@@ -1,24 +1,24 @@
 # Microsoft Developer Studio Project File - Name="ldecod" - Package Owner=<4>
 # Microsoft Developer Studio Generated Build File, Format Version 6.00
-# ** DO NOT EDIT **
+# ** NICHT BEARBEITEN **
 
 # TARGTYPE "Win32 (x86) Console Application" 0x0103
 
 CFG=ldecod - Win32 Debug
-!MESSAGE This is not a valid makefile. To build this project using NMAKE,
-!MESSAGE use the Export Makefile command and run
+!MESSAGE Dies ist kein gültiges Makefile. Zum Erstellen dieses Projekts mit NMAKE
+!MESSAGE verwenden Sie den Befehl "Makefile exportieren" und führen Sie den Befehl
 !MESSAGE 
 !MESSAGE NMAKE /f "ldecod.mak".
 !MESSAGE 
-!MESSAGE You can specify a configuration when running NMAKE
-!MESSAGE by defining the macro CFG on the command line. For example:
+!MESSAGE Sie können beim Ausführen von NMAKE eine Konfiguration angeben
+!MESSAGE durch Definieren des Makros CFG in der Befehlszeile. Zum Beispiel:
 !MESSAGE 
 !MESSAGE NMAKE /f "ldecod.mak" CFG="ldecod - Win32 Debug"
 !MESSAGE 
-!MESSAGE Possible choices for configuration are:
+!MESSAGE Für die Konfiguration stehen zur Auswahl:
 !MESSAGE 
-!MESSAGE "ldecod - Win32 Release" (based on "Win32 (x86) Console Application")
-!MESSAGE "ldecod - Win32 Debug" (based on "Win32 (x86) Console Application")
+!MESSAGE "ldecod - Win32 Release" (basierend auf  "Win32 (x86) Console Application")
+!MESSAGE "ldecod - Win32 Debug" (basierend auf  "Win32 (x86) Console Application")
 !MESSAGE 
 
 # Begin Project
@@ -87,6 +87,14 @@ LINK32=link.exe
 # PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
 # Begin Source File
 
+SOURCE=.\ldecod\src\abt.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\ldecod\src\abt_const.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\ldecod\src\b_frame.c
 # End Source File
 # Begin Source File
@@ -131,6 +139,14 @@ SOURCE=.\ldecod\src\filehandle.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\ldecod\src\fmo.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\ldecod\src\golomb_dec.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\ldecod\src\header.c
 # End Source File
 # Begin Source File
@@ -163,6 +179,10 @@ SOURCE=.\lcommon\src\memalloc.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\ldecod\src\nal.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\ldecod\src\nal_part.c
 # End Source File
 # Begin Source File
@@ -181,6 +201,10 @@ SOURCE=.\ldecod\src\uvlc.c
 # Begin Group "Header Files"
 
 # PROP Default_Filter "h;hpp;hxx;hm;inl"
+# Begin Source File
+
+SOURCE=.\ldecod\inc\abt.h
+# End Source File
 # Begin Source File
 
 SOURCE=.\ldecod\inc\b_frame.h
@@ -235,7 +259,15 @@ SOURCE=.\ldecod\inc\errorconcealment.h
 # End Source File
 # Begin Source File
 
+SOURCE=.\ldecod\inc\fmo.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\ldecod\inc\global.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ldecod\inc\golomb_dec.h
 # End Source File
 # Begin Source File
 

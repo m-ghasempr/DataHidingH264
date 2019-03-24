@@ -58,6 +58,7 @@
 #include <time.h>
 #include <sys/timeb.h>
 #include <string.h>
+#include <assert.h>
 
 
 #include "global.h"
@@ -65,6 +66,8 @@
 #include "image.h"
 #include "mbuffer.h"
 #include "decodeiff.h"
+#include "fmo.h"
+
 
 #if _ERROR_CONCEALMENT_
 #include "erc_api.h"
@@ -74,9 +77,6 @@ extern frame erc_recfr;
 extern int erc_mvperMB;
 extern struct img_par *erc_img;
 #endif
-
-extern int getBitsPos();
-extern int setBitsPos(int);
 
 #ifdef _ADAPT_LAST_GROUP_
 int *last_P_no;
@@ -100,6 +100,7 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
   int i;
   Slice *currSlice = img->currentSlice;
   extern FILE* bits;
+  int Firstcall;
 
 #if _ERROR_CONCEALMENT_
   int ercStartMB;
@@ -130,17 +131,42 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
 #endif
   time( &ltime1 );                // start time s
 
-  currSlice->next_header = 0;
-  currSlice->next_eiflag = 0;
-  while ((currSlice->next_header != EOS && currSlice->next_header != SOP) || (img->structure == TOP_FIELD))
-  {
+  FmoStartPicture();
 
+  img->current_slice_nr = 0;
+  img->current_mb_nr = -4711;     // initialized to an impossible value for debugging -- correct value is taken from slice header
+  currSlice->next_header = -8888; // initialized to an impossible value for debugging -- correct value is taken from slice header
+  currSlice->next_eiflag = 0;
+  while ((currSlice->next_header != EOS && currSlice->next_header != SOP))
+  {
+// printf ("decode_one_frame: currSlice->next_header %d\n", currSlice->next_header);
     // set the  corresponding read functions
     start_slice(img, inp);
 
     // read new slice
+    Firstcall = (img->max_mb_nr == 0);    // A hack for the current byte string format.  In the current format,
+                                          // the picture size is part of the slice header and unknown before
+                                          // the first slice is read.  FMO needs to be initialized with the
+                                          // picture format.  Hence, test the picture size for initialization
+                                          // and initialize FMO in case of the first slice.
     current_header = read_new_slice(img, inp);
+    if (Firstcall && (inp->of_mode == PAR_OF_26L || inp->of_mode == PAR_OF_IFF))
+    {
+      if (currSlice->structure)
+      {
+        FmoInit (img->width/16, img->height/8, NULL, 0);   // force a default MBAmap
+      }
+      else
+      {
+        FmoInit (img->width/16, img->height/16, NULL, 0);   // force a default MBAmap
+      }
+    }
+    img->current_mb_nr = currSlice->start_mb_nr;
+#ifdef _ABT_FLAG_IN_SLICE_HEADER_
+    USEABT = currSlice->abt;
+#endif
 
+// printf ("Now processing mb %d\n", img->current_mb_nr);
     if (current_header == EOS)
       return EOS;
 
@@ -150,9 +176,37 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
       decode_field_slice(img, inp, current_header);
 
     img->current_slice_nr++;
+  }
+  FmoEndPicture();
 
+  //deblocking for frame or top/bottom field
+  DeblockFrame( img, imgY, imgUV ) ;
+  
+  if(img->structure != FRAME)		//if the previous pict is top or bottom field, 
+  {
+    FmoStartPicture();
+    img->current_slice_nr = 0;
+    currSlice->next_header = -8889;
+    currSlice->next_eiflag = 0;
+    while ((currSlice->next_header != EOS && currSlice->next_header != SOP))
+    {	
+      // set the  corresponding read functions
+      start_slice(img, inp);
+      
+      // read new slice
+      current_header = read_new_slice(img, inp);
+      img->current_mb_nr = currSlice->start_mb_nr;
+      
+      if (current_header == EOS)
+        return EOS;
+      
+      decode_field_slice(img, inp, current_header);
+      
+      img->current_slice_nr++;	
+    }
+    FmoEndPicture();
+    //deblocking bottom/top
     DeblockFrame( img, imgY, imgUV ) ;
-
   }
 
 #if _ERROR_CONCEALMENT_
@@ -186,7 +240,7 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
     }
   }
   //! mark end of the last segent
-  ercStopSegment(img->max_mb_nr, ercSegment, 0, erc_errorVar);
+  ercStopSegment(img->max_mb_nr-1, ercSegment, 0, erc_errorVar);
   if(img->mb_data[i-1].ei_flag)
     ercMarkCurrSegmentLost(img->width, erc_errorVar);
   else
@@ -207,6 +261,7 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
   else
     field_postprocessing(img, inp);   // reset all interlaced variables
   store_field_MV(img);
+  store_field_colB8mode(img);
 
   if (p_ref)
     find_snr(snr,img,p_ref,inp->postfilter);      // if ref sequence exist
@@ -264,7 +319,7 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
     img->height_cr /= 2;
   }
 
-  img->current_mb_nr = 0;
+  img->current_mb_nr = -4712;   // impossible value for debugging, StW
   img->current_slice_nr = 0;
   return (SOP);
 }
@@ -888,13 +943,15 @@ void init_frame(struct img_par *img, struct inp_par *inp)
   static int first_P = TRUE;
   int i,j;
 
-
-  img->current_mb_nr=0;
+// printf ("init_frame: img->tr %d, img->number %d, img->current_mb_nr %d\n", img->tr, img->number, img->current_mb_nr);
+//  img->current_mb_nr=-4713;     // don't know why this should make sense.  
+                            // First MB may be in a lost slcie, slices
+                            // may be out-of-order... STW
   img->current_slice_nr=0;
 
-  img->mb_y = img->mb_x = 0;
-  img->block_y = img->pix_y = img->pix_c_y = 0; // define vertical positions
-  img->block_x = img->pix_x = img->pix_c_x = 0; // define horizontal positions
+//  img->mb_y = img->mb_x = 0;
+//  img->block_y = img->pix_y = img->pix_c_y = 0; // define vertical positions
+//  img->block_x = img->pix_x = img->pix_c_x = 0; // define horizontal positions
 
   last_P_no = last_P_no_frm;
   nextP_tr = nextP_tr_frm;
@@ -955,11 +1012,6 @@ void init_frame(struct img_par *img, struct inp_par *inp)
     init_global_buffers(inp, img); 
   }
 
-  if (inp->of_mode==PAR_OF_IFF)
-  {
-    img->pn=(img->number%img->buf_cycle);
-  }
-
   for(i=0;i<img->width/BLOCK_SIZE+1;i++)          // set edge to -1, indicate nothing to predict from
   {
     img->ipredmode[i+1][0]=-1;
@@ -1000,6 +1052,8 @@ void init_frame(struct img_par *img, struct inp_par *inp)
 
   img->fw_refFrArr = img->fw_refFrArr_frm;
   img->bw_refFrArr = img->bw_refFrArr_frm;
+
+//  printf("short size, used, (%d, %d)\n", frm->short_size, frm->short_used );
 }
 
 /*!
@@ -1134,19 +1188,17 @@ void decode_one_slice(struct img_par *img,struct inp_par *inp)
 #endif
 
     // Initializes the current macroblock
-    start_macroblock(img,inp);
-
+    start_macroblock(img,inp, img->current_mb_nr);
+// printf ("Decode_one_slice: after start_mb (%d)\n", img->current_mb_nr);
     // Get the syntax elements from the NAL
     read_flag = read_one_macroblock(img,inp);
+// printf ("Decode_one_slice: after read_mb, currmb %d, currslice %d\n", img->current_mb_nr, img->current_slice_nr);
 
     // decode one macroblock
     switch(read_flag)
     {
     case DECODE_MB:
       decode_one_macroblock(img,inp);
-      break;
-    case DECODE_COPY_MB:
-      decode_one_CopyMB(img,inp);
       break;
     default:
         printf("need to trigger error concealment or something here\n ");
@@ -1157,16 +1209,20 @@ void decode_one_slice(struct img_par *img,struct inp_par *inp)
 #endif
 
     end_of_slice=exit_macroblock(img,inp);
+// printf (", exit-mb returns %d\n", end_of_slice);
   }
   reset_ec_flags();
 }
 
+
+
+
+
+
+
 void decode_frame_slice(struct img_par *img,struct inp_par *inp, int current_header)
 {
   Slice *currSlice = img->currentSlice;
-#if _ERROR_CONCEALMENT_
-  int received_mb_nr = 0; //to record how many MBs are correctly received in error prone transmission
-#endif
 
   if (inp->symbol_mode == CABAC)
   {
@@ -1175,7 +1231,7 @@ void decode_frame_slice(struct img_par *img,struct inp_par *inp, int current_hea
   }
 
   // init new frame
-  if (current_header == SOP || current_header == SOS)
+  if (current_header == SOP)
     init_frame(img, inp);
 
   // do reference frame buffer reordering
@@ -1206,68 +1262,75 @@ void decode_frame_slice(struct img_par *img,struct inp_par *inp, int current_hea
   if (current_header == SOP || current_header == SOS)
     decode_one_slice(img,inp);
 #endif
-    
-  if(currSlice->next_eiflag && img->current_mb_nr != img->max_mb_nr)
-    currSlice->next_header = SOS;
+
+//! This code doesn't workj with FMO or a slice-lossy environment!
+
+//  if(currSlice->next_eiflag && img->current_mb_nr != img->max_mb_nr)
+//    currSlice->next_header = SOS;
 }
+
+
+
+
+
+
+
 
 void decode_field_slice(struct img_par *img,struct inp_par *inp, int current_header)
 {
   Slice *currSlice = img->currentSlice;
-#if _ERROR_CONCEALMENT_
-  int received_mb_nr = 0; //to record how many MBs are correctly received in error prone transmission
-#endif
 
-    if (inp->symbol_mode == CABAC)
+  if (inp->symbol_mode == CABAC)
+  {
+    init_contexts_MotionInfo(img, currSlice->mot_ctx, 1);
+    init_contexts_TextureInfo(img,currSlice->tex_ctx, 1);
+  }
+  
+  // init new frame
+  if (current_header == SOP)
+  {
+    if (img->structure == TOP_FIELD)
+      init_top(img, inp); // set up field buffer in this function
+    else
     {
-      init_contexts_MotionInfo(img, currSlice->mot_ctx, 1);
-      init_contexts_TextureInfo(img,currSlice->tex_ctx, 1);
+      init_bottom(img, inp);
     }
-    
-    // init new frame
-    if (current_header == SOP || current_header == SOS)
-    {
-      if (img->structure == TOP_FIELD)
-        init_top(img, inp); // set up field buffer in this function
-      else
-      {
-       init_bottom(img, inp);
-      }
-    }
-
-    // do reference frame buffer reordering
-    reorder_mref(img);
-
+  }
+  
+  // do reference frame buffer reordering
+  reorder_mref(img);
+  
 
 #if _ERROR_CONCEALMENT_
-    if (current_header == SOP)
-    {
-      if (img->number == 0) 
-        ercInit(img->width, 2*img->height, 1);
-      // reset all variables of the error concealmnet instance before decoding of every frame.
-      // here the third parameter should, if perfectly, be equal to the number of slices per frame.
-      // using little value is ok, the code will alloc more memory if the slice number is larger
-      ercReset(erc_errorVar, img->max_mb_nr, img->max_mb_nr, img->width);
-      erc_mvperMB = 0;
-    }
-    
-    // decode main slice information
-    if ((current_header == SOP || current_header == SOS) && currSlice->ei_flag == 0)
-      decode_one_slice(img,inp);
-    
-    // setMB-Nr in case this slice was lost
-    if(currSlice->ei_flag)  
-      img->current_mb_nr = currSlice->last_mb_nr + 1;
+  if (current_header == SOP)
+  {
+    if (img->number == 0) 
+      ercInit(img->width, 2*img->height, 1);
+    // reset all variables of the error concealmnet instance before decoding of every frame.
+    // here the third parameter should, if perfectly, be equal to the number of slices per frame.
+    // using little value is ok, the code will alloc more memory if the slice number is larger
+    ercReset(erc_errorVar, img->max_mb_nr, img->max_mb_nr, img->width);
+    erc_mvperMB = 0;
+  }
+  
+  // decode main slice information
+  if ((current_header == SOP || current_header == SOS) && currSlice->ei_flag == 0)
+    decode_one_slice(img,inp);
+  
+  // setMB-Nr in case this slice was lost
+//  if(currSlice->ei_flag)  
+//    img->current_mb_nr = currSlice->last_mb_nr + 1;
 #else
 
-    // decode main slice information
-    if (current_header == SOP || current_header == SOS)
-      decode_one_slice(img,inp);
+  // decode main slice information
+  if (current_header == SOP || current_header == SOS)
+    decode_one_slice(img,inp);
 
 #endif
-    
-    if(currSlice->next_eiflag && img->current_mb_nr != img->max_mb_nr)
-      currSlice->next_header = SOS;
+
+//! This code doesn't work with FMO or a slice lossy environment or out-of-order slices
+//  if(currSlice->next_eiflag && img->current_mb_nr != img->max_mb_nr)
+//    currSlice->next_header = SOS;
 }
 
 /*!
@@ -1283,7 +1346,7 @@ void init_top(struct img_par *img, struct inp_par *inp)
 
   img->buf_cycle *= 2;
   img->number *= 2;
-  img->current_mb_nr=0;
+//  img->current_mb_nr=-4714;   // impossible value, StW
   img->current_slice_nr=0;
 
   img->mb_y = img->mb_x = 0;
@@ -1401,7 +1464,7 @@ void init_bottom(struct img_par *img, struct inp_par *inp)
   int i,j;
 
   img->number++;
-  img->current_mb_nr=0;
+//  img->current_mb_nr=-4715;   // impossible value, StW
   img->current_slice_nr=0;
   img->buf_cycle *= 2;
 
@@ -1724,7 +1787,7 @@ void store_field_MV(struct img_par *img)
         {
           img->mv_top[i][j][0] = img->mv_bot[i][j][0] = (int)(img->mv_frm[i][2*j][0]);
           img->mv_top[i][j][1] = img->mv_bot[i][j][1] = (int)((img->mv_frm[i][2*j][1])/2);
-          
+
           if ((i%2 == 0) && (j%2 == 0) && (i<img->width/4))
           {
             if (refFrArr_frm[2*j][i] == -1)
@@ -1743,6 +1806,53 @@ void store_field_MV(struct img_par *img)
             }
           }
         }
+      }
+    }
+  }
+}
+
+// ABT
+int  field2frame_mode(int fld_mode)
+{
+  int frm_mode;
+  static const int field2frame_map[MAXMODE] = {-1, 1,1,3,3,4,6,6, -1, 7,1, -1};
+
+  frm_mode = field2frame_map[fld_mode];
+  assert(frm_mode>0);
+
+  return frm_mode;
+
+}
+int frame2field_mode(int frm_mode)
+{
+  int fld_mode;
+  static const int frame2field_map[MAXMODE] = {-1, 2,5,4,5,5,7,7, -1, 7,2, -1};
+
+  fld_mode = frame2field_map[frm_mode];
+  assert(fld_mode>0);
+
+  return fld_mode;
+
+}
+void store_field_colB8mode(struct img_par *img)
+{
+  int i, j;
+
+  if (USEABT)
+  {
+    if(img->type==INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT)
+    {
+      if (img->structure != FRAME)
+      {
+        for (i=0 ; i<img->width/B8_SIZE ; i++)
+          for (j=0 ; j<img->height/MB_BLOCK_SIZE ; j++)
+            colB8mode[FRAME][2*j][i] = colB8mode[FRAME][2*j+1][i] = field2frame_mode(colB8mode[TOP_FIELD][j][i]);
+      }
+      else
+      {
+        for (i=0 ; i<img->width/B8_SIZE ; i++)
+          for (j=0 ; j<img->height/MB_BLOCK_SIZE ; j++)
+            colB8mode[TOP_FIELD][j][i] = colB8mode[BOTTOM_FIELD][j][i] = frame2field_mode(colB8mode[FRAME][2*j][i]);
       }
     }
   }

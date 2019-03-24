@@ -46,10 +46,12 @@
 
 #include <stdlib.h>
 #include <memory.h>
+#include <assert.h>
 
 #include "global.h"
 #include "mbuffer.h"
 #include "memalloc.h"
+#include "encodeiff.h"
 
 /*!
  ************************************************************************
@@ -64,9 +66,10 @@
 void init_frame_buffers(InputParameters *inp, ImageParameters *img)
 {
   int i;
-  int bufsize=img->buf_cycle;
+  int bufsize=img->buf_cycle+1;    // Tian: PLUS1, June 6, 2002
 
-  if ((fb=(FrameBuffer*)calloc(1,sizeof (FrameBuffer)))==NULL) no_mem_exit("init_frame_buffers: fb");
+  // Tian: the following line should be deleted! June 6, 2002
+//  if ((fb=(FrameBuffer*)calloc(1,sizeof (FrameBuffer)))==NULL) no_mem_exit("init_frame_buffers: fb");
 
 //frame buffers
   if ((frm=(FrameBuffer*)calloc(1,sizeof (FrameBuffer)))==NULL) no_mem_exit("init_frame_buffers: frm");
@@ -93,7 +96,7 @@ void init_frame_buffers(InputParameters *inp, ImageParameters *img)
 //field buffers
   if(input->InterlaceCodingOption != FRAME_CODING)
   {
-    bufsize =2*img->buf_cycle;
+    bufsize *=2;
     if ((fld=(FrameBuffer*)calloc(1,sizeof (FrameBuffer)))==NULL) no_mem_exit("init_field_buffers: fld");
 
     if ((fld->picbuf_short=(Frame**)calloc(bufsize,sizeof (Frame*)))==NULL) no_mem_exit("init_field_buffers: fld->picbuf_short");
@@ -384,7 +387,7 @@ void remove_long_term(int longID)
       if (i<fb->long_used) 
       {
         f=fb->picbuf_long[i];
-        for (j=i;j<fb->long_used-1;j++);
+        for (j=i;j<fb->long_used-1;j++)
           fb->picbuf_long[j]=fb->picbuf_long[j+1];
         fb->picbuf_long[fb->long_used-1]=f;
       } 
@@ -417,16 +420,25 @@ void remove_short_term(int shortID)
       
       fb->short_used--;
 
-      if (i<fb->short_used) 
+      // Tian Dong: June 15, 2002
+      // Use short_size to replace short_used.
+      if (i<fb->short_size) 
+      {
+        f=fb->picbuf_short[i];
+        for (j=i;j<fb->short_size-1;j++)
+          fb->picbuf_short[j]=fb->picbuf_short[j+1];
+        fb->picbuf_short[fb->short_size-1]=f;
+      } 
+      // old lines:
+/*      if (i<fb->short_size) 
       {
         f=fb->picbuf_short[i];
         for (j=i;j<fb->short_used-1;j++);
           fb->picbuf_short[j]=fb->picbuf_short[j+1];
         fb->picbuf_short[fb->short_used-1]=f;
-      } 
+      } */
     }
   }
-
 }
 
 /*!
@@ -476,17 +488,15 @@ void init_mref(ImageParameters *img)
 {
   int i,j;
 
-  for (i=0,j=0;i<fb->short_used;i++)
+  for (i=0,j=0;i<fb->short_used;i++,j++)
   {
     mref[j]=fb->picbuf_short[i]->mref;
     mcef[j]=fb->picbuf_short[i]->mcef;
-    j++;
   }
-  for (i=0;i<fb->long_used;i++)
+  for (i=0;i<fb->long_used;i++,j++)
   {
     mref[j]=fb->picbuf_long[i]->mref;
     mcef[j]=fb->picbuf_long[i]->mcef;
-    j++;
   }
 
   // set all other mref pointers to NULL !KS!
@@ -509,8 +519,8 @@ void reorder_mref(ImageParameters *img)
   RMPNIbuffer_t *r;
 
   int pnp = img->pn;
-  int pnq;
-  int index,i;
+  int pnq = 0;
+  int index = 0,i;
   int size;
   int islong=0;
   int found=0;
@@ -580,44 +590,47 @@ void reorder_mref(ImageParameters *img)
       break;
 
     case 3:
-      return;
+//      return; // Tian: I don't think it should return here. June 6, 2002
+      assert(r->Next == NULL);  // Tian: for debug purpose, try to assert ... June 6, 2002
       break;
 
     }
 
     // now scan the frame buffer for the needed frame
-
-    found=0;
-    i=0;
-
-    while ((!found)&&(i<size))
+    if ( r->RMPNI == 0 || r->RMPNI == 1 || r->RMPNI == 2 )  // the IF is added by Tian
     {
-      if (((!islong)&&(!fr[i]->islong) && (fr[i]->picID==pnq)) ||
-          ((islong)&&(fr[i]->islong) && (fr[i]->lt_picID==pnq)))
+      found=0;
+      i=0;
+
+      while ((!found)&&(i<size))
       {
-          found=1;
-          index=i;
+        if (((!islong)&&(!fr[i]->islong) && (fr[i]->picID==pnq)) ||
+            ((islong)&&(fr[i]->islong) && (fr[i]->lt_picID==pnq)))
+        {
+            found=1;
+            index=i;
+        }
+        i++;
       }
-      i++;
+
+      if (!found) error ("tried to remap non-existent picture",400);
+
+      // now do the actual reordering
+      /* cycle frame buffer */
+      f=fr[index];
+      for (i=index-1;i>=0;i--)
+      {
+        fr[i+1]=fr[i];
+      }
+      fr[0]=f;
+
+      // set the picture number prediction correctly
+      pnp=pnq;
     }
 
-    if (!found) error ("tried to remap non-existent picture",400);
-
-    // now do the actual reordering
-    /* cycle frame buffer */
-    f=fr[index];
-    for (i=index-1;i>=0;i--)
-    {
-      fr[i+1]=fr[i];
-    }
-    fr[0]=f;
-
-    // set the picture number prediction correctly
-    pnp=pnq;
-
-    img->currentSlice->rmpni_buffer=r->Next;
-    free (r);
-    r=img->currentSlice->rmpni_buffer;
+    img->currentSlice->rmpni_buffer = r->Next;
+    free( r );
+    r = img->currentSlice->rmpni_buffer;
   }
 
   // at last init mref, mcef and Refbuf from temporary structure
@@ -709,33 +722,6 @@ void reset_buffers()
 
 }
 
-/*!
- ************************************************************************
- * \brief
- *    store reconstructed frame in multiple reference buffer
- ************************************************************************
- */
-void copy2fb(ImageParameters *img)
-{
-  int j,uv;
-
-  add_frame(img);
-
-  init_mref(img);
-  init_Refbuf(img);
-
-
-  for (j=0; j < (img->height+2*IMG_PAD_SIZE)*4; j++)
-    memcpy(fb->picbuf_short[0]->mref[j],mref_P[j], (img->width+2*IMG_PAD_SIZE)*4);
-  
-  //  Chroma:
-  for (uv=0; uv < 2; uv++)
-      for (j=0; j < img->height_cr; j++)
-        memcpy(fb->picbuf_short[0]->mcef[uv][j],mcef_P[uv][j],img->width_cr);
-
-  // Full pel represnetation for MV search
-  memcpy (fb->picbuf_short[0]->Refbuf11, Refbuf11_P, (img->width*img->height));
-}
 
 /*!
  ************************************************************************
@@ -747,10 +733,12 @@ void add_frame(ImageParameters *img)
 {
   int i;
   Frame *f;
+  Boolean remove_last = FALSE;
 
   /* delete frames with same short term ID */
   if(mref==mref_frm) remove_short_term(img->pn);
 
+  if (fb->short_used == fb->short_size && fb==frm) remove_last = TRUE;  // Tian: PLUS1
 
   /* cycle frame buffer */
   f=fb->picbuf_short[fb->short_size-1];
@@ -765,9 +753,20 @@ void add_frame(ImageParameters *img)
   fb->picbuf_short[0]->picID=img->pn;
   fb->picbuf_short[0]->lt_picID=-1;
 
+  // indicate which layer and sub-seq current ref frame comes from.
+  fb->picbuf_short[0]->layer_no=currPictureInfo.refFromLayerNumber;
+  fb->picbuf_short[0]->sub_seq_no=currPictureInfo.refFromSubSequenceIdentifier;
+
   (fb->short_used)++;
   if (fb->short_used>fb->short_size)
     fb->short_used=fb->short_size;
-  
+  if (remove_last)
+  {
+    fb->picbuf_short[fb->short_size-1]->used=0;
+    fb->picbuf_short[fb->short_size-1]->picID=-1;
+    fb->picbuf_short[fb->short_size-1]->lt_picID=-1;
+    fb->short_used--;
+    printf("remove last........................\n");
+  }
 }
 

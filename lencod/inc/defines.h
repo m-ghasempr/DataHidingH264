@@ -50,9 +50,9 @@
 #ifndef _DEFINES_H_
 #define _DEFINES_H_
 
-
 #define _EXP_GOLOMB
-//#define USE_6_INTRA_MODES
+
+#define clamp(a,b,c) ( (a)<(b) ? (b) : ((a)>(c)?(c):(a)) )    //!< clamp a to the range of [b;c]
 
 
 // Constants for the interim file format
@@ -71,17 +71,30 @@
 // #define _CHECK_MULTI_BUFFER_1_
 // #define _CHECK_MULTI_BUFFER_2_
 
-// #define USE_6_INTRA_MODES
 
 #define IMG_PAD_SIZE    4   //!< Number of pixels padded around the reference frame (>=4)
 
-#define TRACE           1        //!< 0:Trace off 1:Trace on
+#define TRACE           0   //!< 0:Trace off 1:Trace on
 
 #define absm(A) ((A)<(0) ? (-(A)):(A)) //!< abs macro, faster than procedure
 #define MAX_VALUE       999999   //!< used for start value for some variables
 
 
 
+// ---------------------------------------------------------------------------------
+// FLAGS and DEFINES for ABT.
+#define INI_CTX         1       //!< use initialization values for all CABAC contexts. 0=off, 1=on
+#define INICNT_ABT      64      // max_count for ABT contexts if INI_CTX = 0
+
+#define B8_SIZE         8       // maximum block size of block transformed by ABT. 020308 mwi
+#define WHOLE_BLK      -1       // signal application on all subblocks for ABT routines. 020308 mwi
+#define ABT_OFF        -1
+#define QUANT_PERIOD    6       // mantissa/exponent quantization, step size doubles every QUANT_PERIOD qp
+#define _ALT_SCAN_              // use GI scan from JVT-C140 for field coding
+#define QP_OFS         -12      // workaround to use old qp-design for ABT routines
+#define _CD_4x4VALUES_          // use baseline 4x4 quantization values
+//#define _ABT_FLAG_IN_SLICE_HEADER_ // write ABT flag to slice header (needs fix)
+// ---------------------------------------------------------------------------------
 
 
 #define P8x8    8
@@ -107,13 +120,21 @@
 #define IS_COPY(MB)     ((MB)->mb_type==0     && img ->   type==INTER_IMG);
 #define IS_P8x8(MB)     ((MB)->mb_type==P8x8)
 
-
-
-
-
+//#define _OLDSTYLEQP_
 // Quantization parameter range
-#define MIN_QP          -8
+#ifndef _OLDSTYLEQP_
+
+#define MIN_QP          0
+#define MAX_QP          52
+#define SHIFT_QP        12
+
+#else
+
+#define MIN_QP          -12
 #define MAX_QP          39
+#define SHIFT_QP        0
+
+#endif
 
 // Picture types
 #define INTRA_IMG       0   //!< I frame
@@ -124,8 +145,6 @@
 
 #define BLOCK_SIZE      4
 #define MB_BLOCK_SIZE   16
-
-#ifndef USE_6_INTRA_MODES
 
 #define NO_INTRA_PMODE  9        //!< #intra prediction modes
 //!< 4x4 intra prediction modes
@@ -138,19 +157,6 @@
 #define DIAG_PRED_NNE   6
 #define DIAG_PRED_ENE   7
 #define DIAG_PRED_ESE   8
-
-#else //!< USE_6_INTRA_MODES
-
-#define NO_INTRA_PMODE  6        //!< #intra prediction modes
-//!< 4x4 intra prediction modes
-#define DC_PRED         0
-#define DIAG_PRED_RL    1
-#define VERT_PRED       2
-#define DIAG_PRED_LR_45 3
-#define HOR_PRED        4
-#define DIAG_PRED_LR    5
-
-#endif //!< USE_6_INTRA_MODES
 
 // 16x16 intra prediction modes
 #define VERT_PRED_16    0
@@ -193,5 +199,7 @@
 
 #define MAXPICTURETYPESEQUENCELEN 100   /*!< Maximum size of the string that defines the picture
                                              types to be coded, e.g. "IBBPBBPBB" */
+//Start code and Emulation Prevention need this to be defined in identical manner at encoder and decoder
+#define ZEROBYTES_SHORTSTARTCODE 1 //indicates the number of zero bytes in the short start-code prefix
 #endif
 

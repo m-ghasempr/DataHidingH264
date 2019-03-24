@@ -54,7 +54,7 @@ clean:
 
 tags:
 	@echo update tag table
-	@etags inc/*.h src/*.c
+	@ctags inc/*.h src/*.c
 
 bin:    $(OBJ)
 	@echo

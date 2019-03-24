@@ -66,7 +66,7 @@
 
  /*!
  ************************************************************************
- *  Tian Dong:
+ *  Tian Dong (Last Updated in June 15, 2002)
  *  \flowchart of how the output module works:
  *  main()
  *  {
@@ -80,7 +80,11 @@
  *    initSegmentBox()
  *    {
  *      ......
- *      initAlternateTrackHeaderBox();
+ *      initAlternateTrackHeaderBox()
+ *      {
+ *         initPictureInformationBox()
+ *         initLayerBox()
+ *      }
  *      initSwitchPictureBox();
  *      initAlternateTrackMediaBox();
  *    }
@@ -156,8 +160,11 @@ AlternateTrackInfoBox box_ati;
 ParameterSetBox box_ps;
 SegmentBox box_s;
 AlternateTrackHeaderBox box_ath;
+PictureInformationBox box_pi;
 PayloadInfo* pCurrPayloadInfo;
 PictureInfo currPictureInfo;
+LayerBox box_layr[MAX_LAYER_NUMBER];
+SubSequenceBox box_sseq[MAX_LAYER_NUMBER];
 AlternateTrackMediaBox box_atm;
 SwitchPictureBox box_sp;
 
@@ -485,7 +492,7 @@ void freeAlternateTrackInfoBox()
  */
 int initParameterSetBox()
 {
-  box_ps.type.size = SIZEOF_BOXTYPE + 27;     // 26 => 27, add bufCycle
+  box_ps.type.size = SIZEOF_BOXTYPE + 28;     // 26 => 27 => 28, add bufCycle, temporal scalability
   box_ps.type.type = BOX_PRMS;
 
   box_ps.parameterSetID = 0;
@@ -523,6 +530,8 @@ int initParameterSetBox()
   box_ps.partitioningType = input->partition_mode;
   box_ps.intraPredictionType = input->UseConstrainedIntraPred;
   box_ps.bufCycle = input->no_multpred;
+  if (input->NumFramesInELSubSeq!=0) box_ps.requiredPictureNumberUpdateBehavior=1;
+  else box_ps.requiredPictureNumberUpdateBehavior=0;
   return 0;
 }
 
@@ -540,6 +549,7 @@ int initParameterSetBox()
 size_t wrParameterSetBox( FILE* fp )
 {
   size_t num = 0;
+  unsigned char cd;
 
   assert( fp != NULL );
   num += writefile( &box_ps.type.size, 4, 1, fp );
@@ -563,6 +573,9 @@ size_t wrParameterSetBox( FILE* fp )
   num += writefile( &box_ps.partitioningType, 1, 1, fp );
   num += writefile( &box_ps.intraPredictionType, 1, 1, fp );
   num += writefile( &box_ps.bufCycle, 1, 1, fp );
+  if (box_ps.requiredPictureNumberUpdateBehavior==1) cd=0x80;
+  else cd=0;
+  num += writefile( &cd, 1, 1, fp );
 
   if ( num == box_ps.type.size ) return num;
   return -1;
@@ -679,7 +692,7 @@ void freeSegmentBox()
  ************************************************************************
  * \brief
  *      Initiate the Alternate Track Header Box & some data in picture info.
- *      Tian Dong, Feb 10, 2002:
+ *      Tian Dong, May 30, 2002:
  *      Only one Alternate Track Header Box in the output file.
  * \return
  *      0, if success
@@ -690,19 +703,22 @@ int initAlternateTrackHeaderBox()
 {
   box_ath.type.size = 0;  // to be updated
   box_ath.type.type = BOX_ATRH;
-  box_ath.numPictures = 0;  // set to 0
+  
+  if ( box_ps.requiredPictureNumberUpdateBehavior != 0 ) box_ath.numLayers = 2;
+  else box_ath.numLayers = 0;
 
-  box_ath.fpMeta = tmpfile();
-  if ( box_ath.fpMeta == NULL ) return -1;
+  assert((box_ath.numLayers <= MAX_LAYER_NUMBER));
 
-  currPictureInfo.lastFrameNr = 0;    // do this for init of picture info
+  if ( initPictureInformationBox() == -1 ) return -1;
+  if ( initLayerBox() == -1 ) return -1;
   return 0;
 }
 
 /*!
  ************************************************************************
  * \brief
- *      Update the data in this Alternate Track Header
+ *      Update the data in this Alternate Track Header Box
+ *      Only one PicureInformationBox in ATH, May 30, 2002
  * \return
  *      0, if success
  *      -1, if failed
@@ -710,13 +726,17 @@ int initAlternateTrackHeaderBox()
  */
 int updateAlternateTrackHeaderBox()
 {
-  int pictureDataSize;
-  
-  assert( box_ath.fpMeta != NULL );
+  int i;
+  assert(box_ath.numLayers <= MAX_LAYER_NUMBER );
+
+  updatePictureInformationBox();
+  if ( input->NumFramesInELSubSeq != 0 )
+    updateLayerBox();
+
   // update the head data
-  fseek( box_ath.fpMeta, 0, SEEK_END );
-  pictureDataSize = ftell( box_ath.fpMeta );
-  box_ath.type.size = SIZEOF_BOXTYPE + box_fh.numBytesInPictureCountMinusOne+1 + pictureDataSize;
+  box_ath.type.size = SIZEOF_BOXTYPE + 1 + box_pi.type.size;
+  for (i=0; i<box_ath.numLayers; i++)
+    box_ath.type.size += box_layr[i].type.size;
   return 0;
 }
 
@@ -733,37 +753,32 @@ int updateAlternateTrackHeaderBox()
  */
 size_t mergeAlternateTrackHeaderBox( FILE* fp )
 {
-  FILE* sourcef;
   FILE* destf;
-  unsigned char c;
-  size_t num = 0;
+  size_t num = 0, ret;
 
-  sourcef = box_ath.fpMeta;
   destf = fp;
-
-  assert( sourcef != NULL );
   assert( destf != NULL );
 
-  // write the head of Alternate Track Header Box
-  num += writefile( &box_ath.type.size, 4, 1, fp );
-  num += writefile( &box_ath.type.type, 4, 1, fp );
-//  writefile( &box_ath.type.largesize, 8, 1, fp );
+  // write the head of Picture Information
+  num += writefile( &box_ath.type.size, 4, 1, destf );
+  num += writefile( &box_ath.type.type, 4, 1, destf );
+//  writefile( &box_ath.type.largesize, 8, 1, destf );
 
-  num += writefile_s( &box_ath.numPictures, sizeof(box_ath.numPictures), box_fh.numBytesInPictureCountMinusOne+1, 1, destf );
+  num += writefile( &box_ath.numLayers, 1, 1, destf );
   
-  // append the data in box_ath.fpMeta into fp:
-  fseek( sourcef, 0L, SEEK_SET );
-  
-  c = fgetc(sourcef);
-  while ( !feof( sourcef ) )
+  ret = mergePictureInformationBox( destf );
+  if ( ret == -1 ) return -1;
+  num += ret;
+
+  if ( input->NumFramesInELSubSeq != 0 ) 
   {
-    fputc( c, destf );
-    num++;
-    c = fgetc(sourcef);
+    ret = mergeLayerBox( destf );
+    if ( ret == -1 ) return -1;
+    num += ret;
   }
 
-  if ( num == box_ath.type.size ) return num;
-  return -1;
+  if ( num != box_ath.type.size ) return -1;
+  return num;
 }
 
 /*!
@@ -776,7 +791,112 @@ size_t mergeAlternateTrackHeaderBox( FILE* fp )
  */
 void freeAlternateTrackHeaderBox()
 {
-  fclose( box_ath.fpMeta );
+  freePictureInformationBox();
+  freeLayerBox();
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *      Initiate the Picture Information Box & some data in picture info.
+ *      Tian Dong, Feb 10, 2002:
+ *      Only one Alternate Track Header Box in the output file.
+ * \return
+ *      0, if success
+ *      -1, otherwise
+ ************************************************************************
+ */
+int initPictureInformationBox()
+{
+  box_pi.type.size = 0;  // to be updated
+  box_pi.type.type = BOX_PICI;
+  box_pi.numPictures = 0;  // set to 0
+
+  box_pi.fpMeta = tmpfile();
+  if ( box_pi.fpMeta == NULL ) return -1;
+
+  currPictureInfo.lastFrameNr = 0;    // do this for init of picture info
+  return 0;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *      Update the data in this Picture Information Box
+ * \return
+ *      0, if success
+ *      -1, if failed
+ ************************************************************************
+ */
+int updatePictureInformationBox()
+{
+  int pictureDataSize;
+  
+  assert( box_pi.fpMeta != NULL );
+  // update the head data
+  fseek( box_pi.fpMeta, 0, SEEK_END );
+  pictureDataSize = ftell( box_pi.fpMeta );
+  box_pi.type.size = SIZEOF_BOXTYPE + box_fh.numBytesInPictureCountMinusOne+1 + pictureDataSize;
+  return 0;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *      Merge the PictureInformation Data to the output file
+ * \return
+ *      how many bytes been appended, if success
+ *      -1, if failed
+ * \param fp
+ *      output file pointer
+ ************************************************************************
+ */
+size_t mergePictureInformationBox( FILE* fp )
+{
+  FILE* sourcef;
+  FILE* destf;
+  unsigned char c;
+  size_t num = 0;
+
+  sourcef = box_pi.fpMeta;
+  destf = fp;
+
+  assert( sourcef != NULL );
+  assert( destf != NULL );
+
+  // write the head of Picture Information
+  num += writefile( &box_pi.type.size, 4, 1, fp );
+  num += writefile( &box_pi.type.type, 4, 1, fp );
+//  writefile( &box_pi.type.largesize, 8, 1, fp );
+
+  num += writefile_s( &box_pi.numPictures, sizeof(box_pi.numPictures), box_fh.numBytesInPictureCountMinusOne+1, 1, destf );
+  
+  // append the data in box_ath.fpMeta into fp:
+  fseek( sourcef, 0L, SEEK_SET );
+  
+  c = fgetc(sourcef);
+  while ( !feof( sourcef ) )
+  {
+    fputc( c, destf );
+    num++;
+    c = fgetc(sourcef);
+  }
+
+  if ( num == box_pi.type.size ) return num;
+  return -1;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *      Free all resource allocated for this PictureInformation Box
+ * \return
+ *      None
+ ************************************************************************
+ */
+void freePictureInformationBox()
+{
+  fclose( box_pi.fpMeta );
 }
 
 // Functions on PictureInfo
@@ -793,10 +913,11 @@ int initPictureInfo()
 {
   static int prev_frame_no = 0;
 
-  if ( img->type == INTRA_IMG )
-    currPictureInfo.intraPictureFlag = 0x80; // if the picture is INTRA
-  else
-    currPictureInfo.intraPictureFlag = 0x00; // if the picture is not INTRA
+  if ( img->type == INTRA_IMG ) currPictureInfo.intraPictureFlag = TRUE;
+  else currPictureInfo.intraPictureFlag = FALSE;
+  if ( img->type == SP_IMG ) currPictureInfo.syncPictureFlag = TRUE; // ???
+  else currPictureInfo.syncPictureFlag = FALSE; // ???
+
   currPictureInfo.pictureOffset = currPictureInfo.currPictureSize;
   currPictureInfo.currPictureSize = 0;  // reset
 
@@ -809,6 +930,29 @@ int initPictureInfo()
 
   currPictureInfo.numPayloads = 0;  // numPayloads must be set to zero here
   currPictureInfo.payloadData = NULL;
+
+  // the follow values may be updated.
+  currPictureInfo.layerNumber = 0;
+  currPictureInfo.subSequenceIdentifier = 0;
+  currPictureInfo.originLayerNumber = 0;
+  currPictureInfo.originSubSequenceIdentifier = 0;
+
+  if ( input->NumFramesInELSubSeq != 0 )
+  {
+    if (IMG_NUMBER%(input->NumFramesInELSubSeq+1)==0 && img->type!=B_IMG)
+      currPictureInfo.layerNumber = 0;
+    else
+    {
+      currPictureInfo.layerNumber = 1;
+    }
+    currPictureInfo.subSequenceIdentifier = box_sseq[currPictureInfo.layerNumber].subSequenceIdentifier;
+    if (img->type!=B_IMG)
+    {
+      currPictureInfo.refFromLayerNumber = currPictureInfo.layerNumber;
+      currPictureInfo.refFromSubSequenceIdentifier = currPictureInfo.subSequenceIdentifier;
+    }
+  }
+
   return 0;
 }
 
@@ -828,26 +972,39 @@ size_t wrPictureInfo( FILE* fp )
   int i;
   INT64 size;
   PayloadInfo* pp;
+  unsigned char cd;
   size_t num = 0;
-//  FILE* f;
 
-//  f = fopen( "dummy1.txt", "at" );
   assert( fp != NULL );
 
-  num += writefile( &currPictureInfo.intraPictureFlag, 1, 1, fp );
+  if ( currPictureInfo.intraPictureFlag == TRUE ) cd = 0x80;
+  else cd = 0x00;
+  if ( currPictureInfo.syncPictureFlag == TRUE ) cd |= 0x40;
+  num += writefile( &cd, 1, 1, fp );
+
   num += writefile_s( &currPictureInfo.pictureOffset, sizeof(currPictureInfo.pictureOffset), box_fh.numBytesInPictureOffsetMinusTwo + 2, 1, fp );
   num += writefile_s( &currPictureInfo.pictureDisplayTime, sizeof(currPictureInfo.pictureDisplayTime), box_fh.numBytesInPictureDisplayTimeMinusOne + 1, 1, fp );
+
+  if ( box_ath.numLayers )
+  {
+    if ( -1 == writefile( &currPictureInfo.layerNumber, 1, 1, fp ) ) return -1;
+    if ( -1 == writefile( &currPictureInfo.subSequenceIdentifier, 2, 1, fp ) ) return -1;
+    if ( currPictureInfo.syncPictureFlag )
+    {
+      if ( -1 == writefile( &currPictureInfo.originLayerNumber, 1, 1, fp ) ) return -1;
+      if ( -1 == writefile( &currPictureInfo.originSubSequenceIdentifier, 2, 1, fp ) ) return -1;
+    }
+  }
+
   num += writefile_s( &currPictureInfo.numPayloads, sizeof(currPictureInfo.numPayloads), box_fh.numBytesInPayloadCountMinusOne + 1, 1, fp );
 
+  // check if the operations to write file are successful.
   if ( num != (unsigned)(1+box_fh.numBytesInPictureOffsetMinusTwo + 2+box_fh.numBytesInPictureDisplayTimeMinusOne + 1+box_fh.numBytesInPayloadCountMinusOne + 1) ) return -1;
-//  fprintf( f, "picture %d 's payload, total %d:\n", frame_no, currPictureInfo.numPayloads );
 
   pp = currPictureInfo.payloadData;
   for ( i = 0; i < currPictureInfo.numPayloads; i++ )
   { 
     assert( pp != NULL );
-
-//    fprintf( f, "payloadsize of %d is: %d\n", i, pp->payloadSize );
 
     // update and write the payload to file
     if ( -1 == wrPayloadInfo( pp, fp ) ) return -1;
@@ -861,7 +1018,6 @@ size_t wrPictureInfo( FILE* fp )
     pp = pp->next;
   }
 
-//  fclose ( f );
   return 0;
 }
 
@@ -925,10 +1081,14 @@ PayloadInfo* newPayloadInfo()
   pli->lindex = img->lindex;
 
   // set values
-  if ( input->partition_mode == PAR_DP_1 )
-    pli->payloadType = 0;
-  else
-    assert(0==1);
+  assert ( input->partition_mode == PAR_DP_1 );
+
+  // Tian Dong: JVT-C083. June 15, 2002
+  // Calculating payload type, the conditions may be updated when more
+  // coding options are supported later.
+  if ( FirstFrameIn2ndIGOP == img->number )
+    pli->payloadType = PAYLOAD_TYPE_IDERP;
+
   pli->parameterSet = box_ps.parameterSetID;
   pli->pictureID = img->currentSlice->picture_id;
   pli->sliceID = img->current_slice_nr;
@@ -968,11 +1128,27 @@ PayloadInfo* newPayloadInfo()
 
   pli->firstMBInSliceX = img->mb_x;
   pli->firstMBInSliceY = img->mb_y;
+#ifdef _ABT_FLAG_IN_SLICE_HEADER_
+  pli->abtMode   = input->abt;
+#endif
   pli->initialQP = img->qp;
   pli->qpsp = img->qpsp;
 
+  // Tian: begin of ERPS
+  pli->numRMPNI = 0;
+  if ( img->type != INTRA_IMG )
+  {
+    // do the possible remapping 
+    remap_ref_short_term(pli);
+  }
+
   // begin of ERPS
 #ifdef _CHECK_MULTI_BUFFER_1_
+
+  // Tian Dong: It is suggested to delete the lines 
+  // for test purpose. June 7, 2002
+  printf("_CHECK_MULTI_BUFFER_1_ cannot be defined!\n");
+  exit(0);
 
   /* RPSL: Reference Picture Selection Layer */
   if(img->type!=INTRA_IMG)
@@ -993,6 +1169,10 @@ PayloadInfo* newPayloadInfo()
 #endif
 
 #ifdef _CHECK_MULTI_BUFFER_2_
+
+  // Tian Dong: It is suggested to delete such check coding lines
+  // for test purpose. June 7, 2002
+  assert(0);
 
   // some code to check operation
   if ((img->pn==3) && (img->type==INTER_IMG))
@@ -1079,6 +1259,7 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
   Bitstream* bitstream; // used as a MEM buffer of slice header
   SyntaxElement sym;
   size_t num = 0, bytes_written;
+  int d_MB_Nr, start_mb_nr;
 
   assert( pp != NULL );
   assert( fp != NULL );
@@ -1096,7 +1277,7 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
   // First write the element to the MEM bitstream buffer
   sym.type = SE_HEADER;       // This will be true for all symbols generated here
   sym.mapping = n_linfo2;       // Mapping rule: Simple code number to len/info
-  if ( pp->payloadType == 0 )
+  if ( pp->payloadType == 0 || pp->payloadType == PAYLOAD_TYPE_IDERP )
   {
     // write the parameter set
     sym.value1 = pp->parameterSet;
@@ -1108,26 +1289,42 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
     sym.value1 = pp->pictureID;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
     sym.value1 = pp->sliceType;
-    // select_picture_type (&sym);
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
     sym.value1 = pp->firstMBInSliceX;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
     sym.value1 = pp->firstMBInSliceY;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
-    sym.value1 = MAX_QP - pp->initialQP;
+    start_mb_nr = (img->width/16)*pp->firstMBInSliceY+pp->firstMBInSliceX;
+#ifdef _ABT_FLAG_IN_SLICE_HEADER_
+    sym.value1 = pp->abtMode;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
+#endif
+    sym.mapping = dquant_linfo;
+    sym.value1 = pp->initialQP - (MAX_QP - MIN_QP +1)/2;
+    writeSyntaxElement2Buf_UVLC (&sym, bitstream);
+ 
+    if ( pp->sliceType2 ==SP_IMG)
+    {
+      sym.value1 = pp->qpsp - (MAX_QP - MIN_QP +1)/2;
+      writeSyntaxElement2Buf_UVLC (&sym, bitstream);
+    }
+    sym.mapping = n_linfo2;
+    iff_writeERPS(&sym, pp, bitstream); // Tian: to support ERPS (Annex U), Feb 27, 2002
+
+    // Tian Dong: June 10, 2002
+    // Update: a differential value is conveyed rather than an absolute value. 
     if ( input->symbol_mode == CABAC )
     {
-      sym.value1 = pp->lastMBnr;
+      d_MB_Nr = pp->lastMBnr-start_mb_nr;
+      if((input->InterlaceCodingOption==FRAME_CODING)&&(d_MB_Nr == img->total_number_mb))
+        d_MB_Nr = 0;
+      if(input->InterlaceCodingOption==ADAPTIVE_CODING)
+        if((((img->fld_flag==0)||(img->pstruct==1))&&(img->total_number_mb==d_MB_Nr)) ||
+         ((img->pstruct==2)&&((img->total_number_mb/2)==d_MB_Nr)))
+         d_MB_Nr = 0;
+      sym.value1 = d_MB_Nr;
       writeSyntaxElement2Buf_UVLC(&sym, bitstream);
     }
-    if ( pp->sliceType2 == SP_IMG )
-    {
-      sym.value1 = MAX_QP - pp->qpsp;
-      writeSyntaxElement2Buf_UVLC(&sym, bitstream);
-    }
-
-    iff_writeERPS(&sym, pp, bitstream);       // Tian: to support ERPS (Annex U), Feb 27, 2002
   }
   else if ( pp->payloadType == 1 )
   {
@@ -1146,8 +1343,14 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
     sym.value1 = pp->firstMBInSliceY;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
-    sym.value1 = MAX_QP - pp->initialQP;
+#ifdef _ABT_FLAG_IN_SLICE_HEADER_
+    sym.value1 = pp->abtMode;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
+#endif
+    sym.mapping = dquant_linfo;
+    sym.value1 = pp->initialQP - (MAX_QP - MIN_QP + 1)/2;
+    writeSyntaxElement2Buf_UVLC(&sym, bitstream);
+    sym.mapping = n_linfo2;
     // write the slice id
     sym.value1 = pp->sliceID;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
@@ -1215,6 +1418,7 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
 size_t iff_writeERPS(SyntaxElement *sym, PayloadInfo* pp, Bitstream* bitstream)
 {
   size_t len=0;
+  int i; 
 
   // RPSF: Reference Picture Selection Flags
   sym->value1 = 0;
@@ -1223,6 +1427,31 @@ size_t iff_writeERPS(SyntaxElement *sym, PayloadInfo* pp, Bitstream* bitstream)
   // PN: Picture Number
   sym->value1 = pp->pn;
   len += writeSyntaxElement2Buf_UVLC(sym, bitstream);
+
+  if (pp->numRMPNI)
+  {
+    sym->value1 = 1;
+    len += writeSyntaxElement2Buf_UVLC(sym, bitstream);
+
+    // now write the data:
+    for (i=0; i<pp->numRMPNI; i++)
+    {
+      assert( pp->rmpni_RMPNI[i] >= 0 && pp->rmpni_RMPNI[i] <= 3 );
+      sym->value1 = pp->rmpni_RMPNI[i];
+//      printf("write RMPNI %d\n", pp->rmpni_RMPNI[i]);
+      len += writeSyntaxElement2Buf_UVLC(sym, bitstream);
+      if ( pp->rmpni_RMPNI[i] != 3 )
+      {
+        sym->value1 = pp->rmpni_Data[i];
+        len += writeSyntaxElement2Buf_UVLC(sym, bitstream);
+      }
+    }
+  }
+  else
+  {
+    sym->value1 = 0;
+    len += writeSyntaxElement2Buf_UVLC(sym, bitstream);
+  }
 
 #ifdef _CHECK_MULTI_BUFFER_1_
 
@@ -1250,8 +1479,8 @@ size_t iff_writeERPS(SyntaxElement *sym, PayloadInfo* pp, Bitstream* bitstream)
   
 #else
   // RPSL: Reference Picture Selection Layer
-  sym->value1 = 0;
-  len += writeSyntaxElement2Buf_UVLC(sym, bitstream);
+//  sym->value1 = 0;
+//  len += writeSyntaxElement2Buf_UVLC(sym, bitstream);
 
 #endif
 
@@ -1312,6 +1541,238 @@ size_t iff_writeERPS(SyntaxElement *sym, PayloadInfo* pp, Bitstream* bitstream)
 #endif 
 
   return len;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *      Initiate the Layer Box
+ *      Tian Dong, May 30, 2002:
+ * \return
+ *      0, if success
+ *      -1, otherwise
+ ************************************************************************
+ */
+int initLayerBox()
+{
+  int i;
+  if ( input->NumFramesInELSubSeq == 0 ) return 0;
+  if ( box_ath.numLayers > MAX_LAYER_NUMBER ) return -1;
+  for (i=0; i<box_ath.numLayers; i++)
+  {
+    box_layr[i].type.size = 0;  // to be updated
+    box_layr[i].type.type = BOX_LAYR;
+    box_layr[i].avgBitRate = 0;
+    box_layr[i].avgFrameRate = 0;
+
+    box_layr[i].fp = tmpfile();
+    if ( box_layr[i].fp == NULL ) return -1;
+  }
+  return 0;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *      Update the average bit rate and frame rate in this Layer
+ * \return
+ *      0, if success
+ *      -1, if failed
+ ************************************************************************
+ */
+int updateLayerBox()
+{
+  int i;
+  int pictureDataSize;
+
+  if ( input->NumFramesInELSubSeq == 0 ) return 0;
+  for (i=0; i<box_ath.numLayers; i++)
+  {
+    assert( box_layr[i].fp != NULL );
+    // update the head data
+    fseek( box_layr[i].fp, 0, SEEK_END );
+    pictureDataSize = ftell( box_layr[i].fp );
+    box_layr[i].type.size = SIZEOF_BOXTYPE + 8 + pictureDataSize;
+
+    // replace the following two lines to calculate the average values
+    box_layr[i].avgBitRate = 0;
+    box_layr[i].avgFrameRate = 0;
+  }
+  return 0;
+}
+
+size_t mergeLayerBox( FILE* fp )
+{
+  size_t num = 0, num2 = 0;
+  int layr;
+  FILE* sourcef, *destf;
+  unsigned char c;
+
+  if ( input->NumFramesInELSubSeq == 0 ) return 0;
+  for (layr=0; layr<box_ath.numLayers; layr++)
+  {
+    num = 0;
+    num += writefile( &box_layr[layr].type.size, 4, 1, fp );
+    num += writefile( &box_layr[layr].type.type, 4, 1, fp );
+
+    num += writefile( &box_layr[layr].avgBitRate, 4, 1, fp );
+    num += writefile( &box_layr[layr].avgFrameRate, 4, 1, fp );
+
+    // append the data in box_layr[layr].fp into fp:
+    sourcef = box_layr[layr].fp;
+    destf = fp;
+
+    fseek( sourcef, 0L, SEEK_SET );
+  
+    c = fgetc(sourcef);
+    while ( !feof( sourcef ) )
+    {
+      fputc( c, destf );
+      num++;
+      c = fgetc(sourcef);
+    }
+
+    if ( num != box_layr[layr].type.size ) return -1;
+    num2 += num;
+  }
+  return num2;
+}
+
+void freeLayerBox()
+{
+  int layr;
+  if ( input->NumFramesInELSubSeq == 0 ) return;
+  for (layr=0; layr<box_ath.numLayers; layr++)
+  {
+    fclose( box_layr[layr].fp );
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *      Initiate the Sub Sequence Box
+ *      Tian Dong, May 30, 2002:
+ * \return
+ *      0, if success
+ *      -1, otherwise
+ ************************************************************************
+ */
+int initSubSequenceBox(int layr)
+{
+  static unsigned INT16 id=0;
+
+  if ( input->NumFramesInELSubSeq == 0 ) return 0;
+  if (layr<0 || layr>box_ath.numLayers) return -1;
+
+  box_sseq[layr].type.size = 0;  // to be updated
+  box_sseq[layr].type.type = BOX_SSEQ;
+
+  // set the data in current sub-sequence here...
+  box_sseq[layr].subSequenceIdentifier = id++;
+  box_sseq[layr].continuationFromPreviousSegmentFlag = FALSE;
+  box_sseq[layr].continuationToNextSegmentFlag = FALSE;
+  box_sseq[layr].startTickAvailableFlag = 0;
+  box_sseq[layr].ssStartTick = 0;
+  box_sseq[layr].ssDuration = 0;
+  box_sseq[layr].avgBitRate = 0;
+  box_sseq[layr].avgFrameRate = 0;
+  box_sseq[layr].numReferenceSubSequences = 0; // to be updated. 
+
+  return 0;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *      Update the Sub Sequence Box
+ *      Tian Dong, May 30, 2002:
+ * \return
+ *      number of bytes being written
+ *      -1, if failed
+ ************************************************************************
+ */
+int updateSubSequenceBox( int layr )
+{
+  if ( input->NumFramesInELSubSeq == 0 ) return 0;
+  assert( layr >= 0 && layr < box_ath.numLayers );
+
+  box_sseq[layr].type.size = SIZEOF_BOXTYPE + 30 + 3*box_sseq[layr].numReferenceSubSequences;
+  box_sseq[layr].ssDuration = 0;
+  box_sseq[layr].avgBitRate = 0;
+  box_sseq[layr].avgFrameRate = 0;
+  return 0;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *      Write the Sub Sequence Box
+ *      Tian Dong, May 30, 2002:
+ * \input
+ *      layr: the layor number
+ *      fp: the destination file, normally it is box_layr[layr].fp
+ * \return
+ *      number of bytes being written
+ *      -1, if failed
+ ************************************************************************
+ */
+size_t wrSubSequenceBox( int layr )
+{
+  size_t num = 0, num2;
+  unsigned INT16 cd;
+  unsigned int i;
+  FILE *fp;
+
+  if ( input->NumFramesInELSubSeq == 0 ) return 0;
+  fp = box_layr[layr].fp;
+  assert( fp );
+  if ( box_sseq[layr].numReferenceSubSequences < 0 || box_sseq[layr].numReferenceSubSequences > MAX_DEPENDENT_SUBSEQ )
+    return -1;
+
+  // since we now only deal with the ONE track case, we assert:
+  assert( box_fh.numAlternateTracks == 1 );
+  assert( layr >= 0 && layr < box_ath.numLayers );
+
+  num += writefile( &box_sseq[layr].type.size, 4, 1, fp );
+  num += writefile( &box_sseq[layr].type.type, 4, 1, fp );
+  num += writefile( &box_sseq[layr].subSequenceIdentifier, 2, 1, fp );
+
+  if ( box_sseq[layr].continuationFromPreviousSegmentFlag ) cd = 0x8000;
+  else cd = 0;
+  if ( box_sseq[layr].continuationToNextSegmentFlag) cd |= 0x4000;
+  if ( box_sseq[layr].startTickAvailableFlag) cd |= 0x2000;
+  num += writefile( &cd, 2, 1, fp );
+
+  num += writefile( &box_sseq[layr].ssStartTick, 8, 1, fp );
+  num += writefile( &box_sseq[layr].ssDuration, 8, 1, fp );
+  num += writefile( &box_sseq[layr].avgBitRate, 4, 1, fp );
+  num += writefile( &box_sseq[layr].avgFrameRate, 4, 1, fp );
+  num += writefile( &box_sseq[layr].numReferenceSubSequences, 2, 1, fp );
+  
+  if ( num != SIZEOF_BOXTYPE+30 ) return -1;
+
+  for (i=0; i<box_sseq[layr].numReferenceSubSequences; i++)
+  {
+    num2 = writefile( &box_sseq[layr].dependencyData[i].layerNumber, 1, 1, fp );
+    num2 += writefile( &box_sseq[layr].dependencyData[i].subSequenceIdentifier, 2, 1, fp );
+    num += num2;
+    if ( num2 != 3 ) return -1;
+  }
+
+  return num;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *      Free the resources allocated for the Sub Sequence Box
+ *      Tian Dong, May 30, 2002:
+ ************************************************************************
+ */
+void freeSubSequenceBox( int layr )
+{
+  if ( input->NumFramesInELSubSeq == 0 ) return;
 }
 
 // Functions on SwitchPictureBox
@@ -1566,4 +2027,277 @@ size_t writefile_s( void* buf, size_t bufsize, size_t size, size_t count, FILE* 
     num++;
   }
   return num;
+}
+
+/*!
+ ************************************************************************
+ * \date:
+ *      June 15, 2002
+ * \brief
+ *      If the first frame in a new sub-sequence is to be encoded,
+ *        this function will do some initialization for the new sub-seq.
+ ************************************************************************
+ */
+void begin_sub_sequence()
+{
+  if ( input->of_mode != PAR_OF_IFF || input->NumFramesInELSubSeq == 0 ) return;
+
+  // begin to encode the base layer subseq?
+  if ( IMG_NUMBER == 0 )
+  {
+//    printf("begin to encode the base layer subseq\n");
+    initSubSequenceBox(0);  // init the sub-sequence in the base layer
+  }
+  // begin to encode the enhanced layer subseq?
+  if ( IMG_NUMBER % (input->NumFramesInELSubSeq+1) == 1 )
+  {
+//    printf("begin to encode the enhanced layer subseq\n");
+    initSubSequenceBox(1);  // init the sub-sequence in the enhanced layer
+    add_dependent_subseq(1);
+  }
+}
+
+/*!
+ ************************************************************************
+ * \date:
+ *      June 15, 2002
+ * \brief
+ *      If the last frame of current sub-sequence has been encoded,
+ *        this function will do some finalization for the sub-seq.
+ ************************************************************************
+ */
+void end_sub_sequence()
+{
+  if ( input->of_mode != PAR_OF_IFF || input->NumFramesInELSubSeq == 0 ) return;
+
+  // end of the base layer:
+  if ( img->number == input->no_frames-1 )
+  {
+//    printf("end of encoding the base layer subseq\n");
+    updateSubSequenceBox(0);
+    if ( -1 == wrSubSequenceBox(0) )
+    {
+      printf("Serious warning: error occurs when trying to write sub sequence box 0.\n");
+    }
+  }
+  // end of the enhanced layer:
+  if ( ((IMG_NUMBER%(input->NumFramesInELSubSeq+1)==0) && (input->successive_Bframe != 0) && (IMG_NUMBER>0)) || // there are B frames
+    ((IMG_NUMBER%(input->NumFramesInELSubSeq+1)==input->NumFramesInELSubSeq) && (input->successive_Bframe==0))   // there are no B frames
+    )
+  {
+//    printf("end of encoding the enhanced layer subseq\n");
+    add_dependent_subseq(1);
+    updateSubSequenceBox(1);
+    if ( -1 == wrSubSequenceBox(1) )
+    {
+      printf("Serious warning: error occurs when trying to write sub sequence box 1.\n");
+    }
+  }
+}
+
+
+/*!
+ ************************************************************************
+ * \date:
+ *      June 15, 2002
+ * \brief
+ *    Hide some frames in the short term frame buffer
+ *      The number of frames can be used for the forward prediction will
+ *      be set in fb->num_short_used.
+ ************************************************************************
+ */
+void remap_ref_short_term(PayloadInfo* pp)
+{
+  int i;
+  RMPNIbuffer_t *r, *t;
+  int currLayerNo, currSubSeqNo;
+  int pnp, pnq;
+  int delta, mdelta;
+  Boolean need_rmpni = FALSE;
+
+  currLayerNo = currPictureInfo.layerNumber;
+  currSubSeqNo = currPictureInfo.subSequenceIdentifier;
+  pnp = img->pn;
+
+  // check if the remapping is need or not?
+  for (i=0; i<fb->short_used; i++)
+  {
+    if ( fb->picbuf_short[i]->layer_no > currLayerNo ||
+      (fb->picbuf_short[i]->layer_no == currLayerNo && fb->picbuf_short[i]->sub_seq_no != currSubSeqNo)
+      )
+    {
+      need_rmpni = TRUE;
+      break;
+    }
+  }
+
+  if ( !need_rmpni ) return;
+
+  fb->num_short_used = 0;
+
+  // Tian Dong: we use the reverse order for re-mapping to let the latest frame
+  // to have the relative index 0. See our implementation accompanying document, section 1.2.5
+  t = img->currentSlice->rmpni_buffer;
+  for (i=fb->short_used-1; i>=0; i--)
+  {
+    if ( fb->picbuf_short[i]->layer_no < currLayerNo ||
+      (fb->picbuf_short[i]->layer_no == currLayerNo && fb->picbuf_short[i]->sub_seq_no == currSubSeqNo)
+      )
+    {
+      r = (RMPNIbuffer_t*)calloc (1,sizeof(RMPNIbuffer_t));
+      r->Next=NULL;
+      fb->num_short_used++;
+
+      // caculate the abs_diff_pic_numbers from picID. TBD...
+      pnq = fb->picbuf_short[i]->picID;
+      delta = pnq - pnp;
+      if ( delta < 0 )
+      {
+        if ( delta < -fb->short_size/2 -1 )
+          mdelta = delta+fb->short_size;
+        else
+          mdelta = delta;
+      }
+      else
+      {
+        if ( delta > fb->short_size/2 )
+          mdelta = delta - fb->short_size;
+        else
+          mdelta = delta;
+      }
+
+      r->Data = abs( mdelta );
+      if ( mdelta < 0 ) r->RMPNI = 0;
+      else  r->RMPNI=1;
+
+      pp->rmpni_Data[pp->numRMPNI] = r->Data;
+      pp->rmpni_RMPNI[pp->numRMPNI] = r->RMPNI;
+      pp->numRMPNI++;
+      assert( pp->numRMPNI < 6 );
+
+      // add a new node to the list
+      if ( img->currentSlice->rmpni_buffer == NULL )
+        img->currentSlice->rmpni_buffer = r;
+      else
+        t->Next = r;
+      t = r;
+
+      pnp=pnq;
+    }
+  }
+  // the end loop code number is 3
+  if ( img->currentSlice->rmpni_buffer != NULL )
+  {
+    r = (RMPNIbuffer_t*)calloc (1,sizeof(RMPNIbuffer_t));
+    r->RMPNI=3;
+    r->Data=0;
+    r->Next=NULL;
+    t->Next = r;
+
+    pp->rmpni_Data[pp->numRMPNI] = r->Data;
+    pp->rmpni_RMPNI[pp->numRMPNI] = r->RMPNI;
+    pp->numRMPNI++;
+    assert( pp->numRMPNI < 6 );
+  }
+
+  reorder_mref(img);
+
+  for (i=fb->num_short_used;i<fb->short_used;i++)
+  {
+    mref[i]=NULL;
+    mcef[i]=NULL;
+    Refbuf11[i]=NULL;
+  }
+
+}
+
+/*!
+ ************************************************************************
+ * \date:
+ *      June 15, 2002
+ * \brief
+ *      To add the dependent sub-sequence to current sub-sequence.
+ *      (stored in dependencyData[*])
+ *      Note: It only check the possible dependent frames for the frame
+ *      to-be-encoded, thus to let all the dependent sub-sequence be 
+ *      collected, this function should be called twice: in the 
+ *      begin_sub_sequence() and end_sub_sequence().
+ * \param layr
+ *    the layer number of current sub-sequence: box_sseq[this_layr].
+ ************************************************************************
+ */
+void add_dependent_subseq(int layr)
+{
+  int i;
+  for (i=0; i<frm->short_used; i++)
+  {
+    if (!in_dependency_set(layr, frm->picbuf_short[i]->sub_seq_no, frm->picbuf_short[i]->layer_no) &&
+      can_predict_from(layr, frm->picbuf_short[i]->sub_seq_no, frm->picbuf_short[i]->layer_no) 
+      )
+    {
+      assert(box_sseq[layr].numReferenceSubSequences+1 < MAX_DEPENDENT_SUBSEQ);
+      box_sseq[layr].dependencyData[box_sseq[layr].numReferenceSubSequences].subSequenceIdentifier = 
+        frm->picbuf_short[i]->sub_seq_no;
+      box_sseq[layr].dependencyData[box_sseq[layr].numReferenceSubSequences].layerNumber = 
+        frm->picbuf_short[i]->layer_no;
+      box_sseq[layr].numReferenceSubSequences++;
+    }
+  }
+}
+
+/*!
+ ************************************************************************
+ * \date:
+ *      June 15, 2002
+ * \brief
+ *      To judge if any frame from sub-sequence 1 is in the dependency 
+ *      data of sub-sequence 2.
+ * \return
+ *    FALSE: if not.
+ *    TRUE: if yes.
+ * \param this_layr
+ *    the layer number of sub-sequence 2, box_sseq[this_layr] is sub-seq 2
+ * \param sub_seq_no
+ *    the id of sub-sequence 1
+ * \param layer_no
+ *    the layer no of sub-sequence 1
+ ************************************************************************
+ */
+Boolean in_dependency_set(int this_layr, int sub_seq_no, int layer_no)
+{
+  unsigned int i;
+  for (i=0; i<box_sseq[this_layr].numReferenceSubSequences; i++)
+  {
+    if ( box_sseq[this_layr].dependencyData[i].subSequenceIdentifier == sub_seq_no &&
+      box_sseq[this_layr].dependencyData[i].layerNumber == layer_no 
+      )
+      return TRUE;
+  }
+  return FALSE;
+}
+
+/*!
+ ************************************************************************
+ * \date:
+ *      June 15, 2002
+ * \brief
+ *      To judge if sub-sequence 1 can predict from sub-sequence 2
+ * \return
+ *    FALSE: if it can not or
+ *           sub-sequnece 1 and sub-sequence 2 are the same one;
+ *    TRUE: otherwise.
+ * \param this_layr
+ *    the layer number of sub-sequence 1, box_sseq[this_layr] is sub-seq 1
+ * \param sub_seq_no
+ *    the id of sub-sequence 2
+ * \param layer_no
+ *    the layer no of sub-sequence 2
+ ************************************************************************
+ */
+Boolean can_predict_from(int this_layr, int sub_seq_no, int layer_no)
+{
+  if (this_layr>layer_no) return TRUE;
+  if (this_layr<layer_no) return FALSE;
+//  if (box_sseq[this_layr].subSequenceIdentifier == sub_seq_no) return TRUE;
+  return FALSE;
 }

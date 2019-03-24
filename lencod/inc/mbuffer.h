@@ -58,6 +58,8 @@ typedef struct
   byte  ***mcef;
   pel_t *Refbuf11;
   int  islong;            //<! field is needed for reordering
+  int layer_no;           //<! Tian: to save which layer and sub seq the short-term reference 
+  int sub_seq_no;         //<! frames comes from. JVT-B042  June 01, 2002
 } Frame;
 
 typedef struct
@@ -68,6 +70,8 @@ typedef struct
   int   long_size;
   int   short_used;
   int   long_used;
+  int   num_short_used;   //<! Tian: to save the number of short-term reference 
+                          //<! frames can be used for prediction. JVT-B042  June 01, 2002
 } FrameBuffer;
 
 FrameBuffer *fb;
@@ -94,8 +98,8 @@ void reorder_mref(ImageParameters *img);
 void alloc_Refbuf (ImageParameters *img);
 void init_Refbuf(ImageParameters *img);
 
-void copy2fb(ImageParameters *img);
 void add_frame(ImageParameters *img);
+void reset_buffers();
 
 #endif
 

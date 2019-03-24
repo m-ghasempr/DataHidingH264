@@ -131,6 +131,7 @@
 #include "elements.h"
 #include "bitsbuf.h"
 #include "rtp.h"
+#include "fmo.h"
 
 extern void tracebits(const char *trace_str,  int len,  int info,int value1,
     int value2) ;
@@ -175,6 +176,7 @@ int readSliceRTP (struct img_par *img, struct inp_par *inp)
 {
   Slice *currSlice = img->currentSlice;
   int PartitionMask;
+  static int CurrentPictureId = -1;
 
   assert (currSlice != NULL);
 
@@ -196,12 +198,221 @@ printf ("\n");
   if(PartitionMask == -4711)
     return EOS;
 
-  if(currSlice->start_mb_nr != 0)
+  if(CurrentPictureId == currSlice->picture_id)
     return SOS;
   else
+  {
+    CurrentPictureId = currSlice->picture_id;
     return SOP;
+  }
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    read all partitions of one slice from RTP packet stream, also handle
+ *    any Parameter Update packets and SuUPP-Packets
+ * \return
+ *    -1 for EOF                                              \n
+ *    Partition-Bitmask otherwise:
+ *    Partition Bitmask: 0x1: Full Slice, 0x2: type A, 0x4: Type B 
+ *                       0x8: Type C
+ ************************************************************************
+ */
+
+// Note: this is the unchanged code from the FMO implementation in C092.
+// Needs serious testing w/DP and stuff.
+
+int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
+{
+  Slice *currSlice = img->currentSlice;
+  DecodingEnvironmentPtr dep;
+  byte *buf;
+  RTPpacket_t *p, *nextp;
+  RTPSliceHeader_t *sh, *nextsh;
+  int MBDataIndex;
+  int done = 0;
+  int err;//, back=0; // avoid warnings. mwi
+  int FirstMacroblockInSlice;
+  static int b_frame = FALSE;
+
+  assert (currSlice != NULL);
+  assert (bits != 0);
+
+  // Temporal storage for this function only
+
+  p=alloca (sizeof (RTPpacket_t));      // the RTP packet
+  p->packet=alloca (MAXRTPPACKETSIZE);
+  p->payload=alloca (MAXRTPPAYLOADLEN);
+  nextp=alloca (sizeof (RTPpacket_t));  
+  sh=alloca(sizeof (RTPSliceHeader_t));
+  sh->RMPNIbuffer=NULL;
+  sh->MMCObuffer=NULL;
+
+  nextsh=alloca(sizeof (RTPSliceHeader_t));
+  nextsh->RMPNIbuffer=NULL;
+  nextsh->MMCObuffer=NULL;
+
+  ExpectedMBNr = img->current_mb_nr;
+  LastPicID = img->tr;
+
+  done = 0;
+  do  
+  {
+    if (RTPReadPacket (p, bits) < 0)    // Read and decompose
+      return -4711;
+
+    if (p->payload[0] == (PAYLOAD_TYPE_IDERP<<4) && fb != NULL && frm != NULL )  // Tian Dong: IDERP, JVT-C083
+    {
+      reset_buffers();
+      frm->picbuf_short[0]->used=0;
+      frm->picbuf_short[0]->picID=-1;
+      frm->picbuf_short[0]->lt_picID=-1;
+      frm->short_used=0;
+    }
+
+    switch (p->payload[0] & 0xf)
+    {
+    case 0:       // Full Slice packet
+    case 1:       // Partition type A packet
+      done = 1;
+      break;
+ 
+    case 2:       // Partition B
+    case 3:       // Partition C
+      // Do nothing.  this results in discarding the unexpected Partition B, C
+      // packet, which will later be concealed "automatically", because when
+      // interpreting the next Partition A or full slice packet a range of
+      // lost blocks is found which will be concealed in the usual manner.
+      //
+      // If anyonme comes up with an idea how to use coefficients without the
+      // header information then this code has to be changed
+      printf ("found unexpected Partition %c packet, skipping\n", (p->payload[0]&0xf)==2?'B':'C'); // avoid warnings. mwi
+      break;
+    case 4:
+      //! Compound packets may be handled here, but I (StW) would personally prefer and
+      //! recommend to handle them externally, by a pre-processor tool.  For now,
+      //! compounds lead to exit()
+      printf ("Compound packets not yet implemented, exit\n");
+      exit (-700);
+      break;
+    case 5:
+      //! Add implementation of SUPP packets here
+      printf ("SUPP packets not yet implemented, skipped\n");
+      break;
+    case 6:
+      printf ("Found header packet\n");
+
+      if ((err = RTPInterpretParameterSetPacket (&p->payload[1], p->paylen-1)) < 0)
+      {
+        printf ("RTPInterpretParameterSetPacket returns error %d\n", err);
+      }
+      break;
+    default:
+      printf ("Undefined packet type %d found, skipped\n", p->payload[0] & 0xf);
+      assert (0==1);
+      break;
+    }
+  } while (!done);
+
+  // Here, all the non-video data packets and lonely type B, C partitions
+  // are handled.  Now work on the expected type A and full slice packets
+
+  assert ((p->payload[0] & 0xf) < 2);
+
+  if ((p->payload[0] & 0xf) == 0)       // Full Slice packet
+  {
+    currSlice->ei_flag = 0;
+    MBDataIndex = 1;                    // Skip First Byte
+    MBDataIndex += RTPInterpretSliceHeader (&p->payload[1], p->paylen-1, 0, sh);
+  }
+  else                                  // Partition A packet
+  {
+    currSlice->ei_flag = 0;
+    MBDataIndex = 1;                    // Skip First Byte
+    MBDataIndex += RTPInterpretSliceHeader (&p->payload[1], p->paylen-1, 1, sh);
+  }
+
+  FirstMacroblockInSlice = sh->FirstMBInSliceY * (img->width/16) + 
+                               sh->FirstMBInSliceX;   //! assumes picture sizes divisble by 16
+
+  // Here used to be the if() cascade.  It is deleted for two reasons:  First,
+  // error concealment for non data-partitioned slices (Nokia concealment) is
+  // now triggered after decoding based on the map of decoded macroblocks, see
+  // file image.c.  The DP errror concealment (Teles concealment) is triggered
+  // in ProcessDataPartitionedSlice().  Second, the old code made assumptions
+  // such as in-order slices and non-FMO macroblock ordering which are no more
+  // appropriate.
+  //! I believe I have included all relevant code regarding the IDERP handling
+  //! and the emu-prevention code.  However, this would be the first place to
+  //! look if any of the two are broken (in the RTP file format only).  StW, 06.07.02
+
+// printf ("ReadRTPPacket: FirstMacroblockInSlice = %d\n", FirstMacroblockInSlice);
+  // Here, all concealment is done and we have either a type A partition 
+  // packet or a full slice packet, which need to be worked on
+    
+  RTPUseParameterSet (sh->ParameterSet, img, inp);
+  RTPSetImgInp(img, inp, sh);
+
+  free_Partition (currSlice->partArr[0].bitstream);
+
+  assert (p->paylen-MBDataIndex > 0);
+      
+  currSlice->partArr[0].bitstream->read_len = 0;
+  currSlice->partArr[0].bitstream->code_len = p->paylen-MBDataIndex;        // neu
+  currSlice->partArr[0].bitstream->bitstream_length = p->paylen-MBDataIndex;
+
+  memcpy (currSlice->partArr[0].bitstream->streamBuffer, &p->payload[MBDataIndex],p->paylen-MBDataIndex);
+  if(inp->Encapsulated_NAL_Payload)
+  {
+    p->paylen = MBDataIndex + EBSPtoRBSP(currSlice->partArr[0].bitstream->streamBuffer, p->paylen - MBDataIndex, 0);
+    p->paylen = MBDataIndex + RBSPtoSODB(currSlice->partArr[0].bitstream->streamBuffer, p->paylen - MBDataIndex);
+    currSlice->partArr[0].bitstream->bitstream_length = p->paylen-MBDataIndex;
+  }
+  buf = currSlice->partArr[0].bitstream->streamBuffer;
+
+  if(inp->symbol_mode == CABAC)
+  {
+    dep = &((currSlice->partArr[0]).de_cabac);
+    arideco_start_decoding(dep, buf, 0, &currSlice->partArr[0].bitstream->read_len);
+  }
+      
+  currSlice->next_header = RTPGetFollowingSliceHeader (img, nextp, nextsh); // no use for the info in nextp, nextsh yet. 
+// printf ("ReadRTPPacket: currSlice->next_header %d  RTPSequence %d\n", currSlice->next_header, p->seq);
+assert (b_frame == 0);  
+  if ((p->payload[0]&0xf) == 0  || b_frame)         // Full Slice Packet or B-Frame
+  {
+    currSlice->dp_mode = PAR_DP_1;
+    currSlice->max_part_nr=1;
+    return 1;
+  }
+  else
+  {
+    currSlice->dp_mode = PAR_DP_3;
+    currSlice->max_part_nr = 3;
+    RTPProcessDataPartitionedSlice (img, inp, bits, p, sh->SliceID);
+    return 3;
+
+  }
+
+  return FALSE;
+}
+
+#if 0
+/*! This is the old ReadRTPPacket routine.  It contains some code that
+    helps the error concealment in case there is a loss in the first
+    I frame.  It also has some other concealment code I don't understand.
+    I believe, most of the code is redundant for the RTP file format,
+    and the bitstream file format is not error resilient anyway, so why
+    bother.  But I may be wrong, hence the code is here, so that one could
+    steal parts of it.
+    Please don't simply comments it in, and the currently acrtive routine
+    out.  There are numerous small bug fixes in the code above, which
+    should be kept.  Also the FMO support.  If anyone wants (or needs) to 
+    touch this code, please contact me so that we can talk it through.
+    Thanks, Stephan
+    stewe@cs.tu-berlin.de
+*/
   
 /*!
  ************************************************************************
@@ -260,6 +471,14 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
     if (RTPReadPacket (p, bits) < 0)    // Read and decompose
       return -4711;
 
+    if (p->payload[0] == (PAYLOAD_TYPE_IDERP<<4) && fb != NULL && frm != NULL )  // Tian Dong: IDERP, JVT-C083
+    {
+      reset_buffers();
+      frm->picbuf_short[0]->used=0;
+      frm->picbuf_short[0]->picID=-1;
+      frm->picbuf_short[0]->lt_picID=-1;
+      frm->short_used=0;
+    }
     switch (p->payload[0] & 0xf)
     {
     case 0:       // Full Slice packet
@@ -474,6 +693,13 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
           if(bframe_to_code > InfoSet.NumberBFrames)
             last_pframe += (InfoSet.FrameSkip +1);
         }
+        else if(sh->PictureID == last_pframe+1 && p->payload[0] == (PAYLOAD_TYPE_IDERP<<4) )
+        // Tian Dong: an IDERP picture is here.
+        {
+          last_pframe = sh->PictureID;
+          bframe_to_code = InfoSet.NumberBFrames+1;
+          b_frame = FALSE;
+        }
         else //! we lost at least one whole frame
         {
           //printf ("SLICE LOSS 4: Slice loss at PicID %d containing the whole frame\n", LastPicID + InfoSet.FrameSkip +1); 
@@ -602,6 +828,12 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
   currSlice->partArr[0].bitstream->bitstream_length = p->paylen-MBDataIndex;
 
   memcpy (currSlice->partArr[0].bitstream->streamBuffer, &p->payload[MBDataIndex],p->paylen-MBDataIndex);
+  if(inp->Encapsulated_NAL_Payload)
+  {
+    p->paylen = MBDataIndex + EBSPtoRBSP(currSlice->partArr[0].bitstream->streamBuffer, p->paylen - MBDataIndex, 0);
+    p->paylen = MBDataIndex + RBSPtoSODB(currSlice->partArr[0].bitstream->streamBuffer, p->paylen - MBDataIndex);
+    currSlice->partArr[0].bitstream->bitstream_length = p->paylen-MBDataIndex;
+  }
   buf = currSlice->partArr[0].bitstream->streamBuffer;
 
   if(inp->symbol_mode == CABAC)
@@ -629,7 +861,7 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
 
   return FALSE;
 }
-
+#endif
 
 /*!
  *****************************************************************************
@@ -788,19 +1020,18 @@ int RTPInterpretSliceHeader (byte *buf, int bufsize, int ReadSliceId, RTPSliceHe
   bitptr+=len;
 
   len = GetVLCSymbol(buf, bitptr, &info, bufsize);
-  linfo (len, info, &sh->InitialQP, &dummy);
+  linfo_dquant (len, info, &sh->InitialQP, &dummy);
   bitptr+=len;
-  sh->InitialQP = MAX_QP-sh->InitialQP;
+  sh->InitialQP = sh->InitialQP + (MAX_QP - MIN_QP +1)/2;
 
   if (sh->SliceType==2) // SP Picture
   {
     len = GetVLCSymbol(buf, bitptr, &info, bufsize);
-    linfo (len, info, &sh->InitialSPQP, &dummy);
+    linfo_dquant (len, info, &sh->InitialSPQP, &dummy);
     bitptr+=len;
-    sh->InitialSPQP = MAX_QP-sh->InitialSPQP;
+    sh->InitialSPQP = sh->InitialSPQP + (MAX_QP - MIN_QP +1)/2;
     assert (sh->InitialSPQP >=MIN_QP && sh->InitialSPQP <= MAX_QP);
   }
-
   assert (sh->ParameterSet == 0);     // only for testing, should be deleted as soon as more than one parameter set is generated by trhe encoder
   assert (sh->SliceType > 0 || sh->SliceType < 5);
   assert (sh->InitialQP >=MIN_QP && sh->InitialQP <= MAX_QP);
@@ -860,7 +1091,7 @@ int RTPInterpretSliceHeader (byte *buf, int bufsize, int ReadSliceId, RTPSliceHe
 
         if (tmp1!=3)
         {
-          printf ("got RMPNI = %d\n",tmp1);
+//          printf ("got RMPNI = %d\n",tmp1);
           tmp_rmpni=(RMPNIbuffer_t*)calloc (1,sizeof (RMPNIbuffer_t));
           tmp_rmpni->Next=NULL;
           tmp_rmpni->RMPNI=tmp1;
@@ -1130,7 +1361,6 @@ int RTPSequenceHeader (struct img_par *img, struct inp_par *inp, FILE *bits)
 
 void RTPSetImgInp (struct img_par *img, struct inp_par *inp, RTPSliceHeader_t *sh)
 {
-  static int ActualPictureType;
   Slice *currSlice = img->currentSlice;
   static int last_imgtr_frm=0,modulo_ctr_frm=0,last_imgtr_fld=0,modulo_ctr_fld=0;
   static int last_imgtr_frm_b=0,modulo_ctr_frm_b=0,last_imgtr_fld_b=0,modulo_ctr_fld_b=0;
@@ -1168,75 +1398,64 @@ void RTPSetImgInp (struct img_par *img, struct inp_par *inp, RTPSliceHeader_t *s
     currSlice->ei_flag = 1;
   }  
   
-
-  //! The purpose of the following is to check for mixed Slices in one picture.
-  //! According to VCEG-N72r1 and common sense this is allowed.  However, the
-  //! current software seems to have a problem of some kind, to be checked.  Hence,
-  //! printf a warning
-
-  if (currSlice->start_mb_nr == 0)
-    ActualPictureType = img->type;
-  else
-    if (ActualPictureType != img->type)
-    {
-      printf ("WARNING: mixed Slice types in a single picture -- interesting things may happen :-(\n");
-    }
-
   img->tr = currSlice->picture_id = sh->PictureID;
 
 #if 1
   img->structure = currSlice->structure = sh->structure; //picture structure: 
   
-  if (img->type <= INTRA_IMG || img->type >= SP_IMG_1) 
-  {
-    if (img->structure == FRAME)
-    {     
-      if(img->tr <last_imgtr_frm) 
-        modulo_ctr_frm++;
-      
-      last_imgtr_frm = img->tr;
-      img->tr_frm = img->tr + (256*modulo_ctr_frm);
+  if(!img->current_slice_nr)
+  { 
+    if (img->type <= INTRA_IMG || img->type >= SP_IMG_1) 
+    {
+      if (img->structure == FRAME)
+      {     
+        if(img->tr <last_imgtr_frm) 
+          modulo_ctr_frm++;
+        
+        last_imgtr_frm = img->tr;
+        img->tr_frm = img->tr + (256*modulo_ctr_frm);
+      }
+      else
+      {
+        if(img->tr <last_imgtr_fld) 
+          modulo_ctr_fld++;
+        
+        last_imgtr_fld = img->tr;
+        img->tr_fld = img->tr + (256*modulo_ctr_fld);
+      }
     }
     else
     {
-      if(img->tr <last_imgtr_fld) 
-        modulo_ctr_fld++;
-      
-      last_imgtr_fld = img->tr;
-      img->tr_fld = img->tr + (256*modulo_ctr_fld);
+      if (img->structure == FRAME)
+      {     
+        if(img->tr <last_imgtr_frm_b) 
+          modulo_ctr_frm_b++;
+        
+        last_imgtr_frm_b = img->tr;
+        img->tr_frm = img->tr + (256*modulo_ctr_frm_b);
+      }
+      else
+      {
+        if(img->tr <last_imgtr_fld_b) 
+          modulo_ctr_fld_b++;
+        
+        last_imgtr_fld_b = img->tr;
+        img->tr_fld = img->tr + (256*modulo_ctr_fld_b);
+      }
     }
-  }
-  else
-  {
-    if (img->structure == FRAME)
-    {     
-      if(img->tr <last_imgtr_frm_b) 
-        modulo_ctr_frm_b++;
-      
-      last_imgtr_frm_b = img->tr;
-      img->tr_frm = img->tr + (256*modulo_ctr_frm_b);
-    }
-    else
-    {
-      if(img->tr <last_imgtr_fld_b) 
-        modulo_ctr_fld_b++;
-      
-      last_imgtr_fld_b = img->tr;
-      img->tr_fld = img->tr + (256*modulo_ctr_fld_b);
-    }
-  }
-  
-  if(img->type != B_IMG_MULT) {
-    img->pstruct_next_P = img->structure;
-    if(img->structure == TOP_FIELD)
-    {
-      img->imgtr_last_P = img->imgtr_next_P;
-      img->imgtr_next_P = img->tr_fld;
-    }
-    else if(img->structure == FRAME)
-    {
-      img->imgtr_last_P = img->imgtr_next_P;
-      img->imgtr_next_P = 2*img->tr_frm;
+    
+    if(img->type != B_IMG_MULT) {
+      img->pstruct_next_P = img->structure;
+      if(img->structure == TOP_FIELD)
+      {
+        img->imgtr_last_P = img->imgtr_next_P;
+        img->imgtr_next_P = img->tr_fld;
+      }
+      else if(img->structure == FRAME)
+      {
+        img->imgtr_last_P = img->imgtr_next_P;
+        img->imgtr_next_P = 2*img->tr_frm;
+      }
     }
   }
 #endif
@@ -1304,9 +1523,9 @@ int RTPGetFollowingSliceHeader (struct img_par *img, RTPpacket_t *p, RTPSliceHea
   int done=0;
   int intime=0;
   Slice *currSlice = img->currentSlice;
-  static unsigned int old_seq=0;
-  static int first=0;
-  static int i=2;
+//  static unsigned int old_seq=0; // avoid warnings. mwi
+//  static int first=0; // avoid warnings. mwi
+//  static int i=2; // avoid warnings. mwi
   
   RTPpacket_t *newp, *nextp;
   RTPSliceHeader_t *nextsh;
@@ -1359,6 +1578,13 @@ int RTPGetFollowingSliceHeader (struct img_par *img, RTPpacket_t *p, RTPSliceHea
   p->v = newp->v;
   p->x = newp->x;
 
+  //! This code fragment made the assumtion of a fixed frame rate with no fixed frames
+  //! It is commented out, because I believe that such an assumption is unrealistic in
+  //! real world environments, and the resulting gains in error concealment quality
+  //! should not be part of the reference code.  I don't believe it does do much harm
+  //! to keep it from a functional point-of-view.  StW, 06.07.02
+
+/*
   if (p->seq != old_seq+i)
     currSlice->next_eiflag =1;
   else
@@ -1372,7 +1598,7 @@ int RTPGetFollowingSliceHeader (struct img_par *img, RTPpacket_t *p, RTPSliceHea
     first=1;
     i=1;
   }
-
+*/
   RTPInterpretSliceHeader (&newp->payload[1], newp->packlen, newp->payload[0]==0?0:1, sh);
   if(currSlice->picture_id != sh->PictureID) 
     return (SOP);
@@ -1491,6 +1717,394 @@ void RTP_get_symbol(SyntaxElement *sym, Bitstream *currStream)
 /*!
  ************************************************************************
  * \brief
+ *    Interprets a parameter set packet
+ ************************************************************************
+ */
+
+#define EXPECT_ATTR 0
+#define EXPECT_PARSET_LIST 1
+#define EXPECT_PARSET_NO 2
+#define EXPECT_STRUCTNAME 3
+#define EXPECT_STRUCTVAL_INT 4
+#define EXPECT_STRUCTVAL_STRING 5
+#define EXPECT_STRUCTVAL_INT_LIST 6
+
+#define INTERPRET_COPY 100
+#define INTERPRET_ENTROPY_CODING 101
+#define INTERPRET_MOTION_RESOLUTION 102
+#define INTERPRET_INTRA_PREDICTION 103
+#define INTERPRET_PARTITIONING_TYPE 104
+#define INTERPRET_FMOMAP 105
+
+int RTPInterpretParameterSetPacket (char *buf, int buflen)
+
+{
+  // The dumbest possible parser that updates the parameter set variables 
+  // static to this module
+
+  int bufp = 0;
+  int state = EXPECT_ATTR;
+  int interpreter;
+  int minus, number;
+  int ps;
+  char s[MAX_PARAMETER_STRINGLEN];
+  void *destin;
+
+  while (bufp < buflen)
+  {
+// printf ("%d\t%d\t %c%c%c%c%c%c%c%c  ", bufp, state, buf[bufp], buf[bufp+1], buf[bufp+2], buf[bufp+3], buf[bufp+4], buf[bufp+5], buf[bufp+6], buf[bufp+7], buf[bufp+8], buf[bufp+9]);
+
+    switch (state)
+    {
+    case EXPECT_ATTR:
+      if (buf[bufp] == '\004')      // Found UNIX EOF, this is the end marker
+      {
+        ParSet[ps].Valid = 1;
+        return 0;
+      }
+      if (strncmp ("a=H26L ", &buf[bufp], 7))
+      {
+        printf ("Parsing error EXPECT_ATTR in Header Packet: position %d, packet %s\n",
+                 bufp, &buf[bufp]);
+        return -1;
+      }
+      bufp += 7;
+      state = EXPECT_PARSET_LIST;
+      break;
+
+    case EXPECT_PARSET_LIST:
+      if (buf[bufp] != '(')
+      {
+        printf ("Parsing error EXPECT_PARSET in Header Packet: position %d, packet %s\n",
+                bufp, &buf[bufp]);
+        return -2;
+      }
+      bufp++;
+      state = EXPECT_PARSET_NO;
+      break;
+
+    case EXPECT_PARSET_NO:
+      number = 0;
+      minus = 1;
+      if (buf[bufp] == '-')
+      {
+        minus = -1;
+        bufp++;
+      }
+      while (isdigit (buf[bufp]))
+        number = number * 10 + ( (int)buf[bufp++] - (int) '0');
+      if (buf[bufp] == ',')
+      {
+        printf ("Update of more than one prameter set not yet supported\n");
+        return -1;
+      }
+      if (buf[bufp] != ')')
+      {
+        printf ("Parsing error NO PARSET LISTEND in Header Packet: position %d, packet %s\n",
+          bufp, &buf[bufp]);
+        return -1;
+      }
+      if (minus > 0)      // not negative
+        ps = number;
+
+      bufp+= 2;     // skip ) and blank
+      state = EXPECT_STRUCTNAME;
+      break;
+
+    case EXPECT_STRUCTNAME:
+      if (1 != sscanf (&buf[bufp], "%100s", s))   // Note the 100, which si MAX_PARAMETER_STRLEN
+      {
+        printf ("Parsing error EXPECT STRUCTNAME STRING in Header packet: position %d, packet %s\n",
+               bufp, &buf[bufp]);
+        return -1;
+      }
+      bufp += strlen (s);
+      bufp++;       // Skip the blank
+
+
+      if (!strncmp (s, "MaxPicID", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_INT;
+        interpreter = INTERPRET_COPY;
+        destin = &ParSet[ps].MaxPicID;
+        break;
+      }
+      if (!strncmp (s, "BufCycle", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_INT;
+        interpreter = INTERPRET_COPY;
+        destin = &ParSet[ps].BufCycle;
+        break;
+      }
+      if (!strncmp (s, "MaxPn", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_INT;
+        interpreter = INTERPRET_COPY;
+        destin = &ParSet[ps].BufCycle;
+        break;
+      }
+
+      if (!strncmp (s, "UseMultpred", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_INT;
+        interpreter = INTERPRET_COPY;
+        destin = &ParSet[ps].UseMultpred;
+        break;
+      }
+
+      if (!strncmp (s, "PixAspectRatioX", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_INT;
+        interpreter = INTERPRET_COPY;
+        destin = &ParSet[ps].PixAspectRatioX;
+        break;
+      }
+      if (!strncmp (s, "PixAspectRatioY", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_INT;
+        interpreter = INTERPRET_COPY;
+        destin = &ParSet[ps].PixAspectRatioY;
+        break;
+      }
+      if (!strncmp (s, "DisplayWindowOffsetTop", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_INT;
+        interpreter = INTERPRET_COPY;
+        destin = &ParSet[ps].DisplayWindowOffsetTop;
+        break;
+      }
+      if (!strncmp (s, "DisplayWindowOffsetBottom", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_INT;
+        interpreter = INTERPRET_COPY;
+        destin = &ParSet[ps].DisplayWindowOffsetBottom;
+        break;
+      }
+      if (!strncmp (s, "DisplayWindowOffsetRight", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_INT;
+        interpreter = INTERPRET_COPY;
+        destin = &ParSet[ps].DisplayWindowOffsetRight;
+        break;
+      }
+      if (!strncmp (s, "DisplayWindowOffsetLeft", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_INT;
+        interpreter = INTERPRET_COPY;
+        destin = &ParSet[ps].DisplayWindowOffsetLeft;
+        break;
+      }
+      if (!strncmp (s, "XSizeMB", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_INT;
+        interpreter = INTERPRET_COPY;
+        destin = &ParSet[ps].XSizeMB;
+        break;
+      }
+      if (!strncmp (s, "YSizeMB", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_INT;
+        interpreter = INTERPRET_COPY;
+        destin = &ParSet[ps].YSizeMB;
+        break;
+      }
+      if (!strncmp (s, "EntropyCoding", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_STRING;
+        interpreter = INTERPRET_ENTROPY_CODING;
+        destin = &ParSet[ps].EntropyCoding;
+        break;
+      }
+      if (!strncmp (s, "MotionResolution", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_STRING;
+        interpreter = INTERPRET_MOTION_RESOLUTION;
+        destin = &ParSet[ps].MotionResolution;
+        break;
+      }
+      if (!strncmp (s, "PartitioningType", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_STRING;
+        interpreter = INTERPRET_PARTITIONING_TYPE;
+        destin = &ParSet[ps].PartitioningType;
+        break;
+      }
+      if (!strncmp (s, "IntraPredictionType", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_STRING;
+        interpreter = INTERPRET_INTRA_PREDICTION;
+        destin = &ParSet[ps].IntraPredictionType;
+        break;
+      }
+      if (!strncmp (s, "HRCParameters", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_INT;
+        interpreter = INTERPRET_COPY;
+        destin = &ParSet[ps].HRCParameters;
+        break;
+      }
+      if (!strncmp (s, "FramesToBeEncoded", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_INT;
+        interpreter = INTERPRET_COPY;
+        destin = &InfoSet.FramesToBeEncoded;
+        break;
+      }
+      if (!strncmp (s, "FrameSkip", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_INT;
+        interpreter = INTERPRET_COPY;
+        destin = &InfoSet.FrameSkip;
+        break;
+      }
+      if (!strncmp (s, "SequenceFileName", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_STRING;
+        interpreter = INTERPRET_COPY;
+        destin = &InfoSet.SequenceFileName;
+        break;
+      }
+      if (!strncmp (s, "NumberBFrames", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_INT;
+        interpreter = INTERPRET_COPY;
+        destin = &InfoSet.NumberBFrames;
+        break;
+      }
+
+      // The FMOmap requires a special handling,because it contains more than one integer
+      if (!strncmp (s, "FMOmap", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_INT_LIST;
+        interpreter = INTERPRET_FMOMAP;
+        destin = &ParSet[ps].MBAmap;
+        break;
+      }
+	 
+     
+      // Here, all defined Parameter names are checked.  Anything else is a syntax error
+      printf ("Syntax Error: unknown Parameter %s\n", s);
+      printf ("Parsing error in Header Packet: position %d, packet %s\n",
+          bufp, buf);
+      return -3;
+      break;        // to make lint happy
+    
+    case EXPECT_STRUCTVAL_INT:
+      if (1!=sscanf (&buf[bufp], "%d", (int *)destin))
+      {
+        printf ("Parsing error EXPECT STRUCTVAL INT in Header Packet: position %d, packet %s\n",
+          bufp, &buf[bufp]);
+        return -4;
+      }
+// printf ("EXPECT_STRCUTVAL_INT: write %d\n", * (int *)destin);
+      while (bufp < buflen && buf[bufp] != '\n')    // Skip any trailing whitespace and \n
+        bufp++;
+      bufp++;
+      state=EXPECT_ATTR;
+      break;
+      
+    case EXPECT_STRUCTVAL_STRING:
+      if (1 != sscanf (&buf[bufp], "%100s", s))
+      {
+        printf ("Parsing error EXPECT STRUCTVAL STRING in Header Packet: position %d, packet %s\n",
+          bufp, &buf[bufp]);
+        return -5;
+      }
+      while (bufp < buflen && buf[bufp] != '\n')   // Skip any trailing whitespace and \n
+        bufp++;
+      bufp++;
+      state=EXPECT_ATTR;
+
+      switch (interpreter)
+      {
+      case INTERPRET_COPY:
+        // nothing -- handled where it occurs
+        break;
+      case INTERPRET_ENTROPY_CODING:
+        if (!strncmp (s, "UVLC", 4))
+          * (int *)destin = 0;
+        else
+          * (int *)destin = 1;
+//        printf ("in Interpret, Entropy Coding :%s: results in %d\n", s, *(int *)destin);
+        break;
+      case INTERPRET_MOTION_RESOLUTION:
+        if (!strncmp (s, "quater", 6))
+          * (int *)destin = 0;
+        else
+          * (int *)destin = 1;
+        break;
+      case INTERPRET_INTRA_PREDICTION:
+        if (!strncmp (s, "Unconstrained", 14))
+          * (int *)destin = 0;
+        else
+          * (int *)destin = 1;
+printf ("Interpret Intra prediction returns %d\n", *(int*)destin);
+        break;
+        case INTERPRET_PARTITIONING_TYPE:
+        if (!strncmp (s, "one", 3))
+          * (int *)destin = 0;
+        else
+          * (int *)destin = 1;
+        break;
+      default:
+        assert (0==1);
+      }
+      break;
+    case EXPECT_STRUCTVAL_INT_LIST:
+      switch (interpreter)
+      {
+      case INTERPRET_FMOMAP:
+        {
+          int mb = 0;
+// printf ("Interpret Parameterset: Getting the FMOmap, expected %d ints\n", ParSet[ps].XSizeMB*ParSet[ps].YSizeMB);
+          //! The FMOmap in the ParSet cosists of whitespace and backslash-
+          //! separated, single-digit integers.  With this (and only this)
+          //! format the following code can deal.
+          if (ParSet[ps].MBAmap == NULL)
+            ParSet[ps].MBAmap = malloc (sizeof (int) * ParSet[ps].XSizeMB * ParSet[ps].YSizeMB);
+          assert (ParSet[ps].MBAmap != NULL);
+          while (bufp<buflen && buf[bufp] != '\004' && buf[bufp] != 'a')
+          {
+            if (isdigit (buf[bufp]))
+            {
+              if (mb >= ParSet[ps].XSizeMB*ParSet[ps].YSizeMB)
+              { 
+printf ("Interpret Parameterset: too many FMOmap entries, overwriting last entry\n");
+                mb--;
+              }
+              ParSet[ps].MBAmap[mb++] = (int) buf[bufp] - (int) '0';
+            }
+            bufp++;
+          }
+          state=EXPECT_ATTR;
+        }
+        break;
+      default:
+        printf ("Unknown Int List (not FMOmap??\?)\n");
+        assert (0==1);
+      }
+    break;
+
+    default:
+      printf ("Parsing error UNDEFINED SYNTAX in Header Packet: position %d, packet %s\n",
+        bufp, &buf[bufp]);
+      return -1;
+    }
+//  printf ("\t\t%d\n", bufp);
+  }
+/*
+printf ("CurrentParameterSet %d, ps %d\n", CurrentParameterSet, ps);
+printf ("RTPInterpretParameterPacket: xsize x Ysize, %d x %d, Entropy %d, Motion %d  MaxPicId %d\n",
+ParSet[ps].XSizeMB, ParSet[ps].YSizeMB, ParSet[ps].EntropyCoding, ParSet[ps].MotionResolution, ParSet[ps].MaxPicID);
+*/
+  ParSet[ps].Valid = 1;
+  return 0;
+}
+
+#if 0
+/*!
+ ************************************************************************
+ * \brief
  *    Interrepts a parameter set packet
  ************************************************************************
  */
@@ -1517,11 +2131,11 @@ int RTPInterpretParameterSetPacket (char *buf, int buflen)
 
   int bufp = 0;
   int state = EXPECT_ATTR;
-  int interpreter;
+  int interpreter = 0;
   int minus, number;
   int ps;
   char s[MAX_PARAMETER_STRINGLEN];
-  void *destin;
+  void *destin = NULL;
 
   while (bufp < buflen)
   {
@@ -1794,10 +2408,11 @@ int RTPInterpretParameterSetPacket (char *buf, int buflen)
           * (int *)destin = 1;
         break;
       case INTERPRET_INTRA_PREDICTION:
-        if (!strncmp (s, "InterPredicted", 14))
+        if (!strncmp (s, "Unconstrained", 14))
           * (int *)destin = 0;
         else
           * (int *)destin = 1;
+printf ("Interpret Intra prediction returns %d\n", *);
         break;
       case INTERPRET_PARTITIONING_TYPE:
         if (!strncmp (s, "one", 3))
@@ -1824,7 +2439,7 @@ int RTPInterpretParameterSetPacket (char *buf, int buflen)
   ParSet[ps].Valid = 1;
   return 0;
 }
-
+#endif
 
 /*!
  ************************************************************************
@@ -1898,20 +2513,24 @@ void RTPUseParameterSet (int n, struct img_par *img, struct inp_par *inp)
     inp->symbol_mode = UVLC;
   else
     inp->symbol_mode = CABAC;
-
   // MotionResolution
   img->mv_res = ParSet[CurrentParameterSet].MotionResolution;
-
   // PartitioningType
   inp->partition_mode = ParSet[CurrentParameterSet].PartitioningType;
 
   // IntraPredictionType
-  inp->UseConstrainedIntraPred = ParSet[CurrentParameterSet].IntraPredictionType;
+  inp->UseConstrainedIntraPred = img->UseConstrainedIntraPred = ParSet[CurrentParameterSet].IntraPredictionType;
   
   //! img->type: This is calculated by using ParSet[CurrentParameterSet].UseMultpred
   //! and the slice type from the slice header.  It is set in RTPSetImgInp()
 
   // HRCParameters: Doesn't exist
+    // FMO: MBAmap
+  FmoInit (ParSet[CurrentParameterSet].XSizeMB, 
+           ParSet[CurrentParameterSet].YSizeMB, 
+           ParSet[CurrentParameterSet].MBAmap, 
+           ParSet[CurrentParameterSet].XSizeMB * ParSet[CurrentParameterSet].YSizeMB);
+
 }
 
 
@@ -2114,7 +2733,7 @@ void RTPProcessDataPartitionedSlice (struct img_par *img, struct inp_par *inp, F
     img->currentSlice->partArr[1].bitstream->code_len=0;
     img->currentSlice->partArr[1].readSyntaxElement = readSyntaxElement_RTP;
     img->currentSlice->partArr[2].bitstream->ei_flag=0;
-    CopyPartitionBitstring (img, c, img->currentSlice->partArr[2].bitstream, 2);    // copy to C
+    CopyPartitionBitstring (img, c, img->currentSlice->partArr[2].bitstream, 2, inp);    // copy to C
     return;
   }
 
@@ -2138,7 +2757,7 @@ void RTPProcessDataPartitionedSlice (struct img_par *img, struct inp_par *inp, F
     img->currentSlice->partArr[1].bitstream->ei_flag=0;
     img->currentSlice->partArr[2].bitstream->ei_flag=0;
     img->currentSlice->ei_flag=0;
-    CopyPartitionBitstring (img, c, img->currentSlice->partArr[2].bitstream, 2);    // copy to C
+    CopyPartitionBitstring (img, c, img->currentSlice->partArr[2].bitstream, 2, inp);    // copy to C
     return;
   }
 
@@ -2148,7 +2767,7 @@ void RTPProcessDataPartitionedSlice (struct img_par *img, struct inp_par *inp, F
     // copy type B and then check for type C
     
     img->currentSlice->partArr[1].bitstream->ei_flag=0;
-    CopyPartitionBitstring (img, b, img->currentSlice->partArr[1].bitstream, 1);    // copy to B
+    CopyPartitionBitstring (img, b, img->currentSlice->partArr[1].bitstream, 1, inp);    // copy to B
     c = b;    // re-use buffer, could as well use b variable
     Filepos = ftell (bits);
 
@@ -2192,7 +2811,7 @@ void RTPProcessDataPartitionedSlice (struct img_par *img, struct inp_par *inp, F
     {
       img->currentSlice->partArr[2].bitstream->ei_flag=0;
       img->currentSlice->ei_flag=0;
-      CopyPartitionBitstring (img, c, img->currentSlice->partArr[2].bitstream, 2);    // copy to C
+      CopyPartitionBitstring (img, c, img->currentSlice->partArr[2].bitstream, 2, inp);    // copy to C
       return;
     }
     assert (1==2);
@@ -2203,7 +2822,7 @@ void RTPProcessDataPartitionedSlice (struct img_par *img, struct inp_par *inp, F
 
 
 
-void CopyPartitionBitstring (struct img_par *img, RTPpacket_t *p, Bitstream *b, int dP)
+void CopyPartitionBitstring (struct img_par *img, RTPpacket_t *p, Bitstream *b, int dP, struct inp_par *inp)
 {
   int header_bytes;
   RTPSliceHeader_t *sh = alloca (sizeof(RTPSliceHeader_t));
@@ -2221,6 +2840,11 @@ void CopyPartitionBitstring (struct img_par *img, RTPpacket_t *p, Bitstream *b, 
   b->frame_bitoffset = b->read_len = 0;
 
   memcpy (b->streamBuffer, &p->payload[header_bytes], b->bitstream_length);
+  if(inp->Encapsulated_NAL_Payload) 
+  {
+    b->bitstream_length = EBSPtoRBSP(b->streamBuffer, b->bitstream_length, 0);
+    b->bitstream_length = RBSPtoSODB(b->streamBuffer, b->bitstream_length);
+  }
 
   if (ParSet[CurrentParameterSet].EntropyCoding == CABAC) 
   {
@@ -2232,3 +2856,6 @@ void CopyPartitionBitstring (struct img_par *img, RTPpacket_t *p, Bitstream *b, 
     arideco_start_decoding(dep, buf, 0, &b->read_len);
   }
 }
+
+
+// "Unconstrained":"Constrained",

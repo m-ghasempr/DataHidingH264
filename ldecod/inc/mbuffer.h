@@ -52,11 +52,16 @@
 typedef struct 
 {
   int  used;
+  int  valid;           //<! To indicate if this frame is inserted to fill in the PN gap
+                        //<! 1: normal reference frame, 0: frame inserted to the buffer
   int  picID;
   int  lt_picID;
   byte **mref;
   byte ***mcef;
   int  islong;            //<! field is needed for reordering
+
+  unsigned int layerNumber;  //<! to tell which layer this frame belongs to.
+  unsigned int subSequenceIdentifier;  //<! to tell which subsequence this frame belongs to.
 } Frame;
 
 /* the whole frame buffer structure containing both long and short term frames */
@@ -97,6 +102,9 @@ void init_mref(ImageParameters *img);
 void reorder_mref(ImageParameters *img);
 
 void copy2fb(ImageParameters *img);
+
+void add_frame(int pn_expected, int valid);
+void fill_PN_gap(ImageParameters *img);
 
 #endif
 

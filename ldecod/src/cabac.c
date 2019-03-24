@@ -46,6 +46,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <memory.h>
+#include <assert.h> // for debugging
 #include <string.h>
 #include "cabac.h"
 #include "memalloc.h"
@@ -116,11 +117,7 @@ TextureInfoContexts* create_contexts_TextureInfo(void)
 {
   int j,k;
   TextureInfoContexts *deco_ctx;
-#ifndef USE_6_INTRA_MODES
   const int max_ipr=9;
-#else
-  const int max_ipr=6;
-#endif
 
   deco_ctx = (TextureInfoContexts*) calloc(1, sizeof(TextureInfoContexts) );
   if( deco_ctx == NULL )
@@ -164,6 +161,20 @@ TextureInfoContexts* create_contexts_TextureInfo(void)
     if( deco_ctx->coeff_count_context[j] == NULL )
       no_mem_exit("create_contexts_TextureInfo: deco_ctx->coeff_count_context");
   }
+
+  for (j=0; j < 2*NUM_TRANS_TYPE_ABT; j++)
+  {
+    deco_ctx->ABT_run_context[j] = (BiContextTypePtr) malloc(NUM_RUN_CTX_ABT  * sizeof( BiContextType ) );
+    if( deco_ctx->ABT_run_context[j] == NULL )
+      no_mem_exit("create_contexts_TextureInfo: deco_ctx->ABT_run_context");
+  }
+
+  for (j=0; j < NUM_TRANS_TYPE_ABT; j++)
+  {
+    deco_ctx->ABT_coeff_count_context[j] = (BiContextTypePtr) malloc(NUM_COEFF_COUNT_CTX_ABT  * sizeof( BiContextType ) );
+    if( deco_ctx->ABT_coeff_count_context[j] == NULL )
+      no_mem_exit("create_contexts_TextureInfo: deco_ctx->ABT_coeff_count_context");
+  }
   return deco_ctx;
 }
 
@@ -184,7 +195,7 @@ void init_contexts_MotionInfo(struct img_par *img, MotionInfoContexts *deco_ctx,
   int qp_factor;
   int ini[3];
 
-  qp_factor=min(max(0,img->qp-10),21);
+  qp_factor=min(max(0,img->qp-10-SHIFT_QP),21);
 
   if ( (img->width*img->height) <=  (IMG_WIDTH * IMG_HEIGHT) ) //  format <= QCIF
         scale_factor=1;
@@ -285,14 +296,10 @@ void init_contexts_TextureInfo(struct img_par *img, TextureInfoContexts *deco_ct
   int scale_factor;
   int qp_factor;
   int ini[3];
-#ifndef USE_6_INTRA_MODES
   const int max_ipr=9;
-#else
-  const int max_ipr=6;
-#endif
 
 
-  qp_factor=min(max(0,img->qp-10),21);
+  qp_factor=min(max(0,img->qp-10-SHIFT_QP),21);
 
   if ( (img->width*img->height) <=  (IMG_WIDTH * IMG_HEIGHT) ) //  format <= QCIF
         scale_factor=1;
@@ -334,7 +341,7 @@ void init_contexts_TextureInfo(struct img_par *img, TextureInfoContexts *deco_ct
     }
 
   // other init mapping 
-  qp_factor=min(max(0,28-img->qp),24);
+  qp_factor=min(max(0,28-(img->qp-SHIFT_QP)),24);
 
   for (j=0; j < 4*NUM_TRANS_TYPE; j++)
   {
@@ -390,6 +397,44 @@ void init_contexts_TextureInfo(struct img_par *img, TextureInfoContexts *deco_ct
     {
       for (i=0; i < NUM_COEFF_COUNT_CTX; i++)
         biari_init_context(deco_ctx->coeff_count_context[j] + i,1,1,100);
+    }
+  }
+
+  for (j=0; j < 2*NUM_TRANS_TYPE_ABT; j++)
+  {
+    if (ini_flag)
+    {
+      for (i=0; i < NUM_RUN_CTX_ABT; i++)
+      {
+        ini[0] = (ABT_Run_Ini[j][i][0]+(ABT_Run_Ini[j][i][3]*qp_factor)/24)*scale_factor;
+        ini[1] = (ABT_Run_Ini[j][i][1]+(ABT_Run_Ini[j][i][4]*qp_factor)/24)*scale_factor;
+        ini[2] = ABT_Run_Ini[j][i][2]*scale_factor;
+        biari_init_context(deco_ctx->ABT_run_context[j] + i,ini[0],ini[1],ini[2]);
+      }
+    }
+    else
+    {
+      for (i=0; i < NUM_RUN_CTX_ABT; i++)
+        biari_init_context(deco_ctx->ABT_run_context[j] + i,1,1,INICNT_ABT);
+    }
+  }
+
+  for (j=0; j < NUM_TRANS_TYPE_ABT; j++)
+  {
+    if (ini_flag)
+    {
+      for (i=0; i < NUM_COEFF_COUNT_CTX_ABT; i++)
+      {
+        ini[0] = (ABT_Coeff_Count_Ini[j][i][0]+(ABT_Coeff_Count_Ini[j][i][3]*qp_factor)/24)*scale_factor;
+        ini[1] = (ABT_Coeff_Count_Ini[j][i][1]+(ABT_Coeff_Count_Ini[j][i][4]*qp_factor)/24)*scale_factor;
+        ini[2] = ABT_Coeff_Count_Ini[j][i][2]*scale_factor;
+        biari_init_context(deco_ctx->ABT_coeff_count_context[j] + i,ini[0],ini[1],ini[2]);
+      }
+    }
+    else
+    {
+      for (i=0; i < NUM_COEFF_COUNT_CTX_ABT; i++)
+        biari_init_context(deco_ctx->ABT_coeff_count_context[j] + i,1,1,INICNT_ABT);
     }
   }
 }
@@ -450,11 +495,7 @@ void delete_contexts_TextureInfo(TextureInfoContexts *deco_ctx)
 {
   int j,k;
 
-#ifndef USE_6_INTRA_MODES
   static const int max_ipr=9;
-#else
-  static const int max_ipr=6;
-#endif
 
 
   if( deco_ctx == NULL )
@@ -484,11 +525,23 @@ void delete_contexts_TextureInfo(TextureInfoContexts *deco_ctx)
     if (deco_ctx->run_context[j] != NULL)
       free(deco_ctx->run_context[j]);
   }
-      
+
   for (j=0; j < NUM_TRANS_TYPE; j++)
   {
     if (deco_ctx->coeff_count_context[j] != NULL)
       free(deco_ctx->coeff_count_context[j]);
+  }
+
+  for (j=0; j < 2*NUM_TRANS_TYPE_ABT; j++)
+  {
+    if (deco_ctx->ABT_run_context[j] != NULL)
+      free(deco_ctx->ABT_run_context[j]);
+  }
+
+  for (j=0; j < NUM_TRANS_TYPE_ABT; j++)
+  {
+    if (deco_ctx->ABT_coeff_count_context[j] != NULL)
+      free(deco_ctx->ABT_coeff_count_context[j]);
   }
 
   free( deco_ctx );
@@ -876,19 +929,11 @@ void readIntraPredModeFromBuffer_CABAC( SyntaxElement *se,
   else if (currMB->mb_available[1][0])  prev_sym = currMB->mb_available[1][0]->intra_pred_modes[se->context+5];
   else                                  prev_sym = 0;
 
-#ifndef USE_6_INTRA_MODES
   se->value1  = unary_bin_max_decode(dep_dp,ctx->ipr_contexts[prev_sym],1,8);
-#else
-  se->value1  = unary_bin_max_decode(dep_dp,ctx->ipr_contexts[prev_sym],1,5);
-#endif
 
   //--- second symbol ---
   prev_sym = se->value1;
-#ifndef USE_6_INTRA_MODES
   se->value2  = unary_bin_max_decode(dep_dp,ctx->ipr_contexts[prev_sym],1,8);
-#else
-  se->value2  = unary_bin_max_decode(dep_dp,ctx->ipr_contexts[prev_sym],1,5);
-#endif
 
 #if TRACE
   fprintf(p_trace, "@%d%s\t\t\t%d\n",symbolCount++, se->tracestring, se->value1);
@@ -1229,10 +1274,10 @@ void readRunLevelFromBuffer_CABAC (SyntaxElement *se,
                                    struct img_par *img,    
                                    DecodingEnvironmentPtr dep_dp)
 {
-  int level;
-  int run=0;
+  int level = 0;
+  int run   = 0;
   const int curr_ctx_idx = se->context;
-  int curr_level_ctx, curr_run_ctx;
+  int curr_level_ctx, curr_run_ctx = 0;
   int sign_of_level;
   static int max_run;
   static int coeff_count=0;
@@ -1246,6 +1291,10 @@ void readRunLevelFromBuffer_CABAC (SyntaxElement *se,
   static int prevLevel = 0;
   int changed_ctx_idx;
   
+  int b8, curr_abt_ctx_idx=-1; // =-1: avoid warnings
+  static unsigned int max_ccnt_abt [6] = {63,32,16,63,32,16};
+  static unsigned int max_coeff_abt[6] = {64,32,16,64,32,16};
+
   TextureInfoContexts *ctx = img->currentSlice->tex_ctx;
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
 
@@ -1343,6 +1392,59 @@ void readRunLevelFromBuffer_CABAC (SyntaxElement *se,
       }
       break;
     }
+    case 9:  // 8x8 ABT luma inter
+    case 10: // 4x8,8x4 ABT luma inter
+    case 11: // 4x4 ABT luma inter
+    case 12: // 8x8 ABT luma intra
+    case 13: // 4x8,8x4 ABT luma intra
+    case 14: // 4x4 ABT luma intra
+    {
+      //context termination
+      j = img->subblock_y;
+      i = img->subblock_x;
+      b8 = ((j>1)?2:0) + ((i>1)?1:0);
+      curr_abt_ctx_idx = curr_ctx_idx - NUM_TRANS_TYPE;
+
+      if (j==0)
+        b = (currMB->mb_available[0][1] == NULL)?0:(((currMB->mb_available[0][1])->coeffs_count[BLOCK_SIZE-1][i]==0)?0:1);
+      else
+        b = (currMB->coeffs_count[j-1][i]==0)?0:1;
+
+      if (i==0)
+        a = (currMB->mb_available[1][0] == NULL)?0:(((currMB->mb_available[1][0])->coeffs_count[j][BLOCK_SIZE-1]==0)?0:1);
+      else
+        a = (currMB->coeffs_count[j][i-1]==0)?0:1;
+
+      act_ctx = a+2*b;
+
+      coeff_count = unary_bin_max_decodeABT(dep_dp, ctx->ABT_coeff_count_context[curr_abt_ctx_idx]+act_ctx, 4-act_ctx,
+                                            max_ccnt_abt[curr_abt_ctx_idx]);
+      if ((curr_ctx_idx==9)||(curr_ctx_idx==12))
+        coeff_count++;
+
+      // copy coeff_count to all 4x4 positions belonging to the current subblock
+      if ((curr_ctx_idx==9)||(curr_ctx_idx==12))
+      {
+        currMB->coeffs_count[j  ][i  ] =
+        currMB->coeffs_count[j+1][i  ] =
+        currMB->coeffs_count[j  ][i+1] =
+        currMB->coeffs_count[j+1][i+1] = coeff_count;
+      }
+      else if ((curr_ctx_idx==10)||(curr_ctx_idx==13))
+      {
+        currMB->coeffs_count[j][i] = coeff_count;
+        if (currMB->abt_mode[b8]==B8x4)
+          currMB->coeffs_count[j  ][i+1] = coeff_count;
+        else
+          currMB->coeffs_count[j+1][i  ] = coeff_count;
+      }
+      else
+      {
+        currMB->coeffs_count[j][i] = coeff_count;
+      }
+
+      break;
+    }
     default: printf("ERROR");
     }
     coeff_count_all = coeff_count;
@@ -1367,37 +1469,62 @@ void readRunLevelFromBuffer_CABAC (SyntaxElement *se,
   }
   if (coeff_count != 0) //get the coeff. (run and level)
   {
-    //determine run ctx
-    switch (curr_ctx_idx)
+    if (curr_ctx_idx < 9)
     {
-    case 1:
-    case 2:
-      curr_run_ctx = ((coeff_count_all) >= 4) ? 1 : 0;  
-      break;                                        
-    case 3:
-      curr_run_ctx = ((coeff_count) >= 4) ? 1 : 0;
-      break;
-    case 4:
-    case 7:
-    case 8:
-    case 0:
-      curr_run_ctx = ((coeff_count) >= 3) ? 1 : 0;
-      break;
-    case 5:
-    case 6:
-      curr_run_ctx = ((coeff_count) >= 2) ? 1 : 0;
-      break;
+      //determine run ctx
+      switch (curr_ctx_idx)
+      {
+      case 1:
+      case 2:
+        curr_run_ctx = ((coeff_count_all) >= 4) ? 1 : 0;
+        break;
+      case 3:
+        curr_run_ctx = ((coeff_count) >= 4) ? 1 : 0;
+        break;
+      case 4:
+      case 7:
+      case 8:
+      case 0:
+        curr_run_ctx = ((coeff_count) >= 3) ? 1 : 0;
+        break;
+      case 5:
+      case 6:
+        curr_run_ctx = ((coeff_count) >= 2) ? 1 : 0;
+        break;
+      }
+
+      curr_run_ctx = 9*curr_run_ctx + curr_ctx_idx;
+      // get run
+      if (coeff_count == coeff_count_all)
+        max_run = max_coeff[curr_ctx_idx]-coeff_count_all;
+      if (max_run > 0)
+        run = unary_bin_max_decode(dep_dp,ctx->run_context[curr_run_ctx],1,max_run);
+      max_run -= run;
+    }
+    else
+    {
+      curr_abt_ctx_idx = curr_ctx_idx - NUM_TRANS_TYPE;
+      curr_run_ctx = ((coeff_count_all) >= 4) ? 1 : 0;
+      curr_run_ctx = NUM_TRANS_TYPE_ABT*curr_run_ctx + curr_abt_ctx_idx;        // 6->NUM_TRANS_TYPE_ABT to prevent selection of wrong context.
+      assert( curr_run_ctx>=0);
+      //send run
+      if (coeff_count == coeff_count_all)
+        max_run = max_coeff_abt[curr_abt_ctx_idx]-coeff_count_all;
+      if ((max_run != 0) )
+        run = unary_bin_max_decodeABT(dep_dp,ctx->ABT_run_context[curr_run_ctx],1,max_run);
+      max_run -= run;
     }
 
-    curr_run_ctx = 9*curr_run_ctx + curr_ctx_idx;
-    // get run
-    if (coeff_count == coeff_count_all)
-      max_run = max_coeff[curr_ctx_idx]-coeff_count_all;
-    if (max_run > 0) 
-      run = unary_bin_max_decode(dep_dp,ctx->run_context[curr_run_ctx],1,max_run);
-    max_run -= run;
     //get level
-    changed_ctx_idx = curr_ctx_idx;
+    if (curr_ctx_idx < 9)
+      changed_ctx_idx = curr_ctx_idx;
+    else
+    {                        // use JM contexts for ABT level encoding:
+      if (curr_ctx_idx < 12) // inter
+        changed_ctx_idx = 1;
+      else                   // intra
+        changed_ctx_idx = 2;
+    }
     changed_ctx_idx += 9*prevLevel;
     level = unary_level_decode(dep_dp,ctx->level_context[changed_ctx_idx]);
     level++;
@@ -1459,31 +1586,32 @@ int readSliceCABAC(struct img_par *img, struct inp_par *inp)
   DecodingEnvironmentPtr dep = &((currSlice->partArr[0]).de_cabac);
   int current_header;
   int BitstreamLengthInBytes;
-  int info;
   int BitsUsedByHeader = 0, ByteStartPosition;
   int newframe = 0;   //WYK: Oct. 8, 2001, change the method to find a new frame
+  int startcodeprefix_len; //Number of bytes taken by start code prefix
 
   currStream->frame_bitoffset =0;
 
   memset (code_buffer, 0xff, MAX_CODED_FRAME_SIZE);   // this prevents a buffer full with zeros
-  BitstreamLengthInBytes = currStream->bitstream_length = GetOneSliceIntoSourceBitBuffer(img, inp, code_buffer);
+  BitstreamLengthInBytes = currStream->bitstream_length = GetOneSliceIntoSourceBitBuffer(img, inp, code_buffer, &startcodeprefix_len);
 
   // Here we are ready to interpret the picture and slice headers.  Since
   // SliceHeader() gets the data out of the UVLC's len/info
   // array, we need to convert the start of our slice to such a format.
 
 
-  if (BitstreamLengthInBytes < 4)
+  if (BitstreamLengthInBytes < startcodeprefix_len)
     return EOS;
+
+  if(inp->Encapsulated_NAL_Payload) 
+  {
+    BitstreamLengthInBytes = currStream->bitstream_length = EBSPtoRBSP(code_buffer, currStream->bitstream_length, startcodeprefix_len);
+    BitstreamLengthInBytes = currStream->bitstream_length = RBSPtoSODB(code_buffer, currStream->bitstream_length);
+  }
 
   // Now we have the bits between the current startcode (inclusive) and the
   // next start code in code_buffer.  Now decode the start codes and the headers
-  if (31 != GetVLCSymbol (code_buffer, 0, &info, BitstreamLengthInBytes))
-  {
-    snprintf (errortext, ET_SIZE, "readSliceCABAC: Panic, expected start code symbol, found wrong len");
-    error(errortext, 600);
-  }
-  currStream->frame_bitoffset +=31;
+  currStream->frame_bitoffset += startcodeprefix_len * 8;
   BitsUsedByHeader+=SliceHeader(img, inp);
 
   //WYK: Oct. 8, 2001, change the method to find a new frame
@@ -1491,8 +1619,8 @@ int readSliceCABAC(struct img_par *img, struct inp_par *inp)
     newframe = 1;
   else 
     newframe = 0;
+// printf ("readSlice_CABAC: tr_old %d, tr %d, startcodeprefix_len %d, newframe %d\n", img->tr_old, img->tr, startcodeprefix_len, newframe);    
   img->tr_old = img->tr;
-    
   // if the TR of current slice is not identical to the TR of previous received slice, we have a new frame
   if(newframe)
     current_header = SOP;
@@ -1659,13 +1787,77 @@ unsigned int unary_mv_decode(DecodingEnvironmentPtr dep_dp,
  ************************************************************************
  * \brief
  *    finding end of a slice in case this is not the end of a frame
+ *
+ * Unsure whether the "correction" below actually solves an off-by-one
+ * problem or whether it introduces one in some cases :-(  Anyway,
+ * with this change the bit stream format works with CABAC again.
+ * StW, 8.7.02
  ************************************************************************
  */
 int cabac_startcode_follows(struct img_par *img, struct inp_par *inp)
 {
   Slice *currSlice = img->currentSlice;
-  if (img->current_mb_nr == currSlice->last_mb_nr)
+// printf ("cabac_startcode_follows returns %d\n", (img->current_mb_nr == currSlice->last_mb_nr));
+//  if (img->current_mb_nr == currSlice->last_mb_nr)
+  if (img->current_mb_nr > currSlice->last_mb_nr)
     return TRUE;
   return FALSE;
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    Unary binarization for values <16 with max 4 CTX; larger values use
+ *    syncword and binary representation of value-16; no terminating "0"
+ *    of sync for binary representation(finite symbol alphabet)
+ *    Used for ABT.
+ ************************************************************************
+ */
+unsigned int unary_bin_max_decodeABT(DecodingEnvironmentPtr dep_dp,
+                                     BiContextTypePtr ctx,
+                                     int ctx_offset,
+                                     unsigned int max_symbol)
+{
+  unsigned int l, ibits=0, i=0;
+  unsigned int symbol;
+  int bin=1;
+  BiContextTypePtr ictx=ctx;
+
+  symbol =  biari_decode_symbol(dep_dp, ctx );
+
+  if (symbol==0)
+  {
+    return 0;
+  }
+  else
+  {
+    symbol = 0;
+    ictx = ctx + ctx_offset;
+    do
+    {
+      if ((++bin)==17)
+        break;
+      l =  biari_decode_symbol(dep_dp, ictx );
+      symbol++;
+      if (bin==2) { ictx++; }
+      if (bin==4) { ictx++; }
+    }
+    while (l>0);
+
+    if (bin>16)
+    {
+      assert (max_symbol > 15);
+      l=max_symbol-15;
+      do { ibits++; }
+      while ( (l>>=1) > 0);
+      ictx = ctx + ctx_offset + 3;
+      while (i<ibits)
+      {
+        l=biari_decode_symbol(dep_dp, ictx);
+        symbol += l*(1<<i);
+        i++;
+      }
+    }
+    return symbol;
+  }
+}

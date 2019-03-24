@@ -1,27 +1,24 @@
-#/bin/sh
+#!/bin/sh
+
+which sed || (echo "sed unavailable" 1>&2; exit 1)
 
 echo "Creating obj directories..."
-if test -d lencod/obj ;then echo "  lencod/obj exists." ; else mkdir lencod/obj ;fi
-if test -d ldecod/obj ;then echo "  ldecod/obj exists." ; else mkdir ldecod/obj ;fi
 
-if test -z "`which sed`" ;then
-  echo "Fatal: \"sed\" not found!"
-  exit
-fi
+test -d lencod/obj && rm -rf lencod/obj ; mkdir lencod/obj
+test -d ldecod/obj && rm -rf ldecod/obj ; mkdir ldecod/obj
 
-touch lencod/dependencies
-touch ldecod/dependencies
+rm -f lencod/dependencies; touch lencod/dependencies
+rm -f ldecod/dependencies; touch ldecod/dependencies
 
 echo "Removing DOS LF chars..."
-for s in `find . -name \*.[ch]`
+for f in l{en,de}cod/{src,inc}/*.[ch]
 do
-cat $s|sed -e "s///" >$s.tmp
-mv $s.tmp $s
+   sed -e "s///" < $f >$f.tmp && mv $f.tmp $f
 done
-for s in `find . -name Makefile`
+
+for f in l{en,de}cod/Makefile
 do
-cat $s|sed -e "s///" >$s.tmp
-mv $s.tmp $s
+   sed -e "s///" < $f >$f.tmp && mv $f.tmp $f
 done
 
 echo "Done."

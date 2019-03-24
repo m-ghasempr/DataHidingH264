@@ -402,6 +402,7 @@ static int ParameterNameToMapIndex (char *s)
  */
 static void PatchInp ()
 {
+
   // consistency check of QPs
   if (input->qp0 > MAX_QP || input->qp0 < MIN_QP)
   {
@@ -467,6 +468,9 @@ static void PatchInp ()
 
   // Set block sizes
 
+    input->blc_size[0][0]=16;
+    input->blc_size[0][1]=16;
+
     input->blc_size[1][0]=16;
     input->blc_size[1][1]=16;
 
@@ -521,6 +525,12 @@ static void PatchInp ()
     error (errortext, 400);
   }
 
+  // Encapsulated_NAL_Payload check
+  if(input->Encapsulated_NAL_Payload != FALSE && input->Encapsulated_NAL_Payload != TRUE)
+  {
+    snprintf (errortext, ET_SIZE, "Encapsulated_NAL_Payload %d. It has to be either 0 or 1 ", input->Encapsulated_NAL_Payload);
+  }
+
   // Open Files
 
   if ((p_in=fopen(input->infile,"rb"))==NULL)
@@ -540,4 +550,59 @@ static void PatchInp ()
     snprintf(errortext, ET_SIZE, "Error open file %s", input->TraceFile);
     error (errortext, 500);
   }
+
+  // frame/field consistency check
+  if (input->InterlaceCodingOption != FRAME_CODING && input->InterlaceCodingOption != ADAPTIVE_CODING)
+  {
+    snprintf (errortext, ET_SIZE, "Unsupported InterlaceCodingOption=%d, use frame based coding=0 or adaptive=1",input->InterlaceCodingOption);
+    error (errortext, 400);
+  }
+   
+  if (input->InterlaceCodingOption != FRAME_CODING)
+  {
+    if (input->img_height % 32 != 0 )
+    { 
+      snprintf(errortext, ET_SIZE, "Unsupported image format y=%d, must be a multiple of 32 for adaptive frame/field",input->img_height);
+      error (errortext, 400);
+    }
+  }
+
+  if (input->InterlaceCodingOption != FRAME_CODING && (input->of_mode == 1 || input->of_mode == 2))
+  {
+    snprintf(errortext, ET_SIZE, "AFF currently does not support RTP & IFF, check encoder.cfg");
+    error (errortext, 400);
+  }
+
+  // Tian Dong: May 31, 2002
+  // The number of frames in one sub-seq in enhanced layer should not exceed
+  // the number of reference frame number.
+  if ( input->NumFramesInELSubSeq >= input->no_multpred || input->NumFramesInELSubSeq < 0 )
+  {
+    snprintf(errortext, ET_SIZE, "NumFramesInELSubSeq (%d) is out of range [0,%d).", input->NumFramesInELSubSeq, input->no_multpred);
+    error (errortext, 500);
+  }
+  // Tian Dong: Enhanced GOP is not supported in bitstream mode and RTP mode yet. May 31, 2002
+  if ( input->NumFramesInELSubSeq > 0 && input->of_mode != PAR_OF_IFF )
+  {
+    snprintf(errortext, ET_SIZE, "Enhanced GOP is not supported in bitstream mode and RTP mode yet.");
+    error (errortext, 500);
+  }
+  // Tian Dong: adaptive frame/field coding is not supported in IFF, May 31, 2002
+  if (input->of_mode == PAR_OF_IFF && input->InterlaceCodingOption != 0)
+  {
+    snprintf(errortext, ET_SIZE, "adaptive frame/field coding is not supported in IFF, May 31, 2002.");
+    error (errortext, 500);
+  }
+}
+
+void PatchInputNoFrames()
+{
+  // Tian Dong: May 31, 2002
+  // If the frames are grouped into two layers, "FramesToBeEncoded" in the config file
+  // will give the number of frames which are in the base layer. Here we let input->no_frames
+  // be the total frame numbers.
+  input->no_frames = 1+ (input->no_frames-1) * (input->NumFramesInELSubSeq+1);
+  if ( input->NumFrameIn2ndIGOP )
+    input->NumFrameIn2ndIGOP = 1+(input->NumFrameIn2ndIGOP-1) * (input->NumFramesInELSubSeq+1);
+  FirstFrameIn2ndIGOP = input->no_frames;
 }

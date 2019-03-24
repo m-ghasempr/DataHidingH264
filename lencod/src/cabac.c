@@ -46,6 +46,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <memory.h>
+#include <assert.h>
 #include "cabac.h"
 
 /*!
@@ -108,11 +109,7 @@ TextureInfoContexts* create_contexts_TextureInfo(void)
 {
   int                   j,k;
   TextureInfoContexts*  enco_ctx;
-#ifndef USE_6_INTRA_MODES
   static const int max_ipr=9;
-#else
-  static const int max_ipr=6;
-#endif
 
  
 
@@ -157,6 +154,21 @@ TextureInfoContexts* create_contexts_TextureInfo(void)
     if( enco_ctx->coeff_count_context[j] == NULL )
       no_mem_exit("create_contexts_TextureInfo: enco_ctx->coeff_count_context");
   }
+
+  for (j=0; j < 2*NUM_TRANS_TYPE_ABT; j++)
+  {
+    enco_ctx->ABT_run_context[j] = (BiContextTypePtr) malloc(NUM_RUN_CTX_ABT  * sizeof( BiContextType ) );
+    if( enco_ctx->ABT_run_context[j] == NULL )
+      no_mem_exit("create_contexts_TextureInfo: enco_ctx->ABT_run_context");
+  }
+
+  for (j=0; j < NUM_TRANS_TYPE_ABT; j++)
+  {
+    enco_ctx->ABT_coeff_count_context[j] = (BiContextTypePtr) malloc(NUM_COEFF_COUNT_CTX_ABT  * sizeof( BiContextType ) );
+    if( enco_ctx->ABT_coeff_count_context[j] == NULL )
+      no_mem_exit("create_contexts_TextureInfo: enco_ctx->ABT_coeff_count_context");
+  }
+
   return enco_ctx;
 }
 
@@ -181,7 +193,7 @@ void init_contexts_MotionInfo(MotionInfoContexts *enco_ctx, int ini_flag)
   else
     scale_factor=2;
 
-  qp_factor=min(max(0,img->qp-10),21);
+  qp_factor=min(max(0,img->qp-10-SHIFT_QP),21);
 
   for (j=0; j<3; j++)
   {
@@ -274,18 +286,14 @@ void init_contexts_TextureInfo(TextureInfoContexts *enco_ctx, int ini_flag)
   int scale_factor;
   int qp_factor;
   int ini[3];
-#ifndef USE_6_INTRA_MODES
   const int max_ipr=9;
-#else
-  const int max_ipr=6;
-#endif
 
   if ( (img->width*img->height) <=  (IMG_WIDTH * IMG_HEIGHT) ) //  format <= QCIF
    scale_factor=1;
   else
    scale_factor=2;
 
-  qp_factor=min(max(0,img->qp-10),21);
+  qp_factor=min(max(0,img->qp-10-SHIFT_QP),21);
 
   for (j=0; j < max_ipr; j++)
   {
@@ -322,7 +330,7 @@ void init_contexts_TextureInfo(TextureInfoContexts *enco_ctx, int ini_flag)
     }
 
   // other init mapping 
-  qp_factor=min(max(0,28-img->qp),24);
+  qp_factor=min(max(0,28-(img->qp-SHIFT_QP)),24);
 
   for (j=0; j < 4*NUM_TRANS_TYPE; j++)
   {
@@ -378,6 +386,44 @@ void init_contexts_TextureInfo(TextureInfoContexts *enco_ctx, int ini_flag)
     {
       for (i=0; i < NUM_COEFF_COUNT_CTX; i++)
         biari_init_context(enco_ctx->coeff_count_context[j] + i,1,1,100);
+    }
+  }
+
+  for (j=0; j < 2*NUM_TRANS_TYPE_ABT; j++)
+  {
+    if (ini_flag)
+    {
+      for (i=0; i < NUM_RUN_CTX_ABT; i++)
+      {
+        ini[0] = (ABT_Run_Ini[j][i][0]+(ABT_Run_Ini[j][i][3]*qp_factor)/24)*scale_factor;
+        ini[1] = (ABT_Run_Ini[j][i][1]+(ABT_Run_Ini[j][i][4]*qp_factor)/24)*scale_factor;
+        ini[2] = ABT_Run_Ini[j][i][2]*scale_factor;
+        biari_init_context(enco_ctx->ABT_run_context[j] + i,ini[0],ini[1],ini[2]);
+      }
+    }
+    else
+    {
+      for (i=0; i < NUM_RUN_CTX_ABT; i++)
+        biari_init_context(enco_ctx->ABT_run_context[j] + i,1,1,INICNT_ABT);
+    }
+  }
+
+  for (j=0; j < NUM_TRANS_TYPE_ABT; j++)
+  {
+    if (ini_flag)
+    {
+      for (i=0; i < NUM_COEFF_COUNT_CTX_ABT; i++)
+      {
+        ini[0] = (ABT_Coeff_Count_Ini[j][i][0]+(ABT_Coeff_Count_Ini[j][i][3]*qp_factor)/24)*scale_factor;
+        ini[1] = (ABT_Coeff_Count_Ini[j][i][1]+(ABT_Coeff_Count_Ini[j][i][4]*qp_factor)/24)*scale_factor;
+        ini[2] = ABT_Coeff_Count_Ini[j][i][2]*scale_factor;
+        biari_init_context(enco_ctx->ABT_coeff_count_context[j] + i,ini[0],ini[1],ini[2]);
+      }
+    }
+    else
+    {
+      for (i=0; i < NUM_COEFF_COUNT_CTX_ABT; i++)
+        biari_init_context(enco_ctx->ABT_coeff_count_context[j] + i,1,1,INICNT_ABT);
     }
   }
 }
@@ -438,11 +484,7 @@ void delete_contexts_TextureInfo(TextureInfoContexts *enco_ctx)
 
   int j,k;
 
-#ifndef USE_6_INTRA_MODES
   static const int max_ipr=9;
-#else
-  static const int max_ipr=6;
-#endif
 
   if( enco_ctx == NULL )
     return;
@@ -476,6 +518,18 @@ void delete_contexts_TextureInfo(TextureInfoContexts *enco_ctx)
   {
     if (enco_ctx->coeff_count_context[j] != NULL)
       free(enco_ctx->coeff_count_context[j]);
+  }
+
+  for (j=0; j < 2*NUM_TRANS_TYPE_ABT; j++)
+  {
+    if (enco_ctx->ABT_run_context[j] != NULL)
+      free(enco_ctx->ABT_run_context[j]);
+  }
+
+  for (j=0; j < NUM_TRANS_TYPE_ABT; j++)
+  {
+    if (enco_ctx->ABT_coeff_count_context[j] != NULL)
+      free(enco_ctx->ABT_coeff_count_context[j]);
   }
   free( enco_ctx );
 
@@ -872,19 +926,11 @@ void writeIntraPredMode2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr e
   else if (currMB->mb_available[1][0])  prev_sym = currMB->mb_available[1][0]->intra_pred_modes[se->context+5];
   else                                  prev_sym = 0;
 
-#ifndef USE_6_INTRA_MODES
   unary_bin_max_encode(eep_dp,(unsigned int) se->value1,ctx->ipr_contexts[prev_sym],1,8);
-#else
-  unary_bin_max_encode(eep_dp,(unsigned int) se->value1,ctx->ipr_contexts[prev_sym],1,5);
-#endif
 
   //--- second symbol ---
   prev_sym = se->value1;
-#ifndef USE_6_INTRA_MODES
   unary_bin_max_encode(eep_dp,(unsigned int) se->value2,ctx->ipr_contexts[prev_sym],1,8);
-#else
-  unary_bin_max_encode(eep_dp,(unsigned int) se->value2,ctx->ipr_contexts[prev_sym],1,5);
-#endif
 }
 
 
@@ -1272,18 +1318,23 @@ void writeRunLevel2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp
   const int run = se->value2;
   int curr_ctx_idx = se->context;
   int sign_of_level;
-  int max_run;
-  static int coeff_can[2][17] = {{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}};
+  int max_run = 0;
+  static int coeff_can[2][65]; // was initialized with zeros. init necessary? is only initialized at first block of whole seq.
   static int coeff_count=0;
   int i,j,a,b;
   int max_coeff[9] = {8,16,16,16,15,4,4,15,15};
-  int curr_run_ctx, curr_level_ctx;
+  int curr_run_ctx = 0, curr_level_ctx;
   int act_ctx=0;
   static int count[3] = {0,0,0};
   static int prev_sym[3] = {0,0,0};
   int prevLevel = 0;
   int absLevel;
   int changed_ctx_idx=curr_ctx_idx;
+
+  // ABT stuff
+  int b8, curr_abt_ctx_idx=-1; // =-1: avoid warnings
+  static unsigned int max_ccnt_abt  [6] = {63,32,16,63,32,16};
+  static unsigned int max_coeff_abt [6] = {64,32,16,64,32,16};
 
   TextureInfoContexts *ctx = img->currentSlice->tex_ctx;
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
@@ -1396,44 +1447,127 @@ void writeRunLevel2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp
       }
       break;
     }
+    case 9:  // 8x8 ABT luma inter
+    case 10: // 4x8,8x4 ABT luma inter
+    case 11: // 4x4 ABT luma inter
+    case 12: // 8x8 ABT luma intra
+    case 13: // 4x8,8x4 ABT luma intra
+    case 14: // 4x4 ABT luma intra
+    {
+      //context termination
+      j = img->subblock_y;
+      i = img->subblock_x;
+      b8 = ((j>1)?2:0) + ((i>1)?1:0);
+      curr_abt_ctx_idx = curr_ctx_idx - NUM_TRANS_TYPE;
+
+      if (j==0)
+        b = (currMB->mb_available[0][1] == NULL)?0:(((currMB->mb_available[0][1])->coeffs_count[BLOCK_SIZE-1][i]==0)?0:1);
+      else
+        b = (currMB->coeffs_count[j-1][i]==0)?0:1;
+
+      if (i==0)
+        a = (currMB->mb_available[1][0] == NULL)?0:(((currMB->mb_available[1][0])->coeffs_count[j][BLOCK_SIZE-1]==0)?0:1);
+      else
+        a = (currMB->coeffs_count[j][i-1]==0)?0:1;
+
+      act_ctx = a+2*b;
+      if ((curr_ctx_idx==9)||(curr_ctx_idx==12))
+        coeff_count--; // coeff_count can't be zero for 8x8 blocks - handled by CBP
+
+      unary_bin_max_encodeABT(eep_dp,(unsigned int) coeff_count,
+                              ctx->ABT_coeff_count_context[curr_abt_ctx_idx]+act_ctx, 4-act_ctx,
+                              max_ccnt_abt[curr_abt_ctx_idx]);
+
+      if ((curr_ctx_idx==9)||(curr_ctx_idx==12))
+        coeff_count++; // save true coeff_count in currMB struct.
+
+      // copy coeff_count to all 4x4 positions belonging to the current subblock
+      if ((curr_ctx_idx==9)||(curr_ctx_idx==12))
+      {
+        currMB->coeffs_count[j  ][i  ] =
+        currMB->coeffs_count[j+1][i  ] =
+        currMB->coeffs_count[j  ][i+1] =
+        currMB->coeffs_count[j+1][i+1] = coeff_count;
+      }
+      else if ((curr_ctx_idx==10)||(curr_ctx_idx==13))
+      {
+        currMB->coeffs_count[j][i] = coeff_count;
+        if (currMB->abt_mode[b8]==B8x4)
+          currMB->coeffs_count[j  ][i+1] = coeff_count;
+        else
+          currMB->coeffs_count[j+1][i  ] = coeff_count;
+      }
+      else
+      {
+        currMB->coeffs_count[j][i] = coeff_count;
+      }
+
+      break;
+    }
     default: printf("ERROR");
     }
     prevLevel = 0;
     for(i=0; i<coeff_count;i++)
     {
-      //determine run ctx
-      switch (curr_ctx_idx)
+      if (curr_ctx_idx < 9)
       {
-      case 1:
-      case 2:
-          curr_run_ctx = ((coeff_count) >= 4) ? 1 : 0;  
-          break;                                        
-      case 3:
-          curr_run_ctx = ((coeff_count-i) >= 4) ? 1 : 0;
-          break;
-      case 4:
-      case 7:
-      case 8:
-      case 0:
-          curr_run_ctx = ((coeff_count-i) >= 3) ? 1 : 0;
-          break;
-      case 5:
-      case 6:
-          curr_run_ctx = ((coeff_count-i) >= 2) ? 1 : 0;
-          break;
+        //determine run ctx
+        switch (curr_ctx_idx)
+        {
+        case 1:
+        case 2:
+            curr_run_ctx = ((coeff_count) >= 4) ? 1 : 0;
+            break;
+        case 3:
+            curr_run_ctx = ((coeff_count-i) >= 4) ? 1 : 0;
+            break;
+        case 4:
+        case 7:
+        case 8:
+        case 0:
+            curr_run_ctx = ((coeff_count-i) >= 3) ? 1 : 0;
+            break;
+        case 5:
+        case 6:
+            curr_run_ctx = ((coeff_count-i) >= 2) ? 1 : 0;
+            break;
+        }
+        curr_run_ctx = 9*curr_run_ctx + curr_ctx_idx;
+        //send run
+        if (i==0)
+          max_run = max_coeff[curr_ctx_idx]-coeff_count;
+        if ((max_run != 0) )
+          unary_bin_max_encode(eep_dp,(unsigned int) coeff_can[1][i],ctx->run_context[curr_run_ctx],1,max_run);
+        max_run -= coeff_can[1][i];
       }
-      curr_run_ctx = 9*curr_run_ctx + curr_ctx_idx;
-      //send run
-      if (i==0)
-        max_run = max_coeff[curr_ctx_idx]-coeff_count;
-      if ((max_run != 0) )
-        unary_bin_max_encode(eep_dp,(unsigned int) coeff_can[1][i],ctx->run_context[curr_run_ctx],1,max_run);
-      max_run -= coeff_can[1][i];
+      else // ABT Run Coding
+      {
+        curr_abt_ctx_idx = curr_ctx_idx - NUM_TRANS_TYPE;
+        curr_run_ctx = ((coeff_count) >= 4) ? 1 : 0;
+        curr_run_ctx = NUM_TRANS_TYPE_ABT*curr_run_ctx + curr_abt_ctx_idx;        // 6->NUM_TRANS_TYPE_ABT to prevent selection of wrong context.
+        //send run
+        if (i==0)
+          max_run = max_coeff_abt[curr_abt_ctx_idx]-coeff_count;
+        assert(max_run>=0);
+
+        if ((max_run != 0) )
+          unary_bin_max_encodeABT(eep_dp,(unsigned int) coeff_can[1][i],ctx->ABT_run_context[curr_run_ctx],1,max_run);
+        max_run -= coeff_can[1][i];
+      }
       //determine level ctx
-      changed_ctx_idx = curr_ctx_idx;
+      if (curr_ctx_idx < 9)
+        changed_ctx_idx = curr_ctx_idx;
+      else
+      {                        // use JM contexts for ABT level encoding:
+        if (curr_ctx_idx < 12) // inter
+          changed_ctx_idx = 1;
+        else                   // intra
+          changed_ctx_idx = 2;
+      }
       absLevel    = absm(coeff_can[0][i]);
       changed_ctx_idx += 9*prevLevel;
       prevLevel     = absLevel > 3 ? 3 : absLevel;
+
       // send level
       unary_level_encode(eep_dp,(unsigned int) absm(coeff_can[0][i])-1,ctx->level_context[changed_ctx_idx]);
       sign_of_level = ((coeff_can[0][i] < 0) ? 1 : 0);
@@ -1587,3 +1721,72 @@ void unary_mv_encode(EncodingEnvironmentPtr eep_dp,
   return;
 }
 
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Unary binarization for values <16 with max 4 CTX; larger values use
+ *    syncword and binary representation of value-16; no terminating "0"
+ *    of sync for binary representation(finite symbol alphabet)
+ *    Used for ABT.
+ ************************************************************************
+ */
+void unary_bin_max_encodeABT(EncodingEnvironmentPtr eep_dp,
+                             unsigned int symbol,
+                             BiContextTypePtr ctx,
+                             int ctx_offset,
+                             unsigned int max_symbol)
+{
+  unsigned int l, ibits=0;
+  int bin=1;
+  BiContextTypePtr ictx=ctx;
+
+  assert (symbol<=max_symbol);
+
+  if (symbol==0)
+  {
+    biari_encode_symbol(eep_dp, 0, ictx );
+    return;
+  }
+  else
+  {
+    if (max_symbol > 15)
+    {
+      l=max_symbol-15;
+      do { ibits++; }
+      while ( (l>>=1) > 0);
+    }
+
+    biari_encode_symbol(eep_dp, 1, ictx );
+    l=symbol;
+    ictx = ctx + ctx_offset;
+    while ((--l)>0)
+    {
+      if ((++bin)==17)
+        break;
+      biari_encode_symbol(eep_dp, 1, ictx  );
+      if (bin==2) { ictx++; }
+      if (bin==4) { ictx++; }
+    }
+    if (bin<16)
+    {
+      biari_encode_symbol(eep_dp, 0, ictx  );
+    }
+    if (symbol > 15)
+    {
+      l = symbol-15;
+      ictx = ctx + ctx_offset + 3;
+      do
+      {
+        if (l&1)
+          biari_encode_symbol(eep_dp, 1, ictx  );
+        else
+          biari_encode_symbol(eep_dp, 0, ictx  );
+        l>>=1;
+      }
+      while ((--ibits)>0);
+    }
+  }
+
+  return;
+}

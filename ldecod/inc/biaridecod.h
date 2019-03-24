@@ -51,9 +51,13 @@
 #ifndef _BIARIDECOD_H_
 #define _BIARIDECOD_H_
 
+#if INI_CTX
 #define AAC_FRAC_TABLE 1  /*! replaces division in the AC by a table lookup
                               IMPORTANT NOTE: Should be changed according to
                               the definition in the encoder */
+#else
+#define AAC_FRAC_TABLE 0
+#endif
 
 /************************************************************************
  * C o n s t a n t s

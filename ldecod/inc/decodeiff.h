@@ -60,6 +60,9 @@
 
 #define SIZEOF_BOXTYPE 8  // 8: 32 bits mode, 16: 64 bits mode
 
+#define MAX_LAYER_NUMBER 2
+#define MAX_DEPENDENT_SUBSEQ 5
+
 //! Box Types
 typedef enum
 {
@@ -70,6 +73,9 @@ typedef enum
     BOX_PRMS, //<! 
     BOX_SEGM, //<! 
     BOX_ATRH, //<! 
+    BOX_PICI, //<! 
+    BOX_LAYR, //<! 
+    BOX_SSEQ, //<! 
     BOX_SWPC, //<! 
     BOX_ATRM  //<! 
 } TYPE_OF_BOX;
@@ -185,6 +191,7 @@ typedef struct
   unsigned INT8 partitioningType;
   unsigned INT8 intraPredictionType;
   unsigned INT8 bufCycle;
+  Boolean requiredPictureNumberUpdateBehavior;
 } ParameterSetBox;
 
 // 6
@@ -200,6 +207,14 @@ typedef struct
 } SegmentBox;
 
 // 7
+typedef struct
+{
+  BoxType type;
+  unsigned INT8 numLayers;
+  long storedpos;
+} AlternateTrackHeaderBox;  // 042
+
+// 8
 
 typedef struct sPayloadInfo
 {
@@ -231,16 +246,20 @@ typedef struct sPayloadInfo
 typedef struct
 {
   Boolean intraPictureFlag;
+  Boolean syncPictureFlag;    // 042
   INT64 pictureOffset;
   INT64 currPictureSize;
   INT64 pictureDisplayTime;
+
+  unsigned INT8 layerNumber;  // 042
+  unsigned INT16 subSequenceIdentifier;
+  unsigned INT8 originLayerNumber;
+  unsigned INT16 originSubSequenceIdentifier;
+
   unsigned INT64 numPayloads;
 
   INT64 lastFrameNr;
-  long    storedpos;
-
   long picPos;
-
 } PictureInfo;
 
 typedef struct
@@ -248,8 +267,41 @@ typedef struct
   BoxType type;
   unsigned INT64 numPictures;
   unsigned long storedpos;
-} AlternateTrackHeaderBox;
+} PictureInformationBox;
 
+// 9
+typedef struct
+{
+  BoxType type;
+  unsigned INT32 avgBitRate;
+  unsigned INT32 avgFrameRate;
+  FILE* fp;
+} LayerBox;
+
+// 10
+typedef struct
+{
+  unsigned INT8 layerNumber;
+  unsigned INT16 subSequenceIdentifier;
+} DependencyInfo;
+
+typedef struct
+{
+  BoxType type;
+
+  unsigned INT16 subSequenceIdentifier;
+  Boolean continuationFromPreviousSegmentFlag;
+  Boolean continuationToNextSegmentFlag;
+  Boolean startTickAvailableFlag;
+  unsigned INT64 ssStartTick;
+  unsigned INT64 ssDuration;
+  unsigned INT32 avgBitRate;
+  unsigned INT32 avgFrameRate;
+  unsigned INT32 numReferenceSubSequences;
+  DependencyInfo dependencyData[MAX_DEPENDENT_SUBSEQ];
+} SubSequenceBox;
+
+// 11
 typedef struct
 {
   BoxType type;
@@ -257,6 +309,7 @@ typedef struct
 
 } SwitchPictureBox;
 
+// 12
 typedef struct
 {
   BoxType type;
@@ -317,6 +370,12 @@ int rdPictureInfo( FILE* fp );
 // Functions on payloadInfo
 void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo* pp );
 
+// Functions on layer box
+int rdLayerBox( int no, unsigned long boxsize, FILE *bits );
+
+// Functions on sub sequence box
+int rdSubSequence(FILE* fp, FILE* bits);
+
 // Functions on SwitchPictureBox
 
 // Functions on AlternateMediaBox
@@ -340,4 +399,3 @@ int rdOnePayload( struct img_par *img, struct inp_par* inp, PayloadInfo *pp, FIL
 int IFFGetFollowingSliceHeader( struct img_par *img, PayloadInfo* pp );
 
 #endif
-

@@ -203,7 +203,9 @@ void tracebits(
   }
 
   // put out the last 1
-  fprintf(p_trace, "1\n");
+  fprintf(p_trace, "1");
+
+  fprintf(p_trace, "  (%3d)\n", value1);
 
   bitcounter += len;
   fflush (p_trace);

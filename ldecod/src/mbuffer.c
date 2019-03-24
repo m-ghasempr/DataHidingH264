@@ -46,10 +46,12 @@
 
 #include <stdlib.h>
 #include <memory.h>
+#include <assert.h>
 
 #include "global.h"
 #include "mbuffer.h"
 #include "memalloc.h"
+#include "decodeiff.h"
 
 /*!
  ************************************************************************
@@ -85,6 +87,10 @@ void init_frame_buffers(struct inp_par *inp, ImageParameters *img)
   {
     get_mem2D(&(frm->picbuf_short[i]->mref), img->height, img->width);
     get_mem3D(&(frm->picbuf_short[i]->mcef), 2, img->height_cr, img->width_cr);
+
+    frm->picbuf_short[i]->picID = -1;
+    frm->picbuf_short[i]->lt_picID = -1;
+    frm->picbuf_short[i]->used = 0;
   }
 
 
@@ -387,7 +393,7 @@ void remove_long_term(int longID)
       if (i<fb->long_used) 
       {
         f=fb->picbuf_long[i];
-        for (j=i;j<fb->long_used-1;j++);
+        for (j=i;j<fb->long_used-1;j++)
           fb->picbuf_long[j]=fb->picbuf_long[j+1];
         fb->picbuf_long[fb->long_used-1]=f;
       } 
@@ -421,13 +427,23 @@ void remove_short_term(int shortID)
       
       fb->short_used--;
 
-      if (i<fb->short_used) 
+      // Tian Dong: June 15, 2002
+      // Use short_size to replace short_used.
+      if (i<fb->short_size) 
+      {
+        f=fb->picbuf_short[i];
+        for (j=i;j<fb->short_size-1;j++)
+          fb->picbuf_short[j]=fb->picbuf_short[j+1];
+        fb->picbuf_short[fb->short_size-1]=f;
+      }
+      // old lines:
+/*      if (i<fb->short_used) 
       {
         f=fb->picbuf_short[i];
         for (j=i;j<fb->short_used-1;j++);
           fb->picbuf_short[j]=fb->picbuf_short[j+1];
         fb->picbuf_short[fb->short_used-1]=f;
-      } 
+      } */
     }
   }
 }
@@ -476,30 +492,38 @@ void init_mref(ImageParameters *img)
 {
   int i,j;
 
-  for (i=0,j=0;i<frm->short_used;i++)
+  for (i=0,j=0;i<frm->short_used;i++,j++)
   {
     mref_frm[j]=frm->picbuf_short[i]->mref;
     mcef_frm[j]=frm->picbuf_short[i]->mcef;
-    j++;
   }
-  for (i=0;i<frm->long_size;i++)
+  for (i=0;i<frm->long_size;i++,j++)
   {
     mref_frm[j]=frm->picbuf_long[i]->mref;
     mcef_frm[j]=frm->picbuf_long[i]->mcef;
-    j++;
   }
 
-  for (i=0,j=0;i<fld->short_used;i++)
+  // Tian Dong. June 15, 2002. Let the others be NULL
+  for (i=frm->short_used;i<frm->short_size;i++,j++)
+  {
+    mref_frm[j]=NULL;
+    mcef_frm[j]=NULL;
+  }
+  for (i=frm->long_used;i<frm->long_size;i++,j++)
+  {
+    mref_frm[j]=NULL;
+    mcef_frm[j]=NULL;
+  }
+
+  for (i=0,j=0;i<fld->short_used;i++,j++)
   {
     mref_fld[j]=fld->picbuf_short[i]->mref;
     mcef_fld[j]=fld->picbuf_short[i]->mcef;
-    j++;
   }
-  for (i=0;i<fld->long_size;i++)
+  for (i=0;i<fld->long_size;i++,j++)
   {
     mref_fld[j]=fld->picbuf_long[i]->mref;
     mcef_fld[j]=fld->picbuf_long[i]->mcef;
-    j++;
   }
 
 }
@@ -516,8 +540,8 @@ void reorder_mref(ImageParameters *img)
   RMPNIbuffer_t *r;
 
   int pnp = img->pn;
-  int pnq;
-  int index,i;
+  int pnq = 0;
+  int index = 0,i;
   int size;
   int islong=0;
   int found=0;
@@ -536,6 +560,7 @@ void reorder_mref(ImageParameters *img)
   // so we need a temporary frame buffer of ordered references
 
   size=fb->short_used+fb->long_used;
+
   if ((fr=(Frame**)calloc(size,sizeof (Frame*)))==NULL) no_mem_exit("init_frame_buffers: fb->picbuf_long");
 
   for (i=0;i<fb->short_used;i++)
@@ -586,40 +611,46 @@ void reorder_mref(ImageParameters *img)
       break;
 
     case 3:
-      return;
+//      return;   // Tian: I don't think it is a return point, so I add the judgment (*) below.
+      assert( r->Next == NULL );  // Tian assert ...
       break;
 
     }
 
     // now scan the frame buffer for the needed frame
 
-    found=0;
-    i=0;
-
-    while ((!found)&&(i<size))
+    if ( r->RMPNI == 0 || r->RMPNI == 1 || r->RMPNI == 2 )  // Tian: judgment (*)
     {
-      if (((!islong)&&(!fr[i]->islong) && (fr[i]->picID==pnq)) ||
-          ((islong)&&(fr[i]->islong) && (fr[i]->lt_picID==pnq)))
+      found=0;
+      i=0;
+
+      while ((!found)&&(i<size))
       {
-          found=1;
-          index=i;
+        if (((!islong)&&(!fr[i]->islong) && (fr[i]->picID==pnq)) ||
+            ((islong)&&(fr[i]->islong) && (fr[i]->lt_picID==pnq)))
+        {
+            found=1;
+            index=i;
+        }
+        i++;
       }
-      i++;
+
+      if (!found) error ("tried to remap non-existent picture",400);
+      if ( fr[index]->valid == 0 )  // Tian Dong. June 10, 2002
+        printf("Warning: an invalid reference frame is remapped.\n");
+
+      // now do the actual reordering
+      /* cycle frame buffer */
+      f=fr[index];
+      for (i=index-1;i>=0;i--)
+      {
+        fr[i+1]=fr[i];
+      }
+      fr[0]=f;
+
+      // set the picture number prediction correctly
+      pnp=pnq;
     }
-
-    if (!found) error ("tried to remap non-existent picture",400);
-
-    // now do the actual reordering
-    /* cycle frame buffer */
-    f=fr[index];
-    for (i=index-1;i>=0;i--)
-    {
-      fr[i+1]=fr[i];
-    }
-    fr[0]=f;
-
-    // set the picture number prediction correctly
-    pnp=pnq;
 
     img->currentSlice->rmpni_buffer=r->Next;
     free (r);
@@ -701,6 +732,7 @@ void copy2fb(ImageParameters *img)
   fb->picbuf_short[0]->used=1;
   fb->picbuf_short[0]->picID=img->pn;
   fb->picbuf_short[0]->lt_picID=-1;
+  fb->picbuf_short[0]->valid=1;     // Tian Dong: This is a normal reference frame.
 
   (fb->short_used)++;
   if (fb->short_used>fb->short_size)
@@ -715,6 +747,8 @@ void copy2fb(ImageParameters *img)
       for (j=0; j < img->height_cr; j++)
         fb->picbuf_short[0]->mcef[uv][j][i]=imgUV[uv][j][i];// just copy 1/1 pix, interpolate "online"  
 
+  fb->picbuf_short[0]->layerNumber = currPictureInfo.layerNumber;
+  fb->picbuf_short[0]->subSequenceIdentifier = currPictureInfo.subSequenceIdentifier;
 
   // MMCO will be done after storing the decoded frame
   while (img->mmco_buffer)
@@ -742,6 +776,75 @@ void copy2fb(ImageParameters *img)
     img->mmco_buffer=tmp_mmco->Next;
     free (tmp_mmco);
   }
-
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *      Tian Dong, June 13, 2002
+ *      If a PN gap is found, try to fill the gap
+ * \param pn_expected
+ *      which picture will be added to the buffer
+ * \param valid
+ *      1: a normal reference frame is added to the buffer
+ *      0: a blank reference frame is inserted to the buffer for filling
+ *          the PN gap
+ ************************************************************************
+ */
+void add_frame(int pn_expected, int valid)
+{
+  Frame *f;
+  int i;
+
+  f=fb->picbuf_short[fb->short_size-1];
+
+  for (i=fb->short_size-2;i>=0;i--)
+    fb->picbuf_short[i+1]=fb->picbuf_short[i];
+
+  fb->picbuf_short[0]=f;
+
+
+  fb->picbuf_short[0]->used=1;
+  fb->picbuf_short[0]->picID=pn_expected;
+  fb->picbuf_short[0]->lt_picID=-1;
+  fb->picbuf_short[0]->valid=valid;
+
+  (fb->short_used)++;
+  if (fb->short_used>fb->short_size)
+    fb->short_used=fb->short_size;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *      Tian Dong, June 13, 2002
+ *      If a PN gap is found, try to fill the gap
+ * \param img
+ *      
+ ************************************************************************
+ */
+void fill_PN_gap(ImageParameters *img)
+{
+  int pn_expected, pn_new;
+
+  if (fb==0 || fb!=frm) return;
+
+  if ( img->type == B_IMG_MULT || img->type ==  B_IMG_1 ) return;
+
+  pn_expected = (fb->picbuf_short[0]->picID+1) % (img->buf_cycle);
+  pn_new = img->pn;
+
+  while ( pn_new != pn_expected)
+  {
+    fb = frm;
+    add_frame(pn_expected, 0);
+
+    fb = fld;
+    add_frame(pn_expected, 0);
+    add_frame(pn_expected, 0);
+
+    pn_expected = (fb->picbuf_short[0]->picID + 1) % (img->buf_cycle);
+    img->number++;
+  }
+  fb = frm;
+}

@@ -67,7 +67,7 @@ int const MAP[4][4]=
 extern const int JQ1[];
 extern const int JQ[32];
 extern const byte FILTER_STR[32][4];//!< defined in image.h
-extern const byte QP_SCALE_CR[40] ;
+extern const byte QP_SCALE_CR[52] ;
 extern const int dequant_coef[6][4][4];
 
 #endif

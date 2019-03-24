@@ -46,6 +46,8 @@
 #include <math.h>
 #include "global.h"
 #include "biariencode.h"
+#include <assert.h>
+
 
 /*!
  ************************************************************************
@@ -214,6 +216,7 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
   unsigned long half, quarter;
   unsigned long out_r;
 
+  assert(bi_ct->cum_freq[0]>=bi_ct->cum_freq[1]);
   c0 = bi_ct->cum_freq[0]-bi_ct->cum_freq[1];
   c1 = bi_ct->cum_freq[1];
   half = CACM99_HALF;

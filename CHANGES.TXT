@@ -1,3 +1,150 @@
+Changes for Version JM 3.9 to JM 3.8
+------------------------------------
+
+Bug Fixes
+* fix bitstream NAL encapsulation for slice modes 1,2 and interlace (KS)
+* merge interlace buffer changes (KP/KS)
+* fix encoder/decoder mismatch for SP-frames (MW)
+* remove unnecessary calculations (AT)
+* fix SP compiling warning (FW)
+* disable 8x8 intra blocks in data partitioning mode (TO)
+
+Cleanups
+* remove dead code and variables (KS)
+* free all prviously allocated memory (KS)
+
+Note:
+* FMO is currently broken
+
+Changes for Version JM 3.8 to JM 3.7
+------------------------------------
+
+New features
+* Adaptive Block-size Transforms (MW)
+
+Changes for Version JM 3.7 to JM 3.6
+------------------------------------
+
+New features
+* Loop filter complexity reduction [JVT-C094] (AJ)
+
+
+Changes for Version JM 3.6 to JM 3.5
+------------------------------------
+
+New features
+* support for FMO, see JVT-C089-C092 (SW)
+  -> FMO requires RTP file format and ConstrainedIntraPrediction = 1
+
+Bug Fixes
+* many FMO and out-of-order slices related ones (SW)
+* fix old QPs (KS)
+* fix chroma coding (AT/KS)
+* error concealment fix (YW)
+
+Cleanups
+* really remove old start codes (KS)
+* remove some unused decoder functions (KS)
+
+Note:
+* in Version 3.5 and 3.6 is in the bit stream format the Slice mode broken
+* RTP still has the ASCII Parameter Set format
+
+Changes for Version JM 3.4 to JM 3.5
+------------------------------------
+
+New Features
+* improved SP technique [JVT-c114] (FW)
+* add syntax flag for switching (FW)
+
+
+Bug Fixes
+* new QP range bug fixes (chroma & SP coding) (AT/FW)
+* SKIP mode support and Runlength Coding for SP frames (AT/FW)
+* Modified lambda weight in RDO for SP frames (AT/FW)
+
+
+Changes for Version JM 3.4 to JM 3.3
+------------------------------------
+
+New Features
+* stuffing to prevent emulation of start-code [JVT-C064] (SR)
+* New start-code for byte-stream format. (SR)
+* New method for slice-level QP signaling [JVT-C136] (SR)
+* QP range shifted to [0,51] (SR)
+  -> use #define _OLDSTYLEQP_ for old range
+
+Bug Fixes
+* fix single reference frame problem (AT)
+* fix B-Frame coding (AT)
+* fix ADAPT_LAST_GROUP (DT)
+* fix bit statistics (KS)
+* fix search if _FAST_FULL_ME_ disabled (KS)
+
+Cleanups
+* remove old slice-level QP signaling (KS)
+* remove old start codes (KS)
+* large QP handling cleanups (KS)
+
+
+Changes for Version JM 3.3 to JM 3.2
+------------------------------------
+
+New Features
+* Consideration of MVs of Direct Mode Macroblocks in B frame MV prediction [JVT-C127] (AT)
+
+Bug Fixes
+* fix deblocking filter for B frames [JVT-C127] (AT)
+
+
+Changes for Version JM 3.2 to JM 3.1
+------------------------------------
+
+New Features
+* Skip mode motion compensation as defined in JVT-C027 (JL)
+
+
+Changes for Version JM 3.1 to JM 3.0
+------------------------------------
+
+New Features
+* Quantization range changed from [-8,39] to [-12,39] [JVT-B039] (AH)
+* Simplified rounding for transform and quantization [JVT-C136] (AH)
+* Simplified formula for intra 16x16 plane prediction [JVT-C136] (AH)
+
+Bug Fixes
+* fix RTP assert (DT)
+
+Cleanups
+* remove gcc warnings (KS)
+
+Known Problems
+* AFF + 1/8 pel motion compensation broken
+* if "LastFrameNumber" is used, "FramesToBeEncoded" must be >= "LastFrameNumber"
+
+
+Changes for Version JM 3.0 to JM 2.1
+------------------------------------
+
+New Features
+* Signaling of "Clean" Random Access Points [JVT-B042, JVT-C083] (DT)
+
+Bug Fixes
+* error concealment fixes (TO)
+* constrained intra prediction (GRC)
+* align intra pred to CD text (GRC)
+* adaptive frame/field fixes 
+  - lambda calculation (LW)
+  - average psnr output (LW)
+  - fix slice modes 1 and 2 (LW)
+  - fix data partitioning (TO)
+* add adaptive frame/field parameter consistency checks (KS/LW)
+* encoder frame buffer management changes for non-AFF mode (DT)
+
+Cleanups
+* remove old 6 mode intra prediction (KS)
+
+
 Changes for Version JM 2.1 to JM 2.0b
 -------------------------------------
 
@@ -351,28 +498,32 @@ Changes for Version 8.0 relative to Version 6.1
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 People:
-KS      Karsten Sühring         suehring@hhi.de
+KS      Karsten S’hring         suehring@hhi.de
 AH      Antti Hallapuro         antti.hallapuro@nokia.com
 AT      Alexis Michael Tourapis alexismt@ieee.org
+AJ      Anthony Joch            anthony@ubvideo.com
 DC      Doug Chin               dougchin@sandvideo.com
 DK      Dimitris Kontopodis     dkonto@eikon.tum.de
 DM      Detlev Marpe            marpe@hhi.de
 DT      Dong Tian               tian@cs.tut.fi
 GC	Guy Cote                guy@videolocus.com
 GrC	Greg Conklin            gregc@real.com
-GB      Gabi Blättermann        blaetter@hhi.de
+GB      Gabi Bl„ttermann        blaetter@hhi.de
 GS      Gary Sullivan		garysull@microsoft.com
+FW	Feng Wu			fengwu@microsoft.com
 HS      Heiko Schwarz           hschwarz@hhi.de
 IL      Inge Lille-Langoy       Inge.Lille-Langoy@telenor.com
 JL      Jani Lainema            Jani.Lainema@nokia.com
 IM      Iole Moccagatta         imoccaga@lsil.com
+KP      Krit Panusopone         KPanusopone@gi.com
 LK      Louis Kerofsky          lkerofsky@sharplabs.com
 LW      Limin Wang              liwang@gi.com
 MB      Marcus Barkowsky        Marcus.Barkowsky@nt.e-technik.uni-erlangen.de
 MG      Michael Gallant         mgallant@videolocus.com
+MW      Mathias Wien            wien@ient.rwth-aachen.de
 PL      Peter List              Peter.List@t-systems.de
 RK	Ragip Kurceren 		ragip.kurceren@nokia.com
-RS      Rickard Sjöberg         Rickard.Sjoberg@era.ericsson.se
+RS      Rickard Sj÷berg         Rickard.Sjoberg@era.ericsson.se
 SR      Shankar Regunathan      shanre@microsoft.com
 SW      Stephan Wenger          stewe@cs.tu-berlin.de
 TO      Tobias Oelbaum          drehvial@gmx.net

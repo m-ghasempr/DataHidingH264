@@ -59,6 +59,7 @@
 #include "header.h"
 
 #include "global.h"
+#include "fmo.h"
 
 
 // A little trick to avoid those horrible #if TRACE all over the source code
@@ -184,6 +185,13 @@ int WriteRTPPacket (RTPpacket_t *p, FILE *f)
   return 0;
 }
 
+#if 0
+
+// OLD CODE, delete StW
+//
+// Note: this old code does not support FMO, but is also buggy (slen is
+// incorrect, sprintf does not return the number of byte sin the string!
+//
 
 /*!
  *****************************************************************************
@@ -270,7 +278,7 @@ int ComposeHeaderPacketPayload (byte *payload)
             input->symbol_mode==UVLC?"UVLC":"CABAC",
             input->mv_res==0?"quater":"eigth",
             input->partition_mode==0?"one":"three",
-            input->UseConstrainedIntraPred==0?"InterPredicted":"NotInterPredicted",
+            input->UseConstrainedIntraPred==0?"Unconstrained":"Constrained",
             
             input->no_frames,
             input->jumpd,
@@ -280,6 +288,126 @@ int ComposeHeaderPacketPayload (byte *payload)
             26);  // MS-DOS/Windows Control Z EOF Symbol
   return slen;
 }
+
+
+#endif
+
+
+/*!
+ *****************************************************************************
+ *
+ * \brief 
+ *    ComposeHeaderPacketPayload generates the payload for a header packet
+ *    using the inp-> structure contents.  The header packet contains 
+ *    definitions for a single parameter set 0, which is used for all 
+ *    slices of the picture
+ *
+ * \return
+ *    len of the genberated payload in bytes
+ *    <0 in case of failure (typically fatal)
+ *
+ * \para Parameters
+ *    p: the payload of the RTP packet to be written
+ *
+ * \para Side effects
+ *    none
+ *
+ * \note
+ *    This function should be revisited and checked in case of additional
+ *    bit stream parameters that affect the picture header (or higher
+ *    entitries).  Typical examples are more entropy coding schemes, other
+ *    motion vector resolutiuon, and optional elements
+ *
+ * \date
+ *    October 23, 2001
+ *
+ * \author
+ *    Stephan Wenger   stewe@cs.tu-berlin.de
+ *****************************************************************************/
+
+
+int ComposeHeaderPacketPayload (byte *payload)
+{
+  int slen=0;
+  int multpred;
+  int y, x;
+
+  assert (img->width%16 == 0);
+  assert (img->height%16 == 0);
+
+#ifdef _ADDITIONAL_REFERENCE_FRAME_
+  if (input->no_multpred <= 1 && input->add_ref_frame == 0)
+#else
+  if (input->no_multpred <= 1)
+#endif
+    multpred=FALSE;
+  else
+    multpred=TRUE;               // multiple reference frames in motion search
+
+  
+  snprintf (payload, MAXRTPPAYLOADLEN, 
+             "a=H26L (0) MaxPicID %d\
+            \na=H26L (0) UseMultpred %d\
+            \na=H26L (0) MaxPn %d\
+            \na=H26L (0) BufCycle %d\
+            \na=H26L (0) PixAspectRatioX 1\
+            \na=H26L (0) PixAspectRatioY 1\
+            \na=H26L (0) DisplayWindowOffsetTop 0\
+            \na=H26L (0) DisplayWindowOffsetBottom 0\
+            \na=H26L (0) DisplayWindowOffsetRight 0\
+            \na=H26L (0) DisplayWindowOffsetLeft 0\
+            \na=H26L (0) XSizeMB %d\
+            \na=H26L (0) YSizeMB %d\
+            \na=H26L (0) EntropyCoding %s\
+            \na=H26L (0) MotionResolution %s\
+            \na=H26L (0) PartitioningType %s\
+            \na=H26L (0) IntraPredictionType %s\
+            \na=H26L (0) HRCParameters 0\
+            \
+            \na=H26L (-1) FramesToBeEncoded %d\
+            \na=H26L (-1) FrameSkip %d\
+            \na=H26L (-1) SequenceFileName %s\
+            \na=H26L (0) NumberBFrames %d",
+
+            256,
+            multpred==TRUE?1:0,
+            input->no_multpred,
+            input->no_multpred,
+            input->img_width/16,
+            input->img_height/16,
+            input->symbol_mode==UVLC?"UVLC":"CABAC",
+            input->mv_res==0?"quater":"eigth",
+            input->partition_mode==0?"one":"three",
+            input->UseConstrainedIntraPred==0?"Unconstrained":"Constrained",
+            
+            input->no_frames,
+            input->jumpd,
+            input->infile,
+            input->successive_Bframe);
+  slen = strlen (payload);
+  snprintf (&payload[slen], MAXRTPPAYLOADLEN-slen, "\na=H26L (0) FMOmap \\\n");
+  slen = strlen(payload);
+
+  for (y=0; y<img->height/16; y++)
+  {
+    for (x=0; x<img->width/16; x++)
+    {
+      snprintf (&payload[slen], MAXRTPPAYLOADLEN-slen, "%d ", FmoMB2SliceGroup (y*(img->width/16)+x));
+      slen = strlen (payload);
+    }
+    snprintf (&payload[slen], MAXRTPPAYLOADLEN-slen, "\\\n");
+    slen = strlen (payload);
+  }
+
+  snprintf (&payload[slen], MAXRTPPAYLOADLEN-slen, "\n%c%c%c\n",
+            4,     // Unix Control D EOF symbol
+            26,    // MS-DOS/Windows Control Z EOF Symbol
+            0);   // End of String
+  slen = strlen (payload);
+  //printf ("Parameter Set Packet '\n%s\n'\n", payload);
+  return slen;
+}
+
 
 
 
@@ -476,16 +604,24 @@ int RTPSliceHeader()
   sym.value1 = img->mb_y;
   len += writeSyntaxElement_UVLC (&sym, partition);
 
+#ifdef _ABT_FLAG_IN_SLICE_HEADER_
+  SYMTRACESTRING("RTP-SH ABTMode");
+  sym.value1 = input->abt;
+  len += writeSyntaxElement_UVLC (&sym, partition);
+#endif
+
   SYMTRACESTRING("RTP-SH: InitialQP");
-  sym.value1 = MAX_QP-img->qp;
+  sym.mapping = dquant_linfo;
+  sym.value1 = img->qp - (MAX_QP - MIN_QP +1)/2;
   len += writeSyntaxElement_UVLC (&sym, partition);
 
   if (img->types==SP_IMG)
   {
     SYMTRACESTRING("RTP-SH: SP InitialQP");
-    sym.value1 = MAX_QP-img->qpsp;
+    sym.value1 = img->qpsp - (MAX_QP - MIN_QP +1)/2;
     len += writeSyntaxElement_UVLC (&sym, partition);
   }
+  sym.mapping = n_linfo2;
 
 
   /*! StW:
@@ -544,7 +680,7 @@ int RTPWriteBits (int Marker, int PacketType, void * bitstream,
   assert (out != NULL);
   assert (BitStreamLenInByte < 65000);
   assert (bitstream != NULL);
-  assert (PacketType < 4);
+  assert ((PacketType&0xf) < 4);
 
   // Set RTP structure elements and alloca() memory foor the buffers
   p = (RTPpacket_t *) alloca (sizeof (RTPpacket_t));

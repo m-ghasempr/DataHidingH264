@@ -66,7 +66,10 @@ extern void tracebits(const char *trace_str,  int len,  int info,int value1,
  * \return
  *    TRUE if a startcode follows (meaning that all symbols are used).  \n
  *    FALSE otherwise.
+ * \para
+ *     Looks like this is dead code.  StW, 7.7.02
  ************************************************************************/
+/*
 int slice_startcode_follows(struct img_par *img, struct inp_par *inp)
 {
   Slice *currSlice = img->currentSlice;
@@ -76,6 +79,8 @@ int slice_startcode_follows(struct img_par *img, struct inp_par *inp)
   byte *buf = currStream->streamBuffer;
   int frame_bitoffset = currStream->frame_bitoffset;
   int info;
+assert (!currStream->ei_flag);
+printf ("slice_startcode_follows returns %d\n", (-1 == GetVLCSymbol (buf, frame_bitoffset, &info, currStream->bitstream_length)));
 
   if (currStream->ei_flag)
     return (img->current_mb_nr == currSlice->last_mb_nr);
@@ -87,7 +92,7 @@ int slice_startcode_follows(struct img_par *img, struct inp_par *inp)
       return FALSE;
   }
 }
-
+*/
 /*!
  ************************************************************************
  * \brief

@@ -1,24 +1,24 @@
 # Microsoft Developer Studio Project File - Name="lencod" - Package Owner=<4>
 # Microsoft Developer Studio Generated Build File, Format Version 6.00
-# ** DO NOT EDIT **
+# ** NICHT BEARBEITEN **
 
 # TARGTYPE "Win32 (x86) Console Application" 0x0103
 
 CFG=lencod - Win32 Debug
-!MESSAGE This is not a valid makefile. To build this project using NMAKE,
-!MESSAGE use the Export Makefile command and run
+!MESSAGE Dies ist kein gültiges Makefile. Zum Erstellen dieses Projekts mit NMAKE
+!MESSAGE verwenden Sie den Befehl "Makefile exportieren" und führen Sie den Befehl
 !MESSAGE 
 !MESSAGE NMAKE /f "lencod.mak".
 !MESSAGE 
-!MESSAGE You can specify a configuration when running NMAKE
-!MESSAGE by defining the macro CFG on the command line. For example:
+!MESSAGE Sie können beim Ausführen von NMAKE eine Konfiguration angeben
+!MESSAGE durch Definieren des Makros CFG in der Befehlszeile. Zum Beispiel:
 !MESSAGE 
 !MESSAGE NMAKE /f "lencod.mak" CFG="lencod - Win32 Debug"
 !MESSAGE 
-!MESSAGE Possible choices for configuration are:
+!MESSAGE Für die Konfiguration stehen zur Auswahl:
 !MESSAGE 
-!MESSAGE "lencod - Win32 Release" (based on "Win32 (x86) Console Application")
-!MESSAGE "lencod - Win32 Debug" (based on "Win32 (x86) Console Application")
+!MESSAGE "lencod - Win32 Release" (basierend auf  "Win32 (x86) Console Application")
+!MESSAGE "lencod - Win32 Debug" (basierend auf  "Win32 (x86) Console Application")
 !MESSAGE 
 
 # Begin Project
@@ -87,6 +87,14 @@ LINK32=link.exe
 # PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
 # Begin Source File
 
+SOURCE=.\lencod\src\abt.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\abt_const.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\src\biariencode.c
 # End Source File
 # Begin Source File
@@ -115,11 +123,23 @@ SOURCE=.\lencod\src\filehandle.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\lencod\src\fmo.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\golomb.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\src\header.c
 # End Source File
 # Begin Source File
 
 SOURCE=.\lencod\src\image.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\intrarefresh.c
 # End Source File
 # Begin Source File
 
@@ -151,6 +171,10 @@ SOURCE=".\lencod\src\mv-search.c"
 # End Source File
 # Begin Source File
 
+SOURCE=.\lencod\src\nal.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\src\rdopt.c
 # End Source File
 # Begin Source File
@@ -173,6 +197,10 @@ SOURCE=.\lencod\src\uvlc.c
 # Begin Group "Header Files"
 
 # PROP Default_Filter "h;hpp;hxx;hm;inl"
+# Begin Source File
+
+SOURCE=.\lencod\inc\abt.h
+# End Source File
 # Begin Source File
 
 SOURCE=.\lencod\inc\biariencode.h
@@ -207,7 +235,15 @@ SOURCE=.\lencod\inc\encodeiff.h
 # End Source File
 # Begin Source File
 
+SOURCE=.\lencod\inc\fmo.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\inc\global.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\inc\golomb.h
 # End Source File
 # Begin Source File
 
@@ -216,6 +252,10 @@ SOURCE=.\lencod\inc\header.h
 # Begin Source File
 
 SOURCE=.\lencod\inc\image.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\inc\intrarefresh.h
 # End Source File
 # Begin Source File
 

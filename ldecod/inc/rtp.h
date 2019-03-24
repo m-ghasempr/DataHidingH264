@@ -71,6 +71,7 @@ typedef struct
   int PartitioningType;
   int IntraPredictionType;
   int HRCParameters;
+  int *MBAmap;
 } ParameterSet_t;
 
 typedef struct
@@ -149,6 +150,6 @@ int  get_lastMB(struct img_par *img, RTPSliceHeader_t *sh, RTPpacket_t *p);
 int RTPReadPacket (RTPpacket_t *p, FILE *bits);
 void RTPProcessDataPartitionedSlice (struct img_par *img, struct inp_par *inp, FILE *bits, 
                                      RTPpacket_t *a, int a_SliceID);
-void CopyPartitionBitstring (struct img_par *img, RTPpacket_t *p, Bitstream *b, int dP);
+void CopyPartitionBitstring (struct img_par *img, RTPpacket_t *p, Bitstream *b, int dP, struct inp_par *inp);
 
 #endif

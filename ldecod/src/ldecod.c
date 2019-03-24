@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 2.1
+ *     JM 3.70
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -94,7 +94,7 @@
  *     - Sebastian Purreiter     <sebastian.purreiter@mch.siemens.de>
  *     - Byeong-Moon Jeon        <jeonbm@lge.com>
  *     - Gabi Blaettermann       <blaetter@hhi.de>
- *     - Ye-Kui Wang                <wangy@cs.tut.fi>
+ *     - Ye-Kui Wang             <wangy@cs.tut.fi>
  *
  ***********************************************************************
  */
@@ -112,22 +112,22 @@
 #endif
 
 #include "global.h"
-#include "elements.h"
 #include "bitsbuf.h"
 #include "rtp.h"
 #include "memalloc.h"
 #include "mbuffer.h"
 #include "leaky_bucket.h"
 #include "decodeiff.h"
+#include "fmo.h"
 
 #if _ERROR_CONCEALMENT_
 #include "erc_api.h"
 #endif
 
-#define JM          "2"
-#define VERSION     "2.1"
+#define JM          "3"
+#define VERSION     "3.90"
 #define LOGFILE     "log.dec"
-#define DATADECFILE "data.dec"
+#define DATADECFILE "dataDec.txt"
 #define TRACEFILE   "trace_dec.txt"
 
 #if _ERROR_CONCEALMENT_
@@ -166,6 +166,8 @@ int main(int argc, char **argv)
   // Initializes Configuration Parameters with configuration file
   init_conf(inp, argv[1]);
 
+  img->UseConstrainedIntraPred = inp->UseConstrainedIntraPred;
+
   if (inp->of_mode == PAR_OF_RTP)
   {
     extern FILE *bits;
@@ -182,8 +184,9 @@ int main(int argc, char **argv)
     }
   }
 // printf ("In main: some pictrue information: %d x %d, with %d reference frames %d\n", img->height, img->width, img->buf_cycle, inp->buf_cycle);
-
-  img->UseConstrainedIntraPred = inp->UseConstrainedIntraPred;
+#ifndef _ABT_FLAG_IN_SLICE_HEADER_
+  USEABT = inp->abt; // set global ABT flag. (0=OFF, 1=Inter, 2=Inter&Intra)
+#endif
 
   // Allocate Slice data struct
   malloc_slice(inp,img);
@@ -195,7 +198,6 @@ int main(int argc, char **argv)
   img->refPicID = -1; // WYK: for detection of a new non-B frame
   img->imgtr_last_P = 0;
   img->imgtr_next_P = 0;
-
   img->mmco_buffer=NULL;
 
   // B pictures
@@ -214,6 +216,8 @@ int main(int argc, char **argv)
   report(inp, img, snr);
 
   free_slice(inp,img);
+
+  FmoFinit();
 
   free_frame_buffers(inp, img);
   free_global_buffers(inp, img);
@@ -345,6 +349,16 @@ void init_conf(struct inp_par *inp,
     error(errortext,400);
   }
 
+    // NAL Encapsulation
+  fscanf(fd,"%d,",&inp->Encapsulated_NAL_Payload);        // 0: UVLC 1: CABAC, may be overwritten ni case of RTP NAL
+  fscanf(fd,"%*[^\n]");
+  if (inp->Encapsulated_NAL_Payload != FALSE && inp->Encapsulated_NAL_Payload != TRUE)
+  {
+    snprintf(errortext, ET_SIZE, "Encapsulated_NAL_Payload=%d, use 0 or 1",inp->Encapsulated_NAL_Payload);
+    error(errortext,1);
+  }
+
+
 #ifdef _LEAKYBUCKET_
   fscanf(fd,"%ld,",&inp->R_decoder);             // Decoder rate
   fscanf(fd, "%*[^\n]");
@@ -355,6 +369,20 @@ void init_conf(struct inp_par *inp,
   fscanf(fd,"%s",inp->LeakyBucketParamFile);    // file where Leaky Bucket params (computed by encoder) are stored
   fscanf(fd,"%*[^\n]");
 #endif
+
+#ifndef _ABT_FLAG_IN_SLICE_HEADER_
+  fscanf(fd,"%d,",&inp->abt); // Adaptive Block Transforms ABT
+  fscanf(fd,"%*[^\n]");
+  if ( (inp->abt < 0) || (inp->abt > 2) )
+    {
+      snprintf(errortext, ET_SIZE, "ABT Mode  %d not defined.",inp->abt);
+      error(errortext,1);
+    }
+#endif
+
+  fclose (fd);
+
+
 #if TRACE
   if ((p_trace=fopen(TRACEFILE,"w"))==0)             // append new statistic at the end
   {
@@ -388,6 +416,18 @@ void init_conf(struct inp_par *inp,
   }
   else
     fprintf(stdout," Input reference file                   : %s \n",inp->reffile);
+#ifndef _ABT_FLAG_IN_SLICE_HEADER_
+  if ( inp->abt )
+  {
+    fprintf(stdout," Adaptive Block Transforms              : Used ");
+    if (inp->abt==INTER_ABT)
+      fprintf(stdout,"(Inter only)\n");
+    else
+      fprintf(stdout,"(Inter and Intra)\n");
+  }
+  else
+    fprintf(stdout," Adaptive Block Transforms              : Not used \n");
+#endif
   fprintf(stdout,"--------------------------------------------------------------------------\n");
 #ifdef _LEAKYBUCKET_
   fprintf(stdout," Rate_decoder        : %8ld \n",inp->R_decoder);
@@ -433,12 +473,19 @@ void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr)
   fprintf(stdout," SNR V(dB)           : %5.2f\n",snr->snr_va);
   fprintf(stdout," Total decoding time : %.3f sec \n",tot_time*0.001);
   fprintf(stdout,"--------------------------------------------------------------------------\n");
-  fprintf(stdout," Exit JM %s decoder, ver %s \n",JM,VERSION);
-
+  fprintf(stdout," Exit JM %s decoder, ver %s ",JM,VERSION);
+#if ( INI_CTX == 0 )
+  fprintf(stdout,"No CABAC Initialization. ");
+  fprintf(stdout," ABT_max_count %d ",INICNT_ABT);
+#endif
+#ifdef _ALT_SCAN_
+  fprintf(stdout,"altScan ");
+#endif
+  fprintf(stdout,"\n");
   // write to log file
 
   snprintf(string, OUTSTRING_SIZE, "%s", LOGFILE);
-  if (fopen(string,"r")==0)                    // check if file exist
+  if ((p_log=fopen(string,"r"))==0)                    // check if file exist
   {
     if ((p_log=fopen(string,"a"))==0)
     {
@@ -455,7 +502,10 @@ void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr)
     }
   }
   else
-    p_log=fopen("log.dec","a");                    // File exist,just open for appending
+  { 
+    fclose(p_log);
+    p_log=fopen(string,"a");                    // File exist,just open for appending
+  }
 
 #ifdef WIN32
   _strdate( timebuf );
@@ -815,7 +865,6 @@ int init_global_buffers(struct inp_par *inp, struct img_par *img)
 
   int memory_size=0;
 #ifdef _ADAPT_LAST_GROUP_
-  extern int *last_P_no;
   extern int *last_P_no_frm;
   extern int *last_P_no_fld;
 #endif
@@ -902,6 +951,8 @@ int init_global_buffers(struct inp_par *inp, struct img_par *img)
   memory_size += get_mem3Dint(&(img->fw_mv),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
   // int bw_mv[92][72][3];
   memory_size += get_mem3Dint(&(img->bw_mv),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
+
+  memory_size += get_mem3Dint(&colB8mode,3,img->height/B8_SIZE, img->width/B8_SIZE); // collocated ABT block mode
   
   // int fw_refFrArr[72][88];
   memory_size += get_mem2Dint(&(img->fw_refFrArr_top),img->height/BLOCK_SIZE,img->width/BLOCK_SIZE);
@@ -958,8 +1009,11 @@ void free_global_buffers(struct inp_par *inp, struct img_par *img)
   free_mem3D(imgUV_prev,2);
 
   // free multiple ref frame buffers
-  free (mref);
-  free (mcef);
+  free (mref_frm);
+  free (mcef_frm);
+
+  free (mref_fld);
+  free (mcef_fld);
 
   free_mem2Dint(refFrArr_frm);
   free_mem2Dint(refFrArr_top);
@@ -1000,5 +1054,7 @@ void free_global_buffers(struct inp_par *inp, struct img_par *img)
 
   free_mem3Dint(img->fw_mv,img->width/BLOCK_SIZE + 4);
   free_mem3Dint(img->bw_mv,img->width/BLOCK_SIZE + 4);
+
+  free_mem3Dint(colB8mode,3); // collocated ABT block mode
 }
 

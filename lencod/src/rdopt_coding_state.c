@@ -50,11 +50,7 @@
 #include <memory.h>
 #include "rdopt_coding_state.h"
 
-#ifndef USE_6_INTRA_MODES
-  static const int max_ipr=9;
-#else
-  static const int max_ipr=6;
-#endif
+static const int max_ipr=9;
 
 
 /*!
@@ -220,9 +216,15 @@ store_coding_state (CSptr cs)
     for (i = 0; i < 2*NUM_TRANS_TYPE; i++)
       for (j = 0; j < NUM_RUN_CTX; j++)
         biari_copy_context (&(tc_src->run_context[i][j]), &(tc_dest->run_context[i][j]));
-    for (i = 0; i < NUM_TRANS_TYPE; i++)  
+    for (i = 0; i < NUM_TRANS_TYPE; i++)
       for (j = 0; j < NUM_COEFF_COUNT_CTX; j++)
          biari_copy_context (&(tc_src->coeff_count_context[i][j]), &(tc_dest->coeff_count_context[i][j]));
+    for (i = 0; i < 2*NUM_TRANS_TYPE_ABT; i++)
+      for (j = 0; j < NUM_RUN_CTX_ABT; j++)
+        biari_copy_context (&(tc_src->ABT_run_context[i][j]), &(tc_dest->ABT_run_context[i][j]));
+    for (i = 0; i < NUM_TRANS_TYPE_ABT; i++)
+      for (j = 0; j < NUM_COEFF_COUNT_CTX_ABT; j++)
+         biari_copy_context (&(tc_src->ABT_coeff_count_context[i][j]), &(tc_dest->ABT_coeff_count_context[i][j]));
   }
 
   //=== syntax element number and bitcounters ===
@@ -233,6 +235,7 @@ store_coding_state (CSptr cs)
   //=== elements of current macroblock ===
   memcpy (cs->mvd, currMB->mvd, 2*2*BLOCK_MULTIPLE*BLOCK_MULTIPLE*sizeof(int));
   memcpy (cs->coeffs_count,currMB->coeffs_count, BLOCK_MULTIPLE*BLOCK_MULTIPLE*sizeof(int));
+
 }
 
 
@@ -330,6 +333,12 @@ reset_coding_state (CSptr cs)
     for (i = 0; i < NUM_TRANS_TYPE; i++)
       for (j = 0; j < NUM_COEFF_COUNT_CTX; j++)
         biari_copy_context (&(tc_src->coeff_count_context[i][j]), &(tc_dest->coeff_count_context[i][j]));
+    for (i = 0; i < 2*NUM_TRANS_TYPE_ABT; i++)
+      for (j = 0; j < NUM_RUN_CTX_ABT; j++)
+        biari_copy_context (&(tc_src->ABT_run_context[i][j]), &(tc_dest->ABT_run_context[i][j]));
+    for (i = 0; i < NUM_TRANS_TYPE_ABT; i++)
+      for (j = 0; j < NUM_COEFF_COUNT_CTX_ABT; j++)
+        biari_copy_context (&(tc_src->ABT_coeff_count_context[i][j]), &(tc_dest->ABT_coeff_count_context[i][j]));
 
   }
 

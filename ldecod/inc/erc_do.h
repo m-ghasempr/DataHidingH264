@@ -68,8 +68,8 @@ int ercCollectColumnBlocks( int predBlocks[], int currRow, int currColumn, int *
 /* this can be used as getParam(...,mv) or getParam(...,xMin) or getParam(...,yMin) */
 #define getParam(object_list,currMBNum,comp,param) \
     (isSplitted(object_list,currMBNum) ? \
-     ((object_list+((currMBNum)<<2)+(comp))->##param) : \
-     ((object_list+((currMBNum)<<2))->##param))
+     ((object_list+((currMBNum)<<2)+(comp))->param) : \
+     ((object_list+((currMBNum)<<2))->param))
 
 #endif
 

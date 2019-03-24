@@ -62,6 +62,9 @@
 #define SIZEOF_BOXTYPE 8  // 8: compact size, 32 bits mode, 16: extended size, 64 bits mode
 #define BUFSIZE_FOR_PAYLOADINFO 2048
 
+#define MAX_LAYER_NUMBER 2
+#define MAX_DEPENDENT_SUBSEQ 5
+
 //! Box Types
 typedef enum
 {
@@ -72,6 +75,9 @@ typedef enum
     BOX_PRMS, //<! 
     BOX_SEGM, //<! 
     BOX_ATRH, //<! 
+    BOX_PICI, //<! 
+    BOX_LAYR, //<! 
+    BOX_SSEQ, //<! 
     BOX_SWPC, //<! 
     BOX_ATRM  //<! 
 } TYPE_OF_BOX;
@@ -182,6 +188,7 @@ typedef struct
   unsigned INT8 partitioningType;
   unsigned INT8 intraPredictionType;
   unsigned INT8 bufCycle;
+  Boolean requiredPictureNumberUpdateBehavior;
 } ParameterSetBox;
 
 // 6
@@ -197,7 +204,13 @@ typedef struct
 } SegmentBox;
 
 // 7
+typedef struct
+{
+  BoxType type;
+  unsigned INT8 numLayers;
+} AlternateTrackHeaderBox;  // 042
 
+// 8
 typedef struct sPayloadInfo
 {
   unsigned INT64 payloadSize;
@@ -215,6 +228,10 @@ typedef struct sPayloadInfo
   unsigned INT8  sliceType;
   unsigned INT8  firstMBInSliceX;
   unsigned INT8  firstMBInSliceY;
+#ifdef _ABT_FLAG_IN_SLICE_HEADER_
+  unsigned INT8  abtMode;
+#endif
+
   INT8  initialQP;
 
   int sliceType2;   // save according to original value
@@ -229,14 +246,28 @@ typedef struct sPayloadInfo
 
   struct sPayloadInfo* next;
 
+  int numRMPNI;
+  int rmpni_Data[6];
+  int rmpni_RMPNI[6];
+
 } PayloadInfo;
 
 typedef struct
 {
   Boolean intraPictureFlag;
+  Boolean syncPictureFlag;    // 042
   INT64 pictureOffset;
   INT64 currPictureSize;
   INT64 pictureDisplayTime;
+
+  unsigned INT8 layerNumber;  // 042
+  unsigned INT16 subSequenceIdentifier;
+  unsigned INT8 originLayerNumber;
+  unsigned INT16 originSubSequenceIdentifier;
+
+  unsigned INT8 refFromLayerNumber;  // 042
+  unsigned INT16 refFromSubSequenceIdentifier;
+
   unsigned INT64 numPayloads;
 
   INT64 lastFrameNr;
@@ -251,7 +282,39 @@ typedef struct
   unsigned INT64 numPictures;
 
   FILE* fpMeta;   // save the PictureInfo to tmp files
-} AlternateTrackHeaderBox;
+} PictureInformationBox;   // 042
+
+// 9
+typedef struct
+{
+  BoxType type;
+  unsigned INT32 avgBitRate;
+  unsigned INT32 avgFrameRate;
+  FILE* fp;
+} LayerBox;
+
+// 10
+typedef struct
+{
+  unsigned INT8 layerNumber;
+  unsigned INT16 subSequenceIdentifier;
+} DependencyInfo;
+
+typedef struct
+{
+  BoxType type;
+
+  unsigned INT16 subSequenceIdentifier;
+  Boolean continuationFromPreviousSegmentFlag;
+  Boolean continuationToNextSegmentFlag;
+  Boolean startTickAvailableFlag;
+  unsigned INT64 ssStartTick;
+  unsigned INT64 ssDuration;
+  unsigned INT32 avgBitRate;
+  unsigned INT32 avgFrameRate;
+  unsigned INT32 numReferenceSubSequences;
+  DependencyInfo dependencyData[MAX_DEPENDENT_SUBSEQ];
+} SubSequenceBox;
 
 typedef struct
 {
@@ -273,12 +336,14 @@ extern AlternateTrackInfoBox box_ati;
 extern ParameterSetBox box_ps;
 extern SegmentBox box_s;
 extern AlternateTrackHeaderBox box_ath;
+extern PictureInformationBox box_pi;
 extern PayloadInfo* pCurrPayloadInfo;
 extern PictureInfo currPictureInfo;
 extern AlternateTrackMediaBox box_atm;
 extern SwitchPictureBox box_sp;
 
 extern int isBigEndian;
+
 // functions
 
 int testEndian();
@@ -320,6 +385,12 @@ int updateAlternateTrackHeaderBox();
 size_t mergeAlternateTrackHeaderBox( FILE* fp );
 void freeAlternateTrackHeaderBox();
 
+// Functions on PictureInformationBox
+int initPictureInformationBox();
+int updatePictureInformationBox();
+size_t mergePictureInformationBox( FILE* fp );
+void freePictureInformationBox();
+
 // Functions on PictureInfo
 int initPictureInfo();
 size_t wrPictureInfo( FILE* fp );
@@ -331,6 +402,20 @@ PayloadInfo* newPayloadInfo();
 int addOnePayloadInfo(PayloadInfo* pi);
 size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp );
 size_t iff_writeERPS(SyntaxElement *sym, PayloadInfo* pp, Bitstream* bitstream);
+
+// Functions on LayerBox
+int initLayerBox();
+int updateLayerBox();
+size_t mergeLayerBox( FILE* fp );
+void freeLayerBox();
+
+// Functions on SubSequenceBox
+int initSubSequenceBox( int layr );
+int updateSubSequenceBox( int layr );
+size_t wrSubSequenceBox( int layr );
+void freeSubSequenceBox( int layr );
+void begin_sub_sequence();
+void end_sub_sequence();
 
 // Functions on SwitchPictureBox
 int initSwitchPictureBox();
@@ -346,6 +431,10 @@ int initInterimFile();
 size_t terminateInterimFile(FILE* outf);
 size_t writefile( void* buf, size_t size, size_t count, FILE* fp );
 size_t writefile_s( void* buf, size_t bufsize, size_t size, size_t count, FILE* fp );
+void remap_ref_short_term(PayloadInfo* pp);
+void add_dependent_subseq(int layr);
+Boolean in_dependency_set(int this_layr, int sub_seq_no, int layer_no);
+Boolean can_predict_from(int this_layr, int sub_seq_no, int layer_no);
 
 #endif
 

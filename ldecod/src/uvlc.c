@@ -39,9 +39,9 @@
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
- *    - Inge Lille-Langøy                <inge.lille-langoy@telenor.com>
- *    - Detlev Marpe                     <marpe@hhi.de>
- *    - Gabi Blaettermann             <blaetter@hhi.de>
+ *    - Inge Lille-Langøy               <inge.lille-langoy@telenor.com>
+ *    - Detlev Marpe                    <marpe@hhi.de>
+ *    - Gabi Blaettermann               <blaetter@hhi.de>
  ************************************************************************
  */
 #include "contributors.h"
@@ -55,6 +55,7 @@
 #include "elements.h"
 #include "bitsbuf.h"
 #include "header.h"
+#include "golomb_dec.h"
 
 
 // A little trick to avoid those horrible #if TRACE all over the source code
@@ -268,18 +269,25 @@ int readSliceUVLC(struct img_par *img, struct inp_par *inp)
   DataPartition *dP;
   Bitstream *currStream = currSlice->partArr[0].bitstream;
   int *partMap = assignSE2partition[currSlice->dp_mode];
-  int frame_bitoffset = currStream->frame_bitoffset = 0;
   SyntaxElement sym;
   int dummy;
   byte *buf = currStream->streamBuffer;
-
-  int len, info;
+  
+  int len;
   int newframe = 0;   //WYK: Oct. 8, 2001, change the method to find a new frame
+  int startcodeprefix_len; //number of bytes taken by start code prefix
 
+  currStream->frame_bitoffset = 0;
+  
   memset (buf, 0xff, MAX_CODED_FRAME_SIZE);   // this prevents a buffer full with zeros
-  currStream->bitstream_length = GetOneSliceIntoSourceBitBuffer(img, inp, buf);
-  if (currStream->bitstream_length > 4)  // More than just a start code
+  currStream->bitstream_length = GetOneSliceIntoSourceBitBuffer(img, inp, buf, &startcodeprefix_len);
+  if (currStream->bitstream_length > startcodeprefix_len)  // More than just a start code
   {
+    if(inp->Encapsulated_NAL_Payload)
+    {
+      currStream->bitstream_length = EBSPtoRBSP(buf, currStream->bitstream_length, startcodeprefix_len);
+      currStream->bitstream_length = RBSPtoSODB(buf, currStream->bitstream_length);
+    }
     sym.type = SE_HEADER;
 #if TRACE
     strncpy(sym.tracestring, "\nHeaderinfo", TRACESTRING_SIZE);
@@ -288,16 +296,13 @@ int readSliceUVLC(struct img_par *img, struct inp_par *inp)
       dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
     else
       dP = &(currSlice->partArr[partMap[sym.type]]);
-    len =  GetVLCSymbol (buf, frame_bitoffset, &info, currStream->bitstream_length);
-#if TRACE
-    tracebits("Startcode", len, info, 0, 0);
-#endif
-
+    len = startcodeprefix_len * 8;
+    
     currStream->frame_bitoffset +=len;
-
+    
     // read the slice header
     dummy = SliceHeader(img,inp);
-
+    
     //WYK: Oct. 8, 2001, change the method to find a new frame
     if(img->tr != img->tr_old)
       newframe = 1;
@@ -305,12 +310,19 @@ int readSliceUVLC(struct img_par *img, struct inp_par *inp)
       newframe = 0;
     img->tr_old = img->tr;
     
-    // if the TR of current slice is not identical to the TR  of previous received slice, we have a new frame
+    // PLUS2, 7/7 temp fix for AFF
+    if(img->structure != img->structure_old)		
+      newframe |= 1;
+/*    else
+      newframe = 0;  */
+	  img->structure_old = img->structure; 
+
+  // if the TR of current slice is not identical to the TR  of previous received slice, we have a new frame
     if(newframe)
       return SOP;
     else
       return SOS;
-
+    
   }
   else    // less than four bytes in file -> cannot be a slice
     return EOS;
@@ -332,6 +344,9 @@ int readSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct inp_p
   byte *buf = currStream->streamBuffer;
   int BitstreamLengthInBytes = currStream->bitstream_length;
 
+  if( sym->golomb_maxlevels && (sym->type==SE_LUM_DC_INTRA||sym->type==SE_LUM_AC_INTRA||sym->type==SE_LUM_DC_INTER||sym->type==SE_LUM_AC_INTER) )
+    return readSyntaxElement_GOLOMB(sym,img,inp,dP);
+
   sym->len =  GetVLCSymbol (buf, frame_bitoffset, &(sym->inf), BitstreamLengthInBytes);
   if (sym->len == -1)
     return -1;
@@ -343,6 +358,59 @@ int readSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct inp_p
 #endif
 
   return 1;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    read a fixed codeword from UVLC-partition and
+ *    map it to the corresponding syntax element
+ ************************************************************************
+ */
+int readSyntaxElement_fixed(SyntaxElement *sym, struct img_par *img, struct inp_par *inp, struct datapartition *dP)
+{
+  Bitstream   *currStream = dP->bitstream;
+  int totbitoffset = currStream->frame_bitoffset;
+  byte *buffer = currStream->streamBuffer;
+  int bytecount = currStream->bitstream_length;
+
+  int *info = &(sym->inf);
+  register int inf;
+  long byteoffset;      // byte from start of buffer
+  int bitoffset;      // bit from start of byte
+  int bitcounter = 1;
+  int info_bit;
+
+  byteoffset = totbitoffset/8;
+  bitoffset = 7-(totbitoffset%8);
+
+  inf = 0;
+  for (info_bit = 0; info_bit < sym->len; info_bit ++)
+  {
+    bitcounter ++;
+    bitoffset -= 1;
+    if (bitoffset < 0)
+    {                 // finished with current byte ?
+      bitoffset = bitoffset+8;
+      byteoffset++;
+    }
+    if (byteoffset > bytecount)
+    {
+      return -1;
+    }
+    inf=(inf<<1);
+    if(buffer[byteoffset] & (0x01<<(bitoffset)))
+      inf |=1;
+  }
+
+  *info = inf;
+  currStream->frame_bitoffset += sym->len;
+
+#if TRACE
+  tracebits(sym->tracestring, sym->len, sym->inf, sym->value1, sym->value2);
+#endif
+
+  return bitcounter;           // return absolute offset in bit from start of frame
 }
 
 /*!
@@ -360,13 +428,12 @@ int uvlc_startcode_follows(struct img_par *img, struct inp_par *inp)
   byte *buf = currStream->streamBuffer;
   int frame_bitoffset = currStream->frame_bitoffset;
   int info;
-
+// printf ("uvlc_startcode_follows returns %d\n", (-1 == GetVLCSymbol (buf, frame_bitoffset, &info, currStream->bitstream_length)));
   if (-1 == GetVLCSymbol (buf, frame_bitoffset, &info, currStream->bitstream_length))
     return TRUE;
   else
     return FALSE;
 }
-
 
 #ifdef _EXP_GOLOMB
 /*!

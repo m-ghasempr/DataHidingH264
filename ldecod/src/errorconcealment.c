@@ -64,7 +64,30 @@
 #include "global.h"
 #include "elements.h"
 
-
+static int ec_flag[SE_MAX_ELEMENTS];        //!< array to set errorconcealment
+static char SEtypes[][25] =
+{
+    "SE_HEADER",
+    "SE_PTYPE",
+    "SE_MBTYPE",
+    "SE_REFFRAME",
+    "SE_INTRAPREDMODE",
+    "SE_MVD",
+    "SE_CBP_INTRA",
+    "SE_LUM_DC_INTRA",
+    "SE_CHR_DC_INTRA",
+    "SE_LUM_AC_INTRA",
+    "SE_CHR_AC_INTRA",
+    "SE_CBP_INTER",
+    "SE_LUM_DC_INTER",
+    "SE_CHR_DC_INTER",
+    "SE_LUM_AC_INTER",
+    "SE_CHR_AC_INTER",
+    "SE_DELTA_QUANT_INTER",
+    "SE_DELTA_QUANT_INTRA",
+    "SE_BFRAME",
+    "SE_EOS"
+};
 
 /*!
  ***********************************************************************

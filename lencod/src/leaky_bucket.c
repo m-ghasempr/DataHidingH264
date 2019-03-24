@@ -92,10 +92,12 @@ int get_LeakyBucketRate(unsigned long NumberLeakyBuckets, unsigned long *Rmin)
     if(1 != fscanf(f, "%ld", &buf)) 
     {
       printf(" Leaky BucketRateFile does not have valid entries;\n using rate calculated from avg. rate \n");
+      fclose (f);
       return 0;
     }
     Rmin[i] = buf;
   }
+  fclose (f);
   return 1;
 }
 /*!
@@ -231,7 +233,7 @@ void calc_buffer()
 {    
   unsigned long AvgRate, TotalRate, NumberLeakyBuckets;
   long *buffer_frame, minB;
-  unsigned long iBucket, iFrame,  FrameIndex;
+  unsigned long iBucket, iFrame,  FrameIndex = 0;
   long maxBuffer, actualBuffer, InitFullness, iChannelRate;
   unsigned long *Rmin, *Bmin, *Fmin;
    

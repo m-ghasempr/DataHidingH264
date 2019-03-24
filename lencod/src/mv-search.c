@@ -67,6 +67,7 @@
 #include "mv-search.h"
 #include "refbuf.h"
 #include "memalloc.h"
+#include "abt.h"
 
 
 // These procedure pointers are used by motion_search() and one_eigthpel()
@@ -83,6 +84,15 @@ int*   refbits;
 int*   byte_abs;
 int*** motion_cost;
 
+
+void SetMotionVectorPredictor (int  pmv[2],
+                               int  **refFrArr,
+                               int  ***tmp_mv,
+                               int  ref_frame,
+                               int  mb_x,
+                               int  mb_y,
+                               int  blockshape_x,
+                               int  blockshape_y);
 
 #ifdef _FAST_FULL_ME_
 
@@ -286,6 +296,147 @@ SetupLargerBlocks (int refindex, int max_pos)
 }
 
 
+/*!
+ ***********************************************************************
+ * \brief
+ *    Setup the fast search for an macroblock
+ ***********************************************************************
+ */
+void
+SetupFastFullPelSearch (int   ref)  // <--  reference frame parameter (0... or -1 (backward))
+{
+  int     pmv[2];
+  pel_t   orig_blocks[256], *orgptr=orig_blocks, *refptr;
+  int     offset_x, offset_y, x, y, range_partly_outside, ref_x, ref_y, pos, abs_x, abs_y, bindex, blky;
+  int     LineSadBlk0, LineSadBlk1, LineSadBlk2, LineSadBlk3;
+
+  int     mvshift       = (input->mv_res ? 3 : 2);
+  int     refframe      = (ref>=0 ? ref             : 0);
+  int     refindex      = (ref>=0 ? ref             : img->buf_cycle);
+  pel_t*  ref_pic       = img->type==B_IMG? Refbuf11 [ref+((mref==mref_fld)) +1] : Refbuf11[ref];
+  int**   ref_array     = (img->type!=B_IMG ? refFrArr : ref>=0 ? fw_refFrArr : bw_refFrArr);
+  int***  mv_array      = (img->type!=B_IMG ? tmp_mv   : ref>=0 ? tmp_fwMV    : tmp_bwMV);
+  int**   block_sad     = BlockSAD[refindex][7];
+  int     max_width     = img->width  - 17;
+  int     max_height    = img->height - 17;
+  int     search_range  = max_search_range[refindex];
+  int     max_pos       = (2*search_range+1) * (2*search_range+1);
+
+
+  //===== get search center: predictor of 16x16 block =====
+  SetMotionVectorPredictor (pmv, ref_array, mv_array, refframe, 0, 0, 16, 16);
+  search_center_x[refindex] = pmv[0] / (1 << mvshift);
+  search_center_y[refindex] = pmv[1] / (1 << mvshift);
+  if (!input->rdopt)
+  {
+    //--- correct center so that (0,0) vector is inside ---
+    search_center_x[refindex] = max(-search_range, min(search_range, search_center_x[refindex]));
+    search_center_y[refindex] = max(-search_range, min(search_range, search_center_y[refindex]));
+  }
+  search_center_x[refindex] += img->pix_x;
+  search_center_y[refindex] += img->pix_y;
+  offset_x = search_center_x[refindex];
+  offset_y = search_center_y[refindex];
+
+
+  //===== copy original block for fast access =====
+  for   (y = img->pix_y; y < img->pix_y+16; y++)
+    for (x = img->pix_x; x < img->pix_x+16; x++)
+      *orgptr++ = imgY_org [y][x];
+
+
+  //===== check if whole search range is inside image =====
+  if (offset_x >= search_range && offset_x <= max_width  - search_range &&
+      offset_y >= search_range && offset_y <= max_height - search_range   )
+  {
+    range_partly_outside = 0; PelYline_11 = FastLine16Y_11;
+  }
+  else
+  {
+    range_partly_outside = 1;
+  }
+
+
+  //===== determine position of (0,0)-vector =====
+  if (!input->rdopt)
+  {
+    ref_x = img->pix_x - offset_x;
+    ref_y = img->pix_y - offset_y;
+
+    for (pos = 0; pos < max_pos; pos++)
+    {
+      if (ref_x == spiral_search_x[pos] &&
+          ref_y == spiral_search_y[pos])
+      {
+        pos_00[refindex] = pos;
+        break;
+      }
+    }
+  }
+
+
+  //===== loop over search range (spiral search): get blockwise SAD =====
+  for (pos = 0; pos < max_pos; pos++)
+  {
+    abs_y = offset_y + spiral_search_y[pos];
+    abs_x = offset_x + spiral_search_x[pos];
+
+    if (range_partly_outside)
+    {
+      if (abs_y >= 0 && abs_y <= max_height &&
+          abs_x >= 0 && abs_x <= max_width    )
+      {
+        PelYline_11 = FastLine16Y_11;
+      }
+      else
+      {
+        PelYline_11 = UMVLine16Y_11;
+      }
+    }
+
+    orgptr = orig_blocks;
+    bindex = 0;
+    for (blky = 0; blky < 4; blky++)
+    {
+      LineSadBlk0 = LineSadBlk1 = LineSadBlk2 = LineSadBlk3 = 0;
+      for (y = 0; y < 4; y++)
+      {
+        refptr = PelYline_11 (ref_pic, abs_y++, abs_x);
+
+        LineSadBlk0 += byte_abs [*refptr++ - *orgptr++];
+        LineSadBlk0 += byte_abs [*refptr++ - *orgptr++];
+        LineSadBlk0 += byte_abs [*refptr++ - *orgptr++];
+        LineSadBlk0 += byte_abs [*refptr++ - *orgptr++];
+        LineSadBlk1 += byte_abs [*refptr++ - *orgptr++];
+        LineSadBlk1 += byte_abs [*refptr++ - *orgptr++];
+        LineSadBlk1 += byte_abs [*refptr++ - *orgptr++];
+        LineSadBlk1 += byte_abs [*refptr++ - *orgptr++];
+        LineSadBlk2 += byte_abs [*refptr++ - *orgptr++];
+        LineSadBlk2 += byte_abs [*refptr++ - *orgptr++];
+        LineSadBlk2 += byte_abs [*refptr++ - *orgptr++];
+        LineSadBlk2 += byte_abs [*refptr++ - *orgptr++];
+        LineSadBlk3 += byte_abs [*refptr++ - *orgptr++];
+        LineSadBlk3 += byte_abs [*refptr++ - *orgptr++];
+        LineSadBlk3 += byte_abs [*refptr++ - *orgptr++];
+        LineSadBlk3 += byte_abs [*refptr++ - *orgptr++];
+      }
+      block_sad[bindex++][pos] = LineSadBlk0;
+      block_sad[bindex++][pos] = LineSadBlk1;
+      block_sad[bindex++][pos] = LineSadBlk2;
+      block_sad[bindex++][pos] = LineSadBlk3;
+    }
+  }
+
+
+  //===== combine SAD's for larger block types =====
+  SetupLargerBlocks (refindex, max_pos);
+
+
+  //===== set flag marking that search setup have been done =====
+  search_setup_done[refindex] = 1;
+}
+#endif // _FAST_FULL_ME_
+
 
 /*!
  ***********************************************************************
@@ -454,151 +605,6 @@ SetMotionVectorPredictor (int  pmv[2],
 }
 
 
-
-/*!
- ***********************************************************************
- * \brief
- *    Setup the fast search for an macroblock
- ***********************************************************************
- */
-void
-SetupFastFullPelSearch (int   ref)  // <--  reference frame parameter (0... or -1 (backward))
-{
-  int     pmv[2];
-  pel_t   orig_blocks[256], *orgptr=orig_blocks, *refptr;
-  int     offset_x, offset_y, x, y, range_partly_outside, ref_x, ref_y, pos, abs_x, abs_y, bindex, blky;
-  int     LineSadBlk0, LineSadBlk1, LineSadBlk2, LineSadBlk3;
-
-  int     mvshift       = (input->mv_res ? 3 : 2);
-  int     refframe      = (ref>=0 ? ref             : 0);
-  int     refindex      = (ref>=0 ? ref             : img->buf_cycle);
-  pel_t*  ref_pic       = (ref>=0 ? Refbuf11[ref+((mref==mref_fld)&&(img->type==B_IMG))] : Refbuf11_P);
-  int**   ref_array     = (img->type!=B_IMG ? refFrArr : ref>=0 ? fw_refFrArr : bw_refFrArr);
-  int***  mv_array      = (img->type!=B_IMG ? tmp_mv   : ref>=0 ? tmp_fwMV    : tmp_bwMV);
-  int**   block_sad     = BlockSAD[refindex][7];
-  int     max_width     = img->width  - 17;
-  int     max_height    = img->height - 17;
-  int     search_range  = max_search_range[refindex];
-  int     max_pos       = (2*search_range+1) * (2*search_range+1);
-
-
-  //===== get search center: predictor of 16x16 block =====
-  SetMotionVectorPredictor (pmv, ref_array, mv_array, refframe, 0, 0, 16, 16);
-  search_center_x[refindex] = pmv[0] / (1 << mvshift);
-  search_center_y[refindex] = pmv[1] / (1 << mvshift);
-  if (!input->rdopt)
-  {
-    //--- correct center so that (0,0) vector is inside ---
-    search_center_x[refindex] = max(-search_range, min(search_range, search_center_x[refindex]));
-    search_center_y[refindex] = max(-search_range, min(search_range, search_center_y[refindex]));
-  }
-  search_center_x[refindex] += img->pix_x;
-  search_center_y[refindex] += img->pix_y;
-  offset_x = search_center_x[refindex];
-  offset_y = search_center_y[refindex];
-
-
-  //===== copy original block for fast access =====
-  for   (y = img->pix_y; y < img->pix_y+16; y++)
-    for (x = img->pix_x; x < img->pix_x+16; x++)
-      *orgptr++ = imgY_org [y][x];
-
-
-  //===== check if whole search range is inside image =====
-  if (offset_x >= search_range && offset_x <= max_width  - search_range &&
-      offset_y >= search_range && offset_y <= max_height - search_range   )
-  {
-    range_partly_outside = 0; PelYline_11 = FastLine16Y_11;
-  }
-  else
-  {
-    range_partly_outside = 1;
-  }
-
-
-  //===== determine position of (0,0)-vector =====
-  if (!input->rdopt)
-  {
-    ref_x = img->pix_x - offset_x;
-    ref_y = img->pix_y - offset_y;
-
-    for (pos = 0; pos < max_pos; pos++)
-    {
-      if (ref_x == spiral_search_x[pos] &&
-          ref_y == spiral_search_y[pos])
-      {
-        pos_00[refindex] = pos;
-        break;
-      }
-    }
-  }
-
-
-  //===== loop over search range (spiral search): get blockwise SAD =====
-  for (pos = 0; pos < max_pos; pos++)
-  {
-    abs_y = offset_y + spiral_search_y[pos];
-    abs_x = offset_x + spiral_search_x[pos];
-
-    if (range_partly_outside)
-    {
-      if (abs_y >= 0 && abs_y <= max_height &&
-          abs_x >= 0 && abs_x <= max_width    )
-      {
-        PelYline_11 = FastLine16Y_11;
-      }
-      else
-      {
-        PelYline_11 = UMVLine16Y_11;
-      }
-    }
-
-    orgptr = orig_blocks;
-    bindex = 0;
-    for (blky = 0; blky < 4; blky++)
-    {
-      LineSadBlk0 = LineSadBlk1 = LineSadBlk2 = LineSadBlk3 = 0;
-      for (y = 0; y < 4; y++)
-      {
-        refptr = PelYline_11 (ref_pic, abs_y++, abs_x);
-
-        LineSadBlk0 += byte_abs [*refptr++ - *orgptr++];
-        LineSadBlk0 += byte_abs [*refptr++ - *orgptr++];
-        LineSadBlk0 += byte_abs [*refptr++ - *orgptr++];
-        LineSadBlk0 += byte_abs [*refptr++ - *orgptr++];
-        LineSadBlk1 += byte_abs [*refptr++ - *orgptr++];
-        LineSadBlk1 += byte_abs [*refptr++ - *orgptr++];
-        LineSadBlk1 += byte_abs [*refptr++ - *orgptr++];
-        LineSadBlk1 += byte_abs [*refptr++ - *orgptr++];
-        LineSadBlk2 += byte_abs [*refptr++ - *orgptr++];
-        LineSadBlk2 += byte_abs [*refptr++ - *orgptr++];
-        LineSadBlk2 += byte_abs [*refptr++ - *orgptr++];
-        LineSadBlk2 += byte_abs [*refptr++ - *orgptr++];
-        LineSadBlk3 += byte_abs [*refptr++ - *orgptr++];
-        LineSadBlk3 += byte_abs [*refptr++ - *orgptr++];
-        LineSadBlk3 += byte_abs [*refptr++ - *orgptr++];
-        LineSadBlk3 += byte_abs [*refptr++ - *orgptr++];
-      }
-      block_sad[bindex++][pos] = LineSadBlk0;
-      block_sad[bindex++][pos] = LineSadBlk1;
-      block_sad[bindex++][pos] = LineSadBlk2;
-      block_sad[bindex++][pos] = LineSadBlk3;
-    }
-  }
-
-
-  //===== combine SAD's for larger block types =====
-  SetupLargerBlocks (refindex, max_pos);
-
-
-  //===== set flag marking that search setup have been done =====
-  search_setup_done[refindex] = 1;
-}
-#endif // _FAST_FULL_ME_
-
-
-
-
 /*!
  ************************************************************************
  * \brief
@@ -736,7 +742,7 @@ FullPelBlockMotionSearch (pel_t**   orig_pic,     // <--  original pixel values 
   pel_t *orig_line, *ref_line;
   pel_t *(*get_ref_line)(int, pel_t*, int, int);
 
-  pel_t*ref_pic       = (ref==-1 ? Refbuf11_P : Refbuf11 [ref+1]);
+  pel_t*  ref_pic       = img->type==B_IMG? Refbuf11 [ref+((mref==mref_fld)) +1] : Refbuf11[ref];
   int   best_pos      = 0;                                        // position with minimum motion cost
   int   max_pos       = (2*search_range+1)*(2*search_range+1);    // number of search positions
   int   lambda_factor = LAMBDA_FACTOR (lambda);                   // factor for determining lagragian motion cost
@@ -861,10 +867,6 @@ FastFullPelBlockMotionSearch (pel_t**   orig_pic,     // <--  not used
   if (!input->rdopt)
   {
     mcost = block_sad[pos_00[refindex]] + MV_COST (lambda_factor, mvshift, 0, 0, pred_mv_x, pred_mv_y);
-    if (img->type!=B_IMG && blocktype==1 && ref==0)
-    {
-      mcost -= WEIGHTED_COST (lambda_factor, 16);
-    }
 
     if (mcost < min_mcost)
     {
@@ -1025,14 +1027,16 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
                          int       search_pos4,   // <--  search positions for quarter-pel search  (default: 9)
                          int       search_pos8,   // <--  search positions for  eighth-pel search  (default: 9)
                          int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
-                         double    lambda)        // <--  lagrangian parameter for determining motion cost
+                         double    lambda,        // <--  lagrangian parameter for determining motion cost
+                         int       useABT)        // <--  use ABT SATD calculation
 {
   int   diff[16], *d;
   int   pos, best_pos, mcost, abort_search;
   int   y0, x0, ry0, rx0, ry;
   int   cand_mv_x, cand_mv_y;
   pel_t *orig_line;
-  pel_t **ref_pic       = (ref==-1 ? mref_P : mref [ref+((mref==mref_fld)&&(img->type==B_IMG))]);
+  int   incr            = ref==-1 ? ((!img->fld_type)&&(mref==mref_fld)&&(img->type==B_IMG)) : (mref==mref_fld)&&(img->type==B_IMG) ;
+  pel_t **ref_pic       = img->type==B_IMG? mref [ref+1+incr] : mref [ref];
   int   lambda_factor   = LAMBDA_FACTOR (lambda);
   int   mv_shift        = (input->mv_res ? 1 : 0);
   int   check_position0 = (blocktype==1 && *mv_x==0 && *mv_y==0 && input->hadamard && !input->rdopt && img->type!=B_IMG && ref==0);
@@ -1044,8 +1048,10 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
   int   max_pos_y4      = ((img->height-blocksize_y+1)<<2);
   int   min_pos2        = (input->hadamard ? 0 : 1);
   int   max_pos2        = (input->hadamard ? max(1,search_pos2) : search_pos2);
+  int   curr_diff[MB_BLOCK_SIZE][MB_BLOCK_SIZE]; // for ABT SATD calculation
+  int   xx,yy,kk;                                // indicees for curr_diff
 
-
+  
   /*********************************
    *****                       *****
    *****  HALF-PEL REFINEMENT  *****
@@ -1111,13 +1117,24 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
         *d++      = orig_line[x0+2]  -  PelY_14 (ref_pic, ry, rx0+ 8);
         *d        = orig_line[x0+3]  -  PelY_14 (ref_pic, ry, rx0+12);
 
-        if ((mcost += SATD (diff, input->hadamard)) > min_mcost)
+        if (!useABT)
         {
-          abort_search = 1;
-          break;
+          if ((mcost += SATD (diff, input->hadamard)) > min_mcost)
+          {
+            abort_search = 1;
+            break;
+          }
+        }
+        else  // copy diff to curr_diff for ABT SATD calculation
+        {
+          for (yy=y0,kk=0; yy<y0+4; yy++)
+            for (xx=x0; xx<x0+4; xx++, kk++)
+              curr_diff[yy][xx] = diff[kk];
         }
       }
     }
+    if (useABT)
+      mcost += find_sad_abt(input->hadamard, blocksize_x, blocksize_y, 0, 0, curr_diff);
 
     if (mcost < min_mcost)
     {
@@ -1190,13 +1207,24 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
         *d++      = orig_line[x0+2]  -  PelY_14 (ref_pic, ry, rx0+ 8);
         *d        = orig_line[x0+3]  -  PelY_14 (ref_pic, ry, rx0+12);
 
-        if ((mcost += SATD (diff, input->hadamard)) > min_mcost)
+        if (!useABT)
         {
-          abort_search = 1;
-          break;
+          if ((mcost += SATD (diff, input->hadamard)) > min_mcost)
+          {
+            abort_search = 1;
+            break;
+          }
+        }
+        else  // copy diff to curr_diff for ABT SATD calculation
+        {
+          for (yy=y0,kk=0; yy<y0+4; yy++)
+            for (xx=x0; xx<x0+4; xx++, kk++)
+              curr_diff[yy][xx] = diff[kk];
         }
       }
     }
+    if (useABT)
+      mcost += find_sad_abt(input->hadamard, blocksize_x, blocksize_y, 0, 0, curr_diff);
 
     if (mcost < min_mcost)
     {
@@ -1274,13 +1302,24 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
           *d++      = orig_line[x0+2]  -  PelY_18 (ref_pic, ry, rx0+16);
           *d        = orig_line[x0+3]  -  PelY_18 (ref_pic, ry, rx0+24);
 
-          if ((mcost += SATD (diff, input->hadamard)) > min_mcost)
+          if (!useABT)
           {
-            abort_search = 1;
-            break;
+            if ((mcost += SATD (diff, input->hadamard)) > min_mcost)
+            {
+              abort_search = 1;
+              break;
+            }
+          }
+          else  // copy diff to curr_diff for ABT SATD calculation
+          {
+            for (yy=y0,kk=0; yy<y0+4; yy++)
+              for (xx=x0; xx<x0+4; xx++, kk++)
+                curr_diff[yy][xx] = diff[kk];
           }
         }
       }
+      if (useABT)
+        mcost += find_sad_abt(input->hadamard, blocksize_x, blocksize_y, 0, 0, curr_diff);
 
       if (mcost < min_mcost)
       {
@@ -1294,7 +1333,6 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
       *mv_y += spiral_search_y [best_pos];
     }
   }
-
 
   //===== return minimum motion cost =====
   return min_mcost;
@@ -1314,7 +1352,8 @@ BlockMotionSearch (int       ref,           // <--  reference frame (0... or -1 
                    int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
                    int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
                    int       search_range,  // <--  1-d search range for integer-position search
-                   double    lambda)        // <--  lagrangian parameter for determining motion cost
+                   double    lambda,        // <--  lagrangian parameter for determining motion cost
+                   int       useABT)        // <--  use ABT SATD calculation
 {
   static pel_t   orig_val [256];
   static pel_t  *orig_pic  [16] = {orig_val,     orig_val+ 16, orig_val+ 32, orig_val+ 48,
@@ -1327,7 +1366,6 @@ BlockMotionSearch (int       ref,           // <--  reference frame (0... or -1 
 #endif
   int       pred_mv_x, pred_mv_y, mv_x, mv_y, i, j;
 
-  int       bframe    = (img->type == B_IMG);
   int       max_value = (1<<20);
   int       min_mcost = max_value;
   int       mb_x      = pic_pix_x-img->pix_x;
@@ -1395,7 +1433,6 @@ BlockMotionSearch (int       ref,           // <--  reference frame (0... or -1 
 
 #endif
 
-
   //==============================
   //=====   SUB-PEL SEARCH   =====
   //==============================
@@ -1405,8 +1442,29 @@ BlockMotionSearch (int       ref,           // <--  reference frame (0... or -1 
   }
   min_mcost =  SubPelBlockMotionSearch (orig_pic, ref, pic_pix_x, pic_pix_y, blocktype,
                                         pred_mv_x, pred_mv_y, &mv_x, &mv_y, 9, 9, 9,
-                                        min_mcost, lambda);
+                                        min_mcost, lambda, useABT);
 
+
+  if (!input->rdopt)
+  {
+    // Get the skip mode cost
+    if (blocktype == 1 && img->type == INTER_IMG)
+    {
+      int cost;
+
+      FindSkipModeMotionVector ();
+
+      cost  = GetSkipCostMB (lambda);
+      cost -= (int)floor(8*lambda+0.4999);
+
+      if (cost < min_mcost)
+      {
+        min_mcost = cost;
+        mv_x      = img->all_mv [0][0][0][0][0];
+        mv_y      = img->all_mv [0][0][0][0][1];
+      }
+    }
+  }
 
   //===============================================
   //=====   SET MV'S AND RETURN MOTION COST   =====
@@ -1433,7 +1491,8 @@ int
 BIDPartitionCost (int   blocktype,
                   int   block8x8,
                   int   fw_ref,
-                  int   lambda_factor)
+                  int   lambda_factor,
+                  int   useABT)
 {
   static int  bx0[5][4] = {{0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,2,0,0}, {0,2,0,2}};
   static int  by0[5][4] = {{0,0,0,0}, {0,0,0,0}, {0,2,0,0}, {0,0,0,0}, {0,0,2,2}};
@@ -1447,6 +1506,10 @@ BIDPartitionCost (int   blocktype,
   int   step_v0   = (input->blc_size[ parttype][1]>>2);
   int   step_h    = (input->blc_size[blocktype][0]>>2);
   int   step_v    = (input->blc_size[blocktype][1]>>2);
+  int   curr_blk[MB_BLOCK_SIZE][MB_BLOCK_SIZE]; // ABT pred.error buffer
+  int   bxx, byy;                               // indexing curr_blk
+  int   bsx       = min(input->blc_size[blocktype][0],8);
+  int   bsy       = min(input->blc_size[blocktype][1],8);
 
   //----- cost for motion vector bits -----
   for (v=by0[parttype][block8x8]; v<by0[parttype][block8x8]+step_v0; v+=step_v)
@@ -1460,11 +1523,11 @@ BIDPartitionCost (int   blocktype,
   mcost = WEIGHTED_COST (lambda_factor, mvd_bits);
 
   //----- cost of residual signal -----
-  for (v=by0[parttype][block8x8]; v<by0[parttype][block8x8]+step_v0; v++)
+  for (byy=0, v=by0[parttype][block8x8]; v<by0[parttype][block8x8]+step_v0; byy+=4, v++)
   {
     pic_pix_y = img->pix_y + (block_y = (v<<2));
 
-    for (h=bx0[parttype][block8x8]; h<bx0[parttype][block8x8]+step_h0; h++)
+    for (bxx=0, h=bx0[parttype][block8x8]; h<bx0[parttype][block8x8]+step_h0; bxx+=4, h++)
     {
       pic_pix_x = img->pix_x + (block_x = (h<<2));
 
@@ -1473,10 +1536,18 @@ BIDPartitionCost (int   blocktype,
       for (k=j=0; j<4; j++)
       for (  i=0; i<4; i++, k++)
       {
-        diff[k] = imgY_org[pic_pix_y+j][pic_pix_x+i] - img->mpr[i+block_x][j+block_y];
+        diff[k] = curr_blk[byy+j][bxx+i] =
+                  imgY_org[pic_pix_y+j][pic_pix_x+i] - img->mpr[i+block_x][j+block_y];
       }
-      mcost += SATD (diff, input->hadamard);
+      if (!useABT)
+        mcost += SATD (diff, input->hadamard);
     }
+  }
+  if (useABT)
+  {
+    for (byy=0; byy<8 ; byy+=bsy)
+      for (bxx=0; bxx<8 ; bxx+=bsx)
+        mcost += find_sad_abt(input->hadamard,bsx,bsy,bxx,byy,curr_blk);
   }
 
   return mcost;
@@ -1486,27 +1557,25 @@ BIDPartitionCost (int   blocktype,
 /*!
  ************************************************************************
  * \brief
- *    Get cost for direct mode for an 8x8 block
+ *    Get cost for skip mode for an macroblock
  ************************************************************************
  */
-int Get_Direct_Cost8x8 (int block, double lambda)
+int GetSkipCostMB (double lambda)
 {
   int block_y, block_x, pic_pix_y, pic_pix_x, i, j, k;
   int diff[16];
-  int cost  = 0;
-  int mb_y  = (block/2)<<3;
-  int mb_x  = (block%2)<<3;
+  int cost = 0;
 
-  for (block_y=mb_y; block_y<mb_y+8; block_y+=4)
+  for (block_y=0; block_y<16; block_y+=4)
   {
     pic_pix_y = img->pix_y + block_y;
 
-    for (block_x=mb_x; block_x<mb_x+8; block_x+=4)
+    for (block_x=0; block_x<16; block_x+=4)
     {
       pic_pix_x = img->pix_x + block_x;
 
       //===== prediction of 4x4 block =====
-      LumaPrediction4x4 (block_x, block_y, 0, 0, max(0,refFrArr[pic_pix_y>>2][pic_pix_x>>2]));
+      LumaPrediction4x4 (block_x, block_y, 0, 0, 0);
 
       //===== get displaced frame difference ======                
       for (k=j=0; j<4; j++)
@@ -1517,6 +1586,93 @@ int Get_Direct_Cost8x8 (int block, double lambda)
       cost += SATD (diff, input->hadamard);
     }
   }
+
+  return cost;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Find motion vector for the Skip mode
+ ************************************************************************
+ */
+void FindSkipModeMotionVector ()
+{
+  int bx, by;
+  int mb_available_up   = (img->mb_y == 0)  ? 0 : (img->mb_data[img->current_mb_nr].slice_nr == img->mb_data[img->current_mb_nr-img->width/16].slice_nr);
+  int mb_available_left = (img->mb_x == 0)  ? 0 : (img->mb_data[img->current_mb_nr].slice_nr == img->mb_data[img->current_mb_nr-1                    ].slice_nr);
+  int zeroMotionAbove   = !mb_available_up  ? 1 : refFrArr[img->block_y-1][img->block_x] == 0 && tmp_mv[0][img->block_y-1][4+img->block_x]   == 0 && tmp_mv[1][img->block_y-1][4+img->block_x]   == 0 ? 1 : 0;
+  int zeroMotionLeft    = !mb_available_left? 1 : refFrArr[img->block_y][img->block_x-1] == 0 && tmp_mv[0][img->block_y  ][4+img->block_x-1] == 0 && tmp_mv[1][img->block_y  ][4+img->block_x-1] == 0 ? 1 : 0;
+  
+  if (zeroMotionAbove || zeroMotionLeft)
+  {
+    for (by = 0;by < 4;by++)
+      for (bx = 0;bx < 4;bx++)
+      {
+        img->all_mv [bx][by][0][0][0] = 0;
+        img->all_mv [bx][by][0][0][1] = 0;
+      }
+  }
+  else
+  {
+    for (by = 0;by < 4;by++)
+      for (bx = 0;bx < 4;bx++)
+      {
+        img->all_mv [bx][by][0][0][0] = img->mv[0][0][0][1][0];
+        img->all_mv [bx][by][0][0][1] = img->mv[0][0][0][1][1];
+      }
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Get cost for direct mode for an 8x8 block
+ ************************************************************************
+ */
+int Get_Direct_Cost8x8 (int block, double lambda, int abt_mode)
+{
+  int block_y, block_x, pic_pix_y, pic_pix_x, i, j, k;
+  int diff[16];
+  int cost  = 0;
+  int mb_y  = (block/2)<<3;
+  int mb_x  = (block%2)<<3;
+  int curr_blk[MB_BLOCK_SIZE][MB_BLOCK_SIZE]; // ABT pred.error buffer
+  int bxx, byy;                               // indexing curr_blk
+  int bsx   = ABT_TRSIZE[abt_mode][PIX];
+  int bsy   = ABT_TRSIZE[abt_mode][LIN];
+
+  for (byy=0, block_y=mb_y; block_y<mb_y+8; byy+=4, block_y+=4)
+  {
+    pic_pix_y = img->pix_y + block_y;
+
+    for (bxx=0, block_x=mb_x; block_x<mb_x+8; bxx+=4, block_x+=4)
+    {
+      pic_pix_x = img->pix_x + block_x;
+
+      //===== prediction of 4x4 block =====
+      LumaPrediction4x4 (block_x, block_y, 0, 0, max(0,refFrArr[pic_pix_y>>2][pic_pix_x>>2]));
+
+      //===== get displaced frame difference ======                
+      for (k=j=0; j<4; j++)
+        for (i=0; i<4; i++, k++)
+        {
+          diff[k] = curr_blk[byy+j][bxx+i] =
+                    imgY_org[pic_pix_y+j][pic_pix_x+i] - img->mpr[i+block_x][j+block_y];
+
+        }
+      if (abt_mode == ABT_OFF)
+        cost += SATD (diff, input->hadamard);
+    }
+  }
+
+  if (abt_mode != ABT_OFF)
+  {
+    for (byy=0; byy<8 ; byy+=bsy)
+      for (bxx=0; bxx<8 ; bxx+=bsx)
+        cost += find_sad_abt(input->hadamard,bsx,bsy,bxx,byy,curr_blk);
+  }
+
   return cost;
 }
 
@@ -1535,7 +1691,7 @@ int Get_Direct_CostMB (double lambda)
   
   for (i=0; i<4; i++)
   {
-    cost += Get_Direct_Cost8x8 (i, lambda);
+    cost += Get_Direct_Cost8x8 (i, lambda, (input->abt)? getDirectModeABT(i) : ABT_OFF);
   }
   return cost;
 }
@@ -1550,7 +1706,8 @@ int Get_Direct_CostMB (double lambda)
 void
 PartitionMotionSearch (int    blocktype,
                        int    block8x8,
-                       double lambda)
+                       double lambda,
+                       int    useABT)
 {
   static int  bx0[5][4] = {{0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,2,0,0}, {0,2,0,2}};
   static int  by0[5][4] = {{0,0,0,0}, {0,0,0,0}, {0,2,0,0}, {0,0,0,0}, {0,0,2,2}};
@@ -1559,7 +1716,7 @@ PartitionMotionSearch (int    blocktype,
   int   ref, refinx, refframe, v, h, mcost, search_range, i, j;
   int   pic_block_x, pic_block_y;
   int   bframe    = (img->type==B_IMG);
-  int   max_ref = img->nb_references;
+  int   max_ref   = bframe? img->nb_references-1 : img->nb_references;
   int   parttype  = (blocktype<4?blocktype:4);
   int   step_h0   = (input->blc_size[ parttype][0]>>2);
   int   step_v0   = (input->blc_size[ parttype][1]>>2);
@@ -1567,7 +1724,7 @@ PartitionMotionSearch (int    blocktype,
   int   step_v    = (input->blc_size[blocktype][1]>>2);
 
   if(mref==mref_fld)   //field coding, 
-    max_ref   = min (img->number-((mref==mref_fld)&&img->fld_type&&bframe), img->buf_cycle-(mref==mref_fld)-(mref==mref_fld&&bframe));
+	  max_ref = min (img->number-((mref==mref_fld)&&img->fld_type&&bframe), img->buf_cycle);
 
   //===== LOOP OVER REFERENCE FRAMES =====
   for (ref=(bframe?-1:0); ref<max_ref; ref++)
@@ -1605,7 +1762,7 @@ PartitionMotionSearch (int    blocktype,
           pic_block_x = img->block_x + h;
 
           //--- motion search for block ---
-          mcost = BlockMotionSearch (ref, 4*pic_block_x, 4*pic_block_y, blocktype, search_range, lambda);
+          mcost = BlockMotionSearch (ref, 4*pic_block_x, 4*pic_block_y, blocktype, search_range, lambda, useABT);
           motion_cost[blocktype][refinx][block8x8] += mcost;
 
           //--- set motion vectors and reference frame (for motion vector prediction) ---

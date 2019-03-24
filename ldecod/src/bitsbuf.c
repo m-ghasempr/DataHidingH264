@@ -54,81 +54,37 @@
 #include "global.h"
 #include "bitsbuf.h"
 
-static int SourceBitBufferPtr;    //!< the position for the next byte-write into the bit buffer
 FILE *bits;                //!< the bit stream file
 
 
 /*!
  ************************************************************************
  * \brief
- *    return the byte position of the bitstream file
- ************************************************************************
- */
-int getBitsPos()
-{
-  return ftell(bits);
-}
-/*!
- ************************************************************************
- * \brief
- *    set the position of the bitsream file
- ************************************************************************
- */
-int setBitsPos(int offset)
-{
-printf ("in setBitsPos (%d)\n", offset);
-  return fseek(bits, offset, SEEK_SET);
-}
-
-
-/*!
- ************************************************************************
- * \brief
- *    Initializes the Source Bit Buffer
- ************************************************************************
- */
-void InitializeSourceBitBuffer()
-{
-  SourceBitBufferPtr = 0;
-}
-
-
-/*!
- ************************************************************************
- * \brief
- *    returns the type of the start code at byte aligned position buf.
+ *    returns if new start code is found at byte aligned position buf.
+ *    new-startcode is of form N 0x00 bytes, followed by a 0x01 byte.
  *
  *  \return
- *     the info field of a start code (len == 31) or                      \n
- *     -1, indicating that there is no start code here
+ *     1 if start-code is found or                      \n
+ *     0, indicating that there is no start code
  *
- *  This function could be optimized considerably by checking for zero bytes first,
- *  but the current implementation gives us more freedom to define what a
- *  start code actually is
- *  Note that this function could be easily extended to search for non
- *  byte aligned start codes, by simply checking all 8 bit positions
- *  (and not only the zero position
+ *  \param Buf
+ *         pointer to byte-stream
+ *  \param zeros_in_startcode
+ *         indicates number of 0x00 bytes in start-code.
  ************************************************************************
  */
-static int TypeOfStartCode (byte *Buf)
+static int FindStartCode (byte *Buf, int zeros_in_startcode)
 {
   int info;
+  int i;
 
-#ifdef _EXP_GOLOMB
-  // A bit of optimization first: an EXP Golomb start code starts always with 2 zero bytes and a '1' byte
-  if ((Buf[0] != 0) || (Buf[1] != 1) || (Buf[2] != 0))
-    return -1;
-#else
-  // A bit of optimization first: a start code starts always with 3 zero bytes
-  if ((Buf[0] != 0) || (Buf[1] != 0) || (Buf[2] != 0))
-    return -1;
-#endif
-  if (31 != GetVLCSymbol (Buf, 0, &info, MAX_CODED_FRAME_SIZE))
-  {
-    return -1;
-  }
-  if (info != 0 && info != 1)   // the only two start codes currently allowed
-    return -1;
+  info = 1;
+  for (i = 0; i < zeros_in_startcode; i++)
+    if(Buf[i] != 0)
+      info = 0;
+
+  if(Buf[i] != 1)
+    info = 0;
   return info;
 }
 
@@ -137,46 +93,68 @@ static int TypeOfStartCode (byte *Buf)
  * \brief
  *    Returns the number of bytes in copied into the buffer
  *    The buffer includes the own start code, but excludes the
- *    next slice's start code
+ *    next slice's start code.
+ *    Important: Works with the new start-code. See below.
  * \return
  *     0 if there is nothing any more to read (EOF)                         \n
  *    -1 in case of any error
  *
+ *
  * \note
- *   GetOneSliceIntoSourceBitBuffer() expects start codes as follows:       \n
- *   Slice start code: UVLC, len == 31, info == 1                           \n
- *   Picture Start code: UVLC, len == 31, info == 0                         \n
+ *   GetOneSliceIntoSourceBitBuffer () expects start codes as follows:       \n
+ *   Start code: either 2 or 3 0x00 bytes followed by one 0x01 byte.                           \n
+ *  \note Side-effect: Returns length of start-code in bytes. \n
+ *
  * \note
- *   getOneSliceIntoSourceBitBuffer expects Slice and Picture start codes
+ *   getOneSliceIntoSourceBitBuffer expects start codes
  *   at byte aligned positions in the file
  *
  ************************************************************************
  */
-int GetOneSliceIntoSourceBitBuffer(struct img_par *img, struct inp_par *inp, byte *Buf)
+int GetOneSliceIntoSourceBitBuffer(struct img_par *img, struct inp_par *inp, byte *Buf, int *startcodeprefix_len)
 {
-  int info, pos;
-  int StartCodeFound;
+  int info2, info3, pos = 0;
+  int StartCodeFound, rewind;
   Slice *currSlice = img->currentSlice;
 
-  InitializeSourceBitBuffer(); // WYK: Useless, can be erased. Why use this?
+  *startcodeprefix_len=2;
+
   // read the first 32 bits (which MUST contain a start code, or eof)
-  if (4 != fread (Buf, 1, 4, bits))
+  info2 = 0;
+  info3 = 0;
+  
+  if (2 != fread (Buf, 1, 2, bits))
   {
     return 0;
   }
-  info = TypeOfStartCode (Buf);
-  if (info < 0)
+
+  info2 = FindStartCode (Buf, 1);
+  if(info2 != 1) {
+    if(1 != fread(Buf+2, 1, 1, bits))
+      return 0;
+    info3 = FindStartCode (Buf, 2);
+  }
+
+  if (info2 != 1 && info3 != 1)
   {
     printf ("GetOneSliceIntoSourceBitBuffer: no Start Code at the begin of the slice, return -1\n");
     return -1;
   }
-  if (info != 0 && info != 1)
-  {
-    printf ("GetOneSliceIntoSourceBitBuffer: found start code with invalid info %d, return -1\n", info);
-    return -1;
+
+  if( info2 == 1) {
+    *startcodeprefix_len = 2;
+    pos = 2;
   }
-  pos = 4;
+  else if(info3 ==1 ) {
+    pos = 3;
+    *startcodeprefix_len = 3;
+  }
+  else
+    printf( " Panic: Error \n");
+
   StartCodeFound = 0;
+  info2 = 0;
+  info3 = 0;
 
   while (!StartCodeFound)
   {
@@ -187,21 +165,30 @@ int GetOneSliceIntoSourceBitBuffer(struct img_par *img, struct inp_par *inp, byt
       return pos-1; // modified to "pos-1" instead of "pos" 
     }
     Buf[pos++] = fgetc (bits);
-
-    info = TypeOfStartCode(&Buf[pos-4]);
-    StartCodeFound = (info == 0 || info == 1);
+    info3 = FindStartCode(&Buf[pos-3], 2);
+    if(info3 != 1)
+      info2 = FindStartCode(&Buf[pos-2], 1);
+    StartCodeFound = (info2 == 1 || info3 == 1);
   }
 
-  // Here, we have found another start code (and read four bytes more than we should
+ 
+  // Here, we have found another start code (and read length of startcode bytes more than we should
   // have.  Hence, go back in the file
+  rewind = 0;
+  if(info3 == 1)
+    rewind = -3;
+  else if (info2 == 1)
+    rewind = -2;
+  else
+    printf(" Panic: Error in next start code search \n");
 
-  if (0 != fseek (bits, -4, SEEK_CUR))
+  if (0 != fseek (bits, rewind, SEEK_CUR))
   {
-    snprintf (errortext, ET_SIZE, "GetOneSliceIntoSourceBitBuffer: Cannot fseek -4 in the bit stream file");
+    snprintf (errortext, ET_SIZE, "GetOneSliceIntoSourceBitBuffer: Cannot fseek %d in the bit stream file", rewind);
     error(errortext, 600);
   }
 
-  return (pos-4);
+  return (pos+rewind);
 }
 
 
@@ -234,26 +221,4 @@ void CloseBitstreamFile()
 {
   fclose (bits);
 }
-
-/*!
- ************************************************************************
- * \brief
- *    read bytes from input
- * \return
- *    Number of bytes read from partition
- ************************************************************************
- */
-int GetOnePartitionIntoSourceBitBuffer(int PartitionSize, byte *Buf)
-{
-  int pos;
-  InitializeSourceBitBuffer();
-  for (pos=0; pos<PartitionSize; pos++)
-  {
-    if (feof (bits))
-      return pos;
-    Buf[pos] = fgetc (bits);
-  }
-  return pos;
-}
-
 

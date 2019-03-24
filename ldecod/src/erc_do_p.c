@@ -336,8 +336,8 @@ static int concealByTrial(frame *recfr, byte *predMB,
                           int currMBNum, objectBuffer_t *object_list, int predBlocks[], 
                           int32 picSizeX, int32 picSizeY, int *yCondition)
 {
-  int predMBNum, numMBPerLine,
-      compSplit1, compSplit2, compLeft = 1, comp = 0, compPred, order = 1,
+  int predMBNum = 0, numMBPerLine,
+      compSplit1 = 0, compSplit2 = 0, compLeft = 1, comp = 0, compPred, order = 1,
       fInterNeighborExists, numIntraNeighbours,
       fZeroMotionChecked, predSplitted = 0,
       threshold = ERC_BLOCK_OK,

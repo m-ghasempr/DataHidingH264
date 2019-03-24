@@ -44,8 +44,7 @@
 #define _BITSBUF_H_
 
 
-void InitializeSourceBitBuffer();
-int  GetOneSliceIntoSourceBitBuffer(struct img_par *img, struct inp_par *inp, byte *Buf);
+int  GetOneSliceIntoSourceBitBuffer(struct img_par *img, struct inp_par *inp, byte *Buf, int *startcodeprefix_len);
 int  OpenBitstreamFile (char *fn);
 void CloseBitstreamFile();
 

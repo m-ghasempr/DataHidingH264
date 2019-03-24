@@ -86,5 +86,14 @@ void  store_coding_state   (CSptr);  //!< store parameters
 void  reset_coding_state   (CSptr);  //!< restore parameters
 
 
+//a few vars exported for routines in abt.c
+extern int mpr8x8[16][16];
+extern int ****cofAC,****cofAC8x8;
+extern int ***cofDC;
+extern int **cofAC4x4,****cofAC4x4intern;
+extern int cbp, cbp8x8, cnt_nonz_8x8;
+extern CSptr cs_mb,cs_b8,cs_cm,cs_imb,cs_ib8,cs_ib4,cs_pc;
+
+
 #endif
 

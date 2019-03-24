@@ -52,6 +52,7 @@
       Munich University of Technology, Institute for Communications Engineering, Germany 
       Videolocus, Canada
       Motorola Inc., USA
+      Microsoft Corp., USA
 
   \endverbatim
   \par Full Contact Information
@@ -82,7 +83,7 @@
 
       Jani Lainema                    <jani.lainema@nokia.com>
       Nokia Inc. / Nokia Research Center
-      6000 Connection Drive, M6-440
+      6000 Connection Drive
       Irving, TX 75039, USA
 
       Sebastian Purreiter             <sebastian.purreiter@mch.siemens.de>
@@ -167,6 +168,14 @@
       6450 Sequence Drive
       San Diego, CA 92121 USA
 
-    \endverbatim
+      Feng Wu                         <fengwu@microsoft.com>
+      Alexis Michael Tourapis         <alexismt@ieee.org>
+      Xiaoyan Sun                     <sunxiaoyan@msrchina.research.microsoft.com>
+      Microsoft Research Asia
+      3/F, Beijing Sigma Center 
+      No.49, Zhichun Road, Hai Dian District, 
+      Beijing China 100080 
+
+  \endverbatim
 */
 

@@ -47,6 +47,7 @@
 #include "global.h"
 #include "elements.h"
 #include "defines.h"
+#include "fmo.h"
 
 
 #if TRACE
@@ -68,9 +69,10 @@ int SliceHeader(struct img_par *img, struct inp_par *inp)
   int dP_nr = assignSE2partition[currSlice->dp_mode][SE_HEADER];
   DataPartition *partition = &(currSlice->partArr[dP_nr]);
   SyntaxElement sym;
-  int UsedBits=31;
+  int UsedBits= partition->bitstream->frame_bitoffset; // was hardcoded to 31 for previous start-code. This is better.
   static int last_imgtr_frm=0,modulo_ctr_frm=0,last_imgtr_fld=0,modulo_ctr_fld=0;
   static int last_imgtr_frm_b=0,modulo_ctr_frm_b=0,last_imgtr_fld_b=0,modulo_ctr_fld_b=0;
+  static int FirstCall = 1;   // used for FMO initialization
 
   int tmp1;
   RMPNIbuffer_t *tmp_rmpni,*tmp_rmpni2;
@@ -126,64 +128,66 @@ int SliceHeader(struct img_par *img, struct inp_par *inp)
   UsedBits += sym.len;
 
   // Picture Structure indication (0 for frame, 1 for top field and 2 for bottom field)
-  SYMTRACESTRING("PHPictureType");
+  SYMTRACESTRING("SH PictureStructure");
   readSyntaxElement_UVLC (&sym,img,inp,partition);
   currSlice->structure = img->structure = sym.value1;
   UsedBits += sym.len;
-
-  if (img->type <= INTRA_IMG || img->type >= SP_IMG_1) 
-  {
-    if (img->structure == FRAME)
-    {     
-      if(img->tr <last_imgtr_frm) 
-        modulo_ctr_frm++;
-      
-      last_imgtr_frm = img->tr;
-      img->tr_frm = img->tr + (256*modulo_ctr_frm);
-    }
-    else
-    {
-      if(img->tr <last_imgtr_fld) 
-        modulo_ctr_fld++;
-      
-      last_imgtr_fld = img->tr;
-      img->tr_fld = img->tr + (256*modulo_ctr_fld);
-    }
-  }
-  else
-  {
-    if (img->structure == FRAME)
-    {     
-      if(img->tr <last_imgtr_frm_b) 
-        modulo_ctr_frm_b++;
-      
-      last_imgtr_frm_b = img->tr;
-      img->tr_frm = img->tr + (256*modulo_ctr_frm_b);
-    }
-    else
-    {
-      if(img->tr <last_imgtr_fld_b) 
-        modulo_ctr_fld_b++;
-      
-      last_imgtr_fld_b = img->tr;
-      img->tr_fld = img->tr + (256*modulo_ctr_fld_b);
-    }
-  }
   
-  if(img->type != B_IMG_MULT) {
-    img->pstruct_next_P = img->structure;
-    if(img->structure == TOP_FIELD)
+  if(!img->current_slice_nr)
+  { 
+    if (img->type <= INTRA_IMG || img->type >= SP_IMG_1) 
     {
-      img->imgtr_last_P = img->imgtr_next_P;
-      img->imgtr_next_P = img->tr_fld;
+      if (img->structure == FRAME)
+      {     
+        if(img->tr <last_imgtr_frm) 
+          modulo_ctr_frm++;
+        
+        last_imgtr_frm = img->tr;
+        img->tr_frm = img->tr + (256*modulo_ctr_frm);
+      }
+      else
+      {
+        if(img->tr <last_imgtr_fld) 
+          modulo_ctr_fld++;
+        
+        last_imgtr_fld = img->tr;
+        img->tr_fld = img->tr + (256*modulo_ctr_fld);
+      }
     }
-    else if(img->structure == FRAME)
+    else
     {
-      img->imgtr_last_P = img->imgtr_next_P;
-      img->imgtr_next_P = 2*img->tr_frm;
+      if (img->structure == FRAME)
+      {     
+        if(img->tr <last_imgtr_frm_b) 
+          modulo_ctr_frm_b++;
+        
+        last_imgtr_frm_b = img->tr;
+        img->tr_frm = img->tr + (256*modulo_ctr_frm_b);
+      }
+      else
+      {
+        if(img->tr <last_imgtr_fld_b) 
+          modulo_ctr_fld_b++;
+        
+        last_imgtr_fld_b = img->tr;
+        img->tr_fld = img->tr + (256*modulo_ctr_fld_b);
+      }
+    }
+    
+    if(img->type != B_IMG_MULT && img->type != B_IMG_1) {
+      img->pstruct_next_P = img->structure;
+      if(img->structure == TOP_FIELD)
+      {
+        img->imgtr_last_P = img->imgtr_next_P;
+        img->imgtr_next_P = img->tr_fld;
+      }
+      else if(img->structure == FRAME)
+      {
+        img->imgtr_last_P = img->imgtr_next_P;
+        img->imgtr_next_P = 2*img->tr_frm;
+      }
     }
   }
-
   // 5. Finally, read Reference Picture ID (same as TR here).  Note that this is an
   // optional field that is not present if the input parameters do not indicate
   // multiframe prediction ??
@@ -202,7 +206,7 @@ int SliceHeader(struct img_par *img, struct inp_par *inp)
   if (1)
   {
     // refPicID, variable length
-    SYMTRACESTRING("PHRefPicID");
+    SYMTRACESTRING("SH RefPicID");
     readSyntaxElement_UVLC (&sym,img,inp,partition);
     if (img->refPicID != sym.value1)
     {
@@ -218,18 +222,33 @@ int SliceHeader(struct img_par *img, struct inp_par *inp)
   currSlice->start_mb_nr = sym.value1;
   UsedBits += sym.len;
 
+#ifdef _ABT_FLAG_IN_SLICE_HEADER_
+  SYMTRACESTRING("SH ABTMode");
+  readSyntaxElement_UVLC (&sym,img,inp,partition);
+  currSlice->abt = sym.value1;
+  UsedBits += sym.len;
+#endif
+
   // 7. Get Quant.
   SYMTRACESTRING("SH SliceQuant");
+  sym.mapping = linfo_dquant;
   readSyntaxElement_UVLC (&sym,img,inp,partition);
-  currSlice->qp = img->qp = MAX_QP - sym.value1;
+  currSlice->qp = img->qp = sym.value1 + (MAX_QP - MIN_QP + 1)/2;
   UsedBits += sym.len;
-
-  if(img->type==SP_IMG_1 || img->type==SP_IMG_MULT)
+  if(img->type==SP_IMG_1 || img->type==SP_IMG_MULT) //lack of SI frame
   {
+	if(img->type==SP_IMG_1 || img->type==SP_IMG_MULT)
+	{
+      SYMTRACESTRING("SH SP SWITCH");
+	  sym.len = 1;
+      readSyntaxElement_fixed (&sym,img,inp,partition);
+	  img->sp_switch = sym.inf;
+	}
     SYMTRACESTRING("SH SP SliceQuant");
     readSyntaxElement_UVLC (&sym,img,inp,partition);
-    img->qpsp = MAX_QP - sym.value1;
+    img->qpsp = sym.value1 + (MAX_QP - MIN_QP + 1)/2;
   }
+  sym.mapping = linfo;
   // 8. Get MVResolution
   SYMTRACESTRING("SH MVResolution");
   readSyntaxElement_UVLC (&sym,img,inp,partition);
@@ -409,12 +428,38 @@ int SliceHeader(struct img_par *img, struct inp_par *inp)
     // 9. Get number of MBs in this slice
     SYMTRACESTRING("SH Last MB in Slice");
     readSyntaxElement_UVLC (&sym,img,inp,partition);
+// printf ("Got Last MB in Slice %d\n", sym.value1);
     currSlice->last_mb_nr = currSlice->start_mb_nr+sym.value1;
     // Note: if one slice == one frame the number of MBs in this slice is coded as 0
     if (currSlice->last_mb_nr == currSlice->start_mb_nr)
       currSlice->last_mb_nr = img->max_mb_nr;
     UsedBits += sym.len;
   }
+
+
+  //! Note! This software reqiures a valid MBAmap in any case.  When FMO is not
+  //! used, the MBAmap consists of all zeros, yielding scan order slices. 
+  //! 
+  //! We cannot initialize the FMO module with the default (scan order MBAmap)
+  //! before we know the picture size.  Hence, the FMO Module is initialized here,
+  //! unless we have RTP file format.  The RTP NAL is currently the only one which
+  //! implements the ParameterSets.  There, we can initialize the FMO module as
+  //! soon as we got the Parameter Set packet.
+  
+  if (inp->of_mode != PAR_OF_RTP && FirstCall)
+  {
+    if (currSlice->structure)
+    {
+      // if first call is field: init with double height
+      FmoInit (img->width/16, img->height/8, NULL, 0);   // force a default MBAmap
+    }
+    else
+    {
+      FmoInit (img->width/16, img->height/16, NULL, 0);   // force a default MBAmap
+    }
+    FirstCall = 0;
+  }
+
   return UsedBits;
 }
 

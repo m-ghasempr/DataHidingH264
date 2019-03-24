@@ -158,7 +158,8 @@ typedef enum {
   NO_SLICES,
   FIXED_MB,
   FIXED_RATE,
-  CALLBACK
+  CALLBACK,
+  FMO
 } SliceMode;
 
 
@@ -166,6 +167,28 @@ typedef enum {
   UVLC,
   CABAC
 } SymbolMode;
+
+
+typedef enum {        // ABT
+  NO_ABT,
+  INTER_ABT,
+  INTER_INTRA_ABT
+} ABTCodingMode;      // ABT
+
+typedef enum {        // ABT
+  B8x8=0,
+  B8x4,
+  B4x8,
+  B4x4
+} ABTBlockMode;       // ABT
+
+// mwi: use same enum as in decoder
+typedef enum {
+  FRAME,
+  TOP_FIELD,
+  BOTTOM_FIELD
+} PictureType;           //!< New enum for field processing
+// ~mwi
 
 
 /***********************************************************************
@@ -234,19 +257,20 @@ typedef struct
 #define NUM_LEVEL_CTX  4
 #define NUM_RUN_CTX    2
 #define NUM_COEFF_COUNT_CTX 6
+#define NUM_TRANS_TYPE_ABT      6
+#define NUM_COEFF_COUNT_CTX_ABT 8
+#define NUM_RUN_CTX_ABT         5
 
 
 typedef struct
 {
-#ifndef USE_6_INTRA_MODES
   BiContextTypePtr ipr_contexts [9];
-#else
-  BiContextTypePtr ipr_contexts [6];
-#endif
   BiContextTypePtr cbp_contexts [2][3];
   BiContextTypePtr level_context[4*NUM_TRANS_TYPE];
   BiContextTypePtr run_context  [2*NUM_TRANS_TYPE];
-  BiContextTypePtr coeff_count_context[NUM_TRANS_TYPE];
+  BiContextTypePtr coeff_count_context    [NUM_TRANS_TYPE];
+  BiContextTypePtr ABT_run_context        [2*NUM_TRANS_TYPE_ABT];
+  BiContextTypePtr ABT_coeff_count_context[NUM_TRANS_TYPE_ABT];
 } TextureInfoContexts;
 
 //*********************** end of data type definition for CABAC *******************
@@ -277,6 +301,8 @@ typedef struct syntaxelement
   unsigned int        bitpattern;     //!< UVLC bitpattern
   int                 context;        //!< CABAC context
   int                 k;              //!< CABAC context for coeff_count,uv
+  int                 golomb_grad;    //needed if type is a golomb element (ABT)
+  int                 golomb_maxlevels; // if this is zero, do not use the golomb coding. (ABT)
 
 #if TRACE
   #define             TRACESTRING_SIZE 100            //!< size of trace string
@@ -310,6 +336,9 @@ typedef struct macroblock
   int                 cbp_blk ;    //!< 1 bit set for every 4x4 block with coefs (not implemented for INTRA)
   int                 b8mode[4];
   int                 b8pdir[4];
+  int                 useABT[4];         // flag, indicating application of ABT for each 8x8 block in this MB (1=ABT)
+  int                 abt_mode[4];       // transform mode used for ABT for each 8x8 block.
+  int                 abt_pred_mode[4];  // mode used for ABT block prediction for each 8x8 block.
 } Macroblock;
 
 
@@ -333,6 +362,9 @@ typedef struct
   byte            *streamBuffer;      //!< actual buffer for written bytes
   int             write_flag;
 
+  int             tmp_byte_pos;       //!< temp storage for position in bitstream
+  int             last_startcode;     //!< location of last valid startcode
+
 } Bitstream;
 
 //! DataPartition
@@ -343,7 +375,6 @@ typedef struct datapartition
   Bitstream           *bitstream_frm;   //!< frame stream buffer
   Bitstream           *bitstream_fld;   //!< field stream buffer
   EncodingEnvironment ee_cabac;
-  EncodingEnvironment ee_cabac_frm; 
 
   int                 (*writeSyntaxElement)(SyntaxElement *, struct datapartition *);
                       /*!< virtual function;
@@ -359,6 +390,7 @@ typedef struct
   int                 picture_type; //!< picture type
   int                 start_mb_nr;
   int                 max_part_nr;  //!< number of different partitions
+  int                 num_mb;       //!< number of MBs in the slice
   DataPartition       *partArr;     //!< array of partitions
   MotionInfoContexts  *mot_ctx;     //!< pointer to struct of context models for use in CABAC
   TextureInfoContexts *tex_ctx;     //!< pointer to struct of context models for use in CABAC
@@ -382,8 +414,7 @@ byte   **imgY;               //!< Encoded luma images
 byte  ***imgUV;              //!< Encoded croma images
 byte   **imgY_org;           //!< Reference luma image
 byte  ***imgUV_org;          //!< Reference croma image
-int   ***tmp_mv;             //!< motion vector buffer
-int    **refFrArr;           //!< Array for reference frames of each block
+//int    **refFrArr;           //!< Array for reference frames of each block
 byte   **imgY_pf;            //!< Post filter luma image
 byte  ***imgUV_pf;           //!< Post filter croma image
 byte  ***mref;               //!< 1/4 pix luma
@@ -400,12 +431,10 @@ int  ***dfMV;
 int  ***dbMV;
 int   **fw_refFrArr;
 int   **bw_refFrArr;
-byte  **mref_P;              //!< for B-frames: 1/4 pix luma for next P picture
-byte ***mcef_P;              //!< for B-frames: pix chroma for next P picture
 byte  **nextP_imgY;
 byte ***nextP_imgUV;
 pel_t **Refbuf11;            //!< 1/1th pel (full pel) reference frame buffer
-pel_t  *Refbuf11_P;          //!< 1/1th pel P picture buffer
+int  ***colB8mode;           //!< ABT: Array containing the modes of the collocated 8x8 Blocks.
 
 // global picture format dependend buffers, mem allocation in image.c (field picture)
 byte   **imgY_org_top;
@@ -419,8 +448,6 @@ byte  ***imgUV_bot;              //!< Encoded croma images
 byte   **imgY_com;               //!< Encoded luma images
 byte  ***imgUV_com;              //!< Encoded croma images
 pel_t **Refbuf11_fld;            //!< 1/1th pel (full pel) reference frame buffer
-pel_t  *Refbuf11_P_top;          //!< 1/1th pel P picture buffer
-pel_t  *Refbuf11_P_bot;
 int    **refFrArr_top;           //!< Array for reference frames of each block
 int    **refFrArr_bot;           //!< Array for reference frames of each block
 
@@ -434,10 +461,6 @@ byte ****mcef_frm;               //!< pix chroma
 
 // B pictures
 // motion vector : forward, backward, direct
-byte  **mref_P_top;              //!< for B-frames: 1/4 pix luma for next P picture
-byte ***mcef_P_top;              //!< for B-frames: pix chroma for next P picture
-byte  **mref_P_bot;              //!< for B-frames: 1/4 pix luma for next P picture
-byte ***mcef_P_bot;              //!< for B-frames: pix chroma for next P picture
 int   **fw_refFrArr_top;
 int   **bw_refFrArr_top;
 int   **fw_refFrArr_bot;
@@ -451,15 +474,11 @@ byte  ***imgUV_org_frm;
 byte   **imgY_frm;               //!< Encoded luma images
 byte  ***imgUV_frm;              //!< Encoded croma images
 pel_t **Refbuf11_frm;            //!< 1/1th pel (full pel) reference frame buffer
-pel_t  *Refbuf11_P_frm;          //!< 1/1th pel P picture buffer
 int    **refFrArr_frm;           //!< Array for reference frames of each block
-int   ***tmp_mv_frm;             //!< motion vect
 int   direct_mode;
 
 // B pictures
 // motion vector : forward, backward, direct
-byte  **mref_P_frm;              //!< for B-frames: 1/4 pix luma for next P picture
-byte ***mcef_P_frm;              //!< for B-frames: pix chroma for next P picture
 int   **fw_refFrArr_frm;
 int   **bw_refFrArr_frm;
 
@@ -523,6 +542,7 @@ typedef struct
   int search_range;             /*!< search range - integer pel search and 16x16 blocks.  The search window is
                                      generally around the predicted vector. Max vector is 2xmcrange.  For 8x8
                                      and 4x4 block sizes the search range is 1/2 of that for 16x16 blocks.       */
+  int abt;                      //!< Use Adaptive Block Transforms (ABT) 0:Off, 1: Inter ABT, 2: Inter & Intra ABT
   int no_multpred;              /*!< 1: prediction from the last frame only. 2: prediction from the last or
                                      second last frame etc.  Maximum 5 frames                                    */
   int img_width;                //!< GH: if CUSTOM image format is chosen, use this size
@@ -592,12 +612,21 @@ typedef struct
 #endif
 
   int InterlaceCodingOption;
+  int Encapsulated_NAL_Payload;
 
   int LossRateA;
   int LossRateB;
   int LossRateC;
   int NoOfDecoders;
   int RestrictRef;
+  int NumFramesInELSubSeq;
+  int NumFrameIn2ndIGOP;
+
+  int RandomIntraMBRefresh;     //! Number of pseudo-random intra-MBs per picture
+  int FmoNumSliceGroups;        //! Number of slice groups, 0 == scan order 
+                                //! slices, maximum value is 7
+  int FmoType;                  //! Type pf FMO MBAmap description, see CD doc
+  char FmoConfigFileName[100];  //! Filename for config info fot type 0, 2
 
 } InputParameters;
 
@@ -645,11 +674,7 @@ typedef struct
   int cod_counter;             //!< Current count of number of skipped macroblocks in a row
 
   // some temporal buffers
-#ifdef USE_6_INTRA_MODES
-  int mprr[6][4][4];           //!< all 6 prediction modes
-#else
-  int mprr[9][4][4];           //!< all 9 prediction modes?
-#endif
+  int mprr[9][16][16];         //!< all 9 prediction modes? // enlarged from 4 to 16 for ABT (is that neccessary?)
 
   int mprr_2[5][16][16];       //!< all 4 new intra prediction modes
   int***** mv;                 //!< motion vectors for all block types and all reference frames
@@ -693,6 +718,9 @@ typedef struct
 
   int buf_cycle;
   int i16offset;
+
+  int layer;             //!< which layer this picture belonged to
+  int old_layer;         //!< old layer number
 } ImageParameters;
 
                                 //!< statistics
@@ -708,6 +736,7 @@ typedef struct
   int   bit_ctr_n;              //!< bit usage for the current frame
   int   bit_slice;              //!< number of bits in current slice
   int   bit_use_mode_inter[2][MAXMODE]; //!< statistics of bit usage
+  int   bit_ctr_emulationprevention; //!< stored bits needed to prevent start code emulation
   int   mode_use_intra[25];     //!< Macroblock mode usage for Intra frames
   int   mode_use_inter[2][MAXMODE];
 
@@ -732,6 +761,8 @@ typedef struct
 extern InputParameters *input;
 extern ImageParameters *img;
 extern StatParameters *stat;
+extern StatParameters stats_frame,stats_field;
+
 extern SNRParameters *snr;
 
 // files
@@ -750,6 +781,7 @@ FILE *p_trace;                   //!< Trace file
 
 
 void intrapred_luma(int CurrPixX,int CurrPixY);
+void intrapred_luma_ABT(int pos_x,int pos_y,int subblock_size_x,int subblock_size_y);
 void init();
 void find_snr();
 void oneforthpix();
@@ -799,19 +831,21 @@ extern int*   refbits;
 extern int*** motion_cost;
 
 void  Get_Direct_Motion_Vectors ();
-void  PartitionMotionSearch     (int, int, double);
-int   BIDPartitionCost          (int, int, int, int);
-int   LumaResidualCoding8x8     (int*, int*, int, int, int, int);
-int   writeLumaCoeff8x8         (int, int);
+void  PartitionMotionSearch     (int, int, double, int);               // useABT added.
+int   BIDPartitionCost          (int, int, int, int, int);             // useABT added.
+int   LumaResidualCoding8x8     (int*, int*, int, int, int, int, int); // useABT added.
+int   writeLumaCoeff8x8         (int, int, int);                       // useABT added.
 int   writeMotionVector8x8      (int, int, int, int, int, int);
 int   writeReferenceFrame       (int, int, int, int);
 int   writeIntra4x4Modes        (int);
 
-int Get_Direct_Cost8x8 (int, double);
+int Get_Direct_Cost8x8 (int, double, int);                             // abt_mode added.
 int Get_Direct_CostMB  (double);
 int B8Mode2Value (int b8mode, int b8pdir);
 void writeCBP_BIT_CABAC (int b8, int bit, int cbp, Macroblock* currMB, int inter, EncodingEnvironmentPtr eep_dp);
 
+int GetSkipCostMB (double lambda);
+void FindSkipModeMotionVector ();
 
 
 // dynamic mem allocation
@@ -840,16 +874,17 @@ void free_mem4global_buffers_field();
 void read_one_new_field();
 void combine_field();
 void find_distortion();
-void find_snr_avg();
 
 // Added for (re-) structuring the TML soft
 int   encode_one_frame();
-void  encode_one_slice();
+int   encode_one_slice(int SLiceGroupId);   //! returns the number of MBs in the slice
 void  malloc_slice();
 void  free_slice();
 void  init_slice();
 void  encode_one_macroblock();
 void  start_macroblock();
+void  set_MB_parameters (int mb);           //! sets up img-> according to input-> and currSlice->
+int   write_ipred_modes(); // used for intra ABT modes
 
 int   writeMotionInfo2NAL ();
 
@@ -865,6 +900,7 @@ void  CheckAvailabilityOfNeighbors();
 int   writeMotionInfo2NAL_Pframe();
 void  writeCBPandCoeffs2NAL();
 int   writeSyntaxElement_UVLC(SyntaxElement *se, DataPartition *this_dataPart);
+int   writeSyntaxElement_fixed(SyntaxElement *se, DataPartition *this_dataPart);
 int   writeSyntaxElement2Buf_UVLC(SyntaxElement *se, Bitstream* this_streamBuffer );
 void  writeUVLC2buffer(SyntaxElement *se, Bitstream *currStream);
 int   symbol2uvlc(SyntaxElement *se);
@@ -914,8 +950,8 @@ void writeBiMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void error(char *text, int code);
 int  start_sequence();
 int  terminate_sequence();
-int  start_slice(SyntaxElement *sym);
-int  terminate_slice();
+int  start_slice();
+int  terminate_slice(int write_out);
 
 // B pictures
 int  motion_search_Bframe(int tot_intra_sad);
@@ -933,16 +969,15 @@ int  BlkSize2CodeNumber(int blc_size_h, int blc_size_v);
 // Introduced for 1/8-pel
 void interpolate_frame();
 void interpolate_frame_to_fb();
-void interpolate_frame_to_P_buffer();
-void oneeighthpix(int prior_B_frame);
+void oneeighthpix();
 
 void InitRefbuf ();
 void InitMotionVectorSearchModule();
 void InitRefbuf_fld ();
 void copy2mref_fld();
 void store_field_MV(int frame_number);
+void store_field_colB8mode();
 
-#endif
 
 void  SetRefFrameInfo (int, int);
 
@@ -977,6 +1012,8 @@ int   SingleUnifiedMotionSearch   (int, int, int**, int***, int*****, int, int**
 void  clear_rdopt      ();
 void  init_rdopt       ();
 void  RD_Mode_Decision ();
+int   RDcode_intra_subblock(int transform_mode,int pred_ipred_mode,int offset_x,int offset_y); // ABT
+int   RDcode_intrablockABT();
 //============= rate-distortion opt with packet losses ===========
 void decode_one_macroblock();
 void decode_one_mb (int, Macroblock*);
@@ -1002,6 +1039,20 @@ void  ClearFastFullIntegerSearch    ();
 void  ResetFastFullIntegerSearch    ();
 #endif
 
-int temp_byte_pos;
-int temp_bits_to_go;
+void process_2nd_IGOP();
+void SetImgType();
 
+// Tian Dong: for IGOPs
+extern Boolean In2ndIGOP;
+extern int start_frame_no_in_this_IGOP;
+extern int start_tr_in_this_IGOP;
+extern int FirstFrameIn2ndIGOP;
+#define IMG_NUMBER (img->number-start_frame_no_in_this_IGOP)
+#define PAYLOAD_TYPE_IDERP 8
+byte *NAL_Payload_buffer;
+void SODBtoRBSP(Bitstream *currStream);
+int RBSPtoEBSP(byte *streamBuffer, int begin_bytepos, int end_bytepos);
+int Bytes_After_Header;
+int startcodeprefix_len;
+
+#endif

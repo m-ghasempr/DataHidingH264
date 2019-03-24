@@ -96,8 +96,12 @@
 #include <assert.h>
 #include <memory.h>
 #include <malloc.h>
+#include <stdlib.h>
+#include <time.h>
+
 #include "global.h"
 #include "decodeiff.h"
+#include "mbuffer.h"
 
 FileTypeBox box_ft;
 FileHeaderBox box_fh;
@@ -106,12 +110,15 @@ AlternateTrackInfoBox box_ati;
 ParameterSetBox box_ps;
 SegmentBox box_s;
 AlternateTrackHeaderBox box_ath;
+PictureInformationBox box_pi;
 PayloadInfo currPayloadInfo;
-PictureInfo currPictureInfo;
+PictureInfo currPictureInfo, oldPictureInfo;
+LayerBox box_layr[MAX_LAYER_NUMBER];
+SubSequenceBox box_sseq[MAX_LAYER_NUMBER];
 AlternateTrackMediaBox box_atm;
 SwitchPictureBox box_sp;
 
-extern int CurrentParameterSet=-1;  // Tian Dong: must not be set to 0 here.
+int CurrentParameterSet=-1;  // Tian Dong: must not be set to 0 here.
 static int BeginOfPictureOrSlice; // SOP or SOS
 int IFFEndOfFile = FALSE;
 int ThisAlternateTrack = 0;   // indicate which track in the file will be decoded.
@@ -373,6 +380,7 @@ void freeAlternateTrackInfoBox()
  */
 int rdParameterSetBox( FILE* fp, unsigned long size )
 {
+  unsigned char cd;
   assert( fp );
 
   if ( -1 == readfile( &box_ps.parameterSetID, 2, 1, fp ) ) return -1;
@@ -393,6 +401,10 @@ int rdParameterSetBox( FILE* fp, unsigned long size )
   if ( -1 == readfile( &box_ps.partitioningType, 1, 1, fp ) ) return -1;
   if ( -1 == readfile( &box_ps.intraPredictionType, 1, 1, fp ) ) return -1;
   if ( -1 == readfile( &box_ps.bufCycle, 1, 1, fp ) ) return -1;
+
+  if ( -1 == readfile( &cd, 1, 1, fp ) ) return -1;
+  if ( cd == 0x80 ) box_ps.requiredPictureNumberUpdateBehavior= TRUE;
+  else box_ps.requiredPictureNumberUpdateBehavior = FALSE;
 
   return 0;
 }
@@ -527,31 +539,50 @@ void freeSegmentBox()
  */
 int rdOneTrack( struct img_par* img, struct inp_par* inp, struct snr_par *snr, FILE *fp )
 {
-  unsigned long numPictures;
+  unsigned long numPictures, pos;
+  unsigned long size, type, boxsize, readsize;
   int ret = EOS + 100;
-//  FILE *f;
-
-//  f = fopen("dummy2.txt", "at");
+  int layerno = 0;
 
   numPictures=0;
 
-  if ( 0 != fseek( fp, box_ath.storedpos, SEEK_SET ) ) return -1;
-  if ( -1 == readfile( &numPictures, box_fh.numBytesInPictureCountMinusOne+1, 1, fp ) ) return -1;
-  currPictureInfo.storedpos = ftell( fp );
+  if ( 0 != fseek( fp, box_ath.storedpos, SEEK_SET ) ) return -1; // ath
+  if ( -1 == readfile( &boxsize, 4, 1, fp ) ) return -1;
+  if ( boxsize == 0 ) return -1;
+  if ( -1 == readfile( &type, 4, 1, fp ) ) return -1;
+  assert( type == BOX_ATRH );
 
-  while ( numPictures-- > 0 && ret != EOS )
-    ret = decode_one_frame( img, inp, snr );
-/*  {
-    rdPictureInfo( fp );
-    fprintf( f, "picture payload, total %d:\n", currPictureInfo.numPayloads );
-    i=9;
-    while (i-- > 0)
+  if ( -1 == readfile( &box_ath.numLayers, 1, 1, fp ) ) return -1;
+
+  pos = ftell( fp );
+  boxsize = boxsize - SIZEOF_BOXTYPE - 1;
+  readsize = 0;
+  while ( readsize < boxsize )
+  {
+    if ( 0 != fseek( fp, pos, SEEK_SET ) ) return -1;
+    if ( -1 == readfile( &size, 4, 1, fp ) ) return -1;
+    if ( size == 0 ) return -1;
+    if ( -1 == readfile( &type, 4, 1, fp ) ) return -1;
+    
+    switch ( type )
     {
-      ret = readSliceIFF( img, inp );
-      fprintf( f, "picture %d payload nr %d 's payloadsize: %d\n", currPayloadInfo.pictureID, currPayloadInfo.payloadnr, currPayloadInfo.payloadSize);
+    case BOX_PICI:
+      if ( -1 == readfile_s( &numPictures, sizeof(unsigned long), box_fh.numBytesInPictureCountMinusOne+1, 1, fp ) ) return -1;
+        box_ath.storedpos = ftell( fp );
+      while ( numPictures-- > 0 && ret != EOS )
+        ret = decode_one_frame( img, inp, snr );
+      break;
+    case BOX_LAYR:
+      rdLayerBox(layerno++, size, fp);
+      break;
+    default:
+      printf("Unknow boxes found in the track!\n");
+      exit(0);
+      break;
     }
+    readsize += size;
+    pos += size;
   }
-  fclose( f ); */
   return 0;
 }
 
@@ -585,9 +616,9 @@ int find_track_meta( FILE *fp, unsigned long limited, unsigned long* storedpos, 
   pos = 0;
   while ( tracknr > nr && pos < limited && pos != (unsigned long)-1 )
   {
+    pos = (unsigned)ftell(fp);
     if ( -1 == readfile( &size, 4, 1, fp ) ) return -1;     // in 32 bits mode
     if ( -1 == readfile( &type, 4, 1, fp ) ) return -1;
-    pos = (unsigned)ftell(fp);
     if ( type == BOX_ATRH ) nr++;
     if ( tracknr > nr )
     { if ( 0 != fseek( fp, size - SIZEOF_BOXTYPE, SEEK_CUR ) ) return -1; }
@@ -595,7 +626,7 @@ int find_track_meta( FILE *fp, unsigned long limited, unsigned long* storedpos, 
 
   if ( tracknr != nr ) return -1;     // have not found the track needed
 
-  *storedpos = ftell( fp );           // save the file pointer to the track header
+  *storedpos = pos;           // save the file pointer to the track header
   return 0;
 }
 
@@ -675,11 +706,15 @@ int rdPictureInfo( FILE* fp )
   
   assert( fp != NULL );
 
-  fseek( fp, currPictureInfo.storedpos, SEEK_SET );
+  memcpy( &oldPictureInfo, &currPictureInfo, sizeof(PictureInfo) );
+
+  fseek( fp, box_ath.storedpos, SEEK_SET );
 
   num += readfile( &cd, 1, 1, fp );
-  if ( cd == 0x80 ) currPictureInfo.intraPictureFlag = 1;
-  else currPictureInfo.intraPictureFlag = 0;
+  if ( (cd&0x80) != 0 ) currPictureInfo.intraPictureFlag = TRUE;
+  else currPictureInfo.intraPictureFlag = FALSE;
+  if ( (cd&0x40) != 0 ) currPictureInfo.syncPictureFlag = TRUE;
+  else currPictureInfo.syncPictureFlag = FALSE;
 
   currPictureInfo.pictureOffset=0;
   currPictureInfo.pictureDisplayTime=0;
@@ -687,6 +722,18 @@ int rdPictureInfo( FILE* fp )
 
   num += readfile_s( &currPictureInfo.pictureOffset, sizeof(currPictureInfo.pictureOffset), box_fh.numBytesInPictureOffsetMinusTwo + 2, 1, fp );
   num += readfile_s( &currPictureInfo.pictureDisplayTime, sizeof(currPictureInfo.pictureDisplayTime), box_fh.numBytesInPictureDisplayTimeMinusOne+1, 1, fp );
+
+  if (box_ath.numLayers != 0)
+  {
+    if ( -1 == readfile( &currPictureInfo.layerNumber, 1, 1, fp ) ) return -1;
+    if ( -1 == readfile( &currPictureInfo.subSequenceIdentifier, 2, 1, fp ) ) return -1;
+    if ( currPictureInfo.syncPictureFlag )
+    {
+      if ( -1 == readfile( &currPictureInfo.originLayerNumber, 1, 1, fp ) ) return -1;
+      if ( -1 == readfile( &currPictureInfo.originSubSequenceIdentifier, 2, 1, fp ) ) return -1;
+    }
+  }
+
   num += readfile_s( &currPictureInfo.numPayloads, sizeof(currPictureInfo.numPayloads), box_fh.numBytesInPayloadCountMinusOne+1, 1, fp );
 
   if ( num != (unsigned)(1+box_fh.numBytesInPictureOffsetMinusTwo + 2 +
@@ -736,13 +783,13 @@ int rdPayloadInfo( struct img_par *img, struct inp_par* inp, PayloadInfo* pp, FI
   switch ( pp->payloadType )
   {
   case 0:
+  case PAYLOAD_TYPE_IDERP:
     pp->buffer.bitstream_length = pp->headerSize - (box_fh.numBytesInPayloadSizeMinusOne+1 + 2);
     pp->buffer.streamBuffer = alloca( pp->buffer.bitstream_length );
     assert( pp->buffer.streamBuffer != NULL );
     if ( fread( pp->buffer.streamBuffer, 1, pp->buffer.bitstream_length, fp ) != (unsigned)pp->buffer.bitstream_length )
       return -1;
     pp->buffer.frame_bitoffset = 0;
-
     decomposeSliceHeader( img, inp, pp );
     break;
   default:
@@ -753,7 +800,7 @@ int rdPayloadInfo( struct img_par *img, struct inp_par* inp, PayloadInfo* pp, FI
 
   pp->payloadnr++;
   if ( currPictureInfo.numPayloads == pp->payloadnr ) // the last payloadinfo is read, set the position of next pic
-    currPictureInfo.storedpos = ftell( fp );
+    box_ath.storedpos = ftell( fp );
   else // next payloadinfo 
     pp->storedpos = ftell( fp );
 
@@ -842,56 +889,59 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
   bitptr += sym.len;
 
 #if 1
-  if (img->type <= INTRA_IMG || img->type >= SP_IMG_1) 
+  if(!img->current_slice_nr)
   {
-    if (img->structure == FRAME)
-    {     
-      if(img->tr <last_imgtr_frm) 
-        modulo_ctr_frm++;
-      
-      last_imgtr_frm = img->tr;
-      img->tr_frm = img->tr + (256*modulo_ctr_frm);
+    
+    if (img->type <= INTRA_IMG || img->type >= SP_IMG_1) 
+    {
+      if (img->structure == FRAME)
+      {     
+        if(img->tr <last_imgtr_frm) 
+          modulo_ctr_frm++;
+        
+        last_imgtr_frm = img->tr;
+        img->tr_frm = img->tr + (256*modulo_ctr_frm);
+      }
+      else
+      {
+        if(img->tr <last_imgtr_fld) 
+          modulo_ctr_fld++;
+        
+        last_imgtr_fld = img->tr;
+        img->tr_fld = img->tr + (256*modulo_ctr_fld);
+      }
     }
     else
     {
-      if(img->tr <last_imgtr_fld) 
-        modulo_ctr_fld++;
-      
-      last_imgtr_fld = img->tr;
-      img->tr_fld = img->tr + (256*modulo_ctr_fld);
+      if (img->structure == FRAME)
+      {     
+        if(img->tr <last_imgtr_frm_b) 
+          modulo_ctr_frm_b++;
+        
+        last_imgtr_frm_b = img->tr;
+        img->tr_frm = img->tr + (256*modulo_ctr_frm_b);
+      }
+      else
+      {
+        if(img->tr <last_imgtr_fld_b) 
+          modulo_ctr_fld_b++;
+        
+        last_imgtr_fld_b = img->tr;
+        img->tr_fld = img->tr + (256*modulo_ctr_fld_b);
+      }
     }
-  }
-  else
-  {
-    if (img->structure == FRAME)
-    {     
-      if(img->tr <last_imgtr_frm_b) 
-        modulo_ctr_frm_b++;
-      
-      last_imgtr_frm_b = img->tr;
-      img->tr_frm = img->tr + (256*modulo_ctr_frm_b);
-    }
-    else
-    {
-      if(img->tr <last_imgtr_fld_b) 
-        modulo_ctr_fld_b++;
-      
-      last_imgtr_fld_b = img->tr;
-      img->tr_fld = img->tr + (256*modulo_ctr_fld_b);
-    }
-  }
-  
-  if(img->type != B_IMG_MULT) {
-    img->pstruct_next_P = img->structure;
-    if(img->structure == TOP_FIELD)
-    {
-      img->imgtr_last_P = img->imgtr_next_P;
-      img->imgtr_next_P = img->tr_fld;
-    }
-    else if(img->structure == FRAME)
-    {
-      img->imgtr_last_P = img->imgtr_next_P;
-      img->imgtr_next_P = 2*img->tr_frm;
+    if(img->type != B_IMG_MULT && img->type != B_IMG_1) {
+      img->pstruct_next_P = img->structure;
+      if(img->structure == TOP_FIELD)
+      {
+        img->imgtr_last_P = img->imgtr_next_P;
+        img->imgtr_next_P = img->tr_fld;
+      }
+      else if(img->structure == FRAME)
+      {
+        img->imgtr_last_P = img->imgtr_next_P;
+        img->imgtr_next_P = 2*img->tr_frm;
+      }
     }
   }
 #endif
@@ -910,32 +960,30 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
 
   currSlice->start_mb_nr = pp->firstMBInSliceY * box_ps.pictureWidthInMBs + pp->firstMBInSliceX;
 
+#ifdef _ABT_FLAG_IN_SLICE_HEADER_
   sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length );
   sym.mapping(sym.len, sym.inf, &(sym.value1), &(sym.value2));
-  pp->initialQP = MAX_QP - sym.value1;
+  currSlice->abt = sym.value1;
+  bitptr += sym.len;
+#endif
+
+  sym.mapping = linfo_dquant;
+  sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length );
+  sym.mapping(sym.len, sym.inf, &(sym.value1), &(sym.value2));
+  pp->initialQP = sym.value1 + (MAX_QP - MIN_QP + 1)/2;
   currSlice->qp = img->qp = pp->initialQP;
   buf->frame_bitoffset += sym.len;
   bitptr += sym.len;
 
-  if ( inp->symbol_mode == CABAC )
-  {
-    sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length );
-    sym.mapping(sym.len, sym.inf, &(sym.value1), &(sym.value2));
-    pp->lastMBnr = sym.value1;
-    currSlice->last_mb_nr = sym.value1;
-    buf->frame_bitoffset += sym.len;
-    bitptr += sym.len;
-  }
   if ( img->type == SP_IMG_1 || img->type == SP_IMG_MULT )
   {
     sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length );
     sym.mapping(sym.len, sym.inf, &(sym.value1), &(sym.value2));
-    img->qpsp = MAX_QP - sym.value1;
+    img->qpsp = sym.value1 + (MAX_QP - MIN_QP + 1)/2;
     buf->frame_bitoffset += sym.len;
     bitptr += sym.len;
   }
-
-
+  sym.mapping = linfo;        // Mapping rule: Simple code number to len/info
   // Multi-Picture Buffering Syntax, Feb 27, 2002
   // RPSF: Reference Picture Selection Flags
   sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &(sym.inf), buf->bitstream_length );
@@ -949,6 +997,20 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
   buf->frame_bitoffset += sym.len;
   bitptr+=sym.len;
   img->pn=sym.value1;
+
+  // Tian Dong: payloadType 8 is IDERP packet, in which PN is reset,
+  // so a PN gap is expected. Be sure not try to fill such a gap.
+  if ( pp->payloadType != PAYLOAD_TYPE_IDERP ) fill_PN_gap(img);
+  // Tian Dong: The following condition will ensure the buffer reset will
+  // not be done before the successive B frames are decoded.
+  if ( pp->payloadType == PAYLOAD_TYPE_IDERP && fb != NULL && frm != NULL )
+  {
+    reset_buffers();
+    frm->picbuf_short[0]->used=0;
+    frm->picbuf_short[0]->picID=-1;
+    frm->picbuf_short[0]->lt_picID=-1;
+    frm->short_used=0;
+  }
 
   // RPSL: Reference picture selection layer
   sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &(sym.inf), buf->bitstream_length );
@@ -988,7 +1050,7 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
 
         if (tmp1!=3)
         {
-          printf ("got RMPNI = %d\n",tmp1);
+//          printf ("got RMPNI = %d\n",tmp1);
           tmp_rmpni=(RMPNIbuffer_t*)calloc (1,sizeof (RMPNIbuffer_t));
           tmp_rmpni->Next=NULL;
           tmp_rmpni->RMPNI=tmp1;
@@ -1102,6 +1164,20 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
       
     }while (tmp_mmco->MMCO!=0);
   }
+
+  // Tian Dong: June 10, 2002
+  // Update: a differential value is conveyed rather than an absolute value. 
+  if ( inp->symbol_mode == CABAC )
+  {
+    sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length );
+    sym.mapping(sym.len, sym.inf, &(sym.value1), &(sym.value2));
+    pp->lastMBnr = sym.value1;
+    buf->frame_bitoffset += sym.len;
+    bitptr += sym.len;
+    currSlice->last_mb_nr = currSlice->start_mb_nr + sym.value1;
+    if (currSlice->last_mb_nr == currSlice->start_mb_nr)
+      currSlice->last_mb_nr = img->max_mb_nr;
+  }
 }
 
 /*!
@@ -1137,6 +1213,11 @@ int rdOnePayload( struct img_par *img, struct inp_par* inp, PayloadInfo *pp, FIL
   {
     currStream->bitstream_length = (int)pp->payloadSize;
     box_atm.currPayloadOffset += (long)pp->payloadSize;
+    if(inp->Encapsulated_NAL_Payload) 
+    {
+      currStream->bitstream_length = (int) pp->payloadSize = EBSPtoRBSP( buf, (int) pp->payloadSize, 0);
+      currStream->bitstream_length = (int) pp->payloadSize = RBSPtoSODB( buf, (int) pp->payloadSize);
+    }
 
     currSlice->ei_flag = 0;
     currSlice->dp_mode = PAR_DP_1;
@@ -1443,6 +1524,9 @@ int IFFSequenceHeader( struct img_par *img, struct inp_par *inp, FILE *bits )
 
   assert( bits != NULL );
 
+  memset(&currPictureInfo, 0, sizeof(PictureInfo));
+  memset(&oldPictureInfo, 0, sizeof(PictureInfo));
+
   // read FileTypeBox
   if ( -1 == testFileTypeBox( bits ) ) return -1;
   size = -1;
@@ -1485,4 +1569,89 @@ void terminateInterimFile()
   freeContentInfoBox();
   freeFileHeaderBox();
   freeFileTypeBox();
+}
+
+int rdLayerBox( int no, unsigned long boxsize, FILE *bits )
+{
+  unsigned long size, type, readsize;
+  unsigned INT32 avgBitRate, avgFrameRate;
+  time_t ltime;
+  FILE *fp = fopen("enhanced_layers.txt", "at");
+  if ( fp == NULL )
+  {
+    printf("Cannot open enhanced_layers.txt for reporting the information in Layer Box.\n");
+    return -1;
+  }
+
+  if ( no == 0 )
+  {
+    time( &ltime );
+    fprintf( fp, "\n\n*****************************************\n");
+    fprintf( fp, "Reporting the information in Layer Boxes\nGenerated by the JVT decoder\nDate & Time: %s", ctime( &ltime ));
+    fprintf( fp, "*****************************************\n");
+  }
+  fprintf(fp, "\nLayer Box %d:\n", no );
+
+  if (-1 == readfile( &avgBitRate, 4, 1, bits ) ) return -1;
+  if (-1 == readfile( &avgFrameRate, 4, 1, bits ) ) return -1;
+
+  fprintf(fp, "Average bit-rate is %ld, average frame rate is %ld.\n", avgBitRate, avgFrameRate );
+  fprintf(fp, "The sub-sequences in this layer:\n");
+
+  readsize = 0;
+  boxsize = boxsize - SIZEOF_BOXTYPE - 8;
+  while (readsize < boxsize)
+  {
+    if ( -1 == readfile( &size, 4, 1, bits ) ) return -1;
+    if ( size == 0 ) return -1;
+    if ( -1 == readfile( &type, 4, 1, bits ) ) return -1;
+    if ( type != BOX_SSEQ ) return -1;
+    if ( -1 == rdSubSequence(fp, bits) ) return -1;
+    readsize += size;
+  }
+  fclose( fp );
+  return 0;
+}
+
+int rdSubSequence(FILE* fp, FILE* bits)
+{
+  int i;
+  unsigned INT16 subSequenceIdentifier;
+  Boolean continuationFromPreviousSegmentFlag=FALSE, continuationToNextSegmentFlag=FALSE;
+  Boolean startTickAvailableFlag=FALSE;
+  unsigned INT64 ssStartTick, ssDuration;
+  unsigned INT32 avgBitRate, avgFrameRate;
+  unsigned INT16 numReferencedSubSequences;
+  unsigned INT8  layerNumber;
+  unsigned INT16 depSubSequenceIdentifier;
+  unsigned INT16 cd;
+
+  if (-1 == readfile( &subSequenceIdentifier, 2, 1, bits ) ) return -1;
+  fprintf(fp, "\nsubSequenceIdentifier = %d\n", subSequenceIdentifier );
+  if (-1 == readfile( &cd, 2, 1, bits ) ) return -1;
+  if ( cd&0x8000 ) continuationFromPreviousSegmentFlag = TRUE;
+  if ( cd&0x4000 ) continuationToNextSegmentFlag = TRUE;
+  if ( cd&0x2000 ) startTickAvailableFlag = TRUE;
+  fprintf(fp, "continuationFromPreviousSegmentFlag = %d\n", continuationFromPreviousSegmentFlag );
+  fprintf(fp, "continuationToNextSegmentFlag = %d\n", continuationToNextSegmentFlag);
+  fprintf(fp, "startTickAvailableFlag = %d\n", startTickAvailableFlag);
+  if (-1 == readfile( &ssStartTick, 8, 1, bits ) ) return -1;
+  fprintf(fp, "ssStartTick = %lld\n", ssStartTick);
+  if (-1 == readfile( &ssDuration, 8, 1, bits ) ) return -1;
+  fprintf(fp, "ssDuration = %lld\n", ssDuration);
+  if (-1 == readfile( &avgBitRate, 4, 1, bits ) ) return -1;
+  fprintf(fp, "avgBitRate = %ld\n", avgBitRate);
+  if (-1 == readfile( &avgFrameRate, 4, 1, bits ) ) return -1;
+  fprintf(fp, "avgFrameRate = %ld\n", avgFrameRate);
+  if (-1 == readfile( &numReferencedSubSequences, 2, 1, bits ) ) return -1;
+  fprintf(fp, "numReferencedSubSequences = %d\n", numReferencedSubSequences);
+
+  for (i=0; i<numReferencedSubSequences; i++)
+  {
+    if (-1 == readfile( &layerNumber, 1, 1, bits ) ) return -1;
+    fprintf(fp, "layerNumber = %d\n", layerNumber);
+    if (-1 == readfile( &depSubSequenceIdentifier, 2, 1, bits ) ) return -1;
+    fprintf(fp, "depSubSequenceIdentifier= %d\n", depSubSequenceIdentifier);
+  }
+  return 0;
 }

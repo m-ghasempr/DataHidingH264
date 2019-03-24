@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 2.1
+ *     JM 3.9 Adaptive Block Transforms
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -82,19 +82,27 @@
 #include "memalloc.h"
 #include "mbuffer.h"
 #include "encodeiff.h"
+#include "intrarefresh.h"
+#include "fmo.h"
 
-#define JM      "2"
-#define VERSION "2.1"
+#define JM      "3"
+#define VERSION "3.90"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
-StatParameters  stats,  *stat  = &stats;
+StatParameters  stats_frame, stats_field,  *stat  = &stats_frame;
 SNRParameters   snrs,   *snr   = &snrs;
 Decoders decoders, *decs=&decoders;
 
 #ifdef _ADAPT_LAST_GROUP_
 int initial_Bframes = 0;
 #endif
+
+Boolean In2ndIGOP = FALSE;
+int    start_frame_no_in_this_IGOP = 0;
+int    start_tr_in_this_IGOP = 0;
+int    FirstFrameIn2ndIGOP=0;
+
 
 /*!
  ***********************************************************************
@@ -154,51 +162,24 @@ int main(int argc,char **argv)
   initial_Bframes = input->successive_Bframe;
 #endif
 
+  PatchInputNoFrames();
+
   if ( input->of_mode == PAR_OF_IFF )
     initSegmentBox(); // There is only one segment
 
+  img->pn = -1;    // Tian
+  start_frame_no_in_this_IGOP = 0;
   for (img->number=0; img->number < input->no_frames; img->number++)
   {
-    img->pn = img->number % (img->buf_cycle+1);
-    if (input->intra_period == 0)
-    {
-      if (img->number == 0)
-      {
-        img->type = INTRA_IMG;        // set image type for first image to I-frame
-      }
-      else
-      {
-        img->type = INTER_IMG;        // P-frame
-        if (input->sp_periodicity)
-        {
-          if ((img->number % input->sp_periodicity) ==0)
-          {
-            img->types=SP_IMG;
-          }
-          else img->types=INTER_IMG;
-        }
-      }
-    }
-    else
-    {
-      if ((img->number%input->intra_period) == 0)
-      {
-        img->type = INTRA_IMG;
-      }
-      else
-      {
-        img->type = INTER_IMG;        // P-frame
-        if (input->sp_periodicity)
-        {
-          if ((img->number % input->sp_periodicity) ==0)
-              img->types=SP_IMG;
-          else img->types=INTER_IMG;
-        }
-      }
-    }
+    // Tian Dong. June 13, 2002, C083
+    // C083's picture Update Behavior need the following modification
+//    img->pn = img->number % (img->buf_cycle+1);
+    img->pn = (img->pn+1) % (img->buf_cycle+1); 
+
+    SetImgType();
 
 #ifdef _ADAPT_LAST_GROUP_
-    if (input->successive_Bframe && input->last_frame && img->number+1 == input->no_frames)
+    if (input->successive_Bframe && input->last_frame && IMG_NUMBER+1 == input->no_frames)
       {
         int bi = (int)((float)(input->jumpd+1)/(input->successive_Bframe+1.0)+0.499999);
         input->successive_Bframe = (input->last_frame-(img->number-1)*(input->jumpd+1))/bi-1;
@@ -207,24 +188,44 @@ int main(int argc,char **argv)
 
     image_type = img->type;
     
+    // which layer the image belonged to?
+    if ( IMG_NUMBER % (input->NumFramesInELSubSeq+1) == 0 )
+      img->layer = 0;
+    else
+      img->layer = 1;
+
+    begin_sub_sequence(); // Tian Dong, JVT-B042, May 31, 2002
+
     encode_one_frame(); // encode one I- or P-frame
-    if ((input->successive_Bframe != 0) && (img->number > 0)) // B-frame(s) to encode
+    // Tian Dong. PLUS1, The following lines are moved ahead of the next IF June 06, 2002
+//    if (image_type == INTRA_IMG || img->types==SP_IMG)
+//    if (img->number == 0 )
+//    {
+//      img->nb_references = 1;
+//    }
+//    else
+    {
+      img->nb_references += 1;
+      img->nb_references = min(img->nb_references, img->buf_cycle +1); // Tian Dong. PLUS1, +1, June 7, 2002
+      img->nb_references = min(img->nb_references, fb->short_used+fb->long_used);// Tian Dong. June 7, 2002
+    }
+
+    if ((input->successive_Bframe != 0) && (IMG_NUMBER > 0)) // B-frame(s) to encode
     {
       img->type = B_IMG;            // set image type to B-frame
       img->types= INTER_IMG;
+
+      if ( input->NumFramesInELSubSeq == 0 ) img->layer = 0;
+      else img->layer = 1;
+
       for(img->b_frame_to_code=1; img->b_frame_to_code<=input->successive_Bframe; img->b_frame_to_code++)
         encode_one_frame();  // encode one B-frame
     }
     
-    if (image_type == INTRA_IMG || img->types==SP_IMG)
-    {
-        img->nb_references = 1;
-    }
-    else
-    {
-       img->nb_references += 1;
-       img->nb_references = min(img->nb_references, img->buf_cycle);
-    }
+
+    end_sub_sequence();  // Tian, JVT-B042, May 31, 2002
+
+    process_2nd_IGOP();
   }
   if ( input->of_mode == PAR_OF_IFF )
   {
@@ -234,11 +235,19 @@ int main(int argc,char **argv)
     updateSegmentBox();
   }
 
-    // terminate sequence
+  // terminate sequence
   terminate_sequence();
+
+  fclose(p_in);
+  fclose(p_dec);
+  if (p_trace)
+    fclose(p_trace);
 
   Clear_Motion_Search_Module ();
 
+  RandomIntraUninit();
+  FmoUninit();
+  
   // free structure for rd-opt. mode decision
   clear_rdopt ();
 
@@ -273,7 +282,7 @@ int main(int argc,char **argv)
  */
 void init_img()
 {
-  int i,j;
+  int i,j,size_x,size_y;
 
   img->no_multpred=input->no_multpred;
 #ifdef _ADDITIONAL_REFERENCE_FRAME_
@@ -329,22 +338,32 @@ void init_img()
 
   // allocate memory for intra pred mode buffer for each block: img->ipredmode
   // int  img->ipredmode[90][74];
-  get_mem2Dint(&(img->ipredmode), img->width/BLOCK_SIZE+2, img->height/BLOCK_SIZE+2);
+  size_x=img->width/BLOCK_SIZE+3;
+  size_y=img->height/BLOCK_SIZE+3;
+  get_mem2Dint(&(img->ipredmode), img->width/BLOCK_SIZE+3, img->height/BLOCK_SIZE+3);        //need two extra rows at right and bottom
 
   // Prediction mode is set to -1 outside the frame, indicating that no prediction can be made from this part
   for (i=0; i < img->width/BLOCK_SIZE+1; i++)
   {
+    // img->ipredmode[i][0]=-1;
+    // img->ipredmode[i][size_y-2]=-1;
+    // img->ipredmode[i][size_y-1]=-1;
     img->ipredmode[i+1][0]=-1;
     img->ipredmode[i+1][img->height/BLOCK_SIZE+1]=-1;
-
   }
   for (j=0; j < img->height/BLOCK_SIZE+1; j++)
   {
+    // img->ipredmode[0][j]=-1;
+    // img->ipredmode[size_x-2][j]=-1;
+    // img->ipredmode[size_x-1][j]=-1;
     img->ipredmode[0][j+1]=-1;
     img->ipredmode[img->width/BLOCK_SIZE+1][j+1]=-1;
   }
 
   img->mb_y_upd=0;
+
+  RandomIntraInit (img->width/16, img->height/16, input->RandomIntraMBRefresh);
+  FmoInit (img->width/16, img->height/16, input->FmoNumSliceGroups, 1, NULL);   // Forced Scattered Slices so far
 
 }
 
@@ -388,6 +407,10 @@ void malloc_slice()
   const int buffer_size = (img->width * img->height * 4); // AH 190202: There can be data expansion with 
                                                           // low QP values. So, we make sure that buffer 
                                                           // does not everflow. 4 is probably safe multiplier.
+  if(input->Encapsulated_NAL_Payload)
+  {
+    NAL_Payload_buffer = (byte *) calloc(buffer_size, sizeof(byte));
+  }
 
   switch(input->of_mode) // init depending on NAL mode
   {
@@ -585,6 +608,11 @@ void free_slice()
   }
   if (currSlice != NULL)
     free(img->currentSlice);
+  if(input->Encapsulated_NAL_Payload)
+  {
+    if(NAL_Payload_buffer)
+      free(NAL_Payload_buffer);
+  }
 }
 
 
@@ -704,6 +732,16 @@ void report()
     if(input->successive_Bframe != 0)
       fprintf(stdout,   " No of ref. frames used in B pred  : %d\n",input->no_multpred);
   }
+  if(input->abt)
+  {
+    fprintf(stdout," Adaptive Block Transforms         : Used");
+    if (input->abt==INTER_ABT)
+      fprintf(stdout," (inter only)\n");
+    else
+      fprintf(stdout," (inter and intra)\n");
+  }
+  else
+    fprintf(stdout," Adaptive Block Transforms         : Not Used\n");            // ABT
   fprintf(stdout,   " Total encoding time for the seq.  : %.3f sec \n",tot_time*0.001);
 
   // B pictures
@@ -805,8 +843,17 @@ void report()
     fprintf(stdout, " Bit rate (kbit/s)  @ %2.2f Hz     : %5.2f\n", frame_rate, stat->bitrate/1000);
   }
 
+  if(input->Encapsulated_NAL_Payload) {
+    fprintf(stdout, " Bits to avoid Startcode Emulation : %d \n", stat->bit_ctr_emulationprevention);
+  }
+
   fprintf(stdout,"--------------------------------------------------------------------------\n");
-  fprintf(stdout,"Exit JM %s encoder ver %s\n", JM, VERSION);
+  fprintf(stdout,"Exit JM %s encoder ver %s ", JM, VERSION);
+#if ( INI_CTX == 0 )
+  fprintf(stdout,"No CABAC Initialization. ");
+  fprintf(stdout," ABT_max_count %d ",INICNT_ABT);
+#endif
+  fprintf(stdout,"\n");
 
   // status file
   if ((p_stat=fopen("stat.dat","wt"))==0)
@@ -863,6 +910,16 @@ void report()
     if(input->successive_Bframe != 0)
       fprintf(p_stat, " No of frame used in B pred   : %d\n",input->no_multpred);
   }
+  if(input->abt) // ABT
+  {
+    fprintf(p_stat," Adaptive Block Transforms    : Used");
+    if (input->abt==INTER_ABT)
+      fprintf(p_stat," (inter only)\n");
+    else
+      fprintf(p_stat," (inter and intra)\n");
+  }
+  else
+    fprintf(p_stat," Adaptive Block Transforms    : Not Used\n"); // ~ABT
   if (input->symbol_mode == UVLC)
     fprintf(p_stat,   " Entropy coding method        : UVLC\n");
   else
@@ -916,7 +973,6 @@ void report()
   fprintf(p_stat,"\n Mode  6+ intr.new  | %5d         |",stat->mode_use_inter[0][I16MB]);
   mean_motion_info_bit_use[0] = (float)(stat->bit_use_mode_inter[0][0] + stat->bit_use_mode_inter[0][1] + stat->bit_use_mode_inter[0][2] 
                                       + stat->bit_use_mode_inter[0][3] + stat->bit_use_mode_inter[0][P8x8])/(float) bit_use[1][0]; 
-
 
   // B pictures
   if(input->successive_Bframe!=0 && Bframe_ctr!=0)
@@ -1019,8 +1075,10 @@ void report()
   fprintf(p_stat,"\n");
   fprintf(p_stat," --------------------|----------------|----------------|----------------|\n");
 
+  fclose(p_stat);
+
   // write to log file
-  if (fopen("log.dat","r")==0)                      // check if file exist
+  if ((p_log=fopen("log.dat","r"))==0)                      // check if file exist
   {
     if ((p_log=fopen("log.dat","a"))==NULL)            // append new statistic at the end
     {
@@ -1029,19 +1087,22 @@ void report()
     }
     else                                            // Create header for new log file
     {
-      fprintf(p_log," ---------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
-      fprintf(p_log,"|            Encoder statistics. This file is generated during first encoding session, new sessions will be appended                                               |\n");
-      fprintf(p_log," ---------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
-      fprintf(p_log,"| Date  | Time  |    Sequence        |#Img|Quant1|QuantN|Format|Hadamard|Search r|#Ref |Freq |Intra upd|SNRY 1|SNRU 1|SNRV 1|SNRY N|SNRU N|SNRV N|#Bitr P|#Bitr B|\n");
-      fprintf(p_log," ---------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
+      fprintf(p_log," ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
+      fprintf(p_log,"|            Encoder statistics. This file is generated during first encoding session, new sessions will be appended                                                   |\n");
+      fprintf(p_log," ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
+      fprintf(p_log,"| Date  | Time  |    Sequence        |#Img|Quant1|QuantN|Format|Hadamard|Search r|#Ref | ABT |Freq |Intra upd|SNRY 1|SNRU 1|SNRV 1|SNRY N|SNRU N|SNRV N|#Bitr P|#Bitr B|\n");
+      fprintf(p_log," ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
     }
   }
   else
+  {
+    fclose (p_log);
     if ((p_log=fopen("log.dat","a"))==NULL)            // File exist,just open for appending
     {
       snprintf(errortext, ET_SIZE, "Error open file %s  \n","log.dat");
       error(errortext, 500);
     }
+  }
 
 #ifdef WIN32
   _strdate( timebuf );
@@ -1080,6 +1141,13 @@ void report()
   fprintf(p_log,"   %2d   |",input->search_range );
 
   fprintf(p_log," %2d  |",input->no_multpred);
+
+  if(input->abt==INTER_ABT) // ABT
+    fprintf(p_log," P+B |");
+  else if (input->abt==INTER_INTRA_ABT)
+    fprintf(p_log,"I+P+B|");
+  else
+    fprintf(p_log," OFF |");
 
   fprintf(p_log," %2d  |",img->framerate/(input->jumpd+1));
 
@@ -1180,9 +1248,7 @@ void information_init()
   printf(" Output log file                   : log.dat \n");
   printf(" Output statistics file            : stat.dat \n");
   printf("--------------------------------------------------------------------------\n");
-
-
-  printf(" Frame   Bit/pic   QP   SnrY    SnrU    SnrV    Time(ms) IntraMBs\n");
+  printf(" Frame   Bit/pic   QP   SnrY    SnrU    SnrV    Time(ms) Frm/Fld IntraMBs\n");
 }
 
 
@@ -1233,12 +1299,6 @@ int init_global_buffers()
   // int  refFrArr[72][88];
   memory_size += get_mem2Dint(&refFrArr_frm, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
 
-  if (NULL == (Refbuf11_P_frm = malloc ((img->width * img->height) * sizeof (pel_t))))
-    no_mem_exit ("init_global_buffers: Refbuf11_P_frm");
-
-  memory_size += get_mem2D(&mref_P_frm, (img->height+2*IMG_PAD_SIZE)*4, (img->width+2*IMG_PAD_SIZE)*4);
-  memory_size += get_mem3D(&mcef_P_frm, 2, img->height_cr, img->width_cr);
-
   if(input->successive_Bframe!=0)
   {
     // allocate memory for temp B-frame motion vector buffer: fw_refFrArr, bw_refFrArr
@@ -1271,9 +1331,6 @@ int init_global_buffers()
 
   alloc_Refbuf (img);
 
-  if (NULL == (Refbuf11_P = malloc ((img->width * img->height) * sizeof (pel_t))))
-    no_mem_exit ("init_global_buffers: Refbuf11_P");
-
   if(input->successive_Bframe!=0)
   {
     // allocate memory for temp B-frame motion vector buffer: tmp_fwMV, tmp_bwMV, dfMV, dbMV
@@ -1283,6 +1340,10 @@ int init_global_buffers()
     memory_size += get_mem3Dint(&dfMV,     2, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE+4);
     memory_size += get_mem3Dint(&dbMV,     2, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE+4);
   }
+
+  // allocate memory for array containing the block modes of the collocated MBs. Needed for B-Frames ABT Direct Mode.
+  // colMBmode[frame/top/bottom][blk_y][blk_x]
+  memory_size += get_mem3Dint(&colB8mode, 3, img->height/B8_SIZE, img->width/B8_SIZE);
 
   // allocate memory for temp quarter pel luma frame buffer: img4Y_tmp
   // int img4Y_tmp[576][704];  (previously int imgY_tmp in global.h)
@@ -1328,20 +1389,6 @@ int init_global_buffers()
     memory_size += get_mem3D(&imgUV_org_top, 2, height_field/2, img->width_cr);
     memory_size += get_mem2D(&imgY_org_bot, height_field, img->width);
     memory_size += get_mem3D(&imgUV_org_bot, 2, height_field/2, img->width_cr);
-
-    if (NULL == (Refbuf11_P_top = malloc ((img->width * height_field) * sizeof (pel_t))))
-      no_mem_exit ("init_global_buffers: Refbuf11_P_top");
-    if (NULL == (Refbuf11_P_bot = malloc ((img->width * height_field) * sizeof (pel_t))))
-      no_mem_exit ("init_global_buffers: Refbuf11_P_bot");
-
-    // allocate memory for B-frame coding (last upsampled P-frame): mref_P, mcref_P
-    // is currently also used in oneforthpix_1() and _2() for coding without B-frames
-    //byte mref[1152][1408];  */   /* 1/4 pix luma
-    //byte mcef[2][352][288]; */   /* pix chroma
-    memory_size += get_mem2D(&mref_P_top, (height_field+2*IMG_PAD_SIZE)*4, (img->width+2*IMG_PAD_SIZE)*4);
-    memory_size += get_mem3D(&mcef_P_top, 2, height_field/2, img->width_cr);
-    memory_size += get_mem2D(&mref_P_bot, (height_field+2*IMG_PAD_SIZE)*4, (img->width+2*IMG_PAD_SIZE)*4);
-    memory_size += get_mem3D(&mcef_P_bot, 2, height_field/2, img->width_cr);
 
     if(input->successive_Bframe!=0)
     {
@@ -1397,13 +1444,11 @@ void free_global_buffers()
   free_mem3D(imgUV_org_frm,2);
   free_mem3Dint(tmp_mv_frm,2);
   free_mem2Dint(refFrArr_frm);
-  free_mem2D(mref_P_frm);
-  free_mem3D(mcef_P_frm,2);
+
   // free multiple ref frame buffers
   // number of reference frames increased by one for next P-frame
   free(mref_frm);
   free(mcef_frm);
-  free (Refbuf11_P_frm);
 
   free_mem2D(imgY_pf);       // free post filtering frame buffers
   free_mem3D(imgUV_pf,2);
@@ -1428,6 +1473,7 @@ void free_global_buffers()
   } // end if B frame
 
 
+  free_mem3Dint(colB8mode,3);  // ABT
   free_mem2Dint(img4Y_tmp);    // free temp quarter pel frame buffer
 
   // free mem, allocated in init_img()
@@ -1493,17 +1539,10 @@ void free_global_buffers()
     free_mem2D(imgY_org_bot);      // free ref frame buffers
     free_mem3D(imgUV_org_bot,2);
 
-    free_mem2D(mref_P_top);
-    free_mem3D(mcef_P_top,2);
-    free_mem2D(mref_P_bot);
-    free_mem3D(mcef_P_bot,2);
     // free multiple ref frame buffers
     // number of reference frames increased by one for next P-frame
     free(mref_fld);
     free(mcef_fld);
-
-    free (Refbuf11_P_top);
-    free (Refbuf11_P_bot);
 
     if(input->successive_Bframe!=0)
     {
@@ -1613,11 +1652,11 @@ int get_mem_ACcoeff (int***** cofAC)
       if (((*cofAC)[k][j] = (int**)calloc (2, sizeof(int*))) == NULL)      no_mem_exit ("get_mem_ACcoeff: cofAC");
       for (i=0; i<2; i++)
       {
-        if (((*cofAC)[k][j][i] = (int*)calloc (18, sizeof(int))) == NULL)  no_mem_exit ("get_mem_ACcoeff: cofAC");
+        if (((*cofAC)[k][j][i] = (int*)calloc (65, sizeof(int))) == NULL)  no_mem_exit ("get_mem_ACcoeff: cofAC"); // 18->65 for ABT
       }
     }
   }
-  return 6*4*2*18*sizeof(int);
+  return 6*4*2*65*sizeof(int);// 18->65 for ABT
 }
 
 /*!
@@ -1636,10 +1675,10 @@ int get_mem_DCcoeff (int**** cofDC)
     if (((*cofDC)[k] = (int**)calloc (2, sizeof(int*))) == NULL)      no_mem_exit ("get_mem_DCcoeff: cofDC");
     for (j=0; j<2; j++)
     {
-      if (((*cofDC)[k][j] = (int*)calloc (18, sizeof(int))) == NULL)  no_mem_exit ("get_mem_DCcoeff: cofDC");
+      if (((*cofDC)[k][j] = (int*)calloc (65, sizeof(int))) == NULL)  no_mem_exit ("get_mem_DCcoeff: cofDC"); // 18->65 for ABT
     }
   }
-  return 3*2*18*sizeof(int);
+  return 3*2*65*sizeof(int); // 18->65 for ABT
 }
 
 
@@ -1707,15 +1746,12 @@ void put_buffer_frame()
   tmp_mv = tmp_mv_frm;
   mref = mref_frm;
   mcef = mcef_frm;
-  mref_P = mref_P_frm;
-  mcef_P = mcef_P_frm;
 
   refFrArr = refFrArr_frm;
   fw_refFrArr = fw_refFrArr_frm;
   bw_refFrArr = bw_refFrArr_frm;
 
   Refbuf11 = Refbuf11_frm;
-  Refbuf11_P = Refbuf11_P_frm;
 }
 
 /*!
@@ -1737,11 +1773,8 @@ void put_buffer_top()
 
   mref = mref_fld;
   mcef = mcef_fld;
-  mref_P = mref_P_top;
-  mcef_P = mcef_P_top;
 
   Refbuf11 = Refbuf11_fld;
-  Refbuf11_P = Refbuf11_P_top;
 
   tmp_mv = tmp_mv_top;
   refFrArr = refFrArr_top;
@@ -1770,13 +1803,10 @@ void put_buffer_bot()
   refFrArr = refFrArr_bot;
   fw_refFrArr = fw_refFrArr_bot;
   bw_refFrArr = bw_refFrArr_bot;
-  Refbuf11_P = Refbuf11_P_bot;
   Refbuf11 = Refbuf11_fld;
 
   mref = mref_fld;
   mcef = mcef_fld;
-  mref_P = mref_P_bot;
-  mcef_P = mcef_P_bot;
 }
 
 /*!
@@ -1867,3 +1897,81 @@ int decide_fld_frame(float snr_frame_Y, float snr_field_Y, int bit_field, int bi
     return (1);
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    Do some initializaiton work for encoding the 2nd IGOP
+ ************************************************************************
+ */
+void process_2nd_IGOP()
+{
+  Boolean FirstIGOPFinished = FALSE;
+  if ( img->number == input->no_frames-1 )
+    FirstIGOPFinished = TRUE;
+  if (input->NumFrameIn2ndIGOP==0) return;
+  if (!FirstIGOPFinished || In2ndIGOP) return;
+  In2ndIGOP = TRUE;
+
+//  img->number = -1;
+  img->pn = -1;
+  start_frame_no_in_this_IGOP = input->no_frames;
+  start_tr_in_this_IGOP = (input->no_frames-1)*(input->jumpd+1) +1;
+  input->no_frames = input->no_frames + input->NumFrameIn2ndIGOP;
+
+  reset_buffers();
+
+  frm->picbuf_short[0]->used=0;
+  frm->picbuf_short[0]->picID=-1;
+  frm->picbuf_short[0]->lt_picID=-1;
+  frm->short_used = 0;
+  img->nb_references = 0;
+}
+
+void SetImgType()
+{
+  if (input->intra_period == 0)
+  {
+    if (IMG_NUMBER == 0)
+    {
+      img->type = INTRA_IMG;        // set image type for first image to I-frame
+    }
+    else
+    {
+      img->type = INTER_IMG;        // P-frame
+      if (input->sp_periodicity)
+      {
+        if ((IMG_NUMBER % input->sp_periodicity) ==0)
+        {
+          img->types=SP_IMG;
+        }
+        else img->types=INTER_IMG;
+      }
+    }
+  }
+  else
+  {
+    if ((IMG_NUMBER%input->intra_period) == 0)
+    {
+      img->type = INTRA_IMG;
+    }
+    else
+    {
+      img->type = INTER_IMG;        // P-frame
+      if (input->sp_periodicity)
+      {
+        if ((IMG_NUMBER % input->sp_periodicity) ==0)
+            img->types=SP_IMG;
+        else img->types=INTER_IMG;
+      }
+    }
+  }
+
+  if (frm->short_size==frm->short_used)
+  {
+    frm->picbuf_short[frm->short_size-1]->used = 0;
+    frm->picbuf_short[frm->short_size-1]->picID = -1;
+    frm->picbuf_short[frm->short_size-1]->lt_picID = -1;
+    frm->short_used--;
+    img->nb_references--;
+  }
+}

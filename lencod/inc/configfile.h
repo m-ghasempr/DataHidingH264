@@ -123,7 +123,15 @@ Mapping Map[] = {
     {"LeakyBucketRateFile",      &configinput.LeakyBucketRateFile,     1},
     {"LeakyBucketParamFile",     &configinput.LeakyBucketParamFile,    1},
 #endif
+    {"AdaptiveBlockTransforms",  &configinput.abt,                     0},
     {"InterlaceCodingOption",    &configinput.InterlaceCodingOption, 0},
+    {"EncapsulatedNALPayload",   &configinput.Encapsulated_NAL_Payload, 0},
+    {"NumberFramesInEnhancementLayerSubSequence", &configinput.NumFramesInELSubSeq, 0},
+    {"NumberOfFrameInSecondIGOP",&configinput.NumFrameIn2ndIGOP, 0},
+    {"RandomIntraMBRefresh",     &configinput.RandomIntraMBRefresh,    0},
+    {"FmoNumSliceGroups",        &configinput.FmoNumSliceGroups,       0},
+    {"FmoType",                  &configinput.FmoType,                 0},
+    {"FmoConfigFileName",        &configinput.FmoConfigFileName,       1},
     {NULL,                       NULL,                                -1}
 };
 
@@ -135,6 +143,7 @@ extern Mapping Map[];
 
 
 void Configure (int ac, char *av[]);
+void PatchInputNoFrames();
 
 #endif
 

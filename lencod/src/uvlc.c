@@ -52,6 +52,7 @@
 #include <assert.h>
 
 #include "elements.h"
+#include "golomb.h"
 
 /*!
  ************************************************************************
@@ -109,11 +110,7 @@ void n_linfo2(int n, int dummy, int *len,int *info)
  */
 void intrapred_linfo(int ipred1, int ipred2, int *len,int *info)
 {
-#ifndef USE_6_INTRA_MODES
   extern const int IPRED_ORDER[9][9];
-#else
-  extern const int IPRED_ORDER[6][6];
-#endif
 
   n_linfo(IPRED_ORDER[ipred1][ipred2],len,info);
 
@@ -457,10 +454,34 @@ int symbol2uvlc(SyntaxElement *sym)
 int writeSyntaxElement_UVLC(SyntaxElement *se, DataPartition *this_dataPart)
 {
 
+  if( se->golomb_maxlevels && (se->type==SE_LUM_DC_INTRA||se->type==SE_LUM_AC_INTRA||se->type==SE_LUM_DC_INTER||se->type==SE_LUM_AC_INTER) )
+    return writeSyntaxElement_GOLOMB(se,this_dataPart);
+
   se->mapping(se->value1,se->value2,&(se->len),&(se->inf));
 
   symbol2uvlc(se);
 
+  writeUVLC2buffer(se, this_dataPart->bitstream);
+
+  if(se->type != SE_HEADER)
+    this_dataPart->bitstream->write_flag = 1;
+
+#if TRACE
+  if(se->type <= 1)
+    trace2out (se);
+#endif
+
+  return (se->len);
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    passes the fixed codeword to the buffer
+ ************************************************************************
+ */
+int writeSyntaxElement_fixed(SyntaxElement *se, DataPartition *this_dataPart)
+{
   writeUVLC2buffer(se, this_dataPart->bitstream);
 
   if(se->type != SE_HEADER)
@@ -602,7 +623,7 @@ trace2out(SyntaxElement *sym)
       else
         fputc('0', p_trace);
     }
-    fprintf(p_trace, "\n");
+    fprintf(p_trace, " (%3d) \n",sym->value1);
   }
   fflush (p_trace);
 }

@@ -52,9 +52,11 @@
 #ifndef _BIARIENCOD_H_
 #define _BIARIENCOD_H_
 
-
+#if INI_CTX
 #define AAC_FRAC_TABLE 1 //!< replaces division in the AC by a table lookup
-
+#else
+#define AAC_FRAC_TABLE 0 //!< replaces division in the AC by a table lookup
+#endif
 
 /************************************************************************
  * C o n s t a n t s

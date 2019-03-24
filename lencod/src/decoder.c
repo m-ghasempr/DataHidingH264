@@ -133,7 +133,7 @@ void decode_one_b8block (int decoder, int mbmode, int b8block, int b8mode, int b
         block_x = img->block_x+bx;
         block_y = img->block_y+by;
         if (img->type == B_IMG && mref == mref_fld)
-          ref_inx = (img->number-b8ref-2)%img->no_multpred;
+          ref_inx = (IMG_NUMBER-b8ref-2)%img->no_multpred;
 
         Get_Reference_Block (decs->decref[decoder][ref_inx],
                              block_y, block_x,
@@ -418,7 +418,7 @@ void UpdateDecoders()
  */
 void DecOneForthPix(byte **dY, byte ***dref)
 {
-  int j, ref=img->number%img->buf_cycle;
+  int j, ref=IMG_NUMBER%img->buf_cycle;
 
   for (j=0; j<img->height; j++)
     memcpy(dref[ref][j], dY[j], img->width);
@@ -547,7 +547,7 @@ void Error_Concealment(byte **inY, byte **s_map, byte ***refY)
 void Conceal_Error(byte **inY, int mb_y, int mb_x, byte ***refY, byte **s_map)
 {
   int i,j,block_x, block_y;
-  int ref_inx = (img->number-1)%img->no_multpred;
+  int ref_inx = (IMG_NUMBER-1)%img->no_multpred;
   int pos_y = mb_y*MB_BLOCK_SIZE, pos_x = mb_x*MB_BLOCK_SIZE;
   int mv[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE];
   int resY[MB_BLOCK_SIZE][MB_BLOCK_SIZE];
