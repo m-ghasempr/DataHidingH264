@@ -510,7 +510,8 @@ void readLumaCoeffABT_B8(int block8x8, struct inp_par *inp, struct img_par *img)
     ipos,
     run, level,
     len,        // obsolete?
-    ii,jj;
+    ii,jj,
+    sbx, sby;
   int boff_x, boff_y;
   int any_coeff;
   int vlc_numcoef;
@@ -522,7 +523,7 @@ void readLumaCoeffABT_B8(int block8x8, struct inp_par *inp, struct img_par *img)
 
   int qp, q_shift, R[2][2]; // dequantization parameters
 //  static const int blk_table[4][4] = { {0,-1,-1,-1}, {0,2,-1,-1}, {0,1,-1,-1}, {0,1,2,3}};
-  static const int blkmode2ctx [4] = { 9, 10, 10, 11 };
+  static const int blkmode2ctx [4] = {LUMA_8x8, LUMA_8x4, LUMA_4x8, LUMA_4x4};
   int  frm_fld; // indicate progressive/interlaced scan use.
 
 #ifdef _ALT_SCAN_
@@ -684,26 +685,10 @@ void readLumaCoeffABT_B8(int block8x8, struct inp_par *inp, struct img_par *img)
         }else{
           //decode from CABAC
           currSE.reading = readRunLevelFromBuffer_CABAC;
-          if (icoef == 0)
-          {
-            if ( intra )
-            {
-              currSE.context = (abt_mode==B4x4)? 2 : 3 + blkmode2ctx[abt_mode];   // for choosing context model
-              currSE.type    = SE_LUM_DC_INTRA;
-            }else{
-              currSE.context = (abt_mode==B4x4)? 1 :blkmode2ctx[abt_mode];   // for choosing context model
-              currSE.type    = SE_LUM_DC_INTER;
-            }
-          }else{
-            if ( intra )
-            {
-              currSE.context = (abt_mode==B4x4)? 2 : 3 + blkmode2ctx[abt_mode];   // for choosing context model
-              currSE.type    = SE_LUM_AC_INTRA;
-            }else{
-              currSE.context = (abt_mode==B4x4)? 1 : blkmode2ctx[abt_mode];   // for choosing context model
-              currSE.type    = SE_LUM_AC_INTER;
-            }
-          }
+          currSE.type         = (intra ? (icoef==0 ? SE_LUM_DC_INTRA : SE_LUM_AC_INTRA) : (icoef==0 ? SE_LUM_DC_INTER : SE_LUM_AC_INTER));
+          currSE.context      = blkmode2ctx[abt_mode];
+          img->is_intra_block = intra;
+
 #if TRACE
           sprintf(currSE.tracestring, " Luma sng ");
 #endif
@@ -729,6 +714,31 @@ void readLumaCoeffABT_B8(int block8x8, struct inp_par *inp, struct img_par *img)
         if(is_last_levelrun)
           break;
       }//end loop icoef
+
+      // CAVLC store number of coefficients
+      sbx = img->subblock_x;
+      sby = img->subblock_y;
+      switch (abt_mode)
+      {
+      case 0: // 8x8
+        img->nz_coeff [img->mb_x ][img->mb_y ][sbx  ][sby  ] = icoef/4;
+        img->nz_coeff [img->mb_x ][img->mb_y ][sbx+1][sby  ] = icoef/4;
+        img->nz_coeff [img->mb_x ][img->mb_y ][sbx  ][sby+1] = icoef/4;
+        img->nz_coeff [img->mb_x ][img->mb_y ][sbx+1][sby+1] = icoef/4;
+        break;
+      case 1: // 8x4
+        img->nz_coeff [img->mb_x ][img->mb_y ][sbx  ][sby] = icoef/2;
+        img->nz_coeff [img->mb_x ][img->mb_y ][sbx+1][sby] = icoef/2;
+        break;
+      case 2: // 4x8
+        img->nz_coeff [img->mb_x ][img->mb_y ][sbx][sby  ] = icoef/2;
+        img->nz_coeff [img->mb_x ][img->mb_y ][sbx][sby+1] = icoef/2;
+        break;
+      case 3: // 4x4
+        img->nz_coeff [img->mb_x ][img->mb_y ][sbx][sby] = icoef;
+        break;
+      }
+
 
       if(any_coeff)
       {

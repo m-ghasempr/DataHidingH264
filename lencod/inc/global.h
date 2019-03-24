@@ -99,7 +99,8 @@ typedef enum {
 
 typedef enum {
   FRAME_CODING,
-  ADAPTIVE_CODING
+  ADAPTIVE_CODING,
+  FIELD_CODING
 } CodingType;
 
 //! definition of H.26L syntax elements
@@ -206,6 +207,7 @@ typedef struct
   byte          *Ecodestrm;
   int           *Ecodestrm_len;
   int           *Ecodestrm_laststartcode;
+	unsigned short*AC_next_state_MPS_64;
   // storage in case of recode MB
   unsigned int  ElowS, ErangeS;
   unsigned int  EbufferS;
@@ -213,6 +215,11 @@ typedef struct
   unsigned int  Ebits_to_followS;
   byte          *EcodestrmS;
   int           *Ecodestrm_lenS;
+#ifdef NEW_CONSTRAINT_AC
+  int           C, CS;
+	int						E, ES;
+	int						B, BS;
+#endif
 } EncodingEnvironment;
 
 typedef EncodingEnvironment *EncodingEnvironmentPtr;
@@ -220,10 +227,8 @@ typedef EncodingEnvironment *EncodingEnvironmentPtr;
 //! struct for context management
 typedef struct
 {
-  unsigned int  cum_freq[2];    //!< cumulated frequency counts
-  Boolean       in_use;         //!< flag for context in use
-  unsigned int  max_cum_freq;   //!< maximum frequency count
-
+	unsigned short state;         // index into state-table CP	
+  unsigned char  MPS;           // Least Probable Symbol 0/1 CP
 } BiContextType;
 
 typedef BiContextType *BiContextTypePtr;
@@ -235,6 +240,7 @@ typedef BiContextType *BiContextTypePtr;
  */
 
 
+#define NUM_ABT_MODE_CTX 3
 #define NUM_MB_TYPE_CTX  11
 #define NUM_B8_TYPE_CTX  9
 #define NUM_MV_RES_CTX   10
@@ -243,35 +249,34 @@ typedef BiContextType *BiContextTypePtr;
 
 typedef struct
 {
-  BiContextTypePtr mb_type_contexts[3];
-  BiContextTypePtr b8_type_contexts[2];
-  BiContextTypePtr mv_res_contexts [2];
-  BiContextTypePtr ref_no_contexts [2];
-  BiContextTypePtr delta_qp_inter_contexts;
-  BiContextTypePtr delta_qp_intra_contexts;
+  BiContextType ABT_mode_contexts[2][NUM_ABT_MODE_CTX];
+  BiContextType mb_type_contexts [3][NUM_MB_TYPE_CTX];
+  BiContextType b8_type_contexts [2][NUM_B8_TYPE_CTX];
+  BiContextType mv_res_contexts  [2][NUM_MV_RES_CTX];
+  BiContextType ref_no_contexts  [2][NUM_REF_NO_CTX];
+	BiContextType delta_qp_contexts		[NUM_DELTA_QP_CTX];
+  BiContextType slice_term_context;
 } MotionInfoContexts;
 
 
 #define NUM_IPR_CTX    2
 #define NUM_CBP_CTX    4
-#define NUM_TRANS_TYPE 9
-#define NUM_LEVEL_CTX  4
-#define NUM_RUN_CTX    2
-#define NUM_COEFF_COUNT_CTX 6
-#define NUM_TRANS_TYPE_ABT      6
-#define NUM_COEFF_COUNT_CTX_ABT 8
-#define NUM_RUN_CTX_ABT         5
+#define NUM_BCBP_CTX   4
+#define NUM_MAP_CTX   15
+#define NUM_LAST_CTX  15
+#define NUM_ONE_CTX    5
+#define NUM_ABS_CTX    5
 
 
 typedef struct
 {
-  BiContextTypePtr ipr_contexts [9];
-  BiContextTypePtr cbp_contexts [2][3];
-  BiContextTypePtr level_context[4*NUM_TRANS_TYPE];
-  BiContextTypePtr run_context  [2*NUM_TRANS_TYPE];
-  BiContextTypePtr coeff_count_context    [NUM_TRANS_TYPE];
-  BiContextTypePtr ABT_run_context        [2*NUM_TRANS_TYPE_ABT];
-  BiContextTypePtr ABT_coeff_count_context[NUM_TRANS_TYPE_ABT];
+  BiContextType  ipr_contexts [9][NUM_IPR_CTX];
+  BiContextType  cbp_contexts [3][NUM_CBP_CTX];
+  BiContextType  bcbp_contexts[NUM_BLOCK_TYPES][NUM_BCBP_CTX];
+  BiContextType  map_contexts [NUM_BLOCK_TYPES][NUM_MAP_CTX];
+  BiContextType  last_contexts[NUM_BLOCK_TYPES][NUM_LAST_CTX];
+  BiContextType  one_contexts [NUM_BLOCK_TYPES][NUM_ONE_CTX];
+  BiContextType  abs_contexts [NUM_BLOCK_TYPES][NUM_ABS_CTX];
 } TextureInfoContexts;
 
 //*********************** end of data type definition for CABAC *******************
@@ -332,7 +337,6 @@ typedef struct macroblock
   int                 mb_type;
   int                 mvd[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE][2];          //!< indices correspond to [forw,backw][block_y][block_x][x,y]
   int                 intra_pred_modes[BLOCK_MULTIPLE*BLOCK_MULTIPLE];
-  int                 coeffs_count[BLOCK_MULTIPLE][BLOCK_MULTIPLE];
   int                 cbp ;
   int                 cbp_blk ;    //!< 1 bit set for every 4x4 block with coefs (not implemented for INTRA)
   int                 b8mode[4];
@@ -340,6 +344,7 @@ typedef struct macroblock
   int                 useABT[4];         // flag, indicating application of ABT for each 8x8 block in this MB (1=ABT)
   int                 abt_mode[4];       // transform mode used for ABT for each 8x8 block.
   int                 abt_pred_mode[4];  // mode used for ABT block prediction for each 8x8 block.
+  unsigned long       cbp_bits;
 } Macroblock;
 
 
@@ -352,8 +357,6 @@ typedef struct
   byte            byte_buf;           //!< current buffer for last written byte
   int             stored_byte_pos;    //!< storage for position in bitstream;
   int             stored_bits_to_go;  //!< storage for bitcounter
-  int             header_len;
-  byte            header_byte_buffer;
   byte            stored_byte_buf;    //!< storage for buffer of last written byte
 
   byte            byte_buf_skip;      //!< current buffer for last written byte
@@ -364,6 +367,7 @@ typedef struct
   int             write_flag;
 
   int             tmp_byte_pos;       //!< temp storage for position in bitstream
+
   int             last_startcode;     //!< location of last valid startcode
 
 } Bitstream;
@@ -664,6 +668,8 @@ typedef struct
   int block_x;                 //!< current block horizontal
   int subblock_y;              //!< current subblock vertical
   int subblock_x;              //!< current subblock horizontal
+  int is_intra_block;
+  int is_v_block;
   int pix_y;                   //!< current pixel vertical
   int pix_x;                   //!< current pixel horizontal
   int mb_y_upd;
@@ -673,6 +679,8 @@ typedef struct
   int pix_c_x;                 //!< current pixel chroma horizontal
   int **ipredmode;             //!< GH ipredmode[90][74];prediction mode for inter frames */ /* fix from ver 4.1
   int cod_counter;             //!< Current count of number of skipped macroblocks in a row
+  int ****nz_coeff;            //!< number of coefficients per block (CAVLC)
+
 
   // some temporal buffers
   int mprr[9][16][16];         //!< all 9 prediction modes? // enlarged from 4 to 16 for ABT (is that neccessary?)
@@ -756,13 +764,16 @@ typedef struct
   int   bit_use_coeffY[3];
   int   bit_use_coeffC[3];
   int   bit_use_delta_quant[3];
+
+  int   em_prev_bits_frm;
+  int   em_prev_bits_fld;
+  int  *em_prev_bits;
 } StatParameters;
 
 
 extern InputParameters *input;
 extern ImageParameters *img;
 extern StatParameters *stat;
-extern StatParameters stats_frame,stats_field;
 
 extern SNRParameters *snr;
 
@@ -912,41 +923,54 @@ void  mvd_linfo2(int mvd, int dummy, int *len,int *info);
 void  dquant_linfo(int mvd, int dummy, int *len,int *info);
 void  cbp_linfo_intra(int cbp, int dummy, int *len,int *info);
 void  cbp_linfo_inter(int cbp, int dummy, int *len,int *info);
+
+// CAVLC
+int writeCoeff4x4_CAVLC (int block_type, int b8, int b4, int param);
+
+int   writeSyntaxElement_VLC(SyntaxElement *se, DataPartition *this_dataPart);
+int   writeSyntaxElement_TotalZeros(SyntaxElement *se, DataPartition *this_dataPart);
+int   writeSyntaxElement_TotalZerosChromaDC(SyntaxElement *se, DataPartition *this_dataPart);
+int   writeSyntaxElement_Run(SyntaxElement *se, DataPartition *this_dataPart);
+int   writeSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *se, DataPartition *this_dataPart);
+int   writeSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *se, DataPartition *this_dataPart);
+int   writeSyntaxElement_Level_VLC1(SyntaxElement *se, DataPartition *this_dataPart);
+int   writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *this_dataPart);
+
 #if TRACE
 void  trace2out(SyntaxElement *se);
 #endif
 Boolean dummy_slice_too_big(int bits_slice);
 
 // CABAC
-void arienco_start_encoding(EncodingEnvironmentPtr eep, unsigned char *code_buffer, int *code_len, int *last_startcode  );
+void arienco_start_encoding(EncodingEnvironmentPtr eep, unsigned char *code_buffer, int *code_len, int *last_startcode, int slice_type);
 int  arienco_bits_written(EncodingEnvironmentPtr eep);
 int  get_trailing_bits(EncodingEnvironmentPtr eep);
 void arienco_done_encoding(EncodingEnvironmentPtr eep);
-void biari_init_context( BiContextTypePtr ctx, int ini_count_0, int ini_count_1, int max_cum_freq );
-void biari_copy_context( BiContextTypePtr ctx_orig, BiContextTypePtr ctx_dest );
-void biari_print_context( BiContextTypePtr ctx );
+void biari_init_context (BiContextTypePtr ctx, const int* ini);
 void rescale_cum_freq(BiContextTypePtr bi_ct);
 void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiContextTypePtr bi_ct );
+void biari_encode_symbol_eq_prob(EncodingEnvironmentPtr eep, signed short symbol);
 MotionInfoContexts* create_contexts_MotionInfo(void);
 TextureInfoContexts* create_contexts_TextureInfo(void);
-void init_contexts_MotionInfo(MotionInfoContexts *enco_ctx, int ini_flag);
-void init_contexts_TextureInfo(TextureInfoContexts *enco_ctx, int ini_flag);
+void init_contexts_MotionInfo (MotionInfoContexts  *enco_ctx);
+void init_contexts_TextureInfo(TextureInfoContexts *enco_ctx);
 void delete_contexts_MotionInfo(MotionInfoContexts *enco_ctx);
 void delete_contexts_TextureInfo(TextureInfoContexts *enco_ctx);
 void writeHeaderToBuffer();
 void writeEOSToBuffer();
 int  writeSyntaxElement_CABAC(SyntaxElement *se, DataPartition *this_dataPart);
+void writeABTIntraBlkModeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeMB_typeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeB8_typeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeIntraPredMode2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeRefFrame2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeCBP2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
-void writeDquant_inter_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
-void writeDquant_intra_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeDquant_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeRunLevel2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeBiDirBlkSize2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeBiMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+
 
 void error(char *text, int code);
 int  start_sequence();

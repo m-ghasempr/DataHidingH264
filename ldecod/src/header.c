@@ -135,7 +135,7 @@ int SliceHeader(struct img_par *img, struct inp_par *inp)
   
   if(!img->current_slice_nr)
   { 
-    if (img->type <= INTRA_IMG || img->type >= SP_IMG_1) 
+    if (img->type <= INTRA_IMG || img->type >= SI_IMG ) 
     {
       if (img->structure == FRAME)
       {     
@@ -235,7 +235,7 @@ int SliceHeader(struct img_par *img, struct inp_par *inp)
   readSyntaxElement_UVLC (&sym,img,inp,partition);
   currSlice->qp = img->qp = sym.value1 + (MAX_QP - MIN_QP + 1)/2;
   UsedBits += sym.len;
-  if(img->type==SP_IMG_1 || img->type==SP_IMG_MULT) //lack of SI frame
+  if(img->type==SP_IMG_1 || img->type==SP_IMG_MULT || img->type == SI_IMG) 
   {
 	if(img->type==SP_IMG_1 || img->type==SP_IMG_MULT)
 	{
@@ -244,7 +244,10 @@ int SliceHeader(struct img_par *img, struct inp_par *inp)
       readSyntaxElement_fixed (&sym,img,inp,partition);
 	  img->sp_switch = sym.inf;
 	}
-    SYMTRACESTRING("SH SP SliceQuant");
+    if(img->type==SI_IMG)
+      SYMTRACESTRING("SH SI SliceQuant");
+    else
+      SYMTRACESTRING("SH SP SliceQuant");
     readSyntaxElement_UVLC (&sym,img,inp,partition);
     img->qpsp = sym.value1 + (MAX_QP - MIN_QP + 1)/2;
   }
@@ -423,18 +426,6 @@ int SliceHeader(struct img_par *img, struct inp_par *inp)
   img->pn=(((img->structure==BOTTOM_FIELD) ? (img->number/2):img->number)%img->buf_cycle);
 
   img->max_mb_nr = (img->width * img->height) / (MB_BLOCK_SIZE * MB_BLOCK_SIZE);
-  if (inp->symbol_mode ==CABAC)
-  {
-    // 9. Get number of MBs in this slice
-    SYMTRACESTRING("SH Last MB in Slice");
-    readSyntaxElement_UVLC (&sym,img,inp,partition);
-// printf ("Got Last MB in Slice %d\n", sym.value1);
-    currSlice->last_mb_nr = currSlice->start_mb_nr+sym.value1;
-    // Note: if one slice == one frame the number of MBs in this slice is coded as 0
-    if (currSlice->last_mb_nr == currSlice->start_mb_nr)
-      currSlice->last_mb_nr = img->max_mb_nr;
-    UsedBits += sym.len;
-  }
 
 
   //! Note! This software reqiures a valid MBAmap in any case.  When FMO is not

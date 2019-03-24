@@ -47,6 +47,7 @@
 #include "contributors.h"
 
 #include <math.h>
+#include <stdlib.h>
 #include <memory.h>
 #include <string.h>
 
@@ -600,3 +601,679 @@ int GetVLCSymbol (byte buffer[],int totbitoffset,int *info, int bytecount)
   return bitcounter;           // return absolute offset in bit from start of frame
 }
 #endif
+
+
+extern void tracebits2(const char *trace_str,  int len,  int info) ;
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    code from bitstream (2d tables)
+ ************************************************************************
+ */
+
+int code_from_bitstream_2d(SyntaxElement *sym,  
+                           DataPartition *dP,
+                           int *lentab,
+                           int *codtab,
+                           int tabwidth,
+                           int tabheight,
+                           int *code)
+{
+  Bitstream   *currStream = dP->bitstream;
+  int frame_bitoffset = currStream->frame_bitoffset;
+  byte *buf = currStream->streamBuffer;
+  int BitstreamLengthInBytes = currStream->bitstream_length;
+
+  int i,j;
+  int len, cod;
+
+  // this VLC decoding method is not optimized for speed
+  for (j = 0; j < tabheight; j++) {
+    for (i = 0; i < tabwidth; i++)
+    {
+      len = lentab[i];
+      if (!len)
+        continue;
+      cod = codtab[i];
+
+      if ((ShowBits(buf, frame_bitoffset, BitstreamLengthInBytes, len) == cod))
+      {
+        sym->value1 = i;
+        sym->value2 = j;
+        currStream->frame_bitoffset += len; // move bitstream pointer
+        sym->len = len;
+        goto found_code;
+      }
+    }
+    lentab += tabwidth;
+    codtab += tabwidth;
+  }
+  
+  return -1;  // failed to find code
+
+found_code:
+
+  *code = cod;
+
+  return 0;
+}
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    read FLC codeword from UVLC-partition 
+ ************************************************************************
+ */
+int readSyntaxElement_FLC(SyntaxElement *sym, struct datapartition *dP)
+{
+  Bitstream   *currStream = dP->bitstream;
+  int frame_bitoffset = currStream->frame_bitoffset;
+  byte *buf = currStream->streamBuffer;
+  int BitstreamLengthInBytes = currStream->bitstream_length;
+
+  if ((GetBits(buf, frame_bitoffset, &(sym->inf), BitstreamLengthInBytes, sym->len)) < 0)
+    return -1;
+
+  currStream->frame_bitoffset += sym->len; // move bitstream pointer
+  sym->value1 = sym->inf;
+
+#if TRACE
+  tracebits2(sym->tracestring, sym->len, sym->inf);
+#endif
+
+  return 1;
+}
+
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    read NumCoeff/TrailingOnes codeword from UVLC-partition 
+ ************************************************************************
+ */
+
+int readSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *sym,  DataPartition *dP,
+                                           char *type)
+{
+  Bitstream   *currStream = dP->bitstream;
+  int frame_bitoffset = currStream->frame_bitoffset;
+  byte *buf = currStream->streamBuffer;
+  int BitstreamLengthInBytes = currStream->bitstream_length;
+
+  int vlcnum, retval;
+  int code, *ct, *lt;
+
+  int lentab[3][4][17] = 
+  {
+    {   // 0702
+      { 1, 6, 8, 9,10,11,13,13,13,14,14,15,15,16,16,16,16},
+      { 0, 2, 6, 8, 9,10,11,13,13,14,14,15,15,15,16,16,16},
+      { 0, 0, 3, 7, 8, 9,10,11,13,13,14,14,15,15,16,16,16},
+      { 0, 0, 0, 5, 6, 7, 8, 9,10,11,13,14,14,15,15,16,16},
+    },                                                 
+    {                                                  
+      { 2, 6, 6, 7, 8, 8, 9,11,11,12,12,12,13,13,13,14,14},
+      { 0, 2, 5, 6, 6, 7, 8, 9,11,11,12,12,13,13,14,14,14},
+      { 0, 0, 3, 6, 6, 7, 8, 9,11,11,12,12,13,13,13,14,14},
+      { 0, 0, 0, 4, 4, 5, 6, 6, 7, 9,11,11,12,13,13,13,14},
+    },                                                 
+    {                                                  
+      { 4, 6, 6, 6, 7, 7, 7, 7, 8, 8, 9, 9, 9,10,10,10,10},
+      { 0, 4, 5, 5, 5, 5, 6, 6, 7, 8, 8, 9, 9, 9,10,10,10},
+      { 0, 0, 4, 5, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9,10,10,10},
+      { 0, 0, 0, 4, 4, 4, 4, 4, 5, 6, 7, 8, 8, 9,10,10,10},
+    },
+
+  };
+
+  int codtab[3][4][17] = 
+  {
+    {
+      { 1, 5, 7, 7, 7, 7,15,11, 8,15,11,15,11,15,11, 7,4}, 
+      { 0, 1, 4, 6, 6, 6, 6,14,10,14,10,14,10, 1,14,10,6}, 
+      { 0, 0, 1, 5, 5, 5, 5, 5,13, 9,13, 9,13, 9,13, 9,5}, 
+      { 0, 0, 0, 3, 3, 4, 4, 4, 4, 4,12,12, 8,12, 8,12,8},
+    },
+    {
+      { 3,11, 7, 7, 7, 4, 7,15,11,15,11, 8,15,11, 7, 9,7}, 
+      { 0, 2, 7,10, 6, 6, 6, 6,14,10,14,10,14,10,11, 8,6}, 
+      { 0, 0, 3, 9, 5, 5, 5, 5,13, 9,13, 9,13, 9, 6,10,5}, 
+      { 0, 0, 0, 5, 4, 6, 8, 4, 4, 4,12, 8,12,12, 8, 1,4},
+    },
+    {
+      {15,15,11, 8,15,11, 9, 8,15,11,15,11, 8,13, 9, 5,1}, 
+      { 0,14,15,12,10, 8,14,10,14,14,10,14,10, 7,12, 8,4},
+      { 0, 0,13,14,11, 9,13, 9,13,10,13, 9,13, 9,11, 7,3},
+      { 0, 0, 0,12,11,10, 9, 8,13,12,12,12, 8,12,10, 6,2},
+    },
+  };
+
+  vlcnum = sym->value1;
+
+  if (vlcnum == 3)
+  {
+    // read 6 bit FLC
+    code = ShowBits(buf, frame_bitoffset, BitstreamLengthInBytes, 6);
+    currStream->frame_bitoffset += 6;
+    sym->value2 = code & 3;
+    sym->value1 = (code >> 2);
+
+    if (!sym->value1 && sym->value2 == 3)
+    {
+      // #c = 0, #t1 = 3 =>  #c = 0
+      sym->value2 = 0;
+    }
+    else
+      sym->value1++;
+
+    sym->len = 6;
+
+    retval = 0;
+  }
+  else
+
+  {
+    lt = &lentab[vlcnum][0][0];
+    ct = &codtab[vlcnum][0][0];
+    retval = code_from_bitstream_2d(sym, dP, lt, ct, 17, 4, &code);
+  }
+
+  if (retval)
+  {
+    printf("ERROR: failed to find NumCoeff/TrailingOnes\n");
+    exit(-1);
+  }
+
+#if TRACE
+  snprintf(sym->tracestring, 
+    TRACESTRING_SIZE, "%s # c & tr.1s vlc=%d #c=%d #t1=%d",
+           type, vlcnum, sym->value1, sym->value2);
+  tracebits2(sym->tracestring, sym->len, code);
+
+#endif
+
+  return retval;
+}
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    read NumCoeff/TrailingOnes codeword from UVLC-partition ChromaDC
+ ************************************************************************
+ */
+int readSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *sym,  DataPartition *dP)
+{
+  int retval;
+  int code, *ct, *lt;
+
+  int lentab[4][5] = 
+  {
+    { 2, 6, 6, 6, 6,},          
+    { 0, 1, 6, 7, 8,}, 
+    { 0, 0, 3, 7, 8,}, 
+    { 0, 0, 0, 6, 7,},
+  };
+
+  int codtab[4][5] = 
+  {
+    {1,7,4,3,2},
+    {0,1,6,3,3},
+    {0,0,1,2,2},
+    {0,0,0,5,0},
+  };
+
+
+
+  lt = &lentab[0][0];
+  ct = &codtab[0][0];
+
+  retval = code_from_bitstream_2d(sym, dP, lt, ct, 5, 4, &code);
+
+  if (retval)
+  {
+    printf("ERROR: failed to find NumCoeff/TrailingOnes ChromaDC\n");
+    exit(-1);
+  }
+
+
+#if TRACE
+    snprintf(sym->tracestring, 
+      TRACESTRING_SIZE, "ChrDC # c & tr.1s  #c=%d #t1=%d",
+              sym->value1, sym->value2);
+    tracebits2(sym->tracestring, sym->len, code);
+
+#endif
+
+  return retval;
+}
+
+
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    read Level VLC0 codeword from UVLC-partition 
+ ************************************************************************
+ */
+int readSyntaxElement_Level_VLC0(SyntaxElement *sym, struct datapartition *dP)
+{
+  Bitstream   *currStream = dP->bitstream;
+  int frame_bitoffset = currStream->frame_bitoffset;
+  byte *buf = currStream->streamBuffer;
+  int BitstreamLengthInBytes = currStream->bitstream_length;
+  int len, sign, level, code;
+
+  len = 0;
+  while (!ShowBits(buf, frame_bitoffset+len, BitstreamLengthInBytes, 1))
+    len++;
+
+  len++;
+  code = 1;
+  frame_bitoffset += len;
+
+  if (len < 15)
+  {
+    sign = len % 2;
+    level = (len-1) / 2 + 1;
+  }
+  else if (len == 15)
+  {
+    // escape code
+    code = (code << 4) | ShowBits(buf, frame_bitoffset, BitstreamLengthInBytes, 4);
+    len += 4;
+    frame_bitoffset += 4;
+    sign = (code & 1);
+    level = ((code >> 1) & 0x7) + 8;
+  }
+  else if (len == 16)
+  {
+    // escape code
+    code = (code << 12) | ShowBits(buf, frame_bitoffset, BitstreamLengthInBytes, 12);
+    len += 12;
+    frame_bitoffset += 12;
+    sign =  (code & 1);
+    level = ((code >> 1) & 0x7ff) + 16;
+  }
+  else
+  {
+    printf("ERROR reading Level code\n");
+    exit(-1);
+  }
+
+  if (!sign) 
+    level = -level;
+
+  sym->inf = level;
+  sym->len = len;
+
+#if TRACE
+  tracebits2(sym->tracestring, sym->len, code);
+#endif
+  currStream->frame_bitoffset = frame_bitoffset;
+  return 0;
+
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    read Level VLC codeword from UVLC-partition 
+ ************************************************************************
+ */
+int readSyntaxElement_Level_VLCN(SyntaxElement *sym, int vlc, struct datapartition *dP)	 
+{
+  
+  Bitstream   *currStream = dP->bitstream;
+  int frame_bitoffset = currStream->frame_bitoffset;
+  byte *buf = currStream->streamBuffer;
+  int BitstreamLengthInBytes = currStream->bitstream_length;
+  
+  int levabs, sign;
+  int len = 0;
+  int code, sb;
+  
+  int numPrefix;
+  int suffix = 0;
+  int shift = vlc-1;
+  int escape = (15<<shift)+1;
+  
+  // read pre zeros
+  numPrefix = 0;
+  while (!ShowBits(buf, frame_bitoffset+numPrefix, BitstreamLengthInBytes, 1))
+    numPrefix++;
+  
+  
+  len = numPrefix+1;
+  code = 1;
+  
+  if (numPrefix < 15)
+  {
+    levabs = (numPrefix<<shift) + 1;
+    
+    // read (vlc-1) bits -> suffix
+    if (vlc-1)
+    {
+      sb =  ShowBits(buf, frame_bitoffset+len, BitstreamLengthInBytes, vlc-1);
+      code = (code << (vlc-1) )| sb;
+      levabs += sb;
+      len += (vlc-1);
+    }
+    
+    // read 1 bit -> sign
+    sign = ShowBits(buf, frame_bitoffset+len, BitstreamLengthInBytes, 1);
+    code = (code << 1)| sign;
+    len ++;
+  }
+  else	// escape
+  {
+    // read 11 bits -> levabs
+    // levabs += escape
+    sb = ShowBits(buf, frame_bitoffset+len, BitstreamLengthInBytes, 11);
+    code = (code << 11 )| sb;
+    
+    levabs =  sb + escape;
+    len+=11;
+    
+    // read 1 bit -> sign
+    sign = ShowBits(buf, frame_bitoffset+len, BitstreamLengthInBytes, 1);
+    code = (code << 1)| sign;
+    len++;
+  }
+  
+  sym->inf = (sign)?-levabs:levabs;
+  sym->len = len;
+  
+  currStream->frame_bitoffset = frame_bitoffset+len;
+  
+#if TRACE
+  tracebits2(sym->tracestring, sym->len, code);
+#endif
+  
+  return 0;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    read Total Zeros codeword from UVLC-partition 
+ ************************************************************************
+ */
+int readSyntaxElement_TotalZeros(SyntaxElement *sym,  DataPartition *dP)
+{
+  int vlcnum, retval;
+  int code, *ct, *lt;
+
+  int lentab[TOTRUN_NUM][16] = 
+  {
+    
+    { 1,3,3,4,4,5,5,6,6,7,7,8,8,9,9,9},  
+    { 3,3,3,3,3,4,4,4,4,5,5,6,6,6,6},  
+    { 4,3,3,3,4,4,3,3,4,5,5,6,5,6},  
+    { 5,3,4,4,3,3,3,4,3,4,5,5,5},  
+    { 4,4,4,3,3,3,3,3,4,5,4,5},  
+    { 6,5,3,3,3,3,3,3,4,3,6},  
+    { 6,5,3,3,3,2,3,4,3,6},  
+    { 6,4,5,3,2,2,3,3,6},  
+    { 6,6,4,2,2,3,2,5},  
+    { 5,5,3,2,2,2,4},  
+    { 4,4,3,3,1,3},  
+    { 4,4,2,1,3},  
+    { 3,3,1,2},  
+    { 2,2,1},  
+    { 1,1},  
+  };
+
+  int codtab[TOTRUN_NUM][16] = 
+  {
+    {1,3,2,3,2,3,2,3,2,3,2,3,2,3,2,1},
+    {7,6,5,4,3,5,4,3,2,3,2,3,2,1,0},
+    {5,7,6,5,4,3,4,3,2,3,2,1,1,0},
+    {3,7,5,4,6,5,4,3,3,2,2,1,0},
+    {5,4,3,7,6,5,4,3,2,1,1,0},
+    {1,1,7,6,5,4,3,2,1,1,0},
+    {1,1,5,4,3,3,2,1,1,0},
+    {1,1,1,3,3,2,2,1,0},
+    {1,0,1,3,2,1,1,1,},
+    {1,0,1,3,2,1,1,},
+    {0,1,1,2,1,3},
+    {0,1,1,1,1},
+    {0,1,1,1},
+    {0,1,1},
+    {0,1},  
+  };
+  vlcnum = sym->value1;
+
+  lt = &lentab[vlcnum][0];
+  ct = &codtab[vlcnum][0];
+
+  retval = code_from_bitstream_2d(sym, dP, lt, ct, 16, 1, &code);
+
+  if (retval)
+  {
+    printf("ERROR: failed to find Total Zeros\n");
+    exit(-1);
+  }
+
+
+#if TRACE
+    tracebits2(sym->tracestring, sym->len, code);
+
+#endif
+
+  return retval;
+}    
+
+/*!
+ ************************************************************************
+ * \brief
+ *    read Total Zeros Chroma DC codeword from UVLC-partition 
+ ************************************************************************
+ */
+int readSyntaxElement_TotalZerosChromaDC(SyntaxElement *sym,  DataPartition *dP)
+{
+  int vlcnum, retval;
+  int code, *ct, *lt;
+
+  int lentab[3][4] = 
+  {
+    { 1, 2, 3, 3,},
+    { 1, 2, 2, 0,},
+    { 1, 1, 0, 0,}, 
+  };
+
+  int codtab[3][4] = 
+  {
+    { 1, 1, 1, 0,},
+    { 1, 1, 0, 0,},
+    { 1, 0, 0, 0,},
+  };
+
+  vlcnum = sym->value1;
+
+  lt = &lentab[vlcnum][0];
+  ct = &codtab[vlcnum][0];
+
+  retval = code_from_bitstream_2d(sym, dP, lt, ct, 4, 1, &code);
+
+  if (retval)
+  {
+    printf("ERROR: failed to find Total Zeros\n");
+    exit(-1);
+  }
+
+
+#if TRACE
+    tracebits2(sym->tracestring, sym->len, code);
+
+#endif
+
+  return retval;
+}    
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    read  Run codeword from UVLC-partition 
+ ************************************************************************
+ */
+int readSyntaxElement_Run(SyntaxElement *sym,  DataPartition *dP)
+{
+  int vlcnum, retval;
+  int code, *ct, *lt;
+
+  int lentab[TOTRUN_NUM][16] = 
+  {
+    {1,1},
+    {1,2,2},
+    {2,2,2,2},
+    {2,2,2,3,3},
+    {2,2,3,3,3,3},
+    {2,3,3,3,3,3,3},
+    {3,3,3,3,3,3,3,4,5,6,7,8,9,10,11},
+  };
+
+  int codtab[TOTRUN_NUM][16] = 
+  {
+    {1,0},
+    {1,1,0},
+    {3,2,1,0},
+    {3,2,1,1,0},
+    {3,2,3,2,1,0},
+    {3,0,1,3,2,5,4},
+    {7,6,5,4,3,2,1,1,1,1,1,1,1,1,1},
+  };
+
+  vlcnum = sym->value1;
+
+  lt = &lentab[vlcnum][0];
+  ct = &codtab[vlcnum][0];
+
+  retval = code_from_bitstream_2d(sym, dP, lt, ct, 16, 1, &code);
+
+  if (retval)
+  {
+    printf("ERROR: failed to find Run\n");
+    exit(-1);
+  }
+
+
+#if TRACE
+    tracebits2(sym->tracestring, sym->len, code);
+#endif
+
+  return retval;
+}    
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *  Reads bits from the bitstream buffer
+ *
+ * \param byte buffer[]
+ *    containing VLC-coded data bits
+ * \param int totbitoffset
+ *    bit offset from start of partition
+ * \param int bytecount
+ *    total bytes in bitstream
+ * \param int numbits
+ *    number of bits to read
+ *
+ ************************************************************************
+ */
+
+
+int GetBits (byte buffer[],int totbitoffset,int *info, int bytecount, 
+				     int numbits)
+{
+
+  register int inf;
+  long byteoffset;      // byte from start of buffer
+  int bitoffset;      // bit from start of byte
+
+  int bitcounter=numbits;
+
+  byteoffset= totbitoffset/8;
+  bitoffset= 7-(totbitoffset%8);
+
+  inf=0;
+  while (numbits)
+  {
+	  inf <<=1;
+	  inf |= (buffer[byteoffset] & (0x01<<bitoffset))>>bitoffset;
+	  numbits--;
+	  bitoffset--;
+	  if (bitoffset < 0)
+	  {
+		  byteoffset++;
+		  bitoffset += 8;
+        if (byteoffset > bytecount)
+        {
+          return -1;
+        }
+	  }
+  }
+
+  *info = inf;
+  return bitcounter;           // return absolute offset in bit from start of frame
+}	  
+
+/*!
+ ************************************************************************
+ * \brief
+ *  Reads bits from the bitstream buffer
+ *
+ * \param byte buffer[]
+ *    containing VLC-coded data bits
+ * \param int totbitoffset
+ *    bit offset from start of partition
+ * \param int bytecount
+ *    total bytes in bitstream
+ * \param int numbits
+ *    number of bits to read
+ *
+ ************************************************************************
+ */
+
+int ShowBits (byte buffer[],int totbitoffset,int bytecount, int numbits)
+{
+
+  register int inf;
+  long byteoffset;      // byte from start of buffer
+  int bitoffset;      // bit from start of byte
+
+  int bitcounter=numbits;
+
+  byteoffset= totbitoffset/8;
+  bitoffset= 7-(totbitoffset%8);
+
+  inf=0;
+  while (numbits)
+  {
+	  inf <<=1;
+	  inf |= (buffer[byteoffset] & (0x01<<bitoffset))>>bitoffset;
+	  numbits--;
+	  bitoffset--;
+	  if (bitoffset < 0)
+	  {
+		  byteoffset++;
+		  bitoffset += 8;
+        if (byteoffset > bytecount)
+        {
+          return -1;
+        }
+	  }
+  }
+
+  return inf;           // return absolute offset in bit from start of frame
+}	  
+
+
+

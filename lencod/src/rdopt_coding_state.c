@@ -134,7 +134,7 @@ create_coding_state ()
 void
 store_coding_state (CSptr cs)
 {
-  int  i, j, k;
+  int  i;
 
   EncodingEnvironment  *ee_src, *ee_dest;
   Bitstream            *bs_src, *bs_dest;
@@ -148,7 +148,6 @@ store_coding_state (CSptr cs)
 
   if (!input->rdopt)  return;
 
-
   //=== important variables of data partition array ===
   for (i = 0; i < cs->no_part; i++)
   {
@@ -157,85 +156,24 @@ store_coding_state (CSptr cs)
     ee_dest = &(cs->encenv   [i]);
     bs_dest = &(cs->bitstream[i]);
 
-    //--- parameters of encoding environments ---
-    if (cs->symbol_mode == CABAC)
-    {
-      ee_dest->Elow            = ee_src->Elow;
-      ee_dest->Erange           = ee_src->Erange;
-      ee_dest->Ebuffer         = ee_src->Ebuffer;
-      ee_dest->Ebits_to_go     = ee_src->Ebits_to_go;
-      ee_dest->Ebits_to_follow = ee_src->Ebits_to_follow;
-    }
-
-    //--- bitstream parameters ---
-    bs_dest->byte_pos          = bs_src->byte_pos;
-    bs_dest->bits_to_go        = bs_src->bits_to_go;
-    bs_dest->byte_buf          = bs_src->byte_buf;
-    bs_dest->stored_byte_pos   = bs_src->stored_byte_pos;
-    bs_dest->stored_bits_to_go = bs_src->stored_bits_to_go;
-    bs_dest->stored_byte_buf   = bs_src->stored_byte_buf;
-    bs_dest->write_flag        = bs_src->write_flag;
+    if (cs->symbol_mode==CABAC) memcpy (ee_dest, ee_src, sizeof(EncodingEnvironment));
+    memcpy (bs_dest, bs_src, sizeof(Bitstream));
   }
-
 
   //=== contexts for binary arithmetic coding ===
   if (cs->symbol_mode == CABAC)
   {
-    //--- motion coding contexts ---
-    for (i = 0; i < 3; i++)
-    {
-      for (j = 0; j < NUM_MB_TYPE_CTX; j++)
-        biari_copy_context (&(mc_src->mb_type_contexts[i][j]), &(mc_dest->mb_type_contexts[i][j]));
-    }
-    for (i = 0; i < 2; i++)
-    {
-      for (j = 0; j < NUM_B8_TYPE_CTX; j++)
-        biari_copy_context (&(mc_src->b8_type_contexts[i][j]), &(mc_dest->b8_type_contexts[i][j]));
-      for (j = 0; j < NUM_MV_RES_CTX;  j++)
-        biari_copy_context (&(mc_src->mv_res_contexts [i][j]), &(mc_dest->mv_res_contexts [i][j]));
-      for (j = 0; j < NUM_REF_NO_CTX;  j++)
-        biari_copy_context (&(mc_src->ref_no_contexts [i][j]), &(mc_dest->ref_no_contexts [i][j]));
-    }
-    for (i = 0; i < NUM_DELTA_QP_CTX; i++)
-    {
-      biari_copy_context (&(mc_src->delta_qp_intra_contexts[i]), &(mc_dest->delta_qp_intra_contexts[i]));
-      biari_copy_context (&(mc_src->delta_qp_inter_contexts[i]), &(mc_dest->delta_qp_inter_contexts[i]));
-    }
-
-    //--- texture coding contexts ---
-    for (i = 0; i < max_ipr; i++)
-      for (j = 0; j < NUM_IPR_CTX; j++)
-        biari_copy_context (&(tc_src->ipr_contexts[i][j]), &(tc_dest->ipr_contexts[i][j]));
-    for (i = 0; i < 2; i++)
-      for (j = 0; j < 3; j++)
-        for (k = 0; k < NUM_CBP_CTX; k++)
-          biari_copy_context (&(tc_src->cbp_contexts[i][j][k]), &(tc_dest->cbp_contexts[i][j][k]));
-    for (i = 0; i < 4*NUM_TRANS_TYPE; i++)
-      for (j = 0; j < NUM_LEVEL_CTX; j++)
-        biari_copy_context (&(tc_src->level_context[i][j]), &(tc_dest->level_context[i][j]));
-    for (i = 0; i < 2*NUM_TRANS_TYPE; i++)
-      for (j = 0; j < NUM_RUN_CTX; j++)
-        biari_copy_context (&(tc_src->run_context[i][j]), &(tc_dest->run_context[i][j]));
-    for (i = 0; i < NUM_TRANS_TYPE; i++)
-      for (j = 0; j < NUM_COEFF_COUNT_CTX; j++)
-         biari_copy_context (&(tc_src->coeff_count_context[i][j]), &(tc_dest->coeff_count_context[i][j]));
-    for (i = 0; i < 2*NUM_TRANS_TYPE_ABT; i++)
-      for (j = 0; j < NUM_RUN_CTX_ABT; j++)
-        biari_copy_context (&(tc_src->ABT_run_context[i][j]), &(tc_dest->ABT_run_context[i][j]));
-    for (i = 0; i < NUM_TRANS_TYPE_ABT; i++)
-      for (j = 0; j < NUM_COEFF_COUNT_CTX_ABT; j++)
-         biari_copy_context (&(tc_src->ABT_coeff_count_context[i][j]), &(tc_dest->ABT_coeff_count_context[i][j]));
+    memcpy (mc_dest, mc_src, sizeof(MotionInfoContexts));
+    memcpy (tc_dest, tc_src, sizeof(TextureInfoContexts));
   }
 
   //=== syntax element number and bitcounters ===
   cs->currSEnr = currMB->currSEnr;
-  for (i = 0; i < MAX_BITCOUNTER_MB; i++)
-    cs->bitcounter[i] = currMB->bitcounter[i];
+  memcpy (cs->bitcounter, currMB->bitcounter, MAX_BITCOUNTER_MB*sizeof(int));
 
   //=== elements of current macroblock ===
   memcpy (cs->mvd, currMB->mvd, 2*2*BLOCK_MULTIPLE*BLOCK_MULTIPLE*sizeof(int));
-  memcpy (cs->coeffs_count,currMB->coeffs_count, BLOCK_MULTIPLE*BLOCK_MULTIPLE*sizeof(int));
-
+  cs->cbp_bits = currMB->cbp_bits;
 }
 
 
@@ -248,7 +186,7 @@ store_coding_state (CSptr cs)
 void
 reset_coding_state (CSptr cs)
 {
-  int  i, j, k;
+  int  i;
 
   EncodingEnvironment  *ee_src, *ee_dest;
   Bitstream            *bs_src, *bs_dest;
@@ -272,84 +210,25 @@ reset_coding_state (CSptr cs)
     bs_src  = &(cs->bitstream[i]);
 
     //--- parameters of encoding environments ---
-    if (cs->symbol_mode == CABAC)
-    {
-      ee_dest->Elow            = ee_src->Elow;
-      ee_dest->Erange           = ee_src->Erange;
-      ee_dest->Ebuffer         = ee_src->Ebuffer;
-      ee_dest->Ebits_to_go     = ee_src->Ebits_to_go;
-      ee_dest->Ebits_to_follow = ee_src->Ebits_to_follow;
-    }
-
-    //--- bitstream parameters ---
-    bs_dest->byte_pos          = bs_src->byte_pos;
-    bs_dest->bits_to_go        = bs_src->bits_to_go;
-    bs_dest->byte_buf          = bs_src->byte_buf;
-    bs_dest->stored_byte_pos   = bs_src->stored_byte_pos;
-    bs_dest->stored_bits_to_go = bs_src->stored_bits_to_go;
-    bs_dest->stored_byte_buf   = bs_src->stored_byte_buf;
-    bs_dest->write_flag        = bs_src->write_flag;
+    if (cs->symbol_mode==CABAC) memcpy (ee_dest, ee_src, sizeof(EncodingEnvironment));
+    memcpy (bs_dest, bs_src, sizeof(Bitstream));
   }
 
 
   //=== contexts for binary arithmetic coding ===
   if (cs->symbol_mode == CABAC)
   {
-    //--- motion coding contexts ---
-    for (i = 0; i < 3; i++)
-    {
-      for (j = 0; j < NUM_MB_TYPE_CTX; j++)
-        biari_copy_context (&(mc_src->mb_type_contexts[i][j]), &(mc_dest->mb_type_contexts[i][j]));
-    }
-    for (i = 0; i < 2; i++)
-    {
-      for (j = 0; j < NUM_B8_TYPE_CTX; j++)
-        biari_copy_context (&(mc_src->b8_type_contexts[i][j]), &(mc_dest->b8_type_contexts[i][j]));
-      for (j = 0; j < NUM_MV_RES_CTX;  j++)
-        biari_copy_context (&(mc_src->mv_res_contexts [i][j]), &(mc_dest->mv_res_contexts [i][j]));
-      for (j = 0; j < NUM_REF_NO_CTX;  j++)
-        biari_copy_context (&(mc_src->ref_no_contexts [i][j]), &(mc_dest->ref_no_contexts [i][j]));
-    }
-    for (i = 0; i < NUM_DELTA_QP_CTX; i++)
-    {
-      biari_copy_context (&(mc_src->delta_qp_intra_contexts[i]), &(mc_dest->delta_qp_intra_contexts[i]));
-      biari_copy_context (&(mc_src->delta_qp_inter_contexts[i]), &(mc_dest->delta_qp_inter_contexts[i]));
-    }
-
-    //--- texture coding contexts ---
-    for (i = 0; i < max_ipr; i++)
-      for (j = 0; j < NUM_IPR_CTX; j++)
-        biari_copy_context (&(tc_src->ipr_contexts[i][j]), &(tc_dest->ipr_contexts[i][j]));
-    for (i = 0; i < 2; i++)
-      for (j = 0; j < 3; j++)
-        for (k = 0; k < NUM_CBP_CTX; k++)
-          biari_copy_context (&(tc_src->cbp_contexts[i][j][k]), &(tc_dest->cbp_contexts[i][j][k]));
-    for (i = 0; i < 4*NUM_TRANS_TYPE; i++)
-      for (j = 0; j < NUM_LEVEL_CTX; j++)
-        biari_copy_context (&(tc_src->level_context[i][j]), &(tc_dest->level_context[i][j]));
-    for (i = 0; i < 2*NUM_TRANS_TYPE; i++)
-      for (j = 0; j < NUM_RUN_CTX; j++)
-        biari_copy_context (&(tc_src->run_context[i][j]), &(tc_dest->run_context[i][j]));
-    for (i = 0; i < NUM_TRANS_TYPE; i++)
-      for (j = 0; j < NUM_COEFF_COUNT_CTX; j++)
-        biari_copy_context (&(tc_src->coeff_count_context[i][j]), &(tc_dest->coeff_count_context[i][j]));
-    for (i = 0; i < 2*NUM_TRANS_TYPE_ABT; i++)
-      for (j = 0; j < NUM_RUN_CTX_ABT; j++)
-        biari_copy_context (&(tc_src->ABT_run_context[i][j]), &(tc_dest->ABT_run_context[i][j]));
-    for (i = 0; i < NUM_TRANS_TYPE_ABT; i++)
-      for (j = 0; j < NUM_COEFF_COUNT_CTX_ABT; j++)
-        biari_copy_context (&(tc_src->ABT_coeff_count_context[i][j]), &(tc_dest->ABT_coeff_count_context[i][j]));
-
+    memcpy (mc_dest, mc_src, sizeof(MotionInfoContexts));
+    memcpy (tc_dest, tc_src, sizeof(TextureInfoContexts));
   }
 
 
   //=== syntax element number and bitcounters ===
   currMB->currSEnr = cs->currSEnr;
-  for (i = 0; i < MAX_BITCOUNTER_MB; i++)
-    currMB->bitcounter[i] = cs->bitcounter[i];
+  memcpy (currMB->bitcounter, cs->bitcounter, MAX_BITCOUNTER_MB*sizeof(int));
 
   //=== elements of current macroblock ===
   memcpy (currMB->mvd, cs->mvd, 2*2*BLOCK_MULTIPLE*BLOCK_MULTIPLE*sizeof(int));
-  memcpy (currMB->coeffs_count, cs->coeffs_count, BLOCK_MULTIPLE*BLOCK_MULTIPLE*sizeof(int));
+  currMB->cbp_bits = cs->cbp_bits;
 }
 

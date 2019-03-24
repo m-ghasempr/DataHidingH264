@@ -132,6 +132,7 @@
 #include "bitsbuf.h"
 #include "rtp.h"
 #include "fmo.h"
+#include "golomb_dec.h"
 
 extern void tracebits(const char *trace_str,  int len,  int info,int value1,
     int value2) ;
@@ -374,7 +375,7 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
   if(inp->symbol_mode == CABAC)
   {
     dep = &((currSlice->partArr[0]).de_cabac);
-    arideco_start_decoding(dep, buf, 0, &currSlice->partArr[0].bitstream->read_len);
+    arideco_start_decoding(dep, buf, 0, &currSlice->partArr[0].bitstream->read_len, img->type);
   }
       
   currSlice->next_header = RTPGetFollowingSliceHeader (img, nextp, nextsh); // no use for the info in nextp, nextsh yet. 
@@ -839,7 +840,7 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
   if(inp->symbol_mode == CABAC)
   {
     dep = &((currSlice->partArr[0]).de_cabac);
-    arideco_start_decoding(dep, buf, 0, &currSlice->partArr[0].bitstream->read_len);
+    arideco_start_decoding(dep, buf, 0, &currSlice->partArr[0].bitstream->read_len, img->type);
   }
       
   currSlice->next_header = RTPGetFollowingSliceHeader (img, nextp, nextsh); // no use for the info in nextp, nextsh yet. 
@@ -1196,12 +1197,6 @@ int RTPInterpretSliceHeader (byte *buf, int bufsize, int ReadSliceId, RTPSliceHe
   }
   /* end KS */
 
-  if (ParSet[sh->ParameterSet].EntropyCoding == 1)   // CABAC in use, need to get LastMB
-  {
-    len = GetVLCSymbol(buf, bitptr, &info, bufsize);
-    linfo (len, info, &sh->CABAC_LastMB, &dummy);
-    bitptr+=len;
-  }
 
   bytes = bitptr/8;
   if (bitptr%8)
@@ -1393,6 +1388,9 @@ void RTPSetImgInp (struct img_par *img, struct inp_par *inp, RTPSliceHeader_t *s
   case 3:
     img->type = currSlice->picture_type = INTRA_IMG;
     break;
+  case 4:
+    img->type = currSlice->picture_type = SI_IMG;
+    break;
   default:
     printf ("Panic: unknown Slice type %d, conceal by loosing slice\n", sh->SliceType);
     currSlice->ei_flag = 1;
@@ -1405,7 +1403,7 @@ void RTPSetImgInp (struct img_par *img, struct inp_par *inp, RTPSliceHeader_t *s
   
   if(!img->current_slice_nr)
   { 
-    if (img->type <= INTRA_IMG || img->type >= SP_IMG_1) 
+    if (img->type <= INTRA_IMG || img->type >= SI_IMG) 
     {
       if (img->structure == FRAME)
       {     
@@ -1460,11 +1458,6 @@ void RTPSetImgInp (struct img_par *img, struct inp_par *inp, RTPSliceHeader_t *s
   }
 #endif
   
-  currSlice->last_mb_nr = currSlice->start_mb_nr + sh->CABAC_LastMB;
-
-  if (currSlice->last_mb_nr == currSlice->start_mb_nr)
-    currSlice->last_mb_nr = img->max_mb_nr;
-
   /* KS: Multi Frame Buffering Syntax */
   img->pn=sh->PictureNum;
 
@@ -1653,7 +1646,7 @@ int readSyntaxElement_RTP(SyntaxElement *sym, struct img_par *img, struct inp_pa
 
   if (RTP_symbols_available(currStream))    // check on existing elements in partition
   {
-    RTP_get_symbol(sym, currStream);
+    RTP_get_symbol(img, inp, dP, sym, currStream);
   }
   else
   {
@@ -1661,7 +1654,8 @@ int readSyntaxElement_RTP(SyntaxElement *sym, struct img_par *img, struct inp_pa
   }
   get_concealed_element(sym);
 
-  sym->mapping(sym->len,sym->inf,&(sym->value1),&(sym->value2));
+  if(!sym->golomb_maxlevels || (sym->type!=SE_LUM_DC_INTRA&&sym->type!=SE_LUM_AC_INTRA&&sym->type!=SE_LUM_DC_INTER&&sym->type!=SE_LUM_AC_INTER) )
+    sym->mapping(sym->len,sym->inf,&(sym->value1),&(sym->value2));
 
 #if TRACE
   tracebits(sym->tracestring, sym->len, sym->inf, sym->value1, sym->value2);
@@ -1702,11 +1696,17 @@ int RTP_symbols_available (Bitstream *currStream)
  *    gets info and len of symbol
  ************************************************************************
  */
-void RTP_get_symbol(SyntaxElement *sym, Bitstream *currStream)
+void RTP_get_symbol(struct img_par *img, struct inp_par *inp, struct datapartition *dP, SyntaxElement *sym, Bitstream *currStream)
 {
   int frame_bitoffset = currStream->frame_bitoffset;
   byte *buf = currStream->streamBuffer;
   int BitstreamLengthInBytes = currStream->bitstream_length;
+
+  if( sym->golomb_maxlevels && (sym->type==SE_LUM_DC_INTRA||sym->type==SE_LUM_AC_INTRA||sym->type==SE_LUM_DC_INTER||sym->type==SE_LUM_AC_INTER) )
+  {
+    readSyntaxElement_GOLOMB(sym,img,inp,dP);
+    return;
+  }
 
   sym->len =  GetVLCSymbol (buf, frame_bitoffset, &(sym->inf), BitstreamLengthInBytes);
   currStream->frame_bitoffset += sym->len;
@@ -2038,7 +2038,7 @@ int RTPInterpretParameterSetPacket (char *buf, int buflen)
           * (int *)destin = 0;
         else
           * (int *)destin = 1;
-printf ("Interpret Intra prediction returns %d\n", *(int*)destin);
+// printf ("Interpret Intra prediction returns %d\n", *(int*)destin);
         break;
         case INTERPRET_PARTITIONING_TYPE:
         if (!strncmp (s, "one", 3))
@@ -2412,7 +2412,7 @@ int RTPInterpretParameterSetPacket (char *buf, int buflen)
           * (int *)destin = 0;
         else
           * (int *)destin = 1;
-printf ("Interpret Intra prediction returns %d\n", *);
+// printf ("Interpret Intra prediction returns %d\n", *);
         break;
       case INTERPRET_PARTITIONING_TYPE:
         if (!strncmp (s, "one", 3))
@@ -2853,7 +2853,7 @@ void CopyPartitionBitstring (struct img_par *img, RTPpacket_t *p, Bitstream *b, 
 
     buf = b->streamBuffer;
     dep = &((img->currentSlice->partArr[dP]).de_cabac);
-    arideco_start_decoding(dep, buf, 0, &b->read_len);
+    arideco_start_decoding(dep, buf, 0, &b->read_len, img->type);
   }
 }
 

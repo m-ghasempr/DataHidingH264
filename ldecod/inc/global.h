@@ -232,6 +232,7 @@ typedef struct
   int             Dbits_to_go;
   byte            *Dcodestrm;
   int             *Dcodestrm_len;
+	unsigned short  *AC_next_state_MPS_64;
 } DecodingEnvironment;
 
 typedef DecodingEnvironment *DecodingEnvironmentPtr;
@@ -239,9 +240,8 @@ typedef DecodingEnvironment *DecodingEnvironmentPtr;
 //! struct for context management
 typedef struct
 {
-  unsigned int  cum_freq[2];          //!< cumulated frequency counts
-  Boolean     in_use;                 //!< flag for context in use
-  unsigned int  max_cum_freq;         //!< maximum frequency count
+	unsigned short state;         // index into state-table CP	
+  unsigned char  MPS;           // Least Probable Symbol 0/1 CP
 } BiContextType;
 
 typedef BiContextType *BiContextTypePtr;
@@ -252,6 +252,7 @@ typedef BiContextType *BiContextTypePtr;
  **********************************************************************
  */
 
+#define NUM_ABT_MODE_CTX 3
 #define NUM_MB_TYPE_CTX  11
 #define NUM_B8_TYPE_CTX  9
 #define NUM_MV_RES_CTX   10
@@ -261,34 +262,33 @@ typedef BiContextType *BiContextTypePtr;
 
 typedef struct
 {
-  BiContextTypePtr mb_type_contexts[3];
-  BiContextTypePtr b8_type_contexts[2];
-  BiContextTypePtr mv_res_contexts [2];
-  BiContextTypePtr ref_no_contexts [2];
-  BiContextTypePtr delta_qp_inter_contexts;
-  BiContextTypePtr delta_qp_intra_contexts;
+  BiContextType ABT_mode_contexts[2][NUM_ABT_MODE_CTX];
+  BiContextType mb_type_contexts [3][NUM_MB_TYPE_CTX];
+  BiContextType b8_type_contexts [2][NUM_B8_TYPE_CTX];
+  BiContextType mv_res_contexts  [2][NUM_MV_RES_CTX];
+  BiContextType ref_no_contexts  [2][NUM_REF_NO_CTX];
+  BiContextType delta_qp_contexts[NUM_DELTA_QP_CTX];
+  BiContextType slice_term_context;
 } MotionInfoContexts;
 
 
 #define NUM_IPR_CTX    2
 #define NUM_CBP_CTX    4
-#define NUM_TRANS_TYPE 9
-#define NUM_LEVEL_CTX  4
-#define NUM_RUN_CTX    2
-#define NUM_COEFF_COUNT_CTX 6
-#define NUM_TRANS_TYPE_ABT      6
-#define NUM_COEFF_COUNT_CTX_ABT 8
-#define NUM_RUN_CTX_ABT         5
+#define NUM_BCBP_CTX   4
+#define NUM_MAP_CTX   15
+#define NUM_LAST_CTX  15
+#define NUM_ONE_CTX    5
+#define NUM_ABS_CTX    5
 
 typedef struct
 {
-  BiContextTypePtr ipr_contexts [9];
-  BiContextTypePtr cbp_contexts [2][3];
-  BiContextTypePtr level_context[4*NUM_TRANS_TYPE];//36
-  BiContextTypePtr run_context  [2*NUM_TRANS_TYPE];//18
-  BiContextTypePtr coeff_count_context[NUM_TRANS_TYPE];//9
-  BiContextTypePtr ABT_run_context        [2*NUM_TRANS_TYPE_ABT];//12 -> cabac_stat 1,21,41,...
-  BiContextTypePtr ABT_coeff_count_context[NUM_TRANS_TYPE_ABT];//6    -> cabac_stat 301,321,341,...
+  BiContextType  ipr_contexts [9][NUM_IPR_CTX];
+	BiContextType  cbp_contexts [3][NUM_CBP_CTX];
+  BiContextType  bcbp_contexts[NUM_BLOCK_TYPES][NUM_BCBP_CTX];
+  BiContextType  map_contexts [NUM_BLOCK_TYPES][NUM_MAP_CTX];
+  BiContextType  last_contexts[NUM_BLOCK_TYPES][NUM_LAST_CTX];
+  BiContextType  one_contexts [NUM_BLOCK_TYPES][NUM_ONE_CTX];
+  BiContextType  abs_contexts [NUM_BLOCK_TYPES][NUM_ABS_CTX];
 } TextureInfoContexts;
 
 //*********************** end of data type definition for CABAC *******************
@@ -358,8 +358,8 @@ typedef struct macroblock
   int           mb_type;
   int           mvd[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE][2];      //!< indices correspond to [forw,backw][block_y][block_x][x,y]
   int           intra_pred_modes[BLOCK_MULTIPLE*BLOCK_MULTIPLE];
-  int           coeffs_count[BLOCK_MULTIPLE][BLOCK_MULTIPLE];
   int           cbp, cbp_blk ;
+  unsigned long cbp_bits;
 
   int           i16mode;
   int           b8mode[4];
@@ -465,7 +465,8 @@ typedef struct img_par
   int **ipredmode;                            //<! prediction type [90][74]
   int quad[256];
   int UseConstrainedIntraPred;
-
+  int ****nz_coeff;
+  int **siblock;
   int cod_counter;                            //<! Current count of number of skipped macroblocks in a row
 
   int ***dfMV;                                //<! [92][72][3];
@@ -499,6 +500,8 @@ typedef struct img_par
   Macroblock          *mb_data;                //<! array containing all MBs of a whole frame
   int subblock_x;
   int subblock_y;
+  int is_intra_block;
+  int is_v_block;
 
   int mv_res;
   int buf_cycle;
@@ -626,6 +629,20 @@ int  GetVLCSymbol (byte buffer[],int totbitoffset,int *info, int bytecount);
 
 // int   inter_intra(struct img_par *img);
 
+int readSyntaxElement_FLC(SyntaxElement *sym, struct datapartition *dp);
+int readSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *sym,  DataPartition *dP,
+                                           char *type);
+int readSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *sym,  DataPartition *dP);
+int readSyntaxElement_Level_VLC0(SyntaxElement *sym, struct datapartition *dP);
+int readSyntaxElement_Level_VLCN(SyntaxElement *sym, int vlc, struct datapartition *dP);
+int readSyntaxElement_TotalZeros(SyntaxElement *sym,  DataPartition *dP);
+int readSyntaxElement_TotalZerosChromaDC(SyntaxElement *sym,  DataPartition *dP);
+int readSyntaxElement_Run(SyntaxElement *sym,  DataPartition *dP);
+int GetBits (byte buffer[],int totbitoffset,int *info, int bytecount, 
+				     int numbits);
+int ShowBits (byte buffer[],int totbitoffset,int bytecount, int numbits);
+
+
 // SLICE function pointers
 int  (*nal_startcode_follows) ();
 
@@ -638,22 +655,22 @@ void free_Partition(Bitstream *currStream);
 void reset_ec_flags();
 
 // CABAC
-void arideco_start_decoding(DecodingEnvironmentPtr dep, unsigned char *code_buffer, int firstbyte, int *code_len );
+void arideco_start_decoding(DecodingEnvironmentPtr eep, unsigned char *code_buffer, int firstbyte, int *code_len, int slice_type);
 int  arideco_bits_read(DecodingEnvironmentPtr dep);
 void arideco_done_decoding(DecodingEnvironmentPtr dep);
-void biari_init_context( BiContextTypePtr ctx, int ini_count_0, int ini_count_1, int max_cum_freq );
-void biari_copy_context( BiContextTypePtr ctx_orig, BiContextTypePtr ctx_dest );
-void biari_print_context( BiContextTypePtr ctx );
+void biari_init_context (struct img_par *img, BiContextTypePtr ctx, const int* ini);
 void rescale_cum_freq(BiContextTypePtr bi_ct);
 unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi_ct );
+unsigned int biari_decode_symbol_eq_prob(DecodingEnvironmentPtr dep);
 MotionInfoContexts* create_contexts_MotionInfo(void);
 TextureInfoContexts* create_contexts_TextureInfo(void);
-void init_contexts_MotionInfo(struct img_par *img, MotionInfoContexts *enco_ctx, int ini_flag);
-void init_contexts_TextureInfo(struct img_par *img, TextureInfoContexts *enco_ctx, int ini_flag);
+void init_contexts_MotionInfo(struct img_par *img, MotionInfoContexts *enco_ctx);
+void init_contexts_TextureInfo(struct img_par *img, TextureInfoContexts *enco_ctx);
 void delete_contexts_MotionInfo(MotionInfoContexts *enco_ctx);
 void delete_contexts_TextureInfo(TextureInfoContexts *enco_ctx);
 
 
+void readABTIntraBlkModeInfo2Buffer_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
 void readMB_typeInfoFromBuffer_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
 void readB8_typeInfoFromBuffer_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
 void readIntraPredModeFromBuffer_CABAC(SyntaxElement *se, struct inp_par *inp,struct img_par *img, DecodingEnvironmentPtr dep_dp);
@@ -668,8 +685,7 @@ void readBiDirBlkSize2Buffer_CABAC(SyntaxElement *se,struct inp_par *inp,struct 
 
 int  readSliceCABAC(struct img_par *img, struct inp_par *inp);
 int  readSyntaxElement_CABAC(SyntaxElement *se, struct img_par *img, struct inp_par *inp, DataPartition *this_dataPart);
-void readDquant_inter_FromBuffer_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp);
-void readDquant_intra_FromBuffer_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp);
+void readDquant_FromBuffer_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp);
 
 void error(char *text, int code);
 void start_slice(struct img_par *img, struct inp_par *inp);

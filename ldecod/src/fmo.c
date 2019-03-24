@@ -85,7 +85,7 @@ static int NumberOfSliceGroups;		// the number of slice groups -1 (0 == scan ord
 
 int FmoInit (int xs, int ys, int NewMBAmap[], int SizeOfNewMBAmap)
 {
-  int x, y, i;
+  int i;
 
   NumberOfSliceGroups = 0;
   PictureXSize = xs;
@@ -115,13 +115,13 @@ int FmoInit (int xs, int ys, int NewMBAmap[], int SizeOfNewMBAmap)
       NumberOfSliceGroups = MBAmap[i];
   }
 
-
+/*
 printf ("FmoInit: Using MBAmap as follows\n");
 for (y=0;y<ys; y++) {
 for (x=0; x<xs;x++) printf ("%d ", MBAmap [y*xs+x]);
 printf ("\n"); }
 printf ("\n");
-
+*/
   return 0;
 }
 

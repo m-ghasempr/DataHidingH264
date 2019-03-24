@@ -82,7 +82,12 @@ static const int dequant_coef[6][4][4] = {
   {{16, 20, 16, 20},{ 20, 25, 20, 25},{16, 20, 16, 20},{ 20, 25, 20, 25}},
   {{18, 23, 18, 23},{ 23, 29, 23, 29},{18, 23, 18, 23},{ 23, 29, 23, 29}}
 };
-
+static const int A[4][4] = {
+  { 16, 20, 16, 20},
+  { 20, 25, 20, 25},
+  { 16, 20, 16, 20},
+  { 20, 25, 20, 25}
+};
 
 
 // Notation for comments regarding prediction and predictors.
@@ -366,17 +371,17 @@ void intrapred_luma(int img_x,int img_y)
     img->mprr[DIAG_PRED_ENE][0][0] = (2*(P_C + P_I + P_J) + P_B + P_D + 4) / 8;
     img->mprr[DIAG_PRED_ENE][0][1] = (2*(P_D + P_J) + P_C + P_E + P_I + P_K + 4) / 8;
     img->mprr[DIAG_PRED_ENE][0][2] = 
-    img->mprr[DIAG_PRED_ENE][1][0] = (2*(P_E + P_J + P_K) + P_D + P_F + 4) / 8;
+    img->mprr[DIAG_PRED_ENE][1][0] = (P_J + P_K + 1) / 2;
     img->mprr[DIAG_PRED_ENE][0][3] = 
-    img->mprr[DIAG_PRED_ENE][1][1] = (2*(P_F + P_K) + P_E + P_G + P_J + P_L + 4) / 8;
+    img->mprr[DIAG_PRED_ENE][1][1] = (P_J + 2*P_K + P_L + 2) / 4;
     img->mprr[DIAG_PRED_ENE][1][2] = 
-    img->mprr[DIAG_PRED_ENE][2][0] = (2*(P_G + P_K + P_L) + P_F + P_H + 4) / 8;
+    img->mprr[DIAG_PRED_ENE][2][0] = (P_K + P_L + 1) / 2;
     img->mprr[DIAG_PRED_ENE][1][3] = 
-    img->mprr[DIAG_PRED_ENE][2][1] = (2*(P_H + P_L) + P_G + P_H + P_K + P_L + 4) / 8;
-    img->mprr[DIAG_PRED_ENE][2][3] = 
-    img->mprr[DIAG_PRED_ENE][3][1] = (P_L + (P_M << 1) + P_N + 2) / 4;
+    img->mprr[DIAG_PRED_ENE][2][1] = (P_K + 2*P_L + P_M + 2) / 4;
     img->mprr[DIAG_PRED_ENE][3][0] = 
-    img->mprr[DIAG_PRED_ENE][2][2] = (P_G + P_H + P_L + P_M + 2) / 4;
+    img->mprr[DIAG_PRED_ENE][2][2] = (P_L + P_M + 1) / 2;
+    img->mprr[DIAG_PRED_ENE][2][3] = 
+    img->mprr[DIAG_PRED_ENE][3][1] = (P_L + 2*P_M + P_N + 2) / 4;
     img->mprr[DIAG_PRED_ENE][3][2] = (P_M + P_N + 1) / 2;
     img->mprr[DIAG_PRED_ENE][3][3] = (P_M + 2*P_N + P_O + 2) / 4;
 
@@ -846,7 +851,8 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int old_intra_mode)
 
   nonzero=FALSE;
 
-  if (old_intra_mode && (img->qp<(24+SHIFT_QP) || input->symbol_mode == CABAC)) // for CABAC double scan always
+  if (old_intra_mode && (input->symbol_mode == CABAC)
+	  ) // for CABAC double scan always  // CAVLC always single scan
   {
     scan_mode=DOUBLE_SCAN;
     loop_rep=2;
@@ -857,6 +863,13 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int old_intra_mode)
     scan_mode=SINGLE_SCAN;
     loop_rep=1;
     idx=0;
+  }
+
+  if (input->symbol_mode==CABAC)
+  {
+    scan_mode= SINGLE_SCAN;
+    loop_rep = 1;
+    idx      = 0;
   }
 
   for(scan_loop_ctr=0;scan_loop_ctr<loop_rep;scan_loop_ctr++) // 2 times if double scan, 1 normal scan
@@ -1362,22 +1375,22 @@ int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
 	  level1 = (abs (predicted_block[i][j]) * quant_coef[qp_rem_sp][i][j] + qp_const2) >> q_bits_sp; 
 	  level1 = (level1 << q_bits_sp) / quant_coef[qp_rem_sp][i][j];									
 	  c_err1 = img->m7[i][j]-sign(level1, predicted_block[i][j]);										
-  	  level1 = (abs (c_err1) * quant_coef[qp_rem][i][j] + qp_const) >> q_bits;
+  	level1 = (abs (c_err1) * quant_coef[qp_rem][i][j] + qp_const) >> q_bits;
 
 	  // case 2
-      c_err2=img->m7[i][j]-predicted_block[i][j];
+    c_err2=img->m7[i][j]-predicted_block[i][j];
 	  level2 = (abs (c_err2) * quant_coef[qp_rem][i][j] + qp_const) >> q_bits;
 
 	  // select prediction
 	  if ((level1 != level2) && (level1 != 0) && (level2 != 0))
 	  {
-	  	  D_dis1 = img->m7[i][j] - sign(((level1 << q_bits) + quant_coef[qp_rem][i][j] / 2) / quant_coef[qp_rem][i][j], c_err1) - predicted_block[i][j]; 
+	  	D_dis1 = img->m7[i][j] - ((sign(level1,c_err1)*dequant_coef[qp_rem][i][j]*A[i][j]<< qp_per) >>6) - predicted_block[i][j]; 
 		  levrun_linfo_inter(level1, run, &len, &info);
 		  D_dis1 = D_dis1*D_dis1 + lambda_mode * len;
 
-		  D_dis2 = img->m7[i][j] - sign(((level2 << q_bits) + quant_coef[qp_rem][i][j] / 2) / quant_coef[qp_rem][i][j], c_err2) - predicted_block[i][j]; 
-	      levrun_linfo_inter(level2, run, &len, &info);
-	      D_dis2 = D_dis2 * D_dis2 + lambda_mode * len;
+	  	D_dis2 = img->m7[i][j] - ((sign(level2,c_err2)*dequant_coef[qp_rem][i][j]*A[i][j]<< qp_per) >>6) - predicted_block[i][j]; 
+	    levrun_linfo_inter(level2, run, &len, &info);
+	    D_dis2 = D_dis2 * D_dis2 + lambda_mode * len;
 
 		  if (D_dis1 == D_dis2)
 			  level = (abs(level1) < abs(level2)) ? level1 : level2;
@@ -1412,10 +1425,9 @@ int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
         ACRun  [scan_pos] = run;
         ++scan_pos;
         run=-1;                     // reset zero level counter
-        ilev=level;
+        ilev=((sign(level,c_err)*dequant_coef[qp_rem][i][j]*A[i][j]<< qp_per) >>6);
       }
-	  
-      ilev = sign(((ilev << q_bits) + quant_coef[qp_rem][i][j] / 2) / quant_coef[qp_rem][i][j], c_err) + predicted_block[i][j];
+      ilev+=predicted_block[i][j] ; 
       img->m7[i][j] = sign((abs(ilev) * quant_coef[qp_rem_sp][i][j] + qp_const2)>> q_bits_sp, ilev) * dequant_coef[qp_rem_sp][i][j] << qp_per_sp;
     }
     ACLevel[scan_pos] = 0;
@@ -1466,9 +1478,8 @@ int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
   //  Decoded block moved to frame memory
 
   for (j=0; j < BLOCK_SIZE; j++)
-    for (i=0; i < BLOCK_SIZE; i++)
-      imgY[img->pix_y+block_y+j][img->pix_x+block_x+i]=img->m7[i][j];
-
+  for (i=0; i < BLOCK_SIZE; i++)
+    imgY[img->pix_y+block_y+j][img->pix_x+block_x+i]=img->m7[i][j];
 
   return nonzero;
 }
@@ -1628,10 +1639,10 @@ int dct_chroma_sp(int uv,int cr_cbp)
     ilev=0;
 
 	// case 1
-	c_err1 = (abs (mp1[coeff_ctr]) * quant_coef[qp_rem_sp][0][0] + 2 * qp_const2) >> (q_bits_sp + 1);
-	c_err1 = (c_err1 << (q_bits_sp + 1)) / quant_coef[qp_rem_sp][0][0];
-	c_err1 = m1[coeff_ctr] - sign(c_err1, mp1[coeff_ctr]);
-	level1 = (abs(c_err1) * quant_coef[qp_rem][0][0] + 2 * qp_const) >> (q_bits+1);
+  	c_err1 = (abs (mp1[coeff_ctr]) * quant_coef[qp_rem_sp][0][0] + 2 * qp_const2) >> (q_bits_sp + 1);
+  	c_err1 = (c_err1 << (q_bits_sp + 1)) / quant_coef[qp_rem_sp][0][0];
+  	c_err1 = m1[coeff_ctr] - sign(c_err1, mp1[coeff_ctr]);
+  	level1 = (abs(c_err1) * quant_coef[qp_rem][0][0] + 2 * qp_const) >> (q_bits+1);
 
 	// case 2
     c_err2 = m1[coeff_ctr] - mp1[coeff_ctr];
@@ -1639,11 +1650,11 @@ int dct_chroma_sp(int uv,int cr_cbp)
 
 	if (level1 != level2 && level1 != 0 && level2 != 0)
 	{
-		D_dis1 = m1[coeff_ctr] - sign(((level1 << (q_bits+1)) + quant_coef[qp_rem][0][0] / 2) / quant_coef[qp_rem][0][0], c_err1) - mp1[coeff_ctr];
+    D_dis1 = m1[coeff_ctr] - ((sign(level1,c_err1)*dequant_coef[qp_rem][0][0]*A[0][0]<< qp_per) >>5)- mp1[coeff_ctr];
 		levrun_linfo_c2x2(level1, run, &len, &info);
 		D_dis1 = D_dis1 * D_dis1 + lambda_mode * len;
 
-		D_dis2 = m1[coeff_ctr] - sign(((level2 << (q_bits+1)) + quant_coef[qp_rem][0][0] / 2) / quant_coef[qp_rem][0][0], c_err2) - mp1[coeff_ctr];
+    D_dis2 = m1[coeff_ctr] - ((sign(level2,c_err2)*dequant_coef[qp_rem][0][0]*A[0][0]<< qp_per) >>5)- mp1[coeff_ctr];
 		levrun_linfo_c2x2(level2, run, &len, &info);
 		D_dis2 = D_dis2 * D_dis2 + lambda_mode * len;
 
@@ -1677,10 +1688,10 @@ int dct_chroma_sp(int uv,int cr_cbp)
       DCRun  [scan_pos] = run;
       scan_pos++;
       run=-1;
-      ilev=level;
+      ilev=((sign(level,c_err)*dequant_coef[qp_rem][0][0]*A[0][0]<< qp_per) >>5);
     }
-	ilev=sign(((ilev << (q_bits+1)) + quant_coef[qp_rem][0][0] / 2) / quant_coef[qp_rem][0][0], c_err) + mp1[coeff_ctr];
-    m1[coeff_ctr]=sign((abs(ilev)  * quant_coef[qp_rem_sp][0][0] + qp_const2) >> (q_bits_sp+1), ilev) * dequant_coef[qp_rem_sp][0][0] << qp_per_sp;
+    ilev+= mp1[coeff_ctr];
+    m1[coeff_ctr]=sign((abs(ilev)  * quant_coef[qp_rem_sp][0][0] + 2 * qp_const2) >> (q_bits_sp+1), ilev) * dequant_coef[qp_rem_sp][0][0] << qp_per_sp;
   }
   DCLevel[scan_pos] = 0;
 
@@ -1717,19 +1728,20 @@ int dct_chroma_sp(int uv,int cr_cbp)
 		c_err1 = (abs(predicted_chroma_block[n1+i][n2+j]) * quant_coef[qp_rem_sp][i][j] + qp_const2) >> q_bits_sp;
 		c_err1 = (c_err1 << q_bits_sp) / quant_coef[qp_rem_sp][i][j];
 		c_err1 = img->m7[n1+i][n2+j] - sign(c_err1, predicted_chroma_block[n1+i][n2+j]);
-        level1 = (abs(c_err1) * quant_coef[qp_rem][i][j] + qp_const) >> q_bits;
+    level1 = (abs(c_err1) * quant_coef[qp_rem][i][j] + qp_const) >> q_bits;
 
 		// no quantization on prediction
-        c_err2 = img->m7[n1+i][n2+j] - predicted_chroma_block[n1+i][n2+j];
-        level2 = (abs(c_err2) * quant_coef[qp_rem][i][j] + qp_const) >> q_bits;
+    c_err2 = img->m7[n1+i][n2+j] - predicted_chroma_block[n1+i][n2+j];
+    level2 = (abs(c_err2) * quant_coef[qp_rem][i][j] + qp_const) >> q_bits;
 
 		if (level1 != level2 && level1 != 0 && level2 != 0)
 		{
-			D_dis1 = img->m7[n1+i][n2+j] - sign(((level1 << q_bits) + quant_coef[qp_rem][i][j] / 2) / quant_coef[qp_rem][i][j], c_err1) - predicted_chroma_block[n1+i][n2+j];
+	  	D_dis1 = img->m7[n1+i][n2+j] - ((sign(level1,c_err1)*dequant_coef[qp_rem][i][j]*A[i][j]<< qp_per) >>6) - predicted_chroma_block[n1+i][n2+j]; 
+
 			levrun_linfo_inter(level1, run, &len, &info);
 			D_dis1 = D_dis1 * D_dis1 + lambda_mode * len;
 
-			D_dis2 = img->m7[n1+i][n2+j] - sign(((level2 << q_bits) + quant_coef[qp_rem][i][j] / 2) / quant_coef[qp_rem][i][j], c_err2) - predicted_chroma_block[n1+i][n2+j];
+	  	D_dis2 = img->m7[n1+i][n2+j] - ((sign(level2,c_err2)*dequant_coef[qp_rem][i][j]*A[i][j]<< qp_per) >>6) - predicted_chroma_block[n1+i][n2+j]; 
 			levrun_linfo_inter(level2, run, &len, &info);
 			D_dis2 = D_dis2 * D_dis2 + lambda_mode * len;
 			
@@ -1768,9 +1780,9 @@ int dct_chroma_sp(int uv,int cr_cbp)
           ACRun  [scan_pos] = run;
           ++scan_pos;
           run=-1;
-          ilev=level;
+          ilev=((sign(level,c_err)*dequant_coef[qp_rem][i][j]*A[i][j]<< qp_per) >>6);
         }
-        ilev = sign(((ilev << q_bits) + quant_coef[qp_rem][i][j] / 2) / quant_coef[qp_rem][i][j], c_err) + predicted_chroma_block[n1+i][n2+j];
+        ilev+=predicted_chroma_block[n1+i][n2+j];
         img->m7[n1+i][n2+j] = sign((abs(ilev) * quant_coef[qp_rem_sp][i][j] + qp_const2) >> q_bits_sp,ilev) * dequant_coef[qp_rem_sp][i][j] << qp_per_sp;
       }
       ACLevel[scan_pos] = 0;

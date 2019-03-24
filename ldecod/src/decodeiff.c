@@ -881,6 +881,8 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
   case 3:
     img->type = currSlice->picture_type = INTRA_IMG;
     break;
+  case 4:
+    img->type = currSlice->picture_type = SI_IMG;
   default:
     printf ("Panic: unknown Slice type %d, conceal by loosing slice\n", pp->sliceType);
     currSlice->ei_flag = 1;
@@ -892,7 +894,7 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
   if(!img->current_slice_nr)
   {
     
-    if (img->type <= INTRA_IMG || img->type >= SP_IMG_1) 
+    if (img->type <= INTRA_IMG || img->type >= SI_IMG) 
     {
       if (img->structure == FRAME)
       {     
@@ -975,7 +977,7 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
   buf->frame_bitoffset += sym.len;
   bitptr += sym.len;
 
-  if ( img->type == SP_IMG_1 || img->type == SP_IMG_MULT )
+  if ( img->type == SP_IMG_1 || img->type == SP_IMG_MULT || img->type == SI_IMG)
   {
     sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length );
     sym.mapping(sym.len, sym.inf, &(sym.value1), &(sym.value2));
@@ -1164,20 +1166,6 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
       
     }while (tmp_mmco->MMCO!=0);
   }
-
-  // Tian Dong: June 10, 2002
-  // Update: a differential value is conveyed rather than an absolute value. 
-  if ( inp->symbol_mode == CABAC )
-  {
-    sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length );
-    sym.mapping(sym.len, sym.inf, &(sym.value1), &(sym.value2));
-    pp->lastMBnr = sym.value1;
-    buf->frame_bitoffset += sym.len;
-    bitptr += sym.len;
-    currSlice->last_mb_nr = currSlice->start_mb_nr + sym.value1;
-    if (currSlice->last_mb_nr == currSlice->start_mb_nr)
-      currSlice->last_mb_nr = img->max_mb_nr;
-  }
 }
 
 /*!
@@ -1228,7 +1216,7 @@ int rdOnePayload( struct img_par *img, struct inp_par* inp, PayloadInfo *pp, FIL
     if(inp->symbol_mode == CABAC)
     {
       dep = &((currSlice->partArr[0]).de_cabac);
-      arideco_start_decoding(dep, buf, 0, read_len);
+      arideco_start_decoding(dep, buf, 0, read_len, img->type);
     }
 
     // At this point the slice is ready for decoding. 

@@ -49,6 +49,28 @@
 #ifndef _DEFINES_H_
 #define _DEFINES_H_
 
+
+// CAVLC
+#define LUMA              0
+#define LUMA_INTRA16x16DC 1
+#define LUMA_INTRA16x16AC 2
+
+#define TOTRUN_NUM    15
+#define RUNBEFORE_NUM  7
+
+
+//--- block types for CABAC ----
+#define LUMA_16DC       0
+#define LUMA_16AC       1
+#define LUMA_8x8        2
+#define LUMA_8x4        3
+#define LUMA_4x8        4
+#define LUMA_4x4        5
+#define CHROMA_DC       6
+#define CHROMA_AC       7
+#define NUM_BLOCK_TYPES 8
+
+
 #define _EXP_GOLOMB
 
 
@@ -59,7 +81,11 @@
 #define MAX_INFO_WORD  300000               //!< for one frame
 #define MAX_CODED_FRAME_SIZE 400000         //!< bytes for one frame
 #define MAXIMUM_UVLC_CODEWORD_PER_HEADER 20 //!< UVLC codewords per combined picture/slice header maximum
+#if defined _DEBUG
+#define TRACE           1                   //!< 0:Trace off 1:Trace on
+#else
 #define TRACE           0                   //!< 0:Trace off 1:Trace on
+#endif
 #define _LEAKYBUCKET_
 
 #define absm(A) ((A)<(0) ? (-(A)):(A))      //!< abs macro, faster than procedure
@@ -84,8 +110,8 @@
 #define I4MB    9
 #define I16MB   10
 #define IBLOCK  11
-#define MAXMODE 12
-
+#define SI4MB   12
+#define MAXMODE 13
 
 #define IS_INTRA(MB)    ((MB)->mb_type==I4MB  || (MB)->mb_type==I16MB)
 #define IS_NEWINTRA(MB) ((MB)->mb_type==I16MB)
@@ -119,13 +145,13 @@
 #define INTRA_IMG       2
 
 // B pictures
-#define B_IMG_1   3
+#define B_IMG_1     3
 #define B_IMG_MULT  4
 
 // SP Pictures
-#define SP_IMG_1  5
+#define SP_IMG_1    5
 #define SP_IMG_MULT 6
-
+#define SI_IMG      7
 
 #define BLOCK_SIZE      4
 #define MB_BLOCK_SIZE   16
@@ -193,7 +219,7 @@
 
 #define BLOCK_MULTIPLE      (MB_BLOCK_SIZE/BLOCK_SIZE)
 
-#define MAX_SYMBOLS_PER_MB  600  //!< Maximum number of different syntax elements for one MB
+#define MAX_SYMBOLS_PER_MB  1200  //!< Maximum number of different syntax elements for one MB
 
 #define MAX_PART_NR     3        /*!< Maximum number of different data partitions.
                                       Some reasonable number which should reflect

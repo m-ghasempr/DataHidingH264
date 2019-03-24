@@ -125,28 +125,36 @@ int encode_one_frame()
 #endif
   time( &ltime1 );        // start time s
 
-  frame_picture(&bits_frm, &dis_frm_y, &dis_frm_u, &dis_frm_v);
 
-  if(input->InterlaceCodingOption != FRAME_CODING)
+  if (input->InterlaceCodingOption==FIELD_CODING)
   {
+    put_buffer_frame();  
+    init_frame();
+    read_one_new_frame();
+    if (img->type==B_IMG)  Bframe_ctr++;
+
     field_picture(&bits_fld, &dis_fld_y, &dis_fld_u, &dis_fld_v);
-
-    dis_fld = dis_fld_y + dis_fld_u + dis_fld_v;
-    dis_frm = dis_frm_y + dis_frm_u + dis_frm_v;
-    picture_structure_decision(bits_frm, bits_fld, dis_frm, dis_fld);
-    if (img->fld_flag)
-
-      memcpy (&stats_frame,&stats_field,sizeof(StatParameters));
-
-    else
-
-      memcpy (&stats_field,&stats_frame,sizeof(StatParameters));
-
+    img->fld_flag = 1;
   }
   else
-    img->fld_flag = 0;
+  {
 
+    frame_picture(&bits_frm, &dis_frm_y, &dis_frm_u, &dis_frm_v);
 
+    if(input->InterlaceCodingOption != FRAME_CODING)
+    {
+      field_picture(&bits_fld, &dis_fld_y, &dis_fld_u, &dis_fld_v);
+
+      dis_fld = dis_fld_y + dis_fld_u + dis_fld_v;
+      dis_frm = dis_frm_y + dis_frm_u + dis_frm_v;
+      picture_structure_decision(bits_frm, bits_fld, dis_frm, dis_fld);
+    }
+    else
+      img->fld_flag = 0;
+  }
+
+  if (img->fld_flag)  stat->bit_ctr_emulationprevention += stat->em_prev_bits_fld;
+  else                stat->bit_ctr_emulationprevention += stat->em_prev_bits_frm;
 
 
 
@@ -268,14 +276,15 @@ int encode_one_frame()
 
 void frame_picture(int *bits_frm, float *dis_frm_y, float *dis_frm_u, float *dis_frm_v)
 {
-  int i,j;
+  int i,j,k,l;
 
   int SliceGroup = 0;
   int NumberOfCodedMBs;
 
   RandomIntraNewPicture();    //! Tells the RandomIntra that a new picture has started, no side effects
   put_buffer_frame();  
-  stat=&stats_frame;
+  stat->em_prev_bits_frm = 0;
+  stat->em_prev_bits     = &stat->em_prev_bits_frm;
 
   // Initialize frame with all stat and img variables
   img->total_number_mb = (img->width * img->height)/(MB_BLOCK_SIZE*MB_BLOCK_SIZE);
@@ -329,6 +338,15 @@ void frame_picture(int *bits_frm, float *dis_frm_y, float *dis_frm_u, float *dis
   if (input->rdopt==2 && (img->type!=B_IMG) )
     for (j=0 ;j<input->NoOfDecoders; j++)  DeblockFrame(img, decs->decY_best[j], NULL ) ;
 
+  // CAVLC init
+  for (i=0;i < img->width/MB_BLOCK_SIZE; i++)
+    for (j=0; j < img->height/MB_BLOCK_SIZE; j++)
+      for (k=0;k<4;k++)
+        for (l=0;l<6;l++)
+          img->nz_coeff[i][j][k][l]=-1;
+
+
+
   DeblockFrame(img, imgY, imgUV ) ; 
 
   *bits_frm = 8*((((img->currentSlice)->partArr[0]).bitstream)->byte_pos);
@@ -344,7 +362,8 @@ void frame_picture(int *bits_frm, float *dis_frm_y, float *dis_frm_u, float *dis
 
 void field_picture(int *bits_fld, float *dis_fld_y, float *dis_fld_u, float *dis_fld_v)
 {
-  stat=&stats_field;
+  stat->em_prev_bits_fld = 0;
+  stat->em_prev_bits     = &stat->em_prev_bits_fld;
 
   top_field_picture(bits_fld);
   bottom_field_picture(bits_fld);
@@ -353,7 +372,7 @@ void field_picture(int *bits_fld, float *dis_fld_y, float *dis_fld_u, float *dis
 
 void top_field_picture(int *bits_fld)
 {
-  int i,j;
+  int i,j,k,l;
   int NumberOfCodedMBs, SliceGroup;
 
   img->number *= 2;
@@ -402,6 +421,14 @@ void top_field_picture(int *bits_fld)
     SliceGroup++;
   }
   FmoEndPicture();
+
+  // CAVLC init
+  for (i=0;i < img->width/MB_BLOCK_SIZE; i++)
+    for (j=0; j < img->height/MB_BLOCK_SIZE; j++)
+      for (k=0;k<4;k++)
+        for (l=0;l<6;l++)
+          img->nz_coeff[i][j][k][l]=-1;
+
 
   if (input->rdopt==2 && (img->type!=B_IMG) )
     for (j=0 ;j<input->NoOfDecoders; j++)  DeblockFrame(img, decs->decY_best[j], NULL ) ;
@@ -534,9 +561,6 @@ void field_mode_buffer(int bit_field, float snr_field_y, float snr_field_u, floa
     
   input->no_fields += 1;
 
-  if (input->symbol_mode != CABAC)
-    stat->bit_ctr = bit_field+stat->bit_ctr_n;
-
   snr->snr_y = snr_field_y;
   snr->snr_u = snr_field_u;
   snr->snr_v = snr_field_v;
@@ -588,9 +612,6 @@ void frame_mode_buffer(int bit_frame, float snr_frame_y, float snr_frame_u, floa
     img->height = input->img_height;
     img->height_cr = input->img_height/2;
     img->total_number_mb = (img->width * img->height)/(MB_BLOCK_SIZE*MB_BLOCK_SIZE);
-
-    if (input->symbol_mode != CABAC)
-      stat->bit_ctr = bit_frame+stat->bit_ctr_n;
 
     snr->snr_y = snr_frame_y;
     snr->snr_u = snr_frame_u;
@@ -1233,7 +1254,7 @@ void read_one_new_field()
   {
     frame_no = picture_no*(input->jumpd+1);
 #ifdef _ADAPT_LAST_GROUP_
-      if (input->last_frame && img->number+1 == input->no_frames)
+      if (input->last_frame && picture_no+1 == input->no_frames)
         frame_no=input->last_frame;
 #endif
   }
@@ -1857,7 +1878,7 @@ void store_field_MV(int frame_number)
 int  field2frame_mode(int fld_mode)
 {
   int frm_mode;
-  static const int field2frame_map[MAXMODE] = {-1, 1,1,3,3,4,6,6, -1, 7,1, -1};
+  static const int field2frame_map[MAXMODE] = {-1, 1,1,3,3,4,6,6, -1, 7,1, -1, -1};
 
   frm_mode = field2frame_map[fld_mode];
   assert(frm_mode>0);
@@ -1868,7 +1889,7 @@ int  field2frame_mode(int fld_mode)
 int frame2field_mode(int frm_mode)
 {
   int fld_mode;
-  static const int frame2field_map[MAXMODE] = {-1, 2,5,4,5,5,7,7, -1, 7,2, -1};
+  static const int frame2field_map[MAXMODE] = {-1, 2,5,4,5,5,7,7, -1, 7,2, -1, -1};
 
   fld_mode = frame2field_map[frm_mode];
   assert(fld_mode>0);

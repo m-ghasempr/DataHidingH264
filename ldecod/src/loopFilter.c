@@ -236,7 +236,7 @@ void GetStrength(byte Strength[4],byte LargeBlockEdge[4],struct img_par *img,Mac
       if(LBcount>3)LBcount=3;
       LargeBlockEdge[idx]=LBcount;
 
-      if( (   img->type != SP_IMG_1) && (img->type != SP_IMG_MULT)  
+      if( (   img->type != SP_IMG_1) && (img->type != SP_IMG_MULT)  && (img->type != SI_IMG)
           && !(MbP->b8mode[ BLK_4_TO_8[blkP] ]==IBLOCK || MbP->mb_type==I16MB)
           && !(MbQ->b8mode[ BLK_4_TO_8[blkQ] ]==IBLOCK || MbQ->mb_type==I16MB) )
       {

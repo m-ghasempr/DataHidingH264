@@ -231,8 +231,9 @@ int start_slice()
   EncodingEnvironmentPtr eep;
   Slice *currSlice = img->currentSlice;
   Bitstream *currStream;
-  int header_len, part_header_len;
+  int header_len;
   int i;
+	static int count = 0;
 
   currSlice->num_mb = 0;  // no coded MBs so far
 
@@ -247,9 +248,6 @@ int start_slice()
         assert (currStream->bits_to_go == 8);
         assert (currStream->byte_buf == 0);
         assert (currStream->byte_pos == 0);
-
-        currStream->header_len = header_len;
-        currStream->header_byte_buffer = currStream->byte_buf;
 
         pCurrPayloadInfo = newPayloadInfo();
         addOnePayloadInfo( pCurrPayloadInfo );
@@ -267,13 +265,11 @@ int start_slice()
         pCurrPayloadInfo = newPayloadInfo();
         addOnePayloadInfo( pCurrPayloadInfo );
         
-        currStream->header_len = header_len;
-        currStream->header_byte_buffer = currStream->byte_buf;
 
-        arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos),&(currStream->last_startcode));
+        arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos),&(currStream->last_startcode),img->type);
         // initialize context models
-        init_contexts_MotionInfo(currSlice->mot_ctx, INI_CTX);
-        init_contexts_TextureInfo(currSlice->tex_ctx, INI_CTX);
+        init_contexts_MotionInfo (currSlice->mot_ctx);
+        init_contexts_TextureInfo(currSlice->tex_ctx);
       }
       return header_len;
       break;
@@ -306,22 +302,18 @@ int start_slice()
         // Note that SliceHeader() sets the buffer pointers as a side effect
         // Hence no need for adjusting it manually (and preserving space to be patched later
 
-        // reserve bits for d_MB_Nr
-        currStream->header_len = header_len;
-        currStream->header_byte_buffer = currStream->byte_buf;
-
-        currStream->byte_pos += ((31-currStream->bits_to_go)/8);
-        if ((31-currStream->bits_to_go)%8 != 0)
-          currStream->byte_pos++;
-        currStream->bits_to_go = 8;
-        currStream->byte_pos++;
+        if (currStream->bits_to_go != 8)
+          header_len+=currStream->bits_to_go;
+        ByteAlign (currStream);
 
         // If there is an absolute need to communicate the partition size, this would be
         // the space to insert it
-        arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos),&(currStream->last_startcode));
+        arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos),&(currStream->last_startcode),img->type);
         // initialize context models
-        init_contexts_MotionInfo(currSlice->mot_ctx, 1);
-        init_contexts_TextureInfo(currSlice->tex_ctx, 1);
+
+
+        init_contexts_MotionInfo (currSlice->mot_ctx);
+        init_contexts_TextureInfo(currSlice->tex_ctx);
 
         return header_len;
 
@@ -343,7 +335,6 @@ int start_slice()
         
         if (currStream->bits_to_go != 8)
           header_len+=currStream->bits_to_go;
-        currStream->header_len = header_len;
         ByteAlign (currStream);
 
         assert (currStream->bits_to_go == 8);
@@ -361,11 +352,7 @@ int start_slice()
             assert (currStream->bits_to_go == 8);
             assert (currStream->byte_pos == 0);
             assert (currStream->byte_buf == 0);
-            part_header_len = RTPPartition_BC_Header(i);
-            
-            if (currStream->bits_to_go != 8)
-              part_header_len+=currStream->bits_to_go;
-            currStream->header_len = part_header_len;
+            RTPPartition_BC_Header(i);
             ByteAlign (currStream);
             currStream->write_flag = 0;
           }
@@ -383,17 +370,11 @@ int start_slice()
 
         header_len=RTPSliceHeader();                      // generate the slice header
 
-        // reserve bits for d_MB_Nr
-        currStream->header_len = header_len;
-        currStream->header_byte_buffer = currStream->byte_buf;
+        if (currStream->bits_to_go != 8)
+          header_len+=currStream->bits_to_go;
+        ByteAlign (currStream);
 
-        currStream->byte_pos += ((31-currStream->bits_to_go)/8);
-        if ((31-currStream->bits_to_go)%8 != 0)
-          currStream->byte_pos++;
-        currStream->bits_to_go = 8;
-        currStream->byte_pos++;
-
-        arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos),&(currStream->last_startcode));
+        arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos),&(currStream->last_startcode),img->type);
         currStream->write_flag = 0;
 
         if(input->partition_mode != PAR_DP_1)
@@ -403,22 +384,19 @@ int start_slice()
             eep = &((currSlice->partArr[i]).ee_cabac);
             currStream = (currSlice->partArr[i]).bitstream;
 
-            part_header_len = RTPPartition_BC_Header(i);
-            if (currStream->bits_to_go != 8)
-              part_header_len+=currStream->bits_to_go;
-            currStream->header_len = part_header_len;
+            RTPPartition_BC_Header(i);
             ByteAlign (currStream);
 
             assert (currStream->bits_to_go == 8);
             assert (currStream->byte_buf == 0);
 
-            arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos),&(currStream->last_startcode));
+            arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos),&(currStream->last_startcode),img->type);
             currStream->write_flag = 0;
           }
         }
         // initialize context models
-        init_contexts_MotionInfo(currSlice->mot_ctx, INI_CTX);
-        init_contexts_TextureInfo(currSlice->tex_ctx, INI_CTX);
+        init_contexts_MotionInfo (currSlice->mot_ctx);
+        init_contexts_TextureInfo(currSlice->tex_ctx);
 
         return header_len;
       }
@@ -446,14 +424,9 @@ int terminate_slice(int write_out)
   Slice *currSlice = img->currentSlice;
   EncodingEnvironmentPtr eep;
   int i;
-  int byte_pos, bits_to_go, start_data;
-  byte buffer;
   int LastPartition;
   int cabac_byte_pos=0, uvlc_byte_pos=0, empty_bytes=0;
   int rtp_bytes_written;
-  int dmb_length;
-
-  int header_byte;
   int temp_byte_pos;
 
   // Mainly flushing of everything
@@ -485,7 +458,7 @@ int terminate_slice(int write_out)
         {
           temp_byte_pos = bytes_written;
           bytes_written = RBSPtoEBSP(currStream->streamBuffer, 0, bytes_written);
-          stat->bit_ctr_emulationprevention += (bytes_written - temp_byte_pos) * 8;
+          *(stat->em_prev_bits) += (bytes_written - temp_byte_pos) * 8;
         }
         stat->bit_ctr += 8*bytes_written;     // actually written bits
         fwrite (currStream->streamBuffer, 1, bytes_written, box_atm.fpMedia );
@@ -497,6 +470,8 @@ int terminate_slice(int write_out)
       else
       {
         // CABAC File Format
+        write_terminating_bit (1);
+
         eep = &((currSlice->partArr[0]).ee_cabac);
         currStream = (currSlice->partArr[0]).bitstream;
         // terminate the arithmetic code
@@ -514,13 +489,10 @@ int terminate_slice(int write_out)
         {
           temp_byte_pos = bytes_written;
           bytes_written = RBSPtoEBSP(currStream->streamBuffer, 0, bytes_written);
-          stat->bit_ctr_emulationprevention += (bytes_written - temp_byte_pos) * 8;
+          *(stat->em_prev_bits) += (bytes_written - temp_byte_pos) * 8;
         }
         stat->bit_ctr += 8*bytes_written;     // actually written bits
         fwrite (currStream->streamBuffer, 1, bytes_written, box_atm.fpMedia );
-
-        // save the last MB number here
-        pCurrPayloadInfo->lastMBnr = img->current_mb_nr;
 
         // Provide the next partition with a 'fresh' buffer
         currStream->stored_bits_to_go = 8;
@@ -560,10 +532,10 @@ int terminate_slice(int write_out)
             SODBtoRBSP(currStream);
             temp_byte_pos = currStream->byte_pos;
             currStream->byte_pos = RBSPtoEBSP(currStream->streamBuffer, currStream->last_startcode+startcodeprefix_len, currStream->byte_pos);
-            stat->bit_ctr_emulationprevention += (currStream->byte_pos - temp_byte_pos) * 8;
+            *(stat->em_prev_bits) += (currStream->byte_pos - temp_byte_pos) * 8;
           }
         } 
-		else
+		    else
         {
           bytes_written = currStream->byte_pos;
           stat->bit_ctr += 8*bytes_written;     // actually written bits
@@ -583,6 +555,7 @@ int terminate_slice(int write_out)
         if(!write_out)
         {
           // CABAC File Format
+          write_terminating_bit (1);
           
           eep = &((currSlice->partArr[0]).ee_cabac);
           
@@ -592,77 +565,44 @@ int terminate_slice(int write_out)
           stat->bit_use_stuffingBits[img->type]+=get_trailing_bits(eep);
           arienco_done_encoding(eep);
           
-          // Add Number of MBs of this slice to the header
-          // Save current state of Bitstream
-          currStream = (currSlice->partArr[0]).bitstream;
-          byte_pos = currStream->byte_pos;
-          bits_to_go = currStream->bits_to_go;
           if (eep->Ebits_to_go != 8)
             stat->bit_use_stuffingBits[img->type]+=eep->Ebits_to_go;
-          buffer = currStream->byte_buf;
           
-          // Go to the reserved bits
-          currStream->byte_pos = (currStream->header_len)/8;
-          currStream->bits_to_go = 8-(currStream->header_len)%8;
-          currStream->byte_buf = currStream->header_byte_buffer;
-          
-          currStream->byte_pos += currStream->tmp_byte_pos;
-          
-          // Add Info about last MB
-          dmb_length=LastMBInSlice();
-          stat->bit_use_header[img->type]+=dmb_length;
-          
-          // And write the header to the output
           bytes_written = currStream->byte_pos-currStream->tmp_byte_pos;
           if (currStream->bits_to_go < 8) // trailing bits to process
           {
             currStream->byte_buf <<= currStream->bits_to_go;
             stat->bit_use_header[img->type]+=currStream->bits_to_go;
             
-            currStream->streamBuffer[currStream->tmp_byte_pos +bytes_written]= currStream->byte_buf;	// Yue
+            currStream->streamBuffer[bytes_written]= currStream->byte_buf;	// Yue
             bytes_written++;
             currStream->bits_to_go = 8;
           }
-          
-          stat->bit_ctr += 8*bytes_written;
-          header_byte = bytes_written;
-          
-          // Go back to the end of the stream
-          currStream->byte_pos = byte_pos;
-          currStream->bits_to_go = bits_to_go;
-          currStream->byte_buf = buffer;
-          
-          
-          // Find startposition of databitstream
-          start_data = (currStream->header_len+31)/8;
-          if ((currStream->header_len+31)%8 != 0)
-            start_data++;
-          
-          bytes_written = currStream->byte_pos - start_data - currStream->tmp_byte_pos;  // number of written bytes
-          
-          stat->bit_ctr += 8*bytes_written;     // actually written bits
-          memmove ((currStream->streamBuffer + header_byte + currStream->tmp_byte_pos), (currStream->streamBuffer + start_data + currStream->tmp_byte_pos), bytes_written);	// Yue
-          currStream->byte_pos = currStream->byte_pos -(start_data - header_byte);
 
           if(input->Encapsulated_NAL_Payload) 
           {
             SODBtoRBSP(currStream);
             temp_byte_pos = currStream->byte_pos;
             currStream->byte_pos = RBSPtoEBSP(currStream->streamBuffer, currStream->last_startcode+startcodeprefix_len, currStream->byte_pos);
-            stat->bit_ctr += (currStream->byte_pos - temp_byte_pos)*8;
-            stat->bit_ctr_emulationprevention += (currStream->byte_pos - temp_byte_pos) * 8;
+            *(stat->em_prev_bits) += (currStream->byte_pos - temp_byte_pos) * 8;
           }
-          currStream->tmp_byte_pos = currStream->byte_pos; 
+          currStream->tmp_byte_pos = currStream->byte_pos;
         }
         else
         {
           currStream = (currSlice->partArr[0]).bitstream;
           fwrite (currStream->streamBuffer, 1, currStream->byte_pos, out);
+          stat->bit_ctr += 8*currStream->byte_pos;
         }
       }
       return 0;
 
     case PAR_OF_RTP:
+
+      if (input->symbol_mode==CABAC)
+      {
+        write_terminating_bit (1);
+      }
 
       for (i=0; i<currSlice->max_part_nr; i++)
       {
@@ -693,48 +633,7 @@ int terminate_slice(int write_out)
         {
           int Marker;
           int FirstBytePacketType;
-          
-          if (input->symbol_mode == CABAC && i == 0)
-          {
-            //! Add Number of MBs of this slice to the header
-            //! Save current state of Bitstream
-            byte_pos = currStream->byte_pos; //last byte in the stream
-
-            
-            //! Go to the reserved bits
-            currStream->byte_pos = cabac_byte_pos = (currStream->header_len)/8;
-            currStream->bits_to_go = 8-(currStream->header_len)%8;
-            currStream->byte_buf = currStream->header_byte_buffer;
-            
-            cabac_byte_pos += ((31-currStream->bits_to_go)/8);
-            if ((31-currStream->bits_to_go)%8 != 0)
-              cabac_byte_pos++;
-            cabac_byte_pos++; //! that's the position where we started to write CABAC code
-            
-            //! Ad Info about last MB 
-            dmb_length=LastMBInSlice();
-            stat->bit_use_header[img->type]+=dmb_length;
-           
-            if (currStream->bits_to_go < 8) //! trailing bits to process
-            {
-              currStream->byte_buf <<= currStream->bits_to_go;
-              stat->bit_use_header[img->type]+=currStream->bits_to_go;
-              currStream->streamBuffer[currStream->byte_pos++]=currStream->byte_buf;
-            }
-            
-            uvlc_byte_pos = currStream->byte_pos; //! that's the first byte after the UVLC header data
-            currStream->byte_pos = byte_pos;  //! where we were before this last_MB thing
-            empty_bytes = cabac_byte_pos - uvlc_byte_pos; //! These bytes contain no information
-            //! They were reserved for writing the last_MB information but were not used
-
-            for(byte_pos=uvlc_byte_pos; byte_pos<=currStream->byte_pos-empty_bytes; byte_pos++)
-              currStream->streamBuffer[byte_pos]=currStream->streamBuffer[byte_pos+empty_bytes]; //shift the bitstreams
-            bytes_written = byte_pos-1;
-
-            //! TO 02.11.2001 I'm sure this can be done much more elegant, but that's the way it works. 
-            //! If anybody understands what happens here please feel free to change this!
-          }  
-
+         
           // Tian Dong: JVT-C083. June 15, 2002
           // Calculating RTP payload's First Byte, the conditions may be updated when more
           // coding options are supported later.
@@ -773,12 +672,13 @@ int terminate_slice(int write_out)
               bytes_written = currStream->byte_pos;
               temp_byte_pos = bytes_written;
               bytes_written = RBSPtoEBSP(currStream->streamBuffer, Bytes_After_Header, bytes_written);
-              stat->bit_ctr_emulationprevention += (bytes_written - temp_byte_pos) * 8;
+              *(stat->em_prev_bits) += (bytes_written - temp_byte_pos) * 8;
           }
 
           rtp_bytes_written = RTPWriteBits (Marker, FirstBytePacketType, currStream->streamBuffer, bytes_written, out);
         }
         stat->bit_ctr += 8*bytes_written;
+
         // Provide the next partition with a 'fresh' buffer
         currStream->stored_bits_to_go = 8;
         currStream->stored_byte_buf   = 0;

@@ -552,9 +552,10 @@ static void PatchInp ()
   }
 
   // frame/field consistency check
-  if (input->InterlaceCodingOption != FRAME_CODING && input->InterlaceCodingOption != ADAPTIVE_CODING)
+  if (input->InterlaceCodingOption != FRAME_CODING && input->InterlaceCodingOption != ADAPTIVE_CODING && input->InterlaceCodingOption != FIELD_CODING
+    )
   {
-    snprintf (errortext, ET_SIZE, "Unsupported InterlaceCodingOption=%d, use frame based coding=0 or adaptive=1",input->InterlaceCodingOption);
+    snprintf (errortext, ET_SIZE, "Unsupported InterlaceCodingOption=%d, use frame based coding=0 or adaptive=1 or field based coding=2",input->InterlaceCodingOption);
     error (errortext, 400);
   }
    

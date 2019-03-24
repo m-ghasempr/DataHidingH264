@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 3.90a
+ *     JM 4.0d
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -124,8 +124,8 @@
 #include "erc_api.h"
 #endif
 
-#define JM          "3"
-#define VERSION     "3.90a"
+#define JM          "4"
+#define VERSION     "4.0d"
 #define LOGFILE     "log.dec"
 #define DATADECFILE "dataDec.txt"
 #define TRACEFILE   "trace_dec.txt"
@@ -479,7 +479,7 @@ void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr)
   fprintf(stdout," ABT_max_count %d ",INICNT_ABT);
 #endif
 #ifdef _ALT_SCAN_
-  fprintf(stdout,"altScan ");
+  //fprintf(stdout,"altScan ");
 #endif
   fprintf(stdout,"\n");
   // write to log file
@@ -963,6 +963,16 @@ int init_global_buffers(struct inp_par *inp, struct img_par *img)
   // int bw_refFrArr[72][88];
   memory_size += get_mem2Dint(&(img->bw_refFrArr_bot),img->height/BLOCK_SIZE,img->width/BLOCK_SIZE);
 
+  // CAVLC mem
+  if((img->nz_coeff = (int****)calloc(img->width/MB_BLOCK_SIZE,sizeof(int***))) == NULL)
+    no_mem_exit("get_mem4global_buffers: nzcoeff");
+  for(j=0;j<img->width/MB_BLOCK_SIZE;j++)
+  {
+    memory_size += get_mem3Dint(&(img->nz_coeff[j]), img->height/MB_BLOCK_SIZE, 4, 6);
+  }
+
+  memory_size += get_mem2Dint(&(img->siblock),img->width/MB_BLOCK_SIZE  , img->height/MB_BLOCK_SIZE);
+
   if (img->structure != FRAME)
   {
     img->height /= 2;      // reset height for normal variables
@@ -970,6 +980,7 @@ int init_global_buffers(struct inp_par *inp, struct img_par *img)
   }
   
   img->buf_cycle = inp->buf_cycle+1;
+
 
   return (memory_size);
 }
@@ -1023,6 +1034,16 @@ void free_global_buffers(struct inp_par *inp, struct img_par *img)
   free_mem3D (imgUV_ref,2);
 //  free_mem2D (imgY_tmp);
 //  free_mem3D (imgUV_tmp,2);
+
+  // CAVLC free mem
+  for(j=0;j<img->width/MB_BLOCK_SIZE;j++)
+  for(i=0;i<img->height/MB_BLOCK_SIZE;i++)
+  {
+    if(img->nz_coeff[j][i][0] != NULL) free(img->nz_coeff[j][i][0]);
+    if(img->nz_coeff[j][i]    != NULL) free(img->nz_coeff[j][i]);
+  };
+  if (img->nz_coeff !=NULL) free(img->nz_coeff );
+  free_mem2Dint(img->siblock);
 
   // free mem, allocated for structure img
   if (img->mb_data       != NULL) free(img->mb_data);

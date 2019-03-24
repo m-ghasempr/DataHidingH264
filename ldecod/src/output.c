@@ -146,6 +146,8 @@ void write_prev_Pframe(struct img_par *img, FILE *p_out)
 
 #if TRACE
 
+static int bitcounter = 0;
+
 /*!
  ************************************************************************
  * \brief
@@ -160,7 +162,6 @@ void tracebits(
     int value1,
     int value2)
 {
-  static int bitcounter = 0;
 
   int i, chars;
   // int outint = 1;
@@ -177,7 +178,7 @@ void tracebits(
   while(chars++ < 6)
     putc(' ',p_trace);
   chars += fprintf(p_trace, "%s", trace_str);
-  while(chars++ < 30)
+  while(chars++ < 45)
     putc(' ',p_trace);
 
   // Align bitpattern
@@ -187,23 +188,22 @@ void tracebits(
 
 
   // Print bitpattern
-  for(i=0 ; i<len-1 ; i++)
+  for(i=0 ; i<len/2 ; i++)
   {
-    if(i%2 == 0)
-    {
-      fputc('0', p_trace);
-    }
-    else
-    {
-      if (0x01 & ( info >> ((len-i)/2-1)))
+    fputc('0', p_trace);
+  }
+  // put 1
+  fprintf(p_trace, "1");
+  // Print bitpattern
+  for(i=0 ; i<len/2 ; i++)
+  {
+      if (0x01 & ( info >> ((len/2-i)-1)))
         fputc('1', p_trace);
       else
         fputc('0', p_trace);
-    }
   }
 
-  // put out the last 1
-  fprintf(p_trace, "1");
+
 
   fprintf(p_trace, "  (%3d)\n", value1);
 
@@ -211,4 +211,67 @@ void tracebits(
   fflush (p_trace);
 
 }
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Tracing bitpatterns 
+ ************************************************************************
+ */
+void tracebits2(
+    const char *trace_str,  //!< tracing information, char array describing the symbol
+    int len,                //!< length of syntax element in bits
+    int info)
+{
+
+  int i, chars;
+  // int outint = 1;
+
+  if(len>=45)
+  {
+    snprintf(errortext, ET_SIZE, "Length argument to put too long for trace to work");
+    error (errortext, 600);
+  }
+
+
+  putc('@', p_trace);
+  chars = fprintf(p_trace, "%i", bitcounter);
+  while(chars++ < 6)
+    putc(' ',p_trace);
+  chars += fprintf(p_trace, "%s", trace_str);
+  while(chars++ < 45)
+    putc(' ',p_trace);
+
+  // Align bitpattern
+  if(len<15)
+    for(i=0 ; i<15-len ; i++)
+      fputc(' ', p_trace);
+
+
+  bitcounter += len;
+  while (len >= 32)
+  {
+    for(i=0 ; i<8 ; i++)
+    {
+      fputc('0', p_trace);
+    }
+    len -= 8;
+
+  }
+  // Print bitpattern
+  for(i=0 ; i<len ; i++)
+  {
+    if (0x01 & ( info >> (len-i-1)))
+      fputc('1', p_trace);
+    else
+      fputc('0', p_trace);
+  }
+
+  fputc('\n', p_trace);
+
+  fflush (p_trace);
+
+}
+
+
 #endif

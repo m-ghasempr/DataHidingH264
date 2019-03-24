@@ -1,3 +1,42 @@
+Changes for Version JM 4.0d to JM 4.0c
+--------------------------------------
+Bug Fixes
+* CAVLC/AFF memory allocation (KL)
+* Solaris compiler problem (MW)
+* CAVLC and ABT updates
+
+
+Changes for Version JM 4.0c to JM 4.0b
+--------------------------------------
+
+New features
+* New Macroblock modes for SP-frames [JVT-B055] (RK)
+
+Bug Fix
+* Decoder bug fix for SP-pictures
+
+
+Changes for Version JM 4.0b to JM 4.0a
+--------------------------------------
+
+New features
+* CAVLC [JVT-C028, D034, D036] (KL, JA)
+* Low Complexity Diagonal Mode for Intra Prediction [JVT-D059] (GrC)
+
+Bug Fix
+* Bitstream in MSB first order for CABAC (DM, GB)
+
+
+Changes for Version JM 4.0a to JM 3.9a
+--------------------------------------
+New features
+* Improved CABAC [JVT-C060] (HS, GB))
+* Fast Arithmetic Coding for CABAC [JVT-C061] (DM, GB)
+* CABAC cleanup [JVT-D019] (GB, DM)
+* CABAC and ABT [JVT-D021] (HS, DM, GH))
+* New end-of-slice signaling for CABAC [JVT-D020] (HS)
+
+
 Changes for Version JM 3.9a to JM 3.9
 -------------------------------------
 
@@ -522,8 +561,10 @@ FW	Feng Wu			fengwu@microsoft.com
 HS      Heiko Schwarz           hschwarz@hhi.de
 IL      Inge Lille-Langoy       Inge.Lille-Langoy@telenor.com
 JL      Jani Lainema            Jani.Lainema@nokia.com
+JA      James Au                james@ubvideo.com
 IM      Iole Moccagatta         imoccaga@lsil.com
 KP      Krit Panusopone         KPanusopone@gi.com
+KL	Karl Lillevold		Karll@real.com
 LK      Louis Kerofsky          lkerofsky@sharplabs.com
 LW      Limin Wang              liwang@gi.com
 MB      Marcus Barkowsky        Marcus.Barkowsky@nt.e-technik.uni-erlangen.de

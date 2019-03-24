@@ -25,7 +25,7 @@ ADDINCDIR= ../lcommon/inc
 CC=     $(shell which gcc)
 
 LIBS=   -lm
-FLAGS=  -Wall -I$(INCDIR) -I$(ADDINCDIR)
+FLAGS=  -ffloat-store -Wall -I$(INCDIR) -I$(ADDINCDIR)
 
 ifdef DBG
 SUFFIX= .dbg

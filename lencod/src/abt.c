@@ -963,7 +963,8 @@ int writeLumaCoeffABT_B8(int b8,int intra,int blk_off_x,int blk_off_y)
     icoef,                      /* current coefficient */
     ipos,                       /* current position in cof_abt */
     run, level,
-    blk_max_x,blk_max_y,i,j;
+    blk_max_x,blk_max_y,i,j,
+    sbx, sby;
   int use_vlc_numcoef,abs_level;
   int b4;
   int* ACLevel;
@@ -973,7 +974,7 @@ int writeLumaCoeffABT_B8(int b8,int intra,int blk_off_x,int blk_off_y)
   const char (*table2D)[8];
 
   static const int blk_table[4][4] = { {0,-1,-1,-1}, {0,2,-1,-1}, {0,1,-1,-1}, {0,1,2,3}};
-  static const int blkmode2ctx [4] = { 9, 10, 10, 11 };
+  static const int blkmode2ctx [4] = {LUMA_8x8, LUMA_8x4, LUMA_4x8, LUMA_4x4};
 
   assert(input->abt);
 
@@ -1031,6 +1032,9 @@ int writeLumaCoeffABT_B8(int b8,int intra,int blk_off_x,int blk_off_y)
         continue;        //used in ABT Intra RDopt. code one one subblock.
 
       b4 = blk_table[abt_mode][iblk];
+
+
+
       level = 1; // get inside loop
       ipos  = 0;
       ACLevel = img->cofAC[b8][b4][0];
@@ -1039,12 +1043,14 @@ int writeLumaCoeffABT_B8(int b8,int intra,int blk_off_x,int blk_off_y)
       img->subblock_x = ((b8&0x1)==0)?(((b4&0x1)==0)?0:1):(((b4&0x1)==0)?2:3); // horiz. position for coeff_count context
       img->subblock_y = (b8<2)?((b4<2)?0:1):((b4<2)?2:3); // vert.  position for coeff_count context
 
+
+      for(icoef=0;icoef<inumcoeff;icoef++) //count coeffs
+        if(!ACLevel[icoef])
+          break;
+
       if( use_vlc_numcoef && input->symbol_mode==UVLC )
       {
         //code numcoeffs symbol
-        for(icoef=0;icoef<inumcoeff;icoef++) //count coeffs
-          if(!ACLevel[icoef])
-            break;
         currSE->type=SE_LUM_AC_INTER;
         currSE->golomb_grad=0;
         currSE->golomb_maxlevels=31;
@@ -1064,6 +1070,31 @@ int writeLumaCoeffABT_B8(int b8,int intra,int blk_off_x,int blk_off_y)
         bitCount[BITS_COEFF_Y_MB]+=currSE->len;
         no_bits+=currSE->len;
       }
+
+      // CAVLC store number of coefficients
+      sbx = img->subblock_x;
+      sby = img->subblock_y;
+      switch (abt_mode)
+      {
+      case 0: // 8x8
+        img->nz_coeff [img->mb_x ][img->mb_y ][sbx  ][sby  ] = icoef/4;
+        img->nz_coeff [img->mb_x ][img->mb_y ][sbx+1][sby  ] = icoef/4;
+        img->nz_coeff [img->mb_x ][img->mb_y ][sbx  ][sby+1] = icoef/4;
+        img->nz_coeff [img->mb_x ][img->mb_y ][sbx+1][sby+1] = icoef/4;
+        break;
+      case 1: // 8x4
+        img->nz_coeff [img->mb_x ][img->mb_y ][sbx  ][sby] = icoef/2;
+        img->nz_coeff [img->mb_x ][img->mb_y ][sbx+1][sby] = icoef/2;
+        break;
+      case 2: // 4x8
+        img->nz_coeff [img->mb_x ][img->mb_y ][sbx][sby  ] = icoef/2;
+        img->nz_coeff [img->mb_x ][img->mb_y ][sbx][sby+1] = icoef/2;
+        break;
+      case 3: // 4x4
+        img->nz_coeff [img->mb_x ][img->mb_y ][sbx][sby] = icoef;
+        break;
+      }
+      
 
       for (icoef=0; icoef<inumcoeff && level!=0; icoef++)
       {
@@ -1161,26 +1192,9 @@ int writeLumaCoeffABT_B8(int b8,int intra,int blk_off_x,int blk_off_y)
 
           currSE->writing = writeRunLevel2Buffer_CABAC;
 
-          if (icoef==0 && run==0) // is DC coefficient?
-          {
-            if ( intra )
-            {
-              currSE->context = (abt_mode==B4x4)? 2 : 3 + blkmode2ctx[abt_mode]; // for choosing context model
-              currSE->type    = SE_LUM_DC_INTRA;
-            }else{
-              currSE->context = (abt_mode==B4x4)? 1 : blkmode2ctx[abt_mode]; // for choosing context model
-              currSE->type    = SE_LUM_DC_INTER;
-            }
-          }else{
-            if ( intra )
-            {
-              currSE->context = (abt_mode==B4x4)? 2 :3 + blkmode2ctx[abt_mode]; // for choosing context model
-              currSE->type    = SE_LUM_AC_INTRA;
-            }else{
-              currSE->context = (abt_mode==B4x4)? 1 :blkmode2ctx[abt_mode]; // for choosing context model
-              currSE->type    = SE_LUM_AC_INTER;
-            }
-          }
+          currSE->type        = (intra ? (icoef==0 && run==0 ? SE_LUM_DC_INTRA : SE_LUM_AC_INTRA) : (icoef==0 && run==0 ? SE_LUM_DC_INTER : SE_LUM_AC_INTER));
+          currSE->context     = blkmode2ctx[abt_mode];
+          img->is_intra_block = (intra ? 1 : 0);
 
           // choose the appropriate data partition
           if (img->type != B_IMG)
@@ -1259,7 +1273,7 @@ int getDirectModeABT(int block8x8)
   int blk_x          = (img->pix_x>>3) + block8x8%2;
   int blk_y          = (img->pix_y>>3) + block8x8/2;
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
-  static const int  abt_mode_table[MAXMODE] = {-2, 0, 0, 0, 0, 1, 2, 3, -2, 3, 0, 3};  // DO NOT CHANGE ORDER !!!   // b8mode->abt_mode
+  static const int  abt_mode_table[MAXMODE] = {-2, 0, 0, 0, 0, 1, 2, 3, -2, 3, 0, 3, -1};  // DO NOT CHANGE ORDER !!!   // b8mode->abt_mode
   int pstruct        = img->pstruct; // distinguish frame/top/bottom array. 020603 mwi
 
   assert(pstruct<3); // needs revision for other values. 020603 mwi

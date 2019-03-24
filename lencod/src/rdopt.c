@@ -408,7 +408,16 @@ RDCost_for_4x4IntraBlocks (int*    nonzero,
   currMB->currSEnr++;
 
   //===== RATE for LUMINANCE COEFFICIENTS =====
-  rate  += writeLumaCoeff4x4 (b8, b4, 1);
+  if (input->symbol_mode == UVLC 
+	  //&&(input->abt != INTER_INTRA_ABT && input->abt != INTER_ABT)
+	  )
+  {
+    rate  += writeCoeff4x4_CAVLC (LUMA, b8, b4, 0);
+  }
+  else
+  {
+    rate  += writeLumaCoeff4x4 (b8, b4, 1);
+  }
   rdcost = (double)distortion + lambda*(double)rate;
 
   return rdcost;
@@ -1717,6 +1726,7 @@ encode_one_macroblock ()
 
   int         intra       = ((img->type==INTER_IMG && img->mb_y==img->mb_y_upd && img->mb_y_upd!=img->mb_y_intra) || img->type==INTRA_IMG);
   int         spframe     = (img->type==INTER_IMG && img->types==SP_IMG);
+  int         siframe     = (img->type==INTRA_IMG && img->types==SP_IMG);
   int         bframe      = (img->type==B_IMG);
   int         write_ref   = (input->no_multpred>1 || input->add_ref_frame>0);
   int         runs        = (input->RestrictRef==1 && input->rdopt==2 && img->type==INTER_IMG ? 2 : 1);
@@ -1745,10 +1755,9 @@ encode_one_macroblock ()
   if(input->abt==INTER_INTRA_ABT)
     valid[I16MB]  = 0;	//no intraNew for ABT
   // HS: I'm not sure when the Intra Mode on 8x8 basis should be unvalid
-  //     Is it o.k. to have intra and inter 8x8 block inside one macroblock for SP-frame (especially for chroma)?
   //     Is it o.k. for data partitioning? (where the syntax elements have to written to?)
 
-  if(input->partition_mode)
+  if(input->partition_mode || spframe || siframe)
     valid[IBLOCK] = 0;
   else
     valid[IBLOCK] = 1;
@@ -1762,6 +1771,7 @@ encode_one_macroblock ()
   valid[6]      = (!intra && input->InterSearch4x8);
   valid[7]      = (!intra && input->InterSearch4x4);
   valid[P8x8]   = (valid[4] || valid[5] || valid[6] || valid[7] || (bframe && valid[0] && valid[IBLOCK]));
+  valid[12]    =  (siframe);
 
   for (i=0; i<MAXMODE; i++){ for (j=0; j<4; j++)  best_abt_mode[i][j] = ABT_OFF; }
 

@@ -593,44 +593,4 @@ void select_picture_type(SyntaxElement *symbol)
 }
 
 
-/*!
- ************************************************************************
- * \brief
- *    Writes the number of MBs of this slice
- ************************************************************************
- */
-int LastMBInSlice()
-{
-  int dP_nr = assignSE2partition[input->partition_mode][SE_HEADER];
-  DataPartition *partition = &((img->currentSlice)->partArr[dP_nr]);
-  SyntaxElement *sym;
-  int d_MB_Nr;
-  int len;
-
-  if ((sym=(SyntaxElement*)calloc(1,sizeof(SyntaxElement)))==NULL) no_mem_exit("LastMBInSlice:sym");
-
-  d_MB_Nr = img->current_mb_nr-img->currentSlice->start_mb_nr;
-
-  if((input->InterlaceCodingOption==FRAME_CODING)&&(d_MB_Nr == img->total_number_mb))
-    d_MB_Nr = 0;
-
-   if(input->InterlaceCodingOption==ADAPTIVE_CODING)
-     if((((img->fld_flag==0)||(img->pstruct==1))&&(img->total_number_mb==d_MB_Nr)) ||
-       ((img->pstruct==2)&&((img->total_number_mb/2)==d_MB_Nr)))
-       d_MB_Nr = 0;
-
-  sym->type = SE_HEADER;
-  sym->mapping = n_linfo2;       // Mapping rule: Simple code number to len/info
-
-  // Put MB-Adresse
-  assert (d_MB_Nr < (1<<15));
-// printf ("LastMBInSlice: putting %d\n", d_MB_Nr);
-  SYMTRACESTRING("SH Numbers of MB in Slice");
-  sym->value1 = d_MB_Nr;
-  len=writeSyntaxElement_UVLC (sym, partition);
-
-  free (sym);
-  return(len);
-}
-
 

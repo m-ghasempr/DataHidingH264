@@ -114,7 +114,7 @@ void arideco_delete_decoding_environment(DecodingEnvironmentPtr dep)
  ************************************************************************
  */
 void arideco_start_decoding(DecodingEnvironmentPtr dep, unsigned char *cpixcode,
-                            int firstbyte, int *cpixcode_len )
+                            int firstbyte, int *cpixcode_len, int slice_type )
 {
   int i;
   int bits;
@@ -131,13 +131,20 @@ void arideco_start_decoding(DecodingEnvironmentPtr dep, unsigned char *cpixcode,
   {
     if (--Dbits_to_go < 0)
       get_byte();
-    dep->Dvalue += dep->Dvalue  + (Dbuffer & 1);
-    Dbuffer >>= 1;
+    dep->Dvalue <<= 1;
+		if (Dbuffer & 0x80) 
+			dep->Dvalue |= 0x01;
+		Dbuffer <<= 1;
   }
   dep->Dlow = 0;
 
   /* Only necessary for new AC */
   dep->Drange = CACM99_HALF;
+
+	if (slice_type == INTRA_IMG) //INTRA_SLICE
+		dep->AC_next_state_MPS_64 = AC_next_state_MPS_64_INTRA;
+	else
+		dep->AC_next_state_MPS_64 = AC_next_state_MPS_64_INTER;
 }
 
 
@@ -178,96 +185,91 @@ unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi
 {
   int bit;
   register unsigned int range, value;
-
+  
   range = dep->Drange;
   value = dep->Dvalue;
 
-  /* scope LPS, cLPS, rLPS, rMPS, and in_r */
+  /* scope  rLPS, rMPS  */
   {
-    int LPS;
-    unsigned int cLPS, rLPS, rMPS;
-    unsigned int in_r;
+    unsigned int rLPS, rMPS;
+   
+		rLPS = rLPS_table_64x4[bi_ct->state][(range-0x4001)>>12];
+		rMPS = range - rLPS;
 
-    /* scope c0 and c1 */
+		if (value >= rMPS) 
     {
-      register unsigned short c0, c1, one_over_c0;
-
-      one_over_c0 = ARITH_CUM_FREQ_TABLE[bi_ct->cum_freq[0]]>>10;
-      c0 = bi_ct->cum_freq[0]-bi_ct->cum_freq[1];
-      c1 = bi_ct->cum_freq[1];
-
-      /* Unit interval size */
-#if  AAC_FRAC_TABLE
-      in_r = ((range*one_over_c0)>>16);   
-#else
-      in_r = range / (c0+c1);
-#endif
-
-      /* Determine LPS and cLPS. This should compile to conditional moves. */
-      LPS = (c0 <  c1) ? 0 : 1;
-      cLPS = (c0 < c1) ? c0 : c1;
-
-    }
-
-    /* Size of interval for LPS */
-    rLPS = in_r * cLPS;
-    rMPS = range - rLPS;
-    /* Always set LPS interval at upper end of range. This always allocates the 
-     * excess probabilty caused by the truncation during division to the MPS. 
-     * Check if value lies in this upper end, if so, then bit is LPS otherwise 
-     * bit is MPS */
-    if (value >= rMPS) 
-    {
-      bit = LPS;
       value -= rMPS;
       range = rLPS;
+			bit = !(bi_ct->MPS);
+      if (!bi_ct->state)
+				bi_ct->MPS = bi_ct->MPS ^ 1;               // switch LPS if necessary
+			bi_ct->state = AC_next_state_LPS_64[bi_ct->state]; // next state
     } 
     else 
     {
-      bit = !(LPS);
-      range -= rLPS;
+      range = rMPS;
+			bit = bi_ct->MPS;
+  		bi_ct->state = dep->AC_next_state_MPS_64[bi_ct->state]; // next state
     }
   }
   
-  /* Increase model frequency counts appropriately */
-  bi_ct->cum_freq[1] += bit;
-
-  if (++bi_ct->cum_freq[0] >= bi_ct->max_cum_freq) 
-    rescale_cum_freq(bi_ct);
-
-
-  /* Renormalise when range <= 1/4 of max frequency count to maintain precise 
-   * division of code space, minimizing loss of compression effectiveness. 
-   * The idea is to prevent underflow, i.e. when the scaling operation 
-   * maps different symbols of the model onto the same integer. The (low, high) 
-   * pair can lie between:
-   * - [0, 1/2) 
-   * - [1/2, top) 
-   * - [1/4, 3/4) 
-   * The (low, high) pair can only become close together when they straddle 1/2 
-   * (3rd case). We know unambiguously what to output if the (low,high) pair 
-   * are, at the smallest:
-   * - [1/4,1/2+epsilon)
-   * - [1/2-epsilon,3/4)
-   * This range is <= 1/4 of the max frequency count, hence we can (should) rescale 
-   * at this time, i.e. when range <= 1/4
-   */
   while (range <= CACM99_QUARTER)
   {
     /* Double range and value */
     range <<= 1;
     if (--Dbits_to_go < 0) 
     {
-      get_byte();
+	    get_byte();
     }
     /* Shift in next bit and add to value */
     value <<= 1;
-    value += (Dbuffer & 1);
-    Dbuffer >>= 1;   
+		if (Dbuffer & 0x80)
+			value |= 0x01;
+		Dbuffer <<= 1;
   }
   
   dep->Drange = range;
   dep->Dvalue = value;
+
+  return(bit);
+}
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    biari_decode_symbol_eq_prob():
+ * \return
+ *    the decoded symbol
+ ************************************************************************
+ */
+unsigned int biari_decode_symbol_eq_prob(DecodingEnvironmentPtr dep)
+{
+  int bit;
+	register unsigned int value  = dep->Dvalue;
+	register unsigned int range  = (dep->Drange>>1);
+
+	
+	if (value >= range) 
+	{
+		bit = 1;
+		value -= range;
+	} 
+	else 
+		bit = 0;
+
+	if (--Dbits_to_go < 0) 
+	{
+		get_byte();
+	}
+	/* Shift in next bit and add to value */	
+	value <<= 1;
+	if (Dbuffer & 0x80)
+		value |= 0x01;
+	Dbuffer <<= 1;
+
+	dep->Dvalue = value;
+	dep->Drange = (range<<1);
 
   return(bit);
 }
@@ -281,63 +283,25 @@ unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi
  *    and a maximum symbol count for triggering the rescaling
  ************************************************************************
  */
-void biari_init_context( BiContextTypePtr ctx, int ini_count_0, int ini_count_1, int max_cum_freq )
+void biari_init_context (struct img_par* img, BiContextTypePtr ctx, const int* ini)
 {
+  int pstate;
 
-  ctx->in_use       = TRUE;
-  ctx->max_cum_freq = max_cum_freq;
+	pstate = ((ini[0]*(img->qp-SHIFT_QP))>>4) + ini[1]; 
 
 
-  ctx->cum_freq[1]  = ini_count_1;
-  ctx->cum_freq[0]  = ini_count_0 + ini_count_1;
+  if (img->type==INTRA_IMG) pstate = min (max (27, pstate),  74);  // states from 0 to 23
+  else                      pstate = min (max ( 0, pstate), 101);  // states from 0 to 50
 
+  if (pstate>=51)
+  {
+    ctx->state  = pstate - 51;
+    ctx->MPS    = 1;
+  }
+  else
+  {
+    ctx->state  = 50 - pstate;
+    ctx->MPS    = 0;
+  }
 }
 
-
-/*!
- ************************************************************************
- * \brief
- *    biari_copy_context():
- ************************************************************************
- */
-void biari_copy_context( BiContextTypePtr ctx_orig, BiContextTypePtr ctx_dest )
-{
-  ctx_dest->in_use     =  ctx_orig->in_use;
-  ctx_dest->max_cum_freq = ctx_orig->max_cum_freq;
-
-  ctx_dest->cum_freq[1] = ctx_orig->cum_freq[1];
-  ctx_dest->cum_freq[0] = ctx_orig->cum_freq[0];
-
-  return;
-}
-
-/*!
- ***********************************************************************
- * \brief
- *    biari_print_context():
- ***********************************************************************
- */
-void biari_print_context( BiContextTypePtr ctx )
-{
-  printf("0: %4d\t",ctx->cum_freq[0] - ctx->cum_freq[1]);
-  printf("1: %4d",ctx->cum_freq[1]);
-
-  return;
-}
-
-
-/*!
- ***********************************************************************
- * \brief
- *    Rescales a given context model by halvening the symbol counts
- *
- ***********************************************************************
- */
-void rescale_cum_freq( BiContextTypePtr   bi_ct)
-{
-  int old_cum_freq_of_one = bi_ct->cum_freq[1];
-
-  bi_ct->cum_freq[1] = (bi_ct->cum_freq[1] + 1) >> 1;
-  bi_ct->cum_freq[0] = bi_ct->cum_freq[1] +
-    ( ( bi_ct->cum_freq[0] - old_cum_freq_of_one + 1 ) >> 1);
-}

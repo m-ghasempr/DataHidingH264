@@ -63,7 +63,12 @@ static const int quant_coef[6][4][4] = {
   {{ 8192, 5243, 8192, 5243},{ 5243, 3355, 5243, 3355},{ 8192, 5243, 8192, 5243},{ 5243, 3355, 5243, 3355}},
   {{ 7282, 4559, 7282, 4559},{ 4559, 2893, 4559, 2893},{ 7282, 4559, 7282, 4559},{ 4559, 2893, 4559, 2893}}
 };
-
+static const int A[4][4] = {
+  { 16, 20, 16, 20},
+  { 20, 25, 20, 25},
+  { 16, 20, 16, 20},
+  { 20, 25, 20, 25}
+};
 
 // Notation for comments regarding prediction and predictors.
 // The pels of the 4x4 block are labelled a..p. The predictor pels above
@@ -350,17 +355,17 @@ int intrapred(
     img->mpr[0+ioff][0+joff] = (2*(P_C + P_I + P_J) + P_B + P_D + 4) / 8;
     img->mpr[1+ioff][0+joff] = (2*(P_D + P_J) + P_C + P_E + P_I + P_K + 4) / 8;
     img->mpr[2+ioff][0+joff] = 
-    img->mpr[0+ioff][1+joff] = (2*(P_E + P_J + P_K) + P_D + P_F + 4) / 8;
+    img->mpr[0+ioff][1+joff] = (P_J + P_K + 1) / 2;
     img->mpr[3+ioff][0+joff] = 
-    img->mpr[1+ioff][1+joff] = (2*(P_F + P_K) + P_E + P_G + P_J + P_L + 4) / 8;
+    img->mpr[1+ioff][1+joff] = (P_J + 2*P_K + P_L + 2) / 4;
     img->mpr[2+ioff][1+joff] = 
-    img->mpr[0+ioff][2+joff] = (2*(P_G + P_K + P_L) + P_F + P_H + 4) / 8;
+    img->mpr[0+ioff][2+joff] = (P_K + P_L + 1) / 2;
     img->mpr[3+ioff][1+joff] = 
-    img->mpr[1+ioff][2+joff] = (2*(P_H + P_L) + P_G + P_H + P_K + P_L + 4) / 8;
+    img->mpr[1+ioff][2+joff] = (P_K + 2*P_L + P_M + 2) / 4;
     img->mpr[3+ioff][2+joff] = 
-    img->mpr[1+ioff][3+joff] = (P_L + (P_M << 1) + P_N + 2) / 4;
+    img->mpr[1+ioff][3+joff] = (P_L + 2*P_M + P_N + 2) / 4;
     img->mpr[0+ioff][3+joff] = 
-    img->mpr[2+ioff][2+joff] = (P_G + P_H + P_L + P_M + 2) / 4;
+    img->mpr[2+ioff][2+joff] = (P_L + P_M + 1) / 2;
     img->mpr[2+ioff][3+joff] = (P_M + P_N + 1) / 2;
     img->mpr[3+ioff][3+joff] = (P_M + 2*P_N + P_O + 2) / 4;
     break;
@@ -626,17 +631,15 @@ void itrans_sp(struct img_par *img,  //!< image parameters
   int q_bits_sp    = Q_BITS+qp_per_sp;
   int qp_const2=(1<<q_bits_sp)/2;  //sp_pred
 
-  if (img->sp_switch)
+  if (img->sp_switch || img->type == SI_IMG)
   {
-	qp_per = (img->qpsp-MIN_QP)/6;
-	qp_rem = (img->qpsp-MIN_QP)%6;
-	q_bits = Q_BITS+qp_per;
+  	qp_per = (img->qpsp-MIN_QP)/6;
+	  qp_rem = (img->qpsp-MIN_QP)%6;
+	  q_bits = Q_BITS+qp_per;
   }
   for (j=0; j< BLOCK_SIZE; j++)
-    for (i=0; i< BLOCK_SIZE; i++)
-    {
+  for (i=0; i< BLOCK_SIZE; i++)
       predicted_block[i][j]=img->mpr[i+ioff][j+joff];
-    }
   for (j=0; j < BLOCK_SIZE; j++)
   {
     for (i=0; i < 2; i++)
@@ -667,15 +670,14 @@ void itrans_sp(struct img_par *img,  //!< image parameters
     predicted_block[i][3]=m5[3]-m5[2]*2;
   }
 
-
   for (j=0;j<BLOCK_SIZE;j++)
-    for (i=0;i<BLOCK_SIZE;i++)
-    {
+  for (i=0;i<BLOCK_SIZE;i++)
+  {
 	  // recovering coefficient since they are already dequantized earlier
-      img->cof[i0][j0][i][j]=(img->cof[i0][j0][i][j] >> qp_per) / dequant_coef[qp_rem][i][j]; 
-      ilev=(sign((((abs(img->cof[i0][j0][i][j]) << q_bits) + quant_coef[qp_rem][i][j] / 2) / quant_coef[qp_rem][i][j]), img->cof[i0][j0][i][j]) + predicted_block[i][j] );
-      img->cof[i0][j0][i][j]=sign((abs(ilev) * quant_coef[qp_rem_sp][i][j] + qp_const2) >> q_bits_sp, ilev) * dequant_coef[qp_rem_sp][i][j] << qp_per_sp;
-    }
+    img->cof[i0][j0][i][j]=(img->cof[i0][j0][i][j] >> qp_per) / dequant_coef[qp_rem][i][j]; 
+    ilev=((img->cof[i0][j0][i][j]*dequant_coef[qp_rem][i][j]*A[i][j]<< qp_per) >>6)+predicted_block[i][j] ;
+    img->cof[i0][j0][i][j]=sign((abs(ilev) * quant_coef[qp_rem_sp][i][j] + qp_const2) >> q_bits_sp, ilev) * dequant_coef[qp_rem_sp][i][j] << qp_per_sp;
+  }
   // horizontal
   for (j=0;j<BLOCK_SIZE;j++)
   {
@@ -745,10 +747,8 @@ void copyblock_sp(struct img_par *img,int block_x,int block_y)
 
   //  Horizontal transform
   for (j=0; j< BLOCK_SIZE; j++)
-    for (i=0; i< BLOCK_SIZE; i++)
-    {
-      predicted_block[i][j]=img->mpr[i+block_x][j+block_y];
-    }
+  for (i=0; i< BLOCK_SIZE; i++)
+    predicted_block[i][j]=img->mpr[i+block_x][j+block_y];
 
   for (j=0; j < BLOCK_SIZE; j++)
   {
@@ -782,8 +782,8 @@ void copyblock_sp(struct img_par *img,int block_x,int block_y)
 
   // Quant
   for (j=0;j < BLOCK_SIZE; j++)
-    for (i=0; i < BLOCK_SIZE; i++)
-       img->m7[i][j]=sign((abs(predicted_block[i][j])* quant_coef[qp_rem][i][j]+qp_const2)>> q_bits,predicted_block[i][j])*dequant_coef[qp_rem][i][j]<<qp_per;
+  for (i=0; i < BLOCK_SIZE; i++)
+    img->m7[i][j]=sign((abs(predicted_block[i][j])* quant_coef[qp_rem][i][j]+qp_const2)>> q_bits,predicted_block[i][j])*dequant_coef[qp_rem][i][j]<<qp_per;
 
   //     IDCT.
   //     horizontal
@@ -850,7 +850,7 @@ void itrans_sp_chroma(struct img_par *img,int ll)
   q_bits_sp    = Q_BITS+qp_per_sp;
   qp_const2=(1<<q_bits_sp)/2;  //sp_pred
 
-  if (img->sp_switch)
+  if (img->sp_switch || img->type == SI_IMG)
   {
 	qp_per    = ((img->qpsp < 0 ? img->qpsp : QP_SCALE_CR[img->qpsp]) - MIN_QP) / 6;
     qp_rem    = ((img->qpsp < 0 ? img->qpsp : QP_SCALE_CR[img->qpsp]) - MIN_QP) % 6;
@@ -858,11 +858,11 @@ void itrans_sp_chroma(struct img_par *img,int ll)
   }
 
   for (j=0; j < MB_BLOCK_SIZE/2; j++)
-    for (i=0; i < MB_BLOCK_SIZE/2; i++)
-    {
-      predicted_chroma_block[i][j]=img->mpr[i][j];
-      img->mpr[i][j]=0;
-    }
+  for (i=0; i < MB_BLOCK_SIZE/2; i++)
+  {
+    predicted_chroma_block[i][j]=img->mpr[i][j];
+    img->mpr[i][j]=0;
+  }
   for (n2=0; n2 <= BLOCK_SIZE; n2 += BLOCK_SIZE)
   {
     for (n1=0; n1 <= BLOCK_SIZE; n1 += BLOCK_SIZE)
@@ -908,31 +908,27 @@ void itrans_sp_chroma(struct img_par *img,int ll)
   mp1[2]=(predicted_chroma_block[0][0]+predicted_chroma_block[4][0]-predicted_chroma_block[0][4]-predicted_chroma_block[4][4]);
   mp1[3]=(predicted_chroma_block[0][0]-predicted_chroma_block[4][0]-predicted_chroma_block[0][4]+predicted_chroma_block[4][4]);
 
-  ilev=(sign((((abs(img->cof[0+ll][4][0][0]) << (q_bits+1)) + quant_coef[qp_rem][0][0] / 2)/quant_coef[qp_rem][0][0]),img->cof[0+ll][4][0][0])+mp1[0] );
-  mp1[0]=sign((abs(ilev)* quant_coef[qp_rem_sp][0][0]+qp_const2)>> (q_bits_sp+1),ilev)*dequant_coef[qp_rem_sp][0][0]<<qp_per_sp;
-  ilev=(sign((((abs(img->cof[1+ll][4][0][0]) << (q_bits+1)) + quant_coef[qp_rem][0][0] / 2)/quant_coef[qp_rem][0][0]),img->cof[1+ll][4][0][0])+mp1[1] );
-  mp1[1]=sign((abs(ilev)* quant_coef[qp_rem_sp][0][0]+qp_const2)>> (q_bits_sp+1),ilev)*dequant_coef[qp_rem_sp][0][0]<<qp_per_sp;
-  ilev=(sign((((abs(img->cof[0+ll][5][0][0]) << (q_bits+1)) + quant_coef[qp_rem][0][0] / 2)/quant_coef[qp_rem][0][0]),img->cof[0+ll][5][0][0])+mp1[2] );
-  mp1[2]=sign((abs(ilev)* quant_coef[qp_rem_sp][0][0]+qp_const2)>> (q_bits_sp+1),ilev)*dequant_coef[qp_rem_sp][0][0]<<qp_per_sp;
-  ilev=(sign((((abs(img->cof[1+ll][5][0][0]) << (q_bits+1)) + quant_coef[qp_rem][0][0] / 2)/quant_coef[qp_rem][0][0]),img->cof[1+ll][5][0][0])+mp1[3] );
-  mp1[3]=sign((abs(ilev)* quant_coef[qp_rem_sp][0][0]+qp_const2)>> (q_bits_sp+1),ilev)*dequant_coef[qp_rem_sp][0][0]<<qp_per_sp;
+  for (n1=0; n1 < 2; n1 ++)
+  for (n2=0; n2 < 2; n2 ++)
+  {
+    ilev=((img->cof[n1+ll][4+n2][0][0]*dequant_coef[qp_rem][0][0]*A[0][0]<< qp_per) >>5)+mp1[n1+n2*2] ;
+    mp1[n1+n2*2]=sign((abs(ilev)* quant_coef[qp_rem_sp][0][0]+ 2 * qp_const2)>> (q_bits_sp+1),ilev)*dequant_coef[qp_rem_sp][0][0]<<qp_per_sp;
+  }
 
+  for (n2=0; n2 < 2; n2 ++)
+  for (n1=0; n1 < 2; n1 ++)
+  for (i=0;i< BLOCK_SIZE; i++)
+  for (j=0;j< BLOCK_SIZE; j++)
+  {
+  // recovering coefficient since they are already dequantized earlier
+    img->cof[n1+ll][4+n2][i][j] = (img->cof[n1+ll][4+n2][i][j] >> qp_per) / dequant_coef[qp_rem][i][j];
+    ilev=((img->cof[n1+ll][4+n2][i][j]*dequant_coef[qp_rem_sp][i][j]*A[i][j]<< qp_per) >>6)+predicted_chroma_block[n1*BLOCK_SIZE+i][n2*BLOCK_SIZE+j] ;
+    img->cof[n1+ll][4+n2][i][j] = sign((abs(ilev) * quant_coef[qp_rem_sp][i][j] + qp_const2)>> q_bits_sp,ilev)*dequant_coef[qp_rem_sp][i][j]<<qp_per_sp;
+  }
   img->cof[0+ll][4][0][0]=(mp1[0]+mp1[1]+mp1[2]+mp1[3])>>1;
   img->cof[1+ll][4][0][0]=(mp1[0]-mp1[1]+mp1[2]-mp1[3])>>1;
   img->cof[0+ll][5][0][0]=(mp1[0]+mp1[1]-mp1[2]-mp1[3])>>1;
   img->cof[1+ll][5][0][0]=(mp1[0]-mp1[1]-mp1[2]+mp1[3])>>1;
-
-  for (n2=0; n2 <= BLOCK_SIZE; n2 += BLOCK_SIZE)
-    for (n1=0; n1 <= BLOCK_SIZE; n1 += BLOCK_SIZE)
-      for (i=0;i< BLOCK_SIZE; i++)
-        for (j=0;j< BLOCK_SIZE; j++)
-        if ((i!=0) || (j!=0))
-        {
-		  // recovering coefficient since they are already dequantized earlier
-          img->cof[n1/BLOCK_SIZE+ll][4+n2/BLOCK_SIZE][i][j] = (img->cof[n1/BLOCK_SIZE+ll][4+n2/BLOCK_SIZE][i][j] >> qp_per) / dequant_coef[qp_rem][i][j];
-          ilev = sign((((abs(img->cof[n1/BLOCK_SIZE+ll][4+n2/BLOCK_SIZE][i][j]) << q_bits) + quant_coef[qp_rem][i][j]/2) / quant_coef[qp_rem][i][j]), img->cof[n1/BLOCK_SIZE+ll][4+n2/BLOCK_SIZE][i][j]) + predicted_chroma_block[n1+i][n2+j];
-          img->cof[n1/BLOCK_SIZE+ll][4+n2/BLOCK_SIZE][i][j] = sign((abs(ilev) * quant_coef[qp_rem_sp][i][j] + qp_const2)>> q_bits_sp,ilev)*dequant_coef[qp_rem_sp][i][j]<<qp_per_sp;
-        }
 }
 
 int sign(int a , int b)

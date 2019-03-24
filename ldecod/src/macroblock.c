@@ -218,9 +218,7 @@ void start_macroblock(struct img_par *img,struct inp_par *inp, int CurrentMBInSc
   for (i=0; i < (BLOCK_MULTIPLE*BLOCK_MULTIPLE); i++)
     currMB->intra_pred_modes[i] = 0;
 
-  for (j=0; j < BLOCK_MULTIPLE; j++)
-    for (i=0; i < BLOCK_MULTIPLE; i++)
-      currMB->coeffs_count[j][i] = 0;
+  currMB->cbp_bits   = 0;
 
   // initialize img->m7 for ABT
   for (j=0; j<MB_BLOCK_SIZE; j++)
@@ -267,7 +265,7 @@ int exit_macroblock(struct img_par *img,struct inp_par *inp)
     if(nal_startcode_follows(img, inp) == FALSE) 
       return FALSE;
 
-    if(img->type == INTRA_IMG || img->type == SP_IMG_1|| img->type == SP_IMG_MULT || inp->symbol_mode == CABAC)
+    if(img->type == INTRA_IMG  || img->type == SI_IMG || inp->symbol_mode == CABAC)
       return TRUE;
     if(img->cod_counter<=0)
       return TRUE;
@@ -415,7 +413,38 @@ void interpret_mb_mode_B(struct img_par *img)
   }
   currMB->mb_type = mbmode;
 }
+/*!
+ ************************************************************************
+ * \brief
+ *    Interpret the mb mode for SI-Frames
+ ************************************************************************
+ */
+void interpret_mb_mode_SI(struct img_par *img)
+{
+  int i;
+  const int ICBPTAB[6] = {0,16,32,15,31,47};
+  Macroblock *currMB   = &img->mb_data[img->current_mb_nr];
+  int         mbmode   = currMB->mb_type;
 
+  if (mbmode==0)
+  {
+    currMB->mb_type = SI4MB;
+    for (i=0;i<4;i++) {currMB->b8mode[i]=IBLOCK; currMB->b8pdir[i]=-1; currMB->useABT[i] = (USEABT == INTER_INTRA_ABT);}
+    img->siblock[img->mb_x][img->mb_y]=1;
+  }
+  else if (mbmode==1)
+  {
+    currMB->mb_type = I4MB;
+    for (i=0;i<4;i++) {currMB->b8mode[i]=IBLOCK; currMB->b8pdir[i]=-1; currMB->useABT[i] = (USEABT == INTER_INTRA_ABT);}
+  }
+  else
+  {
+    currMB->mb_type = I16MB;
+    for (i=0;i<4;i++) {currMB->b8mode[i]=0; currMB->b8pdir[i]=-1; currMB->useABT[i] = NO_ABT;} // I16MB not with ABT
+    currMB->cbp= ICBPTAB[(mbmode-1)>>2];
+    currMB->i16mode = (mbmode-2) & 0x03;
+  }
+}
 /*!
  ************************************************************************
  * \brief
@@ -537,7 +566,8 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
 
 
   currSE.type = SE_MBTYPE;
-  if( img->type!=INTRA_IMG || USEABT!=INTER_INTRA_ABT )	//in intra frames, there can only be one.
+  // if( img->type!=INTRA_IMG || img->type!= SI_IMG || USEABT!=INTER_INTRA_ABT )	//in intra frames, there can only be one.
+  if( (img->type!=INTRA_IMG && img->type!= SI_IMG) || USEABT!=INTER_INTRA_ABT )	//in intra frames, there can only be one. // bug fix mwi: I&&SI. 
   {
     //  read MB mode *****************************************************************
     if(img->type == B_IMG_1 || img->type == B_IMG_MULT) dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
@@ -556,6 +586,11 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
       currMB->mb_type = currSE.value1;
       if(!dP->bitstream->ei_flag)
         currMB->ei_flag = 0;
+
+      if ((img->type==B_IMG_1 || img->type==B_IMG_MULT) && currSE.value1==0 && currSE.value2==0)
+      {
+        img->cod_counter=0;
+      }
     } 
     else
     {
@@ -590,7 +625,7 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
   }else{//end if code MBmode (due to intra and ABT)
     currMB->mb_type=0;
   }
-
+  img->siblock[img->mb_x][img->mb_y]=0;
 
   if ((img->type==INTER_IMG_1) || (img->type==INTER_IMG_MULT))    // inter frame
     interpret_mb_mode_P(img);
@@ -600,7 +635,8 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
     interpret_mb_mode_B(img);
   else if ((img->type==SP_IMG_1) || (img->type==SP_IMG_MULT))     // SP frame
     interpret_mb_mode_P(img);
-
+  else if (img->type==SI_IMG)     // SI frame
+    interpret_mb_mode_SI(img);
 
   //====== READ 8x8 SUB-PARTITION MODES (modes of 8x8 blocks) and Intra VBST block modes ======
   if (IS_P8x8 (currMB))
@@ -608,17 +644,21 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
     currSE.type    = SE_MBTYPE;
     if (img->type==B_IMG_1 || img->type==B_IMG_MULT)      dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
     else                                                  dP = &(currSlice->partArr[partMap[SE_MBTYPE]]);
-    if (inp->symbol_mode==UVLC || dP->bitstream->ei_flag) currSE.mapping = linfo;
-    else                                                  currSE.reading = readB8_typeInfoFromBuffer_CABAC;
 
     for (i=0; i<4; i++)
     {
+      if (inp->symbol_mode==UVLC || dP->bitstream->ei_flag) currSE.mapping = linfo;
+      else                                                  currSE.reading = readB8_typeInfoFromBuffer_CABAC;
+
       dP->readSyntaxElement (&currSE, img, inp, dP);
       SetB8Mode (img, currMB, currSE.value1, i);
       if( currMB->useABT[i] && currMB->b8mode[i]==IBLOCK )
       {
+        if (inp->symbol_mode==UVLC || dP->bitstream->ei_flag) currSE.mapping = linfo;
+        else                                                  currSE.reading = readABTIntraBlkModeInfo2Buffer_CABAC;
         dP->readSyntaxElement (&currSE, img, inp, dP);
-        currMB->abt_mode[i]=currSE.value1;
+
+        currMB->abt_mode[i]=3-currSE.value1;
         assert(!(currMB->abt_mode[i]&~3));//must be from 0 to 3.
       }
     }
@@ -633,7 +673,7 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
     if (img->type==B_IMG_1 || img->type==B_IMG_MULT)      dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
     else                                                  dP = &(currSlice->partArr[partMap[SE_MBTYPE]]);
     if (inp->symbol_mode==UVLC || dP->bitstream->ei_flag) currSE.mapping = linfo;
-    else                                                  currSE.reading = readB8_typeInfoFromBuffer_CABAC;
+    else                                                  currSE.reading = readABTIntraBlkModeInfo2Buffer_CABAC;
 
     dP->readSyntaxElement (&currSE, img, inp, dP);
     for(i=0; i<4; i++)
@@ -678,7 +718,7 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
   if ((img->type==B_IMG_1) || (img->type==B_IMG_MULT))  init_macroblock_Bframe(img);
   else                                                  init_macroblock       (img);
 
-  if (inp->symbol_mode != CABAC && IS_DIRECT (currMB) && img->cod_counter >= 0)
+  if (IS_DIRECT (currMB) && img->cod_counter >= 0)
   {
     int i, j, iii, jjj;
     currMB->cbp = 0;
@@ -696,6 +736,13 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
           for (jjj=0;jjj<4;jjj++)
             img->cof[i][j][iii][jjj]=0;
     }
+    if (inp->symbol_mode==CABAC)
+      img->cod_counter=-1;
+
+    for (i=0; i < 4; i++)
+      for (j=0; j < 6; j++)
+        img->nz_coeff[img->mb_x ][img->mb_y][i][j]=0;  // CAVLC
+
     return DECODE_MB;
   }
 
@@ -729,6 +776,9 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
       for (i=0; i<BLOCK_SIZE;i++)
         refFrArr[img->block_y+j][img->block_x+i] = 0;
 
+    for (i=0; i < 4; i++)
+      for (j=0; j < 6; j++)
+        img->nz_coeff[img->mb_x ][img->mb_y][i][j]=0;  // CAVLC
 
     if (zeroMotionAbove || zeroMotionLeft)
     {
@@ -774,12 +824,13 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
 
 void read_ipred_modes(struct img_par *img,struct inp_par *inp)
 {
- int b8,bs_x,bs_y,i,j,ii,jj,bi,bj,avail,next_ipreds[2],dec;
+ int b8,bs_x,bs_y,bbs_x,bbs_y,i,j,ii,jj,bi,bj,avail,next_ipreds[2],dec;
  SyntaxElement currSE;
  Slice *currSlice;
  DataPartition *dP;
  int *partMap;
  Macroblock *currMB;
+ int ts, ls;
 
   currMB=img->mb_data+img->current_mb_nr;
 
@@ -796,7 +847,7 @@ void read_ipred_modes(struct img_par *img,struct inp_par *inp)
   else                                                    currSE.reading = readIntraPredModeFromBuffer_CABAC;
 
   avail=0;
-  for(b8=0;b8<4;b8++)	//loop 8x8 blocks
+  for(b8=0;b8<4;b8++)  //loop 8x8 blocks
   {
     if( currMB->b8mode[b8]==IBLOCK )
     {
@@ -806,8 +857,10 @@ void read_ipred_modes(struct img_par *img,struct inp_par *inp)
         bs_x=ABT_TRSIZE[currMB->abt_mode[b8]][0];
         bs_y=ABT_TRSIZE[currMB->abt_mode[b8]][1];
       }
-      for(j=0;j<2;j+=(bs_y>>2))	//loop subblocks
-        for(i=0;i<2;i+=(bs_x>>2))
+      bbs_x = (bs_x>>2);    // bug fix for solaris. mwi
+      bbs_y = (bs_y>>2);    // bug fix for solaris. mwi
+      for(j=0;j<2;j+=bbs_y)  //loop subblocks
+        for(i=0;i<2;i+=bbs_x)
         {
           //get from stream
           if(avail<=0)
@@ -831,7 +884,20 @@ void read_ipred_modes(struct img_par *img,struct inp_par *inp)
           dec=next_ipreds[0];  next_ipreds[0]=next_ipreds[1];  avail--;
           currMB->intra_pred_modes[(b8<<2)|(j<<1)|i]=dec;
 
-          dec=PRED_IPRED[img->ipredmode[1+bi][bj]+1][img->ipredmode[bi][1+bj]+1][dec];
+          ts=ls=0;   // Check to see if the neighboring block is SI
+          if (IS_OLDINTRA(currMB) && img->type == SI_IMG)
+          {
+            if (avail<=0) ls=0;
+            else  if (bi==img->block_x && img->mb_x>0)
+                     if (img->siblock [img->mb_x-1][img->mb_y])
+                          ls=1;
+
+            if (bj==img->block_y && img->mb_y>0)
+              if (img->siblock [img->mb_x][img->mb_y-1])
+                ts=1;
+          }
+
+          dec=PRED_IPRED[img->ipredmode[1+bi][bj]*(1-ts)+1][img->ipredmode[bi][1+bj]*(1-ls)+1][dec];
 
           //set
           for(jj=0;jj<(bs_y>>2);jj++)	//loop 4x4s in the subblock
@@ -1347,6 +1413,367 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
 /*!
  ************************************************************************
  * \brief
+ *    Get the Prediction from the Neighboring BLocks for Number of Nonzero Coefficients 
+ *    
+ *    Luma Blocks
+ ************************************************************************
+ */
+int predict_nnz(struct img_par *img, int i,int j)
+{
+	int Left_block,Top_block, pred_nnz;
+  int cnt=0;
+
+  if (i)
+    Left_block= img->nz_coeff [img->mb_x ][img->mb_y ][i-1][j];
+  else
+      Left_block= img->mb_x > 0 ? img->nz_coeff [img->mb_x-1 ][img->mb_y ][3][j] : -1;
+  if (j)
+    Top_block=  img->nz_coeff [img->mb_x ][img->mb_y ][i][j-1];
+  else
+      Top_block=  img->mb_y > 0 ? img->nz_coeff [img->mb_x ][img->mb_y-1 ][i][3] : -1;
+  
+  pred_nnz=0;
+  if (Left_block>-1)
+  {
+    pred_nnz=Left_block;
+    cnt++;
+  }
+  if (Top_block>-1)
+  {
+    pred_nnz+=Top_block;
+    cnt++;
+  }
+  if (cnt)
+    pred_nnz/=cnt; 
+	return pred_nnz;
+}
+/*!
+ ************************************************************************
+ * \brief
+ *    Get the Prediction from the Neighboring BLocks for Number of Nonzero Coefficients 
+ *    
+ *    Chroma Blocks   
+ ************************************************************************
+ */
+int predict_nnz_chroma(struct img_par *img, int i,int j)
+{
+	int Left_block,Top_block, pred_nnz;
+  int cnt=0;
+
+  if (i==1 || i==3)
+    Left_block= img->nz_coeff [img->mb_x ][img->mb_y ][i-1][j];
+  else
+      Left_block= img->mb_x > 0 ? img->nz_coeff [img->mb_x-1 ][img->mb_y ][i+1][j] : -1;
+  if (j==5)
+    Top_block=  img->nz_coeff [img->mb_x ][img->mb_y ][i][j-1];
+  else
+    Top_block=  img->mb_y > 0 ? img->nz_coeff [img->mb_x ][img->mb_y-1 ][i][5] : -1;
+  
+  pred_nnz=0;
+  if (Left_block>-1)
+  {
+    pred_nnz=Left_block;
+    cnt++;
+  }
+  if (Top_block>-1)
+  {
+    pred_nnz+=Top_block;
+    cnt++;
+  }
+  if (cnt)
+    pred_nnz/=cnt; 
+	return pred_nnz;
+}
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Reads coeff of an 4x4 block (CAVLC)
+ *
+ * \author
+ *    Karl Lillevold <karll@real.com>
+ *    contributions by James Au <james@ubvideo.com>
+ ************************************************************************
+ */
+
+
+void readCoeff4x4_CAVLC (struct img_par *img,struct inp_par *inp,
+                        int block_type, 
+                        int i, int j, int levarr[16], int runarr[16],
+                        int *number_coefficients)
+{
+  int mb_nr = img->current_mb_nr;
+  Macroblock *currMB = &img->mb_data[mb_nr];
+  SyntaxElement currSE;
+  Slice *currSlice = img->currentSlice;
+  DataPartition *dP;
+  int *partMap = assignSE2partition[currSlice->dp_mode];
+
+
+  int k, code, vlcnum;
+  int numcoeff, numtrailingones, numcoeff_vlc;
+  int level_two_or_higher;
+  int numones, totzeros, level, cdc=0, cac=0;
+  int zerosleft, ntr, dptype;
+  int max_coeff_num, nnz;
+  char type[15];
+  int incVlc[] = {0,3,6,12,24,48,32768};	// maximum vlc = 6
+
+  numcoeff = 0;
+
+  switch (block_type)
+  {
+  case LUMA:
+    max_coeff_num = 16;
+    sprintf(type, "%s", "Luma");
+    if (IS_INTRA (currMB))
+    {
+      dptype = SE_LUM_AC_INTRA;
+    }
+    else
+    {
+      dptype = SE_LUM_AC_INTER;
+    }
+    break;
+  case LUMA_INTRA16x16DC:
+    max_coeff_num = 16;
+    sprintf(type, "%s", "Lum16DC");
+    dptype = SE_LUM_DC_INTRA;
+    break;
+  case LUMA_INTRA16x16AC:
+    max_coeff_num = 15;
+    sprintf(type, "%s", "Lum16AC");
+    dptype = SE_LUM_AC_INTRA;
+    break;
+
+  case CHROMA_DC:
+    max_coeff_num = 4;
+    cdc = 1;
+
+    sprintf(type, "%s", "ChrDC");
+    if (IS_INTRA (currMB))
+    {
+      dptype = SE_CHR_DC_INTRA;
+    }
+    else
+    {
+      dptype = SE_CHR_DC_INTER;
+    }
+    break;
+  case CHROMA_AC:
+    max_coeff_num = 15;
+    cac = 1;
+    sprintf(type, "%s", "ChrAC");
+    if (IS_INTRA (currMB))
+    {
+      dptype = SE_CHR_AC_INTRA;
+    }
+    else
+    {
+      dptype = SE_CHR_AC_INTER;
+    }
+    break;
+  }
+
+  if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
+  {
+    dptype = SE_BFRAME;
+  }
+
+  currSE.type = dptype;
+  dP = &(currSlice->partArr[partMap[dptype]]);
+
+  img->nz_coeff[img->mb_x ][img->mb_y][i][j] = 0;
+
+
+  if (!cdc)
+  {
+    // luma or chroma AC
+    if (!cac)
+    {
+      nnz = predict_nnz(img, i, j);
+    }
+    else
+    {
+      nnz = predict_nnz_chroma(img, i, j);
+    }
+
+    if (nnz < 2)
+    {
+      numcoeff_vlc = 0;
+    }
+    else if (nnz < 4)
+    {
+      numcoeff_vlc = 1;
+    }
+    else if (nnz < 8)
+    {
+      numcoeff_vlc = 2;
+    }
+    else //
+    {
+      numcoeff_vlc = 3;
+    }
+
+    currSE.value1 = numcoeff_vlc;
+
+    readSyntaxElement_NumCoeffTrailingOnes(&currSE, dP, type);
+
+    numcoeff =  currSE.value1;
+    numtrailingones =  currSE.value2;
+
+    img->nz_coeff[img->mb_x ][img->mb_y][i][j] = numcoeff;
+  }
+  else
+  {
+    // chroma DC
+    readSyntaxElement_NumCoeffTrailingOnesChromaDC(&currSE, dP);
+
+    numcoeff =  currSE.value1;
+    numtrailingones =  currSE.value2;
+  }
+
+
+  for (k = 0; k < max_coeff_num; k++)
+  {
+    levarr[k] = 0;
+    runarr[k] = 0;
+  }
+
+  numones = numtrailingones;
+  *number_coefficients = numcoeff;
+
+  if (numcoeff)
+  {
+    if (numtrailingones)
+    {
+
+      currSE.len = numtrailingones;
+
+#if TRACE
+      snprintf(currSE.tracestring, 
+        TRACESTRING_SIZE, "%s trailing ones sign (%d,%d)", type, i, j);
+#endif
+
+      readSyntaxElement_FLC (&currSE, dP);
+
+      code = currSE.inf;
+      ntr = numtrailingones;
+      for (k = numcoeff-1; k > numcoeff-1-numtrailingones; k--)
+      {
+        ntr --;
+        if ((code>>ntr)&1)
+          levarr[k] = -1;
+        else
+          levarr[k] = 1;
+      }
+    }
+
+    // decode levels
+    level_two_or_higher = 1;
+    if (numcoeff > 3 && numtrailingones == 3)
+      level_two_or_higher = 0;
+
+	  if (numcoeff > 10 && numtrailingones < 3)
+		  vlcnum = 1;
+	  else
+		  vlcnum = 0;
+
+    for (k = numcoeff - 1 - numtrailingones; k >= 0; k--)
+    {
+
+#if TRACE
+      snprintf(currSE.tracestring, 
+        TRACESTRING_SIZE, "%s lev (%d,%d) k=%d vlc=%d ", type,
+          i, j, k, vlcnum);
+#endif
+
+      if (vlcnum == 0)
+	      readSyntaxElement_Level_VLC0(&currSE, dP);
+      else
+	      readSyntaxElement_Level_VLCN(&currSE, vlcnum, dP);
+
+      if (level_two_or_higher)
+      {
+	      if (currSE.inf > 0)
+	      currSE.inf ++;
+	      else
+	      currSE.inf --;
+	      level_two_or_higher = 0;
+      }
+
+      level = levarr[k] = currSE.inf;
+      if (abs(level) == 1)
+        numones ++;
+
+      // update VLC table
+      if (abs(level)>incVlc[vlcnum])
+        vlcnum++;
+
+      if (k == numcoeff - 1 - numtrailingones && abs(level)>3)
+        vlcnum = 2;
+
+    }
+    
+    if (numcoeff < max_coeff_num)
+    {
+      // decode total run
+      vlcnum = numcoeff-1;
+      currSE.value1 = vlcnum;
+
+#if TRACE
+      snprintf(currSE.tracestring, 
+        TRACESTRING_SIZE, "%s totalrun (%d,%d) vlc=%d ", type, i,j, vlcnum);
+#endif
+      if (cdc)
+        readSyntaxElement_TotalZerosChromaDC(&currSE, dP);
+      else
+        readSyntaxElement_TotalZeros(&currSE, dP);
+
+      totzeros = currSE.value1;
+    }
+    else
+    {
+      totzeros = 0;
+    }
+
+    // decode run before each coefficient
+    zerosleft = totzeros;
+    i = numcoeff-1;
+    if (zerosleft > 0 && i > 0)
+    {
+      do 
+      {
+        // select VLC for runbefore
+        vlcnum = zerosleft - 1;
+        if (vlcnum > RUNBEFORE_NUM-1)
+          vlcnum = RUNBEFORE_NUM-1;
+
+        currSE.value1 = vlcnum;
+#if TRACE
+        snprintf(currSE.tracestring, 
+          TRACESTRING_SIZE, "%s run (%d,%d) k=%d vlc=%d ",
+            type, i, j, i, vlcnum);
+#endif
+
+        readSyntaxElement_Run(&currSE, dP);
+        runarr[i] = currSE.value1;
+
+        zerosleft -= runarr[i];
+        i --;
+      } while (zerosleft != 0 && i != 0);
+    }
+    runarr[i] = zerosleft;
+
+  } // if numcoeff
+}
+
+
+
+/*!
+ ************************************************************************
+ * \brief
  *    Get coded block pattern and coefficients (run/level)
  *    from the NAL
  ************************************************************************
@@ -1354,7 +1781,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
 void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
 {
   int i,j,k;
-  int level, run;
+  int level;
   int mb_nr = img->current_mb_nr;
   int ii,jj;
   int i1,j1, m2,jg2;
@@ -1365,23 +1792,26 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
   DataPartition *dP;
   int *partMap = assignSE2partition[currSlice->dp_mode];
   int iii,jjj;
-  int coef_ctr, len, i0, j0, b8;
+  int coef_ctr, i0, j0, b8;
   int ll;
-  int scan_loop_ctr;
   int block_x,block_y;
   int start_scan;
   int uv;
+
+
+  int run, len, scan_loop_ctr;
+  int levarr[16], runarr[16], numcoeff;
 
   int qp_per    = (img->qp-MIN_QP)/6;
   int qp_rem    = (img->qp-MIN_QP)%6;
   int qp_per_uv = QP_SCALE_CR[img->qp-MIN_QP]/6;
   int qp_rem_uv = QP_SCALE_CR[img->qp-MIN_QP]%6;
-
+  int smb       = ((img->type==SP_IMG_1 || img->type==SP_IMG_MULT) && IS_INTER (currMB)) || (img->type == SI_IMG && currMB->mb_type == SI4MB);
 
   // read CBP if not new intra mode
   if (!IS_NEWINTRA (currMB))
   {
-    if (IS_OLDINTRA (currMB))   currSE.type = SE_CBP_INTRA;
+    if (IS_OLDINTRA (currMB) || currMB->mb_type == SI4MB )   currSE.type = SE_CBP_INTRA;
     else                        currSE.type = SE_CBP_INTER;
 
     if(img->type == B_IMG_1 || img->type == B_IMG_MULT)  dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
@@ -1389,7 +1819,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
     
     if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
     {
-      if (IS_OLDINTRA (currMB))  currSE.mapping = linfo_cbp_intra;
+      if (IS_OLDINTRA (currMB) || currMB->mb_type == SI4MB)  currSE.mapping = linfo_cbp_intra;
       else                       currSE.mapping = linfo_cbp_inter;
     }
     else
@@ -1416,10 +1846,8 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
         currSE.mapping = linfo_dquant;
       }
       else
-      {
-        if (IS_INTER (currMB))   currSE.reading= readDquant_inter_FromBuffer_CABAC;
-        else                     currSE.reading= readDquant_intra_FromBuffer_CABAC;
-      } 
+				currSE.reading= readDquant_FromBuffer_CABAC; //gabi
+
 #if TRACE
       snprintf(currSE.tracestring, TRACESTRING_SIZE, " Delta quant ");
 #endif
@@ -1453,7 +1881,8 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
     }
     else
     {
-      currSE.reading= readDquant_intra_FromBuffer_CABAC;
+			currSE.reading= readDquant_FromBuffer_CABAC;
+      //currSE.reading= readDquant_intra_FromBuffer_CABAC;
     }
 #if TRACE
     snprintf(currSE.tracestring, TRACESTRING_SIZE, " Delta quant ");
@@ -1467,42 +1896,71 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
         img->ipredmode[img->block_x+i+1][img->block_y+j+1]=0;
 
 
-    currSE.type = SE_LUM_DC_INTRA;
-    if(img->type == B_IMG_1 || img->type == B_IMG_MULT)  dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-    else                                                 dP = &(currSlice->partArr[partMap[currSE.type]]);
-
-    currSE.golomb_maxlevels=0;  //do not use generic golomb
-
-    if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
+    if (inp->symbol_mode == UVLC)
     {
-      currSE.mapping = linfo_levrun_inter;
+      readCoeff4x4_CAVLC(img, inp, LUMA_INTRA16x16DC, 0, 0,
+                          levarr, runarr, &numcoeff);
+
+      coef_ctr=-1;
+      level = 1;                            // just to get inside the loop
+      for(k = 0; k < numcoeff; k++)
+      {
+        if (levarr[k] != 0)                     // leave if len=1
+        {
+          coef_ctr=coef_ctr+runarr[k]+1;
+
+          i0=SNGL_SCAN[coef_ctr][0];
+          j0=SNGL_SCAN[coef_ctr][1];
+
+          img->cof[i0][j0][0][0]=levarr[k];// add new intra DC coeff
+        }
+      }
     }
     else
     {
-      currSE.reading = readRunLevelFromBuffer_CABAC;
-      currSE.context = 3; // for choosing context model
-    }
 
-    coef_ctr=-1;
-    level = 1;                            // just to get inside the loop
-    for(k=0;(k<17) && (level!=0);k++)
-    {
-#if TRACE
-      snprintf(currSE.tracestring, TRACESTRING_SIZE, "DC luma 16x16 ");
-#endif
-      dP->readSyntaxElement(&currSE,img,inp,dP);
-      level = currSE.value1;
-      run   = currSE.value2;
-      len   = currSE.len;
+      currSE.type = SE_LUM_DC_INTRA;
+      if(img->type == B_IMG_1 || img->type == B_IMG_MULT)  dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+      else                                                 dP = &(currSlice->partArr[partMap[currSE.type]]);
 
-      if (level != 0)                     // leave if len=1
+      currSE.golomb_maxlevels=0;  //do not use generic golomb
+
+      currSE.context      = LUMA_16DC;
+      currSE.type         = SE_LUM_DC_INTRA;
+      img->is_intra_block = 1;
+
+      if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
       {
-        coef_ctr=coef_ctr+run+1;
+        currSE.mapping = linfo_levrun_inter;
+      }
+      else
+      {
+        currSE.reading = readRunLevelFromBuffer_CABAC;
+      }
 
-        i0=SNGL_SCAN[coef_ctr][0];
-        j0=SNGL_SCAN[coef_ctr][1];
 
-        img->cof[i0][j0][0][0]=level;// add new intra DC coeff
+
+      coef_ctr=-1;
+      level = 1;                            // just to get inside the loop
+      for(k=0;(k<17) && (level!=0);k++)
+      {
+#if TRACE
+        snprintf(currSE.tracestring, TRACESTRING_SIZE, "DC luma 16x16 ");
+#endif
+        dP->readSyntaxElement(&currSE,img,inp,dP);
+        level = currSE.value1;
+        run   = currSE.value2;
+        len   = currSE.len;
+
+        if (level != 0)                     // leave if len=1
+        {
+          coef_ctr=coef_ctr+run+1;
+
+          i0=SNGL_SCAN[coef_ctr][0];
+          j0=SNGL_SCAN[coef_ctr][1];
+
+          img->cof[i0][j0][0][0]=level;// add new intra DC coeff
+        }
       }
     }
     itrans_2(img);// transform new intra DC
@@ -1519,140 +1977,177 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
   {
     for (block_x=0; block_x < 4; block_x += 2)
     {
-      b8 = 2*(block_y/2) + block_x/2;
 
-      if (currMB->useABT[b8])
-        readLumaCoeffABT_B8(b8, inp, img);
-      else
+      b8 = 2*(block_y/2) + block_x/2;
+      if (inp->symbol_mode == UVLC && !currMB->useABT[b8])
       {
         for (j=block_y; j < block_y+2; j++)
         {
-          //jj=j/2;
           for (i=block_x; i < block_x+2; i++)
           {
-            //ii = i/2;
-            //b8 = 2*jj+ii;
+            ii = block_x/2; jj = block_y/2;
+            b8 = 2*jj+ii;
 
-            if (IS_NEWINTRA (currMB))   start_scan = 1; /* skip DC coeff */
-            else                        start_scan = 0; /* take all coeffs */
-
-            img->subblock_x = i; // position for coeff_count ctx
-            img->subblock_y = j; // position for coeff_count ctx
             if (cbp & (1<<b8))  /* are there any coeff in current block at all */
             {
-              if (currMB->b8mode[b8]!=IBLOCK || (inp->symbol_mode!=CABAC && (img->qp-SHIFT_QP)>=24))
+              if (IS_NEWINTRA(currMB))
               {
-                coef_ctr = start_scan-1;
-                level    = 1;
-                for(k=start_scan;(k<17) && (level!=0);k++)
+                readCoeff4x4_CAVLC(img, inp, LUMA_INTRA16x16AC, i, j,
+                                    levarr, runarr, &numcoeff);
+
+                start_scan = 1;
+              }
+              else
+              {
+                readCoeff4x4_CAVLC(img, inp, LUMA, i, j,
+                                    levarr, runarr, &numcoeff);
+                start_scan = 0;
+              }
+
+              coef_ctr = start_scan-1;
+              for (k = 0; k < numcoeff; k++)
+              {
+                if (levarr[k] != 0)
                 {
-                  /*
-                   * make distinction between INTRA and INTER coded
-                   * luminance coefficients
-                   */
-                  if (k == 0)
-                  {
-                    if (currMB->b8mode[b8]==IBLOCK || IS_NEWINTRA (currMB))
-                    {
-                      currSE.context = 2; // for choosing context model
-                      currSE.type  = SE_LUM_DC_INTRA;
-                    }
-                    else
-                    {
-                      currSE.context = 1; // for choosing context model
-                      currSE.type  = SE_LUM_DC_INTER;
-                    }
-                  }
-                  else
-                  {
-                    if (currMB->b8mode[b8]==IBLOCK)
-                    {
-                      currSE.context = 2; // for choosing context model
-                      currSE.type  = SE_LUM_AC_INTRA;
-                    }
-                    else if (IS_NEWINTRA (currMB))
-                    {
-                      currSE.context = 4; // for choosing context model
-                      currSE.type  = SE_LUM_AC_INTRA;
-                    }
-                    else
-                    {
-                      currSE.context = 1; // for choosing context model
-                      currSE.type  = SE_LUM_AC_INTER;
-                    }
-                  }
-#if TRACE
-                  sprintf(currSE.tracestring, " Luma sng ");
-#endif
-                  if(img->type == B_IMG_1 || img->type == B_IMG_MULT)  dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-                  else                                                 dP = &(currSlice->partArr[partMap[currSE.type]]);
-
-                  if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)  currSE.mapping = linfo_levrun_inter;
-                  else                                                     currSE.reading = readRunLevelFromBuffer_CABAC;
-
-                  currSE.golomb_maxlevels=0;  //do not use generic golomb
-
-                  dP->readSyntaxElement(&currSE,img,inp,dP);
-                  level = currSE.value1;
-                  run   =  currSE.value2;
-                  len   = currSE.len;
-
-                  if (level != 0)    /* leave if len=1 */
-                  {
-                    coef_ctr             += run+1;
-                    i0=SNGL_SCAN[coef_ctr][0];
-                    j0=SNGL_SCAN[coef_ctr][1];
-                    currMB->cbp_blk      |= 1 << ((j<<2) + i) ;
-                    img->cof[i][j][i0][j0]= level*dequant_coef[qp_rem][i0][j0]<<qp_per;
-                  }
+                  coef_ctr             += runarr[k]+1;
+                  i0=SNGL_SCAN[coef_ctr][0];
+                  j0=SNGL_SCAN[coef_ctr][1];
+                  currMB->cbp_blk      |= 1 << ((j<<2) + i) ;
+                  img->cof[i][j][i0][j0]= levarr[k]*dequant_coef[qp_rem][i0][j0]<<qp_per;
                 }
               }
-              else    /* double scan (old intra with QP<24*/
+            }
+            else
+            {
+              img->nz_coeff[img->mb_x][img->mb_y][i][j] = 0;
+            }
+          }
+        }
+      }
+      else
+      {
+
+        b8 = 2*(block_y/2) + block_x/2;
+
+        if (currMB->useABT[b8])
+        {
+          for (j=block_y; j < block_y+2; j++)
+          {
+            for (i=block_x; i < block_x+2; i++)
+            {
+              img->nz_coeff[img->mb_x][img->mb_y][i][j] = 0;  // CAVLC
+            }
+          }
+          readLumaCoeffABT_B8(b8, inp, img);
+
+        }
+		
+        else
+        {
+          for (j=block_y; j < block_y+2; j++)
+          {
+            //jj=j/2;
+            for (i=block_x; i < block_x+2; i++)
+            {
+              //ii = i/2;
+              //b8 = 2*jj+ii;
+
+              if (IS_NEWINTRA (currMB))   start_scan = 1; /* skip DC coeff */
+              else                        start_scan = 0; /* take all coeffs */
+
+              img->subblock_x = i; // position for coeff_count ctx
+              img->subblock_y = j; // position for coeff_count ctx
+              if (cbp & (1<<b8))  /* are there any coeff in current block at all */
               {
-                for(scan_loop_ctr=0;scan_loop_ctr<2;scan_loop_ctr++)
+                if (currMB->b8mode[b8]!=IBLOCK || (img->qp-SHIFT_QP)>=24 || inp->symbol_mode==CABAC)
                 {
-                  coef_ctr=start_scan-1;
-                  level=1;                          /* just to get inside the loop */
-                  for(k=0; k<9 && level!=0;k++)
+                  coef_ctr = start_scan-1;
+                  level    = 1;
+                  for(k=start_scan;(k<17) && (level!=0);k++)
                   {
-                    if (k == 0)  currSE.type  = SE_LUM_DC_INTRA; /* element is of type DC */
-                    else         currSE.type  = SE_LUM_AC_INTRA; /* element is of type AC */
+                    /*
+                     * make distinction between INTRA and INTER coded
+                     * luminance coefficients
+                     */
+                    currSE.context      = (IS_NEWINTRA(currMB) ? LUMA_16AC : LUMA_4x4);
+                    currSE.type         = (IS_NEWINTRA(currMB) || currMB->b8mode[b8]==IBLOCK ?
+                                           (k==0 ? SE_LUM_DC_INTRA : SE_LUM_AC_INTRA) :
+                                           (k==0 ? SE_LUM_DC_INTER : SE_LUM_AC_INTER));
+                    img->is_intra_block = (IS_NEWINTRA(currMB) || currMB->b8mode[b8]==IBLOCK);
+
 #if TRACE
-                    sprintf(currSE.tracestring, "Luma dbl(%2d,%2d)  ",scan_loop_ctr,k);
+                    sprintf(currSE.tracestring, " Luma sng ");
 #endif
                     if(img->type == B_IMG_1 || img->type == B_IMG_MULT)  dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
                     else                                                 dP = &(currSlice->partArr[partMap[currSE.type]]);
 
-                    if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
-                    {
-                      currSE.mapping = linfo_levrun_intra;
-                    }
-                    else
-                    {
-                      currSE.context = 0; // for choosing context model
-                      currSE.reading = readRunLevelFromBuffer_CABAC;
-                    }
+                    if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)  currSE.mapping = linfo_levrun_inter;
+                    else                                                     currSE.reading = readRunLevelFromBuffer_CABAC;
+
                     currSE.golomb_maxlevels=0;  //do not use generic golomb
+
                     dP->readSyntaxElement(&currSE,img,inp,dP);
                     level = currSE.value1;
-                    run   = currSE.value2;
+                    run   =  currSE.value2;
                     len   = currSE.len;
 
                     if (level != 0)    /* leave if len=1 */
                     {
-                      coef_ctr              = coef_ctr+run+1;
+                      coef_ctr             += run+1;
+                      i0=SNGL_SCAN[coef_ctr][0];
+                      j0=SNGL_SCAN[coef_ctr][1];
                       currMB->cbp_blk      |= 1 << ((j<<2) + i) ;
-                      i0=DBL_SCAN[coef_ctr][0][scan_loop_ctr];
-                      j0=DBL_SCAN[coef_ctr][1][scan_loop_ctr];
                       img->cof[i][j][i0][j0]= level*dequant_coef[qp_rem][i0][j0]<<qp_per;
+                    }
+                  }
+                }
+                else    /* double scan (old intra with QP<24*/
+                {
+                  for(scan_loop_ctr=0;scan_loop_ctr<2;scan_loop_ctr++)
+                  {
+                    coef_ctr=start_scan-1;
+                    level=1;                          /* just to get inside the loop */
+                    for(k=0; k<9 && level!=0;k++)
+                    {
+                      if (k == 0)  currSE.type  = SE_LUM_DC_INTRA; /* element is of type DC */
+                      else         currSE.type  = SE_LUM_AC_INTRA; /* element is of type AC */
+#if TRACE
+                      sprintf(currSE.tracestring, "Luma dbl(%2d,%2d)  ",scan_loop_ctr,k);
+#endif
+                      if(img->type == B_IMG_1 || img->type == B_IMG_MULT)  dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+                      else                                                 dP = &(currSlice->partArr[partMap[currSE.type]]);
+
+                      if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
+                      {
+                        currSE.mapping = linfo_levrun_intra;
+                      }
+                      else
+                      {
+                        currSE.context = 0; // for choosing context model
+                        currSE.reading = readRunLevelFromBuffer_CABAC;
+                      }
+                      currSE.golomb_maxlevels=0;  //do not use generic golomb
+                      dP->readSyntaxElement(&currSE,img,inp,dP);
+                      level = currSE.value1;
+                      run   = currSE.value2;
+                      len   = currSE.len;
+
+                      if (level != 0)    /* leave if len=1 */
+                      {
+                        coef_ctr              = coef_ctr+run+1;
+                        currMB->cbp_blk      |= 1 << ((j<<2) + i) ;
+                        i0=DBL_SCAN[coef_ctr][0][scan_loop_ctr];
+                        j0=DBL_SCAN[coef_ctr][1][scan_loop_ctr];
+                        img->cof[i][j][i0][j0]= level*dequant_coef[qp_rem][i0][j0]<<qp_per;
+                      }
                     }
                   }
                 }
               }
             }
           }
-        }
-      } // else ABT
+        } // else ABT
+      } 
     }
   }
 
@@ -1673,63 +2168,78 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
       for (i=0;i<4;i++)
         img->cofu[i]=0;
 
-      coef_ctr=-1;
-      level=1;
-      for(k=0;(k<5)&&(level!=0);k++)
-      {
-        if (IS_INTRA (currMB))
-        {
-          currSE.context = 6; // for choosing context model
-          currSE.type  = SE_CHR_DC_INTRA;
-        }
-        else
-        {
-          currSE.context = 5; // for choosing context model
-          currSE.type  = SE_CHR_DC_INTER;
-        }
-        currSE.k = ll; //coeff_count ctx
-#if TRACE
-        snprintf(currSE.tracestring, TRACESTRING_SIZE, " 2x2 DC Chroma ");
-#endif
-        if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
-          dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-        else
-          dP = &(currSlice->partArr[partMap[currSE.type]]);
-        
-        if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
-          currSE.mapping = linfo_levrun_c2x2;
-        else
-          currSE.reading = readRunLevelFromBuffer_CABAC;
 
-        dP->readSyntaxElement(&currSE,img,inp,dP);
-        level = currSE.value1;
-        run = currSE.value2;
-        len = currSE.len;
-        if (level != 0)
-        {
-          currMB->cbp_blk |= 0xf0000 << (ll<<1) ;
-          coef_ctr=coef_ctr+run+1;
-          // Bug: img->cofu has only 4 entries, hence coef_ctr MUST be <4 (which is
-          // caught by the assert().  If it is bigger than 4, it starts patching the
-          // img->predmode pointer, which leads to bugs later on.
-          //
-          // This assert() should be left in the code, because it captures a very likely
-          // bug early when testing in error prone environments (or when testing NAL
-          // functionality).
-          assert (coef_ctr < 4);
-          img->cofu[coef_ctr]=level*dequant_coef[qp_rem_uv][0][0]<<qp_per_uv;
-        }
-      }
-
-      if (((img->type==SP_IMG_1 || img->type==SP_IMG_MULT) && IS_INTER (currMB)))
+      if (inp->symbol_mode == UVLC)
       {
-        img->cof[0+ll][4][0][0]=(img->cofu[0]>>qp_per_uv)/dequant_coef[qp_rem_uv][0][0];
-        img->cof[1+ll][4][0][0]=(img->cofu[1]>>qp_per_uv)/dequant_coef[qp_rem_uv][0][0];
-        img->cof[0+ll][5][0][0]=(img->cofu[2]>>qp_per_uv)/dequant_coef[qp_rem_uv][0][0];
-        img->cof[1+ll][5][0][0]=(img->cofu[3]>>qp_per_uv)/dequant_coef[qp_rem_uv][0][0];
+
+        readCoeff4x4_CAVLC(img, inp, CHROMA_DC, 0, 0,
+                            levarr, runarr, &numcoeff);
+        coef_ctr=-1;
+        level=1;
+        for(k = 0; k < numcoeff; k++)
+        {
+          if (levarr[k] != 0)
+          {
+            currMB->cbp_blk |= 0xf0000 << (ll<<1) ;
+            coef_ctr=coef_ctr+runarr[k]+1;
+            img->cofu[coef_ctr]=levarr[k];
+          }
+        }
       }
       else
       {
+        coef_ctr=-1;
+        level=1;
+        for(k=0;(k<5)&&(level!=0);k++)
+        {
+          currSE.context      = CHROMA_DC;
+          currSE.type         = (IS_INTRA(currMB) ? SE_CHR_DC_INTRA : SE_CHR_DC_INTER);
+          img->is_intra_block =  IS_INTRA(currMB);
+          img->is_v_block     = ll;
+
+#if TRACE
+          snprintf(currSE.tracestring, TRACESTRING_SIZE, " 2x2 DC Chroma ");
+#endif
+          if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
+            dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+          else
+            dP = &(currSlice->partArr[partMap[currSE.type]]);
+        
+          if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
+            currSE.mapping = linfo_levrun_c2x2;
+          else
+            currSE.reading = readRunLevelFromBuffer_CABAC;
+
+          dP->readSyntaxElement(&currSE,img,inp,dP);
+          level = currSE.value1;
+          run = currSE.value2;
+          len = currSE.len;
+          if (level != 0)
+          {
+            currMB->cbp_blk |= 0xf0000 << (ll<<1) ;
+            coef_ctr=coef_ctr+run+1;
+            // Bug: img->cofu has only 4 entries, hence coef_ctr MUST be <4 (which is
+            // caught by the assert().  If it is bigger than 4, it starts patching the
+            // img->predmode pointer, which leads to bugs later on.
+            //
+            // This assert() should be left in the code, because it captures a very likely
+            // bug early when testing in error prone environments (or when testing NAL
+            // functionality).
+            assert (coef_ctr < 4);
+            img->cofu[coef_ctr]=level;
+          }
+        }
+      }
+
+      if (smb) // check to see if MB type is SPred or SIntra4x4 
+      {
+         img->cof[0+ll][4][0][0]=img->cofu[0];   img->cof[1+ll][4][0][0]=img->cofu[1];
+         img->cof[0+ll][5][0][0]=img->cofu[2];   img->cof[1+ll][5][0][0]=img->cofu[3];
+      }
+      else
+      { 
+        for (i=0;i<4;i++)
+          img->cofu[i]*=dequant_coef[qp_rem_uv][0][0]<<qp_per_uv;
         img->cof[0+ll][4][0][0]=(img->cofu[0]+img->cofu[1]+img->cofu[2]+img->cofu[3])>>1;
         img->cof[1+ll][4][0][0]=(img->cofu[0]-img->cofu[1]+img->cofu[2]-img->cofu[3])>>1;
         img->cof[0+ll][5][0][0]=(img->cofu[0]+img->cofu[1]-img->cofu[2]-img->cofu[3])>>1;
@@ -1737,6 +2247,13 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
       }
     }
   }
+
+  // chroma AC coeff, all zero fram start_scan
+  if (cbp<=31)
+    for (j=4; j < 6; j++)
+      for (i=0; i < 4; i++)
+  	    img->nz_coeff [img->mb_x ][img->mb_y ][i][j]=0;
+
 
   // chroma AC coeff, all zero fram start_scan
   uv=-1;
@@ -1751,25 +2268,46 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
         j1=j-4;
         for (i=block_x; i < block_x+2; i++)
         {
+
           ii=i/2;
           i1=i%2;
+
+          if (inp->symbol_mode == UVLC)
+          {
+            readCoeff4x4_CAVLC(img, inp, CHROMA_AC, i, j,
+                                levarr, runarr, &numcoeff);
+            coef_ctr=0;
+            level=1;
+            uv++;
+            for(k = 0; k < numcoeff;k++)
+            {
+              if (levarr[k] != 0)
+              {
+                currMB->cbp_blk |= 1 << (16 + (j1<<1) + i1 + (block_x<<1) ) ;
+                coef_ctr=coef_ctr+runarr[k]+1;
+                i0=SNGL_SCAN[coef_ctr][0];
+                j0=SNGL_SCAN[coef_ctr][1];
+                img->cof[i][j][i0][j0]=levarr[k]*dequant_coef[qp_rem_uv][i0][j0]<<qp_per_uv;
+              }
+            }
+          }
+
+          else
           {
             coef_ctr=0;
             level=1;
             uv++;
+
+            img->subblock_y = j/5;
+            img->subblock_x = i%2;
+
             for(k=0;(k<16)&&(level!=0);k++)
             {
-              currSE.k = uv;  //coeff_count ctx
-              if (IS_INTRA (currMB))
-              {
-                currSE.context = 8; // for choosing context model
-                currSE.type  = SE_CHR_AC_INTRA;
-              }
-              else
-              {
-                currSE.context = 7; // for choosing context model
-                currSE.type  = SE_CHR_AC_INTER;
-              }
+              currSE.context      = CHROMA_AC;
+              currSE.type         = (IS_INTRA(currMB) ? SE_CHR_AC_INTRA : SE_CHR_AC_INTER);
+              img->is_intra_block =  IS_INTRA(currMB);
+              img->is_v_block     = (uv>=4);
+
 #if TRACE
               snprintf(currSE.tracestring, TRACESTRING_SIZE, " AC Chroma ");
 #endif
@@ -1777,12 +2315,12 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
                 dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
               else
                 dP = &(currSlice->partArr[partMap[currSE.type]]);
-              
+            
               if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
                 currSE.mapping = linfo_levrun_inter;
               else
                 currSE.reading = readRunLevelFromBuffer_CABAC;
-                         
+                       
               dP->readSyntaxElement(&currSE,img,inp,dP);
               level = currSE.value1;
               run = currSE.value2;
@@ -1851,6 +2389,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
   int mb_width          = img->width/16;
   int mb_available_up   = (img->mb_y == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
   int mb_available_left = (img->mb_x == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-1].slice_nr);
+  int smb       = ((img->type==SP_IMG_1 || img->type==SP_IMG_MULT) && IS_INTER (currMB)) || (img->type == SI_IMG && currMB->mb_type == SI4MB);
 
   if(img->UseConstrainedIntraPred)
   {
@@ -2065,7 +2604,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
         }
         if (currMB->useABT[block8x8]==NO_ABT)
         {
-          if ((img->type==SP_IMG_1 || img->type==SP_IMG_MULT) && (IS_INTER (currMB) && mv_mode!=IBLOCK))
+          if (smb && mv_mode!=IBLOCK)
           {
             itrans_sp(img,ioff,joff,i,j);
           }
@@ -2091,7 +2630,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
       if (currMB->b8mode[block8x8]!=IBLOCK)//((IS_INTER (currMB) && mv_mode!=IBLOCK))
       {
         // inverse transform, copy reconstructed block to img->m7 and imgY
-        if ( img->type==SP_IMG_1 || img->type==SP_IMG_MULT )
+        if ( img->type==SP_IMG_1 || img->type==SP_IMG_MULT || img->type == SI_IMG)
           idct_dequant_abt_sp (block8x8, currMB->abt_mode[block8x8], WHOLE_BLK, WHOLE_BLK, curr_blk, img);
         else
           idct_dequant_abt_B8 (block8x8, currMB->qp+QP_OFS-MIN_QP, currMB->abt_mode[block8x8], WHOLE_BLK, WHOLE_BLK, curr_blk, img);
@@ -2334,7 +2873,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
           }
         }
 
-        if ((img->type!=SP_IMG_1 && img->type!=SP_IMG_MULT) || IS_INTRA (currMB))
+        if (!smb)
         {
           itrans(img,ioff,joff,2*uv+i,j);
           for(ii=0;ii<4;ii++)
@@ -2346,7 +2885,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
       }
     }
 
-    if((img->type==SP_IMG_1 || img->type==SP_IMG_MULT) && IS_INTER (currMB))
+    if(smb)
     {
       itrans_sp_chroma(img,2*uv);
       for (j=4;j<6;j++)

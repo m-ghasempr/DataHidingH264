@@ -121,7 +121,6 @@ typedef struct
   int InitialQP;
   int InitialSPQP;
   int SliceID;            //!< not used for single Slice packets, see VCEG-N72
-  int CABAC_LastMB;       //!< UVLC-coded Last MB for CABAC
   int RPBT;
   RMPNIbuffer_t *RMPNIbuffer;
   MMCObuffer_t  *MMCObuffer;
@@ -133,7 +132,7 @@ extern ParameterSet_t ParSet[];
 int  ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits);
 int  readSyntaxElement_RTP(SyntaxElement *sym, struct img_par *img, struct inp_par *inp, struct datapartition *dP);
 int  RTP_startcode_follows(struct img_par *img, struct inp_par *inp);
-void RTP_get_symbol(SyntaxElement *sym, Bitstream *currStream);
+void RTP_get_symbol(struct img_par *img, struct inp_par *inp, struct datapartition *dP, SyntaxElement *sym, Bitstream *currStream);
 int  RTP_symbols_available (Bitstream *currStream);
 int  RTPInterpretParameterSetPacket (char *buf, int buflen);
 void  RTPUseParameterSet (int n, struct img_par *img, struct inp_par *inp);

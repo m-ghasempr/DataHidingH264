@@ -50,6 +50,32 @@
 #ifndef _DEFINES_H_
 #define _DEFINES_H_
 
+
+// CAVLC
+#define LUMA              0
+#define LUMA_INTRA16x16DC 1
+#define LUMA_INTRA16x16AC 2
+
+#define LEVEL_NUM      6
+#define TOTRUN_NUM    15
+#define RUNBEFORE_NUM  7
+
+
+
+
+//--- block types for CABAC
+#define LUMA_16DC       0
+#define LUMA_16AC       1
+#define LUMA_8x8        2
+#define LUMA_8x4        3
+#define LUMA_4x8        4
+#define LUMA_4x4        5
+#define CHROMA_DC       6
+#define CHROMA_AC       7
+#define NUM_BLOCK_TYPES 8
+
+#define NEW_CONSTRAINT_AC
+
 #define _EXP_GOLOMB
 
 #define clamp(a,b,c) ( (a)<(b) ? (b) : ((a)>(c)?(c):(a)) )    //!< clamp a to the range of [b;c]
@@ -74,7 +100,11 @@
 
 #define IMG_PAD_SIZE    4   //!< Number of pixels padded around the reference frame (>=4)
 
+#if defined _DEBUG
+#define TRACE           1   //!< 0:Trace off 1:Trace on
+#else
 #define TRACE           0   //!< 0:Trace off 1:Trace on
+#endif
 
 #define absm(A) ((A)<(0) ? (-(A)):(A)) //!< abs macro, faster than procedure
 #define MAX_VALUE       999999   //!< used for start value for some variables
@@ -101,8 +131,8 @@
 #define I4MB    9
 #define I16MB   10
 #define IBLOCK  11
-#define MAXMODE 12
-
+#define SI4MB   12
+#define MAXMODE 13
 
 #define  LAMBDA_ACCURACY_BITS         16
 #define  LAMBDA_FACTOR(lambda)        ((int)((double)(1<<LAMBDA_ACCURACY_BITS)*lambda+0.5))
@@ -191,7 +221,9 @@
 
 #define BLOCK_MULTIPLE      (MB_BLOCK_SIZE/BLOCK_SIZE)
 
-#define MAX_SYMBOLS_PER_MB  600 //!< Maximum number of different syntax elements for one MB
+#define MAX_SYMBOLS_PER_MB  1200  //!< Maximum number of different syntax elements for one MB
+									                // CAVLC needs more symbols per MB
+
 
 #define MAX_PART_NR     8 /*!< Maximum number of different data partitions.
                                Some reasonable number which should reflect

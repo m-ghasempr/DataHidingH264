@@ -583,6 +583,473 @@ void  writeEOS2buffer()
 
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    Makes code word and passes it back
+ *
+ * \par Input:
+ *    Info   : Xn..X2 X1 X0                                             \n
+ *    Length : Total number of bits in the codeword
+ ************************************************************************
+ */
+
+int symbol2vlc(SyntaxElement *sym)
+{
+  int info_len = sym->len;
+
+  // Convert info into a bitpattern int
+  sym->bitpattern = 0;
+
+  // vlc coding
+  while(--info_len >= 0)
+  {
+    sym->bitpattern <<= 1;
+    sym->bitpattern |= (0x01 & (sym->inf >> info_len));
+  }
+  return 0;
+}
+
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    generates VLC code and passes the codeword to the buffer
+ ************************************************************************
+ */
+int writeSyntaxElement_VLC(SyntaxElement *se, DataPartition *this_dataPart)
+{
+
+  se->inf = se->value1;
+  se->len = se->value2;
+  symbol2vlc(se);
+
+  writeUVLC2buffer(se, this_dataPart->bitstream);
+#if TRACE
+  if (se->type <= 1)
+    trace2out (se);
+#endif
+
+  return (se->len);
+}
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    write VLC for NumCoeff and TrailingOnes
+ ************************************************************************
+ */
+
+int writeSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *se, DataPartition *this_dataPart)
+{
+  int lentab[3][4][17] = 
+  {
+    {   // 0702
+      { 1, 6, 8, 9,10,11,13,13,13,14,14,15,15,16,16,16,16},
+      { 0, 2, 6, 8, 9,10,11,13,13,14,14,15,15,15,16,16,16},
+      { 0, 0, 3, 7, 8, 9,10,11,13,13,14,14,15,15,16,16,16},
+      { 0, 0, 0, 5, 6, 7, 8, 9,10,11,13,14,14,15,15,16,16},
+    },                                                 
+    {                                                  
+      { 2, 6, 6, 7, 8, 8, 9,11,11,12,12,12,13,13,13,14,14},
+      { 0, 2, 5, 6, 6, 7, 8, 9,11,11,12,12,13,13,14,14,14},
+      { 0, 0, 3, 6, 6, 7, 8, 9,11,11,12,12,13,13,13,14,14},
+      { 0, 0, 0, 4, 4, 5, 6, 6, 7, 9,11,11,12,13,13,13,14},
+    },                                                 
+    {                                                  
+      { 4, 6, 6, 6, 7, 7, 7, 7, 8, 8, 9, 9, 9,10,10,10,10},
+      { 0, 4, 5, 5, 5, 5, 6, 6, 7, 8, 8, 9, 9, 9,10,10,10},
+      { 0, 0, 4, 5, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9,10,10,10},
+      { 0, 0, 0, 4, 4, 4, 4, 4, 5, 6, 7, 8, 8, 9,10,10,10},
+    },
+
+  };
+
+  int codtab[3][4][17] = 
+  {
+    {
+      { 1, 5, 7, 7, 7, 7,15,11, 8,15,11,15,11,15,11, 7,4}, 
+      { 0, 1, 4, 6, 6, 6, 6,14,10,14,10,14,10, 1,14,10,6}, 
+      { 0, 0, 1, 5, 5, 5, 5, 5,13, 9,13, 9,13, 9,13, 9,5}, 
+      { 0, 0, 0, 3, 3, 4, 4, 4, 4, 4,12,12, 8,12, 8,12,8},
+    },
+    {
+      { 3,11, 7, 7, 7, 4, 7,15,11,15,11, 8,15,11, 7, 9,7}, 
+      { 0, 2, 7,10, 6, 6, 6, 6,14,10,14,10,14,10,11, 8,6}, 
+      { 0, 0, 3, 9, 5, 5, 5, 5,13, 9,13, 9,13, 9, 6,10,5}, 
+      { 0, 0, 0, 5, 4, 6, 8, 4, 4, 4,12, 8,12,12, 8, 1,4},
+    },
+    {
+      {15,15,11, 8,15,11, 9, 8,15,11,15,11, 8,13, 9, 5,1}, 
+      { 0,14,15,12,10, 8,14,10,14,14,10,14,10, 7,12, 8,4},
+      { 0, 0,13,14,11, 9,13, 9,13,10,13, 9,13, 9,11, 7,3},
+      { 0, 0, 0,12,11,10, 9, 8,13,12,12,12, 8,12,10, 6,2},
+    },
+  };
+  int vlcnum;
+
+  vlcnum = se->len;
+
+  // se->value1 : numcoeff
+  // se->value2 : numtrailingones
+
+  if (vlcnum == 3)
+  {
+    se->len = 6;  // 4 + 2 bit FLC
+    if (se->value1 > 0)
+    {
+      se->inf = ((se->value1-1) << 2) | se->value2;
+    }
+    else
+    {
+      se->inf = 3;
+    }
+  }
+  else
+  {
+    se->len = lentab[vlcnum][se->value2][se->value1];
+    se->inf = codtab[vlcnum][se->value2][se->value1];
+  }
+  //se->inf = 0;
+
+  if (se->len == 0)
+  {
+    printf("ERROR: (numcoeff,trailingones) not valid: vlc=%d (%d, %d)\n", 
+      vlcnum, se->value1, se->value2);
+    exit(-1);
+  }
+
+  symbol2vlc(se);
+
+  writeUVLC2buffer(se, this_dataPart->bitstream);
+#if TRACE
+  if (se->type <= 1)
+    trace2out (se);
+#endif
+
+  return (se->len);
+}
+
+
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    write VLC for NumCoeff and TrailingOnes for Chroma DC
+ ************************************************************************
+ */
+int writeSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *se, DataPartition *this_dataPart)
+{
+  int lentab[4][5] = 
+  {
+    { 2, 6, 6, 6, 6,},          
+    { 0, 1, 6, 7, 8,}, 
+    { 0, 0, 3, 7, 8,}, 
+    { 0, 0, 0, 6, 7,},
+  };
+
+  int codtab[4][5] = 
+  {
+    {1,7,4,3,2},
+    {0,1,6,3,3},
+    {0,0,1,2,2},
+    {0,0,0,5,0},
+  };
+
+  // se->value1 : numcoeff
+  // se->value2 : numtrailingones
+  se->len = lentab[se->value2][se->value1];
+  se->inf = codtab[se->value2][se->value1];
+
+  if (se->len == 0)
+  {
+    printf("ERROR: (numcoeff,trailingones) not valid: (%d, %d)\n", 
+      se->value1, se->value2);
+    exit(-1);
+  }
+
+  symbol2vlc(se);
+
+  writeUVLC2buffer(se, this_dataPart->bitstream);
+#if TRACE
+  if (se->type <= 1)
+    trace2out (se);
+#endif
+
+  return (se->len);
+}
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    write VLC for TotalZeros
+ ************************************************************************
+ */
+int writeSyntaxElement_TotalZeros(SyntaxElement *se, DataPartition *this_dataPart)
+{
+  int lentab[TOTRUN_NUM][16] = 
+  {
+    { 1,3,3,4,4,5,5,6,6,7,7,8,8,9,9,9},  
+    { 3,3,3,3,3,4,4,4,4,5,5,6,6,6,6},  
+    { 4,3,3,3,4,4,3,3,4,5,5,6,5,6},  
+    { 5,3,4,4,3,3,3,4,3,4,5,5,5},  
+    { 4,4,4,3,3,3,3,3,4,5,4,5},  
+    { 6,5,3,3,3,3,3,3,4,3,6},  
+    { 6,5,3,3,3,2,3,4,3,6},  
+    { 6,4,5,3,2,2,3,3,6},  
+    { 6,6,4,2,2,3,2,5},  
+    { 5,5,3,2,2,2,4},  
+    { 4,4,3,3,1,3},  
+    { 4,4,2,1,3},  
+    { 3,3,1,2},  
+    { 2,2,1},  
+    { 1,1},  
+  };
+
+  int codtab[TOTRUN_NUM][16] = 
+  {
+    {1,3,2,3,2,3,2,3,2,3,2,3,2,3,2,1},
+    {7,6,5,4,3,5,4,3,2,3,2,3,2,1,0},
+    {5,7,6,5,4,3,4,3,2,3,2,1,1,0},
+    {3,7,5,4,6,5,4,3,3,2,2,1,0},
+    {5,4,3,7,6,5,4,3,2,1,1,0},
+    {1,1,7,6,5,4,3,2,1,1,0},
+    {1,1,5,4,3,3,2,1,1,0},
+    {1,1,1,3,3,2,2,1,0},
+    {1,0,1,3,2,1,1,1,},
+    {1,0,1,3,2,1,1,},
+    {0,1,1,2,1,3},
+    {0,1,1,1,1},
+    {0,1,1,1},
+    {0,1,1},
+    {0,1},  
+  };
+  int vlcnum;
+
+  vlcnum = se->len;
+
+  // se->value1 : TotalZeros
+  se->len = lentab[vlcnum][se->value1];
+  se->inf = codtab[vlcnum][se->value1];
+
+  if (se->len == 0)
+  {
+    printf("ERROR: (TotalZeros) not valid: (%d)\n",se->value1);
+    exit(-1);
+  }
+
+  symbol2vlc(se);
+
+  writeUVLC2buffer(se, this_dataPart->bitstream);
+#if TRACE
+  if (se->type <= 1)
+    trace2out (se);
+#endif
+
+  return (se->len);
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    write VLC for TotalZeros for Chroma DC
+ ************************************************************************
+ */
+int writeSyntaxElement_TotalZerosChromaDC(SyntaxElement *se, DataPartition *this_dataPart)
+{
+  int lentab[3][4] = 
+  {
+    { 1, 2, 3, 3,},
+    { 1, 2, 2, 0,},
+    { 1, 1, 0, 0,}, 
+  };
+
+  int codtab[3][4] = 
+  {
+    { 1, 1, 1, 0,},
+    { 1, 1, 0, 0,},
+    { 1, 0, 0, 0,},
+  };
+  int vlcnum;
+
+  vlcnum = se->len;
+
+  // se->value1 : TotalZeros
+  se->len = lentab[vlcnum][se->value1];
+  se->inf = codtab[vlcnum][se->value1];
+
+  if (se->len == 0)
+  {
+    printf("ERROR: (TotalZeros) not valid: (%d)\n",se->value1);
+    exit(-1);
+  }
+
+  symbol2vlc(se);
+
+  writeUVLC2buffer(se, this_dataPart->bitstream);
+#if TRACE
+  if (se->type <= 1)
+    trace2out (se);
+#endif
+
+  return (se->len);
+}
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    write VLC for Run Before Next Coefficient, VLC0
+ ************************************************************************
+ */
+int writeSyntaxElement_Run(SyntaxElement *se, DataPartition *this_dataPart)
+{
+  int lentab[TOTRUN_NUM][16] = 
+  {
+    {1,1},
+    {1,2,2},
+    {2,2,2,2},
+    {2,2,2,3,3},
+    {2,2,3,3,3,3},
+    {2,3,3,3,3,3,3},
+    {3,3,3,3,3,3,3,4,5,6,7,8,9,10,11},
+  };
+
+  int codtab[TOTRUN_NUM][16] = 
+  {
+    {1,0},
+    {1,1,0},
+    {3,2,1,0},
+    {3,2,1,1,0},
+    {3,2,3,2,1,0},
+    {3,0,1,3,2,5,4},
+    {7,6,5,4,3,2,1,1,1,1,1,1,1,1,1},
+  };
+  int vlcnum;
+
+  vlcnum = se->len;
+
+  // se->value1 : run
+  se->len = lentab[vlcnum][se->value1];
+  se->inf = codtab[vlcnum][se->value1];
+
+  if (se->len == 0)
+  {
+    printf("ERROR: (run) not valid: (%d)\n",se->value1);
+    exit(-1);
+  }
+
+  symbol2vlc(se);
+
+  writeUVLC2buffer(se, this_dataPart->bitstream);
+#if TRACE
+  if (se->type <= 1)
+    trace2out (se);
+#endif
+
+  return (se->len);
+}
+
+
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    write VLC for Coeff Level (VLC1)
+ ************************************************************************
+ */
+int writeSyntaxElement_Level_VLC1(SyntaxElement *se, DataPartition *this_dataPart)
+{
+  int level, levabs, sign;
+
+  level = se->value1;
+  levabs = abs(level);
+  sign = (level < 0 ? 0 : 1);  /* note reversed */
+
+
+  if (levabs < 8)
+  {
+    se->len = levabs * 2 - sign;
+    se->inf = 1;
+  }
+  else if (levabs < 8+8)
+  {
+    // escape code1
+    se->len = 14 + 1 + 4;
+    se->inf = (1 << 4) | ((levabs - 8) << 1) | sign;
+  }
+  else
+  {
+    // escape code2
+    se->len = 14 + 2 + 12;
+    se->inf = (0x1 << 12) | ((levabs - 16)<< 1) | sign;
+  }
+
+
+  symbol2vlc(se);
+
+  writeUVLC2buffer(se, this_dataPart->bitstream);
+#if TRACE
+  if (se->type <= 1)
+    trace2out (se);
+#endif
+
+  return (se->len);
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    write VLC for Coeff Level
+ ************************************************************************
+ */
+int writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *this_dataPart)
+{
+  int iCodeword;
+  int iLength;
+
+  int level = se->value1;
+
+  int levabs = abs(level);
+  int sign = (level < 0 ? 1 : 0);  
+
+  int shift = vlc-1;
+  int escape = (15<<shift)+1;
+
+  int numPrefix = (levabs-1)>>shift;
+
+  int sufmask = ~((0xffffffff)<<shift);
+  int suffix = (levabs-1)&sufmask;
+
+  if (levabs < escape)
+  {
+	  iLength = numPrefix + vlc + 1;
+	  iCodeword = (1<<(shift+1))|(suffix<<1)|sign;
+  }
+  else
+  {
+	  iLength = 28;
+	  iCodeword = (1<<12)|((levabs-escape)<<1)|sign;
+  }
+	se->len = iLength;
+	se->inf = iCodeword;
+
+  symbol2vlc(se);
+
+  writeUVLC2buffer(se, this_dataPart->bitstream);
+#if TRACE
+  if (se->type <= 1)
+    trace2out (se);
+#endif
+
+  return (se->len);
+}
+
 
 /*!
  ************************************************************************

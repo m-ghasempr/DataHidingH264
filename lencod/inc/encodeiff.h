@@ -237,8 +237,6 @@ typedef struct sPayloadInfo
   int sliceType2;   // save according to original value
   int qpsp;
 
-  int lastMBnr;
-
   int pn;           // save img->pn
   int type;         // save img->type
   int max_lindex;   // save img->max_lindex

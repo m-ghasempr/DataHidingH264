@@ -1259,7 +1259,7 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
   Bitstream* bitstream; // used as a MEM buffer of slice header
   SyntaxElement sym;
   size_t num = 0, bytes_written;
-  int d_MB_Nr, start_mb_nr;
+  int start_mb_nr;
 
   assert( pp != NULL );
   assert( fp != NULL );
@@ -1313,18 +1313,6 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
 
     // Tian Dong: June 10, 2002
     // Update: a differential value is conveyed rather than an absolute value. 
-    if ( input->symbol_mode == CABAC )
-    {
-      d_MB_Nr = pp->lastMBnr-start_mb_nr;
-      if((input->InterlaceCodingOption==FRAME_CODING)&&(d_MB_Nr == img->total_number_mb))
-        d_MB_Nr = 0;
-      if(input->InterlaceCodingOption==ADAPTIVE_CODING)
-        if((((img->fld_flag==0)||(img->pstruct==1))&&(img->total_number_mb==d_MB_Nr)) ||
-         ((img->pstruct==2)&&((img->total_number_mb/2)==d_MB_Nr)))
-         d_MB_Nr = 0;
-      sym.value1 = d_MB_Nr;
-      writeSyntaxElement2Buf_UVLC(&sym, bitstream);
-    }
   }
   else if ( pp->payloadType == 1 )
   {

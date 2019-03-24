@@ -54,10 +54,21 @@
  * Macro for writing bytes of code
  ***********************************************************************
  */
+#ifdef NEW_CONSTRAINT_AC
+#define put_byte() { \
+                     Ecodestrm[(*Ecodestrm_len)++] = Ebuffer; \
+                     Ebits_to_go = 8; \
+ 											 while (eep->C > 7) { \
+												eep->C-=8; \
+												eep->E++; \
+											 } \
+                    }
+#else
 #define put_byte() { \
                      Ecodestrm[(*Ecodestrm_len)++] = Ebuffer; \
                      Ebits_to_go = 8; \
                     }
+#endif
 
 /*!
  ************************************************************************
@@ -104,7 +115,7 @@ void arienco_delete_encoding_environment(EncodingEnvironmentPtr eep)
  */
 void arienco_start_encoding(EncodingEnvironmentPtr eep,
                             unsigned char *code_buffer,
-                            int *code_len, int *last_startcode )
+                            int *code_len, int *last_startcode, int slice_type )
 {
   Elow = 0;
   Ebits_to_follow = 0;
@@ -117,6 +128,18 @@ void arienco_start_encoding(EncodingEnvironmentPtr eep,
 
   /* Only necessary for new AC */
   Erange = CACM99_HALF;
+
+	if (slice_type == INTRA_IMG) //INTRA_SLICE
+		eep->AC_next_state_MPS_64 = AC_next_state_MPS_64_INTRA;
+	else
+		eep->AC_next_state_MPS_64 = AC_next_state_MPS_64_INTER;
+
+#ifdef NEW_CONSTRAINT_AC
+  eep->C = 0;
+	eep->B = *code_len;
+	eep->E = 0;
+#endif
+
 }
 
 /*!
@@ -176,28 +199,51 @@ void arienco_done_encoding(EncodingEnvironmentPtr eep)
   for (i = 1; i <= nbits; i++)        
   {
     bit = (bits >> (nbits-i)) & 1;
-    Ebuffer >>= 1;
-    Ebuffer |= (bit<<7);
+    Ebuffer <<= 1;
+    Ebuffer |= bit;
     if (--Ebits_to_go == 0) 
       put_byte();
 
     while (Ebits_to_follow > 0) 
     {
       Ebits_to_follow--;
-      Ebuffer >>= 1;
-      Ebuffer |= ((!bit)<<7);
+      Ebuffer <<= 1;
+      Ebuffer |= (!bit);
       if (--Ebits_to_go == 0) 
         put_byte();
     }
   }
-  if (Ebits_to_go != 8)
-#if defined (_EXP_GOLOMB)
-    // prevent SCE by filling upper bits with ones
-    Ecodestrm[(*Ecodestrm_len)++] = (Ebuffer >> Ebits_to_go) 
-                                      | (((1<<Ebits_to_go)-1)<<(8-Ebits_to_go));
-#else
-    Ecodestrm[(*Ecodestrm_len)++] = (Ebuffer >> Ebits_to_go);
+#ifdef NEW_CONSTRAINT_AC
+
+	while (eep->C > 7)
+	{ 
+		eep->C-=8; 
+		eep->E++; 
+	}
+	eep->B= 8*(*Ecodestrm_len - eep->B) + 8 - Ebits_to_go; // no of written bits
+	eep->E= eep->E*8 + eep->C; // no of processed bins
+	eep->E>>=2; // E/4
+
+	if (eep->B >= 4*(img->current_mb_nr-img->currentSlice->start_mb_nr) ) // only if avg. # bits/MB >= 4
+	{	
+		if (eep->E > eep->B ) // check whether upper limit of R=4 is exceeded
+		{				
+			for (i = 0; i < eep->E - eep->B; i++)   // # stuffing bits: (E- R*B)/R     
+			{
+				Ebuffer <<= 1;	
+				Ebuffer |= 0x01;
+				if (--Ebits_to_go == 0) 
+					put_byte();
+  
+			}
+		} 
+	}	
+
 #endif
+
+  if (Ebits_to_go != 8)
+    // prevent SCE by filling lower bits with ones
+    Ecodestrm[(*Ecodestrm_len)++] = (Ebuffer << Ebits_to_go) | ((1<<Ebits_to_go)-1);
  
 }
 
@@ -211,110 +257,155 @@ void arienco_done_encoding(EncodingEnvironmentPtr eep)
  */
 void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiContextTypePtr bi_ct )
 {
-  int LPS;
-  unsigned long cLPS, rLPS;
-  unsigned long c0, c1;
+  unsigned long rLPS;
   unsigned long half, quarter;
-  unsigned long out_r;
 
-  assert(bi_ct->cum_freq[0]>=bi_ct->cum_freq[1]);
-  c0 = bi_ct->cum_freq[0]-bi_ct->cum_freq[1];
-  c1 = bi_ct->cum_freq[1];
   half = CACM99_HALF;
   quarter = CACM99_QUARTER;
 
   /* covers all cases where code does not bother to shift down symbol to be 
    * either 0 or 1, e.g. in some cases for cbp, mb_Type etc the code symply 
-   * masks off the bit position and passes in the resulting value */
-  if (symbol != 0) 
-    symbol = 1;
-  
-  /* From frequencies (c0 and c1) determine least probable symbol (LPS) and its
-   * count (cLPS)
-   */
-  if (c0 < c1) 
-  {
-    LPS = 0;
-    cLPS = c0;
-  } 
-  else 
-  {
-    LPS = 1;
-    cLPS = c1;
-  }
+	 * masks off the bit position and passes in the resulting value */
 
-#if  AAC_FRAC_TABLE
-  out_r = (Erange*(ARITH_CUM_FREQ_TABLE[bi_ct->cum_freq[0]]>>10))>>16;
-#else
-  out_r = Erange / (c0+c1);
-#endif
-  rLPS = out_r * cLPS;
-  
-  if (symbol == LPS) 
+  if (symbol != 0) 
+	  symbol = 1;
+
+  rLPS = rLPS_table_64x4[bi_ct->state][(Erange-0x4001)>>12];
+
+  if (symbol != bi_ct->MPS) 
   {
     Elow += Erange - rLPS;
     Erange = rLPS;
+
+    if (!bi_ct->state)
+			bi_ct->MPS = bi_ct->MPS ^ 1;               // switch LPS if necessary
+		bi_ct->state = AC_next_state_LPS_64[bi_ct->state]; // next state
   } 
   else 
   {
     Erange -= rLPS;
+		bi_ct->state = eep->AC_next_state_MPS_64[bi_ct->state]; // next state
   }
 
-  if (symbol != 0)
-      bi_ct->cum_freq[1]++;
-
-  if (++bi_ct->cum_freq[0] >= bi_ct->max_cum_freq) 
-    rescale_cum_freq(bi_ct);
-
-
   /* renormalise, as for arith_encode */
-  do 
+    
+	while (Erange <= quarter)
   {
-    while (Erange <= quarter)
+		if (Elow >= half)
     {
-      if (Elow >= half)
-      {
-        /* BIT_PLUS_FOLLOW(1) */;
-        Ebuffer >>= 1;
-        Ebuffer |= 0x80;
-        if (--Ebits_to_go == 0) 
-        put_byte();
-
-        while (Ebits_to_follow > 0) 
-        {
-          Ebits_to_follow--;
-          Ebuffer >>= 1;
-          if (--Ebits_to_go == 0) 
-            put_byte();
-        }
-        Elow -= half;
-      }
-      else if (Elow+Erange <= half)
-      {
-        /* BIT_PLUS_FOLLOW(0); */
-        Ebuffer >>= 1;
-        if (--Ebits_to_go == 0) 
-          put_byte();
-        
-        while (Ebits_to_follow > 0) 
-        {
-          Ebits_to_follow--;
-          Ebuffer >>= 1;
-          Ebuffer |= 0x80;
-          if (--Ebits_to_go == 0) 
-            put_byte();
-          
-        }
-      }
-      else
-      {
-        Ebits_to_follow++;
-        Elow -= quarter;
-      }
-      Elow <<= 1;
-      Erange <<= 1;
+			/* BIT_PLUS_FOLLOW(1) */;
+			Ebuffer <<= 1;
+			Ebuffer |= 0x01;
+			if (--Ebits_to_go == 0) 
+				put_byte();
+				
+			while (Ebits_to_follow > 0) 
+			{
+				Ebits_to_follow--;
+				Ebuffer <<= 1;
+				if (--Ebits_to_go == 0) 
+					put_byte();
+			}
+      Elow -= half;
+		}
+    else if (Elow+Erange <= half)
+    {
+			/* BIT_PLUS_FOLLOW(0); */
+			Ebuffer <<= 1;
+			if (--Ebits_to_go == 0) 
+				put_byte();
+			  
+			while (Ebits_to_follow > 0) 
+			{
+				Ebits_to_follow--;
+				Ebuffer <<= 1;
+				Ebuffer |= 0x01;
+				if (--Ebits_to_go == 0) 
+					put_byte();
+			}
+		}
+    else
+    {
+			Ebits_to_follow++;
+      Elow -= quarter;
     }
-  } while (0);
+    Elow <<= 1;
+    Erange <<= 1;
+  }
+#ifdef NEW_CONSTRAINT_AC
+	eep->C++;
+#endif
+
+}
+
+
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Arithmetic encoding of one binary symbol assuming 
+ *    a fixed prob. distribution with p(symbol) = 0.5
+ ************************************************************************
+ */
+void biari_encode_symbol_eq_prob(EncodingEnvironmentPtr eep, signed short symbol)
+{
+	unsigned int half = CACM99_HALF;
+	unsigned int quarter = CACM99_QUARTER;
+
+	
+	Erange >>= 1; 
+  if (symbol != 0)
+	{
+    Elow += Erange;
+	}
+
+  /* renormalise, as for biari_encode */ 
+	if (Elow >= half)
+	{
+		/* BIT_PLUS_FOLLOW(1) */;
+		Ebuffer <<= 1;
+		Ebuffer |= 0x01;
+		if (--Ebits_to_go == 0) 
+			put_byte();
+				
+		while (Ebits_to_follow > 0) 
+		{
+			Ebits_to_follow--;
+			Ebuffer <<= 1;
+			if (--Ebits_to_go == 0) 
+				put_byte();
+		}
+    Elow -= half;
+	}
+	else 
+		if (Elow+Erange <= half)
+		{
+			/* BIT_PLUS_FOLLOW(0); */
+			Ebuffer <<= 1;
+			if (--Ebits_to_go == 0) 
+				  put_byte();
+		
+			while (Ebits_to_follow > 0) 
+			{
+				  Ebits_to_follow--;
+					Ebuffer <<= 1;
+					Ebuffer |= 0x01;
+					if (--Ebits_to_go == 0) 
+						put_byte();			
+			}
+		}
+		else
+		{
+			Ebits_to_follow++;
+			Elow -= quarter;
+		}
+
+	Elow <<= 1;
+	Erange <<=1;
+#ifdef NEW_CONSTRAINT_AC
+	eep->C++;
+#endif
 }
 
 
@@ -325,61 +416,24 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
  *    and a maximum symbol count for triggering the rescaling
  ************************************************************************
  */
-void biari_init_context( BiContextTypePtr ctx, int ini_count_0, int ini_count_1, int max_cum_freq )
+void biari_init_context (BiContextTypePtr ctx, const int* ini)
 {
-  ctx->in_use       = TRUE;
-  ctx->max_cum_freq = max_cum_freq;
+  int pstate;
 
+	pstate = ((ini[0]*(img->qp-SHIFT_QP))>>4) + ini[1];
 
-  ctx->cum_freq[1]  = ini_count_1;
-  ctx->cum_freq[0]  = ini_count_0 + ini_count_1;
-}
+  if (img->type==INTRA_IMG) pstate = min (max (27, pstate),  74);  // states from 0 to 23
+  else                      pstate = min (max ( 0, pstate), 101);  // states from 0 to 50
 
-/*!
- ************************************************************************
- * \brief
- *    Copies the content (symbol counts) of a given context
- ************************************************************************
- */
-void biari_copy_context( BiContextTypePtr ctx_orig, BiContextTypePtr ctx_dest )
-{
-
-  ctx_dest->in_use     =  ctx_orig->in_use;
-  ctx_dest->max_cum_freq = ctx_orig->max_cum_freq;
-
-  ctx_dest->cum_freq[1] = ctx_orig->cum_freq[1];
-  ctx_dest->cum_freq[0] = ctx_orig->cum_freq[0];
-
-}
-
-/*!
- ************************************************************************
- * \brief
- *    Prints the content (symbol counts) of a given context model
- ************************************************************************
- */
-void biari_print_context( BiContextTypePtr ctx )
-{
-
-  printf("0: %4d\t",ctx->cum_freq[0] - ctx->cum_freq[1]);
-  printf("1: %4d",ctx->cum_freq[1]);
-
-}
-
-
-/*!
- ************************************************************************
- * \brief
- *    Rescales a given context model by halvening the symbol counts
- ************************************************************************
- */
-void rescale_cum_freq( BiContextTypePtr   bi_ct)
-{
-
-  int old_cum_freq_of_one = bi_ct->cum_freq[1];
-
-  bi_ct->cum_freq[1] = (bi_ct->cum_freq[1] + 1) >> 1;
-  bi_ct->cum_freq[0] = bi_ct->cum_freq[1] +
-                         ( ( bi_ct->cum_freq[0] - old_cum_freq_of_one + 1 ) >> 1);
+  if (pstate>=51)
+  {
+    ctx->state  = pstate - 51;
+    ctx->MPS    = 1;
+  }
+  else
+  {
+    ctx->state  = 50 - pstate;
+    ctx->MPS    = 0;
+  }
 }
 

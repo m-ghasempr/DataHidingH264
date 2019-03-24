@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 3.90a
+ *     JM 4.0d
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -85,12 +85,12 @@
 #include "intrarefresh.h"
 #include "fmo.h"
 
-#define JM      "3"
-#define VERSION "3.90a"
+#define JM      "4"
+#define VERSION "4.0d"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
-StatParameters  stats_frame, stats_field,  *stat  = &stats_frame;
+StatParameters  stats,  *stat  = &stats;
 SNRParameters   snrs,   *snr   = &snrs;
 Decoders decoders, *decs=&decoders;
 
@@ -282,7 +282,7 @@ int main(int argc,char **argv)
  */
 void init_img()
 {
-  int i,j,size_x,size_y;
+  int i,j,k,l,size_x,size_y;
 
   img->no_multpred=input->no_multpred;
 #ifdef _ADDITIONAL_REFERENCE_FRAME_
@@ -341,6 +341,21 @@ void init_img()
   size_x=img->width/BLOCK_SIZE+3;
   size_y=img->height/BLOCK_SIZE+3;
   get_mem2Dint(&(img->ipredmode), img->width/BLOCK_SIZE+3, img->height/BLOCK_SIZE+3);        //need two extra rows at right and bottom
+
+  // CAVLC mem
+  if((img->nz_coeff = (int****)calloc(img->width/MB_BLOCK_SIZE,sizeof(int***))) == NULL)
+    no_mem_exit("get_mem4global_buffers: nzcoeff");
+  for(j=0;j<img->width/MB_BLOCK_SIZE;j++)
+  {
+    get_mem3Dint(&(img->nz_coeff[j]), img->height/MB_BLOCK_SIZE, 4, 6);
+  }
+
+  for (i=0;i < img->width/MB_BLOCK_SIZE; i++)
+    for (j=0; j < img->height/MB_BLOCK_SIZE; j++)
+      for (k=0;k<4;k++)
+        for (l=0;l<6;l++)
+          img->nz_coeff[i][j][k][l]=-1;
+
 
   // Prediction mode is set to -1 outside the frame, indicating that no prediction can be made from this part
   for (i=0; i < img->width/BLOCK_SIZE+1; i++)
@@ -755,7 +770,7 @@ void report()
 
   // report on entropy coding  method
   if (input->symbol_mode == UVLC)
-    fprintf(stdout," Entropy coding method             : UVLC\n");
+    fprintf(stdout," Entropy coding method             : CAVLC\n");
   else
     fprintf(stdout," Entropy coding method             : CABAC\n");
 
@@ -921,7 +936,7 @@ void report()
   else
     fprintf(p_stat," Adaptive Block Transforms    : Not Used\n"); // ~ABT
   if (input->symbol_mode == UVLC)
-    fprintf(p_stat,   " Entropy coding method        : UVLC\n");
+    fprintf(p_stat,   " Entropy coding method        : CAVLC\n");
   else
     fprintf(p_stat,   " Entropy coding method        : CABAC\n");
 
@@ -1560,6 +1575,18 @@ void free_global_buffers()
     free_mem2Dint(refFrArr_top);
     free_mem2Dint(refFrArr_bot);
   }
+
+  // CAVLC mem free
+  for(j=0;j<img->width/MB_BLOCK_SIZE;j++)
+  for(i=0;i<img->height/MB_BLOCK_SIZE;i++)
+  {
+    if(img->nz_coeff[j][i][0] != NULL) free(img->nz_coeff[j][i][0]);
+    if(img->nz_coeff[j][i]    != NULL) free(img->nz_coeff[j][i]);
+  };
+  if (img->nz_coeff !=NULL) free(img->nz_coeff );
+
+
+
 }
 
 /*!

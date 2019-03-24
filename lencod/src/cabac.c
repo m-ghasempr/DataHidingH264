@@ -58,41 +58,11 @@
  */
 MotionInfoContexts* create_contexts_MotionInfo(void)
 {
-  int                 j;
   MotionInfoContexts* enco_ctx;
 
   enco_ctx = (MotionInfoContexts*) calloc(1, sizeof(MotionInfoContexts) );
   if( enco_ctx == NULL )
     no_mem_exit("create_contexts_MotionInfo: enco_ctx");
-
-  for (j=0; j<3; j++)
-  {
-    enco_ctx->mb_type_contexts[j] = (BiContextTypePtr) malloc(NUM_MB_TYPE_CTX  * sizeof( BiContextType ) );
-    if( enco_ctx->mb_type_contexts[j] == NULL )
-      no_mem_exit("create_contexts_MotionInfo: enco_ctx->mb_type_contexts");
-  }
-  for (j=0; j<2; j++)
-  {
-    enco_ctx->b8_type_contexts[j] = (BiContextTypePtr) malloc(NUM_B8_TYPE_CTX * sizeof( BiContextType ) );      
-    if( enco_ctx->b8_type_contexts[j] == NULL ) 
-      no_mem_exit("create_contexts_MotionInfo: enco_ctx->b8_type_contexts");
-
-    enco_ctx->mv_res_contexts[j] = (BiContextTypePtr) malloc(NUM_MV_RES_CTX * sizeof( BiContextType ) );
-    if( enco_ctx->mv_res_contexts[j] == NULL )
-      no_mem_exit("create_contexts_MotionInfo: enco_ctx->mv_res_contexts");
-
-    enco_ctx->ref_no_contexts[j] = (BiContextTypePtr) malloc(NUM_REF_NO_CTX * sizeof( BiContextType ) );
-    if( enco_ctx->ref_no_contexts[j] == NULL )
-      no_mem_exit("create_contexts_MotionInfo: enco_ctx->ref_no_contexts");
-  }
-
-  enco_ctx->delta_qp_inter_contexts = (BiContextTypePtr) malloc(NUM_DELTA_QP_CTX * sizeof( BiContextType ) );
-  if( enco_ctx->delta_qp_inter_contexts == NULL )
-    no_mem_exit("create_contexts_MotionInfo: enco_ctx->delta_qp_inter_contexts");
-
-  enco_ctx->delta_qp_intra_contexts = (BiContextTypePtr) malloc(NUM_DELTA_QP_CTX * sizeof( BiContextType ) );
-  if( enco_ctx->delta_qp_intra_contexts == NULL )
-    no_mem_exit("create_contexts_MotionInfo: enco_ctx->delta_qp_intra_contexts");
 
   return enco_ctx;
 }
@@ -107,67 +77,12 @@ MotionInfoContexts* create_contexts_MotionInfo(void)
  */
 TextureInfoContexts* create_contexts_TextureInfo(void)
 {
-  int                   j,k;
   TextureInfoContexts*  enco_ctx;
   static const int max_ipr=9;
-
- 
 
   enco_ctx = (TextureInfoContexts*) calloc(1, sizeof(TextureInfoContexts) );
   if( enco_ctx == NULL )
     no_mem_exit("create_contexts_TextureInfo: enco_ctx");
-
-  for (j=0; j < max_ipr; j++)
-  {
-    enco_ctx->ipr_contexts[j] = (BiContextTypePtr) malloc(NUM_IPR_CTX  * sizeof( BiContextType ) );
-    if( enco_ctx->ipr_contexts[j] == NULL )
-      no_mem_exit("create_contexts_TextureInfo: enco_ctx->ipr_contexts");
-  }
-
-  for (k=0; k<2; k++)
-  {
-    for (j=0; j<3; j++)
-    {
-      enco_ctx->cbp_contexts[k][j] = (BiContextTypePtr) malloc(NUM_CBP_CTX  * sizeof( BiContextType ) );
-      if( enco_ctx->cbp_contexts[k][j] == NULL )
-        no_mem_exit("create_contexts_TextureInfo: enco_ctx->cbp_contexts");
-    }
-  }
-
-  for (j=0; j < 4*NUM_TRANS_TYPE; j++)
-  {
-    enco_ctx->level_context[j] = (BiContextTypePtr) malloc(NUM_LEVEL_CTX  * sizeof( BiContextType ) );
-    if( enco_ctx->level_context[j] == NULL )
-      no_mem_exit("create_contexts_TextureInfo: enco_ctx->level_context");
-  }
-
-  for (j=0; j < 2*NUM_TRANS_TYPE; j++)
-  {
-    enco_ctx->run_context[j] = (BiContextTypePtr) malloc(NUM_RUN_CTX  * sizeof( BiContextType ) );
-    if( enco_ctx->run_context[j] == NULL )
-      no_mem_exit("create_contexts_TextureInfo: enco_ctx->run_context");
-  }
-    
-  for (j=0; j < NUM_TRANS_TYPE; j++)
-  {
-    enco_ctx->coeff_count_context[j] = (BiContextTypePtr) malloc(NUM_COEFF_COUNT_CTX  * sizeof( BiContextType ) );
-    if( enco_ctx->coeff_count_context[j] == NULL )
-      no_mem_exit("create_contexts_TextureInfo: enco_ctx->coeff_count_context");
-  }
-
-  for (j=0; j < 2*NUM_TRANS_TYPE_ABT; j++)
-  {
-    enco_ctx->ABT_run_context[j] = (BiContextTypePtr) malloc(NUM_RUN_CTX_ABT  * sizeof( BiContextType ) );
-    if( enco_ctx->ABT_run_context[j] == NULL )
-      no_mem_exit("create_contexts_TextureInfo: enco_ctx->ABT_run_context");
-  }
-
-  for (j=0; j < NUM_TRANS_TYPE_ABT; j++)
-  {
-    enco_ctx->ABT_coeff_count_context[j] = (BiContextTypePtr) malloc(NUM_COEFF_COUNT_CTX_ABT  * sizeof( BiContextType ) );
-    if( enco_ctx->ABT_coeff_count_context[j] == NULL )
-      no_mem_exit("create_contexts_TextureInfo: enco_ctx->ABT_coeff_count_context");
-  }
 
   return enco_ctx;
 }
@@ -180,96 +95,23 @@ TextureInfoContexts* create_contexts_TextureInfo(void)
  *    counts (ini_flag = 1) or with a flat histogram (ini_flag = 0)
  ************************************************************************
  */
-void init_contexts_MotionInfo(MotionInfoContexts *enco_ctx, int ini_flag)
+#define INIT_CTX(jj,ii,ctx,ini) {for(j=0;j<jj;j++)for(i=0;i<ii;i++)biari_init_context((ctx)[j]+i,(ini)[j][i]);}
+
+
+void init_contexts_MotionInfo (MotionInfoContexts *enco_ctx)
 {
-
   int i,j;
-  int scale_factor;
-  int qp_factor;
-  int ini[3];
 
-  if ( (img->width*img->height) <=  (IMG_WIDTH * IMG_HEIGHT) ) //  format <= QCIF
-    scale_factor=1;
-  else
-    scale_factor=2;
+  INIT_CTX (2, NUM_ABT_MODE_CTX, enco_ctx->ABT_mode_contexts, ABT_MODE_Ini);
+  INIT_CTX (3, NUM_MB_TYPE_CTX,  enco_ctx->mb_type_contexts,  MB_TYPE_Ini );
+  INIT_CTX (2, NUM_B8_TYPE_CTX,  enco_ctx->b8_type_contexts,  B8_TYPE_Ini );
+  INIT_CTX (2, NUM_MV_RES_CTX,   enco_ctx->mv_res_contexts,   MV_RES_Ini  );
+  INIT_CTX (2, NUM_REF_NO_CTX,   enco_ctx->ref_no_contexts,   REF_NO_Ini  );
+	  
+	INIT_CTX (1, NUM_DELTA_QP_CTX, &enco_ctx->delta_qp_contexts, &DELTA_QP_Ini  );
 
-  qp_factor=min(max(0,img->qp-10-SHIFT_QP),21);
-
-  for (j=0; j<3; j++)
-  {
-    if (ini_flag)
-    {
-      for (i=0; i < NUM_MB_TYPE_CTX; i++)
-      {
-        ini[0] = MB_TYPE_Ini[j][i][0]+(MB_TYPE_Ini[j][i][3]*qp_factor)/10;
-        ini[1] = MB_TYPE_Ini[j][i][1]+(MB_TYPE_Ini[j][i][4]*qp_factor)/10;
-        ini[2] = MB_TYPE_Ini[j][i][2]*scale_factor;
-        biari_init_context(enco_ctx->mb_type_contexts[j] + i,ini[0],ini[1],ini[2]);
-      }
-    }
-    else
-    {
-      for (i=0; i < NUM_MB_TYPE_CTX; i++)
-        biari_init_context(enco_ctx->mb_type_contexts[j] + i,1,1,100);
-    }
-  }
-  for (j=0; j<2; j++)
-  {
-    if (ini_flag)
-    {
-      for (i=0; i < NUM_B8_TYPE_CTX; i++)
-        biari_init_context(enco_ctx->b8_type_contexts[j] + i,B8_TYPE_Ini[j][i][0]*scale_factor,B8_TYPE_Ini[j][i][1]*scale_factor,B8_TYPE_Ini[j][i][2]*scale_factor);
-    }
-    else
-    {
-      for (i=0; i < NUM_B8_TYPE_CTX; i++)
-        biari_init_context (enco_ctx->b8_type_contexts[j] + i, 1, 1, 1000);
-    }
-
-    if (ini_flag)
-    {
-      for (i=0; i < NUM_MV_RES_CTX; i++)
-        biari_init_context(enco_ctx->mv_res_contexts[j] + i,MV_RES_Ini[j][i][0]*scale_factor,MV_RES_Ini[j][i][1]*scale_factor,MV_RES_Ini[j][i][2]*scale_factor);
-    }
-    else
-    {
-      for (i=0; i < NUM_MV_RES_CTX; i++)
-        biari_init_context(enco_ctx->mv_res_contexts[j] + i,1,1,1000);
-    }
-
-    if (ini_flag)
-    {
-      for (i=0; i < NUM_REF_NO_CTX; i++)
-        biari_init_context(enco_ctx->ref_no_contexts[j] + i,REF_NO_Ini[i][0]*scale_factor,REF_NO_Ini[i][1]*scale_factor,REF_NO_Ini[i][2]*scale_factor);
-    }
-    else
-    {
-      for (i=0; i < NUM_REF_NO_CTX; i++)
-        biari_init_context(enco_ctx->ref_no_contexts[j] + i,1,1,1000);
-    }
-  }
-
-  if (ini_flag)
-  {
-    for (i=0; i < NUM_DELTA_QP_CTX; i++)
-      biari_init_context(enco_ctx->delta_qp_inter_contexts + i,DELTA_QP_Ini[i][0]*scale_factor,DELTA_QP_Ini[i][1]*scale_factor,DELTA_QP_Ini[i][2]*scale_factor);
-  }
-  else
-  {
-    for (i=0; i < NUM_DELTA_QP_CTX; i++)
-      biari_init_context(enco_ctx->delta_qp_inter_contexts + i,1,1,1000);
-  }
-
-  if (ini_flag)
-  {
-    for (i=0; i < NUM_DELTA_QP_CTX; i++)
-      biari_init_context(enco_ctx->delta_qp_intra_contexts + i,DELTA_QP_Ini[i][0]*scale_factor,DELTA_QP_Ini[i][1]*scale_factor,DELTA_QP_Ini[i][2]*scale_factor);
-  }
-  else
-  {
-    for (i=0; i < NUM_DELTA_QP_CTX; i++)
-      biari_init_context(enco_ctx->delta_qp_intra_contexts + i,1,1,1000);
-  }
+  enco_ctx->slice_term_context.state = 63;
+  enco_ctx->slice_term_context.MPS   =  0;
 }
 
 /*!
@@ -279,155 +121,20 @@ void init_contexts_MotionInfo(MotionInfoContexts *enco_ctx, int ini_flag)
  *    counts (ini_flag = 1) or with a flat histogram (ini_flag = 0)
  ************************************************************************
  */
-void init_contexts_TextureInfo(TextureInfoContexts *enco_ctx, int ini_flag)
+void init_contexts_TextureInfo(TextureInfoContexts *enco_ctx)
 {
+  int i,j;
+  int intra = (img->type==INTRA_IMG ? 1 : 0);
 
-  int i,j,k;
-  int scale_factor;
-  int qp_factor;
-  int ini[3];
-  const int max_ipr=9;
+	INIT_CTX (3, NUM_CBP_CTX,  enco_ctx->cbp_contexts,		CBP_Ini[!intra]);
+  INIT_CTX (9, NUM_IPR_CTX,  enco_ctx->ipr_contexts,    IPR_Ini   );
 
-  if ( (img->width*img->height) <=  (IMG_WIDTH * IMG_HEIGHT) ) //  format <= QCIF
-   scale_factor=1;
-  else
-   scale_factor=2;
-
-  qp_factor=min(max(0,img->qp-10-SHIFT_QP),21);
-
-  for (j=0; j < max_ipr; j++)
-  {
-    if (ini_flag)
-    {
-      for (i=0; i < NUM_IPR_CTX; i++)
-        biari_init_context(enco_ctx->ipr_contexts[j] + i,IPR_Ini[j][i][0]*scale_factor,IPR_Ini[j][i][1]*scale_factor,IPR_Ini[j][i][2]*scale_factor);
-    }
-    else
-    {
-      for (i=0; i < NUM_IPR_CTX; i++)
-        biari_init_context(enco_ctx->ipr_contexts[j] + i,2,1,50);
-    }
-  }
-
-  for (k=0; k<2; k++)
-    for (j=0; j<3; j++)
-    {
-      if (ini_flag)
-      {
-        for (i=0; i < NUM_CBP_CTX; i++)
-        {
-          ini[0] = CBP_Ini[k][j][i][0]+(CBP_Ini[k][j][i][3]*qp_factor)/10;
-          ini[1] = CBP_Ini[k][j][i][1]+(CBP_Ini[k][j][i][4]*qp_factor)/10;
-          ini[2] = CBP_Ini[k][j][i][2]*scale_factor;
-          biari_init_context(enco_ctx->cbp_contexts[k][j] + i,ini[0],ini[1],ini[2]);
-        }
-      }
-      else
-      {
-        for (i=0; i < NUM_CBP_CTX; i++)
-          biari_init_context(enco_ctx->cbp_contexts[k][j] + i,1,1,100);
-      }
-    }
-
-  // other init mapping 
-  qp_factor=min(max(0,28-(img->qp-SHIFT_QP)),24);
-
-  for (j=0; j < 4*NUM_TRANS_TYPE; j++)
-  {
-    if (ini_flag)
-    {
-      for (i=0; i < NUM_LEVEL_CTX; i++)
-      {
-        ini[0] = (Level_Ini[j][i][0]+(Level_Ini[j][i][3]*qp_factor)/24)*scale_factor;
-        ini[1] = (Level_Ini[j][i][1]+(Level_Ini[j][i][4]*qp_factor)/24)*scale_factor;
-        ini[2] = Level_Ini[j][i][2]*scale_factor;
-        biari_init_context(enco_ctx->level_context[j] + i,ini[0],ini[1],ini[2]);
-      }
-    }
-    else
-    {
-      for (i=0; i < NUM_LEVEL_CTX; i++)
-        biari_init_context(enco_ctx->level_context[j] + i,1,1,100);
-    }
-  }
-
-  for (j=0; j < 2*NUM_TRANS_TYPE; j++)
-  {
-    if (ini_flag)
-    {
-      for (i=0; i < NUM_RUN_CTX; i++)
-      {
-        ini[0] = (Run_Ini[j][i][0]+(Run_Ini[j][i][3]*qp_factor)/24)*scale_factor;
-        ini[1] = (Run_Ini[j][i][1]+(Run_Ini[j][i][4]*qp_factor)/24)*scale_factor;
-        ini[2] = Run_Ini[j][i][2]*scale_factor;
-        biari_init_context(enco_ctx->run_context[j] + i,ini[0],ini[1],ini[2]);
-      }
-    }
-    else
-    {
-      for (i=0; i < NUM_RUN_CTX; i++)
-        biari_init_context(enco_ctx->run_context[j] + i,1,1,100);
-    }
-  }
-
-  for (j=0; j < NUM_TRANS_TYPE; j++)
-  {
-    if (ini_flag)
-    {
-      for (i=0; i < NUM_COEFF_COUNT_CTX; i++)
-      {
-        ini[0] = (Coeff_Count_Ini[j][i][0]+(Coeff_Count_Ini[j][i][3]*qp_factor)/24)*scale_factor;
-        ini[1] = (Coeff_Count_Ini[j][i][1]+(Coeff_Count_Ini[j][i][4]*qp_factor)/24)*scale_factor;
-        ini[2] = Coeff_Count_Ini[j][i][2]*scale_factor;
-        biari_init_context(enco_ctx->coeff_count_context[j] + i,ini[0],ini[1],ini[2]);
-      }
-    }
-    else
-    {
-      for (i=0; i < NUM_COEFF_COUNT_CTX; i++)
-        biari_init_context(enco_ctx->coeff_count_context[j] + i,1,1,100);
-    }
-  }
-
-  for (j=0; j < 2*NUM_TRANS_TYPE_ABT; j++)
-  {
-    if (ini_flag)
-    {
-      for (i=0; i < NUM_RUN_CTX_ABT; i++)
-      {
-        ini[0] = (ABT_Run_Ini[j][i][0]+(ABT_Run_Ini[j][i][3]*qp_factor)/24)*scale_factor;
-        ini[1] = (ABT_Run_Ini[j][i][1]+(ABT_Run_Ini[j][i][4]*qp_factor)/24)*scale_factor;
-        ini[2] = ABT_Run_Ini[j][i][2]*scale_factor;
-        biari_init_context(enco_ctx->ABT_run_context[j] + i,ini[0],ini[1],ini[2]);
-      }
-    }
-    else
-    {
-      for (i=0; i < NUM_RUN_CTX_ABT; i++)
-        biari_init_context(enco_ctx->ABT_run_context[j] + i,1,1,INICNT_ABT);
-    }
-  }
-
-  for (j=0; j < NUM_TRANS_TYPE_ABT; j++)
-  {
-    if (ini_flag)
-    {
-      for (i=0; i < NUM_COEFF_COUNT_CTX_ABT; i++)
-      {
-        ini[0] = (ABT_Coeff_Count_Ini[j][i][0]+(ABT_Coeff_Count_Ini[j][i][3]*qp_factor)/24)*scale_factor;
-        ini[1] = (ABT_Coeff_Count_Ini[j][i][1]+(ABT_Coeff_Count_Ini[j][i][4]*qp_factor)/24)*scale_factor;
-        ini[2] = ABT_Coeff_Count_Ini[j][i][2]*scale_factor;
-        biari_init_context(enco_ctx->ABT_coeff_count_context[j] + i,ini[0],ini[1],ini[2]);
-      }
-    }
-    else
-    {
-      for (i=0; i < NUM_COEFF_COUNT_CTX_ABT; i++)
-        biari_init_context(enco_ctx->ABT_coeff_count_context[j] + i,1,1,INICNT_ABT);
-    }
-  }
+  INIT_CTX (NUM_BLOCK_TYPES, NUM_BCBP_CTX,  enco_ctx->bcbp_contexts, BCBP_Ini[intra]);
+  INIT_CTX (NUM_BLOCK_TYPES, NUM_MAP_CTX,   enco_ctx->map_contexts,  MAP_Ini [intra]);
+  INIT_CTX (NUM_BLOCK_TYPES, NUM_LAST_CTX,  enco_ctx->last_contexts, LAST_Ini[intra]);
+  INIT_CTX (NUM_BLOCK_TYPES, NUM_ONE_CTX,   enco_ctx->one_contexts,  ONE_Ini [intra]);
+  INIT_CTX (NUM_BLOCK_TYPES, NUM_ABS_CTX,   enco_ctx->abs_contexts,  ABS_Ini [intra]);
 }
-
 
 /*!
  ************************************************************************
@@ -438,34 +145,8 @@ void init_contexts_TextureInfo(TextureInfoContexts *enco_ctx, int ini_flag)
  */
 void delete_contexts_MotionInfo(MotionInfoContexts *enco_ctx)
 {
-  int j;
-
   if( enco_ctx == NULL )
     return;
-
-  for (j=0; j<3; j++)
-  {
-    if (enco_ctx->mb_type_contexts[j] != NULL)
-      free(enco_ctx->mb_type_contexts[j] );
-  }
-
-  for (j=0; j<2; j++)
-  {
-    if (enco_ctx->b8_type_contexts[j] != NULL)
-      free(enco_ctx->b8_type_contexts[j]);
-
-    if (enco_ctx->mv_res_contexts[j]  != NULL)
-      free(enco_ctx->mv_res_contexts [j]);
-
-    if (enco_ctx->ref_no_contexts[j]  != NULL)
-      free(enco_ctx->ref_no_contexts [j]);
-  }
-
-  if (enco_ctx->delta_qp_inter_contexts != NULL)
-    free(enco_ctx->delta_qp_inter_contexts);
-
-  if (enco_ctx->delta_qp_intra_contexts != NULL)
-    free(enco_ctx->delta_qp_intra_contexts);
 
   free( enco_ctx );
 
@@ -481,56 +162,11 @@ void delete_contexts_MotionInfo(MotionInfoContexts *enco_ctx)
  */
 void delete_contexts_TextureInfo(TextureInfoContexts *enco_ctx)
 {
-
-  int j,k;
-
   static const int max_ipr=9;
 
   if( enco_ctx == NULL )
     return;
 
-  for (j=0; j < max_ipr; j++)
-  {
-    if (enco_ctx->ipr_contexts[j] != NULL)
-      free(enco_ctx->ipr_contexts[j]);
-  }
-
-  for (k=0; k<2; k++)
-    for (j=0; j<3; j++)
-    {
-      if (enco_ctx->cbp_contexts[k][j] != NULL)
-        free(enco_ctx->cbp_contexts[k][j]);
-    }
-
-  for (j=0; j < 4*NUM_TRANS_TYPE; j++)
-  {
-    if (enco_ctx->level_context[j] != NULL)
-      free(enco_ctx->level_context[j]);
-  }
-
-  for (j=0; j < 2*NUM_TRANS_TYPE; j++)
-  {
-    if (enco_ctx->run_context[j] != NULL)
-      free(enco_ctx->run_context[j]);
-  }
-      
-  for (j=0; j < NUM_TRANS_TYPE; j++)
-  {
-    if (enco_ctx->coeff_count_context[j] != NULL)
-      free(enco_ctx->coeff_count_context[j]);
-  }
-
-  for (j=0; j < 2*NUM_TRANS_TYPE_ABT; j++)
-  {
-    if (enco_ctx->ABT_run_context[j] != NULL)
-      free(enco_ctx->ABT_run_context[j]);
-  }
-
-  for (j=0; j < NUM_TRANS_TYPE_ABT; j++)
-  {
-    if (enco_ctx->ABT_coeff_count_context[j] != NULL)
-      free(enco_ctx->ABT_coeff_count_context[j]);
-  }
   free( enco_ctx );
 
   return;
@@ -577,6 +213,8 @@ void writeMB_typeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep
   int bframe   = (img->type==B_IMG);
   int mode_sym = 0;
   int mode16x16;
+	int useABT	 = ((input->abt==INTER_INTRA_ABT) || (input->abt==INTER_ABT));
+
 
   MotionInfoContexts *ctx         = (img->currentSlice)->mot_ctx;
   Macroblock         *currMB      = &img->mb_data[img->current_mb_nr];
@@ -639,6 +277,29 @@ void writeMB_typeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep
   }
   else // INTER
   {
+    if (bframe)
+    {
+      if (currMB->mb_available[0][1] == NULL)
+        b = 0;
+      else
+        b = (currMB->mb_available[0][1]->mb_type==0 && currMB->mb_available[0][1]->cbp==0 ? 0 : 1);
+      if (currMB->mb_available[1][0] == NULL)
+        a = 0;
+      else
+        a = (currMB->mb_available[1][0]->mb_type==0 && currMB->mb_available[1][0]->cbp==0 ? 0 : 1);
+      act_ctx = 7 + a + b;
+
+      if (se->value1==0 && se->value2==0) // DIRECT mode, no coefficients
+      {
+        biari_encode_symbol (eep_dp, 0, &ctx->mb_type_contexts[2][act_ctx]);
+        return;
+      }
+      else
+      {
+        biari_encode_symbol (eep_dp, 1, &ctx->mb_type_contexts[2][act_ctx]);
+      }
+    }
+
     if (currMB->mb_available[0][1] == NULL)
       b = 0;
     else
@@ -695,7 +356,8 @@ void writeMB_typeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep
       case 6:
         biari_encode_symbol (eep_dp, 1, &ctx->mb_type_contexts[1][act_ctx]);
         biari_encode_symbol (eep_dp, 1, &ctx->mb_type_contexts[1][4]);
-        biari_encode_symbol (eep_dp, 0, &ctx->mb_type_contexts[1][7]);
+				if (!useABT)
+					biari_encode_symbol (eep_dp, 0, &ctx->mb_type_contexts[1][7]);
         break;
       case 7:
         biari_encode_symbol (eep_dp, 1, &ctx->mb_type_contexts[1][act_ctx]);
@@ -761,9 +423,12 @@ void writeMB_typeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep
         csym=(((act_sym-12)>>1)&0x01);
         if (csym) biari_encode_symbol (eep_dp, 1, &ctx->mb_type_contexts[2][6]);
         else      biari_encode_symbol (eep_dp, 0, &ctx->mb_type_contexts[2][6]);
-        csym=((act_sym-12)&0x01);
-        if (csym) biari_encode_symbol (eep_dp, 1, &ctx->mb_type_contexts[2][6]);
-        else      biari_encode_symbol (eep_dp, 0, &ctx->mb_type_contexts[2][6]);
+				if ((!useABT) || (act_sym != 22))
+				{
+					csym=((act_sym-12)&0x01);
+					if (csym) biari_encode_symbol (eep_dp, 1, &ctx->mb_type_contexts[2][6]); // GB not use if abt
+					else      biari_encode_symbol (eep_dp, 0, &ctx->mb_type_contexts[2][6]);
+				}
         if (act_sym >=22) act_sym++;
       }
     }
@@ -801,6 +466,40 @@ void writeMB_typeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep
       act_sym  = mode_sym%2;
       biari_encode_symbol(eep_dp, (unsigned char) act_sym, ctx->mb_type_contexts[1] + act_ctx );
     }
+  }
+}
+
+
+/*!
+ ***************************************************************************
+ * \brief
+ *    This function is used to arithmetically encode the intra_block_modeABT
+ ***************************************************************************
+ */
+void writeABTIntraBlkModeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
+{
+  Macroblock         *currMB = &img->mb_data[img->current_mb_nr];
+  int                 ftype  = (img->type==INTRA_IMG?0:1);
+  MotionInfoContexts *ctx    = (img->currentSlice)->mot_ctx;
+
+  switch (se->value1)
+  {
+  case 0: //4x4 block mode: bins 10 
+    biari_encode_symbol (eep_dp, 1, ctx->ABT_mode_contexts[ftype]+0);
+	  biari_encode_symbol (eep_dp, 0, ctx->ABT_mode_contexts[ftype]+2);
+    break;
+  case 1: //4x8 block mode: bins 00 
+    biari_encode_symbol (eep_dp, 0, ctx->ABT_mode_contexts[ftype]+0);
+    biari_encode_symbol (eep_dp, 0, ctx->ABT_mode_contexts[ftype]+1);
+    break;
+  case 2: //8x4 block mode: bins 01
+    biari_encode_symbol (eep_dp, 0, ctx->ABT_mode_contexts[ftype]+0);
+    biari_encode_symbol (eep_dp, 1, ctx->ABT_mode_contexts[ftype]+1);
+    break;
+  case 3: //8x8 block mode: bins 11
+    biari_encode_symbol (eep_dp, 1, ctx->ABT_mode_contexts[ftype]+0);
+    biari_encode_symbol (eep_dp, 1, ctx->ABT_mode_contexts[ftype]+2);
+	  break;
   }
 }
 
@@ -1042,13 +741,12 @@ void writeMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
     biari_encode_symbol(eep_dp, 1, &ctx->mv_res_contexts[0][act_ctx] );
     mv_sign = (mv_pred_res<0) ? 1: 0;
     act_ctx=5*k+4;
-    biari_encode_symbol(eep_dp, (unsigned char) mv_sign, &ctx->mv_res_contexts[1][act_ctx] );
+		biari_encode_symbol_eq_prob(eep_dp, (unsigned char) mv_sign);
     act_sym--;
     act_ctx=5*k;
-    unary_mv_encode(eep_dp,act_sym,ctx->mv_res_contexts[1]+act_ctx,3);
+    unary_exp_golomb_mv_encode(eep_dp,act_sym,ctx->mv_res_contexts[1]+act_ctx,3);
   }
 }
-
 
 /*!
  ****************************************************************************
@@ -1057,7 +755,7 @@ void writeMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
  *    block pattern of a given delta quant.
  ****************************************************************************
  */
-void writeDquant_inter_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
+void writeDquant_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
   MotionInfoContexts *ctx = img->currentSlice->mot_ctx;
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
@@ -1081,60 +779,16 @@ void writeDquant_inter_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 
   if (act_sym==0)
   {
-    biari_encode_symbol(eep_dp, 0, ctx->delta_qp_inter_contexts + act_ctx );
+    biari_encode_symbol(eep_dp, 0, ctx->delta_qp_contexts + act_ctx );
   }
   else
   {
-    biari_encode_symbol(eep_dp, 1, ctx->delta_qp_inter_contexts + act_ctx);
+    biari_encode_symbol(eep_dp, 1, ctx->delta_qp_contexts + act_ctx);
     act_ctx=2;
     act_sym--;
-    unary_bin_encode(eep_dp, act_sym,ctx->delta_qp_inter_contexts+act_ctx,1);
+    unary_bin_encode(eep_dp, act_sym,ctx->delta_qp_contexts+act_ctx,1);
   }
 }
-
-
-/*!
- ****************************************************************************
- * \brief
- *    This function is used to arithmetically encode the coded
- *    block pattern of a given delta quant.
- ****************************************************************************
- */
-void writeDquant_intra_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
-{
-  MotionInfoContexts *ctx = img->currentSlice->mot_ctx;
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
-
-  int act_ctx;
-  int act_sym;
-  int dquant = se->value1;
-  int sign=0;
-
-  if (dquant <= 0)
-    sign = 1;
-  act_sym = abs(dquant) << 1;
-
-  act_sym += sign;
-  act_sym --;
-
-  if (currMB->mb_available[1][0] == NULL)
-    act_ctx = 0;
-  else
-    act_ctx = ( ((currMB->mb_available[1][0])->delta_qp != 0) ? 1 : 0);
-
-  if (act_sym==0)
-  {
-    biari_encode_symbol(eep_dp, 0, ctx->delta_qp_intra_contexts + act_ctx );
-  }
-  else
-  {
-    biari_encode_symbol(eep_dp, 1, ctx->delta_qp_intra_contexts + act_ctx);
-    act_ctx=2;
-    act_sym--;
-    unary_bin_encode(eep_dp, act_sym,ctx->delta_qp_intra_contexts+act_ctx,1);
-  }
-}
-
 
 /*!
  ****************************************************************************
@@ -1200,10 +854,10 @@ void writeBiMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
     biari_encode_symbol(eep_dp, 1, &ctx->mv_res_contexts[0][act_ctx] );
     mv_sign = (mv_pred_res<0) ? 1: 0;
     act_ctx=5*k+4;
-    biari_encode_symbol(eep_dp, (unsigned char) mv_sign, &ctx->mv_res_contexts[1][act_ctx] );
+		biari_encode_symbol_eq_prob(eep_dp, (unsigned char) mv_sign);
     act_sym--;
     act_ctx=5*k;
-    unary_mv_encode(eep_dp,act_sym,ctx->mv_res_contexts[1]+act_ctx,3);
+    unary_exp_golomb_mv_encode(eep_dp,act_sym,ctx->mv_res_contexts[1]+act_ctx,3);
   }
 }
 
@@ -1240,8 +894,9 @@ void writeCBP_BIT_CABAC (int b8, int bit, int cbp, Macroblock* currMB, int inter
     a   = ((cbp & (1<<(b8-1))) == 0 ? 1: 0);
 
   //===== WRITE BIT =====
-  biari_encode_symbol (eep_dp, (unsigned char) bit,
-                       img->currentSlice->tex_ctx->cbp_contexts[inter][0] + a+2*b);
+	biari_encode_symbol (eep_dp, (unsigned char) bit,
+                       img->currentSlice->tex_ctx->cbp_contexts[0] + a+2*b);
+
 }
 
 /*!
@@ -1284,7 +939,7 @@ void writeCBP2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 
   curr_cbp_ctx = a+2*b;
   cbp_bit = (cbp > 15 ) ? 1 : 0;
-  biari_encode_symbol(eep_dp, (unsigned char) cbp_bit, ctx->cbp_contexts[curr_cbp_idx][1] + curr_cbp_ctx );
+  biari_encode_symbol(eep_dp, (unsigned char) cbp_bit, ctx->cbp_contexts[1] + curr_cbp_ctx );
 
   if (cbp > 15)
   {
@@ -1300,7 +955,183 @@ void writeCBP2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 
     curr_cbp_ctx = a+2*b;
     cbp_bit = ((cbp>>4) == 2) ? 1 : 0;
-    biari_encode_symbol(eep_dp, (unsigned char) cbp_bit, ctx->cbp_contexts[curr_cbp_idx][2] + curr_cbp_ctx );
+    biari_encode_symbol(eep_dp, (unsigned char) cbp_bit, ctx->cbp_contexts[2] + curr_cbp_ctx );
+  }
+}
+
+
+static const int maxpos       [] = {16, 15, 64, 32, 32, 16,  4, 15};
+static const int c1isdc       [] = { 1,  0,  1,  1,  1,  1,  1,  0};
+
+static const int type2ctx_bcbp[] = { 0,  1,  2,  2,  3,  4,  5,  6}; // 7
+static const int type2ctx_map [] = { 0,  1,  2,  3,  4,  5,  6,  7}; // 8
+static const int type2ctx_last[] = { 0,  1,  2,  3,  4,  5,  6,  7}; // 8
+static const int type2ctx_one [] = { 0,  1,  2,  3,  3,  4,  5,  6}; // 7
+static const int type2ctx_abs [] = { 0,  1,  2,  3,  3,  4,  5,  6}; // 7
+
+
+
+/*!
+ ****************************************************************************
+ * \brief
+ *    Write CBP4-BIT
+ ****************************************************************************
+ */
+void write_and_store_CBP_block_bit (Macroblock* currMB, EncodingEnvironmentPtr eep_dp, int type, int cbp_bit)
+{
+#define BIT_SET(x,n)  ((int)(((x)&(1<<(n)))>>(n)))
+
+  int y_ac        = (type==LUMA_16AC || type==LUMA_8x8 || type==LUMA_8x4 || type==LUMA_4x8 || type==LUMA_4x4);
+  int y_dc        = (type==LUMA_16DC);
+  int u_ac        = (type==CHROMA_AC && !img->is_v_block);
+  int v_ac        = (type==CHROMA_AC &&  img->is_v_block);
+  int u_dc        = (type==CHROMA_DC && !img->is_v_block);
+  int v_dc        = (type==CHROMA_DC &&  img->is_v_block);
+  int j           = (y_ac || u_ac || v_ac ? img->subblock_y : 0);
+  int i           = (y_ac || u_ac || v_ac ? img->subblock_x : 0);
+  int bit         = (y_dc ? 0 : y_ac ? 1+4*j+i : u_dc ? 17 : v_dc ? 18 : u_ac ? 19+2*j+i : 23+2*j+i);
+  int ystep       = (y_ac ? 4 : 2);
+  int default_bit = (img->is_intra_block ? 1 : 0);
+  int upper_bit   = default_bit;
+  int left_bit    = default_bit;
+  int ctx;
+
+
+  //--- set bits for current block ---
+  if (cbp_bit)
+  {
+    if (type==LUMA_8x8)
+    {
+      currMB->cbp_bits   |= (1<< bit   );
+      currMB->cbp_bits   |= (1<<(bit+1));
+      currMB->cbp_bits   |= (1<<(bit+4));
+      currMB->cbp_bits   |= (1<<(bit+5));
+    }
+    else if (type==LUMA_8x4)
+    {
+      currMB->cbp_bits   |= (1<< bit   );
+      currMB->cbp_bits   |= (1<<(bit+1));
+    }
+    else if (type==LUMA_4x8)
+    {
+      currMB->cbp_bits   |= (1<< bit   );
+      currMB->cbp_bits   |= (1<<(bit+4));
+    }
+    else
+    {
+      currMB->cbp_bits   |= (1<<bit);
+    }
+  }
+
+  if (type!=LUMA_8x8)
+  {
+    //--- get bits from neighbouring blocks ---
+    if (j==0)
+    {
+      if (currMB->mb_available[0][1])
+      {
+        upper_bit = BIT_SET(currMB->mb_available[0][1]->cbp_bits,bit);
+      }
+    }
+    else
+    {
+      upper_bit = BIT_SET(currMB->cbp_bits,bit-ystep);
+    }
+    if (i==0)
+    {
+      if (currMB->mb_available[1][0])
+      {
+        left_bit = BIT_SET(currMB->mb_available[1][0]->cbp_bits,bit);
+      }
+    }
+    else
+    {
+      left_bit = BIT_SET(currMB->cbp_bits,bit-1);
+    }
+    ctx = 2*upper_bit+left_bit;
+
+    //===== encode symbol =====
+    biari_encode_symbol (eep_dp, (short)cbp_bit, img->currentSlice->tex_ctx->bcbp_contexts[type2ctx_bcbp[type]]+ctx);
+  }
+}
+
+
+
+
+//===== position -> ctx for MAP =====
+//--- zig-zag scan ----
+static const int  pos2ctx_map8x8 [] = { 0,  1,  2,  3,  4,  5,  5,  4,  4,  3,  3,  4,  4,  4,  5,  5,
+                                        4,  4,  4,  4,  3,  3,  6,  7,  7,  7,  8,  9, 10,  9,  8,  7,
+                                        7,  6, 11, 12, 13, 11,  6,  7,  8,  9, 14, 10,  9,  8,  6, 11,
+                                       12, 13, 11,  6,  9, 14, 10,  9, 11, 12, 13, 11 ,14, 10, 12, 14}; // 15 CTX
+static const int  pos2ctx_map8x4 [] = { 0,  1,  2,  3,  4,  5,  7,  8,  9, 10, 11,  9,  8,  6,  7,  8,
+                                        9, 10, 11,  9,  8,  6, 12,  8,  9, 10, 11,  9, 13, 13, 14, 14}; // 15 CTX
+static const int  pos2ctx_map4x4 [] = { 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 14}; // 15 CTX
+static const int* pos2ctx_map    [] = {pos2ctx_map4x4, pos2ctx_map4x4, pos2ctx_map8x8, pos2ctx_map8x4,
+                                       pos2ctx_map8x4, pos2ctx_map4x4, pos2ctx_map4x4, pos2ctx_map4x4};
+//--- interlace scan ----
+static const int  pos2ctx_map8x8i[] = { 0,  1,  1,  2,  2,  3,  3,  4,  5,  6,  7,  7,  7,  8,  4,  5,
+                                        6,  9, 10, 10,  8, 11, 12, 11,  9,  9, 10, 10,  8, 11, 12, 11,
+                                        9,  9, 10, 10,  8, 11, 12, 11,  9,  9, 10, 10,  8, 13, 13,  9,
+                                        9, 10, 10,  8, 13, 13,  9,  9, 10, 10, 14, 14, 14, 14, 14, 14}; // 15 CTX
+static const int  pos2ctx_map8x4i[] = { 0,  1,  2,  3,  4,  5,  6,  3,  4,  5,  6,  3,  4,  7,  6,  8,
+                                        9,  7,  6,  8,  9, 10, 11, 12, 12, 10, 11, 13, 13, 14, 14, 14}; // 15 CTX
+static const int  pos2ctx_map4x8i[] = { 0,  1,  1,  1,  2,  3,  3,  4,  4,  4,  5,  6,  2,  7,  7,  8,
+                                        8,  8,  5,  6,  9, 10, 10, 11, 11, 11, 12, 13, 13, 14, 14, 14}; // 15 CTX
+static const int* pos2ctx_map_int[] = {pos2ctx_map4x4, pos2ctx_map4x4, pos2ctx_map8x8i,pos2ctx_map8x4i,
+                                       pos2ctx_map4x8i,pos2ctx_map4x4, pos2ctx_map4x4, pos2ctx_map4x4};
+
+
+//===== position -> ctx for LAST =====
+static const int  pos2ctx_last8x8 [] = { 0,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,
+                                         2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,
+                                         3,  3,  3,  3,  3,  3,  3,  3,  4,  4,  4,  4,  4,  4,  4,  4,
+                                         5,  5,  5,  5,  6,  6,  6,  6,  7,  7,  7,  7,  8,  8,  8,  8}; //  9 CTX
+static const int  pos2ctx_last8x4 [] = { 0,  1,  1,  1,  1,  1,  1,  1,  2,  2,  2,  2,  2,  2,  2,  2,
+                                         3,  3,  3,  3,  4,  4,  4,  4,  5,  5,  6,  6,  7,  7,  8,  8}; //  9 CTX
+static const int  pos2ctx_last4x4 [] = { 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15}; // 15 CTX
+static const int* pos2ctx_last    [] = {pos2ctx_last4x4, pos2ctx_last4x4, pos2ctx_last8x8, pos2ctx_last8x4,
+                                        pos2ctx_last8x4, pos2ctx_last4x4, pos2ctx_last4x4, pos2ctx_last4x4};
+
+
+
+
+/*!
+ ****************************************************************************
+ * \brief
+ *    Write Significance MAP
+ ****************************************************************************
+ */
+void write_significance_map (Macroblock* currMB, EncodingEnvironmentPtr eep_dp, int type, int coeff[], int coeff_ctr)
+{
+  short k, sig, last;
+  int   k0      = 0;
+  int   k1      = maxpos[type]-1;
+
+
+  if (!c1isdc[type])
+  {
+    k0++; k1++; coeff--;
+  }
+
+  for (k=k0; k<k1; k++) // if last coeff is reached, it has to be significant
+  {
+    sig   = (coeff[k]!=0 ? 1 : 0);
+
+    if (img->pstruct)
+      biari_encode_symbol  (eep_dp, sig,  img->currentSlice->tex_ctx->map_contexts [type2ctx_map [type]]+pos2ctx_map_int [type][k]);
+    else
+      biari_encode_symbol  (eep_dp, sig,  img->currentSlice->tex_ctx->map_contexts [type2ctx_map [type]]+pos2ctx_map     [type][k]);
+    if (sig)
+    {
+      last = (--coeff_ctr==0 ? 1 : 0);
+
+      biari_encode_symbol(eep_dp, last, img->currentSlice->tex_ctx->last_contexts[type2ctx_last[type]]+pos2ctx_last[type][k]);
+      if (last)
+      {
+        return;
+      }
+    }
   }
 }
 
@@ -1308,275 +1139,94 @@ void writeCBP2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 /*!
  ****************************************************************************
  * \brief
- *    This function is used to arithmetically encode coeff_count, level and
- *    run of a given MB.
+ *    Write Levels
  ****************************************************************************
  */
-void writeRunLevel2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
+void write_significant_coefficients (Macroblock* currMB, EncodingEnvironmentPtr eep_dp, int type, int coeff[])
 {
-  const int level = se->value1;
-  const int run = se->value2;
-  int curr_ctx_idx = se->context;
-  int sign_of_level;
-  int max_run = 0;
-  static int coeff_can[2][65]; // was initialized with zeros. init necessary? is only initialized at first block of whole seq.
-  static int coeff_count=0;
-  int i,j,a,b;
-  int max_coeff[9] = {8,16,16,16,15,4,4,15,15};
-  int curr_run_ctx = 0, curr_level_ctx;
-  int act_ctx=0;
-  static int count[3] = {0,0,0};
-  static int prev_sym[3] = {0,0,0};
-  int prevLevel = 0;
-  int absLevel;
-  int changed_ctx_idx=curr_ctx_idx;
+  int   i;
+  int   absLevel;
+  int   ctx;
+  short sign;
+  short greater_one;
+  int   c1 = 1;
+  int   c2 = 0;
 
-  // ABT stuff
-  int b8, curr_abt_ctx_idx=-1; // =-1: avoid warnings
-  static unsigned int max_ccnt_abt  [6] = {63,32,16,63,32,16};
-  static unsigned int max_coeff_abt [6] = {64,32,16,64,32,16};
-
-  TextureInfoContexts *ctx = img->currentSlice->tex_ctx;
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
-
-  if (level != 0)
+  for (i=maxpos[type]-1; i>=0; i--)
   {
-    coeff_can[0][coeff_count] = level;
-    coeff_can[1][coeff_count] = run;
-    coeff_count++;
+    if (coeff[i]!=0)
+    {
+      if (coeff[i]>0) {absLevel =  coeff[i];  sign = 0;}
+      else            {absLevel = -coeff[i];  sign = 1;}
+
+      greater_one = (absLevel>1 ? 1 : 0);
+
+      //--- if coefficient is one ---
+      ctx = min(c1,4);
+      biari_encode_symbol (eep_dp, greater_one, img->currentSlice->tex_ctx->one_contexts[type2ctx_one[type]] + ctx);
+
+      if (greater_one)
+      {
+        ctx = min(c2,4);
+				unary_exp_golomb_level_encode(eep_dp, absLevel-2, img->currentSlice->tex_ctx->abs_contexts[type2ctx_abs[type]] + ctx);
+        c1 = 0;
+        c2++;
+      }
+      else if (c1)
+      {
+        c1++;
+      }
+			biari_encode_symbol_eq_prob (eep_dp, sign);
+    }
+  }
+}
+
+
+
+/*!
+ ****************************************************************************
+ * \brief
+ *    Write Block-Transform Coefficients
+ ****************************************************************************
+ */
+void writeRunLevel2Buffer_CABAC (SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
+{
+  static int  coeff[64];
+  static int  coeff_ctr = 0;
+  static int  pos       = 0;
+
+  Macroblock* currMB    = &img->mb_data[img->current_mb_nr];
+  int         i;
+
+  //--- accumulate run-level information ---
+  if (se->value1 != 0)
+  {
+    for (i=0; i<se->value2; i++) coeff[pos++] = 0; coeff[pos++] = se->value1; coeff_ctr++;
+    return;
   }
   else
   {
-    //send coeff_count
-    switch(curr_ctx_idx)
-    {
-    case 0://max 8 coeffs, double_scan
-    {
-      //context determination
-      act_ctx = (count[0] == 0) ? 0 : ((prev_sym[0] == 0) ? 1 : 2);
-      prev_sym[0] = coeff_count;
-      if(++count[0] == 2) count[0]=0;
-      
-      if (coeff_count == 0)
-        biari_encode_symbol(eep_dp, 0, ctx->coeff_count_context[curr_ctx_idx] + act_ctx);
-      else
-      {
-        biari_encode_symbol(eep_dp, 1, ctx->coeff_count_context[curr_ctx_idx] + act_ctx);
-        unary_bin_max_encode(eep_dp,(unsigned int) coeff_count-1,ctx->coeff_count_context[curr_ctx_idx]+4,1,max_coeff[curr_ctx_idx]-1);
-      }
-      break;
-    }
-    case 1: //max 16 coeffs //single scan
-    case 2:
-    {
-      //context termination
-      j = img->subblock_y;
-      i = img->subblock_x;
-      if (j==0)
-        b = (currMB->mb_available[0][1] == NULL)?0:(((currMB->mb_available[0][1])->coeffs_count[BLOCK_SIZE-1][i]==0)?0:1);
-      else
-        b = (currMB->coeffs_count[j-1][i]==0)?0:1;
-          
-      if (i==0)
-        a = (currMB->mb_available[1][0] == NULL)?0:(((currMB->mb_available[1][0])->coeffs_count[j][BLOCK_SIZE-1]==0)?0:1);
-      else
-        a = (currMB->coeffs_count[j][i-1]==0)?0:1;
-
-      act_ctx = a+2*b; 
-      if (coeff_count == 0)
-        biari_encode_symbol(eep_dp, 0, ctx->coeff_count_context[curr_ctx_idx] + act_ctx);
-      else
-      {
-        biari_encode_symbol(eep_dp, 1, ctx->coeff_count_context[curr_ctx_idx] + act_ctx);
-        unary_bin_max_encode(eep_dp,(unsigned int) coeff_count-1,ctx->coeff_count_context[curr_ctx_idx]+4,1,max_coeff[curr_ctx_idx]-1);
-      }
-      currMB->coeffs_count[j][i] = coeff_count; 
-      break;
-    }
-    case 4://max 15 coeffs // 16x16 luma ac
-    {
-      //context determination
-      act_ctx = (count[2] == 0) ? 0 : ((prev_sym[2] == 0) ? 1 : 2);
-      prev_sym[2] = coeff_count;
-      if(++count[2] == 16) count[2]=0;
-
-      if (coeff_count == 0)
-        biari_encode_symbol(eep_dp, 0, ctx->coeff_count_context[curr_ctx_idx] + act_ctx);
-      else
-      {
-        biari_encode_symbol(eep_dp, 1, ctx->coeff_count_context[curr_ctx_idx] + act_ctx);
-        unary_bin_max_encode(eep_dp,(unsigned int) coeff_count-1,ctx->coeff_count_context[curr_ctx_idx]+4,1,max_coeff[curr_ctx_idx]-1);
-      }
-      break;
-    }
-    case 5:
-    case 6://max 4 coeffs, chroma dc different ctx uv for first bin
-    {
-      act_ctx = (se->k == 0)?0:1;
-      if (coeff_count == 0)
-        biari_encode_symbol(eep_dp, 0, ctx->coeff_count_context[curr_ctx_idx] + act_ctx);
-      else
-      {
-        biari_encode_symbol(eep_dp, 1, ctx->coeff_count_context[curr_ctx_idx] + act_ctx);
-        unary_bin_max_encode(eep_dp,(unsigned int) coeff_count-1,ctx->coeff_count_context[curr_ctx_idx]+4,1,max_coeff[curr_ctx_idx]-1);
-      }
-      break;
-    }
-    case 7:
-    case 8://max 15 coeffs, chroma ac different ctx uv for first bin
-    {
-      act_ctx = (se->k < 4)?0:1;
-      if (coeff_count == 0)
-        biari_encode_symbol(eep_dp, 0, ctx->coeff_count_context[curr_ctx_idx] + act_ctx);
-      else
-      {
-        biari_encode_symbol(eep_dp, 1, ctx->coeff_count_context[curr_ctx_idx] + act_ctx);
-        unary_bin_max_encode(eep_dp,(unsigned int) coeff_count-1,ctx->coeff_count_context[curr_ctx_idx]+4,1,max_coeff[curr_ctx_idx]-1);
-      }
-      break;
-    }
-    case 3:  //max 16 coeffs // 16x16 luma dc
-    {
-      act_ctx = 0;
-      if (coeff_count == 0)
-        biari_encode_symbol(eep_dp, 0, ctx->coeff_count_context[curr_ctx_idx] + act_ctx);
-      else
-      {
-        biari_encode_symbol(eep_dp, 1, ctx->coeff_count_context[curr_ctx_idx] + act_ctx);
-        unary_bin_max_encode(eep_dp,(unsigned int) coeff_count-1,ctx->coeff_count_context[curr_ctx_idx]+4,1,max_coeff[curr_ctx_idx]-1);
-      }
-      break;
-    }
-    case 9:  // 8x8 ABT luma inter
-    case 10: // 4x8,8x4 ABT luma inter
-    case 11: // 4x4 ABT luma inter
-    case 12: // 8x8 ABT luma intra
-    case 13: // 4x8,8x4 ABT luma intra
-    case 14: // 4x4 ABT luma intra
-    {
-      //context termination
-      j = img->subblock_y;
-      i = img->subblock_x;
-      b8 = ((j>1)?2:0) + ((i>1)?1:0);
-      curr_abt_ctx_idx = curr_ctx_idx - NUM_TRANS_TYPE;
-
-      if (j==0)
-        b = (currMB->mb_available[0][1] == NULL)?0:(((currMB->mb_available[0][1])->coeffs_count[BLOCK_SIZE-1][i]==0)?0:1);
-      else
-        b = (currMB->coeffs_count[j-1][i]==0)?0:1;
-
-      if (i==0)
-        a = (currMB->mb_available[1][0] == NULL)?0:(((currMB->mb_available[1][0])->coeffs_count[j][BLOCK_SIZE-1]==0)?0:1);
-      else
-        a = (currMB->coeffs_count[j][i-1]==0)?0:1;
-
-      act_ctx = a+2*b;
-      if ((curr_ctx_idx==9)||(curr_ctx_idx==12))
-        coeff_count--; // coeff_count can't be zero for 8x8 blocks - handled by CBP
-
-      unary_bin_max_encodeABT(eep_dp,(unsigned int) coeff_count,
-                              ctx->ABT_coeff_count_context[curr_abt_ctx_idx]+act_ctx, 4-act_ctx,
-                              max_ccnt_abt[curr_abt_ctx_idx]);
-
-      if ((curr_ctx_idx==9)||(curr_ctx_idx==12))
-        coeff_count++; // save true coeff_count in currMB struct.
-
-      // copy coeff_count to all 4x4 positions belonging to the current subblock
-      if ((curr_ctx_idx==9)||(curr_ctx_idx==12))
-      {
-        currMB->coeffs_count[j  ][i  ] =
-        currMB->coeffs_count[j+1][i  ] =
-        currMB->coeffs_count[j  ][i+1] =
-        currMB->coeffs_count[j+1][i+1] = coeff_count;
-      }
-      else if ((curr_ctx_idx==10)||(curr_ctx_idx==13))
-      {
-        currMB->coeffs_count[j][i] = coeff_count;
-        if (currMB->abt_mode[b8]==B8x4)
-          currMB->coeffs_count[j  ][i+1] = coeff_count;
-        else
-          currMB->coeffs_count[j+1][i  ] = coeff_count;
-      }
-      else
-      {
-        currMB->coeffs_count[j][i] = coeff_count;
-      }
-
-      break;
-    }
-    default: printf("ERROR");
-    }
-    prevLevel = 0;
-    for(i=0; i<coeff_count;i++)
-    {
-      if (curr_ctx_idx < 9)
-      {
-        //determine run ctx
-        switch (curr_ctx_idx)
-        {
-        case 1:
-        case 2:
-            curr_run_ctx = ((coeff_count) >= 4) ? 1 : 0;
-            break;
-        case 3:
-            curr_run_ctx = ((coeff_count-i) >= 4) ? 1 : 0;
-            break;
-        case 4:
-        case 7:
-        case 8:
-        case 0:
-            curr_run_ctx = ((coeff_count-i) >= 3) ? 1 : 0;
-            break;
-        case 5:
-        case 6:
-            curr_run_ctx = ((coeff_count-i) >= 2) ? 1 : 0;
-            break;
-        }
-        curr_run_ctx = 9*curr_run_ctx + curr_ctx_idx;
-        //send run
-        if (i==0)
-          max_run = max_coeff[curr_ctx_idx]-coeff_count;
-        if ((max_run != 0) )
-          unary_bin_max_encode(eep_dp,(unsigned int) coeff_can[1][i],ctx->run_context[curr_run_ctx],1,max_run);
-        max_run -= coeff_can[1][i];
-      }
-      else // ABT Run Coding
-      {
-        curr_abt_ctx_idx = curr_ctx_idx - NUM_TRANS_TYPE;
-        curr_run_ctx = ((coeff_count) >= 4) ? 1 : 0;
-        curr_run_ctx = NUM_TRANS_TYPE_ABT*curr_run_ctx + curr_abt_ctx_idx;        // 6->NUM_TRANS_TYPE_ABT to prevent selection of wrong context.
-        //send run
-        if (i==0)
-          max_run = max_coeff_abt[curr_abt_ctx_idx]-coeff_count;
-        assert(max_run>=0);
-
-        if ((max_run != 0) )
-          unary_bin_max_encodeABT(eep_dp,(unsigned int) coeff_can[1][i],ctx->ABT_run_context[curr_run_ctx],1,max_run);
-        max_run -= coeff_can[1][i];
-      }
-      //determine level ctx
-      if (curr_ctx_idx < 9)
-        changed_ctx_idx = curr_ctx_idx;
-      else
-      {                        // use JM contexts for ABT level encoding:
-        if (curr_ctx_idx < 12) // inter
-          changed_ctx_idx = 1;
-        else                   // intra
-          changed_ctx_idx = 2;
-      }
-      absLevel    = absm(coeff_can[0][i]);
-      changed_ctx_idx += 9*prevLevel;
-      prevLevel     = absLevel > 3 ? 3 : absLevel;
-
-      // send level
-      unary_level_encode(eep_dp,(unsigned int) absm(coeff_can[0][i])-1,ctx->level_context[changed_ctx_idx]);
-      sign_of_level = ((coeff_can[0][i] < 0) ? 1 : 0);
-      curr_level_ctx = 3;
-      biari_encode_symbol(eep_dp, (unsigned char) sign_of_level, ctx->level_context[curr_ctx_idx]+ curr_level_ctx );
-    }
-    coeff_count=0;
+    for (; pos<64; pos++) coeff[pos] = 0;
   }
+
+  //===== encode CBP-BIT =====
+  write_and_store_CBP_block_bit     (currMB, eep_dp, se->context, coeff_ctr>0?1:0);
+
+  if (coeff_ctr>0)
+  {
+    //===== encode significance map =====
+    write_significance_map          (currMB, eep_dp, se->context, coeff, coeff_ctr);
+
+    //===== encode significant coefficients =====
+    write_significant_coefficients  (currMB, eep_dp, se->context, coeff);
+  }
+
+  //--- reset counters ---
+  pos = coeff_ctr = 0;
 }
+
+
+
 
 /*!
  ************************************************************************
@@ -1647,58 +1297,86 @@ void unary_bin_max_encode(EncodingEnvironmentPtr eep_dp,
   return;
 }
 
+
+
 /*!
  ************************************************************************
  * \brief
- *    Unary binarization and encoding of a symbol by using
- *    three distinct models for the first, the second and all
- *    remaining bins
+ *    Exp Golomb binarization and encoding
  ************************************************************************
  */
-void unary_level_encode(EncodingEnvironmentPtr eep_dp,
-                        unsigned int symbol,
-                        BiContextTypePtr ctx)
+void exp_golomb_encode_eq_prob(	EncodingEnvironmentPtr eep_dp,
+																unsigned int symbol,
+																int k) 
 {
-  unsigned int l;
-  int bin=1;
-  BiContextTypePtr ictx=ctx;
+  while(1)
+  {
+	  if (symbol >= (unsigned int)(1<<k))		
+	  {
+			biari_encode_symbol_eq_prob(eep_dp, 1);		//first unary part
+			symbol = symbol - (1<<k);
+			k++;
+	  }
+	  else						      
+	  {
+			biari_encode_symbol_eq_prob(eep_dp, 0);		//now terminated zero of unary part
+			while (k--)																//next binary part
+				biari_encode_symbol_eq_prob(eep_dp, (unsigned char)((symbol>>k)&1)); 
+			break;
+	  }
+  }
 
-  if (symbol==0)
-  {
-    biari_encode_symbol(eep_dp, 0, ictx );
-    return;
-  }
-  else
-  {
-    biari_encode_symbol(eep_dp, 1, ictx );
-    l=symbol;
-    ictx++;
-    while ((--l)>0)
-    {
-      biari_encode_symbol(eep_dp, 1, ictx  );
-      if ((++bin)==2) ictx++;
-    }
-    biari_encode_symbol(eep_dp, 0, ictx  );
-  }
   return;
 }
 
 /*!
  ************************************************************************
  * \brief
- *    Unary binarization and encoding of a symbol by using
- *    four distinct models for the first, the second, intermediate
- *    and all remaining bins
- ************************************************************************
- */
-void unary_mv_encode(EncodingEnvironmentPtr eep_dp,
-                        unsigned int symbol,
-                        BiContextTypePtr ctx,
-                        unsigned int max_bin)
+ *    Exp-Golomb for Level Encoding
+*
+************************************************************************/
+void unary_exp_golomb_level_encode(	EncodingEnvironmentPtr eep_dp,
+																		unsigned int symbol,
+																		BiContextTypePtr ctx)
 {
-  unsigned int l;
+  unsigned int l,k;
+	unsigned int exp_start = 13; // 15-2 : 0,1 level decision always sent
+
+  if (symbol==0)
+  {
+    biari_encode_symbol(eep_dp, 0, ctx );
+    return;
+  }
+  else
+  {
+    biari_encode_symbol(eep_dp, 1, ctx );
+    l=symbol;
+		k=1;
+    while (((--l)>0) && (++k <= exp_start))
+      biari_encode_symbol(eep_dp, 1, ctx);
+		if (symbol < exp_start) biari_encode_symbol(eep_dp, 0, ctx);
+		else exp_golomb_encode_eq_prob(eep_dp,symbol-exp_start,0);
+  }
+  return;
+}
+
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Exp-Golomb for MV Encoding
+*
+************************************************************************/
+void unary_exp_golomb_mv_encode(EncodingEnvironmentPtr eep_dp,
+																unsigned int symbol,
+																BiContextTypePtr ctx,
+																unsigned int max_bin)
+{
+  unsigned int l,k;
   unsigned int bin=1;
   BiContextTypePtr ictx=ctx;
+	unsigned int exp_start = 8; // 9-1 : 0 mvd decision always sent
 
   if (symbol==0)
   {
@@ -1709,84 +1387,17 @@ void unary_mv_encode(EncodingEnvironmentPtr eep_dp,
   {
     biari_encode_symbol(eep_dp, 1, ictx );
     l=symbol;
+		k=1;
     ictx++;
-    while ((--l)>0)
+    while (((--l)>0) && (++k <= exp_start))
     {
       biari_encode_symbol(eep_dp, 1, ictx  );
       if ((++bin)==2) ictx++;
       if (bin==max_bin) ictx++;
     }
-    biari_encode_symbol(eep_dp, 0, ictx  );
+		if (symbol < exp_start) biari_encode_symbol(eep_dp, 0, ictx);
+		else exp_golomb_encode_eq_prob(eep_dp,symbol-exp_start,3);
   }
   return;
 }
 
-
-/*!
- ************************************************************************
- * \brief
- *    Unary binarization for values <16 with max 4 CTX; larger values use
- *    syncword and binary representation of value-16; no terminating "0"
- *    of sync for binary representation(finite symbol alphabet)
- *    Used for ABT.
- ************************************************************************
- */
-void unary_bin_max_encodeABT(EncodingEnvironmentPtr eep_dp,
-                             unsigned int symbol,
-                             BiContextTypePtr ctx,
-                             int ctx_offset,
-                             unsigned int max_symbol)
-{
-  unsigned int l, ibits=0;
-  int bin=1;
-  BiContextTypePtr ictx=ctx;
-
-  assert (symbol<=max_symbol);
-
-  if (symbol==0)
-  {
-    biari_encode_symbol(eep_dp, 0, ictx );
-    return;
-  }
-  else
-  {
-    if (max_symbol > 15)
-    {
-      l=max_symbol-15;
-      do { ibits++; }
-      while ( (l>>=1) > 0);
-    }
-
-    biari_encode_symbol(eep_dp, 1, ictx );
-    l=symbol;
-    ictx = ctx + ctx_offset;
-    while ((--l)>0)
-    {
-      if ((++bin)==17)
-        break;
-      biari_encode_symbol(eep_dp, 1, ictx  );
-      if (bin==2) { ictx++; }
-      if (bin==4) { ictx++; }
-    }
-    if (bin<16)
-    {
-      biari_encode_symbol(eep_dp, 0, ictx  );
-    }
-    if (symbol > 15)
-    {
-      l = symbol-15;
-      ictx = ctx + ctx_offset + 3;
-      do
-      {
-        if (l&1)
-          biari_encode_symbol(eep_dp, 1, ictx  );
-        else
-          biari_encode_symbol(eep_dp, 0, ictx  );
-        l>>=1;
-      }
-      while ((--ibits)>0);
-    }
-  }
-
-  return;
-}
