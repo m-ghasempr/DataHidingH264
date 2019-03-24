@@ -110,9 +110,9 @@ Mapping Map[] = {
     {"ChangeQPStart",            &configinput.qp2start,                0},
 #endif
     {"RDOptimization",           &configinput.rdopt,                   0},
-    {"LossRateA",                 &configinput.LossRateA,                0},
-    {"LossRateB",                 &configinput.LossRateB,                0},
-    {"LossRateC",                 &configinput.LossRateC,                0},
+    {"LossRateA",                &configinput.LossRateA,               0},
+    {"LossRateB",                &configinput.LossRateB,               0},
+    {"LossRateC",                &configinput.LossRateC,               0},
     {"NumberOfDecoders",         &configinput.NoOfDecoders,            0},
     {"RestrictRefFrames",        &configinput.RestrictRef ,            0},
 #ifdef _ADDITIONAL_REFERENCE_FRAME_
@@ -120,9 +120,10 @@ Mapping Map[] = {
 #endif
 #ifdef _LEAKYBUCKET_
     {"NumberofLeakyBuckets",     &configinput.NumberLeakyBuckets,      0},
-    {"LeakyBucketRateFile",     &configinput.LeakyBucketRateFile,     1},
-    {"LeakyBucketParamFile",    &configinput.LeakyBucketParamFile,    1},
+    {"LeakyBucketRateFile",      &configinput.LeakyBucketRateFile,     1},
+    {"LeakyBucketParamFile",     &configinput.LeakyBucketParamFile,    1},
 #endif
+    {"InterlaceCodingOption",    &configinput.InterlaceCodingOption, 0},
     {NULL,                       NULL,                                -1}
 };
 

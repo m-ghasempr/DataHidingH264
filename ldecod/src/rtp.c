@@ -768,6 +768,10 @@ int RTPInterpretSliceHeader (byte *buf, int bufsize, int ReadSliceId, RTPSliceHe
   bitptr+=len;
 
   len = GetVLCSymbol(buf, bitptr, &info, bufsize);
+  linfo (len, info, &sh->structure, &dummy);
+  bitptr+=len;
+
+  len = GetVLCSymbol(buf, bitptr, &info, bufsize);
   linfo (len, info, &sh->PictureID, &dummy);
   bitptr+=len;
 
@@ -1128,6 +1132,8 @@ void RTPSetImgInp (struct img_par *img, struct inp_par *inp, RTPSliceHeader_t *s
 {
   static int ActualPictureType;
   Slice *currSlice = img->currentSlice;
+  static int last_imgtr_frm=0,modulo_ctr_frm=0,last_imgtr_fld=0,modulo_ctr_fld=0;
+  static int last_imgtr_frm_b=0,modulo_ctr_frm_b=0,last_imgtr_fld_b=0,modulo_ctr_fld_b=0;
  
   RMPNIbuffer_t *tmp_rmpni;
   MMCObuffer_t *tmp_mmco;
@@ -1178,6 +1184,63 @@ void RTPSetImgInp (struct img_par *img, struct inp_par *inp, RTPSliceHeader_t *s
 
   img->tr = currSlice->picture_id = sh->PictureID;
 
+#if 1
+  img->structure = currSlice->structure = sh->structure; //picture structure: 
+  
+  if (img->type <= INTRA_IMG || img->type >= SP_IMG_1) 
+  {
+    if (img->structure == FRAME)
+    {     
+      if(img->tr <last_imgtr_frm) 
+        modulo_ctr_frm++;
+      
+      last_imgtr_frm = img->tr;
+      img->tr_frm = img->tr + (256*modulo_ctr_frm);
+    }
+    else
+    {
+      if(img->tr <last_imgtr_fld) 
+        modulo_ctr_fld++;
+      
+      last_imgtr_fld = img->tr;
+      img->tr_fld = img->tr + (256*modulo_ctr_fld);
+    }
+  }
+  else
+  {
+    if (img->structure == FRAME)
+    {     
+      if(img->tr <last_imgtr_frm_b) 
+        modulo_ctr_frm_b++;
+      
+      last_imgtr_frm_b = img->tr;
+      img->tr_frm = img->tr + (256*modulo_ctr_frm_b);
+    }
+    else
+    {
+      if(img->tr <last_imgtr_fld_b) 
+        modulo_ctr_fld_b++;
+      
+      last_imgtr_fld_b = img->tr;
+      img->tr_fld = img->tr + (256*modulo_ctr_fld_b);
+    }
+  }
+  
+  if(img->type != B_IMG_MULT) {
+    img->pstruct_next_P = img->structure;
+    if(img->structure == TOP_FIELD)
+    {
+      img->imgtr_last_P = img->imgtr_next_P;
+      img->imgtr_next_P = img->tr_fld;
+    }
+    else if(img->structure == FRAME)
+    {
+      img->imgtr_last_P = img->imgtr_next_P;
+      img->imgtr_next_P = 2*img->tr_frm;
+    }
+  }
+#endif
+  
   currSlice->last_mb_nr = currSlice->start_mb_nr + sh->CABAC_LastMB;
 
   if (currSlice->last_mb_nr == currSlice->start_mb_nr)

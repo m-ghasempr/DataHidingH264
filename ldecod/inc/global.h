@@ -71,25 +71,42 @@ typedef unsigned int    u_int32;
 
 
 // global picture format dependend buffers, mem allocation in decod.c ******************
-int  **refFrArr;                                //<! Array for reference frames of each block
-byte **imgY;                                    //<! array for the decoded luma component
-byte **imgY_pf;                                 //<! Post filter luma image
-byte ***imgUV;                                  //<! array for the chroma component
-byte ***imgUV_pf;                               //<! Post filter luma image
+int  **refFrArr;                                //!< Array for reference frames of each block
+byte **imgY;                                    //!< array for the decoded luma component
+byte **imgY_pf;                                 //!< Post filter luma image
+byte ***imgUV;                                  //!< array for the chroma component
+byte ***imgUV_pf;                               //!< Post filter luma image
 
 // B pictures
 byte **imgY_prev;
 byte ***imgUV_prev;
 
-byte **mref_P_small;                            //<! 1/4 pix luma for next P picture
+byte **mref_P_small;                            //!< 1/4 pix luma for next P picture
 
-byte **imgY_ref;                                //<! reference frame find snr
+byte **imgY_ref;                                //!< reference frame find snr
 byte ***imgUV_ref;
 
 // B pictures
 int  Bframe_ctr;
 byte prevP_tr, nextP_tr, P_interval;
 int  frame_no;
+
+int  **refFrArr_frm;
+int  **refFrArr_top;
+int  **refFrArr_bot;
+byte **imgY_frm;
+byte **imgY_top;
+byte **imgY_bot;
+byte ***imgUV_frm;
+byte ***imgUV_top;
+byte ***imgUV_bot;
+
+byte ***mref_frm;                               //!< 1/1 pix luma for direct interpolation
+byte ****mcef_frm;                              //!< pix chroma
+
+byte ***mref_fld;                               //!< 1/1 pix luma for direct interpolation
+byte ****mcef_fld;     
+byte nextP_tr_frm, nextP_tr_fld;
 
 #define ET_SIZE 300      //!< size of error text buffer
 char errortext[ET_SIZE]; //!< buffer for error message for exit with error()
@@ -180,6 +197,11 @@ typedef enum {
   CABAC
 } SymbolMode;
 
+typedef enum {
+  FRAME,
+  TOP_FIELD,
+  BOTTOM_FIELD
+} PictureType;           //!< New enum for field processing
 
 /***********************************************************************
  * D a t a    t y p e s   f o r  C A B A C
@@ -221,6 +243,7 @@ typedef BiContextType *BiContextTypePtr;
 #define NUM_REF_NO_CTX   6
 #define NUM_DELTA_QP_CTX 4
 
+
 typedef struct
 {
   BiContextTypePtr mb_type_contexts[3];
@@ -241,7 +264,11 @@ typedef struct
 
 typedef struct
 {
+#ifndef USE_6_INTRA_MODES
+  BiContextTypePtr ipr_contexts [9];
+#else
   BiContextTypePtr ipr_contexts [6];
+#endif
   BiContextTypePtr cbp_contexts [2][3];
   BiContextTypePtr level_context[4*NUM_TRANS_TYPE];
   BiContextTypePtr run_context  [2*NUM_TRANS_TYPE];
@@ -356,6 +383,7 @@ typedef struct
   int                 picture_id;    //!< MUST be set by NAL even in case ei_flag == 1
   int                 qp;
   int                 picture_type;  //!< picture type
+  int                 structure;     //!< Identify picture structure type
   int                 start_mb_nr;   //!< MUST be set by NAL even in case of ei_flag == 1
   int                 max_part_nr;
   int                 dp_mode;       //!< data partioning mode
@@ -370,6 +398,7 @@ typedef struct
   int     (*readSlice)(struct img_par *, struct inp_par *);
 
 } Slice;
+
 //****************************** ~DM ***********************************
 
 // image parameters
@@ -418,6 +447,24 @@ typedef struct img_par
   int ***dbMV;                                //<! [92][72][3];
   int **fw_refFrArr;                          //<! [72][88];
   int **bw_refFrArr;                          //<! [72][88];
+ 
+
+  int ***mv_top;
+  int ***mv_bot;
+  int ***mv_frm;
+  int **fw_refFrArr_frm;                          //<! [72][88];
+  int **bw_refFrArr_frm;                          //<! [72][88];
+  int **fw_refFrArr_top;                          //<! [72][88];
+  int **bw_refFrArr_top;                          //<! [72][88];
+  int **fw_refFrArr_bot;                          //<! [72][88];
+  int **bw_refFrArr_bot;                          //<! [72][88];
+
+  int structure;                               //<! Identify picture structure type
+  int pstruct_next_P;
+  int imgtr_next_P;
+  int imgtr_last_P;
+  int tr_frm;
+  int tr_fld;
 
   // B pictures
   int ***fw_mv;                                //<! [92][72][3];
@@ -603,5 +650,16 @@ int  terminate_slice(struct img_par *img, struct inp_par *inp, struct stat_par  
 int  init_global_buffers(struct inp_par *inp, struct img_par *img);
 void free_global_buffers(struct inp_par *inp, struct img_par *img);
 
+void split_field_top(struct img_par *img);
+void split_field_bot(struct img_par *img);
+void combine_field(struct img_par *img);
+void frame_postprocessing(struct img_par *img, struct inp_par *inp);
+void field_postprocessing(struct img_par *img, struct inp_par *inp);
+int  bottom_field_picture(struct img_par *img,struct inp_par *inp);
+void init_top(struct img_par *img, struct inp_par *inp);
+void init_bottom(struct img_par *img, struct inp_par *inp);
+void decode_frame_slice(struct img_par *img,struct inp_par *inp, int current_header);
+void decode_field_slice(struct img_par *img,struct inp_par *inp, int current_header);
+void store_field_MV(struct img_par *img);
 #endif
 

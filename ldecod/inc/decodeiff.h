@@ -212,6 +212,7 @@ typedef struct sPayloadInfo
   unsigned INT16 parameterSet;
 
   unsigned INT8  pictureID;
+  unsigned INT8  structure;
   unsigned INT8  sliceID;
 
   unsigned INT8  sliceType;
@@ -278,8 +279,10 @@ extern PictureInfo currPictureInfo;
 extern AlternateTrackMediaBox box_atm;
 extern SwitchPictureBox box_sp;
 
-
+extern int isBigEndian;
 // functions
+
+int testEndian();
 
 // Functions on FileTypeBox
 int testFileTypeBox(FILE* fp);
@@ -327,6 +330,7 @@ int initInterimFile();
 void terminateInterimFile();
 
 int readfile( void* buf, size_t size, size_t count, FILE* fp );
+int readfile_s( void* buf, size_t bufsize, size_t size, size_t count, FILE* fp );
 int find_track_meta( FILE *fp, unsigned long limited, unsigned long* storedpos, int tracknr );
 int find_track_media( FILE *fp, unsigned long limited, unsigned long* storedpos, int tracknr );
 int rdOneTrack( struct img_par* img, struct inp_par* inp, struct snr_par *snr, FILE *fp );

@@ -1471,6 +1471,8 @@ encode_one_macroblock ()
   int         checkref    = (input->rdopt && input->RestrictRef && img->type==INTER_IMG);
   Macroblock* currMB      = &img->mb_data[img->current_mb_nr];
 
+  if(mref==mref_fld)  //field coding, 
+    max_ref   = min (img->number-((mref==mref_fld)&&img->fld_type&&bframe), img->buf_cycle-(mref==mref_fld)-(mref==mref_fld&&bframe));
 
   //===== SET VALID MODES =====
   valid[I4MB]   = 1;
@@ -1571,6 +1573,7 @@ encode_one_macroblock ()
                   if (!checkref || ref==0 || CheckReliabilityOfRef (block, ref, mode))
                   {
                     mcost  = (input->rdopt ? write_ref ? REF_COST (lambda_motion_factor, ref) : 0 : (int)(2*lambda_motion*min(ref,1)));
+
                     mcost += motion_cost[mode][ref+1][block];
                     if (mcost < fw_mcost)
                     {
@@ -1587,6 +1590,7 @@ encode_one_macroblock ()
 
                   //--- get cost for bidirectional prediction ---
                   bid_mcost  = (input->rdopt ? write_ref ? REF_COST (lambda_motion_factor, best_fw_ref) : 0 : (int)(2*lambda_motion*min(best_fw_ref,1)));
+
                   bid_mcost += BIDPartitionCost (mode, block, best_fw_ref, lambda_motion_factor);
 
                   //--- get prediction direction ----
@@ -1765,6 +1769,7 @@ encode_one_macroblock ()
               if (!checkref || ref==0 || CheckReliabilityOfRef (block, ref, mode))
               {
                 mcost  = (input->rdopt ? write_ref ? REF_COST (lambda_motion_factor, ref) : 0 : (int)(2*lambda_motion*min(ref,1)));
+
                 mcost += motion_cost[mode][ref+1][block];
                 if (mcost < fw_mcost)
                 {
@@ -1781,6 +1786,7 @@ encode_one_macroblock ()
 
               //--- get cost for bidirectional prediction ---
               bid_mcost  = (input->rdopt ? write_ref ? REF_COST (lambda_motion_factor, best_fw_ref) : 0 : (int)(2*lambda_motion*min(best_fw_ref,1)));
+
               bid_mcost += BIDPartitionCost (mode, block, best_fw_ref, lambda_motion_factor);
 
               //--- get prediction direction ----

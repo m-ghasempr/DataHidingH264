@@ -80,6 +80,8 @@ extern int setBitsPos(int);
 
 #ifdef _ADAPT_LAST_GROUP_
 int *last_P_no;
+int *last_P_no_frm;
+int *last_P_no_fld;
 #endif
 
 
@@ -91,6 +93,7 @@ int *last_P_no;
  *
  ***********************************************************************
  */
+
 int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *snr)
 {
   int current_header;
@@ -129,7 +132,7 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
 
   currSlice->next_header = 0;
   currSlice->next_eiflag = 0;
-  while (currSlice->next_header != EOS && currSlice->next_header != SOP)
+  while ((currSlice->next_header != EOS && currSlice->next_header != SOP) || (img->structure == TOP_FIELD))
   {
 
     // set the  corresponding read functions
@@ -141,51 +144,14 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
     if (current_header == EOS)
       return EOS;
 
-    if (inp->symbol_mode == CABAC)
-    {
-      init_contexts_MotionInfo(img, currSlice->mot_ctx, 1);
-      init_contexts_TextureInfo(img,currSlice->tex_ctx, 1);
-    }
+    if (img->structure == FRAME)
+      decode_frame_slice(img, inp, current_header);
+    else 
+      decode_field_slice(img, inp, current_header);
 
-    // init new frame
-    if (current_header == SOP)
-      init_frame(img, inp);
-
-    // do reference frame buffer reordering
-    reorder_mref(img);
-
-
-#if _ERROR_CONCEALMENT_
-    if (current_header == SOP)
-    {
-      if (img->number == 0) 
-        ercInit(img->width, img->height, 1);
-      // reset all variables of the error concealmnet instance before decoding of every frame.
-      // here the third parameter should, if perfectly, be equal to the number of slices per frame.
-      // using little value is ok, the code will alloc more memory if the slice number is larger
-      ercReset(erc_errorVar, img->max_mb_nr, img->max_mb_nr, img->width);
-      erc_mvperMB = 0;
-    }
-    
-    // decode main slice information
-    if ((current_header == SOP || current_header == SOS) && currSlice->ei_flag == 0)
-      decode_one_slice(img,inp);
-    
-    // setMB-Nr in case this slice was lost
-    if(currSlice->ei_flag)  
-      img->current_mb_nr = currSlice->last_mb_nr + 1;
-#else
-
-    // decode main slice information
-    if (current_header == SOP || current_header == SOS)
-      decode_one_slice(img,inp);
-
-#endif
-    
-    if(currSlice->next_eiflag && img->current_mb_nr != img->max_mb_nr)
-      currSlice->next_header = SOS;
-    
     img->current_slice_nr++;
+
+    DeblockFrame( img, imgY, imgUV ) ;
 
   }
 
@@ -194,7 +160,7 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
   recfr.yptr = &imgY[0][0];
   recfr.uptr = &imgUV[0][0][0];
   recfr.vptr = &imgUV[1][0][0];
-  
+
   //! this is always true at the beginning of a frame
   ercStartMB = 0;
   ercSegment = 0;
@@ -228,14 +194,19 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
 
   //! call the right error concealment function depending on the frame type.
   erc_mvperMB /= img->max_mb_nr;
+
   erc_img = img;
   if(img->type == INTRA_IMG) // I-frame
     ercConcealIntraFrame(&recfr, img->width, img->height, erc_errorVar);
   else
     ercConcealInterFrame(&recfr, erc_object_list, img->width, img->height, erc_errorVar);
 #endif
-
-  DeblockFrame( img, imgY, imgUV ) ;
+  
+  if (img->structure == FRAME)         // buffer mgt. for frame mode
+    frame_postprocessing(img, inp);
+  else
+    field_postprocessing(img, inp);   // reset all interlaced variables
+  store_field_MV(img);
 
   if (p_ref)
     find_snr(snr,img,p_ref,inp->postfilter);      // if ref sequence exist
@@ -287,11 +258,16 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
 
   exit_frame(img, inp);
 
+  if (img->structure != FRAME)
+  {
+    img->height /= 2;
+    img->height_cr /= 2;
+  }
+
   img->current_mb_nr = 0;
   img->current_slice_nr = 0;
   return (SOP);
 }
-
 
 
 /*!
@@ -311,11 +287,13 @@ void find_snr(
   int diff_y,diff_u,diff_v;
   int uv;
   int  status;
-  static int modulo_ctr = 0;
-  static int modulo_ctr_b = 0;
-  static int modulo_flag = 0;
-  static int modulo_flag_b = 0;
-  static int pic_id_old = 0, pic_id_old_b = 0;
+  static int modulo_ctr_frm=0,modulo_ctr_fld=0,pic_id_old_frm=0,pic_id_old_fld=0;
+  static int modulo_ctr_frm_b=0,modulo_ctr_fld_b=0,pic_id_old_frm_b=0,pic_id_old_fld_b=0;
+//  static int modulo_ctr = 0;
+//  static int modulo_ctr_b = 0;
+//  static int modulo_flag = 0;
+ // static int modulo_flag_b = 0;
+ // static int pic_id_old = 0, pic_id_old_b = 0;
   Slice *currSlice = img->currentSlice;
 
 #ifndef _ADAPT_LAST_GROUP_
@@ -334,36 +312,45 @@ void find_snr(
   // TO 5.11.2001 We do have some problems finding the correct frame in the original sequence
   // if errors appear. In this case the method of using this p_frame_no, nextP_tr, prevP_tr
   // variables does not work. So I use the picture_id instead.
-  if (img->type <= INTRA_IMG || img->type >= SP_IMG_1) // I, P
-  {
-    if (img->number > 0)
-    {
-      if ((currSlice->picture_id < pic_id_old) && !modulo_flag)//module_flag is used for P frames
-      {
-        modulo_ctr++;
-        modulo_flag = 1;
-      }
-      else
-        modulo_flag = 0;
 
-      frame_no = currSlice->picture_id + (256*modulo_ctr);
-      pic_id_old = currSlice->picture_id;
-    }
-    else
-      frame_no = 0;
-  }
-  else // B
+  //calculate frame number
+  if (img->type <= INTRA_IMG || img->type >= SP_IMG_1) 
   {
-    if ((currSlice->picture_id < pic_id_old_b) && !modulo_flag_b ) //modulo_flag_b is used for B frames
-    {
-      modulo_ctr_b++;
-      modulo_flag_b = 1;
+    if (img->structure == FRAME)
+    { 
+      if (currSlice->picture_id < pic_id_old_frm) 
+        modulo_ctr_frm++;
+      
+      pic_id_old_frm = currSlice->picture_id;
+      frame_no = currSlice->picture_id + (256*modulo_ctr_frm);
     }
     else
-      modulo_flag_b = 0;
-        
-    frame_no = currSlice->picture_id + (256*modulo_ctr_b);
-    pic_id_old_b = currSlice->picture_id;
+    {
+      if (currSlice->picture_id < pic_id_old_fld) 
+        modulo_ctr_fld++;
+      
+      pic_id_old_fld = currSlice->picture_id;
+      frame_no = (currSlice->picture_id  + (256*modulo_ctr_fld))/2;
+    }
+  }
+  else
+  {
+    if (img->structure == FRAME)
+    { 
+      if (currSlice->picture_id < pic_id_old_frm_b) 
+        modulo_ctr_frm_b++;
+      
+      pic_id_old_frm_b = currSlice->picture_id;
+      frame_no = currSlice->picture_id + (256*modulo_ctr_frm_b);
+    }
+    else
+    {
+      if (currSlice->picture_id < pic_id_old_fld_b) 
+        modulo_ctr_fld_b++;
+      
+      pic_id_old_fld_b = currSlice->picture_id;
+      frame_no = (currSlice->picture_id  + (256*modulo_ctr_fld_b))/2;
+    }
   }
 #endif
 
@@ -909,10 +896,14 @@ void init_frame(struct img_par *img, struct inp_par *inp)
   img->block_y = img->pix_y = img->pix_c_y = 0; // define vertical positions
   img->block_x = img->pix_x = img->pix_c_x = 0; // define horizontal positions
 
+  last_P_no = last_P_no_frm;
+  nextP_tr = nextP_tr_frm;
+
   //WYK: When entire non-B frames are lost, adjust the reference buffers
   //! TO 4.11.2001 Yes, but only for Bitstream mode! We do not loose anything in bitstream mode!
   //! Should remove this one time!
   
+#ifndef AFF //to be fixed later
   if(inp->of_mode == PAR_OF_26L) //! TO 4.11.2001 just to make sure that this piece of code 
   {                              //! does not affect any other input mode where this refPicID is not supported
     j = img->refPicID-img->refPicID_old;
@@ -926,6 +917,7 @@ void init_frame(struct img_par *img, struct inp_par *inp)
       }
     }
   }
+#endif
   
   if (img->number == 0) // first picture
   {
@@ -963,10 +955,21 @@ void init_frame(struct img_par *img, struct inp_par *inp)
     init_global_buffers(inp, img); 
   }
 
+  if (inp->of_mode==PAR_OF_IFF)
+  {
+    img->pn=(img->number%img->buf_cycle);
+  }
+
   for(i=0;i<img->width/BLOCK_SIZE+1;i++)          // set edge to -1, indicate nothing to predict from
+  {
     img->ipredmode[i+1][0]=-1;
+    img->ipredmode[i+1][img->height/BLOCK_SIZE+1]=-1;
+  }
   for(j=0;j<img->height/BLOCK_SIZE+1;j++)
+  {
     img->ipredmode[0][j+1]=-1;
+    img->ipredmode[img->width/BLOCK_SIZE+1][j+1]=-1;
+  }
 
   if(img->UseConstrainedIntraPred)
   {
@@ -983,6 +986,20 @@ void init_frame(struct img_par *img, struct inp_par *inp)
     img->mb_data[i].slice_nr = -1; 
     img->mb_data[i].ei_flag = 1;
   }
+
+  fb = frm;
+
+  imgY = imgY_frm;
+  imgUV = imgUV_frm;
+
+  mref = mref_frm;
+  mcef = mcef_frm;
+
+  img->mv = img->mv_frm;
+  refFrArr = refFrArr_frm;
+
+  img->fw_refFrArr = img->fw_refFrArr_frm;
+  img->bw_refFrArr = img->bw_refFrArr_frm;
 }
 
 /*!
@@ -993,8 +1010,14 @@ void init_frame(struct img_par *img, struct inp_par *inp)
  */
 void exit_frame(struct img_par *img, struct inp_par *inp)
 {
-    if(img->type==INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT)
-        copy2fb(img);
+  if(img->type==INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT)
+    copy2fb(img);
+
+  if (img->structure == FRAME)
+  {
+    fld->short_used = frm->short_used * 2;
+    fld->short_size = frm->short_size * 2;
+  }
 }
 
 /*!
@@ -1138,3 +1161,589 @@ void decode_one_slice(struct img_par *img,struct inp_par *inp)
   reset_ec_flags();
 }
 
+void decode_frame_slice(struct img_par *img,struct inp_par *inp, int current_header)
+{
+  Slice *currSlice = img->currentSlice;
+#if _ERROR_CONCEALMENT_
+  int received_mb_nr = 0; //to record how many MBs are correctly received in error prone transmission
+#endif
+
+  if (inp->symbol_mode == CABAC)
+  {
+      init_contexts_MotionInfo(img, currSlice->mot_ctx, 1);
+      init_contexts_TextureInfo(img, currSlice->tex_ctx, 1);
+  }
+
+  // init new frame
+  if (current_header == SOP || current_header == SOS)
+    init_frame(img, inp);
+
+  // do reference frame buffer reordering
+  reorder_mref(img);
+
+
+#if _ERROR_CONCEALMENT_
+  if (current_header == SOP)
+  {
+    if (img->number == 0) 
+      ercInit(img->width, img->height, 1);
+    // reset all variables of the error concealmnet instance before decoding of every frame.
+    // here the third parameter should, if perfectly, be equal to the number of slices per frame.
+    // using little value is ok, the code will alloc more memory if the slice number is larger
+    ercReset(erc_errorVar, img->max_mb_nr, img->max_mb_nr, img->width);
+    erc_mvperMB = 0;
+  }
+    
+  // decode main slice information
+  if ((current_header == SOP || current_header == SOS) && currSlice->ei_flag == 0)
+    decode_one_slice(img,inp);
+    
+  // setMB-Nr in case this slice was lost
+  if(currSlice->ei_flag)  
+    img->current_mb_nr = currSlice->last_mb_nr + 1;
+#else
+  // decode main slice information
+  if (current_header == SOP || current_header == SOS)
+    decode_one_slice(img,inp);
+#endif
+    
+  if(currSlice->next_eiflag && img->current_mb_nr != img->max_mb_nr)
+    currSlice->next_header = SOS;
+}
+
+void decode_field_slice(struct img_par *img,struct inp_par *inp, int current_header)
+{
+  Slice *currSlice = img->currentSlice;
+#if _ERROR_CONCEALMENT_
+  int received_mb_nr = 0; //to record how many MBs are correctly received in error prone transmission
+#endif
+
+    if (inp->symbol_mode == CABAC)
+    {
+      init_contexts_MotionInfo(img, currSlice->mot_ctx, 1);
+      init_contexts_TextureInfo(img,currSlice->tex_ctx, 1);
+    }
+    
+    // init new frame
+    if (current_header == SOP || current_header == SOS)
+    {
+      if (img->structure == TOP_FIELD)
+        init_top(img, inp); // set up field buffer in this function
+      else
+      {
+       init_bottom(img, inp);
+      }
+    }
+
+    // do reference frame buffer reordering
+    reorder_mref(img);
+
+
+#if _ERROR_CONCEALMENT_
+    if (current_header == SOP)
+    {
+      if (img->number == 0) 
+        ercInit(img->width, 2*img->height, 1);
+      // reset all variables of the error concealmnet instance before decoding of every frame.
+      // here the third parameter should, if perfectly, be equal to the number of slices per frame.
+      // using little value is ok, the code will alloc more memory if the slice number is larger
+      ercReset(erc_errorVar, img->max_mb_nr, img->max_mb_nr, img->width);
+      erc_mvperMB = 0;
+    }
+    
+    // decode main slice information
+    if ((current_header == SOP || current_header == SOS) && currSlice->ei_flag == 0)
+      decode_one_slice(img,inp);
+    
+    // setMB-Nr in case this slice was lost
+    if(currSlice->ei_flag)  
+      img->current_mb_nr = currSlice->last_mb_nr + 1;
+#else
+
+    // decode main slice information
+    if (current_header == SOP || current_header == SOS)
+      decode_one_slice(img,inp);
+
+#endif
+    
+    if(currSlice->next_eiflag && img->current_mb_nr != img->max_mb_nr)
+      currSlice->next_header = SOS;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Initializes the parameters for a new field
+ ************************************************************************
+ */
+void init_top(struct img_par *img, struct inp_par *inp)
+{
+  static int first_P = TRUE;
+  int i,j;
+
+  img->buf_cycle *= 2;
+  img->number *= 2;
+  img->current_mb_nr=0;
+  img->current_slice_nr=0;
+
+  img->mb_y = img->mb_x = 0;
+  img->block_y = img->pix_y = img->pix_c_y = 0; // define vertical positions
+  img->block_x = img->pix_x = img->pix_c_x = 0; // define horizontal positions
+
+  last_P_no = last_P_no_fld;
+  nextP_tr = nextP_tr_fld;
+
+  //WYK: When entire non-B frames are lost, adjust the reference buffers
+  //! TO 4.11.2001 Yes, but only for Bitstream mode! We do not loose anything in bitstream mode!
+  //! Should remove this one time!
+
+#ifndef AFF //to be fixed
+  if(inp->of_mode == PAR_OF_26L) //! TO 4.11.2001 just to make sure that this piece of code 
+  {                              //! does not affect any other input mode where this refPicID is not supported
+    j = img->refPicID-img->refPicID_old;
+    if(j<0) j += 16;    // img->refPicID is 4 bit, wrapps at 15
+    if(j > 1) //at least one non-B frame has been lost  
+    {
+      for(i=1; i<j; i++)  // j-1 non-B frames are lost
+      {
+        img->number++;
+        copy2fb(img);
+      }
+    }
+  }
+#endif
+
+  if (img->number == 0) // first picture
+  {
+    nextP_tr=prevP_tr=img->tr;
+  }
+  else if(img->type == INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT)  // I or P pictures
+  {
+#ifdef _ADAPT_LAST_GROUP_
+
+    for (i = img->buf_cycle; i > 0; i--)
+      last_P_no[i] = last_P_no[i-1];
+    last_P_no[0] = nextP_tr;
+#endif
+    nextP_tr=img->tr;
+
+    if(first_P) // first P picture
+    {
+      first_P = FALSE;
+      P_interval=nextP_tr-prevP_tr; //! TO 4.11.2001 we get problems here in case the first P-Frame was lost
+    }
+    write_prev_Pframe(img, p_out);  // imgY_prev, imgUV_prev -> file
+  }
+  
+  if (img->type > SP_IMG_MULT)
+  {
+    set_ec_flag(SE_PTYPE);
+    img->type = INTER_IMG_1;  // concealed element
+  }
+
+  img->max_mb_nr = (img->width * img->height) / (MB_BLOCK_SIZE * MB_BLOCK_SIZE);
+
+  // allocate memory for frame buffers
+  if (img->number == 0) 
+  {
+    init_frame_buffers(inp, img); 
+    init_global_buffers(inp, img); 
+    img->buf_cycle *= 2;
+  }
+
+  for(i=0;i<img->width/BLOCK_SIZE+1;i++)          // set edge to -1, indicate nothing to predict from
+  {
+    img->ipredmode[i+1][0]=-1;
+    img->ipredmode[i+1][img->height/BLOCK_SIZE+1]=-1;
+  }
+  for(j=0;j<img->height/BLOCK_SIZE+1;j++)
+  {
+    img->ipredmode[0][j+1]=-1;
+    img->ipredmode[img->width/BLOCK_SIZE+1][j+1]=-1;
+  }
+
+  if(img->UseConstrainedIntraPred)
+  {
+    for (i=0; i<img->width/MB_BLOCK_SIZE*img->height/MB_BLOCK_SIZE; i++)
+    {
+      img->intra_block[i][0] =img->intra_block[i][1] = img->intra_block[i][2] = img->intra_block[i][3] = 1;
+    }
+  }
+
+  // WYK: Oct. 8, 2001. Set the slice_nr member of each MB to -1, to ensure correct when packet loss occurs
+  for(i=0; i<img->max_mb_nr; i++)
+    img->mb_data[i].slice_nr = -1;
+
+  fb = fld;
+
+  imgY = imgY_top;
+  imgUV = imgUV_top;
+
+  mref = mref_fld;
+  mcef = mcef_fld;
+
+  img->mv = img->mv_top;
+  refFrArr = refFrArr_top;
+
+  img->fw_refFrArr = img->fw_refFrArr_top;
+  img->bw_refFrArr = img->bw_refFrArr_top;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Initializes the parameters for a new field
+ ************************************************************************
+ */
+void init_bottom(struct img_par *img, struct inp_par *inp)
+{
+  static int first_P = TRUE;
+  int i,j;
+
+  img->number++;
+  img->current_mb_nr=0;
+  img->current_slice_nr=0;
+  img->buf_cycle *= 2;
+
+  img->mb_y = img->mb_x = 0;
+  img->block_y = img->pix_y = img->pix_c_y = 0; // define vertical positions
+  img->block_x = img->pix_x = img->pix_c_x = 0; // define horizontal positions
+
+  last_P_no = last_P_no_fld;
+
+  //WYK: When entire non-B frames are lost, adjust the reference buffers
+  //! TO 4.11.2001 Yes, but only for Bitstream mode! We do not loose anything in bitstream mode!
+  //! Should remove this one time!
+  
+#ifndef AFF //to be fixed
+  if(inp->of_mode == PAR_OF_26L) //! TO 4.11.2001 just to make sure that this piece of code 
+  {                              //! does not affect any other input mode where this refPicID is not supported
+    j = img->refPicID-img->refPicID_old;
+    if(j<0) j += 16;    // img->refPicID is 4 bit, wrapps at 15
+    if(j > 1) //at least one non-B frame has been lost  
+    {
+      for(i=1; i<j; i++)  // j-1 non-B frames are lost
+      {
+        img->number++;
+        copy2fb(img);
+      }
+    }
+  }
+#endif
+
+  if(img->type==INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT)
+    copy2fb(img);       // trying to match exit_frame() in frame mode
+
+  if (img->number == 0) // first picture
+  {
+    nextP_tr=prevP_tr=img->tr;
+  }
+  else if (img->type == INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT)  // I or P pictures
+  {
+#ifdef _ADAPT_LAST_GROUP_
+    if (img->number==1)
+    {
+      for (i = img->buf_cycle; i > 0; i--)
+        last_P_no[i] = last_P_no[i-1];
+      last_P_no[0] = nextP_tr;
+    }
+#endif
+    nextP_tr=img->tr;
+    
+    if(first_P) // first P picture
+    {
+      first_P = FALSE;
+      P_interval=nextP_tr-prevP_tr; //! TO 4.11.2001 we get problems here in case the first P-Frame was lost
+    }
+  }
+
+  if (img->type > SP_IMG_MULT)
+  {
+    set_ec_flag(SE_PTYPE);
+    img->type = INTER_IMG_1;  // concealed element
+  }
+
+  img->max_mb_nr = (img->width * img->height) / (MB_BLOCK_SIZE * MB_BLOCK_SIZE);
+
+  for(i=0;i<img->width/BLOCK_SIZE+1;i++)          // set edge to -1, indicate nothing to predict from
+  {
+    img->ipredmode[i+1][0]=-1;
+    img->ipredmode[i+1][img->height/BLOCK_SIZE+1]=-1;
+  }
+  for(j=0;j<img->height/BLOCK_SIZE+1;j++)
+  {
+    img->ipredmode[0][j+1]=-1;
+    img->ipredmode[img->width/BLOCK_SIZE+1][j+1]=-1;
+  }
+
+  if(img->UseConstrainedIntraPred)
+  {
+    for (i=0; i<img->width/MB_BLOCK_SIZE*img->height/MB_BLOCK_SIZE; i++)
+    {
+      img->intra_block[i][0] =img->intra_block[i][1] = img->intra_block[i][2] = img->intra_block[i][3] = 1;
+    }
+  }
+
+  // WYK: Oct. 8, 2001. Set the slice_nr member of each MB to -1, to ensure correct when packet loss occurs
+  for(i=0; i<img->max_mb_nr; i++)
+    img->mb_data[i].slice_nr = -1;
+
+  imgY = imgY_bot;
+  imgUV = imgUV_bot;
+
+  img->mv = img->mv_bot;
+  refFrArr = refFrArr_bot;
+  mref = mref_fld;
+  mcef = mcef_fld;
+
+  img->fw_refFrArr = img->fw_refFrArr_bot;
+  img->bw_refFrArr = img->bw_refFrArr_bot;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Prepare field and frame buffer after frame decoding
+ ************************************************************************
+ */
+void frame_postprocessing(struct img_par *img, struct inp_par *inp)
+{
+  int i;
+
+  img->height = img->height/2;
+  img->height_cr = img->height_cr/2;
+  img->number *= 2;
+  img->buf_cycle *= 2;
+
+  fb = fld;
+  mref = mref_fld;
+  mcef = mcef_fld;
+  imgY = imgY_top;
+  imgUV = imgUV_top;
+  if (img->type == INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT)  // I or P pictures
+  {
+    split_field_top(img);
+    copy2fb(img);
+  }
+
+  img->number++;
+  imgY = imgY_bot;
+  imgUV = imgUV_bot;
+  if (img->type == INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT)  // I or P pictures
+  {
+    split_field_bot(img);
+    copy2fb(img);
+  }
+
+  fb = frm;
+  mref = mref_frm;
+  mcef = mcef_frm;
+  imgY = imgY_frm;
+  imgUV = imgUV_frm;
+  
+  img->height *= 2;
+  img->height_cr *= 2;
+  img->buf_cycle /= 2;
+  img->number /= 2;
+
+  if((img->number)&&(img->type==INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT))
+  {
+    for (i = img->buf_cycle; i > 2; i--)
+    {
+      last_P_no_fld[i] = last_P_no_fld[i-2];
+      last_P_no_fld[i-1] = last_P_no_fld[i-3];
+    }
+    last_P_no_fld[0] = nextP_tr_fld+1;
+    last_P_no_fld[1] = nextP_tr_fld;
+
+    nextP_tr_fld = nextP_tr * 2;
+    nextP_tr_frm = nextP_tr;
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Extract top field from a frame
+ ************************************************************************
+ */
+void split_field_top(struct img_par *img)
+{
+  int i;
+
+  for (i=0; i<img->height; i++)
+  {
+    memcpy(imgY[i], imgY_frm[i*2], img->width);
+  }
+
+  for (i=0; i<img->height_cr; i++)
+  {
+    memcpy(imgUV[0][i], imgUV_frm[0][i*2], img->width_cr);
+    memcpy(imgUV[1][i], imgUV_frm[1][i*2], img->width_cr);
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Extract bottom field from a frame
+ ************************************************************************
+ */
+void split_field_bot(struct img_par *img)
+{
+  int i;
+
+  for (i=0; i<img->height; i++)
+  {
+    memcpy(imgY[i], imgY_frm[i*2 + 1], img->width);
+  }
+
+  for (i=0; i<img->height_cr; i++)
+  {
+    memcpy(imgUV[0][i], imgUV_frm[0][i*2 + 1], img->width_cr);
+    memcpy(imgUV[1][i], imgUV_frm[1][i*2 + 1], img->width_cr);
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Prepare field and frame buffer after field decoding
+ ************************************************************************
+ */
+void field_postprocessing(struct img_par *img, struct inp_par *inp)
+{
+  int i;
+
+  combine_field(img);
+
+  if(img->type==INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT)
+  {
+    img->number++;
+    imgY = imgY_bot;
+    imgUV = imgUV_bot;
+    copy2fb(img);  // bottom field
+    img->number--;
+  }
+ 
+  fb = frm;
+  mref = mref_frm;
+  imgY = imgY_frm;
+  imgUV = imgUV_frm;
+
+  if((img->number>1)&&(img->type==INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT))
+  {
+    for (i = img->buf_cycle-1; i > 0; i--)
+      last_P_no_frm[i] = last_P_no_frm[i-1];
+    last_P_no_frm[0] = nextP_tr_frm;
+
+    nextP_tr_frm = nextP_tr / 2;
+    nextP_tr_fld = nextP_tr;
+  }
+
+  img->height *= 2;
+  img->height_cr *= 2;
+  img->buf_cycle /= 2;
+  img->number /= 2;
+  img->max_mb_nr = (img->width * img->height) / (MB_BLOCK_SIZE * MB_BLOCK_SIZE);
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Generate a frame from top and bottom fields
+ ************************************************************************
+ */
+void combine_field(struct img_par *img)
+{
+  int i;
+
+  for (i=0; i<img->height; i++)
+  {
+    memcpy(imgY_frm[i*2], imgY_top[i], img->width);     // top field
+    memcpy(imgY_frm[i*2 + 1], imgY_bot[i], img->width); // bottom field
+  }
+
+  for (i=0; i<img->height_cr; i++)
+  {
+    memcpy(imgUV_frm[0][i*2], imgUV_top[0][i], img->width_cr);
+    memcpy(imgUV_frm[0][i*2 + 1], imgUV_bot[0][i], img->width_cr);
+    memcpy(imgUV_frm[1][i*2], imgUV_top[1][i], img->width_cr);
+    memcpy(imgUV_frm[1][i*2 + 1], imgUV_bot[1][i], img->width_cr);
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Store information for use in B picture
+ ************************************************************************
+ */
+void store_field_MV(struct img_par *img)
+{
+  int i, j;
+  
+  if(img->type==INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT)
+  {
+    if (img->structure != FRAME)
+    {
+      for (i=0 ; i<img->width/4+4 ; i++)
+      {
+        for (j=0 ; j<img->height/8 ; j++)
+        {
+          img->mv_frm[i][2*j][0] = img->mv_frm[i][2*j+1][0] = img->mv_top[i][j][0];
+          img->mv_frm[i][2*j][0] = img->mv_frm[i][2*j+1][0] = img->mv_top[i][j][0];
+          img->mv_frm[i][2*j][1] = img->mv_frm[i][2*j+1][1] = img->mv_top[i][j][1]*2;
+          img->mv_frm[i][2*j][1] = img->mv_frm[i][2*j+1][1] = img->mv_top[i][j][1]*2;
+          
+          if ((i%2 == 0) && (j%2 == 0) && (i<img->width/4))
+          {
+            if (refFrArr_top[j][i] == -1)
+            {
+              refFrArr_frm[2*j][i] = refFrArr_frm[2*j+1][i] = -1;
+              refFrArr_frm[2*(j+1)][i] = refFrArr_frm[2*(j+1)+1][i] = -1;
+              refFrArr_frm[2*j][i+1] = refFrArr_frm[2*j+1][i+1] = -1;
+              refFrArr_frm[2*(j+1)][i+1] = refFrArr_frm[2*(j+1)+1][i+1] = -1;
+            }
+            else
+            {
+              refFrArr_frm[2*j][i] = refFrArr_frm[2*j+1][i] = (int)(refFrArr_top[j][i]/2);
+              refFrArr_frm[2*(j+1)][i] = refFrArr_frm[2*(j+1)+1][i] = (int)(refFrArr_top[j][i]/2);
+              refFrArr_frm[2*j][i+1] = refFrArr_frm[2*j+1][i+1] = (int)(refFrArr_top[j][i]/2);
+              refFrArr_frm[2*(j+1)][i+1] = refFrArr_frm[2*(j+1)+1][i+1] = (int)(refFrArr_top[j][i]/2);
+            }
+          }
+        }
+      }
+    }
+    else
+    {
+      for (i=0 ; i<img->width/4+4 ; i++)
+      {
+        for (j=0 ; j<img->height/8 ; j++)
+        {
+          img->mv_top[i][j][0] = img->mv_bot[i][j][0] = (int)(img->mv_frm[i][2*j][0]);
+          img->mv_top[i][j][1] = img->mv_bot[i][j][1] = (int)((img->mv_frm[i][2*j][1])/2);
+          
+          if ((i%2 == 0) && (j%2 == 0) && (i<img->width/4))
+          {
+            if (refFrArr_frm[2*j][i] == -1)
+            {
+              refFrArr_top[j][i] = refFrArr_bot[j][i] = -1;
+              refFrArr_top[j+1][i] = refFrArr_bot[j+1][i] = -1;
+              refFrArr_top[j][i+1] = refFrArr_bot[j][i+1] = -1;
+              refFrArr_top[j+1][i+1] = refFrArr_bot[j+1][i+1] = -1;
+            }
+            else
+            {
+              refFrArr_top[j][i] = refFrArr_bot[j][i] = refFrArr_frm[2*j][i]*2;
+              refFrArr_top[j+1][i] = refFrArr_bot[j+1][i] = refFrArr_frm[2*j][i]*2;
+              refFrArr_top[j][i+1] = refFrArr_bot[j][i+1] = refFrArr_frm[2*j][i]*2;
+              refFrArr_top[j+1][i+1] = refFrArr_bot[j+1][i+1] = refFrArr_frm[2*j][i]*2;
+            }
+          }
+        }
+      }
+    }
+  }
+}

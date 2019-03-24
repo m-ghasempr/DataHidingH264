@@ -64,6 +64,8 @@
 // Global Varibales
 
 static FILE *out;   //!< output file
+static int temp_header_len;
+static int temp_byte_buf;
 
 /*
    The implemented solution for a unified picture header
@@ -287,10 +289,24 @@ int start_slice(SyntaxElement *sym)
         eep = &((currSlice->partArr[0]).ee_cabac);
         currStream = (currSlice->partArr[0]).bitstream;
 
-        assert (currStream->bits_to_go == 8);
-        assert (currStream->byte_buf == 0);
-        assert (currStream->byte_pos == 0);
-        memset(currStream->streamBuffer, 0, 12);    // fill first 12 bytes with zeros (debug only)
+        if(input->InterlaceCodingOption==ADAPTIVE_CODING)
+        {
+
+          if((img->pstruct==0)||(img->pstruct==1))
+          {
+            assert (currStream->bits_to_go == 8);
+            assert (currStream->byte_buf == 0);
+            assert (currStream->byte_pos == 0);
+            memset(currStream->streamBuffer, 0, 12);    // fill first 12 bytes with zeros (debug only)
+          }
+        }
+        else
+        {
+          assert (currStream->bits_to_go == 8);
+          assert (currStream->byte_buf == 0);
+          assert (currStream->byte_pos == 0);
+          memset(currStream->streamBuffer, 0, 12);    // fill first 12 bytes with zeros (debug only)
+        }
 
         header_len = SliceHeader (0);  // Slice Header without Start Code
         
@@ -314,6 +330,13 @@ int start_slice(SyntaxElement *sym)
         init_contexts_MotionInfo(currSlice->mot_ctx, 1);
         init_contexts_TextureInfo(currSlice->tex_ctx, 1);
 
+        if(input->InterlaceCodingOption==ADAPTIVE_CODING)
+
+        if(img->pstruct==1)
+        { 
+          temp_byte_buf=currStream->header_byte_buffer;
+          temp_header_len=currStream->header_len;
+        }
         return header_len;
 
       }
@@ -327,8 +350,8 @@ int start_slice(SyntaxElement *sym)
 
         assert (currStream != NULL);
         assert (currStream->bits_to_go == 8);
-        assert (currStream->byte_pos == 0);
-        assert (currStream->byte_buf == 0);
+        if(mref!=mref_fld || !img->fld_type) assert (currStream->byte_pos == 0);
+        if(mref!=mref_fld || !img->fld_type) assert (currStream->byte_buf == 0);
 
         header_len=RTPSliceHeader();                      // generate the slice header
         
@@ -371,7 +394,6 @@ int start_slice(SyntaxElement *sym)
 
         assert (currStream->bits_to_go == 8);
         assert (currStream->byte_buf == 0);
-
 
         header_len=RTPSliceHeader();                      // generate the slice header
 
@@ -444,6 +466,7 @@ int terminate_slice()
   int cabac_byte_pos=0, uvlc_byte_pos=0, empty_bytes=0;
   int rtp_bytes_written;
   int dmb_length;
+  int temp_bitstogo;
 
   // Mainly flushing of everything
   // Add termination symbol, etc.
@@ -534,7 +557,12 @@ int terminate_slice()
       {
 
         // CABAC File Format
-        eep = &((currSlice->partArr[0]).ee_cabac);
+
+        if(((input->InterlaceCodingOption!=FRAME_CODING)&&(img->fld_flag!=0))||(input->InterlaceCodingOption==FRAME_CODING))
+          eep = &((currSlice->partArr[0]).ee_cabac);
+        else
+          eep=&((currSlice->partArr[0]).ee_cabac_frm);
+
         currStream = (currSlice->partArr[0]).bitstream;
 
         // terminate the arithmetic code
@@ -560,35 +588,96 @@ int terminate_slice()
         dmb_length=LastMBInSlice();
         stat->bit_use_header[img->type]+=dmb_length;
 
+        if((input->InterlaceCodingOption!=FRAME_CODING)&&(img->fld_flag!=0))
+          temp_bitstogo=currStream->bits_to_go;
+
 
         // And write the header to the output
         bytes_written = currStream->byte_pos;
         if (currStream->bits_to_go < 8) // trailing bits to process
         {
-            currStream->byte_buf <<= currStream->bits_to_go;
-            stat->bit_use_header[img->type]+=currStream->bits_to_go;
+          currStream->byte_buf <<= currStream->bits_to_go;
+          stat->bit_use_header[img->type]+=currStream->bits_to_go;
+
+          if((input->InterlaceCodingOption!=FRAME_CODING)&&(img->fld_flag!=0))
+            currStream->streamBuffer[temp_byte_pos+currStream->byte_pos++]=currStream->byte_buf;
+          else
             currStream->streamBuffer[currStream->byte_pos++]=currStream->byte_buf;
+          bytes_written++;
+          currStream->bits_to_go = 8;
+        }
+
+        if((input->InterlaceCodingOption==FRAME_CODING)||(input->InterlaceCodingOption!=FRAME_CODING)&&(img->fld_flag==0))
+          fwrite (currStream->streamBuffer, 1, bytes_written, out);
+
+
+        if((input->InterlaceCodingOption!=FRAME_CODING)&&(img->fld_flag!=0))
+        {
+          currStream->byte_pos = (temp_header_len)/8;
+          currStream->bits_to_go = temp_bits_to_go;
+          currStream->byte_buf = temp_byte_buf;
+        }
+
+        // And write the header to the output
+        if((input->InterlaceCodingOption!=FRAME_CODING)&&(img->fld_flag!=0))
+        {
+          bytes_written = currStream->byte_pos;
+          if (currStream->bits_to_go < 8) // trailing bits to process
+          {
             bytes_written++;
             currStream->bits_to_go = 8;
+          }
+          fwrite (currStream->streamBuffer, 1, bytes_written, out);
+          stat->bit_ctr += 8*bytes_written;
         }
-        fwrite (currStream->streamBuffer, 1, bytes_written, out);
-        stat->bit_ctr += 8*bytes_written;
-
-
+        
+        if((input->InterlaceCodingOption!=FRAME_CODING)&&(img->fld_flag!=0))
+        {
+          currStream->byte_pos = temp_byte_pos;
+          
+          // Find startposition of databitstream
+          start_data = (temp_header_len+31)/8;
+          if ((temp_header_len+31)%8 != 0)
+            start_data++;
+          
+          fwrite ((currStream->streamBuffer+start_data), 1, (temp_byte_pos-start_data), out);
+          
+          stat->bit_ctr += 8*(temp_byte_pos-start_data);
+          
+          currStream->byte_pos = (currStream->header_len)/8;
+          currStream->bits_to_go = temp_bitstogo;
+          currStream->byte_buf = currStream->header_byte_buffer;
+          // And write the header to the output
+          bytes_written = currStream->byte_pos;
+          if (currStream->bits_to_go < 8) // trailing bits to process
+          {
+            bytes_written++;
+            currStream->bits_to_go = 8;
+          }
+          fwrite (currStream->streamBuffer+temp_byte_pos, 1, bytes_written, out);
+          stat->bit_ctr += 8*bytes_written;
+        }
         // Go back to the end of the stream
         currStream->byte_pos = byte_pos;
         currStream->bits_to_go = bits_to_go;
         currStream->byte_buf = buffer;
-
-
+        
+        
         // Find startposition of databitstream
         start_data = (currStream->header_len+31)/8;
         if ((currStream->header_len+31)%8 != 0)
           start_data++;
-        bytes_written = currStream->byte_pos - start_data; // number of written bytes
-
+        if((input->InterlaceCodingOption==FRAME_CODING)||((input->InterlaceCodingOption!=FRAME_CODING)&&(img->fld_flag==0)))
+          bytes_written = currStream->byte_pos - start_data; // number of written bytes
+        else
+          bytes_written = currStream->byte_pos - start_data-temp_byte_pos; // number of written bytes
+        
         stat->bit_ctr += 8*bytes_written;     // actually written bits
-        fwrite ((currStream->streamBuffer+start_data), 1, bytes_written, out);
+        if((input->InterlaceCodingOption==FRAME_CODING)||((input->InterlaceCodingOption!=FRAME_CODING)&&(img->fld_flag==0)))
+          fwrite ((currStream->streamBuffer+start_data), 1, bytes_written, out);
+        else
+          fwrite ((currStream->streamBuffer+start_data+temp_byte_pos), 1, bytes_written, out);
+        
       }
       return 0;
 

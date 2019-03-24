@@ -1,3 +1,22 @@
+Changes for Version JM 2.1 to JM 2.0b
+-------------------------------------
+
+New Features
+* adaptive frame/field coding (LW)
+
+Bug Fixes
+* intra 4x4 prediction block availability (several people)
+* DP fixes (TO)
+
+
+Changes for Version JM 2.0b to JM 2.0
+-------------------------------------
+Bug Fixes
+* fix array bounds overflow in cabac.c (KS/IM)
+* fix byte sex issues in IFF (KS)
+* add UNIX preparation script (KS)
+
+
 Changes for Version JM 2.0 to JM 1.9
 -------------------------------------
 I dropped adaptive frame/field coding, so only bugfixes for this release
@@ -346,7 +365,9 @@ GS      Gary Sullivan		garysull@microsoft.com
 HS      Heiko Schwarz           hschwarz@hhi.de
 IL      Inge Lille-Langoy       Inge.Lille-Langoy@telenor.com
 JL      Jani Lainema            Jani.Lainema@nokia.com
+IM      Iole Moccagatta         imoccaga@lsil.com
 LK      Louis Kerofsky          lkerofsky@sharplabs.com
+LW      Limin Wang              liwang@gi.com
 MB      Marcus Barkowsky        Marcus.Barkowsky@nt.e-technik.uni-erlangen.de
 MG      Michael Gallant         mgallant@videolocus.com
 PL      Peter List              Peter.List@t-systems.de
@@ -361,4 +382,5 @@ TWe     Thomas Wedi             wedi@tnt.uni-hannover.de
 VV	Viktor Varsa		viktor.varsa@nokia.com
 WYK	Ye-Kui Wang		wangy@cs.tut.fi
 YL      Yann Lemaguet		yann.lemaguet@philips.com
+YW      Ye-Kui Wang             wyk@ieee.org
 ZX      Z. Xue                  jon_xz@yahoo.com

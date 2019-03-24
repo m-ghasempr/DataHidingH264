@@ -116,6 +116,12 @@ void write_prev_Pframe(struct img_par *img, FILE *p_out)
 {
   int i,j;
 
+  if (img->structure != FRAME)
+  {
+    img->height *= 2;
+    img->height_cr *= 2;
+  }
+ 
   for(i=0;i<img->height;i++)
     for(j=0;j<img->width;j++)
       fputc(imgY_prev[i][j],p_out);
@@ -128,6 +134,12 @@ void write_prev_Pframe(struct img_par *img, FILE *p_out)
     for(j=0;j<img->width_cr;j++)
       fputc(imgUV_prev[1][i][j],p_out);
   fflush( p_out  );
+
+  if (img->structure != FRAME)
+  {
+    img->height /= 2;
+    img->height_cr /= 2;
+  }
 }
 
 

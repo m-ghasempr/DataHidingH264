@@ -132,7 +132,8 @@ void decode_one_b8block (int decoder, int mbmode, int b8block, int b8mode, int b
       {
         block_x = img->block_x+bx;
         block_y = img->block_y+by;
-        ref_inx = (img->number-b8ref-1)%img->no_multpred;
+        if (img->type == B_IMG && mref == mref_fld)
+          ref_inx = (img->number-b8ref-2)%img->no_multpred;
 
         Get_Reference_Block (decs->decref[decoder][ref_inx],
                              block_y, block_x,

@@ -69,12 +69,13 @@ int SliceHeader(struct img_par *img, struct inp_par *inp)
   DataPartition *partition = &(currSlice->partArr[dP_nr]);
   SyntaxElement sym;
   int UsedBits=31;
+  static int last_imgtr_frm=0,modulo_ctr_frm=0,last_imgtr_fld=0,modulo_ctr_fld=0;
+  static int last_imgtr_frm_b=0,modulo_ctr_frm_b=0,last_imgtr_fld_b=0,modulo_ctr_fld_b=0;
 
   int tmp1;
   RMPNIbuffer_t *tmp_rmpni,*tmp_rmpni2;
   MMCObuffer_t *tmp_mmco,*tmp_mmco2;
   int done;
-
 
   sym.type = SE_HEADER;
   sym.mapping = linfo;
@@ -123,6 +124,65 @@ int SliceHeader(struct img_par *img, struct inp_par *inp)
   readSyntaxElement_UVLC (&sym,img,inp,partition);
   currSlice->picture_type = img->type = sym.value1;
   UsedBits += sym.len;
+
+  // Picture Structure indication (0 for frame, 1 for top field and 2 for bottom field)
+  SYMTRACESTRING("PHPictureType");
+  readSyntaxElement_UVLC (&sym,img,inp,partition);
+  currSlice->structure = img->structure = sym.value1;
+  UsedBits += sym.len;
+
+  if (img->type <= INTRA_IMG || img->type >= SP_IMG_1) 
+  {
+    if (img->structure == FRAME)
+    {     
+      if(img->tr <last_imgtr_frm) 
+        modulo_ctr_frm++;
+      
+      last_imgtr_frm = img->tr;
+      img->tr_frm = img->tr + (256*modulo_ctr_frm);
+    }
+    else
+    {
+      if(img->tr <last_imgtr_fld) 
+        modulo_ctr_fld++;
+      
+      last_imgtr_fld = img->tr;
+      img->tr_fld = img->tr + (256*modulo_ctr_fld);
+    }
+  }
+  else
+  {
+    if (img->structure == FRAME)
+    {     
+      if(img->tr <last_imgtr_frm_b) 
+        modulo_ctr_frm_b++;
+      
+      last_imgtr_frm_b = img->tr;
+      img->tr_frm = img->tr + (256*modulo_ctr_frm_b);
+    }
+    else
+    {
+      if(img->tr <last_imgtr_fld_b) 
+        modulo_ctr_fld_b++;
+      
+      last_imgtr_fld_b = img->tr;
+      img->tr_fld = img->tr + (256*modulo_ctr_fld_b);
+    }
+  }
+  
+  if(img->type != B_IMG_MULT) {
+    img->pstruct_next_P = img->structure;
+    if(img->structure == TOP_FIELD)
+    {
+      img->imgtr_last_P = img->imgtr_next_P;
+      img->imgtr_next_P = img->tr_fld;
+    }
+    else if(img->structure == FRAME)
+    {
+      img->imgtr_last_P = img->imgtr_next_P;
+      img->imgtr_next_P = 2*img->tr_frm;
+    }
+  }
 
   // 5. Finally, read Reference Picture ID (same as TR here).  Note that this is an
   // optional field that is not present if the input parameters do not indicate
@@ -341,7 +401,7 @@ int SliceHeader(struct img_par *img, struct inp_par *inp)
 
   /* end KS */
   img->buf_cycle = inp->buf_cycle+1;
-//  img->pn=(img->number%img->buf_cycle);
+  img->pn=(((img->structure==BOTTOM_FIELD) ? (img->number/2):img->number)%img->buf_cycle);
 
   img->max_mb_nr = (img->width * img->height) / (MB_BLOCK_SIZE * MB_BLOCK_SIZE);
   if (inp->symbol_mode ==CABAC)

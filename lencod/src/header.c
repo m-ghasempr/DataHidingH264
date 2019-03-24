@@ -99,6 +99,7 @@ int SliceHeader()
   len += writeSyntaxElement_UVLC (sym, partition);
 
   sym->value1 = img->tr%256;         // TR, variable length
+
   SYMTRACESTRING("PH TemporalReference");
   len += writeSyntaxElement_UVLC (sym, partition);
 
@@ -110,7 +111,8 @@ int SliceHeader()
   // unwise to assume that P pictures will never have a size indiciation.  So the
   // one bit for an "unchanged" inidication is well spent.
 
-  if (img->type == INTRA_IMG)
+  if (img->type == INTRA_IMG||img->current_mb_nr==0)
+ // if (img->type == INTRA_IMG)
   {
     // Double check that width and height are divisible by 16
     assert (img->width  % 16 == 0);
@@ -137,6 +139,12 @@ int SliceHeader()
   SYMTRACESTRING("Hacked Picture Type Symbol");
   len+= writeSyntaxElement_UVLC (sym, partition);
 
+  // picture structure, (0: progressive, 1: top field, 2: bottom field, 
+  // 3: top field first, 4: bottom field first)
+  sym->value1 = img->pstruct;
+  SYMTRACESTRING("Picture Stucture");
+  len += writeSyntaxElement_UVLC (sym, partition);
+
   // Finally, write Reference Picture ID 
   // WYK: Oct. 16, 2001. Now I use this for the reference frame ID (non-B frame ID). 
   // If current frame is a B-frame, it will not change; otherwise it is increased by 1 based
@@ -145,6 +153,7 @@ int SliceHeader()
   if (1)
   {
     sym->value1 = img->refPicID%16;         // refPicID, variable length
+ 
     SYMTRACESTRING("PHRefPicID");
     len += writeSyntaxElement_UVLC (sym, partition);
   }
@@ -227,6 +236,9 @@ int writeERPS(SyntaxElement *sym, DataPartition *partition)
   /* PN: Picture Number */
   SYMTRACESTRING("RTP-SH: Picture Number");
   sym->value1 = img->pn;
+#ifdef FLD0
+  sym->value1 =0;
+#endif
   len += writeSyntaxElement_UVLC (sym, partition);
 
 #ifdef _CHECK_MULTI_BUFFER_1_
@@ -586,8 +598,14 @@ int LastMBInSlice()
   if ((sym=(SyntaxElement*)calloc(1,sizeof(SyntaxElement)))==NULL) no_mem_exit("LastMBInSlice:sym");
 
   d_MB_Nr = img->current_mb_nr-img->currentSlice->start_mb_nr;
-  if (d_MB_Nr == img->total_number_mb)
+
+  if((input->InterlaceCodingOption==FRAME_CODING)&&(d_MB_Nr == img->total_number_mb))
     d_MB_Nr = 0;
+
+   if(input->InterlaceCodingOption==ADAPTIVE_CODING)
+     if((((img->fld_flag==0)||(img->pstruct==1))&&(img->total_number_mb==d_MB_Nr)) ||
+       ((img->pstruct==2)&&((img->total_number_mb/2)==d_MB_Nr)))
+       d_MB_Nr = 0;
 
   sym->type = SE_HEADER;
   sym->mapping = n_linfo2;       // Mapping rule: Simple code number to len/info

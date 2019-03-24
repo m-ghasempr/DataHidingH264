@@ -51,6 +51,7 @@
       TICSP, Tampere University of Technology, Finland
       Munich University of Technology, Institute for Communications Engineering, Germany 
       Videolocus, Canada
+      Motorola Inc., USA
 
   \endverbatim
   \par Full Contact Information
@@ -158,6 +159,13 @@
       Munich University of Technology
       Germany
 
+      Limin Wang                     <liwang@gi.com>
+      Krit Panusopone                <kpanusopone@gi.com>
+      Rajeev Gandhi                  <rgandhi@gi.com>
+      Yue Yu                         <yyu@gi.com>
+      Motorola Inc.
+      6450 Sequence Drive
+      San Diego, CA 92121 USA
 
     \endverbatim
 */

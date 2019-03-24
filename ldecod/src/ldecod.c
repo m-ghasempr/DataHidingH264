@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 2.0
+ *     JM 2.1
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -125,7 +125,7 @@
 #endif
 
 #define JM          "2"
-#define VERSION     "2.0"
+#define VERSION     "2.1"
 #define LOGFILE     "log.dec"
 #define DATADECFILE "data.dec"
 #define TRACEFILE   "trace_dec.txt"
@@ -161,6 +161,8 @@ int main(int argc, char **argv)
     error(errortext, 300);
   }
 
+  isBigEndian = testEndian();
+
   // Initializes Configuration Parameters with configuration file
   init_conf(inp, argv[1]);
 
@@ -191,6 +193,8 @@ int main(int argc, char **argv)
   img->type = INTRA_IMG;
   img->tr_old = -1; // WYK: Oct. 8, 2001, for detection of a new frame
   img->refPicID = -1; // WYK: for detection of a new non-B frame
+  img->imgtr_last_P = 0;
+  img->imgtr_next_P = 0;
 
   img->mmco_buffer=NULL;
 
@@ -812,16 +816,38 @@ int init_global_buffers(struct inp_par *inp, struct img_par *img)
   int memory_size=0;
 #ifdef _ADAPT_LAST_GROUP_
   extern int *last_P_no;
+  extern int *last_P_no_frm;
+  extern int *last_P_no_fld;
 #endif
 
+  img->buf_cycle = inp->buf_cycle+1;
+
+  img->buf_cycle *= 2;
+
+  if (img->structure != FRAME)
+  {
+    img->height *= 2;         // set height to frame (twice of field) for normal variables
+    img->height_cr *= 2;      // set height to frame (twice of field) for normal variables
+  }
+
 #ifdef _ADAPT_LAST_GROUP_
-  if ((last_P_no = (int*)malloc(img->buf_cycle*sizeof(int))) == NULL)
-    no_mem_exit("init_global_buffers: last_P_no");
+  if ((last_P_no_frm = (int*)malloc(2*img->buf_cycle*sizeof(int))) == NULL)
+    no_mem_exit("get_mem4global_buffers: last_P_no_frm");
+  if ((last_P_no_fld = (int*)malloc(2*img->buf_cycle*sizeof(int))) == NULL)
+    no_mem_exit("get_mem4global_buffers: last_P_no_fld");
 #endif
 
   // allocate memory for encoding frame buffers: imgY, imgUV
-  memory_size += get_mem2D(&imgY, img->height, img->width);
-  memory_size += get_mem3D(&imgUV, 2, img->height_cr, img->width_cr);
+  // byte imgY[288][352];
+  // byte imgUV[2][144][176];
+  memory_size += get_mem2D(&imgY_frm, img->height, img->width);    // processing memory in frame mode
+  memory_size += get_mem3D(&imgUV_frm, 2, img->height_cr, img->width_cr); // processing memory in frame mode
+
+  memory_size += get_mem2D(&imgY_top, img->height/2, img->width);    // processing memory in field mode
+  memory_size += get_mem3D(&imgUV_top, 2, img->height_cr/2, img->width_cr);  // processing memory in field mode
+
+  memory_size += get_mem2D(&imgY_bot, img->height/2, img->width);    // processing memory in field mode
+  memory_size += get_mem3D(&imgUV_bot, 2, img->height_cr/2, img->width_cr);  // processing memory in field mode
 
   // allocate memory for multiple ref. frame buffers: mref, mcref
   // rows and cols for croma component mcef[ref][croma][4x][4y] are switched
@@ -834,9 +860,14 @@ int init_global_buffers(struct inp_par *inp, struct img_par *img)
   memory_size += get_mem3D(&imgUV_prev, 2, img->height_cr, img->width_cr);
 
   // allocate memory for reference frames of each block: refFrArr
-  memory_size += get_mem2Dint(&refFrArr, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
+  // int  refFrArr[72][88];
+  memory_size += get_mem2Dint(&refFrArr_frm, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
+  memory_size += get_mem2Dint(&refFrArr_top, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
+  memory_size += get_mem2Dint(&refFrArr_bot, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
 
   // allocate memory for reference frame in find_snr
+  // byte imgY_ref[288][352];
+  // byte imgUV_ref[2][144][176];
   memory_size += get_mem2D(&imgY_ref, img->height, img->width);
   memory_size += get_mem3D(&imgUV_ref, 2, img->height_cr, img->width_cr);
 
@@ -853,14 +884,42 @@ int init_global_buffers(struct inp_par *inp, struct img_par *img)
         no_mem_exit ("init_global_buffers: img->intra_block");
     }
   }
-  memory_size += get_mem3Dint(&(img->mv),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
+  // img => int mv[92][72][3]
+  memory_size += get_mem3Dint(&(img->mv_frm),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
+  memory_size += get_mem3Dint(&(img->mv_top),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
+  memory_size += get_mem3Dint(&(img->mv_bot),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
+  // img => int ipredmode[90][74]
   memory_size += get_mem2Dint(&(img->ipredmode),img->width/BLOCK_SIZE +2 , img->height/BLOCK_SIZE +2);
+  // int dfMV[92][72][3];
   memory_size += get_mem3Dint(&(img->dfMV),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
+  // int dbMV[92][72][3];
   memory_size += get_mem3Dint(&(img->dbMV),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
-  memory_size += get_mem2Dint(&(img->fw_refFrArr),img->height/BLOCK_SIZE,img->width/BLOCK_SIZE);
-  memory_size += get_mem2Dint(&(img->bw_refFrArr),img->height/BLOCK_SIZE,img->width/BLOCK_SIZE);
+  // int fw_refFrArr[72][88];
+  memory_size += get_mem2Dint(&(img->fw_refFrArr_frm),img->height/BLOCK_SIZE,img->width/BLOCK_SIZE);
+  // int bw_refFrArr[72][88];
+  memory_size += get_mem2Dint(&(img->bw_refFrArr_frm),img->height/BLOCK_SIZE,img->width/BLOCK_SIZE);
+  // int fw_mv[92][72][3];
   memory_size += get_mem3Dint(&(img->fw_mv),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
+  // int bw_mv[92][72][3];
   memory_size += get_mem3Dint(&(img->bw_mv),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
+  
+  // int fw_refFrArr[72][88];
+  memory_size += get_mem2Dint(&(img->fw_refFrArr_top),img->height/BLOCK_SIZE,img->width/BLOCK_SIZE);
+  // int bw_refFrArr[72][88];
+  memory_size += get_mem2Dint(&(img->bw_refFrArr_top),img->height/BLOCK_SIZE,img->width/BLOCK_SIZE);
+  // int fw_refFrArr[72][88];
+  memory_size += get_mem2Dint(&(img->fw_refFrArr_bot),img->height/BLOCK_SIZE,img->width/BLOCK_SIZE);
+  // int bw_refFrArr[72][88];
+  memory_size += get_mem2Dint(&(img->bw_refFrArr_bot),img->height/BLOCK_SIZE,img->width/BLOCK_SIZE);
+
+  if (img->structure != FRAME)
+  {
+    img->height /= 2;      // reset height for normal variables
+    img->height_cr /= 2;   // reset height for normal variables
+  }
+  
+  img->buf_cycle = inp->buf_cycle+1;
+
   return (memory_size);
 }
 
@@ -881,14 +940,20 @@ int init_global_buffers(struct inp_par *inp, struct img_par *img)
  */
 void free_global_buffers(struct inp_par *inp, struct img_par *img)
 {
-  int i,j;
+  int  i,j;
 #ifdef _ADAPT_LAST_GROUP_
-  extern int *last_P_no;
-  free (last_P_no);
+  extern int *last_P_no_frm;
+  extern int *last_P_no_fld;
+  free (last_P_no_frm);
+  free (last_P_no_fld);
 #endif
 
-  free_mem2D(imgY);
-  free_mem3D(imgUV,2);
+  free_mem2D(imgY_frm);
+  free_mem2D(imgY_top);
+  free_mem2D(imgY_bot);
+  free_mem3D(imgUV_frm,2);
+  free_mem3D(imgUV_top,2);
+  free_mem3D(imgUV_bot,2);
   free_mem2D(imgY_prev);
   free_mem3D(imgUV_prev,2);
 
@@ -896,10 +961,14 @@ void free_global_buffers(struct inp_par *inp, struct img_par *img)
   free (mref);
   free (mcef);
 
-  free_mem2Dint(refFrArr);
+  free_mem2Dint(refFrArr_frm);
+  free_mem2Dint(refFrArr_top);
+  free_mem2Dint(refFrArr_bot);
 
   free_mem2D (imgY_ref);
   free_mem3D (imgUV_ref,2);
+//  free_mem2D (imgY_tmp);
+//  free_mem3D (imgUV_tmp,2);
 
   // free mem, allocated for structure img
   if (img->mb_data       != NULL) free(img->mb_data);
@@ -913,17 +982,23 @@ void free_global_buffers(struct inp_par *inp, struct img_par *img)
     }
     free (img->intra_block);
   }
-
-  free_mem3Dint(img->mv,img->width/BLOCK_SIZE + 4);
+  free_mem3Dint(img->mv_frm,img->width/BLOCK_SIZE + 4);
+  free_mem3Dint(img->mv_top,img->width/BLOCK_SIZE + 4);
+  free_mem3Dint(img->mv_bot,img->width/BLOCK_SIZE + 4);
 
   free_mem2Dint (img->ipredmode);
 
   free_mem3Dint(img->dfMV,img->width/BLOCK_SIZE + 4);
   free_mem3Dint(img->dbMV,img->width/BLOCK_SIZE + 4);
 
-  free_mem2Dint(img->fw_refFrArr);
-  free_mem2Dint(img->bw_refFrArr);
+  free_mem2Dint(img->fw_refFrArr_frm);
+  free_mem2Dint(img->bw_refFrArr_frm);
+  free_mem2Dint(img->fw_refFrArr_top);
+  free_mem2Dint(img->bw_refFrArr_top);
+  free_mem2Dint(img->fw_refFrArr_bot);
+  free_mem2Dint(img->bw_refFrArr_bot);
 
   free_mem3Dint(img->fw_mv,img->width/BLOCK_SIZE + 4);
   free_mem3Dint(img->bw_mv,img->width/BLOCK_SIZE + 4);
 }
+

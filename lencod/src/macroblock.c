@@ -227,6 +227,8 @@ void start_macroblock()
   for (i=0; i < (BLOCK_MULTIPLE*BLOCK_MULTIPLE); i++)
     currMB->intra_pred_modes[i] = 0;
 
+  //initialize the whole MB as INTRA coded
+  //Blocks ar set to notINTRA in write_one_macroblock
   if (input->UseConstrainedIntraPred)
   {
     i = img->current_mb_nr;
@@ -420,15 +422,17 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
     }
     else //! MB that did not fit in this slice anymore is not a Skip MB
     {
-      for (i=0; i<currSlice->max_part_nr; i++)
-      {
-        dataPart = &(currSlice->partArr[i]);
-        currStream = dataPart->bitstream;
+      if(img->type == B_IMG)
+        dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+      else
+        dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
+
+      currStream = dataPart->bitstream;
         // update the bitstream
-        currStream->bits_to_go = currStream->bits_to_go_skip;
-        currStream->byte_pos  = currStream->byte_pos_skip;
-        currStream->byte_buf  = currStream->byte_buf_skip;
-      }
+      currStream->bits_to_go = currStream->bits_to_go_skip;
+      currStream->byte_pos  = currStream->byte_pos_skip;
+      currStream->byte_buf  = currStream->byte_buf_skip;
+
       // update the statistics
       img->cod_counter = 0;
       skip = FALSE;
@@ -600,7 +604,6 @@ void CheckAvailabilityOfNeighbors()
   if(img->pix_y >= MB_BLOCK_SIZE && img->pix_x < (img->width-MB_BLOCK_SIZE ))
   {
     if(currMB->slice_nr == img->mb_data[mb_nr-mb_width+1].slice_nr)
-      // currMB->mb_available[0][1]=&(img->mb_data[mb_nr-mb_width+1]);
       currMB->mb_available[0][2]=&(img->mb_data[mb_nr-mb_width+1]);
   }
 }
@@ -622,7 +625,10 @@ OneComponentLumaPrediction4x4 (int*   mpred,      //  --> array of prediction va
                                int*   mv,         // <--  motion vector
                                int    ref)        // <--  reference frame (0.. / -1:backward)
 {
-  pel_t** ref_pic = (ref==-1 ? mref_P : mref [ref]);
+  int incr  = ((img->type == B_IMG) ? (direct_mode ? ((!img->fld_type&&(mref==mref_fld))):((mref==mref_fld))) : 0);
+
+  pel_t** ref_pic = (ref==-1 ? mref_P : mref [ref+incr]);   // AFF_TOP
+
   int     mvshift = (input->mv_res ? 3 : 2);
   int     pix_add = (1 << mvshift);
   int     j0      = (pic_pix_y << mvshift) + mv[1], j1=j0+pix_add, j2=j1+pix_add, j3=j2+pix_add;
@@ -676,11 +682,10 @@ LumaPrediction4x4 (int  block_x,    // <--  relative horizontal block coordinate
   int* bpred     = bw_pred;
   int  direct    = (fw_mode == 0 && bw_mode == 0);
 
-
+  direct_mode = direct;
   if (fw_mode || direct)
   {
-    OneComponentLumaPrediction4x4 (fw_pred, pic_pix_x, pic_pix_y, img->all_mv [bx][by][fw_ref][fw_mode], fw_ref);
-
+      OneComponentLumaPrediction4x4 (fw_pred, pic_pix_x, pic_pix_y, img->all_mv [bx][by][fw_ref][fw_mode], fw_ref);   
   }
   if (bw_mode || direct)
   {
@@ -922,14 +927,14 @@ OneComponentChromaPrediction4x4 (int*     mpred,      //  --> array to store pre
                                  int      uv)         // <--  chroma component
 {
   int     i, j, ii, jj, ii0, jj0, ii1, jj1, if0, if1, jf0, jf1;
+  int incr  = ((img->type == B_IMG) ? (direct_mode ? ((!img->fld_type&&(mref==mref_fld))):((mref==mref_fld))) : 0);
   int*    mvb;
-  int     refframe  = (ref<0 ?      0 :      ref);
-  pel_t** refimage  = (ref<0 ? mcef_P : mcef[ref])[uv];
+  int     refframe  = (ref<0 ?      0 :    ref);
+  pel_t** refimage  = (ref<0 ? mcef_P : mcef[ref+incr])[uv];   // AFF_TOP
   int     je        = pix_c_y + 4;
   int     ie        = pix_c_x + 4;
   int     f1        =(input->mv_res?16:8), f2=f1-1, f3=f1*f1, f4=f3>>1;
   int     s1        =(input->mv_res? 4:3);
-
 
   for (j=pix_c_y; j<je; j++)
   for (i=pix_c_x; i<ie; i++)
@@ -1053,6 +1058,7 @@ ChromaPrediction4x4 (int  uv,           // <-- colour component
   int* bpred     = bw_pred;
   int  direct    = (fw_mode == 0 && bw_mode == 0);
 
+  direct_mode = direct;
   //===== INTRA PREDICTION =====
   if (fw_ref_frame < 0)
   {
@@ -1529,6 +1535,15 @@ writeReferenceFrame (int  mode,
 
 
   currSE->value1 = ref;
+
+  if(mref==mref_fld) 
+  {
+    if(currSE->value1 % 2)        //favoring the same field
+      currSE->value1 -= 1;
+    else
+      currSE->value1 += 1;
+  }  //end of favoring the same field parity
+
   currSE->type   = (img->type==B_IMG ? SE_BFRAME : SE_REFFRAME);
   if (input->symbol_mode == UVLC)
   {

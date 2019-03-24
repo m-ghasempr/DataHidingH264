@@ -450,10 +450,17 @@ void delete_contexts_TextureInfo(TextureInfoContexts *deco_ctx)
 {
   int j,k;
 
+#ifndef USE_6_INTRA_MODES
+  static const int max_ipr=9;
+#else
+  static const int max_ipr=6;
+#endif
+
+
   if( deco_ctx == NULL )
     return;
 
-  for (j=0; j < 6; j++)
+  for (j=0; j < max_ipr; j++)
   {
     if (deco_ctx->ipr_contexts[j] != NULL)
       free(deco_ctx->ipr_contexts[j]);

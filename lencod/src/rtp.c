@@ -414,6 +414,12 @@ int RTPSliceHeader()
   SYMTRACESTRING("RTP-SH: Parameter Set");
   sym.value1 = 0;
   len += writeSyntaxElement_UVLC (&sym, partition);
+  
+  // picture structure, (0: progressive, 1: top field, 2: bottom field, 
+  // 3: top field first, 4: bottom field first)
+  sym.value1 = img->pstruct;
+  SYMTRACESTRING("Picture Stucture");
+  len += writeSyntaxElement_UVLC (&sym, partition);
 
   SYMTRACESTRING("RTP-SH: Picture ID");
   sym.value1 = img->currentSlice->picture_id;

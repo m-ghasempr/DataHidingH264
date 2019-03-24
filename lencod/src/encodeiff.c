@@ -161,6 +161,29 @@ PictureInfo currPictureInfo;
 AlternateTrackMediaBox box_atm;
 SwitchPictureBox box_sp;
 
+int isBigEndian=0;
+
+/*!
+ ************************************************************************
+ * \brief
+ *      checks if the System is big- or little-endian
+ * \return
+ *      0, little-endian
+ *      1, big-endian
+ ************************************************************************
+ */
+int testEndian()
+{
+  short s;
+  byte *p;
+
+  p=(byte*)&s;
+
+  s=1;
+
+  return (*p==0);
+}
+
 /*!
  ************************************************************************
  * \brief
@@ -726,7 +749,7 @@ size_t mergeAlternateTrackHeaderBox( FILE* fp )
   num += writefile( &box_ath.type.type, 4, 1, fp );
 //  writefile( &box_ath.type.largesize, 8, 1, fp );
 
-  num += writefile( &box_ath.numPictures, box_fh.numBytesInPictureCountMinusOne+1, 1, destf );
+  num += writefile_s( &box_ath.numPictures, sizeof(box_ath.numPictures), box_fh.numBytesInPictureCountMinusOne+1, 1, destf );
   
   // append the data in box_ath.fpMeta into fp:
   fseek( sourcef, 0L, SEEK_SET );
@@ -812,9 +835,9 @@ size_t wrPictureInfo( FILE* fp )
   assert( fp != NULL );
 
   num += writefile( &currPictureInfo.intraPictureFlag, 1, 1, fp );
-  num += writefile( &currPictureInfo.pictureOffset, box_fh.numBytesInPictureOffsetMinusTwo + 2, 1, fp );
-  num += writefile( &currPictureInfo.pictureDisplayTime, box_fh.numBytesInPictureDisplayTimeMinusOne + 1, 1, fp );
-  num += writefile( &currPictureInfo.numPayloads, box_fh.numBytesInPayloadCountMinusOne + 1, 1, fp );
+  num += writefile_s( &currPictureInfo.pictureOffset, sizeof(currPictureInfo.pictureOffset), box_fh.numBytesInPictureOffsetMinusTwo + 2, 1, fp );
+  num += writefile_s( &currPictureInfo.pictureDisplayTime, sizeof(currPictureInfo.pictureDisplayTime), box_fh.numBytesInPictureDisplayTimeMinusOne + 1, 1, fp );
+  num += writefile_s( &currPictureInfo.numPayloads, sizeof(currPictureInfo.numPayloads), box_fh.numBytesInPayloadCountMinusOne + 1, 1, fp );
 
   if ( num != (unsigned)(1+box_fh.numBytesInPictureOffsetMinusTwo + 2+box_fh.numBytesInPictureDisplayTimeMinusOne + 1+box_fh.numBytesInPayloadCountMinusOne + 1) ) return -1;
 //  fprintf( f, "picture %d 's payload, total %d:\n", frame_no, currPictureInfo.numPayloads );
@@ -909,7 +932,8 @@ PayloadInfo* newPayloadInfo()
   pli->parameterSet = box_ps.parameterSetID;
   pli->pictureID = img->currentSlice->picture_id;
   pli->sliceID = img->current_slice_nr;
-  
+  pli->pstruct = img->pstruct;
+
   // copied from rtp.c, and add pli->sliceType2
   switch (img->type)
   {
@@ -1077,11 +1101,14 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
     // write the parameter set
     sym.value1 = pp->parameterSet;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
+    // write picture structure
+    sym.value1 = pp->pstruct;
+    writeSyntaxElement2Buf_UVLC(&sym, bitstream);
     // write slice header;
     sym.value1 = pp->pictureID;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
     sym.value1 = pp->sliceType;
-//    select_picture_type (&sym);
+    // select_picture_type (&sym);
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
     sym.value1 = pp->firstMBInSliceX;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
@@ -1107,6 +1134,9 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
     // write the parameter set
     sym.value1 = pp->parameterSet;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
+    // write picture structure
+    sym.value1 = pp->pstruct;
+    writeSyntaxElement2Buf_UVLC(&sym, bitstream);
     // write slice header;
     sym.value1 = pp->pictureID;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
@@ -1126,6 +1156,9 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
   }
   else if ( pp->payloadType == 2 || pp->payloadType == 3 )
   {
+    // write picture structure
+    sym.value1 = pp->pstruct;
+    writeSyntaxElement2Buf_UVLC(&sym, bitstream);
     // write pictureID
     sym.value1 = pp->pictureID;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
@@ -1151,7 +1184,7 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
   bytes_written = bitstream->byte_pos;
 
   // update & write headerSize
-  num += writefile( &pp->payloadSize, box_fh.numBytesInPayloadSizeMinusOne+1, 1, fp );
+  num += writefile_s( &pp->payloadSize, sizeof(pp->payloadSize), box_fh.numBytesInPayloadSizeMinusOne+1, 1, fp );
   pp->headerSize += bytes_written;
   num += writefile( &pp->headerSize, 1, 1, fp );
   cd = (pp->payloadType << 4) | (pp->errorIndication << 3) | (pp->reserved);
@@ -1471,8 +1504,14 @@ size_t terminateInterimFile(FILE* outf)
  */
 size_t writefile( void* buf, size_t size, size_t count, FILE* fp )
 {
-  byte* p = (byte*)buf+size-1;
+  byte* p;
   int num = 0;
+
+  if (isBigEndian)
+    p = (byte*)buf;
+  else
+    p = (byte*)buf+size-1;
+
 
   assert( fp != NULL );
   assert( buf != NULL );
@@ -1480,7 +1519,49 @@ size_t writefile( void* buf, size_t size, size_t count, FILE* fp )
 
   while ( size > 0 )
   {
-    fwrite( p--, 1, 1, fp );
+    if (isBigEndian)
+      fwrite( p++, 1, 1, fp );
+    else
+      fwrite( p--, 1, 1, fp );
+    size--;
+    num++;
+  }
+  return num;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *      write the data to file, bytes are in big Endian order.
+ *      to be used if buffers size differs from number of written bytes
+ * \return
+ *      how many bytes being written into the file, if success
+ *      -1, otherwise
+ * \param outf
+ *      output file pointer
+ ************************************************************************
+ */
+size_t writefile_s( void* buf, size_t bufsize, size_t size, size_t count, FILE* fp )
+{
+  byte* p;
+  int num = 0;
+
+  if (isBigEndian)
+    p = (byte*)buf+(bufsize-size);
+  else
+    p = (byte*)buf+size-1;
+
+
+  assert( fp != NULL );
+  assert( buf != NULL );
+  assert( count == 1 );
+
+  while ( size > 0 )
+  {
+    if (isBigEndian)
+      fwrite( p++, 1, 1, fp );
+    else
+      fwrite( p--, 1, 1, fp );
     size--;
     num++;
   }

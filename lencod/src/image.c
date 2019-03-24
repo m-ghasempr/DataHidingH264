@@ -69,8 +69,12 @@
 #include "mbuffer.h"
 #include "encodeiff.h"
 
+#include "header.h"
+
 #ifdef _ADAPT_LAST_GROUP_
 int *last_P_no;
+int *last_P_no_frm;
+int *last_P_no_fld;
 #endif
 
 //! The followibng two variables are used for debug purposes.  They store
@@ -91,14 +95,12 @@ static void UnifiedOneForthPix (pel_t **imgY, pel_t** imgU, pel_t **imgV,
  */
 int encode_one_frame()
 {
-int        j ;
-
 #ifdef _LEAKYBUCKET_
   extern long Bit_Buffer[10000];
   extern unsigned long total_frame_buffer;
 #endif
   Boolean end_of_frame = FALSE;
-  SyntaxElement sym;
+  Bitstream *tmp_bitstream;
 
   time_t ltime1;   // for time measurement
   time_t ltime2;
@@ -112,6 +114,9 @@ int        j ;
 #endif
 
   int tmp_time;
+  int  bits_frm=0, bits_fld=0;
+  float dis_frm=0, dis_frm_y=0, dis_frm_u=0, dis_frm_v=0;
+  float dis_fld=0, dis_fld_y=0, dis_fld_u=0, dis_fld_v=0;
 
 #ifdef WIN32
   _ftime( &tstruct1 );    // start time ms
@@ -120,6 +125,139 @@ int        j ;
 #endif
   time( &ltime1 );        // start time s
 
+  frame_picture(&bits_frm, &dis_frm_y, &dis_frm_u, &dis_frm_v);
+
+  if(input->InterlaceCodingOption != FRAME_CODING)
+  {
+    field_picture(&bits_fld, &dis_fld_y, &dis_fld_u, &dis_fld_v);
+
+    dis_fld = dis_fld_y + dis_fld_u + dis_fld_v;
+    dis_frm = dis_frm_y + dis_frm_u + dis_frm_v;
+    picture_structure_decision(bits_frm, bits_fld, dis_frm, dis_fld);
+  }
+  else
+    img->fld_flag = 0;
+
+  if(img->type != B_IMG) {
+    img->pstruct_next_P = img->fld_flag;
+  }
+
+  if (img->fld_flag)  // field mode (use field when fld_flag=1 only)
+    field_mode_buffer(bits_fld, dis_fld_y, dis_fld_u, dis_fld_v);
+  else  //frame mode
+    frame_mode_buffer(bits_frm, dis_frm_y, dis_frm_u, dis_frm_v);
+ 
+  terminate_slice();
+
+  if(input->InterlaceCodingOption != FRAME_CODING)
+    store_field_MV(img->number);  // assume that img->number = frame_number
+
+  if(input->InterlaceCodingOption != FRAME_CODING)
+  {
+    if(!img->fld_flag) 
+      tmp_bitstream = ((img->currentSlice)->partArr[0]).bitstream_fld;
+    else
+      tmp_bitstream = ((img->currentSlice)->partArr[0]).bitstream_frm;
+        
+    tmp_bitstream->stored_bits_to_go = 8;
+    tmp_bitstream->stored_byte_pos = 0;
+    tmp_bitstream->stored_byte_buf = 0;
+  }
+
+  if(input->InterlaceCodingOption == FRAME_CODING)
+  {  
+    if (input->rdopt==2 && img->type!=B_IMG)
+      UpdateDecoders(); // simulate packet losses and move decoded image to reference buffers
+
+    if (input->RestrictRef)
+      UpdatePixelMap();
+  }
+
+  find_snr(snr,img);
+
+  time(&ltime2);       // end time sec
+#ifdef WIN32
+  _ftime(&tstruct2);   // end time ms
+#else
+  ftime(&tstruct2);    // end time ms
+#endif
+  
+  tmp_time=(ltime2*1000+tstruct2.millitm) - (ltime1*1000+tstruct1.millitm);
+  tot_time=tot_time + tmp_time;
+
+  // Write reconstructed images
+  write_reconstructed_image();
+
+#ifdef _LEAKYBUCKET_
+  // Store bits used for this frame and increment counter of no. of coded frames
+  Bit_Buffer[total_frame_buffer] = stat->bit_ctr - stat->bit_ctr_n;
+  total_frame_buffer++;
+#endif
+  
+  if(img->number == 0)
+  {
+    printf("%3d(I)  %8d %4d %7.4f %7.4f %7.4f  %5d \n",
+        frame_no, stat->bit_ctr-stat->bit_ctr_n,
+        img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time);
+
+    stat->bitr0=stat->bitr;
+    stat->bit_ctr_0=stat->bit_ctr;
+    stat->bit_ctr=0;
+  }
+  else
+  {
+    if (img->type == INTRA_IMG)
+    {
+      stat->bit_ctr_P += stat->bit_ctr-stat->bit_ctr_n;
+
+      printf("%3d(I)  %8d %4d %7.4f %7.4f %7.4f  %5d \n",
+        frame_no, stat->bit_ctr-stat->bit_ctr_n,
+        img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time);
+    }
+    else if (img->type != B_IMG)
+    {
+      stat->bit_ctr_P += stat->bit_ctr-stat->bit_ctr_n;
+      if(img->types == SP_IMG)
+        printf("%3d(SP) %8d %4d %7.4f %7.4f %7.4f  %5d    %3d\n",
+          frame_no, stat->bit_ctr-stat->bit_ctr_n,
+          img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time, intras);
+      else
+        printf("%3d(P)  %8d %4d %7.4f %7.4f %7.4f  %5d    %3d\n",
+          frame_no, stat->bit_ctr-stat->bit_ctr_n,
+          img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time, intras);
+    }
+    else
+    {
+      stat->bit_ctr_B += stat->bit_ctr-stat->bit_ctr_n;
+
+      printf("%3d(B)  %8d %4d %7.4f %7.4f %7.4f  %5d \n",
+        frame_no, stat->bit_ctr-stat->bit_ctr_n, img->qp,
+        snr->snr_y, snr->snr_u, snr->snr_v, tmp_time);
+    }
+  }
+  stat->bit_ctr_n=stat->bit_ctr;
+
+  // for Interim File Format output
+  if ( input->of_mode == PAR_OF_IFF )
+  {
+    wrPictureInfo( box_ath.fpMeta );  // write the picture info to a temporary file
+    freePictureInfo();
+  }
+
+  if(img->number == 0)
+    return 0;
+  else
+    return 1;
+}
+
+void frame_picture(int *bits_frm, float *dis_frm_y, float *dis_frm_u, float *dis_frm_v)
+{
+  int j;
+
+  SyntaxElement sym;
+  Boolean end_of_frame = FALSE;
+
+  put_buffer_frame();  
 
   // Initialize frame with all stat and img variables
   img->total_number_mb = (img->width * img->height)/(MB_BLOCK_SIZE*MB_BLOCK_SIZE);
@@ -141,6 +279,8 @@ int        j ;
     initPictureInfo();
   }
 
+  ((img->currentSlice)->partArr[0]).bitstream = ((img->currentSlice)->partArr[0]).bitstream_frm;
+
   while (end_of_frame == FALSE) // loop over slices
   {
     // Encode the current slice
@@ -153,22 +293,282 @@ int        j ;
       end_of_frame = TRUE;
   }
 
-  
+  if (input->symbol_mode == CABAC)
+    ((img->currentSlice->partArr[0]).ee_cabac_frm)=((img->currentSlice->partArr[0]).ee_cabac);
+
   if (input->rdopt==2 && (img->type!=B_IMG) )
     for (j=0 ;j<input->NoOfDecoders; j++)  DeblockFrame(img, decs->decY_best[j], NULL ) ;
 
   DeblockFrame(img, imgY, imgUV ) ; 
 
+  find_snr(snr,img);     // snr calculation
+  *bits_frm = 8*((((img->currentSlice)->partArr[0]).bitstream)->byte_pos);
+
+  find_distortion(snr,img);       //distortion, not snr
+  *dis_frm_y = snr->snr_y;
+  *dis_frm_u = snr->snr_u;
+  *dis_frm_v = snr->snr_v;
+}
+
+void field_picture(int *bits_fld, float *dis_fld_y, float *dis_fld_u, float *dis_fld_v)
+{
+  top_field_picture(bits_fld);
+  bottom_field_picture(bits_fld);
+  distortion_fld(dis_fld_y, dis_fld_u, dis_fld_v);
+}
+
+void top_field_picture(int *bits_fld)
+{
+  int j;
+  SyntaxElement sym;
+  Boolean end_of_frame = FALSE;
+
+  int bytes_written;
+  Bitstream *currStream;
+  Slice *currSlice = img->currentSlice;
+  EncodingEnvironmentPtr eep;
+  int byte_pos, bits_to_go;
+  byte buffer;
+  
+  img->number *= 2;
+  img->buf_cycle *= 2;
+  input->no_multpred = 2*input->no_multpred+1;
+  img->height = input->img_height/2;
+  img->height_cr = input->img_height/4;
+  img->total_number_mb = (img->width * img->height)/(MB_BLOCK_SIZE*MB_BLOCK_SIZE);
+
+  if ((img->type != B_IMG) && (img->number)) 
+  {                             //all I- and P-frames
+    put_buffer_bot();  
+    copy2fb(img);               // Move mref_P_bottom to mref[0]
+  }
+
+  put_buffer_top();
+
+  // Initialize field with all stat and img variables
+  ((img->currentSlice)->partArr[0]).bitstream = ((img->currentSlice)->partArr[0]).bitstream_fld; //temp
+
+  init_field();
+
+  if (img->type == B_IMG) //all I- and P-frames
+    nextP_tr_fld--;
+
+  read_one_new_field();  // top field
+
+  while (end_of_frame == FALSE) // loop over slices
+  {
+    // Encode the current slice
+    encode_one_slice(&sym);
+
+    // Proceed to next slice
+    img->current_slice_nr++;
+    stat->bit_slice = 0;
+    if (img->current_mb_nr == img->total_number_mb) // end of frame reached?
+      end_of_frame = TRUE;
+  }
+
+  if (input->rdopt==2 && (img->type!=B_IMG) )
+    for (j=0 ;j<input->NoOfDecoders; j++)  DeblockFrame(img, decs->decY_best[j], NULL ) ;
+
+  DeblockFrame(img, imgY, imgUV ) ; 
+
+  // in future only one call of oneforthpix() for all frame tyoes will be necessary, because
+  // mref buffer will be increased by one frame to store also the next P-frame. Then mref_P
+  // will not be used any more
+  if (img->type != B_IMG)               //all I- and P-frames
+    interpolate_frame_to_P_buffer();    // I- and P-frames prior a B-frame:loop-filtered imgY, imgUV -> mref_P[][][], mcef_P[][][][]
+
+  find_snr(snr,img);
+  *bits_fld = 8*((((img->currentSlice)->partArr[0]).bitstream)->byte_pos);
+
+  if (input->symbol_mode == CABAC)
+  {
+    eep = &((currSlice->partArr[0]).ee_cabac);
+    currStream = (currSlice->partArr[0]).bitstream;
+
+    // terminate the arithmetic code
+    arienco_done_encoding(eep);
+
+    // Add Number of MBs of this slice to the header
+    // Save current state of Bitstream
+    currStream = (currSlice->partArr[0]).bitstream;
+    byte_pos = currStream->byte_pos;
+    bits_to_go = currStream->bits_to_go;
+    buffer = currStream->byte_buf;
+
+    // Go to the reserved bits
+    currStream->byte_pos = (currStream->header_len)/8;
+    currStream->bits_to_go = 8-(currStream->header_len)%8;
+    currStream->byte_buf = currStream->header_byte_buffer;
+    // Ad Info about last MB
+
+    LastMBInSlice();
+  
+    temp_bits_to_go=currStream->bits_to_go;
+ 
+    // And write the bytes of the header to the bitstream, but do not write to the file right now
+    bytes_written = currStream->byte_pos;
+    if (currStream->bits_to_go < 8) // trailing bits to process
+    {
+      currStream->byte_buf <<= currStream->bits_to_go;
+      currStream->streamBuffer[currStream->byte_pos++]=currStream->byte_buf;
+      bytes_written++;
+      currStream->bits_to_go = 8;
+    }
+
+    // Go back to the end of the stream
+    currStream->byte_pos = byte_pos;
+    currStream->bits_to_go = bits_to_go;
+    currStream->byte_buf = buffer;
+
+    // Find startposition of databitstream
+    temp_byte_pos=currStream->byte_pos;  // set the total amount of bytes of the first field 
+  }
+
+}
+
+void bottom_field_picture(int *bits_fld)
+{
+  int j; 
+
+  Bitstream *tmp_bitstream;
+  SyntaxElement sym;
+  Boolean end_of_frame = FALSE;
+  int bits_top, bit_bot;
+  
+  if (img->type != B_IMG)//all I- and P-frames
+  {
+    put_buffer_top();
+    copy2fb(img);      // Move mref_P_top to mref[0]
+  }
+
+  put_buffer_bot();
+
+  img->number++;  
+  bits_top = *bits_fld;
+
+  init_field();
+
+  if (img->type == B_IMG) //all I- and P-frames
+    nextP_tr_fld++;       //check once coding B field
+  
+  if (img->type == INTRA_IMG)
+    img->type = INTER_IMG;
+
+  tmp_bitstream = ((img->currentSlice)->partArr[0]).bitstream;
+  tmp_bitstream->stored_bits_to_go = tmp_bitstream->bits_to_go;
+  tmp_bitstream->stored_byte_pos = tmp_bitstream->byte_pos;
+  tmp_bitstream->stored_byte_buf = tmp_bitstream->byte_buf;
+
+  read_one_new_field();  // bottom field, use frame number for reading from frame buffer
+
+  while (end_of_frame == FALSE) // loop over slices
+  {
+    // Encode the current slice
+    encode_one_slice(&sym);
+
+    // Proceed to next slice
+    img->current_slice_nr++;
+    stat->bit_slice = 0;
+    if (img->current_mb_nr == img->total_number_mb) // end of frame reached?
+      end_of_frame = TRUE;
+  }
+
+  if (input->rdopt==2 && (img->type!=B_IMG) )
+    for (j=0 ;j<input->NoOfDecoders; j++)  DeblockFrame(img, decs->decY_best[j], NULL ) ;
+
+  DeblockFrame(img, imgY, imgUV ) ; 
+
+  if (img->type != B_IMG) //all I- and P-frames
+    interpolate_frame_to_P_buffer();    // I- and P-frames prior a B-frame:loop-filtered imgY, imgUV -> mref_P[][][], mcef_P[][][][]
+
+  find_snr(snr,img);
+  *bits_fld = 8*((((img->currentSlice)->partArr[0]).bitstream)->byte_pos);
+  bit_bot = *bits_fld - bits_top;
+}
+
+void distortion_fld(float *dis_fld_y, float *dis_fld_u, float *dis_fld_v)
+{
+
+  img->number /= 2;  
+  img->buf_cycle /= 2;
+  img->height = input->img_height;
+  img->height_cr = input->img_height/2;
+  img->total_number_mb = (img->width * img->height)/(MB_BLOCK_SIZE*MB_BLOCK_SIZE);
+  input->no_multpred = (input->no_multpred-1)/2;
+
+  combine_field();
+
+  imgY = imgY_com; 
+  imgUV = imgUV_com;
+  imgY_org = imgY_org_frm;
+  imgUV_org = imgUV_org_frm;
+  
+  find_distortion(snr,img);  // find snr from original frame picture
+  
+  *dis_fld_y = snr->snr_y;
+  *dis_fld_u = snr->snr_u;
+  *dis_fld_v = snr->snr_v;
+}
+
+void picture_structure_decision(int bit_frame, int bit_field, float snr_frame, float snr_field)
+{
+  double lambda_picture;
+
+  lambda_picture = 5.0 * exp (0.1 * img->qp) * (img->qp + 5.0) / (34.0 - img->qp);
+
+  img->fld_flag = decide_fld_frame(snr_frame, snr_field, bit_field, bit_frame, lambda_picture);    // modify fld_flag accordingly
+
+}
+
+void field_mode_buffer(int bit_field, float snr_field_y, float snr_field_u, float snr_field_v)
+{
+  ((img->currentSlice)->partArr[0]).bitstream = ((img->currentSlice)->partArr[0]).bitstream_fld; //temp
+
+  put_buffer_frame();
+  imgY = imgY_com; 
+  imgUV = imgUV_com;
+  
+  if (img->type != B_IMG) //all I- and P-frames
+  {
+    if (input->successive_Bframe == 0 || (img->number==0))
+      interpolate_frame_to_fb(); // I- and P-frames:loop-filtered imgY, imgUV -> mref[][][], mcef[][][][]
+    else
+      interpolate_frame_to_P_buffer();    // I- and P-frames prior a B-frame:loop-filtered imgY, imgUV -> mref_P[][][], mcef_P[][][][]
+                                 // I- and P-frames prior a B-frame:loop-filtered imgY, imgUV -> mref_P[][][], mcef_P[][][][]
+  }
+  else
+    if (img->b_frame_to_code == input->successive_Bframe)
+      copy2fb(img);          // last successive B-frame: mref_P[][][], mcef_P[][][][] (loop-filtered imgY, imgUV)-> mref[][][], mcef[][][][]
+    
+  input->no_fields += 1;
+
+  if (input->symbol_mode != CABAC)
+    stat->bit_ctr = bit_field+stat->bit_ctr_n;
+
+  snr->snr_y = snr_field_y;
+  snr->snr_u = snr_field_u;
+  snr->snr_v = snr_field_v;
+  find_snr_avg();
+}
+
+void frame_mode_buffer(int bit_frame, float snr_frame_y, float snr_frame_u, float snr_frame_v)
+{
+  ((img->currentSlice)->partArr[0]).bitstream = ((img->currentSlice)->partArr[0]).bitstream_frm; //temp
+
+  if(input->InterlaceCodingOption!=FRAME_CODING)
+    if (input->symbol_mode == CABAC)
+      img->current_mb_nr=img->current_mb_nr*2;
+
+  put_buffer_frame();
 
   // in future only one call of oneforthpix() for all frame tyoes will be necessary, because
   // mref buffer will be increased by one frame to store also the next P-frame. Then mref_P
   // will not be used any more
   if (img->type != B_IMG) //all I- and P-frames
   {
-    if (input->successive_Bframe == 0 || img->number == 0)
-    {
+    if (input->successive_Bframe == 0 || img->number ==0) //(img->number / 2) == 0)
       interpolate_frame_to_fb(); // I- and P-frames:loop-filtered imgY, imgUV -> mref[][][], mcef[][][][]
-    }
     else
       interpolate_frame_to_P_buffer();    // I- and P-frames prior a B-frame:loop-filtered imgY, imgUV -> mref_P[][][], mcef_P[][][][]
                                  // I- and P-frames prior a B-frame:loop-filtered imgY, imgUV -> mref_P[][][], mcef_P[][][][]
@@ -177,83 +577,50 @@ int        j ;
     if (img->b_frame_to_code == input->successive_Bframe)
       copy2fb(img);          // last successive B-frame: mref_P[][][], mcef_P[][][][] (loop-filtered imgY, imgUV)-> mref[][][], mcef[][][][]
 
-  if (input->rdopt==2 && img->type!=B_IMG)
-    UpdateDecoders(); // simulate packet losses and move decoded image to reference buffers
-
-  if (input->RestrictRef)
-    UpdatePixelMap();
-
-  find_snr(snr,img);
-
-  time(&ltime2);       // end time sec
-#ifdef WIN32
-  _ftime(&tstruct2);   // end time ms
-#else
-  ftime(&tstruct2);    // end time ms
-#endif
-  tmp_time=(ltime2*1000+tstruct2.millitm) - (ltime1*1000+tstruct1.millitm);
-  tot_time=tot_time + tmp_time;
-
-  // Write reconstructed images
-  write_reconstructed_image();
-#ifdef _LEAKYBUCKET_
-  // Store bits used for this frame and increment counter of no. of coded frames
-  Bit_Buffer[total_frame_buffer] = stat->bit_ctr - stat->bit_ctr_n;
-  total_frame_buffer++;
-#endif
-  if(img->number == 0)
+  if(input->InterlaceCodingOption != FRAME_CODING)
   {
-    printf("%3d(I)  %8d %4d %7.4f %7.4f %7.4f  %5d \n",
-        frame_no, stat->bit_ctr-stat->bit_ctr_n,
-        img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time);
-    stat->bitr0=stat->bitr;
-    stat->bit_ctr_0=stat->bit_ctr;
-    stat->bit_ctr=0;
-  }
-  else
-  {
-    if (img->type == INTRA_IMG)
-    {
-      stat->bit_ctr_P += stat->bit_ctr-stat->bit_ctr_n;
-      printf("%3d(I)  %8d %4d %7.4f %7.4f %7.4f  %5d \n",
-        frame_no, stat->bit_ctr-stat->bit_ctr_n,
-        img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time);
-    }
-    else if (img->type != B_IMG)
-    {
-      stat->bit_ctr_P += stat->bit_ctr-stat->bit_ctr_n;
-      if(img->types == SP_IMG)
-        printf("%3d(SP) %8d %4d %7.4f %7.4f %7.4f  %5d    %3d\n",
-          frame_no, stat->bit_ctr-stat->bit_ctr_n,
-          img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time, intras);
-      else
-        printf("%3d(P)  %8d %4d %7.4f %7.4f %7.4f  %5d    %3d\n",
-          frame_no, stat->bit_ctr-stat->bit_ctr_n,
-          img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time, intras);
-    }
-    else
-    {
-      stat->bit_ctr_B += stat->bit_ctr-stat->bit_ctr_n;
-      printf("%3d(B)  %8d %4d %7.4f %7.4f %7.4f  %5d \n",
-        frame_no, stat->bit_ctr-stat->bit_ctr_n, img->qp,
-        snr->snr_y, snr->snr_u, snr->snr_v, tmp_time);
-    }
-  }
-  stat->bit_ctr_n=stat->bit_ctr;
+    img->height = img->height/2;
+    img->height_cr = img->height_cr/2;
+    img->number *= 2;
+    img->buf_cycle *= 2;
 
-  // for Interim File Format output
-  if ( input->of_mode == PAR_OF_IFF )
-  {
-    wrPictureInfo( box_ath.fpMeta );  // write the picture info to a temporary file
-    freePictureInfo();
-  }
+    put_buffer_top();
+    split_field_top();
 
-  if(img->number == 0)
-    return 0;
-  else
-    return 1;
+    // in future only one call of oneforthpix() for all frame tyoes will be necessary, because
+    // mref buffer will be increased by one frame to store also the next P-frame. Then mref_P
+    // will not be used any more
+    if (img->type != B_IMG) //all I- and P-frames
+    {
+      interpolate_frame(); // I- and P-frames:loop-filtered imgY, imgUV -> mref[][][], mcef[][][][]
+      interpolate_frame_to_P_buffer();    // I- and P-frames prior a B-frame:loop-filtered imgY, imgUV -> mref_P[][][], mcef_P[][][][]
+                                 // I- and P-frames prior a B-frame:loop-filtered imgY, imgUV -> mref_P[][][], mcef_P[][][][]
+    }
+
+    img->number++;
+    put_buffer_bot();
+    split_field_bot();
+
+    if (img->type != B_IMG) //all I- and P-frames
+      interpolate_frame_to_P_buffer();    // I- and P-frames prior a B-frame:loop-filtered imgY, imgUV -> mref_P[][][], mcef_P[][][][]
+  
+    img->number /= 2;  // reset the img->number to field
+    img->buf_cycle /= 2;
+    img->height = input->img_height;
+    img->height_cr = input->img_height/2;
+    img->total_number_mb = (img->width * img->height)/(MB_BLOCK_SIZE*MB_BLOCK_SIZE);
+
+    if (input->symbol_mode != CABAC)
+      stat->bit_ctr = bit_frame+stat->bit_ctr_n;
+
+    snr->snr_y = snr_frame_y;
+    snr->snr_u = snr_frame_u;
+    snr->snr_v = snr_frame_v;
+    find_snr_avg();
+    put_buffer_frame();
+
+  }
 }
-
 
 /*!
  ************************************************************************
@@ -266,6 +633,8 @@ void encode_one_slice(SyntaxElement *sym)
   Boolean end_of_slice = FALSE;
   Boolean recode_macroblock;
   int len;
+  Slice *currSlice = img->currentSlice;
+  Bitstream *currStream;
 
   img->cod_counter=0;
 
@@ -310,7 +679,16 @@ void encode_one_slice(SyntaxElement *sym)
       proceed2nextMacroblock(); // Go to next macroblock
 
   }
-  terminate_slice();
+
+  // Enforce byte alignment of next header: zero bit stuffing
+  currStream = (currSlice->partArr[0]).bitstream;
+
+  if (currStream->bits_to_go < 8)
+  { // trailing bits to process
+      currStream->byte_buf <<= currStream->bits_to_go;
+      currStream->streamBuffer[currStream->byte_pos++]=currStream->byte_buf;
+      currStream->bits_to_go = 8;
+  }
 }
 
 
@@ -325,6 +703,9 @@ void init_frame()
   int i,j,k;
   int prevP_no, nextP_no;
 
+  img->pstruct = 0;    //frame coding
+  last_P_no = last_P_no_frm;
+
   img->current_mb_nr=0;
   img->current_slice_nr=0;
   stat->bit_slice = 0;
@@ -335,8 +716,13 @@ void init_frame()
 
   if(img->type != B_IMG)
   {
-    img->refPicID ++;
+    img->refPicID_frm ++;
+    img->refPicID = img->refPicID_frm;
+
     img->tr=img->number*(input->jumpd+1);
+
+    img->imgtr_last_P_frm = img->imgtr_next_P_frm;
+    img->imgtr_next_P_frm = img->tr;
 
     box_s.lastFrameNr = img->tr;  // serve as the duration of the segment.
 
@@ -344,19 +730,21 @@ void init_frame()
     if (input->last_frame && img->number+1 == input->no_frames)
       img->tr=input->last_frame;
 #endif
+
     if(img->number!=0 && input->successive_Bframe != 0)   // B pictures to encode
-      nextP_tr=img->tr;
+      nextP_tr_frm=img->tr;
 
     if (img->type == INTRA_IMG)
       img->qp = input->qp0;         // set quant. parameter for I-frame
     else
     {
 #ifdef _CHANGE_QP_
-        if (input->qp2start > 0 && img->tr >= input->qp2start)
-          img->qp = input->qpN2;
-        else
+      if (input->qp2start > 0 && img->tr >= input->qp2start)
+        img->qp = input->qpN2;
+      else
 #endif
-          img->qp = input->qpN;
+        img->qp = input->qpN;
+      
       if (img->types==SP_IMG)
       {
         img->qp = input->qpsp;
@@ -377,8 +765,159 @@ void init_frame()
     img->p_interval = input->jumpd+1;
     prevP_no = (img->number-1)*img->p_interval;
     nextP_no = img->number*img->p_interval;
+
 #ifdef _ADAPT_LAST_GROUP_
     last_P_no[0] = prevP_no; for (i=1; i<img->buf_cycle; i++) last_P_no[i] = last_P_no[i-1]-img->p_interval;
+
+    if (input->last_frame && img->number+1 == input->no_frames)
+    {
+      nextP_no        =input->last_frame;
+      img->p_interval =nextP_no - prevP_no;
+    }
+#endif
+
+    img->b_interval = (int)((float)(input->jumpd+1)/(input->successive_Bframe+1.0)+0.49999);
+
+    img->tr= prevP_no+img->b_interval*img->b_frame_to_code; // from prev_P
+    if(img->tr >= nextP_no)
+      img->tr=nextP_no-1; 
+
+#ifdef _CHANGE_QP_
+    if (input->qp2start > 0 && img->tr >= input->qp2start)
+      img->qp = input->qpB2;
+    else
+#endif
+      img->qp = input->qpB;
+
+    // initialize arrays
+    for(k=0; k<2; k++)
+      for(i=0; i<img->height/BLOCK_SIZE; i++)
+        for(j=0; j<img->width/BLOCK_SIZE+4; j++)
+        {
+          tmp_fwMV[k][i][j]=0;
+          tmp_bwMV[k][i][j]=0;
+          dfMV[k][i][j]=0;
+          dbMV[k][i][j]=0;
+        }
+    for(i=0; i<img->height/BLOCK_SIZE; i++)
+      for(j=0; j<img->width/BLOCK_SIZE; j++)
+      {
+        fw_refFrArr[i][j]=bw_refFrArr[i][j]=-1;
+      }
+
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Initializes the parameters for a new field
+ ************************************************************************
+ */
+void init_field()
+{
+  int i,j,k;
+  int prevP_no, nextP_no;
+
+  last_P_no = last_P_no_fld;
+
+  //picture structure
+  if(!img->fld_type)
+    img->pstruct = 1;
+  else
+    img->pstruct = 2;
+  
+  img->current_mb_nr=0;
+  img->current_slice_nr=0;
+  stat->bit_slice = 0;
+
+  input->jumpd *= 2;
+  input->successive_Bframe *= 2;
+  img->number /= 2;
+  img->buf_cycle /= 2;
+
+#ifdef UMV
+  img->mhor  = img->width *4-1;
+  img->mvert = img->height*4-1;
+#endif
+
+  img->mb_y = img->mb_x = 0;
+  img->block_y = img->pix_y = img->pix_c_y = 0;   // define vertical positions
+  img->block_x = img->pix_x = img->block_c_x = img->pix_c_x = 0; // define horizontal positions
+
+  if(img->type != B_IMG)
+  {
+
+    if(!img->fld_type)
+      img->refPicID_fld++;   //increment by 1 for field 1 only.
+    img->refPicID = img->refPicID_fld;
+
+    img->tr=img->number*(input->jumpd+2)+img->fld_type;
+
+    if(!img->fld_type) 
+    {
+      img->imgtr_last_P_fld = img->imgtr_next_P_fld;
+      img->imgtr_next_P_fld = img->tr;
+    }
+
+#ifdef _ADAPT_LAST_GROUP_
+    if (input->last_frame && img->number+1 == input->no_frames)
+      img->tr=input->last_frame;
+#endif
+    if(img->number!=0 && input->successive_Bframe != 0)   // B pictures to encode
+      nextP_tr_fld=img->tr;
+
+    if (img->type == INTRA_IMG)
+      img->qp = input->qp0;         // set quant. parameter for I-frame
+    else
+    {
+#ifdef _CHANGE_QP_
+      if (input->qp2start > 0 && img->tr >= input->qp2start)
+        img->qp = input->qpN2;
+      else
+#endif
+        img->qp = input->qpN;
+      if (img->types==SP_IMG)
+      {
+        img->qp = input->qpsp;
+        img->qpsp = input->qpsp_pred;
+      }
+
+    }
+
+    img->mb_y_intra=img->mb_y_upd;   //  img->mb_y_intra indicates which GOB to intra code for this frame
+
+    if (input->intra_upd > 0)          // if error robustness, find next GOB to update
+    {
+      img->mb_y_upd=(img->number/input->intra_upd) % (img->width/MB_BLOCK_SIZE);
+    }
+  }
+  else
+  {
+    img->p_interval = input->jumpd+2;
+    prevP_no = (img->number-1)*img->p_interval+img->fld_type;
+    nextP_no = img->number*img->p_interval+img->fld_type;
+#ifdef _ADAPT_LAST_GROUP_
+    if (!img->fld_type)  // top field
+    {
+      last_P_no[0] = prevP_no + 1; 
+      last_P_no[1] = prevP_no;
+      for (i=1; i<=img->buf_cycle; i++) 
+      {
+        last_P_no[2*i] = last_P_no[2*i-2]-img->p_interval; 
+        last_P_no[2*i+1] = last_P_no[2*i-1]-img->p_interval; 
+      }
+    }
+    else    // bottom field
+    {
+      last_P_no[0] = nextP_no - 1; 
+      last_P_no[1] = prevP_no;
+      for (i=1; i<=img->buf_cycle; i++) 
+      {
+        last_P_no[2*i] = last_P_no[2*i-2]-img->p_interval; 
+        last_P_no[2*i+1] = last_P_no[2*i-1]-img->p_interval; 
+      }
+    }
 
     if (input->last_frame && img->number+1 == input->no_frames)
       {
@@ -387,10 +926,9 @@ void init_frame()
       }
 #endif
 
-
     img->b_interval = (int)((float)(input->jumpd+1)/(input->successive_Bframe+1.0)+0.49999);
 
-    img->tr= prevP_no+img->b_interval*img->b_frame_to_code; // from prev_P
+    img->tr= prevP_no+(img->b_interval+1)*img->b_frame_to_code; // from prev_P
     if(img->tr >= nextP_no)
       img->tr=nextP_no-1; // ?????
 
@@ -418,6 +956,10 @@ void init_frame()
       }
 
   }
+  input->jumpd /= 2;
+  input->successive_Bframe /= 2;
+  img->buf_cycle *= 2;
+  img->number = 2 * img->number + img->fld_type;
 }
 
 /*!
@@ -454,7 +996,6 @@ void init_slice()
     // For UVLC, the stored_ positions in the bit buffer are necessary.  For CABAC,
     // the buffer is initialized to start at zero.
 
-
     if (input->symbol_mode == UVLC && (input->of_mode == PAR_OF_26L /*|| input->of_mode == PAR_OF_IFF */ ))    // Stw: added PAR_OF_26L check
     {
       currStream = dataPart->bitstream;
@@ -464,10 +1005,24 @@ void init_slice()
     } 
     else // anything but UVLC and PAR_OF_26L
     {   
-      currStream = dataPart->bitstream;
-      currStream->bits_to_go  = 8;
-      currStream->byte_pos    = 0;
-      currStream->byte_buf    = 0;
+      if(input->InterlaceCodingOption==ADAPTIVE_CODING)
+      {
+    
+        if((img->pstruct==0)||(img->pstruct==1))
+        {
+          currStream = dataPart->bitstream;
+          currStream->bits_to_go  = 8;
+          currStream->byte_pos    = 0;
+          currStream->byte_buf    = 0;
+        }
+      }
+      else
+      {
+        currStream = dataPart->bitstream;
+        currStream->bits_to_go  = 8;
+        currStream->byte_pos    = 0;
+        currStream->byte_buf    = 0;
+      }
     }
   }
 }
@@ -519,6 +1074,79 @@ void read_one_new_frame()
 /*!
  ************************************************************************
  * \brief
+ *    Reads new field from file and sets frame_no
+ ************************************************************************
+ */
+void read_one_new_field()
+{
+  int i, j, uv;
+  int status; // frame_no;
+  int frame_size = img->height*img->width*3;  // (3/2) * 2
+  int picture_no;
+
+  picture_no = img->number / 2;
+  if(img->type == B_IMG)
+    frame_no = (picture_no-1)*(input->jumpd+1)+img->b_interval*img->b_frame_to_code;
+  else
+  {
+    frame_no = picture_no*(input->jumpd+1);
+#ifdef _ADAPT_LAST_GROUP_
+      if (input->last_frame && img->number+1 == input->no_frames)
+        frame_no=input->last_frame;
+#endif
+  }
+
+  rewind (p_in);
+  status = fseek (p_in, frame_no * frame_size + input->infile_header, 0);
+
+  if (status != 0)
+  {
+    snprintf(errortext, ET_SIZE, "Error in seeking frame no: %d\n", frame_no);
+    error(errortext,1);
+  }
+
+  // img->height and img->height_cr must be adjusted for field before this function
+  if (img->fld_type==0)  // top field
+  {
+    for (j=0; j < img->height; j++)
+    {
+      for (i=0; i < img->width; i++)
+        imgY_org[j][i]=fgetc(p_in);
+      for (i=0; i < img->width; i++)
+        fgetc(p_in);
+    }
+    for (uv=0; uv < 2; uv++)
+      for (j=0; j < img->height_cr; j++)
+      {
+        for (i=0; i < img->width_cr; i++)
+          imgUV_org[uv][j][i]=fgetc(p_in);
+        for (i=0; i < img->width_cr; i++)
+          fgetc(p_in);
+      }
+  }
+  else           // bottom field
+  {
+    for (j=0; j < img->height; j++)
+    {
+      for (i=0; i < img->width; i++)
+        fgetc(p_in);
+      for (i=0; i < img->width; i++)
+        imgY_org[j][i]=fgetc(p_in);
+    }
+    for (uv=0; uv < 2; uv++)
+      for (j=0; j < img->height_cr; j++)
+      {
+        for (i=0; i < img->width_cr; i++)
+          fgetc(p_in);
+        for (i=0; i < img->width_cr; i++)
+          imgUV_org[uv][j][i]=fgetc(p_in);
+      }
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
  *     Writes reconstructed image(s) to file
  *     This can be done more elegant!
  ************************************************************************
@@ -526,6 +1154,7 @@ void read_one_new_frame()
 void write_reconstructed_image()
 {
   int i, j, k;
+  int start=0, inc=1;
 
   if (p_dec != NULL)
   {
@@ -534,12 +1163,12 @@ void write_reconstructed_image()
       // write reconstructed image (IPPP)
       if(input->successive_Bframe==0)
       {
-        for (i=0; i < img->height; i++)
+        for (i=start; i < img->height; i+=inc)
           for (j=0; j < img->width; j++)
             fputc(min(imgY[i][j],255),p_dec);
 
         for (k=0; k < 2; ++k)
-          for (i=0; i < img->height/2; i++)
+          for (i=start; i < img->height/2; i+=inc)
             for (j=0; j < img->width/2; j++)
               fputc(min(imgUV[k][i][j],255),p_dec);
       }
@@ -547,12 +1176,12 @@ void write_reconstructed_image()
       // write reconstructed image (IBPBP) : only intra written
       else if (img->number==0 && input->successive_Bframe!=0)
       {
-        for (i=0; i < img->height; i++)
+        for (i=start; i < img->height; i+=inc)
           for (j=0; j < img->width; j++)
             fputc(min(imgY[i][j],255),p_dec);
 
         for (k=0; k < 2; ++k)
-          for (i=0; i < img->height/2; i++)
+          for (i=start; i < img->height/2; i+=inc)
             for (j=0; j < img->width/2; j++)
               fputc(min(imgUV[k][i][j],255),p_dec);
       }
@@ -560,22 +1189,22 @@ void write_reconstructed_image()
       // next P picture. This is saved with recon B picture after B picture coding
       if (img->number!=0 && input->successive_Bframe!=0)
       {
-        for (i=0; i < img->height; i++)
+        for (i=start; i < img->height; i+=inc)
           for (j=0; j < img->width; j++)
             nextP_imgY[i][j]=imgY[i][j];
         for (k=0; k < 2; ++k)
-          for (i=0; i < img->height/2; i++)
+          for (i=start; i < img->height/2; i+=inc)
             for (j=0; j < img->width/2; j++)
               nextP_imgUV[k][i][j]=imgUV[k][i][j];
       }
     }
     else
     {
-      for (i=0; i < img->height; i++)
+      for (i=start; i < img->height; i+=inc)
         for (j=0; j < img->width; j++)
           fputc(min(imgY[i][j],255),p_dec);
       for (k=0; k < 2; ++k)
-        for (i=0; i < img->height/2; i++)
+        for (i=start; i < img->height/2; i+=inc)
           for (j=0; j < img->width/2; j++)
             fputc(min(imgUV[k][i][j],255),p_dec);
 
@@ -583,11 +1212,11 @@ void write_reconstructed_image()
       if(img->b_frame_to_code == input->successive_Bframe)
       {
         // save P picture
-        for (i=0; i < img->height; i++)
+        for (i=start; i < img->height; i+=inc)
           for (j=0; j < img->width; j++)
             fputc(min(nextP_imgY[i][j],255),p_dec);
         for (k=0; k < 2; ++k)
-          for (i=0; i < img->height/2; i++)
+          for (i=start; i < img->height/2; i+=inc)
             for (j=0; j < img->width/2; j++)
               fputc(min(nextP_imgUV[k][i][j],255),p_dec);
       }
@@ -630,8 +1259,24 @@ void interpolate_frame_to_P_buffer()      // write to mref_P
 
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    Choose interpolation method depending on MV-resolution
+ ************************************************************************
+ */
+void interpolate_frame()
+{                 // write to mref[]
+  init_mref(img);
+  init_Refbuf(img);
 
-
+  if(input->mv_res)
+    oneeighthpix(0);
+  else
+    UnifiedOneForthPix(imgY, imgUV[0], imgUV[1],
+               mref[0], mcef[0][0], mcef[0][1],
+               Refbuf11[0]);
+}
 
 static void GenerateFullPelRepresentation (pel_t **Fourthpel, pel_t *Fullpel, int xsize, int ysize)
 {
@@ -976,6 +1621,170 @@ void find_snr()
   }
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    Find distortion for all three components
+ ************************************************************************
+ */
+void find_distortion()
+{
+  int i,j;
+  int diff_y,diff_u,diff_v;
+  int impix;
+
+  //  Calculate  PSNR for Y, U and V.
+
+  //     Luma.
+  impix = img->height*img->width;
+
+  diff_y=0;
+  for (i=0; i < img->width; ++i)
+  {
+    for (j=0; j < img->height; ++j)
+    {
+      diff_y += img->quad[abs(imgY_org[j][i]-imgY[j][i])];
+    }
+  }
+
+  //     Chroma.
+
+  diff_u=0;
+  diff_v=0;
+
+  for (i=0; i < img->width_cr; i++)
+  {
+    for (j=0; j < img->height_cr; j++)
+    {
+      diff_u += img->quad[abs(imgUV_org[0][j][i]-imgUV[0][j][i])];
+      diff_v += img->quad[abs(imgUV_org[1][j][i]-imgUV[1][j][i])];
+    }
+  }
+
+  // Calculate real PSNR at find_snr_avg()
+  snr->snr_y = (float)diff_y;
+  snr->snr_u = (float)diff_u;
+  snr->snr_v = (float)diff_v;
+}
+
+void find_snr_avg()
+{
+  int impix;
+  float diff_y, diff_u, diff_v;
+
+  diff_y = snr->snr_y;
+  diff_u = snr->snr_u;
+  diff_v = snr->snr_v;
+  impix = img->height*img->width;
+
+  //  Collecting SNR statistics
+  if (diff_y != 0)
+  {
+    snr->snr_y=(float)(10*log10(65025*(float)impix/(float)diff_y));        // luma snr for current frame
+    snr->snr_u=(float)(10*log10(65025*(float)impix/(float)(4*diff_u)));    // u croma snr for current frame, 1/4 of luma samples
+    snr->snr_v=(float)(10*log10(65025*(float)impix/(float)(4*diff_v)));    // v croma snr for current frame, 1/4 of luma samples
+  }
+
+  if (img->number == 0)
+  {
+    snr->snr_y1=snr->snr_y;       // keep luma snr for first frame
+    snr->snr_u1=snr->snr_u;   // keep croma u snr for first frame
+    snr->snr_v1=snr->snr_v;   // keep croma v snr for first frame
+    snr->snr_ya=snr->snr_y1;
+    snr->snr_ua=snr->snr_u1;
+    snr->snr_va=snr->snr_v1;
+  }
+  // B pictures
+  else
+  {
+    snr->snr_ya=(float)(snr->snr_ya*(img->number+Bframe_ctr)+snr->snr_y)/(img->number+Bframe_ctr+1);   // average snr lume for all frames inc. first
+    snr->snr_ua=(float)(snr->snr_ua*(img->number+Bframe_ctr)+snr->snr_u)/(img->number+Bframe_ctr+1);   // average snr u croma for all frames inc. first
+    snr->snr_va=(float)(snr->snr_va*(img->number+Bframe_ctr)+snr->snr_v)/(img->number+Bframe_ctr+1);   // average snr v croma for all frames inc. first
+  }
+}
+
+void rotate_buffer()
+{
+  Frame *f;
+
+  f=fb->picbuf_short[1];
+  fb->picbuf_short[1]=fb->picbuf_short[0];
+  fb->picbuf_short[0]=f;
+
+  mref[0]=fb->picbuf_short[0]->mref;
+  mcef[0]=fb->picbuf_short[0]->mcef;
+  mref[1]=fb->picbuf_short[1]->mref;
+  mcef[1]=fb->picbuf_short[1]->mcef;
+}
+
+void store_field_MV(int frame_number)
+{
+  int i, j;
+  
+  if (img->type != B_IMG) //all I- and P-frames
+  {
+    if (img->fld_flag)
+    {
+      for (i=0 ; i<img->width/4+4 ; i++)
+      {
+        for (j=0 ; j<img->height/8 ; j++)
+        {
+          tmp_mv_frm[0][2*j][i] = tmp_mv_frm[0][2*j+1][i] = tmp_mv_top[0][j][i];
+          tmp_mv_frm[0][2*j][i] = tmp_mv_frm[0][2*j+1][i] = tmp_mv_top[0][j][i];
+          tmp_mv_frm[1][2*j][i] = tmp_mv_frm[1][2*j+1][i] = tmp_mv_top[1][j][i]*2;
+          tmp_mv_frm[1][2*j][i] = tmp_mv_frm[1][2*j+1][i] = tmp_mv_top[1][j][i]*2;
+          
+          if ((i%2 == 0) && (j%2 == 0) && (i<img->width/4))
+          {
+            if (refFrArr_top[j][i] == -1)
+            {
+              refFrArr_frm[2*j][i] = refFrArr_frm[2*j+1][i] = -1;
+              refFrArr_frm[2*(j+1)][i] = refFrArr_frm[2*(j+1)+1][i] = -1;
+              refFrArr_frm[2*j][i+1] = refFrArr_frm[2*j+1][i+1] = -1;
+              refFrArr_frm[2*(j+1)][i+1] = refFrArr_frm[2*(j+1)+1][i+1] = -1;
+            }
+            else
+            {
+              refFrArr_frm[2*j][i] = refFrArr_frm[2*j+1][i] = (int)(refFrArr_top[j][i]/2);
+              refFrArr_frm[2*(j+1)][i] = refFrArr_frm[2*(j+1)+1][i] = (int)(refFrArr_top[j][i]/2);
+              refFrArr_frm[2*j][i+1] = refFrArr_frm[2*j+1][i+1] = (int)(refFrArr_top[j][i]/2);
+              refFrArr_frm[2*(j+1)][i+1] = refFrArr_frm[2*(j+1)+1][i+1] = (int)(refFrArr_top[j][i]/2);
+            }
+          }
+        }
+      }
+    }
+    else
+    {
+      for (i=0 ; i<img->width/4+4 ; i++)
+      {
+        for (j=0 ; j<img->height/8 ; j++)
+        {
+          tmp_mv_top[0][j][i] = tmp_mv_bot[0][j][i] = (int)(tmp_mv_frm[0][2*j][i]);
+          tmp_mv_top[1][j][i] = tmp_mv_bot[1][j][i] = (int)((tmp_mv_frm[1][2*j][i])/2);
+          
+          if ((i%2 == 0) && (j%2 == 0) && (i<img->width/4))
+          {
+            if (refFrArr_frm[2*j][i] == -1)
+            {
+              refFrArr_top[j][i] = refFrArr_bot[j][i] = -1;
+              refFrArr_top[j+1][i] = refFrArr_bot[j+1][i] = -1;
+              refFrArr_top[j][i+1] = refFrArr_bot[j][i+1] = -1;
+              refFrArr_top[j+1][i+1] = refFrArr_bot[j+1][i+1] = -1;
+            }
+            else
+            {
+              refFrArr_top[j][i] = refFrArr_bot[j][i] = refFrArr_frm[2*j][i]*2;
+              refFrArr_top[j+1][i] = refFrArr_bot[j+1][i] = refFrArr_frm[2*j][i]*2;
+              refFrArr_top[j][i+1] = refFrArr_bot[j][i+1] = refFrArr_frm[2*j][i]*2;
+              refFrArr_top[j+1][i+1] = refFrArr_bot[j+1][i+1] = refFrArr_frm[2*j][i]*2;
+            }
+          }
+        }
+      }
+    }
+  }
+}
 
 /*!
  ************************************************************************

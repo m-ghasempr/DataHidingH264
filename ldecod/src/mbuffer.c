@@ -67,23 +67,60 @@ void init_frame_buffers(struct inp_par *inp, ImageParameters *img)
 
   img->buf_cycle = inp->buf_cycle+1;
 
-  if ((fb=(FrameBuffer*)calloc(1,sizeof (FrameBuffer)))==NULL) no_mem_exit("init_frame_buffers: fb");
+  if (img->structure != FRAME)
+  {
+    img->height *= 2;
+    img->height_cr *= 2;
+  }
 
-  if ((fb->picbuf_short=(Frame**)calloc(img->buf_cycle,sizeof (Frame*)))==NULL) no_mem_exit("init_frame_buffers: fb->picbuf_short");
+  //frame buffers
+  if ((frm=(FrameBuffer*)calloc(1,sizeof (FrameBuffer)))==NULL) no_mem_exit("init_frame_buffers: frm");
+
+  if ((frm->picbuf_short=(Frame**)calloc(img->buf_cycle,sizeof (Frame*)))==NULL) no_mem_exit("init_frame_buffers: frm->picbuf_short");
 
   for (i=0;i<img->buf_cycle;i++)
-    if ((fb->picbuf_short[i]=(Frame*)calloc(1,sizeof (Frame)))==NULL) no_mem_exit("init_frame_buffers: fb->picbuf_short");
+    if ((frm->picbuf_short[i]=(Frame*)calloc(1,sizeof (Frame)))==NULL) no_mem_exit("init_frame_buffers: frm->picbuf_short");
 
   for (i=0;i<img->buf_cycle;i++)
   {
-    get_mem2D(&(fb->picbuf_short[i]->mref), img->height, img->width);
-    get_mem3D(&(fb->picbuf_short[i]->mcef), 2, img->height_cr*2, img->width_cr*2);
+    get_mem2D(&(frm->picbuf_short[i]->mref), img->height, img->width);
+    get_mem3D(&(frm->picbuf_short[i]->mcef), 2, img->height_cr, img->width_cr);
   }
 
-  fb->short_size=img->buf_cycle;
-  fb->short_used=0;
-  fb->long_size=0;
-  fb->long_used=0;
+
+  frm->short_size=img->buf_cycle;
+  frm->short_used=0;
+  frm->long_size=0;
+  frm->long_used=0;
+
+//field buffers
+  img->buf_cycle=2*img->buf_cycle;
+  if ((fld=(FrameBuffer*)calloc(1,sizeof (FrameBuffer)))==NULL) no_mem_exit("init_field_buffers: fld");
+
+  if ((fld->picbuf_short=(Frame**)calloc(img->buf_cycle,sizeof (Frame*)))==NULL) no_mem_exit("init_field_buffers: fld->picbuf_short");
+
+  for (i=0;i<img->buf_cycle;i++)
+    if ((fld->picbuf_short[i]=(Frame*)calloc(1,sizeof (Frame)))==NULL) no_mem_exit("init_field_buffers: fld->picbuf_short");
+
+  for (i=0;i<img->buf_cycle;i++)
+  {
+    get_mem2D(&(fld->picbuf_short[i]->mref), img->height/2, img->width);
+    get_mem3D(&(fld->picbuf_short[i]->mcef), 2, img->height_cr/2, img->width_cr);
+  }
+
+//  bufsize=img->buf_cycle+1;
+
+  fld->short_size=img->buf_cycle;
+  fld->short_used=0;
+  fld->long_size=0;
+  fld->long_used=0;
+
+  if (img->structure != FRAME)
+  {
+    img->height /= 2;
+    img->height_cr /= 2;
+  }
+    img->buf_cycle = inp->buf_cycle+1;
 }
 
 /*!
@@ -102,30 +139,59 @@ void free_frame_buffers(struct inp_par *inp, ImageParameters *img)
 
   for (i=0;i<img->buf_cycle;i++)
   {
-    free_mem2D(fb->picbuf_short[i]->mref);
-    free_mem3D(fb->picbuf_short[i]->mcef,2);
+    free_mem2D(frm->picbuf_short[i]->mref);
+    free_mem3D(frm->picbuf_short[i]->mcef,2);
+//    free(frm->picbuf_short[i]->Refbuf11);
   }
 
 
   for (i=0;i<img->buf_cycle;i++)
-    free (fb->picbuf_short[i]);
+    free (frm->picbuf_short[i]);
 
-  free (fb->picbuf_short);
- 
-  if (fb->picbuf_long)
+  free (frm->picbuf_short);
+
+  if (frm->picbuf_long)
   {
-    for (i=0;i<fb->long_size;i++)
+    for (i=0;i<frm->long_size;i++)
     {
-      free_mem2D(fb->picbuf_long[i]->mref);
-      free_mem3D(fb->picbuf_long[i]->mcef,2);
-
-      free (fb->picbuf_long[i]);
+      free_mem2D(frm->picbuf_long[i]->mref);
+      free_mem3D(frm->picbuf_long[i]->mcef,2);
+//      free(frm->picbuf_long[i]->Refbuf11);
     } 
-    free (fb->picbuf_long);
+    for (i=0;i<frm->long_size;i++)
+      free (frm->picbuf_long[i]);
+
+  }
+
+  free (frm);
+
+  for (i=0;i<2 * img->buf_cycle;i++)
+  {
+    free_mem2D(fld->picbuf_short[i]->mref);
+    free_mem3D(fld->picbuf_short[i]->mcef,2);
+//    free(fld->picbuf_short[i]->Refbuf11);
   }
 
 
-  free (fb);
+  for (i=0;i<2*img->buf_cycle;i++)
+    free (fld->picbuf_short[i]);
+
+  free (fld->picbuf_short);
+
+  if (fld->picbuf_long)
+  {
+    for (i=0;i<fld->long_size;i++)
+    {
+      free_mem2D(fld->picbuf_long[i]->mref);
+      free_mem3D(fld->picbuf_long[i]->mcef,2);
+//      free(fld->picbuf_long[i]->Refbuf11);
+    } 
+    for (i=0;i<fld->long_size;i++)
+      free (fld->picbuf_long[i]);
+  }
+
+  free (fld);  
+
 }
 
 /*!
@@ -344,6 +410,7 @@ void remove_short_term(int shortID)
   int i,j;
   Frame *f;
 
+
   for (i=0;i<fb->short_used;i++)
   {
     if ((fb->picbuf_short[i]->picID)==shortID)
@@ -373,17 +440,29 @@ void remove_short_term(int shortID)
  */
 void alloc_mref(ImageParameters *img)
 {
-  if (mref) 
-    free (mref);
+  if (mref_frm) 
+    free (mref_frm);
 
-  if((mref = (byte***)calloc(fb->short_size+fb->long_size,sizeof(byte**))) == NULL)
-    no_mem_exit("alloc_mref: mref");
+  if((mref_frm = (byte***)calloc(frm->short_size+frm->long_size,sizeof(byte**))) == NULL)
+    no_mem_exit("alloc_mref: mref_frm");
 
-  if (mcef) 
-    free (mcef);
+  if (mcef_frm) 
+    free (mcef_frm);
 
-  if((mcef = (byte****)calloc(fb->short_size+fb->long_size,sizeof(byte***))) == NULL)
-    no_mem_exit("alloc_mref: mcef");
+  if((mcef_frm = (byte****)calloc(frm->short_size+frm->long_size,sizeof(byte***))) == NULL)
+    no_mem_exit("alloc_mref: mcef_frm");
+
+  if (mref_fld) 
+    free (mref_fld);
+
+  if((mref_fld = (byte***)calloc(fld->short_size+fld->long_size,sizeof(byte**))) == NULL)
+    no_mem_exit("alloc_mref: mref_fld");
+
+  if (mcef_fld) 
+    free (mcef_fld);
+
+  if((mcef_fld = (byte****)calloc(fld->short_size+fld->long_size,sizeof(byte***))) == NULL)
+    no_mem_exit("alloc_mref: mcef_fld");
 
 }
 
@@ -397,18 +476,32 @@ void init_mref(ImageParameters *img)
 {
   int i,j;
 
-  for (i=0,j=0;i<fb->short_used;i++)
+  for (i=0,j=0;i<frm->short_used;i++)
   {
-    mref[j]=fb->picbuf_short[i]->mref;
-    mcef[j]=fb->picbuf_short[i]->mcef;
+    mref_frm[j]=frm->picbuf_short[i]->mref;
+    mcef_frm[j]=frm->picbuf_short[i]->mcef;
     j++;
   }
-  for (i=0;i<fb->long_size;i++)
+  for (i=0;i<frm->long_size;i++)
   {
-    mref[j]=fb->picbuf_long[i]->mref;
-    mcef[j]=fb->picbuf_long[i]->mcef;
+    mref_frm[j]=frm->picbuf_long[i]->mref;
+    mcef_frm[j]=frm->picbuf_long[i]->mcef;
     j++;
   }
+
+  for (i=0,j=0;i<fld->short_used;i++)
+  {
+    mref_fld[j]=fld->picbuf_short[i]->mref;
+    mcef_fld[j]=fld->picbuf_short[i]->mcef;
+    j++;
+  }
+  for (i=0;i<fld->long_size;i++)
+  {
+    mref_fld[j]=fld->picbuf_long[i]->mref;
+    mcef_fld[j]=fld->picbuf_long[i]->mcef;
+    j++;
+  }
+
 }
 
 
@@ -594,8 +687,7 @@ void copy2fb(ImageParameters *img)
   MMCObuffer_t *tmp_mmco;
 
   /* delete frames with same short term ID */
-  remove_short_term(img->pn);
-
+  if(imgY == imgY_frm||imgY == imgY_top) remove_short_term(img->pn);
 
   /* cycle frame buffer */
   f=fb->picbuf_short[fb->short_size-1];

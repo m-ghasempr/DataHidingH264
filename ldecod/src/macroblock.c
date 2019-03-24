@@ -404,7 +404,11 @@ void init_macroblock(struct img_par *img)
   }
 
   predframe_no = 0;
+  if (img->structure != FRAME)  // Initialize for field mode (use for copy)
+    if (img->number>1)          // use the top field for the bottom field of the first picture
+      predframe_no = 1;         // g.b.1;
 
+ 
   // Set the reference frame information for motion vector prediction
   if (IS_INTRA (currMB))
   {
@@ -427,7 +431,10 @@ void init_macroblock(struct img_par *img)
     for (j=0; j<4; j++)
     for (i=0; i<4; i++)
     {
-      refFrArr[img->block_y+j][img->block_x+i] = (currMB->b8mode[2*(j/2)+(i/2)]==IBLOCK ? -1 : 0);
+      if(img->structure != FRAME) 
+        refFrArr[img->block_y+j][img->block_x+i] = (currMB->b8mode[2*(j/2)+(i/2)]==IBLOCK ? -1 : 1);
+      else
+        refFrArr[img->block_y+j][img->block_x+i] = (currMB->b8mode[2*(j/2)+(i/2)]==IBLOCK ? -1 : 0);
     }
   }
 }
@@ -905,29 +912,37 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
           currSE.context = BType2CtxRef (currMB->b8mode[k]);
           dP->readSyntaxElement (&currSE,img,inp,dP);
           refframe = currSE.value1;
+          
+          if(img->structure!=FRAME) //favoring the same field
+          {
+            if(refframe % 2)
+              refframe -= 1;
+            else
+              refframe += 1;
+          }   //end of favoring the same field
         }
         else
         {
           refframe = 0;
         }
-
+        
         if (bframe && refframe>img->buf_cycle) //??? copied from readMotionInfoFrameNAL
         {
           set_ec_flag(SE_REFFRAME);
           refframe = 1;
         }
-
+        
         if (!bframe)
         {
           for (j=j0; j<j0+step_v0;j++)
-          for (i=i0; i<i0+step_h0;i++)
-            refFrArr[img->block_y+j][img->block_x+i] = refframe;
+            for (i=i0; i<i0+step_h0;i++)
+              refFrArr[img->block_y+j][img->block_x+i] = refframe;
         }
         else
         {
           for (j=j0; j<j0+step_v0;j++)
-          for (i=i0; i<i0+step_h0;i++)
-            img->fw_refFrArr[img->block_y+j][img->block_x+i] = refframe;
+            for (i=i0; i<i0+step_h0;i++)
+              img->fw_refFrArr[img->block_y+j][img->block_x+i] = refframe;
         }
       }
     }
@@ -1087,10 +1102,10 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
   int start_scan;
   int uv;
 
-  int qp_per;
-  int qp_rem;
-  int qp_per_uv;
-  int qp_rem_uv;
+  int qp_per    = (img->qp-MIN_QP)/6;
+  int qp_rem    = (img->qp-MIN_QP)%6;
+  int qp_per_uv = ((img->qp<0?img->qp:QP_SCALE_CR[img->qp])-MIN_QP)/6;
+  int qp_rem_uv = ((img->qp<0?img->qp:QP_SCALE_CR[img->qp])-MIN_QP)%6;
 
 
   // read CBP if not new intra mode
@@ -1288,6 +1303,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
                     currSE.type  = SE_LUM_AC_INTER;
                   }
                 }
+
 #if TRACE
                 sprintf(currSE.tracestring, " Luma sng ");
 #endif
@@ -1630,11 +1646,15 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
   int refframe, fw_refframe, bw_refframe, mv_mode, pred_dir, intra_prediction; // = currMB->ref_frame;
   int*** mv_array, ***fw_mv_array, ***bw_mv_array;
   int bframe = (img->type==B_IMG_1 || img->type==B_IMG_MULT);
-  byte refP_tr, TRb, TRp;
+  byte refP_tr;
+
+  int frame_no_next_P, frame_no_B, delta_P;
 
 #ifdef _ADAPT_LAST_GROUP_
   extern int *last_P_no;
 #endif
+
+  int iTRb, iTRp;
 
   int mb_nr             = img->current_mb_nr;
   int mb_width          = img->width/16;
@@ -1709,14 +1729,18 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
         }
         else if (!pred_dir)
         {
-          //refframe = (img->number - 1 - img->fw_refFrArr[j4][i4] + img->buf_cycle) % img->buf_cycle;
-          refframe = img->fw_refFrArr[j4][i4]+1;
+          if (img->structure==FRAME)
+            refframe = img->fw_refFrArr[j4][i4]+1;
+          else
+            refframe = img->fw_refFrArr[j4][i4]+2;
+
           mv_array = img->fw_mv;
         }
         else
         {
           //refframe = (img->frame_cycle + img->buf_cycle) % img->buf_cycle;
           refframe = 0;
+          if (img->structure==TOP_FIELD)  refframe = 1;
           mv_array = img->bw_mv;
         }
 
@@ -1735,8 +1759,13 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
           //===== BI-DIRECTIONAL PREDICTION =====
           fw_mv_array = img->fw_mv;
           bw_mv_array = img->bw_mv;
-          fw_refframe = img->fw_refFrArr[j4][i4]+1;
+          if (img->structure==FRAME) 
+            fw_refframe = img->fw_refFrArr[j4][i4]+1;
+          else
+            fw_refframe = img->fw_refFrArr[j4][i4]+2;
+
           bw_refframe = 0;
+          if (img->structure==TOP_FIELD)  bw_refframe = 1;
         }
         else
         {
@@ -1744,44 +1773,86 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
           fw_mv_array = img->dfMV;
           bw_mv_array = img->dbMV;
           bw_refframe = 0;
+          if (img->structure==TOP_FIELD)  bw_refframe = 1;
 
           if(refFrArr[j4][i4]==-1) // next P is intra mode
           {
             for(hv=0; hv<2; hv++)   img->dfMV[i4+BLOCK_SIZE][j4][hv]=img->dbMV[i4+BLOCK_SIZE][j4][hv]=0;
-            fw_refframe = 1;
+
+            if (img->structure == FRAME)
+              fw_refframe = 1;
+            else
+            {
+              if (img->structure == TOP_FIELD)
+                fw_refframe = 2;    // used to be 3;
+              else
+                fw_refframe = 1;    // used to be 2
+            }
           }
           else // next P is skip or inter mode
           {
 #ifdef _ADAPT_LAST_GROUP_
-            refP_tr = last_P_no[refFrArr[j4][i4]];
+            if (img->structure == FRAME)
+              refP_tr = last_P_no[refFrArr[j4][i4]];
+            else if (img->structure == TOP_FIELD)
+              refP_tr = last_P_no[refFrArr[j4][i4] + 1];  // used to be 2
+            else if (img->structure == BOTTOM_FIELD)
+              refP_tr = last_P_no[refFrArr[j4][i4]];  // used to be 1, DIRECT
+            
 #else
             refP_tr = nextP_tr-((refFrArr[j4][i4]+1)*P_interval);
 #endif
-            TRb = img->tr-refP_tr;
-            TRp = nextP_tr-refP_tr;
+//            TRb = img->tr-refP_tr;
+//            TRp = nextP_tr-refP_tr;
 
-            img->dfMV[i4+BLOCK_SIZE][j4][0]=TRb*img->mv[i4+BLOCK_SIZE][j4][0]/TRp;
-            img->dfMV[i4+BLOCK_SIZE][j4][1]=TRb*img->mv[i4+BLOCK_SIZE][j4][1]/TRp;
-            img->dbMV[i4+BLOCK_SIZE][j4][0]=(TRb-TRp)*img->mv[i4+BLOCK_SIZE][j4][0]/TRp;
-            img->dbMV[i4+BLOCK_SIZE][j4][1]=(TRb-TRp)*img->mv[i4+BLOCK_SIZE][j4][1]/TRp;
-            //fw_refframe = (img->number - 1 - refFrArr[j4][i4] + img->buf_cycle) % img->buf_cycle;
-            fw_refframe = refFrArr[j4][i4]+1;
+            refframe = refFrArr[j4][i4];
+            frame_no_next_P =img->imgtr_next_P+((mref==mref_fld)&&(img->structure==BOTTOM_FIELD));
+            //frame_no_B = (mref==mref_fld) ? img->tr : 2*img->tr;
+            frame_no_B = (mref==mref_fld) ? img->tr_fld : 2*img->tr_frm;
+            
+            delta_P = (img->imgtr_next_P - img->imgtr_last_P);
+            if((mref==mref_fld) && (img->structure==TOP_FIELD)) // top field
+            {
+              iTRp = delta_P*(refframe/2+1)-(refframe+1)%2;
+            }
+            else if((mref==mref_fld) && (img->structure==BOTTOM_FIELD)) // bot field
+            {
+              iTRp = 1+delta_P*(refframe+1)/2-refframe%2;
+            }
+            else  // frame
+            {
+              iTRp = (refframe+1)*delta_P;
+            }
+            
+            iTRb = iTRp - (frame_no_next_P - frame_no_B);
+            
+            img->dfMV[i4+BLOCK_SIZE][j4][0]=iTRb*img->mv[i4+BLOCK_SIZE][j4][0]/iTRp;
+            img->dfMV[i4+BLOCK_SIZE][j4][1]=iTRb*img->mv[i4+BLOCK_SIZE][j4][1]/iTRp;
+            img->dbMV[i4+BLOCK_SIZE][j4][0]=(iTRb-iTRp)*img->mv[i4+BLOCK_SIZE][j4][0]/iTRp;
+            img->dbMV[i4+BLOCK_SIZE][j4][1]=(iTRb-iTRp)*img->mv[i4+BLOCK_SIZE][j4][1]/iTRp;
+            
+            if (img->structure == TOP_FIELD)
+              fw_refframe = refFrArr[j4][i4]+2;
+            else
+            {
+              fw_refframe = max(0,refFrArr[j4][i4]) + 1;  // DIRECT
+            }
           }
         }
-
+        
         vec1_x = i4*4*mv_mul + fw_mv_array[i4+BLOCK_SIZE][j4][0];
         vec1_y = j4*4*mv_mul + fw_mv_array[i4+BLOCK_SIZE][j4][1];
         vec2_x = i4*4*mv_mul + bw_mv_array[i4+BLOCK_SIZE][j4][0];
         vec2_y = j4*4*mv_mul + bw_mv_array[i4+BLOCK_SIZE][j4][1];
-
+        
         get_block(fw_refframe, vec1_x, vec1_y, img, tmp_block);
         get_block(bw_refframe, vec2_x, vec2_y, img, tmp_blockbw);
-
+        
         for(ii=0;ii<BLOCK_SIZE;ii++)
-        for(jj=0;jj<BLOCK_SIZE;jj++)  img->mpr[ii+ioff][jj+joff] = (tmp_block[ii][jj]+tmp_blockbw[ii][jj]+1)/2;
+          for(jj=0;jj<BLOCK_SIZE;jj++)  img->mpr[ii+ioff][jj+joff] = (tmp_block[ii][jj]+tmp_blockbw[ii][jj]+1)/2;
       }
     }
-
+    
     if ((img->type==SP_IMG_1 || img->type==SP_IMG_MULT) && (IS_INTER (currMB) && mv_mode!=IBLOCK))
     {
       itrans_sp(img,ioff,joff,i,j);
@@ -1790,7 +1861,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
     {
       itrans   (img,ioff,joff,i,j);      // use DCT transform and make 4x4 block m7 from prediction block mpr
     }
-
+    
     for(ii=0;ii<BLOCK_SIZE;ii++)
     {
       for(jj=0;jj<BLOCK_SIZE;jj++)
@@ -1799,7 +1870,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
       }
     }
   }
-
+  
 
   // chroma decoding *******************************************************
   for(uv=0;uv<2;uv++)
@@ -1899,6 +1970,12 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
               else if (!pred_dir) refframe = 1+img->fw_refFrArr[jf][if1];
               else                refframe = 0;
 
+              if (!bframe) refframe = refFrArr[jf][if1];
+              else if (img->structure==FRAME) refframe = 1+img->fw_refFrArr[jf][if1];// Backward MV
+              else if (!pred_dir) refframe = 2+img->fw_refFrArr[jf][if1];
+              else if (img->structure==TOP_FIELD)          refframe = 1;  // Backward MV
+              else refframe = 0;  // Backward MV for direct, bi-directional mode
+
               i1=(img->pix_c_x+ii+ioff)*f1+mv_array[if1+4][jf][0];
               j1=(img->pix_c_y+jj+joff)*f1+mv_array[if1+4][jf][1];
 
@@ -1944,12 +2021,34 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
               {
                 fw_refframe = 1+img->fw_refFrArr[jf][ifx];
                 bw_refframe = 0;
+                if (img->structure!=FRAME)  fw_refframe = 2+img->fw_refFrArr[jf][ifx];
+                if (img->structure==TOP_FIELD)  bw_refframe = 1;
               }
               else
               {
                 bw_refframe = 0;
-                if(refFrArr[jf][ifx]==-1)  fw_refframe = 1;
-                else                       fw_refframe = 1+refFrArr[jf][ifx];
+                if (img->structure==TOP_FIELD)  bw_refframe = 1;
+                
+                if (img->structure == FRAME)
+                {
+                  if(refFrArr[jf][ifx]==-1)  fw_refframe = 1;
+                  else                       fw_refframe = 1+refFrArr[jf][ifx];
+                }
+                else
+                {
+                  if (img->structure == TOP_FIELD)
+                  {
+                    if(refFrArr[jf][ifx]==-1)  fw_refframe = 2;  // used to be 3; DIRECT
+                    else                       fw_refframe = 2+refFrArr[jf][ifx];
+                  }
+                  else
+                  {
+                    if(refFrArr[jf][ifx]==-1)  fw_refframe = 1;  // used to be 2; DIRECT
+                    else                       fw_refframe = max(0,refFrArr[jf][ifx]) + 1;  // DIRECT
+                    // used to have 1+refFrArr[jf][ifx]; DIRECT
+                  }
+                }
+                
               }
 
               i1=(img->pix_c_x+ii+ioff)*f1+fw_mv_array[ifx+4][jf][0];

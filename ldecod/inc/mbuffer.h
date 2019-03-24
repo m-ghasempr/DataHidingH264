@@ -72,6 +72,8 @@ typedef struct
 
 
 FrameBuffer *fb;
+FrameBuffer *frm;
+FrameBuffer *fld;
 
 byte ***mref;                                   //<! these are pointer arrays to the actual structures
 byte ****mcef;                                  //<! these are pointer arrays to the actual structures

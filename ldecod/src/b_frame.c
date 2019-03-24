@@ -55,8 +55,6 @@
 
 #define POS 0
 
-
-
 /*!
  ************************************************************************
  * \brief
@@ -140,20 +138,28 @@ void init_macroblock_Bframe(struct img_par *img)
   if (IS_INTRA (currMB) || IS_DIRECT (currMB))
   {
     for(j=0;j<4;j++)
-    for(i=0;i<4;i++)
-    {
-      img->fw_refFrArr[img->block_y+j][img->block_x+i] = -1;
-      img->bw_refFrArr[img->block_y+j][img->block_x+i] = -1;
-    }
+      for(i=0;i<4;i++)
+      {
+        img->fw_refFrArr[img->block_y+j][img->block_x+i] = -1;
+        img->bw_refFrArr[img->block_y+j][img->block_x+i] = -1;
+      }
   }
   else
   {
     for(j=0;j<4;j++)
-    for(i=0;i<4;i++)
-    {
-      k=2*(j/2)+(i/2);
-      img->fw_refFrArr[img->block_y+j][img->block_x+i] = ((currMB->b8pdir[k]==0||currMB->b8pdir[k]==2)&&currMB->b8mode[k]!=0?0:-1);
-      img->bw_refFrArr[img->block_y+j][img->block_x+i] = ((currMB->b8pdir[k]==1||currMB->b8pdir[k]==2)&&currMB->b8mode[k]!=0?0:-1);
-    }
+      for(i=0;i<4;i++)
+      {
+        k=2*(j/2)+(i/2);
+        if(img->structure != FRAME)
+        {
+          img->fw_refFrArr[img->block_y+j][img->block_x+i] = ((currMB->b8pdir[k]==0||currMB->b8pdir[k]==2)&&currMB->b8mode[k]!=0?2:-1);
+          img->bw_refFrArr[img->block_y+j][img->block_x+i] = ((currMB->b8pdir[k]==1||currMB->b8pdir[k]==2)&&currMB->b8mode[k]!=0?2:-1);
+        }
+        else
+        {
+          img->fw_refFrArr[img->block_y+j][img->block_x+i] = ((currMB->b8pdir[k]==0||currMB->b8pdir[k]==2)&&currMB->b8mode[k]!=0?0:-1);
+          img->bw_refFrArr[img->block_y+j][img->block_x+i] = ((currMB->b8pdir[k]==1||currMB->b8pdir[k]==2)&&currMB->b8mode[k]!=0?0:-1);
+        }
+      }
   }
 }

@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 2.0
+ *     JM 2.1
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -84,7 +84,7 @@
 #include "encodeiff.h"
 
 #define JM      "2"
-#define VERSION "2.0"
+#define VERSION "2.1"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
@@ -117,6 +117,8 @@ int main(int argc,char **argv)
   
   p_dec = p_dec_u = p_dec_v = p_stat = p_log = p_datpart = p_trace = NULL;
 
+  isBigEndian = testEndian();
+
   Configure (argc, argv);
 
   // Initialize Image Parameters
@@ -142,6 +144,8 @@ int main(int argc,char **argv)
   // B pictures
   Bframe_ctr=0;
   img->refPicID=-1;  //WYK: Oct. 16, 2001
+  img->refPicID_frm = -1;
+  img->refPicID_fld = -1;
   tot_time=0;                 // time for total encoding session
 
 #ifdef _ADAPT_LAST_GROUP_
@@ -282,6 +286,8 @@ void init_img()
   img->max_lindex=0;
 
   img->framerate=INIT_FRAME_RATE;   // The basic frame rate (of the original sequence)
+  if(input->InterlaceCodingOption != FRAME_CODING) 
+    img->buf_cycle *= 2;
 
   get_mem_mv (&(img->mv));
   get_mem_mv (&(img->p_fwMV));
@@ -291,6 +297,8 @@ void init_img()
 
   get_mem_ACcoeff (&(img->cofAC));
   get_mem_DCcoeff (&(img->cofDC));
+  if(input->InterlaceCodingOption != FRAME_CODING) 
+    img->buf_cycle /= 2;
 
   if ((img->quad = (int*)calloc (511, sizeof(int))) == NULL)
     no_mem_exit ("init_img: img->quad");
@@ -327,10 +335,13 @@ void init_img()
   for (i=0; i < img->width/BLOCK_SIZE+1; i++)
   {
     img->ipredmode[i+1][0]=-1;
+    img->ipredmode[i+1][img->height/BLOCK_SIZE+1]=-1;
+
   }
   for (j=0; j < img->height/BLOCK_SIZE+1; j++)
   {
     img->ipredmode[0][j+1]=-1;
+    img->ipredmode[img->width/BLOCK_SIZE+1][j+1]=-1;
   }
 
   img->mb_y_upd=0;
@@ -419,22 +430,43 @@ void malloc_slice()
       for (i=0; i<currSlice->max_part_nr; i++) // loop over all data partitions
       {
         dataPart = &(currSlice->partArr[i]);
-        dataPart->bitstream = (Bitstream *) calloc(1, sizeof(Bitstream));
-        if (dataPart->bitstream == NULL)
+        dataPart->bitstream_frm = (Bitstream *) calloc(1, sizeof(Bitstream));
+        if (dataPart->bitstream_frm == NULL)
         {
           snprintf(errortext, ET_SIZE, "Memory allocation for Bitstream datastruct in NAL-mode %d failed", input->of_mode);
           error (errortext, 100);
         }
-        dataPart->bitstream->streamBuffer = (byte *) calloc(buffer_size, sizeof(byte));
-        if (dataPart->bitstream->streamBuffer == NULL)
+        dataPart->bitstream_frm->streamBuffer = (byte *) calloc(buffer_size, sizeof(byte));
+        if (dataPart->bitstream_frm->streamBuffer == NULL)
         {
           snprintf(errortext, ET_SIZE, "Memory allocation for bitstream buffer in NAL-mode %d failed", input->of_mode);
           error (errortext, 100);
         }
         // Initialize storage of bitstream parameters
-        dataPart->bitstream->stored_bits_to_go = 8;
-        dataPart->bitstream->stored_byte_pos = 0;
-        dataPart->bitstream->stored_byte_buf = 0;
+        dataPart->bitstream_frm->stored_bits_to_go = 8;
+        dataPart->bitstream_frm->stored_byte_pos = 0;
+        dataPart->bitstream_frm->stored_byte_buf = 0;
+
+        if(input->InterlaceCodingOption != FRAME_CODING)
+        {
+          dataPart->bitstream_fld = (Bitstream *) calloc(1, sizeof(Bitstream));
+          if (dataPart->bitstream_fld == NULL)
+          {
+            snprintf(errortext, ET_SIZE, "Memory allocation for Bitstream datastruct in NAL-mode %d failed", input->of_mode);
+            error (errortext, 100);
+          }
+          dataPart->bitstream_fld->streamBuffer = (byte *) calloc(buffer_size, sizeof(byte));
+          if (dataPart->bitstream_fld->streamBuffer == NULL)
+          {
+            snprintf(errortext, ET_SIZE, "Memory allocation for bitstream buffer in NAL-mode %d failed", input->of_mode);
+            error (errortext, 100);
+          }
+          // Initialize storage of bitstream parameters
+          dataPart->bitstream_fld->stored_bits_to_go = 8;
+          dataPart->bitstream_fld->stored_byte_pos = 0;
+          dataPart->bitstream_fld->stored_byte_buf = 0;
+        }
+
       }
       return;
     case PAR_OF_RTP:
@@ -474,22 +506,42 @@ void malloc_slice()
       for (i=0; i<currSlice->max_part_nr; i++) // loop over all data partitions
       {
         dataPart = &(currSlice->partArr[i]);
-        dataPart->bitstream = (Bitstream *) calloc(1, sizeof(Bitstream));
-        if (dataPart->bitstream == NULL)
+        dataPart->bitstream_frm = (Bitstream *) calloc(1, sizeof(Bitstream));
+        if (dataPart->bitstream_frm == NULL)
         {
           snprintf(errortext, ET_SIZE, "Memory allocation for Bitstream datastruct in NAL-mode %d failed", input->of_mode);
           error(errortext, 100);
         }
-        dataPart->bitstream->streamBuffer = (byte *) calloc(buffer_size, sizeof(byte));
-        if (dataPart->bitstream->streamBuffer == NULL)
+        dataPart->bitstream_frm->streamBuffer = (byte *) calloc(buffer_size, sizeof(byte));
+        if (dataPart->bitstream_frm->streamBuffer == NULL)
         {
           snprintf(errortext, ET_SIZE, "Memory allocation for bitstream buffer in NAL-mode %d failed", input->of_mode);
           error(errortext, 100);
         }
         // Initialize storage of bitstream parameters
-        dataPart->bitstream->stored_bits_to_go = 8;
-        dataPart->bitstream->stored_byte_pos = 0;
-        dataPart->bitstream->stored_byte_buf = 0;
+        dataPart->bitstream_frm->stored_bits_to_go = 8;
+        dataPart->bitstream_frm->stored_byte_pos = 0;
+        dataPart->bitstream_frm->stored_byte_buf = 0;
+
+        if(input->InterlaceCodingOption != FRAME_CODING)
+        {
+          dataPart->bitstream_fld = (Bitstream *) calloc(1, sizeof(Bitstream));
+          if (dataPart->bitstream_fld == NULL)
+          {
+            snprintf(errortext, ET_SIZE, "Memory allocation for Bitstream datastruct in NAL-mode %d failed", input->of_mode);
+            error (errortext, 100);
+          }
+          dataPart->bitstream_fld->streamBuffer = (byte *) calloc(buffer_size, sizeof(byte));
+          if (dataPart->bitstream_fld->streamBuffer == NULL)
+          {
+            snprintf(errortext, ET_SIZE, "Memory allocation for bitstream buffer in NAL-mode %d failed", input->of_mode);
+            error (errortext, 100);
+          }
+          // Initialize storage of bitstream parameters
+          dataPart->bitstream_fld->stored_bits_to_go = 8;
+          dataPart->bitstream_fld->stored_byte_pos = 0;
+          dataPart->bitstream_fld->stored_byte_buf = 0;
+        }
       }
       return;
 
@@ -1103,6 +1155,8 @@ void report()
   fclose(p_log);
 
  
+//  free(stat->mode_use_Bframe);
+//  free(stat->bit_use_mode_Bframe);
 }
 
 
@@ -1147,24 +1201,52 @@ void information_init()
 int init_global_buffers()
 {
   int j,memory_size=0;
+  int height_field = img->height/2;
 #ifdef _ADAPT_LAST_GROUP_
-  extern int *last_P_no;
+  extern int *last_P_no_frm;
+  extern int *last_P_no_fld;
 
-  if ((last_P_no = (int*)malloc(img->buf_cycle*sizeof(int))) == NULL)
+  if ((last_P_no_frm = (int*)malloc(2*img->buf_cycle*sizeof(int))) == NULL)
     no_mem_exit("init_global_buffers: last_P_no");
+  if(input->InterlaceCodingOption != FRAME_CODING)
+    if ((last_P_no_fld = (int*)malloc(3*img->buf_cycle*sizeof(int))) == NULL)
+      no_mem_exit("init_global_buffers: last_P_no");
 #endif
 
   // allocate memory for encoding frame buffers: imgY, imgUV
   // byte imgY[288][352];
   // byte imgUV[2][144][176];
-  memory_size += get_mem2D(&imgY, img->height, img->width);
-  memory_size += get_mem3D(&imgUV, 2, img->height_cr, img->width_cr);
+  memory_size += get_mem2D(&imgY_frm, img->height, img->width);
+  memory_size += get_mem3D(&imgUV_frm, 2, img->height_cr, img->width_cr);
 
   // allocate memory for reference frame buffers: imgY_org, imgUV_org
   // byte imgY_org[288][352];
   // byte imgUV_org[2][144][176];
-  memory_size += get_mem2D(&imgY_org, img->height, img->width);
-  memory_size += get_mem3D(&imgUV_org, 2, img->height_cr, img->width_cr);
+  memory_size += get_mem2D(&imgY_org_frm, img->height, img->width);
+  memory_size += get_mem3D(&imgUV_org_frm, 2, img->height_cr, img->width_cr);
+
+  // allocate memory for temp P and B-frame motion vector buffer: tmp_mv, temp_mv_block
+  // int tmp_mv[2][72][92];  ([2][72][88] should be enough)
+  memory_size += get_mem3Dint(&tmp_mv_frm, 2, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE+4);
+
+  // allocate memory for reference frames of each block: refFrArr
+  // int  refFrArr[72][88];
+  memory_size += get_mem2Dint(&refFrArr_frm, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
+
+  if (NULL == (Refbuf11_P_frm = malloc ((img->width * img->height) * sizeof (pel_t))))
+    no_mem_exit ("init_global_buffers: Refbuf11_P_frm");
+
+  memory_size += get_mem2D(&mref_P_frm, (img->height+2*IMG_PAD_SIZE)*4, (img->width+2*IMG_PAD_SIZE)*4);
+  memory_size += get_mem3D(&mcef_P_frm, 2, img->height_cr, img->width_cr);
+
+  if(input->successive_Bframe!=0)
+  {
+    // allocate memory for temp B-frame motion vector buffer: fw_refFrArr, bw_refFrArr
+    // int ...refFrArr[72][88];
+    memory_size += get_mem2Dint(&fw_refFrArr_frm, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
+    memory_size += get_mem2Dint(&bw_refFrArr_frm, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
+  }
+
 
   // allocate memory for post filter frame buffers: imgY_pf, imgUV_pf
   // byte imgY_pf[288][352];
@@ -1192,14 +1274,6 @@ int init_global_buffers()
   if (NULL == (Refbuf11_P = malloc ((img->width * img->height) * sizeof (pel_t))))
     no_mem_exit ("init_global_buffers: Refbuf11_P");
 
-
-  // allocate memory for B-frame coding (last upsampled P-frame): mref_P, mcref_P
-  // is currently also used in oneforthpix_1() and _2() for coding without B-frames
-  //byte mref[1152][1408];  */   /* 1/4 pix luma
-  //byte mcef[2][352][288]; */   /* pix chroma
-  memory_size += get_mem2D(&mref_P, (img->height+2*IMG_PAD_SIZE)*4, (img->width+2*IMG_PAD_SIZE)*4);
-  memory_size += get_mem3D(&mcef_P, 2, img->height_cr, img->width_cr);
-
   if(input->successive_Bframe!=0)
   {
     // allocate memory for temp B-frame motion vector buffer: tmp_fwMV, tmp_bwMV, dfMV, dbMV
@@ -1208,24 +1282,11 @@ int init_global_buffers()
     memory_size += get_mem3Dint(&tmp_bwMV, 2, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE+4);
     memory_size += get_mem3Dint(&dfMV,     2, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE+4);
     memory_size += get_mem3Dint(&dbMV,     2, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE+4);
-
-    // allocate memory for temp B-frame motion vector buffer: fw_refFrArr, bw_refFrArr
-    // int ...refFrArr[72][88];
-    memory_size += get_mem2Dint(&fw_refFrArr, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
-    memory_size += get_mem2Dint(&bw_refFrArr, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
   }
-
-  // allocate memory for temp P and B-frame motion vector buffer: tmp_mv, temp_mv_block
-  // int tmp_mv[2][72][92];  ([2][72][88] should be enough)
-  memory_size += get_mem3Dint(&tmp_mv, 2, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE+4);
 
   // allocate memory for temp quarter pel luma frame buffer: img4Y_tmp
   // int img4Y_tmp[576][704];  (previously int imgY_tmp in global.h)
   memory_size += get_mem2Dint(&img4Y_tmp, img->height+2*IMG_PAD_SIZE, (img->width+2*IMG_PAD_SIZE)*4);
-
-  // allocate memory for reference frames of each block: refFrArr
-  // int  refFrArr[72][88];
-  memory_size += get_mem2Dint(&refFrArr, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
 
   if (input->rdopt==2)
   {
@@ -1248,6 +1309,60 @@ int init_global_buffers()
     memory_size += get_mem2D(&refresh_map, img->height/8,img->width/8);
   }
 
+  if(input->InterlaceCodingOption != FRAME_CODING)
+  {
+    // allocate memory for encoding frame buffers: imgY, imgUV
+    // byte imgY[288][352];
+    // byte imgUV[2][144][176];
+    memory_size += get_mem2D(&imgY_com, img->height, img->width);
+    memory_size += get_mem3D(&imgUV_com, 2, img->height/2, img->width_cr);
+    memory_size += get_mem2D(&imgY_top, height_field, img->width);
+    memory_size += get_mem3D(&imgUV_top, 2, height_field/2, img->width_cr);
+    memory_size += get_mem2D(&imgY_bot, height_field, img->width);
+    memory_size += get_mem3D(&imgUV_bot, 2, height_field/2, img->width_cr);
+
+    // allocate memory for reference frame buffers: imgY_org, imgUV_org
+    // byte imgY_org[288][352];
+    // byte imgUV_org[2][144][176];
+    memory_size += get_mem2D(&imgY_org_top, height_field, img->width);
+    memory_size += get_mem3D(&imgUV_org_top, 2, height_field/2, img->width_cr);
+    memory_size += get_mem2D(&imgY_org_bot, height_field, img->width);
+    memory_size += get_mem3D(&imgUV_org_bot, 2, height_field/2, img->width_cr);
+
+    if (NULL == (Refbuf11_P_top = malloc ((img->width * height_field) * sizeof (pel_t))))
+      no_mem_exit ("init_global_buffers: Refbuf11_P_top");
+    if (NULL == (Refbuf11_P_bot = malloc ((img->width * height_field) * sizeof (pel_t))))
+      no_mem_exit ("init_global_buffers: Refbuf11_P_bot");
+
+    // allocate memory for B-frame coding (last upsampled P-frame): mref_P, mcref_P
+    // is currently also used in oneforthpix_1() and _2() for coding without B-frames
+    //byte mref[1152][1408];  */   /* 1/4 pix luma
+    //byte mcef[2][352][288]; */   /* pix chroma
+    memory_size += get_mem2D(&mref_P_top, (height_field+2*IMG_PAD_SIZE)*4, (img->width+2*IMG_PAD_SIZE)*4);
+    memory_size += get_mem3D(&mcef_P_top, 2, height_field/2, img->width_cr);
+    memory_size += get_mem2D(&mref_P_bot, (height_field+2*IMG_PAD_SIZE)*4, (img->width+2*IMG_PAD_SIZE)*4);
+    memory_size += get_mem3D(&mcef_P_bot, 2, height_field/2, img->width_cr);
+
+    if(input->successive_Bframe!=0)
+    {
+      // allocate memory for temp B-frame motion vector buffer: fw_refFrArr, bw_refFrArr
+      // int ...refFrArr[72][88];
+      memory_size += get_mem2Dint(&fw_refFrArr_top, height_field/BLOCK_SIZE, img->width/BLOCK_SIZE);
+      memory_size += get_mem2Dint(&bw_refFrArr_top, height_field/BLOCK_SIZE, img->width/BLOCK_SIZE);
+      memory_size += get_mem2Dint(&fw_refFrArr_bot, height_field/BLOCK_SIZE, img->width/BLOCK_SIZE);
+      memory_size += get_mem2Dint(&bw_refFrArr_bot, height_field/BLOCK_SIZE, img->width/BLOCK_SIZE);
+    }
+
+    // allocate memory for temp P and B-frame motion vector buffer: tmp_mv, temp_mv_block
+    // int tmp_mv[2][72][92];  ([2][72][88] should be enough)
+    memory_size += get_mem3Dint(&tmp_mv_top, 2, height_field/BLOCK_SIZE, img->width/BLOCK_SIZE+4);
+    memory_size += get_mem3Dint(&tmp_mv_bot, 2, height_field/BLOCK_SIZE, img->width/BLOCK_SIZE+4);
+
+    // allocate memory for reference frames of each block: refFrArr
+    // int  refFrArr[72][88];
+    memory_size += get_mem2Dint(&refFrArr_top, height_field/BLOCK_SIZE, img->width/BLOCK_SIZE);
+    memory_size += get_mem2Dint(&refFrArr_bot, height_field/BLOCK_SIZE, img->width/BLOCK_SIZE);
+  }
 
   return (memory_size);
 }
@@ -1270,31 +1385,36 @@ void free_global_buffers()
   int  i,j;
 
 #ifdef _ADAPT_LAST_GROUP_
-  extern int *last_P_no;
-  free (last_P_no);
+  extern int *last_P_no_frm;
+  extern int *last_P_no_fld;
+  free (last_P_no_frm);
+  free (last_P_no_fld);
 #endif
 
-  free_mem2D(imgY);
-  free_mem3D(imgUV,2);
-  free_mem2D(imgY_org);      // free ref frame buffers
-  free_mem3D(imgUV_org,2);
+  free_mem2D(imgY_frm);
+  free_mem3D(imgUV_frm,2);
+  free_mem2D(imgY_org_frm);      // free ref frame buffers
+  free_mem3D(imgUV_org_frm,2);
+  free_mem3Dint(tmp_mv_frm,2);
+  free_mem2Dint(refFrArr_frm);
+  free_mem2D(mref_P_frm);
+  free_mem3D(mcef_P_frm,2);
+  // free multiple ref frame buffers
+  // number of reference frames increased by one for next P-frame
+  free(mref_frm);
+  free(mcef_frm);
+  free (Refbuf11_P_frm);
+
   free_mem2D(imgY_pf);       // free post filtering frame buffers
   free_mem3D(imgUV_pf,2);
 
   free_mem2D(nextP_imgY);    // free next frame buffers (for B frames)
   free_mem3D(nextP_imgUV,2);
 
-  free_mem2D(mref_P);
-  free_mem3D(mcef_P,2);
-
-  free (Refbuf11_P);
-  free (Refbuf11);
+  free (Refbuf11_frm);
 
   // free multiple ref frame buffers
   // number of reference frames increased by one for next P-frame
-
-  free(mref);
-  free(mcef);
 
   if(input->successive_Bframe!=0)
   {
@@ -1303,14 +1423,12 @@ void free_global_buffers()
     free_mem3Dint(tmp_bwMV,2);
     free_mem3Dint(dfMV,2);
     free_mem3Dint(dbMV,2);
-    free_mem2Dint(fw_refFrArr);
-    free_mem2Dint(bw_refFrArr);
+    free_mem2Dint(fw_refFrArr_frm);
+    free_mem2Dint(bw_refFrArr_frm);
   } // end if B frame
 
 
-  free_mem3Dint(tmp_mv,2);
   free_mem2Dint(img4Y_tmp);    // free temp quarter pel frame buffer
-  free_mem2Dint(refFrArr);
 
   // free mem, allocated in init_img()
   // free intra pred mode buffer for blocks
@@ -1360,6 +1478,48 @@ void free_global_buffers()
     free(pixel_map);
     free(refresh_map[0]);
     free(refresh_map);
+  }
+
+  if(input->InterlaceCodingOption != FRAME_CODING)
+  {
+    free_mem2D(imgY_com);
+    free_mem3D(imgUV_com,2);
+    free_mem2D(imgY_top);
+    free_mem3D(imgUV_top,2);
+    free_mem2D(imgY_org_top);      // free ref frame buffers
+    free_mem3D(imgUV_org_top,2);
+    free_mem2D(imgY_bot);
+    free_mem3D(imgUV_bot,2);
+    free_mem2D(imgY_org_bot);      // free ref frame buffers
+    free_mem3D(imgUV_org_bot,2);
+
+    free_mem2D(mref_P_top);
+    free_mem3D(mcef_P_top,2);
+    free_mem2D(mref_P_bot);
+    free_mem3D(mcef_P_bot,2);
+    // free multiple ref frame buffers
+    // number of reference frames increased by one for next P-frame
+    free(mref_fld);
+    free(mcef_fld);
+
+    free (Refbuf11_P_top);
+    free (Refbuf11_P_bot);
+
+    if(input->successive_Bframe!=0)
+    {
+      // free last P-frame buffers for B-frame coding
+      free_mem2Dint(fw_refFrArr_top);
+      free_mem2Dint(bw_refFrArr_top);
+      free_mem2Dint(fw_refFrArr_bot);
+      free_mem2Dint(bw_refFrArr_bot);
+    } // end if B frame
+
+    free (Refbuf11_fld);
+
+    free_mem3Dint(tmp_mv_top,2);
+    free_mem3Dint(tmp_mv_bot,2);
+    free_mem2Dint(refFrArr_top);
+    free_mem2Dint(refFrArr_bot);
   }
 }
 
@@ -1527,5 +1687,183 @@ void free_mem_DCcoeff (int*** cofDC)
     free (cofDC[j]);
   }
   free (cofDC);
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    point to frame coding variables 
+ ************************************************************************
+ */
+void put_buffer_frame()
+{
+  fb = frm;
+
+  imgY = imgY_frm;
+  imgUV = imgUV_frm;
+  imgY_org = imgY_org_frm;
+  imgUV_org = imgUV_org_frm;
+
+  tmp_mv = tmp_mv_frm;
+  mref = mref_frm;
+  mcef = mcef_frm;
+  mref_P = mref_P_frm;
+  mcef_P = mcef_P_frm;
+
+  refFrArr = refFrArr_frm;
+  fw_refFrArr = fw_refFrArr_frm;
+  bw_refFrArr = bw_refFrArr_frm;
+
+  Refbuf11 = Refbuf11_frm;
+  Refbuf11_P = Refbuf11_P_frm;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    point to top field coding variables 
+ ************************************************************************
+ */
+void put_buffer_top()
+{
+  fb = fld;
+
+  img->fld_type = 0;
+
+  imgY = imgY_top;
+  imgUV = imgUV_top;
+  imgY_org = imgY_org_top;
+  imgUV_org = imgUV_org_top;
+
+  mref = mref_fld;
+  mcef = mcef_fld;
+  mref_P = mref_P_top;
+  mcef_P = mcef_P_top;
+
+  Refbuf11 = Refbuf11_fld;
+  Refbuf11_P = Refbuf11_P_top;
+
+  tmp_mv = tmp_mv_top;
+  refFrArr = refFrArr_top;
+  fw_refFrArr = fw_refFrArr_top;
+  bw_refFrArr = bw_refFrArr_top;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    point to bottom field coding variables 
+ ************************************************************************
+ */
+void put_buffer_bot()
+{
+  fb = fld;
+
+  img->fld_type = 1;
+
+  imgY = imgY_bot;
+  imgUV = imgUV_bot;
+  imgY_org = imgY_org_bot;
+  imgUV_org = imgUV_org_bot;
+
+  tmp_mv = tmp_mv_bot;
+  refFrArr = refFrArr_bot;
+  fw_refFrArr = fw_refFrArr_bot;
+  bw_refFrArr = bw_refFrArr_bot;
+  Refbuf11_P = Refbuf11_P_bot;
+  Refbuf11 = Refbuf11_fld;
+
+  mref = mref_fld;
+  mcef = mcef_fld;
+  mref_P = mref_P_bot;
+  mcef_P = mcef_P_bot;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    form frame picture from two field pictures 
+ ************************************************************************
+ */
+void combine_field()
+{
+  int i;
+
+  for (i=0; i<img->height / 2; i++)
+  {
+    memcpy(imgY_com[i*2], imgY_top[i], img->width);     // top field
+    memcpy(imgY_com[i*2 + 1], imgY_bot[i], img->width); // bottom field
+  }
+
+  for (i=0; i<img->height_cr / 2; i++)
+  {
+    memcpy(imgUV_com[0][i*2], imgUV_top[0][i], img->width_cr);
+    memcpy(imgUV_com[0][i*2 + 1], imgUV_bot[0][i], img->width_cr);
+    memcpy(imgUV_com[1][i*2], imgUV_top[1][i], img->width_cr);
+    memcpy(imgUV_com[1][i*2 + 1], imgUV_bot[1][i], img->width_cr);
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    extract top field from a frame 
+ ************************************************************************
+ */
+void split_field_top()
+{
+  int i;
+
+  for (i=0; i<img->height; i++)
+  {
+    memcpy(imgY[i], imgY_frm[i*2], img->width);	
+  }
+
+  for (i=0; i<img->height_cr; i++)
+  {
+    memcpy(imgUV[0][i], imgUV_frm[0][i*2], img->width_cr);
+    memcpy(imgUV[1][i], imgUV_frm[1][i*2], img->width_cr);
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    extract bottom field from a frame 
+ ************************************************************************
+ */
+void split_field_bot()
+{
+  int i;
+
+  for (i=0; i<img->height; i++)
+  {
+    memcpy(imgY[i], imgY_frm[i*2 + 1], img->width);
+  }
+
+  for (i=0; i<img->height_cr; i++)
+  {
+    memcpy(imgUV[0][i], imgUV_frm[0][i*2 + 1], img->width_cr);
+    memcpy(imgUV[1][i], imgUV_frm[1][i*2 + 1], img->width_cr);
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    RD decision of frame and field coding 
+ ************************************************************************
+ */
+int decide_fld_frame(float snr_frame_Y, float snr_field_Y, int bit_field, int bit_frame, double lambda_picture)
+{
+  double cost_frame, cost_field;
+
+  cost_frame = bit_frame * lambda_picture + snr_frame_Y;
+  cost_field = bit_field * lambda_picture + snr_field_Y;
+
+  if (cost_field > cost_frame)
+    return (0);
+  else
+    return (1);
 }
 

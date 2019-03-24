@@ -68,24 +68,54 @@ void init_frame_buffers(InputParameters *inp, ImageParameters *img)
 
   if ((fb=(FrameBuffer*)calloc(1,sizeof (FrameBuffer)))==NULL) no_mem_exit("init_frame_buffers: fb");
 
-  if ((fb->picbuf_short=(Frame**)calloc(bufsize,sizeof (Frame*)))==NULL) no_mem_exit("init_frame_buffers: fb->picbuf_short");
+//frame buffers
+  if ((frm=(FrameBuffer*)calloc(1,sizeof (FrameBuffer)))==NULL) no_mem_exit("init_frame_buffers: frm");
+
+  if ((frm->picbuf_short=(Frame**)calloc(bufsize,sizeof (Frame*)))==NULL) no_mem_exit("init_frame_buffers: frm->picbuf_short");
 
   for (i=0;i<bufsize;i++)
-    if ((fb->picbuf_short[i]=(Frame*)calloc(1,sizeof (Frame)))==NULL) no_mem_exit("init_frame_buffers: fb->picbuf_short");
+    if ((frm->picbuf_short[i]=(Frame*)calloc(1,sizeof (Frame)))==NULL) no_mem_exit("init_frame_buffers: frm->picbuf_short");
 
   for (i=0;i<bufsize;i++)
   {
-    get_mem2D(&(fb->picbuf_short[i]->mref), (img->height+2*IMG_PAD_SIZE)*4, (img->width+2*IMG_PAD_SIZE)*4);
-    get_mem3D(&(fb->picbuf_short[i]->mcef), 2, img->height_cr*2, img->width_cr*2);
-    if (NULL == (fb->picbuf_short[i]->Refbuf11 = malloc ((img->width * img->height) * sizeof (pel_t))))
+    get_mem2D(&(frm->picbuf_short[i]->mref), (img->height+2*IMG_PAD_SIZE)*4, (img->width+2*IMG_PAD_SIZE)*4);
+    get_mem3D(&(frm->picbuf_short[i]->mcef), 2, img->height_cr*2, img->width_cr*2);
+    if (NULL == (frm->picbuf_short[i]->Refbuf11 = malloc ((img->width * img->height) * sizeof (pel_t))))
       no_mem_exit ("init_frame_buffers: Refbuf11");
   }
 
 
-  fb->short_size=bufsize;
-  fb->short_used=0;
-  fb->long_size=0;
-  fb->long_used=0;
+  frm->short_size=bufsize;
+  frm->short_used=0;
+  frm->long_size=0;
+  frm->long_used=0;
+
+//field buffers
+  if(input->InterlaceCodingOption != FRAME_CODING)
+  {
+    bufsize =2*img->buf_cycle;
+    if ((fld=(FrameBuffer*)calloc(1,sizeof (FrameBuffer)))==NULL) no_mem_exit("init_field_buffers: fld");
+
+    if ((fld->picbuf_short=(Frame**)calloc(bufsize,sizeof (Frame*)))==NULL) no_mem_exit("init_field_buffers: fld->picbuf_short");
+
+    for (i=0;i<bufsize;i++)
+      if ((fld->picbuf_short[i]=(Frame*)calloc(1,sizeof (Frame)))==NULL) no_mem_exit("init_field_buffers: fld->picbuf_short");
+
+    for (i=0;i<bufsize;i++)
+    {
+      get_mem2D(&(fld->picbuf_short[i]->mref), (img->height/2+2*IMG_PAD_SIZE)*4, (img->width+2*IMG_PAD_SIZE)*4);
+      get_mem3D(&(fld->picbuf_short[i]->mcef), 2, img->height_cr, img->width_cr*2);
+      if (NULL == (fld->picbuf_short[i]->Refbuf11 = malloc ((img->width * img->height / 2) * sizeof (pel_t))))
+        no_mem_exit ("init_field_buffers: Refbuf11");
+    }
+
+//  bufsize=img->buf_cycle+1;
+
+    fld->short_size=bufsize;
+    fld->short_used=0;
+    fld->long_size=0;
+    fld->long_used=0;
+  }
 }
 
 /*!
@@ -102,33 +132,63 @@ void free_frame_buffers(InputParameters *inp, ImageParameters *img)
 {
   int i;
 
-  for (i=0;i<fb->short_size;i++)
+  for (i=0;i<frm->short_size;i++)
   {
-    free_mem2D(fb->picbuf_short[i]->mref);
-    free_mem3D(fb->picbuf_short[i]->mcef,2);
-    free(fb->picbuf_short[i]->Refbuf11);
+    free_mem2D(frm->picbuf_short[i]->mref);
+    free_mem3D(frm->picbuf_short[i]->mcef,2);
+    free(frm->picbuf_short[i]->Refbuf11);
   }
 
 
-  for (i=0;i<fb->short_size;i++)
-    free (fb->picbuf_short[i]);
+  for (i=0;i<frm->short_size;i++)
+    free (frm->picbuf_short[i]);
 
-  free (fb->picbuf_short);
+  free (frm->picbuf_short);
 
-  if (fb->picbuf_long)
+  if (frm->picbuf_long)
   {
-    for (i=0;i<fb->long_size;i++)
+    for (i=0;i<frm->long_size;i++)
     {
-      free_mem2D(fb->picbuf_long[i]->mref);
-      free_mem3D(fb->picbuf_long[i]->mcef,2);
-      free(fb->picbuf_long[i]->Refbuf11);
+      free_mem2D(frm->picbuf_long[i]->mref);
+      free_mem3D(frm->picbuf_long[i]->mcef,2);
+      free(frm->picbuf_long[i]->Refbuf11);
     } 
-    for (i=0;i<fb->long_size;i++)
-      free (fb->picbuf_long[i]);
+    for (i=0;i<frm->long_size;i++)
+      free (frm->picbuf_long[i]);
 
   }
 
-  free (fb);
+  free (frm);
+
+  if(input->InterlaceCodingOption != FRAME_CODING)
+  {
+    for (i=0;i<fld->short_size;i++)
+    {
+      free_mem2D(fld->picbuf_short[i]->mref);
+      free_mem3D(fld->picbuf_short[i]->mcef,2);
+      free(fld->picbuf_short[i]->Refbuf11);
+    }
+
+
+    for (i=0;i<fld->short_size;i++)
+      free (fld->picbuf_short[i]);
+
+    free (fld->picbuf_short);
+
+    if (fld->picbuf_long)
+    {
+      for (i=0;i<fld->long_size;i++)
+      {
+        free_mem2D(fld->picbuf_long[i]->mref);
+        free_mem3D(fld->picbuf_long[i]->mcef,2);
+        free(fld->picbuf_long[i]->Refbuf11);
+      } 
+      for (i=0;i<fld->long_size;i++)
+        free (fld->picbuf_long[i]);
+    }
+
+    free (fld);
+  }
 }
 
 /*!
@@ -366,6 +426,7 @@ void remove_short_term(int shortID)
       } 
     }
   }
+
 }
 
 /*!
@@ -376,18 +437,33 @@ void remove_short_term(int shortID)
  */
 void alloc_mref(ImageParameters *img)
 {
-  if (mref) 
-    free (mref);
 
-  if((mref = (byte***)calloc(fb->short_size+fb->long_size,sizeof(byte**))) == NULL)
-    no_mem_exit("alloc_mref: mref");
+  if (mref_frm) 
+    free (mref_frm);
 
-  if (mcef) 
-    free (mcef);
+  if((mref_frm = (byte***)calloc(frm->short_size+frm->long_size,sizeof(byte**))) == NULL)
+    no_mem_exit("alloc_mref: mref_frm");
 
-  if((mcef = (byte****)calloc(fb->short_size+fb->long_size,sizeof(byte***))) == NULL)
-    no_mem_exit("alloc_mref: mcef");
+  if (mcef_frm) 
+    free (mcef_frm);
 
+  if((mcef_frm = (byte****)calloc(frm->short_size+frm->long_size,sizeof(byte***))) == NULL)
+    no_mem_exit("alloc_mref: mcef_frm");
+
+  if(input->InterlaceCodingOption != FRAME_CODING)
+  {
+    if (mref_fld) 
+      free (mref_fld);
+
+    if ((mref_fld = (byte***)calloc(fld->short_size+fld->long_size,sizeof(byte**))) == NULL)
+      no_mem_exit("alloc_mref: mref_fld");
+
+    if (mcef_fld) 
+      free (mcef_fld);
+
+    if ((mcef_fld = (byte****)calloc(fld->short_size+fld->long_size,sizeof(byte***))) == NULL)
+      no_mem_exit("alloc_mref: mcef_fld");
+  }
 }
 
 /*!
@@ -565,13 +641,24 @@ void reorder_mref(ImageParameters *img)
  */
 void alloc_Refbuf (ImageParameters *img)
 {
-  int num_frames = fb->long_size+fb->short_size;
-  
-  if (Refbuf11) free (Refbuf11);
+ // int num_frames = fb->long_size+fb->short_size; 
+ //   if (Refbuf11) free (Refbuf11);
 
-  if (NULL == (Refbuf11 = malloc (num_frames * sizeof (pel_t *))))
-    no_mem_exit ("alloc_Refbuf: Refbuf11");
+  int num_frames = frm->long_size+frm->short_size;
+ 
+  if (Refbuf11_frm) free (Refbuf11_frm);
+
+  if (NULL == (Refbuf11_frm = malloc (num_frames * sizeof (pel_t *))))
+    no_mem_exit ("alloc_Refbuf: Refbuf11_frm");
   
+  if(input->InterlaceCodingOption != FRAME_CODING)
+  {
+    num_frames = fld->long_size+fld->short_size;
+    if (Refbuf11_fld) free (Refbuf11_fld);
+
+    if (NULL == (Refbuf11_fld = malloc (num_frames * sizeof (pel_t *))))
+      no_mem_exit ("alloc_Refbuf: Refbuf11_fld");
+  }
 }
 
 /*!
@@ -637,6 +724,7 @@ void copy2fb(ImageParameters *img)
   init_mref(img);
   init_Refbuf(img);
 
+
   for (j=0; j < (img->height+2*IMG_PAD_SIZE)*4; j++)
     memcpy(fb->picbuf_short[0]->mref[j],mref_P[j], (img->width+2*IMG_PAD_SIZE)*4);
   
@@ -646,9 +734,7 @@ void copy2fb(ImageParameters *img)
         memcpy(fb->picbuf_short[0]->mcef[uv][j],mcef_P[uv][j],img->width_cr);
 
   // Full pel represnetation for MV search
-
   memcpy (fb->picbuf_short[0]->Refbuf11, Refbuf11_P, (img->width*img->height));
-
 }
 
 /*!
@@ -663,7 +749,7 @@ void add_frame(ImageParameters *img)
   Frame *f;
 
   /* delete frames with same short term ID */
-  remove_short_term(img->pn);
+  if(mref==mref_frm) remove_short_term(img->pn);
 
 
   /* cycle frame buffer */

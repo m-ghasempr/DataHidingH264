@@ -116,6 +116,29 @@ static int BeginOfPictureOrSlice; // SOP or SOS
 int IFFEndOfFile = FALSE;
 int ThisAlternateTrack = 0;   // indicate which track in the file will be decoded.
 
+int isBigEndian=0;
+
+/*!
+ ************************************************************************
+ * \brief
+ *      checks if the System is big- or little-endian
+ * \return
+ *      0, little-endian
+ *      1, big-endian
+ ************************************************************************
+ */
+int testEndian()
+{
+  short s;
+  byte *p;
+
+  p=(byte*)&s;
+
+  s=1;
+
+  return (*p==0);
+}
+
 /*!
  ************************************************************************
  * \brief
@@ -510,6 +533,8 @@ int rdOneTrack( struct img_par* img, struct inp_par* inp, struct snr_par *snr, F
 
 //  f = fopen("dummy2.txt", "at");
 
+  numPictures=0;
+
   if ( 0 != fseek( fp, box_ath.storedpos, SEEK_SET ) ) return -1;
   if ( -1 == readfile( &numPictures, box_fh.numBytesInPictureCountMinusOne+1, 1, fp ) ) return -1;
   currPictureInfo.storedpos = ftell( fp );
@@ -656,9 +681,13 @@ int rdPictureInfo( FILE* fp )
   if ( cd == 0x80 ) currPictureInfo.intraPictureFlag = 1;
   else currPictureInfo.intraPictureFlag = 0;
 
-  num += readfile( &currPictureInfo.pictureOffset, box_fh.numBytesInPictureOffsetMinusTwo + 2, 1, fp );
-  num += readfile( &currPictureInfo.pictureDisplayTime, box_fh.numBytesInPictureDisplayTimeMinusOne+1, 1, fp );
-  num += readfile( &currPictureInfo.numPayloads, box_fh.numBytesInPayloadCountMinusOne+1, 1, fp );
+  currPictureInfo.pictureOffset=0;
+  currPictureInfo.pictureDisplayTime=0;
+  currPictureInfo.numPayloads=0;
+
+  num += readfile_s( &currPictureInfo.pictureOffset, sizeof(currPictureInfo.pictureOffset), box_fh.numBytesInPictureOffsetMinusTwo + 2, 1, fp );
+  num += readfile_s( &currPictureInfo.pictureDisplayTime, sizeof(currPictureInfo.pictureDisplayTime), box_fh.numBytesInPictureDisplayTimeMinusOne+1, 1, fp );
+  num += readfile_s( &currPictureInfo.numPayloads, sizeof(currPictureInfo.numPayloads), box_fh.numBytesInPayloadCountMinusOne+1, 1, fp );
 
   if ( num != (unsigned)(1+box_fh.numBytesInPictureOffsetMinusTwo + 2 +
     box_fh.numBytesInPictureDisplayTimeMinusOne+1 +
@@ -696,7 +725,8 @@ int rdPayloadInfo( struct img_par *img, struct inp_par* inp, PayloadInfo* pp, FI
 
   fseek( fp, pp->storedpos, SEEK_SET );
 
-  if ( -1 == readfile( &pp->payloadSize, box_fh.numBytesInPayloadSizeMinusOne+1, 1, fp ) ) return -1;
+  pp->payloadSize=0;
+  if ( -1 == readfile_s( &pp->payloadSize, sizeof (pp->payloadSize), box_fh.numBytesInPayloadSizeMinusOne+1, 1, fp ) ) return -1;
   if ( -1 == readfile( &pp->headerSize, 1, 1, fp ) ) return -1;
   if ( -1 == readfile( &cd, 1, 1, fp ) ) return -1;
   pp->payloadType = (cd >> 4);
@@ -754,6 +784,8 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
   RMPNIbuffer_t *tmp_rmpni,*tmp_rmpni2;
   MMCObuffer_t *tmp_mmco,*tmp_mmco2;
   int done;
+  static int last_imgtr_frm=0,modulo_ctr_frm=0,last_imgtr_fld=0,modulo_ctr_fld=0;
+  static int last_imgtr_frm_b=0,modulo_ctr_frm_b=0,last_imgtr_fld_b=0,modulo_ctr_fld_b=0;
 
   buf = &(pp->buffer);
 
@@ -764,6 +796,13 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
   sym.mapping(sym.len, sym.inf, &(sym.value1), &(sym.value2));
   pp->parameterSet = sym.value1;
   IFFUseParameterSet( pp->parameterSet, img, inp );
+  buf->frame_bitoffset += sym.len;
+  bitptr += sym.len;
+
+  sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length );
+  sym.mapping(sym.len, sym.inf, &(sym.value1), &(sym.value2));
+  pp->structure = sym.value1;
+  currSlice->structure = img->structure = sym.value1;
   buf->frame_bitoffset += sym.len;
   bitptr += sym.len;
 
@@ -801,6 +840,61 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
   }  
   buf->frame_bitoffset += sym.len;
   bitptr += sym.len;
+
+#if 1
+  if (img->type <= INTRA_IMG || img->type >= SP_IMG_1) 
+  {
+    if (img->structure == FRAME)
+    {     
+      if(img->tr <last_imgtr_frm) 
+        modulo_ctr_frm++;
+      
+      last_imgtr_frm = img->tr;
+      img->tr_frm = img->tr + (256*modulo_ctr_frm);
+    }
+    else
+    {
+      if(img->tr <last_imgtr_fld) 
+        modulo_ctr_fld++;
+      
+      last_imgtr_fld = img->tr;
+      img->tr_fld = img->tr + (256*modulo_ctr_fld);
+    }
+  }
+  else
+  {
+    if (img->structure == FRAME)
+    {     
+      if(img->tr <last_imgtr_frm_b) 
+        modulo_ctr_frm_b++;
+      
+      last_imgtr_frm_b = img->tr;
+      img->tr_frm = img->tr + (256*modulo_ctr_frm_b);
+    }
+    else
+    {
+      if(img->tr <last_imgtr_fld_b) 
+        modulo_ctr_fld_b++;
+      
+      last_imgtr_fld_b = img->tr;
+      img->tr_fld = img->tr + (256*modulo_ctr_fld_b);
+    }
+  }
+  
+  if(img->type != B_IMG_MULT) {
+    img->pstruct_next_P = img->structure;
+    if(img->structure == TOP_FIELD)
+    {
+      img->imgtr_last_P = img->imgtr_next_P;
+      img->imgtr_next_P = img->tr_fld;
+    }
+    else if(img->structure == FRAME)
+    {
+      img->imgtr_last_P = img->imgtr_next_P;
+      img->imgtr_next_P = 2*img->tr_frm;
+    }
+  }
+#endif
 
   sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length );
   sym.mapping(sym.len, sym.inf, &(sym.value1), &(sym.value2));
@@ -1197,8 +1291,13 @@ int readSliceIFF( struct img_par* img, struct inp_par* inp )
  */
 int readfile( void* buf, size_t size, size_t count, FILE* fp ) 
 {
-  byte* p = (byte*)buf+size-1;
+  byte* p;
   int num = 0;
+    
+  if (isBigEndian)
+    p = (byte*)buf;
+  else
+    p = (byte*)buf+size-1;
 
   assert( fp != NULL );
   assert( buf != NULL );
@@ -1206,7 +1305,56 @@ int readfile( void* buf, size_t size, size_t count, FILE* fp )
 
   while ( size > 0 )
   {
-    if ( fread( p--, 1, 1, fp ) != 1 ) return -1;
+    if (isBigEndian)
+    {
+      if ( fread( p++, 1, 1, fp ) != 1 ) return -1;
+    }
+    else
+    {
+      if ( fread( p--, 1, 1, fp ) != 1 ) return -1;
+    }
+    size--;
+    num++;
+  }
+  return num;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *      read the data from file, bytes are in big Endian order.
+ *      to be used if buffers size differs from number of written bytes
+ * \return
+ *      how many bytes being read, if success
+ *      -1, otherwise
+ * \param outf
+ *      output file pointer
+ ************************************************************************
+ */
+int readfile_s( void* buf, size_t bufsize, size_t size, size_t count, FILE* fp ) 
+{
+  byte* p;
+  int num = 0;
+    
+  if (isBigEndian)
+    p = (byte*)buf+(bufsize-size);
+  else
+    p = (byte*)buf+size-1;
+
+  assert( fp != NULL );
+  assert( buf != NULL );
+  assert( count == 1 );
+
+  while ( size > 0 )
+  {
+    if (isBigEndian)
+    {
+      if ( fread( p++, 1, 1, fp ) != 1 ) return -1;
+    }
+    else
+    {
+      if ( fread( p--, 1, 1, fp ) != 1 ) return -1;
+    }
     size--;
     num++;
   }

@@ -97,6 +97,10 @@ typedef enum {
   TRUE
 } Boolean;
 
+typedef enum {
+  FRAME_CODING,
+  ADAPTIVE_CODING
+} CodingType;
 
 //! definition of H.26L syntax elements
 typedef enum {
@@ -234,7 +238,11 @@ typedef struct
 
 typedef struct
 {
+#ifndef USE_6_INTRA_MODES
+  BiContextTypePtr ipr_contexts [9];
+#else
   BiContextTypePtr ipr_contexts [6];
+#endif
   BiContextTypePtr cbp_contexts [2][3];
   BiContextTypePtr level_context[4*NUM_TRANS_TYPE];
   BiContextTypePtr run_context  [2*NUM_TRANS_TYPE];
@@ -332,7 +340,10 @@ typedef struct datapartition
 {
 
   Bitstream           *bitstream;
+  Bitstream           *bitstream_frm;   //!< frame stream buffer
+  Bitstream           *bitstream_fld;   //!< field stream buffer
   EncodingEnvironment ee_cabac;
+  EncodingEnvironment ee_cabac_frm; 
 
   int                 (*writeSyntaxElement)(SyntaxElement *, struct datapartition *);
                       /*!< virtual function;
@@ -359,11 +370,20 @@ typedef struct
 } Slice;
 
 
-// GH: global picture format dependend buffers, mem allocation in image.c
+// global picture format dependend buffers, mem allocation in image.c
+byte   **imgY_frm;               //!< Encoded luma images
+byte  ***imgUV_frm;              //!< Encoded croma images
+byte   **imgY_org_frm;           //!< Reference luma image
+byte  ***imgUV_org_frm;          //!< Reference croma image
+int   ***tmp_mv_frm;             //!< motion vector buffer
+int    **refFrArr_frm;           //!< Array for reference frames of each block
+
 byte   **imgY;               //!< Encoded luma images
 byte  ***imgUV;              //!< Encoded croma images
 byte   **imgY_org;           //!< Reference luma image
 byte  ***imgUV_org;          //!< Reference croma image
+int   ***tmp_mv;             //!< motion vector buffer
+int    **refFrArr;           //!< Array for reference frames of each block
 byte   **imgY_pf;            //!< Post filter luma image
 byte  ***imgUV_pf;           //!< Post filter croma image
 byte  ***mref;               //!< 1/4 pix luma
@@ -387,11 +407,76 @@ byte ***nextP_imgUV;
 pel_t **Refbuf11;            //!< 1/1th pel (full pel) reference frame buffer
 pel_t  *Refbuf11_P;          //!< 1/1th pel P picture buffer
 
+// global picture format dependend buffers, mem allocation in image.c (field picture)
+byte   **imgY_org_top;
+byte  ***imgUV_org_top;
+byte   **imgY_org_bot;
+byte  ***imgUV_org_bot;
+byte   **imgY_top;               //!< Encoded luma images
+byte  ***imgUV_top;              //!< Encoded croma images
+byte   **imgY_bot;               //!< Encoded luma images
+byte  ***imgUV_bot;              //!< Encoded croma images
+byte   **imgY_com;               //!< Encoded luma images
+byte  ***imgUV_com;              //!< Encoded croma images
+pel_t **Refbuf11_fld;            //!< 1/1th pel (full pel) reference frame buffer
+pel_t  *Refbuf11_P_top;          //!< 1/1th pel P picture buffer
+pel_t  *Refbuf11_P_bot;
+int    **refFrArr_top;           //!< Array for reference frames of each block
+int    **refFrArr_bot;           //!< Array for reference frames of each block
+
+// global picture format dependend buffers, mem allocation in image.c (field picture)
+byte  ***mref_fld;               //!< 1/4 pix luma
+byte ****mcef_fld;               //!< pix chroma
+
+// global picture format dependend buffers, mem allocation in image.c (frame buffer)
+byte  ***mref_frm;               //!< 1/4 pix luma
+byte ****mcef_frm;               //!< pix chroma
+
+// B pictures
+// motion vector : forward, backward, direct
+byte  **mref_P_top;              //!< for B-frames: 1/4 pix luma for next P picture
+byte ***mcef_P_top;              //!< for B-frames: pix chroma for next P picture
+byte  **mref_P_bot;              //!< for B-frames: 1/4 pix luma for next P picture
+byte ***mcef_P_bot;              //!< for B-frames: pix chroma for next P picture
+int   **fw_refFrArr_top;
+int   **bw_refFrArr_top;
+int   **fw_refFrArr_bot;
+int   **bw_refFrArr_bot;
+int   ***tmp_mv_top;             //!< motion vector buffer
+int   ***tmp_mv_bot;             //!< motion vector buffer
+
+// global picture format dependend buffers, mem allocation in image.c (frame buffer)
+byte   **imgY_org_frm;
+byte  ***imgUV_org_frm;
+byte   **imgY_frm;               //!< Encoded luma images
+byte  ***imgUV_frm;              //!< Encoded croma images
+pel_t **Refbuf11_frm;            //!< 1/1th pel (full pel) reference frame buffer
+pel_t  *Refbuf11_P_frm;          //!< 1/1th pel P picture buffer
+int    **refFrArr_frm;           //!< Array for reference frames of each block
+int   ***tmp_mv_frm;             //!< motion vect
+int   direct_mode;
+
+// B pictures
+// motion vector : forward, backward, direct
+byte  **mref_P_frm;              //!< for B-frames: 1/4 pix luma for next P picture
+byte ***mcef_P_frm;              //!< for B-frames: pix chroma for next P picture
+int   **fw_refFrArr_frm;
+int   **bw_refFrArr_frm;
+
+// Buffers for rd optimization with packet losses, Dim. Kontopodis
+/* int  **resY;             //!< Residue of Luminance
+byte ***decY;            //!< Decoded values at the simulated decoders
+byte ****decref;         //!< Reference frames of the simulated decoders
+byte ***decY_best;       //!< Decoded frames for the best mode for all decoders
+byte **RefBlock;
+byte **status_map;
+byte **dec_mb_mode;
+byte **dec_mb_ref;*/
 byte **pixel_map;   //!< Shows the latest reference frame that is reliable for each pixel
 byte **refresh_map; //!< Stores the new values for pixel_map  
 int intras;         //!< Counts the intra updates in each frame.
 
-int  Bframe_ctr, frame_no, nextP_tr;
+int  Bframe_ctr, frame_no, nextP_tr_fld, nextP_tr_frm;
 int  tot_time;
 
 #define ET_SIZE 300      //!< size of error text buffer
@@ -428,6 +513,7 @@ typedef struct
 typedef struct
 {
   int no_frames;                //!< number of frames to be encoded
+  int no_fields;                //!< number of fields to be encoded
   int qp0;                      //!< QP of first frame
   int qpN;                      //!< QP of remaining frames
   int jumpd;                    //!< number of frames to skip in input sequence (e.g 2 takes frame 0,3,6,9...)
@@ -505,6 +591,8 @@ typedef struct
   char LeakyBucketParamFile[100];
 #endif
 
+  int InterlaceCodingOption;
+
   int LossRateA;
   int LossRateB;
   int LossRateC;
@@ -525,6 +613,7 @@ typedef struct
   int total_number_mb;
   int current_slice_nr;
   int type;
+  int pstruct;                 //!< picture structure
   int types;                   /*!< This is for SP-Pictures, since all the syntax elements for SP-Pictures
                                     are the same as P-pictures, we keep the img->type as P_IMG but indicate
                                     SP-Pictures by img->types */
@@ -578,7 +667,17 @@ typedef struct
   int **intra_block;
 
   int tr;
-  int refPicID;                         //<! temporal reference for reference frames (non-B frames), added by WYK
+  int refPicID;                        //!< temporal reference for reference frames (non-B frames)
+  int refPicID_fld;
+  int refPicID_frm; 
+  int fld_type;                        //!< top or bottom field
+  int fld_flag;
+  int direct_intraP_ref[4][4];
+  int pstruct_next_P;
+  int imgtr_next_P_frm;
+  int imgtr_last_P_frm;
+  int imgtr_next_P_fld;
+  int imgtr_last_P_fld;
 
   // B pictures
   int b_interval;
@@ -613,6 +712,8 @@ typedef struct
   int   mode_use_inter[2][MAXMODE];
 
   // B pictures
+  int   *mode_use_Bframe;
+  int   *bit_use_mode_Bframe;
   int   bit_ctr_P;
   int   bit_ctr_B;
   float bitrate_P;
@@ -632,7 +733,6 @@ extern InputParameters *input;
 extern ImageParameters *img;
 extern StatParameters *stat;
 extern SNRParameters *snr;
-
 
 // files
 FILE *p_dec,*p_dec_u,*p_dec_v;   //!< internal decoded image for debugging
@@ -674,6 +774,7 @@ int  find_sad2(int *intra_mode);
 int dct_luma2(int);
 
 void init_img();
+// void init_stat();
 void report();
 void information_init();
 void init_frame();
@@ -727,9 +828,23 @@ int  get_mem_DCcoeff  (int****);
 void free_mem_ACcoeff (int****);
 void free_mem_DCcoeff (int***);
 
+void put_buffer_frame();
+void init_field();
+void split_field_top();
+void split_field_bot();
+void put_buffer_top();
+void put_buffer_bot();
+int  decide_fld_frame(float snr_frame_Y, float snr_field_Y, int bit_field, int bit_frame, double lambda_picture);
+int  get_mem4global_buffers_field();
+void free_mem4global_buffers_field();
+void read_one_new_field();
+void combine_field();
+void find_distortion();
+void find_snr_avg();
+
 // Added for (re-) structuring the TML soft
 int   encode_one_frame();
-void  encode_one_slice(SyntaxElement *sym);
+void  encode_one_slice();
 void  malloc_slice();
 void  free_slice();
 void  init_slice();
@@ -816,17 +931,31 @@ int  writeMotionInfo2NAL_Bframe();
 int  BlkSize2CodeNumber(int blc_size_h, int blc_size_v);
 
 // Introduced for 1/8-pel
+void interpolate_frame();
 void interpolate_frame_to_fb();
 void interpolate_frame_to_P_buffer();
 void oneeighthpix(int prior_B_frame);
 
 void InitRefbuf ();
 void InitMotionVectorSearchModule();
+void InitRefbuf_fld ();
+void copy2mref_fld();
+void store_field_MV(int frame_number);
 
 #endif
 
 void  SetRefFrameInfo (int, int);
 
+void frame_picture(int *bits_frm, float *dis_frm_y, float *dis_frm_u, float *dis_frm_v);
+void field_picture(int *bits_fld, float *dis_fld_y, float *dis_fld_u, float *dis_fld_v);
+void top_field_picture(int *bits_fld);
+void bottom_field_picture(int *bits_fld);
+void distortion_fld(float *dis_fld_y, float *dis_fld_u, float *dis_fld_v);
+void picture_structure_decision(int bit_frame, int bit_field, float snr_frame, float snr_field);
+void field_mode_buffer(int bit_field, float snr_field_y, float snr_field_u, float snr_field_v);
+void frame_mode_buffer(int bit_frame, float snr_frame_y, float snr_frame_u, float snr_frame_v);
+void set_ref_field(int *k);
+void rotate_buffer();
 
 int   writeLumaCoeff4x4     (int, int, int);
 int   writeCBPandLumaCoeff  ();
@@ -872,4 +1001,7 @@ void UpdatePixelMap();
 void  ClearFastFullIntegerSearch    ();
 void  ResetFastFullIntegerSearch    ();
 #endif
+
+int temp_byte_pos;
+int temp_bits_to_go;
 

@@ -3,15 +3,35 @@ JM Reference Software Manual
 
 please send comments and additions to suehring@hhi.de
 
-1. Command line parameters
-2. Input/Output file format
-3. Configuration files
+1. Compilation
+2. Command line parameters
+3. Input/Output file format
+4. Configuration files
 
 
-1. Command line parameters
+1. Compilation
+--------------
+
+1.1 Windows
+-----------
+  
+  A workspace for MS Visual C++ is provided with the name "tml.dsw". It contains
+  the encoder and decoder projects.
+
+
+1.2 Unix
+-----------
+
+  Before compiling in a UNIX environment please run the "unixprep.sh" script which
+  will remove the DOS LF characters from the files and create object directories.
+
+  Makefiles for GNU make are provided in the lencod and ldecod directory.
+
+
+2. Command line parameters
 --------------------------
 
-1.1 Encoder
+2.1 Encoder
 -----------
 
     lencod.exe [-f file] [-p parameter=value]
@@ -32,7 +52,7 @@ please send comments and additions to suehring@hhi.de
              be whitespace between -f and -p commands and their respecitive 
              parameters.
 
-1.2 Decoder
+2.2 Decoder
 -----------
 
     ldecod.exe decoder.cfg
@@ -41,14 +61,14 @@ please send comments and additions to suehring@hhi.de
   decoding parameters are read from this file.
 
 
-2. Input/Output file format
+3. Input/Output file format
 ---------------------------
 
   The source video material is read from raw YUV 4:2:0 data files.
   For output the same format is used.
 
 
-3. Configuration files
+4. Configuration files
 ----------------------
 
   Sample encoder and decode configuration files are provided in the bin/ directory.
@@ -56,7 +76,7 @@ please send comments and additions to suehring@hhi.de
   
   The generic structure is explained here.
 
-3.1 Encoder
+4.1 Encoder
 -----------
   <ParameterName> = <ParameterValue> # Comments
 
@@ -80,7 +100,7 @@ please send comments and additions to suehring@hhi.de
   Known bug/Shortcoming:  zero-length strings (i.e. to signal an non-existing file
                           have to be coded as "".
  
-3.2 Decoder
+4.2 Decoder
 -----------
   <value>    #comment
 

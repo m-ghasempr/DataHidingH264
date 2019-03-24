@@ -38,6 +38,7 @@
  *     definitions for H.26L interim file format, as defined in VCEG-O58
  *  \author
  *      - Dong Tian                             <tian@cs.tut.fi>
+ *
  * ************************************************************************
  */
 
@@ -208,6 +209,7 @@ typedef struct sPayloadInfo
   unsigned INT16 parameterSet;
 
   unsigned INT8  pictureID;
+  unsigned INT8  pstruct;
   unsigned INT8  sliceID;
 
   unsigned INT8  sliceType;
@@ -276,7 +278,10 @@ extern PictureInfo currPictureInfo;
 extern AlternateTrackMediaBox box_atm;
 extern SwitchPictureBox box_sp;
 
+extern int isBigEndian;
 // functions
+
+int testEndian();
 
 // Functions on FileTypeBox
 int initFileTypeBox();
@@ -340,6 +345,7 @@ void freeAlternateTrackMediaBox();
 int initInterimFile();
 size_t terminateInterimFile(FILE* outf);
 size_t writefile( void* buf, size_t size, size_t count, FILE* fp );
+size_t writefile_s( void* buf, size_t bufsize, size_t size, size_t count, FILE* fp );
 
 #endif
 

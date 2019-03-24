@@ -111,6 +111,7 @@ typedef struct
 typedef struct
 {
   int ParameterSet;
+  int structure;
   int PictureID;
   int PictureNum;
   int SliceType;
@@ -151,4 +152,3 @@ void RTPProcessDataPartitionedSlice (struct img_par *img, struct inp_par *inp, F
 void CopyPartitionBitstring (struct img_par *img, RTPpacket_t *p, Bitstream *b, int dP);
 
 #endif
-
