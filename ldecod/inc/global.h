@@ -114,7 +114,8 @@ typedef enum
 typedef enum
 {
   PAR_OF_26L,   //<! Current TML description
-  PAR_OF_RTP    //<! RTP Packet Output format
+  PAR_OF_RTP,   //<! RTP Packet Output format
+  PAR_OF_IFF    //<! Interim File Format
 } PAR_OF_TYPE;
 
 //! Boolean Type

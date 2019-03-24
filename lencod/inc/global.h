@@ -87,7 +87,8 @@ typedef enum
 typedef enum
 {
   PAR_OF_26L,    //!< Current TML description
-  PAR_OF_RTP     //!< RTP packets in outfile
+  PAR_OF_RTP,    //!< RTP packets in outfile
+  PAR_OF_IFF     //!< Interim File Format
 } PAR_OF_TYPE;
 
 //! Boolean Type
@@ -675,7 +676,7 @@ int  encode_oneB_Frame();
 int  find_sad(int hadamard, int m7[16][16]);
 int  dct_luma(int pos_mb1,int pos_mb2,int *cnt_nonz);
 int  dct_luma_sp(int pos_mb1,int pos_mb2,int *cnt_nonz);
-int  copyblock_sp(int pos_mb1,int pos_mb2);
+void  copyblock_sp(int pos_mb1,int pos_mb2);
 int  dct_chroma(int uv,int i11);
 int  dct_chroma_sp(int uv,int i11);
 int  motion_search(int isi);
@@ -684,9 +685,6 @@ void levrun_linfo_intra(int level,int run,int *len,int *info);
 void levrun_linfo_inter(int level,int run,int *len,int *info);
 int  sign(int a,int b);
 void intrapred_chroma(int,int,int uv);
-#ifndef NO_RDQUANT
-void rd_quant(int no_coeff,int *coeff);
-#endif
 void intrapred_luma_2();
 int  find_sad2(int *intra_mode);
 void dct_luma2(int);
@@ -731,6 +729,7 @@ void  CheckAvailabilityOfNeighbors();
 int   writeMotionInfo2NAL_Pframe();
 void  writeCBPandCoeffs2NAL();
 int   writeSyntaxElement_UVLC(SyntaxElement *se, DataPartition *this_dataPart);
+int   writeSyntaxElement2Buf_UVLC(SyntaxElement *se, Bitstream* this_streamBuffer );
 void  writeUVLC2buffer(SyntaxElement *se, Bitstream *currStream);
 int   symbol2uvlc(SyntaxElement *se);
 void  n_linfo(int n, int *len,int *info);

@@ -67,6 +67,7 @@
 #include "image.h"
 #include "refbuf.h"
 #include "mbuffer.h"
+#include "encodeiff.h"
 
 #ifdef _ADAPT_LAST_GROUP_
 int *last_P_no;
@@ -132,6 +133,13 @@ int encode_one_frame()
 
   if (img->type == B_IMG)
     Bframe_ctr++;
+
+  // for Interim File Format output
+  if ( input->of_mode == PAR_OF_IFF )
+  {
+    box_ath.numPictures++;  // update header of AlternateTrackHeaderClump
+    initPictureInfo();
+  }
 
   while (end_of_frame == FALSE) // loop over slices
   {
@@ -226,6 +234,12 @@ int encode_one_frame()
   }
   stat->bit_ctr_n=stat->bit_ctr;
 
+  // for Interim File Format output
+  if ( input->of_mode == PAR_OF_IFF )
+  {
+    wrPictureInfo( box_ath.fpMeta );  // write the picture info to a temporary file
+    freePictureInfo();
+  }
 
   if(img->number == 0)
     return 0;
@@ -330,6 +344,8 @@ void init_frame()
   {
     img->refPicID ++;
     img->tr=img->number*(input->jumpd+1);
+
+    box_s.lastFrameNr = img->tr;  // serve as the duration of the segment.
 
 #ifdef _ADAPT_LAST_GROUP_
     if (input->last_frame && img->number+1 == input->no_frames)
@@ -446,7 +462,7 @@ void init_slice()
     // the buffer is initialized to start at zero.
 
 
-    if (input->symbol_mode == UVLC && input->of_mode == PAR_OF_26L)    // Stw: added PAR_OF_26L check
+    if (input->symbol_mode == UVLC && (input->of_mode == PAR_OF_26L /*|| input->of_mode == PAR_OF_IFF */ ))    // Stw: added PAR_OF_26L check
     {
       currStream = dataPart->bitstream;
       currStream->bits_to_go  = currStream->stored_bits_to_go;
@@ -480,6 +496,8 @@ void read_one_new_frame()
   else
   {
     frame_no = img->number*(input->jumpd+1);
+    if ( input->of_mode == PAR_OF_IFF )
+      box_ati.info[0].last_frame = frame_no;
 #ifdef _ADAPT_LAST_GROUP_
       if (input->last_frame && img->number+1 == input->no_frames)
         frame_no=input->last_frame;

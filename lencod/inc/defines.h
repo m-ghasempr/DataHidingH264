@@ -50,9 +50,13 @@
 #ifndef _DEFINES_H_
 #define _DEFINES_H_
 
-#define VCEG_M79_PICTURE_HEADER
+#define _EXP_GOLOMB
 
-#define NO_RDQUANT
+// Constants for the interim file format
+#define WORKING_DRAFT_MAJOR_NO 0    // inidicate the working draft version number
+#define WORKING_DRAFT_MINOR_NO 4
+#define INTERIM_FILE_MAJOR_NO 0     // indicate interim file format version number
+#define INTERIM_FILE_MINOR_NO 0
 
 #define _FAST_FULL_ME_
 #define _FULL_SEARCH_RANGE_
@@ -70,6 +74,10 @@
 
 #define absm(A) ((A)<(0) ? (-(A)):(A)) //!< abs macro, faster than procedure
 #define MAX_VALUE       999999   //!< used for start value for some variables
+
+// Quantization parameter range
+#define MIN_QP          -8
+#define MAX_QP          39
 
 // Picture types
 #define INTRA_IMG       0   //!< I frame

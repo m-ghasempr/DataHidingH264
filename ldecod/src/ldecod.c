@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 1.1
+ *     JM 1.4
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -118,13 +118,14 @@
 #include "memalloc.h"
 #include "mbuffer.h"
 #include "leaky_bucket.h"
+#include "decodeiff.h"
 
 #if _ERROR_CONCEALMENT_
 #include "erc_api.h"
 #endif
 
 #define TML         "1"
-#define VERSION     "1.10"
+#define VERSION     "1.40"
 #define LOGFILE     "log.dec"
 #define DATADECFILE "data.dec"
 #define TRACEFILE   "trace_dec.txt"
@@ -143,6 +144,7 @@ extern ercVariables_t *erc_errorVar;
  */
 int main(int argc, char **argv)
 {
+  extern FILE* bits;
   struct inp_par    *inp;         // input parameters from input configuration file
   struct snr_par    *snr;         // statistics
   struct img_par    *img;         // image parameters
@@ -168,6 +170,15 @@ int main(int argc, char **argv)
     // Read the first RTP packet conmtaining a header packet, and set the initial parameter set
     RTPSequenceHeader (img, inp, bits);
   }
+  if (inp->of_mode == PAR_OF_IFF)
+  {
+    // Read the first boxes, and set the initial parameter set
+    if ( -1 == IFFSequenceHeader( img, inp, bits ) )
+    {
+      snprintf(errortext, ET_SIZE, "Error: The input file is not in the Interim File Format\n");
+      error(errortext, 300);
+    }
+  }
 // printf ("In main: some pictrue information: %d x %d, with %d reference frames %d\n", img->height, img->width, img->buf_cycle, inp->buf_cycle);
 
   img->UseConstrainedIntraPred = inp->UseConstrainedIntraPred;
@@ -188,7 +199,10 @@ int main(int argc, char **argv)
 
   // time for total decoding session
   tot_time = 0;
-  while (decode_one_frame(img, inp, snr) != EOS);
+  if ( inp->of_mode == PAR_OF_IFF )
+    while ( parse_one_box(img, inp, snr, bits) != -1 );
+  else
+    while (decode_one_frame(img, inp, snr) != EOS);
 
   // B PICTURE : save the last P picture
   write_prev_Pframe(img, p_out);
@@ -200,10 +214,12 @@ int main(int argc, char **argv)
   free_frame_buffers(inp, img);
   free_global_buffers(inp, img);
 
+  terminateInterimFile();
   CloseBitstreamFile();
 
   fclose(p_out);
-  fclose(p_ref);
+  if (p_ref)
+    fclose(p_ref);
 #if TRACE
   fclose(p_trace);
 #endif
@@ -314,6 +330,10 @@ void init_conf(struct inp_par *inp,
                                             // for three partitions.  In the RTP NAL, it can
                                             // be chanegd on a slice basis whether to use
                                             // one or three partitions
+    break;
+  case 2:
+    inp->of_mode = PAR_OF_IFF;
+    inp->partition_mode = PAR_DP_1;
     break;
   default:
     snprintf(errortext, ET_SIZE, "NAL mode %i is not supported", NAL_mode);
@@ -527,6 +547,55 @@ void malloc_slice(struct inp_par *inp, struct img_par *img)
 
   switch(inp->of_mode) // init depending on NAL mode
   {
+    case PAR_OF_IFF:
+      // Current File Format
+      img->currentSlice = (Slice *) calloc(1, sizeof(Slice));
+      if ( (currSlice = img->currentSlice) == NULL)
+      {
+        snprintf(errortext, ET_SIZE, "Memory allocation for Slice datastruct in NAL-mode %d failed", inp->of_mode);
+        error(errortext,100);
+      }
+      if (inp->symbol_mode == CABAC)
+      {
+        // create all context models
+        currSlice->mot_ctx = create_contexts_MotionInfo();
+        currSlice->tex_ctx = create_contexts_TextureInfo();
+      }
+
+      switch(inp->partition_mode)
+      {
+      case PAR_DP_1:
+        currSlice->max_part_nr = 1;
+        break;
+      case PAR_DP_3:
+        error("Data Partitioning Mode 3 in 26L-Format not supported",1);
+        break;
+      default:
+        error("Data Partitioning Mode not supported!",1);
+        break;
+      }
+
+      currSlice->partArr = (DataPartition *) calloc(1, sizeof(DataPartition));
+      if (currSlice->partArr == NULL)
+      {
+        snprintf(errortext, ET_SIZE, "Memory allocation for Data Partition datastruct in NAL-mode %d failed", inp->of_mode);
+        error(errortext, 100);
+      }
+      dataPart = currSlice->partArr;
+      dataPart->bitstream = (Bitstream *) calloc(1, sizeof(Bitstream));
+      if (dataPart->bitstream == NULL)
+      {
+        snprintf(errortext, ET_SIZE, "Memory allocation for Bitstream datastruct in NAL-mode %d failed", inp->of_mode);
+        error(errortext, 100);
+      }
+      dataPart->bitstream->streamBuffer = (byte *) calloc(buffer_size, sizeof(byte));
+      if (dataPart->bitstream->streamBuffer == NULL)
+      {
+        snprintf(errortext, ET_SIZE, "Memory allocation for bitstream buffer in NAL-mode %d failed", inp->of_mode);
+        error(errortext, 100);
+      }
+      return;
+    
     case PAR_OF_26L:
       // Current File Format
       img->currentSlice = (Slice *) calloc(1, sizeof(Slice));
@@ -657,6 +726,23 @@ void free_slice(struct inp_par *inp, struct img_par *img)
 
   switch(inp->of_mode) // init depending on NAL mode
   {
+    case PAR_OF_IFF:
+      dataPart = currSlice->partArr;  // only one active data partition
+      if (dataPart->bitstream->streamBuffer != NULL)
+        free(dataPart->bitstream->streamBuffer);
+      if (dataPart->bitstream != NULL)
+        free(dataPart->bitstream);
+      if (currSlice->partArr != NULL)
+        free(currSlice->partArr);
+      if (inp->symbol_mode == CABAC)
+      {
+        // delete all context models
+        delete_contexts_MotionInfo(currSlice->mot_ctx);
+        delete_contexts_TextureInfo(currSlice->tex_ctx);
+      }
+      if (currSlice != NULL)
+        free(img->currentSlice);
+      break;
     case PAR_OF_26L:
       // Current File Format
       dataPart = currSlice->partArr;  // only one active data partition

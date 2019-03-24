@@ -114,10 +114,15 @@ static int TypeOfStartCode (byte *Buf)
 {
   int info;
 
+#ifdef _EXP_GOLOMB
+  // A bit of optimization first: an EXP Golomb start code starts always with 2 zero bytes and a '1' byte
+  if ((Buf[0] != 0) || (Buf[1] != 1) || (Buf[2] != 0))
+    return -1;
+#else
   // A bit of optimization first: a start code starts always with 3 zero bytes
   if ((Buf[0] != 0) || (Buf[1] != 0) || (Buf[2] != 0))
     return -1;
-
+#endif
   if (31 != GetVLCSymbol (Buf, 0, &info, MAX_CODED_FRAME_SIZE))
   {
     return -1;

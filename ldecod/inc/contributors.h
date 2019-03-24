@@ -120,7 +120,6 @@
       Ye-Kui Wang                     <wangy@cs.tut.fi>
       Tampere University of Technology
       Tampere International Center for Signal Processing
-      Hermiankatu 12 A
       33720 Tampere, Finland
 
       Ari Hourunranta                 <ari.hourunranta@nokia.com>
@@ -130,6 +129,22 @@
 
       Yann Le Maguet                  <yann.lemaguet@philips.com>
       Philips Research France
+
+      Dong Tian                       <tian@cs.tut.fi>
+      Tampere University of Technology
+      Tampere International Center for Signal Processing
+      33720 Tampere, Finland
+
+      Miska M. Hannuksela             <miska.hannuksela@nokia.com>
+      Nokia Corporation / Nokia Mobile Phones
+      P.O. Box 88
+      33721 Tampere, Finland
+            
+      Karsten Suehring                <suehring@hhi.de>
+      Heinrich-Hertz-Institute
+      Einsteinufer 37
+      10587 Berlin
+      Germany
 
     \endverbatim
 */

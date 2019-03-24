@@ -60,6 +60,7 @@
 #include <string.h>    // strncpy
 #endif
 #include "rtp.h"
+#include "decodeiff.h"
 
 
 /*!
@@ -92,6 +93,23 @@ void start_slice(struct img_par *img, struct inp_par *inp)
 
   switch(inp->of_mode)
   {
+    case PAR_OF_IFF:
+      if (inp->symbol_mode == UVLC)
+      {
+        // Current TML File Format
+        nal_startcode_follows = uvlc_startcode_follows;
+        currSlice->readSlice = readSliceIFF;
+        currSlice->partArr[0].readSyntaxElement = readSyntaxElement_UVLC;
+      }
+      else
+      {
+        // CABAC File Format
+        nal_startcode_follows = cabac_startcode_follows;
+        currSlice->readSlice = readSliceIFF;
+        currSlice->partArr[0].readSyntaxElement = readSyntaxElement_CABAC;
+      }
+      break;
+
     case PAR_OF_26L:
 
       currSlice->dp_mode = PAR_DP_1; //other modes not supported

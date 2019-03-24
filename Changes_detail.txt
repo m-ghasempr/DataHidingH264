@@ -1,69 +1,65 @@
-Changes by HHI (Karsten Suehring)
----------------------------------
+VLC Changes (Lois Kerofsky)
+---------------------------
 
-* added ERPS Syntax and decoding functionality (RTP)
- 
-  - only RTP NAL (bitstream will follow)
-  - whole ERPS syntax should be decodable
-  - Encoder contains some sample code (see defines _CHECK_MULTI_BUFFER_1_ , _CHECK_MULTI_BUFFER_2_ )
-  - reference frame buffer changed:
-    -> mref, mcef, Refbuf11 have positive indexes always starting with "0" (no frame_cycle)
-    for details see mbuffer.c / mbuffer.h
+To implement the modifed VLC one functions in uvlc.c at the encoder 
+was modified.  Also one function in uvlc.c at the decoder was modified.  
+I did not go to the effort of changing file and variable names to 
+replace UVLC with VLC.  This could be considered.
 
- Note:
-   - The routines have been tested, but I may have missed to correct a reference counter
-   - Be careful using the long term buffer - Do to the missing encoder infrastructure they
-     could not be tested very well
-   - There are some small memory leaks remaining (fixes will follow)
-   - remapping of picture numbers has a bug if used twice (encoder/decoder mismatch)
+Functions modified are included within a define _EXP_GOLOMB.  This is 
+defined at the top of each uvlc.c file.  The modified functions are:
 
+ldecod\src\uvlc.c GetVLCSymbol
+lencod\src\uvlc.c symbol2uvlc
 
-* cleaned up memory allocation
+I tested the code with an encode decode pair with _EXP_GOLOMB defined 
+and a second pair with them undefined and the reconstructed images at 
+the decoder are identical.  Once satisfied it is easy to remove the prior 
+code.
 
-  - get_mem[23]D funtion moved into a separate file in lcommon directory (for use in
-    both encoder and decoder)
-  - added free_mem[23]D functions
-    (TODO: uses these at the encoder)
+I found two issues with the encoder.  The encoder trace file trace_enc 
+does not contain correct bitstrings representing the codewords.  The trace 
+of the original code gives many all zero codewords. The second issue I 
+found is in the use of the function symbol2uvlc.  In some cases, this 
+function is called with a syntax element having more info bits than the 
+length of the code word.  The original code used only the last bits of info 
+in building the codeword.  In the modified code I mask out the last bits 
+before building the codeword.  This bug could be traced further.
 
-* Cleaned up bitstream file
+In my tests with doxygen I needed to disable the dot tool.
+HAVE_DOT = NO
 
-  - we only have one start code (slice start code)
-  - moved PictureHeader funtionality to SliceHeader
-    (we don't have picture headers, so don't confuse people with old function names)
+(KS) Note: dot is part of the ATT Graphviz tools available at
+           http://www.research.att.com/sw/tools/graphviz
 
+Transform and Quantizer (Antti Hallapuro)
+-----------------------------------------
 
+In addition to transform changes, I have also extended quantization range 
+to [-8,39]. JVT decided that range should be extended, but the amount of 
+extension was not quite clear. I decided to follow Sony's proposal since 
+that is the only submission on QP range extension that I know. So, list 
+of changes includes:
 
-Changes by TUM (Tobias Oelbaum) / TUB (Stephan Wenger)
-------------------------------------------------------
+- New transform and quantization
+- Extension of QP range to [-8,39]
+- Removal of some unused code
 
-* Added data partitioning for RTP
+I had some trouble with RD-optimized mode decision and extended QP range. 
+Mode decision was not designed to work beyond QP range [0,33] so I had to 
+put in a hack that prevents performance drop when encoding beyond that range. 
+In fucntion vcalled RD_Mode_Decision lambda is now computed as
 
-* Changed detection of lost slices and lost partitions
+if (img->qp >= 0 && img->qp < 34)
+  rdopt->lambda_mode = 5.0 * exp (0.1 * qp) * (qp + 5.0) / (34.0 - qp);
+else
+  rdopt->lambda_mode = 0.9*pow(2, qp/3.0);
 
-* Removed img->slice_numbers (same information is given in img->mb_data.slice_nr)
-* Removed Slice->slice_nr (same information is given in img->current_slice_nr)
+"rdopt->lambda_mode = 0.9*pow(2, qp/3.0)" seems to works fine for whole QP 
+range although I did't test it extensively. I propose using that formula 
+exclusively.
 
-* Added some lines code to enable correct decoding if _ERROR_CONCEALMENT_  is set to 0 
+There seems to be a bug in jm 1.2 decoder. If I encode mobile_cif at QP 0 
+and wihout RD-optimizations and decode resulting bitstream the decoder 
+crashes. It increased size of the decoding buffer, but this didn't fix the bug.
 
-* Devided SE_DELTA_QUANT into SE_DELTA_QUANT_INTER and SE_DELTA_QUANT_INTRA to enable correct decoding in case of packet losses and data partitioning.
-  SE_DELTA_QUANT_INTER is assigned to the partition containing the inter coefficients
-  SE_DELTA_QUANT_INTRA is assigned to the partition containing the intra coefficients
-
-* Moved SE_INTRAPREDMODE from the first partition to the partition containing the intra coefficients
-  In case data partitioning is chosen UseConstrainedIntraPred must be set to 1 (this is checked in PatchInp)
-
-* Adapted the simulation of the distortion at the decoder in the encoder to the error concealment techniques available if data partitioning was choosen
-* Added new input parameters
-  - LossRateA 
-  - LossRateB
-  - LossRateC
-
-* Bugfix frame numbers in case of B-Frames 
-
-* Added Parameter NumberBFrames to RTP InfoSet (necessary for detecting lost frames)
-
-
-Known Bugs:
-
-- Marker bit is not written correctly (to Stephan Wenger)
-- Data Partitioning does not work with CABAC

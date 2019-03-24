@@ -403,30 +403,30 @@ static int ParameterNameToMapIndex (char *s)
 static void PatchInp ()
 {
   // consistency check of QPs
-  if (input->qp0 > 31 || input->qp0 < 0)
+  if (input->qp0 > MAX_QP || input->qp0 < MIN_QP)
   {
     snprintf(errortext, ET_SIZE, "Error input parameter quant_0,check configuration file");
     error (errortext, 400);
   }
 
-  if (input->qpN > 31 || input->qpN < 0)
+  if (input->qpN > MAX_QP || input->qpN < MIN_QP)
   {
     snprintf(errortext, ET_SIZE, "Error input parameter quant_n,check configuration file");
     error (errortext, 400);
   }
 
-  if (input->qpB > 31 || input->qpB < 0)
+  if (input->qpB > MAX_QP || input->qpB < MIN_QP)
   {
     snprintf(errortext, ET_SIZE, "Error input parameter quant_B,check configuration file");
     error (errortext, 400);
   }
 
-  if (input->qpsp > 31 || input->qpsp < 0)
+  if (input->qpsp > MAX_QP || input->qpsp < MIN_QP)
   {
     snprintf(errortext, ET_SIZE, "Error input parameter quant_sp,check configuration file");
     error (errortext, 400);
   }
-  if (input->qpsp_pred > 31 || input->qpsp_pred < 0)
+  if (input->qpsp_pred > MAX_QP || input->qpsp_pred < MIN_QP)
   {
     snprintf(errortext, ET_SIZE, "Error input parameter quant_sp_pred,check configuration file");
     error (errortext, 400);

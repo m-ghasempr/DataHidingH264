@@ -48,79 +48,14 @@
 
 #include "global.h"
 
-/*!  max number of double quant coefficients used for RD constrained quantization.
-     Set to 3 in the TML test model  */
-#define MAX_TWO_LEVEL_COEFF 3
-//! pow(2,MAX_TWO_LEVEL_COEFF), must be updated together with MAX_TWO_LEVEL_COEFF
-#define MTLC_POW            8
-
-#define QUANT_LUMA_SNG      0
-#define QUANT_LUMA_AC       1
-#define QUANT_LUMA_DBL      2
-#define QUANT_CHROMA_DC     3
-#define QUANT_CHROMA_AC     4
-
-
-
-int snr_arr[16][MTLC_POW];
-int level_arr[16][MTLC_POW+1];
-
-const int JQQ1=1048576; // = J20
-const int JQQ2= 524288;
-const int JQQ3= 349525;
-const int JQQ4= 174762;
-const int JQ4 = 471859;
-
-const int J13 = 8192;
-const int J19 = 524288;
-const int J20 = 1048576;
-
-extern const byte FILTER_STR[32][4];
-
-//! numbers used for quantization/dequantization.
-const int JQ[32][2] =
-{
-  {620,  3881  },
-  {553,  4351  },
-  {492,  4890  },
-  {439,  5481  },
-  {391,  6154  },
-  {348,  6914  },
-  {310,  7761  },
-  {276,  8718  },
-  {246,  9781  },
-  {219,  10987 },
-  {195,  12339 },
-  {174,  13828 },
-  {155,  15523 },
-  {138,  17435 },
-  {123,  19561 },
-  {110,  21873 },
-  { 98,  24552 },
-  { 87,  27656 },
-  { 78,  30847 },
-  { 69,  34870 },
-  { 62,  38807 },
-  { 55,  43747 },
-  { 49,  49103 },
-  { 44,  54683 },
-  { 39,  61694 },
-  { 35,  68745 },
-  { 31,  77615 },
-  { 27,  89113 },
-  { 24,  100253},
-  { 22,  109366},
-  { 19,  126635},
-  { 17,  141533},
-};
 
 //! make chroma QP from quant
-const int QP_SCALE_CR[32]=
+const int QP_SCALE_CR[40]=
 {
    0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15,
-  16,17,17,18,19,20,20,21,22,22,23,23,24,24,25,25
+  16,17,17,18,19,20,20,21,22,22,23,23,24,24,25,25,
+  26,26,26,27,27,27,28,28
 };
-
 
 
 //! single scan pattern

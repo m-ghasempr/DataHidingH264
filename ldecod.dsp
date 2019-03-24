@@ -107,6 +107,10 @@ SOURCE=.\ldecod\src\cabac.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\ldecod\src\decodeiff.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\ldecod\src\erc_api.c
 # End Source File
 # Begin Source File
@@ -200,6 +204,10 @@ SOURCE=.\ldecod\inc\cabac.h
 # Begin Source File
 
 SOURCE=.\ldecod\inc\contributors.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ldecod\inc\decodeiff.h
 # End Source File
 # Begin Source File
 

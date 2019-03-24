@@ -61,7 +61,7 @@
 #include "mbuffer.h"
 #include "elements.h"
 #include "macroblock.h"
-
+#include "decodeiff.h"
 
 /*!
  ************************************************************************
@@ -200,6 +200,7 @@ int exit_macroblock(struct img_par *img,struct inp_par *inp)
 {
   const int number_mb_per_row = img->width / MB_BLOCK_SIZE ;
   Slice *currSlice = img->currentSlice;
+  static int mbnr = 0;
 
   // Update coordinates of the next macroblock
   img->mb_x++;
@@ -229,8 +230,7 @@ int exit_macroblock(struct img_par *img,struct inp_par *inp)
   // ask for last mb in the slice  UVLC
   else
   {
-    if(nal_startcode_follows(img, inp) == FALSE)
-      return FALSE;
+    if(nal_startcode_follows(img, inp) == FALSE) return FALSE;
     if(img->type == INTRA_IMG || img->type == SP_IMG_1|| img->type == SP_IMG_MULT || inp->symbol_mode == CABAC)
       return TRUE;
     if(img->cod_counter<=0)
@@ -805,6 +805,11 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
   int block_x,block_y;
   int scan_mode, start_scan;
 
+  int qp_per    = (img->qp-MIN_QP)/6;
+  int qp_rem    = (img->qp-MIN_QP)%6;
+  int qp_per_uv = ((img->qp<0?img->qp:QP_SCALE_CR[img->qp])-MIN_QP)/6;
+  int qp_rem_uv = ((img->qp<0?img->qp:QP_SCALE_CR[img->qp])-MIN_QP)%6;
+
   // read CBP if not new intra mode
   if (img->imod != INTRA_MB_NEW)
   {
@@ -863,7 +868,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
 #endif
      dP->readSyntaxElement(&currSE,img,inp,dP);
      currMB->delta_quant = currSE.value1;
-     img->qp= (img->qp+currMB->delta_quant+32)%32;
+     img->qp= (img->qp-MIN_QP+currMB->delta_quant+(MAX_QP-MIN_QP+1))%(MAX_QP-MIN_QP+1)+MIN_QP;
     }
   }
   else
@@ -904,7 +909,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
     
     dP->readSyntaxElement(&currSE,img,inp,dP);
     currMB->delta_quant = currSE.value1;
-    img->qp= (img->qp+currMB->delta_quant+32)%32;
+    img->qp= (img->qp-MIN_QP+currMB->delta_quant+(MAX_QP-MIN_QP+1))%(MAX_QP-MIN_QP+1)+MIN_QP;
 
     for (i=0;i<BLOCK_SIZE;i++)
       for (j=0;j<BLOCK_SIZE;j++)
@@ -1044,9 +1049,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
                   currMB->cbp_blk |= 1 << ((j<<2) + i) ;
                   i0=SNGL_SCAN[coef_ctr][0];
                   j0=SNGL_SCAN[coef_ctr][1];
-
-
-                  img->cof[i][j][i0][j0]=level*JQ1[img->qp];
+                  img->cof[i][j][i0][j0]=level*dequant_coef[qp_rem][i0][j0]<<qp_per;
                 }
               }
             }
@@ -1092,7 +1095,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
                     i0=DBL_SCAN[coef_ctr][0][scan_loop_ctr];
                     j0=DBL_SCAN[coef_ctr][1][scan_loop_ctr];
 
-                    img->cof[i][j][i0][j0]=level*JQ1[img->qp];
+                    img->cof[i][j][i0][j0]=level*dequant_coef[qp_rem][i0][j0]<<qp_per;
                   }
                 }
               }
@@ -1164,16 +1167,16 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
           // bug early when testing in error prone environments (or when testing NAL
           // functionality).
           assert (coef_ctr < 4);
-          img->cofu[coef_ctr]=level*JQ1[QP_SCALE_CR[img->qp]];
+          img->cofu[coef_ctr]=level*dequant_coef[qp_rem_uv][0][0]<<qp_per_uv;
         }
       }
 
-      if ((img->type==SP_IMG_1 || img->type==SP_IMG_MULT) && (currMB->mb_imode == INTRA_MB_INTER))
+      if (((img->type==SP_IMG_1 || img->type==SP_IMG_MULT) && (currMB->mb_imode == INTRA_MB_INTER)))
       {
-        img->cof[0+ll][4][0][0]=img->cofu[0]/JQ1[QP_SCALE_CR[img->qp]];
-        img->cof[1+ll][4][0][0]=img->cofu[1]/JQ1[QP_SCALE_CR[img->qp]];
-        img->cof[0+ll][5][0][0]=img->cofu[2]/JQ1[QP_SCALE_CR[img->qp]];
-        img->cof[1+ll][5][0][0]=img->cofu[3]/JQ1[QP_SCALE_CR[img->qp]];
+        img->cof[0+ll][4][0][0]=(img->cofu[0]>>qp_per_uv)/dequant_coef[qp_rem_uv][0][0];
+        img->cof[1+ll][4][0][0]=(img->cofu[1]>>qp_per_uv)/dequant_coef[qp_rem_uv][0][0];
+        img->cof[0+ll][5][0][0]=(img->cofu[2]>>qp_per_uv)/dequant_coef[qp_rem_uv][0][0];
+        img->cof[1+ll][5][0][0]=(img->cofu[3]>>qp_per_uv)/dequant_coef[qp_rem_uv][0][0];
       }
       else
       {
@@ -1239,7 +1242,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
                 coef_ctr=coef_ctr+run+1;
                 i0=SNGL_SCAN[coef_ctr][0];
                 j0=SNGL_SCAN[coef_ctr][1];
-                img->cof[i][j][i0][j0]=level*JQ1[QP_SCALE_CR[img->qp]];
+                img->cof[i][j][i0][j0]=level*dequant_coef[qp_rem_uv][i0][j0]<<qp_per_uv;
               }
             }
           }

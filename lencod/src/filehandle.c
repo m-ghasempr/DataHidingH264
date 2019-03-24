@@ -58,6 +58,7 @@
 #include "global.h"
 #include "header.h"
 #include "rtp.h"
+#include "encodeiff.h"
 
 
 // Global Varibales
@@ -130,6 +131,9 @@ int start_sequence()
     case PAR_OF_RTP:
       len = RTPSequenceHeader(out);
       return 0;
+    case PAR_OF_IFF:
+      len = SequenceHeader(out);
+      return len;
       
     default:
       snprintf(errortext, ET_SIZE, "Output File Mode %d not supported", input->of_mode);
@@ -154,6 +158,10 @@ int terminate_sequence()
 
   switch(input->of_mode)
   {
+    case PAR_OF_IFF:
+      terminateInterimFile(out);
+      fclose (out);
+      return 0;
     case PAR_OF_26L:
       currStream = ((img->currentSlice)->partArr[0]).bitstream;
       if (input->symbol_mode == UVLC)
@@ -226,6 +234,46 @@ int start_slice(SyntaxElement *sym)
 
   switch(input->of_mode)
   {
+    case PAR_OF_IFF:    // for Interim File Format
+      header_len = 0;
+      if (input->symbol_mode == UVLC)
+      {
+        currStream = (currSlice->partArr[0]).bitstream;
+
+        assert (currStream->bits_to_go == 8);
+        assert (currStream->byte_buf == 0);
+        assert (currStream->byte_pos == 0);
+
+        currStream->header_len = header_len;
+        currStream->header_byte_buffer = currStream->byte_buf;
+
+        pCurrPayloadInfo = newPayloadInfo();
+        addOnePayloadInfo( pCurrPayloadInfo );
+      }
+      else
+      {                   // CABAC 
+        eep = &((currSlice->partArr[0]).ee_cabac);
+        currStream = (currSlice->partArr[0]).bitstream;
+
+        assert (currStream->bits_to_go == 8);
+        assert (currStream->byte_buf == 0);
+        assert (currStream->byte_pos == 0);
+        memset(currStream->streamBuffer, 0, 12);
+
+        pCurrPayloadInfo = newPayloadInfo();
+        addOnePayloadInfo( pCurrPayloadInfo );
+        
+        currStream->header_len = header_len;
+        currStream->header_byte_buffer = currStream->byte_buf;
+
+        arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos));
+        // initialize context models
+        init_contexts_MotionInfo(currSlice->mot_ctx, 1);
+        init_contexts_TextureInfo(currSlice->tex_ctx, 1);
+      }
+      return header_len;
+      break;
+
     case PAR_OF_26L:
       if (input->symbol_mode == UVLC)
       {
@@ -392,7 +440,64 @@ int terminate_slice()
   // Add termination symbol, etc.
   switch(input->of_mode)
   {
-    case PAR_OF_26L:
+     case PAR_OF_IFF:
+      assert( box_atm.fpMedia != NULL );
+
+      if (input->symbol_mode == UVLC)
+      {
+        // Enforce byte alignment of next header: zero bit stuffing
+        currStream = (currSlice->partArr[0]).bitstream;
+
+        if (currStream->bits_to_go < 8)
+        { // trailing bits to process
+          currStream->byte_buf <<= currStream->bits_to_go;
+          currStream->streamBuffer[currStream->byte_pos++]=currStream->byte_buf;
+          currStream->bits_to_go = 8;
+        }
+
+        bytes_written = currStream->byte_pos;
+        stat->bit_ctr += 8*bytes_written;     // actually written bits
+        fwrite (currStream->streamBuffer, 1, bytes_written, box_atm.fpMedia );
+
+        currStream->stored_bits_to_go = 8; // store bits_to_go
+        currStream->stored_byte_buf   = currStream->byte_buf;   // store current byte
+        currStream->stored_byte_pos   = 0; // reset byte position
+      }
+      else
+      {
+        // CABAC File Format
+        eep = &((currSlice->partArr[0]).ee_cabac);
+        currStream = (currSlice->partArr[0]).bitstream;
+        // terminate the arithmetic code
+        arienco_done_encoding(eep);
+
+        if (currStream->bits_to_go < 8) // trailing bits to process
+        {
+          currStream->byte_buf <<= currStream->bits_to_go;
+          currStream->streamBuffer[currStream->byte_pos++]=currStream->byte_buf;
+          currStream->bits_to_go = 8;
+        }
+        bytes_written = currStream->byte_pos; // number of written bytes
+        stat->bit_ctr += 8*bytes_written;     // actually written bits
+        fwrite (currStream->streamBuffer, 1, bytes_written, box_atm.fpMedia );
+
+        // save the last MB number here
+        pCurrPayloadInfo->lastMBnr = img->current_mb_nr;
+
+        // Provide the next partition with a 'fresh' buffer
+        currStream->stored_bits_to_go = 8;
+        currStream->stored_byte_buf   = 0;
+        currStream->stored_byte_pos   = 0;
+        currStream->bits_to_go = 8;
+        currStream->byte_buf   = 0;
+        currStream->byte_pos   = 0;
+      }
+
+      currPictureInfo.currPictureSize += bytes_written;  // caculate the size of currentPicture
+      pCurrPayloadInfo->payloadSize = bytes_written;
+      return 0;
+
+   case PAR_OF_26L:
 
 
       if (input->symbol_mode == UVLC)

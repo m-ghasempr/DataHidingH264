@@ -49,19 +49,24 @@
 #ifndef _DEFINES_H_
 #define _DEFINES_H_
 
+#define _EXP_GOLOMB
 
 #define _ERROR_CONCEALMENT_   1   //!< 0: off; 1: on
 #define MAX_SLICES_PER_FRAME  396
 #define _ADAPT_LAST_GROUP_
 
 #define MAX_INFO_WORD  300000               //!< for one frame
-#define MAX_CODED_FRAME_SIZE 200000         //!< bytes for one frame
+#define MAX_CODED_FRAME_SIZE 400000         //!< bytes for one frame
 #define MAXIMUM_UVLC_CODEWORD_PER_HEADER 20 //!< UVLC codewords per combined picture/slice header maximum
 #define TRACE           1                   //!< 0:Trace off 1:Trace on
 #define _LEAKYBUCKET_
 
 #define absm(A) ((A)<(0) ? (-(A)):(A))      //!< abs macro, faster than procedure
 #define MAX_VALUE       999999              //!< used for start value for some variables
+
+// Quantization parameter range
+#define MIN_QP          -8
+#define MAX_QP          39
 
 #define INTER_IMG_1     0
 #define INTER_IMG_MULT  1
@@ -173,4 +178,13 @@
                                       Some reasonable number which should reflect
                                       what is currently defined in the SE2Partition
                                       map (elements.h) */
+
+// Interim File Format: define the following macro to identify which version is 
+//                      used in the implementation
+
+#define WORKING_DRAFT_MAJOR_NO 0    // inidicate the working draft version number
+#define WORKING_DRAFT_MINOR_NO 4
+#define INTERIM_FILE_MAJOR_NO 0     // indicate interim file format version number
+#define INTERIM_FILE_MINOR_NO 0
+
 #endif

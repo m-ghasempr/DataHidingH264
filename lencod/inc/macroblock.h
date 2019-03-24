@@ -159,7 +159,6 @@ const int IPRED_ORDER[6][6]=
   {15,25,26,32,33,35},
 };
 
-extern int JQ[32][2];
-extern int QP2QUANT[32];
+extern int QP2QUANT[40];
 
 #endif

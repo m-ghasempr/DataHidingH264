@@ -111,6 +111,10 @@ SOURCE=.\lencod\src\decoder.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\lencod\src\encodeiff.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\src\filehandle.c
 # End Source File
 # Begin Source File
@@ -204,6 +208,10 @@ SOURCE=.\lencod\inc\defines.h
 # Begin Source File
 
 SOURCE=.\lencod\inc\elements.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\inc\encodeiff.h
 # End Source File
 # Begin Source File
 

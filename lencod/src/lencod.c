@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 1.1
+ *     JM 1.4
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -81,9 +81,10 @@
 #include "leaky_bucket.h"
 #include "memalloc.h"
 #include "mbuffer.h"
+#include "encodeiff.h"
 
 #define TML     "1"
-#define VERSION "1.10"
+#define VERSION "1.40"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
@@ -152,6 +153,8 @@ int main(int argc,char **argv)
   initial_Bframes = input->successive_Bframe;
 #endif
 
+  if ( input->of_mode == PAR_OF_IFF )
+    initSegmentBox(); // There is only one segment
 
   for (img->number=0; img->number < input->no_frames; img->number++)
   {
@@ -221,6 +224,13 @@ int main(int argc,char **argv)
        img->nb_references += 1;
        img->nb_references = min(img->nb_references, img->buf_cycle);
     }
+  }
+  if ( input->of_mode == PAR_OF_IFF )
+  {
+    updateAlternateTrackHeaderBox();
+    updateAlternateTrackMediaBox();
+
+    updateSegmentBox();
   }
 
     // terminate sequence
@@ -351,13 +361,13 @@ void malloc_slice()
   int i;
   DataPartition *dataPart;
   Slice *currSlice;
-  const int buffer_size = (img->width * img->height * 3)/2; // DM 070301: The only assumption here is that we
-                                // do not consider the case of data expansion.
-                                // So this is a strictly conservative estimation
-                                // of the size of the bitstream buffer for one frame */                                                       /* ~DM
+  const int buffer_size = (img->width * img->height * 4); // AH 190202: There can be data expansion with 
+                                                          // low QP values. So, we make sure that buffer 
+                                                          // does not everflow. 4 is probably safe multiplier.
 
   switch(input->of_mode) // init depending on NAL mode
   {
+    case PAR_OF_IFF:
     case PAR_OF_26L:
       // Current File Format
       img->currentSlice = (Slice *) calloc(1, sizeof(Slice));
@@ -691,6 +701,9 @@ void report()
 
     switch(input->of_mode)
     {
+    case PAR_OF_IFF:
+      fprintf(stdout," Output File Format                : H.26L Interim File Format \n");
+      break;
     case PAR_OF_26L:
       fprintf(stdout," Output File Format                : H.26L Bit Stream File Format \n");
       break;

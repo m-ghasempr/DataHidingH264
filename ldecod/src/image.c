@@ -64,6 +64,7 @@
 #include "elements.h"
 #include "image.h"
 #include "mbuffer.h"
+#include "decodeiff.h"
 
 #if _ERROR_CONCEALMENT_
 #include "erc_api.h"
@@ -95,6 +96,7 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
 {
   int current_header;
   Slice *currSlice = img->currentSlice;
+  extern FILE* bits;
 
 #if _ERROR_CONCEALMENT_
   int received_mb_nr = 0; //to record how many MBs are correctly received in error prone transmission
@@ -113,6 +115,9 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
 #endif
 
   int tmp_time;                   // time used by decoding the last frame
+
+  if ( inp->of_mode == PAR_OF_IFF ) // for Interim File Format
+    rdPictureInfo( bits );
 
 #ifdef WIN32
   _ftime (&tstruct1);             // start time ms
@@ -942,6 +947,11 @@ void init_frame(struct img_par *img, struct inp_par *inp)
   {
     init_frame_buffers(inp, img); 
     init_global_buffers(inp, img); 
+  }
+
+  if (inp->of_mode==PAR_OF_IFF)
+  {
+    img->pn=(img->number%img->buf_cycle);
   }
 
   for(i=0;i<img->width/BLOCK_SIZE+1;i++)          // set edge to -1, indicate nothing to predict from

@@ -55,8 +55,7 @@ extern int  MODTAB[3][2];
 extern int  NCBP[48][2];
 extern byte PRED_IPRED[7][7][6];
 extern int  IPRED_ORDER[6][6];
-extern int  JQ[32][2];
-extern int  QP2QUANT[32];
+extern int  QP2QUANT[40];
 
 
 #endif

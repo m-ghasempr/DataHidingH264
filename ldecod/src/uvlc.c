@@ -368,6 +368,93 @@ int uvlc_startcode_follows(struct img_par *img, struct inp_par *inp)
 }
 
 
+#ifdef _EXP_GOLOMB
+/*!
+ ************************************************************************
+ * \brief
+ *  Moves the read pointer of the partition forward by one symbol
+ *
+ * \param byte buffer[]
+ *    containing VLC-coded data bits
+ * \param int totbitoffset
+ *    bit offset from start of partition
+ * \param int type
+ *    expected data type (Partiotion ID)
+ * \return  int info, len
+ *    Length and Value of the next symbol
+ *
+ * \note
+ *    As in both nal_bits.c and nal_part.c all data of one partition, slice,
+ *    picture was already read into a buffer, there is no need to read any data
+ *    here again.
+ * \par
+ *    GetVLCInfo was extracted because there should be only one place in the
+ *    source code that has knowledge about symbol extraction, regardless of
+ *    the number of different NALs.
+ * \par
+ *    This function could (and should) be optimized considerably
+ * \par
+ *    If it is ever decided to have different VLC tables for different symbol
+ *    types, then this would be the place for the implementation
+ * \par
+ *    An alternate VLC table is implemented based on exponential Golomb codes.
+ *    The define _EXP_GOLOMB selects between the UVLC and the exponential Golomb codes.
+ *    The encoder must have a matching define selected.
+ *  
+ ************************************************************************
+ */
+int GetVLCSymbol (byte buffer[],int totbitoffset,int *info, int bytecount)
+{
+
+  register int inf;
+  long byteoffset;      // byte from start of buffer
+  int bitoffset;      // bit from start of byte
+  int ctr_bit=0;      // control bit for current bit posision
+  int bitcounter=1;
+  int len;
+  int info_bit;
+
+  byteoffset= totbitoffset/8;
+  bitoffset= 7-(totbitoffset%8);
+  ctr_bit = (buffer[byteoffset] & (0x01<<bitoffset));   // set up control bit
+
+  len=1;
+  while (ctr_bit==0)
+  {                 // find leading 1 bit
+    len++;
+    bitoffset-=1;           
+    bitcounter++;
+    if (bitoffset<0)
+    {                 // finish with current byte ?
+      bitoffset=bitoffset+8;
+      byteoffset++;
+    }
+    ctr_bit=buffer[byteoffset] & (0x01<<(bitoffset));
+  }
+    // make infoword
+  inf=0;                          // shortest possible code is 1, then info is always 0
+  for(info_bit=0;(info_bit<(len-1)); info_bit++)
+  {
+    bitcounter++;
+    bitoffset-=1;
+    if (bitoffset<0)
+    {                 // finished with current byte ?
+      bitoffset=bitoffset+8;
+      byteoffset++;
+    }
+    if (byteoffset > bytecount)
+    {
+      return -1;
+    }
+    inf=(inf<<1);
+    if(buffer[byteoffset] & (0x01<<(bitoffset)))
+      inf |=1;
+  }
+
+  *info = inf;
+  return bitcounter;           // return absolute offset in bit from start of frame
+}
+#else
 /*!
  ************************************************************************
  * \brief
@@ -445,3 +532,4 @@ int GetVLCSymbol (byte buffer[],int totbitoffset,int *info, int bytecount)
   *info = inf;
   return bitcounter;           // return absolute offset in bit from start of frame
 }
+#endif

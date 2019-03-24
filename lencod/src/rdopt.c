@@ -52,7 +52,7 @@
 #include "refbuf.h"
 
 extern const byte PRED_IPRED[7][7][6];
-extern       int  QP2QUANT  [32];
+extern       int  QP2QUANT  [40];
 
 //=== static parameters ===
 RDOpt  *rdopt     = NULL;
@@ -912,7 +912,10 @@ RD_Mode_Decision ()
         input->rdopt=2;
     }
 
-    rdopt->lambda_mode = 5.0 * exp (0.1 * qp) * (qp + 5.0) / (34.0 - qp);
+    if (img->qp >= 0 && img->qp < 34)
+      rdopt->lambda_mode = 5.0 * exp (0.1 * qp) * (qp + 5.0) / (34.0 - qp);
+    else
+      rdopt->lambda_mode = 0.9*pow(2, qp/3.0);
   
     if (img->type == B_IMG || img->types == SP_IMG)
       rdopt->lambda_mode *= 4;

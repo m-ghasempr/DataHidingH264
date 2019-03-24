@@ -1,6 +1,9 @@
-Changes for Version JM 1.1 to JM 1.0
+Changes for Version JM 1.4 to JM 1.0
 ------------------------------------
 New Features
+* Interim file format according to Appendix III of WD-1 (JVT-A003) (DT)
+* Transform and Quantizer changes [JVT-B008, JVT-B038] (AH)
+* VLC update [JVT-B029] (LK)
 * Updated Error Rebust Macroblock Mode and Reference Frame Selection [JVT-B102] (DK)
 
 Bug Fixes
@@ -268,12 +271,14 @@ KS      Karsten Sühring         suehring@hhi.de
 AH      Antti Hallapuro         antti.hallapuro@nokia.com
 DK      Dimitris Kontopodis     dkonto@eikon.tum.de
 DM      Detlev Marpe            marpe@hhi.de
+DT      Dong Tian               tian@cs.tut.fi
 GC	Guy Cote                guy@videolocus.com
 GB      Gabi Blättermann        blaetter@hhi.de
 GS      Gary Sullivan		garysull@microsoft.com
 HS      Heiko Schwarz           hschwarz@hhi.de
 IL      Inge Lille-Langoy       Inge.Lille-Langoy@telenor.com
 JL      Jani Lainema            Jani.Lainema@nokia.com
+LK      Louis Kerofsky          lkerofsky@sharplabs.com
 MG      Michael Gallant         mgallant@videolocus.com
 PL      Peter List              Peter.List@t-systems.de
 RK	Ragip Kurceren 		ragip.kurceren@nokia.com

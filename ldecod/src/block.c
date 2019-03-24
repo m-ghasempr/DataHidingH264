@@ -52,6 +52,19 @@
 
 #include "block.h"
 
+
+#define Q_BITS          16
+
+static const int quant_coef[6][4][4] = {
+  {{16384,10486,16384,10486},{10486, 6453,10486, 6453},{16384,10486,16384,10486},{10486, 6453,10486, 6453}},
+  {{14564, 9118,14564, 9118},{ 9118, 5785, 9118, 5785},{14564, 9118,14564, 9118},{ 9118, 5785, 9118, 5785}},
+  {{13107, 8389,13107, 8389},{ 8389, 5243, 8389, 5243},{13107, 8389,13107, 8389},{ 8389, 5243, 8389, 5243}},
+  {{11916, 7490,11916, 7490},{ 7490, 4660, 7490, 4660},{11916, 7490,11916, 7490},{ 7490, 4660, 7490, 4660}},
+  {{10486, 6554,10486, 6554},{ 6554, 4194, 6554, 4194},{10486, 6554,10486, 6554},{ 6554, 4194, 6554, 4194}},
+  {{9362,  5825, 9362, 5825},{ 5825, 3728, 5825, 3728},{ 9362, 5825, 9362, 5825},{ 5825, 3728, 5825, 3728}}
+};
+
+
 /*!
  ***********************************************************************
  * \brief
@@ -291,10 +304,10 @@ void itrans(struct img_par *img, //!< image parameters
     {
       m5[i]=img->cof[i0][j0][i][j];
     }
-    m6[0]=(m5[0]+m5[2])*13;
-    m6[1]=(m5[0]-m5[2])*13;
-    m6[2]=m5[1]*7-m5[3]*17;
-    m6[3]=m5[1]*17+m5[3]*7;
+    m6[0]=(m5[0]+m5[2]);
+    m6[1]=(m5[0]-m5[2]);
+    m6[2]=(m5[1]>>1)-m5[3];
+    m6[3]=m5[1]+(m5[3]>>1);
 
     for (i=0;i<2;i++)
     {
@@ -309,16 +322,16 @@ void itrans(struct img_par *img, //!< image parameters
     for (j=0;j<BLOCK_SIZE;j++)
       m5[j]=img->m7[i][j];
 
-    m6[0]=(m5[0]+m5[2])*13;
-    m6[1]=(m5[0]-m5[2])*13;
-    m6[2]=m5[1]*7-m5[3]*17;
-    m6[3]=m5[1]*17+m5[3]*7;
+    m6[0]=(m5[0]+m5[2]);
+    m6[1]=(m5[0]-m5[2]);
+    m6[2]=(m5[1]>>1)-m5[3];
+    m6[3]=m5[1]+(m5[3]>>1);
 
     for (j=0;j<2;j++)
     {
       j1=3-j;
-      img->m7[i][j]=mmax(0,mmin(255,(m6[j]+m6[j1]+img->mpr[i+ioff][j+joff]*JQQ+JQQ2)/JQQ));
-      img->m7[i][j1]=mmax(0,mmin(255,(m6[j]-m6[j1]+img->mpr[i+ioff][j1+joff]*JQQ+JQQ2)/JQQ));
+      img->m7[i][j] =mmax(0,mmin(255,(m6[j]+m6[j1]+(img->mpr[i+ioff][j+joff] <<DQ_BITS)+DQ_ROUND)>>DQ_BITS));
+      img->m7[i][j1]=mmax(0,mmin(255,(m6[j]-m6[j1]+(img->mpr[i+ioff][j1+joff]<<DQ_BITS)+DQ_ROUND)>>DQ_BITS));
     }
   }
 
@@ -338,16 +351,19 @@ void itrans_2(
   int M5[4];
   int M6[4];
 
+  int qp_per = (img->qp-MIN_QP)/6;
+  int qp_rem = (img->qp-MIN_QP)%6;
+
   // horizontal
   for (j=0;j<4;j++)
   {
     for (i=0;i<4;i++)
       M5[i]=img->cof[i][j][0][0];
 
-    M6[0]=(M5[0]+M5[2])*13;
-    M6[1]=(M5[0]-M5[2])*13;
-    M6[2]= M5[1]*7 -M5[3]*17;
-    M6[3]= M5[1]*17+M5[3]*7;
+    M6[0]=M5[0]+M5[2];
+    M6[1]=M5[0]-M5[2];
+    M6[2]=M5[1]-M5[3];
+    M6[3]=M5[1]+M5[3];
 
     for (i=0;i<2;i++)
     {
@@ -363,23 +379,16 @@ void itrans_2(
     for (j=0;j<4;j++)
       M5[j]=img->cof[i][j][0][0];
 
-    M6[0]=(M5[0]+M5[2])*13;
-    M6[1]=(M5[0]-M5[2])*13;
-    M6[2]= M5[1]*7 -M5[3]*17;
-    M6[3]= M5[1]*17+M5[3]*7;
+    M6[0]=M5[0]+M5[2];
+    M6[1]=M5[0]-M5[2];
+    M6[2]=M5[1]-M5[3];
+    M6[3]=M5[1]+M5[3];
 
     for (j=0;j<2;j++)
     {
       j1=3-j;
-      img->cof[i][j][0][0] = ((M6[j]+M6[j1])/8) *JQ1[img->qp];
-      img->cof[i][j1][0][0]= ((M6[j]-M6[j1])/8) *JQ1[img->qp];
-    }
-  }
-  for (j=0;j<4;j++)
-  {
-    for (i=0;i<4;i++)
-    {
-      img->cof[i][j][0][0] = 3 * img->cof[i][j][0][0]/256;
+      img->cof[i][j][0][0] = ((M6[j]+M6[j1])*dequant_coef[qp_rem][0][0]<<qp_per)/4;
+      img->cof[i][j1][0][0]= ((M6[j]-M6[j1])*dequant_coef[qp_rem][0][0]<<qp_per)/4;
     }
   }
 }
@@ -394,7 +403,16 @@ void itrans_sp(struct img_par *img,  //!< image parameters
   int i,j,i1,j1;
   int m5[4];
   int m6[4];
-  int predicted_block[BLOCK_SIZE][BLOCK_SIZE],Fq1q2,ilev;
+  int predicted_block[BLOCK_SIZE][BLOCK_SIZE],ilev;
+  
+  int qp_per = (img->qp-MIN_QP)/6;
+  int qp_rem = (img->qp-MIN_QP)%6;
+  int q_bits    = Q_BITS+qp_per;
+  int qp_per_sp = (img->qpsp-MIN_QP)/6;
+  int qp_rem_sp = (img->qpsp-MIN_QP)%6;
+  int q_bits_sp    = Q_BITS+qp_per_sp;
+
+  int qp_const2=(1<<q_bits_sp)/2;  //sp_pred
 
   for (j=0; j< BLOCK_SIZE; j++)
     for (i=0; i< BLOCK_SIZE; i++)
@@ -409,10 +427,10 @@ void itrans_sp(struct img_par *img,  //!< image parameters
       m5[i]=predicted_block[i][j]+predicted_block[i1][j];
       m5[i1]=predicted_block[i][j]-predicted_block[i1][j];
     }
-    predicted_block[0][j]=(m5[0]+m5[1])*13;
-    predicted_block[2][j]=(m5[0]-m5[1])*13;
-    predicted_block[1][j]=m5[3]*17+m5[2]*7;
-    predicted_block[3][j]=m5[3]*7-m5[2]*17;
+    predicted_block[0][j]=(m5[0]+m5[1]);
+    predicted_block[2][j]=(m5[0]-m5[1]);
+    predicted_block[1][j]=m5[3]*2+m5[2];
+    predicted_block[3][j]=m5[3]-m5[2]*2;
   }
 
   //  Vertival transform
@@ -425,19 +443,19 @@ void itrans_sp(struct img_par *img,  //!< image parameters
       m5[j]=predicted_block[i][j]+predicted_block[i][j1];
       m5[j1]=predicted_block[i][j]-predicted_block[i][j1];
     }
-    predicted_block[i][0]=(m5[0]+m5[1])*13;
-    predicted_block[i][2]=(m5[0]-m5[1])*13;
-    predicted_block[i][1]=m5[3]*17+m5[2]*7;
-    predicted_block[i][3]=m5[3]*7-m5[2]*17;
+    predicted_block[i][0]=(m5[0]+m5[1]);
+    predicted_block[i][2]=(m5[0]-m5[1]);
+    predicted_block[i][1]=m5[3]*2+m5[2];
+    predicted_block[i][3]=m5[3]-m5[2]*2;
   }
 
-  Fq1q2=(JQQ*JQ[img->qpsp]+JQ[img->qp]/2)/JQ[img->qp];
 
   for (j=0;j<BLOCK_SIZE;j++)
     for (i=0;i<BLOCK_SIZE;i++)
     {
-      ilev=img->cof[i0][j0][i][j]/JQ1[img->qp]*Fq1q2+predicted_block[i][j]*JQ[img->qpsp];
-      img->cof[i0][j0][i][j]=sign((abs(ilev)+JQQ2)/ JQQ,ilev)*JQ1[img->qpsp];
+      img->cof[i0][j0][i][j]=(img->cof[i0][j0][i][j]>>qp_per)/dequant_coef[qp_rem][i][j]; // recovering coefficient since they are already dequantized earlier
+      ilev=(sign(((abs(img->cof[i0][j0][i][j])<<q_bits)/quant_coef[qp_rem][i][j]),img->cof[i0][j0][i][j])+predicted_block[i][j] );
+      img->cof[i0][j0][i][j]=sign((abs(ilev)* quant_coef[qp_rem_sp][i][j]+qp_const2)>> q_bits_sp,ilev)*dequant_coef[qp_rem_sp][i][j]<<qp_per_sp;
     }
   // horizontal
   for (j=0;j<BLOCK_SIZE;j++)
@@ -446,10 +464,10 @@ void itrans_sp(struct img_par *img,  //!< image parameters
     {
       m5[i]=img->cof[i0][j0][i][j];
     }
-    m6[0]=(m5[0]+m5[2])*13;
-    m6[1]=(m5[0]-m5[2])*13;
-    m6[2]=m5[1]*7-m5[3]*17;
-    m6[3]=m5[1]*17+m5[3]*7;
+    m6[0]=(m5[0]+m5[2]);
+    m6[1]=(m5[0]-m5[2]);
+    m6[2]=(m5[1]>>1)-m5[3];
+    m6[3]=m5[1]+(m5[3]>>1);
 
     for (i=0;i<2;i++)
     {
@@ -464,19 +482,18 @@ void itrans_sp(struct img_par *img,  //!< image parameters
     for (j=0;j<BLOCK_SIZE;j++)
       m5[j]=img->m7[i][j];
 
-    m6[0]=(m5[0]+m5[2])*13;
-    m6[1]=(m5[0]-m5[2])*13;
-    m6[2]=m5[1]*7-m5[3]*17;
-    m6[3]=m5[1]*17+m5[3]*7;
+    m6[0]=(m5[0]+m5[2]);
+    m6[1]=(m5[0]-m5[2]);
+    m6[2]=(m5[1]>>1)-m5[3];
+    m6[3]=m5[1]+(m5[3]>>1);
 
     for (j=0;j<2;j++)
     {
       j1=3-j;
-      img->m7[i][j]=mmax(0,mmin(255,(m6[j]+m6[j1]+JQQ2)/JQQ));
-      img->m7[i][j1]=mmax(0,mmin(255,(m6[j]-m6[j1]+JQQ2)/JQQ));
+      img->m7[i][j] =mmax(0,mmin(255,(m6[j]+m6[j1]+DQ_ROUND)>>DQ_BITS));
+      img->m7[i][j1]=mmax(0,mmin(255,(m6[j]-m6[j1]+DQ_ROUND)>>DQ_BITS));
     }
   }
-
 }
 
 /*!
@@ -500,7 +517,12 @@ void copyblock_sp(struct img_par *img,int block_x,int block_y)
 
   int i,j,i1,j1,m5[4],m6[4];
 
-  int predicted_block[BLOCK_SIZE][BLOCK_SIZE],quant_set1;
+  int predicted_block[BLOCK_SIZE][BLOCK_SIZE];
+  int qp_per = (img->qpsp-MIN_QP)/6;
+  int qp_rem = (img->qpsp-MIN_QP)%6;
+  int q_bits    = Q_BITS+qp_per;
+  int qp_const2=(1<<q_bits)/2;  //sp_pred
+
 
   //  Horizontal transform
   for (j=0; j< BLOCK_SIZE; j++)
@@ -517,13 +539,13 @@ void copyblock_sp(struct img_par *img,int block_x,int block_y)
       m5[i]=predicted_block[i][j]+predicted_block[i1][j];
       m5[i1]=predicted_block[i][j]-predicted_block[i1][j];
     }
-    predicted_block[0][j]=(m5[0]+m5[1])*13;
-    predicted_block[2][j]=(m5[0]-m5[1])*13;
-    predicted_block[1][j]=m5[3]*17+m5[2]*7;
-    predicted_block[3][j]=m5[3]*7-m5[2]*17;
+    predicted_block[0][j]=(m5[0]+m5[1]);
+    predicted_block[2][j]=(m5[0]-m5[1]);
+    predicted_block[1][j]=m5[3]*2+m5[2];
+    predicted_block[3][j]=m5[3]-m5[2]*2;
   }
 
-  //  Vertical transform
+  //  Vertival transform
 
   for (i=0; i < BLOCK_SIZE; i++)
   {
@@ -533,58 +555,54 @@ void copyblock_sp(struct img_par *img,int block_x,int block_y)
       m5[j]=predicted_block[i][j]+predicted_block[i][j1];
       m5[j1]=predicted_block[i][j]-predicted_block[i][j1];
     }
-    predicted_block[i][0]=(m5[0]+m5[1])*13;
-    predicted_block[i][2]=(m5[0]-m5[1])*13;
-    predicted_block[i][1]=m5[3]*17+m5[2]*7;
-    predicted_block[i][3]=m5[3]*7-m5[2]*17;
+    predicted_block[i][0]=(m5[0]+m5[1]);
+    predicted_block[i][2]=(m5[0]-m5[1]);
+    predicted_block[i][1]=m5[3]*2+m5[2];
+    predicted_block[i][3]=m5[3]-m5[2]*2;
   }
 
   // Quant
-  quant_set1=img->qpsp;
   for (j=0;j < BLOCK_SIZE; j++)
     for (i=0; i < BLOCK_SIZE; i++)
-      img->m7[i][j]=sign((abs(predicted_block[i][j])*JQ[quant_set1]+JQQ2)/ JQQ,predicted_block[i][j])*JQ1[quant_set1];
+       img->m7[i][j]=sign((abs(predicted_block[i][j])* quant_coef[qp_rem][i][j]+qp_const2)>> q_bits,predicted_block[i][j])*dequant_coef[qp_rem][i][j]<<qp_per;
 
   //     IDCT.
   //     horizontal
 
-  for (j=0; j < BLOCK_SIZE; j++)
+  for (j=0;j<BLOCK_SIZE;j++)
   {
-    for (i=0; i < BLOCK_SIZE; i++)
+    for (i=0;i<BLOCK_SIZE;i++)
     {
       m5[i]=img->m7[i][j];
     }
-    m6[0]=(m5[0]+m5[2])*13;
-    m6[1]=(m5[0]-m5[2])*13;
-    m6[2]=m5[1]*7-m5[3]*17;
-    m6[3]=m5[1]*17+m5[3]*7;
+    m6[0]=(m5[0]+m5[2]);
+    m6[1]=(m5[0]-m5[2]);
+    m6[2]=(m5[1]>>1)-m5[3];
+    m6[3]=m5[1]+(m5[3]>>1);
 
-    for (i=0; i < 2; i++)
+    for (i=0;i<2;i++)
     {
       i1=3-i;
       img->m7[i][j]=m6[i]+m6[i1];
       img->m7[i1][j]=m6[i]-m6[i1];
     }
   }
-
-  //  vertical
-
-  for (i=0; i < BLOCK_SIZE; i++)
+  // vertical
+  for (i=0;i<BLOCK_SIZE;i++)
   {
-    for (j=0; j < BLOCK_SIZE; j++)
-    {
+    for (j=0;j<BLOCK_SIZE;j++)
       m5[j]=img->m7[i][j];
-    }
-    m6[0]=(m5[0]+m5[2])*13;
-    m6[1]=(m5[0]-m5[2])*13;
-    m6[2]=m5[1]*7-m5[3]*17;
-    m6[3]=m5[1]*17+m5[3]*7;
 
-    for (j=0; j < 2; j++)
+    m6[0]=(m5[0]+m5[2]);
+    m6[1]=(m5[0]-m5[2]);
+    m6[2]=(m5[1]>>1)-m5[3];
+    m6[3]=m5[1]+(m5[3]>>1);
+
+    for (j=0;j<2;j++)
     {
       j1=3-j;
-      img->m7[i][j] =min(255,max(0,(m6[j]+m6[j1]+JQQ2)/JQQ));
-      img->m7[i][j1]=min(255,max(0,(m6[j]-m6[j1]+JQQ2)/JQQ));
+      img->m7[i][j] =mmax(0,mmin(255,(m6[j]+m6[j1]+DQ_ROUND)>>DQ_BITS));
+      img->m7[i][j1]=mmax(0,mmin(255,(m6[j]-m6[j1]+DQ_ROUND)>>DQ_BITS));
     }
   }
 
@@ -598,11 +616,20 @@ void copyblock_sp(struct img_par *img,int block_x,int block_y)
 
 void itrans_sp_chroma(struct img_par *img,int ll)
 {
-  int i,j,i1,j2,ilev,n2,n1,j1,mb_y,qp_const,quant_set;
+  int i,j,i1,j2,ilev,n2,n1,j1,mb_y,qp_const;
   int m5[BLOCK_SIZE];
-  int predicted_chroma_block[MB_BLOCK_SIZE/2][MB_BLOCK_SIZE/2],Fq1q2,mp1[BLOCK_SIZE],quant_set1;
+  int predicted_chroma_block[MB_BLOCK_SIZE/2][MB_BLOCK_SIZE/2],mp1[BLOCK_SIZE];
+  int qp_per,qp_rem,q_bits;
+  int qp_per_sp,qp_rem_sp,q_bits_sp,qp_const2;
 
-  qp_const=JQQ4;
+  qp_per    = ((img->qp<0?img->qp:QP_SCALE_CR[img->qp])-MIN_QP)/6;
+  qp_rem    = ((img->qp<0?img->qp:QP_SCALE_CR[img->qp])-MIN_QP)%6;
+  q_bits    = Q_BITS+qp_per;
+  qp_const=(1<<q_bits)/6;    // inter
+  qp_per_sp    = ((img->qpsp<0?img->qpsp:QP_SCALE_CR[img->qpsp])-MIN_QP)/6;
+  qp_rem_sp    = ((img->qpsp<0?img->qpsp:QP_SCALE_CR[img->qpsp])-MIN_QP)%6;
+  q_bits_sp    = Q_BITS+qp_per_sp;
+  qp_const2=(1<<q_bits_sp)/2;  //sp_pred
 
   for (j=0; j < MB_BLOCK_SIZE/2; j++)
     for (i=0; i < MB_BLOCK_SIZE/2; i++)
@@ -610,12 +637,10 @@ void itrans_sp_chroma(struct img_par *img,int ll)
       predicted_chroma_block[i][j]=img->mpr[i][j];
       img->mpr[i][j]=0;
     }
-
   for (n2=0; n2 <= BLOCK_SIZE; n2 += BLOCK_SIZE)
   {
     for (n1=0; n1 <= BLOCK_SIZE; n1 += BLOCK_SIZE)
     {
-
       //  Horizontal transform.
       for (j=0; j < BLOCK_SIZE; j++)
       {
@@ -626,10 +651,10 @@ void itrans_sp_chroma(struct img_par *img,int ll)
           m5[i]=predicted_chroma_block[i+n1][mb_y]+predicted_chroma_block[i1+n1][mb_y];
           m5[i1]=predicted_chroma_block[i+n1][mb_y]-predicted_chroma_block[i1+n1][mb_y];
         }
-        predicted_chroma_block[n1][mb_y]=(m5[0]+m5[1])*13;
-        predicted_chroma_block[n1+2][mb_y]=(m5[0]-m5[1])*13;
-        predicted_chroma_block[n1+1][mb_y]=m5[3]*17+m5[2]*7;
-        predicted_chroma_block[n1+3][mb_y]=m5[3]*7-m5[2]*17;
+        predicted_chroma_block[n1][mb_y]  =(m5[0]+m5[1]);
+        predicted_chroma_block[n1+2][mb_y]=(m5[0]-m5[1]);
+        predicted_chroma_block[n1+1][mb_y]=m5[3]*2+m5[2];
+        predicted_chroma_block[n1+3][mb_y]=m5[3]-m5[2]*2;
       }
 
       //  Vertical transform.
@@ -643,32 +668,28 @@ void itrans_sp_chroma(struct img_par *img,int ll)
           m5[j]=predicted_chroma_block[j1][n2+j]+predicted_chroma_block[j1][n2+j2];
           m5[j2]=predicted_chroma_block[j1][n2+j]-predicted_chroma_block[j1][n2+j2];
         }
-        predicted_chroma_block[j1][n2+0]=(m5[0]+m5[1])*13;
-        predicted_chroma_block[j1][n2+2]=(m5[0]-m5[1])*13;
-        predicted_chroma_block[j1][n2+1]=m5[3]*17+m5[2]*7;
-        predicted_chroma_block[j1][n2+3]=m5[3]*7-m5[2]*17;
+        predicted_chroma_block[j1][n2+0]=(m5[0]+m5[1]);
+        predicted_chroma_block[j1][n2+2]=(m5[0]-m5[1]);
+        predicted_chroma_block[j1][n2+1]=m5[3]*2+m5[2];
+        predicted_chroma_block[j1][n2+3]=m5[3]-m5[2]*2;
       }
     }
   }
 
   //     2X2 transform of DC coeffs.
-  mp1[0]=(predicted_chroma_block[0][0]+predicted_chroma_block[4][0]+predicted_chroma_block[0][4]+predicted_chroma_block[4][4])/2;
-  mp1[1]=(predicted_chroma_block[0][0]-predicted_chroma_block[4][0]+predicted_chroma_block[0][4]-predicted_chroma_block[4][4])/2;
-  mp1[2]=(predicted_chroma_block[0][0]+predicted_chroma_block[4][0]-predicted_chroma_block[0][4]-predicted_chroma_block[4][4])/2;
-  mp1[3]=(predicted_chroma_block[0][0]-predicted_chroma_block[4][0]-predicted_chroma_block[0][4]+predicted_chroma_block[4][4])/2;
+  mp1[0]=(predicted_chroma_block[0][0]+predicted_chroma_block[4][0]+predicted_chroma_block[0][4]+predicted_chroma_block[4][4]);
+  mp1[1]=(predicted_chroma_block[0][0]-predicted_chroma_block[4][0]+predicted_chroma_block[0][4]-predicted_chroma_block[4][4]);
+  mp1[2]=(predicted_chroma_block[0][0]+predicted_chroma_block[4][0]-predicted_chroma_block[0][4]-predicted_chroma_block[4][4]);
+  mp1[3]=(predicted_chroma_block[0][0]-predicted_chroma_block[4][0]-predicted_chroma_block[0][4]+predicted_chroma_block[4][4]);
 
-  quant_set=QP_SCALE_CR[img->qp];
-  quant_set1=QP_SCALE_CR[img->qpsp];
-  Fq1q2=(JQQ*JQ[quant_set1]+JQ[quant_set]/2)/JQ[quant_set];
-
-  ilev=img->cof[0+ll][4][0][0]*Fq1q2+mp1[0]*JQ[quant_set1];
-  mp1[0]=sign((abs(ilev)+JQQ2)/ JQQ,ilev)*JQ1[quant_set1];
-  ilev=img->cof[1+ll][4][0][0]*Fq1q2+mp1[1]*JQ[quant_set1];
-  mp1[1]=sign((abs(ilev)+JQQ2)/ JQQ,ilev)*JQ1[quant_set1];
-  ilev=img->cof[0+ll][5][0][0]*Fq1q2+mp1[2]*JQ[quant_set1];
-  mp1[2]=sign((abs(ilev)+JQQ2)/ JQQ,ilev)*JQ1[quant_set1];
-  ilev=img->cof[1+ll][5][0][0]*Fq1q2+mp1[3]*JQ[quant_set1];
-  mp1[3]=sign((abs(ilev)+JQQ2)/ JQQ,ilev)*JQ1[quant_set1];
+  ilev=(sign(((abs(img->cof[0+ll][4][0][0])<<(q_bits+1))/quant_coef[qp_rem][0][0]),img->cof[0+ll][4][0][0])+mp1[0] );
+  mp1[0]=sign((abs(ilev)* quant_coef[qp_rem_sp][0][0]+qp_const2)>> (q_bits_sp+1),ilev)*dequant_coef[qp_rem_sp][0][0]<<qp_per_sp;
+  ilev=(sign(((abs(img->cof[1+ll][4][0][0])<<(q_bits+1))/quant_coef[qp_rem][0][0]),img->cof[1+ll][4][0][0])+mp1[1] );
+  mp1[1]=sign((abs(ilev)* quant_coef[qp_rem_sp][0][0]+qp_const2)>> (q_bits_sp+1),ilev)*dequant_coef[qp_rem_sp][0][0]<<qp_per_sp;
+  ilev=(sign(((abs(img->cof[0+ll][5][0][0])<<(q_bits+1))/quant_coef[qp_rem][0][0]),img->cof[0+ll][5][0][0])+mp1[2] );
+  mp1[2]=sign((abs(ilev)* quant_coef[qp_rem_sp][0][0]+qp_const2)>> (q_bits_sp+1),ilev)*dequant_coef[qp_rem_sp][0][0]<<qp_per_sp;
+  ilev=(sign(((abs(img->cof[1+ll][5][0][0])<<(q_bits+1))/quant_coef[qp_rem][0][0]),img->cof[1+ll][5][0][0])+mp1[3] );
+  mp1[3]=sign((abs(ilev)* quant_coef[qp_rem_sp][0][0]+qp_const2)>> (q_bits_sp+1),ilev)*dequant_coef[qp_rem_sp][0][0]<<qp_per_sp;
 
   img->cof[0+ll][4][0][0]=(mp1[0]+mp1[1]+mp1[2]+mp1[3])/2;
   img->cof[1+ll][4][0][0]=(mp1[0]-mp1[1]+mp1[2]-mp1[3])/2;
@@ -681,8 +702,9 @@ void itrans_sp_chroma(struct img_par *img,int ll)
         for (j=0;j< BLOCK_SIZE; j++)
         if ((i!=0) || (j!=0))
         {
-          ilev=img->cof[n1/BLOCK_SIZE+ll][4+n2/BLOCK_SIZE][i][j]/JQ1[QP_SCALE_CR[img->qp]]*Fq1q2+predicted_chroma_block[n1+i][n2+j]*JQ[quant_set1];
-          img->cof[n1/BLOCK_SIZE+ll][4+n2/BLOCK_SIZE][i][j]=sign((abs(ilev)+JQQ2)/ JQQ,ilev)*JQ1[quant_set1];
+          img->cof[n1/BLOCK_SIZE+ll][4+n2/BLOCK_SIZE][i][j]=(img->cof[n1/BLOCK_SIZE+ll][4+n2/BLOCK_SIZE][i][j]>>qp_per)/dequant_coef[qp_rem][i][j];
+          ilev=(sign(((abs(img->cof[n1/BLOCK_SIZE+ll][4+n2/BLOCK_SIZE][i][j])<<q_bits)/quant_coef[qp_rem][i][j]),img->cof[n1/BLOCK_SIZE+ll][4+n2/BLOCK_SIZE][i][j])+predicted_chroma_block[n1+i][n2+j] )* quant_coef[qp_rem_sp][i][j];
+          img->cof[n1/BLOCK_SIZE+ll][4+n2/BLOCK_SIZE][i][j]=sign((abs(ilev)+qp_const2)>> q_bits_sp,ilev)*dequant_coef[qp_rem_sp][i][j]<<qp_per_sp;
         }
 }
 

@@ -162,14 +162,14 @@ int SliceHeader(struct img_par *img, struct inp_par *inp)
   // 7. Get Quant.
   SYMTRACESTRING("SH SliceQuant");
   readSyntaxElement_UVLC (&sym,img,inp,partition);
-  currSlice->qp = img->qp = 31 - sym.value1;
+  currSlice->qp = img->qp = MAX_QP - sym.value1;
   UsedBits += sym.len;
 
   if(img->type==SP_IMG_1 || img->type==SP_IMG_MULT)
   {
     SYMTRACESTRING("SH SP SliceQuant");
     readSyntaxElement_UVLC (&sym,img,inp,partition);
-    img->qpsp = 31 - sym.value1;
+    img->qpsp = MAX_QP - sym.value1;
   }
   // 8. Get MVResolution
   SYMTRACESTRING("SH MVResolution");

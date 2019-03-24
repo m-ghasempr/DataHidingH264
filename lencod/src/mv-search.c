@@ -119,10 +119,10 @@ static int MVCost (int ParameterResolution, int BitstreamResolution,
   len_x = Candidate_x * Factor - Pred_x;
   len_y = Candidate_y * Factor - Pred_y;
 
-  Penalty = (QP2QUANT[qp] * ( MVBitUse[absm (len_x)]+MVBitUse[absm(len_y)]) );
+  Penalty = (QP2QUANT[max(qp,0)] * ( MVBitUse[absm (len_x)]+MVBitUse[absm(len_y)]) );
 
   if (img->type != B_IMG && Blocktype == 1 && Candidate_x == 0 && Candidate_y == 0)   // 16x16 and no motion
-    Penalty -= QP2QUANT [qp] * 16;
+    Penalty -= QP2QUANT [max(qp,0)] * 16;
   return Penalty;
 }
 
@@ -1056,7 +1056,7 @@ UnifiedMotionSearch (int tot_intra_sad, int **refFrArr, int ***tmp_mv,
 
     for (;blocktype <= 7;)
     {
-      tot_inter_sad  = QP2QUANT[img->qp] * min(ref_frame,1) * 2; // start 'handicap '
+      tot_inter_sad  = QP2QUANT[max(img->qp,0)] * min(ref_frame,1) * 2; // start 'handicap '
       tot_inter_sad += SingleUnifiedMotionSearch (ref_frame, blocktype,
         refFrArr, tmp_mv, img_mv,
         BFrame, all_mv, 0.0);

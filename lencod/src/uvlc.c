@@ -29,7 +29,6 @@
 * THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
 ************************************************************************
 */
-
 /*!
  ***************************************************************************
  * \file uvlc.c
@@ -44,8 +43,8 @@
  *    - Stephan Wenger                  <stewe@cs.tu-berlin.de>
  ***************************************************************************
  */
-#include "contributors.h"
 
+#include "contributors.h"
 
 #include <math.h>
 #include <stdlib.h>
@@ -393,6 +392,26 @@ void levrun_linfo_intra(int level,int run,int *len,int *info)
   *info=n-(int)pow(2,i)+sign;
 }
 
+#ifdef _EXP_GOLOMB
+/*!
+ ************************************************************************
+ * \brief
+ *    Makes code word and passes it back
+ *    A code word has the following format: 0 0 0 ... 1 Xn ...X2 X1 X0.
+ *
+ * \par Input:
+ *    Info   : Xn..X2 X1 X0                                             \n
+ *    Length : Total number of bits in the codeword
+ ************************************************************************
+ */
+ // NOTE this function is called with sym->inf > (1<<(sym->len/2)).  The upper bits of inf are junk
+int symbol2uvlc(SyntaxElement *sym)
+{
+  int suffix_len=sym->len/2;
+  sym->bitpattern = (1<<suffix_len)|(sym->inf&((1<<suffix_len)-1));
+  return 0;
+}
+#else
 /*!
  ************************************************************************
  * \brief
@@ -404,7 +423,6 @@ void levrun_linfo_intra(int level,int run,int *len,int *info)
  *    Length : Total number of bits in the codeword
  ************************************************************************
  */
-
 int symbol2uvlc(SyntaxElement *sym)
 {
   int info_len = sym->len/2;
@@ -423,7 +441,7 @@ int symbol2uvlc(SyntaxElement *sym)
 
   return 0;
 }
-
+#endif
 
 /*!
  ************************************************************************
@@ -451,6 +469,30 @@ int writeSyntaxElement_UVLC(SyntaxElement *se, DataPartition *this_dataPart)
   return (se->len);
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    generates UVLC code and passes the codeword to the buffer
+ * \author
+ *  Tian Dong
+ ************************************************************************
+ */
+int writeSyntaxElement2Buf_UVLC(SyntaxElement *se, Bitstream* this_streamBuffer )
+{
+
+  se->mapping(se->value1,se->value2,&(se->len),&(se->inf));
+
+  symbol2uvlc(se);
+
+  writeUVLC2buffer(se, this_streamBuffer );
+
+#if TRACE
+  if(se->type <= 1)
+    trace2out (se);
+#endif
+
+  return (se->len);
+}
 
 /*!
  ************************************************************************

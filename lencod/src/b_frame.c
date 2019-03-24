@@ -1140,7 +1140,7 @@ void get_bid(int *bid_sad, int fw_predframe_no)
   int code_num, step_h, step_v, mvd_x, mvd_y;
 
   // consider code number of fw_predframe_no
-  *bid_sad = QP2QUANT[img->qp]*min(fw_predframe_no,1)*2;
+  *bid_sad = QP2QUANT[max(img->qp,0)]*min(fw_predframe_no,1)*2;
 
   // consider bits of fw_blk_size
   if(img->fw_blc_size_h==16 && img->fw_blc_size_v==16)      // 16x16 : blocktype 1
@@ -1157,7 +1157,7 @@ void get_bid(int *bid_sad, int fw_predframe_no)
     code_num=5;
   else        // 4x4 : blocktype 7
     code_num=6;
-  *bid_sad += QP2QUANT[img->qp]*img->blk_bituse[code_num];
+  *bid_sad += QP2QUANT[max(img->qp,0)]*img->blk_bituse[code_num];
 
   // consider bits of bw_blk_size
   if(img->bw_blc_size_h==16 && img->bw_blc_size_v==16)      // 16x16 : blocktype 1
@@ -1174,7 +1174,7 @@ void get_bid(int *bid_sad, int fw_predframe_no)
     code_num=5;
   else        // 4x4 : blocktype 7
     code_num=6;
-  *bid_sad += QP2QUANT[img->qp]*img->blk_bituse[code_num];
+  *bid_sad += QP2QUANT[max(img->qp,0)]*img->blk_bituse[code_num];
 
   // consider bits of mvdfw
   step_h=img->fw_blc_size_h/BLOCK_SIZE;  // horizontal stepsize
@@ -1219,7 +1219,7 @@ void get_bid(int *bid_sad, int fw_predframe_no)
         mvd_x=tmp_fwMV[0][img->block_y+j][img->block_x+i+4]-img->p_fwMV[i][j][fw_predframe_no][7][0];
         mvd_y=tmp_fwMV[1][img->block_y+j][img->block_x+i+4]-img->p_fwMV[i][j][fw_predframe_no][7][1];
       }
-      *bid_sad += QP2QUANT[img->qp]*(img->mv_bituse[absm(mvd_x)]+img->mv_bituse[absm(mvd_y)]);
+      *bid_sad += QP2QUANT[max(img->qp,0)]*(img->mv_bituse[absm(mvd_x)]+img->mv_bituse[absm(mvd_y)]);
     }
   }
 
@@ -1266,7 +1266,7 @@ void get_bid(int *bid_sad, int fw_predframe_no)
         mvd_x=tmp_bwMV[0][img->block_y+j][img->block_x+i+4]-img->p_bwMV[i][j][0][7][0];
         mvd_y=tmp_bwMV[1][img->block_y+j][img->block_x+i+4]-img->p_bwMV[i][j][0][7][1];
       }
-      *bid_sad += QP2QUANT[img->qp]*(img->mv_bituse[absm(mvd_x)]+img->mv_bituse[absm(mvd_y)]);
+      *bid_sad += QP2QUANT[max(img->qp,0)]*(img->mv_bituse[absm(mvd_x)]+img->mv_bituse[absm(mvd_y)]);
     }
   }
 
@@ -1348,7 +1348,7 @@ void get_dir(int *dir_sad)
   int refP_tr, TRb, TRp;
 
   // initialize with bias value
-  *dir_sad=-QP2QUANT[img->qp] * 16;
+  *dir_sad=-QP2QUANT[max(img->qp,0)] * 16;
 
   // create dfMV, dbMV
   for (mb_y=0; mb_y < MB_BLOCK_SIZE; mb_y += BLOCK_SIZE*2)

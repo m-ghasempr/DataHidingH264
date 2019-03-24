@@ -52,7 +52,7 @@
 #include "header.h"
 #include "rtp.h"
 #include "mbuffer.h"
-
+#include "encodeiff.h"
 
 // A little trick to avoid those horrible #if TRACE all over the source code
 #if TRACE
@@ -181,13 +181,13 @@ int SliceHeader()
   // 3 == full pel resolution
 
   SYMTRACESTRING("SH SliceQuant");
-  sym->value1 = 31 - Quant;
+  sym->value1 = MAX_QP - Quant;
   len += writeSyntaxElement_UVLC (sym, partition);
 
   if (img->types==SP_IMG)
   {
     SYMTRACESTRING("SH SP SliceQuant");
-    sym->value1 = 31 - img->qpsp;
+    sym->value1 = MAX_QP - img->qpsp;
     len += writeSyntaxElement_UVLC (sym, partition);
   }
   // Put the Motion Vector resolution as per reflector consensus
@@ -357,6 +357,12 @@ int SequenceHeader (FILE *outf)
   int HeaderInfo;         // Binary coded Headerinfo to be written in file
   int ProfileLevelVersionHash;
 
+
+  // Handle the Interim File Format
+  if (input->of_mode == PAR_OF_IFF)
+  {
+    return initInterimFile();
+  }
 
   // Handle the RTP case
   if (input->of_mode == PAR_OF_RTP)

@@ -44,6 +44,7 @@
       Ericsson Radio Systems, Sweden
       TELES AG, Germany
       Nokia Inc., USA
+      Nokia Corporation, Finland
       Siemens AG, Germany
       Heinrich-Hertz-Institute for Communication Technology GmbH, Germany
       University of Hannover, Institut of Communication Theory and Signal Processing,Germany
@@ -116,6 +117,22 @@
 
       Yann Le Maguet                  <yann.lemaguet@philips.com>
       Philips Research France
+
+      Dong Tian                       <tian@cs.tut.fi>
+      Tampere University of Technology
+      Tampere International Center for Signal Processing
+      33720 Tampere, Finland
+
+      Miska M. Hannuksela             <miska.hannuksela@nokia.com>
+      Nokia Corporation / Nokia Mobile Phones
+      P.O. Box 88
+      33721 Tampere, Finland
+            
+      Karsten Suehring                <suehring@hhi.de>
+      Heinrich-Hertz-Institute
+      Einsteinufer 37
+      10587 Berlin
+      Germany
 
     \endverbatim
  */

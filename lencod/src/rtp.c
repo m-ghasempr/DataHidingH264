@@ -475,13 +475,13 @@ int RTPSliceHeader()
   len += writeSyntaxElement_UVLC (&sym, partition);
 
   SYMTRACESTRING("RTP-SH: InitialQP");
-  sym.value1 = 31-img->qp;
+  sym.value1 = MAX_QP-img->qp;
   len += writeSyntaxElement_UVLC (&sym, partition);
 
   if (img->types==SP_IMG)
   {
     SYMTRACESTRING("RTP-SH: SP InitialQP");
-    sym.value1 = 31-img->qpsp;
+    sym.value1 = MAX_QP-img->qpsp;
     len += writeSyntaxElement_UVLC (&sym, partition);
   }
 

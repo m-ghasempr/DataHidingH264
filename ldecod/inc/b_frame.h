@@ -60,13 +60,7 @@ extern const int BLOCK_STEP[8][2];
 extern const byte SNGL_SCAN[16][2];
 extern const int JQ1[];
 extern const byte DBL_SCAN[8][2][2];
-extern const byte QP_SCALE_CR[32];
-
-extern int two[6];
-extern int three[6];
-extern int five[6][6];
-extern int six[6][6];
-extern int seven[6][6];
+extern const byte QP_SCALE_CR[40];
 
 int **fw_refFrArr, ** bw_refFrArr;
 

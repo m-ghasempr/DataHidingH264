@@ -52,13 +52,15 @@
 
 #define  Clip( Min, Max, Val) (((Val)<(Min))? (Min):(((Val)>(Max))? (Max):(Val)))
 
-int ALPHA_TABLE[32]  = {128,128,128,128,128,128,128,128,128,128,122, 96, 75, 59, 47, 37,
-                         29, 23, 18, 15, 13, 11,  9,  8,  7,  6,  5,  4,  3,  3,  2,  2 } ;
-int  BETA_TABLE[32]  = {  0,  0,  0,  0,  0,  0,  0,  0,  3,  3,  3,  4,  4,  4,  6,  6,
-                          6,  7,  8,  8,  9,  9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14  } ;
-byte CLIP_TBL[3][32] = {{0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0},
-                        {0,0,0,0,0,0,0,0, 0,0,0,1,1,1,1,1, 1,1,1,1,1,2,2,2, 2,3,3,3,3,4,5,5},
-                        {0,0,0,0,0,0,0,0, 0,1,1,1,1,1,1,1, 1,2,2,2,2,3,3,3, 4,4,5,5,5,7,8,9}} ;
+int ALPHA_TABLE[40]  = {128,128,128,128,128,128,128,128,128,128,122, 96, 75, 59, 47, 37,
+                         29, 23, 18, 15, 13, 11,  9,  8,  7,  6,  5,  4,  3,  3,  2,  2,
+                          1,  1,  1,  1,  1,  1,  0,  0 } ;
+int  BETA_TABLE[40]  = {  0,  0,  0,  0,  0,  0,  0,  0,  3,  3,  3,  4,  4,  4,  6,  6,
+                          6,  7,  8,  8,  9,  9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14,
+                         15, 15, 16, 16, 17, 17, 18, 18 } ;
+byte CLIP_TBL[3][40] = {{0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0},
+                        {0,0,0,0,0,0,0,0, 0,0,0,1,1,1,1,1, 1,1,1,1,1,2,2,2, 2,3,3,3,3,4,5,5, 6,7,8,9,10,11,13,15},
+                        {0,0,0,0,0,0,0,0, 0,1,1,1,1,1,1,1, 1,2,2,2,2,3,3,3, 4,4,5,5,5,7,8,9, 10,12,13,15,17,20,22,25}} ;
 byte MASK_L[2][16]   = {{3,0,1,2,  7,4,5,6,  11,8,9,10,  15,12,13,14}, {12,13,14,15,  0,1,2,3, 4,5,6,7, 8,9,10,11}} ;
 byte MASK_C[2][ 4]   = {{1,0,3,2}, {2,3,0,1}} ;
 
@@ -79,6 +81,7 @@ void EdgeLoop( byte* ptrOut, int* ptrIn, Macroblock *MbP, Macroblock *MbQ, int V
   int      incOut, incOut2, incOut3 ;
   int      C0, Cq, Cp, c0, n, delta, strong, dif ;
   int      lastPel = luma ? 4 : 2;
+  int      qp = max(MbQ->qp, 0);
 
 
   StrengthQ = ((MbQ->intraOrInter != INTER_MB) || (img->types == SP_IMG))? 2: ((MbQ->cbp_blk & CbpMaskQ) != 0)? 1:0 ;  // if not INTRA: has this
@@ -86,10 +89,10 @@ void EdgeLoop( byte* ptrOut, int* ptrIn, Macroblock *MbP, Macroblock *MbQ, int V
 
   if( StrengthP || StrengthQ || VecDif )
   {
-    alpha   = ALPHA_TABLE[ MbQ->qp ] ;
-    beta    = BETA_TABLE [ MbQ->qp ] ;
-    Cq      = CLIP_TBL[ StrengthQ ][ MbQ->qp ] ;
-    Cp      = CLIP_TBL[ StrengthP ][ MbQ->qp ] ;
+    alpha   = ALPHA_TABLE[ qp ] ;
+    beta    = BETA_TABLE [ qp ] ;
+    Cq      = CLIP_TBL[ StrengthQ ][ qp ] ;
+    Cp      = CLIP_TBL[ StrengthP ][ qp ] ;
     C0      = Cq + Cp ;
     incIn   = dir ?  widthIn : 1 ;                     // vertical filtering increment to next pixel is 1 else width
     incIn2  = incIn<<1 ;
@@ -112,7 +115,7 @@ void EdgeLoop( byte* ptrOut, int* ptrIn, Macroblock *MbP, Macroblock *MbQ, int V
         if( abs(ptrIn[-incIn] - ptrIn[(-1-ap)*incIn]) > beta)
           break ;
 
-      if( strong & (ap+aq == 6) & (delta < MbQ->qp>>2) & (delta >= 2) )                   // INTRA strong filtering
+      if( strong & (ap+aq == 6) & (delta < qp>>2) & (delta >= 2) )                   // INTRA strong filtering
       {
         ptrOut[ -incOut]   = (25*( ptrIn[-incIn3] +  ptrIn[  incIn]) + 26*( ptrIn[-incIn2] + ptrIn[-incIn ] +  ptrIn[      0 ]) + 64) >> 7 ;
         ptrOut[-incOut2]   = (25*( ptrIn[-incIn4] +  ptrIn[      0]) + 26*( ptrIn[-incIn3] + ptrIn[-incIn2] + ptrOut[ -incOut]) + 64) >> 7 ;

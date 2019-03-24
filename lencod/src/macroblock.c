@@ -627,7 +627,7 @@ int MakeIntraPrediction(int *intra_pred_mode_2)
   currMB->cbp     = 0;
   currMB->intraOrInter = INTRA_MB_4x4;
 
-  tot_intra_sad=QP2QUANT[img->qp]*24;// sum of intra sad values, start with a 'handicap'
+  tot_intra_sad=QP2QUANT[max(img->qp,0)]*24;// sum of intra sad values, start with a 'handicap'
 
   for(block_y = 0 ; block_y < MB_BLOCK_SIZE ; block_y += BLOCK_MULTIPLE)
   {
@@ -663,7 +663,7 @@ int MakeIntraPrediction(int *intra_pred_mode_2)
               for (i=0; i < BLOCK_SIZE; i++)
                 img->m7[i][j]=imgY_org[pic_pix_y+j][pic_pix_x+i]-img->mprr[ipmode][j][i]; // find diff
             }
-            current_intra_sad=QP2QUANT[img->qp]*PRED_IPRED[img->ipredmode[pic_block_x+1][pic_block_y]+1][img->ipredmode[pic_block_x][pic_block_y+1]+1][ipmode]*2;
+            current_intra_sad=QP2QUANT[max(img->qp,0)]*PRED_IPRED[img->ipredmode[pic_block_x+1][pic_block_y]+1][img->ipredmode[pic_block_x][pic_block_y+1]+1][ipmode]*2;
 
             current_intra_sad += find_sad(input->hadamard, img->m7); // add the start 'handicap' and the computed SAD
 
