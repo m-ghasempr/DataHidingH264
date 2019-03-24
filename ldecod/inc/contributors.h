@@ -126,7 +126,7 @@
       6000 Connection Drive
       Irving, TX 75039, USA
 
-      Ye-Kui Wang                     <wangy@cs.tut.fi>
+      Ye-Kui Wang                     <wyk@ieee.org>
       Tampere University of Technology
       Tampere International Center for Signal Processing
       33720 Tampere, Finland

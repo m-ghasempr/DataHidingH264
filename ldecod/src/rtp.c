@@ -238,6 +238,11 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
   int FirstMacroblockInSlice;
   static int b_frame = FALSE;
 
+  // JVT-D101
+  int done0 = 0; 
+  static int first = 1; 
+  // End JVT-D101
+
   assert (currSlice != NULL);
   assert (bits != 0);
 
@@ -258,85 +263,111 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
   ExpectedMBNr = img->current_mb_nr;
   LastPicID = img->tr;
 
-  done = 0;
-  do  
+  // JVT-D101
+  done0 = 0;
+  do
   {
-    if (RTPReadPacket (p, bits) < 0)    // Read and decompose
-      return -4711;
-
-    if (p->payload[0] == (PAYLOAD_TYPE_IDERP<<4) && fb != NULL && frm != NULL )  // Tian Dong: IDERP, JVT-C083
+  // End JVT-D101
+    done = 0;
+    do  
     {
-      reset_buffers();
-      frm->picbuf_short[0]->used=0;
-      frm->picbuf_short[0]->picID=-1;
-      frm->picbuf_short[0]->lt_picID=-1;
-      frm->short_used=0;
-    }
+      if (RTPReadPacket (p, bits) < 0)    // Read and decompose
+        return -4711;
 
-    switch (p->payload[0] & 0xf)
-    {
-    case 0:       // Full Slice packet
-    case 1:       // Partition type A packet
-      done = 1;
-      break;
- 
-    case 2:       // Partition B
-    case 3:       // Partition C
-      // Do nothing.  this results in discarding the unexpected Partition B, C
-      // packet, which will later be concealed "automatically", because when
-      // interpreting the next Partition A or full slice packet a range of
-      // lost blocks is found which will be concealed in the usual manner.
-      //
-      // If anyonme comes up with an idea how to use coefficients without the
-      // header information then this code has to be changed
-      printf ("found unexpected Partition %c packet, skipping\n", (p->payload[0]&0xf)==2?'B':'C'); // avoid warnings. mwi
-      break;
-    case 4:
-      // Tian Dong (Sept 2002)
-      // The spare picture SEI messages are packetized in compound packet (known as aggregation packet now),
-      // I will only deal with the compound packet composed by sei message and slice data.
-      ProcessAggregationPacket(p, img);
-      done = 1;
-      break;
-    case 5:
-      //! Add implementation of SUPP packets here
-      printf ("SUPP packets not yet implemented, skipped\n");
-      break;
-    case 6:
-      printf ("Found header packet\n");
-
-      if ((err = RTPInterpretParameterSetPacket (&p->payload[1], p->paylen-1)) < 0)
+      if (p->payload[0] == (PAYLOAD_TYPE_IDERP<<4) && fb != NULL && frm != NULL )  // Tian Dong: IDERP, JVT-C083
       {
-        printf ("RTPInterpretParameterSetPacket returns error %d\n", err);
+        reset_buffers();
+        frm->picbuf_short[0]->used=0;
+        frm->picbuf_short[0]->picID=-1;
+        frm->picbuf_short[0]->lt_picID=-1;
+        frm->short_used=0;
       }
-      break;
-    default:
-      printf ("Undefined packet type %d found, skipped\n", p->payload[0] & 0xf);
-      assert (0==1);
-      break;
+
+      switch (p->payload[0] & 0xf)
+      {
+      case 0:       // Full Slice packet
+      case 1:       // Partition type A packet
+        done = 1;
+        break;
+ 
+      case 2:       // Partition B
+      case 3:       // Partition C
+        // Do nothing.  this results in discarding the unexpected Partition B, C
+        // packet, which will later be concealed "automatically", because when
+        // interpreting the next Partition A or full slice packet a range of
+        // lost blocks is found which will be concealed in the usual manner.
+        //
+        // If anyonme comes up with an idea how to use coefficients without the
+        // header information then this code has to be changed
+        printf ("found unexpected Partition %c packet, skipping\n", (p->payload[0]&0xf)==2?'B':'C'); // avoid warnings. mwi
+        break;
+      case 4:
+        // Tian Dong (Sept 2002)
+        // The spare picture SEI messages are packetized in compound packet (known as aggregation packet now),
+        // I will only deal with the compound packet composed by sei message and slice data.
+        ProcessAggregationPacket(p, img);
+        done = 1;
+        break;
+      case 5:
+        //! Add implementation of SUPP packets here
+        printf ("SUPP packets not yet implemented, skipped\n");
+        break;
+      case 6:
+        printf ("Found header packet\n");
+
+        if ((err = RTPInterpretParameterSetPacket (&p->payload[1], p->paylen-1)) < 0)
+        {
+          printf ("RTPInterpretParameterSetPacket returns error %d\n", err);
+        }
+        break;
+      default:
+        printf ("Undefined packet type %d found, skipped\n", p->payload[0] & 0xf);
+        assert (0==1);
+        break;
+      }
+    } while (!done);
+
+    // Here, all the non-video data packets and lonely type B, C partitions
+    // are handled.  Now work on the expected type A and full slice packets
+
+    assert ((p->payload[0] & 0xf) < 2);
+
+    if ((p->payload[0] & 0xf) == 0)       // Full Slice packet
+    {
+      currSlice->ei_flag = 0;
+      MBDataIndex = 1;                    // Skip First Byte
+      MBDataIndex += RTPInterpretSliceHeader (&p->payload[1], p->paylen-1, 0, sh, img);
     }
-  } while (!done);
+    else                                  // Partition A packet
+    {
+      currSlice->ei_flag = 0;
+      MBDataIndex = 1;                    // Skip First Byte
+      MBDataIndex += RTPInterpretSliceHeader (&p->payload[1], p->paylen-1, 1, sh, img);
+    }
 
-  // Here, all the non-video data packets and lonely type B, C partitions
-  // are handled.  Now work on the expected type A and full slice packets
+    FirstMacroblockInSlice = sh->FirstMBInSliceY * (img->width/16) + 
+                                 sh->FirstMBInSliceX;   //! assumes picture sizes divisble by 16
+    //JVT-D101
+    if(first) // just to let the decoding of the first slice in the session
+    {
+      done0 = 1;
+      first = 0;
+    }
+    else 
+    {
+      if(sh->PictureID == currSlice->picture_id) // in same picture currSlice->picture_id
+      {
+        if(sh->PictureID == img->last_decoded_pic_id) // a redundant slice/picture
+          ;
+        else if(FirstMacroblockInSlice >= img->current_mb_nr) // note here img->current_mb_nr = -4711 if the first slice of picture comes
+          done0 = 1; // if FirstMacroblockInSlice < img->current_mb_nr, the slice just read is a redundant slice
+      }
+      else
+        done0 = 1;
+    }
+    // End JVT-D101
 
-  assert ((p->payload[0] & 0xf) < 2);
-
-  if ((p->payload[0] & 0xf) == 0)       // Full Slice packet
-  {
-    currSlice->ei_flag = 0;
-    MBDataIndex = 1;                    // Skip First Byte
-    MBDataIndex += RTPInterpretSliceHeader (&p->payload[1], p->paylen-1, 0, sh);
-  }
-  else                                  // Partition A packet
-  {
-    currSlice->ei_flag = 0;
-    MBDataIndex = 1;                    // Skip First Byte
-    MBDataIndex += RTPInterpretSliceHeader (&p->payload[1], p->paylen-1, 1, sh);
-  }
-
-  FirstMacroblockInSlice = sh->FirstMBInSliceY * (img->width/16) + 
-                               sh->FirstMBInSliceX;   //! assumes picture sizes divisble by 16
+  } while (!done0); // JVT-D101
 
   // Here used to be the if() cascade.  It is deleted for two reasons:  First,
   // error concealment for non data-partitioned slices (Nokia concealment) is
@@ -365,12 +396,11 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
   currSlice->partArr[0].bitstream->bitstream_length = p->paylen-MBDataIndex;
 
   memcpy (currSlice->partArr[0].bitstream->streamBuffer, &p->payload[MBDataIndex],p->paylen-MBDataIndex);
-  if(inp->Encapsulated_NAL_Payload)
-  {
-    p->paylen = MBDataIndex + EBSPtoRBSP(currSlice->partArr[0].bitstream->streamBuffer, p->paylen - MBDataIndex, 0);
-    p->paylen = MBDataIndex + RBSPtoSODB(currSlice->partArr[0].bitstream->streamBuffer, p->paylen - MBDataIndex);
-    currSlice->partArr[0].bitstream->bitstream_length = p->paylen-MBDataIndex;
-  }
+
+  p->paylen = MBDataIndex + EBSPtoRBSP(currSlice->partArr[0].bitstream->streamBuffer, p->paylen - MBDataIndex, 0);
+  p->paylen = MBDataIndex + RBSPtoSODB(currSlice->partArr[0].bitstream->streamBuffer, p->paylen - MBDataIndex);
+  currSlice->partArr[0].bitstream->bitstream_length = p->paylen-MBDataIndex;
+  
   buf = currSlice->partArr[0].bitstream->streamBuffer;
 
   if(inp->symbol_mode == CABAC)
@@ -830,12 +860,11 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
   currSlice->partArr[0].bitstream->bitstream_length = p->paylen-MBDataIndex;
 
   memcpy (currSlice->partArr[0].bitstream->streamBuffer, &p->payload[MBDataIndex],p->paylen-MBDataIndex);
-  if(inp->Encapsulated_NAL_Payload)
-  {
-    p->paylen = MBDataIndex + EBSPtoRBSP(currSlice->partArr[0].bitstream->streamBuffer, p->paylen - MBDataIndex, 0);
-    p->paylen = MBDataIndex + RBSPtoSODB(currSlice->partArr[0].bitstream->streamBuffer, p->paylen - MBDataIndex);
-    currSlice->partArr[0].bitstream->bitstream_length = p->paylen-MBDataIndex;
-  }
+
+  p->paylen = MBDataIndex + EBSPtoRBSP(currSlice->partArr[0].bitstream->streamBuffer, p->paylen - MBDataIndex, 0);
+  p->paylen = MBDataIndex + RBSPtoSODB(currSlice->partArr[0].bitstream->streamBuffer, p->paylen - MBDataIndex);
+  currSlice->partArr[0].bitstream->bitstream_length = p->paylen-MBDataIndex;
+
   buf = currSlice->partArr[0].bitstream->streamBuffer;
 
   if(inp->symbol_mode == CABAC)
@@ -989,7 +1018,7 @@ void DumpRTPHeader (RTPpacket_t *p)
  *    Stephan Wenger   stewe@cs.tu-berlin.de
  *****************************************************************************/
 
-int RTPInterpretSliceHeader (byte *buf, int bufsize, int ReadSliceId, RTPSliceHeader_t *sh)
+int RTPInterpretSliceHeader (byte *buf, int bufsize, int ReadSliceId, RTPSliceHeader_t *sh, struct img_par *img)
 {
   int len, info, bytes, dummy, bitptr=0;
   int temp, tmp1;
@@ -1050,6 +1079,15 @@ int RTPInterpretSliceHeader (byte *buf, int bufsize, int ReadSliceId, RTPSliceHe
   linfo (len, info, &sh->FirstMBInSliceY, &dummy);
   bitptr+=len;
   
+  // JVT-D101
+  if(img->redundant_slice_flag)
+  {
+    len = GetfixedSymbol(buf, bitptr, &info, bufsize,1);   
+    sh->redundant_pic_cnt = info;
+    bitptr+=len;
+  } 
+  // End JVT-D101
+
   if(sh->SliceType==1)
   {
     len = GetfixedSymbol(buf, bitptr, &info, bufsize,1);   
@@ -1257,6 +1295,16 @@ int RTPInterpretSliceHeader (byte *buf, int bufsize, int ReadSliceId, RTPSliceHe
   }
   /* end KS */
 
+  // JVT-D097
+  if( img->num_slice_groups_minus1 > 0  &&  
+      img->mb_allocation_map_type >= 4  &&  
+		  img->mb_allocation_map_type <= 6)
+  {
+    len = GetVLCSymbol(buf, bitptr, &info, bufsize);
+    linfo (len, info, &sh->slice_group_change_cycle, &dummy);
+    bitptr+=len;
+  }
+  // End JVT-D097
 
   bytes = bitptr/8;
   if (bitptr%8)
@@ -1577,6 +1625,8 @@ void RTPSetImgInp (struct img_par *img, struct inp_par *inp, RTPSliceHeader_t *s
         }
       }
   }
+
+  img->slice_group_change_cycle = sh->slice_group_change_cycle; //JVT-D097
 }
 
 
@@ -1683,7 +1733,7 @@ int RTPGetFollowingSliceHeader (struct img_par *img, RTPpacket_t *p, RTPSliceHea
     i=1;
   }
 */  
-  RTPInterpretSliceHeader (&newp->payload[1], newp->packlen, newp->payload[0]==0?0:1, sh);
+  RTPInterpretSliceHeader (&newp->payload[1], newp->packlen, newp->payload[0]==0?0:1, sh, img);
   if(currSlice->picture_id != sh->PictureID) 
     return (SOP);
   else
@@ -2013,13 +2063,6 @@ int RTPInterpretParameterSetPacket (char *buf, int buflen)
         destin = &ParSet[ps].EntropyCoding;
         break;
       }
-      if (!strncmp (s, "MotionResolution", MAX_PARAMETER_STRINGLEN))
-      {
-        state = EXPECT_STRUCTVAL_STRING;
-        interpreter = INTERPRET_MOTION_RESOLUTION;
-        destin = &ParSet[ps].MotionResolution;
-        break;
-      }
       if (!strncmp (s, "PartitioningType", MAX_PARAMETER_STRINGLEN))
       {
         state = EXPECT_STRUCTVAL_STRING;
@@ -2079,6 +2122,60 @@ int RTPInterpretParameterSetPacket (char *buf, int buflen)
         break;
       }
  
+      // JVT-D095, JVT-D097
+      if (!strncmp (s, "num_slice_groups_minus1", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_INT;
+        interpreter = INTERPRET_COPY;
+        destin = &ParSet[ps].num_slice_groups_minus1;
+        break;
+      }
+      if (!strncmp (s, "mb_allocation_map_type", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_INT;
+        interpreter = INTERPRET_COPY;
+        destin = &ParSet[ps].mb_allocation_map_type;
+        break;
+      }
+      if (!strncmp (s, "top_left_mb", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_INT;
+        interpreter = INTERPRET_COPY;
+        destin = &ParSet[ps].top_left_mb;
+        break;
+      }
+      if (!strncmp (s, "bottom_right_mb", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_INT;
+        interpreter = INTERPRET_COPY;
+        destin = &ParSet[ps].bottom_right_mb;
+        break;
+      }
+      if (!strncmp (s, "slice_group_change_direction", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_INT;
+        interpreter = INTERPRET_COPY;
+        destin = &ParSet[ps].slice_group_change_direction;
+        break;
+      }
+      if (!strncmp (s, "slice_group_change_rate_minus1", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_INT;
+        interpreter = INTERPRET_COPY;
+        destin = &ParSet[ps].slice_group_change_rate_minus1;
+        break;
+      }
+      // End JVT-D095, JVT-D097
+
+      // JVT-D101: redundant_slice_flag
+      if (!strncmp (s, "redundant_slice_flag", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_INT;
+        interpreter = INTERPRET_COPY;
+        destin = &ParSet[ps].redundant_slice_flag;
+        break;
+      }
+      // End JVT-D101
      
       // Here, all defined Parameter names are checked.  Anything else is a syntax error
       printf ("Syntax Error: unknown Parameter %s\n", s);
@@ -2397,13 +2494,6 @@ int RTPInterpretParameterSetPacket (char *buf, int buflen)
         destin = &ParSet[ps].EntropyCoding;
         break;
       }
-      if (!strncmp (s, "MotionResolution", MAX_PARAMETER_STRINGLEN))
-      {
-        state = EXPECT_STRUCTVAL_STRING;
-        interpreter = INTERPRET_MOTION_RESOLUTION;
-        destin = &ParSet[ps].MotionResolution;
-        break;
-      }
       if (!strncmp (s, "PartitioningType", MAX_PARAMETER_STRINGLEN))
       {
         state = EXPECT_STRUCTVAL_STRING;
@@ -2614,8 +2704,6 @@ void RTPUseParameterSet (int n, struct img_par *img, struct inp_par *inp)
     inp->symbol_mode = UVLC;
   else
     inp->symbol_mode = CABAC;
-  // MotionResolution
-  img->mv_res = ParSet[CurrentParameterSet].MotionResolution;
   // PartitioningType
   inp->partition_mode = ParSet[CurrentParameterSet].PartitioningType;
 
@@ -2627,11 +2715,21 @@ void RTPUseParameterSet (int n, struct img_par *img, struct inp_par *inp)
 
   // HRCParameters: Doesn't exist
     // FMO: MBAmap
-  FmoInit (ParSet[CurrentParameterSet].XSizeMB, 
+  FmoInit (img, inp, ParSet[CurrentParameterSet].XSizeMB, 
            ParSet[CurrentParameterSet].YSizeMB, 
            ParSet[CurrentParameterSet].MBAmap, 
            ParSet[CurrentParameterSet].XSizeMB * ParSet[CurrentParameterSet].YSizeMB);
 
+  // JVT-D095, JVT-D097
+  img->num_slice_groups_minus1 = ParSet[CurrentParameterSet].num_slice_groups_minus1;
+  img->mb_allocation_map_type = ParSet[CurrentParameterSet].mb_allocation_map_type; 
+  img->top_left_mb = ParSet[CurrentParameterSet].top_left_mb; 
+  img->bottom_right_mb = ParSet[CurrentParameterSet].bottom_right_mb; 
+  img->slice_group_change_direction = ParSet[CurrentParameterSet].slice_group_change_direction; 
+  img->slice_group_change_rate_minus1 = ParSet[CurrentParameterSet].slice_group_change_rate_minus1; 
+  // End JVT-D095, JVT-D097
+
+  img->redundant_slice_flag = ParSet[CurrentParameterSet].redundant_slice_flag; // JVT-D101
 }
 
 
@@ -2941,11 +3039,9 @@ void CopyPartitionBitstring (struct img_par *img, RTPpacket_t *p, Bitstream *b, 
   b->frame_bitoffset = b->read_len = 0;
 
   memcpy (b->streamBuffer, &p->payload[header_bytes], b->bitstream_length);
-  if(inp->Encapsulated_NAL_Payload) 
-  {
-    b->bitstream_length = EBSPtoRBSP(b->streamBuffer, b->bitstream_length, 0);
-    b->bitstream_length = RBSPtoSODB(b->streamBuffer, b->bitstream_length);
-  }
+
+  b->bitstream_length = EBSPtoRBSP(b->streamBuffer, b->bitstream_length, 0);
+  b->bitstream_length = RBSPtoSODB(b->streamBuffer, b->bitstream_length);
 
   if (ParSet[CurrentParameterSet].EntropyCoding == CABAC) 
   {

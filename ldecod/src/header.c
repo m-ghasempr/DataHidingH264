@@ -327,11 +327,6 @@ int SliceHeader(struct img_par *img, struct inp_par *inp)
   }
 
   sym.mapping = linfo;
-  // 8. Get MVResolution
-  SYMTRACESTRING("SH MVResolution");
-  readSyntaxElement_UVLC (&sym,img,inp,partition);
-  img->mv_res = sym.value1;
-  UsedBits += sym.len;
 
   /* KS: Multi-Picture Buffering Syntax */
 
@@ -517,11 +512,11 @@ int SliceHeader(struct img_par *img, struct inp_par *inp)
     if (currSlice->structure)
     {
       // if first call is field: init with double height
-      FmoInit (img->width/16, img->height/8, NULL, 0);   // force a default MBAmap
+      FmoInit (img, inp, img->width/16, img->height/8, NULL, 0);   // force a default MBAmap
     }
     else
     {
-      FmoInit (img->width/16, img->height/16, NULL, 0);   // force a default MBAmap
+      FmoInit (img, inp, img->width/16, img->height/16, NULL, 0);   // force a default MBAmap
     }
     FirstCall = 0;
   }

@@ -379,7 +379,6 @@ void levrun_linfo_intra(int level,int run,int *len,int *info)
   *info=n-(int)pow(2,i)+sign;
 }
 
-#ifdef _EXP_GOLOMB
 /*!
  ************************************************************************
  * \brief
@@ -398,36 +397,6 @@ int symbol2uvlc(SyntaxElement *sym)
   sym->bitpattern = (1<<suffix_len)|(sym->inf&((1<<suffix_len)-1));
   return 0;
 }
-#else
-/*!
- ************************************************************************
- * \brief
- *    Makes code word and passes it back
- *    A code word has the following format: 0 Xn...0 X2 0 X1 0 X0 1
- *
- * \par Input:
- *    Info   : Xn..X2 X1 X0                                             \n
- *    Length : Total number of bits in the codeword
- ************************************************************************
- */
-int symbol2uvlc(SyntaxElement *sym)
-{
-  int info_len = sym->len/2;
-
-  // Convert info into a bitpattern int
-  sym->bitpattern = 0;
-
-  // vlc coding
-  while(--info_len >= 0)
-  {
-    sym->bitpattern <<= 2;
-    sym->bitpattern |= (0x01 & (sym->inf >> info_len));
-  }
-  sym->bitpattern <<= 1;
-  sym->bitpattern |= 0x01;
-  return 0;
-}
-#endif
 
 /*!
  ************************************************************************
@@ -588,37 +557,6 @@ int writeSyntaxElement2Buf_Fixed(SyntaxElement *se, Bitstream* this_streamBuffer
   return (se->len);
 }
 
-
-/*!
- ************************************************************************
- * \brief
- *    generates UVLC code for EOS and writes it to the appropriate buffer
- ************************************************************************
- */
-void  writeEOS2buffer()
-{
-  int dP_nr = assignSE2partition[input->partition_mode][SE_EOS];
-  Bitstream *currStream = ((img->currentSlice)->partArr[dP_nr]).bitstream;
-
-  SyntaxElement sym;
-
-  sym.len = LEN_STARTCODE;
-  sym.inf = EOS;
-  sym.type  = SE_EOS;
-#if TRACE
-  strncpy(sym.tracestring, "EOS",TRACESTRING_SIZE);
-#endif
-
-  symbol2uvlc(&sym);
-
-  writeUVLC2buffer(&sym, currStream);
-
-#if TRACE
-  trace2out(&sym);
-#endif
-
-
-}
 
 /*!
  ************************************************************************

@@ -76,5 +76,10 @@ void interpret_spare_picture( byte* payload, int size, struct img_par *img );
 void interpret_subsequence_info( byte* payload, int size, struct img_par *img );
 void interpret_subsequence_layer_info( byte* payload, int size, struct img_par *img );
 void interpret_subsequence_characteristics_info( byte* payload, int size, struct img_par *img );
+void interpret_scene_information( byte* payload, int size, struct img_par *img ); // JVT-D099
+void interpret_user_data_registered_itu_t_t35_info( byte* payload, int size, struct img_par *img );
+void interpret_user_data_unregistered_info( byte* payload, int size, struct img_par *img );
+void interpret_pan_scan_rect_info( byte* payload, int size, struct img_par *img );
+void interpret_random_access_info( byte* payload, int size, struct img_par *img );
 
 #endif

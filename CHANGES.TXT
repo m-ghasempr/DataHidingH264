@@ -1,3 +1,41 @@
+Changes for Version JM 5.0 to JM 4.4a
+-------------------------------------
+New features
+* Changed startcode length (KS)
+* SEI for                             (SR)
+   a) Unregistered (arbitrary) data
+   b) Registered ITU_T_t35 data
+   c) Random access 
+   d) Pan Scan Information
+
+Removed features
+* Special Position (KS)
+* 1/8 pel motion compensation (KS)
+
+Bug Fixes
+* Temporal Direct mode fix for bottom field (LW)
+* fix statistics file
+
+
+Changes for Version JM 4.4a to JM 4.4
+-------------------------------------
+New features
+* MB AFF and CABAC (GB/HS)
+Bug Fixes
+* fix chroma QP mapping (AH)
+
+
+Changes for Version JM 4.4 to JM 4.3a
+-------------------------------------
+New features
+* FMO mode 3# [JVT-D095] (WYK)
+* FMO modes 4#~6# [JVT-D097] (WYK)
+* Scene information SEI message [JVT-D099] (WYK)
+* Redundant slices [JVT-D101] (WYK)
+
+Note: FMO is broken.
+
+
 Changes for Version JM 4.3a to JM 4.3
 -------------------------------------
 New features
@@ -677,7 +715,7 @@ TW      Thomas Wiegand          wiegand@hhi.de
 TWe     Thomas Wedi             wedi@tnt.uni-hannover.de
 TWa     Toby Walker             tobyw@usrl.sony.com
 VV	Viktor Varsa		viktor.varsa@nokia.com
-WYK	Ye-Kui Wang		wangy@cs.tut.fi
+WYK	Ye-Kui Wang		wyk@ieee.org
 YK      Yoshihiro Kikuchi       yoshihiro.kikuchi@toshiba.co.jp
 YL      Yann Lemaguet		yann.lemaguet@philips.com
 YW      Ye-Kui Wang             wyk@ieee.org

@@ -71,9 +71,6 @@
 #define NUM_BLOCK_TYPES 8
 
 
-#define _EXP_GOLOMB
-
-
 #define _ERROR_CONCEALMENT_   1   //!< 0: off; 1: on
 #define _ADAPT_LAST_GROUP_
 
@@ -188,7 +185,6 @@
 #define IMG_HEIGHT_CR   72
 
 #define INIT_FRAME_RATE 30
-#define LEN_STARTCODE   31                      //!< length of start code
 #define EOS             1                       //!< End Of Sequence
 #define SOP             2                       //!< Start Of Picture
 #define SOS             3                       //!< Start Of Slice
@@ -241,6 +237,6 @@
 #define INTERIM_FILE_MINOR_NO 1
 
 //Start code and Emulation Prevention need this to be defined in identical manner at encoder and decoder
-#define ZEROBYTES_SHORTSTARTCODE 1 //indicates the number of zero bytes in the short start-code prefix
+#define ZEROBYTES_SHORTSTARTCODE 2 //indicates the number of zero bytes in the short start-code prefix
 #endif
 

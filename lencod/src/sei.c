@@ -64,12 +64,12 @@ Boolean seiHasUser_data_unregistered=FALSE;
 Boolean seiHasRandom_access_point=FALSE;
 Boolean seiHasRef_pic_buffer_management_repetition=FALSE;
 Boolean seiHasSpare_picture=FALSE;
-Boolean seiHasScene_information=FALSE;
+
+Boolean seiHasSceneInformation=FALSE; // JVT-D099
+
 Boolean seiHasSubseq_information=FALSE;
 Boolean seiHasSubseq_layer_characteristics=FALSE;
 Boolean seiHasSubseq_characteristics=FALSE;
-
-
 
 /*!
  ************************************************************************
@@ -94,12 +94,22 @@ void InitSEIMessages()
     sei_message[i].subPacketType = SEI_PACKET_TYPE;
     clear_sei_message(i);
   }
-  // init spare picture sei message
+
+  // init sei messages
   seiSparePicturePayload.data = NULL;
   InitSparePicture();
   InitSubseqChar();
   if (input->NumFramesInELSubSeq != 0)
     InitSubseqLayerInfo();
+  InitSceneInformation(); // JVT-D099
+  // init panscanrect sei message
+  InitPanScanRectInfo();
+  // init user_data_unregistered
+  InitUser_data_unregistered();
+  // init user_data_unregistered
+  InitUser_data_registered_itu_t_t35();
+  // init user_RandomAccess
+  InitRandomAccess();
 }
 
 void CloseSEIMessages()
@@ -111,6 +121,12 @@ void CloseSEIMessages()
 
   CloseSubseqChar();
   CloseSparePicture();
+  CloseSceneInformation(); // JVT-D099
+  //Shankar Regunathan Oct 2002
+  ClosePanScanRectInfo();
+  CloseUser_data_unregistered();
+  CloseUser_data_registered_itu_t_t35();
+  CloseRandomAccess();
 
   for (i=0; i<MAX_LAYER_NUMBER; i++)
   {
@@ -128,6 +144,16 @@ Boolean HaveAggregationSEI()
   if (seiHasSubseqLayerInfo && img->number == 0)
     return TRUE;
   if (seiHasSubseqChar)
+    return TRUE;
+  if (seiHasSceneInformation) // JVT-D099
+    return TRUE;
+  if (seiHasPanScanRectInfo) // Shankar Regunathan Oct 2002
+    return TRUE;
+  if (seiHasUser_data_unregistered_info)
+    return TRUE;
+  if (seiHasUser_data_registered_itu_t_t35_info)
+    return TRUE;
+  if (seiHasRandomAccess_info)
     return TRUE;
   return FALSE;
 //  return input->SparePictureOption && ( seiHasSpare_picture || seiHasSubseq_information || 
@@ -181,7 +207,7 @@ void write_sei_message(int id, byte* payload, int payload_size, int payload_type
 
 /*!
  ************************************************************************
- *  \write_sei_message
+ *  \finalize_sei_message
  *  \brief
  *     write rbsp_trailing_bits to the sei message
  *  \input
@@ -1109,4 +1135,552 @@ void CloseSubseqChar()
     free(seiSubseqChar.data);
   }
   seiSubseqChar.data = NULL;
+}
+
+
+// JVT-D099
+/*!
+ **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ *  \functions on scene information SEI message
+ *  \brief
+ *      JVT-D099
+ *  \author
+ *      Ye-Kui Wang                 <wyk@ieee.org>
+ **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ */
+
+scene_information_struct seiSceneInformation;
+
+void InitSceneInformation()
+{
+  seiHasSceneInformation = TRUE;
+
+  seiSceneInformation.scene_id = 0;
+  seiSceneInformation.scene_transition_type = 0;
+  seiSceneInformation.second_scene_id = -1;
+
+  seiSceneInformation.data = malloc( sizeof(Bitstream) );
+  seiSceneInformation.data->streamBuffer = malloc( MAXRTPPAYLOADLEN );
+  seiSceneInformation.data->bits_to_go  = 8;
+  seiSceneInformation.data->byte_pos    = 0;
+  seiSceneInformation.data->byte_buf    = 0;
+  memset( seiSceneInformation.data->streamBuffer, 0, MAXRTPPAYLOADLEN );
+}
+
+void CloseSceneInformation()
+{
+  if (seiSceneInformation.data)
+  {
+    free(seiSceneInformation.data->streamBuffer);
+    free(seiSceneInformation.data);
+  }
+  seiSceneInformation.data = NULL;
+}
+
+void FinalizeSceneInformation()
+{
+  SyntaxElement sym;
+  Bitstream *dest = seiSceneInformation.data;
+
+  sym.type = SE_HEADER;
+  sym.mapping = n_linfo2;
+
+  sym.bitpattern = seiSceneInformation.scene_id;
+  sym.len = 8;
+  writeSyntaxElement2Buf_Fixed(&sym, dest);
+
+  sym.value1 = seiSceneInformation.scene_transition_type;
+  writeSyntaxElement2Buf_UVLC(&sym, dest);
+
+  if(seiSceneInformation.scene_transition_type > 3)
+  {
+    sym.bitpattern = seiSceneInformation.second_scene_id;
+    sym.len = 8;
+    writeSyntaxElement2Buf_Fixed(&sym, dest);
+  }
+
+  // make sure the payload is byte aligned, stuff bits are 10..0
+  if ( dest->bits_to_go != 8 )
+  {
+    (dest->byte_buf) <<= 1;
+    dest->byte_buf |= 1;
+    dest->bits_to_go--;
+    if ( dest->bits_to_go != 0 ) (dest->byte_buf) <<= (dest->bits_to_go);
+    dest->bits_to_go = 8;
+    dest->streamBuffer[dest->byte_pos++]=dest->byte_buf;
+    dest->byte_buf = 0;
+  }
+  seiSceneInformation.payloadSize = dest->byte_pos;
+}
+
+// HasSceneInformation: To include a scene information SEI into the next slice/DP, 
+//      set HasSceneInformation to be TRUE when calling this function. Otherwise, 
+//      set HasSceneInformation to be FALSE.
+void UpdateSceneInformation(Boolean HasSceneInformation, int sceneID, int sceneTransType, int secondSceneID)
+{
+  seiHasSceneInformation = HasSceneInformation;
+
+  assert (sceneID < 256);
+  seiSceneInformation.scene_id = sceneID;
+
+  assert (sceneTransType <= 6 );
+  seiSceneInformation.scene_transition_type = sceneTransType;
+
+  if(sceneTransType > 3)
+  {
+    assert (secondSceneID < 256);
+    seiSceneInformation.second_scene_id = secondSceneID;
+  }
+}
+// End JVT-D099
+
+
+/*!
+ **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ *  \functions on Pan Scan messages
+ *  \brief
+ *      Based on FCD
+ *  \author
+ *      Shankar Regunathan                 <tian@cs.tut.fi>
+ **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ */
+
+Boolean seiHasPanScanRectInfo = FALSE;
+panscanrect_information_struct seiPanScanRectInfo;
+
+void InitPanScanRectInfo()
+{
+
+  seiPanScanRectInfo.data = malloc( sizeof(Bitstream) );
+  assert( seiPanScanRectInfo.data != NULL );
+  seiPanScanRectInfo.data->streamBuffer = malloc(MAXRTPPAYLOADLEN);
+  assert( seiPanScanRectInfo.data->streamBuffer != NULL );
+  ClearPanScanRectInfoPayload();
+
+  seiPanScanRectInfo.pan_scan_rect_left_offset = 0;
+  seiPanScanRectInfo.pan_scan_rect_right_offset = 0;
+  seiPanScanRectInfo.pan_scan_rect_top_offset = 0;
+  seiPanScanRectInfo.pan_scan_rect_bottom_offset = 0;
+
+}
+
+
+void ClearPanScanRectInfoPayload()
+{
+  memset( seiPanScanRectInfo.data->streamBuffer, 0, MAXRTPPAYLOADLEN);
+  seiPanScanRectInfo.data->bits_to_go  = 8;
+  seiPanScanRectInfo.data->byte_pos    = 0;
+  seiPanScanRectInfo.data->byte_buf    = 0;
+  seiPanScanRectInfo.payloadSize       = 0;
+
+  seiHasPanScanRectInfo = TRUE;
+}
+
+void UpdatePanScanRectInfo()
+{
+  seiPanScanRectInfo.pan_scan_rect_id = 3;
+  seiPanScanRectInfo.pan_scan_rect_left_offset = 10;
+  seiPanScanRectInfo.pan_scan_rect_right_offset = 40;
+  seiPanScanRectInfo.pan_scan_rect_top_offset = 20;
+  seiPanScanRectInfo.pan_scan_rect_bottom_offset =32;
+  seiHasPanScanRectInfo = TRUE;
+}
+
+void FinalizePanScanRectInfo()
+{
+  SyntaxElement sym;
+  Bitstream *dest = seiPanScanRectInfo.data;
+
+
+  sym.type = SE_HEADER;
+  sym.mapping = n_linfo2;
+
+  sym.value1 = seiPanScanRectInfo.pan_scan_rect_id;
+  writeSyntaxElement2Buf_UVLC(&sym, dest);
+  sym.value1 = seiPanScanRectInfo.pan_scan_rect_left_offset;
+  writeSyntaxElement2Buf_UVLC(&sym, dest);
+  sym.value1 = seiPanScanRectInfo.pan_scan_rect_right_offset;
+  writeSyntaxElement2Buf_UVLC(&sym, dest);
+  sym.value1 = seiPanScanRectInfo.pan_scan_rect_top_offset;
+  writeSyntaxElement2Buf_UVLC(&sym, dest);
+  sym.value1 = seiPanScanRectInfo.pan_scan_rect_bottom_offset;
+  writeSyntaxElement2Buf_UVLC(&sym, dest);
+
+// #define PRINT_PAN_SCAN_RECT
+#ifdef PRINT_PAN_SCAN_RECT
+  printf("Pan Scan Id %d Left %d Right %d Top %d Bottom %d \n", seiPanScanRectInfo.pan_scan_rect_id, seiPanScanRectInfo.pan_scan_rect_left_offset, seiPanScanRectInfo.pan_scan_rect_right_offset, seiPanScanRectInfo.pan_scan_rect_top_offset, seiPanScanRectInfo.pan_scan_rect_bottom_offset);
+#endif
+#ifdef PRINT_PAN_SCAN_RECT
+#undef PRINT_PAN_SCAN_RECT
+#endif
+  // make sure the payload is byte aligned, stuff bits are 10..0
+  if ( dest->bits_to_go != 8 )
+  {
+    (dest->byte_buf) <<= 1;
+    dest->byte_buf |= 1;
+    dest->bits_to_go--;
+    if ( dest->bits_to_go != 0 ) (dest->byte_buf) <<= (dest->bits_to_go);
+    dest->bits_to_go = 8;
+    dest->streamBuffer[dest->byte_pos++]=dest->byte_buf;
+    dest->byte_buf = 0;
+  }
+  seiPanScanRectInfo.payloadSize = dest->byte_pos;
+}
+
+
+
+void ClosePanScanRectInfo()
+{
+  if (seiPanScanRectInfo.data)
+  {
+    free(seiPanScanRectInfo.data->streamBuffer);
+    free(seiPanScanRectInfo.data);
+  }
+  seiPanScanRectInfo.data = NULL;
+}
+
+/*!
+ **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ *  \functions on arbitrary (unregistered) data
+ *  \brief
+ *      Based on FCD
+ *  \author
+ *      Shankar Regunathan                 <tian@cs.tut.fi>
+ **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ */
+Boolean seiHasUser_data_unregistered_info;
+user_data_unregistered_information_struct seiUser_data_unregistered;
+void InitUser_data_unregistered()
+{
+
+  seiUser_data_unregistered.data = malloc( sizeof(Bitstream) );
+  assert( seiUser_data_unregistered.data != NULL );
+  seiUser_data_unregistered.data->streamBuffer = malloc(MAXRTPPAYLOADLEN);
+  assert( seiUser_data_unregistered.data->streamBuffer != NULL );
+  seiUser_data_unregistered.byte = malloc(MAXRTPPAYLOADLEN);
+  assert( seiUser_data_unregistered.byte != NULL);
+  ClearUser_data_unregistered();
+
+}
+
+
+void ClearUser_data_unregistered()
+{
+  memset( seiUser_data_unregistered.data->streamBuffer, 0, MAXRTPPAYLOADLEN);
+  seiUser_data_unregistered.data->bits_to_go  = 8;
+  seiUser_data_unregistered.data->byte_pos    = 0;
+  seiUser_data_unregistered.data->byte_buf    = 0;
+  seiUser_data_unregistered.payloadSize       = 0;
+
+  memset( seiUser_data_unregistered.byte, 0, MAXRTPPAYLOADLEN);
+  seiUser_data_unregistered.total_byte = 0;
+
+  seiHasUser_data_unregistered_info = TRUE;
+}
+
+void UpdateUser_data_unregistered()
+{
+  int i, temp_data;
+  int total_byte;
+
+
+  total_byte = 7;
+  for(i = 0; i < total_byte; i++)
+  {
+    temp_data = i * 4;
+    seiUser_data_unregistered.byte[i] = max(0, min(temp_data, 255));
+  }
+  seiUser_data_unregistered.total_byte = total_byte;
+}
+
+void FinalizeUser_data_unregistered()
+{
+  int i;
+  SyntaxElement sym;
+  Bitstream *dest = seiUser_data_unregistered.data;
+
+  sym.type = SE_HEADER;
+  sym.mapping = n_linfo2;
+
+// #define PRINT_USER_DATA_UNREGISTERED_INFO
+  for( i = 0; i < seiUser_data_unregistered.total_byte; i++)
+  {
+    sym.bitpattern = seiUser_data_unregistered.byte[i];
+    sym.len = 8; // b (8)
+    writeSyntaxElement2Buf_Fixed(&sym, dest);
+#ifdef PRINT_USER_DATA_UNREGISTERED_INFO
+    printf("Unreg data payload_byte = %d\n", seiUser_data_unregistered.byte[i]);
+#endif
+  }
+#ifdef PRINT_USER_DATA_UNREGISTERED_INFO
+#undef PRINT_USER_DATA_UNREGISTERED_INFO
+#endif
+  // make sure the payload is byte aligned, stuff bits are 10..0
+  if ( dest->bits_to_go != 8 )
+  {
+    (dest->byte_buf) <<= 1;
+    dest->byte_buf |= 1;
+    dest->bits_to_go--;
+    if ( dest->bits_to_go != 0 ) (dest->byte_buf) <<= (dest->bits_to_go);
+    dest->bits_to_go = 8;
+    dest->streamBuffer[dest->byte_pos++]=dest->byte_buf;
+    dest->byte_buf = 0;
+  }
+  seiUser_data_unregistered.payloadSize = dest->byte_pos;
+}
+
+void CloseUser_data_unregistered()
+{
+  if (seiUser_data_unregistered.data)
+  {
+    free(seiUser_data_unregistered.data->streamBuffer);
+    free(seiUser_data_unregistered.data);
+  }
+  seiUser_data_unregistered.data = NULL;
+  if(seiUser_data_unregistered.byte)
+  {
+    free(seiUser_data_unregistered.byte);
+  }
+}
+
+
+/*!
+ **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ *  \functions on registered ITU_T_T35 user data
+ *  \brief
+ *      Based on FCD
+ *  \author
+ *      Shankar Regunathan                 <tian@cs.tut.fi>
+ **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ */
+Boolean seiHasUser_data_registered_itu_t_t35_info;
+user_data_registered_itu_t_t35_information_struct seiUser_data_registered_itu_t_t35;
+void InitUser_data_registered_itu_t_t35()
+{
+
+  seiUser_data_registered_itu_t_t35.data = malloc( sizeof(Bitstream) );
+  assert( seiUser_data_registered_itu_t_t35.data != NULL );
+  seiUser_data_registered_itu_t_t35.data->streamBuffer = malloc(MAXRTPPAYLOADLEN);
+  assert( seiUser_data_registered_itu_t_t35.data->streamBuffer != NULL );
+  seiUser_data_registered_itu_t_t35.byte = malloc(MAXRTPPAYLOADLEN);
+  assert( seiUser_data_registered_itu_t_t35.byte != NULL);
+  ClearUser_data_registered_itu_t_t35();
+
+}
+
+
+void ClearUser_data_registered_itu_t_t35()
+{
+  memset( seiUser_data_registered_itu_t_t35.data->streamBuffer, 0, MAXRTPPAYLOADLEN);
+  seiUser_data_registered_itu_t_t35.data->bits_to_go  = 8;
+  seiUser_data_registered_itu_t_t35.data->byte_pos    = 0;
+  seiUser_data_registered_itu_t_t35.data->byte_buf    = 0;
+  seiUser_data_registered_itu_t_t35.payloadSize       = 0;
+
+  memset( seiUser_data_registered_itu_t_t35.byte, 0, MAXRTPPAYLOADLEN);
+  seiUser_data_registered_itu_t_t35.total_byte = 0;
+  seiUser_data_registered_itu_t_t35.itu_t_t35_country_code = 0;
+  seiUser_data_registered_itu_t_t35.itu_t_t35_country_code_extension_byte = 0;
+
+  seiHasUser_data_registered_itu_t_t35_info = TRUE;
+}
+
+void UpdateUser_data_registered_itu_t_t35()
+{
+  int i, temp_data;
+  int total_byte;
+  int country_code;
+
+  country_code = 82; // Country_code for India
+
+  if(country_code < 0xFF) 
+  {
+    seiUser_data_registered_itu_t_t35.itu_t_t35_country_code = country_code;
+  }
+  else 
+  {
+    seiUser_data_registered_itu_t_t35.itu_t_t35_country_code = 0xFF;
+    seiUser_data_registered_itu_t_t35.itu_t_t35_country_code_extension_byte = country_code - 0xFF;
+  }
+
+  total_byte = 7;
+  for(i = 0; i < total_byte; i++)
+  {
+    temp_data = i * 3;
+    seiUser_data_registered_itu_t_t35.byte[i] = max(0, min(temp_data, 255));
+  }
+  seiUser_data_registered_itu_t_t35.total_byte = total_byte;
+}
+
+void FinalizeUser_data_registered_itu_t_t35()
+{
+  int i;
+  SyntaxElement sym;
+  Bitstream *dest = seiUser_data_registered_itu_t_t35.data;
+
+  sym.type = SE_HEADER;
+  sym.mapping = n_linfo2;
+
+  sym.bitpattern = seiUser_data_registered_itu_t_t35.itu_t_t35_country_code;
+  sym.len = 8;
+  writeSyntaxElement2Buf_Fixed(&sym, dest);
+
+// #define PRINT_USER_DATA_REGISTERED_ITU_T_T35_INFO
+#ifdef PRINT_USER_DATA_REGISTERED_ITU_T_T35_INFO
+  printf(" ITU_T_T35_COUNTRTY_CODE %d \n", seiUser_data_registered_itu_t_t35.itu_t_t35_country_code);
+#endif
+
+  if(seiUser_data_registered_itu_t_t35.itu_t_t35_country_code == 0xFF)
+  {
+    sym.bitpattern = seiUser_data_registered_itu_t_t35.itu_t_t35_country_code_extension_byte;
+    sym.len = 8;
+    writeSyntaxElement2Buf_Fixed(&sym, dest);
+#ifdef PRINT_USER_DATA_REGISTERED_ITU_T_T35_INFO
+    printf(" ITU_T_T35_COUNTRTY_CODE_EXTENSION_BYTE %d \n", seiUser_data_registered_itu_t_t35.itu_t_t35_country_code_extension_byte);
+#endif
+  }
+
+  for( i = 0; i < seiUser_data_registered_itu_t_t35.total_byte; i++)
+  {
+    sym.bitpattern = seiUser_data_registered_itu_t_t35.byte[i];
+    sym.len = 8; // b (8)
+    writeSyntaxElement2Buf_Fixed(&sym, dest);
+#ifdef PRINT_USER_DATA_REGISTERED_ITU_T_T35_INFO
+    printf("itu_t_t35 payload_byte = %d\n", seiUser_data_registered_itu_t_t35.byte[i]);
+#endif
+  }
+#ifdef PRINT_USER_DATA_REGISTERED_ITU_T_T35_INFO
+#undef PRINT_USER_DATA_REGISTERED_ITU_T_T35_INFO
+#endif
+  // make sure the payload is byte aligned, stuff bits are 10..0
+  if ( dest->bits_to_go != 8 )
+  {
+    (dest->byte_buf) <<= 1;
+    dest->byte_buf |= 1;
+    dest->bits_to_go--;
+    if ( dest->bits_to_go != 0 ) (dest->byte_buf) <<= (dest->bits_to_go);
+    dest->bits_to_go = 8;
+    dest->streamBuffer[dest->byte_pos++]=dest->byte_buf;
+    dest->byte_buf = 0;
+  }
+  seiUser_data_registered_itu_t_t35.payloadSize = dest->byte_pos;
+}
+
+void CloseUser_data_registered_itu_t_t35()
+{
+  if (seiUser_data_registered_itu_t_t35.data)
+  {
+    free(seiUser_data_registered_itu_t_t35.data->streamBuffer);
+    free(seiUser_data_registered_itu_t_t35.data);
+  }
+  seiUser_data_registered_itu_t_t35.data = NULL;
+  if(seiUser_data_registered_itu_t_t35.byte)
+  {
+    free(seiUser_data_registered_itu_t_t35.byte);
+  }
+}
+
+/*!
+ **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ *  \functions on random access message
+ *  \brief
+ *      Based on FCD
+ *  \author
+ *      Shankar Regunathan                 <tian@cs.tut.fi>
+ **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ */
+Boolean seiHasRandomAccess_info;
+randomaccess_information_struct seiRandomAccess;
+void InitRandomAccess()
+{
+
+  seiRandomAccess.data = malloc( sizeof(Bitstream) );
+  assert( seiRandomAccess.data != NULL );
+  seiRandomAccess.data->streamBuffer = malloc(MAXRTPPAYLOADLEN);
+  assert( seiRandomAccess.data->streamBuffer != NULL );
+  ClearRandomAccess();
+
+}
+
+
+void ClearRandomAccess()
+{
+  memset( seiRandomAccess.data->streamBuffer, 0, MAXRTPPAYLOADLEN);
+  seiRandomAccess.data->bits_to_go  = 8;
+  seiRandomAccess.data->byte_pos    = 0;
+  seiRandomAccess.data->byte_buf    = 0;
+  seiRandomAccess.payloadSize       = 0;
+
+  seiRandomAccess.recovery_point_flag = 0;
+  seiRandomAccess.broken_link_flag = 0;
+  seiRandomAccess.exact_match_flag = 0;
+
+  seiHasRandomAccess_info = FALSE;
+}
+
+void UpdateRandomAccess()
+{
+
+  if(img->type == INTRA_IMG)
+  {
+    seiRandomAccess.recovery_point_flag = 0;
+    seiRandomAccess.exact_match_flag = 1;
+    seiRandomAccess.broken_link_flag = 0;
+    seiHasRandomAccess_info = TRUE;
+  }
+  else
+  {
+    seiHasRandomAccess_info = FALSE;
+  }
+}
+
+void FinalizeRandomAccess()
+{
+  SyntaxElement sym;
+  Bitstream *dest = seiRandomAccess.data;
+
+  sym.type = SE_HEADER;
+  sym.mapping = n_linfo2;
+
+  sym.value1 = seiRandomAccess.recovery_point_flag;
+  writeSyntaxElement2Buf_UVLC(&sym, dest);
+
+  sym.bitpattern = seiRandomAccess.exact_match_flag;
+  sym.len = 1;
+  writeSyntaxElement2Buf_Fixed(&sym, dest);
+
+  sym.bitpattern = seiRandomAccess.broken_link_flag;
+  sym.len = 1;
+  writeSyntaxElement2Buf_Fixed(&sym, dest);
+
+// #define PRINT_RANDOM_ACCESS
+#ifdef PRINT_RANDOM_ACCESS
+  printf(" recovery_point_flag %d exact_match_flag %d broken_link_flag %d \n", seiRandomAccess.recovery_point_flag, seiRandomAccess.exact_match_flag, seiRandomAccess.broken_link_flag);
+  printf(" %d %d \n", dest->byte_pos, dest->bits_to_go);
+#endif
+#ifdef PRINT_RANDOM_ACCESS
+#undef PRINT_RANDOM_ACCESS
+#endif
+  // make sure the payload is byte aligned, stuff bits are 10..0
+  if ( dest->bits_to_go != 8 )
+  {
+    (dest->byte_buf) <<= 1;
+    dest->byte_buf |= 1;
+    dest->bits_to_go--;
+    if ( dest->bits_to_go != 0 ) (dest->byte_buf) <<= (dest->bits_to_go);
+    dest->bits_to_go = 8;
+    dest->streamBuffer[dest->byte_pos++]=dest->byte_buf;
+    dest->byte_buf = 0;
+  }
+  seiRandomAccess.payloadSize = dest->byte_pos;
+}
+
+void CloseRandomAccess()
+{
+  if (seiRandomAccess.data)
+  {
+    free(seiRandomAccess.data->streamBuffer);
+    free(seiRandomAccess.data);
+  }
+  seiRandomAccess.data = NULL;
 }

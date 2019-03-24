@@ -46,7 +46,7 @@
  *    - Byeong-Moon Jeon                <jeonbm@lge.com>
  *    - Thomas Wedi                     <wedi@tnt.uni-hannover.de>
  *    - Gabi Blaettermann               <blaetter@hhi.de>
- *    - Ye-Kui Wang                     <wangy@cs.tut.fi>
+ *    - Ye-Kui Wang                     <wyk@ieee.org>
  *    - Antti Hallapuro                 <antti.hallapuro@nokia.com>
  ***********************************************************************
  */
@@ -97,7 +97,6 @@ int *last_P_no_fld;
 int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *snr)
 {
   int current_header;
-  int i;
   Slice *currSlice = img->currentSlice;
   extern FILE* bits;
   int Firstcall;
@@ -106,6 +105,7 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
   int ercStartMB;
   int ercSegment;
   frame recfr;
+  int i;
 #endif
 
   time_t ltime1;                  // for time measurement
@@ -120,6 +120,7 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
 #endif
 
   int tmp_time;                   // time used by decoding the last frame
+
 
   if ( inp->of_mode == PAR_OF_IFF ) // for Interim File Format
     rdPictureInfo( bits );
@@ -154,14 +155,14 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
     {
       if (currSlice->structure!=0 && currSlice->structure!=3)
       {
-        FmoInit (img->width/16, img->height/8, NULL, 0);   // force a default MBAmap
+        FmoInit (img, inp, img->width/16, img->height/8, NULL, 0);   // force a default MBAmap
       }
       else
       {
-        FmoInit (img->width/16, img->height/16, NULL, 0);   // force a default MBAmap
+        FmoInit (img, inp, img->width/16, img->height/16, NULL, 0);   // force a default MBAmap
       }
     }
-    img->current_mb_nr = currSlice->start_mb_nr;
+    img->current_mb_nr = img->map_mb_nr = currSlice->start_mb_nr;//GB
 #ifdef _ABT_FLAG_IN_SLICE_HEADER_
     USEABT = currSlice->abt;
 #endif
@@ -335,6 +336,9 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
 
   img->current_mb_nr = -4712;   // impossible value for debugging, StW
   img->current_slice_nr = 0;
+
+  img->last_decoded_pic_id = img->tr; // JVT-D101
+
   return (SOP);
 }
 
@@ -491,53 +495,13 @@ void find_snr(
 }
 
 
-
-/*!
- ************************************************************************
- * \brief
- *    Direct interpolation of a specific subpel position
- *
- * \author
- *    Thomas Wedi, 12.01.2001   <wedi@tnt.uni-hannover.de>
- *
- * \para Remarks:
- *    A further significant complexity reduction is possible
- *    if the direct interpolation is not performed on pixel basis
- *    but on block basis,
- *
- ************************************************************************
- */
-void get_block(int ref_frame,int x_pos, int y_pos, struct img_par *img, int block[BLOCK_SIZE][BLOCK_SIZE])
-{
-
-  switch(img->mv_res)
-  {
-  case 0:
-
-    get_quarterpel_block(ref_frame,x_pos,y_pos,img,block);
-    break;
-
-  case 1:
-
-    get_eighthpel_block(ref_frame,x_pos,y_pos,img,block);
-    break;
-
-  default:
-
-    snprintf(errortext, ET_SIZE, "wrong mv-resolution: %d",img->mv_res);
-    error(errortext, 600);
-    break;
-  }
-}
-
-
 /*!
  ************************************************************************
  * \brief
  *    Interpolation of 1/4 subpixel
  ************************************************************************
  */
-void get_quarterpel_block(int ref_frame,int x_pos, int y_pos, struct img_par *img, int block[BLOCK_SIZE][BLOCK_SIZE])
+void get_block(int ref_frame,int x_pos, int y_pos, struct img_par *img, int block[BLOCK_SIZE][BLOCK_SIZE])
 {
 
   int dx, dy;
@@ -567,15 +531,6 @@ void get_quarterpel_block(int ref_frame,int x_pos, int y_pos, struct img_par *im
     for (j = 0; j < BLOCK_SIZE; j++)
       for (i = 0; i < BLOCK_SIZE; i++)
         block[i][j] = mref[ref_frame][max(0,min(maxold_y,y_pos+j))][max(0,min(maxold_x,x_pos+i))];
-  }
-  else if (dx == 3 && dy == 3) {  /* funny position */
-    for (j = 0; j < BLOCK_SIZE; j++)
-      for (i = 0; i < BLOCK_SIZE; i++)
-        block[i][j] = (
-          mref[ref_frame][max(0,min(maxold_y,y_pos+j))  ][max(0,min(maxold_x,x_pos+i))  ]+
-          mref[ref_frame][max(0,min(maxold_y,y_pos+j))  ][max(0,min(maxold_x,x_pos+i+1))]+
-          mref[ref_frame][max(0,min(maxold_y,y_pos+j+1))][max(0,min(maxold_x,x_pos+i+1))]+
-          mref[ref_frame][max(0,min(maxold_y,y_pos+j+1))][max(0,min(maxold_x,x_pos+i))  ]+2)/4;
   }
   else { /* other positions */
 
@@ -683,253 +638,6 @@ void get_quarterpel_block(int ref_frame,int x_pos, int y_pos, struct img_par *im
 }
 
 
-/*!
- ************************************************************************
- * \brief
- *    Interpolation of 1/8 subpixel
- ************************************************************************
- */
-
-static void get_fullpel_block(int ref_frame,int x_pres, int y_pres, int max_x, int max_y, int block[BLOCK_SIZE][BLOCK_SIZE])
-{
-  int i, j;
-
-  for (j = 0; j < BLOCK_SIZE; j++)
-    for (i = 0; i < BLOCK_SIZE; i++)
-      block[i][j] = mref[ref_frame][max(0,min(y_pres+j,max_y))][max(0,min(x_pres+i,max_x))];
-}
-
-static void interp_block_X(int ref_frame, int pres_x, int pres_y, const int *coefx, int max_x, int max_y, int block[BLOCK_SIZE][BLOCK_SIZE])
-{
-  int i, j, x;
-  int result;
-
-  for (j = 0; j < BLOCK_SIZE; j++) {
-    for (i = 0; i < BLOCK_SIZE; i++) {
-      for(result = 0, x = -3; x < 5; x++)
-        result += mref[ref_frame][max(0,min(max_y,pres_y+j))][max(0,min(pres_x+i+x,max_x))]*coefx[x+3];
-      block[i][j] = max(0, min(255, (result+128)/256));
-    }
-  }
-}
-
-static void interp_block_Y(int ref_frame, int pres_x, int pres_y, const int *coefy, int max_x, int max_y, int block[BLOCK_SIZE][BLOCK_SIZE])
-{
-  int i, j, y;
-  int result;
-
-  for (j = 0; j < BLOCK_SIZE; j++) {
-    for (i = 0; i < BLOCK_SIZE; i++) {
-      for(result = 0, y = -3; y < 5; y++)
-        result += mref[ref_frame][max(0,min(pres_y+j+y,max_y))][max(0,min(max_x,pres_x+i))]*coefy[y+3];
-      block[i][j] = max(0, min(255, (result+128)/256));
-    }
-  }
-}
-
-static void interp_block_3_1(int block[BLOCK_SIZE][BLOCK_SIZE],
-                             int block1[BLOCK_SIZE][BLOCK_SIZE],
-                             int block2[BLOCK_SIZE][BLOCK_SIZE])
-{
-  int i, j;
-
-  for (j = 0; j < BLOCK_SIZE; j++)
-    for (i = 0; i < BLOCK_SIZE; i++)
-      block[i][j] = (3*block1[i][j] + block2[i][j] + 2) / 4;
-}
-
-static void average_block(int block[BLOCK_SIZE][BLOCK_SIZE], int block2[BLOCK_SIZE][BLOCK_SIZE])
-{
-  int i, j;
-
-  for (j = 0; j < BLOCK_SIZE; j++)
-    for (i = 0; i < BLOCK_SIZE; i++)
-      block[i][j] = (block[i][j] + block2[i][j]) / 2;
-}
-
-
-void get_eighthpel_block(int ref_frame,int x_pos, int y_pos, struct img_par *img, int block[BLOCK_SIZE][BLOCK_SIZE])
-{
-  static const int COEF[3][8] = {
-    {-3, 12, -37, 229,  71, -21,  6, -1},
-    {-3, 12, -39, 158, 158, -39, 12, -3},
-    {-1,  6, -21,  71, 229, -37, 12, -3}
-  };
-
-  int block2[BLOCK_SIZE][BLOCK_SIZE];
-  int dx=0, x=0;
-  int dy=0, y=0;
-  int pres_x=0;
-  int pres_y=0;
-  int max_x=0,max_y=0;
-
-  int tmp[4][4+8]; 
-  int result;
-  int i, j;
-
-
-  dx = x_pos&7;
-  dy = y_pos&7;
-  pres_x = x_pos>>3;
-  pres_y = y_pos>>3;
-  max_x = img->width-1;
-  max_y = img->height-1;
-
-
-  /* choose filter depending on subpel position */
-  if(dx==0 && dy==0) {                /* fullpel position */
-    get_fullpel_block(ref_frame, pres_x, pres_y, max_x, max_y, block);
-  }
-  else if(dy == 0) {  /* Only horizontal interpolation */
-    if (dx == 1)
-      get_fullpel_block(ref_frame, pres_x, pres_y, max_x, max_y, block);
-    else
-      interp_block_X(ref_frame, pres_x, pres_y, COEF[dx/2-1], max_x, max_y, block);
-
-    if ((dx&1) != 0) {
-      if (dx == 7)
-        get_fullpel_block(ref_frame, pres_x+1, pres_y, max_x, max_y, block2);
-      else
-        interp_block_X(ref_frame, pres_x, pres_y, COEF[dx/2], max_x, max_y, block2);
-
-      average_block(block, block2);
-    }
-  }
-  else if (dx == 0) {  /* Only vertical interpolation */
-    if (dy == 1)
-      get_fullpel_block(ref_frame, pres_x, pres_y, max_x, max_y, block);
-    else
-      interp_block_Y(ref_frame, pres_x, pres_y, COEF[dy/2-1], max_x, max_y, block);
-
-    if ((dy&1) != 0) {
-      if (dy == 7)
-        get_fullpel_block(ref_frame, pres_x, pres_y+1, max_x, max_y, block2);
-      else
-        interp_block_Y(ref_frame, pres_x, pres_y, COEF[dy/2], max_x, max_y, block2);
-
-      average_block(block, block2);
-    }
-  }
-  else if ((dx&1) == 0) {  /* Horizontal 1/4-pel and vertical 1/8-pel interpolation */
-
-    for (j = -3; j < BLOCK_SIZE+5; j++) {
-      for (i = 0; i < BLOCK_SIZE; i++) {
-        for (tmp[i][j+3] = 0, x = -3; x < 5; x++)
-          tmp[i][j+3] += mref[ref_frame][max(0,min(pres_y+j,max_y))][max(0,min(pres_x+i+x,max_x))]*COEF[dx/2-1][x+3];
-      }
-    }
-
-    if (dy == 1) {
-      for (j = 0; j < BLOCK_SIZE; j++)
-        for (i = 0; i < BLOCK_SIZE; i++)
-          block[i][j] = max(0, min(255, (tmp[i][j+3]+128)/256));
-    }
-    else {
-      for (j = 0; j < BLOCK_SIZE; j++) {
-        for (i = 0; i < BLOCK_SIZE; i++) {
-          for (result = 0, y = -3; y < 5; y++)
-            result += tmp[i][j+y+3]*COEF[dy/2-1][y+3];
-          block[i][j] = max(0, min(255, (result+32768)/65536));
-        }
-      }
-    }
-
-    if ((dy&1) != 0) {
-      if (dy == 7) {
-        for (j = 0; j < BLOCK_SIZE; j++)
-          for (i = 0; i < BLOCK_SIZE; i++)
-            block2[i][j] = max(0, min(255, (tmp[i][j+4]+128)/256));
-      }
-      else {
-        for (j = 0; j < BLOCK_SIZE; j++) {
-          for (i = 0; i < BLOCK_SIZE; i++) {
-            for(result = 0, y = -3; y < 5; y++)
-              result += tmp[i][j+y+3]*COEF[dy/2][y+3];
-            block2[i][j] = max(0, min(255, (result+32768)/65536));
-          }
-        }
-      }
-
-      average_block(block, block2);
-    }
-  }
-  else if ((dy&1) == 0) {  /* Vertical 1/4-pel and horizontal 1/8-pel interpolation */
-
-    for (j = 0; j < BLOCK_SIZE; j++) {
-      for (i = -3; i < BLOCK_SIZE+5; i++) {
-        for (tmp[j][i+3] = 0, y = -3; y < 5; y++)
-          tmp[j][i+3] += mref[ref_frame][max(0,min(pres_y+j+y,max_y))][max(0,min(pres_x+i,max_x))]*COEF[dy/2-1][y+3];
-      }
-    }
-
-    if (dx == 1) {
-      for (j = 0; j < BLOCK_SIZE; j++)
-        for (i = 0; i < BLOCK_SIZE; i++)
-          block[i][j] = max(0, min(255, (tmp[j][i+3]+128)/256));
-    }
-    else {
-      for (j = 0; j < BLOCK_SIZE; j++) {
-        for (i = 0; i < BLOCK_SIZE; i++) {
-          for (result = 0, x = -3; x < 5; x++)
-            result += tmp[j][i+x+3]*COEF[dx/2-1][x+3];
-          block[i][j] = max(0, min(255, (result+32768)/65536));
-        }
-      }
-    }
-
-    if (dx == 7) {
-      for (j = 0; j < BLOCK_SIZE; j++)
-        for (i = 0; i < BLOCK_SIZE; i++)
-          block2[i][j] = max(0, min(255, (tmp[j][i+4]+128)/256));
-    }
-    else {
-      for (j = 0; j < BLOCK_SIZE; j++) {
-        for (i = 0; i < BLOCK_SIZE; i++) {
-          for (result = 0, x = -3; x < 5; x++)
-            result += tmp[j][i+x+3]*COEF[dx/2][x+3];
-          block2[i][j] = max(0, min(255, (result+32768)/65536));
-        }
-      }
-    }
-
-    average_block(block, block2);
-  }
-  else if ((dx == 1 || dx == 7) && (dy == 1 || dy == 7)) { /* Diagonal averaging */
-    interp_block_X(ref_frame, pres_x, (y_pos+1)>>3, COEF[(dx+1)/4], max_x, max_y, block);
-    interp_block_Y(ref_frame, (x_pos+1)>>3, pres_y, COEF[(dy+1)/4], max_x, max_y, block2);
-    average_block(block, block2);
-  }
-  else if (dx == 1 || dx == 7 || dy == 1 || dy == 7) { /* Diagonal linear interpolation */
-
-    interp_block_X(ref_frame, pres_x, (y_pos+3)>>3, COEF[1], max_x, max_y, block);
-    interp_block_Y(ref_frame, (x_pos+3)>>3, pres_y, COEF[1], max_x, max_y, block2);
-
-    if (dx == 1 || dx == 7)
-      interp_block_3_1(block, block2, block);
-    else
-      interp_block_3_1(block, block, block2);
-  }
-  else { /* Diagonal interpolation using a full pixel and a center 1/2-pixel */
-
-    for (j = -3; j < BLOCK_SIZE+5; j++) {
-      for (i = 0; i < BLOCK_SIZE; i++) {
-        for (tmp[i][j+3] = 0, x = -3; x < 5; x++)
-          tmp[i][j+3] += mref[ref_frame][max(0,min(pres_y+j,max_y))][max(0,min(pres_x+i+x,max_x))]*COEF[1][x+3];
-      }
-    }
-
-    for (j = 0; j < BLOCK_SIZE; j++) {
-      for (i = 0; i < BLOCK_SIZE; i++) {
-        for (result = 0, y = -3; y < 5; y++)
-          result += tmp[i][j+y+3]*COEF[1][y+3];
-        block[i][j] = max(0, min(255, (result+32768)/65536));
-      }
-    }
-
-    get_fullpel_block(ref_frame, (x_pos+3)>>3, (y_pos+3)>>3, max_x, max_y, block2);
-    interp_block_3_1(block, block, block2);
-  }
-}
 
 /*!
  ************************************************************************
@@ -1093,6 +801,12 @@ void init_frame(struct img_par *img, struct inp_par *inp)
   img->bw_refFrArr = img->bw_refFrArr_frm;
 
 //  printf("short size, used, (%d, %d)\n", frm->short_size, frm->short_used );
+
+  // JVT-D097
+  if (img->type!=B_IMG_1 && img->type!=B_IMG_MULT && 
+      img->num_slice_groups_minus1 == 1 && img->mb_allocation_map_type > 3)
+    FmoUpdateEvolvingMBAmap (img, inp, MBAmap);
+  // End JVT-D097
 }
 
 /*!
@@ -1221,9 +935,11 @@ void decode_one_slice(struct img_par *img,struct inp_par *inp)
 
   while (end_of_slice == FALSE) // loop over macroblocks
   {
+		setRealMB_nr (img); //GB
+
 
 #if TRACE
-    fprintf(p_trace,"\n*********** Pic: %i (I/P) MB: %i Slice: %i Type %d **********\n", img->tr, img->current_mb_nr, img->mb_data[img->current_mb_nr].slice_nr, img->type);
+    fprintf(p_trace,"\n*********** Pic: %i (I/P) MB: %i Slice: %i Type %d **********\n", img->tr, img->map_mb_nr, img->mb_data[img->map_mb_nr].slice_nr, img->type);
 #endif
 
     // Initializes the current macroblock
@@ -1251,7 +967,7 @@ void decode_one_slice(struct img_par *img,struct inp_par *inp)
     ercWriteMBMODEandMV(img,inp);
 #endif
 
-    end_of_slice=exit_macroblock(img,inp);
+    end_of_slice=exit_macroblock(img,inp,(!img->mb_frame_field_flag||img->current_mb_nr%2));
   }
   reset_ec_flags();
 
@@ -1498,6 +1214,12 @@ void init_top(struct img_par *img, struct inp_par *inp)
 
   img->fw_refFrArr = img->fw_refFrArr_top;
   img->bw_refFrArr = img->bw_refFrArr_top;
+
+  // JVT-D097
+  if (img->type!=B_IMG_1 && img->type!=B_IMG_MULT && 
+      img->num_slice_groups_minus1 == 1 && img->mb_allocation_map_type > 3)
+    FmoUpdateEvolvingMBAmap (img, inp, MBAmap);
+  // End JVT-D097
 }
 
 /*!
@@ -1630,6 +1352,12 @@ void init_bottom(struct img_par *img, struct inp_par *inp)
 
   img->fw_refFrArr = img->fw_refFrArr_bot;
   img->bw_refFrArr = img->bw_refFrArr_bot;
+
+  // JVT-D097
+  if (img->type!=B_IMG_1 && img->type!=B_IMG_MULT && 
+      img->num_slice_groups_minus1 == 1 && img->mb_allocation_map_type > 3)
+    FmoUpdateEvolvingMBAmap (img, inp, MBAmap);
+  // End JVT-D097
 }
 
 /*!

@@ -185,7 +185,6 @@ typedef struct
   unsigned INT16 displayRectangleOffsetFromWindowLeftBorder;
   unsigned INT8 loopFilterParametersFlag;
   unsigned INT8 entropyCoding;
-  unsigned INT8 motionResolution;
   unsigned INT8 partitioningType;
   unsigned INT8 intraPredictionType;
   unsigned INT8 bufCycle;

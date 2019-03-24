@@ -259,7 +259,6 @@ int ComposeHeaderPacketPayload (byte *payload)
             \na=H26L (0) XSizeMB %d\
             \na=H26L (0) YSizeMB %d\
             \na=H26L (0) EntropyCoding %s\
-            \na=H26L (0) MotionResolution %s\
             \na=H26L (0) PartitioningType %s\
             \na=H26L (0) IntraPredictionType %s\
             \na=H26L (0) HRCParameters 0\
@@ -277,7 +276,6 @@ int ComposeHeaderPacketPayload (byte *payload)
             input->img_width/16,
             input->img_height/16,
             input->symbol_mode==UVLC?"UVLC":"CABAC",
-            input->mv_res==0?"quater":"eigth",
             input->partition_mode==0?"one":"three",
             input->UseConstrainedIntraPred==0?"Unconstrained":"Constrained",
             
@@ -331,7 +329,7 @@ int ComposeHeaderPacketPayload (byte *payload)
 {
   int slen=0;
   int multpred;
-  int y, x;
+  int y, x, i;
 
   assert (img->width%16 == 0);
   assert (img->height%16 == 0);
@@ -361,7 +359,6 @@ int ComposeHeaderPacketPayload (byte *payload)
             \na=H26L (0) YSizeMB %d\
             \na=H26L (0) FilterParametersFlag %d\
             \na=H26L (0) EntropyCoding %s\
-            \na=H26L (0) MotionResolution %s\
             \na=H26L (0) PartitioningType %s\
             \na=H26L (0) IntraPredictionType %s\
             \na=H26L (0) HRCParameters 0\
@@ -379,7 +376,6 @@ int ComposeHeaderPacketPayload (byte *payload)
             input->img_height/16,
             input->LFSendParameters,
             input->symbol_mode==UVLC?"UVLC":"CABAC",
-            input->mv_res==0?"quater":"eigth",
             input->partition_mode==0?"one":"three",
             input->UseConstrainedIntraPred==0?"Unconstrained":"Constrained",
             
@@ -401,6 +397,50 @@ int ComposeHeaderPacketPayload (byte *payload)
     snprintf (&payload[slen], MAXRTPPAYLOADLEN-slen, "\\\n");
     slen = strlen (payload);
   }
+
+  // JVT-D095, JVT-D097
+  // the orignal implementation of FMO is left intact. 
+  snprintf (&payload[slen], MAXRTPPAYLOADLEN-slen, "\na=H26L (0) num_slice_groups_minus1 %d", 
+            input->num_slice_groups_minus1);
+  slen = strlen(payload);
+  if(input->num_slice_groups_minus1 > 0)
+  {
+    snprintf (&payload[slen], MAXRTPPAYLOADLEN-slen, "\na=H26L (0) mb_allocation_map_type %d", 
+              input->mb_allocation_map_type);
+    slen = strlen(payload);
+
+    if(input->mb_allocation_map_type == 3)
+    {
+      assert(input->num_slice_groups_minus1 == 1);
+      for(i=0; i<input->num_slice_groups_minus1; i++)
+      {
+        snprintf (&payload[slen], MAXRTPPAYLOADLEN-slen, "\na=H26L (0) top_left_mb %d", 
+                  input->top_left_mb);
+        slen = strlen(payload);
+        snprintf (&payload[slen], MAXRTPPAYLOADLEN-slen, "\na=H26L (0) bottom_right_mb %d", 
+                  input->bottom_right_mb);
+        slen = strlen(payload);
+      }
+    }
+    if(input->mb_allocation_map_type == 4 || input->mb_allocation_map_type == 5 || input->mb_allocation_map_type == 6)
+    {
+      assert(input->num_slice_groups_minus1 == 1);
+      snprintf (&payload[slen], MAXRTPPAYLOADLEN-slen, "\na=H26L (0) slice_group_change_direction %d", 
+                input->slice_group_change_direction);
+      slen = strlen(payload);
+      snprintf (&payload[slen], MAXRTPPAYLOADLEN-slen, "\na=H26L (0) slice_group_change_rate_minus1 %d", 
+                input->slice_group_change_rate_minus1);
+      slen = strlen(payload);
+    }
+  }
+  // End JVT-D095, JVT-D097
+
+  // JVT-D101
+  snprintf (&payload[slen], MAXRTPPAYLOADLEN-slen, "\na=H26L (0) redundant_slice_flag %d", 
+            input->redundant_slice_flag);
+  slen = strlen(payload);
+  // End JVT-D101
+
 
   snprintf (&payload[slen], MAXRTPPAYLOADLEN-slen, "\n%c%c%c\n",
             4,     // Unix Control D EOF symbol
@@ -638,6 +678,19 @@ int RTPSliceHeader()
   sym.value1 = img->mb_y;
   len += writeSyntaxElement_UVLC (&sym, partition);
 
+  // JVT-D101: redundant_pic_cnt should be a ue(v) instead of u(1). However since currently we allow 
+  // only 1 redundant slice for each slice, therefore herein encoding it as u(1) is OK.
+  if(input->redundant_slice_flag) 
+  {
+    SYMTRACESTRING("RTP-SH: redundant_pic_cnt");
+    rpc_bytes_to_go = currStream->byte_pos;
+    rpc_bits_to_go = currStream->bits_to_go;
+    sym.bitpattern = img->redundant_pic_cnt = 0; //may be modifed before being written into bitstream file
+    sym.len = 1;
+    len += writeSyntaxElement_fixed(&sym, partition);
+  }
+  // End JVT-D101
+
   if (img->type==B_IMG || img->type==BS_IMG)
   {
     SYMTRACESTRING("RTP-SH DirectSpatialFlag");
@@ -713,6 +766,16 @@ int RTPSliceHeader()
   /* KS: add Annex U Syntax elements */
   len += writeERPS(&sym, partition);
 
+  // JVT-D097
+  if( input->num_slice_groups_minus1 > 0  &&  
+      input->mb_allocation_map_type >= 4  &&  
+		  input->mb_allocation_map_type <= 6)
+  {
+    SYMTRACESTRING("RTP-SH: slice_group_change_cycle");
+    sym.value1 = slice_group_change_cycle;
+    len += writeSyntaxElement_UVLC (&sym, partition);
+  }
+  // End JVT-D097
 
   // After this, and when in CABAC mode, terminateSlice() may insert one more
   // UVLC codeword for the number of coded MBs
@@ -1048,8 +1111,49 @@ void PrepareAggregationSEIMessage()
     ClearSubseqCharPayload();
     has_aggregation_sei_message = TRUE;
   }
+  // write the pan scan rectangle info sei playload to the aggregation sei message
+  if (seiHasPanScanRectInfo)
+  {
+    FinalizePanScanRectInfo();
+    write_sei_message(AGGREGATION_SEI, seiPanScanRectInfo.data->streamBuffer, seiPanScanRectInfo.payloadSize, SEI_PANSCAN_RECT);
+    ClearPanScanRectInfoPayload();
+    has_aggregation_sei_message = TRUE;
+  }
+  // write the arbitrary (unregistered) info sei playload to the aggregation sei message
+  if (seiHasUser_data_unregistered_info)
+  {
+    FinalizeUser_data_unregistered();
+    write_sei_message(AGGREGATION_SEI, seiUser_data_unregistered.data->streamBuffer, seiUser_data_unregistered.payloadSize, SEI_USER_DATA_UNREGISTERED);
+    ClearUser_data_unregistered();
+    has_aggregation_sei_message = TRUE;
+  }
+  // write the arbitrary (unregistered) info sei playload to the aggregation sei message
+  if (seiHasUser_data_registered_itu_t_t35_info)
+  {
+    FinalizeUser_data_registered_itu_t_t35();
+    write_sei_message(AGGREGATION_SEI, seiUser_data_registered_itu_t_t35.data->streamBuffer, seiUser_data_registered_itu_t_t35.payloadSize, SEI_USER_DATA_REGISTERED_ITU_T_T35);
+    ClearUser_data_registered_itu_t_t35();
+    has_aggregation_sei_message = TRUE;
+  }
+  //write RandomAccess info sei payload to the aggregation sei message
+  if (seiHasRandomAccess_info)
+  {
+    FinalizeRandomAccess();
+    write_sei_message(AGGREGATION_SEI, seiRandomAccess.data->streamBuffer, seiRandomAccess.payloadSize, SEI_RANDOM_ACCESS_POINT);
+    ClearRandomAccess();
+    has_aggregation_sei_message = TRUE;
+  }
   // more aggregation sei payload is written here...
- 
+
+  // JVT-D099 write the scene information SEI payload
+  if (seiHasSceneInformation)
+  {
+    FinalizeSceneInformation();
+    write_sei_message(AGGREGATION_SEI, seiSceneInformation.data->streamBuffer, seiSceneInformation.payloadSize, SEI_SCENE_INFORMATION);
+    has_aggregation_sei_message = TRUE;
+  }
+  // End JVT-D099
+
   // after all the sei payload is written
   if (has_aggregation_sei_message)
     finalize_sei_message(AGGREGATION_SEI);

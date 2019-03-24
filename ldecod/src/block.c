@@ -442,9 +442,9 @@ int intrapred_luma_2(struct img_par *img, //!< image parameters
   int ib,ic,iaa;
 
   int mb_width = img->width/16;
-  int mb_nr_frame = img->mb_y*mb_width+img->mb_x;
-  int mb_nr = img->current_mb_nr;
-  int mb_available_up = (img->mb_y == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr_frame-mb_width].slice_nr);
+  //int mb_nr_frame = img->mb_y*mb_width+img->mb_x;
+  int mb_nr = img->map_mb_nr;// GB img->current_mb_nr;
+  int mb_available_up = (img->mb_y == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
   int mb_available_left = (img->mb_x == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-1].slice_nr);
   int field_y = img->pix_y;   // For MB level frame/field coding
   if (img->mb_field)
@@ -461,7 +461,7 @@ int intrapred_luma_2(struct img_par *img, //!< image parameters
 
   if(img->UseConstrainedIntraPred)
   {
-    if (mb_available_up   && (img->intra_block[mb_nr-mb_width][2]==0 || img->intra_block[mb_nr_frame-mb_width][3]==0))
+    if (mb_available_up   && (img->intra_block[mb_nr-mb_width][2]==0 || img->intra_block[mb_nr-mb_width][3]==0))
       mb_available_up   = 0;
     if (mb_available_left && (img->intra_block[mb_nr-       1][1]==0 || img->intra_block[mb_nr       -1][3]==0))
       mb_available_left = 0;

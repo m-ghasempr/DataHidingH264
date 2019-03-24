@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 4.3a
+ *     JM 5.0
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -94,7 +94,7 @@
  *     - Sebastian Purreiter     <sebastian.purreiter@mch.siemens.de>
  *     - Byeong-Moon Jeon        <jeonbm@lge.com>
  *     - Gabi Blaettermann       <blaetter@hhi.de>
- *     - Ye-Kui Wang             <wangy@cs.tut.fi>
+ *     - Ye-Kui Wang             <wyk@ieee.org>
  *
  ***********************************************************************
  */
@@ -124,8 +124,8 @@
 #include "erc_api.h"
 #endif
 
-#define JM          "4"
-#define VERSION     "4.3a"
+#define JM          "5"
+#define VERSION     "5.0"
 
 #define LOGFILE     "log.dec"
 #define DATADECFILE "dataDec.txt"
@@ -200,6 +200,7 @@ int main(int argc, char **argv)
   img->imgtr_last_P = 0;
   img->imgtr_next_P = 0;
   img->mmco_buffer=NULL;
+  img->last_decoded_pic_id = -1; // JVT-D101
 
   // B pictures
   Bframe_ctr=0;
@@ -350,21 +351,6 @@ void init_conf(struct inp_par *inp,
     error(errortext,400);
   }
 
-    // NAL Encapsulation
-  fscanf(fd,"%d,",&inp->Encapsulated_NAL_Payload);        // 0: UVLC 1: CABAC, may be overwritten ni case of RTP NAL
-  fscanf(fd,"%*[^\n]");
-  if (inp->Encapsulated_NAL_Payload != FALSE && inp->Encapsulated_NAL_Payload != TRUE)
-  {
-    snprintf(errortext, ET_SIZE, "Encapsulated_NAL_Payload=%d, use 0 or 1",inp->Encapsulated_NAL_Payload);
-    error(errortext,1);
-  }
-  if (inp->Encapsulated_NAL_Payload != TRUE)
-  {
-    printf("Encapsulated_NAL_Payload is always enabled!\n");
-    inp->Encapsulated_NAL_Payload = TRUE;
-  }
-
-
 #ifdef _LEAKYBUCKET_
   fscanf(fd,"%ld,",&inp->R_decoder);             // Decoder rate
   fscanf(fd, "%*[^\n]");
@@ -493,9 +479,6 @@ void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr)
 #if ( INI_CTX == 0 )
   fprintf(stdout,"No CABAC Initialization. ");
   fprintf(stdout," ABT_max_count %d ",INICNT_ABT);
-#endif
-#ifdef _ALT_SCAN_
-  fprintf(stdout,"altScan ");
 #endif
   fprintf(stdout,"\n");
   // write to log file

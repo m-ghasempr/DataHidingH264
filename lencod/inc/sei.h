@@ -184,4 +184,103 @@ void UpdateSubseqChar();
 void FinalizeSubseqChar();
 void CloseSubseqChar();
 
+
+//! JVT-D099 Scene information SEI message
+typedef struct
+{
+  int scene_id;
+  int scene_transition_type;
+  int second_scene_id;
+
+  Bitstream* data;
+  int payloadSize;
+} scene_information_struct;
+
+extern Boolean seiHasSceneInformation;
+extern scene_information_struct seiSceneInformation;
+
+void InitSceneInformation();
+void CloseSceneInformation();
+void UpdateSceneInformation(Boolean HasSceneInformation, int sceneID, int sceneTransType, int secondSceneID);
+void FinalizeSceneInformation();
+//! End JVT-D099 Scene information SEI message
+
+//! Shankar Regunathan Oct 2002
+//! PanScanRect Information
+typedef struct
+{
+  int pan_scan_rect_id; 
+  int pan_scan_rect_left_offset;
+  int pan_scan_rect_right_offset;
+  int pan_scan_rect_top_offset;
+  int pan_scan_rect_bottom_offset;
+
+  Bitstream *data;
+  int payloadSize;
+} panscanrect_information_struct;
+
+extern Boolean seiHasPanScanRectInfo;
+extern panscanrect_information_struct seiPanScanRectInfo;
+
+void InitPanScanRectInfo();
+void ClearPanScanRectInfoPayload();
+void UpdatePanScanRectInfo();
+void FinalizePanScanRectInfo();
+void ClosePanScanRectInfo();
+
+//! User_data_unregistered Information
+typedef struct
+{
+  char *byte;
+  int total_byte;
+  Bitstream *data;
+  int payloadSize;
+} user_data_unregistered_information_struct;
+Boolean seiHasUser_data_unregistered_info;
+user_data_unregistered_information_struct seiUser_data_unregistered;
+
+void InitUser_data_unregistered();
+void ClearUser_data_unregistered();
+void UpdateUser_data_unregistered();
+void FinalizeUser_data_unregistered();
+void CloseUser_data_unregistered();
+
+//! User_data_registered_itu_t_t35 Information
+typedef struct
+{
+  char *byte;
+  int total_byte;
+  int itu_t_t35_country_code;
+  int itu_t_t35_country_code_extension_byte;
+  Bitstream *data;
+  int payloadSize;
+} user_data_registered_itu_t_t35_information_struct;
+Boolean seiHasUser_data_registered_itu_t_t35_info;
+user_data_registered_itu_t_t35_information_struct seiUser_data_registered_itu_t_t35;
+
+void InitUser_data_registered_itu_t_t35();
+void ClearUser_data_registered_itu_t_t35();
+void UpdateUser_data_registered_itu_t_t35();
+void FinalizeUser_data_registered_itu_t_t35();
+void CloseUser_data_registered_itu_t_t35();
+
+//! RandomAccess Information
+typedef struct
+{
+  unsigned char recovery_point_flag;
+  unsigned char exact_match_flag;
+  unsigned char broken_link_flag;
+
+  Bitstream *data;
+  int payloadSize;
+} randomaccess_information_struct;
+Boolean seiHasRandomAccess_info;
+randomaccess_information_struct seiRandomAccess;
+
+void InitRandomAccess();
+void ClearRandomAccess();
+void UpdateRandomAccess();
+void FinalizeRandomAccess();
+void CloseRandomAccess();
+
 #endif

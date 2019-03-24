@@ -64,7 +64,6 @@ Mapping Map[] = {
     {"QPFirstFrame",             &configinput.qp0,                     0},
     {"QPRemainingFrame",         &configinput.qpN,                     0},
     {"FrameSkip",                &configinput.jumpd,                   0},
-    {"MVResolution",             &configinput.mv_res,                  0},
     {"UseHadamard",              &configinput.hadamard,                0},
     {"SearchRange",              &configinput.search_range,            0},
     {"NumberReferenceFrames",    &configinput.no_multpred,             0},
@@ -126,7 +125,6 @@ Mapping Map[] = {
 #endif
     {"AdaptiveBlockTransforms",  &configinput.abt,                     0},
     {"InterlaceCodingOption",    &configinput.InterlaceCodingOption, 0},
-    {"EncapsulatedNALPayload",   &configinput.Encapsulated_NAL_Payload, 0},
     {"NumberFramesInEnhancementLayerSubSequence", &configinput.NumFramesInELSubSeq, 0},
     {"NumberOfFrameInSecondIGOP",&configinput.NumFrameIn2ndIGOP, 0},
     {"RandomIntraMBRefresh",     &configinput.RandomIntraMBRefresh,    0},
@@ -141,6 +139,15 @@ Mapping Map[] = {
     {"SparePictureOption",       &configinput.SparePictureOption,      0},
     {"SparePictureDetectionThr", &configinput.SPDetectionThreshold,    0},
     {"SparePicturePercentageThr",&configinput.SPPercentageThreshold,   0},
+
+    // JVT-D095, JVT-D097
+    {"FmoTopLeftMB",                  &configinput.top_left_mb,                 0},
+    {"FmoBottomRightMB",                  &configinput.bottom_right_mb,                 0},
+    {"FmoChangeDirection",                  &configinput.slice_group_change_direction,                 0},
+    {"FmoChangeRate",                  &configinput.slice_group_change_rate_minus1,                 0},
+    // End JVT-D095, JVT-D097
+
+    {"UseRedundantSlice", &configinput.redundant_slice_flag, 0}, // JVT-D101
 
     {NULL,                       NULL,                                -1}
 };

@@ -113,9 +113,9 @@ void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int mb_y, int m
   SrcU = imgUV[0][mb_y<<3] + (mb_x<<3) ;
   SrcV = imgUV[1][mb_y<<3] + (mb_x<<3) ;
 
-  if (img->mb_frame_field_flag)
-    MbQ  = &img->mb_data[((mb_y/2)*(img->width>>3))+(mb_y%2)+mb_x*2];                            // current Mb
-  else
+ // if (img->mb_frame_field_flag)
+ //   MbQ  = &img->mb_data[((mb_y/2)*(img->width>>3))+(mb_y%2)+mb_x*2];                            // current Mb
+ // else  GB
     MbQ  = &img->mb_data[mb_y*(img->width>>4) + mb_x] ;                                                 // current Mb
 
   // This could also be handled as a filter offset of -51 
@@ -132,9 +132,9 @@ void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int mb_y, int m
       {
         
         sizey = mb_y%2 ? 1:2*img->width/MB_BLOCK_SIZE-1;
-        if (img->mb_frame_field_flag)
-          MbP = (edge)? MbQ : ((dir)? (MbQ-sizey) : (MbQ-2) ) ;       // MbP = Mb of the remote 4x4 block
-        else
+   //     if (img->mb_frame_field_flag)
+     //     MbP = (edge)? MbQ : ((dir)? (MbQ-sizey) : (MbQ-2) ) ;       // MbP = Mb of the remote 4x4 block
+      //  else GB
           MbP = (edge)? MbQ : ((dir)? (MbQ -(img->width>>4))  : (MbQ-1) ) ;       // MbP = Mb of the remote 4x4 block
 
         QP  = max( 0, ((MbP->qp-SHIFT_QP) + (MbQ->qp-SHIFT_QP) ) >> 1) ;                   // Average QP of the two blocks
@@ -221,9 +221,6 @@ void GetStrength(byte Strength[4],byte LargeBlockEdge[4],struct img_par *img,Mac
   int    **fw_refFrArr = img->fw_refFrArr;
   int    **bw_refFrArr = img->bw_refFrArr;
 
-
-  int    mvshift = (img->mv_res ? 3 : 2);                      // Consideration of mv resolution for filter strength
-
   *((int*)Strength) = ININT_STRENGTH[edge] ;                     // Start with Strength=3. or Strength=4 for Mb-edge
 
   if(img->mb_frame_field_flag)
@@ -274,16 +271,16 @@ void GetStrength(byte Strength[4],byte LargeBlockEdge[4],struct img_par *img,Mac
         {                                                     // if no coefs, but vector difference >= 1 set Strength=1 
           if( (img->type == B_IMG_1)  || (img->type == B_IMG_MULT) )
           {
-            Strength[idx] =  (abs( fw_mv[blk_x][blk_y][0] - fw_mv[blk_x2][blk_y2][0]) >= (1 << mvshift)) |
-                             (abs( fw_mv[blk_x][blk_y][1] - fw_mv[blk_x2][blk_y2][1]) >= (1 << mvshift)) |
-                             (abs( bw_mv[blk_x][blk_y][0] - bw_mv[blk_x2][blk_y2][0]) >= (1 << mvshift)) |
-                             (abs( bw_mv[blk_x][blk_y][1] - bw_mv[blk_x2][blk_y2][1]) >= (1 << mvshift)) |
+            Strength[idx] =  (abs( fw_mv[blk_x][blk_y][0] - fw_mv[blk_x2][blk_y2][0]) >= 4) |
+                             (abs( fw_mv[blk_x][blk_y][1] - fw_mv[blk_x2][blk_y2][1]) >= 4) |
+                             (abs( bw_mv[blk_x][blk_y][0] - bw_mv[blk_x2][blk_y2][0]) >= 4) |
+                             (abs( bw_mv[blk_x][blk_y][1] - bw_mv[blk_x2][blk_y2][1]) >= 4) |
                                   (fw_refFrArr[blk_y][blk_x-4]   !=   fw_refFrArr[blk_y2][blk_x2-4] )|
                                   (bw_refFrArr[blk_y][blk_x-4]   !=   bw_refFrArr[blk_y2][blk_x2-4] );
           }
           else
-            Strength[idx] =    (abs( img->mv[blk_x][blk_y][0] - img->mv[blk_x2][blk_y2][0]) >= (1 << mvshift) ) |
-                               (abs( img->mv[blk_x][blk_y][1] - img->mv[blk_x2][blk_y2][1]) >= (1 << mvshift) ) |
+            Strength[idx] =    (abs( img->mv[blk_x][blk_y][0] - img->mv[blk_x2][blk_y2][0]) >= 4 ) |
+                               (abs( img->mv[blk_x][blk_y][1] - img->mv[blk_x2][blk_y2][1]) >= 4 ) |
                                     (refFrArr[blk_y][blk_x-4]   !=   refFrArr[blk_y2][blk_x2-4] );
         }
       }

@@ -39,7 +39,7 @@
  *
  * \author
  *      - Viktor Varsa                     <viktor.varsa@nokia.com>
- *      - Ye-Kui Wang                   <wangy@cs.tut.fi>
+ *      - Ye-Kui Wang                   <wyk@ieee.org>
  ************************************************************************
  */
 
@@ -75,7 +75,7 @@ typedef struct
   byte regionMode;  /* region mode as above */
   int xMin;         /* X coordinate of the pixel position of the top-left corner of the region */
   int yMin;         /* Y coordinate of the pixel position of the top-left corner of the region */
-  int32 mv[3];      /* motion vectors in 1/4 or 1/8 pixel units: mvx = mv[0], mvy = mv[1], 
+  int32 mv[3];      /* motion vectors in 1/4 pixel units: mvx = mv[0], mvy = mv[1], 
                               and ref_frame = mv[2] */
 } objectBuffer_t;
 

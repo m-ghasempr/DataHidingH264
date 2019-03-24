@@ -545,20 +545,7 @@ static void PatchInp ()
     error (errortext, 400);
   }
 
-  // Encapsulated_NAL_Payload check
-  if(input->Encapsulated_NAL_Payload != FALSE && input->Encapsulated_NAL_Payload != TRUE)
-  {
-    snprintf (errortext, ET_SIZE, "Encapsulated_NAL_Payload %d. It has to be either 0 or 1 ", input->Encapsulated_NAL_Payload);
-  }
-
-  // Encapsulated_NAL_Payload will always be set to true
-  if(input->Encapsulated_NAL_Payload == FALSE )
-  {
-    printf ("EncapsulatedNALPayload is now always enabled !!!\n");
-    input->Encapsulated_NAL_Payload = TRUE;
-  }
   // Open Files
-
   if ((p_in=fopen(input->infile,"rb"))==NULL)
   {
     snprintf(errortext, ET_SIZE, "Input file %s does not exist",input->infile);
@@ -662,6 +649,17 @@ static void PatchInp ()
     snprintf(errortext, ET_SIZE, "Enhanced GOP is not supported in weighted bi-prediction coding mode yet.");
     error (errortext, 500);
   }
+
+  // JVT-D095, JVT-D097
+  input->num_slice_groups_minus1 = input->FmoNumSliceGroups;
+  input->mb_allocation_map_type = input->FmoType;
+  if(input->num_slice_groups_minus1 > 0)
+  {
+    if(input->mb_allocation_map_type >= 3)
+      input->num_slice_groups_minus1 = input->FmoNumSliceGroups = 1;
+  }
+  // End JVT-D095, JVT-D097
+
 }
 
 void PatchInputNoFrames()

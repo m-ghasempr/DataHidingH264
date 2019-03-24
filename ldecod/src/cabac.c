@@ -118,6 +118,7 @@ void init_contexts_MotionInfo (struct img_par *img, MotionInfoContexts *enco_ctx
   INIT_CTX (2, NUM_REF_NO_CTX,   enco_ctx->ref_no_contexts,   REF_NO_Ini  );
   INIT_CTX (2, NUM_BWD_REF_NO_CTX, enco_ctx->bwd_ref_no_contexts, REF_NO_Ini);
   INIT_CTX (1, NUM_DELTA_QP_CTX, &enco_ctx->delta_qp_contexts, &DELTA_QP_Ini  );
+  INIT_CTX (1, NUM_MB_AFF_CTX,   &enco_ctx->mb_aff_contexts,   &MB_AFF_Ini  );
 
   enco_ctx->slice_term_context.state = 63;
   enco_ctx->slice_term_context.MPS   =  0;
@@ -183,6 +184,113 @@ void delete_contexts_TextureInfo(TextureInfoContexts *deco_ctx)
   return;
 }
 
+void readFieldModeInfoFromBuffer_CABAC( SyntaxElement *se,
+                                        struct inp_par *inp,
+                                        struct img_par *img,
+                                        DecodingEnvironmentPtr dep_dp)
+{
+  int a,b,act_ctx;
+  MotionInfoContexts *ctx         = (img->currentSlice)->mot_ctx;
+  Macroblock         *currMB      = &img->mb_data[img->map_mb_nr];//GB current_mb_nr];
+  
+  if (currMB->field_available[0] == NULL)
+    b = 0;
+  else
+    b = currMB->field_available[0]->mb_field;
+  if (currMB->field_available[1] == NULL)
+    a = 0;
+  else
+    a = currMB->field_available[1]->mb_field;
+
+  act_ctx = a + b;
+
+  se->value1 = biari_decode_symbol (dep_dp, &ctx->mb_aff_contexts[act_ctx]);
+
+#if TRACE
+  fprintf(p_trace, "@%d %s\t\t%d\n",symbolCount++, se->tracestring, se->value1);
+  fflush(p_trace);
+#endif
+}
+
+
+int check_next_mb_and_get_field_mode_CABAC( SyntaxElement *se,
+                                            struct img_par *img,
+                                            struct inp_par *inp,
+                                            DataPartition  *act_dp)
+{
+  BiContextTypePtr          mb_type_ctx_copy[4];
+  BiContextTypePtr          mb_aff_ctx_copy;
+  DecodingEnvironmentPtr    dep_dp_copy;
+
+  int length;
+  DecodingEnvironmentPtr    dep_dp = &(act_dp->de_cabac);
+
+  int bframe = (img->type==B_IMG_1 || img->type==B_IMG_MULT);
+  int skip   = 0;
+  int field  = 0;
+  int i;
+
+  Macroblock *currMB;
+  
+  //get next MB
+  img->current_mb_nr++;
+  setRealMB_nr(img);
+  currMB = &img->mb_data[img->map_mb_nr];
+  currMB->slice_nr = img->current_slice_nr;
+  CheckAvailabilityOfNeighborsForSkip(img);
+  CheckAvailabilityOfNeighborsForAff(img);
+  
+  
+  //create
+  dep_dp_copy = (DecodingEnvironmentPtr) calloc(1, sizeof(DecodingEnvironment) );
+  for (i=0;i<4;i++)
+    mb_type_ctx_copy[i] = (BiContextTypePtr) calloc(NUM_MB_TYPE_CTX, sizeof(BiContextType) );
+  mb_aff_ctx_copy = (BiContextTypePtr) calloc(NUM_MB_AFF_CTX, sizeof(BiContextType) );
+  
+  //copy
+  memcpy(dep_dp_copy,dep_dp,sizeof(DecodingEnvironment));
+  length = *(dep_dp_copy->Dcodestrm_len) = *(dep_dp->Dcodestrm_len);
+  for (i=0;i<4;i++)
+    memcpy(mb_type_ctx_copy[i], img->currentSlice->mot_ctx->mb_type_contexts[i],NUM_MB_TYPE_CTX*sizeof(BiContextType) );
+  memcpy(mb_aff_ctx_copy, img->currentSlice->mot_ctx->mb_aff_contexts,NUM_MB_AFF_CTX*sizeof(BiContextType) );
+
+
+  //check_next_mb
+#if TRACE
+  strncpy(se->tracestring, "Check MB skipflag", TRACESTRING_SIZE);
+#endif
+  readMB_skip_flagInfoFromBuffer_CABAC(se,inp,img,dep_dp);
+
+  skip = (bframe)? (se->value1==0 && se->value2==0) : (se->value1==0);
+  if (!skip)
+  {
+#if TRACE
+    strncpy(se->tracestring, "Get Field mode", TRACESTRING_SIZE);
+#endif
+    readFieldModeInfoFromBuffer_CABAC( se,inp,img,dep_dp);
+    field = se->value1;
+  }
+
+  //reset
+  img->current_mb_nr--;
+  setRealMB_nr(img);
+  memcpy(dep_dp,dep_dp_copy,sizeof(DecodingEnvironment));
+  *(dep_dp->Dcodestrm_len) = length;
+  for (i=0;i<4;i++)
+    memcpy(img->currentSlice->mot_ctx->mb_type_contexts[i],mb_type_ctx_copy[i], NUM_MB_TYPE_CTX*sizeof(BiContextType) );
+  memcpy( img->currentSlice->mot_ctx->mb_aff_contexts,mb_aff_ctx_copy,NUM_MB_AFF_CTX*sizeof(BiContextType) );
+  
+  
+  //delete
+  free(dep_dp_copy);
+  for (i=0;i<4;i++)
+    free(mb_type_ctx_copy[i]);
+  free(mb_aff_ctx_copy);
+  
+  return skip;
+}
+
+
 
 
 /*!
@@ -208,7 +316,7 @@ void readBiMVD2Buffer_CABAC( SyntaxElement *se,
   int k = (se->value2>>1); // MVD component
 
   MotionInfoContexts *ctx = img->currentSlice->mot_ctx;
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  Macroblock *currMB = &img->mb_data[img->map_mb_nr];//GB current_mb_nr];
 
 
   if (j==0)
@@ -381,7 +489,65 @@ void readB8_typeInfoFromBuffer_CABAC (SyntaxElement *se,
 //	if (act_sym == 13)				printf(" stop");
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    This function is used to arithmetically decode the macroblock
+ *    type info of a given MB.
+ ************************************************************************
+ */
+void readMB_skip_flagInfoFromBuffer_CABAC( SyntaxElement *se,
+                                      struct inp_par *inp,
+                                      struct img_par *img,
+                                      DecodingEnvironmentPtr dep_dp)
+{
+  int a, b;
+  int act_ctx;
+  int bframe=(img->type==B_IMG_1 || img->type==B_IMG_MULT);
+  MotionInfoContexts *ctx = (img->currentSlice)->mot_ctx;
+  Macroblock *currMB = &img->mb_data[img->map_mb_nr];//GB current_mb_nr];
 
+
+  if (bframe)
+  {
+    if (currMB->skip_mb_available[0][1] == NULL)
+      b = 0;
+    else
+      b = (currMB->skip_mb_available[0][1]->mb_type==0 && currMB->skip_mb_available[0][1]->cbp==0 ? 0 : 1);
+    if (currMB->skip_mb_available[1][0] == NULL)
+      a = 0;
+    else
+      a = (currMB->skip_mb_available[1][0]->mb_type==0 && currMB->skip_mb_available[1][0]->cbp==0 ? 0 : 1);
+    act_ctx = 7 + a + b;
+
+    if (biari_decode_symbol (dep_dp, &ctx->mb_type_contexts[2][act_ctx]) == 0)
+      se->value1 = se->value2 = 0;
+    else
+      se->value1 = se->value2 = 1;
+  }
+  else
+  {
+    if (currMB->skip_mb_available[0][1] == NULL)
+      b = 0;
+    else
+      b = (( (currMB->skip_mb_available[0][1])->mb_type != 0) ? 1 : 0 );
+    if (currMB->skip_mb_available[1][0] == NULL)
+      a = 0;
+    else
+      a = (( (currMB->skip_mb_available[1][0])->mb_type != 0) ? 1 : 0 );
+    act_ctx = a + b;
+
+    if (biari_decode_symbol(dep_dp, &ctx->mb_type_contexts[1][act_ctx]) == 0)
+      se->value1 = 0;
+    else
+      se->value1 = 1;
+  }
+#if TRACE
+  fprintf(p_trace, "@%d %s\t\t%d\t%d %d\n",symbolCount++, se->tracestring, se->value1,a,b);
+  fflush(p_trace);
+#endif
+  return;
+}
 /*!
  ************************************************************************
  * \brief
@@ -405,8 +571,7 @@ void readMB_typeInfoFromBuffer_CABAC( SyntaxElement *se,
 
 
   MotionInfoContexts *ctx = (img->currentSlice)->mot_ctx;
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
-
+  Macroblock *currMB = &img->mb_data[img->map_mb_nr];//GB current_mb_nr];
 
   if(img->type == INTRA_IMG)  // INTRA-frame
   {
@@ -526,41 +691,18 @@ void readMB_typeInfoFromBuffer_CABAC( SyntaxElement *se,
   {
     if (bframe)
     {
+      ct = 1;
       if (currMB->mb_available[0][1] == NULL)
         b = 0;
-      else
-        b = (currMB->mb_available[0][1]->mb_type==0 && currMB->mb_available[0][1]->cbp==0 ? 0 : 1);
-      if (currMB->mb_available[1][0] == NULL)
-        a = 0;
-      else
-        a = (currMB->mb_available[1][0]->mb_type==0 && currMB->mb_available[1][0]->cbp==0 ? 0 : 1);
-      act_ctx = 7 + a + b;
+			else
+				b = (( (currMB->mb_available[0][1])->mb_type != 0) ? 1 : 0 );
+			if (currMB->mb_available[1][0] == NULL)
+				a = 0;
+			else
+				a = (( (currMB->mb_available[1][0])->mb_type != 0) ? 1 : 0 );
 
-      if (biari_decode_symbol (dep_dp, &ctx->mb_type_contexts[2][act_ctx]) == 0)
-      {
-        se->value1 = se->value2 = 0;
-        return;
-      }
-      else
-      {
-        se->value2 = 1;
-      }
-    }
+			act_ctx = a + b;
 
-    ct = 1;
-    if (currMB->mb_available[0][1] == NULL)
-      b = 0;
-    else
-      b = (( (currMB->mb_available[0][1])->mb_type != 0) ? 1 : 0 );
-    if (currMB->mb_available[1][0] == NULL)
-      a = 0;
-    else
-      a = (( (currMB->mb_available[1][0])->mb_type != 0) ? 1 : 0 );
-
-      act_ctx = a + b;
-
-    if (bframe)
-    {
       if (biari_decode_symbol (dep_dp, &ctx->mb_type_contexts[2][act_ctx]))
       {
         if (biari_decode_symbol (dep_dp, &ctx->mb_type_contexts[2][4]))
@@ -602,7 +744,6 @@ void readMB_typeInfoFromBuffer_CABAC( SyntaxElement *se,
     }
     else // P-frame
     {
-      if (biari_decode_symbol(dep_dp, &ctx->mb_type_contexts[1][act_ctx] ))
       {
         if (biari_decode_symbol(dep_dp, &ctx->mb_type_contexts[1][4] )) 
         {
@@ -626,10 +767,6 @@ void readMB_typeInfoFromBuffer_CABAC( SyntaxElement *se,
             else                                                            act_sym = 1;
           }
         }
-      }
-      else
-      {
-        act_sym = 0;
       }
     }
 
@@ -672,7 +809,6 @@ void readMB_typeInfoFromBuffer_CABAC( SyntaxElement *se,
 #endif
 }
 
-
 /*!
  ************************************************************************
  * \brief
@@ -687,10 +823,10 @@ void readIntraPredModeFromBuffer_CABAC( SyntaxElement *se,
 {
   TextureInfoContexts *ctx     = img->currentSlice->tex_ctx;
 
-  se->value1 = unary_bin_max_decode(dep_dp,ctx->ipr_contexts[0],1,8) - 1;
-
+  se->value1 = (int) unary_bin_max_decode(dep_dp,ctx->ipr_contexts[0],1,8);
+  se->value1--;
 #if TRACE
-  fprintf(p_trace, "@%d%s\t\t\t%d\n",symbolCount++, se->tracestring, se->value1);
+  fprintf(p_trace, "@%d %s\t\t\t%d %d\n",symbolCount++, se->tracestring, se->value1,se->context);
   fflush(p_trace);
 #endif
 }
@@ -708,22 +844,41 @@ void readRefFrameFromBuffer_CABAC(  SyntaxElement *se,
                                     DecodingEnvironmentPtr dep_dp)
 {
   MotionInfoContexts *ctx = img->currentSlice->mot_ctx;
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  Macroblock *currMB = &img->mb_data[img->map_mb_nr];//GB current_mb_nr];
 
   int   addctx = se->context;
   int   a, b;
   int   act_ctx;
   int   act_sym;
   int** refframe_array = ((img->type==B_IMG_1 || img->type==B_IMG_MULT) ? img->fw_refFrArr : refFrArr);
-  
+  int   block_y        = img->block_y;
+
+  if( img->mb_frame_field_flag )
+  {
+    if( !img->mb_field )
+    {
+      refframe_array = ((img->type==B_IMG_1 || img->type==B_IMG_MULT) ? img->fw_refFrArr_frm : refFrArr_frm);
+    }
+    else if ( img->current_mb_nr % 2 )
+    {
+      refframe_array = ((img->type==B_IMG_1 || img->type==B_IMG_MULT) ? img->fw_refFrArr_bot : refFrArr_bot);
+      block_y        = ( img->block_y - 4 ) / 2;
+    }
+    else
+    {
+      refframe_array = ((img->type==B_IMG_1 || img->type==B_IMG_MULT) ? img->fw_refFrArr_top : refFrArr_top);
+      block_y        = img->block_y / 2;
+    }
+  }
+
   if (currMB->mb_available[0][1] == NULL)
     b = 0;
   else
-    b = (refframe_array[img->block_y+img->subblock_y-1][img->block_x+img->subblock_x] > 0 ? 1 : 0);
+    b = (refframe_array[block_y+img->subblock_y-1][img->block_x+img->subblock_x] > 0 ? 1 : 0);
   if (currMB->mb_available[1][0] == NULL)
     a = 0;
   else 
-    a = (refframe_array[img->block_y+img->subblock_y][img->block_x+img->subblock_x-1] > 0 ? 1 : 0);
+    a = (refframe_array[block_y+img->subblock_y][img->block_x+img->subblock_x-1] > 0 ? 1 : 0);
 
   act_ctx = a + 2*b;
   se->context = act_ctx; // store context
@@ -739,9 +894,9 @@ void readRefFrameFromBuffer_CABAC(  SyntaxElement *se,
   se->value1 = act_sym;
 
 #if TRACE
-//  fprintf(p_trace, "@%d%s\t\t\t%d",symbolCount++, se->tracestring, se->value1);
+  fprintf(p_trace, "@%d %s\t\t\t%d \n",symbolCount++, se->tracestring, se->value1);
 //  fprintf(p_trace," c: %d :%d \n",ctx->ref_no_contexts[addctx][act_ctx].cum_freq[0],ctx->ref_no_contexts[addctx][act_ctx].cum_freq[1]);
-//  fflush(p_trace);
+  fflush(p_trace);
   // commented out, does not compile. karll@real.com
 #endif
 }
@@ -759,24 +914,43 @@ void readBwdRefFrameFromBuffer_CABAC(  SyntaxElement *se,
                                     DecodingEnvironmentPtr dep_dp)
 {
   MotionInfoContexts *ctx = img->currentSlice->mot_ctx;
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  Macroblock *currMB = &img->mb_data[img->map_mb_nr];//GB current_mb_nr];
 
   int   addctx = se->context;
   int   a, b;
   int   act_ctx;
   int   act_sym;
   int** refframe_array = img->bw_refFrArr;
+  int   block_y        = img->block_y;
  
+  if( img->mb_frame_field_flag )
+  {
+    if( !img->mb_field )
+    {
+      refframe_array = img->bw_refFrArr_frm;
+    }
+    else if ( img->current_mb_nr % 2 )
+    {
+      refframe_array = img->bw_refFrArr_bot;
+      block_y        = ( img->block_y - 4 ) / 2;
+    }
+    else
+    {
+      refframe_array = img->bw_refFrArr_top;
+      block_y        = img->block_y / 2;
+    }
+  }
+
 #define REF_IDX(r) ((img->num_ref_pic_active_bwd>1 && (r)<2) ? (1-(r)):(r))
 
   if (currMB->mb_available[0][1] == NULL)
     b = 0;
   else
-    b = (REF_IDX(refframe_array[img->block_y+img->subblock_y-1][img->block_x+img->subblock_x]) > 0 ? 1 : 0);
+    b = (REF_IDX(refframe_array[block_y+img->subblock_y-1][img->block_x+img->subblock_x]) > 0 ? 1 : 0);
   if (currMB->mb_available[1][0] == NULL)
     a = 0;
   else 
-    a = (REF_IDX(refframe_array[img->block_y+img->subblock_y][img->block_x+img->subblock_x-1]) > 0 ? 1 : 0);
+    a = (REF_IDX(refframe_array[block_y+img->subblock_y][img->block_x+img->subblock_x-1]) > 0 ? 1 : 0);
 #undef REF_IDX
 
   act_ctx = a + 2*b;
@@ -824,7 +998,7 @@ void readMVDFromBuffer_CABAC(SyntaxElement *se,
   int k = se->value2; // MVD component
 
   MotionInfoContexts *ctx = img->currentSlice->mot_ctx;
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  Macroblock *currMB = &img->mb_data[img->map_mb_nr];//GB current_mb_nr];
 
   if (j==0)
   {
@@ -875,7 +1049,7 @@ void readMVDFromBuffer_CABAC(SyntaxElement *se,
   se->value1 = mv_pred_res;
 
 #if TRACE
-  fprintf(p_trace, "@%d%s\t\t\t%d\n",symbolCount++, se->tracestring, se->value1);
+  fprintf(p_trace, "@%d %s\t\t\t%d %d\n",symbolCount++, se->tracestring, se->value1,a+b);
   fflush(p_trace);
 #endif
 }
@@ -893,7 +1067,7 @@ void readDquant_FromBuffer_CABAC(SyntaxElement *se,
                                 DecodingEnvironmentPtr dep_dp)
 {
   MotionInfoContexts *ctx = img->currentSlice->mot_ctx;
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  Macroblock *currMB = &img->mb_data[img->map_mb_nr];//GB current_mb_nr];
 
   int act_ctx;
   int act_sym;
@@ -935,7 +1109,7 @@ void readCBPFromBuffer_CABAC(SyntaxElement *se,
                              DecodingEnvironmentPtr dep_dp)
 {
   TextureInfoContexts *ctx = img->currentSlice->tex_ctx;
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  Macroblock *currMB = &img->mb_data[img->map_mb_nr];//GB current_mb_nr];
 
   int mb_x, mb_y;
   int a, b;
@@ -1038,7 +1212,7 @@ void readCIPredMode_FromBuffer_CABAC(SyntaxElement *se,
 {
 
   TextureInfoContexts *ctx = img->currentSlice->tex_ctx;
-  Macroblock          *currMB  = &img->mb_data[img->current_mb_nr];
+  Macroblock          *currMB  = &img->mb_data[img->map_mb_nr];
   int                 act_ctx,a,b;
   int                 act_sym  = se->value1;
 
@@ -1106,7 +1280,9 @@ int read_and_store_CBP_block_bit (Macroblock              *currMB,
   int j           = (y_ac || u_ac || v_ac ? img->subblock_y : 0);
   int i           = (y_ac || u_ac || v_ac ? img->subblock_x : 0);
   int bit         = (y_dc ? 0 : y_ac ? 1+4*j+i : u_dc ? 17 : v_dc ? 18 : u_ac ? 19+2*j+i : 23+2*j+i);
-  int ystep       = (y_ac ? 4 : 2);
+  int ystep_back  = (y_ac ? 12 : u_ac || v_ac ? 2 : 0);
+  int xstep_back  = (y_ac ?  3 : u_ac || v_ac ? 1 : 0);
+  int ystep       = (y_ac ?  4 : u_ac || v_ac ? 2 : 0);
   int default_bit = (img->is_intra_block ? 1 : 0);
   int upper_bit   = default_bit;
   int left_bit    = default_bit;
@@ -1121,7 +1297,7 @@ int read_and_store_CBP_block_bit (Macroblock              *currMB,
     {
       if (currMB->mb_available[0][1])
       {
-        upper_bit = BIT_SET(currMB->mb_available[0][1]->cbp_bits,bit);
+        upper_bit = BIT_SET(currMB->mb_available[0][1]->cbp_bits,bit+ystep_back);
       }
     }
     else
@@ -1132,7 +1308,7 @@ int read_and_store_CBP_block_bit (Macroblock              *currMB,
     {
       if (currMB->mb_available[1][0])
       {
-        left_bit = BIT_SET(currMB->mb_available[1][0]->cbp_bits,bit);
+        left_bit = BIT_SET(currMB->mb_available[1][0]->cbp_bits,bit+xstep_back);
       }
     }
     else
@@ -1332,7 +1508,7 @@ void readRunLevelFromBuffer_CABAC (SyntaxElement  *se,
   static int  coeff_ctr = -1;
   static int  pos       =  0;
 
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  Macroblock *currMB = &img->mb_data[img->map_mb_nr];//GB current_mb_nr];
 
   //--- read coefficients for whole block ---
   if (coeff_ctr < 0)
@@ -1422,11 +1598,8 @@ int readSliceCABAC(struct img_par *img, struct inp_par *inp)
   if (BitstreamLengthInBytes < startcodeprefix_len)
     return EOS;
 
-  if(inp->Encapsulated_NAL_Payload) 
-  {
-    BitstreamLengthInBytes = currStream->bitstream_length = EBSPtoRBSP(code_buffer, currStream->bitstream_length, startcodeprefix_len);
-    BitstreamLengthInBytes = currStream->bitstream_length = RBSPtoSODB(code_buffer, currStream->bitstream_length);
-  }
+  BitstreamLengthInBytes = currStream->bitstream_length = EBSPtoRBSP(code_buffer, currStream->bitstream_length, startcodeprefix_len);
+  BitstreamLengthInBytes = currStream->bitstream_length = RBSPtoSODB(code_buffer, currStream->bitstream_length);
 
   // Now we have the bits between the current startcode (inclusive) and the
   // next start code in code_buffer.  Now decode the start codes and the headers
@@ -1541,7 +1714,7 @@ unsigned int unary_bin_decode(DecodingEnvironmentPtr dep_dp,
  * StW, 8.7.02
  ************************************************************************
  */
-int cabac_startcode_follows(struct img_par *img, struct inp_par *inp)
+int cabac_startcode_follows(struct img_par *img, struct inp_par *inp, int eos_bit)
 {
   Slice         *currSlice  = img->currentSlice;
   int           *partMap    = assignSE2partition[currSlice->dp_mode];
@@ -1553,7 +1726,19 @@ int cabac_startcode_follows(struct img_par *img, struct inp_par *inp)
   else                                                dP = &(currSlice->partArr[partMap[SE_MBTYPE]]);
   dep_dp = &(dP->de_cabac);
 
-  bit = biari_decode_symbol (dep_dp, &(currSlice->mot_ctx->slice_term_context));
+  if( eos_bit )
+  {
+    bit = biari_decode_symbol (dep_dp, &(currSlice->mot_ctx->slice_term_context));
+#if TRACE
+//	strncpy(se->tracestring, "Decode Sliceterm", TRACESTRING_SIZE);
+  fprintf(p_trace, "@%d %s\t\t%d\n",symbolCount++, "Decode Sliceterm", bit);
+  fflush(p_trace);
+#endif
+  }
+  else
+  {
+    bit = 0;
+  }
 
   return (bit==1?1:0);
 }

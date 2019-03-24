@@ -68,11 +68,22 @@ typedef struct
   int YSizeMB;
   int FilterParametersFlag;
   int EntropyCoding;
-  int MotionResolution;
   int PartitioningType;
   int IntraPredictionType;
   int HRCParameters;
   int *MBAmap;
+
+  // JVT-D095, JVT-D097
+  int num_slice_groups_minus1; 
+  int mb_allocation_map_type; 
+  int top_left_mb; 
+  int bottom_right_mb; 
+  int slice_group_change_direction; 
+  int slice_group_change_rate_minus1; 
+  // End JVT-D095, JVT-D097
+
+  int redundant_slice_flag; // JVT-D101
+
 } ParameterSet_t;
 
 typedef struct
@@ -134,6 +145,8 @@ typedef struct
   int num_ref_pic_active_fwd;                   //!< number of forward reference
   int num_ref_pic_active_bwd;                   //!< number of backward reference
   int explicit_B_prediction;                    //!< type of weight for bi-pred, 0:average 1:implicit
+  int slice_group_change_cycle; // JVT-D097
+  int redundant_pic_cnt; // JVT-D101
 } RTPSliceHeader_t;
 
 
@@ -149,7 +162,7 @@ void  RTPUseParameterSet (int n, struct img_par *img, struct inp_par *inp);
 int  RTPReadPartitions (struct img_par *img, struct inp_par *inp, FILE *bits);
 int  DecomposeRTPpacket (RTPpacket_t *p);
 void DumpRTPHeader (RTPpacket_t *p);
-int  RTPInterpretSliceHeader (byte *buf, int bufsize, int ReadSliceId, RTPSliceHeader_t *sh);
+int  RTPInterpretSliceHeader (byte *buf, int bufsize, int ReadSliceId, RTPSliceHeader_t *sh, struct img_par *img);
 int  RTPInterpretPartitionHeader (byte *buf, int bufsize, RTPSliceHeader_t *sh);
 int  readSliceRTP (struct img_par *img, struct inp_par *inp);
 int  RTPSequenceHeader (struct img_par *img, struct inp_par *inp, FILE *bits);

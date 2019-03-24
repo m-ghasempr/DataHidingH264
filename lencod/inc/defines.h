@@ -75,8 +75,6 @@
 
 #define NEW_CONSTRAINT_AC
 
-#define _EXP_GOLOMB
-
 #define clamp(a,b,c) ( (a)<(b) ? (b) : ((a)>(c)?(c):(a)) )    //!< clamp a to the range of [b;c]
 
 
@@ -234,7 +232,6 @@
 #define IMG_HEIGHT_CR   72
 
 #define INIT_FRAME_RATE 30
-#define LEN_STARTCODE   31        //!< length of start code
 #define EOS             1         //!< End Of Sequence
 
 
@@ -257,6 +254,6 @@
 #define MAXPICTURETYPESEQUENCELEN 100   /*!< Maximum size of the string that defines the picture
                                              types to be coded, e.g. "IBBPBBPBB" */
 //Start code and Emulation Prevention need this to be defined in identical manner at encoder and decoder
-#define ZEROBYTES_SHORTSTARTCODE 1 //indicates the number of zero bytes in the short start-code prefix
+#define ZEROBYTES_SHORTSTARTCODE 2 //indicates the number of zero bytes in the short start-code prefix
 #endif
 

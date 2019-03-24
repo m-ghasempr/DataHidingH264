@@ -398,7 +398,6 @@ int rdParameterSetBox( FILE* fp, unsigned long size )
   if ( -1 == readfile( &box_ps.displayRectangleOffsetFromWindowLeftBorder, 2, 1, fp ) ) return -1;
   if ( -1 == readfile( &box_ps.loopFilterParametersFlag, 1, 1, fp ) ) return -1;
   if ( -1 == readfile( &box_ps.entropyCoding, 1, 1, fp ) ) return -1;
-  if ( -1 == readfile( &box_ps.motionResolution, 1, 1, fp ) ) return -1;
   if ( -1 == readfile( &box_ps.partitioningType, 1, 1, fp ) ) return -1;
   if ( -1 == readfile( &box_ps.intraPredictionType, 1, 1, fp ) ) return -1;
   if ( -1 == readfile( &box_ps.bufCycle, 1, 1, fp ) ) return -1;
@@ -1292,11 +1291,9 @@ int rdOnePayload( struct img_par *img, struct inp_par* inp, PayloadInfo *pp, FIL
   {
     currStream->bitstream_length = (int)pp->payloadSize;
     box_atm.currPayloadOffset += (long)pp->payloadSize;
-    if(inp->Encapsulated_NAL_Payload) 
-    {
-      currStream->bitstream_length = (int) pp->payloadSize = EBSPtoRBSP( buf, (int) pp->payloadSize, 0);
-      currStream->bitstream_length = (int) pp->payloadSize = RBSPtoSODB( buf, (int) pp->payloadSize);
-    }
+
+    currStream->bitstream_length = (int) pp->payloadSize = EBSPtoRBSP( buf, (int) pp->payloadSize, 0);
+    currStream->bitstream_length = (int) pp->payloadSize = RBSPtoSODB( buf, (int) pp->payloadSize);
 
     currSlice->ei_flag = 0;
     currSlice->dp_mode = PAR_DP_1;
@@ -1380,24 +1377,6 @@ int IFFUseParameterSet( int n, struct img_par* img, struct inp_par* inp )
 
   if ( box_ps.entropyCoding == 0 ) inp->symbol_mode = UVLC;
   else inp->symbol_mode = CABAC;
-
-  switch ( box_ps.motionResolution )
-  {
-  case 2:
-    img->mv_res = 0;
-    break;
-  case 3:
-    img->mv_res = 1;
-    break;
-  case 0:
-    img->mv_res = 2;
-    break;
-  case 1:
-    img->mv_res = 3;
-    break;
-  default:
-    assert( 1==0 );
-  }
 
   inp->partition_mode = box_ps.partitioningType;
   inp->UseConstrainedIntraPred = box_ps.intraPredictionType;

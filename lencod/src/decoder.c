@@ -260,12 +260,6 @@ byte Get_Reference_Pixel(byte **imY, int y_pos, int x_pos)
   if (dx == 0 && dy == 0) { /* fullpel position */
     result = imY[max(0,min(maxold_y,y_pos))][max(0,min(maxold_x,x_pos))];
   }
-  else if (dx == 3 && dy == 3) { /* funny position */
-    result = (imY[max(0,min(maxold_y,y_pos))  ][max(0,min(maxold_x,x_pos))  ]+
-              imY[max(0,min(maxold_y,y_pos))  ][max(0,min(maxold_x,x_pos+1))]+
-              imY[max(0,min(maxold_y,y_pos+1))][max(0,min(maxold_x,x_pos+1))]+
-              imY[max(0,min(maxold_y,y_pos+1))][max(0,min(maxold_x,x_pos))  ]+2)/4;
-  }
   else { /* other positions */
 
     if (dy == 0) {

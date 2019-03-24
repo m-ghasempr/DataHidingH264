@@ -237,16 +237,6 @@ int CheckReliabilityOfRef (int block, int ref, int mode)
             if (pixel_map[max(0,min(maxold_y,y_pos+y))][max(0,min(maxold_x,x_pos+x))] < ref_frame)
               return 0;
       }
-      else if (dx == 3 && dy == 3)  /* funny position */
-      {
-        for (y=0 ; y < BLOCK_SIZE ; y++)
-          for (x=0 ; x < BLOCK_SIZE ; x++)
-            if (pixel_map[max(0,min(maxold_y,y_pos+y))  ][max(0,min(maxold_x,x_pos+x))  ] < ref_frame ||
-                pixel_map[max(0,min(maxold_y,y_pos+y))  ][max(0,min(maxold_x,x_pos+x+1))] < ref_frame ||
-                pixel_map[max(0,min(maxold_y,y_pos+y+1))][max(0,min(maxold_x,x_pos+x+1))] < ref_frame ||
-                pixel_map[max(0,min(maxold_y,y_pos+y+1))][max(0,min(maxold_x,x_pos+x))  ] < ref_frame)
-              return 0;
-      }
       else  /* other positions */
       {
         if (dy == 0) 

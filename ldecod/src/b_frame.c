@@ -121,7 +121,7 @@ void init_macroblock_Bframe(struct img_par *img)
   int i,j,k;
   int img_block_y;
   int j2 = img->block_y; 
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  Macroblock *currMB = &img->mb_data[img->map_mb_nr];//GB current_mb_nr];
 
   if (img->mb_frame_field_flag)
     j2 = img->block_y/2 - 2*(img->current_mb_nr%2);

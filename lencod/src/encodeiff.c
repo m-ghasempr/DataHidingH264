@@ -493,7 +493,7 @@ void freeAlternateTrackInfoBox()
  */
 int initParameterSetBox()
 {
-  box_ps.type.size = SIZEOF_BOXTYPE + 29;     // 26 => 27 => 28, add bufCycle, temporal scalability
+  box_ps.type.size = SIZEOF_BOXTYPE + 28;     // 26 => 27 => 28, add bufCycle, temporal scalability
   box_ps.type.type = BOX_PRMS;
 
   box_ps.parameterSetID = 0;
@@ -511,23 +511,6 @@ int initParameterSetBox()
   box_ps.displayRectangleOffsetFromWindowLeftBorder = 0;
   if ( input->symbol_mode == UVLC ) box_ps.entropyCoding = 0;
   else box_ps.entropyCoding = 1;
-  switch ( input->mv_res )  // the value defined in VCEG-O58 is different from that in .cfg
-  {
-  case 2:
-    box_ps.motionResolution = 0;  // full-pixel
-    break;
-  case 3:
-    box_ps.motionResolution = 1;  // half-pixel
-    break;
-  case 0:
-    box_ps.motionResolution = 2;  // 1/4-pixel
-    break;
-  case 1:
-    box_ps.motionResolution = 3;  // 1/8-pixel
-    break;
-  default:
-    break;
-  }
   box_ps.partitioningType = input->partition_mode;
   box_ps.intraPredictionType = input->UseConstrainedIntraPred;
   box_ps.bufCycle = input->no_multpred;
@@ -572,7 +555,6 @@ size_t wrParameterSetBox( FILE* fp )
   num += writefile( &box_ps.displayRectangleOffsetFromWindowLeftBorder, 2, 1, fp );
   num += writefile( &box_ps.loopFilterParametersFlag, 1, 1, fp );
   num += writefile( &box_ps.entropyCoding, 1, 1, fp );
-  num += writefile( &box_ps.motionResolution, 1, 1, fp );
   num += writefile( &box_ps.partitioningType, 1, 1, fp );
   num += writefile( &box_ps.intraPredictionType, 1, 1, fp );
   num += writefile( &box_ps.bufCycle, 1, 1, fp );

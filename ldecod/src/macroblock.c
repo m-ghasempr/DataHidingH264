@@ -46,7 +46,7 @@
  *    - Thomas Wedi                     <wedi@tnt.uni-hannover.de>
  *    - Detlev Marpe                    <marpe@hhi.de>
  *    - Gabi Blaettermann               <blaetter@hhi.de>
- *    - Ye-Kui Wang                     <wangy@cs.tut.fi>
+ *    - Ye-Kui Wang                     <wyk@ieee.org>
  ***********************************************************************
 */
 
@@ -78,6 +78,23 @@ void SetMotionVectorPredictor (struct img_par  *img,
                           int             blockshape_x,
                           int             blockshape_y); // declare to avoid warnings. mwi
 
+
+void setRealMB_nr (struct img_par *img) //GB
+{
+	int max_mb_row, x;
+
+	if (img->mb_frame_field_flag)
+	{
+		max_mb_row = (img->width/16);
+		x = img->current_mb_nr/(2*max_mb_row);
+		if (img->current_mb_nr % 2) 
+			img->map_mb_nr = img->current_mb_nr/2 + (x+1) * max_mb_row;
+		else
+			img->map_mb_nr = img->current_mb_nr/2 + x * max_mb_row;
+	}
+	else
+		img->map_mb_nr = img->current_mb_nr;
+}
 /*!
  ************************************************************************
  * \brief
@@ -88,12 +105,15 @@ void SetMotionVectorPredictor (struct img_par  *img,
  *    past of the current MB are checked.
  ************************************************************************
  */
+
+//GB
 void CheckAvailabilityOfNeighbors(struct img_par *img)
 {
   int i,j;
   const int mb_width = img->width/MB_BLOCK_SIZE;
-  const int mb_nr = img->current_mb_nr;
+  const int mb_nr = img->map_mb_nr;
   Macroblock *currMB = &img->mb_data[mb_nr];
+	int check_value;
 
   // mark all neighbors as unavailable
   for (i=0; i<3; i++)
@@ -125,7 +145,11 @@ void CheckAvailabilityOfNeighbors(struct img_par *img)
 
 
   // Check MB above
-  if(img->pix_y >= MB_BLOCK_SIZE)
+	check_value = (img->mb_frame_field_flag && img->mb_field) 
+								? (img->pix_y >= 2*MB_BLOCK_SIZE) 
+								: (img->pix_y >= MB_BLOCK_SIZE);
+  if(check_value) //GB
+
   {
     int remove_prediction = currMB->slice_nr != img->mb_data[mb_nr-mb_width].slice_nr;
     // upper blocks
@@ -147,7 +171,11 @@ void CheckAvailabilityOfNeighbors(struct img_par *img)
   }
 
   // Check MB left above
-  if(img->pix_x >= MB_BLOCK_SIZE && img->pix_y  >= MB_BLOCK_SIZE )
+	check_value = (img->mb_frame_field_flag && img->mb_field) 
+								? (img->pix_y >= 2*MB_BLOCK_SIZE && img->pix_x >= MB_BLOCK_SIZE ) 
+								: (img->pix_x >= MB_BLOCK_SIZE && img->pix_y  >= MB_BLOCK_SIZE );
+
+  if (check_value) //GB
   {
     if(currMB->slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr)
       img->mb_data[mb_nr].mb_available[0][0]=&(img->mb_data[mb_nr-mb_width-1]);
@@ -159,6 +187,53 @@ void CheckAvailabilityOfNeighbors(struct img_par *img)
     if(currMB->slice_nr == img->mb_data[mb_nr-mb_width+1].slice_nr)
       currMB->mb_available[0][2]=&(img->mb_data[mb_nr-mb_width+1]);
   }
+
+	if(img->mb_frame_field_flag)
+	  currMB->mb_available[0][2] = NULL;	// set the prediction from top right MB to zero 
+
+}
+
+//GB
+void CheckAvailabilityOfNeighborsForSkip(struct img_par *img)
+{
+  int i,j;
+  const int mb_width = img->width/MB_BLOCK_SIZE;
+  const int mb_nr = img->map_mb_nr;
+  Macroblock *currMB = &img->mb_data[mb_nr];
+
+  // mark all neighbors as unavailable
+  for (i=0; i<3; i++)
+    for (j=0; j<3; j++)
+      img->mb_data[mb_nr].skip_mb_available[i][j]=NULL;
+  img->mb_data[mb_nr].skip_mb_available[1][1]=currMB; // current MB
+
+  // Check MB to the left
+  if((img->pix_x >= MB_BLOCK_SIZE) && (currMB->slice_nr == img->mb_data[mb_nr-1].slice_nr))
+		currMB->skip_mb_available[1][0]=&(img->mb_data[mb_nr-1]);
+
+  // Check MB above
+  if((img->pix_y >= MB_BLOCK_SIZE) && (currMB->slice_nr == img->mb_data[mb_nr-mb_width].slice_nr))
+		currMB->skip_mb_available[0][1]=&(img->mb_data[mb_nr-mb_width]);
+}
+
+void CheckAvailabilityOfNeighborsForAff(struct img_par *img)
+{
+  const int mb_width = img->width/MB_BLOCK_SIZE;
+  const int mb_nr = img->map_mb_nr;
+  Macroblock *currMB = &img->mb_data[mb_nr];
+  	
+	// Check Field to the left
+	if ((img->pix_x >= MB_BLOCK_SIZE) && (currMB->slice_nr == img->mb_data[mb_nr-1].slice_nr))
+		currMB->field_available[1]=&(img->mb_data[mb_nr-1]);
+	else
+		currMB->field_available[1]=NULL;
+	
+	// Check Field above
+	if ((img->pix_y >= 2*MB_BLOCK_SIZE) && (currMB->slice_nr == img->mb_data[mb_nr-mb_width*2].slice_nr))
+		currMB->field_available[0]=&(img->mb_data[mb_nr-mb_width*2]);
+	else
+		currMB->field_available[0]=NULL;
+
 }
 
 /*!
@@ -173,8 +248,10 @@ void start_macroblock(struct img_par *img,struct inp_par *inp, int CurrentMBInSc
   Macroblock *currMB;   // intialization code deleted, see below, StW
 
   assert (img->current_mb_nr >=0 && img->current_mb_nr < img->max_mb_nr);
-  img->current_mb_nr = CurrentMBInScanOrder;
-  currMB = &img->mb_data[CurrentMBInScanOrder];
+	// img->current_mb_nr = CurrentMBInScanOrder;
+  //currMB = &img->mb_data[CurrentMBInScanOrder];
+
+	currMB = &img->mb_data[img->map_mb_nr];//GB
 
   /* Update coordinates of the current macroblock */
   if (img->mb_frame_field_flag)
@@ -257,7 +334,7 @@ void start_macroblock(struct img_par *img,struct inp_par *inp, int CurrentMBInSc
  *    check end_of_slice condition 
  ************************************************************************
  */
-int exit_macroblock(struct img_par *img,struct inp_par *inp)
+int exit_macroblock(struct img_par *img,struct inp_par *inp,int eos_bit)
 {
   Slice *currSlice = img->currentSlice;
 
@@ -282,11 +359,11 @@ int exit_macroblock(struct img_par *img,struct inp_par *inp)
  
     if (img->current_mb_nr == -1)     // End of Slice group, MUST be end of slice
     {
-      assert (nal_startcode_follows (img, inp) == TRUE);
+      assert (nal_startcode_follows (img, inp, eos_bit) == TRUE);
       return TRUE;
     }
 
-    if(nal_startcode_follows(img, inp) == FALSE) 
+    if(nal_startcode_follows(img, inp, eos_bit) == FALSE) 
       return FALSE;
 
     if(img->type == INTRA_IMG  || img->type == SI_IMG || inp->symbol_mode == CABAC)
@@ -307,7 +384,7 @@ void interpret_mb_mode_P(struct img_par *img)
 {
   int i;
   const int ICBPTAB[6] = {0,16,32,15,31,47};
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  Macroblock *currMB = &img->mb_data[img->map_mb_nr];//GB current_mb_nr];
   int         mbmode = currMB->mb_type;
 
 #define ZERO_P8x8     (mbmode==5)
@@ -362,7 +439,7 @@ void interpret_mb_mode_I(struct img_par *img)
 {
   int i;
   const int ICBPTAB[6] = {0,16,32,15,31,47};
-  Macroblock *currMB   = &img->mb_data[img->current_mb_nr];
+  Macroblock *currMB   = &img->mb_data[img->map_mb_nr];//GB current_mb_nr];
   int         mbmode   = currMB->mb_type;
 
   if (mbmode==0)
@@ -394,7 +471,7 @@ void interpret_mb_mode_B(struct img_par *img)
                                              {1,0},{0,0},{0,2},{0,0},{1,2},{0,0},{2,0},{0,0},{2,1},{0,0},{2,2}};
 
   const int ICBPTAB[6] = {0,16,32,15,31,47};
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  Macroblock *currMB = &img->mb_data[img->map_mb_nr];//GB current_mb_nr];
 
   int i, mbmode;
   int mbtype  = currMB->mb_type;
@@ -448,7 +525,7 @@ void interpret_mb_mode_SI(struct img_par *img)
 {
   int i;
   const int ICBPTAB[6] = {0,16,32,15,31,47};
-  Macroblock *currMB   = &img->mb_data[img->current_mb_nr];
+  Macroblock *currMB   = &img->mb_data[img->map_mb_nr];//GB current_mb_nr];
   int         mbmode   = currMB->mb_type;
 
   if (mbmode==0)
@@ -480,7 +557,7 @@ void init_macroblock(struct img_par *img)
 {
   int i,j;
   int predframe_no;
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  Macroblock *currMB = &img->mb_data[img->map_mb_nr];//GB current_mb_nr];
   int img_block_y;
   int j2 = img->block_y/2 - 2*(img->current_mb_nr%2);
 
@@ -741,21 +818,26 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
   int i;
 
   SyntaxElement currSE;
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  Macroblock *currMB = &img->mb_data[img->map_mb_nr];//GB current_mb_nr];
 
   Slice *currSlice = img->currentSlice;
   DataPartition *dP;
   int *partMap = assignSE2partition[currSlice->dp_mode];
-
-  Macroblock *topMB = &img->mb_data[img->current_mb_nr - 1];    // only work for bottom field
+	int mb_width = img->width/16;
+  Macroblock *topMB;
   int  skip;// = (img->current_mb_nr%2 && topMB->mb_type == 0); // && (img->type != INTER_IMG_1 || img->type != INTER_IMG_MULT);
   int  img_block_y;
+	int read_top, read_bottom, check_bottom;
+  
+	if (img->map_mb_nr>= mb_width) topMB= &img->mb_data[img->map_mb_nr-mb_width];    // only work for bottom field
 
-
-  if(!(img->type == B_IMG_1 || img->type == B_IMG_MULT))
-      skip = (img->current_mb_nr%2 && topMB->mb_type == 0);
-  else 
-      skip = (img->current_mb_nr%2 && topMB->mb_type == 0 && topMB->cbp == 0);
+	if (img->structure==FRAME && img->mb_frame_field_flag)
+	{
+		if(!(img->type == B_IMG_1 || img->type == B_IMG_MULT))
+		 skip = (img->current_mb_nr%2 && topMB->mb_type == 0);
+		else 
+     skip = (img->current_mb_nr%2 && topMB->mb_type == 0 && topMB->cbp == 0);
+	}
   
   if (img->current_mb_nr%2 == 0)
     img->mb_field = 0;
@@ -763,7 +845,7 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
   currMB->qp = img->qp ;
 
   currSE.type = SE_MBTYPE;
-  // if( img->type!=INTRA_IMG || img->type!= SI_IMG || USEABT!=INTER_INTRA_ABT )    //in intra frames, there can only be one.
+
   if( (img->type!=INTRA_IMG && img->type!= SI_IMG) || USEABT!=INTER_INTRA_ABT ) //in intra frames, there can only be one. // bug fix mwi: I&&SI. 
   {
     //  read MB mode *****************************************************************
@@ -772,34 +854,104 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
 
     if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)   currSE.mapping = linfo;
     else                                                      currSE.reading = readMB_typeInfoFromBuffer_CABAC;
-
-    if(inp->symbol_mode == CABAC || (img->type != SP_IMG_1 && img->type != SP_IMG_MULT && img->type != INTER_IMG_1 && img->type != INTER_IMG_MULT && img->type != B_IMG_1 && img->type != B_IMG_MULT))
+ 
+    if(img->type == INTRA_IMG || img->type == SI_IMG) //GB
     {
-      //  read MB mode
-#if TRACE
-      strncpy(currSE.tracestring, "MB Type", TRACESTRING_SIZE);
-#endif
-      dP->readSyntaxElement(&currSE,img,inp,dP);
-      currMB->mb_type = currSE.value1;
-      if(!dP->bitstream->ei_flag)
-        currMB->ei_flag = 0;
-
-      // read super MB type here
-//          if (img->structure==FRAME && img->mb_frame_field_flag)
-      if ((img->structure==FRAME && img->mb_frame_field_flag) && ((img->current_mb_nr%2==0) || (img->current_mb_nr && skip)))
+      // read MB aff
+      if (img->structure==FRAME && img->mb_frame_field_flag && img->current_mb_nr%2==0) //GB
       {
+				CheckAvailabilityOfNeighborsForAff(img);
+				currSE.reading = readFieldModeInfoFromBuffer_CABAC;
 #if TRACE
         strncpy(currSE.tracestring, "Field mode", TRACESTRING_SIZE);
 #endif
         dP->readSyntaxElement(&currSE,img,inp,dP);
         img->mb_field = currSE.value1;
       }
+			if (img->structure==FRAME && img->mb_frame_field_flag)
+				CheckAvailabilityOfNeighbors(img); 
 
-      if ((img->type==B_IMG_1 || img->type==B_IMG_MULT) && currSE.value1==0 && currSE.value2==0)
-      {
-        img->cod_counter=0;
-      }
+      //  read MB type
+#if TRACE
+      strncpy(currSE.tracestring, "MB Type", TRACESTRING_SIZE);
+#endif
+			currSE.reading = readMB_typeInfoFromBuffer_CABAC;
+      dP->readSyntaxElement(&currSE,img,inp,dP);
+      currMB->mb_type = currSE.value1;
+      if(!dP->bitstream->ei_flag)
+        currMB->ei_flag = 0;
+
+
     } 
+// START CABAC DECODING MB_SKIP_FLAG & MBTYPE ******************************************************* GB
+		else if (inp->symbol_mode == CABAC)
+		{
+			
+			CheckAvailabilityOfNeighborsForSkip(img);
+
+			// read MB skipflag
+			currSE.reading = readMB_skip_flagInfoFromBuffer_CABAC;
+#if TRACE
+      strncpy(currSE.tracestring, "MB skipflag", TRACESTRING_SIZE);
+#endif
+			dP->readSyntaxElement(&currSE,img,inp,dP);
+      currMB->mb_type = currSE.value1;
+			if (img->type==B_IMG_1 || img->type==B_IMG_MULT)
+				currMB->cbp = currSE.value2;
+      if(!dP->bitstream->ei_flag)
+        currMB->ei_flag = 0;
+			
+			if ((img->type==B_IMG_1 || img->type==B_IMG_MULT) && currSE.value1==0 && currSE.value2==0)
+        img->cod_counter=0;
+
+			// read MB aff
+			if (img->structure==FRAME && img->mb_frame_field_flag) 
+			{
+				check_bottom=read_bottom=read_top=0;
+				if (img->current_mb_nr%2==0)
+				{
+					check_bottom =	(img->type!=B_IMG_1 && img->type!=B_IMG_MULT)? 
+													(currMB->mb_type == 0):
+													(currMB->mb_type == 0 && currMB->cbp == 0);
+					read_top = !check_bottom;
+				}
+				else
+					read_bottom = (img->type!=B_IMG_1 && img->type!=B_IMG_MULT)? 
+												(topMB->mb_type == 0 && currMB->mb_type != 0) :
+												((topMB->mb_type == 0 && topMB->cbp == 0) && (currMB->mb_type != 0 || currMB->cbp != 0));
+
+				if (read_bottom || read_top)
+				{
+					CheckAvailabilityOfNeighborsForAff(img);
+					currSE.reading = readFieldModeInfoFromBuffer_CABAC;
+#if TRACE
+					strncpy(currSE.tracestring, "Field mode", TRACESTRING_SIZE);
+#endif
+					dP->readSyntaxElement(&currSE,img,inp,dP);
+					img->mb_field = currSE.value1;
+				}
+				if (check_bottom)
+					img->mb_field = (check_next_mb_and_get_field_mode_CABAC(&currSE,img,inp,dP)) ? 0 : currSE.value1;
+
+			}
+
+			if (img->structure==FRAME && img->mb_frame_field_flag)
+				CheckAvailabilityOfNeighbors(img); 
+
+			// read MB type
+			if (currMB->mb_type != 0 )
+			{
+				currSE.reading = readMB_typeInfoFromBuffer_CABAC;
+#if TRACE
+				strncpy(currSE.tracestring, "MB Type", TRACESTRING_SIZE);
+#endif
+				dP->readSyntaxElement(&currSE,img,inp,dP);
+				currMB->mb_type = currSE.value1;
+				if(!dP->bitstream->ei_flag)
+					currMB->ei_flag = 0;
+			}
+    }
+// END CABAC DECODING MB_SKIP_FLAG & MBTYPE ******************************************************* GB
     else
     {
       if(img->cod_counter == -1)
@@ -812,6 +964,17 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
       }
       if (img->cod_counter==0)
       {
+				 // read MB aff
+        if ((img->structure==FRAME && img->mb_frame_field_flag) && ((img->current_mb_nr%2==0) || (img->current_mb_nr && skip)))
+        {
+#if TRACE
+          strncpy(currSE.tracestring, "Field mode", TRACESTRING_SIZE);
+#endif
+          dP->readSyntaxElement(&currSE,img,inp,dP);
+          img->mb_field = currSE.value1;
+        }
+
+				// read MB type
 #if TRACE
         strncpy(currSE.tracestring, "MB Type", TRACESTRING_SIZE);
 #endif
@@ -822,16 +985,7 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
         if(!dP->bitstream->ei_flag)
           currMB->ei_flag = 0;
         img->cod_counter--;
-        // read super MB type here
-//          if (img->structure==FRAME && img->mb_frame_field_flag)
-        if ((img->structure==FRAME && img->mb_frame_field_flag) && ((img->current_mb_nr%2==0) || (img->current_mb_nr && skip)))
-        {
-#if TRACE
-          strncpy(currSE.tracestring, "Field mode", TRACESTRING_SIZE);
-#endif
-          dP->readSyntaxElement(&currSE,img,inp,dP);
-          img->mb_field = currSE.value1;
-        }
+
       } 
       else
       {
@@ -842,7 +996,10 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
         {
           if(img->cod_counter == 0 && (img->current_mb_nr%2 == 0))
           {
-            peekSyntaxElement_UVLC(&currSE,img,inp,dP);
+#if TRACE
+          strncpy(currSE.tracestring, "Field mode", TRACESTRING_SIZE);
+#endif
+						peekSyntaxElement_UVLC(&currSE,img,inp,dP);
             img->mb_field = currSE.value1;
           }
           else if(img->cod_counter > 0 && (img->current_mb_nr%2 == 0))
@@ -855,8 +1012,7 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
   }
   img->siblock[img->mb_x][img->mb_y]=0;
 
-  field_mb[img->mb_y][img->mb_x] = img->mb_field;
-
+  field_mb[img->mb_y][img->mb_x] = currMB->mb_field = img->mb_field;
 
   if ((img->type==INTER_IMG_1) || (img->type==INTER_IMG_MULT))    // inter frame
     interpret_mb_mode_P(img);
@@ -996,13 +1152,13 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
   {
     int i, j, iii, jjj, pmv[2];
     int ***tmp_mv         = img->mv;
-    int mb_available_up   = (img->mb_y == 0)  ? 0 : (currMB->slice_nr == img->mb_data[img->current_mb_nr-img->width/16].slice_nr);
-    int mb_available_left = (img->mb_x == 0)  ? 0 : (currMB->slice_nr == img->mb_data[img->current_mb_nr-1].slice_nr);
+    int mb_available_up   = (img->mb_y == 0)  ? 0 : (currMB->slice_nr == img->mb_data[img->map_mb_nr-img->width/16]/*GB [img->current_mb_nr-img->width/16]*/.slice_nr);
+    int mb_available_left = (img->mb_x == 0)  ? 0 : (currMB->slice_nr == img->mb_data[img->map_mb_nr-1]/*GB [img->current_mb_nr-1]*/.slice_nr);
     int zeroMotionAbove   = !mb_available_up  ? 1 : refFrArr[img->block_y-1][img->block_x]  == 0 && tmp_mv[4+img->block_x  ][img->block_y-1][0] == 0 && tmp_mv[4+img->block_x  ][img->block_y-1][1] == 0 ? 1 : 0;
     int zeroMotionLeft    = !mb_available_left? 1 : refFrArr[img->block_y][img->block_x-1]  == 0 && tmp_mv[4+img->block_x-1][img->block_y  ][0] == 0 && tmp_mv[4+img->block_x-1][img->block_y  ][1] == 0 ? 1 : 0;
 
-    mb_available_up   = (img->mb_y == 0)  ? 0 : 1;
-    mb_available_left   = (img->mb_x == 0)  ? 0 : 1;
+    mb_available_up   = (img->mb_y == 0)  ? 0 : 1;// GB
+    mb_available_left   = (img->mb_x == 0)  ? 0 : 1;//GB
     zeroMotionAbove   = !mb_available_up  ? 1 : refFrArr[img->block_y-1][img->block_x]  == 0 && tmp_mv[4+img->block_x  ][img->block_y-1][0] == 0 && tmp_mv[4+img->block_x  ][img->block_y-1][1] == 0 ? 1 : 0;;
     zeroMotionLeft   = !mb_available_left  ? 1 : refFrArr[img->block_y][img->block_x-1]  == 0 && tmp_mv[4+img->block_x-1][img->block_y  ][0] == 0 && tmp_mv[4+img->block_x-1][img->block_y  ][1] == 0 ? 1 : 0;
 
@@ -1195,7 +1351,7 @@ void read_ipred_modes(struct img_par *img,struct inp_par *inp)
   int revMapTab[9] = {1, 2, 0, 4, 3, 5, 8, 6, 7};
   int IntraChromaPredModeFlag;
   
-  currMB=img->mb_data+img->current_mb_nr;
+  currMB=img->mb_data+img->map_mb_nr;//current_mb_nr;
   IntraChromaPredModeFlag = IS_INTRA(currMB);
 
   currSlice = img->currentSlice;
@@ -1584,8 +1740,8 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
   int i,j,k,l,m;
   int step_h,step_v;
   int curr_mvd;
-  int mb_nr           = img->current_mb_nr;
-  Macroblock *currMB  = &img->mb_data[mb_nr];
+ // int mb_nr           = img->current_mb_nr; //GB Falsch
+  Macroblock *currMB  = &img->mb_data[img->map_mb_nr];
   SyntaxElement currSE;
   Slice *currSlice    = img->currentSlice;
   DataPartition *dP;
@@ -1654,7 +1810,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
     {
       int pic_blockx          = img->block_x;
       int pic_blocky          = (img->mb_frame_field_flag && img->mb_field)? ((img->current_mb_nr%2)?img->block_y/2-BLOCK_SIZE / 2:img->block_y/2):img->block_y;
-      int mb_nr                = img->current_mb_nr;
+      int mb_nr                = img->map_mb_nr; //GB current_mb_nr; //HIER
       int mb_width             = img->width/16;
       int mb_available_up =      (img->mb_y == 0 || pic_blocky == 0  ) ? 0 : (img->mb_frame_field_flag? 1 :(currMB->slice_nr == img->mb_data[mb_nr-mb_width].slice_nr));
       int mb_available_left =    (img->mb_x == 0                      ) ? 0 : (currMB->slice_nr == img->mb_data[mb_nr-1].slice_nr);
@@ -2376,7 +2532,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
             for (k=0; k < 2; k++) 
             {
 #if TRACE
-              snprintf(currSE.tracestring, TRACESTRING_SIZE, " MVD");
+              snprintf(currSE.tracestring, TRACESTRING_SIZE, "MVD");
 #endif
               img->subblock_x = i; // position used for context determination
               img->subblock_y = j; // position used for context determination
@@ -2591,7 +2747,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
                 }
                 else if((mref==mref_fld) && (img->structure==BOTTOM_FIELD)) // bot field
                 {
-                  iTRp = 1+delta_P*(ref+1)/2-ref%2;
+                  iTRp = 1+delta_P*((ref+1)/2)-ref%2;
                 }
                 else  // frame
                 {
@@ -2599,7 +2755,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
                   if(img->mb_frame_field_flag && img->mb_field)
                   {
                     if(img->mb_y%2)
-                      iTRp = 1+delta_P*(ref+1)/2-ref%2;
+                      iTRp = 1+delta_P*((ref+1)/2)-ref%2;
                     else
                       iTRp = delta_P*(ref/2+1)-(ref+1)%2;
                   }
@@ -2643,15 +2799,11 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
                 {              
                   img->fw_mv[i4+BLOCK_SIZE][j4][ii]= (mv_scale * img->mv[i4+BLOCK_SIZE][j4][ii] + 128)>>8;
                   img->bw_mv[i4+BLOCK_SIZE][j4][ii]= ((mv_scale - 256) * img->mv[i4+BLOCK_SIZE][j4][ii] + 128)>>8;
-                  //                img->fw_mv[i4+BLOCK_SIZE][j4][ii]= iTRb*img->mv[i4+BLOCK_SIZE][j4][ii]/iTRp;
-                  //                img->bw_mv[i4+BLOCK_SIZE][j4][ii]=(iTRb-iTRp)*img->mv[i4+BLOCK_SIZE][j4][ii]/iTRp;
                   if (img->mb_frame_field_flag && img->mb_field)
                   {
                     if (img->current_mb_nr%2 == 0)
                     {
                       j4 = img->block_y/2 + j;
-                      //                    img->fw_mv_top[i4+BLOCK_SIZE][j4][ii]= iTRb*img->mv_top[i4+BLOCK_SIZE][j4][ii]/iTRp;
-                      //                    img->bw_mv_top[i4+BLOCK_SIZE][j4][ii]=(iTRb-iTRp)*img->mv_top[i4+BLOCK_SIZE][j4][ii]/iTRp;
                       img->fw_mv_top[i4+BLOCK_SIZE][j4][ii]= (mv_scale * img->mv_top[i4+BLOCK_SIZE][j4][ii] + 128)>>8;
                       img->bw_mv_top[i4+BLOCK_SIZE][j4][ii]=((mv_scale - 256) * img->mv_top[i4+BLOCK_SIZE][j4][ii] + 128)>>8;
                     }
@@ -2660,8 +2812,6 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
                       j4 = (img->block_y-4)/2 + j;
                       img->fw_mv_bot[i4+BLOCK_SIZE][j4][ii]= (mv_scale * img->mv_bot[i4+BLOCK_SIZE][j4][ii] + 128)>>8;  // TBD -- fix it to use bot mv 
                       img->bw_mv_bot[i4+BLOCK_SIZE][j4][ii]=((mv_scale - 256) * img->mv_bot[i4+BLOCK_SIZE][j4][ii] + 128)>>8; // TBD -- fix it to use bot mv 
-                      //                    img->fw_mv_bot[i4+BLOCK_SIZE][j4][ii]= iTRb*img->mv_bot[i4+BLOCK_SIZE][j4][ii]/iTRp;
-                      //                    img->bw_mv_bot[i4+BLOCK_SIZE][j4][ii]=(iTRb-iTRp)*img->mv_bot[i4+BLOCK_SIZE][j4][ii]/iTRp;
                     }
                   }
                   if (img->mb_frame_field_flag && img->mb_field == 0)
@@ -2669,8 +2819,6 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
                     img->fw_mv_frm[i4+BLOCK_SIZE][j4][ii]= (mv_scale * img->mv[i4+BLOCK_SIZE][j4][ii] + 128)>>8;
                     img->bw_mv_frm[i4+BLOCK_SIZE][j4][ii]=((mv_scale - 256) * img->mv[i4+BLOCK_SIZE][j4][ii] + 128)>>8;
                     
-                    //                  img->fw_mv_frm[i4+BLOCK_SIZE][j4][ii]= iTRb*img->mv[i4+BLOCK_SIZE][j4][ii]/iTRp;
-                    //                  img->bw_mv_frm[i4+BLOCK_SIZE][j4][ii]=(iTRb-iTRp)*img->mv[i4+BLOCK_SIZE][j4][ii]/iTRp;
                   }
                 }
               } 
@@ -2777,7 +2925,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
         for (k=0; k < 2; k++) 
         {
 #if TRACE
-          snprintf(currSE.tracestring, TRACESTRING_SIZE, " MVD");
+          snprintf(currSE.tracestring, TRACESTRING_SIZE, "MVD");
 #endif
           img->subblock_x = i; // position used for context determination
           img->subblock_y = j; // position used for context determination
@@ -2950,7 +3098,7 @@ void readCoeff4x4_CAVLC (struct img_par *img,struct inp_par *inp,
                         int i, int j, int levarr[16], int runarr[16],
                         int *number_coefficients)
 {
-  int mb_nr = img->current_mb_nr;
+  int mb_nr = img->map_mb_nr; // GBimg->current_mb_nr;
   Macroblock *currMB = &img->mb_data[mb_nr];
   SyntaxElement currSE;
   Slice *currSlice = img->currentSlice;
@@ -3232,7 +3380,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
 {
   int i,j,k;
   int level;
-  int mb_nr = img->current_mb_nr;
+  int mb_nr = img->map_mb_nr; //GBimg->current_mb_nr;
   int ii,jj;
   int i1,j1, m2,jg2;
   Macroblock *currMB = &img->mb_data[mb_nr];
@@ -3775,7 +3923,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
 
   const byte decode_block_scan[16] = {0,1,4,5,2,3,6,7,8,9,12,13,10,11,14,15};
 
-  Macroblock *currMB   = &img->mb_data[img->current_mb_nr];
+  Macroblock *currMB   = &img->mb_data[img->map_mb_nr];//GB current_mb_nr];
   int refframe, fw_refframe, bw_refframe, mv_mode, pred_dir, intra_prediction; // = currMB->ref_frame;
   int*** mv_array, ***fw_mv_array, ***bw_mv_array;
   int bframe = (img->type==B_IMG_1 || img->type==B_IMG_MULT);
@@ -3795,7 +3943,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
   int iTRb, iTRp;
   int mv_scale;
 
-  int mb_nr             = img->current_mb_nr;
+  int mb_nr             = img->map_mb_nr;//GBimg->current_mb_nr;
   int mb_width          = img->width/16;
   int mb_available_up;
   int mb_available_left;
@@ -3856,19 +4004,9 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
 #define bwd_ref_idx_to_refframe(idx) ((idx)+bwd_refframe_offset)
 
 
-  // set variables depending on mv_res
-  if(img->mv_res)
-  {
-    mv_mul=8;
-    f1=16;
-    f2=15;
-  }
-  else
-  {
-    mv_mul=4;
-    f1=8;
-    f2=7;
-  }
+  mv_mul=4;
+  f1=8;
+  f2=7;
 
   f3=f1*f1;
   f4=f3/2;
@@ -4015,7 +4153,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
               {
                 int pic_blockx           = img->block_x;
                 int pic_blocky           = (img->mb_frame_field_flag && img->mb_field)? img->block_y/2:img->block_y;
-                int mb_nr                = img->current_mb_nr;
+                int mb_nr                = img->map_mb_nr; //GB current_mb_nr; //HIER
                 int mb_width             = img->width/16;
                 int mb_available_up =      (img->mb_y == 0        ) ? 0 : (img->mb_frame_field_flag? 1 :(currMB->slice_nr == img->mb_data[mb_nr-mb_width].slice_nr));
                 int mb_available_left =    (img->mb_x == 0        ) ? 0 : (currMB->slice_nr == img->mb_data[mb_nr-1].slice_nr);
@@ -4308,7 +4446,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                   }
                   else if((mref==mref_fld) && (img->structure==BOTTOM_FIELD)) // bot field
                   {
-                    iTRp = 1+delta_P*(refframe+1)/2-refframe%2;
+                    iTRp = 1+delta_P*((refframe+1)/2)-refframe%2;
                   }
                   else  // frame
                   {
@@ -4947,10 +5085,7 @@ void decode_one_Copy_topMB(struct img_par *img,struct inp_par *inp)
   mref = mref_fld;
   mcef = mcef_fld;
 
-  if(img->mv_res)
-    mv_mul=8;
-  else
-    mv_mul=4;
+  mv_mul=4;
 
   // get luma pixel *************************************************
   for(j=0;j<MB_BLOCK_SIZE;j+=BLOCK_SIZE)
@@ -5103,7 +5238,7 @@ void exit_super_macroblock(struct img_par *img,struct inp_par *inp)
   int chroma_y = offset_y/2;
   int chroma_x = offset_x/2;
   int field_c_y = field_y/2;
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  Macroblock *currMB = &img->mb_data[img->map_mb_nr];//GB current_mb_nr];
       
   if (img->mb_field==0)
     for (i=0;i<4;i++)
@@ -5203,7 +5338,7 @@ int decode_super_macroblock(struct img_par *img,struct inp_par *inp)
 
   const byte decode_block_scan[16] = {0,1,4,5,2,3,6,7,8,9,12,13,10,11,14,15};
 
-  Macroblock *currMB   = &img->mb_data[img->current_mb_nr];
+  Macroblock *currMB   = &img->mb_data[img->map_mb_nr];//GB current_mb_nr];
   int refframe, fw_refframe, bw_refframe, mv_mode, pred_dir, intra_prediction; // = currMB->ref_frame;
   int*** mv_array, ***fw_mv_array, ***bw_mv_array;
   int bframe = (img->type==B_IMG_1 || img->type==B_IMG_MULT);
@@ -5216,7 +5351,7 @@ int decode_super_macroblock(struct img_par *img,struct inp_par *inp)
   int iTRb, iTRp;
   int mv_scale;
 
-  int mb_nr             = img->current_mb_nr;
+  int mb_nr             = img->map_mb_nr;//img->current_mb_nr;
   int mb_width          = img->width/16;
   
   int mb_available_up, mb_available_left;
@@ -5292,19 +5427,9 @@ int decode_super_macroblock(struct img_par *img,struct inp_par *inp)
 #define fwd_ref_idx_to_refframe(idx) ((idx)+fwd_refframe_offset)
 #define bwd_ref_idx_to_refframe(idx) ((idx)+bwd_refframe_offset)
 
-  // set variables depending on mv_res
-  if(img->mv_res)
-  {
-    mv_mul=8;
-    f1=16;
-    f2=15;
-  }
-  else
-  {
-    mv_mul=4;
-    f1=8;
-    f2=7;
-  }
+  mv_mul=4;
+  f1=8;
+  f2=7;
 
   f3=f1*f1;
   f4=f3/2;
@@ -5455,7 +5580,7 @@ int decode_super_macroblock(struct img_par *img,struct inp_par *inp)
           {
             int pic_blockx              = img->block_x;
             int pic_blocky              = (img->current_mb_nr%2)?img->block_y/2-BLOCK_SIZE / 2:img->block_y/2;
-            int mb_nr                   = img->current_mb_nr;
+            int mb_nr                   = img->map_mb_nr;//GB current_mb_nr; //HIER
             int mb_width                = img->width/16;
             // Note pic_blocky == 0 && condition on img->mb_frame_field_flag is a temp fix. Should be fixed when proper support of slices within MB-AFF is added.
             int mb_available_up         = (img->mb_y == 0 || pic_blocky == 0  ) ? 0 : (img->mb_frame_field_flag? 1 :(currMB->slice_nr == img->mb_data[mb_nr-mb_width].slice_nr));
@@ -5622,7 +5747,7 @@ int decode_super_macroblock(struct img_par *img,struct inp_par *inp)
                }
                else if((mref==mref_fld) && (img->structure==BOTTOM_FIELD)) // bot field
                {
-                 iTRp = 1+delta_P*(refframe+1)/2-refframe%2;
+                 iTRp = 1+delta_P*((refframe+1)/2)-refframe%2;
                }
                else    // frame
                {
@@ -5630,7 +5755,7 @@ int decode_super_macroblock(struct img_par *img,struct inp_par *inp)
                  if(img->mb_frame_field_flag && img->mb_field)
                  {
                    if(img->mb_y%2)
-                     iTRp = 1+delta_P*(refframe+1)/2-refframe%2;
+                     iTRp = 1+delta_P*((refframe+1)/2)-refframe%2;
                    else
                      iTRp = delta_P*(refframe/2+1)-(refframe+1)%2;
                  }
@@ -6257,7 +6382,7 @@ int decode_super_macroblock(struct img_par *img,struct inp_par *inp)
 void SetOneRefMV(struct img_par* img)
 {
   int i0,j0,i,j,k;
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  Macroblock *currMB = &img->mb_data[img->map_mb_nr];//GB current_mb_nr];
   int bframe          = (img->type==B_IMG_1 || img->type==B_IMG_MULT);
   int partmode        = (IS_P8x8(currMB)?4:currMB->mb_type);
   int step_h0         = BLOCK_STEP [partmode][0];

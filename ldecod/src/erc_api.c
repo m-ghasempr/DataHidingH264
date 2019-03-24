@@ -40,7 +40,7 @@
  *  \author
  *     - Ari Hourunranta                <ari.hourunranta@nokia.com>
  *     - Viktor Varsa                     <viktor.varsa@nokia.com>
- *     - Ye-Kui Wang                   <wangy@cs.tut.fi>
+ *     - Ye-Kui Wang                   <wyk@ieee.org>
  *
  *************************************************************************************
  */

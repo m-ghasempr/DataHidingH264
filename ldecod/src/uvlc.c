@@ -284,11 +284,10 @@ int readSliceUVLC(struct img_par *img, struct inp_par *inp)
   currStream->bitstream_length = GetOneSliceIntoSourceBitBuffer(img, inp, buf, &startcodeprefix_len);
   if (currStream->bitstream_length > startcodeprefix_len)  // More than just a start code
   {
-    if(inp->Encapsulated_NAL_Payload)
-    {
-      currStream->bitstream_length = EBSPtoRBSP(buf, currStream->bitstream_length, startcodeprefix_len);
-      currStream->bitstream_length = RBSPtoSODB(buf, currStream->bitstream_length);
-    }
+
+    currStream->bitstream_length = EBSPtoRBSP(buf, currStream->bitstream_length, startcodeprefix_len);
+    currStream->bitstream_length = RBSPtoSODB(buf, currStream->bitstream_length);
+
     sym.type = SE_HEADER;
 #if TRACE
     strncpy(sym.tracestring, "\nHeaderinfo", TRACESTRING_SIZE);
@@ -498,7 +497,7 @@ int readSyntaxElement_fixed(SyntaxElement *sym, struct img_par *img, struct inp_
  *    Check if there are symbols for the next MB
  ************************************************************************
  */
-int uvlc_startcode_follows(struct img_par *img, struct inp_par *inp)
+int uvlc_startcode_follows(struct img_par *img, struct inp_par *inp, int dummy)
 {
   Slice *currSlice = img->currentSlice;
   int dp_Nr = assignSE2partition[currSlice->dp_mode][SE_MBTYPE];
@@ -514,7 +513,6 @@ int uvlc_startcode_follows(struct img_par *img, struct inp_par *inp)
     return FALSE;
 }
 
-#ifdef _EXP_GOLOMB
 /*!
  ************************************************************************
  * \brief
@@ -544,7 +542,6 @@ int uvlc_startcode_follows(struct img_par *img, struct inp_par *inp)
  *    types, then this would be the place for the implementation
  * \par
  *    An alternate VLC table is implemented based on exponential Golomb codes.
- *    The define _EXP_GOLOMB selects between the UVLC and the exponential Golomb codes.
  *    The encoder must have a matching define selected.
  *  
  ************************************************************************
@@ -600,85 +597,6 @@ int GetVLCSymbol (byte buffer[],int totbitoffset,int *info, int bytecount)
   *info = inf;
   return bitcounter;           // return absolute offset in bit from start of frame
 }
-#else
-/*!
- ************************************************************************
- * \brief
- *  Moves the read pointer of the partition forward by one symbol
- *
- * \param byte buffer[]
- *    containing VLC-coded data bits
- * \param int totbitoffset
- *    bit offset from start of partition
- * \param int type
- *    expected data type (Partiotion ID)
- * \return  int info, len
- *    Length and Value of the next symbol
- *
- * \note
- *    As in both nal_bits.c and nal_part.c all data of one partition, slice,
- *    picture was already read into a buffer, there is no need to read any data
- *    here again.
- * \par
- *    GetVLCInfo was extracted because there should be only one place in the
- *    source code that has knowledge about symbol extraction, regardless of
- *    the number of different NALs.
- * \par
- *    This function could (and should) be optimized considerably
- * \par
- *    If it is ever decided to have different VLC tables for different symbol
- *    types, then this would be the place for the implementation
- ************************************************************************
- */
-int GetVLCSymbol (byte buffer[],int totbitoffset,int *info, int bytecount)
-{
-
-  register int inf;
-  long byteoffset;      // byte from start of buffer
-  int bitoffset;      // bit from start of byte
-  int ctr_bit=0;      // control bit for current bit posision
-  int bitcounter=1;
-
-  byteoffset= totbitoffset/8;
-  bitoffset= 7-(totbitoffset%8);
-  ctr_bit = (buffer[byteoffset] & (0x01<<bitoffset));   // set up control bit
-
-  inf=0;                          // shortest possible code is 1, then info is always 0
-
-  while (ctr_bit==0)
-  {                 // repeate until next 0, ref. VLC
-    bitoffset-=2;           // from MSB to LSB
-    if (bitoffset<0)
-    {                 // finish with current byte ?
-      bitoffset=bitoffset+8;
-      byteoffset++;
-    }
-
-    ctr_bit=buffer[byteoffset] & (0x01<<(bitoffset));
-
-    // make infoword
-
-    if(bitoffset>=7)                  // first bit in new byte
-      if (buffer[byteoffset-1] & (0x01))        // check last (info)bit of last byte
-        inf = ((inf << 1) | 0x01);          // multiply with 2 and add 1, ref VLC
-      else
-        inf = (inf << 1);             // multiply with 2
-
-    else
-      if (buffer[byteoffset] & (0x01<<(bitoffset+1))) // check infobit
-        inf = ((inf << 1) | 0x01);
-      else
-        inf = (inf << 1);
-    bitcounter+=2;
-    if (byteoffset > bytecount)
-    {
-      return -1;
-    }
-  }
-  *info = inf;
-  return bitcounter;           // return absolute offset in bit from start of frame
-}
-#endif
 
 int GetfixedSymbol (byte buffer[],int totbitoffset,int *info, int bytecount, int len)
 {
@@ -1404,12 +1322,17 @@ int peekSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct inp_p
   if( sym->golomb_maxlevels && (sym->type==SE_LUM_DC_INTRA||sym->type==SE_LUM_AC_INTRA||sym->type==SE_LUM_DC_INTER||sym->type==SE_LUM_AC_INTER) )
     return readSyntaxElement_GOLOMB(sym,img,inp,dP);
 
+/*
   sym->len =  GetVLCSymbol (buf, frame_bitoffset, &(sym->inf), BitstreamLengthInBytes);
   if (sym->len == -1)
     return -1;
   frame_bitoffset += sym->len;
   sym->mapping(sym->len,sym->inf,&(sym->value1),&(sym->value2));
 
+#if TRACE
+  tracebits(sym->tracestring, sym->len, sym->inf, sym->value1, sym->value2); //GB
+#endif
+*/
 
   sym->len =  GetVLCSymbol (buf, frame_bitoffset, &(sym->inf), BitstreamLengthInBytes);
   if (sym->len == -1)
@@ -1424,3 +1347,5 @@ int peekSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct inp_p
 
   return 1;
 }
+
+

@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 4.3a
+ *     JM 5.0
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -86,8 +86,8 @@
 #include "fmo.h"
 #include "sei.h"
 
-#define JM      "4"
-#define VERSION "4.3a"
+#define JM      "5"
+#define VERSION "5.0"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
@@ -500,7 +500,7 @@ void init_img()
   img->mb_y_upd=0;
 
   RandomIntraInit (img->width/16, img->height/16, input->RandomIntraMBRefresh);
-  FmoInit (img->width/16, img->height/16, input->FmoNumSliceGroups, 1, NULL);   // Forced Scattered Slices so far
+  FmoInit (img->width/16, img->height/16, input->FmoNumSliceGroups, input->FmoType, NULL); 
 
   InitSEIMessages();  // Tian Dong (Sept 2002)
 
@@ -569,10 +569,7 @@ void malloc_slice()
   const int buffer_size = (img->width * img->height * 4); // AH 190202: There can be data expansion with 
                                                           // low QP values. So, we make sure that buffer 
                                                           // does not everflow. 4 is probably safe multiplier.
-  if(input->Encapsulated_NAL_Payload)
-  {
-    NAL_Payload_buffer = (byte *) calloc(buffer_size, sizeof(byte));
-  }
+  NAL_Payload_buffer = (byte *) calloc(buffer_size, sizeof(byte));
 
   switch(input->of_mode) // init depending on NAL mode
   {
@@ -770,11 +767,9 @@ void free_slice()
   }
   if (currSlice != NULL)
     free(img->currentSlice);
-  if(input->Encapsulated_NAL_Payload)
-  {
-    if(NAL_Payload_buffer)
-      free(NAL_Payload_buffer);
-  }
+
+  if(NAL_Payload_buffer)
+    free(NAL_Payload_buffer);
 }
 
 
@@ -875,10 +870,6 @@ void report()
     fprintf(stdout," Error robustness                  : Off\n");
   fprintf(stdout,    " Search range                      : %d\n",input->search_range);
 
-  if(input->mv_res)
-    fprintf(stdout," MV resolution                     : 1/8-pel\n");
-  else
-    fprintf(stdout," MV resolution                     : 1/4-pel\n");
 
 #ifdef _ADDITIONAL_REFERENCE_FRAME_
   if (input->add_ref_frame >= input->no_multpred)
@@ -1030,9 +1021,7 @@ void report()
     fprintf(stdout, " Bit rate (kbit/s)  @ %2.2f Hz     : %5.2f\n", frame_rate, stat->bitrate/1000);
   }
 
-  if(input->Encapsulated_NAL_Payload) {
-    fprintf(stdout, " Bits to avoid Startcode Emulation : %d \n", stat->bit_ctr_emulationprevention);
-  }
+  fprintf(stdout, " Bits to avoid Startcode Emulation : %d \n", stat->bit_ctr_emulationprevention);
 
   fprintf(stdout,"--------------------------------------------------------------------------\n");
   fprintf(stdout,"Exit JM %s encoder ver %s ", JM, VERSION);
@@ -1077,11 +1066,6 @@ void report()
     fprintf(p_stat," Error robustness             : Off\n");
 
   fprintf(p_stat,  " Search range                 : %d\n",input->search_range);
-
-  if(input->mv_res)
-    fprintf(p_stat," MV resolution                : 1/8-pel\n");
-  else
-    fprintf(p_stat," MV resolution                : 1/4-pel\n");
 
 #ifdef _ADDITIONAL_REFERENCE_FRAME_
   if (input->add_ref_frame >= input->no_multpred)
@@ -1434,7 +1418,7 @@ void information_init()
   printf(" Input YUV file                    : %s \n",input->infile);
   printf(" Output H.26L bitstream            : %s \n",input->outfile);
   if (p_dec != NULL)
-    printf(" Output YUV file(debug)            : %s \n",input->ReconFile);
+    printf(" Output YUV file                   : %s \n",input->ReconFile);
   printf(" Output log file                   : log.dat \n");
   printf(" Output statistics file            : stat.dat \n");
   printf("--------------------------------------------------------------------------\n");

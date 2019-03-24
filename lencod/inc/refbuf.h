@@ -48,9 +48,6 @@
 pel_t UMVPelY_14 (pel_t **Pic, int y, int x);
 pel_t FastPelY_14 (pel_t **Pic, int y, int x);
 
-pel_t UMVPelY_18 (pel_t **Pic, int y, int x);
-pel_t FastPelY_18 (pel_t **Pic, int y, int x);
-
 pel_t UMVPelY_11 (pel_t *Pic, int y, int x);
 pel_t FastPelY_11 (pel_t *Pic, int y, int x);
 pel_t *FastLine16Y_11 (pel_t *Pic, int y, int x);

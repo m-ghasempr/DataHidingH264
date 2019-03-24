@@ -211,8 +211,6 @@ void GetStrength(byte Strength[4],byte LargeBlockEdge[4],Macroblock* MbP,Macrobl
   int    LBcount;
   int    blk_mode1, blk_mode2;
 
-  int     mvshift = (input->mv_res ? 3 : 2);            //  Motion vector resolution consideration
-
   *((int*)Strength) = ININT_STRENGTH[edge] ;               // Assume INTRA -> Strength=3. (or Strength=4 for Mb-edge)
 
   for( idx=0 ; idx<4 ; idx++ )
@@ -253,16 +251,16 @@ void GetStrength(byte Strength[4],byte LargeBlockEdge[4],Macroblock* MbP,Macrobl
         {                                                     // if no coefs, but vector difference >= 1 set Strength=1 
           if( img->type == B_IMG || img->type == BS_IMG )
           {
-            Strength[idx] = (abs( tmp_fwMV[0][blk_y][blk_x] - tmp_fwMV[0][blk_y2][blk_x2]) >= (1 << mvshift)) |
-                            (abs( tmp_fwMV[1][blk_y][blk_x] - tmp_fwMV[1][blk_y2][blk_x2]) >= (1 << mvshift)) |
-                            (abs( tmp_bwMV[0][blk_y][blk_x] - tmp_bwMV[0][blk_y2][blk_x2]) >= (1 << mvshift)) |
-                            (abs( tmp_bwMV[1][blk_y][blk_x] - tmp_bwMV[1][blk_y2][blk_x2]) >= (1 << mvshift)) |
+            Strength[idx] = (abs( tmp_fwMV[0][blk_y][blk_x] - tmp_fwMV[0][blk_y2][blk_x2]) >= 4) |
+                            (abs( tmp_fwMV[1][blk_y][blk_x] - tmp_fwMV[1][blk_y2][blk_x2]) >= 4) |
+                            (abs( tmp_bwMV[0][blk_y][blk_x] - tmp_bwMV[0][blk_y2][blk_x2]) >= 4) |
+                            (abs( tmp_bwMV[1][blk_y][blk_x] - tmp_bwMV[1][blk_y2][blk_x2]) >= 4) |
                             (fw_refFrArr [blk_y][blk_x-4] !=   fw_refFrArr[blk_y2][blk_x2-4]) | 
                             (bw_refFrArr [blk_y][blk_x-4] !=   bw_refFrArr[blk_y2][blk_x2-4]);
           }
           else
-            Strength[idx]  =  (abs(   tmp_mv[0][blk_y][blk_x] -   tmp_mv[0][blk_y2][blk_x2]) >= (1 << mvshift) ) |
-                              (abs(   tmp_mv[1][blk_y][blk_x] -   tmp_mv[1][blk_y2][blk_x2]) >= (1 << mvshift)) |
+            Strength[idx]  =  (abs(   tmp_mv[0][blk_y][blk_x] -   tmp_mv[0][blk_y2][blk_x2]) >= 4 ) |
+                              (abs(   tmp_mv[1][blk_y][blk_x] -   tmp_mv[1][blk_y2][blk_x2]) >= 4) |
                               (     refFrArr [blk_y][blk_x-4] !=   refFrArr[blk_y2][blk_x2-4]);
         }
       }

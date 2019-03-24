@@ -40,7 +40,7 @@
  *
  *  \author
  *      - Viktor Varsa                     <viktor.varsa@nokia.com>
- *      - Ye-Kui Wang                   <wangy@cs.tut.fi>
+ *      - Ye-Kui Wang                   <wyk@ieee.org>
  *
  *************************************************************************************
  */
@@ -141,7 +141,7 @@ int ercConcealInterFrame(frame *recfr, objectBuffer_t *object_list,
                 ercCollect8PredBlocks (predBlocks, (currRow<<1), (column<<1), 
                   errorVar->yCondition, (lastRow<<1), (lastColumn<<1), 2, 0);      
                 
-                if(erc_mvperMB >= MVPERMB_THR*(erc_img->mv_res+1))
+                if(erc_mvperMB >= MVPERMB_THR)
                   concealByTrial(recfr, predMB, 
                     currRow*lastColumn+column, object_list, predBlocks, 
                     picSizeX, picSizeY,
@@ -163,7 +163,7 @@ int ercConcealInterFrame(frame *recfr, objectBuffer_t *object_list,
                 ercCollect8PredBlocks (predBlocks, (currRow<<1), (column<<1), 
                   errorVar->yCondition, (lastRow<<1), (lastColumn<<1), 2, 0);      
                 
-                if(erc_mvperMB >= MVPERMB_THR*(erc_img->mv_res+1))
+                if(erc_mvperMB >= MVPERMB_THR)
                   concealByTrial(recfr, predMB, 
                     currRow*lastColumn+column, object_list, predBlocks, 
                     picSizeX, picSizeY,
@@ -204,7 +204,7 @@ int ercConcealInterFrame(frame *recfr, objectBuffer_t *object_list,
                 ercCollect8PredBlocks (predBlocks, (currRow<<1), (column<<1), 
                   errorVar->yCondition, (lastRow<<1), (lastColumn<<1), 2, 0);      
                 
-                if(erc_mvperMB >= MVPERMB_THR*(erc_img->mv_res+1))
+                if(erc_mvperMB >= MVPERMB_THR)
                   concealByTrial(recfr, predMB, 
                     currRow*lastColumn+column, object_list, predBlocks, 
                     picSizeX, picSizeY,
@@ -530,9 +530,9 @@ static int concealByTrial(frame *recfr, byte *predMB,
 /*!
  ************************************************************************
  * \brief
- *      Builds the motion prediction pixels from the given location (in 1/4 or 1/8 pixel units) 
+ *      Builds the motion prediction pixels from the given location (in 1/4 pixel units) 
  *      of the reference frame. It not only copies the pixel values but builds the interpolation 
- *      when the pixel positions to be copied from is not full pixel (any 1/4 or 1/8 pixel position).
+ *      when the pixel positions to be copied from is not full pixel (any 1/4 pixel position).
  *      It copies the resulting pixel vlaues into predMB.
  * \param img
  *      The pointer of img_par struture of current frame
@@ -570,19 +570,9 @@ static void buildPredRegionYUV(struct img_par *img, int32 *mv, int x, int y, byt
   img->block_x = img->mb_x * BLOCK_SIZE;
   img->pix_c_x = img->mb_x * MB_BLOCK_SIZE/2;
 
-  // set variables depending on mv_res
-  if(img->mv_res)
-  {
-    mv_mul=8;
-    f1=16;
-    f2=15;
-  }
-  else
-  {
-    mv_mul=4;
-    f1=8;
-    f2=7;
-  }
+  mv_mul=4;
+  f1=8;
+  f2=7;
 
   f3=f1*f1;
   f4=f3/2;

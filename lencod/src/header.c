@@ -239,13 +239,6 @@ int SliceHeader()
   // at low QPs this is not as much an issue.  Hence, the QUANT parameter
   // is coded as a UVLC calculated as 31 - QUANT.  That is, the UVLC representation
   // of 31-QUANT is coded, instead of QUANT.
-  // Note 3:  In addition to the fields in VCEG-M79 there is one additional header field
-  // with the MV resolution.  Currently defined values:
-  // 0 == 1/4th pel resolution (old default)
-  // 1 == 1/8th pel resolution
-  // ... could be enhanced straightforward, it may make sense to define
-  // 2 == 1/2 pel resolution
-  // 3 == full pel resolution
 
   SYMTRACESTRING("SH SliceQuant");
   sym->mapping = dquant_linfo;  
@@ -286,13 +279,6 @@ int SliceHeader()
     }
   }
 
-
-  sym->mapping = n_linfo2;
-  // Put the Motion Vector resolution as per reflector consensus
-  SYMTRACESTRING("SH MVResolution");
-  sym->value1 = input->mv_res;
-  len += writeSyntaxElement_UVLC (sym, partition);
-  
   len+=writeERPS(sym, partition);
   
   free(sym);

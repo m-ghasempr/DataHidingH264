@@ -49,7 +49,7 @@
 #define _FMO_H_
 
 
-int FmoInit (int xs, int ys, int NewMBAmap[], int SizeOfNewMBAmap);
+int FmoInit (struct img_par *img, struct inp_par *inp, int xs, int ys, int NewMBAmap[], int SizeOfNewMBAmap);
 int FmoFinit ();
 void FmoStartPicture();
 void FmoEndPicture();
@@ -59,5 +59,7 @@ int FmoGetLastMBInSliceGroup(int SliceGroup, int structure);
 int FmoMB2Slice (int mb);
 int FmoGetNextMBNr (int CurrentMbNr, int structure);
 
+int FmoUpdateEvolvingMBAmap (struct img_par *img, struct inp_par *inp, int *MBAmap); // JVT-D097
+extern int *MBAmap; 
 
 #endif

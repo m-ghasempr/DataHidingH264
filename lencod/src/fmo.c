@@ -59,15 +59,36 @@
 
 #define MAXSLICEGROUPIDS 8
 
-static int *MBAmap = NULL;   
+int *MBAmap = NULL;   
 static int PictureXSize, PictureYSize, PictureSizeInMBs;
+
+// JVT-D097
+int fmo_evlv_NewPeriod;
+int slice_group_change_cycle;
+
+static int fmo_evlv_x;
+static int fmo_evlv_y;
+static int fmo_evlv_left;
+static int fmo_evlv_right;
+static int fmo_evlv_top;
+static int fmo_evlv_bottom;
+static int fmo_evlv_directx;
+static int fmo_evlv_directy;
+
+static int FmoGenerateType3MBAmap (int NumSliceGroups, int XSize, int YSize, int *MBAmap);
+static int FmoBoxoutCounterClockwise (int XSize, int YSize, int *MBAmap);
+static int FmoBoxoutClockwise (int XSize, int YSize, int *MBAmap);
+static int FmoRasterScan(int XSize, int YSize, int *MBAmap);
+static int FmoInverseRasterScan(int XSize, int YSize, int *MBAmap);
+static int FmoWipeRight(int XSize, int YSize, int *MBAmap);
+static int FmoWipeLeft(int XSize, int YSize, int *MBAmap);
+
+// End JVT-D097
 
 static int FmoGenerateDefaultMap (int XSize, int YSize, int *MBAmap);
 
 static int FmoGenerateType0MBAmap (int NumSliceGroupIDs, int *run_length,int XSize, int YSize, int *MBAmap);
-static int FmoGenerateType1MBAmap (int NumSliceGroups, 
-                                   int XSize, int YSize,
-                                   int *MBAmap);
+static int FmoGenerateType1MBAmap (int NumSliceGroups, int XSize, int YSize, int *MBAmap);
 int FmoGenerateType2MBAmap (int NumSliceGroups, int *MapData, int xs, int ys, int *MBAmap);
 
 static int FirstMBInSlice[MAXSLICEGROUPIDS];
@@ -147,12 +168,24 @@ int FmoInit (int xs, int ys, int NumSliceGroups, int FmoMode, int* MapData)
     case 2:
       FmoGenerateType2MBAmap (NumSliceGroups, MapData, xs, ys, MBAmap);
       break;
+
+    // JVT-D095, JVT-D097
+    case 3:
+      FmoGenerateType3MBAmap (NumSliceGroups, xs, ys, MBAmap);
+      break;
+    case 4:
+    case 5:
+    case 6:
+      assert(NumSliceGroups == 1);
+      FmoInitEvolvingMBAmap (FmoMode, PictureXSize, PictureYSize, MBAmap); // need to be updated before coding of each picture
+      break;
+    // End JVT-D095, JVT-D097
+
     default:
       printf ("Illegal FmoMode %d , exit \n", FmoMode);
       exit (-1);
     }
   }
-
 
 /*
 {
@@ -164,6 +197,7 @@ printf ("\n"); }
 printf ("\n");
 }
 */
+
   return 0;
 }
 
@@ -554,5 +588,480 @@ int FmoGenerateType2MBAmap (int NumSliceGroups, int *MapData, int xs, int ys, in
   return 0;
 }
 
+// JVT-D095
+int FmoGenerateType3MBAmap (int NumSliceGroups, int XSize, int YSize, int *MBAmap)
+{
+  int x, y, xx;
+  int n = XSize;              // Number of columns
+  int p = NumSliceGroups+1;     // Number of Slice Groups
 
+  int rx0, rx1, ry0, ry1;   // coordinates of the rectangule
 
+  assert (NumSliceGroups == 1);
+
+  rx0 = input->top_left_mb%n;
+  ry0 = input->top_left_mb/n;
+  rx1 = input->bottom_right_mb%n;
+  ry1 = input->bottom_right_mb/n;
+
+  for (y=0; y<YSize; y++)
+  for (x=0; x<XSize; x++)
+  {
+    xx = y*XSize+x;
+    if(x >= rx0 && x <= rx1 && y >= ry0 && y<= ry1) // within the rectangular slice group
+      MBAmap[xx] = 0;
+    else
+      MBAmap[xx] = 1;
+  }
+  return 0;
+}
+// End JVT-D095
+
+// JVT-D097
+int FmoInitEvolvingMBAmap (int FmoMode, int XSize, int YSize, int *MBAmap)
+{
+  int i;
+
+  assert (MBAmap != NULL);
+  for(i=0; i< XSize*YSize; i++) 
+    MBAmap[i] = 1;
+
+  fmo_evlv_NewPeriod = 0;
+  slice_group_change_cycle = -1;
+
+  switch(FmoMode)
+  {
+  case 4:
+    if(input->slice_group_change_direction == 0)
+    {
+      fmo_evlv_x = XSize / 2;
+      fmo_evlv_y = YSize / 2;
+      fmo_evlv_directx = -1;
+      fmo_evlv_directy = 0;
+    }
+    else 
+    {
+      fmo_evlv_x = ( XSize - 1 ) / 2;
+      fmo_evlv_y = ( YSize - 1) / 2;
+      fmo_evlv_directx = 0;
+      fmo_evlv_directy = 1;
+    }
+    fmo_evlv_left = fmo_evlv_x;
+    fmo_evlv_right = fmo_evlv_x;
+    fmo_evlv_top = fmo_evlv_y;
+    fmo_evlv_bottom = fmo_evlv_y;
+    break;
+  case 5:
+    if(input->slice_group_change_direction == 0)
+    {
+      fmo_evlv_x = 0;
+      fmo_evlv_y = 0;
+    }
+    else
+    {
+      fmo_evlv_x = XSize-1;
+      fmo_evlv_y = YSize-1;
+    }
+    break;
+  case 6:
+    if(input->slice_group_change_direction == 0)
+    {
+      fmo_evlv_x = 0;
+      fmo_evlv_y = 0;
+    }
+    else
+    {
+      fmo_evlv_x = XSize-1;
+      fmo_evlv_y = YSize-1;
+    }
+    break;
+  }
+
+  return 0;
+}
+
+int FmoUpdateEvolvingMBAmap (int FmoMode, int XSize, int YSize, int *MBAmap)
+{
+  switch(FmoMode)
+  {
+  case 4:
+    if(input->slice_group_change_direction == 0)
+      FmoBoxoutClockwise (XSize, YSize, MBAmap);
+    else 
+      FmoBoxoutCounterClockwise (XSize, YSize, MBAmap);
+    break;
+  case 5:
+    if(input->slice_group_change_direction == 0)
+      FmoRasterScan (XSize, YSize, MBAmap);
+    else
+      FmoInverseRasterScan (XSize, YSize, MBAmap);
+    break;
+  case 6:
+    if(input->slice_group_change_direction == 0)
+      FmoWipeRight (XSize, YSize, MBAmap);
+    else
+      FmoWipeLeft (XSize, YSize, MBAmap);
+    break;
+  }
+
+/*
+{
+int xx, yy;
+for (yy=0;yy<YSize; yy++) {
+for (xx=0; xx<XSize;xx++) printf ("%d ", MBAmap [yy*XSize+xx]);
+printf ("\n"); }
+printf ("\n");
+}
+*/
+
+  return 0;
+}
+
+int FmoWipeLeft(int XSize, int YSize, int *MBAmap)
+{
+  int i;
+  int x = fmo_evlv_x;
+  int y = fmo_evlv_y;
+
+  slice_group_change_cycle++;
+
+  for(i=0; i<input->slice_group_change_rate_minus1+1; i++)
+  {
+    // update the MBAmap unit of the MB (x,y)
+    MBAmap[y*XSize+x] = 0;
+
+    // go to the next MB
+    if(y > 0) y--;
+    else if(x > 0)
+    {
+      y = YSize-1;
+      x--;
+    }
+    else 
+    {
+      fmo_evlv_NewPeriod = 1;
+      break;
+    }
+  }
+  fmo_evlv_x = x;
+  fmo_evlv_y = y;
+
+  return 0;
+}
+
+int FmoWipeRight(int XSize, int YSize, int *MBAmap)
+{
+  int i;
+  int x = fmo_evlv_x;
+  int y = fmo_evlv_y;
+
+  slice_group_change_cycle++;
+
+  for(i=0; i<input->slice_group_change_rate_minus1+1; i++)
+  {
+    // update the MBAmap unit of the MB (x,y)
+    MBAmap[y*XSize+x] = 0;
+
+    // go to the next MB
+    if(y < YSize-1) y++;
+    else if(x < XSize-1)
+    {
+      y = 0;
+      x++;
+    }
+    else 
+    {
+      fmo_evlv_NewPeriod = 1;
+      break;
+    }
+  }
+  fmo_evlv_x = x;
+  fmo_evlv_y = y;
+
+  return 0;
+}
+
+int FmoInverseRasterScan(int XSize, int YSize, int *MBAmap)
+{
+  int i;
+  int nextMBnum = fmo_evlv_y * XSize + fmo_evlv_x;
+
+  slice_group_change_cycle++;
+
+  for(i=0; i<input->slice_group_change_rate_minus1+1; i++)
+  {
+    // update the next MBAmap unit
+    MBAmap[nextMBnum] = 0;
+
+    // go to the next MB
+    nextMBnum--;
+    // check whether passed already the last MB in the evolving period
+    if( nextMBnum < 0 ) 
+    {
+      fmo_evlv_NewPeriod = 1;
+      break;
+    }
+  }
+  fmo_evlv_x = nextMBnum%XSize;
+  fmo_evlv_y = nextMBnum/XSize;
+
+  return 0;
+}
+
+int FmoRasterScan(int XSize, int YSize, int *MBAmap)
+{
+  int i;
+  int nextMBnum = fmo_evlv_y * XSize + fmo_evlv_x;
+
+  slice_group_change_cycle++;
+
+  for(i=0; i<input->slice_group_change_rate_minus1+1; i++)
+  {
+    // update the next MBAmap unit
+    MBAmap[nextMBnum] = 0;
+
+    // go to the next MB
+    nextMBnum++;
+    // check whether passed already the last MB in the evolving period
+    if( nextMBnum >= XSize*YSize ) 
+    {
+      fmo_evlv_NewPeriod = 1;
+      break;
+    }
+  }
+  fmo_evlv_x = nextMBnum%XSize;
+  fmo_evlv_y = nextMBnum/XSize;
+
+  return 0;
+}
+
+int FmoBoxoutCounterClockwise (int XSize, int YSize, int *MBAmap)
+{
+  int i;
+  int W = XSize, H = YSize;
+  
+  int x = fmo_evlv_x;
+  int y = fmo_evlv_y;
+  int left = fmo_evlv_left;
+  int right = fmo_evlv_right;
+  int top = fmo_evlv_top;
+  int bottom = fmo_evlv_bottom;
+  int directx = fmo_evlv_directx;
+  int directy = fmo_evlv_directy;
+
+  slice_group_change_cycle++;
+
+  for(i=0; i<input->slice_group_change_rate_minus1+1; i++)
+  {
+    // update the MBAmap unit of the MB (x,y)
+    MBAmap[y*XSize+x] = 0;
+
+    // go to the next mb (x, y)
+    if ( directx == -1 && directy == 0 )
+    {
+      if (x > left) x--;
+      else if (x == 0)
+      {
+        y = bottom + 1;
+        bottom++;
+        directx = 1;
+        directy = 0;
+      }
+      else if (x == left)
+      {
+        x--;
+        left--;
+        directx = 0;
+        directy = 1;
+      }
+    }
+    else if ( directx == 1 && directy == 0 )
+    {
+      if (x < right) x++;
+      else if (x == W - 1)
+      {
+        y = top - 1;
+        top--;
+        directx = -1;
+        directy = 0;
+      }
+      else if (x == right)
+      {
+        x++;
+        right++;
+        directx = 0;
+        directy = -1;
+      }
+    }
+    else if ( directx == 0 && directy == -1 )
+    {
+      if ( y > top) y--;
+      else if (y == 0)
+      {
+        x = left - 1;
+        left--;
+        directx = 0;
+        directy = 1;
+      }
+      else if (y == top)
+      {
+        y--;
+        top--;
+        directx = -1;
+        directy = 0;
+      }
+    }
+    else if ( directx == 0 && directy == 1 )
+    {
+      if (y < bottom) y++;
+      else if (y == H - 1)
+      {
+        x = right+1;
+        right++;
+        directx = 0;
+        directy = -1;
+      }
+      else if (y == bottom)
+      {
+        y++;
+        bottom++;
+        directx = 1;
+        directy = 0;
+      }
+    }
+
+    // check whether passed already the last MB in the evolving period
+    if( !(left >= 0 && right < W && top >= 0 && bottom < H) ) 
+    {
+      fmo_evlv_NewPeriod = 1;
+      break;
+    }
+  }
+
+  fmo_evlv_x = x;
+  fmo_evlv_y = y;
+  fmo_evlv_left = left;
+  fmo_evlv_right = right;
+  fmo_evlv_top = top;
+  fmo_evlv_bottom = bottom;
+  fmo_evlv_directx = directx;
+  fmo_evlv_directy = directy;
+
+  return 0;
+}
+
+int FmoBoxoutClockwise (int XSize, int YSize, int *MBAmap)
+{
+  int i;
+  int W = XSize, H = YSize;
+  
+  int x = fmo_evlv_x;
+  int y = fmo_evlv_y;
+  int left = fmo_evlv_left;
+  int right = fmo_evlv_right;
+  int top = fmo_evlv_top;
+  int bottom = fmo_evlv_bottom;
+  int directx = fmo_evlv_directx;
+  int directy = fmo_evlv_directy;
+
+  slice_group_change_cycle++;
+
+  for(i=0; i<input->slice_group_change_rate_minus1+1; i++)
+  {
+    // update the MBAmap unit of the MB (x,y)
+    MBAmap[y*XSize+x] = 0;
+
+    // go to the next mb (x, y)
+    if ( directx == -1 && directy == 0 )
+    {
+      if (x > left) x--;
+      else if (x == 0)
+      {
+        y = top - 1;
+        top--;
+        directx = 1;
+        directy = 0;
+      }
+      else if (x == left)
+      {
+        x--;
+        left--;
+        directx = 0;
+        directy = -1;
+      }
+    }
+    else if ( directx == 1 && directy == 0 )
+    {
+      if (x < right) x++;
+      else if (x == W - 1)
+      {
+        y = bottom + 1;
+        bottom++;
+        directx = -1;
+        directy = 0;
+      }
+      else if (x == right)
+      {
+        x++;
+        right++;
+        directx = 0;
+        directy = 1;
+      }
+    }
+    else if ( directx == 0 && directy == -1 )
+    {
+      if ( y > top) y--;
+      else if (y == 0)
+      {
+        x = right + 1;
+        right++;
+        directx = 0;
+        directy = 1;
+      }
+      else if (y == top)
+      {
+        y--;
+        top--;
+        directx = 1;
+        directy = 0;
+      }
+    }
+    else if ( directx == 0 && directy == 1 )
+    {
+      if (y < bottom) y++;
+      else if (y == H - 1)
+      {
+        x = left - 1;
+        left--;
+        directx = 0;
+        directy = -1;
+      }
+      else if (y == bottom)
+      {
+        y++;
+        bottom++;
+        directx = -1;
+        directy = 0;
+      }
+    }
+
+    // check whether passed already the last MB in the evolving period
+    if( !(left >= 0 && right < W && top >= 0 && bottom < H) ) 
+    {
+      fmo_evlv_NewPeriod = 1;
+      break;
+    }
+  }
+
+  fmo_evlv_x = x;
+  fmo_evlv_y = y;
+  fmo_evlv_left = left;
+  fmo_evlv_right = right;
+  fmo_evlv_top = top;
+  fmo_evlv_bottom = bottom;
+  fmo_evlv_directx = directx;
+  fmo_evlv_directy = directy;
+
+  return 0;
+}
+// End JVT-D097

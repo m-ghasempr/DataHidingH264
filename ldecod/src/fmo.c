@@ -59,11 +59,20 @@
 #include "header.h"
 #include "fmo.h"
 
-static int *MBAmap;   
+int *MBAmap;   
 
 static int PictureXSize, PictureYSize, PictureSizeInMBs;
 static int NumberOfSliceGroups;    // the number of slice groups -1 (0 == scan order, 7 == maximum)
 
+// JVT-D095, JVT-D097
+static int FmoGenerateType3MBAmap (struct img_par *img, struct inp_par *inp, int NumSliceGroups, int XSize, int YSize, int *MBAmap);
+static int FmoBoxoutCounterClockwise (struct img_par *img, struct inp_par *inp, int XSize, int YSize, int *MBAmap);
+static int FmoBoxoutClockwise (struct img_par *img, struct inp_par *inp, int XSize, int YSize, int *MBAmap);
+static int FmoRasterScan(struct img_par *img, struct inp_par *inp, int XSize, int YSize, int *MBAmap);
+static int FmoInverseRasterScan(struct img_par *img, struct inp_par *inp, int XSize, int YSize, int *MBAmap);
+static int FmoWipeRight(struct img_par *img, struct inp_par *inp, int XSize, int YSize, int *MBAmap);
+static int FmoWipeLeft(struct img_par *img, struct inp_par *inp, int XSize, int YSize, int *MBAmap);
+// End JVT-D095, JVT-D097
 
 
 /*!
@@ -83,9 +92,9 @@ static int NumberOfSliceGroups;    // the number of slice groups -1 (0 == scan o
  ************************************************************************
  */
 
-int FmoInit (int xs, int ys, int NewMBAmap[], int SizeOfNewMBAmap)
+int FmoInit (struct img_par *img, struct inp_par *inp, int xs, int ys, int NewMBAmap[], int SizeOfNewMBAmap)
 {
-  int i;
+  int i, FmoMode;
 
   NumberOfSliceGroups = 0;
   PictureXSize = xs;
@@ -114,6 +123,29 @@ int FmoInit (int xs, int ys, int NewMBAmap[], int SizeOfNewMBAmap)
     if (MBAmap[i] > NumberOfSliceGroups)
       NumberOfSliceGroups = MBAmap[i];
   }
+
+  // JVT-D095, JVT-D097
+  NumberOfSliceGroups = img->num_slice_groups_minus1;
+  FmoMode = img->mb_allocation_map_type;
+  if (NumberOfSliceGroups && FmoMode >= 3)
+  {
+    switch (FmoMode)
+    {
+    case 3:
+      FmoGenerateType3MBAmap (img, inp, NumberOfSliceGroups, xs, ys, MBAmap);
+      break;
+    case 4:
+    case 5:
+    case 6:
+      assert(NumberOfSliceGroups == 1);
+      //FmoInitEvolvingMBAmap (img, inp, FmoMode, PictureXSize, PictureYSize, MBAmap); // need to be updated before coding of each picture
+      break;
+    default:
+      printf ("Illegal FmoMode %d , exit \n", FmoMode);
+      exit (-1);
+    }
+  }
+  // End JVT-D095, JVT-D097
 
 /*
 printf ("FmoInit: Using MBAmap as follows\n");
@@ -275,6 +307,396 @@ int FmoGetNextMBNr (int CurrentMbNr, int structure)
   else
     return CurrentMbNr;
 }
+
+
+// JVT-D095
+int FmoGenerateType3MBAmap (struct img_par *img, struct inp_par *inp, int NumSliceGroups, int XSize, int YSize, int *MBAmap)
+{
+  int x, y, xx;
+  int n = XSize;              // Number of columns
+  int p = NumSliceGroups+1;     // Number of Slice Groups
+
+  int rx0, rx1, ry0, ry1;   // coordinates of the rectangule
+
+  assert (NumSliceGroups == 1);
+
+  rx0 = img->top_left_mb%n;
+  ry0 = img->top_left_mb/n;
+  rx1 = img->bottom_right_mb%n;
+  ry1 = img->bottom_right_mb/n;
+
+  for (y=0; y<YSize; y++)
+  for (x=0; x<XSize; x++)
+  {
+    xx = y*XSize+x;
+    if(x >= rx0 && x <= rx1 && y >= ry0 && y<= ry1) // within the rectangular slice group
+      MBAmap[xx] = 0;
+    else
+      MBAmap[xx] = 1;
+  }
+  return 0;
+}
+// End JVT-D095
+
+// JVT-D097
+int FmoUpdateEvolvingMBAmap (struct img_par *img, struct inp_par *inp, int *MBAmap)
+{
+  int FmoMode = img->mb_allocation_map_type;
+  int XSize = img->width/16;
+  int YSize = img->height/16;
+  int i;
+
+  for (i=0; i<YSize*XSize; i++)
+      MBAmap[i] = 1;
+
+  switch(FmoMode)
+  {
+  case 4:
+    if(img->slice_group_change_direction == 0)
+      FmoBoxoutClockwise (img, inp, XSize, YSize, MBAmap);
+    else 
+      FmoBoxoutCounterClockwise (img, inp, XSize, YSize, MBAmap);
+    break;
+  case 5:
+    if(img->slice_group_change_direction == 0)
+      FmoRasterScan (img, inp, XSize, YSize, MBAmap);
+    else
+      FmoInverseRasterScan (img, inp, XSize, YSize, MBAmap);
+    break;
+  case 6:
+    if(img->slice_group_change_direction == 0)
+      FmoWipeRight (img, inp, XSize, YSize, MBAmap);
+    else
+      FmoWipeLeft (img, inp, XSize, YSize, MBAmap);
+    break;
+  }
+
+/*
+{
+int xx, yy;
+for (yy=0;yy<YSize; yy++) {
+for (xx=0; xx<XSize;xx++) printf ("%d ", MBAmap [yy*XSize+xx]);
+printf ("\n"); }
+printf ("\n");
+}
+*/
+
+  return 0;
+}
+
+int FmoWipeLeft(struct img_par *img, struct inp_par *inp, int XSize, int YSize, int *MBAmap)
+{
+  int i, x, y, n;
+
+  x = XSize-1; 
+  y = YSize-1;
+
+  n = (img->slice_group_change_cycle+1) * (img->slice_group_change_rate_minus1+1);
+
+  for(i=0; i<n; i++)
+  {
+    // update the MBAmap unit of the MB (x,y)
+    MBAmap[y*XSize+x] = 0;
+
+    // go to the next MB
+    if(y > 0) y--;
+    else if(x > 0)
+    {
+      y = YSize-1;
+      x--;
+    }
+    else 
+      break;
+  }
+
+  return 0;
+}
+
+int FmoWipeRight(struct img_par *img, struct inp_par *inp, int XSize, int YSize, int *MBAmap)
+{
+  int i, x, y, n;
+
+  x = 0; 
+  y = 0;
+
+  n = (img->slice_group_change_cycle+1) * (img->slice_group_change_rate_minus1+1);
+
+  for(i=0; i<n; i++)
+  {
+    // update the MBAmap unit of the MB (x,y)
+    MBAmap[y*XSize+x] = 0;
+
+    // go to the next MB
+    if(y < YSize-1) y++;
+    else if(x < XSize-1)
+    {
+      y = 0;
+      x++;
+    }
+    else 
+      break;
+  }
+
+  return 0;
+}
+
+int FmoInverseRasterScan(struct img_par *img, struct inp_par *inp, int XSize, int YSize, int *MBAmap)
+{
+  int i, x, y, n, nextMBnum;
+
+  x = XSize -1; 
+  y = YSize -1;
+
+  n = (img->slice_group_change_cycle+1) * (img->slice_group_change_rate_minus1+1);
+  nextMBnum = y * XSize + x;
+
+  for(i=0; i<n; i++)
+  {
+    // update the next MBAmap unit
+    MBAmap[nextMBnum] = 0;
+
+    // go to the next MB
+    nextMBnum--;
+    // check whether passed already the last MB in the evolving period
+    if( nextMBnum < 0 ) 
+      break;
+  }
+
+  return 0;
+}
+
+int FmoRasterScan(struct img_par *img, struct inp_par *inp, int XSize, int YSize, int *MBAmap)
+{
+  int i, x, y, n, nextMBnum;
+
+  x = 0; 
+  y = 0;
+
+  n = (img->slice_group_change_cycle+1) * (img->slice_group_change_rate_minus1+1);
+  nextMBnum = y * XSize + x;
+
+  for(i=0; i<n; i++)
+  {
+    // update the next MBAmap unit
+    MBAmap[nextMBnum] = 0;
+
+    // go to the next MB
+    nextMBnum++;
+    // check whether passed already the last MB in the evolving period
+    if( nextMBnum >= XSize*YSize ) 
+      break;
+  }
+
+  return 0;
+}
+
+int FmoBoxoutCounterClockwise (struct img_par *img, struct inp_par *inp, int XSize, int YSize, int *MBAmap)
+{
+  int i, n;
+  int W = XSize, H = YSize;
+  
+  int x = ( XSize - 1 ) / 2;
+  int y = ( YSize - 1) / 2;
+  int directx = 0;
+  int directy = 1;
+  int left = x;
+  int right = x;
+  int top = y;
+  int bottom = y;
+
+  n = (img->slice_group_change_cycle+1) * (img->slice_group_change_rate_minus1+1);
+
+  for(i=0; i<n; i++)
+  {
+    // update the MBAmap unit of the MB (x,y)
+    MBAmap[y*XSize+x] = 0;
+
+    // go to the next mb (x, y)
+    if ( directx == -1 && directy == 0 )
+    {
+      if (x > left) x--;
+      else if (x == 0)
+      {
+        y = bottom + 1;
+        bottom++;
+        directx = 1;
+        directy = 0;
+      }
+      else if (x == left)
+      {
+        x--;
+        left--;
+        directx = 0;
+        directy = 1;
+      }
+    }
+    else if ( directx == 1 && directy == 0 )
+    {
+      if (x < right) x++;
+      else if (x == W - 1)
+      {
+        y = top - 1;
+        top--;
+        directx = -1;
+        directy = 0;
+      }
+      else if (x == right)
+      {
+        x++;
+        right++;
+        directx = 0;
+        directy = -1;
+      }
+    }
+    else if ( directx == 0 && directy == -1 )
+    {
+      if ( y > top) y--;
+      else if (y == 0)
+      {
+        x = left - 1;
+        left--;
+        directx = 0;
+        directy = 1;
+      }
+      else if (y == top)
+      {
+        y--;
+        top--;
+        directx = -1;
+        directy = 0;
+      }
+    }
+    else if ( directx == 0 && directy == 1 )
+    {
+      if (y < bottom) y++;
+      else if (y == H - 1)
+      {
+        x = right+1;
+        right++;
+        directx = 0;
+        directy = -1;
+      }
+      else if (y == bottom)
+      {
+        y++;
+        bottom++;
+        directx = 1;
+        directy = 0;
+      }
+    }
+
+    // check whether passed already the last MB in the evolving period
+    if( !(left >= 0 && right < W && top >= 0 && bottom < H) ) 
+      break;
+  }
+
+  return 0;
+}
+
+int FmoBoxoutClockwise (struct img_par *img, struct inp_par *inp, int XSize, int YSize, int *MBAmap)
+{
+  int i, n;
+  int W = XSize, H = YSize;
+  
+  int x = XSize / 2;
+  int y = YSize / 2;
+  int directx = -1;
+  int directy = 0;
+  int left = x;
+  int right = x;
+  int top = y;
+  int bottom = y;
+
+  n = (img->slice_group_change_cycle+1) * (img->slice_group_change_rate_minus1+1);
+
+  for(i=0; i<n; i++)
+  {
+    // update the MBAmap unit of the MB (x,y)
+    MBAmap[y*XSize+x] = 0;
+
+    // go to the next mb (x, y)
+    if ( directx == -1 && directy == 0 )
+    {
+      if (x > left) x--;
+      else if (x == 0)
+      {
+        y = top - 1;
+        top--;
+        directx = 1;
+        directy = 0;
+      }
+      else if (x == left)
+      {
+        x--;
+        left--;
+        directx = 0;
+        directy = -1;
+      }
+    }
+    else if ( directx == 1 && directy == 0 )
+    {
+      if (x < right) x++;
+      else if (x == W - 1)
+      {
+        y = bottom + 1;
+        bottom++;
+        directx = -1;
+        directy = 0;
+      }
+      else if (x == right)
+      {
+        x++;
+        right++;
+        directx = 0;
+        directy = 1;
+      }
+    }
+    else if ( directx == 0 && directy == -1 )
+    {
+      if ( y > top) y--;
+      else if (y == 0)
+      {
+        x = right + 1;
+        right++;
+        directx = 0;
+        directy = 1;
+      }
+      else if (y == top)
+      {
+        y--;
+        top--;
+        directx = 1;
+        directy = 0;
+      }
+    }
+    else if ( directx == 0 && directy == 1 )
+    {
+      if (y < bottom) y++;
+      else if (y == H - 1)
+      {
+        x = left - 1;
+        left--;
+        directx = 0;
+        directy = -1;
+      }
+      else if (y == bottom)
+      {
+        y++;
+        bottom++;
+        directx = -1;
+        directy = 0;
+      }
+    }
+
+    // check whether passed already the last MB in the evolving period
+    if( !(left >= 0 && right < W && top >= 0 && bottom < H) ) 
+      break;
+  }
+
+  return 0;
+}
+// End JVT-D097
+
 
 #if 0
 

@@ -127,6 +127,15 @@ int encode_one_frame()
 #endif
   time( &ltime1 );        // start time s
 
+  //Shankar Regunathan (Oct 2002)
+  //Prepare Panscanrect SEI payload
+  UpdatePanScanRectInfo();
+  //Prepare Arbitrarydata SEI Payload
+  UpdateUser_data_unregistered();
+  //Prepare Registered data SEI Payload
+  UpdateUser_data_registered_itu_t_t35();
+  //Prepare RandomAccess SEI Payload
+  UpdateRandomAccess();
 
   if (input->InterlaceCodingOption==FIELD_CODING)
   {
@@ -772,10 +781,8 @@ void encode_one_slice(SyntaxElement *sym)
 
   // Initializes the parameters of the current slice
   init_slice();
-  if(input->Encapsulated_NAL_Payload) //stores the position after header. Needed for skipping byte stuffing in RTP Header
-  {
-    Bytes_After_Header = img->currentSlice->partArr[0].bitstream->byte_pos;
-  }
+
+  Bytes_After_Header = img->currentSlice->partArr[0].bitstream->byte_pos;
 
   // Tian Dong: June 7, 2002 JVT-B042
   // When the pictures are put into different layers and subseq, not all the reference frames
@@ -826,7 +833,7 @@ void encode_one_slice(SyntaxElement *sym)
     encode_one_macroblock();
 
     // Pass the generated syntax elements to the NAL
-    write_one_macroblock();
+    write_one_macroblock(1);
 
     // Terminate processing of the current macroblock
     terminate_macroblock(&end_of_slice, &recode_macroblock);
@@ -869,7 +876,6 @@ int encode_one_slice(int SliceGroupId)
   int MBRowSize = img->width/MB_BLOCK_SIZE;
   double FrameRDCost, FieldRDCost;
 
-
   img->cod_counter=0;
 
   // Initializes the parameters of the current slice
@@ -878,10 +884,8 @@ int encode_one_slice(int SliceGroupId)
 
   set_MB_parameters (CurrentMbInScanOrder);
   init_slice(CurrentMbInScanOrder);
-  if(input->Encapsulated_NAL_Payload) //stores the position after header. Needed for skipping byte stuffing in RTP Header
-  {
-    Bytes_After_Header = img->currentSlice->partArr[0].bitstream->byte_pos;
-  }
+
+  Bytes_After_Header = img->currentSlice->partArr[0].bitstream->byte_pos;
 
   // Tian Dong: June 7, 2002 JVT-B042
   // When the pictures are put into different layers and subseq, not all the reference frames
@@ -930,7 +934,7 @@ int encode_one_slice(int SliceGroupId)
     encode_one_macroblock();
 
     // Pass the generated syntax elements to the NAL
-    write_one_macroblock();
+    write_one_macroblock(1);
 
     // Terminate processing of the current macroblock
     terminate_macroblock(&end_of_slice, &recode_macroblock);
@@ -982,10 +986,10 @@ int encode_one_slice(int SliceGroupId)
     
     // go to the bottom MB in the MB pair
     CurrentMbInScanOrder =  img->current_mb_nr+MBRowSize;  
+		img->field_mode   = 0;    // MB coded as frame  //GB
     set_MB_parameters (CurrentMbInScanOrder);
     start_macroblock();
     img->update_stats = 0;    // don't update any stats yet
-    img->field_mode   = 0;    // MB coded as frame
     rdopt       = &rddata_bot_frame_mb; // store data in top frame MB
     WriteFrameFieldMBInHeader = TopFrameIsSkipped ? 1:0;
     field_mb[img->mb_y][img->mb_x] = 0;
@@ -1063,7 +1067,7 @@ int encode_one_slice(int SliceGroupId)
       img->top_field = 1;
     else
       img->top_field = 0;
-
+    
     // go back to the Top MB in the MB pair
     CurrentMbInScanOrder -= MBRowSize;
     set_MB_parameters (CurrentMbInScanOrder);
@@ -1072,7 +1076,7 @@ int encode_one_slice(int SliceGroupId)
     rdopt         =   img->field_mode ? &rddata_top_field_mb:&rddata_top_frame_mb;
     copy_rdopt_data(0);       // copy the MB data for Top MB from the temp buffers
     WriteFrameFieldMBInHeader = 1;
-    write_one_macroblock();     // write the Top MB data to the bitstream
+    write_one_macroblock(1);     // write the Top MB data to the bitstream
     NumberOfCodedMBs++;       // only here we are sure that the coded MB is actually included in the slice
     terminate_macroblock(&end_of_slice, &recode_macroblock);  // done coding the Top MB 
       proceed2nextMacroblock(CurrentMbInScanOrder); // Go to next macroblock
@@ -1090,11 +1094,11 @@ int encode_one_slice(int SliceGroupId)
     else
       WriteFrameFieldMBInHeader = TopFrameIsSkipped ? 1:0;
 
-    write_one_macroblock();     // write the Bottom MB data to the bitstream
+    write_one_macroblock(0);     // write the Bottom MB data to the bitstream
     NumberOfCodedMBs++;       // only here we are sure that the coded MB is actually included in the slice
     terminate_macroblock(&end_of_slice, &recode_macroblock);  // done coding the Top MB 
       proceed2nextMacroblock(CurrentMbInScanOrder); // Go to next macroblock
-    
+
     CurrentMbInScanOrder -= MBRowSize;
 
     if(MBPairIsField)       // if MB Pair was coded as field the buffer size variables back to frame mode
@@ -1257,7 +1261,18 @@ void init_frame()
   }
 
   UpdateSubseqInfo(img->layer);     // Tian Dong (Sept 2002)
+  UpdateSceneInformation(0, 0, 0, -1); // JVT-D099, scene information SEI, nothing included by default
   PrepareAggregationSEIMessage();
+
+  // JVT-D097
+  if (img->type!=B_IMG && input->FmoNumSliceGroups == 1 && input->FmoType > 3)
+  {
+    if(fmo_evlv_NewPeriod)
+      FmoInitEvolvingMBAmap (input->FmoType, img->width/16, img->height/16, MBAmap);
+
+    FmoUpdateEvolvingMBAmap (input->FmoType, img->width/16, img->height/16, MBAmap);
+  }
+  // End JVT-D097
 }
 
 /*!
@@ -1724,12 +1739,9 @@ void interpolate_frame_to_fb()
   init_mref(img);
   init_Refbuf(img);
 
-  if(input->mv_res)
-    oneeighthpix();
-  else
-    UnifiedOneForthPix(imgY, imgUV[0], imgUV[1],
-               mref[0], mcef[0][0], mcef[0][1],
-               Refbuf11[0]);
+  UnifiedOneForthPix(imgY, imgUV[0], imgUV[1],
+                     mref[0], mcef[0][0], mcef[0][1],
+                     Refbuf11[0]);
 }
 
 /*!
@@ -1743,12 +1755,9 @@ void interpolate_frame()
   init_mref(img);
   init_Refbuf(img);
 
-  if(input->mv_res)
-    oneeighthpix();
-  else
-    UnifiedOneForthPix(imgY, imgUV[0], imgUV[1],
-               mref[0], mcef[0][0], mcef[0][1],
-               Refbuf11[0]);
+  UnifiedOneForthPix(imgY, imgUV[0], imgUV[1],
+                     mref[0], mcef[0][0], mcef[0][1],
+                     Refbuf11[0]);
 }
 
 static void GenerateFullPelRepresentation (pel_t **Fourthpel, pel_t *Fullpel, int xsize, int ysize)
@@ -1830,16 +1839,6 @@ void UnifiedOneForthPix (pel_t **imgY, pel_t** imgU, pel_t **imgV,
         /*  '|'  */
         PutPel_14 (out4Y, j-IMG_PAD_SIZE*4+1, i-IMG_PAD_SIZE*4, (pel_t)(max(0,min(255,(int)(FastPelY_14(out4Y, j-IMG_PAD_SIZE*4, i-IMG_PAD_SIZE*4)+FastPelY_14(out4Y, min(je2+2,j+2)-IMG_PAD_SIZE*4, i-IMG_PAD_SIZE*4))/2))));
       }
-      else if( ((i&3) == 3)&&(((j+1)&3) == 3))
-      {
-        /* "funny posision" */
-        PutPel_14 (out4Y, j-IMG_PAD_SIZE*4+1, i-IMG_PAD_SIZE*4, (pel_t) ((
-          FastPelY_14 (out4Y, j-IMG_PAD_SIZE*4-2, i-IMG_PAD_SIZE*4-3) +
-          FastPelY_14 (out4Y, min(je2,j+2)-IMG_PAD_SIZE*4, i-IMG_PAD_SIZE*4-3) +
-          FastPelY_14 (out4Y, j-IMG_PAD_SIZE*4-2, min(ie2,i+1)-IMG_PAD_SIZE*4) +
-          FastPelY_14 (out4Y, min(je2,j+2)-IMG_PAD_SIZE*4, min(ie2,i+1)-IMG_PAD_SIZE*4)
-          + 2 )/4));
-      }
       else if ((j%4 == 0 && i%4 == 1) || (j%4 == 2 && i%4 == 3)) {
         /*  '/'  */
         PutPel_14 (out4Y, j-IMG_PAD_SIZE*4+1, i-IMG_PAD_SIZE*4, (pel_t)(max(0,min(255,(int)(
@@ -1867,142 +1866,6 @@ void UnifiedOneForthPix (pel_t **imgY, pel_t** imgU, pel_t **imgV,
 
 }
 
-/*!
- ************************************************************************
- * \brief
- *    Upsample 4 times for 1/8-pel estimation and store in buffer
- *    for multiple reference frames. 1/8-pel resolution is calculated
- *    during the motion estimation on the fly with bilinear interpolation.
- *
- ************************************************************************
- */
-void oneeighthpix()
-{
-  static int h1[8] = {  -3, 12, -37, 229,  71, -21,  6, -1 };  
-  static int h2[8] = {  -3, 12, -39, 158, 158, -39, 12, -3 };  
-  static int h3[8] = {  -1,  6, -21,  71, 229, -37, 12, -3 };  
-
-  int uv,x,y,y1,x4,y4,x4p;
-
-  int nx_out, ny_out, nx_1, ny_1, maxy;
-  int i0,i1,i2,i3;
-
-  nx_out = 4*img->width;
-  ny_out = 4*img->height;
-  nx_1   = img->width-1;
-  ny_1   = img->height-1;
-
-
-  //horizontal filtering filtering
-  for(y=-IMG_PAD_SIZE;y<img->height+IMG_PAD_SIZE;y++)
-  {
-    for(x=-IMG_PAD_SIZE;x<img->width+IMG_PAD_SIZE;x++)
-    {
-      y1 = max(0,min(ny_1,y));
-
-      i0=(256*imgY[y1][max(0,min(nx_1,x))]);
-      
-      i1=(
-        h1[0]* imgY[y1][max(0,min(nx_1,x-3))]  +
-        h1[1]* imgY[y1][max(0,min(nx_1,x-2))]  +
-        h1[2]* imgY[y1][max(0,min(nx_1,x-1))]  +
-        h1[3]* imgY[y1][max(0,min(nx_1,x  ))]  +
-        h1[4]* imgY[y1][max(0,min(nx_1,x+1))]  +
-        h1[5]* imgY[y1][max(0,min(nx_1,x+2))]  +
-        h1[6]* imgY[y1][max(0,min(nx_1,x+3))]  +                         
-        h1[7]* imgY[y1][max(0,min(nx_1,x+4))] );
-      
-      
-      i2=(
-        h2[0]* imgY[y1][max(0,min(nx_1,x-3))]  +
-        h2[1]* imgY[y1][max(0,min(nx_1,x-2))]  +
-        h2[2]* imgY[y1][max(0,min(nx_1,x-1))]  +
-        h2[3]* imgY[y1][max(0,min(nx_1,x  ))]  +
-        h2[4]* imgY[y1][max(0,min(nx_1,x+1))]  +
-        h2[5]* imgY[y1][max(0,min(nx_1,x+2))]  +
-        h2[6]* imgY[y1][max(0,min(nx_1,x+3))]  +                         
-        h2[7]* imgY[y1][max(0,min(nx_1,x+4))] );
-      
-      
-      i3=(
-        h3[0]* imgY[y1][max(0,min(nx_1,x-3))]  +
-        h3[1]* imgY[y1][max(0,min(nx_1,x-2))]  +
-        h3[2]* imgY[y1][max(0,min(nx_1,x-1))]  +
-        h3[3]* imgY[y1][max(0,min(nx_1,x  ))]  +
-        h3[4]* imgY[y1][max(0,min(nx_1,x+1))]  +
-        h3[5]* imgY[y1][max(0,min(nx_1,x+2))]  +
-        h3[6]* imgY[y1][max(0,min(nx_1,x+3))]  +                         
-        h3[7]* imgY[y1][max(0,min(nx_1,x+4))] );
-      
-      x4=(x+IMG_PAD_SIZE)*4;
-
-      img4Y_tmp[y+IMG_PAD_SIZE][x4  ] = i0;
-      img4Y_tmp[y+IMG_PAD_SIZE][x4+1] = i1;
-      img4Y_tmp[y+IMG_PAD_SIZE][x4+2] = i2;
-      img4Y_tmp[y+IMG_PAD_SIZE][x4+3] = i3;
-    }
-  }
-
-  maxy = img->height+2*IMG_PAD_SIZE-1;
-
-  for(x4=0;x4<nx_out+2*IMG_PAD_SIZE*4;x4++)
-  {
-    for(y=0;y<=maxy;y++)
-    {
-      i0=(long int)(img4Y_tmp[y][x4]+256/2)/256;
-      
-      i1=(long int)( 
-        h1[0]* img4Y_tmp[max(0   ,y-3)][x4]+
-        h1[1]* img4Y_tmp[max(0   ,y-2)][x4]+
-        h1[2]* img4Y_tmp[max(0   ,y-1)][x4]+
-        h1[3]* img4Y_tmp[y][x4]            +
-        h1[4]* img4Y_tmp[min(maxy,y+1)][x4]+
-        h1[5]* img4Y_tmp[min(maxy,y+2)][x4]+
-        h1[6]* img4Y_tmp[min(maxy,y+3)][x4]+ 
-        h1[7]* img4Y_tmp[min(maxy,y+4)][x4]+ 256*256/2 ) / (256*256);
-      
-      i2=(long int)( 
-        h2[0]* img4Y_tmp[max(0   ,y-3)][x4]+
-        h2[1]* img4Y_tmp[max(0   ,y-2)][x4]+
-        h2[2]* img4Y_tmp[max(0   ,y-1)][x4]+
-        h2[3]* img4Y_tmp[y][x4]            +
-        h2[4]* img4Y_tmp[min(maxy,y+1)][x4]+
-        h2[5]* img4Y_tmp[min(maxy,y+2)][x4]+
-        h2[6]* img4Y_tmp[min(maxy,y+3)][x4]+ 
-        h2[7]* img4Y_tmp[min(maxy,y+4)][x4]+ 256*256/2 ) / (256*256);
-      
-      i3=(long int)( 
-        h3[0]* img4Y_tmp[max(0   ,y-3)][x4]+
-        h3[1]* img4Y_tmp[max(0   ,y-2)][x4]+
-        h3[2]* img4Y_tmp[max(0   ,y-1)][x4]+
-        h3[3]* img4Y_tmp[y][x4]            +
-        h3[4]* img4Y_tmp[min(maxy,y+1)][x4]+
-        h3[5]* img4Y_tmp[min(maxy,y+2)][x4]+
-        h3[6]* img4Y_tmp[min(maxy,y+3)][x4]+ 
-        h3[7]* img4Y_tmp[min(maxy,y+4)][x4]+ 256*256/2 ) / (256*256);
-      
-      y4  = (y-IMG_PAD_SIZE)*4;
-      x4p = x4-IMG_PAD_SIZE*4;
-  
-      PutPel_14 (mref[0], y4,   x4p, (pel_t) max(0,min(255,i0)));   
-      PutPel_14 (mref[0], y4+1, x4p, (pel_t) max(0,min(255,i1)));   
-      PutPel_14 (mref[0], y4+2, x4p, (pel_t) max(0,min(255,i2)));
-      PutPel_14 (mref[0], y4+3, x4p, (pel_t) max(0,min(255,i3)));   
-
-    }
-  }
-
-  for(y=0;y<img->height;y++)
-    for(x=0;x<img->width;x++)
-      PutPel_11 (Refbuf11[0], y, x, FastPelY_14 (mref[0], y*4, x*4));
-
-  for (uv=0; uv < 2; uv++)
-    for (y=0; y < img->height_cr; y++)
-      memcpy(mcef[0][uv][y],imgUV[uv][y],img->width_cr); // just copy 1/1 pix, interpolate "online"
-  GenerateFullPelRepresentation (mref[0], Refbuf11[0], img->width, img->height);
-  // Generate 1/1th pel representation (used for integer pel MV search)
-
-}
 
 /*!
  ************************************************************************

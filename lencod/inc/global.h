@@ -224,6 +224,10 @@ typedef struct
 {
   unsigned short state;         // index into state-table CP  
   unsigned char  MPS;           // Least Probable Symbol 0/1 CP
+//	int						 ew;
+//	unsigned int	 state_prob[128];
+//	unsigned int	 state_sum;
+
 } BiContextType;
 
 typedef BiContextType *BiContextTypePtr;
@@ -241,6 +245,7 @@ typedef BiContextType *BiContextTypePtr;
 #define NUM_MV_RES_CTX   10
 #define NUM_REF_NO_CTX   6
 #define NUM_DELTA_QP_CTX 4
+#define NUM_MB_AFF_CTX 4
 
 typedef struct
 {
@@ -251,6 +256,7 @@ typedef struct
   BiContextType ref_no_contexts  [2][NUM_REF_NO_CTX];
   BiContextType bwd_ref_no_contexts [2][NUM_REF_NO_CTX];
   BiContextType delta_qp_contexts   [NUM_DELTA_QP_CTX];
+  BiContextType mb_aff_contexts			[NUM_MB_AFF_CTX];
   BiContextType slice_term_context;
 } MotionInfoContexts;
 
@@ -330,7 +336,10 @@ typedef struct macroblock
   int                 bitcounter[MAX_BITCOUNTER_MB];
   struct macroblock   *mb_available[3][3];        /*!< pointer to neighboring MBs in a 3x3 window of current MB, which is located at [1][1] \n
                                                        NULL pointer identifies neighboring MBs which are unavailable */
+  struct macroblock   *skip_mb_available[3][3];        /*!< pointer to neighboring MBs in a 3x3 window of current MB, which is located at [1][1] \n
+                                                       NULL pointer identifies neighboring MBs which are unavailable */
 
+	struct macroblock   *field_available[2];
   // some storage of macroblock syntax elements for global access
   int                 mb_type;
   int                 mvd[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE][2];          //!< indices correspond to [forw,backw][block_y][block_x][x,y]
@@ -350,6 +359,7 @@ typedef struct macroblock
 
   int                 c_ipred_mode;      //!< chroma intra prediction mode
   int                 IntraChromaPredModeFlag;
+	int									mb_field;
 } Macroblock;
 
 
@@ -408,6 +418,9 @@ typedef struct
   RMPNIbuffer_t        *rmpni_buffer; //!< stores the slice temporary buffer remapping commands
 
   Boolean             (*slice_too_big)(int bits_slice); //!< for use of callback functions
+
+	int									write_is_real;//GB
+	int									field_ctx[3][2]; //GB
 
 } Slice;
 
@@ -579,7 +592,6 @@ typedef struct
   int qp0;                      //!< QP of first frame
   int qpN;                      //!< QP of remaining frames
   int jumpd;                    //!< number of frames to skip in input sequence (e.g 2 takes frame 0,3,6,9...)
-  int mv_res;                   //!< motion vector resolution: 0: 1/4-pel, 1: 1/8-pel
   int hadamard;                 /*!< 0: 'normal' SAD in 1/3 pixel search.  1: use 4x4 Haphazard transform and '
                                      Sum of absolute transform difference' in 1/3 pixel search                   */
   int search_range;             /*!< search range - integer pel search and 16x16 blocks.  The search window is
@@ -659,7 +671,6 @@ typedef struct
 #endif
 
   int InterlaceCodingOption;
-  int Encapsulated_NAL_Payload;
 
   int LossRateA;
   int LossRateB;
@@ -683,6 +694,17 @@ typedef struct
   int SparePictureOption;
   int SPDetectionThreshold;
   int SPPercentageThreshold;
+
+  // JVT-D095, JVT-D097
+  int num_slice_groups_minus1; //! "FmoNumSliceGroups" in encoder.cfg, same as FmoNumSliceGroups, which should be erased later
+  int mb_allocation_map_type; //! "FmoType" in encoder.cfg, same as FmoType, FmoType should be erased latter
+  int top_left_mb; //! "FmoTopLeftMB"  in encoder.cfg
+  int bottom_right_mb; //! "FmoBottomRightMB" in encoder.cfg
+  int slice_group_change_direction; //! "FmoChangeDirection" in encoder.cfg
+  int slice_group_change_rate_minus1; //! "FmoChangeRate" in encoder.cfg
+  // End JVT-D095, JVT-D097
+
+  int redundant_slice_flag; //! whether redundant slices exist,  JVT-D101
 
 } InputParameters;
 
@@ -811,6 +833,9 @@ typedef struct
   int layer;             //!< which layer this picture belonged to
   int old_layer;         //!< old layer number
   int NoResidueDirect;
+
+  int redundant_pic_cnt; // JVT-D101
+
 } ImageParameters;
 
                                 //!< statistics
@@ -1027,7 +1052,7 @@ int   writeMotionInfo2NAL ();
 
 void  terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock);
 int   slice_too_big(int rlc_bits);
-void  write_one_macroblock();
+void  write_one_macroblock(int eos_bit);
 void  proceed2nextMacroblock();
 void  proceed2nextSuperMacroblock();    //!< For MB level field/frame coding tools
 void  back2topmb();             //!< For MB level field/frame coding tools
@@ -1092,7 +1117,6 @@ void init_contexts_TextureInfo(TextureInfoContexts *enco_ctx);
 void delete_contexts_MotionInfo(MotionInfoContexts *enco_ctx);
 void delete_contexts_TextureInfo(TextureInfoContexts *enco_ctx);
 void writeHeaderToBuffer();
-void writeEOSToBuffer();
 int  writeSyntaxElement_CABAC(SyntaxElement *se, DataPartition *this_dataPart);
 void writeABTIntraBlkModeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeMB_typeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
@@ -1108,6 +1132,10 @@ void writeBiDirBlkSize2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr ee
 void writeBiMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeCIPredMode2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void print_ctx_TextureInfo(TextureInfoContexts *enco_ctx);
+void writeMB_skip_flagInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeFieldModeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp); //GB
+void CheckAvailabilityOfNeighborsForAff(); //
+void print_ctx_MotionInfo(MotionInfoContexts *enco_ctx); //GB
 
 
 void error(char *text, int code);
@@ -1129,10 +1157,8 @@ void SetRefFrameInfo_B();
 int  writeMotionInfo2NAL_Bframe();
 int  BlkSize2CodeNumber(int blc_size_h, int blc_size_v);
 
-// Introduced for 1/8-pel
 void interpolate_frame();
 void interpolate_frame_to_fb();
-void oneeighthpix();
 
 void InitRefbuf ();
 void InitMotionVectorSearchModule();
@@ -1219,5 +1245,13 @@ void SODBtoRBSP(Bitstream *currStream);
 int RBSPtoEBSP(byte *streamBuffer, int begin_bytepos, int end_bytepos);
 int Bytes_After_Header;
 int startcodeprefix_len;
+
+// JVT-D101: the bit for redundant_pic_cnt in slice header may be changed, 
+// therefore the bit position in the bitstream must be stored.
+int rpc_bytes_to_go;
+int rpc_bits_to_go;
+void modify_redundant_pic_cnt(unsigned char *streamBuffer);
+// End JVT-D101
+
 #endif
 

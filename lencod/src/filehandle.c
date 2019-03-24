@@ -447,17 +447,14 @@ int terminate_slice(int write_out)
           currStream->bits_to_go = 8;
         }
 
-        if(input->Encapsulated_NAL_Payload)
-        {
-          SODBtoRBSP(currStream);
-        }
+        SODBtoRBSP(currStream);
+
         bytes_written = currStream->byte_pos;
-        if(input->Encapsulated_NAL_Payload)
-        {
-          temp_byte_pos = bytes_written;
-          bytes_written = RBSPtoEBSP(currStream->streamBuffer, 0, bytes_written);
-          *(stat->em_prev_bits) += (bytes_written - temp_byte_pos) * 8;
-        }
+
+        temp_byte_pos = bytes_written;
+        bytes_written = RBSPtoEBSP(currStream->streamBuffer, 0, bytes_written);
+        *(stat->em_prev_bits) += (bytes_written - temp_byte_pos) * 8;
+
         stat->bit_ctr += 8*bytes_written;     // actually written bits
         fwrite (currStream->streamBuffer, 1, bytes_written, box_atm.fpMedia );
 
@@ -478,17 +475,14 @@ int terminate_slice(int write_out)
         if (eep->Ebits_to_go != 8)
           stat->bit_use_stuffingBits[img->type]+=eep->Ebits_to_go;
 
-        if(input->Encapsulated_NAL_Payload)
-        {
-          SODBtoRBSP(currStream);
-        }
+        SODBtoRBSP(currStream);
+
         bytes_written = currStream->byte_pos; // number of written bytes
-        if(input->Encapsulated_NAL_Payload)
-        {
-          temp_byte_pos = bytes_written;
-          bytes_written = RBSPtoEBSP(currStream->streamBuffer, 0, bytes_written);
-          *(stat->em_prev_bits) += (bytes_written - temp_byte_pos) * 8;
-        }
+
+        temp_byte_pos = bytes_written;
+        bytes_written = RBSPtoEBSP(currStream->streamBuffer, 0, bytes_written);
+        *(stat->em_prev_bits) += (bytes_written - temp_byte_pos) * 8;
+
         stat->bit_ctr += 8*bytes_written;     // actually written bits
         fwrite (currStream->streamBuffer, 1, bytes_written, box_atm.fpMedia );
 
@@ -525,13 +519,10 @@ int terminate_slice(int write_out)
 
         if(!write_out)
         {
-          if(input->Encapsulated_NAL_Payload) 
-          {
-            SODBtoRBSP(currStream);
-            temp_byte_pos = currStream->byte_pos;
-            currStream->byte_pos = RBSPtoEBSP(currStream->streamBuffer, currStream->last_startcode+startcodeprefix_len, currStream->byte_pos);
-            *(stat->em_prev_bits) += (currStream->byte_pos - temp_byte_pos) * 8;
-          }
+          SODBtoRBSP(currStream);
+          temp_byte_pos = currStream->byte_pos;
+          currStream->byte_pos = RBSPtoEBSP(currStream->streamBuffer, currStream->last_startcode+startcodeprefix_len, currStream->byte_pos);
+          *(stat->em_prev_bits) += (currStream->byte_pos - temp_byte_pos) * 8;
         } 
         else
         {
@@ -577,13 +568,11 @@ int terminate_slice(int write_out)
             currStream->bits_to_go = 8;
           }
 
-          if(input->Encapsulated_NAL_Payload) 
-          {
-            SODBtoRBSP(currStream);
-            temp_byte_pos = currStream->byte_pos;
-            currStream->byte_pos = RBSPtoEBSP(currStream->streamBuffer, currStream->last_startcode+startcodeprefix_len, currStream->byte_pos);
-            *(stat->em_prev_bits) += (currStream->byte_pos - temp_byte_pos) * 8;
-          }
+          SODBtoRBSP(currStream);
+          temp_byte_pos = currStream->byte_pos;
+          currStream->byte_pos = RBSPtoEBSP(currStream->streamBuffer, currStream->last_startcode+startcodeprefix_len, currStream->byte_pos);
+          *(stat->em_prev_bits) += (currStream->byte_pos - temp_byte_pos) * 8;
+
           currStream->tmp_byte_pos = currStream->byte_pos;
         }
         else
@@ -670,26 +659,36 @@ int terminate_slice(int write_out)
             if ((input->partition_mode==PAR_DP_1) ||          // Single SLice
                 (input->partition_mode==PAR_DP_3 && i == LastPartition ))   // Last partition containing bits
               Marker = 1;
+
           // and write the RTP packet
-          if(input->Encapsulated_NAL_Payload) 
-          {              
-              currStream->byte_pos = bytes_written; 
-              currStream->bits_to_go = 8;
-              currStream->byte_buf = 0;
-              SODBtoRBSP(currStream);
-              bytes_written = currStream->byte_pos;
-              temp_byte_pos = bytes_written;
-              bytes_written = RBSPtoEBSP(currStream->streamBuffer, Bytes_After_Header, bytes_written);
-              *(stat->em_prev_bits) += (bytes_written - temp_byte_pos) * 8;
-          }
+          currStream->byte_pos = bytes_written; 
+          currStream->bits_to_go = 8;
+          currStream->byte_buf = 0;
+          SODBtoRBSP(currStream);
+          bytes_written = currStream->byte_pos;
+          temp_byte_pos = bytes_written;
+          bytes_written = RBSPtoEBSP(currStream->streamBuffer, Bytes_After_Header, bytes_written);
+          *(stat->em_prev_bits) += (bytes_written - temp_byte_pos) * 8;
 
           // Tian Dong (Sept 2002):
           if (isAggregationPacket())
             rtp_bytes_written = aggregationRTPWriteBits (Marker, FirstBytePacketType, subFirstBytePacketType, currStream->streamBuffer, bytes_written, out);
           else
             rtp_bytes_written = RTPWriteBits (Marker, FirstBytePacketType, currStream->streamBuffer, bytes_written, out);
+
+          // JVT-D101, write the redundant slice
+          if(input->redundant_slice_flag)
+          {
+            // seems that SODBtoRBSP() and RBSPtoEBSP() did not change bits of slice header, 
+            // therefore a bit position in slice header is unchanged.
+            img->redundant_pic_cnt = 1;
+            modify_redundant_pic_cnt(currStream->streamBuffer);
+            rtp_bytes_written = RTPWriteBits (Marker, FirstBytePacketType, currStream->streamBuffer, bytes_written, out);
+          }
+          // End JVT-D101
         }
-        stat->bit_ctr += 8*bytes_written;
+        // stat->bit_ctr += 8*bytes_written;
+        stat->bit_ctr += 8*bytes_written*(img->redundant_pic_cnt+1); // JVT-D101: modified from the above line
 
         // Provide the next partition with a 'fresh' buffer
         currStream->stored_bits_to_go = 8;
@@ -708,3 +707,17 @@ int terminate_slice(int write_out)
       return 1;
   }
 }
+
+// JVT-D101: redundant slices
+/*!
+ ************************************************************************
+ * \brief
+ *    This function set the value of a bit in a bitstream to 1
+ ************************************************************************
+ */
+void modify_redundant_pic_cnt(unsigned char *buffer)
+{
+  unsigned char tmp = 1 << (rpc_bits_to_go-1);
+  buffer[rpc_bytes_to_go] |= tmp;
+}
+// End JVT-D101

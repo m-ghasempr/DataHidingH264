@@ -117,22 +117,22 @@ int GetOneSliceIntoSourceBitBuffer(struct img_par *img, struct inp_par *inp, byt
   int StartCodeFound, rewind;
   Slice *currSlice = img->currentSlice;
 
-  *startcodeprefix_len=2;
+  *startcodeprefix_len=3;
 
   // read the first 32 bits (which MUST contain a start code, or eof)
   info2 = 0;
   info3 = 0;
   
-  if (2 != fread (Buf, 1, 2, bits))
+  if (3 != fread (Buf, 1, 3, bits))
   {
     return 0;
   }
 
-  info2 = FindStartCode (Buf, 1);
+  info2 = FindStartCode (Buf, 2);
   if(info2 != 1) {
-    if(1 != fread(Buf+2, 1, 1, bits))
+    if(1 != fread(Buf+3, 1, 1, bits))
       return 0;
-    info3 = FindStartCode (Buf, 2);
+    info3 = FindStartCode (Buf, 3);
   }
 
   if (info2 != 1 && info3 != 1)
@@ -142,12 +142,12 @@ int GetOneSliceIntoSourceBitBuffer(struct img_par *img, struct inp_par *inp, byt
   }
 
   if( info2 == 1) {
-    *startcodeprefix_len = 2;
-    pos = 2;
+    *startcodeprefix_len = 3;
+    pos = 3;
   }
   else if(info3 ==1 ) {
-    pos = 3;
-    *startcodeprefix_len = 3;
+    pos = 4;
+    *startcodeprefix_len = 4;
   }
   else
     printf( " Panic: Error \n");
@@ -165,9 +165,9 @@ int GetOneSliceIntoSourceBitBuffer(struct img_par *img, struct inp_par *inp, byt
       return pos-1; // modified to "pos-1" instead of "pos" 
     }
     Buf[pos++] = fgetc (bits);
-    info3 = FindStartCode(&Buf[pos-3], 2);
+    info3 = FindStartCode(&Buf[pos-4], 3);
     if(info3 != 1)
-      info2 = FindStartCode(&Buf[pos-2], 1);
+      info2 = FindStartCode(&Buf[pos-3], 2);
     StartCodeFound = (info2 == 1 || info3 == 1);
   }
 
@@ -176,9 +176,9 @@ int GetOneSliceIntoSourceBitBuffer(struct img_par *img, struct inp_par *inp, byt
   // have.  Hence, go back in the file
   rewind = 0;
   if(info3 == 1)
-    rewind = -3;
+    rewind = -4;
   else if (info2 == 1)
-    rewind = -2;
+    rewind = -3;
   else
     printf(" Panic: Error in next start code search \n");
 

@@ -248,6 +248,7 @@ void arienco_done_encoding(EncodingEnvironmentPtr eep)
 }
 
 
+
 /*!
  ************************************************************************
  * \brief
@@ -266,9 +267,17 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
   /* covers all cases where code does not bother to shift down symbol to be 
    * either 0 or 1, e.g. in some cases for cbp, mb_Type etc the code symply 
    * masks off the bit position and passes in the resulting value */
-
+	
   if (symbol != 0) 
     symbol = 1;
+
+#if TRACE
+	if (img->currentSlice->write_is_real == 1)
+	{
+		fprintf(p_trace, "@%d %s\t\t\t%d %d => %d\n",111, "CONTEXT",bi_ct->MPS, bi_ct->state, symbol);
+		fflush(p_trace);
+	}
+#endif
 
   rLPS = rLPS_table_64x4[bi_ct->state][(Erange-0x4001)>>12];
 
@@ -353,8 +362,9 @@ void biari_encode_symbol_eq_prob(EncodingEnvironmentPtr eep, signed short symbol
   unsigned int half = CACM99_HALF;
   unsigned int quarter = CACM99_QUARTER;
 
-  
+ 
   Erange >>= 1; 
+
   if (symbol != 0)
   {
     Elow += Erange;

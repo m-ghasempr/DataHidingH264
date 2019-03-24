@@ -118,6 +118,21 @@ void InterpretSEIMessage(byte* msg, int size, struct img_par *img)
     case SEI_SUBSEQ_CHARACTERISTICS:
       interpret_subsequence_characteristics_info( msg+offset, payload_size, img );
       break;
+    case SEI_SCENE_INFORMATION: // JVT-D099
+      interpret_scene_information( msg+offset, payload_size, img );
+      break;
+    case SEI_USER_DATA_REGISTERED_ITU_T_T35:
+      interpret_user_data_registered_itu_t_t35_info( msg+offset, payload_size, img );
+      break;
+    case SEI_USER_DATA_UNREGISTERED:
+      interpret_user_data_unregistered_info( msg+offset, payload_size, img );
+      break;
+    case SEI_PANSCAN_RECT:
+      interpret_pan_scan_rect_info( msg+offset, payload_size, img );
+      break;
+    case SEI_RANDOM_ACCESS_POINT:
+      interpret_random_access_info( msg+offset, payload_size, img );
+      break;
     default:
       printf("The SEI type %d is not supported in JM yet.\n", payload_type);
       exit(0);
@@ -578,3 +593,202 @@ void interpret_subsequence_characteristics_info( byte* payload, int size, struct
 #undef PRINT_SUBSEQUENCE_CHAR
 #endif
 }
+
+// JVT-D099
+void interpret_scene_information( byte* payload, int size, struct img_par *img )
+{
+  SyntaxElement sym;
+  Bitstream* buf;
+  int scene_id, scene_transition_type, second_scene_id;
+// #define PRINT_SCENE_INFORMATION
+
+  sym.type = SE_HEADER;
+  sym.mapping = linfo;
+
+  buf = malloc(sizeof(Bitstream));
+  buf->bitstream_length = size;
+  buf->streamBuffer = payload;
+  buf->frame_bitoffset = 0;
+
+  sym.len = GetfixedSymbol(buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length, 8);
+  assert( sym.len == 8 );
+  buf->frame_bitoffset += sym.len;
+  scene_id = sym.inf;
+#ifdef PRINT_SCENE_INFORMATION
+  printf("scene_id = %d\n", scene_id);
+#endif
+
+  sym.len = GetVLCSymbol(buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length );
+  sym.mapping(sym.len, sym.inf, &(sym.value1), &(sym.value2));
+  buf->frame_bitoffset += sym.len;
+  scene_transition_type = sym.value1;
+#ifdef PRINT_SCENE_INFORMATION
+  printf("scene_transition_type = %d\n", scene_transition_type);
+#endif
+
+  if ( scene_transition_type > 3 )
+  {
+    sym.len = GetfixedSymbol(buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length, 8);
+    assert( sym.len == 8 );
+    buf->frame_bitoffset += sym.len;
+    second_scene_id = sym.inf;
+#ifdef PRINT_SCENE_INFORMATION
+    printf("second_scene_id = %d\n", second_scene_id);
+#endif
+  }
+
+  free( buf );
+#ifdef PRINT_SCENE_INFORMATION
+#undef PRINT_SCENE_INFORMATION
+#endif
+}
+// End JVT-D099
+
+
+void interpret_user_data_unregistered_info( byte* payload, int size, struct img_par *img )
+{
+  int offset = 0;
+  byte payload_byte;
+
+// #define PRINT_USER_DATA_UNREGISTERED_INFO
+
+  while (offset < size)
+  {
+    payload_byte = *(byte*)&payload[offset];
+    offset ++;
+#ifdef PRINT_USER_DATA_UNREGISTERED_INFO
+    printf("Unreg data payload_byte = %d\n", payload_byte);
+#endif
+  }
+#ifdef PRINT_USER_DATA_UNREGISTERED_INFO
+#undef PRINT_USER_DATA_UNREGISTERED_INFO
+#endif
+}
+
+void interpret_user_data_registered_itu_t_t35_info( byte* payload, int size, struct img_par *img )
+{
+  int offset = 0;
+  byte itu_t_t35_country_code, itu_t_t35_country_code_extension_byte, payload_byte;
+// #define PRINT_USER_DATA_REGISTERED_ITU_T_T35_INFO
+
+
+  itu_t_t35_country_code = *(byte*)&payload[offset];
+  offset++;
+#ifdef PRINT_USER_DATA_REGISTERED_ITU_T_T35_INFO
+  printf(" ITU_T_T35_COUNTRTY_CODE %d \n", itu_t_t35_country_code);
+#endif
+  if(itu_t_t35_country_code == 0xFF) 
+  {
+    itu_t_t35_country_code_extension_byte = *(byte*)&payload[offset];
+    offset++;
+#ifdef PRINT_USER_DATA_REGISTERED_ITU_T_T35_INFO
+    printf(" ITU_T_T35_COUNTRTY_CODE_EXTENSION_BYTE %d \n", itu_t_t35_country_code_extension_byte);
+#endif
+  }
+  while (offset < size)
+  {
+    payload_byte = *(byte*)&payload[offset];
+    offset ++;
+#ifdef PRINT_USER_DATA_REGISTERED_ITU_T_T35_INFO
+    printf("itu_t_t35 payload_byte = %d\n", payload_byte);
+#endif
+  }
+#ifdef PRINT_USER_DATA_REGISTERED_ITU_T_T35_INFO
+#undef PRINT_USER_DATA_REGISTERED_ITU_T_T35_INFO
+#endif
+}
+
+
+void interpret_pan_scan_rect_info( byte* payload, int size, struct img_par *img )
+{
+  int pan_scan_rect_id, pan_scan_rect_left_offset, pan_scan_rect_right_offset;
+  int pan_scan_rect_top_offset, pan_scan_rect_bottom_offset;
+
+  SyntaxElement sym;
+  Bitstream* buf;
+
+  // UVLC coded map:
+  sym.type = SE_HEADER;     
+  sym.mapping = linfo;        
+
+  buf = malloc(sizeof(Bitstream));
+  buf->bitstream_length = size;
+  buf->streamBuffer = payload;
+  buf->frame_bitoffset = 0;
+
+  sym.len = GetVLCSymbol(buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length );
+  sym.mapping(sym.len, sym.inf, &(sym.value1), &(sym.value2));
+  buf->frame_bitoffset += sym.len;
+  pan_scan_rect_id = sym.value1;
+
+  sym.len = GetVLCSymbol(buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length );
+  sym.mapping(sym.len, sym.inf, &(sym.value1), &(sym.value2));
+  buf->frame_bitoffset += sym.len;
+  pan_scan_rect_left_offset = sym.value1;
+
+  sym.len = GetVLCSymbol(buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length );
+  sym.mapping(sym.len, sym.inf, &(sym.value1), &(sym.value2));
+  buf->frame_bitoffset += sym.len;
+  pan_scan_rect_right_offset = sym.value1;
+
+  sym.len = GetVLCSymbol(buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length );
+  sym.mapping(sym.len, sym.inf, &(sym.value1), &(sym.value2));
+  buf->frame_bitoffset += sym.len;
+  pan_scan_rect_top_offset = sym.value1;
+
+  sym.len = GetVLCSymbol(buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length );
+  sym.mapping(sym.len, sym.inf, &(sym.value1), &(sym.value2));
+  buf->frame_bitoffset += sym.len;
+  pan_scan_rect_bottom_offset = sym.value1;
+
+// #define PRINT_PAN_SCAN_RECT
+#ifdef PRINT_PAN_SCAN_RECT
+  printf("Pan Scan Id %d Left %d Right %d Top %d Bottom %d \n", pan_scan_rect_id, pan_scan_rect_left_offset, pan_scan_rect_right_offset, pan_scan_rect_top_offset, pan_scan_rect_bottom_offset);
+#endif
+#ifdef PRINT_PAN_SCAN_RECT
+#undef PRINT_PAN_SCAN_RECT
+#endif
+}
+
+void interpret_random_access_info( byte* payload, int size, struct img_par *img )
+{
+  int recovery_point_flag, exact_match_flag, broken_link_flag;
+
+
+  SyntaxElement sym;
+  Bitstream* buf;
+
+  // UVLC coded map:
+  sym.type = SE_HEADER;     
+  sym.mapping = linfo;        
+
+  buf = malloc(sizeof(Bitstream));
+  buf->bitstream_length = size;
+  buf->streamBuffer = payload;
+  buf->frame_bitoffset = 0;
+
+  sym.len = GetVLCSymbol(buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length );
+  sym.mapping(sym.len, sym.inf, &(sym.value1), &(sym.value2));
+  buf->frame_bitoffset += sym.len;
+  recovery_point_flag = sym.value1;
+
+  sym.len = GetfixedSymbol(buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length, 1); //u(1)
+  assert( sym.len == 1 );
+  exact_match_flag = sym.inf;
+  buf->frame_bitoffset += sym.len;
+
+  sym.len = GetfixedSymbol(buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length, 1); //u(1)
+  assert( sym.len == 1 );
+  broken_link_flag = sym.inf;
+  buf->frame_bitoffset += sym.len;
+
+// #define PRINT_RANDOM_ACCESS
+#ifdef PRINT_RANDOM_ACCESS
+  printf(" recovery_point_flag %d exact_match_flag %d broken_link_flag %d \n", recovery_point_flag, exact_match_flag, broken_link_flag);
+  printf(" %d \n", buf->frame_bitoffset);
+#endif
+#ifdef PRINT_RANDOM_ACCESS
+#undef PRINT_RANDOM_ACCESS
+#endif
+}
+

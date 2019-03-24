@@ -266,6 +266,7 @@ typedef BiContextType *BiContextTypePtr;
 #define NUM_REF_NO_CTX   6
 #define NUM_BWD_REF_NO_CTX  6
 #define NUM_DELTA_QP_CTX 4
+#define NUM_MB_AFF_CTX 4
 
 
 typedef struct
@@ -277,6 +278,7 @@ typedef struct
   BiContextType ref_no_contexts  [2][NUM_REF_NO_CTX];
   BiContextType bwd_ref_no_contexts[2][NUM_BWD_REF_NO_CTX];
   BiContextType delta_qp_contexts[NUM_DELTA_QP_CTX];
+  BiContextType mb_aff_contexts  [NUM_MB_AFF_CTX];
   BiContextType slice_term_context;
 } MotionInfoContexts;
 
@@ -365,6 +367,11 @@ typedef struct macroblock
   int           delta_quant;          //!< for rate control
   struct macroblock   *mb_available[3][3]; /*!< pointer to neighboring MBs in a 3x3 window of current MB, which is located at [1][1]
                                                 NULL pointer identifies neighboring MBs which are unavailable */
+  
+  struct macroblock   *skip_mb_available[3][3]; /*!< pointer to neighboring MBs in a 3x3 window of current MB, which is located at [1][1]
+                                                NULL pointer identifies neighboring MBs which are unavailable */
+
+  struct macroblock   *field_available[2];
 
   // some storage of macroblock syntax elements for global access
   int           mb_type;
@@ -389,6 +396,7 @@ typedef struct macroblock
   int           lf_beta_offset;
 
   int           c_ipred_mode;       //!< chroma intra prediction mode
+  int           mb_field;
 } Macroblock;
 
 //! Bitstream
@@ -453,7 +461,8 @@ typedef struct img_par
 {
   int number;                                 //<! frame number
   int pn;                                     //<! short term picture number
-  int current_mb_nr;
+  int current_mb_nr; // bitstream order
+  int map_mb_nr;  //related to mb_data
   int max_mb_nr;
   int current_slice_nr;
   int **intra_block;
@@ -528,7 +537,6 @@ typedef struct img_par
   int is_intra_block;
   int is_v_block;
 
-  int mv_res;
   int buf_cycle;
 
   // For MB level frame/field coding
@@ -555,6 +563,23 @@ typedef struct img_par
   int num_ref_pic_active_fwd;                   //!< number of forward reference
   int num_ref_pic_active_bwd;                   //!< number of backward reference
   int explicit_B_prediction;                    //!< type of weight for bi-pred, 0:average 1:implicit 
+
+  // JVT-D095, JVT-D097
+  int num_slice_groups_minus1; 
+  int mb_allocation_map_type; 
+  int top_left_mb; 
+  int bottom_right_mb; 
+  int slice_group_change_direction; 
+  int slice_group_change_rate_minus1; 
+  int slice_group_change_cycle;
+  // End JVT-D095, JVT-D097
+
+  // JVT-D101
+  int redundant_slice_flag; 
+  int redundant_pic_cnt; 
+  int last_decoded_pic_id; 
+  // End JVT-D101
+
 } ImageParameters;
 
 // signal to noice ratio parameters
@@ -585,7 +610,6 @@ struct inp_par
   int of_mode;                            //<! Specifies the mode of the output file
   int partition_mode;                     //<! Specifies the mode of data partitioning
   int buf_cycle;                          //<! Frame buffer size
-  int Encapsulated_NAL_Payload;           //<! 0: No encapsulation 1: Encapsulation
 #ifdef _LEAKYBUCKET_
   unsigned long R_decoder;                //<! Decoder Rate in HRD Model
   unsigned long B_decoder;                //<! Decoder Buffer size in HRD model
@@ -639,7 +663,7 @@ void read_ipred_modes(struct img_par *img,struct inp_par *inp);
 int  read_one_macroblock_Bframe(struct img_par *img,struct inp_par *inp);// B pictures
 int  decode_one_macroblock(struct img_par *img,struct inp_par *inp);
 int  decode_one_macroblock_Bframe(struct img_par *img);// B pictures
-int  exit_macroblock(struct img_par *img,struct inp_par *inp);
+int  exit_macroblock(struct img_par *img,struct inp_par *inp, int eos_bit);
 
 void readMotionInfoFromNAL (struct img_par *img,struct inp_par *inp);
 
@@ -674,7 +698,6 @@ int  readSyntaxElement_Intra4x4PredictionMode(SyntaxElement *sym, struct img_par
 // Direct interpolation
 void get_block(int ref_frame,int x_pos, int y_pos, struct img_par *img, int block[BLOCK_SIZE][BLOCK_SIZE]);
 void get_quarterpel_block(int ref_frame,int x_pos, int y_pos, struct img_par *img, int block[BLOCK_SIZE][BLOCK_SIZE]);
-void get_eighthpel_block(int ref_frame,int x_pos, int y_pos, struct img_par *img, int block[BLOCK_SIZE][BLOCK_SIZE]);
 
 int  GetVLCSymbol (byte buffer[],int totbitoffset,int *info, int bytecount);
 int  GetfixedSymbol (byte buffer[],int totbitoffset,int *info, int bytecount, int len);
@@ -740,6 +763,14 @@ int  readSliceCABAC(struct img_par *img, struct inp_par *inp);
 int  readSyntaxElement_CABAC(SyntaxElement *se, struct img_par *img, struct inp_par *inp, DataPartition *this_dataPart);
 void readDquant_FromBuffer_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp);
 void readCIPredMode_FromBuffer_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp);
+
+void readMB_skip_flagInfoFromBuffer_CABAC( SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);//GB
+void readFieldModeInfoFromBuffer_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp); //GB
+void setRealMB_nr (struct img_par *img); //GB
+int  check_next_mb_and_get_field_mode_CABAC(SyntaxElement *se,struct img_par *img,struct inp_par *inp,DataPartition  *act_dp);
+void CheckAvailabilityOfNeighborsForSkip(struct img_par *img); //GB
+void CheckAvailabilityOfNeighborsForAff(struct img_par *img); //GB
+
 
 void error(char *text, int code);
 void start_slice(struct img_par *img, struct inp_par *inp);
