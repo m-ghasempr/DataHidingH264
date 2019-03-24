@@ -1,0 +1,69 @@
+Changes by HHI (Karsten Suehring)
+---------------------------------
+
+* added ERPS Syntax and decoding functionality (RTP)
+ 
+  - only RTP NAL (bitstream will follow)
+  - whole ERPS syntax should be decodable
+  - Encoder contains some sample code (see defines _CHECK_MULTI_BUFFER_1_ , _CHECK_MULTI_BUFFER_2_ )
+  - reference frame buffer changed:
+    -> mref, mcef, Refbuf11 have positive indexes always starting with "0" (no frame_cycle)
+    for details see mbuffer.c / mbuffer.h
+
+ Note:
+   - The routines have been tested, but I may have missed to correct a reference counter
+   - Be careful using the long term buffer - Do to the missing encoder infrastructure they
+     could not be tested very well
+   - There are some small memory leaks remaining (fixes will follow)
+   - remapping of picture numbers has a bug if used twice (encoder/decoder mismatch)
+
+
+* cleaned up memory allocation
+
+  - get_mem[23]D funtion moved into a separate file in lcommon directory (for use in
+    both encoder and decoder)
+  - added free_mem[23]D functions
+    (TODO: uses these at the encoder)
+
+* Cleaned up bitstream file
+
+  - we only have one start code (slice start code)
+  - moved PictureHeader funtionality to SliceHeader
+    (we don't have picture headers, so don't confuse people with old function names)
+
+
+
+Changes by TUM (Tobias Oelbaum) / TUB (Stephan Wenger)
+------------------------------------------------------
+
+* Added data partitioning for RTP
+
+* Changed detection of lost slices and lost partitions
+
+* Removed img->slice_numbers (same information is given in img->mb_data.slice_nr)
+* Removed Slice->slice_nr (same information is given in img->current_slice_nr)
+
+* Added some lines code to enable correct decoding if _ERROR_CONCEALMENT_  is set to 0 
+
+* Devided SE_DELTA_QUANT into SE_DELTA_QUANT_INTER and SE_DELTA_QUANT_INTRA to enable correct decoding in case of packet losses and data partitioning.
+  SE_DELTA_QUANT_INTER is assigned to the partition containing the inter coefficients
+  SE_DELTA_QUANT_INTRA is assigned to the partition containing the intra coefficients
+
+* Moved SE_INTRAPREDMODE from the first partition to the partition containing the intra coefficients
+  In case data partitioning is chosen UseConstrainedIntraPred must be set to 1 (this is checked in PatchInp)
+
+* Adapted the simulation of the distortion at the decoder in the encoder to the error concealment techniques available if data partitioning was choosen
+* Added new input parameters
+  - LossRateA 
+  - LossRateB
+  - LossRateC
+
+* Bugfix frame numbers in case of B-Frames 
+
+* Added Parameter NumberBFrames to RTP InfoSet (necessary for detecting lost frames)
+
+
+Known Bugs:
+
+- Marker bit is not written correctly (to Stephan Wenger)
+- Data Partitioning does not work with CABAC
