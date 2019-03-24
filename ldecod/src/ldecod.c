@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 4.2
+ *     JM 4.3a
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -125,7 +125,7 @@
 #endif
 
 #define JM          "4"
-#define VERSION     "4.2"
+#define VERSION     "4.3a"
 
 #define LOGFILE     "log.dec"
 #define DATADECFILE "dataDec.txt"
@@ -385,6 +385,16 @@ void init_conf(struct inp_par *inp,
       error(errortext,1);
     }
 #endif
+
+  // Loop Filter parameters flag
+  fscanf(fd,"%d,",&inp->LFParametersFlag);   // 0: No Params  1: Read Filter Params, may be overwritten in case of RTP NAL
+  fscanf(fd,"%*[^\n]");
+  if(inp->LFParametersFlag != 0 && inp->LFParametersFlag != 1)
+  {
+    snprintf(errortext, ET_SIZE, "Unsupported value=%d on loop filter parameters flag",inp->LFParametersFlag);
+    error(errortext,1);
+  }
+
 
   fclose (fd);
 

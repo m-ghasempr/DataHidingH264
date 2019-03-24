@@ -219,6 +219,7 @@ void start_macroblock(struct img_par *img,struct inp_par *inp, int CurrentMBInSc
   currMB->delta_quant = 0;
   currMB->cbp         = 0;
   currMB->cbp_blk     = 0;
+  currMB->c_ipred_mode= 0; //GB
   for (i=0; i<4; i++)
   {
     currMB->useABT[i]        = 0;       // ABT
@@ -241,6 +242,12 @@ void start_macroblock(struct img_par *img,struct inp_par *inp, int CurrentMBInSc
   for (j=0; j<MB_BLOCK_SIZE; j++)
     for (i=0; i<MB_BLOCK_SIZE; i++)
       img->m7[i][j] = 0;
+
+  // store filtering parameters for this MB 
+  currMB->lf_disable = img->currentSlice->LFDisable;
+  currMB->lf_alpha_c0_offset = img->currentSlice->LFAlphaC0Offset;
+  currMB->lf_beta_offset = img->currentSlice->LFBetaOffset;
+
 }
 
 /*!
@@ -922,7 +929,8 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
     assert( currMB->abt_mode[0]>=0 && currMB->abt_mode[0]<4 );
   }
 
-  if(img->UseConstrainedIntraPred && (img->type==INTER_IMG_1 || img->type==INTER_IMG_MULT))        // inter frame
+  if(img->UseConstrainedIntraPred && (img->type==INTER_IMG_1 || img->type==INTER_IMG_MULT
+     || img->type==B_IMG_1 || img->type==B_IMG_MULT))        // inter frame
   {
     if (!IS_NEWINTRA (currMB) && currMB->b8mode[0]!=IBLOCK) img->intra_block[img->current_mb_nr][0] = 0;
     if (!IS_NEWINTRA (currMB) && currMB->b8mode[1]!=IBLOCK) img->intra_block[img->current_mb_nr][1] = 0;
@@ -1185,8 +1193,10 @@ void read_ipred_modes(struct img_par *img,struct inp_par *inp)
   int leftIntraPredMode;
   int mapTab[9] = {2, 0, 1, 4, 3, 5, 7, 8, 6};
   int revMapTab[9] = {1, 2, 0, 4, 3, 5, 8, 6, 7};
+  int IntraChromaPredModeFlag;
   
   currMB=img->mb_data+img->current_mb_nr;
+  IntraChromaPredModeFlag = IS_INTRA(currMB);
 
   currSlice = img->currentSlice;
   partMap = assignSE2partition[currSlice->dp_mode];
@@ -1205,6 +1215,7 @@ void read_ipred_modes(struct img_par *img,struct inp_par *inp)
   {
     if( currMB->b8mode[b8]==IBLOCK )
     {
+      IntraChromaPredModeFlag = 1;
       bs_x=bs_y=4;
       if(currMB->useABT[b8])        // need support for MBINTLC1
       {
@@ -1320,6 +1331,23 @@ void read_ipred_modes(struct img_par *img,struct inp_par *inp)
           }
         }
     }
+  }
+
+  if (IntraChromaPredModeFlag)
+  {
+    currSE.type = SE_INTRAPREDMODE;
+#if TRACE
+    strncpy(currSE.tracestring, "Chroma intra pred mode", TRACESTRING_SIZE);
+#endif
+    if(img->type == B_IMG_1 || img->type == B_IMG_MULT)     dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+    else                                                    dP = &(currSlice->partArr[partMap[currSE.type]]);
+    if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag) currSE.mapping = linfo;
+    else                                                    currSE.reading = readCIPredMode_FromBuffer_CABAC;
+
+    dP->readSyntaxElement(&currSE,img,inp,dP);
+    currMB->c_ipred_mode = currSE.value1;
+    if (currMB->c_ipred_mode < DC_PRED_8 || currMB->c_ipred_mode > PLANE_8)
+      error("illegal chroma intra pred mode!\n", 600);
   }
 }
 
@@ -4561,10 +4589,57 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
         if (mv_mode==IBLOCK || IS_NEWINTRA (currMB))
         {
           //--- INTRA PREDICTION ---
-          for (ii=0; ii<4; ii++)
-          for (jj=0; jj<4; jj++)
+          int pred;
+          int ih, iv, ib, ic, iaa;
+
+          switch (currMB->c_ipred_mode)
           {
-            img->mpr[ii+ioff][jj+joff]=js[i][j-4];
+          case DC_PRED_8:
+            for (ii=0; ii<4; ii++)
+            for (jj=0; jj<4; jj++)
+            {
+              img->mpr[ii+ioff][jj+joff]=js[i][j-4];
+            }
+            break;
+          case HOR_PRED_8:
+            if (!mb_available_left)
+              error("unexpected HOR_PRED_8 chroma intra prediction mode",-1);
+            for (jj=0; jj<4; jj++)
+            {
+              pred = imgUV[uv][img->pix_c_y+jj+joff][img->pix_c_x-1];
+              for (ii=0; ii<4; ii++)
+                img->mpr[ii+ioff][jj+joff]=pred;
+            }
+            break;
+          case VERT_PRED_8:
+            if (!mb_available_up)
+              error("unexpected VERT_PRED_8 chroma intra prediction mode",-1);
+            for (ii=0; ii<4; ii++)
+            {
+              pred = imgUV[uv][img->pix_c_y-1][img->pix_c_x+ii+ioff];
+              for (jj=0; jj<4; jj++)
+                img->mpr[ii+ioff][jj+joff]=pred;
+            }
+            break;
+          case PLANE_8:
+            if (!mb_available_left || !mb_available_up)
+              error("unexpected PLANE_8 chroma intra prediction mode",-1);
+            ih=iv=0;
+            for (ii=1;ii<5;ii++)
+            {
+              ih += ii*(imgUV[uv][img->pix_c_y-1][img->pix_c_x+3+ii] - imgUV[uv][img->pix_c_y-1][img->pix_c_x+3-ii]);
+              iv += ii*(imgUV[uv][img->pix_c_y+3+ii][img->pix_c_x-1] - imgUV[uv][img->pix_c_y+3-ii][img->pix_c_x-1]);
+            }
+            ib=17*(ih+16)/32;
+            ic=17*(iv+16)/32;
+            iaa=16*(imgUV[uv][img->pix_c_y-1][img->pix_c_x+7]+imgUV[uv][img->pix_c_y+7][img->pix_c_x-1]);
+            for (ii=0; ii<4; ii++)
+            for (jj=0; jj<4; jj++)
+              img->mpr[ii+ioff][jj+joff]=max(0,min(255,(iaa+(ii+ioff-3)*ib +(jj+joff-3)*ic + 16)/32));
+            break;
+          default:
+            error("illegal chroma intra prediction mode", 600);
+            break;
           }
         }
         else if (pred_dir != 2)
@@ -5834,10 +5909,58 @@ int decode_super_macroblock(struct img_par *img,struct inp_par *inp)
         if (mv_mode==IBLOCK || IS_NEWINTRA (currMB))
         {
           //--- INTRA PREDICTION ---
-          for (ii=0; ii<4; ii++)
-          for (jj=0; jj<4; jj++)
+          //--- INTRA PREDICTION ---
+          int pred;
+          int ih, iv, ib, ic, iaa;
+
+          switch (currMB->c_ipred_mode)
           {
-            img->mpr[ii+ioff][jj+joff]=js[i][j-4];
+          case DC_PRED_8:
+            for (ii=0; ii<4; ii++)
+            for (jj=0; jj<4; jj++)
+            {
+              img->mpr[ii+ioff][jj+joff]=js[i][j-4];
+            }
+            break;
+          case HOR_PRED_8:
+            if (!mb_available_left)
+              error("unexpected HOR_PRED_8 chroma intra prediction mode",-1);
+            for (jj=0; jj<4; jj++)
+            {
+              pred = imgUV[uv][img_pix_c_y+jj+joff][img->pix_c_x-1];
+              for (ii=0; ii<4; ii++)
+                img->mpr[ii+ioff][jj+joff]=pred;
+            }
+            break;
+          case VERT_PRED_8:
+            if (!mb_available_up)
+              error("unexpected VERT_PRED_8 chroma intra prediction mode",-1);
+            for (ii=0; ii<4; ii++)
+            {
+              pred = imgUV[uv][img_pix_c_y-1][img->pix_c_x+ii+ioff];
+              for (jj=0; jj<4; jj++)
+                img->mpr[ii+ioff][jj+joff]=pred;
+            }
+            break;
+          case PLANE_8:
+            if (!mb_available_left || !mb_available_up)
+              error("unexpected PLANE_8 chroma intra prediction mode",-1);
+            ih=iv=0;
+            for (ii=1;ii<5;ii++)
+            {
+              ih += ii*(imgUV[uv][img_pix_c_y-1][img->pix_c_x+3+ii] - imgUV[uv][img_pix_c_y-1][img->pix_c_x+3-ii]);
+              iv += ii*(imgUV[uv][img_pix_c_y+3+ii][img->pix_c_x-1] - imgUV[uv][img_pix_c_y+3-ii][img->pix_c_x-1]);
+            }
+            ib=17*(ih+16)/32;
+            ic=17*(iv+16)/32;
+            iaa=16*(imgUV[uv][img_pix_c_y-1][img->pix_c_x+7]+imgUV[uv][img_pix_c_y+7][img->pix_c_x-1]);
+            for (ii=0; ii<4; ii++)
+            for (jj=0; jj<4; jj++)
+              img->mpr[ii+ioff][jj+joff]=max(0,min(255,(iaa+(ii+ioff-3)*ib +(jj+joff-3)*ic + 16)/32));
+            break;
+          default:
+            error("illegal chroma intra prediction mode", 600);
+            break;
           }
         }
         else if (pred_dir != 2)

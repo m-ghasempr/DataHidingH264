@@ -1162,7 +1162,7 @@ int dct_chroma(int uv,int cr_cbp)
   }
 
   // * reset chroma coeffs
-  if(coeff_cost<7)
+  if(coeff_cost < _CHROMA_COEFF_COST_)
   {
     cr_cbp_tmp = 0 ;
     for (n2=0; n2 <= BLOCK_SIZE; n2 += BLOCK_SIZE)

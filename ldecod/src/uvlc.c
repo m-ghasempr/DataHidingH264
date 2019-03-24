@@ -293,10 +293,9 @@ int readSliceUVLC(struct img_par *img, struct inp_par *inp)
 #if TRACE
     strncpy(sym.tracestring, "\nHeaderinfo", TRACESTRING_SIZE);
 #endif
-    if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
-      dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-    else
-      dP = &(currSlice->partArr[partMap[sym.type]]);
+
+    if(img->type == B_IMG_1 || img->type == B_IMG_MULT)   dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+    else                                                  dP = &(currSlice->partArr[partMap[sym.type]]);
     len = startcodeprefix_len * 8;
     
     currStream->frame_bitoffset +=len;

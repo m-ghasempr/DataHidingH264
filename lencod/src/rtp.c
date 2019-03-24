@@ -60,7 +60,8 @@
 
 #include "global.h"
 #include "fmo.h"
-
+#include "encodeiff.h"
+#include "sei.h"
 
 // A little trick to avoid those horrible #if TRACE all over the source code
 #if TRACE
@@ -358,6 +359,7 @@ int ComposeHeaderPacketPayload (byte *payload)
             \na=H26L (0) DisplayWindowOffsetLeft 0\
             \na=H26L (0) XSizeMB %d\
             \na=H26L (0) YSizeMB %d\
+            \na=H26L (0) FilterParametersFlag %d\
             \na=H26L (0) EntropyCoding %s\
             \na=H26L (0) MotionResolution %s\
             \na=H26L (0) PartitioningType %s\
@@ -375,6 +377,7 @@ int ComposeHeaderPacketPayload (byte *payload)
             input->no_multpred,
             input->img_width/16,
             input->img_height/16,
+            input->LFSendParameters,
             input->symbol_mode==UVLC?"UVLC":"CABAC",
             input->mv_res==0?"quater":"eigth",
             input->partition_mode==0?"one":"three",
@@ -669,6 +672,27 @@ int RTPSliceHeader()
     sym.value1 = img->qpsp - (MAX_QP - MIN_QP +1)/2;
     len += writeSyntaxElement_UVLC (&sym, partition);
   }
+
+  if (input->LFSendParameters)
+  {
+    SYMTRACESTRING("RTP-SH LF_DISABLE FLAG");
+    sym.bitpattern = input->LFDisable;  /* Turn loop filter on/off on slice basis */
+    sym.len = 1;
+    len += writeSyntaxElement_fixed(&sym, partition);
+
+    if (!input->LFDisable)
+    {
+      sym.mapping = dquant_linfo;           // Mapping rule: Signed integer
+      SYMTRACESTRING("RTP-SH LFAlphaC0OffsetDiv2");
+      sym.value1 = input->LFAlphaC0Offset>>1; /* Convert from offset to code */
+      len += writeSyntaxElement_UVLC (&sym, partition);
+
+      SYMTRACESTRING("RTP-SH LFBetaOffsetDiv2");
+      sym.value1 = input->LFBetaOffset>>1; /* Convert from offset to code */
+      len += writeSyntaxElement_UVLC (&sym, partition);
+    }
+  }
+
   sym.mapping = n_linfo2;
 
 
@@ -751,6 +775,97 @@ int RTPWriteBits (int Marker, int PacketType, void * bitstream,
 
   memcpy (&p->payload[1], bitstream, BitStreamLenInByte);
 
+  // Generate complete RTP packet
+  if (ComposeRTPPacket (p) < 0)
+  {
+    printf ("Cannot compose RTP packet, exit\n");
+    exit (-1);
+  }
+  if (WriteRTPPacket (p, out) < 0)
+  {
+    printf ("Cannot write %d bytes of RTP packet to outfile, exit\n", p->packlen);
+    exit (-1);
+  }
+  return (p->packlen);
+
+}
+
+/*!
+ *****************************************************************************
+ *
+ * \brief 
+ *    int aggregationRTPWriteBits (int marker) write the Slice header for the RTP NAL      
+ *
+ * \return
+ *    Number of bytes written to output file
+ *
+ * \para Parameters
+ *    marker: markber bit,
+ *
+ * \para Side effects
+ *    Packet written, RTPSequenceNumber and RTPTimestamp updated
+ *   
+ * \date
+ *    September 10, 2002
+ *
+ * \author
+ *    Dong Tian   tian@cs.tut.fi
+ *****************************************************************************/
+
+int aggregationRTPWriteBits (int Marker, int PacketType, int subPacketType, void * bitstream, 
+                    int BitStreamLenInByte, FILE *out)
+{
+  RTPpacket_t *p;
+  int offset;
+
+//  printf( "writing aggregation packet...\n");
+  assert (out != NULL);
+  assert (BitStreamLenInByte < 65000);
+  assert (bitstream != NULL);
+  assert ((PacketType&0xf) == 4);
+
+  // Set RTP structure elements and alloca() memory foor the buffers
+  p = (RTPpacket_t *) alloca (sizeof (RTPpacket_t));
+  p->packet=alloca (MAXRTPPACKETSIZE);
+  p->payload=alloca (MAXRTPPACKETSIZE);
+  p->v=2;
+  p->p=0;
+  p->x=0;
+  p->cc=0;
+  p->m=Marker&1;
+  p->pt=H26LPAYLOADTYPE;
+  p->seq=CurrentRTPSequenceNumber++;
+  p->timestamp=CurrentRTPTimestamp;
+  p->ssrc=H26LSSRC;
+
+  offset = 0;
+  p->payload[offset++] = PacketType; // This is the first byte of the compound packet
+
+  // FIRST, write the sei message to aggregation packet, if it is available
+  if ( HaveAggregationSEI() )
+  {
+    p->payload[offset++] = sei_message[AGGREGATION_SEI].subPacketType; // this is the first byte of the first subpacket
+    *(short*)&(p->payload[offset]) = sei_message[AGGREGATION_SEI].payloadSize;
+    offset += 2;
+    memcpy (&p->payload[offset], sei_message[AGGREGATION_SEI].data, sei_message[AGGREGATION_SEI].payloadSize);
+    offset += sei_message[AGGREGATION_SEI].payloadSize;
+
+    clear_sei_message(AGGREGATION_SEI);
+  }
+
+  // SECOND, write other payload to the aggregation packet
+  // to do ...
+
+  // LAST, write the slice data to the aggregation packet
+  p->payload[offset++] = subPacketType;  // this is the first byte of the second subpacket
+  *(short*)&(p->payload[offset]) = BitStreamLenInByte;
+  offset += 2;
+  memcpy (&p->payload[offset], bitstream, BitStreamLenInByte);
+  offset += BitStreamLenInByte;
+
+  p->paylen = offset;  // 1 +3 +seiPayload.payloadSize +3 +BitStreamLenInByte
+
+  // Now the payload is ready, we can ...
   // Generate complete RTP packet
   if (ComposeRTPPacket (p) < 0)
   {
@@ -857,3 +972,155 @@ int RTPPartition_BC_Header(int PartNo)
   return len;
 }
 
+/*!
+ *****************************************************************************
+ * \isAggregationPacket
+ * \brief 
+ *    Determine if current packet is normal packet or compound packet (aggregation
+ *    packet)
+ *
+ * \return
+ *    return TRUE, if it is compound packet.
+ *    return FALSE, otherwise.
+ *   
+ * \date
+ *    September 10, 2002
+ *
+ * \author
+ *    Dong Tian   tian@cs.tut.fi
+ *****************************************************************************/
+Boolean isAggregationPacket()
+{
+  if (HaveAggregationSEI())
+  {
+    return TRUE;
+  }
+  // Until Sept 2002, the JM will produce aggregation packet only for some SEI messages
+
+  return FALSE;
+}
+
+/*!
+ *****************************************************************************
+ * \PrepareAggregationSEIMessage
+ * \brief 
+ *    Prepare the aggregation sei message.
+ *    
+ * \date
+ *    September 10, 2002
+ *
+ * \author
+ *    Dong Tian   tian@cs.tut.fi
+ *****************************************************************************/
+void PrepareAggregationSEIMessage()
+{
+  Boolean has_aggregation_sei_message = FALSE;
+  // prepare the sei message here
+  // write the spare picture sei payload to the aggregation sei message
+  if (seiHasSparePicture && img->type != B_IMG)
+  {
+    FinalizeSpareMBMap();
+    assert(seiSparePicturePayload.data->byte_pos == seiSparePicturePayload.payloadSize);
+    write_sei_message(AGGREGATION_SEI, seiSparePicturePayload.data->streamBuffer, seiSparePicturePayload.payloadSize, SEI_SPARE_PICTURE);
+    has_aggregation_sei_message = TRUE;
+  }
+  // write the sub sequence information sei paylaod to the aggregation sei message
+  if (seiHasSubseqInfo)
+  {
+    FinalizeSubseqInfo(img->layer);
+    write_sei_message(AGGREGATION_SEI, seiSubseqInfo[img->layer].data->streamBuffer, seiSubseqInfo[img->layer].payloadSize, SEI_SUBSEQ_INFORMATION);
+    ClearSubseqInfoPayload(img->layer);
+    has_aggregation_sei_message = TRUE;
+  }
+  // write the sub sequence layer information sei paylaod to the aggregation sei message
+  if (seiHasSubseqLayerInfo && img->number == 0)
+  {
+    FinalizeSubseqLayerInfo();
+    write_sei_message(AGGREGATION_SEI, seiSubseqLayerInfo.data, seiSubseqLayerInfo.payloadSize, SEI_SUBSEQ_LAYER_CHARACTERISTICS);
+    seiHasSubseqLayerInfo = FALSE;
+    has_aggregation_sei_message = TRUE;
+  }
+  // write the sub sequence characteristics payload to the aggregation sei message
+  if (seiHasSubseqChar)
+  {
+    FinalizeSubseqChar();
+    write_sei_message(AGGREGATION_SEI, seiSubseqChar.data->streamBuffer, seiSubseqChar.payloadSize, SEI_SUBSEQ_CHARACTERISTICS);
+    ClearSubseqCharPayload();
+    has_aggregation_sei_message = TRUE;
+  }
+  // more aggregation sei payload is written here...
+ 
+  // after all the sei payload is written
+  if (has_aggregation_sei_message)
+    finalize_sei_message(AGGREGATION_SEI);
+}
+
+/*!
+ *****************************************************************************
+ * \begin_sub_sequence_rtp
+ * \brief 
+ *    do some initialization for sub-sequence under rtp
+ *    
+ * \date
+ *    September 10, 2002
+ *
+ * \author
+ *    Dong Tian   tian@cs.tut.fi
+ *****************************************************************************/
+
+void begin_sub_sequence_rtp()
+{
+  if ( input->of_mode != PAR_OF_RTP || input->NumFramesInELSubSeq == 0 ) 
+    return;
+
+  // begin to encode the base layer subseq
+  if ( IMG_NUMBER == 0 )
+  {
+//    printf("begin to encode the base layer subseq\n");
+    InitSubseqInfo(0);
+    if (1)
+      UpdateSubseqChar();
+  }
+  // begin to encode the enhanced layer subseq
+  if ( IMG_NUMBER % (input->NumFramesInELSubSeq+1) == 1 )
+  {
+//    printf("begin to encode the enhanced layer subseq\n");
+    InitSubseqInfo(1);  // init the sub-sequence in the enhanced layer
+//    add_dependent_subseq(1);
+    if (1)
+      UpdateSubseqChar();
+  }
+}
+
+/*!
+ *****************************************************************************
+ * \end_sub_sequence_rtp
+ * \brief 
+ *    do nothing
+ *    
+ * \date
+ *    September 10, 2002
+ *
+ * \author
+ *    Dong Tian   tian@cs.tut.fi
+ *****************************************************************************/
+void end_sub_sequence_rtp()
+{
+  // end of the base layer:
+  if ( img->number == input->no_frames-1 )
+  {
+//    printf("end of encoding the base layer subseq\n");
+    CloseSubseqInfo(0);
+//    updateSubSequenceBox(0);
+  }
+  // end of the enhanced layer:
+  if ( ((IMG_NUMBER%(input->NumFramesInELSubSeq+1)==0) && (input->successive_Bframe != 0) && (IMG_NUMBER>0)) || // there are B frames
+    ((IMG_NUMBER%(input->NumFramesInELSubSeq+1)==input->NumFramesInELSubSeq) && (input->successive_Bframe==0))   // there are no B frames
+    )
+  {
+//    printf("end of encoding the enhanced layer subseq\n");
+    CloseSubseqInfo(1);
+//    add_dependent_subseq(1);
+//    updateSubSequenceBox(1);
+  }
+}

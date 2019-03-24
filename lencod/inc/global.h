@@ -256,6 +256,7 @@ typedef struct
 
 
 #define NUM_IPR_CTX    2
+#define NUM_CIPR_CTX   4
 #define NUM_CBP_CTX    4
 #define NUM_BCBP_CTX   4
 #define NUM_MAP_CTX   15
@@ -267,6 +268,7 @@ typedef struct
 typedef struct
 {
   BiContextType  ipr_contexts [9][NUM_IPR_CTX];
+  BiContextType  cipr_contexts[NUM_CIPR_CTX]; //GB
   BiContextType  cbp_contexts [3][NUM_CBP_CTX];
   BiContextType  bcbp_contexts[NUM_BLOCK_TYPES][NUM_BCBP_CTX];
   BiContextType  map_contexts [NUM_BLOCK_TYPES][NUM_MAP_CTX];
@@ -341,6 +343,13 @@ typedef struct macroblock
   int                 abt_mode[4];       // transform mode used for ABT for each 8x8 block.
   int                 abt_pred_mode[4];  // mode used for ABT block prediction for each 8x8 block.
   unsigned long       cbp_bits;
+
+  int                 lf_disable;
+  int                 lf_alpha_c0_offset;
+  int                 lf_beta_offset;
+
+  int                 c_ipred_mode;      //!< chroma intra prediction mode
+  int                 IntraChromaPredModeFlag;
 } Macroblock;
 
 
@@ -666,6 +675,15 @@ typedef struct
   int FmoType;                  //! Type pf FMO MBAmap description, see CD doc
   char FmoConfigFileName[100];  //! Filename for config info fot type 0, 2
 
+  int LFSendParameters;
+  int LFDisable;
+  int LFAlphaC0Offset;
+  int LFBetaOffset;
+
+  int SparePictureOption;
+  int SPDetectionThreshold;
+  int SPPercentageThreshold;
+
 } InputParameters;
 
 //! ImageParameters
@@ -719,6 +737,7 @@ typedef struct
   int mprr[9][16][16];         //!< all 9 prediction modes? // enlarged from 4 to 16 for ABT (is that neccessary?)
 
   int mprr_2[5][16][16];       //!< all 4 new intra prediction modes
+  int mprr_c[2][4][8][8];      //!< new chroma 8x8 intra prediction modes
   int***** mv;                 //!< motion vectors for all block types and all reference frames
   int mpr[16][16];             //!< current best prediction mode
   int m7[16][16];              //!< the diff pixel values between orginal image and prediction
@@ -857,6 +876,7 @@ typedef struct
   int    *****all_mv;
   int    *****all_bmv;
   int    i16offset;
+  int    c_ipred_mode;
 } RD_DATA;
 
 RD_DATA *rdopt; 
@@ -936,8 +956,9 @@ pel_t* UMVLineX  (int, pel_t*, int, int);
 
 void LumaResidualCoding ();
 void ChromaResidualCoding (int*);
+void IntraChromaPrediction8x8 (int*, int*);
 void SetRefFrameInfo (int, int);
-int  writeMBHeader   ();
+int  writeMBHeader   (int rdopt); //GB CHROMA !!!!!
 
 extern int*   refbits;
 extern int*** motion_cost;
@@ -949,10 +970,11 @@ int   LumaResidualCoding8x8     (int*, int*, int, int, int, int, int, int, int);
 int   writeLumaCoeff8x8         (int, int, int);                       // useABT added.
 int   writeMotionVector8x8      (int, int, int, int, int, int, int, int);
 int   writeReferenceFrame       (int, int, int, int, int);
-int   ABIDPartitionCost          (int, int, int*, int*, int, int*, int);
-void  AbpLumaPrediction4x4 (int, int, int, int, int, int, int);
+int   ABIDPartitionCost         (int, int, int*, int*, int, int*, int);
+void  AbpLumaPrediction4x4      (int, int, int, int, int, int, int);
 int   writeAbpCoeffIndex        (int, int, int, int);
 int   writeIntra4x4Modes        (int);
+int   writeChromaIntraPredMode  ();
 
 int Get_Direct_Cost8x8 (int, double, int);                             // abt_mode added.
 int Get_Direct_CostMB  (double);
@@ -1084,6 +1106,8 @@ void writeDquant_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeRunLevel2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeBiDirBlkSize2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeBiMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeCIPredMode2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void print_ctx_TextureInfo(TextureInfoContexts *enco_ctx);
 
 
 void error(char *text, int code);

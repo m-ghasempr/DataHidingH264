@@ -466,6 +466,19 @@ static void PatchInp ()
   }
 #endif
 
+  // check range of filter offsets
+  if (input->LFAlphaC0Offset > 6 || input->LFAlphaC0Offset < -6)
+  {
+    snprintf(errortext, ET_SIZE, "Error input parameter LFAlphaC0Offset, check configuration file");
+    error (errortext, 400);
+  }
+
+  if (input->LFBetaOffset > 6 || input->LFBetaOffset < -6)
+  {
+    snprintf(errortext, ET_SIZE, "Error input parameter LFBetaOffset, check configuration file");
+    error (errortext, 400);
+  }
+
   // Set block sizes
 
     input->blc_size[0][0]=16;
@@ -595,8 +608,8 @@ static void PatchInp ()
     snprintf(errortext, ET_SIZE, "NumFramesInELSubSeq (%d) is out of range [0,%d).", input->NumFramesInELSubSeq, input->no_multpred);
     error (errortext, 500);
   }
-  // Tian Dong: Enhanced GOP is not supported in bitstream mode and RTP mode yet. May 31, 2002
-  if ( input->NumFramesInELSubSeq > 0 && input->of_mode != PAR_OF_IFF )
+  // Tian Dong: Enhanced GOP is not supported in bitstream mode. September, 2002
+  if ( input->NumFramesInELSubSeq > 0 && input->of_mode == PAR_OF_26L )
   {
     snprintf(errortext, ET_SIZE, "Enhanced GOP is not supported in bitstream mode and RTP mode yet.");
     error (errortext, 500);
@@ -605,6 +618,19 @@ static void PatchInp ()
   if (input->of_mode == PAR_OF_IFF && input->InterlaceCodingOption != 0)
   {
     snprintf(errortext, ET_SIZE, "adaptive frame/field coding is not supported in IFF, May 31, 2002.");
+    error (errortext, 500);
+  }
+  // Tian Dong (Sept 2002)
+  // The AFF is not compatible with spare picture for the time being.
+  if (input->InterlaceCodingOption != FRAME_CODING && input->SparePictureOption == TRUE)
+  {
+    snprintf(errortext, ET_SIZE, "The AFF is not compatible with spare picture in JM 4.1b.");
+    error (errortext, 500);
+  }
+  // Only the RTP mode is compatible with spare picture for the time being.
+  if (input->of_mode != PAR_OF_RTP && input->SparePictureOption == TRUE)
+  {
+    snprintf(errortext, ET_SIZE, "Only RTP output mode is compatible with spare picture features in JM 4.1b.");
     error (errortext, 500);
   }
   if (input->BipredictiveWeighting > 0)

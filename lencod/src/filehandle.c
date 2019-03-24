@@ -59,7 +59,7 @@
 #include "header.h"
 #include "rtp.h"
 #include "encodeiff.h"
-
+#include "sei.h"
 
 // Global Varibales
 
@@ -630,22 +630,32 @@ int terminate_slice(int write_out)
         if(currStream->write_flag == 1)                                                   
         {
           int Marker;
-          int FirstBytePacketType;
+          int FirstBytePacketType, subFirstBytePacketType;
          
-          // Tian Dong: JVT-C083. June 15, 2002
-          // Calculating RTP payload's First Byte, the conditions may be updated when more
-          // coding options are supported later.
-          if ( FirstFrameIn2ndIGOP == img->number )
-            FirstBytePacketType = (PAYLOAD_TYPE_IDERP << 4);
-          else if ( input->partition_mode==PAR_DP_1 || img->type == B_IMG)
-            FirstBytePacketType = 0;
-          else
-            FirstBytePacketType = i+1; //! See VCEG-N72
-/*          if (input->partition_mode==PAR_DP_1 || img->type == B_IMG)
-            FirstBytePacketType = 0;
-          else
-            FirstBytePacketType = i+1; //! See VCEG-N72
-  */        
+          // Tian Dong (Sept 2002):
+          // The SEI message will be encapsulated together with the slice data into a compound
+          // packet (the newly name is "aggregation packet", see draft-wenger-avt-rtp-jvt-01.txt)
+          FirstBytePacketType = subFirstBytePacketType = 0;
+          if (isAggregationPacket())  // has spare reference picture information to be packetized
+          {
+            FirstBytePacketType = AGGREGATION_PACKET_TYPE; //! compound packet (aggregation packet) See VCEG-N72
+            if ( FirstFrameIn2ndIGOP == img->number )
+              subFirstBytePacketType = (PAYLOAD_TYPE_IDERP << 4);
+            if (input->partition_mode==PAR_DP_1 || img->type == B_IMG)
+              subFirstBytePacketType |= 0;
+            else
+              subFirstBytePacketType |= i+1; //! See VCEG-N72
+          }
+          else 
+          {
+            if ( FirstFrameIn2ndIGOP == img->number )
+              FirstBytePacketType = (PAYLOAD_TYPE_IDERP << 4);
+            if ( input->partition_mode==PAR_DP_1 || img->type == B_IMG)
+              FirstBytePacketType |= 0;
+            else
+              FirstBytePacketType |= i+1; //! See VCEG-N72
+          }
+          
           // Calculate the Marker bit
           LastPartition=0;
           if (input->partition_mode == PAR_DP_3 && img->type != B_IMG)
@@ -673,7 +683,11 @@ int terminate_slice(int write_out)
               *(stat->em_prev_bits) += (bytes_written - temp_byte_pos) * 8;
           }
 
-          rtp_bytes_written = RTPWriteBits (Marker, FirstBytePacketType, currStream->streamBuffer, bytes_written, out);
+          // Tian Dong (Sept 2002):
+          if (isAggregationPacket())
+            rtp_bytes_written = aggregationRTPWriteBits (Marker, FirstBytePacketType, subFirstBytePacketType, currStream->streamBuffer, bytes_written, out);
+          else
+            rtp_bytes_written = RTPWriteBits (Marker, FirstBytePacketType, currStream->streamBuffer, bytes_written, out);
         }
         stat->bit_ctr += 8*bytes_written;
 

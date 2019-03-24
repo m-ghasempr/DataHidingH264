@@ -91,5 +91,11 @@ int  RTPWriteBits (int Marker, int PacketType, void * bitstream,
                    int BitStreamLenInByte, FILE *out);
 int RTPPartition_BC_Header();
 
+Boolean isAggregationPacket();
+int aggregationRTPWriteBits (int Marker, int PacketType, int subPacketType, void * bitstream, int BitStreamLenInByte, FILE *out);
+
+void begin_sub_sequence_rtp();
+void end_sub_sequence_rtp();
+
 #endif
 

@@ -137,6 +137,8 @@ void init_contexts_TextureInfo(struct img_par *img, TextureInfoContexts *enco_ct
 
   INIT_CTX (3, NUM_CBP_CTX,  enco_ctx->cbp_contexts,    CBP_Ini[!intra]);
   INIT_CTX (9, NUM_IPR_CTX,  enco_ctx->ipr_contexts,    IPR_Ini   );
+  INIT_CTX (1, NUM_CIPR_CTX, &enco_ctx->cipr_contexts,   &CIPR_Ini  ); //GB
+
 
   INIT_CTX (NUM_BLOCK_TYPES, NUM_BCBP_CTX,  enco_ctx->bcbp_contexts, BCBP_Ini[intra]);
   INIT_CTX (NUM_BLOCK_TYPES, NUM_MAP_CTX,   enco_ctx->map_contexts,  MAP_Ini [intra]);
@@ -256,7 +258,7 @@ void readBiMVD2Buffer_CABAC( SyntaxElement *se,
   se->value1 = act_sym;
 
 #if TRACE
-  fprintf(p_trace, "@%d      %s\t\t\t%d ",symbolCount++, se->tracestring, se->value1);
+  fprintf(p_trace, "@%d      %s\t\t\t%d \n",symbolCount++, se->tracestring, se->value1);
   fflush(p_trace);
 #endif
 }
@@ -376,6 +378,7 @@ void readB8_typeInfoFromBuffer_CABAC (SyntaxElement *se,
     }
   }
   se->value1 = act_sym;
+//	if (act_sym == 13)				printf(" stop");
 }
 
 
@@ -662,8 +665,9 @@ void readMB_typeInfoFromBuffer_CABAC( SyntaxElement *se,
   }
   se->value1 = curr_mb_type;
 
+//	if (curr_mb_type >= 23)				printf(" stopx");
 #if TRACE
-  fprintf(p_trace, "@%d%s\t\t\t%d",symbolCount++, se->tracestring, se->value1);
+  fprintf(p_trace, "@%d%s\t\t\t%d\n",symbolCount++, se->tracestring, se->value1);
   fflush(p_trace);
 #endif
 }
@@ -1015,12 +1019,57 @@ void readCBPFromBuffer_CABAC(SyntaxElement *se,
   se->value1 = cbp;
 
 #if TRACE
-  fprintf(p_trace, "@%d      %s\t\t\t%d",symbolCount++, se->tracestring, se->value1);
+  fprintf(p_trace, "@%d      %s\t\t\t%d\n",symbolCount++, se->tracestring, se->value1);
   fflush(p_trace);
 #endif
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    This function is used to arithmetically decode the chroma
+ *    intra prediction mode of a given MB.
+ ************************************************************************
+ */  //GB
+void readCIPredMode_FromBuffer_CABAC(SyntaxElement *se,
+                                     struct inp_par *inp,
+                                     struct img_par *img,
+                                     DecodingEnvironmentPtr dep_dp)
+{
 
+  TextureInfoContexts *ctx = img->currentSlice->tex_ctx;
+  Macroblock          *currMB  = &img->mb_data[img->current_mb_nr];
+  int                 act_ctx,a,b;
+  int                 act_sym  = se->value1;
+
+  if (currMB->mb_available[0][1] == NULL) b = 0;
+  else  b = ( ((currMB->mb_available[0][1])->c_ipred_mode != 0) ? 1 : 0);
+
+  if (currMB->mb_available[1][0] == NULL) a = 0;
+  else  a = ( ((currMB->mb_available[1][0])->c_ipred_mode != 0) ? 1 : 0);
+
+  act_ctx = a+b;
+
+  act_sym = biari_decode_symbol(dep_dp, ctx->cipr_contexts + act_ctx );
+
+  if (act_sym!=0) 
+    act_sym = unary_bin_max_decode(dep_dp,ctx->cipr_contexts+3,0,2)+1;
+
+//	act_sym = 0;
+//	act_sym |= biari_decode_symbol_eq_prob(dep_dp);
+//	act_sym |= (biari_decode_symbol_eq_prob(dep_dp)<<1);
+
+  se->value1 = act_sym;
+
+	//if (img->type==B_IMG_1 || img->type==B_IMG_MULT) 
+	//	printf(" %d",act_sym);
+
+#if TRACE
+  fprintf(p_trace, "@%d%s\t\t\t%d\n",symbolCount++, se->tracestring, se->value1);
+  fflush(p_trace);
+#endif
+
+}
 
 
 static const int maxpos       [] = {16, 15, 64, 32, 32, 16,  4, 15};
@@ -1313,6 +1362,11 @@ void readRunLevelFromBuffer_CABAC (SyntaxElement  *se,
   }
   //--- decrement coefficient counter and re-set position ---
   if (coeff_ctr-- == 0) pos=0;
+
+#if TRACE
+  fprintf(p_trace, "@%d%s\t\t\t%d\t%d\n",symbolCount++, se->tracestring, se->value1,se->value2);
+  fflush(p_trace);
+#endif
 }
 
 

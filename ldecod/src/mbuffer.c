@@ -393,9 +393,9 @@ void remove_long_term(int longID)
       if (i<fb->long_used) 
       {
         f=fb->picbuf_long[i];
-        for (j=i;j<fb->long_used-1;j++)
+        for (j=i;j<fb->long_used;j++)
           fb->picbuf_long[j]=fb->picbuf_long[j+1];
-        fb->picbuf_long[fb->long_used-1]=f;
+        fb->picbuf_long[fb->long_used]=f;
       } 
     }
   }

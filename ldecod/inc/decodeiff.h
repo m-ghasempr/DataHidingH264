@@ -186,6 +186,7 @@ typedef struct
   unsigned INT8 displayMode;
   unsigned INT16 displayRectangleOffsetFromWindowTop;
   unsigned INT16 displayRectangleOffsetFromWindowLeftBorder;
+  unsigned INT8 loopFilterParametersFlag;
   unsigned INT8 entropyCoding;
   unsigned INT8 motionResolution;
   unsigned INT8 partitioningType;

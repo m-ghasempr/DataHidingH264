@@ -187,6 +187,13 @@
       1006 Kadoma, Kadoma
       Osaka 663-8113, Japan
 
+      Dzung Hoang                     <dzung.hoang@conexant.com>
+      Eric Viscito                    <eric.viscito@conexant.com>
+      Conexant Systems. Inc.
+      MPEG Compression Group
+      20450 Stevens Creek Blvd.
+      Cupertino, CA 95014
+
   \endverbatim
 */
 

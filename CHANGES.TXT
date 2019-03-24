@@ -1,3 +1,35 @@
+Changes for Version JM 4.3a to JM 4.3
+-------------------------------------
+New features
+* Spare Pictures [JVT-D100] (DT)
+* Signaling of Enhanced GOPs [JVT-D098] (DT)
+
+Bug Fixes
+* state table fix (BH)
+* fix chroma intra prediction and MB AFF (DH)
+* double decoder bitstream buffer size for HD material (KS)
+* SP chroma calcultaion fix (MN)
+* fix long term picture remove from buffer (DC)
+
+Changes for Version JM 4.3 to JM 4.2a
+-------------------------------------
+New features
+* Chroma Intra prediction (DH/GB)
+
+Bug Fixes
+* Data partitioning (TO)
+* remove assert from ABT (TH/MW)
+* fix for constrained intra prediction (TWa)
+
+Note: MB AFF is broken in this version
+
+
+Changes for Version JM 4.2a to JM 4.2
+-------------------------------------
+New features
+* Loop Filter Simplification and Improvement (AJ)
+
+
 Changes for Version JM 4.2 to JM 4.1c
 -------------------------------------
 New features
@@ -603,17 +635,19 @@ Changes for Version 8.0 relative to Version 6.1
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 People:
-KS      Karsten Sühring         suehring@hhi.de
+KS      Karsten Suehring        suehring@hhi.de
 AH      Antti Hallapuro         antti.hallapuro@nokia.com
 AT      Alexis Michael Tourapis alexismt@ieee.org
 AJ      Anthony Joch            anthony@ubvideo.com
+BH      Barry Haskell           bhaskell@apple.com
 DC      Doug Chin               dougchin@sandvideo.com
+DH      Dzung Hoang             dzung.hoang@conexant.com
 DK      Dimitris Kontopodis     dkonto@eikon.tum.de
 DM      Detlev Marpe            marpe@hhi.de
 DT      Dong Tian               tian@cs.tut.fi
 GC	Guy Cote                guy@videolocus.com
 GrC	Greg Conklin            gregc@real.com
-GB      Gabi Bl„ttermann        blaetter@hhi.de
+GB      Gabi Blaetterman        blaetter@hhi.de
 GS      Gary Sullivan		garysull@microsoft.com
 FW	Feng Wu			fengwu@microsoft.com
 HS      Heiko Schwarz           hschwarz@hhi.de
@@ -627,6 +661,7 @@ LK      Louis Kerofsky          lkerofsky@sharplabs.com
 LW      Limin Wang              liwang@gi.com
 LWi     Lowell Winger           lwinger@videolocus.com
 MB      Marcus Barkowsky        Marcus.Barkowsky@nt.e-technik.uni-erlangen.de
+MN      Mike Nilsson            mike.nilsson@bt.com
 MG      Michael Gallant         mgallant@videolocus.com
 MW      Mathias Wien            wien@ient.rwth-aachen.de
 PL      Peter List              Peter.List@t-systems.de
@@ -635,10 +670,12 @@ RK	Ragip Kurceren 		ragip.kurceren@nokia.com
 RS      Rickard Sj÷berg         Rickard.Sjoberg@era.ericsson.se
 SR      Shankar Regunathan      shanre@microsoft.com
 SW      Stephan Wenger          stewe@cs.tu-berlin.de
+TH      Till Hallbach           halbach@tele.ntnu.no
 TO      Tobias Oelbaum          drehvial@gmx.net
 TSt	Thomas Stockhammer	stockhammer@lnt.ei.tum.de
 TW      Thomas Wiegand          wiegand@hhi.de
 TWe     Thomas Wedi             wedi@tnt.uni-hannover.de
+TWa     Toby Walker             tobyw@usrl.sony.com
 VV	Viktor Varsa		viktor.varsa@nokia.com
 WYK	Ye-Kui Wang		wangy@cs.tut.fi
 YK      Yoshihiro Kikuchi       yoshihiro.kikuchi@toshiba.co.jp

@@ -66,6 +66,7 @@ typedef struct
   int DisplayWindowOffsetLeft;
   int XSizeMB;
   int YSizeMB;
+  int FilterParametersFlag;
   int EntropyCoding;
   int MotionResolution;
   int PartitioningType;
@@ -122,6 +123,9 @@ typedef struct
   int InitialQP;
   int SwitchSP;  
   int InitialSPQP;  
+  int LFDisable;
+  int LFAlphaC0OffsetDiv2;
+  int LFBetaOffsetDiv2;
   int SliceID;            //!< not used for single Slice packets, see VCEG-N72
   int RPBT;
   RMPNIbuffer_t *RMPNIbuffer;
@@ -156,5 +160,7 @@ int RTPReadPacket (RTPpacket_t *p, FILE *bits);
 void RTPProcessDataPartitionedSlice (struct img_par *img, struct inp_par *inp, FILE *bits, 
                                      RTPpacket_t *a, int a_SliceID);
 void CopyPartitionBitstring (struct img_par *img, RTPpacket_t *p, Bitstream *b, int dP, struct inp_par *inp);
+
+void ProcessAggregationPacket(RTPpacket_t *p, struct img_par *img);
 
 #endif

@@ -1055,10 +1055,8 @@ int writeLumaCoeffABT_B8(int b8,int intra,int blk_off_x,int blk_off_y)
         currSE->value1=icoef;
         currSE->value2=0;
         // choose the appropriate data partition
-        if (img->type != B_IMG && img->type != BS_IMG)
-          dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-        else
-          dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+        if (img->type != B_IMG && img->type != BS_IMG) dataPart = &(currSlice->partArr[partMap[currSE->type]]);
+        else                                           dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
         dataPart->writeSyntaxElement(currSE, dataPart);
         bitCount[BITS_COEFF_Y_MB]+=currSE->len;
         no_bits+=currSE->len;
@@ -1122,10 +1120,8 @@ int writeLumaCoeffABT_B8(int b8,int intra,int blk_off_x,int blk_off_y)
           currSE->golomb_grad=mode2D;
           currSE->golomb_maxlevels=6-mode2D;        //make code with little less than 64 symbols.
           // choose the appropriate data partition
-          if (img->type != B_IMG && img->type != BS_IMG)
-            dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-          else
-            dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+          if (img->type != B_IMG && img->type != BS_IMG) dataPart = &(currSlice->partArr[partMap[currSE->type]]);
+          else                                           dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
           //code
           dataPart->writeSyntaxElement(currSE, dataPart);
           bitCount[BITS_COEFF_Y_MB]+=currSE->len;//count
@@ -1147,10 +1143,8 @@ int writeLumaCoeffABT_B8(int b8,int intra,int blk_off_x,int blk_off_y)
             currSE->value1=(abs_level-1)<<1;
             if(level<0)currSE->value1|=1;           //sign bit
             // choose the appropriate data partition
-            if (img->type != B_IMG && img->type != BS_IMG)
-              dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-            else
-              dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+            if (img->type != B_IMG && img->type != BS_IMG) dataPart = &(currSlice->partArr[partMap[currSE->type]]);
+            else                                           dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
             //code
             dataPart->writeSyntaxElement(currSE, dataPart);
             bitCount[BITS_COEFF_Y_MB]+=currSE->len;//count
@@ -1166,11 +1160,8 @@ int writeLumaCoeffABT_B8(int b8,int intra,int blk_off_x,int blk_off_y)
             currSE->golomb_grad=2;
             currSE->golomb_maxlevels=29;
             // choose the appropriate data partition
-            if (img->type != B_IMG && img->type != BS_IMG)
-              dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-            else
-            dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
-            //code
+            if (img->type != B_IMG && img->type != BS_IMG) dataPart = &(currSlice->partArr[partMap[currSE->type]]);
+            else                                           dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);            //code
             dataPart->writeSyntaxElement(currSE, dataPart);
             bitCount[BITS_COEFF_Y_MB]+=currSE->len;//count
             no_bits+=currSE->len;
@@ -1190,10 +1181,8 @@ int writeLumaCoeffABT_B8(int b8,int intra,int blk_off_x,int blk_off_y)
           img->is_intra_block = (intra ? 1 : 0);
 
           // choose the appropriate data partition
-          if (img->type != B_IMG && img->type != BS_IMG)
-            dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-          else
-            dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+          if (img->type != B_IMG && img->type != BS_IMG) dataPart = &(currSlice->partArr[partMap[currSE->type]]);
+          else                                           dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
 
           dataPart->writeSyntaxElement(currSE, dataPart);
           bitCount[BITS_COEFF_Y_MB]+=currSE->len;
@@ -1721,7 +1710,7 @@ int Mode_Decision_for_ABT_IntraBlocks(int b8,int b4,double lambda,int *min_cost,
     }
   }
 
-  assert( *min_cost < (1<<20) ); //make shure we found one.
+//  assert( *min_cost < (1<<20) ); //make shure we found one.
 
   //===== set intra mode prediction =====
   for(j=0;j<(bs_y>>2);j++)
@@ -1827,7 +1816,7 @@ double RDCost_for_ABTIntraBlocks(int *nonzero,
   if (input->symbol_mode != UVLC)    currSE->writing = writeIntraPredMode2Buffer_CABAC;
 
   //--- choose data partition ---
-  if (img->type != B_IMG && img->type != BS_IMG)   dataPart = &(currSlice->partArr[partMap[SE_INTRAPREDMODE]]);
+  if (img->type != B_IMG && img->type != BS_IMG)   dataPart = &(currSlice->partArr[partMap[currSE->type]]);
   else                    dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
 
   //--- encode and update rate ---

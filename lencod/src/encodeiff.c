@@ -152,6 +152,7 @@
 #include "global.h"
 #include "mbuffer.h"
 #include "encodeiff.h"
+#include "rtp.h"
 
 FileTypeBox box_ft;
 FileHeaderBox box_fh;
@@ -492,7 +493,7 @@ void freeAlternateTrackInfoBox()
  */
 int initParameterSetBox()
 {
-  box_ps.type.size = SIZEOF_BOXTYPE + 28;     // 26 => 27 => 28, add bufCycle, temporal scalability
+  box_ps.type.size = SIZEOF_BOXTYPE + 29;     // 26 => 27 => 28, add bufCycle, temporal scalability
   box_ps.type.type = BOX_PRMS;
 
   box_ps.parameterSetID = 0;
@@ -532,6 +533,7 @@ int initParameterSetBox()
   box_ps.bufCycle = input->no_multpred;
   if (input->NumFramesInELSubSeq!=0) box_ps.requiredPictureNumberUpdateBehavior=1;
   else box_ps.requiredPictureNumberUpdateBehavior=0;
+  box_ps.loopFilterParametersFlag = input->LFSendParameters;
   return 0;
 }
 
@@ -568,6 +570,7 @@ size_t wrParameterSetBox( FILE* fp )
   num += writefile( &box_ps.displayMode, 1, 1, fp );
   num += writefile( &box_ps.displayRectangleOffsetFromWindowTop, 2, 1, fp );
   num += writefile( &box_ps.displayRectangleOffsetFromWindowLeftBorder, 2, 1, fp );
+  num += writefile( &box_ps.loopFilterParametersFlag, 1, 1, fp );
   num += writefile( &box_ps.entropyCoding, 1, 1, fp );
   num += writefile( &box_ps.motionResolution, 1, 1, fp );
   num += writefile( &box_ps.partitioningType, 1, 1, fp );
@@ -1141,6 +1144,11 @@ PayloadInfo* newPayloadInfo()
   pli->initialQP = img->qp;
   pli->qpsp = img->qpsp;
 
+  pli->filter_parameters_flag = input->LFSendParameters;
+  pli->lf_disable = input->LFDisable;
+  pli->lf_alpha_c0_offset_div2 = input->LFAlphaC0Offset >> 1;
+  pli->lf_beta_offset_div2 = input->LFBetaOffset >> 1;
+
   // Tian: begin of ERPS
   pli->numRMPNI = 0;
   if ( img->type != INTRA_IMG )
@@ -1346,6 +1354,23 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
       }
       sym.value1 = pp->qpsp - (MAX_QP - MIN_QP +1)/2;
       writeSyntaxElement2Buf_UVLC (&sym, bitstream);
+    }
+
+    if (pp->filter_parameters_flag)
+    {
+        sym.bitpattern = pp->lf_disable;
+        sym.len = 1;
+        writeSyntaxElement2Buf_Fixed(&sym, bitstream);
+        
+        if (!pp->lf_disable)
+        {
+          sym.mapping = dquant_linfo;
+          sym.value1 = pp->lf_alpha_c0_offset_div2;
+          writeSyntaxElement2Buf_UVLC (&sym, bitstream);
+
+          sym.value1 = pp->lf_beta_offset_div2;
+          writeSyntaxElement2Buf_UVLC (&sym, bitstream);
+        }
     }
 
     sym.mapping = n_linfo2;
@@ -2085,7 +2110,12 @@ size_t writefile_s( void* buf, size_t bufsize, size_t size, size_t count, FILE* 
  */
 void begin_sub_sequence()
 {
-  if ( input->of_mode != PAR_OF_IFF || input->NumFramesInELSubSeq == 0 ) return;
+  if ( input->of_mode == PAR_OF_26L || input->NumFramesInELSubSeq == 0 ) return;
+  if ( input->of_mode == PAR_OF_RTP ) 
+  {
+    begin_sub_sequence_rtp();
+    return;
+  }
 
   // begin to encode the base layer subseq?
   if ( IMG_NUMBER == 0 )
@@ -2113,7 +2143,12 @@ void begin_sub_sequence()
  */
 void end_sub_sequence()
 {
-  if ( input->of_mode != PAR_OF_IFF || input->NumFramesInELSubSeq == 0 ) return;
+  if ( input->of_mode != PAR_OF_26L || input->NumFramesInELSubSeq == 0 ) return;
+  if ( input->of_mode == PAR_OF_RTP ) 
+  {
+    end_sub_sequence_rtp();
+    return;
+  }
 
   // end of the base layer:
   if ( img->number == input->no_frames-1 )

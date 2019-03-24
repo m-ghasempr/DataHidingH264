@@ -71,6 +71,7 @@
 #include "header.h"
 #include "intrarefresh.h"
 #include "fmo.h"
+#include "sei.h"
 
 #ifdef _ADAPT_LAST_GROUP_
 int *last_P_no;
@@ -176,6 +177,12 @@ int encode_one_frame()
   else  //frame mode
     frame_mode_buffer(bits_frm, dis_frm_y, dis_frm_u, dis_frm_v);
  
+  // Tian Dong (Sept 2002)
+  // in frame mode, the newly reconstructed frame has been inserted to the mem buffer
+  // and it is time to prepare the spare picture SEI payload.
+  if(input->InterlaceCodingOption == FRAME_CODING && input->SparePictureOption && img->type!=B_IMG)
+    CalculateSparePicture();
+
   if(input->of_mode==PAR_OF_26L)
     terminate_slice(1);
 
@@ -1248,6 +1255,9 @@ void init_frame()
       }
 
   }
+
+  UpdateSubseqInfo(img->layer);     // Tian Dong (Sept 2002)
+  PrepareAggregationSEIMessage();
 }
 
 /*!
@@ -1846,9 +1856,10 @@ void UnifiedOneForthPix (pel_t **imgY, pel_t** imgU, pel_t **imgV,
   }
 
   /*  Chroma: */
-  for (j=0; j < img->height_cr; j++) {
-    memcpy(outU[j],imgUV[0][j],img->width_cr); // just copy 1/1 pix, interpolate "online" 
-    memcpy(outV[j],imgUV[1][j],img->width_cr);
+  for (j=0; j < img->height_cr; j++) 
+  {
+    memcpy(outU[j],imgU[j],img->width_cr); // just copy 1/1 pix, interpolate "online" 
+    memcpy(outV[j],imgV[j],img->width_cr);
   }
 
   // Generate 1/1th pel representation (used for integer pel MV search)
@@ -2339,6 +2350,7 @@ void copy_rdopt_data(int bot_block)
   currMB->cbp   = rdopt->cbp;   // copy cbp
   currMB->cbp_blk = rdopt->cbp_blk; // copy cbp_blk
   img->i16offset  = rdopt->i16offset;
+  currMB->c_ipred_mode = rdopt->c_ipred_mode;
 
   if(img->type != B_IMG && img->type != BS_IMG)
     field_mb[img->mb_y][img->mb_x] = MBPairIsField;

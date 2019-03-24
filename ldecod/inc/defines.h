@@ -78,7 +78,7 @@
 #define _ADAPT_LAST_GROUP_
 
 #define MAX_INFO_WORD  300000               //!< for one frame
-#define MAX_CODED_FRAME_SIZE 400000         //!< bytes for one frame
+#define MAX_CODED_FRAME_SIZE 800000         //!< bytes for one frame
 #define MAXIMUM_UVLC_CODEWORD_PER_HEADER 20 //!< UVLC codewords per combined picture/slice header maximum
 #if defined _DEBUG
 #define TRACE           0                   //!< 0:Trace off 1:Trace on
@@ -174,6 +174,12 @@
 #define HOR_PRED_16     1
 #define DC_PRED_16      2
 #define PLANE_16        3
+
+// 8x8 chroma intra prediction modes
+#define DC_PRED_8       0
+#define HOR_PRED_8      1
+#define VERT_PRED_8     2
+#define PLANE_8         3
 
 // QCIF format
 #define IMG_WIDTH       176

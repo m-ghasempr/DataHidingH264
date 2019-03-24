@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 4.2
+ *     JM 4.3a
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -84,9 +84,10 @@
 #include "encodeiff.h"
 #include "intrarefresh.h"
 #include "fmo.h"
+#include "sei.h"
 
 #define JM      "4"
-#define VERSION "4.2"
+#define VERSION "4.3a"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
@@ -501,6 +502,24 @@ void init_img()
   RandomIntraInit (img->width/16, img->height/16, input->RandomIntraMBRefresh);
   FmoInit (img->width/16, img->height/16, input->FmoNumSliceGroups, 1, NULL);   // Forced Scattered Slices so far
 
+  InitSEIMessages();  // Tian Dong (Sept 2002)
+
+  // Initialize filtering parameters. If sending parameters, the offsets are 
+  // multiplied by 2 since inputs are taken in "div 2" format.
+  // If not sending paramters, all fields are cleared 
+  if (input->LFSendParameters)
+  {
+    input->LFAlphaC0Offset <<= 1;
+    input->LFBetaOffset <<= 1;
+  }
+  else
+  {
+    input->LFDisable = 0;
+    input->LFAlphaC0Offset = 0;
+    input->LFBetaOffset = 0;
+  }
+
+
 }
 
 /*!
@@ -513,6 +532,7 @@ void init_img()
  */
 void free_img ()
 {
+  CloseSEIMessages(); // Tian Dong (Sept 2002)
   free_mem_mv (img->mv);
   free_mem_mv (img->p_fwMV);
   free_mem_mv (img->p_bwMV);

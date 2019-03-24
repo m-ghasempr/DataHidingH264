@@ -396,6 +396,7 @@ int rdParameterSetBox( FILE* fp, unsigned long size )
   if ( -1 == readfile( &box_ps.displayMode, 1, 1, fp ) ) return -1;
   if ( -1 == readfile( &box_ps.displayRectangleOffsetFromWindowTop, 2, 1, fp ) ) return -1;
   if ( -1 == readfile( &box_ps.displayRectangleOffsetFromWindowLeftBorder, 2, 1, fp ) ) return -1;
+  if ( -1 == readfile( &box_ps.loopFilterParametersFlag, 1, 1, fp ) ) return -1;
   if ( -1 == readfile( &box_ps.entropyCoding, 1, 1, fp ) ) return -1;
   if ( -1 == readfile( &box_ps.motionResolution, 1, 1, fp ) ) return -1;
   if ( -1 == readfile( &box_ps.partitioningType, 1, 1, fp ) ) return -1;
@@ -1051,6 +1052,31 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
     buf->frame_bitoffset += sym.len;
     bitptr += sym.len;
   }
+
+  if (inp->LFParametersFlag)
+  {
+    sym.len = GetfixedSymbol( buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length,1 );
+    currSlice->LFDisable = sym.inf;
+    buf->frame_bitoffset += sym.len;
+    bitptr+=1;
+
+    if (!currSlice->LFDisable)
+    {
+      sym.mapping = linfo_dquant;
+      sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length );
+      sym.mapping(sym.len, sym.inf, &(sym.value1), &(sym.value2));
+      currSlice->LFAlphaC0Offset = sym.value1 << 1;
+      buf->frame_bitoffset += sym.len;
+      bitptr+=sym.len;
+
+      sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length );
+      sym.mapping(sym.len, sym.inf, &(sym.value1), &(sym.value2));
+      currSlice->LFBetaOffset = sym.value1 << 1;
+      buf->frame_bitoffset += sym.len;
+      bitptr+=sym.len;
+    }
+  }
+
   sym.mapping = linfo;        // Mapping rule: Simple code number to len/info
   // Multi-Picture Buffering Syntax, Feb 27, 2002
   // RPSF: Reference Picture Selection Flags
@@ -1376,6 +1402,7 @@ int IFFUseParameterSet( int n, struct img_par* img, struct inp_par* inp )
   inp->partition_mode = box_ps.partitioningType;
   inp->UseConstrainedIntraPred = box_ps.intraPredictionType;
   inp->buf_cycle = box_ps.bufCycle;
+  inp->LFParametersFlag = box_ps.loopFilterParametersFlag;
   return 0;
 }
 

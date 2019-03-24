@@ -133,6 +133,7 @@
 #include "rtp.h"
 #include "fmo.h"
 #include "golomb_dec.h"
+#include "sei.h"
 
 extern void tracebits(const char *trace_str,  int len,  int info,int value1,
     int value2) ;
@@ -291,11 +292,11 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
       printf ("found unexpected Partition %c packet, skipping\n", (p->payload[0]&0xf)==2?'B':'C'); // avoid warnings. mwi
       break;
     case 4:
-      //! Compound packets may be handled here, but I (StW) would personally prefer and
-      //! recommend to handle them externally, by a pre-processor tool.  For now,
-      //! compounds lead to exit()
-      printf ("Compound packets not yet implemented, exit\n");
-      exit (-700);
+      // Tian Dong (Sept 2002)
+      // The spare picture SEI messages are packetized in compound packet (known as aggregation packet now),
+      // I will only deal with the compound packet composed by sei message and slice data.
+      ProcessAggregationPacket(p, img);
+      done = 1;
       break;
     case 5:
       //! Add implementation of SUPP packets here
@@ -1079,6 +1080,23 @@ int RTPInterpretSliceHeader (byte *buf, int bufsize, int ReadSliceId, RTPSliceHe
   assert (sh->SliceType > 0 || sh->SliceType < 5);
   assert (sh->InitialQP >=MIN_QP && sh->InitialQP <= MAX_QP);
 
+  if (ParSet[CurrentParameterSet].FilterParametersFlag)
+  {
+    len = GetfixedSymbol(buf, bitptr, &info, bufsize,1);   
+    sh->LFDisable = info;
+    bitptr+=1;
+    if (!sh->LFDisable)
+    {
+      len = GetVLCSymbol(buf, bitptr, &info, bufsize);
+      linfo_dquant (len, info, &sh->LFAlphaC0OffsetDiv2, &dummy);
+      bitptr+=len;
+
+      len = GetVLCSymbol(buf, bitptr, &info, bufsize);
+      linfo_dquant (len, info, &sh->LFBetaOffsetDiv2, &dummy);
+      bitptr+=len;
+    }
+  }
+
 
   if (ReadSliceId)
   {
@@ -1447,6 +1465,10 @@ void RTPSetImgInp (struct img_par *img, struct inp_par *inp, RTPSliceHeader_t *s
   img->structure = currSlice->structure = sh->structure; //picture structure: 
 #endif
   
+  currSlice->LFDisable = sh->LFDisable;
+  currSlice->LFAlphaC0Offset = sh->LFAlphaC0OffsetDiv2 << 1;
+  currSlice->LFBetaOffset = sh->LFBetaOffsetDiv2 << 1;
+
   /* KS: Multi Frame Buffering Syntax */
   img->pn=sh->PictureNum;
 
@@ -1975,6 +1997,13 @@ int RTPInterpretParameterSetPacket (char *buf, int buflen)
         state = EXPECT_STRUCTVAL_INT;
         interpreter = INTERPRET_COPY;
         destin = &ParSet[ps].YSizeMB;
+        break;
+      }
+      if (!strncmp (s, "FilterParametersFlag", MAX_PARAMETER_STRINGLEN))
+      {
+        state = EXPECT_STRUCTVAL_INT;
+        interpreter = INTERPRET_COPY;
+        destin = &ParSet[ps].FilterParametersFlag;
         break;
       }
       if (!strncmp (s, "EntropyCoding", MAX_PARAMETER_STRINGLEN))
@@ -2577,6 +2606,9 @@ void RTPUseParameterSet (int n, struct img_par *img, struct inp_par *inp)
   img->height = ParSet[CurrentParameterSet].YSizeMB*16;
   img->height_cr = ParSet[CurrentParameterSet].YSizeMB*8;
 
+  // FilterParamtersFlag
+  inp->LFParametersFlag =  ParSet[CurrentParameterSet].FilterParametersFlag;
+  
   // EntropyCoding
   if (ParSet[CurrentParameterSet].EntropyCoding == 0)
     inp->symbol_mode = UVLC;
@@ -2928,3 +2960,63 @@ void CopyPartitionBitstring (struct img_par *img, RTPpacket_t *p, Bitstream *b, 
 
 
 // "Unconstrained":"Constrained",
+
+
+/*!
+ *****************************************************************************
+ *
+ * \ProcessAggregationPacket
+ * \brief 
+ *    Process the compound packet ( now known as aggregation packet )
+ *
+ * \return
+ *    none
+ *
+ * \date
+ *    September, 2002
+ *
+ * \author
+ *    Dong Tian,    tian@cs.tut.fi
+ *****************************************************************************
+!*/
+void ProcessAggregationPacket(RTPpacket_t *p, struct img_par *img)
+{
+  unsigned short size_slice;
+  byte *buf = NULL;    // to save the slice data temporally
+  byte  type;
+  unsigned short offset, size;
+  Boolean done = FALSE;
+
+  offset = 1;   // to skip the FirstByte in payload
+  while ( offset < p->paylen )
+  {
+    type = p->payload[offset++];
+    switch (type & 0xf)
+    {
+    case SEI_PACKET_TYPE: // 5
+      size = *(unsigned short*)&p->payload[offset];
+      offset += 2;
+      InterpretSEIMessage(&p->payload[offset], size, img);
+      offset += size;
+      break;
+    case 0:
+      size_slice = *(unsigned short*)&p->payload[offset];
+      offset += 2;
+      assert( buf == NULL );
+      buf = malloc( size_slice );
+      memcpy( buf, &(p->payload[offset]), size_slice);
+      offset += size_slice;
+      break;
+    default:
+      printf("Unknown aggregation packet type. In JM 4.1b, only SEI and normal slice data are allowed in the aggregation packet.\n");
+      exit(0);
+    }
+  }
+
+  assert( buf != NULL );
+  p->payload[0] = 0; // this is the first byte. hard coded to 0
+  memcpy( &p->payload[1], buf, size_slice);
+  p->paylen = size_slice + 1;
+
+  free( buf );
+}

@@ -280,8 +280,8 @@ typedef struct
   BiContextType slice_term_context;
 } MotionInfoContexts;
 
-
 #define NUM_IPR_CTX    2
+#define NUM_CIPR_CTX   4
 #define NUM_CBP_CTX    4
 #define NUM_BCBP_CTX   4
 #define NUM_MAP_CTX   15
@@ -289,9 +289,11 @@ typedef struct
 #define NUM_ONE_CTX    5
 #define NUM_ABS_CTX    5
 
+
 typedef struct
 {
   BiContextType  ipr_contexts [9][NUM_IPR_CTX];
+  BiContextType  cipr_contexts[NUM_CIPR_CTX]; //GB
   BiContextType  cbp_contexts [3][NUM_CBP_CTX];
   BiContextType  bcbp_contexts[NUM_BLOCK_TYPES][NUM_BCBP_CTX];
   BiContextType  map_contexts [NUM_BLOCK_TYPES][NUM_MAP_CTX];
@@ -299,6 +301,7 @@ typedef struct
   BiContextType  one_contexts [NUM_BLOCK_TYPES][NUM_ONE_CTX];
   BiContextType  abs_contexts [NUM_BLOCK_TYPES][NUM_ABS_CTX];
 } TextureInfoContexts;
+
 
 //*********************** end of data type definition for CABAC *******************
 
@@ -380,6 +383,12 @@ typedef struct macroblock
   int           abt_pred_mode[4];   //!< ABT mode used for ABT block prediction.
 
   int           bipred_weighting_type[4];  //!< bi-predictive weighting type, 0:average 1:extrapolation
+
+  int           lf_disable;
+  int           lf_alpha_c0_offset;
+  int           lf_beta_offset;
+
+  int           c_ipred_mode;       //!< chroma intra prediction mode
 } Macroblock;
 
 //! Bitstream
@@ -430,6 +439,10 @@ typedef struct
   RMPNIbuffer_t        *rmpni_buffer; //!< stores the slice temporary buffer remapping commands
   int     (*readSlice)(struct img_par *, struct inp_par *);
   int                 abt;           //!< ABT Flag
+
+  int                 LFDisable;        //!< Disable loop filter on slice
+  int                 LFAlphaC0Offset;  //!< Alpha and C0 offset for filtering slice
+  int                 LFBetaOffset;     //!< Beta offset for filtering slice
 
 } Slice;
 
@@ -580,6 +593,8 @@ struct inp_par
   char LeakyBucketParamFile[100];         //<! LeakyBucketParamFile
 #endif
   int  abt;                               //<! Use Adaptive Block Transforms (ABT) 0:Off, 1: Inter ABT, 2: Inter & Intra ABT
+  int LFParametersFlag;                   //<! Specifies that loop filter parameters are included in bitstream
+
 };
 
 
@@ -724,6 +739,7 @@ void readBiDirBlkSize2Buffer_CABAC(SyntaxElement *se,struct inp_par *inp,struct 
 int  readSliceCABAC(struct img_par *img, struct inp_par *inp);
 int  readSyntaxElement_CABAC(SyntaxElement *se, struct img_par *img, struct inp_par *inp, DataPartition *this_dataPart);
 void readDquant_FromBuffer_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp);
+void readCIPredMode_FromBuffer_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp);
 
 void error(char *text, int code);
 void start_slice(struct img_par *img, struct inp_par *inp);

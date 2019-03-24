@@ -96,6 +96,12 @@
 // #define _CHECK_MULTI_BUFFER_1_
 // #define _CHECK_MULTI_BUFFER_2_
 
+// ---------------------------------------------------------------------------------
+// FLAGS and DEFINES for new chroma intra prediction, Dzung Hoang
+// Threshold values to zero out quantized transform coefficients.
+// Recommend that _CHROMA_COEFF_COST_ be low to improve chroma quality
+#define _LUMA_COEFF_COST_       4 //!< threshold for luma coeffs
+#define _CHROMA_COEFF_COST_     4 //!< threshold for chroma coeffs, used to be 7
 
 #define IMG_PAD_SIZE    4   //!< Number of pixels padded around the reference frame (>=4)
 
@@ -206,6 +212,12 @@
 #define HOR_PRED_16     1
 #define DC_PRED_16      2
 #define PLANE_16        3
+
+// 8x8 chroma intra prediction modes
+#define DC_PRED_8       0
+#define HOR_PRED_8      1
+#define VERT_PRED_8     2
+#define PLANE_8         3
 
 // image formats
 #define SUB_QCIF        0       // GH added picture formats

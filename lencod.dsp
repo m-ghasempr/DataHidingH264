@@ -191,6 +191,10 @@ SOURCE=.\lencod\src\rtp.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\lencod\src\sei.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\src\uvlc.c
 # End Source File
 # End Group
@@ -288,6 +292,10 @@ SOURCE=.\lencod\inc\refbuf.h
 # Begin Source File
 
 SOURCE=.\lencod\inc\rtp.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\inc\sei.h
 # End Source File
 # End Group
 # Begin Source File

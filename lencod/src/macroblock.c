@@ -263,6 +263,7 @@ void start_macroblock()
           currMB->mvd[l][j][i][k] = 0;
  
   currMB->cbp_bits   = 0;
+  currMB->c_ipred_mode = 0; //GB
 
   for (i=0; i < (BLOCK_MULTIPLE*BLOCK_MULTIPLE); i++)
     currMB->intra_pred_modes[i] = 0;
@@ -274,6 +275,13 @@ void start_macroblock()
     i = img->current_mb_nr;
     img->intra_block[i][0] =img->intra_block[i][1] = img->intra_block[i][2] = img->intra_block[i][3] = 1;
  }
+
+  // store filtering parameters for this MB; For now, we are using the
+  // same offset throughout the sequence
+  currMB->lf_disable = input->LFDisable;
+  currMB->lf_alpha_c0_offset = input->LFAlphaC0Offset;
+  currMB->lf_beta_offset = input->LFBetaOffset;
+
 
   // Initialize bitcounters for this macroblock
   if(img->current_mb_nr == 0) // No slice header to account for
@@ -345,13 +353,11 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
      if(img->cod_counter)
      {
        // write out the skip MBs to know how many bits we need for the RLC
-       if (img->type == B_IMG || img->type == BS_IMG)
-         dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
-       else
-         dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
        currSE->value1 = img->cod_counter;
        currSE->mapping = n_linfo2;
        currSE->type = SE_MBTYPE;
+       if (img->type != B_IMG && img->type != BS_IMG)   dataPart = &(currSlice->partArr[partMap[currSE->type]]);
+       else                    dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
        dataPart->writeSyntaxElement(  currSE, dataPart);
        rlc_bits=currSE->len;
 
@@ -466,13 +472,11 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
       img->cod_counter--;
       if(img->cod_counter)
       {
-        if (img->type == B_IMG || img->type == BS_IMG)
-          dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
-        else
-          dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
         currSE->value1 = img->cod_counter;
         currSE->mapping = n_linfo2;
         currSE->type = SE_MBTYPE;
+        if (img->type != B_IMG && img->type != BS_IMG)   dataPart = &(currSlice->partArr[partMap[currSE->type]]);
+        else                                             dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
         dataPart->writeSyntaxElement(  currSE, dataPart);
         rlc_bits=currSE->len;
         currMB->bitcounter[BITS_MB_MODE]+=rlc_bits;
@@ -481,11 +485,9 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
     }
     else //! MB that did not fit in this slice anymore is not a Skip MB
     {
-      if (img->type == B_IMG || img->type == BS_IMG)
-        dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
-      else
-        dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
-
+      if (img->type != B_IMG && img->type != BS_IMG)   dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
+      else                                             dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+       
       currStream = dataPart->bitstream;
         // update the bitstream
       currStream->bits_to_go = currStream->bits_to_go_skip;
@@ -501,13 +503,11 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
   //! TO 4.11.2001 Skip MBs at the end of this slice for Slice Mode 0 or 1
   if(*end_of_slice == TRUE && img->cod_counter && !use_bitstream_backing)
   {
-    if (img->type == B_IMG || img->type == BS_IMG)
-      dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
-    else
-      dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
     currSE->value1 = img->cod_counter;
     currSE->mapping = n_linfo2;
     currSE->type = SE_MBTYPE;
+    if (img->type != B_IMG && img->type != BS_IMG)   dataPart = &(currSlice->partArr[partMap[currSE->type]]);
+    else                                             dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
     dataPart->writeSyntaxElement(  currSE, dataPart);
     rlc_bits=currSE->len;
     currMB->bitcounter[BITS_MB_MODE]+=rlc_bits;
@@ -1142,7 +1142,7 @@ LumaResidualCoding8x8 (int  *cbp,         //  --> cbp (updated according to proc
   all nonzero coefficients are discarded for the MB and the reconstructed block is set equal to the prediction.
   */
 
-  if (img->NoResidueDirect != 1 && !skipped && coeff_cost <= 3)
+  if (img->NoResidueDirect != 1 && !skipped && coeff_cost <= _LUMA_COEFF_COST_)
   {
     coeff_cost  = 0;
     (*cbp)     &=  (63 - cbp_mask);
@@ -1424,86 +1424,14 @@ IntraChromaPrediction4x4 (int  uv,       // <-- colour component
                           int  block_x,  // <-- relative horizontal block coordinate of 4x4 block
                           int  block_y)  // <-- relative vertical   block coordinate of 4x4 block
 {
-  int     s=128, s0=0, s1=0, s2=0, s3=0, i, j;
-  pel_t** image             = imgUV[uv];
-  int     img_cx            = img->pix_c_x;
-  int     img_cy            = img->pix_c_y;
-  int     img_cx_1          = img->pix_c_x-1;
-  int     img_cx_4          = img->pix_c_x+4;
-  int     img_cy_1          = img->pix_c_y-1;
-  int     img_cy_4          = img->pix_c_y+4;
-  int     mb_nr             = img->current_mb_nr;
-  int     mb_width          = img->width/16;
-  int     mb_available_up   = (img_cy/BLOCK_SIZE == 0) ? 0 : (img->mb_data[mb_nr].slice_nr==img->mb_data[mb_nr-mb_width].slice_nr);
-  int     mb_available_left = (img_cx/BLOCK_SIZE == 0) ? 0 : (img->mb_data[mb_nr].slice_nr==img->mb_data[mb_nr-1]       .slice_nr);
+  int mode = img->mb_data[img->current_mb_nr].c_ipred_mode;
+  int i, j;
 
-  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
-  {
-    img_cy   = img->field_pix_c_y;
-    img_cy_1 = img->field_pix_c_y-1;
-    img_cy_4 = img->field_pix_c_y+4;
-    if(img->top_field)
-    {
-      image   = imgUV_top[uv];
-      mb_available_up = (img_cy/BLOCK_SIZE == 0) ? 0 : (img->mb_data[mb_nr].slice_nr==img->mb_data[mb_nr-mb_width].slice_nr);
-    }
-    else
-    {
-      image   = imgUV_bot[uv];
-      mb_available_up   =   (img_cy/BLOCK_SIZE == 0) ? 0 : (img->mb_data[mb_nr].slice_nr==img->mb_data[mb_nr-mb_width].slice_nr);
-    }
-  }
-
-  if(input->UseConstrainedIntraPred)
-  {
-    if (mb_available_up   && (img->intra_block[mb_nr-mb_width][2]==0 || img->intra_block[mb_nr-mb_width][3]==0))
-      mb_available_up   = 0;
-    if (mb_available_left && (img->intra_block[mb_nr-       1][1]==0 || img->intra_block[mb_nr       -1][3]==0))
-      mb_available_left = 0;
-  }
-
-  //===== get prediction value =====
-  switch ((block_y>>1) + (block_x>>2))
-  {
-  case 0:  //===== TOP LEFT =====
-    if      (mb_available_up)    for (i=0;i<4;i++)  s0 += image[img_cy_1  ][img_cx  +i];
-    if      (mb_available_left)  for (i=0;i<4;i++)  s2 += image[img_cy  +i][img_cx_1  ];
-    if      (mb_available_up && mb_available_left)  s  = (s0+s2+4) >> 3;
-    else if (mb_available_up)                       s  = (s0   +2) >> 2;
-    else if (mb_available_left)                     s  = (s2   +2) >> 2;
-    break;
-  case 1: //===== TOP RIGHT =====
-    if(mb_available_up)    
-    for (i=0;i<4;i++)  
-      s1 += image[img_cy_1  ][img_cx_4+i];
-    else if (mb_available_left)  
-    for (i=0;i<4;i++)  
-      s2 += image[img_cy  +i][img_cx_1  ];
-    if      (mb_available_up)                       
-    s  = (s1   +2) >> 2;
-    else if (mb_available_left)                     
-    s  = (s2   +2) >> 2;
-    break;
-  case 2: //===== BOTTOM LEFT =====
-    if      (mb_available_left)  for (i=0;i<4;i++)  s3 += image[img_cy_4+i][img_cx_1  ];
-    else if (mb_available_up)    for (i=0;i<4;i++)  s0 += image[img_cy_1  ][img_cx  +i];
-    if      (mb_available_left)                     s  = (s3   +2) >> 2;
-    else if (mb_available_up)                       s  = (s0   +2) >> 2;
-    break;
-  case 3: //===== BOTTOM RIGHT =====
-    if      (mb_available_up)    for (i=0;i<4;i++)  s1 += image[img_cy_1  ][img_cx_4+i];
-    if      (mb_available_left)  for (i=0;i<4;i++)  s3 += image[img_cy_4+i][img_cx_1  ];
-    if      (mb_available_up && mb_available_left)  s  = (s1+s3+4) >> 3;
-    else if (mb_available_up)                       s  = (s1   +2) >> 2;
-    else if (mb_available_left)                     s  = (s3   +2) >> 2;
-    break;
-  }
-  
   //===== prediction =====
   for (j=block_y; j<block_y+4; j++)
   for (i=block_x; i<block_x+4; i++)
   {
-    img->mpr[i][j] = s;
+    img->mpr[i][j] = img->mprr_c[uv][mode][i][j];
   }
 }
 
@@ -1854,6 +1782,203 @@ void ChromaResidualCoding (int* cr_cbp)
 }
 
 
+/*!
+ ************************************************************************
+ * \brief
+ *    Predict an intra chroma 8x8 block
+ ************************************************************************
+ */
+void
+IntraChromaPrediction8x8 (int *mb_up, int *mb_left)
+{
+  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  int     s, s0, s1, s2, s3, i, j, k;
+  pel_t** image;
+  int     block_x, block_y, b4;
+  int     img_cx            = img->pix_c_x;
+  int     img_cy            = img->pix_c_y;
+  int     img_cx_1          = img->pix_c_x-1;
+  int     img_cx_4          = img->pix_c_x+4;
+  int     img_cy_1          = img->pix_c_y-1;
+  int     img_cy_4          = img->pix_c_y+4;
+  int     mb_nr             = img->current_mb_nr;
+  int     mb_width          = img->width/16;
+  int     mb_available_up   = (img_cy/BLOCK_SIZE == 0) ? 0 : (img->mb_data[mb_nr].slice_nr==img->mb_data[mb_nr-mb_width].slice_nr);
+  int     mb_available_left = (img_cx/BLOCK_SIZE == 0) ? 0 : (img->mb_data[mb_nr].slice_nr==img->mb_data[mb_nr-1]       .slice_nr);
+  int     ih,iv;
+  int     ib,ic,iaa;
+  int     uv;
+  int     hline[8], vline[8];
+  int     mode;
+  int     best_mode;
+  int     cost;
+  int     min_cost;
+  int     diff[16];
+
+  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
+  {
+    img_cy   = img->field_pix_c_y;
+    img_cy_1 = img->field_pix_c_y-1;
+    img_cy_4 = img->field_pix_c_y+4;
+    mb_available_up = (img_cy/BLOCK_SIZE == 0) ? 0 : (img->mb_data[mb_nr].slice_nr==img->mb_data[mb_nr-mb_width].slice_nr);
+  }
+
+  if(input->UseConstrainedIntraPred)
+  {
+    if (mb_available_up   && (img->intra_block[mb_nr-mb_width][2]==0 || img->intra_block[mb_nr-mb_width][3]==0))
+      mb_available_up   = 0;
+    if (mb_available_left && (img->intra_block[mb_nr-       1][1]==0 || img->intra_block[mb_nr       -1][3]==0))
+      mb_available_left = 0;
+  }
+
+  if (mb_up)
+    *mb_up = mb_available_up;
+  if (mb_left)
+    *mb_left = mb_available_left;
+
+  // compute all chroma intra prediction modes for both U and V
+  for (uv=0; uv<2; uv++)
+  {
+    if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
+    {
+      if(img->top_field)
+        image = imgUV_top[uv];
+      else
+        image = imgUV_bot[uv];
+    }
+    else
+      image = imgUV[uv];
+
+    // DC prediction
+    for (block_y=0; block_y<8; block_y+=4)
+    for (block_x=0; block_x<8; block_x+=4)
+    {
+      s=128;
+      s0=s1=s2=s3=0;
+      //===== get prediction value =====
+      switch ((block_y>>1) + (block_x>>2))
+      {
+      case 0:  //===== TOP LEFT =====
+        if      (mb_available_up)    for (i=0;i<4;i++)  s0 += image[img_cy_1  ][img_cx  +i];
+        if      (mb_available_left)  for (i=0;i<4;i++)  s2 += image[img_cy  +i][img_cx_1  ];
+        if      (mb_available_up && mb_available_left)  s  = (s0+s2+4) >> 3;
+        else if (mb_available_up)                       s  = (s0   +2) >> 2;
+        else if (mb_available_left)                     s  = (s2   +2) >> 2;
+        break;
+      case 1: //===== TOP RIGHT =====
+        if      (mb_available_up)    for (i=0;i<4;i++)  s1 += image[img_cy_1  ][img_cx_4+i];
+        else if (mb_available_left)  for (i=0;i<4;i++)  s2 += image[img_cy  +i][img_cx_1  ];
+        if      (mb_available_up)                       s  = (s1   +2) >> 2;
+        else if (mb_available_left)                     s  = (s2   +2) >> 2;
+        break;
+      case 2: //===== BOTTOM LEFT =====
+        if      (mb_available_left)  for (i=0;i<4;i++)  s3 += image[img_cy_4+i][img_cx_1  ];
+        else if (mb_available_up)    for (i=0;i<4;i++)  s0 += image[img_cy_1  ][img_cx  +i];
+        if      (mb_available_left)                     s  = (s3   +2) >> 2;
+        else if (mb_available_up)                       s  = (s0   +2) >> 2;
+        break;
+      case 3: //===== BOTTOM RIGHT =====
+        if      (mb_available_up)    for (i=0;i<4;i++)  s1 += image[img_cy_1  ][img_cx_4+i];
+        if      (mb_available_left)  for (i=0;i<4;i++)  s3 += image[img_cy_4+i][img_cx_1  ];
+        if      (mb_available_up && mb_available_left)  s  = (s1+s3+4) >> 3;
+        else if (mb_available_up)                       s  = (s1   +2) >> 2;
+        else if (mb_available_left)                     s  = (s3   +2) >> 2;
+        break;
+      }
+
+      //===== prediction =====
+      for (j=block_y; j<block_y+4; j++)
+      for (i=block_x; i<block_x+4; i++)
+      {
+        img->mprr_c[uv][DC_PRED_8][i][j] = s;
+      }
+    }
+
+    // vertical prediction
+    if (mb_available_up)
+    {
+      for (i=0; i<8; i++)
+        hline[i] = image[img_cy_1][img_cx+i];
+      for (i=0; i<8; i++)
+      for (j=0; j<8; j++)
+        img->mprr_c[uv][VERT_PRED_8][i][j] = hline[i];
+    }
+
+    // horizontal prediction
+    if (mb_available_left)
+    {
+      for (i=0; i<8; i++)
+        vline[i] = image[img_cy+i][img_cx_1];
+      for (i=0; i<8; i++)
+      for (j=0; j<8; j++)
+        img->mprr_c[uv][HOR_PRED_8][i][j] = vline[j];
+    }
+
+    // plane prediction
+    if (mb_available_up && mb_available_left)
+    {
+      ih = 4*(hline[7] - image[img_cy_1][img_cx_1]);
+      iv = 4*(vline[7] - image[img_cy_1][img_cx_1]);
+      for (i=1;i<4;i++)
+      {
+        ih += i*(hline[3+i] - hline[3-i]);
+        iv += i*(vline[3+i] - vline[3-i]);
+      }
+      ib=17*(ih+16)/32;
+      ic=17*(iv+16)/32;
+
+      iaa=16*(hline[7]+vline[7]);
+      for (j=0; j<8; j++)
+      for (i=0; i<8; i++)
+        img->mprr_c[uv][PLANE_8][i][j]=max(0,min(255,(iaa+(i-3)*ib +(j-3)*ic + 16)/32));// store plane prediction
+    }
+  }
+
+  if (!input->rdopt)
+  {
+    // pick lowest cost prediction mode
+    min_cost = 1<<20;
+    for (mode=DC_PRED_8; mode<=PLANE_8; mode++)
+    {
+      if ((mode==VERT_PRED_8 && !mb_available_up) ||
+        (mode==HOR_PRED_8 && !mb_available_left) ||
+        (mode==PLANE_8 && (!mb_available_left || !mb_available_up)))
+        continue;
+
+      cost = 0;
+      for (uv=0; uv<2; uv++)
+      {
+        if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
+        {
+          if(img->top_field)
+            image = imgUV_org_top[uv];
+          else
+            image = imgUV_org_bot[uv];
+        }
+        else
+          image = imgUV_org[uv];
+        for (b4=0,block_y=0; block_y<8; block_y+=4)
+        for (block_x=0; block_x<8; block_x+=4,b4++)
+        {
+          for (k=0,j=block_y; j<block_y+4; j++)
+          for (i=block_x; i<block_x+4; i++,k++)
+          {
+            diff[k] = image[img_cy+j][img_cx+i] - img->mprr_c[uv][mode][i][j];
+          }
+          cost += SATD(diff, input->hadamard);
+        }
+      }
+      if (cost < min_cost)
+      {
+        best_mode = mode;
+        min_cost = cost;
+      }
+    }
+
+    currMB->c_ipred_mode = best_mode;
+  }
+}
+
 
 /*!
  ************************************************************************
@@ -2012,6 +2137,7 @@ int writeIntra4x4Modes(int only_this_block)
 
   for(i=0;i<ipred_number;i++)
   {
+    currMB->IntraChromaPredModeFlag = 1;
     currSE->context = cont_array[i];
     currSE->value1  = ipred_array[i];
 
@@ -2024,9 +2150,9 @@ int writeIntra4x4Modes(int only_this_block)
     currSE->type = SE_INTRAPREDMODE;
 
     /*--- choose data partition ---*/
-    if (img->type==B_IMG)   dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
-    else                    dataPart = &(currSlice->partArr[partMap[SE_INTRAPREDMODE]]);
-
+    if (img->type != B_IMG && img->type != BS_IMG) dataPart = &(currSlice->partArr[partMap[SE_INTRAPREDMODE]]);
+    else                                           dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+    
     /*--- encode and update rate ---*/
     if (input->symbol_mode == UVLC)    writeSyntaxElement_Intra4x4PredictionMode(currSE, dataPart);
     else                               dataPart->writeSyntaxElement (currSE, dataPart);
@@ -2073,7 +2199,7 @@ B8Mode2Value (int b8mode, int b8pdir)
  ************************************************************************
  */
 int
-writeMBHeader ()
+writeMBHeader (int rdopt)  // GB CHROMA !!!!!!!!
 {
   int             i,j;
   int             mb_nr     = img->current_mb_nr;
@@ -2090,12 +2216,12 @@ writeMBHeader ()
   if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
     mb_y = img->top_field ? 2*img->field_mb_y:2*img->field_mb_y+1;
 
+  currMB->IntraChromaPredModeFlag = IS_INTRA(currMB);
 
   // choose the appropriate data partition
-  if (img->type == B_IMG || img->type == BS_IMG)   dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
-  else                      dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
-
-
+  if (img->type != B_IMG && img->type != BS_IMG)   dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
+  else                                             dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+  
   if( img->type!=INTRA_IMG || input->abt!=INTER_INTRA_ABT ) //in ABT intra frames, there can only be one mode.
   {
     //=====  BITS FOR MACROBLOCK MODE =====
@@ -2121,7 +2247,7 @@ writeMBHeader ()
     }
     else if (currMB->mb_type != 0 || ((img->type == B_IMG || img->type == BS_IMG) && currMB->cbp != 0))
     {
-      //===== Run Length Coding: Non-Skipped macorblock =====
+      //===== Run Length Coding: Non-Skipped macroblock =====
       currSE->value1  = img->cod_counter;
       currSE->mapping = n_linfo2;
       currSE->type    = SE_MBTYPE;
@@ -2213,9 +2339,9 @@ writeMBHeader ()
   //===== BITS FOR 8x8 SUB-PARTITION MODES AND ABT INTRA BLOCK MODES =====
   if (IS_P8x8 (currMB))
   {
-    if (img->type==B_IMG || img->type==BS_IMG) dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
-    else                  dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
-
+    if (img->type != B_IMG && img->type != BS_IMG) dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
+    else                                           dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+    
     for (i=0; i<4; i++)
     {
       if (input->symbol_mode==UVLC)   currSE->mapping = n_linfo2;
@@ -2268,9 +2394,16 @@ writeMBHeader ()
     currMB->currSEnr++;
   }
 
-
-  //===== BITS FOR INTRA PREDICTION MODES ====
+ //===== BITS FOR INTRA PREDICTION MODES ====
   no_bits += writeIntra4x4Modes(-1);
+  //===== BITS FOR CHROMA INTRA PREDICTION MODE ====
+  if (currMB->IntraChromaPredModeFlag)
+    no_bits += writeChromaIntraPredMode();
+	else if(!rdopt) //GB CHROMA !!!!!
+		currMB->c_ipred_mode = 0; //setting c_ipred_mode to default is not the right place here
+															//resetting in rdopt.c (but where ??)
+															//with cabac and bframes maybe it could crash without this default
+															//since cabac needs the right neighborhood for the later MBs
 
   return no_bits;
 }
@@ -2288,12 +2421,48 @@ write_terminating_bit (short bit)
   }
 
   //--- write non-slice termination symbol if the macroblock is not the first one in its slice ---
-  if (img->type == B_IMG || img->type == BS_IMG)   dataPart = &(img->currentSlice->partArr[partMap[SE_BFRAME]]);
-  else                      dataPart = &(img->currentSlice->partArr[partMap[SE_MBTYPE]]);
+  if (img->type != B_IMG && img->type != BS_IMG) dataPart = &(img->currentSlice->partArr[partMap[SE_MBTYPE]]);
+  else                                           dataPart = &(img->currentSlice->partArr[partMap[SE_BFRAME]]);
   dataPart->bitstream->write_flag = 1;
   eep_dp                          = &(dataPart->ee_cabac);
 
   biari_encode_symbol (eep_dp, bit, &(img->currentSlice->mot_ctx->slice_term_context));
+}
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Write chroma intra prediction mode.
+ ************************************************************************
+ */
+int   writeChromaIntraPredMode()
+{
+  Macroblock*     currMB    = &img->mb_data[img->current_mb_nr];
+  SyntaxElement*  currSE    = &img->MB_SyntaxElements[currMB->currSEnr];
+  Slice*          currSlice = img->currentSlice;
+  int*            bitCount  = currMB->bitcounter;
+  const int*      partMap   = assignSE2partition[input->partition_mode];
+  int             rate      = 0;
+  DataPartition*  dataPart;
+
+  //===== BITS FOR CHROMA INTRA PREDICTION MODES
+  if (input->symbol_mode==UVLC)   currSE->mapping = n_linfo2;
+  else                            currSE->writing = writeCIPredMode2Buffer_CABAC;
+  currSE->value1 = currMB->c_ipred_mode;
+  currSE->type = SE_INTRAPREDMODE;
+  if (img->type != B_IMG && img->type != BS_IMG) dataPart = &(currSlice->partArr[partMap[SE_INTRAPREDMODE]]);
+  else                                           dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+  dataPart->writeSyntaxElement (currSE, dataPart);
+  bitCount[BITS_COEFF_UV_MB] += currSE->len;
+  rate                    += currSE->len;
+#if TRACE
+  snprintf(currSE->tracestring, TRACESTRING_SIZE, "Chroma intra pred mode");
+#endif
+  currSE++;
+  currMB->currSEnr++;
+
+  return rate;
 }
 
 
@@ -2320,7 +2489,7 @@ void write_one_macroblock ()
   }
 
   //--- write header ---
-  writeMBHeader ();
+  writeMBHeader (0); //GB CHROMA !!!!!
 
   //  Do nothing more if copy and inter mode
   if ((IS_INTERMV (currMB)  || IS_INTRA (currMB)  ) ||
@@ -2339,7 +2508,7 @@ void write_one_macroblock ()
 
 
   //--- constrain intra prediction ---
-  if(input->UseConstrainedIntraPred && img->type==INTER_IMG && img->types != SP_IMG)
+  if(input->UseConstrainedIntraPred && (img->type==INTER_IMG || img->type==B_IMG) && img->types != SP_IMG)
   {
     if (!IS_NEWINTRA (currMB) && currMB->b8mode[0]!=IBLOCK) img->intra_block[img->current_mb_nr][0] = 0;
     if (!IS_NEWINTRA (currMB) && currMB->b8mode[1]!=IBLOCK) img->intra_block[img->current_mb_nr][1] = 0;
@@ -2767,7 +2936,7 @@ writeChromaCoeff ()
     
           // choose the appropriate data partition
           if (img->type!=B_IMG && img->type!=BS_IMG)   dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-          else                      dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+          else                                         dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
     
           dataPart->writeSyntaxElement (currSE, dataPart);
           bitCount[BITS_COEFF_UV_MB] += currSE->len;
@@ -2838,7 +3007,7 @@ writeChromaCoeff ()
 
               // choose the appropriate data partition
               if (img->type!=B_IMG && img->type!=BS_IMG)   dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-              else                      dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+              else                                         dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
         
               dataPart->writeSyntaxElement (currSE, dataPart);
               bitCount[BITS_COEFF_UV_MB] += currSE->len;
@@ -2909,7 +3078,7 @@ writeLumaCoeff4x4 (int b8, int b4, int intra4x4mode)
 
           // choose the appropriate data partition
           if (img->type!=B_IMG && img->type!=BS_IMG)   dataPart = &(currSlice->partArr[partMap[SE_LUM_DC_INTRA]]);
-          else                    dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+          else                                         dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
         }
         else
         {
@@ -2917,7 +3086,7 @@ writeLumaCoeff4x4 (int b8, int b4, int intra4x4mode)
             
           // choose the appropriate data partition
           if (img->type!=B_IMG && img->type!=BS_IMG)   dataPart = &(currSlice->partArr[partMap[SE_LUM_AC_INTRA]]);
-          else                    dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+          else                                         dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
         }
 
         dataPart->writeSyntaxElement (currSE, dataPart);
@@ -2951,7 +3120,7 @@ writeLumaCoeff4x4 (int b8, int b4, int intra4x4mode)
 
       // choose the appropriate data partition
       if (img->type != B_IMG && img->type != BS_IMG)    dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-      else                       dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+      else                                              dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
           
       dataPart->writeSyntaxElement (currSE, dataPart);
       bitCount[BITS_COEFF_Y_MB] += currSE->len;
@@ -3044,9 +3213,9 @@ writeCBPandLumaCoeff ()
     if (input->symbol_mode == CABAC)   currSE->writing = writeCBP2Buffer_CABAC;
                       
     // choose the appropriate data partition
-    if (img->type==B_IMG || img->type==BS_IMG)  dataPart = &(img->currentSlice->partArr[partMap[SE_BFRAME]]);
-    else                   dataPart = &(img->currentSlice->partArr[partMap[currSE->type]]);
-
+    if (img->type != B_IMG && img->type != BS_IMG) dataPart = &(currSlice->partArr[partMap[currSE->type]]);
+    else                                           dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+    
     dataPart->writeSyntaxElement(currSE, dataPart);
     bitCount[BITS_CBP_MB] += currSE->len;
     rate                  += currSE->len;
@@ -3066,12 +3235,14 @@ writeCBPandLumaCoeff ()
 
     if (input->symbol_mode==UVLC)   currSE->mapping = dquant_linfo;
     else                            currSE->writing = writeDquant_CABAC;
-      currSE->type = SE_DELTA_QUANT_INTRA;
+
+    if (IS_INTER (currMB))  currSE->type = SE_DELTA_QUANT_INTER;
+    else                    currSE->type = SE_DELTA_QUANT_INTRA;
 
 
     // choose the appropriate data partition
     if (img->type != B_IMG && img->type != BS_IMG)   dataPart = &(img->currentSlice->partArr[partMap[currSE->type]]);
-    else                      dataPart = &(img->currentSlice->partArr[partMap[SE_BFRAME]]);
+    else                                             dataPart = &(img->currentSlice->partArr[partMap[SE_BFRAME]]);
 
     dataPart->writeSyntaxElement(  currSE, dataPart);
     bitCount[BITS_DELTA_QUANT_MB] += currSE->len;
@@ -3130,7 +3301,7 @@ writeCBPandLumaCoeff ()
 
         // choose the appropriate data partition
         if (img->type != B_IMG && img->type != BS_IMG)   dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-        else                      dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+        else                                             dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
     
         dataPart->writeSyntaxElement (currSE, dataPart);
         bitCount[BITS_COEFF_Y_MB] += currSE->len;
@@ -3185,7 +3356,7 @@ writeCBPandLumaCoeff ()
 
             // choose the appropriate data partition
             if (img->type != B_IMG && img->type != BS_IMG)   dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-            else                      dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+            else                                             dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
 
             dataPart->writeSyntaxElement (currSE, dataPart);
             bitCount[BITS_COEFF_Y_MB] += currSE->len;

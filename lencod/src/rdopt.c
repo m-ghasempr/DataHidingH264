@@ -78,6 +78,8 @@ int   b8_ipredmode[16], b8_intra_pred_modes[16];
 CSptr cs_mb=NULL, cs_b8=NULL, cs_cm=NULL, cs_imb=NULL, cs_ib8=NULL, cs_ib4=NULL, cs_pc=NULL;
 int   best_abt_mode[MAXMODE][4];      // [mode][block]
 int   ABT_MODE[4];
+int   best_c_imode;
+int   best_i16offset;
 
 int   best8x8bwref     [MAXMODE][4];       // [mode][block]
 int   best8x8abp_type  [MAXMODE][4];       // [mode][block]
@@ -399,7 +401,7 @@ RDCost_for_4x4IntraBlocks (int*    nonzero,
 
   //--- choose data partition ---
   if (img->type==B_IMG && img->type!=BS_IMG)   dataPart = &(currSlice->partArr[partMap[SE_INTRAPREDMODE]]);
-  else                    dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+  else                                         dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
 
   //--- encode and update rate ---
   if (input->symbol_mode == UVLC)    writeSyntaxElement_Intra4x4PredictionMode(currSE, dataPart);
@@ -969,10 +971,11 @@ RDCost_for_8x8blocks (int*    cnt_nonz,   // --> number of nonzero coefficients
   }
   else
   {
-    dataPart        = &(currSlice->partArr[partMap[SE_BFRAME]]);
     currSE->value1  = b8value;
     currSE->writing = writeB8_typeInfo2Buffer_CABAC;
     currSE->type    = SE_MBTYPE;
+    if (img->type==B_IMG && img->type!=BS_IMG)   dataPart = &(currSlice->partArr[partMap[currSE->type]]);
+    else                                         dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
     dataPart->writeSyntaxElement (currSE, dataPart);
     rate += currSE->len;
     currSE++;
@@ -1301,7 +1304,7 @@ Intra16x16_Mode_Decision (Macroblock* currMB, int* i16mode)
  */
 void SetCoeffAndReconstruction8x8 (Macroblock* currMB)
 {
-  int ****ip4, k, j, i;
+  int block, k, j, i;
   int block_y = img->block_y;
   int **ipredmodes = img->ipredmode;
  
@@ -1311,7 +1314,13 @@ void SetCoeffAndReconstruction8x8 (Macroblock* currMB)
     ipredmodes  = img->top_field ? img->ipredmode_top:img->ipredmode_bot;
   }
 
-  ip4=img->cofAC; img->cofAC=cofAC8x8; cofAC8x8=ip4;
+  //--- restore coefficients ---
+  for (block=0; block<6; block++)
+  for (k=0; k<4; k++)
+  for (j=0; j<2; j++)
+  for (i=0; i<65; i++)
+    img->cofAC[block][k][j][i] = cofAC8x8[block][k][j][i];
+
   if (cnt_nonz_8x8<=5 && img->types!=SP_IMG)
   {
     currMB->cbp     = 0;
@@ -1650,6 +1659,7 @@ RDCost_for_macroblocks (double   lambda,      // <-- lagrange multiplier
     compute_residue_mb (mode==I16MB?i16mode:-1);
   }
 
+  img->i16offset = 0;
   dummy = 0;
   ChromaResidualCoding (&dummy);
   if (mode==I16MB)     img->i16offset = I16Offset  (currMB->cbp, i16mode);
@@ -1705,7 +1715,7 @@ RDCost_for_macroblocks (double   lambda,      // <-- lagrange multiplier
     {
       // cod counter and macroblock mode are written ==> do not consider code counter
       tmp_cc = img->cod_counter;
-      rate   = writeMBHeader ();
+      rate   = writeMBHeader (1); //GB CHROMA !!!!!
       n_linfo2 (tmp_cc, dummy, &cc_rate, &dummy);
       rate  -= cc_rate;
       img->cod_counter = tmp_cc;
@@ -1720,7 +1730,7 @@ RDCost_for_macroblocks (double   lambda,      // <-- lagrange multiplier
   }
   else
   {
-    rate = writeMBHeader ();
+    rate = writeMBHeader (1); //GB CHROMA !!!!!
   }
   if (mode)
   {
@@ -1808,6 +1818,8 @@ store_macroblock_parameters (int mode)
 
   //--- store best mode ---
   best_mode = mode;
+  best_c_imode = currMB->c_ipred_mode;
+  best_i16offset = img->i16offset;
   for (i=0; i<4; i++)
   {
     b8mode[i]   = currMB->b8mode[i];
@@ -2019,6 +2031,8 @@ set_stored_macroblock_parameters ()
   }
 
   //==== intra prediction modes ====
+  currMB->c_ipred_mode = best_c_imode;
+  img->i16offset = best_i16offset;
   if (mode==P8x8)
   {
     for (k=0, j=block_y+1; j<block_y+5; j++)
@@ -2031,22 +2045,23 @@ set_stored_macroblock_parameters ()
   else if (mode!=I4MB)
   {
     for (k=0, j=block_y+1; j<block_y+5; j++)
-    for (     i=img->block_x+1; i<img->block_x+5; i++, k++)
-    {
-      ipredmodes    [i][j] = 0;
-      currMB->intra_pred_modes[k] = 0;
-    }
+      for (     i=img->block_x+1; i<img->block_x+5; i++, k++)
+      {
+        ipredmodes    [i][j] = 0;
+        currMB->intra_pred_modes[k] = 0;
+      }
   }
 
   if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive)
   {
     for (k=0, j=block_y+1; j<block_y+5; j++)
-    for (     i=img->block_x+1; i<img->block_x+5; i++, k++)
-  {
-      rdopt->ipredmode[i][j] = ipredmodes[i][j];
-    rdopt->intra_pred_modes[k] = currMB->intra_pred_modes[k];
-  }
-
+      for (     i=img->block_x+1; i<img->block_x+5; i++, k++)
+      {
+        rdopt->ipredmode[i][j] = ipredmodes[i][j];
+        rdopt->intra_pred_modes[k] = currMB->intra_pred_modes[k];
+      }
+    rdopt->c_ipred_mode = currMB->c_ipred_mode;
+    rdopt->i16offset = img->i16offset;  // DH
   }
 
   //==== motion vectors =====
@@ -2358,6 +2373,9 @@ encode_one_macroblock ()
       if (rerun==0)   input->rdopt=1;
       else            input->rdopt=2;
     }
+
+    // reset chroma intra predictor to default
+    currMB->c_ipred_mode = DC_PRED_8;
 
     if (!intra)
     {
@@ -2909,39 +2927,66 @@ encode_one_macroblock ()
 
     if (input->rdopt)
     {
-      //===== GET BEST MACROBLOCK MODE =====
-      for (ctr16x16=0, min_rdcost=max_rdcost, index=0; index<7; index++)
+      int mb_available_up;
+      int mb_available_left;
+      
+      min_rdcost = max_rdcost;
+      
+      // precompute all new chroma intra prediction modes
+      IntraChromaPrediction8x8(&mb_available_up, &mb_available_left);
+
+      for (currMB->c_ipred_mode=DC_PRED_8; currMB->c_ipred_mode<=PLANE_8; currMB->c_ipred_mode++)
       {
-        mode = mb_mode_table[index];
+        // bypass if c_ipred_mode is not allowed
+        if ((currMB->c_ipred_mode==VERT_PRED_8 && !mb_available_up) ||
+           (currMB->c_ipred_mode==HOR_PRED_8 && !mb_available_left) ||
+           (currMB->c_ipred_mode==PLANE_8 && (!mb_available_left || !mb_available_up)))
+           continue;
 
-        if ( (input->abt==INTER_INTRA_ABT) && ((mode==I4MB)||(mode==I16MB)) && (!intra) )
-          lambda_mode = lambda_intra;
-        else
-          lambda_mode = lambda_inter;
-
-        //--- for INTER16x16 check all prediction directions ---
-        if (mode==1 && img->type==B_IMG)
+        //===== GET BEST MACROBLOCK MODE =====
+        for (ctr16x16=0, index=0; index<7; index++)
         {
-          best8x8pdir[1][0] = best8x8pdir[1][1] = best8x8pdir[1][2] = best8x8pdir[1][3] = ctr16x16;
-          if (ctr16x16 < 2) index--;
-          ctr16x16++;
-        }
+          mode = mb_mode_table[index];
 
-        img->NoResidueDirect = 0;
+          if ( (input->abt==INTER_INTRA_ABT) && ((mode==I4MB)||(mode==I16MB)) && (!intra) )
+            lambda_mode = lambda_intra;
+          else
+            lambda_mode = lambda_inter;
 
-        if (valid[mode])
-        {
-          if (RDCost_for_macroblocks (lambda_mode, mode, &min_rdcost))
+          //--- for INTER16x16 check all prediction directions ---
+          if (mode==1 && img->type==B_IMG)
           {
-            store_macroblock_parameters (mode);
+            best8x8pdir[1][0] = best8x8pdir[1][1] = best8x8pdir[1][2] = best8x8pdir[1][3] = ctr16x16;
+            if (ctr16x16 < 2) index--;
+            ctr16x16++;
           }
-        }
-        if (bframe && mode == 0 && currMB->cbp && (currMB->cbp&15) != 15)
-        {
-            img->NoResidueDirect = 1;
-            if (RDCost_for_macroblocks (lambda_mode, mode, &min_rdcost))
+
+          img->NoResidueDirect = 0;
+
+          if (valid[mode])
+          {
+            // bypass if c_ipred_mode not used
+            SetModesAndRefframeForBlocks (mode);
+            if (currMB->c_ipred_mode == DC_PRED_8 ||
+              (IS_INTRA(currMB) || (IS_P8x8(currMB) &&
+              (currMB->b8mode[0]==IBLOCK ||
+              currMB->b8mode[1]==IBLOCK ||
+              currMB->b8mode[2]==IBLOCK ||
+              currMB->b8mode[3]==IBLOCK))))
             {
-              store_macroblock_parameters (mode);
+              if (RDCost_for_macroblocks (lambda_mode, mode, &min_rdcost))
+              {
+                store_macroblock_parameters (mode);
+              }
+            }
+          }
+          if (bframe && mode == 0 && currMB->cbp && (currMB->cbp&15) != 15)
+          {
+              img->NoResidueDirect = 1;
+              if (RDCost_for_macroblocks (lambda_mode, mode, &min_rdcost))
+              {
+                store_macroblock_parameters (mode);
+            }
           }
         }
       }
@@ -3035,6 +3080,9 @@ encode_one_macroblock ()
         }
       }
     }
+    // precompute all chroma intra prediction modes
+    IntraChromaPrediction8x8(NULL, NULL);
+    img->i16offset = 0;
     dummy = 0;
     ChromaResidualCoding (&dummy);
     if (best_mode==I16MB)

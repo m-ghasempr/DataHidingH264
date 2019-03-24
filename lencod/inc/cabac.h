@@ -117,6 +117,11 @@ static const int IPR_Ini[9][2][2]=
   {{ -7,65},{-1,63}},
   {{-18,66},{-9,67}}
 };
+ //GB
+static const int CIPR_Ini[4][2]=
+{
+{-4,61},{ 1,68},{ 1,71},{1,60}
+};
 
 static const int BCBP_Ini[2][NUM_BLOCK_TYPES][NUM_BCBP_CTX][2]=
 {

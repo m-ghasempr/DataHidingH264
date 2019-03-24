@@ -128,6 +128,7 @@ void init_contexts_TextureInfo(TextureInfoContexts *enco_ctx)
 
   INIT_CTX (3, NUM_CBP_CTX,  enco_ctx->cbp_contexts,    CBP_Ini[!intra]);
   INIT_CTX (9, NUM_IPR_CTX,  enco_ctx->ipr_contexts,    IPR_Ini   );
+  INIT_CTX (1, NUM_CIPR_CTX, &enco_ctx->cipr_contexts,   &CIPR_Ini  ); //GB
 
   INIT_CTX (NUM_BLOCK_TYPES, NUM_BCBP_CTX,  enco_ctx->bcbp_contexts, BCBP_Ini[intra]);
   INIT_CTX (NUM_BLOCK_TYPES, NUM_MAP_CTX,   enco_ctx->map_contexts,  MAP_Ini [intra]);
@@ -135,6 +136,7 @@ void init_contexts_TextureInfo(TextureInfoContexts *enco_ctx)
   INIT_CTX (NUM_BLOCK_TYPES, NUM_ONE_CTX,   enco_ctx->one_contexts,  ONE_Ini [intra]);
   INIT_CTX (NUM_BLOCK_TYPES, NUM_ABS_CTX,   enco_ctx->abs_contexts,  ABS_Ini [intra]);
 }
+
 
 /*!
  ************************************************************************
@@ -611,7 +613,7 @@ void writeB8_typeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep
  */
 void writeIntraPredMode2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
-  TextureInfoContexts *ctx = img->currentSlice->tex_ctx;
+  TextureInfoContexts *ctx     = img->currentSlice->tex_ctx;
 
   unary_bin_max_encode(eep_dp,(unsigned int) se->value1+1,ctx->ipr_contexts[0],1,8);
 }
@@ -888,6 +890,45 @@ void writeBiMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
     act_ctx=5*k;
     unary_exp_golomb_mv_encode(eep_dp,act_sym,ctx->mv_res_contexts[1]+act_ctx,3);
   }
+}
+
+
+/*!
+ ****************************************************************************
+ * \brief
+ *    This function is used to arithmetically encode the chroma
+ *    intra prediction mode of an 8x8 block
+ ****************************************************************************
+ */ //GB
+void writeCIPredMode2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
+{
+  TextureInfoContexts *ctx     = img->currentSlice->tex_ctx;
+  Macroblock          *currMB  = &img->mb_data[img->current_mb_nr];
+  int                 act_ctx,a,b;
+  int                 act_sym  = se->value1;
+
+  if (currMB->mb_available[0][1] == NULL) b = 0;
+  else  b = ( ((currMB->mb_available[0][1])->c_ipred_mode != 0) ? 1 : 0);
+
+  if (currMB->mb_available[1][0] == NULL) a = 0;
+  else  a = ( ((currMB->mb_available[1][0])->c_ipred_mode != 0) ? 1 : 0);
+
+  act_ctx = a+b;
+
+  if (act_sym==0) biari_encode_symbol(eep_dp, 0, ctx->cipr_contexts + act_ctx );
+  else
+  {
+    biari_encode_symbol(eep_dp, 1, ctx->cipr_contexts + act_ctx );
+    unary_bin_max_encode(eep_dp,(unsigned int) (act_sym-1),ctx->cipr_contexts+3,0,2);
+  }
+
+//	biari_encode_symbol_eq_prob(eep_dp, (signed short) (act_sym & 0x1));
+	//biari_encode_symbol_eq_prob(eep_dp, (signed short) (act_sym & 0x2));
+
+//	if (img->type==B_IMG || img->type==BS_IMG)
+//		printf(" %d",act_sym);
+
+
 }
 
 

@@ -61,9 +61,8 @@ extern const byte QP_SCALE_CR[52] ;
 // NOTE: to change the tables below for instance when the QP doubling is changed from 6 to 8 values 
 //       send an e-mail to Peter.List@t-systems.com to get a little programm that calculates them automatically 
 
-
-byte ALPHA_TABLE[40]  = {0,0,0,0,0,0,0,0,  4,4,5,6,7,9,10,12,  14,17,20,24,28,33,39,46,  55,65,76,90,106,126,148,175,  207,245,255,255,255,255,255,255} ;
-byte  BETA_TABLE[40]  = {0,0,0,0,0,0,0,0,  3,3,3,4,4,4, 6, 6,   7, 7, 8, 8, 9, 9,10,10,  11,11,12,12, 13, 13, 14, 14,   15, 15, 16, 16, 17, 17, 18, 18} ;
+byte ALPHA_TABLE[40]  = {0,0,0,0,4,4,5,6,  7,8,9,10,12,13,15,17,  20,22,25,28,32,36,40,45,  50,56,63,71,80,90,101,113,  127,144,162,182,203,226,255,255} ;
+byte  BETA_TABLE[40]  = {0,0,0,0,2,2,2,3,  3,3,3, 4, 4, 4, 6, 6,   7, 7, 8, 8, 9, 9,10,10,  11,11,12,12,13,13, 14, 14,   15, 15, 16, 16, 17, 17, 18, 18} ;
 byte CLIP_TAB[40][5]  =
  {{ 0, 0, 0, 0, 0},{ 0, 0, 0, 0, 0},{ 0, 0, 0, 0, 0},{ 0, 0, 0, 0, 0},{ 0, 0, 0, 0, 0},{ 0, 0, 0, 1, 1},{ 0, 0, 0, 1, 1},{ 0, 0, 0, 1, 1},
   { 0, 0, 0, 1, 1},{ 0, 0, 1, 1, 1},{ 0, 0, 1, 1, 1},{ 0, 1, 1, 1, 1},{ 0, 1, 1, 1, 1},{ 0, 1, 1, 1, 1},{ 0, 1, 1, 1, 1},{ 0, 1, 1, 2, 2},
@@ -73,7 +72,7 @@ byte CLIP_TAB[40][5]  =
 
 
 void GetStrength(byte Strength[4],byte LargeBlockEdge[4],struct img_par *img,Macroblock* MbP,Macroblock* MbQ,int dir,int edge,int mb_y,int mb_x,byte blkmode[2][2]);
-void EdgeLoop(byte* SrcPtr,byte Strength[4],byte LargeBlockEdge[4],int QP,int dir,int width,int yuv);
+void EdgeLoop(byte* SrcPtr,byte Strength[4],byte LargeBlockEdge[4], int QP, int AlphaC0Offset, int BetaOffset, int dir,int width,int yuv);
 void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int mb_y, int mb_x) ;
 void get_deblock_modes(ImageParameters *img,Macroblock *MB,byte blkmode[2][2]);
 
@@ -119,6 +118,9 @@ void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int mb_y, int m
   else
     MbQ  = &img->mb_data[mb_y*(img->width>>4) + mb_x] ;                                                 // current Mb
 
+  // This could also be handled as a filter offset of -51 
+  if (MbQ->lf_disable) return;
+
   get_deblock_modes(img,MbQ,blkmode);
 
   for( dir=0 ; dir<2 ; dir++ )                                             // vertical edges, than horicontal edges
@@ -139,11 +141,11 @@ void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int mb_y, int m
         GetStrength(Strength,LargeBlockEdge,img,MbP,MbQ,dir,edge,mb_y<<2,mb_x<<2,blkmode); // Strength for 4 blks in 1 stripe
         if( *((int*)Strength) )  // && (QP>= 8) )                    // only if one of the 4 Strength bytes is != 0
         {
-          EdgeLoop( SrcY + (edge<<2)* ((dir)? img->width:1 ), Strength, LargeBlockEdge, QP, dir, img->width, 0) ; 
+          EdgeLoop( SrcY + (edge<<2)* ((dir)? img->width:1 ), Strength, LargeBlockEdge, QP, MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width, 0) ; 
           if( (imgUV != NULL) && !(edge & 1) )
           {
-            EdgeLoop( SrcU +  (edge<<1) * ((dir)? img->width_cr:1 ), Strength, LargeBlockEdge, QP_SCALE_CR[QP+SHIFT_QP]-SHIFT_QP, dir, img->width_cr, 1 ) ; 
-            EdgeLoop( SrcV +  (edge<<1) * ((dir)? img->width_cr:1 ), Strength, LargeBlockEdge, QP_SCALE_CR[QP+SHIFT_QP]-SHIFT_QP, dir, img->width_cr, 1 ) ; 
+            EdgeLoop( SrcU +  (edge<<1) * ((dir)? img->width_cr:1 ), Strength, LargeBlockEdge, QP_SCALE_CR[QP+SHIFT_QP]-SHIFT_QP, MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width_cr, 1 ) ; 
+            EdgeLoop( SrcV +  (edge<<1) * ((dir)? img->width_cr:1 ), Strength, LargeBlockEdge, QP_SCALE_CR[QP+SHIFT_QP]-SHIFT_QP, MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width_cr, 1 ) ; 
           }
         }
       }
@@ -301,7 +303,8 @@ void GetStrength(byte Strength[4],byte LargeBlockEdge[4],struct img_par *img,Mac
  *    Filters one edge of 16 (luma) or 8 (chroma) pel
  *****************************************************************************************
  */
-void EdgeLoop(byte* SrcPtr,byte Strength[4],byte LargeBlockEdge[4],int QP,int dir,int width,int yuv)
+void EdgeLoop(byte* SrcPtr,byte Strength[4],byte LargeBlockEdge[4], int QP,
+              int AlphaC0Offset, int BetaOffset, int dir,int width,int yuv)
 {
   int      pel, ap, aq, PtrInc, Strng ;
   int      inc, inc2, inc3, inc4 ;
@@ -309,6 +312,9 @@ void EdgeLoop(byte* SrcPtr,byte Strength[4],byte LargeBlockEdge[4],int QP,int di
   int      L2, L1, L0, R0, R1, R2, RL0 ;
   int      Alpha = 0, Beta = 0 ;
   byte*    ClipTab = NULL;   
+  int      small_gap;
+  int      indexA, indexB;
+
 
   PtrInc  = dir?      1 : width ;
   inc     = dir?  width : 1 ;                     // vertical filtering increment to next pixel is 1 else width
@@ -320,15 +326,12 @@ void EdgeLoop(byte* SrcPtr,byte Strength[4],byte LargeBlockEdge[4],int QP,int di
   {
     if(!(pel&3))
     {
-      c0=QP;                    // QP is passed to EdgeLoop() in 'old range', no SHIFT_QP correction
-      if( LargeBlockEdge[pel>>2] )
-      {
-        c0+=LargeBlockEdge[pel>>2];
-        if(c0>MAX_QP-SHIFT_QP)c0=MAX_QP-SHIFT_QP;
-      }
-      Alpha=ALPHA_TABLE[c0];
-      Beta=BETA_TABLE[c0];  
-      ClipTab=CLIP_TAB[c0];
+      indexA = IClip(0, MAX_QP-SHIFT_QP-1, QP + LargeBlockEdge[pel>>2] + AlphaC0Offset);
+      indexB = IClip(0, MAX_QP-SHIFT_QP-1, QP + LargeBlockEdge[pel>>2] + BetaOffset);
+
+      Alpha=ALPHA_TABLE[indexA];
+      Beta=BETA_TABLE[indexB];  
+      ClipTab=CLIP_TAB[indexA];
     }
     if( (Strng = Strength[pel >> 2]) )
       {
@@ -352,11 +355,16 @@ void EdgeLoop(byte* SrcPtr,byte Strength[4],byte LargeBlockEdge[4],int QP,int di
 
           if(Strng == 4 )    // INTRA strong filtering
             {
+            small_gap = (AbsDelta < ((Alpha >> 2) + 2));
+         
+            aq &= small_gap;
+            ap &= small_gap;
+
             SrcPtr[   0 ]   = aq ? ( L1 + ((R1 + RL0) << 1) +  SrcPtr[ inc2] + 4) >> 3 : ((R1 << 1) + R0 + L1 + 2) >> 2 ;
             SrcPtr[-inc ]   = ap ? ( R1 + ((L1 + RL0) << 1) +  SrcPtr[-inc3] + 4) >> 3 : ((L1 << 1) + L0 + R1 + 2) >> 2 ;
 
-            SrcPtr[ inc ]   = aq ? ( SrcPtr[ inc3] + ((SrcPtr[ inc2] + R0 + R1) << 1) + L0 + 4) >> 3 : R1;
-            SrcPtr[-inc2]   = ap ? ( SrcPtr[-inc4] + ((SrcPtr[-inc3] + L1 + L0) << 1) + R0 + 4) >> 3 : L1;
+            SrcPtr[ inc ] =   aq  ? ( SrcPtr[ inc2] + R0 + R1 + L0 + 2) >> 2 : SrcPtr[ inc ];
+            SrcPtr[-inc2] =   ap  ? ( SrcPtr[-inc3] + L1 + L0 + R0 + 2) >> 2 : SrcPtr[-inc2];
 
             SrcPtr[ inc2] = (aq && !yuv) ? (((SrcPtr[ inc3] + SrcPtr[ inc2]) <<1) + SrcPtr[ inc2] + R1 + RL0 + 4) >> 3 : R2;
             SrcPtr[-inc3] = (ap && !yuv) ? (((SrcPtr[-inc4] + SrcPtr[-inc3]) <<1) + SrcPtr[-inc3] + L1 + RL0 + 4) >> 3 : L2;

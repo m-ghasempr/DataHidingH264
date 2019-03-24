@@ -195,6 +195,10 @@ SOURCE=.\ldecod\src\rtp.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\ldecod\src\sei.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\ldecod\src\uvlc.c
 # End Source File
 # End Group
@@ -296,6 +300,10 @@ SOURCE=.\lcommon\inc\memalloc.h
 # Begin Source File
 
 SOURCE=.\ldecod\inc\rtp.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ldecod\inc\sei.h
 # End Source File
 # Begin Source File
 

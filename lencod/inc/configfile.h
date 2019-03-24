@@ -134,6 +134,14 @@ Mapping Map[] = {
     {"FmoType",                  &configinput.FmoType,                 0},
     {"FmoConfigFileName",        &configinput.FmoConfigFileName,       1},
     {"BipredictiveWeighting",    &configinput.BipredictiveWeighting,   0},
+    {"LoopFilterParametersFlag", &configinput.LFSendParameters,        0},
+    {"LoopFilterDisable",        &configinput.LFDisable,               0},
+    {"LoopFilterAlphaC0Offset",  &configinput.LFAlphaC0Offset,         0},
+    {"LoopFilterBetaOffset",     &configinput.LFBetaOffset,            0},
+    {"SparePictureOption",       &configinput.SparePictureOption,      0},
+    {"SparePictureDetectionThr", &configinput.SPDetectionThreshold,    0},
+    {"SparePicturePercentageThr",&configinput.SPPercentageThreshold,   0},
+
     {NULL,                       NULL,                                -1}
 };
 

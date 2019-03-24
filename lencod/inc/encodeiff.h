@@ -183,6 +183,7 @@ typedef struct
   unsigned INT8 displayMode;
   unsigned INT16 displayRectangleOffsetFromWindowTop;
   unsigned INT16 displayRectangleOffsetFromWindowLeftBorder;
+  unsigned INT8 loopFilterParametersFlag;
   unsigned INT8 entropyCoding;
   unsigned INT8 motionResolution;
   unsigned INT8 partitioningType;
@@ -253,6 +254,11 @@ typedef struct sPayloadInfo
   int numRMPNI;
   int rmpni_Data[6];
   int rmpni_RMPNI[6];
+
+  unsigned INT8   filter_parameters_flag;
+  unsigned INT8   lf_disable;
+  INT8            lf_alpha_c0_offset_div2;
+  INT8            lf_beta_offset_div2;
 
 } PayloadInfo;
 

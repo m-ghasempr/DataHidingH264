@@ -394,9 +394,9 @@ void remove_long_term(int longID)
       if (i<fb->long_used) 
       {
         f=fb->picbuf_long[i];
-        for (j=i;j<fb->long_used-1;j++)
+        for (j=i;j<fb->long_used;j++)
           fb->picbuf_long[j]=fb->picbuf_long[j+1];
-        fb->picbuf_long[fb->long_used-1]=f;
+        fb->picbuf_long[fb->long_used]=f;
       } 
     }
   }
@@ -758,6 +758,7 @@ void add_frame(ImageParameters *img)
 
   fb->picbuf_short[0]->used=1;
   fb->picbuf_short[0]->picID=img->pn;
+  fb->picbuf_short[0]->frame_num_256=img->number % 256;   // Tian Dong (Sept 2002)
   fb->picbuf_short[0]->lt_picID=-1;
 
   // indicate which layer and sub-seq current ref frame comes from.
@@ -771,6 +772,7 @@ void add_frame(ImageParameters *img)
   {
     fb->picbuf_short[fb->short_size-1]->used=0;
     fb->picbuf_short[fb->short_size-1]->picID=-1;
+    fb->picbuf_short[fb->short_size-1]->frame_num_256=-1;   // Tian Dong (Sept 2002)
     fb->picbuf_short[fb->short_size-1]->lt_picID=-1;
     fb->short_used--;
     printf("remove last........................\n");

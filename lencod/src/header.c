@@ -265,6 +265,28 @@ int SliceHeader()
     sym->value1 = img->qpsp - (MAX_QP - MIN_QP +1)/2;
     len += writeSyntaxElement_UVLC (sym, partition);
   }
+
+  if (input->LFSendParameters)
+  {
+    SYMTRACESTRING("SH LF_DISABLE FLAG");
+    sym->bitpattern = input->LFDisable;  /* Turn loop filter on/off on slice basis */
+    sym->len = 1;
+    len += writeSyntaxElement_fixed(sym, partition);
+
+    if (!input->LFDisable)
+    {
+      sym->mapping = dquant_linfo;           // Mapping rule: Signed integer
+      SYMTRACESTRING("SH LFAlphaC0OffsetDiv2");
+      sym->value1 = input->LFAlphaC0Offset>>1; /* Convert from offset to code */
+      len += writeSyntaxElement_UVLC (sym, partition);
+
+      SYMTRACESTRING("SH LFBetaOffsetDiv2");
+      sym->value1 = input->LFBetaOffset>>1; /* Convert from offset to code */
+      len += writeSyntaxElement_UVLC (sym, partition);
+    }
+  }
+
+
   sym->mapping = n_linfo2;
   // Put the Motion Vector resolution as per reflector consensus
   SYMTRACESTRING("SH MVResolution");

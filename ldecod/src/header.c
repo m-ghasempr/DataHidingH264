@@ -303,6 +303,29 @@ int SliceHeader(struct img_par *img, struct inp_par *inp)
     readSyntaxElement_UVLC (&sym,img,inp,partition);
     img->qpsp = sym.value1 + (MAX_QP - MIN_QP + 1)/2;
   }
+
+  if (inp->LFParametersFlag)
+  {
+    SYMTRACESTRING("SH LF_DISABLE FLAG");
+    sym.len = 1;
+    readSyntaxElement_fixed (&sym,img,inp,partition);
+    currSlice->LFDisable = sym.inf;
+
+    if (!currSlice->LFDisable)
+    {
+      sym.mapping = linfo_dquant;           // Mapping rule: Signed integer
+      SYMTRACESTRING("SH LFAlphaC0OffsetDiv2");
+      readSyntaxElement_UVLC (&sym,img,inp,partition);
+      currSlice->LFAlphaC0Offset = sym.value1 << 1;
+      UsedBits += sym.len;
+
+      SYMTRACESTRING("SH LFBetaOffsetDiv2");
+      readSyntaxElement_UVLC (&sym,img,inp,partition);
+      currSlice->LFBetaOffset = sym.value1 << 1;
+      UsedBits += sym.len;
+    }
+  }
+
   sym.mapping = linfo;
   // 8. Get MVResolution
   SYMTRACESTRING("SH MVResolution");
