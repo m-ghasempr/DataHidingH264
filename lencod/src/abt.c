@@ -65,8 +65,6 @@
 #include "elements.h"
 #include "rdopt_coding_state.h"
 
-extern const byte mapTab[9];
-
 /*!
  ************************************************************************
  * \brief
@@ -1230,7 +1228,7 @@ void setDirectModeABT(int block8x8)
   {
     dirmode = B8x8+4; // 8x8 MB mode
   }
-  else if( currMB->mb_type==I4MB || (currMB->mb_type==P8x8&&currMB->b8mode[block8x8]==IBLOCK) )
+  else if( currMB->mb_type==I4MB )
     dirmode=4+(currMB->abt_mode[block8x8]&3);   // gives B4x4 if abt_mode[block8x8] = -1
   else
     dirmode = currMB->b8mode[block8x8];
@@ -1646,7 +1644,7 @@ int Mode_Decision_for_ABT_IntraBlocks(int b8,int b4,double lambda,int *min_cost,
 
   upMode           = img->ipredmode[pic_block_x+1][pic_block_y  ];
   leftMode         = img->ipredmode[pic_block_x  ][pic_block_y+1];
-  mostProbableMode = (upMode < 0 || leftMode < 0) ? DC_PRED : mapTab[upMode] < mapTab[leftMode] ? upMode : leftMode;
+  mostProbableMode = (upMode < 0 || leftMode < 0) ? DC_PRED : upMode < leftMode ? upMode : leftMode;
 
 
   //===== INTRA PREDICTION FOR 4x4 BLOCK =====
@@ -1717,10 +1715,10 @@ int Mode_Decision_for_ABT_IntraBlocks(int b8,int b4,double lambda,int *min_cost,
     for(i=0;i<(bs_x>>2);i++)
     {
       img->ipredmode[pic_block_x+i+1][pic_block_y+j+1] = best_ipmode;
-      currMB->intra_pred_modes[(b8<<2)+b4+(j<<1)+i]=0;
+      currMB->intra_pred_modes[(b8<<2)+b4+(j<<1)+i]=DC_PRED;
     }
 
-  currMB->intra_pred_modes[(b8<<2)+b4] = mostProbableMode == best_ipmode ? -1 : mapTab[best_ipmode] < mapTab[mostProbableMode] ? mapTab[best_ipmode] : mapTab[best_ipmode]-1;
+  currMB->intra_pred_modes[(b8<<2)+b4] = mostProbableMode == best_ipmode ? -1 : best_ipmode < mostProbableMode ? best_ipmode : best_ipmode-1;
 
   // get prediction and prediction error
   tmp_x=(b4&1)<<2;tmp_y=(b4&2)<<1;

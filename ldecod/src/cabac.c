@@ -54,7 +54,6 @@
 #include "header.h"
 #include "elements.h"
 
-extern const int BLOCK_STEP[8][2];
 int symbolCount = 0;
 
 /*!
@@ -116,12 +115,9 @@ void init_contexts_MotionInfo (struct img_par *img, MotionInfoContexts *enco_ctx
   INIT_CTX (2, NUM_B8_TYPE_CTX,  enco_ctx->b8_type_contexts,  B8_TYPE_Ini );
   INIT_CTX (2, NUM_MV_RES_CTX,   enco_ctx->mv_res_contexts,   MV_RES_Ini  );
   INIT_CTX (2, NUM_REF_NO_CTX,   enco_ctx->ref_no_contexts,   REF_NO_Ini  );
-  INIT_CTX (2, NUM_BWD_REF_NO_CTX, enco_ctx->bwd_ref_no_contexts, REF_NO_Ini);
   INIT_CTX (1, NUM_DELTA_QP_CTX, &enco_ctx->delta_qp_contexts, &DELTA_QP_Ini  );
   INIT_CTX (1, NUM_MB_AFF_CTX,   &enco_ctx->mb_aff_contexts,   &MB_AFF_Ini  );
 
-  enco_ctx->slice_term_context.state = 63;
-  enco_ctx->slice_term_context.MPS   =  0;
 }
 
 /*!
@@ -137,9 +133,8 @@ void init_contexts_TextureInfo(struct img_par *img, TextureInfoContexts *enco_ct
   int intra = (img->type==INTRA_IMG ? 1 : 0);
 
   INIT_CTX (3, NUM_CBP_CTX,  enco_ctx->cbp_contexts,    CBP_Ini[!intra]);
-  INIT_CTX (9, NUM_IPR_CTX,  enco_ctx->ipr_contexts,    IPR_Ini   );
-  INIT_CTX (1, NUM_CIPR_CTX, &enco_ctx->cipr_contexts,   &CIPR_Ini  ); //GB
-
+  INIT_CTX (1, NUM_IPR_CTX,  &enco_ctx->ipr_contexts,   &IPR_Ini   );
+  INIT_CTX (1, NUM_CIPR_CTX, &enco_ctx->cipr_contexts,  &CIPR_Ini  );
 
   INIT_CTX (NUM_BLOCK_TYPES, NUM_BCBP_CTX,  enco_ctx->bcbp_contexts, BCBP_Ini[intra]);
   INIT_CTX (NUM_BLOCK_TYPES, NUM_MAP_CTX,   enco_ctx->map_contexts,  MAP_Ini [intra]);
@@ -432,21 +427,14 @@ void readB8_typeInfoFromBuffer_CABAC (SyntaxElement *se,
     }
     else
     {
-      if (biari_decode_symbol (dep_dp, &ctx->b8_type_contexts[0][2]))
+      if (biari_decode_symbol (dep_dp, &ctx->b8_type_contexts[0][3]))
       {
-        act_sym = 4;
+        if (biari_decode_symbol (dep_dp, &ctx->b8_type_contexts[0][4])) act_sym = 2;
+        else                                                            act_sym = 3;
       }
       else
       {
-        if (biari_decode_symbol (dep_dp, &ctx->b8_type_contexts[0][3]))
-        {
-          if (biari_decode_symbol (dep_dp, &ctx->b8_type_contexts[0][4])) act_sym = 2;
-          else                                                            act_sym = 3;
-        }
-        else
-        {
-          act_sym = 1;
-        }
+        act_sym = 1;
       }
     }
   }
@@ -458,11 +446,15 @@ void readB8_typeInfoFromBuffer_CABAC (SyntaxElement *se,
       {
         if (biari_decode_symbol (dep_dp, &ctx->b8_type_contexts[1][2]))
         {
-          act_sym=6;
-          if (biari_decode_symbol (dep_dp, &ctx->b8_type_contexts[1][3])) act_sym+=4;
-          if (biari_decode_symbol (dep_dp, &ctx->b8_type_contexts[1][3])) act_sym+=2;
-          if (act_sym!=12)
+          if (biari_decode_symbol (dep_dp, &ctx->b8_type_contexts[1][3]))
           {
+            act_sym = 10;
+            if (biari_decode_symbol (dep_dp, &ctx->b8_type_contexts[1][3])) act_sym++;
+          }
+          else
+          {
+            act_sym = 6;
+            if (biari_decode_symbol (dep_dp, &ctx->b8_type_contexts[1][3])) act_sym+=2;
             if (biari_decode_symbol (dep_dp, &ctx->b8_type_contexts[1][3])) act_sym++;
           }
         }
@@ -822,15 +814,27 @@ void readIntraPredModeFromBuffer_CABAC( SyntaxElement *se,
                                         DecodingEnvironmentPtr dep_dp)
 {
   TextureInfoContexts *ctx     = img->currentSlice->tex_ctx;
+	int act_sym;
 
-  se->value1 = (int) unary_bin_max_decode(dep_dp,ctx->ipr_contexts[0],1,8);
-  se->value1--;
+	// use_most_probable_mode
+	act_sym = biari_decode_symbol(dep_dp, ctx->ipr_contexts);
+
+	// remaining_mode_selector
+	if (act_sym == 0)
+		se->value1 = -1;
+	else
+	{
+		se->value1 = 0;
+		se->value1 |= (biari_decode_symbol(dep_dp, ctx->ipr_contexts+1) << 2);
+		se->value1 |= (biari_decode_symbol(dep_dp, ctx->ipr_contexts+1) << 1);
+		se->value1 |=  biari_decode_symbol(dep_dp, ctx->ipr_contexts+1);
+	}
+
 #if TRACE
-  fprintf(p_trace, "@%d %s\t\t\t%d %d\n",symbolCount++, se->tracestring, se->value1,se->context);
+  fprintf(p_trace, "@%d%s\t\t\t%d\n",symbolCount++, se->tracestring, se->value1);
   fflush(p_trace);
 #endif
 }
-
 /*!
  ************************************************************************
  * \brief
@@ -873,10 +877,14 @@ void readRefFrameFromBuffer_CABAC(  SyntaxElement *se,
 
   if (currMB->mb_available[0][1] == NULL)
     b = 0;
+	else if (IS_DIRECT(currMB->mb_available[0][1]))
+		b = 0;
   else
     b = (refframe_array[block_y+img->subblock_y-1][img->block_x+img->subblock_x] > 0 ? 1 : 0);
   if (currMB->mb_available[1][0] == NULL)
     a = 0;
+	else if (IS_DIRECT(currMB->mb_available[1][0]))
+		a = 0;
   else 
     a = (refframe_array[block_y+img->subblock_y][img->block_x+img->subblock_x-1] > 0 ? 1 : 0);
 
@@ -945,10 +953,14 @@ void readBwdRefFrameFromBuffer_CABAC(  SyntaxElement *se,
 
   if (currMB->mb_available[0][1] == NULL)
     b = 0;
+	else if (IS_DIRECT(currMB->mb_available[0][1]))
+		b = 0;
   else
     b = (REF_IDX(refframe_array[block_y+img->subblock_y-1][img->block_x+img->subblock_x]) > 0 ? 1 : 0);
   if (currMB->mb_available[1][0] == NULL)
     a = 0;
+	else if (IS_DIRECT(currMB->mb_available[1][0]))
+		a = 0;
   else 
     a = (REF_IDX(refframe_array[block_y+img->subblock_y][img->block_x+img->subblock_x-1]) > 0 ? 1 : 0);
 #undef REF_IDX
@@ -956,20 +968,20 @@ void readBwdRefFrameFromBuffer_CABAC(  SyntaxElement *se,
   act_ctx = a + 2*b;
   se->context = act_ctx; // store context
 
-  act_sym = biari_decode_symbol(dep_dp,ctx->bwd_ref_no_contexts[addctx] + act_ctx );
+  act_sym = biari_decode_symbol(dep_dp,ctx->ref_no_contexts[addctx] + act_ctx );
 
   if (act_sym != 0)
   {
     act_ctx = 4;
-    act_sym = unary_bin_decode(dep_dp,ctx->bwd_ref_no_contexts[addctx]+act_ctx,1);
+    act_sym = unary_bin_decode(dep_dp,ctx->ref_no_contexts[addctx]+act_ctx,1);
     act_sym++;
   }
   se->value1 = act_sym;
 
 #if TRACE
-//  fprintf(p_trace, "@%d%s\t\t\t%d",symbolCount++, se->tracestring, se->value1);
-//  fprintf(p_trace," c: %d :%d \n",ctx->bwd_ref_no_contexts[addctx][act_ctx].cum_freq[0],ctx->bwd_ref_no_contexts[addctx][act_ctx].cum_freq[1]);
-//  fflush(p_trace);
+  fprintf(p_trace, "@%d%s\t\t\t%d",symbolCount++, se->tracestring, se->value1);
+//  fprintf(p_trace," c: %d :%d \n",ctx->ref_no_contexts[addctx][act_ctx].cum_freq[0],ctx->ref_no_contexts[addctx][act_ctx].cum_freq[1]);
+  fflush(p_trace);
   // commented out, does not compile. karll@real.com
 #endif
 }
@@ -1229,14 +1241,9 @@ void readCIPredMode_FromBuffer_CABAC(SyntaxElement *se,
   if (act_sym!=0) 
     act_sym = unary_bin_max_decode(dep_dp,ctx->cipr_contexts+3,0,2)+1;
 
-//	act_sym = 0;
-//	act_sym |= biari_decode_symbol_eq_prob(dep_dp);
-//	act_sym |= (biari_decode_symbol_eq_prob(dep_dp)<<1);
 
   se->value1 = act_sym;
 
-	//if (img->type==B_IMG_1 || img->type==B_IMG_MULT) 
-	//	printf(" %d",act_sym);
 
 #if TRACE
   fprintf(p_trace, "@%d%s\t\t\t%d\n",symbolCount++, se->tracestring, se->value1);
@@ -1728,7 +1735,8 @@ int cabac_startcode_follows(struct img_par *img, struct inp_par *inp, int eos_bi
 
   if( eos_bit )
   {
-    bit = biari_decode_symbol (dep_dp, &(currSlice->mot_ctx->slice_term_context));
+		bit = biari_decode_final (dep_dp); //GB
+
 #if TRACE
 //	strncpy(se->tracestring, "Decode Sliceterm", TRACESTRING_SIZE);
   fprintf(p_trace, "@%d %s\t\t%d\n",symbolCount++, "Decode Sliceterm", bit);
@@ -1745,38 +1753,6 @@ int cabac_startcode_follows(struct img_par *img, struct inp_par *inp, int eos_bi
 
 
 
-
-/*!
- ************************************************************************
- * \brief
- *    Exp Golomb binarization and decoding of a symbol without model
- *    k = exp golombparameter (k==0, uvlc)
- ************************************************************************
- */
-unsigned int exp_golomb_decode( DecodingEnvironmentPtr dep_dp,
-                                int k)
-{
-  unsigned int l;
-  int symbol = 0;
-  int binary_symbol = 0;
-
-  do
-  {
-    l=biari_decode_symbol_eq_prob(dep_dp);
-    if (l==1) 
-    {
-      symbol += (1<<k); 
-      k++;
-    }
-  }
-  while (l!=0);
-
-  while (k--)                             //next binary part
-    if (biari_decode_symbol_eq_prob(dep_dp)==1) 
-      binary_symbol |= (1<<k);
-
-  return (unsigned int) (symbol+binary_symbol);
-}
 
 
 /*!

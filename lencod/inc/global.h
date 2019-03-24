@@ -202,7 +202,6 @@ typedef struct
   byte          *Ecodestrm;
   int           *Ecodestrm_len;
   int           *Ecodestrm_laststartcode;
-  unsigned short*AC_next_state_MPS_64;
   // storage in case of recode MB
   unsigned int  ElowS, ErangeS;
   unsigned int  EbufferS;
@@ -210,11 +209,9 @@ typedef struct
   unsigned int  Ebits_to_followS;
   byte          *EcodestrmS;
   int           *Ecodestrm_lenS;
-#ifdef NEW_CONSTRAINT_AC
   int           C, CS;
   int           E, ES;
   int           B, BS;
-#endif
 } EncodingEnvironment;
 
 typedef EncodingEnvironment *EncodingEnvironmentPtr;
@@ -254,10 +251,9 @@ typedef struct
   BiContextType b8_type_contexts [2][NUM_B8_TYPE_CTX];
   BiContextType mv_res_contexts  [2][NUM_MV_RES_CTX];
   BiContextType ref_no_contexts  [2][NUM_REF_NO_CTX];
-  BiContextType bwd_ref_no_contexts [2][NUM_REF_NO_CTX];
   BiContextType delta_qp_contexts   [NUM_DELTA_QP_CTX];
   BiContextType mb_aff_contexts			[NUM_MB_AFF_CTX];
-  BiContextType slice_term_context;
+
 } MotionInfoContexts;
 
 
@@ -273,8 +269,8 @@ typedef struct
 
 typedef struct
 {
-  BiContextType  ipr_contexts [9][NUM_IPR_CTX];
-  BiContextType  cipr_contexts[NUM_CIPR_CTX]; //GB
+  BiContextType  ipr_contexts [NUM_IPR_CTX]; 
+  BiContextType  cipr_contexts[NUM_CIPR_CTX]; 
   BiContextType  cbp_contexts [3][NUM_CBP_CTX];
   BiContextType  bcbp_contexts[NUM_BLOCK_TYPES][NUM_BCBP_CTX];
   BiContextType  map_contexts [NUM_BLOCK_TYPES][NUM_MAP_CTX];
@@ -535,14 +531,6 @@ int   **fw_refFrArr_frm;
 int   **bw_refFrArr_frm;
 
 // Buffers for rd optimization with packet losses, Dim. Kontopodis
-/* int  **resY;             //!< Residue of Luminance
-byte ***decY;            //!< Decoded values at the simulated decoders
-byte ****decref;         //!< Reference frames of the simulated decoders
-byte ***decY_best;       //!< Decoded frames for the best mode for all decoders
-byte **RefBlock;
-byte **status_map;
-byte **dec_mb_mode;
-byte **dec_mb_ref;*/
 byte **pixel_map;   //!< Shows the latest reference frame that is reliable for each pixel
 byte **refresh_map; //!< Stores the new values for pixel_map  
 int intras;         //!< Counts the intra updates in each frame.
@@ -983,7 +971,7 @@ void LumaResidualCoding ();
 void ChromaResidualCoding (int*);
 void IntraChromaPrediction8x8 (int*, int*);
 void SetRefFrameInfo (int, int);
-int  writeMBHeader   (int rdopt); //GB CHROMA !!!!!
+int  writeMBHeader   (int rdopt); 
 
 extern int*   refbits;
 extern int*** motion_cost;
@@ -1104,12 +1092,12 @@ Boolean dummy_slice_too_big(int bits_slice);
 // CABAC
 void arienco_start_encoding(EncodingEnvironmentPtr eep, unsigned char *code_buffer, int *code_len, int *last_startcode, int slice_type);
 int  arienco_bits_written(EncodingEnvironmentPtr eep);
-int  get_trailing_bits(EncodingEnvironmentPtr eep);
 void arienco_done_encoding(EncodingEnvironmentPtr eep);
 void biari_init_context (BiContextTypePtr ctx, const int* ini);
 void rescale_cum_freq(BiContextTypePtr bi_ct);
 void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiContextTypePtr bi_ct );
 void biari_encode_symbol_eq_prob(EncodingEnvironmentPtr eep, signed short symbol);
+void biari_encode_symbol_final(EncodingEnvironmentPtr eep, signed short symbol);
 MotionInfoContexts* create_contexts_MotionInfo(void);
 TextureInfoContexts* create_contexts_TextureInfo(void);
 void init_contexts_MotionInfo (MotionInfoContexts  *enco_ctx);
@@ -1135,7 +1123,6 @@ void print_ctx_TextureInfo(TextureInfoContexts *enco_ctx);
 void writeMB_skip_flagInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeFieldModeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp); //GB
 void CheckAvailabilityOfNeighborsForAff(); //
-void print_ctx_MotionInfo(MotionInfoContexts *enco_ctx); //GB
 
 
 void error(char *text, int code);
@@ -1183,7 +1170,7 @@ void set_ref_field(int *k);
 void rotate_buffer();
 void set_mbaff_parameters();  // For MB AFF
 
-int   writeLumaCoeff4x4     (int, int, int);
+int   writeLumaCoeff4x4_CABAC     (int, int, int);
 int   writeCBPandLumaCoeff  ();
 int   writeChromaCoeff      ();
 int   writeMB_bits_for_4x4_luma   (int, int, int);
@@ -1192,10 +1179,6 @@ int   writeMB_bits_for_luma       (int);
 int   writeMB_bits_for_DC_chroma  (int);
 int   writeMB_bits_for_AC_chroma  (int);
 int   writeMB_bits_for_CBP        ();
-//!TO Hack for the Dquant-Problem
-int   writeMB_bits_for_Dquant_inter     ();
-int   writeMB_bits_for_Dquant_intra     ();
-//! End TO
 
 int   SingleUnifiedMotionSearch   (int, int, int**, int***, int*****, int, int*****, double);
 

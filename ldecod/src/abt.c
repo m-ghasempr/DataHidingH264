@@ -533,7 +533,7 @@ void readLumaCoeffABT_B8(int block8x8, struct inp_par *inp, struct img_par *img)
 #endif
 
   // this has to be done for each subblock seperately
-  intra     = (currMB->b8mode[block8x8]==IBLOCK)||IS_INTRA(currMB);
+  intra     = IS_INTRA(currMB);
   abt_mode  = currMB->abt_mode[block8x8];
   inumblk   = ABT_NUMTR [abt_mode][0] * ABT_NUMTR [abt_mode][1];
   inumcoeff = ABT_TRSIZE[abt_mode][0] * ABT_TRSIZE[abt_mode][1] + 1; //  all positions + EOB
@@ -779,7 +779,7 @@ void setDirectModeABT(int block8x8, struct img_par *img)
   {
     dirmode = B8x8+4; // 8x8 MB mode
   }
-  else if( currMB->mb_type==I4MB || (currMB->mb_type==P8x8&&currMB->b8mode[block8x8]==IBLOCK) )
+  else if( currMB->mb_type==I4MB )
     dirmode=4+(currMB->abt_mode[block8x8]&3);
   else
     dirmode = currMB->b8mode[block8x8];

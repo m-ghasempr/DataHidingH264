@@ -73,7 +73,6 @@
 #define CHROMA_AC       7
 #define NUM_BLOCK_TYPES 8
 
-#define NEW_CONSTRAINT_AC
 
 #define clamp(a,b,c) ( (a)<(b) ? (b) : ((a)>(c)?(c):(a)) )    //!< clamp a to the range of [b;c]
 
@@ -159,21 +158,11 @@
 #define IS_COPY(MB)     ((MB)->mb_type==0     && img ->   type==INTER_IMG);
 #define IS_P8x8(MB)     ((MB)->mb_type==P8x8)
 
-//#define _OLDSTYLEQP_
 // Quantization parameter range
-#ifndef _OLDSTYLEQP_
 
 #define MIN_QP          0
 #define MAX_QP          51
 #define SHIFT_QP        12
-
-#else
-
-#define MIN_QP          -12
-#define MAX_QP          39
-#define SHIFT_QP        0
-
-#endif
 
 // Picture types
 #define INTRA_IMG       0   //!< I frame
@@ -195,15 +184,15 @@
 
 #define NO_INTRA_PMODE  9        //!< #intra prediction modes
 //!< 4x4 intra prediction modes
-#define DC_PRED               0
-#define VERT_PRED             1
-#define HOR_PRED              2
-#define DIAG_DOWN_RIGHT_PRED  3
-#define DIAG_DOWN_LEFT_PRED   4
+#define VERT_PRED             0
+#define HOR_PRED              1
+#define DC_PRED               2
+#define DIAG_DOWN_LEFT_PRED   3
+#define DIAG_DOWN_RIGHT_PRED  4
 #define VERT_RIGHT_PRED       5
-#define VERT_LEFT_PRED        6
-#define HOR_UP_PRED           7
-#define HOR_DOWN_PRED         8
+#define HOR_DOWN_PRED         6
+#define VERT_LEFT_PRED        7
+#define HOR_UP_PRED           8
 
 // 16x16 intra prediction modes
 #define VERT_PRED_16    0

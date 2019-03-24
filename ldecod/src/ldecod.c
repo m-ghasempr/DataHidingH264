@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 5.0
+ *     JM 5.0c
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -125,7 +125,7 @@
 #endif
 
 #define JM          "5"
-#define VERSION     "5.0"
+#define VERSION     "5.0c"
 
 #define LOGFILE     "log.dec"
 #define DATADECFILE "dataDec.txt"

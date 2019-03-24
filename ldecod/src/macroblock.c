@@ -310,9 +310,6 @@ void start_macroblock(struct img_par *img,struct inp_par *inp, int CurrentMBInSc
         for (k=0; k < 2; k++)
           currMB->mvd[l][j][i][k] = 0;
 
-  for (i=0; i < (BLOCK_MULTIPLE*BLOCK_MULTIPLE); i++)
-    currMB->intra_pred_modes[i] = 0;
-
   currMB->cbp_bits   = 0;
 
   // initialize img->m7 for ABT
@@ -614,11 +611,11 @@ void init_macroblock(struct img_par *img)
         img->mv[img->block_x+i+4][img->block_y+j][1] = 0;
       }
 
-      img->ipredmode[img->block_x+i+1][img->block_y+j+1] = 0;
+      img->ipredmode[img->block_x+i+1][img->block_y+j+1] = DC_PRED;
       if (img->current_mb_nr%2==0)
-        img->ipredmode_top[img->block_x+i+1][j2+j+1] = 0;
+        img->ipredmode_top[img->block_x+i+1][j2+j+1] = DC_PRED;
       else
-        img->ipredmode_bot[img->block_x+i+1][j2+j+1] = 0;
+        img->ipredmode_bot[img->block_x+i+1][j2+j+1] = DC_PRED;
     }
   }
 
@@ -1088,10 +1085,13 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
   if(img->UseConstrainedIntraPred && (img->type==INTER_IMG_1 || img->type==INTER_IMG_MULT
      || img->type==B_IMG_1 || img->type==B_IMG_MULT))        // inter frame
   {
-    if (!IS_NEWINTRA (currMB) && currMB->b8mode[0]!=IBLOCK) img->intra_block[img->current_mb_nr][0] = 0;
-    if (!IS_NEWINTRA (currMB) && currMB->b8mode[1]!=IBLOCK) img->intra_block[img->current_mb_nr][1] = 0;
-    if (!IS_NEWINTRA (currMB) && currMB->b8mode[2]!=IBLOCK) img->intra_block[img->current_mb_nr][2] = 0;
-    if (!IS_NEWINTRA (currMB) && currMB->b8mode[3]!=IBLOCK) img->intra_block[img->current_mb_nr][3] = 0;
+    if( !IS_INTRA(currMB) )
+    {
+      img->intra_block[img->current_mb_nr][0] = 0;
+      img->intra_block[img->current_mb_nr][1] = 0;
+      img->intra_block[img->current_mb_nr][2] = 0;
+      img->intra_block[img->current_mb_nr][3] = 0;
+    }
   }
 
   if(!(img->type == B_IMG_1 || img->type == B_IMG_MULT))
@@ -1347,8 +1347,6 @@ void read_ipred_modes(struct img_par *img,struct inp_par *inp)
   int mostProbableIntraPredMode;
   int upIntraPredMode;
   int leftIntraPredMode;
-  int mapTab[9] = {2, 0, 1, 4, 3, 5, 7, 8, 6};
-  int revMapTab[9] = {1, 2, 0, 4, 3, 5, 8, 6, 7};
   int IntraChromaPredModeFlag;
   
   currMB=img->mb_data+img->map_mb_nr;//current_mb_nr;
@@ -1409,16 +1407,15 @@ void read_ipred_modes(struct img_par *img,struct inp_par *inp)
 
           upIntraPredMode            = ts == 0 ? img->ipredmode[bi+1][bj] : DC_PRED;
           leftIntraPredMode          = ls == 0 ? img->ipredmode[bi][bj+1] : DC_PRED;
-          mostProbableIntraPredMode  = (upIntraPredMode < 0 || leftIntraPredMode < 0) ? DC_PRED : mapTab[upIntraPredMode] < mapTab[leftIntraPredMode] ? upIntraPredMode : leftIntraPredMode;
+          mostProbableIntraPredMode  = (upIntraPredMode < 0 || leftIntraPredMode < 0) ? DC_PRED : upIntraPredMode < leftIntraPredMode ? upIntraPredMode : leftIntraPredMode;
 
-          dec = (currSE.value1 == -1) ? mostProbableIntraPredMode : revMapTab[currSE.value1 + (currSE.value1 >= mapTab[mostProbableIntraPredMode])];
+          dec = (currSE.value1 == -1) ? mostProbableIntraPredMode : currSE.value1 + (currSE.value1 >= mostProbableIntraPredMode);
 
           //set
           for(jj=0;jj<(bs_y>>2);jj++)   //loop 4x4s in the subblock
             for(ii=0;ii<(bs_x>>2);ii++)
             {
               img->ipredmode[1+bi+ii][1+bj+jj]=dec;
-//              if(jj||ii)currMB->intra_pred_modes[(b8<<2)|((j+jj)<<1)|(i+ii)]=dec;
             }
           if (img->mb_frame_field_flag)
             j2 = img->block_y / 2 +    (b8&2)   + j - 2*(img->current_mb_nr%2);
@@ -1431,9 +1428,9 @@ void read_ipred_modes(struct img_par *img,struct inp_par *inp)
             {
               upIntraPredMode            = ts == 0 ? img->ipredmode_top[bi+1][j2] : DC_PRED;
               leftIntraPredMode          = ls == 0 ? img->ipredmode_top[bi][j2+1] : DC_PRED;
-              mostProbableIntraPredMode  = (upIntraPredMode < 0 || leftIntraPredMode < 0) ? DC_PRED : mapTab[upIntraPredMode] < mapTab[leftIntraPredMode] ? upIntraPredMode : leftIntraPredMode;
+              mostProbableIntraPredMode  = (upIntraPredMode < 0 || leftIntraPredMode < 0) ? DC_PRED : upIntraPredMode < leftIntraPredMode ? upIntraPredMode : leftIntraPredMode;
 
-              dec1 = (currSE.value1 == -1) ? mostProbableIntraPredMode : revMapTab[currSE.value1 + (currSE.value1 >= mapTab[mostProbableIntraPredMode])];
+              dec1 = (currSE.value1 == -1) ? mostProbableIntraPredMode : currSE.value1 + (currSE.value1 >= mostProbableIntraPredMode);
 
               for(jj=0;jj<(bs_y>>2);jj++)   //loop 4x4s in the subblock
                 for(ii=0;ii<(bs_x>>2);ii++)
@@ -1446,9 +1443,9 @@ void read_ipred_modes(struct img_par *img,struct inp_par *inp)
             {
               upIntraPredMode            = ts == 0 ? img->ipredmode_bot[bi+1][j2] : DC_PRED;
               leftIntraPredMode          = ls == 0 ? img->ipredmode_bot[bi][j2+1] : DC_PRED;
-              mostProbableIntraPredMode  = (upIntraPredMode < 0 || leftIntraPredMode < 0) ? DC_PRED : mapTab[upIntraPredMode] < mapTab[leftIntraPredMode] ? upIntraPredMode : leftIntraPredMode;
+              mostProbableIntraPredMode  = (upIntraPredMode < 0 || leftIntraPredMode < 0) ? DC_PRED : upIntraPredMode < leftIntraPredMode ? upIntraPredMode : leftIntraPredMode;
 
-              dec1 = (currSE.value1 == -1) ? mostProbableIntraPredMode : revMapTab[currSE.value1 + (currSE.value1 >= mapTab[mostProbableIntraPredMode])];
+              dec1 = (currSE.value1 == -1) ? mostProbableIntraPredMode : currSE.value1 + (currSE.value1 >= mostProbableIntraPredMode);
 
               for(jj=0;jj<(bs_y>>2);jj++)   //loop 4x4s in the subblock
                 for(ii=0;ii<(bs_x>>2);ii++)
@@ -1465,8 +1462,8 @@ void read_ipred_modes(struct img_par *img,struct inp_par *inp)
               for(jj=0;jj<(bs_y>>2);jj++)   //loop 4x4s in the subblock
                 for(ii=0;ii<(bs_x>>2);ii++)
                 {
-                    img->ipredmode_top[1+bi+ii][1+j2+jj] = 0;
-                    img->ipredmode_bot[1+bi+ii][1+j2+jj] = 0;
+                    img->ipredmode_top[1+bi+ii][1+j2+jj] = DC_PRED;
+                    img->ipredmode_bot[1+bi+ii][1+j2+jj] = DC_PRED;
                 }
             }
             else
@@ -3491,7 +3488,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
 
     for (i=0;i<BLOCK_SIZE;i++)
       for (j=0;j<BLOCK_SIZE;j++)
-        img->ipredmode[img->block_x+i+1][img->block_y+j+1]=0;
+        img->ipredmode[img->block_x+i+1][img->block_y+j+1]=DC_PRED;
 
 
     if (inp->symbol_mode == UVLC)
@@ -3665,10 +3662,10 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
                   * luminance coefficients
                   */
                   currSE.context      = (IS_NEWINTRA(currMB) ? LUMA_16AC : LUMA_4x4);
-                  currSE.type         = (IS_NEWINTRA(currMB) || currMB->b8mode[b8]==IBLOCK ?
+                  currSE.type         = (IS_INTRA(currMB) ?
                                         (k==0 ? SE_LUM_DC_INTRA : SE_LUM_AC_INTRA) :
                                         (k==0 ? SE_LUM_DC_INTER : SE_LUM_AC_INTER));
-                  img->is_intra_block = (IS_NEWINTRA(currMB) || currMB->b8mode[b8]==IBLOCK);
+                  img->is_intra_block = IS_INTRA(currMB);
                   
 #if TRACE
                   sprintf(currSE.tracestring, " Luma sng ");
@@ -4656,11 +4653,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
   // chroma decoding *******************************************************
   for(uv=0;uv<2;uv++)
   {
-    intra_prediction = (IS_NEWINTRA (currMB)        ||
-                        currMB->b8mode[0] == IBLOCK ||
-                        currMB->b8mode[1] == IBLOCK ||
-                        currMB->b8mode[2] == IBLOCK ||
-                        currMB->b8mode[3] == IBLOCK);
+    intra_prediction = IS_INTRA (currMB);
 
     if (intra_prediction)
     {
@@ -4724,7 +4717,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
         pred_dir = currMB->b8pdir[2*(j-4)+i];
 
         // PREDICTION
-        if (mv_mode==IBLOCK || IS_NEWINTRA (currMB))
+        if (IS_INTRA (currMB))
         {
           //--- INTRA PREDICTION ---
           int pred;
@@ -4768,8 +4761,8 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
               ih += ii*(imgUV[uv][img->pix_c_y-1][img->pix_c_x+3+ii] - imgUV[uv][img->pix_c_y-1][img->pix_c_x+3-ii]);
               iv += ii*(imgUV[uv][img->pix_c_y+3+ii][img->pix_c_x-1] - imgUV[uv][img->pix_c_y+3-ii][img->pix_c_x-1]);
             }
-            ib=17*(ih+16)/32;
-            ic=17*(iv+16)/32;
+            ib=(17*ih+16)>>5;
+            ic=(17*iv+16)>>5;
             iaa=16*(imgUV[uv][img->pix_c_y-1][img->pix_c_x+7]+imgUV[uv][img->pix_c_y+7][img->pix_c_x-1]);
             for (ii=0; ii<4; ii++)
             for (jj=0; jj<4; jj++)
@@ -5963,11 +5956,7 @@ int decode_super_macroblock(struct img_par *img,struct inp_par *inp)
 
   for(uv=0;uv<2;uv++)
   {
-    intra_prediction = (IS_NEWINTRA (currMB)        ||
-                        currMB->b8mode[0] == IBLOCK ||
-                        currMB->b8mode[1] == IBLOCK ||
-                        currMB->b8mode[2] == IBLOCK ||
-                        currMB->b8mode[3] == IBLOCK);
+    intra_prediction = IS_INTRA (currMB);
 
     if (intra_prediction)
     {
@@ -6031,7 +6020,7 @@ int decode_super_macroblock(struct img_par *img,struct inp_par *inp)
         pred_dir = currMB->b8pdir[2*(j-4)+i];
 
         // PREDICTION
-        if (mv_mode==IBLOCK || IS_NEWINTRA (currMB))
+        if (IS_INTRA (currMB))
         {
           //--- INTRA PREDICTION ---
           //--- INTRA PREDICTION ---
@@ -6076,8 +6065,8 @@ int decode_super_macroblock(struct img_par *img,struct inp_par *inp)
               ih += ii*(imgUV[uv][img_pix_c_y-1][img->pix_c_x+3+ii] - imgUV[uv][img_pix_c_y-1][img->pix_c_x+3-ii]);
               iv += ii*(imgUV[uv][img_pix_c_y+3+ii][img->pix_c_x-1] - imgUV[uv][img_pix_c_y+3-ii][img->pix_c_x-1]);
             }
-            ib=17*(ih+16)/32;
-            ic=17*(iv+16)/32;
+            ib=(17*ih+16)>>5;
+            ic=(17*iv+16)>>5;
             iaa=16*(imgUV[uv][img_pix_c_y-1][img->pix_c_x+7]+imgUV[uv][img_pix_c_y+7][img->pix_c_x-1]);
             for (ii=0; ii<4; ii++)
             for (jj=0; jj<4; jj++)

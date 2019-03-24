@@ -58,10 +58,10 @@ extern int symbolCount;
  ************************************************************************
  */
 
-#define get_byte(){                                                     \
-            Dbuffer = Dcodestrm[(*Dcodestrm_len)++];        \
-                        Dbits_to_go = 7;                                \
-          }
+#define get_byte(){																					\
+										Dbuffer = Dcodestrm[(*Dcodestrm_len)++];\
+										Dbits_to_go = 7;												\
+									}
 
 
 /************************************************************************
@@ -76,7 +76,7 @@ extern int symbolCount;
  * \brief
  *    Allocates memory for the DecodingEnvironment struct
  * \return DecodingContextPtr
- *    allocated memory
+ *    allocates memory
  ************************************************************************
  */
 DecodingEnvironmentPtr arideco_create_decoding_environment()
@@ -116,35 +116,26 @@ void arideco_delete_decoding_environment(DecodingEnvironmentPtr dep)
 void arideco_start_decoding(DecodingEnvironmentPtr dep, unsigned char *cpixcode,
                             int firstbyte, int *cpixcode_len, int slice_type )
 {
-  int i;
-  int bits;
-  bits = B_BITS;
+ 
+	int value = 0;
 
-  Dcodestrm = cpixcode;
+	Dcodestrm = cpixcode;
   Dcodestrm_len = cpixcode_len;
   *Dcodestrm_len = firstbyte;
+ 
+	{
+		int i;
+		Dbits_to_go = 0;
+		for (i = 0; i < B_BITS -1 ; i++) // insertion of redundant bit
+		{
+			if (--Dbits_to_go < 0)
+				get_byte();
+			value = (value<<1)  | ((Dbuffer >> Dbits_to_go) & 0x01);
+		}
+	}
+	dep->Drange = HALF-2;
+  dep->Dvalue = value;
 
-  Dbits_to_go = 0;
-  dep->Dvalue = 0;
-
-  for (i = 0; i < bits; i++)
-  {
-    if (--Dbits_to_go < 0)
-      get_byte();
-    dep->Dvalue <<= 1;
-    if (Dbuffer & 0x80) 
-      dep->Dvalue |= 0x01;
-    Dbuffer <<= 1;
-  }
-  dep->Dlow = 0;
-
-  /* Only necessary for new AC */
-  dep->Drange = CACM99_HALF;
-
-  if (slice_type == INTRA_IMG) //INTRA_SLICE
-    dep->AC_next_state_MPS_64 = AC_next_state_MPS_64_INTRA;
-  else
-    dep->AC_next_state_MPS_64 = AC_next_state_MPS_64_INTER;
 }
 
 
@@ -156,7 +147,7 @@ void arideco_start_decoding(DecodingEnvironmentPtr dep, unsigned char *cpixcode,
  */
 int arideco_bits_read(DecodingEnvironmentPtr dep)
 {
-  return 8 * ((*Dcodestrm_len)-1) + (8 - Dbits_to_go) - CODE_VALUE_BITS;
+  return 8 * ((*Dcodestrm_len)-1) + (8 - Dbits_to_go) - 16;
 }
 
 
@@ -183,49 +174,34 @@ void arideco_done_decoding(DecodingEnvironmentPtr dep)
  */
 unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi_ct )
 {
-  int bit;
-  register unsigned int range, value;
-  
-  range = dep->Drange;
-  value = dep->Dvalue;
+  register unsigned int bit = bi_ct->MPS;
+	register unsigned int value = dep->Dvalue;
+  register unsigned int range = dep->Drange;
+	register unsigned int rLPS = rLPS_table_64x4[bi_ct->state][(range>>6) & 0x03];
 
-  /* scope  rLPS, rMPS  */
-  {
-    unsigned int rLPS, rMPS;
-   
-    rLPS = rLPS_table_64x4[bi_ct->state][(range-0x4001)>>12];
-    rMPS = range - rLPS;
+	range -= rLPS;
 
-    if (value >= rMPS) 
-    {
-      value -= rMPS;
-      range = rLPS;
-      bit = !(bi_ct->MPS);
-      if (!bi_ct->state)
-        bi_ct->MPS = bi_ct->MPS ^ 1;               // switch LPS if necessary
-      bi_ct->state = AC_next_state_LPS_64[bi_ct->state]; // next state
-    } 
-    else 
-    {
-      range = rMPS;
-      bit = bi_ct->MPS;
-      bi_ct->state = dep->AC_next_state_MPS_64[bi_ct->state]; // next state
-    }
-  }
-  
-  while (range <= CACM99_QUARTER)
+	if (value < range) /* MPS */ 
+  	bi_ct->state = AC_next_state_MPS_64[bi_ct->state]; // next state
+  else						  /* LPS */
   {
-    /* Double range and value */
+		value -= range;
+		range = rLPS;
+		bit = !bit;
+    if (!bi_ct->state)			 // switch meaning of MPS if necessary	
+			bi_ct->MPS ^= 0x01;              
+		bi_ct->state = AC_next_state_LPS_64[bi_ct->state]; // next state 
+	}
+  
+  while (range < QUARTER)
+  {
+    /* Double range */
     range <<= 1;
     if (--Dbits_to_go < 0) 
-    {
-      get_byte();
-    }
+	    get_byte();   
     /* Shift in next bit and add to value */
-    value <<= 1;
-    if (Dbuffer & 0x80)
-      value |= 0x01;
-    Dbuffer <<= 1;
+		value = (value << 1) | ((Dbuffer >> Dbits_to_go) & 0x01);
+
   }
   
   dep->Drange = range;
@@ -245,33 +221,56 @@ unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi
  */
 unsigned int biari_decode_symbol_eq_prob(DecodingEnvironmentPtr dep)
 {
-  int bit;
-  register unsigned int value  = dep->Dvalue;
-  register unsigned int range  = (dep->Drange>>1);
+  register unsigned int bit = 0;
+	register unsigned int value  = (dep->Dvalue<<1);
 
-  
-  if (value >= range) 
-  {
-    bit = 1;
-    value -= range;
-  } 
-  else 
-    bit = 0;
+	if (--Dbits_to_go < 0) 
+		get_byte();	
+	/* Shift in next bit and add to value */	
+	value |= (Dbuffer >> Dbits_to_go) &  0x01;	
+	if (value >= dep->Drange) 
+	{
+		bit = 1;
+		value -= dep->Drange;
+	}
 
-  if (--Dbits_to_go < 0) 
-  {
-    get_byte();
-  }
-  /* Shift in next bit and add to value */  
-  value <<= 1;
-  if (Dbuffer & 0x80)
-    value |= 0x01;
-  Dbuffer <<= 1;
-
-  dep->Dvalue = value;
-  dep->Drange = (range<<1);
+	dep->Dvalue = value;
 
   return(bit);
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    biari_decode_symbol_final():
+ * \return
+ *    the decoded symbol
+ ************************************************************************
+ */
+unsigned int biari_decode_final(DecodingEnvironmentPtr dep)
+{
+  register unsigned int value  = dep->Dvalue;
+  register unsigned int range  = dep->Drange - 2;
+		
+	if (value >= range) 
+	{
+		return 1;
+	}
+	else
+	{
+		while (range < QUARTER)
+		{
+    /* Double range */
+			range <<= 1;
+			if (--Dbits_to_go < 0) 
+				get_byte();   
+			/* Shift in next bit and add to value */
+			value = (value << 1) | ((Dbuffer >> Dbits_to_go) & 0x01);
+		}	
+		dep->Dvalue = value;
+		dep->Drange = range;
+		return 0;
+	}
 }
 
 
@@ -279,15 +278,14 @@ unsigned int biari_decode_symbol_eq_prob(DecodingEnvironmentPtr dep)
 /*!
  ************************************************************************
  * \brief
- *    Initializes a given context with some pre-defined probabilities
- *    and a maximum symbol count for triggering the rescaling
+ *    Initializes a given context with some pre-defined probability state
  ************************************************************************
  */
 void biari_init_context (struct img_par* img, BiContextTypePtr ctx, const int* ini)
 {
   int pstate;
 
-  pstate = ((ini[0]*(img->qp-SHIFT_QP))>>4) + ini[1]; 
+	pstate = ((ini[0]*(img->qp-SHIFT_QP))>>4) + ini[1]; 
 
 
   if (img->type==INTRA_IMG) pstate = min (max (27, pstate),  74);  // states from 0 to 23

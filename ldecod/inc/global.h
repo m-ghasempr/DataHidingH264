@@ -239,7 +239,6 @@ typedef struct
   int             Dbits_to_go;
   byte            *Dcodestrm;
   int             *Dcodestrm_len;
-  unsigned short  *AC_next_state_MPS_64;
 } DecodingEnvironment;
 
 typedef DecodingEnvironment *DecodingEnvironmentPtr;
@@ -264,7 +263,6 @@ typedef BiContextType *BiContextTypePtr;
 #define NUM_B8_TYPE_CTX  9
 #define NUM_MV_RES_CTX   10
 #define NUM_REF_NO_CTX   6
-#define NUM_BWD_REF_NO_CTX  6
 #define NUM_DELTA_QP_CTX 4
 #define NUM_MB_AFF_CTX 4
 
@@ -276,10 +274,8 @@ typedef struct
   BiContextType b8_type_contexts [2][NUM_B8_TYPE_CTX];
   BiContextType mv_res_contexts  [2][NUM_MV_RES_CTX];
   BiContextType ref_no_contexts  [2][NUM_REF_NO_CTX];
-  BiContextType bwd_ref_no_contexts[2][NUM_BWD_REF_NO_CTX];
   BiContextType delta_qp_contexts[NUM_DELTA_QP_CTX];
   BiContextType mb_aff_contexts  [NUM_MB_AFF_CTX];
-  BiContextType slice_term_context;
 } MotionInfoContexts;
 
 #define NUM_IPR_CTX    2
@@ -294,8 +290,8 @@ typedef struct
 
 typedef struct
 {
-  BiContextType  ipr_contexts [9][NUM_IPR_CTX];
-  BiContextType  cipr_contexts[NUM_CIPR_CTX]; //GB
+  BiContextType  ipr_contexts [NUM_IPR_CTX];
+  BiContextType  cipr_contexts[NUM_CIPR_CTX]; 
   BiContextType  cbp_contexts [3][NUM_CBP_CTX];
   BiContextType  bcbp_contexts[NUM_BLOCK_TYPES][NUM_BCBP_CTX];
   BiContextType  map_contexts [NUM_BLOCK_TYPES][NUM_MAP_CTX];
@@ -376,7 +372,6 @@ typedef struct macroblock
   // some storage of macroblock syntax elements for global access
   int           mb_type;
   int           mvd[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE][2];      //!< indices correspond to [forw,backw][block_y][block_x][x,y]
-  int           intra_pred_modes[BLOCK_MULTIPLE*BLOCK_MULTIPLE];
   int           cbp, cbp_blk ;
   unsigned long cbp_bits;
 
@@ -737,6 +732,7 @@ void biari_init_context (struct img_par *img, BiContextTypePtr ctx, const int* i
 void rescale_cum_freq(BiContextTypePtr bi_ct);
 unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi_ct );
 unsigned int biari_decode_symbol_eq_prob(DecodingEnvironmentPtr dep);
+unsigned int biari_decode_final(DecodingEnvironmentPtr dep);
 MotionInfoContexts* create_contexts_MotionInfo(void);
 TextureInfoContexts* create_contexts_TextureInfo(void);
 void init_contexts_MotionInfo(struct img_par *img, MotionInfoContexts *enco_ctx);
@@ -764,12 +760,12 @@ int  readSyntaxElement_CABAC(SyntaxElement *se, struct img_par *img, struct inp_
 void readDquant_FromBuffer_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp);
 void readCIPredMode_FromBuffer_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp);
 
-void readMB_skip_flagInfoFromBuffer_CABAC( SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);//GB
-void readFieldModeInfoFromBuffer_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp); //GB
-void setRealMB_nr (struct img_par *img); //GB
+void readMB_skip_flagInfoFromBuffer_CABAC( SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
+void readFieldModeInfoFromBuffer_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp); 
+void setRealMB_nr (struct img_par *img); 
 int  check_next_mb_and_get_field_mode_CABAC(SyntaxElement *se,struct img_par *img,struct inp_par *inp,DataPartition  *act_dp);
-void CheckAvailabilityOfNeighborsForSkip(struct img_par *img); //GB
-void CheckAvailabilityOfNeighborsForAff(struct img_par *img); //GB
+void CheckAvailabilityOfNeighborsForSkip(struct img_par *img); 
+void CheckAvailabilityOfNeighborsForAff(struct img_par *img); 
 
 
 void error(char *text, int code);

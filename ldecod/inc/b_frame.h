@@ -51,9 +51,6 @@
 extern int ONE_FOURTH_TAP[3][2];
 extern const byte NCBP[48][2];
 
-extern byte PRED_IPRED[7][7][6];
-extern const byte IPRED_ORDER[36][2];
-
 extern const int BLOCK_STEP[8][2];
 extern const byte SNGL_SCAN[16][2];
 extern const int JQ1[];

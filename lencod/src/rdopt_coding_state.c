@@ -50,7 +50,6 @@
 #include <memory.h>
 #include "rdopt_coding_state.h"
 
-static const int max_ipr=9;
 
 
 /*!

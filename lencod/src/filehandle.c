@@ -470,16 +470,15 @@ int terminate_slice(int write_out)
         eep = &((currSlice->partArr[0]).ee_cabac);
         currStream = (currSlice->partArr[0]).bitstream;
         // terminate the arithmetic code
-        stat->bit_use_stuffingBits[img->type]+=get_trailing_bits(eep);
         arienco_done_encoding(eep);
-        if (eep->Ebits_to_go != 8)
-          stat->bit_use_stuffingBits[img->type]+=eep->Ebits_to_go;
+				currStream->bits_to_go = eep->Ebits_to_go;
+				currStream->byte_buf = 0;
 
-        SODBtoRBSP(currStream);
+				// SODBtoRBSP(currStream); GB stopbit is inserted in arienco_done_encoding
 
         bytes_written = currStream->byte_pos; // number of written bytes
 
-        temp_byte_pos = bytes_written;
+        temp_byte_pos = bytes_written-5; // 5 last bytes contain stuffing information
         bytes_written = RBSPtoEBSP(currStream->streamBuffer, 0, bytes_written);
         *(stat->em_prev_bits) += (bytes_written - temp_byte_pos) * 8;
 
@@ -551,25 +550,15 @@ int terminate_slice(int write_out)
           currStream = (currSlice->partArr[0]).bitstream;
           
           // terminate the arithmetic code
-          stat->bit_use_stuffingBits[img->type]+=get_trailing_bits(eep);
           arienco_done_encoding(eep);
-          
-          if (eep->Ebits_to_go != 8)
-            stat->bit_use_stuffingBits[img->type]+=eep->Ebits_to_go;
-          
+					currStream->bits_to_go = eep->Ebits_to_go;
+					currStream->byte_buf = 0;
+                    
           bytes_written = currStream->byte_pos-currStream->tmp_byte_pos;
-          if (currStream->bits_to_go < 8) // trailing bits to process
-          {
-            currStream->byte_buf <<= currStream->bits_to_go;
-            stat->bit_use_header[img->type]+=currStream->bits_to_go;
-            
-            currStream->streamBuffer[bytes_written]= currStream->byte_buf;  // Yue
-            bytes_written++;
-            currStream->bits_to_go = 8;
-          }
 
-          SODBtoRBSP(currStream);
-          temp_byte_pos = currStream->byte_pos;
+					// SODBtoRBSP(currStream); GB stopbit is inserted in arienco_done_encoding
+
+          temp_byte_pos = currStream->byte_pos-5; // last 5 bytes contain stuffing information
           currStream->byte_pos = RBSPtoEBSP(currStream->streamBuffer, currStream->last_startcode+startcodeprefix_len, currStream->byte_pos);
           *(stat->em_prev_bits) += (currStream->byte_pos - temp_byte_pos) * 8;
 
@@ -598,11 +587,10 @@ int terminate_slice(int write_out)
         if (input->symbol_mode == CABAC)
         {
           eep = &((currSlice->partArr[i]).ee_cabac);
-          stat->bit_use_stuffingBits[img->type]+=get_trailing_bits(eep);
           arienco_done_encoding(eep);
-          if (eep->Ebits_to_go != 8)
-            stat->bit_use_stuffingBits[img->type]+=eep->Ebits_to_go;
-       }
+					currStream->bits_to_go = eep->Ebits_to_go;
+					currStream->byte_buf = 0;
+				}
         
         if (currStream->bits_to_go < 8) // trailing bits to process
         {
@@ -664,9 +652,15 @@ int terminate_slice(int write_out)
           currStream->byte_pos = bytes_written; 
           currStream->bits_to_go = 8;
           currStream->byte_buf = 0;
-          SODBtoRBSP(currStream);
+
+					if (input->symbol_mode==UVLC)  //GB stopbit is inserted in arienco_done_encoding for CABAC
+						SODBtoRBSP(currStream);
+
           bytes_written = currStream->byte_pos;
           temp_byte_pos = bytes_written;
+	  if (input->symbol_mode==CABAC)
+	    temp_byte_pos -= 5; // last five bytes contain stuffing info
+
           bytes_written = RBSPtoEBSP(currStream->streamBuffer, Bytes_After_Header, bytes_written);
           *(stat->em_prev_bits) += (bytes_written - temp_byte_pos) * 8;
 

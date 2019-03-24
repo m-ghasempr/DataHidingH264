@@ -1,3 +1,33 @@
+Changes for Version JM 5.0c to JM 5.0b
+--------------------------------------
+New features
+* CABC Cleanup and Complexity reduction (FB)
+
+Bug Fixes
+* Chroma intra pred fix (AH/KS)
+* Loop filter Clipping (AH)
+
+Cleanups (no functional change)
+* 4x4 intra prediction mode order (KS)
+* remove old qp range support (simplifies loop filter) (KS)
+* remove some never called code (KS)
+
+
+Changes for Version JM 5.0b to JM 5.0a
+--------------------------------------
+New features
+* CABAC cleanup (GB/DM)
+
+
+Changes for Version JM 5.0a to JM 5.0
+-------------------------------------
+Removed features
+* Intra 8x8 sub macroblocks (HS)
+
+Bug Fixes
+* Choose right data partition in RDCost_for_4x4IntraBlocks() MW
+
+
 Changes for Version JM 5.0 to JM 4.4a
 -------------------------------------
 New features
@@ -683,6 +713,7 @@ DH      Dzung Hoang             dzung.hoang@conexant.com
 DK      Dimitris Kontopodis     dkonto@eikon.tum.de
 DM      Detlev Marpe            marpe@hhi.de
 DT      Dong Tian               tian@cs.tut.fi
+FB      Frank Bossen            bossen@docomolabs-usa.com
 GC	Guy Cote                guy@videolocus.com
 GrC	Greg Conklin            gregc@real.com
 GB      Gabi Blaetterman        blaetter@hhi.de

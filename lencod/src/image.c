@@ -2503,13 +2503,13 @@ void copy_rdopt_data(int bot_block)
     for (k=0, j=1; j<5; j++)
     for (     i=img->block_x+1; i<img->block_x+5; i++, k++)
     {
-      img   ->ipredmode    [i][img->block_y+j] = 0;
-      currMB->intra_pred_modes[k] = 0;
+      img   ->ipredmode    [i][img->block_y+j] = DC_PRED;
+      currMB->intra_pred_modes[k] = DC_PRED;
 
       if(!bot_block)
-        img->ipredmode_top[i][field_y+j]=0;
+        img->ipredmode_top[i][field_y+j]=DC_PRED;
       else 
-        img->ipredmode_bot[i][field_y+j]=0;
+        img->ipredmode_bot[i][field_y+j]=DC_PRED;
 
     }
   }

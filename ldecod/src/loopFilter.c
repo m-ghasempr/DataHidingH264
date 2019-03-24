@@ -61,14 +61,18 @@ extern const byte QP_SCALE_CR[52] ;
 // NOTE: to change the tables below for instance when the QP doubling is changed from 6 to 8 values 
 //       send an e-mail to Peter.List@t-systems.com to get a little programm that calculates them automatically 
 
-byte ALPHA_TABLE[40]  = {0,0,0,0,4,4,5,6,  7,8,9,10,12,13,15,17,  20,22,25,28,32,36,40,45,  50,56,63,71,80,90,101,113,  127,144,162,182,203,226,255,255} ;
-byte  BETA_TABLE[40]  = {0,0,0,0,2,2,2,3,  3,3,3, 4, 4, 4, 6, 6,   7, 7, 8, 8, 9, 9,10,10,  11,11,12,12,13,13, 14, 14,   15, 15, 16, 16, 17, 17, 18, 18} ;
-byte CLIP_TAB[40][5]  =
- {{ 0, 0, 0, 0, 0},{ 0, 0, 0, 0, 0},{ 0, 0, 0, 0, 0},{ 0, 0, 0, 0, 0},{ 0, 0, 0, 0, 0},{ 0, 0, 0, 1, 1},{ 0, 0, 0, 1, 1},{ 0, 0, 0, 1, 1},
-  { 0, 0, 0, 1, 1},{ 0, 0, 1, 1, 1},{ 0, 0, 1, 1, 1},{ 0, 1, 1, 1, 1},{ 0, 1, 1, 1, 1},{ 0, 1, 1, 1, 1},{ 0, 1, 1, 1, 1},{ 0, 1, 1, 2, 2},
-  { 0, 1, 1, 2, 2},{ 0, 1, 1, 2, 2},{ 0, 1, 1, 2, 2},{ 0, 1, 2, 3, 3},{ 0, 1, 2, 3, 3},{ 0, 2, 2, 3, 3},{ 0, 2, 2, 4, 4},{ 0, 2, 3, 4, 4},
-  { 0, 2, 3, 4, 4},{ 0, 3, 3, 5, 5},{ 0, 3, 4, 6, 6},{ 0, 3, 4, 6, 6},{ 0, 4, 5, 7, 7},{ 0, 4, 5, 8, 8},{ 0, 4, 6, 9, 9},{ 0, 5, 7,10,10},
-  { 0, 6, 8,11,11},{ 0, 6, 8,13,13},{ 0, 7,10,14,14},{ 0, 8,11,16,16},{ 0, 9,12,18,18},{ 0,10,13,20,20},{ 0,11,15,23,23},{ 0,13,17,25,25}} ;
+byte ALPHA_TABLE[52]  = {0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,4,4,5,6,  7,8,9,10,12,13,15,17,  20,22,25,28,32,36,40,45,  50,56,63,71,80,90,101,113,  127,144,162,182,203,226,255,255} ;
+byte  BETA_TABLE[52]  = {0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,2,2,2,3,  3,3,3, 4, 4, 4, 6, 6,   7, 7, 8, 8, 9, 9,10,10,  11,11,12,12,13,13, 14, 14,   15, 15, 16, 16, 17, 17, 18, 18} ;
+byte CLIP_TAB[52][5]  =
+{
+  { 0, 0, 0, 0, 0},{ 0, 0, 0, 0, 0},{ 0, 0, 0, 0, 0},{ 0, 0, 0, 0, 0},{ 0, 0, 0, 0, 0},{ 0, 0, 0, 0, 0},{ 0, 0, 0, 0, 0},{ 0, 0, 0, 0, 0},
+  { 0, 0, 0, 0, 0},{ 0, 0, 0, 0, 0},{ 0, 0, 0, 0, 0},{ 0, 0, 0, 0, 0},{ 0, 0, 0, 0, 0},{ 0, 0, 0, 0, 0},{ 0, 0, 0, 0, 0},{ 0, 0, 0, 0, 0},
+  { 0, 0, 0, 0, 0},{ 0, 0, 0, 1, 1},{ 0, 0, 0, 1, 1},{ 0, 0, 0, 1, 1},{ 0, 0, 0, 1, 1},{ 0, 0, 1, 1, 1},{ 0, 0, 1, 1, 1},{ 0, 1, 1, 1, 1},
+  { 0, 1, 1, 1, 1},{ 0, 1, 1, 1, 1},{ 0, 1, 1, 1, 1},{ 0, 1, 1, 2, 2},{ 0, 1, 1, 2, 2},{ 0, 1, 1, 2, 2},{ 0, 1, 1, 2, 2},{ 0, 1, 2, 3, 3},
+  { 0, 1, 2, 3, 3},{ 0, 2, 2, 3, 3},{ 0, 2, 2, 4, 4},{ 0, 2, 3, 4, 4},{ 0, 2, 3, 4, 4},{ 0, 3, 3, 5, 5},{ 0, 3, 4, 6, 6},{ 0, 3, 4, 6, 6},
+  { 0, 4, 5, 7, 7},{ 0, 4, 5, 8, 8},{ 0, 4, 6, 9, 9},{ 0, 5, 7,10,10},{ 0, 6, 8,11,11},{ 0, 6, 8,13,13},{ 0, 7,10,14,14},{ 0, 8,11,16,16},
+  { 0, 9,12,18,18},{ 0,10,13,20,20},{ 0,11,15,23,23},{ 0,13,17,25,25}
+} ;
 
 
 void GetStrength(byte Strength[4],byte LargeBlockEdge[4],struct img_par *img,Macroblock* MbP,Macroblock* MbQ,int dir,int edge,int mb_y,int mb_x,byte blkmode[2][2]);
@@ -113,10 +117,7 @@ void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int mb_y, int m
   SrcU = imgUV[0][mb_y<<3] + (mb_x<<3) ;
   SrcV = imgUV[1][mb_y<<3] + (mb_x<<3) ;
 
- // if (img->mb_frame_field_flag)
- //   MbQ  = &img->mb_data[((mb_y/2)*(img->width>>3))+(mb_y%2)+mb_x*2];                            // current Mb
- // else  GB
-    MbQ  = &img->mb_data[mb_y*(img->width>>4) + mb_x] ;                                                 // current Mb
+  MbQ  = &img->mb_data[mb_y*(img->width>>4) + mb_x] ;                                                 // current Mb
 
   // This could also be handled as a filter offset of -51 
   if (MbQ->lf_disable) return;
@@ -132,20 +133,17 @@ void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int mb_y, int m
       {
         
         sizey = mb_y%2 ? 1:2*img->width/MB_BLOCK_SIZE-1;
-   //     if (img->mb_frame_field_flag)
-     //     MbP = (edge)? MbQ : ((dir)? (MbQ-sizey) : (MbQ-2) ) ;       // MbP = Mb of the remote 4x4 block
-      //  else GB
-          MbP = (edge)? MbQ : ((dir)? (MbQ -(img->width>>4))  : (MbQ-1) ) ;       // MbP = Mb of the remote 4x4 block
+        MbP = (edge)? MbQ : ((dir)? (MbQ -(img->width>>4))  : (MbQ-1) ) ;       // MbP = Mb of the remote 4x4 block
 
-        QP  = max( 0, ((MbP->qp-SHIFT_QP) + (MbQ->qp-SHIFT_QP) ) >> 1) ;                   // Average QP of the two blocks
+        QP  = ( MbP->qp + MbQ->qp ) >> 1 ;                   // Average QP of the two blocks
         GetStrength(Strength,LargeBlockEdge,img,MbP,MbQ,dir,edge,mb_y<<2,mb_x<<2,blkmode); // Strength for 4 blks in 1 stripe
-        if( *((int*)Strength) )  // && (QP>= 8) )                    // only if one of the 4 Strength bytes is != 0
+        if( *((int*)Strength) )                      // only if one of the 4 Strength bytes is != 0
         {
           EdgeLoop( SrcY + (edge<<2)* ((dir)? img->width:1 ), Strength, LargeBlockEdge, QP, MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width, 0) ; 
           if( (imgUV != NULL) && !(edge & 1) )
           {
-            EdgeLoop( SrcU +  (edge<<1) * ((dir)? img->width_cr:1 ), Strength, LargeBlockEdge, QP_SCALE_CR[QP+SHIFT_QP]-SHIFT_QP, MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width_cr, 1 ) ; 
-            EdgeLoop( SrcV +  (edge<<1) * ((dir)? img->width_cr:1 ), Strength, LargeBlockEdge, QP_SCALE_CR[QP+SHIFT_QP]-SHIFT_QP, MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width_cr, 1 ) ; 
+            EdgeLoop( SrcU +  (edge<<1) * ((dir)? img->width_cr:1 ), Strength, LargeBlockEdge, QP_SCALE_CR[QP], MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width_cr, 1 ) ; 
+            EdgeLoop( SrcV +  (edge<<1) * ((dir)? img->width_cr:1 ), Strength, LargeBlockEdge, QP_SCALE_CR[QP], MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width_cr, 1 ) ; 
           }
         }
       }
@@ -262,8 +260,8 @@ void GetStrength(byte Strength[4],byte LargeBlockEdge[4],struct img_par *img,Mac
       LargeBlockEdge[idx]=LBcount;
 
       if( (   img->type != SP_IMG_1) && (img->type != SP_IMG_MULT)  && (img->type != SI_IMG)
-          && !(MbP->b8mode[ BLK_4_TO_8[blkP] ]==IBLOCK || MbP->mb_type==I16MB)
-          && !(MbQ->b8mode[ BLK_4_TO_8[blkQ] ]==IBLOCK || MbQ->mb_type==I16MB) )
+          && !(MbP->mb_type==I4MB || MbP->mb_type==I16MB)
+          && !(MbQ->mb_type==I4MB || MbQ->mb_type==I16MB) )
       {
         if( ((MbQ->cbp_blk &  (1 << blkQ )) != 0) || ((MbP->cbp_blk &  (1 << blkP)) != 0) )
           Strength[idx] = 2 ;
@@ -323,8 +321,8 @@ void EdgeLoop(byte* SrcPtr,byte Strength[4],byte LargeBlockEdge[4], int QP,
   {
     if(!(pel&3))
     {
-      indexA = IClip(0, MAX_QP-SHIFT_QP-1, QP + LargeBlockEdge[pel>>2] + AlphaC0Offset);
-      indexB = IClip(0, MAX_QP-SHIFT_QP-1, QP + LargeBlockEdge[pel>>2] + BetaOffset);
+      indexA = IClip(0, MAX_QP, QP + LargeBlockEdge[pel>>2] + AlphaC0Offset);
+      indexB = IClip(0, MAX_QP, QP + LargeBlockEdge[pel>>2] + BetaOffset);
 
       Alpha=ALPHA_TABLE[indexA];
       Beta=BETA_TABLE[indexB];  

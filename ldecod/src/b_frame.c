@@ -135,7 +135,7 @@ void init_macroblock_Bframe(struct img_par *img)
       img->bw_mv_frm[img->block_x+i+4][img->block_y+j][0]=img->bw_mv_frm[img->block_x+i+4][img->block_y+j][1]=0;
       img->dfMV [img->block_x+i+4][img->block_y+j][0]=img->dfMV[img->block_x+i+4][img->block_y+j][1]=0;
       img->dbMV [img->block_x+i+4][img->block_y+j][0]=img->dbMV[img->block_x+i+4][img->block_y+j][1]=0;
-      img->ipredmode[img->block_x+i+1][img->block_y+j+1] = 0;
+      img->ipredmode[img->block_x+i+1][img->block_y+j+1] = DC_PRED;
       if (img->mb_frame_field_flag)
       {
         img->dfMV_top[img->block_x+i+4][img->block_y+j][0]=img->dfMV_top[img->block_x+i+4][img->block_y+j][1]=0;
@@ -146,13 +146,13 @@ void init_macroblock_Bframe(struct img_par *img)
       }
       if (img->current_mb_nr%2==0 && img->mb_frame_field_flag)
       {
-        img->ipredmode_top[img->block_x+i+1][j2+j+1] = 0;
+        img->ipredmode_top[img->block_x+i+1][j2+j+1] = DC_PRED;
         img->fw_mv_top[img->block_x+i+4][j2+j][0]=img->fw_mv_top[img->block_x+i+4][j2+j][1]=0;
         img->bw_mv_top[img->block_x+i+4][j2+j][0]=img->bw_mv_top[img->block_x+i+4][j2+j][1]=0;
       }
       else if (img->mb_frame_field_flag)
       {
-        img->ipredmode_bot[img->block_x+i+1][j2+j+1] = 0;
+        img->ipredmode_bot[img->block_x+i+1][j2+j+1] = DC_PRED;
         img->fw_mv_bot[img->block_x+i+4][j2+j][0]=img->fw_mv_bot[img->block_x+i+4][j2+j][1]=0;
         img->bw_mv_bot[img->block_x+i+4][j2+j][0]=img->bw_mv_bot[img->block_x+i+4][j2+j][1]=0;
       }
