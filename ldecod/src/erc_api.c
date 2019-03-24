@@ -117,9 +117,10 @@ ercVariables_t *ercOpen( void )
  *    Estimated number of segments (memory reserved)
  ************************************************************************
  */
-void ercReset( ercVariables_t *errorVar, int nOfMBs, int numOfSegments )
+void ercReset( ercVariables_t *errorVar, int nOfMBs, int numOfSegments, int32 picSizeX )
 {
   int *tmp = NULL;
+  int i = 0, j = 0;
   
   if ( errorVar && errorVar->concealment ) 
   {
@@ -179,9 +180,25 @@ void ercReset( ercVariables_t *errorVar, int nOfMBs, int numOfSegments )
     }
     
     memset( errorVar->segments, 0, errorVar->nOfSegments*sizeof(ercSegment_t));
+
+    for ( i = 0; i < errorVar->nOfSegments; i++ ) 
+    {
+      // mark all the Blocks as empty 
+      for ( j = 0; j < nOfMBs; j++ ) 
+      {
+        errorVar->yCondition[MBNum2YBlock (j, 0, picSizeX)] = ERC_BLOCK_EMPTY;
+        errorVar->yCondition[MBNum2YBlock (j, 1, picSizeX)] = ERC_BLOCK_EMPTY;
+        errorVar->yCondition[MBNum2YBlock (j, 2, picSizeX)] = ERC_BLOCK_EMPTY;
+        errorVar->yCondition[MBNum2YBlock (j, 3, picSizeX)] = ERC_BLOCK_EMPTY;
+        errorVar->uCondition[j] = ERC_BLOCK_EMPTY;
+        errorVar->vCondition[j] = ERC_BLOCK_EMPTY;
+      }
+      errorVar->segments[i].fCorrupted = 1; //! mark segments as corrupted
+      errorVar->segments[i].startMBPos = 0;
+      errorVar->segments[i].endMBPos = nOfMBs;
+    }
     
     errorVar->currSegment = 0;
-    errorVar->currSegmentCorrupted = 0;
     errorVar->nOfCorruptedSegments = 0;
   }
 }
@@ -252,27 +269,10 @@ void ercStartSegment( int currMBNum, int segment, u_int32 bitPos, ercVariables_t
   if ( errorVar && errorVar->concealment ) 
   {
     errorVar->currSegmentCorrupted = 0;
-    if ( segment < 0 )
-      segment = errorVar->currSegment;
-    
-    if ( segment >= errorVar->nOfSegments ) 
-    {
-      errorVar->segments = (ercSegment_t *) realloc(errorVar->segments,2*errorVar->nOfSegments*sizeof(ercSegment_t));
-      errorVar->nOfSegments *= 2;
-    }
-    
+        
     errorVar->segments[ segment ].fCorrupted = 0;
-    errorVar->segments[ segment ].startBitPos = bitPos;
     errorVar->segments[ segment ].startMBPos = currMBNum;
     
-    if ( segment > 0 ) 
-    {
-      if ( errorVar->segments[ segment-1 ].endBitPos == 0 ) 
-      {
-        errorVar->segments[ segment-1 ].endBitPos = bitPos;
-        errorVar->segments[ segment-1 ].endMBPos = currMBNum - 1;
-      }
-    }//if ( segment > 0 ) 
   }   
 }
 
@@ -295,15 +295,6 @@ void ercStopSegment( int currMBNum, int segment, u_int32 bitPos, ercVariables_t 
 {
   if ( errorVar && errorVar->concealment ) 
   {
-    if ( segment < 0 )
-      segment = errorVar->currSegment;
-    
-    if ( segment > errorVar->nOfSegments ) 
-    {
-      return;
-    }
-    
-    errorVar->segments[ segment ].endBitPos = bitPos;
     errorVar->segments[ segment ].endMBPos = currMBNum; //! Changed TO 12.11.2001
     errorVar->currSegment++;
   }
@@ -322,10 +313,12 @@ void ercStopSegment( int currMBNum, int segment, u_int32 bitPos, ercVariables_t 
  *      Variables for error detector
  ************************************************************************
  */
-void ercMarkCurrSegmentLost( int currMBNum, int32 picSizeX, ercVariables_t *errorVar )
+void ercMarkCurrSegmentLost(int32 picSizeX, ercVariables_t *errorVar )
 {
   int i = 0, j = 0;
+  int current_segment;
   
+  current_segment = errorVar->currSegment-1;
   if ( errorVar && errorVar->concealment ) 
   {
     if (errorVar->currSegmentCorrupted == 0) 
@@ -334,24 +327,16 @@ void ercMarkCurrSegmentLost( int currMBNum, int32 picSizeX, ercVariables_t *erro
       errorVar->currSegmentCorrupted = 1;
     }
      
-    for ( i = 0; i < errorVar->nOfSegments; i++ ) 
+    for ( j = errorVar->segments[current_segment].startMBPos; j < errorVar->segments[current_segment].endMBPos; j++ ) 
     {
-      if ( currMBNum >= errorVar->segments[i].startMBPos && ( currMBNum <= errorVar->segments[i].endMBPos || errorVar->segments[i].endMBPos == 0 ) ) 
-      {
-        /* mark all the Blocks belonging to the lost segment as corrupted */
-        for ( j = errorVar->segments[i].startMBPos; j <= errorVar->segments[i].endMBPos; j++ ) 
-        {
-          errorVar->yCondition[MBNum2YBlock (j, 0, picSizeX)] = ERC_BLOCK_CORRUPTED;
-          errorVar->yCondition[MBNum2YBlock (j, 1, picSizeX)] = ERC_BLOCK_CORRUPTED;
-          errorVar->yCondition[MBNum2YBlock (j, 2, picSizeX)] = ERC_BLOCK_CORRUPTED;
-          errorVar->yCondition[MBNum2YBlock (j, 3, picSizeX)] = ERC_BLOCK_CORRUPTED;
-          errorVar->uCondition[j] = ERC_BLOCK_CORRUPTED;
-          errorVar->vCondition[j] = ERC_BLOCK_CORRUPTED;
-        }
-        errorVar->segments[i].fCorrupted = 1;
-        break;
-      }
+      errorVar->yCondition[MBNum2YBlock (j, 0, picSizeX)] = ERC_BLOCK_CORRUPTED;
+      errorVar->yCondition[MBNum2YBlock (j, 1, picSizeX)] = ERC_BLOCK_CORRUPTED;
+      errorVar->yCondition[MBNum2YBlock (j, 2, picSizeX)] = ERC_BLOCK_CORRUPTED;
+      errorVar->yCondition[MBNum2YBlock (j, 3, picSizeX)] = ERC_BLOCK_CORRUPTED;
+      errorVar->uCondition[j] = ERC_BLOCK_CORRUPTED;
+      errorVar->vCondition[j] = ERC_BLOCK_CORRUPTED;
     }
+    errorVar->segments[current_segment].fCorrupted = 1;
   }
 }
 
@@ -368,30 +353,25 @@ void ercMarkCurrSegmentLost( int currMBNum, int32 picSizeX, ercVariables_t *erro
  *      Variables for error detector
  ************************************************************************
  */
-void ercMarkCurrSegmentOK( int currMBNum, int32 picSizeX, ercVariables_t *errorVar )
+void ercMarkCurrSegmentOK(int32 picSizeX, ercVariables_t *errorVar )
 {
   int i = 0, j = 0;
+  int current_segment;
   
+  current_segment = errorVar->currSegment-1;
   if ( errorVar && errorVar->concealment ) 
   {
-    for ( i = 0; i < errorVar->nOfSegments; i++ ) 
+    // mark all the Blocks belonging to the segment as OK */
+    for ( j = errorVar->segments[current_segment].startMBPos; j < errorVar->segments[current_segment].endMBPos; j++ ) 
     {
-      if ( currMBNum >= errorVar->segments[i].startMBPos && ( currMBNum <= errorVar->segments[i].endMBPos || errorVar->segments[i].endMBPos == 0 ) ) 
-      {
-        /* mark all the Blocks belonging to the segment as OK */
-        for ( j = errorVar->segments[i].startMBPos; j <= errorVar->segments[i].endMBPos; j++ ) 
-        {
-          errorVar->yCondition[MBNum2YBlock (j, 0, picSizeX)] = ERC_BLOCK_OK;
-          errorVar->yCondition[MBNum2YBlock (j, 1, picSizeX)] = ERC_BLOCK_OK;
-          errorVar->yCondition[MBNum2YBlock (j, 2, picSizeX)] = ERC_BLOCK_OK;
-          errorVar->yCondition[MBNum2YBlock (j, 3, picSizeX)] = ERC_BLOCK_OK;
-          errorVar->uCondition[j] = ERC_BLOCK_OK;
-          errorVar->vCondition[j] = ERC_BLOCK_OK;
-        }
-        errorVar->segments[i].fCorrupted = 0;
-        break;
-      }
+      errorVar->yCondition[MBNum2YBlock (j, 0, picSizeX)] = ERC_BLOCK_OK;
+      errorVar->yCondition[MBNum2YBlock (j, 1, picSizeX)] = ERC_BLOCK_OK;
+      errorVar->yCondition[MBNum2YBlock (j, 2, picSizeX)] = ERC_BLOCK_OK;
+      errorVar->yCondition[MBNum2YBlock (j, 3, picSizeX)] = ERC_BLOCK_OK;
+      errorVar->uCondition[j] = ERC_BLOCK_OK;
+      errorVar->vCondition[j] = ERC_BLOCK_OK;
     }
+    errorVar->segments[current_segment].fCorrupted = 0;
   }
 }
 

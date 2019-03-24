@@ -46,6 +46,7 @@
  */
 
 #include <stdlib.h>
+#include <assert.h>
 #include "mbuffer.h"
 #include "global.h"
 #include "memalloc.h"
@@ -349,7 +350,10 @@ static int concealByTrial(frame *recfr, byte *predMB,
     do 
     { /* reliability loop */
       
-      minDist = 0; fInterNeighborExists = 0; numIntraNeighbours = 0; fZeroMotionChecked = 0;
+      minDist = 0; 
+      fInterNeighborExists = 0; 
+      numIntraNeighbours = 0; 
+      fZeroMotionChecked = 0;
       
       /* loop the 4 neighbours */
       for (i = 4; i < 8; i++) 
@@ -798,6 +802,8 @@ static int edgeDistortion (int predBlocks[], int currYBlockNum, byte *predMB,
       break;
   } while (numOfPredBlocks == 0);
   
+  if(numOfPredBlocks == 0)
+    assert (numOfPredBlocks != 0);
   return (distortion/numOfPredBlocks);
 }
 

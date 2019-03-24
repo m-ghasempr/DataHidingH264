@@ -90,16 +90,22 @@ void CheckAvailabilityOfNeighbors(struct img_par *img)
   if(img->pix_x >= MB_BLOCK_SIZE)
   {
     int remove_prediction = currMB->slice_nr != img->mb_data[mb_nr-1].slice_nr;
-    if(img->UseConstrainedIntraPred)
-      remove_prediction = (remove_prediction || img->intra_mb[mb_nr-1] ==0);
-    if(remove_prediction)
+    // upper blocks
+    if (remove_prediction || (img->UseConstrainedIntraPred && img->intra_block[mb_nr-1][1]==0))
     {
       img->ipredmode[img->block_x][img->block_y+1] = -1;
       img->ipredmode[img->block_x][img->block_y+2] = -1;
+    }
+    // lower blocks
+    if (remove_prediction || (img->UseConstrainedIntraPred && img->intra_block[mb_nr-1][3]==0))
+    {
       img->ipredmode[img->block_x][img->block_y+3] = -1;
       img->ipredmode[img->block_x][img->block_y+4] = -1;
-    } else
+    }
+    if (!remove_prediction)
+    {
       currMB->mb_available[1][0]=&(img->mb_data[mb_nr-1]);
+    }
   }
 
 
@@ -107,16 +113,22 @@ void CheckAvailabilityOfNeighbors(struct img_par *img)
   if(img->pix_y >= MB_BLOCK_SIZE)
   {
     int remove_prediction = currMB->slice_nr != img->mb_data[mb_nr-mb_width].slice_nr;
-    if(img->UseConstrainedIntraPred)
-      remove_prediction = (remove_prediction || img->intra_mb[mb_nr-mb_width] ==0);
-    if(remove_prediction)
+    // upper blocks
+    if (remove_prediction || (img->UseConstrainedIntraPred && img->intra_block[mb_nr-mb_width][2]==0))
     {
       img->ipredmode[img->block_x+1][img->block_y] = -1;
       img->ipredmode[img->block_x+2][img->block_y] = -1;
+    }
+    // lower blocks
+    if (remove_prediction || (img->UseConstrainedIntraPred && img->intra_block[mb_nr-mb_width][3]==0))
+    {
       img->ipredmode[img->block_x+3][img->block_y] = -1;
       img->ipredmode[img->block_x+4][img->block_y] = -1;
-    } else
+    }
+    if (!remove_prediction)
+    {
       currMB->mb_available[0][1]=&(img->mb_data[mb_nr-mb_width]);
+    }
   }
 
   // Check MB left above
@@ -172,8 +184,6 @@ void start_macroblock(struct img_par *img,struct inp_par *inp)
 
   // Reset syntax element entries in MB struct
   currMB->mb_type = 0;
-  currMB->ref_frame = 0;
-  currMB->predframe_no = 0;
   currMB->delta_quant = 0;
 
   currMB->cbp     = 0;
@@ -187,6 +197,10 @@ void start_macroblock(struct img_par *img,struct inp_par *inp)
 
   for (i=0; i < (BLOCK_MULTIPLE*BLOCK_MULTIPLE); i++)
     currMB->intra_pred_modes[i] = 0;
+
+	for (j=0; j < BLOCK_MULTIPLE; j++)
+    for (i=0; i < BLOCK_MULTIPLE; i++)
+			currMB->coeffs_count[j][i] = 0;
 }
 
 /*!
@@ -247,26 +261,39 @@ int exit_macroblock(struct img_par *img,struct inp_par *inp)
  */
 void interpret_mb_mode_P(struct img_par *img)
 {
+  int i;
   const int ICBPTAB[6] = {0,16,32,15,31,47};
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  int         mbmode = currMB->mb_type;
 
+#define ZERO_P8x8     (mbmode==5)
+#define MODE_IS_P8x8  (mbmode==4 || mbmode==5)
+#define MODE_IS_I4x4  (mbmode==6)
+#define I16OFFSET     (mbmode-7)
 
-  currMB->intraOrInter           = INTER_MB ;
-
-  if (img->mb_mode == INTRA_MB)   // 4x4 intra
+  if(mbmode <4)
   {
-    currMB->intraOrInter         = INTRA_MB_4x4 ;
-    currMB->mb_imode = img->imod = INTRA_MB_OLD ;
+    currMB->mb_type = mbmode;
+    for (i=0;i<4;i++) {currMB->b8mode[i]=mbmode; currMB->b8pdir[i]=0; }
   }
-  if (img->mb_mode > INTRA_MB)    // 16x16 intra
+  else if(MODE_IS_P8x8)
   {
-    currMB->intraOrInter         = INTRA_MB_16x16 ;
-    img->imod = currMB->mb_imode = INTRA_MB_NEW;     // mod0=img->mb_mode-1;kmod=mod0 & 3;cbp = ICBPTAB[mod0/4];
-    currMB->intra_pred_modes[0] = (img->mb_mode - INTRA_MB-1) & 3;
-    currMB->cbp = ICBPTAB[(img->mb_mode - INTRA_MB-1)>>2];
+    currMB->mb_type = P8x8;
+    img->allrefzero = ZERO_P8x8;
+    // b8mode and pdir are read and set later
   }
-  if (img->mb_mode < INTRA_MB)    // inter prediction mode (block shape)
-    img->imod = currMB->mb_imode = INTRA_MB_INTER;   // intra in inter frame
+  else if(MODE_IS_I4x4)
+  {
+    currMB->mb_type = I4MB;
+    for (i=0;i<4;i++) {currMB->b8mode[i]=IBLOCK; currMB->b8pdir[i]=-1; }
+  }
+  else
+  {
+    currMB->mb_type = I16MB;
+    for (i=0;i<4;i++) {currMB->b8mode[i]=0; currMB->b8pdir[i]=-1; }
+    currMB->cbp= ICBPTAB[(I16OFFSET)>>2];
+    currMB->i16mode = (I16OFFSET) & 0x03;
+  }
 }
 
 /*!
@@ -277,20 +304,22 @@ void interpret_mb_mode_P(struct img_par *img)
  */
 void interpret_mb_mode_I(struct img_par *img)
 {
+  int i;
   const int ICBPTAB[6] = {0,16,32,15,31,47};
   Macroblock *currMB   = &img->mb_data[img->current_mb_nr];
+  int         mbmode   = currMB->mb_type;
 
-  if (img->mb_mode == 0)
+  if (mbmode==0)
   {
-    currMB->intraOrInter         = INTRA_MB_4x4 ;
-    img->imod = currMB->mb_imode = INTRA_MB_OLD;     // 4x4 intra
+    currMB->mb_type = I4MB;
+    for (i=0;i<4;i++) {currMB->b8mode[i]=IBLOCK; currMB->b8pdir[i]=-1; }
   }
   else
   {
-    currMB->intraOrInter         = INTRA_MB_16x16 ;
-    img->imod = currMB->mb_imode = INTRA_MB_NEW;     // 16x16 intra */ /* mod0=img->mb_mode-1;kmod=mod0 & 3;cbp = ICBPTAB[mod0/4];
-    currMB->intra_pred_modes[0] = (img->mb_mode - 1) & 3;
-    currMB->cbp = ICBPTAB[(img->mb_mode - 1)>>2];
+    currMB->mb_type = I16MB;
+    for (i=0;i<4;i++) {currMB->b8mode[i]=0; currMB->b8pdir[i]=-1; }
+    currMB->cbp= ICBPTAB[(mbmode-1)>>2];
+    currMB->i16mode = (mbmode-1) & 0x03;
   }
 }
 
@@ -302,34 +331,52 @@ void interpret_mb_mode_I(struct img_par *img)
  */
 void interpret_mb_mode_B(struct img_par *img)
 {
+  static const int offset2pdir16x16[12]   = {0, 0, 1, 2, 0,0,0,0,0,0,0,0};
+  static const int offset2pdir16x8[22][2] = {{0,0},{0,0},{0,0},{0,0},{0,0},{0,0},{1,1},{0,0},{0,1},{0,0},{1,0},
+                                             {0,0},{0,2},{0,0},{1,2},{0,0},{2,0},{0,0},{2,1},{0,0},{2,2},{0,0}};
+  static const int offset2pdir8x16[22][2] = {{0,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0},{1,1},{0,0},{0,1},{0,0},
+                                             {1,0},{0,0},{0,2},{0,0},{1,2},{0,0},{2,0},{0,0},{2,1},{0,0},{2,2}};
+
   const int ICBPTAB[6] = {0,16,32,15,31,47};
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
 
-  currMB->intraOrInter         = INTER_MB ;
-  if (img->mb_mode == INTRA_MB_B) // 4x4 intra
-  {
-    currMB->intraOrInter         = INTRA_MB_4x4 ;
-    img->imod = currMB->mb_imode = INTRA_MB_OLD;
-  }
-  if (img->mb_mode > INTRA_MB_B)  // 16x16 intra
-  {
-    currMB->intraOrInter         = INTRA_MB_16x16 ;
-    img->imod = currMB->mb_imode = INTRA_MB_NEW;
-    currMB->intra_pred_modes[0] = (img->mb_mode - INTRA_MB_B-1) & 3;
-    currMB->cbp = ICBPTAB[(img->mb_mode - INTRA_MB_B-1)>>2];
-  }
+  int i, mbmode;
+  int mbtype  = currMB->mb_type;
+  int *b8mode = currMB->b8mode;
+  int *b8pdir = currMB->b8pdir;
 
-  if (img->mb_mode < INTRA_MB_B)
+  //--- set mbtype, b8type, and b8pdir ---
+  if (mbtype==0)       // direct
   {
-    if(img->mb_mode == 0)
-      img->imod = currMB->mb_imode = B_Direct;
-    else if(img->mb_mode == 3)
-      img->imod = currMB->mb_imode = B_Bidirect;
-    else if(img->mb_mode==1 || (img->mb_mode>3 && img->mb_mode%2==0))
-      img->imod = currMB->mb_imode = B_Forward;
-    else if(img->mb_mode==2 || (img->mb_mode>4 && img->mb_mode%2==1))
-      img->imod = currMB->mb_imode = B_Backward;
+    mbmode=0;       for(i=0;i<4;i++) {b8mode[i]=0;          b8pdir[i]=2;}
   }
+  else if (mbtype==23) // intra4x4
+  {
+    mbmode=I4MB;    for(i=0;i<4;i++) {b8mode[i]=IBLOCK;     b8pdir[i]=-1;}
+  }
+  else if (mbtype>23) // intra16x16
+  {
+    mbmode=I16MB;   for(i=0;i<4;i++) {b8mode[i]=0;          b8pdir[i]=-1;}
+    currMB->cbp     = ICBPTAB[(mbtype-24)>>2];
+    currMB->i16mode = (mbtype-24) & 0x03;
+  }
+  else if (mbtype==22) // 8x8(+split)
+  {
+    mbmode=P8x8;       // b8mode and pdir is transmitted in additional codewords
+  }
+  else if (mbtype<4)   // 16x16
+  {
+    mbmode=1;       for(i=0;i<4;i++) {b8mode[i]=1;          b8pdir[i]=offset2pdir16x16[mbtype];}
+  }
+  else if (mbtype%2==0) // 16x8
+  {
+    mbmode=2;       for(i=0;i<4;i++) {b8mode[i]=2;          b8pdir[i]=offset2pdir16x8 [mbtype][i/2];}
+  }
+  else
+  {
+    mbmode=3;       for(i=0;i<4;i++) {b8mode[i]=3;          b8pdir[i]=offset2pdir8x16 [mbtype][i%2];}
+  }
+  currMB->mb_type = mbmode;
 }
 
 /*!
@@ -356,19 +403,62 @@ void init_macroblock(struct img_par *img)
     }
   }
 
-  currMB->ref_frame = 0;
-  currMB->predframe_no = predframe_no = 0;// g.b.1;
+  predframe_no = 0;
 
   // Set the reference frame information for motion vector prediction
-  if (img->imod == INTRA_MB_OLD || img->imod == INTRA_MB_NEW)
-    for (j = 0;j < BLOCK_SIZE;j++)
-      for (i = 0;i < BLOCK_SIZE;i++)
-        refFrArr[img->block_y+j][img->block_x+i] = -1;
+  if (IS_INTRA (currMB))
+  {
+    for (j=0; j<4; j++)
+    for (i=0; i<4; i++)
+    {
+      refFrArr[img->block_y+j][img->block_x+i] = -1;
+    }
+  }
+  else if (!IS_P8x8 (currMB))
+  {
+    for (j=0; j<4; j++)
+    for (i=0; i<4; i++)
+    {
+      refFrArr[img->block_y+j][img->block_x+i] = 0;
+    }
+  }
   else
-    for (j = 0;j < BLOCK_SIZE;j++)
-      for (i = 0;i < BLOCK_SIZE;i++)
-        refFrArr[img->block_y+j][img->block_x+i] = predframe_no;
+  {
+    for (j=0; j<4; j++)
+    for (i=0; i<4; i++)
+    {
+      refFrArr[img->block_y+j][img->block_x+i] = (currMB->b8mode[2*(j/2)+(i/2)]==IBLOCK ? -1 : 0);
+    }
+  }
 }
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Sets mode for 8x8 block
+ ************************************************************************
+ */
+void
+SetB8Mode (struct img_par* img, Macroblock* currMB, int value, int i)
+{
+  static const int p_v2b8 [ 5] = {4, 5, 6, 7, IBLOCK};
+  static const int p_v2pd [ 5] = {0, 0, 0, 0, -1};
+  static const int b_v2b8 [14] = {0, 4, 4, 4, 5, 6, 5, 6, 5, 6, 7, 7, 7, IBLOCK};
+  static const int b_v2pd [14] = {2, 0, 1, 2, 0, 0, 1, 1, 2, 2, 0, 1, 2, -1};
+
+  if (img->type==B_IMG_1 || img->type==B_IMG_MULT)
+  {
+    currMB->b8mode[i] = b_v2b8[value];
+    currMB->b8pdir[i] = b_v2pd[value];
+  }
+  else
+  {
+    currMB->b8mode[i] = p_v2b8[value];
+    currMB->b8pdir[i] = p_v2pd[value];
+  }
+}
+
 
 /*!
  ************************************************************************
@@ -389,20 +479,17 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
 
   int dbl_ipred_word;
 
-  currMB->qp           = img->qp ;
+  currMB->qp = img->qp ;
+
 
   //  read MB mode *****************************************************************
   currSE.type = SE_MBTYPE;
 
-  if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
-    dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-  else
-    dP = &(currSlice->partArr[partMap[currSE.type]]);
+  if(img->type == B_IMG_1 || img->type == B_IMG_MULT) dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+  else                                                dP = &(currSlice->partArr[partMap[currSE.type]]);
 
-  if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
-    currSE.mapping = linfo;
-  else
-    currSE.reading = readMB_typeInfoFromBuffer_CABAC;
+  if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)   currSE.mapping = linfo;
+  else                                                      currSE.reading = readMB_typeInfoFromBuffer_CABAC;
   
   if(inp->symbol_mode == CABAC || (img->type != INTER_IMG_1 && img->type != INTER_IMG_MULT && img->type != B_IMG_1 && img->type != B_IMG_MULT))
   {
@@ -410,9 +497,10 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
 #if TRACE
     strncpy(currSE.tracestring, "MB Type", TRACESTRING_SIZE);
 #endif
-    
     dP->readSyntaxElement(&currSE,img,inp,dP);
-    img->mb_mode = currMB->mb_type = currSE.value1;
+    currMB->mb_type = currSE.value1;
+    if(!dP->bitstream->ei_flag)
+      currMB->ei_flag = 0;
   } 
   else
   {
@@ -432,21 +520,53 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
       dP->readSyntaxElement(&currSE,img,inp,dP);
       if(img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT)
         currSE.value1++;
-      img->mb_mode = currMB->mb_type = currSE.value1;
+      currMB->mb_type = currSE.value1;
+      if(!dP->bitstream->ei_flag)
+        currMB->ei_flag = 0;
       img->cod_counter--;
     } 
     else
     {
       img->cod_counter--;
-      img->mb_mode = 0;
+      currMB->mb_type = 0;
+      currMB->ei_flag = 0;
     }
   }
 
-  if(img->UseConstrainedIntraPred)
+
+  if ((img->type==INTER_IMG_1) || (img->type==INTER_IMG_MULT))    // inter frame
+    interpret_mb_mode_P(img);
+  else if (img->type==INTRA_IMG)                                  // intra frame
+    interpret_mb_mode_I(img);
+  else if ((img->type==B_IMG_1) || (img->type==B_IMG_MULT))       // B frame
+    interpret_mb_mode_B(img);
+  else if ((img->type==SP_IMG_1) || (img->type==SP_IMG_MULT))     // SP frame
+    interpret_mb_mode_P(img);
+
+
+  //====== READ 8x8 SUB-PARTITION MODES (modes of 8x8 blocks) ======
+  if (IS_P8x8 (currMB))
   {
-    if (img->type==INTER_IMG_1 || (img->type==INTER_IMG_MULT))        // inter frame
-      if (img->mb_mode < 8)
-        img->intra_mb[img->current_mb_nr] = 0;
+    currSE.type    = SE_MBTYPE;
+    if (img->type==B_IMG_1 || img->type==B_IMG_MULT)      dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+    else                                                  dP = &(currSlice->partArr[partMap[SE_MBTYPE]]);
+    if (inp->symbol_mode==UVLC || dP->bitstream->ei_flag) currSE.mapping = linfo;
+    else                                                  currSE.reading = readB8_typeInfoFromBuffer_CABAC;
+
+    for (i=0; i<4; i++)
+    {
+      dP->readSyntaxElement (&currSE, img, inp, dP);
+      SetB8Mode (img, currMB, currSE.value1, i);
+    }
+  }
+
+
+  if(img->UseConstrainedIntraPred && (img->type==INTER_IMG_1 || img->type==INTER_IMG_MULT))        // inter frame
+  {
+    if (!IS_NEWINTRA (currMB) && currMB->b8mode[0]!=IBLOCK) img->intra_block[img->current_mb_nr][0] = 0;
+    if (!IS_NEWINTRA (currMB) && currMB->b8mode[1]!=IBLOCK) img->intra_block[img->current_mb_nr][1] = 0;
+    if (!IS_NEWINTRA (currMB) && currMB->b8mode[2]!=IBLOCK) img->intra_block[img->current_mb_nr][2] = 0;
+    if (!IS_NEWINTRA (currMB) && currMB->b8mode[3]!=IBLOCK) img->intra_block[img->current_mb_nr][3] = 0;
   }
   
   
@@ -457,32 +577,24 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
   //! Seems to be a bit at the wrong place to do this right here, but for this case 
   //! up to now there is no other way.
   dP = &(currSlice->partArr[partMap[SE_CBP_INTRA]]);
-  if(img->mb_mode == INTRA_MB && dP->bitstream->ei_flag && img->number)
+  if(IS_INTRA (currMB) && dP->bitstream->ei_flag && img->number)
   {
-    img->mb_mode = COPY_MB;
-    img->imod = INTRA_MB_INTER;
+    currMB->mb_type = 0;
+    currMB->ei_flag = 1;
+    for (i=0;i<4;i++) {currMB->b8mode[i]=currMB->b8pdir[i]=0; }
   }
-  if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
-    dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-  else
-    dP = &(currSlice->partArr[partMap[currSE.type]]);
+  if(img->type == B_IMG_1 || img->type == B_IMG_MULT)  dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+  else                                                 dP = &(currSlice->partArr[partMap[currSE.type]]);
   //! End TO
-  
-  if ((img->type==INTER_IMG_1) || (img->type==INTER_IMG_MULT))    // inter frame
-    interpret_mb_mode_P(img);
-  else if (img->type==INTRA_IMG)                                  // intra frame
-    interpret_mb_mode_I(img);
-  else if ((img->type==B_IMG_1) || (img->type==B_IMG_MULT))       // B frame
-    interpret_mb_mode_B(img);
-  else if ((img->type==SP_IMG_1) || (img->type==SP_IMG_MULT))    // SP frame
-    interpret_mb_mode_P(img);
 
-  if ((img->type==B_IMG_1) || (img->type==B_IMG_MULT))
-    init_macroblock_Bframe(img);
-  else
-    init_macroblock(img);
 
-  if (inp->symbol_mode != CABAC && img->imod==B_Direct && img->mb_mode==COPY_MB && img->cod_counter >= 0)
+  //--- init macroblock data ---
+  if ((img->type==B_IMG_1) || (img->type==B_IMG_MULT))  init_macroblock_Bframe(img);
+  else                                                  init_macroblock       (img);
+
+
+
+  if (inp->symbol_mode != CABAC && IS_DIRECT (currMB) && img->cod_counter >= 0)
   {
     int i, j, iii, jjj;
     currMB->cbp = 0;
@@ -500,281 +612,452 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
           for (jjj=0;jjj<4;jjj++)
             img->cof[i][j][iii][jjj]=0;
     }
-    return DECODE_MB_BFRAME;
+    return DECODE_MB;
   }
 
-  if (img->imod==INTRA_MB_INTER && img->mb_mode==COPY_MB) //keep last macroblock
+  if (IS_COPY (currMB)) //keep last macroblock
   {
     return DECODE_COPY_MB;
   }
 
+
   // intra prediction modes for a macroblock 4x4 **********************************************
-  if (img->imod==INTRA_MB_OLD)
+  currSE.type = SE_INTRAPREDMODE;
+  if(img->type == B_IMG_1 || img->type == B_IMG_MULT)     dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+  else                                                    dP = &(currSlice->partArr[partMap[currSE.type]]);
+  if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag) currSE.mapping = linfo;
+  else                                                    currSE.reading = readIntraPredModeFromBuffer_CABAC;
+  for(i=0; i<8; i++)
   {
-    currSE.type = SE_INTRAPREDMODE;
-    if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
-      dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-    else
-      dP = &(currSlice->partArr[partMap[currSE.type]]);
-
-    if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
-        currSE.mapping = linfo;
-    else
-        currSE.reading = readIntraPredModeFromBuffer_CABAC;
-
-
-    for(i=0;i<MB_BLOCK_SIZE/2;i++)
+    if (currMB->b8mode[i/2]==IBLOCK)
     {
 #if TRACE
-      snprintf(currSE.tracestring, TRACESTRING_SIZE, "Intra mode ");
+      sprintf(currSE.tracestring, "Intra mode ");
 #endif
-
+      currSE.context=2*i;
       dP->readSyntaxElement(&currSE,img,inp,dP);
 
-      i1=img->block_x + 2*(i&0x01);
-      j1=img->block_y + i/2;
+      i1 = img->block_x + 2*((i%4)/2);
+      j1 = img->block_y + 2*(i/4) + (i%2);
 
       if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
       {
         dbl_ipred_word = currSE.value1;
-        // find intra prediction mode for two blocks
+        /* find intra prediction mode for two blocks */
         img->ipredmode[i1+1][j1+1] = PRED_IPRED[img->ipredmode[i1+1][j1]+1][img->ipredmode[i1][j1+1]+1][IPRED_ORDER[dbl_ipred_word][0]];
         img->ipredmode[i1+2][j1+1] = PRED_IPRED[img->ipredmode[i1+2][j1]+1][img->ipredmode[i1+1][j1+1]+1][IPRED_ORDER[dbl_ipred_word][1]];
       }
       else
       {
+        currMB->intra_pred_modes[2*i  ] = currSE.value1;
+        currMB->intra_pred_modes[2*i+1] = currSE.value2;
         img->ipredmode[i1+1][j1+1] = PRED_IPRED[img->ipredmode[i1+1][j1]+1][img->ipredmode[i1][j1+1]+1][currSE.value1];
         img->ipredmode[i1+2][j1+1] = PRED_IPRED[img->ipredmode[i1+2][j1]+1][img->ipredmode[i1+1][j1+1]+1][currSE.value2];
       }
     }
   }
 
-  // read inter frame vector data ********************************************************
-  if ((img->type==B_IMG_1) || (img->type==B_IMG_MULT))
-    readMotionInfoFromNAL_Bframe(img,inp);
-  else if(img->imod==INTRA_MB_INTER)
-    readMotionInfoFromNAL_Pframe(img,inp);
+
+  /* read inter frame vector data *********************************************************/
+  if (IS_INTERMV (currMB))
+  {
+    readMotionInfoFromNAL (img, inp);
+  }
+
 
   // read CBP and Coeffs  ***************************************************************
-  readCBPandCoeffsFromNAL(img,inp);
+  readCBPandCoeffsFromNAL (img,inp);
 
-  return (((img->type==B_IMG_1) || (img->type==B_IMG_MULT)) ? DECODE_MB_BFRAME : DECODE_MB);
+  return DECODE_MB;
+}
+
+
+
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Set motion vector predictor
+ ************************************************************************
+ */
+void
+SetMotionVectorPredictor (struct img_par  *img,
+                          int             *pmv_x,
+                          int             *pmv_y,
+                          int             ref_frame,
+                          int             **refFrArr,
+                          int             ***tmp_mv,
+                          int             block_x,
+                          int             block_y,
+                          int             blockshape_x,
+                          int             blockshape_y)
+{
+  Macroblock* currMB = &img->mb_data[img->current_mb_nr];
+
+  int mb_x                 = 4*block_x;
+  int mb_y                 = 4*block_y;
+  int pic_block_x          = img->block_x + block_x;
+  int pic_block_y          = img->block_y + block_y;
+  int mb_nr                = img->current_mb_nr;
+  int mb_width             = img->width/16;
+  int mb_available_up =      (img->mb_y == 0        ) ? 0 : (currMB->slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
+  int mb_available_left =    (img->mb_x == 0        ) ? 0 : (currMB->slice_nr == img->mb_data[mb_nr-1].slice_nr);
+  int mb_available_upleft  = (img->mb_x == 0          ||
+                              img->mb_y == 0        ) ? 0 : (currMB->slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr);
+  int mb_available_upright = (img->mb_x >= mb_width-1 ||
+                              img->mb_y == 0        ) ? 0 : (currMB->slice_nr == img->mb_data[mb_nr-mb_width+1].slice_nr);
+  int block_available_up, block_available_left, block_available_upright, block_available_upleft;
+  int mv_a, mv_b, mv_c, mv_d, pred_vec=0;
+  int mvPredType, rFrameL, rFrameU, rFrameUR;
+  int hv;
+
+  /* D B C */
+  /* A X   */
+
+  /* 1 A, B, D are set to 0 if unavailable       */
+  /* 2 If C is not available it is replaced by D */
+  block_available_up   = mb_available_up   || (mb_y > 0);
+  block_available_left = mb_available_left || (mb_x > 0);
+
+  if (mb_y > 0)
+  {
+    if (mb_x < 8)  // first column of 8x8 blocks
+    {
+      if (mb_y==8)
+      {
+        if (blockshape_x == 16)      block_available_upright = 0;
+        else                         block_available_upright = 1;
+      }
+      else
+      {
+        if (mb_x+blockshape_x != 8)  block_available_upright = 1;
+        else                         block_available_upright = 0;
+      }
+    }
+    else
+    {
+      if (mb_x+blockshape_x != 16)   block_available_upright = 1;
+      else                           block_available_upright = 0;
+    }
+  }
+  else if (mb_x+blockshape_x != MB_BLOCK_SIZE)
+  {
+    block_available_upright = mb_available_up;
+  }
+  else
+  {
+    block_available_upright = mb_available_upright;
+  }
+
+  if (mb_x > 0)
+  {
+    block_available_upleft = (mb_y > 0 ? 1 : mb_available_up);
+  }
+  else if (mb_y > 0)
+  {
+    block_available_upleft = mb_available_left;
+  }
+  else
+  {
+    block_available_upleft = mb_available_upleft;
+  }
+
+  mvPredType = MVPRED_MEDIAN;
+  rFrameL    = block_available_left    ? refFrArr[pic_block_y]  [pic_block_x-1             ] : -1;
+  rFrameU    = block_available_up      ? refFrArr[pic_block_y-1][pic_block_x               ]   : -1;
+  rFrameUR   = block_available_upright ? refFrArr[pic_block_y-1][pic_block_x+blockshape_x/4] :
+               block_available_upleft  ? refFrArr[pic_block_y-1][pic_block_x-1             ] : -1;
+
+
+  /* Prediction if only one of the neighbors uses the reference frame
+   * we are checking
+   */
+  if(rFrameL == ref_frame && rFrameU != ref_frame && rFrameUR != ref_frame)       mvPredType = MVPRED_L;
+  else if(rFrameL != ref_frame && rFrameU == ref_frame && rFrameUR != ref_frame)  mvPredType = MVPRED_U;
+  else if(rFrameL != ref_frame && rFrameU != ref_frame && rFrameUR == ref_frame)  mvPredType = MVPRED_UR;
+  // Directional predictions 
+  else if(blockshape_x == 8 && blockshape_y == 16)
+  {
+    if(mb_x == 0)
+    {
+      if(rFrameL == ref_frame)
+        mvPredType = MVPRED_L;
+    }
+    else
+    {
+      if(rFrameUR == ref_frame)
+        mvPredType = MVPRED_UR;
+    }
+  }
+  else if(blockshape_x == 16 && blockshape_y == 8)
+  {
+    if(mb_y == 0)
+    {
+      if(rFrameU == ref_frame)
+        mvPredType = MVPRED_U;
+    }
+    else
+    {
+      if(rFrameL == ref_frame)
+        mvPredType = MVPRED_L;
+    }
+  }
+
+  for (hv=0; hv < 2; hv++)
+  {
+    mv_a = block_available_left    ? tmp_mv[4+pic_block_x-1             ][pic_block_y  ][hv] : 0;
+    mv_b = block_available_up      ? tmp_mv[4+pic_block_x               ][pic_block_y-1][hv] : 0;
+    mv_d = block_available_upleft  ? tmp_mv[4+pic_block_x-1             ][pic_block_y-1][hv] : 0;
+    mv_c = block_available_upright ? tmp_mv[4+pic_block_x+blockshape_x/4][pic_block_y-1][hv] : mv_d;
+
+    switch (mvPredType)
+    {
+    case MVPRED_MEDIAN:
+      if(!(block_available_upleft || block_available_up || block_available_upright))
+        pred_vec = mv_a;
+      else
+        pred_vec = mv_a+mv_b+mv_c-min(mv_a,min(mv_b,mv_c))-max(mv_a,max(mv_b,mv_c));
+      break;
+    case MVPRED_L:
+      pred_vec = mv_a;
+      break;
+    case MVPRED_U:
+      pred_vec = mv_b;
+      break;
+    case MVPRED_UR:
+      pred_vec = mv_c;
+      break;
+    default:
+      break;
+    }
+
+    if (hv==0)  *pmv_x = pred_vec;
+    else        *pmv_y = pred_vec;
+  }
+}
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Set context for reference frames
+ ************************************************************************
+ */
+int
+BType2CtxRef (int btype)
+{
+  if (btype<4)  return 0;
+  else          return 1;
 }
 
 /*!
  ************************************************************************
  * \brief
- *    Get for a given MB of a P picture the reference frame
- *    parameter and the motion vectors from the NAL
+ *    Read motion info
  ************************************************************************
  */
-void readMotionInfoFromNAL_Pframe(struct img_par *img,struct inp_par *inp)
+void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
 {
   int i,j,k,l,m;
   int step_h,step_v;
   int curr_mvd;
-  int mb_nr = img->current_mb_nr;
-  Macroblock *currMB = &img->mb_data[mb_nr];
+  int mb_nr           = img->current_mb_nr;
+  Macroblock *currMB  = &img->mb_data[mb_nr];
   SyntaxElement currSE;
-  Slice *currSlice = img->currentSlice;
+  Slice *currSlice    = img->currentSlice;
   DataPartition *dP;
-  int *partMap = assignSE2partition[currSlice->dp_mode];
-  int ref_frame = currMB->ref_frame;
-  int predframe_no = currMB->predframe_no;
+  int *partMap        = assignSE2partition[inp->partition_mode];
+  int bframe          = (img->type==B_IMG_1 || img->type==B_IMG_MULT);
+  int partmode        = (IS_P8x8(currMB)?4:currMB->mb_type);
+  int step_h0         = BLOCK_STEP [partmode][0];
+  int step_v0         = BLOCK_STEP [partmode][1];
 
 
-  // keep track of neighbouring macroblocks available for prediction
-  int mb_width = img->width/16;
-  int mb_available_up = (img->mb_y == 0) ? 0 : (currMB->slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
-  int mb_available_left = (img->mb_x == 0) ? 0 : (currMB->slice_nr == img->mb_data[mb_nr-1].slice_nr);
-  int mb_available_upleft  = (img->mb_x == 0 || img->mb_y == 0) ? 0 : (currMB->slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr);
-  int mb_available_upright = (img->mb_x >= mb_width-1 || img->mb_y == 0) ? 0 : (currMB->slice_nr == img->mb_data[mb_nr-mb_width+1].slice_nr);
-
-  // keep track of neighbouring blocks available for motion vector prediction
-  int block_available_up, block_available_left, block_available_upright, block_available_upleft;
-  int mv_a, mv_b, mv_c, mv_d;
-  int mvPredType, rFrameL, rFrameU, rFrameUR;
-  int ie, j4, i4, ii,jj;
+  int mv_mode, i0, j0, refframe;
+  int pmv[2];
+  int j4, i4, ii,jj;
   int pred_vec=0, vec;
 
-
   //  If multiple ref. frames, read reference frame for the MB *********************************
-  if(img->type==INTER_IMG_MULT || img->type == SP_IMG_MULT)
+  if(img->type==INTER_IMG_MULT || img->type == SP_IMG_MULT || img->type == B_IMG_MULT)
   {
-#if TRACE
-    strncpy(currSE.tracestring,  "Reference frame no ", TRACESTRING_SIZE);
-#endif
     currSE.type = SE_REFFRAME;
-    dP = &(currSlice->partArr[partMap[currSE.type]]);
+    if (bframe)                                               dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+    else                                                      dP = &(currSlice->partArr[partMap[SE_REFFRAME]]);
+    if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)   currSE.mapping = linfo;
+    else                                                      currSE.reading = readRefFrameFromBuffer_CABAC;
 
-    if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
-      currSE.mapping = linfo;
-    else
-      currSE.reading = readRefFrameFromBuffer_CABAC;
-    dP->readSyntaxElement(&currSE,img,inp,dP);
-    predframe_no = currMB->predframe_no = currSE.value1;
-    ref_frame = currMB->ref_frame = predframe_no;
+    for (j0=0; j0<4; j0+=step_v0)
+    for (i0=0; i0<4; i0+=step_h0)
+    {
+      k=2*(j0/2)+(i0/2);
+      if ((currMB->b8pdir[k]==0 || currMB->b8pdir[k]==2) && currMB->b8mode[k]!=0)
+      {
+#if TRACE
+        strncpy(currSE.tracestring,  "Reference frame no ", TRACESTRING_SIZE);
+#endif
+        img->subblock_x = i0;
+        img->subblock_y = j0;
 
-    /*!
-    * \note
-    * if frame lost occurs within img->buf_cycle frames and buffer of previous
-    * decoded pictures is still empty, set ref_frame to last decoded
-    * picture to avoid prediction from unexistent frames.
-    */
-//    if (ref_frame > img->number) ref_frame = 0;
+        if (!IS_P8x8 (currMB) || bframe || (!bframe && !img->allrefzero))
+        {
+          currSE.context = BType2CtxRef (currMB->b8mode[k]);
+          dP->readSyntaxElement (&currSE,img,inp,dP);
+          refframe = currSE.value1;
+        }
+        else
+        {
+          refframe = 0;
+        }
 
-    // Update the reference frame information for motion vector prediction
-    for (j = 0;j < BLOCK_SIZE;j++)
-      for (i = 0;i < BLOCK_SIZE;i++)
-        refFrArr[img->block_y+j][img->block_x+i] = predframe_no;
+        if (bframe && refframe>img->buf_cycle) //??? copied from readMotionInfoFrameNAL
+        {
+          set_ec_flag(SE_REFFRAME);
+          refframe = 1;
+        }
+
+        if (!bframe)
+        {
+          for (j=j0; j<j0+step_v0;j++)
+          for (i=i0; i<i0+step_h0;i++)
+            refFrArr[img->block_y+j][img->block_x+i] = refframe;
+        }
+        else
+        {
+          for (j=j0; j<j0+step_v0;j++)
+          for (i=i0; i<i0+step_h0;i++)
+            img->fw_refFrArr[img->block_y+j][img->block_x+i] = refframe;
+        }
+      }
+    }
   }
 
-  // read motion vectors **********************************************************************
 
+  //=====  READ FORWARD MOTION VECTORS =====
   currSE.type = SE_MVD;
-  dP = &(currSlice->partArr[partMap[currSE.type]]);
+  if (bframe)   dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+  else          dP = &(currSlice->partArr[partMap[SE_MVD]]);
 
-  if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
-    currSE.mapping = linfo_mvd;
-  else
-    currSE.reading = readMVDFromBuffer_CABAC;
+  if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag) currSE.mapping = linfo_mvd;
+  else if (bframe)                                        currSE.reading = readBiMVD2Buffer_CABAC;
+  else                                                    currSE.reading = readMVDFromBuffer_CABAC;
 
-  step_h=BLOCK_STEP[img->mb_mode][0];     // horizontal stepsize
-  step_v=BLOCK_STEP[img->mb_mode][1];     // vertical stepsize
-
-  ie=4-BLOCK_STEP[img->mb_mode][0];
-  for (j=0; j < BLOCK_SIZE; j += step_v)
+  for (j0=0; j0<4; j0+=step_v0)
+  for (i0=0; i0<4; i0+=step_h0)
   {
-    block_available_up = mb_available_up || (j > 0);
-    j4=img->block_y+j;
-
-    for (i=0;i < BLOCK_SIZE; i += step_h)
+    k=2*(j0/2)+(i0/2);
+    if ((currMB->b8pdir[k]==0 || currMB->b8pdir[k]==2) && (currMB->b8mode[k] !=0))//has forward vector
     {
-      i4=img->block_x+i;
-      // first make mv-prediction
+      mv_mode  = currMB->b8mode[k];
+      step_h   = BLOCK_STEP [mv_mode][0];
+      step_v   = BLOCK_STEP [mv_mode][1];
 
-      // D B C
-      // A X
+      if (!bframe)  refframe = refFrArr        [img->block_y+j0][img->block_x+i0];
+      else          refframe = img->fw_refFrArr[img->block_y+j0][img->block_x+i0];
 
-      // 1 A, B, D are set to 0 if unavailable
-      // 2 If C is not available it is replaced by D
-
-      block_available_left = mb_available_left || (i > 0);
-
-      if (j > 0)
-        block_available_upright = i != ie ? 1 : 0;
-      else if (i != ie)
-        block_available_upright = block_available_up;
-      else
-        block_available_upright = mb_available_upright;
-
-      if (i > 0)
-        block_available_upleft = j > 0 ? 1 : block_available_up;
-      else if (j > 0)
-        block_available_upleft = block_available_left;
-      else
-        block_available_upleft = mb_available_upleft;
-
-      mvPredType = MVPRED_MEDIAN;
-
-      rFrameL    = block_available_left    ? refFrArr[j4][i4-1]   : -1;
-      rFrameU    = block_available_up      ? refFrArr[j4-1][i4]   : -1;
-      rFrameUR   = block_available_upright ? refFrArr[j4-1][i4+BLOCK_STEP[img->mb_mode][0]] :
-      block_available_upleft  ? refFrArr[j4-1][i4-1] : -1;
-
-      // Prediction if only one of the neighbors uses the selected reference frame
-
-      if(rFrameL == predframe_no && rFrameU != predframe_no && rFrameUR != predframe_no)
-        mvPredType = MVPRED_L;
-      else if(rFrameL != predframe_no && rFrameU == predframe_no && rFrameUR != predframe_no)
-        mvPredType = MVPRED_U;
-      else if(rFrameL != predframe_no && rFrameU != predframe_no && rFrameUR == predframe_no)
-        mvPredType = MVPRED_UR;
-
-      // Directional predictions
-
-      else if(img->mb_mode == 3)
+      for (j=j0; j<j0+step_v0; j+=step_v)
+      for (i=i0; i<i0+step_h0; i+=step_h)
       {
-        if(i == 0)
-        {
-          if(rFrameL == predframe_no)
-            mvPredType = MVPRED_L;
-        }
-        else
-        {
-          if(rFrameUR == predframe_no)
-            mvPredType = MVPRED_UR;
-        }
-      }
-      else if(img->mb_mode == 2)
-      {
-        if(j == 0)
-        {
-          if(rFrameU == predframe_no)
-            mvPredType = MVPRED_U;
-        }
-        else
-        {
-          if(rFrameL == predframe_no)
-            mvPredType = MVPRED_L;
-        }
-      }
-      else if(img->mb_mode == 5 && i == 2)
-        mvPredType = MVPRED_L;
-      else if(img->mb_mode == 6 && j == 2)
-        mvPredType = MVPRED_U;
+        j4 = img->block_y+j;
+        i4 = img->block_x+i;
 
-      for (k=0; k < 2; k++)
-      {
+        // first make mv-prediction
+        if (!bframe)  SetMotionVectorPredictor (img, pmv, pmv+1, refframe, refFrArr,         img->mv,    i, j, 4*step_h, 4*step_v);
+        else          SetMotionVectorPredictor (img, pmv, pmv+1, refframe, img->fw_refFrArr, img->fw_mv, i, j, 4*step_h, 4*step_v);
 
-        mv_a = block_available_left ? img->mv[i4-1+BLOCK_SIZE][j4][k] : 0;
-        mv_b = block_available_up      ? img->mv[i4+BLOCK_SIZE][j4-1][k]   : 0;
-        mv_d = block_available_upleft  ? img->mv[i4-1+BLOCK_SIZE][j4-1][k] : 0;
-        mv_c = block_available_upright ? img->mv[i4+BLOCK_STEP[img->mb_mode][0]+BLOCK_SIZE][j4-1][k] : mv_d;
-
-        switch (mvPredType)
+        for (k=0; k < 2; k++) 
         {
-        case MVPRED_MEDIAN:
-          if(!(block_available_upleft || block_available_up || block_available_upright))
-            pred_vec = mv_a;
-          else
-            pred_vec =mv_a+mv_b+mv_c-min(mv_a,min(mv_b,mv_c))-max(mv_a,max(mv_b,mv_c));
-          break;
-        case MVPRED_L:
-          pred_vec = mv_a;
-          break;
-        case MVPRED_U:
-          pred_vec = mv_b;
-          break;
-        case MVPRED_UR:
-          pred_vec = mv_c;
-          break;
-        default:
-          break;
-        }
 #if TRACE
-        snprintf(currSE.tracestring, TRACESTRING_SIZE, " MVD");
+          snprintf(currSE.tracestring, TRACESTRING_SIZE, " MVD");
 #endif
-        img->subblock_x = i; // position used for context determination
-        img->subblock_y = j; // position used for context determination
-        currSE.value2 = k; // identifies the component; only used for context determination
+          img->subblock_x = i; // position used for context determination
+          img->subblock_y = j; // position used for context determination
+          currSE.value2 = (!bframe ? k : 2*k); // identifies the component; only used for context determination
+          dP->readSyntaxElement(&currSE,img,inp,dP);
+          curr_mvd = currSE.value1; 
+  
+          vec=curr_mvd+pmv[k];           /* find motion vector */
 
-        dP->readSyntaxElement(&currSE,img,inp,dP);
-        curr_mvd = currSE.value1;
+          if (bframe)
+          {
+            for(ii=0;ii<step_h;ii++)
+              for(jj=0;jj<step_v;jj++)
+                img->fw_mv[i4+ii+BLOCK_SIZE][j4+jj][k]=vec;
+          }
+          else
+          {
+            for(ii=0;ii<step_h;ii++)
+              for(jj=0;jj<step_v;jj++)
+                img->mv[i4+ii+BLOCK_SIZE][j4+jj][k]=vec;
+          }
 
-        vec=curr_mvd+pred_vec;           // find motion vector
-        for(ii=0;ii<BLOCK_STEP[img->mb_mode][0];ii++)
-          for(jj=0;jj<BLOCK_STEP[img->mb_mode][1];jj++)
-            img->mv[i4+ii+BLOCK_SIZE][j4+jj][k]=vec;
-
-          // store (oversampled) mvd
-          for (l=0; l < step_v; l++)
-            for (m=0; m < step_h; m++)
+          /* store (oversampled) mvd */
+          for (l=0; l < step_v; l++) 
+            for (m=0; m < step_h; m++)  
               currMB->mvd[0][j+l][i+m][k] =  curr_mvd;
+        }
+      }
+    }
+  }
+
+
+  //=====  READ FORWARD MOTION VECTORS =====
+  currSE.type = SE_MVD;
+  dP          = &(currSlice->partArr[partMap[SE_BFRAME]]);
+
+  if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag) currSE.mapping = linfo_mvd;
+  else                                                    currSE.reading = readBiMVD2Buffer_CABAC;
+
+  for (j0=0; j0<4; j0+=step_v0)
+  for (i0=0; i0<4; i0+=step_h0)
+  {
+    k=2*(j0/2)+(i0/2);
+    if ((currMB->b8pdir[k]==1 || currMB->b8pdir[k]==2) && (currMB->b8mode[k]!=0))//has forward vector
+    {
+      mv_mode  = currMB->b8mode[k];
+      step_h   = BLOCK_STEP [mv_mode][0];
+      step_v   = BLOCK_STEP [mv_mode][1];
+
+      refframe = img->bw_refFrArr[img->block_y+j0][img->block_x+i0]; // always 0
+
+      for (j=j0; j<j0+step_v0; j+=step_v)
+      for (i=i0; i<i0+step_h0; i+=step_h)
+      {
+        j4 = img->block_y+j;
+        i4 = img->block_x+i;
+
+        // first make mv-prediction
+        SetMotionVectorPredictor (img, pmv, pmv+1, refframe, img->bw_refFrArr, img->bw_mv, i, j, 4*step_h, 4*step_v);
+
+        for (k=0; k < 2; k++) 
+        {
+#if TRACE
+          snprintf(currSE.tracestring, TRACESTRING_SIZE, " MVD");
+#endif
+          img->subblock_x = i; // position used for context determination
+          img->subblock_y = j; // position used for context determination
+          currSE.value2   = 2*k+1; // identifies the component; only used for context determination
+          dP->readSyntaxElement(&currSE,img,inp,dP);
+          curr_mvd = currSE.value1; 
+  
+          vec=curr_mvd+pmv[k];           /* find motion vector */
+
+          for(ii=0;ii<step_h;ii++)
+            for(jj=0;jj<step_v;jj++)
+              img->bw_mv[i4+ii+BLOCK_SIZE][j4+jj][k]=vec;
+
+          /* store (oversampled) mvd */
+          for (l=0; l < step_v; l++) 
+            for (m=0; m < step_h; m++)  
+              currMB->mvd[1][j+l][i+m][k] =  curr_mvd;
+        }
       }
     }
   }
 }
+
+
 
 /*!
  ************************************************************************
@@ -797,82 +1080,73 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
   DataPartition *dP;
   int *partMap = assignSE2partition[currSlice->dp_mode];
   int iii,jjj;
-  int coef_ctr, len, i0,j0;
-
+  int coef_ctr, len, i0, j0, b8;
   int ll;
   int scan_loop_ctr;
-
   int block_x,block_y;
-  int scan_mode, start_scan;
+  int start_scan;
+	int uv;
 
   int qp_per    = (img->qp-MIN_QP)/6;
   int qp_rem    = (img->qp-MIN_QP)%6;
   int qp_per_uv = ((img->qp<0?img->qp:QP_SCALE_CR[img->qp])-MIN_QP)/6;
   int qp_rem_uv = ((img->qp<0?img->qp:QP_SCALE_CR[img->qp])-MIN_QP)%6;
 
-  // read CBP if not new intra mode
-  if (img->imod != INTRA_MB_NEW)
-  {
-    if (img->imod == INTRA_MB_OLD)
-      currSE.type = SE_CBP_INTRA;
-    else
-      currSE.type = SE_CBP_INTER;
 
-    if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
-      dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-    else
-      dP = &(currSlice->partArr[partMap[currSE.type]]);
+  // read CBP if not new intra mode
+  if (!IS_NEWINTRA (currMB))
+  {
+    if (IS_OLDINTRA (currMB))   currSE.type = SE_CBP_INTRA;
+    else                        currSE.type = SE_CBP_INTER;
+
+    if(img->type == B_IMG_1 || img->type == B_IMG_MULT)  dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+    else                                                 dP = &(currSlice->partArr[partMap[currSE.type]]);
     
     if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
     {
-      if (img->imod == INTRA_MB_OLD)
-        currSE.mapping = linfo_cbp_intra;
-      else
-        currSE.mapping = linfo_cbp_inter;
+      if (IS_OLDINTRA (currMB))  currSE.mapping = linfo_cbp_intra;
+      else                       currSE.mapping = linfo_cbp_inter;
     }
     else
+    {
       currSE.reading = readCBPFromBuffer_CABAC;
+    }
 
 #if TRACE
     snprintf(currSE.tracestring, TRACESTRING_SIZE, " CBP ");
 #endif
-    
-   
     dP->readSyntaxElement(&currSE,img,inp,dP);
     currMB->cbp = cbp = currSE.value1;
     // Delta quant only if nonzero coeffs
     if (cbp !=0)
     {
-      if (currMB->intraOrInter == INTER_MB)
-        currSE.type = SE_DELTA_QUANT_INTER;
-      else
-        currSE.type = SE_DELTA_QUANT_INTRA;
+      if (IS_INTER (currMB))  currSE.type = SE_DELTA_QUANT_INTER;
+      else                    currSE.type = SE_DELTA_QUANT_INTRA;
 
-      if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
-        dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-      else
-        dP = &(currSlice->partArr[partMap[currSE.type]]);
+      if(img->type == B_IMG_1 || img->type == B_IMG_MULT)  dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+      else                                                 dP = &(currSlice->partArr[partMap[currSE.type]]);
       
       if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
+      {
         currSE.mapping = linfo_dquant;
+      }
       else
       {
-        if (currMB->intraOrInter == INTER_MB)
-          currSE.reading= readDquant_inter_FromBuffer_CABAC;
-        else
-          currSE.reading= readDquant_intra_FromBuffer_CABAC;
+        if (IS_INTER (currMB))   currSE.reading= readDquant_inter_FromBuffer_CABAC;
+        else                     currSE.reading= readDquant_intra_FromBuffer_CABAC;
       } 
-
 #if TRACE
-        snprintf(currSE.tracestring, TRACESTRING_SIZE, " Delta quant ");
+      snprintf(currSE.tracestring, TRACESTRING_SIZE, " Delta quant ");
 #endif
-     dP->readSyntaxElement(&currSE,img,inp,dP);
-     currMB->delta_quant = currSE.value1;
-     img->qp= (img->qp-MIN_QP+currMB->delta_quant+(MAX_QP-MIN_QP+1))%(MAX_QP-MIN_QP+1)+MIN_QP;
+      dP->readSyntaxElement(&currSE,img,inp,dP);
+      currMB->delta_quant = currSE.value1;
+      img->qp= (img->qp-MIN_QP+currMB->delta_quant+(MAX_QP-MIN_QP+1))%(MAX_QP-MIN_QP+1)+MIN_QP;
     }
   }
   else
+  {
     cbp = currMB->cbp;
+  }
 
   for (i=0;i<BLOCK_SIZE;i++)
     for (j=0;j<BLOCK_SIZE;j++)
@@ -880,33 +1154,25 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
         for(jjj=0;jjj<BLOCK_SIZE;jjj++)
           img->cof[i][j][iii][jjj]=0;// reset luma coeffs
 
-  if(img->imod==INTRA_MB_NEW) // read DC coeffs for new intra modes
+
+  if (IS_NEWINTRA (currMB)) // read DC coeffs for new intra modes
   {
+    currSE.type = SE_DELTA_QUANT_INTRA;
 
-    if (currMB->intraOrInter == INTER_MB)
-      currSE.type = SE_DELTA_QUANT_INTER;
-    else
-      currSE.type = SE_DELTA_QUANT_INTRA;
-
-    if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
-      dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-    else
-      dP = &(currSlice->partArr[partMap[currSE.type]]);
+    if(img->type == B_IMG_1 || img->type == B_IMG_MULT)  dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+    else                                                 dP = &(currSlice->partArr[partMap[currSE.type]]);
     
     if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
+    {
       currSE.mapping = linfo_dquant;
+    }
     else
     {
-      if (currMB->intraOrInter == INTER_MB)
-        currSE.reading= readDquant_inter_FromBuffer_CABAC;
-      else
-        currSE.reading= readDquant_intra_FromBuffer_CABAC;
-    } 
-      
+      currSE.reading= readDquant_intra_FromBuffer_CABAC;
+    }
 #if TRACE
     snprintf(currSE.tracestring, TRACESTRING_SIZE, " Delta quant ");
 #endif
-    
     dP->readSyntaxElement(&currSE,img,inp,dP);
     currMB->delta_quant = currSE.value1;
     img->qp= (img->qp-MIN_QP+currMB->delta_quant+(MAX_QP-MIN_QP+1))%(MAX_QP-MIN_QP+1)+MIN_QP;
@@ -915,23 +1181,21 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
       for (j=0;j<BLOCK_SIZE;j++)
         img->ipredmode[img->block_x+i+1][img->block_y+j+1]=0;
 
-            // //////
 
     currSE.type = SE_LUM_DC_INTRA;
-    if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
-      dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-    else
-      dP = &(currSlice->partArr[partMap[currSE.type]]);
+    if(img->type == B_IMG_1 || img->type == B_IMG_MULT)  dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+    else                                                 dP = &(currSlice->partArr[partMap[currSE.type]]);
 
     if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
+    {
       currSE.mapping = linfo_levrun_inter;
+    }
     else
     {
       currSE.reading = readRunLevelFromBuffer_CABAC;
       currSE.context = 3; // for choosing context model
     }
 
-    // ////////////
     coef_ctr=-1;
     level = 1;                            // just to get inside the loop
     for(k=0;(k<17) && (level!=0);k++)
@@ -941,8 +1205,8 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
 #endif
       dP->readSyntaxElement(&currSE,img,inp,dP);
       level = currSE.value1;
-      run = currSE.value2;
-      len = currSE.len;
+      run   = currSE.value2;
+      len   = currSE.len;
 
       if (level != 0)                     // leave if len=1
       {
@@ -958,14 +1222,8 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
   }
 
 
-  if (img->imod == INTRA_MB_OLD && img->qp < 24)
-    scan_mode=DOUBLE_SCAN;
-  else
-    scan_mode=SINGLE_SCAN;
-
-
   // luma coefficients
-  for (block_y=0; block_y < 4; block_y += 2) // all modes
+  for (block_y=0; block_y < 4; block_y += 2) /* all modes */
   {
     for (block_x=0; block_x < 4; block_x += 2)
     {
@@ -974,27 +1232,29 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
         jj=j/2;
         for (i=block_x; i < block_x+2; i++)
         {
-          ii=i/2;
-          if (img->imod == INTRA_MB_NEW)
-            start_scan = 1; // skip DC coeff
-          else
-            start_scan = 0; // take all coeffs
+          ii = i/2;
+          b8 = 2*jj+ii;
 
-          if((cbp & (int)pow(2,(ii+2*jj))) != 0)  // are there any coeff in current block at all
+          if (IS_NEWINTRA (currMB))   start_scan = 1; /* skip DC coeff */
+          else                        start_scan = 0; /* take all coeffs */
+
+					img->subblock_x = i; // position for coeff_count ctx
+					img->subblock_y = j; // position for coeff_count ctx
+          if (cbp & (1<<b8))  /* are there any coeff in current block at all */
           {
-            if (scan_mode==SINGLE_SCAN)
+            if (currMB->b8mode[b8]!=IBLOCK || (inp->symbol_mode!=CABAC && img->qp>=24))
             {
-              coef_ctr=start_scan-1;
-              level = 1;
+              coef_ctr = start_scan-1;
+              level    = 1;      
               for(k=start_scan;(k<17) && (level!=0);k++)
               {
-                /*
-                  * make distinction between INTRA and INTER coded
-                  * luminance coefficients
-                */
+                /* 
+                 * make distinction between INTRA and INTER coded
+                 * luminance coefficients
+                 */
                 if (k == 0)
-                {
-                  if (img->imod == INTRA_MB_OLD || img->imod == INTRA_MB_NEW)
+                { 
+                  if (currMB->b8mode[b8]==IBLOCK || IS_NEWINTRA (currMB))
                   {
                     currSE.context = 2; // for choosing context model
                     currSE.type  = SE_LUM_DC_INTRA;
@@ -1006,13 +1266,13 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
                   }
                 }
                 else
-                {
-                  if (img->imod == INTRA_MB_OLD /*|| img->imod == INTRA_MB_NEW*/)
+                { 
+                  if (currMB->b8mode[b8]==IBLOCK)
                   {
                     currSE.context = 2; // for choosing context model
                     currSE.type  = SE_LUM_AC_INTRA;
                   }
-                  else if ( img->imod == INTRA_MB_NEW )
+                  else if (IS_NEWINTRA (currMB))
                   {
                     currSE.context = 4; // for choosing context model
                     currSE.type  = SE_LUM_AC_INTRA;
@@ -1023,79 +1283,67 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
                     currSE.type  = SE_LUM_AC_INTER;
                   }
                 }
-
 #if TRACE
-                snprintf(currSE.tracestring, TRACESTRING_SIZE, " Luma sng ");
+                sprintf(currSE.tracestring, " Luma sng ");
 #endif
-                
-                if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
-                  dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-                else
-                  dP = &(currSlice->partArr[partMap[currSE.type]]);
+                if(img->type == B_IMG_1 || img->type == B_IMG_MULT)  dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+                else                                                 dP = &(currSlice->partArr[partMap[currSE.type]]);
 
-                if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
-                  currSE.mapping = linfo_levrun_inter;
-                else
-                  currSE.reading = readRunLevelFromBuffer_CABAC;
+                if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)  currSE.mapping = linfo_levrun_inter;
+                else                                                     currSE.reading = readRunLevelFromBuffer_CABAC;
 
                 dP->readSyntaxElement(&currSE,img,inp,dP);
                 level = currSE.value1;
-                run =  currSE.value2;
-                len = currSE.len;
-
-                if (level != 0)   // leave if len=1
+                run   =  currSE.value2;
+                len   = currSE.len;
+                
+                if (level != 0)    /* leave if len=1 */
                 {
-                  coef_ctr += run+1;
-                  currMB->cbp_blk |= 1 << ((j<<2) + i) ;
+                  coef_ctr             += run+1;
                   i0=SNGL_SCAN[coef_ctr][0];
                   j0=SNGL_SCAN[coef_ctr][1];
-                  img->cof[i][j][i0][j0]=level*dequant_coef[qp_rem][i0][j0]<<qp_per;
+                  currMB->cbp_blk      |= 1 << ((j<<2) + i) ;
+                  img->cof[i][j][i0][j0]= level*dequant_coef[qp_rem][i0][j0]<<qp_per;
                 }
               }
             }
-            else    // double scan (old intra with QP<24
+            else    /* double scan (old intra with QP<24*/
             {
               for(scan_loop_ctr=0;scan_loop_ctr<2;scan_loop_ctr++)
               {
                 coef_ctr=start_scan-1;
-                level=1;                          // just to get inside the loop
+                level=1;                          /* just to get inside the loop */
                 for(k=0; k<9 && level!=0;k++)
                 {
-                  
-                  if (k == 0)
-                    currSE.type  = SE_LUM_DC_INTRA; // element is of type DC
-                  else
-                    currSE.type  = SE_LUM_AC_INTRA;   // element is of type AC
+                  if (k == 0)  currSE.type  = SE_LUM_DC_INTRA; /* element is of type DC */
+                  else         currSE.type  = SE_LUM_AC_INTRA; /* element is of type AC */
 #if TRACE
-                  snprintf(currSE.tracestring, TRACESTRING_SIZE, "Luma dbl(%2d,%2d)  ",scan_loop_ctr,k);
+                  sprintf(currSE.tracestring, "Luma dbl(%2d,%2d)  ",scan_loop_ctr,k);
 #endif
-                  if(img->type == B_IMG_1 || img->type == B_IMG_MULT)
-                    dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-                  else
-                    dP = &(currSlice->partArr[partMap[currSE.type]]);
+                  if(img->type == B_IMG_1 || img->type == B_IMG_MULT)  dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+                  else                                                 dP = &(currSlice->partArr[partMap[currSE.type]]);
 
                   if (inp->symbol_mode == UVLC || dP->bitstream->ei_flag)
+                  {
                     currSE.mapping = linfo_levrun_intra;
+                  }
                   else
                   {
                     currSE.context = 0; // for choosing context model
                     currSE.reading = readRunLevelFromBuffer_CABAC;
                   }
-                  
                   dP->readSyntaxElement(&currSE,img,inp,dP);
                   level = currSE.value1;
-                  run = currSE.value2;
-                  len = currSE.len;
+                  run   = currSE.value2;
+                  len   = currSE.len;
 
-                  if (level != 0)   // leave if len=1
+                  if (level != 0)    /* leave if len=1 */
                   {
-                    coef_ctr=coef_ctr+run+1;
-                    currMB->cbp_blk |= 1 << ((j<<2) + i) ;
-
+                    coef_ctr              = coef_ctr+run+1;
+                    currMB->cbp_blk      |= 1 << ((j<<2) + i) ;
                     i0=DBL_SCAN[coef_ctr][0][scan_loop_ctr];
                     j0=DBL_SCAN[coef_ctr][1][scan_loop_ctr];
-
-                    img->cof[i][j][i0][j0]=level*dequant_coef[qp_rem][i0][j0]<<qp_per;
+                    img->cof[i][j][i0][j0]= level*dequant_coef[qp_rem][i0][j0]<<qp_per;
                   }
                 }
               }
@@ -1112,7 +1360,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
         for (jjj=0;jjj<4;jjj++)
           img->cof[i][j][iii][jjj]=0;
 
-  m2=img->mb_x*2;
+  m2 =img->mb_x*2;
   jg2=img->mb_y*2;
 
   // chroma 2x2 DC coeff
@@ -1127,7 +1375,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
       level=1;
       for(k=0;(k<5)&&(level!=0);k++)
       {
-        if ( img->imod == INTRA_MB_OLD || img->imod == INTRA_MB_NEW)
+        if (IS_INTRA (currMB))
         {
           currSE.context = 6; // for choosing context model
           currSE.type  = SE_CHR_DC_INTRA;
@@ -1137,7 +1385,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
           currSE.context = 5; // for choosing context model
           currSE.type  = SE_CHR_DC_INTER;
         }
-
+				currSE.k = ll; //coeff_count ctx
 #if TRACE
         snprintf(currSE.tracestring, TRACESTRING_SIZE, " 2x2 DC Chroma ");
 #endif
@@ -1171,7 +1419,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
         }
       }
 
-      if (((img->type==SP_IMG_1 || img->type==SP_IMG_MULT) && (currMB->mb_imode == INTRA_MB_INTER)))
+      if (((img->type==SP_IMG_1 || img->type==SP_IMG_MULT) && IS_INTER (currMB)))
       {
         img->cof[0+ll][4][0][0]=(img->cofu[0]>>qp_per_uv)/dequant_coef[qp_rem_uv][0][0];
         img->cof[1+ll][4][0][0]=(img->cofu[1]>>qp_per_uv)/dequant_coef[qp_rem_uv][0][0];
@@ -1189,6 +1437,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
   }
 
   // chroma AC coeff, all zero fram start_scan
+	uv=-1;
   if (cbp>31)
   {
     block_y=4;
@@ -1205,10 +1454,11 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
           {
             coef_ctr=0;
             level=1;
+						uv++;
             for(k=0;(k<16)&&(level!=0);k++)
             {
-              
-              if ( img->imod == INTRA_MB_OLD || img->imod == INTRA_MB_NEW)
+              currSE.k = uv;  //coeff_count ctx
+              if (IS_INTRA (currMB))
               {
                 currSE.context = 8; // for choosing context model
                 currSE.type  = SE_CHR_AC_INTRA;
@@ -1265,7 +1515,7 @@ void decode_one_CopyMB(struct img_par *img,struct inp_par *inp)
   int tmp_block[BLOCK_SIZE][BLOCK_SIZE];
   int i, j, ii, jj, uv;
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
-  int ref_frame = currMB->ref_frame;
+  int ref_frame = 0; //currMB->ref_frame;
   int mv_mul;
 
   if(img->mv_res)
@@ -1354,21 +1604,46 @@ void decode_one_CopyMB(struct img_par *img,struct inp_par *inp)
  *    decode one macroblock
  ************************************************************************
  */
+
 int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
 {
   int tmp_block[BLOCK_SIZE][BLOCK_SIZE];
+  int tmp_blockbw[BLOCK_SIZE][BLOCK_SIZE];
   int js[2][2];
   int i=0,j=0,ii=0,jj=0,i1=0,j1=0,j4=0,i4=0;
   int js0=0,js1=0,js2=0,js3=0,jf=0;
-  int uv;
+  int uv, hv;
   int vec1_x=0,vec1_y=0,vec2_x=0,vec2_y=0;
+  int vec1_xx=0,vec1_yy=0;
   int ioff,joff;
 
+  int bw_pred, fw_pred, ifx;
   int ii0,jj0,ii1,jj1,if1,jf1,if0,jf0;
   int mv_mul,f1,f2,f3,f4;
 
   Macroblock *currMB   = &img->mb_data[img->current_mb_nr];
-  int ref_frame        = currMB->ref_frame;
+  int refframe, fw_refframe, bw_refframe, mv_mode, pred_dir, intra_prediction; // = currMB->ref_frame;
+  int*** mv_array, ***fw_mv_array, ***bw_mv_array;
+  int bframe = (img->type==B_IMG_1 || img->type==B_IMG_MULT);
+  byte refP_tr, TRb, TRp;
+
+#ifdef _ADAPT_LAST_GROUP_
+  extern int *last_P_no;
+#endif
+
+  int mb_nr             = img->current_mb_nr;
+  int mb_width          = img->width/16;
+  int mb_available_up   = (img->mb_y == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
+  int mb_available_left = (img->mb_x == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-1].slice_nr);
+
+  if(img->UseConstrainedIntraPred)
+  {
+    if (mb_available_up   && (img->intra_block[mb_nr-mb_width][2]==0 || img->intra_block[mb_nr-mb_width][3]==0))
+      mb_available_up   = 0;
+    if (mb_available_left && (img->intra_block[mb_nr-       1][1]==0 || img->intra_block[mb_nr       -1][3]==0))
+      mb_available_left = 0;
+  }
+
 
   // set variables depending on mv_res
   if(img->mv_res)
@@ -1390,8 +1665,10 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
   // luma decoding **************************************************
 
   // get prediction for INTRA_MB_16x16
-  if (currMB->mb_imode == INTRA_MB_NEW)
-    intrapred_luma_2(img,currMB->intra_pred_modes[0]);
+  if (IS_NEWINTRA (currMB))
+  {
+    intrapred_luma_2(img, currMB->i16mode);
+  }
 
   for(j=0;j<MB_BLOCK_SIZE/BLOCK_SIZE;j++)
   {
@@ -1401,28 +1678,111 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
     {
       ioff=i*4;
       i4=img->block_x+i;
-      // get prediction for INTRA_MB_4x4
-      if(currMB->mb_imode == INTRA_MB_OLD)
+
+      mv_mode  = currMB->b8mode[2*(j/2)+(i/2)];
+      pred_dir = currMB->b8pdir[2*(j/2)+(i/2)];
+            
+      // PREDICTION
+      if (mv_mode==IBLOCK)
       {
-        if (intrapred(img,ioff,joff,i4,j4)==SEARCH_SYNC)  // make 4x4 prediction block mpr from given prediction img->mb_mode
-          return SEARCH_SYNC;                   // bit error
+        //===== INTRA PREDICTION =====
+        if (intrapred(img,ioff,joff,i4,j4)==SEARCH_SYNC)  /* make 4x4 prediction block mpr from given prediction img->mb_mode */
+          return SEARCH_SYNC;                   /* bit error */
       }
-      // get motion prediction for INTER_MB
-      else if(currMB->mb_imode == INTRA_MB_INTER)
+      else if (!IS_NEWINTRA (currMB))
       {
-        vec1_x = i4*4*mv_mul + img->mv[i4+BLOCK_SIZE][j4][0];
-        vec1_y = j4*4*mv_mul + img->mv[i4+4][j4][1];
+        if (pred_dir != 2)
+        {
+          //===== FORWARD/BACKWARD PREDICTION =====
+          if (!bframe)
+          {
+            //refframe = (img->frame_cycle + img->buf_cycle - refFrArr[j4][i4]) % img->buf_cycle;
+            refframe = refFrArr[j4][i4];
+            mv_array = img->mv;
+          }
+          else if (!pred_dir)
+          {
+            //refframe = (img->number - 1 - img->fw_refFrArr[j4][i4] + img->buf_cycle) % img->buf_cycle;
+            refframe = img->fw_refFrArr[j4][i4]+1;
+            mv_array = img->fw_mv;
+          }
+          else
+          {
+            //refframe = (img->frame_cycle + img->buf_cycle) % img->buf_cycle;
+            refframe = 0;
+            mv_array = img->bw_mv;
+          }
 
-        get_block(ref_frame,vec1_x,vec1_y,img,tmp_block);
+          vec1_x = i4*4*mv_mul + mv_array[i4+BLOCK_SIZE][j4][0];
+          vec1_y = j4*4*mv_mul + mv_array[i4+BLOCK_SIZE][j4][1];
 
-        for(ii=0;ii<BLOCK_SIZE;ii++)
-          for(jj=0;jj<BLOCK_SIZE;jj++)
-            img->mpr[ii+ioff][jj+joff] = tmp_block[ii][jj];
+          get_block (refframe, vec1_x, vec1_y, img, tmp_block);
+
+          for(ii=0;ii<BLOCK_SIZE;ii++)
+          for(jj=0;jj<BLOCK_SIZE;jj++)  img->mpr[ii+ioff][jj+joff] = tmp_block[ii][jj];
+        }
+        else
+        {
+          if (mv_mode != 0)
+          {
+            //===== BI-DIRECTIONAL PREDICTION =====
+            fw_mv_array = img->fw_mv;
+            bw_mv_array = img->bw_mv;
+            fw_refframe = img->fw_refFrArr[j4][i4]+1;
+            bw_refframe = 0;
+          }
+          else
+          {
+            //===== DIRECT PREDICTION =====
+            fw_mv_array = img->dfMV;
+            bw_mv_array = img->dbMV;
+            bw_refframe = 0;
+
+            if(refFrArr[j4][i4]==-1) // next P is intra mode
+            {
+              for(hv=0; hv<2; hv++)   img->dfMV[i4+BLOCK_SIZE][j4][hv]=img->dbMV[i4+BLOCK_SIZE][j4][hv]=0;
+              fw_refframe = 1;
+            }
+            else // next P is skip or inter mode
+            {
+#ifdef _ADAPT_LAST_GROUP_
+              refP_tr = last_P_no[refFrArr[j4][i4]];
+#else
+              refP_tr = nextP_tr-((refFrArr[j4][i4]+1)*P_interval);
+#endif
+              TRb = img->tr-refP_tr;
+              TRp = nextP_tr-refP_tr;
+
+              img->dfMV[i4+BLOCK_SIZE][j4][0]=TRb*img->mv[i4+BLOCK_SIZE][j4][0]/TRp;
+              img->dfMV[i4+BLOCK_SIZE][j4][1]=TRb*img->mv[i4+BLOCK_SIZE][j4][1]/TRp;
+              img->dbMV[i4+BLOCK_SIZE][j4][0]=(TRb-TRp)*img->mv[i4+BLOCK_SIZE][j4][0]/TRp;
+              img->dbMV[i4+BLOCK_SIZE][j4][1]=(TRb-TRp)*img->mv[i4+BLOCK_SIZE][j4][1]/TRp;
+              //fw_refframe = (img->number - 1 - refFrArr[j4][i4] + img->buf_cycle) % img->buf_cycle;
+              fw_refframe = refFrArr[j4][i4]+1;
+            }
+          }
+
+          vec1_x = i4*4*mv_mul + fw_mv_array[i4+BLOCK_SIZE][j4][0];
+          vec1_y = j4*4*mv_mul + fw_mv_array[i4+BLOCK_SIZE][j4][1];
+          vec2_x = i4*4*mv_mul + bw_mv_array[i4+BLOCK_SIZE][j4][0];
+          vec2_y = j4*4*mv_mul + bw_mv_array[i4+BLOCK_SIZE][j4][1];
+
+          get_block(fw_refframe, vec1_x, vec1_y, img, tmp_block);
+          get_block(bw_refframe, vec2_x, vec2_y, img, tmp_blockbw);
+
+          for(ii=0;ii<BLOCK_SIZE;ii++)
+          for(jj=0;jj<BLOCK_SIZE;jj++)  img->mpr[ii+ioff][jj+joff] = (tmp_block[ii][jj]+tmp_blockbw[ii][jj]+1)/2;
+        }
       }
 
-      if ((img->type==SP_IMG_1 || img->type==SP_IMG_MULT) && (currMB->mb_imode == INTRA_MB_INTER))
+      if ((img->type==SP_IMG_1 || img->type==SP_IMG_MULT) && (IS_INTER (currMB) && mv_mode!=IBLOCK))
+      {
         itrans_sp(img,ioff,joff,i,j);
-      else itrans(img,ioff,joff,i,j);      // use DCT transform and make 4x4 block m7 from prediction block mpr
+      }
+      else
+      {
+        itrans   (img,ioff,joff,i,j);      // use DCT transform and make 4x4 block m7 from prediction block mpr
+      }
 
       for(ii=0;ii<BLOCK_SIZE;ii++)
       {
@@ -1433,24 +1793,19 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
       }
     }
   }
-  // chroma decoding *******************************************************
 
+
+  // chroma decoding *******************************************************
   for(uv=0;uv<2;uv++)
   {
-    if (img->imod==INTRA_MB_OLD || img->imod==INTRA_MB_NEW)// intra mode
-    {
-      int mb_available_up = (currMB->mb_available[0][1] != NULL);
-      int mb_available_left = (currMB->mb_available[1][0] != NULL);
-      if(img->UseConstrainedIntraPred)
-      {
-        const int mb_nr = img->current_mb_nr;
-        const int mb_width = img->width/MB_BLOCK_SIZE;
-        if (mb_available_up && (img->intra_mb[mb_nr-mb_width] ==0))
-          mb_available_up = 0;
-        if (mb_available_left && (img->intra_mb[mb_nr-1] ==0))
-          mb_available_left = 0;
-      }
+    intra_prediction = (IS_NEWINTRA (currMB)        ||
+                        currMB->b8mode[0] == IBLOCK ||
+                        currMB->b8mode[1] == IBLOCK ||
+                        currMB->b8mode[2] == IBLOCK ||
+                        currMB->b8mode[3] == IBLOCK);
 
+    if (intra_prediction)
+    {
       js0=0;
       js1=0;
       js2=0;
@@ -1506,25 +1861,40 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
       {
         ioff=i*4;
         i4=img->pix_c_x+ioff;
-        // make pred
-        if(img->imod==INTRA_MB_OLD|| img->imod==INTRA_MB_NEW)// intra
+
+        mv_mode  = currMB->b8mode[2*(j-4)+i];
+        pred_dir = currMB->b8pdir[2*(j-4)+i];
+
+        // PREDICTION
+        if (mv_mode==IBLOCK || IS_NEWINTRA (currMB))
         {
-          for(ii=0;ii<4;ii++)
-            for(jj=0;jj<4;jj++)
-            {
-              img->mpr[ii+ioff][jj+joff]=js[i][j-4];
-            }
+          //--- INTRA PREDICTION ---
+          for (ii=0; ii<4; ii++)
+          for (jj=0; jj<4; jj++)
+          {
+            img->mpr[ii+ioff][jj+joff]=js[i][j-4];
+          }
         }
-        else
+        else if (pred_dir != 2)
         {
+          //--- FORWARD/BACKWARD PREDICTION ---
+          if (!bframe)        mv_array = img->mv;
+          else if (!pred_dir) mv_array = img->fw_mv;
+          else                mv_array = img->bw_mv;
+
           for(jj=0;jj<4;jj++)
           {
             jf=(j4+jj)/2;
             for(ii=0;ii<4;ii++)
             {
               if1=(i4+ii)/2;
-              i1=(img->pix_c_x+ii+ioff)*f1+img->mv[if1+4][jf][0];
-              j1=(img->pix_c_y+jj+joff)*f1+img->mv[if1+4][jf][1];
+
+              if (!bframe)        refframe =           refFrArr[jf][if1];
+              else if (!pred_dir) refframe = 1+img->fw_refFrArr[jf][if1];
+              else                refframe = 0;
+
+              i1=(img->pix_c_x+ii+ioff)*f1+mv_array[if1+4][jf][0];
+              j1=(img->pix_c_y+jj+joff)*f1+mv_array[if1+4][jf][1];
 
               ii0=max (0, min (i1/f1, img->width_cr-1));
               jj0=max (0, min (j1/f1, img->height_cr-1));
@@ -1535,26 +1905,101 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
               jf1=(j1 & f2);
               if0=f1-if1;
               jf0=f1-jf1;
-              img->mpr[ii+ioff][jj+joff]=(if0*jf0*mcef[ref_frame][uv][jj0][ii0]+
-                if1*jf0*mcef[ref_frame][uv][jj0][ii1]+
-                if0*jf1*mcef[ref_frame][uv][jj1][ii0]+
-                if1*jf1*mcef[ref_frame][uv][jj1][ii1]+f4)/f3;
-
+              img->mpr[ii+ioff][jj+joff]=(if0*jf0*mcef[refframe][uv][jj0][ii0]+
+                                          if1*jf0*mcef[refframe][uv][jj0][ii1]+
+                                          if0*jf1*mcef[refframe][uv][jj1][ii0]+
+                                          if1*jf1*mcef[refframe][uv][jj1][ii1]+f4)/f3;
             }
           }
         }
-        if ((img->type!=SP_IMG_1 && img->type!=SP_IMG_MULT) || (currMB->mb_imode != INTRA_MB_INTER))
+        else
+        {
+          if (mv_mode != 0)
+          {
+            //===== BI-DIRECTIONAL PREDICTION =====
+            fw_mv_array = img->fw_mv;
+            bw_mv_array = img->bw_mv;
+          }
+          else
+          {
+            //===== DIRECT PREDICTION =====
+            fw_mv_array = img->dfMV;
+            bw_mv_array = img->dbMV;
+          }
+
+          for(jj=0;jj<4;jj++)
+          {
+            jf=(j4+jj)/2;
+            for(ii=0;ii<4;ii++)
+            {
+              ifx=(i4+ii)/2;
+
+              if (mv_mode != 0)
+              {
+                fw_refframe = 1+img->fw_refFrArr[jf][ifx];
+                bw_refframe = 0;
+              }
+              else
+              {
+                bw_refframe = 0;
+                if(refFrArr[jf][ifx]==-1)  fw_refframe = 1;
+                else                       fw_refframe = 1+refFrArr[jf][ifx];
+              }
+
+              i1=(img->pix_c_x+ii+ioff)*f1+fw_mv_array[ifx+4][jf][0];
+              j1=(img->pix_c_y+jj+joff)*f1+fw_mv_array[ifx+4][jf][1];
+
+              ii0=max (0, min (i1/f1, img->width_cr-1));
+              jj0=max (0, min (j1/f1, img->height_cr-1));
+              ii1=max (0, min ((i1+f2)/f1, img->width_cr-1));
+              jj1=max (0, min ((j1+f2)/f1, img->height_cr-1));
+
+              if1=(i1 & f2);
+              jf1=(j1 & f2);
+              if0=f1-if1;
+              jf0=f1-jf1;
+
+              fw_pred=(if0*jf0*mcef[fw_refframe][uv][jj0][ii0]+
+                       if1*jf0*mcef[fw_refframe][uv][jj0][ii1]+
+                       if0*jf1*mcef[fw_refframe][uv][jj1][ii0]+
+                       if1*jf1*mcef[fw_refframe][uv][jj1][ii1]+f4)/f3;
+
+              i1=(img->pix_c_x+ii+ioff)*f1+bw_mv_array[ifx+4][jf][0];
+              j1=(img->pix_c_y+jj+joff)*f1+bw_mv_array[ifx+4][jf][1];
+
+              ii0=max (0, min (i1/f1, img->width_cr-1));
+              jj0=max (0, min (j1/f1, img->height_cr-1));
+              ii1=max (0, min ((i1+f2)/f1, img->width_cr-1));
+              jj1=max (0, min ((j1+f2)/f1, img->height_cr-1));
+
+              if1=(i1 & f2);
+              jf1=(j1 & f2);
+              if0=f1-if1;
+              jf0=f1-jf1;
+
+              bw_pred=(if0*jf0*mcef[bw_refframe][uv][jj0][ii0]+
+                       if1*jf0*mcef[bw_refframe][uv][jj0][ii1]+
+                       if0*jf1*mcef[bw_refframe][uv][jj1][ii0]+
+                       if1*jf1*mcef[bw_refframe][uv][jj1][ii1]+f4)/f3;
+
+              img->mpr[ii+ioff][jj+joff]=(int)((fw_pred+bw_pred)/2.+.5);
+            }
+          }
+        }
+
+        if ((img->type!=SP_IMG_1 && img->type!=SP_IMG_MULT) || IS_INTRA (currMB))
         {
           itrans(img,ioff,joff,2*uv+i,j);
           for(ii=0;ii<4;ii++)
-            for(jj=0;jj<4;jj++)
-            {
-              imgUV[uv][j4+jj][i4+ii]=img->m7[ii][jj];
-            }
+          for(jj=0;jj<4;jj++)
+          {
+            imgUV[uv][j4+jj][i4+ii]=img->m7[ii][jj];
+          }
         }
       }
     }
-    if((img->type==SP_IMG_1 || img->type==SP_IMG_MULT) && (currMB->mb_imode == INTRA_MB_INTER))
+
+    if((img->type==SP_IMG_1 || img->type==SP_IMG_MULT) && IS_INTER (currMB))
     {
       itrans_sp_chroma(img,2*uv);
       for (j=4;j<6;j++)

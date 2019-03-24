@@ -398,10 +398,6 @@ int RTPSliceHeader()
   int len = 0;
   int RTPSliceType;
 
-#ifdef _CHECK_MULTI_BUFFER_1_
-  RMPNIbuffer_t *r;
-#endif
-
   if(img->type == B_IMG)
     dP_nr= assignSE2partition[input->partition_mode][SE_BFRAME];
   else

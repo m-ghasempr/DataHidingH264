@@ -49,20 +49,38 @@
 #ifndef _DEFINES_H_
 #define _DEFINES_H_
 
+
 #define _EXP_GOLOMB
 
 #define _ERROR_CONCEALMENT_   1   //!< 0: off; 1: on
-#define MAX_SLICES_PER_FRAME  396
 #define _ADAPT_LAST_GROUP_
 
 #define MAX_INFO_WORD  300000               //!< for one frame
 #define MAX_CODED_FRAME_SIZE 400000         //!< bytes for one frame
 #define MAXIMUM_UVLC_CODEWORD_PER_HEADER 20 //!< UVLC codewords per combined picture/slice header maximum
-#define TRACE           1                   //!< 0:Trace off 1:Trace on
+#define TRACE           0                   //!< 0:Trace off 1:Trace on
 #define _LEAKYBUCKET_
 
 #define absm(A) ((A)<(0) ? (-(A)):(A))      //!< abs macro, faster than procedure
 #define MAX_VALUE       999999              //!< used for start value for some variables
+
+
+#define P8x8    8
+#define I4MB    9
+#define I16MB   10
+#define IBLOCK  11
+#define MAXMODE 12
+
+
+#define IS_INTRA(MB)    ((MB)->mb_type==I4MB  || (MB)->mb_type==I16MB)
+#define IS_NEWINTRA(MB) ((MB)->mb_type==I16MB)
+#define IS_OLDINTRA(MB) ((MB)->mb_type==I4MB)
+#define IS_INTER(MB)    ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB)
+#define IS_INTERMV(MB)  ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB       && (MB)->mb_type!=0)
+#define IS_DIRECT(MB)   ((MB)->mb_type==0     && (img->   type==    B_IMG_1 ||  img->   type==    B_IMG_MULT))
+#define IS_COPY(MB)     ((MB)->mb_type==0     && (img->   type==INTER_IMG_1 ||  img->   type==INTER_IMG_MULT || img->type==SP_IMG_1 || img->type==SP_IMG_MULT))
+#define IS_P8x8(MB)     ((MB)->mb_type==P8x8)
+
 
 // Quantization parameter range
 #define MIN_QP          -8
@@ -80,36 +98,6 @@
 #define SP_IMG_1  5
 #define SP_IMG_MULT 6
 
-// coding of MBtypes
-#define INTRA_CODED_MB  0
-#define INTER_CODED_MB  1
-
-// inter MB modes
-#define COPY_MB         0        //!< just copy last MB, no motion vectors
-#define M16x16_MB       1        //!< 16 x 16 block
-#define M16x8_MB        2
-#define M8x16_MB        3
-#define M8x8_MB         4
-#define M8x4_MB         5
-#define M4x8_MB         6
-#define M4x4_MB         7
-#define INTRA_MB        8        //!< intra coded MB in inter frame
-
-// B pictures : MB mode
-#define INTRA_MB_B      16
-
-
-
-// imod constants
-#define INTRA_MB_OLD    0        //!< new intra prediction mode in inter frame
-#define INTRA_MB_NEW    1        //!< 'old' intra prediction mode in inter frame
-#define INTRA_MB_INTER  2        //!< Intra MB in inter frame, use the constants above
-
-// B pictures : img->imod
-#define B_Forward       3
-#define B_Backward      4
-#define B_Bidirect      5
-#define B_Direct        6
 
 #define BLOCK_SIZE      4
 #define MB_BLOCK_SIZE   16
@@ -168,7 +156,7 @@
 
 #define DECODE_COPY_MB  0
 #define DECODE_MB       1
-#define DECODE_MB_BFRAME 2
+//#define DECODE_MB_BFRAME 2
 
 #define BLOCK_MULTIPLE      (MB_BLOCK_SIZE/BLOCK_SIZE)
 

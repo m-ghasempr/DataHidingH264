@@ -204,10 +204,9 @@ int intrapred_luma_2(struct img_par *img, //!< image parameters
 
   if(img->UseConstrainedIntraPred)
   {
-    // If neighbor MB is Inter, flag as not available
-    if (mb_available_up && (img->intra_mb[mb_nr-mb_width] ==0))
-      mb_available_up = 0;
-    if (mb_available_left && (img->intra_mb[mb_nr-1] ==0))
+    if (mb_available_up   && (img->intra_block[mb_nr-mb_width][2]==0 || img->intra_block[mb_nr-mb_width][3]==0))
+      mb_available_up   = 0;
+    if (mb_available_left && (img->intra_block[mb_nr-       1][1]==0 || img->intra_block[mb_nr       -1][3]==0))
       mb_available_left = 0;
   }
 

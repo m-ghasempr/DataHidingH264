@@ -72,15 +72,19 @@ typedef struct {
 
   // elements of current macroblock
   int                   mvd[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE][2];
-
-} RDCodingState;
-
+  int                   coeffs_count[BLOCK_MULTIPLE][BLOCK_MULTIPLE];
 
 
-void  clear_coding_state   ();   //!< delete structure
-void  init_coding_state    ();   //!< create structure
-void  store_coding_state   ();   //!< store parameters
-void  restore_coding_state ();   //!< restore parameters
+} CSobj;
+typedef CSobj* CSptr;
+
+
+void  delete_coding_state  (CSptr);  //!< delete structure
+CSptr create_coding_state  ();       //!< create structure
+
+void  store_coding_state   (CSptr);  //!< store parameters
+void  reset_coding_state   (CSptr);  //!< restore parameters
+
 
 #endif
 

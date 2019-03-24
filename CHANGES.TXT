@@ -1,7 +1,25 @@
+Changes for Version JM 1.7 to JM 1.4
+------------------------------------
+New Features
+* New Arithmetic Coding Engine [JVT-B036, Moffat/Neal/Witten ACM98]
+* Improved CABAC [JVT-B101] (GB)
+* Improved MB Pred Modes [JVT-B054] (HS)
+
+Bug Fixes
+* Fix MB statistics (HS)
+* Compile fix ERPS test (KS)
+* Restrict qp_factor for CABAC initialization (DM/KS)
+* Uses MAX_QP for IFF qp encoding (KS)
+* Fix decoder TR calculation (again) (AT)
+* Fix wrong concealment for B-frames and TR wrap around (KS)
+* Correct error handling if first slice (or first frame) was lost (TO)
+* Introduced macroblock map for concealment of lost or damaged macroblocks (TO)
+
+
 Changes for Version JM 1.4 to JM 1.0
 ------------------------------------
 New Features
-* Interim file format according to Appendix III of WD-1 (JVT-A003) (DT)
+* Interim file format according to Appendix III of WD-1 [JVT-A003] (DT)
 * Transform and Quantizer changes [JVT-B008, JVT-B038] (AH)
 * VLC update [JVT-B029] (LK)
 * Updated Error Rebust Macroblock Mode and Reference Frame Selection [JVT-B102] (DK)
@@ -269,6 +287,7 @@ Changes for Version 8.0 relative to Version 6.1
 People:
 KS      Karsten Sühring         suehring@hhi.de
 AH      Antti Hallapuro         antti.hallapuro@nokia.com
+AT      Alexis Michael Tourapis alexismt@ieee.org
 DK      Dimitris Kontopodis     dkonto@eikon.tum.de
 DM      Detlev Marpe            marpe@hhi.de
 DT      Dong Tian               tian@cs.tut.fi

@@ -172,14 +172,14 @@ typedef enum {
 //! struct to characterize the state of the arithmetic coding engine
 typedef struct
 {
-  unsigned int  Elow, Ehigh;
+  unsigned int  Elow, Erange;
   unsigned int  Ebuffer;
   unsigned int  Ebits_to_go;
   unsigned int  Ebits_to_follow;
   byte          *Ecodestrm;
   int           *Ecodestrm_len;
   // storage in case of recode MB
-  unsigned int  ElowS, EhighS;
+  unsigned int  ElowS, ErangeS;
   unsigned int  EbufferS;
   unsigned int  Ebits_to_goS;
   unsigned int  Ebits_to_followS;
@@ -206,32 +206,39 @@ typedef BiContextType *BiContextTypePtr;
  **********************************************************************
  */
 
-#define NUM_MB_TYPE_CTX  10
+
+#define NUM_MB_TYPE_CTX  11
+#define NUM_B8_TYPE_CTX  9
 #define NUM_MV_RES_CTX   10
 #define NUM_REF_NO_CTX   6
 #define NUM_DELTA_QP_CTX 4
 
 typedef struct
 {
-  BiContextTypePtr mb_type_contexts[2];
-  BiContextTypePtr mv_res_contexts[2];
-  BiContextTypePtr ref_no_contexts;
+  BiContextTypePtr mb_type_contexts[3];
+  BiContextTypePtr b8_type_contexts[2];
+  BiContextTypePtr mv_res_contexts [2];
+  BiContextTypePtr ref_no_contexts [2];
   BiContextTypePtr delta_qp_inter_contexts;
   BiContextTypePtr delta_qp_intra_contexts;
 } MotionInfoContexts;
+
 
 #define NUM_IPR_CTX    2
 #define NUM_CBP_CTX    4
 #define NUM_TRANS_TYPE 9
 #define NUM_LEVEL_CTX  4
 #define NUM_RUN_CTX    2
+#define NUM_COEFF_COUNT_CTX 6
+
 
 typedef struct
 {
-  BiContextTypePtr ipr_contexts[6];
-  BiContextTypePtr cbp_contexts[2][3];
-  BiContextTypePtr level_context[NUM_TRANS_TYPE];
-  BiContextTypePtr run_context[NUM_TRANS_TYPE];
+  BiContextTypePtr ipr_contexts [6];
+  BiContextTypePtr cbp_contexts [2][3];
+  BiContextTypePtr level_context[4*NUM_TRANS_TYPE];
+  BiContextTypePtr run_context  [2*NUM_TRANS_TYPE];
+  BiContextTypePtr coeff_count_context[NUM_TRANS_TYPE];
 } TextureInfoContexts;
 
 //*********************** end of data type definition for CABAC *******************
@@ -261,6 +268,8 @@ typedef struct syntaxelement
   int                 inf;            //!< info part of UVLC code
   unsigned int        bitpattern;     //!< UVLC bitpattern
   int                 context;        //!< CABAC context
+  int                 k;              //!< CABAC context for coeff_count,uv
+
 #if TRACE
   #define             TRACESTRING_SIZE 100            //!< size of trace string
   char                tracestring[TRACESTRING_SIZE];  //!< trace string
@@ -280,21 +289,22 @@ typedef struct macroblock
   int                 slice_nr;
   int                 delta_qp;
   int                 qp ;
-  int                 intraOrInter;
   int                 bitcounter[MAX_BITCOUNTER_MB];
   struct macroblock   *mb_available[3][3];        /*!< pointer to neighboring MBs in a 3x3 window of current MB, which is located at [1][1] \n
                                                        NULL pointer identifies neighboring MBs which are unavailable */
 
   // some storage of macroblock syntax elements for global access
   int                 mb_type;
-  int                 mb_imode;
-  int                 ref_frame;
   int                 mvd[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE][2];          //!< indices correspond to [forw,backw][block_y][block_x][x,y]
   int                 intra_pred_modes[BLOCK_MULTIPLE*BLOCK_MULTIPLE];
+  int                 coeffs_count[BLOCK_MULTIPLE][BLOCK_MULTIPLE];
   int                 cbp ;
   int                 cbp_blk ;    //!< 1 bit set for every 4x4 block with coefs (not implemented for INTRA)
-
+  int                 b8mode[4];
+  int                 b8pdir[4];
 } Macroblock;
+
+
 
 //! Bitstream
 typedef struct
@@ -379,15 +389,6 @@ byte ***nextP_imgUV;
 pel_t **Refbuf11;            //!< 1/1th pel (full pel) reference frame buffer
 pel_t  *Refbuf11_P;          //!< 1/1th pel P picture buffer
 
-// Buffers for rd optimization with packet losses, Dim. Kontopodis
-/* int  **resY;             //!< Residue of Luminance
-byte ***decY;            //!< Decoded values at the simulated decoders
-byte ****decref;         //!< Reference frames of the simulated decoders
-byte ***decY_best;       //!< Decoded frames for the best mode for all decoders
-byte **RefBlock;
-byte **status_map;
-byte **dec_mb_mode;
-byte **dec_mb_ref;*/
 byte **pixel_map;   //!< Shows the latest reference frame that is reliable for each pixel
 byte **refresh_map; //!< Stores the new values for pixel_map  
 int intras;         //!< Counts the intra updates in each frame.
@@ -408,7 +409,6 @@ typedef struct
   byte **RefBlock;
   byte **status_map;
   byte **dec_mb_mode;
-  byte **dec_mb_ref;
 } Decoders;
 extern Decoders *decs;
 
@@ -532,7 +532,6 @@ typedef struct
                                     SP-Pictures by img->types */
   int no_multpred;             /*!< 1: prediction from the last frame only.
                                     2: prediction from the last or second last frame etc. */
-  int multframe_no;
   int qp;                      //!< quant for the current frame
   int qpsp;                    //!< quant for the prediction frame of SP-frame
   int framerate;
@@ -540,7 +539,6 @@ typedef struct
   int width_cr;                //!< Number of pels chroma
   int height;                  //!< Number of lines
   int height_cr;               //!< Number of lines  chroma
-  int height_err;              //!< For y vector limitation for error robustness
   int mb_y;                    //!< current MB vertical
   int mb_x;                    //!< current MB horizontal
   int mb_x_save;               //!< horizontal position of the last written MB
@@ -553,14 +551,9 @@ typedef struct
   int pix_x;                   //!< current pixel horizontal
   int mb_y_upd;
   int mb_y_intra;              //!< which GOB to intra code
-  int mb_mode;                 //!< MB mode relevant for inter images, for intra images are all MB intra
-  int imod;                    //!< new/old intra modes + inter
   int pix_c_y;                 //!< current pixel chroma vertical
   int block_c_x;               //!< current block chroma vertical
   int pix_c_x;                 //!< current pixel chroma horizontal
-  int blc_size_h;              //!< block size for motion search, horizontal
-  int blc_size_v;              //!< block size for motion search, vertical
-  int kac;                     //!< any AC coeffs
   int **ipredmode;             //!< GH ipredmode[90][74];prediction mode for inter frames */ /* fix from ver 4.1
   int cod_counter;             //!< Current count of number of skipped macroblocks in a row
 
@@ -570,22 +563,16 @@ typedef struct
   int***** mv;                 //!< motion vectors for all block types and all reference frames
   int mpr[16][16];             //!< current best prediction mode
   int m7[16][16];              //!< the diff pixel values between orginal image and prediction
-  int cof[4][6][18][2][2];     //!< coefficients
-  int cofu[5][2][2];           //!< coefficients chroma
 
-  byte tmp_loop_Y[BLOCK_MULTIPLE+2][BLOCK_MULTIPLE+2];      //!< temporal storage for LUMA loop-filter strength
-  byte tmp_loop_UV[BLOCK_MULTIPLE/2+2][BLOCK_MULTIPLE/2+2]; //!< temporal storage for CHROMA loop-filter strength
+  int ****cofAC;               //!< AC coefficients [8x8block][4x4block][level/run][scan_pos]
+  int ***cofDC;                //!< DC coefficients [yuv][level/run][scan_pos]
+
   Slice       *currentSlice;                                //!< pointer to current Slice data struct
   Macroblock    *mb_data;                                   //!< array containing all MBs of a whole frame
   SyntaxElement   MB_SyntaxElements[MAX_SYMBOLS_PER_MB];    //!< temporal storage for all chosen syntax elements of one MB
 
-  int quad[256];               //!< Array containing square values,used for snr computation  */                                         /* Values are limited to 5000 for pixel differences over 70 (sqr(5000)).
-  int mv_bituse[512];
-  int *intra_mb;
-
-  // UMV support
-  int mhor;
-  int mvert;
+  int *quad;               //!< Array containing square values,used for snr computation  */                                         /* Values are limited to 5000 for pixel differences over 70 (sqr(5000)).
+  int **intra_block;
 
   int tr;
   int refPicID;                         //<! temporal reference for reference frames (non-B frames), added by WYK
@@ -595,22 +582,15 @@ typedef struct
   int p_interval;
   int b_frame_to_code;
   int fw_mb_mode;
-  int fw_multframe_no;
-  int fw_blc_size_h;
-  int fw_blc_size_v;
   int bw_mb_mode;
-  int bw_multframe_no;
-  int bw_blc_size_h;
-  int bw_blc_size_v;
   int***** p_fwMV;       //!< for MVDFW
   int***** p_bwMV;       //!< for MVDBW
-  int blk_bituse[10];    //!< it is included when getting bid_sad
 
   int***** all_mv;       //!< replaces local all_mv
   int***** all_bmv;      //!< replaces local all_mv
 
   int buf_cycle;
-
+  int i16offset;
 } ImageParameters;
 
                                 //!< statistics
@@ -674,7 +654,7 @@ void oneforthpix_2();
 int  encode_oneIorP_Frame();
 int  encode_oneB_Frame();
 int  find_sad(int hadamard, int m7[16][16]);
-int  dct_luma(int pos_mb1,int pos_mb2,int *cnt_nonz);
+int  dct_luma(int pos_mb1,int pos_mb2,int *cnt_nonz,int);
 int  dct_luma_sp(int pos_mb1,int pos_mb2,int *cnt_nonz);
 void  copyblock_sp(int pos_mb1,int pos_mb2);
 int  dct_chroma(int uv,int i11);
@@ -687,7 +667,8 @@ int  sign(int a,int b);
 void intrapred_chroma(int,int,int uv);
 void intrapred_luma_2();
 int  find_sad2(int *intra_mode);
-void dct_luma2(int);
+
+int dct_luma2(int);
 
 void init_img();
 void init_stat();
@@ -699,6 +680,37 @@ void read_one_new_frame();
 void write_reconstructed_image();
 void DeblockMb(ImageParameters *img, byte **, byte ***) ;
 
+
+void  LumaPrediction4x4 (int, int, int, int, int);
+int   SATD (int*, int);
+
+pel_t* FastLineX (int, pel_t*, int, int);
+pel_t* UMVLineX  (int, pel_t*, int, int);
+
+void LumaResidualCoding ();
+void ChromaResidualCoding (int*);
+void SetRefFrameInfo (int, int);
+int  writeMBHeader   ();
+
+extern int*   refbits;
+extern int*** motion_cost;
+
+void  Get_Direct_Motion_Vectors ();
+void  PartitionMotionSearch     (int, int, double);
+int   BIDPartitionCost          (int, int, int, int);
+int   LumaResidualCoding8x8     (int*, int*, int, int, int, int);
+int   writeLumaCoeff8x8         (int, int);
+int   writeMotionVector8x8      (int, int, int, int, int, int);
+int   writeReferenceFrame       (int, int, int, int);
+int   writeIntra4x4Modes        (int);
+
+int Get_Direct_Cost8x8 (int, double);
+int Get_Direct_CostMB  (double);
+int B8Mode2Value (int b8mode, int b8pdir);
+void writeCBP_BIT_CABAC (int b8, int bit, int cbp, Macroblock* currMB, int inter, EncodingEnvironmentPtr eep_dp);
+
+
+
 // dynamic mem allocation
 int  init_global_buffers();
 void free_global_buffers();
@@ -708,6 +720,11 @@ int  get_mem_mv  (int******);
 void free_mem_mv (int*****);
 void free_img    ();
 
+int  get_mem_ACcoeff  (int*****);
+int  get_mem_DCcoeff  (int****);
+void free_mem_ACcoeff (int****);
+void free_mem_DCcoeff (int***);
+
 // Added for (re-) structuring the TML soft
 int   encode_one_frame();
 void  encode_one_slice(SyntaxElement *sym);
@@ -716,6 +733,8 @@ void  free_slice();
 void  init_slice();
 void  encode_one_macroblock();
 void  start_macroblock();
+
+int   writeMotionInfo2NAL ();
 
 void  terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock);
 int   slice_too_big(int rlc_bits);
@@ -763,6 +782,7 @@ void writeHeaderToBuffer();
 void writeEOSToBuffer();
 int  writeSyntaxElement_CABAC(SyntaxElement *se, DataPartition *this_dataPart);
 void writeMB_typeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeB8_typeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeIntraPredMode2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeRefFrame2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
@@ -785,7 +805,7 @@ int  get_fwMV(int *min_fw_sad, int tot_intra_sad);
 void get_bwMV(int *min_bw_sad);
 void get_bid(int *bid_sad, int fw_predframe_no);
 void get_dir(int *dir_sad);
-void compare_sad(int tot_intra_sad, int fw_sad, int bw_sad, int bid_sad, int dir_sad);
+void compare_sad(int tot_intra_sad, int fw_sad, int bw_sad, int bid_sad, int dir_sad, int);
 void LumaResidualCoding_B();
 void ChromaCoding_B(int *cr_cbp);
 void SetRefFrameInfo_B();
@@ -802,7 +822,12 @@ void InitMotionVectorSearchModule();
 
 #endif
 
+void  SetRefFrameInfo (int, int);
 
+
+int   writeLumaCoeff4x4     (int, int, int);
+int   writeCBPandLumaCoeff  ();
+int   writeChromaCoeff      ();
 int   writeMB_bits_for_4x4_luma   (int, int, int);
 int   writeMB_bits_for_16x16_luma ();
 int   writeMB_bits_for_luma       (int);
@@ -813,6 +838,7 @@ int   writeMB_bits_for_CBP        ();
 int   writeMB_bits_for_Dquant_inter     ();
 int   writeMB_bits_for_Dquant_intra     ();
 //! End TO
+
 int   SingleUnifiedMotionSearch   (int, int, int**, int***, int*****, int, int*****, double);
 
 //============= rate-distortion optimization ===================
@@ -821,22 +847,25 @@ void  init_rdopt       ();
 void  RD_Mode_Decision ();
 //============= rate-distortion opt with packet losses ===========
 void decode_one_macroblock();
+void decode_one_mb (int, Macroblock*);
+void decode_one_b8block (int, int, int, int, int);
 void Get_Reference_Block(byte **imY, int block_y, int block_x, int mvhor, int mvver, byte **out);
 byte Get_Reference_Pixel(byte **imY, int y, int x);
 int Half_Upsample(byte **imY, int j, int i);
 void DecOneForthPix(byte **dY, byte ***dref);
 void compute_residue(int mode);
+void compute_residue_b8block (int, int);
+void compute_residue_mb (int);
 void UpdateDecoders();
 void Build_Status_Map(byte **s_map);
 void Error_Concealment(byte **inY, byte **s_map, byte ***refY);
 void Conceal_Error(byte **inY, int mb_y, int mb_x, byte ***refY, byte **s_map);
 //============= restriction of reference frames based on the latest intra-refreshes==========
-int CheckReliabilityOfRefFrame(int ref_frame);
+int CheckReliabilityOfRefFrame(int ref_frame, int);
 void UpdatePixelMap();
 
 //============= fast full integer search =======================
 #ifdef _FAST_FULL_ME_
-void  InitializeFastFullIntegerSearch (int);
 void  ClearFastFullIntegerSearch    ();
 void  ResetFastFullIntegerSearch    ();
 #endif

@@ -51,7 +51,7 @@
 #ifndef _BIARIDECOD_H_
 #define _BIARIDECOD_H_
 
-#define AAC_FRAC_TABLE 0  /*! replaces division in the AC by a table lookup
+#define AAC_FRAC_TABLE 1  /*! replaces division in the AC by a table lookup
                               IMPORTANT NOTE: Should be changed according to
                               the definition in the encoder */
 
@@ -106,6 +106,12 @@ const unsigned int ARITH_CUM_FREQ_TABLE[128] =
 #define Dbits_to_go     (dep->Dbits_to_go)
 #define Dcodestrm       (dep->Dcodestrm)
 #define Dcodestrm_len   (dep->Dcodestrm_len)
+
+/* Only necessary for new AC */
+#define		B_BITS		16
+#define		F_BITS	  14
+#define		CACM99_HALF		    (1 << (B_BITS-1))
+#define		CACM99_QUARTER		(1 << (B_BITS-2))
 
 #endif  // BIARIDECOD_H_
 

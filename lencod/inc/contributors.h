@@ -48,10 +48,18 @@
       Siemens AG, Germany
       Heinrich-Hertz-Institute for Communication Technology GmbH, Germany
       University of Hannover, Institut of Communication Theory and Signal Processing,Germany
+      Videolocus, Canada
 
    \endverbatim
    \par Full Contact Information
    \verbatim
+
+      Lowell Winger                   <lwinger@videolocus.com><lwinger@uwaterloo.ca>
+      Guy Côté                        <gcote@videolocus.com>
+      Michael Gallant                 <mgallant@videolocus.com>
+      VideoLocus Inc.                 
+      97 Randall Dr.         
+      Waterloo, ON, Canada  N2V1C5  
 
       Inge Lille-Langøy               <inge.lille-langoy@telenor.com>
       Telenor Broadband Services

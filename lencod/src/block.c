@@ -244,9 +244,9 @@ void intrapred_luma_2()
 
   if(input->UseConstrainedIntraPred)
   {
-    if (mb_available_up && (img->intra_mb[mb_nr-mb_width] ==0))
-      mb_available_up = 0;
-    if (mb_available_left && (img->intra_mb[mb_nr-1] ==0))
+    if (mb_available_up   && (img->intra_block[mb_nr-mb_width][2]==0 || img->intra_block[mb_nr-mb_width][3]==0))
+      mb_available_up   = 0;
+    if (mb_available_left && (img->intra_block[mb_nr-       1][1]==0 || img->intra_block[mb_nr       -1][3]==0))
       mb_available_left = 0;
   }
 
@@ -324,20 +324,25 @@ void intrapred_luma_2()
  *    none
  ************************************************************************
  */
-void dct_luma2(int new_intra_mode)
+int dct_luma2(int new_intra_mode)
 {
   int qp_const;
   int i,j;
   int ii,jj;
   int i1,j1;
-
   int M1[16][16];
   int M4[4][4];
   int M5[4],M6[4];
   int M0[4][4][4][4];
   int run,scan_pos,coeff_ctr,level;
-
   int qp_per,qp_rem,q_bits;
+  int ac_coef = 0;
+
+  int   b8, b4;
+  int*  DCLevel = img->cofDC[0][0];
+  int*  DCRun   = img->cofDC[0][1];
+  int*  ACLevel;
+  int*  ACRun;
 
   qp_per    = (img->qp-MIN_QP)/6;
   qp_rem    = (img->qp-MIN_QP)%6;
@@ -440,17 +445,16 @@ void dct_luma2(int new_intra_mode)
 
     if (level != 0)
     {
-      img->cof[0][0][scan_pos][0][1]=sign(level,M4[i][j]);
-      img->cof[0][0][scan_pos][1][1]=run;
+      DCLevel[scan_pos] = sign(level,M4[i][j]);
+      DCRun  [scan_pos] = run;
       ++scan_pos;
       run=-1;
     }
     M4[i][j]=sign(level,M4[i][j]);
   }
-  img->cof[0][0][scan_pos][0][1]=0;
+  DCLevel[scan_pos]=0;
 
   // invers DC transform
-
   for (j=0;j<4;j++)
   {
     for (i=0;i<4;i++)
@@ -488,13 +492,17 @@ void dct_luma2(int new_intra_mode)
   }
 
   // AC invers trans/quant for MB
-  img->kac=0;
   for (jj=0;jj<4;jj++)
   {
     for (ii=0;ii<4;ii++)
     {
-      run=-1;
-      scan_pos=0;
+      run      = -1;
+      scan_pos =  0;
+      b8       = 2*(jj/2) + (ii/2);
+      b4       = 2*(jj%2) + (ii%2);
+      ACLevel  = img->cofAC [b8][b4][0];
+      ACRun    = img->cofAC [b8][b4][1];
+
       for (coeff_ctr=1;coeff_ctr<16;coeff_ctr++) // set in AC coeff
       {
         i=SNGL_SCAN[coeff_ctr][0];
@@ -505,15 +513,15 @@ void dct_luma2(int new_intra_mode)
 
         if (level != 0)
         {
-          img->kac=1;
-          img->cof[ii][jj][scan_pos][0][0]=sign(level,M0[i][ii][j][jj]);
-          img->cof[ii][jj][scan_pos][1][0]=run;
+          ac_coef = 15;
+          ACLevel[scan_pos] = sign(level,M0[i][ii][j][jj]);
+          ACRun  [scan_pos] = run;
           ++scan_pos;
           run=-1;
         }
         M0[i][ii][j][jj]=sign(level*dequant_coef[qp_rem][i][j]<<qp_per,M0[i][ii][j][jj]);
       }
-      img->cof[ii][jj][scan_pos][0][0]=0;
+      ACLevel[scan_pos] = 0;
 
 
       // IDCT horizontal
@@ -573,95 +581,7 @@ void dct_luma2(int new_intra_mode)
     for (i=0;i<16;i++)
       imgY[img->pix_y+j][img->pix_x+i]=(byte)min(255,max(0,(M1[i][j]+(img->mprr_2[new_intra_mode][j][i]<<DQ_BITS)+DQ_ROUND)>>DQ_BITS));
 
-}
-
-
-/*!
- ************************************************************************
- * \brief
- *    Intra prediction for chroma.  There is only one prediction mode,
- *    corresponding to 'DC prediction' for luma. However,since 2x2 transform
- *    of DC levels are used,all predictions are made from neighbouring MBs.
- *    Prediction also depends on whether the block is at a frame edge.
- *
- *  \para Input:
- *     Starting point of current chroma macro block image posision
- *
- *  \para Output:
- *     8x8 array with DC intra chroma prediction and diff array
- ************************************************************************
- */
-void intrapred_chroma(int img_c_x,int img_c_y,int uv)
-{
-  int s[2][2],s0,s1,s2,s3;
-  int i,j;
-
-  int mb_nr = img->current_mb_nr;
-  int mb_width = img->width/16;
-  int mb_available_up = (img_c_y/BLOCK_SIZE == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
-  int mb_available_left = (img_c_x/BLOCK_SIZE == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-1].slice_nr);
-  if(input->UseConstrainedIntraPred)
-  {
-    if (mb_available_up && (img->intra_mb[mb_nr-mb_width] ==0))
-      mb_available_up = 0;
-    if (mb_available_left && (img->intra_mb[mb_nr-1] ==0))
-      mb_available_left = 0;
-  }
-  s0=s1=s2=s3=0;          // reset counters
-
-  for (i=0; i < BLOCK_SIZE; i++)
-  {
-    if(mb_available_up)
-    {
-      s0 += imgUV[uv][img_c_y-1][img_c_x+i];
-      s1 += imgUV[uv][img_c_y-1][img_c_x+i+BLOCK_SIZE];
-    }
-    if(mb_available_left)
-    {
-      s2 += imgUV[uv][img_c_y+i][img_c_x-1];
-      s3 += imgUV[uv][img_c_y+i+BLOCK_SIZE][img_c_x-1];
-    }
-  }
-
-  if(mb_available_up && mb_available_left)
-  {
-    s[0][0]=(s0+s2+4)/(2*BLOCK_SIZE);
-    s[1][0]=(s1+2)/BLOCK_SIZE;
-    s[0][1]=(s3+2)/BLOCK_SIZE;
-    s[1][1]=(s1+s3+4)/(2*BLOCK_SIZE);
-  }
-  else
-    if(mb_available_up && !mb_available_left)
-    {
-      s[0][0]=(s0+2)/BLOCK_SIZE;
-      s[1][0]=(s1+2)/BLOCK_SIZE;
-      s[0][1]=(s0+2)/BLOCK_SIZE;
-      s[1][1]=(s1+2)/BLOCK_SIZE;
-    }
-    else
-      if(!mb_available_up && mb_available_left)
-      {
-        s[0][0]=(s2+2)/BLOCK_SIZE;
-        s[1][0]=(s2+2)/BLOCK_SIZE;
-        s[0][1]=(s3+2)/BLOCK_SIZE;
-        s[1][1]=(s3+2)/BLOCK_SIZE;
-      }
-      else
-        if(!mb_available_up && !mb_available_left)
-        {
-          s[0][0]=128;
-          s[1][0]=128;
-          s[0][1]=128;
-          s[1][1]=128;
-        }
-  for (j=0; j < MB_BLOCK_SIZE/2; j++)
-  {
-    for (i=0; i < MB_BLOCK_SIZE/2; i++)
-    {
-      img->mpr[i][j]=s[i/BLOCK_SIZE][j/BLOCK_SIZE];
-      img->m7[i][j]=imgUV_org[uv][img_c_y+j][img_c_x+i]-img->mpr[i][j];
-    }
-  }
+    return ac_coef;
 }
 
 
@@ -680,19 +600,24 @@ void intrapred_chroma(int img_c_x,int img_c_y,int uv)
  *    coeff_cost: Counter for nonzero coefficients, used to discard expencive levels.
  ************************************************************************
  */
-int dct_luma(int block_x,int block_y,int *coeff_cost)
+int dct_luma(int block_x,int block_y,int *coeff_cost, int old_intra_mode)
 {
   int sign(int a,int b);
 
   int i,j,i1,j1,ilev,m5[4],m6[4],coeff_ctr,scan_loop_ctr;
-  int qp_const,pos_x,pos_y,level,scan_pos,run;
+  int qp_const,level,scan_pos,run;
   int nonzero;
   int idx;
-
   int scan_mode;
   int loop_rep;
-
   int qp_per,qp_rem,q_bits;
+
+  int   pos_x   = block_x/BLOCK_SIZE;
+  int   pos_y   = block_y/BLOCK_SIZE;
+  int   b8      = 2*(pos_y/2) + (pos_x/2);
+  int   b4      = 2*(pos_y%2) + (pos_x%2);
+  int*  ACLevel = img->cofAC[b8][b4][0];
+  int*  ACRun   = img->cofAC[b8][b4][1];
 
   qp_per    = (img->qp-MIN_QP)/6;
   qp_rem    = (img->qp-MIN_QP)%6;
@@ -703,11 +628,7 @@ int dct_luma(int block_x,int block_y,int *coeff_cost)
   else
     qp_const=(1<<q_bits)/6;    // inter
 
-  pos_x=block_x/BLOCK_SIZE;
-  pos_y=block_y/BLOCK_SIZE;
-
   //  Horizontal transform
-
   for (j=0; j < BLOCK_SIZE; j++)
   {
     for (i=0; i < 2; i++)
@@ -723,7 +644,6 @@ int dct_luma(int block_x,int block_y,int *coeff_cost)
   }
 
   //  Vertival transform
-
   for (i=0; i < BLOCK_SIZE; i++)
   {
     for (j=0; j < 2; j++)
@@ -742,7 +662,7 @@ int dct_luma(int block_x,int block_y,int *coeff_cost)
 
   nonzero=FALSE;
 
-  if (img->imod == INTRA_MB_OLD && img->qp < 24)
+  if (old_intra_mode && (img->qp<24 || input->symbol_mode == CABAC)) // for CABAC double scan always
   {
     scan_mode=DOUBLE_SCAN;
     loop_rep=2;
@@ -785,15 +705,15 @@ int dct_luma(int block_x,int block_y,int *coeff_cost)
           *coeff_cost += MAX_VALUE;                // set high cost, shall not be discarded
         else
           *coeff_cost += COEFF_COST[run];
-        img->cof[pos_x][pos_y][scan_pos][0][scan_mode]=sign(level,img->m7[i][j]);
-        img->cof[pos_x][pos_y][scan_pos][1][scan_mode]=run;
+        ACLevel[scan_pos] = sign(level,img->m7[i][j]);
+        ACRun  [scan_pos] = run;
         ++scan_pos;
         run=-1;                     // reset zero level counter
         ilev=level*dequant_coef[qp_rem][i][j]<<qp_per;
       }
       img->m7[i][j]=sign(ilev,img->m7[i][j]);
     }
-    img->cof[pos_x][pos_y][scan_pos][0][scan_mode]=0;  // end of block
+    ACLevel[scan_pos] = 0;
   }
 
 
@@ -850,6 +770,8 @@ int dct_luma(int block_x,int block_y,int *coeff_cost)
   return nonzero;
 }
 
+
+
 /*!
  ************************************************************************
  * \brief
@@ -868,7 +790,7 @@ int dct_luma(int block_x,int block_y,int *coeff_cost)
  */
 int dct_chroma(int uv,int cr_cbp)
 {
-  int i,j,i1,j2,ilev,n2,n1,j1,mb_y,coeff_ctr,qp_const,pos_x,pos_y,level ,scan_pos,run;
+  int i,j,i1,j2,ilev,n2,n1,j1,mb_y,coeff_ctr,qp_const,level ,scan_pos,run;
   int m1[BLOCK_SIZE],m5[BLOCK_SIZE],m6[BLOCK_SIZE];
   int coeff_cost;
   int cr_cbp_tmp;
@@ -877,6 +799,12 @@ int dct_chroma(int uv,int cr_cbp)
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
 
   int qp_per,qp_rem,q_bits;
+
+  int   b4;
+  int*  DCLevel = img->cofDC[uv+1][0];
+  int*  DCRun   = img->cofDC[uv+1][1];
+  int*  ACLevel;
+  int*  ACRun;
 
   qp_per    = ((img->qp<0?img->qp:QP_SCALE_CR[img->qp])-MIN_QP)/6;
   qp_rem    = ((img->qp<0?img->qp:QP_SCALE_CR[img->qp])-MIN_QP)%6;
@@ -949,15 +877,15 @@ int dct_chroma(int uv,int cr_cbp)
       currMB->cbp_blk |= 0xf0000 << (uv << 2) ;    // if one of the 2x2-DC levels is != 0 set the
       cr_cbp=max(1,cr_cbp);                     // coded-bit all 4 4x4 blocks (bit 16-19 or 20-23)
       DCcoded = 1 ;
-      img->cofu[scan_pos][0][uv]=sign(level ,m1[coeff_ctr]);
-      img->cofu[scan_pos][1][uv]=run;
+      DCLevel[scan_pos] = sign(level ,m1[coeff_ctr]);
+      DCRun  [scan_pos] = run;
       scan_pos++;
       run=-1;
       ilev=level*dequant_coef[qp_rem][0][0]<<qp_per;
     }
     m1[coeff_ctr]=sign(ilev,m1[coeff_ctr]);
   }
-  img->cofu[scan_pos][0][uv]=0;
+  DCLevel[scan_pos] = 0;
 
   //  Invers transform of 2x2 DC levels
 
@@ -974,8 +902,9 @@ int dct_chroma(int uv,int cr_cbp)
   {
     for (n1=0; n1 <= BLOCK_SIZE; n1 += BLOCK_SIZE)
     {
-      pos_x=n1/BLOCK_SIZE + 2*uv;
-      pos_y=n2/BLOCK_SIZE + BLOCK_SIZE;
+      b4      = 2*(n2/4) + (n1/4);
+      ACLevel = img->cofAC[uv+4][b4][0];
+      ACRun   = img->cofAC[uv+4][b4][1];
       run=-1;
       scan_pos=0;
 
@@ -997,15 +926,15 @@ int dct_chroma(int uv,int cr_cbp)
             coeff_cost += COEFF_COST[run];
 
           cr_cbp_tmp=2;
-          img->cof[pos_x][pos_y][scan_pos][0][0]=sign(level,img->m7[n1+i][n2+j]);
-          img->cof[pos_x][pos_y][scan_pos][1][0]=run;
+          ACLevel[scan_pos] = sign(level,img->m7[n1+i][n2+j]);
+          ACRun  [scan_pos] = run;
           ++scan_pos;
           run=-1;
           ilev=level*dequant_coef[qp_rem][i][j]<<qp_per;
         }
         img->m7[n1+i][n2+j]=sign(ilev,img->m7[n1+i][n2+j]); // for use in IDCT
       }
-      img->cof[pos_x][pos_y][scan_pos][0][0]=0; // EOB
+      ACLevel[scan_pos] = 0;
     }
   }
 
@@ -1017,17 +946,19 @@ int dct_chroma(int uv,int cr_cbp)
     {
       for (n1=0; n1 <= BLOCK_SIZE; n1 += BLOCK_SIZE)
       {
-        if( DCcoded == 0)                                   // if no chroma DC's: then reset
-         currMB->cbp_blk &= ~(0xf0000 << (uv << 2)) ; // coded-bits of this chroma subblock
+        b4      = 2*(n2/4) + (n1/4);
+        ACLevel = img->cofAC[uv+4][b4][0];
+        ACRun   = img->cofAC[uv+4][b4][1];
+        if( DCcoded == 0) currMB->cbp_blk &= ~(0xf0000 << (uv << 2));  // if no chroma DC's: then reset coded-bits of this chroma subblock
         nn0 = (n1>>2) + (uv<<1);
         nn1 = 4 + (n2>>2) ;
-        img->cof[nn0][nn1][0][0][0] = 0;// dc coeff
+        ACLevel[0] = 0;
         for (coeff_ctr=1; coeff_ctr < 16; coeff_ctr++)// ac coeff
         {
           i=SNGL_SCAN[coeff_ctr][0];
           j=SNGL_SCAN[coeff_ctr][1];
           img->m7[n1+i][n2+j]=0;
-          img->cof[nn0][nn1][coeff_ctr][0][0]=0;
+          ACLevel[coeff_ctr] = 0;
         }
       }
     }
@@ -1113,7 +1044,7 @@ int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
   int sign(int a,int b);
 
   int i,j,i1,j1,ilev,m5[4],m6[4],coeff_ctr,scan_loop_ctr;
-  int qp_const,pos_x,pos_y,level,scan_pos,run;
+  int qp_const,level,scan_pos,run;
   int nonzero;
   int idx;
 
@@ -1122,6 +1053,13 @@ int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
   int predicted_block[BLOCK_SIZE][BLOCK_SIZE],c_err,qp_const2;
   int qp_per,qp_rem,q_bits;
   int qp_per_sp,qp_rem_sp,q_bits_sp;
+
+  int   pos_x   = block_x/BLOCK_SIZE;
+  int   pos_y   = block_y/BLOCK_SIZE;
+  int   b8      = 2*(pos_y/2) + (pos_x/2);
+  int   b4      = 2*(pos_y%2) + (pos_x%2);
+  int*  ACLevel = img->cofAC[b8][b4][0];
+  int*  ACRun   = img->cofAC[b8][b4][1];
 
   qp_per    = (img->qp-MIN_QP)/6;
   qp_rem    = (img->qp-MIN_QP)%6;
@@ -1132,9 +1070,6 @@ int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
 
   qp_const=(1<<q_bits)/6;    // inter
   qp_const2=(1<<q_bits_sp)/2;  //sp_pred
-
-  pos_x=block_x/BLOCK_SIZE;
-  pos_y=block_y/BLOCK_SIZE;
 
   //  Horizontal transform
   for (j=0; j< BLOCK_SIZE; j++)
@@ -1242,8 +1177,8 @@ int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
           *coeff_cost += MAX_VALUE;                // set high cost, shall not be discarded
         else
           *coeff_cost += COEFF_COST[run];
-        img->cof[pos_x][pos_y][scan_pos][0][scan_mode]=sign(level,c_err);
-        img->cof[pos_x][pos_y][scan_pos][1][scan_mode]=run;
+        ACLevel[scan_pos] = sign(level,c_err);
+        ACRun  [scan_pos] = run;
         ++scan_pos;
         run=-1;                     // reset zero level counter
         ilev=level;
@@ -1251,7 +1186,7 @@ int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
       ilev=(sign(((ilev<<q_bits)/quant_coef[qp_rem][i][j]),c_err)+predicted_block[i][j] );
       img->m7[i][j]=sign((abs(ilev)* quant_coef[qp_rem_sp][i][j]+qp_const2)>> q_bits_sp,ilev)*dequant_coef[qp_rem_sp][i][j]<<qp_per_sp;
     }
-    img->cof[pos_x][pos_y][scan_pos][0][scan_mode]=0;  // end of block
+    ACLevel[scan_pos] = 0;
   }
   //     IDCT.
   //     horizontal
@@ -1305,6 +1240,8 @@ int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
 
   return nonzero;
 }
+
+
 /*!
  ************************************************************************
  * \brief
@@ -1323,7 +1260,7 @@ int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
  */
 int dct_chroma_sp(int uv,int cr_cbp)
 {
-  int i,j,i1,j2,ilev,n2,n1,j1,mb_y,coeff_ctr,qp_const,pos_x,pos_y,c_err,level ,scan_pos,run;
+  int i,j,i1,j2,ilev,n2,n1,j1,mb_y,coeff_ctr,qp_const,c_err,level ,scan_pos,run;
   int m1[BLOCK_SIZE],m5[BLOCK_SIZE],m6[BLOCK_SIZE];
   int coeff_cost;
   int cr_cbp_tmp;
@@ -1332,7 +1269,13 @@ int dct_chroma_sp(int uv,int cr_cbp)
 
   int qp_per,qp_rem,q_bits;
   int qp_per_sp,qp_rem_sp,q_bits_sp;
- 
+
+  int   b4;
+  int*  DCLevel = img->cofDC[uv+1][0];
+  int*  DCRun   = img->cofDC[uv+1][1];
+  int*  ACLevel;
+  int*  ACRun;
+
   qp_per    = ((img->qp<0?img->qp:QP_SCALE_CR[img->qp])-MIN_QP)/6;
   qp_rem    = ((img->qp<0?img->qp:QP_SCALE_CR[img->qp])-MIN_QP)%6;
   q_bits    = Q_BITS+qp_per;
@@ -1455,8 +1398,8 @@ int dct_chroma_sp(int uv,int cr_cbp)
     {
       currMB->cbp_blk |= 0xf0000 << (uv << 2) ;  // if one of the 2x2-DC levels is != 0 the coded-bit
       cr_cbp=max(1,cr_cbp);
-      img->cofu[scan_pos][0][uv]=sign(level ,c_err);
-      img->cofu[scan_pos][1][uv]=run;
+      DCLevel[scan_pos] = sign(level ,c_err);
+      DCRun  [scan_pos] = run;
       scan_pos++;
       run=-1;
       ilev=level;
@@ -1464,7 +1407,7 @@ int dct_chroma_sp(int uv,int cr_cbp)
     ilev=(sign(((ilev<<(q_bits+1))/quant_coef[qp_rem][0][0]),c_err)+mp1[coeff_ctr] )* quant_coef[qp_rem_sp][0][0];
     m1[coeff_ctr]=sign((abs(ilev)+qp_const2)>> (q_bits_sp+1),ilev)*dequant_coef[qp_rem_sp][0][0]<<qp_per_sp;
   }
-  img->cofu[scan_pos][0][uv]=0;
+  DCLevel[scan_pos] = 0;
 
   //  Invers transform of 2x2 DC levels
 
@@ -1481,10 +1424,12 @@ int dct_chroma_sp(int uv,int cr_cbp)
   {
     for (n1=0; n1 <= BLOCK_SIZE; n1 += BLOCK_SIZE)
     {
-      pos_x=n1/BLOCK_SIZE + 2*uv;
-      pos_y=n2/BLOCK_SIZE + BLOCK_SIZE;
-      run=-1;
-      scan_pos=0;
+      b4      = 2*(n2/4) + (n1/4);
+      ACLevel = img->cofAC[uv+4][b4][0];
+      ACRun   = img->cofAC[uv+4][b4][1];
+
+      run      = -1;
+      scan_pos =  0;
 
       for (coeff_ctr=1; coeff_ctr < 16; coeff_ctr++)// start change rd_quant
       {
@@ -1505,8 +1450,8 @@ int dct_chroma_sp(int uv,int cr_cbp)
             coeff_cost += COEFF_COST[run];
 
           cr_cbp_tmp=2;
-          img->cof[pos_x][pos_y][scan_pos][0][0]=sign(level,c_err);
-          img->cof[pos_x][pos_y][scan_pos][1][0]=run;
+          ACLevel[scan_pos] = sign(level,c_err);
+          ACRun  [scan_pos] = run;
           ++scan_pos;
           run=-1;
           ilev=level;
@@ -1514,7 +1459,7 @@ int dct_chroma_sp(int uv,int cr_cbp)
         ilev=(sign(((ilev<<q_bits)/quant_coef[qp_rem][i][j]),c_err)+predicted_chroma_block[n1+i][n2+j] )* quant_coef[qp_rem_sp][i][j];
         img->m7[n1+i][n2+j]=sign((abs(ilev)+qp_const2)>> q_bits_sp,ilev)*dequant_coef[qp_rem_sp][i][j]<<qp_per_sp;
       }
-      img->cof[pos_x][pos_y][scan_pos][0][0]=0; // EOB
+      ACLevel[scan_pos] = 0;
     }
   }
 

@@ -106,7 +106,7 @@
 
 #define MAXPARTITIONMODES   2   //!< maximum possible partition modes as defined in assignSE2partition[][]
 
-static char SEtypes[][20] =
+static char SEtypes[][25] =
 {
     "SE_HEADER",
     "SE_PTYPE",

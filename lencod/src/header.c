@@ -215,6 +215,10 @@ int writeERPS(SyntaxElement *sym, DataPartition *partition)
 {
   int len=0;
 
+#ifdef _CHECK_MULTI_BUFFER_1_
+  RMPNIbuffer_t *r;
+#endif
+
   /* RPSF: Reference Picture Selection Flags */
   SYMTRACESTRING("RTP-SH: Reference Picture Selection Flags");
   sym->value1 = 0;
@@ -283,7 +287,7 @@ int writeERPS(SyntaxElement *sym, DataPartition *partition)
   {
 
     // check in this frame as long term picture
-    if (img->max_lindex==0)
+//    if (img->max_lindex==0)
     {
       // set long term buffer size = 2
       SYMTRACESTRING("RTP-SH: MMCO Specify Max Long Term Index");
@@ -322,18 +326,15 @@ int writeERPS(SyntaxElement *sym, DataPartition *partition)
   } 
   if ((img->pn==4) && (img->type==INTER_IMG))
   {
-     if (img->max_lindex>0)
-     {
-      // delete long term picture again
-      SYMTRACESTRING("RTP-SH: MMCO Mark a Long-Term Picture as Unused");
-      // command
-      sym->value1 = 2;
-      len += writeSyntaxElement_UVLC (sym, partition);
-      SYMTRACESTRING("RTP-SH: MMCO LPIN");
-      // command
-      sym->value1 = (img->max_lindex+img->lindex-1)%img->max_lindex;
-      len += writeSyntaxElement_UVLC (sym, partition);
-    }
+    // delete long term picture again
+    SYMTRACESTRING("RTP-SH: MMCO Mark a Long-Term Picture as Unused");
+    // command
+    sym->value1 = 2;
+    len += writeSyntaxElement_UVLC (sym, partition);
+    SYMTRACESTRING("RTP-SH: MMCO LPIN");
+    // command
+    sym->value1 = (img->max_lindex+img->lindex-1)%img->max_lindex;
+    len += writeSyntaxElement_UVLC (sym, partition);
   } 
 
   // end MMCO loop

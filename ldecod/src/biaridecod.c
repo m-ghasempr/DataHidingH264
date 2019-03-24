@@ -118,8 +118,7 @@ void arideco_start_decoding(DecodingEnvironmentPtr dep, unsigned char *cpixcode,
 {
   int i;
   int bits;
-
-  bits = CODE_VALUE_BITS;
+  bits = B_BITS;
 
   Dcodestrm = cpixcode;
   Dcodestrm_len = cpixcode_len;
@@ -136,7 +135,9 @@ void arideco_start_decoding(DecodingEnvironmentPtr dep, unsigned char *cpixcode,
     Dbuffer >>= 1;
   }
   dep->Dlow = 0;
-  dep->Dhigh = TOP_VALUE;
+
+  /* Only necessary for new AC */
+  dep->Drange = CACM99_HALF;
 }
 
 
@@ -175,58 +176,100 @@ void arideco_done_decoding(DecodingEnvironmentPtr dep)
  */
 unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi_ct )
 {
-  unsigned int scaled_range;
-  unsigned int symbol=0;
-  int Dlow_m1 = dep->Dlow - 1;
+  int bit;
+  register unsigned int range, value;
 
-#if  AAC_FRAC_TABLE
-  if ( (scaled_range =  ( ( (dep->Dhigh - Dlow_m1) * ((bi_ct->cum_freq[1]*ARITH_CUM_FREQ_TABLE[bi_ct->cum_freq[0]])>>16))>>10) ) >=  (dep->Dvalue - Dlow_m1) )
-#else
-  if ( (scaled_range =  ( ( (dep->Dhigh - Dlow_m1) * bi_ct->cum_freq[1]) / bi_ct->cum_freq[0] )) >=  (dep->Dvalue - Dlow_m1) )
-#endif
+  range = dep->Drange;
+  value = dep->Dvalue;
+
+  /* scope LPS, cLPS, rLPS, rMPS, and in_r */
   {
-    symbol++;
-    dep->Dhigh = Dlow_m1 + scaled_range;
-    bi_ct->cum_freq[1]++;
-  }
-  else
-    dep->Dlow += scaled_range;
+    int LPS;
+    unsigned int cLPS, rLPS, rMPS;
+    unsigned int in_r;
 
-  if (++bi_ct->cum_freq[0] >= bi_ct->max_cum_freq)
-    rescale_cum_freq(bi_ct);
-
-  do
-  {
-    if (dep->Dhigh >= HALF)
+    /* scope c0 and c1 */
     {
-      if (dep->Dlow < HALF)
-        if (dep->Dlow >= FIRST_QTR && dep->Dhigh < THIRD_QTR)
-        {
-          dep->Dhigh -= FIRST_QTR;
-          dep->Dvalue -= FIRST_QTR;
-          dep->Dlow -= FIRST_QTR;
-        }
-        else
-          break;
-        else
-        {
-          dep->Dhigh -= HALF;
-          dep->Dvalue -= HALF;
-          dep->Dlow -= HALF;
-        }
+	    register unsigned short c0, c1, one_over_c0;
+
+      one_over_c0 = ARITH_CUM_FREQ_TABLE[bi_ct->cum_freq[0]]>>10;
+	    c0 = bi_ct->cum_freq[0]-bi_ct->cum_freq[1];
+	    c1 = bi_ct->cum_freq[1];
+
+      /* Unit interval size */
+#if  AAC_FRAC_TABLE
+      in_r = ((range*one_over_c0)>>16);	  
+#else
+      in_r = range / (c0+c1);
+#endif
+
+      /* Determine LPS and cLPS. This should compile to conditional moves. */
+	    LPS = (c0 <  c1) ? 0 : 1;
+	    cLPS = (c0 < c1) ? c0 : c1;
+
     }
-    dep->Dlow <<= 1;
-    dep->Dhigh += dep->Dhigh+1;
 
-    if (--Dbits_to_go < 0)
-      get_byte();
-
-    dep->Dvalue += dep->Dvalue  + (Dbuffer & 1);
-    Dbuffer >>= 1;
+    /* Size of interval for LPS */
+    rLPS = in_r * cLPS;
+    rMPS = range - rLPS;
+    /* Always set LPS interval at upper end of range. This always allocates the 
+     * excess probabilty caused by the truncation during division to the MPS. 
+     * Check if value lies in this upper end, if so, then bit is LPS otherwise 
+     * bit is MPS */
+    if (value >= rMPS) 
+    {
+      bit = LPS;
+      value -= rMPS;
+      range = rLPS;
+    } 
+    else 
+    {
+      bit = !(LPS);
+      range -= rLPS;
+    }
   }
-  while (1);
+  
+  /* Increase model frequency counts appropriately */
+  bi_ct->cum_freq[1] += bit;
 
-  return symbol;
+  if (++bi_ct->cum_freq[0] >= bi_ct->max_cum_freq) 
+		rescale_cum_freq(bi_ct);
+
+
+  /* Renormalise when range <= 1/4 of max frequency count to maintain precise 
+   * division of code space, minimizing loss of compression effectiveness. 
+   * The idea is to prevent underflow, i.e. when the scaling operation 
+   * maps different symbols of the model onto the same integer. The (low, high) 
+   * pair can lie between:
+   * - [0, 1/2) 
+   * - [1/2, top) 
+   * - [1/4, 3/4) 
+   * The (low, high) pair can only become close together when they straddle 1/2 
+   * (3rd case). We know unambiguously what to output if the (low,high) pair 
+   * are, at the smallest:
+   * - [1/4,1/2+epsilon)
+   * - [1/2-epsilon,3/4)
+   * This range is <= 1/4 of the max frequency count, hence we can (should) rescale 
+   * at this time, i.e. when range <= 1/4
+   */
+  while (range <= CACM99_QUARTER)
+  {
+    /* Double range and value */
+    range <<= 1;
+    if (--Dbits_to_go < 0) 
+    {
+	    get_byte();
+    }
+    /* Shift in next bit and add to value */
+    value <<= 1;
+    value += (Dbuffer & 1);
+    Dbuffer >>= 1;   
+  }
+  
+  dep->Drange = range;
+  dep->Dvalue = value;
+
+  return(bit);
 }
 
 

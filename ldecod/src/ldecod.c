@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 1.4
+ *     JM 1.7
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -124,8 +124,8 @@
 #include "erc_api.h"
 #endif
 
-#define TML         "1"
-#define VERSION     "1.40"
+#define JM          "1"
+#define VERSION     "1.7"
 #define LOGFILE     "log.dec"
 #define DATADECFILE "data.dec"
 #define TRACEFILE   "trace_dec.txt"
@@ -428,7 +428,7 @@ void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr)
   fprintf(stdout," SNR V(dB)           : %5.2f\n",snr->snr_va);
   fprintf(stdout," Total decoding time : %.3f sec \n",tot_time*0.001);
   fprintf(stdout,"--------------------------------------------------------------------------\n");
-  fprintf(stdout," Exit JM %s decoder, ver %s \n",TML,VERSION);
+  fprintf(stdout," Exit JM %s decoder, ver %s \n",JM,VERSION);
 
   // write to log file
 
@@ -806,7 +806,7 @@ void free_slice(struct inp_par *inp, struct img_par *img)
  */
 int init_global_buffers(struct inp_par *inp, struct img_par *img)
 {
-
+  int i,j;
 
   int memory_size=0;
 #ifdef _ADAPT_LAST_GROUP_
@@ -848,8 +848,13 @@ int init_global_buffers(struct inp_par *inp, struct img_par *img)
     no_mem_exit("init_global_buffers: img->mb_data");
   if(img->UseConstrainedIntraPred)
   {
-    if(((img->intra_mb) = (int *) calloc(img->width/MB_BLOCK_SIZE * img->height/MB_BLOCK_SIZE,sizeof(int))) == NULL)
-      no_mem_exit("init_global_buffers: img->intra_mb");
+    if(((img->intra_block) = (int**)calloc((j=(img->width/MB_BLOCK_SIZE) * (img->height/MB_BLOCK_SIZE)),sizeof(int))) == NULL)
+      no_mem_exit("init_global_buffers: img->intra_block");
+    for (i=0; i<j; i++)
+    {
+      if ((img->intra_block[i] = (int*)calloc(4, sizeof(int))) == NULL)
+        no_mem_exit ("init_global_buffers: img->intra_block");
+    }
   }
   memory_size += get_mem3Dint(&(img->mv),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
   memory_size += get_mem2Dint(&(img->ipredmode),img->width/BLOCK_SIZE +2 , img->height/BLOCK_SIZE +2);
@@ -879,6 +884,7 @@ int init_global_buffers(struct inp_par *inp, struct img_par *img)
  */
 void free_global_buffers(struct inp_par *inp, struct img_par *img)
 {
+  int i,j;
 #ifdef _ADAPT_LAST_GROUP_
   extern int *last_P_no;
   free (last_P_no);
@@ -904,7 +910,14 @@ void free_global_buffers(struct inp_par *inp, struct img_par *img)
   if (img->mb_data       != NULL) free(img->mb_data);
 
   if(img->UseConstrainedIntraPred)
-    if (img->intra_mb    != NULL) free(img->intra_mb);
+  {
+    j = (img->width/16)*(img->height/16);
+    for (i=0; i<j; i++)
+    {
+      free (img->intra_block[i]);
+    }
+    free (img->intra_block);
+  }
 
   free_mem3Dint(img->mv,img->width/BLOCK_SIZE + 4);
 

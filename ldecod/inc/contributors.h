@@ -50,11 +50,18 @@
       University of Hannover, Institut of Communication Theory and Signal Processing,Germany
       TICSP, Tampere University of Technology, Finland
       Munich University of Technology, Institute for Communications Engineering, Germany 
-
+      Videolocus, Canada
 
   \endverbatim
   \par Full Contact Information
   \verbatim
+
+      Lowell Winger                   <lwinger@videolocus.com><lwinger@uwaterloo.ca>
+      Guy Côté                        <gcote@videolocus.com>
+      Michael Gallant                 <mgallant@videolocus.com>
+      VideoLocus Inc.                 
+      97 Randall Dr.         
+      Waterloo, ON, Canada  N2V1C5  
 
       Inge Lille-Langøy               <inge.lille-langoy@telenor.com>
       Telenor Satellite Services
@@ -145,6 +152,12 @@
       Einsteinufer 37
       10587 Berlin
       Germany
+
+      Tobias Oelbaum                  <drehvial@gmx.net>
+      Institute for Communications Engineering
+      Munich University of Technology
+      Germany
+
 
     \endverbatim
 */

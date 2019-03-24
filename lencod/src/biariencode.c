@@ -47,7 +47,6 @@
 #include "global.h"
 #include "biariencode.h"
 
-
 /*!
  ************************************************************************
  * Macro for writing bytes of code
@@ -57,7 +56,6 @@
                      Ecodestrm[(*Ecodestrm_len)++] = Ebuffer; \
                      Ebits_to_go = 8; \
                     }
-
 
 /*!
  ************************************************************************
@@ -107,13 +105,15 @@ void arienco_start_encoding(EncodingEnvironmentPtr eep,
                             int *code_len )
 {
   Elow = 0;
-  Ehigh = TOP_VALUE;
   Ebits_to_follow = 0;
   Ebuffer = 0;
   Ebits_to_go = 8;
 
   Ecodestrm = code_buffer;
   Ecodestrm_len = code_len;
+
+  /* Only necessary for new AC */
+  Erange = CACM99_HALF;			
 }
 
 /*!
@@ -136,39 +136,37 @@ int arienco_bits_written(EncodingEnvironmentPtr eep)
  */
 void arienco_done_encoding(EncodingEnvironmentPtr eep)
 {
-  Ebits_to_follow ++;
-  if (Elow < FIRST_QTR)                 // output_bit(0)
+  int nbits, i;
+  unsigned int roundup, bits, value, bit;
+  
+  for (nbits = 1; nbits <= B_BITS; nbits++)
   {
-    Ebuffer >>= 1;
-    if (--Ebits_to_go == 0)
-      put_byte();
-
-    while (Ebits_to_follow > 0)
-    {
-      Ebuffer >>= 1;
-      Ebuffer |= 0x80;
-      if (--Ebits_to_go == 0)
-        put_byte();
-      Ebits_to_follow--;
-    }
+    roundup = (1 << (B_BITS - nbits)) - 1;
+    bits = (Elow + roundup) >> (B_BITS - nbits);
+    value = bits << (B_BITS - nbits);
+    if (Elow <= value && value + roundup <= (Elow + (Erange - 1)) )
+      break;
   }
-  else                                 // output_bit(1)
+  /* output the nbits integer bits */
+  for (i = 1; i <= nbits; i++)        
   {
+    bit = (bits >> (nbits-i)) & 1;
     Ebuffer >>= 1;
-    Ebuffer |= 0x80;
-    if (--Ebits_to_go == 0)
+    Ebuffer |= (bit<<7);
+    if (--Ebits_to_go == 0) 
       put_byte();
-
-    while (Ebits_to_follow > 0)
+				
+    while (Ebits_to_follow > 0) 
     {
-      Ebuffer >>= 1;
-      if (--Ebits_to_go == 0)
-        put_byte();
       Ebits_to_follow--;
+      Ebuffer >>= 1;
+      Ebuffer |= ((!bit)<<7);
+      if (--Ebits_to_go == 0) 
+        put_byte();
     }
   }
   if (Ebits_to_go != 8)
-    Ecodestrm[(*Ecodestrm_len)++] = (Ebuffer >> Ebits_to_go);
+    Ecodestrm[(*Ecodestrm_len)++] = (Ebuffer >> Ebits_to_go);		
 }
 
 
@@ -181,84 +179,109 @@ void arienco_done_encoding(EncodingEnvironmentPtr eep)
  */
 void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiContextTypePtr bi_ct )
 {
-  int Elow_m1 = Elow - 1;
+  int LPS;
+  unsigned long cLPS, rLPS;
+  unsigned long c0, c1;
+  unsigned long half, quarter;
+  unsigned long out_r;
 
-  if( symbol != 0)
+  c0 = bi_ct->cum_freq[0]-bi_ct->cum_freq[1];
+  c1 = bi_ct->cum_freq[1];
+  half = CACM99_HALF;
+  quarter = CACM99_QUARTER;
+
+  /* covers all cases where code does not bother to shift down symbol to be 
+   * either 0 or 1, e.g. in some cases for cbp, mb_Type etc the code symply 
+	 * masks off the bit position and passes in the resulting value */
+  if (symbol != 0) 
+	  symbol = 1;
+  
+  /* From frequencies (c0 and c1) determine least probable symbol (LPS) and its
+   * count (cLPS)				
+   */
+  if (c0 < c1) 		
+  {				
+    LPS = 0;		
+    cLPS = c0;
+  } 
+  else 
   {
-
-#if AAC_FRAC_TABLE
-    Ehigh = Elow_m1 + ( ( ( Ehigh - Elow_m1 ) *
-            ((bi_ct->cum_freq[1]*ARITH_CUM_FREQ_TABLE[bi_ct->cum_freq[0]])>>16))>>10);
-#else
-    Ehigh = Elow_m1 + ( ( Ehigh - Elow_m1 ) * bi_ct->cum_freq[1]) / bi_ct->cum_freq[0];
-#endif
-
-    bi_ct->cum_freq[1]++;
-
+    LPS = 1;
+    cLPS = c1;
   }
-  else
-  {
-#if AAC_FRAC_TABLE
-    Elow += ((( Ehigh - Elow_m1 )  * ((bi_ct->cum_freq[1]*ARITH_CUM_FREQ_TABLE[bi_ct->cum_freq[0]])>>16))>>10);
+
+#if  AAC_FRAC_TABLE
+  out_r = (Erange*(ARITH_CUM_FREQ_TABLE[bi_ct->cum_freq[0]]>>10))>>16;
 #else
-    Elow += ( ( Ehigh - Elow_m1 ) * bi_ct->cum_freq[1]) / bi_ct->cum_freq[0];
+  out_r = Erange / (c0+c1);
 #endif
+  rLPS = out_r * cLPS;
+  
+  if (symbol == LPS) 
+  {
+    Elow += Erange - rLPS;
+    Erange = rLPS;
+  } 
+  else 
+  {
+    Erange -= rLPS;
   }
 
-  if (++bi_ct->cum_freq[0] >= bi_ct->max_cum_freq)
-    rescale_cum_freq(bi_ct);
+  if (symbol != 0)
+      bi_ct->cum_freq[1]++;
 
-  do
+	if (++bi_ct->cum_freq[0] >= bi_ct->max_cum_freq) 
+		rescale_cum_freq(bi_ct);
+	
+
+  /* renormalise, as for arith_encode */
+  do 
   {
-    if (Ehigh < HALF)  // output_bit(0)
+    while (Erange <= quarter)
     {
-      Ebuffer >>= 1;
-      if (--Ebits_to_go == 0)
-        put_byte();
-
-      while (Ebits_to_follow > 0)
+      if (Elow >= half)
       {
-        Ebits_to_follow--;
-        Ebuffer >>= 1;
-        Ebuffer |= 0x80;
-        if (--Ebits_to_go == 0)
-          put_byte();
-
+        /* BIT_PLUS_FOLLOW(1) */;
+				Ebuffer >>= 1;
+				Ebuffer |= 0x80;
+				if (--Ebits_to_go == 0) 
+					put_byte();
+				
+				while (Ebits_to_follow > 0) 
+				{
+					Ebits_to_follow--;
+					Ebuffer >>= 1;
+					if (--Ebits_to_go == 0) 
+						put_byte();
+				}
+        Elow -= half;
       }
-    }
-    else
-      if (Elow >= HALF)  // output_bit(1)
+      else if (Elow+Erange <= half)
       {
-        Ebuffer >>= 1;
-        Ebuffer |= 0x80;
-        if (--Ebits_to_go == 0)
-          put_byte();
-
-        while (Ebits_to_follow > 0)
-        {
-          Ebits_to_follow--;
-          Ebuffer >>= 1;
-          if (--Ebits_to_go == 0)
-            put_byte();
-        }
-
-        Ehigh -= HALF;
-        Elow -= HALF;
+        /* BIT_PLUS_FOLLOW(0); */
+			  Ebuffer >>= 1;
+			  if (--Ebits_to_go == 0) 
+				  put_byte();
+			  
+			  while (Ebits_to_follow > 0) 
+			  {
+				  Ebits_to_follow--;
+				  Ebuffer >>= 1;
+				  Ebuffer |= 0x80;
+				  if (--Ebits_to_go == 0) 
+					  put_byte();
+				  
+			  }
       }
       else
-        if (Elow >= FIRST_QTR && Ehigh < THIRD_QTR)
-        {
-          Ebits_to_follow++;
-          Ehigh -= FIRST_QTR;
-          Elow -= FIRST_QTR;
-        }
-        else
-          break;
-
-        Elow <<= 1;
-        Ehigh += Ehigh+1;
-  }
-  while (1);
+      {
+        Ebits_to_follow++;
+        Elow -= quarter;
+      }
+      Elow <<= 1;
+      Erange <<= 1;
+    }
+  } while (0);
 }
 
 

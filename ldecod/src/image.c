@@ -91,15 +91,16 @@ int *last_P_no;
  *
  ***********************************************************************
  */
-
 int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *snr)
 {
   int current_header;
+  int i;
   Slice *currSlice = img->currentSlice;
   extern FILE* bits;
 
 #if _ERROR_CONCEALMENT_
-  int received_mb_nr = 0; //to record how many MBs are correctly received in error prone transmission
+  int ercStartMB;
+  int ercSegment;
   frame recfr;
 #endif
 
@@ -162,43 +163,23 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
       // reset all variables of the error concealmnet instance before decoding of every frame.
       // here the third parameter should, if perfectly, be equal to the number of slices per frame.
       // using little value is ok, the code will alloc more memory if the slice number is larger
-      ercReset(erc_errorVar, img->max_mb_nr, MAX_SLICES_PER_FRAME);
+      ercReset(erc_errorVar, img->max_mb_nr, img->max_mb_nr, img->width);
       erc_mvperMB = 0;
     }
-    // mark the start of a slice 
-    ercStartSegment(currSlice->start_mb_nr, ((currSlice->start_mb_nr == 0) ? 0 : -1), 0 , erc_errorVar);
     
-
     // decode main slice information
     if ((current_header == SOP || current_header == SOS) && currSlice->ei_flag == 0)
       decode_one_slice(img,inp);
+    
+    // setMB-Nr in case this slice was lost
+    if(currSlice->ei_flag)  
+      img->current_mb_nr = currSlice->last_mb_nr + 1;
 #else
 
     // decode main slice information
     if (current_header == SOP || current_header == SOS)
       decode_one_slice(img,inp);
 
-#endif
-    
-    
-#if _ERROR_CONCEALMENT_
-    if(!currSlice->ei_flag)  // slice received
-    {
-      ercStopSegment(img->current_mb_nr-1, -1, 0, erc_errorVar); // stop the current slice 
-      ercMarkCurrSegmentOK(currSlice->start_mb_nr, img->width, erc_errorVar);
-      received_mb_nr += img->current_mb_nr - currSlice->start_mb_nr;
-    }
-    else    // at least one slice lost
-    {
-      ercStopSegment(currSlice->last_mb_nr, -1, 0, erc_errorVar);
-      ercMarkCurrSegmentLost(currSlice->start_mb_nr, img->width, erc_errorVar);
-      received_mb_nr += (currSlice->last_mb_nr + 1) - currSlice->start_mb_nr;
-      //! Should never happen, but to be sure
-      //! Changed TO 12.11.2001
-      if(received_mb_nr > img->max_mb_nr)
-        received_mb_nr = img->max_mb_nr;
-      img->current_mb_nr = currSlice->last_mb_nr + 1;
-    }
 #endif
     
     if(currSlice->next_eiflag && img->current_mb_nr != img->max_mb_nr)
@@ -213,10 +194,40 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
   recfr.yptr = &imgY[0][0];
   recfr.uptr = &imgUV[0][0][0];
   recfr.vptr = &imgUV[1][0][0];
+  
+  //! this is always true at the beginning of a frame
+  ercStartMB = 0;
+  ercSegment = 0;
+  
+  //! mark the start of the first segment
+  ercStartSegment(0, ercSegment, 0 , erc_errorVar);
+  //! generate the segments according to the macroblock map
+  for(i = 1; i<img->max_mb_nr; i++)
+  {
+    if(img->mb_data[i].ei_flag != img->mb_data[i-1].ei_flag)
+    {
+      ercStopSegment(i-1, ercSegment, 0, erc_errorVar); //! stop current segment
+      
+      //! mark current segment as lost or OK
+      if(img->mb_data[i-1].ei_flag)
+        ercMarkCurrSegmentLost(img->width, erc_errorVar);
+      else
+        ercMarkCurrSegmentOK(img->width, erc_errorVar);
+      
+      ercSegment++;  //! next segment
+      ercStartSegment(i, ercSegment, 0 , erc_errorVar); //! start new segment
+      ercStartMB = i;//! save start MB for this segment 
+    }
+  }
+  //! mark end of the last segent
+  ercStopSegment(img->max_mb_nr, ercSegment, 0, erc_errorVar);
+  if(img->mb_data[i-1].ei_flag)
+    ercMarkCurrSegmentLost(img->width, erc_errorVar);
+  else
+    ercMarkCurrSegmentOK(img->width, erc_errorVar);
 
-  /* call the right error concealment function depending on the frame type.
-      here it is simulated that only the first frame is Intra, the rest is Inter. */
-  erc_mvperMB /= received_mb_nr;
+  //! call the right error concealment function depending on the frame type.
+  erc_mvperMB /= img->max_mb_nr;
   erc_img = img;
   if(img->type == INTRA_IMG) // I-frame
     ercConcealIntraFrame(&recfr, img->width, img->height, erc_errorVar);
@@ -300,7 +311,8 @@ void find_snr(
   int  status;
   static int modulo_ctr = 0;
   static int modulo_ctr_b = 0;
-  static int modolo_flag = 0;
+  static int modulo_flag = 0;
+  static int modulo_flag_b = 0;
   static int pic_id_old = 0, pic_id_old_b = 0;
   Slice *currSlice = img->currentSlice;
 
@@ -324,13 +336,13 @@ void find_snr(
   {
     if (img->number > 0)
     {
-      if ((currSlice->picture_id < pic_id_old) && !modolo_flag)
+      if ((currSlice->picture_id < pic_id_old) && !modulo_flag)//module_flag is used for P frames
       {
         modulo_ctr++;
-        modolo_flag = 1;
+        modulo_flag = 1;
       }
       else
-        modolo_flag = 0;
+        modulo_flag = 0;
 
       frame_no = currSlice->picture_id + (256*modulo_ctr);
       pic_id_old = currSlice->picture_id;
@@ -340,14 +352,14 @@ void find_snr(
   }
   else // B
   {
-    if ((currSlice->picture_id < pic_id_old_b) && !modolo_flag)
+    if ((currSlice->picture_id < pic_id_old_b) && !modulo_flag_b ) //modulo_flag_b is used for B frames
     {
       modulo_ctr_b++;
-      modolo_flag = 1;
+      modulo_flag_b = 1;
     }
     else
-      modolo_flag = 0;
-
+      modulo_flag_b = 0;
+        
     frame_no = currSlice->picture_id + (256*modulo_ctr_b);
     pic_id_old_b = currSlice->picture_id;
   }
@@ -370,9 +382,9 @@ void find_snr(
 
   img->quad[0]=0;
   diff_y=0;
-  for (i=0; i < img->width; ++i)
+  for (j=0; j < img->height; ++j)
   {
-    for (j=0; j < img->height; ++j)
+    for (i=0; i < img->width; ++i)
     {
       diff_y += img->quad[abs(imgY[j][i]-imgY_ref[j][i])];
     }
@@ -382,9 +394,9 @@ void find_snr(
   diff_u=0;
   diff_v=0;
 
-  for (i=0; i < img->width_cr; ++i)
+  for (j=0; j < img->height_cr; ++j)
   {
-    for (j=0; j < img->height_cr; ++j)
+    for (i=0; i < img->width_cr; ++i)
     {
       diff_u += img->quad[abs(imgUV_ref[0][j][i]-imgUV[0][j][i])];
       diff_v += img->quad[abs(imgUV_ref[1][j][i]-imgUV[1][j][i])];
@@ -962,13 +974,18 @@ void init_frame(struct img_par *img, struct inp_par *inp)
   if(img->UseConstrainedIntraPred)
   {
     for (i=0; i<img->width/MB_BLOCK_SIZE*img->height/MB_BLOCK_SIZE; i++)
-      img->intra_mb[i] = 1; // default 1 = intra mb
+    {
+      img->intra_block[i][0] =img->intra_block[i][1] = img->intra_block[i][2] = img->intra_block[i][3] = 1;
+    }
   }
 
   // WYK: Oct. 8, 2001. Set the slice_nr member of each MB to -1, to ensure correct when packet loss occurs
+  // TO set Macroblock Map (mark all MBs as 'have to be concealed')
   for(i=0; i<img->max_mb_nr; i++)
+  {
     img->mb_data[i].slice_nr = -1; 
-
+    img->mb_data[i].ei_flag = 1;
+  }
 }
 
 /*!
@@ -991,6 +1008,7 @@ void exit_frame(struct img_par *img, struct inp_par *inp)
  ************************************************************************
  */
 #if _ERROR_CONCEALMENT_
+
 void ercWriteMBMODEandMV(struct img_par *img,struct inp_par *inp)
 {
   extern objectBuffer_t *erc_object_list;
@@ -998,162 +1016,76 @@ void ercWriteMBMODEandMV(struct img_par *img,struct inp_par *inp)
   int mbx = xPosMB(currMBNum,img->width), mby = yPosMB(currMBNum,img->width);
   objectBuffer_t *currRegion, *pRegion;
   Macroblock *currMB = &img->mb_data[currMBNum];
+  int***  mv;
 
   currRegion = erc_object_list + (currMBNum<<2);
 
   if(img->type != B_IMG_1 && img->type != B_IMG_MULT) //non-B frame
   {
-    if(currMB->intraOrInter == INTRA_MB_16x16)
+    for (i=0; i<4; i++)
     {
-      for(i=0; i<4; i++)
+      pRegion             = currRegion + i;
+      pRegion->regionMode = (currMB->mb_type  ==I16MB  ? REGMODE_INTRA      :
+                             currMB->b8mode[i]==IBLOCK ? REGMODE_INTRA_8x8  :
+                             currMB->b8mode[i]==0      ? REGMODE_INTER_COPY :
+                             currMB->b8mode[i]==1      ? REGMODE_INTER_PRED : REGMODE_INTER_PRED_8x8);
+      if (currMB->b8mode[i]==0 || currMB->b8mode[i]==IBLOCK)  // INTRA OR COPY
       {
-        pRegion = currRegion + i;
-        pRegion->regionMode = REGMODE_INTRA;
-        pRegion->mv[0] = 0;
-        pRegion->mv[1] = 0;
-        pRegion->mv[2] = currMB->ref_frame;
+        pRegion->mv[0]    = 0;
+        pRegion->mv[1]    = 0;
+        pRegion->mv[2]    = 0;
       }
-    }
-    else if(currMB->intraOrInter == INTRA_MB_4x4)
-    {
-      for(i=0; i<4; i++)
+      else
       {
-        pRegion = currRegion + i;
-        pRegion->regionMode = REGMODE_INTRA_8x8;
-        pRegion->mv[0] = 0;
-        pRegion->mv[1] = 0;
-        pRegion->mv[2] = currMB->ref_frame;
-      }
-    }
-    else //if(currMB->intraOrInter == INTER_MB)
-    {
-      switch(img->mb_mode)
-      {
-      case COPY_MB:
-        for(i=0; i<4; i++)
+        if (currMB->b8mode[i]>=5 && currMB->b8mode[i]<=7)  // SMALL BLOCKS
         {
-          pRegion = currRegion + i;
-          pRegion->regionMode = REGMODE_INTER_COPY;
-          pRegion->mv[0] = 0;
-          pRegion->mv[1] = 0;
-          pRegion->mv[2] = currMB->ref_frame;
+          ii              = 4*mbx + (i%2)*2 + BLOCK_SIZE;
+          jj              = 4*mby + (i/2)*2;
+          pRegion->mv[0]  = (img->mv[ii][jj][0] + img->mv[ii+1][jj][0] + img->mv[ii][jj+1][0] + img->mv[ii+1][jj+1][0] + 2)/4;
+          pRegion->mv[1]  = (img->mv[ii][jj][1] + img->mv[ii+1][jj][1] + img->mv[ii][jj+1][1] + img->mv[ii+1][jj+1][1] + 2)/4;
         }
-        break;
-      case M16x16_MB:
-        for(i=0; i<4; i++)
+        else // 16x16, 16x8, 8x16, 8x8
         {
-          pRegion = currRegion + i;
-          pRegion->regionMode = REGMODE_INTER_PRED;
-          pRegion->mv[0] = img->mv[4*mbx+(i%2)*2+BLOCK_SIZE][4*mby+(i/2)*2][0];
-          pRegion->mv[1] = img->mv[4*mbx+(i%2)*2+BLOCK_SIZE][4*mby+(i/2)*2][1];
-          erc_mvperMB += mabs(pRegion->mv[0]) + mabs(pRegion->mv[1]);
-          pRegion->mv[2] = currMB->ref_frame;
+          pRegion->mv[0]  = img->mv[4*mbx+(i%2)*2+BLOCK_SIZE][4*mby+(i/2)*2][0];
+          pRegion->mv[1]  = img->mv[4*mbx+(i%2)*2+BLOCK_SIZE][4*mby+(i/2)*2][1];
         }
-        break;
-      case M16x8_MB:
-      case M8x16_MB:
-      case M8x8_MB:
-        for(i=0; i<4; i++)
-        {
-          pRegion = currRegion + i;
-          pRegion->regionMode = REGMODE_INTER_PRED_8x8;
-          pRegion->mv[0] = img->mv[4*mbx+(i%2)*2+BLOCK_SIZE][4*mby+(i/2)*2][0];
-          pRegion->mv[1] = img->mv[4*mbx+(i%2)*2+BLOCK_SIZE][4*mby+(i/2)*2][1];
-          erc_mvperMB += mabs(pRegion->mv[0]) + mabs(pRegion->mv[1]);
-          pRegion->mv[2] = currMB->ref_frame;
-        }
-        break;
-      case M8x4_MB:
-      case M4x8_MB:
-      case M4x4_MB:
-        for(i=0; i<4; i++)
-        {
-          pRegion = currRegion + i;
-          pRegion->regionMode = REGMODE_INTER_PRED_8x8;
-          ii = 4*mbx + (i%2)*2 + BLOCK_SIZE; jj = 4*mby + (i/2)*2;
-          pRegion->mv[0] = (img->mv[ii][jj][0] + img->mv[ii+1][jj][0] + img->mv[ii][jj+1][0] + img->mv[ii+1][jj+1][0] + 2)/4;
-          pRegion->mv[1] = (img->mv[ii][jj][1] + img->mv[ii+1][jj][1] + img->mv[ii][jj+1][1] + img->mv[ii+1][jj+1][1] + 2)/4;
-          erc_mvperMB += mabs(pRegion->mv[0]) + mabs(pRegion->mv[1]);
-          pRegion->mv[2] = currMB->ref_frame;
-        }
-        break;
-      default:
-        snprintf(errortext, ET_SIZE, "INTER MB mode %i is not supported\n", img->mb_mode);
-        error (errortext, 200);
+        erc_mvperMB      += mabs(pRegion->mv[0]) + mabs(pRegion->mv[1]);
+        pRegion->mv[2]    = refFrArr[4*mby+(i/2)*2][4*mbx+(i%2)*2];
       }
     }
   }
   else  //B-frame
   {
-    if(currMB->intraOrInter == INTRA_MB_16x16)
+    for (i=0; i<4; i++)
     {
-      for(i=0; i<4; i++)
+      ii                  = 4*mbx + (i%2)*2 + BLOCK_SIZE;
+      jj                  = 4*mby + (i/2)*2;
+      pRegion             = currRegion + i;
+      pRegion->regionMode = (currMB->mb_type  ==I16MB  ? REGMODE_INTRA      :
+                             currMB->b8mode[i]==IBLOCK ? REGMODE_INTRA_8x8  : REGMODE_INTER_PRED_8x8);
+      if (currMB->mb_type==I16MB || currMB->b8mode[i]==IBLOCK)  // INTRA
       {
-        pRegion = currRegion + i;
-        pRegion->regionMode = REGMODE_INTRA;
-        pRegion->mv[0] = 0;
-        pRegion->mv[1] = 0;
-        pRegion->mv[2] = currMB->ref_frame;
+        pRegion->mv[0]    = 0;
+        pRegion->mv[1]    = 0;
+        pRegion->mv[2]    = 0;
+      }
+      else
+      {
+        mv                = (currMB->b8mode[i]==0 && currMB->b8pdir[i]==2 ? img->dbMV : currMB->b8pdir[i]==1 ? img->bw_mv : img->fw_mv);
+        pRegion->mv[0]    = (mv[ii][jj][0] + mv[ii+1][jj][0] + mv[ii][jj+1][0] + mv[ii+1][jj+1][0] + 2)/4;
+        pRegion->mv[1]    = (mv[ii][jj][1] + mv[ii+1][jj][1] + mv[ii][jj+1][1] + mv[ii+1][jj+1][1] + 2)/4;
+        erc_mvperMB      += mabs(pRegion->mv[0]) + mabs(pRegion->mv[1]);
+        if (currMB->b8pdir[i]==0 || (currMB->b8pdir[i]==2 && currMB->b8mode[i]!=0)) // forward or bidirect
+        {
+          pRegion->mv[2]  = (img->fw_refFrArr[jj][ii-4]-1+img->buf_cycle) % img->buf_cycle;
+          ///???? is it right, not only "img->fw_refFrArr[jj][ii-4]"
+        }
+        else
+        {
+          pRegion->mv[2]  = 0;
+        }
       }
     }
-    else if(currMB->intraOrInter == INTRA_MB_4x4)
-    {
-      for(i=0; i<4; i++)
-      {
-        pRegion = currRegion + i;
-        pRegion->regionMode = REGMODE_INTRA_8x8;
-        pRegion->mv[0] = 0;
-        pRegion->mv[1] = 0;
-        pRegion->mv[2] = currMB->ref_frame;
-      }
-    }
-    else //if(currMB->intraOrInter == INTER_MB)
-    {
-      switch(img->imod)
-      {
-      case B_Forward:
-      case B_Bidirect:
-        for(i=0; i<4; i++)
-        {
-          pRegion = currRegion + i;
-          pRegion->regionMode = REGMODE_INTER_PRED_8x8;
-          ii = 4*mbx + (i%2)*2 + BLOCK_SIZE; jj = 4*mby + (i/2)*2;
-          pRegion->mv[0] = (img->fw_mv[ii][jj][0] + img->fw_mv[ii+1][jj][0] + img->fw_mv[ii][jj+1][0] + img->fw_mv[ii+1][jj+1][0] + 2)/4;
-          pRegion->mv[1] = (img->fw_mv[ii][jj][1] + img->fw_mv[ii+1][jj][1] + img->fw_mv[ii][jj+1][1] + img->fw_mv[ii+1][jj+1][1] + 2)/4;
-          erc_mvperMB += mabs(pRegion->mv[0]) + mabs(pRegion->mv[1]);
-          pRegion->mv[2] = (currMB->ref_frame-1+img->buf_cycle) % img->buf_cycle; //ref_frame_fw
-        }
-        break;
-      case B_Backward:
-        for(i=0; i<4; i++)
-        {
-          pRegion = currRegion + i;
-          pRegion->regionMode = REGMODE_INTER_PRED_8x8;
-          ii = 4*mbx + (i%2)*2 + BLOCK_SIZE; jj = 4*mby + (i/2)*2;
-          pRegion->mv[0] = (img->bw_mv[ii][jj][0] + img->bw_mv[ii+1][jj][0] + img->bw_mv[ii][jj+1][0] + img->bw_mv[ii+1][jj+1][0] + 2)/4;
-          pRegion->mv[1] = (img->bw_mv[ii][jj][1] + img->bw_mv[ii+1][jj][1] + img->bw_mv[ii][jj+1][1] + img->bw_mv[ii+1][jj+1][1] + 2)/4;
-          erc_mvperMB += mabs(pRegion->mv[0]) + mabs(pRegion->mv[1]);
-          pRegion->mv[2] = 0; //ref_frame_bw
-        }
-        break;
-      case B_Direct:
-        for(i=0; i<4; i++)
-        {
-          pRegion = currRegion + i;
-          pRegion->regionMode = REGMODE_INTER_PRED_8x8;
-          ii = 4*mbx + (i%2)*2 + BLOCK_SIZE; jj = 4*mby + (i/2)*2;
-          pRegion->mv[0] = (img->dbMV[ii][jj][0] + img->dbMV[ii+1][jj][0] + img->dbMV[ii][jj+1][0] + img->dbMV[ii+1][jj+1][0] + 2)/4;
-          pRegion->mv[1] = (img->dbMV[ii][jj][1] + img->dbMV[ii+1][jj][1] + img->dbMV[ii][jj+1][1] + img->dbMV[ii+1][jj+1][1] + 2)/4;
-          erc_mvperMB += mabs(pRegion->mv[0]) + mabs(pRegion->mv[1]);
-          pRegion->mv[2] = 0; //ref_frame_bw
-        }
-        break;
-      default:
-        snprintf(errortext, ET_SIZE, "B-frame img->imod %i is not supported\n", img->imod);
-        error (errortext, 200);
-      }
-    }
-
   }
 }
 #endif
@@ -1195,9 +1127,6 @@ void decode_one_slice(struct img_par *img,struct inp_par *inp)
       break;
     case DECODE_COPY_MB:
       decode_one_CopyMB(img,inp);
-      break;
-    case DECODE_MB_BFRAME:
-      decode_one_macroblock_Bframe(img);
       break;
     default:
         printf("need to trigger error concealment or something here\n ");

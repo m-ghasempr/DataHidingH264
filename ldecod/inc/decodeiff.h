@@ -93,18 +93,18 @@ typedef struct
 
   unsigned __int8 majorVersion;
   unsigned __int8 minorVersion;
-	unsigned __int32 timescale;
-	unsigned __int32 numUnitsInTick;
-	unsigned __int64 duration;
-	unsigned __int16 pixAspectRatioX;
-	unsigned __int16 pixAspectRatioY;
-	unsigned __int16 maxPicId;	
-	unsigned __int8 numAlternateTracks;
-	__int2 numBytesInPayloadCountMinusOne;
-	__int2 numBytesInPictureOffsetMinusTwo;
-	__int2 numBytesInPictureDisplayTimeMinusOne;
-	__int2 numBytesInPictureCountMinusOne;
-	__int2 numBytesInPayloadSizeMinusOne;
+  unsigned __int32 timescale;
+  unsigned __int32 numUnitsInTick;
+  unsigned __int64 duration;
+  unsigned __int16 pixAspectRatioX;
+  unsigned __int16 pixAspectRatioY;
+  unsigned __int16 maxPicId;
+  unsigned __int8 numAlternateTracks;
+  __int2 numBytesInPayloadCountMinusOne;
+  __int2 numBytesInPictureOffsetMinusTwo;
+  __int2 numBytesInPictureDisplayTimeMinusOne;
+  __int2 numBytesInPictureCountMinusOne;
+  __int2 numBytesInPayloadSizeMinusOne;
 } FileHeaderBox;
 
 // 3
@@ -112,33 +112,33 @@ typedef struct
 {
   BoxType type;
 
-	unsigned __int64 creationTime;
-	unsigned __int64 modificationTime;
+  unsigned __int64 creationTime;
+  unsigned __int64 modificationTime;
 
-	unsigned __int8 titleNumBytes;
-	unsigned char* title;
+  unsigned __int8 titleNumBytes;
+  unsigned char* title;
 
-	unsigned __int8 authorNumBytes;
-	unsigned char* author;
+  unsigned __int8 authorNumBytes;
+  unsigned char* author;
 
-	unsigned __int8 copyrightNumBytes;
+  unsigned __int8 copyrightNumBytes;
   unsigned char* copyright;
 
-	unsigned __int16 descriptionNumBytes;
-	unsigned char* description;
+  unsigned __int16 descriptionNumBytes;
+  unsigned char* description;
 
-	unsigned __int16 URINumBytes;
-	unsigned char* URI;
+  unsigned __int16 URINumBytes;
+  unsigned char* URI;
 } ContentInfoBox;
 
 // 4
 typedef struct
 {
-	unsigned __int16 displayWindowWidth;
-	unsigned __int16 displayWindowHeight;
-	unsigned __int16 maxSDUSize;
-	unsigned __int16 avgSDUSize;
-	unsigned __int32 avgBitRate;
+  unsigned __int16 displayWindowWidth;
+  unsigned __int16 displayWindowHeight;
+  unsigned __int16 maxSDUSize;
+  unsigned __int16 avgSDUSize;
+  unsigned __int32 avgBitRate;
   long double      sumSDUSize;
   long double      numSDU;
   int              last_frame;
@@ -155,23 +155,23 @@ typedef struct
 {
   BoxType type;
 
-	unsigned __int16 parameterSetID;
-	unsigned __int8 profile;
-	unsigned __int8 level;
-	unsigned __int8 version;
-	unsigned __int16 pictureWidthInMBs;
-	unsigned __int16 pictureHeightInMBs;
-	unsigned __int16 displayRectangleOffsetTop;
-	unsigned __int16 displayRectangleOffsetLeft;
-	unsigned __int16 displayRectangleOffsetBottom;
-	unsigned __int16 displayRectangleOffsetRight;
-	unsigned __int8 displayMode;
-	unsigned __int16 displayRectangleOffsetFromWindowTop;
-	unsigned __int16 displayRectangleOffsetFromWindowLeftBorder;
-	unsigned __int8 entropyCoding;
-	unsigned __int8 motionResolution;
-	unsigned __int8 partitioningType;
-	unsigned __int8 intraPredictionType;
+  unsigned __int16 parameterSetID;
+  unsigned __int8 profile;
+  unsigned __int8 level;
+  unsigned __int8 version;
+  unsigned __int16 pictureWidthInMBs;
+  unsigned __int16 pictureHeightInMBs;
+  unsigned __int16 displayRectangleOffsetTop;
+  unsigned __int16 displayRectangleOffsetLeft;
+  unsigned __int16 displayRectangleOffsetBottom;
+  unsigned __int16 displayRectangleOffsetRight;
+  unsigned __int8 displayMode;
+  unsigned __int16 displayRectangleOffsetFromWindowTop;
+  unsigned __int16 displayRectangleOffsetFromWindowLeftBorder;
+  unsigned __int8 entropyCoding;
+  unsigned __int8 motionResolution;
+  unsigned __int8 partitioningType;
+  unsigned __int8 intraPredictionType;
 } ParameterSetBox;
 
 // 6
@@ -179,9 +179,9 @@ typedef struct
 {
   BoxType type;
 
-	unsigned __int64 fileSize;
-	unsigned __int64 startTick;
-	unsigned __int64 segmentDuration;
+  unsigned __int64 fileSize;
+  unsigned __int64 startTick;
+  unsigned __int64 segmentDuration;
   unsigned __int64 firstFrameNr;
   unsigned __int64 lastFrameNr;
 } SegmentBox;
@@ -204,7 +204,7 @@ typedef struct sPayloadInfo
   unsigned __int8  sliceType;
   unsigned __int8  firstMBInSliceX;
   unsigned __int8  firstMBInSliceY;
-  unsigned __int8  initialQP;
+  signed __int8  initialQP;
 
   int lastMBnr;
 

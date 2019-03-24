@@ -85,6 +85,11 @@ pel_t *FastLine16Y_11 (pel_t *Pic, int y, int x)
   return &Pic [y*img->width+x];
 }
 
+pel_t *FastLineX (int dummy, pel_t* Pic, int y, int x)
+{
+  return Pic + y*img->width + x;
+}
+
 pel_t UMVPelY_11 (pel_t *Pic, int y, int x)
 {
   if (x < 0)
@@ -121,16 +126,7 @@ pel_t UMVPelY_11 (pel_t *Pic, int y, int x)
  ************************************************************************
  */
 static pel_t line[16];
-#if 0
-pel_t *UMVLine16Y_11 (pel_t *Pic, int y, int x)
-{
-  int i;
 
-  for (i=0; i<16; i++)
-    line[i] = UMVPelY_11 (Pic, y, x+i);
-  return line;
-}
-#else
 pel_t *UMVLine16Y_11 (pel_t *Pic, int y, int x)
 {
   int i, maxx;
@@ -163,8 +159,46 @@ pel_t *UMVLine16Y_11 (pel_t *Pic, int y, int x)
 
   return line;
 }
-#endif
 
+
+pel_t *UMVLineX (int size, pel_t* Pic, int y, int x)
+{
+  int i, maxx;
+  pel_t *Picy;
+
+  Picy = Pic + max(0,min(img->height-1,y)) * img->width;
+
+  if (x < 0)                            // Left edge
+  {
+    maxx = min(0,x+size);
+    for (i = x; i < maxx; i++)
+    {
+      line[i-x] = Picy [0];             // Replicate left edge pixel
+    }
+    maxx = x+size;
+    for (i = 0; i < maxx; i++)          // Copy non-edge pixels
+      line[i-x] = Picy [i];
+  }
+  else if (x > img->width-size)         // Right edge
+  {
+    maxx = img->width;
+    for (i = x; i < maxx; i++)
+    {
+      line[i-x] = Picy [i];             // Copy non-edge pixels
+    }
+    maxx = x+size;
+    for (i = max(img->width,x); i < maxx; i++)
+    {
+      line[i-x] = Picy [img->width-1];  // Replicate right edge pixel
+    }
+  }
+  else                                  // No edge
+  {
+    return Picy + x;
+  }
+
+  return line;
+}
 
 /*!
  ************************************************************************

@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 1.4
+ *     JM 1.6
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -83,8 +83,8 @@
 #include "mbuffer.h"
 #include "encodeiff.h"
 
-#define TML     "1"
-#define VERSION "1.40"
+#define JM      "1"
+#define VERSION "1.7"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
@@ -108,6 +108,9 @@ int initial_Bframes = 0;
  *    exit code
  ***********************************************************************
  */
+void Init_Motion_Search_Module ();
+void Clear_Motion_Search_Module ();
+
 int main(int argc,char **argv)
 {
   int image_type;
@@ -125,17 +128,14 @@ int main(int argc,char **argv)
   // create and init structure for rd-opt. mode decision
   init_rdopt ();
 
-#ifdef _FAST_FULL_ME_
-  // create arrays for fast full motion estimation
-  InitializeFastFullIntegerSearch (input->search_range);
-#endif
-
   // Initialize Statistic Parameters
   init_stat();
 
   // allocate memory for frame buffers
   init_frame_buffers(input,img);
   init_global_buffers();
+
+  Init_Motion_Search_Module ();
 
   // Just some information which goes to the standard output
   information_init();
@@ -236,10 +236,7 @@ int main(int argc,char **argv)
     // terminate sequence
   terminate_sequence();
 
-#ifdef _FAST_FULL_ME_
-  // free arrays for fast full motion estimation
-  ClearFastFullIntegerSearch ();
-#endif
+  Clear_Motion_Search_Module ();
 
   // free structure for rd-opt. mode decision
   clear_rdopt ();
@@ -295,6 +292,17 @@ void init_img()
   get_mem_mv (&(img->all_mv));
   get_mem_mv (&(img->all_bmv));
 
+  get_mem_ACcoeff (&(img->cofAC));
+  get_mem_DCcoeff (&(img->cofDC));
+
+  if ((img->quad = (int*)calloc (511, sizeof(int))) == NULL)
+    no_mem_exit ("init_img: img->quad");
+  img->quad+=255;
+  for (i=0; i < 256; ++i) // fix from TML1 / TML2 sw, truncation removed
+  {
+    img->quad[i]=img->quad[-i]=i*i;
+  }
+
   img->width    = input->img_width;
   img->height   = input->img_height;
   img->width_cr = input->img_width/2;
@@ -305,11 +313,14 @@ void init_img()
 
   if(input->UseConstrainedIntraPred)
   {
-    if(((img->intra_mb) = (int *) calloc((img->width/MB_BLOCK_SIZE) * (img->height/MB_BLOCK_SIZE),sizeof(int))) == NULL)
-      no_mem_exit("init_img: img->intra_mb");
+    if(((img->intra_block) = (int**)calloc((j=(img->width/MB_BLOCK_SIZE) * (img->height/MB_BLOCK_SIZE)),sizeof(int))) == NULL)
+      no_mem_exit("init_img: img->intra_block");
+    for (i=0; i<j; i++)
+    {
+      if ((img->intra_block[i] = (int*)calloc(4, sizeof(int))) == NULL)
+        no_mem_exit ("init_img: img->intra_block");
+    }
   }
-
-  init(img);
 
   // allocate memory for intra pred mode buffer for each block: img->ipredmode
   // int  img->ipredmode[90][74];
@@ -344,6 +355,11 @@ void free_img ()
   free_mem_mv (img->p_bwMV);
   free_mem_mv (img->all_mv);
   free_mem_mv (img->all_bmv);
+
+  free_mem_ACcoeff (img->cofAC);
+  free_mem_DCcoeff (img->cofDC);
+
+  free (img->quad-255);
 }
 
 
@@ -756,7 +772,7 @@ void report()
   }
 
   fprintf(stdout,"--------------------------------------------------------------------------\n");
-  fprintf(stdout,"Exit JM %s encoder ver %s\n", TML, VERSION);
+  fprintf(stdout,"Exit JM %s encoder ver %s\n", JM, VERSION);
 
   // status file
   if ((p_stat=fopen("stat.dat","wt"))==0)
@@ -851,25 +867,19 @@ void report()
   fprintf(p_stat,"   Intra            |   Mode used   |\n");
   fprintf(p_stat," -------------------|---------------|\n");
 
-  fprintf(p_stat," Mode  0 intra old  | %5d         |\n",stat->mode_use_intra[0]);
-  for (i=1;i<=24;i++)
-    fprintf(p_stat," Mode %2d intra new  | %5d         |\n",i,stat->mode_use_intra[i]);
+  fprintf(p_stat," Mode 0  intra old  | %5d         |\n",stat->mode_use_intra[I4MB]);
+  fprintf(p_stat," Mode 1+ intra new  | %5d         |\n",stat->mode_use_intra[I16MB]);
 
   fprintf(p_stat,"\n -------------------|---------------|---------------|\n");
   fprintf(p_stat,"   Inter            |   Mode used   | Vector bit use|\n");
   fprintf(p_stat," -------------------|---------------|---------------|");
-
-  fprintf(p_stat,"\n Mode  0  (copy)    | %5d         | %5.0f         |",stat->mode_use_inter[0],(float)stat->bit_use_mode_inter[0]/(float)bit_use[1][0]);
-  fprintf(p_stat,"\n Mode  1  (16x16)   | %5d         | %5.0f         |",stat->mode_use_inter[1],(float)stat->bit_use_mode_inter[1]/(float)bit_use[1][0]);
-  fprintf(p_stat,"\n Mode  2  (16x8)    | %5d         | %5.0f         |",stat->mode_use_inter[2],(float)stat->bit_use_mode_inter[2]/(float)bit_use[1][0]);
-  fprintf(p_stat,"\n Mode  3  (8x16)    | %5d         | %5.0f         |",stat->mode_use_inter[3],(float)stat->bit_use_mode_inter[3]/(float)bit_use[1][0]);
-  fprintf(p_stat,"\n Mode  4  (8x8)     | %5d         | %5.0f         |",stat->mode_use_inter[4],(float)stat->bit_use_mode_inter[4]/(float)bit_use[1][0]);
-  fprintf(p_stat,"\n Mode  5  (8x4)     | %5d         | %5.0f         |",stat->mode_use_inter[5],(float)stat->bit_use_mode_inter[5]/(float)bit_use[1][0]);
-  fprintf(p_stat,"\n Mode  6  (4x8)     | %5d         | %5.0f         |",stat->mode_use_inter[6],(float)stat->bit_use_mode_inter[6]/(float)bit_use[1][0]);
-  fprintf(p_stat,"\n Mode  7  (4x4)     | %5d         | %5.0f         |",stat->mode_use_inter[7],(float)stat->bit_use_mode_inter[7]/(float)bit_use[1][0]);
-  fprintf(p_stat,"\n Mode  8 intra old  | %5d         | --------------|",stat->mode_use_inter[8]);
-  for (i=9;i<33;i++)
-    fprintf(p_stat,"\n Mode %2d intr.new   | %5d         |",i,stat->mode_use_inter[i]);
+  fprintf(p_stat,"\n Mode  0  (copy)    | %5d         | %5.0f         |",stat->mode_use_inter[0   ],(float)stat->bit_use_mode_inter[0   ]/(float)bit_use[1][0]);
+  fprintf(p_stat,"\n Mode  1  (16x16)   | %5d         | %5.0f         |",stat->mode_use_inter[1   ],(float)stat->bit_use_mode_inter[1   ]/(float)bit_use[1][0]);
+  fprintf(p_stat,"\n Mode  2  (16x8)    | %5d         | %5.0f         |",stat->mode_use_inter[2   ],(float)stat->bit_use_mode_inter[2   ]/(float)bit_use[1][0]);
+  fprintf(p_stat,"\n Mode  3  (8x16)    | %5d         | %5.0f         |",stat->mode_use_inter[3   ],(float)stat->bit_use_mode_inter[3   ]/(float)bit_use[1][0]);
+  fprintf(p_stat,"\n Mode  4  (8x8)     | %5d         | %5.0f         |",stat->mode_use_inter[P8x8],(float)stat->bit_use_mode_inter[P8x8]/(float)bit_use[1][0]);
+  fprintf(p_stat,"\n Mode  5  intra old | %5d         | --------------|",stat->mode_use_inter[I4MB]);
+  fprintf(p_stat,"\n Mode  6+ intr.new  | %5d         |",stat->mode_use_inter[I16MB]);
 
   // B pictures
   if(input->successive_Bframe!=0 && Bframe_ctr!=0)
@@ -877,12 +887,13 @@ void report()
     fprintf(p_stat,"\n\n -------------------|---------------|\n");
     fprintf(p_stat,"   B frame          |   Mode used   |\n");
     fprintf(p_stat," -------------------|---------------|");
-
-    for(i=0; i<16; i++)
-      fprintf(p_stat,"\n Mode %2d            | %5d         |", i, stat->mode_use_Bframe[i]);
-    fprintf(p_stat,"\n Mode %2d intra old  | %5d         |", 16, stat->mode_use_Bframe[16]);
-    for (i=17; i<41; i++)
-      fprintf(p_stat,"\n Mode %2d intr.new   | %5d         |",i, stat->mode_use_Bframe[i]);
+    fprintf(p_stat,"\n Mode  0  (copy)    | %5d         |",stat->mode_use_Bframe[0   ]);
+    fprintf(p_stat,"\n Mode  1  (16x16)   | %5d         |",stat->mode_use_Bframe[1   ]);
+    fprintf(p_stat,"\n Mode  2  (16x8)    | %5d         |",stat->mode_use_Bframe[2   ]);
+    fprintf(p_stat,"\n Mode  3  (8x16)    | %5d         |",stat->mode_use_Bframe[3   ]);
+    fprintf(p_stat,"\n Mode  4  (8x8)     | %5d         |",stat->mode_use_Bframe[P8x8]);
+    fprintf(p_stat,"\n Mode  5  intra old | %5d         |",stat->mode_use_Bframe[I4MB]);
+    fprintf(p_stat,"\n Mode  6+ intr.new  | %5d         |",stat->mode_use_Bframe[I16MB]);
   }
 
   fprintf(p_stat,"\n\n --------------------|----------------|----------------|----------------|\n");
@@ -1083,53 +1094,6 @@ void report()
   free(stat->bit_use_mode_Bframe);
 }
 
-/*!
- ************************************************************************
- * \brief
- *    Some matrices are initilized here.
- * \par Input:
- *    none
- * \par Output:
- *    none
- ************************************************************************
- */
-void init()
-{
-  int i, ii, ind, j, i2;
-
-  InitMotionVectorSearchModule();
-
-  /*  img->mv_bituse[] is the number of bits used for motion vectors.
-  It is used to add a portion to the SAD depending on bit usage in the motion search
-  */
-
-  img->mv_bituse[0]=1;
-  ind=0;
-  for (i=0; i < 9; i++)
-  {
-    ii= 2*i + 3;
-    for (j=1; j <= (int)pow(2,i); j++)
-    {
-      ind++;
-      img->mv_bituse[ind]=ii;
-    }
-  }
-
-  // quad(0:255) SNR quad array
-  for (i=0; i < 256; ++i) // fix from TML1 / TML2 sw, truncation removed
-  {
-    i2=i*i;
-    img->quad[i]=i2;
-  }
-
-  // B pictures : img->blk_bitsue[] is used when getting bidirection SAD
-  for (i=0; i < 7; i++)
-  {
-    if(i==0) img->blk_bituse[i]=1;
-    else if(i==1 || i==2) img->blk_bituse[i]=3;
-    else img->blk_bituse[i]=5;
-  }
-}
 
 /*!
  ************************************************************************
@@ -1271,13 +1235,11 @@ int init_global_buffers()
     memory_size += get_mem3D(&decs->decY_best, input->NoOfDecoders, img->height, img->width);
     memory_size += get_mem2D(&decs->status_map, img->height/MB_BLOCK_SIZE,img->width/MB_BLOCK_SIZE);
     memory_size += get_mem2D(&decs->dec_mb_mode, img->width/MB_BLOCK_SIZE,img->height/MB_BLOCK_SIZE);
-    memory_size += get_mem2D(&decs->dec_mb_ref, img->width/MB_BLOCK_SIZE,img->height/MB_BLOCK_SIZE);
-
   }
   if (input->RestrictRef)
   {
     memory_size += get_mem2D(&pixel_map, img->height,img->width);
-    memory_size += get_mem2D(&refresh_map, img->height/MB_BLOCK_SIZE,img->width/MB_BLOCK_SIZE);
+    memory_size += get_mem2D(&refresh_map, img->height/8,img->width/8);
   }
 
 
@@ -1353,7 +1315,12 @@ void free_global_buffers()
 
   if(input->UseConstrainedIntraPred)
   {
-    free(img->intra_mb);
+    j=(img->width/16)*(img->height/16);
+    for (i=0; i<j; i++)
+    {
+      free (img->intra_block[i]);
+    }
+    free (img->intra_block);
   }
 
   if (input->rdopt==2)
@@ -1382,9 +1349,6 @@ void free_global_buffers()
     free(decs->status_map);
     free(decs->dec_mb_mode[0]);
     free(decs->dec_mb_mode);
-    free(decs->dec_mb_ref[0]);
-    free(decs->dec_mb_ref);
-
   }
   if (input->RestrictRef)
   {
@@ -1432,6 +1396,7 @@ int get_mem_mv (int****** mv)
   return 4*4*img->buf_cycle*9*2*sizeof(int);
 }
 
+
 /*!
  ************************************************************************
  * \brief
@@ -1461,3 +1426,101 @@ void free_mem_mv (int***** mv)
   free (mv);
 }
 
+
+
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Allocate memory for AC coefficients
+ ************************************************************************
+ */
+int get_mem_ACcoeff (int***** cofAC)
+{
+  int i, j, k;
+
+  if ((*cofAC = (int****)calloc (6, sizeof(int***))) == NULL)              no_mem_exit ("get_mem_ACcoeff: cofAC");
+  for (k=0; k<6; k++)
+  {
+    if (((*cofAC)[k] = (int***)calloc (4, sizeof(int**))) == NULL)         no_mem_exit ("get_mem_ACcoeff: cofAC");
+    for (j=0; j<4; j++)
+    {
+      if (((*cofAC)[k][j] = (int**)calloc (2, sizeof(int*))) == NULL)      no_mem_exit ("get_mem_ACcoeff: cofAC");
+      for (i=0; i<2; i++)
+      {
+        if (((*cofAC)[k][j][i] = (int*)calloc (18, sizeof(int))) == NULL)  no_mem_exit ("get_mem_ACcoeff: cofAC");
+      }
+    }
+  }
+  return 6*4*2*18*sizeof(int);
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Allocate memory for DC coefficients
+ ************************************************************************
+ */
+int get_mem_DCcoeff (int**** cofDC)
+{
+  int j, k;
+
+  if ((*cofDC = (int***)calloc (3, sizeof(int**))) == NULL)           no_mem_exit ("get_mem_DCcoeff: cofDC");
+  for (k=0; k<3; k++)
+  {
+    if (((*cofDC)[k] = (int**)calloc (2, sizeof(int*))) == NULL)      no_mem_exit ("get_mem_DCcoeff: cofDC");
+    for (j=0; j<2; j++)
+    {
+      if (((*cofDC)[k][j] = (int*)calloc (18, sizeof(int))) == NULL)  no_mem_exit ("get_mem_DCcoeff: cofDC");
+    }
+  }
+  return 3*2*18*sizeof(int);
+}
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Free memory of AC coefficients
+ ************************************************************************
+ */
+void free_mem_ACcoeff (int**** cofAC)
+{
+  int i, j, k;
+
+  for (k=0; k<6; k++)
+  {
+    for (i=0; i<4; i++)
+    {
+      for (j=0; j<2; j++)
+      {
+        free (cofAC[k][i][j]);
+      }
+      free (cofAC[k][i]);
+    }
+    free (cofAC[k]);
+  }
+  free (cofAC);
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Free memory of DC coefficients
+ ************************************************************************
+ */
+void free_mem_DCcoeff (int*** cofDC)
+{
+  int i, j;
+
+  for (j=0; j<3; j++)
+  {
+    for (i=0; i<2; i++)
+    {
+      free (cofDC[j][i]);
+    }
+    free (cofDC[j]);
+  }
+  free (cofDC);
+}

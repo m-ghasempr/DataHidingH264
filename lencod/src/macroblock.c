@@ -89,7 +89,7 @@ void proceed2nextMacroblock()
   // Update the statistics
   stat->bit_use_mb_type[img->type]      += currMB->bitcounter[BITS_MB_MODE];
   stat->bit_use_coeffY[img->type]       += currMB->bitcounter[BITS_COEFF_Y_MB] ;
-  stat->bit_use_mode_inter[img->mb_mode]+= currMB->bitcounter[BITS_INTER_MB];
+  stat->bit_use_mode_inter[currMB->mb_type]+= currMB->bitcounter[BITS_INTER_MB];
   stat->tmp_bit_use_cbp[img->type]      += currMB->bitcounter[BITS_CBP_MB];
   stat->bit_use_coeffC[img->type]       += currMB->bitcounter[BITS_COEFF_UV_MB];
   stat->bit_use_delta_quant[img->type]  += currMB->bitcounter[BITS_DELTA_QUANT_MB];
@@ -97,12 +97,12 @@ void proceed2nextMacroblock()
 /*  if (input->symbol_mode == UVLC)
     stat->bit_ctr += currMB->bitcounter[BITS_TOTAL_MB]; */
   if (img->type==INTRA_IMG)
-    ++stat->mode_use_intra[img->mb_mode];
+    ++stat->mode_use_intra[currMB->mb_type];
   else
     if (img->type != B_IMG)
-      ++stat->mode_use_inter[img->mb_mode];
+      ++stat->mode_use_inter[currMB->mb_type];
     else
-      ++stat->mode_use_Bframe[img->mb_mode];
+      ++stat->mode_use_Bframe[currMB->mb_type];
 
   // Update coordinates of macroblock
   img->mb_x++;
@@ -118,14 +118,6 @@ void proceed2nextMacroblock()
   img->block_y = img->mb_y * BLOCK_SIZE;      // vertical luma block position
   img->pix_y   = img->mb_y * MB_BLOCK_SIZE;   // vertical luma macroblock position
   img->pix_c_y = img->mb_y * MB_BLOCK_SIZE/2; // vertical chroma macroblock position
-
-  if (img->type != B_IMG)
-  {
-    if (input->intra_upd > 0 && img->mb_y <= img->mb_y_intra)
-      img->height_err=(img->mb_y_intra*16)+15;     // for extra intra MB
-    else
-      img->height_err=img->height-1;
-  }
 
   // Define horizontal positions
   img->block_x = img->mb_x * BLOCK_SIZE;        // luma block
@@ -183,7 +175,7 @@ void start_macroblock()
         {
           eep = &(dataPart->ee_cabac);
           eep->ElowS            = eep->Elow;
-          eep->EhighS           = eep->Ehigh;
+          eep->ErangeS           = eep->Erange;
           eep->EbufferS         = eep->Ebuffer;
           eep->Ebits_to_goS     = eep->Ebits_to_go;
           eep->Ebits_to_followS = eep->Ebits_to_follow;
@@ -218,7 +210,6 @@ void start_macroblock()
   }
 
   // Reset syntax element entries in MB struct
-  currMB->ref_frame = 0;
   currMB->mb_type   = 0;
   currMB->cbp_blk   = 0;
   currMB->cbp       = 0;
@@ -228,10 +219,19 @@ void start_macroblock()
       for (i=0; i < BLOCK_MULTIPLE; i++)
         for (k=0; k < 2; k++)
           currMB->mvd[l][j][i][k] = 0;
+ 
+  for (j=0; j < BLOCK_MULTIPLE; j++)
+    for (i=0; i < BLOCK_MULTIPLE; i++)
+			currMB->coeffs_count[j][i] = 0;
 
   for (i=0; i < (BLOCK_MULTIPLE*BLOCK_MULTIPLE); i++)
     currMB->intra_pred_modes[i] = 0;
 
+  if (input->UseConstrainedIntraPred)
+  {
+    i = img->current_mb_nr;
+    img->intra_block[i][0] =img->intra_block[i][1] = img->intra_block[i][2] = img->intra_block[i][3] = 1;
+ }
 
   // Initialize bitcounters for this macroblock
   if(img->current_mb_nr == 0) // No slice header to account for
@@ -384,7 +384,7 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
       {
         eep = &(dataPart->ee_cabac);
         eep->Elow            = eep->ElowS;
-        eep->Ehigh           = eep->EhighS;
+        eep->Erange           = eep->ErangeS;
         eep->Ebuffer         = eep->EbufferS;
         eep->Ebits_to_go     = eep->Ebits_to_goS;
         eep->Ebits_to_follow = eep->Ebits_to_followS;
@@ -556,16 +556,22 @@ void CheckAvailabilityOfNeighbors()
   if(img->pix_x >= MB_BLOCK_SIZE)
   {
     int remove_prediction = currMB->slice_nr != img->mb_data[mb_nr-1].slice_nr;
-    if(input->UseConstrainedIntraPred)
-      remove_prediction = (remove_prediction || img->intra_mb[mb_nr-1] ==0);
-    if(remove_prediction)
+    // upper blocks
+    if (remove_prediction || (input->UseConstrainedIntraPred && img->intra_block[mb_nr-1][1]==0))
     {
       img->ipredmode[img->block_x][img->block_y+1] = -1;
       img->ipredmode[img->block_x][img->block_y+2] = -1;
+    }
+    // lower blocks
+    if (remove_prediction || (input->UseConstrainedIntraPred && img->intra_block[mb_nr-1][3]==0))
+    {
       img->ipredmode[img->block_x][img->block_y+3] = -1;
       img->ipredmode[img->block_x][img->block_y+4] = -1;
-    } else
+    }
+    if (!remove_prediction)
+    {
       currMB->mb_available[1][0]=&(img->mb_data[mb_nr-1]);
+    }
   }
 
 
@@ -573,16 +579,22 @@ void CheckAvailabilityOfNeighbors()
   if(img->pix_y >= MB_BLOCK_SIZE)
   {
     int remove_prediction = currMB->slice_nr != img->mb_data[mb_nr-mb_width].slice_nr;
-    if(input->UseConstrainedIntraPred)
-      remove_prediction = (remove_prediction || img->intra_mb[mb_nr-mb_width] ==0);
-    if(remove_prediction)
+    // upper blocks
+    if (remove_prediction || (input->UseConstrainedIntraPred && img->intra_block[mb_nr-mb_width][2]==0))
     {
       img->ipredmode[img->block_x+1][img->block_y] = -1;
       img->ipredmode[img->block_x+2][img->block_y] = -1;
+    }
+    // lower blocks
+    if (remove_prediction || (input->UseConstrainedIntraPred && img->intra_block[mb_nr-mb_width][3]==0))
+    {
       img->ipredmode[img->block_x+3][img->block_y] = -1;
       img->ipredmode[img->block_x+4][img->block_y] = -1;
-    } else
+    }
+    if (!remove_prediction)
+    {
       currMB->mb_available[0][1]=&(img->mb_data[mb_nr-mb_width]);
+    }
   }
 
   // Check MB left above
@@ -601,263 +613,283 @@ void CheckAvailabilityOfNeighbors()
   }
 }
 
+
+
+
+
 /*!
  ************************************************************************
  * \brief
- *    Performs 4x4 and 16x16 intra prediction and transform coding
- *    of the prediction residue. The routine returns the best cost;
- *    current cbp (for LUMA only) and intra pred modes are affected
+ *    Predict one component of a 4x4 Luma block
  ************************************************************************
  */
-int MakeIntraPrediction(int *intra_pred_mode_2)
+void
+OneComponentLumaPrediction4x4 (int*   mpred,      //  --> array of prediction values (row by row)
+                               int    pic_pix_x,  // <--  absolute horizontal coordinate of 4x4 block
+                               int    pic_pix_y,  // <--  absolute vertical   coordinate of 4x4 block
+                               int*   mv,         // <--  motion vector
+                               int    ref)        // <--  reference frame (0.. / -1:backward)
 {
+  pel_t** ref_pic = (ref==-1 ? mref_P : mref [ref+1]);
+  int     mvshift = (input->mv_res ? 3 : 2);
+  int     pix_add = (1 << mvshift);
+  int     j0      = (pic_pix_y << mvshift) + mv[1], j1=j0+pix_add, j2=j1+pix_add, j3=j2+pix_add;
+  int     i0      = (pic_pix_x << mvshift) + mv[0], i1=i0+pix_add, i2=i1+pix_add, i3=i2+pix_add;
 
-  int i,j;
-  int block_x, block_y;
-  int best_ipmode=0;
-  int tot_intra_sad, tot_intra_sad2, best_intra_sad, current_intra_sad;
-  int coeff_cost; // not used
-  int pic_pix_y,pic_pix_x,pic_block_y,pic_block_x;
-  int last_ipred=0;                       // keeps last chosen intra prediction mode for 4x4 intra pred
-  int ipmode;                           // intra pred mode
-  int cbp_mask;
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  pel_t (*get_pel) (pel_t**, int, int) = (input->mv_res ? UMVPelY_18 : UMVPelY_14);
 
-  // start making 4x4 intra prediction
-  currMB->cbp     = 0;
-  currMB->intraOrInter = INTRA_MB_4x4;
+  *mpred++ = get_pel (ref_pic, j0, i0);
+  *mpred++ = get_pel (ref_pic, j0, i1);
+  *mpred++ = get_pel (ref_pic, j0, i2);
+  *mpred++ = get_pel (ref_pic, j0, i3);
+  *mpred++ = get_pel (ref_pic, j1, i0);
+  *mpred++ = get_pel (ref_pic, j1, i1);
+  *mpred++ = get_pel (ref_pic, j1, i2);
+  *mpred++ = get_pel (ref_pic, j1, i3);
+  *mpred++ = get_pel (ref_pic, j2, i0);
+  *mpred++ = get_pel (ref_pic, j2, i1);
+  *mpred++ = get_pel (ref_pic, j2, i2);
+  *mpred++ = get_pel (ref_pic, j2, i3);
+  *mpred++ = get_pel (ref_pic, j3, i0);
+  *mpred++ = get_pel (ref_pic, j3, i1);
+  *mpred++ = get_pel (ref_pic, j3, i2);
+  *mpred++ = get_pel (ref_pic, j3, i3);
+}
 
-  tot_intra_sad=QP2QUANT[max(img->qp,0)]*24;// sum of intra sad values, start with a 'handicap'
 
-  for(block_y = 0 ; block_y < MB_BLOCK_SIZE ; block_y += BLOCK_MULTIPLE)
+/*!
+ ************************************************************************
+ * \brief
+ *    Predict one 4x4 Luma block
+ ************************************************************************
+ */
+void
+LumaPrediction4x4 (int  block_x,    // <--  relative horizontal block coordinate of 4x4 block
+                   int  block_y,    // <--  relative vertical   block coordinate of 4x4 block
+                   int  fw_mode,    // <--  forward  prediction mode (1-7, 0=DIRECT if bw_mode=0)
+                   int  bw_mode,    // <--  backward prediction mode (1-7, 0=DIRECT if fw_mode=0)
+                   int  fw_ref)     // <--  reference frame for forward prediction (-1: Intra4x4 pred. with fw_mode)
+{
+  static int fw_pred[16];
+  static int bw_pred[16];
+
+  int  i, j;
+  int  block_x4  = block_x+4;
+  int  block_y4  = block_y+4;
+  int  pic_pix_x = img->pix_x + block_x;
+  int  pic_pix_y = img->pix_y + block_y;
+  int  bx        = block_x >> 2;
+  int  by        = block_y >> 2;
+  int* fpred     = fw_pred;
+  int* bpred     = bw_pred;
+  int  direct    = (fw_mode == 0 && bw_mode == 0);
+
+
+  if (fw_mode || direct)
   {
-    pic_pix_y=img->pix_y+block_y;
-    pic_block_y=pic_pix_y/BLOCK_SIZE;
+    OneComponentLumaPrediction4x4 (fw_pred, pic_pix_x, pic_pix_y, img->all_mv [bx][by][fw_ref][fw_mode], fw_ref);
 
-    for(block_x = 0 ; block_x < MB_BLOCK_SIZE  ; block_x += BLOCK_MULTIPLE)
+  }
+  if (bw_mode || direct)
+  {
+    OneComponentLumaPrediction4x4 (bw_pred, pic_pix_x, pic_pix_y, img->all_bmv[bx][by][     0][bw_mode],     -1);
+  }
+
+  if (direct || (fw_mode && bw_mode))
+  {
+    for   (j=block_y; j<block_y4; j++)
+      for (i=block_x; i<block_x4; i++)  img->mpr[i][j] = (int)((*fpred++ + *bpred++) / 2.0 + 0.5);
+  }
+  else if (fw_mode)
+  {
+    for   (j=block_y; j<block_y4; j++)
+      for (i=block_x; i<block_x4; i++)  img->mpr[i][j] = *fpred++;
+  }
+  else
+  {
+    for   (j=block_y; j<block_y4; j++)
+      for (i=block_x; i<block_x4; i++)  img->mpr[i][j] = *bpred++;
+  }
+}
+
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Residual Coding of an 8x8 Luma block (not for intra)
+ ************************************************************************
+ */
+int                                       //  ==> coefficient cost
+LumaResidualCoding8x8 (int  *cbp,         //  --> cbp (updated according to processed 8x8 luminance block)
+                       int  *cbp_blk,     //  --> block cbp (updated according to processed 8x8 luminance block)
+                       int  block8x8,     // <--  block number of 8x8 block
+                       int  fw_mode,      // <--  forward  prediction mode (1-7, 0=DIRECT)
+                       int  bw_mode,      // <--  backward prediction mode (1-7, 0=DIRECT)
+                       int  fw_refframe)  // <--  reference frame for forward prediction
+{
+  int    block_y, block_x, pic_pix_y, pic_pix_x, i, j, nonzero, cbp_blk_mask;
+  int    coeff_cost = 0;
+  int    mb_y       = (block8x8 / 2) << 3;
+  int    mb_x       = (block8x8 % 2) << 3;
+  int    cbp_mask   = 1 << block8x8;
+
+
+  //===== loop over 4x4 blocks =====
+  for (block_y=mb_y; block_y<mb_y+8; block_y+=4)
+  {
+    pic_pix_y = img->pix_y + block_y;
+
+    for (block_x=mb_x; block_x<mb_x+8; block_x+=4)
     {
-      cbp_mask=(1<<(2*(block_y/8)+block_x/8));
+      pic_pix_x = img->pix_x + block_x;
 
-      pic_pix_x=img->pix_x+block_x;
-      pic_block_x=pic_pix_x/BLOCK_SIZE;
+      cbp_blk_mask = (block_x>>2) + block_y;
 
-      /*
-      intrapred_luma() makes and returns 4x4 blocks with all 5 intra prediction modes.
-      Notice that some modes are not possible at frame edges.
-      */
-      intrapred_luma(pic_pix_x,pic_pix_y);
+      //===== prediction of 4x4 block =====
+      LumaPrediction4x4 (block_x, block_y, fw_mode, bw_mode, fw_refframe);
 
-      best_intra_sad=MAX_VALUE; // initial value, will be modified below
-      img->imod = INTRA_MB_OLD;  // for now mode set to intra, may be changed in motion_search()
-      // DM: has to be removed
-
-      for (ipmode=0; ipmode < NO_INTRA_PMODE; ipmode++)   // all intra prediction modes
+      //===== get displaced frame difference ======                
+      for (j=0; j<4; j++)
+      for (i=0; i<4; i++)
       {
-        // Horizontal pred from Y neighbour pix , vertical use X pix, diagonal needs both
-        if (ipmode==DC_PRED||ipmode==HOR_PRED||img->ipredmode[pic_block_x+1][pic_block_y] >= 0)// DC or vert pred or hor edge
-        {
-          if (ipmode==DC_PRED||ipmode==VERT_PRED||img->ipredmode[pic_block_x][pic_block_y+1] >= 0)// DC or hor pred or vert edge
-          {
-            for (j=0; j < BLOCK_SIZE; j++)
-            {
-              for (i=0; i < BLOCK_SIZE; i++)
-                img->m7[i][j]=imgY_org[pic_pix_y+j][pic_pix_x+i]-img->mprr[ipmode][j][i]; // find diff
-            }
-            current_intra_sad=QP2QUANT[max(img->qp,0)]*PRED_IPRED[img->ipredmode[pic_block_x+1][pic_block_y]+1][img->ipredmode[pic_block_x][pic_block_y+1]+1][ipmode]*2;
-
-            current_intra_sad += find_sad(input->hadamard, img->m7); // add the start 'handicap' and the computed SAD
-
-            if (current_intra_sad < best_intra_sad)
-            {
-              best_intra_sad=current_intra_sad;
-              best_ipmode=ipmode;
-
-              for (j=0; j < BLOCK_SIZE; j++)
-                for (i=0; i < BLOCK_SIZE; i++)
-                  img->mpr[i+block_x][j+block_y]=img->mprr[ipmode][j][i];       // store the currently best intra prediction block
-            }
-          }
-        }
+        img->m7[i][j] = imgY_org[pic_pix_y+j][pic_pix_x+i] - img->mpr[i+block_x][j+block_y];
       }
-      tot_intra_sad += best_intra_sad;
 
-      img->ipredmode[pic_block_x+1][pic_block_y+1]=best_ipmode;
-
-      if ((pic_block_x & 1) == 1) // just even blocks, two and two predmodes are sent together
+      //===== DCT, Quantization, inverse Quantization, IDCT, Reconstruction =====
+      if (img->types!=SP_IMG)  nonzero = dct_luma   (block_x, block_y, &coeff_cost, 0);
+      else                     nonzero = dct_luma_sp(block_x, block_y, &coeff_cost);
+      if (nonzero)
       {
-        currMB->intra_pred_modes[block_x/4+block_y]=PRED_IPRED[img->ipredmode[pic_block_x+1][pic_block_y]+1][img->ipredmode[pic_block_x][pic_block_y+1]+1][best_ipmode];
-        currMB->intra_pred_modes[block_x/4-1+block_y]=last_ipred;
+        (*cbp_blk) |= 1 << cbp_blk_mask;  // one bit for every 4x4 block
+        (*cbp)     |= cbp_mask;           // one bit for the 4x4 blocks of an 8x8 block
       }
-      last_ipred=PRED_IPRED[img->ipredmode[pic_block_x+1][pic_block_y]+1][img->ipredmode[pic_block_x][pic_block_y+1]+1][best_ipmode];
-
-      //  Make difference from prediction to be transformed
-      for (j=0; j < BLOCK_SIZE; j++)
-        for (i=0; i < BLOCK_SIZE; i++)
-          img->m7[i][j] =imgY_org[img->pix_y+block_y+j][img->pix_x+block_x+i] - img->mpr[i+block_x][j+block_y];
-
-        if( dct_luma(block_x,block_y,&coeff_cost) )          // if non zero coefficients
-          currMB->cbp     |= cbp_mask;      // set coded block pattern if nonzero coeffs
     }
   }
 
-  // 16x16 intra prediction
-  intrapred_luma_2(img);                        // make intra pred for the new 4 modes
-  tot_intra_sad2 = find_sad2(intra_pred_mode_2);        // find best SAD for new modes
+  /*
+  The purpose of the action below is to prevent that single or 'expensive' coefficients are coded.
+  With 4x4 transform there is larger chance that a single coefficient in a 8x8 or 16x16 block may be nonzero.
+  A single small (level=1) coefficient in a 8x8 block will cost: 3 or more bits for the coefficient,
+  4 bits for EOBs for the 4x4 blocks,possibly also more bits for CBP.  Hence the total 'cost' of that single
+  coefficient will typically be 10-12 bits which in a RD consideration is too much to justify the distortion improvement.
+  The action below is to watch such 'single' coefficients and set the reconstructed block equal to the prediction according
+  to a given criterium.  The action is taken only for inter luma blocks.
 
-  if (tot_intra_sad2<tot_intra_sad)
+  Notice that this is a pure encoder issue and hence does not have any implication on the standard.
+  coeff_cost is a parameter set in dct_luma() and accumulated for each 8x8 block.  If level=1 for a coefficient,
+  coeff_cost is increased by a number depending on RUN for that coefficient.The numbers are (see also dct_luma()): 3,2,2,1,1,1,0,0,...
+  when RUN equals 0,1,2,3,4,5,6, etc.
+  If level >1 coeff_cost is increased by 9 (or any number above 3). The threshold is set to 3. This means for example:
+  1: If there is one coefficient with (RUN,level)=(0,1) in a 8x8 block this coefficient is discarded.
+  2: If there are two coefficients with (RUN,level)=(1,1) and (4,1) the coefficients are also discarded
+  sum_cnt_nonz is the accumulation of coeff_cost over a whole macro block.  If sum_cnt_nonz is 5 or less for the whole MB,
+  all nonzero coefficients are discarded for the MB and the reconstructed block is set equal to the prediction.
+  */
+
+  if (coeff_cost <= 3)
   {
-    currMB->cbp     = 0;              // cbp for 16x16 LUMA is signaled by the MB-mode
-    tot_intra_sad   = tot_intra_sad2;            // update best intra sad if necessary
-    img->imod = INTRA_MB_NEW;                          // one of the new modes is used
-    currMB->intraOrInter = INTRA_MB_16x16;
-    dct_luma2(*intra_pred_mode_2);
-    for (i=0;i<4;i++)
-      for (j=0;j<4;j++)
-        img->ipredmode[img->block_x+i+1][img->block_y+j+1]=0;
+    coeff_cost  = 0;
+    (*cbp)     &=  (63 - cbp_mask);
+    (*cbp_blk) &= ~(51 << (4*block8x8-2*(block8x8%2)));
+
+    for (i=mb_x; i<mb_x+8; i++)
+    for (j=mb_y; j<mb_y+8; j++)
+    {
+      imgY[img->pix_y+j][img->pix_x+i] = img->mpr[i][j];
+    }
+    if (img->types==SP_IMG)
+    {
+      for (i=mb_x; i < mb_x+BLOCK_SIZE*2; i+=BLOCK_SIZE)
+      for (j=mb_y; j < mb_y+BLOCK_SIZE*2; j+=BLOCK_SIZE)
+      {
+        copyblock_sp(i,j);
+      }
+    }
   }
-  return tot_intra_sad;
+
+  return coeff_cost;
+}
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Set mode parameters and reference frames for an 8x8 block
+ ************************************************************************
+ */
+void
+SetModesAndRefframe (int b8, int* fw_mode, int* bw_mode, int* refframe)
+{
+  Macroblock* currMB = &img->mb_data[img->current_mb_nr];
+  int         j      = 2*(b8/2);
+  int         i      = 2*(b8%2);
+
+  if (img->type!=B_IMG)
+  {
+    *refframe = refFrArr[img->block_y+j][img->block_x+i];
+    *bw_mode  = 0;
+    *fw_mode  = currMB->b8mode[b8];
+  }
+  else
+  {
+    if (currMB->b8pdir[b8]==-1)
+    {
+      *refframe = -1;
+      *fw_mode  =  0;
+      *bw_mode  =  0;
+    }
+    else if (currMB->b8pdir[b8]==0)
+    {
+      *refframe = fw_refFrArr[img->block_y+j][img->block_x+i];
+      *fw_mode  = currMB->b8mode[b8];
+      *bw_mode  = 0;
+    }
+    else if (currMB->b8pdir[b8]==1)
+    {
+      *refframe = 0;
+      *fw_mode  = 0;
+      *bw_mode  = currMB->b8mode[b8];
+    }
+    else
+    {
+      *refframe = fw_refFrArr[img->block_y+j][img->block_x+i];
+      *fw_mode  = currMB->b8mode[b8];
+      *bw_mode  = currMB->b8mode[b8];
+      if (currMB->b8mode[b8]==0) // direct
+      {
+        *refframe = max(0,refFrArr[img->block_y+j][img->block_x+i]);
+      }
+    }
+  }
 }
 
 /*!
  ************************************************************************
  * \brief
- *    Performs DCT, R-D constrained quantization, run/level
- *    pre-coding and IDCT for the MC-compensated MB residue
- *    of P-frame; current cbp (for LUMA only) is affected
+ *    Residual Coding of a Luma macroblock (not for intra)
  ************************************************************************
  */
-void LumaResidualCoding_P()
+void
+LumaResidualCoding ()
 {
-
-  int i,j;
-  int block_x, block_y;
-  int pic_pix_y,pic_pix_x,pic_block_y,pic_block_x;
-  int ii4,i2,jj4,j2;
+  int i,j,block8x8;
+  int fw_mode, bw_mode, refframe;
   int sum_cnt_nonz;
-  int mb_x, mb_y;
-  int cbp_mask, cbp_blk_mask ;
-  int coeff_cost;
-  int nonzero;
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
-
 
   currMB->cbp     = 0 ;
   currMB->cbp_blk = 0 ;
   sum_cnt_nonz    = 0 ;
 
-  for (mb_y=0; mb_y < MB_BLOCK_SIZE; mb_y += BLOCK_SIZE*2)
+  for (block8x8=0; block8x8<4; block8x8++)
   {
-    for (mb_x=0; mb_x < MB_BLOCK_SIZE; mb_x += BLOCK_SIZE*2)
-    {
-      cbp_mask   = (1<<(mb_x/8+mb_y/4));
-      coeff_cost = 0;
-      for (block_y=mb_y; block_y < mb_y+BLOCK_SIZE*2; block_y += BLOCK_SIZE)
-      {
-        pic_pix_y=img->pix_y+block_y;
-        pic_block_y=pic_pix_y/BLOCK_SIZE;
+    SetModesAndRefframe (block8x8, &fw_mode, &bw_mode, &refframe);
 
-        for (block_x=mb_x; block_x < mb_x+BLOCK_SIZE*2; block_x += BLOCK_SIZE)
-        {
-          pic_pix_x    = img->pix_x+block_x;
-          pic_block_x  = pic_pix_x/BLOCK_SIZE;
-          cbp_blk_mask = (block_x>>2)+ block_y ;
-
-          img->ipredmode[pic_block_x+1][pic_block_y+1]=0;
-
-          if(input->mv_res)
-
-          {
-            ii4=(img->pix_x+block_x)*8+tmp_mv[0][pic_block_y][pic_block_x+4];
-            jj4=(img->pix_y+block_y)*8+tmp_mv[1][pic_block_y][pic_block_x+4];
-            for (j=0;j<4;j++)
-            {
-              j2=j*8;
-              for (i=0;i<4;i++)
-              {
-                i2=i*8;
-                img->mpr[i+block_x][j+block_y]=UMVPelY_18 (mref[img->multframe_no], jj4+j2, ii4+i2);
-              }
-            }
-
-          }
-          else
-          {
-            ii4=(img->pix_x+block_x)*4+tmp_mv[0][pic_block_y][pic_block_x+4];
-            jj4=(img->pix_y+block_y)*4+tmp_mv[1][pic_block_y][pic_block_x+4];
-            for (j=0;j<4;j++)
-            {
-              j2 = jj4+j*4;
-              for (i=0;i<4;i++)
-              {
-                i2 = ii4+i*4;
-                img->mpr[i+block_x][j+block_y]=UMVPelY_14 (mref[img->multframe_no], j2, i2);
-
-              }
-            }
-          }
-
-          for (j=0; j < BLOCK_SIZE; j++)
-          {
-            for (i=0; i < BLOCK_SIZE; i++)
-            {
-              img->m7[i][j] =imgY_org[img->pix_y+block_y+j][img->pix_x+block_x+i] - img->mpr[i+block_x][j+block_y];
-            }
-          }
-          if (img->types!=SP_IMG)
-            nonzero=dct_luma(block_x,block_y,&coeff_cost);
-          else nonzero=dct_luma_sp(block_x,block_y,&coeff_cost);
-
-          if (nonzero)
-          {
-            currMB->cbp_blk |= 1 << cbp_blk_mask ;            // one bit for every 4x4 block
-            currMB->cbp     |= cbp_mask;       // one bit for the 4x4 blocks of an 8x8 block
-          }
-        }
-      }
-
-      /*
-      The purpose of the action below is to prevent that single or 'expensive' coefficients are coded.
-      With 4x4 transform there is larger chance that a single coefficient in a 8x8 or 16x16 block may be nonzero.
-      A single small (level=1) coefficient in a 8x8 block will cost: 3 or more bits for the coefficient,
-      4 bits for EOBs for the 4x4 blocks,possibly also more bits for CBP.  Hence the total 'cost' of that single
-      coefficient will typically be 10-12 bits which in a RD consideration is too much to justify the distortion improvement.
-      The action below is to watch such 'single' coefficients and set the reconstructed block equal to the prediction according
-      to a given criterium.  The action is taken only for inter luma blocks.
-
-        Notice that this is a pure encoder issue and hence does not have any implication on the standard.
-        coeff_cost is a parameter set in dct_luma() and accumulated for each 8x8 block.  If level=1 for a coefficient,
-        coeff_cost is increased by a number depending on RUN for that coefficient.The numbers are (see also dct_luma()): 3,2,2,1,1,1,0,0,...
-        when RUN equals 0,1,2,3,4,5,6, etc.
-        If level >1 coeff_cost is increased by 9 (or any number above 3). The threshold is set to 3. This means for example:
-        1: If there is one coefficient with (RUN,level)=(0,1) in a 8x8 block this coefficient is discarded.
-        2: If there are two coefficients with (RUN,level)=(1,1) and (4,1) the coefficients are also discarded
-        sum_cnt_nonz is the accumulation of coeff_cost over a whole macro block.  If sum_cnt_nonz is 5 or less for the whole MB,
-        all nonzero coefficients are discarded for the MB and the reconstructed block is set equal to the prediction.
-      */
-
-      if (coeff_cost > 3)
-      {
-        sum_cnt_nonz += coeff_cost;
-      }
-      else //discard
-      {
-        currMB->cbp     &=  (63  -  cbp_mask ) ;
-        currMB->cbp_blk &= ~(51 << (mb_y + (mb_x>>2) )) ;
-        for (i=mb_x; i < mb_x+BLOCK_SIZE*2; i++)
-        {
-          for (j=mb_y; j < mb_y+BLOCK_SIZE*2; j++)
-          {
-            imgY[img->pix_y+j][img->pix_x+i]=img->mpr[i][j];
-          }
-        }
-        if (img->types==SP_IMG)
-          for (i=mb_x; i < mb_x+BLOCK_SIZE*2; i+=BLOCK_SIZE)
-            for (j=mb_y; j < mb_y+BLOCK_SIZE*2; j+=BLOCK_SIZE)
-              copyblock_sp(i,j);
-      }
-    }
+    sum_cnt_nonz += LumaResidualCoding8x8 (&(currMB->cbp), &(currMB->cbp_blk), block8x8,
+                                           fw_mode, bw_mode, refframe);
   }
-
+  
   if (sum_cnt_nonz <= 5 )
   {
      currMB->cbp     &= 0xfffff0 ;
@@ -870,83 +902,243 @@ void LumaResidualCoding_P()
        }
      }
      if (img->types==SP_IMG)
+     {
        for (i=0; i < MB_BLOCK_SIZE; i+=BLOCK_SIZE)
-         for (j=0; j < MB_BLOCK_SIZE; j+=BLOCK_SIZE)
-           copyblock_sp(i,j);
+       for (j=0; j < MB_BLOCK_SIZE; j+=BLOCK_SIZE)
+       {
+         copyblock_sp(i,j);
+       }
+     }
    }
 }
+
+
 
 /*!
  ************************************************************************
  * \brief
- *    Performs DCT, quantization, run/level pre-coding and IDCT
- *    for the chrominance of a I- of P-frame macroblock;
- *    current cbp and cr_cbp are affected
+ *    Predict one component of a chroma 4x4 block
  ************************************************************************
  */
-void ChromaCoding_P(int *cr_cbp)
+void
+OneComponentChromaPrediction4x4 (int*     mpred,      //  --> array to store prediction values
+                                 int      pix_c_x,    // <--  horizontal pixel coordinate of 4x4 block
+                                 int      pix_c_y,    // <--  vertical   pixel coordinate of 4x4 block
+                                 int***** mv,         // <--  motion vector array
+                                 int      ref,        // <--  reference frame parameter (0.../ -1: backward)
+                                 int      blocktype,  // <--  block type
+                                 int      uv)         // <--  chroma component
 {
-  int i, j;
-  int uv, ii,jj,ii0,jj0,ii1,jj1,if1,jf1,if0,jf0,f1,f2,f3,f4;
-  int pic_block_y, pic_block_x;
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  int     i, j, ii, jj, ii0, jj0, ii1, jj1, if0, if1, jf0, jf1;
+  int*    mvb;
+  int     refframe  = (ref<0 ?      0 :      ref);
+  pel_t** refimage  = (ref<0 ? mcef_P : mcef[ref+1])[uv];
+  int     je        = pix_c_y + 4;
+  int     ie        = pix_c_x + 4;
+  int     f1        =(input->mv_res?16:8), f2=f1-1, f3=f1*f1, f4=f3>>1;
+  int     s1        =(input->mv_res? 4:3);
 
-  if(input->mv_res)
+
+  for (j=pix_c_y; j<je; j++)
+  for (i=pix_c_x; i<ie; i++)
   {
-    f1=16;
-    f2=15;
+    mvb  = mv [(i-img->pix_c_x)>>1][(j-img->pix_c_y)>>1][refframe][blocktype];
+    ii   = (i<<s1) + mvb[0];
+    jj   = (j<<s1) + mvb[1];
+
+    ii0  = max (0, min (img->width_cr -1, ii>>s1     ));
+    jj0  = max (0, min (img->height_cr-1, jj>>s1     ));
+    ii1  = max (0, min (img->width_cr -1, (ii+f2)>>s1));
+    jj1  = max (0, min (img->height_cr-1, (jj+f2)>>s1));
+
+    if1  = (ii&f2);  if0 = f1-if1;
+    jf1  = (jj&f2);  jf0 = f1-jf1;
+
+    *mpred++ = (if0 * jf0 * refimage[jj0][ii0] +
+                if1 * jf0 * refimage[jj0][ii1] +
+                if0 * jf1 * refimage[jj1][ii0] +
+                if1 * jf1 * refimage[jj1][ii1] + f4) / f3;
+  }
+}
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Predict an intra chroma 4x4 block
+ ************************************************************************
+ */
+void
+IntraChromaPrediction4x4 (int  uv,       // <-- colour component
+                          int  block_x,  // <-- relative horizontal block coordinate of 4x4 block
+                          int  block_y)  // <-- relative vertical   block coordinate of 4x4 block
+{
+  int     s=128, s0=0, s1=0, s2=0, s3=0, i, j;
+  pel_t** image             = imgUV[uv];
+  int     img_cx            = img->pix_c_x;
+  int     img_cy            = img->pix_c_y;
+  int     img_cx_1          = img->pix_c_x-1;
+  int     img_cx_4          = img->pix_c_x+4;
+  int     img_cy_1          = img->pix_c_y-1;
+  int     img_cy_4          = img->pix_c_y+4;
+  int     mb_nr             = img->current_mb_nr;
+  int     mb_width          = img->width/16;
+  int     mb_available_up   = (img_cy/BLOCK_SIZE == 0) ? 0 : (img->mb_data[mb_nr].slice_nr==img->mb_data[mb_nr-mb_width].slice_nr);
+  int     mb_available_left = (img_cx/BLOCK_SIZE == 0) ? 0 : (img->mb_data[mb_nr].slice_nr==img->mb_data[mb_nr-1]       .slice_nr);
+
+  if(input->UseConstrainedIntraPred)
+  {
+    if (mb_available_up   && (img->intra_block[mb_nr-mb_width][2]==0 || img->intra_block[mb_nr-mb_width][3]==0))
+      mb_available_up   = 0;
+    if (mb_available_left && (img->intra_block[mb_nr-       1][1]==0 || img->intra_block[mb_nr       -1][3]==0))
+      mb_available_left = 0;
+  }
+
+  //===== get prediction value =====
+  switch ((block_y>>1) + (block_x>>2))
+  {
+  case 0:  //===== TOP LEFT =====
+    if      (mb_available_up)    for (i=0;i<4;i++)  s0 += image[img_cy_1  ][img_cx  +i];
+    if      (mb_available_left)  for (i=0;i<4;i++)  s2 += image[img_cy  +i][img_cx_1  ];
+    if      (mb_available_up && mb_available_left)  s  = (s0+s2+4) >> 3;
+    else if (mb_available_up)                       s  = (s0   +2) >> 2;
+    else if (mb_available_left)                     s  = (s2   +2) >> 2;
+    break;
+  case 1: //===== TOP RIGHT =====
+    if      (mb_available_up)    for (i=0;i<4;i++)  s1 += image[img_cy_1  ][img_cx_4+i];
+    else if (mb_available_left)  for (i=0;i<4;i++)  s2 += image[img_cy  +i][img_cx_1  ];
+    if      (mb_available_up)                       s  = (s1   +2) >> 2;
+    else if (mb_available_left)                     s  = (s2   +2) >> 2;
+    break;
+  case 2: //===== BOTTOM LEFT =====
+    if      (mb_available_left)  for (i=0;i<4;i++)  s3 += image[img_cy_4+i][img_cx_1  ];
+    else if (mb_available_up)    for (i=0;i<4;i++)  s0 += image[img_cy_1  ][img_cx  +i];
+    if      (mb_available_left)                     s  = (s3   +2) >> 2;
+    else if (mb_available_up)                       s  = (s0   +2) >> 2;
+    break;
+  case 3: //===== BOTTOM RIGHT =====
+    if      (mb_available_up)    for (i=0;i<4;i++)  s1 += image[img_cy_1  ][img_cx_4+i];
+    if      (mb_available_left)  for (i=0;i<4;i++)  s3 += image[img_cy_4+i][img_cx_1  ];
+    if      (mb_available_up && mb_available_left)  s  = (s1+s3+4) >> 3;
+    else if (mb_available_up)                       s  = (s1   +2) >> 2;
+    else if (mb_available_left)                     s  = (s3   +2) >> 2;
+    break;
+  }
+  
+  //===== prediction =====
+  for (j=block_y; j<block_y+4; j++)
+  for (i=block_x; i<block_x+4; i++)
+  {
+    img->mpr[i][j] = s;
+  }
+}
+
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Predict one chroma 4x4 block
+ ************************************************************************
+ */
+void
+ChromaPrediction4x4 (int  uv,           // <-- colour component
+                     int  block_x,      // <-- relative horizontal block coordinate of 4x4 block
+                     int  block_y,      // <-- relative vertical   block coordinate of 4x4 block
+                     int  fw_mode,      // <-- forward  prediction mode (1-7, 0=DIRECT if bw_mode=0)
+                     int  bw_mode,      // <-- backward prediction mode (1-7, 0=DIRECT if fw_mode=0)
+                     int  fw_ref_frame) // <-- reference frame for forward prediction (if (<0) -> intra prediction)
+{
+  static int fw_pred[16];
+  static int bw_pred[16];
+
+  int  i, j;
+  int  block_x4  = block_x+4;
+  int  block_y4  = block_y+4;
+  int  pic_pix_x = img->pix_c_x + block_x;
+  int  pic_pix_y = img->pix_c_y + block_y;
+  int* fpred     = fw_pred;
+  int* bpred     = bw_pred;
+  int  direct    = (fw_mode == 0 && bw_mode == 0);
+
+  //===== INTRA PREDICTION =====
+  if (fw_ref_frame < 0)
+  {
+    IntraChromaPrediction4x4 (uv, block_x, block_y);
+    return;
+  }
+
+  //===== INTER PREDICTION =====
+  if (fw_mode || direct)
+  {
+    OneComponentChromaPrediction4x4 (fw_pred, pic_pix_x, pic_pix_y, img->all_mv , fw_ref_frame, fw_mode, uv);
+  }
+  if (bw_mode || direct)
+  {
+    OneComponentChromaPrediction4x4 (bw_pred, pic_pix_x, pic_pix_y, img->all_bmv,           -1, bw_mode, uv);
+  }
+
+  if (direct || (fw_mode && bw_mode))
+  {
+    for (j=block_y; j<block_y4; j++)
+    for (i=block_x; i<block_x4; i++)  img->mpr[i][j] = (int)((*fpred++ + *bpred++) / 2.0 + 0.5);
+  }
+  else if (fw_mode)
+  {
+    for (j=block_y; j<block_y4; j++)
+    for (i=block_x; i<block_x4; i++)  img->mpr[i][j] = *fpred++;
   }
   else
   {
-    f1=8;
-    f2=7;
+    for (j=block_y; j<block_y4; j++)
+    for (i=block_x; i<block_x4; i++)  img->mpr[i][j] = *bpred++;
   }
-
-  f3=f1*f1;
-  f4=f3/2;
-
-  *cr_cbp=0;
-  for (uv=0; uv < 2; uv++)
-  {
-    if (img->imod == INTRA_MB_OLD || img->imod == INTRA_MB_NEW)
-    {
-      intrapred_chroma(img->pix_c_x,img->pix_c_y,uv);
-    }
-    else
-    {
-      for (j=0; j < MB_BLOCK_SIZE/2; j++)
-      {
-        pic_block_y=(img->pix_c_y+j)/2;
-        for (i=0; i < MB_BLOCK_SIZE/2; i++)
-        {
-          pic_block_x=(img->pix_c_x+i)/2;
-          ii=(img->pix_c_x+i)*f1+tmp_mv[0][pic_block_y][pic_block_x+4];
-          jj=(img->pix_c_y+j)*f1+tmp_mv[1][pic_block_y][pic_block_x+4];
-
-          ii0 = max (0, min (img->width_cr-1,ii/f1));
-          jj0 = max (0, min (img->height_cr-1,jj/f1));
-          ii1 = max (0, min (img->width_cr-1,(ii+f2)/f1));
-          jj1 = max (0, min (img->height_cr-1,(jj+f2)/f1));
-
-          if1=(ii & f2);
-          jf1=(jj & f2);
-          if0=f1-if1;
-          jf0=f1-jf1;
-          img->mpr[i][j]=(if0*jf0*mcef[img->multframe_no][uv][jj0][ii0]+
-            if1*jf0*mcef[img->multframe_no][uv][jj0][ii1]+
-            if0*jf1*mcef[img->multframe_no][uv][jj1][ii0]+
-            if1*jf1*mcef[img->multframe_no][uv][jj1][ii1]+f4)/f3;
-
-          img->m7[i][j]=imgUV_org[uv][img->pix_c_y+j][img->pix_c_x+i]-img->mpr[i][j];
-        }
-      }
-    }
-    if (img->types!=SP_IMG || (img->imod == INTRA_MB_OLD || img->imod == INTRA_MB_NEW) )
-      *cr_cbp=dct_chroma(uv,*cr_cbp);
-    else *cr_cbp=dct_chroma_sp(uv,*cr_cbp);
-  }
-  currMB->cbp += *cr_cbp*16;
 }
+
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Chroma residual coding for an macroblock
+ ************************************************************************
+ */
+void ChromaResidualCoding (int* cr_cbp)
+{
+  int   uv, block8, block_y, block_x, j, i;
+  int   fw_mode, bw_mode, refframe;
+
+  for (*cr_cbp=0, uv=0; uv<2; uv++)
+  {
+    //===== prediction of chrominance blocks ===d==
+    block8 = 0;
+    for (block_y=0; block_y<8; block_y+=4)
+    for (block_x=0; block_x<8; block_x+=4, block8++)
+    {
+      SetModesAndRefframe (block8, &fw_mode, &bw_mode, &refframe);
+
+      ChromaPrediction4x4 (uv, block_x, block_y, fw_mode, bw_mode, refframe);
+    }
+
+    //===== calculation of displaced frame difference =====
+    for (j=0; j<8; j++)
+    for (i=0; i<8; i++)
+    {
+      img->m7[i][j] = imgUV_org[uv][img->pix_c_y+j][img->pix_c_x+i] - img->mpr[i][j];
+    }
+
+    //===== DCT, Quantization, inverse Quantization, IDCT, and Reconstruction =====
+    if (img->types!=SP_IMG || IS_INTRA (&img->mb_data[img->current_mb_nr]))
+      *cr_cbp=dct_chroma   (uv,*cr_cbp);
+    else
+      *cr_cbp=dct_chroma_sp(uv,*cr_cbp);
+  }
+
+  //===== update currMB->cbp =====
+  img->mb_data[img->current_mb_nr].cbp += ((*cr_cbp)<<4);  
+}
+
+
 
 /*!
  ************************************************************************
@@ -955,112 +1147,317 @@ void ChromaCoding_P(int *cr_cbp)
  *    depending on mode decision. Used for motion vector prediction.
  ************************************************************************
  */
-void SetRefFrameInfo_P()
+void SetRefFrameInfo(int refframe, int bwrefframe)
 {
   int i,j;
 
-  if (img->imod == INTRA_MB_OLD || img->imod == INTRA_MB_NEW)
+  if (img->type!=B_IMG)
   {
-    // Set the reference frame information for motion vector prediction as unavailable
-    for (j = 0;j < BLOCK_MULTIPLE;j++)
-    {
-      for (i = 0;i < BLOCK_MULTIPLE;i++)
+      for (j=0; j<4; j++)
+      for (i=0; i<4; i++)
       {
-        refFrArr[img->block_y+j][img->block_x+i] = -1;
+        refFrArr[img->block_y+j][img->block_x+i] = refframe;
       }
-    }
   }
   else
   {
-    // Set the reference frame information for motion vector prediction
-    for (j = 0;j < BLOCK_MULTIPLE;j++)
+    for (j=0; j<4; j++)
+    for (i=0; i<4; i++)
     {
-      for (i = 0;i < BLOCK_MULTIPLE;i++)
-      {
-        refFrArr[img->block_y+j][img->block_x+i] =  img->mb_data[img->current_mb_nr].ref_frame;
-      }
+      fw_refFrArr[img->block_y+j][img->block_x+i] = refframe;
+      bw_refFrArr[img->block_y+j][img->block_x+i] = bwrefframe;
     }
   }
+}
+
+
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Check if all reference frames for a macroblock are zero
+ ************************************************************************
+ */
+int
+ZeroRef (Macroblock* currMB)
+{
+  int i,j;
+  for (j=0; j<4; j++)
+  for (i=0; i<4; i++)
+  {
+    if (currMB->b8mode[2*(j/2)+(i/2)]!=IBLOCK && refFrArr[img->block_y+j][img->block_x+i]!=0)
+    {
+        return 0;
+    }
+  }
+  return 1;
 }
 
 
 /*!
  ************************************************************************
  * \brief
- *    Encode one macroblock depending on chosen picture type
+ *    Converts macroblock type to coding value
  ************************************************************************
  */
-void encode_one_macroblock()
+int
+MBType2Value (Macroblock* currMB)
 {
-  int cr_cbp;             // chroma coded block pattern
-  int tot_intra_sad;
-  int intra_pred_mode_2;  // best 16x16 intra mode
+  static const int dir1offset[3]    =  { 1,  2, 3};
+  static const int dir2offset[3][3] = {{ 0,  4,  8},   // 1. block forward
+                                       { 6,  2, 10},   // 1. block backward
+                                       {12, 14, 16}};  // 1. block bi-directional
 
-  if (input->rdopt)
+  int mbtype, pdir0, pdir1;
+
+  if (img->type!=B_IMG)
   {
-    RD_Mode_Decision ();
+    if      (currMB->mb_type==I4MB)     return (img->type==INTRA_IMG ? 0 : 6);
+    else if (currMB->mb_type==I16MB)    return (img->type==INTRA_IMG ? 0 : 6) + img->i16offset;
+    else if (currMB->mb_type==P8x8)
+    {
+      if (input->symbol_mode==UVLC && ZeroRef (currMB))  return 5;
+      else                                               return 4;
+    }
+    else                                return currMB->mb_type;
   }
   else
   {
-    Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+    mbtype = currMB->mb_type;
+    pdir0  = currMB->b8pdir[0];
+    pdir1  = currMB->b8pdir[3];
 
-    tot_intra_sad = MakeIntraPrediction(&intra_pred_mode_2);     // Intra Prediction
-    if (img->type != B_IMG)         // I- or P-frame
-    {
-      if ((img->mb_y == img->mb_y_upd && img->mb_y_upd != img->mb_y_intra) || img->type == INTRA_IMG)
-      {
-        img->mb_mode=8*img->type+img->imod;  // Intra mode: set if intra image or if intra GOB for error robustness
-      }
-      else
-      {
-        currMB->ref_frame = motion_search(tot_intra_sad);      // P-frames MV-search
-      }
-    }
-    else                          // B-frame
-      currMB->ref_frame = motion_search_Bframe(tot_intra_sad); // B-frames MV-search
-
-    if (img->type == B_IMG)         // B-frame
-    {
-
-      LumaResidualCoding_B(img);           // Residual coding of Luma (B-modes only)
-      ChromaCoding_B(&cr_cbp);                              // Coding of Chrominance
-
-
-      SetRefFrameInfo_B();     // Set ref-frame info for mv-prediction of future MBs
-    }
-    else                  // I- or P-frame
-    {
-      if (currMB->intraOrInter == INTER_MB)
-        LumaResidualCoding_P();    // Residual coding of Luma (only for inter modes)
-      // Coding of Luma in intra mode is done implicitly in MakeIntraPredicition
-      ChromaCoding_P(&cr_cbp);                              // Coding of Chrominance
-
-      // Set reference frame information for motion vector prediction of future MBs
-      SetRefFrameInfo_P();
-
-      //  Check if a MB is skipped (no coeffs. only 0-vectors and prediction from the most recent frame)
-      if(   (currMB->ref_frame                      == 0) && (currMB->intraOrInter == INTER_MB)
-        && (tmp_mv[0][img->block_y][img->block_x+4]== 0) && (img->mb_mode         == M16x16_MB)
-        && (tmp_mv[1][img->block_y][img->block_x+4]== 0) && (currMB->cbp          == 0) )
-        img->mb_mode=COPY_MB;
-    }
-
-    currMB->qp = img->qp; // this should (or has to be) done somewere else. where?
-    DeblockMb(img, imgY, imgUV) ; // Deblock this MB ( pixels to the right and above are affected)
-
-    if (img->imod==INTRA_MB_NEW)        // Set 16x16 intra mode and make "intra CBP"
-    {
-      img->mb_mode += intra_pred_mode_2 + 4*cr_cbp + 12*img->kac;
-      currMB->cbp += 15*img->kac; //GB
-    }
-
-
-    if ((((img->type == INTER_IMG)||(img->types==SP_IMG))  && ((img->imod==INTRA_MB_NEW) || (img->imod==INTRA_MB_OLD)))
-      || (img->type == B_IMG && (img->imod==B_Backward || img->imod==B_Direct || img->imod==INTRA_MB_NEW || img->imod==INTRA_MB_OLD)))// gb b-frames too
-      currMB->ref_frame = 0;
-
+    if      (mbtype==0)       return 0;
+    else if (mbtype==I4MB)    return 23;
+    else if (mbtype==I16MB)   return 23 + img->i16offset;
+    else if (mbtype==P8x8)    return 22;
+    else if (mbtype==1)       return dir1offset[pdir0];
+    else if (mbtype==2)       return 4 + dir2offset[pdir0][pdir1];
+    else                      return 5 + dir2offset[pdir0][pdir1];
   }
 }
+
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Writes intra prediction modes for an 8x8 block
+ ************************************************************************
+ */
+int
+writeIntra4x4Modes (int block8x8)
+{
+  int i, i0=4*block8x8, i1=i0+4;
+  int           rate        = 0;
+  SyntaxElement *currSE     = img->MB_SyntaxElements;
+  Macroblock    *currMB     = &img->mb_data[img->current_mb_nr];
+  int           *bitCount   = currMB->bitcounter;
+  Slice         *currSlice  = img->currentSlice;
+  DataPartition *dataPart;
+  const int     *partMap    = assignSE2partition[input->partition_mode];
+
+  for (i=i0; i<i1; )
+  {
+    currSE->context = i;
+    currSE->value1  = currMB->intra_pred_modes[i++];
+    currSE->value2  = currMB->intra_pred_modes[i++];
+
+#if TRACE
+    snprintf(currSE->tracestring, TRACESTRING_SIZE, "Intra mode     = %3d",IPRED_ORDER[currSE->value1][currSE->value2]);
+#endif
+
+    /*--- set symbol type and function pointers ---*/
+    if (input->symbol_mode == UVLC)    currSE->mapping = intrapred_linfo;
+    else                               currSE->writing = writeIntraPredMode2Buffer_CABAC;
+    currSE->type = SE_INTRAPREDMODE;
+      
+    /*--- choose data partition ---*/
+    if (img->type==B_IMG)   dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+    else                    dataPart = &(currSlice->partArr[partMap[SE_INTRAPREDMODE]]);
+    
+    /*--- encode and update rate ---*/
+    dataPart->writeSyntaxElement (currSE, dataPart);
+    bitCount[BITS_COEFF_Y_MB]+=currSE->len;
+    rate += currSE->len;
+    currSE++;
+    currMB->currSEnr++;
+  }
+  return rate;
+}
+
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Converts 8x8 block tyoe to coding value
+ ************************************************************************
+ */
+int
+B8Mode2Value (int b8mode, int b8pdir)
+{
+  static const int b8start[8] = {0,0,0,0, 1, 4, 5, 10};
+  static const int b8inc  [8] = {0,0,0,0, 1, 2, 2, 1};
+
+  if (img->type!=B_IMG)
+  {
+    return (b8mode==IBLOCK?4:b8mode-4);
+  }
+  else
+  {
+    if (b8mode==IBLOCK)  return 13;
+    else                 return b8start[b8mode] + b8inc[b8mode] * b8pdir;
+  }
+}
+
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Codes macroblock header
+ ************************************************************************
+ */
+int
+writeMBHeader ()
+{
+  int             i;
+  int             mb_nr     = img->current_mb_nr;
+  SyntaxElement*  currSE    = img->MB_SyntaxElements;
+  Macroblock*     currMB    = &img->mb_data[mb_nr];
+  int*            bitCount  = currMB->bitcounter;
+  Slice*          currSlice = img->currentSlice;
+  DataPartition*  dataPart;
+  const int*      partMap   = assignSE2partition[input->partition_mode];
+  int             no_bits   = 0;
+
+
+  // choose the appropriate data partition
+  if (img->type == B_IMG)   dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+  else                      dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
+
+
+  //=====  BITS FOR MACROBLOCK MODE =====
+  if(img->type == INTRA_IMG || img->types == SP_IMG || input->symbol_mode == CABAC)
+  {
+    //===== No Run Length Coding of SKIP modes =====
+    currSE->value1  = MBType2Value (currMB);
+    currSE->type    = SE_MBTYPE;
+
+    if (input->symbol_mode == UVLC)  currSE->mapping = n_linfo2;
+    else                             currSE->writing = writeMB_typeInfo2Buffer_CABAC;
+
+    dataPart->writeSyntaxElement( currSE, dataPart);
+#if TRACE
+    if (img->type == B_IMG)  snprintf(currSE->tracestring, TRACESTRING_SIZE, "B_MB mode(%2d,%2d) = %3d",img->mb_x, img->mb_y, currMB->mb_type);
+    else                     snprintf(currSE->tracestring, TRACESTRING_SIZE,   "MB mode(%2d,%2d) = %3d",img->mb_x, img->mb_y,currMB->mb_type);
+#endif
+    bitCount[BITS_MB_MODE] += currSE->len;
+    no_bits                += currSE->len;
+    currSE++;
+    currMB->currSEnr++;
+  }
+  else if (currMB->mb_type != 0 || (img->type == B_IMG && currMB->cbp != 0))
+  {
+    //===== Run Length Coding: Non-Skipped macorblock =====
+    currSE->value1  = img->cod_counter;
+    currSE->mapping = n_linfo2;
+    currSE->type    = SE_MBTYPE;
+    dataPart->writeSyntaxElement( currSE, dataPart);
+#if TRACE
+    snprintf(currSE->tracestring, TRACESTRING_SIZE, "MB runlength = %3d",img->cod_counter);
+#endif
+    bitCount[BITS_MB_MODE] += currSE->len;
+    no_bits                += currSE->len;
+    currSE++;
+    currMB->currSEnr++;
+    
+    // Reset cod counter
+    img->cod_counter = 0;
+
+    // Put out mb mode
+    currSE->value1  = MBType2Value (currMB);
+    if(img->type != B_IMG)
+    {
+      currSE->value1--;
+    }
+    currSE->mapping = n_linfo2;
+    currSE->type    = SE_MBTYPE;
+
+    dataPart->writeSyntaxElement( currSE, dataPart);
+#if TRACE
+    if (img->type == B_IMG)   snprintf(currSE->tracestring, TRACESTRING_SIZE, "B_MB mode(%2d,%2d) = %3d",img->mb_x, img->mb_y, currMB->mb_type);
+    else                      snprintf(currSE->tracestring, TRACESTRING_SIZE,   "MB mode(%2d,%2d) = %3d",img->mb_x, img->mb_y,currMB->mb_type);
+#endif
+    bitCount[BITS_MB_MODE] += currSE->len;
+    no_bits                += currSE->len;
+    currSE++;
+    currMB->currSEnr++;
+  }
+  else
+  {
+    //Run Length Coding: Skipped macroblock
+    img->cod_counter++;
+
+    if(img->current_mb_nr == img->total_number_mb)
+    {
+      // Put out run
+      currSE->value1  = img->cod_counter;
+      currSE->mapping = n_linfo2;
+      currSE->type    = SE_MBTYPE;
+
+      dataPart->writeSyntaxElement( currSE, dataPart);
+#if TRACE
+      snprintf(currSE->tracestring, TRACESTRING_SIZE, "MB runlength = %3d",img->cod_counter);
+#endif
+      bitCount[BITS_MB_MODE] += currSE->len;
+      no_bits                += currSE->len;
+      currSE++;
+      currMB->currSEnr++;
+
+      // Reset cod counter
+      img->cod_counter = 0;
+    }
+  }
+
+
+  //===== BITS FOR 8x8 SUB-PARTITION MODI =====
+  if (IS_P8x8 (currMB))
+  {
+    if (img->type==B_IMG) dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+    else                  dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
+
+    for (i=0; i<4; i++)
+    {
+      if (input->symbol_mode==UVLC)   currSE->mapping = n_linfo2;
+      else                            currSE->writing = writeB8_typeInfo2Buffer_CABAC;
+
+      currSE->value1  = B8Mode2Value (currMB->b8mode[i], currMB->b8pdir[i]);
+      currSE->type    = SE_MBTYPE;
+      dataPart->writeSyntaxElement (currSE, dataPart);
+      bitCount[BITS_MB_MODE]+= currSE->len;
+      no_bits               += currSE->len;
+      currSE++;
+      currMB->currSEnr++;
+    }
+  }
+
+
+  //===== BITS FOR INTRA PREDICTION MODI ====
+  for (i=0; i<4; i++)
+  {
+    if (currMB->b8mode[i]==IBLOCK)
+    {
+      no_bits += writeIntra4x4Modes (i);
+    }
+  }
+
+  return no_bits;
+}
+
+
 
 /*!
  ************************************************************************
@@ -1068,552 +1465,491 @@ void encode_one_macroblock()
  *    Passes the chosen syntax elements to the NAL
  ************************************************************************
  */
-void write_one_macroblock()
+void write_one_macroblock ()
 {
-  int i;
-  int mb_nr = img->current_mb_nr;
-  SyntaxElement *currSE = img->MB_SyntaxElements;
-  Macroblock *currMB = &img->mb_data[mb_nr];
-  int *bitCount = currMB->bitcounter;
-  Slice *currSlice = img->currentSlice;
-  DataPartition *dataPart;
-  int *partMap = assignSE2partition[input->partition_mode];
+  Macroblock* currMB   = &img->mb_data[img->current_mb_nr];
+  int*        bitCount = currMB->bitcounter;
 
-  // Store imod for further use
-  currMB->mb_imode = img->imod;
-
-  // Store mb_mode for further use
-  currMB->mb_type = (currSE->value1 = img->mb_mode);
-
-  // choose the appropriate data partition
-  if (img->type == B_IMG)
-    dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
-  else
-    dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
-
-  //  Bits for mode
-  if(img->type == INTRA_IMG || img->types == SP_IMG || input->symbol_mode == CABAC)
-  {
-    if (input->symbol_mode == UVLC)
-      currSE->mapping = n_linfo2;
-    else
-      currSE->writing = writeMB_typeInfo2Buffer_CABAC;
-    currSE->type = SE_MBTYPE;
-
-#if TRACE
-    if (img->type == B_IMG)
-      snprintf(currSE->tracestring, TRACESTRING_SIZE, "B_MB mode(%2d,%2d) = %3d",img->mb_x, img->mb_y, img->mb_mode);
-    else
-      snprintf(currSE->tracestring, TRACESTRING_SIZE, "MB mode(%2d,%2d) = %3d",img->mb_x, img->mb_y,img->mb_mode);
-#endif
-    dataPart->writeSyntaxElement( currSE, dataPart);
-
-    bitCount[BITS_MB_MODE]+=currSE->len;
-    currSE++;
-    currMB->currSEnr++;
-
-  }
-  else
-  {
-    if (img->mb_mode != COPY_MB || currMB->intraOrInter != INTER_MB || (img->type == B_IMG && currMB->cbp != 0))
-  {
-      // Macroblock is coded, put out run and mbmode
-      currSE->value1 = img->cod_counter;
-      currSE->mapping = n_linfo2;
-      currSE->type = SE_MBTYPE;
-#if TRACE
-      snprintf(currSE->tracestring, TRACESTRING_SIZE, "MB runlength = %3d",img->cod_counter);
-#endif
-      dataPart->writeSyntaxElement( currSE, dataPart);
-      bitCount[BITS_MB_MODE]+=currSE->len;
-      currSE++;
-      currMB->currSEnr++;
-    // Reset cod counter
-      img->cod_counter = 0;
-
-      // Put out mb mode
-      currSE->value1 = img->mb_mode;
-      if(img->type != B_IMG)
-        currSE->value1--;
-      currSE->mapping = n_linfo2;
-      currSE->type = SE_MBTYPE;
-#if TRACE
-      if (img->type == B_IMG)
-        snprintf(currSE->tracestring, TRACESTRING_SIZE, "B_MB mode(%2d,%2d) = %3d",img->mb_x, img->mb_y, img->mb_mode);
-      else
-        snprintf(currSE->tracestring, TRACESTRING_SIZE, "MB mode(%2d,%2d) = %3d",img->mb_x, img->mb_y,img->mb_mode);
-#endif
-      dataPart->writeSyntaxElement( currSE, dataPart);
-      bitCount[BITS_MB_MODE]+=currSE->len;
-      currSE++;
-      currMB->currSEnr++;
-    }
-  else
-  {
-      // Macroblock is skipped, increase cod_counter
-      img->cod_counter++;
-
-      if(img->current_mb_nr == img->total_number_mb)
-      {
-        // Put out run
-        currSE->value1 = img->cod_counter;
-        currSE->mapping = n_linfo2;
-        currSE->type = SE_MBTYPE;
-#if TRACE
-        snprintf(currSE->tracestring, TRACESTRING_SIZE, "MB runlength = %3d",img->cod_counter);
-#endif
-       
-        dataPart->writeSyntaxElement( currSE, dataPart);
-        bitCount[BITS_MB_MODE]+=currSE->len;
-        currSE++;
-        currMB->currSEnr++;
-
-        // Reset cod counter
-        img->cod_counter = 0;
-      }
-    }
-  }
-
-  if(input->UseConstrainedIntraPred)
-  {
-    if (img->type==INTER_IMG && img->types != SP_IMG)
-      if(currMB->intraOrInter == INTER_MB)
-        img->intra_mb[img->current_mb_nr] = 0;
-  }
-
+  //--- write header ---
+  writeMBHeader ();
 
   //  Do nothing more if copy and inter mode
-  if (img->mb_mode != COPY_MB || currMB->intraOrInter != INTER_MB ||
-     (img->type == B_IMG && input->symbol_mode == CABAC) ||
-     (img->type == B_IMG && input->symbol_mode == UVLC &&  currMB->cbp != 0))
+  if ((IS_INTERMV (currMB)  || IS_INTRA (currMB)                             ) ||
+      (img->type==B_IMG     && input->symbol_mode== CABAC                    ) ||
+      (img->type==B_IMG     && input->symbol_mode== UVLC &&  currMB->cbp != 0)  )
   {
-
-    //  Bits for intra prediction modes
-    if (img->imod == INTRA_MB_OLD)
-    {
-      for (i=0; i < MB_BLOCK_SIZE/2; i++)
-      {
-        currSE->value1 = currMB->intra_pred_modes[2*i];
-        currSE->value2 = currMB->intra_pred_modes[2*i+1];
-        if (input->symbol_mode == UVLC)
-          currSE->mapping = intrapred_linfo;
-        else
-          currSE->writing = writeIntraPredMode2Buffer_CABAC;
-        currSE->type = SE_INTRAPREDMODE;
-
-        // choose the appropriate data partition
-        if (img->type != B_IMG)
-        {
-#if TRACE
-          snprintf(currSE->tracestring, TRACESTRING_SIZE, "Intra mode     = %3d",IPRED_ORDER[currSE->value1][currSE->value2]);
-#endif
-          dataPart = &(currSlice->partArr[partMap[SE_INTRAPREDMODE]]);
-
-        }
-        else
-        {
-#if TRACE
-          snprintf(currSE->tracestring, TRACESTRING_SIZE, "B_Intra mode = %3d\t",IPRED_ORDER[currSE->value1][currSE->value2]);
-#endif
-          dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
-
-        }
-      
-        dataPart->writeSyntaxElement( currSE, dataPart);
-        bitCount[BITS_COEFF_Y_MB]+=currSE->len;
-
-        // proceed to next SE
-        currSE++;
-        currMB->currSEnr++;
-      }
-    }
-    //  Bits for vector data
-    if (img->type != B_IMG)
-    {
-      if (currMB->intraOrInter == INTER_MB) // inter
-        writeMotionInfo2NAL_Pframe();
-    }
-    else
-    {
-      if(img->imod != B_Direct)
-        writeMotionInfo2NAL_Bframe();
-    }
-
-    // Bits for CBP and Coefficients
-    writeCBPandCoeffs2NAL();
+    writeMotionInfo2NAL  ();
+    writeCBPandLumaCoeff ();
+    writeChromaCoeff     ();
   }
-  bitCount[BITS_TOTAL_MB] = bitCount[BITS_MB_MODE] + bitCount[BITS_COEFF_Y_MB]  + bitCount[BITS_INTER_MB]
-    + bitCount[BITS_CBP_MB] + bitCount[BITS_DELTA_QUANT_MB] + bitCount[BITS_COEFF_UV_MB];
+
+  //--- constrain intra prediction ---
+  if(input->UseConstrainedIntraPred && img->type==INTER_IMG && img->types != SP_IMG)
+  {
+    if (!IS_NEWINTRA (currMB) && currMB->b8mode[0]!=IBLOCK) img->intra_block[img->current_mb_nr][0] = 0;
+    if (!IS_NEWINTRA (currMB) && currMB->b8mode[1]!=IBLOCK) img->intra_block[img->current_mb_nr][1] = 0;
+    if (!IS_NEWINTRA (currMB) && currMB->b8mode[2]!=IBLOCK) img->intra_block[img->current_mb_nr][2] = 0;
+    if (!IS_NEWINTRA (currMB) && currMB->b8mode[3]!=IBLOCK) img->intra_block[img->current_mb_nr][3] = 0;
+  }
+
+  //--- set total bit-counter ---
+  bitCount[BITS_TOTAL_MB] = bitCount[BITS_MB_MODE] + bitCount[BITS_COEFF_Y_MB]     + bitCount[BITS_INTER_MB]
+                          + bitCount[BITS_CBP_MB]  + bitCount[BITS_DELTA_QUANT_MB] + bitCount[BITS_COEFF_UV_MB];
   stat->bit_slice += bitCount[BITS_TOTAL_MB];
 }
 
-/*!
- ************************************************************************
- * \brief
- *    Passes for a given MB of a P picture the reference frame
- *    parameter and the motion vectors to the NAL
- ************************************************************************
- */
-int writeMotionInfo2NAL_Pframe()
-{
-  int i,j,k,l,m;
-  int step_h,step_v;
-  int curr_mvd;
-  int mb_nr = img->current_mb_nr;
-  Macroblock *currMB = &img->mb_data[mb_nr];
-  SyntaxElement *currSE = &img->MB_SyntaxElements[currMB->currSEnr];
-  int *bitCount = currMB->bitcounter;
-  Slice *currSlice = img->currentSlice;
-  DataPartition *dataPart;
-  int *partMap = assignSE2partition[input->partition_mode];
-  int no_bits = 0;
 
-  //  If multiple ref. frames, write reference frame for the MB
-#ifdef _ADDITIONAL_REFERENCE_FRAME_
-  if (input->no_multpred > 1 || input->add_ref_frame > 0)
-#else
-    if (input->no_multpred > 1)
-#endif
-    {
 
-      currSE->value1 = currMB->ref_frame ;
-      currSE->type = SE_REFFRAME;
-      if (input->symbol_mode == UVLC)
-        currSE->mapping = n_linfo2;
-      else
-        currSE->writing = writeRefFrame2Buffer_CABAC;
-      dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-      
-      dataPart->writeSyntaxElement( currSE, dataPart);
-      bitCount[BITS_INTER_MB]+=currSE->len;
-      no_bits += currSE->len;
-#if TRACE
-      snprintf(currSE->tracestring, TRACESTRING_SIZE, "Reference frame no %d", currMB->ref_frame);
-#endif
-
-      // proceed to next SE
-      currSE++;
-      currMB->currSEnr++;
-    }
-
-    // Write motion vectors
-    step_h=img->blc_size_h/BLOCK_SIZE;      // horizontal stepsize
-    step_v=img->blc_size_v/BLOCK_SIZE;      // vertical stepsize
-
-    for (j=0; j < BLOCK_SIZE; j += step_v)
-    {
-      for (i=0;i < BLOCK_SIZE; i += step_h)
-      {
-        for (k=0; k < 2; k++)
-        {
-          curr_mvd = tmp_mv[k][img->block_y+j][img->block_x+i+4]-img->mv[i][j][currMB->ref_frame][img->mb_mode][k];
-
-          img->subblock_x = i; // position used for context determination
-          img->subblock_y = j; // position used for context determination
-          currSE->value1 = curr_mvd;
-          // store (oversampled) mvd
-          for (l=0; l < step_v; l++)
-            for (m=0; m < step_h; m++)
-              currMB->mvd[0][j+l][i+m][k] =  curr_mvd;
-          currSE->value2 = k; // identifies the component; only used for context determination
-          currSE->type = SE_MVD;
-          if (input->symbol_mode == UVLC)
-            currSE->mapping = mvd_linfo2;
-          else
-            currSE->writing = writeMVD2Buffer_CABAC;
-          
-          dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-          dataPart->writeSyntaxElement( currSE, dataPart);
-          bitCount[BITS_INTER_MB]+=currSE->len;
-          no_bits += currSE->len;
-#if TRACE
-          snprintf(currSE->tracestring, TRACESTRING_SIZE, " MVD(%d) = %3d",k, curr_mvd);
-#endif
-
-          // proceed to next SE
-          currSE++;
-          currMB->currSEnr++;
-        }
-      }
-    }
-    return no_bits;
-}
 
 /*!
  ************************************************************************
  * \brief
- *    Passes coded block pattern and coefficients (run/level)
- *    to the NAL
+ *    Sets context for reference frame parameter
  ************************************************************************
  */
-void
-writeCBPandCoeffs2NAL ()
-{
-  Macroblock    *currMB    = &img->mb_data[img->current_mb_nr];
-  if (img->imod != INTRA_MB_NEW)
-  {
-    // Bits for CBP
-    writeMB_bits_for_CBP  ();
-    // Bits for Delta quant
-    
-    //! TO Hack for Dquant
-    if (currMB->cbp != 0)
-    {
-      if (currMB->intraOrInter == INTER_MB)
-        writeMB_bits_for_Dquant_inter();
-      else
-        writeMB_bits_for_Dquant_intra();
-    }
-    // Bits for luma coefficients
-    writeMB_bits_for_luma (1);
-  }
-  else // 16x16 based intra modes
-  {
-    writeMB_bits_for_Dquant_intra  ();
-    writeMB_bits_for_16x16_luma ();
-  }
-  // Bits for chroma 2x2 DC transform coefficients
-  writeMB_bits_for_DC_chroma (1);
-  // Bits for chroma AC-coeffs.
-  writeMB_bits_for_AC_chroma (1);
-}
-
-
-
 int
-writeMB_bits_for_CBP ()
+BType2CtxRef (int btype)
 {
-  int           no_bits    = 0;
-  Macroblock    *currMB    = &img->mb_data[img->current_mb_nr];
-  SyntaxElement *currSE    = &img->MB_SyntaxElements[currMB->currSEnr];
-  int           *bitCount  = currMB->bitcounter;
-  DataPartition *dataPart;
-  int           *partMap   = assignSE2partition[input->partition_mode];
+  if (btype<4)   return 0;
+  else           return 1;
+}
 
-  currSE->value1 = currMB->cbp;
 
+/*!
+ ************************************************************************
+ * \brief
+ *    Codes the reference frame
+ ************************************************************************
+ */
+int
+writeReferenceFrame (int  mode,
+                     int  i,
+                     int  j,
+                     int  ref)
+{
+  Macroblock*     currMB    = &img->mb_data[img->current_mb_nr];
+  SyntaxElement*  currSE    = &img->MB_SyntaxElements[currMB->currSEnr];
+  Slice*          currSlice = img->currentSlice;
+  int*            bitCount  = currMB->bitcounter;
+  const int*      partMap   = assignSE2partition[input->partition_mode];
+  int             rate      = 0;
+  DataPartition*  dataPart;
+
+
+  currSE->value1 = ref;
+  currSE->type   = (img->type==B_IMG ? SE_BFRAME : SE_REFFRAME);
+  if (input->symbol_mode == UVLC)
+  {
+    currSE->mapping = n_linfo2;
+  }
+  else
+  {
+    currSE->context = BType2CtxRef (mode);
+    img->subblock_x = i; // position used for context determination
+    img->subblock_y = j; // position used for context determination
+    currSE->writing = writeRefFrame2Buffer_CABAC;
+  }
+
+  dataPart = &(currSlice->partArr[partMap[currSE->type]]);
+  dataPart->writeSyntaxElement (currSE, dataPart);
+  bitCount[BITS_INTER_MB] += currSE->len;
+  rate                    += currSE->len;
 #if TRACE
-  snprintf(currSE->tracestring, TRACESTRING_SIZE, "CBP (%2d,%2d) = %3d",img->mb_x, img->mb_y, currMB->cbp);
+  snprintf(currSE->tracestring, TRACESTRING_SIZE, "Reference frame no %d", currSE->value1);
 #endif
-
-  if (img->imod == INTRA_MB_OLD)
-  {
-    if (input->symbol_mode == UVLC)
-      currSE->mapping = cbp_linfo_intra;
-    currSE->type = SE_CBP_INTRA;
-  }
-  else
-  {
-    if (input->symbol_mode == UVLC)
-      currSE->mapping = cbp_linfo_inter;
-    currSE->type = SE_CBP_INTER;
-  }
-
-  if (input->symbol_mode == CABAC)
-    currSE->writing = writeCBP2Buffer_CABAC;
-
-  // choose the appropriate data partition
-  if (img->type != B_IMG)
-    dataPart = &(img->currentSlice->partArr[partMap[currSE->type]]);
-  else
-    dataPart = &(img->currentSlice->partArr[partMap[SE_BFRAME]]);
-
-  dataPart->writeSyntaxElement(currSE, dataPart);
-  bitCount[BITS_CBP_MB]+=currSE->len;
-  no_bits              +=currSE->len;
-
-  // proceed to next SE
   currSE++;
   currMB->currSEnr++;
 
-  return no_bits;
+  return rate;
 }
 
-/*
- *  TO Hack for the Dquant Problem:
- *  introduce Dquant_inter and Dquant_intra
- *
- *
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Writes motion vectors of an 8x8 block
+ ************************************************************************
  */
 int
-writeMB_bits_for_Dquant_inter ()
+writeMotionVector8x8 (int  i0,
+                      int  j0,
+                      int  i1,
+                      int  j1,
+                      int  refframe,
+                      int  mv_mode)
 {
-  int           no_bits    = 0;
-  Macroblock    *currMB    = &img->mb_data[img->current_mb_nr];
-  SyntaxElement *currSE    = &img->MB_SyntaxElements[currMB->currSEnr];
-  int           *bitCount  = currMB->bitcounter;
-  DataPartition *dataPart;
-  int           *partMap   = assignSE2partition[input->partition_mode];
+  int            i, j, k, l, m;
+  int            curr_mvd;
+  DataPartition* dataPart;
+  int            bwflag     = (refframe<0?1:0);
+  int            rate       = 0;
+  int            step_h     = input->blc_size[mv_mode][0] >> 2;
+  int            step_v     = input->blc_size[mv_mode][1] >> 2;
+  Macroblock*    currMB     = &img->mb_data[img->current_mb_nr];
+  SyntaxElement* currSE     = &img->MB_SyntaxElements[currMB->currSEnr];
+  Slice*         currSlice  = img->currentSlice;
+  int*           bitCount   = currMB->bitcounter;
+  const int*     partMap    = assignSE2partition[input->partition_mode];
+  int            refindex   = (refframe<0 ? 0 : refframe);
+  int*****       all_mv     = (refframe<0 ? img->all_bmv : img->all_mv);
+  int*****       pred_mv    = (img->type!=B_IMG ? img->mv : refframe<0 ? img->p_bwMV : img->p_fwMV);
 
-
-  currSE->value1 = currMB->delta_qp;
-#if TRACE
-  snprintf(currSE->tracestring, TRACESTRING_SIZE, "Delta QP (%2d,%2d) = %3d",img->mb_x, img->mb_y, currMB->delta_qp);
-#endif
-  if (input->symbol_mode == UVLC)
-     currSE->mapping = dquant_linfo;
-  else if (input->symbol_mode == CABAC)
-     currSE->writing = writeDquant_inter_CABAC;// writeMVD2Buffer_CABAC;
-
-   currSE->type = SE_DELTA_QUANT_INTER;
-
-   // choose the appropriate data partition
-
-   if (img->type != B_IMG)
-     dataPart = &(img->currentSlice->partArr[partMap[currSE->type]]);
-   else
-     dataPart = &(img->currentSlice->partArr[partMap[SE_BFRAME]]);
-
-   dataPart->writeSyntaxElement(  currSE, dataPart);
-   bitCount[BITS_DELTA_QUANT_MB]+=currSE->len;
-   no_bits              +=currSE->len;
-
-    // proceed to next SE
-   currSE++;
-   currMB->currSEnr++;
-
-   return no_bits;
-}
-
-
-int
-writeMB_bits_for_Dquant_intra ()
-{
-  int           no_bits    = 0;
-  Macroblock    *currMB    = &img->mb_data[img->current_mb_nr];
-  SyntaxElement *currSE    = &img->MB_SyntaxElements[currMB->currSEnr];
-  int           *bitCount  = currMB->bitcounter;
-  DataPartition *dataPart;
-  int           *partMap   = assignSE2partition[input->partition_mode];
-
-
-  currSE->value1 = currMB->delta_qp;
-#if TRACE
-  snprintf(currSE->tracestring, TRACESTRING_SIZE, "Delta QP (%2d,%2d) = %3d",img->mb_x, img->mb_y, currMB->delta_qp);
-#endif
-  if (input->symbol_mode == UVLC)
-     currSE->mapping = dquant_linfo;
-  else if (input->symbol_mode == CABAC)
-     currSE->writing = writeDquant_intra_CABAC;// writeMVD2Buffer_CABAC;
-
-   currSE->type = SE_DELTA_QUANT_INTRA;
-
-   // choose the appropriate data partition
-
-   if (img->type != B_IMG)
-     dataPart = &(img->currentSlice->partArr[partMap[currSE->type]]);
-   else
-     dataPart = &(img->currentSlice->partArr[partMap[SE_BFRAME]]);
-
-   dataPart->writeSyntaxElement(  currSE, dataPart);
-   bitCount[BITS_DELTA_QUANT_MB]+=currSE->len;
-   no_bits              +=currSE->len;
-
-    // proceed to next SE
-   currSE++;
-   currMB->currSEnr++;
-
-   return no_bits;
-}
-
-int
-writeMB_bits_for_luma (int  filtering)
-{
-  int no_bits = 0;
-  int cbp     = img->mb_data [img->current_mb_nr].cbp;
-  int mb_y, mb_x, i, j, ii, jj, bits;
-
-  for (mb_y=0; mb_y < 4; mb_y += 2)
+  for (j=j0; j<j1; j+=step_v)
+  for (i=i0; i<i1; i+=step_h)
   {
-    for (mb_x=0; mb_x < 4; mb_x += 2)
+    for (k=0; k<2; k++) 
     {
-      for (j=mb_y; j < mb_y+2; j++)
+      curr_mvd = all_mv[i][j][refindex][mv_mode][k] - pred_mv[i][j][refindex][mv_mode][k];
+
+      //--- store (oversampled) mvd ---
+      for (l=0; l < step_v; l++) 
+      for (m=0; m < step_h; m++)    currMB->mvd[bwflag][j+l][i+m][k] = curr_mvd;
+
+      currSE->value1 = curr_mvd;
+      currSE->type   = (img->type==B_IMG ? SE_BFRAME : SE_MVD);
+      if (input->symbol_mode == UVLC)
       {
-        jj=j/2;
-        for (i=mb_x; i < mb_x+2; i++)
+        currSE->mapping = mvd_linfo2;
+      }
+      else
+      {
+        img->subblock_x = i; // position used for context determination
+        img->subblock_y = j; // position used for context determination
+        if (img->type!=B_IMG)
         {
-          ii=i/2;
-          if ((cbp & (1<<(ii+jj*2))) != 0)        // check for any coefficients
-          {
-            no_bits += (bits = writeMB_bits_for_4x4_luma (i, j, filtering));
-          }
-          else bits = 0;
-#ifdef _RD_DEBUG_I4MODE_
-          rcdebug_set_luma_rate_4x4 (i, j, bits);
+          currSE->value2  = k; // identifies the component and the direction; only used for context determination
+          currSE->writing = writeMVD2Buffer_CABAC;
+        }
+        else
+        {
+          currSE->value2  = 2*k+bwflag; // identifies the component and the direction; only used for context determination
+          currSE->writing = writeBiMVD2Buffer_CABAC;
+        }
+      }  
+      dataPart = &(currSlice->partArr[partMap[img->type==B_IMG ? SE_BFRAME : SE_MVD]]);
+      dataPart->writeSyntaxElement (currSE, dataPart);
+#if TRACE
+      snprintf(currSE->tracestring, TRACESTRING_SIZE, " MVD(%d) = %3d",k, curr_mvd);
 #endif
+      bitCount[BITS_INTER_MB] += currSE->len;
+      rate                    += currSE->len;
+      currSE++;  
+      currMB->currSEnr++;
+    }
+  }
+
+  return rate;
+}
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Writes motion info
+ ************************************************************************
+ */
+int writeMotionInfo2NAL ()
+{
+  int k, j0, i0, refframe;
+
+  Macroblock*     currMB    = &img->mb_data[img->current_mb_nr];
+  SyntaxElement*  currSE    = &img->MB_SyntaxElements[currMB->currSEnr];
+  int*            bitCount  = currMB->bitcounter;
+  Slice*          currSlice = img->currentSlice;
+  const int*      partMap   = assignSE2partition[input->partition_mode];
+  int             no_bits   = 0;
+
+  int   bframe          = (img->type==B_IMG);
+  int** refframe_array  = (img->type==B_IMG ? fw_refFrArr : refFrArr);
+#ifdef _ADDITIONAL_REFERENCE_FRAME_
+  int   multframe       = (input->no_multpred>1 || input->add_ref_frame>0); 
+#else
+  int   multframe       = (input->no_multpred>1); 
+#endif
+  int   step_h0         = (input->blc_size[IS_P8x8(currMB) ? 4 : currMB->mb_type][0] >> 2);
+  int   step_v0         = (input->blc_size[IS_P8x8(currMB) ? 4 : currMB->mb_type][1] >> 2);
+
+
+  //=== If multiple ref. frames, write reference frame for the MB ===
+  if (IS_INTERMV (currMB) && multframe)
+  {
+    // if UVLC is turned on, a 8x8 macroblock with all ref=0 in a P-frame is signalled in macroblock mode
+    if (!IS_P8x8 (currMB) || !ZeroRef (currMB) || input->symbol_mode==CABAC || bframe)
+    {
+      for (j0=0; j0<4; j0+=step_v0)
+      for (i0=0; i0<4; i0+=step_h0)
+      {
+        k=j0+(i0/2);
+
+        if ((currMB->b8pdir[k]==0 || currMB->b8pdir[k]==2) && currMB->b8mode[k]!=0)//has forward vector
+        {
+          no_bits += writeReferenceFrame (currMB->b8mode[k], i0, j0, refframe_array[img->block_y+j0][img->block_x+i0]);
         }
       }
     }
   }
+
+
+  //===== write forward motion vectors =====
+  if (IS_INTERMV (currMB))
+  {
+    for (j0=0; j0<4; j0+=step_v0)
+    for (i0=0; i0<4; i0+=step_h0)
+    {
+      k=j0+(i0/2);
+      if ((currMB->b8pdir[k]==0 || currMB->b8pdir[k]==2) && currMB->b8mode[k]!=0)//has forward vector
+      {
+        refframe  = refframe_array[img->block_y+j0][img->block_x+i0];
+        no_bits  += writeMotionVector8x8 (i0, j0, i0+step_h0, j0+step_v0, refframe, currMB->b8mode[k]);
+      }
+    }
+  }
+
+
+  //===== write backward motion vectors =====
+  if (IS_INTERMV (currMB) && bframe)
+  {
+    for (j0=0; j0<4; j0+=step_v0)
+    for (i0=0; i0<4; i0+=step_h0)
+    {
+      k=j0+(i0/2);
+      if ((currMB->b8pdir[k]==1 || currMB->b8pdir[k]==2) && currMB->b8mode[k]!=0)//has backward vector
+      {
+        refframe  = refframe_array[img->block_y+j0][img->block_x+i0];
+        no_bits  += writeMotionVector8x8 (i0, j0, i0+step_h0, j0+step_v0,       -1, currMB->b8mode[k]);
+      }
+    }
+  }
+
   return no_bits;
 }
 
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Writes chrominance coefficients
+ ************************************************************************
+ */
 int
-writeMB_bits_for_4x4_luma (int i, int j, int  filtering)
+writeChromaCoeff ()
 {
-  int           no_bits    = 0;
-  Macroblock    *currMB    = &img->mb_data[img->current_mb_nr];
-  SyntaxElement *currSE    = &img->MB_SyntaxElements[currMB->currSEnr];
-  int           *bitCount  = currMB->bitcounter;
-  Slice         *currSlice = img->currentSlice;
-  DataPartition *dataPart;
-  int           *partMap   = assignSE2partition[input->partition_mode];
+  int             rate      = 0;
+  Macroblock*     currMB    = &img->mb_data[img->current_mb_nr];
+  SyntaxElement*  currSE    = &img->MB_SyntaxElements[currMB->currSEnr];
+  int*            bitCount  = currMB->bitcounter;
+  Slice*          currSlice = img->currentSlice;
+  const int*      partMap   = assignSE2partition[input->partition_mode];
+  int             mode      = currMB->mb_type;
+  int             cbp       = currMB->cbp;
+  int             m2        = img->mb_x << 1;
+  int             jg2       = img->mb_y << 1;
+  DataPartition*  dataPart;
 
-  int kk,kbeg,kend;
-  int level, run;
-  int k;
+  int   level, run;
+  int   i, j, k, uv, mb_x, mb_y, i1, ii, j1, jj;
+  int   b8, b4;
+  int*  ACLevel;
+  int*  ACRun;
+  int*  DCLevel;
+  int*  DCRun;
 
 
-  if (img->imod == INTRA_MB_OLD && img->qp < 24)  // double scan
+  //=====
+  //=====   D C - C O E F F I C I E N T S
+  //=====
+  if (cbp > 15)  // check if any chroma bits in coded block pattern is set
   {
+    for (uv=0; uv < 2; uv++)
+    {
+      DCLevel = img->cofDC[uv+1][0];
+      DCRun   = img->cofDC[uv+1][1];
 
+      level=1;
+      for (k=0; k < 5 && level != 0; ++k)
+      {
+        level = currSE->value1 = DCLevel[k]; // level
+        run   = currSE->value2 = DCRun  [k]; // run
+
+        if (input->symbol_mode == UVLC)   currSE->mapping = levrun_linfo_c2x2;
+        else                              currSE->writing = writeRunLevel2Buffer_CABAC;
+
+				currSE->k = uv;	//ctx for coeff_count
+
+        if (IS_INTRA (currMB))
+        {
+          currSE->context = 6; // for choosing context model
+          currSE->type    = SE_CHR_DC_INTRA;
+        }
+        else
+        {
+          currSE->context = 5; // for choosing context model
+          currSE->type    = SE_CHR_DC_INTER; 
+        }
+    
+        // choose the appropriate data partition
+        if (img->type != B_IMG)   dataPart = &(currSlice->partArr[partMap[currSE->type]]);
+        else                      dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+    
+        dataPart->writeSyntaxElement (currSE, dataPart);
+        bitCount[BITS_COEFF_UV_MB] += currSE->len;
+        rate                       += currSE->len;
+#if TRACE
+        snprintf(currSE->tracestring, TRACESTRING_SIZE, "2x2 DC Chroma %2d: level =%3d run =%2d",k, level, run);
+#endif
+        // proceed to next SE 
+        currSE++;  
+        currMB->currSEnr++;
+      }
+    }
+  }
+
+
+  //=====
+  //=====   A C - C O E F F I C I E N T S
+  //=====
+  uv=-1;   
+  if (cbp >> 4 == 2) // check if chroma bits in coded block pattern = 10b
+    {  
+    for (mb_y=4; mb_y < 6; mb_y += 2)
+    for (mb_x=0; mb_x < 4; mb_x += 2)
+      {
+      for (j=mb_y; j < mb_y+2; j++)
+      {
+        jj=j/2;
+        j1=j-4;
+        for (i=mb_x; i < mb_x+2; i++)
+        {
+          b8      = 4 + i/2;
+          b4      = 2*(j/5)+ (i%2);
+          ACLevel = img->cofAC[b8][b4][0];
+          ACRun   = img->cofAC[b8][b4][1];
+
+          ii=i/2;
+          i1=i%2;
+          level=1;
+					uv++;
+          for (k=0; k < 16 && level != 0; k++)
+          {
+            level = currSE->value1 = ACLevel[k]; // level
+            run   = currSE->value2 = ACRun  [k]; // run
+
+            if (input->symbol_mode == UVLC)   currSE->mapping = levrun_linfo_inter;
+            else                              currSE->writing = writeRunLevel2Buffer_CABAC;
+						
+						currSE->k=uv;	//ctx for coeff_count
+
+            if (IS_INTRA (currMB))
+            {
+              currSE->context = 8; // for choosing context model  
+              currSE->type  = SE_CHR_AC_INTRA;
+            }
+            else
+            {
+              currSE->context = 7; // for choosing context model  
+              currSE->type  = SE_CHR_AC_INTER; 
+            }
+
+            // choose the appropriate data partition
+            if (img->type != B_IMG)   dataPart = &(currSlice->partArr[partMap[currSE->type]]);
+            else                      dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+        
+            dataPart->writeSyntaxElement (currSE, dataPart);
+            bitCount[BITS_COEFF_UV_MB] += currSE->len;
+            rate                       += currSE->len;
+#if TRACE
+            snprintf(currSE->tracestring, TRACESTRING_SIZE, "AC Chroma %2d: level =%3d run =%2d",k, level, run);
+#endif
+
+            // proceed to next SE 
+            currSE++;  
+            currMB->currSEnr++;
+          }
+        }
+      }
+    }
+  }
+
+  return rate;
+}
+
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Writes Luma coeff of an 4x4 block
+ ************************************************************************
+ */
+int
+writeLumaCoeff4x4 (int b8, int b4, int intra4x4mode)
+{
+  int             rate      = 0;
+  Macroblock*     currMB    = &img->mb_data[img->current_mb_nr];
+  SyntaxElement*  currSE    = &img->MB_SyntaxElements[currMB->currSEnr];
+  Slice*          currSlice = img->currentSlice;
+  const int*      partMap   = assignSE2partition[input->partition_mode];
+  int*            bitCount  = currMB->bitcounter;
+  DataPartition*  dataPart;
+
+  int   kk,kbeg,kend;
+  int   level, run;
+  int   k;
+  int*  ACLevel = img->cofAC[b8][b4][0];
+  int*  ACRun   = img->cofAC[b8][b4][1];
+
+  img->subblock_x = ((b8&0x1)==0)?(((b4&0x1)==0)?0:1):(((b4&0x1)==0)?2:3); // horiz. position for coeff_count context
+  img->subblock_y = (b8<2)?((b4<2)?0:1):((b4<2)?2:3); // vert.  position for coeff_count context
+
+  if (intra4x4mode && (img->qp<24 || input->symbol_mode == CABAC))  // double scan, for CABAC always
+  {
     for(kk=0;kk<2;kk++)
     {
-      kbeg=kk*9;
-      kend=kbeg+8;
-      level=1; // get inside loop
+      kbeg  = kk*9;
+      kend  = kbeg+8;
+      level = 1; // get inside loop
 
-      for(k=kbeg;k <= kend && level !=0; k++)
+      for (k=kbeg; k<=kend && level!=0; k++)
       {
-        level = currSE->value1 = img->cof[i][j][k][0][DOUBLE_SCAN]; // level
-        run   = currSE->value2 = img->cof[i][j][k][1][DOUBLE_SCAN]; // run
+        level = currSE->value1 = ACLevel[k];
+        run   = currSE->value2 = ACRun  [k];
 
         if (input->symbol_mode == UVLC)
-          currSE->mapping = levrun_linfo_intra;
+        {
+          currSE->mapping = levrun_linfo_intra;  
+        }
         else
         {
           currSE->context = 0; // for choosing context model
           currSE->writing = writeRunLevel2Buffer_CABAC;
         }
-
+              
         if (k == kbeg)
         {
           currSE->type  = SE_LUM_DC_INTRA; // element is of type DC
 
           // choose the appropriate data partition
-          if (img->type != B_IMG)
-            dataPart = &(currSlice->partArr[partMap[SE_LUM_DC_INTRA]]);
-          else
-            dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+          if (img->type!=B_IMG)   dataPart = &(currSlice->partArr[partMap[SE_LUM_DC_INTRA]]);
+          else                    dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
         }
         else
         {
           currSE->type  = SE_LUM_AC_INTRA;   // element is of type AC
-
+            
           // choose the appropriate data partition
-          if (img->type != B_IMG)
-            dataPart = &(currSlice->partArr[partMap[SE_LUM_AC_INTRA]]);
-          else
-            dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+          if (img->type!=B_IMG)   dataPart = &(currSlice->partArr[partMap[SE_LUM_AC_INTRA]]);
+          else                    dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
         }
+
         dataPart->writeSyntaxElement (currSE, dataPart);
-        bitCount[BITS_COEFF_Y_MB]+=currSE->len;
-        no_bits                  +=currSE->len;
+        bitCount[BITS_COEFF_Y_MB] += currSE->len;
+        rate                      += currSE->len;
 #if TRACE
         snprintf(currSE->tracestring, TRACESTRING_SIZE, "Luma dbl(%2d,%2d)  level=%3d Run=%2d",kk,k,level,run);
 #endif
         // proceed to next SE
-        currSE++;
+        currSE++;  
         currMB->currSEnr++;
       }
     }
@@ -1621,19 +1957,17 @@ writeMB_bits_for_4x4_luma (int i, int j, int  filtering)
   else     // single scan
   {
     level=1; // get inside loop
-    for(k=0;k<=16 && level !=0; k++)
+    for(k=0; k<=16 && level !=0; k++)
     {
-      level = currSE->value1 = img->cof[i][j][k][0][SINGLE_SCAN]; // level
-      run   = currSE->value2 = img->cof[i][j][k][1][SINGLE_SCAN]; // run
-
-      if (input->symbol_mode == UVLC)
-        currSE->mapping = levrun_linfo_inter;
-      else
-        currSE->writing = writeRunLevel2Buffer_CABAC;
+      level = currSE->value1 = ACLevel[k]; // level
+      run   = currSE->value2 = ACRun  [k]; // run
+      
+      if (input->symbol_mode == UVLC)  currSE->mapping = levrun_linfo_inter;    
+      else                             currSE->writing = writeRunLevel2Buffer_CABAC;
 
       if (k == 0)
-      {
-        if (img->imod == INTRA_MB_OLD || img->imod == INTRA_MB_NEW)
+      { 
+        if (intra4x4mode)
         {
           currSE->context = 2; // for choosing context model
           currSE->type  = SE_LUM_DC_INTRA;
@@ -1646,7 +1980,7 @@ writeMB_bits_for_4x4_luma (int i, int j, int  filtering)
       }
       else
       {
-        if (img->imod == INTRA_MB_OLD || img->imod == INTRA_MB_NEW)
+        if (intra4x4mode)
         {
           currSE->context = 2; // for choosing context model
           currSE->type  = SE_LUM_AC_INTRA;
@@ -1659,278 +1993,240 @@ writeMB_bits_for_4x4_luma (int i, int j, int  filtering)
       }
 
       // choose the appropriate data partition
-      if (img->type != B_IMG)
-        dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-      else
-        dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
-       
+      if (img->type != B_IMG)    dataPart = &(currSlice->partArr[partMap[currSE->type]]);
+      else                       dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+          
       dataPart->writeSyntaxElement (currSE, dataPart);
-      bitCount[BITS_COEFF_Y_MB]+=currSE->len;
-      no_bits                  +=currSE->len;
+      bitCount[BITS_COEFF_Y_MB] += currSE->len;
+      rate                      += currSE->len;
 #if TRACE
       snprintf(currSE->tracestring, TRACESTRING_SIZE, "Luma sng(%2d) level =%3d run =%2d", k, level,run);
 #endif
-      // proceed to next SE
-      currSE++;
+      /* proceed to next SE */
+      currSE++;  
       currMB->currSEnr++;
-
     }
   }
 
-  return no_bits;
+  return rate;
+}
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Writes Luma Coeff of an 8x8 block
+ ************************************************************************
+ */
+int writeLumaCoeff8x8 (int block8x8, int intra4x4mode)
+{
+  int  block4x4, rate = 0;
+
+  for (block4x4=0; block4x4<4; block4x4++)
+  {
+    rate += writeLumaCoeff4x4 (block8x8, block4x4, intra4x4mode);
+  }
+
+  return rate;
 }
 
 
 
-
-
+/*!
+ ************************************************************************
+ * \brief
+ *    Writes CBP, DQUANT, and Luma Coefficients of an macroblock
+ ************************************************************************
+ */
 int
-writeMB_bits_for_16x16_luma ()
+writeCBPandLumaCoeff ()
 {
-  int           no_bits    = 0;
-  Macroblock    *currMB    = &img->mb_data[img->current_mb_nr];
-  SyntaxElement *currSE    = &img->MB_SyntaxElements[currMB->currSEnr];
-  int           *bitCount  = currMB->bitcounter;
-  Slice         *currSlice = img->currentSlice;
-  DataPartition *dataPart;
-  int           *partMap   = assignSE2partition[input->partition_mode];
+  int             mb_x, mb_y, i, j, k;
+  int             level, run;
+  int             rate      = 0;
+  Macroblock*     currMB    = &img->mb_data[img->current_mb_nr];
+  int*            bitCount  = currMB->bitcounter;
+  SyntaxElement*  currSE    = &img->MB_SyntaxElements[currMB->currSEnr];
+  Slice*          currSlice = img->currentSlice;
+  const int*      partMap   = assignSE2partition[input->partition_mode];
+  int             cbp       = currMB->cbp;
+  DataPartition*  dataPart;
 
-  int level, run;
-  int i, j, k, mb_x, mb_y;
+  int   b8, b4;
+  int*  DCLevel = img->cofDC[0][0];
+  int*  DCRun   = img->cofDC[0][1];
+  int*  ACLevel;
+  int*  ACRun;
 
 
-  // DC coeffs
-  level=1; // get inside loop
-  for (k=0;k<=16 && level !=0;k++)
+  if (!IS_NEWINTRA (currMB))
   {
-    level = currSE->value1 = img->cof[0][0][k][0][1]; // level
-    run   = currSE->value2 = img->cof[0][0][k][1][1]; // run
-
-    if (input->symbol_mode == UVLC)
-      currSE->mapping = levrun_linfo_inter;
+    //=====   C B P   =====
+    //---------------------
+    currSE->value1 = cbp;
+    
+    if (IS_OLDINTRA (currMB))
+    {
+      if (input->symbol_mode == UVLC)  currSE->mapping = cbp_linfo_intra;
+      currSE->type = SE_CBP_INTRA;
+    }
     else
     {
-      currSE->context = 3; // for choosing context model
-      currSE->writing = writeRunLevel2Buffer_CABAC;
+      if (input->symbol_mode == UVLC)  currSE->mapping = cbp_linfo_inter;
+      currSE->type = SE_CBP_INTER;
     }
-    currSE->type  = SE_LUM_DC_INTRA;   // element is of type DC
+    if (input->symbol_mode == CABAC)   currSE->writing = writeCBP2Buffer_CABAC;
+                      
+    // choose the appropriate data partition
+    if (img->type==B_IMG)  dataPart = &(img->currentSlice->partArr[partMap[SE_BFRAME]]);
+    else                   dataPart = &(img->currentSlice->partArr[partMap[currSE->type]]);
+
+    dataPart->writeSyntaxElement(currSE, dataPart);
+    bitCount[BITS_CBP_MB] += currSE->len;
+    rate                  += currSE->len;
+#if TRACE
+    snprintf(currSE->tracestring, TRACESTRING_SIZE, "CBP (%2d,%2d) = %3d",img->mb_x, img->mb_y, cbp);
+#endif
+    // proceed to next SE
+    currSE++;  
+    currMB->currSEnr++;
+  }
+
+  //=====   DQUANT   =====
+  //----------------------
+  if (cbp!=0 || IS_NEWINTRA (currMB))
+  {
+    currSE->value1 = currMB->delta_qp;
+
+    if (IS_INTRA (currMB))
+    {
+      if (input->symbol_mode==UVLC)   currSE->mapping = dquant_linfo;
+      else                            currSE->writing = writeDquant_intra_CABAC;
+      currSE->type = SE_DELTA_QUANT_INTRA;
+    }
+    else
+    {
+      if (input->symbol_mode==UVLC)   currSE->mapping = dquant_linfo;
+      else                            currSE->writing = writeDquant_inter_CABAC;
+      currSE->type = SE_DELTA_QUANT_INTER;
+    }
 
     // choose the appropriate data partition
-    if (img->type != B_IMG)
-      dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-    else
-      dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+    if (img->type != B_IMG)   dataPart = &(img->currentSlice->partArr[partMap[currSE->type]]);
+    else                      dataPart = &(img->currentSlice->partArr[partMap[SE_BFRAME]]);
 
-    dataPart->writeSyntaxElement (currSE, dataPart);
-    bitCount[BITS_COEFF_Y_MB]+=currSE->len;
-    no_bits                  +=currSE->len;
+    dataPart->writeSyntaxElement(  currSE, dataPart);
+    bitCount[BITS_DELTA_QUANT_MB] += currSE->len;
+    rate                          += currSE->len;
 #if TRACE
-    snprintf(currSE->tracestring, TRACESTRING_SIZE, "DC luma 16x16 sng(%2d) level =%3d run =%2d", k, level, run);
+    snprintf(currSE->tracestring, TRACESTRING_SIZE, "Delta QP (%2d,%2d) = %3d",img->mb_x, img->mb_y, currMB->delta_qp);
 #endif
-
     // proceed to next SE
     currSE++;
     currMB->currSEnr++;
   }
 
 
-  // AC coeffs
-  if (img->kac==1)
+  if (!IS_NEWINTRA (currMB))
   {
-    for (mb_y=0; mb_y < 4; mb_y += 2)
+    //=====  L U M I N A N C E   =====
+    //--------------------------------
+    for (i=0; i<4; i++)  if (cbp & (1<<i))
     {
+        rate += writeLumaCoeff8x8 (i, (currMB->b8mode[i]==IBLOCK));
+    }
+  }
+  else
+  {
+    //=====  L U M I N A N C E   f o r   1 6 x 1 6   =====
+    //----------------------------------------------------
+    // DC coeffs
+    level=1; // get inside loop
+    for (k=0; k<=16 && level!=0; k++)
+    {
+      level = currSE->value1 = DCLevel[k]; // level
+      run   = currSE->value2 = DCRun  [k]; // run
+
+      if (input->symbol_mode == UVLC)
+      {
+        currSE->mapping = levrun_linfo_inter;
+      }
+      else
+      {
+        currSE->context = 3; // for choosing context model
+        currSE->writing = writeRunLevel2Buffer_CABAC;
+      }
+      currSE->type  = SE_LUM_DC_INTRA;   // element is of type DC
+
+      // choose the appropriate data partition
+      if (img->type != B_IMG)   dataPart = &(currSlice->partArr[partMap[currSE->type]]);
+      else                      dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+    
+      dataPart->writeSyntaxElement (currSE, dataPart);
+      bitCount[BITS_COEFF_Y_MB] += currSE->len;
+      rate                      += currSE->len;
+#if TRACE
+      snprintf(currSE->tracestring, TRACESTRING_SIZE, "DC luma 16x16 sng(%2d) level =%3d run =%2d", k, level, run);
+#endif
+      // proceed to next SE
+      currSE++;
+      currMB->currSEnr++;
+    }
+
+    // AC coeffs
+    if (cbp & 15)
+    {
+      for (mb_y=0; mb_y < 4; mb_y += 2)
       for (mb_x=0; mb_x < 4; mb_x += 2)
+      for (j=mb_y; j < mb_y+2; j++)
+      for (i=mb_x; i < mb_x+2; i++)
       {
-        for (j=mb_y; j < mb_y+2; j++)
+        b8      = 2*(j/2) + (i/2);
+        b4      = 2*(j%2) + (i%2);
+        ACLevel = img->cofAC[b8][b4][0];
+        ACRun   = img->cofAC[b8][b4][1];
+
+        level=1; // get inside loop
+        for (k=0;k<16 && level !=0;k++)
         {
-          for (i=mb_x; i < mb_x+2; i++)
+          level = currSE->value1 = ACLevel[k]; // level
+          run   = currSE->value2 = ACRun  [k]; // run
+
+          if (input->symbol_mode == UVLC)
           {
-            level=1; // get inside loop
-            for (k=0;k<16 && level !=0;k++)
-            {
-              level = currSE->value1 = img->cof[i][j][k][0][SINGLE_SCAN]; // level
-              run   = currSE->value2 = img->cof[i][j][k][1][SINGLE_SCAN]; // run
-
-              if (input->symbol_mode == UVLC)
-                currSE->mapping = levrun_linfo_inter;
-              else
-              {
-                currSE->context = 4; // for choosing context model
-                currSE->writing = writeRunLevel2Buffer_CABAC;
-              }
-              currSE->type  = SE_LUM_AC_INTRA;   // element is of type AC
-
-              // choose the appropriate data partition
-              if (img->type != B_IMG)
-                dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-              else
-                dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
-              
-              dataPart->writeSyntaxElement (currSE, dataPart);
-              bitCount[BITS_COEFF_Y_MB]+=currSE->len;
-              no_bits                  +=currSE->len;
-#if TRACE
-              snprintf(currSE->tracestring, TRACESTRING_SIZE, "AC luma 16x16 sng(%2d) level =%3d run =%2d", k, level, run);
-#endif
-              // proceed to next SE
-              currSE++;
-              currMB->currSEnr++;
-            }
+            currSE->mapping = levrun_linfo_inter;
           }
-        }
-      }
-    }
-  }
-
-  return no_bits;
-}
-
-
-
-
-
-int
-writeMB_bits_for_DC_chroma (int filtering)
-{
-  int           no_bits    = 0;
-  Macroblock    *currMB    = &img->mb_data[img->current_mb_nr];
-  SyntaxElement *currSE    = &img->MB_SyntaxElements[currMB->currSEnr];
-  int           *bitCount  = currMB->bitcounter;
-  Slice         *currSlice = img->currentSlice;
-  DataPartition *dataPart;
-  int           *partMap   = assignSE2partition[input->partition_mode];
-
-  int cbp = img->mb_data [img->current_mb_nr].cbp;
-
-  int level, run;
-  int k, uv;
-
-
-  if (cbp > 15)  // check if any chroma bits in coded block pattern is set
-  {
-    for (uv=0; uv < 2; uv++)
-    {
-      level=1;
-      for (k=0; k < 5 && level != 0; ++k)
-      {
-        level = currSE->value1 = img->cofu[k][0][uv]; // level
-        run   = currSE->value2 = img->cofu[k][1][uv]; // run
-
-        if (input->symbol_mode == UVLC)
-          currSE->mapping = levrun_linfo_c2x2;
-        else
-          currSE->writing = writeRunLevel2Buffer_CABAC;
-
-        if (img->imod == INTRA_MB_OLD || img->imod == INTRA_MB_NEW)
-        {
-          currSE->context = 6; // for choosing context model
-          currSE->type  = SE_CHR_DC_INTRA;
-        }
-        else
-        {
-          currSE->context = 5; // for choosing context model
-          currSE->type  = SE_CHR_DC_INTER;
-        }
-
-        // choose the appropriate data partition
-        if (img->type != B_IMG)
-          dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-        else
-          dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
-       
-        dataPart->writeSyntaxElement (currSE, dataPart);
-        bitCount[BITS_COEFF_UV_MB]+=currSE->len;
-        no_bits                   +=currSE->len;
-#if TRACE
-        snprintf(currSE->tracestring, TRACESTRING_SIZE, "2x2 DC Chroma %2d: level =%3d run =%2d",k, level, run);
-#endif
-
-        // proceed to next SE
-        currSE++;
-        currMB->currSEnr++;
-      }
-    }
-  }
-
-  return no_bits;
-}
-
-int
-writeMB_bits_for_AC_chroma (int  filtering)
-{
-  int           no_bits    = 0;
-  Macroblock    *currMB    = &img->mb_data[img->current_mb_nr];
-  SyntaxElement *currSE    = &img->MB_SyntaxElements[currMB->currSEnr];
-  int           *bitCount  = currMB->bitcounter;
-  Slice         *currSlice = img->currentSlice;
-  DataPartition *dataPart;
-  int           *partMap   = assignSE2partition[input->partition_mode];
-
-  int cbp = img->mb_data [img->current_mb_nr].cbp;
-
-  int level, run;
-  int i, j, k, mb_x, mb_y, i1, ii, j1, jj;
-
-
-  if (cbp >> 4 == 2) // check if chroma bits in coded block pattern = 10b
-  {
-    for (mb_y=4; mb_y < 6; mb_y += 2)
-    {
-      for (mb_x=0; mb_x < 4; mb_x += 2)
-      {
-        for (j=mb_y; j < mb_y+2; j++)
-        {
-          jj=j/2;
-          j1=j-4;
-          for (i=mb_x; i < mb_x+2; i++)
+          else
           {
-            ii=i/2;
-            i1=i%2;
-            level=1;
-            for (k=0; k < 16 && level != 0; k++)
-            {
-              level = currSE->value1 = img->cof[i][j][k][0][0]; // level
-              run   = currSE->value2 = img->cof[i][j][k][1][0]; // run
-
-              if (input->symbol_mode == UVLC)
-                currSE->mapping = levrun_linfo_inter;
-              else
-                currSE->writing = writeRunLevel2Buffer_CABAC;
-
-              if (img->imod == INTRA_MB_OLD || img->imod == INTRA_MB_NEW)
-              {
-                currSE->context = 8; // for choosing context model
-                currSE->type  = SE_CHR_AC_INTRA;
-              }
-              else
-              {
-                currSE->context = 7; // for choosing context model
-                currSE->type  = SE_CHR_AC_INTER;
-              }
-              // choose the appropriate data partition
-              if (img->type != B_IMG)
-                dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-              else
-                dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
-       
-              dataPart->writeSyntaxElement (currSE, dataPart);
-              bitCount[BITS_COEFF_UV_MB]+=currSE->len;
-              no_bits                   +=currSE->len;
-#if TRACE
-              snprintf(currSE->tracestring, TRACESTRING_SIZE, "AC Chroma %2d: level =%3d run =%2d",k, level, run);
-#endif
-              // proceed to next SE
-              currSE++;
-              currMB->currSEnr++;
-            }
+            currSE->context = 4; // for choosing context model
+            currSE->writing = writeRunLevel2Buffer_CABAC;
           }
+          currSE->type  = SE_LUM_AC_INTRA;   // element is of type AC
+
+          // choose the appropriate data partition
+          if (img->type != B_IMG)   dataPart = &(currSlice->partArr[partMap[currSE->type]]);
+          else                      dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+
+          dataPart->writeSyntaxElement (currSE, dataPart);
+          bitCount[BITS_COEFF_Y_MB] += currSE->len;
+          rate                      += currSE->len;
+#if TRACE
+          snprintf(currSE->tracestring, TRACESTRING_SIZE, "AC luma 16x16 sng(%2d) level =%3d run =%2d", k, level, run);
+#endif
+          // proceed to next SE
+          currSE++;
+          currMB->currSEnr++;
         }
       }
     }
   }
 
-  return no_bits;
+  return rate;
 }
+
+
+
+
 
 /*!
  ************************************************************************
@@ -1961,10 +2257,10 @@ int find_sad2(int *intra_mode)
     int mb_available_left = (img->mb_x == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-1].slice_nr);
     if(input->UseConstrainedIntraPred)
     {
-      if (mb_available_up && (img->intra_mb[mb_nr-mb_width] ==0))
-        mb_available_up = 0;
-      if (mb_available_left && (img->intra_mb[mb_nr-1] ==0))
-        mb_available_left = 0;
+    if (mb_available_up   && (img->intra_block[mb_nr-mb_width][2]==0 || img->intra_block[mb_nr-mb_width][3]==0))
+      mb_available_up   = 0;
+    if (mb_available_left && (img->intra_block[mb_nr-       1][1]==0 || img->intra_block[mb_nr       -1][3]==0))
+      mb_available_left = 0;
     }
     //check if there are neighbours to predict from
     if ((k==0 && !mb_available_up) || (k==1 && !mb_available_left) || (k==3 && (!mb_available_left || !mb_available_up)))

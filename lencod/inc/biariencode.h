@@ -53,7 +53,7 @@
 #define _BIARIENCOD_H_
 
 
-#define AAC_FRAC_TABLE 0  //!< replaces division in the AC by a table lookup
+#define AAC_FRAC_TABLE 1 //!< replaces division in the AC by a table lookup
 
 
 /************************************************************************
@@ -102,12 +102,17 @@ const unsigned int ARITH_CUM_FREQ_TABLE[128] =
 // some definitions to increase the readability of the source code
 
 #define Elow            (eep->Elow)
-#define Ehigh           (eep->Ehigh)
+#define Erange          (eep->Erange)
 #define Ebits_to_follow (eep->Ebits_to_follow)
 #define Ebuffer         (eep->Ebuffer)
 #define Ebits_to_go     (eep->Ebits_to_go)
 #define Ecodestrm       (eep->Ecodestrm)
 #define Ecodestrm_len   (eep->Ecodestrm_len)
 
+/* Only necessary for new AC */
+#define		B_BITS		16
+#define		F_BITS	  14
+#define		CACM99_HALF		    (1 << (B_BITS-1))
+#define		CACM99_QUARTER		(1 << (B_BITS-2))
 
 #endif  // BIARIENCOD_H

@@ -192,7 +192,7 @@ typedef enum {
 //! struct to characterize the state of the arithmetic coding engine
 typedef struct
 {
-  unsigned int    Dlow, Dhigh;
+  unsigned int    Dlow, Drange;
   unsigned int    Dvalue;
   unsigned int    Dbuffer;
   int             Dbits_to_go;
@@ -218,33 +218,37 @@ typedef BiContextType *BiContextTypePtr;
  **********************************************************************
  */
 
-#define NUM_MB_TYPE_CTX  10
+#define NUM_MB_TYPE_CTX  11
+#define NUM_B8_TYPE_CTX  9
 #define NUM_MV_RES_CTX   10
 #define NUM_REF_NO_CTX   6
 #define NUM_DELTA_QP_CTX 4
 
-
 typedef struct
 {
-  BiContextTypePtr mb_type_contexts[2];
-  BiContextTypePtr mv_res_contexts[2];
-  BiContextTypePtr ref_no_contexts;
+  BiContextTypePtr mb_type_contexts[3];
+  BiContextTypePtr b8_type_contexts[2];
+  BiContextTypePtr mv_res_contexts [2];
+  BiContextTypePtr ref_no_contexts [2];
   BiContextTypePtr delta_qp_inter_contexts;
   BiContextTypePtr delta_qp_intra_contexts;
 } MotionInfoContexts;
+
 
 #define NUM_IPR_CTX    2
 #define NUM_CBP_CTX    4
 #define NUM_TRANS_TYPE 9
 #define NUM_LEVEL_CTX  4
 #define NUM_RUN_CTX    2
+#define NUM_COEFF_COUNT_CTX 6
 
 typedef struct
 {
-  BiContextTypePtr ipr_contexts[6];
-  BiContextTypePtr cbp_contexts[2][3];
-  BiContextTypePtr level_context[NUM_TRANS_TYPE];
-  BiContextTypePtr run_context[NUM_TRANS_TYPE];
+  BiContextTypePtr ipr_contexts [6];
+  BiContextTypePtr cbp_contexts [2][3];
+  BiContextTypePtr level_context[4*NUM_TRANS_TYPE];
+  BiContextTypePtr run_context  [2*NUM_TRANS_TYPE];
+  BiContextTypePtr coeff_count_context[NUM_TRANS_TYPE];
 } TextureInfoContexts;
 
 //*********************** end of data type definition for CABAC *******************
@@ -286,6 +290,7 @@ typedef struct syntaxelement
   int           inf;                   //!< info part of UVLC code
   unsigned int  bitpattern;            //!< UVLC bitpattern
   int           context;               //!< CABAC context
+  int           k;                     //!< CABAC context for coeff_count,uv
 #if TRACE
   #define       TRACESTRING_SIZE 100           //!< size of trace string
   char          tracestring[TRACESTRING_SIZE]; //!< trace string
@@ -304,18 +309,20 @@ typedef struct macroblock
   int           qp;
   int           slice_nr;
   int           delta_quant;          //!< for rate control
-  int           intraOrInter;
   struct macroblock   *mb_available[3][3]; /*!< pointer to neighboring MBs in a 3x3 window of current MB, which is located at [1][1]
                                                 NULL pointer identifies neighboring MBs which are unavailable */
 
   // some storage of macroblock syntax elements for global access
   int           mb_type;
-  int           mb_imode;
-  int           ref_frame;
-  int           predframe_no;
   int           mvd[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE][2];      //!< indices correspond to [forw,backw][block_y][block_x][x,y]
   int           intra_pred_modes[BLOCK_MULTIPLE*BLOCK_MULTIPLE];
+  int           coeffs_count[BLOCK_MULTIPLE][BLOCK_MULTIPLE];
   int           cbp, cbp_blk ;
+
+  int           i16mode;
+  int           b8mode[4];
+  int           b8pdir[4];
+  int           ei_flag;
 } Macroblock;
 
 //! Bitstream
@@ -376,7 +383,7 @@ typedef struct img_par
   int current_mb_nr;
   int max_mb_nr;
   int current_slice_nr;
-  int *intra_mb;                              //<! 1 = intra mb, 0 = not intra mb
+  int **intra_block;
   int tr;                                     //<! temporal reference, 8 bit, wrapps at 255
   int tr_old;                                     //<! old temporal reference, for detection of a new frame, added by WYK
   int refPicID;                         //<! temporal reference for reference frames (non-B frames), 4 bit, wrapps at 15, added by WYK
@@ -396,8 +403,8 @@ typedef struct img_par
   int pix_c_y;
   int block_x;
   int pix_c_x;
-  int mb_mode;
-  int imod;                                   //<! MB mode
+
+  int allrefzero;
   int ***mv;                                  //<! [92][72][3]
   int mpr[16][16];                            //<! predicted block
 
@@ -414,17 +421,10 @@ typedef struct img_par
   int ***dbMV;                                //<! [92][72][3];
   int **fw_refFrArr;                          //<! [72][88];
   int **bw_refFrArr;                          //<! [72][88];
-  int ref_frame;
 
   // B pictures
   int ***fw_mv;                                //<! [92][72][3];
   int ***bw_mv;                                //<! [92][72][3];
-  int fw_multframe_no;
-  int fw_blc_size_h;
-  int fw_blc_size_v;
-  int bw_multframe_no;
-  int bw_blc_size_h;
-  int bw_blc_size_v;
   Slice       *currentSlice;                   //<! pointer to current Slice data struct
   Macroblock          *mb_data;                //<! array containing all MBs of a whole frame
   int subblock_x;
@@ -514,6 +514,8 @@ int  decode_one_macroblock_Bframe(struct img_par *img);// B pictures
 void decode_one_CopyMB(struct img_par *img,struct inp_par *inp);
 int  exit_macroblock(struct img_par *img,struct inp_par *inp);
 
+void readMotionInfoFromNAL (struct img_par *img,struct inp_par *inp);
+
 void readMotionInfoFromNAL_Bframe(struct img_par *img,struct inp_par *inp);// B pictures
 void readMotionInfoFromNAL_Pframe(struct img_par *img,struct inp_par *inp);
 void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp);
@@ -580,6 +582,7 @@ void delete_contexts_TextureInfo(TextureInfoContexts *enco_ctx);
 
 
 void readMB_typeInfoFromBuffer_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
+void readB8_typeInfoFromBuffer_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
 void readIntraPredModeFromBuffer_CABAC(SyntaxElement *se, struct inp_par *inp,struct img_par *img, DecodingEnvironmentPtr dep_dp);
 void readRefFrameFromBuffer_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
 void readMVDFromBuffer_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);

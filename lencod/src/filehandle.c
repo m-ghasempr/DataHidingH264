@@ -387,16 +387,16 @@ int start_slice(SyntaxElement *sym)
           for (i=1; i<currSlice->max_part_nr; i++)
           {
             eep = &((currSlice->partArr[i]).ee_cabac);
-	          currStream = (currSlice->partArr[i]).bitstream;
+            currStream = (currSlice->partArr[i]).bitstream;
 
             part_header_len = RTPPartition_BC_Header(i);
             currStream->header_len = part_header_len;
             ByteAlign (currStream);
 
-     			  assert (currStream->bits_to_go == 8);
-		        assert (currStream->byte_buf == 0);
+            assert (currStream->bits_to_go == 8);
+            assert (currStream->byte_buf == 0);
 
-	          arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos));
+            arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos));
             currStream->write_flag = 0;
           }
         }

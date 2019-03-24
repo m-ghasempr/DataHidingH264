@@ -102,8 +102,6 @@ typedef struct ercSegment_s
 {
   int      startMBPos;
   int      endMBPos;
-  u_int32  startBitPos;
-  u_int32  endBitPos;
   int      fCorrupted;
 } ercSegment_t;
 
@@ -145,14 +143,14 @@ typedef struct ercVariables_s
 
 void ercInit(int pic_sizex, int pic_sizey, int flag);
 ercVariables_t *ercOpen( void );
-void ercReset( ercVariables_t *errorVar, int nOfMBs, int numOfSegments );
+void ercReset( ercVariables_t *errorVar, int nOfMBs, int numOfSegments, int32 picSizeX );
 void ercClose( ercVariables_t *errorVar );
 void ercSetErrorConcealment( ercVariables_t *errorVar, int value );
 
 void ercStartSegment( int currMBNum, int segment, u_int32 bitPos, ercVariables_t *errorVar );
 void ercStopSegment( int currMBNum, int segment, u_int32 bitPos, ercVariables_t *errorVar );
-void ercMarkCurrSegmentLost( int currMBNum, int32 picSizeX, ercVariables_t *errorVar );
-void ercMarkCurrSegmentOK( int currMBNum, int32 picSizeX, ercVariables_t *errorVar );
+void ercMarkCurrSegmentLost(int32 picSizeX, ercVariables_t *errorVar );
+void ercMarkCurrSegmentOK(int32 picSizeX, ercVariables_t *errorVar );
 void ercMarkCurrMBConcealed( int currMBNum, int comp, int32 picSizeX, ercVariables_t *errorVar );
 
 int ercConcealIntraFrame( frame *recfr, int32 picSizeX, int32 picSizeY, ercVariables_t *errorVar );

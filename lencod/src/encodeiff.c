@@ -1031,7 +1031,7 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
     sym.value1 = pp->firstMBInSliceY;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
-    sym.value1 = 31 - pp->initialQP;
+    sym.value1 = MAX_QP - pp->initialQP;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
     if ( input->symbol_mode == CABAC )
     {
@@ -1040,7 +1040,7 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
     }
     if ( pp->sliceType2 == SP_IMG )
     {
-      sym.value1 = 31 - pp->qpsp;
+      sym.value1 = MAX_QP - pp->qpsp;
       writeSyntaxElement2Buf_UVLC(&sym, bitstream);
     }
   }
@@ -1058,7 +1058,7 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
     sym.value1 = pp->firstMBInSliceY;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
-    sym.value1 = 31 - pp->initialQP;
+    sym.value1 = MAX_QP - pp->initialQP;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
     // write the slice id
     sym.value1 = pp->sliceID;

@@ -73,7 +73,7 @@ byte MASK_C[2][ 4]   = {{1,0,3,2}, {2,3,0,1}} ;
  *    Filters one edge of 4 (luma) or 2 (chroma) pel
  *****************************************************************************************
  */
-void EdgeLoop( struct img_par *img, byte* ptrOut, int* ptrIn, Macroblock *MbP, Macroblock *MbQ, int VecDif, int dir, int CbpMaskP, int CbpMaskQ, int widthOut, int widthIn, int luma )
+void EdgeLoop( struct img_par *img, int blkp, int blkq, byte* ptrOut, int* ptrIn, Macroblock *MbP, Macroblock *MbQ, int VecDif, int dir, int CbpMaskP, int CbpMaskQ, int widthOut, int widthIn, int luma )
 {
   int      StrengthP, StrengthQ ;
   int      alpha, beta  ;
@@ -86,10 +86,8 @@ void EdgeLoop( struct img_par *img, byte* ptrOut, int* ptrIn, Macroblock *MbP, M
   int      qp = max(MbQ->qp, 0);
 
 
-  StrengthQ = ((MbQ->intraOrInter != INTER_MB) || (img->type == SP_IMG_1) || (img->type == SP_IMG_MULT))?
-               2: ((MbQ->cbp_blk & CbpMaskQ) != 0)? 1:0 ;
-  StrengthP = ((MbP->intraOrInter != INTER_MB) || (img->type == SP_IMG_1) || (img->type == SP_IMG_MULT))?
-               2: ((MbP->cbp_blk & CbpMaskP) != 0)? 1:0 ;        // if not INTRA: has this  4x4 block coeffs?
+  StrengthQ = (MbQ->b8mode[blkq]==IBLOCK || MbQ->mb_type==I16MB || (img->type == SP_IMG_1) || (img->type == SP_IMG_MULT))? 2: ((MbQ->cbp_blk & CbpMaskQ) != 0)? 1:0 ;  // if not INTRA: has this
+  StrengthP = (MbP->b8mode[blkp]==IBLOCK || MbP->mb_type==I16MB || (img->type == SP_IMG_1) || (img->type == SP_IMG_MULT))? 2: ((MbP->cbp_blk & CbpMaskP) != 0)? 1:0 ;       // 4x4 block coeffs?
 
   if( StrengthP || StrengthQ || VecDif )
   {
@@ -167,12 +165,12 @@ void EdgeLoop( struct img_par *img, byte* ptrOut, int* ptrIn, Macroblock *MbP, M
  *    returns VecDiff for different Frame types
  *****************************************************************************************
  */
-int GetVecDif( struct img_par *img, int dir, int blk_y, int blk_x )
+int GetVecDif( struct img_par *img, int dir, int blk_y, int blk_x, int direct )
 {
 
   if( (img->type == B_IMG_1)  || (img->type == B_IMG_MULT) )
   {
-    if( img->imod != B_Direct )
+    if (!direct)
       return (abs( img->fw_mv[blk_x+4][blk_y][0] - img->fw_mv[blk_x+4-!dir][blk_y-dir][0]) >= 4) |
              (abs( img->fw_mv[blk_x+4][blk_y][1] - img->fw_mv[blk_x+4-!dir][blk_y-dir][1]) >= 4) |
              (abs( img->bw_mv[blk_x+4][blk_y][0] - img->bw_mv[blk_x+4-!dir][blk_y-dir][0]) >= 4) |
@@ -207,6 +205,8 @@ void DeblockMb(struct img_par *img )
   int           bufferY[20*20],  bufferU[12*12], bufferV[12*12];
   int xFirst =  img->block_x? -4:0;
   int yFirst =  img->block_y? -4:0;
+  int           blkp, blkq;
+  int           direct;
 
 
 
@@ -226,21 +226,33 @@ void DeblockMb(struct img_par *img )
     for( ofs_y=(!dir || img->block_y)? 0:1 ; ofs_y<4 ; ofs_y++ )             // go  vertically through 4x4 blocks
       for( ofs_x=( dir || img->block_x)? 0:1 ; ofs_x<4 ; ofs_x++ )          // go horicontally through 4x4 blocks
       {
+        blkp = blkq = 2*(ofs_y/2)+(ofs_x/2);
+        if (!dir) //hori
+        {
+          if      (ofs_x==0)  blkp = blkq+1;
+          else if (ofs_x==2)  blkp = blkq-1;
+        }
+        else
+        {
+          if      (ofs_y==0)  blkp = blkq+2;
+          else if (ofs_y==2)  blkp = blkq-2;
+        }
         blk_y    = img->block_y + ofs_y ;                                                 // absolute 4x4 address
         blk_x    = img->block_x + ofs_x ;
         MbQ      = MbP = &img->mb_data[ img->current_mb_nr ] ;                                      // current Mb
         MbP     -= ( !ofs_x && !dir)? 1 : ((!ofs_y && dir)? (img->width>>4) : 0) ;              // neighboring Mb
-        VecDif   = GetVecDif( img, dir, blk_y, blk_x ) ;                 // Get Vecdiff for different frame types
+        direct   = ((img->type==B_IMG_1 || img->type==B_IMG_MULT) && (MbQ->mb_type==0 || (MbQ->mb_type==P8x8 && MbQ->b8mode[blkq]==0)));
+        VecDif   = GetVecDif( img, dir, blk_y, blk_x, direct ) ;         // Get Vecdiff for different frame types
         CbpMaskQ = (ofs_y<<2) + ofs_x ;
-        EdgeLoop( img, imgY[blk_y<<2] + (blk_x<<2), bufferY + ((20*ofs_y+ofs_x)<<2) + 84, MbP, MbQ, VecDif, dir, 1<<MASK_L[dir][CbpMaskQ], 1<<CbpMaskQ, img->width, 20, 1 ) ;
+        EdgeLoop( img, blkp, blkq, imgY[blk_y<<2] + (blk_x<<2), bufferY + ((20*ofs_y+ofs_x)<<2) + 84, MbP, MbQ, VecDif, dir, 1<<MASK_L[dir][CbpMaskQ], 1<<CbpMaskQ, img->width, 20, 1 ) ;
 
         if( (!dir && !(ofs_x & 1)) || (dir && !(ofs_y & 1)) )                      // do the same for chrominance
-          {
+        {
           CbpMaskQ = (ofs_y & 0xfe) + (ofs_x>>1) ;
 
-          EdgeLoop( img, imgUV[0][blk_y<<1] + ((blk_x)<<1), bufferU + ((12*ofs_y+ofs_x)<<1) + 52, MbP, MbQ, VecDif, dir, 0x010000<<MASK_C[dir][CbpMaskQ], 0x010000<<CbpMaskQ, img->width_cr, 12, 0 ) ;
-          EdgeLoop( img, imgUV[1][blk_y<<1] + ((blk_x)<<1), bufferV + ((12*ofs_y+ofs_x)<<1) + 52, MbP, MbQ, VecDif, dir, 0x100000<<MASK_C[dir][CbpMaskQ], 0x100000<<CbpMaskQ, img->width_cr, 12, 0 ) ;
-          }
+          EdgeLoop( img, blkp, blkq, imgUV[0][blk_y<<1] + ((blk_x)<<1), bufferU + ((12*ofs_y+ofs_x)<<1) + 52, MbP, MbQ, VecDif, dir, 0x010000<<MASK_C[dir][CbpMaskQ], 0x010000<<CbpMaskQ, img->width_cr, 12, 0 ) ;
+          EdgeLoop( img, blkp, blkq, imgUV[1][blk_y<<1] + ((blk_x)<<1), bufferV + ((12*ofs_y+ofs_x)<<1) + 52, MbP, MbQ, VecDif, dir, 0x100000<<MASK_C[dir][CbpMaskQ], 0x100000<<CbpMaskQ, img->width_cr, 12, 0 ) ;
+        }
       }
   }
 }

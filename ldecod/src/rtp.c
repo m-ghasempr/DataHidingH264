@@ -235,18 +235,11 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
   int b_interval;
   static unsigned int old_seq=0;
   int FirstMacroblockInSlice;
-  static int b_frame;
+  static int b_frame = FALSE;
+  static int first_slice = FALSE;
 
   assert (currSlice != NULL);
   assert (bits != 0);
-
-  if (first)
-  {
-    currSlice->max_part_nr = MAX_PART_NR;   // Just to get a start
-    ExpectedMBNr = 0;
-    LastPicID = -1;
-  }
-
 
   // Tenporal storage for this function only
 
@@ -346,172 +339,64 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
   {
     first = FALSE;
     bframe_to_code = InfoSet.NumberBFrames+1;
+    currSlice->max_part_nr = MAX_PART_NR;   // Just to get a start
+    ExpectedMBNr = 0;
+    LastPicID = -1;
   }
-
-  if (LastPicID == sh->PictureID)   // we are in the same picture
+  // slightly different handling for first slice that is received
+  // necessary for the case we loose this first slice or even the whole first frame
+  if(first_slice == FALSE)
   {
-    if (ExpectedMBNr == FirstMacroblockInSlice)
+    first_slice = TRUE;
+    b_frame = FALSE;
+    img->pn = 0;
+    if(sh->PictureID == 0)
     {
-      currSlice->partArr[0].bitstream->ei_flag = 0;    // everything seems to be ok.
+      if(FirstMacroblockInSlice == 0)
+        currSlice->partArr[0].bitstream->ei_flag = 0; // everything seems to be ok.
+      else
+      {
+        back=p->packlen+8;                // Unread the packet
+        fseek (bits, -back, SEEK_CUR);    
+        currSlice->ei_flag = 1;
+        currSlice->dp_mode = PAR_DP_1;
+        currSlice->start_mb_nr = ExpectedMBNr;
+        currSlice->next_header = RTPGetFollowingSliceHeader (img, nextp, nextsh);
+          
+        img->tr = currSlice->picture_id = last_pframe = sh->PictureID;
+        img->type = INTRA_IMG;
+        img->pn = 0;
+        bframe_to_code = 1;
+ 
+        currSlice->start_mb_nr = 0;
+#if _ERROR_CONCEALMENT_
+        currSlice->last_mb_nr = FirstMacroblockInSlice-1;
+#else
+        currSlice->last_mb_nr = FirstMacroblockInSlice;
+#endif
+        currSlice->partArr[0].bitstream->bitstream_length=0;
+        currSlice->partArr[0].bitstream->read_len=0;
+        currSlice->partArr[0].bitstream->code_len=0;
+        currSlice->partArr[0].readSyntaxElement = readSyntaxElement_RTP;
+
+        return 0;
+      }
     }
     else
     {
-      if (FirstMacroblockInSlice == 0)
-      {
-        assert ("weird! PicID wrap around?  Should not happen\n");
-      }
-      else
-      {
-        //printf ("SLICE LOSS 1: Slice loss at PicID %d, macoblocks %d to %d\n",LastPicID, ExpectedMBNr, FirstMacroblockInSlice-1);
-        back=p->packlen+8;
-        fseek (bits, -back, SEEK_CUR);    
-
-        //FirstMacroblockInSlice = (img->width*img->height)/(16*16);
-        currSlice->ei_flag = 1;
-        currSlice->dp_mode = PAR_DP_1;
-        currSlice->start_mb_nr = ExpectedMBNr;
-        //! just the same slice we just read!
-        currSlice->next_header = RTPGetFollowingSliceHeader (img, nextp, nextsh); 
-        assert (currSlice->start_mb_nr == img->current_mb_nr); 
-#if _ERROR_CONCEALMENT_
-        currSlice->last_mb_nr = FirstMacroblockInSlice-1;
-#else
-        currSlice->last_mb_nr = FirstMacroblockInSlice;
-#endif
-        currSlice->partArr[0].bitstream->bitstream_length=0;
-        currSlice->partArr[0].bitstream->read_len=0;
-        currSlice->partArr[0].bitstream->code_len=0;
-        currSlice->partArr[0].bitstream->ei_flag=1;
-          
-        img->tr = currSlice->picture_id = LastPicID;
-         
-        return 0;
-      }
-    }
-  }
-  else      // we are in a different picture
-  {
-    b_interval = (int)((float)(InfoSet.FrameSkip +1)/(float)(InfoSet.NumberBFrames +1) + 0.49999);
-    if (ExpectedMBNr == 0)    // the old picture was finished
-    {
-      if (((last_pframe + InfoSet.FrameSkip +1)%256) == sh->PictureID && 
-           (bframe_to_code > InfoSet.NumberBFrames)) //! we received a new P-Frame and coded all B-Frames
-      {
-        if(InfoSet.NumberBFrames)
-        {
-          bframe_to_code = 1;
-          last_pframe = sh->PictureID-(InfoSet.FrameSkip +1);
-        }
-        else
-          last_pframe = sh->PictureID;
-
-        if(last_pframe < 0)
-          last_pframe += 256;
-        b_frame = FALSE;
-      }
-      else if(sh->PictureID == last_pframe + b_interval*bframe_to_code && InfoSet.NumberBFrames) //! we received a B-Frame
-      {
-        bframe_to_code ++;
-        b_frame = TRUE;
-        if(bframe_to_code > InfoSet.NumberBFrames)
-          last_pframe += (InfoSet.FrameSkip +1);
-      }
-      else //! we lost at least one whole frame
-      {
-        //printf ("SLICE LOSS 4: Slice loss at PicID %d containing the whole frame\n", LastPicID + InfoSet.FrameSkip +1); 
-        back=p->packlen+8;                // Unread the packet
-        fseek (bits, -back, SEEK_CUR);    
-        currSlice->ei_flag = 1;
-        currSlice->dp_mode = PAR_DP_1;
-        currSlice->start_mb_nr = ExpectedMBNr;
-        currSlice->next_header = RTPGetFollowingSliceHeader (img, nextp, nextsh); 
-        currSlice->partArr[0].readSyntaxElement = readSyntaxElement_RTP;
-        assert (currSlice->start_mb_nr == img->current_mb_nr); 
-
-#if _ERROR_CONCEALMENT_
-        currSlice->last_mb_nr = img->max_mb_nr-1;
-#else
-        currSlice->last_mb_nr = img->max_mb_nr;
-#endif
-        currSlice->partArr[0].bitstream->bitstream_length=0;
-        currSlice->partArr[0].bitstream->read_len=0;
-        currSlice->partArr[0].bitstream->code_len=0;
-
-        if(!InfoSet.NumberBFrames || (bframe_to_code > InfoSet.NumberBFrames)) //! we expect a P-Frame
-        {
-          img->tr = currSlice->picture_id = (last_pframe + InfoSet.FrameSkip +1)%256;
-          img->type = INTER_IMG_1;
-          if(InfoSet.NumberBFrames)
-          {
-            last_pframe = img->tr-(InfoSet.FrameSkip +1);
-            bframe_to_code = 1;
-          }
-          else
-            last_pframe = img->tr;
-          
-          if(last_pframe < 0)
-            last_pframe += 256;
-          b_frame = FALSE;
-          img->pn++;
-        }
-        else //! we expect a B-Frame
-        {
-          img->tr = currSlice->picture_id = (last_pframe + b_interval*bframe_to_code)%256;
-          img->type = B_IMG_1;
-          bframe_to_code ++;
-          if(bframe_to_code > InfoSet.NumberBFrames)
-            last_pframe += (InfoSet.FrameSkip +1);
-        }
-        
-        return 0;
-      }
-      if(FirstMacroblockInSlice == 0)
-      {
-        currSlice->partArr[0].bitstream->ei_flag = 0; // everything seems to be ok.
-      }
-      else //! slice loss from the begining of the frame
-      {
-        //printf ("SLICE LOSS 2: Slice loss at PicID %d, beginning of picture to macroblock %d\n", LastPicID, FirstMacroblockInSlice); 
-        back=p->packlen+8;                // Unread the packet
-        fseek (bits, -back, SEEK_CUR);    
-        currSlice->ei_flag = 1;
-        currSlice->dp_mode = PAR_DP_1;
-        currSlice->start_mb_nr = ExpectedMBNr;
-        currSlice->next_header = RTPGetFollowingSliceHeader (img, nextp, nextsh); 
-        assert (currSlice->start_mb_nr == img->current_mb_nr); 
-
-#if _ERROR_CONCEALMENT_
-        currSlice->last_mb_nr = FirstMacroblockInSlice-1;
-#else
-        currSlice->last_mb_nr = FirstMacroblockInSlice;
-#endif
-        currSlice->partArr[0].bitstream->bitstream_length=0;
-        currSlice->partArr[0].bitstream->read_len=0;
-        currSlice->partArr[0].bitstream->code_len=0;
-        currSlice->partArr[0].readSyntaxElement = readSyntaxElement_RTP;
-        
-        img->tr = currSlice->picture_id = sh->PictureID;
-        if(b_frame == FALSE) //! we expect a P-Frame
-        {
-          img->type = INTER_IMG_1;
-          img->pn++;
-        }  
-        else
-          img->type = B_IMG_1;
-        
-        return 0;
-      }
-    }
-    else //we did not finish the old frame
-    {
-      //upprintf ("SLICE LOSS 3: Slice loss at PicID %d, macroblocks %d to end of picture\n", LastPicID, ExpectedMBNr); 
       back=p->packlen+8;                // Unread the packet
       fseek (bits, -back, SEEK_CUR);    
       currSlice->ei_flag = 1;
       currSlice->dp_mode = PAR_DP_1;
       currSlice->start_mb_nr = ExpectedMBNr;
-      currSlice->next_header = RTPGetFollowingSliceHeader (img, nextp, nextsh); 
-      assert (currSlice->start_mb_nr == img->current_mb_nr); 
+      currSlice->next_header = RTPGetFollowingSliceHeader (img, nextp, nextsh);
+          
+      img->tr = currSlice->picture_id = last_pframe = 0;
+      img->type = INTRA_IMG;
+      img->pn = 0;
+      bframe_to_code = 1;
+
+      img->max_mb_nr = (img->width * img->height) / (MB_BLOCK_SIZE * MB_BLOCK_SIZE);
 #if _ERROR_CONCEALMENT_
       currSlice->last_mb_nr = img->max_mb_nr-1;
 #else
@@ -521,10 +406,190 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
       currSlice->partArr[0].bitstream->read_len=0;
       currSlice->partArr[0].bitstream->code_len=0;
       currSlice->partArr[0].readSyntaxElement = readSyntaxElement_RTP;
-      
-      img->tr = currSlice->picture_id = LastPicID;
-      
+
       return 0;
+    }
+  }
+  else
+  {
+    if (LastPicID == sh->PictureID)   // we are in the same picture
+    {
+      if (ExpectedMBNr == FirstMacroblockInSlice)
+      {
+        currSlice->partArr[0].bitstream->ei_flag = 0;    // everything seems to be ok.
+      }
+      else
+      {
+        if (FirstMacroblockInSlice == 0)
+        {
+          assert ("weird! PicID wrap around?  Should not happen\n");
+        }
+        else
+        {
+          //printf ("SLICE LOSS 1: Slice loss at PicID %d, macoblocks %d to %d\n",LastPicID, ExpectedMBNr, FirstMacroblockInSlice-1);
+          back=p->packlen+8;
+          fseek (bits, -back, SEEK_CUR);    
+
+          //FirstMacroblockInSlice = (img->width*img->height)/(16*16);
+          currSlice->ei_flag = 1;
+          currSlice->dp_mode = PAR_DP_1;
+          currSlice->start_mb_nr = ExpectedMBNr;
+          //! just the same slice we just read!
+          currSlice->next_header = RTPGetFollowingSliceHeader (img, nextp, nextsh); 
+          assert (currSlice->start_mb_nr == img->current_mb_nr); 
+  #if _ERROR_CONCEALMENT_
+          currSlice->last_mb_nr = FirstMacroblockInSlice-1;
+  #else
+          currSlice->last_mb_nr = FirstMacroblockInSlice;
+  #endif
+          currSlice->partArr[0].bitstream->bitstream_length=0;
+          currSlice->partArr[0].bitstream->read_len=0;
+          currSlice->partArr[0].bitstream->code_len=0;
+          currSlice->partArr[0].bitstream->ei_flag=1;
+          
+          img->tr = currSlice->picture_id = LastPicID;
+         
+          return 0;
+        }
+      }
+    }
+    else      // we are in a different picture
+    {
+      b_interval = (int)((float)(InfoSet.FrameSkip +1)/(float)(InfoSet.NumberBFrames +1) + 0.49999);
+      if (ExpectedMBNr == 0)    // the old picture was finished
+      {
+        if (((last_pframe + InfoSet.FrameSkip +1)%256) == sh->PictureID && 
+             (bframe_to_code > InfoSet.NumberBFrames)) //! we received a new P-Frame and coded all B-Frames
+        {
+          if(InfoSet.NumberBFrames)
+          {
+            bframe_to_code = 1;
+            last_pframe = sh->PictureID-(InfoSet.FrameSkip +1);
+          }
+          else
+            last_pframe = sh->PictureID;
+
+          if(last_pframe < 0)
+            last_pframe += 256;
+          b_frame = FALSE;
+        }
+        else if(sh->PictureID == ((last_pframe + b_interval*bframe_to_code)%256) && InfoSet.NumberBFrames) //! we received a B-Frame
+        {
+          bframe_to_code ++;
+          b_frame = TRUE;
+          if(bframe_to_code > InfoSet.NumberBFrames)
+            last_pframe += (InfoSet.FrameSkip +1);
+        }
+        else //! we lost at least one whole frame
+        {
+          //printf ("SLICE LOSS 4: Slice loss at PicID %d containing the whole frame\n", LastPicID + InfoSet.FrameSkip +1); 
+          back=p->packlen+8;                // Unread the packet
+          fseek (bits, -back, SEEK_CUR);    
+          currSlice->ei_flag = 1;
+          currSlice->dp_mode = PAR_DP_1;
+          currSlice->start_mb_nr = ExpectedMBNr;
+          currSlice->next_header = RTPGetFollowingSliceHeader (img, nextp, nextsh); 
+          currSlice->partArr[0].readSyntaxElement = readSyntaxElement_RTP;
+          assert (currSlice->start_mb_nr == img->current_mb_nr); 
+
+  #if _ERROR_CONCEALMENT_
+          currSlice->last_mb_nr = img->max_mb_nr-1;
+  #else
+          currSlice->last_mb_nr = img->max_mb_nr;
+  #endif
+          currSlice->partArr[0].bitstream->bitstream_length=0;
+          currSlice->partArr[0].bitstream->read_len=0;
+          currSlice->partArr[0].bitstream->code_len=0;
+
+          if(!InfoSet.NumberBFrames || (bframe_to_code > InfoSet.NumberBFrames)) //! we expect a P-Frame
+          {
+            img->tr = currSlice->picture_id = (last_pframe + InfoSet.FrameSkip +1)%256;
+            img->type = INTER_IMG_1;
+            if(InfoSet.NumberBFrames)
+            {
+              last_pframe = img->tr-(InfoSet.FrameSkip +1);
+              bframe_to_code = 1;
+            }
+            else
+              last_pframe = img->tr;
+          
+            if(last_pframe < 0)
+              last_pframe += 256;
+            b_frame = FALSE;
+            img->pn++;
+          }
+          else //! we expect a B-Frame
+          {
+            img->tr = currSlice->picture_id = (last_pframe + b_interval*bframe_to_code)%256;
+            img->type = B_IMG_1;
+            bframe_to_code ++;
+            if(bframe_to_code > InfoSet.NumberBFrames)
+              last_pframe += (InfoSet.FrameSkip +1);
+          }
+        
+          return 0;
+        }
+        if(FirstMacroblockInSlice == 0)
+        {
+          currSlice->partArr[0].bitstream->ei_flag = 0; // everything seems to be ok.
+        }
+        else //! slice loss from the begining of the frame
+        {
+          //printf ("SLICE LOSS 2: Slice loss at PicID %d, beginning of picture to macroblock %d\n", LastPicID, FirstMacroblockInSlice); 
+          back=p->packlen+8;                // Unread the packet
+          fseek (bits, -back, SEEK_CUR);    
+          currSlice->ei_flag = 1;
+          currSlice->dp_mode = PAR_DP_1;
+          currSlice->start_mb_nr = ExpectedMBNr;
+          currSlice->next_header = RTPGetFollowingSliceHeader (img, nextp, nextsh); 
+          assert (currSlice->start_mb_nr == img->current_mb_nr); 
+
+  #if _ERROR_CONCEALMENT_
+          currSlice->last_mb_nr = FirstMacroblockInSlice-1;
+  #else
+          currSlice->last_mb_nr = FirstMacroblockInSlice;
+  #endif
+          currSlice->partArr[0].bitstream->bitstream_length=0;
+          currSlice->partArr[0].bitstream->read_len=0;
+          currSlice->partArr[0].bitstream->code_len=0;
+          currSlice->partArr[0].readSyntaxElement = readSyntaxElement_RTP;
+        
+          img->tr = currSlice->picture_id = sh->PictureID;
+          if(b_frame == FALSE) //! we expect a P-Frame
+          {
+            img->type = INTER_IMG_1;
+            img->pn++;
+          }  
+          else
+            img->type = B_IMG_1;
+        
+          return 0;
+        }
+      }
+      else //we did not finish the old frame
+      {
+        //upprintf ("SLICE LOSS 3: Slice loss at PicID %d, macroblocks %d to end of picture\n", LastPicID, ExpectedMBNr); 
+        back=p->packlen+8;                // Unread the packet
+        fseek (bits, -back, SEEK_CUR);    
+        currSlice->ei_flag = 1;
+        currSlice->dp_mode = PAR_DP_1;
+        currSlice->start_mb_nr = ExpectedMBNr;
+        currSlice->next_header = RTPGetFollowingSliceHeader (img, nextp, nextsh); 
+        assert (currSlice->start_mb_nr == img->current_mb_nr); 
+  #if _ERROR_CONCEALMENT_
+        currSlice->last_mb_nr = img->max_mb_nr-1;
+  #else
+        currSlice->last_mb_nr = img->max_mb_nr;
+  #endif
+        currSlice->partArr[0].bitstream->bitstream_length=0;
+        currSlice->partArr[0].bitstream->read_len=0;
+        currSlice->partArr[0].bitstream->code_len=0;
+        currSlice->partArr[0].readSyntaxElement = readSyntaxElement_RTP;
+      
+        img->tr = currSlice->picture_id = LastPicID;
+      
+        return 0;
+      }
     }
   }
 
@@ -553,7 +618,7 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
       
   currSlice->next_header = RTPGetFollowingSliceHeader (img, nextp, nextsh); // no use for the info in nextp, nextsh yet. 
   
-  if ((p->payload[0]&0xf) == 0)         // Full Slice Packet
+  if ((p->payload[0]&0xf) == 0  || b_frame)         // Full Slice Packet or B-Frame
   {
     currSlice->dp_mode = PAR_DP_1;
     currSlice->max_part_nr=1;
@@ -735,12 +800,12 @@ int RTPInterpretSliceHeader (byte *buf, int bufsize, int ReadSliceId, RTPSliceHe
     linfo (len, info, &sh->InitialSPQP, &dummy);
     bitptr+=len;
     sh->InitialSPQP = MAX_QP-sh->InitialSPQP;
+    assert (sh->InitialSPQP >=MIN_QP && sh->InitialSPQP <= MAX_QP);
   }
 
   assert (sh->ParameterSet == 0);     // only for testing, should be deleted as soon as more than one parameter set is generated by trhe encoder
   assert (sh->SliceType > 0 || sh->SliceType < 5);
   assert (sh->InitialQP >=MIN_QP && sh->InitialQP <= MAX_QP);
-  assert (sh->InitialSPQP >=MIN_QP && sh->InitialSPQP <= MAX_QP);
 
 
   if (ReadSliceId)

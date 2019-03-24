@@ -87,10 +87,6 @@ LINK32=link.exe
 # PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
 # Begin Source File
 
-SOURCE=.\lencod\src\b_frame.c
-# End Source File
-# Begin Source File
-
 SOURCE=.\lencod\src\biariencode.c
 # End Source File
 # Begin Source File
@@ -179,10 +175,6 @@ SOURCE=.\lencod\src\uvlc.c
 # PROP Default_Filter "h;hpp;hxx;hm;inl"
 # Begin Source File
 
-SOURCE=.\lencod\inc\b_frame.h
-# End Source File
-# Begin Source File
-
 SOURCE=.\lencod\inc\biariencode.h
 # End Source File
 # Begin Source File
@@ -244,10 +236,6 @@ SOURCE=.\lcommon\inc\memalloc.h
 # Begin Source File
 
 SOURCE=".\lencod\inc\mv-search.h"
-# End Source File
-# Begin Source File
-
-SOURCE=.\lencod\inc\rdopt.h
 # End Source File
 # Begin Source File
 

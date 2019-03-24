@@ -50,6 +50,7 @@
 #ifndef _DEFINES_H_
 #define _DEFINES_H_
 
+
 #define _EXP_GOLOMB
 
 // Constants for the interim file format
@@ -70,10 +71,41 @@
 
 #define IMG_PAD_SIZE    4   //!< Number of pixels padded around the reference frame (>=4)
 
-#define TRACE           1        //!< 0:Trace off 1:Trace on
+#define TRACE           0        //!< 0:Trace off 1:Trace on
 
 #define absm(A) ((A)<(0) ? (-(A)):(A)) //!< abs macro, faster than procedure
 #define MAX_VALUE       999999   //!< used for start value for some variables
+
+
+
+
+
+#define P8x8    8
+#define I4MB    9
+#define I16MB   10
+#define IBLOCK  11
+#define MAXMODE 12
+
+
+#define  LAMBDA_ACCURACY_BITS         16
+#define  LAMBDA_FACTOR(lambda)        ((int)((double)(1<<LAMBDA_ACCURACY_BITS)*lambda+0.5))
+#define  WEIGHTED_COST(factor,bits)   (((factor)*(bits))>>LAMBDA_ACCURACY_BITS)
+#define  MV_COST(f,s,cx,cy,px,py)     (WEIGHTED_COST(f,mvbits[((cx)<<(s))-px]+mvbits[((cy)<<(s))-py]))
+#define  REF_COST(f,ref)              (WEIGHTED_COST(f,refbits[(ref)]))
+
+
+#define IS_INTRA(MB)    ((MB)->mb_type==I4MB  || (MB)->mb_type==I16MB)
+#define IS_NEWINTRA(MB) ((MB)->mb_type==I16MB)
+#define IS_OLDINTRA(MB) ((MB)->mb_type==I4MB)
+#define IS_INTER(MB)    ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB)
+#define IS_INTERMV(MB)  ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB  && (MB)->mb_type!=0)
+#define IS_DIRECT(MB)   ((MB)->mb_type==0     && img ->   type==B_IMG)
+#define IS_COPY(MB)     ((MB)->mb_type==0     && img ->   type==INTER_IMG);
+#define IS_P8x8(MB)     ((MB)->mb_type==P8x8)
+
+
+
+
 
 // Quantization parameter range
 #define MIN_QP          -8
@@ -85,26 +117,6 @@
 #define B_IMG           2   //!< B frame
 #define SP_IMG          3   //!< SP frame
 
-// inter MB modes
-#define COPY_MB         0        //!< just copy last MB, no motion vectors
-#define M16x16_MB       1        //!< 16 x 16 block
-#define M16x8_MB        2
-#define M8x16_MB        3
-#define M8x8_MB         4
-#define M8x4_MB         5
-#define M4x8_MB         6
-#define M4x4_MB         7
-
-// imod constants
-#define INTRA_MB_OLD    0       //!< new intra prediction mode in inter frame
-#define INTRA_MB_NEW    1       //!< 'old' intra prediction mode in inter frame
-#define INTRA_MB_INTER  2       //!< Intra MB in inter frame, use the constants above
-
-// B pictures : img->imod
-#define B_Forward       3
-#define B_Backward      4
-#define B_Bidirect      5
-#define B_Direct        6
 
 #define BLOCK_SIZE      4
 #define MB_BLOCK_SIZE   16

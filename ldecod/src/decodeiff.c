@@ -818,7 +818,7 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
 
   sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length );
   sym.mapping(sym.len, sym.inf, &(sym.value1), &(sym.value2));
-  pp->initialQP = 31 - sym.value1;
+  pp->initialQP = MAX_QP - sym.value1;
   currSlice->qp = img->qp = pp->initialQP;
   buf->frame_bitoffset += sym.len;
   bitptr += sym.len;
@@ -836,7 +836,7 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
   {
     sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length );
     sym.mapping(sym.len, sym.inf, &(sym.value1), &(sym.value2));
-    img->qpsp = 31 - sym.value1;
+    img->qpsp = MAX_QP - sym.value1;
     buf->frame_bitoffset += sym.len;
     bitptr += sym.len;
   }

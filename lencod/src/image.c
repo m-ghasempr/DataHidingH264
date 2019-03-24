@@ -170,7 +170,7 @@ int encode_one_frame()
     if (img->b_frame_to_code == input->successive_Bframe)
       copy2fb(img);          // last successive B-frame: mref_P[][][], mcef_P[][][][] (loop-filtered imgY, imgUV)-> mref[][][], mcef[][][][]
 
-  if (input->rdopt==2)
+  if (input->rdopt==2 && img->type!=B_IMG)
     UpdateDecoders(); // simulate packet losses and move decoded image to reference buffers
 
   if (input->RestrictRef)
@@ -322,23 +322,9 @@ void init_frame()
   img->current_slice_nr=0;
   stat->bit_slice = 0;
 
-  if(input->UseConstrainedIntraPred)
-  {
-    for (i=0; i<img->total_number_mb; i++)
-      img->intra_mb[i] = 1; // default 1 = intra mb
-  }
-
-  img->mhor  = img->width *4-1;
-  img->mvert = img->height*4-1;
-
   img->mb_y = img->mb_x = 0;
   img->block_y = img->pix_y = img->pix_c_y = 0;   // define vertical positions
   img->block_x = img->pix_x = img->block_c_x = img->pix_c_x = 0; // define horizontal positions
-
-  if (input->intra_upd > 0 && img->mb_y <= img->mb_y_intra)
-    img->height_err=(img->mb_y_intra*16)+15;     // for extra intra MB
-  else
-    img->height_err=img->height-1;
 
   if(img->type != B_IMG)
   {
@@ -937,7 +923,7 @@ void find_snr()
   {
     for (j=0; j < img->height; ++j)
     {
-      diff_y += img->quad[abs(imgY_org[j][i]-imgY[j][i])];
+      diff_y += img->quad[imgY_org[j][i]-imgY[j][i]];
     }
   }
 
@@ -950,8 +936,8 @@ void find_snr()
   {
     for (j=0; j < img->height_cr; j++)
     {
-      diff_u += img->quad[abs(imgUV_org[0][j][i]-imgUV[0][j][i])];
-      diff_v += img->quad[abs(imgUV_org[1][j][i]-imgUV[1][j][i])];
+      diff_u += img->quad[imgUV_org[0][j][i]-imgUV[0][j][i]];
+      diff_v += img->quad[imgUV_org[1][j][i]-imgUV[1][j][i]];
     }
   }
 
