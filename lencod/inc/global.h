@@ -369,8 +369,6 @@ byte  ***imgUV_pf;           //!< Post filter croma image
 byte  ***mref;               //!< 1/4 pix luma
 byte ****mcef;               //!< pix chroma
 int    **img4Y_tmp;          //!< for quarter pel interpolation
-byte   **imgY_tmp;           //!< for loop filter
-byte  ***imgUV_tmp;
 int   ***tmp_mv;             //!< motion vector buffer
 int    **refFrArr;           //!< Array for reference frames of each block
 
@@ -558,7 +556,12 @@ typedef struct
   int cod_counter;             //!< Current count of number of skipped macroblocks in a row
 
   // some temporal buffers
-  int mprr[6][4][4];           //!< all 5 prediction modes
+#ifdef USE_6_INTRA_MODES
+  int mprr[6][4][4];           //!< all 6 prediction modes
+#else
+  int mprr[9][4][4];           //!< all 9 prediction modes?
+#endif
+
   int mprr_2[5][16][16];       //!< all 4 new intra prediction modes
   int***** mv;                 //!< motion vectors for all block types and all reference frames
   int mpr[16][16];             //!< current best prediction mode
@@ -605,18 +608,18 @@ typedef struct
   int   bit_ctr_0;              //!< stored bit use for the first frame
   int   bit_ctr_n;              //!< bit usage for the current frame
   int   bit_slice;              //!< number of bits in current slice
-  int   bit_use_mode_inter[33]; //!< statistics of bit usage
+  int   bit_use_mode_inter[2][MAXMODE]; //!< statistics of bit usage
   int   mode_use_intra[25];     //!< Macroblock mode usage for Intra frames
-  int   mode_use_inter[33];
+  int   mode_use_inter[2][MAXMODE];
 
   // B pictures
-  int   *mode_use_Bframe;
-  int   *bit_use_mode_Bframe;
   int   bit_ctr_P;
   int   bit_ctr_B;
   float bitrate_P;
   float bitrate_B;
-  int bit_use_mb_type[3];
+
+  int   bit_use_stuffingBits[3];
+  int   bit_use_mb_type[3];
   int   bit_use_header[3];
   int   tmp_bit_use_cbp[3];
   int   bit_use_coeffY[3];
@@ -671,14 +674,13 @@ int  find_sad2(int *intra_mode);
 int dct_luma2(int);
 
 void init_img();
-void init_stat();
 void report();
 void information_init();
 void init_frame();
 void select_picture_type(SyntaxElement *symbol);
 void read_one_new_frame();
 void write_reconstructed_image();
-void DeblockMb(ImageParameters *img, byte **, byte ***) ;
+void DeblockFrame(ImageParameters *img, byte **, byte ***) ;
 
 
 void  LumaPrediction4x4 (int, int, int, int, int);
@@ -766,6 +768,7 @@ Boolean dummy_slice_too_big(int bits_slice);
 // CABAC
 void arienco_start_encoding(EncodingEnvironmentPtr eep, unsigned char *code_buffer, int *code_len );
 int  arienco_bits_written(EncodingEnvironmentPtr eep);
+int  get_trailing_bits(EncodingEnvironmentPtr eep);
 void arienco_done_encoding(EncodingEnvironmentPtr eep);
 void biari_init_context( BiContextTypePtr ctx, int ini_count_0, int ini_count_1, int max_cum_freq );
 void biari_copy_context( BiContextTypePtr ctx_orig, BiContextTypePtr ctx_dest );
@@ -813,8 +816,8 @@ int  writeMotionInfo2NAL_Bframe();
 int  BlkSize2CodeNumber(int blc_size_h, int blc_size_v);
 
 // Introduced for 1/8-pel
-void interpolate_frame();
-void interpolate_frame_2();
+void interpolate_frame_to_fb();
+void interpolate_frame_to_P_buffer();
 void oneeighthpix(int prior_B_frame);
 
 void InitRefbuf ();

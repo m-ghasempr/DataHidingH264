@@ -30,19 +30,23 @@
 ************************************************************************
 */
 
+
 /*!
- *************************************************************************************
- * \file header.h
+ ****************************************************************************
+ * \file errorconcealment.h
  *
  * \brief
- *    Prototypes for header.c
- *************************************************************************************
+ *    Header file for errorconcealment.c
+ *
+ ****************************************************************************
  */
 
-#ifndef _HEADER_H_
-#define _HEADER_H_
+#ifndef _ERRORCONCEALMENT_H_
+#define _ERRORCONCEALMENT_H_
 
-int SliceHeader(struct img_par *img, struct inp_par *inp);
+int set_ec_flag(int se);
+void reset_ec_flags();
+int get_concealed_element(SyntaxElement *sym);
 
 #endif
 

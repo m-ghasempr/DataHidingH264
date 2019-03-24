@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 1.7
+ *     JM 2.0
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -124,8 +124,8 @@
 #include "erc_api.h"
 #endif
 
-#define JM          "1"
-#define VERSION     "1.7"
+#define JM          "2"
+#define VERSION     "2.0"
 #define LOGFILE     "log.dec"
 #define DATADECFILE "data.dec"
 #define TRACEFILE   "trace_dec.txt"
@@ -231,7 +231,8 @@ int main(int argc, char **argv)
   free (inp);
   free (snr);
   free (img);
-
+  
+  //while( !kbhit() ); 
   return 0;
 }
 
@@ -839,10 +840,6 @@ int init_global_buffers(struct inp_par *inp, struct img_par *img)
   memory_size += get_mem2D(&imgY_ref, img->height, img->width);
   memory_size += get_mem3D(&imgUV_ref, 2, img->height_cr, img->width_cr);
 
-  // allocate memory for loop_filter
-  memory_size += get_mem2D(&imgY_tmp, img->height, img->width);
-  memory_size += get_mem3D(&imgUV_tmp, 2, img->height_cr, img->width_cr);
-
   // allocate memory in structure img
   if(((img->mb_data) = (Macroblock *) calloc((img->width/MB_BLOCK_SIZE) * (img->height/MB_BLOCK_SIZE),sizeof(Macroblock))) == NULL)
     no_mem_exit("init_global_buffers: img->mb_data");
@@ -903,8 +900,6 @@ void free_global_buffers(struct inp_par *inp, struct img_par *img)
 
   free_mem2D (imgY_ref);
   free_mem3D (imgUV_ref,2);
-  free_mem2D (imgY_tmp);
-  free_mem3D (imgUV_tmp,2);
 
   // free mem, allocated for structure img
   if (img->mb_data       != NULL) free(img->mb_data);

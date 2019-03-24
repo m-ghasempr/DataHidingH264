@@ -96,3 +96,4 @@ void copy2fb(ImageParameters *img);
 void add_frame(ImageParameters *img);
 
 #endif
+

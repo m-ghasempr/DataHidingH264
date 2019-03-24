@@ -55,7 +55,6 @@
 #include <assert.h>
 
 #include "global.h"
-#include "elements.h"
 #if TRACE
 #include <string.h>    // strncpy
 #endif

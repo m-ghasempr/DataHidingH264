@@ -51,4 +51,3 @@ void CloseBitstreamFile();
 
 #endif
 
-

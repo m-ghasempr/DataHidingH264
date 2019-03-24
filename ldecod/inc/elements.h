@@ -166,11 +166,5 @@ static int assignSE2partition[][SE_MAX_ELEMENTS] =
 static int ec_flag[SE_MAX_ELEMENTS];        //!< array to set errorconcealment
 int PartitionMode;
 
-/*
- * function definitions for errorconcealment.c
- */
-int set_ec_flag(int se);
-void reset_ec_flags();
-int get_concealed_element(SyntaxElement *sym);
-
 #endif
+

@@ -91,6 +91,8 @@ static void UnifiedOneForthPix (pel_t **imgY, pel_t** imgU, pel_t **imgV,
  */
 int encode_one_frame()
 {
+int        j ;
+
 #ifdef _LEAKYBUCKET_
   extern long Bit_Buffer[10000];
   extern unsigned long total_frame_buffer;
@@ -123,8 +125,6 @@ int encode_one_frame()
   img->total_number_mb = (img->width * img->height)/(MB_BLOCK_SIZE*MB_BLOCK_SIZE);
   init_frame();
 
-  if (img->type != B_IMG) //all I- and P-frames
-    add_frame(img);
   init_mref(img);
   init_Refbuf(img);
 
@@ -153,6 +153,13 @@ int encode_one_frame()
       end_of_frame = TRUE;
   }
 
+  
+  if (input->rdopt==2 && (img->type!=B_IMG) )
+    for (j=0 ;j<input->NoOfDecoders; j++)  DeblockFrame(img, decs->decY_best[j], NULL ) ;
+
+  DeblockFrame(img, imgY, imgUV ) ; 
+
+
   // in future only one call of oneforthpix() for all frame tyoes will be necessary, because
   // mref buffer will be increased by one frame to store also the next P-frame. Then mref_P
   // will not be used any more
@@ -160,10 +167,10 @@ int encode_one_frame()
   {
     if (input->successive_Bframe == 0 || img->number == 0)
     {
-      interpolate_frame(); // I- and P-frames:loop-filtered imgY, imgUV -> mref[][][], mcef[][][][]
+      interpolate_frame_to_fb(); // I- and P-frames:loop-filtered imgY, imgUV -> mref[][][], mcef[][][][]
     }
     else
-      interpolate_frame_2();    // I- and P-frames prior a B-frame:loop-filtered imgY, imgUV -> mref_P[][][], mcef_P[][][][]
+      interpolate_frame_to_P_buffer();    // I- and P-frames prior a B-frame:loop-filtered imgY, imgUV -> mref_P[][][], mcef_P[][][][]
                                  // I- and P-frames prior a B-frame:loop-filtered imgY, imgUV -> mref_P[][][], mcef_P[][][][]
   }
   else
@@ -594,16 +601,18 @@ void write_reconstructed_image()
  *    Choose interpolation method depending on MV-resolution
  ************************************************************************
  */
-void interpolate_frame()
+void interpolate_frame_to_fb()
 {                 // write to mref[]
-  int rpic = 0;
+  add_frame(img);
+  init_mref(img);
+  init_Refbuf(img);
 
   if(input->mv_res)
     oneeighthpix(0);
   else
     UnifiedOneForthPix(imgY, imgUV[0], imgUV[1],
-               mref[rpic], mcef[rpic][0], mcef[rpic][1],
-               Refbuf11[rpic]);
+               mref[0], mcef[0][0], mcef[0][1],
+               Refbuf11[0]);
 }
 
 /*!
@@ -612,7 +621,7 @@ void interpolate_frame()
  *    Choose interpolation method depending on MV-resolution
  ************************************************************************
  */
-void interpolate_frame_2()      // write to mref_P
+void interpolate_frame_to_P_buffer()      // write to mref_P
 {
   if(input->mv_res)
     oneeighthpix(1);

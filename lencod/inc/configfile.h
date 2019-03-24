@@ -67,7 +67,7 @@ Mapping Map[] = {
     {"MVResolution",             &configinput.mv_res,                  0},
     {"UseHadamard",              &configinput.hadamard,                0},
     {"SearchRange",              &configinput.search_range,            0},
-    {"NumberRefereceFrames",     &configinput.no_multpred,             0},
+    {"NumberReferenceFrames",    &configinput.no_multpred,             0},
     {"SourceWidth",              &configinput.img_width,               0},
     {"SourceHeight",             &configinput.img_height,              0},
     {"MbLineIntraUpdate",        &configinput.intra_upd,               0},
@@ -136,3 +136,4 @@ extern Mapping Map[];
 void Configure (int ac, char *av[]);
 
 #endif
+

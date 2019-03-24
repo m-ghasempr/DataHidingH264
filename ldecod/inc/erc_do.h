@@ -56,24 +56,6 @@ int ercCollect8PredBlocks( int predBlocks[], int currRow, int currColumn, int *c
                           int maxRow, int maxColumn, int step, byte fNoCornerNeigh );
 int ercCollectColumnBlocks( int predBlocks[], int currRow, int currColumn, int *condition, int maxRow, int maxColumn, int step );
 
-static int concealByCopy(frame *recfr, int currMBNum, 
-                         objectBuffer_t *object_list, int32 picSizeX);
-
-static int concealByTrial(frame *recfr, byte *predMB, 
-                          int currMBNum, objectBuffer_t *object_list, int predBlocks[], 
-                          int32 picSizeX, int32 picSizeY, int *yCondition);
- 
-static int edgeDistortion (int predBlocks[], int currYBlockNum, byte *predMB, 
-                           byte *recY, int32 picSizeX, int32 regionSize);
-
-static void copyBetweenFrames (frame *recfr, 
-                               int currYBlockNum, int32 picSizeX, int32 regionSize);
-
-static void buildPredRegionYUV(struct img_par *img, int32 *mvPred, int x, int y, byte *predMB);
-
-static void copyPredMB (int currYBlockNum, byte *predMB, frame *recfr, 
-                        int32 picSizeX, int32 regionSize);
-
 #define isSplitted(object_list,currMBNum) \
     ((object_list+((currMBNum)<<2))->regionMode >= REGMODE_SPLITTED)
 
@@ -90,3 +72,4 @@ static void copyPredMB (int currYBlockNum, byte *predMB, frame *recfr,
      ((object_list+((currMBNum)<<2))->##param))
 
 #endif
+

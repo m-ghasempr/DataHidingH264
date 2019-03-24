@@ -460,7 +460,7 @@ SetupFastFullPelSearch (int   ref)  // <--  reference frame parameter (0... or -
   int     mvshift       = (input->mv_res ? 3 : 2);
   int     refframe      = (ref>=0 ? ref             : 0);
   int     refindex      = (ref>=0 ? ref             : img->buf_cycle);
-  pel_t*  ref_pic       = (ref>=0 ? Refbuf11[ref+1] : Refbuf11_P);
+  pel_t*  ref_pic       = (ref>=0 ? Refbuf11[ref] : Refbuf11_P);
   int**   ref_array     = (img->type!=B_IMG ? refFrArr : ref>=0 ? fw_refFrArr : bw_refFrArr);
   int***  mv_array      = (img->type!=B_IMG ? tmp_mv   : ref>=0 ? tmp_fwMV    : tmp_bwMV);
   int**   block_sad     = BlockSAD[refindex][7];
@@ -723,7 +723,7 @@ FullPelBlockMotionSearch (pel_t**   orig_pic,     // <--  original pixel values 
   pel_t *orig_line, *ref_line;
   pel_t *(*get_ref_line)(int, pel_t*, int, int);
 
-  pel_t*ref_pic       = (ref==-1 ? Refbuf11_P : Refbuf11 [ref+1]);
+  pel_t*ref_pic       = (ref==-1 ? Refbuf11_P : Refbuf11 [ref]);
   int   best_pos      = 0;                                        // position with minimum motion cost
   int   max_pos       = (2*search_range+1)*(2*search_range+1);    // number of search positions
   int   lambda_factor = LAMBDA_FACTOR (lambda);                   // factor for determining lagragian motion cost
@@ -1020,7 +1020,7 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
   int   cand_mv_x, cand_mv_y;
   pel_t *orig_line;
 
-  pel_t **ref_pic       = (ref==-1 ? mref_P : mref [ref+1]);
+  pel_t **ref_pic       = (ref==-1 ? mref_P : mref [ref]);
   int   lambda_factor   = LAMBDA_FACTOR (lambda);
   int   mv_shift        = (input->mv_res ? 1 : 0);
   int   check_position0 = (blocktype==1 && *mv_x==0 && *mv_y==0 && input->hadamard && !input->rdopt && img->type!=B_IMG && ref==0);
@@ -1545,7 +1545,6 @@ PartitionMotionSearch (int    blocktype,
   int   **ref_array, ***mv_array, *****all_mv;
   int   ref, refinx, refframe, v, h, mcost, search_range, i, j;
   int   pic_block_x, pic_block_y;
-  int   max_ref   = min (img->number, img->buf_cycle);
   int   bframe    = (img->type==B_IMG);
   int   parttype  = (blocktype<4?blocktype:4);
   int   step_h0   = (input->blc_size[ parttype][0]>>2);
@@ -1555,7 +1554,7 @@ PartitionMotionSearch (int    blocktype,
 
 
   //===== LOOP OVER REFERENCE FRAMES =====
-  for (ref=(bframe?-1:0); ref<max_ref; ref++)
+  for (ref=(bframe?-1:0); ref<img->nb_references; ref++)
   {
     refinx    = ref+1;
     refframe  = (ref<0?0:ref);

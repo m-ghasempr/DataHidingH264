@@ -92,3 +92,4 @@ int  RTPWriteBits (int Marker, int PacketType, void * bitstream,
 int RTPPartition_BC_Header();
 
 #endif
+

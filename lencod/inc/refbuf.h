@@ -60,3 +60,4 @@ void PutPel_14 (pel_t **Pic, int y, int x, pel_t val);
 void PutPel_11 (pel_t *Pic, int y, int x, pel_t val);
 
 #endif
+

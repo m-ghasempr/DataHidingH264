@@ -98,6 +98,20 @@ static const int CBP_Ini[2][3][4][5]=
     {{5,2,50,1,0},   {1,1,50,2,1},   {1,1,50,0,0},   {1,2,50,0,0}} }  //!< inter cbp
 };
 
+#ifndef USE_6_INTRA_MODES
+static const int IPR_Ini[9][2][3]=
+{
+  {{2,1,50},  {1,1,50}},
+  {{3,2,50},  {1,1,50}},
+  {{1,1,50},  {2,3,50}},
+  {{1,1,50},  {2,3,50}},
+  {{1,1,50},  {1,1,50}},
+  {{2,3,50},  {1,1,50}},
+  {{1,1,50},  {1,1,50}},
+  {{1,1,50},  {1,1,50}},
+  {{1,1,50},  {1,1,50}}
+};
+#else
 static const int IPR_Ini[6][2][3]=
 {
   {{2,1,50},  {1,1,50}},
@@ -107,6 +121,7 @@ static const int IPR_Ini[6][2][3]=
   {{1,1,50},  {1,1,50}},
   {{2,3,50},  {1,1,50}}
 };
+#endif
 
 static const int Run_Ini[18][2][5]=
 {
@@ -225,5 +240,4 @@ void unary_mv_encode(EncodingEnvironmentPtr eep_frame,
 
 
 #endif  // CABAC_H
-
 

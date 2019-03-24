@@ -158,3 +158,4 @@ int ercConcealInterFrame( frame *recfr, objectBuffer_t *object_list,
                          int32 picSizeX, int32 picSizeY, ercVariables_t *errorVar );
 
 #endif
+

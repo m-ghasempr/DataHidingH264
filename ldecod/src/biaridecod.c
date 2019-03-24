@@ -190,22 +190,22 @@ unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi
 
     /* scope c0 and c1 */
     {
-	    register unsigned short c0, c1, one_over_c0;
+      register unsigned short c0, c1, one_over_c0;
 
       one_over_c0 = ARITH_CUM_FREQ_TABLE[bi_ct->cum_freq[0]]>>10;
-	    c0 = bi_ct->cum_freq[0]-bi_ct->cum_freq[1];
-	    c1 = bi_ct->cum_freq[1];
+      c0 = bi_ct->cum_freq[0]-bi_ct->cum_freq[1];
+      c1 = bi_ct->cum_freq[1];
 
       /* Unit interval size */
 #if  AAC_FRAC_TABLE
-      in_r = ((range*one_over_c0)>>16);	  
+      in_r = ((range*one_over_c0)>>16);   
 #else
       in_r = range / (c0+c1);
 #endif
 
       /* Determine LPS and cLPS. This should compile to conditional moves. */
-	    LPS = (c0 <  c1) ? 0 : 1;
-	    cLPS = (c0 < c1) ? c0 : c1;
+      LPS = (c0 <  c1) ? 0 : 1;
+      cLPS = (c0 < c1) ? c0 : c1;
 
     }
 
@@ -233,7 +233,7 @@ unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi
   bi_ct->cum_freq[1] += bit;
 
   if (++bi_ct->cum_freq[0] >= bi_ct->max_cum_freq) 
-		rescale_cum_freq(bi_ct);
+    rescale_cum_freq(bi_ct);
 
 
   /* Renormalise when range <= 1/4 of max frequency count to maintain precise 
@@ -258,7 +258,7 @@ unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi
     range <<= 1;
     if (--Dbits_to_go < 0) 
     {
-	    get_byte();
+      get_byte();
     }
     /* Shift in next bit and add to value */
     value <<= 1;

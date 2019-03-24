@@ -52,32 +52,8 @@
 #include "global.h"
 #include "mbuffer.h"
 #include "b_frame.h"
-#include "elements.h"
 
 #define POS 0
-
-/*!
- ************************************************************************
- * \brief
- *    Write previous decoded P frame to output file
- ************************************************************************
- */
-void write_prev_Pframe(struct img_par *img, FILE *p_out)
-{
-  int i,j;
-
-  for(i=0;i<img->height;i++)
-    for(j=0;j<img->width;j++)
-      fputc(imgY_prev[i][j],p_out);
-
-  for(i=0;i<img->height_cr;i++)
-    for(j=0;j<img->width_cr;j++)
-      fputc(imgUV_prev[0][i][j],p_out);
-
-  for(i=0;i<img->height_cr;i++)
-    for(j=0;j<img->width_cr;j++)
-      fputc(imgUV_prev[1][i][j],p_out);
-}
 
 
 
@@ -145,7 +121,6 @@ void copy_Pframe(struct img_par *img, int postfilter)
 void init_macroblock_Bframe(struct img_par *img)
 {
   int i,j,k;
-  int fw_predframe_no=0;
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
 
   // reset vectors and pred. modes

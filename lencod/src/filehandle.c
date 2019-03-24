@@ -331,6 +331,9 @@ int start_slice(SyntaxElement *sym)
         assert (currStream->byte_buf == 0);
 
         header_len=RTPSliceHeader();                      // generate the slice header
+        
+        if (currStream->bits_to_go != 8)
+          header_len+=currStream->bits_to_go;
         currStream->header_len = header_len;
         ByteAlign (currStream);
 
@@ -350,6 +353,9 @@ int start_slice(SyntaxElement *sym)
             assert (currStream->byte_pos == 0);
             assert (currStream->byte_buf == 0);
             part_header_len = RTPPartition_BC_Header(i);
+            
+            if (currStream->bits_to_go != 8)
+              part_header_len+=currStream->bits_to_go;
             currStream->header_len = part_header_len;
             ByteAlign (currStream);
             currStream->write_flag = 0;
@@ -390,6 +396,8 @@ int start_slice(SyntaxElement *sym)
             currStream = (currSlice->partArr[i]).bitstream;
 
             part_header_len = RTPPartition_BC_Header(i);
+            if (currStream->bits_to_go != 8)
+              part_header_len+=currStream->bits_to_go;
             currStream->header_len = part_header_len;
             ByteAlign (currStream);
 
@@ -435,6 +443,7 @@ int terminate_slice()
   int LastPartition;
   int cabac_byte_pos=0, uvlc_byte_pos=0, empty_bytes=0;
   int rtp_bytes_written;
+  int dmb_length;
 
   // Mainly flushing of everything
   // Add termination symbol, etc.
@@ -451,6 +460,7 @@ int terminate_slice()
         if (currStream->bits_to_go < 8)
         { // trailing bits to process
           currStream->byte_buf <<= currStream->bits_to_go;
+          stat->bit_use_stuffingBits[img->type]+=currStream->bits_to_go;
           currStream->streamBuffer[currStream->byte_pos++]=currStream->byte_buf;
           currStream->bits_to_go = 8;
         }
@@ -469,14 +479,11 @@ int terminate_slice()
         eep = &((currSlice->partArr[0]).ee_cabac);
         currStream = (currSlice->partArr[0]).bitstream;
         // terminate the arithmetic code
+        stat->bit_use_stuffingBits[img->type]+=get_trailing_bits(eep);
         arienco_done_encoding(eep);
+        if (eep->Ebits_to_go != 8)
+          stat->bit_use_stuffingBits[img->type]+=eep->Ebits_to_go;
 
-        if (currStream->bits_to_go < 8) // trailing bits to process
-        {
-          currStream->byte_buf <<= currStream->bits_to_go;
-          currStream->streamBuffer[currStream->byte_pos++]=currStream->byte_buf;
-          currStream->bits_to_go = 8;
-        }
         bytes_written = currStream->byte_pos; // number of written bytes
         stat->bit_ctr += 8*bytes_written;     // actually written bits
         fwrite (currStream->streamBuffer, 1, bytes_written, box_atm.fpMedia );
@@ -509,6 +516,7 @@ int terminate_slice()
         if (currStream->bits_to_go < 8)
         { // trailing bits to process
           currStream->byte_buf <<= currStream->bits_to_go;
+          stat->bit_use_stuffingBits[img->type]+=currStream->bits_to_go;
           currStream->streamBuffer[currStream->byte_pos++]=currStream->byte_buf;
           currStream->bits_to_go = 8;
         }
@@ -530,6 +538,7 @@ int terminate_slice()
         currStream = (currSlice->partArr[0]).bitstream;
 
         // terminate the arithmetic code
+        stat->bit_use_stuffingBits[img->type]+=get_trailing_bits(eep);
         arienco_done_encoding(eep);
 
         // Add Number of MBs of this slice to the header
@@ -537,6 +546,8 @@ int terminate_slice()
         currStream = (currSlice->partArr[0]).bitstream;
         byte_pos = currStream->byte_pos;
         bits_to_go = currStream->bits_to_go;
+        if (eep->Ebits_to_go != 8)
+          stat->bit_use_stuffingBits[img->type]+=eep->Ebits_to_go;
         buffer = currStream->byte_buf;
 
         // Go to the reserved bits
@@ -544,20 +555,25 @@ int terminate_slice()
         currStream->bits_to_go = 8-(currStream->header_len)%8;
         currStream->byte_buf = currStream->header_byte_buffer;
 
-        // Ad Info about last MB
-        LastMBInSlice();
+
+        // Add Info about last MB
+        dmb_length=LastMBInSlice();
+        stat->bit_use_header[img->type]+=dmb_length;
+
 
         // And write the header to the output
         bytes_written = currStream->byte_pos;
         if (currStream->bits_to_go < 8) // trailing bits to process
         {
             currStream->byte_buf <<= currStream->bits_to_go;
+            stat->bit_use_header[img->type]+=currStream->bits_to_go;
             currStream->streamBuffer[currStream->byte_pos++]=currStream->byte_buf;
             bytes_written++;
             currStream->bits_to_go = 8;
         }
         fwrite (currStream->streamBuffer, 1, bytes_written, out);
         stat->bit_ctr += 8*bytes_written;
+
 
         // Go back to the end of the stream
         currStream->byte_pos = byte_pos;
@@ -585,12 +601,16 @@ int terminate_slice()
         if (input->symbol_mode == CABAC)
         {
           eep = &((currSlice->partArr[i]).ee_cabac);
+          stat->bit_use_stuffingBits[img->type]+=get_trailing_bits(eep);
           arienco_done_encoding(eep);
-        }
+          if (eep->Ebits_to_go != 8)
+            stat->bit_use_stuffingBits[img->type]+=eep->Ebits_to_go;
+       }
         
         if (currStream->bits_to_go < 8) // trailing bits to process
         {
           currStream->byte_buf <<= currStream->bits_to_go;
+          stat->bit_use_stuffingBits[img->type]+=currStream->bits_to_go;
           currStream->streamBuffer[currStream->byte_pos++]=currStream->byte_buf;
           currStream->bits_to_go = 8;
         }
@@ -609,6 +629,7 @@ int terminate_slice()
             //! Add Number of MBs of this slice to the header
             //! Save current state of Bitstream
             byte_pos = currStream->byte_pos; //last byte in the stream
+
             
             //! Go to the reserved bits
             currStream->byte_pos = cabac_byte_pos = (currStream->header_len)/8;
@@ -621,11 +642,13 @@ int terminate_slice()
             cabac_byte_pos++; //! that's the position where we started to write CABAC code
             
             //! Ad Info about last MB 
-            LastMBInSlice();
-            
+            dmb_length=LastMBInSlice();
+            stat->bit_use_header[img->type]+=dmb_length;
+           
             if (currStream->bits_to_go < 8) //! trailing bits to process
             {
               currStream->byte_buf <<= currStream->bits_to_go;
+              stat->bit_use_header[img->type]+=currStream->bits_to_go;
               currStream->streamBuffer[currStream->byte_pos++]=currStream->byte_buf;
             }
             
@@ -633,10 +656,11 @@ int terminate_slice()
             currStream->byte_pos = byte_pos;  //! where we were before this last_MB thing
             empty_bytes = cabac_byte_pos - uvlc_byte_pos; //! These bytes contain no information
             //! They were reserved for writing the last_MB information but were not used
-            
+
             for(byte_pos=uvlc_byte_pos; byte_pos<=currStream->byte_pos-empty_bytes; byte_pos++)
               currStream->streamBuffer[byte_pos]=currStream->streamBuffer[byte_pos+empty_bytes]; //shift the bitstreams
-            bytes_written = byte_pos;
+            bytes_written = byte_pos-1;
+
             //! TO 02.11.2001 I'm sure this can be done much more elegant, but that's the way it works. 
             //! If anybody understands what happens here please feel free to change this!
           }  

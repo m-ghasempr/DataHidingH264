@@ -64,7 +64,7 @@
 void init_frame_buffers(InputParameters *inp, ImageParameters *img)
 {
   int i;
-  int bufsize=img->buf_cycle+1;
+  int bufsize=img->buf_cycle;
 
   if ((fb=(FrameBuffer*)calloc(1,sizeof (FrameBuffer)))==NULL) no_mem_exit("init_frame_buffers: fb");
 
@@ -412,6 +412,14 @@ void init_mref(ImageParameters *img)
     mcef[j]=fb->picbuf_long[i]->mcef;
     j++;
   }
+
+  // set all other mref pointers to NULL !KS!
+  for (;j<fb->long_size+fb->short_size;j++)
+  {
+    mref[j]=NULL;
+    mcef[j]=NULL;
+  }
+
 }
 
 /*!
@@ -586,6 +594,10 @@ void init_Refbuf(ImageParameters *img)
     Refbuf11[j]=fb->picbuf_long[i]->Refbuf11;
     j++;
   }
+  for (;j<fb->long_size+fb->short_size;j++)
+  {
+    Refbuf11[j]=NULL;
+  }
 }
 
 /*!
@@ -619,6 +631,11 @@ void reset_buffers()
 void copy2fb(ImageParameters *img)
 {
   int j,uv;
+
+  add_frame(img);
+
+  init_mref(img);
+  init_Refbuf(img);
 
   for (j=0; j < (img->height+2*IMG_PAD_SIZE)*4; j++)
     memcpy(fb->picbuf_short[0]->mref[j],mref_P[j], (img->width+2*IMG_PAD_SIZE)*4);

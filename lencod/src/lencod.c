@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 1.6
+ *     JM 2.0
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -83,8 +83,8 @@
 #include "mbuffer.h"
 #include "encodeiff.h"
 
-#define JM      "1"
-#define VERSION "1.7"
+#define JM      "2"
+#define VERSION "2.0"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
@@ -127,9 +127,6 @@ int main(int argc,char **argv)
 
   // create and init structure for rd-opt. mode decision
   init_rdopt ();
-
-  // Initialize Statistic Parameters
-  init_stat();
 
   // allocate memory for frame buffers
   init_frame_buffers(input,img);
@@ -542,27 +539,6 @@ void free_slice()
 /*!
  ************************************************************************
  * \brief
- *    Initializes the Statistics structure with appropriate parameters
- * \par Input:
- *    Statistic Parameters struct stat_par *stat
- * \par Output:
- *    Statistic Parameters struct stat_par *stat
- ************************************************************************
- */
-void init_stat()
-{
-  int i;
-  if ((stat->mode_use_Bframe = (int *)malloc(sizeof(int)*41))==NULL)
-    no_mem_exit("init_stat: stat->mode_use_Bframe");
-  if ((stat->bit_use_mode_Bframe =  (int *)malloc(sizeof(int)*41))==NULL)
-    no_mem_exit("init_stat: stat->bit_use_mode_Bframe");
-  for(i=0; i<41; i++)
-    stat->mode_use_Bframe[i]=stat->bit_use_mode_Bframe[i]=0;
-}
-
-/*!
- ************************************************************************
- * \brief
  *    Reports the gathered information to appropriate outputs
  * \par Input:
  *    struct inp_par *inp,                                            \n
@@ -582,6 +558,7 @@ void report()
   int bit_use_Bframe=0;
   int total_bits;
   float frame_rate;
+  float mean_motion_info_bit_use[2];
 
 #ifndef WIN32
   time_t now;
@@ -596,8 +573,10 @@ void report()
   //  Accumulate bit usage for inter and intra frames
   bit_use[0][1]=bit_use[1][1]=0;
 
-  for (i=0; i < 9; i++)
-    bit_use[1][1] += stat->bit_use_mode_inter[i];
+
+  for (i=0; i < 11; i++)
+    bit_use[1][1] += stat->bit_use_mode_inter[0][i];
+
 
   for (j=0;j<2;j++)
   {
@@ -607,19 +586,22 @@ void report()
     bit_use[j][1]+=stat->bit_use_coeffY[j];
     bit_use[j][1]+=stat->bit_use_coeffC[j];
     bit_use[j][1]+=stat->bit_use_delta_quant[j];
+    bit_use[j][1]+=stat->bit_use_stuffingBits[j];
   }
 
   // B pictures
   if(Bframe_ctr!=0)
   {
     bit_use_Bframe=0;
-    for(i=0; i<41; i++)
-      bit_use_Bframe += stat->bit_use_mode_Bframe[i]; // fw_predframe_no, blk_size
+    for(i=0; i<11; i++)
+      bit_use_Bframe += stat->bit_use_mode_inter[1][i]; 
     bit_use_Bframe += stat->bit_use_header[2];
+    bit_use_Bframe += stat->bit_use_mb_type[2];
     bit_use_Bframe += stat->tmp_bit_use_cbp[2];
     bit_use_Bframe += stat->bit_use_coeffY[2];
     bit_use_Bframe += stat->bit_use_coeffC[2];
     bit_use_Bframe += stat->bit_use_delta_quant[2];
+    bit_use_Bframe +=stat->bit_use_stuffingBits[2];
 
     stat->bitrate_P=(stat->bit_ctr_0+stat->bit_ctr_P)*(float)(img->framerate/(input->jumpd+1))/input->no_frames;
 #ifdef _ADAPT_LAST_GROUP_
@@ -745,7 +727,7 @@ void report()
     fprintf(stdout, " Total bits                        : %d (I %5d, P %5d, B %d) \n",
             total_bits=stat->bit_ctr_P + stat->bit_ctr_0 + stat->bit_ctr_B, stat->bit_ctr_0, stat->bit_ctr_P, stat->bit_ctr_B);
 
-    frame_rate = (float)img->framerate / ( (float) (input->jumpd - input->successive_Bframe + 1) );
+    frame_rate = (float)(img->framerate *(input->successive_Bframe + 1)) / (float) (input->jumpd+1);
     stat->bitrate= ((float) total_bits * frame_rate)/((float) (input->no_frames + Bframe_ctr));
 
     fprintf(stdout, " Bit rate (kbit/s)  @ %2.2f Hz     : %5.2f\n", frame_rate, stat->bitrate/1000);
@@ -870,74 +852,105 @@ void report()
   fprintf(p_stat," Mode 0  intra old  | %5d         |\n",stat->mode_use_intra[I4MB]);
   fprintf(p_stat," Mode 1+ intra new  | %5d         |\n",stat->mode_use_intra[I16MB]);
 
-  fprintf(p_stat,"\n -------------------|---------------|---------------|\n");
-  fprintf(p_stat,"   Inter            |   Mode used   | Vector bit use|\n");
-  fprintf(p_stat," -------------------|---------------|---------------|");
-  fprintf(p_stat,"\n Mode  0  (copy)    | %5d         | %5.0f         |",stat->mode_use_inter[0   ],(float)stat->bit_use_mode_inter[0   ]/(float)bit_use[1][0]);
-  fprintf(p_stat,"\n Mode  1  (16x16)   | %5d         | %5.0f         |",stat->mode_use_inter[1   ],(float)stat->bit_use_mode_inter[1   ]/(float)bit_use[1][0]);
-  fprintf(p_stat,"\n Mode  2  (16x8)    | %5d         | %5.0f         |",stat->mode_use_inter[2   ],(float)stat->bit_use_mode_inter[2   ]/(float)bit_use[1][0]);
-  fprintf(p_stat,"\n Mode  3  (8x16)    | %5d         | %5.0f         |",stat->mode_use_inter[3   ],(float)stat->bit_use_mode_inter[3   ]/(float)bit_use[1][0]);
-  fprintf(p_stat,"\n Mode  4  (8x8)     | %5d         | %5.0f         |",stat->mode_use_inter[P8x8],(float)stat->bit_use_mode_inter[P8x8]/(float)bit_use[1][0]);
-  fprintf(p_stat,"\n Mode  5  intra old | %5d         | --------------|",stat->mode_use_inter[I4MB]);
-  fprintf(p_stat,"\n Mode  6+ intr.new  | %5d         |",stat->mode_use_inter[I16MB]);
+  fprintf(p_stat,"\n -------------------|---------------|-----------------|\n");
+  fprintf(p_stat,"   Inter            |   Mode used   | MotionInfo bits |\n");
+  fprintf(p_stat," -------------------|---------------|-----------------|");
+  fprintf(p_stat,"\n Mode  0  (copy)    | %5d         |    %8.2f     |",stat->mode_use_inter[0][0   ],(float)stat->bit_use_mode_inter[0][0   ]/(float)bit_use[1][0]);
+  fprintf(p_stat,"\n Mode  1  (16x16)   | %5d         |    %8.2f     |",stat->mode_use_inter[0][1   ],(float)stat->bit_use_mode_inter[0][1   ]/(float)bit_use[1][0]);
+  fprintf(p_stat,"\n Mode  2  (16x8)    | %5d         |    %8.2f     |",stat->mode_use_inter[0][2   ],(float)stat->bit_use_mode_inter[0][2   ]/(float)bit_use[1][0]);
+  fprintf(p_stat,"\n Mode  3  (8x16)    | %5d         |    %8.2f     |",stat->mode_use_inter[0][3   ],(float)stat->bit_use_mode_inter[0][3   ]/(float)bit_use[1][0]);
+  fprintf(p_stat,"\n Mode  4  (8x8)     | %5d         |    %8.2f     |",stat->mode_use_inter[0][P8x8],(float)stat->bit_use_mode_inter[0][P8x8]/(float)bit_use[1][0]);
+  fprintf(p_stat,"\n Mode  5  intra old | %5d         |-----------------|",stat->mode_use_inter[0][I4MB]);
+  fprintf(p_stat,"\n Mode  6+ intr.new  | %5d         |",stat->mode_use_inter[0][I16MB]);
+  mean_motion_info_bit_use[0] = (float)(stat->bit_use_mode_inter[0][0] + stat->bit_use_mode_inter[0][1] + stat->bit_use_mode_inter[0][2] 
+                                      + stat->bit_use_mode_inter[0][3] + stat->bit_use_mode_inter[0][P8x8])/(float) bit_use[1][0]; 
+
 
   // B pictures
   if(input->successive_Bframe!=0 && Bframe_ctr!=0)
   {
-    fprintf(p_stat,"\n\n -------------------|---------------|\n");
-    fprintf(p_stat,"   B frame          |   Mode used   |\n");
-    fprintf(p_stat," -------------------|---------------|");
-    fprintf(p_stat,"\n Mode  0  (copy)    | %5d         |",stat->mode_use_Bframe[0   ]);
-    fprintf(p_stat,"\n Mode  1  (16x16)   | %5d         |",stat->mode_use_Bframe[1   ]);
-    fprintf(p_stat,"\n Mode  2  (16x8)    | %5d         |",stat->mode_use_Bframe[2   ]);
-    fprintf(p_stat,"\n Mode  3  (8x16)    | %5d         |",stat->mode_use_Bframe[3   ]);
-    fprintf(p_stat,"\n Mode  4  (8x8)     | %5d         |",stat->mode_use_Bframe[P8x8]);
-    fprintf(p_stat,"\n Mode  5  intra old | %5d         |",stat->mode_use_Bframe[I4MB]);
-    fprintf(p_stat,"\n Mode  6+ intr.new  | %5d         |",stat->mode_use_Bframe[I16MB]);
+ 
+    fprintf(p_stat,"\n\n -------------------|---------------|-----------------|\n");
+    fprintf(p_stat,"   B frame          |   Mode used   | MotionInfo bits |\n");
+    fprintf(p_stat," -------------------|---------------|-----------------|");
+    fprintf(p_stat,"\n Mode  0  (copy)    | %5d         |    %8.2f     |",stat->mode_use_inter[1][0   ],(float)stat->bit_use_mode_inter[1][0   ]/(float)Bframe_ctr);
+    fprintf(p_stat,"\n Mode  1  (16x16)   | %5d         |    %8.2f     |",stat->mode_use_inter[1][1   ],(float)stat->bit_use_mode_inter[1][1   ]/(float)Bframe_ctr);
+    fprintf(p_stat,"\n Mode  2  (16x8)    | %5d         |    %8.2f     |",stat->mode_use_inter[1][2   ],(float)stat->bit_use_mode_inter[1][2   ]/(float)Bframe_ctr);
+    fprintf(p_stat,"\n Mode  3  (8x16)    | %5d         |    %8.2f     |",stat->mode_use_inter[1][3   ],(float)stat->bit_use_mode_inter[1][3   ]/(float)Bframe_ctr);
+    fprintf(p_stat,"\n Mode  4  (8x8)     | %5d         |    %8.2f     |",stat->mode_use_inter[1][P8x8],(float)stat->bit_use_mode_inter[1][P8x8]/(float)Bframe_ctr);
+    fprintf(p_stat,"\n Mode  5  intra old | %5d         |-----------------|",stat->mode_use_inter[1][I4MB]);
+    fprintf(p_stat,"\n Mode  6+ intr.new  | %5d         |",stat->mode_use_inter[1][I16MB]);
+    mean_motion_info_bit_use[1] = (float)(stat->bit_use_mode_inter[1][0] + stat->bit_use_mode_inter[1][1] + stat->bit_use_mode_inter[1][2] 
+                                      + stat->bit_use_mode_inter[1][3] + stat->bit_use_mode_inter[1][P8x8])/(float) Bframe_ctr; 
+
   }
 
   fprintf(p_stat,"\n\n --------------------|----------------|----------------|----------------|\n");
-  fprintf(p_stat,"  Bit usage:         |      Intra     |     Inter      |    B frame     |\n");
+  fprintf(p_stat,"  Bit usage:         |      Intra     |      Inter     |    B frame     |\n");
   fprintf(p_stat," --------------------|----------------|----------------|----------------|\n");
 
-  fprintf(p_stat," Header+modeinfo     |");
-  fprintf(p_stat," %8d       |",stat->bit_use_header[0]);
-  fprintf(p_stat," %8d       |",stat->bit_use_header[1]/bit_use[1][0]);
+  fprintf(p_stat," Header              |");
+  fprintf(p_stat," %10.2f     |",(float) stat->bit_use_header[0]/bit_use[0][0]);
+  fprintf(p_stat," %10.2f     |",(float) stat->bit_use_header[1]/bit_use[1][0]);
   if(input->successive_Bframe!=0 && Bframe_ctr!=0)
-    fprintf(p_stat," %8d       |",stat->bit_use_header[2]/Bframe_ctr);
-  else fprintf(p_stat," %8d       |", 0);
+    fprintf(p_stat," %10.2f     |",(float) stat->bit_use_header[2]/Bframe_ctr);
+  else fprintf(p_stat," %10.2f     |", 0.);
+  fprintf(p_stat,"\n");
+
+  fprintf(p_stat," Mode                |");
+  fprintf(p_stat," %10.2f     |",(float)stat->bit_use_mb_type[0]/bit_use[0][0]);
+  fprintf(p_stat," %10.2f     |",(float)stat->bit_use_mb_type[1]/bit_use[1][0]);
+  if(input->successive_Bframe!=0 && Bframe_ctr!=0)
+    fprintf(p_stat," %10.2f     |",(float)stat->bit_use_mb_type[2]/Bframe_ctr);
+  else fprintf(p_stat," %10.2f     |", 0.);
+  fprintf(p_stat,"\n");
+
+  fprintf(p_stat," Motion Info         |");
+  fprintf(p_stat,"        ./.     |");
+  fprintf(p_stat," %10.2f     |",mean_motion_info_bit_use[0]);
+  if(input->successive_Bframe!=0 && Bframe_ctr!=0)
+    fprintf(p_stat," %10.2f     |",mean_motion_info_bit_use[1]);
+  else fprintf(p_stat," %10.2f     |", 0.);
   fprintf(p_stat,"\n");
 
   fprintf(p_stat," CBP Y/C             |");
   for (j=0; j < 2; j++)
   {
-    fprintf(p_stat," %8.2f       |", (float)stat->tmp_bit_use_cbp[j]/bit_use[j][0]);
+    fprintf(p_stat," %10.2f     |", (float)stat->tmp_bit_use_cbp[j]/bit_use[j][0]);
   }
   if(input->successive_Bframe!=0 && Bframe_ctr!=0)
-    fprintf(p_stat," %8.2f       |", (float)stat->tmp_bit_use_cbp[2]/Bframe_ctr);
-  else fprintf(p_stat," %8.2f       |", 0.);
+    fprintf(p_stat," %10.2f     |", (float)stat->tmp_bit_use_cbp[2]/Bframe_ctr);
+  else fprintf(p_stat," %10.2f     |", 0.);
   fprintf(p_stat,"\n");
 
   if(input->successive_Bframe!=0 && Bframe_ctr!=0)
-    fprintf(p_stat," Coeffs. Y           | %8.2f       | %8.2f       | %8.2f       |\n",
+    fprintf(p_stat," Coeffs. Y           | %10.2f     | %10.2f     | %10.2f     |\n",
       (float)stat->bit_use_coeffY[0]/bit_use[0][0], (float)stat->bit_use_coeffY[1]/bit_use[1][0], (float)stat->bit_use_coeffY[2]/Bframe_ctr);
   else
-    fprintf(p_stat," Coeffs. Y           | %8.2f       | %8.2f       | %8.2f       |\n",
-      (float)stat->bit_use_coeffY[0]/bit_use[0][0], (float)stat->bit_use_coeffY[1]/bit_use[1][0], 0.);
+    fprintf(p_stat," Coeffs. Y           | %10.2f     | %10.2f     | %10.2f     |\n",
+      (float)stat->bit_use_coeffY[0]/bit_use[0][0], (float)stat->bit_use_coeffY[1]/(float)bit_use[1][0], 0.);
 
   if(input->successive_Bframe!=0 && Bframe_ctr!=0)
-    fprintf(p_stat," Coeffs. C           | %8.2f       | %8.2f       | %8.2f       |\n",
+    fprintf(p_stat," Coeffs. C           | %10.2f     | %10.2f     | %10.2f     |\n",
       (float)stat->bit_use_coeffC[0]/bit_use[0][0], (float)stat->bit_use_coeffC[1]/bit_use[1][0], (float)stat->bit_use_coeffC[2]/Bframe_ctr);
   else
-    fprintf(p_stat," Coeffs. C           | %8.2f       | %8.2f       | %8.2f       |\n",
+    fprintf(p_stat," Coeffs. C           | %10.2f     | %10.2f     | %10.2f     |\n",
       (float)stat->bit_use_coeffC[0]/bit_use[0][0], (float)stat->bit_use_coeffC[1]/bit_use[1][0], 0.);
 
   if(input->successive_Bframe!=0 && Bframe_ctr!=0)
-    fprintf(p_stat," Delta quant         | %8.2f       | %8.2f       | %8.2f       |\n",
+    fprintf(p_stat," Delta quant         | %10.2f     | %10.2f     | %10.2f     |\n",
       (float)stat->bit_use_delta_quant[0]/bit_use[0][0], (float)stat->bit_use_delta_quant[1]/bit_use[1][0], (float)stat->bit_use_delta_quant[2]/Bframe_ctr);
   else
-    fprintf(p_stat," Delta quant         | %8.2f       | %8.2f       | %8.2f       |\n",
+    fprintf(p_stat," Delta quant         | %10.2f     | %10.2f     | %10.2f     |\n",
       (float)stat->bit_use_delta_quant[0]/bit_use[0][0], (float)stat->bit_use_delta_quant[1]/bit_use[1][0], 0.);
+
+  if(input->successive_Bframe!=0 && Bframe_ctr!=0)
+    fprintf(p_stat," Stuffing Bits       | %10.2f     | %10.2f     | %10.2f     |\n",
+      (float)stat->bit_use_stuffingBits[0]/bit_use[0][0], (float)stat->bit_use_stuffingBits[1]/bit_use[1][0], (float)stat->bit_use_stuffingBits[2]/Bframe_ctr);
+  else
+    fprintf(p_stat," Stuffing Bits       | %10.2f     | %10.2f     | %10.2f     |\n",
+      (float)stat->bit_use_stuffingBits[0]/bit_use[0][0], (float)stat->bit_use_stuffingBits[1]/bit_use[1][0], 0.);
+
 
 
   fprintf(p_stat," --------------------|----------------|----------------|----------------|\n");
@@ -945,11 +958,11 @@ void report()
   fprintf(p_stat," average bits/frame  |");
   for (i=0; i < 2; i++)
   {
-    fprintf(p_stat," %8d       |",bit_use[i][1]/bit_use[i][0]);
+    fprintf(p_stat," %10.2f     |", (float) bit_use[i][1]/(float) bit_use[i][0] );
   }
   if(input->successive_Bframe!=0 && Bframe_ctr!=0)
-    fprintf(p_stat," %8d       |", bit_use_Bframe/Bframe_ctr);
-  else fprintf(p_stat," %8d       |", 0);
+    fprintf(p_stat," %10.2f     |", (float) bit_use_Bframe/ (float) Bframe_ctr );
+  else fprintf(p_stat," %10.2f     |", 0.);
 
   fprintf(p_stat,"\n");
   fprintf(p_stat," --------------------|----------------|----------------|----------------|\n");
@@ -1061,7 +1074,7 @@ void report()
         snr->snr_ya,
         snr->snr_ua,
         snr->snr_va,
-        (stat->bit_ctr_0+stat->bit_ctr)/input->no_frames,
+        (stat->bit_ctr_0+stat->bit_ctr)/(input->no_frames+Bframe_ctr),
         stat->bit_ctr_B/Bframe_ctr,
         (double)0.001*tot_time/(input->no_frames+Bframe_ctr));
   }
@@ -1089,9 +1102,7 @@ void report()
 
   fclose(p_log);
 
-  // B pictures
-  free(stat->mode_use_Bframe);
-  free(stat->bit_use_mode_Bframe);
+ 
 }
 
 
@@ -1212,11 +1223,6 @@ int init_global_buffers()
   // int img4Y_tmp[576][704];  (previously int imgY_tmp in global.h)
   memory_size += get_mem2Dint(&img4Y_tmp, img->height+2*IMG_PAD_SIZE, (img->width+2*IMG_PAD_SIZE)*4);
 
-  // allocate memory for tmp loop filter frame buffers: imgY_tmp, imgUV_tmp
-  // byte imgY_tmp[288][352];
-  memory_size += get_mem2D(&imgY_tmp, img->height, img->width);
-  memory_size += get_mem3D(&imgUV_tmp, 2, img->height_cr, img->width_cr);
-
   // allocate memory for reference frames of each block: refFrArr
   // int  refFrArr[72][88];
   memory_size += get_mem2Dint(&refFrArr, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
@@ -1304,8 +1310,6 @@ void free_global_buffers()
 
   free_mem3Dint(tmp_mv,2);
   free_mem2Dint(img4Y_tmp);    // free temp quarter pel frame buffer
-  free_mem2D(imgY_tmp);    // free temp loop filter frame buffer
-  free_mem3D(imgUV_tmp,2);
   free_mem2Dint(refFrArr);
 
   // free mem, allocated in init_img()
@@ -1524,3 +1528,4 @@ void free_mem_DCcoeff (int*** cofDC)
   }
   free (cofDC);
 }
+

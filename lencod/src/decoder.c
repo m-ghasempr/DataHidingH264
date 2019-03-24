@@ -481,9 +481,6 @@ void compute_residue_mb (int i16mode)
 void Build_Status_Map(byte **s_map)
 {
   int i,j,slice=-1,mb=0,jj,ii,packet_lost=0;
-  static int packet = 0;
-  static int fehler = 0;
-
 
   jj = img->height/MB_BLOCK_SIZE;
   ii = img->width/MB_BLOCK_SIZE;

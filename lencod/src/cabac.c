@@ -108,12 +108,19 @@ TextureInfoContexts* create_contexts_TextureInfo(void)
 {
   int                   j,k;
   TextureInfoContexts*  enco_ctx;
+#ifndef USE_6_INTRA_MODES
+  static const int max_ipr=9;
+#else
+  static const int max_ipr=6;
+#endif
+
+ 
 
   enco_ctx = (TextureInfoContexts*) calloc(1, sizeof(TextureInfoContexts) );
   if( enco_ctx == NULL )
     no_mem_exit("create_contexts_TextureInfo: enco_ctx");
 
-  for (j=0; j < 6; j++)
+  for (j=0; j < max_ipr; j++)
   {
     enco_ctx->ipr_contexts[j] = (BiContextTypePtr) malloc(NUM_IPR_CTX  * sizeof( BiContextType ) );
     if( enco_ctx->ipr_contexts[j] == NULL )
@@ -143,7 +150,7 @@ TextureInfoContexts* create_contexts_TextureInfo(void)
     if( enco_ctx->run_context[j] == NULL )
       no_mem_exit("create_contexts_TextureInfo: enco_ctx->run_context");
   }
-	  
+    
   for (j=0; j < NUM_TRANS_TYPE; j++)
   {
     enco_ctx->coeff_count_context[j] = (BiContextTypePtr) malloc(NUM_COEFF_COUNT_CTX  * sizeof( BiContextType ) );
@@ -174,7 +181,7 @@ void init_contexts_MotionInfo(MotionInfoContexts *enco_ctx, int ini_flag)
   else
     scale_factor=2;
 
-	qp_factor=min(max(0,img->qp-10),21);
+  qp_factor=min(max(0,img->qp-10),21);
 
   for (j=0; j<3; j++)
   {
@@ -267,15 +274,20 @@ void init_contexts_TextureInfo(TextureInfoContexts *enco_ctx, int ini_flag)
   int scale_factor;
   int qp_factor;
   int ini[3];
+#ifndef USE_6_INTRA_MODES
+  const int max_ipr=9;
+#else
+  const int max_ipr=6;
+#endif
 
   if ( (img->width*img->height) <=  (IMG_WIDTH * IMG_HEIGHT) ) //  format <= QCIF
    scale_factor=1;
   else
    scale_factor=2;
 
-	qp_factor=min(max(0,img->qp-10),21);
+  qp_factor=min(max(0,img->qp-10),21);
 
-  for (j=0; j < 6; j++)
+  for (j=0; j < max_ipr; j++)
   {
     if (ini_flag)
     {
@@ -309,8 +321,8 @@ void init_contexts_TextureInfo(TextureInfoContexts *enco_ctx, int ini_flag)
       }
     }
 
-	// other init mapping 
-	qp_factor=min(max(0,28-img->qp),24);
+  // other init mapping 
+  qp_factor=min(max(0,28-img->qp),24);
 
   for (j=0; j < 4*NUM_TRANS_TYPE; j++)
   {
@@ -337,7 +349,7 @@ void init_contexts_TextureInfo(TextureInfoContexts *enco_ctx, int ini_flag)
     {
       for (i=0; i < NUM_RUN_CTX; i++)
       {
-				ini[0] = (Run_Ini[j][i][0]+(Run_Ini[j][i][3]*qp_factor)/24)*scale_factor;
+        ini[0] = (Run_Ini[j][i][0]+(Run_Ini[j][i][3]*qp_factor)/24)*scale_factor;
         ini[1] = (Run_Ini[j][i][1]+(Run_Ini[j][i][4]*qp_factor)/24)*scale_factor;
         ini[2] = Run_Ini[j][i][2]*scale_factor;
         biari_init_context(enco_ctx->run_context[j] + i,ini[0],ini[1],ini[2]);
@@ -448,15 +460,15 @@ void delete_contexts_TextureInfo(TextureInfoContexts *enco_ctx)
       free(enco_ctx->level_context[j]);
   }
 
-	for (j=0; j < 2*NUM_TRANS_TYPE; j++)
+  for (j=0; j < 2*NUM_TRANS_TYPE; j++)
   {
     if (enco_ctx->run_context[j] != NULL)
       free(enco_ctx->run_context[j]);
   }
-		  
-	for (j=0; j < NUM_TRANS_TYPE; j++)
+      
+  for (j=0; j < NUM_TRANS_TYPE; j++)
   {
-		if (enco_ctx->coeff_count_context[j] != NULL)
+    if (enco_ctx->coeff_count_context[j] != NULL)
       free(enco_ctx->coeff_count_context[j]);
   }
   free( enco_ctx );
@@ -747,7 +759,6 @@ void writeB8_typeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep
   int bframe=(img->type==B_IMG);
 
   MotionInfoContexts *ctx    = (img->currentSlice)->mot_ctx;
-  Macroblock         *currMB = &img->mb_data[img->current_mb_nr];
 
   act_sym = se->value1;
   act_ctx = 0;
@@ -848,17 +859,26 @@ void writeIntraPredMode2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr e
   static const int    right[8] = {0, 0, 1, 1, 0, 0, 1, 1};
   Macroblock          *currMB  = &(img->mb_data[img->current_mb_nr]);
   TextureInfoContexts *ctx     = img->currentSlice->tex_ctx;
-  int                 prev_sym;
-
+  int                 prev_sym; 
+ 
   //--- first symbol ---
   if (right[se->context/2])             prev_sym = currMB->intra_pred_modes[se->context-3];
   else if (currMB->mb_available[1][0])  prev_sym = currMB->mb_available[1][0]->intra_pred_modes[se->context+5];
   else                                  prev_sym = 0;
+
+#ifndef USE_6_INTRA_MODES
+  unary_bin_max_encode(eep_dp,(unsigned int) se->value1,ctx->ipr_contexts[prev_sym],1,8);
+#else
   unary_bin_max_encode(eep_dp,(unsigned int) se->value1,ctx->ipr_contexts[prev_sym],1,5);
+#endif
 
   //--- second symbol ---
   prev_sym = se->value1;
+#ifndef USE_6_INTRA_MODES
+  unary_bin_max_encode(eep_dp,(unsigned int) se->value2,ctx->ipr_contexts[prev_sym],1,8);
+#else
   unary_bin_max_encode(eep_dp,(unsigned int) se->value2,ctx->ipr_contexts[prev_sym],1,5);
+#endif
 }
 
 
@@ -928,7 +948,6 @@ void writeMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 
   MotionInfoContexts  *ctx         = img->currentSlice->mot_ctx;
   Macroblock          *currMB      = &img->mb_data[img->current_mb_nr];
-  int                 curr_mb_type = currMB->mb_type;
 
   if (j==0)
   {

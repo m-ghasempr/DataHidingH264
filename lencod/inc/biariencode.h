@@ -110,9 +110,10 @@ const unsigned int ARITH_CUM_FREQ_TABLE[128] =
 #define Ecodestrm_len   (eep->Ecodestrm_len)
 
 /* Only necessary for new AC */
-#define		B_BITS		16
-#define		F_BITS	  14
-#define		CACM99_HALF		    (1 << (B_BITS-1))
-#define		CACM99_QUARTER		(1 << (B_BITS-2))
+#define B_BITS    16
+#define F_BITS    14
+#define CACM99_HALF       (1 << (B_BITS-1))
+#define CACM99_QUARTER    (1 << (B_BITS-2))
 
 #endif  // BIARIENCOD_H
+

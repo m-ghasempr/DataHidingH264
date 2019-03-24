@@ -72,6 +72,7 @@ void proceed2nextMacroblock()
 #endif
   const int number_mb_per_row = img->width / MB_BLOCK_SIZE ;
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  int*        bitCount = currMB->bitcounter;
 
 #if TRACE
   int i;
@@ -87,12 +88,11 @@ void proceed2nextMacroblock()
 #endif
 
   // Update the statistics
-  stat->bit_use_mb_type[img->type]      += currMB->bitcounter[BITS_MB_MODE];
-  stat->bit_use_coeffY[img->type]       += currMB->bitcounter[BITS_COEFF_Y_MB] ;
-  stat->bit_use_mode_inter[currMB->mb_type]+= currMB->bitcounter[BITS_INTER_MB];
-  stat->tmp_bit_use_cbp[img->type]      += currMB->bitcounter[BITS_CBP_MB];
-  stat->bit_use_coeffC[img->type]       += currMB->bitcounter[BITS_COEFF_UV_MB];
-  stat->bit_use_delta_quant[img->type]  += currMB->bitcounter[BITS_DELTA_QUANT_MB];
+  stat->bit_use_mb_type[img->type]      += bitCount[BITS_MB_MODE];
+  stat->bit_use_coeffY[img->type]       += bitCount[BITS_COEFF_Y_MB] ;
+  stat->tmp_bit_use_cbp[img->type]      += bitCount[BITS_CBP_MB];
+  stat->bit_use_coeffC[img->type]       += bitCount[BITS_COEFF_UV_MB];
+  stat->bit_use_delta_quant[img->type]  += bitCount[BITS_DELTA_QUANT_MB];
 
 /*  if (input->symbol_mode == UVLC)
     stat->bit_ctr += currMB->bitcounter[BITS_TOTAL_MB]; */
@@ -100,9 +100,17 @@ void proceed2nextMacroblock()
     ++stat->mode_use_intra[currMB->mb_type];
   else
     if (img->type != B_IMG)
-      ++stat->mode_use_inter[currMB->mb_type];
+    {
+      ++stat->mode_use_inter[0][currMB->mb_type];
+      stat->bit_use_mode_inter[0][currMB->mb_type]+= bitCount[BITS_INTER_MB];
+
+    }
     else
-      ++stat->mode_use_Bframe[currMB->mb_type];
+    {
+      stat->bit_use_mode_inter[1][currMB->mb_type]+= bitCount[BITS_INTER_MB];
+      ++stat->mode_use_inter[1][currMB->mb_type];
+    }
+
 
   // Update coordinates of macroblock
   img->mb_x++;
@@ -152,15 +160,6 @@ void start_macroblock()
 
   if(use_bitstream_backing)
   {
-     // Save image to allow recoding if necessary
-     for(y=0; y<img->height; y++)
-       for(x=0; x<img->width; x++)
-         imgY_tmp[y][x] = imgY[y][x];
-     for(i=0; i<2; i++)
-       for(y=0; y<img->height_cr; y++)
-         for(x=0; x<img->width_cr; x++)
-           imgUV_tmp[i][y][x] = imgUV[i][y][x];
-
     // Keep the current state of the bitstreams
     if(!img->cod_counter)
       for (i=0; i<curr_slice->max_part_nr; i++)
@@ -190,7 +189,8 @@ void start_macroblock()
   currMB->slice_nr = img->current_slice_nr;
 
     // Initialize delta qp change from last macroblock. Feature may be used for future rate control
-  currMB->delta_qp=0;
+  currMB->delta_qp = 0;
+  currMB->qp       = img->qp;       // needed in loop filter (even if constant QP is used)
 
   // Initialize counter for MB symbols
   currMB->currSEnr=0;
@@ -222,7 +222,7 @@ void start_macroblock()
  
   for (j=0; j < BLOCK_MULTIPLE; j++)
     for (i=0; i < BLOCK_MULTIPLE; i++)
-			currMB->coeffs_count[j][i] = 0;
+      currMB->coeffs_count[j][i] = 0;
 
   for (i=0; i < (BLOCK_MULTIPLE*BLOCK_MULTIPLE); i++)
     currMB->intra_pred_modes[i] = 0;
@@ -392,15 +392,6 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
         eep->Ecodestrm_len   = eep->Ecodestrm_lenS;
       }
     }
-    // Restore image to avoid DeblockMB to operate twice
-    // Note that this can be simplified! The copy range!
-    for(y=0; y<img->height; y++)
-      for(x=0; x<img->width; x++)
-        imgY[y][x] = imgY_tmp[y][x];
-    for(i=0; i<2; i++)
-      for(y=0; y<img->height_cr; y++)
-        for(x=0; x<img->width_cr; x++)
-          imgUV[i][y][x] = imgUV_tmp[i][y][x];
   }
 
   if(*end_of_slice == TRUE  && skip == TRUE) //! TO 4.11.2001 Skip MBs at the end of this slice
@@ -498,7 +489,7 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
    EncodingEnvironmentPtr eep;
    int i;
    int size_in_bytes;
-   
+  
    //! UVLC
    if (input->symbol_mode == UVLC)
    {
@@ -523,7 +514,8 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
      {
         dataPart= &(currSlice->partArr[i]);
         eep = &(dataPart->ee_cabac);
-        if(arienco_bits_written(eep) > (input->slice_argument*8))
+      
+       if( arienco_bits_written(eep) > (input->slice_argument*8))
           return TRUE;
      }
    }
@@ -630,7 +622,7 @@ OneComponentLumaPrediction4x4 (int*   mpred,      //  --> array of prediction va
                                int*   mv,         // <--  motion vector
                                int    ref)        // <--  reference frame (0.. / -1:backward)
 {
-  pel_t** ref_pic = (ref==-1 ? mref_P : mref [ref+1]);
+  pel_t** ref_pic = (ref==-1 ? mref_P : mref [ref]);
   int     mvshift = (input->mv_res ? 3 : 2);
   int     pix_add = (1 << mvshift);
   int     j0      = (pic_pix_y << mvshift) + mv[1], j1=j0+pix_add, j2=j1+pix_add, j3=j2+pix_add;
@@ -932,7 +924,7 @@ OneComponentChromaPrediction4x4 (int*     mpred,      //  --> array to store pre
   int     i, j, ii, jj, ii0, jj0, ii1, jj1, if0, if1, jf0, jf1;
   int*    mvb;
   int     refframe  = (ref<0 ?      0 :      ref);
-  pel_t** refimage  = (ref<0 ? mcef_P : mcef[ref+1])[uv];
+  pel_t** refimage  = (ref<0 ? mcef_P : mcef[ref])[uv];
   int     je        = pix_c_y + 4;
   int     ie        = pix_c_x + 4;
   int     f1        =(input->mv_res?16:8), f2=f1-1, f3=f1*f1, f4=f3>>1;
@@ -1251,8 +1243,8 @@ writeIntra4x4Modes (int block8x8)
 {
   int i, i0=4*block8x8, i1=i0+4;
   int           rate        = 0;
-  SyntaxElement *currSE     = img->MB_SyntaxElements;
   Macroblock    *currMB     = &img->mb_data[img->current_mb_nr];
+  SyntaxElement *currSE    = &img->MB_SyntaxElements[currMB->currSEnr];
   int           *bitCount   = currMB->bitcounter;
   Slice         *currSlice  = img->currentSlice;
   DataPartition *dataPart;
@@ -1325,8 +1317,8 @@ writeMBHeader ()
 {
   int             i;
   int             mb_nr     = img->current_mb_nr;
-  SyntaxElement*  currSE    = img->MB_SyntaxElements;
   Macroblock*     currMB    = &img->mb_data[mb_nr];
+  SyntaxElement *currSE    = &img->MB_SyntaxElements[currMB->currSEnr];
   int*            bitCount  = currMB->bitcounter;
   Slice*          currSlice = img->currentSlice;
   DataPartition*  dataPart;
@@ -1653,10 +1645,6 @@ int writeMotionInfo2NAL ()
   int k, j0, i0, refframe;
 
   Macroblock*     currMB    = &img->mb_data[img->current_mb_nr];
-  SyntaxElement*  currSE    = &img->MB_SyntaxElements[currMB->currSEnr];
-  int*            bitCount  = currMB->bitcounter;
-  Slice*          currSlice = img->currentSlice;
-  const int*      partMap   = assignSE2partition[input->partition_mode];
   int             no_bits   = 0;
 
   int   bframe          = (img->type==B_IMG);
@@ -1741,10 +1729,7 @@ writeChromaCoeff ()
   int*            bitCount  = currMB->bitcounter;
   Slice*          currSlice = img->currentSlice;
   const int*      partMap   = assignSE2partition[input->partition_mode];
-  int             mode      = currMB->mb_type;
   int             cbp       = currMB->cbp;
-  int             m2        = img->mb_x << 1;
-  int             jg2       = img->mb_y << 1;
   DataPartition*  dataPart;
 
   int   level, run;
@@ -1775,7 +1760,7 @@ writeChromaCoeff ()
         if (input->symbol_mode == UVLC)   currSE->mapping = levrun_linfo_c2x2;
         else                              currSE->writing = writeRunLevel2Buffer_CABAC;
 
-				currSE->k = uv;	//ctx for coeff_count
+        currSE->k = uv;        //ctx for coeff_count
 
         if (IS_INTRA (currMB))
         {
@@ -1829,7 +1814,7 @@ writeChromaCoeff ()
           ii=i/2;
           i1=i%2;
           level=1;
-					uv++;
+          uv++;
           for (k=0; k < 16 && level != 0; k++)
           {
             level = currSE->value1 = ACLevel[k]; // level
@@ -1837,8 +1822,8 @@ writeChromaCoeff ()
 
             if (input->symbol_mode == UVLC)   currSE->mapping = levrun_linfo_inter;
             else                              currSE->writing = writeRunLevel2Buffer_CABAC;
-						
-						currSE->k=uv;	//ctx for coeff_count
+            
+            currSE->k=uv;  //ctx for coeff_count
 
             if (IS_INTRA (currMB))
             {

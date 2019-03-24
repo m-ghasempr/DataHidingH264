@@ -45,6 +45,7 @@
 int  SliceHeader();
 int  writeERPS(SyntaxElement *sym, DataPartition *partition);
 int  SequenceHeader(FILE *outf);
-void LastMBInSlice();
+int  LastMBInSlice();
 
 #endif
+

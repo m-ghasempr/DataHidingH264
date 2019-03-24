@@ -467,45 +467,26 @@ static void PatchInp ()
 
   // Set block sizes
 
-  // First, initialize input->blc_size to all zeros
-  memset (input->blc_size,0, 4*8*2);
-
-  // set individual items
-  if (input->InterSearch16x16)
-  {
     input->blc_size[1][0]=16;
     input->blc_size[1][1]=16;
-  }
-  if (input->InterSearch16x8)
-  {
+
     input->blc_size[2][0]=16;
     input->blc_size[2][1]= 8;
-  }
-  if (input->InterSearch8x16)
-  {
+
     input->blc_size[3][0]= 8;
     input->blc_size[3][1]=16;
-  }
-  if (input->InterSearch8x8)
-  {
+
     input->blc_size[4][0]= 8;
     input->blc_size[4][1]= 8;
-  }
-  if (input->InterSearch8x4)
-  {
+
     input->blc_size[5][0]= 8;
     input->blc_size[5][1]= 4;
-  }
-  if (input->InterSearch4x8)
-  {
+
     input->blc_size[6][0]= 4;
     input->blc_size[6][1]= 8;
-  }
-  if (input->InterSearch4x4)
-  {
+
     input->blc_size[7][0]= 4;
     input->blc_size[7][1]= 4;
-  }
 
   if (input->partition_mode < 0 || input->partition_mode > 1)
   {

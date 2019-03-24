@@ -106,6 +106,31 @@ void write_frame(
   fflush(p_out);
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    Write previous decoded P frame to output file
+ ************************************************************************
+ */
+void write_prev_Pframe(struct img_par *img, FILE *p_out)
+{
+  int i,j;
+
+  for(i=0;i<img->height;i++)
+    for(j=0;j<img->width;j++)
+      fputc(imgY_prev[i][j],p_out);
+
+  for(i=0;i<img->height_cr;i++)
+    for(j=0;j<img->width_cr;j++)
+      fputc(imgUV_prev[0][i][j],p_out);
+
+  for(i=0;i<img->height_cr;i++)
+    for(j=0;j<img->width_cr;j++)
+      fputc(imgUV_prev[1][i][j],p_out);
+  fflush( p_out  );
+}
+
+
 
 #if TRACE
 

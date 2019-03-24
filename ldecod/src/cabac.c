@@ -49,7 +49,6 @@
 #include <string.h>
 #include "cabac.h"
 #include "memalloc.h"
-#include "elements.h"
 #include "bitsbuf.h"
 #include "header.h"
 
@@ -117,12 +116,17 @@ TextureInfoContexts* create_contexts_TextureInfo(void)
 {
   int j,k;
   TextureInfoContexts *deco_ctx;
+#ifndef USE_6_INTRA_MODES
+  const int max_ipr=9;
+#else
+  const int max_ipr=6;
+#endif
 
   deco_ctx = (TextureInfoContexts*) calloc(1, sizeof(TextureInfoContexts) );
   if( deco_ctx == NULL )
     no_mem_exit("create_contexts_TextureInfo: deco_ctx");
 
-  for (j=0; j < 6; j++)
+  for (j=0; j < max_ipr; j++)
   {
     deco_ctx->ipr_contexts[j] = (BiContextTypePtr) malloc(NUM_IPR_CTX  * sizeof( BiContextType ) );
     if( deco_ctx->ipr_contexts[j] == NULL )
@@ -281,6 +285,12 @@ void init_contexts_TextureInfo(struct img_par *img, TextureInfoContexts *deco_ct
   int scale_factor;
   int qp_factor;
   int ini[3];
+#ifndef USE_6_INTRA_MODES
+  const int max_ipr=9;
+#else
+  const int max_ipr=6;
+#endif
+
 
   qp_factor=min(max(0,img->qp-10),21);
 
@@ -289,7 +299,7 @@ void init_contexts_TextureInfo(struct img_par *img, TextureInfoContexts *deco_ct
     else
         scale_factor=2;
 
-  for (j=0; j < 6; j++)
+  for (j=0; j < max_ipr; j++)
   {
     if (ini_flag)
     {
@@ -574,12 +584,10 @@ void readB8_typeInfoFromBuffer_CABAC (SyntaxElement *se,
                                       struct img_par *img,
                                       DecodingEnvironmentPtr dep_dp)
 {
-  int act_ctx = 0;
   int act_sym = 0;
   int bframe  = (img->type==B_IMG_1 || img->type==B_IMG_MULT);
 
   MotionInfoContexts *ctx = (img->currentSlice)->mot_ctx;
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
 
 
   if (!bframe)
@@ -860,11 +868,20 @@ void readIntraPredModeFromBuffer_CABAC( SyntaxElement *se,
   if (right[se->context/2])             prev_sym = currMB->intra_pred_modes[se->context-3];
   else if (currMB->mb_available[1][0])  prev_sym = currMB->mb_available[1][0]->intra_pred_modes[se->context+5];
   else                                  prev_sym = 0;
-  se->value1  = unary_bin_max_decode(dep_dp,ctx->ipr_contexts[prev_sym],1,5);  
+
+#ifndef USE_6_INTRA_MODES
+  se->value1  = unary_bin_max_decode(dep_dp,ctx->ipr_contexts[prev_sym],1,8);
+#else
+  se->value1  = unary_bin_max_decode(dep_dp,ctx->ipr_contexts[prev_sym],1,5);
+#endif
 
   //--- second symbol ---
   prev_sym = se->value1;
+#ifndef USE_6_INTRA_MODES
+  se->value2  = unary_bin_max_decode(dep_dp,ctx->ipr_contexts[prev_sym],1,8);
+#else
   se->value2  = unary_bin_max_decode(dep_dp,ctx->ipr_contexts[prev_sym],1,5);
+#endif
 
 #if TRACE
   fprintf(p_trace, "@%d%s\t\t\t%d\n",symbolCount++, se->tracestring, se->value1);

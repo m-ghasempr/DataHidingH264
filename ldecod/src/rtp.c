@@ -127,6 +127,7 @@
 #include <ctype.h>
 
 #include "global.h"
+#include "errorconcealment.h"
 #include "elements.h"
 #include "bitsbuf.h"
 #include "rtp.h"
@@ -219,21 +220,14 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
   Slice *currSlice = img->currentSlice;
   DecodingEnvironmentPtr dep;
   byte *buf;
-  int i=0, dt=0;
-  unsigned int last_mb=0, picid=0;
-  int eiflag=1;
   static int first=1;
   RTPpacket_t *p, *nextp;
   RTPSliceHeader_t *sh, *nextsh;
-  int DoUnread = 0;
   int MBDataIndex;
-  int PartitionMask = 0;
   int done = 0;
   int err, back=0;
-  int intime=0;
   static int last_pframe=0, bframe_to_code=0;
   int b_interval;
-  static unsigned int old_seq=0;
   int FirstMacroblockInSlice;
   static int b_frame = FALSE;
   static int first_slice = FALSE;
@@ -282,7 +276,7 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
       //
       // If anyonme comes up with an idea how to use coefficients without the
       // header information then this code has to be changed
-      printf ("found unexpected Partition %c packet, skipping\n", p->payload[0]&0xf==2?'B':'C');
+      printf ("found unexpected Partition %c packet, skipping\n", (p->payload[0]&0xf)==2?'B':'C');
       break;
     case 4:
       //! Compound packets may be handled here, but I (StW) would personally prefer and
@@ -601,7 +595,7 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
 
   free_Partition (currSlice->partArr[0].bitstream);
 
-  assert (p->paylen-MBDataIndex > 0);
+  assert (p->paylen-MBDataIndex >= 0);
       
   currSlice->partArr[0].bitstream->read_len = 0;
   currSlice->partArr[0].bitstream->code_len = p->paylen-MBDataIndex;        // neu
@@ -1049,15 +1043,8 @@ int RTPInterpretPartitionHeader (byte *buf, int bufsize, RTPSliceHeader_t *sh)
 int RTPSequenceHeader (struct img_par *img, struct inp_par *inp, FILE *bits)
 {
   int TotalPackLen;
-  int i=0, dt=0;
-  unsigned int last_mb=0, picid=0;
-  int eiflag=1;
-  static int first=1;
   RTPpacket_t *p;
   RTPSliceHeader_t *sh;
-  int DoUnread = 0;
-  int PartitionMask = 0;
-  int done = 0;
   int err;
   int intime=0;
 
@@ -1700,7 +1687,7 @@ int RTPInterpretParameterSetPacket (char *buf, int buflen)
       break;        // to make lint happy
     
     case EXPECT_STRUCTVAL_INT:
-      if (1!=sscanf (&buf[bufp], "%d", destin))
+      if (1!=sscanf (&buf[bufp], "%d", (int *)destin))
       {
         printf ("Parsing error EXPECT STRUCTVAL INT in Header Packet: position %d, packet %s\n",
           bufp, &buf[bufp]);

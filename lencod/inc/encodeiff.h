@@ -37,18 +37,29 @@
  *  \brief
  *     definitions for H.26L interim file format, as defined in VCEG-O58
  *  \author
- *      - Tian, Dong                             <tian@cs.tut.fi>
- *
+ *      - Dong Tian                             <tian@cs.tut.fi>
  * ************************************************************************
  */
 
 #ifndef ENCODEIFF_H
 #define ENCODEIFF_H
 
+#ifdef WIN32
+#define INT2 __int8
+#define INT8 __int8
+#define INT16 __int16
+#define INT32 __int32
+#define INT64 __int64
+#else
+#define INT2 char
+#define INT8 char
+#define INT16 short
+#define INT32 long
+#define INT64 long long int  // This may not be 64 bit on some compilers
+#endif
+
 #define SIZEOF_BOXTYPE 8  // 8: compact size, 32 bits mode, 16: extended size, 64 bits mode
 #define BUFSIZE_FOR_PAYLOADINFO 2048
-
-typedef byte __int2;
 
 //! Box Types
 typedef enum
@@ -66,9 +77,9 @@ typedef enum
 
 typedef struct
 {
-  unsigned __int32 size;
-  unsigned __int32 type;
-//  unsigned __int64 largesize;
+  unsigned INT32 size;
+  unsigned INT32 type;
+//  unsigned INT64 largesize;
 } BoxType;
 
 // 1
@@ -77,8 +88,8 @@ typedef struct
   BoxType type;
 
   unsigned char    majorBrand[4];
-  unsigned __int16 jmMajorVersion;
-  unsigned __int16 jmMinorVersion;
+  unsigned INT16 jmMajorVersion;
+  unsigned INT16 jmMinorVersion;
   unsigned int     numCompatibleBrands;
   unsigned char*   compatibleBrands;
 } FileTypeBox;
@@ -88,20 +99,20 @@ typedef struct
 {
   BoxType type;
 
-  unsigned __int8 majorVersion;
-  unsigned __int8 minorVersion;
-  unsigned __int32 timescale;
-  unsigned __int32 numUnitsInTick;
-  unsigned __int64 duration;
-  unsigned __int16 pixAspectRatioX;
-  unsigned __int16 pixAspectRatioY;
-  unsigned __int16 maxPicId;
-  unsigned __int8 numAlternateTracks;
-  __int2 numBytesInPayloadCountMinusOne;
-  __int2 numBytesInPictureOffsetMinusTwo;
-  __int2 numBytesInPictureDisplayTimeMinusOne;
-  __int2 numBytesInPictureCountMinusOne;
-  __int2 numBytesInPayloadSizeMinusOne;
+  unsigned INT8 majorVersion;
+  unsigned INT8 minorVersion;
+  unsigned INT32 timescale;
+  unsigned INT32 numUnitsInTick;
+  unsigned INT64 duration;
+  unsigned INT16 pixAspectRatioX;
+  unsigned INT16 pixAspectRatioY;
+  unsigned INT16 maxPicId;  
+  unsigned INT8 numAlternateTracks;
+  INT2 numBytesInPayloadCountMinusOne;
+  INT2 numBytesInPictureOffsetMinusTwo;
+  INT2 numBytesInPictureDisplayTimeMinusOne;
+  INT2 numBytesInPictureCountMinusOne;
+  INT2 numBytesInPayloadSizeMinusOne;
 } FileHeaderBox;
 
 // 3
@@ -109,33 +120,33 @@ typedef struct
 {
   BoxType type;
 
-  unsigned __int64 creationTime;
-  unsigned __int64 modificationTime;
+  unsigned INT64 creationTime;
+  unsigned INT64 modificationTime;
 
-  unsigned __int8 titleNumBytes;
+  unsigned INT8 titleNumBytes;
   unsigned char* title;
 
-  unsigned __int8 authorNumBytes;
+  unsigned INT8 authorNumBytes;
   unsigned char* author;
 
-  unsigned __int8 copyrightNumBytes;
+  unsigned INT8 copyrightNumBytes;
   unsigned char* copyright;
 
-  unsigned __int16 descriptionNumBytes;
+  unsigned INT16 descriptionNumBytes;
   unsigned char* description;
 
-  unsigned __int16 URINumBytes;
+  unsigned INT16 URINumBytes;
   unsigned char* URI;
 } ContentInfoBox;
 
 // 4
 typedef struct
 {
-  unsigned __int16 displayWindowWidth;
-  unsigned __int16 displayWindowHeight;
-  unsigned __int16 maxSDUSize;
-  unsigned __int16 avgSDUSize;
-  unsigned __int32 avgBitRate;
+  unsigned INT16 displayWindowWidth;
+  unsigned INT16 displayWindowHeight;
+  unsigned INT16 maxSDUSize;
+  unsigned INT16 avgSDUSize;
+  unsigned INT32 avgBitRate;
   long double      sumSDUSize;
   long double      numSDU;
   int              last_frame;
@@ -152,23 +163,24 @@ typedef struct
 {
   BoxType type;
 
-  unsigned __int16 parameterSetID;
-  unsigned __int8 profile;
-  unsigned __int8 level;
-  unsigned __int8 version;
-  unsigned __int16 pictureWidthInMBs;
-  unsigned __int16 pictureHeightInMBs;
-  unsigned __int16 displayRectangleOffsetTop;
-  unsigned __int16 displayRectangleOffsetLeft;
-  unsigned __int16 displayRectangleOffsetBottom;
-  unsigned __int16 displayRectangleOffsetRight;
-  unsigned __int8 displayMode;
-  unsigned __int16 displayRectangleOffsetFromWindowTop;
-  unsigned __int16 displayRectangleOffsetFromWindowLeftBorder;
-  unsigned __int8 entropyCoding;
-  unsigned __int8 motionResolution;
-  unsigned __int8 partitioningType;
-  unsigned __int8 intraPredictionType;
+  unsigned INT16 parameterSetID;
+  unsigned INT8 profile;
+  unsigned INT8 level;
+  unsigned INT8 version;
+  unsigned INT16 pictureWidthInMBs;
+  unsigned INT16 pictureHeightInMBs;
+  unsigned INT16 displayRectangleOffsetTop;
+  unsigned INT16 displayRectangleOffsetLeft;
+  unsigned INT16 displayRectangleOffsetBottom;
+  unsigned INT16 displayRectangleOffsetRight;
+  unsigned INT8 displayMode;
+  unsigned INT16 displayRectangleOffsetFromWindowTop;
+  unsigned INT16 displayRectangleOffsetFromWindowLeftBorder;
+  unsigned INT8 entropyCoding;
+  unsigned INT8 motionResolution;
+  unsigned INT8 partitioningType;
+  unsigned INT8 intraPredictionType;
+  unsigned INT8 bufCycle;
 } ParameterSetBox;
 
 // 6
@@ -176,38 +188,43 @@ typedef struct
 {
   BoxType type;
 
-  unsigned __int64 fileSize;
-  unsigned __int64 startTick;
-  unsigned __int64 segmentDuration;
-  unsigned __int64 firstFrameNr;
-  unsigned __int64 lastFrameNr;
+  unsigned INT64 fileSize;
+  unsigned INT64 startTick;
+  unsigned INT64 segmentDuration;
+  unsigned INT64 firstFrameNr;
+  unsigned INT64 lastFrameNr;
 } SegmentBox;
 
 // 7
 
 typedef struct sPayloadInfo
 {
-  unsigned __int64 payloadSize;
-  unsigned __int8  headerSize;
-  unsigned __int8  payloadType;
-  unsigned __int8  errorIndication;
-  unsigned __int8  reserved;
+  unsigned INT64 payloadSize;
+  unsigned INT8  headerSize;
+  unsigned INT8  payloadType;
+  unsigned INT8  errorIndication;
+  unsigned INT8  reserved;
 
-  unsigned __int16 parameterSet;
+  unsigned INT16 parameterSet;
 
-  unsigned __int8  pictureID;
-  unsigned __int8  sliceID;
+  unsigned INT8  pictureID;
+  unsigned INT8  sliceID;
 
-  unsigned __int8  sliceType;
-  unsigned __int8  firstMBInSliceX;
-  unsigned __int8  firstMBInSliceY;
-  signed __int8  initialQP;
+  unsigned INT8  sliceType;
+  unsigned INT8  firstMBInSliceX;
+  unsigned INT8  firstMBInSliceY;
+  INT8  initialQP;
 
   int sliceType2;   // save according to original value
   int qpsp;
 
   int lastMBnr;
-  
+
+  int pn;           // save img->pn
+  int type;         // save img->type
+  int max_lindex;   // save img->max_lindex
+  int lindex;       // save img->lindex
+
   struct sPayloadInfo* next;
 
 } PayloadInfo;
@@ -215,12 +232,12 @@ typedef struct sPayloadInfo
 typedef struct
 {
   Boolean intraPictureFlag;
-  __int64 pictureOffset;
-  __int64 currPictureSize;
-  __int64 pictureDisplayTime;
-  unsigned __int64 numPayloads;
+  INT64 pictureOffset;
+  INT64 currPictureSize;
+  INT64 pictureDisplayTime;
+  unsigned INT64 numPayloads;
 
-  __int64 lastFrameNr;
+  INT64 lastFrameNr;
   
   PayloadInfo* payloadData;
 
@@ -229,7 +246,7 @@ typedef struct
 typedef struct
 {
   BoxType type;
-  unsigned __int64 numPictures;
+  unsigned INT64 numPictures;
 
   FILE* fpMeta;   // save the PictureInfo to tmp files
 } AlternateTrackHeaderBox;
@@ -308,6 +325,7 @@ void freePictureInfo();
 PayloadInfo* newPayloadInfo();
 int addOnePayloadInfo(PayloadInfo* pi);
 size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp );
+size_t iff_writeERPS(SyntaxElement *sym, PayloadInfo* pp, Bitstream* bitstream);
 
 // Functions on SwitchPictureBox
 int initSwitchPictureBox();
@@ -324,3 +342,4 @@ size_t terminateInterimFile(FILE* outf);
 size_t writefile( void* buf, size_t size, size_t count, FILE* fp );
 
 #endif
+

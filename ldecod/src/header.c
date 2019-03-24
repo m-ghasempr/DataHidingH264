@@ -66,7 +66,6 @@ int SliceHeader(struct img_par *img, struct inp_par *inp)
 {
   Slice *currSlice = img->currentSlice;
   int dP_nr = assignSE2partition[currSlice->dp_mode][SE_HEADER];
-  Bitstream *currStream = (currSlice->partArr[dP_nr]).bitstream;
   DataPartition *partition = &(currSlice->partArr[dP_nr]);
   SyntaxElement sym;
   int UsedBits=31;
@@ -342,7 +341,7 @@ int SliceHeader(struct img_par *img, struct inp_par *inp)
 
   /* end KS */
   img->buf_cycle = inp->buf_cycle+1;
-  img->pn=(img->number%img->buf_cycle);
+//  img->pn=(img->number%img->buf_cycle);
 
   img->max_mb_nr = (img->width * img->height) / (MB_BLOCK_SIZE * MB_BLOCK_SIZE);
   if (inp->symbol_mode ==CABAC)

@@ -113,7 +113,7 @@ void arienco_start_encoding(EncodingEnvironmentPtr eep,
   Ecodestrm_len = code_len;
 
   /* Only necessary for new AC */
-  Erange = CACM99_HALF;			
+  Erange = CACM99_HALF;
 }
 
 /*!
@@ -124,9 +124,31 @@ void arienco_start_encoding(EncodingEnvironmentPtr eep,
  */
 int arienco_bits_written(EncodingEnvironmentPtr eep)
 {
-   return (8 * (*Ecodestrm_len) + Ebits_to_follow + 8 + 2 - Ebits_to_go);
+   return (8 * (*Ecodestrm_len) + Ebits_to_follow + 8  - Ebits_to_go);
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    Determines the trailing bits needed for the termination of the 
+ *    arihmetic coder
+ ************************************************************************
+ */
+int get_trailing_bits(EncodingEnvironmentPtr eep)
+{
+  int nbits;
+  unsigned int roundup, value, bits;
+  
+  for (nbits = 1; nbits <= B_BITS; nbits++)
+  {
+    roundup = (1 << (B_BITS - nbits)) - 1;
+    bits = (Elow + roundup) >> (B_BITS - nbits);
+    value = bits << (B_BITS - nbits);
+    if (Elow <= value && value + roundup <= (Elow + (Erange - 1)) )
+      break;
+  }
+  return (nbits);
+}
 
 /*!
  ************************************************************************
@@ -155,7 +177,7 @@ void arienco_done_encoding(EncodingEnvironmentPtr eep)
     Ebuffer |= (bit<<7);
     if (--Ebits_to_go == 0) 
       put_byte();
-				
+
     while (Ebits_to_follow > 0) 
     {
       Ebits_to_follow--;
@@ -166,7 +188,14 @@ void arienco_done_encoding(EncodingEnvironmentPtr eep)
     }
   }
   if (Ebits_to_go != 8)
-    Ecodestrm[(*Ecodestrm_len)++] = (Ebuffer >> Ebits_to_go);		
+#if defined (_EXP_GOLOMB)
+    // prevent SCE by filling upper bits with ones
+    Ecodestrm[(*Ecodestrm_len)++] = (Ebuffer >> Ebits_to_go) 
+                                      | (((1<<Ebits_to_go)-1)<<(8-Ebits_to_go));
+#else
+    Ecodestrm[(*Ecodestrm_len)++] = (Ebuffer >> Ebits_to_go);
+#endif
+ 
 }
 
 
@@ -192,16 +221,16 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
 
   /* covers all cases where code does not bother to shift down symbol to be 
    * either 0 or 1, e.g. in some cases for cbp, mb_Type etc the code symply 
-	 * masks off the bit position and passes in the resulting value */
+   * masks off the bit position and passes in the resulting value */
   if (symbol != 0) 
-	  symbol = 1;
+    symbol = 1;
   
   /* From frequencies (c0 and c1) determine least probable symbol (LPS) and its
-   * count (cLPS)				
+   * count (cLPS)
    */
-  if (c0 < c1) 		
-  {				
-    LPS = 0;		
+  if (c0 < c1) 
+  {
+    LPS = 0;
     cLPS = c0;
   } 
   else 
@@ -230,9 +259,9 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
   if (symbol != 0)
       bi_ct->cum_freq[1]++;
 
-	if (++bi_ct->cum_freq[0] >= bi_ct->max_cum_freq) 
-		rescale_cum_freq(bi_ct);
-	
+  if (++bi_ct->cum_freq[0] >= bi_ct->max_cum_freq) 
+    rescale_cum_freq(bi_ct);
+
 
   /* renormalise, as for arith_encode */
   do 
@@ -242,36 +271,36 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
       if (Elow >= half)
       {
         /* BIT_PLUS_FOLLOW(1) */;
-				Ebuffer >>= 1;
-				Ebuffer |= 0x80;
-				if (--Ebits_to_go == 0) 
-					put_byte();
-				
-				while (Ebits_to_follow > 0) 
-				{
-					Ebits_to_follow--;
-					Ebuffer >>= 1;
-					if (--Ebits_to_go == 0) 
-						put_byte();
-				}
+        Ebuffer >>= 1;
+        Ebuffer |= 0x80;
+        if (--Ebits_to_go == 0) 
+        put_byte();
+
+        while (Ebits_to_follow > 0) 
+        {
+          Ebits_to_follow--;
+          Ebuffer >>= 1;
+          if (--Ebits_to_go == 0) 
+            put_byte();
+        }
         Elow -= half;
       }
       else if (Elow+Erange <= half)
       {
         /* BIT_PLUS_FOLLOW(0); */
-			  Ebuffer >>= 1;
-			  if (--Ebits_to_go == 0) 
-				  put_byte();
-			  
-			  while (Ebits_to_follow > 0) 
-			  {
-				  Ebits_to_follow--;
-				  Ebuffer >>= 1;
-				  Ebuffer |= 0x80;
-				  if (--Ebits_to_go == 0) 
-					  put_byte();
-				  
-			  }
+        Ebuffer >>= 1;
+        if (--Ebits_to_go == 0) 
+          put_byte();
+        
+        while (Ebits_to_follow > 0) 
+        {
+          Ebits_to_follow--;
+          Ebuffer >>= 1;
+          Ebuffer |= 0x80;
+          if (--Ebits_to_go == 0) 
+            put_byte();
+          
+        }
       }
       else
       {

@@ -231,6 +231,10 @@ SOURCE=.\ldecod\inc\erc_globals.h
 # End Source File
 # Begin Source File
 
+SOURCE=.\ldecod\inc\errorconcealment.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\ldecod\inc\global.h
 # End Source File
 # Begin Source File

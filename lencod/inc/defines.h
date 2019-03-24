@@ -38,7 +38,7 @@
  *    Headerfile containing some useful global definitions
  *
  * \author
- *    Detlev Marpe                                                        \n
+ *    Detlev Marpe 
  *    Copyright (C) 2000 HEINRICH HERTZ INSTITUTE All Rights Reserved.
  *
  * \date
@@ -52,12 +52,14 @@
 
 
 #define _EXP_GOLOMB
+//#define USE_6_INTRA_MODES
+
 
 // Constants for the interim file format
 #define WORKING_DRAFT_MAJOR_NO 0    // inidicate the working draft version number
 #define WORKING_DRAFT_MINOR_NO 4
 #define INTERIM_FILE_MAJOR_NO 0     // indicate interim file format version number
-#define INTERIM_FILE_MINOR_NO 0
+#define INTERIM_FILE_MINOR_NO 1
 
 #define _FAST_FULL_ME_
 #define _FULL_SEARCH_RANGE_
@@ -69,9 +71,11 @@
 // #define _CHECK_MULTI_BUFFER_1_
 // #define _CHECK_MULTI_BUFFER_2_
 
+// #define USE_6_INTRA_MODES
+
 #define IMG_PAD_SIZE    4   //!< Number of pixels padded around the reference frame (>=4)
 
-#define TRACE           0        //!< 0:Trace off 1:Trace on
+#define TRACE           1        //!< 0:Trace off 1:Trace on
 
 #define absm(A) ((A)<(0) ? (-(A)):(A)) //!< abs macro, faster than procedure
 #define MAX_VALUE       999999   //!< used for start value for some variables
@@ -121,14 +125,32 @@
 #define BLOCK_SIZE      4
 #define MB_BLOCK_SIZE   16
 
+#ifndef USE_6_INTRA_MODES
+
+#define NO_INTRA_PMODE  9        //!< #intra prediction modes
+//!< 4x4 intra prediction modes
+#define DC_PRED         0
+#define VERT_PRED       1
+#define HOR_PRED        2
+#define DIAG_PRED_SE    3
+#define DIAG_PRED_NE    4
+#define DIAG_PRED_SSE   5
+#define DIAG_PRED_NNE   6
+#define DIAG_PRED_ENE   7
+#define DIAG_PRED_ESE   8
+
+#else //!< USE_6_INTRA_MODES
+
 #define NO_INTRA_PMODE  6        //!< #intra prediction modes
-// 4x4 intra prediction modes
+//!< 4x4 intra prediction modes
 #define DC_PRED         0
 #define DIAG_PRED_RL    1
 #define VERT_PRED       2
 #define DIAG_PRED_LR_45 3
 #define HOR_PRED        4
 #define DIAG_PRED_LR    5
+
+#endif //!< USE_6_INTRA_MODES
 
 // 16x16 intra prediction modes
 #define VERT_PRED_16    0

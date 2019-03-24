@@ -71,3 +71,4 @@ extern const byte QP_SCALE_CR[40] ;
 extern const int dequant_coef[6][4][4];
 
 #endif
+

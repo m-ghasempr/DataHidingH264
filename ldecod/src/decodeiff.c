@@ -111,7 +111,7 @@ PictureInfo currPictureInfo;
 AlternateTrackMediaBox box_atm;
 SwitchPictureBox box_sp;
 
-extern int CurrentParameterSet = -1;  // Tian Dong: must not be set to 0 here.
+extern int CurrentParameterSet=-1;  // Tian Dong: must not be set to 0 here.
 static int BeginOfPictureOrSlice; // SOP or SOS
 int IFFEndOfFile = FALSE;
 int ThisAlternateTrack = 0;   // indicate which track in the file will be decoded.
@@ -369,6 +369,7 @@ int rdParameterSetBox( FILE* fp, unsigned long size )
   if ( -1 == readfile( &box_ps.motionResolution, 1, 1, fp ) ) return -1;
   if ( -1 == readfile( &box_ps.partitioningType, 1, 1, fp ) ) return -1;
   if ( -1 == readfile( &box_ps.intraPredictionType, 1, 1, fp ) ) return -1;
+  if ( -1 == readfile( &box_ps.bufCycle, 1, 1, fp ) ) return -1;
 
   return 0;
 }
@@ -689,7 +690,6 @@ int rdPictureInfo( FILE* fp )
  */
 int rdPayloadInfo( struct img_par *img, struct inp_par* inp, PayloadInfo* pp, FILE *fp )
 {
-  Slice *currSlice = img->currentSlice;
   byte cd;
 
   assert( fp != NULL );
@@ -748,11 +748,12 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
 {
   SyntaxElement sym;
   Bitstream* buf;
-  int dP_nr = 0;
   Slice *currSlice = img->currentSlice;
-  Bitstream *currStream = (currSlice->partArr[dP_nr]).bitstream;
-  DataPartition *partition = &(currSlice->partArr[dP_nr]);
   int bitptr = 0;
+  int tmp1;
+  RMPNIbuffer_t *tmp_rmpni,*tmp_rmpni2;
+  MMCObuffer_t *tmp_mmco,*tmp_mmco2;
+  int done;
 
   buf = &(pp->buffer);
 
@@ -798,7 +799,6 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
     printf ("Panic: unknown Slice type %d, conceal by loosing slice\n", pp->sliceType);
     currSlice->ei_flag = 1;
   }  
-//  currSlice->picture_type = img->type = sym.value1;
   buf->frame_bitoffset += sym.len;
   bitptr += sym.len;
 
@@ -839,6 +839,174 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
     img->qpsp = MAX_QP - sym.value1;
     buf->frame_bitoffset += sym.len;
     bitptr += sym.len;
+  }
+
+
+  // Multi-Picture Buffering Syntax, Feb 27, 2002
+  // RPSF: Reference Picture Selection Flags
+  sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &(sym.inf), buf->bitstream_length );
+  sym.mapping(sym.len, sym.inf, &(sym.value1), &(sym.value2));
+  buf->frame_bitoffset += sym.len;
+  bitptr+=sym.len;
+
+  // PN: Picture Number
+  sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &(sym.inf), buf->bitstream_length );
+  sym.mapping(sym.len, sym.inf, &(sym.value1), &(sym.value2));
+  buf->frame_bitoffset += sym.len;
+  bitptr+=sym.len;
+  img->pn=sym.value1;
+
+  // RPSL: Reference picture selection layer
+  sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &(sym.inf), buf->bitstream_length );
+  sym.mapping(sym.len, sym.inf, &(sym.value1), &(sym.value2));
+  buf->frame_bitoffset += sym.len;
+  bitptr+=sym.len;
+
+  if (sym.value1)
+  {
+    // read Reference Picture Selection Layer
+    // free old buffer content
+    while (img->currentSlice->rmpni_buffer)
+    { 
+      tmp_rmpni=img->currentSlice->rmpni_buffer;
+ 
+      img->currentSlice->rmpni_buffer=tmp_rmpni->Next;
+      free (tmp_rmpni);
+    } 
+    done=0;
+    // if P or B frame RMPNI
+
+    if ((img->type==INTER_IMG_1)||(img->type==INTER_IMG_MULT)||(img->type==B_IMG_1)||
+        (img->type==B_IMG_MULT)||(img->type==SP_IMG_1)||(img->type==SP_IMG_MULT))
+    {
+      do
+      {
+    
+        sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &(sym.inf), buf->bitstream_length );
+        sym.mapping(sym.len, sym.inf, &tmp1, &(sym.value2));
+        buf->frame_bitoffset += sym.len;
+        bitptr+=sym.len;
+
+
+        // check for illegal values
+        if ((tmp1<0)||(tmp1>3))
+          error ("Invalid RMPNI operation specified",400);
+
+        if (tmp1!=3)
+        {
+          printf ("got RMPNI = %d\n",tmp1);
+          tmp_rmpni=(RMPNIbuffer_t*)calloc (1,sizeof (RMPNIbuffer_t));
+          tmp_rmpni->Next=NULL;
+          tmp_rmpni->RMPNI=tmp1;
+
+          // get the additional parameter
+          sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &(sym.inf), buf->bitstream_length );
+          sym.mapping(sym.len, sym.inf, &(tmp_rmpni->Data), &(sym.value2));
+          buf->frame_bitoffset += sym.len;
+          bitptr+=sym.len;
+
+          // add RMPNI to list
+          if (img->currentSlice->rmpni_buffer==NULL) 
+          {
+            img->currentSlice->rmpni_buffer=tmp_rmpni;
+          }
+          else
+          {
+            tmp_rmpni2=img->currentSlice->rmpni_buffer;
+            while (tmp_rmpni2->Next!=NULL) 
+              tmp_rmpni2=tmp_rmpni2->Next;
+            tmp_rmpni2->Next=tmp_rmpni;
+          }
+        } else
+        {
+          // free temporary memory (no need to save end loop operation)
+          done=1;
+        }
+      } while (!done);
+    }
+  }
+
+  // RBPT 
+  sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &(sym.inf), buf->bitstream_length );
+  sym.mapping(sym.len, sym.inf, &(sym.value1), &(sym.value2));
+  buf->frame_bitoffset += sym.len;
+  bitptr+=sym.len;
+
+  // free old buffer content
+  while (img->mmco_buffer)
+  { 
+    tmp_mmco=img->mmco_buffer;
+
+    img->mmco_buffer=tmp_mmco->Next;
+    free (tmp_mmco);
+  } 
+  
+  // read Memory Management Control Operation
+  if (sym.value1)
+  {
+    // read Memory Management Control Operation 
+    do
+    {
+
+      tmp_mmco=(MMCObuffer_t*)calloc (1,sizeof (MMCObuffer_t));
+      tmp_mmco->Next=NULL;
+    
+      sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &(sym.inf), buf->bitstream_length );
+      sym.mapping(sym.len, sym.inf, &(tmp_mmco->MMCO), &(sym.value2));
+      buf->frame_bitoffset += sym.len;
+      bitptr+=sym.len;
+
+      switch (tmp_mmco->MMCO)
+      {
+      case 0:
+      case 5:
+        break;
+      case 1:
+        sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &(sym.inf), buf->bitstream_length );
+        sym.mapping(sym.len, sym.inf, &(tmp_mmco->DPN), &(sym.value2));
+        buf->frame_bitoffset += sym.len;
+        bitptr+=sym.len;
+        break;
+      case 2:
+        sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &(sym.inf), buf->bitstream_length );
+        sym.mapping(sym.len, sym.inf, &(tmp_mmco->LPIN), &(sym.value2));
+        buf->frame_bitoffset += sym.len;
+        bitptr+=sym.len;
+        break;
+      case 3:
+        sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &(sym.inf), buf->bitstream_length );
+        sym.mapping(sym.len, sym.inf, &(tmp_mmco->DPN), &(sym.value2));
+        buf->frame_bitoffset += sym.len;
+        bitptr+=sym.len;
+        sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &(sym.inf), buf->bitstream_length );
+        sym.mapping(sym.len, sym.inf, &(tmp_mmco->LPIN), &(sym.value2));
+        buf->frame_bitoffset += sym.len;
+        bitptr+=sym.len;
+        break;
+      case 4:
+        sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &(sym.inf), buf->bitstream_length );
+        sym.mapping(sym.len, sym.inf, &(tmp_mmco->MLIP1), &(sym.value2));
+        buf->frame_bitoffset += sym.len;
+        bitptr+=sym.len;
+        break;
+      default:
+        error ("Invalid MMCO operation specified",400);
+        break;
+      }
+
+      // add MMCO to list
+      if (img->mmco_buffer==NULL) 
+      {
+        img->mmco_buffer=tmp_mmco;
+      }
+      else
+      {
+        tmp_mmco2=img->mmco_buffer;
+        while (tmp_mmco2->Next!=NULL) tmp_mmco2=tmp_mmco2->Next;
+        tmp_mmco2->Next=tmp_mmco;
+      }
+      
+    }while (tmp_mmco->MMCO!=0);
   }
 }
 
@@ -911,10 +1079,6 @@ int rdOnePayload( struct img_par *img, struct inp_par* inp, PayloadInfo *pp, FIL
  */
 int IFFGetFollowingSliceHeader( struct img_par *img, PayloadInfo* pp )
 {
-  Slice* currSlice = img->currentSlice;
-  Bitstream* currStream = currSlice->partArr[0].bitstream;
-  byte* buf = currStream->streamBuffer;
-  
   if ( currPictureInfo.numPayloads == pp->payloadnr ) // the last payloadinfo is read, set the position of next pic
     return SOP;
   else // next payloadinfo 
@@ -950,8 +1114,6 @@ void freeAlternateTrackMediaBox()
  */
 int IFFUseParameterSet( int n, struct img_par* img, struct inp_par* inp )
 {
-  Slice* currSlice = img->currentSlice;
-
   if ( n == CurrentParameterSet )
     return 0;
 
@@ -984,9 +1146,8 @@ int IFFUseParameterSet( int n, struct img_par* img, struct inp_par* inp )
   }
 
   inp->partition_mode = box_ps.partitioningType;
-
   inp->UseConstrainedIntraPred = box_ps.intraPredictionType;
-
+  inp->buf_cycle = box_ps.bufCycle;
   return 0;
 }
 
@@ -1102,7 +1263,7 @@ int parse_one_box( struct img_par* img, struct inp_par* inp, struct snr_par* snr
   case BOX_SWPC: //<! 
   case BOX_ATRM:  //<! 
   default:
-    printf( "Unexpected boxs %d at %d\n", type, ftell( fp ));
+    printf( "Unexpected boxs %d at %ld\n", type, ftell( fp ));
     return -1;
     break;
   }

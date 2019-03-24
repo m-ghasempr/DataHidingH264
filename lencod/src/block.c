@@ -84,6 +84,318 @@ static const int dequant_coef[6][4][4] = {
 };
 
 
+#ifndef USE_6_INTRA_MODES
+
+// Notation for comments regarding prediction and predictors.
+// The pels of the 4x4 block are labelled a..p. The predictor pels above
+// are labelled A..H, from the left I..P, and from above left X, as follows:
+//
+//  X A B C D E F G H
+//  I a b c d
+//  J e f g h
+//  K i j k l
+//  L m n o p
+//  M
+//  N
+//  O
+//  P
+//
+
+// Predictor array index definitions
+#define P_X (PredPel[0])
+#define P_A (PredPel[1])
+#define P_B (PredPel[2])
+#define P_C (PredPel[3])
+#define P_D (PredPel[4])
+#define P_E (PredPel[5])
+#define P_F (PredPel[6])
+#define P_G (PredPel[7])
+#define P_H (PredPel[8])
+#define P_I (PredPel[9])
+#define P_J (PredPel[10])
+#define P_K (PredPel[11])
+#define P_L (PredPel[12])
+#define P_M (PredPel[13])
+#define P_N (PredPel[14])
+#define P_O (PredPel[15])
+#define P_P (PredPel[16])
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Make intra 4x4 prediction according to all 9 prediction modes.
+ *    The routine uses left and upper neighbouring points from
+ *    previous coded blocks to do this (if available). Notice that
+ *    inaccessible neighbouring points are signalled with a negative
+ *    value in the predmode array .
+ *
+ *  \para Input:
+ *     Starting point of current 4x4 block image posision
+ *
+ *  \para Output:
+ *      none
+ ************************************************************************
+ */
+void intrapred_luma(int img_x,int img_y)
+{
+  int i,j;
+  int s0;
+  int PredPel[17];  // array of predictor pels
+
+  int block_available_up        = (img->ipredmode[img_x/BLOCK_SIZE+1][img_y/BLOCK_SIZE] >=0);
+  int block_available_up_right  = (img->ipredmode[img_x/BLOCK_SIZE+2][img_y/BLOCK_SIZE] >=0);
+  int block_available_left      = (img->ipredmode[img_x/BLOCK_SIZE][img_y/BLOCK_SIZE+1] >=0);
+  int block_available_left_down = (img->ipredmode[img_x/BLOCK_SIZE][img_y/BLOCK_SIZE+2] >=0);
+
+  i = (img_x & 15);
+  j = (img_y & 15);
+  if (block_available_up_right)
+  {
+    if ((i == 4  && j == 4) ||
+        (i == 12 && j == 4) ||
+        (i == 12 && j == 8) ||
+        (i == 4  && j == 12) ||
+        (i == 12 && j == 12))
+    {
+      block_available_up_right = 0;
+    }
+  }
+
+  if (block_available_left_down)
+  {
+    if (!(i == 0 && j == 0) &&
+        !(i == 8 && j == 0) &&
+        !(i == 0 && j == 4) &&
+        !(i == 0 && j == 8) &&
+        !(i == 8 && j == 8))
+    {
+      block_available_left_down = 0;
+    }
+  }
+
+  // form predictor pels
+  if (block_available_up)
+  {
+    P_A = imgY[img_y-1][img_x+0];
+    P_B = imgY[img_y-1][img_x+1];
+    P_C = imgY[img_y-1][img_x+2];
+    P_D = imgY[img_y-1][img_x+3];
+
+    if (block_available_up_right)
+    {
+      P_E = imgY[img_y-1][img_x+4];
+      P_F = imgY[img_y-1][img_x+5];
+      P_G = imgY[img_y-1][img_x+6];
+      P_H = imgY[img_y-1][img_x+7];
+    }
+    else
+    {
+      P_E = P_F = P_G = P_H = P_D;
+    }
+  }
+  else
+  {
+    P_A = P_B = P_C = P_D = P_E = P_F = P_G = P_H = 128;
+  }
+
+  if (block_available_left)
+  {
+    P_I = imgY[img_y+0][img_x-1];
+    P_J = imgY[img_y+1][img_x-1];
+    P_K = imgY[img_y+2][img_x-1];
+    P_L = imgY[img_y+3][img_x-1];
+
+    if (block_available_left_down)
+    {
+      P_M = imgY[img_y+4][img_x-1];
+      P_N = imgY[img_y+5][img_x-1];
+      P_O = imgY[img_y+6][img_x-1];
+      P_P = imgY[img_y+7][img_x-1];
+    }
+    else
+    {
+      P_M = P_N = P_O = P_P = P_L;
+    }
+  }
+  else
+  {
+    P_I = P_J = P_K = P_L = P_M = P_N = P_O = P_P = 128;
+  }
+
+  // XXXGJC -- not quite right for this boundary
+  if (block_available_up && block_available_left)
+  {
+    P_X = imgY[img_y-1][img_x-1];
+  }
+  else
+  {
+    P_X = 128;
+  }
+
+  ///////////////////////////////
+  // make DC prediction
+  ///////////////////////////////
+  s0 = 0;
+  if (block_available_up && block_available_left)
+  {   
+    // no edge
+    s0 = (P_A + P_B + P_C + P_D + P_I + P_J + P_K + P_L + 4)/(2*BLOCK_SIZE);
+  }
+  else if (!block_available_up && block_available_left)
+  {
+    // upper edge
+    s0 = (P_I + P_J + P_K + P_L + 2)/BLOCK_SIZE;             
+  }
+  else if (block_available_up && !block_available_left)
+  {
+    // left edge
+    s0 = (P_A + P_B + P_C + P_D + 2)/BLOCK_SIZE;             
+  }
+  else //if (!block_available_up && !block_available_left)
+  {
+    // top left corner, nothing to predict from
+    s0 = 128;                           
+  }
+
+  for (j=0; j < BLOCK_SIZE; j++)
+  {
+    for (i=0; i < BLOCK_SIZE; i++)
+    {
+      // store DC prediction
+      img->mprr[DC_PRED][i][j] = s0;
+    }
+  }
+
+  ///////////////////////////////
+  // make horiz and vert prediction
+  ///////////////////////////////
+
+  for (i=0; i < BLOCK_SIZE; i++)
+  {
+    img->mprr[VERT_PRED][0][i] = 
+    img->mprr[VERT_PRED][1][i] = 
+    img->mprr[VERT_PRED][2][i] = 
+    img->mprr[VERT_PRED][3][i] = (&P_A)[i];
+    img->mprr[HOR_PRED][i][0]  = 
+    img->mprr[HOR_PRED][i][1]  = 
+    img->mprr[HOR_PRED][i][2]  = 
+    img->mprr[HOR_PRED][i][3]  = (&P_I)[i];
+  }
+
+  /*  Prediction according to 'diagonal' modes */
+  if (block_available_up && block_available_left)
+  {
+    // Mode DIAG_PRED_SE
+    img->mprr[DIAG_PRED_SE][3][0] = (P_L + 2*P_K + P_J + 2) / 4; 
+    img->mprr[DIAG_PRED_SE][2][0] =
+    img->mprr[DIAG_PRED_SE][3][1] = (P_K + 2*P_J + P_I + 2) / 4; 
+    img->mprr[DIAG_PRED_SE][1][0] =
+    img->mprr[DIAG_PRED_SE][2][1] = 
+    img->mprr[DIAG_PRED_SE][3][2] = (P_J + 2*P_I + P_X + 2) / 4; 
+    img->mprr[DIAG_PRED_SE][0][0] =
+    img->mprr[DIAG_PRED_SE][1][1] =
+    img->mprr[DIAG_PRED_SE][2][2] =
+    img->mprr[DIAG_PRED_SE][3][3] = (P_I + 2*P_X + P_A + 2) / 4; 
+    img->mprr[DIAG_PRED_SE][0][1] =
+    img->mprr[DIAG_PRED_SE][1][2] =
+    img->mprr[DIAG_PRED_SE][2][3] = (P_X + 2*P_A + P_B + 2) / 4;
+    img->mprr[DIAG_PRED_SE][0][2] =
+    img->mprr[DIAG_PRED_SE][1][3] = (P_A + 2*P_B + P_C + 2) / 4;
+    img->mprr[DIAG_PRED_SE][0][3] = (P_B + 2*P_C + P_D + 2) / 4;
+
+    // Mode DIAG_PRED_NE
+    img->mprr[DIAG_PRED_NE][0][0] = (P_A + P_C + P_I + P_K + 2*(P_B + P_J) + 4) / 8;
+    img->mprr[DIAG_PRED_NE][0][1] = 
+    img->mprr[DIAG_PRED_NE][1][0] = (P_B + P_D + P_J + P_L + 2*(P_C + P_K) + 4) / 8;
+    img->mprr[DIAG_PRED_NE][0][2] =
+    img->mprr[DIAG_PRED_NE][1][1] =
+    img->mprr[DIAG_PRED_NE][2][0] = (P_C + P_E + P_K + P_M + 2*(P_D + P_L) + 4) / 8;
+    img->mprr[DIAG_PRED_NE][0][3] = 
+    img->mprr[DIAG_PRED_NE][1][2] = 
+    img->mprr[DIAG_PRED_NE][2][1] = 
+    img->mprr[DIAG_PRED_NE][3][0] = (P_D + P_F + P_L + P_N + 2*(P_E + P_M) + 4) / 8;
+    img->mprr[DIAG_PRED_NE][1][3] = 
+    img->mprr[DIAG_PRED_NE][2][2] = 
+    img->mprr[DIAG_PRED_NE][3][1] = (P_E + P_G + P_M + P_O + 2*(P_F + P_N) + 4) / 8;
+    img->mprr[DIAG_PRED_NE][2][3] = 
+    img->mprr[DIAG_PRED_NE][3][2] = (P_F + P_H + P_N + P_P + 2*(P_G + P_O) + 4) / 8;
+    img->mprr[DIAG_PRED_NE][3][3] = (P_G + P_O + P_H + P_P + 2) / 4;
+
+    // Mode DIAG_PRED_SSE
+    img->mprr[DIAG_PRED_SSE][0][0] = 
+    img->mprr[DIAG_PRED_SSE][2][1] = (P_X + P_A + 1) / 2;
+    img->mprr[DIAG_PRED_SSE][0][1] = 
+    img->mprr[DIAG_PRED_SSE][2][2] = (P_A + P_B + 1) / 2;
+    img->mprr[DIAG_PRED_SSE][0][2] = 
+    img->mprr[DIAG_PRED_SSE][2][3] = (P_B + P_C + 1) / 2;
+    img->mprr[DIAG_PRED_SSE][0][3] = (P_C + P_D + 1) / 2;
+    img->mprr[DIAG_PRED_SSE][1][0] = 
+    img->mprr[DIAG_PRED_SSE][3][1] = (P_I + 2*P_X + P_A + 2) / 4;
+    img->mprr[DIAG_PRED_SSE][1][1] = 
+    img->mprr[DIAG_PRED_SSE][3][2] = (P_X + 2*P_A + P_B + 2) / 4;
+    img->mprr[DIAG_PRED_SSE][1][2] = 
+    img->mprr[DIAG_PRED_SSE][3][3] = (P_A + 2*P_B + P_C + 2) / 4;
+    img->mprr[DIAG_PRED_SSE][1][3] = (P_B + 2*P_C + P_D + 2) / 4;
+    img->mprr[DIAG_PRED_SSE][2][0] = (P_X + 2*P_I + P_J + 2) / 4;
+    img->mprr[DIAG_PRED_SSE][3][0] = (P_I + 2*P_J + P_K + 2) / 4;
+
+    // Mode DIAG_PRED_NNE
+    img->mprr[DIAG_PRED_NNE][0][0] = (2*(P_A + P_B + P_K) + P_J + P_L + 4) / 8;
+    img->mprr[DIAG_PRED_NNE][0][1] = 
+    img->mprr[DIAG_PRED_NNE][2][0] = (P_B + P_C + 1) / 2;
+    img->mprr[DIAG_PRED_NNE][0][2] = 
+    img->mprr[DIAG_PRED_NNE][2][1] = (P_C + P_D + 1) / 2;
+    img->mprr[DIAG_PRED_NNE][0][3] = 
+    img->mprr[DIAG_PRED_NNE][2][2] = (P_D + P_E + 1) / 2;
+    img->mprr[DIAG_PRED_NNE][2][3] = (P_E + P_F + 1) / 2;
+    img->mprr[DIAG_PRED_NNE][1][0] = (2*(P_B + P_L) + P_A + P_C + P_K + P_M + 4) / 8;
+    img->mprr[DIAG_PRED_NNE][1][1] = 
+    img->mprr[DIAG_PRED_NNE][3][0] = (P_B + 2*P_C + P_D + 2) / 4;
+    img->mprr[DIAG_PRED_NNE][1][2] = 
+    img->mprr[DIAG_PRED_NNE][3][1] = (P_C + 2*P_D + P_E + 2) / 4;
+    img->mprr[DIAG_PRED_NNE][1][3] = 
+    img->mprr[DIAG_PRED_NNE][3][2] = (P_D + 2*P_E + P_F + 2) / 4;
+    img->mprr[DIAG_PRED_NNE][3][3] = (P_E + 2*P_F + P_G + 2) / 4;
+
+    // Mode DIAG_PRED_ENE
+    img->mprr[DIAG_PRED_ENE][0][0] = (2*(P_C + P_I + P_J) + P_B + P_D + 4) / 8;
+    img->mprr[DIAG_PRED_ENE][0][1] = (2*(P_D + P_J) + P_C + P_E + P_I + P_K + 4) / 8;
+    img->mprr[DIAG_PRED_ENE][0][2] = 
+    img->mprr[DIAG_PRED_ENE][1][0] = (2*(P_E + P_J + P_K) + P_D + P_F + 4) / 8;
+    img->mprr[DIAG_PRED_ENE][0][3] = 
+    img->mprr[DIAG_PRED_ENE][1][1] = (2*(P_F + P_K) + P_E + P_G + P_J + P_L + 4) / 8;
+    img->mprr[DIAG_PRED_ENE][1][2] = 
+    img->mprr[DIAG_PRED_ENE][2][0] = (2*(P_G + P_K + P_L) + P_F + P_H + 4) / 8;
+    img->mprr[DIAG_PRED_ENE][1][3] = 
+    img->mprr[DIAG_PRED_ENE][2][1] = (2*(P_H + P_L) + P_G + P_H + P_K + P_L + 4) / 8;
+    img->mprr[DIAG_PRED_ENE][2][3] = 
+    img->mprr[DIAG_PRED_ENE][3][1] = (P_L + (P_M << 1) + P_N + 2) / 4;
+    img->mprr[DIAG_PRED_ENE][3][0] = 
+    img->mprr[DIAG_PRED_ENE][2][2] = (P_G + P_H + P_L + P_M + 2) / 4;
+    img->mprr[DIAG_PRED_ENE][3][2] = (P_M + P_N + 1) / 2;
+    img->mprr[DIAG_PRED_ENE][3][3] = (P_M + 2*P_N + P_O + 2) / 4;
+
+    // Mode DIAG_PRED_ESE
+    img->mprr[DIAG_PRED_ESE][0][0] = 
+    img->mprr[DIAG_PRED_ESE][1][2] = (P_X + P_I + 1) / 2;
+    img->mprr[DIAG_PRED_ESE][0][1] = 
+    img->mprr[DIAG_PRED_ESE][1][3] = (P_I + 2*P_X + P_A + 2) / 4;
+    img->mprr[DIAG_PRED_ESE][0][2] = (P_X + 2*P_A + P_B + 2) / 4;
+    img->mprr[DIAG_PRED_ESE][0][3] = (P_A + 2*P_B + P_C + 2) / 4;
+    img->mprr[DIAG_PRED_ESE][1][0] = 
+    img->mprr[DIAG_PRED_ESE][2][2] = (P_I + P_J + 1) / 2;
+    img->mprr[DIAG_PRED_ESE][1][1] = 
+    img->mprr[DIAG_PRED_ESE][2][3] = (P_X + 2*P_I + P_J + 2) / 4;
+    img->mprr[DIAG_PRED_ESE][2][0] = 
+    img->mprr[DIAG_PRED_ESE][3][2] = (P_J + P_K + 1) / 2;
+    img->mprr[DIAG_PRED_ESE][2][1] = 
+    img->mprr[DIAG_PRED_ESE][3][3] = (P_I + 2*P_J + P_K + 2) / 4;
+    img->mprr[DIAG_PRED_ESE][3][0] = (P_K + P_L + 1) / 2;
+    img->mprr[DIAG_PRED_ESE][3][1] = (P_J + 2*P_K + P_L + 2) / 4;
+  }
+}
+#else
+
 /*!
  ************************************************************************
  * \brief
@@ -215,6 +527,8 @@ void intrapred_luma(int img_x,int img_y)
                                 img->mprr[DIAG_PRED_LR][3][3] = H;
   }
 }
+
+#endif
 
 /*!
  ************************************************************************

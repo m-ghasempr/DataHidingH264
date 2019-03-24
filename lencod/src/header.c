@@ -575,12 +575,13 @@ void select_picture_type(SyntaxElement *symbol)
  *    Writes the number of MBs of this slice
  ************************************************************************
  */
-void LastMBInSlice()
+int LastMBInSlice()
 {
   int dP_nr = assignSE2partition[input->partition_mode][SE_HEADER];
   DataPartition *partition = &((img->currentSlice)->partArr[dP_nr]);
   SyntaxElement *sym;
   int d_MB_Nr;
+  int len;
 
   if ((sym=(SyntaxElement*)calloc(1,sizeof(SyntaxElement)))==NULL) no_mem_exit("LastMBInSlice:sym");
 
@@ -595,9 +596,10 @@ void LastMBInSlice()
   assert (d_MB_Nr < (1<<15));
   SYMTRACESTRING("SH Numbers of MB in Slice");
   sym->value1 = d_MB_Nr;
-  writeSyntaxElement_UVLC (sym, partition);
+  len=writeSyntaxElement_UVLC (sym, partition);
 
   free (sym);
+  return(len);
 }
 
 

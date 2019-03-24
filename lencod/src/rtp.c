@@ -644,7 +644,6 @@ void RTPUpdateTimestamp (int tr)
 
 int RTPPartition_BC_Header(int PartNo)
 {
-  Bitstream *currStream = ((img->currentSlice)->partArr[PartNo]).bitstream;
   DataPartition *partition = &((img->currentSlice)->partArr[PartNo]);
   SyntaxElement sym;
 

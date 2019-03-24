@@ -55,6 +55,20 @@
 extern int erc_mvperMB;
 struct img_par *erc_img;
 
+// static function declarations
+static int concealByCopy(frame *recfr, int currMBNum,
+  objectBuffer_t *object_list, int32 picSizeX);
+static int concealByTrial(frame *recfr, byte *predMB, 
+                          int currMBNum, objectBuffer_t *object_list, int predBlocks[], 
+                          int32 picSizeX, int32 picSizeY, int *yCondition);
+static int edgeDistortion (int predBlocks[], int currYBlockNum, byte *predMB, 
+                           byte *recY, int32 picSizeX, int32 regionSize);
+static void copyBetweenFrames (frame *recfr, 
+   int currYBlockNum, int32 picSizeX, int32 regionSize);
+static void buildPredRegionYUV(struct img_par *img, int32 *mv, int x, int y, byte *predMB);
+static void copyPredMB (int currYBlockNum, byte *predMB, frame *recfr, 
+                        int32 picSizeX, int32 regionSize);
+
 /*!
  ************************************************************************
  * \brief
@@ -539,7 +553,7 @@ static void buildPredRegionYUV(struct img_par *img, int32 *mv, int x, int y, byt
   int i=0,j=0,ii=0,jj=0,i1=0,j1=0,j4=0,i4=0;
   int jf=0;
   int uv;
-  int vec1_x=0,vec1_y=0,vec2_x=0,vec2_y=0;
+  int vec1_x=0,vec1_y=0;
   int ioff,joff;
   byte *pMB = predMB;
 

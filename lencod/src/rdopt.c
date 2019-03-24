@@ -52,7 +52,12 @@
 #include "elements.h"
 #include "refbuf.h"
 
+#ifndef USE_6_INTRA_MODES
+extern const byte PRED_IPRED[10][10][9];
+#else
 extern const byte PRED_IPRED[7][7][6];
+#endif
+
 extern       int  QP2QUANT  [40];
 
 //==== MODULE PARAMETERS ====
@@ -612,8 +617,8 @@ RDCost_for_8x8blocks (int*    cnt_nonz,   // --> number of nonzero coefficients
   int  direct  = (bframe && mode==0);
   int  b8value = B8Mode2Value (mode, pdir);
 
-  SyntaxElement *currSE    = img->MB_SyntaxElements;
   Macroblock    *currMB    = &img->mb_data[img->current_mb_nr];
+  SyntaxElement *currSE    = &img->MB_SyntaxElements[currMB->currSEnr];
   Slice         *currSlice = img->currentSlice;
   DataPartition *dataPart;
   const int     *partMap   = assignSE2partition[input->partition_mode];
@@ -1085,7 +1090,7 @@ RDCost_for_macroblocks (double   lambda,      // <-- lagrange multiplier
     for (j=img->pix_y; j<img->pix_y+16; j++)
     for (i=img->pix_x; i<img->pix_x+16; i++)
     {
-      distortion += img->quad [imgY_org[j][i] - FastPelY_14 (mref[1], j<<2, i<<2)];
+      distortion += img->quad [imgY_org[j][i] - FastPelY_14 (mref[0], j<<2, i<<2)];
     }
   }
   else
@@ -1102,8 +1107,8 @@ RDCost_for_macroblocks (double   lambda,      // <-- lagrange multiplier
     for (j=img->pix_c_y; j<img->pix_c_y+8; j++)
     for (i=img->pix_c_x; i<img->pix_c_x+8; i++)
     {
-      distortion += img->quad [imgUV_org[0][j][i] - mcef[1][0][j][i]];
-      distortion += img->quad [imgUV_org[1][j][i] - mcef[1][1][j][i]];
+      distortion += img->quad [imgUV_org[0][j][i] - mcef[0][0][j][i]];
+      distortion += img->quad [imgUV_org[1][j][i] - mcef[0][1][j][i]];
     }
   }
   else
@@ -1215,13 +1220,13 @@ store_macroblock_parameters (int mode)
     for (j=0; j<16; j++)
     for (i=0; i<16; i++)
     {
-      rec_mbY[j][i] = FastPelY_14 (mref[1], (img->pix_y+j)<<2, (img->pix_x+i)<<2);
+      rec_mbY[j][i] = FastPelY_14 (mref[0], (img->pix_y+j)<<2, (img->pix_x+i)<<2);
     }
     for (j=0; j<8; j++)
     for (i=0; i<8; i++)
     {
-      rec_mbU[j][i] = mcef[1][0][img->pix_c_y+j][img->pix_c_x+i];
-      rec_mbV[j][i] = mcef[1][1][img->pix_c_y+j][img->pix_c_x+i];
+      rec_mbU[j][i] = mcef[0][0][img->pix_c_y+j][img->pix_c_x+i];
+      rec_mbV[j][i] = mcef[0][1][img->pix_c_y+j][img->pix_c_x+i];
     }
   }
   else
@@ -1462,7 +1467,7 @@ encode_one_macroblock ()
   int         bframe      = (img->type==B_IMG);
   int         write_ref   = (input->no_multpred>1 || input->add_ref_frame>0);
   int         runs        = (input->RestrictRef==1 && input->rdopt==2 && img->type==INTER_IMG ? 2 : 1);
-  int         max_ref     = min (img->number, img->buf_cycle);
+  int         max_ref     = img->nb_references;
   int         checkref    = (input->rdopt && input->RestrictRef && img->type==INTER_IMG);
   Macroblock* currMB      = &img->mb_data[img->current_mb_nr];
 
@@ -1475,23 +1480,22 @@ encode_one_macroblock ()
   //     Is it o.k. for data partitioning? (where the syntax elements have to written to?)
   valid[IBLOCK] = 1;
   valid[0]      = (!intra && !spframe);
-  valid[1]      = (!intra && input->blc_size[1][0]>0);
-  valid[2]      = (!intra && input->blc_size[2][0]>0);
-  valid[3]      = (!intra && input->blc_size[3][0]>0);
-  valid[4]      = (!intra && input->blc_size[4][0]>0);
-  valid[5]      = (!intra && input->blc_size[5][0]>0);
-  valid[6]      = (!intra && input->blc_size[6][0]>0);
-  valid[7]      = (!intra && input->blc_size[7][0]>0);
+  valid[1]      = (!intra && input->InterSearch16x16);
+  valid[2]      = (!intra && input->InterSearch16x8);
+  valid[3]      = (!intra && input->InterSearch8x16);
+  valid[4]      = (!intra && input->InterSearch8x8);
+  valid[5]      = (!intra && input->InterSearch8x4);
+  valid[6]      = (!intra && input->InterSearch4x8);
+  valid[7]      = (!intra && input->InterSearch4x4);
   valid[P8x8]   = (valid[4] || valid[5] || valid[6] || valid[7] || (bframe && valid[0] && valid[IBLOCK]));
+
 
 
   //===== SET LAGRANGE PARAMETERS =====
   if (input->rdopt)
   {
-    qp  = (double)img->qp;
-    if (qp>=0 && qp<=31)    lambda_mode  = 5.00 * exp (0.1 * qp) * (qp + 5.0) / (34.0 - qp);  // may be it should be deleted
-    else                    lambda_mode  = 0.85 * pow (2, qp/3.0);
-    if (bframe || spframe)  lambda_mode *= 4.00;    // ????? WHY FOR SP-FRAME ?????
+    qp            = (double)img->qp;
+    lambda_mode   = 0.85 * pow (2, qp/3.0) * (bframe||spframe?4:1);  // ????? WHY FACTOR 4 FOR SP-FRAME ?????
     lambda_motion = sqrt (lambda_mode);
   }
   else
@@ -1938,15 +1942,12 @@ encode_one_macroblock ()
       currMB->mb_type=currMB->b8mode[0]=currMB->b8mode[1]=currMB->b8mode[2]=currMB->b8mode[3]=0;
     }
   }
-
-  //===== set macroblock quant and perform loop filtering =====
-  currMB->qp = img->qp;         // this should (or has to be) done somewere else, but where???
-  DeblockMb(img, imgY, imgUV);  // filter this macroblock ( pixels to the right and above the MB are affected )
+/*
   if (input->rdopt==2 && !bframe)
   {
     for (j=0 ;j<input->NoOfDecoders; j++)  DeblockMb(img, decs->decY_best[j], NULL);
   }
-
+*/
   //===== init and update number of intra macroblocks =====
   if (img->current_mb_nr==0)                      intras=0;
   if (img->type==INTER_IMG && IS_INTRA(currMB))   intras++;

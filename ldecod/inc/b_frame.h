@@ -54,8 +54,15 @@
 
 extern int ONE_FOURTH_TAP[3][2];
 extern const byte NCBP[48][2];
+
+#ifndef USE_6_INTRA_MODES
 extern byte PRED_IPRED[7][7][6];
 extern const byte IPRED_ORDER[36][2];
+#else // USE_6_INTRA_MODES
+extern byte PRED_IPRED[10][10][7];
+extern const byte IPRED_ORDER[81][2];
+#endif
+
 extern const int BLOCK_STEP[8][2];
 extern const byte SNGL_SCAN[16][2];
 extern const int JQ1[];
@@ -67,5 +74,5 @@ int **fw_refFrArr, ** bw_refFrArr;
 int ***dfMV;  // [92][72][2]
 int ***dbMV;  // [92][72][2]
 
-
 #endif
+

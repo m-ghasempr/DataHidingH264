@@ -1,3 +1,50 @@
+Changes for Version JM 2.0 to JM 1.9
+-------------------------------------
+I dropped adaptive frame/field coding, so only bugfixes for this release
+
+Bug Fixes
+* decoder delta qp decoding fix (HS)
+* correction of wrong calculation of written bits in CABAC mode 
+  (correction according to the new coding engine) (DM)
+* major cleanup of the routines related to the statistics reported 
+  in stat.dat (DM):
+  - correction of wrong calculation of used bits for header and mode info
+  - addition of new table entries "motion info" and "stuffing bits"
+    such that the sum of all entries matches _exactly_ the 
+    plotted number of average bits/frame, which in turn is
+    now equal to the number of bits reported on the console
+* correction of wrong calculation of written bytes for CABAC in RTP mode  (DM)
+* correction of total bits/frame printed out to the data.txt file for with B-frames (JL)
+* fix mprr size for new intra pred modes (GC)
+* fix frame_rate calculation for B-frames (GH)
+* fix restriction on reference frames for intra frame period (KS)
+* first step RPSL fixes (KS)
+* fix RTP assert (WYK)
+* tracefile fix (DC)
+* fix spelling of config file parameter "NumberReferenceFrames" (MB)
+
+Changes for Version JM 1.9 to JM 1.8
+-------------------------------------
+New Features
+* Loopfilter revised (PL)
+* INTRA-Prediction on unfiltered content (PL)
+
+Bug Fixes
+* use for each intra pred mode one CABAC context (DM)
+* increase version number (KS)
+* Interim file format updates (DT)
+
+Cleanups
+* GCC compatibility, remove warnings/unused variables (KS)
+* Add UNIX Makefiles (KS/HS)
+
+
+Changes for Version JM 1.8 to JM 1.7
+------------------------------------
+New Features
+* New Intra Prediction Modes [JVT-B080] (GrC)
+
+
 Changes for Version JM 1.7 to JM 1.4
 ------------------------------------
 New Features
@@ -288,16 +335,19 @@ People:
 KS      Karsten Sühring         suehring@hhi.de
 AH      Antti Hallapuro         antti.hallapuro@nokia.com
 AT      Alexis Michael Tourapis alexismt@ieee.org
+DC      Doug Chin               dougchin@sandvideo.com
 DK      Dimitris Kontopodis     dkonto@eikon.tum.de
 DM      Detlev Marpe            marpe@hhi.de
 DT      Dong Tian               tian@cs.tut.fi
 GC	Guy Cote                guy@videolocus.com
+GrC	Greg Conklin            gregc@real.com
 GB      Gabi Blättermann        blaetter@hhi.de
 GS      Gary Sullivan		garysull@microsoft.com
 HS      Heiko Schwarz           hschwarz@hhi.de
 IL      Inge Lille-Langoy       Inge.Lille-Langoy@telenor.com
 JL      Jani Lainema            Jani.Lainema@nokia.com
 LK      Louis Kerofsky          lkerofsky@sharplabs.com
+MB      Marcus Barkowsky        Marcus.Barkowsky@nt.e-technik.uni-erlangen.de
 MG      Michael Gallant         mgallant@videolocus.com
 PL      Peter List              Peter.List@t-systems.de
 RK	Ragip Kurceren 		ragip.kurceren@nokia.com

@@ -50,6 +50,11 @@
 #include <memory.h>
 #include "rdopt_coding_state.h"
 
+#ifndef USE_6_INTRA_MODES
+  static const int max_ipr=9;
+#else
+  static const int max_ipr=6;
+#endif
 
 
 /*!
@@ -202,7 +207,7 @@ store_coding_state (CSptr cs)
     }
 
     //--- texture coding contexts ---
-    for (i = 0; i < 6; i++)
+    for (i = 0; i < max_ipr; i++)
       for (j = 0; j < NUM_IPR_CTX; j++)
         biari_copy_context (&(tc_src->ipr_contexts[i][j]), &(tc_dest->ipr_contexts[i][j]));
     for (i = 0; i < 2; i++)
@@ -309,7 +314,7 @@ reset_coding_state (CSptr cs)
     }
 
     //--- texture coding contexts ---
-    for (i = 0; i < 6; i++)
+    for (i = 0; i < max_ipr; i++)
       for (j = 0; j < NUM_IPR_CTX; j++)
         biari_copy_context (&(tc_src->ipr_contexts[i][j]), &(tc_dest->ipr_contexts[i][j]));
     for (i = 0; i < 2; i++)

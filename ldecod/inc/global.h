@@ -86,9 +86,6 @@ byte **mref_P_small;                            //<! 1/4 pix luma for next P pic
 byte **imgY_ref;                                //<! reference frame find snr
 byte ***imgUV_ref;
 
-byte **imgY_tmp;                                //<! temp luma image loop_filter
-byte ***imgUV_tmp;                              //<! temp chroma image loop_filter
-
 // B pictures
 int  Bframe_ctr;
 byte prevP_tr, nextP_tr, P_interval;
@@ -495,7 +492,7 @@ void free_slice(struct inp_par *inp, struct img_par *img);
 int  decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *snr);
 void init_frame(struct img_par *img, struct inp_par *inp);
 void exit_frame(struct img_par *img, struct inp_par *inp);
-void DeblockMb(struct img_par *img ) ;
+void DeblockFrame(struct img_par *img, byte **imgY, byte ***imgUV ) ;
 
 void write_frame(struct img_par *img,int,FILE *p_out);
 void write_prev_Pframe(struct img_par *img,FILE *p_out);// B pictures

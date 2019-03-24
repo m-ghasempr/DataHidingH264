@@ -141,10 +141,12 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <assert.h>
 #include <memory.h>
 #include <malloc.h>
 #include "global.h"
+#include "mbuffer.h"
 #include "encodeiff.h"
 
 FileTypeBox box_ft;
@@ -416,9 +418,9 @@ size_t wrAlternateTrackInfoBox( FILE* fp )
 
   // update avgSDUSize
   if ( box_ati.info[0].numSDU != 0 )
-    box_ati.info[0].avgSDUSize = (unsigned __int16)(box_ati.info[0].sumSDUSize / box_ati.info[0].numSDU);
+    box_ati.info[0].avgSDUSize = (unsigned INT16)(box_ati.info[0].sumSDUSize / box_ati.info[0].numSDU);
   t = (float)(box_ati.info[0].last_frame + 1) * (float)box_fh.numUnitsInTick / (float)box_fh.timescale;
-  box_ati.info[0].avgBitRate = (__int32) (box_ati.info[0].sumSDUSize / t );
+  box_ati.info[0].avgBitRate = (INT32) (box_ati.info[0].sumSDUSize / t );
 
   // write them to the file
   num += writefile( &box_ati.type.size, 4, 1, fp );
@@ -460,7 +462,7 @@ void freeAlternateTrackInfoBox()
  */
 int initParameterSetBox()
 {
-  box_ps.type.size = SIZEOF_BOXTYPE + 26;
+  box_ps.type.size = SIZEOF_BOXTYPE + 27;     // 26 => 27, add bufCycle
   box_ps.type.type = BOX_PRMS;
 
   box_ps.parameterSetID = 0;
@@ -497,6 +499,7 @@ int initParameterSetBox()
   }
   box_ps.partitioningType = input->partition_mode;
   box_ps.intraPredictionType = input->UseConstrainedIntraPred;
+  box_ps.bufCycle = input->no_multpred;
   return 0;
 }
 
@@ -536,6 +539,7 @@ size_t wrParameterSetBox( FILE* fp )
   num += writefile( &box_ps.motionResolution, 1, 1, fp );
   num += writefile( &box_ps.partitioningType, 1, 1, fp );
   num += writefile( &box_ps.intraPredictionType, 1, 1, fp );
+  num += writefile( &box_ps.bufCycle, 1, 1, fp );
 
   if ( num == box_ps.type.size ) return num;
   return -1;
@@ -799,7 +803,7 @@ int initPictureInfo()
 size_t wrPictureInfo( FILE* fp )
 {
   int i;
-  __int64 size;
+  INT64 size;
   PayloadInfo* pp;
   size_t num = 0;
 //  FILE* f;
@@ -829,7 +833,7 @@ size_t wrPictureInfo( FILE* fp )
     size = pp->payloadSize + pp->headerSize;
     box_ati.info[0].numSDU++;
     box_ati.info[0].sumSDUSize += (long double)size;
-    if ( box_ati.info[0].maxSDUSize < size ) box_ati.info[0].maxSDUSize = (unsigned __int16)size;
+    if ( box_ati.info[0].maxSDUSize < size ) box_ati.info[0].maxSDUSize = (unsigned INT16)size;
 
     pp = pp->next;
   }
@@ -892,6 +896,10 @@ PayloadInfo* newPayloadInfo()
   pli->firstMBInSliceX = 0;
   pli->firstMBInSliceY = 0;
   pli->next = NULL;
+  pli->pn = img->pn;
+  pli->type = img->type;
+  pli->max_lindex = img->max_lindex;
+  pli->lindex = img->lindex;
 
   // set values
   if ( input->partition_mode == PAR_DP_1 )
@@ -938,6 +946,54 @@ PayloadInfo* newPayloadInfo()
   pli->firstMBInSliceY = img->mb_y;
   pli->initialQP = img->qp;
   pli->qpsp = img->qpsp;
+
+  // begin of ERPS
+#ifdef _CHECK_MULTI_BUFFER_1_
+
+  /* RPSL: Reference Picture Selection Layer */
+  if(img->type!=INTRA_IMG)
+  {
+    // let's mix some reference frames
+    if ((img->pn==5)&&(img->type==INTER_IMG))
+    {
+      RMPNIbuffer_t *r;
+      r = (RMPNIbuffer_t*)calloc (1,sizeof(RMPNIbuffer_t));
+      r->RMPNI=0;
+      r->Data=2;
+      r->Next=NULL;
+      img->currentSlice->rmpni_buffer=r;
+    }
+  }
+  reorder_mref(img);
+  
+#endif
+
+#ifdef _CHECK_MULTI_BUFFER_2_
+
+  // some code to check operation
+  if ((img->pn==3) && (img->type==INTER_IMG))
+  {
+    // check in this frame as long term picture
+//    if (img->max_lindex==0)
+    {
+      // set long term buffer size = 2
+      img->max_lindex=2;
+    }
+
+    // assign local long term
+    init_long_term_buffer(2,img);
+    init_mref(img);
+    init_Refbuf(img);
+
+    if (img->current_slice_nr==0)
+    {
+      assign_long_term_id(3,img->lindex,img);
+      img->lindex=(img->lindex+1)%img->max_lindex;
+    }
+  }
+
+#endif 
+  // end of ERPS
 
   return pli;
 }
@@ -1043,6 +1099,8 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
       sym.value1 = MAX_QP - pp->qpsp;
       writeSyntaxElement2Buf_UVLC(&sym, bitstream);
     }
+
+    iff_writeERPS(&sym, pp, bitstream);       // Tian: to support ERPS (Annex U), Feb 27, 2002
   }
   else if ( pp->payloadType == 1 )
   {
@@ -1063,6 +1121,8 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
     // write the slice id
     sym.value1 = pp->sliceID;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
+
+    iff_writeERPS(&sym, pp, bitstream);       // Tian: to support ERPS (Annex U), Feb 27, 2002
   }
   else if ( pp->payloadType == 2 || pp->payloadType == 3 )
   {
@@ -1072,6 +1132,8 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
     // write sliceID
     sym.value1 = pp->sliceID;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
+
+    iff_writeERPS(&sym, pp, bitstream);       // Tian: to support ERPS (Annex U), Feb 27, 2002
   }
   else if ( pp->payloadType == 5 )
   {
@@ -1099,6 +1161,124 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
   // Then write the bitstream to FILE
   if ( bytes_written != fwrite (bitstream->streamBuffer, 1, bytes_written, fp) ) return -1;
   return num+bytes_written;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *      writes the ERPS syntax elements to a bitstream
+ *      imitate write_ERPS(), and change the function calls:
+ *    from:
+ *      len += writeSyntaxElement_UVLC (sym, partition);
+ *    to:
+ *      len += writeSyntaxElement2Buf_UVLC(sym, bitstream);
+ * \return
+ *      how many bytes been written, if success
+ *      -1, if failed
+ * \param bitstream
+ *      destination: where the code to be written
+ ************************************************************************
+ */
+size_t iff_writeERPS(SyntaxElement *sym, PayloadInfo* pp, Bitstream* bitstream)
+{
+  size_t len=0;
+
+  // RPSF: Reference Picture Selection Flags
+  sym->value1 = 0;
+  len += writeSyntaxElement2Buf_UVLC(sym, bitstream);
+
+  // PN: Picture Number
+  sym->value1 = pp->pn;
+  len += writeSyntaxElement2Buf_UVLC(sym, bitstream);
+
+#ifdef _CHECK_MULTI_BUFFER_1_
+
+  // RPSL: Reference Picture Selection Layer
+  sym->value1 = 1;
+  len += writeSyntaxElement2Buf_UVLC(sym, bitstream);
+
+  if(pp->type!=INTRA_IMG)
+  {
+    // let's mix some reference frames
+    if ((pp->pn==5)&&(pp->type==INTER_IMG))
+    {
+      // negative ADPN follows
+      // RMPNI
+      sym->value1 = 0;
+      len += writeSyntaxElement2Buf_UVLC(sym, bitstream);
+      // ADPN
+      sym->value1 = 2;
+      len += writeSyntaxElement2Buf_UVLC(sym, bitstream);
+    }
+    // RMPNI
+    sym->value1 = 3;
+    len += writeSyntaxElement2Buf_UVLC(sym, bitstream);
+  }
+  
+#else
+  // RPSL: Reference Picture Selection Layer
+  sym->value1 = 0;
+  len += writeSyntaxElement2Buf_UVLC(sym, bitstream);
+
+#endif
+
+#ifdef _CHECK_MULTI_BUFFER_2_
+
+  // Reference Picture Bufering Type
+  sym->value1 = 1;
+  len += writeSyntaxElement2Buf_UVLC(sym, bitstream);
+
+  // some code to check operation
+  if ((pp->pn==3) && (pp->type==INTER_IMG))
+  {
+    // set long term buffer size = 2
+    // MMCO Specify Max Long Term Index
+    // command
+    sym->value1 = 4;
+    len += writeSyntaxElement2Buf_UVLC(sym, bitstream);
+    // size = 2+1 (MLP1)
+    sym->value1 = 2+1;
+    len += writeSyntaxElement2Buf_UVLC(sym, bitstream);
+
+    // assign a long term index to actual frame
+    // MMCO Assign Long Term Index to a Picture
+    // command
+    sym->value1 = 3;
+    len += writeSyntaxElement2Buf_UVLC(sym, bitstream);
+    // DPN=0 for actual frame 
+    sym->value1 = 0;
+    len += writeSyntaxElement2Buf_UVLC(sym, bitstream);
+    //long term ID
+    sym->value1 = pp->lindex;
+    len += writeSyntaxElement2Buf_UVLC(sym, bitstream);
+  } 
+  if ((pp->pn==4) && (pp->type==INTER_IMG))
+  {
+     if (pp->max_lindex>0)
+     {
+      // delete long term picture again
+      // MMCO Mark a Long-Term Picture as Unused
+      // command
+      sym->value1 = 2;
+      len += writeSyntaxElement2Buf_UVLC(sym, bitstream);
+      // MMCO LPIN
+      // command
+      sym->value1 = (pp->max_lindex+pp->lindex-1)%pp->max_lindex;
+      len += writeSyntaxElement2Buf_UVLC(sym, bitstream);
+    }
+  } 
+
+  // end MMCO loop
+  // end loop
+  sym->value1 = 0;
+  len += writeSyntaxElement2Buf_UVLC(sym, bitstream);
+#else
+    // RPBT: Reference Picture Bufering Type
+    sym->value1 = 0;
+    len += writeSyntaxElement2Buf_UVLC(sym, bitstream);
+#endif 
+
+  return len;
 }
 
 // Functions on SwitchPictureBox

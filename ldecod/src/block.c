@@ -65,6 +65,338 @@ static const int quant_coef[6][4][4] = {
 };
 
 
+#ifndef USE_6_INTRA_MODES
+
+// Notation for comments regarding prediction and predictors.
+// The pels of the 4x4 block are labelled a..p. The predictor pels above
+// are labelled A..H, from the left I..P, and from above left X, as follows:
+//
+//  X A B C D E F G H
+//  I a b c d
+//  J e f g h
+//  K i j k l
+//  L m n o p
+//  M
+//  N
+//  O
+//  P
+//
+
+// Predictor array index definitions
+#define P_X (PredPel[0])
+#define P_A (PredPel[1])
+#define P_B (PredPel[2])
+#define P_C (PredPel[3])
+#define P_D (PredPel[4])
+#define P_E (PredPel[5])
+#define P_F (PredPel[6])
+#define P_G (PredPel[7])
+#define P_H (PredPel[8])
+#define P_I (PredPel[9])
+#define P_J (PredPel[10])
+#define P_K (PredPel[11])
+#define P_L (PredPel[12])
+#define P_M (PredPel[13])
+#define P_N (PredPel[14])
+#define P_O (PredPel[15])
+#define P_P (PredPel[16])
+
+/*!
+ ***********************************************************************
+ * \brief
+ *    makes and returns 4x4 blocks with all 5 intra prediction modes
+ *
+ * \return
+ *    DECODING_OK   decoding of intraprediction mode was sucessfull            \n
+ *    SEARCH_SYNC   search next sync element as errors while decoding occured
+ ***********************************************************************
+ */
+
+int intrapred(
+  struct img_par *img,  /*!< image parameters */
+  int ioff,             /*!< ?? */
+  int joff,             /*!< ?? */
+  int img_block_x,      /*!< ?? */
+  int img_block_y)      /*!< ?? */
+{
+  int i,j;
+  int s0;
+  int img_y,img_x;
+  int PredPel[17];  // array of predictor pels
+
+  int block_available_up;
+  int block_available_up_right;
+  int block_available_left;
+  int block_available_left_down;
+
+  byte predmode = img->ipredmode[img_block_x+1][img_block_y+1];
+
+  img_x=img_block_x*4;
+  img_y=img_block_y*4;
+
+  block_available_up = (img->ipredmode[img_block_x+1][img_block_y] >=0);
+  block_available_up_right  = (img->ipredmode[img_x/BLOCK_SIZE+2][img_y/BLOCK_SIZE] >=0); // ???
+  block_available_left = (img->ipredmode[img_block_x][img_block_y+1] >=0);
+  block_available_left_down = (img->ipredmode[img_x/BLOCK_SIZE][img_y/BLOCK_SIZE+2] >=0); // ???
+
+  i = (img_x & 15);
+  j = (img_y & 15);
+  if (block_available_up_right)
+  {
+    if ((i == 4  && j == 4) ||
+        (i == 12 && j == 4) ||
+        (i == 12 && j == 8) ||
+        (i == 4  && j == 12) ||
+        (i == 12 && j == 12))
+    {
+      block_available_up_right = 0;
+    }
+  }
+
+  if (block_available_left_down)
+  {
+    if (!(i == 0 && j == 0) &&
+        !(i == 8 && j == 0) &&
+        !(i == 0 && j == 4) &&
+        !(i == 0 && j == 8) &&
+        !(i == 8 && j == 8))
+    {
+      block_available_left_down = 0;
+    }
+  }
+
+  // form predictor pels
+  if (block_available_up)
+  {
+    P_A = imgY[img_y-1][img_x+0];
+    P_B = imgY[img_y-1][img_x+1];
+    P_C = imgY[img_y-1][img_x+2];
+    P_D = imgY[img_y-1][img_x+3];
+
+    if (block_available_up_right)
+    {
+      P_E = imgY[img_y-1][img_x+4];
+      P_F = imgY[img_y-1][img_x+5];
+      P_G = imgY[img_y-1][img_x+6];
+      P_H = imgY[img_y-1][img_x+7];
+    }
+    else
+    {
+      P_E = P_F = P_G = P_H = P_D;
+    }
+  }
+  else
+  {
+    P_A = P_B = P_C = P_D = P_E = P_F = P_G = P_H = 128;
+  }
+
+  if (block_available_left)
+  {
+    P_I = imgY[img_y+0][img_x-1];
+    P_J = imgY[img_y+1][img_x-1];
+    P_K = imgY[img_y+2][img_x-1];
+    P_L = imgY[img_y+3][img_x-1];
+
+    if (block_available_left_down)
+    {
+      P_M = imgY[img_y+4][img_x-1];
+      P_N = imgY[img_y+5][img_x-1];
+      P_O = imgY[img_y+6][img_x-1];
+      P_P = imgY[img_y+7][img_x-1];
+    }
+    else
+    {
+      P_M = P_N = P_O = P_P = P_L;
+    }
+  }
+  else
+  {
+    P_I = P_J = P_K = P_L = P_M = P_N = P_O = P_P = 128;
+  }
+
+  if (block_available_up && block_available_left)
+  {
+    P_X = imgY[img_y-1][img_x-1];
+  }
+  else
+  {
+    P_X = 128;
+  }
+
+  
+  switch (predmode)
+  {
+  case DC_PRED:                         /* DC prediction */
+
+    s0 = 0;
+    if (block_available_up && block_available_left)
+    {   
+      // no edge
+      s0 = (P_A + P_B + P_C + P_D + P_I + P_J + P_K + P_L + 4)/(2*BLOCK_SIZE);
+    }
+    else if (!block_available_up && block_available_left)
+    {
+      // upper edge
+      s0 = (P_I + P_J + P_K + P_L + 2)/BLOCK_SIZE;             
+    }
+    else if (block_available_up && !block_available_left)
+    {
+      // left edge
+      s0 = (P_A + P_B + P_C + P_D + 2)/BLOCK_SIZE;             
+    }
+    else //if (!block_available_up && !block_available_left)
+    {
+      // top left corner, nothing to predict from
+      s0 = 128;                           
+    }
+
+    for (j=0; j < BLOCK_SIZE; j++)
+    {
+      for (i=0; i < BLOCK_SIZE; i++)
+      {
+        // store DC prediction
+        img->mpr[i+ioff][j+joff] = s0;
+      }
+    }
+    break;
+
+  case VERT_PRED:                       /* vertical prediction from block above */
+    for(j=0;j<BLOCK_SIZE;j++)
+      for(i=0;i<BLOCK_SIZE;i++)
+        img->mpr[i+ioff][j+joff]=imgY[img_y-1][img_x+i];/* store predicted 4x4 block */
+    break;
+
+  case HOR_PRED:                        /* horisontal prediction from left block */
+    for(j=0;j<BLOCK_SIZE;j++)
+      for(i=0;i<BLOCK_SIZE;i++)
+        img->mpr[i+ioff][j+joff]=imgY[img_y+j][img_x-1]; /* store predicted 4x4 block */
+    break;
+
+  case DIAG_PRED_SE:
+    img->mpr[0+ioff][3+joff] = (P_L + 2*P_K + P_J + 2) / 4; 
+    img->mpr[0+ioff][2+joff] =
+    img->mpr[1+ioff][3+joff] = (P_K + 2*P_J + P_I + 2) / 4; 
+    img->mpr[0+ioff][1+joff] =
+    img->mpr[1+ioff][2+joff] = 
+    img->mpr[2+ioff][3+joff] = (P_J + 2*P_I + P_X + 2) / 4; 
+    img->mpr[0+ioff][0+joff] =
+    img->mpr[1+ioff][1+joff] =
+    img->mpr[2+ioff][2+joff] =
+    img->mpr[3+ioff][3+joff] = (P_I + 2*P_X + P_A + 2) / 4; 
+    img->mpr[1+ioff][0+joff] =
+    img->mpr[2+ioff][1+joff] =
+    img->mpr[3+ioff][2+joff] = (P_X + 2*P_A + P_B + 2) / 4;
+    img->mpr[2+ioff][0+joff] =
+    img->mpr[3+ioff][1+joff] = (P_A + 2*P_B + P_C + 2) / 4;
+    img->mpr[3+ioff][0+joff] = (P_B + 2*P_C + P_D + 2) / 4;
+    break;
+
+  case DIAG_PRED_NE:
+    img->mpr[0+ioff][0+joff] = (P_A + P_C + P_I + P_K + 2*(P_B + P_J) + 4) / 8;
+    img->mpr[1+ioff][0+joff] = 
+    img->mpr[0+ioff][1+joff] = (P_B + P_D + P_J + P_L + 2*(P_C + P_K) + 4) / 8;
+    img->mpr[2+ioff][0+joff] =
+    img->mpr[1+ioff][1+joff] =
+    img->mpr[0+ioff][2+joff] = (P_C + P_E + P_K + P_M + 2*(P_D + P_L) + 4) / 8;
+    img->mpr[3+ioff][0+joff] = 
+    img->mpr[2+ioff][1+joff] = 
+    img->mpr[1+ioff][2+joff] = 
+    img->mpr[0+ioff][3+joff] = (P_D + P_F + P_L + P_N + 2*(P_E + P_M) + 4) / 8;
+    img->mpr[3+ioff][1+joff] = 
+    img->mpr[2+ioff][2+joff] = 
+    img->mpr[1+ioff][3+joff] = (P_E + P_G + P_M + P_O + 2*(P_F + P_N) + 4) / 8;
+    img->mpr[3+ioff][2+joff] = 
+    img->mpr[2+ioff][3+joff] = (P_F + P_H + P_N + P_P + 2*(P_G + P_O) + 4) / 8;
+    img->mpr[3+ioff][3+joff] = (P_G + P_O + P_H + P_P + 2) / 4;
+    break;
+
+  case  DIAG_PRED_SSE:/* diagonal prediction -22.5 deg to horizontal plane */
+    img->mpr[0+ioff][0+joff] = 
+    img->mpr[1+ioff][2+joff] = (P_X + P_A + 1) / 2;
+    img->mpr[1+ioff][0+joff] = 
+    img->mpr[2+ioff][2+joff] = (P_A + P_B + 1) / 2;
+    img->mpr[2+ioff][0+joff] = 
+    img->mpr[3+ioff][2+joff] = (P_B + P_C + 1) / 2;
+    img->mpr[3+ioff][0+joff] = (P_C + P_D + 1) / 2;
+    img->mpr[0+ioff][1+joff] = 
+    img->mpr[1+ioff][3+joff] = (P_I + 2*P_X + P_A + 2) / 4;
+    img->mpr[1+ioff][1+joff] = 
+    img->mpr[2+ioff][3+joff] = (P_X + 2*P_A + P_B + 2) / 4;
+    img->mpr[2+ioff][1+joff] = 
+    img->mpr[3+ioff][3+joff] = (P_A + 2*P_B + P_C + 2) / 4;
+    img->mpr[3+ioff][1+joff] = (P_B + 2*P_C + P_D + 2) / 4;
+    img->mpr[0+ioff][2+joff] = (P_X + 2*P_I + P_J + 2) / 4;
+    img->mpr[0+ioff][3+joff] = (P_I + 2*P_J + P_K + 2) / 4;
+    break;
+
+  case  DIAG_PRED_NNE:/* diagonal prediction -22.5 deg to horizontal plane */
+    img->mpr[0+ioff][0+joff] = (2*(P_A + P_B + P_K) + P_J + P_L + 4) / 8;
+    img->mpr[1+ioff][0+joff] = 
+    img->mpr[0+ioff][2+joff] = (P_B + P_C + 1) / 2;
+    img->mpr[2+ioff][0+joff] = 
+    img->mpr[1+ioff][2+joff] = (P_C + P_D + 1) / 2;
+    img->mpr[3+ioff][0+joff] = 
+    img->mpr[2+ioff][2+joff] = (P_D + P_E + 1) / 2;
+    img->mpr[3+ioff][2+joff] = (P_E + P_F + 1) / 2;
+    img->mpr[0+ioff][1+joff] = (2*(P_B + P_L) + P_A + P_C + P_K + P_M + 4) / 8;
+    img->mpr[1+ioff][1+joff] = 
+    img->mpr[0+ioff][3+joff] = (P_B + 2*P_C + P_D + 2) / 4;
+    img->mpr[2+ioff][1+joff] = 
+    img->mpr[1+ioff][3+joff] = (P_C + 2*P_D + P_E + 2) / 4;
+    img->mpr[3+ioff][1+joff] = 
+    img->mpr[2+ioff][3+joff] = (P_D + 2*P_E + P_F + 2) / 4;
+    img->mpr[3+ioff][3+joff] = (P_E + 2*P_F + P_G + 2) / 4;
+    break;
+
+  case  DIAG_PRED_ENE:/* diagonal prediction -22.5 deg to horizontal plane */
+    img->mpr[0+ioff][0+joff] = (2*(P_C + P_I + P_J) + P_B + P_D + 4) / 8;
+    img->mpr[1+ioff][0+joff] = (2*(P_D + P_J) + P_C + P_E + P_I + P_K + 4) / 8;
+    img->mpr[2+ioff][0+joff] = 
+    img->mpr[0+ioff][1+joff] = (2*(P_E + P_J + P_K) + P_D + P_F + 4) / 8;
+    img->mpr[3+ioff][0+joff] = 
+    img->mpr[1+ioff][1+joff] = (2*(P_F + P_K) + P_E + P_G + P_J + P_L + 4) / 8;
+    img->mpr[2+ioff][1+joff] = 
+    img->mpr[0+ioff][2+joff] = (2*(P_G + P_K + P_L) + P_F + P_H + 4) / 8;
+    img->mpr[3+ioff][1+joff] = 
+    img->mpr[1+ioff][2+joff] = (2*(P_H + P_L) + P_G + P_H + P_K + P_L + 4) / 8;
+    img->mpr[3+ioff][2+joff] = 
+    img->mpr[1+ioff][3+joff] = (P_L + (P_M << 1) + P_N + 2) / 4;
+    img->mpr[0+ioff][3+joff] = 
+    img->mpr[2+ioff][2+joff] = (P_G + P_H + P_L + P_M + 2) / 4;
+    img->mpr[2+ioff][3+joff] = (P_M + P_N + 1) / 2;
+    img->mpr[3+ioff][3+joff] = (P_M + 2*P_N + P_O + 2) / 4;
+    break;
+
+  case  DIAG_PRED_ESE:/* diagonal prediction -22.5 deg to horizontal plane */
+    img->mpr[0+ioff][0+joff] = 
+    img->mpr[2+ioff][1+joff] = (P_X + P_I + 1) / 2;
+    img->mpr[1+ioff][0+joff] = 
+    img->mpr[3+ioff][1+joff] = (P_I + 2*P_X + P_A + 2) / 4;
+    img->mpr[2+ioff][0+joff] = (P_X + 2*P_A + P_B + 2) / 4;
+    img->mpr[3+ioff][0+joff] = (P_A + 2*P_B + P_C + 2) / 4;
+    img->mpr[0+ioff][1+joff] = 
+    img->mpr[2+ioff][2+joff] = (P_I + P_J + 1) / 2;
+    img->mpr[1+ioff][1+joff] = 
+    img->mpr[3+ioff][2+joff] = (P_X + 2*P_I + P_J + 2) / 4;
+    img->mpr[0+ioff][2+joff] = 
+    img->mpr[2+ioff][3+joff] = (P_J + P_K + 1) / 2;
+    img->mpr[1+ioff][2+joff] = 
+    img->mpr[3+ioff][3+joff] = (P_I + 2*P_J + P_K + 2) / 4;
+    img->mpr[0+ioff][3+joff] = (P_K + P_L + 1) / 2;
+    img->mpr[1+ioff][3+joff] = (P_J + 2*P_K + P_L + 2) / 4;
+    break;
+
+  default:
+    printf("Error: illegal prediction mode input: %d\n",predmode);
+    return SEARCH_SYNC;
+    break;
+  }
+
+  return DECODING_OK;
+}
+
+#else // !USE_6_INTRA_MODES
+
 /*!
  ***********************************************************************
  * \brief
@@ -180,6 +512,7 @@ int intrapred(struct img_par *img,  //!< image parameters
   return DECODING_OK;
 }
 
+#endif
 
 /*!
  ***********************************************************************

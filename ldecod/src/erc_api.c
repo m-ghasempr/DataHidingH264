@@ -315,7 +315,7 @@ void ercStopSegment( int currMBNum, int segment, u_int32 bitPos, ercVariables_t 
  */
 void ercMarkCurrSegmentLost(int32 picSizeX, ercVariables_t *errorVar )
 {
-  int i = 0, j = 0;
+  int j = 0;
   int current_segment;
   
   current_segment = errorVar->currSegment-1;
@@ -355,7 +355,7 @@ void ercMarkCurrSegmentLost(int32 picSizeX, ercVariables_t *errorVar )
  */
 void ercMarkCurrSegmentOK(int32 picSizeX, ercVariables_t *errorVar )
 {
-  int i = 0, j = 0;
+  int j = 0;
   int current_segment;
   
   current_segment = errorVar->currSegment-1;

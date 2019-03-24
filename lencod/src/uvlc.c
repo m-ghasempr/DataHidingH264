@@ -109,7 +109,12 @@ void n_linfo2(int n, int dummy, int *len,int *info)
  */
 void intrapred_linfo(int ipred1, int ipred2, int *len,int *info)
 {
+#ifndef USE_6_INTRA_MODES
+  extern const int IPRED_ORDER[9][9];
+#else
   extern const int IPRED_ORDER[6][6];
+#endif
+
   n_linfo(IPRED_ORDER[ipred1][ipred2],len,info);
 
 }

@@ -88,4 +88,3 @@ void  reset_coding_state   (CSptr);  //!< restore parameters
 
 #endif
 
-

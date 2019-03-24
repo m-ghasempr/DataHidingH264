@@ -61,7 +61,7 @@
 
 
 #include "global.h"
-#include "elements.h"
+#include "errorconcealment.h"
 #include "image.h"
 #include "mbuffer.h"
 #include "decodeiff.h"
@@ -234,6 +234,8 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
   else
     ercConcealInterFrame(&recfr, erc_object_list, img->width, img->height, erc_errorVar);
 #endif
+
+  DeblockFrame( img, imgY, imgUV ) ;
 
   if (p_ref)
     find_snr(snr,img,p_ref,inp->postfilter);      // if ref sequence exist
@@ -961,11 +963,6 @@ void init_frame(struct img_par *img, struct inp_par *inp)
     init_global_buffers(inp, img); 
   }
 
-  if (inp->of_mode==PAR_OF_IFF)
-  {
-    img->pn=(img->number%img->buf_cycle);
-  }
-
   for(i=0;i<img->width/BLOCK_SIZE+1;i++)          // set edge to -1, indicate nothing to predict from
     img->ipredmode[i+1][0]=-1;
   for(j=0;j<img->height/BLOCK_SIZE+1;j++)
@@ -1136,7 +1133,6 @@ void decode_one_slice(struct img_par *img,struct inp_par *inp)
     ercWriteMBMODEandMV(img,inp);
 #endif
 
-    DeblockMb( img ) ;
     end_of_slice=exit_macroblock(img,inp);
   }
   reset_ec_flags();
