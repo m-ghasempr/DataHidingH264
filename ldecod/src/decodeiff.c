@@ -890,50 +890,97 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
   buf->frame_bitoffset += sym.len;
   bitptr += sym.len;
 
-#if 1
-  if(!img->current_slice_nr)
+  img->explicit_B_prediction = 0;
+
+  sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &(sym.inf), buf->bitstream_length );
+  sym.mapping(sym.len, sym.inf, &(img->disposable_flag), &(sym.value2));
+  buf->frame_bitoffset += sym.len;
+  bitptr+=sym.len;
+
+  if(img->type==INTER_IMG_1 || img->type==INTER_IMG_MULT)
   {
-    
-    if (img->type <= INTRA_IMG || img->type >= SI_IMG) 
-    {
-      if (img->structure == FRAME)
-      {     
-        if(img->tr <last_imgtr_frm) 
-          modulo_ctr_frm++;
-        
-        last_imgtr_frm = img->tr;
-        img->tr_frm = img->tr + (256*modulo_ctr_frm);
-      }
-      else
-      {
-        if(img->tr <last_imgtr_fld) 
-          modulo_ctr_fld++;
-        
-        last_imgtr_fld = img->tr;
-        img->tr_fld = img->tr + (256*modulo_ctr_fld);
-      }
+    sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &(sym.inf), buf->bitstream_length );
+    sym.mapping(sym.len, sym.inf, &(img->num_ref_pic_active_fwd), &(sym.value2));
+    buf->frame_bitoffset += sym.len;
+    bitptr+=sym.len;
+    img->num_ref_pic_active_fwd++;
+  }
+  else if(img->type==B_IMG_1 || img->type==B_IMG_MULT)
+  {
+    sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &(sym.inf), buf->bitstream_length );
+    sym.mapping(sym.len, sym.inf, &(img->explicit_B_prediction), &(sym.value2));
+    buf->frame_bitoffset += sym.len;
+    bitptr+=sym.len;
+ 
+    sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &(sym.inf), buf->bitstream_length );
+    sym.mapping(sym.len, sym.inf, &(img->num_ref_pic_active_fwd), &(sym.value2));
+    buf->frame_bitoffset += sym.len;
+    bitptr+=sym.len;
+    img->num_ref_pic_active_fwd++;
+
+    sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &(sym.inf), buf->bitstream_length );
+    sym.mapping(sym.len, sym.inf, &(img->num_ref_pic_active_bwd), &(sym.value2));
+    buf->frame_bitoffset += sym.len;
+    bitptr+=sym.len;
+    img->num_ref_pic_active_bwd++;
+  }
+
+  if (img->type <= INTRA_IMG || img->type >= SP_IMG_1 || !img->disposable_flag) 
+  {
+    if (img->structure == FRAME)
+    {     
+      if(img->tr <last_imgtr_frm) 
+        modulo_ctr_frm++;
+      
+      last_imgtr_frm = img->tr;
+      img->tr_frm = img->tr + (256*modulo_ctr_frm);
     }
     else
     {
-      if (img->structure == FRAME)
-      {     
-        if(img->tr <last_imgtr_frm_b) 
-          modulo_ctr_frm_b++;
-        
-        last_imgtr_frm_b = img->tr;
-        img->tr_frm = img->tr + (256*modulo_ctr_frm_b);
-      }
-      else
-      {
-        if(img->tr <last_imgtr_fld_b) 
-          modulo_ctr_fld_b++;
-        
-        last_imgtr_fld_b = img->tr;
-        img->tr_fld = img->tr + (256*modulo_ctr_fld_b);
-      }
+      if(img->tr <last_imgtr_fld) 
+        modulo_ctr_fld++;
+      
+      last_imgtr_fld = img->tr;
+      img->tr_fld = img->tr + (256*modulo_ctr_fld);
     }
-    if(img->type != B_IMG_MULT && img->type != B_IMG_1) {
-      img->pstruct_next_P = img->structure;
+  }
+  else
+  {
+    if (img->structure == FRAME)
+    {     
+      if(img->tr <last_imgtr_frm_b) 
+        modulo_ctr_frm_b++;
+      
+      last_imgtr_frm_b = img->tr;
+      img->tr_frm = img->tr + (256*modulo_ctr_frm_b);
+    }
+    else
+    {
+      if(img->tr <last_imgtr_fld_b) 
+        modulo_ctr_fld_b++;
+      
+      last_imgtr_fld_b = img->tr;
+      img->tr_fld = img->tr + (256*modulo_ctr_fld_b);
+    }
+  }
+  if(img->type != B_IMG_MULT && img->type != B_IMG_1) {
+    img->pstruct_next_P = img->structure;
+    if(img->structure == TOP_FIELD)
+    {
+      img->imgtr_last_P = img->imgtr_next_P;
+      img->imgtr_next_P = img->tr_fld;
+    }
+    else if(img->structure == FRAME)
+    {
+      img->imgtr_last_P = img->imgtr_next_P;
+      img->imgtr_next_P = 2*img->tr_frm;
+    }
+  }
+  
+  if(img->type==B_IMG_1 || img->type==B_IMG_MULT)
+  {
+    if(img->disposable_flag==0) 
+    {
       if(img->structure == TOP_FIELD)
       {
         img->imgtr_last_P = img->imgtr_next_P;
@@ -946,7 +993,11 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
       }
     }
   }
-#endif
+
+  img->mb_frame_field_flag = 0;
+
+  if (img->structure == 3)
+    img->mb_frame_field_flag = 1;
 
   sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length );
   sym.mapping(sym.len, sym.inf, &(sym.value1), &(sym.value2));
@@ -961,6 +1012,15 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
   bitptr += sym.len;
 
   currSlice->start_mb_nr = pp->firstMBInSliceY * box_ps.pictureWidthInMBs + pp->firstMBInSliceX;
+  
+  if ( img->type == B_IMG_1 || img->type == B_IMG_MULT )
+  {
+    sym.len = GetfixedSymbol( buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length,1 );
+    img->direct_type= pp->directType = sym.inf ;
+    buf->frame_bitoffset += sym.len;
+    bitptr += sym.len;
+  }
+  
 
 #ifdef _ABT_FLAG_IN_SLICE_HEADER_
   sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length );
@@ -976,9 +1036,15 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
   currSlice->qp = img->qp = pp->initialQP;
   buf->frame_bitoffset += sym.len;
   bitptr += sym.len;
-
   if ( img->type == SP_IMG_1 || img->type == SP_IMG_MULT || img->type == SI_IMG)
   {
+    if ( img->type != SI_IMG )
+    {
+      sym.len = GetfixedSymbol( buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length,1 );
+      img->sp_switch=sym.inf ;
+      buf->frame_bitoffset += sym.len;
+      bitptr += sym.len;
+    }
     sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length );
     sym.mapping(sym.len, sym.inf, &(sym.value1), &(sym.value2));
     img->qpsp = sym.value1 + (MAX_QP - MIN_QP + 1)/2;
@@ -1052,7 +1118,6 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
 
         if (tmp1!=3)
         {
-//          printf ("got RMPNI = %d\n",tmp1);
           tmp_rmpni=(RMPNIbuffer_t*)calloc (1,sizeof (RMPNIbuffer_t));
           tmp_rmpni->Next=NULL;
           tmp_rmpni->RMPNI=tmp1;

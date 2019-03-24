@@ -1074,11 +1074,17 @@ PayloadInfo* newPayloadInfo()
   pli->sliceType = 0;
   pli->firstMBInSliceX = 0;
   pli->firstMBInSliceY = 0;
+  pli->directType=input->direct_type;
+  pli->spSwitchFlag = 0;     // Flag for SP picture. 1 for switching SP, 0 for normal SP
   pli->next = NULL;
   pli->pn = img->pn;
   pli->type = img->type;
   pli->max_lindex = img->max_lindex;
   pli->lindex = img->lindex;
+  pli->disposable_flag               = img->disposable_flag;
+  pli->explicit_B_prediction         = (input->BipredictiveWeighting > 0)? (input->BipredictiveWeighting-1) : 0;
+  pli->num_ref_pic_active_fwd_minus1 = img->num_ref_pic_active_fwd_minus1;
+  pli->num_ref_pic_active_bwd_minus1 = img->num_ref_pic_active_bwd_minus1;
 
   // set values
   assert ( input->partition_mode == PAR_DP_1 );
@@ -1114,6 +1120,7 @@ PayloadInfo* newPayloadInfo()
       pli->sliceType2 = INTRA_IMG;
       break;
     case B_IMG:
+    case BS_IMG:
       pli->sliceType = 1;
       pli->sliceType2 = B_IMG;
       break;
@@ -1290,11 +1297,37 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
     sym.value1 = pp->sliceType;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
+    sym.value1 = pp->disposable_flag;
+    writeSyntaxElement2Buf_UVLC(&sym, bitstream);
+    if ( pp->sliceType2==B_IMG )
+    {
+      sym.value1 = pp->explicit_B_prediction;
+      writeSyntaxElement2Buf_UVLC(&sym, bitstream);
+    }
+    if ( pp->sliceType2==INTER_IMG || pp->sliceType2==B_IMG )
+    {
+      sym.value1 = pp->num_ref_pic_active_fwd_minus1;
+      writeSyntaxElement2Buf_UVLC(&sym, bitstream);
+    }
+    if ( pp->sliceType2==B_IMG )
+    {
+      sym.value1 = pp->num_ref_pic_active_bwd_minus1;
+      writeSyntaxElement2Buf_UVLC(&sym, bitstream);
+    }
     sym.value1 = pp->firstMBInSliceX;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
     sym.value1 = pp->firstMBInSliceY;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
     start_mb_nr = (img->width/16)*pp->firstMBInSliceY+pp->firstMBInSliceX;
+
+    if (pp->sliceType2==B_IMG)
+    {
+      sym.bitpattern = pp->directType;
+      sym.len = 1;
+      writeSyntaxElement2Buf_Fixed(&sym, bitstream);
+    }
+
+
 #ifdef _ABT_FLAG_IN_SLICE_HEADER_
     sym.value1 = pp->abtMode;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
@@ -1302,12 +1335,19 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
     sym.mapping = dquant_linfo;
     sym.value1 = pp->initialQP - (MAX_QP - MIN_QP +1)/2;
     writeSyntaxElement2Buf_UVLC (&sym, bitstream);
- 
-    if ( pp->sliceType2 ==SP_IMG)
+    
+    if ( pp->sliceType2 == SP_IMG) 
     {
+      if ( pp->sliceType2 == SP_IMG) // Needs some definition for SI Images. Currently code seems not to support them,
+      {
+        sym.bitpattern = pp->spSwitchFlag;
+        sym.len = 1;
+        writeSyntaxElement2Buf_Fixed(&sym, bitstream);
+      }
       sym.value1 = pp->qpsp - (MAX_QP - MIN_QP +1)/2;
       writeSyntaxElement2Buf_UVLC (&sym, bitstream);
     }
+
     sym.mapping = n_linfo2;
     iff_writeERPS(&sym, pp, bitstream); // Tian: to support ERPS (Annex U), Feb 27, 2002
 
@@ -1327,6 +1367,23 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
     sym.value1 = pp->sliceType;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
+    sym.value1 = pp->disposable_flag;
+    writeSyntaxElement2Buf_UVLC(&sym, bitstream);
+    if ( pp->sliceType2==B_IMG )
+    {
+      sym.value1 = pp->explicit_B_prediction;
+      writeSyntaxElement2Buf_UVLC(&sym, bitstream);
+    }
+    if ( pp->sliceType2==INTER_IMG || pp->sliceType2==B_IMG )
+    {
+      sym.value1 = pp->num_ref_pic_active_fwd_minus1;
+      writeSyntaxElement2Buf_UVLC(&sym, bitstream);
+    }
+    if ( pp->sliceType2==B_IMG )
+    {
+      sym.value1 = pp->num_ref_pic_active_bwd_minus1;
+      writeSyntaxElement2Buf_UVLC(&sym, bitstream);
+    }
     sym.value1 = pp->firstMBInSliceX;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
     sym.value1 = pp->firstMBInSliceY;

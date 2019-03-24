@@ -110,6 +110,6 @@ void get_quant_consts      (int abt_mode,int qp,int intra,int Q[2][2],int Qrshif
 void get_dequant_consts    (int abt_mode,int qp,int R[2][2]);
 
 int Mode_Decision_for_ABT_IntraBlocks(int b8,int b4,double lambda,int *min_cost,int bs_x,int bs_y);
-double RDCost_for_ABTIntraBlocks(int *nonzero,int b8,int b4,int ipmode,double lambda,double  min_rdcost,int bs_x,int bs_y);
+double RDCost_for_ABTIntraBlocks(int *nonzero,int b8,int b4,int ipmode,double lambda,double  min_rdcost,int bs_x,int bs_y, int mostProbableMode);
 
 #endif // _ABT_H_

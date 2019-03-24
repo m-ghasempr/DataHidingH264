@@ -1013,20 +1013,62 @@ int RTPInterpretSliceHeader (byte *buf, int bufsize, int ReadSliceId, RTPSliceHe
   bitptr+=len;
 
   len = GetVLCSymbol(buf, bitptr, &info, bufsize);
+  linfo (len, info, &sh->disposable_flag, &dummy);
+  bitptr+=len;
+  sh->num_ref_pic_active_fwd = 0;
+  sh->num_ref_pic_active_bwd = 0;
+  if(sh->SliceType==0 || sh->SliceType==2) // P or SP Picture
+  {
+    len = GetVLCSymbol(buf, bitptr, &info, bufsize);
+    linfo (len, info, &sh->num_ref_pic_active_fwd, &dummy);
+    bitptr+=len;
+    sh->num_ref_pic_active_fwd++;
+  }
+  else if(sh->SliceType==1) // B Picture
+  {
+    len = GetVLCSymbol(buf, bitptr, &info, bufsize);
+    linfo (len, info, &sh->explicit_B_prediction, &dummy);
+    bitptr+=len;
+
+    len = GetVLCSymbol(buf, bitptr, &info, bufsize);
+    linfo (len, info, &sh->num_ref_pic_active_fwd, &dummy);
+    bitptr+=len;
+    sh->num_ref_pic_active_fwd++;
+
+    len = GetVLCSymbol(buf, bitptr, &info, bufsize);
+    linfo (len, info, &sh->num_ref_pic_active_bwd, &dummy);
+    bitptr+=len;
+    sh->num_ref_pic_active_bwd++;
+  }
+
+  len = GetVLCSymbol(buf, bitptr, &info, bufsize);
   linfo (len, info, &sh->FirstMBInSliceX, &dummy);
   bitptr+=len;
 
   len = GetVLCSymbol(buf, bitptr, &info, bufsize);
   linfo (len, info, &sh->FirstMBInSliceY, &dummy);
   bitptr+=len;
+  
+  if(sh->SliceType==1)
+  {
+    len = GetfixedSymbol(buf, bitptr, &info, bufsize,1);   
+    sh->Direct_type = info;
+    bitptr+=len;
+  } 
 
   len = GetVLCSymbol(buf, bitptr, &info, bufsize);
   linfo_dquant (len, info, &sh->InitialQP, &dummy);
   bitptr+=len;
   sh->InitialQP = sh->InitialQP + (MAX_QP - MIN_QP +1)/2;
 
-  if (sh->SliceType==2) // SP Picture
+  if (sh->SliceType==2 || sh->SliceType==4) // SP Picture & SI Pictures
   {
+    if(sh->SliceType==2) // Do not read for SI PICTURES
+    {
+    len = GetfixedSymbol(buf, bitptr, &info, bufsize,1);   
+    sh->SwitchSP = info;
+    bitptr+=1;
+    } 
     len = GetVLCSymbol(buf, bitptr, &info, bufsize);
     linfo_dquant (len, info, &sh->InitialSPQP, &dummy);
     bitptr+=len;
@@ -1365,8 +1407,11 @@ void RTPSetImgInp (struct img_par *img, struct inp_par *inp, RTPSliceHeader_t *s
 
   img->qp = currSlice->qp = sh->InitialQP;
 
-  if (sh->SliceType==2)
+  if (sh->SliceType==2 || sh->SliceType==4)
     img->qpsp = sh->InitialSPQP;
+
+  if (sh->SliceType==2)
+    img->sp_switch = sh->SwitchSP;
 
   currSlice->start_mb_nr = (img->width/16)*sh->FirstMBInSliceY+sh->FirstMBInSliceX;
 
@@ -1400,62 +1445,6 @@ void RTPSetImgInp (struct img_par *img, struct inp_par *inp, RTPSliceHeader_t *s
 
 #if 1
   img->structure = currSlice->structure = sh->structure; //picture structure: 
-  
-  if(!img->current_slice_nr)
-  { 
-    if (img->type <= INTRA_IMG || img->type >= SI_IMG) 
-    {
-      if (img->structure == FRAME)
-      {     
-        if(img->tr <last_imgtr_frm) 
-          modulo_ctr_frm++;
-        
-        last_imgtr_frm = img->tr;
-        img->tr_frm = img->tr + (256*modulo_ctr_frm);
-      }
-      else
-      {
-        if(img->tr <last_imgtr_fld) 
-          modulo_ctr_fld++;
-        
-        last_imgtr_fld = img->tr;
-        img->tr_fld = img->tr + (256*modulo_ctr_fld);
-      }
-    }
-    else
-    {
-      if (img->structure == FRAME)
-      {     
-        if(img->tr <last_imgtr_frm_b) 
-          modulo_ctr_frm_b++;
-        
-        last_imgtr_frm_b = img->tr;
-        img->tr_frm = img->tr + (256*modulo_ctr_frm_b);
-      }
-      else
-      {
-        if(img->tr <last_imgtr_fld_b) 
-          modulo_ctr_fld_b++;
-        
-        last_imgtr_fld_b = img->tr;
-        img->tr_fld = img->tr + (256*modulo_ctr_fld_b);
-      }
-    }
-    
-    if(img->type != B_IMG_MULT) {
-      img->pstruct_next_P = img->structure;
-      if(img->structure == TOP_FIELD)
-      {
-        img->imgtr_last_P = img->imgtr_next_P;
-        img->imgtr_next_P = img->tr_fld;
-      }
-      else if(img->structure == FRAME)
-      {
-        img->imgtr_last_P = img->imgtr_next_P;
-        img->imgtr_next_P = 2*img->tr_frm;
-      }
-    }
-  }
 #endif
   
   /* KS: Multi Frame Buffering Syntax */
@@ -1486,6 +1475,86 @@ void RTPSetImgInp (struct img_par *img, struct inp_par *inp, RTPSliceHeader_t *s
   // set image mmco bufer to actual MMCO buffer
   img->mmco_buffer=sh->MMCObuffer;
   sh->MMCObuffer=NULL;
+
+  img->disposable_flag = sh->disposable_flag;
+  img->num_ref_pic_active_fwd = sh->num_ref_pic_active_fwd;
+  img->num_ref_pic_active_bwd = sh->num_ref_pic_active_bwd;
+  if(img->type==B_IMG_1 || img->type==B_IMG_MULT)
+    img->explicit_B_prediction = sh->explicit_B_prediction;
+  else
+    img->explicit_B_prediction = 0;
+
+  if (img->type <= INTRA_IMG || img->type >= SP_IMG_1 || !img->disposable_flag) 
+  {
+    if (img->structure == FRAME)
+    {     
+      if(img->tr <last_imgtr_frm) 
+        modulo_ctr_frm++;
+      
+      last_imgtr_frm = img->tr;
+      img->tr_frm = img->tr + (256*modulo_ctr_frm);
+    }
+    else
+    {
+      if(img->tr <last_imgtr_fld) 
+        modulo_ctr_fld++;
+      
+      last_imgtr_fld = img->tr;
+      img->tr_fld = img->tr + (256*modulo_ctr_fld);
+    }
+  }
+  else
+  {
+    if (img->structure == FRAME)
+    {     
+      if(img->tr <last_imgtr_frm_b) 
+        modulo_ctr_frm_b++;
+      
+      last_imgtr_frm_b = img->tr;
+      img->tr_frm = img->tr + (256*modulo_ctr_frm_b);
+    }
+    else
+    {
+      if(img->tr <last_imgtr_fld_b) 
+        modulo_ctr_fld_b++;
+      
+      last_imgtr_fld_b = img->tr;
+      img->tr_fld = img->tr + (256*modulo_ctr_fld_b);
+    }
+  }
+  if(img->type == img->type==B_IMG_1 || img->type == B_IMG_MULT) 
+  {
+    img->direct_type=sh->Direct_type;
+  }
+  if(img->type != B_IMG_MULT && img->type != B_IMG_1) {
+    img->pstruct_next_P = img->structure;
+    if(img->structure == TOP_FIELD)
+    {
+      img->imgtr_last_P = img->imgtr_next_P;
+      img->imgtr_next_P = img->tr_fld;
+    }
+    else if(img->structure == FRAME)
+    {
+      img->imgtr_last_P = img->imgtr_next_P;
+      img->imgtr_next_P = 2*img->tr_frm;
+    }
+  }
+  
+  if(img->type==B_IMG_1 || img->type==B_IMG_MULT)
+  {
+    if(img->disposable_flag==0) {
+        if(img->structure == TOP_FIELD)
+        {
+          img->imgtr_last_P = img->imgtr_next_P;
+          img->imgtr_next_P = img->tr_fld;
+        }
+        else if(img->structure == FRAME)
+        {
+          img->imgtr_last_P = img->imgtr_next_P;
+          img->imgtr_next_P = 2*img->tr_frm;
+        }
+      }
+  }
 }
 
 
@@ -1591,7 +1660,7 @@ int RTPGetFollowingSliceHeader (struct img_par *img, RTPpacket_t *p, RTPSliceHea
     first=1;
     i=1;
   }
-*/
+*/  
   RTPInterpretSliceHeader (&newp->payload[1], newp->packlen, newp->payload[0]==0?0:1, sh);
   if(currSlice->picture_id != sh->PictureID) 
     return (SOP);
@@ -1980,7 +2049,7 @@ int RTPInterpretParameterSetPacket (char *buf, int buflen)
         destin = &ParSet[ps].MBAmap;
         break;
       }
-	 
+ 
      
       // Here, all defined Parameter names are checked.  Anything else is a syntax error
       printf ("Syntax Error: unknown Parameter %s\n", s);

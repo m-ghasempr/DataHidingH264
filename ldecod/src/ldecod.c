@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 4.0d
+ *     JM 4.2
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -125,7 +125,8 @@
 #endif
 
 #define JM          "4"
-#define VERSION     "4.0d"
+#define VERSION     "4.2"
+
 #define LOGFILE     "log.dec"
 #define DATADECFILE "dataDec.txt"
 #define TRACEFILE   "trace_dec.txt"
@@ -357,6 +358,11 @@ void init_conf(struct inp_par *inp,
     snprintf(errortext, ET_SIZE, "Encapsulated_NAL_Payload=%d, use 0 or 1",inp->Encapsulated_NAL_Payload);
     error(errortext,1);
   }
+  if (inp->Encapsulated_NAL_Payload != TRUE)
+  {
+    printf("Encapsulated_NAL_Payload is always enabled!\n");
+    inp->Encapsulated_NAL_Payload = TRUE;
+  }
 
 
 #ifdef _LEAKYBUCKET_
@@ -479,7 +485,7 @@ void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr)
   fprintf(stdout," ABT_max_count %d ",INICNT_ABT);
 #endif
 #ifdef _ALT_SCAN_
-  //fprintf(stdout,"altScan ");
+  fprintf(stdout,"altScan ");
 #endif
   fprintf(stdout,"\n");
   // write to log file
@@ -913,6 +919,11 @@ int init_global_buffers(struct inp_par *inp, struct img_par *img)
   memory_size += get_mem2Dint(&refFrArr_frm, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
   memory_size += get_mem2Dint(&refFrArr_top, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
   memory_size += get_mem2Dint(&refFrArr_bot, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
+  
+  // allocate memory for collocated motion stationarity - int could be replaced with boolean    
+  memory_size += get_mem2Dint(&moving_block_frm, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
+  memory_size += get_mem2Dint(&moving_block_top,  img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
+  memory_size += get_mem2Dint(&moving_block_bot,  img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
 
   // allocate memory for reference frame in find_snr
   // byte imgY_ref[288][352];
@@ -963,6 +974,28 @@ int init_global_buffers(struct inp_par *inp, struct img_par *img)
   // int bw_refFrArr[72][88];
   memory_size += get_mem2Dint(&(img->bw_refFrArr_bot),img->height/BLOCK_SIZE,img->width/BLOCK_SIZE);
 
+  memory_size += get_mem2Dint(&(img->ipredmode_frm),img->width/BLOCK_SIZE +2 , img->height/BLOCK_SIZE +2);
+  memory_size += get_mem2Dint(&(img->ipredmode_top),img->width/BLOCK_SIZE +2 , (img->height /2)/BLOCK_SIZE +2);
+  memory_size += get_mem2Dint(&(img->ipredmode_bot),img->width/BLOCK_SIZE +2 , (img->height /2)/BLOCK_SIZE +2);
+
+  memory_size += get_mem3Dint(&(img->fw_mv_frm),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
+  memory_size += get_mem3Dint(&(img->fw_mv_top),img->width/BLOCK_SIZE +4, (img->height/2)/BLOCK_SIZE,3);
+  memory_size += get_mem3Dint(&(img->fw_mv_bot),img->width/BLOCK_SIZE +4, (img->height/2)/BLOCK_SIZE,3);
+
+  memory_size += get_mem3Dint(&(img->bw_mv_frm),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
+  memory_size += get_mem3Dint(&(img->bw_mv_top),img->width/BLOCK_SIZE +4, (img->height/2)/BLOCK_SIZE,3);
+  memory_size += get_mem3Dint(&(img->bw_mv_bot),img->width/BLOCK_SIZE +4, (img->height/2)/BLOCK_SIZE,3);
+
+  memory_size += get_mem3Dint(&(img->dfMV_top),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
+  memory_size += get_mem3Dint(&(img->dbMV_top),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
+
+  memory_size += get_mem3Dint(&(img->dfMV_bot),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
+  memory_size += get_mem3Dint(&(img->dbMV_bot),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
+
+  memory_size += get_mem2Dint(&(img->field_anchor),img->height/BLOCK_SIZE,img->width/BLOCK_SIZE);
+  memory_size += get_mem2Dint(&(field_mb), img->height/MB_BLOCK_SIZE, img->width/MB_BLOCK_SIZE);
+
+
   // CAVLC mem
   if((img->nz_coeff = (int****)calloc(img->width/MB_BLOCK_SIZE,sizeof(int***))) == NULL)
     no_mem_exit("get_mem4global_buffers: nzcoeff");
@@ -980,7 +1013,6 @@ int init_global_buffers(struct inp_par *inp, struct img_par *img)
   }
   
   img->buf_cycle = inp->buf_cycle+1;
-
 
   return (memory_size);
 }
@@ -1030,6 +1062,10 @@ void free_global_buffers(struct inp_par *inp, struct img_par *img)
   free_mem2Dint(refFrArr_top);
   free_mem2Dint(refFrArr_bot);
 
+  free_mem2Dint(moving_block_frm);
+  free_mem2Dint(moving_block_top);
+  free_mem2Dint(moving_block_bot);
+
   free_mem2D (imgY_ref);
   free_mem3D (imgUV_ref,2);
 //  free_mem2D (imgY_tmp);
@@ -1077,5 +1113,27 @@ void free_global_buffers(struct inp_par *inp, struct img_par *img)
   free_mem3Dint(img->bw_mv,img->width/BLOCK_SIZE + 4);
 
   free_mem3Dint(colB8mode,3); // collocated ABT block mode
+
+  free_mem2Dint (img->ipredmode_frm);
+  free_mem2Dint (img->ipredmode_top);
+  free_mem2Dint (img->ipredmode_bot);
+
+  free_mem3Dint(img->fw_mv_frm,img->width/BLOCK_SIZE + 4);
+  free_mem3Dint(img->fw_mv_top,img->width/BLOCK_SIZE + 4);
+  free_mem3Dint(img->fw_mv_bot,img->width/BLOCK_SIZE + 4);
+
+  free_mem3Dint(img->bw_mv_frm,img->width/BLOCK_SIZE + 4);
+  free_mem3Dint(img->bw_mv_top,img->width/BLOCK_SIZE + 4);
+  free_mem3Dint(img->bw_mv_bot,img->width/BLOCK_SIZE + 4);
+
+  free_mem3Dint(img->dfMV_top,img->width/BLOCK_SIZE + 4);
+  free_mem3Dint(img->dbMV_top,img->width/BLOCK_SIZE + 4);
+
+  free_mem3Dint(img->dfMV_bot,img->width/BLOCK_SIZE + 4);
+  free_mem3Dint(img->dbMV_bot,img->width/BLOCK_SIZE + 4);
+
+  free_mem2Dint(img->field_anchor);
+  free_mem2Dint(field_mb);
+
 }
 

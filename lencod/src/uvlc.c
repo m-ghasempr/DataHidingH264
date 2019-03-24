@@ -100,21 +100,6 @@ void n_linfo2(int n, int dummy, int *len,int *info)
   *info=n+1-(int)pow(2,i);
 }
 
-/*!
- ************************************************************************
- * \par Input:
- *    Number in the code table
- * \par Output:
- *    lenght and info
- ************************************************************************
- */
-void intrapred_linfo(int ipred1, int ipred2, int *len,int *info)
-{
-  extern const int IPRED_ORDER[9][9];
-
-  n_linfo(IPRED_ORDER[ipred1][ipred2],len,info);
-
-}
 
 /*!
  ************************************************************************
@@ -409,7 +394,7 @@ void levrun_linfo_intra(int level,int run,int *len,int *info)
  // NOTE this function is called with sym->inf > (1<<(sym->len/2)).  The upper bits of inf are junk
 int symbol2uvlc(SyntaxElement *sym)
 {
-  int suffix_len=sym->len/2;
+  int suffix_len=sym->len/2;  
   sym->bitpattern = (1<<suffix_len)|(sym->inf&((1<<suffix_len)-1));
   return 0;
 }
@@ -440,7 +425,6 @@ int symbol2uvlc(SyntaxElement *sym)
   }
   sym->bitpattern <<= 1;
   sym->bitpattern |= 0x01;
-
   return 0;
 }
 #endif
@@ -458,7 +442,6 @@ int writeSyntaxElement_UVLC(SyntaxElement *se, DataPartition *this_dataPart)
     return writeSyntaxElement_GOLOMB(se,this_dataPart);
 
   se->mapping(se->value1,se->value2,&(se->len),&(se->inf));
-
   symbol2uvlc(se);
 
   writeUVLC2buffer(se, this_dataPart->bitstream);
@@ -481,7 +464,41 @@ int writeSyntaxElement_UVLC(SyntaxElement *se, DataPartition *this_dataPart)
  ************************************************************************
  */
 int writeSyntaxElement_fixed(SyntaxElement *se, DataPartition *this_dataPart)
+{  
+  writeUVLC2buffer(se, this_dataPart->bitstream);
+  
+  if(se->type != SE_HEADER)
+    this_dataPart->bitstream->write_flag = 1;
+
+#if TRACE
+  if(se->type <= 1)
+    trace2out (se);
+#endif
+
+  return (se->len);
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    generates code and passes the codeword to the buffer
+ ************************************************************************
+ */
+int writeSyntaxElement_Intra4x4PredictionMode(SyntaxElement *se, DataPartition *this_dataPart)
 {
+
+  if (se->value1 == -1)
+  {
+    se->len = 1;
+    se->inf = 1;
+  }
+  else 
+  {
+    se->len = 4;  
+    se->inf = se->value1;
+  }
+
+  se->bitpattern = se->inf;
   writeUVLC2buffer(se, this_dataPart->bitstream);
 
   if(se->type != SE_HEADER)
@@ -550,6 +567,26 @@ void  writeUVLC2buffer(SyntaxElement *se, Bitstream *currStream)
   }
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    generates UVLC code and passes the codeword to the buffer
+ * \author
+ *  Tian Dong
+ ************************************************************************
+ */
+int writeSyntaxElement2Buf_Fixed(SyntaxElement *se, Bitstream* this_streamBuffer )
+{
+
+  writeUVLC2buffer(se, this_streamBuffer );
+
+#if TRACE
+  if(se->type <= 1)
+    trace2out (se);
+#endif
+
+  return (se->len);
+}
 
 
 /*!
@@ -1028,16 +1065,16 @@ int writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *thi
 
   if (levabs < escape)
   {
-	  iLength = numPrefix + vlc + 1;
-	  iCodeword = (1<<(shift+1))|(suffix<<1)|sign;
+    iLength = numPrefix + vlc + 1;
+    iCodeword = (1<<(shift+1))|(suffix<<1)|sign;
   }
   else
   {
-	  iLength = 28;
-	  iCodeword = (1<<12)|((levabs-escape)<<1)|sign;
+    iLength = 28;
+    iCodeword = (1<<12)|((levabs-escape)<<1)|sign;
   }
-	se->len = iLength;
-	se->inf = iCodeword;
+  se->len = iLength;
+  se->inf = iCodeword;
 
   symbol2vlc(se);
 

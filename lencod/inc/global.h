@@ -100,7 +100,8 @@ typedef enum {
 typedef enum {
   FRAME_CODING,
   ADAPTIVE_CODING,
-  FIELD_CODING
+  FIELD_CODING,
+  MB_CODING
 } CodingType;
 
 //! definition of H.26L syntax elements
@@ -147,12 +148,6 @@ typedef enum {
   BITS_DELTA_QUANT_MB,
   MAX_BITCOUNTER_MB
 } BitCountType;
-
-
-typedef enum {
-  SINGLE_SCAN,
-  DOUBLE_SCAN
-} ScanMode;
 
 
 typedef enum {
@@ -207,7 +202,7 @@ typedef struct
   byte          *Ecodestrm;
   int           *Ecodestrm_len;
   int           *Ecodestrm_laststartcode;
-	unsigned short*AC_next_state_MPS_64;
+  unsigned short*AC_next_state_MPS_64;
   // storage in case of recode MB
   unsigned int  ElowS, ErangeS;
   unsigned int  EbufferS;
@@ -217,8 +212,8 @@ typedef struct
   int           *Ecodestrm_lenS;
 #ifdef NEW_CONSTRAINT_AC
   int           C, CS;
-	int						E, ES;
-	int						B, BS;
+  int           E, ES;
+  int           B, BS;
 #endif
 } EncodingEnvironment;
 
@@ -227,7 +222,7 @@ typedef EncodingEnvironment *EncodingEnvironmentPtr;
 //! struct for context management
 typedef struct
 {
-	unsigned short state;         // index into state-table CP	
+  unsigned short state;         // index into state-table CP  
   unsigned char  MPS;           // Least Probable Symbol 0/1 CP
 } BiContextType;
 
@@ -254,7 +249,8 @@ typedef struct
   BiContextType b8_type_contexts [2][NUM_B8_TYPE_CTX];
   BiContextType mv_res_contexts  [2][NUM_MV_RES_CTX];
   BiContextType ref_no_contexts  [2][NUM_REF_NO_CTX];
-	BiContextType delta_qp_contexts		[NUM_DELTA_QP_CTX];
+  BiContextType bwd_ref_no_contexts [2][NUM_REF_NO_CTX];
+  BiContextType delta_qp_contexts   [NUM_DELTA_QP_CTX];
   BiContextType slice_term_context;
 } MotionInfoContexts;
 
@@ -426,12 +422,27 @@ byte  ***mref;               //!< 1/4 pix luma
 byte ****mcef;               //!< pix chroma
 int    **img4Y_tmp;          //!< for quarter pel interpolation
 int   ***tmp_mv;             //!< motion vector buffer
+
+int   **moving_block;           //!< stationary block buffer
+int   **moving_block_frm;       //!< stationary block buffer - frame
+int   **moving_block_top;       //!< stationary block buffer - field
+int   **moving_block_bot;       //!< stationary block buffer - field
+
 int    **refFrArr;           //!< Array for reference frames of each block
 
 // B pictures
 // motion vector : forward, backward, direct
 int  ***tmp_fwMV;
 int  ***tmp_bwMV;
+int  ***tmp_fwMV_top;   //!< For MB level field/frame coding tools
+int  ***tmp_fwMV_bot;   //!< For MB level field/frame coding tools
+int  ***tmp_bwMV_top;   //!< For MB level field/frame coding tools
+int  ***tmp_bwMV_bot;   //!< For MB level field/frame coding tools
+int  **field_mb;      //!< For MB level field/frame coding tools
+int  mb_adaptive;     //!< For MB level field/frame coding tools
+int  MBPairIsField;     //!< For MB level field/frame coding tools
+int  WriteFrameFieldMBInHeader; //! For MB level field/frame coding tools
+
 int  ***dfMV;
 int  ***dbMV;
 int   **fw_refFrArr;
@@ -455,10 +466,15 @@ byte  ***imgUV_com;              //!< Encoded croma images
 pel_t **Refbuf11_fld;            //!< 1/1th pel (full pel) reference frame buffer
 int    **refFrArr_top;           //!< Array for reference frames of each block
 int    **refFrArr_bot;           //!< Array for reference frames of each block
+int    **refFrArr_top_save;      //!< For MB level field/frame coding tools
+int    **refFrArr_bot_save;      //!< For MB level field/frame coding tools
+
 
 // global picture format dependend buffers, mem allocation in image.c (field picture)
 byte  ***mref_fld;               //!< 1/4 pix luma
 byte ****mcef_fld;               //!< pix chroma
+byte ***mref_mbfld;        //!< For MB level field/frame coding tools 
+
 
 // global picture format dependend buffers, mem allocation in image.c (frame buffer)
 byte  ***mref_frm;               //!< 1/4 pix luma
@@ -472,6 +488,13 @@ int   **fw_refFrArr_bot;
 int   **bw_refFrArr_bot;
 int   ***tmp_mv_top;             //!< motion vector buffer
 int   ***tmp_mv_bot;             //!< motion vector buffer
+int   ***tmp_mv_top_save;    //!< motion vector buffer for MB level field/frame coding tools
+int   ***tmp_mv_bot_save;    //!< motion vector buffer for MB level field/frame coding tools
+
+int   **fwdir_refFrArr;         //!< direct mode forward reference buffer
+int   **bwdir_refFrArr;         //!< direct mode backward reference buffer
+
+
 
 // global picture format dependend buffers, mem allocation in image.c (frame buffer)
 byte   **imgY_org_frm;
@@ -481,6 +504,8 @@ byte  ***imgUV_frm;              //!< Encoded croma images
 pel_t **Refbuf11_frm;            //!< 1/1th pel (full pel) reference frame buffer
 int    **refFrArr_frm;           //!< Array for reference frames of each block
 int   direct_mode;
+int   TopFieldIsSkipped, TopFrameIsSkipped; //!< Flag to prevent bottom MB in a field MB pair to be skipped 
+                //!< if the top MB is skipped
 
 // B pictures
 // motion vector : forward, backward, direct
@@ -505,6 +530,10 @@ int  tot_time;
 
 #define ET_SIZE 300      //!< size of error text buffer
 char errortext[ET_SIZE]; //!< buffer for error message for exit with error()
+
+int    **abp_type_FrArr;      //!< Array for abp_type of each block
+int    **abp_type_FrArr_top;
+int    **abp_type_FrArr_bot;
 
 //! Info for the "decoders-in-the-encoder" used for rdoptimization with packet losses
 typedef struct
@@ -572,11 +601,15 @@ typedef struct
   // B pictures
   int successive_Bframe;        //!< number of B frames that will be used
   int qpB;                      //!< QP of B frames
+  int direct_type;              //!< Direct Mode type to be used (1: Temporal, 0: Spatial)
 
   // SP Pictures
   int sp_periodicity;           //!< The periodicity of SP-pictures
   int qpsp;                     //!< SP Picture QP for prediction error
   int qpsp_pred;                //!< SP Picture QP for predicted block
+
+  int BipredictiveWeighting;     //!< bipredictive weighting mode 
+  int explicit_B_prediction;     //!< explicite B prediction 
 
   // Introduced by TOM
   int symbol_mode;              //!< Specifies the mode the symbols are mapped on bits
@@ -725,11 +758,40 @@ typedef struct
   int***** all_mv;       //!< replaces local all_mv
   int***** all_bmv;      //!< replaces local all_mv
 
+  int***** abp_all_dmv;        //!< replaces local all_dmv for forward interpolative prediction
+  int***** abp_all_dmv_top;
+  int***** abp_all_dmv_bot;
+  int disposable_flag;
+  int num_ref_pic_active_fwd_minus1;
+  int num_ref_pic_active_bwd_minus1;
+
+
+  int field_mb_y;   // Macroblock number of a field MB
+  int field_block_y;  // Vertical block number for the first block of a field MB
+  int field_pix_y;    // Co-ordinates of current macroblock in terms of field pixels (luma)
+  int field_pix_c_y;  // Co-ordinates of current macroblock in terms of field pixels (chroma)
+  int *****mv_top;    //!< For MB level field/frame coding tools
+  int *****mv_bot;    //!< For MB level field/frame coding tools
+  int *****p_fwMV_top;    //!< For MB level field/frame coding tools
+  int *****p_fwMV_bot;    //!< For MB level field/frame coding tools
+  int *****p_bwMV_top;    //!< For MB level field/frame coding tools
+  int *****p_bwMV_bot;    //!< For MB level field/frame coding tools
+  int *****all_mv_top;    //!< For MB level field/frame coding tools
+  int *****all_mv_bot;    //!< For MB level field/frame coding tools
+  int *****all_bmv_top;   //!< For MB level field/frame coding tools
+  int *****all_bmv_bot;   //!< For MB level field/frame coding tools
+  int **ipredmode_top;    //!< For MB level field/frame coding tools
+  int **ipredmode_bot;    //!< For MB level field/frame coding tools
+  int update_stats;     //!< For MB level field/frame -- update stats flag
+  int field_mode;     //!< For MB level field/frame -- field mode on flag
+  int top_field;      //!< For MB level field/frame -- top field flag
+
   int buf_cycle;
   int i16offset;
 
   int layer;             //!< which layer this picture belonged to
   int old_layer;         //!< old layer number
+  int NoResidueDirect;
 } ImageParameters;
 
                                 //!< statistics
@@ -757,25 +819,62 @@ typedef struct
   float bitrate_P;
   float bitrate_B;
 
-  int   bit_use_stuffingBits[3];
-  int   bit_use_mb_type[3];
-  int   bit_use_header[3];
-  int   tmp_bit_use_cbp[3];
-  int   bit_use_coeffY[3];
-  int   bit_use_coeffC[3];
-  int   bit_use_delta_quant[3];
+#define NUM_PIC_TYPE 5
+  int   bit_use_stuffingBits[NUM_PIC_TYPE];
+  int   bit_use_mb_type[NUM_PIC_TYPE];
+  int   bit_use_header[NUM_PIC_TYPE];
+  int   tmp_bit_use_cbp[NUM_PIC_TYPE];
+  int   bit_use_coeffY[NUM_PIC_TYPE];
+  int   bit_use_coeffC[NUM_PIC_TYPE];
+  int   bit_use_delta_quant[NUM_PIC_TYPE];
 
   int   em_prev_bits_frm;
   int   em_prev_bits_fld;
   int  *em_prev_bits;
 } StatParameters;
 
+//!< For MB level field/frame coding tools
+//!< temporary structure to store MB data for field/frame coding
+typedef struct
+{
+  double min_rdcost;
+  int tmp_mv[2][4][4];        // to hold the motion vectors for each block
+  int tmp_fwMV[2][4][4];      // to hold forward motion vectors for B MB's
+  int tmp_bwMV[2][4][4];      // to hold backward motion vectors for B MBs
+  int dfMV[2][4][4], dbMV[2][4][4]; // to hold direct motion vectors for B MB's
+  int    rec_mbY[16][16];       // hold the Y component of reconstructed MB
+  int    rec_mbU[8][8], rec_mbV[8][8]; 
+  int    ****cofAC;
+  int    ***cofDC;
+  int    mb_type;
+  int    b8mode[4], b8pdir[4];
+  int    frefar[4][4], brefar[4][4];
+  int    **ipredmode;
+  int    intra_pred_modes[16];
+  int    cbp, cbp_blk;
+  int    mode;
+  int    *****mv, *****p_fwMV, *****p_bwMV ;
+  int    *****all_mv;
+  int    *****all_bmv;
+  int    i16offset;
+} RD_DATA;
+
+RD_DATA *rdopt; 
+RD_DATA rddata_top_frame_mb, rddata_bot_frame_mb; //!< For MB level field/frame coding tools
+RD_DATA rddata_top_field_mb, rddata_bot_field_mb; //!< For MB level field/frame coding tools
 
 extern InputParameters *input;
 extern ImageParameters *img;
 extern StatParameters *stat;
 
 extern SNRParameters *snr;
+
+#ifdef _DEBUG   //limin
+extern byte *tmp_streamBuffer;  //limin, 01/02/02
+extern int  *pbits_to_go;     //!< current bitcounter, limin 11/06
+extern byte *pbyte_buf;       //!< current buffer for last written byte, limin 11/06
+extern int *pbyte_pos;
+#endif
 
 // files
 FILE *p_dec,*p_dec_u,*p_dec_v;   //!< internal decoded image for debugging
@@ -816,6 +915,7 @@ void intrapred_luma_2();
 int  find_sad2(int *intra_mode);
 
 int dct_luma2(int);
+void copy_mref();
 
 void init_img();
 // void init_stat();
@@ -845,10 +945,13 @@ extern int*** motion_cost;
 void  Get_Direct_Motion_Vectors ();
 void  PartitionMotionSearch     (int, int, double, int);               // useABT added.
 int   BIDPartitionCost          (int, int, int, int, int);             // useABT added.
-int   LumaResidualCoding8x8     (int*, int*, int, int, int, int, int); // useABT added.
+int   LumaResidualCoding8x8     (int*, int*, int, int, int, int, int, int, int);
 int   writeLumaCoeff8x8         (int, int, int);                       // useABT added.
-int   writeMotionVector8x8      (int, int, int, int, int, int);
-int   writeReferenceFrame       (int, int, int, int);
+int   writeMotionVector8x8      (int, int, int, int, int, int, int, int);
+int   writeReferenceFrame       (int, int, int, int, int);
+int   ABIDPartitionCost          (int, int, int*, int*, int, int*, int);
+void  AbpLumaPrediction4x4 (int, int, int, int, int, int, int);
+int   writeAbpCoeffIndex        (int, int, int, int);
 int   writeIntra4x4Modes        (int);
 
 int Get_Direct_Cost8x8 (int, double, int);                             // abt_mode added.
@@ -904,6 +1007,13 @@ void  terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock);
 int   slice_too_big(int rlc_bits);
 void  write_one_macroblock();
 void  proceed2nextMacroblock();
+void  proceed2nextSuperMacroblock();    //!< For MB level field/frame coding tools
+void  back2topmb();             //!< For MB level field/frame coding tools
+void proceed2lowermb();           //!< For MB level field/frame coding tools
+void copy_motion_vectors_MB(int bot_block); //!< For MB level field/frame coding tools
+void assign_mem2mvs (RD_DATA *var);   //!< For MB level field/frame coding tools
+void copy_rdopt_data (int field_type);    //!< For MB level field/frame coding tools
+
 void  LumaResidualCoding_P();
 void  ChromaCoding_P(int *cr_cbp);
 void  SetRefFrameInfo_P();
@@ -915,6 +1025,7 @@ int   writeSyntaxElement_UVLC(SyntaxElement *se, DataPartition *this_dataPart);
 int   writeSyntaxElement_fixed(SyntaxElement *se, DataPartition *this_dataPart);
 int   writeSyntaxElement2Buf_UVLC(SyntaxElement *se, Bitstream* this_streamBuffer );
 void  writeUVLC2buffer(SyntaxElement *se, Bitstream *currStream);
+int   writeSyntaxElement2Buf_Fixed(SyntaxElement *se, Bitstream* this_streamBuffer );
 int   symbol2uvlc(SyntaxElement *se);
 void  n_linfo(int n, int *len,int *info);
 void  n_linfo2(int n, int dummy, int *len,int *info);
@@ -935,11 +1046,13 @@ int   writeSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *se, DataPartition *
 int   writeSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *se, DataPartition *this_dataPart);
 int   writeSyntaxElement_Level_VLC1(SyntaxElement *se, DataPartition *this_dataPart);
 int   writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *this_dataPart);
+int   writeSyntaxElement_Intra4x4PredictionMode(SyntaxElement *se, DataPartition *this_dataPart);
 
 #if TRACE
 void  trace2out(SyntaxElement *se);
 #endif
 Boolean dummy_slice_too_big(int bits_slice);
+
 
 // CABAC
 void arienco_start_encoding(EncodingEnvironmentPtr eep, unsigned char *code_buffer, int *code_len, int *last_startcode, int slice_type);
@@ -964,6 +1077,7 @@ void writeMB_typeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep
 void writeB8_typeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeIntraPredMode2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeRefFrame2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeBwdRefFrame2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeCBP2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeDquant_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
@@ -1001,6 +1115,7 @@ void InitMotionVectorSearchModule();
 void InitRefbuf_fld ();
 void copy2mref_fld();
 void store_field_MV(int frame_number);
+void store_direct_moving_flag(int frame_number);
 void store_field_colB8mode();
 
 
@@ -1016,6 +1131,7 @@ void field_mode_buffer(int bit_field, float snr_field_y, float snr_field_u, floa
 void frame_mode_buffer(int bit_frame, float snr_frame_y, float snr_frame_u, float snr_frame_v);
 void set_ref_field(int *k);
 void rotate_buffer();
+void set_mbaff_parameters();  // For MB AFF
 
 int   writeLumaCoeff4x4     (int, int, int);
 int   writeCBPandLumaCoeff  ();
@@ -1079,5 +1195,5 @@ void SODBtoRBSP(Bitstream *currStream);
 int RBSPtoEBSP(byte *streamBuffer, int begin_bytepos, int end_bytepos);
 int Bytes_After_Header;
 int startcodeprefix_len;
-
 #endif
+

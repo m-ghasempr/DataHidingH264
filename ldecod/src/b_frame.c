@@ -119,30 +119,90 @@ void copy_Pframe(struct img_par *img, int postfilter)
 void init_macroblock_Bframe(struct img_par *img)
 {
   int i,j,k;
+  int img_block_y;
+  int j2 = img->block_y; 
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+
+  if (img->mb_frame_field_flag)
+    j2 = img->block_y/2 - 2*(img->current_mb_nr%2);
 
   // reset vectors and pred. modes
   for (i=0;i<BLOCK_SIZE;i++)
   {
     for(j=0;j<BLOCK_SIZE;j++)
     {
-      img->fw_mv[img->block_x+i+4][img->block_y+j][0]=img->fw_mv[img->block_x+i+4][img->block_y+j][1]=0;
-      img->bw_mv[img->block_x+i+4][img->block_y+j][0]=img->bw_mv[img->block_x+i+4][img->block_y+j][1]=0;
+      img->fw_mv_frm[img->block_x+i+4][img->block_y+j][0]=img->fw_mv_frm[img->block_x+i+4][img->block_y+j][1]=0;
+      img->bw_mv_frm[img->block_x+i+4][img->block_y+j][0]=img->bw_mv_frm[img->block_x+i+4][img->block_y+j][1]=0;
       img->dfMV [img->block_x+i+4][img->block_y+j][0]=img->dfMV[img->block_x+i+4][img->block_y+j][1]=0;
       img->dbMV [img->block_x+i+4][img->block_y+j][0]=img->dbMV[img->block_x+i+4][img->block_y+j][1]=0;
       img->ipredmode[img->block_x+i+1][img->block_y+j+1] = 0;
+      if (img->mb_frame_field_flag)
+      {
+        img->dfMV_top[img->block_x+i+4][img->block_y+j][0]=img->dfMV_top[img->block_x+i+4][img->block_y+j][1]=0;
+        img->dbMV_top[img->block_x+i+4][img->block_y+j][0]=img->dbMV_top[img->block_x+i+4][img->block_y+j][1]=0;
+        
+        img->dfMV_bot[img->block_x+i+4][img->block_y+j][0]=img->dfMV_bot[img->block_x+i+4][img->block_y+j][1]=0;
+        img->dbMV_bot[img->block_x+i+4][img->block_y+j][0]=img->dbMV_bot[img->block_x+i+4][img->block_y+j][1]=0;
+      }
+      if (img->current_mb_nr%2==0 && img->mb_frame_field_flag)
+      {
+        img->ipredmode_top[img->block_x+i+1][j2+j+1] = 0;
+        img->fw_mv_top[img->block_x+i+4][j2+j][0]=img->fw_mv_top[img->block_x+i+4][j2+j][1]=0;
+        img->bw_mv_top[img->block_x+i+4][j2+j][0]=img->bw_mv_top[img->block_x+i+4][j2+j][1]=0;
+      }
+      else if (img->mb_frame_field_flag)
+      {
+        img->ipredmode_bot[img->block_x+i+1][j2+j+1] = 0;
+        img->fw_mv_bot[img->block_x+i+4][j2+j][0]=img->fw_mv_bot[img->block_x+i+4][j2+j][1]=0;
+        img->bw_mv_bot[img->block_x+i+4][j2+j][0]=img->bw_mv_bot[img->block_x+i+4][j2+j][1]=0;
+      }
+      else
+      {
+        img->fw_mv[img->block_x+i+4][img->block_y+j][0]=img->fw_mv[img->block_x+i+4][img->block_y+j][1]=0;
+        img->bw_mv[img->block_x+i+4][img->block_y+j][0]=img->bw_mv[img->block_x+i+4][img->block_y+j][1]=0;
+      }
     }
   }
 
   // Set the reference frame information for motion vector prediction
   if (IS_INTRA (currMB) || IS_DIRECT (currMB))
   {
-    for(j=0;j<4;j++)
-      for(i=0;i<4;i++)
+    if (img->structure != FRAME || img->mb_frame_field_flag == 0)
+    {
+      for (j=0; j<4; j++)
+        for (i=0; i<4; i++)
+        {
+          img->fw_refFrArr[img->block_y+j][img->block_x+i] = -1;
+          img->bw_refFrArr[img->block_y+j][img->block_x+i] = -1;
+        }
+    }
+    else 
+    {
+      if (img->current_mb_nr%2==0)
       {
-        img->fw_refFrArr[img->block_y+j][img->block_x+i] = -1;
-        img->bw_refFrArr[img->block_y+j][img->block_x+i] = -1;
+        img_block_y   = img->block_y/2;
+        for (j=0; j<4; j++)
+          for (i=0; i<4; i++)
+          {
+            img->fw_refFrArr_top[img_block_y+j][img->block_x+i] = -1;
+            img->fw_refFrArr_frm[img->block_y+j][img->block_x+i] = -1;
+            img->bw_refFrArr_top[img_block_y+j][img->block_x+i] = -1;
+            img->bw_refFrArr_frm[img->block_y+j][img->block_x+i] = -1;
+          }
       }
+      else
+      {
+        img_block_y   = (img->block_y-4)/2;
+        for (j=0; j<4; j++)
+          for (i=0; i<4; i++)
+          {
+            img->fw_refFrArr_bot[img_block_y+j][img->block_x+i] = -1;
+            img->fw_refFrArr_frm[img->block_y+j][img->block_x+i] = -1;
+            img->bw_refFrArr_bot[img_block_y+j][img->block_x+i] = -1;
+            img->bw_refFrArr_frm[img->block_y+j][img->block_x+i] = -1;
+          }
+      }
+    }
   }
   else
   {
@@ -153,8 +213,26 @@ void init_macroblock_Bframe(struct img_par *img)
         if(img->structure != FRAME)
         {
           img->fw_refFrArr[img->block_y+j][img->block_x+i] = ((currMB->b8pdir[k]==0||currMB->b8pdir[k]==2)&&currMB->b8mode[k]!=0?2:-1);
-          // used to be 2 for backward, now 0
           img->bw_refFrArr[img->block_y+j][img->block_x+i] = ((currMB->b8pdir[k]==1||currMB->b8pdir[k]==2)&&currMB->b8mode[k]!=0?0:-1);
+        }
+        else if (img->mb_frame_field_flag)
+        {
+          if (img->current_mb_nr%2==0)
+          {
+            img_block_y   = img->block_y/2;
+            img->fw_refFrArr_top[img_block_y+j][img->block_x+i] = ((currMB->b8pdir[k]==0||currMB->b8pdir[k]==2)&&currMB->b8mode[k]!=0?0:-1);
+            img->bw_refFrArr_top[img_block_y+j][img->block_x+i] = ((currMB->b8pdir[k]==1||currMB->b8pdir[k]==2)&&currMB->b8mode[k]!=0?0:-1);
+            img->fw_refFrArr_frm[img->block_y+j][img->block_x+i] = ((currMB->b8pdir[k]==0||currMB->b8pdir[k]==2)&&currMB->b8mode[k]!=0?0:-1);
+            img->bw_refFrArr_frm[img->block_y+j][img->block_x+i] = ((currMB->b8pdir[k]==1||currMB->b8pdir[k]==2)&&currMB->b8mode[k]!=0?0:-1);
+          }
+          else
+          {
+            img_block_y   = (img->block_y-4)/2;
+            img->fw_refFrArr_bot[img_block_y+j][img->block_x+i] = ((currMB->b8pdir[k]==0||currMB->b8pdir[k]==2)&&currMB->b8mode[k]!=0?0:-1);
+            img->bw_refFrArr_bot[img_block_y+j][img->block_x+i] = ((currMB->b8pdir[k]==1||currMB->b8pdir[k]==2)&&currMB->b8mode[k]!=0?0:-1);
+            img->fw_refFrArr_frm[img->block_y+j][img->block_x+i] = ((currMB->b8pdir[k]==0||currMB->b8pdir[k]==2)&&currMB->b8mode[k]!=0?0:-1);
+            img->bw_refFrArr_frm[img->block_y+j][img->block_x+i] = ((currMB->b8pdir[k]==1||currMB->b8pdir[k]==2)&&currMB->b8mode[k]!=0?0:-1);
+          }
         }
         else
         {

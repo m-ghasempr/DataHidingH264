@@ -132,19 +132,19 @@ void arideco_start_decoding(DecodingEnvironmentPtr dep, unsigned char *cpixcode,
     if (--Dbits_to_go < 0)
       get_byte();
     dep->Dvalue <<= 1;
-		if (Dbuffer & 0x80) 
-			dep->Dvalue |= 0x01;
-		Dbuffer <<= 1;
+    if (Dbuffer & 0x80) 
+      dep->Dvalue |= 0x01;
+    Dbuffer <<= 1;
   }
   dep->Dlow = 0;
 
   /* Only necessary for new AC */
   dep->Drange = CACM99_HALF;
 
-	if (slice_type == INTRA_IMG) //INTRA_SLICE
-		dep->AC_next_state_MPS_64 = AC_next_state_MPS_64_INTRA;
-	else
-		dep->AC_next_state_MPS_64 = AC_next_state_MPS_64_INTER;
+  if (slice_type == INTRA_IMG) //INTRA_SLICE
+    dep->AC_next_state_MPS_64 = AC_next_state_MPS_64_INTRA;
+  else
+    dep->AC_next_state_MPS_64 = AC_next_state_MPS_64_INTER;
 }
 
 
@@ -193,23 +193,23 @@ unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi
   {
     unsigned int rLPS, rMPS;
    
-		rLPS = rLPS_table_64x4[bi_ct->state][(range-0x4001)>>12];
-		rMPS = range - rLPS;
+    rLPS = rLPS_table_64x4[bi_ct->state][(range-0x4001)>>12];
+    rMPS = range - rLPS;
 
-		if (value >= rMPS) 
+    if (value >= rMPS) 
     {
       value -= rMPS;
       range = rLPS;
-			bit = !(bi_ct->MPS);
+      bit = !(bi_ct->MPS);
       if (!bi_ct->state)
-				bi_ct->MPS = bi_ct->MPS ^ 1;               // switch LPS if necessary
-			bi_ct->state = AC_next_state_LPS_64[bi_ct->state]; // next state
+        bi_ct->MPS = bi_ct->MPS ^ 1;               // switch LPS if necessary
+      bi_ct->state = AC_next_state_LPS_64[bi_ct->state]; // next state
     } 
     else 
     {
       range = rMPS;
-			bit = bi_ct->MPS;
-  		bi_ct->state = dep->AC_next_state_MPS_64[bi_ct->state]; // next state
+      bit = bi_ct->MPS;
+      bi_ct->state = dep->AC_next_state_MPS_64[bi_ct->state]; // next state
     }
   }
   
@@ -219,13 +219,13 @@ unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi
     range <<= 1;
     if (--Dbits_to_go < 0) 
     {
-	    get_byte();
+      get_byte();
     }
     /* Shift in next bit and add to value */
     value <<= 1;
-		if (Dbuffer & 0x80)
-			value |= 0x01;
-		Dbuffer <<= 1;
+    if (Dbuffer & 0x80)
+      value |= 0x01;
+    Dbuffer <<= 1;
   }
   
   dep->Drange = range;
@@ -246,30 +246,30 @@ unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi
 unsigned int biari_decode_symbol_eq_prob(DecodingEnvironmentPtr dep)
 {
   int bit;
-	register unsigned int value  = dep->Dvalue;
-	register unsigned int range  = (dep->Drange>>1);
+  register unsigned int value  = dep->Dvalue;
+  register unsigned int range  = (dep->Drange>>1);
 
-	
-	if (value >= range) 
-	{
-		bit = 1;
-		value -= range;
-	} 
-	else 
-		bit = 0;
+  
+  if (value >= range) 
+  {
+    bit = 1;
+    value -= range;
+  } 
+  else 
+    bit = 0;
 
-	if (--Dbits_to_go < 0) 
-	{
-		get_byte();
-	}
-	/* Shift in next bit and add to value */	
-	value <<= 1;
-	if (Dbuffer & 0x80)
-		value |= 0x01;
-	Dbuffer <<= 1;
+  if (--Dbits_to_go < 0) 
+  {
+    get_byte();
+  }
+  /* Shift in next bit and add to value */  
+  value <<= 1;
+  if (Dbuffer & 0x80)
+    value |= 0x01;
+  Dbuffer <<= 1;
 
-	dep->Dvalue = value;
-	dep->Drange = (range<<1);
+  dep->Dvalue = value;
+  dep->Drange = (range<<1);
 
   return(bit);
 }
@@ -287,7 +287,7 @@ void biari_init_context (struct img_par* img, BiContextTypePtr ctx, const int* i
 {
   int pstate;
 
-	pstate = ((ini[0]*(img->qp-SHIFT_QP))>>4) + ini[1]; 
+  pstate = ((ini[0]*(img->qp-SHIFT_QP))>>4) + ini[1]; 
 
 
   if (img->type==INTRA_IMG) pstate = min (max (27, pstate),  74);  // states from 0 to 23

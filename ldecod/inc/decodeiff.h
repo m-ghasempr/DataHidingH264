@@ -233,6 +233,7 @@ typedef struct sPayloadInfo
   unsigned INT8  sliceType;
   unsigned INT8  firstMBInSliceX;
   unsigned INT8  firstMBInSliceY;
+  unsigned INT8  directType;
   INT8  initialQP;
 
   int lastMBnr;

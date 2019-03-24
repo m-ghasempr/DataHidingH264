@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 4.0d
+ *     JM 4.2
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -86,13 +86,20 @@
 #include "fmo.h"
 
 #define JM      "4"
-#define VERSION "4.0d"
+#define VERSION "4.2"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
 StatParameters  stats,  *stat  = &stats;
 SNRParameters   snrs,   *snr   = &snrs;
 Decoders decoders, *decs=&decoders;
+
+#ifdef _DEBUG
+byte    *tmp_streamBuffer;  //limin 01/02/02
+int     *pbits_to_go;     //!< current bitcounter, 
+byte    *pbyte_buf;       //!< current buffer for last written byte
+int     *pbyte_pos;
+#endif
 
 #ifdef _ADAPT_LAST_GROUP_
 int initial_Bframes = 0;
@@ -122,12 +129,15 @@ void Clear_Motion_Search_Module ();
 int main(int argc,char **argv)
 {
   int image_type;
+  int num_ref_pic_bak;
   
   p_dec = p_dec_u = p_dec_v = p_stat = p_log = p_datpart = p_trace = NULL;
+
 
   isBigEndian = testEndian();
 
   Configure (argc, argv);
+  img->disposable_flag = FALSE;
 
   // Initialize Image Parameters
   init_img();
@@ -187,7 +197,26 @@ int main(int argc,char **argv)
 #endif
 
     image_type = img->type;
+    img->disposable_flag = FALSE;
     
+    img->num_ref_pic_active_fwd_minus1 = max(0,img->nb_references - 1);
+    num_ref_pic_bak          = img->num_ref_pic_active_fwd_minus1;
+    if (input->BipredictiveWeighting > 0)
+    {
+      if (input->InterlaceCodingOption>=MB_CODING)
+      {
+        img->num_ref_pic_active_bwd_minus1 = 1;
+      }
+      else
+      {
+        img->num_ref_pic_active_bwd_minus1 = 1;
+      }
+    }
+    else
+    {
+      img->num_ref_pic_active_bwd_minus1 = 0;
+    }
+  
     // which layer the image belonged to?
     if ( IMG_NUMBER % (input->NumFramesInELSubSeq+1) == 0 )
       img->layer = 0;
@@ -213,13 +242,19 @@ int main(int argc,char **argv)
     if ((input->successive_Bframe != 0) && (IMG_NUMBER > 0)) // B-frame(s) to encode
     {
       img->type = B_IMG;            // set image type to B-frame
+      img->disposable_flag = TRUE;
+      img->num_ref_pic_active_bwd_minus1 = 0;
+
       img->types= INTER_IMG;
 
       if ( input->NumFramesInELSubSeq == 0 ) img->layer = 0;
       else img->layer = 1;
 
       for(img->b_frame_to_code=1; img->b_frame_to_code<=input->successive_Bframe; img->b_frame_to_code++)
+      {
+        img->num_ref_pic_active_fwd_minus1 = num_ref_pic_bak;       // coding field pictures would have changed this, so reset
         encode_one_frame();  // encode one B-frame
+      }
     }
     
 
@@ -239,7 +274,8 @@ int main(int argc,char **argv)
   terminate_sequence();
 
   fclose(p_in);
-  fclose(p_dec);
+  if (p_dec)
+    fclose(p_dec);
   if (p_trace)
     fclose(p_trace);
 
@@ -257,6 +293,8 @@ int main(int argc,char **argv)
 
   // report everything
   report();
+
+
 
   free_slice();
 
@@ -303,9 +341,64 @@ void init_img()
   get_mem_mv (&(img->p_bwMV));
   get_mem_mv (&(img->all_mv));
   get_mem_mv (&(img->all_bmv));
+  get_mem_mv (&(img->abp_all_dmv));
 
   get_mem_ACcoeff (&(img->cofAC));
   get_mem_DCcoeff (&(img->cofDC));
+
+  if(input->InterlaceCodingOption >= MB_CODING) 
+  {
+    get_mem_mv (&(img->mv_top));
+    get_mem_mv (&(img->p_fwMV_top));
+    get_mem_mv (&(img->p_bwMV_top));
+    get_mem_mv (&(img->all_mv_top));
+    get_mem_mv (&(img->all_bmv_top));
+
+    get_mem_mv (&(img->mv_bot));
+    get_mem_mv (&(img->p_fwMV_bot));
+    get_mem_mv (&(img->p_bwMV_bot));
+    get_mem_mv (&(img->all_mv_bot));
+    get_mem_mv (&(img->all_bmv_bot));
+
+    get_mem_mv (&(rddata_top_frame_mb.mv));
+    get_mem_mv (&(rddata_top_frame_mb.p_fwMV));
+    get_mem_mv (&(rddata_top_frame_mb.p_bwMV));
+    get_mem_mv (&(rddata_top_frame_mb.all_mv));
+    get_mem_mv (&(rddata_top_frame_mb.all_bmv));
+
+    get_mem_mv (&(rddata_bot_frame_mb.mv));
+    get_mem_mv (&(rddata_bot_frame_mb.p_fwMV));
+    get_mem_mv (&(rddata_bot_frame_mb.p_bwMV));
+    get_mem_mv (&(rddata_bot_frame_mb.all_mv));
+    get_mem_mv (&(rddata_bot_frame_mb.all_bmv));
+
+    get_mem_mv (&(rddata_top_field_mb.mv));
+    get_mem_mv (&(rddata_top_field_mb.p_fwMV));
+    get_mem_mv (&(rddata_top_field_mb.p_bwMV));
+    get_mem_mv (&(rddata_top_field_mb.all_mv));
+    get_mem_mv (&(rddata_top_field_mb.all_bmv));
+
+    get_mem_mv (&(rddata_bot_field_mb.mv));
+    get_mem_mv (&(rddata_bot_field_mb.p_fwMV));
+    get_mem_mv (&(rddata_bot_field_mb.p_bwMV));
+    get_mem_mv (&(rddata_bot_field_mb.all_mv));
+    get_mem_mv (&(rddata_bot_field_mb.all_bmv));
+    get_mem_mv (&(img->abp_all_dmv_top));
+    get_mem_mv (&(img->abp_all_dmv_bot));
+
+    get_mem_ACcoeff (&(rddata_top_frame_mb.cofAC));
+    get_mem_DCcoeff (&(rddata_top_frame_mb.cofDC));
+
+    get_mem_ACcoeff (&(rddata_bot_frame_mb.cofAC));
+    get_mem_DCcoeff (&(rddata_bot_frame_mb.cofDC));
+
+    get_mem_ACcoeff (&(rddata_top_field_mb.cofAC));
+    get_mem_DCcoeff (&(rddata_top_field_mb.cofDC));
+
+    get_mem_ACcoeff (&(rddata_bot_field_mb.cofAC));
+    get_mem_DCcoeff (&(rddata_bot_field_mb.cofDC));
+  }
+
   if(input->InterlaceCodingOption != FRAME_CODING) 
     img->buf_cycle /= 2;
 
@@ -341,7 +434,15 @@ void init_img()
   size_x=img->width/BLOCK_SIZE+3;
   size_y=img->height/BLOCK_SIZE+3;
   get_mem2Dint(&(img->ipredmode), img->width/BLOCK_SIZE+3, img->height/BLOCK_SIZE+3);        //need two extra rows at right and bottom
-
+  if(input->InterlaceCodingOption >= MB_CODING) 
+  {
+    get_mem2Dint(&(img->ipredmode_top), img->width/BLOCK_SIZE+3, img->height/BLOCK_SIZE+3);
+    get_mem2Dint(&(img->ipredmode_bot), img->width/BLOCK_SIZE+3, img->height/BLOCK_SIZE+3);
+    get_mem2Dint(&(rddata_top_frame_mb.ipredmode), img->width/BLOCK_SIZE+3, img->height/BLOCK_SIZE+3);
+    get_mem2Dint(&(rddata_bot_frame_mb.ipredmode), img->width/BLOCK_SIZE+3, img->height/BLOCK_SIZE+3);
+    get_mem2Dint(&(rddata_top_field_mb.ipredmode), img->width/BLOCK_SIZE+3, img->height/BLOCK_SIZE+3);
+    get_mem2Dint(&(rddata_bot_field_mb.ipredmode), img->width/BLOCK_SIZE+3, img->height/BLOCK_SIZE+3);
+  }
   // CAVLC mem
   if((img->nz_coeff = (int****)calloc(img->width/MB_BLOCK_SIZE,sizeof(int***))) == NULL)
     no_mem_exit("get_mem4global_buffers: nzcoeff");
@@ -375,6 +476,26 @@ void init_img()
     img->ipredmode[img->width/BLOCK_SIZE+1][j+1]=-1;
   }
 
+  if(input->InterlaceCodingOption >= MB_CODING)
+  {
+    for (i=0; i < img->width/BLOCK_SIZE+1; i++)
+    {
+    img->ipredmode_top[i+1][0]=-1;
+    img->ipredmode_top[i+1][img->height/BLOCK_SIZE+1]=-1;
+    img->ipredmode_bot[i+1][0]=-1;
+    img->ipredmode_bot[i+1][img->height/BLOCK_SIZE+1]=-1;
+
+    }
+    for (j=0; j < img->height/BLOCK_SIZE+1; j++)
+    {
+    img->ipredmode_top[0][j+1]=-1;
+    img->ipredmode_top[img->width/BLOCK_SIZE+1][j+1]=-1;
+    img->ipredmode_bot[0][j+1]=-1;
+    img->ipredmode_bot[img->width/BLOCK_SIZE+1][j+1]=-1;
+
+    }
+  }
+
   img->mb_y_upd=0;
 
   RandomIntraInit (img->width/16, img->height/16, input->RandomIntraMBRefresh);
@@ -397,6 +518,12 @@ void free_img ()
   free_mem_mv (img->p_bwMV);
   free_mem_mv (img->all_mv);
   free_mem_mv (img->all_bmv);
+  free_mem_mv (img->abp_all_dmv);
+  if(input->InterlaceCodingOption >= MB_CODING) 
+  {
+    free_mem_mv (img->abp_all_dmv_top);
+    free_mem_mv (img->abp_all_dmv_bot);
+  }
 
   free_mem_ACcoeff (img->cofAC);
   free_mem_DCcoeff (img->cofDC);
@@ -761,11 +888,18 @@ void report()
 
   // B pictures
   fprintf(stdout, " Sequence type                     :" );
-  if(input->successive_Bframe==1)   fprintf(stdout, " IBPBP (QP: I %d, P %d, B %d) \n",
+  if(input->successive_Bframe==0 && input->BipredictiveWeighting > 0)
+    fprintf(stdout, " I-P-BS-BS (QP: I %d, P BS %d) \n",input->qp0, input->qpN);
+  else if(input->successive_Bframe==1 && input->BipredictiveWeighting > 0)
+    fprintf(stdout, " I-B-P-BS-B-BS (QP: I %d, P BS %d, B %d) \n",input->qp0, input->qpN, input->qpB);
+  else if(input->successive_Bframe==2 && input->BipredictiveWeighting > 0)
+    fprintf(stdout, " I-B-B-P-B-B-BS (QP: I %d, P BS %d, B %d) \n",input->qp0, input->qpN, input->qpB);
+  else if(input->successive_Bframe==1)   fprintf(stdout, " IBPBP (QP: I %d, P %d, B %d) \n",
     input->qp0, input->qpN, input->qpB);
   else if(input->successive_Bframe==2) fprintf(stdout, " IBBPBBP (QP: I %d, P %d, B %d) \n",
     input->qp0, input->qpN, input->qpB);
   else if(input->successive_Bframe==0 && input->sp_periodicity==0) fprintf(stdout, " IPPP (QP: I %d, P %d) \n",   input->qp0, input->qpN);
+
   else fprintf(stdout, " I-P-P-SP-P (QP: I %d, P %d, SP (%d, %d)) \n",  input->qp0, input->qpN, input->qpsp, input->qpsp_pred);
 
   // report on entropy coding  method
@@ -829,14 +963,32 @@ void report()
   if(Bframe_ctr!=0)
   {
 
-    fprintf(stdout, " Total bits                        : %d (I %5d, P %5d, B %d) \n",
+    if(input->BipredictiveWeighting > 0)
+    {
+      fprintf(stdout, " Total bits                        : %d (I %5d, P BS %5d, B %d) \n",
             total_bits=stat->bit_ctr_P + stat->bit_ctr_0 + stat->bit_ctr_B, stat->bit_ctr_0, stat->bit_ctr_P, stat->bit_ctr_B);
+    }
+    else
+    {
+      fprintf(stdout, " Total bits                        : %d (I %5d, P %5d, B %d) \n",
+            total_bits=stat->bit_ctr_P + stat->bit_ctr_0 + stat->bit_ctr_B, stat->bit_ctr_0, stat->bit_ctr_P, stat->bit_ctr_B);
+    }
 
     frame_rate = (float)(img->framerate *(input->successive_Bframe + 1)) / (float) (input->jumpd+1);
     stat->bitrate= ((float) total_bits * frame_rate)/((float) (input->no_frames + Bframe_ctr));
 
     fprintf(stdout, " Bit rate (kbit/s)  @ %2.2f Hz     : %5.2f\n", frame_rate, stat->bitrate/1000);
 
+  }
+  else if(input->BipredictiveWeighting > 0)
+  {
+    fprintf(stdout, " Total bits                        : %d (I %5d, P BS %5d) \n",
+    total_bits=stat->bit_ctr_P + stat->bit_ctr_0 , stat->bit_ctr_0, stat->bit_ctr_P);
+
+    frame_rate = (float)img->framerate / ( (float) (input->jumpd + 1) );
+    stat->bitrate= ((float) total_bits * frame_rate)/((float) input->no_frames );
+
+    fprintf(stdout, " Bit rate (kbit/s)  @ %2.2f Hz     : %5.2f\n", frame_rate, stat->bitrate/1000);
   }
   else if (input->sp_periodicity==0)
   {
@@ -939,6 +1091,9 @@ void report()
     fprintf(p_stat,   " Entropy coding method        : CAVLC\n");
   else
     fprintf(p_stat,   " Entropy coding method        : CABAC\n");
+
+  if(input->InterlaceCodingOption >= MB_CODING)
+    fprintf(p_stat, " MB Field Coding : On \n");
 
 #ifdef _FULL_SEARCH_RANGE_
   if (input->full_search == 2)
@@ -1290,9 +1445,13 @@ int init_global_buffers()
   if ((last_P_no_frm = (int*)malloc(2*img->buf_cycle*sizeof(int))) == NULL)
     no_mem_exit("init_global_buffers: last_P_no");
   if(input->InterlaceCodingOption != FRAME_CODING)
-    if ((last_P_no_fld = (int*)malloc(3*img->buf_cycle*sizeof(int))) == NULL)
+    if ((last_P_no_fld = (int*)malloc(4*img->buf_cycle*sizeof(int))) == NULL)
       no_mem_exit("init_global_buffers: last_P_no");
 #endif
+
+  if(input->InterlaceCodingOption >= MB_CODING)
+    memory_size += get_mem2Dint(&field_mb, img->height/MB_BLOCK_SIZE, img->width/MB_BLOCK_SIZE);
+
 
   // allocate memory for encoding frame buffers: imgY, imgUV
   // byte imgY[288][352];
@@ -1314,12 +1473,32 @@ int init_global_buffers()
   // int  refFrArr[72][88];
   memory_size += get_mem2Dint(&refFrArr_frm, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
 
-  if(input->successive_Bframe!=0)
-  {
+  memory_size += get_mem2Dint(&abp_type_FrArr, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
+
+  if(input->successive_Bframe!=0 || input->BipredictiveWeighting > 0)
+  {    
     // allocate memory for temp B-frame motion vector buffer: fw_refFrArr, bw_refFrArr
     // int ...refFrArr[72][88];
     memory_size += get_mem2Dint(&fw_refFrArr_frm, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
     memory_size += get_mem2Dint(&bw_refFrArr_frm, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
+
+    // allocate memory for temp B-frame direct ref-frame buffer: fwdir_refFrArr, bwdir_refFrArr
+    // int ...refFrArr[72][88];
+    if(input->direct_type == DIR_SPATIAL)
+    {
+      memory_size += get_mem2Dint(&fwdir_refFrArr, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
+      memory_size += get_mem2Dint(&bwdir_refFrArr, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
+      // allocate memory for collocated motion stationarity - int could be replaced with boolean    
+      memory_size += get_mem2Dint(&moving_block_frm, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
+    }
+
+  if(input->InterlaceCodingOption >= MB_CODING)
+  {
+    memory_size += get_mem3Dint(&tmp_fwMV_top, 2, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE+4);
+    memory_size += get_mem3Dint(&tmp_fwMV_bot, 2, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE+4);
+    memory_size += get_mem3Dint(&tmp_bwMV_top, 2, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE+4);
+    memory_size += get_mem3Dint(&tmp_bwMV_bot, 2, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE+4);
+  }
   }
 
 
@@ -1346,7 +1525,7 @@ int init_global_buffers()
 
   alloc_Refbuf (img);
 
-  if(input->successive_Bframe!=0)
+  if(input->successive_Bframe!=0 || input->BipredictiveWeighting > 0)
   {
     // allocate memory for temp B-frame motion vector buffer: tmp_fwMV, tmp_bwMV, dfMV, dbMV
     // int ...MV[2][72][92];  ([2][72][88] should be enough)
@@ -1354,11 +1533,12 @@ int init_global_buffers()
     memory_size += get_mem3Dint(&tmp_bwMV, 2, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE+4);
     memory_size += get_mem3Dint(&dfMV,     2, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE+4);
     memory_size += get_mem3Dint(&dbMV,     2, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE+4);
+
   }
 
   // allocate memory for array containing the block modes of the collocated MBs. Needed for B-Frames ABT Direct Mode.
   // colMBmode[frame/top/bottom][blk_y][blk_x]
-  memory_size += get_mem3Dint(&colB8mode, 3, img->height/B8_SIZE, img->width/B8_SIZE);
+  memory_size += get_mem3Dint(&colB8mode, 5, img->height/B8_SIZE, img->width/B8_SIZE);
 
   // allocate memory for temp quarter pel luma frame buffer: img4Y_tmp
   // int img4Y_tmp[576][704];  (previously int imgY_tmp in global.h)
@@ -1405,7 +1585,7 @@ int init_global_buffers()
     memory_size += get_mem2D(&imgY_org_bot, height_field, img->width);
     memory_size += get_mem3D(&imgUV_org_bot, 2, height_field/2, img->width_cr);
 
-    if(input->successive_Bframe!=0)
+    if(input->successive_Bframe!=0 || input->BipredictiveWeighting > 0)
     {
       // allocate memory for temp B-frame motion vector buffer: fw_refFrArr, bw_refFrArr
       // int ...refFrArr[72][88];
@@ -1413,6 +1593,12 @@ int init_global_buffers()
       memory_size += get_mem2Dint(&bw_refFrArr_top, height_field/BLOCK_SIZE, img->width/BLOCK_SIZE);
       memory_size += get_mem2Dint(&fw_refFrArr_bot, height_field/BLOCK_SIZE, img->width/BLOCK_SIZE);
       memory_size += get_mem2Dint(&bw_refFrArr_bot, height_field/BLOCK_SIZE, img->width/BLOCK_SIZE);
+      if(input->direct_type == DIR_SPATIAL)
+      {
+        // allocate memory for collocated motion stationarity - int could be replaced with boolean    
+        memory_size += get_mem2Dint(&moving_block_top,  height_field/BLOCK_SIZE, img->width/BLOCK_SIZE);
+        memory_size += get_mem2Dint(&moving_block_bot,  height_field/BLOCK_SIZE, img->width/BLOCK_SIZE);
+      }
     }
 
     // allocate memory for temp P and B-frame motion vector buffer: tmp_mv, temp_mv_block
@@ -1424,6 +1610,17 @@ int init_global_buffers()
     // int  refFrArr[72][88];
     memory_size += get_mem2Dint(&refFrArr_top, height_field/BLOCK_SIZE, img->width/BLOCK_SIZE);
     memory_size += get_mem2Dint(&refFrArr_bot, height_field/BLOCK_SIZE, img->width/BLOCK_SIZE);
+    memory_size += get_mem2Dint(&abp_type_FrArr_top, height_field/BLOCK_SIZE, img->width/BLOCK_SIZE);
+    memory_size += get_mem2Dint(&abp_type_FrArr_bot, height_field/BLOCK_SIZE, img->width/BLOCK_SIZE);
+
+  if(input->InterlaceCodingOption >= MB_CODING)
+  {
+    memory_size += get_mem3Dint(&tmp_mv_top_save, 2, height_field/BLOCK_SIZE, img->width/BLOCK_SIZE+4);
+    memory_size += get_mem3Dint(&tmp_mv_bot_save, 2, height_field/BLOCK_SIZE, img->width/BLOCK_SIZE+4);
+    memory_size += get_mem2Dint(&refFrArr_top_save, height_field/BLOCK_SIZE, img->width/BLOCK_SIZE);
+    memory_size += get_mem2Dint(&refFrArr_bot_save, height_field/BLOCK_SIZE, img->width/BLOCK_SIZE);
+  }
+
   }
 
   return (memory_size);
@@ -1476,7 +1673,7 @@ void free_global_buffers()
   // free multiple ref frame buffers
   // number of reference frames increased by one for next P-frame
 
-  if(input->successive_Bframe!=0)
+  if(input->successive_Bframe!=0 || input->BipredictiveWeighting > 0)
   {
     // free last P-frame buffers for B-frame coding
     free_mem3Dint(tmp_fwMV,2);
@@ -1484,9 +1681,15 @@ void free_global_buffers()
     free_mem3Dint(dfMV,2);
     free_mem3Dint(dbMV,2);
     free_mem2Dint(fw_refFrArr_frm);
-    free_mem2Dint(bw_refFrArr_frm);
+    free_mem2Dint(bw_refFrArr_frm);    
+    if (input->direct_type)
+    {
+      free_mem2Dint(moving_block_frm);
+      free_mem2Dint(fwdir_refFrArr);
+      free_mem2Dint(bwdir_refFrArr);
+    }
   } // end if B frame
-
+  free_mem2Dint(abp_type_FrArr);
 
   free_mem3Dint(colB8mode,3);  // ABT
   free_mem2Dint(img4Y_tmp);    // free temp quarter pel frame buffer
@@ -1559,13 +1762,18 @@ void free_global_buffers()
     free(mref_fld);
     free(mcef_fld);
 
-    if(input->successive_Bframe!=0)
+    if(input->successive_Bframe!=0 || input->BipredictiveWeighting > 0)
     {
       // free last P-frame buffers for B-frame coding
       free_mem2Dint(fw_refFrArr_top);
       free_mem2Dint(bw_refFrArr_top);
       free_mem2Dint(fw_refFrArr_bot);
       free_mem2Dint(bw_refFrArr_bot);
+      if (input->direct_type)
+      {
+        free_mem2Dint(moving_block_top);
+        free_mem2Dint(moving_block_bot);
+      }
     } // end if B frame
 
     free (Refbuf11_fld);
@@ -1574,6 +1782,8 @@ void free_global_buffers()
     free_mem3Dint(tmp_mv_bot,2);
     free_mem2Dint(refFrArr_top);
     free_mem2Dint(refFrArr_bot);
+    free_mem2Dint(abp_type_FrArr_top);
+    free_mem2Dint(abp_type_FrArr_bot);
   }
 
   // CAVLC mem free
@@ -1768,17 +1978,18 @@ void put_buffer_frame()
   imgY = imgY_frm;
   imgUV = imgUV_frm;
   imgY_org = imgY_org_frm;
-  imgUV_org = imgUV_org_frm;
-
+  imgUV_org = imgUV_org_frm;  
   tmp_mv = tmp_mv_frm;
   mref = mref_frm;
-  mcef = mcef_frm;
+  mcef = mcef_frm;  
 
   refFrArr = refFrArr_frm;
   fw_refFrArr = fw_refFrArr_frm;
   bw_refFrArr = bw_refFrArr_frm;
 
   Refbuf11 = Refbuf11_frm;
+  if (input->direct_type && (input->successive_Bframe!=0 || input->BipredictiveWeighting > 0))
+    moving_block=moving_block_frm;
 }
 
 /*!
@@ -1801,12 +2012,15 @@ void put_buffer_top()
   mref = mref_fld;
   mcef = mcef_fld;
 
-  Refbuf11 = Refbuf11_fld;
-
+  Refbuf11 = Refbuf11_fld;  
   tmp_mv = tmp_mv_top;
   refFrArr = refFrArr_top;
   fw_refFrArr = fw_refFrArr_top;
   bw_refFrArr = bw_refFrArr_top;
+
+  if (input->direct_type && (input->successive_Bframe!=0 || input->BipredictiveWeighting > 0))
+    moving_block=moving_block_top;
+
 }
 
 /*!
@@ -1834,6 +2048,8 @@ void put_buffer_bot()
 
   mref = mref_fld;
   mcef = mcef_fld;
+  if (input->direct_type && (input->successive_Bframe!=0 || input->BipredictiveWeighting > 0))
+    moving_block=moving_block_bot;
 }
 
 /*!
@@ -1873,7 +2089,7 @@ void split_field_top()
 
   for (i=0; i<img->height; i++)
   {
-    memcpy(imgY[i], imgY_frm[i*2], img->width);	
+    memcpy(imgY[i], imgY_frm[i*2], img->width); 
   }
 
   for (i=0; i<img->height_cr; i++)
@@ -1965,7 +2181,11 @@ void SetImgType()
     else
     {
       img->type = INTER_IMG;        // P-frame
-      if (input->sp_periodicity)
+      if(input->BipredictiveWeighting > 0 && img->number > 1)
+      {
+        img->type = BS_IMG;
+      }
+      else if (input->sp_periodicity)
       {
         if ((IMG_NUMBER % input->sp_periodicity) ==0)
         {
@@ -1984,7 +2204,11 @@ void SetImgType()
     else
     {
       img->type = INTER_IMG;        // P-frame
-      if (input->sp_periodicity)
+      if(input->BipredictiveWeighting > 0 && img->number > 1)
+      {
+        img->type = BS_IMG;
+      }
+      else if (input->sp_periodicity)
       {
         if ((IMG_NUMBER % input->sp_periodicity) ==0)
             img->types=SP_IMG;

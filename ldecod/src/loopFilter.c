@@ -108,11 +108,17 @@ void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int mb_y, int m
   byte          LargeBlockEdge[4];
   byte          blkmode[2][2];
   Macroblock    *MbP, *MbQ ; 
+  int           sizey;
   
   SrcY = imgY    [mb_y<<4] + (mb_x<<4) ;                                                      // pointers to source
   SrcU = imgUV[0][mb_y<<3] + (mb_x<<3) ;
   SrcV = imgUV[1][mb_y<<3] + (mb_x<<3) ;
-  MbQ  = &img->mb_data[mb_y*(img->width>>4) + mb_x] ;                                                 // current Mb
+
+  if (img->mb_frame_field_flag)
+    MbQ  = &img->mb_data[((mb_y/2)*(img->width>>3))+(mb_y%2)+mb_x*2];                            // current Mb
+  else
+    MbQ  = &img->mb_data[mb_y*(img->width>>4) + mb_x] ;                                                 // current Mb
+
   get_deblock_modes(img,MbQ,blkmode);
 
   for( dir=0 ; dir<2 ; dir++ )                                             // vertical edges, than horicontal edges
@@ -122,7 +128,13 @@ void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int mb_y, int m
     {                                                                                         // then  4 horicontal
       if( edge || EdgeCondition )
       {
-        MbP = (edge)? MbQ : ((dir)? (MbQ -(img->width>>4))  : (MbQ-1) ) ;                  // MbP = Mb of the remote 4x4 block
+        
+        sizey = mb_y%2 ? 1:2*img->width/MB_BLOCK_SIZE-1;
+        if (img->mb_frame_field_flag)
+          MbP = (edge)? MbQ : ((dir)? (MbQ-sizey) : (MbQ-2) ) ;       // MbP = Mb of the remote 4x4 block
+        else
+          MbP = (edge)? MbQ : ((dir)? (MbQ -(img->width>>4))  : (MbQ-1) ) ;       // MbP = Mb of the remote 4x4 block
+
         QP  = max( 0, ((MbP->qp-SHIFT_QP) + (MbQ->qp-SHIFT_QP) ) >> 1) ;                   // Average QP of the two blocks
         GetStrength(Strength,LargeBlockEdge,img,MbP,MbQ,dir,edge,mb_y<<2,mb_x<<2,blkmode); // Strength for 4 blks in 1 stripe
         if( *((int*)Strength) )  // && (QP>= 8) )                    // only if one of the 4 Strength bytes is != 0
@@ -149,7 +161,7 @@ void get_deblock_modes(ImageParameters *img,Macroblock *MB,byte blkmode[2][2])
     for(j=0;j<2;j++)
       for(i=0;i<2;i++)
       {
-        mode=3;	//no ABT, always deblock all (depending on strength)
+        mode=3; //no ABT, always deblock all (depending on strength)
         if(MB->useABT[(j<<1)|i])
         {
           mode=MB->abt_mode[(j<<1)|i]; //ABT
@@ -167,7 +179,7 @@ void get_deblock_modes(ImageParameters *img,Macroblock *MB,byte blkmode[2][2])
         blkmode[i>>1][i&1]=4+i;
     else
       for(i=0;i<4;i++)
-        blkmode[i>>1][i&1]=3;	//no ABT, always deblock all (depending on strength)
+        blkmode[i>>1][i&1]=3;   //no ABT, always deblock all (depending on strength)
   }
 }
 
@@ -202,10 +214,24 @@ void GetStrength(byte Strength[4],byte LargeBlockEdge[4],struct img_par *img,Mac
   int    blk_x, blk_x2, blk_y, blk_y2 ;
   int    LBcount;
   int    blk_mode1, blk_mode2;
+  int    ***fw_mv = img->fw_mv;
+  int    ***bw_mv = img->bw_mv;
+  int    **fw_refFrArr = img->fw_refFrArr;
+  int    **bw_refFrArr = img->bw_refFrArr;
+
 
   int    mvshift = (img->mv_res ? 3 : 2);                      // Consideration of mv resolution for filter strength
 
   *((int*)Strength) = ININT_STRENGTH[edge] ;                     // Start with Strength=3. or Strength=4 for Mb-edge
+
+  if(img->mb_frame_field_flag)
+  {
+        fw_mv = img->fw_mv_frm;
+        bw_mv = img->bw_mv_frm;
+        fw_refFrArr = img->fw_refFrArr_frm;
+        bw_refFrArr = img->bw_refFrArr_frm;
+  }
+
 
   for( idx=0 ; idx<4 ; idx++ )
   {                                                                                       // if not intra or SP-frame
@@ -246,12 +272,12 @@ void GetStrength(byte Strength[4],byte LargeBlockEdge[4],struct img_par *img,Mac
         {                                                     // if no coefs, but vector difference >= 1 set Strength=1 
           if( (img->type == B_IMG_1)  || (img->type == B_IMG_MULT) )
           {
-            Strength[idx] =  (abs( img->fw_mv[blk_x][blk_y][0] - img->fw_mv[blk_x2][blk_y2][0]) >= (1 << mvshift)) |
-                             (abs( img->fw_mv[blk_x][blk_y][1] - img->fw_mv[blk_x2][blk_y2][1]) >= (1 << mvshift)) |
-                             (abs( img->bw_mv[blk_x][blk_y][0] - img->bw_mv[blk_x2][blk_y2][0]) >= (1 << mvshift)) |
-                             (abs( img->bw_mv[blk_x][blk_y][1] - img->bw_mv[blk_x2][blk_y2][1]) >= (1 << mvshift)) |
-                                  (img->fw_refFrArr[blk_y][blk_x-4]   !=   img->fw_refFrArr[blk_y2][blk_x2-4] )|
-                                  (img->bw_refFrArr[blk_y][blk_x-4]   !=   img->bw_refFrArr[blk_y2][blk_x2-4] );
+            Strength[idx] =  (abs( fw_mv[blk_x][blk_y][0] - fw_mv[blk_x2][blk_y2][0]) >= (1 << mvshift)) |
+                             (abs( fw_mv[blk_x][blk_y][1] - fw_mv[blk_x2][blk_y2][1]) >= (1 << mvshift)) |
+                             (abs( bw_mv[blk_x][blk_y][0] - bw_mv[blk_x2][blk_y2][0]) >= (1 << mvshift)) |
+                             (abs( bw_mv[blk_x][blk_y][1] - bw_mv[blk_x2][blk_y2][1]) >= (1 << mvshift)) |
+                                  (fw_refFrArr[blk_y][blk_x-4]   !=   fw_refFrArr[blk_y2][blk_x2-4] )|
+                                  (bw_refFrArr[blk_y][blk_x-4]   !=   bw_refFrArr[blk_y2][blk_x2-4] );
           }
           else
             Strength[idx] =    (abs( img->mv[blk_x][blk_y][0] - img->mv[blk_x2][blk_y2][0]) >= (1 << mvshift) ) |

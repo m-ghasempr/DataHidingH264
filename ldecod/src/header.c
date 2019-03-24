@@ -132,62 +132,15 @@ int SliceHeader(struct img_par *img, struct inp_par *inp)
   readSyntaxElement_UVLC (&sym,img,inp,partition);
   currSlice->structure = img->structure = sym.value1;
   UsedBits += sym.len;
-  
-  if(!img->current_slice_nr)
-  { 
-    if (img->type <= INTRA_IMG || img->type >= SI_IMG ) 
-    {
-      if (img->structure == FRAME)
-      {     
-        if(img->tr <last_imgtr_frm) 
-          modulo_ctr_frm++;
-        
-        last_imgtr_frm = img->tr;
-        img->tr_frm = img->tr + (256*modulo_ctr_frm);
-      }
-      else
-      {
-        if(img->tr <last_imgtr_fld) 
-          modulo_ctr_fld++;
-        
-        last_imgtr_fld = img->tr;
-        img->tr_fld = img->tr + (256*modulo_ctr_fld);
-      }
-    }
-    else
-    {
-      if (img->structure == FRAME)
-      {     
-        if(img->tr <last_imgtr_frm_b) 
-          modulo_ctr_frm_b++;
-        
-        last_imgtr_frm_b = img->tr;
-        img->tr_frm = img->tr + (256*modulo_ctr_frm_b);
-      }
-      else
-      {
-        if(img->tr <last_imgtr_fld_b) 
-          modulo_ctr_fld_b++;
-        
-        last_imgtr_fld_b = img->tr;
-        img->tr_fld = img->tr + (256*modulo_ctr_fld_b);
-      }
-    }
-    
-    if(img->type != B_IMG_MULT && img->type != B_IMG_1) {
-      img->pstruct_next_P = img->structure;
-      if(img->structure == TOP_FIELD)
-      {
-        img->imgtr_last_P = img->imgtr_next_P;
-        img->imgtr_next_P = img->tr_fld;
-      }
-      else if(img->structure == FRAME)
-      {
-        img->imgtr_last_P = img->imgtr_next_P;
-        img->imgtr_next_P = 2*img->tr_frm;
-      }
-    }
-  }
+
+  img->mb_frame_field_flag = 0;
+
+  if (img->structure == 3)
+    img->mb_frame_field_flag = 1;
+
+  if (img->structure == 3)
+    img->structure = 0;         // Frame coding with new scan for super MB pair
+
   // 5. Finally, read Reference Picture ID (same as TR here).  Note that this is an
   // optional field that is not present if the input parameters do not indicate
   // multiframe prediction ??
@@ -216,11 +169,110 @@ int SliceHeader(struct img_par *img, struct inp_par *inp)
     UsedBits += sym.len;
   }
 
+  SYMTRACESTRING("disposable_flag");
+  readSyntaxElement_UVLC (&sym,img,inp,partition);
+  img->disposable_flag = sym.value1;
+  UsedBits += sym.len;
+
+  img->num_ref_pic_active_fwd = 0;
+  img->num_ref_pic_active_bwd = 0;
+
+  if(img->type==INTER_IMG_1 || img->type==INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT)
+  {
+    SYMTRACESTRING("num_ref_pic_active_fwd_minus1");
+    readSyntaxElement_UVLC (&sym,img,inp,partition);
+    img->num_ref_pic_active_fwd = sym.value1+1;
+    UsedBits += sym.len;    
+  }
+  else if(img->type==B_IMG_1 || img->type==B_IMG_MULT)
+  {
+
+    SYMTRACESTRING("explicit_bipred_weigt_indicator");
+    readSyntaxElement_UVLC (&sym,img,inp,partition);
+    img->explicit_B_prediction = sym.value1;
+    UsedBits += sym.len;
+
+    SYMTRACESTRING("num_ref_pic_active_fwd_minus1");
+    readSyntaxElement_UVLC (&sym,img,inp,partition);
+    img->num_ref_pic_active_fwd = sym.value1+1;
+    UsedBits += sym.len;
+
+    SYMTRACESTRING("num_ref_pic_active_bwd_minus1");
+    readSyntaxElement_UVLC (&sym,img,inp,partition);
+    img->num_ref_pic_active_bwd = sym.value1+1;
+    UsedBits += sym.len;
+  }
+
+  if(!img->current_slice_nr)
+  { 
+    if (img->type <= INTRA_IMG || img->type >= SP_IMG_1 || !img->disposable_flag) 
+    {
+      if (img->structure == FRAME)
+      {     
+        if(img->tr <last_imgtr_frm) 
+          modulo_ctr_frm++;
+      
+        last_imgtr_frm = img->tr;
+        img->tr_frm = img->tr + (256*modulo_ctr_frm);
+      }
+      else
+      {
+        if(img->tr <last_imgtr_fld) 
+          modulo_ctr_fld++;
+      
+        last_imgtr_fld = img->tr;
+        img->tr_fld = img->tr + (256*modulo_ctr_fld);
+      }
+    }
+    else
+    {
+      if (img->structure == FRAME)
+      {     
+        if(img->tr <last_imgtr_frm_b) 
+          modulo_ctr_frm_b++;
+      
+        last_imgtr_frm_b = img->tr;
+        img->tr_frm = img->tr + (256*modulo_ctr_frm_b);
+      }
+      else
+      {
+        if(img->tr <last_imgtr_fld_b) 
+          modulo_ctr_fld_b++;
+      
+        last_imgtr_fld_b = img->tr;
+        img->tr_fld = img->tr + (256*modulo_ctr_fld_b);
+      }
+    }
+    if((img->type != B_IMG_MULT && img->type != B_IMG_1) || !img->disposable_flag) 
+    {
+      img->pstruct_next_P = img->structure;
+      if(img->structure == TOP_FIELD)
+      {
+        img->imgtr_last_P = img->imgtr_next_P;
+        img->imgtr_next_P = img->tr_fld;
+      }
+      else if(img->structure == FRAME)
+      {
+        img->imgtr_last_P = img->imgtr_next_P;
+        img->imgtr_next_P = 2*img->tr_frm;
+      }
+    }
+  }
+
   // 6. Get MB-Adresse
   SYMTRACESTRING("SH FirstMBInSlice");
   readSyntaxElement_UVLC (&sym,img,inp,partition);
   currSlice->start_mb_nr = sym.value1;
   UsedBits += sym.len;
+
+
+  if(img->type==B_IMG_1 || img->type==B_IMG_MULT)
+    {
+      SYMTRACESTRING("SH DirectSpatialFlag");
+      sym.len = 1;
+      readSyntaxElement_fixed (&sym,img,inp,partition);
+      img->direct_type = sym.inf;
+    }
 
 #ifdef _ABT_FLAG_IN_SLICE_HEADER_
   SYMTRACESTRING("SH ABTMode");
@@ -237,13 +289,13 @@ int SliceHeader(struct img_par *img, struct inp_par *inp)
   UsedBits += sym.len;
   if(img->type==SP_IMG_1 || img->type==SP_IMG_MULT || img->type == SI_IMG) 
   {
-	if(img->type==SP_IMG_1 || img->type==SP_IMG_MULT)
-	{
+    if(img->type==SP_IMG_1 || img->type==SP_IMG_MULT)
+    {
       SYMTRACESTRING("SH SP SWITCH");
-	  sym.len = 1;
+      sym.len = 1;
       readSyntaxElement_fixed (&sym,img,inp,partition);
-	  img->sp_switch = sym.inf;
-	}
+      img->sp_switch = sym.inf;      
+    }
     if(img->type==SI_IMG)
       SYMTRACESTRING("SH SI SliceQuant");
     else

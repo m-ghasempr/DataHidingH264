@@ -518,6 +518,13 @@ static void PatchInp ()
     error (errortext, 400);
   }
 
+  // Direct Mode consistency check
+  if(input->successive_Bframe && input->direct_type != DIR_SPATIAL && input->direct_type != DIR_TEMPORAL)
+  {
+    snprintf(errortext, ET_SIZE, "Unsupported direct mode=%d, use TEMPORAL=0 or SPATIAL=1", input->direct_type);
+    error (errortext, 400);
+  }
+
   // Cabac/UVLC consistency check
   if (input->symbol_mode != UVLC && input->symbol_mode != CABAC)
   {
@@ -531,6 +538,12 @@ static void PatchInp ()
     snprintf (errortext, ET_SIZE, "Encapsulated_NAL_Payload %d. It has to be either 0 or 1 ", input->Encapsulated_NAL_Payload);
   }
 
+  // Encapsulated_NAL_Payload will always be set to true
+  if(input->Encapsulated_NAL_Payload == FALSE )
+  {
+    printf ("EncapsulatedNALPayload is now always enabled !!!\n");
+    input->Encapsulated_NAL_Payload = TRUE;
+  }
   // Open Files
 
   if ((p_in=fopen(input->infile,"rb"))==NULL)
@@ -553,7 +566,7 @@ static void PatchInp ()
 
   // frame/field consistency check
   if (input->InterlaceCodingOption != FRAME_CODING && input->InterlaceCodingOption != ADAPTIVE_CODING && input->InterlaceCodingOption != FIELD_CODING
-    )
+    && input->InterlaceCodingOption != MB_CODING)
   {
     snprintf (errortext, ET_SIZE, "Unsupported InterlaceCodingOption=%d, use frame based coding=0 or adaptive=1 or field based coding=2",input->InterlaceCodingOption);
     error (errortext, 400);
@@ -592,6 +605,35 @@ static void PatchInp ()
   if (input->of_mode == PAR_OF_IFF && input->InterlaceCodingOption != 0)
   {
     snprintf(errortext, ET_SIZE, "adaptive frame/field coding is not supported in IFF, May 31, 2002.");
+    error (errortext, 500);
+  }
+  if (input->BipredictiveWeighting > 0)
+  {
+    input->explicit_B_prediction = input->BipredictiveWeighting - 1;
+    input->direct_type = DIR_SPATIAL;
+  }
+  else
+  {
+    input->explicit_B_prediction = -1; 
+  }
+  if(input->BipredictiveWeighting > 0 && input->successive_Bframe && input->direct_type == DIR_TEMPORAL)
+  {
+    printf("Weighted bi-prediction coding is not supported for temporal direct mode currently.");
+    input->direct_type = DIR_SPATIAL;
+  }
+  if (input->BipredictiveWeighting > 0 && input->no_multpred < 2)
+  {
+    snprintf(errortext, ET_SIZE, "Bipredictive weighting is needed to have more than 2 frames.");
+    input->no_multpred = 2;
+  }
+  if(input->BipredictiveWeighting > 0 && input->InterlaceCodingOption == MB_CODING )
+  {
+    printf("Weighted bi-prediction coding is not supported for MB AFF currently.");
+    error (errortext, 500);
+  }
+  if ( input->NumFramesInELSubSeq > 0 && input->BipredictiveWeighting > 0)
+  {
+    snprintf(errortext, ET_SIZE, "Enhanced GOP is not supported in weighted bi-prediction coding mode yet.");
     error (errortext, 500);
   }
 }

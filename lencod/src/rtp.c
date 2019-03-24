@@ -526,7 +526,7 @@ int RTPSliceHeader()
   int len = 0;
   int RTPSliceType;
 
-  if(img->type == B_IMG)
+  if(img->type==BS_IMG && img->type!=B_IMG)
     dP_nr= assignSE2partition[input->partition_mode][SE_BFRAME];
   else
     dP_nr= assignSE2partition[input->partition_mode][SE_HEADER];
@@ -578,6 +578,7 @@ int RTPSliceHeader()
       RTPSliceType = 3;
       break;
     case B_IMG:
+    case BS_IMG:
       RTPSliceType = 1;
       break;
     case SP_IMG:
@@ -596,6 +597,36 @@ int RTPSliceHeader()
   sym.value1 = RTPSliceType;
   len += writeSyntaxElement_UVLC (&sym, partition);
 
+  // NOTE: following syntax elements have to be moved into nal_unit() and changed from e(v) to u(1)
+  if(1)
+  {
+    sym.value1 = img->disposable_flag;
+    SYMTRACESTRING("RTP-SH: NAL disposable_flag");
+    len += writeSyntaxElement_UVLC (&sym, partition);
+  }
+  
+  // NOTE: following syntax elements have to be moved into picture_layer_rbsp()
+  // weighted_bipred_implicit_flag
+  if(img->type==B_IMG || img->type==BS_IMG)
+  {
+    sym.value1 = (input->BipredictiveWeighting > 0)? (input->BipredictiveWeighting-1) : 0;
+    SYMTRACESTRING("RTP-SH: weighted_bipred_implicit_flag");
+    len += writeSyntaxElement_UVLC (&sym, partition);
+  }
+
+  if (img->type==INTER_IMG || img->type==B_IMG || img->type==BS_IMG)
+  {
+    sym.value1 = img->num_ref_pic_active_fwd_minus1;
+    SYMTRACESTRING("RTP-SH: num_ref_pic_active_fwd_minus1");
+    len += writeSyntaxElement_UVLC (&sym, partition);
+    if (img->type==B_IMG || img->type==BS_IMG)
+    {
+      sym.value1 = img->num_ref_pic_active_bwd_minus1;
+      SYMTRACESTRING("RTP-SH: num_ref_pic_active_bwd_minus1");
+      len += writeSyntaxElement_UVLC (&sym, partition);
+    }
+  }
+
   SYMTRACESTRING("RTP-SH: FirstMBInSliceX");
   sym.value1 = img->mb_x;
   len += writeSyntaxElement_UVLC (&sym, partition);
@@ -603,6 +634,14 @@ int RTPSliceHeader()
   SYMTRACESTRING("RTP-SH: FirstMBinSlinceY");
   sym.value1 = img->mb_y;
   len += writeSyntaxElement_UVLC (&sym, partition);
+
+  if (img->type==B_IMG || img->type==BS_IMG)
+  {
+    SYMTRACESTRING("RTP-SH DirectSpatialFlag");
+    sym.bitpattern = input->direct_type;  // 1 for Spatial Direct, 0 for temporal Direct
+    sym.len = 1;
+    len += writeSyntaxElement_fixed(&sym, partition);
+  }
 
 #ifdef _ABT_FLAG_IN_SLICE_HEADER_
   SYMTRACESTRING("RTP-SH ABTMode");
@@ -617,6 +656,15 @@ int RTPSliceHeader()
 
   if (img->types==SP_IMG)
   {
+
+    if (img->type!=INTRA_IMG) // Switch Flag only for SP pictures
+    {
+      SYMTRACESTRING("RTP-SH SWITCH FLAG");
+      sym.bitpattern = 0;  // 1 for switching SP, 0 for normal SP
+      sym.len = 1;
+      len += writeSyntaxElement_fixed(&sym, partition);
+    }
+
     SYMTRACESTRING("RTP-SH: SP InitialQP");
     sym.value1 = img->qpsp - (MAX_QP - MIN_QP +1)/2;
     len += writeSyntaxElement_UVLC (&sym, partition);
@@ -631,7 +679,7 @@ int RTPSliceHeader()
   // the dependency by checkling the input parameter
   */
 
-  if (input->partition_mode == PAR_DP_3 && img->type != B_IMG)
+  if (input->partition_mode == PAR_DP_3 && img->type != B_IMG && img->type != BS_IMG)
   {
     SYMTRACESTRING("RTP-SH: Slice ID");
     sym.value1 = img->current_slice_nr;

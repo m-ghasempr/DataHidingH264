@@ -50,7 +50,6 @@
 #ifndef _DEFINES_H_
 #define _DEFINES_H_
 
-
 // CAVLC
 #define LUMA              0
 #define LUMA_INTRA16x16DC 1
@@ -101,14 +100,17 @@
 #define IMG_PAD_SIZE    4   //!< Number of pixels padded around the reference frame (>=4)
 
 #if defined _DEBUG
-#define TRACE           1   //!< 0:Trace off 1:Trace on
+#define TRACE           0   //!< 0:Trace off 1:Trace on
 #else
 #define TRACE           0   //!< 0:Trace off 1:Trace on
 #endif
 
+#define BDIRECTINTRA        1        //!< Direct SpatioTemporal Prediction 
+
 #define absm(A) ((A)<(0) ? (-(A)):(A)) //!< abs macro, faster than procedure
 #define MAX_VALUE       999999   //!< used for start value for some variables
 
+#define Clip1(a)            ((a)>255?255:((a)<0?0:(a)))
 
 
 // ---------------------------------------------------------------------------------
@@ -140,6 +142,9 @@
 #define  MV_COST(f,s,cx,cy,px,py)     (WEIGHTED_COST(f,mvbits[((cx)<<(s))-px]+mvbits[((cy)<<(s))-py]))
 #define  REF_COST(f,ref)              (WEIGHTED_COST(f,refbits[(ref)]))
 
+#define  BWD_IDX(ref)                 (((ref)<2)? 1-(ref): (ref))
+#define  REF_COST_FWD(f,ref)          (WEIGHTED_COST(f,((img->num_ref_pic_active_fwd_minus1==0)? 0:refbits[(ref)])))
+#define  REF_COST_BWD(f,ref)          (WEIGHTED_COST(f,((img->num_ref_pic_active_bwd_minus1==0)? 0:BWD_IDX(refbits[ref]))))
 
 #define IS_INTRA(MB)    ((MB)->mb_type==I4MB  || (MB)->mb_type==I16MB)
 #define IS_NEWINTRA(MB) ((MB)->mb_type==I16MB)
@@ -155,7 +160,7 @@
 #ifndef _OLDSTYLEQP_
 
 #define MIN_QP          0
-#define MAX_QP          52
+#define MAX_QP          51
 #define SHIFT_QP        12
 
 #else
@@ -172,21 +177,29 @@
 #define B_IMG           2   //!< B frame
 #define SP_IMG          3   //!< SP frame
 
+#define BS_IMG          4   //!< BS frame
+
+
+// Direct Mode types
+#define DIR_TEMPORAL    0   //!< Temporal Direct Mode
+#define DIR_SPATIAL     1    //!< Spatial Direct Mode
+
+
 
 #define BLOCK_SIZE      4
 #define MB_BLOCK_SIZE   16
 
 #define NO_INTRA_PMODE  9        //!< #intra prediction modes
 //!< 4x4 intra prediction modes
-#define DC_PRED         0
-#define VERT_PRED       1
-#define HOR_PRED        2
-#define DIAG_PRED_SE    3
-#define DIAG_PRED_NE    4
-#define DIAG_PRED_SSE   5
-#define DIAG_PRED_NNE   6
-#define DIAG_PRED_ENE   7
-#define DIAG_PRED_ESE   8
+#define DC_PRED               0
+#define VERT_PRED             1
+#define HOR_PRED              2
+#define DIAG_DOWN_RIGHT_PRED  3
+#define DIAG_DOWN_LEFT_PRED   4
+#define VERT_RIGHT_PRED       5
+#define VERT_LEFT_PRED        6
+#define HOR_UP_PRED           7
+#define HOR_DOWN_PRED         8
 
 // 16x16 intra prediction modes
 #define VERT_PRED_16    0
@@ -222,7 +235,7 @@
 #define BLOCK_MULTIPLE      (MB_BLOCK_SIZE/BLOCK_SIZE)
 
 #define MAX_SYMBOLS_PER_MB  1200  //!< Maximum number of different syntax elements for one MB
-									                // CAVLC needs more symbols per MB
+                                  // CAVLC needs more symbols per MB
 
 
 #define MAX_PART_NR     8 /*!< Maximum number of different data partitions.

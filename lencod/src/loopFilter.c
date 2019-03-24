@@ -154,7 +154,7 @@ void get_deblock_modes(ImageParameters *img,Macroblock *MB,byte blkmode[2][2])
     for(j=0;j<2;j++)
       for(i=0;i<2;i++)
       {
-        mode=3;	//no ABT, always deblock all (depending on strength)
+        mode=3; //no ABT, always deblock all (depending on strength)
         if(MB->useABT[(j<<1)|i])
         {
           mode=MB->abt_mode[(j<<1)|i]; //ABT
@@ -172,7 +172,7 @@ void get_deblock_modes(ImageParameters *img,Macroblock *MB,byte blkmode[2][2])
         blkmode[i>>1][i&1]=4+i;
     else
       for(i=0;i<4;i++)
-        blkmode[i>>1][i&1]=3;	//no ABT, always deblock all (depending on strength)
+        blkmode[i>>1][i&1]=3; //no ABT, always deblock all (depending on strength)
   }
 }
 
@@ -248,7 +248,7 @@ void GetStrength(byte Strength[4],byte LargeBlockEdge[4],Macroblock* MbP,Macrobl
           Strength[idx] = 2 ;
         else
         {                                                     // if no coefs, but vector difference >= 1 set Strength=1 
-          if( img->type == B_IMG )
+          if( img->type == B_IMG || img->type == BS_IMG )
           {
             Strength[idx] = (abs( tmp_fwMV[0][blk_y][blk_x] - tmp_fwMV[0][blk_y2][blk_x2]) >= (1 << mvshift)) |
                             (abs( tmp_fwMV[1][blk_y][blk_x] - tmp_fwMV[1][blk_y2][blk_x2]) >= (1 << mvshift)) |

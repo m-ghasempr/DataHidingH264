@@ -420,7 +420,7 @@ const char ABT_2D_VLC[3][16][8]=
 };
 */
 
-char ABT_2D_VLC_dec[4][64][2]={{{-1,-1}}};	//The -1 values indicate the table is not valid. It is generated the first time it's needed. It could also be placed here, but that is a potential source of bugs.
+char ABT_2D_VLC_dec[4][64][2]={{{-1,-1}}};  //The -1 values indicate the table is not valid. It is generated the first time it's needed. It could also be placed here, but that is a potential source of bugs.
 
 //masks to be used for the bits in Macroblock->cbp_blk (2.Jan.2001 dahlhoff)
 //  cbp_blk_masks[MB_mode 1..7][subblock 0..15]

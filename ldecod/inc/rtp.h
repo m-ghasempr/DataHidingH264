@@ -118,12 +118,18 @@ typedef struct
   int SliceType;
   int FirstMBInSliceX;
   int FirstMBInSliceY;
+  int Direct_type;
   int InitialQP;
-  int InitialSPQP;
+  int SwitchSP;  
+  int InitialSPQP;  
   int SliceID;            //!< not used for single Slice packets, see VCEG-N72
   int RPBT;
   RMPNIbuffer_t *RMPNIbuffer;
   MMCObuffer_t  *MMCObuffer;
+  int disposable_flag;                          //!< flag for disposable frame, 1:disposable
+  int num_ref_pic_active_fwd;                   //!< number of forward reference
+  int num_ref_pic_active_bwd;                   //!< number of backward reference
+  int explicit_B_prediction;                    //!< type of weight for bi-pred, 0:average 1:implicit
 } RTPSliceHeader_t;
 
 

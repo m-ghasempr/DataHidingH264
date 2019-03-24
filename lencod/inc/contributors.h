@@ -173,6 +173,17 @@
       52072 Aachen
       Germany
 
+      Yoshihiro Kikuchi                <yoshihiro.kikuchi@toshiba.co.jp>
+      Takeshi Chujoh                   <takeshi.chujoh@toshiba.co.jp>
+      Toshiba Corporation
+      Research and Development Center
+      Kawasaki 212-8582, Japan
+
+      Shinya Kadono                    <kadono@drl.mei.co.jp>
+      Matsushita Electric Industrial Co., Ltd.
+      1006 Kadoma, Kadoma
+      Osaka 663-8113, Japan
+
     \endverbatim
  */
 

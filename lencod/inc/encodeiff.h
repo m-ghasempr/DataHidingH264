@@ -228,13 +228,19 @@ typedef struct sPayloadInfo
   unsigned INT8  sliceType;
   unsigned INT8  firstMBInSliceX;
   unsigned INT8  firstMBInSliceY;
+  unsigned INT8  directType;
 #ifdef _ABT_FLAG_IN_SLICE_HEADER_
   unsigned INT8  abtMode;
 #endif
+  unsigned INT8  disposable_flag;
+  unsigned INT8  explicit_B_prediction;
+  unsigned INT8  num_ref_pic_active_fwd_minus1;
+  unsigned INT8  num_ref_pic_active_bwd_minus1;
 
   INT8  initialQP;
 
   int sliceType2;   // save according to original value
+  unsigned INT8  spSwitchFlag;
   int qpsp;
 
   int pn;           // save img->pn

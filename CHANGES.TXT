@@ -1,3 +1,63 @@
+Changes for Version JM 4.2 to JM 4.1c
+-------------------------------------
+New features
+* Spatial Direct Prediction for MB AFF (AT)
+
+Bug Fixes
+* align simplified intra prediction to text (AH)
+* fix simplified intra prediction for mb aff (AH)
+* fix spatial direct (YK)
+* fix temporal direct (YK)
+* MB AFF fixes (LW,RG)
+
+Cleanups
+* clean up decode_one_slice (KS)
+* removed commented out code (KS)
+
+
+Changes for Version JM 4.1c to JM 4.1b
+--------------------------------------
+New features
+* Implicit bi-predictive weighting (YK)
+
+Bug Fixes
+* MAX_QP define (AJ)
+
+
+Changes for Version JM 4.1b to JM 4.1a
+--------------------------------------
+New features
+* Simplification of Intra Prediction (AH)
+
+Cleanups
+* also always enable EncapsulatedNALPayload at the decoder (KS)
+* reference frame check AFF fix (AT)
+
+
+Changes for Version JM 4.1a to JM 4.1
+-------------------------------------
+New features
+* Spatial Direct Prediction (AT)
+  Note: Spatial Direct Currently disabled for MB-AFF
+
+Bug Fixes
+* SP chroma bug fixed (XS)
+  Removed SP Switch flag from SI encoding (AT)
+  Corrected readSyntaxElement_fixed (AT)
+* close reconstruction file only if opened (LWi)
+* MB AFF fixes (AT)
+
+Cleanups
+* remove double scan routines (KS)
+* always enable EncapsulatedNALPayload (KS)
+
+
+Changes for Version JM 4.1 to JM 4.0d
+-------------------------------------
+New features
+* macroblock adaptive frame/field (LW)
+
+
 Changes for Version JM 4.0d to JM 4.0c
 --------------------------------------
 Bug Fixes
@@ -7,28 +67,26 @@ Bug Fixes
 
 
 Changes for Version JM 4.0c to JM 4.0b
---------------------------------------
-
+-------------------------------
 New features
 * New Macroblock modes for SP-frames [JVT-B055] (RK)
-
-Bug Fix
-* Decoder bug fix for SP-pictures
+  Note: some problems related to decoding of SI-frames
+	are reported and have to be fixed
+ 
 
 
 Changes for Version JM 4.0b to JM 4.0a
---------------------------------------
-
+-------------------------------
 New features
 * CAVLC [JVT-C028, D034, D036] (KL, JA)
 * Low Complexity Diagonal Mode for Intra Prediction [JVT-D059] (GrC)
 
-Bug Fix
+Bug Fixes
 * Bitstream in MSB first order for CABAC (DM, GB)
 
 
 Changes for Version JM 4.0a to JM 3.9a
---------------------------------------
+-------------------------------
 New features
 * Improved CABAC [JVT-C060] (HS, GB))
 * Fast Arithmetic Coding for CABAC [JVT-C061] (DM, GB)
@@ -545,7 +603,7 @@ Changes for Version 8.0 relative to Version 6.1
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 People:
-KS      Karsten S’hring         suehring@hhi.de
+KS      Karsten Sühring         suehring@hhi.de
 AH      Antti Hallapuro         antti.hallapuro@nokia.com
 AT      Alexis Michael Tourapis alexismt@ieee.org
 AJ      Anthony Joch            anthony@ubvideo.com
@@ -567,10 +625,12 @@ KP      Krit Panusopone         KPanusopone@gi.com
 KL	Karl Lillevold		Karll@real.com
 LK      Louis Kerofsky          lkerofsky@sharplabs.com
 LW      Limin Wang              liwang@gi.com
+LWi     Lowell Winger           lwinger@videolocus.com
 MB      Marcus Barkowsky        Marcus.Barkowsky@nt.e-technik.uni-erlangen.de
 MG      Michael Gallant         mgallant@videolocus.com
 MW      Mathias Wien            wien@ient.rwth-aachen.de
 PL      Peter List              Peter.List@t-systems.de
+RG      Rajeev Gandhi           rajeev@motorola.com
 RK	Ragip Kurceren 		ragip.kurceren@nokia.com
 RS      Rickard Sj÷berg         Rickard.Sjoberg@era.ericsson.se
 SR      Shankar Regunathan      shanre@microsoft.com
@@ -581,6 +641,8 @@ TW      Thomas Wiegand          wiegand@hhi.de
 TWe     Thomas Wedi             wedi@tnt.uni-hannover.de
 VV	Viktor Varsa		viktor.varsa@nokia.com
 WYK	Ye-Kui Wang		wangy@cs.tut.fi
+YK      Yoshihiro Kikuchi       yoshihiro.kikuchi@toshiba.co.jp
 YL      Yann Lemaguet		yann.lemaguet@philips.com
 YW      Ye-Kui Wang             wyk@ieee.org
 ZX      Z. Xue                  jon_xz@yahoo.com
+XS      Xiaoyan Sun             sunxiaoyan@msrchina.research.microsoft.com      

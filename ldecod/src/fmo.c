@@ -62,7 +62,7 @@
 static int *MBAmap;   
 
 static int PictureXSize, PictureYSize, PictureSizeInMBs;
-static int NumberOfSliceGroups;		// the number of slice groups -1 (0 == scan order, 7 == maximum)
+static int NumberOfSliceGroups;    // the number of slice groups -1 (0 == scan order, 7 == maximum)
 
 
 
@@ -111,7 +111,7 @@ int FmoInit (int xs, int ys, int NewMBAmap[], int SizeOfNewMBAmap)
   for (i=0; i<PictureSizeInMBs; i++)
   {
     MBAmap[i] = NewMBAmap[i%SizeOfNewMBAmap];
-	if (MBAmap[i] > NumberOfSliceGroups)
+    if (MBAmap[i] > NumberOfSliceGroups)
       NumberOfSliceGroups = MBAmap[i];
   }
 
@@ -223,7 +223,7 @@ int FmoGetLastMBInSliceGroup (int SliceGroup, int structure)
   int i;
   
   // KS: dirty hack for interlace
-  int PictureSize = (structure?PictureSizeInMBs/2:PictureSizeInMBs);
+  int PictureSize = (structure?(structure == 3 ? PictureSizeInMBs:PictureSizeInMBs/2):PictureSizeInMBs);
 
   for (i=PictureSize-1; i>=0; i--)
     if (FmoMB2Slice (i) == SliceGroup)
@@ -266,7 +266,7 @@ int FmoGetNextMBNr (int CurrentMbNr, int structure)
 {
   int SliceGroup = FmoMB2Slice (CurrentMbNr);
   // KS: dirty hack for interlace
-  int PictureSize = (structure?PictureSizeInMBs/2:PictureSizeInMBs);
+  int PictureSize = PictureSize = (structure?(structure == 3 ? PictureSizeInMBs:PictureSizeInMBs/2):PictureSizeInMBs);
   
   while (++CurrentMbNr<PictureSize && MBAmap [CurrentMbNr] != SliceGroup)
     ;
@@ -293,7 +293,7 @@ int ScatterGetFirstMBOfSlice (int SliceID, int structure)
 {
   int i = 0;
   // KS: dirty hack for interlace
-  int PictureSize = (structure?PictureSizeInMBs/2:PictureSizeInMBs);
+  int PictureSize = PictureSize = (structure?(structure == 3 ? PictureSizeInMBs:PictureSizeInMBs/2):PictureSizeInMBs);;
 
   while ((i<PictureSize) && (ScatterMB2Slice (i) != SliceID))
     i++;
@@ -341,7 +341,7 @@ int ScatterGetLastCodedMBOfSlice (int SliceID, int structure)
   int i;
   int LastMB = -1;
   // KS: dirty hack for interlace
-  int PictureSize = (structure?PictureSizeInMBs/2:PictureSizeInMBs);
+  int PictureSize = PictureSize = (structure?(structure == 3 ? PictureSizeInMBs:PictureSizeInMBs/2):PictureSizeInMBs);;
 
   for (i=0; i<PictureSize; i++)
     if (ScatterMB2Slice (i) == SliceID)
@@ -353,13 +353,13 @@ int ScatterGetLastCodedMBOfSlice (int SliceID, int structure)
 
 
 /************************************************************************
-/************************************************************************
+ ************************************************************************
  *
  *  Pseudo-Random Intra MB walk-around refresh
  *
-/************************************************************************
-/************************************************************************
-/************************************************************************/
+ ************************************************************************
+ ************************************************************************
+ ************************************************************************/
 
 static int *RefreshPattern;
 static int *IntraMBs;

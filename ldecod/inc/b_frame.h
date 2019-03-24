@@ -48,10 +48,6 @@
 #define _B_FRAME_H_
 
 
-#define   SINGLE_SCAN 0
-#define   DOUBLE_SCAN 1
-
-
 extern int ONE_FOURTH_TAP[3][2];
 extern const byte NCBP[48][2];
 
@@ -61,12 +57,18 @@ extern const byte IPRED_ORDER[36][2];
 extern const int BLOCK_STEP[8][2];
 extern const byte SNGL_SCAN[16][2];
 extern const int JQ1[];
-extern const byte DBL_SCAN[8][2][2];
 
 int **fw_refFrArr, ** bw_refFrArr;
+
+// For MB level frame/field coding
 
 int ***dfMV;  // [92][72][2]
 int ***dbMV;  // [92][72][2]
 
+int ***dfMV_top;  // [92][72][2]
+int ***dbMV_top;  // [92][72][2]
+
+int ***dfMV_bot;  // [92][72][2]
+int ***dbMV_bot;  // [92][72][2]
 #endif
 

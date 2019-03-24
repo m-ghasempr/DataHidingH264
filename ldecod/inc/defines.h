@@ -74,7 +74,6 @@
 #define _EXP_GOLOMB
 
 
-
 #define _ERROR_CONCEALMENT_   1   //!< 0: off; 1: on
 #define _ADAPT_LAST_GROUP_
 
@@ -82,7 +81,7 @@
 #define MAX_CODED_FRAME_SIZE 400000         //!< bytes for one frame
 #define MAXIMUM_UVLC_CODEWORD_PER_HEADER 20 //!< UVLC codewords per combined picture/slice header maximum
 #if defined _DEBUG
-#define TRACE           1                   //!< 0:Trace off 1:Trace on
+#define TRACE           0                   //!< 0:Trace off 1:Trace on
 #else
 #define TRACE           0                   //!< 0:Trace off 1:Trace on
 #endif
@@ -128,7 +127,7 @@
 #ifndef _OLDSTYLEQP_
 
 #define MIN_QP          0
-#define MAX_QP          52
+#define MAX_QP          51
 #define SHIFT_QP        12
 
 
@@ -147,6 +146,7 @@
 // B pictures
 #define B_IMG_1     3
 #define B_IMG_MULT  4
+#define COMPLETE      
 
 // SP Pictures
 #define SP_IMG_1    5
@@ -159,15 +159,15 @@
 
 #define NO_INTRA_PMODE  9        //!< #intra prediction modes
 /* 4x4 intra prediction modes */
-#define DC_PRED         0
-#define VERT_PRED       1
-#define HOR_PRED        2
-#define DIAG_PRED_SE    3
-#define DIAG_PRED_NE    4
-#define DIAG_PRED_SSE   5
-#define DIAG_PRED_NNE   6
-#define DIAG_PRED_ENE   7
-#define DIAG_PRED_ESE   8
+#define DC_PRED               0
+#define VERT_PRED             1
+#define HOR_PRED              2
+#define DIAG_DOWN_RIGHT_PRED  3
+#define DIAG_DOWN_LEFT_PRED   4
+#define VERT_RIGHT_PRED       5
+#define VERT_LEFT_PRED        6
+#define HOR_UP_PRED           7
+#define HOR_DOWN_PRED         8
 
 // 16x16 intra prediction modes
 #define VERT_PRED_16    0

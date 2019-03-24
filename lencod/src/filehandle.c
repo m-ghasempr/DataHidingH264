@@ -233,7 +233,6 @@ int start_slice()
   Bitstream *currStream;
   int header_len;
   int i;
-	static int count = 0;
 
   currSlice->num_mb = 0;  // no coded MBs so far
 
@@ -425,7 +424,6 @@ int terminate_slice(int write_out)
   EncodingEnvironmentPtr eep;
   int i;
   int LastPartition;
-  int cabac_byte_pos=0, uvlc_byte_pos=0, empty_bytes=0;
   int rtp_bytes_written;
   int temp_byte_pos;
 
@@ -535,7 +533,7 @@ int terminate_slice(int write_out)
             *(stat->em_prev_bits) += (currStream->byte_pos - temp_byte_pos) * 8;
           }
         } 
-		    else
+        else
         {
           bytes_written = currStream->byte_pos;
           stat->bit_ctr += 8*bytes_written;     // actually written bits
@@ -547,7 +545,7 @@ int terminate_slice(int write_out)
         if(write_out)
           currStream->stored_byte_pos   = 0; // reset byte position
         else
-          currStream->stored_byte_pos   = currStream->byte_pos;		// reset byte position
+          currStream->stored_byte_pos   = currStream->byte_pos;   // reset byte position
 
       }
       else
@@ -574,7 +572,7 @@ int terminate_slice(int write_out)
             currStream->byte_buf <<= currStream->bits_to_go;
             stat->bit_use_header[img->type]+=currStream->bits_to_go;
             
-            currStream->streamBuffer[bytes_written]= currStream->byte_buf;	// Yue
+            currStream->streamBuffer[bytes_written]= currStream->byte_buf;  // Yue
             bytes_written++;
             currStream->bits_to_go = 8;
           }

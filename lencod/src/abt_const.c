@@ -187,7 +187,7 @@ const int ABT_R[4][QUANT_PERIOD][3] = // De-Quantization
 
 const int ABT_QMAP[4][2][2] =
 {
-  { {0,0},{0,0} },  // 8x8	//for getting last index for use in ABT_Q[mode][QP%6][X]
+  { {0,0},{0,0} },  // 8x8  //for getting last index for use in ABT_Q[mode][QP%6][X]
   { {0,0},{1,1} },  // 8x4
   { {0,1},{0,1} },  // 4x8
   { {0,2},{2,1} },  // 4x4
@@ -203,13 +203,13 @@ const int ABT_N[4][2] =
 
 const int ABT_SHIFT0[4][2][2] =
 {
-  {{7,7},{7,7}},	//bit shifts for forward tansform [mode][y&1][x&1] (applied after second mulmat)
+  {{7,7},{7,7}},  //bit shifts for forward tansform [mode][y&1][x&1] (applied after second mulmat)
   {{2,2},{4,4}},
   {{2,4},{2,4}},
   {{0,0},{0,0}}
 };
 
-const int ABT_SHIFT1[4] = { 7,2,2,0 };	//bit shifts for inverse tansform [mode] (applied after first mulmat)
+const int ABT_SHIFT1[4] = { 7,2,2,0 };  //bit shifts for inverse tansform [mode] (applied after first mulmat)
 
 
 const int ABT_SCAN[2][4][64][2] = // [progr/intl][abt_mode][scan_pos][x/y] ATTENTION: the ScanPositions are (pix,lin)!

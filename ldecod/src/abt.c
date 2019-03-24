@@ -1004,21 +1004,21 @@ int intrapred_ABT(struct img_par *img,int img_x,int img_y,int bs_x,int bs_y)
           img->mpr[x+x_off][y+y_off]=EP[-1-y];
       break;
 
-    case DIAG_PRED_SE:// 3 down-right
+    case DIAG_DOWN_RIGHT_PRED:// 3 down-right
       if(!block_available_left||!block_available_up)printf("!!invalid intrapred mode %d!!\n",predmode);
       for(y=0UL;y<bs_y;y++)
         for(x=0UL;x<bs_x;x++)
           img->mpr[x+x_off][y+y_off]=EP[(int)x-(int)y];
       break;
 
-    case DIAG_PRED_NE:// 4 up-right bidirectional
+    case DIAG_DOWN_LEFT_PRED:// 4 up-right bidirectional
       if(!block_available_left||!block_available_up)printf("!!invalid intrapred mode %d!!\n",predmode);
       for(y=0UL;y<bs_y;y++)
         for(x=0UL;x<bs_x;x++)
           img->mpr[x+x_off][y+y_off]=(EP[2+x+y]+EP[-2-(int)(x+y)])>>1;
       break;
 
-    case DIAG_PRED_SSE:// 5 down-right-down
+    case VERT_RIGHT_PRED:// 5 down-right-down
       if(!block_available_left||!block_available_up)printf("!!invalid intrapred mode %d!!\n",predmode);
       for(y=0UL;y<bs_y;y+=2)//even lines
         for(x=0UL;x<bs_x;x++)
@@ -1034,7 +1034,7 @@ int intrapred_ABT(struct img_par *img,int img_x,int img_y,int bs_x,int bs_y)
             img->mpr[x+x_off][y+y_off]=EP[1+2*(int)x-(int)y];
       break;
 
-    case DIAG_PRED_NNE:// 6 down-left-down
+    case VERT_LEFT_PRED:// 6 down-left-down
       if(!block_available_up)printf("!!invalid intrapred mode %d!!\n",predmode);
       for(y=0UL;y<bs_y;y+=2)//even lines
         for(x=0UL;x<bs_x;x++)
@@ -1044,7 +1044,7 @@ int intrapred_ABT(struct img_par *img,int img_x,int img_y,int bs_x,int bs_y)
           img->mpr[x+x_off][y+y_off]=EP[2+x+(y>>1)];
       break;
 
-    case DIAG_PRED_ENE:// 7 right-up-right
+    case HOR_UP_PRED:// 7 right-up-right
       if(!block_available_left)printf("!!invalid intrapred mode %d!!\n",predmode);
       for(y=0UL;y<bs_y;y++)//even columns
         for(x=0UL;x<bs_x;x+=2)
@@ -1054,7 +1054,7 @@ int intrapred_ABT(struct img_par *img,int img_x,int img_y,int bs_x,int bs_y)
           img->mpr[x+x_off][y+y_off]=EP[-2-(int)(y+(x>>1))];
       break;
 
-    case DIAG_PRED_ESE:// 8 right-down-right
+    case HOR_DOWN_PRED:// 8 right-down-right
       if(!block_available_left||!block_available_up)printf("!!invalid intrapred mode %d!!\n",predmode);
       for(y=0UL;y<bs_y;y++)//even columns
         for(x=0UL;x<bs_x;x+=2)

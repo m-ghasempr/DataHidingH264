@@ -98,12 +98,12 @@ void init_frame_buffers(InputParameters *inp, ImageParameters *img)
   {
     bufsize *=2;
     if ((fld=(FrameBuffer*)calloc(1,sizeof (FrameBuffer)))==NULL) no_mem_exit("init_field_buffers: fld");
-
+    
     if ((fld->picbuf_short=(Frame**)calloc(bufsize,sizeof (Frame*)))==NULL) no_mem_exit("init_field_buffers: fld->picbuf_short");
-
+    
     for (i=0;i<bufsize;i++)
       if ((fld->picbuf_short[i]=(Frame*)calloc(1,sizeof (Frame)))==NULL) no_mem_exit("init_field_buffers: fld->picbuf_short");
-
+      
     for (i=0;i<bufsize;i++)
     {
       get_mem2D(&(fld->picbuf_short[i]->mref), (img->height/2+2*IMG_PAD_SIZE)*4, (img->width+2*IMG_PAD_SIZE)*4);
@@ -111,13 +111,20 @@ void init_frame_buffers(InputParameters *inp, ImageParameters *img)
       if (NULL == (fld->picbuf_short[i]->Refbuf11 = malloc ((img->width * img->height / 2) * sizeof (pel_t))))
         no_mem_exit ("init_field_buffers: Refbuf11");
     }
-
-//  bufsize=img->buf_cycle+1;
-
+    
     fld->short_size=bufsize;
     fld->short_used=0;
     fld->long_size=0;
     fld->long_used=0;
+    
+    if(input->InterlaceCodingOption >= MB_CODING)
+    {
+      if ((mref_mbfld = (byte***)calloc(fld->short_size+fld->long_size,sizeof(byte**))) == NULL)
+        no_mem_exit("alloc_mref: mref_mbfld");
+      for(i=0;i<bufsize;i++)
+        get_mem2D(&mref_mbfld[i], (img->height/2+2*IMG_PAD_SIZE)*4, (img->width+2*IMG_PAD_SIZE)*4);
+    }
+    //  bufsize=img->buf_cycle+1;
   }
 }
 
@@ -505,7 +512,7 @@ void init_mref(ImageParameters *img)
     mref[j]=NULL;
     mcef[j]=NULL;
   }
-
+  
 }
 
 /*!
@@ -770,3 +777,58 @@ void add_frame(ImageParameters *img)
   }
 }
 
+void copy_mref()
+{
+  int i,j,k;
+
+  // For MB level field/frame coding -- 
+  // temporary solution till we remove mref==mref_fld from pic level 
+  // then we can use mref as the reference field buffer                                     
+  if(input->InterlaceCodingOption >= MB_CODING)
+  {
+    for (i=0;i<fld->short_used;i++)
+      for (j=0;j<4*(input->img_height/2 + 2*IMG_PAD_SIZE);j++)
+        for(k=0;k<4*(img->width + 2*IMG_PAD_SIZE);k++)
+          mref_mbfld[i][j][k] = fld->picbuf_short[i]->mref[j][k];
+
+    // still need to do this regardless of mref==mref_fld is used or not
+    if(mref != mref_fld)
+    {
+      for (i=0,j=0;i<fld->short_used;i++)
+      {
+        mref_fld[j]=fld->picbuf_short[i]->mref;
+        mcef_fld[j]=fld->picbuf_short[i]->mcef;
+        j++;
+      }
+      for (i=0;i<fld->long_used;i++)
+      {
+        mref_fld[j]=fld->picbuf_long[i]->mref;
+        mcef_fld[j]=fld->picbuf_long[i]->mcef;
+        j++;
+      }
+      
+      // set all other mref pointers to NULL !KS!
+      for (;j<fld->long_size+fld->short_size;j++)
+      {
+        mref_fld[j]=NULL;
+        mcef_fld[j]=NULL;
+      }
+      
+      // need to do this, because MB level frame/field overwrites the current Refbuf11 
+      for (i=0,j=0;i<fld->short_used;i++)
+      {
+        Refbuf11_fld[j]=fld->picbuf_short[i]->Refbuf11;
+        j++;
+      }
+      for (i=0;i<fld->long_size;i++)
+      {
+        Refbuf11_fld[j]=fld->picbuf_long[i]->Refbuf11;
+        j++;
+      }
+      for (;j<fld->long_size+fld->short_size;j++)
+      {
+        Refbuf11_fld[j]=NULL;
+      }
+    }
+  }
+}

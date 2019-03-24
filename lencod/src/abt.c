@@ -65,14 +65,7 @@
 #include "elements.h"
 #include "rdopt_coding_state.h"
 
-//The not-really-a-header file 'macroblock.h' cannot be included due to code-generating lines in it.
-//Therefore, PRED_IPRED is declared here.
-#ifndef USE_6_INTRA_MODES
-extern const byte PRED_IPRED[10][10][9];
-#else
-extern const byte PRED_IPRED[7][7][6];
-#endif
-
+extern const byte mapTab[9];
 
 /*!
  ************************************************************************
@@ -1062,7 +1055,7 @@ int writeLumaCoeffABT_B8(int b8,int intra,int blk_off_x,int blk_off_y)
         currSE->value1=icoef;
         currSE->value2=0;
         // choose the appropriate data partition
-        if (img->type != B_IMG)
+        if (img->type != B_IMG && img->type != BS_IMG)
           dataPart = &(currSlice->partArr[partMap[currSE->type]]);
         else
           dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
@@ -1129,7 +1122,7 @@ int writeLumaCoeffABT_B8(int b8,int intra,int blk_off_x,int blk_off_y)
           currSE->golomb_grad=mode2D;
           currSE->golomb_maxlevels=6-mode2D;        //make code with little less than 64 symbols.
           // choose the appropriate data partition
-          if (img->type != B_IMG)
+          if (img->type != B_IMG && img->type != BS_IMG)
             dataPart = &(currSlice->partArr[partMap[currSE->type]]);
           else
             dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
@@ -1154,7 +1147,7 @@ int writeLumaCoeffABT_B8(int b8,int intra,int blk_off_x,int blk_off_y)
             currSE->value1=(abs_level-1)<<1;
             if(level<0)currSE->value1|=1;           //sign bit
             // choose the appropriate data partition
-            if (img->type != B_IMG)
+            if (img->type != B_IMG && img->type != BS_IMG)
               dataPart = &(currSlice->partArr[partMap[currSE->type]]);
             else
               dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
@@ -1173,7 +1166,7 @@ int writeLumaCoeffABT_B8(int b8,int intra,int blk_off_x,int blk_off_y)
             currSE->golomb_grad=2;
             currSE->golomb_maxlevels=29;
             // choose the appropriate data partition
-            if (img->type != B_IMG)
+            if (img->type != B_IMG && img->type != BS_IMG)
               dataPart = &(currSlice->partArr[partMap[currSE->type]]);
             else
             dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
@@ -1197,7 +1190,7 @@ int writeLumaCoeffABT_B8(int b8,int intra,int blk_off_x,int blk_off_y)
           img->is_intra_block = (intra ? 1 : 0);
 
           // choose the appropriate data partition
-          if (img->type != B_IMG)
+          if (img->type != B_IMG && img->type != BS_IMG)
             dataPart = &(currSlice->partArr[partMap[currSE->type]]);
           else
             dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
@@ -1238,7 +1231,7 @@ void setDirectModeABT(int block8x8)
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
   int pstruct        = img->pstruct; // distinguish frame/top/bottom array. 020603 mwi
 
-  assert(pstruct<3); // needs revision for other pstruct values. 020603 mwi
+  assert(pstruct<4); // needs revision for other pstruct values. 020603 mwi
 
   if      (currMB->mb_type==I16MB)
   {
@@ -1276,7 +1269,7 @@ int getDirectModeABT(int block8x8)
   static const int  abt_mode_table[MAXMODE] = {-2, 0, 0, 0, 0, 1, 2, 3, -2, 3, 0, 3, -1};  // DO NOT CHANGE ORDER !!!   // b8mode->abt_mode
   int pstruct        = img->pstruct; // distinguish frame/top/bottom array. 020603 mwi
 
-  assert(pstruct<3); // needs revision for other values. 020603 mwi
+  assert(pstruct<4); // needs revision for other values. 020603 mwi
 
   dirmode = abt_mode_table[colB8mode[pstruct][blk_y][blk_x]];
 
@@ -1550,13 +1543,13 @@ void intrapred_luma_ABT(int img_x,int img_y,int bs_x,int bs_y)
     if(block_available_left&&block_available_up)
       for(y=0UL;y<bs_y;y++)
         for(x=0UL;x<bs_x;x++)
-          img->mprr[DIAG_PRED_SE][y][x]=EP[x-y];
+          img->mprr[DIAG_DOWN_RIGHT_PRED][y][x]=EP[x-y];
 
     // 4 up-right bidirectional
     if(block_available_left&&block_available_up)
       for(y=0UL;y<bs_y;y++)
         for(x=0UL;x<bs_x;x++)
-          img->mprr[DIAG_PRED_NE][y][x]=(EP[2+x+y]+EP[-2-(x+y)])>>1;
+          img->mprr[DIAG_DOWN_LEFT_PRED][y][x]=(EP[2+x+y]+EP[-2-(x+y)])>>1;
 
     // 5 down-right-down
     if(block_available_left&&block_available_up)
@@ -1564,15 +1557,15 @@ void intrapred_luma_ABT(int img_x,int img_y,int bs_x,int bs_y)
       for(y=0UL;y<bs_y;y+=2)//even lines
         for(x=0UL;x<bs_x;x++)
           if( (i=x-(int)(y>>1)) >= 0 )
-            img->mprr[DIAG_PRED_SSE][y][x]=(EP[i]+EP[1+i])>>1;
+            img->mprr[VERT_RIGHT_PRED][y][x]=(EP[i]+EP[1+i])>>1;
           else
-            img->mprr[DIAG_PRED_SSE][y][x]=EP[1+2*(int)x-(int)y];
+            img->mprr[VERT_RIGHT_PRED][y][x]=EP[1+2*(int)x-(int)y];
       for(y=1UL;y<bs_y;y+=2)//odd lines
         for(x=0UL;x<bs_x;x++)
           if( (i=x-(int)(y>>1)) >= 0 )
-            img->mprr[DIAG_PRED_SSE][y][x]=EP[i];
+            img->mprr[VERT_RIGHT_PRED][y][x]=EP[i];
           else
-            img->mprr[DIAG_PRED_SSE][y][x]=EP[1+2*(int)x-(int)y];
+            img->mprr[VERT_RIGHT_PRED][y][x]=EP[1+2*(int)x-(int)y];
     }
 
     // 6 down-left-down
@@ -1580,10 +1573,10 @@ void intrapred_luma_ABT(int img_x,int img_y,int bs_x,int bs_y)
     {
       for(y=0UL;y<bs_y;y+=2)//even lines
         for(x=0UL;x<bs_x;x++)
-          img->mprr[DIAG_PRED_NNE][y][x]=(EP[1+x+(y>>1)]+EP[2+x+(y>>1)])>>1;
+          img->mprr[VERT_LEFT_PRED][y][x]=(EP[1+x+(y>>1)]+EP[2+x+(y>>1)])>>1;
       for(y=1UL;y<bs_y;y+=2)//odd lines
         for(x=0UL;x<bs_x;x++)
-          img->mprr[DIAG_PRED_NNE][y][x]=EP[2+x+(y>>1)];
+          img->mprr[VERT_LEFT_PRED][y][x]=EP[2+x+(y>>1)];
     }
 
     // 7 right-up-right
@@ -1591,10 +1584,10 @@ void intrapred_luma_ABT(int img_x,int img_y,int bs_x,int bs_y)
     {
       for(y=0UL;y<bs_y;y++)//even columns
         for(x=0UL;x<bs_x;x+=2)
-          img->mprr[DIAG_PRED_ENE][y][x]=(EP[-1-(int)(y+(x>>1))]+EP[-2-(int)(y+(x>>1))])>>1;
+          img->mprr[HOR_UP_PRED][y][x]=(EP[-1-(int)(y+(x>>1))]+EP[-2-(int)(y+(x>>1))])>>1;
       for(y=0UL;y<bs_y;y++)//odd columns
         for(x=1UL;x<bs_x;x+=2)
-          img->mprr[DIAG_PRED_ENE][y][x]=EP[-2-(int)(y+(x>>1))];
+          img->mprr[HOR_UP_PRED][y][x]=EP[-2-(int)(y+(x>>1))];
     }
 
     // 8 right-down-right
@@ -1603,15 +1596,15 @@ void intrapred_luma_ABT(int img_x,int img_y,int bs_x,int bs_y)
       for(y=0UL;y<bs_y;y++)//even columns
         for(x=0UL;x<bs_x;x+=2)
           if( (i=-(int)y+(x>>1)) <= 0 )
-            img->mprr[DIAG_PRED_ESE][y][x]=(EP[i]+EP[i-1])>>1;
+            img->mprr[HOR_DOWN_PRED][y][x]=(EP[i]+EP[i-1])>>1;
           else
-            img->mprr[DIAG_PRED_ESE][y][x]=EP[-1-2*(int)y+(int)x];
+            img->mprr[HOR_DOWN_PRED][y][x]=EP[-1-2*(int)y+(int)x];
       for(y=0UL;y<bs_y;y++)//odd columns
         for(x=1UL;x<bs_x;x+=2)
           if( (i=-(int)y+(x>>1)) <= 0 )
-            img->mprr[DIAG_PRED_ESE][y][x]=EP[i];
+            img->mprr[HOR_DOWN_PRED][y][x]=EP[i];
           else
-            img->mprr[DIAG_PRED_ESE][y][x]=EP[-1-2*(int)y+(int)x];
+            img->mprr[HOR_DOWN_PRED][y][x]=EP[-1-2*(int)y+(int)x];
     }
 
 #undef EP
@@ -1644,6 +1637,9 @@ int Mode_Decision_for_ABT_IntraBlocks(int b8,int b4,double lambda,int *min_cost,
   int tmp_block_88[8][8];
   Macroblock *currMB;
   double min_rdcost ;
+  int     upMode;
+  int     leftMode;
+  int     mostProbableMode;
 
   currMB=img->mb_data+img->current_mb_nr;
 
@@ -1658,6 +1654,10 @@ int Mode_Decision_for_ABT_IntraBlocks(int b8,int b4,double lambda,int *min_cost,
   currMB->abt_mode[b8]=ABTmode;
 
   *min_cost = (1<<20);
+
+  upMode           = img->ipredmode[pic_block_x+1][pic_block_y  ];
+  leftMode         = img->ipredmode[pic_block_x  ][pic_block_y+1];
+  mostProbableMode = (upMode < 0 || leftMode < 0) ? DC_PRED : mapTab[upMode] < mapTab[leftMode] ? upMode : leftMode;
 
 
   //===== INTRA PREDICTION FOR 4x4 BLOCK =====
@@ -1674,8 +1674,7 @@ int Mode_Decision_for_ABT_IntraBlocks(int b8,int b4,double lambda,int *min_cost,
         for (j=0;j<bs_y;j++)
           for (i=0;i<bs_x;i++)
             diff[j][i] = imgY_org[pic_pix_y+j][pic_pix_x+i] - img->mprr[ipmode][j][i]; // bug fix: index of diff was flipped. mwi 020701
-        cost  = (int)floor(2 * lambda * PRED_IPRED[img->ipredmode[pic_block_x+1][pic_block_y  ]+1]
-                                                  [img->ipredmode[pic_block_x  ][pic_block_y+1]+1][ipmode] +0.4999);
+        cost  = (ipmode == mostProbableMode) ? 0 : (int)floor(4 * lambda );
 
         cost+=find_sad_abt(input->hadamard,bs_x,bs_y,0,0,diff);
 
@@ -1697,7 +1696,7 @@ int Mode_Decision_for_ABT_IntraBlocks(int b8,int b4,double lambda,int *min_cost,
         store_coding_state (cs_cm);
 
         // get and check rate-distortion cost
-        if ((rdcost = RDCost_for_ABTIntraBlocks(&c_nz,b8,b4,ipmode,lambda,min_rdcost,bs_x,bs_y)) < min_rdcost)
+        if ((rdcost = RDCost_for_ABTIntraBlocks(&c_nz,b8,b4,ipmode,lambda,min_rdcost,bs_x,bs_y, mostProbableMode)) < min_rdcost)
         {
           //--- set coefficients ---
           for(j=0;j<2;j++)
@@ -1731,9 +1730,9 @@ int Mode_Decision_for_ABT_IntraBlocks(int b8,int b4,double lambda,int *min_cost,
       img->ipredmode[pic_block_x+i+1][pic_block_y+j+1] = best_ipmode;
       currMB->intra_pred_modes[(b8<<2)+b4+(j<<1)+i]=0;
     }
-  currMB->intra_pred_modes[(b8<<2)+b4]=PRED_IPRED[img->ipredmode[pic_block_x+1][pic_block_y  ]+1]
-                                                 [img->ipredmode[pic_block_x  ][pic_block_y+1]+1]
-                                                 [best_ipmode];
+
+  currMB->intra_pred_modes[(b8<<2)+b4] = mostProbableMode == best_ipmode ? -1 : mapTab[best_ipmode] < mapTab[mostProbableMode] ? mapTab[best_ipmode] : mapTab[best_ipmode]-1;
+
   // get prediction and prediction error
   tmp_x=(b4&1)<<2;tmp_y=(b4&2)<<1;
   for (j=0;j<bs_y; j++)
@@ -1761,7 +1760,13 @@ int Mode_Decision_for_ABT_IntraBlocks(int b8,int b4,double lambda,int *min_cost,
  *    Get RD cost for ABT intra block
  ************************************************************************
 */
-double RDCost_for_ABTIntraBlocks(int *nonzero,int b8,int b4,int ipmode,double lambda,double  min_rdcost,int bs_x,int bs_y)
+double RDCost_for_ABTIntraBlocks(int *nonzero,
+                                 int b8,int b4,
+                                 int ipmode,
+                                 double lambda,
+                                 double  min_rdcost,
+                                 int bs_x,int bs_y,
+                                 int mostProbableMode)
 {
  int x,y,rate,ABTmode,tmp_cbp,tmp_cbp_blk;
  int tmp_x,tmp_y;
@@ -1811,37 +1816,23 @@ double RDCost_for_ABTIntraBlocks(int *nonzero,int b8,int b4,int ipmode,double la
     for (x=pic_pix_x; x<pic_pix_x+bs_x; x++)
       distortion += img->quad [imgY_org[y][x] - imgY[y][x]];
 
-
   //===== RATE for INTRA PREDICTION MODE  (SYMBOL MODE MUST BE SET TO UVLC) =====
-  if (even_block)
-  {
-    // EVEN BLOCK: the values the of syntax element can be set correctly
-    currSE->value1 = PRED_IPRED[img->ipredmode[pic_block_x  ][pic_block_y  ]+1]
-                               [img->ipredmode[pic_block_x-1][pic_block_y+1]+1]
-                               [img->ipredmode[pic_block_x  ][pic_block_y+1]];
-    currSE->value2 = PRED_IPRED[img->ipredmode[pic_block_x+1][pic_block_y  ]+1]
-                               [img->ipredmode[pic_block_x  ][pic_block_y+1]+1][ipmode];
-  }else{
-    // ODD BLOCK:  the second value of the syntax element cannot be set, since
-    //             it will be known only after the next step. For estimating
-    //             the rate the corresponding prediction mode is set to zero
-    //             (minimum rate).
-    currSE->value1 = PRED_IPRED[img->ipredmode[pic_block_x+1][pic_block_y  ]+1]
-                               [img->ipredmode[pic_block_x  ][pic_block_y+1]+1][ipmode];
-    currSE->value2 = 0; // value with maximum probability
-  }
+  currSE->value1 = (mostProbableMode == ipmode) ? -1 : ipmode < mostProbableMode ? ipmode : ipmode-1;
 
   //--- set position and type ---
-  currSE->context = 4*b8 + 2*(b4/2);
+  currSE->context = 4*b8 + b4;
   currSE->type    = SE_INTRAPREDMODE;
+
   //--- set function pointer ----
-  if (input->symbol_mode == UVLC)    currSE->mapping = intrapred_linfo;
-  else                               currSE->writing = writeIntraPredMode2Buffer_CABAC;
+  if (input->symbol_mode != UVLC)    currSE->writing = writeIntraPredMode2Buffer_CABAC;
+
   //--- choose data partition ---
-  if (img->type!=B_IMG)   dataPart = &(currSlice->partArr[partMap[SE_INTRAPREDMODE]]);
+  if (img->type != B_IMG && img->type != BS_IMG)   dataPart = &(currSlice->partArr[partMap[SE_INTRAPREDMODE]]);
   else                    dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+
   //--- encode and update rate ---
-  dataPart->writeSyntaxElement (currSE, dataPart);
+  if (input->symbol_mode == UVLC)    writeSyntaxElement_Intra4x4PredictionMode(currSE, dataPart);
+  else                               dataPart->writeSyntaxElement (currSE, dataPart);
   rate = currSE->len;
   currSE++;
   currMB->currSEnr++;

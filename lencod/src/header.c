@@ -141,7 +141,8 @@ int SliceHeader()
     SYMTRACESTRING("SH SizeUnchanged");
     len += writeSyntaxElement_UVLC (sym, partition);
   }
-
+  
+  // AMT - This should follow SH FirstMBInSlice
   select_picture_type (sym);
   SYMTRACESTRING("SH Picture Type Symbol");
   len+= writeSyntaxElement_UVLC (sym, partition);
@@ -165,6 +166,36 @@ int SliceHeader()
     len += writeSyntaxElement_UVLC (sym, partition);
   }
 
+  // NOTE: following syntax elements have to be moved into nal_unit() and changed from e(v) to u(1)
+  if(1)
+  {
+    sym->value1 = img->disposable_flag;
+    SYMTRACESTRING("NAL disposable_flag");
+    len += writeSyntaxElement_UVLC (sym, partition);
+  }
+  
+  // NOTE: following syntax elements have to be moved into picture_layer_rbsp()
+  // explicit_B_prediction_block_weight_indication
+  if(img->type==B_IMG || img->type==BS_IMG)
+  {
+    sym->value1 = (input->BipredictiveWeighting > 0)? (input->BipredictiveWeighting-1) : 0;
+    SYMTRACESTRING("PH weighted_bipred_implicit_flag");
+    len += writeSyntaxElement_UVLC (sym, partition);
+  }
+
+  if (img->type==INTER_IMG || img->type==B_IMG || img->type==BS_IMG)
+  {
+    sym->value1 = img->num_ref_pic_active_fwd_minus1;
+    SYMTRACESTRING("num_ref_pic_active_fwd_minus1");
+    len += writeSyntaxElement_UVLC (sym, partition);
+    if (img->type==B_IMG || img->type==BS_IMG)
+    {
+      sym->value1 = img->num_ref_pic_active_bwd_minus1;
+      SYMTRACESTRING("num_ref_pic_active_bwd_minus1");
+      len += writeSyntaxElement_UVLC (sym, partition);
+    }
+  }
+
   // For the GOB address, use straigtforward procedure.  Note that this allows slices 
   // to start at MB addresses up to 2^15 MBs due ot start code emulation problems.  
   // This should be enough for most practical applications,. but probably not for cinema. 
@@ -177,6 +208,16 @@ int SliceHeader()
   sym->value1 = MBPosition;
   len += writeSyntaxElement_UVLC (sym, partition);
 
+  // AMT - Direct Mode Type selection for B pictures
+  if (img->type==B_IMG || img->type==BS_IMG)
+  {
+    SYMTRACESTRING("SH DirectSpatialFlag");
+    sym->bitpattern = input->direct_type;  // 1 for Spatial Direct, 0 for temporal Direct
+    sym->len = 1;
+    len += writeSyntaxElement_fixed(sym, partition);
+  }
+
+
 #ifdef _ABT_FLAG_IN_SLICE_HEADER_
   // Indicate ABT mode to be applied.
   // 0 == ABT off
@@ -186,6 +227,7 @@ int SliceHeader()
   sym->value1 = input->abt;
   len += writeSyntaxElement_UVLC (sym, partition);
 #endif
+
 
   // Put Quant.  It's a bit irrationale that we still put the same quant here, but it's
   // a good provision for the future.  In real-world applications slices typically
@@ -209,16 +251,16 @@ int SliceHeader()
   sym->mapping = dquant_linfo;  
   sym->value1 = Quant - (MAX_QP - MIN_QP +1)/2;
   len += writeSyntaxElement_UVLC (sym, partition);
-  if (img->types==SP_IMG)  // lack of SI frame
+  if (img->types==SP_IMG )  
   {
-	if (img->types==SP_IMG)
-	{
-	  SYMTRACESTRING("SH SWITCH FLAG");
-	  sym->bitpattern = 0;  // 1 for switching SP, 0 for normal SP
-	  sym->len = 1;
-	  len += writeSyntaxElement_fixed(sym, partition);
-	}
-
+    if (img->types==SP_IMG && img->type!=INTRA_IMG) // Switch Flag only for SP pictures
+    {
+      SYMTRACESTRING("SH SWITCH FLAG");
+      sym->bitpattern = 0;  // 1 for switching SP, 0 for normal SP
+      sym->len = 1;
+      len += writeSyntaxElement_fixed(sym, partition);
+    }
+    
     SYMTRACESTRING("SH SP SliceQuant");
     sym->value1 = img->qpsp - (MAX_QP - MIN_QP +1)/2;
     len += writeSyntaxElement_UVLC (sym, partition);
@@ -228,9 +270,9 @@ int SliceHeader()
   SYMTRACESTRING("SH MVResolution");
   sym->value1 = input->mv_res;
   len += writeSyntaxElement_UVLC (sym, partition);
-
+  
   len+=writeERPS(sym, partition);
-
+  
   free(sym);
 
   return len;
@@ -562,6 +604,12 @@ void select_picture_type(SyntaxElement *symbol)
     symbol->value1 = 3;
   }
   else if((img->type == B_IMG) && (multpred == TRUE))
+  {
+    symbol->len=5;
+    symbol->inf=1;
+    symbol->value1 = 4;
+  }
+  else if((img->type == BS_IMG) && (multpred == TRUE))
   {
     symbol->len=5;
     symbol->inf=1;

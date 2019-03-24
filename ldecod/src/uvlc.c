@@ -312,11 +312,11 @@ int readSliceUVLC(struct img_par *img, struct inp_par *inp)
     img->tr_old = img->tr;
     
     // PLUS2, 7/7 temp fix for AFF
-    if(img->structure != img->structure_old)		
+    if(img->structure != img->structure_old)        
       newframe |= 1;
 /*    else
       newframe = 0;  */
-	  img->structure_old = img->structure; 
+      img->structure_old = img->structure; 
 
   // if the TR of current slice is not identical to the TR  of previous received slice, we have a new frame
     if(newframe)
@@ -364,6 +364,84 @@ int readSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct inp_p
 /*!
  ************************************************************************
  * \brief
+ *    read next VLC codeword for 4x4 Intra Prediction Mode and
+ *    map it to the corresponding Intra Prediction Direction
+ ************************************************************************
+ */
+int readSyntaxElement_Intra4x4PredictionMode(SyntaxElement *sym, struct img_par *img, struct inp_par *inp, struct datapartition *dP)
+{
+  Bitstream   *currStream            = dP->bitstream;
+  int         frame_bitoffset        = currStream->frame_bitoffset;
+  byte        *buf                   = currStream->streamBuffer;
+  int         BitstreamLengthInBytes = currStream->bitstream_length;
+
+  sym->len = GetVLCSymbol_IntraMode (buf, frame_bitoffset, &(sym->inf), BitstreamLengthInBytes);
+
+  if (sym->len == -1)
+    return -1;
+
+  currStream->frame_bitoffset += sym->len;
+  sym->value1                  = sym->len == 1 ? -1 : sym->inf;
+
+#if TRACE
+  tracebits(sym->tracestring, sym->len, sym->inf, sym->value1, sym->value2);
+#endif
+
+  return 1;
+}
+
+int GetVLCSymbol_IntraMode (byte buffer[],int totbitoffset,int *info, int bytecount)
+{
+
+  register int inf;
+  long byteoffset;      // byte from start of buffer
+  int bitoffset;      // bit from start of byte
+  int ctr_bit=0;      // control bit for current bit posision
+  int bitcounter=1;
+  int len;
+  int info_bit;
+
+  byteoffset = totbitoffset/8;
+  bitoffset  = 7-(totbitoffset%8);
+  ctr_bit    = (buffer[byteoffset] & (0x01<<bitoffset));   // set up control bit
+  len        = 1;
+
+  //First bit
+  if (ctr_bit)
+  {
+    *info = 0;
+    return bitcounter;
+  }
+  else
+    len=4;
+
+  // make infoword
+  inf=0;                          // shortest possible code is 1, then info is always 0
+  for(info_bit=0;(info_bit<(len-1)); info_bit++)
+  {
+    bitcounter++;
+    bitoffset-=1;
+    if (bitoffset<0)
+    {                 // finished with current byte ?
+      bitoffset=bitoffset+8;
+      byteoffset++;
+    }
+    if (byteoffset > bytecount)
+    {
+      return -1;
+    }
+    inf=(inf<<1);
+    if(buffer[byteoffset] & (0x01<<(bitoffset)))
+      inf |=1;
+  }
+
+  *info = inf;
+  return bitcounter;           // return absolute offset in bit from start of frame
+}
+
+/*!
+ ************************************************************************
+ * \brief
  *    read a fixed codeword from UVLC-partition and
  *    map it to the corresponding syntax element
  ************************************************************************
@@ -383,11 +461,12 @@ int readSyntaxElement_fixed(SyntaxElement *sym, struct img_par *img, struct inp_
   int info_bit;
 
   byteoffset = totbitoffset/8;
-  bitoffset = 7-(totbitoffset%8);
-
+  bitoffset = 8-(totbitoffset%8);
+  
   inf = 0;
   for (info_bit = 0; info_bit < sym->len; info_bit ++)
   {
+    
     bitcounter ++;
     bitoffset -= 1;
     if (bitoffset < 0)
@@ -602,6 +681,42 @@ int GetVLCSymbol (byte buffer[],int totbitoffset,int *info, int bytecount)
 }
 #endif
 
+int GetfixedSymbol (byte buffer[],int totbitoffset,int *info, int bytecount, int len)
+{
+
+  register int inf;
+  long byteoffset;      // byte from start of buffer
+  int bitoffset;      // bit from start of byte
+  int bitcounter=0;  
+  int info_bit;
+
+  byteoffset = totbitoffset/8;
+  bitoffset = 8-(totbitoffset%8);
+
+
+  // make infoword
+  inf=0;                          // shortest possible code is 1, then info is always 0
+  for(info_bit=0;(info_bit<len); info_bit++)
+  {    
+    bitcounter++;
+    bitoffset-=1;
+    if (bitoffset<0)
+    {                 // finished with current byte ?
+      bitoffset=bitoffset+8;
+      byteoffset++;
+    }
+    if (byteoffset > bytecount)
+    {
+      return -1;
+    }
+    inf=(inf<<1);
+    if(buffer[byteoffset] & (0x01<<(bitoffset)))
+      inf |=1;
+  }
+
+  *info = inf;
+  return bitcounter;           // return absolute offset in bit from start of frame
+}
 
 extern void tracebits2(const char *trace_str,  int len,  int info) ;
 
@@ -926,7 +1041,7 @@ int readSyntaxElement_Level_VLC0(SyntaxElement *sym, struct datapartition *dP)
  *    read Level VLC codeword from UVLC-partition 
  ************************************************************************
  */
-int readSyntaxElement_Level_VLCN(SyntaxElement *sym, int vlc, struct datapartition *dP)	 
+int readSyntaxElement_Level_VLCN(SyntaxElement *sym, int vlc, struct datapartition *dP)  
 {
   
   Bitstream   *currStream = dP->bitstream;
@@ -939,7 +1054,6 @@ int readSyntaxElement_Level_VLCN(SyntaxElement *sym, int vlc, struct datapartiti
   int code, sb;
   
   int numPrefix;
-  int suffix = 0;
   int shift = vlc-1;
   int escape = (15<<shift)+1;
   
@@ -970,7 +1084,7 @@ int readSyntaxElement_Level_VLCN(SyntaxElement *sym, int vlc, struct datapartiti
     code = (code << 1)| sign;
     len ++;
   }
-  else	// escape
+  else  // escape
   {
     // read 11 bits -> levabs
     // levabs += escape
@@ -1191,7 +1305,7 @@ int readSyntaxElement_Run(SyntaxElement *sym,  DataPartition *dP)
 
 
 int GetBits (byte buffer[],int totbitoffset,int *info, int bytecount, 
-				     int numbits)
+             int numbits)
 {
 
   register int inf;
@@ -1206,24 +1320,24 @@ int GetBits (byte buffer[],int totbitoffset,int *info, int bytecount,
   inf=0;
   while (numbits)
   {
-	  inf <<=1;
-	  inf |= (buffer[byteoffset] & (0x01<<bitoffset))>>bitoffset;
-	  numbits--;
-	  bitoffset--;
-	  if (bitoffset < 0)
-	  {
-		  byteoffset++;
-		  bitoffset += 8;
-        if (byteoffset > bytecount)
-        {
-          return -1;
-        }
-	  }
+    inf <<=1;
+    inf |= (buffer[byteoffset] & (0x01<<bitoffset))>>bitoffset;
+    numbits--;
+    bitoffset--;
+    if (bitoffset < 0)
+    {
+      byteoffset++;
+      bitoffset += 8;
+      if (byteoffset > bytecount)
+      {
+        return -1;
+      }
+    }
   }
 
   *info = inf;
   return bitcounter;           // return absolute offset in bit from start of frame
-}	  
+}     
 
 /*!
  ************************************************************************
@@ -1249,31 +1363,65 @@ int ShowBits (byte buffer[],int totbitoffset,int bytecount, int numbits)
   long byteoffset;      // byte from start of buffer
   int bitoffset;      // bit from start of byte
 
-  int bitcounter=numbits;
-
   byteoffset= totbitoffset/8;
   bitoffset= 7-(totbitoffset%8);
 
   inf=0;
   while (numbits)
   {
-	  inf <<=1;
-	  inf |= (buffer[byteoffset] & (0x01<<bitoffset))>>bitoffset;
-	  numbits--;
-	  bitoffset--;
-	  if (bitoffset < 0)
-	  {
-		  byteoffset++;
-		  bitoffset += 8;
-        if (byteoffset > bytecount)
-        {
-          return -1;
-        }
-	  }
+    inf <<=1;
+    inf |= (buffer[byteoffset] & (0x01<<bitoffset))>>bitoffset;
+    numbits--;
+    bitoffset--;
+    if (bitoffset < 0)
+    {
+      byteoffset++;
+      bitoffset += 8;
+      if (byteoffset > bytecount)
+      {
+        return -1;
+      }
+    }
   }
 
   return inf;           // return absolute offset in bit from start of frame
-}	  
+}     
 
 
+/*!
+ ************************************************************************
+ * \brief
+ *    peek at the next 2 UVLC codeword from UVLC-partition to determine
+ *    if a skipped MB is field/frame
+ ************************************************************************
+ */
+int peekSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct inp_par *inp, struct datapartition *dP)
+{
+  Bitstream   *currStream = dP->bitstream;
+  int frame_bitoffset = currStream->frame_bitoffset;
+  byte *buf = currStream->streamBuffer;
+  int BitstreamLengthInBytes = currStream->bitstream_length;
 
+  if( sym->golomb_maxlevels && (sym->type==SE_LUM_DC_INTRA||sym->type==SE_LUM_AC_INTRA||sym->type==SE_LUM_DC_INTER||sym->type==SE_LUM_AC_INTER) )
+    return readSyntaxElement_GOLOMB(sym,img,inp,dP);
+
+  sym->len =  GetVLCSymbol (buf, frame_bitoffset, &(sym->inf), BitstreamLengthInBytes);
+  if (sym->len == -1)
+    return -1;
+  frame_bitoffset += sym->len;
+  sym->mapping(sym->len,sym->inf,&(sym->value1),&(sym->value2));
+
+
+  sym->len =  GetVLCSymbol (buf, frame_bitoffset, &(sym->inf), BitstreamLengthInBytes);
+  if (sym->len == -1)
+    return -1;
+  frame_bitoffset += sym->len;
+  sym->mapping(sym->len,sym->inf,&(sym->value1),&(sym->value2));
+
+
+#if TRACE
+  tracebits(sym->tracestring, sym->len, sym->inf, sym->value1, sym->value2);
+#endif
+
+  return 1;
+}
