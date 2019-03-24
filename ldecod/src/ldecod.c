@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 3.70
+ *     JM 3.90a
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -125,7 +125,7 @@
 #endif
 
 #define JM          "3"
-#define VERSION     "3.90"
+#define VERSION     "3.90a"
 #define LOGFILE     "log.dec"
 #define DATADECFILE "dataDec.txt"
 #define TRACEFILE   "trace_dec.txt"

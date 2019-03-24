@@ -997,7 +997,7 @@ int writeLumaCoeffABT_B8(int b8,int intra,int blk_off_x,int blk_off_y)
   if (input->symbol_mode == UVLC)
   {
     Golomb_se_type=SE_LUM_AC_INTER;
-    if( !intra ) // fix mwi 020505
+    if( intra ) // bug fix mwi 020726
     {
       use_vlc_numcoef=1;
       Golomb_se_type=SE_LUM_AC_INTRA;
@@ -1050,7 +1050,7 @@ int writeLumaCoeffABT_B8(int b8,int intra,int blk_off_x,int blk_off_y)
         currSE->golomb_maxlevels=31;
         if( intra )        //Intra blocks contain more. use higher grade here.
         {
-          currSE->type=SE_LUM_AC_INTER;//This typechange does not change anything. Just to be correct.
+          currSE->type=SE_LUM_AC_INTRA; // Bug Fix: INTER->INTRA. mwi 020726
           currSE->golomb_grad=2;
         }
         currSE->value1=icoef;

@@ -804,9 +804,13 @@ int encode_one_slice(int SliceGroupId)
       }
       NumberOfCodedMBs++;       // only here we are sure that the coded MB is actually included in the slice
       proceed2nextMacroblock(CurrentMbInScanOrder); // Go to next macroblock
+    } else
+    {
+      img->current_mb_nr--; /*KS*/
     }
 
   }
+
   // Tian Dong: June 7, 2002 JVT-B042
   // Restore the short_used
   if ( input->NumFramesInELSubSeq )

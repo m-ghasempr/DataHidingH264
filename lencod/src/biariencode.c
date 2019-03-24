@@ -104,7 +104,7 @@ void arienco_delete_encoding_environment(EncodingEnvironmentPtr eep)
  */
 void arienco_start_encoding(EncodingEnvironmentPtr eep,
                             unsigned char *code_buffer,
-                            int *code_len )
+                            int *code_len, int *last_startcode )
 {
   Elow = 0;
   Ebits_to_follow = 0;
@@ -113,6 +113,7 @@ void arienco_start_encoding(EncodingEnvironmentPtr eep,
 
   Ecodestrm = code_buffer;
   Ecodestrm_len = code_len;
+  Ecodestrm_laststartcode = last_startcode;
 
   /* Only necessary for new AC */
   Erange = CACM99_HALF;
@@ -126,7 +127,7 @@ void arienco_start_encoding(EncodingEnvironmentPtr eep,
  */
 int arienco_bits_written(EncodingEnvironmentPtr eep)
 {
-   return (8 * (*Ecodestrm_len) + Ebits_to_follow + 8  - Ebits_to_go);
+   return (8 * (*Ecodestrm_len-*Ecodestrm_laststartcode) + Ebits_to_follow + 8  - Ebits_to_go);
 }
 
 /*!

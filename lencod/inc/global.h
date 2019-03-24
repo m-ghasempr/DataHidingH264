@@ -205,6 +205,7 @@ typedef struct
   unsigned int  Ebits_to_follow;
   byte          *Ecodestrm;
   int           *Ecodestrm_len;
+  int           *Ecodestrm_laststartcode;
   // storage in case of recode MB
   unsigned int  ElowS, ErangeS;
   unsigned int  EbufferS;
@@ -917,7 +918,7 @@ void  trace2out(SyntaxElement *se);
 Boolean dummy_slice_too_big(int bits_slice);
 
 // CABAC
-void arienco_start_encoding(EncodingEnvironmentPtr eep, unsigned char *code_buffer, int *code_len );
+void arienco_start_encoding(EncodingEnvironmentPtr eep, unsigned char *code_buffer, int *code_len, int *last_startcode  );
 int  arienco_bits_written(EncodingEnvironmentPtr eep);
 int  get_trailing_bits(EncodingEnvironmentPtr eep);
 void arienco_done_encoding(EncodingEnvironmentPtr eep);

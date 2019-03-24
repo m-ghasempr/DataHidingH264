@@ -160,7 +160,7 @@ void write_buffer(unsigned long NumberLeakyBuckets, unsigned long Rmin[], unsign
         
   if ((outf=fopen(input->LeakyBucketParamFile,"wb"))==NULL)
   {
-    snprintf(errortext, ET_SIZE, "Error open file %s  \n",input->outfile);
+    snprintf(errortext, ET_SIZE, "Error open file %s  \n",input->LeakyBucketParamFile);
     error(errortext,1);
   }
 

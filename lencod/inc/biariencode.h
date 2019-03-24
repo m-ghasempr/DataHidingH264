@@ -110,6 +110,7 @@ const unsigned int ARITH_CUM_FREQ_TABLE[128] =
 #define Ebits_to_go     (eep->Ebits_to_go)
 #define Ecodestrm       (eep->Ecodestrm)
 #define Ecodestrm_len   (eep->Ecodestrm_len)
+#define Ecodestrm_laststartcode   (eep->Ecodestrm_laststartcode)
 
 /* Only necessary for new AC */
 #define B_BITS    16

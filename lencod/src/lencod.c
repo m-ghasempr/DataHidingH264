@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 3.9 Adaptive Block Transforms
+ *     JM 3.90a
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -86,7 +86,7 @@
 #include "fmo.h"
 
 #define JM      "3"
-#define VERSION "3.90"
+#define VERSION "3.90a"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;

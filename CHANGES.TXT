@@ -1,3 +1,11 @@
+Changes for Version JM 3.9a to JM 3.9
+-------------------------------------
+
+Bug Fixes
+* fix ABT and VLC (MW)
+* fix slice mode 2 (KS)
+
+
 Changes for Version JM 3.9 to JM 3.8
 ------------------------------------
 

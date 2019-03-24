@@ -270,7 +270,7 @@ int start_slice()
         currStream->header_len = header_len;
         currStream->header_byte_buffer = currStream->byte_buf;
 
-        arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos));
+        arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos),&(currStream->last_startcode));
         // initialize context models
         init_contexts_MotionInfo(currSlice->mot_ctx, INI_CTX);
         init_contexts_TextureInfo(currSlice->tex_ctx, INI_CTX);
@@ -318,7 +318,7 @@ int start_slice()
 
         // If there is an absolute need to communicate the partition size, this would be
         // the space to insert it
-        arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos));
+        arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos),&(currStream->last_startcode));
         // initialize context models
         init_contexts_MotionInfo(currSlice->mot_ctx, 1);
         init_contexts_TextureInfo(currSlice->tex_ctx, 1);
@@ -393,7 +393,7 @@ int start_slice()
         currStream->bits_to_go = 8;
         currStream->byte_pos++;
 
-        arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos));
+        arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos),&(currStream->last_startcode));
         currStream->write_flag = 0;
 
         if(input->partition_mode != PAR_DP_1)
@@ -412,7 +412,7 @@ int start_slice()
             assert (currStream->bits_to_go == 8);
             assert (currStream->byte_buf == 0);
 
-            arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos));
+            arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos),&(currStream->last_startcode));
             currStream->write_flag = 0;
           }
         }
