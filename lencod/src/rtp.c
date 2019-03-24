@@ -390,9 +390,9 @@ int RTPSequenceHeader (FILE *out)
 
 int RTPSliceHeader()
 {
-  int dP_nr = assignSE2partition[input->partition_mode][SE_HEADER];
-  Bitstream *currStream = ((img->currentSlice)->partArr[dP_nr]).bitstream;
-  DataPartition *partition = &((img->currentSlice)->partArr[dP_nr]);
+  int dP_nr;
+  Bitstream *currStream; 
+  DataPartition *partition;
   SyntaxElement sym;
 
   int len = 0;
@@ -401,6 +401,14 @@ int RTPSliceHeader()
 #ifdef _CHECK_MULTI_BUFFER_1_
   RMPNIbuffer_t *r;
 #endif
+
+  if(img->type == B_IMG)
+    dP_nr= assignSE2partition[input->partition_mode][SE_BFRAME];
+  else
+    dP_nr= assignSE2partition[input->partition_mode][SE_HEADER];
+
+  currStream = ((img->currentSlice)->partArr[dP_nr]).bitstream;
+  partition = &((img->currentSlice)->partArr[dP_nr]);
 
   assert (input->of_mode == PAR_OF_RTP);
   sym.type = SE_HEADER;         // This will be true for all symbols generated here
@@ -413,6 +421,7 @@ int RTPSliceHeader()
 
   SYMTRACESTRING("RTP-SH: Picture ID");
   sym.value1 = img->currentSlice->picture_id;
+
   len += writeSyntaxElement_UVLC (&sym, partition);
 
   /*! StW:
@@ -492,8 +501,8 @@ int RTPSliceHeader()
   }
 
   /* KS: add Annex U Syntax elements */
-  len+=writeERPS(&sym, partition);
-  /* end KS*/
+  len += writeERPS(&sym, partition);
+
 
   // After this, and when in CABAC mode, terminateSlice() may insert one more
   // UVLC codeword for the number of coded MBs

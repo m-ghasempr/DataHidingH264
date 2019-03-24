@@ -114,6 +114,7 @@ Mapping Map[] = {
     {"LossRateB",                 &configinput.LossRateB,                0},
     {"LossRateC",                 &configinput.LossRateC,                0},
     {"NumberOfDecoders",         &configinput.NoOfDecoders,            0},
+    {"RestrictRefFrames",        &configinput.RestrictRef ,            0},
 #ifdef _ADDITIONAL_REFERENCE_FRAME_
     {"AdditionalReferenceFrame", &configinput.add_ref_frame,           0},
 #endif

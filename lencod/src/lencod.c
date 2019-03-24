@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 1.0
+ *     JM 1.1
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -83,12 +83,13 @@
 #include "mbuffer.h"
 
 #define TML     "1"
-#define VERSION "1.00"
+#define VERSION "1.10"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
 StatParameters  stats,  *stat  = &stats;
 SNRParameters   snrs,   *snr   = &snrs;
+Decoders decoders, *decs=&decoders;
 
 #ifdef _ADAPT_LAST_GROUP_
 int initial_Bframes = 0;
@@ -1245,21 +1246,27 @@ int init_global_buffers()
 
   if (input->rdopt==2)
   {
-    memory_size += get_mem2Dint(&resY, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    if ((decref = (byte****) calloc(input->NoOfDecoders,sizeof(byte***))) == NULL) 
+    memory_size += get_mem2Dint(&decs->resY, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
+    if ((decs->decref = (byte****) calloc(input->NoOfDecoders,sizeof(byte***))) == NULL) 
       no_mem_exit("init_global_buffers: decref");
     for (j=0 ; j<input->NoOfDecoders; j++)
     {
-      memory_size += get_mem3D(&decref[j], img->buf_cycle+1, img->height, img->width);
+      memory_size += get_mem3D(&decs->decref[j], img->buf_cycle+1, img->height, img->width);
     }
-    memory_size += get_mem2D(&RefBlock, BLOCK_SIZE,BLOCK_SIZE);
-    memory_size += get_mem3D(&decY, input->NoOfDecoders, img->height, img->width);
-    memory_size += get_mem3D(&decY_best, input->NoOfDecoders, img->height, img->width);
-    memory_size += get_mem2D(&status_map, img->height/MB_BLOCK_SIZE,img->width/MB_BLOCK_SIZE);
-    memory_size += get_mem2D(&dec_mb_mode, img->width/MB_BLOCK_SIZE,img->height/MB_BLOCK_SIZE);
-    memory_size += get_mem2D(&dec_mb_ref, img->width/MB_BLOCK_SIZE,img->height/MB_BLOCK_SIZE);
+    memory_size += get_mem2D(&decs->RefBlock, BLOCK_SIZE,BLOCK_SIZE);
+    memory_size += get_mem3D(&decs->decY, input->NoOfDecoders, img->height, img->width);
+    memory_size += get_mem3D(&decs->decY_best, input->NoOfDecoders, img->height, img->width);
+    memory_size += get_mem2D(&decs->status_map, img->height/MB_BLOCK_SIZE,img->width/MB_BLOCK_SIZE);
+    memory_size += get_mem2D(&decs->dec_mb_mode, img->width/MB_BLOCK_SIZE,img->height/MB_BLOCK_SIZE);
+    memory_size += get_mem2D(&decs->dec_mb_ref, img->width/MB_BLOCK_SIZE,img->height/MB_BLOCK_SIZE);
 
   }
+  if (input->RestrictRef)
+  {
+    memory_size += get_mem2D(&pixel_map, img->height,img->width);
+    memory_size += get_mem2D(&refresh_map, img->height/MB_BLOCK_SIZE,img->width/MB_BLOCK_SIZE);
+  }
+
 
   return (memory_size);
 }
@@ -1279,7 +1286,7 @@ int init_global_buffers()
  */
 void free_global_buffers()
 {
-  int  j;
+  int  i,j;
 
 #ifdef _ADAPT_LAST_GROUP_
   extern int *last_P_no;
@@ -1338,19 +1345,40 @@ void free_global_buffers()
 
   if (input->rdopt==2)
   {
-    free_mem2Dint(resY);
-    free_mem2D(RefBlock);
-    free_mem3D(decY,input->NoOfDecoders);
-    free_mem3D(decY_best,input->NoOfDecoders);
+    free(decs->resY[0]);
+    free(decs->resY);
+    free(decs->RefBlock[0]);
+    free(decs->RefBlock);
     for (j=0; j<input->NoOfDecoders; j++)
     {
-      free_mem3D(decref[j],img->buf_cycle+1);
+      free(decs->decY[j][0]);
+      free(decs->decY[j]);
+      free(decs->decY_best[j][0]);
+      free(decs->decY_best[j]);
+      for (i=0; i<img->buf_cycle+1; i++)
+      {
+        free(decs->decref[j][i][0]);
+        free(decs->decref[j][i]);
+      }
+      free(decs->decref[j]);
     }
-    free(decref);
-    free_mem2D(status_map);
-    free_mem2D(dec_mb_mode);
-    free_mem2D(dec_mb_ref);
+    free(decs->decY);
+    free(decs->decY_best);
+    free(decs->decref);
+    free(decs->status_map[0]);
+    free(decs->status_map);
+    free(decs->dec_mb_mode[0]);
+    free(decs->dec_mb_mode);
+    free(decs->dec_mb_ref[0]);
+    free(decs->dec_mb_ref);
 
+  }
+  if (input->RestrictRef)
+  {
+    free(pixel_map[0]);
+    free(pixel_map);
+    free(refresh_map[0]);
+    free(refresh_map);
   }
 }
 

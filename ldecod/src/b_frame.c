@@ -278,7 +278,7 @@ void readMotionInfoFromNAL_Bframe(struct img_par *img,struct inp_par *inp)
       currSE->type = SE_REFFRAME;
       dp = &(currSlice->partArr[partMap[SE_BFRAME]]);
 
-      if (inp->symbol_mode == UVLC)
+      if (inp->symbol_mode == UVLC || dp->bitstream->ei_flag)
         currSE->mapping = linfo;
       else
         currSE->reading = readRefFrameFromBuffer_CABAC;
@@ -330,7 +330,7 @@ void readMotionInfoFromNAL_Bframe(struct img_par *img,struct inp_par *inp)
 
     dp = &(currSlice->partArr[partMap[SE_BFRAME]]);
 
-    if (inp->symbol_mode == UVLC)
+    if (inp->symbol_mode == UVLC || dp->bitstream->ei_flag)
       currSE->mapping = linfo;
     else
       currSE->reading = readBiDirBlkSize2Buffer_CABAC;
@@ -348,7 +348,7 @@ void readMotionInfoFromNAL_Bframe(struct img_par *img,struct inp_par *inp)
 
     dp = &(currSlice->partArr[partMap[SE_BFRAME]]);
 
-    if (inp->symbol_mode == UVLC)
+    if (inp->symbol_mode == UVLC || dp->bitstream->ei_flag)
       currSE->mapping = linfo;
     else
       currSE->reading = readBiDirBlkSize2Buffer_CABAC;
@@ -483,7 +483,7 @@ void readMotionInfoFromNAL_Bframe(struct img_par *img,struct inp_par *inp)
           currSE->type = SE_MVD;
           dp = &(currSlice->partArr[partMap[SE_BFRAME]]);
 
-          if (inp->symbol_mode == UVLC)
+          if (inp->symbol_mode == UVLC || dp->bitstream->ei_flag)
             currSE->mapping = linfo_mvd; // linfo_2
           else
           {
@@ -640,7 +640,7 @@ void readMotionInfoFromNAL_Bframe(struct img_par *img,struct inp_par *inp)
           currSE->type = SE_MVD;
           dp = &(currSlice->partArr[partMap[SE_BFRAME]]);
 
-          if (inp->symbol_mode == UVLC)
+          if (inp->symbol_mode == UVLC || dp->bitstream->ei_flag)
             currSE->mapping = linfo_mvd; // linfo_2
           else
           {

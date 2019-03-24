@@ -530,7 +530,7 @@ RDCost_Macroblock (RateDistortion  *rd,
       for (j=img->pix_y; j<img->pix_y+MB_BLOCK_SIZE; j++)
         for (i=img->pix_x; i<img->pix_x+MB_BLOCK_SIZE; i++)
         {
-          rd->distortion += img->quad[abs (imgY_org[j][i] - decY[k][j][i])];
+          rd->distortion += img->quad[abs (imgY_org[j][i] - decs->decY[k][j][i])];
         }
     }
     rd->distortion /= input->NoOfDecoders;
@@ -854,7 +854,7 @@ RDCost_Macroblock (RateDistortion  *rd,
         for (i=img->pix_x; i<img->pix_x+MB_BLOCK_SIZE; i++)
         {
           /* Keep the decoded values of each MB for updating the ref frames*/
-          decY_best[k][j][i] = decY[k][j][i];
+          decs->decY_best[k][j][i] = decs->decY[k][j][i];
         }
     }
   }
@@ -890,7 +890,7 @@ RD_Mode_Decision ()
   int             k1 = 1;
   int             mb_nr           = img->current_mb_nr;
   Macroblock     *currMB          = &img->mb_data[mb_nr];
-
+  int rerun=0, runs=1, intra1=0;
 
   /*==============================================*
    *===  INIT PARAMETERS OF RD-OPT. STRUCTURE  ===*
@@ -899,345 +899,373 @@ RD_Mode_Decision ()
   //--- set lagrange parameters ---
   double qp = (double)img->qp;
 
-  rdopt->lambda_mode = 5.0 * exp (0.1 * qp) * (qp + 5.0) / (34.0 - qp);
-  
-  if (img->type == B_IMG || img->types == SP_IMG)
-    rdopt->lambda_mode *= 4;
+  if (input->RestrictRef == 1 && input->rdopt == 2 && img->number)
+    runs=2; //We need a rerun to distinguish between error resilience intra updates and other intra updates
 
-  rdopt->lambda_motion = sqrt (rdopt->lambda_mode);
-  rdopt->lambda_intra  = rdopt->lambda_mode;
-
-  if (input->rdopt == 2)
+  for (rerun=0 ; rerun<runs ; rerun++)
   {
-    rdopt->lambda_mode=(1.0-input->LossRateA/100.0)*rdopt->lambda_mode;
-    rdopt->lambda_motion = sqrt (1.0-input->LossRateA/100.0) * rdopt->lambda_motion;
-  }
-  
-  //--- cost values ---
-  rdopt->best_mode   = -1;
-  rdopt->min_rdcost  =  1e30;
-  for (i = 0; i < 9; i++)
-  {
-    forward_rdcost  [i] = backward_rdcost [i] = -1.0;
-    backward_me_done[i] =  0;
-    for (j = 0; j < img->buf_cycle; j++)
+    if (runs==2)
     {
-      forward_me_done[i][j] = 0;
-    }
-  }
-
-
-  /*========================*
-   *===  SET SOME FLAGS  ===*
-   *========================*/
-  bframe           = (img->type==B_IMG);
-  intra_macroblock = (img->mb_y==img->mb_y_upd && img->mb_y_upd!=img->mb_y_intra) || img->type==INTRA_IMG;
-  max_ref_frame    = min (img->number, img->buf_cycle);
-
-  /*========================================*
-   *===  MARK POSSIBLE MACROBLOCK MODES  ===*
-   *========================================*/
-  //--- reset arrays ---
-  memset (valid_mode,        0, sizeof(int)*NO_MAX_MBMODES);
-  memset (valid_intra16mode, 0, sizeof(int)*4);
-  //--- set intra modes ---
-  valid_mode [MBMODE_INTRA4x4  ] = 1;
-  valid_mode [MBMODE_INTRA16x16] = 1;
-  //--- set inter modes ---
-  if (!intra_macroblock || bframe)
-  {
-    for (i=MBMODE_INTER16x16; i <= MBMODE_INTER4x4; i++)
-      if (input->blc_size [i][0] > 0)
-        any_inter_mode = valid_mode [i] = 1;
-      if (bframe)
-      {
-        memcpy (valid_mode+MBMODE_BACKWARD16x16,
-                valid_mode+MBMODE_INTER16x16,   NO_INTER_MBMODES*sizeof(int));
-        valid_mode[MBMODE_BIDIRECTIONAL] = valid_mode[MBMODE_DIRECT] = any_inter_mode;
-      }
+      if (rerun==0)
+        input->rdopt=1;
       else
-      {
-        valid_mode[MBMODE_COPY] = valid_mode[MBMODE_INTER16x16];
-      }
-  }
+        input->rdopt=2;
+    }
 
-  if (img->type==INTER_IMG && img->types== SP_IMG)
-    valid_mode[MBMODE_COPY] =0;
+    rdopt->lambda_mode = 5.0 * exp (0.1 * qp) * (qp + 5.0) / (34.0 - qp);
+  
+    if (img->type == B_IMG || img->types == SP_IMG)
+      rdopt->lambda_mode *= 4;
 
-  //===== LOOP OVER ALL MACROBLOCK MODES =====
-  for (mode = 0; mode < NO_MAX_MBMODES; mode++)
-    if (valid_mode[mode])
+    rdopt->lambda_motion = sqrt (rdopt->lambda_mode);
+    rdopt->lambda_intra  = rdopt->lambda_mode;
+
+    //--- cost values ---
+    rdopt->best_mode   = -1;
+    rdopt->min_rdcost  =  1e30;
+    for (i = 0; i < 9; i++)
     {
-    /*==================================================================*
-     *===  MOTION ESTIMATION, INTRA PREDICTION and COST CALCULATION  ===*
-     *==================================================================*/
-       if (mode == MBMODE_INTRA4x4)
-       {
-       /*======================*
-        *=== INTRA 4x4 MODE ===*
-        *======================*/
-         currMB->intraOrInter = INTRA_MB_4x4;
-         img->imod            = INTRA_MB_OLD;
-         Intra4x4_Mode_Decision ();   // intra 4x4 prediction, dct, etc.
-         RDCost_Macroblock (&rd, mode, 0, 0, 0);
-       }
-       else if (mode == MBMODE_INTRA16x16)
-       {
-       /*========================*
-        *=== INTRA 16x16 MODE ===*
-        *========================*/
-         currMB->intraOrInter = INTRA_MB_16x16;
-         img->imod            = INTRA_MB_NEW;
-         intrapred_luma_2 ();   // make intra pred for all 4 new modes
-         find_sad2 (&k);        // get best new intra mode
-         RDCost_Macroblock (&rd, mode, k, 0, 0);
-       }
-       else if (mode == MBMODE_COPY)
-       {
-       /*=======================*
-        *=== COPY MACROBLOCK ===*
-        *=======================*/
-         currMB->intraOrInter = INTER_MB;
-         img->imod            = INTRA_MB_INTER;
-         RDCost_Macroblock (&rd, mode, 0, 0, 0);
-       }
-       else if (!bframe && (mode >= MBMODE_INTER16x16 && mode <= MBMODE_INTER4x4))
-       {
-       /*===================================*
-        *=== INTER MACROBLOCK in P-FRAME ===*
-        *===================================*/
-         currMB->intraOrInter = INTER_MB;
-         img->imod            = INTRA_MB_INTER;
+      forward_rdcost  [i] = backward_rdcost [i] = -1.0;
+      backward_me_done[i] =  0;
+      for (j = 0; j < img->buf_cycle; j++)
+      {
+        forward_me_done[i][j] = 0;
+      }
+    }
 
-         min_inter_sad = MAX_VALUE;
-         for (k=0; k<max_ref_frame; k++)
-#ifdef _ADDITIONAL_REFERENCE_FRAME_
-           if (k <  input->no_multpred ||
-               k == input->add_ref_frame)
-#endif
-           {
-             tot_inter_sad  = (int)floor(rdopt->lambda_motion * (1+2*floor(log(k+1)/log(2)+1e-10)));
-             tot_inter_sad += SingleUnifiedMotionSearch (k, mode,
-                            refFrArr, tmp_mv, img->mv, PFRAME, img->all_mv,
-                            rdopt->lambda_motion);
-             if (tot_inter_sad <  min_inter_sad)
-             {
-               k0 = k;
-               min_inter_sad = tot_inter_sad;
-             }
-           }
-         for (  i=0; i < 4; i++)
-           for (j=0; j < 4; j++)
-           {
-             tmp_mv[0][img->block_y+j][img->block_x+i+4]=img->all_mv[i][j][k0][mode][0];
-             tmp_mv[1][img->block_y+j][img->block_x+i+4]=img->all_mv[i][j][k0][mode][1];
-           }
-         RDCost_Macroblock (&rd, mode, k0, mode, 0);
-       }
-       else if (bframe && (mode >= MBMODE_INTER16x16 && mode <= MBMODE_INTER4x4))
-       {
-        /*===============================================*
-         *=== FORWARD PREDICTED MACROBLOCK in B-FRAME ===*
-         *===============================================*/
-         if (forward_rdcost[mode] < 0.0)
+
+    /*========================*
+     *===  SET SOME FLAGS  ===*
+     *========================*/
+    bframe           = (img->type==B_IMG);
+    intra_macroblock = (img->mb_y==img->mb_y_upd && img->mb_y_upd!=img->mb_y_intra) || img->type==INTRA_IMG;
+    if (runs==2 && rerun==0)
+      intra_macroblock = 0;
+    max_ref_frame    = min (img->number, img->buf_cycle);
+
+    /*========================================*
+     *===  MARK POSSIBLE MACROBLOCK MODES  ===*
+     *========================================*/
+    //--- reset arrays ---
+    memset (valid_mode,        0, sizeof(int)*NO_MAX_MBMODES);
+    memset (valid_intra16mode, 0, sizeof(int)*4);
+    //--- set intra modes ---
+    valid_mode [MBMODE_INTRA4x4  ] = 1;
+    valid_mode [MBMODE_INTRA16x16] = 1;
+    //--- set inter modes ---
+    if (!intra_macroblock || bframe)
+    {
+      for (i=MBMODE_INTER16x16; i <= MBMODE_INTER4x4; i++)
+        if (input->blc_size [i][0] > 0)
+          any_inter_mode = valid_mode [i] = 1;
+        if (bframe)
+        {
+          memcpy (valid_mode+MBMODE_BACKWARD16x16,
+                  valid_mode+MBMODE_INTER16x16,   NO_INTER_MBMODES*sizeof(int));
+          valid_mode[MBMODE_BIDIRECTIONAL] = valid_mode[MBMODE_DIRECT] = any_inter_mode;
+        }
+        else
+        {
+          valid_mode[MBMODE_COPY] = valid_mode[MBMODE_INTER16x16];
+        }
+    }
+
+    if (img->type==INTER_IMG && img->types== SP_IMG)
+      valid_mode[MBMODE_COPY] =0;
+
+    //===== LOOP OVER ALL MACROBLOCK MODES =====
+    for (mode = 0; mode < NO_MAX_MBMODES; mode++)
+      if (valid_mode[mode])
+      {
+      /*==================================================================*
+       *===  MOTION ESTIMATION, INTRA PREDICTION and COST CALCULATION  ===*
+       *==================================================================*/
+         if (mode == MBMODE_INTRA4x4)
          {
+         /*======================*
+          *=== INTRA 4x4 MODE ===*
+          *======================*/
+           currMB->intraOrInter = INTRA_MB_4x4;
+           img->imod            = INTRA_MB_OLD;
+           Intra4x4_Mode_Decision ();   // intra 4x4 prediction, dct, etc.
+           RDCost_Macroblock (&rd, mode, 0, 0, 0);
+         }
+         else if (mode == MBMODE_INTRA16x16)
+         {
+         /*========================*
+          *=== INTRA 16x16 MODE ===*
+          *========================*/
+           currMB->intraOrInter = INTRA_MB_16x16;
+           img->imod            = INTRA_MB_NEW;
+           intrapred_luma_2 ();   // make intra pred for all 4 new modes
+           find_sad2 (&k);        // get best new intra mode
+           RDCost_Macroblock (&rd, mode, k, 0, 0);
+         }
+         else if (mode == MBMODE_COPY)
+         {
+         /*=======================*
+          *=== COPY MACROBLOCK ===*
+          *=======================*/
            currMB->intraOrInter = INTER_MB;
-           img->imod            = B_Forward;
+           img->imod            = INTRA_MB_INTER;
+           RDCost_Macroblock (&rd, mode, 0, 0, 0);
+         }
+         else if (!bframe && (mode >= MBMODE_INTER16x16 && mode <= MBMODE_INTER4x4))
+         {
+         /*===================================*
+          *=== INTER MACROBLOCK in P-FRAME ===*
+          *===================================*/
+           currMB->intraOrInter = INTER_MB;
+           img->imod            = INTRA_MB_INTER;
 
            min_inter_sad = MAX_VALUE;
            for (k=0; k<max_ref_frame; k++)
-#ifdef _ADDITIONAL_REFERENCE_FRAME_
+  #ifdef _ADDITIONAL_REFERENCE_FRAME_
              if (k <  input->no_multpred ||
                  k == input->add_ref_frame)
-#endif
+  #endif
              {
-               if (!forward_me_done[mode][k])
+               tot_inter_sad  = (int)floor(rdopt->lambda_motion * (1+2*floor(log(k+1)/log(2)+1e-10)));
+               tot_inter_sad += SingleUnifiedMotionSearch (k, mode,
+                              refFrArr, tmp_mv, img->mv, PFRAME, img->all_mv,
+                              rdopt->lambda_motion);
+               if (input->RestrictRef) 
                {
-                 tot_for_sad[mode][k]  = (int)floor(rdopt->lambda_motion * (1+2*floor(log(k+1)/log(2)+1e-10)));
-                 tot_for_sad[mode][k] += SingleUnifiedMotionSearch (k, mode,
-                                         fw_refFrArr, tmp_fwMV, img->p_fwMV,
-                                         B_FORWARD, img->all_mv,
-                                         rdopt->lambda_motion);
-                                         forward_me_done[mode][k] = 1;
+                 for (  i=0; i < 4; i++)
+                   for (j=0; j < 4; j++)
+                   {
+                     tmp_mv[0][img->block_y+j][img->block_x+i+4]=img->all_mv[i][j][k0][mode][0];
+                     tmp_mv[1][img->block_y+j][img->block_x+i+4]=img->all_mv[i][j][k0][mode][1];
+                   }
+                 if (k == 0 || CheckReliabilityOfRefFrame(k))
+                   RDCost_Macroblock (&rd, mode, k, mode, 0); /* Let the rd optimization select the reference frame */
+                 continue;
                }
-               if (tot_for_sad[mode][k] < min_inter_sad)
+
+               if (tot_inter_sad <  min_inter_sad)
                {
                  k0 = k;
-                 min_inter_sad = tot_for_sad[mode][k];
+                 min_inter_sad = tot_inter_sad;
                }
              }
-           for (  i=0; i < 4; i++)
-             for (j=0; j < 4; j++)
-             {
-               tmp_fwMV[0][img->block_y+j][img->block_x+i+4]=img->all_mv[i][j][k0][mode][0];
-               tmp_fwMV[1][img->block_y+j][img->block_x+i+4]=img->all_mv[i][j][k0][mode][1];
-             }
-           RDCost_Macroblock (&rd, mode, k0, mode, 0);
-           forward_rdcost[mode] = rd.rdcost;
-           best_refframe [mode] = k0;
-         }
-       }
-       else if (mode >= MBMODE_BACKWARD16x16 && mode <= MBMODE_BACKWARD4x4)
-       {
-        /*================================================*
-         *=== BACKWARD PREDICTED MACROBLOCK in B-FRAME ===*
-         *================================================*/
-         if (backward_rdcost [mode-NO_INTER_MBMODES] < 0.0)
-         {
-           currMB->intraOrInter = INTER_MB;
-           img->imod            = B_Backward;
-           if (!backward_me_done[mode-NO_INTER_MBMODES])
-           {
-             SingleUnifiedMotionSearch (0, mode-NO_INTER_MBMODES,
-               bw_refFrArr, tmp_bwMV, img->p_bwMV, B_BACKWARD, img->all_bmv,
-               rdopt->lambda_motion);
-             backward_me_done[mode-NO_INTER_MBMODES]=1;
-           }
-           else
-             for (j = 0; j < 4; j++)
-               for (i = 0; i < 4; i++)
-               {
-                 tmp_bwMV[0][img->block_y+j][img->block_x+i+4]=
-                   img->all_bmv[i][j][0][mode-NO_INTER_MBMODES][0];
-                 tmp_bwMV[1][img->block_y+j][img->block_x+i+4]=
-                   img->all_bmv[i][j][0][mode-NO_INTER_MBMODES][1];
-               }
-           RDCost_Macroblock (&rd, mode, 0, 0, mode-NO_INTER_MBMODES);
-           backward_rdcost[mode-NO_INTER_MBMODES] = rd.rdcost;
-         }
-       }
-       else if (mode == MBMODE_DIRECT)
-       {
-       /*==============================================*
-        *=== DIRECT PREDICTED MACROBLOCK in B-FRAME ===*
-        *==============================================*/
-         currMB->intraOrInter = INTER_MB;
-         img->imod            = B_Direct;
-         get_dir (&dummy);
-         if (dummy != 100000000 /*MAX_DIR_SAD*/)
-         {
-           RDCost_Macroblock (&rd, mode, 0, 0, 0);
-         }
-       }
-       else
-       {
-        /*=====================================================*
-         *=== BIDIRECTIONAL PREDICTED MACROBLOCK in B-FRAME ===*
-         *=====================================================*/
-        //--- get best backward prediction ---
-         min_rdcost = 1e30;
-         for (blocktype = 1; blocktype < 8; blocktype++)
-           if (valid_mode[blocktype+NO_INTER_MBMODES])
-           {
-             if (backward_rdcost[blocktype] < 0.0)
-             {
-               //--- get rd-cost's ---
-               currMB->intraOrInter = INTER_MB;
-               img->imod            = B_Backward;
-               if (!backward_me_done[blocktype])
-               {
-                 SingleUnifiedMotionSearch (0, blocktype,
-                   bw_refFrArr, tmp_bwMV, img->p_bwMV, B_BACKWARD, img->all_bmv,
-                   rdopt->lambda_motion);
-                 backward_me_done[mode]=1;
-               }
-               else
-                 for (j = 0; j < 4; j++)
-                   for (i = 0; i < 4; i++)
-                   {
-                     tmp_bwMV[0][img->block_y+j][img->block_x+i+4]=
-                       img->all_bmv[i][j][0][blocktype][0];
-                     tmp_bwMV[1][img->block_y+j][img->block_x+i+4]=
-                       img->all_bmv[i][j][0][blocktype][1];
-                   }
-               RDCost_Macroblock (&rd, blocktype+NO_INTER_MBMODES, 0, 0, blocktype);
-               backward_rdcost[blocktype] = rd.rdcost;
-             }
-             if (backward_rdcost[blocktype] < min_rdcost)
-             {
-               min_rdcost = backward_rdcost[blocktype];
-               k0         = blocktype;
-             }
-           }
-         blocktype_back = k0;
 
-         //--- get best forward prediction ---
-         min_rdcost = 1e30;
-         for (blocktype = 1; blocktype < 8; blocktype++)
-           if (valid_mode[blocktype])
+           if (input->RestrictRef == 0) 
            {
-             if (forward_rdcost[blocktype] < 0.0)
-             {
-               //--- get rd-cost's ---
-               currMB->intraOrInter = INTER_MB;
-               img->imod            = B_Forward;
-               min_inter_sad        = MAX_VALUE;
-               for (k=0; k<max_ref_frame; k++)
-#ifdef _ADDITIONAL_REFERENCE_FRAME_
+             for (  i=0; i < 4; i++)
+               for (j=0; j < 4; j++)
+               {
+                 tmp_mv[0][img->block_y+j][img->block_x+i+4]=img->all_mv[i][j][k0][mode][0];
+                 tmp_mv[1][img->block_y+j][img->block_x+i+4]=img->all_mv[i][j][k0][mode][1];
+               }
+             RDCost_Macroblock (&rd, mode, k0, mode, 0);
+           }
+         }
+         else if (bframe && (mode >= MBMODE_INTER16x16 && mode <= MBMODE_INTER4x4))
+         {
+          /*===============================================*
+           *=== FORWARD PREDICTED MACROBLOCK in B-FRAME ===*
+           *===============================================*/
+           if (forward_rdcost[mode] < 0.0)
+           {
+             currMB->intraOrInter = INTER_MB;
+             img->imod            = B_Forward;
+
+             min_inter_sad = MAX_VALUE;
+             for (k=0; k<max_ref_frame; k++)
+  #ifdef _ADDITIONAL_REFERENCE_FRAME_
                if (k <  input->no_multpred ||
                    k == input->add_ref_frame)
-#endif
+  #endif
                {
-                 if (!forward_me_done[blocktype][k])
+                 if (!forward_me_done[mode][k])
                  {
-                   tot_for_sad[blocktype][k]  = (int)floor(rdopt->lambda_motion * (1+2*floor(log(k+1)/log(2)+1e-10)));
-                   tot_for_sad[blocktype][k] += SingleUnifiedMotionSearch (k, blocktype,
-                     fw_refFrArr, tmp_fwMV, img->p_fwMV,
-                     B_FORWARD, img->all_mv,
-                     rdopt->lambda_motion);
-                   forward_me_done[blocktype][k] = 1;
+                   tot_for_sad[mode][k]  = (int)floor(rdopt->lambda_motion * (1+2*floor(log(k+1)/log(2)+1e-10)));
+                   tot_for_sad[mode][k] += SingleUnifiedMotionSearch (k, mode,
+                                           fw_refFrArr, tmp_fwMV, img->p_fwMV,
+                                           B_FORWARD, img->all_mv,
+                                           rdopt->lambda_motion);
+                                           forward_me_done[mode][k] = 1;
                  }
-                 if (tot_for_sad[blocktype][k] < min_inter_sad)
+                 if (tot_for_sad[mode][k] < min_inter_sad)
                  {
                    k0 = k;
-                   min_inter_sad = tot_for_sad[blocktype][k];
+                   min_inter_sad = tot_for_sad[mode][k];
                  }
                }
-               for (  i=0; i < 4; i++)
-                 for (j=0; j < 4; j++)
-                 {
-                   tmp_fwMV[0][img->block_y+j][img->block_x+i+4]=
-                     img->all_mv[i][j][k0][blocktype][0];
-                   tmp_fwMV[1][img->block_y+j][img->block_x+i+4]=
-                     img->all_mv[i][j][k0][blocktype][1];
-                 }
-               RDCost_Macroblock (&rd, blocktype, k0, blocktype, 0);
-               forward_rdcost[blocktype] = rd.rdcost;
-               best_refframe [blocktype] = k0;
-             }
-             if (forward_rdcost[blocktype] < min_rdcost)
-             {
-               min_rdcost = forward_rdcost[blocktype];
-               k1         = blocktype;
-             }
+             for (  i=0; i < 4; i++)
+               for (j=0; j < 4; j++)
+               {
+                 tmp_fwMV[0][img->block_y+j][img->block_x+i+4]=img->all_mv[i][j][k0][mode][0];
+                 tmp_fwMV[1][img->block_y+j][img->block_x+i+4]=img->all_mv[i][j][k0][mode][1];
+               }
+             RDCost_Macroblock (&rd, mode, k0, mode, 0);
+             forward_rdcost[mode] = rd.rdcost;
+             best_refframe [mode] = k0;
            }
-         blocktype = k1;
-         k0        = best_refframe[blocktype];
-
-         //===== COST CALCULATION =====
-         for (j = 0; j < 4; j++)
-           for (i = 0; i < 4; i++)
+         }
+         else if (mode >= MBMODE_BACKWARD16x16 && mode <= MBMODE_BACKWARD4x4)
+         {
+          /*================================================*
+           *=== BACKWARD PREDICTED MACROBLOCK in B-FRAME ===*
+           *================================================*/
+           if (backward_rdcost [mode-NO_INTER_MBMODES] < 0.0)
            {
-             tmp_bwMV[0][img->block_y+j][img->block_x+i+4]=
-               img->all_bmv[i][j][0][blocktype_back][0];
-             tmp_bwMV[1][img->block_y+j][img->block_x+i+4]=
-               img->all_bmv[i][j][0][blocktype_back][1];
-             tmp_fwMV[0][img->block_y+j][img->block_x+i+4]=
-               img->all_mv[i][j][k0][blocktype][0];
-             tmp_fwMV[1][img->block_y+j][img->block_x+i+4]=
-               img->all_mv[i][j][k0][blocktype][1];
+             currMB->intraOrInter = INTER_MB;
+             img->imod            = B_Backward;
+             if (!backward_me_done[mode-NO_INTER_MBMODES])
+             {
+               SingleUnifiedMotionSearch (0, mode-NO_INTER_MBMODES,
+                 bw_refFrArr, tmp_bwMV, img->p_bwMV, B_BACKWARD, img->all_bmv,
+                 rdopt->lambda_motion);
+               backward_me_done[mode-NO_INTER_MBMODES]=1;
+             }
+             else
+               for (j = 0; j < 4; j++)
+                 for (i = 0; i < 4; i++)
+                 {
+                   tmp_bwMV[0][img->block_y+j][img->block_x+i+4]=
+                     img->all_bmv[i][j][0][mode-NO_INTER_MBMODES][0];
+                   tmp_bwMV[1][img->block_y+j][img->block_x+i+4]=
+                     img->all_bmv[i][j][0][mode-NO_INTER_MBMODES][1];
+                 }
+             RDCost_Macroblock (&rd, mode, 0, 0, mode-NO_INTER_MBMODES);
+             backward_rdcost[mode-NO_INTER_MBMODES] = rd.rdcost;
            }
-         img->fw_blc_size_h = input->blc_size[blocktype][0];
-         img->fw_blc_size_v = input->blc_size[blocktype][1];
-         img->bw_blc_size_h = input->blc_size[blocktype_back][0];
-         img->bw_blc_size_v = input->blc_size[blocktype_back][1];
-         currMB->intraOrInter = INTER_MB;
-         img->imod            = B_Bidirect;
-         RDCost_Macroblock (&rd, mode, k0, blocktype, blocktype_back);
-       }
-   }
+         }
+         else if (mode == MBMODE_DIRECT)
+         {
+         /*==============================================*
+          *=== DIRECT PREDICTED MACROBLOCK in B-FRAME ===*
+          *==============================================*/
+           currMB->intraOrInter = INTER_MB;
+           img->imod            = B_Direct;
+           get_dir (&dummy);
+           if (dummy != 100000000 /*MAX_DIR_SAD*/)
+           {
+             RDCost_Macroblock (&rd, mode, 0, 0, 0);
+           }
+         }
+         else
+         {
+          /*=====================================================*
+           *=== BIDIRECTIONAL PREDICTED MACROBLOCK in B-FRAME ===*
+           *=====================================================*/
+          //--- get best backward prediction ---
+           min_rdcost = 1e30;
+           for (blocktype = 1; blocktype < 8; blocktype++)
+             if (valid_mode[blocktype+NO_INTER_MBMODES])
+             {
+               if (backward_rdcost[blocktype] < 0.0)
+               {
+                 //--- get rd-cost's ---
+                 currMB->intraOrInter = INTER_MB;
+                 img->imod            = B_Backward;
+                 if (!backward_me_done[blocktype])
+                 {
+                   SingleUnifiedMotionSearch (0, blocktype,
+                     bw_refFrArr, tmp_bwMV, img->p_bwMV, B_BACKWARD, img->all_bmv,
+                     rdopt->lambda_motion);
+                   backward_me_done[mode]=1;
+                 }
+                 else
+                   for (j = 0; j < 4; j++)
+                     for (i = 0; i < 4; i++)
+                     {
+                       tmp_bwMV[0][img->block_y+j][img->block_x+i+4]=
+                         img->all_bmv[i][j][0][blocktype][0];
+                       tmp_bwMV[1][img->block_y+j][img->block_x+i+4]=
+                         img->all_bmv[i][j][0][blocktype][1];
+                     }
+                 RDCost_Macroblock (&rd, blocktype+NO_INTER_MBMODES, 0, 0, blocktype);
+                 backward_rdcost[blocktype] = rd.rdcost;
+               }
+               if (backward_rdcost[blocktype] < min_rdcost)
+               {
+                 min_rdcost = backward_rdcost[blocktype];
+                 k0         = blocktype;
+               }
+             }
+           blocktype_back = k0;
 
+           //--- get best forward prediction ---
+           min_rdcost = 1e30;
+           for (blocktype = 1; blocktype < 8; blocktype++)
+             if (valid_mode[blocktype])
+             {
+               if (forward_rdcost[blocktype] < 0.0)
+               {
+                 //--- get rd-cost's ---
+                 currMB->intraOrInter = INTER_MB;
+                 img->imod            = B_Forward;
+                 min_inter_sad        = MAX_VALUE;
+                 for (k=0; k<max_ref_frame; k++)
+  #ifdef _ADDITIONAL_REFERENCE_FRAME_
+                 if (k <  input->no_multpred ||
+                     k == input->add_ref_frame)
+  #endif
+                 {
+                   if (!forward_me_done[blocktype][k])
+                   {
+                     tot_for_sad[blocktype][k]  = (int)floor(rdopt->lambda_motion * (1+2*floor(log(k+1)/log(2)+1e-10)));
+                     tot_for_sad[blocktype][k] += SingleUnifiedMotionSearch (k, blocktype,
+                       fw_refFrArr, tmp_fwMV, img->p_fwMV,
+                       B_FORWARD, img->all_mv,
+                       rdopt->lambda_motion);
+                     forward_me_done[blocktype][k] = 1;
+                   }
+                   if (tot_for_sad[blocktype][k] < min_inter_sad)
+                   {
+                     k0 = k;
+                     min_inter_sad = tot_for_sad[blocktype][k];
+                   }
+                 }
+                 for (  i=0; i < 4; i++)
+                   for (j=0; j < 4; j++)
+                   {
+                     tmp_fwMV[0][img->block_y+j][img->block_x+i+4]=
+                       img->all_mv[i][j][k0][blocktype][0];
+                     tmp_fwMV[1][img->block_y+j][img->block_x+i+4]=
+                       img->all_mv[i][j][k0][blocktype][1];
+                   }
+                 RDCost_Macroblock (&rd, blocktype, k0, blocktype, 0);
+                 forward_rdcost[blocktype] = rd.rdcost;
+                 best_refframe [blocktype] = k0;
+               }
+               if (forward_rdcost[blocktype] < min_rdcost)
+               {
+                 min_rdcost = forward_rdcost[blocktype];
+                 k1         = blocktype;
+               }
+             }
+           blocktype = k1;
+           k0        = best_refframe[blocktype];
 
+           //===== COST CALCULATION =====
+           for (j = 0; j < 4; j++)
+             for (i = 0; i < 4; i++)
+             {
+               tmp_bwMV[0][img->block_y+j][img->block_x+i+4]=
+                 img->all_bmv[i][j][0][blocktype_back][0];
+               tmp_bwMV[1][img->block_y+j][img->block_x+i+4]=
+                 img->all_bmv[i][j][0][blocktype_back][1];
+               tmp_fwMV[0][img->block_y+j][img->block_x+i+4]=
+                 img->all_mv[i][j][k0][blocktype][0];
+               tmp_fwMV[1][img->block_y+j][img->block_x+i+4]=
+                 img->all_mv[i][j][k0][blocktype][1];
+             }
+           img->fw_blc_size_h = input->blc_size[blocktype][0];
+           img->fw_blc_size_v = input->blc_size[blocktype][1];
+           img->bw_blc_size_h = input->blc_size[blocktype_back][0];
+           img->bw_blc_size_v = input->blc_size[blocktype_back][1];
+           currMB->intraOrInter = INTER_MB;
+           img->imod            = B_Bidirect;
+           RDCost_Macroblock (&rd, mode, k0, blocktype, blocktype_back);
+         }
+     }
+
+     if (rerun==0 && (mode==MBMODE_INTRA4x4 || mode==MBMODE_INTRA16x16))
+       intra1=1;
+  }
 
   /*======================================*
    *===  SET PARAMETERS FOR BEST MODE  ===*
@@ -1250,9 +1278,9 @@ RD_Mode_Decision ()
   if (input->rdopt==2)
   {
     //! save the MB Mode of every macroblock
-    dec_mb_mode[img->mb_x][img->mb_y] = mode;
+    decs->dec_mb_mode[img->mb_x][img->mb_y] = mode;
     //! save ref of every macroblock
-    dec_mb_ref[img->mb_x][img->mb_y] = refframe;
+    decs->dec_mb_ref[img->mb_x][img->mb_y] = refframe;
   }
 
 
@@ -1463,7 +1491,7 @@ RD_Mode_Decision ()
   if (input->rdopt == 2)
   {
     for (j=0 ; j<input->NoOfDecoders ; j++)
-      DeblockMb(img, decY_best[j],NULL);
+      DeblockMb(img, decs->decY_best[j],NULL);
   }
 
   if (img->current_mb_nr==0)
@@ -1471,5 +1499,217 @@ RD_Mode_Decision ()
   if (img->number && (mode==MBMODE_INTRA4x4 || mode==MBMODE_INTRA16x16))
     intras++;
 
+  /* Decide if this MB will restrict the reference frames */
+  if (input->RestrictRef == 1)
+  {
+    if ((input->rdopt == 1 && intra_macroblock) || 
+        (input->rdopt == 2 && intra1 == 0 && (mode==MBMODE_INTRA4x4 || mode==MBMODE_INTRA16x16)))
+      refresh_map[img->mb_y][img->mb_x]=1;
+    else
+      refresh_map[img->mb_y][img->mb_x]=0;
+  }
+  else if (input->RestrictRef == 2)
+  {
+    if (mode==MBMODE_INTRA4x4 || mode==MBMODE_INTRA16x16)
+      refresh_map[img->mb_y][img->mb_x]=1;
+    else
+      refresh_map[img->mb_y][img->mb_x]=0;
+  }
 }
+
+
+/*! 
+ *************************************************************************************
+ * \brief
+ *    Updates the pixel map that shows, which reference frames are reliable for
+ *    each MB-area of the picture.
+ *
+ * \note
+ *    The new values of the pixel_map are taken from the temporary buffer refresh_map
+ *
+ *************************************************************************************
+ */
+void UpdatePixelMap()
+{
+  int mx,my,y,x,i,j;
+  if (!img->number)
+  {
+    for (y=0; y<img->height ; y++)
+      for (x=0; x<img->height ; x++)
+        pixel_map[y][x]=1;
+  }
+  else
+  {
+    for (my=0 ; my < img->height/MB_BLOCK_SIZE ; my++)
+      for (mx=0 ; mx < img->width/MB_BLOCK_SIZE ; mx++)
+      {
+        j = my*MB_BLOCK_SIZE + MB_BLOCK_SIZE;
+        i = mx*MB_BLOCK_SIZE + MB_BLOCK_SIZE;
+        if (refresh_map[my][mx])
+          for (y=my*MB_BLOCK_SIZE ; y<j ; y++)
+            for (x=mx*MB_BLOCK_SIZE ; x<i ; x++)
+               pixel_map[y][x]=1;
+        else
+          for (y=my*MB_BLOCK_SIZE ; y<j ; y++)
+            for (x=mx*MB_BLOCK_SIZE ; x<i ; x++)
+              pixel_map[y][x] = min(pixel_map[y][x]+1, input->no_multpred+1);
+      }
+  }
+}
+
+/*! 
+ *************************************************************************************
+ * \brief
+ *    Checks if a given reference frame is reliable for the current 
+ *    macroblock, given the motion vectors that the motion search has 
+ *    returned.
+ *
+ * \param ref_frame
+ *    The number of the reference frame that we want to check
+ *
+ * \return
+ *    If the return value is 1, the reference frame is reliable. If it 
+ *    is 0, then it is not reliable.
+ *
+ * \note
+ *    A specific area in each reference frame is assumed to be unreliable
+ *    if the same area has been intra-refreshed in a subsequent frame.
+ *    The information about intra-refreshed areas is kept in the pixel_map.
+ *
+ *************************************************************************************
+ */
+int CheckReliabilityOfRefFrame(int ref_frame)
+{
+  int y,x, block_y, block_x, dy, dx, y_pos, x_pos, yy, xx, pres_x, pres_y;
+  int maxold_x = img->width-1;
+  int maxold_y = img->height-1;
+  ref_frame++;
+
+  for (block_y=0; block_y<BLOCK_MULTIPLE; block_y++)
+    for (block_x=0; block_x<BLOCK_MULTIPLE; block_x++)
+    {
+      y_pos = tmp_mv[1][img->block_y+block_y][img->block_x+block_x+4];
+      y_pos += (img->block_y+block_y) * BLOCK_SIZE * 4;
+      x_pos = tmp_mv[0][img->block_y+block_y][img->block_x+block_x+4];
+      x_pos += (img->block_x+block_x) * BLOCK_SIZE * 4;
+      
+      /* Here we specify which pixels of the reference frame influence
+         the reference values and check their reliability. This is
+         based on the function Get_Reference_Pixel */
+      
+      dy = y_pos & 3;
+      dx = x_pos & 3;
+
+      y_pos = (y_pos-dy)/4;
+      x_pos = (x_pos-dx)/4;
+
+      if (dy==0 && dx==0) //full-pel
+      {
+        for (y=0 ; y < BLOCK_SIZE ; y++)
+          for (x=0 ; x < BLOCK_SIZE ; x++)
+            if (pixel_map[max(0,min(maxold_y,y_pos+y))][max(0,min(maxold_x,x_pos+y))] < ref_frame)
+              return 0;
+      }
+      else if (dx == 3 && dy == 3)  /* funny position */
+      {
+        for (y=0 ; y < BLOCK_SIZE ; y++)
+          for (x=0 ; x < BLOCK_SIZE ; x++)
+            if (pixel_map[max(0,min(maxold_y,y_pos+y))  ][max(0,min(maxold_x,x_pos+x))  ] < ref_frame ||
+                pixel_map[max(0,min(maxold_y,y_pos+y))  ][max(0,min(maxold_x,x_pos+x+1))] < ref_frame ||
+                pixel_map[max(0,min(maxold_y,y_pos+y+1))][max(0,min(maxold_x,x_pos+x+1))] < ref_frame ||
+                pixel_map[max(0,min(maxold_y,y_pos+y+1))][max(0,min(maxold_x,x_pos+x))  ] < ref_frame)
+              return 0;
+      }
+      else  /* other positions */
+      {
+        if (dy == 0) 
+        {
+          for (y=0 ; y < BLOCK_SIZE ; y++)
+            for (x=0 ; x < BLOCK_SIZE ; x++)
+            {
+              pres_y = max(0,min(maxold_y,y_pos+y));
+              for(xx=-2;xx<4;xx++) {
+                pres_x = max(0,min(maxold_x,x_pos+x+xx));
+                if (pixel_map[pres_y][pres_x] < ref_frame)
+                  return 0;
+              }
+            }
+        }
+
+        else if (dx == 0) 
+        {
+          for (y=0 ; y < BLOCK_SIZE ; y++)
+            for (x=0 ; x < BLOCK_SIZE ; x++)
+            {
+              pres_x = max(0,min(maxold_x,x_pos+x));
+              for(yy=-2;yy<4;yy++) {
+                pres_y = max(0,min(maxold_y,y_pos+yy+y));
+                if (pixel_map[pres_y][pres_x] < ref_frame)
+                  return 0;
+              }
+            }
+        }
+        else if (dx == 2) 
+        {
+          for (y=0 ; y < BLOCK_SIZE ; y++)
+            for (x=0 ; x < BLOCK_SIZE ; x++)
+            {
+              for(yy=-2;yy<4;yy++) {
+                pres_y = max(0,min(maxold_y,y_pos+yy+y));
+                for(xx=-2;xx<4;xx++) {
+                  pres_x = max(0,min(maxold_x,x_pos+xx+x));
+                  if (pixel_map[pres_y][pres_x] < ref_frame)
+                    return 0;
+                }
+              }
+            }
+        }
+        else if (dy == 2) 
+        {
+          for (y=0 ; y < BLOCK_SIZE ; y++)
+            for (x=0 ; x < BLOCK_SIZE ; x++)
+            {
+              for(xx=-2;xx<4;xx++) {
+                pres_x = max(0,min(maxold_x,x_pos+xx+x));
+                for(yy=-2;yy<4;yy++) {
+                  pres_y = max(0,min(maxold_y,y_pos+yy+y));
+                  if (pixel_map[pres_y][pres_x] < ref_frame)
+                    return 0;
+                }
+              }
+            }
+        }
+        else 
+        {
+          for (y=0 ; y < BLOCK_SIZE ; y++)
+            for (x=0 ; x < BLOCK_SIZE ; x++)
+            {
+              pres_y = dy == 1 ? y_pos+y : y_pos+y+1;
+              pres_y = max(0,min(maxold_y,pres_y));
+
+              for(xx=-2;xx<4;xx++) {
+                pres_x = max(0,min(maxold_x,x_pos+xx+x));
+                if (pixel_map[pres_y][pres_x] < ref_frame)
+                  return 0;
+              }
+
+              pres_x = dx == 1 ? x_pos+x : x_pos+x+1;
+              pres_x = max(0,min(maxold_x,pres_x));
+
+              for(yy=-2;yy<4;yy++) {
+                pres_y = max(0,min(maxold_y,y_pos+yy+y));
+                if (pixel_map[pres_y][pres_x] < ref_frame)
+                  return 0;
+              }
+            }
+        }
+
+      }
+    }
+
+  return 1;
+}
+
+
+
 

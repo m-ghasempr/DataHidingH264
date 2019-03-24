@@ -231,11 +231,11 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
   int done = 0;
   int err, back=0;
   int intime=0;
-  int ei_flag;
   static int last_pframe=0, bframe_to_code=0;
   int b_interval;
   static unsigned int old_seq=0;
   int FirstMacroblockInSlice;
+  static int b_frame;
 
   assert (currSlice != NULL);
   assert (bits != 0);
@@ -289,7 +289,7 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
       //
       // If anyonme comes up with an idea how to use coefficients without the
       // header information then this code has to be changed
-      printf ("ReadRTPPacket(): found unexpected Partition %c packet, skipping\n", p->payload[0]&0xf==2?'B':'C');
+      printf ("found unexpected Partition %c packet, skipping\n", p->payload[0]&0xf==2?'B':'C');
       break;
     case 4:
       //! Compound packets may be handled here, but I (StW) would personally prefer and
@@ -344,12 +344,12 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
   // concealment.
   if(first)
   {
+    first = FALSE;
     bframe_to_code = InfoSet.NumberBFrames+1;
   }
 
   if (LastPicID == sh->PictureID)   // we are in the same picture
   {
-    first = FALSE;
     if (ExpectedMBNr == FirstMacroblockInSlice)
     {
       currSlice->partArr[0].bitstream->ei_flag = 0;    // everything seems to be ok.
@@ -395,38 +395,37 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
     if (ExpectedMBNr == 0)    // the old picture was finished
     {
       if (((last_pframe + InfoSet.FrameSkip +1)%256) == sh->PictureID && 
-           (bframe_to_code > InfoSet.NumberBFrames) && !first) //! we received a new P-Frame and coded all B-Frames
+           (bframe_to_code > InfoSet.NumberBFrames)) //! we received a new P-Frame and coded all B-Frames
       {
-        //! This P-Frame is the one we expected but maybe parts of it are lost!
         if(InfoSet.NumberBFrames)
         {
-          last_pframe = sh->PictureID-(InfoSet.FrameSkip +1);
-          if(last_pframe < 0)
-            last_pframe += 256;
           bframe_to_code = 1;
+          last_pframe = sh->PictureID-(InfoSet.FrameSkip +1);
         }
         else
           last_pframe = sh->PictureID;
-        //! need to set the following for EC:
-        img->tr = sh->PictureID;
+
+        if(last_pframe < 0)
+          last_pframe += 256;
+        b_frame = FALSE;
       }
       else if(sh->PictureID == last_pframe + b_interval*bframe_to_code && InfoSet.NumberBFrames) //! we received a B-Frame
       {
-        //! This B-Frame is the one we expected but maybe parts of it are lost!
         bframe_to_code ++;
-        if(bframe_to_code > InfoSet.NumberBFrames) //! last B-Frame before next P-Frame
-          last_pframe = (last_pframe+(InfoSet.FrameSkip +1))%256;
-        //! need to set the following for EC:
-        img->tr = sh->PictureID; 
+        b_frame = TRUE;
+        if(bframe_to_code > InfoSet.NumberBFrames)
+          last_pframe += (InfoSet.FrameSkip +1);
       }
       else //! we lost at least one whole frame
       {
+        //printf ("SLICE LOSS 4: Slice loss at PicID %d containing the whole frame\n", LastPicID + InfoSet.FrameSkip +1); 
         back=p->packlen+8;                // Unread the packet
         fseek (bits, -back, SEEK_CUR);    
         currSlice->ei_flag = 1;
         currSlice->dp_mode = PAR_DP_1;
         currSlice->start_mb_nr = ExpectedMBNr;
         currSlice->next_header = RTPGetFollowingSliceHeader (img, nextp, nextsh); 
+        currSlice->partArr[0].readSyntaxElement = readSyntaxElement_RTP;
         assert (currSlice->start_mb_nr == img->current_mb_nr); 
 
 #if _ERROR_CONCEALMENT_
@@ -437,21 +436,23 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
         currSlice->partArr[0].bitstream->bitstream_length=0;
         currSlice->partArr[0].bitstream->read_len=0;
         currSlice->partArr[0].bitstream->code_len=0;
-        
-        //TO should be OK like this
-        img->pn++;
-        
+
         if(!InfoSet.NumberBFrames || (bframe_to_code > InfoSet.NumberBFrames)) //! we expect a P-Frame
         {
           img->tr = currSlice->picture_id = (last_pframe + InfoSet.FrameSkip +1)%256;
           img->type = INTER_IMG_1;
           if(InfoSet.NumberBFrames)
           {
+            last_pframe = img->tr-(InfoSet.FrameSkip +1);
             bframe_to_code = 1;
-            //! do not change last_pframe here
           }
           else
-            last_pframe = img->tr; 
+            last_pframe = img->tr;
+          
+          if(last_pframe < 0)
+            last_pframe += 256;
+          b_frame = FALSE;
+          img->pn++;
         }
         else //! we expect a B-Frame
         {
@@ -461,12 +462,7 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
           if(bframe_to_code > InfoSet.NumberBFrames)
             last_pframe += (InfoSet.FrameSkip +1);
         }
-        if(first)
-        {
-          img->pn = 0;
-          img->tr = 0;
-        }
-        first = FALSE;
+        
         return 0;
       }
       if(FirstMacroblockInSlice == 0)
@@ -475,7 +471,7 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
       }
       else //! slice loss from the begining of the frame
       {
-        // printf ("SLICE LOSS 2: Slice loss at PicID %d, beginning of picture to macroblock %d\n", LastPicID, FirstMacroblockInSlice); 
+        //printf ("SLICE LOSS 2: Slice loss at PicID %d, beginning of picture to macroblock %d\n", LastPicID, FirstMacroblockInSlice); 
         back=p->packlen+8;                // Unread the packet
         fseek (bits, -back, SEEK_CUR);    
         currSlice->ei_flag = 1;
@@ -492,25 +488,25 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
         currSlice->partArr[0].bitstream->bitstream_length=0;
         currSlice->partArr[0].bitstream->read_len=0;
         currSlice->partArr[0].bitstream->code_len=0;
+        currSlice->partArr[0].readSyntaxElement = readSyntaxElement_RTP;
         
-        if(!InfoSet.NumberBFrames || (bframe_to_code > InfoSet.NumberBFrames)) //! we expect a P-Frame
+        img->tr = currSlice->picture_id = sh->PictureID;
+        if(b_frame == FALSE) //! we expect a P-Frame
         {
           img->type = INTER_IMG_1;
-        }
-        else //! we expect a B-Frame
-        {
+          img->pn++;
+        }  
+        else
           img->type = B_IMG_1;
-        }
         
         return 0;
       }
     }
     else //we did not finish the old frame
     {
-      // printf ("SLICE LOSS 3: Slice loss at PicID %d, macroblocks %d to end of picture\n", LastPicID, ExpectedMBNr); 
+      //upprintf ("SLICE LOSS 3: Slice loss at PicID %d, macroblocks %d to end of picture\n", LastPicID, ExpectedMBNr); 
       back=p->packlen+8;                // Unread the packet
       fseek (bits, -back, SEEK_CUR);    
-      ei_flag = 1;
       currSlice->ei_flag = 1;
       currSlice->dp_mode = PAR_DP_1;
       currSlice->start_mb_nr = ExpectedMBNr;
@@ -524,6 +520,7 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
       currSlice->partArr[0].bitstream->bitstream_length=0;
       currSlice->partArr[0].bitstream->read_len=0;
       currSlice->partArr[0].bitstream->code_len=0;
+      currSlice->partArr[0].readSyntaxElement = readSyntaxElement_RTP;
       
       img->tr = currSlice->picture_id = LastPicID;
       
@@ -566,7 +563,6 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
   {
     currSlice->dp_mode = PAR_DP_3;
     currSlice->max_part_nr = 3;
-    printf ("Found A-Partition: PicId %d, SliceID %d \n",sh->PictureID, sh->SliceID);
     RTPProcessDataPartitionedSlice (img, inp, bits, p, sh->SliceID);
     return 3;
 
@@ -840,14 +836,13 @@ int RTPInterpretSliceHeader (byte *buf, int bufsize, int ReadSliceId, RTPSliceHe
   while (sh->MMCObuffer)
   { 
     tmp_mmco=sh->MMCObuffer;
-
     sh->MMCObuffer=tmp_mmco->Next;
     free (tmp_mmco);
   } 
-
+  
+  /* read Memory Management Control Operation */
   if (sh->RPBT)
   {
-    /* read Memory Management Control Operation */
     do
     {
 
@@ -1967,7 +1962,6 @@ void RTPProcessDataPartitionedSlice (struct img_par *img, struct inp_par *inp, F
     img->currentSlice->partArr[1].bitstream->code_len=0;
     img->currentSlice->partArr[1].bitstream->ei_flag=1;
     img->currentSlice->partArr[1].readSyntaxElement = readSyntaxElement_RTP;
-
     img->currentSlice->partArr[2].bitstream->bitstream_length=0;
     img->currentSlice->partArr[2].bitstream->code_len=0;
     img->currentSlice->partArr[2].bitstream->ei_flag=1;
@@ -1983,7 +1977,6 @@ void RTPProcessDataPartitionedSlice (struct img_par *img, struct inp_par *inp, F
     img->currentSlice->partArr[1].bitstream->code_len=0;
     img->currentSlice->partArr[1].bitstream->ei_flag=1;
     img->currentSlice->partArr[1].readSyntaxElement = readSyntaxElement_RTP;
-
     img->currentSlice->partArr[2].bitstream->bitstream_length=0;
     img->currentSlice->partArr[2].bitstream->code_len=0;
     img->currentSlice->partArr[2].bitstream->ei_flag=1;
@@ -2005,10 +1998,8 @@ void RTPProcessDataPartitionedSlice (struct img_par *img, struct inp_par *inp, F
     img->currentSlice->partArr[1].bitstream->bitstream_length=0;
     img->currentSlice->partArr[1].bitstream->code_len=0;
     img->currentSlice->partArr[1].readSyntaxElement = readSyntaxElement_RTP;
-
     img->currentSlice->partArr[2].bitstream->ei_flag=0;
     CopyPartitionBitstring (img, c, img->currentSlice->partArr[2].bitstream, 2);    // copy to C
-    printf ("Found C-Partition: PicId %d, SliceID %d \n",sh->PictureID, sh->SliceID);
     return;
   }
 
@@ -2033,7 +2024,6 @@ void RTPProcessDataPartitionedSlice (struct img_par *img, struct inp_par *inp, F
     img->currentSlice->partArr[2].bitstream->ei_flag=0;
     img->currentSlice->ei_flag=0;
     CopyPartitionBitstring (img, c, img->currentSlice->partArr[2].bitstream, 2);    // copy to C
-    printf ("Found C-Partition: PicId %d, SliceID %d \n",sh->PictureID, sh->SliceID);
     return;
   }
 
@@ -2044,7 +2034,6 @@ void RTPProcessDataPartitionedSlice (struct img_par *img, struct inp_par *inp, F
     
     img->currentSlice->partArr[1].bitstream->ei_flag=0;
     CopyPartitionBitstring (img, b, img->currentSlice->partArr[1].bitstream, 1);    // copy to B
-    printf ("Found B-Partition: PicId %d, SliceID %d \n",sh->PictureID, sh->SliceID);
     c = b;    // re-use buffer, could as well use b variable
     Filepos = ftell (bits);
 
@@ -2089,7 +2078,6 @@ void RTPProcessDataPartitionedSlice (struct img_par *img, struct inp_par *inp, F
       img->currentSlice->partArr[2].bitstream->ei_flag=0;
       img->currentSlice->ei_flag=0;
       CopyPartitionBitstring (img, c, img->currentSlice->partArr[2].bitstream, 2);    // copy to C
-      printf ("Found C-Partition: PicId %d, SliceID %d \n",sh->PictureID, sh->SliceID);
       return;
     }
     assert (1==2);

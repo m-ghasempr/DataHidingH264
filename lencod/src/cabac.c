@@ -84,10 +84,15 @@ MotionInfoContexts* create_contexts_MotionInfo(void)
   if( enco_ctx->ref_no_contexts == NULL )
     no_mem_exit("create_contexts_MotionInfo: enco_ctx->ref_no_contexts");
 
-  enco_ctx->delta_qp_contexts = (BiContextTypePtr) malloc(NUM_DELTA_QP_CTX * sizeof( BiContextType ) );
+  enco_ctx->delta_qp_inter_contexts = (BiContextTypePtr) malloc(NUM_DELTA_QP_CTX * sizeof( BiContextType ) );
 
-  if( enco_ctx->delta_qp_contexts == NULL )
-    no_mem_exit("create_contexts_MotionInfo: enco_ctx->delta_qp_contexts");
+  if( enco_ctx->delta_qp_inter_contexts == NULL )
+    no_mem_exit("create_contexts_MotionInfo: enco_ctx->delta_qp_inter_contexts");
+
+  enco_ctx->delta_qp_intra_contexts = (BiContextTypePtr) malloc(NUM_DELTA_QP_CTX * sizeof( BiContextType ) );
+
+  if( enco_ctx->delta_qp_intra_contexts == NULL )
+    no_mem_exit("create_contexts_MotionInfo: enco_ctx->delta_qp_intra_contexts");
 
   return enco_ctx;
 }
@@ -218,12 +223,23 @@ void init_contexts_MotionInfo(MotionInfoContexts *enco_ctx, int ini_flag)
   if (ini_flag)
   {
     for (i=0; i < NUM_DELTA_QP_CTX; i++)
-      biari_init_context(enco_ctx->delta_qp_contexts + i,DELTA_QP_Ini[i][0]*scale_factor,DELTA_QP_Ini[i][1]*scale_factor,DELTA_QP_Ini[i][2]*scale_factor);
+      biari_init_context(enco_ctx->delta_qp_inter_contexts + i,DELTA_QP_Ini[i][0]*scale_factor,DELTA_QP_Ini[i][1]*scale_factor,DELTA_QP_Ini[i][2]*scale_factor);
   }
   else
   {
     for (i=0; i < NUM_DELTA_QP_CTX; i++)
-      biari_init_context(enco_ctx->delta_qp_contexts + i,1,1,1000);
+      biari_init_context(enco_ctx->delta_qp_inter_contexts + i,1,1,1000);
+  }
+
+  if (ini_flag)
+  {
+    for (i=0; i < NUM_DELTA_QP_CTX; i++)
+      biari_init_context(enco_ctx->delta_qp_intra_contexts + i,DELTA_QP_Ini[i][0]*scale_factor,DELTA_QP_Ini[i][1]*scale_factor,DELTA_QP_Ini[i][2]*scale_factor);
+  }
+  else
+  {
+    for (i=0; i < NUM_DELTA_QP_CTX; i++)
+      biari_init_context(enco_ctx->delta_qp_intra_contexts + i,1,1,1000);
   }
 }
 
@@ -351,8 +367,11 @@ void delete_contexts_MotionInfo(MotionInfoContexts *enco_ctx)
   if (enco_ctx->ref_no_contexts != NULL)
     free(enco_ctx->ref_no_contexts);
 
-  if (enco_ctx->delta_qp_contexts != NULL)
-    free(enco_ctx->delta_qp_contexts);
+  if (enco_ctx->delta_qp_inter_contexts != NULL)
+    free(enco_ctx->delta_qp_inter_contexts);
+
+  if (enco_ctx->delta_qp_intra_contexts != NULL)
+    free(enco_ctx->delta_qp_intra_contexts);
 
 
   free( enco_ctx );
@@ -762,7 +781,7 @@ void writeMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
  *    block pattern of a given delta quant.
  ****************************************************************************
  */
-void writeDquant_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
+void writeDquant_inter_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
   MotionInfoContexts *ctx = img->currentSlice->mot_ctx;
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
@@ -786,17 +805,59 @@ void writeDquant_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 
   if (act_sym==0)
   {
-    biari_encode_symbol(eep_dp, 0, ctx->delta_qp_contexts + act_ctx );
+    biari_encode_symbol(eep_dp, 0, ctx->delta_qp_inter_contexts + act_ctx );
   }
   else
   {
-    biari_encode_symbol(eep_dp, 1, ctx->delta_qp_contexts + act_ctx);
+    biari_encode_symbol(eep_dp, 1, ctx->delta_qp_inter_contexts + act_ctx);
     act_ctx=2;
     act_sym--;
-    unary_bin_encode(eep_dp, act_sym,ctx->delta_qp_contexts+act_ctx,1);
+    unary_bin_encode(eep_dp, act_sym,ctx->delta_qp_inter_contexts+act_ctx,1);
   }
 }
 
+
+/*!
+ ****************************************************************************
+ * \brief
+ *    This function is used to arithmetically encode the coded
+ *    block pattern of a given delta quant.
+ ****************************************************************************
+ */
+void writeDquant_intra_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
+{
+  MotionInfoContexts *ctx = img->currentSlice->mot_ctx;
+  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+
+  int act_ctx;
+  int act_sym;
+  int dquant = se->value1;
+  int sign=0;
+
+  if (dquant <= 0)
+    sign = 1;
+  act_sym = abs(dquant) << 1;
+
+  act_sym += sign;
+  act_sym --;
+
+  if (currMB->mb_available[1][0] == NULL)
+    act_ctx = 0;
+  else
+    act_ctx = ( ((currMB->mb_available[1][0])->delta_qp != 0) ? 1 : 0);
+
+  if (act_sym==0)
+  {
+    biari_encode_symbol(eep_dp, 0, ctx->delta_qp_intra_contexts + act_ctx );
+  }
+  else
+  {
+    biari_encode_symbol(eep_dp, 1, ctx->delta_qp_intra_contexts + act_ctx);
+    act_ctx=2;
+    act_sym--;
+    unary_bin_encode(eep_dp, act_sym,ctx->delta_qp_intra_contexts+act_ctx,1);
+  }
+}
 /*!
  ****************************************************************************
  * \brief

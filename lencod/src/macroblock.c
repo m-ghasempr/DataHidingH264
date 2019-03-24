@@ -303,7 +303,10 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
      if(img->cod_counter)
      {
        // write out the skip MBs to know how many bits we need for the RLC
-       dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
+       if(img->type == B_IMG)
+         dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+       else
+         dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
        currSE->value1 = img->cod_counter;
        currSE->mapping = n_linfo2;
        currSE->type = SE_MBTYPE;
@@ -411,7 +414,10 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
       img->cod_counter--;
       if(img->cod_counter)
       {
-        dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
+        if(img->type == B_IMG)
+          dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+        else
+          dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
         currSE->value1 = img->cod_counter;
         currSE->mapping = n_linfo2;
         currSE->type = SE_MBTYPE;
@@ -441,7 +447,10 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
   //! TO 4.11.2001 Skip MBs at the end of this slice for Slice Mode 0 or 1
   if(*end_of_slice == TRUE && img->cod_counter && !use_bitstream_backing)
   {
-    dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
+    if(img->type == B_IMG)
+      dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+    else
+      dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
     currSE->value1 = img->cod_counter;
     currSE->mapping = n_linfo2;
     currSE->type = SE_MBTYPE;
@@ -1108,9 +1117,9 @@ void write_one_macroblock()
   {
     if (img->mb_mode != COPY_MB || currMB->intraOrInter != INTER_MB || (img->type == B_IMG && currMB->cbp != 0))
   {
+      // Macroblock is coded, put out run and mbmode
       currSE->value1 = img->cod_counter;
       currSE->mapping = n_linfo2;
-      // Macroblock is coded, put out run and mbmode
       currSE->type = SE_MBTYPE;
 #if TRACE
       snprintf(currSE->tracestring, TRACESTRING_SIZE, "MB runlength = %3d",img->cod_counter);
@@ -1444,7 +1453,7 @@ writeMB_bits_for_Dquant_inter ()
   if (input->symbol_mode == UVLC)
      currSE->mapping = dquant_linfo;
   else if (input->symbol_mode == CABAC)
-     currSE->writing = writeDquant_CABAC;// writeMVD2Buffer_CABAC;
+     currSE->writing = writeDquant_inter_CABAC;// writeMVD2Buffer_CABAC;
 
    currSE->type = SE_DELTA_QUANT_INTER;
 
@@ -1485,7 +1494,7 @@ writeMB_bits_for_Dquant_intra ()
   if (input->symbol_mode == UVLC)
      currSE->mapping = dquant_linfo;
   else if (input->symbol_mode == CABAC)
-     currSE->writing = writeDquant_CABAC;// writeMVD2Buffer_CABAC;
+     currSE->writing = writeDquant_intra_CABAC;// writeMVD2Buffer_CABAC;
 
    currSE->type = SE_DELTA_QUANT_INTRA;
 

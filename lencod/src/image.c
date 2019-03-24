@@ -165,6 +165,9 @@ int encode_one_frame()
   if (input->rdopt==2)
     UpdateDecoders(); // simulate packet losses and move decoded image to reference buffers
 
+  if (input->RestrictRef)
+    UpdatePixelMap();
+
   find_snr(snr,img);
 
   time(&ltime2);       // end time sec

@@ -215,7 +215,8 @@ typedef struct
   BiContextTypePtr mb_type_contexts[2];
   BiContextTypePtr mv_res_contexts[2];
   BiContextTypePtr ref_no_contexts;
-  BiContextTypePtr delta_qp_contexts;
+  BiContextTypePtr delta_qp_inter_contexts;
+  BiContextTypePtr delta_qp_intra_contexts;
 } MotionInfoContexts;
 
 #define NUM_IPR_CTX    2
@@ -312,6 +313,7 @@ typedef struct
 
   byte            *streamBuffer;      //!< actual buffer for written bytes
   int             write_flag;
+
 } Bitstream;
 
 //! DataPartition
@@ -377,21 +379,37 @@ pel_t **Refbuf11;            //!< 1/1th pel (full pel) reference frame buffer
 pel_t  *Refbuf11_P;          //!< 1/1th pel P picture buffer
 
 // Buffers for rd optimization with packet losses, Dim. Kontopodis
-int  **resY;             //!< Residue of Luminance
+/* int  **resY;             //!< Residue of Luminance
 byte ***decY;            //!< Decoded values at the simulated decoders
 byte ****decref;         //!< Reference frames of the simulated decoders
 byte ***decY_best;       //!< Decoded frames for the best mode for all decoders
 byte **RefBlock;
 byte **status_map;
 byte **dec_mb_mode;
-byte **dec_mb_ref;
-int intras;       //!< Counts the intra updates in each frame.
+byte **dec_mb_ref;*/
+byte **pixel_map;   //!< Shows the latest reference frame that is reliable for each pixel
+byte **refresh_map; //!< Stores the new values for pixel_map  
+int intras;         //!< Counts the intra updates in each frame.
 
 int  Bframe_ctr, frame_no, nextP_tr;
 int  tot_time;
 
 #define ET_SIZE 300      //!< size of error text buffer
 char errortext[ET_SIZE]; //!< buffer for error message for exit with error()
+
+//! Info for the "decoders-in-the-encoder" used for rdoptimization with packet losses
+typedef struct
+{
+  int  **resY;             //!< Residue of Luminance
+  byte ***decY;            //!< Decoded values at the simulated decoders
+  byte ****decref;         //!< Reference frames of the simulated decoders
+  byte ***decY_best;       //!< Decoded frames for the best mode for all decoders
+  byte **RefBlock;
+  byte **status_map;
+  byte **dec_mb_mode;
+  byte **dec_mb_ref;
+} Decoders;
+extern Decoders *decs;
 
 //! SNRParameters
 typedef struct
@@ -492,6 +510,7 @@ typedef struct
   int LossRateB;
   int LossRateC;
   int NoOfDecoders;
+  int RestrictRef;
 
 } InputParameters;
 
@@ -749,7 +768,8 @@ void writeIntraPredMode2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr e
 void writeRefFrame2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeCBP2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
-void writeDquant_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeDquant_inter_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeDquant_intra_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeRunLevel2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeBiDirBlkSize2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeBiMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
@@ -811,6 +831,9 @@ void UpdateDecoders();
 void Build_Status_Map(byte **s_map);
 void Error_Concealment(byte **inY, byte **s_map, byte ***refY);
 void Conceal_Error(byte **inY, int mb_y, int mb_x, byte ***refY, byte **s_map);
+//============= restriction of reference frames based on the latest intra-refreshes==========
+int CheckReliabilityOfRefFrame(int ref_frame);
+void UpdatePixelMap();
 
 //============= fast full integer search =======================
 #ifdef _FAST_FULL_ME_

@@ -91,10 +91,16 @@ MotionInfoContexts* create_contexts_MotionInfo(void)
   if( deco_ctx->ref_no_contexts == NULL )
     no_mem_exit("create_contexts_MotionInfo: deco_ctx->ref_no_contexts");
 
-  deco_ctx->delta_qp_contexts = (BiContextTypePtr) malloc(NUM_DELTA_QP_CTX * sizeof( BiContextType ) );
+  deco_ctx->delta_qp_inter_contexts = (BiContextTypePtr) malloc(NUM_DELTA_QP_CTX * sizeof( BiContextType ) );
 
-  if( deco_ctx->delta_qp_contexts == NULL )
-    no_mem_exit("create_contexts_MotionInfo: deco_ctx->delta_qp_contexts");
+  if( deco_ctx->delta_qp_inter_contexts == NULL )
+    no_mem_exit("create_contexts_MotionInfo: deco_ctx->delta_qp_inter_contexts");
+  
+  deco_ctx->delta_qp_intra_contexts = (BiContextTypePtr) malloc(NUM_DELTA_QP_CTX * sizeof( BiContextType ) );
+
+  if( deco_ctx->delta_qp_intra_contexts == NULL )
+    no_mem_exit("create_contexts_MotionInfo: deco_ctx->delta_qp_intra_contexts");
+  
   return deco_ctx;
 }
 
@@ -227,13 +233,25 @@ void init_contexts_MotionInfo(struct img_par *img, MotionInfoContexts *deco_ctx,
   if (ini_flag)
   {
     for (i=0; i < NUM_DELTA_QP_CTX; i++)
-      biari_init_context(deco_ctx->delta_qp_contexts + i,DELTA_QP_Ini[i][0]*scale_factor,DELTA_QP_Ini[i][1]*scale_factor,DELTA_QP_Ini[i][2]*scale_factor);
+      biari_init_context(deco_ctx->delta_qp_inter_contexts + i,DELTA_QP_Ini[i][0]*scale_factor,DELTA_QP_Ini[i][1]*scale_factor,DELTA_QP_Ini[i][2]*scale_factor);
   }
   else
   {
     for (i=0; i < NUM_DELTA_QP_CTX; i++)
-      biari_init_context(deco_ctx->delta_qp_contexts + i,1,1,1000);
+      biari_init_context(deco_ctx->delta_qp_inter_contexts + i,1,1,1000);
   }
+
+  if (ini_flag)
+  {
+    for (i=0; i < NUM_DELTA_QP_CTX; i++)
+      biari_init_context(deco_ctx->delta_qp_intra_contexts + i,DELTA_QP_Ini[i][0]*scale_factor,DELTA_QP_Ini[i][1]*scale_factor,DELTA_QP_Ini[i][2]*scale_factor);
+  }
+  else
+  {
+    for (i=0; i < NUM_DELTA_QP_CTX; i++)
+      biari_init_context(deco_ctx->delta_qp_intra_contexts + i,1,1,1000);
+  }
+
 }
 
 /*!
@@ -362,8 +380,11 @@ void delete_contexts_MotionInfo(MotionInfoContexts *deco_ctx)
   if (deco_ctx->ref_no_contexts != NULL)
     free(deco_ctx->ref_no_contexts);
 
-  if (deco_ctx->delta_qp_contexts != NULL)
-    free(deco_ctx->delta_qp_contexts);
+  if (deco_ctx->delta_qp_inter_contexts != NULL)
+    free(deco_ctx->delta_qp_inter_contexts);
+
+  if (deco_ctx->delta_qp_intra_contexts != NULL)
+    free(deco_ctx->delta_qp_intra_contexts);
 
   free( deco_ctx );
 
@@ -863,7 +884,7 @@ void readMVDFromBuffer_CABAC(SyntaxElement *se,
  *     of a given MB.
  ************************************************************************
  */
-void readDquantFromBuffer_CABAC(SyntaxElement *se,
+void readDquant_inter_FromBuffer_CABAC(SyntaxElement *se,
                                 struct inp_par *inp,
                                 struct img_par *img,
                                 DecodingEnvironmentPtr dep_dp)
@@ -880,11 +901,55 @@ void readDquantFromBuffer_CABAC(SyntaxElement *se,
   else
     act_ctx = ( ((currMB->mb_available[1][0])->delta_quant != 0) ? 1 : 0);
 
-  act_sym = biari_decode_symbol(dep_dp,ctx->delta_qp_contexts + act_ctx );
+  act_sym = biari_decode_symbol(dep_dp,ctx->delta_qp_inter_contexts + act_ctx );
   if (act_sym != 0)
   {
     act_ctx = 2;
-    act_sym = unary_bin_decode(dep_dp,ctx->delta_qp_contexts+act_ctx,1);
+    act_sym = unary_bin_decode(dep_dp,ctx->delta_qp_inter_contexts+act_ctx,1);
+    act_sym++;
+  }
+
+  dquant = (act_sym+1)/2;
+  if((act_sym & 0x01)==0)                           // lsb is signed bit
+    dquant = -dquant;
+  se->value1 = dquant;
+
+#if TRACE
+  fprintf(p_trace, "@%d%s\t\t\t%d\n",symbolCount++, se->tracestring, se->value1);
+  fflush(p_trace);
+#endif
+}
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    This function is used to arithmetically decode the delta qp
+ *     of a given MB.
+ ************************************************************************
+ */
+void readDquant_intra_FromBuffer_CABAC(SyntaxElement *se,
+                                struct inp_par *inp,
+                                struct img_par *img,
+                                DecodingEnvironmentPtr dep_dp)
+{
+  MotionInfoContexts *ctx = img->currentSlice->mot_ctx;
+  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+
+  int act_ctx;
+  int act_sym;
+  int dquant;
+
+  if (currMB->mb_available[1][0] == NULL)
+    act_ctx = 0;
+  else
+    act_ctx = ( ((currMB->mb_available[1][0])->delta_quant != 0) ? 1 : 0);
+
+  act_sym = biari_decode_symbol(dep_dp,ctx->delta_qp_intra_contexts + act_ctx );
+  if (act_sym != 0)
+  {
+    act_ctx = 2;
+    act_sym = unary_bin_decode(dep_dp,ctx->delta_qp_intra_contexts+act_ctx,1);
     act_sym++;
   }
 

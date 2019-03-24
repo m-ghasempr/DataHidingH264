@@ -228,7 +228,8 @@ typedef struct
   BiContextTypePtr mb_type_contexts[2];
   BiContextTypePtr mv_res_contexts[2];
   BiContextTypePtr ref_no_contexts;
-  BiContextTypePtr delta_qp_contexts;
+  BiContextTypePtr delta_qp_inter_contexts;
+  BiContextTypePtr delta_qp_intra_contexts;
 } MotionInfoContexts;
 
 #define NUM_IPR_CTX    2
@@ -590,7 +591,8 @@ void readBiDirBlkSize2Buffer_CABAC(SyntaxElement *se,struct inp_par *inp,struct 
 
 int  readSliceCABAC(struct img_par *img, struct inp_par *inp);
 int  readSyntaxElement_CABAC(SyntaxElement *se, struct img_par *img, struct inp_par *inp, DataPartition *this_dataPart);
-void readDquantFromBuffer_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp);
+void readDquant_inter_FromBuffer_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp);
+void readDquant_intra_FromBuffer_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp);
 
 void error(char *text, int code);
 void start_slice(struct img_par *img, struct inp_par *inp);

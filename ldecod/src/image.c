@@ -122,6 +122,7 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
   time( &ltime1 );                // start time s
 
   currSlice->next_header = 0;
+  currSlice->next_eiflag = 0;
   while (currSlice->next_header != EOS && currSlice->next_header != SOP)
   {
 

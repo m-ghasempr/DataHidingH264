@@ -513,6 +513,13 @@ static void PatchInp ()
     error (errortext, 400);
   }
 
+  if (input->partition_mode == 1 && input->UseConstrainedIntraPred == 0)
+  {
+    snprintf(errortext, ET_SIZE, "For Partition mode 1 UseConstrainedIntraPred must be set to 1");
+    error (errortext, 400);
+  }
+
+
   if (input->of_mode < 0 || input->of_mode > 3)
   {
     snprintf(errortext, ET_SIZE, "Unsupported Outpout file mode, must be between 0 and 2");
