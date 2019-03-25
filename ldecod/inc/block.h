@@ -117,7 +117,7 @@ extern void itrans4x4_ls(Macroblock *currMB, ColorPlane pl, int ioff, int joff);
 extern void itrans_sp   (Macroblock *currMB, ColorPlane pl, int ioff, int joff);
 extern int  intrapred   (Macroblock *currMB, ColorPlane pl, int ioff,int joff,int i4,int j4);
 extern void itrans_2    (Macroblock *currMB, ColorPlane pl);
-extern void iTransform  (Macroblock *currMB, ColorPlane pl, int need_4x4_transform, int smb);
+extern void iTransform  (Macroblock *currMB, ColorPlane pl, int smb);
 
 extern void copy_image_data       (imgpel  **imgBuf1, imgpel  **imgBuf2, int off1, int off2, int width, int height);
 extern void copy_image_data_16x16 (imgpel  **imgBuf1, imgpel  **imgBuf2, int off1, int off2);

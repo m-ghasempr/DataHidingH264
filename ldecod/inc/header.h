@@ -13,10 +13,10 @@
 extern int FirstPartOfSliceHeader(Slice *currSlice);
 extern int RestOfSliceHeader     (Slice *currSlice);
 
-extern void dec_ref_pic_marking(ImageParameters *p_Img, Bitstream *currStream);
+extern void dec_ref_pic_marking(VideoParameters *p_Vid, Bitstream *currStream);
 
-extern void decode_poc(ImageParameters *p_Img);
-extern int dumppoc(ImageParameters *p_Img);
+extern void decode_poc(VideoParameters *p_Vid);
+extern int  dumppoc   (VideoParameters *p_Vid);
 
 #endif
 

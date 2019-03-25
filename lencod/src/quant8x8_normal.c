@@ -42,8 +42,8 @@
  */
 int quant_8x8_normal(Macroblock *currMB, int **tblock, struct quant_methods *q_method)
 {
-  ImageParameters *p_Img = currMB->p_Img;
-  QuantParameters *p_Quant = p_Img->p_Quant;
+  VideoParameters *p_Vid = currMB->p_Vid;
+  QuantParameters *p_Quant = p_Vid->p_Quant;
   int block_x = q_method->block_x;
   int*  ACLevel = q_method->ACLevel;
   int*  ACRun   = q_method->ACRun;
@@ -122,7 +122,7 @@ int quant_8x8_normal(Macroblock *currMB, int **tblock, struct quant_methods *q_m
  */
 int quant_8x8cavlc_normal(Macroblock *currMB, int **tblock, struct quant_methods *q_method, int***  cofAC)
 {
-  QuantParameters *p_Quant = currMB->p_Img->p_Quant;
+  QuantParameters *p_Quant = currMB->p_Vid->p_Quant;
   int block_x = q_method->block_x;
 
   int  qp = q_method->qp;

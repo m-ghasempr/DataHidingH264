@@ -41,12 +41,19 @@ NOTE: This file contains only a quick overview.
 
 
 1.2 Unix
------------
+--------
 
   Before compiling in a UNIX environment please run the "unixprep.sh" script which
   will remove the DOS LF characters from the files and create object directories.
 
-  Makefiles for GNU make are provided in the lencod and ldecod directory.
+  Makefiles for GNU make are provided at the top level and in the lencod and ldecod directories.
+
+
+1.3 MacOS X
+-----------
+
+  A workspace for XCode can be found in the main directory. The project can also be build 
+  using the UNIX build process (make).
 
 
 2. Command line parameters
@@ -68,7 +75,7 @@ NOTE: This file contains only a quick overview.
              DEFAULTCONFIGFILENAME.  
 
   -f file    
-             If an -f <config> parameter is present in the command line then 
+             If an -f parameter is present in the command line then 
              this file is used to update the defaults of DEFAULTCONFIGFILENAME.  
              There can be more than one -f parameters present.  
 
@@ -145,10 +152,10 @@ NOTE: This file contains only a quick overview.
   MacOs X has a UNIX core so most of the UNIX compile process will work. You might need 
   the following modifications:
 
-  a) in Makefile change "CC = $(shell which gcc)" to "CC = gcc"
+  a) Before Leopard (MacOS 10.5): in Makefile change "CC = $(shell which gcc)" to "CC = gcc"
      (it seems "which" doesn't work)
 
-  b) MacOS X (before "Tiger") doesn't come with ftime. We suggest using a third party ftime 
+  b) MacOS "Tiger" (MacOS 10.4) doesn't come with ftime. We suggest using a third party ftime 
      implementation, e.g. from:
 
      http://darwinsource.opendarwin.org/10.3.4/OpenSSL096-3/openssl/crypto/ftime.c

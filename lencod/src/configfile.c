@@ -71,7 +71,7 @@
 
 char *GetConfigFileContent (char *Filename);
 static void ParseContent            (InputParameters *p_Inp, Mapping *Map, char *buf, int bufsize);
-static void PatchInp                (ImageParameters *p_Img, InputParameters *p_Inp);
+static void PatchInp                (VideoParameters *p_Vid, InputParameters *p_Inp);
 static int  ParameterNameToMapIndex (Mapping *Map, char *s);
 static int  InitEncoderParams       (Mapping *Map);
 static int  TestEncoderParams       (Mapping *Map, int bitdepth_qp_scale[3]);
@@ -143,7 +143,7 @@ int64 getVideoFileSize(int video_file)
  *
  ************************************************************************
  */
-static void getNumberOfFrames (InputParameters *p_Inp, VideoDataFile *input_file)
+void getNumberOfFrames (InputParameters *p_Inp, VideoDataFile *input_file)
 {
   int64 fsize = getVideoFileSize(input_file->f_num);
   int64 isize = (int64) p_Inp->source.size;
@@ -253,8 +253,8 @@ static void updateOutFormat(InputParameters *p_Inp)
  ***********************************************************************
  * \brief
  *    Parse the command line parameters and read the config files.
- * \param p_Img
- *    ImageParameters structure for encoding
+ * \param p_Vid
+ *    VideoParameters structure for encoding
  * \param p_Inp
  *    InputParameters structure as input configuration
  * \param ac
@@ -263,7 +263,7 @@ static void updateOutFormat(InputParameters *p_Inp)
  *    command line parameters
  ***********************************************************************
  */
-void Configure (ImageParameters *p_Img, InputParameters *p_Inp, int ac, char *av[])
+void Configure (VideoParameters *p_Vid, InputParameters *p_Inp, int ac, char *av[])
 {
   char *content = NULL;
   int CLcount, ContentLen, NumberParams;
@@ -273,8 +273,22 @@ void Configure (ImageParameters *p_Img, InputParameters *p_Inp, int ac, char *av
   {
     if (0 == strncmp (av[1], "-v", 2))
     {
+      printf("JM-" VERSION "\n");
+      exit(0);
+    }
+    if (0 == strncmp (av[1], "-V", 2))
+    {
       printf("JM " JM ": compiled " __DATE__ " " __TIME__ "\n");
-      exit(-1);
+#if ( IMGTYPE == 0 )
+      printf("support for more than 8 bits/pel disabled\n");
+#endif
+#if ( ENABLE_FIELD_CTX == 0 )
+      printf("CABAC field coding disabled\n");
+#endif
+#if ( ENABLE_HIGH444_CTX == 0 )
+      printf("CABAC High 4:4:4 profile coding disabled\n");
+#endif
+      exit(0);
     }
 
     if (0 == strncmp (av[1], "-h", 2))
@@ -384,7 +398,7 @@ void Configure (ImageParameters *p_Img, InputParameters *p_Inp, int ac, char *av
     }
   }
   printf ("\n");
-  PatchInp(p_Img, p_Inp);
+  PatchInp(p_Vid, p_Inp);
 
   memcpy (&cfgparams, p_Inp, sizeof (InputParameters));
 
@@ -742,34 +756,16 @@ static int DisplayEncoderParams(Mapping *Map)
 /*!
  ************************************************************************
  * \brief
- *    calculate Ceil(Log2(uiVal))
- ************************************************************************
- */
-unsigned CeilLog2( unsigned uiVal)
-{
-  unsigned uiTmp = uiVal-1;
-  unsigned uiRet = 0;
-
-  while( uiTmp != 0 )
-  {
-    uiTmp >>= 1;
-    uiRet++;
-  }
-  return uiRet;
-}
-
-/*!
- ************************************************************************
- * \brief
  *    read the slice group configuration file. Returns without action
  *    if type is not 0, 2 or 6
  ************************************************************************
  */
-void read_slice_group_info(ImageParameters *p_Img, InputParameters *p_Inp)
+void read_slice_group_info(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   FILE * sgfile=NULL;
   int i;
   int ret;
+  unsigned PicSizeInMapUnits;
 
   if ((p_Inp->slice_group_map_type != 0) && (p_Inp->slice_group_map_type != 2) && (p_Inp->slice_group_map_type != 6))
   {
@@ -797,11 +793,11 @@ void read_slice_group_info(ImageParameters *p_Img, InputParameters *p_Inp)
     if ( NULL==p_Inp->run_length_minus1 )
     {
       fclose(sgfile);
-      no_mem_exit("PatchInp: p_Inp->run_length_minus1");
+      no_mem_exit("read_slice_group_info: p_Inp->run_length_minus1");
     }
 
     // each line contains one 'run_length_minus1' value
-    for(i=0;i<=p_Inp->num_slice_groups_minus1;i++)
+    for(i=0; i <= p_Inp->num_slice_groups_minus1;i++)
     {
       ret  = fscanf(sgfile,"%d",(p_Inp->run_length_minus1+i));
       if ( 1!=ret )
@@ -816,8 +812,13 @@ void read_slice_group_info(ImageParameters *p_Img, InputParameters *p_Inp)
     break;
 
   case 2:
-    p_Inp->top_left=(int *)malloc(sizeof(int)*p_Inp->num_slice_groups_minus1);
-    p_Inp->bottom_right=(int *)malloc(sizeof(int)*p_Inp->num_slice_groups_minus1);
+    // determine expected frame size in map units
+    PicSizeInMapUnits = (p_Inp->output.width >> 4) * (p_Inp->output.height >> 4);
+    if (p_Inp->MbInterlace||p_Inp->PicInterlace) 
+      PicSizeInMapUnits >>= 1;
+
+    p_Inp->top_left=(unsigned *)malloc(sizeof(unsigned)*p_Inp->num_slice_groups_minus1);
+    p_Inp->bottom_right=(unsigned *)malloc(sizeof(unsigned)*p_Inp->num_slice_groups_minus1);
     
     if (NULL==p_Inp->top_left)
     {
@@ -834,21 +835,29 @@ void read_slice_group_info(ImageParameters *p_Img, InputParameters *p_Inp)
     // every two lines contain 'top_left' and 'bottom_right' value
     for(i=0;i<p_Inp->num_slice_groups_minus1;i++)
     {
-      ret = fscanf(sgfile,"%d",(p_Inp->top_left+i));
+      ret = fscanf(sgfile,"%ud",(p_Inp->top_left+i));
       if ( 1!=ret )
       {
         fclose(sgfile);
         snprintf(errortext, ET_SIZE, "Error while reading slice group config file (line %d)", 2*i +1);
         error (errortext, 500);
       }
+      if (p_Inp->top_left[i] > PicSizeInMapUnits)
+      {
+        fprintf(stderr, "Warning: slice group # %d top_left exceeds picture size (will be clipped)\n", i);
+      }
       // scan remaining line
       ret = fscanf(sgfile,"%*[^\n]");
-      ret = fscanf(sgfile,"%d",(p_Inp->bottom_right+i));
+      ret = fscanf(sgfile,"%ud",(p_Inp->bottom_right+i));
       if ( 1!=ret )
       {
         fclose(sgfile);
         snprintf(errortext, ET_SIZE, "Error while reading slice group config file (line %d)", 2*i + 2);
         error (errortext, 500);
+      }
+      if (p_Inp->bottom_right[i] > PicSizeInMapUnits)
+      {
+        fprintf(stderr, "Warning: slice group # %d bottom_right exceeds picture size (will be clipped)\n", i);
       }
       // scan remaining line
       ret = fscanf(sgfile,"%*[^\n]");
@@ -861,8 +870,8 @@ void read_slice_group_info(ImageParameters *p_Img, InputParameters *p_Inp)
       int mb_width, mb_height, mapunit_height;
 
       frame_mb_only = !(p_Inp->PicInterlace || p_Inp->MbInterlace);
-      mb_width  = (p_Inp->output.width + p_Img->auto_crop_right)>>4;
-      mb_height = (p_Inp->output.height + p_Img->auto_crop_bottom)>>4;
+      mb_width  = (p_Inp->output.width + p_Vid->auto_crop_right)>>4;
+      mb_height = (p_Inp->output.height + p_Vid->auto_crop_bottom)>>4;
       mapunit_height = mb_height / (2-frame_mb_only);
 
       p_Inp->slice_group_id=(byte * ) malloc(sizeof(byte)*mapunit_height*mb_width);
@@ -905,58 +914,12 @@ void read_slice_group_info(ImageParameters *p_Img, InputParameters *p_Inp)
 }
 
 /*!
- ************************************************************************
- * \brief
- *    Compute frame numbering related parameters
- * \note
- *    The set variables seem to now be primarily useful only for 
- *    RC purposes. Can we ommit them completely? The use of 
- *    lastframe can also be modified as to ommit this parameter.
- *    To be done at a future date.
- *    
- ************************************************************************
- */
-static void compute_frameno_params(InputParameters *p_Inp)
-{
-  p_Inp->last_frame = 0;
-  if (p_Inp->idr_period && p_Inp->EnableIDRGOP)
-  {
-    if (p_Inp->idr_period == 1)
-    {
-      p_Inp->no_frm_base = p_Inp->no_frames;
-    }
-    else
-    {
-      int gop_size        = (p_Inp->idr_period - 1) * (p_Inp->NumberBFrames + 1) + 1;
-      int idr_gops        = p_Inp->no_frames /gop_size;
-      int rem_frames      = p_Inp->no_frames - idr_gops * gop_size;
-      int last_b_groups   = ((rem_frames > 0) + (rem_frames + p_Inp->NumberBFrames - 1)/ (p_Inp->NumberBFrames + 1));
-      int last_frame      = (rem_frames) - last_b_groups * (p_Inp->NumberBFrames + 1);
-      p_Inp->no_frm_base = idr_gops * p_Inp->idr_period + last_b_groups;
-
-      if (last_frame)
-        p_Inp->last_frame = (p_Inp->no_frames - 1) * (p_Inp->frame_skip + 1);
-    } 
-  }
-  else
-  {
-    p_Inp->no_frm_base = (int) (p_Inp->no_frames + p_Inp->NumberBFrames) / (1 + p_Inp->NumberBFrames);
-
-    if ((p_Inp->no_frm_base - 1)* (1 + p_Inp->NumberBFrames) + 1 < p_Inp->no_frames)
-      p_Inp->last_frame = (p_Inp->no_frames - 1) * (p_Inp->frame_skip + 1);
-
-    if (p_Inp->last_frame > 0)
-      p_Inp->no_frm_base = 1 + (p_Inp->last_frame + p_Inp->NumberBFrames) / (p_Inp->NumberBFrames + 1);
-  }
-}
-
-/*!
  ***********************************************************************
  * \brief
  *    Checks the input parameters for consistency.
  ***********************************************************************
  */
-static void PatchInp (ImageParameters *p_Img, InputParameters *p_Inp)
+static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   int i;
   int storedBplus1;
@@ -1018,12 +981,6 @@ static void PatchInp (ImageParameters *p_Img, InputParameters *p_Inp)
     error (errortext, 500);
   }
 
-  if (p_Inp->idr_period && p_Inp->intra_delay && p_Inp->EnableIDRGOP == 0)
-  {
-    snprintf(errortext, ET_SIZE, " IntraDelay can only be used with only 1 IDR or with EnableIDRGOP=1.");
-    error (errortext, 500);
-  }
-
   if (p_Inp->idr_period && p_Inp->intra_delay && p_Inp->adaptive_idr_period)
   {
     snprintf(errortext, ET_SIZE, " IntraDelay can not be used with AdaptiveIDRPeriod.");
@@ -1042,46 +999,8 @@ static void PatchInp (ImageParameters *p_Img, InputParameters *p_Inp)
     CloseFiles(&p_Inp->input_file1);
   }
 
-  // Update intra period internally given the number of intermediate frames.
-  // This allows Intra period parameters to have similar scemantics as FramesToBeEncoded.  
-  if (p_Inp->NumberBFrames)
-  {
-    p_Inp->intra_period = (p_Inp->intra_period) / (p_Inp->NumberBFrames + 1);
-    if (p_Inp->EnableIDRGOP == 1)
-      p_Inp->idr_period = (p_Inp->idr_period + p_Inp->NumberBFrames) / (p_Inp->NumberBFrames + 1);
-    else
-      p_Inp->idr_period = (p_Inp->idr_period) / (p_Inp->NumberBFrames + 1);
-  }
-
-  // These seem to be now only (or primarily) useful for RC purposes. 
-  // It would be nice to modify all RC implementations to use only p_Inp->no_frames and ignore this if possible
-  compute_frameno_params(p_Inp);
-
   storedBplus1 = (p_Inp->BRefPictures ) ? p_Inp->NumberBFrames + 1: 1;
   
-  if (p_Inp->Log2MaxFNumMinus4 == -1)
-  {    
-    p_Img->log2_max_frame_num_minus4 = iClip3(0,12, (int) (CeilLog2(p_Inp->no_frm_base * storedBplus1) - 4));    
-  }
-  else  
-    p_Img->log2_max_frame_num_minus4 = p_Inp->Log2MaxFNumMinus4;
-
-  if (p_Img->log2_max_frame_num_minus4 == 0 && p_Inp->num_ref_frames == 16)
-  {
-    snprintf(errortext, ET_SIZE, " NumberReferenceFrames=%d and Log2MaxFNumMinus4=%d may lead to an invalid value of frame_num.", p_Inp->num_ref_frames, p_Inp-> Log2MaxFNumMinus4);
-    error (errortext, 500);
-  }
-
-  // set proper p_Img->log2_max_pic_order_cnt_lsb_minus4.
-  if (p_Inp->Log2MaxPOCLsbMinus4 == - 1)
-    p_Img->log2_max_pic_order_cnt_lsb_minus4 = iClip3(0,12, (int) (CeilLog2( 2 * p_Inp->no_frm_base * (p_Inp->jumpd + 1)) - 4));
-  else
-    p_Img->log2_max_pic_order_cnt_lsb_minus4 = p_Inp->Log2MaxPOCLsbMinus4;
-
-
-  if (((1<<(p_Img->log2_max_pic_order_cnt_lsb_minus4 + 3)) < p_Inp->jumpd * 4) && p_Inp->Log2MaxPOCLsbMinus4 != -1)
-    error("log2_max_pic_order_cnt_lsb_minus4 might not be sufficient for encoding. Increase value.",400);
-
   if (p_Inp->no_frames < 1)
   {      
     snprintf(errortext, ET_SIZE, "Not enough frames to encode (%d)", p_Inp->no_frames);
@@ -1102,12 +1021,6 @@ static void PatchInp (ImageParameters *p_Img, InputParameters *p_Inp)
     p_Inp->directInferenceFlag = 1;
   }
 
-  if (strlen (p_Inp->ReconFile) > 0 && (p_Img->p_dec = open(p_Inp->ReconFile, OPENFLAGS_WRITE, OPEN_PERMISSIONS))==-1)
-  {
-    snprintf(errortext, ET_SIZE, "Error open file %s", p_Inp->ReconFile);
-    error (errortext, 500);
-  }
-
 #if TRACE
   if (strlen (p_Inp->TraceFile) > 0 && (p_Enc->p_trace = fopen(p_Inp->TraceFile,"w"))==NULL)
   {
@@ -1116,47 +1029,7 @@ static void PatchInp (ImageParameters *p_Img, InputParameters *p_Inp)
   }
 #endif
 
-  if ((p_Inp->output.width & 0x0F) != 0)
-  {
-    p_Img->auto_crop_right = 16 - (p_Inp->output.width & 0x0F);
-  }
-  else
-  {
-    p_Img->auto_crop_right = 0;
-  }
-
-  if (p_Inp->PicInterlace || p_Inp->MbInterlace)
-  {
-    if ((p_Inp->output.height & 0x01) != 0)
-    {
-      error ("even number of lines required for interlaced coding", 500);
-    }
-    
-    if ((p_Inp->output.height & 0x1F) != 0)
-    {
-      p_Img->auto_crop_bottom = 32 - (p_Inp->output.height & 0x1F);
-    }
-    else
-    {
-      p_Img->auto_crop_bottom=0;
-    }
-  }
-  else
-  {
-    if ((p_Inp->output.height & 0x0F) != 0)
-    {
-      p_Img->auto_crop_bottom = 16 - (p_Inp->output.height & 0x0F);
-    }
-    else
-    {
-      p_Img->auto_crop_bottom = 0;
-    }
-  }
-  if (p_Img->auto_crop_bottom || p_Img->auto_crop_right)
-  {
-    fprintf (stderr, "Warning: Automatic cropping activated: Coded frame Size: %dx%d\n", 
-      p_Inp->output.width + p_Img->auto_crop_right, p_Inp->output.height + p_Img->auto_crop_bottom);
-  }
+  
   
   if ((p_Inp->slice_mode == 1)&&(p_Inp->MbInterlace != 0))
   {
@@ -1173,13 +1046,7 @@ static void PatchInp (ImageParameters *p_Img, InputParameters *p_Inp)
       }
       fprintf ( stderr, "Using %d MBs per slice.\n", p_Inp->slice_argument);
     }
-  }
-
-  // read the slice group configuration file. Only for types 0, 2 or 6
-  if ( 0 != p_Inp->num_slice_groups_minus1 )
-  {
-    read_slice_group_info(p_Img, p_Inp);
-  }
+  }  
 
   if (p_Inp->WPMCPrecision && (p_Inp->RDPictureDecision != 1 || p_Inp->GenerateMultiplePPS != 1) )
   {
@@ -1248,9 +1115,9 @@ static void PatchInp (ImageParameters *p_Img, InputParameters *p_Inp)
     error (errortext, 500);
   }
   // Tian Dong: Enhanced GOP is not supported in bitstream mode. September, 2002
-  if ( p_Inp->NumFramesInELSubSeq > 0 && p_Inp->of_mode == PAR_OF_ANNEXB )
+  if ( p_Inp->NumFramesInELSubSeq > 0 )
   {
-    snprintf(errortext, ET_SIZE, "Enhanced GOP is not supported in bitstream mode and RTP mode yet.");
+    snprintf(errortext, ET_SIZE, "Enhanced GOP is not properly supported yet.");
     error (errortext, 500);
   }
   // Tian Dong (Sept 2002)
@@ -1279,24 +1146,9 @@ static void PatchInp (ImageParameters *p_Img, InputParameters *p_Inp)
     error (errortext, 500);
   }
 
-  //! the number of slice groups is forced to be 1 for slice group type 3-5
-  if(p_Inp->num_slice_groups_minus1 > 0)
-  {
-    if( (p_Inp->slice_group_map_type >= 3) && (p_Inp->slice_group_map_type<=5) )
-      p_Inp->num_slice_groups_minus1 = 1;
-  }
-
   // Rate control
   if(p_Inp->RCEnable)
-  {
-    if (p_Inp->basicunit == 0)
-      p_Inp->basicunit = (p_Inp->output.height + p_Img->auto_crop_bottom)*(p_Inp->output.width + p_Img->auto_crop_right)/256;
-
-    if ( ((p_Inp->output.height + p_Img->auto_crop_bottom)*(p_Inp->output.width + p_Img->auto_crop_right)/256) % p_Inp->basicunit != 0)
-    {
-      snprintf(errortext, ET_SIZE, "Frame size in macroblocks must be a multiple of BasicUnit.");
-      error (errortext, 500);
-    }
+  { 
 
     if ( p_Inp->RCUpdateMode == RC_MODE_1 && 
       !( (p_Inp->intra_period == 1 || p_Inp->idr_period == 1 || p_Inp->BRefPictures == 2 ) && !p_Inp->NumberBFrames ) )
@@ -1520,16 +1372,12 @@ static void PatchInp (ImageParameters *p_Img, InputParameters *p_Inp)
     p_Inp->RDOQ_CP_Mode = 0;
   }
 
+  if(p_Inp->num_slice_groups_minus1 > 0 && (p_Inp->GenerateMultiplePPS ==1 && p_Inp->RDPictureDecision == 1))
+  {
+    printf("Warning: Weighted Prediction is disabled as it may not function correctly for multiple slices\n"); 
+  }
+
+
   ProfileCheck(p_Inp);
-  LevelCheck(p_Img, p_Inp);
-}
 
-void PatchInputNoFrames(InputParameters *p_Inp)
-{
-  // Tian Dong: May 31, 2002
-  // If the frames are grouped into two layers, "FramesToBeEncoded" in the config file
-  // will give the number of frames which are in the base layer. Here we let p_Inp->no_frm_base
-  // be the total frame numbers.
-  p_Inp->no_frm_base = 1 + (p_Inp->no_frm_base - 1) * (p_Inp->NumFramesInELSubSeq + 1);
 }
-

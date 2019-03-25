@@ -20,7 +20,7 @@
 
 //#define UNBIASED_VARIANCE // unbiased estimation of the variance
 
-float compute_ssim (ImageParameters *p_Img, InputParameters *p_Inp, imgpel **refImg, imgpel **encImg, int height, int width, int win_height, int win_width, int comp)
+float compute_ssim (VideoParameters *p_Vid, InputParameters *p_Inp, imgpel **refImg, imgpel **encImg, int height, int width, int win_height, int win_width, int comp)
 {
 
   static const float K1 = 0.01f, K2 = 0.03f;
@@ -39,7 +39,7 @@ float compute_ssim (ImageParameters *p_Img, InputParameters *p_Inp, imgpel **ref
   int i, j, n, m, win_cnt = 0;
   int overlapSize = p_Inp->SSIMOverlapSize;
 
-  max_pix_value_sqd = (float) (p_Img->max_pel_value_comp[comp] * p_Img->max_pel_value_comp[comp]);
+  max_pix_value_sqd = (float) (p_Vid->max_pel_value_comp[comp] * p_Vid->max_pel_value_comp[comp]);
   C1 = K1 * K1 * max_pix_value_sqd;
   C2 = K2 * K2 * max_pix_value_sqd;
 
@@ -94,22 +94,22 @@ float compute_ssim (ImageParameters *p_Img, InputParameters *p_Inp, imgpel **ref
  *    Find SSIM for all three components
  ************************************************************************
  */
-void find_ssim (ImageParameters *p_Img, InputParameters *p_Inp, ImageStructure *ref, ImageStructure *src, DistMetric *metricSSIM)
+void find_ssim (VideoParameters *p_Vid, InputParameters *p_Inp, ImageStructure *ref, ImageStructure *src, DistMetric *metricSSIM)
 {
-  DistortionParams *p_Dist = p_Img->p_Dist;
+  DistortionParams *p_Dist = p_Vid->p_Dist;
   FrameFormat *format = &ref->format;
 
-  metricSSIM->value[0] = compute_ssim (p_Img, p_Inp, ref->data[0], src->data[0], format->height, format->width, BLOCK_SIZE_8x8, BLOCK_SIZE_8x8, 0);
+  metricSSIM->value[0] = compute_ssim (p_Vid, p_Inp, ref->data[0], src->data[0], format->height, format->width, BLOCK_SIZE_8x8, BLOCK_SIZE_8x8, 0);
   // Chroma.
   if (format->yuv_format != YUV400)
   {     
-    metricSSIM->value[1]  = compute_ssim (p_Img, p_Inp, ref->data[1], src->data[1], format->height_cr, format->width_cr, p_Img->mb_cr_size_y, p_Img->mb_cr_size_x, 1);
-    metricSSIM->value[2]  = compute_ssim (p_Img, p_Inp, ref->data[2], src->data[2], format->height_cr, format->width_cr, p_Img->mb_cr_size_y, p_Img->mb_cr_size_x, 2);
+    metricSSIM->value[1]  = compute_ssim (p_Vid, p_Inp, ref->data[1], src->data[1], format->height_cr, format->width_cr, p_Vid->mb_cr_size_y, p_Vid->mb_cr_size_x, 1);
+    metricSSIM->value[2]  = compute_ssim (p_Vid, p_Inp, ref->data[2], src->data[2], format->height_cr, format->width_cr, p_Vid->mb_cr_size_y, p_Vid->mb_cr_size_x, 2);
   }
 
   {
     accumulate_average(metricSSIM,  p_Dist->frame_ctr);
-    accumulate_avslice(metricSSIM,  p_Img->type, p_Img->p_Stats->frame_ctr[p_Img->type]);
+    accumulate_avslice(metricSSIM,  p_Vid->type, p_Vid->p_Stats->frame_ctr[p_Vid->type]);
   }
 }
 

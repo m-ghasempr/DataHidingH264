@@ -52,8 +52,7 @@ static int get_picture_type       (Slice *currSlice);
 */
 int SliceHeader(Slice* currSlice)
 {
-  ImageParameters *p_Img = currSlice->p_Img;
-  //InputParameters *p_Inp = currSlice->p_Inp;
+  VideoParameters *p_Vid = currSlice->p_Vid;
   seq_parameter_set_rbsp_t *active_sps = currSlice->active_sps;
   pic_parameter_set_rbsp_t *active_pps = currSlice->active_pps;
 
@@ -66,25 +65,25 @@ int SliceHeader(Slice* currSlice)
   int num_bits_slice_group_change_cycle;
   float numtmp;
 
-  if (currSlice->MbaffFrameFlag)
-    len  = ue_v("SH: first_mb_in_slice", p_Img->current_mb_nr >> 1,   bitstream);
+  if (currSlice->mb_aff_frame_flag)
+    len  = ue_v("SH: first_mb_in_slice", p_Vid->current_mb_nr >> 1,   bitstream);
   else
-    len  = ue_v("SH: first_mb_in_slice", p_Img->current_mb_nr,   bitstream);
+    len  = ue_v("SH: first_mb_in_slice", p_Vid->current_mb_nr,   bitstream);
 
   len += ue_v("SH: slice_type", get_picture_type (currSlice),   bitstream);
 
   len += ue_v("SH: pic_parameter_set_id" , active_pps->pic_parameter_set_id ,bitstream);
 
   if( active_sps->separate_colour_plane_flag == 1 )
-    len += u_v( 2, "SH: colour_plane_id", p_Img->colour_plane_id, bitstream );
+    len += u_v( 2, "SH: colour_plane_id", p_Vid->colour_plane_id, bitstream );
 
-  len += u_v (p_Img->log2_max_frame_num_minus4 + 4,"SH: frame_num", p_Img->frame_num, bitstream);
+  len += u_v (p_Vid->log2_max_frame_num_minus4 + 4,"SH: frame_num", p_Vid->frame_num, bitstream);
 
   if (!currSlice->active_sps->frame_mbs_only_flag)
   {
     // field_pic_flag    u(1)
     field_pic_flag = (currSlice->structure == TOP_FIELD || currSlice->structure ==BOTTOM_FIELD)?1:0;
-    assert( field_pic_flag == p_Img->fld_flag );
+    assert( field_pic_flag == p_Vid->fld_flag );
     len += u_1("SH: field_pic_flag", field_pic_flag, bitstream);
 
     if (field_pic_flag)
@@ -98,52 +97,52 @@ int SliceHeader(Slice* currSlice)
   if (currSlice->idr_flag)
   {
     // idr_pic_id
-    len += ue_v ("SH: idr_pic_id", (p_Img->number & 0x01), bitstream);
+    len += ue_v ("SH: idr_pic_id", (p_Vid->number & 0x01), bitstream);
   }
 
-  if (p_Img->pic_order_cnt_type == 0)
+  if (p_Vid->pic_order_cnt_type == 0)
   {
     if (active_sps->frame_mbs_only_flag)
     {
-      p_Img->pic_order_cnt_lsb = (p_Img->toppoc & ~((((unsigned int)(-1)) << (p_Img->log2_max_pic_order_cnt_lsb_minus4+4))) );
+      p_Vid->pic_order_cnt_lsb = (p_Vid->toppoc & ~((((unsigned int)(-1)) << (p_Vid->log2_max_pic_order_cnt_lsb_minus4+4))) );
     }
     else
     {
       if (!field_pic_flag || currSlice->structure == TOP_FIELD)
-        p_Img->pic_order_cnt_lsb = (p_Img->toppoc & ~((((unsigned int)(-1)) << (p_Img->log2_max_pic_order_cnt_lsb_minus4+4))) );
+        p_Vid->pic_order_cnt_lsb = (p_Vid->toppoc & ~((((unsigned int)(-1)) << (p_Vid->log2_max_pic_order_cnt_lsb_minus4+4))) );
       else if ( currSlice->structure == BOTTOM_FIELD )
-        p_Img->pic_order_cnt_lsb = (p_Img->bottompoc & ~((((unsigned int)(-1)) << (p_Img->log2_max_pic_order_cnt_lsb_minus4+4))) );
+        p_Vid->pic_order_cnt_lsb = (p_Vid->bottompoc & ~((((unsigned int)(-1)) << (p_Vid->log2_max_pic_order_cnt_lsb_minus4+4))) );
     }
 
-    len += u_v (p_Img->log2_max_pic_order_cnt_lsb_minus4+4, "SH: pic_order_cnt_lsb", p_Img->pic_order_cnt_lsb, bitstream);
+    len += u_v (p_Vid->log2_max_pic_order_cnt_lsb_minus4+4, "SH: pic_order_cnt_lsb", p_Vid->pic_order_cnt_lsb, bitstream);
 
-    if (p_Img->bottom_field_pic_order_in_frame_present_flag && !field_pic_flag)
+    if (p_Vid->bottom_field_pic_order_in_frame_present_flag && !field_pic_flag)
     {
-      len += se_v ("SH: delta_pic_order_cnt_bottom", p_Img->delta_pic_order_cnt_bottom, bitstream);
+      len += se_v ("SH: delta_pic_order_cnt_bottom", p_Vid->delta_pic_order_cnt_bottom, bitstream);
     }
   }
-  if (p_Img->pic_order_cnt_type == 1 && !p_Img->delta_pic_order_always_zero_flag)
+  if (p_Vid->pic_order_cnt_type == 1 && !p_Vid->delta_pic_order_always_zero_flag)
   {
-    len += se_v ("SH: delta_pic_order_cnt[0]", p_Img->delta_pic_order_cnt[0], bitstream);
+    len += se_v ("SH: delta_pic_order_cnt[0]", p_Vid->delta_pic_order_cnt[0], bitstream);
 
-    if (p_Img->bottom_field_pic_order_in_frame_present_flag && !field_pic_flag)
+    if (p_Vid->bottom_field_pic_order_in_frame_present_flag && !field_pic_flag)
     {
-      len += se_v ("SH: delta_pic_order_cnt[1]", p_Img->delta_pic_order_cnt[1], bitstream);
+      len += se_v ("SH: delta_pic_order_cnt[1]", p_Vid->delta_pic_order_cnt[1], bitstream);
     }
   }
 
   if (active_pps->redundant_pic_cnt_present_flag)
   {
-    len += ue_v ("SH: redundant_pic_cnt", p_Img->redundant_pic_cnt, bitstream);
+    len += ue_v ("SH: redundant_pic_cnt", p_Vid->redundant_pic_cnt, bitstream);
   }
 
   // Direct Mode Type selection for B pictures
   if (currSlice->slice_type == B_SLICE)
   {
-    len +=  u_1 ("SH: direct_spatial_mv_pred_flag", p_Img->direct_spatial_mv_pred_flag, bitstream);
+    len +=  u_1 ("SH: direct_spatial_mv_pred_flag", p_Vid->direct_spatial_mv_pred_flag, bitstream);
   }
 
-  if ((currSlice->slice_type == P_SLICE) || (currSlice->slice_type == B_SLICE) || (currSlice->slice_type==SP_SLICE))
+  if ((currSlice->slice_type == P_SLICE) || (currSlice->slice_type == B_SLICE) || currSlice->slice_type==SP_SLICE)
   {
     int override_flag;
     if ((currSlice->slice_type == P_SLICE) || (currSlice->slice_type == SP_SLICE))
@@ -176,14 +175,14 @@ int SliceHeader(Slice* currSlice)
     len += pred_weight_table(currSlice, bitstream);
   }
 
-  if (p_Img->nal_reference_idc)
+  if (p_Vid->nal_reference_idc)
   {
-    p_Img->adaptive_ref_pic_buffering_flag = (p_Img->dec_ref_pic_marking_buffer != NULL);
+    p_Vid->adaptive_ref_pic_buffering_flag = (p_Vid->dec_ref_pic_marking_buffer != NULL);
     len += dec_ref_pic_marking(bitstream, 
-      p_Img->dec_ref_pic_marking_buffer, 
+      p_Vid->dec_ref_pic_marking_buffer, 
       currSlice->idr_flag, 
-      p_Img->no_output_of_prior_pics_flag, 
-      p_Img->long_term_reference_flag );
+      p_Vid->no_output_of_prior_pics_flag, 
+      p_Vid->long_term_reference_flag );
   }
 
   if(currSlice->symbol_mode==CABAC && currSlice->slice_type!=I_SLICE /*&& currSlice->slice_type!=SI_IMG*/)
@@ -193,13 +192,13 @@ int SliceHeader(Slice* currSlice)
 
   len += se_v("SH: slice_qp_delta", (currSlice->qp - 26 - active_pps->pic_init_qp_minus26), bitstream);
 
-  if (currSlice->slice_type == SP_SLICE /*|| currSlice->slice_type == SI_SLICE*/)
+  if (currSlice->slice_type == SP_SLICE || currSlice->slice_type == SI_SLICE) // SP or SI
   {
     if (currSlice->slice_type == SP_SLICE) // Switch Flag only for SP pictures
     {
-      len += u_1 ("SH: sp_for_switch_flag", (currSlice->si_frame_indicator || currSlice->sp2_frame_indicator), bitstream);   // 1 for switching SP, 0 for normal SP
+      len += u_1 ("SH: sp_for_switch_flag", currSlice->sp2_frame_indicator, bitstream);   // 1 for switching SP, 0 for normal SP
     }
-    len += se_v ("SH: slice_qs_delta", (p_Img->qpsp - 26), bitstream );
+    len += se_v ("SH: slice_qs_delta", (p_Vid->qpsp - 26), bitstream );
   }
 
   if (active_pps->deblocking_filter_control_present_flag)
@@ -216,11 +215,11 @@ int SliceHeader(Slice* currSlice)
   if ( active_pps->num_slice_groups_minus1 > 0 &&
     active_pps->slice_group_map_type >= 3 && active_pps->slice_group_map_type <= 5)
   {
-    numtmp=p_Img->PicHeightInMapUnits*p_Img->PicWidthInMbs/(float)(active_pps->slice_group_change_rate_minus1+1)+1;
+    numtmp=p_Vid->PicHeightInMapUnits*p_Vid->PicWidthInMbs/(float)(active_pps->slice_group_change_rate_minus1+1)+1;
     num_bits_slice_group_change_cycle = (int)ceil(log(numtmp)/log(2));
 
-    //! p_Img->slice_group_change_cycle can be changed before calling FmoInit()
-    len += u_v (num_bits_slice_group_change_cycle, "SH: slice_group_change_cycle", p_Img->slice_group_change_cycle, bitstream);
+    //! p_Vid->slice_group_change_cycle can be changed before calling FmoInit()
+    len += u_v (num_bits_slice_group_change_cycle, "SH: slice_group_change_cycle", p_Vid->slice_group_change_cycle, bitstream);
   }
 
   // NOTE: The following syntax element is actually part
@@ -238,17 +237,16 @@ int SliceHeader(Slice* currSlice)
  ********************************************************************************************
  * \brief
  *    writes the ref_pic_list_reordering syntax
- *    based on content of according fields in p_Img structure
+ *    based on content of according fields in p_Vid structure
  *
  * \return
  *    number of bits used
  ********************************************************************************************
 */
 static int ref_pic_list_reordering(Slice *currSlice, Bitstream *bitstream)
-{   
-
+{
   int i, len=0;
-  if ((currSlice->slice_type != I_SLICE) /*&&(currSlice->slice_type != SI_IMG)*/ )
+  if ( currSlice->slice_type != I_SLICE && currSlice->slice_type != SI_SLICE )
   {
     len += u_1 ("SH: ref_pic_list_reordering_flag_l0", currSlice->ref_pic_list_reordering_flag[LIST_0], bitstream);
     if (currSlice->ref_pic_list_reordering_flag[LIST_0])
@@ -489,6 +487,9 @@ static int get_picture_type(Slice *currSlice)
     break;
   case SP_SLICE:
     return 3 + same_slicetype_for_whole_frame;
+    break;
+  case SI_SLICE:
+    return 4 + same_slicetype_for_whole_frame;
     break;
   default:
     error("Picture Type not supported!",1);

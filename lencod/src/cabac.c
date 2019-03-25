@@ -305,20 +305,20 @@ static void unary_exp_golomb_mv_encode(EncodingEnvironmentPtr eep_dp,
  */
 void CheckAvailabilityOfNeighborsCABAC(Macroblock *currMB)
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   PixelPos up, left;
-  int *mb_size = p_Img->mb_size[IS_LUMA];
+  int *mb_size = p_Vid->mb_size[IS_LUMA];
 
-  p_Img->getNeighbour(currMB, -1,  0, mb_size, &left);
-  p_Img->getNeighbour(currMB,  0, -1, mb_size, &up);
+  p_Vid->getNeighbour(currMB, -1,  0, mb_size, &left);
+  p_Vid->getNeighbour(currMB,  0, -1, mb_size, &up);
 
   if (up.available)
-    currMB->mb_up = &p_Img->mb_data[up.mb_addr];
+    currMB->mb_up = &p_Vid->mb_data[up.mb_addr];
   else
     currMB->mb_up = NULL;
 
   if (left.available)
-    currMB->mb_left = &p_Img->mb_data[left.mb_addr];
+    currMB->mb_left = &p_Vid->mb_data[left.mb_addr];
   else
     currMB->mb_left = NULL;
 }
@@ -400,8 +400,8 @@ void writeFieldModeInfo_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartiti
 {
   EncodingEnvironmentPtr eep_dp = &(dp->ee_cabac);  
   int curr_len = arienco_bits_written(eep_dp);
-  ImageParameters *p_Img = currMB->p_Img;
-  Macroblock *mb_data = p_Img->mb_data;
+  VideoParameters *p_Vid = currMB->p_Vid;
+  Macroblock *mb_data = p_Vid->mb_data;
 
   int a = currMB->mbAvailA ? mb_data[currMB->mbAddrA].mb_field : 0;
   int b = currMB->mbAvailB ? mb_data[currMB->mbAddrB].mb_field : 0;
@@ -978,10 +978,10 @@ void writeRefPic_P_CABAC(SyntaxElement *se, DataPartition *dp)
   EncodingEnvironmentPtr eep_dp = &(dp->ee_cabac);
   int curr_len = arienco_bits_written(eep_dp);
   Slice *currSlice = dp->p_Slice;
-  ImageParameters *p_Img = dp->p_Img;
-  PicMotionParams *motion = &p_Img->enc_picture->motion;
+  VideoParameters *p_Vid = dp->p_Vid;
+  PicMotionParams *motion = &p_Vid->enc_picture->motion;
   MotionInfoContexts  *ctx    = currSlice->mot_ctx;
-  Macroblock          *currMB = &p_Img->mb_data[p_Img->current_mb_nr];
+  Macroblock          *currMB = &p_Vid->mb_data[p_Vid->current_mb_nr];
   int                 addctx  = 0;
 
   int   a = 0, b = 0;
@@ -990,14 +990,14 @@ void writeRefPic_P_CABAC(SyntaxElement *se, DataPartition *dp)
   char** refframe_array = motion->ref_idx[se->value2];
 
   PixelPos block_a, block_b;
-  int *mb_size = p_Img->mb_size[IS_LUMA];
+  int *mb_size = p_Vid->mb_size[IS_LUMA];
 
   get4x4Neighbour(currMB, currMB->subblock_x - 1, currMB->subblock_y    , mb_size, &block_a);
   get4x4Neighbour(currMB, currMB->subblock_x,     currMB->subblock_y - 1, mb_size, &block_b);
 
   if (block_b.available)
   {
-    if (p_Img->MbaffFrameFlag && (currMB->mb_field == FALSE) && (p_Img->mb_data[block_b.mb_addr].mb_field == TRUE))
+    if (p_Vid->mb_aff_frame_flag && (currMB->mb_field == FALSE) && (p_Vid->mb_data[block_b.mb_addr].mb_field == TRUE))
       b = (refframe_array[block_b.pos_y][block_b.pos_x] > 1 ? 2 : 0);
     else
       b = (refframe_array[block_b.pos_y][block_b.pos_x] > 0 ? 2 : 0);
@@ -1005,7 +1005,7 @@ void writeRefPic_P_CABAC(SyntaxElement *se, DataPartition *dp)
 
   if (block_a.available)
   {
-    if (p_Img->MbaffFrameFlag && (currMB->mb_field == FALSE) && (p_Img->mb_data[block_a.mb_addr].mb_field == TRUE))
+    if (p_Vid->mb_aff_frame_flag && (currMB->mb_field == FALSE) && (p_Vid->mb_data[block_a.mb_addr].mb_field == TRUE))
       a = (refframe_array[block_a.pos_y][block_a.pos_x] > 1 ? 1 : 0);
     else
       a = (refframe_array[block_a.pos_y][block_a.pos_x] > 0 ? 1 : 0);
@@ -1044,10 +1044,10 @@ void writeRefPic_B_CABAC(SyntaxElement *se, DataPartition *dp)
   EncodingEnvironmentPtr eep_dp = &(dp->ee_cabac);
   int curr_len = arienco_bits_written(eep_dp);
   Slice *currSlice = dp->p_Slice;
-  ImageParameters *p_Img = dp->p_Img;
-  PicMotionParams *motion = &p_Img->enc_picture->motion;
+  VideoParameters *p_Vid = dp->p_Vid;
+  PicMotionParams *motion = &p_Vid->enc_picture->motion;
   MotionInfoContexts  *ctx    = currSlice->mot_ctx;
-  Macroblock          *currMB = &p_Img->mb_data[p_Img->current_mb_nr];
+  Macroblock          *currMB = &p_Vid->mb_data[p_Vid->current_mb_nr];
   int                 addctx  = 0;
 
   int   a = 0, b = 0;
@@ -1058,7 +1058,7 @@ void writeRefPic_B_CABAC(SyntaxElement *se, DataPartition *dp)
   int   b8a, b8b;
 
   PixelPos block_a, block_b;
-  int *mb_size = p_Img->mb_size[IS_LUMA];
+  int *mb_size = p_Vid->mb_size[IS_LUMA];
 
   get4x4Neighbour(currMB, currMB->subblock_x - 1, currMB->subblock_y    , mb_size, &block_a);
   get4x4Neighbour(currMB, currMB->subblock_x,     currMB->subblock_y - 1, mb_size, &block_b);
@@ -1067,11 +1067,11 @@ void writeRefPic_B_CABAC(SyntaxElement *se, DataPartition *dp)
   {
     b8b=((block_b.x >> 1) & 0x01)+2*((block_b.y >> 1) & 0x01);
 
-    if (((p_Img->mb_data[block_b.mb_addr].mb_type == 0) && !p_Img->giRDOpt_B8OnlyFlag) || (p_Img->mb_data[block_b.mb_addr].b8x8[b8b].mode==0))
+    if (((p_Vid->mb_data[block_b.mb_addr].mb_type == 0) && !p_Vid->giRDOpt_B8OnlyFlag) || (p_Vid->mb_data[block_b.mb_addr].b8x8[b8b].mode==0))
       b=0;
     else
     {
-      if (p_Img->MbaffFrameFlag && (currMB->mb_field == FALSE) && (p_Img->mb_data[block_b.mb_addr].mb_field == TRUE))
+      if (p_Vid->mb_aff_frame_flag && (currMB->mb_field == FALSE) && (p_Vid->mb_data[block_b.mb_addr].mb_field == TRUE))
         b = (refframe_array[block_b.pos_y][block_b.pos_x] > 1 ? 1 : 0);
       else
         b = (refframe_array[block_b.pos_y][block_b.pos_x] > 0 ? 1 : 0);
@@ -1081,11 +1081,11 @@ void writeRefPic_B_CABAC(SyntaxElement *se, DataPartition *dp)
   if (block_a.available)
   {
     b8a=((block_a.x >> 1) & 0x01)+2*((block_a.y >> 1) & 0x01);
-    if (((p_Img->mb_data[block_a.mb_addr].mb_type == 0) && !p_Img->giRDOpt_B8OnlyFlag) || (p_Img->mb_data[block_a.mb_addr].b8x8[b8a].mode ==0))
+    if (((p_Vid->mb_data[block_a.mb_addr].mb_type == 0) && !p_Vid->giRDOpt_B8OnlyFlag) || (p_Vid->mb_data[block_a.mb_addr].b8x8[b8a].mode ==0))
       a=0;
     else
     {
-      if (p_Img->MbaffFrameFlag && (currMB->mb_field == FALSE) && (p_Img->mb_data[block_a.mb_addr].mb_field == TRUE))
+      if (p_Vid->mb_aff_frame_flag && (currMB->mb_field == FALSE) && (p_Vid->mb_data[block_a.mb_addr].mb_field == TRUE))
         a = (refframe_array[block_a.pos_y][block_a.pos_x] > 1 ? 1 : 0);
       else
         a = (refframe_array[block_a.pos_y][block_a.pos_x] > 0 ? 1 : 0);
@@ -1158,7 +1158,7 @@ void writeDquant_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartition *dp)
  */
 void writeMVD_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartition *dp)
 {
-  ImageParameters *p_Img      = currMB->p_Img;
+  VideoParameters *p_Vid      = currMB->p_Vid;
   EncodingEnvironmentPtr eep_dp = &(dp->ee_cabac);
 
   int curr_len = arienco_bits_written(eep_dp);
@@ -1177,19 +1177,19 @@ void writeMVD_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartition *dp)
 
   PixelPos block_a, block_b;
 
-  int *mb_size = p_Img->mb_size[IS_LUMA];
+  int *mb_size = p_Vid->mb_size[IS_LUMA];
 
   get4x4Neighbour(currMB, i - 1, j    , mb_size, &block_a);
   get4x4Neighbour(currMB, i    , j - 1, mb_size, &block_b);
 
   if (block_b.available)
   {
-    b = iabs(p_Img->mb_data[block_b.mb_addr].mvd[list_idx][block_b.y][block_b.x][k]);
-    if (p_Img->MbaffFrameFlag && (k==1))
+    b = iabs(p_Vid->mb_data[block_b.mb_addr].mvd[list_idx][block_b.y][block_b.x][k]);
+    if (p_Vid->mb_aff_frame_flag && (k==1))
     {
-      if ((currMB->mb_field==0) && (p_Img->mb_data[block_b.mb_addr].mb_field==1))
+      if ((currMB->mb_field==0) && (p_Vid->mb_data[block_b.mb_addr].mb_field==1))
         b *= 2;
-      else if ((currMB->mb_field==1) && (p_Img->mb_data[block_b.mb_addr].mb_field==0))
+      else if ((currMB->mb_field==1) && (p_Vid->mb_data[block_b.mb_addr].mb_field==0))
         b /= 2;
     }
   }
@@ -1198,12 +1198,12 @@ void writeMVD_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartition *dp)
 
   if (block_a.available)
   {
-    a = iabs(p_Img->mb_data[block_a.mb_addr].mvd[list_idx][block_a.y][block_a.x][k]);
-    if (p_Img->MbaffFrameFlag && (k==1))
+    a = iabs(p_Vid->mb_data[block_a.mb_addr].mvd[list_idx][block_a.y][block_a.x][k]);
+    if (p_Vid->mb_aff_frame_flag && (k==1))
     {
-      if ((currMB->mb_field==0) && (p_Img->mb_data[block_a.mb_addr].mb_field==1))
+      if ((currMB->mb_field==0) && (p_Vid->mb_data[block_a.mb_addr].mb_field==1))
         a *= 2;
-      else if ((currMB->mb_field==1) && (p_Img->mb_data[block_a.mb_addr].mb_field==0))
+      else if ((currMB->mb_field==1) && (p_Vid->mb_data[block_a.mb_addr].mb_field==0))
         a /= 2;
     }
   }
@@ -1289,7 +1289,7 @@ void writeCIPredMode_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartition 
  */
 void writeCBP_BIT_CABAC (Macroblock* currMB, int b8, int bit, int cbp, EncodingEnvironmentPtr eep_dp, TextureInfoContexts *ctx)
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   PixelPos block_a;
   int a = 0, b = 0;
 
@@ -1309,11 +1309,11 @@ void writeCBP_BIT_CABAC (Macroblock* currMB, int b8, int bit, int cbp, EncodingE
 
   if (mb_x == 0)
   {
-    get4x4Neighbour(currMB, (mb_x << 2) - 1, (mb_y << 2), p_Img->mb_size[IS_LUMA], &block_a);
+    get4x4Neighbour(currMB, (mb_x << 2) - 1, (mb_y << 2), p_Vid->mb_size[IS_LUMA], &block_a);
 
-    if (block_a.available && (!(p_Img->mb_data[block_a.mb_addr].mb_type==IPCM)))
+    if (block_a.available && (!(p_Vid->mb_data[block_a.mb_addr].mb_type==IPCM)))
     {
-      a = (( (p_Img->mb_data[block_a.mb_addr].cbp & (1<<(2*(block_a.y>>1)+1))) == 0) ? 1 : 0); //VG-ADD
+      a = (( (p_Vid->mb_data[block_a.mb_addr].cbp & (1<<(2*(block_a.y>>1)+1))) == 0) ? 1 : 0); //VG-ADD
     }    
   }
   else
@@ -1333,7 +1333,7 @@ void writeCBP_BIT_CABAC (Macroblock* currMB, int b8, int bit, int cbp, EncodingE
 void writeCBP_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartition *dp)
 {
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currSlice->p_Img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
   EncodingEnvironmentPtr eep_dp = &(dp->ee_cabac);
   int curr_len = arienco_bits_written(eep_dp);
   TextureInfoContexts *ctx = currSlice->tex_ctx;
@@ -1350,7 +1350,7 @@ void writeCBP_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartition *dp)
     writeCBP_BIT_CABAC (currMB, b8, cbp&(1<<b8), cbp, eep_dp, ctx);
   }
 
-  if ((p_Img->yuv_format != YUV400) && (p_Img->yuv_format != YUV444) )
+  if ((p_Vid->yuv_format != YUV400) && (p_Vid->yuv_format != YUV444) )
   {
     // coding of chroma part
     if (currMB->mb_up != NULL)
@@ -1404,18 +1404,18 @@ void writeCBP_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartition *dp)
  */
 void write_and_store_CBP_block_bit_444 (Macroblock* currMB, EncodingEnvironmentPtr eep_dp, int type, int cbp_bit, TextureInfoContexts*  tex_ctx)
 {
-  ImageParameters *p_Img = currMB->p_Img;  
-  Macroblock *mb_data = p_Img->mb_data;
+  VideoParameters *p_Vid = currMB->p_Vid;  
+  Macroblock *mb_data = p_Vid->mb_data;
 
   int y_ac        = (type==LUMA_16AC || type==LUMA_8x8 || type==LUMA_8x4 || type==LUMA_4x8 || type==LUMA_4x4
                      || type==CB_16AC || type==CB_8x8 || type==CB_8x4 || type==CB_4x8 || type==CB_4x4
                      || type==CR_16AC || type==CR_8x8 || type==CR_8x4 || type==CR_4x8 || type==CR_4x4);
   int y_dc        = (type==LUMA_16DC || type==CB_16DC || type==CR_16DC); 
-  int u_ac        = (type==CHROMA_AC && !p_Img->is_v_block);
-  int v_ac        = (type==CHROMA_AC &&  p_Img->is_v_block);
+  int u_ac        = (type==CHROMA_AC && !p_Vid->is_v_block);
+  int v_ac        = (type==CHROMA_AC &&  p_Vid->is_v_block);
   int chroma_dc   = (type==CHROMA_DC || type==CHROMA_DC_2x4 || type==CHROMA_DC_4x4);
-  int u_dc        = (chroma_dc && !p_Img->is_v_block);
-  int v_dc        = (chroma_dc &&  p_Img->is_v_block);
+  int u_dc        = (chroma_dc && !p_Vid->is_v_block);
+  int v_dc        = (chroma_dc &&  p_Vid->is_v_block);
   int j           =  (y_ac || u_ac || v_ac ? currMB->subblock_y : 0);
   int i           =  (y_ac || u_ac || v_ac ? currMB->subblock_x : 0);
   int bit         =  (y_dc ? 0 : y_ac ? 1 : u_dc ? 17 : v_dc ? 18 : u_ac ? 19 : 23);
@@ -1431,8 +1431,8 @@ void write_and_store_CBP_block_bit_444 (Macroblock* currMB, EncodingEnvironmentP
 
   if (y_ac || y_dc)
   {
-    get4x4Neighbour(currMB, i - 1, j   , p_Img->mb_size[IS_LUMA], &block_a);
-    get4x4Neighbour(currMB, i,     j -1, p_Img->mb_size[IS_LUMA], &block_b);
+    get4x4Neighbour(currMB, i - 1, j   , p_Vid->mb_size[IS_LUMA], &block_a);
+    get4x4Neighbour(currMB, i,     j -1, p_Vid->mb_size[IS_LUMA], &block_b);
     if (y_ac)
     {
       if (block_a.available)
@@ -1443,8 +1443,8 @@ void write_and_store_CBP_block_bit_444 (Macroblock* currMB, EncodingEnvironmentP
   }
   else
   {
-    get4x4Neighbour(currMB, i - 1, j    , p_Img->mb_size[IS_CHROMA], &block_a);
-    get4x4Neighbour(currMB, i,     j - 1, p_Img->mb_size[IS_CHROMA], &block_b);
+    get4x4Neighbour(currMB, i - 1, j    , p_Vid->mb_size[IS_CHROMA], &block_a);
+    get4x4Neighbour(currMB, i,     j - 1, p_Vid->mb_size[IS_CHROMA], &block_b);
     if (u_ac||v_ac)
     {
       if (block_a.available)
@@ -1462,7 +1462,7 @@ void write_and_store_CBP_block_bit_444 (Macroblock* currMB, EncodingEnvironmentP
     {
       currMB->cbp_bits[0] |= ((int64) 0x33 << bit);
 
-      if (p_Img->enc_picture->chroma_format_idc == YUV444)
+      if (p_Vid->enc_picture->chroma_format_idc == YUV444)
       {
         currMB->cbp_bits_8x8[0] |= ((int64) 0x33 << bit);
       }
@@ -1517,7 +1517,7 @@ void write_and_store_CBP_block_bit_444 (Macroblock* currMB, EncodingEnvironmentP
 
   bit = (y_dc ? 0 : y_ac ? 1 : u_dc ? 17 : v_dc ? 18 : u_ac ? 19 : 35);
 
-  if (p_Img->enc_picture->chroma_format_idc!=YUV444)
+  if (p_Vid->enc_picture->chroma_format_idc!=YUV444)
   {
     if (type!=LUMA_8x8)
     {
@@ -1631,15 +1631,15 @@ void write_and_store_CBP_block_bit_444 (Macroblock* currMB, EncodingEnvironmentP
  */
 void write_and_store_CBP_block_bit (Macroblock* currMB, EncodingEnvironmentPtr eep_dp, int type, int cbp_bit, TextureInfoContexts*  tex_ctx)
 {
-  ImageParameters *p_Img = currMB->p_Img;
-  Macroblock *mb_data = p_Img->mb_data;
+  VideoParameters *p_Vid = currMB->p_Vid;
+  Macroblock *mb_data = p_Vid->mb_data;
   int y_ac        = (type==LUMA_16AC || type==LUMA_8x8 || type==LUMA_8x4 || type==LUMA_4x8 || type==LUMA_4x4);
   int y_dc        = (type==LUMA_16DC); 
-  int u_ac        = (type==CHROMA_AC && !p_Img->is_v_block);
-  int v_ac        = (type==CHROMA_AC &&  p_Img->is_v_block);
+  int u_ac        = (type==CHROMA_AC && !p_Vid->is_v_block);
+  int v_ac        = (type==CHROMA_AC &&  p_Vid->is_v_block);
   int chroma_dc   = (type==CHROMA_DC || type==CHROMA_DC_2x4 || type==CHROMA_DC_4x4);
-  int u_dc        = (chroma_dc && !p_Img->is_v_block);
-  int v_dc        = (chroma_dc &&  p_Img->is_v_block);
+  int u_dc        = (chroma_dc && !p_Vid->is_v_block);
+  int v_dc        = (chroma_dc &&  p_Vid->is_v_block);
   int j           = (y_ac || u_ac || v_ac ? currMB->subblock_y : 0);
   int i           = (y_ac || u_ac || v_ac ? currMB->subblock_x : 0);
   int bit         =  (y_dc ? 0 : y_ac ? 1 : u_dc ? 17 : v_dc ? 18 : u_ac ? 19 : 23);
@@ -1655,8 +1655,8 @@ void write_and_store_CBP_block_bit (Macroblock* currMB, EncodingEnvironmentPtr e
 
   if (y_ac || y_dc)
   {
-    get4x4Neighbour(currMB, i - 1, j   , p_Img->mb_size[IS_LUMA], &block_a);
-    get4x4Neighbour(currMB, i,     j -1, p_Img->mb_size[IS_LUMA], &block_b);
+    get4x4Neighbour(currMB, i - 1, j   , p_Vid->mb_size[IS_LUMA], &block_a);
+    get4x4Neighbour(currMB, i,     j -1, p_Vid->mb_size[IS_LUMA], &block_b);
     if (y_ac)
     {
       if (block_a.available)
@@ -1667,8 +1667,8 @@ void write_and_store_CBP_block_bit (Macroblock* currMB, EncodingEnvironmentPtr e
   }
   else
   {
-    get4x4Neighbour(currMB, i - 1, j    , p_Img->mb_size[IS_CHROMA], &block_a);
-    get4x4Neighbour(currMB, i,     j - 1, p_Img->mb_size[IS_CHROMA], &block_b);
+    get4x4Neighbour(currMB, i - 1, j    , p_Vid->mb_size[IS_CHROMA], &block_a);
+    get4x4Neighbour(currMB, i,     j - 1, p_Vid->mb_size[IS_CHROMA], &block_b);
     if (u_ac||v_ac)
     {
       if (block_a.available)
@@ -1742,8 +1742,8 @@ void write_significance_map (Macroblock* currMB, EncodingEnvironmentPtr eep_dp, 
   int   k1 = maxpos[type];
 
 #if ENABLE_FIELD_CTX
-  ImageParameters *p_Img = currMB->p_Img;
-  int               fld       = ( p_Img->structure!=FRAME || currMB->mb_field );
+  VideoParameters *p_Vid = currMB->p_Vid;
+  int               fld       = ( p_Vid->structure!=FRAME || currMB->mb_field );
 #else
   int               fld       = 0;
 #endif

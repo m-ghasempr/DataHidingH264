@@ -389,7 +389,7 @@ int readSyntaxElement_VLC(SyntaxElement *sym, Bitstream *currStream)
  *    map it to the corresponding syntax element
  ************************************************************************
  */
-int readSyntaxElement_UVLC(SyntaxElement *sym, ImageParameters *p_Img, struct datapartition *dP)
+int readSyntaxElement_UVLC(Macroblock *currMB, SyntaxElement *sym, struct datapartition *dP)
 {
   return (readSyntaxElement_VLC(sym, dP->bitstream));
 }
@@ -401,7 +401,7 @@ int readSyntaxElement_UVLC(SyntaxElement *sym, ImageParameters *p_Img, struct da
  *    map it to the corresponding Intra Prediction Direction
  ************************************************************************
  */
-int readSyntaxElement_Intra4x4PredictionMode(SyntaxElement *sym, ImageParameters *p_Img, Bitstream   *currStream)
+int readSyntaxElement_Intra4x4PredictionMode(SyntaxElement *sym, Bitstream   *currStream)
 {
   sym->len = GetVLCSymbol_IntraMode (currStream->streamBuffer, currStream->frame_bitoffset, &(sym->inf), currStream->bitstream_length);
 
@@ -615,13 +615,13 @@ static inline int ShowBitsThres (int inf, int numbits)
  ************************************************************************
  */
 
-int code_from_bitstream_2d(SyntaxElement *sym,
-                           Bitstream *currStream,
-                           const byte *lentab,
-                           const byte *codtab,
-                           int tabwidth,
-                           int tabheight,
-                           int *code)
+static int code_from_bitstream_2d(SyntaxElement *sym,
+                                  Bitstream *currStream,
+                                  const byte *lentab,
+                                  const byte *codtab,
+                                  int tabwidth,
+                                  int tabheight,
+                                  int *code)
 {
   int i, j;
   const byte *len = &lentab[0], *cod = &codtab[0];
@@ -795,7 +795,7 @@ int readSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *sym,
  *    read NumCoeff/TrailingOnes codeword from UVLC-partition ChromaDC
  ************************************************************************
  */
-int readSyntaxElement_NumCoeffTrailingOnesChromaDC(ImageParameters *p_Img, SyntaxElement *sym,  Bitstream *currStream)
+int readSyntaxElement_NumCoeffTrailingOnesChromaDC(VideoParameters *p_Vid, SyntaxElement *sym,  Bitstream *currStream)
 {
   static const byte lentab[3][4][17] =
   {
@@ -837,7 +837,7 @@ int readSyntaxElement_NumCoeffTrailingOnesChromaDC(ImageParameters *p_Img, Synta
   };
 
   int code;
-  int yuv = p_Img->active_sps->chroma_format_idc - 1;
+  int yuv = p_Vid->active_sps->chroma_format_idc - 1;
   int retval = code_from_bitstream_2d(sym, currStream, &lentab[yuv][0][0], &codtab[yuv][0][0], 17, 4, &code);
 
   if (retval)
@@ -1058,7 +1058,7 @@ int readSyntaxElement_TotalZeros(SyntaxElement *sym,  Bitstream *currStream)
  *    read Total Zeros Chroma DC codeword from UVLC-partition
  ************************************************************************
  */
-int readSyntaxElement_TotalZerosChromaDC(ImageParameters *p_Img, SyntaxElement *sym,  Bitstream *currStream)
+int readSyntaxElement_TotalZerosChromaDC(VideoParameters *p_Vid, SyntaxElement *sym,  Bitstream *currStream)
 {
   static const byte lentab[3][TOTRUN_NUM][16] =
   {
@@ -1125,7 +1125,7 @@ int readSyntaxElement_TotalZerosChromaDC(ImageParameters *p_Img, SyntaxElement *
   };
 
   int code;
-  int yuv = p_Img->active_sps->chroma_format_idc - 1;
+  int yuv = p_Vid->active_sps->chroma_format_idc - 1;
   int vlcnum = sym->value1;
   int retval = code_from_bitstream_2d(sym, currStream, &lentab[yuv][vlcnum][0], &codtab[yuv][vlcnum][0], 16, 1, &code);
 

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="Windows-1252"?>
 <VisualStudioProject
 	ProjectType="Visual C++"
-	Version="8.00"
+	Version="8,00"
 	Name="ldecod"
 	ProjectGUID="{5499B067-CF32-4141-A757-E0A29866994A}"
 	RootNamespace="ldecod"
@@ -413,6 +413,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lcommon\src\blk_prediction.c"
+				>
+			</File>
+			<File
 				RelativePath=".\ldecod\src\block.c"
 				>
 			</File>
@@ -513,6 +517,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\ldecod\src\mb_prediction.c"
+				>
+			</File>
+			<File
 				RelativePath=".\ldecod\src\mbuffer.c"
 				>
 			</File>
@@ -591,6 +599,10 @@
 			</File>
 			<File
 				RelativePath=".\ldecod\inc\biaridecod.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lcommon\inc\blk_prediction.h"
 				>
 			</File>
 			<File
@@ -727,6 +739,10 @@
 			</File>
 			<File
 				RelativePath=".\lcommon\inc\mb_access.h"
+				>
+			</File>
+			<File
+				RelativePath=".\ldecod\inc\mb_prediction.h"
 				>
 			</File>
 			<File

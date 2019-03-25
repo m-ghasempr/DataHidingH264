@@ -37,7 +37,7 @@
 void error(char *text, int code)
 {
   fprintf(stderr, "%s\n", text);
-  flush_dpb(p_Enc->p_Img, p_Enc->p_Inp, &p_Enc->p_Inp->output);
+  flush_dpb(p_Enc->p_Vid, &p_Enc->p_Inp->output);
   exit(code);
 }
 
@@ -48,12 +48,12 @@ void error(char *text, int code)
  *
  ************************************************************************
  */
-int write_PPS(ImageParameters *p_Img, InputParameters *p_Inp, int len, int PPS_id)
+int write_PPS(VideoParameters *p_Vid, int len, int PPS_id)
 {
   NALU_t *nalu;
   nalu = NULL;
-  nalu = GeneratePic_parameter_set_NALU (p_Img, p_Inp, PPS_id);
-  len += p_Img->WriteNALU (p_Img, nalu);
+  nalu = GeneratePic_parameter_set_NALU (p_Vid, PPS_id);
+  len += p_Vid->WriteNALU (p_Vid, nalu);
   FreeNALU (nalu);
 
   return len;
@@ -66,7 +66,7 @@ int write_PPS(ImageParameters *p_Img, InputParameters *p_Inp, int len, int PPS_i
  *    appropriate sequence header
  ************************************************************************
  */
-int start_sequence(ImageParameters *p_Img, InputParameters *p_Inp)
+int start_sequence(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   int i,len=0, total_pps = (p_Inp->GenerateMultiplePPS) ? 3 : 1;
   NALU_t *nalu;
@@ -74,12 +74,12 @@ int start_sequence(ImageParameters *p_Img, InputParameters *p_Inp)
   switch(p_Inp->of_mode)
   {
     case PAR_OF_ANNEXB:
-      OpenAnnexbFile (p_Img, p_Inp->outfile);
-      p_Img->WriteNALU = WriteAnnexbNALU;
+      OpenAnnexbFile (p_Vid, p_Inp->outfile);
+      p_Vid->WriteNALU = WriteAnnexbNALU;
       break;
     case PAR_OF_RTP:
-      OpenRTPFile (p_Img, p_Inp->outfile);
-      p_Img->WriteNALU = WriteRTPNALU;
+      OpenRTPFile (p_Vid, p_Inp->outfile);
+      p_Vid->WriteNALU = WriteRTPNALU;
       break;
     default:
       snprintf(errortext, ET_SIZE, "Output File Mode %d not supported", p_Inp->of_mode);
@@ -89,7 +89,7 @@ int start_sequence(ImageParameters *p_Img, InputParameters *p_Inp)
   // Access Unit Delimiter NALU
   if ( p_Inp->SendAUD )
   {
-    len += Write_AUD_NALU(p_Img);
+    len += Write_AUD_NALU(p_Vid);
   }
 
   //! As a sequence header, here we write both sequence and picture
@@ -98,25 +98,25 @@ int start_sequence(ImageParameters *p_Img, InputParameters *p_Inp)
   //! An alternative may be to consider this function the IDR start function.
 
   nalu = NULL;
-  nalu = GenerateSeq_parameter_set_NALU (p_Img);
-  len += p_Img->WriteNALU (p_Img, nalu);
+  nalu = GenerateSeq_parameter_set_NALU (p_Vid);
+  len += p_Vid->WriteNALU (p_Vid, nalu);
   FreeNALU (nalu);
 
   //! Lets write now the Picture Parameter sets. Output will be equal to the total number of bits spend here.
   for (i=0;i<total_pps;i++)
   {
-     len = write_PPS(p_Img, p_Inp, len, i);
+     len = write_PPS(p_Vid, len, i);
   }
 
   if (p_Inp->GenerateSEIMessage)
   {
     nalu = NULL;
     nalu = GenerateSEImessage_NALU(p_Inp);
-    len += p_Img->WriteNALU (p_Img, nalu);
+    len += p_Vid->WriteNALU (p_Vid, nalu);
     FreeNALU (nalu);
   }
 
-  p_Img->p_Stats->bit_ctr_parametersets_n = len;
+  p_Vid->p_Stats->bit_ctr_parametersets_n = len;
   return 0;
 }
 
@@ -127,15 +127,16 @@ int start_sequence(ImageParameters *p_Img, InputParameters *p_Inp)
  *    appropriate sequence header
  ************************************************************************
  */
-int rewrite_paramsets(ImageParameters *p_Img, InputParameters *p_Inp)
+int rewrite_paramsets(VideoParameters *p_Vid)
 {
+  InputParameters *p_Inp = p_Vid->p_Inp;
   int i,len=0, total_pps = (p_Inp->GenerateMultiplePPS) ? 3 : 1;
   NALU_t *nalu;
 
   // Access Unit Delimiter NALU
   if ( p_Inp->SendAUD )
   {
-    len += Write_AUD_NALU(p_Img);
+    len += Write_AUD_NALU(p_Vid);
   }
 
   //! As a sequence header, here we write both sequence and picture
@@ -144,25 +145,25 @@ int rewrite_paramsets(ImageParameters *p_Img, InputParameters *p_Inp)
   //! An alternative may be to consider this function the IDR start function.
 
   nalu = NULL;
-  nalu = GenerateSeq_parameter_set_NALU (p_Img);
-  len += p_Img->WriteNALU (p_Img, nalu);
+  nalu = GenerateSeq_parameter_set_NALU (p_Vid);
+  len += p_Vid->WriteNALU (p_Vid, nalu);
   FreeNALU (nalu);
 
   //! Lets write now the Picture Parameter sets. Output will be equal to the total number of bits spend here.
   for (i=0;i<total_pps;i++)
   {
-     len = write_PPS(p_Img, p_Inp, len, i);
+     len = write_PPS(p_Vid, len, i);
   }
 
   if (p_Inp->GenerateSEIMessage)
   {
     nalu = NULL;
     nalu = GenerateSEImessage_NALU(p_Inp);
-    len += p_Img->WriteNALU (p_Img, nalu);
+    len += p_Vid->WriteNALU (p_Vid, nalu);
     FreeNALU (nalu);
   }
 
-  p_Img->p_Stats->bit_ctr_parametersets_n = len;
+  p_Vid->p_Stats->bit_ctr_parametersets_n = len;
   return 0;
 }
 
@@ -173,7 +174,7 @@ int rewrite_paramsets(ImageParameters *p_Img, InputParameters *p_Inp)
  *     output files
  ************************************************************************
  */
-int terminate_sequence(ImageParameters *p_Img, InputParameters *p_Inp)
+int terminate_sequence(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
 //  Bitstream *currStream;
 
@@ -183,10 +184,10 @@ int terminate_sequence(ImageParameters *p_Img, InputParameters *p_Inp)
   switch(p_Inp->of_mode)
   {
   case PAR_OF_ANNEXB:
-    CloseAnnexbFile(p_Img);
+    CloseAnnexbFile(p_Vid);
     break;
   case PAR_OF_RTP:
-    CloseRTPFile(p_Img);
+    CloseRTPFile(p_Vid);
     return 0;
   default:
     snprintf(errortext, ET_SIZE, "Output File Mode %d not supported", p_Inp->of_mode);

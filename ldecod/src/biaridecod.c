@@ -27,14 +27,6 @@
 #define HALF      0x01FE  //(1 << (B_BITS-1)) - 2
 #define QUARTER   0x0100  //(1 << (B_BITS-2))
 
-
-/************************************************************************
- ************************************************************************
-                      init / exit decoder
- ************************************************************************
- ************************************************************************/
-
-
 /*!
  ************************************************************************
  * \brief
@@ -302,15 +294,16 @@ unsigned int biari_decode_final(DecodingEnvironmentPtr dep)
 void biari_init_context (int qp, BiContextTypePtr ctx, const char* ini)
 {
   int pstate = ((ini[0]* qp )>>4) + ini[1];
-  pstate = iClip3(1, 126, pstate);
 
   if ( pstate >= 64 )
   {
+    pstate = imin(126, pstate);
     ctx->state = (uint16) (pstate - 64);
     ctx->MPS   = 1;
   }
   else
   {
+    pstate = imax(1, pstate);
     ctx->state = (uint16) (63 - pstate);
     ctx->MPS   = 0;
   }

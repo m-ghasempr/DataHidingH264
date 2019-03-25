@@ -57,7 +57,7 @@ struct storable_picture
   int         size_x_cr_pad, size_y_cr_pad;
   int         chroma_vector_adjustment;
   int         coded_frame;
-  int         MbaffFrameFlag;
+  int         mb_aff_frame_flag;
 
   imgpel **   imgY;          //!< Y picture component
   imgpel **** imgY_sub;      //!< Y picture component upsampled (Quarter pel)
@@ -158,7 +158,7 @@ typedef struct frame_store FrameStore;
 //! Decoded Picture Buffer
 struct decoded_picture_buffer
 {
-  ImageParameters *p_Img;
+  VideoParameters *p_Vid;
   InputParameters *p_Inp;
   FrameStore  **fs;
   FrameStore  **fs_ref;
@@ -177,31 +177,32 @@ struct decoded_picture_buffer
 
 typedef struct decoded_picture_buffer DecodedPictureBuffer;
 
-extern void             init_dpb                  (ImageParameters *p_Img, InputParameters *p_Inp, DecodedPictureBuffer *dpb);
-extern void             free_dpb                  (ImageParameters *p_Img, InputParameters *p_Inp, DecodedPictureBuffer *dpb);
+extern void             init_dpb                  (VideoParameters *p_Vid, DecodedPictureBuffer *dpb);
+extern void             free_dpb                  (VideoParameters *p_Vid, DecodedPictureBuffer *dpb);
 extern FrameStore*      alloc_frame_store(void);
-extern void             free_frame_store          (ImageParameters *p_Img, InputParameters *p_Inp, FrameStore* f);
-extern StorablePicture* alloc_storable_picture    (ImageParameters *p_Img, InputParameters *p_Inp, PictureStructure type, int size_x, int size_y, int size_x_cr, int size_y_cr);
-extern void             free_storable_picture     (ImageParameters *p_Img, InputParameters *p_Inp, StorablePicture* p);
-extern void             store_picture_in_dpb      (ImageParameters *p_Img, InputParameters *p_Inp, StorablePicture* p, FrameFormat *output);
-extern void             replace_top_pic_with_frame(ImageParameters *p_Img, InputParameters *p_Inp, StorablePicture* p, FrameFormat *output);
-extern void             flush_dpb                 (ImageParameters *p_Img, InputParameters *p_Inp, FrameFormat *output);
-extern void             dpb_split_field           (ImageParameters *p_Img, InputParameters *p_Inp, FrameStore *fs);
-extern void             dpb_combine_field         (ImageParameters *p_Img, InputParameters *p_Inp, FrameStore *fs);
-extern void             dpb_combine_field_yuv     (ImageParameters *p_Img, InputParameters *p_Inp, FrameStore *fs);
+extern void             free_frame_store          (VideoParameters *p_Vid, FrameStore* f);
+extern StorablePicture* alloc_storable_picture    (VideoParameters *p_Vid, PictureStructure type, int size_x, int size_y, int size_x_cr, int size_y_cr);
+extern void             free_storable_picture     (VideoParameters *p_Vid, StorablePicture* p);
+extern void             store_picture_in_dpb      (VideoParameters *p_Vid, StorablePicture* p, FrameFormat *output);
+extern void             replace_top_pic_with_frame(VideoParameters *p_Vid, StorablePicture* p, FrameFormat *output);
+extern void             flush_dpb                 (VideoParameters *p_Vid, FrameFormat *output);
+extern void             dpb_split_field           (VideoParameters *p_Vid, FrameStore *fs);
+extern void             dpb_combine_field         (VideoParameters *p_Vid, FrameStore *fs);
+extern void             dpb_combine_field_yuv     (VideoParameters *p_Vid, FrameStore *fs);
 extern void             init_lists                (Slice *currSlice);
+extern void             init_lists_single_dir     (Slice *currSlice);
 extern void             reorder_ref_pic_list      (Slice *currSlice, StorablePicture **list[6], char list_size[6], int cur_list);
 extern void             init_mbaff_lists          (Slice *currSlice);
-extern void  alloc_ref_pic_list_reordering_buffer (Slice *currSlice);
-extern void  free_ref_pic_list_reordering_buffer  (Slice *currSlice);
-extern void             fill_frame_num_gap        (ImageParameters *p_Img, InputParameters *p_Inp, FrameFormat *output);
+extern void             alloc_ref_pic_list_reordering_buffer (Slice *currSlice);
+extern void             free_ref_pic_list_reordering_buffer  (Slice *currSlice);
+extern void             fill_frame_num_gap        (VideoParameters *p_Vid, FrameFormat *output);
 extern ColocatedParams* alloc_colocated           (int size_x, int size_y,int mb_adaptive_frame_field_flag);
 extern void             free_colocated            (ColocatedParams* p);
 extern void             compute_colocated         (Slice *currSlice, ColocatedParams* p, StorablePicture **listX[6]);
 
 // For 4:4:4 independent mode
 extern void             compute_colocated_JV      ( Slice *currSlice, ColocatedParams* p, StorablePicture **listX[6]);
-extern void             copy_storable_param_JV    ( ImageParameters *p_Img, int nplane, StorablePicture *d, StorablePicture *s );
+extern void             copy_storable_param_JV    ( VideoParameters *p_Vid, int nplane, StorablePicture *d, StorablePicture *s );
 
 #endif
 

@@ -18,8 +18,8 @@ extern char *GetConfigFileContent (char *Filename, int error_type);
 
 #define MAX_ITEMS_TO_PARSE  2000
 
-int offset4x4_check[6] = { 0, 0, 0, 0, 0, 0 };
-int offset8x8_check[6] = { 0, 0, 0, 0, 0, 0 };
+int offset4x4_check[15] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+int offset8x8_check[15] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
 static const char OffsetType4x4[15][24] = {
   "INTRA4X4_LUMA_INTRA",
@@ -391,11 +391,12 @@ void ParseQOffsetMatrix (QuantParameters *p_Quant, char *buf, int bufsize)
  *    Initialise Q offset matrix values.
  ***********************************************************************
  */
-void Init_QOffsetMatrix (ImageParameters *p_Img, InputParameters *p_Inp)
+void Init_QOffsetMatrix (VideoParameters *p_Vid)
 {
   char *content;
+  InputParameters *p_Inp = p_Vid->p_Inp;
 
-  allocate_QOffsets (p_Img->p_Quant, p_Inp);
+  allocate_QOffsets (p_Vid->p_Quant, p_Inp);
 
   if (p_Inp->OffsetMatrixPresentFlag)
   {
@@ -403,7 +404,7 @@ void Init_QOffsetMatrix (ImageParameters *p_Img, InputParameters *p_Inp)
       p_Inp->QOffsetMatrixFile);
     content = GetConfigFileContent (p_Inp->QOffsetMatrixFile, 0);
     if (content != '\0')
-      ParseQOffsetMatrix (p_Img->p_Quant, content, strlen (content));
+      ParseQOffsetMatrix (p_Vid->p_Quant, content, strlen (content));
     else
     {
       printf
@@ -417,7 +418,7 @@ void Init_QOffsetMatrix (ImageParameters *p_Img, InputParameters *p_Inp)
     free (content);
   }
   //! Now set up all offset p_Inp. This process could be reused if we wish to re-init offsets
-  InitOffsetParam (p_Img->p_Quant, p_Inp);
+  InitOffsetParam (p_Vid->p_Quant, p_Inp);
 }
 
 /*!
@@ -494,19 +495,20 @@ static void InitOffsetParam (QuantParameters *p_Quant, InputParameters *p_Inp)
  *    none
  ************************************************************************
  */
-void CalculateOffset4x4Param (ImageParameters *p_Img, InputParameters *p_Inp)
+void CalculateOffset4x4Param (VideoParameters *p_Vid)
 {
-  QuantParameters *p_Quant = p_Img->p_Quant;
+  QuantParameters *p_Quant = p_Vid->p_Quant;
   int k;  
   int qp_per, qp;
   short **OffsetList;
-  int img_type = (p_Img->type == SI_SLICE ? I_SLICE : (p_Img->type == SP_SLICE ? P_SLICE : p_Img->type));
+  int img_type = ((p_Vid->type == SI_SLICE) ? I_SLICE : (p_Vid->type == SP_SLICE ? P_SLICE : p_Vid->type));
 
-  int max_qp_scale = imax(p_Img->bitdepth_luma_qp_scale, p_Img->bitdepth_chroma_qp_scale);
+  int max_qp_scale = imax(p_Vid->bitdepth_luma_qp_scale, p_Vid->bitdepth_chroma_qp_scale);
   int max_qp = 51 + max_qp_scale;
+  InputParameters *p_Inp = p_Vid->p_Inp;
 
-  p_Img->AdaptRndWeight   = p_Inp->AdaptRndWFactor  [p_Img->nal_reference_idc != 0][img_type];
-  p_Img->AdaptRndCrWeight = p_Inp->AdaptRndCrWFactor[p_Img->nal_reference_idc != 0][img_type];
+  p_Vid->AdaptRndWeight   = p_Inp->AdaptRndWFactor  [p_Vid->nal_reference_idc != 0][img_type];
+  p_Vid->AdaptRndCrWeight = p_Inp->AdaptRndCrWFactor[p_Vid->nal_reference_idc != 0][img_type];
 
   if (img_type == I_SLICE )
   {
@@ -578,16 +580,17 @@ void CalculateOffset4x4Param (ImageParameters *p_Img, InputParameters *p_Inp)
  *
  ************************************************************************
 */
-void CalculateOffset8x8Param (ImageParameters *p_Img, InputParameters *p_Inp)
+void CalculateOffset8x8Param (VideoParameters *p_Vid)
 {
-  QuantParameters *p_Quant = p_Img->p_Quant;
+  QuantParameters *p_Quant = p_Vid->p_Quant;
   int k;
   int q_bits, qp;
 
-  int max_qp_scale = imax(p_Img->bitdepth_luma_qp_scale, p_Img->bitdepth_chroma_qp_scale);
+  int max_qp_scale = imax(p_Vid->bitdepth_luma_qp_scale, p_Vid->bitdepth_chroma_qp_scale);
   int max_qp = 51 + max_qp_scale;
+  InputParameters *p_Inp = p_Vid->p_Inp;
 
-  if (p_Img->type == I_SLICE || p_Img->type == SI_SLICE )
+  if (p_Vid->type == I_SLICE || p_Vid->type == SI_SLICE )
   {
     for (qp = 0; qp < max_qp + 1; qp++)
     {
@@ -601,7 +604,7 @@ void CalculateOffset8x8Param (ImageParameters *p_Img, InputParameters *p_Inp)
       update_q_offset8x8(p_Quant->q_params_8x8[2][1][qp], p_Quant->OffsetList8x8[k][10], q_bits);
     }
   }
-  else if ((p_Img->type == P_SLICE) || (p_Img->type == SP_SLICE))
+  else if ((p_Vid->type == P_SLICE) || (p_Vid->type == SP_SLICE))
   {
     for (qp = 0; qp < max_qp + 1; qp++)
     {

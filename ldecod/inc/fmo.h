@@ -18,13 +18,13 @@
 #define _FMO_H_
 
 
-extern int fmo_init (ImageParameters *p_Img);
-extern int FmoFinit (ImageParameters *p_Img);
+extern int fmo_init (VideoParameters *p_Vid);
+extern int FmoFinit (VideoParameters *p_Vid);
 
-extern int FmoGetNumberOfSliceGroup(ImageParameters *p_Img);
-extern int FmoGetLastMBOfPicture   (ImageParameters *p_Img);
-extern int FmoGetLastMBInSliceGroup(ImageParameters *p_Img, int SliceGroup);
-extern int FmoGetSliceGroupId      (ImageParameters *p_Img, int mb);
-extern int FmoGetNextMBNr          (ImageParameters *p_Img, int CurrentMbNr);
+extern int FmoGetNumberOfSliceGroup(VideoParameters *p_Vid);
+extern int FmoGetLastMBOfPicture   (VideoParameters *p_Vid);
+extern int FmoGetLastMBInSliceGroup(VideoParameters *p_Vid, int SliceGroup);
+extern int FmoGetSliceGroupId      (VideoParameters *p_Vid, int mb);
+extern int FmoGetNextMBNr          (VideoParameters *p_Vid, int CurrentMbNr);
 
 #endif

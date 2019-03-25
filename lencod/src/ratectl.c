@@ -31,13 +31,13 @@
  */
 void rc_store_mad(Macroblock *currMB)
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
-  RCGeneric *p_gen = p_Img->p_rc_gen;
+  RCGeneric *p_gen = p_Vid->p_rc_gen;
 
   p_gen->MADofMB[currMB->mbAddrX] = ComputeMBMAD(currMB->p_slice->diffy);
 
-  if(p_Inp->basicunit < p_Img->FrameSizeInMbs)
+  if(p_Inp->basicunit < p_Vid->FrameSizeInMbs)
   {
     p_gen->TotalMADBasicUnit += p_gen->MADofMB[currMB->mbAddrX];
   }  
@@ -148,13 +148,13 @@ int ComputeMBMAD(int diffy[16][16])
  *
  *************************************************************************************
 */
-double ComputeFrameMAD(ImageParameters *p_Img)
+double ComputeFrameMAD(VideoParameters *p_Vid)
 {
   int64 TotalMAD = 0;
   unsigned int i;
-  for(i = 0; i < p_Img->FrameSizeInMbs; i++)
-    TotalMAD += p_Img->p_rc_gen->MADofMB[i];
-  return (double)TotalMAD / (256.0 * (double)p_Img->FrameSizeInMbs);
+  for(i = 0; i < p_Vid->FrameSizeInMbs; i++)
+    TotalMAD += p_Vid->p_rc_gen->MADofMB[i];
+  return (double)TotalMAD / (256.0 * (double)p_Vid->FrameSizeInMbs);
 }
 
 
@@ -165,7 +165,7 @@ double ComputeFrameMAD(ImageParameters *p_Img)
  *
  *************************************************************************************
 */
-void rc_copy_generic( ImageParameters *p_Img, RCGeneric *dst, RCGeneric *src )
+void rc_copy_generic( VideoParameters *p_Vid, RCGeneric *dst, RCGeneric *src )
 {
   /* buffer original addresses for which memory has been allocated */
   int *tmpMADofMB = dst->MADofMB;
@@ -179,7 +179,7 @@ void rc_copy_generic( ImageParameters *p_Img, RCGeneric *dst, RCGeneric *src )
   dst->MADofMB = tmpMADofMB;
 
   /* copy MADs */
-  memcpy( (void *)dst->MADofMB, (void *)src->MADofMB, p_Img->FrameSizeInMbs * sizeof (int) );
+  memcpy( (void *)dst->MADofMB, (void *)src->MADofMB, p_Vid->FrameSizeInMbs * sizeof (int) );
 }
 
 /*!
@@ -189,14 +189,14 @@ void rc_copy_generic( ImageParameters *p_Img, RCGeneric *dst, RCGeneric *src )
  *
  *************************************************************************************
  */
-void rc_alloc_generic( ImageParameters *p_Img, RCGeneric **p_quad )
+void rc_alloc_generic( VideoParameters *p_Vid, RCGeneric **p_quad )
 {
   *p_quad = (RCGeneric *) malloc ( sizeof( RCGeneric ) );
   if (NULL == *p_quad)
   {
     no_mem_exit("rc_alloc_generic: rc_alloc_generic");
   }
-  (*p_quad)->MADofMB = (int *) calloc (p_Img->FrameSizeInMbs, sizeof (int));
+  (*p_quad)->MADofMB = (int *) calloc (p_Vid->FrameSizeInMbs, sizeof (int));
   if (NULL == (*p_quad)->MADofMB)
   {
     no_mem_exit("rc_alloc_generic: (*p_quad)->MADofMB");
@@ -233,58 +233,55 @@ void rc_free_generic(RCGeneric **p_quad)
  *
  *************************************************************************************
  */
-void rc_init_gop_params(ImageParameters *p_Img, InputParameters *p_Inp)
+void rc_init_gop_params(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   int np, nb;
-  RCQuadratic *p_quad = p_Img->p_rc_quad;
-  RCGeneric *p_gen = p_Img->p_rc_gen;
+  RCQuadratic *p_quad = p_Vid->p_rc_quad;
+  RCGeneric *p_gen = p_Vid->p_rc_gen;
 
   switch( p_Inp->RCUpdateMode )
   {
-  case RC_MODE_1: case RC_MODE_3: 
-    if ( !(p_Img->number) )
+  case RC_MODE_1:
+  case RC_MODE_3: 
+    if ( !(p_Vid->curr_frm_idx) )
     {
       /* number of P frames */
-      np = p_Inp->no_frm_base - 1;
+      np = (int) (p_Inp->no_frames + p_Inp->NumberBFrames) / (1 + p_Inp->NumberBFrames) - 1 + 1; // approximate but good enough (hack...)
       /* number of B frames */
       nb = np * p_Inp->NumberBFrames;
 
-      rc_init_GOP(p_Img, p_Inp, p_quad, p_gen, np, nb);
+      rc_init_GOP(p_Vid, p_Inp, p_quad, p_gen, np, nb);
     }
     break;
-  case RC_MODE_0: case RC_MODE_2:
+  case RC_MODE_0:
+  case RC_MODE_2:
     if (p_Inp->idr_period == 0)
     {
-      if ( !(p_Img->number) )
+      if ( !(p_Vid->curr_frm_idx) )
       {
         /* number of P frames */
-        np = p_Inp->no_frm_base - 1;
+        np = (int) (p_Inp->no_frames + p_Inp->NumberBFrames) / (1 + p_Inp->NumberBFrames) - 1 + 1; // approximate but good enough (hack...)
         /* number of B frames */
         nb = np * p_Inp->NumberBFrames;
-        rc_init_GOP(p_Img, p_Inp, p_quad, p_gen, np, nb);
+        rc_init_GOP(p_Vid, p_Inp, p_quad, p_gen, np, nb);
       }
     }
-    else if ( (!p_Inp->adaptive_idr_period && ( p_Img->frm_number - p_Img->lastIDRnumber ) % p_Inp->idr_period == 0)
-      || (p_Inp->adaptive_idr_period == 1 && ( p_Img->frm_number - imax(p_Img->lastIntraNumber, p_Img->lastIDRnumber) ) % p_Inp->idr_period == 0) )  
+    else if ( p_Vid->p_curr_frm_struct->idr_flag )  
     {
       int M = p_Inp->NumberBFrames + 1;
-      int N = M * p_Inp->idr_period;      
-      int n = (p_Img->number == 0) ? N - ( M - 1) : N;
+      int n = p_Inp->idr_period;
 
       /* last GOP may contain less frames */
-      if ((p_Img->number / p_Inp->idr_period) >= (p_Inp->no_frm_base / p_Inp->idr_period))
+      if ((p_Vid->curr_frm_idx / p_Inp->idr_period) >= (p_Inp->no_frames / p_Inp->idr_period))
       {
-        if (p_Img->number != 0)
-          n = (p_Inp->no_frm_base - p_Img->number) * (p_Inp->NumberBFrames + 1);
-        else
-          n = p_Inp->no_frm_base  + (p_Inp->no_frm_base - 1) * p_Inp->NumberBFrames;
+        n = p_Inp->no_frames - p_Vid->curr_frm_idx;
       }
 
       /* number of P frames */
-      np = (p_Img->number == 0) ? 1 + ((n - 2) / M) : (n - 1) / M; 
+      np = (p_Vid->curr_frm_idx == 0) ? 1 + ((n - 2) / M) : (n - 1) / M; 
       /* number of B frames */
       nb = n - np - 1;
-      rc_init_GOP(p_Img, p_Inp, p_quad, p_gen, np, nb);
+      rc_init_GOP(p_Vid, p_Inp, p_quad, p_gen, np, nb);
     }
     break;
   default:
@@ -300,29 +297,29 @@ void rc_init_gop_params(ImageParameters *p_Img, InputParameters *p_Inp)
  *************************************************************************************
  */
 
-void rc_init_frame(ImageParameters *p_Img, InputParameters *p_Inp)
+void rc_init_frame(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   switch( p_Inp->RCUpdateMode )
   {
   case RC_MODE_0:  case RC_MODE_1:  case RC_MODE_2:  case RC_MODE_3:
 
   // update the number of MBs in the basic unit for MBAFF coding
-  if( (p_Inp->MbInterlace) && (p_Inp->basicunit < p_Img->FrameSizeInMbs) && (p_Img->type == P_SLICE || (p_Inp->RCUpdateMode == RC_MODE_1 && p_Img->number) ) )
-    p_Img->BasicUnit = p_Inp->basicunit << 1;
+  if( (p_Inp->MbInterlace) && (p_Inp->basicunit < p_Vid->FrameSizeInMbs) && (p_Vid->type == P_SLICE || (p_Inp->RCUpdateMode == RC_MODE_1 && p_Vid->number) ) )
+    p_Vid->BasicUnit = p_Inp->basicunit << 1;
   else
-    p_Img->BasicUnit = p_Inp->basicunit;
+    p_Vid->BasicUnit = p_Inp->basicunit;
 
     if ( p_Inp->RDPictureDecision )
     {    
-      rc_copy_quadratic( p_Img, p_Inp, p_Img->p_rc_quad_init, p_Img->p_rc_quad ); // store rate allocation quadratic...    
-      rc_copy_generic( p_Img, p_Img->p_rc_gen_init, p_Img->p_rc_gen ); // ...and generic model
+      rc_copy_quadratic( p_Vid, p_Inp, p_Vid->p_rc_quad_init, p_Vid->p_rc_quad ); // store rate allocation quadratic...    
+      rc_copy_generic( p_Vid, p_Vid->p_rc_gen_init, p_Vid->p_rc_gen ); // ...and generic model
     }
-    p_Img->rc_init_pict_ptr(p_Img, p_Inp, p_Img->p_rc_quad, p_Img->p_rc_gen, 1,0,1, 1.0F);
+    p_Vid->rc_init_pict_ptr(p_Vid, p_Inp, p_Vid->p_rc_quad, p_Vid->p_rc_gen, 1,0,1, 1.0F);
 
-    if( p_Img->active_sps->frame_mbs_only_flag)
-      p_Img->p_rc_gen->TopFieldFlag=0;
+    if( p_Vid->active_sps->frame_mbs_only_flag)
+      p_Vid->p_rc_gen->TopFieldFlag=0;
 
-    p_Img->qp = p_Img->updateQP(p_Img, p_Inp, p_Img->p_rc_quad, p_Img->p_rc_gen, 0) - p_Img->p_rc_quad->bitdepth_qp_scale;
+    p_Vid->p_curr_frm_struct->qp = p_Vid->qp = p_Vid->updateQP(p_Vid, p_Inp, p_Vid->p_rc_quad, p_Vid->p_rc_gen, 0) - p_Vid->p_rc_quad->bitdepth_qp_scale;
     break;
   default:
     break;
@@ -337,28 +334,28 @@ void rc_init_frame(ImageParameters *p_Img, InputParameters *p_Inp)
  *************************************************************************************
  */
 
-void rc_init_sequence(ImageParameters *p_Img, InputParameters *p_Inp)
+void rc_init_sequence(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   switch( p_Inp->RCUpdateMode )
   {
   case RC_MODE_0:  case RC_MODE_1:  case RC_MODE_2:  case RC_MODE_3:
-    rc_init_seq(p_Img, p_Inp, p_Img->p_rc_quad, p_Img->p_rc_gen);
+    rc_init_seq(p_Vid, p_Inp, p_Vid->p_rc_quad, p_Vid->p_rc_gen);
     break;
   default:
     break;
   }
 }
 
-void rc_store_slice_header_bits( ImageParameters *p_Img, InputParameters *p_Inp, int len )
+void rc_store_slice_header_bits( VideoParameters *p_Vid, InputParameters *p_Inp, int len )
 {
   switch (p_Inp->RCUpdateMode)
   {
   case RC_MODE_0:  case RC_MODE_1:  case RC_MODE_2:  case RC_MODE_3:
-    p_Img->p_rc_gen->NumberofHeaderBits +=len;
+    p_Vid->p_rc_gen->NumberofHeaderBits +=len;
 
     // basic unit layer rate control
-    if(p_Img->BasicUnit < p_Img->FrameSizeInMbs)
-      p_Img->p_rc_gen->NumberofBasicUnitHeaderBits +=len;
+    if(p_Vid->BasicUnit < p_Vid->FrameSizeInMbs)
+      p_Vid->p_rc_gen->NumberofBasicUnitHeaderBits +=len;
     break;
   default:
     break;

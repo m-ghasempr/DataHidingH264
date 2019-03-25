@@ -31,22 +31,22 @@
 
 static const char DistortionType[3][20] = {"SAD", "SSE", "Hadamard SAD"};
 
-void   report_log_mode (ImageParameters *p_Img, InputParameters *p_Inp, StatParameters *p_Stats);
+void   report_log_mode (VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *p_Stats);
 /*!
  ************************************************************************
  * \brief
  *    Reports frame statistical data to a stats file
  ************************************************************************
  */
-void report_frame_statistic(ImageParameters *p_Img, InputParameters *p_Inp)
+void report_frame_statistic(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
-  DistortionParams *p_Dist = p_Img->p_Dist;
-  FILE *p_stat_frm = NULL;
-  static int64 last_bit_ctr_n = 0;
+  DistortionParams *p_Dist = p_Vid->p_Dist;
+  FILE *p_stat_frm = NULL;  
+  
   int i;
   char name[30];
   int bitcounter;
-  StatParameters *cur_stats = &p_Img->enc_picture->stats;
+  StatParameters *cur_stats = &p_Vid->enc_picture->stats;
 
 #ifndef WIN32
   time_t now;
@@ -81,7 +81,7 @@ void report_frame_statistic(ImageParameters *p_Img, InputParameters *p_Inp)
     }
   }
 
-  if (p_Img->frame_statistic_start)
+  if (p_Vid->frame_statistic_start)
   {
     fprintf(p_stat_frm, "|     ver     | Date  | Time  |    Sequence                  |Frm | QP |P/MbInt|   Bits   |  SNRY  |  SNRU  |  SNRV  |  I4  |  I8  | I16  | IC0  | IC1  | IC2  | IC3  | PI4  | PI8  | PI16 |  P0  |  P1  |  P2  |  P3  | P1*4*| P1*8*| P2*4*| P2*8*| P3*4*| P3*8*|  P8  | P8:4 | P4*4*| P4*8*| P8:5 | P8:6 | P8:7 | BI4  | BI8  | BI16 |  B0  |  B1  |  B2  |  B3  | B0*4*| B0*8*| B1*4*| B1*8*| B2*4*| B2*8*| B3*4*| B3*8*|  B8  | B8:0 |B80*4*|B80*8*| B8:4 | B4*4*| B4*8*| B8:5 | B8:6 | B8:7 |\n");
     fprintf(p_stat_frm, " ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ \n");
@@ -108,22 +108,22 @@ void report_frame_statistic(ImageParameters *p_Img, InputParameters *p_Inp)
 #endif
 
   for (i=0;i<30;i++)
-    name[i]=p_Inp->input_file1.fname[i + imax(0,(int) (strlen(p_Inp->input_file1.fname)- 30))]; // write last part of path, max 30 chars
+    name[i] = p_Inp->input_file1.fname[i + imax(0,(int) (strlen(p_Inp->input_file1.fname)- 30))]; // write last part of path, max 30 chars
 
   fprintf(p_stat_frm, "%30.30s|", name);
-  fprintf(p_stat_frm, "%3d |", p_Img->frame_no);
-  fprintf(p_stat_frm, "%3d |", p_Img->qp);
+  fprintf(p_stat_frm, "%3d |", p_Vid->frame_no);
+  fprintf(p_stat_frm, "%3d |", p_Vid->qp);
   fprintf(p_stat_frm, "  %d/%d  |", p_Inp->PicInterlace, p_Inp->MbInterlace);
 
 
-  if (p_Img->frm_number == 0 && p_Img->frame_num == 0)
+  if (p_Vid->curr_frm_idx == 0 && p_Vid->frame_num == 0)
   {
-    bitcounter = (int) p_Img->p_Stats->bit_counter[I_SLICE];
+    bitcounter = (int) p_Vid->p_Stats->bit_counter[I_SLICE];
   }
   else
   {
-    bitcounter = (int) (p_Img->p_Stats->bit_ctr_n - last_bit_ctr_n);
-    last_bit_ctr_n = p_Img->p_Stats->bit_ctr_n;
+    bitcounter = (int) (p_Vid->p_Stats->bit_ctr_n - p_Vid->last_bit_ctr_n);
+    p_Vid->last_bit_ctr_n = p_Vid->p_Stats->bit_ctr_n;
   }
 
   //report bitrate
@@ -200,7 +200,7 @@ void report_frame_statistic(ImageParameters *p_Img, InputParameters *p_Inp)
   fprintf(p_stat_frm, "\n");
 
   //save the last results
-  p_Img->frame_statistic_start = 0;
+  p_Vid->frame_statistic_start = 0;
   fclose(p_stat_frm);
 }
 
@@ -233,15 +233,14 @@ double report_slice_pred_stats(FILE *p_stat, StatParameters *p_Stats, int slice_
  */
 void report_stats_on_error(void)
 {
-  p_Enc->p_Inp->no_frm_base = p_Enc->p_Img->frm_number;
-  free_encoder_memory(p_Enc->p_Img, p_Enc->p_Inp);
+  free_encoder_memory(p_Enc->p_Vid, p_Enc->p_Inp);
   exit (-1);
 }
 
 
-void report_stats(ImageParameters *p_Img, InputParameters *p_Inp, StatParameters *p_Stats, int64 bit_use[NUM_SLICE_TYPES][2])
+void report_stats(VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *p_Stats, int64 bit_use[NUM_SLICE_TYPES][2])
 {
-  DistortionParams *p_Dist = p_Img->p_Dist;
+  DistortionParams *p_Dist = p_Vid->p_Dist;
   FILE *p_stat;                    //!< status file for the last encoding session
   double mean_motion_info_bit_use[NUM_SLICE_TYPES] = {0.0};
   int i;
@@ -391,9 +390,9 @@ void report_stats(ImageParameters *p_Img, InputParameters *p_Inp, StatParameters
   fprintf(p_stat,"\n ---------------------|----------------|");
   fprintf(p_stat,"\n");
 
-  fprintf(p_stat,"\n ---------------------|----------------|----------------|----------------|");
-  fprintf(p_stat,"\n  Bit usage:          |      Intra     |      Inter     |    B frame     |");
-  fprintf(p_stat,"\n ---------------------|----------------|----------------|----------------|");
+  fprintf(p_stat,"\n ---------------------|----------------|----------------|----------------|----------------|");
+  fprintf(p_stat,"\n  Bit usage:          |      Intra     |      Inter     |    B frame     |    SP frame    |");
+  fprintf(p_stat,"\n ---------------------|----------------|----------------|----------------|----------------|");
 
   fprintf(p_stat,"\n Header               |");
   fprintf(p_stat," %10.2f     |", (float) p_Stats->bit_use_header[I_SLICE] / bit_use[I_SLICE][0]);
@@ -415,25 +414,30 @@ void report_stats(ImageParameters *p_Img, InputParameters *p_Inp, StatParameters
   fprintf(p_stat," %10.2f     |", (float) p_Stats->tmp_bit_use_cbp[P_SLICE] / bit_use[P_SLICE][0]);   
   fprintf(p_stat," %10.2f     |", (float) p_Stats->tmp_bit_use_cbp[B_SLICE] / bit_use[B_SLICE][0]);
 
+  // Print SP_SLICE
   fprintf(p_stat,"\n Coeffs. Y            |");
   fprintf(p_stat," %10.2f     |", (float) p_Stats->bit_use_coeff[0][I_SLICE] / bit_use[I_SLICE][0]);
   fprintf(p_stat," %10.2f     |", (float) p_Stats->bit_use_coeff[0][P_SLICE] / bit_use[P_SLICE][0]);   
   fprintf(p_stat," %10.2f     |", (float) p_Stats->bit_use_coeff[0][B_SLICE] / bit_use[B_SLICE][0]);
+  fprintf(p_stat," %10.2f     |", (float) p_Stats->bit_use_coeff[0][SP_SLICE] / bit_use[SP_SLICE][0]);   
 
   fprintf(p_stat,"\n Coeffs. C            |");
   fprintf(p_stat," %10.2f     |", (float) p_Stats->bit_use_coeffC[I_SLICE] / bit_use[I_SLICE][0]);
   fprintf(p_stat," %10.2f     |", (float) p_Stats->bit_use_coeffC[P_SLICE] / bit_use[P_SLICE][0]);   
   fprintf(p_stat," %10.2f     |", (float) p_Stats->bit_use_coeffC[B_SLICE] / bit_use[B_SLICE][0]);
+  fprintf(p_stat," %10.2f     |", (float) p_Stats->bit_use_coeffC[SP_SLICE] / bit_use[SP_SLICE][0]);   
 
   fprintf(p_stat,"\n Coeffs. CB           |");
   fprintf(p_stat," %10.2f     |", (float) p_Stats->bit_use_coeff[1][I_SLICE] / bit_use[I_SLICE][0]);
   fprintf(p_stat," %10.2f     |", (float) p_Stats->bit_use_coeff[1][P_SLICE] / bit_use[P_SLICE][0]);   
   fprintf(p_stat," %10.2f     |", (float) p_Stats->bit_use_coeff[1][B_SLICE] / bit_use[B_SLICE][0]);
-
-  fprintf(p_stat,"\n Coeffs. CB           |");
+  fprintf(p_stat," %10.2f     |", (float) p_Stats->bit_use_coeff[1][SP_SLICE] / bit_use[SP_SLICE][0]);   
+  
+  fprintf(p_stat,"\n Coeffs. CR           |");
   fprintf(p_stat," %10.2f     |", (float) p_Stats->bit_use_coeff[2][I_SLICE] / bit_use[I_SLICE][0]);
   fprintf(p_stat," %10.2f     |", (float) p_Stats->bit_use_coeff[2][P_SLICE] / bit_use[P_SLICE][0]);   
   fprintf(p_stat," %10.2f     |", (float) p_Stats->bit_use_coeff[2][B_SLICE] / bit_use[B_SLICE][0]);
+  fprintf(p_stat," %10.2f     |", (float) p_Stats->bit_use_coeff[2][SP_SLICE] / bit_use[SP_SLICE][0]);   
 
   fprintf(p_stat,"\n Delta quant          |");
   fprintf(p_stat," %10.2f     |", (float) p_Stats->bit_use_delta_quant[I_SLICE] / bit_use[I_SLICE][0]);
@@ -457,10 +461,10 @@ void report_stats(ImageParameters *p_Img, InputParameters *p_Inp, StatParameters
 }
 
 
-void report_log(ImageParameters *p_Img, InputParameters *p_Inp, StatParameters *p_Stats)
+void report_log(VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *p_Stats)
 {
-  DistortionParams *p_Dist = p_Img->p_Dist;
-  FILE *p_log = p_Img->p_log;
+  DistortionParams *p_Dist = p_Vid->p_Dist;
+  FILE *p_log = p_Vid->p_log;
   char name[40];
   int i;
 #ifndef WIN32
@@ -521,7 +525,7 @@ void report_log(ImageParameters *p_Img, InputParameters *p_Inp, StatParameters *
   fprintf(p_log,"%40.40s|",name);
 
   fprintf(p_log,"%5d |  %d/%d  |", p_Inp->no_frames, p_Inp->PicInterlace, p_Inp->MbInterlace);
-  fprintf(p_log," %-3d| %-3d| %-3d|", p_Inp->qp[0][I_SLICE], p_Inp->qp[0][P_SLICE], p_Inp->qp[0][B_SLICE]);
+  fprintf(p_log," %-3d| %-3d| %-3d|", p_Inp->qp[I_SLICE], p_Inp->qp[P_SLICE], p_Inp->qp[B_SLICE]);
 
   fprintf(p_log,"%4dx%-4d|", p_Inp->output.width, p_Inp->output.height);
   fprintf(p_log,"  %3d  |%3d |", p_Inp->intra_period, p_Stats->NumberBFrames);
@@ -550,7 +554,7 @@ void report_log(ImageParameters *p_Img, InputParameters *p_Inp, StatParameters *
 
   fprintf(p_log," %3d | %2d  |", p_Inp->search_range, p_Inp->num_ref_frames );
 
-  fprintf(p_log," %5.2f|", p_Img->framerate);
+  fprintf(p_log," %5.2f|", p_Vid->framerate);
 
   if (p_Inp->symbol_mode == CAVLC)
     fprintf(p_log," CAVLC|");
@@ -577,7 +581,7 @@ void report_log(ImageParameters *p_Img, InputParameters *p_Inp, StatParameters *
   fprintf(p_log,"%-5.3f|%-5.3f|%-5.3f|", p_Dist->metric[PSNR].avslice[B_SLICE][0], p_Dist->metric[PSNR].avslice[B_SLICE][1], p_Dist->metric[PSNR].avslice[B_SLICE][2]);
   */
   fprintf(p_log,"%7.0f|%7.0f|%7.0f|%9.0f|", p_Stats->bitrate_st[I_SLICE],p_Stats->bitrate_st[P_SLICE],p_Stats->bitrate_st[B_SLICE], p_Stats->bitrate);
-  fprintf(p_log,"   %12d   |   %12d   |", (int)p_Img->tot_time,(int)p_Img->me_tot_time);
+  fprintf(p_log,"   %12d   |   %12d   |", (int)p_Vid->tot_time,(int)p_Vid->me_tot_time);
 
 
   fprintf(p_log,"\n");
@@ -591,7 +595,7 @@ void report_log(ImageParameters *p_Img, InputParameters *p_Inp, StatParameters *
     fprintf(p_log, "%3d %2d %2d %2.2f %2.2f %2.2f %5" FORMAT_OFF_T  " "
       "%2.2f %2.2f %2.2f %5d "
       "%2.2f %2.2f %2.2f %5" FORMAT_OFF_T  " %5" FORMAT_OFF_T  " %.3f\n",
-      p_Stats->frame_counter, p_Inp->qp[0][I_SLICE], p_Inp->qp[0][P_SLICE],
+      p_Stats->frame_counter, p_Inp->qp[I_SLICE], p_Inp->qp[P_SLICE],
       p_Dist->metric[PSNR].avslice[I_SLICE][0],
       p_Dist->metric[PSNR].avslice[I_SLICE][1],
       p_Dist->metric[PSNR].avslice[I_SLICE][2],
@@ -605,7 +609,7 @@ void report_log(ImageParameters *p_Img, InputParameters *p_Inp, StatParameters *
       p_Dist->metric[PSNR].average[2],
       (p_Stats->bit_counter[I_SLICE] + p_Stats->bit_ctr) / p_Stats->frame_counter,
       p_Stats->bit_counter[B_SLICE] / p_Stats->frame_ctr[B_SLICE],
-      (double) 0.001 * p_Img->tot_time / (p_Stats->frame_counter));
+      (double) 0.001 * p_Vid->tot_time / (p_Stats->frame_counter));
   }
   else
   {
@@ -613,7 +617,7 @@ void report_log(ImageParameters *p_Img, InputParameters *p_Inp, StatParameters *
       fprintf(p_log, "%3d %2d %2d %2.2f %2.2f %2.2f %5" FORMAT_OFF_T  " "
       "%2.2f %2.2f %2.2f %5d "
       "%2.2f %2.2f %2.2f %5" FORMAT_OFF_T  " %5d %.3f\n",
-      p_Stats->frame_counter, p_Inp->qp[0][I_SLICE], p_Inp->qp[0][P_SLICE],
+      p_Stats->frame_counter, p_Inp->qp[I_SLICE], p_Inp->qp[P_SLICE],
       p_Dist->metric[PSNR].avslice[I_SLICE][0],
       p_Dist->metric[PSNR].avslice[I_SLICE][1],
       p_Dist->metric[PSNR].avslice[I_SLICE][2],
@@ -627,7 +631,7 @@ void report_log(ImageParameters *p_Img, InputParameters *p_Inp, StatParameters *
       p_Dist->metric[PSNR].average[2],
       (p_Stats->bit_counter[I_SLICE] + p_Stats->bit_ctr)/ p_Stats->frame_counter,
       0,
-      (double)0.001 * p_Img->tot_time / p_Stats->frame_counter);
+      (double)0.001 * p_Vid->tot_time / p_Stats->frame_counter);
   }
 
   fclose(p_log);
@@ -639,16 +643,16 @@ void report_log(ImageParameters *p_Img, InputParameters *p_Inp, StatParameters *
  *    Reports the gathered information to appropriate outputs
  * \par Input:
  *    InputParameters *inp,                                            \n
- *    ImageParameters *p_Img,                                            \n
+ *    VideoParameters *p_Vid,                                            \n
  *    struct stat_par *p_Stats,                                          \n
  *
  * \par Output:
  *    None
  ************************************************************************
  */
-void report( ImageParameters *p_Img, InputParameters *p_Inp, StatParameters *p_Stats)
+void report( VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *p_Stats)
 {
-  DistortionParams *p_Dist = p_Img->p_Dist;
+  DistortionParams *p_Dist = p_Vid->p_Dist;
   int64 bit_use[NUM_SLICE_TYPES][2];
   int i,j;
   int64 total_bits;
@@ -659,8 +663,8 @@ void report( ImageParameters *p_Img, InputParameters *p_Inp, StatParameters *p_S
   bit_use[SP_SLICE][0] = imax(p_Stats->frame_ctr[SP_SLICE], 1);
 
   // normalize time p_Stats
-  p_Img->tot_time    = timenorm(p_Img->tot_time);
-  p_Img->me_tot_time = timenorm(p_Img->me_tot_time);
+  p_Vid->tot_time    = timenorm(p_Vid->tot_time);
+  p_Vid->me_tot_time = timenorm(p_Vid->me_tot_time);
 
 
   //  Accumulate bit usage for inter and intra frames
@@ -716,12 +720,12 @@ void report( ImageParameters *p_Img, InputParameters *p_Inp, StatParameters *p_S
     int  impix    = p_Inp->output.size_cmp[0];
     int  impix_cr = p_Inp->output.size_cmp[1];
 
-    float csnr_y = psnr(p_Img->max_imgpel_value_comp_sq[0], impix   , sse->average[0]);
-    float csnr_u = psnr(p_Img->max_imgpel_value_comp_sq[1], impix_cr, sse->average[1]);
-    float csnr_v = psnr(p_Img->max_imgpel_value_comp_sq[2], impix_cr, sse->average[2]);
+    float csnr_y = psnr(p_Vid->max_imgpel_value_comp_sq[0], impix   , sse->average[0]);
+    float csnr_u = psnr(p_Vid->max_imgpel_value_comp_sq[1], impix_cr, sse->average[1]);
+    float csnr_v = psnr(p_Vid->max_imgpel_value_comp_sq[2], impix_cr, sse->average[2]);
 
-    fprintf(stdout,  " Total encoding time for the seq.  : %7.3f sec (%3.2f fps)\n", (float) p_Img->tot_time * 0.001, 1000.0 * (float) (p_Stats->frame_counter) / (float)p_Img->tot_time);
-    fprintf(stdout,  " Total ME time for sequence        : %7.3f sec \n\n", (float)p_Img->me_tot_time * 0.001);
+    fprintf(stdout,  " Total encoding time for the seq.  : %7.3f sec (%3.2f fps)\n", (float) p_Vid->tot_time * 0.001, 1000.0 * (float) (p_Stats->frame_counter) / (float)p_Vid->tot_time);
+    fprintf(stdout,  " Total ME time for sequence        : %7.3f sec \n\n", (float)p_Vid->me_tot_time * 0.001);
 
     fprintf(stdout," Y { PSNR (dB), cSNR (dB), MSE }   : { %7.3f, %7.3f, %9.5f }\n", 
       snr->average[0], csnr_y, sse->average[0]/(float)impix);
@@ -732,9 +736,9 @@ void report( ImageParameters *p_Img, InputParameters *p_Inp, StatParameters *p_S
 
     if(p_Inp->DistortionYUVtoRGB == 1)
     {
-      float csnr_r = psnr(p_Img->max_imgpel_value_comp_sq[0], impix, sse_rgb->average[0]);
-      float csnr_g = psnr(p_Img->max_imgpel_value_comp_sq[1], impix, sse_rgb->average[1]);
-      float csnr_b = psnr(p_Img->max_imgpel_value_comp_sq[2], impix, sse_rgb->average[2]);
+      float csnr_r = psnr(p_Vid->max_imgpel_value_comp_sq[0], impix, sse_rgb->average[0]);
+      float csnr_g = psnr(p_Vid->max_imgpel_value_comp_sq[1], impix, sse_rgb->average[1]);
+      float csnr_b = psnr(p_Vid->max_imgpel_value_comp_sq[2], impix, sse_rgb->average[2]);
 
       fprintf(stdout," R { PSNR (dB), cSNR (dB), MSE }   : { %7.3f, %7.3f, %9.5f }\n", 
         snr_rgb->average[0], csnr_r, sse_rgb->average[0] / (float) impix);
@@ -777,7 +781,7 @@ void report( ImageParameters *p_Img, InputParameters *p_Inp, StatParameters *p_S
     fprintf(stdout,"\n");
   }
   else
-    fprintf(stdout,  " Total encoding time for the seq.  : %5.3f sec (%5.2f fps)\n\n", p_Img->tot_time * 0.001, 1000.0 * (p_Stats->frame_counter) / p_Img->tot_time);
+    fprintf(stdout,  " Total encoding time for the seq.  : %5.3f sec (%5.2f fps)\n\n", p_Vid->tot_time * 0.001, 1000.0 * (p_Stats->frame_counter) / p_Vid->tot_time);
 
   total_bits = p_Stats->bit_ctr_parametersets;
   total_bits += p_Stats->bit_ctr_filler_data;
@@ -787,7 +791,7 @@ void report( ImageParameters *p_Img, InputParameters *p_Inp, StatParameters *p_S
   if (p_Stats->frame_ctr[B_SLICE] != 0)
   {
     fprintf(stdout, " Total bits                        : %" FORMAT_OFF_T  " (I %" FORMAT_OFF_T  ", P %" FORMAT_OFF_T  ", B %" FORMAT_OFF_T  " NVB %d) \n",
-      total_bits,  p_Stats->bit_counter[I_SLICE], p_Stats->bit_counter[P_SLICE], p_Stats->bit_counter[B_SLICE], p_Stats->bit_ctr_parametersets);
+      total_bits, p_Stats->bit_counter[I_SLICE], p_Stats->bit_counter[P_SLICE], p_Stats->bit_counter[B_SLICE], p_Stats->bit_ctr_parametersets);
   }
   else if (p_Inp->sp_periodicity == 0)
   {
@@ -805,7 +809,9 @@ void report( ImageParameters *p_Img, InputParameters *p_Inp, StatParameters *p_S
   fprintf(stdout, " Bit rate (kbit/s)  @ %2.2f Hz     : %5.2f\n", p_Inp->output.frame_rate, p_Stats->bitrate / 1000.0);
   
   for (i = 0; i < 5; i++)
+  {
     p_Stats->bit_ctr_emulationprevention += p_Stats->bit_use_stuffingBits[i];
+  }
 
   fprintf(stdout, " Bits to avoid Startcode Emulation : %" FORMAT_OFF_T  " \n", p_Stats->bit_ctr_emulationprevention);
   fprintf(stdout, " Bits for parameter sets           : %d \n", p_Stats->bit_ctr_parametersets);
@@ -829,24 +835,24 @@ void report( ImageParameters *p_Img, InputParameters *p_Inp, StatParameters *p_S
   fprintf(stdout,"\n");
 
   // status file
-  report_stats(p_Img, p_Inp, p_Stats, bit_use);
+  report_stats(p_Vid, p_Inp, p_Stats, bit_use);
 
   // write to log file
-  report_log(p_Img, p_Inp, p_Stats);
+  report_log(p_Vid, p_Inp, p_Stats);
 
   if (p_Inp->ReportFrameStats)
   {
-    if ((p_Img->p_log = fopen("stat_frame.dat", "a")) == NULL)       // append new statistic at the end
+    if ((p_Vid->p_log = fopen("stat_frame.dat", "a")) == NULL)       // append new statistic at the end
     {
       snprintf(errortext, ET_SIZE, "Error open file %s  \n", "stat_frame.dat.dat");
       //    error(errortext, 500);
     }
     else
     {
-      fprintf(p_Img->p_log," --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
-      fclose(p_Img->p_log);
+      fprintf(p_Vid->p_log," --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
+      fclose(p_Vid->p_log);
     }
-    report_log_mode(p_Img, p_Inp, p_Stats);
+    report_log_mode(p_Vid, p_Inp, p_Stats);
   }
 }
 
@@ -861,10 +867,10 @@ void report( ImageParameters *p_Img, InputParameters *p_Inp, StatParameters *p_S
  *    none
  ************************************************************************
  */
-void information_init ( ImageParameters *p_Img, InputParameters *p_Inp, StatParameters *p_Stats)
+void information_init ( VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *p_Stats)
 {
   int i;
-  static char yuv_types[4][10] = {"YUV 4:0:0", "YUV 4:2:0", "YUV 4:2:2", "YUV 4:4:4"};
+  static const char yuv_types[4][10] = {"YUV 4:0:0", "YUV 4:2:0", "YUV 4:2:2", "YUV 4:4:4"};
   switch (p_Inp->Verbose)
   {
   case 0:
@@ -883,10 +889,10 @@ void information_init ( ImageParameters *p_Img, InputParameters *p_Inp, StatPara
   fprintf(stdout,  " Input YUV file                    : %s \n", p_Inp->input_file1.fname);
 
   fprintf(stdout,  " Output H.264 bitstream            : %s \n", p_Inp->outfile);
-  if (p_Img->p_dec != -1)
+  if (p_Vid->p_dec != -1)
     fprintf(stdout,  " Output YUV file                   : %s \n", p_Inp->ReconFile);
-  fprintf(stdout,  " YUV Format                        : %s \n", &yuv_types[p_Img->yuv_format][0]);//p_Img->yuv_format==YUV422?"YUV 4:2:2":(p_Img->yuv_format==YUV444)?"YUV 4:4:4":"YUV 4:2:0");
-  fprintf(stdout,  " Frames to be encoded I-P/B        : %d/%d\n", p_Inp->no_frm_base, (p_Inp->NumberBFrames * (p_Inp->no_frm_base - 1)));
+  fprintf(stdout,  " YUV Format                        : %s \n", &yuv_types[p_Vid->yuv_format][0]);//p_Vid->yuv_format==YUV422?"YUV 4:2:2":(p_Vid->yuv_format==YUV444)?"YUV 4:4:4":"YUV 4:2:0");
+  fprintf(stdout,  " Frames to be encoded              : %d\n", p_Inp->no_frames);
   if (p_Inp->Verbose != 0)
   {
     fprintf(stdout,  " Freq. for encoded bitstream       : %3.2f\n", p_Inp->output.frame_rate);
@@ -909,7 +915,7 @@ void information_init ( ImageParameters *p_Img, InputParameters *p_Inp, StatPara
       break;
     }
 
-    fprintf(stdout,  " Image format                      : %dx%d (%dx%d)\n", p_Inp->output.width, p_Inp->output.height, p_Img->width,p_Img->height);
+    fprintf(stdout,  " Image format                      : %dx%d (%dx%d)\n", p_Inp->output.width, p_Inp->output.height, p_Vid->width,p_Vid->height);
 
     if (p_Inp->intra_upd)
       fprintf(stdout," Error robustness                  : On\n");
@@ -928,7 +934,7 @@ void information_init ( ImageParameters *p_Img, InputParameters *p_Inp, StatPara
     if (p_Stats->NumberBFrames > 0 && p_Inp->HierarchicalCoding)
     {
       fprintf(stdout, " Hierarchy (QP: I %d, P %d, B %d) \n",
-        p_Inp->qp[0][I_SLICE], p_Inp->qp[0][P_SLICE], p_Inp->qp[0][B_SLICE]);
+        p_Inp->qp[I_SLICE], p_Inp->qp[P_SLICE], p_Inp->qp[B_SLICE]);
     }
     else if (p_Stats->NumberBFrames > 0)
     {
@@ -949,16 +955,16 @@ void information_init ( ImageParameters *p_Img, InputParameters *p_Inp, StatPara
         strncat(seqtype,"-P", imax(0, (int) (79 - strlen(seqtype))));
       }
       if (p_Inp->BRefPictures)
-        fprintf(stdout, " %s (QP: I %d, P %d, RB %d) \n", seqtype, p_Inp->qp[0][I_SLICE], p_Inp->qp[0][P_SLICE], iClip3(0, 51, p_Inp->qp[0][B_SLICE] + p_Inp->qpBRSOffset[0]));
+        fprintf(stdout, " %s (QP: I %d, P %d, RB %d) \n", seqtype, p_Inp->qp[I_SLICE], p_Inp->qp[P_SLICE], iClip3(0, 51, p_Inp->qp[B_SLICE] + p_Inp->qpBRSOffset));
       else
-        fprintf(stdout, " %s (QP: I %d, P %d, B %d) \n", seqtype, p_Inp->qp[0][I_SLICE], p_Inp->qp[0][P_SLICE], p_Inp->qp[0][B_SLICE]);
+        fprintf(stdout, " %s (QP: I %d, P %d, B %d) \n", seqtype, p_Inp->qp[I_SLICE], p_Inp->qp[P_SLICE], p_Inp->qp[B_SLICE]);
     }
     else if (p_Stats->NumberBFrames == 0 && (p_Inp->intra_period == 1 || p_Inp->idr_period == 1)) 
-      fprintf(stdout, " IIII (QP: I %d) \n", p_Inp->qp[0][I_SLICE]);
+      fprintf(stdout, " IIII (QP: I %d) \n", p_Inp->qp[I_SLICE]);
     else if (p_Stats->NumberBFrames == 0 && p_Inp->sp_periodicity == 0) 
-      fprintf(stdout, " IPPP (QP: I %d, P %d) \n", p_Inp->qp[0][I_SLICE], p_Inp->qp[0][P_SLICE]);
+      fprintf(stdout, " IPPP (QP: I %d, P %d) \n", p_Inp->qp[I_SLICE], p_Inp->qp[P_SLICE]);
     else 
-      fprintf(stdout, " I-P-P-SP-P (QP: I %d, P %d, SP (%d, %d)) \n",  p_Inp->qp[0][I_SLICE], p_Inp->qp[0][P_SLICE], p_Inp->qp[0][SP_SLICE], p_Inp->qpsp[0]);
+      fprintf(stdout, " I-P-P-SP-P (QP: I %d, P %d, SP (%d, %d)) \n",  p_Inp->qp[I_SLICE], p_Inp->qp[P_SLICE], p_Inp->qp[SP_SLICE], p_Inp->qpsp);
 
     // report on entropy coding  method
     if (p_Inp->symbol_mode == CAVLC)
@@ -1037,29 +1043,29 @@ void information_init ( ImageParameters *p_Img, InputParameters *p_Inp, StatPara
   case 2:
     if (p_Inp->Distortion[SSIM] == 1)
     {
-      printf("------------------------------------------------------------------------------------------------------------------------\n");
+      printf("-------------------------------------------------------------------------------------------------------------------------\n");
       printf("Frame     Bit/pic WP QP QL   SnrY    SnrU    SnrV   SsimY   SsimU   SsimV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
-      printf("------------------------------------------------------------------------------------------------------------------------\n");
+      printf("-------------------------------------------------------------------------------------------------------------------------\n");
     }
     else
     {
-      printf("------------------------------------------------------------------------------------------------\n");
+      printf("-------------------------------------------------------------------------------------------------\n");
       printf("Frame     Bit/pic WP QP QL   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
-      printf("------------------------------------------------------------------------------------------------\n");
+      printf("-------------------------------------------------------------------------------------------------\n");
     }
     break;
   case 3:
     if (p_Inp->Distortion[SSIM] == 1)
     {
-      printf("-----------------------------------------------------------------------------------------------------------------------------\n");
+      printf("------------------------------------------------------------------------------------------------------------------------------\n");
       printf("Frame      Bit/pic NVB WP QP QL   SnrY    SnrU    SnrV   SsimY   SsimU   SsimV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
-      printf("-----------------------------------------------------------------------------------------------------------------------------\n");
+      printf("------------------------------------------------------------------------------------------------------------------------------\n");
     }
     else
     {
-      printf("-----------------------------------------------------------------------------------------------------\n");
+      printf("------------------------------------------------------------------------------------------------------\n");
       printf("Frame      Bit/pic NVB WP QP QL   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
-      printf("-----------------------------------------------------------------------------------------------------\n");
+      printf("------------------------------------------------------------------------------------------------------\n");
     }
     break;
   case 4:
@@ -1085,7 +1091,7 @@ void information_init ( ImageParameters *p_Img, InputParameters *p_Inp, StatPara
  *    Report mode distribution of the sequence to log_mode.dat
  ************************************************************************
  */
-void report_log_mode(ImageParameters *p_Img, InputParameters *p_Inp, StatParameters *p_Stats)
+void report_log_mode(VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *p_Stats)
 {
   FILE *p_stat;                    //!< status file for the last encoding session
   int i;
@@ -1148,7 +1154,7 @@ void report_log_mode(ImageParameters *p_Img, InputParameters *p_Inp, StatParamet
     name[i]=p_Inp->input_file1.fname[i + imax(0,(int) (strlen(p_Inp->input_file1.fname)- 30))]; // write last part of path, max 30 chars
 
   fprintf(p_stat, "%30.30s|", name);
-  fprintf(p_stat, "%3d |", p_Img->qp);
+  fprintf(p_stat, "%3d |", p_Vid->qp);
 
   //report modes
   //I-Modes

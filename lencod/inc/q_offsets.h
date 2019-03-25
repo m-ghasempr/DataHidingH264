@@ -17,9 +17,9 @@
 
 static const int OffsetBits = 11;
 
-extern void Init_QOffsetMatrix      (ImageParameters *p_Img, InputParameters *p_Inp);
-extern void CalculateOffset4x4Param (ImageParameters *p_Img, InputParameters *p_Inp);
-extern void CalculateOffset8x8Param (ImageParameters *p_Img, InputParameters *p_Inp);
+extern void Init_QOffsetMatrix      (VideoParameters *p_Vid);
+extern void CalculateOffset4x4Param (VideoParameters *p_Vid);
+extern void CalculateOffset8x8Param (VideoParameters *p_Vid);
 extern void free_QOffsets           (QuantParameters *p_Quant, InputParameters *p_Inp);
 
 #endif

@@ -170,13 +170,13 @@ int WriteRTPPacket (RTPpacket_t *p, FILE *f)
  *****************************************************************************/
 
 
-int WriteRTPNALU (ImageParameters *p_Img, NALU_t *n)
+int WriteRTPNALU (VideoParameters *p_Vid, NALU_t *n)
 {
   RTPpacket_t *p;
   
   byte first_byte;
 
-  assert (p_Img->f_rtp != NULL);
+  assert (p_Vid->f_rtp != NULL);
   assert (n != NULL);
   assert (n->len < 65000);
 
@@ -204,8 +204,8 @@ int WriteRTPNALU (ImageParameters *p_Img, NALU_t *n)
                                           //! marker bit.  Introduce a nalu->marker and set it in
                                           //! terminate_slice()?
   p->pt=H264PAYLOADTYPE;
-  p->seq = p_Img->CurrentRTPSequenceNumber++;
-  p->timestamp = p_Img->CurrentRTPTimestamp;
+  p->seq = p_Vid->CurrentRTPSequenceNumber++;
+  p->timestamp = p_Vid->CurrentRTPTimestamp;
   p->ssrc=H264SSRC;
   p->paylen = 1 + n->len;
 
@@ -218,7 +218,7 @@ int WriteRTPNALU (ImageParameters *p_Img, NALU_t *n)
     printf ("Cannot compose RTP packet, exit\n");
     exit (-1);
   }
-  if (WriteRTPPacket (p, p_Img->f_rtp) < 0)
+  if (WriteRTPPacket (p, p_Vid->f_rtp) < 0)
   {
     printf ("Cannot write %d bytes of RTP packet to outfile, exit\n", p->packlen);
     exit (-1);
@@ -235,7 +235,7 @@ int WriteRTPNALU (ImageParameters *p_Img, NALU_t *n)
  * \brief
  *    RTPUpdateTimestamp: patches the RTP timestamp depending on the TR
  *
- * \param p_Img
+ * \param p_Vid
  *    Image parameters for current picture encoding
  * \param tr
  *    tr: TRof the following NALUs
@@ -247,14 +247,14 @@ int WriteRTPNALU (ImageParameters *p_Img, NALU_t *n)
 */
 
 
-void RTPUpdateTimestamp (ImageParameters *p_Img, int tr)
+void RTPUpdateTimestamp (VideoParameters *p_Vid, int tr)
 {
   int delta;
   static int oldtr = -1;
 
   if (oldtr == -1)            // First invocation
   {
-    p_Img->CurrentRTPTimestamp = 0;  //! This is a violation of the security req. of
+    p_Vid->CurrentRTPTimestamp = 0;  //! This is a violation of the security req. of
                               //! RTP (random timestamp), but easier to debug
     oldtr = 0;
     return;
@@ -275,7 +275,7 @@ void RTPUpdateTimestamp (ImageParameters *p_Img, int tr)
   if (delta < -10)        // wrap-around
     delta+=256;
 
-  p_Img->CurrentRTPTimestamp += delta * RTP_TR_TIMESTAMP_MULT;
+  p_Vid->CurrentRTPTimestamp += delta * RTP_TR_TIMESTAMP_MULT;
   oldtr = tr;
 }
 
@@ -285,7 +285,7 @@ void RTPUpdateTimestamp (ImageParameters *p_Img, int tr)
  * \brief
  *    Opens the output file for the RTP packet stream
  *
- * \param p_Img
+ * \param p_Vid
  *    Image parameters for current picture encoding
  * \param Filename
  *    The filename of the file to be opened
@@ -296,9 +296,9 @@ void RTPUpdateTimestamp (ImageParameters *p_Img, int tr)
  ********************************************************************************************
 */
 
-void OpenRTPFile (ImageParameters *p_Img, char *Filename)
+void OpenRTPFile (VideoParameters *p_Vid, char *Filename)
 {
-  if ((p_Img->f_rtp = fopen (Filename, "wb")) == NULL)
+  if ((p_Vid->f_rtp = fopen (Filename, "wb")) == NULL)
   {
     printf ("Fatal: cannot open bitstream file '%s', exit (-1)\n", Filename);
     exit (-1);
@@ -317,9 +317,9 @@ void OpenRTPFile (ImageParameters *p_Img, char *Filename)
  ********************************************************************************************
 */
 
-void CloseRTPFile (ImageParameters *p_Img)
+void CloseRTPFile (VideoParameters *p_Vid)
 {
-  fclose(p_Img->f_rtp);
+  fclose(p_Vid->f_rtp);
 }
 
 #if 0
@@ -367,15 +367,15 @@ int aggregationRTPWriteBits (int Marker, int PacketType, int subPacketType, void
   p->cc=0;
   p->m=Marker&1;
   p->pt=H264PAYLOADTYPE;
-  p->seq = p_Img->CurrentRTPSequenceNumber++;
-  p->timestamp = p_Img->CurrentRTPTimestamp;
+  p->seq = p_Vid->CurrentRTPSequenceNumber++;
+  p->timestamp = p_Vid->CurrentRTPTimestamp;
   p->ssrc=H264SSRC;
 
   offset = 0;
   p->payload[offset++] = PacketType; // This is the first byte of the compound packet
 
   // FIRST, write the sei message to aggregation packet, if it is available
-  if ( HaveAggregationSEI(p_Img) )
+  if ( HaveAggregationSEI(p_Vid) )
   {
     p->payload[offset++] = sei_message[AGGREGATION_SEI].subPacketType; // this is the first byte of the first subpacket
     *(short*)&(p->payload[offset]) = sei_message[AGGREGATION_SEI].payloadSize;
@@ -431,9 +431,9 @@ int aggregationRTPWriteBits (int Marker, int PacketType, int subPacketType, void
  * \author
  *    Dong Tian   tian@cs.tut.fi
  *****************************************************************************/
-Boolean isAggregationPacket(ImageParameters *p_Img)
+Boolean isAggregationPacket(VideoParameters *p_Vid)
 {
-  if (HaveAggregationSEI(p_Img))
+  if (HaveAggregationSEI(p_Vid))
   {
     return TRUE;
   }
@@ -457,27 +457,27 @@ Boolean isAggregationPacket(ImageParameters *p_Img)
  *    Dong Tian   tian@cs.tut.fi
  *****************************************************************************/
 
-void begin_sub_sequence_rtp(ImageParameters *p_Img, InputParameters *p_Inp)
+void begin_sub_sequence_rtp(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   if ( p_Inp->of_mode != PAR_OF_RTP || p_Inp->NumFramesInELSubSeq == 0 )
     return;
 
   // begin to encode the base layer subseq
-  if ( p_Img->gop_number == 0 )
+  if ( (p_Vid->curr_frm_idx - p_Vid->last_idr_code_order) == 0 )
   {
 //    printf("begin to encode the base layer subseq\n");
-    InitSubseqInfo(p_Img->p_SEI, 0);
+    InitSubseqInfo(p_Vid->p_SEI, 0);
     if (1)
-      UpdateSubseqChar(p_Img);
+      UpdateSubseqChar(p_Vid);
   }
   // begin to encode the enhanced layer subseq
-  if ( p_Img->gop_number % (p_Inp->NumFramesInELSubSeq+1) == 1 )
+  if ( (p_Vid->curr_frm_idx - p_Vid->last_idr_code_order) % (p_Inp->NumFramesInELSubSeq+1) == 1 )
   {
 //    printf("begin to encode the enhanced layer subseq\n");
-    InitSubseqInfo(p_Img->p_SEI, 1);  // init the sub-sequence in the enhanced layer
+    InitSubseqInfo(p_Vid->p_SEI, 1);  // init the sub-sequence in the enhanced layer
 //    add_dependent_subseq(1);
     if (1)
-      UpdateSubseqChar(p_Img);
+      UpdateSubseqChar(p_Vid);
   }
 }
 
@@ -493,23 +493,23 @@ void begin_sub_sequence_rtp(ImageParameters *p_Img, InputParameters *p_Inp)
  * \author
  *    Dong Tian   tian@cs.tut.fi
  *****************************************************************************/
-void end_sub_sequence_rtp(ImageParameters *p_Img, InputParameters *p_Inp)
+void end_sub_sequence_rtp(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   // end of the base layer:
-  if ( p_Img->number == p_Inp->no_frm_base - 1 )
+  if ( p_Vid->number == p_Inp->no_frames - 1 )
   {
     //    printf("end of encoding the base layer subseq\n");
-    CloseSubseqInfo(p_Img->p_SEI, 0);
+    CloseSubseqInfo(p_Vid->p_SEI, 0);
     //    updateSubSequenceBox(0);
   }
 
   // end of the enhanced layer:
-  if ( ((p_Img->gop_number % (p_Inp->NumFramesInELSubSeq+1)==0) && (p_Inp->NumberBFrames != 0) && (p_Img->gop_number > 0)) || // there are B frames
-    ((p_Img->gop_number % (p_Inp->NumFramesInELSubSeq+1)==p_Inp->NumFramesInELSubSeq) && (p_Inp->NumberBFrames==0))   // there are no B frames
+  if ( (((p_Vid->curr_frm_idx - p_Vid->last_idr_code_order) % (p_Inp->NumFramesInELSubSeq+1)==0) && (p_Inp->NumberBFrames != 0) && ((p_Vid->curr_frm_idx - p_Vid->last_idr_code_order) > 0)) || // there are B frames
+    (((p_Vid->curr_frm_idx - p_Vid->last_idr_code_order) % (p_Inp->NumFramesInELSubSeq+1)==p_Inp->NumFramesInELSubSeq) && (p_Inp->NumberBFrames==0))   // there are no B frames
     )
   {
     //    printf("end of encoding the enhanced layer subseq\n");
-    CloseSubseqInfo(p_Img->p_SEI, 1);
+    CloseSubseqInfo(p_Vid->p_SEI, 1);
     //    add_dependent_subseq(1);
     //    updateSubSequenceBox(1);
   }

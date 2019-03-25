@@ -22,6 +22,7 @@
 
 #include "image.h"
 #include "mb_access.h"
+#include "blk_prediction.h"
 #include "elements.h"
 #include "vlc.h"
 #include "transform8x8.h"
@@ -225,14 +226,13 @@ static int Inv_Residual_DPCM_8x8(Macroblock *currMB, int **m7, int block_y, int 
  *    8x8 Intra mode decision for a macroblock
  *************************************************************************************
  */
-int Mode_Decision_for_Intra8x8Macroblock (Macroblock *currMB, double lambda, double *min_cost)
+int Mode_Decision_for_Intra8x8Macroblock (Macroblock *currMB, int lambda, distblk *min_cost)
 {
   Slice *currSlice = currMB->p_slice;
   int cur_cbp = 0, b8;
-  double cost8x8;
   int cr_cbp[3] = { 0, 0, 0}; 
-
-  *min_cost = (int)floor(6.0 * lambda + 0.4999);
+  distblk cost8x8;
+  *min_cost = weighted_cost(lambda, 6); //6 bits overhead;
 
   if (currSlice->P444_joined == 0)
   {
@@ -283,16 +283,14 @@ int Mode_Decision_for_Intra8x8Macroblock (Macroblock *currMB, double lambda, dou
  *    R-D Cost for an 8x8 Intra block
  *************************************************************************************
  */
-
-double rdcost_for_8x8_intra_blocks(Macroblock *currMB, int *nonzero, int b8, int ipmode, double lambda, double min_rdcost, int mostProbableMode)
+distblk rdcost_for_8x8_intra_blocks(Macroblock *currMB, int *nonzero, int b8, int ipmode, int lambda, distblk min_rdcost, int mostProbableMode)
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   Slice *currSlice = currMB->p_slice;
-
-  double  rdcost = 0.0;
+  distblk  rdcost = 0;
   int     dummy = 0;
   int     rate;
-  int64   distortion  = 0;
+  distblk   distortion  = 0;
   int     block_x     = (b8 & 0x01) << 3;
   int     block_y     = (b8 >> 1) << 3;
   int     pic_pix_x   = currMB->pix_x + block_x;
@@ -307,14 +305,12 @@ double rdcost_for_8x8_intra_blocks(Macroblock *currMB, int *nonzero, int b8, int
   *nonzero = currMB->trans_8x8 (currMB, PLANE_Y, b8, &dummy, 1);
 
   //===== get distortion (SSD) of 8x8 block =====
-  distortion += compute_SSE8x8(&p_Img->pCurImg[pic_opix_y], &p_Img->enc_picture->imgY[pic_pix_y], pic_pix_x, pic_pix_x);
-
-  if ((double) distortion > min_rdcost)
+  distortion += compute_SSE8x8(&p_Vid->pCurImg[pic_opix_y], &p_Vid->enc_picture->imgY[pic_pix_y], pic_pix_x, pic_pix_x);
+  if (distortion > min_rdcost)
   {
     //currSlice->reset_coding_state (currMB, currSlice->p_RDO->cs_cm);
-    return (double) distortion;
+    return distortion;
   }
-
   currMB->ipmode_DPCM = NO_INTRA_PMODE;  
 
   //===== RATE for INTRA PREDICTION MODE  (SYMBOL MODE MUST BE SET TO CAVLC) =====
@@ -348,9 +344,7 @@ double rdcost_for_8x8_intra_blocks(Macroblock *currMB, int *nonzero, int b8, int
   {
     rate  += writeCoeff8x8_CABAC (currMB, PLANE_Y, b8, 1);
   }
-
-  rdcost = (double)distortion + lambda*(double)rate;
-
+  rdcost = distortion + weight_cost(lambda, rate);
   currSlice->reset_coding_state (currMB, currSlice->p_RDO->cs_cm);
 
   return rdcost;
@@ -363,16 +357,14 @@ double rdcost_for_8x8_intra_blocks(Macroblock *currMB, int *nonzero, int b8, int
  *    R-D Cost for an 8x8 Intra block
  *************************************************************************************
  */
-
-double rdcost_for_8x8_intra_blocks_444(Macroblock *currMB, int *nonzero, int b8, int ipmode, double lambda, double min_rdcost, int mostProbableMode)
+distblk  rdcost_for_8x8_intra_blocks_444(Macroblock *currMB, int *nonzero, int b8, int ipmode, int lambda, distblk min_rdcost, int mostProbableMode)
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   Slice *currSlice = currMB->p_slice;
-
-  double  rdcost = 0.0;
+  distblk  rdcost = 0;
   int     dummy = 0;
   int     rate;
-  int64   distortion  = 0;
+  distblk   distortion  = 0;
   int     block_x     = (b8 & 0x01) << 3;
   int     block_y     = (b8 >> 1) << 3;
   int     pic_pix_x   = currMB->pix_x + block_x;
@@ -389,7 +381,7 @@ double rdcost_for_8x8_intra_blocks_444(Macroblock *currMB, int *nonzero, int b8,
     *nonzero = currMB->trans_8x8 (currMB, PLANE_Y, b8, &dummy, 1);
 
     //===== get distortion (SSD) of 8x8 block =====
-    distortion += compute_SSE8x8(&p_Img->pCurImg[pic_opix_y], &p_Img->enc_picture->imgY[pic_pix_y], pic_pix_x, pic_pix_x);
+    distortion += compute_SSE8x8(&p_Vid->pCurImg[pic_opix_y], &p_Vid->enc_picture->imgY[pic_pix_y], pic_pix_x, pic_pix_x);
 
     currMB->ipmode_DPCM = NO_INTRA_PMODE;  
 
@@ -432,16 +424,16 @@ double rdcost_for_8x8_intra_blocks_444(Macroblock *currMB, int *nonzero, int b8,
     *nonzero = currMB->trans_8x8 (currMB, PLANE_Y, b8, &dummy, 1);
 
     //===== get distortion (SSD) of 8x8 block =====
-    distortion += compute_SSE8x8(&p_Img->pCurImg[pic_opix_y], &p_Img->enc_picture->imgY[pic_pix_y], pic_pix_x, pic_pix_x);
+    distortion += compute_SSE8x8(&p_Vid->pCurImg[pic_opix_y], &p_Vid->enc_picture->imgY[pic_pix_y], pic_pix_x, pic_pix_x);
 
     for (k = PLANE_U; k <= PLANE_V; k++)
     {
-      select_plane(p_Img, k);
+      select_plane(p_Vid, k);
       currMB->c_nzCbCr[k ]= currMB->trans_8x8(currMB, k, b8, &dummy,1);
-      distortion += compute_SSE8x8(&p_Img->pImgOrg[k][pic_opix_y], &p_Img->enc_picture->p_curr_img[pic_pix_y], pic_pix_x, pic_pix_x);
+      distortion += compute_SSE8x8(&p_Vid->pImgOrg[k][pic_opix_y], &p_Vid->enc_picture->p_curr_img[pic_pix_y], pic_pix_x, pic_pix_x);
     }
     currMB->ipmode_DPCM = NO_INTRA_PMODE;
-    select_plane(p_Img, PLANE_Y);
+    select_plane(p_Vid, PLANE_Y);
 
     //===== RATE for INTRA PREDICTION MODE  (SYMBOL MODE MUST BE SET TO CAVLC) =====
     se.value1 = (mostProbableMode == ipmode) ? -1 : ipmode < mostProbableMode ? ipmode : ipmode-1;
@@ -479,8 +471,7 @@ double rdcost_for_8x8_intra_blocks_444(Macroblock *currMB, int *nonzero, int b8,
       rate  += writeCoeff8x8_CABAC (currMB, PLANE_V, b8, 1);
     }
   }
-  rdcost = (double)distortion + lambda*(double)rate;
-
+  rdcost =  distortion + weight_cost(lambda, rate);
   currSlice->reset_coding_state (currMB, currSlice->p_RDO->cs_cm);
 
   return rdcost;
@@ -518,20 +509,20 @@ static inline int check_zero(int **mb_ores, int block_x)
  */
 int dct_8x8(Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int intra)
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   int nonzero = FALSE; 
 
   int block_x = 8*(b8 & 0x01);
   int block_y = 8*(b8 >> 1);
   int pl_off = b8+ (pl<<2);
   Slice *currSlice = currMB->p_slice;
-  imgpel **img_enc = p_Img->enc_picture->p_curr_img;
+  imgpel **img_enc = p_Vid->enc_picture->p_curr_img;
 
   imgpel **mb_pred = currSlice->mb_pred[pl];
   int    **mb_ores = currSlice->mb_ores[pl];
   int    **mb_rres = currSlice->mb_rres[pl];
 
-  int max_imgpel_value   = p_Img->max_imgpel_value;
+  int max_imgpel_value   = p_Vid->max_imgpel_value;
 
   if (check_zero(&mb_ores[block_y], block_x) != 0)
   {
@@ -539,7 +530,7 @@ int dct_8x8(Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int intr
 
     // Variable p_Quant and some of its parameters could be all set outside 
     // to speed up the code (e.g. field mode, coeff_cost, etc). 
-    QuantParameters *p_Quant = p_Img->p_Quant;
+    QuantParameters *p_Quant = p_Vid->p_Quant;
 
     QuantMethods quant_methods;
     quant_methods.block_x = block_x;
@@ -550,7 +541,7 @@ int dct_8x8(Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int intr
 
     quant_methods.qp         = qp;
     quant_methods.q_params   = p_Quant->q_params_8x8[pl][intra][qp]; 
-    quant_methods.fadjust    = p_Img->AdaptiveRounding ? (&p_Img->ARCofAdj8x8[pl][currMB->ar_mode][block_y]) : NULL;
+    quant_methods.fadjust    = p_Vid->AdaptiveRounding ? (&p_Vid->ARCofAdj8x8[pl][currMB->ar_mode][block_y]) : NULL;
     quant_methods.coeff_cost = coeff_cost;
     quant_methods.pos_scan   = currMB->is_field_mode ? FIELD_SCAN8x8 : SNGL_SCAN8x8;    
     quant_methods.c_cost     = COEFF_COST8x8[currSlice->disthres];
@@ -600,19 +591,19 @@ int dct_8x8(Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int intr
  */
 int dct_8x8_cavlc(Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int intra)
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   int nonzero = FALSE; 
 
   int block_x = 8*(b8 & 0x01);
   int block_y = 8*(b8 >> 1);
   int pl_off = b8+ (pl<<2);
-  imgpel **img_enc = p_Img->enc_picture->p_curr_img;
+  imgpel **img_enc = p_Vid->enc_picture->p_curr_img;
   Slice *currSlice = currMB->p_slice;
   imgpel **mb_pred = currSlice->mb_pred[pl];  
   int    **mb_ores = currSlice->mb_ores[pl];   
   int    **mb_rres = currSlice->mb_rres[pl];   
 
-  int max_imgpel_value   = p_Img->max_imgpel_value;
+  int max_imgpel_value   = p_Vid->max_imgpel_value;
   
   int qp = currMB->qp_scaled[pl];
 
@@ -620,14 +611,14 @@ int dct_8x8_cavlc(Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, in
   {
     // Variable p_Quant and some of its parameters could be all set outside 
     // to speed up the code (e.g. field mode, coeff_cost, etc). 
-    QuantParameters *p_Quant = p_Img->p_Quant;
+    QuantParameters *p_Quant = p_Vid->p_Quant;
 
     QuantMethods quant_methods;
     quant_methods.block_x    = block_x;
     quant_methods.block_y    = block_y;
     quant_methods.qp         = qp;
     quant_methods.q_params   = p_Quant->q_params_8x8[pl][intra][qp]; 
-    quant_methods.fadjust    = p_Img->AdaptiveRounding ? (&p_Img->ARCofAdj8x8[pl][currMB->ar_mode][block_y]) : NULL;
+    quant_methods.fadjust    = p_Vid->AdaptiveRounding ? (&p_Vid->ARCofAdj8x8[pl][currMB->ar_mode][block_y]) : NULL;
     quant_methods.coeff_cost = coeff_cost;
     quant_methods.pos_scan   = currMB->is_field_mode ? FIELD_SCAN8x8 : SNGL_SCAN8x8;    
     quant_methods.c_cost     = COEFF_COST8x8[currSlice->disthres];
@@ -658,7 +649,7 @@ int dct_8x8_cavlc(Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, in
 
 int dct_8x8_ls(Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int intra)
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   int i,j,coeff_ctr;
   int scan_pos = 0,run = -1;
   int nonzero = FALSE;  
@@ -669,7 +660,7 @@ int dct_8x8_ls(Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int i
   Slice *currSlice = currMB->p_slice;
   int*  ACLevel = currSlice->cofAC[pl_off][0][0];
   int*  ACRun   = currSlice->cofAC[pl_off][0][1];  
-  imgpel **img_enc = p_Img->enc_picture->p_curr_img;
+  imgpel **img_enc = p_Vid->enc_picture->p_curr_img;
   imgpel **mb_pred = currSlice->mb_pred[pl];
   int    **mb_ores = currSlice->mb_ores[pl];
   int    **mb_rres = currSlice->mb_rres[pl];
@@ -681,7 +672,7 @@ int dct_8x8_ls(Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int i
 
   const byte (*pos_scan)[2] = currMB->is_field_mode ? FIELD_SCAN8x8 : SNGL_SCAN8x8;
 
-  int **fadjust8x8 = p_Img->AdaptiveRounding ? (&p_Img->ARCofAdj8x8[pl][currMB->ar_mode][block_y]) :NULL;
+  int **fadjust8x8 = p_Vid->AdaptiveRounding ? (&p_Vid->ARCofAdj8x8[pl][currMB->ar_mode][block_y]) :NULL;
   
   runs[0]=runs[1]=runs[2]=runs[3]=-1;
   scan_poss[0] = scan_poss[1] = scan_poss[2] = scan_poss[3] = 0;
@@ -706,7 +697,7 @@ int dct_8x8_ls(Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int i
 
     m7 = &mb_rres[block_y + j][block_x + i];
 
-    if (p_Img->AdaptiveRounding)
+    if (p_Vid->AdaptiveRounding)
     {
       fadjust8x8[j][block_x+i] = 0;
     }
@@ -777,7 +768,7 @@ int dct_8x8_ls(Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int i
 *     distortion for an 8x8 Intra block 
 *************************************************************************************
 */
-void compute_comp8x8_cost(ImageParameters *p_Img, imgpel **cur_img, imgpel **mpr8x8, int pic_opix_x, int *cost, int min_cost)
+void compute_comp8x8_cost(VideoParameters *p_Vid, imgpel **cur_img, imgpel **mpr8x8, int pic_opix_x, distblk *cost, distblk min_cost)
 {
   int diff64[64];
 
@@ -797,7 +788,7 @@ void compute_comp8x8_cost(ImageParameters *p_Img, imgpel **cur_img, imgpel **mpr
     }
 
   }
-  *cost += p_Img->distortion8x8 (diff64, min_cost);
+  *cost += p_Vid->distortion8x8 (diff64, min_cost);
 }
 
 
@@ -807,19 +798,21 @@ void compute_comp8x8_cost(ImageParameters *p_Img, imgpel **cur_img, imgpel **mpr
 *     SAD distortion for an 8x8 Intra block 
 *************************************************************************************
 */
-void compute_sad8x8_cost(ImageParameters *p_Img, imgpel **cur_img, imgpel **mpr8x8, int pic_opix_x, int *cost, int min_cost)
+void compute_sad8x8_cost(VideoParameters *p_Vid, imgpel **cur_img, imgpel **mpr8x8, int pic_opix_x, distblk *cost, distblk min_cost)
 {
-  int i, j;
   imgpel *cimg, *cmpr;
-
+  int i32Cost;
+  int i, j;
   for (j=0; j<8; j++)
   {
+    i32Cost=0;
     cimg = &cur_img[j][pic_opix_x];
     cmpr = &mpr8x8[j][0];
     for (i=0; i<8; i++)
     {
-      *cost += iabs(*cimg++ - *cmpr++);
+      i32Cost += iabs(*cimg++ - *cmpr++);
     }
+    *cost +=  dist_scale(i32Cost);
     if (*cost > min_cost)
     {
       break;
@@ -833,44 +826,37 @@ void compute_sad8x8_cost(ImageParameters *p_Img, imgpel **cur_img, imgpel **mpr8
 *     SSE distortion for an 8x8 Intra block 
 *************************************************************************************
 */
-void compute_sse8x8_cost(ImageParameters *p_Img, imgpel **cur_img, imgpel **mpr8x8, int pic_opix_x, int *cost, int min_cost)
+void compute_sse8x8_cost(VideoParameters *p_Vid, imgpel **cur_img, imgpel **mpr8x8, int pic_opix_x, distblk *cost, distblk min_cost)
 {
   int i, j;
   imgpel *cimg, *cmpr;
-
+  int imin_cost = dist_down(min_cost);
+  int distortion = 0;
   for (j=0; j<8; j++)
   {
     cimg = &cur_img[j][pic_opix_x];
     cmpr = &mpr8x8[j][0];
+
     for (i=0; i<8; i++)
     {
-      *cost += iabs2(*cimg++ - *cmpr++);
+      distortion += iabs2(*cimg++ - *cmpr++);
     }
-    if (*cost > min_cost)
-    {
-      break;
-    }
-  }
-}
 
+    if (distortion > imin_cost)
+      break;
+  }
+  *cost += dist_scale(distortion);
+}
 /*!
 *************************************************************************************
 * \brief
 *     SATD distortion for an 8x8 Intra block 
 *************************************************************************************
 */
-void compute_satd8x8_cost(ImageParameters *p_Img, imgpel **cur_img, imgpel **mpr8x8, int pic_opix_x, int *cost, int min_cost)
+void compute_satd8x8_cost(VideoParameters *p_Vid, imgpel **cur_img, imgpel **mpr8x8, int pic_opix_x, distblk *cost, distblk min_cost)
 {
   int i, j;
-#if defined(USEMMX)
-#if defined(_MSC_VER) || defined(__INTEL_COMPILER) // ICC
-  __declspec(align(16)) int diff64[64];
-#else // GCC
-  int diff64[64] __attribute__ ((aligned (16)));
-#endif
-#else
   int diff64[64];
-#endif
 
   int *diff = &diff64[0];
   imgpel *cimg, *cmpr;
@@ -884,6 +870,11 @@ void compute_satd8x8_cost(ImageParameters *p_Img, imgpel **cur_img, imgpel **mpr
       *diff++ = *cimg++ - *cmpr++;
     }
   }
-  *cost += HadamardSAD8x8 (diff64);
+
+  {
+    distblk i64Tmp = HadamardSAD8x8 (diff64);
+    *cost += dist_scale(i64Tmp);
+  }
+
 }
 

@@ -92,44 +92,45 @@ void accumulate_avslice(DistMetric *metric, int slice_type, int frames)
  *    Find distortion for all three components
  ************************************************************************
  */
-void find_distortion (ImageParameters *p_Img, InputParameters *p_Inp, ImageData *imgData)
+void find_distortion (VideoParameters *p_Vid, ImageData *imgData)
 {
-  DistortionParams *p_Dist = p_Img->p_Dist;
+  InputParameters *p_Inp = p_Vid->p_Inp;
+  DistortionParams *p_Dist = p_Vid->p_Dist;
   int64 diff_cmp[3] = {0};
 
   //  Calculate SSE for Y, U and V.
-  if (p_Img->structure!=FRAME)
+  if (p_Vid->structure!=FRAME)
   {
     // Luma.
-    diff_cmp[0] += compute_SSE(p_Img->pCurImg, p_Img->imgY_com, 0, 0, p_Inp->output.height, p_Inp->output.width);
+    diff_cmp[0] += compute_SSE(p_Vid->pCurImg, p_Vid->imgY_com, 0, 0, p_Inp->output.height, p_Inp->output.width);
 
     // Chroma.
-    if (p_Img->yuv_format != YUV400)
+    if (p_Vid->yuv_format != YUV400)
     {
-      diff_cmp[1] += compute_SSE(p_Img->pImgOrg[1], p_Img->imgUV_com[0], 0, 0, p_Inp->output.height_cr, p_Inp->output.width_cr);
-      diff_cmp[2] += compute_SSE(p_Img->pImgOrg[2], p_Img->imgUV_com[1], 0, 0, p_Inp->output.height_cr, p_Inp->output.width_cr);
+      diff_cmp[1] += compute_SSE(p_Vid->pImgOrg[1], p_Vid->imgUV_com[0], 0, 0, p_Inp->output.height_cr, p_Inp->output.width_cr);
+      diff_cmp[2] += compute_SSE(p_Vid->pImgOrg[2], p_Vid->imgUV_com[1], 0, 0, p_Inp->output.height_cr, p_Inp->output.width_cr);
     }
   }
   else
   {
     if( IS_INDEPENDENT(p_Inp) )
     {
-      p_Img->enc_picture = p_Img->enc_frame_picture[0];     
+      p_Vid->enc_picture = p_Vid->enc_frame_picture[0];     
     }
-    p_Img->pCurImg   = imgData->frm_data[0];
-    p_Img->pImgOrg[0] = imgData->frm_data[0];
+    p_Vid->pCurImg   = imgData->frm_data[0];
+    p_Vid->pImgOrg[0] = imgData->frm_data[0];
 
     // Luma.
-    diff_cmp[0] += compute_SSE(p_Img->pImgOrg[0], p_Img->enc_picture->imgY, 0, 0, p_Inp->output.height, p_Inp->output.width);
+    diff_cmp[0] += compute_SSE(p_Vid->pImgOrg[0], p_Vid->enc_picture->imgY, 0, 0, p_Inp->output.height, p_Inp->output.width);
 
     // Chroma.
-    if (p_Img->yuv_format != YUV400)
+    if (p_Vid->yuv_format != YUV400)
     {
-      p_Img->pImgOrg[1] = imgData->frm_data[1];
-      p_Img->pImgOrg[2] = imgData->frm_data[2]; 
+      p_Vid->pImgOrg[1] = imgData->frm_data[1];
+      p_Vid->pImgOrg[2] = imgData->frm_data[2]; 
 
-      diff_cmp[1] += compute_SSE(p_Img->pImgOrg[1], p_Img->enc_picture->imgUV[0], 0, 0, p_Inp->output.height_cr, p_Inp->output.width_cr);
-      diff_cmp[2] += compute_SSE(p_Img->pImgOrg[2], p_Img->enc_picture->imgUV[1], 0, 0, p_Inp->output.height_cr, p_Inp->output.width_cr);
+      diff_cmp[1] += compute_SSE(p_Vid->pImgOrg[1], p_Vid->enc_picture->imgUV[0], 0, 0, p_Inp->output.height_cr, p_Inp->output.width_cr);
+      diff_cmp[2] += compute_SSE(p_Vid->pImgOrg[2], p_Vid->enc_picture->imgUV[1], 0, 0, p_Inp->output.height_cr, p_Inp->output.width_cr);
     }
   }
 
@@ -139,22 +140,23 @@ void find_distortion (ImageParameters *p_Img, InputParameters *p_Inp, ImageData 
   p_Dist->metric[SSE].value[2] = (float) diff_cmp[2];
 }
 
-void select_img(ImageParameters *p_Img, InputParameters *p_Inp, ImageStructure *imgSRC, ImageStructure *imgREF, ImageData *imgData)
+void select_img(VideoParameters *p_Vid, ImageStructure *imgSRC, ImageStructure *imgREF, ImageData *imgData)
 {
-  if (p_Img->fld_flag != FALSE)
+  InputParameters *p_Inp = p_Vid->p_Inp;
+  if (p_Vid->fld_flag != FALSE)
   {
     imgSRC->format = p_Inp->output;
     imgREF->format = p_Inp->output;
 
-    imgREF->data[0] = p_Img->pCurImg;
-    imgSRC->data[0] = p_Img->imgY_com;
+    imgREF->data[0] = p_Vid->pCurImg;
+    imgSRC->data[0] = p_Vid->imgY_com;
 
-    if (p_Img->yuv_format != YUV400)
+    if (p_Vid->yuv_format != YUV400)
     {
-      imgREF->data[1] = p_Img->pImgOrg[1];
-      imgREF->data[2] = p_Img->pImgOrg[2];
-      imgSRC->data[1] = p_Img->imgUV_com[0];
-      imgSRC->data[2] = p_Img->imgUV_com[1];
+      imgREF->data[1] = p_Vid->pImgOrg[1];
+      imgREF->data[2] = p_Vid->pImgOrg[2];
+      imgSRC->data[1] = p_Vid->imgUV_com[0];
+      imgSRC->data[2] = p_Vid->imgUV_com[1];
     }
   }
   else
@@ -166,43 +168,44 @@ void select_img(ImageParameters *p_Img, InputParameters *p_Inp, ImageStructure *
 
     if ((p_Inp->PicInterlace == ADAPTIVE_CODING) || IS_INDEPENDENT(p_Inp))
     {
-      p_Img->enc_picture = p_Img->enc_frame_picture[0];
+      p_Vid->enc_picture = p_Vid->enc_frame_picture[0];
     }
-    imgSRC->data[0] = p_Img->enc_picture->imgY;
+    imgSRC->data[0] = p_Vid->enc_picture->imgY;
 
-    if (p_Img->yuv_format != YUV400)
+    if (p_Vid->yuv_format != YUV400)
     {
       imgREF->data[1] = imgData->frm_data[1];
       imgREF->data[2] = imgData->frm_data[2];
 
-      imgSRC->data[1] = p_Img->enc_picture->imgUV[0];
-      imgSRC->data[2] = p_Img->enc_picture->imgUV[1];
+      imgSRC->data[1] = p_Vid->enc_picture->imgUV[0];
+      imgSRC->data[2] = p_Vid->enc_picture->imgUV[1];
     }
   }
 }
 
-void compute_distortion(ImageParameters *p_Img, InputParameters *p_Inp, ImageData *imgData)
+void compute_distortion(VideoParameters *p_Vid, ImageData *imgData)
 {
-  DistortionParams *p_Dist = p_Img->p_Dist;
+  InputParameters *p_Inp = p_Vid->p_Inp;
+  DistortionParams *p_Dist = p_Vid->p_Dist;
   if (p_Inp->Verbose != 0)
   {
-    select_img(p_Img, p_Inp, &p_Img->imgSRC, &p_Img->imgREF, imgData);
+    select_img(p_Vid, &p_Vid->imgSRC, &p_Vid->imgREF, imgData);
 
-    find_snr (p_Img, p_Inp, &p_Img->imgREF, &p_Img->imgSRC, &p_Dist->metric[SSE], &p_Dist->metric[PSNR]);
+    find_snr (p_Vid, &p_Vid->imgREF, &p_Vid->imgSRC, &p_Dist->metric[SSE], &p_Dist->metric[PSNR]);
     if (p_Inp->Distortion[SSIM] == 1)
-      find_ssim (p_Img, p_Inp, &p_Img->imgREF, &p_Img->imgSRC, &p_Dist->metric[SSIM]);
+      find_ssim (p_Vid, p_Inp, &p_Vid->imgREF, &p_Vid->imgSRC, &p_Dist->metric[SSIM]);
     if (p_Inp->Distortion[MS_SSIM] == 1)
-      find_ms_ssim(p_Img, p_Inp, &p_Img->imgREF, &p_Img->imgSRC, &p_Dist->metric[MS_SSIM]);
+      find_ms_ssim(p_Vid, p_Inp, &p_Vid->imgREF, &p_Vid->imgSRC, &p_Dist->metric[MS_SSIM]);
     // RGB Distortion
     if(p_Inp->DistortionYUVtoRGB == 1)
     {
-      YUVtoRGB(p_Img, &p_Img->imgREF, &p_Img->imgRGB_ref);
-      YUVtoRGB(p_Img, &p_Img->imgSRC, &p_Img->imgRGB_src);
-      find_snr (p_Img, p_Inp, &p_Img->imgRGB_ref, &p_Img->imgRGB_src, &p_Dist->metric[SSE_RGB], &p_Dist->metric[PSNR_RGB]);
+      YUVtoRGB(p_Vid, &p_Vid->imgREF, &p_Vid->imgRGB_ref);
+      YUVtoRGB(p_Vid, &p_Vid->imgSRC, &p_Vid->imgRGB_src);
+      find_snr (p_Vid, &p_Vid->imgRGB_ref, &p_Vid->imgRGB_src, &p_Dist->metric[SSE_RGB], &p_Dist->metric[PSNR_RGB]);
       if (p_Inp->Distortion[SSIM] == 1)
-        find_ssim (p_Img, p_Inp, &p_Img->imgRGB_ref, &p_Img->imgRGB_src, &p_Dist->metric[SSIM_RGB]);
+        find_ssim (p_Vid, p_Inp, &p_Vid->imgRGB_ref, &p_Vid->imgRGB_src, &p_Dist->metric[SSIM_RGB]);
       if (p_Inp->Distortion[MS_SSIM] == 1)
-        find_ms_ssim(p_Img, p_Inp, &p_Img->imgRGB_ref, &p_Img->imgRGB_src, &p_Dist->metric[MS_SSIM_RGB]);
+        find_ms_ssim(p_Vid, p_Inp, &p_Vid->imgRGB_ref, &p_Vid->imgRGB_src, &p_Dist->metric[MS_SSIM_RGB]);
     }
   }
 }

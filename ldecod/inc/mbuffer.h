@@ -67,12 +67,13 @@ typedef struct storable_picture
   int         size_x_m1, size_y_m1, size_x_cr_m1, size_y_cr_m1;
   int         chroma_vector_adjustment;
   int         coded_frame;
-  int         MbaffFrameFlag;
+  int         mb_aff_frame_flag;
   unsigned    PicWidthInMbs;
   unsigned    PicSizeInMbs;
 
   imgpel **     imgY;         //!< Y picture component
   imgpel ***    imgUV;        //!< U and V picture components
+  imgpel ***    img_comp;     //!< Y,U, and V components
   
   struct pic_motion_params motion;              //!< Motion info
   struct pic_motion_params JVmotion[MAX_PLANE]; //!< Motion info for 4:4:4 independent mode decoding
@@ -155,7 +156,7 @@ typedef struct frame_store
 //! Decoded Picture Buffer
 typedef struct decoded_picture_buffer
 {
-  ImageParameters *p_Img;
+  VideoParameters *p_Vid;
   InputParameters *p_Inp;
   FrameStore  **fs;
   FrameStore  **fs_ref;
@@ -173,37 +174,38 @@ typedef struct decoded_picture_buffer
   FrameStore   *last_picture;
 } DecodedPictureBuffer;
 
-extern void             init_dpb(ImageParameters *p_Img);
-extern void             free_dpb(ImageParameters *p_Img);
+extern void             init_dpb(VideoParameters *p_Vid);
+extern void             free_dpb(VideoParameters *p_Vid);
 extern FrameStore*      alloc_frame_store(void);
-extern void             free_frame_store(ImageParameters *p_Img, FrameStore* f);
-extern StorablePicture* alloc_storable_picture(ImageParameters *p_Img, PictureStructure type, int size_x, int size_y, int size_x_cr, int size_y_cr);
-extern void             free_storable_picture (ImageParameters *p_Img, StorablePicture* p);
-extern void             store_picture_in_dpb(ImageParameters *p_Img, StorablePicture* p);
-extern void             flush_dpb(ImageParameters *p_Img);
+extern void             free_frame_store(VideoParameters *p_Vid, FrameStore* f);
+extern StorablePicture* alloc_storable_picture(VideoParameters *p_Vid, PictureStructure type, int size_x, int size_y, int size_x_cr, int size_y_cr);
+extern void             free_storable_picture (VideoParameters *p_Vid, StorablePicture* p);
+extern void             store_picture_in_dpb(VideoParameters *p_Vid, StorablePicture* p);
+extern void             flush_dpb(VideoParameters *p_Vid);
 
-extern void             dpb_split_field  (ImageParameters *p_Img, FrameStore *fs);
-extern void             dpb_combine_field(ImageParameters *p_Img, FrameStore *fs);
-extern void             dpb_combine_field_yuv(ImageParameters *p_Img, FrameStore *fs);
+extern void             dpb_split_field  (VideoParameters *p_Vid, FrameStore *fs);
+extern void             dpb_combine_field(VideoParameters *p_Vid, FrameStore *fs);
+extern void             dpb_combine_field_yuv(VideoParameters *p_Vid, FrameStore *fs);
 
 extern void             init_lists          (Slice *currSlice);
-extern void             reorder_ref_pic_list(ImageParameters *p_Img, StorablePicture **list, char *list_size,
+extern void             reorder_ref_pic_list(VideoParameters *p_Vid, StorablePicture **list, char *list_size,
                                       int num_ref_idx_lX_active_minus1, int *reordering_of_pic_nums_idc,
                                       int *abs_diff_pic_num_minus1, int *long_term_pic_idx);
 
-extern void             init_mbaff_lists(ImageParameters *p_Img);
+extern void             init_mbaff_lists(VideoParameters *p_Vid);
 extern void             alloc_ref_pic_list_reordering_buffer(Slice *currSlice);
 extern void             free_ref_pic_list_reordering_buffer(Slice *currSlice);
 
-extern void             fill_frame_num_gap(ImageParameters *p_Img);
+extern void             fill_frame_num_gap(VideoParameters *p_Vid);
 
 extern ColocatedParams* alloc_colocated(int size_x, int size_y,int mb_adaptive_frame_field_flag);
 extern void free_colocated(ColocatedParams* p);
-extern void compute_colocated     (Slice *currSlice, ColocatedParams* p, StorablePicture **listX[6]);
+extern void compute_colocated            (Slice *currSlice, ColocatedParams* p, StorablePicture **listX[6]);
+extern void compute_colocated_frames_mbs (Slice *currSlice, ColocatedParams* p, StorablePicture **listX[6]);
 
 // For 4:4:4 independent mode
 extern void compute_colocated_JV  ( Slice *currSlice, ColocatedParams* p, StorablePicture **listX[6]);
-extern void copy_storable_param_JV( ImageParameters *p_Img, PicMotionParams  *JVplane, PicMotionParams  *motion );
+extern void copy_storable_param_JV( VideoParameters *p_Vid, PicMotionParams  *JVplane, PicMotionParams  *motion );
 
 #endif
 

@@ -19,9 +19,9 @@
 
 extern void accumulate_avslice(DistMetric metric[3], int slice_type, int frames);
 extern void accumulate_average(DistMetric metric[3], int frames);
-extern void find_distortion   (ImageParameters *p_Img, InputParameters *p_Inp, ImageData *imgData);
-extern void select_img        (ImageParameters *p_Img, InputParameters *p_Inp, ImageStructure *imgSRC, ImageStructure *imgREF, ImageData *imgData);
-extern void compute_distortion(ImageParameters *p_Img, InputParameters *p_Inp, ImageData *imgData);
+extern void find_distortion   (VideoParameters *p_Vid, ImageData *imgData);
+extern void select_img        (VideoParameters *p_Vid, ImageStructure *imgSRC, ImageStructure *imgREF, ImageData *imgData);
+extern void compute_distortion(VideoParameters *p_Vid, ImageData *imgData);
 
 #endif
 

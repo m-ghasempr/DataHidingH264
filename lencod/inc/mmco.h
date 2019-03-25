@@ -15,8 +15,8 @@
 #ifndef _MMCO_H_
 #define _MMCO_H_
 
-extern void mmco_long_term(ImageParameters *p_Img, int current_pic_num);
-extern void poc_based_ref_management_frame_pic(ImageParameters *p_Img, int current_pic_num);
-extern void poc_based_ref_management_field_pic(ImageParameters *p_Img, int current_pic_num);
+extern void mmco_long_term(VideoParameters *p_Vid, int current_pic_num);
+extern void poc_based_ref_management_frame_pic(VideoParameters *p_Vid, int current_pic_num);
+extern void poc_based_ref_management_field_pic(VideoParameters *p_Vid, int current_pic_num);
 
 #endif 

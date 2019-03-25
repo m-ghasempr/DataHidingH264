@@ -12,6 +12,8 @@
 
 #ifndef _PARAMS_H_
 #define _PARAMS_H_
+
+#include "defines.h"
 #include "types.h"
 #include "vui_params.h"
 #include "frame.h"
@@ -24,10 +26,11 @@ struct inp_par_enc
   int LevelIDC;                         //!< value of syntax element level_idc
   int IntraProfile;                     //!< Enable Intra profiles
   
-  int no_frm_base;                      //!< number of frames to be encoded
   int no_frames;                        //!< number of frames to be encoded
-  int qp[2][NUM_SLICE_TYPES];           //!< QP values for all slice types (first and second group)
-  int qpsp[2];                          //!< QPSP quantization value
+  int qp[NUM_SLICE_TYPES];              //!< QP values for all slice types
+  int qp2frame;                         //!< frame in display order from which to apply the Change QP offsets
+  int qp2off[NUM_SLICE_TYPES];          //!< Change QP offset values for all slice types
+  int qpsp;                             //!< QPSP quantization value
   int frame_skip;                       //!< number of frames to skip in input sequence (e.g 2 takes frame 0,3,6,9...)
   int jumpd;                            /*!< number of frames to skip in input sequence including intermediate pictures 
                                              (e.g 2 takes frame 0,3,6,9...) */
@@ -94,7 +97,7 @@ struct inp_par_enc
   // B pictures
   int NumberBFrames;                    //!< number of B frames that will be used
   int PReplaceBSlice;
-  int qpBRSOffset[2];                   //!< QP for reference B slice coded pictures
+  int qpBRSOffset;                      //!< QP for reference B slice coded pictures
   int direct_spatial_mv_pred_flag;      //!< Direct Mode type to be used (0: Temporal, 1: Spatial)
   int directInferenceFlag;              //!< Direct Mode Inference Flag
 
@@ -106,7 +109,7 @@ struct inp_par_enc
 
   // SP/SI Pictures
   int sp_periodicity;                   //!< The periodicity of SP-pictures
-
+  int sp_switch_period;                 //!< Switch period (in terms of switching SP/SI frames) between bitstream 1 and bitstream 2
   int si_frame_indicator;               //!< Flag indicating whether SI frames should be encoded rather than SP frames (0: not used, 1: used)
   int sp2_frame_indicator;              //!< Flag indicating whether switching SP frames should be encoded rather than SP frames (0: not used, 1: used)
   int sp_output_indicator;              //!< Flag indicating whether coefficients are output to allow future encoding of switchin SP frames (0: not used, 1: used)
@@ -171,9 +174,6 @@ struct inp_par_enc
 
   int chroma_qp_index_offset;
   int full_search;
-  int last_frame;
-
-  int qp2start;
 
   int rdopt;
   int I16rdo; 
@@ -232,10 +232,10 @@ struct inp_par_enc
   int num_slice_groups_minus1;           //!< "FmoNumSliceGroups" in encoder.cfg, same as FmoNumSliceGroups, which should be erased later
   int slice_group_map_type;
 
-  int *top_left;                         //!< top_left and bottom_right store values indicating foregrounds
-  int *bottom_right;
-  byte *slice_group_id;                   //!< slice_group_id is for slice group type being 6
-  int *run_length_minus1;                //!< run_length_minus1 is for slice group type being 0
+  unsigned *top_left;                     //!< for slice_group_map_type=2: top left positions of foreground rectangles
+  unsigned *bottom_right;                 //!< for slice_group_map_type=2: bottom right positions of foreground rectangles
+  byte *slice_group_id;                   //!< for slice_group_map_type=6: slice_group_id values for each slice group map unit
+  int *run_length_minus1;                 //!< for slice_group_map_type=1: run_length_minus1 value list
 
   int slice_group_change_direction_flag;
   int slice_group_change_rate_minus1;
@@ -333,6 +333,11 @@ struct inp_par_enc
   // tone mapping SEI message
   int ToneMappingSEIPresentFlag;
   char ToneMappingFile[FILE_NAME_SIZE];    //!< ToneMapping SEI message cfg file
+
+  // prediction structure
+  int PreferDispOrder;       //!< Prefer display order when building the prediction structure as opposed to coding order
+  int PreferPowerOfTwo;      //!< Prefer prediction structures that have lengths expressed as powers of two
+  int FrmStructBufferLength; //!< Length of the frame structure unit buffer; it can be overriden for certain cases
 
   int separate_colour_plane_flag;
   double WeightY;

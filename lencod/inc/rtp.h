@@ -53,17 +53,17 @@ extern void DumpRTPHeader (RTPpacket_t *p);
 extern int  RTPWriteBits (int Marker, int PacketType, void * bitstream,
                    int BitStreamLenInByte, FILE *out);
 
-extern Boolean isAggregationPacket(ImageParameters *p_Img);
+extern Boolean isAggregationPacket(VideoParameters *p_Vid);
 extern int aggregationRTPWriteBits (int Marker, int PacketType, int subPacketType, void * bitstream, int BitStreamLenInByte, FILE *out);
 
-extern void begin_sub_sequence_rtp(ImageParameters *p_Img, InputParameters *p_Inp);
-extern void end_sub_sequence_rtp  (ImageParameters *p_Img, InputParameters *p_Inp);
+extern void begin_sub_sequence_rtp(VideoParameters *p_Vid, InputParameters *p_Inp);
+extern void end_sub_sequence_rtp  (VideoParameters *p_Vid, InputParameters *p_Inp);
 #endif
 
-extern void RTPUpdateTimestamp (ImageParameters *p_Img, int tr);
-extern void OpenRTPFile        (ImageParameters *p_Img, char *Filename);
-extern void CloseRTPFile       (ImageParameters *p_Img);
-extern int WriteRTPNALU        (ImageParameters *p_Img, NALU_t *n);
+extern void RTPUpdateTimestamp (VideoParameters *p_Vid, int tr);
+extern void OpenRTPFile        (VideoParameters *p_Vid, char *Filename);
+extern void CloseRTPFile       (VideoParameters *p_Vid);
+extern int WriteRTPNALU        (VideoParameters *p_Vid, NALU_t *n);
 
 
 

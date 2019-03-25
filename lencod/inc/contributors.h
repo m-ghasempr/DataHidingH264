@@ -6,9 +6,9 @@
  *
  *  \par Copyright statements
     \verbatim
-   H.264 JM coder/decoder
+   MPEG-4 AVC/H.264 JM coder/decoder
 
-   Copyright (C) 2000 by
+   Copyright (C) 2000/2009 by
    Apple Computer, Inc.
    Dolby Laboratories, Inc., USA
    Ericsson Radio Systems, Sweden

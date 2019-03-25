@@ -18,9 +18,9 @@
 
 static const unsigned int IOBUFFERSIZE = 65536;
 
-void malloc_annex_b(ImageParameters *p_Img)
+void malloc_annex_b(VideoParameters *p_Vid)
 {
-  if ( (p_Img->annex_b = (ANNEXB_t *) calloc(1, sizeof(ANNEXB_t))) == NULL)
+  if ( (p_Vid->annex_b = (ANNEXB_t *) calloc(1, sizeof(ANNEXB_t))) == NULL)
   {
     snprintf(errortext, ET_SIZE, "Memory allocation for Annex_B file failed");
     error(errortext,100);
@@ -38,10 +38,10 @@ void init_annex_b(ANNEXB_t *annex_b)
   annex_b->nextstartcodebytes = 0;
 }
 
-void free_annex_b(ImageParameters *p_Img)
+void free_annex_b(VideoParameters *p_Vid)
 {
-  free(p_Img->annex_b);
-  p_Img->annex_b = NULL;
+  free(p_Vid->annex_b);
+  p_Vid->annex_b = NULL;
 }
 
 /*!
@@ -136,9 +136,9 @@ static inline int FindStartCode (unsigned char *Buf, int zeros_in_startcode)
  *
  ************************************************************************
  */
-int GetAnnexbNALU (ImageParameters *p_Img, NALU_t *nalu)
+int GetAnnexbNALU (VideoParameters *p_Vid, NALU_t *nalu)
 {
-  ANNEXB_t *annex_b = p_Img->annex_b;
+  ANNEXB_t *annex_b = p_Vid->annex_b;
   int i;
   int info2 = 0, info3 = 0, pos = 0;
   int StartCodeFound = 0;
@@ -307,9 +307,9 @@ int GetAnnexbNALU (ImageParameters *p_Img, NALU_t *nalu)
  *    none
  ************************************************************************
  */
-void OpenAnnexBFile (ImageParameters *p_Img, char *fn)
+void OpenAnnexBFile (VideoParameters *p_Vid, char *fn)
 {
-  ANNEXB_t *annex_b = p_Img->annex_b;
+  ANNEXB_t *annex_b = p_Vid->annex_b;
   if (NULL != annex_b->iobuffer)
   {
     error ("OpenAnnexBFile: tried to open Annex B file twice",500);
@@ -335,9 +335,9 @@ void OpenAnnexBFile (ImageParameters *p_Img, char *fn)
  *    Closes the bit stream file
  ************************************************************************
  */
-void CloseAnnexBFile(ImageParameters *p_Img)
+void CloseAnnexBFile(VideoParameters *p_Vid)
 {
-  ANNEXB_t *annex_b = p_Img->annex_b;
+  ANNEXB_t *annex_b = p_Vid->annex_b;
   if (annex_b->BitStreamFile != -1)
   {
     close(annex_b->BitStreamFile);

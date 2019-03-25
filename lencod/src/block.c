@@ -25,6 +25,7 @@
 #include <math.h>
 
 #include "global.h"
+#include "blk_prediction.h"
 #include "enc_statistics.h"
 #include "memalloc.h"
 #include "image.h"
@@ -212,24 +213,24 @@ void intrapred_16x16(Macroblock *currMB, ColorPlane pl)
   int ib,ic,iaa;
 
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currSlice->p_Img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
   InputParameters *p_Inp = currSlice->p_Inp;
-  imgpel **img_enc = p_Img->enc_picture->p_curr_img;
+  imgpel **img_enc = p_Vid->enc_picture->p_curr_img;
   imgpel ***curr_mpr_16x16   = currSlice->mpr_16x16[pl];
-  unsigned int dc_pred_value = p_Img->dc_pred_value;
+  unsigned int dc_pred_value = p_Vid->dc_pred_value;
 
   PixelPos up;          //!< pixel position p(0,-1)
   PixelPos left[17];    //!< pixel positions p(-1, -1..15)
 
   int up_avail, left_avail, left_up_avail;
-  int *mb_size = p_Img->mb_size[IS_LUMA];
+  int *mb_size = p_Vid->mb_size[IS_LUMA];
 
   for (i=0;i<17;++i)
   {
-    p_Img->getNeighbour(currMB, -1,  i - 1, mb_size, &left[i]);
+    p_Vid->getNeighbour(currMB, -1,  i - 1, mb_size, &left[i]);
   }
 
-  p_Img->getNeighbour(currMB,    0,   -1, mb_size, &up);
+  p_Vid->getNeighbour(currMB,    0,   -1, mb_size, &up);
 
   if (!(p_Inp->UseConstrainedIntraPred))
   {
@@ -239,10 +240,10 @@ void intrapred_16x16(Macroblock *currMB, ColorPlane pl)
   }
   else
   {
-    up_avail      = up.available ? p_Img->intra_block[up.mb_addr] : 0;
+    up_avail      = up.available ? p_Vid->intra_block[up.mb_addr] : 0;
     for (i=1, left_avail=1; i<17;++i)
-      left_avail  &= left[i].available ? p_Img->intra_block[left[i].mb_addr]: 0;
-    left_up_avail = left[0].available ? p_Img->intra_block[left[0].mb_addr]: 0;
+      left_avail  &= left[i].available ? p_Vid->intra_block[left[i].mb_addr]: 0;
+    left_up_avail = left[0].available ? p_Vid->intra_block[left[0].mb_addr]: 0;
   }
 
   s1=s2=0;
@@ -329,7 +330,7 @@ void intrapred_16x16(Macroblock *currMB, ColorPlane pl)
   {
     for (i=0;i< MB_BLOCK_SIZE;++i)
     {
-      curr_mpr_16x16[PLANE_16][j][i]= (imgpel) iClip1( p_Img->max_imgpel_value, rshift_rnd_sf((iaa+(i-7)*ib +(j-7)*ic), 5));// store plane prediction
+      curr_mpr_16x16[PLANE_16][j][i]= (imgpel) iClip1( p_Vid->max_imgpel_value, rshift_rnd_sf((iaa+(i-7)*ib +(j-7)*ic), 5));// store plane prediction
     }
   }
 }
@@ -362,17 +363,16 @@ int dct_16x16(Macroblock *currMB, ColorPlane pl)
   //begin the changes
   int   pl_off = pl<<2;
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currSlice->p_Img;
-  //InputParameters *p_Inp = currSlice->p_Inp;
-  QuantParameters   *p_Quant = p_Img->p_Quant;
+  VideoParameters *p_Vid = currSlice->p_Vid;
+  QuantParameters *p_Quant = p_Vid->p_Quant;
 
   int*  DCLevel = currSlice->cofDC[pl][0];
   int*  DCRun   = currSlice->cofDC[pl][1];
   int   ****cofAC = &currSlice->cofAC[pl_off];
   int coeff_cost;
   int   new_intra_mode      = currMB->i16mode;
-  imgpel **img_enc          = p_Img->enc_picture->p_curr_img;
-  int    max_imgpel_value   = p_Img->max_imgpel_value;
+  imgpel **img_enc          = p_Vid->enc_picture->p_curr_img;
+  int    max_imgpel_value   = p_Vid->max_imgpel_value;
   int    qp                 = currMB->qp_scaled[pl]; 
   const byte (*pos_scan)[2] = currMB->is_field_mode ? FIELD_SCAN : SNGL_SCAN;
   imgpel  ***curr_mpr_16x16 = currSlice->mpr_16x16[pl];
@@ -387,16 +387,17 @@ int dct_16x16(Macroblock *currMB, ColorPlane pl)
 
   quant_methods.qp         = qp; 
   quant_methods.q_params   = p_Quant->q_params_4x4[pl][1][qp]; 
-  quant_methods.fadjust    = p_Img->AdaptiveRounding ? (&p_Img->ARCofAdj4x4[pl][I16MB][0]): NULL;
+  quant_methods.fadjust    = p_Vid->AdaptiveRounding ? (&p_Vid->ARCofAdj4x4[pl][I16MB][0]): NULL;
   quant_methods.pos_scan   = currMB->is_field_mode ? FIELD_SCAN : SNGL_SCAN;
   quant_methods.c_cost     = COEFF_COST4x4[currSlice->disthres];
   quant_methods.coeff_cost = &coeff_cost;
+  quant_methods.type       = LUMA_16AC;
 
 
   for (j = 0; j < 16; ++j)
   {
     predY = curr_mpr_16x16[new_intra_mode][j];
-    img_Y = &p_Img->pCurImg[currMB->opix_y + j][currMB->pix_x];
+    img_Y = &p_Vid->pCurImg[currMB->opix_y + j][currMB->pix_x];
     for (i = 0; i < 16; ++i)
     {
       currSlice->tblk16x16[j][i] = img_Y[i] - predY[i];
@@ -428,7 +429,7 @@ int dct_16x16(Macroblock *currMB, ColorPlane pl)
   {
     ihadamard4x4(currSlice->tblk4x4, currSlice->tblk4x4);
 
-    // Reset DC coefficients
+    // inverse quantization for the DC coefficients
     for (j = 0; j < MB_BLOCK_SIZE; j += BLOCK_SIZE)
     {
       for (i = 0; i < MB_BLOCK_SIZE;i += BLOCK_SIZE)
@@ -467,7 +468,7 @@ int dct_16x16(Macroblock *currMB, ColorPlane pl)
       quant_methods.ACRun    = cofAC[b8][b4][1];
 
       // Quantization process
-      nonzero = currSlice->quant_ac4x4(currMB, &currSlice->tblk16x16[jpos], &quant_methods, LUMA_16AC);
+      nonzero = currSlice->quant_ac4x4(currMB, &currSlice->tblk16x16[jpos], &quant_methods);
 
       if (nonzero)
         ac_coef = 15;
@@ -479,14 +480,14 @@ int dct_16x16(Macroblock *currMB, ColorPlane pl)
   }
 
 
-    // Reconstruct samples
-    sample_reconstruct (&img_enc[currMB->pix_y], curr_mpr_16x16[new_intra_mode], currSlice->tblk16x16, 0, currMB->pix_x, 16, 16, max_imgpel_value, DQ_BITS);
+  // Reconstruct samples
+  sample_reconstruct (&img_enc[currMB->pix_y], curr_mpr_16x16[new_intra_mode], currSlice->tblk16x16, 0, currMB->pix_x, 16, 16, max_imgpel_value, DQ_BITS);
 
-  if(currSlice->slice_type == SP_SLICE)
+  if(currSlice->slice_type == SP_SLICE || currSlice->slice_type == SI_SLICE)
   {
     for (j = currMB->pix_y; j < currMB->pix_y + 16;++j)
       for (i = currMB->pix_x; i < currMB->pix_x + 16;++i)
-        p_Img->lrec[j][i]=-16; //signals an I16 block in the SP frame
+        p_Vid->lrec[j][i]=-16; //signals an I16 block in the SP frame
   }
 
   return ac_coef;
@@ -519,13 +520,13 @@ int dct_16x16_ls(Macroblock *currMB, ColorPlane pl)
   //begin the changes
   int   pl_off = pl<<2;
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currSlice->p_Img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
   Boolean is_cavlc = (currSlice->symbol_mode == CAVLC);
   int*  DCLevel = currSlice->cofDC[pl][0];
   int*  DCRun   = currSlice->cofDC[pl][1];
   int*  ACLevel;
   int*  ACRun;  
-  imgpel **img_enc = p_Img->enc_picture->p_curr_img;
+  imgpel **img_enc = p_Vid->enc_picture->p_curr_img;
   int   *m7;
   int   new_intra_mode = currMB->i16mode;
 
@@ -535,7 +536,7 @@ int dct_16x16_ls(Macroblock *currMB, ColorPlane pl)
   for (j = 0; j < 16; ++j)
   {
     predY = curr_mpr_16x16[new_intra_mode][j];
-    img_Y = &p_Img->pCurImg[currMB->opix_y + j][currMB->pix_x];
+    img_Y = &p_Vid->pCurImg[currMB->opix_y + j][currMB->pix_x];
     for (i = 0; i < 16; ++i)
     {
       currSlice->tblk16x16[j][i] = img_Y[i] - predY[i];
@@ -639,11 +640,11 @@ int dct_16x16_ls(Macroblock *currMB, ColorPlane pl)
       img_Y[i]=(imgpel)(currSlice->tblk16x16[j][i] + predY[i]);
   }
 
-  if(currSlice->slice_type == SP_SLICE)
+  if(currSlice->slice_type == SP_SLICE || currSlice->slice_type == SI_SLICE)
   {
     for (j = currMB->pix_y; j < currMB->pix_y + 16;++j)
       for (i = currMB->pix_x; i < currMB->pix_x + 16;++i)
-        p_Img->lrec[j][i]=-16; //signals an I16 block in the SP frame
+        p_Vid->lrec[j][i]=-16; //signals an I16 block in the SP frame
   }
 
   return ac_coef;
@@ -692,19 +693,19 @@ int dct_4x4(Macroblock *currMB, ColorPlane pl, int block_x,int block_y, int *coe
   int   b8      = 2*(pos_y >> 1) + (pos_x >> 1) + (pl<<2);
   int   b4      = 2*(pos_y & 0x01) + (pos_x & 0x01);
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currSlice->p_Img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
 
-  imgpel **img_enc = p_Img->enc_picture->p_curr_img;
+  imgpel **img_enc = p_Vid->enc_picture->p_curr_img;
   imgpel **mb_pred = currSlice->mb_pred[pl];
   int    **mb_ores = currSlice->mb_ores[pl];
   int    **mb_rres = currSlice->mb_rres[pl]; 
   
 
-  int   max_imgpel_value = p_Img->max_imgpel_value;
+  int   max_imgpel_value = p_Vid->max_imgpel_value;
 
   if (check_zero(&mb_ores[block_y], block_x) != 0) // check if any coefficients in block
   {
-    QuantParameters   *p_Quant = p_Img->p_Quant;
+    QuantParameters   *p_Quant = p_Vid->p_Quant;
     int   qp = currMB->qp_scaled[pl]; 
     QuantMethods quant_methods;
     quant_methods.ACLevel = currSlice->cofAC[b8][b4][0];
@@ -714,7 +715,7 @@ int dct_4x4(Macroblock *currMB, ColorPlane pl, int block_x,int block_y, int *coe
     quant_methods.block_y    = block_y;
     quant_methods.qp         = qp;
     quant_methods.q_params   = p_Quant->q_params_4x4[pl][intra][qp]; 
-    quant_methods.fadjust    = p_Img->AdaptiveRounding ? (&p_Img->ARCofAdj4x4[pl][currMB->ar_mode][block_y]) : NULL;
+    quant_methods.fadjust    = p_Vid->AdaptiveRounding ? (&p_Vid->ARCofAdj4x4[pl][currMB->ar_mode][block_y]) : NULL;
     quant_methods.coeff_cost = coeff_cost;
     quant_methods.pos_scan   = currMB->is_field_mode ? FIELD_SCAN : SNGL_SCAN;    
     quant_methods.c_cost     = COEFF_COST4x4[currSlice->disthres];
@@ -785,13 +786,13 @@ int dct_4x4_ls(Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *c
   int   b4      = 2*(pos_y & 0x01) + (pos_x & 0x01);
   
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currSlice->p_Img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
   Boolean is_cavlc = (currSlice->symbol_mode == CAVLC);
   int*  ACL = &currSlice->cofAC[b8][b4][0][0];
   int*  ACR = &currSlice->cofAC[b8][b4][1][0];
 
   int   pix_y, pix_x;
-  imgpel **img_enc = p_Img->enc_picture->p_curr_img;
+  imgpel **img_enc = p_Vid->enc_picture->p_curr_img;
   imgpel **mb_pred = currSlice->mb_pred[pl];
   int    **mb_ores = currSlice->mb_ores[pl];
   int    **mb_rres = currSlice->mb_rres[pl]; 
@@ -800,7 +801,7 @@ int dct_4x4_ls(Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *c
   const byte *p_scan = currMB->is_field_mode ? &FIELD_SCAN[0][0] : &SNGL_SCAN[0][0];
 
   // select scaling parameters
-  int **fadjust4x4    = p_Img->AdaptiveRounding ? (&p_Img->ARCofAdj4x4[pl][currMB->ar_mode][block_y]) : NULL;
+  int **fadjust4x4    = p_Vid->AdaptiveRounding ? (&p_Vid->ARCofAdj4x4[pl][currMB->ar_mode][block_y]) : NULL;
 
   if( (currMB->ipmode_DPCM < 2) && (intra))
   {
@@ -822,7 +823,7 @@ int dct_4x4_ls(Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *c
 
     m7 = &mb_rres[block_y + j][block_x + i]; 
 
-    if (p_Img->AdaptiveRounding)
+    if (p_Vid->AdaptiveRounding)
       fadjust4x4[j][block_x+i] = 0;
 
     if (*m7 != 0)
@@ -1070,24 +1071,24 @@ int dct_chroma(Macroblock *currMB, int uv, int cr_cbp)
   int nonzero[4][4] = {{FALSE}};
   int nonezero = FALSE;
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currSlice->p_Img;
-  QuantParameters *p_Quant = p_Img->p_Quant;
+  VideoParameters *p_Vid = currSlice->p_Vid;
+  QuantParameters *p_Quant = p_Vid->p_Quant;
 
   int   b4;
   int*  DCLevel = currSlice->cofDC[uv+1][0];
   int*  DCRun   = currSlice->cofDC[uv+1][1];
   int   intra = IS_INTRA (currMB);
-  int   uv_scale = uv * (p_Img->num_blk8x8_uv >> 1);
+  int   uv_scale = uv * (p_Vid->num_blk8x8_uv >> 1);
 
   //FRExt
   static const int64 cbpblk_pattern[4]={0, 0xf0000, 0xff0000, 0xffff0000};
-  int yuv = p_Img->yuv_format;
+  int yuv = p_Vid->yuv_format;
   int b8;  
 
   const byte (*pos_scan)[2] = currMB->is_field_mode ? FIELD_SCAN : SNGL_SCAN;
-  int cur_qp = currMB->qpc[uv] + p_Img->bitdepth_chroma_qp_scale;  
+  int cur_qp = currMB->qpc[uv] + p_Vid->bitdepth_chroma_qp_scale;  
 
-  int max_imgpel_value_uv = p_Img->max_pel_value_comp[uv + 1];
+  int max_imgpel_value_uv = p_Vid->max_pel_value_comp[uv + 1];
 
   int    **mb_rres = currSlice->mb_rres[uv + 1]; 
   int    **mb_ores = currSlice->mb_ores[uv + 1];
@@ -1097,14 +1098,15 @@ int dct_chroma(Macroblock *currMB, int uv, int cr_cbp)
   // set quantization parameters
   quant_methods.qp       = cur_qp; 
   quant_methods.q_params = p_Quant->q_params_4x4[uv + 1][intra][cur_qp]; 
+  quant_methods.type     = CHROMA_AC;
   if (currMB->mb_type == P8x8 && currMB->luma_transform_size_8x8_flag)
   {
     //P8x8, treansform 8x8 chroma adjustments must be stored in a different array to avoid conflict with tranform 4x4
-    quant_methods.fadjust = p_Img->AdaptiveRounding ? p_Img->ARCofAdj4x4[uv + 1][4] : NULL;
+    quant_methods.fadjust = p_Vid->AdaptiveRounding ? p_Vid->ARCofAdj4x4[uv + 1][4] : NULL;
   }
   else
   {
-    quant_methods.fadjust = p_Img->AdaptiveRounding ? p_Img->ARCofAdj4x4[uv + 1][currMB->ar_mode] : NULL;
+    quant_methods.fadjust = p_Vid->AdaptiveRounding ? p_Vid->ARCofAdj4x4[uv + 1][currMB->ar_mode] : NULL;
   }
 
   quant_methods.pos_scan      = currMB->is_field_mode ? FIELD_SCAN : SNGL_SCAN;
@@ -1112,12 +1114,12 @@ int dct_chroma(Macroblock *currMB, int uv, int cr_cbp)
   quant_methods.coeff_cost    = &coeff_cost;
 
 
-  p_Img->is_v_block = uv;
+  p_Vid->is_v_block = uv;
 
   //============= dct transform ===============
-  for (n2=0; n2 < p_Img->mb_cr_size_y; n2 += BLOCK_SIZE)
+  for (n2=0; n2 < p_Vid->mb_cr_size_y; n2 += BLOCK_SIZE)
   {
-    for (n1=0; n1 < p_Img->mb_cr_size_x; n1 += BLOCK_SIZE)
+    for (n1=0; n1 < p_Vid->mb_cr_size_x; n1 += BLOCK_SIZE)
     {
       forward4x4(mb_ores, mb_rres, n2, n1);
     }
@@ -1154,15 +1156,15 @@ int dct_chroma(Macroblock *currMB, int uv, int cr_cbp)
   {
     int **fadjust4x2 = NULL; // note that this is in fact 2x4 but the coefficients have been transposed for better memory access
     //for YUV422 only
-    int cur_qp_dc = currMB->qpc[uv] + 3 + p_Img->bitdepth_chroma_qp_scale;
+    int cur_qp_dc = currMB->qpc[uv] + 3 + p_Vid->bitdepth_chroma_qp_scale;
 
     LevelQuantParams **quant_paramsDC = p_Quant->q_params_4x4[uv + 1][intra][cur_qp_dc]; 
 
     //================== CHROMA DC YUV422 ===================
     //pick out DC coeff    
-    for (j=0; j < p_Img->mb_cr_size_y; j+=BLOCK_SIZE)
+    for (j=0; j < p_Vid->mb_cr_size_y; j+=BLOCK_SIZE)
     {
-      for (i=0; i < p_Img->mb_cr_size_x; i+=BLOCK_SIZE)
+      for (i=0; i < p_Vid->mb_cr_size_x; i+=BLOCK_SIZE)
         currSlice->tblk4x4[i>>2][j>>2]= mb_rres[j][i];
     }
 
@@ -1190,7 +1192,7 @@ int dct_chroma(Macroblock *currMB, int uv, int cr_cbp)
   }
 
   //     Quant of chroma AC-coeffs.
-  for (b8=0; b8 < (p_Img->num_blk8x8_uv >> 1); b8++)
+  for (b8=0; b8 < (p_Vid->num_blk8x8_uv >> 1); b8++)
   {
     for (b4=0; b4 < 4; b4++)
     {
@@ -1202,18 +1204,18 @@ int dct_chroma(Macroblock *currMB, int uv, int cr_cbp)
       quant_methods.block_x  = n1;
       quant_methods.block_y  = n2;
 
-      currMB->subblock_y = subblk_offset_y[p_Img->yuv_format - 1][b8][b4];
-      currMB->subblock_x = subblk_offset_x[p_Img->yuv_format - 1][b8][b4];
-      if (p_Img->AdaptiveRounding)
+      currMB->subblock_y = subblk_offset_y[p_Vid->yuv_format - 1][b8][b4];
+      currMB->subblock_x = subblk_offset_x[p_Vid->yuv_format - 1][b8][b4];
+      if (p_Vid->AdaptiveRounding)
       {
         if (currMB->mb_type == P8x8 && currMB->luma_transform_size_8x8_flag)
         {
           //P8x8, treansform 8x8 chroma adjustments must be stored in a different array to avoid conflict with tranform 4x4
-          quant_methods.fadjust = &p_Img->ARCofAdj4x4[uv + 1][4][n2];
+          quant_methods.fadjust = &p_Vid->ARCofAdj4x4[uv + 1][4][n2];
         }
         else
         {
-          quant_methods.fadjust = &p_Img->ARCofAdj4x4[uv + 1][currMB->ar_mode][n2];
+          quant_methods.fadjust = &p_Vid->ARCofAdj4x4[uv + 1][currMB->ar_mode][n2];
         }
       }
       else
@@ -1222,7 +1224,7 @@ int dct_chroma(Macroblock *currMB, int uv, int cr_cbp)
       }
 
       // Quantization process
-      nonzero[n2>>2][n1>>2] = currSlice->quant_ac4x4cr(currMB, &mb_rres[n2], &quant_methods, CHROMA_AC);
+      nonzero[n2>>2][n1>>2] = currSlice->quant_ac4x4cr(currMB, &mb_rres[n2], &quant_methods);
 
       if (nonzero[n2>>2][n1>>2])
       {
@@ -1240,7 +1242,7 @@ int dct_chroma(Macroblock *currMB, int uv, int cr_cbp)
     int64 uv_cbpblk = ((int64)cbpblk_pattern[yuv] << (uv << (1+yuv)));
     cr_cbp_tmp = 0;
 
-    for (b8 = 0; b8 < (p_Img->num_blk8x8_uv >> 1); b8++)
+    for (b8 = 0; b8 < (p_Vid->num_blk8x8_uv >> 1); b8++)
     {
       for (b4 = 0; b4 < 4; b4++)
       {
@@ -1273,9 +1275,9 @@ int dct_chroma(Macroblock *currMB, int uv, int cr_cbp)
     cr_cbp = 2;
 
   nonezero = FALSE;
-  for (n2=0; n2 < p_Img->mb_cr_size_y; n2 += BLOCK_SIZE)
+  for (n2=0; n2 < p_Vid->mb_cr_size_y; n2 += BLOCK_SIZE)
   {
-    for (n1=0; n1 < p_Img->mb_cr_size_x; n1 += BLOCK_SIZE)
+    for (n1=0; n1 < p_Vid->mb_cr_size_x; n1 += BLOCK_SIZE)
     {
       if (mb_rres[n2][n1] != 0 || nonzero[n2>>2][n1>>2] == TRUE)
       {
@@ -1288,11 +1290,11 @@ int dct_chroma(Macroblock *currMB, int uv, int cr_cbp)
   //  Decoded block moved to memory
   if (nonezero == TRUE)
   {
-    sample_reconstruct (&p_Img->enc_picture->imgUV[uv][currMB->pix_c_y], mb_pred, mb_rres, 0, currMB->pix_c_x, p_Img->mb_cr_size_x, p_Img->mb_cr_size_y, max_imgpel_value_uv, DQ_BITS);
+    sample_reconstruct (&p_Vid->enc_picture->imgUV[uv][currMB->pix_c_y], mb_pred, mb_rres, 0, currMB->pix_c_x, p_Vid->mb_cr_size_x, p_Vid->mb_cr_size_y, max_imgpel_value_uv, DQ_BITS);
   }
   else
   {
-    copy_image_data(&p_Img->enc_picture->imgUV[uv][currMB->pix_c_y], mb_pred, currMB->pix_c_x, 0, p_Img->mb_cr_size_x, p_Img->mb_cr_size_y);
+    copy_image_data(&p_Vid->enc_picture->imgUV[uv][currMB->pix_c_y], mb_pred, currMB->pix_c_x, 0, p_Vid->mb_cr_size_x, p_Vid->mb_cr_size_y);
   }
 
   return cr_cbp;
@@ -1324,16 +1326,16 @@ int dct_chroma_ls(Macroblock *currMB, int uv, int cr_cbp)
 
   int   b4;
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currSlice->p_Img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
   Boolean is_cavlc = (currSlice->symbol_mode == CAVLC);
   int*  DCLevel = currSlice->cofDC[uv+1][0];
   int*  DCRun   = currSlice->cofDC[uv+1][1];
   int*  ACLevel;
   int*  ACRun;
-  int   uv_scale = uv * (p_Img->num_blk8x8_uv >> 1);
+  int   uv_scale = uv * (p_Vid->num_blk8x8_uv >> 1);
 
   //FRExt
-  int yuv = p_Img->yuv_format;
+  int yuv = p_Vid->yuv_format;
   int b8;
   int *m7;
   int m3[4][4];
@@ -1347,11 +1349,11 @@ int dct_chroma_ls(Macroblock *currMB, int uv, int cr_cbp)
   if (currMB->mb_type == P8x8 && currMB->luma_transform_size_8x8_flag)
   {
     //P8x8, treansform 8x8 chroma adjustments must be stored in a different array to avoid conflict with tranform 4x4
-    fadjust4x4    = p_Img->AdaptiveRounding ? p_Img->ARCofAdj4x4[uv + 1][4] : NULL;
+    fadjust4x4    = p_Vid->AdaptiveRounding ? p_Vid->ARCofAdj4x4[uv + 1][4] : NULL;
   }
   else
   {
-    fadjust4x4    = p_Img->AdaptiveRounding ? p_Img->ARCofAdj4x4[uv + 1][currMB->ar_mode] : NULL;
+    fadjust4x4    = p_Vid->AdaptiveRounding ? p_Vid->ARCofAdj4x4[uv + 1][currMB->ar_mode] : NULL;
   }
 
   if (yuv == YUV420)
@@ -1393,9 +1395,9 @@ int dct_chroma_ls(Macroblock *currMB, int uv, int cr_cbp)
     //horizontal
 
     //pick out DC coeff
-    for (j=0; j < p_Img->mb_cr_size_y; j+=BLOCK_SIZE)
+    for (j=0; j < p_Vid->mb_cr_size_y; j+=BLOCK_SIZE)
     {
-      for (i=0; i < p_Img->mb_cr_size_x; i+=BLOCK_SIZE)
+      for (i=0; i < p_Vid->mb_cr_size_x; i+=BLOCK_SIZE)
       {
         m3[i>>2][j>>2] = mb_ores[j][i];
         mb_rres[j][i]  = mb_ores[j][i];
@@ -1437,7 +1439,7 @@ int dct_chroma_ls(Macroblock *currMB, int uv, int cr_cbp)
   //     Quant of chroma AC-coeffs.
   coeff_cost=0;
 
-  for (b8=0; b8 < (p_Img->num_blk8x8_uv >> 1); b8++)
+  for (b8=0; b8 < (p_Vid->num_blk8x8_uv >> 1); b8++)
   {
     for (b4=0; b4 < 4; b4++)
     {
@@ -1459,7 +1461,7 @@ int dct_chroma_ls(Macroblock *currMB, int uv, int cr_cbp)
         level = iabs(mb_ores[n2+j][n1+i]);
         mb_rres[n2+j][n1+i] = mb_ores[n2+j][n1+i];
 
-        if (p_Img->AdaptiveRounding)
+        if (p_Vid->AdaptiveRounding)
         {
           fadjust4x4[n2+j][n1+i] = 0;
         }
@@ -1480,12 +1482,12 @@ int dct_chroma_ls(Macroblock *currMB, int uv, int cr_cbp)
     }
   }
 
-  for (j=0; j < p_Img->mb_cr_size_y; ++j)
+  for (j=0; j < p_Vid->mb_cr_size_y; ++j)
   {      
-    orig_img = &p_Img->enc_picture->imgUV[uv][currMB->pix_c_y + j][currMB->pix_c_x];
+    orig_img = &p_Vid->enc_picture->imgUV[uv][currMB->pix_c_y + j][currMB->pix_c_x];
     m7 = mb_rres[j];
     pred_img = mb_pred[j];
-    for (i=0; i < p_Img->mb_cr_size_x; ++i)
+    for (i=0; i < p_Vid->mb_cr_size_x; ++i)
     {        
       orig_img[i] = (imgpel) m7[i] + pred_img[i];
     }
@@ -1516,11 +1518,11 @@ int dct_4x4_sp(Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *c
   int i,j,coeff_ctr;
   int qp_const,ilev, level,scan_pos = 0,run = -1;
   int nonzero = FALSE;
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
   Slice *currSlice = currMB->p_slice;
 
-  imgpel **img_enc = p_Img->enc_picture->p_curr_img;
+  imgpel **img_enc = p_Vid->enc_picture->p_curr_img;
   imgpel **mb_pred = currSlice->mb_pred[pl];
   int    **mb_rres = currSlice->mb_rres[pl]; 
   int    **mb_ores = currSlice->mb_ores[pl];
@@ -1545,7 +1547,7 @@ int dct_4x4_sp(Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *c
   int len, info;
   double lambda_mode   = 0.85 * pow (2, (qp - SHIFT_QP)/3.0) * 4;
 
-  QuantParameters   *p_Quant = p_Img->p_Quant;
+  QuantParameters   *p_Quant = p_Vid->p_Quant;
 
   int qp_per    = p_Quant->qp_per_matrix[qp];
   int q_bits    = Q_BITS + qp_per;
@@ -1555,17 +1557,31 @@ int dct_4x4_sp(Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *c
   LevelQuantParams **q_params_4x4 = p_Quant->q_params_4x4[pl][intra][qp]; 
   LevelQuantParams **quant_params_sp = p_Quant->q_params_4x4[pl][intra][qp_sp]; 
 
+  QuantMethods quant_methods;
+  quant_methods.ACLevel = currSlice->cofAC[b8][b4][0];
+  quant_methods.ACRun   = currSlice->cofAC[b8][b4][1];
+  
+  quant_methods.block_x    = block_x;
+  quant_methods.block_y    = block_y;
+  quant_methods.qp         = qp;
+
+  quant_methods.q_params   = p_Quant->q_params_4x4[pl][intra][qp]; 
+  quant_methods.fadjust    = p_Vid->AdaptiveRounding ? (&p_Vid->ARCofAdj4x4[pl][currMB->ar_mode][block_y]) : NULL;
+  quant_methods.coeff_cost = coeff_cost; 
+  quant_methods.pos_scan   = currMB->is_field_mode ? FIELD_SCAN : SNGL_SCAN;    
+  quant_methods.c_cost     = COEFF_COST4x4[currSlice->disthres];
+    
   qp_const  = (1<<q_bits)/6;    // inter
   qp_const2 = (1<<q_bits_sp)>>1;  //sp_pred
 
   //  Horizontal transform
-  for (j=block_y; j< block_x + BLOCK_SIZE; ++j)
+  for (j=block_y; j< block_y + BLOCK_SIZE; ++j)
   {
     for (i=block_x; i< block_x + BLOCK_SIZE; ++i)
     { 
       mb_rres[j][i] = mb_ores[j][i];
       mb_rres[j][i]+=mb_pred[j][i];
-      currSlice->tblk16x16[j][i] = mb_pred[j][i];
+      currSlice->tblk16x16[j][i] = mb_pred[j][i];	 
     }
   }
 
@@ -1584,23 +1600,27 @@ int dct_4x4_sp(Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *c
     // decide prediction
 
     // case 1
-    level1 = (iabs (currSlice->tblk16x16[j][i]) * quant_params_sp[j][i].ScaleComp + qp_const2) >> q_bits_sp;
+    level1 = (iabs (currSlice->tblk16x16[j+block_y][i+block_x]) * quant_params_sp[j][i].ScaleComp + qp_const2) >> q_bits_sp;
     level1 = (level1 << q_bits_sp) / quant_params_sp[j][i].ScaleComp;
-    c_err1 = mb_rres[j][i] - isignab(level1, currSlice->tblk16x16[j][i]);
+    c_err1 = mb_rres[j+block_y][i+block_x] - isignab(level1, currSlice->tblk16x16[j+block_y][i+block_x]);
     level1 = (iabs (c_err1) * q_params_4x4[j][i].ScaleComp + qp_const) >> q_bits;
 
     // case 2
-    c_err2 = mb_rres[j][i] - currSlice->tblk16x16[j][i];
+    c_err2 = mb_rres[j+block_y][i+block_x] - currSlice->tblk16x16[j+block_y][i+block_x];
     level2 = (iabs (c_err2) * q_params_4x4[j][i].ScaleComp + qp_const) >> q_bits;
 
     // select prediction
     if ((level1 != level2) && (level1 != 0) && (level2 != 0))
     {
-      D_dis1 = mb_rres[j][i] - ((isignab(level1,c_err1) * q_params_4x4[j][i].InvScaleComp * A[j][i]<< qp_per) >>6) - currSlice->tblk16x16[j][i];
+      D_dis1 = mb_rres[j+block_y][i+block_x] - 
+		  ((isignab(level1,c_err1) * (q_params_4x4[j][i].InvScaleComp >> 4) * A[j][i]<< qp_per) >>6) 
+		  - currSlice->tblk16x16[j+block_y][i+block_x];
       levrun_linfo_inter(level1, run, &len, &info);
       D_dis1 = D_dis1 * D_dis1 + lambda_mode * len;
 
-      D_dis2 = mb_rres[j][i] - ((isignab(level2,c_err2)*q_params_4x4[j][i].InvScaleComp * A[j][i]<< qp_per) >>6) - currSlice->tblk16x16[j][i];
+      D_dis2 = mb_rres[j+block_y][i+block_x] - 
+		  ((isignab(level2,c_err2)* (q_params_4x4[j][i].InvScaleComp >> 4)* A[j][i]<< qp_per) >>6) 
+		  - currSlice->tblk16x16[j+block_y][i+block_x];
       levrun_linfo_inter(level2, run, &len, &info);
       D_dis2 = D_dis2 * D_dis2 + lambda_mode * len;
 
@@ -1635,40 +1655,46 @@ int dct_4x4_sp(Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *c
       ACRun  [scan_pos] = run;
       ++scan_pos;
       run=-1;                     // reset zero level counter
-      ilev=((level * q_params_4x4[j][i].InvScaleComp * A[j][i] << qp_per) >>6);
+      ilev=((level * (q_params_4x4[j][i].InvScaleComp >> 4)* A[j][i] << qp_per) >>6);
     }
 
-    ilev += currSlice->tblk16x16[j][i];
+    ilev += currSlice->tblk16x16[j+block_y][i+block_x];
 
-    if(!p_Img->si_frame_indicator && !p_Img->sp2_frame_indicator)//stores the SP frame coefficients in p_Img->lrec, will be useful to encode these and create SI or SP switching frame
+    if(p_Vid->type != SI_SLICE && !p_Vid->sp2_frame_indicator)//stores the SP frame coefficients in p_Vid->lrec, will be useful to encode these and create SI or SP switching frame
     {
-      p_Img->lrec[currMB->pix_y+block_y+j][currMB->pix_x+block_x+i]=
+      p_Vid->lrec[currMB->pix_y+block_y+j][currMB->pix_x+block_x+i]=
         isignab((iabs(ilev) * quant_params_sp[j][i].ScaleComp + qp_const2) >> q_bits_sp, ilev);
     }    
-    mb_rres[j][i] = isignab((iabs(ilev) * quant_params_sp[j][i].ScaleComp + qp_const2)>> q_bits_sp, ilev) * quant_params_sp[j][i].InvScaleComp << qp_per_sp;
+
+    // Yrec Qs and DeQs
+    mb_rres[j+block_y][i+block_x] = isignab((iabs(ilev) * quant_params_sp[j][i].ScaleComp + qp_const2)>> q_bits_sp, ilev) * (quant_params_sp[j][i].InvScaleComp >> 4) << qp_per_sp;	
   }
   ACLevel[scan_pos] = 0;
 
   // inverse transform
-  inverse4x4(currSlice->tblk16x16, mb_rres, 0, 0);
+  inverse4x4(mb_rres, mb_rres, block_y, block_x);
+  // inverse4x4(currSlice->tblk16x16, mb_rres, 0, 0);
 
-  for (j=0; j < BLOCK_SIZE; ++j)
-    for (i=0; i < BLOCK_SIZE; ++i)
+
+  for (j=block_y; j < block_y+BLOCK_SIZE; ++j)
+    for (i=block_x; i < block_x+BLOCK_SIZE; ++i)
     {
       //printf("%d ",mb_rres[j][i]);
-      mb_rres[j][i] = iClip1 (p_Img->max_imgpel_value, rshift_rnd_sf(mb_rres[j][i], DQ_BITS));
+      mb_rres[j][i] = iClip1 (p_Vid->max_imgpel_value, rshift_rnd_sf(mb_rres[j][i], DQ_BITS));
        //printf("%d\n",mb_rres[j][i]);
     }
-
+  
   //  Decoded block moved to frame memory
   for (j=0; j < BLOCK_SIZE; ++j)
   {
     for (i=0; i < BLOCK_SIZE; ++i)
     {
-      img_enc[currMB->pix_y+block_y+j][currMB->pix_x+block_x+i]= (imgpel) mb_rres[j][i];
+      img_enc[currMB->pix_y+block_y+j][currMB->pix_x+block_x+i]= (imgpel) mb_rres[block_y+j][block_x+i];
+
   //printf("%d\n",mb_rres[j][i]);
     }
   }
+         
   return nonzero;
 }
 
@@ -1690,248 +1716,13 @@ int dct_4x4_sp(Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *c
  */
 int dct_chroma_sp(Macroblock *currMB, int uv,int cr_cbp)
 {
-  int i, j, n2, n1, coeff_ctr;
-  int *m1;
-  int coeff_cost = 0;
-  int cr_cbp_tmp = 0;
-  int DCzero = FALSE;
-  int nonzero[4][4] = {{FALSE}};
-  int nonezero = FALSE;
-  Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currSlice->p_Img;
-
-  int   b4;
-  int*  DCLevel = currSlice->cofDC[uv+1][0];
-  int*  DCRun   = currSlice->cofDC[uv+1][1];
-  int   intra = IS_INTRA (currMB);
-  int   uv_scale = uv * (p_Img->num_blk8x8_uv >> 1);
-
-  //FRExt
-  static const int64 cbpblk_pattern[4]={0, 0xf0000, 0xff0000, 0xffff0000};
-  int yuv = p_Img->yuv_format;
-  int b8;  
-
-  const byte (*pos_scan)[2] = currMB->is_field_mode ? FIELD_SCAN : SNGL_SCAN;
-  int cur_qp = currMB->qpc[uv] + p_Img->bitdepth_chroma_qp_scale;  
-
-  QuantParameters *p_Quant = p_Img->p_Quant;
-
-  int max_imgpel_value_uv = p_Img->max_pel_value_comp[uv + 1];
-
-  int    **mb_rres = currSlice->mb_rres[uv + 1]; 
-  int    **mb_ores = currSlice->mb_ores[uv + 1]; 
-  imgpel **mb_pred = currSlice->mb_pred[uv + 1]; 
-
- 
-  QuantMethods quant_methods;
-  // set quantization parameters
-  quant_methods.qp       = cur_qp; 
-  quant_methods.q_params = p_Quant->q_params_4x4[uv + 1][intra][cur_qp]; 
-  if (currMB->mb_type == P8x8 && currMB->luma_transform_size_8x8_flag)
-  {
-    //P8x8, treansform 8x8 chroma adjustments must be stored in a different array to avoid conflict with tranform 4x4
-    quant_methods.fadjust = p_Img->AdaptiveRounding ? p_Img->ARCofAdj4x4[uv + 1][4] : NULL;
-  }
-  else
-  {
-    quant_methods.fadjust = p_Img->AdaptiveRounding ? p_Img->ARCofAdj4x4[uv + 1][currMB->ar_mode] : NULL;
-  }
-
-  quant_methods.pos_scan      = currMB->is_field_mode ? FIELD_SCAN : SNGL_SCAN;
-  quant_methods.c_cost        = COEFF_COST4x4[currSlice->disthres];
-  quant_methods.coeff_cost    = &coeff_cost;
-
-  //============= dct transform ===============
-  for (n2=0; n2 < p_Img->mb_cr_size_y; n2 += BLOCK_SIZE)
-  {
-    for (n1=0; n1 < p_Img->mb_cr_size_x; n1 += BLOCK_SIZE)
-    {
-      forward4x4(mb_ores, mb_rres, n2, n1);
-    }
-  }
-
-  if (yuv == YUV420)
-  {
-    int **fadjust2x2 = NULL;
-    m1 = currSlice->tblk4x4[0];
-    //================== CHROMA DC YUV420 ===================
-  
-    // forward 2x2 hadamard
-    hadamard2x2(mb_rres, m1);
-
-    // Quantization process of chroma 2X2 hadamard transformed DC coeffs.
-    DCzero = currSlice->quant_dc_cr(currMB, &m1, cur_qp, DCLevel, DCRun, &quant_methods.q_params[0][0], fadjust2x2, quant_methods.pos_scan);
-
-    if (DCzero) 
-    {
-      currMB->cbp_blk |= 0xf0000 << (uv << 2) ;    // if one of the 2x2-DC levels is != 0 set the
-      cr_cbp=imax(1,cr_cbp);                     // coded-bit all 4 4x4 blocks (bit 16-19 or 20-23)
-    }
-
-    //  Inverse transform of 2x2 DC levels
-    ihadamard2x2(m1, m1);
-
-    mb_rres[0][0] = m1[0];
-    mb_rres[0][4] = m1[1];
-    mb_rres[4][0] = m1[2];
-    mb_rres[4][4] = m1[3];
-  }
-  else if (yuv == YUV422)
-  {
-    int **fadjust4x2 = NULL; 
-    //for YUV422 only
-    int cur_qp_dc = currMB->qpc[uv] + 3 + p_Img->bitdepth_chroma_qp_scale;
-
-    LevelQuantParams **quant_paramsDC = p_Quant->q_params_4x4 [uv + 1][intra][cur_qp_dc]; 
-
-    //================== CHROMA DC YUV422 ===================
-    //pick out DC coeff    
-    for (j=0; j < p_Img->mb_cr_size_y; j += BLOCK_SIZE)
-    {
-      for (i=0; i < p_Img->mb_cr_size_x; i += BLOCK_SIZE)
-        currSlice->tblk4x4[i>>2][j>>2]= mb_rres[j][i];
-    }
-
-    // forward hadamard transform. Note that coeffs have been transposed (4x2 instead of 2x4) which makes transform a bit faster
-    hadamard4x2(currSlice->tblk4x4, currSlice->tblk4x4);
-
-    // Quantization process of chroma transformed DC coeffs.
-    DCzero = currSlice->quant_dc_cr(currMB, currSlice->tblk4x4, cur_qp_dc, DCLevel, DCRun, &quant_paramsDC[0][0], fadjust4x2, SCAN_YUV422);
-
-    if (DCzero)
-    {
-      currMB->cbp_blk |= 0xff0000 << (uv << 3) ;   // if one of the DC levels is != 0 set the
-      cr_cbp=imax(1,cr_cbp);                       // coded-bit all 4 4x4 blocks (bit 16-31 or 32-47) //YUV444
-    }
-
-    //inverse DC transform. Note that now currSlice->tblk4x4 is transposed back
-    ihadamard4x2(currSlice->tblk4x4, currSlice->tblk4x4);    
-
-    // This code assumes sizeof(int) > 16. Therefore, no need to have conditional
-    for (j = 0; j < 4; ++j)
-    {
-      mb_rres[j << 2 ][0] = currSlice->tblk4x4[j][0];
-      mb_rres[j << 2 ][4] = currSlice->tblk4x4[j][1];
-    }
-  }
-
-  //     Quant of chroma AC-coeffs.
-  for (b8=0; b8 < (p_Img->num_blk8x8_uv >> 1); b8++)
-  {
-    for (b4=0; b4 < 4; b4++)
-    {
-      int64 uv_cbpblk = ((int64)1) << cbp_blk_chroma[b8 + uv_scale][b4];      
-      n1 = hor_offset[yuv][b8][b4];
-      n2 = ver_offset[yuv][b8][b4];
-      quant_methods.ACLevel = currSlice->cofAC[4 + b8 + uv_scale][b4][0];
-      quant_methods.ACRun   = currSlice->cofAC[4 + b8 + uv_scale][b4][1];
-      quant_methods.block_x  = n1;
-      quant_methods.block_y  = n2;
-
-
-      if (p_Img->AdaptiveRounding)
-      {
-        if (currMB->mb_type == P8x8 && currMB->luma_transform_size_8x8_flag)
-        {
-          //P8x8, treansform 8x8 chroma adjustments must be stored in a different array to avoid conflict with tranform 4x4
-          quant_methods.fadjust = &p_Img->ARCofAdj4x4[uv + 1][4][n2];
-        }
-        else
-        {
-          quant_methods.fadjust = &p_Img->ARCofAdj4x4[uv + 1][currMB->ar_mode][n2];
-        }
-      }
-      else
-      {
-        quant_methods.fadjust = NULL;
-      }
-
-      // Quantization process
-      nonzero[n2>>2][n1>>2] = currSlice->quant_ac4x4cr(currMB, &mb_rres[n2], &quant_methods, CHROMA_AC);
-
-      if (nonzero[n2>>2][n1>>2])
-      {
-        currMB->cbp_blk |= uv_cbpblk;
-        cr_cbp_tmp = 2;
-        nonezero = TRUE;
-      }
-    }
-  }
-
-  // Perform thresholding
-  // * reset chroma coeffs
-  if(nonezero && coeff_cost < _CHROMA_COEFF_COST_)
-  {
-    int64 uv_cbpblk = ((int64)cbpblk_pattern[yuv] << (uv << (1+yuv)));
-    cr_cbp_tmp = 0;
-
-    for (b8 = 0; b8 < (p_Img->num_blk8x8_uv >> 1); b8++)
-    {
-      for (b4 = 0; b4 < 4; b4++)
-      {
-        n1 = hor_offset[yuv][b8][b4];
-        n2 = ver_offset[yuv][b8][b4];
-        if (nonzero[n2>>2][n1>>2] == TRUE)
-        {
-          nonzero[n2>>2][n1>>2] = FALSE;
-          quant_methods.ACLevel = currSlice->cofAC[4 + b8 + uv_scale][b4][0];
-          quant_methods.ACRun   = currSlice->cofAC[4 + b8 + uv_scale][b4][1];
-
-          if (DCzero == 0)
-            currMB->cbp_blk &= ~(uv_cbpblk);  // if no chroma DC's: then reset coded-bits of this chroma subblock
-
-          quant_methods.ACLevel[0] = 0;
-
-          for (coeff_ctr=1; coeff_ctr < 16; coeff_ctr++)// ac coeff
-          {
-            mb_rres[n2 + pos_scan[coeff_ctr][1]][n1 + pos_scan[coeff_ctr][0]] = 0;
-            quant_methods.ACLevel[coeff_ctr]  = 0;
-          }
-        }
-      }
-    }
-  }
-
-  //     IDCT.
-  //     Horizontal.
-  if(cr_cbp_tmp == 2)
-    cr_cbp = 2;
-
-  nonezero = FALSE;
-  for (n2=0; n2 < p_Img->mb_cr_size_y; n2 += BLOCK_SIZE)
-  {
-    for (n1=0; n1 < p_Img->mb_cr_size_x; n1 += BLOCK_SIZE)
-    {
-      if (mb_rres[n2][n1] != 0 || nonzero[n2>>2][n1>>2] == TRUE)
-      {
-        inverse4x4(mb_rres, mb_rres, n2, n1);
-        nonezero = TRUE;
-      }
-    }
-  }
-
-  //  Decoded block moved to memory
-  if (nonezero == TRUE)
-  {
-    sample_reconstruct (&p_Img->enc_picture->imgUV[uv][currMB->pix_c_y], mb_pred, mb_rres, 0, currMB->pix_c_x, p_Img->mb_cr_size_x, p_Img->mb_cr_size_y, max_imgpel_value_uv, DQ_BITS);
-  }
-  else
-  {
-    copy_image_data(&p_Img->enc_picture->imgUV[uv][currMB->pix_c_y], mb_pred, currMB->pix_c_x, 0, p_Img->mb_cr_size_x, p_Img->mb_cr_size_y);
-  }
-
-  return cr_cbp;
-}
-
-int dct_chroma_sp_old(Macroblock *currMB, int uv,int cr_cbp)
-{
   int i,j,ilev,n2,n1,coeff_ctr,c_err,level ,scan_pos,run;
   int m1[BLOCK_SIZE];
   int coeff_cost;
   int cr_cbp_tmp;
   int mp1[BLOCK_SIZE];
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currSlice->p_Img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
   Boolean is_cavlc = (currSlice->symbol_mode == CAVLC);
   const byte *c_cost = COEFF_COST4x4[currSlice->disthres];
   const byte (*pos_scan)[2] = currMB->is_field_mode ? FIELD_SCAN : SNGL_SCAN;
@@ -1946,16 +1737,285 @@ int dct_chroma_sp_old(Macroblock *currMB, int uv,int cr_cbp)
   int len, info;
   double D_dis1, D_dis2;
   double lambda_mode   = 0.85 * pow (2, (currMB->qp -SHIFT_QP)/3.0) * 4;
-  int max_imgpel_value_uv = p_Img->max_pel_value_comp[1];
+  int max_imgpel_value_uv = p_Vid->max_pel_value_comp[1];
 
-  int qpChroma = currMB->qpc[uv] + p_Img->bitdepth_chroma_qp_scale;   
-  int qpChromaSP=iClip3(-p_Img->bitdepth_chroma_qp_scale, 51, currMB->qpsp + p_Img->active_pps->chroma_qp_index_offset);
+  int qpChroma = currMB->qpc[uv] + p_Vid->bitdepth_chroma_qp_scale;       
+  int qpc_sp = iClip3(-p_Vid->bitdepth_chroma_qp_scale, 51, currMB->qpsp + p_Vid->active_pps->chroma_qp_index_offset);
+  int qpChromaSP = qpc_sp < 0 ? qpc_sp : QP_SCALE_CR[qpc_sp];
+
   int    **mb_rres = currSlice->mb_rres[uv + 1]; 
   int    **mb_ores = currSlice->mb_ores[uv + 1]; 
   imgpel **mb_pred = currSlice->mb_pred[uv + 1]; 
   
   QuantMethods quant_methods;
-  QuantParameters *p_Quant = p_Img->p_Quant;  
+  QuantParameters *p_Quant = p_Vid->p_Quant;    
+
+  int qp_per    = p_Quant->qp_per_matrix[qpChroma];
+  int q_bits    = Q_BITS + qp_per;
+  int qp_const  = (1<<q_bits)/6;    // inter
+  int qp_per_sp = p_Quant->qp_per_matrix[qpChromaSP];
+  int q_bits_sp = Q_BITS + qp_per_sp;
+  int qp_const2 = (1<<q_bits_sp)>>1;  //sp_pred
+  
+  LevelQuantParams **q_params_4x4 = p_Quant->q_params_4x4[uv + 1][intra][qpChroma]; 
+
+  LevelQuantParams **quant_params_sp = p_Quant->q_params_4x4[uv + 1][intra][qpChromaSP]; 
+
+  quant_methods.type     = CHROMA_AC;
+
+  for (j=0; j < p_Vid->mb_cr_size_y; ++j)
+  {
+    for (i=0; i < p_Vid->mb_cr_size_x; ++i)
+    {
+      mb_rres[j][i]  = mb_ores[j][i];
+      mb_rres[j][i] += mb_pred[j][i];
+      currSlice->tblk16x16[j][i] = mb_pred[j][i];
+    }
+  }
+  
+  for (n2=0; n2 < p_Vid->mb_cr_size_y; n2 += BLOCK_SIZE)
+  {
+    for (n1=0; n1 < p_Vid->mb_cr_size_x; n1 += BLOCK_SIZE)
+    {
+      forward4x4(mb_rres, mb_rres, n2, n1);      
+      forward4x4(currSlice->tblk16x16, currSlice->tblk16x16, n2, n1);
+    }
+  }
+
+  //     2X2 transform of DC coeffs.
+  hadamard2x2(mb_rres, m1);
+  hadamard2x2(currSlice->tblk16x16, mp1);
+  
+  run=-1;
+  scan_pos=0;
+
+  for (coeff_ctr = 0; coeff_ctr < 4; coeff_ctr++)
+  {
+    run++;
+    ilev=0;
+
+    // case 1
+    c_err1 = (iabs (mp1[coeff_ctr]) * quant_params_sp[0][0].ScaleComp + 2 * qp_const2) >> (q_bits_sp + 1);
+    c_err1 = (c_err1 << (q_bits_sp + 1)) / quant_params_sp[0][0].ScaleComp;
+    c_err1 = m1[coeff_ctr] - isignab(c_err1, mp1[coeff_ctr]);
+    level1 = (iabs(c_err1) * q_params_4x4[0][0].ScaleComp + 2 * qp_const) >> (q_bits+1);
+
+    // case 2
+    c_err2 = m1[coeff_ctr] - mp1[coeff_ctr];
+    level2 = (iabs(c_err2) * q_params_4x4[0][0].ScaleComp + 2 * qp_const) >> (q_bits+1);
+
+    if (level1 != level2 && level1 != 0 && level2 != 0)
+    {
+      D_dis1 = m1[coeff_ctr] - ((isignab(level1,c_err1)* (q_params_4x4[0][0].InvScaleComp >> 4) * A[0][0]<< qp_per) >>5)- mp1[coeff_ctr];
+      levrun_linfo_c2x2(level1, run, &len, &info);
+      D_dis1 = D_dis1 * D_dis1 + lambda_mode * len;
+
+      D_dis2 = m1[coeff_ctr] - ((isignab(level2,c_err2)* (q_params_4x4[0][0].InvScaleComp >> 4) * A[0][0]<< qp_per) >>5)- mp1[coeff_ctr];
+      levrun_linfo_c2x2(level2, run, &len, &info);
+      D_dis2 = D_dis2 * D_dis2 + lambda_mode * len;
+
+      if (D_dis1 == D_dis2)
+        level = (iabs(level1) < iabs(level2)) ? level1 : level2;
+      else if (D_dis1 < D_dis2)
+        level = level1;
+      else
+        level = level2;
+
+      c_err = (level == level1) ? c_err1 : c_err2;
+    }
+    else if (level1 == level2)
+    {
+      level = level1;
+      c_err = c_err1;
+    }
+    else
+    {
+      level = (level1 == 0) ? level1 : level2;
+      c_err = (level1 == 0) ? c_err1 : c_err2;
+    }
+
+    if (level  != 0)
+    {
+      if (is_cavlc)
+        level = imin(level, CAVLC_LEVEL_LIMIT);
+      
+      currMB->cbp_blk |= 0xf0000 << (uv << 2) ;  // if one of the 2x2-DC levels is != 0 the coded-bit
+      cr_cbp = imax(1, cr_cbp);
+      DCLevel[scan_pos  ] = isignab(level ,c_err);
+      DCRun  [scan_pos++] = run;
+      run=-1;
+      ilev=((isignab(level,c_err)* (q_params_4x4[0][0].InvScaleComp*A[0][0] >> 4) << qp_per) >>5);
+    }
+
+    ilev+= mp1[coeff_ctr];
+    m1[coeff_ctr]=isignab((iabs(ilev)  * quant_params_sp[0][0].ScaleComp + 2 * qp_const2) >> (q_bits_sp+1), ilev) * (quant_params_sp[0][0].InvScaleComp >> 4) << qp_per_sp;
+    if(p_Vid->type != SI_SLICE && !p_Vid->sp2_frame_indicator)
+      p_Vid->lrec_uv[uv][currMB->pix_c_y + 4*(coeff_ctr & 0x01)][currMB->pix_c_x + 4*(coeff_ctr>>1)]=isignab((iabs(ilev)  * quant_params_sp[0][0].ScaleComp + 2 * qp_const2) >> (q_bits_sp+1), ilev);// stores the SP frames coefficients, will be useful to encode SI or switching SP frame
+  }
+  DCLevel[scan_pos] = 0;
+
+  //  Inverse transform of 2x2 DC levels
+  ihadamard2x2(m1, m1);
+
+  mb_rres[0][0]=(m1[0])>>1;
+  mb_rres[0][4]=(m1[1])>>1;
+  mb_rres[4][0]=(m1[2])>>1;
+  mb_rres[4][4]=(m1[3])>>1;
+
+  //     Quant of chroma AC-coeffs.
+  coeff_cost=0;
+  cr_cbp_tmp=0;
+
+  for (n2=0; n2 <= BLOCK_SIZE; n2 += BLOCK_SIZE)
+  {
+    for (n1=0; n1 <= BLOCK_SIZE; n1 += BLOCK_SIZE)
+    {
+      b4      = 2*(n2 >> 2) + (n1 >> 2);
+      quant_methods.ACLevel = currSlice->cofAC[uv+4][b4][0];
+      quant_methods.ACRun   = currSlice->cofAC[uv+4][b4][1];
+
+      run      = -1;
+      scan_pos =  0;
+
+      for (coeff_ctr=1; coeff_ctr < 16; coeff_ctr++)// start change rd_quant
+      {
+        i=pos_scan[coeff_ctr][0];
+        j=pos_scan[coeff_ctr][1];
+
+        ++run;
+        ilev=0;
+
+        // quantization on prediction
+        c_err1 = (iabs(currSlice->tblk16x16[n2+j][n1+i]) * quant_params_sp[j][i].ScaleComp + qp_const2) >> q_bits_sp;
+        c_err1 = (c_err1 << q_bits_sp) / quant_params_sp[j][i].ScaleComp;
+        c_err1 = mb_rres[n2+j][n1+i] - isignab(c_err1, currSlice->tblk16x16[n2+j][n1+i]);
+        level1 = (iabs(c_err1) * q_params_4x4[j][i].ScaleComp + qp_const) >> q_bits;
+
+        // no quantization on prediction
+        c_err2 = mb_rres[n2+j][n1+i] - currSlice->tblk16x16[n2+j][n1+i];
+        level2 = (iabs(c_err2) * q_params_4x4[j][i].ScaleComp + qp_const) >> q_bits;
+
+        if (level1 != level2 && level1 != 0 && level2 != 0)
+        {
+          D_dis1 = mb_rres[n2+j][n1+i] - ((isignab(level1,c_err1) * (q_params_4x4[j][i].InvScaleComp >> 4) * A[j][i]<< qp_per) >>6) - currSlice->tblk16x16[n2+j][n1+i];
+
+          levrun_linfo_inter(level1, run, &len, &info);
+          D_dis1 = D_dis1 * D_dis1 + lambda_mode * len;
+
+          D_dis2 = mb_rres[n2+j][n1+i] - ((isignab(level2,c_err2)* (q_params_4x4[j][i].InvScaleComp*A[j][i] >> 4) << qp_per) >>6) - currSlice->tblk16x16[n2+j][n1+i];
+          levrun_linfo_inter(level2, run, &len, &info);
+          D_dis2 = D_dis2 * D_dis2 + lambda_mode * len;
+
+          if (D_dis1 == D_dis2)
+            level = (iabs(level1) < iabs(level2)) ? level1 : level2;
+          else
+          {
+            if (D_dis1 < D_dis2)
+              level = level1;
+            else
+              level = level2;
+          }
+          c_err = (level == level1) ? c_err1 : c_err2;
+        }
+        else if (level1 == level2)
+        {
+          level = level1;
+          c_err = c_err1;
+        }
+        else
+        {
+          level = (level1 == 0) ? level1 : level2;
+          c_err = (level1 == 0) ? c_err1 : c_err2;
+        }
+
+        if (level  != 0)
+        {
+          currMB->cbp_blk |=  (int64)1 << (16 + (uv << 2) + ((n2 >> 1) + (n1 >> 2))) ;
+
+          coeff_cost += (level > 1) ? MAX_VALUE : c_cost[run];  // set high cost, shall not be discarded
+
+          cr_cbp_tmp=2;
+          level = isignab(level,c_err);
+          quant_methods.ACLevel[scan_pos] = level;
+          quant_methods.ACRun  [scan_pos] = run;
+          ++scan_pos;
+          run=-1;
+          ilev=((level * (q_params_4x4[j][i].InvScaleComp*A[j][i] >> 4) << qp_per) >>6);
+        }
+        ilev+=currSlice->tblk16x16[n2+j][n1+i];
+        if(p_Vid->type != SI_SLICE && !p_Vid->sp2_frame_indicator)
+          if(!( ((n2+j) & 0x03)==0 && ((n1+i) & 0x03) ==0 ))
+            p_Vid->lrec_uv[uv][currMB->pix_c_y + n2+j][currMB->pix_c_x + n1 + i]=isignab((iabs(ilev) * quant_params_sp[j][i].ScaleComp + qp_const2) >> q_bits_sp,ilev);//stores the SP frames coefficients, will be useful to encode SI or switching SP frame
+        mb_rres[n2+j][n1+i] = isignab((iabs(ilev) * quant_params_sp[j][i].ScaleComp + qp_const2) >> q_bits_sp,ilev) * (quant_params_sp[j][i].InvScaleComp >> 4) << qp_per_sp;
+      }
+      quant_methods.ACLevel[scan_pos] = 0;
+    }
+  }
+
+  // * reset chroma coeffs
+
+  if(cr_cbp_tmp==2)
+    cr_cbp=2;
+  //     IDCT.
+
+  //     Horizontal.
+  for (n2=0; n2 <= BLOCK_SIZE; n2 += BLOCK_SIZE)
+  {
+    for (n1=0; n1 <= BLOCK_SIZE; n1 += BLOCK_SIZE)
+    {
+      inverse4x4(mb_rres, mb_rres, n2, n1);
+
+      for (j=0; j < BLOCK_SIZE; ++j)
+        for (i=0; i < BLOCK_SIZE; ++i)
+        {
+          mb_rres[n2+j][n1+i] = iClip1 (max_imgpel_value_uv,rshift_rnd_sf(mb_rres[n2+j][n1+i], DQ_BITS));
+        }
+    }
+  }
+
+  //  Decoded block moved to memory
+  for (j=0; j < BLOCK_SIZE*2; ++j)
+    for (i=0; i < BLOCK_SIZE*2; ++i)
+    {
+      p_Vid->enc_picture->imgUV[uv][currMB->pix_c_y + j][currMB->pix_c_x + i]= (imgpel) mb_rres[j][i];	
+    }  
+
+  return cr_cbp;
+}
+
+int dct_chroma_sp_old(Macroblock *currMB, int uv,int cr_cbp)
+{
+  int i,j,ilev,n2,n1,coeff_ctr,c_err,level ,scan_pos,run;
+  int m1[BLOCK_SIZE];
+  int coeff_cost;
+  int cr_cbp_tmp;
+  int mp1[BLOCK_SIZE];
+  Slice *currSlice = currMB->p_slice;
+  VideoParameters *p_Vid = currSlice->p_Vid;
+  Boolean is_cavlc = (currSlice->symbol_mode == CAVLC);
+  const byte *c_cost = COEFF_COST4x4[currSlice->disthres];
+  const byte (*pos_scan)[2] = currMB->is_field_mode ? FIELD_SCAN : SNGL_SCAN;
+
+  int   intra = IS_INTRA (currMB);
+
+  int   b4;
+  int*  DCLevel = currSlice->cofDC[uv+1][0];
+  int*  DCRun   = currSlice->cofDC[uv+1][1];
+
+  int c_err1, c_err2, level1, level2;
+  int len, info;
+  double D_dis1, D_dis2;
+  double lambda_mode   = 0.85 * pow (2, (currMB->qp -SHIFT_QP)/3.0) * 4;
+  int max_imgpel_value_uv = p_Vid->max_pel_value_comp[1];
+
+  int qpChroma = currMB->qpc[uv] + p_Vid->bitdepth_chroma_qp_scale;   
+  int qpChromaSP=iClip3(-p_Vid->bitdepth_chroma_qp_scale, 51, currMB->qpsp + p_Vid->active_pps->chroma_qp_index_offset);
+  int    **mb_rres = currSlice->mb_rres[uv + 1]; 
+  int    **mb_ores = currSlice->mb_ores[uv + 1]; 
+  imgpel **mb_pred = currSlice->mb_pred[uv + 1]; 
+  
+  QuantMethods quant_methods;
+  QuantParameters *p_Quant = p_Vid->p_Quant;  
   int qp_per    = p_Quant->qp_per_matrix[qpChroma];
   int q_bits    = Q_BITS + qp_per;
   int qp_const  = (1<<q_bits)/6;    // inter
@@ -1967,9 +2027,9 @@ int dct_chroma_sp_old(Macroblock *currMB, int uv,int cr_cbp)
 
   LevelQuantParams **quant_params_sp = p_Quant->q_params_4x4[uv + 1][intra][qpChromaSP]; 
 
-  for (j=0; j < p_Img->mb_cr_size_y; ++j)
+  for (j=0; j < p_Vid->mb_cr_size_y; ++j)
   {
-    for (i=0; i < p_Img->mb_cr_size_x; ++i)
+    for (i=0; i < p_Vid->mb_cr_size_x; ++i)
     {
       mb_rres[j][i]  = mb_ores[j][i];
       mb_rres[j][i] += mb_pred[j][i];
@@ -1977,9 +2037,9 @@ int dct_chroma_sp_old(Macroblock *currMB, int uv,int cr_cbp)
     }
   }
   
-  for (n2=0; n2 < p_Img->mb_cr_size_y; n2 += BLOCK_SIZE)
+  for (n2=0; n2 < p_Vid->mb_cr_size_y; n2 += BLOCK_SIZE)
   {
-    for (n1=0; n1 < p_Img->mb_cr_size_x; n1 += BLOCK_SIZE)
+    for (n1=0; n1 < p_Vid->mb_cr_size_x; n1 += BLOCK_SIZE)
     {
       forward4x4(mb_rres, mb_rres, n2, n1);      
       forward4x4(currSlice->tblk16x16, currSlice->tblk16x16, n2, n1);
@@ -2053,8 +2113,8 @@ int dct_chroma_sp_old(Macroblock *currMB, int uv,int cr_cbp)
 
     ilev+= mp1[coeff_ctr];
     m1[coeff_ctr]=isignab((iabs(ilev)  * quant_params_sp[0][0].ScaleComp + 2 * qp_const2) >> (q_bits_sp+1), ilev) * quant_params_sp[0][0].InvScaleComp << qp_per_sp;
-    if(!p_Img->si_frame_indicator && !p_Img->sp2_frame_indicator)
-      p_Img->lrec_uv[uv][currMB->pix_c_y + 4*(coeff_ctr & 0x01)][currMB->pix_c_x + 4*(coeff_ctr>>1)]=isignab((iabs(ilev)  * quant_params_sp[0][0].ScaleComp + 2 * qp_const2) >> (q_bits_sp+1), ilev);// stores the SP frames coefficients, will be useful to encode SI or switching SP frame
+    if(p_Vid->type != SI_SLICE && !p_Vid->sp2_frame_indicator)
+      p_Vid->lrec_uv[uv][currMB->pix_c_y + 4*(coeff_ctr & 0x01)][currMB->pix_c_x + 4*(coeff_ctr>>1)]=isignab((iabs(ilev)  * quant_params_sp[0][0].ScaleComp + 2 * qp_const2) >> (q_bits_sp+1), ilev);// stores the SP frames coefficients, will be useful to encode SI or switching SP frame
   }
   DCLevel[scan_pos] = 0;
 
@@ -2147,9 +2207,9 @@ int dct_chroma_sp_old(Macroblock *currMB, int uv,int cr_cbp)
           ilev=((level * q_params_4x4[j][i].InvScaleComp*A[j][i]<< qp_per) >>6);
         }
         ilev+=currSlice->tblk16x16[n2+j][n1+i];
-        if(!p_Img->si_frame_indicator && !p_Img->sp2_frame_indicator)
+        if(p_Vid->type != SI_SLICE && !p_Vid->sp2_frame_indicator)
           if(!( ((n2+j) & 0x03)==0 && ((n1+i) & 0x03) ==0 ))
-            p_Img->lrec_uv[uv][currMB->pix_c_y + n1+j][currMB->pix_c_x + n2 + i]=isignab((iabs(ilev) * quant_params_sp[j][i].ScaleComp + qp_const2) >> q_bits_sp,ilev);//stores the SP frames coefficients, will be useful to encode SI or switching SP frame
+            p_Vid->lrec_uv[uv][currMB->pix_c_y + n1+j][currMB->pix_c_x + n2 + i]=isignab((iabs(ilev) * quant_params_sp[j][i].ScaleComp + qp_const2) >> q_bits_sp,ilev);//stores the SP frames coefficients, will be useful to encode SI or switching SP frame
         mb_rres[n2+j][n1+i] = isignab((iabs(ilev) * quant_params_sp[j][i].ScaleComp + qp_const2) >> q_bits_sp,ilev) * quant_params_sp[j][i].InvScaleComp << qp_per_sp;
       }
       quant_methods.ACLevel[scan_pos] = 0;
@@ -2181,7 +2241,7 @@ int dct_chroma_sp_old(Macroblock *currMB, int uv,int cr_cbp)
   for (j=0; j < BLOCK_SIZE*2; ++j)
     for (i=0; i < BLOCK_SIZE*2; ++i)
     {
-      p_Img->enc_picture->imgUV[uv][currMB->pix_c_y + j][currMB->pix_c_x + i]= (imgpel) mb_rres[j][i];
+      p_Vid->enc_picture->imgUV[uv][currMB->pix_c_y + j][currMB->pix_c_x + i]= (imgpel) mb_rres[j][i];
     }
 
     return cr_cbp;
@@ -2207,13 +2267,13 @@ void copyblock_sp(Macroblock *currMB, ColorPlane pl, int block_x,int block_y)
   int i, j;
 
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currSlice->p_Img;
-  QuantParameters *p_Quant = p_Img->p_Quant;
-  int cur_qp = currMB->qpsp + p_Img->bitdepth_luma_qp_scale;  
+  VideoParameters *p_Vid = currSlice->p_Vid;
+  QuantParameters *p_Quant = p_Vid->p_Quant;
+  int cur_qp = currMB->qpsp + p_Vid->bitdepth_luma_qp_scale;  
   int qp_per = p_Quant->qp_per_matrix[cur_qp];
   int q_bits = Q_BITS + qp_per;
   int qp_const2 = (1 << q_bits) >> 1;  //sp_pred
-  imgpel **img_enc = p_Img->enc_picture->p_curr_img;
+  imgpel **img_enc = p_Vid->enc_picture->p_curr_img;
   imgpel **mb_pred = currSlice->mb_pred[pl]; 
   int    **mb_ores = currSlice->mb_ores[pl]; 
   int    **mb_rres = currSlice->mb_rres[pl]; 
@@ -2225,8 +2285,8 @@ void copyblock_sp(Macroblock *currMB, ColorPlane pl, int block_x,int block_y)
   {
     for (i=0; i< BLOCK_SIZE; ++i)
     {
-      mb_rres[j+block_y][i+block_x] = mb_ores[j+block_y][i+block_x];
-      currSlice->tblk16x16[j][i]=mb_pred[j+block_y][i+block_x];
+      mb_rres[j][i] = mb_ores[j+block_y][i+block_x];
+      currSlice->tblk16x16[j][i]=mb_pred[j+block_y][i+block_x];	  
     }
   }
 
@@ -2237,10 +2297,11 @@ void copyblock_sp(Macroblock *currMB, ColorPlane pl, int block_x,int block_y)
   {
     for (i=0; i < BLOCK_SIZE; ++i)
     {
-      mb_rres[j][i]=isignab((iabs(currSlice->tblk16x16[j][i])* q_params_4x4[j][i].ScaleComp+qp_const2)>> q_bits,currSlice->tblk16x16[j][i]) * q_params_4x4[j][i].ScaleComp<<qp_per;
-      if(!p_Img->si_frame_indicator && !p_Img->sp2_frame_indicator)
+      mb_rres[j][i]=isignab((iabs(currSlice->tblk16x16[j][i])* q_params_4x4[j][i].ScaleComp+qp_const2)>> q_bits,
+      currSlice->tblk16x16[j][i]) * (q_params_4x4[j][i].InvScaleComp >> 4) <<qp_per;
+      if(p_Vid->type != SI_SLICE && !p_Vid->sp2_frame_indicator)
       {
-        p_Img->lrec[currMB->pix_y+block_y+j][currMB->pix_x+block_x+i] =
+        p_Vid->lrec[currMB->pix_y+block_y+j][currMB->pix_x+block_x+i] =
           isignab((iabs(currSlice->tblk16x16[j][i]) * q_params_4x4[j][i].ScaleComp + qp_const2) >> q_bits, currSlice->tblk16x16[j][i]);// stores the SP frames coefficients, will be useful to encode SI or switching SP frame
       }
     }
@@ -2255,10 +2316,11 @@ void copyblock_sp(Macroblock *currMB, ColorPlane pl, int block_x,int block_y)
   {
     for (i=0; i < BLOCK_SIZE; ++i)
     {
-      mb_rres[j][i] = iClip1 (p_Img->max_imgpel_value, mb_rres[j][i]);
+      mb_rres[j][i] = iClip1 (p_Vid->max_imgpel_value, rshift_rnd_sf(mb_rres[j][i], DQ_BITS));
       img_enc[currMB->pix_y+block_y+j][currMB->pix_x+block_x+i]=(imgpel) mb_rres[j][i];
     }
   }
+
 }
 
 /*!
@@ -2290,9 +2352,9 @@ int dct_4x4_sp2(Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *
   int nonzero = FALSE;
 
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currSlice->p_Img;
-  QuantParameters *p_Quant = p_Img->p_Quant;
-  imgpel **img_enc = p_Img->enc_picture->p_curr_img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
+  QuantParameters *p_Quant = p_Vid->p_Quant;
+  imgpel **img_enc = p_Vid->enc_picture->p_curr_img;
   imgpel **mb_pred = currSlice->mb_pred[pl];   
 //  int    **mb_ores = currSlice->mb_ores[pl];   
   int    **mb_rres = currSlice->mb_rres[pl];   
@@ -2330,7 +2392,7 @@ int dct_4x4_sp2(Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *
     for (i=0; i< BLOCK_SIZE; ++i)
     {
       //Coefficients obtained from the prior encoding of the SP frame
-      mb_rres[j][i] = p_Img->lrec[currMB->pix_y+block_y+j][currMB->pix_x+block_x+i];
+      mb_rres[j][i] = p_Vid->lrec[currMB->pix_y+block_y+j][currMB->pix_x+block_x+i];
       //Predicted block
       currSlice->tblk16x16[j][i]=mb_pred[j+block_y][i+block_x];
     }
@@ -2349,7 +2411,7 @@ int dct_4x4_sp2(Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *
 
     //quantization of the predicted block
     level1 = (iabs (currSlice->tblk16x16[j][i]) * quant_params_sp[j][i].ScaleComp + qp_const2) >> q_bits_sp;
-    //substracted from p_Img->lrec
+    //substracted from p_Vid->lrec
     c_err = mb_rres[j][i]-isignab(level1, currSlice->tblk16x16[j][i]);   //substracting the predicted block
 
     level = iabs(c_err);
@@ -2366,8 +2428,8 @@ int dct_4x4_sp2(Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *
     }
     //from now on we are in decoder land
     ilev=c_err + isignab(level1,currSlice->tblk16x16[j][i]) ;  // adding the quantized predicted block
-    mb_rres[j][i] = ilev * quant_params_sp[j][i].InvScaleComp << qp_per_sp;
-
+    mb_rres[j][i] = ilev * (quant_params_sp[j][i].InvScaleComp >> 4) << qp_per_sp;
+	
   }
   quant_methods.ACLevel[scan_pos] = 0;
 
@@ -2376,7 +2438,7 @@ int dct_4x4_sp2(Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *
 
   for (j=0; j < BLOCK_SIZE; ++j)
     for (i=0; i < BLOCK_SIZE; ++i)
-      img_enc[currMB->pix_y+block_y+j][currMB->pix_x+block_x+i] = (imgpel) iClip3 (0, p_Img->max_imgpel_value,rshift_rnd_sf(mb_rres[j][i], DQ_BITS));
+      img_enc[currMB->pix_y+block_y+j][currMB->pix_x+block_x+i] = (imgpel) iClip3 (0, p_Vid->max_imgpel_value,rshift_rnd_sf(mb_rres[j][i], DQ_BITS));
 
   return nonzero;
 }
@@ -2409,8 +2471,8 @@ int dct_chroma_sp2(Macroblock *currMB, int uv,int cr_cbp)
   int cr_cbp_tmp;
   int mp1[BLOCK_SIZE];
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currSlice->p_Img;
-  QuantParameters *p_Quant = p_Img->p_Quant;
+  VideoParameters *p_Vid = currSlice->p_Vid;
+  QuantParameters *p_Quant = p_Vid->p_Quant;
   QuantMethods quant_methods;
   const byte *c_cost = COEFF_COST4x4[currSlice->disthres];
   const byte (*pos_scan)[2] = currMB->is_field_mode ? FIELD_SCAN : SNGL_SCAN;
@@ -2424,8 +2486,11 @@ int dct_chroma_sp2(Macroblock *currMB, int uv,int cr_cbp)
   imgpel **mb_pred = currSlice->mb_pred[uv + 1]; 
   int   intra = IS_INTRA (currMB);
 
-  int qpChroma   = currMB->qpc[uv] + p_Img->bitdepth_chroma_qp_scale;   
-  int qpChromaSP = iClip3(-p_Img->bitdepth_chroma_qp_scale, 51, currMB->qpsp + p_Img->active_pps->chroma_qp_index_offset);
+  int qpChroma   = currMB->qpc[uv] + p_Vid->bitdepth_chroma_qp_scale;   
+
+  int qpc_sp = iClip3(-p_Vid->bitdepth_chroma_qp_scale, 51, currMB->qpsp + p_Vid->active_pps->chroma_qp_index_offset);
+  
+  int qpChromaSP = qpc_sp < 0 ? qpc_sp : QP_SCALE_CR[qpc_sp];
 
   int qp_per    = p_Quant->qp_per_matrix[qpChroma];
   //int qp_rem    = p_Quant->qp_rem_matrix[qpChroma];
@@ -2442,7 +2507,7 @@ int dct_chroma_sp2(Macroblock *currMB, int uv,int cr_cbp)
     for (i=0; i < MB_BLOCK_SIZE>>1; ++i)
     {
       currSlice->tblk16x16[j][i]=mb_pred[j][i];
-      mb_rres[j][i]=p_Img->lrec_uv[uv][currMB->pix_c_y + j][currMB->pix_c_x + i];
+      mb_rres[j][i]=p_Vid->lrec_uv[uv][currMB->pix_c_y + j][currMB->pix_c_x + i];
     }
   }
 
@@ -2488,7 +2553,7 @@ int dct_chroma_sp2(Macroblock *currMB, int uv,int cr_cbp)
     //from now on decoder world
     ilev = c_err + isignab(level1,mp1[coeff_ctr]) ; // we have perfect reconstruction here
 
-    m1[coeff_ctr]= ilev  * quant_params_sp[0][0].InvScaleComp << qp_per_sp;
+    m1[coeff_ctr]= ilev  * (quant_params_sp[0][0].InvScaleComp >> 4) << qp_per_sp;
 
   }
   DCLevel[scan_pos] = 0;
@@ -2526,7 +2591,7 @@ int dct_chroma_sp2(Macroblock *currMB, int uv,int cr_cbp)
         ilev=0;
         // quantization on prediction
         level1 = (iabs(currSlice->tblk16x16[n2+j][n1+i]) * quant_params_sp[j][i].ScaleComp + qp_const2) >> q_bits_sp;
-        //substracted from p_Img->lrec
+        //substracted from p_Vid->lrec
         c_err  = mb_rres[n2+j][n1+i] - isignab(level1, currSlice->tblk16x16[n2+j][n1+i]);
         level  = iabs(c_err) ;
 
@@ -2545,7 +2610,7 @@ int dct_chroma_sp2(Macroblock *currMB, int uv,int cr_cbp)
 
         //from now on decoder land
         ilev=c_err + isignab(level1,currSlice->tblk16x16[n2+j][n1+i]);
-        mb_rres[n2+j][n1+i] = ilev * quant_params_sp[j][i].InvScaleComp << qp_per_sp;
+        mb_rres[n2+j][n1+i] = ilev * (quant_params_sp[j][i].InvScaleComp >> 4) << qp_per_sp;
       }
       quant_methods.ACLevel[scan_pos] = 0;
     }
@@ -2568,8 +2633,8 @@ int dct_chroma_sp2(Macroblock *currMB, int uv,int cr_cbp)
       {
         for (i=0; i < BLOCK_SIZE; ++i)
         {
-          p_Img->enc_picture->imgUV[uv][currMB->pix_c_y + j + n2][currMB->pix_c_x + i + n1 ] = 
-            (imgpel) iClip3 (0, p_Img->max_imgpel_value,rshift_rnd_sf(mb_rres[n2+j][n1+i], DQ_BITS));
+          p_Vid->enc_picture->imgUV[uv][currMB->pix_c_y + j + n2][currMB->pix_c_x + i + n1 ] = 
+            (imgpel) iClip3 (0, p_Vid->max_imgpel_value,rshift_rnd_sf(mb_rres[n2+j][n1+i], DQ_BITS));
         }
       }
     }
@@ -2583,12 +2648,12 @@ void select_dct(Macroblock *currMB)
 {
   Slice *currSlice = currMB->p_slice;
 
-  if (currSlice->slice_type != SP_SLICE)
+  if (currSlice->slice_type != SP_SLICE && currSlice->slice_type != SI_SLICE)
   {
-    ImageParameters *p_Img = currMB->p_Img;
-    if (p_Img->lossless_qpprime_flag == 1)
+    VideoParameters *p_Vid = currMB->p_Vid;
+    if (p_Vid->lossless_qpprime_flag == 1)
     {
-      if (currMB->qp_scaled[(short) p_Img->colour_plane_id] == 0)
+      if (currMB->qp_scaled[(short) p_Vid->colour_plane_id] == 0)
       {
         currMB->trans_4x4   = dct_4x4_ls;
         currMB->trans_16x16 = dct_16x16_ls;
@@ -2628,7 +2693,7 @@ void select_dct(Macroblock *currMB)
       currMB->trans_cr_4x4[1] = dct_chroma;
     }
   }
-  else if(!currSlice->si_frame_indicator && !currSlice->sp2_frame_indicator)
+  else if(currSlice->slice_type != SI_SLICE && !currSlice->sp2_frame_indicator)
   {
     currMB->trans_4x4 = dct_4x4_sp;
     currMB->trans_16x16 = dct_16x16;
@@ -2636,7 +2701,7 @@ void select_dct(Macroblock *currMB)
       currMB->trans_8x8 = dct_8x8_cavlc;
     else
       currMB->trans_8x8 = dct_8x8;
-
+	
     currMB->trans_cr_4x4[0]  = dct_chroma_sp;
     currMB->trans_cr_4x4[1]  = dct_chroma_sp;
   }

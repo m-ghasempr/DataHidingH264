@@ -27,7 +27,7 @@ typedef struct
   double dcost;
   double rate;   // why is rate a double? Could we use int64 or even simply int given that this is for a MB? Could a MB require int64 bits (answer is no)? 
   int   cbp;
-  int   cost;
+  distblk  cost;
   short c_imode;
   short i16offset;
   byte  mode;
@@ -78,10 +78,8 @@ struct rdo_structure
 
 extern int  GetBestTransformP8x8 (Macroblock *currMB);
 extern byte field_flag_inference (Macroblock  *currMB);
-
-extern double rdcost_for_4x4_intra_blocks     (Macroblock *currMB, int* nonzero, int b8, int b4, int ipmode, double lambda, int mostProbableMode, double min_rdcost);
-extern double rdcost_for_4x4_intra_blocks_444 (Macroblock *currMB, int* nonzero, int b8, int b4, int ipmode, double lambda, int mostProbableMode, double min_rdcost);
-
+extern distblk rdcost_for_4x4_intra_blocks     (Macroblock *currMB, int* nonzero, int b8, int b4, int ipmode, int lambda, int mostProbableMode, distblk min_rdcost);
+extern distblk rdcost_for_4x4_intra_blocks_444 (Macroblock *currMB, int* nonzero, int b8, int b4, int ipmode, int lambda, int mostProbableMode, distblk min_rdcost);
 extern int valid_intra_mode(Slice *currSlice, int ipmode);
 
 extern void init_md_best(BestMode  *best);
@@ -95,7 +93,7 @@ extern void generate_pred_error_8x8(imgpel **cur_img, imgpel **prd_img, imgpel *
 extern void  clear_rdopt (Slice *currSlice);
 extern void  init_rdopt  (Slice *currSlice);
 
-extern void UpdatePixelMap(ImageParameters *p_Img, InputParameters *p_Inp);
+extern void UpdatePixelMap(VideoParameters *p_Vid, InputParameters *p_Inp);
 
 extern void   update_qp_cbp     (Macroblock *currMB);
 extern void   update_qp_cbp_tmp (Macroblock *currMB, int cbp);
@@ -112,6 +110,9 @@ extern void encode_one_macroblock_high         (Macroblock *currMB);
 extern void encode_one_macroblock_highfast     (Macroblock *currMB);
 extern void encode_one_macroblock_highloss     (Macroblock *currMB);
 
+extern void store_8x8_motion_vectors_p_slice(Slice *currSlice, int dir, int block8x8, Info8x8 *B8x8Info);
+extern void store_8x8_motion_vectors_b_slice(Slice *currSlice, int dir, int block8x8, Info8x8 *B8x8Info);
+
 
 /*!
  *************************************************************************************
@@ -127,6 +128,5 @@ static inline void copy_4x4block(imgpel **oblock, imgpel **iblock, int o_xoffset
     memcpy(&oblock[y][o_xoffset],&iblock[y][i_xoffset], BLOCK_SIZE * sizeof(imgpel));
   }
 }
-
 #endif
 

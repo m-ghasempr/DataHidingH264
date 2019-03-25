@@ -19,15 +19,15 @@
 
 #include "mbuffer.h"
 
-extern int     encode_one_frame      ( ImageParameters *p_Img, InputParameters *p_Inp);
+extern int     encode_one_frame      ( VideoParameters *p_Vid, InputParameters *p_Inp);
 extern Boolean dummy_slice_too_big   ( int bits_slice);
 extern void    copy_rdopt_data       ( Macroblock *currMB);       // For MB level field/frame coding tools
-extern void    UnifiedOneForthPix    ( ImageParameters *p_Img, InputParameters *p_Inp, StorablePicture *s);
+extern void    UnifiedOneForthPix    ( VideoParameters *p_Vid, StorablePicture *s);
 // For 4:4:4 independent mode
-extern void    UnifiedOneForthPix_JV ( ImageParameters *p_Img, InputParameters *p_Inp, int nplane, StorablePicture *s);
-extern void    frame_picture         ( ImageParameters *p_Img, InputParameters *p_Inp, Picture *frame, ImageData *imgData, int rd_pass);
-extern byte    get_idr_flag          ( ImageParameters *p_Img, InputParameters *p_Inp );
-extern void    write_non_vcl_nalu    ( ImageParameters *p_Img, InputParameters *p_Inp );
+extern void    UnifiedOneForthPix_JV ( VideoParameters *p_Vid, int nplane, StorablePicture *s);
+extern void    frame_picture         ( VideoParameters *p_Vid, Picture *frame, ImageData *imgData, int rd_pass);
+extern byte    get_idr_flag          ( VideoParameters *p_Vid );
+extern void    write_non_vcl_nalu    ( VideoParameters *p_Vid, InputParameters *p_Inp );
 
 #endif
 

@@ -20,7 +20,7 @@
 #include "nalucommon.h"
 #include "enc_statistics.h"
 
-extern int  addCabacZeroWords(ImageParameters *p_Img, NALU_t *nalu, StatParameters *cur_stats);
+extern int  addCabacZeroWords(VideoParameters *p_Vid, NALU_t *nalu, StatParameters *cur_stats);
 extern void SODBtoRBSP (Bitstream *currStream);
 extern int  RBSPtoEBSP(byte *NaluBuffer, unsigned char *rbsp, int rbsp_size);
 

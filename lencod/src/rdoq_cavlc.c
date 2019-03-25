@@ -89,7 +89,7 @@ int cmp(const void *arg1, const void *arg2)
 *    estimate CAVLC bits
 ************************************************************************
 */
-int est_CAVLC_bits (ImageParameters *p_Img, int level_to_enc[16], int sign_to_enc[16], int nnz, int block_type)
+int est_CAVLC_bits (VideoParameters *p_Vid, int level_to_enc[16], int sign_to_enc[16], int nnz, int block_type)
 {
   int           no_bits    = 0;
   SyntaxElement se;
@@ -101,7 +101,7 @@ int est_CAVLC_bits (ImageParameters *p_Img, int level_to_enc[16], int sign_to_en
   int numcoeff_vlc;
   int level_two_or_higher;
   int max_coeff_num = 0, cdc = (block_type == CHROMA_DC ? 1 : 0);
-  int yuv = p_Img->yuv_format - 1;
+  int yuv = p_Vid->yuv_format - 1;
   static const int incVlc[] = {0, 3, 6, 12, 24, 48, 32768};  // maximum vlc = 6
 
   int  pLevel[16] = {0};
@@ -208,7 +208,7 @@ int est_CAVLC_bits (ImageParameters *p_Img, int level_to_enc[16], int sign_to_en
   };
 
 
-  max_coeff_num = ( (block_type == CHROMA_DC) ? p_Img->num_cdc_coeff : 
+  max_coeff_num = ( (block_type == CHROMA_DC) ? p_Vid->num_cdc_coeff : 
   ( (block_type == LUMA_INTRA16x16AC || block_type == CB_INTRA16x16AC || block_type == CR_INTRA16x16AC || block_type == CHROMA_AC) ? 15 : 16) );
 
   //convert zigzag scan to (run, level) pairs
@@ -390,7 +390,7 @@ void est_RunLevel_CAVLC(Macroblock *currMB, levelDataStruct *levelData, int *lev
   int cstat, bestcstat = 0; 
   int nz_coeff=0;
   double lagr, lagrAcc = 0, minlagr = 0;
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
 
   int subblock_x = ((b8 & 0x1) == 0) ? (((b4 & 0x1) == 0) ? 0 : 1) : (((b4 & 0x1) == 0) ? 2 : 3); 
   // horiz. position for coeff_count context  
@@ -449,7 +449,7 @@ void est_RunLevel_CAVLC(Macroblock *currMB, levelDataStruct *levelData, int *lev
         level_to_enc[dataLevel->coeff_ctr] = dataLevel->level[cstat];
         lagr = lagrAcc + dataLevel->errLevel[cstat];
 
-        lagr += lambda * est_CAVLC_bits( p_Img, level_to_enc, sign_to_enc, nnz, block_type);
+        lagr += lambda * est_CAVLC_bits( p_Vid, level_to_enc, sign_to_enc, nnz, block_type);
 
         if(cstat==0 || lagr<minlagr)
         {		
@@ -470,7 +470,7 @@ void est_RunLevel_CAVLC(Macroblock *currMB, levelDataStruct *levelData, int *lev
     }
   }
 
-  p_Img->nz_coeff [p_Img->current_mb_nr ][subblock_x][subblock_y] = nz_coeff;
+  p_Vid->nz_coeff [p_Vid->current_mb_nr ][subblock_x][subblock_y] = nz_coeff;
 }
 
 /*!

@@ -195,7 +195,7 @@ static int est_unary_exp_golomb_level_encode(Macroblock *currMB, unsigned int sy
   return(estBits);
 }
 
-void precalculate_unary_exp_golomb_level(ImageParameters *p_Img)
+void precalculate_unary_exp_golomb_level(VideoParameters *p_Vid)
 {
   int state, ctx_state0, ctx_state1, estBits0, estBits1, symbol;
 
@@ -209,10 +209,10 @@ void precalculate_unary_exp_golomb_level(ImageParameters *p_Img)
 
     for (symbol = 0; symbol < MAX_PREC_COEFF; symbol++)
     {
-      p_Img->precalcUnaryLevelTab[ctx_state0][symbol] = est_unary_exp_golomb_level_bits(symbol, estBits0, estBits1);
+      p_Vid->precalcUnaryLevelTab[ctx_state0][symbol] = est_unary_exp_golomb_level_bits(symbol, estBits0, estBits1);
 
       // symbol 0 is LPS
-      p_Img->precalcUnaryLevelTab[ctx_state1][symbol] =est_unary_exp_golomb_level_bits(symbol, estBits1, estBits0);
+      p_Vid->precalcUnaryLevelTab[ctx_state1][symbol] =est_unary_exp_golomb_level_bits(symbol, estBits1, estBits0);
     }
   }
 }
@@ -300,18 +300,18 @@ void estRunLevel_CABAC (Macroblock *currMB, int context) // marta - writes CABAC
 int est_write_and_store_CBP_block_bit(Macroblock* currMB, int type) 
 {
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   estBitsCabacStruct *cabacEstBits = &currSlice->estBitsCabac[type];  
 
   int y_ac        = (type==LUMA_16AC || type==LUMA_8x8 || type==LUMA_8x4 || type==LUMA_4x8 || type==LUMA_4x4
     || type==CB_16AC || type==CB_8x8 || type==CB_8x4 || type==CB_4x8 || type==CB_4x4
     || type==CR_16AC || type==CR_8x8 || type==CR_8x4 || type==CR_4x8 || type==CR_4x4);
   int y_dc        = (type==LUMA_16DC || type==CB_16DC || type==CR_16DC); 
-  int u_ac        = (type==CHROMA_AC && !p_Img->is_v_block);
-  int v_ac        = (type==CHROMA_AC &&  p_Img->is_v_block);
+  int u_ac        = (type==CHROMA_AC && !p_Vid->is_v_block);
+  int v_ac        = (type==CHROMA_AC &&  p_Vid->is_v_block);
   int chroma_dc   = (type==CHROMA_DC || type==CHROMA_DC_2x4 || type==CHROMA_DC_4x4);
-  int u_dc        = (chroma_dc && !p_Img->is_v_block);
-  int v_dc        = (chroma_dc &&  p_Img->is_v_block);
+  int u_dc        = (chroma_dc && !p_Vid->is_v_block);
+  int v_dc        = (chroma_dc &&  p_Vid->is_v_block);
   int j           = (y_ac || u_ac || v_ac ? currMB->subblock_y : 0);
   int i           = (y_ac || u_ac || v_ac ? currMB->subblock_x : 0);
   int bit;
@@ -327,8 +327,8 @@ int est_write_and_store_CBP_block_bit(Macroblock* currMB, int type)
 
   if (y_ac || y_dc)
   {
-    get4x4Neighbour(currMB, i - 1, j   , p_Img->mb_size[IS_LUMA], &block_a);
-    get4x4Neighbour(currMB, i,     j -1, p_Img->mb_size[IS_LUMA], &block_b);
+    get4x4Neighbour(currMB, i - 1, j   , p_Vid->mb_size[IS_LUMA], &block_a);
+    get4x4Neighbour(currMB, i,     j -1, p_Vid->mb_size[IS_LUMA], &block_b);
     if (y_ac)
     {
       if (block_a.available)
@@ -339,8 +339,8 @@ int est_write_and_store_CBP_block_bit(Macroblock* currMB, int type)
   }
   else
   {
-    get4x4Neighbour(currMB, i - 1, j    , p_Img->mb_size[IS_CHROMA], &block_a);
-    get4x4Neighbour(currMB, i,     j - 1, p_Img->mb_size[IS_CHROMA], &block_b);
+    get4x4Neighbour(currMB, i - 1, j    , p_Vid->mb_size[IS_CHROMA], &block_a);
+    get4x4Neighbour(currMB, i,     j - 1, p_Vid->mb_size[IS_CHROMA], &block_b);
     if (u_ac||v_ac)
     {
       if (block_a.available)
@@ -352,24 +352,24 @@ int est_write_and_store_CBP_block_bit(Macroblock* currMB, int type)
 
   bit = (y_dc ? 0 : y_ac ? 1 : u_dc ? 17 : v_dc ? 18 : u_ac ? 19 : 35);
 
-  if (p_Img->enc_picture->chroma_format_idc!=YUV444 || IS_INDEPENDENT(currMB->p_Inp))
+  if (p_Vid->enc_picture->chroma_format_idc!=YUV444 || IS_INDEPENDENT(currMB->p_Inp))
   {
     if (type!=LUMA_8x8)
     {
       if (block_b.available)
       {
-        if(p_Img->mb_data[block_b.mb_addr].mb_type==IPCM)
+        if(p_Vid->mb_data[block_b.mb_addr].mb_type==IPCM)
           upper_bit = 1;
         else
-          upper_bit = get_bit(p_Img->mb_data[block_b.mb_addr].cbp_bits[0], bit + bit_pos_b);
+          upper_bit = get_bit(p_Vid->mb_data[block_b.mb_addr].cbp_bits[0], bit + bit_pos_b);
       }
 
       if (block_a.available)
       {
-        if(p_Img->mb_data[block_a.mb_addr].mb_type==IPCM)
+        if(p_Vid->mb_data[block_a.mb_addr].mb_type==IPCM)
           left_bit = 1;
         else
-          left_bit = get_bit(p_Img->mb_data[block_a.mb_addr].cbp_bits[0], bit + bit_pos_a);
+          left_bit = get_bit(p_Vid->mb_data[block_a.mb_addr].cbp_bits[0], bit + bit_pos_a);
       }
 
       ctx = 2*upper_bit+left_bit;
@@ -381,43 +381,43 @@ int est_write_and_store_CBP_block_bit(Macroblock* currMB, int type)
   {
     if (block_b.available)
     {
-      if(p_Img->mb_data[block_b.mb_addr].mb_type == IPCM)
+      if(p_Vid->mb_data[block_b.mb_addr].mb_type == IPCM)
         upper_bit=1;
       else
       {
         if(type==LUMA_8x8)
-          upper_bit = get_bit(p_Img->mb_data[block_b.mb_addr].cbp_bits_8x8[0], bit + bit_pos_b);
+          upper_bit = get_bit(p_Vid->mb_data[block_b.mb_addr].cbp_bits_8x8[0], bit + bit_pos_b);
         else if (type==CB_8x8)
-          upper_bit = get_bit(p_Img->mb_data[block_b.mb_addr].cbp_bits_8x8[1], bit + bit_pos_b);
+          upper_bit = get_bit(p_Vid->mb_data[block_b.mb_addr].cbp_bits_8x8[1], bit + bit_pos_b);
         else if (type==CR_8x8)
-          upper_bit = get_bit(p_Img->mb_data[block_b.mb_addr].cbp_bits_8x8[2], bit + bit_pos_b);
+          upper_bit = get_bit(p_Vid->mb_data[block_b.mb_addr].cbp_bits_8x8[2], bit + bit_pos_b);
         else if ((type==CB_4x4)||(type==CB_4x8)||(type==CB_8x4)||(type==CB_16AC)||(type==CB_16DC))
-          upper_bit = get_bit(p_Img->mb_data[block_b.mb_addr].cbp_bits[1], bit + bit_pos_b);
+          upper_bit = get_bit(p_Vid->mb_data[block_b.mb_addr].cbp_bits[1], bit + bit_pos_b);
         else if ((type==CR_4x4)||(type==CR_4x8)||(type==CR_8x4)||(type==CR_16AC)||(type==CR_16DC))
-          upper_bit = get_bit(p_Img->mb_data[block_b.mb_addr].cbp_bits[2], bit + bit_pos_b);
+          upper_bit = get_bit(p_Vid->mb_data[block_b.mb_addr].cbp_bits[2], bit + bit_pos_b);
         else
-          upper_bit = get_bit(p_Img->mb_data[block_b.mb_addr].cbp_bits[0], bit + bit_pos_b);
+          upper_bit = get_bit(p_Vid->mb_data[block_b.mb_addr].cbp_bits[0], bit + bit_pos_b);
       }
     }
 
     if (block_a.available)
     {
-      if(p_Img->mb_data[block_a.mb_addr].mb_type==IPCM)
+      if(p_Vid->mb_data[block_a.mb_addr].mb_type==IPCM)
         left_bit = 1;
       else
       {
         if(type==LUMA_8x8)
-          left_bit = get_bit(p_Img->mb_data[block_a.mb_addr].cbp_bits_8x8[0],bit + bit_pos_a);
+          left_bit = get_bit(p_Vid->mb_data[block_a.mb_addr].cbp_bits_8x8[0],bit + bit_pos_a);
         else if (type==CB_8x8)
-          left_bit = get_bit(p_Img->mb_data[block_a.mb_addr].cbp_bits_8x8[1],bit + bit_pos_a);
+          left_bit = get_bit(p_Vid->mb_data[block_a.mb_addr].cbp_bits_8x8[1],bit + bit_pos_a);
         else if (type==CR_8x8)
-          left_bit = get_bit(p_Img->mb_data[block_a.mb_addr].cbp_bits_8x8[2],bit + bit_pos_a);
+          left_bit = get_bit(p_Vid->mb_data[block_a.mb_addr].cbp_bits_8x8[2],bit + bit_pos_a);
         else if ((type==CB_4x4)||(type==CB_4x8)||(type==CB_8x4)||(type==CB_16AC)||(type==CB_16DC))
-          left_bit = get_bit(p_Img->mb_data[block_a.mb_addr].cbp_bits[1], bit + bit_pos_a);
+          left_bit = get_bit(p_Vid->mb_data[block_a.mb_addr].cbp_bits[1], bit + bit_pos_a);
         else if ((type==CR_4x4)||(type==CR_4x8)||(type==CR_8x4)||(type==CR_16AC)||(type==CR_16DC))
-          left_bit = get_bit(p_Img->mb_data[block_a.mb_addr].cbp_bits[2], bit + bit_pos_a);
+          left_bit = get_bit(p_Vid->mb_data[block_a.mb_addr].cbp_bits[2], bit + bit_pos_a);
         else
-          left_bit = get_bit(p_Img->mb_data[block_a.mb_addr].cbp_bits[0], bit + bit_pos_a);
+          left_bit = get_bit(p_Vid->mb_data[block_a.mb_addr].cbp_bits[0], bit + bit_pos_a);
       }
     }
 
@@ -438,7 +438,7 @@ int est_write_and_store_CBP_block_bit(Macroblock* currMB, int type)
 void est_writeRunLevel_CABAC(Macroblock *currMB, levelDataStruct levelData[], int levelTabMin[], int type, double lambda, int kInit, int kStop, 
                              int noCoeff, int estCBP)
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   Slice *currSlice = currMB->p_slice;
   estBitsCabacStruct *cabacEstBits = &currSlice->estBitsCabac[type];
   int   k, i;
@@ -553,7 +553,7 @@ void est_writeRunLevel_CABAC(Macroblock *currMB, levelDataStruct levelData[], in
           ctx = imin(c2Tab[i], max_c2[type]);
           if ( (dataLevel->level[i] - 2) < MAX_PREC_COEFF)
           {
-            estBits += p_Img->precalcUnaryLevelTab[cabacEstBits->greaterOneState[ctx]][dataLevel->level[i] - 2];
+            estBits += p_Vid->precalcUnaryLevelTab[cabacEstBits->greaterOneState[ctx]][dataLevel->level[i] - 2];
           }
           else
           {

@@ -31,28 +31,28 @@ struct stat_parameters
   int64  intra_chroma_mode[4];
 
   // B pictures
-  int     NumberBFrames;
+  int    NumberBFrames;
 
-  int     frame_counter;
-  int64   quant               [NUM_SLICE_TYPES];
-  int64   num_macroblocks     [NUM_SLICE_TYPES];
-  int     frame_ctr           [NUM_SLICE_TYPES];
-  int64   bit_counter         [NUM_SLICE_TYPES];
-  float   bitrate_st          [NUM_SLICE_TYPES];
-  int64   mode_use            [NUM_SLICE_TYPES][MAXMODE]; //!< Macroblock mode usage for Intra frames
-  int64   bit_use_mode        [NUM_SLICE_TYPES][MAXMODE]; //!< statistics of bit usage  
-  int64   bit_use_mb_type     [NUM_SLICE_TYPES];
-  int64   bit_use_header      [NUM_SLICE_TYPES];
-  int64   tmp_bit_use_cbp     [NUM_SLICE_TYPES];
-  int64   bit_use_coeffC      [NUM_SLICE_TYPES];
-  int64   bit_use_coeff    [3][NUM_SLICE_TYPES];  
-  int64   bit_use_delta_quant [NUM_SLICE_TYPES];
-  int64   bit_use_stuffingBits[NUM_SLICE_TYPES];
+  int    frame_counter;
+  int64  quant               [NUM_SLICE_TYPES];
+  int64  num_macroblocks     [NUM_SLICE_TYPES];
+  int    frame_ctr           [NUM_SLICE_TYPES];
+  int64  bit_counter         [NUM_SLICE_TYPES];
+  float  bitrate_st          [NUM_SLICE_TYPES];
+  int64  mode_use            [NUM_SLICE_TYPES][MAXMODE]; //!< Macroblock mode usage for Intra frames
+  int64  bit_use_mode        [NUM_SLICE_TYPES][MAXMODE]; //!< statistics of bit usage  
+  int64  bit_use_mb_type     [NUM_SLICE_TYPES];
+  int64  bit_use_header      [NUM_SLICE_TYPES];
+  int64  tmp_bit_use_cbp     [NUM_SLICE_TYPES];
+  int64  bit_use_coeffC      [NUM_SLICE_TYPES];
+  int64  bit_use_coeff    [3][NUM_SLICE_TYPES];  
+  int64  bit_use_delta_quant [NUM_SLICE_TYPES];
+  int64  bit_use_stuffingBits[NUM_SLICE_TYPES];
 
-  int   bit_ctr_parametersets;
-  int   bit_ctr_parametersets_n;
-  int64 bit_ctr_filler_data;
-  int64 bit_ctr_filler_data_n;
+  int    bit_ctr_parametersets;
+  int    bit_ctr_parametersets_n;
+  int64  bit_ctr_filler_data;
+  int64  bit_ctr_filler_data_n;
 
 };
 typedef struct stat_parameters StatParameters;

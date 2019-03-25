@@ -53,7 +53,7 @@ int RBSPtoNALU (unsigned char *rbsp, NALU_t *nalu, int rbsp_size, int nal_unit_t
   nalu->startcodeprefix_len = UseAnnexbLongStartcode ? 4 : 3;
   nalu->forbidden_bit       = 0;  
   nalu->nal_reference_idc   = (NalRefIdc) nal_reference_idc;
-  nalu->nal_unit_type       = (NaluType) nal_unit_type;    
+  nalu->nal_unit_type       = (NaluType) nal_unit_type;
 
   len = RBSPtoEBSP (nalu->buf, rbsp, rbsp_size);
   nalu->len = len;
@@ -68,33 +68,33 @@ int RBSPtoNALU (unsigned char *rbsp, NALU_t *nalu, int rbsp_size, int nal_unit_t
  ************************************************************************
  */
 
-int Write_AUD_NALU( ImageParameters *p_Img )
+int Write_AUD_NALU( VideoParameters *p_Vid )
 {  
   int     RBSPlen = 0;
   int     NALUlen, len;
   byte    rbsp[MAXRBSPSIZE];
   NALU_t *nalu = AllocNALU( MAXNALUSIZE );
 
-  switch( p_Img->type )
+  switch( p_Vid->type )
   {
   case I_SLICE:
-    p_Img->primary_pic_type = 0;
+    p_Vid->primary_pic_type = 0;
     break;
   case P_SLICE:
-    p_Img->primary_pic_type = 1;
+    p_Vid->primary_pic_type = 1;
     break;
   case B_SLICE:
-    p_Img->primary_pic_type = 2;
+    p_Vid->primary_pic_type = 2;
     break;
   }
   RBSPlen = 1;
-  rbsp[0] = (byte) (p_Img->primary_pic_type << 5);
+  rbsp[0] = (byte) (p_Vid->primary_pic_type << 5);
   rbsp[0] |= (1 << 4);
 
   // write RBSP into NALU
   NALUlen = RBSPtoNALU( rbsp, nalu, RBSPlen, NALU_TYPE_AUD, NALU_PRIORITY_DISPOSABLE, 1 );
   // write NALU into bitstream
-  len     = p_Img->WriteNALU( p_Img, nalu );
+  len     = p_Vid->WriteNALU( p_Vid, nalu );
 
   FreeNALU( nalu );
 
@@ -108,7 +108,7 @@ int Write_AUD_NALU( ImageParameters *p_Img )
  ************************************************************************
  */
 
-int Write_Filler_Data_NALU( ImageParameters *p_Img, int num_bytes )
+int Write_Filler_Data_NALU( VideoParameters *p_Vid, int num_bytes )
 {  
   int     RBSPlen = num_bytes - 1;
   int     NALUlen, len, bytes_written = 0;
@@ -127,10 +127,10 @@ int Write_Filler_Data_NALU( ImageParameters *p_Img, int num_bytes )
   assert( num_bytes == bytes_written );
 
   // write RBSP into NALU
-  NALUlen = RBSPtoNALU( rbsp, nalu, RBSPlen, NALU_TYPE_FILL, NALU_PRIORITY_HIGHEST, 1 );
+  NALUlen = RBSPtoNALU( rbsp, nalu, RBSPlen, NALU_TYPE_FILL, NALU_PRIORITY_DISPOSABLE, 1 );
   // write NALU into bitstream
-  len     = p_Img->WriteNALU( p_Img, nalu );
-  p_Img->bytes_in_picture += (nalu->len + 1);
+  len     = p_Vid->WriteNALU( p_Vid, nalu );
+  p_Vid->bytes_in_picture += (nalu->len + 1);
 
   FreeNALU( nalu );
 

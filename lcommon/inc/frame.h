@@ -1,4 +1,3 @@
-
 /*!
  ************************************************************************
  * \file frame.h
@@ -45,8 +44,8 @@ typedef struct frame_format
   int         height_crop;                   //!< height after cropping consideration
   int         mb_width;                      //!< luma component frame width
   int         mb_height;                     //!< luma component frame height    
-  int         size_cmp[3];                   //!< component sizes  
-  int         size;                          //!< total image size
+  int         size_cmp[3];                   //!< component sizes (width * height)
+  int         size;                          //!< total image size (sum of size_cmp)
   int         bit_depth[3];                  //!< component bit depth  
   int         max_value[3];                  //!< component max value
   int         max_value_sq[3];               //!< component max value squared

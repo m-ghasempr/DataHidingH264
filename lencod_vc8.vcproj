@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="Windows-1252"?>
 <VisualStudioProject
 	ProjectType="Visual C++"
-	Version="8,00"
+	Version="8.00"
 	Name="lencod"
 	ProjectGUID="{9A39F1B7-3DFE-4263-8C02-8070F7D99AFA}"
 	RootNamespace="lencod"
@@ -215,6 +215,10 @@
 			</File>
 			<File
 				RelativePath=".\lencod\src\biariencode.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lcommon\src\blk_prediction.c"
 				>
 			</File>
 			<File
@@ -470,6 +474,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lencod\src\pred_struct.c"
+				>
+			</File>
+			<File
 				RelativePath=".\lencod\src\q_around.c"
 				>
 			</File>
@@ -644,6 +652,10 @@
 			</File>
 			<File
 				RelativePath=".\lencod\inc\biariencode.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lcommon\inc\blk_prediction.h"
 				>
 			</File>
 			<File
@@ -920,6 +932,22 @@
 			</File>
 			<File
 				RelativePath=".\lencod\inc\parsetcommon.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\inc\pred_struct.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\inc\pred_struct_adapt.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\inc\pred_struct_adapt_types.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\inc\pred_struct_types.h"
 				>
 			</File>
 			<File

@@ -322,20 +322,20 @@ struct sei_params {
 typedef struct sei_params SEIParameters;
 
 // functions
-extern void InitSEIMessages      (ImageParameters *p_Img, InputParameters *p_Inp);
-extern void CloseSEIMessages     (ImageParameters *p_Img, InputParameters *p_Inp);
-extern Boolean HaveAggregationSEI(ImageParameters *p_Img);
+extern void InitSEIMessages      (VideoParameters *p_Vid, InputParameters *p_Inp);
+extern void CloseSEIMessages     (VideoParameters *p_Vid, InputParameters *p_Inp);
+extern Boolean HaveAggregationSEI(VideoParameters *p_Vid);
 
 extern void clear_sei_message    (SEIParameters *p_SEI, int id);
 extern void AppendTmpbits2Buf    ( Bitstream* dest, Bitstream* source );
-extern void PrepareAggregationSEIMessage(ImageParameters *p_Img);
+extern void PrepareAggregationSEIMessage(VideoParameters *p_Vid);
 extern void CalculateSparePicture();
-extern Boolean CompressSpareMBMap(ImageParameters *p_Img, unsigned char **map_sp, Bitstream *bitstream);
+extern Boolean CompressSpareMBMap(VideoParameters *p_Vid, unsigned char **map_sp, Bitstream *bitstream);
 extern void InitSubseqInfo(SEIParameters *p_SEI, int currLayer);
-extern void UpdateSubseqInfo  (ImageParameters *p_Img, InputParameters *p_Inp, int currLayer);
+extern void UpdateSubseqInfo  (VideoParameters *p_Vid, InputParameters *p_Inp, int currLayer);
 extern void CloseSubseqInfo   (SEIParameters *p_SEI, int currLayer);
 void CloseSubseqLayerInfo();
-extern void UpdateSubseqChar(ImageParameters *p_Img);
+extern void UpdateSubseqChar(VideoParameters *p_Vid);
 
 extern void InitSceneInformation        (SEIParameters *p_SEI);
 extern void CloseSceneInformation       (SEIParameters *p_SEI);
@@ -347,17 +347,17 @@ extern void UpdateUser_data_unregistered(SEIParameters *p_SEI);
 extern void UpdateUser_data_registered_itu_t_t35(SEIParameters *p_SEI);
 
 extern void ClearRandomAccess(SEIParameters *p_SEI);
-extern void UpdateRandomAccess(ImageParameters *p_Img);
+extern void UpdateRandomAccess(VideoParameters *p_Vid);
 
 extern void UpdateToneMapping(SEIParameters *p_SEI);
 
 extern void init_sei(SEIParameters *p_SEI);
-extern int Write_SEI_NALU(ImageParameters *p_Img, int len);
-extern void InitBufferingPeriod    (ImageParameters *p_Img);
+extern int Write_SEI_NALU(VideoParameters *p_Vid, int len);
+extern void InitBufferingPeriod    (VideoParameters *p_Vid);
 extern void ClearBufferingPeriod   (SEIParameters *p_SEI, seq_parameter_set_rbsp_t *active_sps);
-extern void UpdateBufferingPeriod  (ImageParameters *p_Img, InputParameters *p_Inp);
+extern void UpdateBufferingPeriod  (VideoParameters *p_Vid, InputParameters *p_Inp);
 extern void ClearPicTiming(SEIParameters *p_SEI);
-extern void UpdatePicTiming(ImageParameters *p_Img, InputParameters *p_Inp);
+extern void UpdatePicTiming(VideoParameters *p_Vid, InputParameters *p_Inp);
 extern void ClearDRPMRepetition(SEIParameters *p_SEI);
 extern void UpdateDRPMRepetition(SEIParameters *p_SEI);
 extern void free_drpm_buffer( DecRefPicMarking_t *pDRPM );

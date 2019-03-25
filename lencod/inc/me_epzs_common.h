@@ -63,14 +63,14 @@ typedef enum
 } EPZSPatterns;
 
 struct epzs_params {
-  ImageParameters *p_Img;
+  VideoParameters *p_Vid;
   uint16 BlkCount;
   int   searcharray;
 
-  int medthres[8];
-  int maxthres[8];
-  int minthres[8];
-  int subthres[8];
+  distblk medthres[8];
+  distblk maxthres[8];
+  distblk minthres[8];
+  distblk subthres[8];
 
   int mv_scale       [6][MAX_REFERENCE_PICTURES][MAX_REFERENCE_PICTURES];
   int mv_scale_update[6][MAX_REFERENCE_PICTURES][MAX_REFERENCE_PICTURES];
@@ -82,9 +82,10 @@ struct epzs_params {
 #else
   MotionVector ****p_motion;  //!< Array for storing Motion Vectors
 #endif
+  distblk ***distortion;  //!< Array for storing SAD Values
+  distblk ***bi_distortion;  //!< Array for storing SAD Values
+  distblk ***distortion_hpel;  //!< Array for storing SAD Values
 
-  int ***distortion;  //!< Array for storing SAD Values
-  int ***bi_distortion;  //!< Array for storing SAD Values
   //
   EPZSStructure *searchPattern;
   EPZSStructure *searchPatternD;
@@ -99,22 +100,20 @@ struct epzs_params {
 typedef struct epzs_params EPZSParameters;
 
 
-extern void  EPZSBlockTypePredictorsMB (Slice *currSlice, MEBlock *mv_block, SPoint *point, int *prednum);
-extern short EPZSSpatialPredictors     (EPZSParameters *p_EPZS, PixelPos *block, int list, int list_offset, short ref, char **refPic, short ***tmp_mv);
-extern void  EPZSTemporalPredictors    (Macroblock *currMB, StorablePicture *ref_picture, EPZSParameters *p_EPZS, MEBlock *mv_block, int *prednum, int stopCriterion, int min_mcost);
-extern void  EPZSBlockTypePredictors   (Slice *currSlice, MEBlock *mv_block, SPoint *point, int *prednum);
-extern void  EPZSWindowPredictors      (MotionVector *mv, EPZSStructure *predictor, int *prednum, EPZSStructure *windowPred);
-extern void  EPZSSpatialMemPredictors  (EPZSParameters *p_EPZS, MEBlock *mv_block, int list, int *prednum, int img_width);
-extern int   EPZSDetermineStopCriterion(EPZSParameters *p_EPZS, int* prevSad, MEBlock *mv_block ,int lambda_dist);
+extern void    EPZSBlockTypePredictorsMB (Slice *currSlice, MEBlock *mv_block, SPoint *point, int *prednum);
+extern short   EPZSSpatialPredictors     (EPZSParameters *p_EPZS, MEBlock *mv_block /*PixelPos *block*/, int list, int list_offset, short ref, char **refPic, short ***tmp_mv);
+extern void    EPZSTemporalPredictors    (Macroblock *currMB, StorablePicture *ref_picture, EPZSParameters *p_EPZS, MEBlock *mv_block, int *prednum, distblk stopCriterion, distblk min_mcost);
+extern distblk EPZSDetermineStopCriterion(EPZSParameters *p_EPZS, distblk* prevSad, MEBlock *mv_block ,distblk lambda_dist);
+extern void    EPZSBlockTypePredictors   (Slice *currSlice, MEBlock *mv_block, SPoint *point, int *prednum);
+extern void    EPZSWindowPredictors      (MotionVector *mv, EPZSStructure *predictor, int *prednum, EPZSStructure *windowPred);
+extern void    EPZSSpatialMemPredictors  (EPZSParameters *p_EPZS, MEBlock *mv_block, int list, int *prednum, int img_width);
 
-extern void  EPZSDelete                (ImageParameters *p_Img);
+extern void  EPZSDelete                (VideoParameters *p_Vid);
 extern void  EPZSStructDelete          (Slice *currSlice);
 extern void  EPZSSliceInit             (Slice *currSlice);
-extern int   EPZSInit                  (ImageParameters *p_Img);
+extern int   EPZSInit                  (VideoParameters *p_Vid);
 extern int   EPZSStructInit            (Slice *currSlice);
 extern void  EPZSOutputStats           (InputParameters *p_Inp, FILE * stat, short stats_file);
-
-
 
 /*!
 ***********************************************************************
@@ -139,6 +138,11 @@ static inline void scale_mv(MotionVector *out_mv, int scale, short *mv, int shif
   out_mv->mv_y = (short) rshift_rnd_sf((scale * mv[1]), shift_mv);
 }
 
+static inline void scale_mv_xy(MotionVector *out_mv, int *scale, short *mv, int shift_mv)
+{
+  out_mv->mv_x = (short) rshift_rnd_sf((scale[0] * mv[0]), shift_mv);
+  out_mv->mv_y = (short) rshift_rnd_sf((scale[1] * mv[1]), shift_mv);
+}
 
 static inline void compute_scaled(MotionVector *MotionVector0, MotionVector *MotionVector1, int tempmv_scale[2], short *mv, int invmv_precision)
 {

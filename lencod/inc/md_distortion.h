@@ -20,10 +20,10 @@
 #include "global.h"
 
 // Functions
-extern void  setupDistortion (Slice *currSlice);
-extern int64 compute_SSE     (imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc, int ySize, int xSize);
-extern int64 compute_SSE_cr  (imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc, int ySize, int xSize);
-extern int64 compute_SSE16x16(imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc);
-extern int64 compute_SSE8x8  (imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc);
-extern int64 compute_SSE4x4  (imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc);
+extern void    setupDistortion (Slice *currSlice);
+extern int64   compute_SSE     (imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc, int ySize, int xSize);
+extern distblk compute_SSE_cr  (imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc, int ySize, int xSize);
+extern distblk compute_SSE16x16(imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc);
+extern distblk compute_SSE8x8  (imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc);
+extern distblk compute_SSE4x4  (imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc);
 #endif

@@ -42,9 +42,9 @@
 #define MIN_BITS_TO_GO 0
 #define B_LOAD_MASK    0xFFFF      // ((1<<BITS_TO_LOAD) - 1)
 
-extern int get_pic_bin_count(ImageParameters *p_Img);
-extern void reset_pic_bin_count(ImageParameters *p_Img);
-extern void set_pic_bin_count  (ImageParameters *p_Img, EncodingEnvironmentPtr eep);
+extern int get_pic_bin_count(VideoParameters *p_Vid);
+extern void reset_pic_bin_count(VideoParameters *p_Vid);
+extern void set_pic_bin_count  (VideoParameters *p_Vid, EncodingEnvironmentPtr eep);
 
 extern void arienco_start_encoding(EncodingEnvironmentPtr eep, unsigned char *code_buffer, int *code_len);
 extern void arienco_reset_EC      (EncodingEnvironmentPtr eep);

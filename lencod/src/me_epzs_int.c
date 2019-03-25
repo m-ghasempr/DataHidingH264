@@ -1,7 +1,7 @@
 
 /*!
 *************************************************************************************
-* \file me_epzs.c
+* \file me_epzs_int.c
 *
 * \brief
 *    Motion Estimation using EPZS
@@ -38,19 +38,19 @@
 *    AMT/HYC
 ***********************************************************************
 */
-int                             //  ==> minimum motion cost after search
+distblk                                               //  ==> minimum motion cost after search
 EPZSIntPelBlockMotionSearch (Macroblock * currMB,     // <--  current Macroblock
                              MotionVector * pred_mv,  // <--  motion vector predictor in sub-pel units
                              MEBlock * mv_block,      // <--  motion vector information
-                             int min_mcost,           // <--  minimum motion cost (cost for center or huge value)
+                             distblk min_mcost,       // <--  minimum motion cost (cost for center or huge value)
                              int lambda_factor        // <--  lagrangian parameter for determining motion cost
                              )
 {
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
   EPZSParameters *p_EPZS = currSlice->p_EPZS;
-  PicMotionParams *motion = &p_Img->enc_picture->motion;
+  PicMotionParams *motion = &p_Vid->enc_picture->motion;
 
   int blocktype = mv_block->blocktype;
 
@@ -61,11 +61,12 @@ EPZSIntPelBlockMotionSearch (Macroblock * currMB,     // <--  current Macroblock
   SearchWindow *searchRange = &mv_block->searchRange;
   int mapCenter_x = searchRange->max_x - mv->mv_x;
   int mapCenter_y = searchRange->max_y - mv->mv_y;
-  StorablePicture *ref_picture = p_Img->listX[cur_list][ref];
+  StorablePicture *ref_picture = p_Vid->listX[cur_list][ref];
 
-  int lambda_dist = (((lambda_factor) * (2)) >> LAMBDA_ACCURACY_BITS);
-  int stopCriterion = p_EPZS->medthres[blocktype] + lambda_dist;
-  int *prevSad = &p_EPZS->distortion[cur_list][blocktype - 1][mv_block->pos_x2];
+  distblk lambda_dist = weighted_cost(lambda_factor, 2);
+  distblk stopCriterion = p_EPZS->medthres[blocktype] + lambda_dist;
+  distblk *prevSad = &p_EPZS->distortion[cur_list][blocktype - 1][mv_block->pos_x2];
+
   MotionVector *p_motion = NULL;
 
   EPZSStructure *searchPatternF = p_EPZS->searchPattern;
@@ -75,7 +76,6 @@ EPZSIntPelBlockMotionSearch (Macroblock * currMB,     // <--  current Macroblock
   MotionVector center = pad_MVs (*mv, mv_block);
   MotionVector pred = pad_MVs (*pred_mv, mv_block);
   MotionVector tmp = *mv, cand = center;
-
   ++p_EPZS->BlkCount;
   if (p_EPZS->BlkCount == 0)
     ++p_EPZS->BlkCount;
@@ -96,15 +96,15 @@ EPZSIntPelBlockMotionSearch (Macroblock * currMB,     // <--  current Macroblock
   *EPZSPoint = p_EPZS->BlkCount;
 
   //--- initialize motion cost (cost for motion vector) and check ---
-  min_mcost = mv_cost (p_Img, lambda_factor, &cand, &pred);
+  min_mcost = mv_cost (p_Vid, lambda_factor, &cand, &pred);
 
   //--- add residual cost to motion cost ---
-  min_mcost += mv_block->computePredFPel (ref_picture, mv_block, INT_MAX, &cand);
+  min_mcost += mv_block->computePredFPel (ref_picture, mv_block, DISTBLK_MAX-min_mcost, &cand);
 
   // Additional threshold for ref>0
   //if ((ref > 0 && currSlice->structure == FRAME) && (*prevSad < imin (p_EPZS->medthres[blocktype] + lambda_dist, min_mcost))) 
   if ((ref > 0 && currSlice->structure == FRAME) && 
-    ((*prevSad < imin (p_EPZS->medthres[blocktype] + lambda_dist, min_mcost)) || (*prevSad * 8 < min_mcost)))
+    ((*prevSad < distblkmin (p_EPZS->medthres[blocktype] + lambda_dist, min_mcost)) || (*prevSad * 8 < min_mcost)))
   {
 #if EPZSREF
     if (p_Inp->EPZSSpatialMem)
@@ -114,6 +114,12 @@ EPZSIntPelBlockMotionSearch (Macroblock * currMB,     // <--  current Macroblock
     {
       *p_motion = tmp;
     }
+
+    // This is unecessary since we exit here only if this is 
+    // considered a bad predictor. This instead makes things slower
+    //if ((ref == 0) || (*prevSad > min_mcost))
+      // *prevSad = min_mcost;
+
     return min_mcost;
   }
 
@@ -123,17 +129,17 @@ EPZSIntPelBlockMotionSearch (Macroblock * currMB,     // <--  current Macroblock
   {
     SPoint *p_EPZS_point = p_EPZS->predictor->point;
     Boolean checkMedian = FALSE;
-    int second_mcost = INT_MAX;
-
+    distblk second_mcost = DISTBLK_MAX;
+    distblk mcost;
     int prednum = 5;
     int conditionEPZS;
     MotionVector tmp2 = {0, 0}, tmv;
-    int pos, mcost;
+    int pos;
     short invalid_refs = 0;
 
     stopCriterion = EPZSDetermineStopCriterion (p_EPZS, prevSad, mv_block, lambda_dist);
 
-    if (min_mcost < stopCriterion >> 1)
+    if (min_mcost < (stopCriterion >> 1))
     {
 #if EPZSREF
       if (p_Inp->EPZSSpatialMem)
@@ -144,13 +150,17 @@ EPZSIntPelBlockMotionSearch (Macroblock * currMB,     // <--  current Macroblock
         *p_motion = tmp;
       }
 
+      // This seems ok to add since this is considered a good enough position
+      if ((ref == 0) || (*prevSad > min_mcost))
+        *prevSad = min_mcost;
+
       return min_mcost;
     }
 
     //! Add Spatial Predictors in predictor list.
     //! Scheme adds zero, left, top-left, top, top-right. Note that top-left adds very little
     //! in terms of performance and could be removed with little penalty if any.
-    invalid_refs = EPZSSpatialPredictors (p_EPZS, mv_block->block, 
+    invalid_refs = EPZSSpatialPredictors (p_EPZS, mv_block/*->block*/, 
       list, currMB->list_offset, ref, motion->ref_idx[list], motion->mv[list]);
 
     if (p_Inp->EPZSSpatialMem)
@@ -208,7 +218,7 @@ EPZSIntPelBlockMotionSearch (Macroblock * currMB,     // <--  current Macroblock
           cand = pad_MVs (tmv, mv_block);
 
           //--- set motion cost (cost for motion vector) and check ---
-          mcost = mv_cost (p_Img, lambda_factor, &cand, &pred);
+          mcost = mv_cost (p_Vid, lambda_factor, &cand, &pred);
 
           if (mcost < second_mcost)
           {
@@ -245,6 +255,13 @@ EPZSIntPelBlockMotionSearch (Macroblock * currMB,     // <--  current Macroblock
       {
         *p_motion = tmp;
       }
+
+      *mv = tmp;
+
+     // this condition seems redundant since (*prevSad * 3 < min_mcost)
+      //if ((*prevSad > min_mcost))
+        // *prevSad = min_mcost;
+
       return min_mcost;
     }
 
@@ -265,12 +282,12 @@ EPZSIntPelBlockMotionSearch (Macroblock * currMB,     // <--  current Macroblock
         {
           if ((tmp.mv_x == 0 && tmp.mv_y == 0) 
             || (iabs (tmp.mv_x - mv->mv_x) < (mv_range) && iabs (tmp.mv_y - mv->mv_y) < (mv_range)))
-            searchPatternF = p_Img->sdiamond;
+            searchPatternF = p_Vid->sdiamond;
           else
-            searchPatternF = p_Img->square;
+            searchPatternF = p_Vid->square;
         }
         else if (ref > 0 && blocktype != 1)
-          searchPatternF = p_Img->square;
+          searchPatternF = p_Vid->square;
         else
           searchPatternF = p_EPZS->searchPattern;
       }
@@ -296,7 +313,7 @@ EPZSIntPelBlockMotionSearch (Macroblock * currMB,     // <--  current Macroblock
                 *EPZSPoint = p_EPZS->BlkCount;
                 cand = pad_MVs (tmv, mv_block);
 
-                mcost = mv_cost (p_Img, lambda_factor, &cand, &pred);
+                mcost = mv_cost (p_Vid, lambda_factor, &cand, &pred);
 
                 if (mcost < min_mcost)
                 {
@@ -349,6 +366,9 @@ EPZSIntPelBlockMotionSearch (Macroblock * currMB,     // <--  current Macroblock
             *p_motion = tmp;
           }
 
+          //if ((*prevSad > min_mcost))
+            //*prevSad = min_mcost;
+
           return min_mcost;
         }
 
@@ -368,9 +388,9 @@ EPZSIntPelBlockMotionSearch (Macroblock * currMB,     // <--  current Macroblock
         if ((tmp.mv_x == 0 && tmp.mv_y == 0) || (tmp.mv_x == mv->mv_x && tmp.mv_y == mv->mv_y))
         {
           if (iabs (tmp.mv_x - mv->mv_x) < (mv_range) && iabs (tmp.mv_y - mv->mv_y) < (mv_range))
-            searchPatternF = p_Img->sdiamond;
+            searchPatternF = p_Vid->sdiamond;
           else
-            searchPatternF = p_Img->square;
+            searchPatternF = p_Vid->square;
         }
         else
           searchPatternF = p_EPZS->searchPatternD;
@@ -400,6 +420,7 @@ EPZSIntPelBlockMotionSearch (Macroblock * currMB,     // <--  current Macroblock
   return min_mcost;
 }
 
+
 /*!
 ***********************************************************************
 * \brief
@@ -407,25 +428,25 @@ EPZSIntPelBlockMotionSearch (Macroblock * currMB,     // <--  current Macroblock
 *    AMT/HYC
 ***********************************************************************
 */
-int                             //  ==> minimum motion cost after search
-EPZSIntPelBlockMotionSearchSubMB (Macroblock * currMB,  // <--  current Macroblock
+distblk                                                   //  ==> minimum motion cost after search
+EPZSIntPelBlockMotionSearchSubMB (Macroblock * currMB,    // <--  current Macroblock
                                   MotionVector * pred_mv, // <--  motion vector predictor in sub-pel units
-                                  MEBlock * mv_block, // <--  motion vector information
-                                  int min_mcost,  // <--  minimum motion cost (cost for center or huge value)
-                                  int lambda_factor // <--  lagrangian parameter for determining motion cost
+                                  MEBlock * mv_block,     // <--  motion vector information
+                                  distblk min_mcost,      // <--  minimum motion cost (cost for center or huge value)
+                                  int lambda_factor       // <--  lagrangian parameter for determining motion cost
                                   )
 {
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
   EPZSParameters *p_EPZS = currSlice->p_EPZS;
-  PicMotionParams *motion = &p_Img->enc_picture->motion;
+  PicMotionParams *motion = &p_Vid->enc_picture->motion;
 
   int blocktype = mv_block->blocktype;
   int list = mv_block->list;
   int cur_list = list + currMB->list_offset;
   short ref = mv_block->ref_idx;
-  StorablePicture *ref_picture = p_Img->listX[cur_list][ref];
+  StorablePicture *ref_picture = p_Vid->listX[cur_list][ref];
 
   MotionVector *mv = &mv_block->mv[list];
   MotionVector center = pad_MVs (*mv, mv_block);
@@ -437,10 +458,9 @@ EPZSIntPelBlockMotionSearchSubMB (Macroblock * currMB,  // <--  current Macroblo
   int mapCenter_y = searchRange->max_y - mv->mv_y;
 
   short pic_pix_x2 = mv_block->pos_x2;
-
-  int lambda_dist = (((lambda_factor) * (3)) >> LAMBDA_ACCURACY_BITS);
-  int stopCriterion = p_EPZS->medthres[blocktype] + lambda_dist;
-  int *prevSad = &p_EPZS->distortion[cur_list][blocktype - 1][pic_pix_x2];
+  distblk lambda_dist = weighted_cost(lambda_factor,3);
+  distblk stopCriterion = p_EPZS->medthres[blocktype] + lambda_dist;
+  distblk *prevSad = &p_EPZS->distortion[cur_list][blocktype - 1][pic_pix_x2];
   MotionVector *p_motion = NULL;
 
   EPZSStructure *searchPatternF = p_EPZS->searchPattern;
@@ -466,14 +486,14 @@ EPZSIntPelBlockMotionSearchSubMB (Macroblock * currMB,  // <--  current Macroblo
   p_EPZS->EPZSMap[searchRange->max_y][searchRange->max_x] = p_EPZS->BlkCount;
 
   //--- initialize motion cost (cost for motion vector) and check ---
-  min_mcost = mv_cost (p_Img, lambda_factor, &cand, &pred);
+  min_mcost = mv_cost (p_Vid, lambda_factor, &cand, &pred);
 
   //--- add residual cost to motion cost ---
-  min_mcost += mv_block->computePredFPel (ref_picture, mv_block, INT_MAX, &cand);
+  min_mcost += mv_block->computePredFPel (ref_picture, mv_block, DISTBLK_MAX-min_mcost, &cand);
 
   // Additional threshold for ref>0
   if ((ref > 0 && currSlice->structure == FRAME) && 
-    ((*prevSad < imin (p_EPZS->medthres[blocktype] + lambda_dist, min_mcost)) || (*prevSad * 6 < min_mcost)))
+    ((*prevSad < distblkmin (p_EPZS->medthres[blocktype] + lambda_dist, min_mcost)) || (*prevSad * 6 < min_mcost)))
   {
 #if EPZSREF
     if (p_Inp->EPZSSpatialMem)
@@ -493,12 +513,13 @@ EPZSIntPelBlockMotionSearchSubMB (Macroblock * currMB,  // <--  current Macroblo
   {
     SPoint *p_EPZS_point = p_EPZS->predictor->point;
     Boolean checkMedian = FALSE;
-    int second_mcost = INT_MAX;
+    distblk second_mcost = DISTBLK_MAX;
+    distblk mcost;
     int prednum = 5;
     int conditionEPZS;
 
     MotionVector tmv, tmp2 = {0,0};
-    int pos, mcost;
+    int pos;
 
     stopCriterion = EPZSDetermineStopCriterion (p_EPZS, prevSad, mv_block, lambda_dist);
 
@@ -518,7 +539,7 @@ EPZSIntPelBlockMotionSearchSubMB (Macroblock * currMB,  // <--  current Macroblo
     //! Add Spatial Predictors in predictor list.
     //! Scheme adds zero, left, top-left, top, top-right. Note that top-left adds very little
     //! in terms of performance and could be removed with little penalty if any.
-    EPZSSpatialPredictors (p_EPZS, mv_block->block, list, currMB->list_offset, ref, motion->ref_idx[list], motion->mv[list]);
+    EPZSSpatialPredictors (p_EPZS, mv_block/*->block*/, list, currMB->list_offset, ref, motion->ref_idx[list], motion->mv[list]);
 
     if (p_Inp->EPZSSpatialMem)
       EPZSSpatialMemPredictors (p_EPZS, mv_block, cur_list, &prednum, ref_picture->size_x >> 2);
@@ -547,7 +568,7 @@ EPZSIntPelBlockMotionSearchSubMB (Macroblock * currMB,  // <--  current Macroblo
           cand = pad_MVs (tmv, mv_block);
 
           //--- set motion cost (cost for motion vector) and check ---
-          mcost = mv_cost (p_Img, lambda_factor, &cand, &pred);
+          mcost = mv_cost (p_Vid, lambda_factor, &cand, &pred);
 
           if (mcost < second_mcost)
           {
@@ -620,12 +641,12 @@ EPZSIntPelBlockMotionSearchSubMB (Macroblock * currMB,  // <--  current Macroblo
         {
           if ((blocktype == 7)
             || (tmp.mv_x == 0 && tmp.mv_y == 0) || (iabs (tmp.mv_x - mv->mv_x) < (mv_range) && iabs (tmp.mv_y - mv->mv_y) < (mv_range)))
-            searchPatternF = p_Img->sdiamond;
+            searchPatternF = p_Vid->sdiamond;
           else
-            searchPatternF = p_Img->square;
+            searchPatternF = p_Vid->square;
         }
         else
-          searchPatternF = p_Img->square;
+          searchPatternF = p_Vid->square;
       }
 
       //! center on best predictor
@@ -647,7 +668,7 @@ EPZSIntPelBlockMotionSearchSubMB (Macroblock * currMB,  // <--  current Macroblo
                 EPZSMap[tmv.mv_y][mapCenter_x + tmv.mv_x] = p_EPZS->BlkCount;
                 cand = pad_MVs(tmv, mv_block);
 
-                mcost = mv_cost (p_Img, lambda_factor, &cand, &pred);
+                mcost = mv_cost (p_Vid, lambda_factor, &cand, &pred);
                 if (mcost < min_mcost)
                 {
 
@@ -720,9 +741,9 @@ EPZSIntPelBlockMotionSearchSubMB (Macroblock * currMB,  // <--  current Macroblo
         if ((tmp.mv_x == 0 && tmp.mv_y == 0) || (tmp.mv_x == mv->mv_x && tmp.mv_y == mv->mv_y))
         {
           if ((blocktype == 7) || (iabs (tmp.mv_x - mv->mv_x) < (mv_range) && iabs (tmp.mv_y - mv->mv_y) < (mv_range)))
-            searchPatternF = p_Img->sdiamond;
+            searchPatternF = p_Vid->sdiamond;
           else
-            searchPatternF = p_Img->square;
+            searchPatternF = p_Vid->square;
         }
         else
           searchPatternF = p_EPZS->searchPatternD;
@@ -758,38 +779,36 @@ EPZSIntPelBlockMotionSearchSubMB (Macroblock * currMB,  // <--  current Macroblo
 *    AMT/HYC
 ***********************************************************************
 */
-int                             //  ==> minimum motion cost after search
-EPZSIntBiPredBlockMotionSearch (Macroblock * currMB,  // <--  Current Macroblock
-                                int list, // <--  reference list
+distblk                                                   //  ==> minimum motion cost after search
+EPZSIntBiPredBlockMotionSearch (Macroblock * currMB,      // <--  Current Macroblock
+                                int list,                 // <--  reference list
                                 MotionVector * pred_mv1,  // <--  motion vector predictor in sub-pel units
                                 MotionVector * pred_mv2,  // <--  motion vector predictor in sub-pel units
-                                MotionVector * mv1, // <--> in: search center (x|y) / out: motion vector (x|y) - in pel units
-                                MotionVector * mv2, // <--> in: search center (x|y) 
-                                MEBlock * mv_block, // <--  motion vector information
-                                int search_range, // <--  1-d search range in pel units
-                                int min_mcost,  // <--  minimum motion cost (cost for center or huge value)
-                                int lambda_factor // <--  lagrangian parameter for determining motion cost
+                                MotionVector * mv1,       // <--> in: search center (x|y) / out: motion vector (x|y) - in pel units
+                                MotionVector * mv2,       // <--> in: search center (x|y) 
+                                MEBlock * mv_block,       // <--  motion vector information
+                                int search_range,         // <--  1-d search range in pel units
+                                distblk min_mcost,        // <--  minimum motion cost (cost for center or huge value)
+                                int lambda_factor         // <--  lagrangian parameter for determining motion cost
                                 )
 {
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
   EPZSParameters *p_EPZS = currSlice->p_EPZS;
-  PicMotionParams *motion = &p_Img->enc_picture->motion;
+  PicMotionParams *motion = &p_Vid->enc_picture->motion;
 
   int blocktype = mv_block->blocktype;
   short ref = mv_block->ref_idx;
 
-  StorablePicture *ref_picture1 = p_Img->listX[list + currMB->list_offset][ref];
-  StorablePicture *ref_picture2 = p_Img->listX[(list ^ 1) + currMB->list_offset][0];
+  StorablePicture *ref_picture1 = p_Vid->listX[list + currMB->list_offset][ref];
+  StorablePicture *ref_picture2 = p_Vid->listX[(list ^ 1) + currMB->list_offset][0];
 
   int mapCenter_x = search_range - mv1->mv_x;
   int mapCenter_y = search_range - mv1->mv_y;
-
-  int lambda_dist = (((lambda_factor) * (4)) >> LAMBDA_ACCURACY_BITS);
-  int stopCriterion = p_EPZS->medthres[blocktype] + lambda_dist;
-
-  int *prevSad = &p_EPZS->bi_distortion[list + currMB->list_offset][blocktype - 1][mv_block->pos_x2];
+  distblk lambda_dist = weighted_cost(lambda_factor, 4);
+  distblk stopCriterion = p_EPZS->medthres[blocktype] + lambda_dist;
+  distblk *prevSad = &p_EPZS->bi_distortion[list + currMB->list_offset][blocktype - 1][mv_block->pos_x2];
   EPZSStructure *searchPatternF = p_EPZS->searchPattern;
   uint16 **EPZSMap = &p_EPZS->EPZSMap[mapCenter_y];
 
@@ -813,28 +832,29 @@ EPZSIntBiPredBlockMotionSearch (Macroblock * currMB,  // <--  Current Macroblock
   p_EPZS->EPZSMap[search_range][search_range] = p_EPZS->BlkCount;
 
   //--- initialize motion cost (cost for motion vector) and check ---
-  min_mcost  = mv_cost (p_Img, lambda_factor, &cand1, &pred1);
-  min_mcost += mv_cost (p_Img, lambda_factor, &cand2, &pred2);
+  min_mcost  = mv_cost (p_Vid, lambda_factor, &cand1, &pred1);
+  min_mcost += mv_cost (p_Vid, lambda_factor, &cand2, &pred2);
 
   //--- add residual cost to motion cost ---
-  min_mcost += mv_block->computeBiPredFPel (ref_picture1, ref_picture2, mv_block, INT_MAX, &cand1, &cand2);
+  min_mcost += mv_block->computeBiPredFPel (ref_picture1, ref_picture2, mv_block, DISTBLK_MAX-min_mcost, &cand1, &cand2);
 
   //! If p_EPZS->medthres satisfied, then terminate, otherwise generate Predictors
   if (min_mcost > stopCriterion)
   {
     SPoint *p_EPZS_point = p_EPZS->predictor->point;
     Boolean checkMedian = FALSE;
-    int second_mcost = INT_MAX;
+    distblk second_mcost = DISTBLK_MAX;
+    distblk mcost;
     int prednum = 5;
     MotionVector tmv, tmp2 = { 0, 0 };
-    int pos, mcost;
+    int pos;
 
     stopCriterion = EPZSDetermineStopCriterion (p_EPZS, prevSad, mv_block, lambda_dist);
 
     //! Add Spatial Predictors in predictor list.
     //! Scheme adds zero, left, top-left, top, top-right. Note that top-left adds very little
     //! in terms of performance and could be removed with little penalty if any.
-    EPZSSpatialPredictors (p_EPZS, mv_block->block, list, currMB->list_offset, ref, motion->ref_idx[list], motion->mv[list]);
+    EPZSSpatialPredictors (p_EPZS, mv_block/*->block*/, list, currMB->list_offset, ref, motion->ref_idx[list], motion->mv[list]);
 
     //! Check all predictors
     for (pos = 0; pos < prednum; ++pos)
@@ -850,8 +870,8 @@ EPZSIntBiPredBlockMotionSearch (Macroblock * currMB,  // <--  Current Macroblock
           cand1 = pad_MVs (tmv, mv_block);
 
           //--- set motion cost (cost for motion vector) and check ---
-          mcost  = mv_cost (p_Img, lambda_factor, &cand1, &pred1);
-          mcost += mv_cost (p_Img, lambda_factor, &cand2, &pred2);
+          mcost  = mv_cost (p_Vid, lambda_factor, &cand1, &pred1);
+          mcost += mv_cost (p_Vid, lambda_factor, &cand2, &pred2);
 
           if (mcost >= second_mcost)
             continue;
@@ -896,12 +916,12 @@ EPZSIntBiPredBlockMotionSearch (Macroblock * currMB,  // <--  Current Macroblock
         if ((min_mcost < stopCriterion + ((4 * p_EPZS->medthres[blocktype]) >> 1)))
         {
           if ((tmp.mv_x == 0 && tmp.mv_y == 0) || (iabs (tmp.mv_x - mv1->mv_x) < (mv_range) && iabs (tmp.mv_y - mv1->mv_y) < (mv_range)))
-            searchPatternF = p_Img->sdiamond;
+            searchPatternF = p_Vid->sdiamond;
           else
-            searchPatternF = p_Img->square;
+            searchPatternF = p_Vid->square;
         }
         else if (blocktype > 5 || (ref > 0 && blocktype != 1))
-          searchPatternF = p_Img->square;
+          searchPatternF = p_Vid->square;
         else
           searchPatternF = p_EPZS->searchPattern;
       }
@@ -925,8 +945,8 @@ EPZSIntBiPredBlockMotionSearch (Macroblock * currMB,  // <--  Current Macroblock
                 EPZSMap[tmv.mv_y][mapCenter_x + tmv.mv_x] = p_EPZS->BlkCount;
                 cand1 = pad_MVs (tmv, mv_block);
 
-                mcost  = mv_cost (p_Img, lambda_factor, &cand1, &pred1);
-                mcost += mv_cost (p_Img, lambda_factor, &cand2, &pred2);
+                mcost  = mv_cost (p_Vid, lambda_factor, &cand1, &pred1);
+                mcost += mv_cost (p_Vid, lambda_factor, &cand2, &pred2);
 
                 if (mcost < min_mcost)
                 {
@@ -980,9 +1000,9 @@ EPZSIntBiPredBlockMotionSearch (Macroblock * currMB,  // <--  Current Macroblock
         if ((tmp.mv_x == 0 && tmp.mv_y == 0) || (tmp.mv_x == mv1->mv_x && tmp.mv_y == mv1->mv_y))
         {
           if (iabs (tmp.mv_x - mv1->mv_x) < (mv_range) && iabs (tmp.mv_y - mv1->mv_y) < (mv_range))
-            searchPatternF = p_Img->sdiamond;
+            searchPatternF = p_Vid->sdiamond;
           else
-            searchPatternF = p_Img->square;
+            searchPatternF = p_Vid->square;
         }
         else
           searchPatternF = p_EPZS->searchPatternD;

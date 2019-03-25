@@ -68,12 +68,12 @@ static void intra_chroma_DC_all(imgpel **curr_img, int up_avail, int left_avail,
 void intrapred_chroma(Macroblock *currMB, int uv)
 {
   Slice *currSlice = currMB->p_Slice;
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   int i,j, ii, jj;
-  StorablePicture *dec_picture = p_Img->dec_picture;
+  StorablePicture *dec_picture = p_Vid->dec_picture;
   imgpel **imgUV = dec_picture->imgUV[uv];
   imgpel **mb_pred = currSlice->mb_pred[uv + 1];
-  int     max_imgpel_value = p_Img->max_imgpel_value_comp[uv + 1];
+  int     max_imgpel_value = p_Vid->max_pel_value_comp[uv + 1];
 
   int ih, iv, ib, ic, iaa;
 
@@ -93,19 +93,19 @@ void intrapred_chroma(Macroblock *currMB, int uv)
 
   int up_avail, left_avail[2], left_up_avail;
 
-  int cr_MB_x = p_Img->mb_cr_size_x;
-  int cr_MB_y = p_Img->mb_cr_size_y;
+  int cr_MB_x = p_Vid->mb_cr_size_x;
+  int cr_MB_y = p_Vid->mb_cr_size_y;
   int cr_MB_y2 = (cr_MB_y >> 1);
   int cr_MB_x2 = (cr_MB_x >> 1);
 
   for (i=0; i < cr_MB_y + 1 ; ++i)
   {
-    p_Img->getNeighbour(currMB, -1, i-1, p_Img->mb_size[IS_CHROMA], &left[i]);
+    p_Vid->getNeighbour(currMB, -1, i-1, p_Vid->mb_size[IS_CHROMA], &left[i]);
   }
 
-  p_Img->getNeighbour(currMB, 0, -1, p_Img->mb_size[IS_CHROMA], &up);
+  p_Vid->getNeighbour(currMB, 0, -1, p_Vid->mb_size[IS_CHROMA], &up);
 
-  if (!p_Img->active_pps->constrained_intra_pred_flag)
+  if (!p_Vid->active_pps->constrained_intra_pred_flag)
   {
     up_avail      = up.available;
     left_avail[0] = left_avail[1] = left[1].available;
@@ -113,14 +113,14 @@ void intrapred_chroma(Macroblock *currMB, int uv)
   }
   else
   {
-    up_avail = up.available ? p_Img->intra_block[up.mb_addr] : 0;
+    up_avail = up.available ? p_Vid->intra_block[up.mb_addr] : 0;
     for (i=0, left_avail[0] = 1; i < cr_MB_y2;++i)
-      left_avail[0]  &= left[i + 1].available ? p_Img->intra_block[left[i + 1].mb_addr]: 0;
+      left_avail[0]  &= left[i + 1].available ? p_Vid->intra_block[left[i + 1].mb_addr]: 0;
 
     for (i = cr_MB_y2, left_avail[1] = 1; i<cr_MB_y;++i)
-      left_avail[1]  &= left[i + 1].available ? p_Img->intra_block[left[i + 1].mb_addr]: 0;
+      left_avail[1]  &= left[i + 1].available ? p_Vid->intra_block[left[i + 1].mb_addr]: 0;
 
-    left_up_avail = left[0].available ? p_Img->intra_block[left[0].mb_addr]: 0;
+    left_up_avail = left[0].available ? p_Vid->intra_block[left[0].mb_addr]: 0;
   }
 
   switch (currMB->c_ipred_mode)
@@ -129,14 +129,14 @@ void intrapred_chroma(Macroblock *currMB, int uv)
     // DC prediction
     // Note that unlike what is stated in many presentations and papers, this mode does not operate
     // the same way as I_16x16 DC prediction.
-    for(b8 = 0; b8 < (p_Img->num_uv_blocks) ;++b8)
+    for(b8 = 0; b8 < (p_Vid->num_uv_blocks) ;++b8)
     {
       for (b4 = 0; b4 < 4; ++b4)
       {
         blk_y = subblk_offset_y[yuv][b8][b4];
         blk_x = subblk_offset_x[yuv][b8][b4];
 
-        pred = p_Img->dc_pred_value_comp[1];
+        pred = p_Vid->dc_pred_value_comp[1];
 
         //===== get prediction value =====
         switch (block_pos[yuv][b8][b4])

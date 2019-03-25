@@ -153,10 +153,10 @@ extern void init_rdoq_slice(Slice *currSlice);
 /*----------CAVLC related functions----------*/
 extern void est_RunLevel_CAVLC(Macroblock *currMB, levelDataStruct *levelData, int *levelTrellis, int block_type, 
                         int b8, int b4, int coeff_num, double lambda);
-extern int est_CAVLC_bits     (ImageParameters *p_Img, int level_to_enc[16], int sign_to_enc[16], int nnz, int block_type);
+extern int est_CAVLC_bits     (VideoParameters *p_Vid, int level_to_enc[16], int sign_to_enc[16], int nnz, int block_type);
 
 /*----------CABAC related functions----------*/
-extern void precalculate_unary_exp_golomb_level(ImageParameters *p_Img);
+extern void precalculate_unary_exp_golomb_level(VideoParameters *p_Vid);
 extern int est_unary_exp_golomb_level_bits(unsigned int symbol, int bits0, int bits1);
 extern int est_exp_golomb_encode_eq_prob  (unsigned int symbol);
 
@@ -194,8 +194,8 @@ extern int init_trellis_data_DC_cr_CABAC(Macroblock *currMB, int **tblock, int q
 
 extern void RDOQ_update_mode    (Slice *currSlice, RD_PARAMS *enc_mb);
 extern void copy_rddata_trellis (Macroblock *currMB, RD_DATA *dest, RD_DATA *src);
-extern void updateMV_mp         (Macroblock *currMB, int *m_cost, short ref, int list, int h, int v, int blocktype, int block8x8);
-extern void trellis_coding      (Macroblock *currMB, Boolean prev_recode_mb);
+extern void updateMV_mp         (Macroblock *currMB, distblk *m_cost, short ref, int list, int h, int v, int blocktype, int block8x8);
+extern void trellis_coding      (Macroblock *currMB);
 extern void get_dQP_table       (Slice *currSlice);
 
 #endif  // _RDOQ_H_

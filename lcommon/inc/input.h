@@ -14,11 +14,11 @@
 #define _INPUT_H_
 
 extern int testEndian(void);
-extern void initInput(ImageParameters *p_Img, FrameFormat *source, FrameFormat *output);
-extern void AllocateFrameMemory (ImageParameters *p_Img, InputParameters *p_Inp, FrameFormat *source);
-extern void DeleteFrameMemory (ImageParameters *p_Img);
+extern void initInput(VideoParameters *p_Vid, FrameFormat *source, FrameFormat *output);
+extern void AllocateFrameMemory (VideoParameters *p_Vid, InputParameters *p_Inp, FrameFormat *source);
+extern void DeleteFrameMemory (VideoParameters *p_Vid);
 
-extern int ReadOneFrame (ImageParameters *p_Img, InputParameters *p_Inp, VideoDataFile *input_file, int FrameNoInFile, int HeaderSize, FrameFormat *source, FrameFormat *output, imgpel **pImage[3]);
+extern int ReadOneFrame (VideoParameters *p_Vid, VideoDataFile *input_file, int FrameNoInFile, int HeaderSize, FrameFormat *source, FrameFormat *output, imgpel **pImage[3]);
 extern void PaddAutoCropBorders( FrameFormat output, int img_size_x, int img_size_y, int img_size_x_cr, int img_size_y_cr, imgpel **pImage[3]);
 
 #endif

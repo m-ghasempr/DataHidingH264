@@ -20,7 +20,7 @@
 #define _IMG_DIST_SSIM_H_
 #include "img_distortion.h"
 
-extern void find_ssim (ImageParameters *p_Img, InputParameters *p_Inp, ImageStructure *imgREF, ImageStructure *imgSRC, DistMetric metricSSIM[3]);
+extern void find_ssim (VideoParameters *p_Vid, InputParameters *p_Inp, ImageStructure *imgREF, ImageStructure *imgSRC, DistMetric metricSSIM[3]);
 
 #endif
 

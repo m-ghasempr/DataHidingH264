@@ -18,6 +18,7 @@
 
 #include "global.h"
 #include "block.h"
+#include "blk_prediction.h"
 #include "image.h"
 #include "mb_access.h"
 #include "transform.h"
@@ -35,25 +36,12 @@ void itrans4x4(Macroblock *currMB,   //!< current macroblock
                int ioff,             //!< index to 4x4 block
                int joff)             //!< index to 4x4 block
 {
-  int i,j;
-
   Slice *currSlice = currMB->p_Slice;
-  ImageParameters *p_Img = currMB->p_Img;
-  int max_imgpel_value = p_Img->max_imgpel_value_comp[pl];
-
-  imgpel **mb_pred = currSlice->mb_pred[pl];
-  imgpel **mb_rec  = currSlice->mb_rec[pl];
   int    **mb_rres = currSlice->mb_rres[pl];
 
   inverse4x4(currSlice->cof[pl],mb_rres,joff,ioff);
 
-  for (j = joff; j < joff + BLOCK_SIZE; ++j)
-  {
-    for (i = ioff; i < ioff + BLOCK_SIZE; ++i)
-    {      
-      mb_rec[j][i] = (imgpel) iClip1(max_imgpel_value, mb_pred[j][i] + rshift_rnd_sf(mb_rres[j][i], DQ_BITS));      
-    }
-  }
+  sample_reconstruct (&currSlice->mb_rec[pl][joff], &currSlice->mb_pred[pl][joff], &mb_rres[joff], ioff, ioff, BLOCK_SIZE, BLOCK_SIZE, currMB->p_Vid->max_pel_value_comp[pl], DQ_BITS);
 }
 
 /*!
@@ -70,20 +58,19 @@ void itrans4x4_ls(Macroblock *currMB,   //!< current macroblock
   int i,j;
 
   Slice *currSlice = currMB->p_Slice;
-  ImageParameters *p_Img = currMB->p_Img;
-  int max_imgpel_value = p_Img->max_imgpel_value_comp[pl];
+  VideoParameters *p_Vid = currMB->p_Vid;
+  int max_imgpel_value = p_Vid->max_pel_value_comp[pl];
 
   imgpel **mb_pred = currSlice->mb_pred[pl];
   imgpel **mb_rec  = currSlice->mb_rec[pl];
   int    **mb_rres = currSlice->mb_rres [pl];
 
-  inverse4x4(currSlice->cof[pl],mb_rres,joff,ioff);
+  inverse4x4(currSlice->cof[pl], mb_rres, joff, ioff);
 
   for (j = joff; j < joff + BLOCK_SIZE; ++j)
   {
     for (i = ioff; i < ioff + BLOCK_SIZE; ++i)
     {      
-      //mb_rec[j][i] = (imgpel) iClip1(max_imgpel_value, rshift_rnd_sf((mb_rres[j][i] + ((long)mb_pred[j][i] << DQ_BITS)), DQ_BITS));
       mb_rec[j][i] = (imgpel) iClip1(max_imgpel_value, mb_pred[j][i] + rshift_rnd_sf(mb_rres[j][i], DQ_BITS));
     }
   }
@@ -104,13 +91,12 @@ void Inv_Residual_trans_4x4(Macroblock *currMB,   //!< current macroblock
   int i,j;
   int temp[4][4];
   Slice *currSlice = currMB->p_Slice;
-  ImageParameters *p_Img = currMB->p_Img;
   imgpel **mb_pred = currSlice->mb_pred[pl];
   imgpel **mb_rec  = currSlice->mb_rec[pl];
   int    **mb_rres = currSlice->mb_rres[pl];
   int    **cof     = currSlice->cof[pl];
 
-  if(p_Img->ipmode_DPCM == VERT_PRED)
+  if(currMB->ipmode_DPCM == VERT_PRED)
   {
     for(i=0; i<4; ++i)
     {
@@ -128,7 +114,7 @@ void Inv_Residual_trans_4x4(Macroblock *currMB,   //!< current macroblock
       mb_rres[joff + 3][ioff + i]=temp[3][i];
     }
   }
-  else if(p_Img->ipmode_DPCM==HOR_PRED)
+  else if(currMB->ipmode_DPCM == HOR_PRED)
   {
     for(j=0; j<4; ++j)
     {
@@ -175,14 +161,13 @@ void Inv_Residual_trans_4x4(Macroblock *currMB,   //!< current macroblock
 void Inv_Residual_trans_8x8(Macroblock *currMB, ColorPlane pl, int ioff,int joff)
 {
   Slice *currSlice = currMB->p_Slice;
-  ImageParameters *p_Img = currMB->p_Img;
   int i, j;
   int temp[8][8];
   imgpel **mb_pred = currSlice->mb_pred[pl];
   imgpel **mb_rec  = currSlice->mb_rec[pl];
   int    **mb_rres = currSlice->mb_rres[pl];
 
-  if(p_Img->ipmode_DPCM == VERT_PRED)
+  if(currMB->ipmode_DPCM == VERT_PRED)
   {
     for(i=0; i<8; ++i)
     {
@@ -207,7 +192,7 @@ void Inv_Residual_trans_8x8(Macroblock *currMB, ColorPlane pl, int ioff,int joff
       mb_rres[joff+7][ioff+i]=temp[7][i];
     }
   }
-  else if(p_Img->ipmode_DPCM == HOR_PRED)//HOR_PRED
+  else if(currMB->ipmode_DPCM == HOR_PRED)//HOR_PRED
   {
     for(i=0; i<8; ++i)
     {
@@ -252,18 +237,18 @@ void itrans_2(Macroblock *currMB,    //!< current macroblock
               ColorPlane pl)         //!< used color plane
 {
   Slice *currSlice = currMB->p_Slice;
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   int i,j;
 
-  int transform_pl = IS_INDEPENDENT(p_Img) ? PLANE_Y /*p_Img->colour_plane_id*/ : pl;
+  int transform_pl = IS_INDEPENDENT(p_Vid) ? PLANE_Y /*p_Vid->colour_plane_id*/ : pl;
   int **cof = currSlice->cof[transform_pl];
   int qp_scaled = currMB->qp_scaled[pl];
 
-  int qp_per = p_Img->qp_per_matrix[ qp_scaled ];
-  int qp_rem = p_Img->qp_rem_matrix[ qp_scaled ];      
+  int qp_per = p_Vid->qp_per_matrix[ qp_scaled ];
+  int qp_rem = p_Vid->qp_rem_matrix[ qp_scaled ];      
 
   int invLevelScale = currSlice->InvLevelScale4x4_Intra[pl][qp_rem][0][0];
-  int    **M4;
+  int **M4;
   get_mem2Dint(&M4, BLOCK_SIZE, BLOCK_SIZE);
   
   // horizontal
@@ -295,24 +280,24 @@ void itrans_sp(Macroblock *currMB,   //!< current macroblock
                int ioff,             //!< index to 4x4 block
                int joff)             //!< index to 4x4 block
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   Slice *currSlice = currMB->p_Slice;
   int i,j;  
   int ilev, icof;
 
-  int qp = (currSlice->slice_type == SI_SLICE) ? currSlice->qs : p_Img->qp;
-  int qp_per = p_Img->qp_per_matrix[ qp ];
-  int qp_rem = p_Img->qp_rem_matrix[ qp ];
+  int qp = (currSlice->slice_type == SI_SLICE) ? currSlice->qs : p_Vid->qp;
+  int qp_per = p_Vid->qp_per_matrix[ qp ];
+  int qp_rem = p_Vid->qp_rem_matrix[ qp ];
 
-  int qp_per_sp = p_Img->qp_per_matrix[ currSlice->qs ];
-  int qp_rem_sp = p_Img->qp_rem_matrix[ currSlice->qs ];
+  int qp_per_sp = p_Vid->qp_per_matrix[ currSlice->qs ];
+  int qp_rem_sp = p_Vid->qp_rem_matrix[ currSlice->qs ];
   int q_bits_sp = Q_BITS + qp_per_sp;
 
   imgpel **mb_pred = currSlice->mb_pred[pl];
   imgpel **mb_rec  = currSlice->mb_rec[pl];
   int    **mb_rres = currSlice->mb_rres[pl];
   int    **cof     = currSlice->cof[pl];
-  int max_imgpel_value = p_Img->max_imgpel_value_comp[pl];
+  int max_imgpel_value = p_Vid->max_pel_value_comp[pl];
 
   const int (*InvLevelScale4x4)  [4] = dequant_coef[qp_rem];
   const int (*InvLevelScale4x4SP)[4] = dequant_coef[qp_rem_sp];  
@@ -326,7 +311,7 @@ void itrans_sp(Macroblock *currMB,   //!< current macroblock
 
   forward4x4(PBlock, PBlock, 0, 0);
 
-  if(p_Img->sp_switch || currSlice->slice_type==SI_SLICE)
+  if(p_Vid->sp_switch || currSlice->slice_type==SI_SLICE)
   {    
     for (j=0;j<BLOCK_SIZE;++j)
     {
@@ -355,7 +340,7 @@ void itrans_sp(Macroblock *currMB,   //!< current macroblock
         ilev = PBlock[j][i] + ((icof * InvLevelScale4x4[j][i] * A[j][i] <<  qp_per) >> 6);
         ilev  = isign(ilev) * rshift_rnd_sf(iabs(ilev) * quant_coef[qp_rem_sp][j][i], q_bits_sp);
         //cof[joff + j][ioff + i] = ilev * InvLevelScale4x4SP[j][i] << qp_per_sp;
-        cof[joff + j][ioff + i] = ilev * dequant_coef[qp_rem_sp][j][i] << qp_per_sp;
+        cof[joff + j][ioff + i] = ilev * InvLevelScale4x4SP[j][i] << qp_per_sp;
       }
     }
   }
@@ -377,7 +362,7 @@ void itrans_sp(Macroblock *currMB,   //!< current macroblock
 void itrans_sp_cr(Macroblock *currMB, int uv)
 {
   Slice *currSlice = currMB->p_Slice;
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   int i,j,ilev, icof, n2,n1;
   int mp1[BLOCK_SIZE];
   int qp_per,qp_rem;
@@ -389,11 +374,11 @@ void itrans_sp_cr(Macroblock *currMB, int uv)
   get_mem2Dint(&PBlock, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
 
 
-  qp_per    = p_Img->qp_per_matrix[ ((p_Img->qp < 0 ? p_Img->qp : QP_SCALE_CR[p_Img->qp]))];
-  qp_rem    = p_Img->qp_rem_matrix[ ((p_Img->qp < 0 ? p_Img->qp : QP_SCALE_CR[p_Img->qp]))];
+  qp_per    = p_Vid->qp_per_matrix[ ((p_Vid->qp < 0 ? p_Vid->qp : QP_SCALE_CR[p_Vid->qp]))];
+  qp_rem    = p_Vid->qp_rem_matrix[ ((p_Vid->qp < 0 ? p_Vid->qp : QP_SCALE_CR[p_Vid->qp]))];
 
-  qp_per_sp = p_Img->qp_per_matrix[ ((currSlice->qs < 0 ? currSlice->qs : QP_SCALE_CR[currSlice->qs]))];
-  qp_rem_sp = p_Img->qp_rem_matrix[ ((currSlice->qs < 0 ? currSlice->qs : QP_SCALE_CR[currSlice->qs]))];
+  qp_per_sp = p_Vid->qp_per_matrix[ ((currSlice->qs < 0 ? currSlice->qs : QP_SCALE_CR[currSlice->qs]))];
+  qp_rem_sp = p_Vid->qp_rem_matrix[ ((currSlice->qs < 0 ? currSlice->qs : QP_SCALE_CR[currSlice->qs]))];
   q_bits_sp = Q_BITS + qp_per_sp;  
 
   if (currSlice->slice_type == SI_SLICE)
@@ -402,18 +387,18 @@ void itrans_sp_cr(Macroblock *currMB, int uv)
     qp_rem = qp_rem_sp;
   }
 
-  for (j=0; j < p_Img->mb_cr_size_y; ++j)
+  for (j=0; j < p_Vid->mb_cr_size_y; ++j)
   {
-    for (i=0; i < p_Img->mb_cr_size_x; ++i)
+    for (i=0; i < p_Vid->mb_cr_size_x; ++i)
     {
       PBlock[j][i] = mb_pred[j][i];
       mb_pred[j][i] = 0;
     }
   }
 
-  for (n2=0; n2 < p_Img->mb_cr_size_y; n2 += BLOCK_SIZE)
+  for (n2=0; n2 < p_Vid->mb_cr_size_y; n2 += BLOCK_SIZE)
   {
-    for (n1=0; n1 < p_Img->mb_cr_size_x; n1 += BLOCK_SIZE)
+    for (n1=0; n1 < p_Vid->mb_cr_size_x; n1 += BLOCK_SIZE)
     {
       forward4x4(PBlock, PBlock, n2, n1);
     }
@@ -425,7 +410,7 @@ void itrans_sp_cr(Macroblock *currMB, int uv)
   mp1[2] = (PBlock[0][0] + PBlock[4][0] - PBlock[0][4] - PBlock[4][4]);
   mp1[3] = (PBlock[0][0] - PBlock[4][0] - PBlock[0][4] + PBlock[4][4]);
 
-  if (p_Img->sp_switch || currSlice->slice_type == SI_SLICE)  
+  if (p_Vid->sp_switch || currSlice->slice_type == SI_SLICE)  
   {        
     for (n2=0; n2 < 2; ++n2 )
     {
@@ -440,9 +425,9 @@ void itrans_sp_cr(Macroblock *currMB, int uv)
       }
     }
 
-    for (n2 = 0; n2 < p_Img->mb_cr_size_y; n2 += BLOCK_SIZE)
+    for (n2 = 0; n2 < p_Vid->mb_cr_size_y; n2 += BLOCK_SIZE)
     {
-      for (n1 = 0; n1 < p_Img->mb_cr_size_x; n1 += BLOCK_SIZE)
+      for (n1 = 0; n1 < p_Vid->mb_cr_size_x; n1 += BLOCK_SIZE)
       {
         for (j = 0; j < BLOCK_SIZE; ++j)
         {
@@ -475,9 +460,9 @@ void itrans_sp_cr(Macroblock *currMB, int uv)
       }
     }
 
-    for (n2 = 0; n2 < p_Img->mb_cr_size_y; n2 += BLOCK_SIZE)
+    for (n2 = 0; n2 < p_Vid->mb_cr_size_y; n2 += BLOCK_SIZE)
     {
-      for (n1 = 0; n1 < p_Img->mb_cr_size_x; n1 += BLOCK_SIZE)
+      for (n1 = 0; n1 < p_Vid->mb_cr_size_x; n1 += BLOCK_SIZE)
       {
         for (j = 0; j< BLOCK_SIZE; ++j)
         {
@@ -509,9 +494,9 @@ void itrans_sp_cr(Macroblock *currMB, int uv)
 void iMBtrans4x4(Macroblock *currMB, ColorPlane pl, int smb)
 {
   Slice *currSlice = currMB->p_Slice;
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
 
-  StorablePicture *dec_picture = p_Img->dec_picture;
+  StorablePicture *dec_picture = p_Vid->dec_picture;
   int jj, ii;
   int block8x8;
   int k;  
@@ -541,8 +526,8 @@ void iMBtrans4x4(Macroblock *currMB, ColorPlane pl, int smb)
 void iMBtrans8x8(Macroblock *currMB, ColorPlane pl)
 {
   Slice *currSlice = currMB->p_Slice;
-  ImageParameters *p_Img = currMB->p_Img;
-  StorablePicture *dec_picture = p_Img->dec_picture;
+  VideoParameters *p_Vid = currMB->p_Vid;
+  StorablePicture *dec_picture = p_Vid->dec_picture;
   imgpel **curr_img = pl ? dec_picture->imgUV[pl - 1]: dec_picture->imgY;
 
   int block8x8;
@@ -561,17 +546,17 @@ void iMBtrans8x8(Macroblock *currMB, ColorPlane pl)
   copy_image_data_16x16(&curr_img[currMB->pix_y], currSlice->mb_rec[pl], currMB->pix_x, 0);
 }
 
-void iTransform(Macroblock *currMB, ColorPlane pl, int need_4x4_transform, int smb)
+void iTransform(Macroblock *currMB, ColorPlane pl, int smb)
 {
   Slice *currSlice = currMB->p_Slice;
-  ImageParameters *p_Img = currMB->p_Img;
-  StorablePicture *dec_picture = p_Img->dec_picture;
+  VideoParameters *p_Vid = currMB->p_Vid;
+  StorablePicture *dec_picture = p_Vid->dec_picture;
   imgpel **curr_img;
   int uv = pl-1; 
 
   if ((currMB->cbp & 15) != 0 || smb)
   {
-    if(need_4x4_transform) // 4x4 inverse transform
+    if(currMB->luma_transform_size_8x8_flag == 0) // 4x4 inverse transform
     {
       iMBtrans4x4(currMB, pl, smb); 
     }
@@ -604,7 +589,7 @@ void iTransform(Macroblock *currMB, ColorPlane pl, int need_4x4_transform, int s
 
       if (!smb && (currMB->cbp>>4))
       {
-        for (b8 = 0; b8 < (p_Img->num_uv_blocks); ++b8)
+        for (b8 = 0; b8 < (p_Vid->num_uv_blocks); ++b8)
         {
           for(b4 = 0; b4 < 4; ++b4)
           {
@@ -615,25 +600,25 @@ void iTransform(Macroblock *currMB, ColorPlane pl, int need_4x4_transform, int s
           }
         }
 
-        copy_image_data(curUV, mb_rec, currMB->pix_c_x, 0, p_Img->mb_size[1][0], p_Img->mb_size[1][1]);
+        copy_image_data(curUV, mb_rec, currMB->pix_c_x, 0, p_Vid->mb_size[1][0], p_Vid->mb_size[1][1]);
       }
       else if (smb)
       {
         itrans_sp_cr(currMB, uv);
 
-        for (joff = 0; joff < p_Img->mb_cr_size_y; joff += BLOCK_SIZE)
+        for (joff = 0; joff < p_Vid->mb_cr_size_y; joff += BLOCK_SIZE)
         {
-          for(ioff = 0; ioff < p_Img->mb_cr_size_x ;ioff += BLOCK_SIZE)
+          for(ioff = 0; ioff < p_Vid->mb_cr_size_x ;ioff += BLOCK_SIZE)
           {
             currMB->itrans_4x4(currMB, (ColorPlane) (uv + 1), ioff, joff);
           }
         }
 
-        copy_image_data(curUV, mb_rec, currMB->pix_c_x, 0, p_Img->mb_size[1][0], p_Img->mb_size[1][1]);
+        copy_image_data(curUV, mb_rec, currMB->pix_c_x, 0, p_Vid->mb_size[1][0], p_Vid->mb_size[1][1]);
       }
       else 
       {
-        copy_image_data(curUV, currSlice->mb_pred[uv + 1], currMB->pix_c_x, 0, p_Img->mb_size[1][0], p_Img->mb_size[1][1]);
+        copy_image_data(curUV, currSlice->mb_pred[uv + 1], currMB->pix_c_x, 0, p_Vid->mb_size[1][0], p_Vid->mb_size[1][1]);
       }
     }
   }

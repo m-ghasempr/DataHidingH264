@@ -1,7 +1,7 @@
 
 /*!
  *************************************************************************************
- * \file img_distortion.c
+ * \file cconv_yuv2rgb.c
  *
  * \brief
  *    YUV to RGB color conversion
@@ -34,48 +34,48 @@ static const float K3 = 0.71414f;
 static const float K4 = 1.772f;
 #endif
 
-int create_RGB_memory(ImageParameters *p_Img)
+int create_RGB_memory(VideoParameters *p_Vid)
 {
   int memory_size = 0;
   int j;
   for( j = 0; j < 3; j++ )
   {
-    memory_size += get_mem2Dpel (&p_Img->imgRGB_src.data[j], p_Img->height, p_Img->width);
+    memory_size += get_mem2Dpel (&p_Vid->imgRGB_src.data[j], p_Vid->height, p_Vid->width);
   }
   for( j = 0; j < 3; j++ )
   {
-    memory_size += get_mem2Dpel (&p_Img->imgRGB_ref.data[j], p_Img->height, p_Img->width);
+    memory_size += get_mem2Dpel (&p_Vid->imgRGB_ref.data[j], p_Vid->height, p_Vid->width);
   }
   
   return memory_size;
 }
 
-void delete_RGB_memory(ImageParameters *p_Img)
+void delete_RGB_memory(VideoParameters *p_Vid)
 {
   int i;
   for( i = 0; i < 3; i++ )
   {
-    free_mem2Dpel(p_Img->imgRGB_src.data[i]);
+    free_mem2Dpel(p_Vid->imgRGB_src.data[i]);
   }
   for( i = 0; i < 3; i++ )
   {
-    free_mem2Dpel(p_Img->imgRGB_ref.data[i]);
+    free_mem2Dpel(p_Vid->imgRGB_ref.data[i]);
   }
 }
 
-void init_YUVtoRGB(ImageParameters *p_Img, InputParameters *p_Inp)
+void init_YUVtoRGB(VideoParameters *p_Vid, InputParameters *p_Inp)
 { 
   float conv_scale = (float) (65536.0f);
 
-  p_Img->wka0 = float2int(  conv_scale * K0);
-  p_Img->wka1 = float2int(  conv_scale * K1);
-  p_Img->wka2 = float2int( -conv_scale * K2);
-  p_Img->wka3 = float2int( -conv_scale * K3);
-  p_Img->wka4 = float2int(  conv_scale * K4);
+  p_Vid->wka0 = float2int(  conv_scale * K0);
+  p_Vid->wka1 = float2int(  conv_scale * K1);
+  p_Vid->wka2 = float2int( -conv_scale * K2);
+  p_Vid->wka3 = float2int( -conv_scale * K3);
+  p_Vid->wka4 = float2int(  conv_scale * K4);
 
 #ifdef YUV2RGB_YOFFSET
-  p_Img->offset_y = OFFSET_Y << (p_Inp->output.bit_depth[0] - 8);
-  p_Img->offset_cr = 1 << (p_Inp->output.bit_depth[0] - 1);
+  p_Vid->offset_y = OFFSET_Y << (p_Inp->output.bit_depth[0] - 8);
+  p_Vid->offset_cr = 1 << (p_Inp->output.bit_depth[0] - 1);
 #endif
 }
 
@@ -88,7 +88,7 @@ void init_YUVtoRGB(ImageParameters *p_Img, InputParameters *p_Inp)
 *    Method not support for 4:0:0 content
 *************************************************************************************
 */
-void YUVtoRGB(ImageParameters *p_Img, ImageStructure *YUV, ImageStructure *RGB)
+void YUVtoRGB(VideoParameters *p_Vid, ImageStructure *YUV, ImageStructure *RGB)
 {
   int i, j, j_cr, i_cr;
   int sy, su, sv;
@@ -102,7 +102,7 @@ void YUVtoRGB(ImageParameters *p_Img, ImageStructure *YUV, ImageStructure *RGB)
   // Color conversion
   for (j = 0; j < height; j++)
   {
-    j_cr = j >> p_Img->shift_cr_y;
+    j_cr = j >> p_Vid->shift_cr_y;
     Y = YUV->data[0][j];
     U = YUV->data[1][j_cr];
     V = YUV->data[2][j_cr];
@@ -112,19 +112,19 @@ void YUVtoRGB(ImageParameters *p_Img, ImageStructure *YUV, ImageStructure *RGB)
 
     for (i = 0; i < width; i++)
     {
-      i_cr = i >> p_Img->shift_cr_x;
+      i_cr = i >> p_Vid->shift_cr_x;
 
-      su = U[i_cr] - p_Img->offset_cr;
-      sv = V[i_cr] - p_Img->offset_cr;
+      su = U[i_cr] - p_Vid->offset_cr;
+      sv = V[i_cr] - p_Vid->offset_cr;
 
-      wruv = p_Img->wka1 * sv;
-      wguv = p_Img->wka2 * su + p_Img->wka3 * sv;
-      wbuv = p_Img->wka4 * su;
+      wruv = p_Vid->wka1 * sv;
+      wguv = p_Vid->wka2 * su + p_Vid->wka3 * sv;
+      wbuv = p_Vid->wka4 * su;
 
 #ifdef YUV2RGB_YOFFSET // Y offset value of 16 is considered
-      sy = p_Img->wka0 * (Y[i] - p_Img->offset_y);
+      sy = p_Vid->wka0 * (Y[i] - p_Vid->offset_y);
 #else
-      sy = p_Img->wka0 * Y[i];
+      sy = p_Vid->wka0 * Y[i];
 #endif
 
       R[i] = (imgpel) iClip1( max_value, rshift_rnd(sy + wruv, 16));

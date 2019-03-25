@@ -21,20 +21,19 @@
 #ifndef _DEFINES_H_
 #define _DEFINES_H_
 
-#include "typedefs.h"
-
 #if defined _DEBUG
 # define TRACE           0      //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
 #else
 # define TRACE           0      //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
 #endif
 
-#define JM                  "16 (FRExt)"
-#define VERSION             "16.0"
+#define JM                  "16.1 (FRExt)"
+#define VERSION             "16.1"
 #define EXT_VERSION         "(FRExt)"
 
 #define GET_METIME                1    //!< Enables or disables ME computation time
 #define DUMP_DPB                  0    //!< Dump DPB info for debug purposes
+#define PRINTREFLIST              0    //!< Print ref list info for debug purposes
 #define IMGTYPE                   1    //!< Define imgpel size type. 0 implies byte (cannot handle >8 bit depths) and 1 implies unsigned short
 #define ENABLE_FIELD_CTX          1    //!< Enables field context types for CABAC. If disabled, results in speedup for progressive content.
 #define ENABLE_HIGH444_CTX        1    //!< Enables High 444 context types for CABAC. If disabled, results in speedup of non High444 profile encodings.
@@ -45,9 +44,10 @@
 #define USE_RND_COST              0    //!< Perform ME RD decision using a rounding estimate of the motion cost
 #define JM_INT_DIVIDE             1
 #define JM_MEM_DISTORTION         0
-#define JCOST_CALC_SCALEUP        0    //!< 1: J = (D<<LAMBDA_ACCURACY_BITS)+Lambda*R; 0: J = D + ((Lambda*R+Rounding)>>LAMBDA_ACCURACY_BITS)
+#define JCOST_CALC_SCALEUP        1    //!< 1: J = (D<<LAMBDA_ACCURACY_BITS)+Lambda*R; 0: J = D + ((Lambda*R+Rounding)>>LAMBDA_ACCURACY_BITS)
 #define INTRA_RDCOSTCALC_EARLY_TERMINATE  1
 #define INTRA_RDCOSTCALC_NNZ      1    //1: to recover block's nzn after rdcost calculation;
+#define JCOST_OVERFLOWCHECK       0    //!<1: to check the J cost if it is overflow>
 
 #define EPZSREF                   1
 
@@ -105,13 +105,15 @@ enum {
 #define DUMMY   14
 #define ET_SIZE 300      //!< size of error text buffer
 
-
-#define  LAMBDA_ACCURACY_BITS         16
+#define  LAMBDA_ACCURACY_BITS         5
 #define  LAMBDA_FACTOR(lambda)        ((int)((double)(1 << LAMBDA_ACCURACY_BITS) * lambda + 0.5))
-#if JCOST_CALC_SCALEUP
-#define  WEIGHTED_COST(factor,bits)   ((factor) * (bits)) 
+
+#if (IMGTYPE == 0)
+#define DISTBLK_MAX  INT_MAX
+#elif (IMGTYPE == 2)
+#define DISTBLK_MAX  FLT_MAX
 #else
-#define  WEIGHTED_COST(factor,bits)   (((factor) * (bits)) >> LAMBDA_ACCURACY_BITS)
+#define DISTBLK_MAX  ((distblk) INT_MAX << LAMBDA_ACCURACY_BITS)
 #endif
 
 #define  MAXSLICEPERPICTURE           100
@@ -136,15 +138,7 @@ enum {
 // RDOQ
 #define MAX_PREC_COEFF    25
 
-#if (IMGTYPE == 0)
-typedef byte imgpel;
-typedef uint16 distpel;
-//typedef uint32 imgdist;
-#else
-typedef uint16 imgpel;
-typedef uint32 distpel;
-//typedef uint64 imgdist;
-#endif
+
 
 //  Available MB modes
 enum {
@@ -216,7 +210,7 @@ enum {
 } CABACBlockTypes;
 
 
-#define IS_INTRA(MB)    ((MB)->mb_type==I4MB  || (MB)->mb_type==I16MB || (MB)->mb_type==I8MB || (MB)->mb_type==IPCM)
+#define IS_INTRA(MB)    ((MB)->mb_type==SI4MB || (MB)->mb_type==I4MB || (MB)->mb_type==I16MB || (MB)->mb_type==I8MB || (MB)->mb_type==IPCM)
 
 #define LEVEL_NUM         6
 #define TOTRUN_NUM       15

@@ -14,12 +14,6 @@
 #ifndef _QUANT_H_
 #define _QUANT_H_
 
-// Macro defines
-#define Q_BITS          15
-#define DQ_BITS          6
-#define Q_BITS_8        16
-#define DQ_BITS_8        6 
-
 // exported variables
 static const int dequant_coef8[6][8][8] =
 {
@@ -163,11 +157,11 @@ static const int A[4][4] = {
 
 // exported functions
 // quantization initialization
-extern void init_qp_process (ImageParameters *p_Img);
-extern void free_qp_matrices(ImageParameters *p_Img);
+extern void init_qp_process (VideoParameters *p_Vid);
+extern void free_qp_matrices(VideoParameters *p_Vid);
 
 // For Q-matrix
-extern void assign_quant_params   (Slice *currslice, pic_parameter_set_rbsp_t* pps, seq_parameter_set_rbsp_t* sps);
+extern void assign_quant_params   (Slice *currslice);
 extern void CalculateQuant4x4Param(Slice *currslice);
 extern void CalculateQuant8x8Param(Slice *currslice);
 

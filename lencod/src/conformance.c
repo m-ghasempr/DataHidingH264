@@ -358,11 +358,12 @@ void ProfileCheck(InputParameters *p_Inp)
  *    Check if Level constraints are satisfied
  ***********************************************************************
  */
-void LevelCheck(ImageParameters *p_Img, InputParameters *p_Inp)
+void LevelCheck(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
-  unsigned int PicSizeInMbs = ( (p_Inp->output.width + p_Img->auto_crop_right) * (p_Inp->output.height + p_Img->auto_crop_bottom) ) >> 8;
+  unsigned int PicSizeInMbs = ( (p_Inp->output.width + p_Vid->auto_crop_right) * (p_Inp->output.height + p_Vid->auto_crop_bottom) ) >> 8;
   unsigned int MBProcessingRate = (unsigned int) (PicSizeInMbs * p_Inp->output.frame_rate + 0.5);
-
+  int cpbBrFactor = ( p_Inp->ProfileIDC >= FREXT_HP ) ? 1500 : 1200;
+  
   if ( (p_Inp->LevelIDC>=30) && (p_Inp->directInferenceFlag==0))
   {
     fprintf( stderr, "\nWarning: LevelIDC 3.0 and above require direct_8x8_inference to be set to 1. Please check your settings.\n");
@@ -399,10 +400,10 @@ void LevelCheck(ImageParameters *p_Img, InputParameters *p_Inp)
     error (errortext, 500);
   }
 
-  if ( p_Inp->bit_rate > (int)(1200 * getMaxBR(p_Inp->LevelIDC)) )
+  if ( p_Inp->bit_rate > (int)(cpbBrFactor * getMaxBR(p_Inp->LevelIDC)) )
   {
     snprintf(errortext, ET_SIZE, "\nBit Rate (%d) exceeds maximum allowed bit rate (%d) at specified LevelIdc %.1f for NAL HRD\n", 
-      p_Inp->bit_rate, 1200 * getMaxBR(p_Inp->LevelIDC), (float) p_Inp->LevelIDC / 10.0);
+      p_Inp->bit_rate, cpbBrFactor * getMaxBR(p_Inp->LevelIDC), (float) p_Inp->LevelIDC / 10.0);
     error (errortext, 500);
   }
 }
@@ -413,31 +414,32 @@ void LevelCheck(ImageParameters *p_Img, InputParameters *p_Inp)
  *    Update Motion Vector Limits
  ***********************************************************************
  */
-void update_mv_limits(ImageParameters *p_Img, InputParameters *p_Inp, byte is_field)
+void update_mv_limits(VideoParameters *p_Vid, byte is_field)
 {
-  memcpy(p_Img->MaxVmvR, LEVELVMVLIMIT[p_Img->LevelIndex], 6 * sizeof(int));
-  memcpy(p_Img->MaxHmvR, LEVELHMVLIMIT, 6 * sizeof(int));
+  InputParameters *p_Inp = p_Vid->p_Inp;
+  memcpy(p_Vid->MaxVmvR, LEVELVMVLIMIT[p_Vid->LevelIndex], 6 * sizeof(int));
+  memcpy(p_Vid->MaxHmvR, LEVELHMVLIMIT, 6 * sizeof(int));
   if (is_field)
   {
     int i;
     for (i = 0; i < 6; i++)
-      p_Img->MaxVmvR[i] = rshift_rnd(p_Img->MaxVmvR[i], 1);
+      p_Vid->MaxVmvR[i] = rshift_rnd(p_Vid->MaxVmvR[i], 1);
   }
   if (p_Inp->UseMVLimits)
   {
-    p_Img->MaxVmvR[0] = imax(p_Img->MaxVmvR[0], -(p_Inp->SetMVYLimit));
-    p_Img->MaxVmvR[1] = imin(p_Img->MaxVmvR[1],  (p_Inp->SetMVYLimit));
-    p_Img->MaxVmvR[2] = imax(p_Img->MaxVmvR[2], -(p_Inp->SetMVYLimit << 1));
-    p_Img->MaxVmvR[3] = imin(p_Img->MaxVmvR[3],  (p_Inp->SetMVYLimit << 1));
-    p_Img->MaxVmvR[4] = imax(p_Img->MaxVmvR[4], -(p_Inp->SetMVYLimit << 2));
-    p_Img->MaxVmvR[5] = imin(p_Img->MaxVmvR[5],  (p_Inp->SetMVYLimit << 2));
+    p_Vid->MaxVmvR[0] = imax(p_Vid->MaxVmvR[0], -(p_Inp->SetMVYLimit));
+    p_Vid->MaxVmvR[1] = imin(p_Vid->MaxVmvR[1],  (p_Inp->SetMVYLimit));
+    p_Vid->MaxVmvR[2] = imax(p_Vid->MaxVmvR[2], -(p_Inp->SetMVYLimit << 1));
+    p_Vid->MaxVmvR[3] = imin(p_Vid->MaxVmvR[3],  (p_Inp->SetMVYLimit << 1));
+    p_Vid->MaxVmvR[4] = imax(p_Vid->MaxVmvR[4], -(p_Inp->SetMVYLimit << 2));
+    p_Vid->MaxVmvR[5] = imin(p_Vid->MaxVmvR[5],  (p_Inp->SetMVYLimit << 2));
 
-    p_Img->MaxHmvR[0] = imax(p_Img->MaxHmvR[0], -(p_Inp->SetMVXLimit));
-    p_Img->MaxHmvR[1] = imin(p_Img->MaxHmvR[1],  (p_Inp->SetMVXLimit));
-    p_Img->MaxHmvR[2] = imax(p_Img->MaxHmvR[2], -(p_Inp->SetMVXLimit << 1));
-    p_Img->MaxHmvR[3] = imin(p_Img->MaxHmvR[3],  (p_Inp->SetMVXLimit << 1));
-    p_Img->MaxHmvR[4] = imax(p_Img->MaxHmvR[4], -(p_Inp->SetMVXLimit << 2));
-    p_Img->MaxHmvR[5] = imin(p_Img->MaxHmvR[5],  (p_Inp->SetMVXLimit << 2));
+    p_Vid->MaxHmvR[0] = imax(p_Vid->MaxHmvR[0], -(p_Inp->SetMVXLimit));
+    p_Vid->MaxHmvR[1] = imin(p_Vid->MaxHmvR[1],  (p_Inp->SetMVXLimit));
+    p_Vid->MaxHmvR[2] = imax(p_Vid->MaxHmvR[2], -(p_Inp->SetMVXLimit << 1));
+    p_Vid->MaxHmvR[3] = imin(p_Vid->MaxHmvR[3],  (p_Inp->SetMVXLimit << 1));
+    p_Vid->MaxHmvR[4] = imax(p_Vid->MaxHmvR[4], -(p_Inp->SetMVXLimit << 2));
+    p_Vid->MaxHmvR[5] = imin(p_Vid->MaxHmvR[5],  (p_Inp->SetMVXLimit << 2));
   }
 }
 
@@ -448,12 +450,12 @@ void update_mv_limits(ImageParameters *p_Img, InputParameters *p_Inp, byte is_fi
  *    Clip motion vector range given encoding level
  ***********************************************************************
  */
-void clip_mv_range(ImageParameters *p_Img, int search_range, MotionVector *mv, int res)
+void clip_mv_range(VideoParameters *p_Vid, int search_range, MotionVector *mv, int res)
 {
   res <<= 1;
 
-  mv->mv_x = (short) iClip3( p_Img->MaxHmvR[0 + res] + search_range, p_Img->MaxHmvR[1 + res] - search_range, mv->mv_x);
-  mv->mv_y = (short) iClip3( p_Img->MaxVmvR[0 + res] + search_range, p_Img->MaxVmvR[1 + res] - search_range, mv->mv_y);
+  mv->mv_x = (short) iClip3( p_Vid->MaxHmvR[0 + res] + search_range, p_Vid->MaxHmvR[1 + res] - search_range, mv->mv_x);
+  mv->mv_y = (short) iClip3( p_Vid->MaxVmvR[0 + res] + search_range, p_Vid->MaxVmvR[1 + res] - search_range, mv->mv_y);
 }
 
 /*!
@@ -462,14 +464,14 @@ void clip_mv_range(ImageParameters *p_Img, int search_range, MotionVector *mv, i
  *    Clip motion vector range given encoding level
  ***********************************************************************
  */
-void test_clip_mvs(ImageParameters *p_Img, short mv[2], Boolean write_mb)
+void test_clip_mvs(VideoParameters *p_Vid, short mv[2], Boolean write_mb)
 {
-  if ((mv[0] < p_Img->MaxHmvR[4]) || (mv[0] > p_Img->MaxHmvR[5]) || (mv[1] < p_Img->MaxVmvR[4]) || (mv[1] > p_Img->MaxVmvR[5]))
+  if ((mv[0] < p_Vid->MaxHmvR[4]) || (mv[0] > p_Vid->MaxHmvR[5]) || (mv[1] < p_Vid->MaxVmvR[4]) || (mv[1] > p_Vid->MaxVmvR[5]))
   {
     if (write_mb == TRUE)
-      printf("Warning MVs (%d %d) were out of range x(%d %d) y(%d %d). Clipping mvs before writing\n", mv[0], mv[1], p_Img->MaxHmvR[4], p_Img->MaxHmvR[5], p_Img->MaxVmvR[4], p_Img->MaxVmvR[5]);
-    mv[0] = (short) iClip3( p_Img->MaxHmvR[4], p_Img->MaxHmvR[5], mv[0]);
-    mv[1] = (short) iClip3( p_Img->MaxVmvR[4], p_Img->MaxVmvR[5], mv[1]);
+      printf("Warning MVs (%d %d) were out of range x(%d %d) y(%d %d). Clipping mvs before writing\n", mv[0], mv[1], p_Vid->MaxHmvR[4], p_Vid->MaxHmvR[5], p_Vid->MaxVmvR[4], p_Vid->MaxVmvR[5]);
+    mv[0] = (short) iClip3( p_Vid->MaxHmvR[4], p_Vid->MaxHmvR[5], mv[0]);
+    mv[1] = (short) iClip3( p_Vid->MaxVmvR[4], p_Vid->MaxVmvR[5], mv[1]);
   }
 }
   
@@ -479,9 +481,9 @@ void test_clip_mvs(ImageParameters *p_Img, short mv[2], Boolean write_mb)
  *    Clip motion vector range given encoding level
  ***********************************************************************
  */
-int out_of_bounds_mvs(ImageParameters *p_Img, short mv[2])
+int out_of_bounds_mvs(VideoParameters *p_Vid, short mv[2])
 {
-  return ((mv[0] < p_Img->MaxHmvR[4]) || (mv[0] > p_Img->MaxHmvR[5]) || (mv[1] < p_Img->MaxVmvR[4]) || (mv[1] > p_Img->MaxVmvR[5]));
+  return ((mv[0] < p_Vid->MaxHmvR[4]) || (mv[0] > p_Vid->MaxHmvR[5]) || (mv[1] < p_Vid->MaxVmvR[4]) || (mv[1] > p_Vid->MaxVmvR[5]));
 }
 
 int InvalidWeightsForBiPrediction(Slice *currSlice, Block8x8Info* b8x8info, int mode)
@@ -518,7 +520,7 @@ int InvalidWeightsForBiPrediction(Slice *currSlice, Block8x8Info* b8x8info, int 
   return invalid_mode;
 }
 
-int InvalidMotionVectors(ImageParameters *p_Img, Slice *currSlice, Block8x8Info* b8x8info, int mode)
+int InvalidMotionVectors(VideoParameters *p_Vid, Slice *currSlice, Block8x8Info* b8x8info, int mode)
 {
   int cur_blk;
   int l0ref, l1ref;
@@ -537,7 +539,7 @@ int InvalidMotionVectors(ImageParameters *p_Img, Slice *currSlice, Block8x8Info*
     {
     case 0:
       l0ref = (int) b8x8info->best[mode][cur_blk].ref[LIST_0];
-      if (out_of_bounds_mvs(p_Img, currSlice->all_mv [LIST_0][l0ref][mode][j][i]))
+      if (out_of_bounds_mvs(p_Vid, currSlice->all_mv [LIST_0][l0ref][mode][j][i]))
       {
         invalid_mode = 1;
         return invalid_mode;
@@ -545,7 +547,7 @@ int InvalidMotionVectors(ImageParameters *p_Img, Slice *currSlice, Block8x8Info*
       break;
     case 1:
       l1ref = (int) b8x8info->best[mode][cur_blk].ref[LIST_1];
-      if (out_of_bounds_mvs(p_Img, currSlice->all_mv [LIST_1][l1ref][mode][j][i]))
+      if (out_of_bounds_mvs(p_Vid, currSlice->all_mv [LIST_1][l1ref][mode][j][i]))
       {
         invalid_mode = 1;
         return invalid_mode;
@@ -554,12 +556,12 @@ int InvalidMotionVectors(ImageParameters *p_Img, Slice *currSlice, Block8x8Info*
     case 2:
       l0ref = (int) b8x8info->best[mode][cur_blk].ref[LIST_0];
       l1ref = (int) b8x8info->best[mode][cur_blk].ref[LIST_1];
-      if (out_of_bounds_mvs(p_Img, currSlice->all_mv [LIST_0][l0ref][mode][j][i]))
+      if (out_of_bounds_mvs(p_Vid, currSlice->all_mv [LIST_0][l0ref][mode][j][i]))
       {
         invalid_mode = 1;
         return invalid_mode;
       }
-      if (out_of_bounds_mvs(p_Img, currSlice->all_mv [LIST_1][l1ref][mode][j][i]))
+      if (out_of_bounds_mvs(p_Vid, currSlice->all_mv [LIST_1][l1ref][mode][j][i]))
       {
         invalid_mode = 1;
         return invalid_mode;
@@ -590,7 +592,7 @@ Boolean CheckPredictionParams(Macroblock  *currMB, Block8x8Info *b8x8info, int m
     }
   }
 
-  if (InvalidMotionVectors(currSlice->p_Img, currSlice, b8x8info, mode))
+  if (InvalidMotionVectors(currSlice->p_Vid, currSlice, b8x8info, mode))
     return FALSE;
 
   if (currSlice->slice_type == B_SLICE)
@@ -610,7 +612,7 @@ Boolean CheckPredictionParams(Macroblock  *currMB, Block8x8Info *b8x8info, int m
       {
         for (i = currMB->block_x; i < currMB->block_x + 4;i++)
         {
-          if (currSlice->direct_pdir[j][i] < 0)  // direct_pdir should be moved and become part of p_Img parameters
+          if (currSlice->direct_pdir[j][i] < 0)  // direct_pdir should be moved and become part of p_Vid parameters
             return FALSE;
         }
       }

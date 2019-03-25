@@ -17,9 +17,9 @@
 
 #include "nalucommon.h"
 
-extern int WriteAnnexbNALU (ImageParameters *p_Img, NALU_t *n);
-extern void OpenAnnexbFile (ImageParameters *p_Img, char *fn);
-extern void CloseAnnexbFile(ImageParameters *p_Img);
+extern int WriteAnnexbNALU (VideoParameters *p_Vid, NALU_t *n);
+extern void OpenAnnexbFile (VideoParameters *p_Vid, char *fn);
+extern void CloseAnnexbFile(VideoParameters *p_Vid);
 
 
 #endif //_ANNEXB_H_

@@ -15,9 +15,9 @@
 #ifndef _IMG_PROCESS_H_
 #define _IMG_PROCESS_H_
 
-extern int  InitProcessImage ( ImageParameters *p_Img, InputParameters *p_Inp );
-extern void ClearProcessImage( ImageParameters *p_Img, InputParameters *p_Inp);
-extern void ProcessImage     ( ImageParameters *p_Img, InputParameters *p_Inp );
+extern int  InitProcessImage ( VideoParameters *p_Vid, InputParameters *p_Inp );
+extern void ClearProcessImage( VideoParameters *p_Vid, InputParameters *p_Inp);
+extern void ProcessImage     ( VideoParameters *p_Vid, InputParameters *p_Inp );
 
 
 #endif

@@ -111,10 +111,10 @@ typedef struct ercVariables_s
 * External function interface
 */
 
-void ercInit(ImageParameters *p_Img, int pic_sizex, int pic_sizey, int flag);
+void ercInit (VideoParameters *p_Vid, int pic_sizex, int pic_sizey, int flag);
 ercVariables_t *ercOpen( void );
 void ercReset( ercVariables_t *errorVar, int nOfMBs, int numOfSegments, int picSizeX );
-void ercClose( ImageParameters *p_Img, ercVariables_t *errorVar );
+void ercClose( VideoParameters *p_Vid, ercVariables_t *errorVar );
 void ercSetErrorConcealment( ercVariables_t *errorVar, int value );
 
 void ercStartSegment( int currMBNum, int segment, unsigned int bitPos, ercVariables_t *errorVar );
@@ -123,7 +123,7 @@ void ercMarkCurrSegmentLost(int picSizeX, ercVariables_t *errorVar );
 void ercMarkCurrSegmentOK(int picSizeX, ercVariables_t *errorVar );
 void ercMarkCurrMBConcealed( int currMBNum, int comp, int picSizeX, ercVariables_t *errorVar );
 
-int ercConcealIntraFrame( ImageParameters *p_Img, frame *recfr, int picSizeX, int picSizeY, ercVariables_t *errorVar );
+int ercConcealIntraFrame( VideoParameters *p_Vid, frame *recfr, int picSizeX, int picSizeY, ercVariables_t *errorVar );
 int ercConcealInterFrame( frame *recfr, objectBuffer_t *object_list,
                           int picSizeX, int picSizeY, ercVariables_t *errorVar, int chroma_format_idc );
 
@@ -142,15 +142,15 @@ struct concealment_node {
 extern struct concealment_node * init_node(StorablePicture* , int );
 extern void print_node( struct concealment_node * );
 extern void print_list( struct concealment_node * );
-extern void init_lists_for_non_reference_loss(ImageParameters *p_Img, int , PictureStructure );
+extern void init_lists_for_non_reference_loss(VideoParameters *p_Vid, int , PictureStructure );
 
-extern void conceal_non_ref_pics(ImageParameters *p_Img, int diff);
-extern void conceal_lost_frames(ImageParameters *p_Img);
+extern void conceal_non_ref_pics(VideoParameters *p_Vid, int diff);
+extern void conceal_lost_frames(VideoParameters *p_Vid);
 
 extern void sliding_window_poc_management(DecodedPictureBuffer *p_Dpb, StorablePicture *p);
 
-extern void write_lost_non_ref_pic(ImageParameters *p_Img, int poc, int p_out);
-extern void write_lost_ref_after_idr(ImageParameters *p_Img, int pos);
+extern void write_lost_non_ref_pic(VideoParameters *p_Vid, int poc, int p_out);
+extern void write_lost_ref_after_idr(VideoParameters *p_Vid, int pos);
 
 extern int comp(const void *, const void *);
 

@@ -416,6 +416,9 @@
 				RelativePath=".\lencod\src\biariencode.c">
 			</File>
 			<File
+				RelativePath=".\lcommon\src\blk_prediction.c">
+			</File>
+			<File
 				RelativePath=".\lencod\src\block.c">
 			</File>
 			<File
@@ -605,6 +608,9 @@
 				RelativePath=".\lcommon\src\parsetcommon.c">
 			</File>
 			<File
+				RelativePath=".\lencod\src\pred_struct.c">
+			</File>
+			<File
 				RelativePath=".\lencod\src\q_around.c">
 			</File>
 			<File
@@ -736,6 +742,9 @@
 			</File>
 			<File
 				RelativePath=".\lencod\inc\biariencode.h">
+			</File>
+			<File
+				RelativePath=".\lcommon\inc\blk_prediction.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\block.h">
@@ -943,6 +952,18 @@
 			</File>
 			<File
 				RelativePath=".\lencod\inc\parsetcommon.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\pred_struct.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\pred_struct_adapt.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\pred_struct_adapt_types.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\pred_struct_types.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\q_around.h">

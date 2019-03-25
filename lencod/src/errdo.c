@@ -31,9 +31,9 @@ static StorablePicture* find_nearest_ref_picture(DecodedPictureBuffer *p_Dpb, in
 static void copy_conceal_mb (Macroblock *currMB, StorablePicture *enc_pic, int decoder, int mb_error, StorablePicture* refPic);
 static void get_predicted_mb(Macroblock *currMB, StorablePicture *enc_pic, int decoder);
 static void add_residue     (Macroblock *currMB, StorablePicture *enc_pic, int decoder, int pl, int block8x8, int x_size, int y_size);
-static void Build_Status_Map(ImageParameters *p_Img, InputParameters *p_Inp, byte **s_map);
+static void Build_Status_Map(VideoParameters *p_Vid, InputParameters *p_Inp, byte **s_map);
 
-extern void DeblockFrame(ImageParameters *p_Img, imgpel **, imgpel ***);
+extern void DeblockFrame(VideoParameters *p_Vid, imgpel **, imgpel ***);
 
 /*!
 **************************************************************************************
@@ -41,22 +41,22 @@ extern void DeblockFrame(ImageParameters *p_Img, imgpel **, imgpel ***);
 *      Allocate memory for error resilient RDO.  
 **************************************************************************************
 */
-int allocate_errdo_mem(ImageParameters *p_Img, InputParameters *p_Inp)
+int allocate_errdo_mem(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   int memory_size = 0;
 
-  p_Img->p_decs   = (Decoders *) malloc(sizeof(Decoders));
+  p_Vid->p_decs   = (Decoders *) malloc(sizeof(Decoders));
 
-  p_Img->p_decs->dec_mb_pred         = NULL;
-  p_Img->p_decs->dec_mbY_best        = NULL;
-  p_Img->p_decs->dec_mb_pred_best8x8 = NULL;
-  p_Img->p_decs->dec_mbY_best8x8     = NULL;
-  p_Img->p_decs->res_img             = NULL;
-  memory_size += get_mem3Dpel(&p_Img->p_decs->dec_mb_pred, p_Inp->NoOfDecoders, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-  memory_size += get_mem3Dpel(&p_Img->p_decs->dec_mbY_best, p_Inp->NoOfDecoders, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-  memory_size += get_mem4Dpel(&p_Img->p_decs->dec_mbY_best8x8, 2, p_Inp->NoOfDecoders, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-  memory_size += get_mem4Dpel(&p_Img->p_decs->dec_mb_pred_best8x8, 2, p_Inp->NoOfDecoders, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-  memory_size += get_mem3Dint(&p_Img->p_decs->res_img, MAX_PLANE, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
+  p_Vid->p_decs->dec_mb_pred         = NULL;
+  p_Vid->p_decs->dec_mbY_best        = NULL;
+  p_Vid->p_decs->dec_mb_pred_best8x8 = NULL;
+  p_Vid->p_decs->dec_mbY_best8x8     = NULL;
+  p_Vid->p_decs->res_img             = NULL;
+  memory_size += get_mem3Dpel(&p_Vid->p_decs->dec_mb_pred, p_Inp->NoOfDecoders, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
+  memory_size += get_mem3Dpel(&p_Vid->p_decs->dec_mbY_best, p_Inp->NoOfDecoders, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
+  memory_size += get_mem4Dpel(&p_Vid->p_decs->dec_mbY_best8x8, 2, p_Inp->NoOfDecoders, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
+  memory_size += get_mem4Dpel(&p_Vid->p_decs->dec_mb_pred_best8x8, 2, p_Inp->NoOfDecoders, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
+  memory_size += get_mem3Dint(&p_Vid->p_decs->res_img, MAX_PLANE, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
   
   return memory_size;
 }
@@ -67,31 +67,31 @@ int allocate_errdo_mem(ImageParameters *p_Img, InputParameters *p_Inp)
 *      free memory of error resilient RDO.  
 **************************************************************************************
 */
-void free_errdo_mem(ImageParameters *p_Img)
+void free_errdo_mem(VideoParameters *p_Vid)
 {
-  if (p_Img->p_decs->res_img)
+  if (p_Vid->p_decs->res_img)
   {
-    free_mem3Dint(p_Img->p_decs->res_img);
+    free_mem3Dint(p_Vid->p_decs->res_img);
   }
-  if (p_Img->p_decs->dec_mb_pred)
+  if (p_Vid->p_decs->dec_mb_pred)
   {
-    free_mem3Dpel(p_Img->p_decs->dec_mb_pred);
+    free_mem3Dpel(p_Vid->p_decs->dec_mb_pred);
   }
-  if (p_Img->p_decs->dec_mbY_best)
+  if (p_Vid->p_decs->dec_mbY_best)
   {
-    free_mem3Dpel(p_Img->p_decs->dec_mbY_best);
+    free_mem3Dpel(p_Vid->p_decs->dec_mbY_best);
   }
-  if (p_Img->p_decs->dec_mbY_best8x8)
+  if (p_Vid->p_decs->dec_mbY_best8x8)
   {
-    free_mem4Dpel(p_Img->p_decs->dec_mbY_best8x8);
+    free_mem4Dpel(p_Vid->p_decs->dec_mbY_best8x8);
   }
-  if (p_Img->p_decs->dec_mb_pred_best8x8)
+  if (p_Vid->p_decs->dec_mb_pred_best8x8)
   {
-    free_mem4Dpel(p_Img->p_decs->dec_mb_pred_best8x8);
+    free_mem4Dpel(p_Vid->p_decs->dec_mb_pred_best8x8);
   }
 
-  if ( p_Img->p_decs != NULL )
-    free( p_Img->p_decs );
+  if ( p_Vid->p_decs != NULL )
+    free( p_Vid->p_decs );
 }
 
 /*!
@@ -109,7 +109,7 @@ void decode_one_mb (Macroblock* currMB, StorablePicture *enc_pic, int decoder)
 {
   int i0, j;
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   imgpel** curComp;
   imgpel** oldComp;
 
@@ -125,9 +125,9 @@ void decode_one_mb (Macroblock* currMB, StorablePicture *enc_pic, int decoder)
   {
     get_predicted_mb(currMB, enc_pic, decoder);
     curComp = &enc_pic->p_dec_img[0][decoder][currMB->pix_y];
-    for(j = 0; j < p_Img->mb_size[0][1]; j++)
+    for(j = 0; j < p_Vid->mb_size[0][1]; j++)
     {
-      memcpy(&(curComp[j][currMB->pix_x]), &(p_Img->p_decs->dec_mb_pred[decoder][j][0]), p_Img->mb_size[0][0] * sizeof(imgpel));
+      memcpy(&(curComp[j][currMB->pix_x]), &(p_Vid->p_decs->dec_mb_pred[decoder][j][0]), p_Vid->mb_size[0][0] * sizeof(imgpel));
     }
   }
   else 
@@ -298,15 +298,15 @@ void decode_one_b8block (Macroblock* currMB, StorablePicture *enc_pic, int decod
 */
 static void add_residue (Macroblock *currMB, StorablePicture *enc_pic, int decoder, int pl, int block8x8, int x_size, int y_size) 
 {
-  ImageParameters *p_Img = currMB->p_Img;
-  int max_pel_value = currMB->p_Img->max_pel_value_comp[pl];
+  VideoParameters *p_Vid = currMB->p_Vid;
+  int max_pel_value = currMB->p_Vid->max_pel_value_comp[pl];
   int i,j;
   int i0 = (block8x8 & 0x01)<<3, i1 = i0 + x_size;
   int j0 = (block8x8 >> 1)<<3,   j1 = j0 + y_size;
 
   imgpel **p_dec_img = &enc_pic->p_dec_img[pl][decoder][currMB->pix_y];
-  int    **res_img   = p_Img->p_decs->res_img[0];
-  imgpel** mpr       = p_Img->p_decs->dec_mb_pred[decoder];
+  int    **res_img   = p_Vid->p_decs->res_img[0];
+  imgpel** mpr       = p_Vid->p_decs->dec_mb_pred[decoder];
 
   for (j = j0; j < j1; j++)
   {
@@ -325,14 +325,14 @@ static void add_residue (Macroblock *currMB, StorablePicture *enc_pic, int decod
  *
  *************************************************************************************
  */
-void UpdateDecoders(ImageParameters *p_Img, InputParameters *p_Inp, StorablePicture *enc_pic)
+void UpdateDecoders(VideoParameters *p_Vid, InputParameters *p_Inp, StorablePicture *enc_pic)
 {
   int k;
   for (k = 0; k < p_Inp->NoOfDecoders; k++)
   {
-    Build_Status_Map(p_Img, p_Inp, enc_pic->mb_error_map[k]); // simulates the packet losses
-    p_Img->error_conceal_picture(p_Img, enc_pic, k); 
-    DeblockFrame (p_Img, enc_pic->p_dec_img[0][k], NULL);
+    Build_Status_Map(p_Vid, p_Inp, enc_pic->mb_error_map[k]); // simulates the packet losses
+    p_Vid->error_conceal_picture(p_Vid, enc_pic, k); 
+    DeblockFrame (p_Vid, enc_pic->p_dec_img[0][k], NULL);
   }
 }
 
@@ -345,9 +345,9 @@ void UpdateDecoders(ImageParameters *p_Img, InputParameters *p_Inp, StorablePict
  *
  *************************************************************************************
  */
-void init_error_conceal(ImageParameters *p_Img, int concealment_type)
+void init_error_conceal(VideoParameters *p_Vid, int concealment_type)
 {
-  p_Img->error_conceal_picture = copy_conceal_picture;
+  p_Vid->error_conceal_picture = copy_conceal_picture;
 }
 
 /*!
@@ -449,7 +449,7 @@ static void get_predicted_concealment_mb(Macroblock* currMB, StorablePicture* en
  *  
  *************************************************************************************
  */
-void copy_conceal_picture(ImageParameters *p_Img, StorablePicture *enc_pic, int decoder)
+void copy_conceal_picture(VideoParameters *p_Vid, StorablePicture *enc_pic, int decoder)
 {
   unsigned int mb;
   Macroblock* currMB;
@@ -457,11 +457,11 @@ void copy_conceal_picture(ImageParameters *p_Img, StorablePicture *enc_pic, int 
   byte** mb_error_map = enc_pic->mb_error_map[decoder];
   StorablePicture* refPic;
 
-  refPic = find_nearest_ref_picture(p_Img->p_Dpb, enc_pic->poc); //Used for concealment if actual reference pic is not known.
+  refPic = find_nearest_ref_picture(p_Vid->p_Dpb, enc_pic->poc); //Used for concealment if actual reference pic is not known.
 
-  for (mb = 0; mb < p_Img->PicSizeInMbs; mb++)
+  for (mb = 0; mb < p_Vid->PicSizeInMbs; mb++)
   {
-    currMB = &p_Img->mb_data[mb];
+    currMB = &p_Vid->mb_data[mb];
     currMB->mb_x = PicPos[mb][0];
     currMB->mb_y = PicPos[mb][1];
     mb_error = mb_error_map[currMB->mb_y][currMB->mb_x];
@@ -509,11 +509,11 @@ static void copy_conceal_mb(Macroblock* currMB, StorablePicture *enc_pic, int de
   }
   else if (mb_error != 2 && currSlice->slice_type != I_SLICE && currMB->mb_type < P8x8) //Only partition 3 lost, and P/B macroblock
   {
-    ImageParameters *p_Img = currMB->p_Img;
+    VideoParameters *p_Vid = currMB->p_Vid;
     get_predicted_concealment_mb(currMB, enc_pic, decoder);
     for(j = 0; j < MB_BLOCK_SIZE; j++)
     {  
-      memcpy(&(concealed_img[j][i0]), &(p_Img->p_decs->dec_mb_pred[decoder][j][0]), MB_BLOCK_SIZE * sizeof(imgpel));
+      memcpy(&(concealed_img[j][i0]), &(p_Vid->p_decs->dec_mb_pred[decoder][j][0]), MB_BLOCK_SIZE * sizeof(imgpel));
     }
   }
 }
@@ -617,27 +617,27 @@ void errdo_get_best_block(Macroblock *currMB, imgpel*** dec_img, imgpel*** mbY, 
  *    Builds a random status map showing whether each MB is received or lost, based
  *    on the packet loss rate and the slice structure.
  *
- * \param p_Img
- *    ImageParameters structure for encoding
+ * \param p_Vid
+ *    VideoParameters structure for encoding
  * \param p_Inp
  *    InputParameters for configurations
  * \param s_map
  *    The status map to be filled
  *************************************************************************************
  */
-static void Build_Status_Map(ImageParameters *p_Img, InputParameters *p_Inp, byte **s_map)
+static void Build_Status_Map(VideoParameters *p_Vid, InputParameters *p_Inp, byte **s_map)
 {
-  int i,j,slice=-1,mb=0,jj,ii;
-  byte packet_lost=0;
+  int i, j, slice = -1, mb = 0, jj, ii;
+  byte packet_lost = 0;
 
-  jj = p_Img->height/MB_BLOCK_SIZE;
-  ii = p_Img->width/MB_BLOCK_SIZE;
+  jj = p_Vid->height / MB_BLOCK_SIZE;
+  ii = p_Vid->width / MB_BLOCK_SIZE;
 
   for (j = 0; j < jj; j++)
   {
     for (i = 0; i < ii; i++)
     {
-      if (!p_Inp->slice_mode || p_Img->mb_data[mb].slice_nr != slice) /* new slice */
+      if (!p_Inp->slice_mode || p_Vid->mb_data[mb].slice_nr != slice) /* new slice */
       {
         packet_lost=0;
         if ((double)rand()/(double)RAND_MAX*100 < p_Inp->LossRateC)   packet_lost += 3;

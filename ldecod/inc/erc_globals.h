@@ -32,7 +32,7 @@
 //! YUV pixel domain image arrays for a video frame
 typedef struct frame_s
 {
-  ImageParameters *p_Img;
+  VideoParameters *p_Vid;
   imgpel *yptr;
   imgpel *uptr;
   imgpel *vptr;

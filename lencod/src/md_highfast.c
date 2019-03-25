@@ -38,7 +38,7 @@
 
 static void fast_mode_intra_decision(Macroblock *currMB, short *intra_skip)
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   int i;
   int mb_available_up, mb_available_left;
   long SBE;
@@ -46,9 +46,9 @@ static void fast_mode_intra_decision(Macroblock *currMB, short *intra_skip)
   PixelPos up;       //!< pixel position p(0,-1)
   PixelPos left[2];  //!< pixel positions p(-1, -1..0)
 
-  p_Img->getNeighbour(currMB,  0 ,  -1 , p_Img->mb_size[IS_LUMA], &up);
-  p_Img->getNeighbour(currMB, -1 ,  -1 , p_Img->mb_size[IS_LUMA], &left[0]);
-  p_Img->getNeighbour(currMB, -1 ,   0 , p_Img->mb_size[IS_LUMA], &left[1]);
+  p_Vid->getNeighbour(currMB,  0 ,  -1 , p_Vid->mb_size[IS_LUMA], &up);
+  p_Vid->getNeighbour(currMB, -1 ,  -1 , p_Vid->mb_size[IS_LUMA], &left[0]);
+  p_Vid->getNeighbour(currMB, -1 ,   0 , p_Vid->mb_size[IS_LUMA], &left[1]);
 
   mb_available_up       = up.available;
   mb_available_left     = left[1].available;
@@ -57,20 +57,20 @@ static void fast_mode_intra_decision(Macroblock *currMB, short *intra_skip)
 
   SBE = 0;
 
-  if( (currMB->mb_y != (int)p_Img->FrameHeightInMbs-1) && (currMB->mb_x != (int)p_Img->PicWidthInMbs-1) && mb_available_left && mb_available_up)
+  if( (currMB->mb_y != (int)p_Vid->FrameHeightInMbs-1) && (currMB->mb_x != (int)p_Vid->PicWidthInMbs-1) && mb_available_left && mb_available_up)
   {
     for(i = 0; i < MB_BLOCK_SIZE; i++)
     {
-      SBE += iabs(p_Img->pCurImg[currMB->opix_y][currMB->pix_x + i] - p_Img->enc_picture->imgY[currMB->pix_y - 1][currMB->pix_x + i]);
-      SBE += iabs(p_Img->pCurImg[currMB->opix_y + i][currMB->pix_x] - p_Img->enc_picture->imgY[currMB->pix_y + i][currMB->pix_x - 1]);
+      SBE += iabs(p_Vid->pCurImg[currMB->opix_y][currMB->pix_x + i] - p_Vid->enc_picture->imgY[currMB->pix_y - 1][currMB->pix_x + i]);
+      SBE += iabs(p_Vid->pCurImg[currMB->opix_y + i][currMB->pix_x] - p_Vid->enc_picture->imgY[currMB->pix_y + i][currMB->pix_x - 1]);
     }
 
     for(i = 0; i < 8; i++)
     {
-      SBE += iabs(p_Img->pImgOrg[1][currMB->opix_c_y][currMB->pix_c_x + i] - p_Img->enc_picture->imgUV[0][currMB->pix_c_y - 1][currMB->pix_c_x + i]);
-      SBE += iabs(p_Img->pImgOrg[1][currMB->opix_c_y+i][currMB->pix_c_x] - p_Img->enc_picture->imgUV[0][currMB->pix_c_y + i][currMB->pix_c_x - 1]);
-      SBE += iabs(p_Img->pImgOrg[2][currMB->opix_c_y][currMB->pix_c_x + i] - p_Img->enc_picture->imgUV[1][currMB->pix_c_y - 1][currMB->pix_c_x + i]);
-      SBE += iabs(p_Img->pImgOrg[2][currMB->opix_c_y+i][currMB->pix_c_x] - p_Img->enc_picture->imgUV[1][currMB->pix_c_y + i][currMB->pix_c_x - 1]);
+      SBE += iabs(p_Vid->pImgOrg[1][currMB->opix_c_y][currMB->pix_c_x + i] - p_Vid->enc_picture->imgUV[0][currMB->pix_c_y - 1][currMB->pix_c_x + i]);
+      SBE += iabs(p_Vid->pImgOrg[1][currMB->opix_c_y+i][currMB->pix_c_x] - p_Vid->enc_picture->imgUV[0][currMB->pix_c_y + i][currMB->pix_c_x - 1]);
+      SBE += iabs(p_Vid->pImgOrg[2][currMB->opix_c_y][currMB->pix_c_x + i] - p_Vid->enc_picture->imgUV[1][currMB->pix_c_y - 1][currMB->pix_c_x + i]);
+      SBE += iabs(p_Vid->pImgOrg[2][currMB->opix_c_y+i][currMB->pix_c_x] - p_Vid->enc_picture->imgUV[1][currMB->pix_c_y + i][currMB->pix_c_x - 1]);
     }
     ABE = 1.0/64 * SBE;
   }
@@ -94,29 +94,29 @@ static void fast_mode_intra_decision(Macroblock *currMB, short *intra_skip)
 void encode_one_macroblock_highfast (Macroblock *currMB)
 {
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
-  PicMotionParams *motion = &p_Img->enc_picture->motion;
+  PicMotionParams *motion = &p_Vid->enc_picture->motion;
   RDOPTStructure  *p_RDO = currSlice->p_RDO;
 
   int         max_index;
   int         block, index, mode, i, j;
   RD_PARAMS   enc_mb;
-  double      max_rdcost = 1e30;
-  int         bmcost[5] = {INT_MAX};
-  int         cost=0;
-  int         min_cost = INT_MAX;
+  distblk       max_rdcost = DISTBLK_MAX;
+  distblk       bmcost[5] = {DISTBLK_MAX};
+  distblk       cost=0;
+  distblk       min_cost = DISTBLK_MAX;
   int         intra1 = 0;
   int         mb_available[3];
 
   short       islice      = (short) (currSlice->slice_type == I_SLICE);
   short       bslice      = (short) (currSlice->slice_type == B_SLICE);
   short       pslice      = (short) ((currSlice->slice_type == P_SLICE) || (currSlice->slice_type == SP_SLICE));
-  short       intra       = (short) ((currSlice->slice_type == I_SLICE) || (pslice && currMB->mb_y == p_Img->mb_y_upd && p_Img->mb_y_upd != p_Img->mb_y_intra));
+  short       intra       = (short) ((currSlice->slice_type == I_SLICE) || (currSlice->slice_type == SI_SLICE) || (pslice && currMB->mb_y == p_Vid->mb_y_upd && p_Vid->mb_y_upd != p_Vid->mb_y_intra));
   int         lambda_mf[3];
 
   imgpel    **mb_pred  = currSlice->mb_pred[0];
-  Block8x8Info *b8x8info = p_Img->b8x8info;
+  Block8x8Info *b8x8info = p_Vid->b8x8info;
 
   char       chroma_pred_mode_range[2];
 
@@ -126,8 +126,7 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
   // Fast Mode Decision
   short inter_skip = 0, intra_skip = 0;
   int mode16 = 0;
-  double RDCost16 = DBL_MAX;
-
+  distblk RDCost16 = DISTBLK_MAX;
   BestMode    md_best;
   Info8x8     best;
 
@@ -139,18 +138,18 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
   best.ref[LIST_0] = 0;
   best.ref[LIST_1] = -1;
 
-  intra |= RandomIntra (p_Img, currMB->mbAddrX);    // Forced Pseudo-Random Intra
+  intra |= RandomIntra (p_Vid, currMB->mbAddrX);    // Forced Pseudo-Random Intra
 
   //===== Setup Macroblock encoding parameters =====
   init_enc_mb_params(currMB, &enc_mb, intra);
   if (p_Inp->AdaptiveRounding)
   {
-    reset_adaptive_rounding(p_Img);
+    reset_adaptive_rounding(p_Vid);
   }
 
-  if (currSlice->MbaffFrameFlag)
+  if (currSlice->mb_aff_frame_flag)
   {
-    reset_mb_nz_coeff(p_Img, currMB->mbAddrX);
+    reset_mb_nz_coeff(p_Vid, currMB->mbAddrX);
   }
 
   //=====   S T O R E   C O D I N G   S T A T E   =====
@@ -192,13 +191,13 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
           i = (block==1 && mode==3 ? 2 : 0);
 
           //--- get cost and reference frame for List 0 prediction ---
-          bmcost[LIST_0] = INT_MAX;
+          bmcost[LIST_0] = DISTBLK_MAX;
           list_prediction_cost(currMB, LIST_0, block, mode, &enc_mb, bmcost, best.ref);
 
           if (bslice)
           {
             //--- get cost and reference frame for List 1 prediction ---
-            bmcost[LIST_1] = INT_MAX;
+            bmcost[LIST_1] = DISTBLK_MAX;
             list_prediction_cost(currMB, LIST_1, block, mode, &enc_mb, bmcost, best.ref);
 
             // Compute bipredictive cost between best list 0 and best list 1 references
@@ -211,8 +210,8 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
             }
             else
             {
-              bmcost[BI_PRED_L0] = INT_MAX;
-              bmcost[BI_PRED_L1] = INT_MAX;
+              bmcost[BI_PRED_L0] = DISTBLK_MAX;
+              bmcost[BI_PRED_L1] = DISTBLK_MAX;
             }
 
             // Determine prediction list based on mode cost
@@ -286,7 +285,7 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
 
       if (p_Inp->Transform8x8Mode)
       {
-        ResetRD8x8Data(p_Img, p_RDO->tr8x8);
+        ResetRD8x8Data(p_Vid, p_RDO->tr8x8);
         currMB->luma_transform_size_8x8_flag = TRUE; //switch to 8x8 transform size
         //===========================================================
         // Check 8x8 partition with transform size 8x8
@@ -304,7 +303,7 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
       if (p_Inp->Transform8x8Mode != 2)
       {
         currMB->luma_transform_size_8x8_flag = FALSE; //switch to 8x8 transform size
-        ResetRD8x8Data(p_Img, p_RDO->tr4x4);
+        ResetRD8x8Data(p_Vid, p_RDO->tr4x4);
         //=================================================================
         // Check 8x8, 8x4, 4x8 and 4x4 partitions with transform size 4x4
         //=================================================================
@@ -318,14 +317,14 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
       }// if (p_Inp->Transform8x8Mode != 2)
 
       if (p_Inp->RCEnable)
-        rc_store_diff(currSlice->diffy, &p_Img->pCurImg[currMB->opix_y], currMB->pix_x, mb_pred);
+        rc_store_diff(currSlice->diffy, &p_Vid->pCurImg[currMB->opix_y], currMB->pix_x, mb_pred);
 
-      p_Img->giRDOpt_B8OnlyFlag = FALSE;
+      p_Vid->giRDOpt_B8OnlyFlag = FALSE;
     }
   }
   else // if (!intra)
   {
-    min_cost = INT_MAX;
+    min_cost = DISTBLK_MAX;
   }
 
   //========= C H O O S E   B E S T   M A C R O B L O C K   M O D E =========
@@ -333,7 +332,7 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
   {
     if (!inter_skip)
     {
-      if(currSlice->slice_type != I_SLICE)
+      if(currSlice->slice_type != I_SLICE && currSlice->slice_type != SI_SLICE)
       {
         currMB->min_rdcost = RDCost16;
         currMB->best_mode  = (short) mode16;
@@ -353,7 +352,7 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
       for (currMB->c_ipred_mode = chroma_pred_mode_range[0]; currMB->c_ipred_mode<=chroma_pred_mode_range[1]; currMB->c_ipred_mode++)
       {
         // bypass if c_ipred_mode is not allowed
-        if ( (p_Img->yuv_format != YUV400) &&
+        if ( (p_Vid->yuv_format != YUV400) &&
           (  ((!intra || !p_Inp->IntraDisableInterOnly) && p_Inp->ChromaIntraDisable == 1 && currMB->c_ipred_mode!=DC_PRED_8)
           || (currMB->c_ipred_mode == VERT_PRED_8 && !mb_available[0]) 
           || (currMB->c_ipred_mode == HOR_PRED_8  && !mb_available[1]) 
@@ -366,7 +365,7 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
           mode = mb_mode_table[index];
       if (enc_mb.valid[mode])
       {
-          if (p_Img->yuv_format != YUV400)
+          if (p_Vid->yuv_format != YUV400)
           {           
             currMB->i16mode = 0; 
           }
@@ -375,12 +374,12 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
           if (currSlice->P444_joined)
           {
             if (p_Inp->SkipIntraInInterSlices && !intra && mode >= I16MB 
-            && currMB->best_mode <=3 && currMB->best_cbp == 0 && currSlice->cmp_cbp[1] == 0 && currSlice->cmp_cbp[2] == 0 && (currMB->min_rdcost < enc_mb.lambda_md * 5.0))
+            && currMB->best_mode <=3 && currMB->best_cbp == 0 && currSlice->cmp_cbp[1] == 0 && currSlice->cmp_cbp[2] == 0 && (currMB->min_rdcost < weighted_cost(enc_mb.lambda_mdfp, 5)))
               continue;
           }
           else
           {
-          if (p_Inp->SkipIntraInInterSlices && !intra && mode >= I4MB && currMB->best_mode <=3 && currMB->best_cbp == 0 && (currMB->min_rdcost < enc_mb.lambda_md * 5.0))
+            if (p_Inp->SkipIntraInInterSlices && !intra && mode >= I4MB && currMB->best_mode <=3 && currMB->best_cbp == 0 && (currMB->min_rdcost < weighted_cost(enc_mb.lambda_mdfp,5)))
               continue;
           }
 
@@ -391,7 +390,7 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
       }// for (currMB->c_ipred_mode=DC_PRED_8; currMB->c_ipred_mode<=chroma_pred_mode_range[1]; currMB->c_ipred_mode++)                     
 
       // Selective Intra Coding
-      if(currSlice->slice_type != I_SLICE && p_Inp->SelectiveIntraEnable && !IS_FREXT_PROFILE(p_Inp->ProfileIDC))
+      if((currSlice->slice_type != I_SLICE && currSlice->slice_type != SI_SLICE) && p_Inp->SelectiveIntraEnable && !IS_FREXT_PROFILE(p_Inp->ProfileIDC))
       {
         fast_mode_intra_decision(currMB, &intra_skip);
 
@@ -406,7 +405,7 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
           {
 
             // bypass if c_ipred_mode is not allowed
-            if ( (p_Img->yuv_format != YUV400) &&
+            if ( (p_Vid->yuv_format != YUV400) &&
               (  ((!intra || !p_Inp->IntraDisableInterOnly) && p_Inp->ChromaIntraDisable == 1 && currMB->c_ipred_mode!=DC_PRED_8)
               || (currMB->c_ipred_mode == VERT_PRED_8 && !mb_available[0])
               || (currMB->c_ipred_mode == HOR_PRED_8  && !mb_available[1])
@@ -422,7 +421,7 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
               if (p_Inp->SkipIntraInInterSlices && !intra && mode >= I4MB && currMB->best_mode <=3 && currMB->best_cbp == 0)
                 continue;
 
-              if (p_Img->yuv_format != YUV400)
+              if (p_Vid->yuv_format != YUV400)
               {
                 currMB->i16mode = 0;
                 // RDcost of mode 1 in P-slice and mode 0, 1 in B-slice are already available

@@ -61,14 +61,14 @@
 
 void init_contexts (Slice *currSlice)
 {
-  ImageParameters *p_Img = currSlice->p_Img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
   MotionInfoContexts*  mc = currSlice->mot_ctx;
   TextureInfoContexts* tc = currSlice->tex_ctx;
   int i, j;
-  int qp = imax(0, p_Img->qp);
+  int qp = imax(0, p_Vid->qp);
   int model_number = currSlice->model_number;
 
-  //printf("%d -", p_Img->currentSlice->model_number);
+  //printf("%d -", p_Vid->currentSlice->model_number);
 
   //--- motion coding contexts ---
   if ((currSlice->slice_type == I_SLICE)||(currSlice->slice_type == SI_SLICE))

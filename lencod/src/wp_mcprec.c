@@ -27,21 +27,21 @@
 ************************************************************************
 */
 
-void wpxInitWPXObject( ImageParameters *p_Img )
+void wpxInitWPXObject( VideoParameters *p_Vid )
 {
-  p_Img->pWPX = (WPXObject *)malloc( sizeof( WPXObject ) );
-  if ( p_Img->pWPX == NULL )
+  p_Vid->pWPX = (WPXObject *)malloc( sizeof( WPXObject ) );
+  if ( p_Vid->pWPX == NULL )
   {
     fprintf( stderr, "\n Error initializing memory for WPXObject. Exiting...\n" );
     exit(1);
   }
 
   // wp_ref_l0
-  if ((p_Img->pWPX->wp_ref_list[LIST_0] = (WeightedPredRefX *) calloc(MAX_REFERENCE_PICTURES, sizeof(WeightedPredRefX))) == NULL)
-    no_mem_exit("wpxInitWPXObject: p_Img->pWPX->wp_ref_list[0]");
+  if ((p_Vid->pWPX->wp_ref_list[LIST_0] = (WeightedPredRefX *) calloc(MAX_REFERENCE_PICTURES, sizeof(WeightedPredRefX))) == NULL)
+    no_mem_exit("wpxInitWPXObject: p_Vid->pWPX->wp_ref_list[0]");
   // wp_ref_l1
-  if ((p_Img->pWPX->wp_ref_list[LIST_1] = (WeightedPredRefX *) calloc(MAX_REFERENCE_PICTURES, sizeof(WeightedPredRefX))) == NULL)
-    no_mem_exit("wpxInitWPXObject: p_Img->pWPX->wp_ref_list[1]");
+  if ((p_Vid->pWPX->wp_ref_list[LIST_1] = (WeightedPredRefX *) calloc(MAX_REFERENCE_PICTURES, sizeof(WeightedPredRefX))) == NULL)
+    no_mem_exit("wpxInitWPXObject: p_Vid->pWPX->wp_ref_list[1]");
 }
 
 /*!
@@ -51,21 +51,21 @@ void wpxInitWPXObject( ImageParameters *p_Img )
 ************************************************************************
 */
 
-void wpxFreeWPXObject( ImageParameters *p_Img )
+void wpxFreeWPXObject( VideoParameters *p_Vid )
 {
-  if ( p_Img->pWPX != NULL )
-  {
-    free( p_Img->pWPX );
-  }
-
   // wp_ref_l0
-  if (p_Img->pWPX->wp_ref_list[LIST_0])
-    free(p_Img->pWPX->wp_ref_list[LIST_0]);
-  p_Img->pWPX->wp_ref_list[LIST_0] = NULL;
+  if (p_Vid->pWPX->wp_ref_list[LIST_0])
+    free(p_Vid->pWPX->wp_ref_list[LIST_0]);
+  p_Vid->pWPX->wp_ref_list[LIST_0] = NULL;
   // wp_ref_l1
-  if (p_Img->pWPX->wp_ref_list[LIST_1])
-    free(p_Img->pWPX->wp_ref_list[LIST_1]);
-  p_Img->pWPX->wp_ref_list[LIST_1] = NULL;
+  if (p_Vid->pWPX->wp_ref_list[LIST_1])
+    free(p_Vid->pWPX->wp_ref_list[LIST_1]);
+  p_Vid->pWPX->wp_ref_list[LIST_1] = NULL;
+
+  if ( p_Vid->pWPX != NULL )
+  {
+    free( p_Vid->pWPX );
+  }
 }
 
 /*!
@@ -75,11 +75,11 @@ void wpxFreeWPXObject( ImageParameters *p_Img )
 ************************************************************************
 */
 
-void wpxInitWPXPasses( ImageParameters *p_Img, InputParameters *p_Inp )
+void wpxInitWPXPasses( VideoParameters *p_Vid, InputParameters *p_Inp )
 {
   // initialize number of wp reference frames in each list
-  p_Img->pWPX->num_wp_ref_list[LIST_0] = 0;
-  p_Img->pWPX->num_wp_ref_list[LIST_1] = 0;
+  p_Vid->pWPX->num_wp_ref_list[LIST_0] = 0;
+  p_Vid->pWPX->num_wp_ref_list[LIST_1] = 0;
 
   switch( p_Inp->WPMCPrecision )
   {
@@ -87,13 +87,13 @@ void wpxInitWPXPasses( ImageParameters *p_Img, InputParameters *p_Inp )
   case 0:
     break;
   case 1:
-    p_Img->pWPX->wp_rd_passes[0].algorithm = WP_REGULAR;
-    p_Img->pWPX->wp_rd_passes[1].algorithm = WP_MCPREC_MINUS0;      
+    p_Vid->pWPX->wp_rd_passes[0].algorithm = WP_REGULAR;
+    p_Vid->pWPX->wp_rd_passes[1].algorithm = WP_MCPREC_MINUS0;      
     break;
   case 2:
-    p_Img->pWPX->wp_rd_passes[0].algorithm = WP_REGULAR;
-    p_Img->pWPX->wp_rd_passes[1].algorithm = WP_MCPREC_MINUS0;
-    p_Img->pWPX->wp_rd_passes[2].algorithm = WP_MCPREC_MINUS1;      
+    p_Vid->pWPX->wp_rd_passes[0].algorithm = WP_REGULAR;
+    p_Vid->pWPX->wp_rd_passes[1].algorithm = WP_MCPREC_MINUS0;
+    p_Vid->pWPX->wp_rd_passes[2].algorithm = WP_MCPREC_MINUS1;      
     break;
   }
 }
@@ -107,7 +107,7 @@ void wpxInitWPXPasses( ImageParameters *p_Img, InputParameters *p_Inp )
 
 void wpxModifyRefPicList( Slice *currSlice )
 {
-  ImageParameters *p_Img = currSlice->p_Img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
   unsigned int i, j, cloned_refs;
   int   default_order_list0[32];
   int   default_order_list1[32];
@@ -122,14 +122,14 @@ void wpxModifyRefPicList( Slice *currSlice )
   memset( (void *)re_order,            1<<20, 32 * sizeof( int ) );
 
   // First assign default list orders
-  list = p_Img->listX[LIST_0];
+  list = p_Vid->listX[LIST_0];
   for (i=0; i<(unsigned int)(currSlice->num_ref_idx_active[LIST_0]); i++)
   {
     default_order_list0[i] = list[i]->pic_num;
   }
   if ( currSlice->slice_type == B_SLICE )
   {
-    list = p_Img->listX[LIST_1];
+    list = p_Vid->listX[LIST_1];
     for (i=0; i<(unsigned int)(currSlice->num_ref_idx_active[LIST_1]); i++)
     {
       default_order_list1[i] = list[i]->pic_num;
@@ -144,21 +144,21 @@ void wpxModifyRefPicList( Slice *currSlice )
     int  tmp_value;
     int  abs_poc_dist;
     
-    for (i=0; i<p_Img->p_Dpb->ref_frames_in_buffer; i++)
+    for (i=0; i<p_Vid->p_Dpb->ref_frames_in_buffer; i++)
     {
-      re_order[i] = p_Img->p_Dpb->fs_ref[i]->frame->pic_num;
-      if (p_Img->p_Dpb->fs_ref[i]->is_used==3 && (p_Img->p_Dpb->fs_ref[i]->frame->used_for_reference)&&(!p_Img->p_Dpb->fs_ref[i]->frame->is_long_term))
+      re_order[i] = p_Vid->p_Dpb->fs_ref[i]->frame->pic_num;
+      if (p_Vid->p_Dpb->fs_ref[i]->is_used==3 && (p_Vid->p_Dpb->fs_ref[i]->frame->used_for_reference)&&(!p_Vid->p_Dpb->fs_ref[i]->frame->is_long_term))
       {
-        abs_poc_dist = iabs(p_Img->p_Dpb->fs_ref[i]->frame->poc - p_Img->enc_picture->poc) ;
+        abs_poc_dist = iabs(p_Vid->p_Dpb->fs_ref[i]->frame->poc - p_Vid->enc_picture->poc) ;
         poc_diff[i]  = abs_poc_dist;
-        list_sign[i] = (p_Img->enc_picture->poc < p_Img->p_Dpb->fs_ref[i]->frame->poc) ? +1 : -1;
+        list_sign[i] = (p_Vid->enc_picture->poc < p_Vid->p_Dpb->fs_ref[i]->frame->poc) ? +1 : -1;
       }
     }
 
     // sort these references based on poc (temporal) distance
-    for (i=0; i< p_Img->p_Dpb->ref_frames_in_buffer-1; i++)
+    for (i=0; i< p_Vid->p_Dpb->ref_frames_in_buffer-1; i++)
     {
-      for (j=i+1; j< p_Img->p_Dpb->ref_frames_in_buffer; j++)
+      for (j=i+1; j< p_Vid->p_Dpb->ref_frames_in_buffer; j++)
       {
         if (poc_diff[i]>poc_diff[j] || (poc_diff[i] == poc_diff[j] && list_sign[j] > list_sign[i]))
         {
@@ -190,7 +190,7 @@ void wpxModifyRefPicList( Slice *currSlice )
     }
 
     // check algorithms (more flexibility for the future...)
-    switch( p_Img->pWPX->curr_wp_rd_pass->algorithm )
+    switch( p_Vid->pWPX->curr_wp_rd_pass->algorithm )
     {
     default:
     case WP_MCPREC_PLUS0:
@@ -198,35 +198,35 @@ void wpxModifyRefPicList( Slice *currSlice )
     case WP_MCPREC_MINUS0:
     case WP_MCPREC_MINUS1:
       // ref 0 and 1 point to to the same reference
-      cloned_refs = p_Img->pWPX->num_wp_ref_list[pred_list] = 2;
+      cloned_refs = p_Vid->pWPX->num_wp_ref_list[pred_list] = 2;
       for ( j = 0; j < cloned_refs; j++ )
       {
-        p_Img->pWPX->wp_ref_list[pred_list][j].PicNum = list_order[0];
+        p_Vid->pWPX->wp_ref_list[pred_list][j].PicNum = list_order[0];
       }
       // shift the rest
-      for ( j = cloned_refs; j < p_Img->p_Dpb->ref_frames_in_buffer; j++ )
+      for ( j = cloned_refs; j < p_Vid->p_Dpb->ref_frames_in_buffer; j++ )
       {
-        p_Img->pWPX->wp_ref_list[pred_list][j].PicNum = list_order[j - (cloned_refs - 1)];
-        p_Img->pWPX->num_wp_ref_list[pred_list]++;
+        p_Vid->pWPX->wp_ref_list[pred_list][j].PicNum = list_order[j - (cloned_refs - 1)];
+        p_Vid->pWPX->num_wp_ref_list[pred_list]++;
       }
       break;
     case WP_MCPREC_MINUS_PLUS0:
       // ref 0 and 1 point to to the same reference
-      cloned_refs = p_Img->pWPX->num_wp_ref_list[pred_list] = 3;
+      cloned_refs = p_Vid->pWPX->num_wp_ref_list[pred_list] = 3;
       for ( j = 0; j < cloned_refs; j++ )
       {
-        p_Img->pWPX->wp_ref_list[pred_list][j].PicNum = list_order[0];
+        p_Vid->pWPX->wp_ref_list[pred_list][j].PicNum = list_order[0];
       }
       // shift the rest
-      for ( j = cloned_refs; j < p_Img->p_Dpb->ref_frames_in_buffer; j++ )
+      for ( j = cloned_refs; j < p_Vid->p_Dpb->ref_frames_in_buffer; j++ )
       {
-        p_Img->pWPX->wp_ref_list[pred_list][j].PicNum = list_order[j - (cloned_refs - 1)];
-        p_Img->pWPX->num_wp_ref_list[pred_list]++;
+        p_Vid->pWPX->wp_ref_list[pred_list][j].PicNum = list_order[j - (cloned_refs - 1)];
+        p_Vid->pWPX->num_wp_ref_list[pred_list]++;
       }      
       break;
     }
     // constrain list length
-    p_Img->pWPX->num_wp_ref_list[pred_list] = imin( p_Img->pWPX->num_wp_ref_list[pred_list],
+    p_Vid->pWPX->num_wp_ref_list[pred_list] = imin( p_Vid->pWPX->num_wp_ref_list[pred_list],
       ( pred_list == LIST_0 ) ? currSlice->num_ref_idx_active[LIST_0] : currSlice->num_ref_idx_active[LIST_1] );
   }
 }
@@ -240,7 +240,7 @@ void wpxModifyRefPicList( Slice *currSlice )
 
 int wpxDetermineWP( Slice *currSlice, int clist, int n )
 {
-  ImageParameters *p_Img = currSlice->p_Img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
   InputParameters *p_Inp = currSlice->p_Inp;
   int i, j, determine_wp = 0;
   short default_weight[3];
@@ -285,7 +285,7 @@ int wpxDetermineWP( Slice *currSlice, int clist, int n )
       }      
     }
     // algorithm consideration
-    switch( p_Img->pWPX->curr_wp_rd_pass->algorithm )
+    switch( p_Vid->pWPX->curr_wp_rd_pass->algorithm )
     {
     case WP_MCPREC_PLUS0:
       for (i = 0; i < 3; i++)
@@ -338,8 +338,8 @@ int wpxDetermineWP( Slice *currSlice, int clist, int n )
 void wpxAdaptRefNum( Slice *currSlice )
 {
   InputParameters *p_Inp = currSlice->p_Inp;
-  ImageParameters *p_Img = currSlice->p_Img;
-  if ( p_Img->pWPX->curr_wp_rd_pass->algorithm == WP_REGULAR )
+  VideoParameters *p_Vid = currSlice->p_Vid;
+  if ( p_Vid->pWPX->curr_wp_rd_pass->algorithm == WP_REGULAR )
   {
     switch( currSlice->slice_type )
     {

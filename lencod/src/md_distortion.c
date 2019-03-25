@@ -60,11 +60,11 @@ int64 compute_SSE(imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc, int ySiz
   return distortion;
 }
 
-int64 compute_SSE_cr(imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc, int ySize, int xSize)
+distblk compute_SSE_cr(imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc, int ySize, int xSize)
 {
   int i, j;
   imgpel *lineRef, *lineSrc;
-  int64 distortion = 0;
+  distblk distortion = 0;
 
   for (j = 0; j < ySize; j++)
   {
@@ -75,7 +75,7 @@ int64 compute_SSE_cr(imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc, int y
       distortion += iabs2( *lineRef++ - *lineSrc++ );
   }
 
-  return distortion;
+  return dist_scale(distortion);
 }
 
 /*!
@@ -84,11 +84,11 @@ int64 compute_SSE_cr(imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc, int y
  *    compute 16x16 SSE
  ***********************************************************************
  */
-int64 compute_SSE16x16(imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc)
+distblk compute_SSE16x16(imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc)
 {
   int i, j;
   imgpel *lineRef, *lineSrc;
-  int64 distortion = 0;
+  distblk distortion = 0;
 
   for (j = 0; j < MB_BLOCK_SIZE; j++)
   {
@@ -98,7 +98,8 @@ int64 compute_SSE16x16(imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc)
     for (i = 0; i < MB_BLOCK_SIZE; i++)
       distortion += iabs2( *lineRef++ - *lineSrc++ );
   }
-  return distortion;
+
+  return dist_scale(distortion);
 }
 
 /*!
@@ -107,11 +108,11 @@ int64 compute_SSE16x16(imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc)
  *    compute 8x8 SSE
  ***********************************************************************
  */
-int64 compute_SSE8x8(imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc)
+distblk compute_SSE8x8(imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc)
 {
   int i, j;
   imgpel *lineRef, *lineSrc;
-  int64 distortion = 0;
+  distblk distortion = 0;
 
   for (j = 0; j < BLOCK_SIZE_8x8; j++)
   {
@@ -121,7 +122,8 @@ int64 compute_SSE8x8(imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc)
     for (i = 0; i < BLOCK_SIZE_8x8; i++)
       distortion += iabs2( *lineRef++ - *lineSrc++ );
   }
-  return distortion;
+
+  return dist_scale(distortion);
 }
 
 
@@ -131,11 +133,11 @@ int64 compute_SSE8x8(imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc)
  *    compute 4x4 SSE
  ***********************************************************************
  */
-int64 compute_SSE4x4(imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc)
+distblk compute_SSE4x4(imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc)
 {
   int i, j;
   imgpel *lineRef, *lineSrc;
-  int64 distortion = 0;
+  distblk distortion = 0;
 
   for (j = 0; j < BLOCK_SIZE; j++)
   {
@@ -146,7 +148,7 @@ int64 compute_SSE4x4(imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc)
       distortion += iabs2( *lineRef++ - *lineSrc++ );
   }
 
-  return distortion;
+  return dist_scale(distortion);
 }
 
 /*!
@@ -155,24 +157,33 @@ int64 compute_SSE4x4(imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc)
 *    SSE distortion calculation for a macroblock
 *************************************************************************************
 */
-int64 distortionSSE(Macroblock *currMB) 
+distblk distortionSSE(Macroblock *currMB) 
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
-  int64 distortionY = 0;
-  int64 distortionCr[2] = {0, 0};
+  distblk distortionY = 0;
+  distblk distortionCr[2] = {0, 0};
 
   // LUMA
-  distortionY = compute_SSE16x16(&p_Img->pCurImg[currMB->opix_y], &p_Img->enc_picture->p_curr_img[currMB->pix_y], currMB->pix_x, currMB->pix_x);
+  distortionY = compute_SSE16x16(&p_Vid->pCurImg[currMB->opix_y], &p_Vid->enc_picture->p_curr_img[currMB->pix_y], currMB->pix_x, currMB->pix_x);
 
   // CHROMA
-  if ((p_Img->yuv_format != YUV400) && !IS_INDEPENDENT(p_Inp))
+  if ((p_Vid->yuv_format != YUV400) && !IS_INDEPENDENT(p_Inp))
   {
-    distortionCr[0] = compute_SSE_cr(&p_Img->pImgOrg[1][currMB->opix_c_y], &p_Img->enc_picture->imgUV[0][currMB->pix_c_y], currMB->pix_c_x, currMB->pix_c_x, p_Img->mb_cr_size_y, p_Img->mb_cr_size_x);
-    distortionCr[1] = compute_SSE_cr(&p_Img->pImgOrg[2][currMB->opix_c_y], &p_Img->enc_picture->imgUV[1][currMB->pix_c_y], currMB->pix_c_x, currMB->pix_c_x, p_Img->mb_cr_size_y, p_Img->mb_cr_size_x);
+    distortionCr[0] = compute_SSE_cr(&p_Vid->pImgOrg[1][currMB->opix_c_y], &p_Vid->enc_picture->imgUV[0][currMB->pix_c_y], currMB->pix_c_x, currMB->pix_c_x, p_Vid->mb_cr_size_y, p_Vid->mb_cr_size_x);
+    distortionCr[1] = compute_SSE_cr(&p_Vid->pImgOrg[2][currMB->opix_c_y], &p_Vid->enc_picture->imgUV[1][currMB->pix_c_y], currMB->pix_c_x, currMB->pix_c_x, p_Vid->mb_cr_size_y, p_Vid->mb_cr_size_x);
   }
-
-  return (int64)( distortionY * p_Inp->WeightY + distortionCr[0] * p_Inp->WeightCb + distortionCr[1] * p_Inp->WeightCr );
+#if JCOST_OVERFLOWCHECK //overflow checking;
+  if(distortionY * p_Inp->WeightY + distortionCr[0] * p_Inp->WeightCb + distortionCr[1] * p_Inp->WeightCr > DISTBLK_MAX)
+  {
+    printf("Overflow: %s : %d \n MB: %d, Value: %lf\n", __FILE__, __LINE__, currMB->mbAddrX, (distortionY * p_Inp->WeightY + distortionCr[0] * p_Inp->WeightCb + distortionCr[1] * p_Inp->WeightCr));
+    exit(-1);
+  }
+#endif  //end;
+  return (distblk)( distortionY * p_Inp->WeightY + distortionCr[0] * p_Inp->WeightCb + distortionCr[1] * p_Inp->WeightCr );
 }
+
+
+
 
 

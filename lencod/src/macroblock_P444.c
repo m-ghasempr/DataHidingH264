@@ -13,6 +13,7 @@
 
 #include "contributors.h"
 #include "global.h"
+#include "blk_prediction.h"
 #include "mc_prediction.h"
 #include "md_common.h"
 #include "rdopt.h"
@@ -38,7 +39,7 @@ int luma_residual_coding_p444_16x16 (Macroblock* currMB,  //!< Current Macrobloc
   int   *cbp     = &(currMB->cbp);
   int64 *cbp_blk = &(currMB->cbp_blk);
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currMB->p_Img;  
+  VideoParameters *p_Vid = currMB->p_Vid;  
   int    i, j, nonzero = 0, cbp_blk_mask;
   int    coeff_cost = 0;
   int    mb_y       = (block8x8 >> 1) << 3;
@@ -57,23 +58,23 @@ int luma_residual_coding_p444_16x16 (Macroblock* currMB,  //!< Current Macrobloc
   luma_prediction (currMB, mb_x, mb_y, 8, 8, p_dir, list_mode, ref_idx, bipred_me); 
 
   //===== compute prediction residual ======            
-  compute_residue (&p_Img->pCurImg[currMB->opix_y + mb_y], &currSlice->mb_pred[0][mb_y], &currSlice->mb_ores[0][mb_y], mb_x, currMB->pix_x + mb_x, 8, 8);
+  compute_residue (&p_Vid->pCurImg[currMB->opix_y + mb_y], &currSlice->mb_pred[0][mb_y], &currSlice->mb_ores[0][mb_y], mb_x, currMB->pix_x + mb_x, 8, 8);
 
   for (uv = PLANE_U; uv <= PLANE_V; ++uv)
   {
-    select_plane(p_Img, uv);
+    select_plane(p_Vid, uv);
     chroma_prediction (currMB, uv - 1, mb_x, mb_y, 8, 8, p_dir, list_mode[0], list_mode[1], ref_idx[0], ref_idx[1], bipred_me);
 
     //===== compute prediction residual ======            
-    compute_residue(&p_Img->pImgOrg[uv][currMB->opix_y + mb_y], &currSlice->mb_pred[uv][mb_y], &currSlice->mb_ores[uv][mb_y], mb_x, currMB->pix_x + mb_x, 8, 8);
+    compute_residue(&p_Vid->pImgOrg[uv][currMB->opix_y + mb_y], &currSlice->mb_pred[uv][mb_y], &currSlice->mb_ores[uv][mb_y], mb_x, currMB->pix_x + mb_x, 8, 8);
   }
-  select_plane(p_Img, PLANE_Y);
+  select_plane(p_Vid, PLANE_Y);
 
   //===== loop over 4x4 blocks =====
   if(!currMB->luma_transform_size_8x8_flag)
   {
     //===== DCT, Quantization, inverse Quantization, IDCT, Reconstruction =====
-    if (!skipped && ( (currSlice->NoResidueDirect != 1) || (currMB->qp_scaled[0] == 0 && p_Img->lossless_qpprime_flag == 1) ))
+    if (!skipped && ( (currSlice->NoResidueDirect != 1) || (currMB->qp_scaled[0] == 0 && p_Vid->lossless_qpprime_flag == 1) ))
     {
       int block_y, block_x;
 
@@ -91,11 +92,11 @@ int luma_residual_coding_p444_16x16 (Macroblock* currMB,  //!< Current Macrobloc
             (*cbp)     |= cbp_mask;           // one bit for the 4x4 blocks of an 8x8 block
           }
 
-          if (currSlice->slice_type != SP_SLICE)  
+          if (currSlice->slice_type != SP_SLICE && currSlice->slice_type != SI_SLICE)  
           {
             for (uv = PLANE_U; uv <= PLANE_V; ++uv)
             {
-              select_plane(p_Img, (ColorPlane) uv);
+              select_plane(p_Vid, (ColorPlane) uv);
               nonzero = currMB->trans_4x4( currMB, (ColorPlane) uv, block_x, block_y, &currSlice->coeff_cost_cr[uv], 0);
               if (nonzero)
               {
@@ -104,11 +105,11 @@ int luma_residual_coding_p444_16x16 (Macroblock* currMB,  //!< Current Macrobloc
                 (currSlice->cmp_cbp[uv]) |= cbp_mask;           // one bit for the 4x4 blocks of an 8x8 block
               }
             }
-            select_plane(p_Img, PLANE_Y);
+            select_plane(p_Vid, PLANE_Y);
           }
           else
           {
-            assert(currSlice->slice_type == SP_SLICE);   //SP_SLICE not implemented for FREXT_AD444
+            assert(currSlice->slice_type == SP_SLICE || currSlice->slice_type == SI_SLICE);   //SP_SLICE not implemented for FREXT_AD444
           }
         }
       }
@@ -118,7 +119,7 @@ int luma_residual_coding_p444_16x16 (Macroblock* currMB,  //!< Current Macrobloc
   {
     if (currSlice->NoResidueDirect != 1 && !skipped)
     {
-      if (currSlice->slice_type != SP_SLICE)
+      if (currSlice->slice_type != SP_SLICE && currSlice->slice_type != SI_SLICE)
         nonzero = currMB->trans_8x8 (currMB, PLANE_Y, block8x8, &coeff_cost, 0);
 
       if (nonzero)
@@ -127,11 +128,11 @@ int luma_residual_coding_p444_16x16 (Macroblock* currMB,  //!< Current Macrobloc
         (*cbp)     |= cbp_mask;                               // one bit for the 4x4 blocks of an 8x8 block
       }
 
-      if (currSlice->slice_type != SP_SLICE)
+      if (currSlice->slice_type != SP_SLICE && currSlice->slice_type != SI_SLICE)
       {
         for (uv = PLANE_U; uv <= PLANE_V; ++uv)
         {
-          select_plane(p_Img, (ColorPlane) uv);
+          select_plane(p_Vid, (ColorPlane) uv);
           nonzero = currMB->trans_8x8( currMB, (ColorPlane) uv, block8x8, &currSlice->coeff_cost_cr[uv], 0);
           if (nonzero)
           {
@@ -139,7 +140,7 @@ int luma_residual_coding_p444_16x16 (Macroblock* currMB,  //!< Current Macrobloc
             (currSlice->cmp_cbp[uv])     |= cbp_mask;           // one bit for the 4x4 blocks of an 8x8 block
           }
         }
-        select_plane(p_Img, PLANE_Y);
+        select_plane(p_Vid, PLANE_Y);
       }
     }
   }
@@ -165,8 +166,8 @@ int luma_residual_coding_p444_16x16 (Macroblock* currMB,  //!< Current Macrobloc
   */
 
   if (currSlice->NoResidueDirect != 1 && !skipped && coeff_cost <= _LUMA_COEFF_COST_ &&
-    ((currMB->qp_scaled[0])!=0 || p_Img->lossless_qpprime_flag==0)&&
-    !(currSlice->slice_type == SP_SLICE && (p_Img->si_frame_indicator == TRUE || p_Img->sp2_frame_indicator == TRUE )))// last set of conditions
+    ((currMB->qp_scaled[0])!=0 || p_Vid->lossless_qpprime_flag==0)&&
+    !(currSlice->slice_type == SI_SLICE || (currSlice->slice_type == SP_SLICE && p_Vid->sp2_frame_indicator == TRUE )))// last set of conditions
     // cannot skip when perfect reconstruction is as in switching pictures or SI pictures
   {
     coeff_cost  = 0;
@@ -175,9 +176,9 @@ int luma_residual_coding_p444_16x16 (Macroblock* currMB,  //!< Current Macrobloc
 
     memset( currSlice->cofAC[block8x8][0][0], 0, 4 * 2 * 65 * sizeof(int));
 
-    copy_image_data_8x8(&p_Img->enc_picture->imgY[currMB->pix_y + mb_y], &currSlice->mb_pred[0][mb_y], currMB->pix_x + mb_x, mb_x);
+    copy_image_data_8x8(&p_Vid->enc_picture->imgY[currMB->pix_y + mb_y], &currSlice->mb_pred[0][mb_y], currMB->pix_x + mb_x, mb_x);
 
-    if (currSlice->slice_type == SP_SLICE)
+    if (currSlice->slice_type == SP_SLICE || currSlice->slice_type == SI_SLICE)
     {
       for (i = mb_x; i < mb_x + BLOCK_SIZE_8x8; i += BLOCK_SIZE)
         for (j = mb_y; j < mb_y + BLOCK_SIZE_8x8; j += BLOCK_SIZE)
@@ -188,7 +189,7 @@ int luma_residual_coding_p444_16x16 (Macroblock* currMB,  //!< Current Macrobloc
   for (uv = PLANE_U; uv <= PLANE_V; ++uv)
   {
     if (currSlice->NoResidueDirect != 1 && !skipped && currSlice->coeff_cost_cr[uv] <= _LUMA_COEFF_COST_ &&
-      (currMB->qp_scaled[uv]!=0 || p_Img->lossless_qpprime_flag==0))// last set of conditions
+      (currMB->qp_scaled[uv]!=0 || p_Vid->lossless_qpprime_flag==0))// last set of conditions
     {
       currSlice->coeff_cost_cr[uv] = 0;
       currSlice->cmp_cbp[uv] &= (63 - cbp_mask);
@@ -196,7 +197,7 @@ int luma_residual_coding_p444_16x16 (Macroblock* currMB,  //!< Current Macrobloc
 
       memset( currSlice->cofAC[block8x8 + 4 * uv][0][0], 0, 4 * 2 * 65 * sizeof(int));
 
-      copy_image_data_8x8(&p_Img->enc_picture->imgUV[uv - 1][currMB->pix_y + mb_y], &currSlice->mb_pred[uv][mb_y], currMB->pix_x + mb_x, mb_x);
+      copy_image_data_8x8(&p_Vid->enc_picture->imgUV[uv - 1][currMB->pix_y + mb_y], &currSlice->mb_pred[uv][mb_y], currMB->pix_x + mb_x, mb_x);
     }
   }
 
@@ -222,7 +223,7 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
                                    char  *ref_idx)     //!< reference pictures for each list
 {
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currSlice->p_Img;  
+  VideoParameters *p_Vid = currSlice->p_Vid;  
   int    block_y, block_x, pic_pix_x, i, j, nonzero = 0, cbp_blk_mask;
   int    coeff_cost = 0;
   int    mb_y       = (block8x8 >> 1) << 3;
@@ -245,7 +246,7 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
       luma_prediction (currMB, mb_x, mb_y, 8, 8, p_dir, list_mode, ref_idx, bipred_me); 
 
       //===== compute prediction residual ======            
-      compute_residue (&p_Img->pCurImg[currMB->opix_y + mb_y], &currSlice->mb_pred[0][mb_y], &currSlice->mb_ores[0][mb_y], mb_x, currMB->pix_x + mb_x, 8, 8);
+      compute_residue (&p_Vid->pCurImg[currMB->opix_y + mb_y], &currSlice->mb_pred[0][mb_y], &currSlice->mb_ores[0][mb_y], mb_x, currMB->pix_x + mb_x, 8, 8);
     }
 
     for (byy=0, block_y=mb_y; block_y<mb_y+8; byy+=4, block_y+=4)
@@ -261,21 +262,21 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
           luma_prediction (currMB, block_x, block_y, 4, 4, p_dir, list_mode, ref_idx, bipred_me);
 
           //===== compute prediction residual ======            
-          compute_residue(&p_Img->pCurImg[currMB->opix_y + block_y], &currSlice->mb_pred[0][block_y], &currSlice->mb_ores[0][block_y], block_x, pic_pix_x, 4, 4);
+          compute_residue(&p_Vid->pCurImg[currMB->opix_y + block_y], &currSlice->mb_pred[0][block_y], &currSlice->mb_ores[0][block_y], block_x, pic_pix_x, 4, 4);
         }
 
         for (uv = PLANE_U; uv <= PLANE_V; ++uv)
         {
-          select_plane(p_Img, uv);
+          select_plane(p_Vid, uv);
           chroma_prediction (currMB, uv - 1, block_x, block_y, 4, 4, p_dir, list_mode[0], list_mode[1], ref_idx[0], ref_idx[1], bipred_me);
 
           //===== compute prediction residual ======            
-          compute_residue(&p_Img->pImgOrg[uv][currMB->opix_y + block_y], &currSlice->mb_pred[uv][block_y], &currSlice->mb_ores[uv][block_y], block_x, pic_pix_x, 4, 4);
+          compute_residue(&p_Vid->pImgOrg[uv][currMB->opix_y + block_y], &currSlice->mb_pred[uv][block_y], &currSlice->mb_ores[uv][block_y], block_x, pic_pix_x, 4, 4);
         }
-        select_plane(p_Img, PLANE_Y);
+        select_plane(p_Vid, PLANE_Y);
 
         //===== DCT, Quantization, inverse Quantization, IDCT, Reconstruction =====
-        if (!skipped && ( (currSlice->NoResidueDirect != 1) || (currMB->qp_scaled[0] == 0 && p_Img->lossless_qpprime_flag == 1) ))
+        if (!skipped && ( (currSlice->NoResidueDirect != 1) || (currMB->qp_scaled[0] == 0 && p_Vid->lossless_qpprime_flag == 1) ))
         {
           //===== DCT, Quantization, inverse Quantization, IDCT, Reconstruction =====
           nonzero = currMB->trans_4x4 (currMB, PLANE_Y, block_x, block_y, &coeff_cost, 0);
@@ -286,11 +287,11 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
             (*cbp)     |= cbp_mask;           // one bit for the 4x4 blocks of an 8x8 block
           }
 
-          if (currSlice->slice_type != SP_SLICE)  
+          if (currSlice->slice_type != SP_SLICE && currSlice->slice_type != SI_SLICE)  
           {
             for (uv = PLANE_U; uv <= PLANE_V; ++uv)
             {
-              select_plane(p_Img, (ColorPlane) uv);
+              select_plane(p_Vid, (ColorPlane) uv);
               nonzero = currMB->trans_4x4( currMB, (ColorPlane) uv, block_x, block_y, &currSlice->coeff_cost_cr[uv], 0);
               if (nonzero)
               {
@@ -298,11 +299,11 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
                 (currSlice->cmp_cbp[uv]) |= cbp_mask;           // one bit for the 4x4 blocks of an 8x8 block
               }
             }
-            select_plane(p_Img, PLANE_Y);
+            select_plane(p_Vid, PLANE_Y);
           }
           else
           {
-            assert(currSlice->slice_type == SP_SLICE);   //SP_SLICE not implementd for FREXT_AD444
+            assert(currSlice->slice_type == SP_SLICE || currSlice->slice_type == SI_SLICE);   //SP_SLICE not implementd for FREXT_AD444
           }
         }
       }
@@ -321,21 +322,21 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
     luma_prediction (currMB, block_x, block_y, 8, 8, p_dir, list_mode, ref_idx, bipred_me);
 
     //===== compute prediction residual ======            
-    compute_residue (&p_Img->pCurImg[currMB->opix_y + block_y], &currSlice->mb_pred[0][block_y], &currSlice->mb_ores[0][block_y], block_x, pic_pix_x, 8, 8);
+    compute_residue (&p_Vid->pCurImg[currMB->opix_y + block_y], &currSlice->mb_pred[0][block_y], &currSlice->mb_ores[0][block_y], block_x, pic_pix_x, 8, 8);
 
     for (uv = PLANE_U; uv <= PLANE_V; ++uv)
     {
-      select_plane(p_Img, (ColorPlane) uv);
+      select_plane(p_Vid, (ColorPlane) uv);
       chroma_prediction (currMB, uv - 1, block_x, block_y, 8, 8, p_dir, list_mode[0], list_mode[1], ref_idx[0], ref_idx[1], bipred_me);
 
       //===== compute prediction residual ======            
-      compute_residue (&p_Img->pImgOrg[uv][currMB->opix_y + block_y], &currSlice->mb_pred[uv][block_y], &currSlice->mb_ores[uv][block_y], block_x, pic_pix_x, 8, 8);
+      compute_residue (&p_Vid->pImgOrg[uv][currMB->opix_y + block_y], &currSlice->mb_pred[uv][block_y], &currSlice->mb_ores[uv][block_y], block_x, pic_pix_x, 8, 8);
     }
-    select_plane(p_Img, PLANE_Y);
+    select_plane(p_Vid, PLANE_Y);
 
     if (currSlice->NoResidueDirect != 1 && !skipped)
     {
-      if (currSlice->slice_type != SP_SLICE)
+      if (currSlice->slice_type != SP_SLICE && currSlice->slice_type != SI_SLICE)
         nonzero = currMB->trans_8x8 (currMB, PLANE_Y, block8x8, &coeff_cost, 0);
 
       if (nonzero)
@@ -344,11 +345,11 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
         (*cbp)     |= cbp_mask;                               // one bit for the 4x4 blocks of an 8x8 block
       }
 
-      if (currSlice->slice_type != SP_SLICE)
+      if (currSlice->slice_type != SP_SLICE && currSlice->slice_type != SI_SLICE)
       {
         for (uv = PLANE_U; uv <= PLANE_V; ++uv)
         {
-          select_plane(p_Img, (ColorPlane) uv);
+          select_plane(p_Vid, (ColorPlane) uv);
           nonzero = currMB->trans_8x8( currMB, (ColorPlane) uv, block8x8, &currSlice->coeff_cost_cr[uv], 0);
           if (nonzero)
           {
@@ -356,7 +357,7 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
             (currSlice->cmp_cbp[uv])     |= cbp_mask;           // one bit for the 4x4 blocks of an 8x8 block
           }
         }
-        select_plane(p_Img, PLANE_Y);
+        select_plane(p_Vid, PLANE_Y);
       }        
     }
   }
@@ -382,8 +383,8 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
   */
 
   if (currSlice->NoResidueDirect != 1 && !skipped && coeff_cost <= _LUMA_COEFF_COST_ &&
-    ((currMB->qp_scaled[0])!=0 || p_Img->lossless_qpprime_flag==0)&&
-    !(currSlice->slice_type == SP_SLICE && (p_Img->si_frame_indicator == TRUE || p_Img->sp2_frame_indicator == TRUE )))// last set of conditions
+    ((currMB->qp_scaled[0])!=0 || p_Vid->lossless_qpprime_flag==0)&&
+    !(currSlice->slice_type == SI_SLICE || (currSlice->slice_type == SP_SLICE && p_Vid->sp2_frame_indicator == TRUE )))// last set of conditions
     // cannot skip when perfect reconstruction is as in switching pictures or SI pictures
   {
     coeff_cost  = 0;
@@ -392,9 +393,9 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
 
     memset( currSlice->cofAC[block8x8][0][0], 0, 4 * 2 * 65 * sizeof(int));
 
-    copy_image_data_8x8(&p_Img->enc_picture->imgY[currMB->pix_y + mb_y], &currSlice->mb_pred[0][mb_y], currMB->pix_x + mb_x, mb_x);
+    copy_image_data_8x8(&p_Vid->enc_picture->imgY[currMB->pix_y + mb_y], &currSlice->mb_pred[0][mb_y], currMB->pix_x + mb_x, mb_x);
 
-    if (currSlice->slice_type == SP_SLICE)
+    if (currSlice->slice_type == SP_SLICE || currSlice->slice_type == SI_SLICE)
     {
       for (i=mb_x; i < mb_x + BLOCK_SIZE_8x8; i+=BLOCK_SIZE)
         for (j=mb_y; j < mb_y + BLOCK_SIZE_8x8; j+=BLOCK_SIZE)
@@ -405,7 +406,7 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
   for (uv = PLANE_U; uv <= PLANE_V; ++uv)
   {
     if (currSlice->NoResidueDirect != 1 && !skipped && currSlice->coeff_cost_cr[uv] <= _LUMA_COEFF_COST_ &&
-      (currMB->qp_scaled[uv]!=0 || p_Img->lossless_qpprime_flag==0))// last set of conditions
+      (currMB->qp_scaled[uv]!=0 || p_Vid->lossless_qpprime_flag==0))// last set of conditions
     {
       currSlice->coeff_cost_cr[uv] = 0;
       currSlice->cmp_cbp[uv] &= (63 - cbp_mask);
@@ -413,7 +414,7 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
 
       memset( currSlice->cofAC[block8x8 + 4 * uv][0][0], 0, 4 * 2 * 65 * sizeof(int));
 
-      copy_image_data_8x8(&p_Img->enc_picture->imgUV[uv - 1][currMB->pix_y + mb_y], &currSlice->mb_pred[uv][mb_y], currMB->pix_x + mb_x, mb_x);
+      copy_image_data_8x8(&p_Vid->enc_picture->imgUV[uv - 1][currMB->pix_y + mb_y], &currSlice->mb_pred[uv][mb_y], currMB->pix_x + mb_x, mb_x);
     }
   }
 
@@ -430,7 +431,7 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
 void luma_residual_coding_p444 (Macroblock *currMB)
 {
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
 
   int uv, i,j,block8x8,b8_x,b8_y;
   int list_mode[2];
@@ -464,7 +465,7 @@ void luma_residual_coding_p444 (Macroblock *currMB)
 
       sum_cnt_nonz[0] += luma_residual_coding_p444_8x8 (currMB, &(currMB->cbp), &(currMB->cbp_blk), block8x8, p_dir, list_mode, list_ref_idx);
 
-      if(p_Img->P444_joined) 
+      if(p_Vid->P444_joined) 
       {
         sum_cnt_nonz[1] += currSlice->coeff_cost_cr[1];
         sum_cnt_nonz[2] += currSlice->coeff_cost_cr[2];
@@ -473,18 +474,18 @@ void luma_residual_coding_p444 (Macroblock *currMB)
   }
 
   if ((is_skip || 
-    (sum_cnt_nonz[0] <= _LUMA_MB_COEFF_COST_ && ((currMB->qp_scaled[0])!=0 || p_Img->lossless_qpprime_flag==0))) &&
-    !(currSlice->slice_type == SP_SLICE && (p_Img->si_frame_indicator == TRUE || p_Img->sp2_frame_indicator == TRUE)))// modif ES added last set of conditions
+    (sum_cnt_nonz[0] <= _LUMA_MB_COEFF_COST_ && ((currMB->qp_scaled[0])!=0 || p_Vid->lossless_qpprime_flag==0))) &&
+    !(currSlice->slice_type == SI_SLICE || (currSlice->slice_type == SP_SLICE && p_Vid->sp2_frame_indicator == TRUE )))// last set of conditions
     //cannot skip if SI or switching SP frame perfect reconstruction is needed
   {
     currMB->cbp     &= 0xfffff0 ;
     currMB->cbp_blk &= 0xff0000 ;
 
-    copy_image_data_16x16(&p_Img->enc_picture->imgY[currMB->pix_y], currSlice->mb_pred[0], currMB->pix_x, 0);
+    copy_image_data_16x16(&p_Vid->enc_picture->imgY[currMB->pix_y], currSlice->mb_pred[0], currMB->pix_x, 0);
 
     memset( currSlice->cofAC[0][0][0], 0, 2080 * sizeof(int)); // 4 * 4 * 2 * 65
 
-    if (currSlice->slice_type == SP_SLICE)
+    if (currSlice->slice_type == SP_SLICE || currSlice->slice_type == SI_SLICE)
     {
       for(block8x8=0;block8x8<4; ++block8x8)
       {
@@ -500,12 +501,12 @@ void luma_residual_coding_p444 (Macroblock *currMB)
   for (uv = PLANE_U; uv <= PLANE_V; ++uv)
   {
     if(is_skip || (sum_cnt_nonz[uv] <= _LUMA_MB_COEFF_COST_ &&
-      ((currMB->qp_scaled[uv])!=0 ||p_Img->lossless_qpprime_flag==0)))
+      ((currMB->qp_scaled[uv])!=0 ||p_Vid->lossless_qpprime_flag==0)))
     {
       currSlice->cmp_cbp[uv] &= 0xfffff0 ;
       currSlice->cur_cbp_blk[uv] &= 0xff0000 ;
 
-      copy_image_data_16x16(&p_Img->enc_picture->p_img[uv][currMB->pix_y], currSlice->mb_pred[uv], currMB->pix_x, 0);
+      copy_image_data_16x16(&p_Vid->enc_picture->p_img[uv][currMB->pix_y], currSlice->mb_pred[uv], currMB->pix_x, 0);
 
       memset( currSlice->cofAC[4 * uv][0][0], 0, 2080 * sizeof(int)); // 4 * 4 * 2 * 65
     }

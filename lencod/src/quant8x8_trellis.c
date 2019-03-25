@@ -39,18 +39,18 @@
 static void rdoq_8x8_CABAC(Macroblock *currMB, int **tblock, int block_x,int qp_per, int qp_rem, 
               LevelQuantParams **q_params_8x8, const byte *p_scan, int levelTrellis[64])
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   levelDataStruct levelData[64];
   double  lambda_md = 0.0;
   int kStart = 0, kStop = 0, noCoeff = 0;
 
-  if ((p_Img->type==B_SLICE) && p_Img->nal_reference_idc)
+  if ((p_Vid->type==B_SLICE) && p_Vid->nal_reference_idc)
   {
-    lambda_md = p_Img->lambda_md[5][p_Img->masterQP];  
+    lambda_md = p_Vid->lambda_md[5][p_Vid->masterQP];  
   }
   else
   {
-    lambda_md = p_Img->lambda_md[p_Img->type][p_Img->masterQP]; 
+    lambda_md = p_Vid->lambda_md[p_Vid->type][p_Vid->masterQP]; 
   }
 
   noCoeff = init_trellis_data_8x8_CABAC(currMB,tblock, block_x, qp_per, qp_rem, q_params_8x8, p_scan, &levelData[0], &kStart, &kStop);
@@ -68,20 +68,20 @@ static void rdoq_8x8_CABAC(Macroblock *currMB, int **tblock, int block_x,int qp_
 static void rdoq_8x8_CAVLC(Macroblock *currMB, int **tblock, int block_y, int block_x, int qp_per, int qp_rem,
                     LevelQuantParams **q_params_8x8, const byte *p_scan, int levelTrellis[4][16])
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   int k;
   levelDataStruct levelData[4][16]; 
   double lambda_md = 0.0;
   
   int b8 = ((block_y >> 3)<<1) + (block_x >> 3);
 
-  if ((p_Img->type==B_SLICE) && p_Img->nal_reference_idc)
+  if ((p_Vid->type==B_SLICE) && p_Vid->nal_reference_idc)
   {
-    lambda_md = p_Img->lambda_md[5][p_Img->masterQP];  
+    lambda_md = p_Vid->lambda_md[5][p_Vid->masterQP];  
   }
   else
   {
-    lambda_md = p_Img->lambda_md[p_Img->type][p_Img->masterQP]; 
+    lambda_md = p_Vid->lambda_md[p_Vid->type][p_Vid->masterQP]; 
   }
 
   init_trellis_data_8x8_CAVLC (currMB, tblock, block_x, qp_per, qp_rem, q_params_8x8, p_scan, levelData);
@@ -104,7 +104,7 @@ static void rdoq_8x8_CAVLC(Macroblock *currMB, int **tblock, int block_y, int bl
  */
 int quant_8x8_trellis(Macroblock *currMB, int **tblock, struct quant_methods *q_method)
 {
-  QuantParameters *p_Quant = currMB->p_Img->p_Quant;
+  QuantParameters *p_Quant = currMB->p_Vid->p_Quant;
   int block_x = q_method->block_x;
   int  qp = q_method->qp;
   int*  ACLevel = q_method->ACLevel;
@@ -183,7 +183,7 @@ int quant_8x8_trellis(Macroblock *currMB, int **tblock, struct quant_methods *q_
  */
 int quant_8x8cavlc_trellis(Macroblock *currMB, int **tblock, struct quant_methods *q_method, int***  cofAC)
 {
-  QuantParameters *p_Quant = currMB->p_Img->p_Quant;
+  QuantParameters *p_Quant = currMB->p_Vid->p_Quant;
   int block_x = q_method->block_x;
   int block_y = q_method->block_y;
   int  qp = q_method->qp;

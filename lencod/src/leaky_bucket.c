@@ -195,7 +195,7 @@ void Sort(unsigned long NumberLeakyBuckets, unsigned long *Rmin)
  ***********************************************************************
  */
 
-void calc_buffer(ImageParameters *p_Img, InputParameters *p_Inp)
+void calc_buffer(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   unsigned long AvgRate, TotalRate, NumberLeakyBuckets;
   long *buffer_frame, minB;
@@ -219,9 +219,9 @@ void calc_buffer(ImageParameters *p_Img, InputParameters *p_Inp)
       fprintf(stdout,"\n-------------------------------------------------------------------------------\n");
       break;
   }
-  printf(" Total Frames:  %ld (%d) \n", p_Img->total_frame_buffer, p_Inp->no_frm_base);
+  printf(" Total Frames:  %ld \n", p_Vid->total_frame_buffer);
   NumberLeakyBuckets = (unsigned long) p_Inp->NumberLeakyBuckets;
-  buffer_frame = calloc(p_Img->total_frame_buffer + 1, sizeof(long));
+  buffer_frame = calloc(p_Vid->total_frame_buffer + 1, sizeof(long));
   if(!buffer_frame)
     no_mem_exit("init_buffer: buffer_frame");
   Rmin = calloc(NumberLeakyBuckets, sizeof(unsigned long));
@@ -235,20 +235,20 @@ void calc_buffer(ImageParameters *p_Img, InputParameters *p_Inp)
     no_mem_exit("init_buffer: Fmin");
 
   TotalRate = 0;
-  for(iFrame=0; iFrame < p_Img->total_frame_buffer; iFrame++)
+  for(iFrame=0; iFrame < p_Vid->total_frame_buffer; iFrame++)
   {
-    TotalRate += (unsigned long) p_Img->Bit_Buffer[iFrame];
+    TotalRate += (unsigned long) p_Vid->Bit_Buffer[iFrame];
   }
-  AvgRate = (unsigned long) ((float) TotalRate/ p_Img->total_frame_buffer);
+  AvgRate = (unsigned long) ((float) TotalRate/ p_Vid->total_frame_buffer);
 
   if(1 != get_LeakyBucketRate(p_Inp, NumberLeakyBuckets, Rmin))
   { /* if rate file is not present, use default calculated from avg.rate */
     for(iBucket=0; iBucket < NumberLeakyBuckets; iBucket++)
     {
       if(iBucket == 0)
-        Rmin[iBucket] = (unsigned long)((float) AvgRate * p_Img->framerate); /* convert bits/frame to bits/second */
+        Rmin[iBucket] = (unsigned long)((float) AvgRate * p_Vid->framerate); /* convert bits/frame to bits/second */
       else
-        Rmin[iBucket] = (unsigned long) ((float) Rmin[iBucket-1] + (AvgRate/4) * (p_Img->framerate));
+        Rmin[iBucket] = (unsigned long) ((float) Rmin[iBucket-1] + (AvgRate/4) * (p_Vid->framerate));
     }
   }
   Sort(NumberLeakyBuckets, Rmin);
@@ -256,22 +256,22 @@ void calc_buffer(ImageParameters *p_Img, InputParameters *p_Inp)
   maxBuffer = AvgRate * 20; /* any initialization is good. */
   for(iBucket=0; iBucket< NumberLeakyBuckets; iBucket++)
   {
-    iChannelRate = (long) (Rmin[iBucket] / (p_Img->framerate)); /* converts bits/second to bits/frame */
+    iChannelRate = (long) (Rmin[iBucket] / (p_Vid->framerate)); /* converts bits/second to bits/frame */
     /* To calculate initial buffer size */
     InitFullness = maxBuffer; /* set Initial Fullness to be buffer size */
     buffer_frame[0] = InitFullness;
     minB = maxBuffer;
 
-    for(iFrame=0; iFrame < p_Img->total_frame_buffer ; iFrame++)
+    for(iFrame=0; iFrame < p_Vid->total_frame_buffer ; iFrame++)
     {
-      buffer_frame[iFrame] = buffer_frame[iFrame] - p_Img->Bit_Buffer[iFrame];
+      buffer_frame[iFrame] = buffer_frame[iFrame] - p_Vid->Bit_Buffer[iFrame];
       if(buffer_frame[iFrame] < minB)
       {
         minB = buffer_frame[iFrame];
         FrameIndex = iFrame;
       }
 
-      if ( iFrame < p_Img->total_frame_buffer )
+      if ( iFrame < p_Vid->total_frame_buffer )
       {
         buffer_frame[iFrame+1] = buffer_frame[iFrame] + iChannelRate;
         if(buffer_frame[iFrame+1] > maxBuffer)
@@ -281,17 +281,17 @@ void calc_buffer(ImageParameters *p_Img, InputParameters *p_Inp)
     actualBuffer = (maxBuffer - minB);
 
     /* To calculate initial buffer Fullness */
-    InitFullness = p_Img->Bit_Buffer[0];
+    InitFullness = p_Vid->Bit_Buffer[0];
     buffer_frame[0] = InitFullness;
     for(iFrame=0; iFrame < FrameIndex+1; iFrame++)
     {
-      buffer_frame[iFrame] = buffer_frame[iFrame] - p_Img->Bit_Buffer[iFrame];
+      buffer_frame[iFrame] = buffer_frame[iFrame] - p_Vid->Bit_Buffer[iFrame];
       if(buffer_frame[iFrame] < 0) 
       {
         InitFullness -= buffer_frame[iFrame];
         buffer_frame[iFrame] = 0;
       }
-      if ( iFrame < p_Img->total_frame_buffer )
+      if ( iFrame < p_Vid->total_frame_buffer )
       {
         buffer_frame[iFrame+1] = buffer_frame[iFrame] + iChannelRate;
         if(buffer_frame[iFrame+1] > actualBuffer)

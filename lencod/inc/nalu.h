@@ -20,8 +20,7 @@
 #include "nalucommon.h"
 
 extern int RBSPtoNALU (unsigned char *rbsp, NALU_t *nalu, int rbsp_size, int nal_unit_type, int nal_reference_idc, int UseAnnexbLongStartcode);
-
-extern int Write_AUD_NALU( ImageParameters *p_Img );
-extern int Write_Filler_Data_NALU( ImageParameters *p_Img, int num_bytes );
+extern int Write_AUD_NALU( VideoParameters *p_Vid );
+extern int Write_Filler_Data_NALU( VideoParameters *p_Vid, int num_bytes );
 
 #endif

@@ -83,9 +83,9 @@ void calc_buffer(InputParameters *p_Inp)
 
   NumberLeakyBuckets = GetBigDoubleWord(outf);
   printf(" Number Leaky Buckets: %8ld \n\n", NumberLeakyBuckets);
-  Rmin = calloc(sizeof(unsigned long), NumberLeakyBuckets);
-  Bmin = calloc(sizeof(unsigned long), NumberLeakyBuckets);
-  Fmin = calloc(sizeof(unsigned long), NumberLeakyBuckets);
+  Rmin = calloc(NumberLeakyBuckets, sizeof(unsigned long));
+  Bmin = calloc(NumberLeakyBuckets, sizeof(unsigned long));
+  Fmin = calloc(NumberLeakyBuckets, sizeof(unsigned long));
 
   for(iBucket =0; iBucket < NumberLeakyBuckets; iBucket++)
   {

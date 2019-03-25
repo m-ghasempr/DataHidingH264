@@ -15,6 +15,8 @@
 #ifndef _NALUCOMMON_H_
 #define _NALUCOMMON_H_
 
+#include "defines.h"
+
 #define MAXRBSPSIZE 64000
 #define MAXNALUSIZE 64000
 
@@ -52,7 +54,7 @@ typedef struct nalu_t
   NaluType  nal_unit_type;         //!< NALU_TYPE_xxxx
   NalRefIdc nal_reference_idc;     //!< NALU_PRIORITY_xxxx  
   byte     *buf;                   //!< contains the first byte followed by the EBSP
-  uint16    lost_packets;     //!< true, if packet loss is detected
+  uint16    lost_packets;          //!< true, if packet loss is detected
 } NALU_t;
 
 //! allocate one NAL Unit

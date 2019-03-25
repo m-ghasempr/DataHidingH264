@@ -14,6 +14,8 @@
 #ifndef _MACROBLOCK_H_
 #define _MACROBLOCK_H_
 
+#include "global.h"
+#include "mbuffer.h"
 #include "block.h"
 
 //! single scan pattern
@@ -143,5 +145,7 @@ extern void get_neighbors(Macroblock *currMB, PixelPos *block, int mb_x, int mb_
 extern void start_macroblock     (Slice *currSlice, Macroblock **currMB);
 extern int  decode_one_macroblock(Macroblock *currMB, StorablePicture *dec_picture);
 extern Boolean  exit_macroblock  (Slice *currSlice, int eos_bit);
+extern void update_qp            (Macroblock *currMB, int qp);
+
 #endif
 

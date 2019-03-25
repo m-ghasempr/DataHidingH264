@@ -23,28 +23,34 @@
 #include "report.h"
 
 
-void mmco_long_term(ImageParameters *p_Img, int current_pic_num)
+void mmco_long_term(VideoParameters *p_Vid, int current_pic_num)
 {
   DecRefPicMarking_t *tmp_drpm,*tmp_drpm2;
 
-  if (p_Img->dec_ref_pic_marking_buffer!=NULL)
-    return;
+  if ( !p_Vid->currentPicture->idr_flag )
+  {
+    if (p_Vid->dec_ref_pic_marking_buffer!=NULL)
+      return;
 
-  if (NULL==(tmp_drpm=(DecRefPicMarking_t*)calloc (1,sizeof (DecRefPicMarking_t)))) 
-    no_mem_exit("poc_based_ref_management: tmp_drpm");
+    if (NULL==(tmp_drpm=(DecRefPicMarking_t*)calloc (1,sizeof (DecRefPicMarking_t)))) 
+      no_mem_exit("poc_based_ref_management: tmp_drpm");
 
-  tmp_drpm->Next=NULL;
+    tmp_drpm->Next=NULL;
 
-  tmp_drpm->memory_management_control_operation = 0;
+    tmp_drpm->memory_management_control_operation = 0;
 
-  if (NULL==(tmp_drpm2=(DecRefPicMarking_t*)calloc (1,sizeof (DecRefPicMarking_t)))) 
-    no_mem_exit("poc_based_ref_management: tmp_drpm2");
-  tmp_drpm2->Next=tmp_drpm;
+    if (NULL==(tmp_drpm2=(DecRefPicMarking_t*)calloc (1,sizeof (DecRefPicMarking_t)))) 
+      no_mem_exit("poc_based_ref_management: tmp_drpm2");
+    tmp_drpm2->Next=tmp_drpm;
 
-  tmp_drpm2->memory_management_control_operation = 3;
-  tmp_drpm2->long_term_frame_idx = current_pic_num;
-  p_Img->dec_ref_pic_marking_buffer = tmp_drpm2;
-  p_Img->long_term_reference_flag   = TRUE;
+    tmp_drpm2->memory_management_control_operation = 3;
+    tmp_drpm2->long_term_frame_idx = current_pic_num;
+    p_Vid->dec_ref_pic_marking_buffer = tmp_drpm2;
+  }
+  else
+  {
+    p_Vid->long_term_reference_flag = TRUE;
+  }
 }
 
 /*!
@@ -54,25 +60,28 @@ void mmco_long_term(ImageParameters *p_Img, int current_pic_num)
 ************************************************************************
 */
 
-void poc_based_ref_management_frame_pic(ImageParameters *p_Img, int current_pic_num)
+void poc_based_ref_management_frame_pic(VideoParameters *p_Vid, int current_pic_num)
 {
   unsigned i, pic_num = 0;
 
   int min_poc=INT_MAX;
   DecRefPicMarking_t *tmp_drpm,*tmp_drpm2;
 
-  if (p_Img->dec_ref_pic_marking_buffer!=NULL)
+  if (p_Vid->dec_ref_pic_marking_buffer!=NULL)
     return;
 
-  if ((p_Img->p_Dpb->ref_frames_in_buffer + p_Img->p_Dpb->ltref_frames_in_buffer)==0)
+  if ( p_Vid->currentPicture->idr_flag )
     return;
 
-  for (i = 0; i < p_Img->p_Dpb->used_size; i++)
+  if ((p_Vid->p_Dpb->ref_frames_in_buffer + p_Vid->p_Dpb->ltref_frames_in_buffer)==0)
+    return;
+
+  for (i = 0; i < p_Vid->p_Dpb->used_size; i++)
   {
-    if (p_Img->p_Dpb->fs[i]->is_reference  && (!(p_Img->p_Dpb->fs[i]->is_long_term)) && p_Img->p_Dpb->fs[i]->poc < min_poc)
+    if (p_Vid->p_Dpb->fs[i]->is_reference  && (!(p_Vid->p_Dpb->fs[i]->is_long_term)) && p_Vid->p_Dpb->fs[i]->poc < min_poc)
     {
-      min_poc = p_Img->p_Dpb->fs[i]->frame->poc ;
-      pic_num = p_Img->p_Dpb->fs[i]->frame->pic_num;
+      min_poc = p_Vid->p_Dpb->fs[i]->frame->poc ;
+      pic_num = p_Vid->p_Dpb->fs[i]->frame->pic_num;
     }
   }
 
@@ -88,7 +97,7 @@ void poc_based_ref_management_frame_pic(ImageParameters *p_Img, int current_pic_
 
   tmp_drpm2->memory_management_control_operation = 1;
   tmp_drpm2->difference_of_pic_nums_minus1 = current_pic_num - pic_num - 1;
-  p_Img->dec_ref_pic_marking_buffer = tmp_drpm2;
+  p_Vid->dec_ref_pic_marking_buffer = tmp_drpm2;
 }
 
 /*!
@@ -98,28 +107,31 @@ void poc_based_ref_management_frame_pic(ImageParameters *p_Img, int current_pic_
 ************************************************************************
 */
 
-void poc_based_ref_management_field_pic(ImageParameters *p_Img, int current_pic_num)
+void poc_based_ref_management_field_pic(VideoParameters *p_Vid, int current_pic_num)
 {
   unsigned int i, pic_num1 = 0, pic_num2 = 0;
 
   int min_poc=INT_MAX;
   DecRefPicMarking_t *tmp_drpm,*tmp_drpm2, *tmp_drpm3;
 
-  if (p_Img->dec_ref_pic_marking_buffer!=NULL)
+  if (p_Vid->dec_ref_pic_marking_buffer!=NULL)
     return;
 
-  if ((p_Img->p_Dpb->ref_frames_in_buffer+p_Img->p_Dpb->ltref_frames_in_buffer)==0)
+  if ( p_Vid->currentPicture->idr_flag )
     return;
 
-  if ( p_Img->structure == TOP_FIELD )
+  if ((p_Vid->p_Dpb->ref_frames_in_buffer+p_Vid->p_Dpb->ltref_frames_in_buffer)==0)
+    return;
+
+  if ( p_Vid->structure == TOP_FIELD )
   {
-    for (i=0; i<p_Img->p_Dpb->used_size;i++)
+    for (i=0; i<p_Vid->p_Dpb->used_size;i++)
     {
-      if (p_Img->p_Dpb->fs[i]->is_reference && (!(p_Img->p_Dpb->fs[i]->is_long_term)) && p_Img->p_Dpb->fs[i]->poc < min_poc)
+      if (p_Vid->p_Dpb->fs[i]->is_reference && (!(p_Vid->p_Dpb->fs[i]->is_long_term)) && p_Vid->p_Dpb->fs[i]->poc < min_poc)
       {      
-        min_poc  = p_Img->p_Dpb->fs[i]->poc;
-        pic_num1 = p_Img->p_Dpb->fs[i]->top_field->pic_num;
-        pic_num2 = p_Img->p_Dpb->fs[i]->bottom_field->pic_num;
+        min_poc  = p_Vid->p_Dpb->fs[i]->poc;
+        pic_num1 = p_Vid->p_Dpb->fs[i]->top_field->pic_num;
+        pic_num2 = p_Vid->p_Dpb->fs[i]->bottom_field->pic_num;
       }
     }
   }
@@ -128,9 +140,9 @@ void poc_based_ref_management_field_pic(ImageParameters *p_Img, int current_pic_
   tmp_drpm->Next=NULL;
   tmp_drpm->memory_management_control_operation = 0;
 
-  if ( p_Img->structure == BOTTOM_FIELD )
+  if ( p_Vid->structure == BOTTOM_FIELD )
   {
-    p_Img->dec_ref_pic_marking_buffer = tmp_drpm;
+    p_Vid->dec_ref_pic_marking_buffer = tmp_drpm;
     return;
   }
 
@@ -144,6 +156,6 @@ void poc_based_ref_management_field_pic(ImageParameters *p_Img, int current_pic_
   tmp_drpm3->memory_management_control_operation = 1;
   tmp_drpm3->difference_of_pic_nums_minus1 = current_pic_num - pic_num2 - 1;
 
-  p_Img->dec_ref_pic_marking_buffer = tmp_drpm3;
+  p_Vid->dec_ref_pic_marking_buffer = tmp_drpm3;
 }
 

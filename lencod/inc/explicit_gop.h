@@ -16,9 +16,8 @@
 #define _EXPLICIT_GOP_H_
 
 // GOP Hierarchy
-extern void init_gop_structure     (ImageParameters *p_Img, InputParameters *p_Inp);
-extern void interpret_gop_structure(ImageParameters *p_Img, InputParameters *p_Inp);
-extern void create_hierarchy       (ImageParameters *p_Img, InputParameters *p_Inp);
-extern void clear_gop_structure    (ImageParameters *p_Img);
+extern void init_gop_structure     (VideoParameters *p_Vid, InputParameters *p_Inp);
+extern void interpret_gop_structure(VideoParameters *p_Vid, InputParameters *p_Inp);
+extern void clear_gop_structure    (VideoParameters *p_Vid);
 
 #endif

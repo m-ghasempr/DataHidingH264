@@ -34,7 +34,6 @@ typedef struct exp_seq_info
 } ExpSeqInfo;
 
 extern void ReadExplicitSeqFile    (ExpSeqInfo *seq_info, FILE *exp_file, int coding_index);
-extern void OpenExplicitSeqFile    (ImageParameters *p_Img, InputParameters *p_Inp);
-extern void CloseExplicitSeqFile   (ImageParameters *p_Img);
-extern void ExplicitUpdateImgParams(ExpFrameInfo *info, ImageParameters *p_Img, InputParameters *p_Inp);
+extern void OpenExplicitSeqFile    (VideoParameters *p_Vid, InputParameters *p_Inp);
+extern void CloseExplicitSeqFile   (VideoParameters *p_Vid);
 #endif

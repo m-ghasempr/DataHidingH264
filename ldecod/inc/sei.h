@@ -64,37 +64,37 @@ typedef struct tone_mapping_struct_s
 
 #endif
 
-void InterpretSEIMessage(byte* msg, int size, ImageParameters *p_Img);
-void interpret_spare_pic( byte* payload, int size, ImageParameters *p_Img );
-void interpret_subsequence_info( byte* payload, int size, ImageParameters *p_Img );
-void interpret_subsequence_layer_characteristics_info( byte* payload, int size, ImageParameters *p_Img );
-void interpret_subsequence_characteristics_info( byte* payload, int size, ImageParameters *p_Img );
-void interpret_scene_information( byte* payload, int size, ImageParameters *p_Img ); // JVT-D099
-void interpret_user_data_registered_itu_t_t35_info( byte* payload, int size, ImageParameters *p_Img );
-void interpret_user_data_unregistered_info( byte* payload, int size, ImageParameters *p_Img );
-void interpret_pan_scan_rect_info( byte* payload, int size, ImageParameters *p_Img );
-void interpret_recovery_point_info( byte* payload, int size, ImageParameters *p_Img );
-void interpret_filler_payload_info( byte* payload, int size, ImageParameters *p_Img );
-void interpret_dec_ref_pic_marking_repetition_info( byte* payload, int size, ImageParameters *p_Img );
-void interpret_full_frame_freeze_info( byte* payload, int size, ImageParameters *p_Img );
-void interpret_full_frame_freeze_release_info( byte* payload, int size, ImageParameters *p_Img );
-void interpret_full_frame_snapshot_info( byte* payload, int size, ImageParameters *p_Img );
-void interpret_progressive_refinement_start_info( byte* payload, int size, ImageParameters *p_Img );
-void interpret_progressive_refinement_end_info( byte* payload, int size, ImageParameters *p_Img );
-void interpret_motion_constrained_slice_group_set_info( byte* payload, int size, ImageParameters *p_Img );
-void interpret_reserved_info( byte* payload, int size, ImageParameters *p_Img );
-void interpret_buffering_period_info( byte* payload, int size, ImageParameters *p_Img );
-void interpret_picture_timing_info( byte* payload, int size, ImageParameters *p_Img );
-void interpret_film_grain_characteristics_info( byte* payload, int size, ImageParameters *p_Img );
-void interpret_deblocking_filter_display_preference_info( byte* payload, int size, ImageParameters *p_Img );
-void interpret_stereo_video_info_info( byte* payload, int size, ImageParameters *p_Img );
-void interpret_post_filter_hints_info( byte* payload, int size, ImageParameters *p_Img );
+void InterpretSEIMessage                                ( byte* payload, int size, VideoParameters *p_Vid );
+void interpret_spare_pic                                ( byte* payload, int size, VideoParameters *p_Vid );
+void interpret_subsequence_info                         ( byte* payload, int size, VideoParameters *p_Vid );
+void interpret_subsequence_layer_characteristics_info   ( byte* payload, int size, VideoParameters *p_Vid );
+void interpret_subsequence_characteristics_info         ( byte* payload, int size, VideoParameters *p_Vid );
+void interpret_scene_information                        ( byte* payload, int size, VideoParameters *p_Vid );
+void interpret_user_data_registered_itu_t_t35_info      ( byte* payload, int size, VideoParameters *p_Vid );
+void interpret_user_data_unregistered_info              ( byte* payload, int size, VideoParameters *p_Vid );
+void interpret_pan_scan_rect_info                       ( byte* payload, int size, VideoParameters *p_Vid );
+void interpret_recovery_point_info                      ( byte* payload, int size, VideoParameters *p_Vid );
+void interpret_filler_payload_info                      ( byte* payload, int size, VideoParameters *p_Vid );
+void interpret_dec_ref_pic_marking_repetition_info      ( byte* payload, int size, VideoParameters *p_Vid );
+void interpret_full_frame_freeze_info                   ( byte* payload, int size, VideoParameters *p_Vid );
+void interpret_full_frame_freeze_release_info           ( byte* payload, int size, VideoParameters *p_Vid );
+void interpret_full_frame_snapshot_info                 ( byte* payload, int size, VideoParameters *p_Vid );
+void interpret_progressive_refinement_start_info        ( byte* payload, int size, VideoParameters *p_Vid );
+void interpret_progressive_refinement_end_info          ( byte* payload, int size, VideoParameters *p_Vid );
+void interpret_motion_constrained_slice_group_set_info  ( byte* payload, int size, VideoParameters *p_Vid );
+void interpret_reserved_info                            ( byte* payload, int size, VideoParameters *p_Vid );
+void interpret_buffering_period_info                    ( byte* payload, int size, VideoParameters *p_Vid );
+void interpret_picture_timing_info                      ( byte* payload, int size, VideoParameters *p_Vid );
+void interpret_film_grain_characteristics_info          ( byte* payload, int size, VideoParameters *p_Vid );
+void interpret_deblocking_filter_display_preference_info( byte* payload, int size, VideoParameters *p_Vid );
+void interpret_stereo_video_info_info                   ( byte* payload, int size, VideoParameters *p_Vid );
+void interpret_post_filter_hints_info                   ( byte* payload, int size, VideoParameters *p_Vid );
 // functions for tone mapping SEI message
-void interpret_tone_mapping( byte* payload, int size, ImageParameters *p_Img );
+void interpret_tone_mapping                             ( byte* payload, int size, VideoParameters *p_Vid );
 
 #if (ENABLE_OUTPUT_TONEMAPPING)
-void tone_map(imgpel** imgX, imgpel* lut, int size_x, int size_y);
-void init_tone_mapping_sei(ToneMappingSEI *seiToneMapping);
+void tone_map               (imgpel** imgX, imgpel* lut, int size_x, int size_y);
+void init_tone_mapping_sei  (ToneMappingSEI *seiToneMapping);
 void update_tone_mapping_sei(ToneMappingSEI *seiToneMapping);
 #endif
 #endif

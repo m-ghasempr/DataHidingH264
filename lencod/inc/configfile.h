@@ -19,15 +19,16 @@
 #define LEVEL_IDC       21
 
 
+//! Maps parameter name to its address, type etc.
 typedef struct {
-  char *TokenName;
-  void *Place;
-  int Type;
-  double Default;
-  int param_limits; //! 0: no limits, 1: both min and max, 2: only min (i.e. no negatives), 3: special case for QPs since min needs bitdepth_qp_scale
+  char *TokenName;    //!< name
+  void *Place;        //!< address
+  int Type;           //!< type:  0-int, 1-char[], 2-double
+  double Default;     //!< default value
+  int param_limits;   //!< 0: no limits, 1: both min and max, 2: only min (i.e. no negatives), 3: special case for QPs since min needs bitdepth_qp_scale
   double min_limit;
   double max_limit;
-  int    char_size;
+  int    char_size;   //!< Dimension of type char[]
 } Mapping;
 
 InputParameters cfgparams;
@@ -54,12 +55,18 @@ Mapping Map[] = {
     {"EnableOpenGOP",            &cfgparams.EnableOpenGOP,                0,   0.0,                       1,  0.0,              1.0,                             },
     {"EnableIDRGOP",             &cfgparams.EnableIDRGOP,                 0,   0.0,                       1,  0.0,              1.0,                             },    
     {"FramesToBeEncoded",        &cfgparams.no_frames,                    0,   1.0,                       2, -1.0,              0.0,                             },
-    {"QPISlice",                 &cfgparams.qp[0][I_SLICE],               0,   24.0,                      3,  (double) MIN_QP,  (double) MAX_QP,                 },
-    {"QPPSlice",                 &cfgparams.qp[0][P_SLICE],               0,   24.0,                      3,  (double) MIN_QP,  (double) MAX_QP,                 },
-    {"QPBSlice",                 &cfgparams.qp[0][B_SLICE],               0,   24.0,                      3,  (double) MIN_QP,  (double) MAX_QP,                 },
-    {"QPSPSlice",                &cfgparams.qp[0][SP_SLICE],              0,   24.0,                      3,  (double) MIN_QP,  (double) MAX_QP,                 },
-    {"QPSISlice",                &cfgparams.qp[0][SI_SLICE],              0,   24.0,                      3,  (double) MIN_QP,  (double) MAX_QP,                 },
-    {"QPSP2Slice",               &cfgparams.qpsp[0],                      0,   24.0,                      3,  (double) MIN_QP,  (double) MAX_QP,                 },
+    {"QPISlice",                 &cfgparams.qp[I_SLICE],                  0,   24.0,                      3,  (double) MIN_QP,  (double) MAX_QP,                 },
+    {"QPPSlice",                 &cfgparams.qp[P_SLICE],                  0,   24.0,                      3,  (double) MIN_QP,  (double) MAX_QP,                 },
+    {"QPBSlice",                 &cfgparams.qp[B_SLICE],                  0,   24.0,                      3,  (double) MIN_QP,  (double) MAX_QP,                 },
+    {"QPSPSlice",                &cfgparams.qp[SP_SLICE],                 0,   24.0,                      3,  (double) MIN_QP,  (double) MAX_QP,                 },
+    {"QPSISlice",                &cfgparams.qp[SI_SLICE],                 0,   24.0,                      3,  (double) MIN_QP,  (double) MAX_QP,                 },
+    {"ChangeQPFrame",            &cfgparams.qp2frame,                     0,   0.0,                       2,  0.0,              0.0,                             },
+    {"ChangeQPI",                &cfgparams.qp2off[I_SLICE],              0,   0.0,                       0,  (double) -MAX_QP,  (double) MAX_QP,                 },
+    {"ChangeQPP",                &cfgparams.qp2off[P_SLICE],              0,   0.0,                       0,  (double) -MAX_QP,  (double) MAX_QP,                 },
+    {"ChangeQPB",                &cfgparams.qp2off[B_SLICE],              0,   0.0,                       0,  (double) -MAX_QP,  (double) MAX_QP,                 },
+    {"ChangeQPSP",               &cfgparams.qp2off[SP_SLICE],             0,   0.0,                       0,  (double) -MAX_QP,  (double) MAX_QP,                 },
+    {"ChangeQPSI",               &cfgparams.qp2off[SI_SLICE],             0,   0.0,                       0,  (double) -MAX_QP,  (double) MAX_QP,                 },
+    {"QPSP2Slice",               &cfgparams.qpsp,                         0,   0.0,                       3,  (double) MIN_QP,  (double) MAX_QP,                 },
     {"FrameSkip",                &cfgparams.frame_skip,                   0,   0.0,                       2,  0.0,              0.0,                             },
     {"DisableSubpelME",          &cfgparams.DisableSubpelME,              0,   0.0,                       1,  0.0,              1.0,                             },
     {"SearchRange",              &cfgparams.search_range,                 0,   16.0,                      2,  0.0,              0.0,                             },
@@ -99,13 +106,14 @@ Mapping Map[] = {
     {"DispPQPOffset",            &cfgparams.DispPQPOffset,                0,   0.0,                       0,-51.0,             51.0,                             },
     {"NumberBFrames",            &cfgparams.NumberBFrames,                0,   0.0,                       2,  0.0,              0.0,                             },
     {"PReplaceBSlice",           &cfgparams.PReplaceBSlice,               0,   0.0,                       1,  0.0,              1.0,                             },
-    {"BRefPicQPOffset",          &cfgparams.qpBRSOffset[0],               0,   0.0,                       0,-51.0,             51.0,                             },
+    {"BRefPicQPOffset",          &cfgparams.qpBRSOffset,                  0,   0.0,                       0,-51.0,             51.0,                             },
     {"DirectModeType",           &cfgparams.direct_spatial_mv_pred_flag,  0,   0.0,                       1,  0.0,              1.0,                             },
     {"DirectInferenceFlag",      &cfgparams.directInferenceFlag,          0,   1.0,                       1,  0.0,              1.0,                             },
     {"SPPicturePeriodicity",     &cfgparams.sp_periodicity,               0,   0.0,                       2,  0.0,              0.0,                             },        
     {"SI_FRAMES",                &cfgparams.si_frame_indicator,           0,   0.0,                       1,  0.0,              1.0,                             },
     {"SP_output",                &cfgparams.sp_output_indicator,          0,   0.0,                       1,  0.0,              1.0,                             },
     {"SP_output_name",           &cfgparams.sp_output_filename,           1,   0.0,                       0,  0.0,              0.0,             FILE_NAME_SIZE, },
+    {"SPSwitchPeriod",           &cfgparams.sp_switch_period,             0,   0.0,                       2,  0.0,              0.0,                             },
     {"SP2_FRAMES",               &cfgparams.sp2_frame_indicator,          0,   0.0,                       1,  0.0,              1.0,                             },
     {"SP2_input_name1",          &cfgparams.sp2_input_filename1,          1,   0.0,                       0,  0.0,              0.0,             FILE_NAME_SIZE, },
     {"SP2_input_name2",          &cfgparams.sp2_input_filename2,          1,   0.0,                       0,  0.0,              0.0,             FILE_NAME_SIZE, },
@@ -149,23 +157,8 @@ Mapping Map[] = {
     {"Intra4x4DirDisable",       &cfgparams.Intra4x4DirDisable,           0,   0.0,                       1,  0.0,              1.0,                             },
     {"Intra16x16ParDisable",     &cfgparams.Intra16x16ParDisable,         0,   0.0,                       1,  0.0,              1.0,                             },
     {"Intra16x16PlaneDisable",   &cfgparams.Intra16x16PlaneDisable,       0,   0.0,                       1,  0.0,              1.0,                             },
-    {"EnableIPCM",               &cfgparams.EnableIPCM,                   0,   0.0,                       1,  0.0,              1.0,                             },
+    {"EnableIPCM",               &cfgparams.EnableIPCM,                   0,   0.0,                       1,  0.0,              2.0,                             },
     {"ChromaIntraDisable",       &cfgparams.ChromaIntraDisable,           0,   0.0,                       1,  0.0,              1.0,                             },
-    {"FastMDEnable",             &cfgparams.FastMDEnable,                 0,   0.0,                       1,  0.0,              1.0,                             },       
-    {"FastIntraMD",              &cfgparams.FastIntraMD,                  0,   0.0,                       1,  0.0,              5.0,                             },    
-    {"FastIntra4x4",             &cfgparams.FastIntra4x4,                 0,   0.0,                       1,  0.0,              6.0,                             },
-    {"FastIntra16x16",           &cfgparams.FastIntra16x16,               0,   0.0,                       1,  0.0,              2.0,                             },
-    {"FastIntra8x8",             &cfgparams.FastIntra8x8,                 0,   0.0,                       1,  0.0,              6.0,                             },
-    {"FastIntraChroma",          &cfgparams.FastIntraChroma,              0,   0.0,                       1,  0.0,              1.0,                             },
-    {"ChangeQPStart",            &cfgparams.qp2start,                     0,   0.0,                       2,  0.0,              0.0,                             },
-    {"ChangeQPI",                &cfgparams.qp[1][I_SLICE],               0,   24.0,                      3,  (double) MIN_QP,  (double) MAX_QP,                 },
-    {"ChangeQPP",                &cfgparams.qp[1][P_SLICE],               0,   24.0,                      3,  (double) MIN_QP,  (double) MAX_QP,                 },
-    {"ChangeQPB",                &cfgparams.qp[1][B_SLICE],               0,   24.0,                      3,  (double) MIN_QP,  (double) MAX_QP,                 },
-    {"ChangeQPSP",               &cfgparams.qp[1][SP_SLICE],              0,   24.0,                      3,  (double) MIN_QP,  (double) MAX_QP,                 },
-    {"ChangeQPSI",               &cfgparams.qp[1][SI_SLICE],              0,   24.0,                      3,  (double) MIN_QP,  (double) MAX_QP,                 },
-    {"ChangeQPSP2",              &cfgparams.qpsp[1],                      0,   24.0,                      3,  (double) MIN_QP,  (double) MAX_QP,                 },
-    {"ChangeQPBSRefOffset",      &cfgparams.qpBRSOffset[1],               0,   0.0,                       1,-51.0,             51.0,                             },
-
     {"RDOptimization",           &cfgparams.rdopt,                        0,   0.0,                       1,  0.0,              3.0,                             },
     {"SubMBCodingState",         &cfgparams.subMBCodingState,             0,   2.0,                       1,  0.0,              2.0,                             },
     {"I16RDOpt",                 &cfgparams.I16rdo,                       0,   0.0,                       1,  0.0,              1.0,                             },
@@ -280,7 +273,7 @@ Mapping Map[] = {
     {"ChromaMEWeight",           &cfgparams.ChromaMEWeight,               0,   1.0,                       2,  1.0,              0.0,                             },
     {"MEDistortionFPel",         &cfgparams.MEErrorMetric[F_PEL],         0,   0.0,                       1,  0.0,              3.0,                             },
     {"MEDistortionHPel",         &cfgparams.MEErrorMetric[H_PEL],         0,   0.0,                       1,  0.0,              3.0,                             },
-    {"MEDistortionQPel",         &cfgparams.MEErrorMetric[Q_PEL],         0,   0.0,                       1,  0.0,              3.0,                             },
+    {"MEDistortionQPel",         &cfgparams.MEErrorMetric[Q_PEL],         0,   2.0,                       1,  0.0,              3.0,                             },
     {"MDDistortion",             &cfgparams.ModeDecisionMetric,           0,   2.0,                       1,  0.0,              2.0,                             },
     {"SkipDeBlockNonRef",        &cfgparams.SkipDeBlockNonRef,            0,   0.0,                       1,  0.0,              1.0,                             },
 
@@ -385,6 +378,11 @@ Mapping Map[] = {
     {"AdaptRndCrWFactorINRef",   &cfgparams.AdaptRndCrWFactor[0][I_SLICE],0,   4.0,                       1,  0.0,           4096.0,                             },
     {"AdaptRndCrWFactorPNRef",   &cfgparams.AdaptRndCrWFactor[0][P_SLICE],0,   4.0,                       1,  0.0,           4096.0,                             },
     {"AdaptRndCrWFactorBNRef",   &cfgparams.AdaptRndCrWFactor[0][B_SLICE],0,   4.0,                       1,  0.0,           4096.0,                             },
+
+    // Prediction Structure
+    {"PreferDispOrder",          &cfgparams.PreferDispOrder,              0,   1.0,                       1,  0.0,              1.0,                             },
+    {"PreferPowerOfTwo",         &cfgparams.PreferPowerOfTwo,             0,   0.0,                       1,  0.0,              1.0,                             },
+    {"FrmStructBufferLength",    &cfgparams.FrmStructBufferLength,        0,  16.0,                       1,  1.0,            128.0,                             },
 
     // Fast Mode Decision
     {"EarlySkipEnable",          &cfgparams.EarlySkipEnable,              0,   0.0,                       1,  0.0,              1.0,                             },
@@ -504,8 +502,9 @@ Mapping Map[] = {
 extern Mapping Map[];
 #endif
 
-extern void Configure         (ImageParameters *p_Img, InputParameters *p_Inp, int ac, char *av[]);
-extern void PatchInputNoFrames(InputParameters *p_Inp);
+extern void Configure            (VideoParameters *p_Vid, InputParameters *p_Inp, int ac, char *av[]);
+extern void getNumberOfFrames    (InputParameters *p_Inp, VideoDataFile *input_file);
+extern void read_slice_group_info(VideoParameters *p_Vid, InputParameters *p_Inp);
 
 #endif
 

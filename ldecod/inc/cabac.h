@@ -45,12 +45,13 @@ extern void readIPCM_CABAC(Slice *currSlice, struct datapartition *dP);
 
 extern int  cabac_startcode_follows(Slice *currSlice, int eos_bit);
 
-extern int  readSyntaxElement_CABAC         (SyntaxElement *se, ImageParameters *p_Img, DataPartition *this_dataPart);
+extern int  readSyntaxElement_CABAC         (Macroblock *currMB, SyntaxElement *se, DataPartition *this_dataPart);
 
 extern int check_next_mb_and_get_field_mode_CABAC( Slice *currSlice, SyntaxElement *se, DataPartition  *act_dp);
 
 extern void CheckAvailabilityOfNeighborsCABAC(Macroblock *currMB);
 
+extern void set_read_and_store_CBP(Macroblock **currMB, int chroma_format_idc);
 
 #endif  // _CABAC_H_
 

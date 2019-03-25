@@ -22,26 +22,28 @@
 #ifndef _DEFINES_H_
 #define _DEFINES_H_
 
-#include "typedefs.h"
-
 #if defined _DEBUG
 # define TRACE           0      //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
 #else
 # define TRACE           0      //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
 #endif
 
-#define JM                  "16 (FRExt)"
-#define VERSION             "16.0"
+#define JM                  "16.1 (FRExt)"
+#define VERSION             "16.1"
 #define EXT_VERSION         "(FRExt)"
 
 #define DUMP_DPB                  0    //!< Dump DPB info for debug purposes
 #define PAIR_FIELDS_IN_OUTPUT     0    //!< Pair field pictures for output purposes
-#define IMGTYPE                   1    //!< Define imgpel size type. 0 implies byte (cannot handle >8 bit depths) and 1 implies unsigned short
+#define IMGTYPE                   0    //!< Define imgpel size type. 0 implies byte (cannot handle >8 bit depths) and 1 implies unsigned short
 #define ENABLE_FIELD_CTX          1    //!< Enables Field mode related context types for CABAC
 #define ENABLE_HIGH444_CTX        1    //!< Enables High 444 profile context types for CABAC. 
 #define ZEROSNR                   0    //!< PSNR computation method
 #define ENABLE_OUTPUT_TONEMAPPING 1    //!< enable tone map the output if tone mapping SEI present
+#define JCOST_CALC_SCALEUP        1    //!< 1: J = (D<<LAMBDA_ACCURACY_BITS)+Lambda*R; 0: J = D + ((Lambda*R+Rounding)>>LAMBDA_ACCURACY_BITS)
 
+#include "typedefs.h"
+
+#define SSE_MEMORY_ALIGNMENT      16
 
 //#define MAX_NUM_SLICES 150
 #define MAX_NUM_SLICES 50
@@ -87,14 +89,6 @@
 // These variables relate to the subpel accuracy supported by the software (1/4)
 #define BLOCK_SIZE_SP      16  // BLOCK_SIZE << 2
 #define BLOCK_SIZE_8x8_SP  32  // BLOCK_SIZE8x8 << 2
-
-#if (IMGTYPE == 0)
-typedef byte imgpel;
-typedef unsigned short distpel;
-#else
-typedef unsigned short imgpel;
-typedef int distpel;
-#endif
 
 //  Available MB modes
 enum {
@@ -165,11 +159,17 @@ enum {
   CR_4x4        =  21
 } CABACBlockTypes;
 
+// Macro defines
+#define Q_BITS          15
+#define DQ_BITS          6
+#define Q_BITS_8        16
+#define DQ_BITS_8        6 
+
 
 #define IS_INTRA(MB)    ((MB)->mb_type==I4MB  || (MB)->mb_type==I16MB ||(MB)->mb_type==IPCM || (MB)->mb_type==I8MB || (MB)->mb_type==SI4MB)
 #define IS_I16MB(MB)    ((MB)->mb_type==I16MB  || (MB)->mb_type==IPCM)
 
-#define IS_INTER(MB)    ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB && (MB)->mb_type!=I8MB  && (MB)->mb_type!=IPCM)
+#define IS_INTER(MB)    ((MB)->mb_type!=SI4MB && (MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB && (MB)->mb_type!=I8MB  && (MB)->mb_type!=IPCM)
 #define IS_INTERMV(MB)  ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB && (MB)->mb_type!=I8MB  && (MB)->mb_type!=0 && (MB)->mb_type!=IPCM)
 #define IS_DIRECT(MB)   ((MB)->mb_type==0     && (currSlice->slice_type == B_SLICE ))
 #define IS_SKIP(MB)     ((MB)->mb_type==0     && (currSlice->slice_type == P_SLICE || currSlice->slice_type == SP_SLICE))
@@ -241,6 +241,6 @@ enum {
 #define MAX_PLANE       3
 #define IS_INDEPENDENT(IMG)           ((IMG)->separate_colour_plane_flag)
 #define IS_FREXT_PROFILE(profile_idc) ( profile_idc>=FREXT_HP || profile_idc == FREXT_CAVLC444 )
-#define HI_INTRA_ONLY_PROFILE (((p_Img->active_sps->profile_idc>=FREXT_Hi10P)&&(p_Img->active_sps->constrained_set3_flag))||(p_Img->active_sps->profile_idc==FREXT_CAVLC444)) 
+#define HI_INTRA_ONLY_PROFILE (((p_Vid->active_sps->profile_idc>=FREXT_Hi10P)&&(p_Vid->active_sps->constrained_set3_flag))||(p_Vid->active_sps->profile_idc==FREXT_CAVLC444)) 
 #endif
 

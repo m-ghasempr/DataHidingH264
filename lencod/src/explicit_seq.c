@@ -33,7 +33,7 @@ static int ReadTextField(FILE *expSeqFile, char* keyword)
     read_line++;
     // let us read a full line of data
     if (NULL == fgets(readline, 100, expSeqFile))
-      error ("error parsing explicit sequence file", 500),
+      error ("error parsing explicit sequence file", 500);
     err = sscanf(readline,"%s",word);
     if (err == -1)
       break;
@@ -73,7 +73,7 @@ void ReadIntField(FILE *expSeqFile, char* format, char* keyword, int* value)
   {
     read_line++;    
     if (NULL == fgets(readline, 100, expSeqFile))
-      error ("error parsing explicit sequence file", 500),
+      error ("error parsing explicit sequence file", 500);
     err = sscanf(readline, format, word, value);
     if (feof(expSeqFile))
       break;      
@@ -104,7 +104,7 @@ void ReadCharField(FILE *expSeqFile, char* format, char* keyword, char* value)
   {
     read_line++;
     if (NULL == fgets(readline, 100, expSeqFile))
-      error ("error parsing explicit sequence file", 500),
+      error ("error parsing explicit sequence file", 500);
     err = sscanf(readline, format, word, value);
 
     while (!feof(expSeqFile)) // move to the end of the line
@@ -206,7 +206,7 @@ void ReadFrameData(FILE *expSeqFile, ExpSeqInfo *seq_info, int coding_index)
   {
     // read one line of data
     if (NULL == fgets(readline, 100, expSeqFile))
-      error ("error parsing explicit sequence file", 500),
+      error ("error parsing explicit sequence file", 500);
     // let us check if ending character reached or error
     err = sscanf(readline, "%s : %s", word, value);    
     if (err == 1) // Check ending characters
@@ -274,59 +274,32 @@ void ReadExplicitSeqFile(ExpSeqInfo *seq_info, FILE *expSFile, int coding_index)
 /*!
  ************************************************************************
  * \brief
- *    Read one picture from explicit sequence information file
- ************************************************************************
- */
-void ExplicitUpdateImgParams(ExpFrameInfo *info, ImageParameters *p_Img, InputParameters *p_Inp)
-{
-  set_slice_type( p_Img, p_Inp, info->slice_type );
-  p_Img->frame_no  = info->seq_number;
-  p_Img->nal_reference_idc = info->reference_idc;
-
-  p_Img->toppoc    = 2 * p_Img->frame_no;
-  p_Img->bottompoc = p_Img->toppoc + 1;
-  p_Img->framepoc = imin (p_Img->toppoc, p_Img->bottompoc);
-
-  //the following is sent in the slice header
-  p_Img->delta_pic_order_cnt[0] = 0;
-  p_Img->delta_pic_order_cnt[1] = 0;
-
-  p_Img->number ++;
-  p_Img->gop_number = (p_Img->number - p_Img->start_frame_no);
-  p_Img->frm_number = p_Img->number;
-
-  p_Img->frm_no_in_file = p_Img->frame_no;
-}
-
-/*!
- ************************************************************************
- * \brief
  *    Open explicit sequence information file
  ************************************************************************
  */
-void OpenExplicitSeqFile(ImageParameters *p_Img, InputParameters *p_Inp)
+void OpenExplicitSeqFile(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   int frm_count = 0;
-  p_Img->expSFile = fopen(p_Inp->ExplicitSeqFile, "r");
-  if (p_Img->expSFile == NULL)
+  p_Vid->expSFile = fopen(p_Inp->ExplicitSeqFile, "r");
+  if (p_Vid->expSFile == NULL)
   {
     printf("ERROR while opening the explicit sequence information file.\n");
     report_stats_on_error();
   }  
   
-  if (ReadTextField(p_Img->expSFile, "Sequence") == -1)
+  if (ReadTextField(p_Vid->expSFile, "Sequence") == -1)
   {
     printf("Sequence info file is of invalid format. Terminating\n");
     report_stats_on_error();
   }
   else
   {
-    ReadIntField  (p_Img->expSFile, "%s : %d", "FrameCount", &frm_count);
+    ReadIntField  (p_Vid->expSFile, "%s : %d", "FrameCount", &frm_count);
     if (frm_count > 0)
     {
-      p_Img->expSeq = (ExpSeqInfo *) malloc(sizeof(ExpSeqInfo));
-      p_Img->expSeq->no_frames = frm_count;
-      p_Img->expSeq->info = (ExpFrameInfo *) calloc(frm_count, sizeof(ExpFrameInfo));
+      p_Vid->expSeq = (ExpSeqInfo *) malloc(sizeof(ExpSeqInfo));
+      p_Vid->expSeq->no_frames = frm_count;
+      p_Vid->expSeq->info = (ExpFrameInfo *) calloc(frm_count, sizeof(ExpFrameInfo));
     }
     else
     {
@@ -342,14 +315,14 @@ void OpenExplicitSeqFile(ImageParameters *p_Img, InputParameters *p_Inp)
 *    Close explicit sequence information file
 ************************************************************************
 */
-void CloseExplicitSeqFile(ImageParameters *p_Img)
+void CloseExplicitSeqFile(VideoParameters *p_Vid)
 {
-  if (p_Img->expSFile != NULL)
-    fclose(p_Img->expSFile);
-  if (p_Img->expSeq != NULL)
+  if (p_Vid->expSFile != NULL)
+    fclose(p_Vid->expSFile);
+  if (p_Vid->expSeq != NULL)
   {
-    free(p_Img->expSeq->info);
-    free(p_Img->expSeq);
+    free(p_Vid->expSeq->info);
+    free(p_Vid->expSeq);
   }
 }
 

@@ -26,7 +26,7 @@
 */
 void init_quant_4x4(Slice *currSlice)
 {
-  ImageParameters *p_Img = currSlice->p_Img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
   InputParameters *p_Inp = currSlice->p_Inp;
 
   if (currSlice->UseRDOQuant == 1)
@@ -50,7 +50,7 @@ void init_quant_4x4(Slice *currSlice)
       currSlice->rdoq_ac4x4 = rdoq_ac4x4_CABAC;
     }
   }
-  else if (p_Img->AdaptiveRounding)
+  else if (p_Vid->AdaptiveRounding)
   {
     currSlice->quant_4x4     = quant_4x4_around;
     currSlice->quant_dc4x4   = quant_dc4x4_normal;

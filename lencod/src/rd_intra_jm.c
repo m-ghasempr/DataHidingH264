@@ -43,19 +43,20 @@ extern int MBType2Value (Macroblock* currMB);
  *    Mode Decision for an 4x4 Intra block
  *************************************************************************************
  */
-int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int  b4,  double  lambda,  double*  min_cost)
+int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int  b4,  int  lambda,  distblk*  min_cost)
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
   Slice *currSlice = currMB->p_slice;
   RDOPTStructure  *p_RDO = currSlice->p_RDO;
 
-  int    ipmode, best_ipmode = 0, y;
-  int    c_nz, nonzero = 0;
-  int*   ACLevel = currSlice->cofAC[b8][b4][0];
-  int*   ACRun   = currSlice->cofAC[b8][b4][1];
-  
-  double rdcost = 0.0;
+  int     ipmode, best_ipmode = 0, y;
+  int     available_mode;
+  int     c_nz, nonzero = 0;
+  int*    ACLevel = currSlice->cofAC[b8][b4][0];
+  int*    ACRun   = currSlice->cofAC[b8][b4][1];
+  distblk rdcost = 0;
+  distblk min_rdcost  = DISTBLK_MAX;
   int    block_x     = ((b8 & 0x01) << 3) + ((b4 & 0x01) << 2);
   int    block_y     = ((b8 >> 1) << 3)  + ((b4 >> 1) << 2);
   int    pic_pix_x   = currMB->pix_x  + block_x;
@@ -64,10 +65,9 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int 
   int    pic_opix_y  = currMB->opix_y + block_y;
   int    pic_block_x = pic_pix_x >> 2;
   int    pic_block_y = pic_pix_y >> 2;
-  double min_rdcost  = 1e30;
 
   int left_available, up_available, all_available;
-  int *mb_size = p_Img->mb_size[IS_LUMA];
+  int *mb_size = p_Vid->mb_size[IS_LUMA];
 
   char   upMode, leftMode;
   int    mostProbableMode;
@@ -94,16 +94,15 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int 
   // constrained intra pred
   if (p_Inp->UseConstrainedIntraPred)
   {
-    left_block.available = left_block.available ? p_Img->intra_block[left_block.mb_addr] : 0;
-    top_block.available  = top_block.available  ? p_Img->intra_block[top_block.mb_addr]  : 0;
+    left_block.available = left_block.available ? p_Vid->intra_block[left_block.mb_addr] : 0;
+    top_block.available  = top_block.available  ? p_Vid->intra_block[top_block.mb_addr]  : 0;
   }
 
-  upMode            =  top_block.available ? p_Img->ipredmode[top_block.pos_y ][top_block.pos_x ] : -1;
-  leftMode          = left_block.available ? p_Img->ipredmode[left_block.pos_y][left_block.pos_x] : -1;
+  upMode            =  top_block.available ? p_Vid->ipredmode[top_block.pos_y ][top_block.pos_x ] : (char) -1;
+  leftMode          = left_block.available ? p_Vid->ipredmode[left_block.pos_y][left_block.pos_x] : (char) -1;
 
   mostProbableMode  = (upMode < 0 || leftMode < 0) ? DC_PRED : upMode < leftMode ? upMode : leftMode;
-
-  *min_cost = INT_MAX;
+  *min_cost = DISTBLK_MAX;
 
   currMB->ipmode_DPCM = NO_INTRA_PMODE; ////For residual DPCM
 
@@ -114,7 +113,7 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int 
   //===== LOOP OVER ALL 4x4 INTRA PREDICTION MODES =====
   for (ipmode = 0; ipmode < NO_INTRA_PMODE; ipmode++)
   {
-    int available_mode =  (all_available) || (ipmode==DC_PRED) ||
+    available_mode =  (all_available) || (ipmode==DC_PRED) ||
       (up_available && (ipmode==VERT_PRED||ipmode==VERT_LEFT_PRED||ipmode==DIAG_DOWN_LEFT_PRED)) ||
       (left_available && (ipmode==HOR_PRED||ipmode==HOR_UP_PRED));
 
@@ -127,28 +126,29 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int 
       get_intrapred_4x4(currMB, PLANE_Y, ipmode, block_x, block_y, left_available, up_available);
 
       // get prediction and prediction error
-      generate_pred_error_4x4(&p_Img->pCurImg[pic_opix_y], currSlice->mpr_4x4[0][ipmode], &currSlice->mb_pred[0][block_y], &currSlice->mb_ores[0][block_y], pic_opix_x, block_x);     
+      generate_pred_error_4x4(&p_Vid->pCurImg[pic_opix_y], currSlice->mpr_4x4[0][ipmode], &currSlice->mb_pred[0][block_y], &currSlice->mb_ores[0][block_y], pic_opix_x, block_x);     
 
       // get and check rate-distortion cost
 #ifdef BEST_NZ_COEFF
       currMB->cbp_bits[0] = cbp_bits;
 #endif      
 
-      if ((rdcost = currSlice->rdcost_for_4x4_intra_blocks (currMB, &c_nz, b8, b4, ipmode, lambda, mostProbableMode, min_rdcost)) < min_rdcost)
+      rdcost = currSlice->rdcost_for_4x4_intra_blocks (currMB, &c_nz, b8, b4, ipmode, lambda, mostProbableMode, min_rdcost);
+      if ((rdcost < min_rdcost) || (rdcost == min_rdcost && ipmode == mostProbableMode))
       {
         //--- set coefficients ---
         memcpy(p_RDO->cofAC4x4[0], ACLevel, 18 * sizeof(int));
         memcpy(p_RDO->cofAC4x4[1], ACRun,   18 * sizeof(int));
 
         //--- set reconstruction ---
-        copy_4x4block(p_RDO->rec4x4[PLANE_Y], &p_Img->enc_picture->imgY[pic_pix_y], 0, pic_pix_x);
+        copy_4x4block(p_RDO->rec4x4[PLANE_Y], &p_Vid->enc_picture->imgY[pic_pix_y], 0, pic_pix_x);
 
         // SP/SI reconstruction
-        if(currSlice->slice_type == SP_SLICE &&(!currSlice->si_frame_indicator && !currSlice->sp2_frame_indicator))
+        if(currSlice->slice_type == SP_SLICE && !currSlice->sp2_frame_indicator)
         {
           for (y=0; y<4; y++)
           {
-            memcpy(lrec4x4[y],&p_Img->lrec[pic_pix_y+y][pic_pix_x], BLOCK_SIZE * sizeof(int));// stores the mode coefficients
+            memcpy(lrec4x4[y],&p_Vid->lrec[pic_pix_y+y][pic_pix_x], BLOCK_SIZE * sizeof(int));// stores the mode coefficients
           }
         }
 
@@ -160,20 +160,20 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int 
         min_rdcost    = rdcost;
         best_ipmode   = ipmode;
 
-        best_nz_coeff = p_Img->nz_coeff [p_Img->current_mb_nr][block_x4][block_y4];
+        best_nz_coeff = p_Vid->nz_coeff [p_Vid->current_mb_nr][block_x4][block_y4];
 #ifdef BEST_NZ_COEFF
         best_coded_block_flag = (int)((currMB->cbp_bits[0] >> bit_pos)&(int64)(1));
 #endif
-        if (p_Img->AdaptiveRounding)
+        if (p_Vid->AdaptiveRounding)
         {
-          store_adaptive_rounding_4x4 (p_Img, p_Img->ARCofAdj4x4, I4MB, block_y, block_x);
+          store_adaptive_rounding_4x4 (p_Vid, p_Vid->ARCofAdj4x4, I4MB, block_y, block_x);
         }
 
       }
     }
   }
 #if INTRA_RDCOSTCALC_NNZ
-  p_Img->nz_coeff [p_Img->current_mb_nr][block_x4][block_y4] = best_nz_coeff;
+  p_Vid->nz_coeff [p_Vid->current_mb_nr][block_x4][block_y4] = best_nz_coeff;
 #endif
 #ifdef BEST_NZ_COEFF
   cbp_bits &= (~(int64)(1<<bit_pos));
@@ -181,7 +181,7 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int 
 #endif
 
   //===== set intra mode prediction =====
-  p_Img->ipredmode[pic_block_y][pic_block_x] = (char) best_ipmode;
+  p_Vid->ipredmode[pic_block_y][pic_block_x] = (char) best_ipmode;
   currMB->intra_pred_modes[4*b8+b4] =
     (char) (mostProbableMode == best_ipmode ? -1 : (best_ipmode < mostProbableMode ? best_ipmode : best_ipmode-1)); 
 
@@ -190,21 +190,21 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int 
   memcpy (ACRun,   p_RDO->cofAC4x4[1], 18 * sizeof(int));
 
   //===== restore reconstruction and prediction (needed if single coeffs are removed) =====
-  copy_4x4block(&p_Img->enc_picture->imgY[pic_pix_y], p_RDO->rec4x4[PLANE_Y], pic_pix_x, 0);
+  copy_4x4block(&p_Vid->enc_picture->imgY[pic_pix_y], p_RDO->rec4x4[PLANE_Y], pic_pix_x, 0);
   copy_4x4block(&currSlice->mb_pred[0][block_y], currSlice->mpr_4x4[0][best_ipmode], block_x, 0);
 
   // SP/SI reconstuction
-  if(currSlice->slice_type == SP_SLICE &&(!p_Img->si_frame_indicator && !p_Img->sp2_frame_indicator))
+  if(currSlice->slice_type == SP_SLICE && !currSlice->sp2_frame_indicator)
   {
     for (y=0; y<BLOCK_SIZE; y++)
     {
-      memcpy (&p_Img->lrec[pic_pix_y+y][pic_pix_x], lrec4x4[y], BLOCK_SIZE * sizeof(int));//restore coefficients when encoding primary SP frame
+      memcpy (&p_Vid->lrec[pic_pix_y+y][pic_pix_x], lrec4x4[y], BLOCK_SIZE * sizeof(int));//restore coefficients when encoding primary SP frame
     }
   }
 
-  if (p_Img->AdaptiveRounding)
+  if (p_Vid->AdaptiveRounding)
   {
-    update_adaptive_rounding_4x4 (p_Img,p_Img->ARCofAdj4x4, I4MB, block_y, block_x);
+    update_adaptive_rounding_4x4 (p_Vid,p_Vid->ARCofAdj4x4, I4MB, block_y, block_x);
   }
 
 
@@ -217,16 +217,17 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int 
 *    8x8 Intra mode decision for a macroblock - High complexity
 *************************************************************************************
 */
-int Mode_Decision_for_8x8IntraBlocks_JM_High (Macroblock *currMB, int b8, double lambda, double *min_cost)
+int Mode_Decision_for_8x8IntraBlocks_JM_High (Macroblock *currMB, int b8, int lambda, distblk *min_cost)
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
   Slice *currSlice = currMB->p_slice;
   RDOPTStructure  *p_RDO = currSlice->p_RDO;
 
   int     ipmode, best_ipmode = 0, j;
   int     c_nz, nonzero = 0;  
-  double  rdcost = 0.0;
+  distblk  rdcost = 0;
+  distblk  min_rdcost  = DISTBLK_MAX;
   int     block_x     = (b8 & 0x01) << 3;
   int     block_y     = (b8 >> 1) << 3;
   int     pic_pix_x   = currMB->pix_x + block_x;
@@ -240,7 +241,6 @@ int Mode_Decision_for_8x8IntraBlocks_JM_High (Macroblock *currMB, int b8, double
   int     *p_AC8x8 = p_RDO->coefAC8x8intra[b8][0][0][0];
   int     *cofAC   = currSlice->cofAC[b8][0][0];
 
-  double  min_rdcost  = 1e30;
   int    left_available, up_available, all_available;
   int    **mb_ores = currSlice->mb_ores[0]; 
   imgpel **mb_pred = currSlice->mb_pred[0];
@@ -250,7 +250,7 @@ int Mode_Decision_for_8x8IntraBlocks_JM_High (Macroblock *currMB, int b8, double
 
   PixelPos left_block, top_block;
 
-  int *mb_size = p_Img->mb_size[IS_LUMA];
+  int *mb_size = p_Vid->mb_size[IS_LUMA];
 
   get4x4Neighbour(currMB, block_x - 1, block_y    , mb_size, &left_block);
   get4x4Neighbour(currMB, block_x,     block_y - 1, mb_size, &top_block );
@@ -258,24 +258,22 @@ int Mode_Decision_for_8x8IntraBlocks_JM_High (Macroblock *currMB, int b8, double
   // constrained intra pred
   if (p_Inp->UseConstrainedIntraPred)
   {
-    left_block.available = left_block.available ? p_Img->intra_block [left_block.mb_addr] : 0;
-    top_block.available  = top_block.available  ? p_Img->intra_block [top_block.mb_addr ] : 0;
+    left_block.available = left_block.available ? p_Vid->intra_block [left_block.mb_addr] : 0;
+    top_block.available  = top_block.available  ? p_Vid->intra_block [top_block.mb_addr ] : 0;
   }
 
   if(b8 >> 1)
-    upMode    =  top_block.available ? p_Img->ipredmode8x8[top_block.pos_y ][top_block.pos_x ] : -1;
+    upMode    =  top_block.available ? p_Vid->ipredmode8x8[top_block.pos_y ][top_block.pos_x ] : (char) -1;
   else
-    upMode    =  top_block.available ? p_Img->ipredmode   [top_block.pos_y ][top_block.pos_x ] : -1;
-  
+    upMode    =  top_block.available ? p_Vid->ipredmode   [top_block.pos_y ][top_block.pos_x ] : (char) -1;
+
   if(b8 & 0x01)
-    leftMode  = left_block.available ? p_Img->ipredmode8x8[left_block.pos_y][left_block.pos_x] : -1;
+    leftMode  = left_block.available ? p_Vid->ipredmode8x8[left_block.pos_y][left_block.pos_x] : (char) -1;
   else
-    leftMode  = left_block.available ? p_Img->ipredmode[left_block.pos_y][left_block.pos_x] : -1;
+    leftMode  = left_block.available ? p_Vid->ipredmode[left_block.pos_y][left_block.pos_x] : (char) -1;
 
   mostProbableMode  = (upMode < 0 || leftMode < 0) ? DC_PRED : upMode < leftMode ? upMode : leftMode;
-
-  *min_cost = INT_MAX;
-
+  *min_cost = DISTBLK_MAX;
   currMB->ipmode_DPCM = NO_INTRA_PMODE; //For residual DPCM
 
   //===== INTRA PREDICTION FOR 8x8 BLOCK =====
@@ -291,24 +289,25 @@ int Mode_Decision_for_8x8IntraBlocks_JM_High (Macroblock *currMB, int b8, double
     {
       get_intrapred_8x8(currMB, PLANE_Y, ipmode, left_available, up_available);
       // get prediction and prediction error
-      generate_pred_error_8x8(&p_Img->pCurImg[pic_opix_y], currSlice->mpr_8x8[0][ipmode], &mb_pred[block_y], &mb_ores[block_y], pic_opix_x, block_x);     
+      generate_pred_error_8x8(&p_Vid->pCurImg[pic_opix_y], currSlice->mpr_8x8[0][ipmode], &mb_pred[block_y], &mb_ores[block_y], pic_opix_x, block_x);     
 
       currMB->ipmode_DPCM = (short) ipmode;
 
       // get and check rate-distortion cost
 
-      if ((rdcost = currSlice->rdcost_for_8x8_intra_blocks (currMB, &c_nz, b8, ipmode, lambda, min_rdcost, mostProbableMode)) < min_rdcost)
+      rdcost = currSlice->rdcost_for_8x8_intra_blocks (currMB, &c_nz, b8, ipmode, lambda, min_rdcost, mostProbableMode);
+      if ((rdcost < min_rdcost) || (rdcost == min_rdcost && ipmode == mostProbableMode))
       {
         //--- set coefficients ---
         memcpy(p_AC8x8, cofAC, 4 * 2 * 65 * sizeof(int));
 
         //--- set reconstruction ---
-        copy_image_data_8x8(p_RDO->rec8x8[PLANE_Y], &p_Img->enc_picture->imgY[pic_pix_y], 0, pic_pix_x);
+        copy_image_data_8x8(p_RDO->rec8x8[PLANE_Y], &p_Vid->enc_picture->imgY[pic_pix_y], 0, pic_pix_x);
 
-        if (p_Img->AdaptiveRounding)
+        if (p_Vid->AdaptiveRounding)
         {
           for (j = block_y; j < block_y + 8; j++)
-            memcpy(&p_Img->ARCofAdj8x8[0][DUMMY][j][block_x],&p_Img->ARCofAdj8x8[0][I8MB][j][block_x], 8 * sizeof(int));
+            memcpy(&p_Vid->ARCofAdj8x8[0][DUMMY][j][block_x],&p_Vid->ARCofAdj8x8[0][I8MB][j][block_x], 8 * sizeof(int));
         }
 
         //--- flag if dct-coefficients must be coded ---
@@ -323,27 +322,27 @@ int Mode_Decision_for_8x8IntraBlocks_JM_High (Macroblock *currMB, int b8, double
   }
 
   //===== set intra mode prediction =====
-  p_Img->ipredmode8x8[pic_block_y][pic_block_x] = (char) best_ipmode;
+  p_Vid->ipredmode8x8[pic_block_y][pic_block_x] = (char) best_ipmode;
   currMB->ipmode_DPCM = (short) best_ipmode; //For residual DPCM
 
   currMB->intra_pred_modes8x8[4*b8] = (char) ((mostProbableMode == best_ipmode)
     ? -1
-    : (best_ipmode < mostProbableMode ? best_ipmode : best_ipmode-1));
+    : (best_ipmode < mostProbableMode ? best_ipmode : best_ipmode - 1));
 
-  memset(&p_Img->ipredmode8x8[mb_block_y    ][mb_block_x], best_ipmode, 2 * sizeof(char));
-  memset(&p_Img->ipredmode8x8[mb_block_y + 1][mb_block_x], best_ipmode, 2 * sizeof(char));
+  memset(&p_Vid->ipredmode8x8[mb_block_y    ][mb_block_x], best_ipmode, 2 * sizeof(char));
+  memset(&p_Vid->ipredmode8x8[mb_block_y + 1][mb_block_x], best_ipmode, 2 * sizeof(char));
 
   //===== restore coefficients =====
   memcpy(cofAC, p_AC8x8, 4 * 2 * 65 * sizeof(int));
 
-  if (p_Img->AdaptiveRounding)
+  if (p_Vid->AdaptiveRounding)
   {
     for (j=block_y; j< block_y + 8; j++)
-      memcpy(&p_Img->ARCofAdj8x8[0][I8MB][j][block_x], &p_Img->ARCofAdj8x8[0][DUMMY][j][block_x], 8 * sizeof(int));
+      memcpy(&p_Vid->ARCofAdj8x8[0][I8MB][j][block_x], &p_Vid->ARCofAdj8x8[0][DUMMY][j][block_x], 8 * sizeof(int));
   }
 
   //===== restore reconstruction and prediction (needed if single coeffs are removed) =====
-  copy_image_data_8x8(&p_Img->enc_picture->imgY[pic_pix_y], p_RDO->rec8x8[0], pic_pix_x, 0);
+  copy_image_data_8x8(&p_Vid->enc_picture->imgY[pic_pix_y], p_RDO->rec8x8[0], pic_pix_x, 0);
   copy_image_data_8x8(&mb_pred[block_y], currSlice->mpr_8x8[0][best_ipmode], block_x, 0);
 
   return nonzero;
@@ -355,19 +354,17 @@ int Mode_Decision_for_8x8IntraBlocks_JM_High (Macroblock *currMB, int b8, double
  *    Mode Decision for an 8x8 Intra block
  *************************************************************************************
  */
-int Mode_Decision_for_IntraSubMBlocks(Macroblock *currMB, int b8,double lambda, double *cost, int non_zero[3])
+int Mode_Decision_for_IntraSubMBlocks(Macroblock *currMB, int b8, int lambda, distblk *cost, int non_zero[3])
 {
   Slice *currSlice = currMB->p_slice;
   int  b4;
-  double  cost4x4;
+  distblk  cost4x4;
   currMB->cr_cbp[0] = 0;
   currMB->cr_cbp[1] = 0;
   currMB->cr_cbp[2] = 0;
 
   memset(non_zero, 0, 3 * sizeof(int));
-
-  *cost = (int)floor(6.0 * lambda + 0.4999);
-
+ *cost = weighted_cost(lambda, 6);        //6 * lambda;
   for (b4=0; b4<4; b4++)
   {
     non_zero[0] |= currSlice->Mode_Decision_for_4x4IntraBlocks (currMB, b8, b4, lambda, &cost4x4);
@@ -385,11 +382,11 @@ int Mode_Decision_for_IntraSubMBlocks(Macroblock *currMB, int b8,double lambda, 
  *    4x4 Intra mode decision for an macroblock
  *************************************************************************************
  */
-int Mode_Decision_for_Intra4x4Macroblock (Macroblock *currMB, double lambda,  double* cost)
+int Mode_Decision_for_Intra4x4Macroblock (Macroblock *currMB, int lambda,  distblk* cost)
 {
   Slice *currSlice = currMB->p_slice;
   int  cbp=0, b8;
-  double cost8x8;
+  distblk cost8x8;
   int non_zero[3] = {0, 0, 0};
 
   currSlice->cmp_cbp[1] = currSlice->cmp_cbp[2] = 0;
@@ -447,9 +444,9 @@ void Intra16x16_Mode_Decision_SAD (Macroblock* currMB)
  * \par Output:
  *    best 16x16 based 
  ************************************************************************/
-double min_rdcost_16x16(Macroblock *currMB, double lambda)
+distblk min_rdcost_16x16(Macroblock *currMB, int lambda)
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp; 
   Slice *currSlice = currMB->p_slice;
 
@@ -457,8 +454,8 @@ double min_rdcost_16x16(Macroblock *currMB, double lambda)
   const int*      partMap    = assignSE2partition[currSlice->partition_mode];
   DataPartition*  dataPart   = &(currSlice->partArr[partMap[SE_MBTYPE]]);
 
-  double min_rdcost = 1e30, rdcost;
-  int64 distortionY; 
+  distblk min_rdcost = DISTBLK_MAX, rdcost;
+  distblk distortionY; 
   int rate; 
   int i,k;
   int b8, b4; 
@@ -475,10 +472,10 @@ double min_rdcost_16x16(Macroblock *currMB, double lambda)
 
   for (i=0;i<17;i++)
   {
-    p_Img->getNeighbour(currMB, -1 ,  i - 1 , p_Img->mb_size[IS_LUMA], &left[i]);
+    p_Vid->getNeighbour(currMB, -1 ,  i - 1 , p_Vid->mb_size[IS_LUMA], &left[i]);
   }
 
-  p_Img->getNeighbour(currMB, 0     ,  -1 , p_Img->mb_size[IS_LUMA], &up);
+  p_Vid->getNeighbour(currMB, 0     ,  -1 , p_Vid->mb_size[IS_LUMA], &up);
 
   if (!(p_Inp->UseConstrainedIntraPred))
   {
@@ -488,17 +485,17 @@ double min_rdcost_16x16(Macroblock *currMB, double lambda)
   }
   else
   {
-    up_avail      = up.available ? p_Img->intra_block[up.mb_addr] : 0;
+    up_avail      = up.available ? p_Vid->intra_block[up.mb_addr] : 0;
     for (i = 1, left_avail = 1; i < 17;i++)
-      left_avail  &= left[i].available ? p_Img->intra_block[left[i].mb_addr]: 0;
-    left_up_avail = left[0].available ? p_Img->intra_block[left[0].mb_addr]: 0;
+      left_avail  &= left[i].available ? p_Vid->intra_block[left[i].mb_addr]: 0;
+    left_up_avail = left[0].available ? p_Vid->intra_block[left[0].mb_addr]: 0;
   }
 
   currMB->mb_type = I16MB; 
 
   for (k = 0;k < 4; k++)
   {
-    if (p_Inp->IntraDisableInterOnly == 0 || currSlice->slice_type != I_SLICE)
+    if (p_Inp->IntraDisableInterOnly == 0 || (currSlice->slice_type != I_SLICE && currSlice->slice_type != SI_SLICE))
     {
       if (p_Inp->Intra16x16ParDisable && (k==VERT_PRED_16||k==HOR_PRED_16))
         continue;
@@ -512,7 +509,7 @@ double min_rdcost_16x16(Macroblock *currMB, double lambda)
     currMB->i16mode = (char) k; 
     currMB->cbp = currMB->trans_16x16(currMB, PLANE_Y); 
 
-    distortionY = compute_SSE16x16(&p_Img->pCurImg[currMB->opix_y], &p_Img->enc_picture->p_curr_img[currMB->pix_y], currMB->pix_x, currMB->pix_x);
+    distortionY = compute_SSE16x16(&p_Vid->pCurImg[currMB->opix_y], &p_Vid->enc_picture->p_curr_img[currMB->pix_y], currMB->pix_x, currMB->pix_x);
 
     currSlice->store_coding_state (currMB, currSlice->p_RDO->cs_tmp);
     currMB->i16offset = I16Offset  (currMB->cbp, currMB->i16mode);
@@ -530,7 +527,7 @@ double min_rdcost_16x16(Macroblock *currMB, double lambda)
     rate += currSlice->writeCoeff16x16   (currMB, PLANE_Y);
     currSlice->reset_coding_state (currMB, currSlice->p_RDO->cs_tmp);
 
-    rdcost = distortionY + lambda*rate; 
+    rdcost = distortionY + weighted_cost(lambda,rate); 
 
     if(rdcost < min_rdcost)
     {
@@ -550,7 +547,7 @@ double min_rdcost_16x16(Macroblock *currMB, double lambda)
       memcpy(bestCofDC[1], currSlice->cofDC[0][1], sizeof(int)*18);
 
       for(i = 0; i < MB_BLOCK_SIZE; i++)
-        memcpy(bestRec[i], &p_Img->enc_picture->p_curr_img[currMB->pix_y + i][currMB->pix_x], sizeof(imgpel)*MB_BLOCK_SIZE);
+        memcpy(bestRec[i], &p_Vid->enc_picture->p_curr_img[currMB->pix_y + i][currMB->pix_x], sizeof(imgpel)*MB_BLOCK_SIZE);
     }
   }
 
@@ -572,7 +569,7 @@ double min_rdcost_16x16(Macroblock *currMB, double lambda)
 
   for(i = 0; i < MB_BLOCK_SIZE; i++)
   {
-    memcpy(&p_Img->enc_picture->p_curr_img[currMB->pix_y+i][currMB->pix_x], bestRec[i], MB_BLOCK_SIZE*sizeof(imgpel));
+    memcpy(&p_Vid->enc_picture->p_curr_img[currMB->pix_y+i][currMB->pix_x], bestRec[i], MB_BLOCK_SIZE*sizeof(imgpel));
   }
 
   return min_rdcost;
@@ -586,7 +583,7 @@ double min_rdcost_16x16(Macroblock *currMB, double lambda)
 *    Intra 16x16 mode decision using Rate-Distortion Optimization
 *************************************************************************************
 */
-void Intra16x16_Mode_Decision_RDopt (Macroblock* currMB, double lambda)
+void Intra16x16_Mode_Decision_RDopt (Macroblock* currMB, int lambda)
 {
   /* generate intra prediction samples for all 4 16x16 modes */
   intrapred_16x16 (currMB, PLANE_Y);

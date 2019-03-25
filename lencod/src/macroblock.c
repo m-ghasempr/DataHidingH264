@@ -30,6 +30,7 @@
 #include "elements.h"
 #include "macroblock.h"
 #include "memalloc.h"
+#include "blk_prediction.h"
 #include "mc_prediction.h"
 #include "fmo.h"
 #include "vlc.h"
@@ -53,12 +54,6 @@
 #else
 #define TRACE_SE(trace,str)
 #endif
-
-static const byte QP_SCALE_CR[52]=
-{
-  0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,
-  28,29,29,30,31,32,32,33,34,34,35,35,36,36,37,37, 37,38,38,38,39,39,39,39
-};
 
 static const int block8x8_idx[3][4][4] = 
 {
@@ -101,13 +96,13 @@ static int  writeCBPandDquant        (Macroblock* currMB);
  */
 void set_MB_parameters (Slice *currSlice, Macroblock *currMB)
 {
-  ImageParameters *p_Img = currSlice->p_Img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
   InputParameters *p_Inp = currSlice->p_Inp;
 
   int mb_addr = currMB->mbAddrX;
-  p_Img->current_mb_nr = mb_addr;
+  p_Vid->current_mb_nr = mb_addr;
 
-  p_Img->get_mb_block_pos(currMB->mbAddrX, &currMB->mb_x, &currMB->mb_y);
+  p_Vid->get_mb_block_pos(currMB->mbAddrX, &currMB->mb_x, &currMB->mb_y);
 
   currMB->block_x = currMB->mb_x << 2; 
   currMB->block_y = currMB->mb_y << 2;
@@ -115,24 +110,24 @@ void set_MB_parameters (Slice *currSlice, Macroblock *currMB)
   currMB->pix_x   = currMB->block_x << 2;
   currMB->pix_y   = currMB->block_y << 2;
   
-  if (currSlice->MbaffFrameFlag)
+  if (currSlice->mb_aff_frame_flag)
   {
     if (currMB->mb_field)
     {
-      p_Img->pCurImg = (mb_addr & 0x01) ? p_Img->imgData.bot_data[0]  : p_Img->imgData.top_data[0];
-      p_Img->pImgOrg[0] = p_Img->pCurImg;
+      p_Vid->pCurImg = (mb_addr & 0x01) ? p_Vid->imgData.bot_data[0]  : p_Vid->imgData.top_data[0];
+      p_Vid->pImgOrg[0] = p_Vid->pCurImg;
 
-      if ((p_Img->yuv_format != YUV400) && !IS_INDEPENDENT(p_Inp))
+      if ((p_Vid->yuv_format != YUV400) && !IS_INDEPENDENT(p_Inp))
       {
         if (mb_addr & 0x01)
         {
-          p_Img->pImgOrg[1] = p_Img->imgData.bot_data[1];
-          p_Img->pImgOrg[2] = p_Img->imgData.bot_data[2];
+          p_Vid->pImgOrg[1] = p_Vid->imgData.bot_data[1];
+          p_Vid->pImgOrg[2] = p_Vid->imgData.bot_data[2];
         }
         else
         {
-          p_Img->pImgOrg[1] = p_Img->imgData.top_data[1];
-          p_Img->pImgOrg[2] = p_Img->imgData.top_data[2];
+          p_Vid->pImgOrg[1] = p_Vid->imgData.top_data[1];
+          p_Vid->pImgOrg[2] = p_Vid->imgData.top_data[2];
         }
       }
 
@@ -141,13 +136,13 @@ void set_MB_parameters (Slice *currSlice, Macroblock *currMB)
     }
     else
     {
-      p_Img->pCurImg    = p_Img->imgData.frm_data[0];      
-      p_Img->pImgOrg[0] = p_Img->imgData.frm_data[0];
+      p_Vid->pCurImg    = p_Vid->imgData.frm_data[0];      
+      p_Vid->pImgOrg[0] = p_Vid->imgData.frm_data[0];
 
-      if ((p_Img->yuv_format != YUV400) && !IS_INDEPENDENT(p_Inp))
+      if ((p_Vid->yuv_format != YUV400) && !IS_INDEPENDENT(p_Inp))
       {
-        p_Img->pImgOrg[1] = p_Img->imgData.frm_data[1];
-        p_Img->pImgOrg[2] = p_Img->imgData.frm_data[2];
+        p_Vid->pImgOrg[1] = p_Vid->imgData.frm_data[1];
+        p_Vid->pImgOrg[2] = p_Vid->imgData.frm_data[2];
       }
 
       currMB->opix_y   = currMB->block_y << 2;
@@ -160,12 +155,12 @@ void set_MB_parameters (Slice *currSlice, Macroblock *currMB)
     currMB->list_offset = 0;
   }
 
-  if (p_Img->yuv_format != YUV400)
+  if (p_Vid->yuv_format != YUV400)
   {
-    currMB->pix_c_x  = (p_Img->mb_cr_size_x * currMB->pix_x) >> 4;
-    currMB->pix_c_y  = (p_Img->mb_cr_size_y * currMB->pix_y) >> 4;
+    currMB->pix_c_x  = (p_Vid->mb_cr_size_x * currMB->pix_x) >> 4;
+    currMB->pix_c_y  = (p_Vid->mb_cr_size_y * currMB->pix_y) >> 4;
 
-    currMB->opix_c_y = (p_Img->mb_cr_size_y * currMB->opix_y) >> 4;
+    currMB->opix_c_y = (p_Vid->mb_cr_size_y * currMB->opix_y) >> 4;
   }
 
   //  printf ("set_MB_parameters: mb %d,  mb_x %d,  mb_y %d\n", mb_addr, currMB->mb_x, currMB->mb_y);
@@ -181,7 +176,7 @@ void set_MB_parameters (Slice *currSlice, Macroblock *currMB)
  */
 void next_macroblock(Macroblock *currMB)
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
   Slice *currSlice = currMB->p_slice;
   int slice_type = currSlice->slice_type;
@@ -190,10 +185,10 @@ void next_macroblock(Macroblock *currMB)
 #endif
   BitCounter *mbBits = &currMB->bits;
   int i;
-  StatParameters *cur_stats = &p_Img->enc_picture->stats;
+  StatParameters *cur_stats = &p_Vid->enc_picture->stats;
 
-  if (mbBits->mb_total > p_Img->max_bitCount)
-    printf("Warning!!! Number of bits (%d) of macroblock_layer() data seems to exceed defined limit (%d).\n", mbBits->mb_total,p_Img->max_bitCount);
+  if (mbBits->mb_total > p_Vid->max_bitCount)
+    printf("Warning!!! Number of bits (%d) of macroblock_layer() data seems to exceed defined limit (%d).\n", mbBits->mb_total,p_Vid->max_bitCount);
 
   // Update the statistics
   cur_stats->bit_use_mb_type[slice_type]      += mbBits->mb_mode;
@@ -252,13 +247,13 @@ void next_macroblock(Macroblock *currMB)
 
 static void set_chroma_qp(Macroblock* currMB)
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   int i;
   for (i=0; i<2; ++i)
   {
-    currMB->qpc[i] = (short) iClip3 ( -p_Img->bitdepth_chroma_qp_scale, 51, currMB->qp + p_Img->chroma_qp_offset[i] );
+    currMB->qpc[i] = (short) iClip3 ( -p_Vid->bitdepth_chroma_qp_scale, 51, currMB->qp + p_Vid->chroma_qp_offset[i] );
     currMB->qpc[i] = (short) (currMB->qpc[i] < 0 ? currMB->qpc[i] : QP_SCALE_CR[currMB->qpc[i]]);
-    currMB->qp_scaled[i + 1] = (short) (currMB->qpc[i] + p_Img->bitdepth_chroma_qp_scale);
+    currMB->qp_scaled[i + 1] = (short) (currMB->qpc[i] + p_Vid->bitdepth_chroma_qp_scale);
   }  
 }
 
@@ -270,7 +265,7 @@ static void set_chroma_qp(Macroblock* currMB)
 */
 void update_qp(Macroblock *currMB)
 {
-  currMB->qp_scaled[0] = (short) (currMB->qp + currMB->p_Img->bitdepth_luma_qp_scale);
+  currMB->qp_scaled[0] = (short) (currMB->qp + currMB->p_Vid->bitdepth_luma_qp_scale);
   set_chroma_qp(currMB);
 
   select_dct(currMB);
@@ -287,10 +282,10 @@ void update_qp(Macroblock *currMB)
  */
 void reset_macroblock(Macroblock *currMB)
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
   Slice *currSlice = currMB->p_slice;
-  PicMotionParams *motion = &p_Img->enc_picture->motion;
+  PicMotionParams *motion = &p_Vid->enc_picture->motion;
   int i,j,l;  
 
   // Reset vectors and reference indices
@@ -331,7 +326,7 @@ void reset_macroblock(Macroblock *currMB)
   //Blocks are set to notINTRA in write_macroblock
   if (p_Inp->UseConstrainedIntraPred)
   {
-    p_Img->intra_block[currMB->mbAddrX] = 1;
+    p_Vid->intra_block[currMB->mbAddrX] = 1;
   }
 
   // Initialize bitcounters for this macroblock
@@ -345,9 +340,9 @@ void reset_macroblock(Macroblock *currMB)
   currMB->bits.mb_delta_quant = 0;
   currMB->bits.mb_stuffing = 0;
 
-  currMB->min_rdcost = 1e30; 
-  currMB->min_dcost  = 1e30;
-  currMB->min_rate   = 1e30; 
+  currMB->min_rdcost = DISTBLK_MAX; 
+  currMB->min_dcost  = DISTBLK_MAX;
+  currMB->min_rate   = DISTBLK_MAX; 
 
   currMB->best_mode      = 0;
   currMB->best_c_imode   = 0;
@@ -373,9 +368,9 @@ void reset_macroblock(Macroblock *currMB)
  */
 void start_macroblock(Slice *currSlice, Macroblock **currMB, int mb_addr, Boolean mb_field)
 {
-  ImageParameters *p_Img = currSlice->p_Img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
   InputParameters *p_Inp = currSlice->p_Inp;
-  PicMotionParams *motion = &p_Img->enc_picture->motion;
+  PicMotionParams *motion = &p_Vid->enc_picture->motion;
   int i, mb_qp;
   int use_bitstream_backing = (p_Inp->slice_mode == FIXED_RATE || p_Inp->slice_mode == CALL_BACK);
 
@@ -385,31 +380,32 @@ void start_macroblock(Slice *currSlice, Macroblock **currMB, int mb_addr, Boolea
   Bitstream *currStream;
   int prev_mb;
   
-  *currMB = &p_Img->mb_data[mb_addr];
+  *currMB = &p_Vid->mb_data[mb_addr];
   (*currMB)->p_slice = currSlice;
-  (*currMB)->p_Img = p_Img;
+  (*currMB)->p_Vid = p_Vid;
   (*currMB)->p_Inp = p_Inp;
 
   (*currMB)->mbAddrX = mb_addr;  
 
-  (*currMB)->is_intra_block = currSlice->slice_type == I_SLICE ? TRUE : FALSE;
+  (*currMB)->is_intra_block = (currSlice->slice_type == I_SLICE || currSlice->slice_type == SI_SLICE) ? TRUE : FALSE;
 
 
   (*currMB)->mb_field = (byte) mb_field;
   motion->mb_field[mb_addr] = (byte) mb_field;
 
-  (*currMB)->is_field_mode = (byte) (p_Img->field_picture || ( currSlice->MbaffFrameFlag && (*currMB)->mb_field));
+  (*currMB)->is_field_mode = (byte) (p_Vid->field_picture || ( currSlice->mb_aff_frame_flag && (*currMB)->mb_field));
+  (*currMB)->prev_recode_mb = FALSE;
 
   set_MB_parameters (currSlice, *currMB);
 
-  prev_mb = FmoGetPreviousMBNr(p_Img, mb_addr);
+  prev_mb = FmoGetPreviousMBNr(p_Vid, mb_addr);
 
   if(use_bitstream_backing)
   {
     if ((!p_Inp->MbInterlace)||((mb_addr & 0x01)==0)) // KS: MB AFF -> store stream positions for 1st MB only
     {
       // Keep the current state of the bitstreams
-      if(!p_Img->cod_counter)
+      if(!p_Vid->cod_counter)
       {
         for (i=0; i<currSlice->max_part_nr; ++i)
         {
@@ -418,7 +414,7 @@ void start_macroblock(Slice *currSlice, Macroblock **currMB, int mb_addr, Boolea
           currStream->stored_bits_to_go = currStream->bits_to_go;
           currStream->stored_byte_pos   = currStream->byte_pos;
           currStream->stored_byte_buf   = currStream->byte_buf;
-          p_Img->p_Stats->stored_bit_slice       = p_Img->p_Stats->bit_slice;
+          p_Vid->p_Stats->stored_bit_slice       = p_Vid->p_Stats->bit_slice;
 
           if (currSlice->symbol_mode ==CABAC)
           {
@@ -435,16 +431,17 @@ void start_macroblock(Slice *currSlice, Macroblock **currMB, int mb_addr, Boolea
 
   // Initialize delta qp change from last macroblock. Feature may be used for future rate control
   // Rate control
-  (*currMB)->qpsp = (short) p_Img->qpsp;
+  (*currMB)->qpsp = (short) p_Vid->qpsp;
 
-  if (prev_mb > -1 && (p_Img->mb_data[prev_mb].slice_nr == currSlice->slice_nr))
+  if (prev_mb > -1 && (p_Vid->mb_data[prev_mb].slice_nr == currSlice->slice_nr))
   {
-    (*currMB)->PrevMB   = &p_Img->mb_data[prev_mb];
+    (*currMB)->PrevMB   = &p_Vid->mb_data[prev_mb];
     (*currMB)->prev_qp  = (*currMB)->PrevMB->qp;
     (*currMB)->prev_dqp = (*currMB)->prev_qp - (*currMB)->PrevMB->prev_qp;
   }
   else
   {
+    prev_mb = - 1;
     (*currMB)->PrevMB   = NULL;
     (*currMB)->prev_qp  = (short) currSlice->qp;
     (*currMB)->prev_dqp = 0;
@@ -456,19 +453,19 @@ void start_macroblock(Slice *currSlice, Macroblock **currMB, int mb_addr, Boolea
   }
   else
   {
-    mb_qp = p_Img->qp;
+    mb_qp = p_Vid->qp;
 
   }
   last_coded_mb = *currMB;   // save the address of the last coded MB
 
-  mb_qp = iClip3(-p_Img->bitdepth_luma_qp_scale, 51, mb_qp);
+  mb_qp = iClip3(-p_Vid->bitdepth_luma_qp_scale, 51, mb_qp);
   (*currMB)->qp = (short) mb_qp;
-  p_Img->qp = mb_qp;
+  p_Vid->qp = mb_qp;
   
   update_qp (*currMB);
 
   // deblocking filter parameter
-  if (p_Img->active_pps->deblocking_filter_control_present_flag)
+  if (p_Vid->active_pps->deblocking_filter_control_present_flag)
   {
     (*currMB)->DFDisableIdc    = currSlice->DFDisableIdc;
     (*currMB)->DFAlphaC0Offset = currSlice->DFAlphaC0Offset;
@@ -480,15 +477,14 @@ void start_macroblock(Slice *currSlice, Macroblock **currMB, int mb_addr, Boolea
     (*currMB)->DFAlphaC0Offset = 0;
     (*currMB)->DFBetaOffset    = 0;
   }
-
-  (*currMB)->min_rdcost = 1e30;
-  (*currMB)->min_dcost  = 1e30;
-  (*currMB)->min_rate   = 1<<20;
+  (*currMB)->min_rdcost = DISTBLK_MAX;
+  (*currMB)->min_dcost  = DISTBLK_MAX;
+  (*currMB)->min_rate   = DISTBLK_MAX;
 
   (*currMB)->i16mode    = 0;
   (*currMB)->best_mode  = 10;
 
-  if ((p_Img->yuv_format!=0) && (p_Img->yuv_format!=3))
+  if ((p_Vid->yuv_format!=0) && (p_Vid->yuv_format!=3))
   {
     (*currMB)->cbp_linfo_intra = cbp_linfo_intra_normal;
     (*currMB)->cbp_linfo_inter = cbp_linfo_inter_normal;
@@ -502,7 +498,7 @@ void start_macroblock(Slice *currSlice, Macroblock **currMB, int mb_addr, Boolea
   // Select appropriate MV predictor function
   if (currSlice->slice_type != I_SLICE && currSlice->slice_type != SI_SLICE)
   {
-    InitMotionVectorPrediction(*currMB, currSlice->MbaffFrameFlag);
+    init_motion_vector_prediction(*currMB, currSlice->mb_aff_frame_flag);
     init_ME_engine(*currMB);
   }
 
@@ -515,7 +511,7 @@ void start_macroblock(Slice *currSlice, Macroblock **currMB, int mb_addr, Boolea
   reset_macroblock(*currMB);
 
   if ((p_Inp->SearchMode == FAST_FULL_SEARCH) && (!p_Inp->IntraProfile))
-    ResetFastFullIntegerSearch (p_Img);
+    ResetFastFullIntegerSearch (p_Vid);
 
   // disable writing of trace file
 #if TRACE
@@ -539,7 +535,7 @@ void end_macroblock(Macroblock *currMB,         //!< Current Macroblock
                     )
 {
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
   int i;
   SyntaxElement se;
@@ -563,11 +559,11 @@ void end_macroblock(Macroblock *currMB,         //!< Current Macroblock
   case NO_SLICES:
     ++currSlice->num_mb;
     *recode_macroblock = FALSE;
-    if ((currSlice->num_mb) == (int)p_Img->PicSizeInMbs) // maximum number of MBs reached
+    if ((currSlice->num_mb) == (int)p_Vid->PicSizeInMbs) // maximum number of MBs reached
       *end_of_slice = TRUE;
 
     // if it's end of current slice group, slice ends too
-    *end_of_slice = (Boolean) (*end_of_slice | (currMB->mbAddrX == FmoGetLastCodedMBOfSliceGroup (p_Img, FmoMB2SliceGroup (p_Img, currMB->mbAddrX))));
+    *end_of_slice = (Boolean) (*end_of_slice | (currMB->mbAddrX == FmoGetLastCodedMBOfSliceGroup (p_Vid, FmoMB2SliceGroup (p_Vid, currMB->mbAddrX))));
 
     break;
   case FIXED_MB:
@@ -575,7 +571,7 @@ void end_macroblock(Macroblock *currMB,         //!< Current Macroblock
     ++currSlice->num_mb;
     *recode_macroblock = FALSE;
     //! Check end-of-slice group condition first
-    *end_of_slice = (Boolean) (currMB->mbAddrX == FmoGetLastCodedMBOfSliceGroup (p_Img, FmoMB2SliceGroup (p_Img, currMB->mbAddrX)));
+    *end_of_slice = (Boolean) (currMB->mbAddrX == FmoGetLastCodedMBOfSliceGroup (p_Vid, FmoMB2SliceGroup (p_Vid, currMB->mbAddrX)));
     //! Now check maximum # of MBs in slice
     *end_of_slice = (Boolean) (*end_of_slice | (currSlice->num_mb >= p_Inp->slice_argument));
 
@@ -586,11 +582,11 @@ void end_macroblock(Macroblock *currMB,         //!< Current Macroblock
     // boundary before this macroblock and code the macroblock again
   case FIXED_RATE:
     // in case of skip MBs check if there is a slice boundary
-    // only for CAVLC (p_Img->cod_counter is always 0 in case of CABAC)
-    if(p_Img->cod_counter)
+    // only for CAVLC (p_Vid->cod_counter is always 0 in case of CABAC)
+    if(p_Vid->cod_counter)
     {
       // write out the skip MBs to know how many bits we need for the RLC
-      se.value1 = p_Img->cod_counter;
+      se.value1 = p_Vid->cod_counter;
       se.value2 = 0;
       se.type = SE_MBTYPE;
       dataPart = &(currSlice->partArr[partMap[se.type]]);
@@ -619,16 +615,16 @@ void end_macroblock(Macroblock *currMB,         //!< Current Macroblock
         *recode_macroblock = TRUE;
         *end_of_slice      = TRUE;
       }
-      else if(!p_Img->cod_counter)
+      else if(!p_Vid->cod_counter)
         skip = FALSE;
     }
     // maximum number of MBs
 
     // check if current slice group is finished
-    if ((*recode_macroblock == FALSE) && (currMB->mbAddrX == FmoGetLastCodedMBOfSliceGroup (p_Img, FmoMB2SliceGroup (p_Img, currMB->mbAddrX))))
+    if ((*recode_macroblock == FALSE) && (currMB->mbAddrX == FmoGetLastCodedMBOfSliceGroup (p_Vid, FmoMB2SliceGroup (p_Vid, currMB->mbAddrX))))
     {
       *end_of_slice = TRUE;
-      if(!p_Img->cod_counter)
+      if(!p_Vid->cod_counter)
         skip = FALSE;
     }
 
@@ -636,7 +632,7 @@ void end_macroblock(Macroblock *currMB,         //!< Current Macroblock
     if (new_slice && slice_too_big(currSlice, rlc_bits))
     {
       *end_of_slice = TRUE;
-      if(!p_Img->cod_counter)
+      if(!p_Vid->cod_counter)
         skip = FALSE;
     }
     if (!*recode_macroblock)
@@ -653,7 +649,7 @@ void end_macroblock(Macroblock *currMB,         //!< Current Macroblock
       }
     }
 
-    if ( (*recode_macroblock == FALSE) && (currMB->mbAddrX == FmoGetLastCodedMBOfSliceGroup (p_Img, FmoMB2SliceGroup (p_Img, currMB->mbAddrX))))
+    if ( (*recode_macroblock == FALSE) && (currMB->mbAddrX == FmoGetLastCodedMBOfSliceGroup (p_Vid, FmoMB2SliceGroup (p_Vid, currMB->mbAddrX))))
       *end_of_slice = TRUE;
     break;
 
@@ -672,7 +668,7 @@ void end_macroblock(Macroblock *currMB,         //!< Current Macroblock
       currStream->bits_to_go = currStream->stored_bits_to_go;
       currStream->byte_pos   = currStream->stored_byte_pos;
       currStream->byte_buf   = currStream->stored_byte_buf;
-      p_Img->p_Stats->bit_slice       = p_Img->p_Stats->stored_bit_slice;
+      p_Vid->p_Stats->bit_slice       = p_Vid->p_Stats->stored_bit_slice;
 
       if (currSlice->symbol_mode == CABAC)
       {
@@ -689,23 +685,23 @@ void end_macroblock(Macroblock *currMB,         //!< Current Macroblock
     {
       // only for Slice Mode 2 or 3
       // If we still have to write the skip, let's do it!
-      if(p_Img->cod_counter && *recode_macroblock == TRUE) // MB that did not fit in this slice
+      if(p_Vid->cod_counter && *recode_macroblock == TRUE) // MB that did not fit in this slice
       {
         // If recoding is true and we have had skip,
         // we have to reduce the counter in case of recoding
-        p_Img->cod_counter--;
-        if(p_Img->cod_counter)
+        p_Vid->cod_counter--;
+        if(p_Vid->cod_counter)
         {
-          se.value1 = p_Img->cod_counter;
+          se.value1 = p_Vid->cod_counter;
           se.value2 = 0;
           se.type = SE_MBTYPE;
 #if TRACE
-          snprintf(se.tracestring, TRACESTRING_SIZE, "Final MB runlength = %3d",p_Img->cod_counter);
+          snprintf(se.tracestring, TRACESTRING_SIZE, "Final MB runlength = %3d",p_Vid->cod_counter);
 #endif
           writeSE_UVLC(&se, dataPart);
           rlc_bits=se.len;
           currMB->bits.mb_mode = currMB->bits.mb_mode + (unsigned short) rlc_bits;
-          p_Img->cod_counter = 0;
+          p_Vid->cod_counter = 0;
         }
       }
       else //! MB that did not fit in this slice anymore is not a Skip MB
@@ -717,15 +713,15 @@ void end_macroblock(Macroblock *currMB,         //!< Current Macroblock
         currStream->byte_buf   = currStream->byte_buf_skip;
 
         // update the statistics
-        p_Img->cod_counter = 0;
+        p_Vid->cod_counter = 0;
         skip = FALSE;
       }
     }
 
     // Skip MBs at the end of this slice for Slice Mode 0 or 1
-    if(*end_of_slice == TRUE && p_Img->cod_counter && !use_bitstream_backing)
+    if(*end_of_slice == TRUE && p_Vid->cod_counter && !use_bitstream_backing)
     {
-      se.value1 = p_Img->cod_counter;
+      se.value1 = p_Vid->cod_counter;
       se.value2 = 0;
       se.type = SE_MBTYPE;
 
@@ -734,7 +730,7 @@ void end_macroblock(Macroblock *currMB,         //!< Current Macroblock
 
       rlc_bits=se.len;
       currMB->bits.mb_mode = currMB->bits.mb_mode + (unsigned short) rlc_bits;
-      p_Img->cod_counter = 0;
+      p_Vid->cod_counter = 0;
     }
   }
 }
@@ -820,7 +816,7 @@ int luma_residual_coding_16x16 (Macroblock* currMB,  //!< Current Macroblock to 
   int   *cbp     = &(currMB->cbp);
   int64 *cbp_blk = &(currMB->cbp_blk);
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currMB->p_Img;  
+  VideoParameters *p_Vid = currMB->p_Vid;  
   int    i, j, nonzero = 0, cbp_blk_mask;
   int    coeff_cost = 0;
   int    mb_y       = (block8x8 >> 1) << 3;
@@ -835,13 +831,13 @@ int luma_residual_coding_16x16 (Macroblock* currMB,  //!< Current Macroblock to 
   //luma_prediction (currMB, mb_x, mb_y, 8, 8, p_dir, list_mode, ref_idx, bipred_me); 
 
   //===== compute prediction residual ======            
-  //compute_residue (&p_Img->pCurImg[currMB->opix_y + mb_y], &currSlice->mb_pred[0][mb_y], &currSlice->mb_ores[0][mb_y], mb_x, currMB->pix_x + mb_x, 8, 8);
+  //compute_residue (&p_Vid->pCurImg[currMB->opix_y + mb_y], &currSlice->mb_pred[0][mb_y], &currSlice->mb_ores[0][mb_y], mb_x, currMB->pix_x + mb_x, 8, 8);
 
   //===== loop over 4x4 blocks =====
   if(!currMB->luma_transform_size_8x8_flag)
   {
     //===== DCT, Quantization, inverse Quantization, IDCT, Reconstruction =====
-    if (!skipped && ( (currSlice->NoResidueDirect != 1) || (currMB->qp_scaled[0] == 0 && p_Img->lossless_qpprime_flag == 1) ))
+    if (!skipped && ( (currSlice->NoResidueDirect != 1) || (currMB->qp_scaled[0] == 0 && p_Vid->lossless_qpprime_flag == 1) ))
     {
       int block_y, block_x;
 
@@ -866,7 +862,7 @@ int luma_residual_coding_16x16 (Macroblock* currMB,  //!< Current Macroblock to 
   {
     if (currSlice->NoResidueDirect != 1 && !skipped)
     {
-      if (currSlice->slice_type != SP_SLICE)
+      if (currSlice->slice_type != SP_SLICE && currSlice->slice_type != SI_SLICE)
         nonzero = currMB->trans_8x8 (currMB, PLANE_Y, block8x8, &coeff_cost, 0);
 
       if (nonzero)
@@ -898,9 +894,11 @@ int luma_residual_coding_16x16 (Macroblock* currMB,  //!< Current Macroblock to 
   */
 
   if (currSlice->NoResidueDirect != 1 && !skipped && coeff_cost <= _LUMA_COEFF_COST_ &&
-    ((currMB->qp_scaled[0])!=0 || p_Img->lossless_qpprime_flag==0)&&
-    !(currSlice->slice_type == SP_SLICE && (p_Img->si_frame_indicator == TRUE || p_Img->sp2_frame_indicator == TRUE )))// last set of conditions
-    // cannot skip when perfect reconstruction is as in switching pictures or SI pictures
+  ((currMB->qp_scaled[0])!=0 || p_Vid->lossless_qpprime_flag==0))
+  //if (currSlice->NoResidueDirect != 1 && !skipped && coeff_cost <= _LUMA_COEFF_COST_ &&
+  //((currMB->qp_scaled[0])!=0 || p_Vid->lossless_qpprime_flag==0)&&
+  //!(currSlice->slice_type == SP_SLICE && (p_Vid->si_frame_indicator == TRUE || p_Vid->sp2_frame_indicator == TRUE )))// last set of conditions
+  //cannot skip when perfect reconstruction is as in switching pictures or SI pictures
   {
     coeff_cost  = 0;
     (*cbp)     &=  (63 - cbp_mask);
@@ -908,16 +906,16 @@ int luma_residual_coding_16x16 (Macroblock* currMB,  //!< Current Macroblock to 
 
     memset( currSlice->cofAC[block8x8][0][0], 0, 4 * 2 * 65 * sizeof(int));
 
-    copy_image_data_8x8(&p_Img->enc_picture->imgY[currMB->pix_y + mb_y], &currSlice->mb_pred[0][mb_y], currMB->pix_x + mb_x, mb_x);
+    copy_image_data_8x8(&p_Vid->enc_picture->imgY[currMB->pix_y + mb_y], &currSlice->mb_pred[0][mb_y], currMB->pix_x + mb_x, mb_x);
 
-    if (currSlice->slice_type == SP_SLICE)
+    if (currSlice->slice_type == SP_SLICE || currSlice->slice_type == SI_SLICE)
     {
       for (i = mb_x; i < mb_x + BLOCK_SIZE_8x8; i += BLOCK_SIZE)
         for (j = mb_y; j < mb_y + BLOCK_SIZE_8x8; j += BLOCK_SIZE)
           copyblock_sp(currMB, PLANE_Y, i, j);
     }
   }
-
+  
   return coeff_cost;
 }
 
@@ -939,7 +937,7 @@ int luma_residual_coding_8x8 (Macroblock* currMB,  //!< Current Macroblock to be
                            char  *ref_idx)     //!< reference pictures for each list
 {
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currSlice->p_Img;  
+  VideoParameters *p_Vid = currSlice->p_Vid;  
   int    block_y, block_x, pic_pix_y, pic_pix_x, i, j, nonzero = 0, cbp_blk_mask;
   int    coeff_cost = 0;
   int    mb_y       = (block8x8 >> 1) << 3;
@@ -961,7 +959,7 @@ int luma_residual_coding_8x8 (Macroblock* currMB,  //!< Current Macroblock to be
       luma_prediction (currMB, mb_x, mb_y, 8, 8, p_dir, list_mode, ref_idx, bipred_me); 
 
       //===== compute prediction residual ======            
-      compute_residue (&p_Img->pCurImg[currMB->opix_y + mb_y], &currSlice->mb_pred[0][mb_y], &currSlice->mb_ores[0][mb_y], mb_x, currMB->pix_x + mb_x, 8, 8);
+      compute_residue (&p_Vid->pCurImg[currMB->opix_y + mb_y], &currSlice->mb_pred[0][mb_y], &currSlice->mb_ores[0][mb_y], mb_x, currMB->pix_x + mb_x, 8, 8);
     }
 
     for (byy=0, block_y=mb_y; block_y<mb_y+8; byy+=4, block_y+=4)
@@ -977,11 +975,11 @@ int luma_residual_coding_8x8 (Macroblock* currMB,  //!< Current Macroblock to be
           luma_prediction (currMB, block_x, block_y, 4, 4, p_dir, list_mode, ref_idx, bipred_me);
 
           //===== compute prediction residual ======            
-          compute_residue(&p_Img->pCurImg[currMB->opix_y + block_y], &currSlice->mb_pred[0][block_y], &currSlice->mb_ores[0][block_y], block_x, pic_pix_x, 4, 4);
+          compute_residue(&p_Vid->pCurImg[currMB->opix_y + block_y], &currSlice->mb_pred[0][block_y], &currSlice->mb_ores[0][block_y], block_x, pic_pix_x, 4, 4);
         }
 
         //===== DCT, Quantization, inverse Quantization, IDCT, Reconstruction =====
-        if (!skipped && ( (currSlice->NoResidueDirect != 1) || (currMB->qp_scaled[0] == 0 && p_Img->lossless_qpprime_flag == 1) ))
+        if (!skipped && ( (currSlice->NoResidueDirect != 1) || (currMB->qp_scaled[0] == 0 && p_Vid->lossless_qpprime_flag == 1) ))
         {
           //===== DCT, Quantization, inverse Quantization, IDCT, Reconstruction =====
           nonzero = currMB->trans_4x4 (currMB, PLANE_Y, block_x, block_y, &coeff_cost, 0);
@@ -1009,11 +1007,11 @@ int luma_residual_coding_8x8 (Macroblock* currMB,  //!< Current Macroblock to be
     luma_prediction (currMB, block_x, block_y, 8, 8, p_dir, list_mode, ref_idx, bipred_me);
 
     //===== compute prediction residual ======            
-    compute_residue (&p_Img->pCurImg[currMB->opix_y + block_y], &currSlice->mb_pred[0][block_y], &currSlice->mb_ores[0][block_y], block_x, pic_pix_x, 8, 8);
+    compute_residue (&p_Vid->pCurImg[currMB->opix_y + block_y], &currSlice->mb_pred[0][block_y], &currSlice->mb_ores[0][block_y], block_x, pic_pix_x, 8, 8);
 
     if (currSlice->NoResidueDirect != 1 && !skipped)
     {
-      if (currSlice->slice_type != SP_SLICE)
+      if (currSlice->slice_type != SP_SLICE && currSlice->slice_type != SI_SLICE)
         nonzero = currMB->trans_8x8 (currMB, PLANE_Y, block8x8, &coeff_cost, 0);
 
       if (nonzero)
@@ -1045,9 +1043,11 @@ int luma_residual_coding_8x8 (Macroblock* currMB,  //!< Current Macroblock to be
   */
 
   if (currSlice->NoResidueDirect != 1 && !skipped && coeff_cost <= _LUMA_COEFF_COST_ &&
-    ((currMB->qp_scaled[0])!=0 || p_Img->lossless_qpprime_flag==0)&&
-    !(currSlice->slice_type == SP_SLICE && (p_Img->si_frame_indicator == TRUE || p_Img->sp2_frame_indicator == TRUE )))// last set of conditions
-    // cannot skip when perfect reconstruction is as in switching pictures or SI pictures
+  ((currMB->qp_scaled[0])!=0 || p_Vid->lossless_qpprime_flag==0))
+  //if (currSlice->NoResidueDirect != 1 && !skipped && coeff_cost <= _LUMA_COEFF_COST_ &&
+  //  ((currMB->qp_scaled[0])!=0 || p_Vid->lossless_qpprime_flag==0)&&
+  //!(currSlice->slice_type == SP_SLICE && (p_Vid->si_frame_indicator == TRUE || p_Vid->sp2_frame_indicator == TRUE )))// last set of conditions
+  // cannot skip when perfect reconstruction is as in switching pictures or SI pictures
   {
     coeff_cost  = 0;
     (*cbp)     &=  (63 - cbp_mask);
@@ -1055,9 +1055,9 @@ int luma_residual_coding_8x8 (Macroblock* currMB,  //!< Current Macroblock to be
 
     memset( currSlice->cofAC[block8x8][0][0], 0, 4 * 2 * 65 * sizeof(int));
 
-    copy_image_data_8x8(&p_Img->enc_picture->imgY[currMB->pix_y + mb_y], &currSlice->mb_pred[0][mb_y], currMB->pix_x + mb_x, mb_x);
+    copy_image_data_8x8(&p_Vid->enc_picture->imgY[currMB->pix_y + mb_y], &currSlice->mb_pred[0][mb_y], currMB->pix_x + mb_x, mb_x);
 
-    if (currSlice->slice_type == SP_SLICE)
+    if (currSlice->slice_type == SP_SLICE || currSlice->slice_type == SI_SLICE)
     {
       for (i=mb_x; i < mb_x + BLOCK_SIZE_8x8; i+=BLOCK_SIZE)
         for (j=mb_y; j < mb_y + BLOCK_SIZE_8x8; j+=BLOCK_SIZE)
@@ -1076,9 +1076,9 @@ int luma_residual_coding_8x8 (Macroblock* currMB,  //!< Current Macroblock to be
  */
 void set_modes_and_reframe (Macroblock* currMB, int b8, short* p_dir, int list_mode[2], char *list_ref_idx)
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   Slice *currSlice = currMB->p_slice;
-  PicMotionParams *motion = &p_Img->enc_picture->motion;
+  PicMotionParams *motion = &p_Vid->enc_picture->motion;
   int j = 2*(b8>>1);
   int i = 2*(b8 & 0x01);
 
@@ -1135,8 +1135,8 @@ void set_modes_and_reframe (Macroblock* currMB, int b8, short* p_dir, int list_m
  */
 void set_modes_and_reframe_p_slice (Macroblock* currMB, int b8, short* p_dir, int list_mode[2], char *list_ref_idx)
 {
-  ImageParameters *p_Img = currMB->p_Img;
-  PicMotionParams *motion = &p_Img->enc_picture->motion;
+  VideoParameters *p_Vid = currMB->p_Vid;
+  PicMotionParams *motion = &p_Vid->enc_picture->motion;
   int j = 2*(b8>>1);
   int i = 2*(b8 & 0x01);
 
@@ -1160,8 +1160,8 @@ void set_modes_and_reframe_p_slice (Macroblock* currMB, int b8, short* p_dir, in
  */
 void set_modes_and_reframe_b_slice (Macroblock* currMB, int b8, short* p_dir, int list_mode[2], char *list_ref_idx)
 {
-  ImageParameters *p_Img = currMB->p_Img;
-  PicMotionParams *motion = &p_Img->enc_picture->motion;
+  VideoParameters *p_Vid = currMB->p_Vid;
+  PicMotionParams *motion = &p_Vid->enc_picture->motion;
   int j = 2*(b8>>1);
   int i = 2*(b8 & 0x01);
 
@@ -1209,7 +1209,7 @@ void set_modes_and_reframe_b_slice (Macroblock* currMB, int b8, short* p_dir, in
 void luma_residual_coding (Macroblock *currMB)
 {
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
 
   int i,j,block8x8,b8_x,b8_y;
   int list_mode[2];
@@ -1237,7 +1237,7 @@ void luma_residual_coding (Macroblock *currMB)
 
     //===== compute prediction residual ======
     // We should not need to compute this for skip mode, but currently computed for "debugging" purposes
-    compute_residue (&p_Img->pCurImg[currMB->opix_y], &currSlice->mb_pred[0][0], &currSlice->mb_ores[0][0], 0, currMB->pix_x, 16, 16);
+    compute_residue (&p_Vid->pCurImg[currMB->opix_y], &currSlice->mb_pred[0][0], &currSlice->mb_ores[0][0], 0, currMB->pix_x, 16, 16);
 
     // Luma residual coding
     if (!is_skip)
@@ -1258,18 +1258,22 @@ void luma_residual_coding (Macroblock *currMB)
   }
 
   // reset information (coefficient thresholding)
+
   if ((is_skip || 
-    (sum_cnt_nonz <= _LUMA_MB_COEFF_COST_ && ((currMB->qp_scaled[0])!=0 || p_Img->lossless_qpprime_flag == 0))) &&
-    !(currSlice->slice_type == SP_SLICE && (p_Img->si_frame_indicator == TRUE || p_Img->sp2_frame_indicator == TRUE)))// modif ES added last set of conditions
+    (sum_cnt_nonz <= _LUMA_MB_COEFF_COST_ && ((currMB->qp_scaled[0])!=0 || p_Vid->lossless_qpprime_flag == 0))))// modif ES added last set of conditions
+
+  //if ((is_skip || 
+    //(sum_cnt_nonz <= _LUMA_MB_COEFF_COST_ && ((currMB->qp_scaled[0])!=0 || p_Vid->lossless_qpprime_flag == 0))) &&
+    //!(currSlice->slice_type == SP_SLICE && (p_Vid->si_frame_indicator == TRUE || p_Vid->sp2_frame_indicator == TRUE)))// modif ES added last set of conditions
   {
     currMB->cbp     &= 0xfffff0 ;
     currMB->cbp_blk &= 0xff0000 ;
 
-    copy_image_data_16x16(&p_Img->enc_picture->imgY[currMB->pix_y], currSlice->mb_pred[0], currMB->pix_x, 0);
+    copy_image_data_16x16(&p_Vid->enc_picture->imgY[currMB->pix_y], currSlice->mb_pred[0], currMB->pix_x, 0);
 
     memset( currSlice->cofAC[0][0][0], 0, 2080 * sizeof(int)); // 4 * 4 * 2 * 65
 
-    if (currSlice->slice_type == SP_SLICE)
+    if (currSlice->slice_type == SP_SLICE || currSlice->slice_type == SI_SLICE)
     {
       for(block8x8 = 0;block8x8 < 4; ++block8x8)
       {
@@ -1290,7 +1294,7 @@ void luma_residual_coding (Macroblock *currMB)
  *    Makes the decision if 8x8 tranform will be used (for RD-off)
  ************************************************************************
  */
-byte TransformDecision (Macroblock *currMB, int block_check, int *cost)
+byte TransformDecision (Macroblock *currMB, int block_check, distblk *cost)
 {
   if(currMB->p_Inp->Transform8x8Mode == 2) //always allow 8x8 transform
   {
@@ -1298,7 +1302,7 @@ byte TransformDecision (Macroblock *currMB, int block_check, int *cost)
   }
   else
   {
-    ImageParameters *p_Img = currMB->p_Img;
+    VideoParameters *p_Vid = currMB->p_Vid;
     Slice *currSlice = currMB->p_slice;
 
     int    block_y, block_x, i, j, k;
@@ -1307,7 +1311,7 @@ byte TransformDecision (Macroblock *currMB, int block_check, int *cost)
     char   list_ref_idx[2];
     short  p_dir;
     int    num_blks;
-    int    cost8x8=0, cost4x4=0;
+    distblk    cost8x8=0, cost4x4=0;
     int    *diff_ptr;
     char    bipred_me;
     imgpel **mb_pred = currSlice->mb_pred[0];
@@ -1344,12 +1348,12 @@ byte TransformDecision (Macroblock *currMB, int block_check, int *cost)
           for (j=block_y; j<block_y + 4; ++j)
           {
             for (i = block_x; i < block_x + 4; ++i, ++k)
-              diff64[k] = p_Img->pCurImg[currMB->opix_y + j][currMB->pix_x + i] - mb_pred[j][i];
+              diff64[k] = p_Vid->pCurImg[currMB->opix_y + j][currMB->pix_x + i] - mb_pred[j][i];
           }
-          cost4x4 += p_Img->distortion4x4 (diff_ptr, INT_MAX);
+          cost4x4 += p_Vid->distortion4x4 (diff_ptr, DISTBLK_MAX);
         }
       }
-      cost8x8 += p_Img->distortion8x8 (diff64, INT_MAX);
+      cost8x8 += p_Vid->distortion8x8 (diff64, DISTBLK_MAX);
     }
 
 
@@ -1376,23 +1380,23 @@ byte TransformDecision (Macroblock *currMB, int block_check, int *cost)
 void chroma_residual_coding (Macroblock *currMB)
 {
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currSlice->p_Img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
   int chroma_cbp;
   int   uv, block8, block_y, block_x, j;
   int   list_mode[2];
   char  list_ref_idx[2];
   short p_dir;
   int   skipped = (currMB->mb_type == 0 && (currSlice->slice_type == P_SLICE || currSlice->slice_type == SP_SLICE));
-  int   yuv = p_Img->yuv_format - 1; 
+  int   yuv = p_Vid->yuv_format - 1; 
   char  bipred_me;
   
   for (chroma_cbp = 0, uv=0; uv<2; ++uv)
   {
     //===== prediction of chrominance blocks ===d==
     block8 = 0;
-    for (block_y=0; block_y < p_Img->mb_cr_size_y; block_y+=4)
+    for (block_y=0; block_y < p_Vid->mb_cr_size_y; block_y+=4)
     {
-      for (block_x=0; block_x < p_Img->mb_cr_size_x; block_x+=4)
+      for (block_x=0; block_x < p_Vid->mb_cr_size_x; block_x+=4)
       {
         block8 = block8x8_idx[yuv][block_y>>2][block_x>>2];
         bipred_me = currMB->b8x8[block8].bipred;
@@ -1406,22 +1410,22 @@ void chroma_residual_coding (Macroblock *currMB)
     // ==== set chroma residue to zero for skip Mode in SP frames
     if (currSlice->NoResidueDirect)
     {
-      copy_image_data(&p_Img->enc_picture->imgUV[uv][currMB->pix_c_y], currSlice->mb_pred[ uv + 1], currMB->pix_c_x, 0, p_Img->mb_cr_size_x, p_Img->mb_cr_size_y);
+      copy_image_data(&p_Vid->enc_picture->imgUV[uv][currMB->pix_c_y], currSlice->mb_pred[ uv + 1], currMB->pix_c_x, 0, p_Vid->mb_cr_size_x, p_Vid->mb_cr_size_y);
     }
     else if (skipped && currSlice->slice_type == SP_SLICE)
     {
-      for (j=0; j<p_Img->mb_cr_size_y; ++j)
-        memset(currSlice->mb_ores[uv + 1][j], 0 , p_Img->mb_cr_size_x * sizeof(int));
-      for (j=0; j<p_Img->mb_cr_size_y; ++j)
-        memset(currSlice->mb_rres[uv + 1][j], 0 , p_Img->mb_cr_size_x * sizeof(int));
+      for (j=0; j<p_Vid->mb_cr_size_y; ++j)
+        memset(currSlice->mb_ores[uv + 1][j], 0 , p_Vid->mb_cr_size_x * sizeof(int));
+      for (j=0; j<p_Vid->mb_cr_size_y; ++j)
+        memset(currSlice->mb_rres[uv + 1][j], 0 , p_Vid->mb_cr_size_x * sizeof(int));
     }
     else if (skipped)
     {
-      copy_image_data(&p_Img->enc_picture->imgUV[uv][currMB->pix_c_y], currSlice->mb_pred[ uv + 1], currMB->pix_c_x, 0, p_Img->mb_cr_size_x, p_Img->mb_cr_size_y);
+      copy_image_data(&p_Vid->enc_picture->imgUV[uv][currMB->pix_c_y], currSlice->mb_pred[ uv + 1], currMB->pix_c_x, 0, p_Vid->mb_cr_size_x, p_Vid->mb_cr_size_y);
     }
     else
     {
-      compute_residue(&p_Img->pImgOrg[uv + 1][currMB->opix_c_y ], &currSlice->mb_pred[ uv + 1][0], &currSlice->mb_ores[uv + 1][0], 0, currMB->pix_c_x, p_Img->mb_cr_size_y, p_Img->mb_cr_size_x);
+      compute_residue(&p_Vid->pImgOrg[uv + 1][currMB->opix_c_y ], &currSlice->mb_pred[ uv + 1][0], &currSlice->mb_ores[uv + 1][0], 0, currMB->pix_c_x, p_Vid->mb_cr_size_y, p_Vid->mb_cr_size_x);
     }
 
     //===== DCT, Quantization, inverse Quantization, IDCT, and Reconstruction =====
@@ -1429,7 +1433,7 @@ void chroma_residual_coding (Macroblock *currMB)
 
     if (skipped && currSlice->slice_type == SP_SLICE)
     {
-      if(p_Img->si_frame_indicator || p_Img->sp2_frame_indicator)
+      if(p_Vid->sp2_frame_indicator)
         chroma_cbp = dct_chroma_sp2(currMB, uv,chroma_cbp);
       else
         chroma_cbp = dct_chroma_sp(currMB, uv,chroma_cbp);
@@ -1438,14 +1442,17 @@ void chroma_residual_coding (Macroblock *currMB)
     {
       if (!currSlice->NoResidueDirect && !skipped)
       {
-        if (currSlice->slice_type != SP_SLICE || (currMB->mb_type==I16MB ))
+        if (currSlice->slice_type != SP_SLICE && currSlice->slice_type != SI_SLICE)
         {
-          //even if the block is intra it should still be treated as SP
           chroma_cbp = currMB->trans_cr_4x4[uv] (currMB, uv,chroma_cbp);
+        }
+        else if (currMB->mb_type==I16MB || currMB->mb_type == I4MB)
+        {
+          chroma_cbp=dct_chroma(currMB, uv,chroma_cbp);
         }
         else
         {
-          if(p_Img->si_frame_indicator||p_Img->sp2_frame_indicator)
+          if(currSlice->slice_type == SI_SLICE || p_Vid->sp2_frame_indicator)
             chroma_cbp=dct_chroma_sp2(currMB, uv,chroma_cbp);// SI frames or switching SP frames
           else
             chroma_cbp=dct_chroma_sp(currMB, uv,chroma_cbp);
@@ -1468,7 +1475,7 @@ void chroma_residual_coding (Macroblock *currMB)
 void intra_chroma_RD_decision (Macroblock *currMB, RD_PARAMS enc_mb)
 {
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
   int      i, j, k;
   imgpel** image;
@@ -1479,21 +1486,21 @@ void intra_chroma_RD_decision (Macroblock *currMB, RD_PARAMS enc_mb)
   int      uv;
   int      mode;
   int      best_mode = DC_PRED_8;  //just an initialization here, should always be overwritten
-  int      cost;
-  int      min_cost;
+  distblk      cost;
+  distblk      min_cost;
   PixelPos up;        //!< pixel position  p(0,-1)
   PixelPos left[17];  //!< pixel positions p(-1, -1..15)
-  int      cr_MB_x = p_Img->mb_cr_size_x;
-  int      cr_MB_y = p_Img->mb_cr_size_y;
+  int      cr_MB_x = p_Vid->mb_cr_size_x;
+  int      cr_MB_y = p_Vid->mb_cr_size_y;
   imgpel *img_org, *img_prd;
   imgpel ***curr_mpr_16x16;
   int diff  [16];
 
   for (i=0;i<cr_MB_y+1;++i)
   {
-    p_Img->getNeighbour(currMB, -1 , i-1 , p_Img->mb_size[IS_CHROMA], &left[i]);
+    p_Vid->getNeighbour(currMB, -1 , i-1 , p_Vid->mb_size[IS_CHROMA], &left[i]);
   }
-  p_Img->getNeighbour(currMB, 0 , -1 , p_Img->mb_size[IS_CHROMA], &up);
+  p_Vid->getNeighbour(currMB, 0 , -1 , p_Vid->mb_size[IS_CHROMA], &up);
 
   mb_available_up                             = up.available;
   mb_available_up_left                        = left[0].available;
@@ -1501,23 +1508,23 @@ void intra_chroma_RD_decision (Macroblock *currMB, RD_PARAMS enc_mb)
 
   if(p_Inp->UseConstrainedIntraPred)
   {
-    mb_available_up = up.available ? p_Img->intra_block[up.mb_addr] : 0;
+    mb_available_up = up.available ? p_Vid->intra_block[up.mb_addr] : 0;
     for (i=1, mb_available_left[0] = 1; i < (cr_MB_y>>1) + 1; ++i)
-      mb_available_left[0]  &= left[i].available ? p_Img->intra_block[left[i].mb_addr]: 0;
+      mb_available_left[0]  &= left[i].available ? p_Vid->intra_block[left[i].mb_addr]: 0;
 
     for (i=(cr_MB_y>>1) + 1, mb_available_left[1]=1; i < cr_MB_y + 1;++i)
-      mb_available_left[1] &= left[i].available ? p_Img->intra_block[left[i].mb_addr]: 0;
+      mb_available_left[1] &= left[i].available ? p_Vid->intra_block[left[i].mb_addr]: 0;
 
-    mb_available_up_left = left[0].available ? p_Img->intra_block[left[0].mb_addr]: 0;
+    mb_available_up_left = left[0].available ? p_Vid->intra_block[left[0].mb_addr]: 0;
   }
 
   // pick lowest cost prediction mode
-  min_cost = INT_MAX;
+  min_cost = DISTBLK_MAX;
   for (i=0;i<cr_MB_y;++i)
   {
-    p_Img->getNeighbour(currMB, 0, i, p_Img->mb_size[IS_CHROMA], &left[i]);
+    p_Vid->getNeighbour(currMB, 0, i, p_Vid->mb_size[IS_CHROMA], &left[i]);
   }
-  if ( currSlice->MbaffFrameFlag && p_Img->field_mode )
+  if ( currSlice->mb_aff_frame_flag && p_Vid->field_mode )
   {
     for (i=0;i<cr_MB_y;++i)
     {
@@ -1535,7 +1542,7 @@ void intra_chroma_RD_decision (Macroblock *currMB, RD_PARAMS enc_mb)
     cost = 0;
     for (uv = 1; uv < 3; ++uv)
     {
-      image = p_Img->pImgOrg[uv];
+      image = p_Vid->pImgOrg[uv];
       curr_mpr_16x16 = currSlice->mpr_16x16[uv];
       for (block_y=0; block_y<cr_MB_y; block_y+=4)
       {
@@ -1550,15 +1557,15 @@ void intra_chroma_RD_decision (Macroblock *currMB, RD_PARAMS enc_mb)
               diff[k++] = img_org[i] - img_prd[i];
           }
 
-          cost += p_Img->distortion4x4(diff, min_cost);
+          cost += p_Vid->distortion4x4(diff, min_cost);
         }
         if (cost > min_cost) break;
       }
       if (cost > min_cost) break;
     }
 
-    //cost += (int) (enc_mb.lambda_me[Q_PEL] * p_Img->mvbits[ mode ]); // exp golomb coding cost for mode signaling
-    cost += weight_cost(enc_mb.lambda_mf[Q_PEL], p_Img->mvbits[ mode ]); // exp golomb coding cost for mode signaling
+    //cost += (int) (enc_mb.lambda_me[Q_PEL] * p_Vid->mvbits[ mode ]); // exp golomb coding cost for mode signaling
+    cost += weight_cost(enc_mb.lambda_mf[Q_PEL], p_Vid->mvbits[ mode ]); // exp golomb coding cost for mode signaling
 
     if (cost < min_cost)
     {
@@ -1578,7 +1585,7 @@ void intra_chroma_RD_decision (Macroblock *currMB, RD_PARAMS enc_mb)
  */
 int ZeroRef (Macroblock* currMB)
 {
-  PicMotionParams *motion = &currMB->p_Img->enc_picture->motion;
+  PicMotionParams *motion = &currMB->p_Vid->enc_picture->motion;
   int i,j;
 
   for (j=currMB->block_y; j<currMB->block_y + BLOCK_MULTIPLE; ++j)
@@ -1608,13 +1615,15 @@ int MBType2Value (Macroblock* currMB)
                                        {12, 14, 16}};  // 1. block bi-directional
 
   int mbtype, pdir0, pdir1;
+  int si_slice = (currSlice->slice_type == SI_SLICE) ? 1 : 0;
 
   if (currSlice->slice_type != B_SLICE)
   {
     if      (currMB->mb_type==I8MB ||currMB->mb_type==I4MB)
-      return (currSlice->slice_type == I_SLICE ? 0 : 6);
-    else if (currMB->mb_type==I16MB) return (currSlice->slice_type  == I_SLICE ? 0 : 6) + currMB->i16offset;
-    else if (currMB->mb_type==IPCM)  return (currSlice->slice_type  == I_SLICE ? 25 : 31);
+      return ((currSlice->slice_type  == I_SLICE || si_slice) ? (0 + si_slice) : 6);
+    else if (currMB->mb_type==SI4MB) return 0;
+    else if (currMB->mb_type==I16MB) return ((currSlice->slice_type  == I_SLICE || si_slice) ? (0 + si_slice) : 6) + currMB->i16offset;
+    else if (currMB->mb_type==IPCM)  return ((currSlice->slice_type == I_SLICE || si_slice ) ? (25 + si_slice) : 31);
     else if (currMB->mb_type==P8x8)
     {
       if (currSlice->symbol_mode==CAVLC
@@ -1765,19 +1774,19 @@ int B8Mode2Value (Slice *currSlice, short b8mode, short b8pdir)
 
 static int writeIPCMLuma (Macroblock *currMB, imgpel **imgY, Bitstream *currStream, SyntaxElement *se, int *bitCount)
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   int i, j;
-  int bit_size = MB_BLOCK_SIZE * MB_BLOCK_SIZE * p_Img->bitdepth_luma;
+  int bit_size = MB_BLOCK_SIZE * MB_BLOCK_SIZE * p_Vid->bitdepth_luma;
 
   *bitCount += bit_size;
-  se->len   = p_Img->bitdepth_luma;
+  se->len   = p_Vid->bitdepth_luma;
   se->type  = SE_MBTYPE;   
 
   for (j = currMB->pix_y; j < currMB->pix_y + MB_BLOCK_SIZE; ++j)
   {      
     for (i = currMB->pix_x; i < currMB->pix_x + MB_BLOCK_SIZE; ++i)
     {            
-      se->bitpattern = imax(p_Img->min_IPCM_value, imgY[j][i]);
+      se->bitpattern = imax(p_Vid->min_IPCM_value, imgY[j][i]);
       se->value1 = se->bitpattern;      
 #if TRACE
       snprintf(se->tracestring, TRACESTRING_SIZE, "pcm_sample_luma (%d %d) = %d", j, i, se->bitpattern);
@@ -1790,19 +1799,19 @@ static int writeIPCMLuma (Macroblock *currMB, imgpel **imgY, Bitstream *currStre
 
 static int writeIPCMChroma (Macroblock *currMB, imgpel **imgUV, Bitstream *currStream, SyntaxElement *se, int *bitCount)
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   int i, j;
-  int bit_size = p_Img->mb_cr_size_y * p_Img->mb_cr_size_x * p_Img->bitdepth_luma;
+  int bit_size = p_Vid->mb_cr_size_y * p_Vid->mb_cr_size_x * p_Vid->bitdepth_luma;
   *bitCount += bit_size;
 
-  se->len   = p_Img->bitdepth_chroma;
+  se->len   = p_Vid->bitdepth_chroma;
   se->type  = SE_MBTYPE;
 
-  for (j = currMB->pix_c_y; j < currMB->pix_c_y + p_Img->mb_cr_size_y; ++j)
+  for (j = currMB->pix_c_y; j < currMB->pix_c_y + p_Vid->mb_cr_size_y; ++j)
   {
-    for (i = currMB->pix_c_x; i < currMB->pix_c_x + p_Img->mb_cr_size_x; ++i)
+    for (i = currMB->pix_c_x; i < currMB->pix_c_x + p_Vid->mb_cr_size_x; ++i)
     {
-      se->bitpattern = imax(p_Img->min_IPCM_value, imgUV[j][i]);
+      se->bitpattern = imax(p_Vid->min_IPCM_value, imgUV[j][i]);
       se->value1 = se->bitpattern;
 #if TRACE
       //snprintf(se.tracestring, TRACESTRING_SIZE, "pcm_sample_chroma (%s) (%d %d) = %d", uv?"v":"u", j,i,se->bitpattern);
@@ -1843,7 +1852,7 @@ static int writeIPCMByteAlign(Bitstream *currStream, SyntaxElement *se, int *bit
 static int writeIPCMData(Macroblock *currMB, DataPartition*  dataPart)
 {
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
   int no_bits = 0;
   SyntaxElement   se;
@@ -1863,14 +1872,14 @@ static int writeIPCMData(Macroblock *currMB, DataPartition*  dataPart)
 
   writeIPCMByteAlign(dataPart->bitstream, &se, &(currMB->bits.mb_y_coeff));
 
-  no_bits += writeIPCMLuma (currMB, p_Img->enc_picture->imgY, dataPart->bitstream, &se, &mbBits->mb_y_coeff);
+  no_bits += writeIPCMLuma (currMB, p_Vid->enc_picture->imgY, dataPart->bitstream, &se, &mbBits->mb_y_coeff);
 
-  if ((p_Img->active_sps->chroma_format_idc != YUV400) && !IS_INDEPENDENT(p_Inp))
+  if ((p_Vid->active_sps->chroma_format_idc != YUV400) && !IS_INDEPENDENT(p_Inp))
   {
     int uv;
     for (uv = 0; uv < 2; ++uv )
     {
-      no_bits += writeIPCMChroma (currMB, p_Img->enc_picture->imgUV[uv], dataPart->bitstream, &se, &mbBits->mb_uv_coeff);
+      no_bits += writeIPCMChroma (currMB, p_Vid->enc_picture->imgUV[uv], dataPart->bitstream, &se, &mbBits->mb_uv_coeff);
     }
   }
   return no_bits;
@@ -1890,7 +1899,7 @@ static int writeIPCMData(Macroblock *currMB, DataPartition*  dataPart)
 */
 int writeMBLayerBSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
   Slice *currSlice = currMB->p_slice;
 
@@ -1910,7 +1919,7 @@ int writeMBLayerBSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
   int             prevMbSkipped = 0;  
   int             WriteFrameFieldMBInHeader = 0;
 
-  if (currSlice->MbaffFrameFlag)
+  if (currSlice->mb_aff_frame_flag)
   {
     if ((mb_nr & 0x01) == 0)
     {
@@ -1925,7 +1934,7 @@ int writeMBLayerBSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
         WriteFrameFieldMBInHeader = 1; // bottom, if top was skipped
       }
 
-      prevMbSkipped = p_Img->mb_data[prev_mb_nr].skip_flag;
+      prevMbSkipped = p_Vid->mb_data[prev_mb_nr].skip_flag;
     }
   }
   currMB->IntraChromaPredModeFlag = (char) IS_INTRA(currMB);
@@ -1933,7 +1942,7 @@ int writeMBLayerBSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
   if (currSlice->symbol_mode == CABAC)
   {
     int mb_type = MBType2Value (currMB);
-    if (currSlice->MbaffFrameFlag && ((p_Img->current_mb_nr & 0x01) == 0 || prevMbSkipped))
+    if (currSlice->mb_aff_frame_flag && ((p_Vid->current_mb_nr & 0x01) == 0 || prevMbSkipped))
     {
       byte   mb_field_tmp = currMB->mb_field;
       currMB->mb_field = field_flag_inference(currMB);
@@ -1954,7 +1963,7 @@ int writeMBLayerBSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
     CheckAvailabilityOfNeighborsCABAC(currMB);
 
     //========= write mb_aff (CABAC) =========
-    if(currSlice->MbaffFrameFlag && !skip) // check for copy mode
+    if(currSlice->mb_aff_frame_flag && !skip) // check for copy mode
     {
       if(WriteFrameFieldMBInHeader)
       {
@@ -1988,7 +1997,7 @@ int writeMBLayerBSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
   else if (currMB->mb_type != 0 || ((currMB->cbp != 0 || currSlice->cmp_cbp[1] != 0 || currSlice->cmp_cbp[2]!=0 )))
   {
     //===== Run Length Coding: Non-Skipped macroblock =====
-    se.value1 = p_Img->cod_counter;
+    se.value1 = p_Vid->cod_counter;
     se.value2 = 0;
     se.type   = SE_MBTYPE;
 
@@ -1998,10 +2007,10 @@ int writeMBLayerBSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
     no_bits         += se.len;
 
     // Reset cod counter
-    p_Img->cod_counter = 0;
+    p_Vid->cod_counter = 0;
 
     // write mb_aff
-    if(currSlice->MbaffFrameFlag && !skip) // check for copy mode
+    if(currSlice->mb_aff_frame_flag && !skip) // check for copy mode
     {
       if(WriteFrameFieldMBInHeader)
       {
@@ -2031,16 +2040,16 @@ int writeMBLayerBSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
   else
   {
     //Run Length Coding: Skipped macroblock
-    ++(p_Img->cod_counter);
+    ++(p_Vid->cod_counter);
 
     currMB->skip_flag = 1;
     // CAVLC
-    reset_mb_nz_coeff(p_Img, currMB->mbAddrX);
+    reset_mb_nz_coeff(p_Vid, currMB->mbAddrX);
 
-    if(FmoGetNextMBNr(p_Img, p_Img->current_mb_nr) == -1 && p_Img->cod_counter > 0)
+    if(FmoGetNextMBNr(p_Vid, p_Vid->current_mb_nr) == -1 && p_Vid->cod_counter > 0)
     {
       // Put out run
-      se.value1  = p_Img->cod_counter;
+      se.value1  = p_Vid->cod_counter;
       se.value2  = 0;
       se.type    = SE_MBTYPE;
 
@@ -2050,13 +2059,13 @@ int writeMBLayerBSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
       no_bits         += se.len;
 
       // Reset cod counter
-      p_Img->cod_counter = 0;
+      p_Vid->cod_counter = 0;
     }
   }
   mbBits->mb_mode = mbBits->mb_mode + (unsigned short) no_bits;;
 
   //init NoMbPartLessThan8x8Flag
-  currMB->NoMbPartLessThan8x8Flag = (currMB->mb_type == 0 && !(p_Img->active_sps->direct_8x8_inference_flag))? FALSE : TRUE;
+  currMB->NoMbPartLessThan8x8Flag = (currMB->mb_type == 0 && !(p_Vid->active_sps->direct_8x8_inference_flag))? FALSE : TRUE;
 
   if (currMB->mb_type == IPCM)
   {    
@@ -2082,7 +2091,7 @@ int writeMBLayerBSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
       no_bits         += se.len;
 
       //set NoMbPartLessThan8x8Flag for P8x8 mode
-      currMB->NoMbPartLessThan8x8Flag &= (Boolean) ((currMB->b8x8[i].mode == 0 && p_Img->active_sps->direct_8x8_inference_flag) 
+      currMB->NoMbPartLessThan8x8Flag &= (Boolean) ((currMB->b8x8[i].mode == 0 && p_Vid->active_sps->direct_8x8_inference_flag) 
                                                     || (currMB->b8x8[i].mode ==4));
     }
 
@@ -2109,7 +2118,7 @@ int writeMBLayerBSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
   //===== BITS FOR INTRA PREDICTION MODES ====
   no_bits += writeIntraModes(currMB);
   //===== BITS FOR CHROMA INTRA PREDICTION MODE ====
-  if (currMB->IntraChromaPredModeFlag && ((p_Img->active_sps->chroma_format_idc != YUV400) && (p_Img->active_sps->chroma_format_idc != YUV444)))
+  if (currMB->IntraChromaPredModeFlag && ((p_Vid->active_sps->chroma_format_idc != YUV400) && (p_Vid->active_sps->chroma_format_idc != YUV444)))
     no_bits += writeChromaIntraPredMode(currMB);
   else if(!rdopt) //GB CHROMA !!!!!
   {
@@ -2131,9 +2140,9 @@ int writeMBLayerBSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
     *coeff_rate  = writeCBPandDquant (currMB);
     *coeff_rate += currSlice->writeCoeff16x16   (currMB, PLANE_Y);
 
-    if ((p_Img->active_sps->chroma_format_idc != YUV400) && (!IS_INDEPENDENT(p_Inp)))
+    if ((p_Vid->active_sps->chroma_format_idc != YUV400) && (!IS_INDEPENDENT(p_Inp)))
     {
-      if(p_Img->active_sps->chroma_format_idc == YUV444)
+      if(p_Vid->active_sps->chroma_format_idc == YUV444)
       {
         *coeff_rate += currSlice->writeCoeff16x16(currMB, PLANE_U);
         *coeff_rate += currSlice->writeCoeff16x16(currMB, PLANE_V);
@@ -2161,7 +2170,7 @@ int writeMBLayerBSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
 */
 int writeMBLayerPSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
   Slice *currSlice = currMB->p_slice;
 
@@ -2181,7 +2190,7 @@ int writeMBLayerPSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
   int             prevMbSkipped = 0;  
   int             WriteFrameFieldMBInHeader = 0;
 
-  if (currSlice->MbaffFrameFlag)
+  if (currSlice->mb_aff_frame_flag)
   {
     if ((mb_nr & 0x01) == 0)
     {
@@ -2196,7 +2205,7 @@ int writeMBLayerPSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
         WriteFrameFieldMBInHeader = 1; // bottom, if top was skipped
       }
 
-      prevMbSkipped = p_Img->mb_data[prev_mb_nr].skip_flag;
+      prevMbSkipped = p_Vid->mb_data[prev_mb_nr].skip_flag;
     }
   }
   currMB->IntraChromaPredModeFlag = (char) IS_INTRA(currMB);
@@ -2204,7 +2213,7 @@ int writeMBLayerPSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
   if (currSlice->symbol_mode == CABAC)
   {
     int mb_type = MBType2Value (currMB);
-    if (currSlice->MbaffFrameFlag && ((p_Img->current_mb_nr & 0x01) == 0 || prevMbSkipped))
+    if (currSlice->mb_aff_frame_flag && ((p_Vid->current_mb_nr & 0x01) == 0 || prevMbSkipped))
     {
       byte   mb_field_tmp = currMB->mb_field;
       currMB->mb_field = field_flag_inference(currMB);
@@ -2225,7 +2234,7 @@ int writeMBLayerPSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
     CheckAvailabilityOfNeighborsCABAC(currMB);
 
     //========= write mb_aff (CABAC) =========
-    if(currSlice->MbaffFrameFlag && !skip) // check for copy mode
+    if(currSlice->mb_aff_frame_flag && !skip) // check for copy mode
     {
       if(WriteFrameFieldMBInHeader)
       {
@@ -2259,7 +2268,7 @@ int writeMBLayerPSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
   else if (currMB->mb_type != 0)
   {
     //===== Run Length Coding: Non-Skipped macroblock =====
-    se.value1 = p_Img->cod_counter;
+    se.value1 = p_Vid->cod_counter;
     se.value2 = 0;
     se.type   = SE_MBTYPE;
 
@@ -2269,10 +2278,10 @@ int writeMBLayerPSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
     no_bits         += se.len;
 
     // Reset cod counter
-    p_Img->cod_counter = 0;
+    p_Vid->cod_counter = 0;
 
     // write mb_aff
-    if(currSlice->MbaffFrameFlag && !skip) // check for copy mode
+    if(currSlice->mb_aff_frame_flag && !skip) // check for copy mode
     {
       if(WriteFrameFieldMBInHeader)
       {
@@ -2303,16 +2312,16 @@ int writeMBLayerPSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
   else
   {
     //Run Length Coding: Skipped macroblock
-    ++(p_Img->cod_counter);
+    ++(p_Vid->cod_counter);
 
     currMB->skip_flag = 1;
     // CAVLC
-    reset_mb_nz_coeff(p_Img, currMB->mbAddrX);
+    reset_mb_nz_coeff(p_Vid, currMB->mbAddrX);
 
-    if(FmoGetNextMBNr(p_Img, p_Img->current_mb_nr) == -1 && p_Img->cod_counter > 0)
+    if(FmoGetNextMBNr(p_Vid, p_Vid->current_mb_nr) == -1 && p_Vid->cod_counter > 0)
     {
       // Put out run
-      se.value1  = p_Img->cod_counter;
+      se.value1  = p_Vid->cod_counter;
       se.value2  = 0;
       se.type    = SE_MBTYPE;
 
@@ -2322,7 +2331,7 @@ int writeMBLayerPSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
       no_bits         += se.len;
 
       // Reset cod counter
-      p_Img->cod_counter = 0;
+      p_Vid->cod_counter = 0;
     }
   }
   mbBits->mb_mode = mbBits->mb_mode + (unsigned short) no_bits;;
@@ -2354,7 +2363,7 @@ int writeMBLayerPSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
       no_bits         += se.len;
 
       //set NoMbPartLessThan8x8Flag for P8x8 mode
-      currMB->NoMbPartLessThan8x8Flag &= (Boolean) ((currMB->b8x8[i].mode == 0 && p_Img->active_sps->direct_8x8_inference_flag) 
+      currMB->NoMbPartLessThan8x8Flag &= (Boolean) ((currMB->b8x8[i].mode == 0 && p_Vid->active_sps->direct_8x8_inference_flag) 
                                                     || (currMB->b8x8[i].mode ==4));
     }
 
@@ -2381,7 +2390,7 @@ int writeMBLayerPSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
   //===== BITS FOR INTRA PREDICTION MODES ====
   no_bits += writeIntraModes(currMB);
   //===== BITS FOR CHROMA INTRA PREDICTION MODE ====
-  if (currMB->IntraChromaPredModeFlag && ((p_Img->active_sps->chroma_format_idc != YUV400) && (p_Img->active_sps->chroma_format_idc != YUV444)))
+  if (currMB->IntraChromaPredModeFlag && ((p_Vid->active_sps->chroma_format_idc != YUV400) && (p_Vid->active_sps->chroma_format_idc != YUV444)))
     no_bits += writeChromaIntraPredMode(currMB);
   else if(!rdopt) //GB CHROMA !!!!!
   {
@@ -2403,9 +2412,9 @@ int writeMBLayerPSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
     *coeff_rate  = writeCBPandDquant (currMB);
     *coeff_rate += currSlice->writeCoeff16x16   (currMB, PLANE_Y);
 
-    if ((p_Img->active_sps->chroma_format_idc != YUV400) && (!IS_INDEPENDENT(p_Inp)))
+    if ((p_Vid->active_sps->chroma_format_idc != YUV400) && (!IS_INDEPENDENT(p_Inp)))
     {
-      if(p_Img->active_sps->chroma_format_idc == YUV444)
+      if(p_Vid->active_sps->chroma_format_idc == YUV444)
       {
         *coeff_rate += currSlice->writeCoeff16x16(currMB, PLANE_U);
         *coeff_rate += currSlice->writeCoeff16x16(currMB, PLANE_V);
@@ -2422,7 +2431,7 @@ int writeMBLayerPSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
 
 int writeMBLayerISlice (Macroblock *currMB, int rdopt, int *coeff_rate)
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
   Slice *currSlice = currMB->p_slice;
 
@@ -2438,7 +2447,7 @@ int writeMBLayerISlice (Macroblock *currMB, int rdopt, int *coeff_rate)
   int             no_bits    = 0;
   int             WriteFrameFieldMBInHeader = 0;
 
-  if (currSlice->MbaffFrameFlag)
+  if (currSlice->mb_aff_frame_flag)
   {
     if ((mb_nr & 0x01) == 0)
     {
@@ -2514,7 +2523,7 @@ int writeMBLayerISlice (Macroblock *currMB, int rdopt, int *coeff_rate)
   //===== BITS FOR INTRA PREDICTION MODES ====
   no_bits += writeIntraModes(currMB);
   //===== BITS FOR CHROMA INTRA PREDICTION MODE ====
-  if (currMB->IntraChromaPredModeFlag && ((p_Img->active_sps->chroma_format_idc != YUV400) && (p_Img->active_sps->chroma_format_idc != YUV444)))
+  if (currMB->IntraChromaPredModeFlag && ((p_Vid->active_sps->chroma_format_idc != YUV400) && (p_Vid->active_sps->chroma_format_idc != YUV444)))
     no_bits += writeChromaIntraPredMode(currMB);
   else if(!rdopt) //GB CHROMA !!!!!
   {
@@ -2528,9 +2537,9 @@ int writeMBLayerISlice (Macroblock *currMB, int rdopt, int *coeff_rate)
   *coeff_rate  = writeCBPandDquant (currMB);
   *coeff_rate += currSlice->writeCoeff16x16 (currMB, PLANE_Y);
 
-  if ((p_Img->active_sps->chroma_format_idc != YUV400) && (!IS_INDEPENDENT(p_Inp)))
+  if ((p_Vid->active_sps->chroma_format_idc != YUV400) && (!IS_INDEPENDENT(p_Inp)))
   {
-    if(p_Img->active_sps->chroma_format_idc == YUV444)
+    if(p_Vid->active_sps->chroma_format_idc == YUV444)
     {
       *coeff_rate += currSlice->writeCoeff16x16(currMB, PLANE_U);
       *coeff_rate += currSlice->writeCoeff16x16(currMB, PLANE_V);
@@ -2596,17 +2605,17 @@ int writeChromaIntraPredMode(Macroblock* currMB)
  *    Passes the chosen syntax elements to the NAL
  ************************************************************************
  */
-void write_macroblock (Macroblock* currMB, int eos_bit, Boolean prev_recode_mb)
+void write_macroblock (Macroblock* currMB, int eos_bit)
 {
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
   BitCounter *mbBits = &currMB->bits;
   int i;
 
   // enable writing of trace file
 #if TRACE
-  if ( prev_recode_mb == FALSE )
+  if ( currMB->prev_recode_mb == FALSE )
   {
     for (i=0; i<currSlice->max_part_nr; ++i)
     {
@@ -2618,15 +2627,15 @@ void write_macroblock (Macroblock* currMB, int eos_bit, Boolean prev_recode_mb)
   //--- constrain intra prediction ---
   if(p_Inp->UseConstrainedIntraPred && (currSlice->slice_type==P_SLICE || currSlice->slice_type==B_SLICE))
   {
-    p_Img->intra_block[currMB->mbAddrX] = IS_INTRA(currMB);
+    p_Vid->intra_block[currMB->mbAddrX] = IS_INTRA(currMB);
   }
 
   //===== init and update number of intra macroblocks =====
   if (currMB->mbAddrX == 0)
-    p_Img->intras=0;
+    p_Vid->intras=0;
 
   if (IS_INTRA(currMB))
-    ++p_Img->intras;
+    ++p_Vid->intras;
 
   //--- write non-slice termination symbol if the macroblock is not the first one in its slice ---
   if (currSlice->symbol_mode==CABAC && currMB->mbAddrX != currSlice->start_mb_nr && eos_bit)
@@ -2638,11 +2647,11 @@ void write_macroblock (Macroblock* currMB, int eos_bit, Boolean prev_recode_mb)
   // trace: write macroblock header
   if (p_Enc->p_trace)
   {
-    fprintf(p_Enc->p_trace, "\n*********** Pic: %i (I/P) MB: %i Slice: %i **********\n\n", p_Img->frame_no, currMB->mbAddrX, currSlice->slice_nr);
+    fprintf(p_Enc->p_trace, "\n*********** Pic: %i (I/P) MB: %i Slice: %i **********\n\n", p_Vid->frame_no, currMB->mbAddrX, currSlice->slice_nr);
   }
 #endif
 
-  p_Img->cabac_encoding = 1;
+  p_Vid->cabac_encoding = 1;
 
   currMB->write_mb = TRUE;
   //--- write macroblock ---
@@ -2650,7 +2659,7 @@ void write_macroblock (Macroblock* currMB, int eos_bit, Boolean prev_recode_mb)
 
   if (!((currMB->mb_type !=0 ) || ((currSlice->slice_type==B_SLICE) && currMB->cbp != 0) ))
   {
-      reset_mb_nz_coeff(p_Img, currMB->mbAddrX);  // CAVLC
+      reset_mb_nz_coeff(p_Vid, currMB->mbAddrX);  // CAVLC
   }
 
   //--- set total bit-counter ---
@@ -2667,11 +2676,11 @@ void write_macroblock (Macroblock* currMB, int eos_bit, Boolean prev_recode_mb)
     rc_update_mb_stats(currMB);  
 
   /*record the total number of MBs*/
-  ++(p_Img->NumberofCodedMacroBlocks);
+  ++(p_Vid->NumberofCodedMacroBlocks);
 
-  p_Img->p_Stats->bit_slice += mbBits->mb_total;
+  p_Vid->p_Stats->bit_slice += mbBits->mb_total;
 
-  p_Img->cabac_encoding = 0;
+  p_Vid->cabac_encoding = 0;
 }
 
 
@@ -2730,7 +2739,7 @@ int writeMotionVector8x8 (Macroblock *currMB,
                           )
 {
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
 
   PixelPos       block[4];
@@ -2750,7 +2759,7 @@ int writeMotionVector8x8 (Macroblock *currMB,
   short***    all_mv     = currSlice->all_mv[list_idx][refindex][mv_mode];
   short         *cur_mv;
   short predMV[2]; 
-  PicMotionParams *motion = &p_Img->enc_picture->motion;
+  PicMotionParams *motion = &p_Vid->enc_picture->motion;
   short         ***final_mv = &motion->mv[list_idx][currMB->block_y];
   short         (*currMB_mvd)[4][2] = currMB->mvd[list_idx]; 
   se.type   = SE_MVD;
@@ -2773,7 +2782,7 @@ int writeMotionVector8x8 (Macroblock *currMB,
       // Lets recompute MV predictor. This should avoid any problems with alterations of the motion vectors after ME
       get_neighbors(currMB, block, i<<2, j<<2, step_h<<2);
       currMB->GetMVPredictor (currMB, block, predMV, (short) refindex, motion->ref_idx[list_idx], motion->mv[list_idx], (i<<2), (j<<2), step_h<<2, step_v<<2);
-      //test_clip_mvs(p_Img, cur_mv, currMB->write_mb);
+      //test_clip_mvs(p_Vid, cur_mv, currMB->write_mb);
 
       for (k=0; k<2; ++k)
       {
@@ -2818,8 +2827,8 @@ int write_bslice_motion_info_to_NAL (Macroblock* currMB)
   if (currMB->mb_type != I4MB  && currMB->mb_type != I16MB && currMB->mb_type != I8MB  && currMB->mb_type != 0)
   {
     Slice* currSlice = currMB->p_slice;
-    ImageParameters *p_Img = currSlice->p_Img;
-    PicMotionParams *motion = &p_Img->enc_picture->motion;
+    VideoParameters *p_Vid = currSlice->p_Vid;
+    PicMotionParams *motion = &p_Vid->enc_picture->motion;
     int   k, j0, i0;
 
     int   step_h0         = (block_size[(currMB->mb_type == P8x8) ? 4 : currMB->mb_type][0] >> 2);
@@ -2827,7 +2836,7 @@ int write_bslice_motion_info_to_NAL (Macroblock* currMB)
     char  *cref_idx;
       
     // Disable for now so we can check MBAFF
-    //if (p_Img->listXsize[0] > 1)
+    //if (p_Vid->listXsize[0] > 1)
     {
       for (j0 = 0; j0 < 4; j0 += step_v0)
       {
@@ -2843,7 +2852,7 @@ int write_bslice_motion_info_to_NAL (Macroblock* currMB)
       }
     }
 
-    //if (p_Img->listXsize[1] > 1)
+    //if (p_Vid->listXsize[1] > 1)
     {
       for (j0 = 0; j0 < 4; j0 += step_v0)
       {                
@@ -2906,8 +2915,8 @@ int write_pslice_motion_info_to_NAL (Macroblock* currMB)
   if (currMB->mb_type != I4MB  && currMB->mb_type != I16MB && currMB->mb_type != I8MB  && currMB->mb_type != 0)
   {
     Slice* currSlice = currMB->p_slice;
-    ImageParameters *p_Img = currSlice->p_Img;
-    PicMotionParams *motion = &p_Img->enc_picture->motion;
+    VideoParameters *p_Vid = currSlice->p_Vid;
+    PicMotionParams *motion = &p_Vid->enc_picture->motion;
     int   k, j0, i0;    
     int   step_h0         = (block_size[(currMB->mb_type == P8x8) ? 4 : currMB->mb_type][0] >> 2);
     int   step_v0         = (block_size[(currMB->mb_type == P8x8) ? 4 : currMB->mb_type][1] >> 2);
@@ -2948,92 +2957,6 @@ int write_pslice_motion_info_to_NAL (Macroblock* currMB)
   return no_bits;
 }
 
-/*!
- ************************************************************************
- * \brief
- *    Writes motion info
- ************************************************************************
- */
-int writeMotionInfo2NAL (Macroblock* currMB)
-{
-  int   no_bits         = 0;
-  //=== If multiple ref. frames, write reference frame for the MB ===
-  if (!IS_INTRA (currMB))
-  {
-    Slice* currSlice = currMB->p_slice;
-    ImageParameters *p_Img = currSlice->p_Img;
-    PicMotionParams *motion = &p_Img->enc_picture->motion;
-    int   k, j0, i0;
-    int   bframe          = (currSlice->slice_type == B_SLICE);
-    int   step_h0         = (block_size[(currMB->mb_type == P8x8) ? 4 : currMB->mb_type][0] >> 2);
-    int   step_v0         = (block_size[(currMB->mb_type == P8x8) ? 4 : currMB->mb_type][1] >> 2);
-    char  *cref_idx;
-
-    // if CAVLC is turned on, a 8x8 macroblock with all ref=0 in a P-frame is signalled in macroblock mode
-    if ((currMB->mb_type != P8x8) || !ZeroRef (currMB) || currSlice->symbol_mode==CABAC || bframe)
-    {
-      for (j0 = 0; j0 < 4; j0 += step_v0)
-      {
-        cref_idx = &motion->ref_idx[LIST_0][currMB->block_y + j0][currMB->block_x];
-        for (i0 = 0; i0 < 4; i0 += step_h0)
-        {
-          k = j0 + (i0 >> 1);
-          if (currMB->b8x8[k].mode !=0 && (currMB->b8x8[k].pdir == 0 || currMB->b8x8[k].pdir == 2))//has forward vector
-          {
-            no_bits += writeReferenceFrame (currMB, i0, j0, 1, cref_idx[i0]);
-          }
-        }
-      }
-
-      for (j0 = 0; j0 < 4; j0 += step_v0)
-      {        
-        cref_idx = &motion->ref_idx[LIST_1][currMB->block_y + j0][currMB->block_x];
-        for (i0 = 0; i0 < 4; i0 += step_h0)
-        {
-          k = j0 + (i0 >> 1);
-          if (currMB->b8x8[k].mode !=0 && (currMB->b8x8[k].pdir == 1 || currMB->b8x8[k].pdir == 2))//has backward vector
-          {
-            no_bits += writeReferenceFrame (currMB, i0, j0, 0, cref_idx[i0]);
-          }
-        }
-      }
-    }
-    
-    //===== write forward motion vectors =====
-    for (j0=0; j0<4; j0+=step_v0)
-    {
-      cref_idx = &motion->ref_idx[LIST_0][currMB->block_y + j0][currMB->block_x];
-      for (i0=0; i0<4; i0+=step_h0)
-      {
-        k = j0 + (i0 >> 1);
-        if (currMB->b8x8[k].mode !=0 && (currMB->b8x8[k].pdir == 0 || currMB->b8x8[k].pdir == 2))//has forward vector
-        {
-          no_bits  += writeMotionVector8x8 (currMB, i0, j0, i0 + step_h0, j0 + step_v0, cref_idx[i0], LIST_0, currMB->b8x8[k].mode, currMB->b8x8[k].bipred);
-        }
-      }
-    }
-
-    //===== write backward motion vectors =====
-    if (bframe)
-    {
-      for (j0=0; j0<4; j0+=step_v0)
-      {
-        cref_idx = &motion->ref_idx[LIST_1][currMB->block_y + j0][currMB->block_x];
-        for (i0 = 0; i0 < 4; i0 += step_h0)
-        {
-          k=j0+(i0 >> 1);
-          if (currMB->b8x8[k].mode !=0 && (currMB->b8x8[k].pdir == 1 || currMB->b8x8[k].pdir == 2))//has backward vector
-          {          
-            no_bits  += writeMotionVector8x8 (currMB, i0, j0, i0+step_h0, j0+step_v0, cref_idx[i0], LIST_1, currMB->b8x8[k].mode, currMB->b8x8[k].bipred);
-          }
-        }
-      }
-    }
-  }
-  return no_bits;
-}
-
-
 
 /*!
  ************************************************************************
@@ -3044,7 +2967,7 @@ int writeMotionInfo2NAL (Macroblock* currMB)
 static int writeChromaCoeff (Macroblock* currMB)
 {
   Slice* currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currSlice->p_Img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
 
   int             rate       = 0;
   int             block_rate = 0;
@@ -3094,7 +3017,7 @@ static int writeChromaCoeff (Macroblock* currMB)
     {42, 58, 43, 59}}
   };
 
-  int   yuv = p_Img->yuv_format - 1;
+  int   yuv = p_Vid->yuv_format - 1;
   //=====
   //=====   D C - C O E F F I C I E N T S
   //=====
@@ -3115,13 +3038,13 @@ static int writeChromaCoeff (Macroblock* currMB)
 
       for (uv=0; uv < 2; ++uv)
       {
-        p_Img->is_v_block = uv;
+        p_Vid->is_v_block = uv;
 
         DCLevel = currSlice->cofDC[uv+1][0];
         DCRun   = currSlice->cofDC[uv+1][1];
 
         level = 1;
-        for (k=0; k <= p_Img->num_cdc_coeff && level != 0; ++k)
+        for (k=0; k <= p_Vid->num_cdc_coeff && level != 0; ++k)
         {
           level = se.value1 = DCLevel[k]; // level
           se.value2 = DCRun  [k]; // run       
@@ -3147,7 +3070,7 @@ static int writeChromaCoeff (Macroblock* currMB)
   {
     if (currSlice->symbol_mode == CAVLC)
     {
-      for (b8=4; b8 < (4 + p_Img->num_blk8x8_uv); b8++)
+      for (b8=4; b8 < (4 + p_Vid->num_blk8x8_uv); b8++)
       {
         rate += currSlice->writeCoeff4x4_CAVLC (currMB, CHROMA_AC, b8, 0, chroma_ac_param[yuv][b8 - 4][0]);
         rate += currSlice->writeCoeff4x4_CAVLC (currMB, CHROMA_AC, b8, 1, chroma_ac_param[yuv][b8 - 4][1]);
@@ -3164,7 +3087,7 @@ static int writeChromaCoeff (Macroblock* currMB)
       // choose the appropriate data partition
       dataPart = &(currSlice->partArr[partMap[se.type]]);
 
-      for (b8=4; b8 < (4+p_Img->num_blk8x8_uv); b8++)
+      for (b8=4; b8 < (4+p_Vid->num_blk8x8_uv); b8++)
       {
         for (b4=0; b4 < 4; b4++)
         {
@@ -3173,7 +3096,7 @@ static int writeChromaCoeff (Macroblock* currMB)
 
           level=1;
           uv++;
-          p_Img->is_v_block = (uv >= (p_Img->num_blk8x8_uv << 1));
+          p_Vid->is_v_block = (uv >= (p_Vid->num_blk8x8_uv << 1));
 
           currMB->subblock_y = subblk_offset_y[yuv][b8 - 4][b4];
           currMB->subblock_x = subblk_offset_x[yuv][b8 - 4][b4];
@@ -3405,7 +3328,7 @@ int writeCBPandDquant (Macroblock* currMB)
 
   if (currMB->mb_type != I16MB)
   {
-    ImageParameters *p_Img = currMB->p_Img;
+    VideoParameters *p_Vid = currMB->p_Vid;
     int  need_transform_size_flag;   //ADD-VG-24062004
     //=====   C B P   =====
     //---------------------
@@ -3426,7 +3349,7 @@ int writeCBPandDquant (Macroblock* currMB)
     //============= Transform Size Flag for INTER MBs =============
     //-------------------------------------------------------------
     need_transform_size_flag = (((currMB->mb_type >= 1 && currMB->mb_type <= 3)||
-      (currSlice->slice_type == B_SLICE && currMB->mb_type == 0 && p_Img->active_sps->direct_8x8_inference_flag) ||
+      (currSlice->slice_type == B_SLICE && currMB->mb_type == 0 && p_Vid->active_sps->direct_8x8_inference_flag) ||
       (currMB->NoMbPartLessThan8x8Flag))
       && currMB->mb_type != I8MB && currMB->mb_type != I4MB
       && (currMB->cbp&15 || currSlice->cmp_cbp[1]&15 || currSlice->cmp_cbp[2] & 15)
@@ -3477,7 +3400,7 @@ int writeCBPandDquant (Macroblock* currMB)
 int writeCoeff16x16_CAVLC (Macroblock* currMB, ColorPlane plane)
 {
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
 
   int cbp = currMB->cbp;
 
@@ -3491,11 +3414,11 @@ int writeCoeff16x16_CAVLC (Macroblock* currMB, ColorPlane plane)
   {
     for (i=0; i < 4; i++)
       for (k=4*plane; k<4*(plane+1); k++)
-        p_Img->nz_coeff [currMB->mbAddrX][i][k] = 0;
+        p_Vid->nz_coeff [currMB->mbAddrX][i][k] = 0;
   }
   else
   {
-    reset_mb_nz_coeff(p_Img, currMB->mbAddrX);
+    reset_mb_nz_coeff(p_Vid, currMB->mbAddrX);
   }
 
 
@@ -3573,7 +3496,7 @@ int writeCoeff16x16_CAVLC (Macroblock* currMB, ColorPlane plane)
 int writeCoeff16x16_CABAC (Macroblock* currMB, ColorPlane plane)
 {
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currSlice->p_Img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
 
   int             cbp = currMB->cbp;
 
@@ -3598,11 +3521,11 @@ int writeCoeff16x16_CABAC (Macroblock* currMB, ColorPlane plane)
   {
     for (i=0; i < 4; i++)
       for (k=4*plane; k<4*(plane+1); k++)
-        p_Img->nz_coeff [currMB->mbAddrX][i][k] = 0;
+        p_Vid->nz_coeff [currMB->mbAddrX][i][k] = 0;
   }
   else
   {
-    reset_mb_nz_coeff(p_Img, currMB->mbAddrX);
+    reset_mb_nz_coeff(p_Vid, currMB->mbAddrX);
   }
 
 
@@ -3740,18 +3663,18 @@ int writeCoeff16x16_CABAC (Macroblock* currMB, ColorPlane plane)
 int predict_nnz(Macroblock *currMB, int block_type, int i,int j)
 {
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   PixelPos pix;
 
   int pred_nnz = 0;
   int cnt      = 0;
 
   // left block
-  get4x4Neighbour(currMB, (i << 2) - 1, (j << 2), p_Img->mb_size[IS_LUMA], &pix);
+  get4x4Neighbour(currMB, (i << 2) - 1, (j << 2), p_Vid->mb_size[IS_LUMA], &pix);
 
-  if (IS_INTRA(currMB) && pix.available && p_Img->active_pps->constrained_intra_pred_flag && ((currSlice->partition_mode != 0) && !currSlice->idr_flag))
+  if (IS_INTRA(currMB) && pix.available && p_Vid->active_pps->constrained_intra_pred_flag && ((currSlice->partition_mode != 0) && !currSlice->idr_flag))
   {
-    pix.available &= p_Img->intra_block[pix.mb_addr];
+    pix.available &= p_Vid->intra_block[pix.mb_addr];
     if (!pix.available)
       cnt++;
   }
@@ -3761,15 +3684,15 @@ int predict_nnz(Macroblock *currMB, int block_type, int i,int j)
     switch (block_type)
     {
     case LUMA:
-      pred_nnz += p_Img->nz_coeff [pix.mb_addr ][pix.x][pix.y];
+      pred_nnz += p_Vid->nz_coeff [pix.mb_addr ][pix.x][pix.y];
       cnt++;
       break;
     case CB:
-      pred_nnz += p_Img->nz_coeff [pix.mb_addr ][pix.x][4+pix.y];
+      pred_nnz += p_Vid->nz_coeff [pix.mb_addr ][pix.x][4+pix.y];
       cnt++;
       break;
     case CR:
-      pred_nnz += p_Img->nz_coeff [pix.mb_addr ][pix.x][8+pix.y];
+      pred_nnz += p_Vid->nz_coeff [pix.mb_addr ][pix.x][8+pix.y];
       cnt++;
       break;
     default:
@@ -3779,11 +3702,11 @@ int predict_nnz(Macroblock *currMB, int block_type, int i,int j)
   }
 
   // top block
-  get4x4Neighbour(currMB, (i<<2), (j<<2) - 1, p_Img->mb_size[IS_LUMA], &pix);
+  get4x4Neighbour(currMB, (i<<2), (j<<2) - 1, p_Vid->mb_size[IS_LUMA], &pix);
 
-  if (IS_INTRA(currMB) && pix.available && p_Img->active_pps->constrained_intra_pred_flag && ((currSlice->partition_mode != 0) && !currSlice->idr_flag))
+  if (IS_INTRA(currMB) && pix.available && p_Vid->active_pps->constrained_intra_pred_flag && ((currSlice->partition_mode != 0) && !currSlice->idr_flag))
   {
-    pix.available &= p_Img->intra_block[pix.mb_addr];
+    pix.available &= p_Vid->intra_block[pix.mb_addr];
     if (!pix.available)
       cnt++;
   }
@@ -3793,15 +3716,15 @@ int predict_nnz(Macroblock *currMB, int block_type, int i,int j)
     switch (block_type)
     {
     case LUMA:
-      pred_nnz += p_Img->nz_coeff [pix.mb_addr ][pix.x][pix.y];
+      pred_nnz += p_Vid->nz_coeff [pix.mb_addr ][pix.x][pix.y];
       cnt++;
       break;
     case CB:
-      pred_nnz += p_Img->nz_coeff [pix.mb_addr ][pix.x][4+pix.y];
+      pred_nnz += p_Vid->nz_coeff [pix.mb_addr ][pix.x][4+pix.y];
       cnt++;
       break;
     case CR:
-      pred_nnz += p_Img->nz_coeff [pix.mb_addr ][pix.x][8+pix.y];
+      pred_nnz += p_Vid->nz_coeff [pix.mb_addr ][pix.x][8+pix.y];
       cnt++;
       break;
     default:
@@ -3831,44 +3754,44 @@ int predict_nnz(Macroblock *currMB, int block_type, int i,int j)
 int predict_nnz_chroma(Macroblock *currMB, int i,int j)
 {
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   PixelPos pix;
 
   int pred_nnz = 0;
   int cnt      = 0;
 
-  if (p_Img->yuv_format != YUV444)
+  if (p_Vid->yuv_format != YUV444)
   {
     //YUV420 and YUV422
     // left block
-    get4x4Neighbour(currMB, ((i & 0x01)<<2) - 1, ((j-4)<<2), p_Img->mb_size[IS_CHROMA], &pix);
+    get4x4Neighbour(currMB, ((i & 0x01)<<2) - 1, ((j-4)<<2), p_Vid->mb_size[IS_CHROMA], &pix);
 
-    if (IS_INTRA(currMB) && pix.available && p_Img->active_pps->constrained_intra_pred_flag && ((currSlice->partition_mode != 0) && !currSlice->idr_flag))
+    if (IS_INTRA(currMB) && pix.available && p_Vid->active_pps->constrained_intra_pred_flag && ((currSlice->partition_mode != 0) && !currSlice->idr_flag))
     {
-      pix.available &= p_Img->intra_block[pix.mb_addr];
+      pix.available &= p_Vid->intra_block[pix.mb_addr];
       if (!pix.available)
         cnt++;
     }
 
     if (pix.available)
     {
-      pred_nnz = p_Img->nz_coeff [pix.mb_addr ][2 * (i >> 1) + pix.x][4 + pix.y];
+      pred_nnz = p_Vid->nz_coeff [pix.mb_addr ][2 * (i >> 1) + pix.x][4 + pix.y];
       cnt++;
     }
 
     // top block
-    get4x4Neighbour(currMB, ((i & 0x01)<<2), ((j-4)<<2) -1, p_Img->mb_size[IS_CHROMA],  &pix);
+    get4x4Neighbour(currMB, ((i & 0x01)<<2), ((j-4)<<2) -1, p_Vid->mb_size[IS_CHROMA],  &pix);
 
-    if (IS_INTRA(currMB) && pix.available && p_Img->active_pps->constrained_intra_pred_flag && ((currSlice->partition_mode != 0) && !currSlice->idr_flag))
+    if (IS_INTRA(currMB) && pix.available && p_Vid->active_pps->constrained_intra_pred_flag && ((currSlice->partition_mode != 0) && !currSlice->idr_flag))
     {
-      pix.available &= p_Img->intra_block[pix.mb_addr];
+      pix.available &= p_Vid->intra_block[pix.mb_addr];
       if (!pix.available)
         cnt++;
     }
 
     if (pix.available)
     {
-      pred_nnz += p_Img->nz_coeff [pix.mb_addr ][2 * (i >> 1) + pix.x][4 + pix.y];
+      pred_nnz += p_Vid->nz_coeff [pix.mb_addr ][2 * (i >> 1) + pix.x][4 + pix.y];
       cnt++;
     }
   }
@@ -3896,7 +3819,7 @@ int predict_nnz_chroma(Macroblock *currMB, int i,int j)
 int writeCoeff4x4_CAVLC_normal (Macroblock* currMB, int block_type, int b8, int b4, int param)
 {
   Slice* currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currSlice->p_Img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
   int           no_bits    = 0;
   SyntaxElement se;
   DataPartition *dataPart;
@@ -3954,7 +3877,7 @@ int writeCoeff4x4_CAVLC_normal (Macroblock* currMB, int block_type, int b8, int 
     dptype = SE_LUM_AC_INTRA;
     break;
   case CHROMA_DC:
-    max_coeff_num = p_Img->num_cdc_coeff;
+    max_coeff_num = p_Vid->num_cdc_coeff;
     mb_bits_coeff = &currMB->bits.mb_uv_coeff;
     cdc = 1;
 
@@ -3984,7 +3907,7 @@ int writeCoeff4x4_CAVLC_normal (Macroblock* currMB, int block_type, int b8, int 
 
   dataPart = &(currSlice->partArr[partMap[dptype]]);
 
-  for(k = 0; (k <= ((cdc) ? p_Img->num_cdc_coeff : 16)) && level != 0; k++)
+  for(k = 0; (k <= ((cdc) ? p_Vid->num_cdc_coeff : 16)) && level != 0; k++)
   {
     level = pLevel[k]; // level
     run   = pRun[k];   // run
@@ -4026,7 +3949,7 @@ int writeCoeff4x4_CAVLC_normal (Macroblock* currMB, int block_type, int b8, int 
       subblock_y = param & 15;
       nnz = predict_nnz_chroma(currMB, subblock_x, subblock_y);
     }
-    p_Img->nz_coeff [currMB->mbAddrX ][subblock_x][subblock_y] = numcoeff;
+    p_Vid->nz_coeff [currMB->mbAddrX ][subblock_x][subblock_y] = numcoeff;
 
     if (nnz < 2)
     {
@@ -4071,7 +3994,7 @@ int writeCoeff4x4_CAVLC_normal (Macroblock* currMB, int block_type, int b8, int 
   if (!cdc)
     writeSyntaxElement_NumCoeffTrailingOnes(&se, dataPart);
   else
-    writeSyntaxElement_NumCoeffTrailingOnesChromaDC(p_Img, &se, dataPart);
+    writeSyntaxElement_NumCoeffTrailingOnesChromaDC(p_Vid, &se, dataPart);
 
   *mb_bits_coeff += se.len;
   no_bits                += se.len;
@@ -4150,9 +4073,9 @@ int writeCoeff4x4_CAVLC_normal (Macroblock* currMB, int block_type, int b8, int 
       //    encode level
 
       if (vlcnum == 0)
-        writeSyntaxElement_Level_VLC1(&se, dataPart, p_Img->active_sps->profile_idc);
+        writeSyntaxElement_Level_VLC1(&se, dataPart, p_Vid->active_sps->profile_idc);
       else
-        writeSyntaxElement_Level_VLCN(&se, vlcnum, dataPart, p_Img->active_sps->profile_idc);
+        writeSyntaxElement_Level_VLCN(&se, vlcnum, dataPart, p_Vid->active_sps->profile_idc);
 
       // update VLC table
       if (iabs(level) > incVlc[vlcnum])
@@ -4184,7 +4107,7 @@ int writeCoeff4x4_CAVLC_normal (Macroblock* currMB, int block_type, int b8, int 
       if (!cdc)
         writeSyntaxElement_TotalZeros(&se, dataPart);
       else
-        writeSyntaxElement_TotalZerosChromaDC(p_Img, &se, dataPart);
+        writeSyntaxElement_TotalZerosChromaDC(p_Vid, &se, dataPart);
 
       *mb_bits_coeff += se.len;
       no_bits                += se.len;
@@ -4243,7 +4166,7 @@ int writeCoeff4x4_CAVLC_normal (Macroblock* currMB, int block_type, int b8, int 
 int writeCoeff4x4_CAVLC_444 (Macroblock* currMB, int block_type, int b8, int b4, int param)
 {
   Slice* currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currSlice->p_Img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
   int      no_bits    = 0;
   SyntaxElement se;
   DataPartition *dataPart;
@@ -4368,7 +4291,7 @@ int writeCoeff4x4_CAVLC_444 (Macroblock* currMB, int block_type, int b8, int b4,
     break;
 
   case CHROMA_DC:
-    max_coeff_num = p_Img->num_cdc_coeff;
+    max_coeff_num = p_Vid->num_cdc_coeff;
     mb_bits_coeff = &currMB->bits.mb_uv_coeff;
     cdc = 1;
 
@@ -4398,7 +4321,7 @@ int writeCoeff4x4_CAVLC_444 (Macroblock* currMB, int block_type, int b8, int b4,
 
   dataPart = &(currSlice->partArr[partMap[dptype]]);
 
-  for(k = 0; (k <= ((cdc) ? p_Img->num_cdc_coeff : 16)) && level != 0; k++)
+  for(k = 0; (k <= ((cdc) ? p_Vid->num_cdc_coeff : 16)) && level != 0; k++)
   {
     level = pLevel[k]; // level
     run   = pRun[k];   // run
@@ -4443,7 +4366,7 @@ int writeCoeff4x4_CAVLC_444 (Macroblock* currMB, int block_type, int b8, int b4,
         subblock_y = param & 15;
         nnz = predict_nnz_chroma(currMB, subblock_x, subblock_y);
       }
-      p_Img->nz_coeff [currMB->mbAddrX ][subblock_x][subblock_y] = numcoeff;
+      p_Vid->nz_coeff [currMB->mbAddrX ][subblock_x][subblock_y] = numcoeff;
     }
     else if (block_type==CB || block_type==CB_INTRA16x16DC 
       || block_type==CB_INTRA16x16AC)
@@ -4453,7 +4376,7 @@ int writeCoeff4x4_CAVLC_444 (Macroblock* currMB, int block_type, int b8, int b4,
       subblock_y = (b8 < 2) ? ((b4 < 2) ? 0 : 1) : ((b4 < 2) ? 2 : 3); 
       // vert.  position for coeff_count context
       nnz = predict_nnz(currMB, CB, subblock_x,subblock_y);
-      p_Img->nz_coeff [currMB->mbAddrX ][subblock_x][4+subblock_y] = numcoeff;
+      p_Vid->nz_coeff [currMB->mbAddrX ][subblock_x][4+subblock_y] = numcoeff;
     }
     else
     { //CR in the common mode in 4:4:4 profiles 
@@ -4462,7 +4385,7 @@ int writeCoeff4x4_CAVLC_444 (Macroblock* currMB, int block_type, int b8, int b4,
       subblock_y = (b8 < 2) ? ((b4 < 2) ? 0 : 1) : ((b4 < 2) ? 2 : 3); 
       // vert.  position for coeff_count context
       nnz = predict_nnz(currMB, CR, subblock_x,subblock_y);
-      p_Img->nz_coeff [currMB->mbAddrX ][subblock_x][8+subblock_y] = numcoeff;
+      p_Vid->nz_coeff [currMB->mbAddrX ][subblock_x][8+subblock_y] = numcoeff;
     }
 
     if (nnz < 2)
@@ -4508,7 +4431,7 @@ int writeCoeff4x4_CAVLC_444 (Macroblock* currMB, int block_type, int b8, int b4,
   if (!cdc)
     writeSyntaxElement_NumCoeffTrailingOnes(&se, dataPart);
   else
-    writeSyntaxElement_NumCoeffTrailingOnesChromaDC(p_Img, &se, dataPart);
+    writeSyntaxElement_NumCoeffTrailingOnesChromaDC(p_Vid, &se, dataPart);
 
   *mb_bits_coeff += se.len;
   no_bits                += se.len;
@@ -4587,9 +4510,9 @@ int writeCoeff4x4_CAVLC_444 (Macroblock* currMB, int block_type, int b8, int b4,
       //    encode level
 
       if (vlcnum == 0)
-        writeSyntaxElement_Level_VLC1(&se, dataPart, p_Img->active_sps->profile_idc);
+        writeSyntaxElement_Level_VLC1(&se, dataPart, p_Vid->active_sps->profile_idc);
       else
-        writeSyntaxElement_Level_VLCN(&se, vlcnum, dataPart, p_Img->active_sps->profile_idc);
+        writeSyntaxElement_Level_VLCN(&se, vlcnum, dataPart, p_Vid->active_sps->profile_idc);
 
       // update VLC table
       if (iabs(level) > incVlc[vlcnum])
@@ -4621,7 +4544,7 @@ int writeCoeff4x4_CAVLC_444 (Macroblock* currMB, int block_type, int b8, int b4,
       if (!cdc)
         writeSyntaxElement_TotalZeros(&se, dataPart);
       else
-        writeSyntaxElement_TotalZerosChromaDC(p_Img, &se, dataPart);
+        writeSyntaxElement_TotalZerosChromaDC(p_Vid, &se, dataPart);
 
       *mb_bits_coeff += se.len;
       no_bits                += se.len;
@@ -4667,14 +4590,14 @@ int writeCoeff4x4_CAVLC_444 (Macroblock* currMB, int block_type, int b8, int b4,
   return no_bits;
 }
 
-int distI16x16_satd(Macroblock *currMB, imgpel **img_org, imgpel **pred_img, double min_cost)
+distblk distI16x16_satd(Macroblock *currMB, imgpel **img_org, imgpel **pred_img, distblk min_cost)
 {
   int   **M7 = NULL;
   int   **tblk4x4 = currMB->p_slice->tblk4x4;
   int   ****i16blk4x4 = currMB->p_slice->i16blk4x4;
   imgpel *cur_img, *prd_img;
-  int current_intra_sad_2 = 0;
-  int ii, jj, i, j;
+  distblk current_intra_sad_2 = 0;
+  int ii, jj, i, j, i32Cost;
 
   for (j = 0; j < MB_BLOCK_SIZE; j++)
   {
@@ -4692,20 +4615,22 @@ int distI16x16_satd(Macroblock *currMB, imgpel **img_org, imgpel **pred_img, dou
     {
       M7 = i16blk4x4[jj][ii];
       hadamard4x4(M7, M7);
+      i32Cost  = iabs(M7[0][1]);
+      i32Cost += iabs(M7[0][2]);
+      i32Cost += iabs(M7[0][3]);
 
-      current_intra_sad_2 += iabs(M7[0][1]);
-      current_intra_sad_2 += iabs(M7[0][2]);
-      current_intra_sad_2 += iabs(M7[0][3]);
-
+      current_intra_sad_2 += (((distblk)i32Cost) << LAMBDA_ACCURACY_BITS);
       if (current_intra_sad_2 > min_cost)
         return (current_intra_sad_2);
 
       for (j=1;j<4;j++)
       {
+        i32Cost =0;
         for (i=0;i<4;i++)
         {
-          current_intra_sad_2 += iabs(M7[j][i]);
+          i32Cost += iabs(M7[j][i]);
         }
+        current_intra_sad_2 += (((distblk)i32Cost) << LAMBDA_ACCURACY_BITS);
         if (current_intra_sad_2 > min_cost)
           return (current_intra_sad_2);
       }
@@ -4721,11 +4646,12 @@ int distI16x16_satd(Macroblock *currMB, imgpel **img_org, imgpel **pred_img, dou
   hadamard4x4(tblk4x4, tblk4x4);
   for (j=0;j<4;j++)
   {
+    i32Cost = 0;
     for (i=0;i<4;i++)
     {
-      current_intra_sad_2 += iabs(tblk4x4[j][i]);
+      i32Cost += iabs(tblk4x4[j][i]);
     }
-
+    current_intra_sad_2 += (((distblk)i32Cost) << LAMBDA_ACCURACY_BITS);
     if (current_intra_sad_2 > min_cost)
       return (current_intra_sad_2);
   }
@@ -4733,42 +4659,45 @@ int distI16x16_satd(Macroblock *currMB, imgpel **img_org, imgpel **pred_img, dou
   return current_intra_sad_2;
 }
 
-int distI16x16_sad(Macroblock *currMB, imgpel **img_org, imgpel **pred_img, double min_cost)
+distblk distI16x16_sad(Macroblock *currMB, imgpel **img_org, imgpel **pred_img, distblk min_cost)
 {
   imgpel *cur_img, *prd_img;
-  int current_intra_sad_2 = 0;
+  int i32Cost;
+  distblk current_intra_sad_2 = 0;
   int i, j; 
 
   for (j=0;j<16;j++)
   {
+    i32Cost = 0;
     cur_img = &img_org[currMB->opix_y + j][currMB->pix_x];
     prd_img = pred_img[j];
     for (i=0;i<16;i++)
     {
-      current_intra_sad_2 += iabs( *cur_img++ - *prd_img++ );
+      i32Cost += iabs( *cur_img++ - *prd_img++ );
     }
-
+    current_intra_sad_2 += (((distblk)i32Cost)<<LAMBDA_ACCURACY_BITS);
     if (current_intra_sad_2 > min_cost)
       return (current_intra_sad_2);
   }
   return current_intra_sad_2;
 }
 
-int distI16x16_sse(Macroblock *currMB, imgpel **img_org, imgpel **pred_img, double min_cost)
+distblk distI16x16_sse(Macroblock *currMB, imgpel **img_org, imgpel **pred_img, distblk min_cost)
 {
   imgpel *cur_img, *prd_img;
-  int current_intra_sad_2 = 0;
-  int i, j; 
+  distblk current_intra_sad_2 = 0;
+  int i, j, i32Cost; 
 
   for (j=0;j<16;j++)
   {
     cur_img = &img_org[currMB->opix_y + j][currMB->pix_x];
     prd_img = pred_img[j];
+    i32Cost = 0;
     for (i=0;i<16;i++)
     {
-      current_intra_sad_2 += iabs2( *cur_img++ - *prd_img++ );
+      i32Cost += iabs2( *cur_img++ - *prd_img++ );
     }
-
+    current_intra_sad_2 += (((distblk)i32Cost)<<LAMBDA_ACCURACY_BITS);
     if (current_intra_sad_2 > min_cost)
       return (current_intra_sad_2);
   }
@@ -4786,14 +4715,12 @@ int distI16x16_sse(Macroblock *currMB, imgpel **img_org, imgpel **pred_img, doub
  * \par Output:
  *    best 16x16 based SAD
  ************************************************************************/
-double find_sad_16x16_JM(Macroblock *currMB)
+distblk find_sad_16x16_JM(Macroblock *currMB)
 {
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
-
-  double current_intra_sad_2, best_intra_sad2 = 1e30;
-
+  distblk current_intra_sad_2, best_intra_sad2 = DISTBLK_MAX;
   int i,k;
   imgpel  ***curr_mpr_16x16 = currSlice->mpr_16x16[0];
 
@@ -4804,10 +4731,10 @@ double find_sad_16x16_JM(Macroblock *currMB)
 
   for (i=0;i<17;i++)
   {
-    p_Img->getNeighbour(currMB, -1 ,  i - 1 , p_Img->mb_size[IS_LUMA], &left[i]);
+    p_Vid->getNeighbour(currMB, -1 ,  i - 1 , p_Vid->mb_size[IS_LUMA], &left[i]);
   }
 
-  p_Img->getNeighbour(currMB, 0     ,  -1 , p_Img->mb_size[IS_LUMA], &up);
+  p_Vid->getNeighbour(currMB, 0     ,  -1 , p_Vid->mb_size[IS_LUMA], &up);
 
   if (!(p_Inp->UseConstrainedIntraPred))
   {
@@ -4817,17 +4744,17 @@ double find_sad_16x16_JM(Macroblock *currMB)
   }
   else
   {
-    up_avail      = up.available ? p_Img->intra_block[up.mb_addr] : 0;
+    up_avail      = up.available ? p_Vid->intra_block[up.mb_addr] : 0;
     for (i = 1, left_avail = 1; i < 17;i++)
-      left_avail  &= left[i].available ? p_Img->intra_block[left[i].mb_addr]: 0;
-    left_up_avail = left[0].available ? p_Img->intra_block[left[0].mb_addr]: 0;
+      left_avail  &= left[i].available ? p_Vid->intra_block[left[i].mb_addr]: 0;
+    left_up_avail = left[0].available ? p_Vid->intra_block[left[0].mb_addr]: 0;
   }
 
   currMB->i16mode = DC_PRED_16;
 
   for (k = 0;k < 4; k++)
   {
-    if (p_Inp->IntraDisableInterOnly == 0 || currSlice->slice_type != I_SLICE)
+    if (p_Inp->IntraDisableInterOnly == 0 || (currSlice->slice_type != I_SLICE && currSlice->slice_type != SI_SLICE) )
     {
       if (p_Inp->Intra16x16ParDisable && (k==VERT_PRED_16||k==HOR_PRED_16))
         continue;
@@ -4838,11 +4765,11 @@ double find_sad_16x16_JM(Macroblock *currMB)
     //check if there are neighbours to predict from
     if (!((k==0 && !up_avail) || (k==1 && !left_avail) || (k==3 && (!left_avail || !up_avail || !left_up_avail))))
     {
-      current_intra_sad_2 = currSlice->distI16x16(currMB, p_Img->pCurImg, curr_mpr_16x16[k], best_intra_sad2);
+      current_intra_sad_2 = currSlice->distI16x16(currMB, p_Vid->pCurImg, curr_mpr_16x16[k], best_intra_sad2);
       if (currSlice->P444_joined)
       {
-        current_intra_sad_2 += currSlice->distI16x16(currMB, p_Img->pImgOrg[1], currSlice->mpr_16x16[1][k], best_intra_sad2);
-        current_intra_sad_2 += currSlice->distI16x16(currMB, p_Img->pImgOrg[2], currSlice->mpr_16x16[2][k], best_intra_sad2);
+        current_intra_sad_2 += currSlice->distI16x16(currMB, p_Vid->pImgOrg[1], currSlice->mpr_16x16[1][k], best_intra_sad2);
+        current_intra_sad_2 += currSlice->distI16x16(currMB, p_Vid->pImgOrg[2], currSlice->mpr_16x16[2][k], best_intra_sad2);
       }
 
       if(current_intra_sad_2 < best_intra_sad2)
@@ -4865,12 +4792,12 @@ double find_sad_16x16_JM(Macroblock *currMB)
  * \par Input:
  *    plane number
  ************************************************************************/
-void change_plane_JV( ImageParameters *p_Img, int nplane )
+void change_plane_JV( VideoParameters *p_Vid, int nplane )
 {
-  p_Img->colour_plane_id = (char) nplane;
-  p_Img->mb_data         = p_Img->mb_data_JV[nplane];
-  p_Img->enc_picture     = p_Img->enc_frame_picture_JV[nplane];
-  p_Img->pCurImg         = p_Img->imgData.frm_data[nplane];
+  p_Vid->colour_plane_id = (char) nplane;
+  p_Vid->mb_data         = p_Vid->mb_data_JV[nplane];
+  p_Vid->enc_picture     = p_Vid->enc_frame_picture_JV[nplane];
+  p_Vid->pCurImg         = p_Vid->imgData.frm_data[nplane];
 }
 
 /*!
@@ -4878,26 +4805,26 @@ void change_plane_JV( ImageParameters *p_Img, int nplane )
  * \brief
  *    Make one frame picture from 4:4:4 plane
  ************************************************************************/
-void make_frame_picture_JV(ImageParameters *p_Img, InputParameters *p_Inp)
+void make_frame_picture_JV(VideoParameters *p_Vid)
 {
   int uv, line;
   int nsize;
   int nplane;
-  p_Img->enc_frame_picture[0] = p_Img->enc_frame_picture_JV[0];
+  p_Vid->enc_frame_picture[0] = p_Vid->enc_frame_picture_JV[0];
 
   for( nplane=0; nplane<MAX_PLANE; nplane++ )
   {
-    copy_storable_param_JV( p_Img, nplane, p_Img->enc_frame_picture[0], p_Img->enc_frame_picture_JV[nplane] );
+    copy_storable_param_JV( p_Vid, nplane, p_Vid->enc_frame_picture[0], p_Vid->enc_frame_picture_JV[nplane] );
   }
 
   for( uv=0; uv<2; uv++ )
   {
-    for( line=0; line<p_Img->height; line++ )
+    for( line=0; line<p_Vid->height; line++ )
     {
-      nsize = sizeof(imgpel) * p_Img->width;
-      memcpy( p_Img->enc_frame_picture[0]->imgUV[uv][line], p_Img->enc_frame_picture_JV[uv+1]->imgY[line], nsize );
+      nsize = sizeof(imgpel) * p_Vid->width;
+      memcpy( p_Vid->enc_frame_picture[0]->imgUV[uv][line], p_Vid->enc_frame_picture_JV[uv+1]->imgY[line], nsize );
     }
-    free_storable_picture(p_Img, p_Inp, p_Img->enc_frame_picture_JV[uv+1]);
+    free_storable_picture(p_Vid, p_Vid->enc_frame_picture_JV[uv+1]);
   }
 }
 

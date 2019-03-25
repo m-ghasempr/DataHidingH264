@@ -16,10 +16,10 @@
 #ifndef _FILEHANDLE_H_
 #define _FILEHANDLE_H_
 
-extern int  rewrite_paramsets (ImageParameters *p_Img, InputParameters *p_Inp);
-extern int  start_sequence    (ImageParameters *p_Img, InputParameters *p_Inp);
-extern int  terminate_sequence(ImageParameters *p_Img, InputParameters *p_Inp);
-extern int  write_PPS         (ImageParameters *p_Img, InputParameters *p_Inp, int len, int PPS_id);
+extern int  rewrite_paramsets (VideoParameters *p_Vid);
+extern int  start_sequence    (VideoParameters *p_Vid, InputParameters *p_Inp);
+extern int  terminate_sequence(VideoParameters *p_Vid, InputParameters *p_Inp);
+extern int  write_PPS         (VideoParameters *p_Vid, int len, int PPS_id);
 
 
 #endif

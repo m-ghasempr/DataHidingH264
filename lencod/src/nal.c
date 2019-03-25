@@ -19,6 +19,7 @@
 #include "global.h"
 #include "enc_statistics.h"
 #include "biariencode.h"
+#include "nal.h"
 
 static const int MbWidthC  [4]= { 0, 8, 8,  16};
 static const int MbHeightC [4]= { 0, 8, 16, 16};
@@ -100,8 +101,8 @@ int RBSPtoEBSP(byte *NaluBuffer, unsigned char *rbsp, int rbsp_size)
 *     This function adds cabac_zero_word syntax elements at the end of the
 *     NAL unit to
 *
-*  \param p_Img
-*            ImageParameters structure
+*  \param p_Vid
+*            VideoParameters structure
 *  \param nalu
 *            target NAL unit
 *  \param cur_stats
@@ -111,21 +112,21 @@ int RBSPtoEBSP(byte *NaluBuffer, unsigned char *rbsp, int rbsp_size)
 *
 ************************************************************************
 */
-int addCabacZeroWords(ImageParameters *p_Img, NALU_t *nalu, StatParameters *cur_stats)
+int addCabacZeroWords(VideoParameters *p_Vid, NALU_t *nalu, StatParameters *cur_stats)
 {
-  seq_parameter_set_rbsp_t *active_sps = p_Img->active_sps;
+  seq_parameter_set_rbsp_t *active_sps = p_Vid->active_sps;
 
   int stuffing_bytes = 0;
   int i = 0;
 
   byte *buf = &nalu->buf[nalu->len];
 
-  int RawMbBits = 256 * p_Img->bitdepth_luma + 2 * MbWidthC[active_sps->chroma_format_idc] * MbHeightC[active_sps->chroma_format_idc] * p_Img->bitdepth_chroma;
-  int min_num_bytes = ((96 * get_pic_bin_count(p_Img)) - (RawMbBits * (int)p_Img->PicSizeInMbs *3) + 1023) / 1024;
+  int RawMbBits = 256 * p_Vid->bitdepth_luma + 2 * MbWidthC[active_sps->chroma_format_idc] * MbHeightC[active_sps->chroma_format_idc] * p_Vid->bitdepth_chroma;
+  int min_num_bytes = ((96 * get_pic_bin_count(p_Vid)) - (RawMbBits * (int)p_Vid->PicSizeInMbs *3) + 1023) / 1024;
 
-  if (min_num_bytes > p_Img->bytes_in_picture)
+  if (min_num_bytes > p_Vid->bytes_in_picture)
   {
-    stuffing_bytes = min_num_bytes - p_Img->bytes_in_picture;
+    stuffing_bytes = min_num_bytes - p_Vid->bytes_in_picture;
     printf ("Inserting %d/%d cabac_zero_word syntax elements/bytes (Clause 7.4.2.10)\n", ((stuffing_bytes + 2)/3), stuffing_bytes);  
 
     for (i = 0; i < stuffing_bytes; i+=3 )
@@ -134,7 +135,7 @@ int addCabacZeroWords(ImageParameters *p_Img, NALU_t *nalu, StatParameters *cur_
       *buf++ = 0x00;
       *buf++ = 0x03;
     }
-    cur_stats->bit_use_stuffingBits[p_Img->type] += (i<<3);
+    cur_stats->bit_use_stuffingBits[p_Vid->type] += (i<<3);
     nalu->len += i;
   }  
 

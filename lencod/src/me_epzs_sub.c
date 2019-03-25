@@ -27,8 +27,6 @@
 #include "me_epzs.h"
 #include "mv_search.h"
 
-static const MotionVector search_point_hp[10] = {{0,0},{-2,0}, {0,2}, {2,0},  {0,-2}, {-2,2},  {2,2},  {2,-2}, {-2,-2}, {-2,2}};
-static const MotionVector search_point_qp[10] = {{0,0},{-1,0}, {0,1}, {1,0},  {0,-1}, {-1,1},  {1,1},  {1,-1}, {-1,-1}, {-1,1}};
 
 /*!
 ***********************************************************************
@@ -36,24 +34,25 @@ static const MotionVector search_point_qp[10] = {{0,0},{-1,0}, {0,1}, {1,0},  {0
 *    Fast sub pixel block motion search to support EPZS
 ***********************************************************************
 */
-int                                                   //  ==> minimum motion cost after search
+distblk                                                   //  ==> minimum motion cost after search
 EPZSSubPelBlockMotionSearch (Macroblock *currMB,      // <--  current Macroblock
                              MotionVector *pred,      // <--  motion vector predictor in sub-pel units
                              MEBlock *mv_block,       // <--  motion vector information
-                             int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
+                             distblk     min_mcost,     // <--  minimum motion cost (cost for center or huge value)
                              int*      lambda         // <--  lagrangian parameter for determining motion cost
                              )
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   EPZSParameters *p_EPZS = currMB->p_slice->p_EPZS;
-  int   pos, best_pos = 0, second_pos = 0, mcost;
-  int   second_mcost = INT_MAX;
-  int   max_pos2     = ( (!p_Img->start_me_refinement_hp || !p_Img->start_me_refinement_qp) ? imax(1, mv_block->search_pos2) : mv_block->search_pos2);
+  int   pos, best_pos = 0, second_pos = 0;
+  distblk   mcost;
+  distblk   second_mcost = DISTBLK_MAX;
+  int   max_pos2     = ( (!p_Vid->start_me_refinement_hp || !p_Vid->start_me_refinement_qp) ? imax(1, mv_block->search_pos2) : mv_block->search_pos2);
 
   int list = mv_block->list;
   int cur_list = list + currMB->list_offset;
   short ref = mv_block->ref_idx;
-  StorablePicture *ref_picture = p_Img->listX[cur_list][ref];
+  StorablePicture *ref_picture = p_Vid->listX[cur_list][ref];
   MotionVector *mv  = &mv_block->mv[list];
   MotionVector cand;
   MotionVector padded_mv = pad_MVs (*mv,   mv_block);
@@ -61,9 +60,9 @@ EPZSSubPelBlockMotionSearch (Macroblock *currMB,      // <--  current Macroblock
 
   int start_pos = 5, end_pos = max_pos2;  
   int lambda_factor = lambda[H_PEL];
-  int lambda_dist = (((lambda_factor) * (2)) >> LAMBDA_ACCURACY_BITS);
-  int sub_threshold = p_EPZS->subthres[mv_block->blocktype] + lambda_dist;
-
+  distblk lambda_dist = weighted_cost(lambda_factor,2);
+  distblk sub_threshold = p_EPZS->subthres[mv_block->blocktype] + lambda_dist;
+  
   /*********************************
   *****                       *****
   *****  HALF-PEL REFINEMENT  *****
@@ -71,14 +70,13 @@ EPZSSubPelBlockMotionSearch (Macroblock *currMB,      // <--  current Macroblock
   *********************************/
 
   //===== loop over search positions =====
-  for (best_pos = 0, pos = p_Img->start_me_refinement_hp; pos < 5; ++pos)
+  for (best_pos = 0, pos = p_Vid->start_me_refinement_hp; pos < imin(5, max_pos2); ++pos)
   {
     cand = add_MVs(search_point_hp[pos], &padded_mv);
 
     //----- set motion vector cost -----
-    mcost = mv_cost (p_Img, lambda_factor, &cand, &pred_mv);        
-
-    mcost += mv_block->computePredHPel(ref_picture, mv_block, INT_MAX, &cand);
+    mcost = mv_cost (p_Vid, lambda_factor, &cand, &pred_mv);        
+    mcost += mv_block->computePredHPel(ref_picture, mv_block, second_mcost-mcost, &cand);
 
     if (mcost < min_mcost)
     {
@@ -95,79 +93,86 @@ EPZSSubPelBlockMotionSearch (Macroblock *currMB,      // <--  current Macroblock
   }
 
   if (best_pos ==0 && (pred->mv_x == mv->mv_x) && (pred->mv_y == mv->mv_y) && min_mcost < sub_threshold)
-    return min_mcost;
-
-  if (best_pos !=0 || (iabs(pred->mv_x - mv->mv_x) + iabs(pred->mv_y - mv->mv_y)))
   {
-    if (best_pos != 0 && second_pos != 0)
+    return min_mcost;
+  }
+
+  if(mv_block->search_pos2 >= 9)
+  {
+    if (best_pos !=0 || (iabs(pred->mv_x - mv->mv_x) + iabs(pred->mv_y - mv->mv_y)))
     {
-      switch (best_pos ^ second_pos)
+      if (best_pos != 0 && second_pos != 0)
       {
-      case 1:
-        start_pos = 6;
-        end_pos   = 7;
-        break;
-      case 3:
-        start_pos = 5;
-        end_pos   = 6;
-        break;
-      case 5:
-        start_pos = 8;
-        end_pos   = 9;
-        break;
-      case 7:
-        start_pos = 7;
-        end_pos   = 8;
-        break;
-      default:
-        break;
+        switch (best_pos ^ second_pos)
+        {
+        case 1:
+          start_pos = 6;
+          end_pos   = 7;
+          break;
+        case 3:
+          start_pos = 5;
+          end_pos   = 6;
+          break;
+        case 5:
+          start_pos = 8;
+          end_pos   = 9;
+          break;
+        case 7:
+          start_pos = 7;
+          end_pos   = 8;
+          break;
+        default:
+          break;
+        }
       }
-    }
-    else
-    {
-      switch (best_pos + second_pos)
+      else
       {
-      case 0:
-        start_pos = 5;
-        end_pos   = 5;
-        break;
-      case 1:
-        start_pos = 8;
-        end_pos   = 10;
-        break;
-      case 2:
-        start_pos = 5;
-        end_pos   = 7;
-        break;
-      case 5:
-        start_pos = 6;
-        end_pos   = 8;
-        break;
-      case 7:
-        start_pos = 7;
-        end_pos   = 9;
-        break;
-      default:
-        break;
+        switch (best_pos + second_pos)
+        {
+        case 0:
+          start_pos = 5;
+          end_pos   = 5;
+          break;
+        case 1:
+          start_pos = 8;
+          end_pos   = 10;
+          break;
+        case 2:
+          start_pos = 5;
+          end_pos   = 7;
+          break;
+        case 5:
+          start_pos = 6;
+          end_pos   = 8;
+          break;
+        case 7:
+          start_pos = 7;
+          end_pos   = 9;
+          break;
+        default:
+          break;
+        }
       }
-    }
 
-    for (pos = start_pos; pos < end_pos; ++pos)
-    {
-      cand = add_MVs(search_point_hp[pos], &padded_mv);
-
-      //----- set motion vector cost -----
-      mcost = mv_cost (p_Img, lambda_factor, &cand, &pred_mv);
-
-      if (mcost >= min_mcost) 
-        continue;
-
-      mcost += mv_block->computePredHPel( ref_picture, mv_block, min_mcost - mcost, &cand);
-
-      if (mcost < min_mcost)
+      for (pos = start_pos; pos < end_pos; ++pos)
       {
-        min_mcost = mcost;
-        best_pos  = pos;
+        cand = add_MVs(search_point_hp[pos], &padded_mv);
+
+        //----- set motion vector cost -----
+        mcost = mv_cost (p_Vid, lambda_factor, &cand, &pred_mv);
+
+        //if (mcost >= min_mcost) 
+          //continue;
+        if(mcost < min_mcost)
+        {
+         mcost += mv_block->computePredHPel( ref_picture, mv_block, min_mcost - mcost, &cand);
+
+         if (mcost < min_mcost)
+         {
+          min_mcost = mcost;
+          best_pos  = pos;
+         }
+        }
       }
     }
   }
@@ -183,9 +188,8 @@ EPZSSubPelBlockMotionSearch (Macroblock *currMB,      // <--  current Macroblock
   else 
     end_pos = 5;
 
-  if ( !p_Img->start_me_refinement_qp )
-    min_mcost = INT_MAX;
-
+  if ( !p_Vid->start_me_refinement_qp )
+    min_mcost = DISTBLK_MAX;
   /************************************
   *****                          *****
   *****  QUARTER-PEL REFINEMENT  *****
@@ -193,15 +197,16 @@ EPZSSubPelBlockMotionSearch (Macroblock *currMB,      // <--  current Macroblock
   ************************************/
   lambda_factor = lambda[Q_PEL];
   second_pos = 0;
-  second_mcost = INT_MAX;
+  second_mcost = DISTBLK_MAX;
+
   //===== loop over search positions =====
-  for (best_pos = 0, pos = p_Img->start_me_refinement_qp; pos < end_pos; ++pos)
+  for (best_pos = 0, pos = p_Vid->start_me_refinement_qp; pos < end_pos; ++pos)
   {
     cand = add_MVs(search_point_qp[pos], &padded_mv);
 
     //----- set motion vector cost -----
-    mcost  = mv_cost (p_Img, lambda_factor, &cand, &pred_mv);
-    mcost += mv_block->computePredQPel(ref_picture, mv_block, INT_MAX, &cand);
+    mcost  = mv_cost (p_Vid, lambda_factor, &cand, &pred_mv);
+    mcost += mv_block->computePredQPel(ref_picture, mv_block, second_mcost-mcost, &cand);
 
     if (mcost < min_mcost)
     {
@@ -218,8 +223,10 @@ EPZSSubPelBlockMotionSearch (Macroblock *currMB,      // <--  current Macroblock
   }
 
   //if (best_pos ==0 && (pred->mv_x == mv->mv_x) && (pred->mv_y == mv->mv_y) && min_mcost < sub_threshold)
-  if (min_mcost < sub_threshold)
+  if ( (min_mcost < sub_threshold))
   {
+    if (best_pos)
+      add_mvs(mv, &search_point_qp[best_pos]);
     return min_mcost;
   }
 
@@ -286,7 +293,7 @@ EPZSSubPelBlockMotionSearch (Macroblock *currMB,      // <--  current Macroblock
       cand = add_MVs(search_point_qp[pos], &padded_mv);
 
       //----- set motion vector cost -----
-      mcost = mv_cost (p_Img, lambda_factor, &cand, &pred_mv);
+      mcost = mv_cost (p_Vid, lambda_factor, &cand, &pred_mv);
 
       if (mcost >= min_mcost) 
         continue;
@@ -309,13 +316,14 @@ EPZSSubPelBlockMotionSearch (Macroblock *currMB,      // <--  current Macroblock
   return min_mcost;
 }
 
+
 /*!
 ***********************************************************************
 * \brief
 *    Fast bipred sub pixel block motion search to support EPZS
 ***********************************************************************
 */
-int                                                   //  ==> minimum motion cost after search
+distblk                                                   //  ==> minimum motion cost after search
 EPZSSubPelBlockSearchBiPred (Macroblock *currMB,      // <--  current Macroblock
                              MEBlock *mv_block,       // <--  motion vector information
                              int       list,          // <--  reference picture list
@@ -323,25 +331,25 @@ EPZSSubPelBlockSearchBiPred (Macroblock *currMB,      // <--  current Macroblock
                              MotionVector *pred_mv2,  // <--  motion vector predictor in sub-pel units
                              MotionVector *mv1,       // <--> in: search center  / out: motion vector - in sub-pel units
                              MotionVector *mv2,       // <--> in: search center / out: motion vector - in sun-pel units
-                             int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
+                             distblk     min_mcost,     // <--  minimum motion cost (cost for center or huge value)
                              int*      lambda         // <--  lagrangian parameter for determining motion cost
                              )
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
 
-  int   list_offset   = p_Img->mb_data[p_Img->current_mb_nr].list_offset;
+  int   list_offset   = p_Vid->mb_data[p_Vid->current_mb_nr].list_offset;
 
-  int   pos, best_pos = 0, second_pos = 0, mcost;
-  int   second_mcost = INT_MAX;
-
+  int   pos, best_pos = 0, second_pos = 0;
+  distblk mcost;
+  distblk second_mcost = DISTBLK_MAX;
   MotionVector cand, sand;
 
-  int   start_hp    = (min_mcost == INT_MAX) ? 0 : p_Img->start_me_refinement_hp;
-  int   max_pos2    = ( (!p_Img->start_me_refinement_hp || !p_Img->start_me_refinement_qp) ? imax(1, mv_block->search_pos2) : mv_block->search_pos2);  
+  int   start_hp    = (min_mcost == DISTBLK_MAX) ? 0 : p_Vid->start_me_refinement_hp;
+  int   max_pos2    = ( (!p_Vid->start_me_refinement_hp || !p_Vid->start_me_refinement_qp) ? imax(1, mv_block->search_pos2) : mv_block->search_pos2);  
 
   short ref = mv_block->ref_idx;
-  StorablePicture *ref_picture1 = p_Img->listX[list       + list_offset][ref];
-  StorablePicture *ref_picture2 = p_Img->listX[(list ^ 1) + list_offset][0];
+  StorablePicture *ref_picture1 = p_Vid->listX[list       + list_offset][ref];
+  StorablePicture *ref_picture2 = p_Vid->listX[(list ^ 1) + list_offset][0];
 
   int start_pos = 5, end_pos = max_pos2;
   int lambda_factor = lambda[H_PEL];
@@ -359,11 +367,11 @@ EPZSSubPelBlockSearchBiPred (Macroblock *currMB,      // <--  current Macroblock
     cand = add_MVs(search_point_hp[pos], mv1);
 
     //----- set motion vector cost -----
-    mcost  = mv_cost (p_Img, lambda_factor, &cand, pred_mv1);
-    mcost += mv_cost (p_Img, lambda_factor,   mv2, pred_mv2);
+    mcost  = mv_cost (p_Vid, lambda_factor, &cand, pred_mv1);
+    mcost += mv_cost (p_Vid, lambda_factor,   mv2, pred_mv2);
 
     cand = pad_MVs(cand, mv_block);
-    mcost += mv_block->computeBiPredHPel(ref_picture1, ref_picture2, mv_block, INT_MAX, &cand, &sand);
+    mcost += mv_block->computeBiPredHPel(ref_picture1, ref_picture2, mv_block, second_mcost - mcost, &cand, &sand);
 
     if (mcost < min_mcost)
     {
@@ -442,8 +450,8 @@ EPZSSubPelBlockSearchBiPred (Macroblock *currMB,      // <--  current Macroblock
       cand = add_MVs(search_point_hp[pos], mv1);
 
       //----- set motion vector cost -----
-      mcost  = mv_cost (p_Img, lambda_factor, &cand, pred_mv1);
-      mcost += mv_cost (p_Img, lambda_factor,   mv2, pred_mv2);
+      mcost  = mv_cost (p_Vid, lambda_factor, &cand, pred_mv1);
+      mcost += mv_cost (p_Vid, lambda_factor,   mv2, pred_mv2);
       if (mcost >= min_mcost) continue;
       cand = pad_MVs(cand, mv_block);
 
@@ -463,10 +471,8 @@ EPZSSubPelBlockSearchBiPred (Macroblock *currMB,      // <--  current Macroblock
     add_mvs (mv1, &search_point_hp[best_pos]);
 
   }
-
-  if ( !p_Img->start_me_refinement_qp )
-    min_mcost = INT_MAX;
-
+  if ( !p_Vid->start_me_refinement_qp )
+    min_mcost = DISTBLK_MAX;
   /************************************
   *****                          *****
   *****  QUARTER-PEL REFINEMENT  *****
@@ -474,19 +480,18 @@ EPZSSubPelBlockSearchBiPred (Macroblock *currMB,      // <--  current Macroblock
   ************************************/
   lambda_factor = lambda[Q_PEL];
   second_pos = 0;
-  second_mcost = INT_MAX;
+  second_mcost = DISTBLK_MAX;
   //===== loop over search positions =====
-  for (best_pos = 0, pos = p_Img->start_me_refinement_qp; pos < 5; ++pos)
+  for (best_pos = 0, pos = p_Vid->start_me_refinement_qp; pos < 5; ++pos)
   {
     cand = add_MVs(search_point_qp[pos], mv1);
 
     //----- set motion vector cost -----
-    mcost  = mv_cost (p_Img, lambda_factor, &cand, pred_mv1);
-    mcost += mv_cost (p_Img, lambda_factor,   mv2, pred_mv2);
+    mcost  = mv_cost (p_Vid, lambda_factor, &cand, pred_mv1);
+    mcost += mv_cost (p_Vid, lambda_factor,   mv2, pred_mv2);
     cand = pad_MVs(cand, mv_block);
 
-    mcost += mv_block->computeBiPredQPel(ref_picture1, ref_picture2, mv_block, INT_MAX, &cand, &sand);
-
+    mcost += mv_block->computeBiPredQPel(ref_picture1, ref_picture2, mv_block, second_mcost - mcost, &cand, &sand);
     if (mcost < min_mcost)
     {
       second_mcost = min_mcost;
@@ -564,8 +569,8 @@ EPZSSubPelBlockSearchBiPred (Macroblock *currMB,      // <--  current Macroblock
       cand = add_MVs(search_point_qp[pos], mv1);
 
       //----- set motion vector cost -----
-      mcost  = mv_cost (p_Img, lambda_factor, &cand, pred_mv1);
-      mcost += mv_cost (p_Img, lambda_factor,   mv2, pred_mv2);
+      mcost  = mv_cost (p_Vid, lambda_factor, &cand, pred_mv1);
+      mcost += mv_cost (p_Vid, lambda_factor,   mv2, pred_mv2);
       if (mcost >= min_mcost) continue;
 
       cand = pad_MVs(cand, mv_block);

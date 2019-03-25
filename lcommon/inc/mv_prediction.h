@@ -14,6 +14,6 @@
 #ifndef _MV_PREDICTION_H_
 #define _MV_PREDICTION_H_
 
-extern void InitMotionVectorPrediction(Macroblock *currMB, int MbaffFrameFlag);
+extern void init_motion_vector_prediction(Macroblock *currMB, int mb_aff_frame_flag);
 
 #endif

@@ -118,16 +118,16 @@ static inline void ResetRefBlock8(char **enc_ref, int block_x, int start, int en
 void SetMotionVectorsMBPSlice (Macroblock* currMB, PicMotionParams *motion)
 {
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
 
   RD_DATA *rdopt = currSlice->rddata;
   short *****all_mv  = currSlice->all_mv[LIST_0];
   int  l0_ref, mode8;
   short ***rdo_mv = motion->mv[LIST_0];
 
-  if (currSlice->MbaffFrameFlag || (currSlice->UseRDOQuant && currSlice->RDOQ_QP_Num > 1))
+  if (currSlice->mb_aff_frame_flag || (currSlice->UseRDOQuant && currSlice->RDOQ_QP_Num > 1))
   {
-    memcpy(&rdopt->all_mv[LIST_0][0][0][0][0][0], &all_mv[0][0][0][0][0], p_Img->max_num_references * 9 * MB_BLOCK_PARTITIONS * 2 * sizeof(short));
+    memcpy(&rdopt->all_mv[LIST_0][0][0][0][0][0], &all_mv[0][0][0][0][0], p_Vid->max_num_references * 9 * MB_BLOCK_PARTITIONS * 2 * sizeof(short));
   }
 
   if (currMB->mb_type == PSKIP) // Skip mode
@@ -214,7 +214,7 @@ static void SetMVBSlice16x8(Slice *currSlice, PicMotionParams *motion, Macrobloc
     l1_ref = motion->ref_idx[LIST_1][currMB->block_y + pos][currMB->block_x];
     CopyMVBlock16 (motion->mv[LIST_1], all_mv [LIST_1][l1_ref][P16x8], currMB->block_x, currMB->block_y, pos, pos + 2);
 
-    if (bipred_me && (currSlice->MbaffFrameFlag || (currSlice->UseRDOQuant && currSlice->RDOQ_QP_Num > 1)))
+    if (bipred_me && (currSlice->mb_aff_frame_flag || (currSlice->UseRDOQuant && currSlice->RDOQ_QP_Num > 1)))
     {
       memcpy(currSlice->rddata->all_mv [LIST_0][l0_ref][P16x8][pos][0], all_mv [LIST_0][l0_ref][P16x8][pos][0], 2 * BLOCK_MULTIPLE * 2 * sizeof(short));
       memcpy(currSlice->rddata->all_mv [LIST_1][l1_ref][P16x8][pos][0], all_mv [LIST_1][l1_ref][P16x8][pos][0], 2 * BLOCK_MULTIPLE * 2 * sizeof(short));
@@ -255,7 +255,7 @@ static void SetMVBSlice8x16(Slice *currSlice, PicMotionParams *motion, Macrobloc
     l1_ref = motion->ref_idx[LIST_1][currMB->block_y][currMB->block_x + pos];    
     CopyMVBlock8(&motion->mv [LIST_1][currMB->block_y], all_mv [LIST_1][l1_ref][P8x16], currMB->block_x + pos, 0, 4, pos);
 
-    if (bipred_me && (currSlice->MbaffFrameFlag || (currSlice->UseRDOQuant && currSlice->RDOQ_QP_Num > 1)))
+    if (bipred_me && (currSlice->mb_aff_frame_flag || (currSlice->UseRDOQuant && currSlice->RDOQ_QP_Num > 1)))
     {
       int j;
       for (j = 0; j < BLOCK_MULTIPLE; j++)
@@ -309,7 +309,7 @@ static void SetMVBSlice8x8(Slice *currSlice, PicMotionParams *motion, Macroblock
     l1_ref = motion->ref_idx[LIST_1][block_y][block_x];    
     CopyMVBlock8(&motion->mv [LIST_1][currMB->block_y], all_mv [LIST_1][l1_ref][mode], currMB->block_x + pos_x, pos_y, pos_y + 2, pos_x);
 
-    if (bipred_me && (currSlice->MbaffFrameFlag || (currSlice->UseRDOQuant && currSlice->RDOQ_QP_Num > 1)))
+    if (bipred_me && (currSlice->mb_aff_frame_flag || (currSlice->UseRDOQuant && currSlice->RDOQ_QP_Num > 1)))
     {
       memcpy(currSlice->rddata->all_mv [LIST_0][l0_ref][mode][pos_y    ][pos_x], all_mv [LIST_0][l0_ref][mode][pos_y    ][pos_x], 4 * sizeof(short));
       memcpy(currSlice->rddata->all_mv [LIST_0][l0_ref][mode][pos_y + 1][pos_x], all_mv [LIST_0][l0_ref][mode][pos_y + 1][pos_x], 4 * sizeof(short));
@@ -337,7 +337,7 @@ void SetMotionVectorsMBISlice (Macroblock* currMB, PicMotionParams *motion)
  */
 void SetMotionVectorsMBBSlice (Macroblock* currMB, PicMotionParams *motion)
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   Slice *currSlice = currMB->p_slice;
 
   int  l0_ref, l1_ref;
@@ -346,9 +346,9 @@ void SetMotionVectorsMBBSlice (Macroblock* currMB, PicMotionParams *motion)
   // Can simplify this by copying the MV's of the best mode (TBD)
   // Should maybe add code to check for Intra only profiles
 
-  if (currSlice->MbaffFrameFlag || (currSlice->UseRDOQuant && currSlice->RDOQ_QP_Num > 1))
+  if (currSlice->mb_aff_frame_flag || (currSlice->UseRDOQuant && currSlice->RDOQ_QP_Num > 1))
   {
-    memcpy(&currSlice->rddata->all_mv[LIST_0][0][0][0][0][0], &currSlice->all_mv[LIST_0][0][0][0][0][0], 2 * p_Img->max_num_references * 9 * MB_BLOCK_PARTITIONS * 2 * sizeof(short));
+    memcpy(&currSlice->rddata->all_mv[LIST_0][0][0][0][0][0], &currSlice->all_mv[LIST_0][0][0][0][0][0], 2 * p_Vid->max_num_references * 9 * MB_BLOCK_PARTITIONS * 2 * sizeof(short));
   }
 
   if (currMB->mb_type == P16x16) // 16x16
@@ -376,7 +376,7 @@ void SetMotionVectorsMBBSlice (Macroblock* currMB, PicMotionParams *motion)
       CopyMVBlock16 (motion->mv[LIST_1], all_mv [LIST_1][l1_ref][P16x16], currMB->block_x, currMB->block_y, 0, 4);
 
       // Is this necessary here? Can this be moved somewhere else?
-      if (bipred_me && (currSlice->MbaffFrameFlag || (currSlice->UseRDOQuant && currSlice->RDOQ_QP_Num > 1)))
+      if (bipred_me && (currSlice->mb_aff_frame_flag || (currSlice->UseRDOQuant && currSlice->RDOQ_QP_Num > 1)))
       {
         memcpy(currSlice->rddata->all_mv [LIST_0][l0_ref][P16x16][0][0], all_mv [LIST_0][l0_ref][P16x16][0][0], MB_BLOCK_PARTITIONS * 2 * sizeof(short));
         memcpy(currSlice->rddata->all_mv [LIST_1][l1_ref][P16x16][0][0], all_mv [LIST_1][l1_ref][P16x16][0][0], MB_BLOCK_PARTITIONS * 2 * sizeof(short));
@@ -475,10 +475,10 @@ void copy_image_data(imgpel  **imgBuf1, imgpel  **imgBuf2, int off1, int off2, i
 *    for an 8x8 sub-macroblock: initialization of RD_8x8DATA
 *************************************************************************************
 */
-void ResetRD8x8Data(ImageParameters *p_Img, RD_8x8DATA *rd_data)
+void ResetRD8x8Data(VideoParameters *p_Vid, RD_8x8DATA *rd_data)
 {
   int block;
-  p_Img->giRDOpt_B8OnlyFlag = TRUE;
+  p_Vid->giRDOpt_B8OnlyFlag = TRUE;
 
   rd_data->mb_p8x8_cost = 0;
   rd_data->cbp8x8 = 0;
@@ -487,8 +487,8 @@ void ResetRD8x8Data(ImageParameters *p_Img, RD_8x8DATA *rd_data)
 
   for (block = 0; block < 4; block++)
   {
-    rd_data->smb_p8x8_cost[block] = INT_MAX;
-    rd_data->smb_p8x8_rdcost[block] = 1e20;
+    rd_data->smb_p8x8_cost[block] = DISTBLK_MAX;
+    rd_data->smb_p8x8_rdcost[block] = DISTBLK_MAX;
     rd_data->part[block].mode = -1;
   }
 }
@@ -501,10 +501,10 @@ void ResetRD8x8Data(ImageParameters *p_Img, RD_8x8DATA *rd_data)
 */
 void SetChromaPredMode(Macroblock *currMB, RD_PARAMS enc_mb, int *mb_available, char chroma_pred_mode_range[2])
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
 
-  if ((p_Img->yuv_format != YUV400) && !IS_INDEPENDENT(p_Inp))
+  if ((p_Vid->yuv_format != YUV400) && !IS_INDEPENDENT(p_Inp))
   {
     // precompute all new chroma intra prediction modes
     intra_chroma_prediction(currMB, &mb_available[0], &mb_available[1], &mb_available[2]);

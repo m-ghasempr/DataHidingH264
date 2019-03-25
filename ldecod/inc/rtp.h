@@ -39,8 +39,8 @@ typedef struct
 } RTPpacket_t;
 
 void DumpRTPHeader (RTPpacket_t *p);
-int  GetRTPNALU  (ImageParameters *p_Img, NALU_t *nalu);
-void OpenRTPFile (ImageParameters *p_Img, char *fn);
-void CloseRTPFile(ImageParameters *p_Img);
+int  GetRTPNALU  (VideoParameters *p_Vid, NALU_t *nalu);
+void OpenRTPFile (VideoParameters *p_Vid, char *fn);
+void CloseRTPFile(VideoParameters *p_Vid);
 
 #endif

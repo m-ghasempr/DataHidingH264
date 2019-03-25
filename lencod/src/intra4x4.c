@@ -105,7 +105,7 @@ static inline void get_i4x4_dc(imgpel **cur_pred, imgpel *PredPel, int left_avai
   else //if (!up_available && !left_available)
   {
     // top left corner, nothing to predict from
-    s0 = P_A; // P_A already set to p_Img->dc_pred_value;
+    s0 = P_A; // P_A already set to p_Vid->dc_pred_value;
   }
 
   for (j=0; j < BLOCK_SIZE; j++)
@@ -291,12 +291,12 @@ static inline void get_i4x4_horup(imgpel **cur_pred, imgpel *PredPel)
  */
 void set_intrapred_4x4(Macroblock *currMB, ColorPlane pl, int img_x,int img_y, int *left_available, int *up_available, int *all_available)
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
 
   int i;
   imgpel  *PredPel = currMB->intra4x4_pred[pl];  // array of predictor pels
-  imgpel   **img_enc = p_Img->enc_picture->p_curr_img;
+  imgpel   **img_enc = p_Vid->enc_picture->p_curr_img;
   imgpel   *img_pel;  
 
   int ioff = (img_x & 15);
@@ -309,26 +309,26 @@ void set_intrapred_4x4(Macroblock *currMB, ColorPlane pl, int img_x,int img_y, i
   int block_available_left;
   int block_available_up_left;
   int block_available_up_right;
-  int *mb_size = p_Img->mb_size[IS_LUMA];
+  int *mb_size = p_Vid->mb_size[IS_LUMA];
 
   for (i=0;i<4;i++)
   {
-    p_Img->getNeighbour(currMB, ioff -1 , joff +i , mb_size, &pix_a[i]);
+    p_Vid->getNeighbour(currMB, ioff -1 , joff +i , mb_size, &pix_a[i]);
   }
 
-  p_Img->getNeighbour(currMB, ioff    , joff -1 , mb_size, &pix_b);
-  p_Img->getNeighbour(currMB, ioff +4 , joff -1 , mb_size, &pix_c);
-  p_Img->getNeighbour(currMB, ioff -1 , joff -1 , mb_size, &pix_d);
+  p_Vid->getNeighbour(currMB, ioff    , joff -1 , mb_size, &pix_b);
+  p_Vid->getNeighbour(currMB, ioff +4 , joff -1 , mb_size, &pix_c);
+  p_Vid->getNeighbour(currMB, ioff -1 , joff -1 , mb_size, &pix_d);
 
   pix_c.available = pix_c.available && !((ioff==4) && ((joff==4)||(joff==12)));
 
   if (p_Inp->UseConstrainedIntraPred)
   {
     for (i=0, block_available_left=1; i<4;i++)
-      block_available_left  &= pix_a[i].available ? p_Img->intra_block[pix_a[i].mb_addr]: 0;
-    block_available_up       = pix_b.available ? p_Img->intra_block [pix_b.mb_addr] : 0;
-    block_available_up_right = pix_c.available ? p_Img->intra_block [pix_c.mb_addr] : 0;
-    block_available_up_left  = pix_d.available ? p_Img->intra_block [pix_d.mb_addr] : 0;
+      block_available_left  &= pix_a[i].available ? p_Vid->intra_block[pix_a[i].mb_addr]: 0;
+    block_available_up       = pix_b.available ? p_Vid->intra_block [pix_b.mb_addr] : 0;
+    block_available_up_right = pix_c.available ? p_Vid->intra_block [pix_c.mb_addr] : 0;
+    block_available_up_left  = pix_d.available ? p_Vid->intra_block [pix_d.mb_addr] : 0;
   }
   else
   {
@@ -357,7 +357,7 @@ void set_intrapred_4x4(Macroblock *currMB, ColorPlane pl, int img_x,int img_y, i
   }
   else
   {
-    P_A = P_B = P_C = P_D = (imgpel) p_Img->dc_pred_value;
+    P_A = P_B = P_C = P_D = (imgpel) p_Vid->dc_pred_value;
   }
 
   if (block_available_up_right)
@@ -382,7 +382,7 @@ void set_intrapred_4x4(Macroblock *currMB, ColorPlane pl, int img_x,int img_y, i
   }
   else
   {
-    P_I = P_J = P_K = P_L = p_Img->dc_pred_value;
+    P_I = P_J = P_K = P_L = p_Vid->dc_pred_value;
   }
 
   if (block_available_up_left)
@@ -391,7 +391,7 @@ void set_intrapred_4x4(Macroblock *currMB, ColorPlane pl, int img_x,int img_y, i
   }
   else
   {
-    P_X = p_Img->dc_pred_value;
+    P_X = p_Vid->dc_pred_value;
   }
 }
 

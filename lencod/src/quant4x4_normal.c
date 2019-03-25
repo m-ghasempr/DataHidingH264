@@ -1,7 +1,7 @@
 
 /*!
  *************************************************************************************
- * \file quant4x4.c
+ * \file quant4x4_normal.c
  *
  * \brief
  *    Quantization process for a 4x4 block
@@ -34,15 +34,11 @@
  * \brief
  *    Quantization process for All coefficients for a 4x4 block
  *
- * \par Input:
- *
- * \par Output:
- *
  ************************************************************************
  */
 int quant_4x4_normal(Macroblock *currMB, int **tblock, struct quant_methods *q_method)
 {
-  QuantParameters *p_Quant = currMB->p_Img->p_Quant;
+  QuantParameters *p_Quant = currMB->p_Vid->p_Quant;
   int   block_x = q_method->block_x;
   int  qp = q_method->qp;
   int*  ACLevel = q_method->ACLevel;
@@ -113,7 +109,7 @@ int quant_4x4_normal(Macroblock *currMB, int **tblock, struct quant_methods *q_m
   return nonzero;
 }
 
-int quant_ac4x4_normal(Macroblock *currMB, int **tblock, struct quant_methods *q_method, int type)
+int quant_ac4x4_normal(Macroblock *currMB, int **tblock, struct quant_methods *q_method)
 {
   int   block_x = q_method->block_x;
   int   qp = q_method->qp;
@@ -124,7 +120,7 @@ int quant_ac4x4_normal(Macroblock *currMB, int **tblock, struct quant_methods *q
   const byte *c_cost = q_method->c_cost;
   int *coeff_cost = q_method->coeff_cost;
 
-  QuantParameters *p_Quant = currMB->p_Img->p_Quant;
+  QuantParameters *p_Quant = currMB->p_Vid->p_Quant;
   Boolean is_cavlc = (currMB->p_slice->symbol_mode == CAVLC);
   int i,j, coeff_ctr;
 
@@ -191,16 +187,12 @@ int quant_ac4x4_normal(Macroblock *currMB, int **tblock, struct quant_methods *q
  * \brief
  *    Quantization process for All coefficients for a 4x4 DC block
  *
- * \par Input:
- *
- * \par Output:
- *
  ************************************************************************
  */
 int quant_dc4x4_normal(Macroblock *currMB, int **tblock, int qp, int* DCLevel, int* DCRun, 
                        LevelQuantParams *q_params_4x4, const byte (*pos_scan)[2])
 {
-  QuantParameters *p_Quant = currMB->p_Img->p_Quant;
+  QuantParameters *p_Quant = currMB->p_Vid->p_Quant;
   Boolean is_cavlc = (currMB->p_slice->symbol_mode == CAVLC);
   int i,j, coeff_ctr;
 

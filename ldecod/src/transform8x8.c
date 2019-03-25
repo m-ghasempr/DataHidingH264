@@ -38,14 +38,14 @@ void itrans8x8(Macroblock *currMB,   //!< current macroblock
                int ioff,             //!< index to 4x4 block
                int joff)             //!< index to 4x4 block
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   Slice *currSlice = currMB->p_Slice;
   int i,j;
 
   imgpel **mpr    = currSlice->mb_pred[pl];
   imgpel **mb_rec = currSlice->mb_rec[pl];
   int    **m7     = currSlice->mb_rres[pl];
-  int     max_imgpel_value = p_Img->max_imgpel_value_comp[pl];
+  int     max_imgpel_value = p_Vid->max_pel_value_comp[pl];
 
   if (currMB->is_lossless == TRUE)
   {

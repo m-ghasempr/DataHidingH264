@@ -30,7 +30,7 @@ pic_parameter_set_rbsp_t *AllocPPS ()
  {
    pic_parameter_set_rbsp_t *p;
 
-   if ((p=calloc (sizeof (pic_parameter_set_rbsp_t), 1)) == NULL)
+   if ((p=calloc (1, sizeof (pic_parameter_set_rbsp_t))) == NULL)
      no_mem_exit ("AllocPPS: PPS");
    p->slice_group_id = NULL;
    return p;
@@ -51,7 +51,7 @@ seq_parameter_set_rbsp_t *AllocSPS ()
  {
    seq_parameter_set_rbsp_t *p;
 
-   if ((p=calloc (sizeof (seq_parameter_set_rbsp_t), 1)) == NULL)
+   if ((p=calloc (1, sizeof (seq_parameter_set_rbsp_t))) == NULL)
      no_mem_exit ("AllocSPS: SPS");
    return p;
  }

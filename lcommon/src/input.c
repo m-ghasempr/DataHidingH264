@@ -20,7 +20,6 @@
 
 #include "global.h"
 #include "input.h"
-#include "report.h"
 #include "img_io.h"
 #include "memalloc.h"
 
@@ -38,17 +37,17 @@ void fillPlane        ( imgpel** imgX, int nVal, int size_x, int size_y);
  *      1, big-endian (e.g. SPARC, MIPS, PowerPC)
  ************************************************************************
  */
-void initInput(ImageParameters *p_Img, FrameFormat *source, FrameFormat *output)
+void initInput(VideoParameters *p_Vid, FrameFormat *source, FrameFormat *output)
 {
   if (source->bit_depth[0] == output->bit_depth[0] && source->bit_depth[1] == output->bit_depth[1])
   {
     if (( sizeof(char) != sizeof (imgpel)) && testEndian())
-      p_Img->buf2img = buf2img_endian;
+      p_Vid->buf2img = buf2img_endian;
     else
-      p_Img->buf2img = buf2img_basic;
+      p_Vid->buf2img = buf2img_basic;
   }
   else
-    p_Img->buf2img = buf2img_bitshift;
+    p_Vid->buf2img = buf2img_bitshift;
 }
 
 
@@ -542,14 +541,14 @@ void buf2img_endian (imgpel** imgX,            //!< Pointer to image plane
  *
  ************************************************************************
  */
-void AllocateFrameMemory (ImageParameters *p_Img, InputParameters *p_Inp, FrameFormat *source)
+void AllocateFrameMemory (VideoParameters *p_Vid, InputParameters *p_Inp, FrameFormat *source)
 {
-  if (NULL == (p_Img->buf = malloc (source->size * source->pic_unit_size_shift3)))
-    no_mem_exit("AllocateFrameMemory: p_Img->buf");
+  if (NULL == (p_Vid->buf = malloc (source->size * source->pic_unit_size_shift3)))
+    no_mem_exit("AllocateFrameMemory: p_Vid->buf");
   if (p_Inp->input_file1.is_interleaved)
   {
-    if (NULL == (p_Img->ibuf = malloc (source->size * source->pic_unit_size_shift3)))
-      no_mem_exit("AllocateFrameMemory: p_Img->ibuf");
+    if (NULL == (p_Vid->ibuf = malloc (source->size * source->pic_unit_size_shift3)))
+      no_mem_exit("AllocateFrameMemory: p_Vid->ibuf");
   }
 }
 
@@ -560,12 +559,12 @@ void AllocateFrameMemory (ImageParameters *p_Img, InputParameters *p_Inp, FrameF
  *
  ************************************************************************
  */
-void DeleteFrameMemory (ImageParameters *p_Img)
+void DeleteFrameMemory (VideoParameters *p_Vid)
 {
-  if (p_Img->buf != NULL)
-    free (p_Img->buf);
-  if (p_Img->ibuf != NULL)
-    free (p_Img->ibuf);
+  if (p_Vid->buf != NULL)
+    free (p_Vid->buf);
+  if (p_Vid->ibuf != NULL)
+    free (p_Vid->ibuf);
 }
 
 /*!
@@ -573,6 +572,10 @@ void DeleteFrameMemory (ImageParameters *p_Img)
  * \brief
  *    Reads one new frame from file
  *
+ * \param p_Img
+ *      image encoding parameters for current picture
+ * \param p_Inp
+ *    Input configuration parameters 
  * \param input_file
  *    structure containing information (filename, format) about the source file
  * \param FrameNoInFile
@@ -587,8 +590,10 @@ void DeleteFrameMemory (ImageParameters *p_Img)
  *    Image planes
  ************************************************************************
  */
-int ReadOneFrame (ImageParameters *p_Img, InputParameters *p_Inp, VideoDataFile *input_file, int FrameNoInFile, int HeaderSize, FrameFormat *source, FrameFormat *output, imgpel **pImage[3])
+int ReadOneFrame (VideoParameters *p_Vid, VideoDataFile *input_file, int FrameNoInFile, int HeaderSize, FrameFormat *source, FrameFormat *output, imgpel **pImage[3])
 {
+  InputParameters *p_Inp = p_Vid->p_Inp;
+  int file_read = 0;
 	unsigned int symbol_size_in_bytes = source->pic_unit_size_shift3;
 
 	const int bytes_y = source->size_cmp[0] * symbol_size_in_bytes;
@@ -600,33 +605,41 @@ int ReadOneFrame (ImageParameters *p_Img, InputParameters *p_Inp, VideoDataFile 
 	if (input_file->is_concatenated == 0)
 	{    
 		if (input_file->vdtype == VIDEO_TIFF)
-			ReadTIFFImage     (p_Inp, input_file, FrameNoInFile, source, p_Img->buf);
+    {
+			file_read = ReadTIFFImage     (p_Inp, input_file, FrameNoInFile, source, p_Vid->buf);
+    }
 		else
-			ReadFrameSeparate (p_Inp, input_file, FrameNoInFile, HeaderSize, source, p_Img->buf);
+    {
+			file_read = ReadFrameSeparate (p_Inp, input_file, FrameNoInFile, HeaderSize, source, p_Vid->buf);
+    }
 	}
 	else
 	{
-		ReadFrameConcatenated (p_Inp, input_file, FrameNoInFile, HeaderSize, source, p_Img->buf);
+		file_read = ReadFrameConcatenated (p_Inp, input_file, FrameNoInFile, HeaderSize, source, p_Vid->buf);
 	}
+  if ( !file_read )
+  {
+    return 0;
+  }
 
 	// Deinterleave input source
 	if (input_file->is_interleaved)
 	{
-		deinterleave ( &p_Img->buf, &p_Img->ibuf, source, symbol_size_in_bytes);
+		deinterleave ( &p_Vid->buf, &p_Vid->ibuf, source, symbol_size_in_bytes);
 	}
 
 	bit_scale = source->bit_depth[0] - output->bit_depth[0];  
 
 	if(rgb_input)
-		p_Img->buf2img(pImage[0], p_Img->buf + bytes_y, source->width, source->height, output->width, output->height, symbol_size_in_bytes, bit_scale);
+		p_Vid->buf2img(pImage[0], p_Vid->buf + bytes_y, source->width, source->height, output->width, output->height, symbol_size_in_bytes, bit_scale);
 	else
-		p_Img->buf2img(pImage[0], p_Img->buf, source->width, source->height, output->width, output->height, symbol_size_in_bytes, bit_scale);
+		p_Vid->buf2img(pImage[0], p_Vid->buf, source->width, source->height, output->width, output->height, symbol_size_in_bytes, bit_scale);
 
 #if (DEBUG_BITDEPTH)
 	MaskMSBs(pImage[0], ((1 << output->bit_depth[0]) - 1), output->width, output->height);
 #endif
 
-	if (p_Img->yuv_format != YUV400)
+	if (p_Vid->yuv_format != YUV400)
 	{
 		bit_scale = source->bit_depth[1] - output->bit_depth[1];
 #if (ALLOW_GRAYSCALE)
@@ -634,22 +647,23 @@ int ReadOneFrame (ImageParameters *p_Img, InputParameters *p_Inp, VideoDataFile 
 #endif
 		{
 			if(rgb_input)
-				p_Img->buf2img(pImage[1], p_Img->buf + bytes_y + bytes_uv, source->width_cr, source->height_cr, output->width_cr, output->height_cr, symbol_size_in_bytes, bit_scale);
+				p_Vid->buf2img(pImage[1], p_Vid->buf + bytes_y + bytes_uv, source->width_cr, source->height_cr, output->width_cr, output->height_cr, symbol_size_in_bytes, bit_scale);
 			else 
-				p_Img->buf2img(pImage[1], p_Img->buf + bytes_y, source->width_cr, source->height_cr, output->width_cr, output->height_cr, symbol_size_in_bytes, bit_scale);
+				p_Vid->buf2img(pImage[1], p_Vid->buf + bytes_y, source->width_cr, source->height_cr, output->width_cr, output->height_cr, symbol_size_in_bytes, bit_scale);
 
 			bit_scale = source->bit_depth[2] - output->bit_depth[2];
 			if(rgb_input)
-				p_Img->buf2img(pImage[2], p_Img->buf, source->width_cr, source->height_cr, output->width_cr, output->height_cr, symbol_size_in_bytes, bit_scale);
+				p_Vid->buf2img(pImage[2], p_Vid->buf, source->width_cr, source->height_cr, output->width_cr, output->height_cr, symbol_size_in_bytes, bit_scale);
 			else
-				p_Img->buf2img(pImage[2], p_Img->buf + bytes_y + bytes_uv, source->width_cr, source->height_cr, output->width_cr, output->height_cr, symbol_size_in_bytes, bit_scale);
+				p_Vid->buf2img(pImage[2], p_Vid->buf + bytes_y + bytes_uv, source->width_cr, source->height_cr, output->width_cr, output->height_cr, symbol_size_in_bytes, bit_scale);
 		}
 #if (DEBUG_BITDEPTH)
 		MaskMSBs(pImage[1], ((1 << output->bit_depth[1]) - 1), output->width_cr, output->height_cr);
 		MaskMSBs(pImage[2], ((1 << output->bit_depth[2]) - 1), output->width_cr, output->height_cr);
 #endif
 	}
-	return 1;
+
+	return file_read;
 }
 
 /*!

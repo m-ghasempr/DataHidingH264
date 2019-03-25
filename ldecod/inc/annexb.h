@@ -27,12 +27,12 @@ typedef struct annex_b_struct
   byte *Buf;  
 } ANNEXB_t;
 
-extern int  GetAnnexbNALU  (ImageParameters *p_Img, NALU_t *nalu);
-extern void OpenAnnexBFile (ImageParameters *p_Img, char *fn);
-extern void CloseAnnexBFile(ImageParameters *p_Img);
-extern void init_annex_b(ANNEXB_t *annex_b);
-extern void malloc_annex_b(ImageParameters *p_Img);
-extern void free_annex_b(ImageParameters *p_Img);
+extern int  GetAnnexbNALU  (VideoParameters *p_Vid, NALU_t *nalu);
+extern void OpenAnnexBFile (VideoParameters *p_Vid, char *fn);
+extern void CloseAnnexBFile(VideoParameters *p_Vid);
+extern void malloc_annex_b (VideoParameters *p_Vid);
+extern void free_annex_b   (VideoParameters *p_Vid);
+extern void init_annex_b   (ANNEXB_t *annex_b);
 
 #endif
 

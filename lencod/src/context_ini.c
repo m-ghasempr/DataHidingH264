@@ -41,35 +41,35 @@ static const double probabilities[64] =
   0.027005, 0.025633, 0.024332, 0.023096,    0.021923, 0.020810, 0.019753, 0.018750
 };
 
-void create_context_memory (ImageParameters *p_Img, InputParameters *p_Inp)
+void create_context_memory (VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   int k;
-  int num_mb  = p_Img->FrameSizeInMbs; // number of macroblocks for frame
+  int num_mb  = p_Vid->FrameSizeInMbs; // number of macroblocks for frame
   double log2 = log(2.0);
 
-  p_Img->num_mb_per_slice  = (p_Inp->slice_mode == 1 ? p_Inp->slice_argument : num_mb);
-  p_Img->number_of_slices  = (num_mb + p_Img->num_mb_per_slice - 1) / p_Img->num_mb_per_slice;
-  get_mem3Dint(&p_Img->initialized, 3, FRAME_TYPES, p_Img->number_of_slices);
+  p_Vid->num_mb_per_slice  = (p_Inp->slice_mode == 1 ? p_Inp->slice_argument : num_mb);
+  p_Vid->number_of_slices  = (num_mb + p_Vid->num_mb_per_slice - 1) / p_Vid->num_mb_per_slice;
+  get_mem3Dint(&p_Vid->initialized, 3, FRAME_TYPES, p_Vid->number_of_slices);
   //===== set all context sets as "uninitialized" =====
-  memset(&p_Img->initialized[0][0][0], 0, 3 * FRAME_TYPES * p_Img->number_of_slices * sizeof(int));
-  get_mem3Dint(&p_Img->modelNumber, 3, FRAME_TYPES, p_Img->number_of_slices);
+  memset(&p_Vid->initialized[0][0][0], 0, 3 * FRAME_TYPES * p_Vid->number_of_slices * sizeof(int));
+  get_mem3Dint(&p_Vid->modelNumber, 3, FRAME_TYPES, p_Vid->number_of_slices);
 
   //----- init tables -----
   for( k=0; k<64; k++ )
   {
-    p_Img->probability[k + 64] = probabilities[k];
-    p_Img->probability[k] = 1.0 - probabilities[63 - k];
-    p_Img->entropy    [k] = log( p_Img->probability[      k] ) / log2;
-    p_Img->entropy[127-k] = log( probabilities[63 - k] ) / log2;
-    p_Img->enorm      [k] = p_Img->entropy[k] - p_Img->entropy[127-k];
-    p_Img->enorm[127 - k] = -p_Img->enorm[k];
+    p_Vid->probability[k + 64] = probabilities[k];
+    p_Vid->probability[k] = 1.0 - probabilities[63 - k];
+    p_Vid->entropy    [k] = log( p_Vid->probability[      k] ) / log2;
+    p_Vid->entropy[127-k] = log( probabilities[63 - k] ) / log2;
+    p_Vid->enorm      [k] = p_Vid->entropy[k] - p_Vid->entropy[127-k];
+    p_Vid->enorm[127 - k] = -p_Vid->enorm[k];
   }
 }
 
-void free_context_memory (ImageParameters *p_Img)
+void free_context_memory (VideoParameters *p_Vid)
 {
-  free_mem3Dint(p_Img->initialized);
-  free_mem3Dint(p_Img->modelNumber);
+  free_mem3Dint(p_Vid->initialized);
+  free_mem3Dint(p_Vid->modelNumber);
 }
 
 #define BIARI_CTX_INIT2(qp, ii,jj,ctx,tab) \
@@ -105,12 +105,12 @@ static inline void binary_context_init2(int qp, int ii, int jj, BiContextType ct
 
 void SetCtxModelNumber (Slice *currSlice)
 {
-  ImageParameters *p_Img = currSlice->p_Img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
   InputParameters *p_Inp = currSlice->p_Inp;
 
-  int frame_field = p_Img->field_picture;
+  int frame_field = p_Vid->field_picture;
   int img_type    = currSlice->slice_type;
-  int ctx_number  = currSlice->start_mb_nr / p_Img->num_mb_per_slice;
+  int ctx_number  = currSlice->start_mb_nr / p_Vid->num_mb_per_slice;
 
   if(img_type == I_SLICE)
   {
@@ -124,13 +124,13 @@ void SetCtxModelNumber (Slice *currSlice)
     return;
   }
 
-  if (p_Img->initialized [frame_field][img_type][ctx_number])
+  if (p_Vid->initialized [frame_field][img_type][ctx_number])
   {
-    currSlice->model_number = p_Img->modelNumber[frame_field][img_type][ctx_number];
+    currSlice->model_number = p_Vid->modelNumber[frame_field][img_type][ctx_number];
   }
-  else if (ctx_number && p_Img->initialized[frame_field][img_type][ctx_number-1])
+  else if (ctx_number && p_Vid->initialized[frame_field][img_type][ctx_number-1])
   {
-    currSlice->model_number = p_Img->modelNumber[frame_field][img_type][ctx_number-1];
+    currSlice->model_number = p_Vid->modelNumber[frame_field][img_type][ctx_number-1];
   }
   else
   {
@@ -196,11 +196,11 @@ void init_contexts (Slice *currSlice)
 }
 
 
-double XRate (ImageParameters *p_Img, BiContextTypePtr ctx, const char* model)
+double XRate (VideoParameters *p_Vid, BiContextTypePtr ctx, const char* model)
 {
   int     ctx_state, mod_state;
   double  weight, xr = 0.0;
-  int     qp = imax(0, p_Img->qp);
+  int     qp = imax(0, p_Vid->qp);
 
   weight    = dmin (1.0, (double)ctx->count/(double)RELIABLE_COUNT);
 
@@ -209,48 +209,48 @@ double XRate (ImageParameters *p_Img, BiContextTypePtr ctx, const char* model)
   ctx_state = (ctx->MPS ? 64 + ctx->state : 63 - ctx->state);
 
 #if 0
-  xr -= weight * p_Img->probability[      ctx_state] * p_Img->entropy[      mod_state];
-  xr -= weight * p_Img->probability[127 - ctx_state] * p_Img->entropy[127 - mod_state];
+  xr -= weight * p_Vid->probability[      ctx_state] * p_Vid->entropy[      mod_state];
+  xr -= weight * p_Vid->probability[127 - ctx_state] * p_Vid->entropy[127 - mod_state];
 #else
-  //xr -= weight * (p_Img->probability[ctx_state] * (p_Img->entropy[mod_state] - p_Img->entropy[127 - mod_state]) + p_Img->entropy[127 - mod_state]);
-  xr -= weight * (p_Img->probability[ctx_state] * p_Img->enorm[mod_state] + p_Img->entropy[127 - mod_state]);
+  //xr -= weight * (p_Vid->probability[ctx_state] * (p_Vid->entropy[mod_state] - p_Vid->entropy[127 - mod_state]) + p_Vid->entropy[127 - mod_state]);
+  xr -= weight * (p_Vid->probability[ctx_state] * p_Vid->enorm[mod_state] + p_Vid->entropy[127 - mod_state]);
 #endif
 
   return xr;
 }
 
 /*
-static inline void add_xrate2(ImageParameters *p_Img, int ii, int jj, BiContextType **ctx, const char ***tab, double *xr)
+static inline void add_xrate2(VideoParameters *p_Vid, int ii, int jj, BiContextType **ctx, const char ***tab, double *xr)
 { 
   int i, j;
   for (i=0; i<ii; i++) 
   for (j=0; j<jj; j++) 
   { 
-    *xr += XRate (p_Img, &(ctx[i][j]), &(tab[i][j][0]));
+    *xr += XRate (p_Vid, &(ctx[i][j]), &(tab[i][j][0]));
   } 
 }
 */
 
-#define ADD_XRATE2(p_Img, ii,jj,ctx,tab) \
+#define ADD_XRATE2(p_Vid, ii,jj,ctx,tab) \
 { \
   for (i=0; i<ii; i++) \
   for (j=0; j<jj; j++) \
   { \
-    xr += XRate (p_Img, &(ctx[i][j]), &(tab[i][j][0])); \
+    xr += XRate (p_Vid, &(ctx[i][j]), &(tab[i][j][0])); \
   } \
 }
 
-#define ADD_XRATE1(p_Img, jj,ctx,tab) \
+#define ADD_XRATE1(p_Vid, jj,ctx,tab) \
 { \
   for (j=0; j<jj; j++) \
   { \
-    xr += XRate (p_Img, &(ctx[j]), &(tab[j][0])); \
+    xr += XRate (p_Vid, &(ctx[j]), &(tab[j][0])); \
   } \
 }
 
 void GetCtxModelNumber (Slice *currSlice, int* mnumber, MotionInfoContexts* mc, TextureInfoContexts* tc)
 {
-  ImageParameters *p_Img = currSlice->p_Img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
   int     model, j, i;
   double  xr, min_xr = 1e30;
 
@@ -260,23 +260,23 @@ void GetCtxModelNumber (Slice *currSlice, int* mnumber, MotionInfoContexts* mc, 
     {
       xr = 0.0;
       //--- motion coding contexts ---
-      ADD_XRATE2 (p_Img, 3, NUM_MB_TYPE_CTX,   mc->mb_type_contexts,     INIT_MB_TYPE_I [model]);
+      ADD_XRATE2 (p_Vid, 3, NUM_MB_TYPE_CTX,   mc->mb_type_contexts,     INIT_MB_TYPE_I [model]);
 
       //--- texture coding contexts ---
-      ADD_XRATE1 (p_Img,    NUM_TRANSFORM_SIZE_CTX,  tc->transform_size_contexts, INIT_TRANSFORM_SIZE_I[model][0]);
-      ADD_XRATE1 (p_Img,                   NUM_IPR_CTX,  tc->ipr_contexts,       INIT_IPR_I [model][0]);
-      ADD_XRATE1 (p_Img,                   NUM_CIPR_CTX, tc->cipr_contexts,      INIT_CIPR_I[model][0]);
-      ADD_XRATE2 (p_Img, 3,                NUM_CBP_CTX,  tc->cbp_contexts,       INIT_CBP_I [model]);
-      ADD_XRATE2 (p_Img, NUM_BLOCK_TYPES,  NUM_BCBP_CTX, tc->bcbp_contexts,      INIT_BCBP_I[model]);
-      ADD_XRATE1 (p_Img, NUM_DELTA_QP_CTX,               tc->delta_qp_contexts,    INIT_DELTA_QP_I[model][0]);
-      ADD_XRATE2 (p_Img, NUM_BLOCK_TYPES,  NUM_MAP_CTX,  tc->map_contexts[0],    INIT_MAP_I [model]);
-      ADD_XRATE2 (p_Img, NUM_BLOCK_TYPES,  NUM_LAST_CTX, tc->last_contexts[0],   INIT_LAST_I[model]);
-      ADD_XRATE2 (p_Img, NUM_BLOCK_TYPES,  NUM_ONE_CTX,  tc->one_contexts,       INIT_ONE_I     [model]);
-      ADD_XRATE2 (p_Img, NUM_BLOCK_TYPES,  NUM_ABS_CTX,  tc->abs_contexts,       INIT_ABS_I     [model]);
+      ADD_XRATE1 (p_Vid,    NUM_TRANSFORM_SIZE_CTX,  tc->transform_size_contexts, INIT_TRANSFORM_SIZE_I[model][0]);
+      ADD_XRATE1 (p_Vid,                   NUM_IPR_CTX,  tc->ipr_contexts,       INIT_IPR_I [model][0]);
+      ADD_XRATE1 (p_Vid,                   NUM_CIPR_CTX, tc->cipr_contexts,      INIT_CIPR_I[model][0]);
+      ADD_XRATE2 (p_Vid, 3,                NUM_CBP_CTX,  tc->cbp_contexts,       INIT_CBP_I [model]);
+      ADD_XRATE2 (p_Vid, NUM_BLOCK_TYPES,  NUM_BCBP_CTX, tc->bcbp_contexts,      INIT_BCBP_I[model]);
+      ADD_XRATE1 (p_Vid, NUM_DELTA_QP_CTX,               tc->delta_qp_contexts,    INIT_DELTA_QP_I[model][0]);
+      ADD_XRATE2 (p_Vid, NUM_BLOCK_TYPES,  NUM_MAP_CTX,  tc->map_contexts[0],    INIT_MAP_I [model]);
+      ADD_XRATE2 (p_Vid, NUM_BLOCK_TYPES,  NUM_LAST_CTX, tc->last_contexts[0],   INIT_LAST_I[model]);
+      ADD_XRATE2 (p_Vid, NUM_BLOCK_TYPES,  NUM_ONE_CTX,  tc->one_contexts,       INIT_ONE_I     [model]);
+      ADD_XRATE2 (p_Vid, NUM_BLOCK_TYPES,  NUM_ABS_CTX,  tc->abs_contexts,       INIT_ABS_I     [model]);
 #if ENABLE_FIELD_CTX
-      ADD_XRATE1 (p_Img, NUM_MB_AFF_CTX,                 tc->mb_aff_contexts,    INIT_MB_AFF_I  [model][0]);
-      ADD_XRATE2 (p_Img, NUM_BLOCK_TYPES,  NUM_MAP_CTX,  tc->map_contexts[1],    INIT_FLD_MAP_I [model]);
-      ADD_XRATE2 (p_Img, NUM_BLOCK_TYPES,  NUM_LAST_CTX, tc->last_contexts[1],   INIT_FLD_LAST_I[model]);
+      ADD_XRATE1 (p_Vid, NUM_MB_AFF_CTX,                 tc->mb_aff_contexts,    INIT_MB_AFF_I  [model][0]);
+      ADD_XRATE2 (p_Vid, NUM_BLOCK_TYPES,  NUM_MAP_CTX,  tc->map_contexts[1],    INIT_FLD_MAP_I [model]);
+      ADD_XRATE2 (p_Vid, NUM_BLOCK_TYPES,  NUM_LAST_CTX, tc->last_contexts[1],   INIT_FLD_LAST_I[model]);
 #endif
 
       if (xr < min_xr)
@@ -292,26 +292,26 @@ void GetCtxModelNumber (Slice *currSlice, int* mnumber, MotionInfoContexts* mc, 
     {
       xr = 0.0;
       //--- motion coding contexts ---
-      ADD_XRATE2 (p_Img, 3, NUM_MB_TYPE_CTX,   mc->mb_type_contexts,     INIT_MB_TYPE_P [model]);
-      ADD_XRATE2 (p_Img, 2, NUM_B8_TYPE_CTX,   mc->b8_type_contexts,     INIT_B8_TYPE_P [model]);
-      ADD_XRATE2 (p_Img, 2, NUM_MV_RES_CTX,    mc->mv_res_contexts,      INIT_MV_RES_P  [model]);
-      ADD_XRATE2 (p_Img, 2, NUM_REF_NO_CTX,    mc->ref_no_contexts,      INIT_REF_NO_P  [model]);
+      ADD_XRATE2 (p_Vid, 3, NUM_MB_TYPE_CTX,   mc->mb_type_contexts,     INIT_MB_TYPE_P [model]);
+      ADD_XRATE2 (p_Vid, 2, NUM_B8_TYPE_CTX,   mc->b8_type_contexts,     INIT_B8_TYPE_P [model]);
+      ADD_XRATE2 (p_Vid, 2, NUM_MV_RES_CTX,    mc->mv_res_contexts,      INIT_MV_RES_P  [model]);
+      ADD_XRATE2 (p_Vid, 2, NUM_REF_NO_CTX,    mc->ref_no_contexts,      INIT_REF_NO_P  [model]);
 
       //--- texture coding contexts ---
-      ADD_XRATE1 (p_Img,    NUM_TRANSFORM_SIZE_CTX,  tc->transform_size_contexts, INIT_TRANSFORM_SIZE_P[model][0]);
-      ADD_XRATE1 (p_Img,                   NUM_IPR_CTX,  tc->ipr_contexts,       INIT_IPR_P  [model][0]);
-      ADD_XRATE1 (p_Img,                   NUM_CIPR_CTX, tc->cipr_contexts,      INIT_CIPR_P [model][0]);
-      ADD_XRATE2 (p_Img, 3,                NUM_CBP_CTX,  tc->cbp_contexts,       INIT_CBP_P  [model]);
-      ADD_XRATE2 (p_Img, NUM_BLOCK_TYPES,  NUM_BCBP_CTX, tc->bcbp_contexts,      INIT_BCBP_P [model]);
-      ADD_XRATE1 (p_Img, NUM_DELTA_QP_CTX,               tc->delta_qp_contexts,  INIT_DELTA_QP_P[model][0]);
-      ADD_XRATE2 (p_Img, NUM_BLOCK_TYPES,  NUM_MAP_CTX,  tc->map_contexts[0],    INIT_MAP_P  [model]);
-      ADD_XRATE2 (p_Img, NUM_BLOCK_TYPES,  NUM_LAST_CTX, tc->last_contexts[0],   INIT_LAST_P [model]);
-      ADD_XRATE2 (p_Img, NUM_BLOCK_TYPES,  NUM_ONE_CTX,  tc->one_contexts,       INIT_ONE_P      [model]);
-      ADD_XRATE2 (p_Img, NUM_BLOCK_TYPES,  NUM_ABS_CTX,  tc->abs_contexts,       INIT_ABS_P      [model]);
+      ADD_XRATE1 (p_Vid,    NUM_TRANSFORM_SIZE_CTX,  tc->transform_size_contexts, INIT_TRANSFORM_SIZE_P[model][0]);
+      ADD_XRATE1 (p_Vid,                   NUM_IPR_CTX,  tc->ipr_contexts,       INIT_IPR_P  [model][0]);
+      ADD_XRATE1 (p_Vid,                   NUM_CIPR_CTX, tc->cipr_contexts,      INIT_CIPR_P [model][0]);
+      ADD_XRATE2 (p_Vid, 3,                NUM_CBP_CTX,  tc->cbp_contexts,       INIT_CBP_P  [model]);
+      ADD_XRATE2 (p_Vid, NUM_BLOCK_TYPES,  NUM_BCBP_CTX, tc->bcbp_contexts,      INIT_BCBP_P [model]);
+      ADD_XRATE1 (p_Vid, NUM_DELTA_QP_CTX,               tc->delta_qp_contexts,  INIT_DELTA_QP_P[model][0]);
+      ADD_XRATE2 (p_Vid, NUM_BLOCK_TYPES,  NUM_MAP_CTX,  tc->map_contexts[0],    INIT_MAP_P  [model]);
+      ADD_XRATE2 (p_Vid, NUM_BLOCK_TYPES,  NUM_LAST_CTX, tc->last_contexts[0],   INIT_LAST_P [model]);
+      ADD_XRATE2 (p_Vid, NUM_BLOCK_TYPES,  NUM_ONE_CTX,  tc->one_contexts,       INIT_ONE_P      [model]);
+      ADD_XRATE2 (p_Vid, NUM_BLOCK_TYPES,  NUM_ABS_CTX,  tc->abs_contexts,       INIT_ABS_P      [model]);
 #if ENABLE_FIELD_CTX
-      ADD_XRATE1 (p_Img, NUM_MB_AFF_CTX,                 tc->mb_aff_contexts,    INIT_MB_AFF_P  [model][0]);
-      ADD_XRATE2 (p_Img, NUM_BLOCK_TYPES,  NUM_MAP_CTX,  tc->map_contexts[1],    INIT_FLD_MAP_P  [model]);
-      ADD_XRATE2 (p_Img, NUM_BLOCK_TYPES,  NUM_LAST_CTX, tc->last_contexts[1],   INIT_FLD_LAST_P [model]);
+      ADD_XRATE1 (p_Vid, NUM_MB_AFF_CTX,                 tc->mb_aff_contexts,    INIT_MB_AFF_P  [model][0]);
+      ADD_XRATE2 (p_Vid, NUM_BLOCK_TYPES,  NUM_MAP_CTX,  tc->map_contexts[1],    INIT_FLD_MAP_P  [model]);
+      ADD_XRATE2 (p_Vid, NUM_BLOCK_TYPES,  NUM_LAST_CTX, tc->last_contexts[1],   INIT_FLD_LAST_P [model]);
 #endif
 
       if (xr < min_xr)
@@ -331,13 +331,13 @@ void store_contexts (Slice *currSlice)
 {
   if( currSlice->p_Inp->context_init_method )
   {
-    ImageParameters *p_Img = currSlice->p_Img;
-    int frame_field = p_Img->field_picture;
+    VideoParameters *p_Vid = currSlice->p_Vid;
+    int frame_field = p_Vid->field_picture;
     int img_type    = currSlice->slice_type;
-    int ctx_number  = currSlice->start_mb_nr / p_Img->num_mb_per_slice;
+    int ctx_number  = currSlice->start_mb_nr / p_Vid->num_mb_per_slice;
 
-    p_Img->initialized [frame_field][img_type][ctx_number] = 1;
-    GetCtxModelNumber (currSlice, p_Img->modelNumber[frame_field][img_type] + ctx_number, currSlice->mot_ctx, currSlice->tex_ctx);
+    p_Vid->initialized [frame_field][img_type][ctx_number] = 1;
+    GetCtxModelNumber (currSlice, p_Vid->modelNumber[frame_field][img_type] + ctx_number, currSlice->mot_ctx, currSlice->tex_ctx);
   }
   else
   {
@@ -346,7 +346,7 @@ void store_contexts (Slice *currSlice)
 }
 
 
-void update_field_frame_contexts (ImageParameters *p_Img, int field)
+void update_field_frame_contexts (VideoParameters *p_Vid, int field)
 {
   int i, j;
 
@@ -355,10 +355,10 @@ void update_field_frame_contexts (ImageParameters *p_Img, int field)
     // set frame contexts
     for (j=0; j<FRAME_TYPES; j++)
     {
-      for (i=0; i<p_Img->number_of_slices; i++)
+      for (i=0; i<p_Vid->number_of_slices; i++)
       {
-        p_Img->initialized [0][j][i] = p_Img->initialized [1][j][i>>1];
-        p_Img->modelNumber[0][j][i] = p_Img->modelNumber[1][j][i>>1];
+        p_Vid->initialized [0][j][i] = p_Vid->initialized [1][j][i>>1];
+        p_Vid->modelNumber[0][j][i] = p_Vid->modelNumber[1][j][i>>1];
       }
     }
   }
@@ -367,10 +367,10 @@ void update_field_frame_contexts (ImageParameters *p_Img, int field)
     // set field contexts
     for (j=0; j<FRAME_TYPES; j++)
     {
-      for (i=0; i<((p_Img->number_of_slices+1)>>1); i++)
+      for (i=0; i<((p_Vid->number_of_slices+1)>>1); i++)
       {
-        p_Img->initialized [1][j][i] = p_Img->initialized [0][j][i<<1];
-        p_Img->modelNumber[1][j][i] = p_Img->modelNumber[0][j][i<<1];
+        p_Vid->initialized [1][j][i] = p_Vid->initialized [0][j][i<<1];
+        p_Vid->modelNumber[1][j][i] = p_Vid->modelNumber[0][j][i<<1];
       }
     }
   }

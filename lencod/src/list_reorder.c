@@ -48,9 +48,9 @@ void init_ref_pic_list_reordering(Slice* currSlice)
 void poc_ref_pic_reorder_frame_default(Slice *currSlice, StorablePicture **list, 
                                unsigned num_ref_idx_lX_active, int *reordering_of_pic_nums_idc, int *abs_diff_pic_num_minus1, int *long_term_pic_idx, int list_no)
 {
-  ImageParameters *p_Img = currSlice->p_Img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
   InputParameters *p_Inp = currSlice->p_Inp;
-  StorablePicture *p_Enc_Pic = p_Img->enc_picture;
+  StorablePicture *p_Enc_Pic = p_Vid->enc_picture;
 
   unsigned int i,j,k;
 
@@ -68,8 +68,8 @@ void poc_ref_pic_reorder_frame_default(Slice *currSlice, StorablePicture **list,
   int maxPicNum;
   unsigned int num_refs;
 
-  maxPicNum  = p_Img->max_frame_num;
-  currPicNum = p_Img->frame_num;
+  maxPicNum  = p_Vid->max_frame_num;
+  currPicNum = p_Vid->frame_num;
 
   picNumLXPred = currPicNum;
 
@@ -83,23 +83,23 @@ void poc_ref_pic_reorder_frame_default(Slice *currSlice, StorablePicture **list,
   // to a potential reordering list. For each one of these
   // references compute the poc distance compared to current
   // frame.
-  num_refs = p_Img->p_Dpb->ref_frames_in_buffer;
-  for (i=0; i<p_Img->p_Dpb->ref_frames_in_buffer; i++)
+  num_refs = p_Vid->p_Dpb->ref_frames_in_buffer;
+  for (i=0; i<p_Vid->p_Dpb->ref_frames_in_buffer; i++)
   {
     poc_diff[i] = 0xFFFF;
-    re_order[i] = p_Img->p_Dpb->fs_ref[i]->frame->pic_num;
+    re_order[i] = p_Vid->p_Dpb->fs_ref[i]->frame->pic_num;
 
-    if (p_Img->p_Dpb->fs_ref[i]->is_used==3 && (p_Img->p_Dpb->fs_ref[i]->frame->used_for_reference)&&(!p_Img->p_Dpb->fs_ref[i]->frame->is_long_term))
+    if (p_Vid->p_Dpb->fs_ref[i]->is_used==3 && (p_Vid->p_Dpb->fs_ref[i]->frame->used_for_reference)&&(!p_Vid->p_Dpb->fs_ref[i]->frame->is_long_term))
     {
-      abs_poc_dist = iabs(p_Img->p_Dpb->fs_ref[i]->frame->poc - p_Enc_Pic->poc) ;
+      abs_poc_dist = iabs(p_Vid->p_Dpb->fs_ref[i]->frame->poc - p_Enc_Pic->poc) ;
       poc_diff[i] = abs_poc_dist;
       if (list_no == LIST_0)
       {
-        list_sign[i] = (p_Enc_Pic->poc < p_Img->p_Dpb->fs_ref[i]->frame->poc) ? +1 : -1;
+        list_sign[i] = (p_Enc_Pic->poc < p_Vid->p_Dpb->fs_ref[i]->frame->poc) ? +1 : -1;
       }
       else
       {
-        list_sign[i] = (p_Enc_Pic->poc > p_Img->p_Dpb->fs_ref[i]->frame->poc) ? +1 : -1;
+        list_sign[i] = (p_Enc_Pic->poc > p_Vid->p_Dpb->fs_ref[i]->frame->poc) ? +1 : -1;
       }
     }
   }
@@ -127,12 +127,12 @@ void poc_ref_pic_reorder_frame_default(Slice *currSlice, StorablePicture **list,
 
   // populate list with selections from the pre-analysis stage
   if ( p_Inp->WPMCPrecision 
-    && p_Img->pWPX->curr_wp_rd_pass->algorithm != WP_REGULAR
-    && p_Img->pWPX->num_wp_ref_list[list_no] )
+    && p_Vid->pWPX->curr_wp_rd_pass->algorithm != WP_REGULAR
+    && p_Vid->pWPX->num_wp_ref_list[list_no] )
   {
     for (i=0; i<num_ref_idx_lX_active; i++)
     {
-      re_order[i] = p_Img->pWPX->wp_ref_list[list_no][i].PicNum;
+      re_order[i] = p_Vid->pWPX->wp_ref_list[list_no][i].PicNum;
     }
   }
 
@@ -219,9 +219,9 @@ void poc_ref_pic_reorder_frame_default(Slice *currSlice, StorablePicture **list,
 */
 void poc_ref_pic_reorder_field(Slice *currSlice, StorablePicture **list, unsigned num_ref_idx_lX_active, int *reordering_of_pic_nums_idc, int *abs_diff_pic_num_minus1, int *long_term_pic_idx, int list_no)
 {
-  ImageParameters *p_Img = currSlice->p_Img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
   //InputParameters *p_Inp = currSlice->p_Inp;
-  StorablePicture *p_Enc_Pic = p_Img->enc_picture;
+  StorablePicture *p_Enc_Pic = p_Vid->enc_picture;
 
   unsigned int i,j,k;
 
@@ -251,8 +251,8 @@ void poc_ref_pic_reorder_field(Slice *currSlice, StorablePicture **list, unsigne
   StorablePicture *pField[2]; // 0: TOP_FIELD, 1: BOTTOM_FIELD
   FrameStore      *pFrameStore; 
 
-  maxPicNum  = 2 * p_Img->max_frame_num;
-  currPicNum = 2 * p_Img->frame_num + 1;
+  maxPicNum  = 2 * p_Vid->max_frame_num;
+  currPicNum = 2 * p_Vid->frame_num + 1;
 
   picNumLXPred = currPicNum;
 
@@ -269,9 +269,9 @@ void poc_ref_pic_reorder_field(Slice *currSlice, StorablePicture **list, unsigne
   // look for eligible fields
   idx = 0;
 
-  for (i=0; i<p_Img->p_Dpb->ref_frames_in_buffer; i++)
+  for (i=0; i<p_Vid->p_Dpb->ref_frames_in_buffer; i++)
   {
-    pFrameStore = p_Img->p_Dpb->fs_ref[i];
+    pFrameStore = p_Vid->p_Dpb->fs_ref[i];
     pField[0]   = pFrameStore->top_field;
     pField[1]   = pFrameStore->bottom_field;
     num_flds    = (currSlice->structure == BOTTOM_FIELD && (p_Enc_Pic->poc == (pField[0]->poc + 1) ) ) ? 1 : 2;
@@ -473,7 +473,7 @@ void poc_ref_pic_reorder_field(Slice *currSlice, StorablePicture **list, unsigne
 
 void reorder_lists( Slice *currSlice )
 {
-  ImageParameters *p_Img = currSlice->p_Img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
   InputParameters *p_Inp = currSlice->p_Inp;
 
   // Perform reordering based on poc distances for HierarchicalCoding
@@ -492,19 +492,19 @@ void reorder_lists( Slice *currSlice )
 
     num_ref = currSlice->num_ref_idx_active[LIST_0];
     if ( currSlice->structure == FRAME )
-      currSlice->poc_ref_pic_reorder_frame(currSlice, p_Img->listX[LIST_0], num_ref,
+      currSlice->poc_ref_pic_reorder_frame(currSlice, p_Vid->listX[LIST_0], num_ref,
       currSlice->reordering_of_pic_nums_idc[LIST_0],
       currSlice->abs_diff_pic_num_minus1[LIST_0],
       currSlice->long_term_pic_idx[LIST_0], LIST_0);
     else
     {
-      poc_ref_pic_reorder_field(currSlice, p_Img->listX[LIST_0], num_ref,
+      poc_ref_pic_reorder_field(currSlice, p_Vid->listX[LIST_0], num_ref,
         currSlice->reordering_of_pic_nums_idc[LIST_0],
         currSlice->abs_diff_pic_num_minus1[LIST_0],
         currSlice->long_term_pic_idx[LIST_0], LIST_0);
     }
     //reference picture reordering
-    reorder_ref_pic_list ( currSlice, p_Img->listX, p_Img->listXsize, LIST_0);
+    reorder_ref_pic_list ( currSlice, p_Vid->listX, p_Vid->listXsize, LIST_0);
   }
 }
 
@@ -518,7 +518,7 @@ void reorder_lists( Slice *currSlice )
 void wp_mcprec_reorder_lists( Slice *currSlice )
 {
 
-  ImageParameters *p_Img = currSlice->p_Img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
   int i, num_ref;
 
   wpxModifyRefPicList( currSlice );
@@ -532,7 +532,7 @@ void wp_mcprec_reorder_lists( Slice *currSlice )
     currSlice->long_term_pic_idx[LIST_0][i] = 0;
   }
 
-  if (currSlice->slice_type == B_SLICE) // type should be part of currSlice not p_Img
+  if (currSlice->slice_type == B_SLICE) // type should be part of currSlice not p_Vid
   {
     for (i = 0; i < currSlice->num_ref_idx_active[LIST_1] + 1; i++)
     {
@@ -545,24 +545,24 @@ void wp_mcprec_reorder_lists( Slice *currSlice )
   // LIST_0
   num_ref = currSlice->num_ref_idx_active[LIST_0];
 
-  currSlice->poc_ref_pic_reorder_frame(currSlice, p_Img->listX[LIST_0], num_ref,
+  currSlice->poc_ref_pic_reorder_frame(currSlice, p_Vid->listX[LIST_0], num_ref,
     currSlice->reordering_of_pic_nums_idc[LIST_0],
     currSlice->abs_diff_pic_num_minus1[LIST_0],
     currSlice->long_term_pic_idx[LIST_0], LIST_0);
   // reference picture reordering
-  reorder_ref_pic_list ( currSlice, p_Img->listX, p_Img->listXsize, LIST_0);
+  reorder_ref_pic_list ( currSlice, p_Vid->listX, p_Vid->listXsize, LIST_0);
 
   if ( currSlice->slice_type == B_SLICE )
   {
     // LIST_1
     num_ref = currSlice->num_ref_idx_active[LIST_1];
 
-    currSlice->poc_ref_pic_reorder_frame(currSlice, p_Img->listX[LIST_1], num_ref,
+    currSlice->poc_ref_pic_reorder_frame(currSlice, p_Vid->listX[LIST_1], num_ref,
       currSlice->reordering_of_pic_nums_idc[LIST_1],
       currSlice->abs_diff_pic_num_minus1[LIST_1],
       currSlice->long_term_pic_idx[LIST_1], LIST_1);
     // reference picture reordering
-    reorder_ref_pic_list ( currSlice, p_Img->listX, p_Img->listXsize, LIST_1);
+    reorder_ref_pic_list ( currSlice, p_Vid->listX, p_Vid->listXsize, LIST_1);
   }
 }
 

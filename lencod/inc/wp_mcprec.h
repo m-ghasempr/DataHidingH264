@@ -40,11 +40,11 @@ typedef struct wpx_object
 }
 WPXObject;
 
-extern void   wpxInitWPXObject( ImageParameters *p_Img );
-extern void   wpxFreeWPXObject( ImageParameters *p_Img );
-extern void   wpxInitWPXPasses( ImageParameters *p_Img, InputParameters *p_Inp );
+extern void   wpxInitWPXObject( VideoParameters *p_Vid );
+extern void   wpxFreeWPXObject( VideoParameters *p_Vid );
+extern void   wpxInitWPXPasses( VideoParameters *p_Vid, InputParameters *p_Inp );
 extern void   wpxModifyRefPicList( Slice *currSlice );
-// Note that at some point, InputParameters p_Inp contents should be copied into ImageParameters *p_Img. 
+// Note that at some point, InputParameters p_Inp contents should be copied into VideoParameters *p_Vid. 
 // This would eliminate need of having to use both structures
 extern int    wpxDetermineWP( Slice *currSlice, int clist, int n );
 extern void   wpxAdaptRefNum( Slice *currSlice );

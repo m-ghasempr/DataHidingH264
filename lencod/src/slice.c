@@ -55,7 +55,7 @@
 #include "rdopt_coding_state.h"
 
 // Local declarations
-static Slice *malloc_slice(ImageParameters *p_Img, InputParameters *p_Inp);
+static Slice *malloc_slice(VideoParameters *p_Vid, InputParameters *p_Inp);
 static void  free_slice   (Slice *currSlice);
 static void  set_ref_pic_num(Slice *currSlice);
 
@@ -82,7 +82,7 @@ void free_block_mem(Slice *currSlice)
 /*!
  ***********************************************************************
  * \brief
- *    Initializes the p_Img->nz_coeff
+ *    Initializes the p_Vid->nz_coeff
  * \par Input:
  *    none
  * \par  Output:
@@ -93,7 +93,7 @@ void free_block_mem(Slice *currSlice)
  */
 static void CAVLC_init(Slice *currSlice)
 {
-  memset(&currSlice->p_Img->nz_coeff[0][0][0], 0, currSlice->PicSizeInMbs * 4 * (4 + currSlice->num_blk8x8_uv)* sizeof(int));
+  memset(&currSlice->p_Vid->nz_coeff[0][0][0], 0, currSlice->PicSizeInMbs * 4 * (4 + currSlice->num_blk8x8_uv)* sizeof(int));
 }
 
 /*!
@@ -101,7 +101,7 @@ static void CAVLC_init(Slice *currSlice)
  * \brief
  *    Allocate memory for mv
  * \par Input:
- *    Image Parameters ImageParameters *p_Img                             \n
+ *    Image Parameters VideoParameters *p_Vid                             \n
  *    int****** mv
  * \return memory size in bytes
  ************************************************************************
@@ -119,7 +119,7 @@ static int get_mem_mv (Slice *currSlice, short ******* mv)
  * \brief
  *    Allocate memory for bipredictive mv 
  * \par Input:
- *    Image Parameters ImageParameters *p_Img                             \n
+ *    Image Parameters VideoParameters *p_Vid                             \n
  *    int****** mv
  * \return memory size in bytes
  ************************************************************************
@@ -165,10 +165,10 @@ static int alloc_rddata(Slice *currSlice, RD_DATA *rd_data)
 
   alloc_size += get_mem3Dpel(&(rd_data->rec_mb), 3, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
 
-  alloc_size += get_mem_ACcoeff (currSlice->p_Img, &(rd_data->cofAC));
+  alloc_size += get_mem_ACcoeff (currSlice->p_Vid, &(rd_data->cofAC));
   alloc_size += get_mem_DCcoeff (&(rd_data->cofDC));  
 
-  if ((currSlice->slice_type != I_SLICE) && (currSlice->slice_type != SI_SLICE))
+  if ((currSlice->slice_type != I_SLICE) && currSlice->slice_type != SI_SLICE)
   {          
     alloc_size += get_mem_mv (currSlice, &(rd_data->all_mv));
   }
@@ -185,8 +185,8 @@ static void free_rddata(Slice *currSlice, RD_DATA *rd_data)
   free_mem3D((byte***) rd_data->refar);
   free_mem2D((byte**)  rd_data->ipredmode);
 
-  if ((currSlice->slice_type != I_SLICE) && (currSlice->slice_type != SI_SLICE))
-  {          
+  if ((currSlice->slice_type != I_SLICE) && currSlice->slice_type != SI_SLICE)
+  {  
     free_mem_mv (rd_data->all_mv);
   }
 
@@ -207,12 +207,12 @@ static void free_rddata(Slice *currSlice, RD_DATA *rd_data)
  *  \par Side effects:
  *      Adds slice/partition header symbols to the symbol buffer
  *      increments Picture->no_slices, allocates memory for the
- *      slice, sets p_Img->currSlice
+ *      slice, sets p_Vid->currSlice
  ************************************************************************
 */
 static int start_slice(Slice *currSlice, StatParameters *cur_stats)
 {
-  ImageParameters *p_Img = currSlice->p_Img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
   EncodingEnvironmentPtr eep;
   Bitstream *currStream;
   int header_len = 0;
@@ -225,7 +225,7 @@ static int start_slice(Slice *currSlice, StatParameters *cur_stats)
     NumberOfPartitions = 1;
   }
 
-  RTPUpdateTimestamp (p_Img, currSlice->frame_no);   // this has no side effects, just leave it for all NALs
+  RTPUpdateTimestamp (p_Vid, currSlice->frame_no);   // this has no side effects, just leave it for all NALs
 
   for (i = 0; i < NumberOfPartitions; i++)
   {
@@ -243,8 +243,8 @@ static int start_slice(Slice *currSlice, StatParameters *cur_stats)
       eep = &((currSlice->partArr[i]).ee_cabac);
       if (currStream->bits_to_go != 8)
         header_len += currStream->bits_to_go;
-      writeVlcByteAlign(p_Img, currStream, cur_stats);
-      eep->p_Img = p_Img;
+      writeVlcByteAlign(p_Vid, currStream, cur_stats);
+      eep->p_Vid = p_Vid;
       arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos));
 
       arienco_reset_EC(eep);
@@ -274,7 +274,7 @@ static int start_slice(Slice *currSlice, StatParameters *cur_stats)
 void create_slice_nalus(Slice *currSlice)
 {
   // KS: this is approx. max. allowed code picture size
-  //const int buffer_size = 500 + p_Img->FrameSizeInMbs * (128 + 256 * p_Img->bitdepth_luma + 512 * p_Img->bitdepth_chroma);
+  //const int buffer_size = 500 + p_Vid->FrameSizeInMbs * (128 + 256 * p_Vid->bitdepth_luma + 512 * p_Vid->bitdepth_chroma);
   int buffer_size = currSlice->partArr[0].bitstream->buffer_size;
   
   int part;
@@ -337,7 +337,7 @@ void create_slice_nalus(Slice *currSlice)
 static int terminate_slice(Macroblock *currMB, int lastslice, StatParameters *cur_stats )
 {
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
 
   Bitstream *currStream;
@@ -375,7 +375,7 @@ static int terminate_slice(Macroblock *currMB, int lastslice, StatParameters *cu
         eep = &((currSlice->partArr[part]).ee_cabac);
         // terminate the arithmetic code
         arienco_done_encoding(currMB, eep);
-        set_pic_bin_count(p_Img, eep);
+        set_pic_bin_count(p_Vid, eep);
 
         currStream->bits_to_go = eep->Ebits_to_go;
         currStream->byte_buf = 0;
@@ -383,11 +383,11 @@ static int terminate_slice(Macroblock *currMB, int lastslice, StatParameters *cu
         currNalu->len = RBSPtoEBSP(currNalu->buf, currStream->streamBuffer, currStream->byte_pos);
 
         // NumBytesInNALunit is: payload length + 1 byte header
-        p_Img->bytes_in_picture += currNalu->len + 1;
+        p_Vid->bytes_in_picture += currNalu->len + 1;
 
         if (lastslice && (part==(currSlice->max_part_nr - 1)))
         {
-          addCabacZeroWords(p_Img, currNalu, cur_stats);
+          addCabacZeroWords(p_Vid, currNalu, cur_stats);
         }
       }           // CABAC
     }
@@ -414,54 +414,54 @@ static int terminate_slice(Macroblock *currMB, int lastslice, StatParameters *cu
 *   returns the number of coded MBs in the SLice
 ************************************************************************
 */
-int encode_one_slice (ImageParameters *p_Img, InputParameters *p_Inp, int SliceGroupId, int TotalCodedMBs)
+int encode_one_slice (VideoParameters *p_Vid, int SliceGroupId, int TotalCodedMBs)
 {
+  InputParameters *p_Inp = p_Vid->p_Inp;
   Boolean end_of_slice = FALSE;
   Boolean recode_macroblock;
-  Boolean prev_recode_mb = FALSE;
   int len;
   int NumberOfCodedMBs = 0;
   Macroblock* currMB   = NULL;
   int CurrentMbAddr;
-  StatParameters *cur_stats = &p_Img->enc_picture->stats;
+  StatParameters *cur_stats = &p_Vid->enc_picture->stats;
   Slice *currSlice = NULL;
 
-  p_Img->Motion_Selected = 0;
+  p_Vid->Motion_Selected = 0;
 
   if( IS_INDEPENDENT(p_Inp) )
   {
-    change_plane_JV( p_Img, p_Img->colour_plane_id );
+    change_plane_JV( p_Vid, p_Vid->colour_plane_id );
   }
 
-  p_Img->cod_counter = 0;
+  p_Vid->cod_counter = 0;
 
-  CurrentMbAddr = FmoGetFirstMacroblockInSlice (p_Img, SliceGroupId);
-  // printf ("\n\nEncode_one_slice: PictureID %d SliceGroupId %d  SliceID %d  FirstMB %d \n", p_Img->frame_no, SliceGroupId, p_Img->current_slice_nr, CurrentMbInScanOrder);
+  CurrentMbAddr = FmoGetFirstMacroblockInSlice (p_Vid, SliceGroupId);
+  // printf ("\n\nEncode_one_slice: PictureID %d SliceGroupId %d  SliceID %d  FirstMB %d \n", p_Vid->frame_no, SliceGroupId, p_Vid->current_slice_nr, CurrentMbInScanOrder);
 
-  init_slice (p_Img, p_Inp, &currSlice, CurrentMbAddr);
+  init_slice (p_Vid, &currSlice, CurrentMbAddr);
   // Initialize quantization functions based on rounding/quantization method
   // Done here since we may wish to disable adaptive rounding on occasional intervals (even at a frame or gop level).
   init_quant_4x4   (currSlice);
   init_quant_8x8   (currSlice);
   init_quant_Chroma(currSlice);
 
-  currSlice->SetLagrangianMultipliers(p_Img, p_Inp);
+  currSlice->SetLagrangianMultipliers(p_Vid, p_Inp);
 
   if (currSlice->symbol_mode == CABAC)
   {
     SetCtxModelNumber (currSlice);
   }
 
-  p_Img->checkref = (short) (p_Inp->rdopt && p_Inp->RestrictRef && (p_Img->type==P_SLICE || p_Img->type==SP_SLICE));
+  p_Vid->checkref = (short) (p_Inp->rdopt && p_Inp->RestrictRef && (p_Vid->type==P_SLICE || p_Vid->type==SP_SLICE));
 
   len = start_slice (currSlice, cur_stats);
 
   // Rate control
   if (p_Inp->RCEnable)
-    rc_store_slice_header_bits( p_Img, p_Inp, len );
+    rc_store_slice_header_bits( p_Vid, p_Inp, len );
 
   // Update statistics
-  p_Img->p_Stats->bit_slice += len;
+  p_Vid->p_Stats->bit_slice += len;
   cur_stats->bit_use_header[currSlice->slice_type] += len;
 
   if(currSlice->UseRDOQuant == 1 && currSlice->RDOQ_QP_Num > 1)
@@ -469,11 +469,11 @@ int encode_one_slice (ImageParameters *p_Img, InputParameters *p_Inp, int SliceG
 
   while (end_of_slice == FALSE) // loop over macroblocks
   {
-    if (p_Img->AdaptiveRounding && p_Inp->AdaptRndPeriod && (p_Img->current_mb_nr % p_Inp->AdaptRndPeriod == 0))
+    if (p_Vid->AdaptiveRounding && p_Inp->AdaptRndPeriod && (p_Vid->current_mb_nr % p_Inp->AdaptRndPeriod == 0))
     {
-      CalculateOffset4x4Param(p_Img, p_Inp);
+      CalculateOffset4x4Param(p_Vid);
       if(p_Inp->Transform8x8Mode)
-        CalculateOffset8x8Param(p_Img, p_Inp);
+        CalculateOffset8x8Param(p_Vid);
     }
 
     recode_macroblock = FALSE;
@@ -487,27 +487,28 @@ int encode_one_slice (ImageParameters *p_Img, InputParameters *p_Inp, int SliceG
 
     if(currSlice->UseRDOQuant)
     {
-      trellis_coding(currMB, prev_recode_mb);   
+      trellis_coding(currMB);   
     }
     else
     {
-      p_Img->masterQP = p_Img->qp;
+      p_Vid->masterQP = p_Vid->qp;
 
       currSlice->encode_one_macroblock (currMB);
       end_encode_one_macroblock(currMB);
-      write_macroblock (currMB, 1, prev_recode_mb);    
+
+      write_macroblock (currMB, 1);
     }
 
     end_macroblock (currMB, &end_of_slice, &recode_macroblock);
-    prev_recode_mb = recode_macroblock;
+    currMB->prev_recode_mb = recode_macroblock;
     //       printf ("encode_one_slice: mb %d,  slice %d,   bitbuf bytepos %d EOS %d\n",
-    //       p_Img->current_mb_nr, p_Img->current_slice_nr,
+    //       p_Vid->current_mb_nr, p_Vid->current_slice_nr,
     //       currSlice->partArr[0].bitstream->byte_pos, end_of_slice);
 
     if (recode_macroblock == FALSE)       // The final processing of the macroblock has been done
     {
-      p_Img->SumFrameQP += currMB->qp;
-      CurrentMbAddr = FmoGetNextMBNr (p_Img, CurrentMbAddr);
+      p_Vid->SumFrameQP += currMB->qp;
+      CurrentMbAddr = FmoGetNextMBNr (p_Vid, CurrentMbAddr);
       if (CurrentMbAddr == -1)   // end of slice
       {
         // printf ("FMO End of Slice Group detected, current MBs %d, force end of slice\n", NumberOfCodedMBs+1);
@@ -519,9 +520,9 @@ int encode_one_slice (ImageParameters *p_Img, InputParameters *p_Inp, int SliceG
     else
     {
       //!Go back to the previous MB to recode it
-      p_Img->current_mb_nr = FmoGetPreviousMBNr(p_Img, p_Img->current_mb_nr);
-      p_Img->NumberofCodedMacroBlocks--;
-      if(p_Img->current_mb_nr == -1 )   // The first MB of the slice group  is too big,
+      p_Vid->current_mb_nr = FmoGetPreviousMBNr(p_Vid, p_Vid->current_mb_nr);
+      p_Vid->NumberofCodedMacroBlocks--;
+      if(p_Vid->current_mb_nr == -1 )   // The first MB of the slice group  is too big,
         // which means it's impossible to encode picture using current slice bits restriction
       {
         snprintf (errortext, ET_SIZE, "Error encoding first MB with specified parameter, bits of current MB may be too big");
@@ -531,14 +532,14 @@ int encode_one_slice (ImageParameters *p_Img, InputParameters *p_Inp, int SliceG
   }
 
 
-  if ((p_Inp->WPIterMC) && (p_Img->frameOffsetAvail == 0) && p_Img->nal_reference_idc)
+  if ((p_Inp->WPIterMC) && (p_Vid->frameOffsetAvail == 0) && p_Vid->nal_reference_idc)
   {
-    compute_offset(p_Img);
+    compute_offset(p_Vid);
   }
-  p_Img->num_ref_idx_l0_active = currSlice->num_ref_idx_active[LIST_0];
-  p_Img->num_ref_idx_l1_active = currSlice->num_ref_idx_active[LIST_1];
+  p_Vid->num_ref_idx_l0_active = currSlice->num_ref_idx_active[LIST_0];
+  p_Vid->num_ref_idx_l1_active = currSlice->num_ref_idx_active[LIST_1];
 
-  terminate_slice (currMB, (NumberOfCodedMBs + TotalCodedMBs >= (int)p_Img->PicSizeInMbs), cur_stats );
+  terminate_slice (currMB, (NumberOfCodedMBs + TotalCodedMBs >= (int)p_Vid->PicSizeInMbs), cur_stats );
   return NumberOfCodedMBs;
 }
 
@@ -551,65 +552,65 @@ int encode_one_slice (ImageParameters *p_Img, InputParameters *p_Inp, int SliceG
 *   returns the number of coded MBs in the SLice
 ************************************************************************
 */
-int encode_one_slice_MBAFF (ImageParameters *p_Img, InputParameters *p_Inp, int SliceGroupId, int TotalCodedMBs)
+int encode_one_slice_MBAFF (VideoParameters *p_Vid, int SliceGroupId, int TotalCodedMBs)
 {
+  InputParameters *p_Inp = p_Vid->p_Inp;
   Boolean end_of_slice = FALSE;
   Boolean recode_macroblock;
-  Boolean prev_recode_mb = FALSE;
   int len;
   int NumberOfCodedMBs = 0;
   Macroblock* currMB      = NULL;
   int CurrentMbAddr;
   double FrameRDCost = DBL_MAX, FieldRDCost = DBL_MAX;
-  StatParameters *cur_stats = &p_Img->enc_picture->stats;
+  StatParameters *cur_stats = &p_Vid->enc_picture->stats;
   Slice *currSlice = NULL;
 
-  p_Img->Motion_Selected = 0;
+  p_Vid->Motion_Selected = 0;
 
   if( IS_INDEPENDENT(p_Inp) )
   {
-    change_plane_JV( p_Img, p_Img->colour_plane_id );
+    change_plane_JV( p_Vid, p_Vid->colour_plane_id );
   }
 
-  p_Img->cod_counter = 0;
+  p_Vid->cod_counter = 0;
 
-  CurrentMbAddr = FmoGetFirstMacroblockInSlice (p_Img, SliceGroupId);
-  // printf ("\n\nEncode_one_slice: PictureID %d SliceGroupId %d  SliceID %d  FirstMB %d \n", p_Img->frame_no, SliceGroupId, p_Img->current_slice_nr, CurrentMbInScanOrder);
+  CurrentMbAddr = FmoGetFirstMacroblockInSlice (p_Vid, SliceGroupId);
+  // printf ("\n\nEncode_one_slice: PictureID %d SliceGroupId %d  SliceID %d  FirstMB %d \n", p_Vid->frame_no, SliceGroupId, p_Vid->current_slice_nr, CurrentMbInScanOrder);
 
-  init_slice (p_Img, p_Inp, &currSlice, CurrentMbAddr);
+  init_slice (p_Vid, &currSlice, CurrentMbAddr);
   // Initialize quantization functions based on rounding/quantization method
   // Done here since we may wish to disable adaptive rounding on occasional intervals (even at a frame or gop level).
   init_quant_4x4   (currSlice);
   init_quant_8x8   (currSlice);
   init_quant_Chroma(currSlice);
 
-  currSlice->SetLagrangianMultipliers(p_Img, p_Inp);
+  currSlice->SetLagrangianMultipliers(p_Vid, p_Inp);
 
   if (currSlice->symbol_mode == CABAC)
   {
     SetCtxModelNumber (currSlice);
   }
 
-  p_Img->checkref = (short) (p_Inp->rdopt && p_Inp->RestrictRef && (currSlice->slice_type == P_SLICE || currSlice->slice_type == SP_SLICE));
+  p_Vid->checkref = (short) (p_Inp->rdopt && p_Inp->RestrictRef && (currSlice->slice_type == P_SLICE || currSlice->slice_type == SP_SLICE));
 
   len = start_slice (currSlice, cur_stats);
 
   // Rate control
   if (p_Inp->RCEnable)
-    rc_store_slice_header_bits( p_Img, p_Inp, len );
+    rc_store_slice_header_bits( p_Vid, p_Inp, len );
 
   // Update statistics
-  p_Img->p_Stats->bit_slice += len;
-  cur_stats->bit_use_header[p_Img->type] += len;
+  p_Vid->p_Stats->bit_slice += len;
+  cur_stats->bit_use_header[p_Vid->type] += len;
 
   while (end_of_slice == FALSE) // loop over macroblocks
   {
 
-    if (p_Img->AdaptiveRounding && p_Inp->AdaptRndPeriod && (p_Img->current_mb_nr % p_Inp->AdaptRndPeriod == 0))
+    if (p_Vid->AdaptiveRounding && p_Inp->AdaptRndPeriod && (p_Vid->current_mb_nr % p_Inp->AdaptRndPeriod == 0))
     {
-      CalculateOffset4x4Param(p_Img, p_Inp);
+      CalculateOffset4x4Param(p_Vid);
       if(p_Inp->Transform8x8Mode)
-        CalculateOffset8x8Param(p_Img, p_Inp);
+        CalculateOffset8x8Param(p_Vid);
     }
 
 
@@ -641,36 +642,36 @@ int encode_one_slice_MBAFF (ImageParameters *p_Img, InputParameters *p_Inp, int 
     //!   2. would it be an option to allocate Bitstreams with zero data in them (or copy the
     //!      already generated bitstream) for the "test coding"?
 
-    p_Img->write_macroblock = FALSE;
+    p_Vid->write_macroblock = FALSE;
     if (p_Inp->MbInterlace == ADAPTIVE_CODING || p_Inp->MbInterlace == FRAME_MB_PAIR_CODING)
     {
       //================ code MB pair as frame MB ================
       //----------------------------------------------------------
       recode_macroblock = FALSE;
       //set mv limits to frame type
-      update_mv_limits(p_Img, p_Inp, FALSE);
+      update_mv_limits(p_Vid, FALSE);
 
-      p_Img->field_mode = FALSE;  // MB coded as frame
-      p_Img->top_field  = FALSE;   // Set top field to 0
+      p_Vid->field_mode = FALSE;  // MB coded as frame
+      p_Vid->top_field  = FALSE;   // Set top field to 0
 
       //Rate control
-      p_Img->write_macroblock = FALSE;
-      p_Img->bot_MB = FALSE;
+      p_Vid->write_macroblock = FALSE;
+      p_Vid->bot_MB = FALSE;
 
       // save RC state only when it is going to change
       if ( p_Inp->RCEnable && p_Inp->RCUpdateMode <= MAX_RC_MODE )
       {
         if ( p_Inp->MbInterlace == ADAPTIVE_CODING
-          && p_Img->NumberofCodedMacroBlocks > 0 && (p_Img->NumberofCodedMacroBlocks % p_Img->BasicUnit) == 0 )
-          rc_copy_quadratic( p_Img, p_Inp, p_Img->p_rc_quad_init, p_Img->p_rc_quad ); // save initial RC status
+          && p_Vid->NumberofCodedMacroBlocks > 0 && (p_Vid->NumberofCodedMacroBlocks % p_Vid->BasicUnit) == 0 )
+          rc_copy_quadratic( p_Vid, p_Inp, p_Vid->p_rc_quad_init, p_Vid->p_rc_quad ); // save initial RC status
         if ( p_Inp->MbInterlace == ADAPTIVE_CODING )
-          rc_copy_generic( p_Img, p_Img->p_rc_gen_init, p_Img->p_rc_gen ); // save initial RC status
+          rc_copy_generic( p_Vid, p_Vid->p_rc_gen_init, p_Vid->p_rc_gen ); // save initial RC status
       }
 
       start_macroblock (currSlice, &currMB, CurrentMbAddr, FALSE);
 
       currSlice->rddata = &currSlice->rddata_top_frame_mb; // store data in top frame MB
-      p_Img->masterQP = p_Img->qp;
+      p_Vid->masterQP = p_Vid->qp;
       currSlice->encode_one_macroblock (currMB);   // code the MB as frame
       end_encode_one_macroblock(currMB);
 
@@ -679,25 +680,25 @@ int encode_one_slice_MBAFF (ImageParameters *p_Img, InputParameters *p_Inp, int 
       //***   Top MB coded as frame MB ***//
 
       //Rate control
-      p_Img->bot_MB = TRUE; //for Rate control
+      p_Vid->bot_MB = TRUE; //for Rate control
 
       // go to the bottom MB in the MB pair
-      p_Img->field_mode = FALSE;  // MB coded as frame  //GB
+      p_Vid->field_mode = FALSE;  // MB coded as frame  //GB
 
       start_macroblock (currSlice, &currMB, CurrentMbAddr + 1, FALSE);
       currSlice->rddata = &currSlice->rddata_bot_frame_mb; // store data in top frame MB
-      p_Img->masterQP = p_Img->qp;
+      p_Vid->masterQP = p_Vid->qp;
       currSlice->encode_one_macroblock (currMB);         // code the MB as frame
       end_encode_one_macroblock(currMB);
 
       if ( p_Inp->RCEnable && p_Inp->RCUpdateMode <= MAX_RC_MODE )
       {
         if ( p_Inp->MbInterlace == ADAPTIVE_CODING
-          && p_Img->NumberofCodedMacroBlocks > 0 && (p_Img->NumberofCodedMacroBlocks % p_Img->BasicUnit) == 0 )
-          rc_copy_quadratic( p_Img, p_Inp, p_Img->p_rc_quad_best, p_Img->p_rc_quad ); // restore initial RC status
+          && p_Vid->NumberofCodedMacroBlocks > 0 && (p_Vid->NumberofCodedMacroBlocks % p_Vid->BasicUnit) == 0 )
+          rc_copy_quadratic( p_Vid, p_Inp, p_Vid->p_rc_quad_best, p_Vid->p_rc_quad ); // restore initial RC status
 
         if ( p_Inp->MbInterlace == ADAPTIVE_CODING )
-          rc_copy_generic( p_Img, p_Img->p_rc_gen_best, p_Img->p_rc_gen ); // save frame RC stats
+          rc_copy_generic( p_Vid, p_Vid->p_rc_gen_best, p_Vid->p_rc_gen ); // save frame RC stats
       }
 
       FrameRDCost += currSlice->rddata->min_rdcost;
@@ -707,15 +708,14 @@ int encode_one_slice_MBAFF (ImageParameters *p_Img, InputParameters *p_Inp, int 
     if ((p_Inp->MbInterlace == ADAPTIVE_CODING) || (p_Inp->MbInterlace == FIELD_CODING))
     {
       //Rate control
-      p_Img->bot_MB = FALSE;
+      p_Vid->bot_MB = FALSE;
       //set mv limits to field type
-      update_mv_limits(p_Img, p_Inp, TRUE);
+      update_mv_limits(p_Vid, TRUE);
 
       //=========== start coding the MB pair as a field MB pair =============
       //---------------------------------------------------------------------
-      p_Img->field_mode = TRUE;  // MB coded as field
-      p_Img->top_field = TRUE;   // Set top field to 1
-      p_Img->buf_cycle <<= 1;
+      p_Vid->field_mode = TRUE;  // MB coded as field
+      p_Vid->top_field = TRUE;   // Set top field to 1
       p_Inp->num_ref_frames <<= 1;
       currSlice->num_ref_idx_active[LIST_0] <<= 1;
       currSlice->num_ref_idx_active[LIST_0] += 1;
@@ -723,30 +723,30 @@ int encode_one_slice_MBAFF (ImageParameters *p_Img, InputParameters *p_Inp, int 
       if ( p_Inp->RCEnable && p_Inp->RCUpdateMode <= MAX_RC_MODE )
       {
         if ( p_Inp->MbInterlace == ADAPTIVE_CODING
-          && p_Img->NumberofCodedMacroBlocks > 0 && (p_Img->NumberofCodedMacroBlocks % p_Img->BasicUnit) == 0 )
-          rc_copy_quadratic( p_Img, p_Inp, p_Img->p_rc_quad, p_Img->p_rc_quad_init ); // restore initial RC status
+          && p_Vid->NumberofCodedMacroBlocks > 0 && (p_Vid->NumberofCodedMacroBlocks % p_Vid->BasicUnit) == 0 )
+          rc_copy_quadratic( p_Vid, p_Inp, p_Vid->p_rc_quad, p_Vid->p_rc_quad_init ); // restore initial RC status
 
         if ( p_Inp->MbInterlace == ADAPTIVE_CODING )
-          rc_copy_generic( p_Img, p_Img->p_rc_gen, p_Img->p_rc_gen_init ); // reset RC stats
+          rc_copy_generic( p_Vid, p_Vid->p_rc_gen, p_Vid->p_rc_gen_init ); // reset RC stats
       }
 
       start_macroblock (currSlice, &currMB, CurrentMbAddr, TRUE);
 
       currSlice->rddata = &currSlice->rddata_top_field_mb; // store data in top frame MB
       //        TopFieldIsSkipped = 0;        // set the top field MB skipped flag to 0
-      p_Img->masterQP = p_Img->qp;
+      p_Vid->masterQP = p_Vid->qp;
       currSlice->encode_one_macroblock (currMB);         // code the MB as field
       end_encode_one_macroblock(currMB);
 
       FieldRDCost = currSlice->rddata->min_rdcost;
       //***   Top MB coded as field MB ***//
       //Rate control
-      p_Img->bot_MB = TRUE;//for Rate control
+      p_Vid->bot_MB = TRUE;//for Rate control
 
-      p_Img->top_field = FALSE;   // Set top field to 0
+      p_Vid->top_field = FALSE;   // Set top field to 0
       start_macroblock (currSlice, &currMB, CurrentMbAddr+1, TRUE);
       currSlice->rddata = &currSlice->rddata_bot_field_mb; // store data in top frame MB
-      p_Img->masterQP = p_Img->qp;
+      p_Vid->masterQP = p_Vid->qp;
       currSlice->encode_one_macroblock (currMB);         // code the MB as field
       end_encode_one_macroblock(currMB);
 
@@ -755,17 +755,16 @@ int encode_one_slice_MBAFF (ImageParameters *p_Img, InputParameters *p_Inp, int 
     }
 
     //Rate control
-    p_Img->write_mbaff_frame = 0;  //Rate control
+    p_Vid->write_mbaff_frame = 0;  //Rate control
 
     //=========== decide between frame/field MB pair ============
     //-----------------------------------------------------------
     if ( ((p_Inp->MbInterlace == ADAPTIVE_CODING) && (FrameRDCost < FieldRDCost)) || p_Inp->MbInterlace == FRAME_MB_PAIR_CODING )
     {
-      p_Img->field_mode = FALSE;
-      p_Img->MBPairIsField = FALSE;
+      p_Vid->field_mode = FALSE;
+      p_Vid->MBPairIsField = FALSE;
       if ( p_Inp->MbInterlace != FRAME_MB_PAIR_CODING )
       {
-        p_Img->buf_cycle >>= 1;
         p_Inp->num_ref_frames >>= 1;
         currSlice->num_ref_idx_active[LIST_0] -= 1;
         currSlice->num_ref_idx_active[LIST_0] >>= 1;
@@ -774,47 +773,47 @@ int encode_one_slice_MBAFF (ImageParameters *p_Img, InputParameters *p_Inp, int 
       if ( p_Inp->RCEnable && p_Inp->RCUpdateMode <= MAX_RC_MODE )
       {
         if ( p_Inp->MbInterlace == ADAPTIVE_CODING
-          && p_Img->NumberofCodedMacroBlocks > 0 && (p_Img->NumberofCodedMacroBlocks % p_Img->BasicUnit) == 0 )
-          rc_copy_quadratic( p_Img, p_Inp, p_Img->p_rc_quad, p_Img->p_rc_quad_best ); // restore initial RC status
+          && p_Vid->NumberofCodedMacroBlocks > 0 && (p_Vid->NumberofCodedMacroBlocks % p_Vid->BasicUnit) == 0 )
+          rc_copy_quadratic( p_Vid, p_Inp, p_Vid->p_rc_quad, p_Vid->p_rc_quad_best ); // restore initial RC status
 
         if ( p_Inp->MbInterlace == ADAPTIVE_CODING )
-          rc_copy_generic( p_Img, p_Img->p_rc_gen, p_Img->p_rc_gen_best ); // restore frame RC stats
+          rc_copy_generic( p_Vid, p_Vid->p_rc_gen, p_Vid->p_rc_gen_best ); // restore frame RC stats
       }
 
       //Rate control
-      p_Img->write_mbaff_frame = 1;  //for Rate control
+      p_Vid->write_mbaff_frame = 1;  //for Rate control
     }
     else
     {
-      p_Img->field_mode = TRUE;
-      p_Img->MBPairIsField = TRUE;
+      p_Vid->field_mode = TRUE;
+      p_Vid->MBPairIsField = TRUE;
     }
 
     //Rate control
-    p_Img->write_macroblock = TRUE;//Rate control
+    p_Vid->write_macroblock = TRUE;//Rate control
 
-    if (p_Img->MBPairIsField)
-      p_Img->top_field = TRUE;
+    if (p_Vid->MBPairIsField)
+      p_Vid->top_field = TRUE;
     else
-      p_Img->top_field = FALSE;
+      p_Vid->top_field = FALSE;
 
     //Rate control
-    p_Img->bot_MB = FALSE;// for Rate control
+    p_Vid->bot_MB = FALSE;// for Rate control
 
     // go back to the Top MB in the MB pair
-    start_macroblock (currSlice, &currMB, CurrentMbAddr, p_Img->field_mode);
+    start_macroblock (currSlice, &currMB, CurrentMbAddr, p_Vid->field_mode);
 
-    currSlice->rddata =  p_Img->field_mode ? &currSlice->rddata_top_field_mb : &currSlice->rddata_top_frame_mb;
+    currSlice->rddata =  p_Vid->field_mode ? &currSlice->rddata_top_field_mb : &currSlice->rddata_top_frame_mb;
     copy_rdopt_data  (currMB);  // copy the MB data for Top MB from the temp buffers
-    write_macroblock (currMB, 1, prev_recode_mb);     // write the Top MB data to the bitstream
+    write_macroblock (currMB, 1);     // write the Top MB data to the bitstream
     end_macroblock   (currMB, &end_of_slice, &recode_macroblock);     // done coding the Top MB
-    prev_recode_mb = recode_macroblock;
+    currMB->prev_recode_mb = recode_macroblock;
 
     if (recode_macroblock == FALSE)       // The final processing of the macroblock has been done
     {
-      p_Img->SumFrameQP += currMB->qp;
+      p_Vid->SumFrameQP += currMB->qp;
 
-      CurrentMbAddr = FmoGetNextMBNr (p_Img, CurrentMbAddr);
+      CurrentMbAddr = FmoGetNextMBNr (p_Vid, CurrentMbAddr);
       if (CurrentMbAddr == -1)   // end of slice
       {
         end_of_slice = TRUE;
@@ -823,22 +822,22 @@ int encode_one_slice_MBAFF (ImageParameters *p_Img, InputParameters *p_Inp, int 
       next_macroblock (currMB);
 
       //Rate control
-      p_Img->bot_MB = TRUE;//for Rate control
+      p_Vid->bot_MB = TRUE;//for Rate control
       // go to the Bottom MB in the MB pair
-      p_Img->top_field = FALSE;
-      start_macroblock (currSlice, &currMB, CurrentMbAddr, p_Img->field_mode);
+      p_Vid->top_field = FALSE;
+      start_macroblock (currSlice, &currMB, CurrentMbAddr, p_Vid->field_mode);
 
-      currSlice->rddata = p_Img->field_mode ? &currSlice->rddata_bot_field_mb : &currSlice->rddata_bot_frame_mb;
+      currSlice->rddata = p_Vid->field_mode ? &currSlice->rddata_bot_field_mb : &currSlice->rddata_bot_frame_mb;
       copy_rdopt_data  (currMB);  // copy the MB data for Bottom MB from the temp buffers
 
-      write_macroblock (currMB, 0, prev_recode_mb);     // write the Bottom MB data to the bitstream
+      write_macroblock (currMB, 0);     // write the Bottom MB data to the bitstream
       end_macroblock   (currMB, &end_of_slice, &recode_macroblock);     // done coding the Top MB
-      prev_recode_mb = recode_macroblock;
+      currMB->prev_recode_mb = recode_macroblock;
       if (recode_macroblock == FALSE)       // The final processing of the macroblock has been done
       {
-        p_Img->SumFrameQP += currMB->qp;
+        p_Vid->SumFrameQP += currMB->qp;
 
-        CurrentMbAddr = FmoGetNextMBNr (p_Img, CurrentMbAddr);
+        CurrentMbAddr = FmoGetNextMBNr (p_Vid, CurrentMbAddr);
         if (CurrentMbAddr == -1)   // end of slice
         {
           end_of_slice = TRUE;
@@ -849,9 +848,9 @@ int encode_one_slice_MBAFF (ImageParameters *p_Img, InputParameters *p_Inp, int 
       else
       {
         //Go back to the beginning of the macroblock pair to recode it
-        p_Img->current_mb_nr = FmoGetPreviousMBNr(p_Img, p_Img->current_mb_nr);
-        p_Img->NumberofCodedMacroBlocks -= 2;
-        if(p_Img->current_mb_nr == -1 )   // The first MB of the slice group  is too big,
+        p_Vid->current_mb_nr = FmoGetPreviousMBNr(p_Vid, p_Vid->current_mb_nr);
+        p_Vid->NumberofCodedMacroBlocks -= 2;
+        if(p_Vid->current_mb_nr == -1 )   // The first MB of the slice group  is too big,
           // which means it's impossible to encode picture using current slice bits restriction
         {
           snprintf (errortext, ET_SIZE, "Error encoding first MB with specified parameter, bits of current MB may be too big");
@@ -862,9 +861,9 @@ int encode_one_slice_MBAFF (ImageParameters *p_Img, InputParameters *p_Inp, int 
     else
     {
       //!Go back to the previous MB to recode it
-      p_Img->current_mb_nr = FmoGetPreviousMBNr(p_Img, p_Img->current_mb_nr);
-      p_Img->NumberofCodedMacroBlocks--;
-      if(p_Img->current_mb_nr == -1 )   // The first MB of the slice group  is too big,
+      p_Vid->current_mb_nr = FmoGetPreviousMBNr(p_Vid, p_Vid->current_mb_nr);
+      p_Vid->NumberofCodedMacroBlocks--;
+      if(p_Vid->current_mb_nr == -1 )   // The first MB of the slice group  is too big,
         // which means it's impossible to encode picture using current slice bits restriction
       {
         snprintf (errortext, ET_SIZE, "Error encoding first MB with specified parameter, bits of current MB may be too big");
@@ -872,29 +871,28 @@ int encode_one_slice_MBAFF (ImageParameters *p_Img, InputParameters *p_Inp, int 
       }
     }
 
-    if (p_Img->MBPairIsField)    // if MB Pair was coded as field the buffer size variables back to frame mode
+    if (p_Vid->MBPairIsField)    // if MB Pair was coded as field the buffer size variables back to frame mode
     {
-      p_Img->buf_cycle >>= 1;
       p_Inp->num_ref_frames >>= 1;
       currSlice->num_ref_idx_active[LIST_0] -= 1;
       currSlice->num_ref_idx_active[LIST_0] >>= 1;
     }
 
-    p_Img->field_mode = p_Img->top_field = FALSE; // reset to frame mode
+    p_Vid->field_mode = p_Vid->top_field = FALSE; // reset to frame mode
 
     if ( !end_of_slice )
     {
-      assert( CurrentMbAddr < (int)p_Img->PicSizeInMbs );
+      assert( CurrentMbAddr < (int)p_Vid->PicSizeInMbs );
       assert( CurrentMbAddr >= 0 );
-      if (CurrentMbAddr == FmoGetLastCodedMBOfSliceGroup (p_Img, FmoMB2SliceGroup (p_Img, CurrentMbAddr)))
+      if (CurrentMbAddr == FmoGetLastCodedMBOfSliceGroup (p_Vid, FmoMB2SliceGroup (p_Vid, CurrentMbAddr)))
         end_of_slice = TRUE;        // just in case it doesn't get set in end_macroblock
     }
   }
 
-  p_Img->num_ref_idx_l0_active = currSlice->num_ref_idx_active[LIST_0];
-  p_Img->num_ref_idx_l1_active = currSlice->num_ref_idx_active[LIST_1];
+  p_Vid->num_ref_idx_l0_active = currSlice->num_ref_idx_active[LIST_0];
+  p_Vid->num_ref_idx_l1_active = currSlice->num_ref_idx_active[LIST_1];
 
-  terminate_slice (currMB, (NumberOfCodedMBs + TotalCodedMBs >= (int)p_Img->PicSizeInMbs), cur_stats );
+  terminate_slice (currMB, (NumberOfCodedMBs + TotalCodedMBs >= (int)p_Vid->PicSizeInMbs), cur_stats );
   return NumberOfCodedMBs;
 }
 
@@ -903,9 +901,10 @@ static void setup_cabac(Slice *currSlice, char *listXsize)
   seq_parameter_set_rbsp_t *active_sps = currSlice->active_sps;
   int i; 
 
-  if (currSlice->slice_type == I_SLICE || currSlice->slice_type == SI_SLICE)
+  if (currSlice->slice_type == I_SLICE)
   {
     currSlice->set_modes_and_reframe = set_modes_and_reframe;
+    currSlice->store_8x8_motion_vectors = NULL;
     currSlice->writeMB_Skip         = NULL;
     currSlice->writeMB_typeInfo     = writeMB_I_typeInfo_CABAC;
     currSlice->writeB8_typeInfo     = writeB8_typeInfo_CABAC;
@@ -918,12 +917,13 @@ static void setup_cabac(Slice *currSlice, char *listXsize)
   }
   else if (currSlice->slice_type == B_SLICE)
   {
-    currSlice->set_modes_and_reframe = set_modes_and_reframe_b_slice;
-    currSlice->writeMB_Skip         = writeMB_Bskip_flagInfo_CABAC;
-    currSlice->writeMB_typeInfo     = writeMB_B_typeInfo_CABAC;
-    currSlice->writeB8_typeInfo     = writeB8_B_typeInfo_CABAC;
-    currSlice->writeMotionInfo2NAL  = write_bslice_motion_info_to_NAL;
-    currSlice->write_MB_layer       = writeMBLayerBSlice;
+    currSlice->set_modes_and_reframe    = set_modes_and_reframe_b_slice;
+    currSlice->store_8x8_motion_vectors = store_8x8_motion_vectors_b_slice;
+    currSlice->writeMB_Skip             = writeMB_Bskip_flagInfo_CABAC;
+    currSlice->writeMB_typeInfo         = writeMB_B_typeInfo_CABAC;
+    currSlice->writeB8_typeInfo         = writeB8_B_typeInfo_CABAC;
+    currSlice->writeMotionInfo2NAL      = write_bslice_motion_info_to_NAL;
+    currSlice->write_MB_layer           = writeMBLayerBSlice;
     for (i=0; i<6; i++)
     {
       switch (listXsize[i])
@@ -942,6 +942,7 @@ static void setup_cabac(Slice *currSlice, char *listXsize)
   else
   {
     currSlice->set_modes_and_reframe = set_modes_and_reframe_p_slice;
+    currSlice->store_8x8_motion_vectors = store_8x8_motion_vectors_p_slice;
     currSlice->writeMB_Skip         = writeMB_Pskip_flagInfo_CABAC;
     currSlice->writeMB_typeInfo     = writeMB_P_typeInfo_CABAC;
     currSlice->writeB8_typeInfo     = writeB8_typeInfo_CABAC;
@@ -1014,18 +1015,21 @@ static void setup_cavlc(Slice *currSlice, char *listXsize)
   if (currSlice->slice_type == I_SLICE || currSlice->slice_type == SI_SLICE)
   {
     currSlice->set_modes_and_reframe = set_modes_and_reframe;
+    currSlice->store_8x8_motion_vectors = NULL;
     currSlice->writeMotionInfo2NAL  = NULL;
     currSlice->write_MB_layer       = writeMBLayerISlice;
   }
   else if (currSlice->slice_type == B_SLICE)
   {
     currSlice->set_modes_and_reframe = set_modes_and_reframe_b_slice;
+    currSlice->store_8x8_motion_vectors = store_8x8_motion_vectors_b_slice;
     currSlice->writeMotionInfo2NAL  = write_bslice_motion_info_to_NAL;
     currSlice->write_MB_layer       = writeMBLayerBSlice;
   }
   else
   {
     currSlice->set_modes_and_reframe = set_modes_and_reframe_p_slice;
+    currSlice->store_8x8_motion_vectors = store_8x8_motion_vectors_p_slice;
     currSlice->writeMotionInfo2NAL  = write_pslice_motion_info_to_NAL;
     currSlice->write_MB_layer       = writeMBLayerPSlice;
   }
@@ -1052,70 +1056,71 @@ static void setup_cavlc(Slice *currSlice, char *listXsize)
  *  \par Side effects:
  *      Adds slice/partition header symbols to the symbol buffer
  *      increments Picture->no_slices, allocates memory for the
- *      slice, sets p_Img->currSlice
+ *      slice, sets p_Vid->currSlice
  ************************************************************************
  */
-void init_slice (ImageParameters *p_Img, InputParameters *p_Inp, Slice **currSlice, int start_mb_addr)
+void init_slice (VideoParameters *p_Vid, Slice **currSlice, int start_mb_addr)
 {
+  InputParameters *p_Inp = p_Vid->p_Inp;
   int i,j;
-  seq_parameter_set_rbsp_t *active_sps = p_Img->active_sps;
-  Picture *currPic = p_Img->currentPicture;
+  seq_parameter_set_rbsp_t *active_sps = p_Vid->active_sps;
+  Picture *currPic = p_Vid->currentPicture;
   DataPartition *dataPart;
   Bitstream *currStream;
-  int active_ref_lists = (p_Img->MbaffFrameFlag) ? 6 : 2;
+  int active_ref_lists = (p_Vid->mb_aff_frame_flag) ? 6 : 2;
 
-  p_Img->current_mb_nr = start_mb_addr;
+  p_Vid->current_mb_nr = start_mb_addr;
 
-  // Allocate new Slice in the current Picture, and set p_Img->currentSlice
+  // Allocate new Slice in the current Picture, and set p_Vid->currentSlice
   assert (currPic != NULL);
   currPic->no_slices++;
 
   if (currPic->no_slices >= MAXSLICEPERPICTURE)
     error ("Too many slices per picture, increase MAXSLICEPERPICTURE in global.h.", -1);
 
-  currPic->slices[currPic->no_slices - 1] = malloc_slice(p_Img, p_Inp);
+  currPic->slices[currPic->no_slices - 1] = malloc_slice(p_Vid, p_Inp);
   *currSlice = currPic->slices[currPic->no_slices-1];
 
-  p_Img->currentSlice = *currSlice;
+  p_Vid->currentSlice = *currSlice;
   // Using this trick we can basically reference back to the image and input parameter structures
-  (*currSlice)->p_Img             = p_Img;
+  (*currSlice)->p_Vid             = p_Vid;
   (*currSlice)->p_Inp             = p_Inp;
   (*currSlice)->active_sps        = active_sps;
-  (*currSlice)->active_pps        = p_Img->active_pps;
+  (*currSlice)->active_pps        = p_Vid->active_pps;
 
-  //printf("Value %d\n", ((ImageParameters *)(*currSlice)->p_Img)->frame_no);
+  //printf("Value %d\n", ((VideoParameters *)(*currSlice)->p_Vid)->frame_no);
 
-  (*currSlice)->picture_id        = (p_Img->frame_no & 0xFF); // % 255
-  (*currSlice)->slice_nr          = p_Img->current_slice_nr;
-  (*currSlice)->idr_flag          = p_Img->currentPicture->idr_flag;
-  (*currSlice)->slice_type        = p_Img->type;
-  (*currSlice)->frame_no          = p_Img->frame_no;
-  (*currSlice)->frame_num         = p_Img->frame_num;
-  (*currSlice)->max_frame_num     = p_Img->max_frame_num;
-  (*currSlice)->framepoc          = p_Img->framepoc;
-  (*currSlice)->ThisPOC           = p_Img->ThisPOC;      
-  (*currSlice)->qp                = p_Img->qp;
+  (*currSlice)->picture_id        = (p_Vid->frame_no & 0xFF); // % 255
+  (*currSlice)->slice_nr          = p_Vid->current_slice_nr;
+  (*currSlice)->idr_flag          = p_Vid->currentPicture->idr_flag;
+  (*currSlice)->slice_type        = p_Vid->type;
+  (*currSlice)->frame_no          = p_Vid->frame_no;
+  (*currSlice)->frame_num         = p_Vid->frame_num;
+  (*currSlice)->max_frame_num     = p_Vid->max_frame_num;
+  (*currSlice)->framepoc          = p_Vid->framepoc;
+  (*currSlice)->ThisPOC           = p_Vid->ThisPOC;
+  (*currSlice)->qp                = p_Vid->p_curr_frm_struct->qp;
   (*currSlice)->start_mb_nr       = start_mb_addr;
-  (*currSlice)->colour_plane_id   = p_Img->colour_plane_id;
+  (*currSlice)->colour_plane_id   = p_Vid->colour_plane_id;
 
-  (*currSlice)->si_frame_indicator =  p_Img->si_frame_indicator;
-  (*currSlice)->sp2_frame_indicator = p_Img->sp2_frame_indicator;
+  (*currSlice)->si_frame_indicator =  p_Vid->type == SI_SLICE ? 1 : 0;
+  (*currSlice)->sp2_frame_indicator = p_Vid->sp2_frame_indicator;
 
-  (*currSlice)->P444_joined       = p_Img->P444_joined;
+  (*currSlice)->P444_joined       = p_Vid->P444_joined;
   (*currSlice)->disthres          = p_Inp->disthres;
   (*currSlice)->UseRDOQuant       = p_Inp->UseRDOQuant;
   (*currSlice)->RDOQ_QP_Num       = p_Inp->RDOQ_QP_Num;
   (*currSlice)->Transform8x8Mode  = p_Inp->Transform8x8Mode;
 
   (*currSlice)->slice_too_big     = dummy_slice_too_big;  
-  (*currSlice)->width_blk         = p_Img->width_blk;
-  (*currSlice)->height_blk        = p_Img->height_blk;
+  (*currSlice)->width_blk         = p_Vid->width_blk;
+  (*currSlice)->height_blk        = p_Vid->height_blk;
   (*currSlice)->partition_mode    = (short) p_Inp->partition_mode;
-  (*currSlice)->PicSizeInMbs      = p_Img->PicSizeInMbs;
-  (*currSlice)->num_blk8x8_uv     = p_Img->num_blk8x8_uv;
-  (*currSlice)->nal_reference_idc = p_Img->nal_reference_idc;
-  (*currSlice)->bitdepth_luma     = p_Img->bitdepth_luma;
-  (*currSlice)->bitdepth_chroma   = p_Img->bitdepth_chroma;  
+  (*currSlice)->PicSizeInMbs      = p_Vid->PicSizeInMbs;
+  (*currSlice)->num_blk8x8_uv     = p_Vid->num_blk8x8_uv;
+  (*currSlice)->nal_reference_idc = p_Vid->nal_reference_idc;
+  (*currSlice)->bitdepth_luma     = p_Vid->bitdepth_luma;
+  (*currSlice)->bitdepth_chroma   = p_Vid->bitdepth_chroma;  
 
   for (i = 0; i < (*currSlice)->max_part_nr; i++)
   {
@@ -1127,23 +1132,23 @@ void init_slice (ImageParameters *p_Img, InputParameters *p_Inp, Slice **currSli
     currStream->byte_buf = 0;
   }
 
-  (*currSlice)->direct_spatial_mv_pred_flag  = p_Img->direct_spatial_mv_pred_flag;
-  (*currSlice)->MbaffFrameFlag = p_Img->MbaffFrameFlag;
-  (*currSlice)->structure      = p_Img->structure;
+  (*currSlice)->direct_spatial_mv_pred_flag  = p_Vid->direct_spatial_mv_pred_flag;
+  (*currSlice)->mb_aff_frame_flag = p_Vid->mb_aff_frame_flag;
+  (*currSlice)->structure      = p_Vid->structure;
 
-  (*currSlice)->num_ref_idx_active[LIST_0] = p_Img->active_pps->num_ref_idx_l0_active_minus1 + 1;
-  (*currSlice)->num_ref_idx_active[LIST_1] = p_Img->active_pps->num_ref_idx_l1_active_minus1 + 1;
+  (*currSlice)->num_ref_idx_active[LIST_0] = p_Vid->active_pps->num_ref_idx_l0_active_minus1 + 1;
+  (*currSlice)->num_ref_idx_active[LIST_1] = p_Vid->active_pps->num_ref_idx_l1_active_minus1 + 1;
 
-  (*currSlice)->DFDisableIdc    = p_Img->DFDisableIdc;
-  (*currSlice)->DFAlphaC0Offset = p_Img->DFAlphaC0Offset;
-  (*currSlice)->DFBetaOffset    = p_Img->DFBetaOffset;
+  (*currSlice)->DFDisableIdc    = p_Vid->DFDisableIdc;
+  (*currSlice)->DFAlphaC0Offset = p_Vid->DFAlphaC0Offset;
+  (*currSlice)->DFBetaOffset    = p_Vid->DFBetaOffset;
 
   // primary and redundant slices: number of references overriding.
   if(p_Inp->redundant_pic_flag)
   {
-    if(!p_Img->redundant_coding)
+    if(!p_Vid->redundant_coding)
     {
-      (*currSlice)->num_ref_idx_active[LIST_0] = (char) imin(p_Img->number,p_Inp->NumRefPrimary);
+      (*currSlice)->num_ref_idx_active[LIST_0] = (char) imin(p_Vid->number,p_Inp->NumRefPrimary);
     }
     else
     {
@@ -1153,20 +1158,20 @@ void init_slice (ImageParameters *p_Img, InputParameters *p_Inp, Slice **currSli
   }
 
   // code now also considers fields. Issue whether we should account this within the appropriate input p_Inp directly
-  if ((p_Img->type == P_SLICE || p_Img->type == SP_SLICE) && p_Inp->P_List0_refs)
+  if ((p_Vid->type == P_SLICE || p_Vid->type == SP_SLICE) && p_Inp->P_List0_refs)
   {
-    (*currSlice)->num_ref_idx_active[LIST_0] = (char) imin((*currSlice)->num_ref_idx_active[LIST_0], p_Inp->P_List0_refs * ((p_Img->structure !=0) + 1));
+    (*currSlice)->num_ref_idx_active[LIST_0] = (char) imin((*currSlice)->num_ref_idx_active[LIST_0], p_Inp->P_List0_refs * ((p_Vid->structure !=0) + 1));
   }
 
-  if (p_Img->type == B_SLICE )
+  if (p_Vid->type == B_SLICE )
   {
     if (p_Inp->B_List0_refs)
     {
-      (*currSlice)->num_ref_idx_active[LIST_0] = (char) imin((*currSlice)->num_ref_idx_active[LIST_0], p_Inp->B_List0_refs * ((p_Img->structure !=0) + 1));
+      (*currSlice)->num_ref_idx_active[LIST_0] = (char) imin((*currSlice)->num_ref_idx_active[LIST_0], p_Inp->B_List0_refs * ((p_Vid->structure !=0) + 1));
     }
     if (p_Inp->B_List1_refs)
     {
-      (*currSlice)->num_ref_idx_active[LIST_1] = (char) imin((*currSlice)->num_ref_idx_active[LIST_1], p_Inp->B_List1_refs * ((p_Img->structure !=0) + 1));
+      (*currSlice)->num_ref_idx_active[LIST_1] = (char) imin((*currSlice)->num_ref_idx_active[LIST_1], p_Inp->B_List1_refs * ((p_Vid->structure !=0) + 1));
     }
     get_mem3D((byte ****)(void*)&(*currSlice)->direct_ref_idx, (*currSlice)->height_blk, (*currSlice)->width_blk, 2);
     get_mem2D((byte ***) (void*)&(*currSlice)->direct_pdir,    (*currSlice)->height_blk, (*currSlice)->width_blk);
@@ -1176,43 +1181,43 @@ void init_slice (ImageParameters *p_Img, InputParameters *p_Inp, Slice **currSli
   init_lists(*currSlice);
 
   // assign list 0 size from list size
-  (*currSlice)->num_ref_idx_active[LIST_0] = p_Img->listXsize[0];
-  (*currSlice)->num_ref_idx_active[LIST_1] = p_Img->listXsize[1];
+  (*currSlice)->num_ref_idx_active[LIST_0] = p_Vid->listXsize[0];
+  (*currSlice)->num_ref_idx_active[LIST_1] = p_Vid->listXsize[1];
 
   if ( p_Inp->WPMCPrecision && p_Inp->WPMCPrecFullRef )
     wpxAdaptRefNum(*currSlice);
 
   //Perform memory management based on poc distances  
-  if (p_Inp->SetFirstAsLongTerm && p_Img->number == 0)
+  if (p_Inp->SetFirstAsLongTerm && p_Vid->number == 0)
   {
-    mmco_long_term(p_Img, p_Img->number);
+    mmco_long_term(p_Vid, p_Vid->number);
   }
-  else if (p_Img->nal_reference_idc && p_Inp->PocMemoryManagement)
+  else if (p_Vid->nal_reference_idc && p_Inp->PocMemoryManagement)
   {
-    if (p_Img->structure == FRAME && p_Img->p_Dpb->ref_frames_in_buffer == active_sps->num_ref_frames)
-      poc_based_ref_management_frame_pic(p_Img, p_Img->frame_num);
-    else if (p_Img->structure == TOP_FIELD && p_Img->p_Dpb->ref_frames_in_buffer== active_sps->num_ref_frames)
-      poc_based_ref_management_field_pic(p_Img, (p_Img->frame_num << 1) + 1);      
-    else if (p_Img->structure == BOTTOM_FIELD)
-      poc_based_ref_management_field_pic(p_Img, (p_Img->frame_num << 1) + 1);
+    if (p_Vid->structure == FRAME && p_Vid->p_Dpb->ref_frames_in_buffer == active_sps->num_ref_frames)
+      poc_based_ref_management_frame_pic(p_Vid, p_Vid->frame_num);
+    else if (p_Vid->structure == TOP_FIELD && p_Vid->p_Dpb->ref_frames_in_buffer== active_sps->num_ref_frames)
+      poc_based_ref_management_field_pic(p_Vid, (p_Vid->frame_num << 1) + 1);      
+    else if (p_Vid->structure == BOTTOM_FIELD)
+      poc_based_ref_management_field_pic(p_Vid, (p_Vid->frame_num << 1) + 1);
   }
 
   if (p_Inp->EnableOpenGOP)
   {
-    for (i = 0; i<p_Img->listXsize[0]; i++)
+    for (i = 0; i<p_Vid->listXsize[0]; i++)
     {
-      if (p_Img->listX[0][i]->poc < p_Img->last_valid_reference && p_Img->ThisPOC > p_Img->last_valid_reference)
+      if (p_Vid->listX[0][i]->poc < p_Vid->last_valid_reference && p_Vid->ThisPOC > p_Vid->last_valid_reference)
       {
-        p_Img->listXsize[0] = (*currSlice)->num_ref_idx_active[LIST_0] = (char) imax(1, i);
+        p_Vid->listXsize[0] = (*currSlice)->num_ref_idx_active[LIST_0] = (char) imax(1, i);
         break;
       }
     }
 
-    for (i = 0; i<p_Img->listXsize[1]; i++)
+    for (i = 0; i<p_Vid->listXsize[1]; i++)
     {
-      if (p_Img->listX[1][i]->poc < p_Img->last_valid_reference && p_Img->ThisPOC > p_Img->last_valid_reference)
+      if (p_Vid->listX[1][i]->poc < p_Vid->last_valid_reference && p_Vid->ThisPOC > p_Vid->last_valid_reference)
       {
-        p_Img->listXsize[1] = (*currSlice)->num_ref_idx_active[LIST_1] = (char) imax(1,i);
+        p_Vid->listXsize[1] = (*currSlice)->num_ref_idx_active[LIST_1] = (char) imax(1,i);
         break;
       }
     }
@@ -1223,23 +1228,23 @@ void init_slice (ImageParameters *p_Img, InputParameters *p_Inp, Slice **currSli
     // reference list reordering 
     // RPLR for redundant pictures
     // !KS: that should actually be moved somewhere else
-    if(p_Inp->redundant_pic_flag && p_Img->redundant_coding)
+    if(p_Inp->redundant_pic_flag && p_Vid->redundant_coding)
     {
       (*currSlice)->ref_pic_list_reordering_flag[LIST_0] = 1;
       (*currSlice)->reordering_of_pic_nums_idc[LIST_0][0] = 0;
       (*currSlice)->reordering_of_pic_nums_idc[LIST_0][1] = 3;
-      (*currSlice)->abs_diff_pic_num_minus1[LIST_0][0] = p_Img->redundant_ref_idx - 1;
+      (*currSlice)->abs_diff_pic_num_minus1[LIST_0][0] = p_Vid->redundant_ref_idx - 1;
       (*currSlice)->long_term_pic_idx[LIST_0][0] = 0;
-      reorder_ref_pic_list ( *currSlice, p_Img->listX, p_Img->listXsize, LIST_0);
+      reorder_ref_pic_list ( *currSlice, p_Vid->listX, p_Vid->listXsize, LIST_0);
     }
-    else if ( (p_Img->type == P_SLICE || p_Img->type == B_SLICE) && p_Inp->WPMCPrecision && p_Img->pWPX->curr_wp_rd_pass->algorithm != WP_REGULAR )
+    else if ( (p_Vid->type == P_SLICE || p_Vid->type == B_SLICE) && p_Inp->WPMCPrecision && p_Vid->pWPX->curr_wp_rd_pass->algorithm != WP_REGULAR )
       wp_mcprec_reorder_lists( *currSlice );
     else
       reorder_lists( *currSlice );
 
-  (*currSlice)->max_num_references = (short) p_Img->max_num_references;
+  (*currSlice)->max_num_references = (short) p_Vid->max_num_references;
 
-  if (((*currSlice)->slice_type != I_SLICE) && ((*currSlice)->slice_type != SI_SLICE))
+  if (((*currSlice)->slice_type != I_SLICE) && (*currSlice)->slice_type != SI_SLICE)
   {
     get_mem_mv(*currSlice, &(*currSlice)->all_mv);  
 
@@ -1253,60 +1258,53 @@ void init_slice (ImageParameters *p_Img, InputParameters *p_Inp, Slice **currSli
       if (p_Inp->Transform8x8Mode && p_Inp->RDOQ_CP_MV)
       {
         get_mem4Dmv (&(*currSlice)->tmp_mv8, 2, (*currSlice)->max_num_references, 4, 4);
-        get_mem3Dint(&(*currSlice)->motion_cost8, 2, (*currSlice)->max_num_references, 4);
+        get_mem3Ddistblk(&(*currSlice)->motion_cost8, 2, (*currSlice)->max_num_references, 4);
+        get_mem4Dmv (&(*currSlice)->tmp_mv4, 2, (*currSlice)->max_num_references, 4, 4);
+        get_mem3Ddistblk(&(*currSlice)->motion_cost4, 2, (*currSlice)->max_num_references, 4);
       }
     }
   }
 
-  if (p_Img->MbaffFrameFlag)
+  if (p_Vid->mb_aff_frame_flag)
     init_mbaff_lists(*currSlice);
 
-  InitWP(p_Img, p_Inp);
+  InitWP(p_Vid, p_Inp);
 
   if ((*currSlice)->slice_type == B_SLICE)
-    (*currSlice)->weighted_prediction = p_Img->active_pps->weighted_bipred_idc;
-  else if (((*currSlice)->slice_type != I_SLICE) || ((*currSlice)->slice_type != SI_SLICE))
-    (*currSlice)->weighted_prediction = p_Img->active_pps->weighted_pred_flag;
+    (*currSlice)->weighted_prediction = p_Vid->active_pps->weighted_bipred_idc;
+  else if (((*currSlice)->slice_type != I_SLICE) && (*currSlice)->slice_type != SI_SLICE)
+    (*currSlice)->weighted_prediction = p_Vid->active_pps->weighted_pred_flag;
 
-  if (p_Img->type != I_SLICE && (p_Img->active_pps->weighted_pred_flag == 1 || (p_Img->active_pps->weighted_bipred_idc > 0 && (p_Img->type == B_SLICE))))
+  if ((p_Vid->type != I_SLICE && p_Vid->type != SI_SLICE) && (p_Vid->active_pps->weighted_pred_flag == 1 || (p_Vid->active_pps->weighted_bipred_idc > 0 && (p_Vid->type == B_SLICE))))
   {
-    if (p_Img->type == P_SLICE || p_Img->type == SP_SLICE)
+    if (p_Vid->type == P_SLICE || p_Vid->type == SP_SLICE)
     {
-      int wp_type = (p_Inp->GenerateMultiplePPS && p_Inp->RDPictureDecision) && (p_Img->enc_picture != p_Img->enc_frame_picture[1]);
-      p_Img->EstimateWPPSlice (*currSlice, wp_type);
+      int wp_type = (p_Inp->GenerateMultiplePPS && p_Inp->RDPictureDecision) && (p_Vid->enc_picture != p_Vid->enc_frame_picture[1]);
+      p_Vid->EstimateWPPSlice (*currSlice, wp_type);
     }
     else
-      p_Img->EstimateWPBSlice (*currSlice);
+      p_Vid->EstimateWPBSlice (*currSlice);
   }
 
   set_ref_pic_num(*currSlice);
 
 
-  if (p_Img->type == B_SLICE)
+  if (p_Vid->type == B_SLICE)
   {
-    int PicWidthInMbs, PicHeightInMapUnits, FrameHeightInMbs;
-    int width, height;
-    PicWidthInMbs = (active_sps->pic_width_in_mbs_minus1 +1);
-    PicHeightInMapUnits = (active_sps->pic_height_in_map_units_minus1 +1);
-    FrameHeightInMbs = ( 2 - active_sps->frame_mbs_only_flag ) * PicHeightInMapUnits;
-
-    width = PicWidthInMbs * MB_BLOCK_SIZE;
-    height = FrameHeightInMbs * MB_BLOCK_SIZE;
-
     if( IS_INDEPENDENT(p_Inp) )
     {
-       (*currSlice)->p_colocated = alloc_colocated (p_Img->width, p_Img->height, active_sps->mb_adaptive_frame_field_flag);           
-      compute_colocated_JV(*currSlice, (*currSlice)->p_colocated, p_Img->listX);
+       (*currSlice)->p_colocated = alloc_colocated (p_Vid->width, p_Vid->height, active_sps->mb_adaptive_frame_field_flag);           
+      compute_colocated_JV(*currSlice, (*currSlice)->p_colocated, p_Vid->listX);
     }
     else
     {
       // Allocation should be based on slice size, not image
-      (*currSlice)->p_colocated = alloc_colocated (p_Img->width, p_Img->height, active_sps->mb_adaptive_frame_field_flag);
-      compute_colocated(*currSlice, (*currSlice)->p_colocated, p_Img->listX);
+      (*currSlice)->p_colocated = alloc_colocated (p_Vid->width, p_Vid->height, active_sps->mb_adaptive_frame_field_flag);
+      compute_colocated(*currSlice, (*currSlice)->p_colocated, p_Vid->listX);
     }
   }
 
-  if (p_Img->type != I_SLICE && p_Img->type != SI_SLICE)
+  if (p_Vid->type != I_SLICE && p_Vid->type != SI_SLICE)
   {
     if (p_Inp->SearchMode == EPZS)
     {
@@ -1321,23 +1319,23 @@ void init_slice (ImageParameters *p_Img, InputParameters *p_Inp, Slice **currSli
 
   if ((*currSlice)->symbol_mode == CAVLC)
   {
-    setup_cavlc(*currSlice, p_Img->listXsize);
+    setup_cavlc(*currSlice, p_Vid->listXsize);
   }
   else
   {
-    setup_cabac(*currSlice, p_Img->listXsize);
+    setup_cabac(*currSlice, p_Vid->listXsize);
   }
 
   // assign luma common reference picture pointers to be used for ME/sub-pel interpolation
 
   for(i = 0; i < active_ref_lists; i++)
   {
-    for(j = 0; j < p_Img->listXsize[i]; j++)
+    for(j = 0; j < p_Vid->listXsize[i]; j++)
     {
-      if( p_Img->listX[i][j] )
+      if( p_Vid->listX[i][j] )
       {
-        p_Img->listX[i][j]->p_curr_img     = p_Img->listX[i][j]->p_img    [(short) p_Img->colour_plane_id];
-        p_Img->listX[i][j]->p_curr_img_sub = p_Img->listX[i][j]->p_img_sub[(short) p_Img->colour_plane_id];
+        p_Vid->listX[i][j]->p_curr_img     = p_Vid->listX[i][j]->p_img    [(short) p_Vid->colour_plane_id];
+        p_Vid->listX[i][j]->p_curr_img_sub = p_Vid->listX[i][j]->p_img_sub[(short) p_Vid->colour_plane_id];
       }
     }
   }
@@ -1356,7 +1354,7 @@ void init_slice (ImageParameters *p_Img, InputParameters *p_Inp, Slice **currSli
     }
   }
 
-  if(p_Img->MbaffFrameFlag)
+  if(p_Vid->mb_aff_frame_flag)
   {
     alloc_rddata(*currSlice, &(*currSlice)->rddata_top_frame_mb);
     alloc_rddata(*currSlice, &(*currSlice)->rddata_bot_frame_mb);
@@ -1381,16 +1379,16 @@ void init_slice (ImageParameters *p_Img, InputParameters *p_Inp, Slice **currSli
   }
 
 
-  if (p_Img->MbaffFrameFlag)
+  if (p_Vid->mb_aff_frame_flag)
   {
-    if (p_Img->direct_spatial_mv_pred_flag)  //spatial direct 
+    if (p_Vid->direct_spatial_mv_pred_flag)  //spatial direct 
       (*currSlice)->Get_Direct_Motion_Vectors = Get_Direct_MV_Spatial_MBAFF;
     else
       (*currSlice)->Get_Direct_Motion_Vectors = Get_Direct_MV_Temporal;
   }
   else
   {
-    if (p_Img->direct_spatial_mv_pred_flag)  //spatial direct 
+    if (p_Vid->direct_spatial_mv_pred_flag)  //spatial direct 
       (*currSlice)->Get_Direct_Motion_Vectors = Get_Direct_MV_Spatial_Normal;
     else
       (*currSlice)->Get_Direct_Motion_Vectors = Get_Direct_MV_Temporal;
@@ -1403,14 +1401,13 @@ void init_slice (ImageParameters *p_Img, InputParameters *p_Inp, Slice **currSli
   get_mem4Dpel(&((*currSlice)->mpr_8x8),   MAX_PLANE, 9, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
   get_mem4Dpel(&((*currSlice)->mpr_16x16), MAX_PLANE, 5, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
 
-  get_mem_ACcoeff (p_Img, &((*currSlice)->cofAC));
+  get_mem_ACcoeff (p_Vid, &((*currSlice)->cofAC));
   get_mem_DCcoeff (&((*currSlice)->cofDC));
 
 
   allocate_block_mem(*currSlice);
   init_coding_state_methods(*currSlice);
   init_rdopt(*currSlice);
-
 }
 
 
@@ -1422,7 +1419,7 @@ void init_slice (ImageParameters *p_Img, InputParameters *p_Inp, Slice **currSli
  *    Pointer to a Slice
  ************************************************************************
  */
-static Slice *malloc_slice(ImageParameters *p_Img, InputParameters *p_Inp)
+static Slice *malloc_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   int i;
   DataPartition *dataPart;
@@ -1434,21 +1431,21 @@ static Slice *malloc_slice(ImageParameters *p_Img, InputParameters *p_Inp)
   switch (p_Inp->slice_mode)
   {
   case 2:
-    //buffer_size = imax(2 * p_Inp->slice_argument, 500 + (128 + 256 * p_Img->bitdepth_luma + 512 * p_Img->bitdepth_chroma));
+    //buffer_size = imax(2 * p_Inp->slice_argument, 500 + (128 + 256 * p_Vid->bitdepth_luma + 512 * p_Vid->bitdepth_chroma));
     buffer_size = imax(2 * p_Inp->slice_argument, 764);
     break;
   case 1:
-    buffer_size = 500 + p_Inp->slice_argument * (128 + 256 * p_Img->bitdepth_luma + cr_size * p_Img->bitdepth_chroma);
+    buffer_size = 500 + p_Inp->slice_argument * (128 + 256 * p_Vid->bitdepth_luma + cr_size * p_Vid->bitdepth_chroma);
     break;
   default:
-    buffer_size = 500 + p_Img->FrameSizeInMbs * (128 + 256 * p_Img->bitdepth_luma + cr_size * p_Img->bitdepth_chroma);
+    buffer_size = 500 + p_Vid->FrameSizeInMbs * (128 + 256 * p_Vid->bitdepth_luma + cr_size * p_Vid->bitdepth_chroma);
     break;
   }
 
   // KS: this is approx. max. allowed code picture size
   if ((currSlice = (Slice *) calloc(1, sizeof(Slice))) == NULL) no_mem_exit ("malloc_slice: currSlice structure");
 
-  currSlice->p_Img             = p_Img;
+  currSlice->p_Vid             = p_Vid;
   currSlice->p_Inp             = p_Inp;
 
   if (((currSlice->p_RDO)  = (RDOPTStructure *) calloc(1, sizeof(RDOPTStructure)))==NULL) 
@@ -1465,14 +1462,14 @@ static Slice *malloc_slice(ImageParameters *p_Img, InputParameters *p_Inp)
 
   currSlice->max_part_nr = p_Inp->partition_mode==0?1:3;
 
-  //for IDR p_Img there should be only one partition
-  if(p_Img->currentPicture->idr_flag)
+  //for IDR p_Vid there should be only one partition
+  if(p_Vid->currentPicture->idr_flag)
     currSlice->max_part_nr = 1;
 
   assignSE2partition[0] = assignSE2partition_NoDP;
   //ZL
-  //for IDR p_Img all the syntax element should be mapped to one partition
-  if(!p_Img->currentPicture->idr_flag && p_Inp->partition_mode == 1)
+  //for IDR p_Vid all the syntax element should be mapped to one partition
+  if(!p_Vid->currentPicture->idr_flag && p_Inp->partition_mode == 1)
     assignSE2partition[1] =  assignSE2partition_DP;
   else
     assignSE2partition[1] =  assignSE2partition_NoDP;
@@ -1492,7 +1489,7 @@ static Slice *malloc_slice(ImageParameters *p_Img, InputParameters *p_Inp)
     // Initialize storage of bitstream parameters
     // Set pointers
     dataPart->p_Slice = currSlice;
-    dataPart->p_Img   = p_Img;
+    dataPart->p_Vid   = p_Vid;
     dataPart->p_Inp   = p_Inp;
   }
 
@@ -1583,7 +1580,7 @@ static void free_slice(Slice *currSlice)
 {
   if (currSlice != NULL)
   {
-    ImageParameters *p_Img = currSlice->p_Img;
+    VideoParameters *p_Vid = currSlice->p_Vid;
     InputParameters *p_Inp = currSlice->p_Inp;
 
     int i;
@@ -1658,7 +1655,7 @@ static void free_slice(Slice *currSlice)
       }
     }
 
-    if(p_Img->MbaffFrameFlag)
+    if(p_Vid->mb_aff_frame_flag)
     {
       free_rddata(currSlice, &currSlice->rddata_top_frame_mb);
       free_rddata(currSlice, &currSlice->rddata_bot_frame_mb);
@@ -1681,7 +1678,9 @@ static void free_slice(Slice *currSlice)
         if (p_Inp->Transform8x8Mode && p_Inp->RDOQ_CP_MV)
         {
           free_mem4Dmv (currSlice->tmp_mv8);
-          free_mem3Dint(currSlice->motion_cost8);
+          free_mem3Ddistblk(currSlice->motion_cost8);
+          free_mem4Dmv (currSlice->tmp_mv4);
+          free_mem3Ddistblk(currSlice->motion_cost4);
         }
       }
     }
@@ -1701,70 +1700,70 @@ static void set_ref_pic_num(Slice *currSlice)
 {
   int i,j;
   StorablePicture *this_ref;
-  ImageParameters *p_Img = currSlice->p_Img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
 
   //! need to add field ref_pic_num that handles field pair.
 
-  for (i=0;i<p_Img->listXsize[LIST_0];i++)
+  for (i=0;i<p_Vid->listXsize[LIST_0];i++)
   {
-    this_ref = p_Img->listX[LIST_0][i];
-    p_Img->enc_picture->ref_pic_num        [LIST_0][i] = this_ref->poc * 2 + ((this_ref->structure==BOTTOM_FIELD)?1:0) ;
-    p_Img->enc_picture->frm_ref_pic_num    [LIST_0][i] = this_ref->frame_poc * 2;
-    p_Img->enc_picture->top_ref_pic_num    [LIST_0][i] = this_ref->top_poc * 2;
-    p_Img->enc_picture->bottom_ref_pic_num [LIST_0][i] = this_ref->bottom_poc * 2 + 1;
+    this_ref = p_Vid->listX[LIST_0][i];
+    p_Vid->enc_picture->ref_pic_num        [LIST_0][i] = this_ref->poc * 2 + ((this_ref->structure==BOTTOM_FIELD)?1:0) ;
+    p_Vid->enc_picture->frm_ref_pic_num    [LIST_0][i] = this_ref->frame_poc * 2;
+    p_Vid->enc_picture->top_ref_pic_num    [LIST_0][i] = this_ref->top_poc * 2;
+    p_Vid->enc_picture->bottom_ref_pic_num [LIST_0][i] = this_ref->bottom_poc * 2 + 1;
   }
 
-  for (i=0;i<p_Img->listXsize[LIST_1];i++)
+  for (i=0;i<p_Vid->listXsize[LIST_1];i++)
   {
-    this_ref = p_Img->listX[LIST_1][i];
-    p_Img->enc_picture->ref_pic_num        [LIST_1][i] = this_ref->poc * 2 + ((this_ref->structure==BOTTOM_FIELD)?1:0);
-    p_Img->enc_picture->frm_ref_pic_num    [LIST_1][i] = this_ref->frame_poc * 2;
-    p_Img->enc_picture->top_ref_pic_num    [LIST_1][i] = this_ref->top_poc * 2;
-    p_Img->enc_picture->bottom_ref_pic_num [LIST_1][i] = this_ref->bottom_poc * 2 + 1;
+    this_ref = p_Vid->listX[LIST_1][i];
+    p_Vid->enc_picture->ref_pic_num        [LIST_1][i] = this_ref->poc * 2 + ((this_ref->structure==BOTTOM_FIELD)?1:0);
+    p_Vid->enc_picture->frm_ref_pic_num    [LIST_1][i] = this_ref->frame_poc * 2;
+    p_Vid->enc_picture->top_ref_pic_num    [LIST_1][i] = this_ref->top_poc * 2;
+    p_Vid->enc_picture->bottom_ref_pic_num [LIST_1][i] = this_ref->bottom_poc * 2 + 1;
   }
 
   if (!currSlice->active_sps->frame_mbs_only_flag && currSlice->structure==FRAME)
   {
     for (j=2;j<6;j++)
     {
-      for (i=0;i<p_Img->listXsize[j];i++)
+      for (i=0;i<p_Vid->listXsize[j];i++)
       {
-        this_ref = p_Img->listX[j][i];
-        p_Img->enc_picture->ref_pic_num[j][i] = this_ref->poc * 2 + ((this_ref->structure==BOTTOM_FIELD)?1:0);
-        p_Img->enc_picture->frm_ref_pic_num[j][i] = this_ref->frame_poc * 2 ;
-        p_Img->enc_picture->top_ref_pic_num[j][i] = this_ref->top_poc * 2 ;
-        p_Img->enc_picture->bottom_ref_pic_num[j][i] = this_ref->bottom_poc * 2 + 1;
+        this_ref = p_Vid->listX[j][i];
+        p_Vid->enc_picture->ref_pic_num[j][i] = this_ref->poc * 2 + ((this_ref->structure==BOTTOM_FIELD)?1:0);
+        p_Vid->enc_picture->frm_ref_pic_num[j][i] = this_ref->frame_poc * 2 ;
+        p_Vid->enc_picture->top_ref_pic_num[j][i] = this_ref->top_poc * 2 ;
+        p_Vid->enc_picture->bottom_ref_pic_num[j][i] = this_ref->bottom_poc * 2 + 1;
       }
     }
   }
 }
 
-void UpdateMELambda(ImageParameters *p_Img, InputParameters *p_Inp)
+void UpdateMELambda(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   int j, k, qp;
   if (p_Inp->UpdateLambdaChromaME)
   {
     for (j = 0; j < 6; j++)
     {
-      for (qp = -p_Img->bitdepth_luma_qp_scale; qp < 52; qp++)
+      for (qp = -p_Vid->bitdepth_luma_qp_scale; qp < 52; qp++)
       { 
         for (k = 0; k < 3; k++)
         {
           if ((p_Inp->MEErrorMetric[k] == ERROR_SAD) && (p_Inp->ChromaMEEnable))
           {
-            switch(p_Img->yuv_format)
+            switch(p_Vid->yuv_format)
             {
             case YUV420:
-              p_Img->lambda_mf[j][qp][k] = (3 * p_Img->lambda_mf[j][qp][k] + 1) >> 1;
-              p_Img->lambda_me[j][qp][k] *= 1.5;
+              p_Vid->lambda_mf[j][qp][k] = (3 * p_Vid->lambda_mf[j][qp][k] + 1) >> 1;
+              p_Vid->lambda_me[j][qp][k] *= 1.5;
               break;
             case YUV422:
-              p_Img->lambda_mf[j][qp][k] *= 2;
-              p_Img->lambda_me[j][qp][k] *= 2.0;
+              p_Vid->lambda_mf[j][qp][k] *= 2;
+              p_Vid->lambda_me[j][qp][k] *= 2.0;
               break;
             case YUV444:
-              p_Img->lambda_mf[j][qp][k] *= 3;
-              p_Img->lambda_me[j][qp][k] *= 3.0;
+              p_Vid->lambda_mf[j][qp][k] *= 3;
+              p_Vid->lambda_me[j][qp][k] *= 3.0;
               break;
             default:
               break;
@@ -1776,37 +1775,85 @@ void UpdateMELambda(ImageParameters *p_Img, InputParameters *p_Inp)
   }
 }
 
-void SetLambda(ImageParameters *p_Img, InputParameters *p_Inp, int j, int qp, double lambda_scale)
+void SetLambda(VideoParameters *p_Vid, int j, int qp, double lambda_scale)
 {
+  InputParameters *p_Inp = p_Vid->p_Inp;
   int k;
-  p_Img->lambda_md[j][qp] *= lambda_scale;
+  p_Vid->lambda_md[j][qp] *= lambda_scale;
 
   for (k = F_PEL; k <= Q_PEL; k++)
   {
-    p_Img->lambda_me[j][qp][k] =  (p_Inp->MEErrorMetric[k] == ERROR_SSE) ? p_Img->lambda_md[j][qp] : sqrt(p_Img->lambda_md[j][qp]);
-    p_Img->lambda_mf[j][qp][k] = LAMBDA_FACTOR (p_Img->lambda_me[j][qp][k]);
+    p_Vid->lambda_me[j][qp][k] =  (p_Inp->MEErrorMetric[k] == ERROR_SSE) ? p_Vid->lambda_md[j][qp] : sqrt(p_Vid->lambda_md[j][qp]);
+    p_Vid->lambda_mf[j][qp][k] = LAMBDA_FACTOR (p_Vid->lambda_me[j][qp][k]);
   }
 }
 
-void SetLagrangianMultipliersOn(ImageParameters *p_Img, InputParameters *p_Inp)
+void CalcMaxLamdaMD(VideoParameters *p_Vid, double *p_lambda_md)
+{
+  double max_lambda_md;
+  int iBits;
+  
+  if(p_Vid->p_Inp->ProfileIDC >= FREXT_HP)
+      iBits=128;  //Spec. Page 306
+  else
+      iBits=80;
+
+  if(p_Vid->yuv_format == YUV420)
+    iBits += 3072; //(256+128)*8;
+  else if(p_Vid->yuv_format == YUV422)
+    iBits += 4096; //(256+256)*8;
+  else if(p_Vid->yuv_format == YUV444)
+    iBits += 6144; //(256*3)*8;
+  else if(p_Vid->yuv_format == YUV400)
+    iBits += 2048; //256*8;
+
+  max_lambda_md =  floor(((double)DISTBLK_MAX)/iBits/(1<<LAMBDA_ACCURACY_BITS));
+#if JCOST_OVERFLOWCHECK
+  {
+    distblk cost = weight_cost(LAMBDA_FACTOR(max_lambda_md), iBits);
+    assert(cost>=0 && cost<=DISTBLK_MAX);
+  }
+#endif
+  *p_lambda_md = max_lambda_md;  
+}
+
+void ClipLambda(double *p_lambda_max, double *p_lambda)
+{
+  if(*p_lambda > *p_lambda_max)
+  {
+    //printf("Clip: %lf -> %lf\n", *p_lambda, *p_lambda_max);   
+    *p_lambda = *p_lambda_max;
+  }
+}
+void SetLagrangianMultipliersOn(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   int qp, j;
   double qp_temp;
   double lambda_scale = 1.0 - dClip3(0.0,0.5,0.05 * (double) p_Inp->jumpd);
+  FrameUnitStruct *p_cur_frm = p_Vid->p_curr_frm_struct;
+  //limit lambda for mode decison;
+  int bLimitsLambdaMD = ((p_Inp->EnableIPCM >0) && (IMGTYPE==0));
+  double dMaxLambdaMD = 0.0;
 
+  if(bLimitsLambdaMD)
+    CalcMaxLamdaMD(p_Vid, &dMaxLambdaMD);
   if (p_Inp->UseExplicitLambdaParams == 1) // consideration of explicit lambda weights.
   {
     for (j = 0; j < 6; j++)
     {
-      for (qp = -p_Img->bitdepth_luma_qp_scale; qp < 52; qp++)
+      for (qp = -p_Vid->bitdepth_luma_qp_scale; qp < 52; qp++)
       {
-        qp_temp = (double)qp + p_Img->bitdepth_luma_qp_scale - SHIFT_QP;
+        qp_temp = (double)qp + p_Vid->bitdepth_luma_qp_scale - SHIFT_QP;
 
-        p_Img->lambda_md[j][qp] = p_Inp->LambdaWeight[j] * pow (2, qp_temp/3.0);
-        SetLambda(p_Img, p_Inp, j, qp, ((p_Inp->MEErrorMetric[H_PEL] == ERROR_SATD && p_Inp->MEErrorMetric[Q_PEL] == ERROR_SATD) ? 1.00 : 0.95));
+        p_Vid->lambda_md[j][qp] = p_Inp->LambdaWeight[j] * pow (2, qp_temp/3.0);
+        //clip lambda; 
+        if(bLimitsLambdaMD)
+          ClipLambda(&dMaxLambdaMD, &p_Vid->lambda_md[j][qp]);
+
+        SetLambda(p_Vid, j, qp, ((p_Inp->MEErrorMetric[H_PEL] == ERROR_SATD && p_Inp->MEErrorMetric[Q_PEL] == ERROR_SATD) ? 1.00 : 0.95));
 
         if (j != B_SLICE)
-          p_Img->lambda_md[j][qp] *= lambda_scale;
+          p_Vid->lambda_md[j][qp] *= lambda_scale;
 
       }
     }
@@ -1815,12 +1862,16 @@ void SetLagrangianMultipliersOn(ImageParameters *p_Img, InputParameters *p_Inp)
   {
     for (j = 0; j < 6; j++)
     {
-      for (qp = -p_Img->bitdepth_luma_qp_scale; qp < 52; qp++)
+      for (qp = -p_Vid->bitdepth_luma_qp_scale; qp < 52; qp++)
       {
-        qp_temp = (double)qp + p_Img->bitdepth_luma_qp_scale - SHIFT_QP;
+        qp_temp = (double)qp + p_Vid->bitdepth_luma_qp_scale - SHIFT_QP;
 
-        p_Img->lambda_md[j][qp] = p_Inp->FixedLambda[j];
-        SetLambda(p_Img, p_Inp, j, qp, ((p_Inp->MEErrorMetric[H_PEL] == ERROR_SATD && p_Inp->MEErrorMetric[Q_PEL] == ERROR_SATD) ? 1.00 : 0.95));
+        p_Vid->lambda_md[j][qp] = p_Inp->FixedLambda[j];
+        //clip lambda; 
+        if(bLimitsLambdaMD)
+          ClipLambda(&dMaxLambdaMD, &p_Vid->lambda_md[j][qp]);
+
+        SetLambda(p_Vid, j, qp, ((p_Inp->MEErrorMetric[H_PEL] == ERROR_SATD && p_Inp->MEErrorMetric[Q_PEL] == ERROR_SATD) ? 1.00 : 0.95));
       }
     }
   }
@@ -1828,98 +1879,106 @@ void SetLagrangianMultipliersOn(ImageParameters *p_Img, InputParameters *p_Inp)
   {
     for (j = 0; j < 5; j++)
     {
-      for (qp = -p_Img->bitdepth_luma_qp_scale; qp < 52; qp++)
+      for (qp = -p_Vid->bitdepth_luma_qp_scale; qp < 52; qp++)
       {
-        qp_temp = (double)qp + p_Img->bitdepth_luma_qp_scale - SHIFT_QP;
+        qp_temp = (double)qp + p_Vid->bitdepth_luma_qp_scale - SHIFT_QP;
 
-        if(p_Inp->UseRDOQuant && p_Img->type == I_SLICE && p_Img->qp==qp)
-          p_Img->lambda_md[j][qp] = 0.57 * pow (2.0, qp_temp/3.0); 
+        if(p_Inp->UseRDOQuant && p_Vid->type == I_SLICE && p_Vid->qp==qp)
+          p_Vid->lambda_md[j][qp] = 0.57 * pow (2.0, qp_temp/3.0); 
         else  if (p_Inp->NumberBFrames > 0)
         {
           /*
           if(j != B_SLICE)
-               p_Img->lambda_md[j][qp] = 0.85 * pow (2.0, qp_temp/3.0) * ((j == SP_SLICE) ? dClip3(1.4, 3.0,(qp_temp / 12.0)) : 1.0);
+               p_Vid->lambda_md[j][qp] = 0.85 * pow (2.0, qp_temp/3.0) * ((j == SP_SLICE || j == SI_SLICE) ? dClip3(1.4, 3.0,(qp_temp / 12.0)) : 1.0);
           else
           */
-          p_Img->lambda_md[j][qp] = 0.68 * pow (2.0, qp_temp/3.0)
-          * (j == B_SLICE && p_Img->b_frame_to_code != 0 ? dClip3(2.00, 4.00, (qp_temp / 6.0)) : (j == SP_SLICE) ? dClip3(1.4,3.0,(qp_temp / 12.0)) : 1.0);
+          p_Vid->lambda_md[j][qp] = 0.68 * pow (2.0, qp_temp/3.0)
+            * (j == B_SLICE && p_cur_frm->layer != 0 ? dClip3(2.00, 4.00, (qp_temp / 6.0)) : (j == SP_SLICE || j == SI_SLICE) ? dClip3(1.4,3.0,(qp_temp / 12.0)) : 1.0);
         }
         else
-          p_Img->lambda_md[j][qp] = 0.85 * pow (2.0, qp_temp/3.0) * ((j == SP_SLICE) ? dClip3(1.4, 3.0,(qp_temp / 12.0)) : 1.0);
+          p_Vid->lambda_md[j][qp] = 0.85 * pow (2.0, qp_temp/3.0) * ((j == SP_SLICE || j == SI_SLICE) ? dClip3(1.4, 3.0,(qp_temp / 12.0)) : 1.0);
         
         // Scale lambda due to hadamard qpel only consideration
-        p_Img->lambda_md[j][qp] = ((p_Inp->MEErrorMetric[H_PEL] == ERROR_SATD && p_Inp->MEErrorMetric[Q_PEL] == ERROR_SATD) ? 1.00 : 0.95) * p_Img->lambda_md[j][qp];
+        p_Vid->lambda_md[j][qp] = ((p_Inp->MEErrorMetric[H_PEL] == ERROR_SATD && p_Inp->MEErrorMetric[Q_PEL] == ERROR_SATD) ? 1.00 : 0.95) * p_Vid->lambda_md[j][qp];
 
         if (j == B_SLICE)
         {
-          p_Img->lambda_md[5][qp] = p_Img->lambda_md[j][qp];
+          p_Vid->lambda_md[5][qp] = p_Vid->lambda_md[j][qp];
 
-          if (p_Img->b_frame_to_code != 0)
+          if (p_cur_frm->layer != 0)
           {
             if (p_Inp->HierarchicalCoding == 2)
-              p_Img->lambda_md[5][qp] *= (1.0 - dmin(0.4, 0.2 * (double) p_Img->gop_structure[p_Img->b_frame_to_code-1].hierarchy_layer));
+              p_Vid->lambda_md[5][qp] *= (1.0 - dmin(0.4, 0.2 * (double) (p_cur_frm->p_atom->gop_levels - p_cur_frm->layer)));
             else
-              p_Img->lambda_md[5][qp] *= 0.80;
-
+              p_Vid->lambda_md[5][qp] *= 0.80;
           }
-          SetLambda(p_Img, p_Inp, 5, qp, lambda_scale);
+          //clip lambda; 
+          if(bLimitsLambdaMD)
+            ClipLambda(&dMaxLambdaMD, &p_Vid->lambda_md[5][qp]);
+
+          SetLambda(p_Vid, 5, qp, lambda_scale);
         }
         else
-          p_Img->lambda_md[j][qp] *= lambda_scale;
+          p_Vid->lambda_md[j][qp] *= lambda_scale;
 
-        SetLambda(p_Img, p_Inp, j, qp, 1.0);
+        //clip lambda; 
+        if(bLimitsLambdaMD)
+          ClipLambda(&dMaxLambdaMD, &p_Vid->lambda_md[j][qp]);
+
+        SetLambda(p_Vid, j, qp, 1.0);
 
         if (p_Inp->CtxAdptLagrangeMult == 1)
         {
           int lambda_qp = (qp >= 32 && !p_Inp->RCEnable) ? imax(0, qp - 4) : imax(0, qp - 6);
-          p_Img->lambda_mf_factor[j][qp] = log (p_Img->lambda_me[j][lambda_qp][Q_PEL] + 1.0) / log (2.0);
+          p_Vid->lambda_mf_factor[j][qp] = log (p_Vid->lambda_me[j][lambda_qp][Q_PEL] + 1.0) / log (2.0);
         }
       }
     }
   }
 
-  UpdateMELambda(p_Img, p_Inp);
+  UpdateMELambda(p_Vid, p_Inp);
+
 }
 
 
-void SetLagrangianMultipliersOff(ImageParameters *p_Img, InputParameters *p_Inp)
+void SetLagrangianMultipliersOff(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   int qp, j, k;
   double qp_temp;
 
   for (j = 0; j < 6; j++)
   {
-    for (qp = -p_Img->bitdepth_luma_qp_scale; qp < 52; qp++)
+    for (qp = -p_Vid->bitdepth_luma_qp_scale; qp < 52; qp++)
     {
-      qp_temp = (double)qp + p_Img->bitdepth_luma_qp_scale - SHIFT_QP;
+      qp_temp = (double)qp + p_Vid->bitdepth_luma_qp_scale - SHIFT_QP;
 
       switch (p_Inp->UseExplicitLambdaParams)
       {
       case 1:  // explicit lambda weights
-        p_Img->lambda_md[j][qp] = sqrt(p_Inp->LambdaWeight[j] * pow (2, qp_temp/3.0));
+        p_Vid->lambda_md[j][qp] = sqrt(p_Inp->LambdaWeight[j] * pow (2, qp_temp/3.0));
         break;
       case 2: // explicit lambda
-        p_Img->lambda_md[j][qp] = sqrt(p_Inp->FixedLambda[j]);
+        p_Vid->lambda_md[j][qp] = sqrt(p_Inp->FixedLambda[j]);
         break;
       default:
-        p_Img->lambda_md[j][qp] = QP2QUANT[imax(0,qp - SHIFT_QP)];
+        p_Vid->lambda_md[j][qp] = QP2QUANT[imax(0,qp - SHIFT_QP)];
         break;
       }
 
       for (k = F_PEL; k <= Q_PEL; k++)
       {
-        p_Img->lambda_me[j][qp][k]  = (p_Inp->MEErrorMetric[k] == ERROR_SSE) ? (p_Img->lambda_md[j][qp] * p_Img->lambda_md[j][qp]) : p_Img->lambda_md[j][qp];
-        p_Img->lambda_mf[j][qp][k]  = LAMBDA_FACTOR (p_Img->lambda_me[j][qp][k]);
+        p_Vid->lambda_me[j][qp][k]  = (p_Inp->MEErrorMetric[k] == ERROR_SSE) ? (p_Vid->lambda_md[j][qp] * p_Vid->lambda_md[j][qp]) : p_Vid->lambda_md[j][qp];
+        p_Vid->lambda_mf[j][qp][k]  = LAMBDA_FACTOR (p_Vid->lambda_me[j][qp][k]);
       }
 
       if (p_Inp->CtxAdptLagrangeMult == 1)
       {
         int lambda_qp = (qp >= 32 && !p_Inp->RCEnable) ? imax(0, qp-4) : imax(0, qp-6);
-        p_Img->lambda_mf_factor[j][qp] = log (p_Img->lambda_me[j][lambda_qp][Q_PEL] + 1.0) / log (2.0);
+        p_Vid->lambda_mf_factor[j][qp] = log (p_Vid->lambda_me[j][lambda_qp][Q_PEL] + 1.0) / log (2.0);
       }
     }
   }
-  UpdateMELambda(p_Img, p_Inp);
+  UpdateMELambda(p_Vid, p_Inp);
 }
 
 

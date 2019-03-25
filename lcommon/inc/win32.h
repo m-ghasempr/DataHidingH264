@@ -65,12 +65,14 @@
 
 #if defined(WIN32) && !defined(__GNUC__)
 typedef __int64   int64;
+typedef unsigned __int64   uint64;
 # define FORMAT_OFF_T "I64d"
 # ifndef INT64_MIN
 #  define INT64_MIN        (-9223372036854775807i64 - 1i64)
 # endif
 #else
 typedef long long int64;
+typedef unsigned long long  uint64;
 # define FORMAT_OFF_T "lld"
 # ifndef INT64_MIN
 #  define INT64_MIN        (-9223372036854775807LL - 1LL)

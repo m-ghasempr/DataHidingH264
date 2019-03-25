@@ -184,7 +184,7 @@ static inline void get_i8x8_dc(imgpel **cur_pred, imgpel *PredPel, int left_avai
   else //if (!up_available && !left_available)
   {
     // top left corner, nothing to predict from
-    s0 = P_A; //p_Img->dc_pred_value;
+    s0 = P_A; //p_Vid->dc_pred_value;
   }
 
   // First line
@@ -664,14 +664,14 @@ static inline void get_i8x8_horup(imgpel **cur_pred, imgpel *PredPel)
  */
 void set_intrapred_8x8(Macroblock *currMB, ColorPlane pl, int img_x,int img_y, int *left_available, int *up_available, int *all_available)
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
 
   int i;
   imgpel *PredPel = currMB->intra8x8_pred[pl];  // array of predictor pels
-  imgpel **img_enc = p_Img->enc_picture->p_curr_img;
+  imgpel **img_enc = p_Vid->enc_picture->p_curr_img;
   imgpel *img_pel;
-  int *mb_size = p_Img->mb_size[IS_LUMA];
+  int *mb_size = p_Vid->mb_size[IS_LUMA];
 
   int ioff = (img_x & 15);
   int joff = (img_y & 15);
@@ -686,23 +686,23 @@ void set_intrapred_8x8(Macroblock *currMB, ColorPlane pl, int img_x,int img_y, i
 
   for (i=0;i<8;i++)
   {
-    p_Img->getNeighbour(currMB, ioff - 1, joff + i , mb_size, &pix_a[i]);
+    p_Vid->getNeighbour(currMB, ioff - 1, joff + i , mb_size, &pix_a[i]);
   }
 
-  p_Img->getNeighbour(currMB, ioff    , joff - 1, mb_size, &pix_b);
-  p_Img->getNeighbour(currMB, ioff + 8, joff - 1, mb_size, &pix_c);
-  p_Img->getNeighbour(currMB, ioff - 1, joff - 1, mb_size, &pix_d);
+  p_Vid->getNeighbour(currMB, ioff    , joff - 1, mb_size, &pix_b);
+  p_Vid->getNeighbour(currMB, ioff + 8, joff - 1, mb_size, &pix_c);
+  p_Vid->getNeighbour(currMB, ioff - 1, joff - 1, mb_size, &pix_d);
 
   pix_c.available = pix_c.available &&!(ioff == 8 && joff == 8);
 
   if (p_Inp->UseConstrainedIntraPred)
   {
     for (i=0, block_available_left=1; i<8;i++)
-      block_available_left  &= pix_a[i].available ? p_Img->intra_block[pix_a[i].mb_addr]: 0;
+      block_available_left  &= pix_a[i].available ? p_Vid->intra_block[pix_a[i].mb_addr]: 0;
 
-    block_available_up       = pix_b.available ? p_Img->intra_block [pix_b.mb_addr] : 0;
-    block_available_up_right = pix_c.available ? p_Img->intra_block [pix_c.mb_addr] : 0;
-    block_available_up_left  = pix_d.available ? p_Img->intra_block [pix_d.mb_addr] : 0;
+    block_available_up       = pix_b.available ? p_Vid->intra_block [pix_b.mb_addr] : 0;
+    block_available_up_right = pix_c.available ? p_Vid->intra_block [pix_c.mb_addr] : 0;
+    block_available_up_left  = pix_d.available ? p_Vid->intra_block [pix_d.mb_addr] : 0;
   }
   else
   {
@@ -731,7 +731,7 @@ void set_intrapred_8x8(Macroblock *currMB, ColorPlane pl, int img_x,int img_y, i
   }
   else
   {
-    P_A = P_B = P_C = P_D = P_E = P_F = P_G = P_H = p_Img->dc_pred_value;
+    P_A = P_B = P_C = P_D = P_E = P_F = P_G = P_H = p_Vid->dc_pred_value;
   }
 
   if (block_available_up_right)
@@ -765,7 +765,7 @@ void set_intrapred_8x8(Macroblock *currMB, ColorPlane pl, int img_x,int img_y, i
   }
   else
   {
-    P_Q = P_R = P_S = P_T = P_U = P_V = P_W = P_X = p_Img->dc_pred_value;
+    P_Q = P_R = P_S = P_T = P_U = P_V = P_W = P_X = p_Vid->dc_pred_value;
   }
 
   if (block_available_up_left)
@@ -774,7 +774,7 @@ void set_intrapred_8x8(Macroblock *currMB, ColorPlane pl, int img_x,int img_y, i
   }
   else
   {
-    P_Z = p_Img->dc_pred_value;
+    P_Z = p_Vid->dc_pred_value;
   }
 
   LowPassForIntra8x8Pred(&(P_Z), block_available_up_left, block_available_up, block_available_left);

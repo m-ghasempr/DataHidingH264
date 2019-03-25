@@ -138,7 +138,7 @@ static inline void weighted_bi_prediction(imgpel** mb_pred,
 
 void get_block_luma(Macroblock *currMB, int decoder, ColorPlane pl, StorablePicture* dec_picture, StorablePicture *curr_ref, int x_pos, int y_pos, int hor_block_size, int ver_block_size, imgpel block[MB_BLOCK_SIZE][MB_BLOCK_SIZE])
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
 
   int tmp_res[21][21];
@@ -155,14 +155,14 @@ void get_block_luma(Macroblock *currMB, int decoder, ColorPlane pl, StorablePict
   int i, j, jj;
   int shift_x  = dec_picture->size_x;
   int maxold_x = dec_picture->size_x - 1;
-  int maxold_y = (dec_picture->motion.mb_field[p_Img->current_mb_nr]) ? (dec_picture->size_y >> 1) - 1 : dec_picture->size_y - 1;
+  int maxold_y = (dec_picture->motion.mb_field[p_Vid->current_mb_nr]) ? (dec_picture->size_y >> 1) - 1 : dec_picture->size_y - 1;
   int result;
   int pres_x;
-  int max_imgpel_value = p_Img->max_pel_value_comp[pl];
+  int max_imgpel_value = p_Vid->max_pel_value_comp[pl];
 
   if( IS_INDEPENDENT(p_Inp) )
   {
-    cur_imgY = curr_ref->p_dec_img[(short) p_Img->colour_plane_id][decoder];
+    cur_imgY = curr_ref->p_dec_img[(short) p_Vid->colour_plane_id][decoder];
   }
   else
   {
@@ -691,11 +691,11 @@ void get_block_luma(Macroblock *currMB, int decoder, ColorPlane pl, StorablePict
 
 void get_block_chroma(Macroblock *currMB, int decoder, int uv, StorablePicture* dec_picture, StorablePicture *curr_ref, int x_pos, int y_pos, int hor_block_size, int ver_block_size, imgpel block[MB_BLOCK_SIZE][MB_BLOCK_SIZE])
 {
-  ImageParameters *p_Img = currMB->p_Img;
-  int subpel_x    = p_Img->mb_cr_size_x == 8 ? 7 : 3;
-  int subpel_y    = p_Img->mb_cr_size_y == 8 ? 7 : 3;
-  int shiftpel_x  = p_Img->mb_cr_size_x == 8 ? 3 : 2;
-  int shiftpel_y  = p_Img->mb_cr_size_y == 8 ? 3 : 2;
+  VideoParameters *p_Vid = currMB->p_Vid;
+  int subpel_x    = p_Vid->mb_cr_size_x == 8 ? 7 : 3;
+  int subpel_y    = p_Vid->mb_cr_size_y == 8 ? 7 : 3;
+  int shiftpel_x  = p_Vid->mb_cr_size_x == 8 ? 3 : 2;
+  int shiftpel_y  = p_Vid->mb_cr_size_y == 8 ? 3 : 2;
   int total_scale = shiftpel_x + shiftpel_y;
 
   int dx = (x_pos & subpel_x);
@@ -710,17 +710,17 @@ void get_block_chroma(Macroblock *currMB, int decoder, int uv, StorablePicture* 
 
   int i, j;
   int maxold_x = dec_picture->size_x_cr - 1;
-  int maxold_y = (dec_picture->motion.mb_field[p_Img->current_mb_nr]) ? (dec_picture->size_y_cr >> 1) - 1 : dec_picture->size_y_cr - 1;
+  int maxold_y = (dec_picture->motion.mb_field[p_Vid->current_mb_nr]) ? (dec_picture->size_y_cr >> 1) - 1 : dec_picture->size_y_cr - 1;
   int result;
   
   imgpel **cur_img, *blk_line;
   imgpel *cur_line, *cur_line_p1;
   int tmp_pos;
   int ipos, ipos_p1;
-  int    max_imgpel_value = p_Img->max_pel_value_comp[uv + 1];
+  int    max_imgpel_value = p_Vid->max_pel_value_comp[uv + 1];
 
 #if 0
-  if (curr_ref == no_reference_picture && p_Img->framepoc < p_Img->recovery_poc)
+  if (curr_ref == no_reference_picture && p_Vid->framepoc < p_Vid->recovery_poc)
   {
     printf("list[ref_frame] is equal to 'no reference picture' before RAP\n");
 
@@ -872,7 +872,7 @@ void get_block_chroma(Macroblock *currMB, int decoder, int uv, StorablePicture* 
 #if 0
 void intra_cr_decoding(Macroblock *currMB, int yuv, int smb)
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   imgpel **curUV, *cur_img;
   int (*m7UV)[16], *m7;
   int uv;
@@ -881,23 +881,23 @@ void intra_cr_decoding(Macroblock *currMB, int yuv, int smb)
 
   for(uv = 0; uv < 2; uv++)
   {
-    Boolean lossless_qpprime = (Boolean) ((p_Img->lossless_qpprime_flag == 1) &&((p_Img->qp + dec_picture->chroma_qp_offset[uv] + p_Img->bitdepth_chroma_qp_scale) == 0));
+    Boolean lossless_qpprime = (Boolean) ((p_Vid->lossless_qpprime_flag == 1) &&((p_Vid->qp + dec_picture->chroma_qp_offset[uv] + p_Vid->bitdepth_chroma_qp_scale) == 0));
     itrans_4x4 = (!lossless_qpprime) ? itrans4x4 : itrans4x4_ls;
 
     curUV = dec_picture->imgUV[uv];
-    m7UV  = p_Img->currentSlice->mb_rres[uv+1];
+    m7UV  = p_Vid->currentSlice->mb_rres[uv+1];
     intrapred_chroma(currMB, uv);
 
     if (!smb && (currMB->cbp >> 4))
     {
-      for (b8 = 0; b8 < (p_Img->num_uv_blocks); b8++)
+      for (b8 = 0; b8 < (p_Vid->num_uv_blocks); b8++)
       {
         for(b4 = 0; b4 < 4; b4++)
         {
           joff = subblk_offset_y[yuv][b8][b4];          
           ioff = subblk_offset_x[yuv][b8][b4];          
 
-          itrans_4x4(p_Img, (ColorPlane) (uv + 1), ioff, joff);
+          itrans_4x4(p_Vid, (ColorPlane) (uv + 1), ioff, joff);
 
           for(jj=joff; jj<joff + 4;jj++)
           {
@@ -914,7 +914,7 @@ void intra_cr_decoding(Macroblock *currMB, int yuv, int smb)
     }
     else if ((currMB->cbp >> 4) == 0)
     {
-      for (b8 = 0; b8 < (p_Img->num_uv_blocks); b8++)
+      for (b8 = 0; b8 < (p_Vid->num_uv_blocks); b8++)
       {
         for(b4 = 0; b4 < 4; b4++)
         {
@@ -922,24 +922,24 @@ void intra_cr_decoding(Macroblock *currMB, int yuv, int smb)
           ioff = subblk_offset_x[yuv][b8][b4];          
 
           for(jj = joff; jj < 4 + joff;jj++)
-            memcpy(&(curUV[currMB->pix_c_y + jj][currMB->pix_c_x + ioff]), &(p_Img->currentSlice->mb_pred[uv + 1][jj][ioff]), BLOCK_SIZE * sizeof(imgpel));
+            memcpy(&(curUV[currMB->pix_c_y + jj][currMB->pix_c_x + ioff]), &(p_Vid->currentSlice->mb_pred[uv + 1][jj][ioff]), BLOCK_SIZE * sizeof(imgpel));
         }
       }
     }
     else
     {
-      itrans_sp_cr(p_Img, uv);
+      itrans_sp_cr(p_Vid, uv);
 
       for (joff  = 0; joff < 8; joff += 4)
       {
         for(ioff = 0; ioff < 8;ioff+=4)
         {          
-          itrans_4x4(p_Img, (ColorPlane) (uv + 1), ioff, joff);
+          itrans_4x4(p_Vid, (ColorPlane) (uv + 1), ioff, joff);
 
           for(jj = joff; jj < joff + 4; jj++)
             for(ii = ioff; ii < ioff + 4; ii++)
             {
-              curUV[currMB->pix_c_y+jj][ii + currMB->pix_c_x] = (imgpel) p_Img->currentSlice->mb_rres[uv+1][jj][ii];
+              curUV[currMB->pix_c_y+jj][ii + currMB->pix_c_x] = (imgpel) p_Vid->currentSlice->mb_rres[uv+1][jj][ii];
             }
         }
       }
@@ -949,7 +949,7 @@ void intra_cr_decoding(Macroblock *currMB, int yuv, int smb)
 
 void prepare_direct_params(Macroblock *currMB, StorablePicture *dec_picture, short pmvl0[2], short pmvl1[2],char *l0_rFrame, char *l1_rFrame)
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   char l0_rFrameL, l0_rFrameU, l0_rFrameUR;
   char l1_rFrameL, l1_rFrameU, l1_rFrameUR;
   PicMotionParams *motion = &dec_picture->motion;
@@ -958,7 +958,7 @@ void prepare_direct_params(Macroblock *currMB, StorablePicture *dec_picture, sho
 
   get_neighbors(currMB, mb, 0, 0, 16);
 
-  if (!p_Img->MbaffFrameFlag)
+  if (!p_Vid->mb_aff_frame_flag)
   {
     l0_rFrameL  = (char) (mb[0].available ? motion->ref_idx[LIST_0][mb[0].pos_y][mb[0].pos_x] : -1);
     l0_rFrameU  = (char) (mb[1].available ? motion->ref_idx[LIST_0][mb[1].pos_y][mb[1].pos_x] : -1);
@@ -973,64 +973,64 @@ void prepare_direct_params(Macroblock *currMB, StorablePicture *dec_picture, sho
     if (currMB->mb_field)
     {
       l0_rFrameL = (char) (mb[0].available 
-        ? p_Img->mb_data[mb[0].mb_addr].mb_field  || motion->ref_idx[LIST_0][mb[0].pos_y][mb[0].pos_x] < 0
+        ? p_Vid->mb_data[mb[0].mb_addr].mb_field  || motion->ref_idx[LIST_0][mb[0].pos_y][mb[0].pos_x] < 0
         ? motion->ref_idx[LIST_0][mb[0].pos_y][mb[0].pos_x] 
         : motion->ref_idx[LIST_0][mb[0].pos_y][mb[0].pos_x] * 2: -1);
 
       l0_rFrameU = (char) (mb[1].available 
-        ? p_Img->mb_data[mb[1].mb_addr].mb_field || motion->ref_idx[LIST_0][mb[1].pos_y][mb[1].pos_x] < 0
+        ? p_Vid->mb_data[mb[1].mb_addr].mb_field || motion->ref_idx[LIST_0][mb[1].pos_y][mb[1].pos_x] < 0
         ? motion->ref_idx[LIST_0][mb[1].pos_y][mb[1].pos_x] 
         : motion->ref_idx[LIST_0][mb[1].pos_y][mb[1].pos_x] * 2: -1);
 
        l0_rFrameUR = (char) (mb[2].available 
-         ? p_Img->mb_data[mb[2].mb_addr].mb_field || motion->ref_idx[LIST_0][mb[2].pos_y][mb[2].pos_x] < 0 
+         ? p_Vid->mb_data[mb[2].mb_addr].mb_field || motion->ref_idx[LIST_0][mb[2].pos_y][mb[2].pos_x] < 0 
          ? motion->ref_idx[LIST_0][mb[2].pos_y][mb[2].pos_x] 
          : motion->ref_idx[LIST_0][mb[2].pos_y][mb[2].pos_x] * 2: -1);
 
        l1_rFrameL = (char) (mb[0].available 
-         ? p_Img->mb_data[mb[0].mb_addr].mb_field || motion->ref_idx[LIST_1][mb[0].pos_y][mb[0].pos_x]  < 0 
+         ? p_Vid->mb_data[mb[0].mb_addr].mb_field || motion->ref_idx[LIST_1][mb[0].pos_y][mb[0].pos_x]  < 0 
          ? motion->ref_idx[LIST_1][mb[0].pos_y][mb[0].pos_x] 
          : motion->ref_idx[LIST_1][mb[0].pos_y][mb[0].pos_x] * 2: -1);
 
        l1_rFrameU = (char) (mb[1].available 
-         ? p_Img->mb_data[mb[1].mb_addr].mb_field || motion->ref_idx[LIST_1][mb[1].pos_y][mb[1].pos_x]  < 0 
+         ? p_Vid->mb_data[mb[1].mb_addr].mb_field || motion->ref_idx[LIST_1][mb[1].pos_y][mb[1].pos_x]  < 0 
          ? motion->ref_idx[LIST_1][mb[1].pos_y][mb[1].pos_x] 
          : motion->ref_idx[LIST_1][mb[1].pos_y][mb[1].pos_x] * 2: -1);
 
        l1_rFrameUR = (char) (mb[2].available 
-         ? p_Img->mb_data[mb[2].mb_addr].mb_field || motion->ref_idx[LIST_1][mb[2].pos_y][mb[2].pos_x] < 0
+         ? p_Vid->mb_data[mb[2].mb_addr].mb_field || motion->ref_idx[LIST_1][mb[2].pos_y][mb[2].pos_x] < 0
          ? motion->ref_idx[LIST_1][mb[2].pos_y][mb[2].pos_x] 
          : motion->ref_idx[LIST_1][mb[2].pos_y][mb[2].pos_x] * 2: -1);
     }
     else
     {
       l0_rFrameL = (char) (mb[0].available 
-        ? p_Img->mb_data[mb[0].mb_addr].mb_field || motion->ref_idx[LIST_0][mb[0].pos_y][mb[0].pos_x]  < 0 
+        ? p_Vid->mb_data[mb[0].mb_addr].mb_field || motion->ref_idx[LIST_0][mb[0].pos_y][mb[0].pos_x]  < 0 
         ? motion->ref_idx[LIST_0][mb[0].pos_y][mb[0].pos_x] >> 1 
         : motion->ref_idx[LIST_0][mb[0].pos_y][mb[0].pos_x]: -1);
 
       l0_rFrameU = (char) (mb[1].available 
-        ? p_Img->mb_data[mb[1].mb_addr].mb_field || motion->ref_idx[LIST_0][mb[1].pos_y][mb[1].pos_x] < 0 
+        ? p_Vid->mb_data[mb[1].mb_addr].mb_field || motion->ref_idx[LIST_0][mb[1].pos_y][mb[1].pos_x] < 0 
         ? motion->ref_idx[LIST_0][mb[1].pos_y][mb[1].pos_x] >> 1 
         : motion->ref_idx[LIST_0][mb[1].pos_y][mb[1].pos_x] : -1);
 
       l0_rFrameUR = (char) (mb[2].available 
-        ? p_Img->mb_data[mb[2].mb_addr].mb_field || motion->ref_idx[LIST_0][mb[2].pos_y][mb[2].pos_x] < 0 
+        ? p_Vid->mb_data[mb[2].mb_addr].mb_field || motion->ref_idx[LIST_0][mb[2].pos_y][mb[2].pos_x] < 0 
         ? motion->ref_idx[LIST_0][mb[2].pos_y][mb[2].pos_x] >> 1 
         : motion->ref_idx[LIST_0][mb[2].pos_y][mb[2].pos_x] : -1);
 
       l1_rFrameL = (char) (mb[0].available 
-        ? p_Img->mb_data[mb[0].mb_addr].mb_field || motion->ref_idx[LIST_1][mb[0].pos_y][mb[0].pos_x] < 0 
+        ? p_Vid->mb_data[mb[0].mb_addr].mb_field || motion->ref_idx[LIST_1][mb[0].pos_y][mb[0].pos_x] < 0 
         ? motion->ref_idx[LIST_1][mb[0].pos_y][mb[0].pos_x] >> 1 
         : motion->ref_idx[LIST_1][mb[0].pos_y][mb[0].pos_x] : -1);
 
       l1_rFrameU = (char) (mb[1].available 
-        ? p_Img->mb_data[mb[1].mb_addr].mb_field || motion->ref_idx[LIST_1][mb[1].pos_y][mb[1].pos_x] < 0 
+        ? p_Vid->mb_data[mb[1].mb_addr].mb_field || motion->ref_idx[LIST_1][mb[1].pos_y][mb[1].pos_x] < 0 
         ? motion->ref_idx[LIST_1][mb[1].pos_y][mb[1].pos_x] >> 1 
         : motion->ref_idx[LIST_1][mb[1].pos_y][mb[1].pos_x] : -1);
 
       l1_rFrameUR = (char) (mb[2].available 
-        ? p_Img->mb_data[mb[2].mb_addr].mb_field || motion->ref_idx[LIST_1][mb[2].pos_y][mb[2].pos_x] < 0 
+        ? p_Vid->mb_data[mb[2].mb_addr].mb_field || motion->ref_idx[LIST_1][mb[2].pos_y][mb[2].pos_x] < 0 
         ? motion->ref_idx[LIST_1][mb[2].pos_y][mb[2].pos_x] >> 1
         : motion->ref_idx[LIST_1][mb[2].pos_y][mb[2].pos_x] : -1);
     }
@@ -1050,17 +1050,17 @@ void prepare_direct_params(Macroblock *currMB, StorablePicture *dec_picture, sho
 }
 
 
-void check_motion_vector_range(ImageParameters *p_Img, short mv_x, short mv_y)
+void check_motion_vector_range(VideoParameters *p_Vid, short mv_x, short mv_y)
 {
   if (mv_x > 8191 || mv_x < -8192)
   {
-    fprintf(stderr,"ERROR! Horizontal motion vector %d is out of allowed range {-8192, 8191} in picture %d, macroblock %d\n", mv_x, p_Img->number, p_Img->current_mb_nr);
+    fprintf(stderr,"ERROR! Horizontal motion vector %d is out of allowed range {-8192, 8191} in picture %d, macroblock %d\n", mv_x, p_Vid->number, p_Vid->current_mb_nr);
     error("invalid stream: too big horizontal motion vector", 500);
   }
 
-  if (mv_y > (p_Img->max_mb_vmv_r - 1) || mv_y < (-p_Img->max_mb_vmv_r))
+  if (mv_y > (p_Vid->max_mb_vmv_r - 1) || mv_y < (-p_Vid->max_mb_vmv_r))
   {
-    fprintf(stderr,"ERROR! Vertical motion vector %d is out of allowed range {%d, %d} in picture %d, macroblock %d\n", mv_y, (-p_Img->max_mb_vmv_r), (p_Img->max_mb_vmv_r - 1), p_Img->number, p_Img->current_mb_nr);
+    fprintf(stderr,"ERROR! Vertical motion vector %d is out of allowed range {%d, %d} in picture %d, macroblock %d\n", mv_y, (-p_Vid->max_mb_vmv_r), (p_Vid->max_mb_vmv_r - 1), p_Vid->number, p_Vid->current_mb_nr);
     error("invalid stream: too big vertical motion vector", 500);
   }
 }
@@ -1072,15 +1072,15 @@ void perform_mc(Macroblock* currMB, int decoder, ColorPlane pl, StorablePicture 
   imgpel tmp_block_l1[MB_BLOCK_SIZE][MB_BLOCK_SIZE];     //!< l1 prediction
 
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currMB->p_Img; 
+  VideoParameters *p_Vid = currMB->p_Vid; 
 
   int vec1_x=0, vec1_y=0;
   int vec2_x=0, vec2_y=0;
   //int vec1_y_cr = 0, vec2_y_cr = 0;
   int alpha_l0, alpha_l1, wp_off;
-  int max_imgpel_value = p_Img->max_pel_value_comp[pl];
-  int apply_weights = ( (p_Img->active_pps->weighted_pred_flag  && (currSlice->slice_type== P_SLICE || currSlice->slice_type == SP_SLICE)) ||
-    (p_Img->active_pps->weighted_bipred_idc && (currSlice->slice_type== B_SLICE)));
+  int max_imgpel_value = p_Vid->max_pel_value_comp[pl];
+  int apply_weights = ( (p_Vid->active_pps->weighted_pred_flag  && (currSlice->slice_type== P_SLICE || currSlice->slice_type == SP_SLICE)) ||
+    (p_Vid->active_pps->weighted_bipred_idc && (currSlice->slice_type== B_SLICE)));
   static const int mv_mul = 16; // 4 * 4
   
   int i4   = currMB->block_x + i;
@@ -1096,7 +1096,7 @@ void perform_mc(Macroblock* currMB, int decoder, ColorPlane pl, StorablePicture 
 	  short ref_idx = ref_idx_buf[pred_dir][j4][i4];
     short ref_idx_wp = ref_idx;
     short      ***mv_array = currSlice->all_mv[pred_dir][ref_idx][l0_mode];
-    StorablePicture **list = p_Img->listX[currMB->list_offset + pred_dir];
+    StorablePicture **list = p_Vid->listX[currMB->list_offset + pred_dir];
     
     vec1_x = i4 * mv_mul + mv_array[j][i][0];
     //vec1_y = (currMB->block_y_aff + j) * mv_mul + mv_array[j4][i4][1];
@@ -1113,11 +1113,11 @@ void perform_mc(Macroblock* currMB, int decoder, ColorPlane pl, StorablePicture 
       alpha_l0  = currSlice->wp_weight[pred_dir][ref_idx_wp][0];
       wp_off    = currSlice->wp_offset[pred_dir][ref_idx_wp][0];
 
-      weighted_mc_prediction(&p_Img->p_decs->dec_mb_pred[decoder][joff], block_size_y, block_size_x, ioff, tmp_block_l0, alpha_l0, wp_off, currSlice->luma_log_weight_denom, max_imgpel_value);
+      weighted_mc_prediction(&p_Vid->p_decs->dec_mb_pred[decoder][joff], block_size_y, block_size_x, ioff, tmp_block_l0, alpha_l0, wp_off, currSlice->luma_log_weight_denom, max_imgpel_value);
     }
     else
     {
-      mc_prediction(&p_Img->p_decs->dec_mb_pred[decoder][joff], block_size_y, block_size_x, ioff, tmp_block_l0); 
+      mc_prediction(&p_Vid->p_decs->dec_mb_pred[decoder][joff], block_size_y, block_size_x, ioff, tmp_block_l0); 
     }
 
 #if 0
@@ -1125,10 +1125,10 @@ void perform_mc(Macroblock* currMB, int decoder, ColorPlane pl, StorablePicture 
     {
       int uv;
 
-      int ioff_cr = (p_Img->mb_cr_size_x == MB_BLOCK_SIZE) ? ioff : ioff >> 1;
-      int joff_cr = (p_Img->mb_cr_size_y == MB_BLOCK_SIZE) ? joff : joff >> 1;
-      int block_size_x_cr = p_Img->mb_cr_size_x == MB_BLOCK_SIZE ? block_size_x : block_size_x >> 1;
-      int block_size_y_cr = p_Img->mb_cr_size_y == MB_BLOCK_SIZE ? block_size_y : block_size_y >> 1;
+      int ioff_cr = (p_Vid->mb_cr_size_x == MB_BLOCK_SIZE) ? ioff : ioff >> 1;
+      int joff_cr = (p_Vid->mb_cr_size_y == MB_BLOCK_SIZE) ? joff : joff >> 1;
+      int block_size_x_cr = p_Vid->mb_cr_size_x == MB_BLOCK_SIZE ? block_size_x : block_size_x >> 1;
+      int block_size_y_cr = p_Vid->mb_cr_size_y == MB_BLOCK_SIZE ? block_size_y : block_size_y >> 1;
 
       vec1_y_cr = vec1_y + ((active_sps->chroma_format_idc == 1)? list[ref_idx]->chroma_vector_adjustment : 0);
 
@@ -1136,12 +1136,12 @@ void perform_mc(Macroblock* currMB, int decoder, ColorPlane pl, StorablePicture 
       {
         get_block_chroma (currMB, uv, list[ref_idx], vec1_x, vec1_y_cr, block_size_x_cr, block_size_y_cr, tmp_block_l0);
 
-        if (p_Img->apply_weights)
+        if (p_Vid->apply_weights)
         {
-          alpha_l0  = p_Img->wp_weight[pred_dir][ref_idx_wp][uv + 1];
-          wp_offset = p_Img->wp_offset[pred_dir][ref_idx_wp][uv + 1];
+          alpha_l0  = p_Vid->wp_weight[pred_dir][ref_idx_wp][uv + 1];
+          wp_offset = p_Vid->wp_offset[pred_dir][ref_idx_wp][uv + 1];
 
-          weighted_mc_prediction(&currSlice->mb_pred[uv + 1][joff_cr], block_size_y_cr, block_size_x_cr, ioff_cr, tmp_block_l0, alpha_l0, wp_offset, p_Img->chroma_log2_weight_denom, p_Img->max_pel_value_comp[uv + 1]);
+          weighted_mc_prediction(&currSlice->mb_pred[uv + 1][joff_cr], block_size_y_cr, block_size_x_cr, ioff_cr, tmp_block_l0, alpha_l0, wp_offset, p_Vid->chroma_log2_weight_denom, p_Vid->max_pel_value_comp[uv + 1]);
         }
         else
         {
@@ -1166,15 +1166,15 @@ void perform_mc(Macroblock* currMB, int decoder, ColorPlane pl, StorablePicture 
     vec1_y = j4 * mv_mul + l0_mv_array[j][i][1];
     vec2_y = j4 * mv_mul + l1_mv_array[j][i][1];
 
-    get_block_luma (currMB, decoder, pl, dec_picture, p_Img->listX[LIST_0 + currMB->list_offset][l0_ref], vec1_x, vec1_y, block_size_x, block_size_y, tmp_block_l0);  
-    get_block_luma (currMB, decoder, pl, dec_picture, p_Img->listX[LIST_1 + currMB->list_offset][l1_ref], vec2_x, vec2_y, block_size_x, block_size_y, tmp_block_l1);  
+    get_block_luma (currMB, decoder, pl, dec_picture, p_Vid->listX[LIST_0 + currMB->list_offset][l0_ref], vec1_x, vec1_y, block_size_x, block_size_y, tmp_block_l0);  
+    get_block_luma (currMB, decoder, pl, dec_picture, p_Vid->listX[LIST_1 + currMB->list_offset][l1_ref], vec2_x, vec2_y, block_size_x, block_size_y, tmp_block_l1);  
 
     if(apply_weights)
     {
-      int wt_list_offset = (p_Img->active_pps->weighted_bipred_idc==2)? currMB->list_offset : 0;
+      int wt_list_offset = (p_Vid->active_pps->weighted_bipred_idc==2)? currMB->list_offset : 0;
 
       // This code existed in the original. Seems pointless but copying it here for reference and in case temporal direct breaks.
-      // if (mv_mode==0 && p_Img->direct_spatial_mv_pred_flag==0 ) l1_ref_idx=0;    
+      // if (mv_mode==0 && p_Vid->direct_spatial_mv_pred_flag==0 ) l1_ref_idx=0;    
       if (currMB->mb_field)
       {
         l0_ref >>=1;
@@ -1185,43 +1185,43 @@ void perform_mc(Macroblock* currMB, int decoder, ColorPlane pl, StorablePicture 
       alpha_l1  =   currSlice->wbp_weight[LIST_1 + wt_list_offset][l0_ref][l1_ref][0];
       wp_off = ((currSlice->wp_offset [LIST_0 + wt_list_offset][l0_ref][0] + currSlice->wp_offset[LIST_1 + wt_list_offset][l1_ref][0] + 1) >>1);
 
-      weighted_bi_prediction(&p_Img->p_decs->dec_mb_pred[decoder][joff], tmp_block_l0, tmp_block_l1, block_size_y, block_size_x, ioff, alpha_l0, alpha_l1, wp_off, (currSlice->luma_log_weight_denom + 1), max_imgpel_value);
+      weighted_bi_prediction(&p_Vid->p_decs->dec_mb_pred[decoder][joff], tmp_block_l0, tmp_block_l1, block_size_y, block_size_x, ioff, alpha_l0, alpha_l1, wp_off, (currSlice->luma_log_weight_denom + 1), max_imgpel_value);
     }
     else
     { 
-      bi_prediction(&p_Img->p_decs->dec_mb_pred[decoder][joff], tmp_block_l0, tmp_block_l1, block_size_y, block_size_x, ioff); 
+      bi_prediction(&p_Vid->p_decs->dec_mb_pred[decoder][joff], tmp_block_l0, tmp_block_l1, block_size_y, block_size_x, ioff); 
     }
 #if 0
     if ((dec_picture->chroma_format_idc != YUV400) && (dec_picture->chroma_format_idc != YUV444) ) 
     {
       int uv;
 
-      int ioff_cr = p_Img->mb_cr_size_x == MB_BLOCK_SIZE ? ioff : ioff >> 1;
-      int joff_cr = p_Img->mb_cr_size_y == MB_BLOCK_SIZE ? joff : joff >> 1;
-      int block_size_x_cr = p_Img->mb_cr_size_x == MB_BLOCK_SIZE ? block_size_x : block_size_x >> 1;
-      int block_size_y_cr = p_Img->mb_cr_size_y == MB_BLOCK_SIZE ? block_size_y : block_size_y >> 1;
+      int ioff_cr = p_Vid->mb_cr_size_x == MB_BLOCK_SIZE ? ioff : ioff >> 1;
+      int joff_cr = p_Vid->mb_cr_size_y == MB_BLOCK_SIZE ? joff : joff >> 1;
+      int block_size_x_cr = p_Vid->mb_cr_size_x == MB_BLOCK_SIZE ? block_size_x : block_size_x >> 1;
+      int block_size_y_cr = p_Vid->mb_cr_size_y == MB_BLOCK_SIZE ? block_size_y : block_size_y >> 1;
 
-      vec1_y_cr = vec1_y + ((active_sps->chroma_format_idc == 1)? p_Img->listX[LIST_0 + list_offset][l0_refframe]->chroma_vector_adjustment : 0);
-      vec2_y_cr = vec2_y + ((active_sps->chroma_format_idc == 1)? p_Img->listX[LIST_1 + list_offset][l1_refframe]->chroma_vector_adjustment : 0);
+      vec1_y_cr = vec1_y + ((active_sps->chroma_format_idc == 1)? p_Vid->listX[LIST_0 + list_offset][l0_refframe]->chroma_vector_adjustment : 0);
+      vec2_y_cr = vec2_y + ((active_sps->chroma_format_idc == 1)? p_Vid->listX[LIST_1 + list_offset][l1_refframe]->chroma_vector_adjustment : 0);
 
       for(uv=0;uv<2;uv++)
       {
-        get_block_chroma (currMB, uv, p_Img->listX[LIST_0 + list_offset][l0_refframe], vec1_x, vec1_y_cr, block_size_x_cr, block_size_y_cr, tmp_block_l0);
-        get_block_chroma (currMB, uv, p_Img->listX[LIST_1 + list_offset][l1_refframe], vec2_x, vec2_y_cr, block_size_x_cr, block_size_y_cr, tmp_block_l1);
+        get_block_chroma (currMB, uv, p_Vid->listX[LIST_0 + list_offset][l0_refframe], vec1_x, vec1_y_cr, block_size_x_cr, block_size_y_cr, tmp_block_l0);
+        get_block_chroma (currMB, uv, p_Vid->listX[LIST_1 + list_offset][l1_refframe], vec2_x, vec2_y_cr, block_size_x_cr, block_size_y_cr, tmp_block_l1);
 
-        if(p_Img->apply_weights)
+        if(p_Vid->apply_weights)
         {
           int wt_list_offset = (active_pps->weighted_bipred_idc==2)? list_offset : 0;
 
-          alpha_l0  =   p_Img->wbp_weight[LIST_0 + wt_list_offset][l0_ref_idx][l1_ref_idx][uv + 1];
-          alpha_l1  =   p_Img->wbp_weight[LIST_1 + wt_list_offset][l0_ref_idx][l1_ref_idx][uv + 1];
-          wp_offset = ((p_Img->wp_offset [LIST_0 + wt_list_offset][l0_ref_idx][uv + 1] + p_Img->wp_offset[LIST_1 + wt_list_offset][l1_ref_idx][uv + 1] + 1) >>1);
+          alpha_l0  =   p_Vid->wbp_weight[LIST_0 + wt_list_offset][l0_ref_idx][l1_ref_idx][uv + 1];
+          alpha_l1  =   p_Vid->wbp_weight[LIST_1 + wt_list_offset][l0_ref_idx][l1_ref_idx][uv + 1];
+          wp_offset = ((p_Vid->wp_offset [LIST_0 + wt_list_offset][l0_ref_idx][uv + 1] + p_Vid->wp_offset[LIST_1 + wt_list_offset][l1_ref_idx][uv + 1] + 1) >>1);
 
-          weighted_bi_prediction(&currSlice->mb_pred[uv+1][joff_cr], tmp_block_l0, tmp_block_l1, block_size_y_cr, block_size_x_cr, ioff_cr, alpha_l0, alpha_l1, wp_offset, (p_Img->chroma_log2_weight_denom + 1), p_Img->max_pel_value_comp[uv + 1]);
+          weighted_bi_prediction(&currSlice->mb_pred[uv+1][joff_cr], tmp_block_l0, tmp_block_l1, block_size_y_cr, block_size_x_cr, ioff_cr, alpha_l0, alpha_l1, wp_offset, (p_Vid->chroma_log2_weight_denom + 1), p_Vid->max_pel_value_comp[uv + 1]);
         }
         else
         {
-          bi_prediction(&p_Img->currentSlice->mb_pred[uv + 1][joff_cr], tmp_block_l0, tmp_block_l1, block_size_y_cr, block_size_x_cr, ioff_cr);
+          bi_prediction(&p_Vid->currentSlice->mb_pred[uv + 1][joff_cr], tmp_block_l0, tmp_block_l1, block_size_y_cr, block_size_x_cr, ioff_cr);
         }
       }
     }
@@ -1235,15 +1235,15 @@ void perform_mc_concealment(Macroblock* currMB, int decoder, ColorPlane pl, Stor
   imgpel tmp_block_l1[MB_BLOCK_SIZE][MB_BLOCK_SIZE];     //!< l1 prediction
 
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
 
   int vec1_x=0, vec1_y=0;
   int vec2_x=0, vec2_y=0;
   //int vec1_y_cr = 0, vec2_y_cr = 0;
   int alpha_l0, alpha_l1, wp_off;
-  int max_imgpel_value = p_Img->max_pel_value_comp[pl];
-  int apply_weights = ( (p_Img->active_pps->weighted_pred_flag  && (currSlice->slice_type == P_SLICE || currSlice->slice_type == SP_SLICE)) ||
-    (p_Img->active_pps->weighted_bipred_idc && (currSlice->slice_type== B_SLICE)));
+  int max_imgpel_value = p_Vid->max_pel_value_comp[pl];
+  int apply_weights = ( (p_Vid->active_pps->weighted_pred_flag  && (currSlice->slice_type == P_SLICE || currSlice->slice_type == SP_SLICE)) ||
+    (p_Vid->active_pps->weighted_bipred_idc && (currSlice->slice_type== B_SLICE)));
   static const int mv_mul = 16; // 4 * 4
   
   int i4   = currMB->block_x + i;
@@ -1259,7 +1259,7 @@ void perform_mc_concealment(Macroblock* currMB, int decoder, ColorPlane pl, Stor
 	  short ref_idx = ref_idx_buf[pred_dir][j4][i4];
     short ref_idx_wp = ref_idx;
     short ***mv_array = dec_picture->motion.mv[pred_dir];
-    StorablePicture **list = p_Img->listX[currMB->list_offset + pred_dir];
+    StorablePicture **list = p_Vid->listX[currMB->list_offset + pred_dir];
 
     vec1_x = i4 * mv_mul + mv_array[j4][i4][0];
     //vec1_y = (currMB->block_y_aff + j) * mv_mul + mv_array[j4][i4][1];
@@ -1273,14 +1273,14 @@ void perform_mc_concealment(Macroblock* currMB, int decoder, ColorPlane pl, Stor
       {
         ref_idx_wp >>=1;
       }
-      alpha_l0  = p_Img->currentSlice->wp_weight[pred_dir][ref_idx_wp][0];
-      wp_off = p_Img->currentSlice->wp_offset[pred_dir][ref_idx_wp][0];
+      alpha_l0  = p_Vid->currentSlice->wp_weight[pred_dir][ref_idx_wp][0];
+      wp_off = p_Vid->currentSlice->wp_offset[pred_dir][ref_idx_wp][0];
 
-      weighted_mc_prediction(&p_Img->p_decs->dec_mb_pred[decoder][joff], block_size_y, block_size_x, ioff, tmp_block_l0, alpha_l0, wp_off, p_Img->currentSlice->luma_log_weight_denom, max_imgpel_value);
+      weighted_mc_prediction(&p_Vid->p_decs->dec_mb_pred[decoder][joff], block_size_y, block_size_x, ioff, tmp_block_l0, alpha_l0, wp_off, p_Vid->currentSlice->luma_log_weight_denom, max_imgpel_value);
     }
     else
     {
-      mc_prediction(&p_Img->p_decs->dec_mb_pred[decoder][joff], block_size_y, block_size_x, ioff, tmp_block_l0); 
+      mc_prediction(&p_Vid->p_decs->dec_mb_pred[decoder][joff], block_size_y, block_size_x, ioff, tmp_block_l0); 
     }
   }
   else
@@ -1298,30 +1298,30 @@ void perform_mc_concealment(Macroblock* currMB, int decoder, ColorPlane pl, Stor
     vec1_y = j4 * mv_mul + l0_mv_array[j4][i4][1];
     vec2_y = j4 * mv_mul + l1_mv_array[j4][i4][1];
 
-    get_block_luma (currMB, decoder, pl, dec_picture, p_Img->listX[LIST_0 + currMB->list_offset][l0_ref], vec1_x, vec1_y, block_size_x, block_size_y, tmp_block_l0);  
-    get_block_luma (currMB, decoder, pl, dec_picture, p_Img->listX[LIST_1 + currMB->list_offset][l1_ref], vec2_x, vec2_y, block_size_x, block_size_y, tmp_block_l1);  
+    get_block_luma (currMB, decoder, pl, dec_picture, p_Vid->listX[LIST_0 + currMB->list_offset][l0_ref], vec1_x, vec1_y, block_size_x, block_size_y, tmp_block_l0);  
+    get_block_luma (currMB, decoder, pl, dec_picture, p_Vid->listX[LIST_1 + currMB->list_offset][l1_ref], vec2_x, vec2_y, block_size_x, block_size_y, tmp_block_l1);  
 
     if(apply_weights)
     {
-      int wt_list_offset = (p_Img->active_pps->weighted_bipred_idc==2)? currMB->list_offset : 0;
+      int wt_list_offset = (p_Vid->active_pps->weighted_bipred_idc==2)? currMB->list_offset : 0;
 
       // This code existed in the original. Seems pointless but copying it here for reference and in case temporal direct breaks.
-      // if (mv_mode==0 && p_Img->direct_spatial_mv_pred_flag==0 ) l1_ref_idx=0;    
+      // if (mv_mode==0 && p_Vid->direct_spatial_mv_pred_flag==0 ) l1_ref_idx=0;    
       if (currMB->mb_field)
       {
         l0_ref >>=1;
         l1_ref >>=1;
       }
 
-      alpha_l0  =   p_Img->currentSlice->wbp_weight[LIST_0 + wt_list_offset][l0_ref][l1_ref][0];
-      alpha_l1  =   p_Img->currentSlice->wbp_weight[LIST_1 + wt_list_offset][l0_ref][l1_ref][0];
-      wp_off = ((p_Img->currentSlice->wp_offset [LIST_0 + wt_list_offset][l0_ref][0] + p_Img->currentSlice->wp_offset[LIST_1 + wt_list_offset][l1_ref][0] + 1) >>1);
+      alpha_l0  =   p_Vid->currentSlice->wbp_weight[LIST_0 + wt_list_offset][l0_ref][l1_ref][0];
+      alpha_l1  =   p_Vid->currentSlice->wbp_weight[LIST_1 + wt_list_offset][l0_ref][l1_ref][0];
+      wp_off = ((p_Vid->currentSlice->wp_offset [LIST_0 + wt_list_offset][l0_ref][0] + p_Vid->currentSlice->wp_offset[LIST_1 + wt_list_offset][l1_ref][0] + 1) >>1);
 
-      weighted_bi_prediction(&p_Img->p_decs->dec_mb_pred[decoder][joff], tmp_block_l0, tmp_block_l1, block_size_y, block_size_x, ioff, alpha_l0, alpha_l1, wp_off, (p_Img->currentSlice->luma_log_weight_denom + 1), max_imgpel_value);
+      weighted_bi_prediction(&p_Vid->p_decs->dec_mb_pred[decoder][joff], tmp_block_l0, tmp_block_l1, block_size_y, block_size_x, ioff, alpha_l0, alpha_l1, wp_off, (p_Vid->currentSlice->luma_log_weight_denom + 1), max_imgpel_value);
     }
     else
     { 
-      bi_prediction(&p_Img->p_decs->dec_mb_pred[decoder][joff], tmp_block_l0, tmp_block_l1, block_size_y, block_size_x, ioff); 
+      bi_prediction(&p_Vid->p_decs->dec_mb_pred[decoder][joff], tmp_block_l0, tmp_block_l1, block_size_y, block_size_x, ioff); 
     }
   }
 }

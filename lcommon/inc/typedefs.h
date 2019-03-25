@@ -12,6 +12,7 @@
  *     - Alexis Michael Tourapis         <alexismt@ieee.org>
  *************************************************************************************
  */
+
 #ifndef _TYPEDEFS_H_
 #define _TYPEDEFS_H_
 
@@ -25,6 +26,30 @@ typedef unsigned int   uint32;   //!< type definition for unsigned int (32 bits)
 typedef          char  int8;
 typedef          short int16;
 typedef          int   int32;
+
+#if (IMGTYPE == 0)
+typedef byte   imgpel;
+typedef uint16 distpel;
+typedef int32  distblk;
+#elif (IMGTYPE == 2)
+typedef float imgpel;
+typedef float distpel;
+typedef float distblk;
+#else
+typedef uint16 imgpel;
+typedef uint32 distpel;
+typedef int64  distblk;
+#endif
+
+//! Boolean Type
+#ifdef FALSE
+#  define Boolean int
+#else
+typedef enum {
+  FALSE,
+  TRUE
+} Boolean;
+#endif
 
 /*
 #define MAXUINT8     0xff

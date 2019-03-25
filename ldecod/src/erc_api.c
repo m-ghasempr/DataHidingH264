@@ -25,17 +25,17 @@
  *    Initinize the error concealment module
  ************************************************************************
  */
-void ercInit(ImageParameters *p_Img, int pic_sizex, int pic_sizey, int flag)
+void ercInit(VideoParameters *p_Vid, int pic_sizex, int pic_sizey, int flag)
 {
-  ercClose(p_Img, p_Img->erc_errorVar);
-  p_Img->erc_object_list = (objectBuffer_t *) calloc((pic_sizex * pic_sizey) >> 6, sizeof(objectBuffer_t));
-  if (p_Img->erc_object_list == NULL) no_mem_exit("ercInit: erc_object_list");
+  ercClose(p_Vid, p_Vid->erc_errorVar);
+  p_Vid->erc_object_list = (objectBuffer_t *) calloc((pic_sizex * pic_sizey) >> 6, sizeof(objectBuffer_t));
+  if (p_Vid->erc_object_list == NULL) no_mem_exit("ercInit: erc_object_list");
 
   // the error concealment instance is allocated
-  p_Img->erc_errorVar = ercOpen();
+  p_Vid->erc_errorVar = ercOpen();
 
   // set error concealment ON
-  ercSetErrorConcealment(p_Img->erc_errorVar, flag);
+  ercSetErrorConcealment(p_Vid->erc_errorVar, flag);
 }
 
 /*!
@@ -162,13 +162,13 @@ void ercReset( ercVariables_t *errorVar, int nOfMBs, int numOfSegments, int picS
  * \brief
  *      Resets the variables used in error detection.
  *      Should be called always when starting to decode a new frame.
- * \param p_Img
- *      ImageParameters variable
+ * \param p_Vid
+ *      VideoParameters variable
  * \param errorVar
  *      Variables for error concealment
  ************************************************************************
  */
-void ercClose(ImageParameters *p_Img,  ercVariables_t *errorVar )
+void ercClose(VideoParameters *p_Vid,  ercVariables_t *errorVar )
 {
   if ( errorVar != NULL )
   {
@@ -184,10 +184,10 @@ void ercClose(ImageParameters *p_Img,  ercVariables_t *errorVar )
     errorVar = NULL;
   }
 
-  if (p_Img->erc_object_list)
+  if (p_Vid->erc_object_list)
   {
-    free(p_Img->erc_object_list);
-    p_Img->erc_object_list=NULL;
+    free(p_Vid->erc_object_list);
+    p_Vid->erc_object_list=NULL;
   }
 }
 

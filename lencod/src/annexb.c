@@ -25,7 +25,7 @@
  *
  ********************************************************************************************
 */
-int WriteAnnexbNALU (ImageParameters *p_Img, NALU_t *n)
+int WriteAnnexbNALU (VideoParameters *p_Vid, NALU_t *n)
 {
   int BitsWritten = 0;
   int offset = 0;
@@ -35,7 +35,7 @@ int WriteAnnexbNALU (ImageParameters *p_Img, NALU_t *n)
 
   assert (n != NULL);
   assert (n->forbidden_bit == 0);
-  assert (p_Img->f_annexb != NULL);
+  assert (p_Vid->f_annexb != NULL);
   assert (n->startcodeprefix_len == 3 || n->startcodeprefix_len == 4);
 
 // printf ("WriteAnnexbNALU: writing %d bytes w/ startcode_len %d\n", n->len+1, n->startcodeprefix_len);
@@ -45,7 +45,7 @@ int WriteAnnexbNALU (ImageParameters *p_Img, NALU_t *n)
     length = 3;
   }
 
-  if ( length != (int) fwrite (startcode+offset, 1, length, p_Img->f_annexb))
+  if ( length != (int) fwrite (startcode+offset, 1, length, p_Vid->f_annexb))
   {
     printf ("Fatal: cannot write %d bytes to bitstream file, exit (-1)\n", length);
     exit (-1);
@@ -55,7 +55,7 @@ int WriteAnnexbNALU (ImageParameters *p_Img, NALU_t *n)
 
   first_byte = (unsigned char) ((n->forbidden_bit << 7) | (n->nal_reference_idc << 5) | n->nal_unit_type);
 
-  if ( 1 != fwrite (&first_byte, 1, 1, p_Img->f_annexb))
+  if ( 1 != fwrite (&first_byte, 1, 1, p_Vid->f_annexb))
   {
     printf ("Fatal: cannot write %d bytes to bitstream file, exit (-1)\n", 1);
     exit (-1);
@@ -65,14 +65,14 @@ int WriteAnnexbNALU (ImageParameters *p_Img, NALU_t *n)
 
 // printf ("First Byte %x, nal_ref_idc %x, nal_unit_type %d\n", first_byte, n->nal_reference_idc, n->nal_unit_type);
 
-  if (n->len != fwrite (n->buf, 1, n->len, p_Img->f_annexb))
+  if (n->len != fwrite (n->buf, 1, n->len, p_Vid->f_annexb))
   {
     printf ("Fatal: cannot write %d bytes to bitstream file, exit (-1)\n", n->len);
     exit (-1);
   }
   BitsWritten += n->len * 8;
 
-  fflush (p_Img->f_annexb);
+  fflush (p_Vid->f_annexb);
 #if TRACE
   fprintf (p_Enc->p_trace, "\n\nAnnex B NALU w/ %s startcode, len %d, forbidden_bit %d, nal_reference_idc %d, nal_unit_type %d\n\n",
     n->startcodeprefix_len == 4?"long":"short", n->len + 1, n->forbidden_bit, n->nal_reference_idc, n->nal_unit_type);
@@ -87,8 +87,8 @@ int WriteAnnexbNALU (ImageParameters *p_Img, NALU_t *n)
  * \brief
  *    Opens the output file for the bytestream
  *
- * \param p_Img
- *    ImageParameters structure
+ * \param p_Vid
+ *    VideoParameters structure
  * \param Filename
  *    The filename of the file to be opened
  *
@@ -97,9 +97,9 @@ int WriteAnnexbNALU (ImageParameters *p_Img, NALU_t *n)
  *
  ********************************************************************************************
 */
-void OpenAnnexbFile (ImageParameters *p_Img, char *Filename)
+void OpenAnnexbFile (VideoParameters *p_Vid, char *Filename)
 {
-  if ((p_Img->f_annexb = fopen (Filename, "wb")) == NULL)
+  if ((p_Vid->f_annexb = fopen (Filename, "wb")) == NULL)
   {
     printf ("Fatal: cannot open Annex B bytestream file '%s', exit (-1)\n", Filename);
     exit (-1);
@@ -116,9 +116,9 @@ void OpenAnnexbFile (ImageParameters *p_Img, char *Filename)
  *    none.  Funtion trerminates the program in case of an error
  ********************************************************************************************
 */
-void CloseAnnexbFile(ImageParameters *p_Img) 
+void CloseAnnexbFile(VideoParameters *p_Vid) 
 {
-  if (fclose (p_Img->f_annexb))
+  if (fclose (p_Vid->f_annexb))
   {
     printf ("Fatal: cannot close Annex B bytestream file, exit (-1)\n");
     exit (-1);

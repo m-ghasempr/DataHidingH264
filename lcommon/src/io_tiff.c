@@ -1,13 +1,13 @@
 /*!
  *************************************************************************************
- * \file io_raw.c
+ * \file io_tiff.c
  *
  * \brief
- *    I/O functions related to raw images
+ *    I/O functions related to TIFF images
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
- *     - Karsten Sühring                 <suehring@hhi.de>
+ *     - Larry Luther                    <lzl@dolby.com>
  *     - Alexis Michael Tourapis         <alexismt@ieee.org>
  *     
  *************************************************************************************
@@ -244,6 +244,8 @@ static void ParseTIFFIFD (uint16 ifd_count, TIFFIFDEntry *tiffIFD, FrameFormat *
  *    Reads entire tiff file from harddrive. Any processing is done
  *    in memory, reducing I/O processing
  *
+ * \param p_Inp
+ *    Input configuration parameters 
  * \param input_file
  *    Input file to read from
  * \param FrameNoInFile
@@ -254,8 +256,9 @@ static void ParseTIFFIFD (uint16 ifd_count, TIFFIFDEntry *tiffIFD, FrameFormat *
  *    memory buffer
  ************************************************************************
  */
-void ReadTIFFImage (InputParameters *p_Inp, VideoDataFile *input_file, int FrameNoInFile, FrameFormat *source, unsigned char *buf)
+int ReadTIFFImage (InputParameters *p_Inp, VideoDataFile *input_file, int FrameNoInFile, FrameFormat *source, unsigned char *buf)
 {
+  int file_read = 0;
   int64 fileSize = 0; 
   int f_num;
   
@@ -293,11 +296,17 @@ void ReadTIFFImage (InputParameters *p_Inp, VideoDataFile *input_file, int Frame
   if (read(f_num, buf, (int) fileSize) != (int) fileSize)
   {
     printf ("ReadTIFFImage: cannot read %d bytes from input file, unexpected EOF, exiting...\n", (int) fileSize);
-    report_stats_on_error();
+    file_read = 0;
+  }
+  else
+  {
+    file_read = 1;
   }
 
   close(input_file->f_num);  
 
   if (tiffIFD != NULL)
     free(tiffIFD);
+
+  return file_read;
 }

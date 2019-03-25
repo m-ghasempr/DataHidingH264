@@ -14,7 +14,6 @@
 
 #include "contributors.h"
 #include "global.h"
-#include "image.h"
 #include "img_process.h"
 #include "io_image.h"
 #include "memalloc.h"
@@ -198,7 +197,7 @@ static inline void YV12toYUV(ImageData *imgOut, ImageData *imgIn)
   }
 }
 
-int InitProcessImage( ImageParameters *p_Img, InputParameters *p_Inp)
+int InitProcessImage( VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   int memory_size = 0;
   switch( p_Inp->ProcessInput )
@@ -209,7 +208,7 @@ int InitProcessImage( ImageParameters *p_Img, InputParameters *p_Inp)
   return memory_size;
 }
 
-void ClearProcessImage( ImageParameters *p_Img, InputParameters *p_Inp)
+void ClearProcessImage( VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   switch( p_Inp->ProcessInput )
   {
@@ -218,27 +217,28 @@ void ClearProcessImage( ImageParameters *p_Img, InputParameters *p_Inp)
   }   
 }
 
-void ProcessImage( ImageParameters *p_Img, InputParameters *p_Inp )
+void ProcessImage( VideoParameters *p_Vid, InputParameters *p_Inp )
 {
   switch( p_Inp->ProcessInput )
   {
   default:
   case 0:
-    CPImage(&p_Img->imgData, &p_Img->imgData0);
+    CPImage(&p_Vid->imgData, &p_Vid->imgData0);
     break;
   case 1:
-    FilterImage(&p_Img->imgData, &p_Img->imgData0);
+    FilterImage(&p_Vid->imgData, &p_Vid->imgData0);
     break;
   case 2:
-    YV12toYUV(&p_Img->imgData, &p_Img->imgData0);
+    YV12toYUV(&p_Vid->imgData, &p_Vid->imgData0);
     break;
   case 3:
-    MuxImages(&p_Img->imgData, &p_Img->imgData0, &p_Img->imgData1, &p_Img->imgData2);
+    MuxImages(&p_Vid->imgData, &p_Vid->imgData0, &p_Vid->imgData1, &p_Vid->imgData2);
     break;
   case 4:
-    FilterImageSep(&p_Img->imgData, &p_Img->imgData0);
+    FilterImageSep(&p_Vid->imgData, &p_Vid->imgData0);
     break;
   }
 }
+
 
 

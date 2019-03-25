@@ -1,7 +1,7 @@
 
 /*!
 ************************************************************************
-* \file quant4x4.h
+* \file quant8x8.h
 *
 * \brief
 *    Quantization process header file

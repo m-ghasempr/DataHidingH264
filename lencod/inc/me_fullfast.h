@@ -28,10 +28,10 @@ typedef struct me_full_fast
   int          **max_search_range;
 } MEFullFast;
 
-extern int FastFullPelBlockMotionSearch (Macroblock *currMB, MotionVector *pred_mv, MEBlock *mv_block, int min_mcost, int lambda_factor);
-extern void InitializeFastFullIntegerSearch (ImageParameters *p_Img, InputParameters *p_Inp);
-extern void ResetFastFullIntegerSearch      (ImageParameters *p_Img);
-extern void ClearFastFullIntegerSearch      (ImageParameters *p_Img);
+extern distblk FastFullPelBlockMotionSearch (Macroblock *currMB, MotionVector *pred_mv, MEBlock *mv_block, distblk min_mcost, int lambda_factor);
+extern void InitializeFastFullIntegerSearch (VideoParameters *p_Vid, InputParameters *p_Inp);
+extern void ResetFastFullIntegerSearch      (VideoParameters *p_Vid);
+extern void ClearFastFullIntegerSearch      (VideoParameters *p_Vid);
 
 
 #endif

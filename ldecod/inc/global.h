@@ -167,7 +167,7 @@ typedef struct
  ***********************************************************************
  */
 
-/*! Buffer structure for decoded referenc picture marking commands */
+//! Buffer structure for decoded reference picture marking commands
 typedef struct DecRefPicMarking_s
 {
   int memory_management_control_operation;
@@ -190,7 +190,7 @@ typedef struct pic_motion_params2
   byte     field_frame;   //!< indicates if co_located is field or frame.
 } PicMotionParams2;
 
-// Motion Vector structure
+//! Motion Vector structure
 typedef struct
 {
   short mv_x;
@@ -201,7 +201,7 @@ typedef struct
 typedef struct macroblock
 {
   struct slice       *p_Slice;                    //!< pointer to the current slice
-  struct img_par     *p_Img;                      //!< pointer to ImageParameters
+  struct video_par   *p_Vid;                      //!< pointer to VideoParameters
   struct inp_par     *p_Inp;
   int                 mbAddrX;                    //!< current MB address
   int mb_x;
@@ -296,7 +296,7 @@ typedef struct syntaxelement
 
 
 //! Bitstream
-typedef struct
+typedef struct bit_stream
 {
   // CABAC Decoding
   int           read_len;           //!< actual position in the codebuffer, CABAC only
@@ -316,7 +316,7 @@ typedef struct datapartition
   Bitstream           *bitstream;
   DecodingEnvironment de_cabac;
 
-  int     (*readSyntaxElement)(SyntaxElement *, struct img_par *, struct datapartition *);
+  int     (*readSyntaxElement)(Macroblock *currMB, SyntaxElement *, struct datapartition *);
           /*!< virtual function;
                actual method depends on chosen data partition and
                entropy coding method  */
@@ -325,7 +325,7 @@ typedef struct datapartition
 //! Slice
 typedef struct slice
 {
-  struct img_par      *p_Img;
+  struct video_par    *p_Vid;
   struct inp_par      *p_Inp;
   pic_parameter_set_rbsp_t *active_pps;
   seq_parameter_set_rbsp_t *active_sps;
@@ -333,7 +333,7 @@ typedef struct slice
   struct colocated_params *p_colocated;
   struct colocated_params *Co_located_JV[MAX_PLANE];  //!< p_colocated to be used during 4:4:4 independent mode decoding
 
-  int                 MbaffFrameFlag;
+  int                 mb_aff_frame_flag;
   int                 direct_spatial_mv_pred_flag;       //!< Indicator for direct mode type (1 for Spatial, 0 for Temporal)
   int                 num_ref_idx_l0_active;             //!< number of available list 0 references
   int                 num_ref_idx_l1_active;             //!< number of available list 1 references
@@ -416,12 +416,13 @@ typedef struct slice
 
 
   void (*read_CBP_and_coeffs_from_NAL) (Macroblock *currMB);
-  int  (*decode_one_component     ) (Macroblock *currMB, ColorPlane curr_plane, imgpel **currImg, struct storable_picture *dec_picture, struct motion_params *colocated, int list_offset);
-  int  (*readSlice                ) (struct img_par *, struct inp_par *);  
+  int  (*decode_one_component     ) (Macroblock *currMB, ColorPlane curr_plane, imgpel **currImg, struct storable_picture *dec_picture);
+  int  (*readSlice                ) (struct video_par *, struct inp_par *);  
   int  (*nal_startcode_follows    ) (struct slice*, int );
   void (*read_motion_info_from_NAL) (Macroblock *currMB);
   void (*read_one_macroblock      ) (Macroblock *currMB);
   void (*interpret_mb_mode        ) (Macroblock *currMB);
+  void (*compute_colocated        ) (struct slice *currSlice, struct colocated_params *p, struct storable_picture **listX[6]);
 
   void (*linfo_cbp_intra) (int len,int info,int *cbp, int *dummy);
   void (*linfo_cbp_inter) (int len,int info,int *cbp, int *dummy);
@@ -429,8 +430,8 @@ typedef struct slice
 
 //****************************** ~DM ***********************************
 
-// image parameters
-typedef struct img_par
+// video parameters
+typedef struct video_par
 {
   struct inp_par      *p_Inp;
   pic_parameter_set_rbsp_t *active_pps;
@@ -480,7 +481,7 @@ typedef struct img_par
   int ChromaArrayType;
 
   // For MB level frame/field coding
-  int MbaffFrameFlag;
+  int mb_aff_frame_flag;
 
   // for signalling to the neighbour logic that this is a deblocker call
   int DeblockCall;
@@ -565,7 +566,7 @@ typedef struct img_par
   int bitdepth_luma_qp_scale;
   int bitdepth_chroma_qp_scale;
   unsigned int dc_pred_value_comp[MAX_PLANE]; //!< component value for DC prediction (depends on component pel bit depth)
-  int max_imgpel_value_comp[MAX_PLANE];       //!< max value that one picture element (pixel) can take (depends on pic_unit_bitdepth)
+  int max_pel_value_comp[MAX_PLANE];       //!< max value that one picture element (pixel) can take (depends on pic_unit_bitdepth)
   int Transform8x8Mode;
   int profile_idc;
   int yuv_format;
@@ -580,6 +581,12 @@ typedef struct img_par
   int mb_size[3][2];                         //!< component macroblock dimensions
   int mb_size_blk[3][2];                     //!< component macroblock dimensions 
   int mb_size_shift[3][2];
+  int subpel_x;
+  int subpel_y;
+  int shiftpel_x;
+  int shiftpel_y;
+  int total_scale;
+
 
   int max_vmv_r;                             //!< maximum vertical motion vector range in luma quarter frame pixel units for the current level_idc
   int max_mb_vmv_r;                          //!< maximum vertical motion vector range in luma quarter pixel units for the current level_idc
@@ -641,9 +648,6 @@ typedef struct img_par
   int LastAccessUnitExists;
   int NALUCount;
 
-  //For residual DPCM
-  int ipmode_DPCM;
-
   // B pictures
   int  Bframe_ctr;
   int  frame_no;
@@ -672,7 +676,7 @@ typedef struct img_par
   struct ercVariables_s *erc_errorVar;
 
   int erc_mvperMB;
-  struct img_par *erc_img;
+  struct video_par *erc_img;
   int ec_flag[SE_MAX_ELEMENTS];        //!< array to set errorconcealment
 
   struct annex_b_struct *annex_b;
@@ -709,7 +713,7 @@ typedef struct img_par
   void (*EdgeLoopLuma)     (ColorPlane pl, imgpel** Img, byte Strength[16], Macroblock *MbQ, int dir, int edge, struct storable_picture *p);
   void (*EdgeLoopChroma)   (imgpel** Img, byte Strength[16], Macroblock *MbQ, int dir, int edge, int uv, struct storable_picture *p);
   void (*img2buf)          (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom);
-} ImageParameters;
+} VideoParameters;
 
 // signal to noise ratio parameters
 typedef struct snr_par
@@ -779,7 +783,7 @@ typedef struct old_slice_par
 typedef struct decoder_params
 {
   InputParameters   *p_Inp;          //!< Input Parameters
-  ImageParameters   *p_Img;          //!< Image Parameters
+  VideoParameters   *p_Vid;          //!< Image Parameters
   int64              bufferSize;     //!< buffersize for tiff reads (not currently supported)
   int                UsedBits;      // for internal statistics, is adjusted by se_v, ue_v, u_1
   FILE              *p_trace;        //!< Trace file
@@ -793,8 +797,8 @@ extern DecoderParams  *p_Dec;
 extern void error(char *text, int code);
 
 // dynamic mem allocation
-extern int  init_global_buffers(ImageParameters *p_Img);
-extern void free_global_buffers(ImageParameters *p_Img);
+extern int  init_global_buffers(VideoParameters *p_Vid);
+extern void free_global_buffers(VideoParameters *p_Vid);
 
 extern int RBSPtoSODB(byte *streamBuffer, int last_byte_pos);
 extern int EBSPtoRBSP(byte *streamBuffer, int end_bytepos, int begin_bytepos);
@@ -809,10 +813,8 @@ unsigned CeilLog2   ( unsigned uiVal);
 unsigned CeilLog2_sf( unsigned uiVal);
 
 // For 4:4:4 independent mode
-extern void change_plane_JV( ImageParameters *p_Img, int nplane );
-extern void make_frame_picture_JV(ImageParameters *p_Img);
+extern void change_plane_JV( VideoParameters *p_Vid, int nplane );
+extern void make_frame_picture_JV(VideoParameters *p_Vid);
 
 
 #endif
-
-

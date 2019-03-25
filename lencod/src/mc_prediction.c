@@ -114,13 +114,13 @@ static inline void MCPrediction(imgpel** mb_pred, imgpel* lpred, int block_size_
  *    Predict Luma block
  ************************************************************************
  */
-static inline void OneComponentLumaPrediction ( ImageParameters *p_Img, //!< image encoding parameters for current picture
-                                                imgpel*   mpred,        //!< array of prediction values (row by row)
-                                                int    pic_pix_x,       //!< motion shifted horizontal coordinate of block
-                                                int    pic_pix_y,       //!< motion shifted vertical   coordinate of block
-                                                int    block_size_x,    //!< horizontal block size
-                                                int    block_size_y,    //!< vertical block size
-                                                StorablePicture *list   //!< reference picture list
+static inline void OneComponentLumaPrediction ( VideoParameters *p_Vid, //!< video encoding parameters for current picture
+                                               imgpel*   mpred,       //!< array of prediction values (row by row)
+                                               int    pic_pix_x,      //!< motion shifted horizontal coordinate of block
+                                               int    pic_pix_y,      //!< motion shifted vertical   coordinate of block
+                                               int    block_size_x,   //!< horizontal block size
+                                               int    block_size_y,   //!< vertical block size
+                                               StorablePicture *list //!< reference picture list
                                                )
 {
   int     j;
@@ -129,7 +129,7 @@ static inline void OneComponentLumaPrediction ( ImageParameters *p_Img, //!< ima
   for (j = 0; j < block_size_y; j++) 
   {
     memcpy(mpred, ref_line, block_size_x * sizeof(imgpel));
-    ref_line += p_Img->padded_size_x;
+    ref_line += p_Vid->padded_size_x;
     mpred += block_size_x;
   }  
 }
@@ -152,7 +152,7 @@ void luma_prediction (Macroblock* currMB, //!< Current Macroblock
                      short bipred_me     //!< use bi prediction mv (0=no bipred, 1 = use set 1, 2 = use set 2)
                      )
 {
-  ImageParameters *p_Img     = currMB->p_Img;
+  VideoParameters *p_Vid     = currMB->p_Vid;
   InputParameters *p_Inp     = currMB->p_Inp;
   Slice           *currSlice = currMB->p_slice;
   imgpel l0_pred[MB_PIXELS];
@@ -180,17 +180,17 @@ void luma_prediction (Macroblock* currMB, //!< Current Macroblock
   {
   case 0:
     curr_mv = mv_array[LIST_0][(short) ref_idx[0]][list_mode[0]][by][bx];
-    OneComponentLumaPrediction (p_Img, l0_pred, pic_opix_x + curr_mv[0], pic_opix_y + curr_mv[1], block_size_x, block_size_y, p_Img->listX[LIST_0 + currMB->list_offset][(short) ref_idx[0]]);
+    OneComponentLumaPrediction (p_Vid, l0_pred, pic_opix_x + curr_mv[0], pic_opix_y + curr_mv[1], block_size_x, block_size_y, p_Vid->listX[LIST_0 + currMB->list_offset][(short) ref_idx[0]]);
     break;
   case 1:
     curr_mv = mv_array[LIST_1][(short) ref_idx[1]][list_mode[1]][by][bx];
-    OneComponentLumaPrediction (p_Img, l1_pred, pic_opix_x + curr_mv[0], pic_opix_y + curr_mv[1], block_size_x, block_size_y, p_Img->listX[LIST_1 + currMB->list_offset][(short)ref_idx[1]]);
+    OneComponentLumaPrediction (p_Vid, l1_pred, pic_opix_x + curr_mv[0], pic_opix_y + curr_mv[1], block_size_x, block_size_y, p_Vid->listX[LIST_1 + currMB->list_offset][(short)ref_idx[1]]);
     break;
   case 2:
     curr_mv = mv_array[LIST_0][(short) ref_idx[0]][list_mode[0]][by][bx];
-    OneComponentLumaPrediction (p_Img, l0_pred, pic_opix_x + curr_mv[0], pic_opix_y + curr_mv[1], block_size_x, block_size_y, p_Img->listX[LIST_0 + currMB->list_offset][(short)ref_idx[0]]);
+    OneComponentLumaPrediction (p_Vid, l0_pred, pic_opix_x + curr_mv[0], pic_opix_y + curr_mv[1], block_size_x, block_size_y, p_Vid->listX[LIST_0 + currMB->list_offset][(short)ref_idx[0]]);
     curr_mv = mv_array[LIST_1][(short) ref_idx[1]][list_mode[1]][by][bx];
-    OneComponentLumaPrediction (p_Img, l1_pred, pic_opix_x + curr_mv[0], pic_opix_y + curr_mv[1], block_size_x, block_size_y, p_Img->listX[LIST_1 + currMB->list_offset][(short)ref_idx[1]]);
+    OneComponentLumaPrediction (p_Vid, l1_pred, pic_opix_x + curr_mv[0], pic_opix_y + curr_mv[1], block_size_x, block_size_y, p_Vid->listX[LIST_1 + currMB->list_offset][(short)ref_idx[1]]);
     break;
   default:
     break;
@@ -201,7 +201,7 @@ void luma_prediction (Macroblock* currMB, //!< Current Macroblock
     if (p_dir==2)
     {
       MCWeightedBiPrediction(&mb_pred[block_y], l0_pred, l1_pred, block_size_y, block_x, block_size_x, 
-        p_Img->max_imgpel_value,
+        p_Vid->max_imgpel_value,
         currSlice->wbp_weight[0][(short)ref_idx[0]][(short)ref_idx[1]][0], currSlice->wbp_weight[1][(short)ref_idx[0]][(short)ref_idx[1]][0],
         (currSlice->wp_offset[0][(short)ref_idx[0]][0] + currSlice->wp_offset[1][(short)ref_idx[1]][0] + 1)>>1, 
          (currSlice->wp_luma_round << 1), currSlice->luma_log_weight_denom + 1);
@@ -209,13 +209,13 @@ void luma_prediction (Macroblock* currMB, //!< Current Macroblock
     else if (p_dir==0)
     {
       MCWeightedPrediction(&mb_pred[block_y], l0_pred, block_size_y, block_x, block_size_x,
-        p_Img->max_imgpel_value,
+        p_Vid->max_imgpel_value,
         currSlice->wp_weight[0][(short)ref_idx[0]][0], currSlice->wp_offset[0][(short)ref_idx[0]][0], currSlice->wp_luma_round, currSlice->luma_log_weight_denom);
     }
     else // (p_dir==1)
     {
       MCWeightedPrediction(&mb_pred[block_y], l1_pred, block_size_y, block_x, block_size_x,
-        p_Img->max_imgpel_value,
+        p_Vid->max_imgpel_value,
         currSlice->wp_weight[1][(short)ref_idx[1]][0], currSlice->wp_offset[1][(short)ref_idx[1]][0], currSlice->wp_luma_round, currSlice->luma_log_weight_denom);
     }
   }
@@ -254,7 +254,7 @@ void luma_prediction_bi (Macroblock* currMB, //!< Current Macroblock
                        int   list          //!< current list for prediction.
                        )
 {
-  ImageParameters *p_Img     = currMB->p_Img;
+  VideoParameters *p_Vid     = currMB->p_Vid;
   Slice           *currSlice = currMB->p_slice;
 
   imgpel l0_pred[MB_PIXELS];
@@ -276,13 +276,13 @@ void luma_prediction_bi (Macroblock* currMB, //!< Current Macroblock
   short   *mv_arrayl1 = mv_array[LIST_1][l1_ref_idx][l1_mode][by][bx];
   imgpel **mb_pred = currSlice->mb_pred[0];
 
-  OneComponentLumaPrediction (p_Img, l0_pred, pic_opix_x + mv_arrayl0[0], pic_opix_y + mv_arrayl0[1], block_size_x, block_size_y, p_Img->listX[0+currMB->list_offset][l0_ref_idx]);
-  OneComponentLumaPrediction (p_Img, l1_pred, pic_opix_x + mv_arrayl1[0], pic_opix_y + mv_arrayl1[1], block_size_x, block_size_y, p_Img->listX[1+currMB->list_offset][l1_ref_idx]);
+  OneComponentLumaPrediction (p_Vid, l0_pred, pic_opix_x + mv_arrayl0[0], pic_opix_y + mv_arrayl0[1], block_size_x, block_size_y, p_Vid->listX[0+currMB->list_offset][l0_ref_idx]);
+  OneComponentLumaPrediction (p_Vid, l1_pred, pic_opix_x + mv_arrayl1[0], pic_opix_y + mv_arrayl1[1], block_size_x, block_size_y, p_Vid->listX[1+currMB->list_offset][l1_ref_idx]);
 
   if (apply_weights)
   {
     MCWeightedBiPrediction(&mb_pred[block_y], l0_pred, l1_pred, block_size_y, block_x, block_size_x, 
-      p_Img->max_imgpel_value,
+      p_Vid->max_imgpel_value,
       currSlice->wbp_weight[0][l0_ref_idx][l1_ref_idx][0], currSlice->wbp_weight[1][l0_ref_idx][l1_ref_idx][0],
       (currSlice->wp_offset[0][l0_ref_idx][0] + currSlice->wp_offset[1][l1_ref_idx][0] + 1)>>1, 
       (currSlice->wp_luma_round << 1), currSlice->luma_log_weight_denom + 1);
@@ -309,23 +309,23 @@ void OneComponentChromaPrediction4x4_regenerate (
                                  StorablePicture *list,  //!< image components (color planes)
                                  int         uv)         //!< chroma component
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   int     i, j, ii, jj, ii0, jj0, ii1, jj1, if0, if1, jf0, jf1;
   short*  mvb;
 
-  int     f1_x = 64/p_Img->mb_cr_size_x;
+  int     f1_x = 64/p_Vid->mb_cr_size_x;
   int     f2_x=f1_x-1;
 
-  int     f1_y = 64/p_Img->mb_cr_size_y;
+  int     f1_y = 64/p_Vid->mb_cr_size_y;
   int     f2_y=f1_y-1;
 
   int     f3=f1_x*f1_y, f4=f3>>1;
-  int     list_offset = p_Img->mb_data[currMB->mbAddrX].list_offset;
-  int     max_y_cr = (int) (list_offset ? (p_Img->height_cr >> 1) - 1 : p_Img->height_cr - 1);
-  int     max_x_cr = (int) (p_Img->width_cr - 1);
+  int     list_offset = p_Vid->mb_data[currMB->mbAddrX].list_offset;
+  int     max_y_cr = (int) (list_offset ? (p_Vid->height_cr >> 1) - 1 : p_Vid->height_cr - 1);
+  int     max_x_cr = (int) (p_Vid->width_cr - 1);
   int     jjx, iix;
-  int     mb_cr_y_div4 = p_Img->mb_cr_size_y>>2;
-  int     mb_cr_x_div4 = p_Img->mb_cr_size_x>>2;
+  int     mb_cr_y_div4 = p_Vid->mb_cr_size_y>>2;
+  int     mb_cr_x_div4 = p_Vid->mb_cr_size_x>>2;
   int     jpos;
 
   imgpel** refimage = list->imgUV[uv];
@@ -343,7 +343,7 @@ void OneComponentChromaPrediction4x4_regenerate (
       ii   = (i + currMB->pix_c_x)*f1_x + mvb[0];
       jj   = jpos + mvb[1];
 
-      if (p_Img->active_sps->chroma_format_idc == 1)
+      if (p_Vid->active_sps->chroma_format_idc == 1)
         jj  += list->chroma_vector_adjustment;
 
       ii0  = iClip3 (0, max_x_cr, ii/f1_x);
@@ -378,26 +378,26 @@ void OneComponentChromaPrediction4x4_retrieve (
                                  StorablePicture *list,  //!< image components (color planes)
                                  int         uv)         //!< chroma component
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   int     j, ii, jj;
   short*  mvb;
 
   int     jjx;
-  int     right_shift_x = 4 - p_Img->chroma_shift_x;
-  int     right_shift_y = 4 - p_Img->chroma_shift_y;
+  int     right_shift_x = 4 - p_Vid->chroma_shift_x;
+  int     right_shift_y = 4 - p_Vid->chroma_shift_y;
   int     jpos;
 
   int     pos_x1 = block_c_x >> right_shift_x;
   int     pos_x2 = (block_c_x + 2) >> right_shift_x;
 
 #if (PAD_AFTER)
-  int     ipos1 = ((block_c_x + currMB->pix_c_x    ) << p_Img->chroma_shift_x);
-  int     ipos2 = ((block_c_x + currMB->pix_c_x + 2) << p_Img->chroma_shift_x);
-  int jj_chroma = ((p_Img->active_sps->chroma_format_idc == 1) ? list->chroma_vector_adjustment : 0);
+  int     ipos1 = ((block_c_x + currMB->pix_c_x    ) << p_Vid->chroma_shift_x);
+  int     ipos2 = ((block_c_x + currMB->pix_c_x + 2) << p_Vid->chroma_shift_x);
+  int jj_chroma = ((p_Vid->active_sps->chroma_format_idc == 1) ? list->chroma_vector_adjustment : 0);
 #else
-  int     ipos1 = ((block_c_x + currMB->pix_c_x    ) << p_Img->chroma_shift_x) + IMG_PAD_SIZE_TIMES4;
-  int     ipos2 = ((block_c_x + currMB->pix_c_x + 2) << p_Img->chroma_shift_x) + IMG_PAD_SIZE_TIMES4;
-  int jj_chroma = ((p_Img->active_sps->chroma_format_idc == 1) ? list->chroma_vector_adjustment : 0) + IMG_PAD_SIZE_TIMES4;
+  int     ipos1 = ((block_c_x + currMB->pix_c_x    ) << p_Vid->chroma_shift_x) + IMG_PAD_SIZE_TIMES4;
+  int     ipos2 = ((block_c_x + currMB->pix_c_x + 2) << p_Vid->chroma_shift_x) + IMG_PAD_SIZE_TIMES4;
+  int jj_chroma = ((p_Vid->active_sps->chroma_format_idc == 1) ? list->chroma_vector_adjustment : 0) + IMG_PAD_SIZE_TIMES4;
 #endif
 
   imgpel *line_ptr;
@@ -406,7 +406,7 @@ void OneComponentChromaPrediction4x4_retrieve (
   {
     jjx = j >> right_shift_y; // translate into absolute block (luma) coordinates
 
-    jpos = ( (j + currMB->opix_c_y) << p_Img->chroma_shift_y ) + jj_chroma;
+    jpos = ( (j + currMB->opix_c_y) << p_Vid->chroma_shift_y ) + jj_chroma;
 
     mvb  = mv [jjx][pos_x1];
 
@@ -436,14 +436,14 @@ void OneComponentChromaPrediction4x4_retrieve (
  ************************************************************************
  */
 static inline 
-void OneComponentChromaPrediction (ImageParameters *p_Img, //!< image encoding parameters for current picture
-                                   imgpel* mpred,          //!< array to store prediction values
-                                   int    pic_pix_x,       //!< motion shifted horizontal coordinate of block
-                                   int    pic_pix_y,       //!< motion shifted vertical  block
-                                   int    block_size_x,    //!< horizontal block size
-                                   int    block_size_y,    //!< vertical block size                                      
-                                   StorablePicture *list,  //!< reference picture list
-                                   int    uv)              //!< chroma component
+void OneComponentChromaPrediction (VideoParameters *p_Vid, //!< video encoding parameters for current picture
+                                   imgpel* mpred,      //!< array to store prediction values
+                                   int    pic_pix_x,      //!< motion shifted horizontal coordinate of block
+                                   int    pic_pix_y,      //!< motion shifted vertical  block
+                                   int    block_size_x,   //!< horizontal block size
+                                   int    block_size_y,   //!< vertical block size                                      
+                                   StorablePicture *list, //!< reference picture list
+                                   int    uv)         //!< chroma component
 {
   int     j;
   imgpel *ref_line = UMVLine4Xcr (list, uv + 1, pic_pix_y, pic_pix_x);
@@ -451,7 +451,7 @@ void OneComponentChromaPrediction (ImageParameters *p_Img, //!< image encoding p
   for (j = 0; j < block_size_y; j++) 
   {
     memcpy(mpred, ref_line, block_size_x * sizeof(imgpel));
-    ref_line += p_Img->cr_padded_size_x;
+    ref_line += p_Vid->cr_padded_size_x;
     mpred += block_size_x;
   }
 }
@@ -498,7 +498,7 @@ void chroma_prediction (Macroblock* currMB, // <-- Current Macroblock
                        short bipred_me      // <-- use bi prediction mv (0=no bipred, 1 = use set 1, 2 = use set 2)
                        )    
 {
-  ImageParameters *p_Img     = currMB->p_Img;
+  VideoParameters *p_Vid     = currMB->p_Vid;
   InputParameters *p_Inp     = currMB->p_Inp;
   Slice           *currSlice = currMB->p_slice;
 
@@ -534,14 +534,14 @@ void chroma_prediction (Macroblock* currMB, // <-- Current Macroblock
   switch (p_dir)
   {
   case 0:
-    OneComponentChromaPrediction (p_Img, l0_pred, pic_opix_x + mv_array[LIST_0][l0_ref_idx][l0_mode][by][bx][0], pic_opix_y + mv_array[LIST_0][l0_ref_idx][l0_mode][by][bx][1], block_size_x, block_size_y, p_Img->listX[0+currMB->list_offset][l0_ref_idx], uv);
+    OneComponentChromaPrediction (p_Vid, l0_pred, pic_opix_x + mv_array[LIST_0][l0_ref_idx][l0_mode][by][bx][0], pic_opix_y + mv_array[LIST_0][l0_ref_idx][l0_mode][by][bx][1], block_size_x, block_size_y, p_Vid->listX[0+currMB->list_offset][l0_ref_idx], uv);
     break;
   case 1: 
-    OneComponentChromaPrediction (p_Img, l1_pred, pic_opix_x + mv_array[LIST_1][l1_ref_idx][l1_mode][by][bx][0], pic_opix_y + mv_array[LIST_1][l1_ref_idx][l1_mode][by][bx][1], block_size_x, block_size_y, p_Img->listX[1+currMB->list_offset][l1_ref_idx], uv);
+    OneComponentChromaPrediction (p_Vid, l1_pred, pic_opix_x + mv_array[LIST_1][l1_ref_idx][l1_mode][by][bx][0], pic_opix_y + mv_array[LIST_1][l1_ref_idx][l1_mode][by][bx][1], block_size_x, block_size_y, p_Vid->listX[1+currMB->list_offset][l1_ref_idx], uv);
     break;
   case 2:
-    OneComponentChromaPrediction (p_Img, l0_pred, pic_opix_x + mv_array[LIST_0][l0_ref_idx][l0_mode][by][bx][0], pic_opix_y + mv_array[LIST_0][l0_ref_idx][l0_mode][by][bx][1], block_size_x, block_size_y, p_Img->listX[0+currMB->list_offset][l0_ref_idx], uv);
-    OneComponentChromaPrediction (p_Img, l1_pred, pic_opix_x + mv_array[LIST_1][l1_ref_idx][l1_mode][by][bx][0], pic_opix_y + mv_array[LIST_1][l1_ref_idx][l1_mode][by][bx][1], block_size_x, block_size_y, p_Img->listX[1+currMB->list_offset][l1_ref_idx], uv);
+    OneComponentChromaPrediction (p_Vid, l0_pred, pic_opix_x + mv_array[LIST_0][l0_ref_idx][l0_mode][by][bx][0], pic_opix_y + mv_array[LIST_0][l0_ref_idx][l0_mode][by][bx][1], block_size_x, block_size_y, p_Vid->listX[0+currMB->list_offset][l0_ref_idx], uv);
+    OneComponentChromaPrediction (p_Vid, l1_pred, pic_opix_x + mv_array[LIST_1][l1_ref_idx][l1_mode][by][bx][0], pic_opix_y + mv_array[LIST_1][l1_ref_idx][l1_mode][by][bx][1], block_size_x, block_size_y, p_Vid->listX[1+currMB->list_offset][l1_ref_idx], uv);
     break;
   default:
     break;
@@ -552,7 +552,7 @@ void chroma_prediction (Macroblock* currMB, // <-- Current Macroblock
     if (p_dir==2)
     {
       MCWeightedBiPrediction(&mb_pred[block_y], l0_pred, l1_pred, block_size_y, block_x, block_size_x, 
-      p_Img->max_pel_value_comp[1],
+      p_Vid->max_pel_value_comp[1],
         currSlice->wbp_weight[0][l0_ref_idx][l1_ref_idx][uv_comp], currSlice->wbp_weight[1][l0_ref_idx][l1_ref_idx][uv_comp],
         (currSlice->wp_offset[0][l0_ref_idx][uv_comp] + currSlice->wp_offset[1][l1_ref_idx][uv_comp] + 1)>>1, 
          (currSlice->wp_chroma_round << 1), currSlice->chroma_log_weight_denom + 1);
@@ -560,13 +560,13 @@ void chroma_prediction (Macroblock* currMB, // <-- Current Macroblock
     else if (p_dir==0)
     {
       MCWeightedPrediction(&mb_pred[block_y], l0_pred, block_size_y, block_x, block_size_x,
-      p_Img->max_pel_value_comp[1],
+      p_Vid->max_pel_value_comp[1],
         currSlice->wp_weight[0][l0_ref_idx][uv_comp], currSlice->wp_offset[0][l0_ref_idx][uv_comp], currSlice->wp_chroma_round, currSlice->chroma_log_weight_denom );
     }
     else // (p_dir==1)
     {
       MCWeightedPrediction(&mb_pred[block_y], l1_pred, block_size_y, block_x, block_size_x,
-      p_Img->max_pel_value_comp[1],
+      p_Vid->max_pel_value_comp[1],
         currSlice->wp_weight[1][l1_ref_idx][uv_comp], currSlice->wp_offset[1][l1_ref_idx][uv_comp], currSlice->wp_chroma_round, currSlice->chroma_log_weight_denom );
     }
   }
@@ -607,7 +607,7 @@ void chroma_prediction_4x4 (Macroblock* currMB,  // <-- Current Macroblock
                            short bipred_me     // <-- use bi prediction mv (0=no bipred, 1 = use set 1, 2 = use set 2)
                            )   
 {
-  ImageParameters *p_Img     = currMB->p_Img;
+  VideoParameters *p_Vid     = currMB->p_Vid;
   InputParameters *p_Inp     = currMB->p_Inp;
   Slice           *currSlice = currMB->p_slice;
 
@@ -634,14 +634,14 @@ void chroma_prediction_4x4 (Macroblock* currMB,  // <-- Current Macroblock
   switch (p_dir)
   {
   case 0: // LIST_0
-    p_Img->OneComponentChromaPrediction4x4 (currMB, l0_pred, block_x, block_y, mv_array[LIST_0][l0_ref_idx][l0_mode], p_Img->listX[LIST_0 + list_offset][l0_ref_idx], uv);
+    p_Vid->OneComponentChromaPrediction4x4 (currMB, l0_pred, block_x, block_y, mv_array[LIST_0][l0_ref_idx][l0_mode], p_Vid->listX[LIST_0 + list_offset][l0_ref_idx], uv);
     break;
   case 1: // LIST_1
-    p_Img->OneComponentChromaPrediction4x4 (currMB, l1_pred, block_x, block_y, mv_array[LIST_1][l1_ref_idx][l1_mode], p_Img->listX[LIST_1 + list_offset][l1_ref_idx], uv);
+    p_Vid->OneComponentChromaPrediction4x4 (currMB, l1_pred, block_x, block_y, mv_array[LIST_1][l1_ref_idx][l1_mode], p_Vid->listX[LIST_1 + list_offset][l1_ref_idx], uv);
     break;
   case 2: // BI_PRED
-    p_Img->OneComponentChromaPrediction4x4 (currMB, l0_pred, block_x, block_y, mv_array[LIST_0][l0_ref_idx][l0_mode], p_Img->listX[LIST_0 + list_offset][l0_ref_idx], uv);
-    p_Img->OneComponentChromaPrediction4x4 (currMB, l1_pred, block_x, block_y, mv_array[LIST_1][l1_ref_idx][l1_mode], p_Img->listX[LIST_1 + list_offset][l1_ref_idx], uv);
+    p_Vid->OneComponentChromaPrediction4x4 (currMB, l0_pred, block_x, block_y, mv_array[LIST_0][l0_ref_idx][l0_mode], p_Vid->listX[LIST_0 + list_offset][l0_ref_idx], uv);
+    p_Vid->OneComponentChromaPrediction4x4 (currMB, l1_pred, block_x, block_y, mv_array[LIST_1][l1_ref_idx][l1_mode], p_Vid->listX[LIST_1 + list_offset][l1_ref_idx], uv);
     break;
   default:
     break;
@@ -652,7 +652,7 @@ void chroma_prediction_4x4 (Macroblock* currMB,  // <-- Current Macroblock
     if (p_dir==2)
     {
       MCWeightedBiPrediction(&mb_pred[block_y], l0_pred, l1_pred, BLOCK_SIZE, block_x, BLOCK_SIZE, 
-        p_Img->max_pel_value_comp[1],
+        p_Vid->max_pel_value_comp[1],
         currSlice->wbp_weight[0][l0_ref_idx][l1_ref_idx][uv_comp], currSlice->wbp_weight[1][l0_ref_idx][l1_ref_idx][uv_comp],
         (currSlice->wp_offset[0][l0_ref_idx][uv_comp] + currSlice->wp_offset[1][l1_ref_idx][uv_comp] + 1)>>1, 
         (currSlice->wp_chroma_round << 1), currSlice->chroma_log_weight_denom + 1);
@@ -661,13 +661,13 @@ void chroma_prediction_4x4 (Macroblock* currMB,  // <-- Current Macroblock
     else if (p_dir==0)
     {
       MCWeightedPrediction(&mb_pred[block_y], l0_pred, BLOCK_SIZE, block_x, BLOCK_SIZE,
-      p_Img->max_pel_value_comp[1],
+      p_Vid->max_pel_value_comp[1],
         currSlice->wp_weight[0][l0_ref_idx][uv_comp], currSlice->wp_offset[0][l0_ref_idx][uv_comp], currSlice->wp_chroma_round, currSlice->chroma_log_weight_denom );
     }
     else // (p_dir==1)
     {
       MCWeightedPrediction(&mb_pred[block_y], l1_pred, BLOCK_SIZE, block_x, BLOCK_SIZE,
-      p_Img->max_pel_value_comp[1],
+      p_Vid->max_pel_value_comp[1],
         currSlice->wp_weight[1][l1_ref_idx][uv_comp], currSlice->wp_offset[1][l1_ref_idx][uv_comp], currSlice->wp_chroma_round, currSlice->chroma_log_weight_denom );
     }
   }
@@ -711,25 +711,25 @@ void intra_chroma_prediction (Macroblock *currMB, int *mb_up, int *mb_left, int*
 
   int      mode;
   int      best_mode = DC_PRED_8;  //just an initilaization here, should always be overwritten
-  int      cost;
-  int      min_cost;
+  distblk      cost;
+  distblk      min_cost;
   PixelPos up;        //!< pixel position  p(0,-1)
   PixelPos left[17];  //!< pixel positions p(-1, -1..15)
   int diff  [16];
 
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currSlice->p_Img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
   InputParameters *p_Inp = currSlice->p_Inp;
-  int      cr_MB_x = p_Img->mb_cr_size_x;
-  int      cr_MB_y = p_Img->mb_cr_size_y;
+  int      cr_MB_x = p_Vid->mb_cr_size_x;
+  int      cr_MB_y = p_Vid->mb_cr_size_y;
   imgpel **cur_pred = NULL;
   imgpel ***curr_mpr_16x16 = NULL;
   imgpel *hline = NULL;
   imgpel *img_org = NULL, *img_prd = NULL;
 
-  int      yuv = p_Img->yuv_format - 1;
-  int      dc_pred_value_chroma = p_Img->dc_pred_value_comp[1];
-  int      max_imgpel_value_uv  = p_Img->max_pel_value_comp[1];
+  int      yuv = p_Vid->yuv_format - 1;
+  int      dc_pred_value_chroma = p_Vid->dc_pred_value_comp[1];
+  int      max_imgpel_value_uv  = p_Vid->max_pel_value_comp[1];
 
   static const int block_pos[3][4][4]= //[yuv][b8][b4]
   {
@@ -740,9 +740,9 @@ void intra_chroma_prediction (Macroblock *currMB, int *mb_up, int *mb_left, int*
 
   for (i=0;i<cr_MB_y+1;i++)
   {
-    p_Img->getNeighbour(currMB, -1 , i-1 , p_Img->mb_size[IS_CHROMA], &left[i]);
+    p_Vid->getNeighbour(currMB, -1 , i-1 , p_Vid->mb_size[IS_CHROMA], &left[i]);
   }
-  p_Img->getNeighbour(currMB, 0 , -1 , p_Img->mb_size[IS_CHROMA], &up);
+  p_Vid->getNeighbour(currMB, 0 , -1 , p_Vid->mb_size[IS_CHROMA], &up);
 
   mb_available_up                             = up.available;
   mb_available_up_left                        = left[0].available;
@@ -750,12 +750,12 @@ void intra_chroma_prediction (Macroblock *currMB, int *mb_up, int *mb_left, int*
 
   if(p_Inp->UseConstrainedIntraPred)
   {
-    mb_available_up = up.available ? p_Img->intra_block[up.mb_addr] : 0;
+    mb_available_up = up.available ? p_Vid->intra_block[up.mb_addr] : 0;
     for (i=0, mb_available_left[0]=1; i<(cr_MB_y>>1);i++)
-      mb_available_left[0]  &= left[i+1].available ? p_Img->intra_block[left[i+1].mb_addr]: 0;
+      mb_available_left[0]  &= left[i+1].available ? p_Vid->intra_block[left[i+1].mb_addr]: 0;
     for (i=(cr_MB_y>>1), mb_available_left[1]=1; i<cr_MB_y;i++)
-      mb_available_left[1] &= left[i+1].available ? p_Img->intra_block[left[i+1].mb_addr]: 0;
-    mb_available_up_left = left[0].available ? p_Img->intra_block[left[0].mb_addr]: 0;
+      mb_available_left[1] &= left[i+1].available ? p_Vid->intra_block[left[i+1].mb_addr]: 0;
+    mb_available_up_left = left[0].available ? p_Vid->intra_block[left[0].mb_addr]: 0;
   }
 
   if (mb_up)
@@ -769,11 +769,11 @@ void intra_chroma_prediction (Macroblock *currMB, int *mb_up, int *mb_left, int*
   // compute all chroma intra prediction modes for both U and V
   for (uv=0; uv<2; uv++)
   {
-    image          = p_Img->enc_picture->imgUV[uv];
+    image          = p_Vid->enc_picture->imgUV[uv];
     curr_mpr_16x16 = currSlice->mpr_16x16[uv + 1];
 
     // DC prediction
-    for(b8=0; b8<p_Img->num_blk8x8_uv >> 1;b8++)
+    for(b8=0; b8<p_Vid->num_blk8x8_uv >> 1;b8++)
     {
       for (b4 = 0; b4 < 4; b4++)
       {
@@ -901,13 +901,13 @@ void intra_chroma_prediction (Macroblock *currMB, int *mb_up, int *mb_left, int*
   if (!p_Inp->rdopt)      // the rd-opt part does not work correctly (see encode_one_macroblock)
   {                       // since ipredmodes could be overwritten => encoder-decoder-mismatches
     // pick lowest cost prediction mode
-    min_cost = INT_MAX;
+    min_cost = DISTBLK_MAX;
     for (i=0;i<cr_MB_y;i++)
     {
-      p_Img->getNeighbour(currMB, 0 , i, p_Img->mb_size[IS_CHROMA], &left[i]);
+      p_Vid->getNeighbour(currMB, 0 , i, p_Vid->mb_size[IS_CHROMA], &left[i]);
     }
 
-    if ( p_Img->MbaffFrameFlag && p_Img->field_mode )
+    if ( p_Vid->mb_aff_frame_flag && p_Vid->field_mode )
     {
       for (i=0;i<cr_MB_y;i++)
       {
@@ -917,7 +917,7 @@ void intra_chroma_prediction (Macroblock *currMB, int *mb_up, int *mb_left, int*
 
     for (mode=DC_PRED_8; mode<=PLANE_8; mode++)
     {
-      if ((currSlice->slice_type != I_SLICE || !p_Inp->IntraDisableInterOnly) && p_Inp->ChromaIntraDisable == 1 && mode!=DC_PRED_8)
+      if (((currSlice->slice_type != I_SLICE && currSlice->slice_type != SI_SLICE) || !p_Inp->IntraDisableInterOnly) && p_Inp->ChromaIntraDisable == 1 && mode!=DC_PRED_8)
         continue;
 
       if ((mode==VERT_PRED_8 && !mb_available_up) ||
@@ -928,7 +928,7 @@ void intra_chroma_prediction (Macroblock *currMB, int *mb_up, int *mb_left, int*
       cost = 0;
       for (uv = 1; uv < 3; uv++)
       {
-        image = p_Img->pImgOrg[uv];
+        image = p_Vid->pImgOrg[uv];
         curr_mpr_16x16 = currSlice->mpr_16x16[uv];
         for (block_y=0; block_y<cr_MB_y; block_y+=4)
           for (block_x = 0; block_x < cr_MB_x; block_x += 4)
@@ -940,7 +940,7 @@ void intra_chroma_prediction (Macroblock *currMB, int *mb_up, int *mb_left, int*
               for (i = block_x; i < block_x + 4; i++)
                 diff[k++] = img_org[i] - img_prd[i];
             }
-            cost += p_Img->distortion4x4(diff, min_cost);
+            cost += p_Vid->distortion4x4(diff, min_cost);
           }
       }
       if (cost < min_cost)
@@ -950,40 +950,6 @@ void intra_chroma_prediction (Macroblock *currMB, int *mb_up, int *mb_left, int*
       }
     }
     currMB->c_ipred_mode = (char) best_mode;
-  }
-}
-
-void compute_residue (imgpel **curImg, imgpel **mpr, int **mb_rres, int mb_x, int opix_x, int width, int height)
-{
-  imgpel *imgOrg, *imgPred;
-  int    *m7;
-  int i, j;
-
-  for (j = 0; j < height; j++)
-  {
-    imgOrg = &curImg[j][opix_x];    
-    imgPred = &mpr[j][mb_x];
-    m7 = &mb_rres[j][mb_x]; 
-    for (i = 0; i < width; i++)
-    {
-      *m7++ = *imgOrg++ - *imgPred++;
-    }
-  }
-}
-
-void sample_reconstruct (imgpel **curImg, imgpel **mpr, int **mb_rres, int mb_x, int opix_x, int width, int height, int max_imgpel_value, int dq_bits)
-{
-  imgpel *imgOrg, *imgPred;
-  int    *m7;
-  int i, j;
-
-  for (j = 0; j < height; j++)
-  {
-    imgOrg = &curImg[j][opix_x];
-    imgPred = &mpr[j][mb_x];
-    m7 = &mb_rres[j][mb_x]; 
-    for (i=0;i<width;i++)
-      *imgOrg++ = (imgpel) iClip1( max_imgpel_value, rshift_rnd_sf(*m7++, dq_bits) + *imgPred++);
   }
 }
 

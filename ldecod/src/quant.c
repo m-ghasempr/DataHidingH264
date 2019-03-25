@@ -83,40 +83,40 @@ int quant8_org[64] = { //to be use if no q matrix is chosen
  *    Initiate quantization process arrays
  ***********************************************************************
  */
-void init_qp_process(ImageParameters *p_Img)
+void init_qp_process(VideoParameters *p_Vid)
 {
-  int bitdepth_qp_scale = imax(p_Img->bitdepth_luma_qp_scale,p_Img->bitdepth_chroma_qp_scale);
+  int bitdepth_qp_scale = imax(p_Vid->bitdepth_luma_qp_scale,p_Vid->bitdepth_chroma_qp_scale);
   int i;
 
   // We should allocate memory outside of this process since maybe we will have a change of SPS 
   // and we may need to recreate these. Currently should only support same bitdepth
-  if (p_Img->qp_per_matrix == NULL)
-    if ((p_Img->qp_per_matrix = (int*)malloc((MAX_QP + 1 +  bitdepth_qp_scale)*sizeof(int))) == NULL)
-      no_mem_exit("init_qp_process: p_Img->qp_per_matrix");
+  if (p_Vid->qp_per_matrix == NULL)
+    if ((p_Vid->qp_per_matrix = (int*)malloc((MAX_QP + 1 +  bitdepth_qp_scale)*sizeof(int))) == NULL)
+      no_mem_exit("init_qp_process: p_Vid->qp_per_matrix");
 
-  if (p_Img->qp_rem_matrix == NULL)
-    if ((p_Img->qp_rem_matrix = (int*)malloc((MAX_QP + 1 +  bitdepth_qp_scale)*sizeof(int))) == NULL)
-      no_mem_exit("init_qp_process: p_Img->qp_rem_matrix");
+  if (p_Vid->qp_rem_matrix == NULL)
+    if ((p_Vid->qp_rem_matrix = (int*)malloc((MAX_QP + 1 +  bitdepth_qp_scale)*sizeof(int))) == NULL)
+      no_mem_exit("init_qp_process: p_Vid->qp_rem_matrix");
 
   for (i = 0; i < MAX_QP + bitdepth_qp_scale + 1; i++)
   {
-    p_Img->qp_per_matrix[i] = i / 6;
-    p_Img->qp_rem_matrix[i] = i % 6;
+    p_Vid->qp_per_matrix[i] = i / 6;
+    p_Vid->qp_rem_matrix[i] = i % 6;
   }
 }
 
-void free_qp_matrices(ImageParameters *p_Img)
+void free_qp_matrices(VideoParameters *p_Vid)
 {
-  if (p_Img->qp_per_matrix != NULL)
+  if (p_Vid->qp_per_matrix != NULL)
   {
-    free (p_Img->qp_per_matrix);
-    p_Img->qp_per_matrix = NULL;
+    free (p_Vid->qp_per_matrix);
+    p_Vid->qp_per_matrix = NULL;
   }
 
-  if (p_Img->qp_rem_matrix != NULL)
+  if (p_Vid->qp_rem_matrix != NULL)
   {
-    free (p_Img->qp_rem_matrix);
-    p_Img->qp_rem_matrix = NULL;
+    free (p_Vid->qp_rem_matrix);
+    p_Vid->qp_rem_matrix = NULL;
   }
 }
 
@@ -134,8 +134,10 @@ void free_qp_matrices(ImageParameters *p_Img)
  *
  ************************************************************************
  */
-void assign_quant_params(Slice *currSlice, pic_parameter_set_rbsp_t* pps, seq_parameter_set_rbsp_t* sps)
+void assign_quant_params(Slice *currSlice)
 {
+  seq_parameter_set_rbsp_t* sps = currSlice->active_sps;
+  pic_parameter_set_rbsp_t* pps = currSlice->active_pps;
   int i;
   int n_ScalingList;
 
@@ -294,7 +296,7 @@ void CalculateQuant4x4Param(Slice *currSlice)
  */
 void CalculateQuant8x8Param(Slice *currSlice)
 {
-  ImageParameters *p_Img = currSlice->p_Img;
+  VideoParameters *p_Vid = currSlice->p_Vid;
   int i, j, k, temp;
 
   for(k=0; k<6; k++)
@@ -310,7 +312,7 @@ void CalculateQuant8x8Param(Slice *currSlice)
     }
   }
 
-  if( p_Img->active_sps->chroma_format_idc == 3 )  // 4:4:4
+  if( p_Vid->active_sps->chroma_format_idc == 3 )  // 4:4:4
   {
     for(k=0; k<6; k++)
     {

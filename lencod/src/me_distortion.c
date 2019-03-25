@@ -26,6 +26,8 @@
 #include "me_distortion.h"
 
 
+//#define CHECKOVERFLOW(mcost) assert(mcost>=0)
+#define CHECKOVERFLOW(mcost) 
 
 /*!
 ***********************************************************************
@@ -33,16 +35,14 @@
 *    Calculate SAD
 ***********************************************************************
 */
-int distortion4x4SAD(int* diff, int min_dist)
+distblk distortion4x4SAD(int* diff, distblk min_dist)
 {
   int distortion = 0, k;
-
   for (k = 0; k < 16; k++)
   {
     distortion += iabs(*diff++);
   }
-
-  return distortion;
+  return (dist_scale((distblk) distortion));
 }
 
 /*!
@@ -51,16 +51,15 @@ int distortion4x4SAD(int* diff, int min_dist)
 *    Calculate SSE 4x4
 ***********************************************************************
 */
-int distortion4x4SSE(int* diff, int min_dist)
+distblk distortion4x4SSE(int* diff, distblk min_dist)
 {
   int distortion = 0, k;
   for (k = 0; k < 16; k++)
   {
     distortion += iabs2(*diff++);
   }
-  return distortion;
+  return (dist_scale((distblk) distortion));
 }
-
 
 /*!
 ***********************************************************************
@@ -68,11 +67,11 @@ int distortion4x4SSE(int* diff, int min_dist)
 *    Calculate SATD
 ***********************************************************************
 */
-int distortion4x4SATD(int* diff, int min_dist)
+distblk distortion4x4SATD(int* diff, distblk min_dist)
 {
-  return HadamardSAD4x4( diff );
+  distblk i64Ret = HadamardSAD4x4( diff );
+  return (dist_scale(i64Ret));
 }
-
 
 /*!
 ***********************************************************************
@@ -80,9 +79,11 @@ int distortion4x4SATD(int* diff, int min_dist)
 *    Calculate SAD for 8x8 (with a threshold)
 ***********************************************************************
 */
-int distortion8x8SADthres(int* diff, int max_dist)
+distblk distortion8x8SADthres(int* diff, distblk min_cost)
 {
-  int distortion = 0, i, j;
+  int distortion = 0;
+  int i, j;  
+  int imin_cost = dist_down(min_cost);
 
   for (j = 0; j < 8; j++)
   {
@@ -90,11 +91,11 @@ int distortion8x8SADthres(int* diff, int max_dist)
     {
       distortion += iabs(*diff++);
     }
-    if (*diff > max_dist)
-      return *diff;
+    if (distortion > imin_cost)
+      break;
   }
 
-  return distortion;
+  return (dist_scale((distblk) distortion));
 }
 
 /*!
@@ -103,17 +104,18 @@ int distortion8x8SADthres(int* diff, int max_dist)
 *    Calculate SAD for 8x8
 ***********************************************************************
 */
-int distortion8x8SAD(int* diff, int min_diff)
+distblk distortion8x8SAD(int* diff, distblk min_diff)
 {
-  int distortion = 0, k;
+  int distortion = 0;
+  int k;
 
   for (k = 0; k < 64; k++)
   {
     distortion += iabs(*diff++);
   }
-
-  return distortion;
+  return (dist_scale((distblk) distortion));
 }
+
 
 /*!
 ***********************************************************************
@@ -121,45 +123,44 @@ int distortion8x8SAD(int* diff, int min_diff)
 *    Calculate SSE for 8x8
 ***********************************************************************
 */
-int distortion8x8SSE(int* diff, int min_dist)
+distblk distortion8x8SSE(int* diff, distblk min_dist)
 {
-  int distortion = 0, k;
+  distblk distortion = 0;
+  int k;
   for (k = 0; k < 64; k++)
   {
     distortion += iabs2(*diff++);
   }
-
-  return distortion;
+  return (dist_scale(distortion));
 }
-
 /*!
 ***********************************************************************
 * \brief
 *    Calculate SATD for 8x8
 ***********************************************************************
 */
-int distortion8x8SATD(int* diff, int min_dist)
+distblk distortion8x8SATD(int* diff, distblk min_dist)
 {
-  return HadamardSAD8x8( diff );
+  distblk i64Ret = HadamardSAD8x8( diff );
+  return (dist_scale(i64Ret));
 }
 
-
-void select_distortion(ImageParameters *p_Img, InputParameters *p_Inp)
+void select_distortion(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   switch(p_Inp->ModeDecisionMetric)
   {
   case ERROR_SAD:
-    p_Img->distortion4x4 = distortion4x4SAD;
-    p_Img->distortion8x8 = distortion8x8SAD;
+    p_Vid->distortion4x4 = distortion4x4SAD;
+    p_Vid->distortion8x8 = distortion8x8SAD;
     break;
   case ERROR_SSE:   
-    p_Img->distortion4x4 = distortion4x4SSE;
-    p_Img->distortion8x8 = distortion8x8SSE;
+    p_Vid->distortion4x4 = distortion4x4SSE;
+    p_Vid->distortion8x8 = distortion8x8SSE;
     break;
   case ERROR_SATD :
   default:
-    p_Img->distortion4x4 = distortion4x4SATD;
-    p_Img->distortion8x8 = distortion8x8SATD;
+    p_Vid->distortion4x4 = distortion4x4SATD;
+    p_Vid->distortion8x8 = distortion8x8SATD;
     break;
   }
 }
@@ -345,23 +346,23 @@ int HadamardSAD8x8 (int* diff)
 *    SAD computation
 ************************************************************************
 */
-int computeSAD(StorablePicture *ref1,
+distblk computeSAD(StorablePicture *ref1,
                MEBlock *mv_block,
-               int min_mcost,
+               distblk min_mcost,
                MotionVector *cand)
 {
   int mcost = 0;
+  int imin_cost = dist_down(min_mcost);
   int y,x;
   short blocksize_x = mv_block->blocksize_x;
   short blocksize_y = mv_block->blocksize_y;
-  ImageParameters *p_Img = mv_block->p_Img;
-  int pad_size_x = p_Img->padded_size_x - blocksize_x;
+  VideoParameters *p_Vid = mv_block->p_Vid;
+  int pad_size_x = p_Vid->padded_size_x - blocksize_x;
 #if (JM_MEM_DISTORTION)
-  int *imgpel_abs = p_Img->imgpel_abs;
+  int *imgpel_abs = p_Vid->imgpel_abs;
 #endif
 
   imgpel *src_line, *ref_line;
-
   src_line = mv_block->orig_pic[0];
   ref_line = UMVLine4X (ref1, cand->mv_y, cand->mv_x);
   for (y=0; y<blocksize_y; y++)
@@ -380,7 +381,8 @@ int computeSAD(StorablePicture *ref1,
       mcost += iabs( *src_line++ - *ref_line++ );
 #endif
     }
-    if (mcost >= min_mcost) return mcost;
+    if(mcost > imin_cost) 
+      return (dist_scale_f((distblk)mcost));
     ref_line += pad_size_x;
   }
   if ( mv_block->ChromaMEEnable ) 
@@ -388,7 +390,7 @@ int computeSAD(StorablePicture *ref1,
     // calculate chroma conribution to motion compensation error
     int blocksize_x_cr = mv_block->blocksize_cr_x;
     int blocksize_y_cr = mv_block->blocksize_cr_y;
-    int cr_pad_size_x = p_Img->cr_padded_size_x - blocksize_x_cr;
+    int cr_pad_size_x = p_Vid->cr_padded_size_x - blocksize_x_cr;
     int k;
     int mcr_cost = 0; // chroma me cost
 
@@ -413,11 +415,14 @@ int computeSAD(StorablePicture *ref1,
         ref_line += cr_pad_size_x;
       }
       mcost += mv_block->ChromaMEWeight * mcr_cost;
-      if (mcost >= min_mcost) return mcost;
+
+      if(mcost >imin_cost)
+        return (dist_scale_f((distblk)mcost));
     }
   }
 
-  return mcost;
+  CHECKOVERFLOW(mcost);
+  return (dist_scale((distblk)mcost));
 }
 
 /*!
@@ -426,22 +431,23 @@ int computeSAD(StorablePicture *ref1,
 *    SAD computation for weighted samples
 ************************************************************************
 */
-int computeSADWP(StorablePicture *ref1,
+distblk computeSADWP(StorablePicture *ref1,
                  MEBlock *mv_block,
-                 int min_mcost,
+                 distblk min_mcost,
                  MotionVector *cand
                  )
 {
   int mcost = 0;
+  int imin_cost = dist_down(min_mcost);
   int y, x;
   int weighted_pel;
   short blocksize_x = mv_block->blocksize_x;
   short blocksize_y = mv_block->blocksize_y;
 
-  ImageParameters *p_Img = mv_block->p_Img;
+  VideoParameters *p_Vid = mv_block->p_Vid;
   Slice *currSlice = mv_block->p_slice;  
-  int pad_size_x = p_Img->padded_size_x - blocksize_x;
-  int max_imgpel_value = p_Img->max_imgpel_value;
+  int pad_size_x = p_Vid->padded_size_x - blocksize_x;
+  int max_imgpel_value = p_Vid->max_imgpel_value;
   short weight = mv_block->weight_luma;
   short offset = mv_block->offset_luma;
 
@@ -464,7 +470,8 @@ int computeSADWP(StorablePicture *ref1,
       weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
       mcost += iabs( *src_line++ -  weighted_pel );
     }
-    if (mcost >= min_mcost) return mcost;
+    if(mcost > imin_cost)
+      return (dist_scale_f((distblk)mcost));
     ref_line += pad_size_x;
   }
   if ( mv_block->ChromaMEEnable ) 
@@ -472,10 +479,10 @@ int computeSADWP(StorablePicture *ref1,
     // calculate chroma conribution to motion compensation error
     int blocksize_x_cr = mv_block->blocksize_cr_x;
     int blocksize_y_cr = mv_block->blocksize_cr_y;
-    int cr_pad_size_x = p_Img->cr_padded_size_x - blocksize_x_cr;
+    int cr_pad_size_x = p_Vid->cr_padded_size_x - blocksize_x_cr;
     int k;
     int mcr_cost = 0;
-    int max_imgpel_value_uv = p_Img->max_pel_value_comp[1];
+    int max_imgpel_value_uv = p_Vid->max_pel_value_comp[1];
     int wp_chroma_round = currSlice->wp_chroma_round;
     short chroma_log_weight_denom = currSlice->chroma_log_weight_denom;
 
@@ -499,11 +506,14 @@ int computeSADWP(StorablePicture *ref1,
         ref_line += cr_pad_size_x;
       }
       mcost += mv_block->ChromaMEWeight * mcr_cost;
-      if (mcost >= min_mcost) return mcost;
+
+      if(mcost >imin_cost)
+        return (dist_scale_f((distblk)mcost));
     }
   }
 
-  return mcost;
+  CHECKOVERFLOW(mcost);
+  return (dist_scale((distblk)mcost));
 }
 
 /*!
@@ -512,22 +522,23 @@ int computeSADWP(StorablePicture *ref1,
 *    BiPred SAD computation (no weights)
 ************************************************************************
 */
-int computeBiPredSAD1(StorablePicture *ref1, 
+distblk computeBiPredSAD1(StorablePicture *ref1, 
                       StorablePicture *ref2, 
                       MEBlock *mv_block,
-                      int min_mcost,
+                      distblk min_mcost,
                       MotionVector *cand1,
                       MotionVector *cand2)
 {
+  int imin_cost = dist_down(min_mcost);
   int mcost = 0;
   int bi_diff;
   int y,x;
   short blocksize_x = mv_block->blocksize_x;
   short blocksize_y = mv_block->blocksize_y;
-  ImageParameters *p_Img = mv_block->p_Img;
-  int pad_size_x = p_Img->padded_size_x - blocksize_x;
+  VideoParameters *p_Vid = mv_block->p_Vid;
+  int pad_size_x = p_Vid->padded_size_x - blocksize_x;
 #if (JM_MEM_DISTORTION)
-  int *imgpel_abs = p_Img->imgpel_abs;
+  int *imgpel_abs = p_Vid->imgpel_abs;
 #endif
 
   imgpel *src_line   = mv_block->orig_pic[0];
@@ -558,7 +569,9 @@ int computeBiPredSAD1(StorablePicture *ref1,
       mcost += iabs(bi_diff);
 #endif
     }
-    if (mcost >= min_mcost) return mcost;
+    if(mcost > imin_cost)
+      return (dist_scale_f((distblk)mcost));
+
     ref2_line += pad_size_x;
     ref1_line += pad_size_x;
   }
@@ -568,7 +581,7 @@ int computeBiPredSAD1(StorablePicture *ref1,
     // calculate chroma conribution to motion compensation error
     int blocksize_x_cr = mv_block->blocksize_cr_x;
     int blocksize_y_cr = mv_block->blocksize_cr_y;
-    int cr_pad_size_x = p_Img->cr_padded_size_x - blocksize_x_cr;
+    int cr_pad_size_x = p_Vid->cr_padded_size_x - blocksize_x_cr;
     int k;
     int mcr_cost = 0;
 
@@ -592,10 +605,14 @@ int computeBiPredSAD1(StorablePicture *ref1,
         ref1_line += cr_pad_size_x;
       }
       mcost += mv_block->ChromaMEWeight * mcr_cost;
-      if (mcost >= min_mcost) return mcost;
+
+      if(mcost > imin_cost)
+        return (dist_scale_f((distblk)mcost));
     }
   }
-  return mcost;
+
+  CHECKOVERFLOW(mcost);
+  return (dist_scale((distblk)mcost));
 }
 
 /*!
@@ -604,20 +621,21 @@ int computeBiPredSAD1(StorablePicture *ref1,
 *    BiPred SAD computation (with weights)
 ************************************************************************
 */
-int computeBiPredSAD2(StorablePicture *ref1, 
+distblk computeBiPredSAD2(StorablePicture *ref1, 
                       StorablePicture *ref2, 
                       MEBlock *mv_block,
-                      int min_mcost,
+                      distblk min_mcost,
                       MotionVector *cand1,
                       MotionVector *cand2)
 {
+  int imin_cost = dist_down(min_mcost);
   int mcost = 0;
   int bi_diff;
-  ImageParameters *p_Img = mv_block->p_Img;
+  VideoParameters *p_Vid = mv_block->p_Vid;
   Slice *currSlice = mv_block->p_slice;
   int denom = currSlice->luma_log_weight_denom + 1;
   int lround = 2 * currSlice->wp_luma_round;  
-  int max_imgpel_value = p_Img->max_imgpel_value;
+  int max_imgpel_value = p_Vid->max_imgpel_value;
   int y,x;
   int weighted_pel, pixel1, pixel2;
   short blocksize_x = mv_block->blocksize_x;
@@ -626,7 +644,7 @@ int computeBiPredSAD2(StorablePicture *ref1,
   short weight2 = mv_block->weight2;
   short offsetBi = mv_block->offsetBi;
 
-  int pad_size_x = p_Img->padded_size_x - blocksize_x;
+  int pad_size_x = p_Vid->padded_size_x - blocksize_x;
 
   imgpel *src_line   = mv_block->orig_pic[0];
   imgpel *ref2_line  = UMVLine4X(ref2, cand2->mv_y, cand2->mv_x);
@@ -660,7 +678,9 @@ int computeBiPredSAD2(StorablePicture *ref1,
       bi_diff = (*src_line++) - weighted_pel;
       mcost += iabs(bi_diff);
     }
-    if (mcost >= min_mcost) return mcost;
+
+    if(mcost > imin_cost)
+      return dist_scale_f((distblk)mcost);
     ref2_line += pad_size_x;
     ref1_line += pad_size_x;
   }
@@ -670,10 +690,10 @@ int computeBiPredSAD2(StorablePicture *ref1,
     // calculate chroma conribution to motion compensation error
     int blocksize_x_cr = mv_block->blocksize_cr_x;
     int blocksize_y_cr = mv_block->blocksize_cr_y;
-    int cr_pad_size_x  = p_Img->cr_padded_size_x - blocksize_x_cr;
+    int cr_pad_size_x  = p_Vid->cr_padded_size_x - blocksize_x_cr;
     int k;
     int mcr_cost = 0;
-    int max_imgpel_value_uv = p_Img->max_pel_value_comp[1];
+    int max_imgpel_value_uv = p_Vid->max_pel_value_comp[1];
 
     for (k=0; k<2; k++)
     {
@@ -706,11 +726,14 @@ int computeBiPredSAD2(StorablePicture *ref1,
         ref1_line += cr_pad_size_x;
       }
       mcost += mv_block->ChromaMEWeight * mcr_cost;
-      if (mcost >= min_mcost) return mcost;
-
+      
+      if(mcost > imin_cost) 
+        return dist_scale_f((distblk)mcost);
     }
   }
-  return mcost;
+
+  CHECKOVERFLOW(mcost);
+  return dist_scale((distblk)mcost);
 }
 
 /*!
@@ -719,18 +742,19 @@ int computeBiPredSAD2(StorablePicture *ref1,
 *    SAD computation _with_ Hadamard Transform
 ************************************************************************
 */
-int computeSATD(StorablePicture *ref1,
+distblk computeSATD(StorablePicture *ref1,
                 MEBlock *mv_block,
-                int min_mcost,
+                distblk min_mcost,
                 MotionVector *cand
                 )
 {
+  int imin_cost = dist_down(min_mcost);
   int mcost = 0;
   int y, x, y4, *d;
   int src_size_x, src_size_mul;
   short blocksize_x = mv_block->blocksize_x;
   short blocksize_y = mv_block->blocksize_y;
-  ImageParameters *p_Img = mv_block->p_Img;
+  VideoParameters *p_Vid = mv_block->p_Vid;
   imgpel *src_tmp = mv_block->orig_pic[0];
   int diff[MB_PIXELS];
   imgpel *src_line, *ref_line;
@@ -753,10 +777,12 @@ int computeSATD(StorablePicture *ref1,
           *d++ = *src_line++ - *ref_line++ ;
           *d++ = *src_line++ - *ref_line++ ;
 
-          ref_line += p_Img->padded_size_x_m4x4;
+          ref_line += p_Vid->padded_size_x_m4x4;
           src_line += src_size_x;
         }
-        if ((mcost += HadamardSAD4x4 (diff)) > min_mcost) return mcost;
+        mcost += HadamardSAD4x4 (diff);
+        if(mcost > imin_cost)
+          return dist_scale_f((distblk)mcost);
       }
       src_tmp += src_size_mul;
     }
@@ -783,15 +809,19 @@ int computeSATD(StorablePicture *ref1,
           *d++ = *src_line++ - *ref_line++ ;
           *d++ = *src_line++ - *ref_line++ ;
 
-          ref_line += p_Img->padded_size_x_m8x8;
+          ref_line += p_Vid->padded_size_x_m8x8;
           src_line += src_size_x;
         }
-        if ((mcost += HadamardSAD8x8 (diff)) > min_mcost) return mcost;
+        mcost += HadamardSAD8x8 (diff);
+        if(mcost > imin_cost)
+          return dist_scale_f((distblk)mcost);
       }
       src_tmp += src_size_mul;
     }
   }
-  return mcost;
+
+  CHECKOVERFLOW(mcost);
+  return dist_scale((distblk)mcost);
 }
 
 /*!
@@ -800,12 +830,13 @@ int computeSATD(StorablePicture *ref1,
 *    SAD computation of weighted samples _with_ Hadamard Transform
 ************************************************************************
 */
-int computeSATDWP(StorablePicture *ref1,
+distblk computeSATDWP(StorablePicture *ref1,
                   MEBlock *mv_block,
-                  int min_mcost,
+                  distblk min_mcost,
                   MotionVector *cand
                   )
 {
+  int imin_cost = dist_down(min_mcost);
   int mcost = 0;
   int y, x, y4, *d;
   int weighted_pel;
@@ -814,14 +845,14 @@ int computeSATDWP(StorablePicture *ref1,
   short blocksize_y = mv_block->blocksize_y;
 
   imgpel *src_tmp = mv_block->orig_pic[0];
-  ImageParameters *p_Img = mv_block->p_Img;
+  VideoParameters *p_Vid = mv_block->p_Vid;
   Slice *currSlice = mv_block->p_slice;
   short luma_log_weight_denom = currSlice->luma_log_weight_denom;
   short weight = mv_block->weight_luma;
   short offset = mv_block->offset_luma; 
 
   int wp_luma_round = currSlice->wp_luma_round;  
-  int max_imgpel_value = p_Img->max_imgpel_value;
+  int max_imgpel_value = p_Vid->max_imgpel_value;
   int diff[MB_PIXELS];
   imgpel *src_line, *ref_line;
 
@@ -847,10 +878,13 @@ int computeSATDWP(StorablePicture *ref1,
           weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
           *d++ = *src_line++ - weighted_pel;
 
-          ref_line += p_Img->padded_size_x_m4x4;
+          ref_line += p_Vid->padded_size_x_m4x4;
           src_line += src_size_x;
         }
-        if ((mcost += HadamardSAD4x4 (diff)) > min_mcost) return mcost;
+        mcost += HadamardSAD4x4 (diff);
+        
+        if(mcost > imin_cost) 
+          return dist_scale_f((distblk)mcost);
       }
       src_tmp += src_size_mul;
     }
@@ -885,15 +919,19 @@ int computeSATDWP(StorablePicture *ref1,
           weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
           *d++ = *src_line++ - weighted_pel;
 
-          ref_line += p_Img->padded_size_x_m8x8;
+          ref_line += p_Vid->padded_size_x_m8x8;
           src_line += src_size_x;
         }
-        if ((mcost += HadamardSAD8x8 (diff)) > min_mcost) return mcost;
+        mcost += HadamardSAD8x8 (diff);
+        if(mcost > imin_cost) 
+          return dist_scale_f((distblk)mcost);
       }
       src_tmp += src_size_mul;
     }
   }
-  return mcost;
+
+  CHECKOVERFLOW(mcost);
+  return dist_scale((distblk)mcost);
 }
 
 /*!
@@ -902,13 +940,14 @@ int computeSATDWP(StorablePicture *ref1,
 *    BiPred (w/o weights) SATD computation
 ************************************************************************
 */
-int computeBiPredSATD1(StorablePicture *ref1, 
+distblk computeBiPredSATD1(StorablePicture *ref1, 
                        StorablePicture *ref2, 
                        MEBlock *mv_block,
-                       int min_mcost,
+                       distblk min_mcost,
                        MotionVector *cand1,
                        MotionVector *cand2)
 {
+  int imin_cost = dist_down(min_mcost);
   int mcost = 0;
   int y, x, y4, *d;
   int src_size_x, src_size_mul;
@@ -917,7 +956,7 @@ int computeBiPredSATD1(StorablePicture *ref1,
   imgpel *src_line, *ref1_line, *ref2_line;
   short blocksize_x = mv_block->blocksize_x;
   short blocksize_y = mv_block->blocksize_y;
-  ImageParameters *p_Img = mv_block->p_Img;
+  VideoParameters *p_Vid = mv_block->p_Vid;
 
   if ( !mv_block->test8x8 )
   { // 4x4 TRANSFORM
@@ -938,11 +977,13 @@ int computeBiPredSATD1(StorablePicture *ref1,
           *d++ = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
           *d++ = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
 
-          ref1_line += p_Img->padded_size_x_m4x4;
-          ref2_line += p_Img->padded_size_x_m4x4;
+          ref1_line += p_Vid->padded_size_x_m4x4;
+          ref2_line += p_Vid->padded_size_x_m4x4;
           src_line  += src_size_x;
         }
-        if ((mcost += HadamardSAD4x4 (diff)) > min_mcost) return mcost;
+        mcost += HadamardSAD4x4 (diff);
+        if(mcost > imin_cost) 
+          return dist_scale_f((distblk)mcost);
       }
       src_tmp += src_size_mul;
     }
@@ -972,16 +1013,20 @@ int computeBiPredSATD1(StorablePicture *ref1,
           *d++ = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
           *d++ = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
 
-          ref1_line += p_Img->padded_size_x_m8x8;
-          ref2_line += p_Img->padded_size_x_m8x8;
+          ref1_line += p_Vid->padded_size_x_m8x8;
+          ref2_line += p_Vid->padded_size_x_m8x8;
           src_line += src_size_x;
         }
-        if ((mcost += HadamardSAD8x8 (diff)) > min_mcost) return mcost;
+        mcost += HadamardSAD8x8 (diff);
+        if(mcost > imin_cost)
+          return dist_scale_f((distblk)mcost);
       }
       src_tmp += src_size_mul;
     }
   }
-  return mcost;
+
+  CHECKOVERFLOW(mcost);
+  return dist_scale((distblk)mcost);
 }
 
 /*!
@@ -990,17 +1035,18 @@ int computeBiPredSATD1(StorablePicture *ref1,
 *    BiPred (w/ weights) SATD computation
 ************************************************************************
 */
-int computeBiPredSATD2(StorablePicture *ref1, 
+distblk computeBiPredSATD2(StorablePicture *ref1, 
                        StorablePicture *ref2, 
                        MEBlock *mv_block,
-                       int min_mcost,
+                       distblk min_mcost,
                        MotionVector *cand1,
                        MotionVector *cand2)
 {
+  int imin_cost = dist_down(min_mcost);
   int mcost = 0;
   int y, x, y4, *d;
   int weighted_pel, pixel1, pixel2;
-  ImageParameters *p_Img = mv_block->p_Img;
+  VideoParameters *p_Vid = mv_block->p_Vid;
   Slice *currSlice = mv_block->p_slice;
   int denom = currSlice->luma_log_weight_denom + 1;
   int lround = 2 * currSlice->wp_luma_round;
@@ -1009,7 +1055,7 @@ int computeBiPredSATD2(StorablePicture *ref1,
   short offsetBi = mv_block->offsetBi;
 
 
-  int max_imgpel_value = p_Img->max_imgpel_value;
+  int max_imgpel_value = p_Vid->max_imgpel_value;
   int src_size_x, src_size_mul;
   imgpel *src_tmp = mv_block->orig_pic[0];
   int diff[MB_PIXELS];
@@ -1052,11 +1098,13 @@ int computeBiPredSATD2(StorablePicture *ref1,
           weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
           *d++ =  (*src_line++) - weighted_pel;
 
-          ref1_line += p_Img->padded_size_x_m4x4;
-          ref2_line += p_Img->padded_size_x_m4x4;
+          ref1_line += p_Vid->padded_size_x_m4x4;
+          ref2_line += p_Vid->padded_size_x_m4x4;
           src_line  += src_size_x;
         }
-        if ((mcost += HadamardSAD4x4 (diff)) > min_mcost) return mcost;
+        mcost += HadamardSAD4x4 (diff);
+        if(mcost > imin_cost)
+          return dist_scale_f((distblk)mcost);
       }
       src_tmp += src_size_mul;
     }
@@ -1118,16 +1166,19 @@ int computeBiPredSATD2(StorablePicture *ref1,
           weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
           *d++ =  (*src_line) - weighted_pel;
 
-          ref1_line += p_Img->padded_size_x_m8x8;
-          ref2_line += p_Img->padded_size_x_m8x8;
+          ref1_line += p_Vid->padded_size_x_m8x8;
+          ref2_line += p_Vid->padded_size_x_m8x8;
           src_line  += src_size_x;
         }
-        if ((mcost += HadamardSAD8x8 (diff)) > min_mcost) return mcost;
+        mcost += HadamardSAD8x8 (diff);
+        if(mcost > imin_cost)
+          return dist_scale_f((distblk)mcost);
       }
       src_tmp += src_size_mul;
     }
   }
-  return mcost;
+  CHECKOVERFLOW(mcost);
+  return dist_scale((distblk)mcost);
 }
 
 /*!
@@ -1136,19 +1187,19 @@ int computeBiPredSATD2(StorablePicture *ref1,
 *    SSE computation
 ************************************************************************
 */
-
-int computeSSE(StorablePicture *ref1,
+distblk computeSSE(StorablePicture *ref1,
                MEBlock *mv_block,
-               int min_mcost,
+               distblk min_mcost,
                MotionVector *cand
                )
 {
+  int imin_cost = dist_down(min_mcost);
   int mcost = 0;
   int y,x;
   short blocksize_x = mv_block->blocksize_x;
   short blocksize_y = mv_block->blocksize_y;
-  ImageParameters *p_Img = mv_block->p_Img;
-  int pad_size_x = p_Img->padded_size_x - blocksize_x;
+  VideoParameters *p_Vid = mv_block->p_Vid;
+  int pad_size_x = p_Vid->padded_size_x - blocksize_x;
 
   imgpel *src_line = mv_block->orig_pic[0];
   imgpel *ref_line = UMVLine4X (ref1, cand->mv_y, cand->mv_x);
@@ -1162,7 +1213,8 @@ int computeSSE(StorablePicture *ref1,
       mcost += iabs2( *src_line++ - *ref_line++ );
       mcost += iabs2( *src_line++ - *ref_line++ );
     }
-    if (mcost >= min_mcost) return mcost;
+    if(mcost > imin_cost)
+      return dist_scale_f((distblk)mcost);
     ref_line += pad_size_x;
   }
 
@@ -1171,7 +1223,7 @@ int computeSSE(StorablePicture *ref1,
     // calculate chroma conribution to motion compensation error
     int blocksize_x_cr = mv_block->blocksize_cr_x;
     int blocksize_y_cr = mv_block->blocksize_cr_y;
-    int cr_pad_size_x = p_Img->cr_padded_size_x - blocksize_x_cr;
+    int cr_pad_size_x = p_Vid->cr_padded_size_x - blocksize_x_cr;
     int k;
     int mcr_cost = 0;
 
@@ -1190,11 +1242,13 @@ int computeSSE(StorablePicture *ref1,
         ref_line += cr_pad_size_x;
       }
       mcost += mv_block->ChromaMEWeight * mcr_cost;
-      if (mcost >= min_mcost) return mcost;
+      if(mcost > imin_cost)
+        return dist_scale_f((distblk)mcost);
     }
   }
 
-  return mcost;
+  CHECKOVERFLOW(mcost);
+  return dist_scale((distblk)mcost);
 }
 
 
@@ -1204,25 +1258,26 @@ int computeSSE(StorablePicture *ref1,
 *    SSE computation of weighted samples
 ************************************************************************
 */
-int computeSSEWP(StorablePicture *ref1,
+distblk computeSSEWP(StorablePicture *ref1,
                  MEBlock *mv_block,
-                 int min_mcost,
+                 distblk min_mcost,
                  MotionVector *cand
                  )
 {
+  int imin_cost = dist_down(min_mcost);
   int mcost = 0;
   int y,x;
   int weighted_pel;
   short blocksize_x = mv_block->blocksize_x;
   short blocksize_y = mv_block->blocksize_y;
-  ImageParameters *p_Img = mv_block->p_Img;
+  VideoParameters *p_Vid = mv_block->p_Vid;
   Slice *currSlice = mv_block->p_slice;  
   short weight = mv_block->weight_luma;
   short offset = mv_block->offset_luma; 
 
   int wp_luma_round = currSlice->wp_luma_round;  
-  int pad_size_x = p_Img->padded_size_x - blocksize_x;
-  int max_imgpel_value = p_Img->max_imgpel_value;
+  int pad_size_x = p_Vid->padded_size_x - blocksize_x;
+  int max_imgpel_value = p_Vid->max_imgpel_value;
   short luma_log_weight_denom = currSlice->luma_log_weight_denom;
 
   imgpel *src_line = mv_block->orig_pic[0];
@@ -1241,7 +1296,8 @@ int computeSSEWP(StorablePicture *ref1,
       weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
       mcost += iabs2( *src_line++ - weighted_pel );
     }
-    if (mcost >= min_mcost) return mcost;
+    if(mcost > imin_cost)
+      return dist_scale_f((distblk)mcost);
     ref_line += pad_size_x;
   }
 
@@ -1251,10 +1307,10 @@ int computeSSEWP(StorablePicture *ref1,
     // These could be made global to reduce computations
     int blocksize_x_cr = mv_block->blocksize_cr_x;
     int blocksize_y_cr = mv_block->blocksize_cr_y;
-    int cr_pad_size_x  = p_Img->cr_padded_size_x - blocksize_x_cr;
+    int cr_pad_size_x  = p_Vid->cr_padded_size_x - blocksize_x_cr;
     int k;
     int mcr_cost = 0;
-    int max_imgpel_value_uv = p_Img->max_pel_value_comp[1];
+    int max_imgpel_value_uv = p_Vid->max_pel_value_comp[1];
     int wp_chroma_round = currSlice->wp_chroma_round;
     short chroma_log_weight_denom = currSlice->chroma_log_weight_denom;
 
@@ -1279,11 +1335,13 @@ int computeSSEWP(StorablePicture *ref1,
         ref_line += cr_pad_size_x;
       }
       mcost += mv_block->ChromaMEWeight * mcr_cost;
-      if (mcost >= min_mcost) return mcost;
+      if(mcost > imin_cost)
+        return dist_scale_f((distblk)mcost);
     }
   }
 
-  return mcost;
+  CHECKOVERFLOW(mcost);
+  return dist_scale((distblk)mcost);
 }
 
 /*!
@@ -1292,20 +1350,21 @@ int computeSSEWP(StorablePicture *ref1,
 *    BiPred SSE computation (no weights)
 ************************************************************************
 */
-int computeBiPredSSE1(StorablePicture *ref1, 
+distblk computeBiPredSSE1(StorablePicture *ref1, 
                       StorablePicture *ref2, 
                       MEBlock *mv_block,
-                      int min_mcost,
+                      distblk min_mcost,
                       MotionVector *cand1,
                       MotionVector *cand2)
 {
+  int imin_cost = dist_down(min_mcost);
   int mcost = 0;
   int bi_diff;
   int y,x;
   short blocksize_x = mv_block->blocksize_x;
   short blocksize_y = mv_block->blocksize_y;
-  ImageParameters *p_Img = mv_block->p_Img;
-  int pad_size_x = p_Img->padded_size_x - blocksize_x;
+  VideoParameters *p_Vid = mv_block->p_Vid;
+  int pad_size_x = p_Vid->padded_size_x - blocksize_x;
 
   imgpel *src_line   = mv_block->orig_pic[0];
   imgpel *ref2_line  = UMVLine4X(ref2, cand2->mv_y, cand2->mv_x);
@@ -1324,8 +1383,9 @@ int computeBiPredSSE1(StorablePicture *ref1,
       bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
       mcost += iabs2(bi_diff);
     }
+    if(mcost > imin_cost)
+      return dist_scale_f((distblk)mcost);
 
-    if (mcost >= min_mcost) return mcost;
     ref2_line += pad_size_x;
     ref1_line += pad_size_x;
   }
@@ -1335,7 +1395,7 @@ int computeBiPredSSE1(StorablePicture *ref1,
     // calculate chroma conribution to motion compensation error
     int blocksize_x_cr = mv_block->blocksize_cr_x;
     int blocksize_y_cr = mv_block->blocksize_cr_y;
-    int cr_pad_size_x  = p_Img->cr_padded_size_x - blocksize_x_cr;
+    int cr_pad_size_x  = p_Vid->cr_padded_size_x - blocksize_x_cr;
     int k;
     int mcr_cost = 0;
 
@@ -1359,11 +1419,13 @@ int computeBiPredSSE1(StorablePicture *ref1,
         ref1_line += cr_pad_size_x;
       }
       mcost += mv_block->ChromaMEWeight * mcr_cost;
-      if (mcost >= min_mcost) return mcost;
+      if(mcost > imin_cost)
+        return dist_scale_f((distblk)mcost);
     }
   }
 
-  return mcost;
+  CHECKOVERFLOW(mcost);
+  return dist_scale((distblk)mcost);
 }
 
 
@@ -1373,20 +1435,21 @@ int computeBiPredSSE1(StorablePicture *ref1,
 *    BiPred SSE computation (with weights)
 ************************************************************************
 */
-int computeBiPredSSE2(StorablePicture *ref1, 
+distblk computeBiPredSSE2(StorablePicture *ref1, 
                       StorablePicture *ref2, 
                       MEBlock *mv_block,
-                      int min_mcost,
+                      distblk min_mcost,
                       MotionVector *cand1,
                       MotionVector *cand2)
 {
+  int imin_cost = dist_down(min_mcost);
   int mcost = 0;
   int bi_diff;
-  ImageParameters *p_Img = mv_block->p_Img;
+  VideoParameters *p_Vid = mv_block->p_Vid;
   Slice *currSlice = mv_block->p_slice;  
   int denom = currSlice->luma_log_weight_denom + 1;
   int lround = 2 * currSlice->wp_luma_round;
-  int max_imgpel_value = p_Img->max_imgpel_value;
+  int max_imgpel_value = p_Vid->max_imgpel_value;
   int y,x;
   int weighted_pel, pixel1, pixel2;
   short weight1 = mv_block->weight1;
@@ -1395,7 +1458,7 @@ int computeBiPredSSE2(StorablePicture *ref1,
 
   short blocksize_x = mv_block->blocksize_x;
   short blocksize_y = mv_block->blocksize_y;
-  int pad_size_x = p_Img->padded_size_x - blocksize_x;
+  int pad_size_x = p_Vid->padded_size_x - blocksize_x;
 
   imgpel *src_line   = mv_block->orig_pic[0];
   imgpel *ref2_line  = UMVLine4X(ref2, cand2->mv_y, cand2->mv_x);
@@ -1428,7 +1491,9 @@ int computeBiPredSSE2(StorablePicture *ref1,
       bi_diff = (*src_line++) - weighted_pel;
       mcost += bi_diff * bi_diff;
     }
-    if (mcost >= min_mcost) return mcost;
+    if(mcost > imin_cost)
+      return dist_scale_f((distblk)mcost);
+
     ref2_line += pad_size_x;
     ref1_line += pad_size_x;
   }
@@ -1438,10 +1503,10 @@ int computeBiPredSSE2(StorablePicture *ref1,
     // calculate chroma conribution to motion compensation error
     int blocksize_x_cr = mv_block->blocksize_cr_x;
     int blocksize_y_cr = mv_block->blocksize_cr_y;
-    int cr_pad_size_x  = p_Img->cr_padded_size_x - blocksize_x_cr;
+    int cr_pad_size_x  = p_Vid->cr_padded_size_x - blocksize_x_cr;
     int k;
     int mcr_cost = 0;
-    int max_imgpel_value_uv = p_Img->max_pel_value_comp[1];
+    int max_imgpel_value_uv = p_Vid->max_pel_value_comp[1];
 
     for (k=0; k<2; k++)
     {
@@ -1474,11 +1539,13 @@ int computeBiPredSSE2(StorablePicture *ref1,
         ref1_line += cr_pad_size_x;
       }
       mcost += mv_block->ChromaMEWeight * mcr_cost;
-      if (mcost >= min_mcost) return mcost;
+      if(mcost > imin_cost)
+        return dist_scale_f((distblk)mcost);
     }
   }
 
-  return mcost;
+  CHECKOVERFLOW(mcost);
+  return dist_scale((distblk)mcost);
 }
 
 

@@ -1,3 +1,17 @@
+Changes in Version JM 16.1 (since JM 16.0)
+------------------------------------------
+- encoder: check slice group parameter size for slice_group_map_type equal to 2 (KS)
+- encoder/decoder: SP/SI bug fixes (YL/AL)
+- encoder: Integer distortion cost calculation (YHe/AT)
+- encoder: Updated and Improved Sequence/GOP design architecture (AL)
+- encoder/decoder: Various cleanups/bugfixes (AT)
+- encoder/decoder: Deblocking speedups (AT)
+- encoder/decoder: add version information command line switches (KS)
+- encoder: NAL unit priority bug fixes (KSw)
+- encoder: RDOQ bug fixes (YY)
+- encoder: Motion estimation and mode decision bug fixes (YHe/AT)
+- decoder: fox cropping for IMGPEL equal to 0 (KS)
+
 Changes in Version JM 16.0 (since JM 15.1)
 ------------------------------------------
 - encoder: Early termination in various distortion computation functions (AT)
@@ -1373,6 +1387,7 @@ KL      Karl Lillevold          Karll@real.com
 KHH     Ki-Hun Han              khhan@dms.sejong.ac.kr
 KP      Krit Panusopone         KPanusopone@gi.com
 KSa     Kazushi Sato            kazushi@av.crl.sony.co.jp
+KSw     Kumar Swaminathan       kswam@dolby.com
 LK      Louis Kerofsky          lkerofsky@sharplabs.com
 LL      Limin Liu               lliu@dolby.com
 LlL     Loïc Le Loarer          loic_leloarer@sdesigns.eu
@@ -1451,6 +1466,7 @@ YHe     Yuwen He                yhe@dolby.com
 YK      Yoshihiro Kikuchi       yoshihiro.kikuchi@toshiba.co.jp
 YL      Yann Lemaguet           yann.lemaguet@philips.com
 YW      Ye-Kui Wang             ye-kui.wang@nokia.com
+YL      Yiting Liao             yliao@dolby.com
 YX      Yanjun Xu               yxu@sarnoff.com
 YY      Yan Ye                  yye@dolby.com
 ZH      Zhou Heng               zhou_heng@yahoo.com

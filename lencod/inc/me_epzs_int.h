@@ -22,8 +22,8 @@
 #include "me_epzs.h"
 
 // Functions
-extern int  EPZSIntPelBlockMotionSearch     (Macroblock *, MotionVector *, MEBlock *, int, int);
-extern int  EPZSIntPelBlockMotionSearchSubMB(Macroblock *, MotionVector *, MEBlock *, int, int);
-extern int  EPZSIntBiPredBlockMotionSearch  (Macroblock *, int, MotionVector *, MotionVector *, MotionVector *, MotionVector *, MEBlock *, int, int, int);
+extern distblk  EPZSIntPelBlockMotionSearch     (Macroblock *, MotionVector *, MEBlock *, distblk, int);
+extern distblk  EPZSIntPelBlockMotionSearchSubMB(Macroblock *, MotionVector *, MEBlock *, distblk, int);
+extern distblk  EPZSIntBiPredBlockMotionSearch  (Macroblock *, int, MotionVector *, MotionVector *, MotionVector *, MotionVector *, MEBlock *, int, distblk, int);
 #endif
 

@@ -31,7 +31,7 @@
 #endif
 
 
-extern void init_frext(ImageParameters *p_Img);
+extern void init_frext(VideoParameters *p_Vid);
 
 // syntax for scaling list matrix values
 void Scaling_List(int *scalingList, int sizeOfScalingList, Boolean *UseDefaultScalingMatrix, Bitstream *s)
@@ -59,7 +59,7 @@ void Scaling_List(int *scalingList, int sizeOfScalingList, Boolean *UseDefaultSc
 }
 // fill sps with content of p
 
-int InterpretSPS (ImageParameters *p_Img, DataPartition *p, seq_parameter_set_rbsp_t *sps)
+int InterpretSPS (VideoParameters *p_Vid, DataPartition *p, seq_parameter_set_rbsp_t *sps)
 {
   unsigned i;
   unsigned n_ScalingList;
@@ -82,7 +82,8 @@ int InterpretSPS (ImageParameters *p_Img, DataPartition *p, seq_parameter_set_rb
       (sps->profile_idc!=FREXT_Hi10P    ) &&
       (sps->profile_idc!=FREXT_Hi422    ) &&
       (sps->profile_idc!=FREXT_Hi444    ) &&
-      (sps->profile_idc!=FREXT_CAVLC444 ))
+      (sps->profile_idc!=FREXT_CAVLC444 )
+      )
   {
     printf("Invalid Profile IDC (%d) encountered. \n", sps->profile_idc);
     return p_Dec->UsedBits;
@@ -103,14 +104,15 @@ int InterpretSPS (ImageParameters *p_Img, DataPartition *p, seq_parameter_set_rb
   sps->chroma_format_idc = 1;
   sps->bit_depth_luma_minus8   = 0;
   sps->bit_depth_chroma_minus8 = 0;
-  p_Img->lossless_qpprime_flag   = 0;
+  p_Vid->lossless_qpprime_flag   = 0;
   sps->separate_colour_plane_flag = 0;
 
   if((sps->profile_idc==FREXT_HP   ) ||
      (sps->profile_idc==FREXT_Hi10P) ||
      (sps->profile_idc==FREXT_Hi422) ||
      (sps->profile_idc==FREXT_Hi444) ||
-     (sps->profile_idc==FREXT_CAVLC444))
+     (sps->profile_idc==FREXT_CAVLC444)
+     )
   {
     sps->chroma_format_idc                      = ue_v ("SPS: chroma_format_idc"                       , s);
 
@@ -121,7 +123,7 @@ int InterpretSPS (ImageParameters *p_Img, DataPartition *p, seq_parameter_set_rb
 
     sps->bit_depth_luma_minus8                  = ue_v ("SPS: bit_depth_luma_minus8"                   , s);
     sps->bit_depth_chroma_minus8                = ue_v ("SPS: bit_depth_chroma_minus8"                 , s);
-    p_Img->lossless_qpprime_flag                  = u_1  ("SPS: lossless_qpprime_y_zero_flag"            , s);
+    p_Vid->lossless_qpprime_flag                  = u_1  ("SPS: lossless_qpprime_y_zero_flag"            , s);
 
     sps->seq_scaling_matrix_present_flag        = u_1  (   "SPS: seq_scaling_matrix_present_flag"       , s);
 
@@ -203,8 +205,8 @@ int ReadVUI(DataPartition *p, seq_parameter_set_rbsp_t *sps)
       sps->vui_seq_parameters.aspect_ratio_idc             = u_v  ( 8, "VUI: aspect_ratio_idc"              , s);
       if (255==sps->vui_seq_parameters.aspect_ratio_idc)
       {
-        sps->vui_seq_parameters.sar_width                  = u_v  (16, "VUI: sar_width"                     , s);
-        sps->vui_seq_parameters.sar_height                 = u_v  (16, "VUI: sar_height"                    , s);
+        sps->vui_seq_parameters.sar_width                  = (unsigned short) u_v  (16, "VUI: sar_width"                     , s);
+        sps->vui_seq_parameters.sar_height                 = (unsigned short) u_v  (16, "VUI: sar_height"                    , s);
       }
   }
 
@@ -297,7 +299,7 @@ int ReadHRDParameters(DataPartition *p, hrd_parameters_t *hrd)
 }
 
 
-int InterpretPPS (ImageParameters *p_Img, DataPartition *p, pic_parameter_set_rbsp_t *pps)
+int InterpretPPS (VideoParameters *p_Vid, DataPartition *p, pic_parameter_set_rbsp_t *pps)
 {
   unsigned i;
   unsigned n_ScalingList;
@@ -389,7 +391,7 @@ int InterpretPPS (ImageParameters *p_Img, DataPartition *p, pic_parameter_set_rb
 
     if(pps->pic_scaling_matrix_present_flag)
     {
-      chroma_format_idc = p_Img->SeqParSet[pps->seq_parameter_set_id].chroma_format_idc;
+      chroma_format_idc = p_Vid->SeqParSet[pps->seq_parameter_set_id].chroma_format_idc;
       n_ScalingList = 6 + ((chroma_format_idc != YUV444) ? 2 : 6) * pps->transform_8x8_mode_flag;
       for(i=0; i<n_ScalingList; i++)
       {
@@ -427,43 +429,43 @@ void SPSConsistencyCheck (seq_parameter_set_rbsp_t *sps)
   printf ("Consistency checking a sequence parset, to be implemented\n");
 }
 
-void MakePPSavailable (ImageParameters *p_Img, int id, pic_parameter_set_rbsp_t *pps)
+void MakePPSavailable (VideoParameters *p_Vid, int id, pic_parameter_set_rbsp_t *pps)
 {
   assert (pps->Valid == TRUE);
 
-  if (p_Img->PicParSet[id].Valid == TRUE && p_Img->PicParSet[id].slice_group_id != NULL)
-    free (p_Img->PicParSet[id].slice_group_id);
+  if (p_Vid->PicParSet[id].Valid == TRUE && p_Vid->PicParSet[id].slice_group_id != NULL)
+    free (p_Vid->PicParSet[id].slice_group_id);
 
-  memcpy (&p_Img->PicParSet[id], pps, sizeof (pic_parameter_set_rbsp_t));
+  memcpy (&p_Vid->PicParSet[id], pps, sizeof (pic_parameter_set_rbsp_t));
 
   // we can simply use the memory provided with the pps. the PPS is destroyed after this function
   // call and will not try to free if pps->slice_group_id == NULL
-  p_Img->PicParSet[id].slice_group_id = pps->slice_group_id;
+  p_Vid->PicParSet[id].slice_group_id = pps->slice_group_id;
   pps->slice_group_id          = NULL;
 }
 
-void CleanUpPPS(ImageParameters *p_Img)
+void CleanUpPPS(VideoParameters *p_Vid)
 {
   int i;
 
   for (i=0; i<MAXPPS; i++)
   {
-    if (p_Img->PicParSet[i].Valid == TRUE && p_Img->PicParSet[i].slice_group_id != NULL)
-      free (p_Img->PicParSet[i].slice_group_id);
+    if (p_Vid->PicParSet[i].Valid == TRUE && p_Vid->PicParSet[i].slice_group_id != NULL)
+      free (p_Vid->PicParSet[i].slice_group_id);
 
-    p_Img->PicParSet[i].Valid = FALSE;
+    p_Vid->PicParSet[i].Valid = FALSE;
   }
 }
 
 
-void MakeSPSavailable (ImageParameters *p_Img, int id, seq_parameter_set_rbsp_t *sps)
+void MakeSPSavailable (VideoParameters *p_Vid, int id, seq_parameter_set_rbsp_t *sps)
 {
   assert (sps->Valid == TRUE);
-  memcpy (&p_Img->SeqParSet[id], sps, sizeof (seq_parameter_set_rbsp_t));
+  memcpy (&p_Vid->SeqParSet[id], sps, sizeof (seq_parameter_set_rbsp_t));
 }
 
 
-void ProcessSPS (ImageParameters *p_Img, NALU_t *nalu)
+void ProcessSPS (VideoParameters *p_Vid, NALU_t *nalu)
 {  
   DataPartition *dp = AllocPartition(1);
   seq_parameter_set_rbsp_t *sps = AllocSPS();
@@ -472,36 +474,36 @@ void ProcessSPS (ImageParameters *p_Img, NALU_t *nalu)
   dp->bitstream->code_len = dp->bitstream->bitstream_length = RBSPtoSODB (dp->bitstream->streamBuffer, nalu->len-1);
   dp->bitstream->ei_flag = 0;
   dp->bitstream->read_len = dp->bitstream->frame_bitoffset = 0;
-  InterpretSPS (p_Img, dp, sps);
+  InterpretSPS (p_Vid, dp, sps);
 
   if (sps->Valid)
   {
-    if (p_Img->active_sps)
+    if (p_Vid->active_sps)
     {
-      if (sps->seq_parameter_set_id == p_Img->active_sps->seq_parameter_set_id)
+      if (sps->seq_parameter_set_id == p_Vid->active_sps->seq_parameter_set_id)
       {
-        if (!sps_is_equal(sps, p_Img->active_sps))
+        if (!sps_is_equal(sps, p_Vid->active_sps))
         {
-          if (p_Img->dec_picture)
+          if (p_Vid->dec_picture)
           {
             // this may only happen on slice loss
-            exit_picture(p_Img, &p_Img->dec_picture);
+            exit_picture(p_Vid, &p_Vid->dec_picture);
           }
-          p_Img->active_sps=NULL;
+          p_Vid->active_sps=NULL;
         }
       }
     }
     // SPSConsistencyCheck (pps);
-    MakeSPSavailable (p_Img, sps->seq_parameter_set_id, sps);
-    p_Img->profile_idc = sps->profile_idc;
-    p_Img->separate_colour_plane_flag = sps->separate_colour_plane_flag;
-    if( p_Img->separate_colour_plane_flag )
+    MakeSPSavailable (p_Vid, sps->seq_parameter_set_id, sps);
+    p_Vid->profile_idc = sps->profile_idc;
+    p_Vid->separate_colour_plane_flag = sps->separate_colour_plane_flag;
+    if( p_Vid->separate_colour_plane_flag )
     {
-      p_Img->ChromaArrayType = 0;
+      p_Vid->ChromaArrayType = 0;
     }
     else
     {
-      p_Img->ChromaArrayType = sps->chroma_format_idc;
+      p_Vid->ChromaArrayType = sps->chroma_format_idc;
     }
   }
 
@@ -510,7 +512,7 @@ void ProcessSPS (ImageParameters *p_Img, NALU_t *nalu)
 }
 
 
-void ProcessPPS (ImageParameters *p_Img, NALU_t *nalu)
+void ProcessPPS (VideoParameters *p_Vid, NALU_t *nalu)
 {
   DataPartition *dp = AllocPartition(1);
   pic_parameter_set_rbsp_t *pps = AllocPPS();
@@ -519,24 +521,24 @@ void ProcessPPS (ImageParameters *p_Img, NALU_t *nalu)
   dp->bitstream->code_len = dp->bitstream->bitstream_length = RBSPtoSODB (dp->bitstream->streamBuffer, nalu->len-1);
   dp->bitstream->ei_flag = 0;
   dp->bitstream->read_len = dp->bitstream->frame_bitoffset = 0;
-  InterpretPPS (p_Img, dp, pps);
+  InterpretPPS (p_Vid, dp, pps);
   // PPSConsistencyCheck (pps);
-  if (p_Img->active_pps)
+  if (p_Vid->active_pps)
   {
-    if (pps->pic_parameter_set_id == p_Img->active_pps->pic_parameter_set_id)
+    if (pps->pic_parameter_set_id == p_Vid->active_pps->pic_parameter_set_id)
     {
-      if (!pps_is_equal(pps, p_Img->active_pps))
+      if (!pps_is_equal(pps, p_Vid->active_pps))
       {
-        if (p_Img->dec_picture)
+        if (p_Vid->dec_picture)
         {
           // this may only happen on slice loss
-          exit_picture(p_Img, &p_Img->dec_picture);
+          exit_picture(p_Vid, &p_Vid->dec_picture);
         }
-        p_Img->active_pps = NULL;
+        p_Vid->active_pps = NULL;
       }
     }
   }
-  MakePPSavailable (p_Img, pps->pic_parameter_set_id, pps);
+  MakePPSavailable (p_Vid, pps->pic_parameter_set_id, pps);
   FreePartition (dp, 1);
   FreePPS (pps);
 }
@@ -565,9 +567,9 @@ static void updateMaxValue(FrameFormat *format)
  *
  ************************************************************************
  */
-void reset_format_info(seq_parameter_set_rbsp_t *sps, ImageParameters *p_Img, FrameFormat *source, FrameFormat *output)
+void reset_format_info(seq_parameter_set_rbsp_t *sps, VideoParameters *p_Vid, FrameFormat *source, FrameFormat *output)
 {
-  InputParameters *p_Inp = p_Img->p_Inp;
+  InputParameters *p_Inp = p_Vid->p_Inp;
   static const int SubWidthC  [4]= { 1, 2, 2, 1};
   static const int SubHeightC [4]= { 1, 2, 1, 1};
 
@@ -587,8 +589,8 @@ void reset_format_info(seq_parameter_set_rbsp_t *sps, ImageParameters *p_Img, Fr
     crop_left = crop_right = crop_top = crop_bottom = 0;
   }
 
-  source->width = p_Img->width - crop_left - crop_right;
-  source->height = p_Img->height - crop_top - crop_bottom;
+  source->width = p_Vid->width - crop_left - crop_right;
+  source->height = p_Vid->height - crop_top - crop_bottom;
 
   // cropping for chroma
   if (sps->frame_cropping_flag)
@@ -610,14 +612,14 @@ void reset_format_info(seq_parameter_set_rbsp_t *sps, ImageParameters *p_Img, Fr
   }
   else
   {
-    source->width_cr = p_Img->width_cr - crop_left - crop_right;
-    source->height_cr = p_Img->height_cr - crop_top - crop_bottom;
+    source->width_cr = p_Vid->width_cr - crop_left - crop_right;
+    source->height_cr = p_Vid->height_cr - crop_top - crop_bottom;
   }
 
-  output->width     = p_Img->width;
-  output->height    = p_Img->height;
-  output->width_cr  = p_Img->width_cr;
-  output->height_cr = p_Img->height_cr;
+  output->width     = p_Vid->width;
+  output->height    = p_Vid->height;
+  output->width_cr  = p_Vid->width_cr;
+  output->height_cr = p_Vid->height_cr;
 
   source->size_cmp[0] = source->width * source->height;
   source->size_cmp[1] = source->width_cr * source->height_cr;
@@ -637,9 +639,9 @@ void reset_format_info(seq_parameter_set_rbsp_t *sps, ImageParameters *p_Img, Fr
   output->mb_height   = output->height / MB_BLOCK_SIZE;
 
 
-  output->bit_depth[0] = source->bit_depth[0] = p_Img->bitdepth_luma;
-  output->bit_depth[1] = source->bit_depth[1] = p_Img->bitdepth_chroma;
-  output->bit_depth[2] = source->bit_depth[2] = p_Img->bitdepth_chroma;  
+  output->bit_depth[0] = source->bit_depth[0] = p_Vid->bitdepth_luma;
+  output->bit_depth[1] = source->bit_depth[1] = p_Vid->bitdepth_chroma;
+  output->bit_depth[2] = source->bit_depth[2] = p_Vid->bitdepth_chroma;  
   output->pic_unit_size_on_disk = (imax(output->bit_depth[0], output->bit_depth[1]) > 8) ? 16 : 8;
   output->pic_unit_size_shift3 = output->pic_unit_size_on_disk >> 3;
 
@@ -649,8 +651,8 @@ void reset_format_info(seq_parameter_set_rbsp_t *sps, ImageParameters *p_Img, Fr
 
   output->auto_crop_bottom    = crop_bottom;
   output->auto_crop_right     = crop_right;
-  output->auto_crop_bottom_cr = (crop_bottom * p_Img->mb_cr_size_y) / MB_BLOCK_SIZE;
-  output->auto_crop_right_cr  = (crop_right * p_Img->mb_cr_size_x) / MB_BLOCK_SIZE;
+  output->auto_crop_bottom_cr = (crop_bottom * p_Vid->mb_cr_size_y) / MB_BLOCK_SIZE;
+  output->auto_crop_right_cr  = (crop_right * p_Vid->mb_cr_size_x) / MB_BLOCK_SIZE;
 
   source->auto_crop_bottom    = output->auto_crop_bottom;
   source->auto_crop_right     = output->auto_crop_right;
@@ -668,134 +670,134 @@ void reset_format_info(seq_parameter_set_rbsp_t *sps, ImageParameters *p_Img, Fr
  *
  ************************************************************************
  */
-void activate_sps (ImageParameters *p_Img, seq_parameter_set_rbsp_t *sps)
+void activate_sps (VideoParameters *p_Vid, seq_parameter_set_rbsp_t *sps)
 {
-  InputParameters *p_Inp = p_Img->p_Inp;  
+  InputParameters *p_Inp = p_Vid->p_Inp;  
 
-  if (p_Img->active_sps != sps)
+  if (p_Vid->active_sps != sps)
   {
-    if (p_Img->dec_picture)
+    if (p_Vid->dec_picture)
     {
       // this may only happen on slice loss
-      exit_picture(p_Img, &p_Img->dec_picture);
+      exit_picture(p_Vid, &p_Vid->dec_picture);
     }
-    p_Img->active_sps = sps;
+    p_Vid->active_sps = sps;
 
-    p_Img->bitdepth_chroma = 0;
-    p_Img->width_cr        = 0;
-    p_Img->height_cr       = 0;
+    p_Vid->bitdepth_chroma = 0;
+    p_Vid->width_cr        = 0;
+    p_Vid->height_cr       = 0;
 
     // maximum vertical motion vector range in luma quarter pixel units
-    if (p_Img->active_sps->level_idc <= 10)
+    if (p_Vid->active_sps->level_idc <= 10)
     {
-      p_Img->max_vmv_r = 64 * 4;
+      p_Vid->max_vmv_r = 64 * 4;
     }
-    else if (p_Img->active_sps->level_idc <= 20)
+    else if (p_Vid->active_sps->level_idc <= 20)
     {
-      p_Img->max_vmv_r = 128 * 4;
+      p_Vid->max_vmv_r = 128 * 4;
     }
-    else if (p_Img->active_sps->level_idc <= 30)
+    else if (p_Vid->active_sps->level_idc <= 30)
     {
-      p_Img->max_vmv_r = 256 * 4;
+      p_Vid->max_vmv_r = 256 * 4;
     }
     else
     {
-      p_Img->max_vmv_r = 512 * 4; // 512 pixels in quarter pixels
+      p_Vid->max_vmv_r = 512 * 4; // 512 pixels in quarter pixels
     }
 
     // Fidelity Range Extensions stuff (part 1)
-    p_Img->bitdepth_luma       = sps->bit_depth_luma_minus8 + 8;
-    p_Img->bitdepth_scale[0]   = 1 << sps->bit_depth_luma_minus8;
+    p_Vid->bitdepth_luma       = (short) (sps->bit_depth_luma_minus8 + 8);
+    p_Vid->bitdepth_scale[0]   = 1 << sps->bit_depth_luma_minus8;
     if (sps->chroma_format_idc != YUV400)
     {
-      p_Img->bitdepth_chroma   = sps->bit_depth_chroma_minus8 + 8;
-      p_Img->bitdepth_scale[1] = 1 << sps->bit_depth_chroma_minus8;
+      p_Vid->bitdepth_chroma   = (short) (sps->bit_depth_chroma_minus8 + 8);
+      p_Vid->bitdepth_scale[1] = 1 << sps->bit_depth_chroma_minus8;
     }
 
-    p_Img->MaxFrameNum = 1<<(sps->log2_max_frame_num_minus4+4);
-    p_Img->PicWidthInMbs = (sps->pic_width_in_mbs_minus1 +1);
-    p_Img->PicHeightInMapUnits = (sps->pic_height_in_map_units_minus1 +1);
-    p_Img->FrameHeightInMbs = ( 2 - sps->frame_mbs_only_flag ) * p_Img->PicHeightInMapUnits;
-    p_Img->FrameSizeInMbs = p_Img->PicWidthInMbs * p_Img->FrameHeightInMbs;
+    p_Vid->MaxFrameNum = 1<<(sps->log2_max_frame_num_minus4+4);
+    p_Vid->PicWidthInMbs = (sps->pic_width_in_mbs_minus1 +1);
+    p_Vid->PicHeightInMapUnits = (sps->pic_height_in_map_units_minus1 +1);
+    p_Vid->FrameHeightInMbs = ( 2 - sps->frame_mbs_only_flag ) * p_Vid->PicHeightInMapUnits;
+    p_Vid->FrameSizeInMbs = p_Vid->PicWidthInMbs * p_Vid->FrameHeightInMbs;
 
-    p_Img->yuv_format=sps->chroma_format_idc;
+    p_Vid->yuv_format=sps->chroma_format_idc;
 
-    p_Img->width = p_Img->PicWidthInMbs * MB_BLOCK_SIZE;
-    p_Img->height = p_Img->FrameHeightInMbs * MB_BLOCK_SIZE;
+    p_Vid->width = p_Vid->PicWidthInMbs * MB_BLOCK_SIZE;
+    p_Vid->height = p_Vid->FrameHeightInMbs * MB_BLOCK_SIZE;
     
     if (sps->chroma_format_idc == YUV420)
     {
-      p_Img->width_cr  = (p_Img->width  >> 1);
-      p_Img->height_cr = (p_Img->height >> 1);
+      p_Vid->width_cr  = (p_Vid->width  >> 1);
+      p_Vid->height_cr = (p_Vid->height >> 1);
     }
     else if (sps->chroma_format_idc == YUV422)
     {
-      p_Img->width_cr  = (p_Img->width >> 1);
-      p_Img->height_cr = p_Img->height;
+      p_Vid->width_cr  = (p_Vid->width >> 1);
+      p_Vid->height_cr = p_Vid->height;
     }
     else if (sps->chroma_format_idc == YUV444)
     {
       //YUV444
-      p_Img->width_cr = p_Img->width;
-      p_Img->height_cr = p_Img->height;
+      p_Vid->width_cr = p_Vid->width;
+      p_Vid->height_cr = p_Vid->height;
     }
 
-    init_frext(p_Img);
-    init_global_buffers(p_Img);
+    init_frext(p_Vid);
+    init_global_buffers(p_Vid);
 
-    if (!p_Img->no_output_of_prior_pics_flag)
+    if (!p_Vid->no_output_of_prior_pics_flag)
     {
-      flush_dpb(p_Img);
+      flush_dpb(p_Vid);
     }
-    init_dpb(p_Img);
+    init_dpb(p_Vid);
 
-    ercInit(p_Img, p_Img->width, p_Img->height, 1);
+    ercInit(p_Vid, p_Vid->width, p_Vid->height, 1);
   }
   
-  reset_format_info(sps, p_Img, &p_Inp->source, &p_Inp->output);
+  reset_format_info(sps, p_Vid, &p_Inp->source, &p_Inp->output);
 
 }
 
-void activate_pps(ImageParameters *p_Img, pic_parameter_set_rbsp_t *pps)
+void activate_pps(VideoParameters *p_Vid, pic_parameter_set_rbsp_t *pps)
 {  
-  if (p_Img->active_pps != pps)
+  if (p_Vid->active_pps != pps)
   {
-    if (p_Img->dec_picture)
+    if (p_Vid->dec_picture)
     {
       // this may only happen on slice loss
-      exit_picture(p_Img, &p_Img->dec_picture);
+      exit_picture(p_Vid, &p_Vid->dec_picture);
     }
 
-    p_Img->active_pps = pps;
+    p_Vid->active_pps = pps;
 
     // Fidelity Range Extensions stuff (part 2)
-    p_Img->Transform8x8Mode = pps->transform_8x8_mode_flag;
+    p_Vid->Transform8x8Mode = pps->transform_8x8_mode_flag;
 
   }
 }
 
 void UseParameterSet (Slice *currSlice, int PicParsetId)
 {
-  ImageParameters *p_Img = currSlice->p_Img;
-  seq_parameter_set_rbsp_t *sps = &p_Img->SeqParSet[p_Img->PicParSet[PicParsetId].seq_parameter_set_id];
-  pic_parameter_set_rbsp_t *pps = &p_Img->PicParSet[PicParsetId];
+  VideoParameters *p_Vid = currSlice->p_Vid;
+  seq_parameter_set_rbsp_t *sps = &p_Vid->SeqParSet[p_Vid->PicParSet[PicParsetId].seq_parameter_set_id];
+  pic_parameter_set_rbsp_t *pps = &p_Vid->PicParSet[PicParsetId];
   int i;
 
-  if (p_Img->PicParSet[PicParsetId].Valid != TRUE)
+  if (p_Vid->PicParSet[PicParsetId].Valid != TRUE)
     printf ("Trying to use an invalid (uninitialized) Picture Parameter Set with ID %d, expect the unexpected...\n", PicParsetId);
-  if (p_Img->SeqParSet[p_Img->PicParSet[PicParsetId].seq_parameter_set_id].Valid != TRUE)
-    printf ("PicParset %d references an invalid (uninitialized) Sequence Parameter Set with ID %d, expect the unexpected...\n", PicParsetId, (int) p_Img->PicParSet[PicParsetId].seq_parameter_set_id);
+  if (p_Vid->SeqParSet[p_Vid->PicParSet[PicParsetId].seq_parameter_set_id].Valid != TRUE)
+    printf ("PicParset %d references an invalid (uninitialized) Sequence Parameter Set with ID %d, expect the unexpected...\n", PicParsetId, (int) p_Vid->PicParSet[PicParsetId].seq_parameter_set_id);
 
-  sps =  &p_Img->SeqParSet[p_Img->PicParSet[PicParsetId].seq_parameter_set_id];
+  sps =  &p_Vid->SeqParSet[p_Vid->PicParSet[PicParsetId].seq_parameter_set_id];
 
 
   // In theory, and with a well-designed software, the lines above
   // are everything necessary.  In practice, we need to patch many values
-  // in p_Img-> (but no more in p_Inp-> -- these have been taken care of)
+  // in p_Vid-> (but no more in p_Inp-> -- these have been taken care of)
 
   // Sequence Parameter Set Stuff first
 
-//  printf ("Using Picture Parameter set %d and associated Sequence Parameter Set %d\n", PicParsetId, p_Img->PicParSet[PicParsetId].seq_parameter_set_id);
+//  printf ("Using Picture Parameter set %d and associated Sequence Parameter Set %d\n", PicParsetId, p_Vid->PicParSet[PicParsetId].seq_parameter_set_id);
 
   if ((int) sps->pic_order_cnt_type < 0 || sps->pic_order_cnt_type > 2)  // != 1
   {
@@ -811,8 +813,8 @@ void UseParameterSet (Slice *currSlice, int PicParsetId)
     }
   }
 
-  activate_sps(p_Img, sps);
-  activate_pps(p_Img, pps);
+  activate_sps(p_Vid, sps);
+  activate_pps(p_Vid, pps);
 
   // currSlice->dp_mode is set by read_new_slice (NALU first byte available there)
   if (pps->entropy_coding_mode_flag == CAVLC)

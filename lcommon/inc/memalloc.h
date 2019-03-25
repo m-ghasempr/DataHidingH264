@@ -53,15 +53,19 @@ extern int  get_mem3D(byte ****array3D, int dim0, int dim1, int dim2);
 extern int  get_mem4D(byte *****array4D, int dim0, int dim1, int dim2, int dim3);
 
 extern int  get_mem2Dint(int ***array2D, int rows, int columns);
+extern int  get_mem2Dint64(int64 ***array2D, int rows, int columns);
 extern int  get_mem3Dint(int ****array3D, int frames, int rows, int columns);
+extern int  get_mem3Dint64(int64 ****array3D, int frames, int rows, int columns);
 extern int  get_mem4Dint(int *****array4D, int idx, int frames, int rows, int columns );
+extern int  get_mem4Dint64(int64 *****array4D, int idx, int frames, int rows, int columns );
 extern int  get_mem5Dint(int ******array5D, int refs, int blocktype, int rows, int columns, int component);
 
 
 extern int get_mem3Duint16(uint16 ****array3D,int dim0, int dim1, int dim2);
 
-extern int  get_mem2Dint64(int64 ***array2D, int rows, int columns);
-extern int  get_mem3Dint64(int64 ****array3D, int frames, int rows, int columns);
+extern int  get_mem2Ddistblk(distblk ***array2D, int rows, int columns);
+extern int  get_mem3Ddistblk(distblk ****array3D, int frames, int rows, int columns);
+extern int  get_mem4Ddistblk(distblk *****array4D, int idx, int frames, int rows, int columns );
 
 extern int  get_mem2Dshort(short ***array2D, int dim0, int dim1);
 extern int  get_mem3Dshort(short ****array3D, int dim0, int dim1, int dim2);
@@ -116,6 +120,11 @@ extern void free_mem5Dint  (int    *****array5D);
 
 extern void free_mem2Dint64(int64     **array2D);
 extern void free_mem3Dint64(int64    ***array3D);
+extern void free_mem4Dint64(int64     ****array4D);
+
+extern void free_mem2Ddistblk(distblk     **array2D);
+extern void free_mem3Ddistblk(distblk    ***array3D);
+extern void free_mem4Ddistblk(distblk     ****array4D);
 
 extern void free_mem2Dshort(short      **array2D);
 extern void free_mem3Dshort(short     ***array3D);
@@ -130,6 +139,7 @@ extern void free_mem3Dpel  (imgpel   ***array3D);
 extern void free_mem4Dpel  (imgpel  ****array4D);
 extern void free_mem5Dpel  (imgpel *****array5D);
 extern void free_mem2Ddouble(double **array2D);
+extern void free_mem3Ddouble(double ***array3D);
 
 extern void free_mem2Dodouble(double **array2D, int offset);
 extern void free_mem3Dodouble(double ***array3D, int rows, int columns, int offset);

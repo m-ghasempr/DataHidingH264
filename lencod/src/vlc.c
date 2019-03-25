@@ -915,7 +915,7 @@ int writeSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *se, DataPartition *dp
  *    write VLC for NumCoeff and TrailingOnes for Chroma DC
  ************************************************************************
  */
-int writeSyntaxElement_NumCoeffTrailingOnesChromaDC(ImageParameters *p_Img, SyntaxElement *se, DataPartition *dp)
+int writeSyntaxElement_NumCoeffTrailingOnesChromaDC(VideoParameters *p_Vid, SyntaxElement *se, DataPartition *dp)
 {
   static const byte lentab[3][4][17] =
   {
@@ -955,7 +955,7 @@ int writeSyntaxElement_NumCoeffTrailingOnesChromaDC(ImageParameters *p_Img, Synt
     { 0, 0, 0, 3, 3, 4, 4, 4, 4, 4,12,12, 8,12, 8,12, 8}}
 
   };  
-  int yuv = p_Img->yuv_format - 1;
+  int yuv = p_Vid->yuv_format - 1;
 
   // se->value1 : numcoeff
   // se->value2 : numtrailingones
@@ -1064,7 +1064,7 @@ int writeSyntaxElement_TotalZeros(SyntaxElement *se, DataPartition *dp)
  *    write VLC for TotalZeros for Chroma DC
  ************************************************************************
  */
-int writeSyntaxElement_TotalZerosChromaDC(ImageParameters *p_Img, SyntaxElement *se, DataPartition *dp)
+int writeSyntaxElement_TotalZerosChromaDC(VideoParameters *p_Vid, SyntaxElement *se, DataPartition *dp)
 {
   static const byte lentab[3][TOTRUN_NUM][16] =
   {
@@ -1130,7 +1130,7 @@ int writeSyntaxElement_TotalZerosChromaDC(ImageParameters *p_Img, SyntaxElement 
     {0,1}}
   };
   int vlcnum = se->len;
-  int yuv = p_Img->yuv_format - 1;  
+  int yuv = p_Vid->yuv_format - 1;  
 
   // se->value1 : TotalZeros
   se->len = lentab[yuv][vlcnum][se->value1];
@@ -1426,8 +1426,8 @@ void trace2out_cabac(SyntaxElement *sym)
  *    puts the less than 8 bits in the byte buffer of the Bitstream into
  *    the streamBuffer.
  *
- * \param p_Img
- *    ImageParameters for current picture encoding
+ * \param p_Vid
+ *    VideoParameters for current picture encoding
  * \param currStream
  *    the Bitstream the alignment should be established
  * \param cur_stats
@@ -1435,13 +1435,13 @@ void trace2out_cabac(SyntaxElement *sym)
  *
  ************************************************************************
  */
-void writeVlcByteAlign(ImageParameters *p_Img, Bitstream* currStream, StatParameters *cur_stats)
+void writeVlcByteAlign(VideoParameters *p_Vid, Bitstream* currStream, StatParameters *cur_stats)
 {
   if (currStream->bits_to_go < 8)
   { // trailing bits to process
     currStream->byte_buf = (byte) ((currStream->byte_buf << currStream->bits_to_go) | (0xff >> (8 - currStream->bits_to_go)));
     currStream->streamBuffer[currStream->byte_pos++] = currStream->byte_buf;
-    cur_stats->bit_use_stuffingBits[p_Img->type] += currStream->bits_to_go;    
+    cur_stats->bit_use_stuffingBits[p_Vid->type] += currStream->bits_to_go;    
     currStream->bits_to_go = 8;
   }
 }
@@ -1451,9 +1451,9 @@ void writeVlcByteAlign(ImageParameters *p_Img, Bitstream* currStream, StatParame
  * \brief
  *    Resets the nz_coeff parameters for a macroblock
  ************************************************************************/
-void reset_mb_nz_coeff(ImageParameters *p_Img, int mb_number)
+void reset_mb_nz_coeff(VideoParameters *p_Vid, int mb_number)
 {
-   memset(&p_Img->nz_coeff [mb_number][0][0], 0, BLOCK_SIZE * (BLOCK_SIZE + p_Img->num_blk8x8_uv) * sizeof(int));
+   memset(&p_Vid->nz_coeff [mb_number][0][0], 0, BLOCK_SIZE * (BLOCK_SIZE + p_Vid->num_blk8x8_uv) * sizeof(int));
 }
 
 

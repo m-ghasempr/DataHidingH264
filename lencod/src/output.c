@@ -279,9 +279,9 @@ void write_out_picture(StorablePicture *p, FrameFormat *output, int p_out)
  *    Initialize output buffer for direct output
  ************************************************************************
  */
-void init_out_buffer(ImageParameters *p_Img)
+void init_out_buffer(VideoParameters *p_Vid)
 {
-  p_Img->out_buffer = alloc_frame_store();
+  p_Vid->out_buffer = alloc_frame_store();
 }
 
 /*!
@@ -290,10 +290,10 @@ void init_out_buffer(ImageParameters *p_Img)
  *    Uninitialize output buffer for direct output
  ************************************************************************
  */
-void uninit_out_buffer(ImageParameters *p_Img, InputParameters *p_Inp)
+void uninit_out_buffer(VideoParameters *p_Vid)
 {
-  free_frame_store(p_Img, p_Inp, p_Img->out_buffer);
-  p_Img->out_buffer=NULL;
+  free_frame_store(p_Vid, p_Vid->out_buffer);
+  p_Vid->out_buffer=NULL;
 }
 
 /*!
@@ -302,31 +302,31 @@ void uninit_out_buffer(ImageParameters *p_Img, InputParameters *p_Inp)
  *    Initialize picture memory with (Y:0,U:128,V:128)
  ************************************************************************
  */
-void clear_picture(ImageParameters *p_Img, StorablePicture *p)
+void clear_picture(VideoParameters *p_Vid, StorablePicture *p)
 {
   int i;
 
-  if (p_Img->bitdepth_luma == 8)
+  if (p_Vid->bitdepth_luma == 8)
   {
     // this does not seem to be right since it seems to work only for imgpel == byte
     // should be fixed
     for(i=0;i<p->size_y;i++)
-      memset(p->imgY[i], p_Img->dc_pred_value_comp[0], p->size_x*sizeof(imgpel));
+      memset(p->imgY[i], p_Vid->dc_pred_value_comp[0], p->size_x*sizeof(imgpel));
   }
   else
   {
     int j;
     for(i=0;i < p->size_y; i++)
     for(j=0;j < p->size_x; j++)
-      p->imgY[i][j] = (imgpel) p_Img->dc_pred_value_comp[0];
+      p->imgY[i][j] = (imgpel) p_Vid->dc_pred_value_comp[0];
   }
 
-  if (p_Img->bitdepth_chroma == 8)
+  if (p_Vid->bitdepth_chroma == 8)
   {
     for(i=0;i<p->size_y_cr;i++)
-      memset(p->imgUV[0][i], p_Img->dc_pred_value_comp[1], p->size_x_cr*sizeof(imgpel));
+      memset(p->imgUV[0][i], p_Vid->dc_pred_value_comp[1], p->size_x_cr*sizeof(imgpel));
     for(i=0;i<p->size_y_cr;i++)
-      memset(p->imgUV[1][i], p_Img->dc_pred_value_comp[2], p->size_x_cr*sizeof(imgpel));
+      memset(p->imgUV[1][i], p_Vid->dc_pred_value_comp[2], p->size_x_cr*sizeof(imgpel));
   }
   else
   {  
@@ -335,7 +335,7 @@ void clear_picture(ImageParameters *p_Img, StorablePicture *p)
    {
       for(i=0;i<p->size_y_cr;i++)
       for(j=0;j < p->size_x_cr; j++)
-        p->imgUV[k][i][j] = (imgpel) p_Img->dc_pred_value_comp[1];
+        p->imgUV[k][i][j] = (imgpel) p_Vid->dc_pred_value_comp[1];
    }
   }
 }
@@ -345,10 +345,8 @@ void clear_picture(ImageParameters *p_Img, StorablePicture *p)
  * \brief
  *    Write out not paired direct output fields. A second empty field is generated
  *    and combined into the frame buffer.
- * \param p_Img
- *    point to ImageParameters
- * \param p_Inp
- *    Input configuration parameters 
+ * \param p_Vid
+ *    point to VideoParameters
  * \param fs
  *    FrameStore that contains a single field
  * \param output
@@ -357,7 +355,7 @@ void clear_picture(ImageParameters *p_Img, StorablePicture *p)
  *    Output file 
  ************************************************************************
  */
-void write_unpaired_field(ImageParameters *p_Img, InputParameters *p_Inp, FrameStore* fs, FrameFormat *output, int p_out)
+void write_unpaired_field(VideoParameters *p_Vid, FrameStore* fs, FrameFormat *output, int p_out)
 {
   StorablePicture *p;
   assert (fs->is_used<3);
@@ -366,15 +364,15 @@ void write_unpaired_field(ImageParameters *p_Img, InputParameters *p_Inp, FrameS
     // we have a top field
     // construct an empty bottom field
     p = fs->top_field;
-    fs->bottom_field = alloc_storable_picture(p_Img, p_Inp, BOTTOM_FIELD, p->size_x, p->size_y, p->size_x_cr, p->size_y_cr);
+    fs->bottom_field = alloc_storable_picture(p_Vid, BOTTOM_FIELD, p->size_x, p->size_y, p->size_x_cr, p->size_y_cr);
     fs->bottom_field->chroma_format_idc = p->chroma_format_idc;
     fs->bottom_field->chroma_mask_mv_x  = p->chroma_mask_mv_x;
     fs->bottom_field->chroma_mask_mv_y  = p->chroma_mask_mv_y;
     fs->bottom_field->chroma_shift_x    = p->chroma_shift_x;
     fs->bottom_field->chroma_shift_y    = p->chroma_shift_y;
 
-    clear_picture(p_Img, fs->bottom_field);
-    dpb_combine_field_yuv(p_Img, p_Inp, fs);
+    clear_picture(p_Vid, fs->bottom_field);
+    dpb_combine_field_yuv(p_Vid, fs);
     write_picture (fs->frame, output, p_out);
   }
 
@@ -383,15 +381,15 @@ void write_unpaired_field(ImageParameters *p_Img, InputParameters *p_Inp, FrameS
     // we have a bottom field
     // construct an empty top field
     p = fs->bottom_field;
-    fs->top_field = alloc_storable_picture(p_Img, p_Inp, TOP_FIELD, p->size_x, p->size_y, p->size_x_cr, p->size_y_cr);
-    clear_picture(p_Img, fs->top_field);
+    fs->top_field = alloc_storable_picture(p_Vid, TOP_FIELD, p->size_x, p->size_y, p->size_x_cr, p->size_y_cr);
+    clear_picture(p_Vid, fs->top_field);
     fs->top_field->chroma_format_idc = p->chroma_format_idc;
     fs->top_field->chroma_mask_mv_x  = p->chroma_mask_mv_x;
     fs->top_field->chroma_mask_mv_y  = p->chroma_mask_mv_y;
     fs->top_field->chroma_shift_x    = p->chroma_shift_x;
     fs->top_field->chroma_shift_y    = p->chroma_shift_y;
 
-    clear_picture(p_Img, fs->top_field);
+    clear_picture(p_Vid, fs->top_field);
     fs ->top_field->frame_cropping_flag = fs->bottom_field->frame_cropping_flag;
     if(fs ->top_field->frame_cropping_flag)
     {
@@ -400,7 +398,7 @@ void write_unpaired_field(ImageParameters *p_Img, InputParameters *p_Inp, FrameS
       fs ->top_field->frame_cropping_rect_left_offset = fs->bottom_field->frame_cropping_rect_left_offset;
       fs ->top_field->frame_cropping_rect_right_offset = fs->bottom_field->frame_cropping_rect_right_offset;
     }
-    dpb_combine_field_yuv(p_Img, p_Inp, fs);
+    dpb_combine_field_yuv(p_Vid, fs);
     write_picture (fs->frame, output, p_out);
   }
 
@@ -411,27 +409,25 @@ void write_unpaired_field(ImageParameters *p_Img, InputParameters *p_Inp, FrameS
  ************************************************************************
  * \brief
  *    Write out unpaired fields from output buffer.
- * \param p_Img
- *    ImageParameters structure
- * \param p_Inp
- *    Input configuration parameters 
+ * \param p_Vid
+ *    VideoParameters structure
  * \param output
  *    FrameFormat structure for output
  * \param p_out
  *    Output file
  ************************************************************************
  */
-void flush_direct_output(ImageParameters *p_Img, InputParameters *p_Inp, FrameFormat *output, int p_out)
+void flush_direct_output(VideoParameters *p_Vid, FrameFormat *output, int p_out)
 {
-  write_unpaired_field(p_Img, p_Inp, p_Img->out_buffer, output, p_out);
+  write_unpaired_field(p_Vid, p_Vid->out_buffer, output, p_out);
 
-  free_storable_picture(p_Img, p_Inp, p_Img->out_buffer->frame);
-  p_Img->out_buffer->frame = NULL;
-  free_storable_picture(p_Img, p_Inp, p_Img->out_buffer->top_field);
-  p_Img->out_buffer->top_field = NULL;
-  free_storable_picture(p_Img, p_Inp, p_Img->out_buffer->bottom_field);
-  p_Img->out_buffer->bottom_field = NULL;
-  p_Img->out_buffer->is_used = 0;
+  free_storable_picture(p_Vid, p_Vid->out_buffer->frame);
+  p_Vid->out_buffer->frame = NULL;
+  free_storable_picture(p_Vid, p_Vid->out_buffer->top_field);
+  p_Vid->out_buffer->top_field = NULL;
+  free_storable_picture(p_Vid, p_Vid->out_buffer->bottom_field);
+  p_Vid->out_buffer->bottom_field = NULL;
+  p_Vid->out_buffer->is_used = 0;
 }
 
 
@@ -439,10 +435,8 @@ void flush_direct_output(ImageParameters *p_Img, InputParameters *p_Inp, FrameFo
  ************************************************************************
  * \brief
  *    Write a frame (from FrameStore)
- * \param p_Img
- *    ImageParameters structure
- * \param p_Inp
- *    Input configuration parameters 
+ * \param p_Vid
+ *    VideoParameters structure
  * \param fs
  *    FrameStore containing the frame
  * \param output
@@ -451,14 +445,14 @@ void flush_direct_output(ImageParameters *p_Img, InputParameters *p_Inp, FrameFo
  *    Output file
  ************************************************************************
  */
-void write_stored_frame( ImageParameters *p_Img, InputParameters *p_Inp, FrameStore *fs, FrameFormat *output, int p_out)
+void write_stored_frame( VideoParameters *p_Vid, FrameStore *fs, FrameFormat *output, int p_out)
 {
   // make sure no direct output field is pending
-  flush_direct_output(p_Img, p_Inp, output, p_out);
+  flush_direct_output(p_Vid, output, p_out);
 
   if (fs->is_used<3)
   {
-    write_unpaired_field(p_Img, p_Inp, fs, output, p_out);
+    write_unpaired_field(p_Vid, fs, output, p_out);
   }
   else
   {
@@ -474,10 +468,8 @@ void write_stored_frame( ImageParameters *p_Img, InputParameters *p_Inp, FrameSt
  * \brief
  *    Directly output a picture without storing it in the DPB. Fields
  *    are buffered before they are written to the file.
- * \param p_Img
- *    ImageParameters structure
- * \param p_Inp
- *    Input configuration parameters 
+ * \param p_Vid
+ *    VideoParameters structure
  * \param p
  *    Picture for output
  * \param output
@@ -486,47 +478,47 @@ void write_stored_frame( ImageParameters *p_Img, InputParameters *p_Inp, FrameSt
  *    Output file
  ************************************************************************
  */
-void direct_output(ImageParameters *p_Img, InputParameters *p_Inp, StorablePicture *p, FrameFormat *output, int p_out)
+void direct_output(VideoParameters *p_Vid, StorablePicture *p, FrameFormat *output, int p_out)
 {
   switch ( p->structure )
   {
   case FRAME:
     // we have a frame (or complementary field pair)
     // so output it directly
-    flush_direct_output(p_Img, p_Inp, output, p_out);
+    flush_direct_output(p_Vid, output, p_out);
     write_picture (p, output, p_out);
-    free_storable_picture(p_Img, p_Inp, p);
+    free_storable_picture(p_Vid, p);
     return;
     break;
   case TOP_FIELD:
-    if (p_Img->out_buffer->is_used &1)
-      flush_direct_output(p_Img, p_Inp, output, p_out);
-    p_Img->out_buffer->top_field = p;
-    p_Img->out_buffer->is_used |= 1;
+    if (p_Vid->out_buffer->is_used &1)
+      flush_direct_output(p_Vid, output, p_out);
+    p_Vid->out_buffer->top_field = p;
+    p_Vid->out_buffer->is_used |= 1;
     break;
   case BOTTOM_FIELD:
-    if (p_Img->out_buffer->is_used &2)
-      flush_direct_output(p_Img, p_Inp, output, p_out);
-    p_Img->out_buffer->bottom_field = p;
-    p_Img->out_buffer->is_used |= 2;
+    if (p_Vid->out_buffer->is_used &2)
+      flush_direct_output(p_Vid, output, p_out);
+    p_Vid->out_buffer->bottom_field = p;
+    p_Vid->out_buffer->is_used |= 2;
     break;
   default:
     printf("invalid picture type\n");
     break;
   }
 
-  if (p_Img->out_buffer->is_used == 3)
+  if (p_Vid->out_buffer->is_used == 3)
   {
     // we have both fields, so output them
-    dpb_combine_field_yuv(p_Img, p_Inp, p_Img->out_buffer);
-    write_picture (p_Img->out_buffer->frame, output, p_out);
-    free_storable_picture(p_Img, p_Inp, p_Img->out_buffer->frame);
-    p_Img->out_buffer->frame = NULL;
-    free_storable_picture(p_Img, p_Inp, p_Img->out_buffer->top_field);
-    p_Img->out_buffer->top_field = NULL;
-    free_storable_picture(p_Img, p_Inp, p_Img->out_buffer->bottom_field);
-    p_Img->out_buffer->bottom_field = NULL;
-    p_Img->out_buffer->is_used = 0;
+    dpb_combine_field_yuv(p_Vid, p_Vid->out_buffer);
+    write_picture (p_Vid->out_buffer->frame, output, p_out);
+    free_storable_picture(p_Vid, p_Vid->out_buffer->frame);
+    p_Vid->out_buffer->frame = NULL;
+    free_storable_picture(p_Vid, p_Vid->out_buffer->top_field);
+    p_Vid->out_buffer->top_field = NULL;
+    free_storable_picture(p_Vid, p_Vid->out_buffer->bottom_field);
+    p_Vid->out_buffer->bottom_field = NULL;
+    p_Vid->out_buffer->is_used = 0;
   }
 }
 
@@ -536,10 +528,8 @@ void direct_output(ImageParameters *p_Img, InputParameters *p_Inp, StorablePictu
 * \brief
 *    For adaptive frame/field coding remove dangling top field from direct
 *    output frame version instead.
-* \param p_Img
+* \param p_Vid
 *    Picture for output
-* \param p_Inp
-*    Input configuration parameters 
 * \param p
 *    Picture for output
 * \param output
@@ -548,16 +538,16 @@ void direct_output(ImageParameters *p_Img, InputParameters *p_Inp, StorablePictu
 *    Output file
 ************************************************************************
 */
-void direct_output_paff(ImageParameters *p_Img, InputParameters *p_Inp, StorablePicture *p, FrameFormat *output, int p_out)
+void direct_output_paff(VideoParameters *p_Vid, StorablePicture *p, FrameFormat *output, int p_out)
 {
   printf("Warning!!! Frame can't fit in DPB. Displayed out of sequence.\n");
-  free_storable_picture(p_Img, p_Inp, p_Img->out_buffer->frame);
-  p_Img->out_buffer->frame = NULL;
-  free_storable_picture(p_Img, p_Inp, p_Img->out_buffer->top_field);
-  p_Img->out_buffer->top_field = NULL;
-  free_storable_picture(p_Img, p_Inp, p_Img->out_buffer->bottom_field);
-  p_Img->out_buffer->bottom_field = NULL;
-  p_Img->out_buffer->is_used = 0;
+  free_storable_picture(p_Vid, p_Vid->out_buffer->frame);
+  p_Vid->out_buffer->frame = NULL;
+  free_storable_picture(p_Vid, p_Vid->out_buffer->top_field);
+  p_Vid->out_buffer->top_field = NULL;
+  free_storable_picture(p_Vid, p_Vid->out_buffer->bottom_field);
+  p_Vid->out_buffer->bottom_field = NULL;
+  p_Vid->out_buffer->is_used = 0;
 
-  direct_output(p_Img, p_Inp, p, output, p_out);
+  direct_output(p_Vid, p, output, p_out);
 }

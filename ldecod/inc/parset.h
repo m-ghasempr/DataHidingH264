@@ -40,17 +40,17 @@ extern int  ReadHRDParameters(DataPartition *p, hrd_parameters_t *hrd);
 extern void PPSConsistencyCheck (pic_parameter_set_rbsp_t *pps);
 extern void SPSConsistencyCheck (seq_parameter_set_rbsp_t *sps);
 
-extern void MakePPSavailable (ImageParameters *p_Img, int id, pic_parameter_set_rbsp_t *pps);
-extern void MakeSPSavailable (ImageParameters *p_Img, int id, seq_parameter_set_rbsp_t *sps);
+extern void MakePPSavailable (VideoParameters *p_Vid, int id, pic_parameter_set_rbsp_t *pps);
+extern void MakeSPSavailable (VideoParameters *p_Vid, int id, seq_parameter_set_rbsp_t *sps);
 
-extern void ProcessSPS (ImageParameters *p_Img, NALU_t *nalu);
-extern void ProcessPPS (ImageParameters *p_Img, NALU_t *nalu);
+extern void ProcessSPS (VideoParameters *p_Vid, NALU_t *nalu);
+extern void ProcessPPS (VideoParameters *p_Vid, NALU_t *nalu);
 
 extern void UseParameterSet (Slice *currSlice, int PicParsetId);
 
-extern void CleanUpPPS(ImageParameters *p_Img);
+extern void CleanUpPPS(VideoParameters *p_Vid);
 
-extern void activate_sps (ImageParameters *p_Img, seq_parameter_set_rbsp_t *sps);
-extern void activate_pps (ImageParameters *p_Img, pic_parameter_set_rbsp_t *pps);
+extern void activate_sps (VideoParameters *p_Vid, seq_parameter_set_rbsp_t *sps);
+extern void activate_pps (VideoParameters *p_Vid, pic_parameter_set_rbsp_t *pps);
 
 #endif

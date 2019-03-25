@@ -29,11 +29,11 @@ static void InitPicTiming              (SEIParameters *p_SEI);
 static void ClosePicTiming             (SEIParameters *p_SEI);
 static void InitDRPMRepetition         (SEIParameters *p_SEI);
 static void CloseDRPMRepetition        (SEIParameters *p_SEI);
-static void FinalizeDRPMRepetition     (ImageParameters *p_Img);
+static void FinalizeDRPMRepetition     (VideoParameters *p_Vid);
 static void InitSparePicture           (SEIParameters *p_SEI);
 static void CloseSparePicture          (SEIParameters *p_SEI);
-static void FinalizeSpareMBMap         (ImageParameters *p_Img);
-static void InitSubseqChar             (ImageParameters *p_Img);
+static void FinalizeSpareMBMap         (VideoParameters *p_Vid);
+static void InitSubseqChar             (VideoParameters *p_Vid);
 static void ClearSubseqCharPayload     (SEIParameters *p_SEI);
 static void CloseSubseqChar            (SEIParameters *p_SEI);
 static void InitSubseqLayerInfo        (SEIParameters *p_SEI);
@@ -86,9 +86,9 @@ void init_sei(SEIParameters *p_SEI)
  *     The implementations are based on FCD
  ************************************************************************
  */
-void InitSEIMessages(ImageParameters *p_Img, InputParameters *p_Inp)
+void InitSEIMessages(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
-  SEIParameters *p_SEI = p_Img->p_SEI;
+  SEIParameters *p_SEI = p_Vid->p_SEI;
   int i;
   for (i=0; i<2; i++)
   {
@@ -104,7 +104,7 @@ void InitSEIMessages(ImageParameters *p_Img, InputParameters *p_Inp)
   if (p_Inp->NumFramesInELSubSeq != 0)
   {
     InitSubseqLayerInfo(p_SEI);
-    InitSubseqChar(p_Img);
+    InitSubseqChar(p_Vid);
   }
   InitSceneInformation(p_SEI);
   // init panscanrect sei message
@@ -120,16 +120,16 @@ void InitSEIMessages(ImageParameters *p_Img, InputParameters *p_Inp)
   // init post_filter_hints
   InitPostFilterHints(p_SEI);
   // init BufferingPeriod
-  InitBufferingPeriod(p_Img);
+  InitBufferingPeriod(p_Vid);
   // init PicTiming
   InitPicTiming(p_SEI);
   // init DRPM Repetition
   InitDRPMRepetition(p_SEI);
 }
 
-void CloseSEIMessages(ImageParameters *p_Img, InputParameters *p_Inp)
+void CloseSEIMessages(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
-  SEIParameters *p_SEI = p_Img->p_SEI;
+  SEIParameters *p_SEI = p_Vid->p_SEI;
   int i;
 
   if (p_Inp->NumFramesInELSubSeq != 0)
@@ -156,14 +156,14 @@ void CloseSEIMessages(ImageParameters *p_Img, InputParameters *p_Inp)
   }
 }
 
-Boolean HaveAggregationSEI(ImageParameters *p_Img)
+Boolean HaveAggregationSEI(VideoParameters *p_Vid)
 {
-  SEIParameters *p_SEI = p_Img->p_SEI;
-  if (p_SEI->sei_message[AGGREGATION_SEI].available && p_Img->type != B_SLICE)
+  SEIParameters *p_SEI = p_Vid->p_SEI;
+  if (p_SEI->sei_message[AGGREGATION_SEI].available && p_Vid->type != B_SLICE)
     return TRUE;
   if (p_SEI->seiHasSubseqInfo)
     return TRUE;
-  if (p_SEI->seiHasSubseqLayerInfo && p_Img->number == 0)
+  if (p_SEI->seiHasSubseqLayerInfo && p_Vid->number == 0)
     return TRUE;
   if (p_SEI->seiHasSubseqChar)
     return TRUE;
@@ -418,7 +418,7 @@ void CalculateSparePicture()
   int delta_spare_frame_num;
   Bitstream *tmpBitstream;
 
-  int num_of_mb=(p_Img->height >> 4) * (p_Img->width >> 4);
+  int num_of_mb=(p_Vid->height >> 4) * (p_Vid->width >> 4);
   int threshold1 = 16*16*p_Inp->SPDetectionThreshold;
   int threshold2 = num_of_mb * p_Inp->SPPercentageThreshold / 100;
   int ref_area_indicator;
@@ -443,13 +443,13 @@ void CalculateSparePicture()
     fp = fopen( map_file_name, "wb" );
     assert( fp != NULL );
     // write the map image
-    for (i=0; i < p_Img->height; i++)
-      for (j=0; j < p_Img->width; j++)
+    for (i=0; i < p_Vid->height; i++)
+      for (j=0; j < p_Vid->width; j++)
         fputc(0, fp);
 
     for (k=0; k < 2; k++)
-      for (i=0; i < p_Img->height >> 1; i++)
-        for (j=0; j < p_Img->width >> 1; j++)
+      for (i=0; i < p_Vid->height >> 1; i++)
+        for (j=0; j < p_Vid->width >> 1; j++)
           fputc(128, fp);
     fclose( fp );
 #endif
@@ -460,7 +460,7 @@ void CalculateSparePicture()
 
   // set the global bitstream memory.
   InitSparePicture();
-  seiSparePicturePayload.target_frame_num = p_Img->number % MAX_FN;
+  seiSparePicturePayload.target_frame_num = p_Vid->number % MAX_FN;
   // init the local bitstream memory.
   tmpBitstream = malloc(sizeof(Bitstream));
   if ( tmpBitstream == NULL ) no_mem_exit("CalculateSparePicture: tmpBitstream");
@@ -476,9 +476,9 @@ void CalculateSparePicture()
   }
   else
     fp = fopen( map_file_name, "ab" );
-  get_mem2D(&y, p_Img->height, p_Img->width);
+  get_mem2D(&y, p_Vid->height, p_Vid->width);
 #endif
-  get_mem2D(&map_sp, p_Img->height >> 4, p_Img->width >> 4);
+  get_mem2D(&map_sp, p_Vid->height >> 4, p_Vid->width >> 4);
 
   if (fb->picbuf_short[2]->used!=0) possible_spare_pic_num = 2;
   else possible_spare_pic_num = 1;
@@ -504,14 +504,14 @@ void CalculateSparePicture()
 
     // calculate the spare macroblock map of one spare picture
     // the results are stored into map_sp[][]
-    for (i=0; i < p_Img->height >> 4; i++)
-      for (j=0; j < p_Img->width >> 4; j++)
+    for (i=0; i < p_Vid->height >> 4; i++)
+      for (j=0; j < p_Vid->width >> 4; j++)
       {
         tmp = 0;
         for (i0=0; i0<16; i0++)
           for (j0=0; j0<16; j0++)
-            tmp+=iabs(fb->picbuf_short[m+1]->Refbuf11[(i*16+i0)*p_Img->width+j*16+j0]-
-                       fb->picbuf_short[0]->Refbuf11[(i*16+i0)*p_Img->width+j*16+j0]);
+            tmp+=iabs(fb->picbuf_short[m+1]->Refbuf11[(i*16+i0)*p_Vid->width+j*16+j0]-
+                       fb->picbuf_short[0]->Refbuf11[(i*16+i0)*p_Vid->width+j*16+j0]);
         tmp = (tmp<=threshold1? 255 : 0);
         map_sp[i][j] = (tmp==0? 1 : 0);
 #ifdef WRITE_MAP_IMAGE
@@ -527,12 +527,12 @@ void CalculateSparePicture()
     // based on map_sp[][], compose the spare picture information
     // and write the spare picture information to a temp bitstream
     tmp = 0;
-    for (i=0; i < p_Img->height >> 4; i++)
-      for (j=0; j < p_Img->width >> 4; j++)
+    for (i=0; i < p_Vid->height >> 4; i++)
+      for (j=0; j < p_Vid->width >> 4; j++)
         if (map_sp[i][j]==0) tmp++;
     if ( tmp > threshold2 )
       ref_area_indicator = 0;
-    else if ( !CompressSpareMBMap(p_Img, map_sp, tmpBitstream) )
+    else if ( !CompressSpareMBMap(p_Vid, map_sp, tmpBitstream) )
       ref_area_indicator = 1;
     else
       ref_area_indicator = 2;
@@ -544,16 +544,16 @@ void CalculateSparePicture()
 //    if (m==0)
     {
       // write the map image
-      for (i=0; i < p_Img->height; i++)
-        for (j=0; j < p_Img->width; j++)
+      for (i=0; i < p_Vid->height; i++)
+        for (j=0; j < p_Vid->width; j++)
         {
           if ( ref_area_indicator == 0 ) fputc(255, fp);
           else fputc(y[i][j], fp);
         }
 
       for (k=0; k < 2; k++)
-        for (i=0; i < p_Img->height >> 1; i++)
-          for (j=0; j < p_Img->width >> 1; j++)
+        for (i=0; i < p_Vid->height >> 1; i++)
+          for (j=0; j < p_Vid->width >> 1; j++)
             fputc(128, fp);
     }
 #endif
@@ -614,7 +614,7 @@ void ComposeSparePictureMessage(SEIParameters *p_SEI, int delta_spare_frame_num,
  *  \brief
  *      test if the compressed spare mb map will occupy less mem and
  *      fill the payload buffer.
- *  \param p_Img
+ *  \param p_Vid
  *      Image parameters for current picture coding
  *  \param map_sp
  *      in which the spare picture information are stored.
@@ -625,7 +625,7 @@ void ComposeSparePictureMessage(SEIParameters *p_SEI, int delta_spare_frame_num,
  *             FALSE: If it is not compressed.
  ************************************************************************
  */
-Boolean CompressSpareMBMap(ImageParameters *p_Img, unsigned char **map_sp, Bitstream *bitstream)
+Boolean CompressSpareMBMap(VideoParameters *p_Vid, unsigned char **map_sp, Bitstream *bitstream)
 {
   int j, k;
   int noc, bit0, bit1, bitc;
@@ -633,7 +633,7 @@ Boolean CompressSpareMBMap(ImageParameters *p_Img, unsigned char **map_sp, Bitst
   int x, y, left, right, bottom, top, directx, directy;
 
   // this is the size of the uncompressed mb map:
-  int size_uncompressed = (p_Img->height >> 4) * (p_Img->width >> 4);
+  int size_uncompressed = (p_Vid->height >> 4) * (p_Vid->width >> 4);
   int size_compressed   = 0;
   Boolean ret;
 
@@ -646,14 +646,14 @@ Boolean CompressSpareMBMap(ImageParameters *p_Img, unsigned char **map_sp, Bitst
   bitc = bit0;
 
   // compress the map, the result goes to the temporal bitstream buffer
-  x = ( (p_Img->width >> 4) - 1 ) / 2;
-  y = ( (p_Img->height >> 4) - 1 ) / 2;
+  x = ( (p_Vid->width >> 4) - 1 ) / 2;
+  y = ( (p_Vid->height >> 4) - 1 ) / 2;
   left = right = x;
   top = bottom = y;
   directx = 0;
   directy = 1;
-  for (j=0; j<p_Img->height >> 4; j++)
-    for (k=0; k<p_Img->width >> 4; k++)
+  for (j=0; j<p_Vid->height >> 4; j++)
+    for (k=0; k<p_Vid->width >> 4; k++)
     {
       // check current mb
       if ( map_sp[y][x] == bitc ) noc++;
@@ -685,7 +685,7 @@ Boolean CompressSpareMBMap(ImageParameters *p_Img, unsigned char **map_sp, Bitst
       else if ( directx == 1 && directy == 0 )
       {
         if (x < right) x++;
-        else if (x == (p_Img->width >> 4) - 1)
+        else if (x == (p_Vid->width >> 4) - 1)
         {
           y = top - 1;
           top--;
@@ -721,7 +721,7 @@ Boolean CompressSpareMBMap(ImageParameters *p_Img, unsigned char **map_sp, Bitst
       else if ( directx == 0 && directy == 1 )
       {
         if (y < bottom) y++;
-        else if (y == (p_Img->height >> 4) - 1)
+        else if (y == (p_Vid->height >> 4) - 1)
         {
           x = right+1;
           right++;
@@ -750,9 +750,9 @@ Boolean CompressSpareMBMap(ImageParameters *p_Img, unsigned char **map_sp, Bitst
     bitstream->byte_buf = 0;
     bitstream->bits_to_go = 8;
     bitstream->byte_pos = 0;
-    for (j=0; j<p_Img->height >> 4; j++)
+    for (j=0; j<p_Vid->height >> 4; j++)
     {
-      for (k=0; k<p_Img->width >> 4; k++)
+      for (k=0; k<p_Vid->width >> 4; k++)
       {
         bitstream->byte_buf <<= 1;
         if (map_sp[j][k]) bitstream->byte_buf |= 1;
@@ -785,10 +785,10 @@ Boolean CompressSpareMBMap(ImageParameters *p_Img, unsigned char **map_sp, Bitst
  *        Make sure it is byte aligned.
  ************************************************************************
  */
-static void FinalizeSpareMBMap(ImageParameters *p_Img)
+static void FinalizeSpareMBMap(VideoParameters *p_Vid)
 {
-  SEIParameters *p_SEI = p_Img->p_SEI;
-  int CurrFrameNum = p_Img->number % MAX_FN;
+  SEIParameters *p_SEI = p_Vid->p_SEI;
+  int CurrFrameNum = p_Vid->number % MAX_FN;
   int delta_frame_num;
   SyntaxElement sym;
   Bitstream *dest, *source;
@@ -882,10 +882,10 @@ void InitSubseqInfo(SEIParameters *p_SEI, int currLayer)
  *      update subsequence info
  ************************************************************************
  */
-void UpdateSubseqInfo(ImageParameters *p_Img, InputParameters *p_Inp, int currLayer)
+void UpdateSubseqInfo(VideoParameters *p_Vid, InputParameters *p_Inp, int currLayer)
 {
-  SEIParameters *p_SEI = p_Img->p_SEI;
-  if (p_Img->type != B_SLICE)
+  SEIParameters *p_SEI = p_Vid->p_SEI;
+  if (p_Vid->type != B_SLICE)
   {
     p_SEI->seiSubseqInfo[currLayer].stored_frame_cnt ++;
     p_SEI->seiSubseqInfo[currLayer].stored_frame_cnt = p_SEI->seiSubseqInfo[currLayer].stored_frame_cnt % MAX_FN;
@@ -893,15 +893,15 @@ void UpdateSubseqInfo(ImageParameters *p_Img, InputParameters *p_Inp, int currLa
 
   if ( currLayer == 0 )
   {
-    if ( p_Img->number == p_Inp->no_frm_base - 1 )
+    if ( p_Vid->number == p_Inp->no_frames - 1 )
       p_SEI->seiSubseqInfo[currLayer].last_picture_flag = 1;
     else
       p_SEI->seiSubseqInfo[currLayer].last_picture_flag = 0;
   }
   if ( currLayer == 1 )
   {
-    if ( ((p_Img->gop_number % (p_Inp->NumFramesInELSubSeq + 1) == 0) && (p_Inp->NumberBFrames != 0) && (p_Img->gop_number > 0)) || // there are B frames
-      ((p_Img->gop_number % (p_Inp->NumFramesInELSubSeq + 1) == p_Inp->NumFramesInELSubSeq) && (p_Inp->NumberBFrames==0))  // there are no B frames
+    if ( (((p_Vid->curr_frm_idx - p_Vid->last_idr_code_order) % (p_Inp->NumFramesInELSubSeq + 1) == 0) && (p_Inp->NumberBFrames != 0) && ((p_Vid->curr_frm_idx - p_Vid->last_idr_code_order) > 0)) || // there are B frames
+      (((p_Vid->curr_frm_idx - p_Vid->last_idr_code_order) % (p_Inp->NumFramesInELSubSeq + 1) == p_Inp->NumFramesInELSubSeq) && (p_Inp->NumberBFrames==0))  // there are no B frames
       )
       p_SEI->seiSubseqInfo[currLayer].last_picture_flag = 1;
     else
@@ -1049,17 +1049,17 @@ static void FinalizeSubseqLayerInfo(SEIParameters *p_SEI)
  **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  */
 
-void InitSubseqChar(ImageParameters *p_Img)
+void InitSubseqChar(VideoParameters *p_Vid)
 {
-  SEIParameters *p_SEI = p_Img->p_SEI;
+  SEIParameters *p_SEI = p_Vid->p_SEI;
   p_SEI->seiSubseqChar.data = malloc( sizeof(Bitstream) );
   if( p_SEI->seiSubseqChar.data == NULL ) no_mem_exit("InitSubseqChar: p_SEI->seiSubseqChar.data");
   p_SEI->seiSubseqChar.data->streamBuffer = malloc(MAXRTPPAYLOADLEN);
   if( p_SEI->seiSubseqChar.data->streamBuffer == NULL ) no_mem_exit("InitSubseqChar: p_SEI->seiSubseqChar.data->streamBuffer");
   ClearSubseqCharPayload(p_SEI);
 
-  p_SEI->seiSubseqChar.subseq_layer_num = p_Img->layer;
-  p_SEI->seiSubseqChar.subseq_id = p_SEI->seiSubseqInfo[p_Img->layer].subseq_id;
+  p_SEI->seiSubseqChar.subseq_layer_num = p_Vid->layer;
+  p_SEI->seiSubseqChar.subseq_id = p_SEI->seiSubseqInfo[p_Vid->layer].subseq_id;
   p_SEI->seiSubseqChar.duration_flag = 0;
   p_SEI->seiSubseqChar.average_rate_flag = 0;
   p_SEI->seiSubseqChar.num_referenced_subseqs = 0;
@@ -1076,12 +1076,12 @@ static void ClearSubseqCharPayload(SEIParameters *p_SEI)
   p_SEI->seiHasSubseqChar = FALSE;
 }
 
-void UpdateSubseqChar(ImageParameters *p_Img)
+void UpdateSubseqChar(VideoParameters *p_Vid)
 {
-  SEIParameters *p_SEI = p_Img->p_SEI;
+  SEIParameters *p_SEI = p_Vid->p_SEI;
 
-  p_SEI->seiSubseqChar.subseq_layer_num = p_Img->layer;
-  p_SEI->seiSubseqChar.subseq_id = p_SEI->seiSubseqInfo[p_Img->layer].subseq_id;
+  p_SEI->seiSubseqChar.subseq_layer_num = p_Vid->layer;
+  p_SEI->seiSubseqChar.subseq_id = p_SEI->seiSubseqInfo[p_Vid->layer].subseq_id;
   p_SEI->seiSubseqChar.duration_flag = 0;
   p_SEI->seiSubseqChar.average_rate_flag = 0;
   p_SEI->seiSubseqChar.average_bit_rate = 100;
@@ -1630,10 +1630,10 @@ void ClearRandomAccess(SEIParameters *p_SEI)
   p_SEI->seiHasRecoveryPoint_info = FALSE;
 }
 
-void UpdateRandomAccess(ImageParameters *p_Img)
+void UpdateRandomAccess(VideoParameters *p_Vid)
 {
-  SEIParameters *p_SEI = p_Img->p_SEI;
-  if(p_Img->type == I_SLICE)
+  SEIParameters *p_SEI = p_Vid->p_SEI;
+  if(p_Vid->type == I_SLICE)
   {
     p_SEI->seiRecoveryPoint.recovery_frame_cnt = 0;
     p_SEI->seiRecoveryPoint.exact_match_flag = 1;
@@ -1866,9 +1866,9 @@ static void InitToneMapping(SEIParameters *p_SEI, InputParameters *p_Inp)
   ParseToneMappingConfigFile(p_SEI, p_Inp, &p_SEI->seiToneMapping);
 }
 
-static void FinalizeToneMapping(ImageParameters *p_Img)
+static void FinalizeToneMapping(VideoParameters *p_Vid)
 {
-  SEIParameters *p_SEI = p_Img->p_SEI;
+  SEIParameters *p_SEI = p_Vid->p_SEI;
 
   Bitstream *bitstream = p_SEI->seiToneMapping.data;  
   int i;
@@ -1877,7 +1877,7 @@ static void FinalizeToneMapping(ImageParameters *p_Img)
   u_1("SEI: tone_map_cancel_flag"       , p_SEI->seiToneMapping.tone_map_cancel_flag,    bitstream);
 
 #ifdef PRINT_TONE_MAPPING
-  printf("frame %d: Tone-mapping SEI message\n", p_Img->frame_num);
+  printf("frame %d: Tone-mapping SEI message\n", p_Vid->frame_num);
   printf("tone_map_id = %d\n", p_SEI->seiToneMapping.tone_map_id);
   printf("tone_map_cancel_flag = %d\n", p_SEI->seiToneMapping.tone_map_cancel_flag);
 #endif
@@ -2094,24 +2094,24 @@ static void ClosePostFilterHints(SEIParameters *p_SEI)
 *  \brief     
 **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 */
-int Write_SEI_NALU(ImageParameters *p_Img, int len)
+int Write_SEI_NALU(VideoParameters *p_Vid, int len)
 {  
   NALU_t *nalu = NULL;
   int RBSPlen = 0;
   int NALUlen;
   byte *rbsp;
 
-  if (HaveAggregationSEI(p_Img))
+  if (HaveAggregationSEI(p_Vid))
   {
-    SEIParameters *p_SEI = p_Img->p_SEI;
+    SEIParameters *p_SEI = p_Vid->p_SEI;
 
     nalu = AllocNALU(MAXNALUSIZE);
     rbsp = p_SEI->sei_message[AGGREGATION_SEI].data;
     RBSPlen = p_SEI->sei_message[AGGREGATION_SEI].payloadSize;
-    NALUlen = RBSPtoNALU (rbsp, nalu, RBSPlen, NALU_TYPE_SEI, NALU_PRIORITY_LOW, 1);
+    NALUlen = RBSPtoNALU (rbsp, nalu, RBSPlen, NALU_TYPE_SEI, NALU_PRIORITY_DISPOSABLE, 1);
     nalu->startcodeprefix_len = 4;
 
-    len += p_Img->WriteNALU (p_Img, nalu);
+    len += p_Vid->WriteNALU (p_Vid, nalu);
     FreeNALU (nalu);
   }  
 
@@ -2125,9 +2125,9 @@ int Write_SEI_NALU(ImageParameters *p_Img, int len)
  *      Based on final Recommendation
  **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  */
-void InitBufferingPeriod(ImageParameters *p_Img)
+void InitBufferingPeriod(VideoParameters *p_Vid)
 {
-  SEIParameters *p_SEI = p_Img->p_SEI;
+  SEIParameters *p_SEI = p_Vid->p_SEI;
   p_SEI->seiBufferingPeriod.data = malloc( sizeof(Bitstream) );
   if( p_SEI->seiBufferingPeriod.data == NULL ) 
     no_mem_exit("InitBufferingPeriod: seiBufferingPeriod.data");
@@ -2136,7 +2136,7 @@ void InitBufferingPeriod(ImageParameters *p_Img)
   if( p_SEI->seiBufferingPeriod.data->streamBuffer == NULL ) 
     no_mem_exit("InitBufferingPeriod: seiBufferingPeriod.data->streamBuffer");
 
-  ClearBufferingPeriod(p_SEI, p_Img->active_sps);
+  ClearBufferingPeriod(p_SEI, p_Vid->active_sps);
 }
 
 void ClearBufferingPeriod(SEIParameters *p_SEI, seq_parameter_set_rbsp_t *active_sps)
@@ -2170,9 +2170,9 @@ void ClearBufferingPeriod(SEIParameters *p_SEI, seq_parameter_set_rbsp_t *active
   p_SEI->seiHasBuffering_period = FALSE;
 }
 
-void UpdateBufferingPeriod(ImageParameters *p_Img, InputParameters *p_Inp)
+void UpdateBufferingPeriod(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
-  SEIParameters *p_SEI = p_Img->p_SEI;
+  SEIParameters *p_SEI = p_Vid->p_SEI;
   p_SEI->seiHasBuffering_period = FALSE;
 }
 
@@ -2291,9 +2291,9 @@ void ClearPicTiming(SEIParameters *p_SEI)
  *    Update Picture Timing SEI data
  ************************************************************************
  */
-void UpdatePicTiming(ImageParameters *p_Img, InputParameters *p_Inp)
+void UpdatePicTiming(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
-  SEIParameters *p_SEI = p_Img->p_SEI;
+  SEIParameters *p_SEI = p_Vid->p_SEI;
   p_SEI->seiHasPicTiming_info = FALSE;
 }
 
@@ -2303,10 +2303,10 @@ void UpdatePicTiming(ImageParameters *p_Img, InputParameters *p_Inp)
  *    Finalize Picture Timing SEI data
  ************************************************************************
  */
-static void FinalizePicTiming(ImageParameters *p_Img)
+static void FinalizePicTiming(VideoParameters *p_Vid)
 {
-  SEIParameters *p_SEI = p_Img->p_SEI;
-  seq_parameter_set_rbsp_t *active_sps = p_Img->active_sps;
+  SEIParameters *p_SEI = p_Vid->p_SEI;
+  seq_parameter_set_rbsp_t *active_sps = p_Vid->active_sps;
 
   Bitstream *bitstream = p_SEI->seiPicTiming.data;
   // CpbDpbDelaysPresentFlag can also be set "by some means not specified in this Recommendation | International Standard"
@@ -2331,7 +2331,7 @@ static void FinalizePicTiming(ImageParameters *p_Img)
   if ( active_sps->vui_seq_parameters.pic_struct_present_flag )
   {
     int NumClockTS = 0, i;
-    int bottom_field_flag = (p_Img->structure == BOTTOM_FIELD);
+    int bottom_field_flag = (p_Vid->structure == BOTTOM_FIELD);
 
     u_v( 4, "SEI: pic_struct", p_SEI->seiPicTiming.pic_struct, bitstream);
     // interpret pic_struct
@@ -2340,40 +2340,40 @@ static void FinalizePicTiming(ImageParameters *p_Img)
     case 0:
     default:
       // frame
-      assert( p_Img->fld_flag == FALSE );
+      assert( p_Vid->fld_flag == FALSE );
       NumClockTS = 1;
       break;
     case 1:
       // top field
-      assert( (p_Img->fld_flag == TRUE) && (bottom_field_flag == FALSE) );
+      assert( (p_Vid->fld_flag == TRUE) && (bottom_field_flag == FALSE) );
       NumClockTS = 1;
       break;
     case 2:
       // bottom field
-      assert( (p_Img->fld_flag == TRUE) && (bottom_field_flag == TRUE) );
+      assert( (p_Vid->fld_flag == TRUE) && (bottom_field_flag == TRUE) );
       NumClockTS = 1;
       break;
     case 3:
       // top field, bottom field, in that order
     case 4:
       // bottom field, top field, in that order
-      assert( p_Img->fld_flag == FALSE );
+      assert( p_Vid->fld_flag == FALSE );
       NumClockTS = 2;
       break;
     case 5:
       // top field, bottom field, top field repeated, in that order
     case 6:
       // bottom field, top field, bottom field repeated, in that order
-      assert( p_Img->fld_flag == FALSE );
+      assert( p_Vid->fld_flag == FALSE );
       NumClockTS = 3;
     case 7:
       // frame doubling
-      assert( (p_Img->fld_flag == FALSE) && active_sps->vui_seq_parameters.fixed_frame_rate_flag == 1 );
+      assert( (p_Vid->fld_flag == FALSE) && active_sps->vui_seq_parameters.fixed_frame_rate_flag == 1 );
       NumClockTS = 2;
       break;
     case 8:
       // frame tripling
-      assert( (p_Img->fld_flag == FALSE) && active_sps->vui_seq_parameters.fixed_frame_rate_flag == 1 );
+      assert( (p_Vid->fld_flag == FALSE) && active_sps->vui_seq_parameters.fixed_frame_rate_flag == 1 );
       NumClockTS = 3;
       break;
     }
@@ -2524,10 +2524,10 @@ void UpdateDRPMRepetition(SEIParameters *p_SEI)
  *    Finalize dec_ref_pic_marking Repetition SEI data
  ************************************************************************
  */
-static void FinalizeDRPMRepetition(ImageParameters *p_Img)
+static void FinalizeDRPMRepetition(VideoParameters *p_Vid)
 {
-  SEIParameters *p_SEI = p_Img->p_SEI;
-  seq_parameter_set_rbsp_t *active_sps = p_Img->active_sps;
+  SEIParameters *p_SEI = p_Vid->p_SEI;
+  seq_parameter_set_rbsp_t *active_sps = p_Vid->active_sps;
 
   Bitstream *bitstream = p_SEI->seiDRPMRepetition.data;
 
@@ -2594,18 +2594,18 @@ static void CloseDRPMRepetition(SEIParameters *p_SEI)
  * \author
  *    Dong Tian   tian@cs.tut.fi
  *****************************************************************************/
-void PrepareAggregationSEIMessage(ImageParameters *p_Img)
+void PrepareAggregationSEIMessage(VideoParameters *p_Vid)
 {
-  SEIParameters *p_SEI = p_Img->p_SEI;
+  SEIParameters *p_SEI = p_Vid->p_SEI;
   Boolean has_aggregation_sei_message = FALSE;
 
   clear_sei_message(p_SEI, AGGREGATION_SEI);
 
   // prepare the sei message here
   // write the spare picture sei payload to the aggregation sei message
-  if (p_SEI->seiHasSparePicture && p_Img->type != B_SLICE)
+  if (p_SEI->seiHasSparePicture && p_Vid->type != B_SLICE)
   {
-    FinalizeSpareMBMap(p_Img);
+    FinalizeSpareMBMap(p_Vid);
     assert(p_SEI->seiSparePicturePayload.data->byte_pos == p_SEI->seiSparePicturePayload.payloadSize);
     write_sei_message(p_SEI, AGGREGATION_SEI, p_SEI->seiSparePicturePayload.data->streamBuffer, p_SEI->seiSparePicturePayload.payloadSize, SEI_SPARE_PIC);
     has_aggregation_sei_message = TRUE;
@@ -2613,13 +2613,13 @@ void PrepareAggregationSEIMessage(ImageParameters *p_Img)
   // write the sub sequence information sei paylaod to the aggregation sei message
   if (p_SEI->seiHasSubseqInfo)
   {
-    FinalizeSubseqInfo(p_SEI, p_Img->layer);
-    write_sei_message(p_SEI, AGGREGATION_SEI, p_SEI->seiSubseqInfo[p_Img->layer].data->streamBuffer, p_SEI->seiSubseqInfo[p_Img->layer].payloadSize, SEI_SUB_SEQ_INFO);
-    ClearSubseqInfoPayload(p_SEI, p_Img->layer);
+    FinalizeSubseqInfo(p_SEI, p_Vid->layer);
+    write_sei_message(p_SEI, AGGREGATION_SEI, p_SEI->seiSubseqInfo[p_Vid->layer].data->streamBuffer, p_SEI->seiSubseqInfo[p_Vid->layer].payloadSize, SEI_SUB_SEQ_INFO);
+    ClearSubseqInfoPayload(p_SEI, p_Vid->layer);
     has_aggregation_sei_message = TRUE;
   }
   // write the sub sequence layer information sei paylaod to the aggregation sei message
-  if (p_SEI->seiHasSubseqLayerInfo && p_Img->number == 0)
+  if (p_SEI->seiHasSubseqLayerInfo && p_Vid->number == 0)
   {
     FinalizeSubseqLayerInfo(p_SEI);
     write_sei_message(p_SEI, AGGREGATION_SEI, p_SEI->seiSubseqLayerInfo.data, p_SEI->seiSubseqLayerInfo.payloadSize, SEI_SUB_SEQ_LAYER_CHARACTERISTICS);
@@ -2670,7 +2670,7 @@ void PrepareAggregationSEIMessage(ImageParameters *p_Img)
 
   if (p_SEI->seiHasTone_mapping)
   {
-    FinalizeToneMapping(p_Img);
+    FinalizeToneMapping(p_Vid);
     write_sei_message(p_SEI, AGGREGATION_SEI, p_SEI->seiToneMapping.data->streamBuffer, p_SEI->seiToneMapping.payloadSize, SEI_TONE_MAPPING);
     ClearToneMapping(p_SEI);
     has_aggregation_sei_message = TRUE;
@@ -2685,14 +2685,14 @@ void PrepareAggregationSEIMessage(ImageParameters *p_Img)
 
   if (p_SEI->seiHasBuffering_period)
   {
-    FinalizeBufferingPeriod(p_SEI, p_Img->active_sps);
+    FinalizeBufferingPeriod(p_SEI, p_Vid->active_sps);
     write_sei_message(p_SEI, AGGREGATION_SEI, p_SEI->seiBufferingPeriod.data->streamBuffer, p_SEI->seiBufferingPeriod.payloadSize, SEI_BUFFERING_PERIOD);
     has_aggregation_sei_message = TRUE;
   }
 
   if (p_SEI->seiHasPicTiming_info)
   {
-    FinalizePicTiming(p_Img);
+    FinalizePicTiming(p_Vid);
     write_sei_message(p_SEI, AGGREGATION_SEI, p_SEI->seiPicTiming.data->streamBuffer, p_SEI->seiPicTiming.payloadSize, SEI_PIC_TIMING);
     has_aggregation_sei_message = TRUE;
   }
@@ -2707,7 +2707,7 @@ void PrepareAggregationSEIMessage(ImageParameters *p_Img)
 
   if (p_SEI->seiHasDRPMRepetition_info)
   {
-    FinalizeDRPMRepetition(p_Img);
+    FinalizeDRPMRepetition(p_Vid);
     write_sei_message(p_SEI, AGGREGATION_SEI, p_SEI->seiDRPMRepetition.data->streamBuffer, p_SEI->seiDRPMRepetition.payloadSize, SEI_DEC_REF_PIC_MARKING_REPETITION);
     has_aggregation_sei_message = TRUE;
     ClearDRPMRepetition(p_SEI); // to reset the drpm buffer into NULL

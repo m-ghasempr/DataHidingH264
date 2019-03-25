@@ -77,8 +77,9 @@ WARN_LOGFILE           = warning.log
 #---------------------------------------------------------------------------
 # configuration options related to the input files
 #---------------------------------------------------------------------------
-INPUT                  = ../ldecod/
-INPUT_ENCODING         = UTF-8
+INPUT                  = ../ldecod/ \
+                         ../lcommon/
+INPUT_ENCODING         = ISO-8859-1
 FILE_PATTERNS          = *.c \
                          *.h
 RECURSIVE              = YES

@@ -51,9 +51,9 @@ static const int   Median_Pred_Thd[8]  = {0,  750,  350,  350, 170,  80,   80,  
 static const int   Threshold_DSR[8]    = {0, 2200, 1000, 1000, 500, 250,  250, 120};
 
 
-void UMHEX_DefineThreshold(ImageParameters *p_Img)
+void UMHEX_DefineThreshold(VideoParameters *p_Vid)
 {
-  UMHexStruct *p_UMHex = p_Img->p_UMHex;
+  UMHexStruct *p_UMHex = p_Vid->p_UMHex;
 
   p_UMHex->AlphaFourth_1[1] = 0.01f;
   p_UMHex->AlphaFourth_1[2] = 0.01f;
@@ -90,11 +90,11 @@ void UMHEX_DefineThreshold(ImageParameters *p_Img)
 ************************************************************************
 */
 
-void UMHEX_DefineThresholdMB(ImageParameters *p_Img, InputParameters *p_Inp)
+void UMHEX_DefineThresholdMB(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
-  UMHexStruct *p_UMHex = p_Img->p_UMHex;
-  int gb_qp_per    = (p_Inp->qp[0][P_SLICE])/6;
-  int gb_qp_rem    = (p_Inp->qp[0][P_SLICE])%6;
+  UMHexStruct *p_UMHex = p_Vid->p_UMHex;
+  int gb_qp_per    = (p_Inp->qp[P_SLICE])/6;
+  int gb_qp_rem    = (p_Inp->qp[P_SLICE])%6;
 
   int gb_q_bits    = Q_BITS+gb_qp_per;
   int gb_qp_const,Thresh4x4;
@@ -102,32 +102,33 @@ void UMHEX_DefineThresholdMB(ImageParameters *p_Img, InputParameters *p_Inp)
   float Quantize_step;
   int i;
   // scale factor: defined for different image sizes
-  float scale_factor = (float)((1-p_Inp->UMHexScale*0.1)+p_Inp->UMHexScale*0.1*(p_Img->width/MIN_IMG_WIDTH));
+  float scale_factor = (float)((1-p_Inp->UMHexScale*0.1)+p_Inp->UMHexScale*0.1*(p_Vid->width/MIN_IMG_WIDTH));
   // QP factor: defined for different quantization steps
-  float QP_factor = (float)((1.0-0.90*(p_Inp->qp[0][P_SLICE]/51.0f)));
+  float QP_factor = (float)((1.0-0.90*(p_Inp->qp[P_SLICE]/51.0f)));
+  distblk dbScalar = dist_scale(1);
 
   gb_qp_const=(1<<gb_q_bits)/6;
-  Thresh4x4 =   ((1<<gb_q_bits) - gb_qp_const)/imax(1, p_Img->p_Quant->q_params_4x4[0][1][gb_qp_rem][0][0].ScaleComp);
+  Thresh4x4 =   ((1<<gb_q_bits) - gb_qp_const)/imax(1, p_Vid->p_Quant->q_params_4x4[0][1][gb_qp_rem][0][0].ScaleComp);
   Quantize_step = Thresh4x4/(4*5.61f)*2.0f*scale_factor;
-  p_UMHex->Bsize[7]=(16*16)*Quantize_step;
+  p_UMHex->Bsize[7]=(16*16)*Quantize_step*dbScalar;
 
-  p_UMHex->Bsize[6] = p_UMHex->Bsize[7]*4;
-  p_UMHex->Bsize[5] = p_UMHex->Bsize[7]*4;
-  p_UMHex->Bsize[4] = p_UMHex->Bsize[5]*4;
-  p_UMHex->Bsize[3] = p_UMHex->Bsize[4]*4;
-  p_UMHex->Bsize[2] = p_UMHex->Bsize[4]*4;
-  p_UMHex->Bsize[1] = p_UMHex->Bsize[2]*4;
+  p_UMHex->Bsize[6] = p_UMHex->Bsize[7]*4*dbScalar;
+  p_UMHex->Bsize[5] = p_UMHex->Bsize[7]*4*dbScalar;
+  p_UMHex->Bsize[4] = p_UMHex->Bsize[5]*4*dbScalar;
+  p_UMHex->Bsize[3] = p_UMHex->Bsize[4]*4*dbScalar;
+  p_UMHex->Bsize[2] = p_UMHex->Bsize[4]*4*dbScalar;
+  p_UMHex->Bsize[1] = p_UMHex->Bsize[2]*4*dbScalar;
 
   for(i=1;i<8;i++)
   {
     //ET_Thd1: early termination after median prediction
-    p_UMHex->Median_Pred_Thd_MB[i]  = (int) (Median_Pred_Thd[i]* scale_factor*QP_factor);
+    p_UMHex->Median_Pred_Thd_MB[i]  = (distblk) (Median_Pred_Thd[i]* scale_factor*QP_factor*dbScalar);
     //ET_thd2: early termination after every circle of 16 points Big-Hex Search
-    p_UMHex->Big_Hexagon_Thd_MB[i]  = (int) (Big_Hexagon_Thd[i]* scale_factor*QP_factor);
+    p_UMHex->Big_Hexagon_Thd_MB[i]  = (distblk) (Big_Hexagon_Thd[i]* scale_factor*QP_factor*dbScalar);
     //threshold for multi ref case
-    p_UMHex->Multi_Ref_Thd_MB[i]    = (int) (Multi_Ref_Thd[i]  * scale_factor*QP_factor);
+    p_UMHex->Multi_Ref_Thd_MB[i]    = (distblk) (Multi_Ref_Thd[i]  * scale_factor*QP_factor*dbScalar);
     //threshold for usage of DSR technique. DSR ref to JVT-R088
-    p_UMHex->Threshold_DSR_MB[i]    = (int) (Threshold_DSR[i]  * scale_factor*QP_factor);
+    p_UMHex->Threshold_DSR_MB[i]    = (distblk) (Threshold_DSR[i]  * scale_factor*QP_factor*dbScalar);
   }
 }
 
@@ -137,24 +138,26 @@ void UMHEX_DefineThresholdMB(ImageParameters *p_Img, InputParameters *p_Inp)
 *    Allocation of space for fast motion estimation
 ************************************************************************
 */
-int UMHEX_get_mem(ImageParameters *p_Img, InputParameters *p_Inp)
+int UMHEX_get_mem(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
-  UMHexStruct *p_UMHex = p_Img->p_UMHex;
+  UMHexStruct *p_UMHex = p_Vid->p_UMHex;
 
   int memory_size = 0;
 
-  if (NULL==(p_UMHex->flag_intra = calloc ((p_Img->width>>4)+1,sizeof(byte)))) no_mem_exit("UMHEX_get_mem: p_UMHex->flag_intra"); //fwf 20050330
+  if (NULL==(p_UMHex->flag_intra = calloc ((p_Vid->width>>4)+1,sizeof(byte)))) no_mem_exit("UMHEX_get_mem: p_UMHex->flag_intra"); //fwf 20050330
 
   memory_size += get_mem2D(&p_UMHex->McostState, 2*p_Inp->search_range+1, 2*p_Inp->search_range+1);
-  memory_size += get_mem4Dint(&(p_UMHex->fastme_ref_cost), p_Img->max_num_references, 9, 4, 4);
-  memory_size += get_mem3Dint(&(p_UMHex->fastme_l0_cost), 9, p_Img->height >> 2, p_Img->width >> 2);
-  memory_size += get_mem3Dint(&(p_UMHex->fastme_l1_cost), 9, p_Img->height >> 2, p_Img->width >> 2);
+
+  memory_size += get_mem4Ddistblk(&(p_UMHex->fastme_ref_cost), p_Vid->max_num_references, 9, 4, 4);
+  memory_size += get_mem3Ddistblk(&(p_UMHex->fastme_l0_cost), 9, p_Vid->height >> 2, p_Vid->width >> 2);
+  memory_size += get_mem3Ddistblk(&(p_UMHex->fastme_l1_cost), 9, p_Vid->height >> 2, p_Vid->width >> 2);
+  memory_size += get_mem2Ddistblk(&(p_UMHex->fastme_best_cost), 7, p_Vid->width >> 2);
+
   memory_size += get_mem2D(&p_UMHex->SearchState, 7, 7);
-  memory_size += get_mem2Dint(&(p_UMHex->fastme_best_cost), 7, p_Img->width >> 2);
   if(p_Inp->BiPredMotionEstimation == 1)//memory allocation for bipred mode
   {
-    memory_size += get_mem3Dint(&(p_UMHex->fastme_l0_cost_bipred), 9, p_Img->height >> 2, p_Img->width >> 2);//for bipred
-    memory_size += get_mem3Dint(&(p_UMHex->fastme_l1_cost_bipred), 9, p_Img->height >> 2, p_Img->width >> 2);//for bipred
+    memory_size += get_mem3Ddistblk(&(p_UMHex->fastme_l0_cost_bipred), 9, p_Vid->height >> 2, p_Vid->width >> 2);//for bipred
+    memory_size += get_mem3Ddistblk(&(p_UMHex->fastme_l1_cost_bipred), 9, p_Vid->height >> 2, p_Vid->width >> 2);//for bipred
   }
 
   return memory_size;
@@ -166,20 +169,22 @@ int UMHEX_get_mem(ImageParameters *p_Img, InputParameters *p_Inp)
 *    Free space for fast motion estimation
 ************************************************************************
 */
-void UMHEX_free_mem(ImageParameters *p_Img, InputParameters *p_Inp)
+void UMHEX_free_mem(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
-  UMHexStruct *p_UMHex = p_Img->p_UMHex;
+  UMHexStruct *p_UMHex = p_Vid->p_UMHex;
   free_mem2D(p_UMHex->McostState);
-  free_mem4Dint(p_UMHex->fastme_ref_cost);
-  free_mem3Dint(p_UMHex->fastme_l0_cost );
-  free_mem3Dint(p_UMHex->fastme_l1_cost);
+
+  free_mem4Ddistblk(p_UMHex->fastme_ref_cost);
+  free_mem3Ddistblk(p_UMHex->fastme_l0_cost );
+  free_mem3Ddistblk(p_UMHex->fastme_l1_cost);
+  free_mem2Ddistblk(p_UMHex->fastme_best_cost);
+
   free_mem2D(p_UMHex->SearchState);
-  free_mem2Dint(p_UMHex->fastme_best_cost);
   free (p_UMHex->flag_intra);
   if(p_Inp->BiPredMotionEstimation == 1)
   {
-    free_mem3Dint(p_UMHex->fastme_l0_cost_bipred);//for bipred
-    free_mem3Dint(p_UMHex->fastme_l1_cost_bipred);//for bipred
+    free_mem3Ddistblk(p_UMHex->fastme_l0_cost_bipred);//for bipred
+    free_mem3Ddistblk(p_UMHex->fastme_l1_cost_bipred);//for bipred
   }
   free(p_UMHex);
 }
@@ -214,18 +219,18 @@ void UMHEX_free_mem(ImageParameters *p_Img, InputParameters *p_Inp)
 *   2006.1
 ************************************************************************
 */
-int                                     //  ==> minimum motion cost after search
+distblk                                     //  ==> minimum motion cost after search
 UMHEXIntegerPelBlockMotionSearch  (Macroblock *currMB,     // <--  current Macroblock
                                    MotionVector *pred_mv,    // < <--  motion vector predictor (x|y) in sub-pel units
                                    MEBlock *mv_block,
-                                   int       min_mcost,     // < <--  minimum motion cost (cost for center or huge value)
+                                   distblk     min_mcost,     // < <--  minimum motion cost (cost for center or huge value)
                                    int       lambda_factor  // < <--  lagrangian parameter for determining motion cost
                                    )
 {
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
-  UMHexStruct *p_UMHex = p_Img->p_UMHex;
+  UMHexStruct *p_UMHex = p_Vid->p_UMHex;
 
   int   blocktype     = mv_block->blocktype;
   short blocksize_x   = mv_block->blocksize_x;  // horizontal block size
@@ -237,19 +242,20 @@ UMHEXIntegerPelBlockMotionSearch  (Macroblock *currMB,     // <--  current Macro
   int   list = mv_block->list;
   int   cur_list = list + currMB->list_offset;
   short ref = mv_block->ref_idx;
-  StorablePicture *ref_picture = p_Img->listX[cur_list][ref];
+  StorablePicture *ref_picture = p_Vid->listX[cur_list][ref];
 
   MotionVector *mv = &mv_block->mv[list];
   MotionVector iMinNow, cand, center, pred, best = {0, 0};
 
   int   search_step;
-  int   pos, mcost;
+  int   pos;
+  distblk mcost;
+  distblk   *SAD_prediction = p_UMHex->fastme_best_cost[blocktype-1];//multi ref SAD prediction
   int   i, j, m;
   float betaFourth_1,betaFourth_2;
   int  temp_Big_Hexagon_X[16];//  temp for Big_Hexagon_X;
   int  temp_Big_Hexagon_Y[16];//  temp for Big_Hexagon_Y;
-  int ET_Thred = p_UMHex->Median_Pred_Thd_MB[blocktype];//ET threshold in use
-  int   *SAD_prediction = p_UMHex->fastme_best_cost[blocktype-1];//multi ref SAD prediction
+  distblk ET_Thred = p_UMHex->Median_Pred_Thd_MB[blocktype];//ET threshold in use
   int  search_range = mv_block->searchRange.max_x >> 2;
 
   short pic_pix_x = mv_block->pos_x_padded;
@@ -268,7 +274,7 @@ UMHEXIntegerPelBlockMotionSearch  (Macroblock *currMB,     // <--  current Macro
   //check the center median predictor
 
   cand = center;
-  mcost = mv_cost (p_Img, lambda_factor, &cand, &pred);
+  mcost = mv_cost (p_Vid, lambda_factor, &cand, &pred);
 
   mcost += mv_block->computePredFPel(ref_picture, mv_block, min_mcost - mcost, &cand);
 
@@ -325,8 +331,8 @@ UMHEXIntegerPelBlockMotionSearch  (Macroblock *currMB,     // <--  current Macro
     }
     else
     {
-      betaFourth_1 = p_UMHex->Bsize[blocktype]/(p_UMHex->pred_SAD * p_UMHex->pred_SAD)-p_UMHex->AlphaFourth_1[blocktype];
-      betaFourth_2 = p_UMHex->Bsize[blocktype]/(p_UMHex->pred_SAD * p_UMHex->pred_SAD)-p_UMHex->AlphaFourth_2[blocktype];
+      betaFourth_1 = p_UMHex->Bsize[blocktype]/((float)p_UMHex->pred_SAD * p_UMHex->pred_SAD)-p_UMHex->AlphaFourth_1[blocktype];
+      betaFourth_2 = p_UMHex->Bsize[blocktype]/((float)p_UMHex->pred_SAD * p_UMHex->pred_SAD)-p_UMHex->AlphaFourth_2[blocktype];
 
     }
     /*********************************************end of init ***********************************************/
@@ -399,8 +405,8 @@ sec_step: //Unsymmetrical-cross search
   //sub step 1: 5x5 squre search
   for(pos=1;pos<25;pos++)
   {
-    cand.mv_x = iMinNow.mv_x + p_Img->spiral_qpel_search[pos].mv_x;
-    cand.mv_y = iMinNow.mv_y + p_Img->spiral_qpel_search[pos].mv_y;
+    cand.mv_x = iMinNow.mv_x + p_Vid->spiral_qpel_search[pos].mv_x;
+    cand.mv_y = iMinNow.mv_y + p_Vid->spiral_qpel_search[pos].mv_y;
     SEARCH_ONE_PIXEL
   }
 
@@ -492,19 +498,18 @@ terminate_step:
   return min_mcost;
 }
 
-
-int                                                   //  ==> minimum motion cost after search
+distblk                                                   //  ==> minimum motion cost after search
 UMHEXSubPelBlockMotionSearch (Macroblock *currMB,     // <--  current Macroblock
                               MotionVector *pred_mv,    // < <--  motion vector predictor (x|y) in sub-pel units
                               MEBlock *mv_block,
-                              int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
+                              distblk     min_mcost,     // <--  minimum motion cost (cost for center or huge value)
                               int       lambda_factor  // <--  lagrangian parameter for determining motion cost
                               )
 {
-  ImageParameters *p_Img = currMB->p_Img;
-  UMHexStruct *p_UMHex = p_Img->p_UMHex;
+  VideoParameters *p_Vid = currMB->p_Vid;
+  UMHexStruct *p_UMHex = p_Vid->p_UMHex;
   static const MotionVector DiamondQ[4] = {{-1, 0}, { 0, 1}, { 1, 0}, { 0, -1}};
-  int   mcost;
+  distblk mcost;
   MotionVector cand, iMinNow, currmv = {0, 0}, candWithPad;
 
   int   list          = mv_block->list;        
@@ -512,7 +517,7 @@ UMHEXSubPelBlockMotionSearch (Macroblock *currMB,     // <--  current Macroblock
   short ref = mv_block->ref_idx;
   MotionVector *mv    = &mv_block->mv[list];
 
-  StorablePicture *ref_picture = p_Img->listX[list+list_offset][ref];
+  StorablePicture *ref_picture = p_Vid->listX[list+list_offset][ref];
 
   int   dynamic_search_range = 3, i;
   int   m;  
@@ -529,11 +534,11 @@ UMHEXSubPelBlockMotionSearch (Macroblock *currMB,     // <--  current Macroblock
 
   memset(p_UMHex->SearchState[0], 0,(2 * dynamic_search_range + 1)*(2 * dynamic_search_range + 1));
 
-  if( !p_Img->start_me_refinement_hp )
+  if( !p_Vid->start_me_refinement_hp )
   {
     p_UMHex->SearchState[dynamic_search_range][dynamic_search_range] = 1;
     cand = *mv;
-    mcost = mv_cost (p_Img, lambda_factor, &cand, pred_mv);
+    mcost = mv_cost (p_Vid, lambda_factor, &cand, pred_mv);
     candWithPad = pad_MVs (cand, mv_block); //cand = pad_MVs (cand, mv_block);
     mcost += mv_block->computePredQPel( ref_picture, mv_block, min_mcost - mcost, &candWithPad); //&cand);
 
@@ -553,7 +558,7 @@ UMHEXSubPelBlockMotionSearch (Macroblock *currMB,     // <--  current Macroblock
   {
     cand.mv_x = (short) (mv->mv_x + pred_frac_mv_x);
     cand.mv_y = (short) (mv->mv_y + pred_frac_mv_y);
-    mcost = mv_cost (p_Img, lambda_factor, &cand, pred_mv);
+    mcost = mv_cost (p_Vid, lambda_factor, &cand, pred_mv);
     p_UMHex->SearchState[cand.mv_y -mv->mv_y + dynamic_search_range][cand.mv_x - mv->mv_x + dynamic_search_range] = 1;
     candWithPad = pad_MVs (cand, mv_block); //cand = pad_MVs (cand, mv_block);
 
@@ -581,7 +586,7 @@ UMHEXSubPelBlockMotionSearch (Macroblock *currMB,     // <--  current Macroblock
         if(!p_UMHex->SearchState[cand.mv_y -mv->mv_y + dynamic_search_range][cand.mv_x -mv->mv_x + dynamic_search_range])
         {
           p_UMHex->SearchState[cand.mv_y -mv->mv_y + dynamic_search_range][cand.mv_x -mv->mv_x + dynamic_search_range] = 1;
-          mcost = mv_cost (p_Img, lambda_factor, &cand, pred_mv);
+          mcost = mv_cost (p_Vid, lambda_factor, &cand, pred_mv);
           candWithPad = pad_MVs (cand, mv_block); //cand = pad_MVs (cand, mv_block);
 
           mcost += mv_block->computePredQPel( ref_picture, mv_block, min_mcost - mcost, &candWithPad); // &cand);                    
@@ -607,12 +612,11 @@ UMHEXSubPelBlockMotionSearch (Macroblock *currMB,     // <--  current Macroblock
   return min_mcost;
 }
 
-
-int                                                   //  ==> minimum motion cost after search
+distblk                                                   //  ==> minimum motion cost after search
 UMHEXSubPelBlockME (Macroblock *currMB,        // <-- Current Macroblock
                     MotionVector  *pred_mv,    // <--  motion vector predictor (x|y) in sub-pel units
                     MEBlock *mv_block, 
-                    int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
+                    distblk     min_mcost,     // <--  minimum motion cost (cost for center or huge value)
                     int*      lambda
                     )
 {  
@@ -642,9 +646,9 @@ UMHEXSubPelBlockME (Macroblock *currMB,        // <-- Current Macroblock
 */
 void UMHEX_decide_intrabk_SAD(Macroblock *currMB)
 {
-  ImageParameters *p_Img = currMB->p_Img;
-  UMHexStruct *p_UMHex = p_Img->p_UMHex;
-  if (currMB->p_slice->slice_type != I_SLICE)
+  VideoParameters *p_Vid = currMB->p_Vid;
+  UMHexStruct *p_UMHex = p_Vid->p_UMHex;
+  if (currMB->p_slice->slice_type != I_SLICE && currMB->p_slice->slice_type != SI_SLICE)
   {
     if (currMB->pix_x == 0 && currMB->pix_y == 0)
     {
@@ -669,13 +673,13 @@ void UMHEX_decide_intrabk_SAD(Macroblock *currMB)
 void UMHEX_skip_intrabk_SAD(Macroblock *currMB, int ref_max)
 {
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currMB->p_Img;
-  UMHexStruct *p_UMHex = p_Img->p_UMHex;
+  VideoParameters *p_Vid = currMB->p_Vid;
+  UMHexStruct *p_UMHex = p_Vid->p_UMHex;
   int i,j,k, ref;
-  if (p_Img->number > 0)
+  if (p_Vid->number > 0)
     p_UMHex->flag_intra[(currMB->pix_x)>>4] = (currMB->best_mode == 9 || currMB->best_mode == 10) ? 1:0;
 
-  if (currSlice->slice_type != I_SLICE  && (currMB->best_mode == 9 || currMB->best_mode == 10))
+  if (currSlice->slice_type != I_SLICE && currSlice->slice_type != SI_SLICE && (currMB->best_mode == 9 || currMB->best_mode == 10))
   {
     for (k=0; k < 9;k++)
     {
@@ -702,8 +706,8 @@ void UMHEX_skip_intrabk_SAD(Macroblock *currMB, int ref_max)
 void UMHEX_setup(Macroblock *currMB, short ref, int list, int block_y, int block_x, int blocktype, short   ******all_mv)
 {
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currMB->p_Img;
-  UMHexStruct *p_UMHex = p_Img->p_UMHex;
+  VideoParameters *p_Vid = currMB->p_Vid;
+  UMHexStruct *p_UMHex = p_Vid->p_UMHex;
 
   int  N_Bframe=0;
   int n_Bframe=0;
@@ -711,7 +715,7 @@ void UMHEX_setup(Macroblock *currMB, short ref, int list, int block_y, int block
   int indication_blocktype[8]={0,0,1,1,2,4,4,5};
   InputParameters *p_Inp = currMB->p_Inp;
   N_Bframe = p_Inp->NumberBFrames;
-  n_Bframe =(N_Bframe) ? (p_Img->p_Stats->frame_ctr[B_SLICE]%(N_Bframe+1)): 0;
+  n_Bframe =(N_Bframe) ? (p_Vid->p_Stats->frame_ctr[B_SLICE]%(N_Bframe+1)): 0;
 
 
   /**************************** MV prediction **********************/
@@ -728,7 +732,7 @@ void UMHEX_setup(Macroblock *currMB, short ref, int list, int block_y, int block
   p_UMHex->pred_MV_ref_flag = 0;
   if(list==0)
   {
-    if (p_Img->field_picture)
+    if (p_Vid->field_picture)
     {
       if ( ref > 1)
       {
@@ -773,7 +777,7 @@ void UMHEX_setup(Macroblock *currMB, short ref, int list, int block_y, int block
     }
     else
     {
-      if (p_Img->field_picture)
+      if (p_Vid->field_picture)
       {
         if (ref > 1)
         {
@@ -822,7 +826,7 @@ void UMHEX_setup(Macroblock *currMB, short ref, int list, int block_y, int block
 *   2006.1
 ************************************************************************
 */
-int                                                //  ==> minimum motion cost after search
+distblk                                                //  ==> minimum motion cost after search
 UMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  current Macroblock
                                         int       list,          // <--  current reference list
                                         MotionVector *pred_mv1,  // <--  motion vector predictor (x|y) in sub-pel units
@@ -831,21 +835,22 @@ UMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  current
                                         MotionVector *mv2,       // <--> in: search center (x|y) 
                                         MEBlock *mv_block,       // <--  motion vector information
                                         int       search_range,  // <--  1-d search range in pel units
-                                        int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
+                                        distblk       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
                                         int       lambda_factor  // <--  lagrangian parameter for determining motion cost
                                         )
 {
   Slice *currSlice = currMB->p_slice;
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
-  UMHexStruct *p_UMHex = p_Img->p_UMHex;
+  UMHexStruct *p_UMHex = p_Vid->p_UMHex;
   int   temp_Big_Hexagon_X[16];// = Big_Hexagon_X;
   int   temp_Big_Hexagon_Y[16];// = Big_Hexagon_Y;
 
   int   search_step;
   int   i,m,j;
   float betaFourth_1,betaFourth_2;
-  int   pos, mcost;
+  int   pos;
+  distblk mcost;
   short blocktype   = mv_block->blocktype;
   short blocksize_x = mv_block->blocksize_x;        // horizontal block size
   short blocksize_y = mv_block->blocksize_y;        // vertical block size
@@ -855,11 +860,11 @@ UMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  current
 
   short block_x       = mv_block->block_x;
   short block_y       = mv_block->block_y;
-  int   ET_Thred      = p_UMHex->Median_Pred_Thd_MB[blocktype];
+  distblk   ET_Thred      = p_UMHex->Median_Pred_Thd_MB[blocktype];
   short ref           = mv_block->ref_idx;
 
-  StorablePicture *ref_picture1 = p_Img->listX[list + currMB->list_offset][ref];
-  StorablePicture *ref_picture2 = p_Img->listX[list == 0 ? 1 + currMB->list_offset: currMB->list_offset][ 0 ];
+  StorablePicture *ref_picture1 = p_Vid->listX[list + currMB->list_offset][ref];
+  StorablePicture *ref_picture2 = p_Vid->listX[list == 0 ? 1 + currMB->list_offset: currMB->list_offset][ 0 ];
 
   MotionVector iMinNow, best, cand;
 
@@ -877,10 +882,9 @@ UMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  current
 
   //check the center median predictor
   best = cand = center2;
-  mcost  = mv_cost (p_Img, lambda_factor, &center1, &pred1);
-  mcost += mv_cost (p_Img, lambda_factor, &cand, &pred2); 
-
-  mcost += mv_block->computeBiPredFPel(ref_picture1, ref_picture2, mv_block, INT_MAX, &center1, &cand);
+  mcost  = mv_cost (p_Vid, lambda_factor, &center1, &pred1);
+  mcost += mv_cost (p_Vid, lambda_factor, &cand, &pred2); 
+  mcost += mv_block->computeBiPredFPel(ref_picture1, ref_picture2, mv_block, DISTBLK_MAX-mcost, &center1, &cand);
 
   p_UMHex->McostState[search_range][search_range] = 1;
 
@@ -925,7 +929,7 @@ UMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  current
     int  n_Bframe=0;
     short****** bipred_mv = currSlice->bipred_mv[list];
     N_Bframe = p_Inp->NumberBFrames;
-    n_Bframe = p_Img->p_Stats->frame_ctr[B_SLICE]%(N_Bframe+1);
+    n_Bframe = p_Vid->p_Stats->frame_ctr[B_SLICE]%(N_Bframe+1);
 
 
     /**************************** MV prediction **********************/
@@ -936,7 +940,7 @@ UMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  current
 
     if(list==0)
     {
-      if (p_Img->field_picture)
+      if (p_Vid->field_picture)
       {
         p_UMHex->pred_MV_ref[0] =(int) (bipred_mv[1][0][blocktype][block_y][block_x][0]*(-n_Bframe)/(N_Bframe-n_Bframe+1.0f));
         p_UMHex->pred_MV_ref[1] =(int) (bipred_mv[1][0][blocktype][block_y][block_x][1]*(-n_Bframe)/(N_Bframe-n_Bframe+1.0f));
@@ -948,8 +952,7 @@ UMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  current
       }
     }
     /******************************SAD prediction**********************************/
-
-    p_UMHex->pred_SAD =imin(imin(p_UMHex->SAD_a,p_UMHex->SAD_b),p_UMHex->SAD_c);  // pred_SAD_space
+    p_UMHex->pred_SAD =distblkmin(distblkmin(p_UMHex->SAD_a,p_UMHex->SAD_b),p_UMHex->SAD_c);  // pred_SAD_space
     ET_Thred = p_UMHex->Big_Hexagon_Thd_MB[blocktype];
 
     ///////Threshold defined for early termination///////////////////
@@ -1022,8 +1025,8 @@ UMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  current
   //sub step1: 5x5 square search
   for(pos=1;pos<25;pos++)
   {
-    cand.mv_x = iMinNow.mv_x + p_Img->spiral_qpel_search[pos].mv_x;
-    cand.mv_y = iMinNow.mv_y + p_Img->spiral_qpel_search[pos].mv_y;
+    cand.mv_x = iMinNow.mv_x + p_Vid->spiral_qpel_search[pos].mv_x;
+    cand.mv_y = iMinNow.mv_y + p_Vid->spiral_qpel_search[pos].mv_y;
     SEARCH_ONE_PIXEL_BIPRED;
   }
 
@@ -1121,9 +1124,9 @@ void UMHEXSetMotionVectorPredictor (Macroblock *currMB,
                                     int         blockshape_y,
                                     MEBlock    *mv_block)
 {
-  ImageParameters *p_Img = currMB->p_Img;
+  VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
-  UMHexStruct *p_UMHex = p_Img->p_UMHex;
+  UMHexStruct *p_UMHex = p_Vid->p_UMHex;
   int mv_a, mv_b, mv_c;
   short pred_vec=0;
   int mvPredType, rFrameL, rFrameU, rFrameUR;
@@ -1132,14 +1135,13 @@ void UMHEXSetMotionVectorPredictor (Macroblock *currMB,
   PixelPos block_a, block_b, block_c, block_d;
 
   // added for bipred mode
-  int *** fastme_l0_cost_flag = (p_UMHex->bipred_flag ? p_UMHex->fastme_l0_cost_bipred : p_UMHex->fastme_l0_cost);
-  int *** fastme_l1_cost_flag = (p_UMHex->bipred_flag ? p_UMHex->fastme_l1_cost_bipred : p_UMHex->fastme_l1_cost);
-
+  distblk *** fastme_l0_cost_flag = (p_UMHex->bipred_flag ? p_UMHex->fastme_l0_cost_bipred : p_UMHex->fastme_l0_cost);
+  distblk *** fastme_l1_cost_flag = (p_UMHex->bipred_flag ? p_UMHex->fastme_l1_cost_bipred : p_UMHex->fastme_l1_cost);
   //Dynamic Search Range
 
   int dsr_temp_search_range[2];
   int dsr_mv_avail, dsr_mv_max, dsr_mv_sum, dsr_small_search_range;
-  int *mb_size = p_Img->mb_size[IS_LUMA];
+  int *mb_size = p_Vid->mb_size[IS_LUMA];
 
   // neighborhood SAD init
   p_UMHex->SAD_a = 0;
@@ -1178,7 +1180,7 @@ void UMHEXSetMotionVectorPredictor (Macroblock *currMB,
 
   mvPredType = MVPRED_MEDIAN;
 
-  if (!p_Img->MbaffFrameFlag)
+  if (!p_Vid->mb_aff_frame_flag)
   {
     rFrameL    = block_a.available    ? refPic[block_a.pos_y][block_a.pos_x] : -1;
     rFrameU    = block_b.available    ? refPic[block_b.pos_y][block_b.pos_x] : -1;
@@ -1186,34 +1188,34 @@ void UMHEXSetMotionVectorPredictor (Macroblock *currMB,
   }
   else
   {
-    if (p_Img->mb_data[currMB->mbAddrX].mb_field)
+    if (p_Vid->mb_data[currMB->mbAddrX].mb_field)
     {
       rFrameL  = block_a.available
-        ? (p_Img->mb_data[block_a.mb_addr].mb_field
+        ? (p_Vid->mb_data[block_a.mb_addr].mb_field
         ? refPic[block_a.pos_y][block_a.pos_x]
       : refPic[block_a.pos_y][block_a.pos_x] * 2) : -1;
       rFrameU  = block_b.available
-        ? (p_Img->mb_data[block_b.mb_addr].mb_field
+        ? (p_Vid->mb_data[block_b.mb_addr].mb_field
         ? refPic[block_b.pos_y][block_b.pos_x]
       : refPic[block_b.pos_y][block_b.pos_x] * 2) : -1;
       rFrameUR = block_c.available
-        ? (p_Img->mb_data[block_c.mb_addr].mb_field
+        ? (p_Vid->mb_data[block_c.mb_addr].mb_field
         ? refPic[block_c.pos_y][block_c.pos_x]
       : refPic[block_c.pos_y][block_c.pos_x] * 2) : -1;
     }
     else
     {
       rFrameL = block_a.available
-        ? (p_Img->mb_data[block_a.mb_addr].mb_field
+        ? (p_Vid->mb_data[block_a.mb_addr].mb_field
         ? refPic[block_a.pos_y][block_a.pos_x] >>1
         : refPic[block_a.pos_y][block_a.pos_x]) : -1;
       rFrameU    = block_b.available    ?
-        p_Img->mb_data[block_b.mb_addr].mb_field ?
+        p_Vid->mb_data[block_b.mb_addr].mb_field ?
         refPic[block_b.pos_y][block_b.pos_x] >>1:
       refPic[block_b.pos_y][block_b.pos_x] :
       -1;
       rFrameUR    = block_c.available    ?
-        p_Img->mb_data[block_c.mb_addr].mb_field ?
+        p_Vid->mb_data[block_c.mb_addr].mb_field ?
         refPic[block_c.pos_y][block_c.pos_x] >>1:
       refPic[block_c.pos_y][block_c.pos_x] :
       -1;
@@ -1264,7 +1266,7 @@ void UMHEXSetMotionVectorPredictor (Macroblock *currMB,
   }
   for (hv=0; hv < 2; hv++)
   {
-    if (!p_Img->MbaffFrameFlag || hv==0)
+    if (!p_Vid->mb_aff_frame_flag || hv==0)
     {
       mv_a = block_a.available  ? tmp_mv[block_a.pos_y][block_a.pos_x][hv] : 0;
       mv_b = block_b.available  ? tmp_mv[block_b.pos_y][block_b.pos_x][hv] : 0;
@@ -1272,32 +1274,32 @@ void UMHEXSetMotionVectorPredictor (Macroblock *currMB,
     }
     else
     {
-      if (p_Img->mb_data[currMB->mbAddrX].mb_field)
+      if (p_Vid->mb_data[currMB->mbAddrX].mb_field)
       {
-        mv_a = block_a.available  ? p_Img->mb_data[block_a.mb_addr].mb_field
+        mv_a = block_a.available  ? p_Vid->mb_data[block_a.mb_addr].mb_field
           ? tmp_mv[block_a.pos_y][block_a.pos_x][hv]
         : tmp_mv[block_a.pos_y][block_a.pos_x][hv] / 2
           : 0;
-        mv_b = block_b.available  ? p_Img->mb_data[block_b.mb_addr].mb_field
+        mv_b = block_b.available  ? p_Vid->mb_data[block_b.mb_addr].mb_field
           ? tmp_mv[block_b.pos_y][block_b.pos_x][hv]
         : tmp_mv[block_b.pos_y][block_b.pos_x][hv] / 2
           : 0;
-        mv_c = block_c.available  ? p_Img->mb_data[block_c.mb_addr].mb_field
+        mv_c = block_c.available  ? p_Vid->mb_data[block_c.mb_addr].mb_field
           ? tmp_mv[block_c.pos_y][block_c.pos_x][hv]
         : tmp_mv[block_c.pos_y][block_c.pos_x][hv] / 2
           : 0;
       }
       else
       {
-        mv_a = block_a.available  ? p_Img->mb_data[block_a.mb_addr].mb_field
+        mv_a = block_a.available  ? p_Vid->mb_data[block_a.mb_addr].mb_field
           ? tmp_mv[block_a.pos_y][block_a.pos_x][hv] * 2
           : tmp_mv[block_a.pos_y][block_a.pos_x][hv]
         : 0;
-        mv_b = block_b.available  ? p_Img->mb_data[block_b.mb_addr].mb_field
+        mv_b = block_b.available  ? p_Vid->mb_data[block_b.mb_addr].mb_field
           ? tmp_mv[block_b.pos_y][block_b.pos_x][hv] * 2
           : tmp_mv[block_b.pos_y][block_b.pos_x][hv]
         : 0;
-        mv_c = block_c.available  ? p_Img->mb_data[block_c.mb_addr].mb_field
+        mv_c = block_c.available  ? p_Vid->mb_data[block_c.mb_addr].mb_field
           ? tmp_mv[block_c.pos_y][block_c.pos_x][hv] * 2
           : tmp_mv[block_c.pos_y][block_c.pos_x][hv]
         : 0;
@@ -1346,7 +1348,7 @@ void UMHEXSetMotionVectorPredictor (Macroblock *currMB,
         else if(dsr_mv_sum > 3 ) dsr_small_search_range = (p_Inp->search_range + 2) >>2;
         else dsr_small_search_range = (3*p_Inp->search_range + 8) >> 4;
         dsr_temp_search_range[hv]=imin(p_Inp->search_range,imax(dsr_small_search_range,dsr_mv_max<<1));
-        if(imax(p_UMHex->SAD_a,imax(p_UMHex->SAD_b,p_UMHex->SAD_c)) > p_UMHex->Threshold_DSR_MB[p_UMHex->UMHEX_blocktype])
+        if(distblkmax(p_UMHex->SAD_a, distblkmax(p_UMHex->SAD_b,p_UMHex->SAD_c)) > p_UMHex->Threshold_DSR_MB[p_UMHex->UMHEX_blocktype])
           dsr_temp_search_range[hv] = p_Inp->search_range;
       }
     }
@@ -1355,7 +1357,7 @@ void UMHEXSetMotionVectorPredictor (Macroblock *currMB,
   //Dynamic Search Range
   if (p_Inp->UMHexDSR) 
   {
-    int search_range = (short) imax(dsr_temp_search_range[0],dsr_temp_search_range[1]);
+    int search_range = imax(dsr_temp_search_range[0],dsr_temp_search_range[1]);
     search_range <<= 2;
 
     if      (p_Inp->full_search == 2) 

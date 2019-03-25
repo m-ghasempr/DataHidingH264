@@ -74,8 +74,8 @@
 
   Each Slice header contaions the information on which parameter set to be used.
   The function RTPSetImgInp() copies the information of the relevant parameter
-  set in the VCL's global variables p_Img-> and p_Inp->  IMPORTANT: any changes
-  in the semantics of the p_Img-> and p_Inp-> structure members must be represented
+  set in the VCL's global variables p_Vid-> and p_Inp->  IMPORTANT: any changes
+  in the semantics of the p_Vid-> and p_Inp-> structure members must be represented
   in this function as well!
 
   A note to the stream-buffer data structure: The stream buffer always contains
@@ -110,9 +110,9 @@ int RTPReadPacket (RTPpacket_t *p, int bitstream);
  *    none
  ************************************************************************
  */
-void OpenRTPFile (ImageParameters *p_Img, char *fn)
+void OpenRTPFile (VideoParameters *p_Vid, char *fn)
 {
-  if ((p_Img->BitStreamFile = open(fn, OPENFLAGS_READ)) == -1)
+  if ((p_Vid->BitStreamFile = open(fn, OPENFLAGS_READ)) == -1)
   {
     snprintf (errortext, ET_SIZE, "Cannot open RTP file '%s'", fn);
     error(errortext,500);
@@ -126,12 +126,12 @@ void OpenRTPFile (ImageParameters *p_Img, char *fn)
  *    Closes the bit stream file
  ************************************************************************
  */
-void CloseRTPFile(ImageParameters *p_Img)
+void CloseRTPFile(VideoParameters *p_Vid)
 {
-  if (p_Img->BitStreamFile != -1)
+  if (p_Vid->BitStreamFile != -1)
   {
-    close(p_Img->BitStreamFile);
-    p_Img->BitStreamFile = - 1;
+    close(p_Vid->BitStreamFile);
+    p_Vid->BitStreamFile = - 1;
   }
 }
 
@@ -151,7 +151,7 @@ void CloseRTPFile(ImageParameters *p_Img)
  ************************************************************************
  */
 
-int GetRTPNALU (ImageParameters *p_Img, NALU_t *nalu)
+int GetRTPNALU (VideoParameters *p_Vid, NALU_t *nalu)
 {
   static uint16 first_call = 1;  //!< triggers sequence number initialization on first call
   static uint16 old_seq = 0;     //!< store the last RTP sequence number for loss detection
@@ -166,7 +166,7 @@ int GetRTPNALU (ImageParameters *p_Img, NALU_t *nalu)
   if ((p->payload=malloc (MAXRTPPACKETSIZE))== NULL)
     no_mem_exit ("GetRTPNALU-3");
 
-  ret = RTPReadPacket (p, p_Img->BitStreamFile);
+  ret = RTPReadPacket (p, p_Vid->BitStreamFile);
   nalu->forbidden_bit = 1;
   nalu->len = 0;
 

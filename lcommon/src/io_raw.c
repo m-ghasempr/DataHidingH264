@@ -15,13 +15,12 @@
 #include "contributors.h"
 
 #include "global.h"
-#include "report.h"
 #include "img_io.h"
 
 #define FAST_READ 1
 
 #if FAST_READ
-static inline void ReadData (int vfile,  FrameFormat *source, unsigned char *buf)
+static inline int ReadData (int vfile,  FrameFormat *source, unsigned char *buf)
 {
   unsigned char *cur_buf = buf;
   int read_size = source->pic_unit_size_shift3 * source->width;
@@ -30,8 +29,8 @@ static inline void ReadData (int vfile,  FrameFormat *source, unsigned char *buf
   {
     if (read(vfile, cur_buf, read_size) != read_size)
     {
-      printf ("ReadOneFrame: cannot read %d bytes from input file, unexpected EOF, exiting...\n", source->width);
-      report_stats_on_error();
+      printf ("ReadOneFrame: cannot read %d bytes from input file, unexpected EOF!\n", source->width);
+      return 0;
     }
     cur_buf += read_size;
   }
@@ -45,21 +44,26 @@ static inline void ReadData (int vfile,  FrameFormat *source, unsigned char *buf
       {
         if (read(vfile, cur_buf, read_size) != read_size)
         {
-          printf ("ReadOneFrame: cannot read %d bytes from input file, unexpected EOF, exiting...\n", source->width_cr);
-          report_stats_on_error();
+          printf ("ReadOneFrame: cannot read %d bytes from input file, unexpected EOF!\n", source->width_cr);
+          return 0;
         }
         cur_buf += read_size;
       }
     }
   }
+  return 1;
 }
 #else
-static inline void ReadData (int vfile, int framesize_in_bytes, unsigned char *buf)
+static inline int ReadData (int vfile, int framesize_in_bytes, unsigned char *buf)
 {
   if (read(vfile, buf, (int) framesize_in_bytes) != (int) framesize_in_bytes)
   {
-    printf ("ReadOneFrame: cannot read %d bytes from input file, unexpected EOF, exiting...\n", (int) framesize_in_bytes);
-    report_stats_on_error();
+    printf ("ReadOneFrame: cannot read %d bytes from input file, unexpected EOF!\n", (int) framesize_in_bytes);
+    return 0;
+  }
+  else
+  {
+    return 1;
   }
 }
 #endif
@@ -71,6 +75,8 @@ static inline void ReadData (int vfile, int framesize_in_bytes, unsigned char *b
  *    Reads one new frame from concatenated raw file
  *    Code does not distinguish between planar and interleaved data
  *
+ * \param p_Inp
+ *    Input configuration parameters 
  * \param input_file
  *    Input file to read from
  * \param FrameNoInFile
@@ -83,8 +89,9 @@ static inline void ReadData (int vfile, int framesize_in_bytes, unsigned char *b
  *    image buffer data
  ************************************************************************
  */
-void ReadFrameConcatenated (InputParameters *p_Inp, VideoDataFile *input_file, int FrameNoInFile, int HeaderSize, FrameFormat *source, unsigned char *buf)
+int ReadFrameConcatenated (InputParameters *p_Inp, VideoDataFile *input_file, int FrameNoInFile, int HeaderSize, FrameFormat *source, unsigned char *buf)
 {
+  int file_read = 0;
   int vfile = input_file->f_num;
   unsigned int symbol_size_in_bytes = source->pic_unit_size_shift3;
 
@@ -126,9 +133,9 @@ void ReadFrameConcatenated (InputParameters *p_Inp, VideoDataFile *input_file, i
   if ((source->pic_unit_size_on_disk & 0x07) == 0)
   {
 #if FAST_READ
-    ReadData (vfile, source, buf);
+    file_read = ReadData (vfile, source, buf);
 #else
-    ReadData (vfile, (int) framesize_in_bytes, buf);
+    file_read = ReadData (vfile, (int) framesize_in_bytes, buf);
 #endif
   }
   else
@@ -136,6 +143,7 @@ void ReadFrameConcatenated (InputParameters *p_Inp, VideoDataFile *input_file, i
     printf ("ReadOneFrame (NOT IMPLEMENTED): pic unit size on disk must be divided by 8");
     exit (-1);
   }
+  return file_read;
 }
 
 /*!
@@ -144,6 +152,8 @@ void ReadFrameConcatenated (InputParameters *p_Inp, VideoDataFile *input_file, i
  *    Reads one new frame from separate data files
  *    Code does not distinguish between planar and interleaved data
  *
+ * \param p_Inp
+ *    Input configuration parameters 
  * \param input_file
  *    Input file to read from
  * \param FrameNoInFile
@@ -156,8 +166,9 @@ void ReadFrameConcatenated (InputParameters *p_Inp, VideoDataFile *input_file, i
  *    taget buffer
  ************************************************************************
  */
-void ReadFrameSeparate (InputParameters *p_Inp, VideoDataFile *input_file, int FrameNoInFile, int HeaderSize, FrameFormat *source, unsigned char *buf)
+int ReadFrameSeparate (InputParameters *p_Inp, VideoDataFile *input_file, int FrameNoInFile, int HeaderSize, FrameFormat *source, unsigned char *buf)
 {
+  int file_read = 0;
   int vfile = input_file->f_num;
 
   OpenFrameFile( input_file, FrameNoInFile + p_Inp->start_frame);
@@ -172,7 +183,7 @@ void ReadFrameSeparate (InputParameters *p_Inp, VideoDataFile *input_file, int F
   if ((source->pic_unit_size_on_disk & 0x07) == 0)
   {
 #if FAST_READ
-    ReadData (vfile, source, buf);
+    file_read = ReadData (vfile, source, buf);
 #else
     unsigned int symbol_size_in_bytes = source->pic_unit_size_shift3;
 
@@ -180,15 +191,17 @@ void ReadFrameSeparate (InputParameters *p_Inp, VideoDataFile *input_file, int F
     const int bytes_uv = source->size_cmp[1] * symbol_size_in_bytes;
     const int64 framesize_in_bytes = bytes_y + 2*bytes_uv;
 
-    ReadData (vfile, (int) framesize_in_bytes, buf);
+    file_read = ReadData (vfile, (int) framesize_in_bytes, buf);
 #endif
   }
   else
   {
-    printf ("ReadOneFrame (NOT IMPLEMENTED): pic unit size on disk must be divided by 8");
+    printf ("ReadOneFrame (NOT IMPLEMENTED): pic unit size on disk must be divisible by 8");
     exit (-1);
   }
 
   if (vfile != -1)
     close(vfile);
+
+  return file_read;
 }

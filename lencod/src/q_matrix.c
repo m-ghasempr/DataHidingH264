@@ -244,7 +244,7 @@ static const short Quant8_inter_default[64] =
  *    -1 for error
  ***********************************************************************
  */
-int CheckParameterName (char *s, int *type)
+static int CheckParameterName (char *s, int *type)
 {
   int i = 0;
 
@@ -274,17 +274,17 @@ int CheckParameterName (char *s, int *type)
  ***********************************************************************
  * \brief
  *    Parse the Q matrix values read from cfg file.
- * \param p_Img
- *    current image parameters
+ * \param p_Vid
+ *    current video parameters
  * \param buf
  *    buffer to be parsed
  * \param bufsize
  *    buffer size of buffer
  ***********************************************************************
  */
-void ParseMatrix (ImageParameters *p_Img, char *buf, int bufsize)
+static void ParseMatrix (VideoParameters *p_Vid, char *buf, int bufsize)
 {
-  ScaleParameters *p_QScale = p_Img->p_QScale;
+  ScaleParameters *p_QScale = p_Vid->p_QScale;
   char *items[MAX_ITEMS_TO_PARSE] = {NULL};
   int MapIdx;
   int item = 0;
@@ -405,9 +405,9 @@ void ParseMatrix (ImageParameters *p_Img, char *buf, int bufsize)
  *    whole matrix will be patch with default value 16.
  ***********************************************************************
  */
-void PatchMatrix(ImageParameters *p_Img, InputParameters *p_Inp)
+static void PatchMatrix(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
-  ScaleParameters *p_QScale = p_Img->p_QScale;
+  ScaleParameters *p_QScale = p_Vid->p_QScale;
   short *ScalingList;
   int i, cnt, fail;
 
@@ -491,7 +491,7 @@ void PatchMatrix(ImageParameters *p_Img, InputParameters *p_Inp)
  *    Allocate Q matrix arrays
  ***********************************************************************
  */
-void allocate_QMatrix (QuantParameters *p_Quant, InputParameters *p_Inp)
+static void allocate_QMatrix (QuantParameters *p_Quant, InputParameters *p_Inp)
 {
   int max_bitdepth = imax(p_Inp->output.bit_depth[0], p_Inp->output.bit_depth[1]);
   int max_qp = (3 + 6*(max_bitdepth));
@@ -536,10 +536,10 @@ void free_QMatrix (QuantParameters *p_Quant)
  *    Initialise Q matrix values.
  ***********************************************************************
  */
-void Init_QMatrix (ImageParameters *p_Img, InputParameters *p_Inp)
+void Init_QMatrix (VideoParameters *p_Vid, InputParameters *p_Inp)
 {
-  QuantParameters *p_Quant = p_Img->p_Quant;
-  ScaleParameters *p_QScale = p_Img->p_QScale;
+  QuantParameters *p_Quant = p_Vid->p_Quant;
+  ScaleParameters *p_QScale = p_Vid->p_QScale;
   char *content;
 
   allocate_QMatrix (p_Quant, p_Inp);
@@ -549,11 +549,11 @@ void Init_QMatrix (ImageParameters *p_Img, InputParameters *p_Inp)
     printf ("Parsing QMatrix file %s ", p_Inp->QmatrixFile);
     content = GetConfigFileContent(p_Inp->QmatrixFile, 0);
     if(content!='\0')
-      ParseMatrix(p_Img, content, strlen (content));
+      ParseMatrix(p_Vid, content, strlen (content));
     else
       printf("\nError: %s\nProceeding with default values for all matrices.", errortext);
 
-    PatchMatrix(p_Img, p_Inp);
+    PatchMatrix(p_Vid, p_Inp);
     printf("\n");
 
     memset(p_QScale->UseDefaultScalingMatrix4x4Flag, 0, 6 * sizeof(short));
@@ -575,20 +575,20 @@ void Init_QMatrix (ImageParameters *p_Img, InputParameters *p_Inp)
  *    none
  ************************************************************************
  */
-void CalculateQuant4x4Param(ImageParameters *p_Img)
+void CalculateQuant4x4Param(VideoParameters *p_Vid)
 {
-  QuantParameters *p_Quant  = p_Img->p_Quant;
-  ScaleParameters *p_QScale = p_Img->p_QScale;
+  QuantParameters *p_Quant  = p_Vid->p_Quant;
+  ScaleParameters *p_QScale = p_Vid->p_QScale;
 
-  pic_parameter_set_rbsp_t *active_pps = p_Img->active_pps;
-  seq_parameter_set_rbsp_t *active_sps = p_Img->active_sps;
+  pic_parameter_set_rbsp_t *active_pps = p_Vid->active_pps;
+  seq_parameter_set_rbsp_t *active_sps = p_Vid->active_sps;
 
   int i, j, k, temp;
   int k_mod;
   int present[6];
   int no_q_matrix=FALSE;
 
-  int max_bitdepth = imax(p_Img->bitdepth_luma, p_Img->bitdepth_chroma);
+  int max_bitdepth = imax(p_Vid->bitdepth_luma, p_Vid->bitdepth_chroma);
   int max_qp = (3 + 6*(max_bitdepth));
 
 
@@ -731,20 +731,20 @@ void CalculateQuant4x4Param(ImageParameters *p_Img)
  *
  ************************************************************************
  */
-void CalculateQuant8x8Param(ImageParameters *p_Img)
+void CalculateQuant8x8Param(VideoParameters *p_Vid)
 {
-  QuantParameters *p_Quant = p_Img->p_Quant;
-  ScaleParameters *p_QScale = p_Img->p_QScale;
+  QuantParameters *p_Quant = p_Vid->p_Quant;
+  ScaleParameters *p_QScale = p_Vid->p_QScale;
 
-  pic_parameter_set_rbsp_t *active_pps = p_Img->active_pps;
-  seq_parameter_set_rbsp_t *active_sps = p_Img->active_sps;
+  pic_parameter_set_rbsp_t *active_pps = p_Vid->active_pps;
+  seq_parameter_set_rbsp_t *active_sps = p_Vid->active_sps;
 
   int i, j, k, temp;
   int k_mod;
   int n_ScalingList8x8;
   int present[6];
   int no_q_matrix=FALSE;
-  int max_bitdepth = imax(p_Img->bitdepth_luma, p_Img->bitdepth_chroma);
+  int max_bitdepth = imax(p_Vid->bitdepth_luma, p_Vid->bitdepth_chroma);
   int max_qp = (3 + 6*(max_bitdepth));
 
 

@@ -114,14 +114,14 @@ static const byte AC_next_state_LPS_64[64] =
 static const byte renorm_table_32[32]={6,5,4,4,3,3,3,3,2,2,2,2,2,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
 
 
-void reset_pic_bin_count(ImageParameters *p_Img)
+void reset_pic_bin_count(VideoParameters *p_Vid)
 {
-  p_Img->pic_bin_count = 0;
+  p_Vid->pic_bin_count = 0;
 }
 
-int get_pic_bin_count(ImageParameters *p_Img)
+int get_pic_bin_count(VideoParameters *p_Vid)
 {
-  return p_Img->pic_bin_count;
+  return p_Vid->pic_bin_count;
 }
 
 /*!
@@ -277,9 +277,9 @@ void arienco_start_encoding(EncodingEnvironmentPtr eep,
 *    should be only used when slice is terminated
 ************************************************************************
 */
-void set_pic_bin_count(ImageParameters *p_Img, EncodingEnvironmentPtr eep)
+void set_pic_bin_count(VideoParameters *p_Vid, EncodingEnvironmentPtr eep)
 {
-  p_Img->pic_bin_count += (eep->E << 3) + eep->C; // no of processed bins
+  p_Vid->pic_bin_count += (eep->E << 3) + eep->C; // no of processed bins
 }
 
 /*!
@@ -295,7 +295,7 @@ void arienco_done_encoding(Macroblock *currMB, EncodingEnvironmentPtr eep)
   unsigned char mask;
   BitCounter *mbBits = &currMB->bits;
 
-  //p_Img->pic_bin_count += eep->E*8 + eep->C; // no of processed bins
+  //p_Vid->pic_bin_count += eep->E*8 + eep->C; // no of processed bins
 
   if (remaining_bits <= 5) // one terminating byte 
   {
@@ -364,7 +364,7 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
   range -= rLPS;
 
   ++(eep->C);
-  bi_ct->count += eep->p_Img->cabac_encoding;
+  bi_ct->count += eep->p_Vid->cabac_encoding;
 
   /* covers all cases where code does not bother to shift down symbol to be 
   * either 0 or 1, e.g. in some cases for cbp, mb_Type etc the code simply 
@@ -559,15 +559,17 @@ void biari_encode_symbol_final(EncodingEnvironmentPtr eep, signed short symbol)
  */
 void biari_init_context (int qp, BiContextTypePtr ctx, const char* ini)
 {
-  int pstate = iClip3 ( 1, 126, ((ini[0]* qp) >> 4) + ini[1]);
+  int pstate = ((ini[0]* qp) >> 4) + ini[1];
 
   if ( pstate >= 64 )
   {
+    pstate = imin(126, pstate);
     ctx->state = (uint16) (pstate - 64);
     ctx->MPS   = 1;
   }
   else
   {
+    pstate = imax(1, pstate);
     ctx->state = (uint16) (63 - pstate);
     ctx->MPS   = 0;
   }
