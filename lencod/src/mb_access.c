@@ -59,10 +59,10 @@ void CheckAvailabilityOfNeighbors()
     currMB->mbAddrC = 2 * (mb_nr/2 - img->PicWidthInMbs + 1);
     currMB->mbAddrD = 2 * (mb_nr/2 - img->PicWidthInMbs - 1);
     
-    currMB->mbAvailA = mb_is_available(currMB->mbAddrA, mb_nr) && ((mb_nr/2 % img->PicWidthInMbs)!=0);
+    currMB->mbAvailA = mb_is_available(currMB->mbAddrA, mb_nr) && (((mb_nr/2) % img->PicWidthInMbs)!=0);
     currMB->mbAvailB = mb_is_available(currMB->mbAddrB, mb_nr);
     currMB->mbAvailC = mb_is_available(currMB->mbAddrC, mb_nr) && (((mb_nr/2 +1) % img->PicWidthInMbs)!=0);
-    currMB->mbAvailD = mb_is_available(currMB->mbAddrD, mb_nr) && ((mb_nr/2 % img->PicWidthInMbs)!=0);
+    currMB->mbAvailD = mb_is_available(currMB->mbAddrD, mb_nr) && (((mb_nr/2) % img->PicWidthInMbs)!=0);
   }
   else
   {
@@ -135,7 +135,7 @@ void get_mb_pos (int mb_addr, int *x, int*y)
  *    returns position informations
  ************************************************************************
  */
-void getNonAffNeighbour(int curr_mb_nr, int xN, int yN, int luma, PixelPos *pix)
+void getNonAffNeighbour(unsigned int curr_mb_nr, int xN, int yN, int luma, PixelPos *pix)
 {
   Macroblock *currMb = &img->mb_data[curr_mb_nr];
   int maxWH;
@@ -212,7 +212,7 @@ void getNonAffNeighbour(int curr_mb_nr, int xN, int yN, int luma, PixelPos *pix)
  *    returns position informations
  ************************************************************************
  */
-void getAffNeighbour(int curr_mb_nr, int xN, int yN, int luma, PixelPos *pix)
+void getAffNeighbour(unsigned int curr_mb_nr, int xN, int yN, int luma, PixelPos *pix)
 {
   Macroblock *currMb = &img->mb_data[curr_mb_nr];
   int maxWH;
@@ -587,6 +587,9 @@ void getAffNeighbour(int curr_mb_nr, int xN, int yN, int luma, PixelPos *pix)
  */
 void getNeighbour(int curr_mb_nr, int xN, int yN, int luma, PixelPos *pix)
 {
+  if (curr_mb_nr<0)
+    error ("getNeighbour: invalid macroblock number", 100);
+
   if (img->MbaffFrameFlag)
     getAffNeighbour(curr_mb_nr, xN, yN, luma, pix);
   else

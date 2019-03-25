@@ -180,6 +180,9 @@ int GetRTPNALU (NALU_t *nalu)
   nalu->nal_reference_idc = (nalu->buf[0]>>5) & 3;
   nalu->nal_unit_type = (nalu->buf[0]) & 0x1f;
 
+  free (p->payload);
+  free (p->packet);
+  free (p); 
 //  printf ("Got an RTP NALU, len %d, first byte %x\n", nalu->len, nalu->buf[0]);
   return nalu->len;
 }

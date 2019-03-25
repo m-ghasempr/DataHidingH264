@@ -1,3 +1,19 @@
+Changes for Version JM 8.6 to JM 8.5
+------------------------------------
+- encoder: fix command line checking order (KS)
+- encoder: fix coded_frame flag (KS)
+- encoder: fix skip mode mb pair problem (KS)
+- decoder: fix macroblock counter (KS)
+- decoder: fix output field pairing (KS)
+- decoder: fix POC previous frame num on MMCO=5(BH)
+- decoder: fix max num ref frames in poc cycle
+- decoder: allow Annex B leading_zero_8bits and trailing_zero_8bits (ZH)
+- decoder: fix SI decoding (MWa)
+- encoder/decoder: fix dpb size (KS)
+- encoder/decoder: hopefully work around VS compiler optimization bug (KS)
+- encoder/decoder: remove a number of gcc warnings (KS)
+
+
 Changes for Version JM 8.5 to JM 8.4
 ------------------------------------
 - encoder: fix wrong direct mode selection for non-rd-optimized encoding (KS)
@@ -871,6 +887,7 @@ MG      Michael Gallant         mgallant@videolocus.com
 ML      Maxim Lobasso           lobasso@hotmail.com
 MN      Mike Nilsson            mike.nilsson@bt.com
 MW      Mathias Wien            wien@ient.rwth-aachen.de
+MWa	Michael Walter		eiMichaelWalter@web.de
 OD      Olivier Deygas          olivier.deygas@st.com
 PK      Petr Kadlec             Kadlec@FTW.at
 PL      Peter List              Peter.List@t-systems.de

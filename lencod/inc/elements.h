@@ -103,11 +103,9 @@ typedef enum {
 //} SE_type;
 
 
-int * assignSE2partition[2] ;
-static int assignSE2partition_NoDP[SE_MAX_ELEMENTS] =
-  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-static int assignSE2partition_DP[SE_MAX_ELEMENTS] =
-  {  0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 2, 2, 2, 2, 0, 0, 0, 0 } ;
+extern int * assignSE2partition[2];
+extern int assignSE2partition_NoDP[SE_MAX_ELEMENTS];
+extern int assignSE2partition_DP[SE_MAX_ELEMENTS];
 
 #endif
 

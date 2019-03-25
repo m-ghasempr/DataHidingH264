@@ -475,10 +475,10 @@ void SetMotionVectorPredictor (int  pmv[2],
 
   PixelPos block_a, block_b, block_c, block_d;
 
-  int SAD_a, SAD_b, SAD_c, SAD_d;
+  int SAD_a=0, SAD_b=0, SAD_c=0, SAD_d=0;
   int temp_pred_SAD[2];
-  if (input->FMEnable) pred_SAD_space=0;
 
+  if (input->FMEnable) pred_SAD_space=0;
 
   getLuma4x4Neighbour(mb_nr, block_x, block_y,           -1,  0, &block_a);
   getLuma4x4Neighbour(mb_nr, block_x, block_y,            0, -1, &block_b);
@@ -1372,7 +1372,6 @@ BlockMotionSearch (int       ref,           //!< reference idx
 
   int*      pred_mv;
 
-  int**     ref_array = enc_picture->ref_idx[list];
   int***    mv_array  = enc_picture->mv[list];
 
   int****** all_mv    = img->all_mv;
@@ -1387,7 +1386,7 @@ BlockMotionSearch (int       ref,           //!< reference idx
   
   int me_tmp_time;
 
-  int  N_Bframe, n_Bframe;
+  int  N_Bframe=0, n_Bframe=0;
   if(input->FMEnable)
   {
     N_Bframe = input->successive_Bframe;
@@ -2121,8 +2120,6 @@ void Get_Direct_Motion_Vectors ()
     int fw_rFrame,bw_rFrame;
     int pmvfw[2]={0,0},pmvbw[2]={0,0};
 
-    int list_offset = ((img->MbaffFrameFlag)&&(currMB->mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
-    
     PixelPos mb_left, mb_up, mb_upleft, mb_upright;              
     
     getLuma4x4Neighbour(img->current_mb_nr,0,0,-1, 0,&mb_left);

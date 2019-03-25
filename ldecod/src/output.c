@@ -81,10 +81,16 @@ void write_picture(StorablePicture *p, FILE *p_out, int real_structure)
 {
    int i, add;
 
-  if ((real_structure==FRAME) || (real_structure==pending_output_state))
+  if (real_structure==FRAME)
   {
     flush_pending_output(p_out);
     write_out_picture(p, p_out);
+    return;
+  }
+  if (real_structure==pending_output_state)
+  {
+    flush_pending_output(p_out);
+    write_picture(p, p_out, real_structure);
     return;
   }
 
@@ -311,7 +317,7 @@ void clear_picture(StorablePicture *p)
   int i;
 
   for(i=0;i<p->size_y;i++)
-    memset(p->imgY[i], 0 ,p->size_x);
+    memset(p->imgY[i], 128 ,p->size_x);
   for(i=0;i<p->size_y_cr;i++)
     memset(p->imgUV[0][i], 128 ,p->size_x_cr);
   for(i=0;i<p->size_y_cr;i++)

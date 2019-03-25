@@ -67,7 +67,7 @@
 #define MAXMODE 13
 #define IPCM    14
 
-#define IS_INTRA(MB)    ((MB)->mb_type==I4MB  || (MB)->mb_type==I16MB ||(MB)->mb_type==IPCM)
+#define IS_INTRA(MB)    ((MB)->mb_type==I4MB  || (MB)->mb_type==I16MB ||(MB)->mb_type==IPCM || (MB)->mb_type==SI4MB)
 #define IS_NEWINTRA(MB) ((MB)->mb_type==I16MB  || (MB)->mb_type==IPCM)
 
 #define IS_OLDINTRA(MB) ((MB)->mb_type==I4MB)

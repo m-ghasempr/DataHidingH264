@@ -32,6 +32,12 @@
 #define SYMTRACESTRING(s) // do nothing
 #endif
 
+int * assignSE2partition[2] ;
+int assignSE2partition_NoDP[SE_MAX_ELEMENTS] =
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+int assignSE2partition_DP[SE_MAX_ELEMENTS] =
+  {  0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 2, 2, 2, 2, 0, 0, 0, 0 } ;
+
 static int ref_pic_list_reordering();
 static int dec_ref_pic_marking();
 static int pred_weight_table();

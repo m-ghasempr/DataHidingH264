@@ -159,7 +159,6 @@ void start_macroblock(struct img_par *img,struct inp_par *inp, int CurrentMBInSc
  */
 int exit_macroblock(struct img_par *img,struct inp_par *inp,int eos_bit)
 {
-  Slice *currSlice = img->currentSlice;
 
   //! The if() statement below resembles the original code, which tested 
   //! img->current_mb_nr == img->PicSizeInMbs.  Both is, of course, nonsense
@@ -1676,7 +1675,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
               int imgblock_y= ((img->MbaffFrameFlag)&&(currMB->mb_field))? (img->current_mb_nr%2) ? (img->block_y-4)/2 : img->block_y/2 : img->block_y;
               int refList = co_located_ref_idx[LIST_0 ][img->block_x+k][imgblock_y+j]== -1 ? LIST_1 : LIST_0;
               int ref_idx = co_located_ref_idx[refList][img->block_x + k][imgblock_y + j];
-              int mapped_idx, iref;                             
+              int mapped_idx=-1, iref;                             
  
 
 
@@ -1941,7 +1940,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
           }
           else 
           {        
-            int mapped_idx, iref;                             
+            int mapped_idx=-1, iref;                             
             int j6;
                         
             for (iref=0;iref<min(img->num_ref_idx_l0_active,listXsize[LIST_0 + list_offset]);iref++)
@@ -3084,15 +3083,15 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
   int ioff,joff;
   int block8x8;   // needed for ABT
 
-  int bw_pred, fw_pred, pred, ifx;
+  int bw_pred=0, fw_pred=0, pred, ifx;
   int ii0,jj0,ii1,jj1,if1,jf1,if0,jf0;
   int mv_mul,f1,f2,f3,f4;
 
   const byte decode_block_scan[16] = {0,1,4,5,2,3,6,7,8,9,12,13,10,11,14,15};
 
   Macroblock *currMB   = &img->mb_data[img->current_mb_nr];
-  int ref_idx, fw_refframe, bw_refframe, mv_mode, pred_dir, intra_prediction; // = currMB->ref_frame;
-  int fw_ref_idx, bw_ref_idx;
+  int ref_idx, fw_refframe=-1, bw_refframe=-1, mv_mode, pred_dir, intra_prediction; // = currMB->ref_frame;
+  int fw_ref_idx=-1, bw_ref_idx=-1;
 
   int  *** mv_array, ***fw_mv_array, ***bw_mv_array;
 
@@ -3107,10 +3106,10 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
 
   int jf;
 
-  int fw_rFrame,bw_rFrame;
+  int fw_rFrame=-1,bw_rFrame=-1;
   int pmvfw[2]={0,0},pmvbw[2]={0,0};              
 
-  int direct_pdir;
+  int direct_pdir=-1;
 
   int curr_mb_field = ((img->MbaffFrameFlag)&&(currMB->mb_field));
   

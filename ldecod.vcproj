@@ -828,6 +828,9 @@
 				RelativePath="ldecod\inc\leaky_bucket.h">
 			</File>
 			<File
+				RelativePath="ldecod\inc\loopfilter.h">
+			</File>
+			<File
 				RelativePath="ldecod\inc\macroblock.h">
 			</File>
 			<File

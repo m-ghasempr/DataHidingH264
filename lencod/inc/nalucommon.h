@@ -26,7 +26,7 @@
 #define NALU_TYPE_SEI      6
 #define NALU_TYPE_SPS      7
 #define NALU_TYPE_PPS      8
-#define NALU_TYPE_PD       9
+#define NALU_TYPE_AUD      9
 #define NALU_TYPE_EOSEQ    10
 #define NALU_TYPE_EOSTREAM 11
 #define NALU_TYPE_FILL     12

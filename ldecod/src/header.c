@@ -269,7 +269,8 @@ int RestOfSliceHeader()
     if (((active_sps->pic_height_in_map_units_minus1+1)*(active_sps->pic_width_in_mbs_minus1+1))% 
           (active_pps->slice_group_change_rate_minus1+1))
           len +=1;
-    len = CeilLog2(len);
+
+    len = CeilLog2(len+1);
 
     img->slice_group_change_cycle = u_v (len, "SH: slice_group_change_cycle", currStream);
   }
@@ -701,6 +702,7 @@ void decode_poc(struct img_par *img)
     {
       if (img->last_has_mmco_5)
       {
+        img->PreviousFrameNum = 0;
         img->PreviousFrameNumOffset = 0;
       }
       if (img->frame_num<img->PreviousFrameNum)

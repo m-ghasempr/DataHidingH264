@@ -911,6 +911,28 @@
 						BrowseInformation="1"/>
 				</FileConfiguration>
 			</File>
+			<File
+				RelativePath="lencod\src\weighted_prediction.c">
+				<FileConfiguration
+					Name="Debug|Win32">
+					<Tool
+						Name="VCCLCompilerTool"
+						Optimization="0"
+						AdditionalIncludeDirectories=""
+						PreprocessorDefinitions=""
+						BasicRuntimeChecks="3"
+						BrowseInformation="1"/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32">
+					<Tool
+						Name="VCCLCompilerTool"
+						Optimization="2"
+						AdditionalIncludeDirectories=""
+						PreprocessorDefinitions=""
+						BrowseInformation="1"/>
+				</FileConfiguration>
+			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"
@@ -1019,7 +1041,13 @@
 			</File>
 		</Filter>
 		<File
-			RelativePath="bin\encoder.cfg">
+			RelativePath="bin\encoder_baseline.cfg">
+		</File>
+		<File
+			RelativePath="bin\encoder_extended.cfg">
+		</File>
+		<File
+			RelativePath="bin\encoder_main.cfg">
 		</File>
 	</Files>
 	<Globals>

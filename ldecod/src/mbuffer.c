@@ -93,43 +93,62 @@ int getDpbSize()
 {
   int pic_size = (active_sps->pic_width_in_mbs_minus1 + 1) * (active_sps->pic_height_in_map_units_minus1 + 1) * (active_sps->frame_mbs_only_flag?1:2) * 384;
 
+  int size = 0;
+
   switch (active_sps->level_idc)
   {
   case 10:
-    return 152064 / pic_size;
+    size = 152064;
+    break;
   case 11:
-    return 345600 / pic_size;
+    size = 345600;
+    break;
   case 12:
-    return 912384 / pic_size;
+    size = 912384;
+    break;
   case 13:
-    return 912384 / pic_size;
+    size = 912384;
+    break;
   case 20:
-    return 912384 / pic_size;
+    size = 912384;
+    break;
   case 21:
-    return 1824768 / pic_size;
+    size = 1824768;
+    break;
   case 22:
-    return 3110400 / pic_size;
+    size = 3110400;
+    break;
   case 30:
-    return 3110400 / pic_size;
+    size = 3110400;
+    break;
   case 31:
-    return 6912000 / pic_size;
+    size = 6912000;
+    break;
   case 32:
-    return 7864320 / pic_size;
+    size = 7864320;
+    break;
   case 40:
-    return 12582912 / pic_size;
+    size = 12582912;
+    break;
   case 41:
-    return 12582912 / pic_size;
+    size = 12582912;
+    break;
   case 42:
-    return 12582912 / pic_size;
+    size = 12582912;
+    break;
   case 50:
-    return 42393600 / pic_size;
+    size = 42393600;
+    break;
   case 51:
-    return 70778880 / pic_size;
+    size = 70778880;
+    break;
   default:
     error ("undefined level", 500);
+    break;
   }
 
-  return 0;
+  size /= pic_size;
+  return min( size, 16);
 }
 
 /*!
@@ -3323,9 +3342,9 @@ void compute_collocated(ColocatedParams* p, StorablePicture **listX[6])
           
           if (img->direct_type ==1)
           p->moving_block[i][j] = 
-            !(!p->is_long_term &&((p->ref_idx[LIST_0][i][j] == 0) && 
+            !((!p->is_long_term &&((p->ref_idx[LIST_0][i][j] == 0) && 
             (abs(p->mv[LIST_0][i][j][0])>>1 == 0) && 
-            (abs(p->mv[LIST_0][i][j][1])>>1 == 0)) || 
+            (abs(p->mv[LIST_0][i][j][1])>>1 == 0))) || 
             ((p->ref_idx[LIST_0][i][j] == -1) && 
             (p->ref_idx[LIST_1][i][j] == 0) && 
             (abs(p->mv[LIST_1][i][j][0])>>1 == 0) && 
@@ -3345,9 +3364,9 @@ void compute_collocated(ColocatedParams* p, StorablePicture **listX[6])
 
           if (img->direct_type ==1)
           p->bottom_moving_block[i][j] = 
-            !(!fs_bottom->is_long_term && ((p->bottom_ref_idx[LIST_0][i][j] == 0) && 
+            !((!fs_bottom->is_long_term && ((p->bottom_ref_idx[LIST_0][i][j] == 0) && 
             (abs(p->bottom_mv[LIST_0][i][j][0])>>1 == 0) && 
-            (abs(p->bottom_mv[LIST_0][i][j][1])>>1 == 0)) || 
+            (abs(p->bottom_mv[LIST_0][i][j][1])>>1 == 0))) || 
             ((p->bottom_ref_idx[LIST_0][i][j] == -1) && 
             (p->bottom_ref_idx[LIST_1][i][j] == 0) && 
             (abs(p->bottom_mv[LIST_1][i][j][0])>>1 == 0) && 
@@ -3365,9 +3384,9 @@ void compute_collocated(ColocatedParams* p, StorablePicture **listX[6])
 
           if (img->direct_type ==1)
           p->top_moving_block[i][j] = 
-            !(!fs_top->is_long_term && ((p->top_ref_idx[LIST_0][i][j] == 0) && 
+            !((!fs_top->is_long_term && ((p->top_ref_idx[LIST_0][i][j] == 0) && 
             (abs(p->top_mv[LIST_0][i][j][0])>>1 == 0) && 
-            (abs(p->top_mv[LIST_0][i][j][1])>>1 == 0)) || 
+            (abs(p->top_mv[LIST_0][i][j][1])>>1 == 0))) || 
             ((p->top_ref_idx[LIST_0][i][j] == -1) && 
             (p->top_ref_idx[LIST_1][i][j] == 0) && 
             (abs(p->top_mv[LIST_1][i][j][0])>>1 == 0) && 
@@ -3467,9 +3486,9 @@ void compute_collocated(ColocatedParams* p, StorablePicture **listX[6])
       p->is_long_term             = fs->is_long_term;
       if (img->direct_type ==1)
       p->moving_block[i][j]= 
-        !(!p->is_long_term && ((p->ref_idx[LIST_0][i][j] == 0) && 
+        !((!p->is_long_term && ((p->ref_idx[LIST_0][i][j] == 0) && 
         (abs(p->mv[LIST_0][i][j][0])>>1 == 0) && 
-        (abs(p->mv[LIST_0][i][j][1])>>1 == 0)) || 
+        (abs(p->mv[LIST_0][i][j][1])>>1 == 0))) || 
         ((p->ref_idx[LIST_0][i][j] == -1) && 
         (p->ref_idx[LIST_1][i][j] == 0) && 
         (abs(p->mv[LIST_1][i][j][0])>>1 == 0) && 

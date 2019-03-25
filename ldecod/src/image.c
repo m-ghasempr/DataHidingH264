@@ -44,6 +44,7 @@
 #include "output.h"
 #include "biaridecod.h"
 #include "mb_access.h"
+#include "annexb.h"
 
 #include "context_ini.h"
 #include "cabac.h"
@@ -525,6 +526,10 @@ int read_new_slice()
     else
       ret=GetRTPNALU (nalu);
 
+    //In some cases, zero_byte shall be present. If current NALU is a VCL NALU, we can't tell
+    //whether it is the first VCL NALU at this point, so only non-VCL NAL unit is checked here.
+    CheckZeroByteNonVCL(nalu, &ret);
+
     NALUtoRBSP(nalu);
 //    printf ("nalu->len %d\n", nalu->len);
     
@@ -581,6 +586,8 @@ int read_new_slice()
           init_picture(img, input);
           
           current_header = SOP;
+          //check zero_byte if it is also the first NAL unit in the access unit
+          CheckZeroByteVCL(nalu, &ret);
         }
         else
           current_header = SOS;
@@ -671,6 +678,7 @@ int read_new_slice()
         {
           init_picture(img, input);
           current_header = SOP;
+          CheckZeroByteVCL(nalu, &ret);
         }
         else
           current_header = SOS;
@@ -785,7 +793,7 @@ int read_new_slice()
       case NALU_TYPE_SPS:
         ProcessSPS(nalu);
         break;
-      case NALU_TYPE_PD:
+      case NALU_TYPE_AUD:
 //        printf ("read_new_slice: Found 'Access Unit Delimiter' NAL unit, len %d, ignored\n", nalu->len);
         break;
       case NALU_TYPE_EOSEQ:
@@ -802,7 +810,6 @@ int read_new_slice()
         printf ("Found NALU type %d, len %d undefined, ignore NALU, moving on\n", nalu->nal_unit_type, nalu->len);
     }
   }
-
   FreeNALU(nalu);
 
   return  current_header;
@@ -834,6 +841,7 @@ void init_picture(struct img_par *img, struct inp_par *inp)
     fill_frame_num_gap(img);
   }
   img->pre_frame_num = img->frame_num;
+  img->num_dec_mb = 0;
 
   //calculate POC
   decode_poc(img);

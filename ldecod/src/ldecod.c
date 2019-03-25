@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 8.5
+ *     JM 8.6
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -62,7 +62,7 @@
 #include "erc_api.h"
 
 #define JM          "8"
-#define VERSION     "8.5"
+#define VERSION     "8.6"
 
 #define LOGFILE     "log.dec"
 #define DATADECFILE "dataDec.txt"
@@ -158,6 +158,10 @@ int main(int argc, char **argv)
   free_global_buffers();
 
   flush_dpb();
+
+#ifdef PAIR_FIELDS_IN_OUTPUT
+  flush_pending_output(p_out);
+#endif
 
   CloseBitstreamFile();
 

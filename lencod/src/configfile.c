@@ -234,6 +234,7 @@ void Configure(int ac, char *av[])
     }
   }
   printf ("\n");
+  PatchInp();
 }
 
 /*!
@@ -416,7 +417,6 @@ void ParseContent (char *buf, int bufsize)
     }
   }
   memcpy (input, &configinput, sizeof (InputParameters));
-  PatchInp();
 }
 
 /*!
@@ -474,7 +474,7 @@ static void PatchInp ()
 
 
   // These variables are added for FMO
-  FILE * sgfile;
+  FILE * sgfile=NULL;
   int i;
   int frame_mb_only;
   int mb_width, mb_height, mapunit_height;

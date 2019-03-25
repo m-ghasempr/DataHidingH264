@@ -134,7 +134,7 @@ typedef struct
 } pic_parameter_set_rbsp_t;
 
 
-#define MAXnum_ref_frames_in_pic_order_cnt_cycle  255
+#define MAXnum_ref_frames_in_pic_order_cnt_cycle  256
 typedef struct
 {
   Boolean   Valid;                  // indicates the parameter set is valid

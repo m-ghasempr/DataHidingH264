@@ -735,7 +735,7 @@ void field_picture (Picture *top, Picture *bottom)
   enc_top_picture->poc=img->toppoc;
   enc_top_picture->frame_poc = img->toppoc;
   enc_top_picture->pic_num = img->frame_num;
-  enc_top_picture->coded_frame = 1;
+  enc_top_picture->coded_frame = 0;
   enc_top_picture->MbaffFrameFlag = img->MbaffFrameFlag = FALSE;
   img->ThisPOC = img->toppoc;
   
@@ -781,7 +781,7 @@ void field_picture (Picture *top, Picture *bottom)
   enc_bottom_picture->poc=img->bottompoc;
   enc_bottom_picture->frame_poc = img->bottompoc;
   enc_bottom_picture->pic_num = img->frame_num;
-  enc_bottom_picture->coded_frame = 1;
+  enc_bottom_picture->coded_frame = 0;
   enc_bottom_picture->MbaffFrameFlag = img->MbaffFrameFlag = FALSE;
   img->ThisPOC = img->bottompoc;
   img->structure = BOTTOM_FIELD;

@@ -34,10 +34,17 @@ please send comments and additions to suehring@hhi.de
 2.1 Encoder
 -----------
 
-    lencod.exe [-f file] [-p parameter=value]
+    lencod.exe [-h] [-d default-file] [-f file] [-p parameter=value]
 
   All Parameters are initially taken from DEFAULTCONFIGFILENAME, defined in 
   configfile.h (typically: "encoder.cfg")
+
+  -h
+             Show help on parameters.
+
+  -d default-file    
+             Use the specified file as default configuration instead of the file in 
+             DEFAULTCONFIGFILENAME.  
 
   -f file    
              If an -f <config> parameter is present in the command line then 

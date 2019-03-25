@@ -1227,7 +1227,7 @@ int RDCost_for_macroblocks (double   lambda,      // <-- lagrange multiplier
   }
 
 
-  if (img->MbaffFrameFlag)
+  if ((img->MbaffFrameFlag) && (mode ? 0: ((img->type == B_SLICE) ? !currMB->cbp:1)))  // AFF and current is skip
   {
     if (img->current_mb_nr%2) //bottom
     {
@@ -1668,7 +1668,7 @@ int field_flag_inference()
    int         fw_mcost, bw_mcost, bid_mcost, mcost, max_mcost=(1<<30);
    int         curr_cbp_blk, cnt_nonz = 0, best_cnt_nonz = 0, best_fw_ref = 0, best_pdir;
    int         cost=0;
-   int         min_cost, min_cost8x8, cost8x8, cost_direct=0, have_direct=0, i16mode;
+   int         min_cost = max_mcost, min_cost8x8, cost8x8, cost_direct=0, have_direct=0, i16mode;
    int         intra1 = 0;
    
    int         intra       = (((img->type==P_SLICE||img->type==SP_SLICE) && img->mb_y==img->mb_y_upd && img->mb_y_upd!=img->mb_y_intra) || img->type==I_SLICE);
@@ -1689,7 +1689,7 @@ int field_flag_inference()
    int  l,list_offset;
 
    int curr_mb_field = ((img->MbaffFrameFlag)&&(currMB->mb_field));
-   
+
    // find out the correct list offsets
    if (curr_mb_field)
    {
