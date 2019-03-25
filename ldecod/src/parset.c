@@ -824,6 +824,7 @@ void reset_format_info(seq_parameter_set_rbsp_t *sps, VideoParameters *p_Vid, Fr
   if (p_Vid->first_sps == TRUE) {
     p_Vid->first_sps = FALSE;
     if(!p_Inp->bDisplayDecParams) {
+      fprintf(stdout,"Profile IDC  : %d\n", sps->profile_idc);
       fprintf(stdout,"Image Format : %dx%d (%dx%d)\n", source->width[0], source->height[0], p_Vid->width, p_Vid->height);
       if (p_Vid->yuv_format == YUV400)
         fprintf(stdout,"Color Format : 4:0:0 ");
@@ -1125,7 +1126,7 @@ void UseParameterSet (Slice *currSlice)
   if (pps->Valid != TRUE)
     printf ("Trying to use an invalid (uninitialized) Picture Parameter Set with ID %d, expect the unexpected...\n", PicParsetId);
 #if (MVC_EXTENSION_ENABLE)
-  if((currSlice->svc_extension_flag == -1))
+  if (currSlice->svc_extension_flag == -1)
   {
     if (sps->Valid != TRUE)
       printf ("PicParset %d references an invalid (uninitialized) Sequence Parameter Set with ID %d, expect the unexpected...\n", 
@@ -1562,6 +1563,9 @@ void get_max_dec_frame_buf_size(seq_parameter_set_rbsp_t *sps)
     size = 42393600;
     break;
   case 51:
+    size = 70778880;
+    break;
+  case 52:
     size = 70778880;
     break;
   default:

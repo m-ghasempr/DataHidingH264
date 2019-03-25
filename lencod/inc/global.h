@@ -1619,6 +1619,11 @@ static inline int is_MVC_profile(unsigned int profile_idc)
     );
 }
 
+static inline int is_intra(Macroblock *curr_MB)
+{
+  return ((curr_MB)->mb_type==SI4MB || (curr_MB)->mb_type==I4MB || (curr_MB)->mb_type==I16MB || (curr_MB)->mb_type==I8MB || (curr_MB)->mb_type==IPCM);
+}
+
 
 #endif
 

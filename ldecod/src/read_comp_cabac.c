@@ -1940,3 +1940,4 @@ void set_read_comp_coeff_cabac(Macroblock *currMB)
     currMB->read_comp_coeff_8x8_CABAC = read_comp_coeff_8x8_MB_CABAC_ls;
   }
 }
+

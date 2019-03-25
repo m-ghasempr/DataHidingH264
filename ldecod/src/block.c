@@ -789,8 +789,17 @@ void iTransform(Macroblock *currMB, ColorPlane pl, int smb)
           const unsigned char *x_pos, *y_pos;
           for (b8 = 0; b8 < (p_Vid->num_uv_blocks); ++b8)
           {
+            int i,j;
             x_pos = subblk_offset_x[1][b8];
             y_pos = subblk_offset_y[1][b8];
+
+            for (i = 0 ; i < p_Vid->mb_cr_size_y ; i ++)
+            {
+              for (j = 0 ; j < p_Vid->mb_cr_size_x ; j ++)
+              {
+                currSlice->mb_rres[uv][i][j] = currSlice->cof[uv][i][j] ;
+              }
+            }
 
             itrans4x4_ls(currMB, uv, *x_pos++, *y_pos++);
             itrans4x4_ls(currMB, uv, *x_pos++, *y_pos++);

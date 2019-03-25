@@ -1350,7 +1350,7 @@ static int decode_one_component_b_slice(Macroblock *currMB, ColorPlane curr_plan
 static void init_cur_imgy(VideoParameters *p_Vid,Slice *currSlice,int pl)
 {
   int i,j;
-  if ((p_Vid->separate_colour_plane_flag == 0)) 
+  if (p_Vid->separate_colour_plane_flag == 0)
   {
     StorablePicture *vidref = p_Vid->no_reference_picture;
     int noref = (currSlice->framepoc < p_Vid->recovery_poc);    

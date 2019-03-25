@@ -3,12 +3,14 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 44;
+	objectVersion = 46;
 	objects = {
 
 /* Begin PBXBuildFile section */
 		436FC29E0D85FBC500D8E371 /* rtpdump.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 436FC25A0D85FB3900D8E371 /* rtpdump.cpp */; };
 		436FC2B20D85FC9400D8E371 /* rtp_loss.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 436FC2AD0D85FC4B00D8E371 /* rtp_loss.cpp */; };
+		7125586E15CC59C4005F1CC1 /* wp_periodic.c in Sources */ = {isa = PBXBuildFile; fileRef = 7125586C15CC59C4005F1CC1 /* wp_periodic.c */; };
+		7125586F15CC59C4005F1CC1 /* wp_random.c in Sources */ = {isa = PBXBuildFile; fileRef = 7125586D15CC59C4005F1CC1 /* wp_random.c */; };
 		71927CF71472DF74000AB618 /* annexb.c in Sources */ = {isa = PBXBuildFile; fileRef = 71927C891472DF74000AB618 /* annexb.c */; };
 		71927CF81472DF74000AB618 /* biariencode.c in Sources */ = {isa = PBXBuildFile; fileRef = 71927C8A1472DF74000AB618 /* biariencode.c */; };
 		71927CF91472DF74000AB618 /* block.c in Sources */ = {isa = PBXBuildFile; fileRef = 71927C8B1472DF74000AB618 /* block.c */; };
@@ -264,6 +266,10 @@
 		436FC2AD0D85FC4B00D8E371 /* rtp_loss.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = rtp_loss.cpp; path = rtp_loss/rtp_loss.cpp; sourceTree = SOURCE_ROOT; };
 		436FC2AE0D85FC4B00D8E371 /* ReadMe.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = ReadMe.txt; path = rtp_loss/ReadMe.txt; sourceTree = SOURCE_ROOT; };
 		43FA4B170D4EECBB001709F1 /* ldecod */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = ldecod; sourceTree = BUILT_PRODUCTS_DIR; };
+		7125586A15CC59B1005F1CC1 /* wp_periodic.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = wp_periodic.h; path = lencod/inc/wp_periodic.h; sourceTree = "<group>"; };
+		7125586B15CC59B1005F1CC1 /* wp_random.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = wp_random.h; path = lencod/inc/wp_random.h; sourceTree = "<group>"; };
+		7125586C15CC59C4005F1CC1 /* wp_periodic.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = wp_periodic.c; path = lencod/src/wp_periodic.c; sourceTree = "<group>"; };
+		7125586D15CC59C4005F1CC1 /* wp_random.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = wp_random.c; path = lencod/src/wp_random.c; sourceTree = "<group>"; };
 		71927C2D1472DF4A000AB618 /* annexb.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = annexb.h; path = lencod/inc/annexb.h; sourceTree = "<group>"; };
 		71927C2E1472DF4A000AB618 /* biariencode.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = biariencode.h; path = lencod/inc/biariencode.h; sourceTree = "<group>"; };
 		71927C2F1472DF4A000AB618 /* block.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = block.h; path = lencod/inc/block.h; sourceTree = "<group>"; };
@@ -813,6 +819,10 @@
 		43FA4A110D4EE920001709F1 /* src */ = {
 			isa = PBXGroup;
 			children = (
+				7125586C15CC59C4005F1CC1 /* wp_periodic.c */,
+				7125586D15CC59C4005F1CC1 /* wp_random.c */,
+				7125586A15CC59B1005F1CC1 /* wp_periodic.h */,
+				7125586B15CC59B1005F1CC1 /* wp_random.h */,
 				71927C891472DF74000AB618 /* annexb.c */,
 				71927C8A1472DF74000AB618 /* biariencode.c */,
 				71927C8B1472DF74000AB618 /* block.c */,
@@ -1192,8 +1202,11 @@
 /* Begin PBXProject section */
 		08FB7793FE84155DC02AAC07 /* Project object */ = {
 			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 0440;
+			};
 			buildConfigurationList = 1DEB928908733DD80010E9CD /* Build configuration list for PBXProject "JM" */;
-			compatibilityVersion = "Xcode 3.0";
+			compatibilityVersion = "Xcode 3.2";
 			developmentRegion = English;
 			hasScannedForEncodings = 1;
 			knownRegions = (
@@ -1432,6 +1445,8 @@
 				71927E391472DFE1000AB618 /* parsetcommon.c in Sources */,
 				71927E3A1472DFE1000AB618 /* transform.c in Sources */,
 				71927E3B1472DFE1000AB618 /* win32.c in Sources */,
+				7125586E15CC59C4005F1CC1 /* wp_periodic.c in Sources */,
+				7125586F15CC59C4005F1CC1 /* wp_random.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1441,19 +1456,17 @@
 		1DEB928608733DD80010E9CD /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_64_BIT_PRE_XCODE_3_1)";
-				ARCHS_STANDARD_32_64_BIT_PRE_XCODE_3_1 = "x86_64 i386 ppc";
+				ARCHS = "$(ARCHS_STANDARD_32_64_BIT)";
 				COPY_PHASE_STRIP = NO;
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_DYNAMIC_NO_PIC = NO;
-				GCC_ENABLE_FIX_AND_CONTINUE = YES;
 				GCC_MODEL_TUNING = G5;
 				GCC_OPTIMIZATION_LEVEL = 0;
 				INSTALL_PATH = "";
 				LIBRARY_SEARCH_PATHS = "";
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_NAME = lencod;
-				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.5.sdk";
+				SDKROOT = "";
 				USER_HEADER_SEARCH_PATHS = lencod/inc;
 				ZERO_LINK = YES;
 			};
@@ -1462,15 +1475,14 @@
 		1DEB928708733DD80010E9CD /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_64_BIT_PRE_XCODE_3_1)";
-				ARCHS_STANDARD_32_64_BIT_PRE_XCODE_3_1 = "x86_64 i386 ppc";
+				ARCHS = "$(ARCHS_STANDARD_32_64_BIT)";
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_MODEL_TUNING = G5;
 				INSTALL_PATH = "";
 				LIBRARY_SEARCH_PATHS = "";
 				PRODUCT_NAME = lencod;
-				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.5.sdk";
+				SDKROOT = "";
 				USER_HEADER_SEARCH_PATHS = lencod/inc;
 			};
 			name = Release;
@@ -1481,7 +1493,6 @@
 				ENABLE_OPENMP_SUPPORT = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				PREBINDING = NO;
 				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.5.sdk";
 			};
 			name = Debug;
@@ -1496,7 +1507,6 @@
 				ENABLE_OPENMP_SUPPORT = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				PREBINDING = NO;
 				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.5.sdk";
 			};
 			name = Release;
@@ -1504,17 +1514,15 @@
 		436FC29A0D85FB4900D8E371 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_BIT_PRE_XCODE_3_1)";
-				ARCHS_STANDARD_32_BIT_PRE_XCODE_3_1 = "ppc i386";
+				ARCHS = "$(ARCHS_STANDARD_32_64_BIT)";
 				COPY_PHASE_STRIP = NO;
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_DYNAMIC_NO_PIC = NO;
-				GCC_ENABLE_FIX_AND_CONTINUE = YES;
 				GCC_MODEL_TUNING = G5;
 				GCC_OPTIMIZATION_LEVEL = 0;
 				INSTALL_PATH = "";
 				PRODUCT_NAME = rtpdump;
-				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.5.sdk";
+				SDKROOT = "";
 				USER_HEADER_SEARCH_PATHS = "";
 				ZERO_LINK = YES;
 			};
@@ -1523,14 +1531,13 @@
 		436FC29B0D85FB4900D8E371 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_BIT_PRE_XCODE_3_1)";
-				ARCHS_STANDARD_32_BIT_PRE_XCODE_3_1 = "ppc i386";
+				ARCHS = "$(ARCHS_STANDARD_32_64_BIT)";
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_MODEL_TUNING = G5;
 				INSTALL_PATH = "";
 				PRODUCT_NAME = rtpdump;
-				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.5.sdk";
+				SDKROOT = "";
 				USER_HEADER_SEARCH_PATHS = "";
 			};
 			name = Release;
@@ -1538,17 +1545,15 @@
 		436FC2A80D85FC1C00D8E371 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_BIT_PRE_XCODE_3_1)";
-				ARCHS_STANDARD_32_BIT_PRE_XCODE_3_1 = "ppc i386";
+				ARCHS = "$(ARCHS_STANDARD_32_64_BIT)";
 				COPY_PHASE_STRIP = NO;
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_DYNAMIC_NO_PIC = NO;
-				GCC_ENABLE_FIX_AND_CONTINUE = YES;
 				GCC_MODEL_TUNING = G5;
 				GCC_OPTIMIZATION_LEVEL = 0;
 				INSTALL_PATH = "";
 				PRODUCT_NAME = rtp_loss;
-				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.5.sdk";
+				SDKROOT = "";
 				USER_HEADER_SEARCH_PATHS = "";
 				ZERO_LINK = YES;
 			};
@@ -1557,14 +1562,13 @@
 		436FC2A90D85FC1C00D8E371 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_BIT_PRE_XCODE_3_1)";
-				ARCHS_STANDARD_32_BIT_PRE_XCODE_3_1 = "ppc i386";
+				ARCHS = "$(ARCHS_STANDARD_32_64_BIT)";
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_MODEL_TUNING = G5;
 				INSTALL_PATH = "";
 				PRODUCT_NAME = rtp_loss;
-				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.5.sdk";
+				SDKROOT = "";
 				USER_HEADER_SEARCH_PATHS = "";
 			};
 			name = Release;
@@ -1572,18 +1576,16 @@
 		43FA4B150D4EECBB001709F1 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_64_BIT_PRE_XCODE_3_1)";
-				ARCHS_STANDARD_32_64_BIT_PRE_XCODE_3_1 = "x86_64 i386 ppc";
+				ARCHS = "$(ARCHS_STANDARD_32_64_BIT)";
 				COPY_PHASE_STRIP = NO;
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_DYNAMIC_NO_PIC = NO;
-				GCC_ENABLE_FIX_AND_CONTINUE = YES;
 				GCC_MODEL_TUNING = G5;
 				GCC_OPTIMIZATION_LEVEL = 0;
 				INSTALL_PATH = "";
 				LIBRARY_SEARCH_PATHS = "";
 				PRODUCT_NAME = ldecod;
-				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.5.sdk";
+				SDKROOT = "";
 				USER_HEADER_SEARCH_PATHS = ldecod/inc;
 				ZERO_LINK = YES;
 			};
@@ -1592,17 +1594,15 @@
 		43FA4B160D4EECBB001709F1 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_64_BIT_PRE_XCODE_3_1)";
-				ARCHS_STANDARD_32_64_BIT_PRE_XCODE_3_1 = "x86_64 i386 ppc";
+				ARCHS = "$(ARCHS_STANDARD_32_64_BIT)";
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_MODEL_TUNING = G5;
 				INSTALL_PATH = "";
 				LIBRARY_SEARCH_PATHS = "";
-				PREBINDING = NO;
 				PRELINK_LIBS = "";
 				PRODUCT_NAME = ldecod;
-				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.5.sdk";
+				SDKROOT = "";
 				USER_HEADER_SEARCH_PATHS = ldecod/inc;
 			};
 			name = Release;

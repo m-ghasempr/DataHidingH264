@@ -1835,7 +1835,7 @@ int RDCost_for_macroblocks (Macroblock  *currMB,   // <-- Current Macroblock to 
       return 0;
   }
 
-  if(/*(p_Inp->rdopt==9) &&*/ (mode==P8x8))
+  if (mode == P8x8)
   {
      if((currMB->luma_transform_size_8x8_flag && !currMB->valid_8x8) || (!currMB->luma_transform_size_8x8_flag && !currMB->valid_4x4))
       return 0;
@@ -1965,7 +1965,7 @@ int RDCost_for_macroblocks (Macroblock  *currMB,   // <-- Current Macroblock to 
   if (p_Inp->ForceTrueRateRDO == 1)
     rdcost = distortion + weight_cost(lambda, rate);
   else if (p_Inp->ForceTrueRateRDO == 2)
-    rdcost = distortion + weight_cost(lambda, (rate +  IS_INTRA(currMB)));
+    rdcost = distortion + weight_cost(lambda, (rate +  is_intra(currMB)));
   else
     rdcost = distortion + (rate>0? (weight_cost(lambda, rate)): (weight_cost(lambda, 1)/2));
 
@@ -2311,7 +2311,7 @@ static void set_stored_macroblock_parameters_mpass (Macroblock *currMB)
       k = 2*(j >> 1)+(i >> 1);
 
       // backward prediction or intra
-      if ((currMB->b8x8[k].pdir == 1) || IS_INTRA(currMB))
+      if ((currMB->b8x8[k].pdir == 1) || is_intra(currMB))
       {
         motion[block_y][block_x].ref_idx [LIST_0] = -1;
         motion[block_y][block_x].mv      [LIST_0] = zero_mv;
@@ -2346,7 +2346,7 @@ static void set_stored_macroblock_parameters_mpass (Macroblock *currMB)
       }
 
       // forward prediction or intra
-      if ((currMB->b8x8[k].pdir == 0) || IS_INTRA(currMB))
+      if ((currMB->b8x8[k].pdir == 0) || is_intra(currMB))
       {
         motion[block_y][block_x].ref_idx [LIST_1] = -1;
         motion[block_y][block_x].ref_pic [LIST_1] = NULL;
@@ -2369,7 +2369,7 @@ static void set_stored_macroblock_parameters_mpass (Macroblock *currMB)
         k = 2*(j >> 1)+(i >> 1);
 
         // forward
-        if (IS_INTRA(currMB)||(currMB->b8x8[k].pdir == 0))
+        if (is_intra(currMB)||(currMB->b8x8[k].pdir == 0))
         {
           motion[block_y][block_x].ref_idx [LIST_1] = -1;
           motion[block_y][block_x].ref_pic [LIST_1] = NULL;
@@ -2549,7 +2549,7 @@ static void set_stored_macroblock_parameters (Macroblock *currMB)
       k = 2*(j >> 1)+(i >> 1);
 
       // backward prediction or intra
-      if ((currMB->b8x8[k].pdir == 1) || IS_INTRA(currMB))
+      if ((currMB->b8x8[k].pdir == 1) || is_intra(currMB))
       {
         motion[block_y][block_x].ref_idx [LIST_0] = -1;
         motion[block_y][block_x].ref_pic [LIST_0] = NULL;
@@ -2573,7 +2573,7 @@ static void set_stored_macroblock_parameters (Macroblock *currMB)
       }
 
       // forward prediction or intra
-      if ((currMB->b8x8[k].pdir == 0) || IS_INTRA(currMB))
+      if ((currMB->b8x8[k].pdir == 0) || is_intra(currMB))
       {
         motion[block_y][block_x].ref_idx [LIST_1] = -1;
         motion[block_y][block_x].ref_pic [LIST_1] = NULL;
@@ -2593,7 +2593,7 @@ static void set_stored_macroblock_parameters (Macroblock *currMB)
         k = 2*(j >> 1)+(i >> 1);
 
         // forward
-        if (IS_INTRA(currMB)||(currMB->b8x8[k].pdir == 0))
+        if (is_intra(currMB)||(currMB->b8x8[k].pdir == 0))
         {
           motion[block_y][block_x].ref_idx [LIST_1] = -1;
           motion[block_y][block_x].ref_pic [LIST_1] = NULL;
@@ -2769,7 +2769,7 @@ static void set_stored_macroblock_parameters_sp (Macroblock *currMB)
       k = 2*(j >> 1)+(i >> 1);
 
       // backward prediction or intra
-      if ((currMB->b8x8[k].pdir == 1) || IS_INTRA(currMB))
+      if ((currMB->b8x8[k].pdir == 1) || is_intra(currMB))
       {
         motion[block_y][block_x].ref_idx [LIST_0] = -1;
         motion[block_y][block_x].ref_pic [LIST_0] = NULL;
@@ -2793,7 +2793,7 @@ static void set_stored_macroblock_parameters_sp (Macroblock *currMB)
       }
 
       // forward prediction or intra
-      if ((currMB->b8x8[k].pdir == 0) || IS_INTRA(currMB))
+      if ((currMB->b8x8[k].pdir == 0) || is_intra(currMB))
       {
         motion[block_y][block_x].ref_idx [LIST_1] = -1;
         motion[block_y][block_x].ref_pic [LIST_1] = NULL;
@@ -2813,7 +2813,7 @@ static void set_stored_macroblock_parameters_sp (Macroblock *currMB)
         k = 2*(j >> 1)+(i >> 1);
 
         // forward
-        if (IS_INTRA(currMB)||(currMB->b8x8[k].pdir == 0))
+        if (is_intra(currMB)||(currMB->b8x8[k].pdir == 0))
         {
           motion[block_y][block_x].ref_idx [LIST_1] = -1;
           motion[block_y][block_x].ref_pic [LIST_1] = NULL;
@@ -4009,7 +4009,7 @@ void copy_rdopt_data (Macroblock *currMB)
     if (currSlice->slice_type != I_SLICE && currSlice->slice_type != SI_SLICE)
       copy_motion_vectors_MB (currSlice, rdopt);
 
-    if (!IS_INTRA(currMB))
+    if (!is_intra(currMB))
     {
       currMB->b8x8[0].bipred = 0;
       currMB->b8x8[1].bipred = 0;

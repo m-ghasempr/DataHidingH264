@@ -59,6 +59,19 @@ void InitWP(VideoParameters *p_Vid, InputParameters *p_Inp, int force_wp_method)
       p_Vid->TestWPPSlice = TestWPPSliceAlg1;
       p_Vid->TestWPBSlice = TestWPBSliceAlg1;
       break;
+    case 2:
+      p_Vid->EstimateWPPSlice = EstimateWPPSliceRandom;
+      p_Vid->EstimateWPBSlice = EstimateWPBSliceRandom;
+      p_Vid->TestWPPSlice = TestWPPSliceRandom;
+      p_Vid->TestWPBSlice = TestWPBSliceRandom;
+      break;
+    case 3:
+      p_Vid->EstimateWPPSlice = EstimateWPPSlicePeriodic;
+      p_Vid->EstimateWPBSlice = EstimateWPBSlicePeriodic;
+      p_Vid->TestWPPSlice = TestWPPSlicePeriodic;
+      p_Vid->TestWPBSlice = TestWPBSlicePeriodic;
+      break;
+
     }
   }
 }
@@ -126,6 +139,7 @@ void ComputeImplicitWeights(Slice *currSlice,
     }
   }
 }
+
 
 /*!
 ************************************************************************

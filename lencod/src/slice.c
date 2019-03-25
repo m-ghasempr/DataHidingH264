@@ -1149,7 +1149,13 @@ static void setup_slice(Slice *currSlice)
 
 static void  ClipWPParams(Slice *currSlice )
 {
+  // Keeping this disabled since it seems that all WP functions already do clipping internally
+  // Otherwise, this should be modified to support different bitdepths and to also
+  // properly clip wbp_weights. 
+  /*
+  VideoParameters *p_Vid = currSlice->p_Vid;
   int list, ref, comp; 
+  int bitdepth[3] = { (p_Vid->bitdepth_luma - 8), (p_Vid->bitdepth_chroma - 8), (p_Vid->bitdepth_chroma - 8)};
 
   for(list = 0; list <= (currSlice->slice_type == B_SLICE ? LIST_1:LIST_0); list++)
   {
@@ -1157,11 +1163,12 @@ static void  ClipWPParams(Slice *currSlice )
     {
       for(comp = PLANE_Y; comp <= PLANE_V; comp++)
       {
-        currSlice->wp_weight[list][ref][comp] = sClip3(-128, 127, currSlice->wp_weight[list][ref][comp]);
-        currSlice->wp_offset[list][ref][comp] = sClip3(-128, 127, currSlice->wp_offset[list][ref][comp]);
+        //currSlice->wp_weight[list][ref][comp] = sClip3(-128 , 127, currSlice->wp_weight[list][ref][comp]);
+        //currSlice->wp_offset[list][ref][comp] = sClip3(-128, 127, currSlice->wp_offset[list][ref][comp]);
       }
     }
   }
+  */
 }
 
 void setup_open_gop_lists(VideoParameters *p_Vid, Slice *currSlice)
@@ -1464,7 +1471,7 @@ void init_slice (VideoParameters *p_Vid, Slice **currSlice, int start_mb_addr)
 #endif
 
 #if HM50_LIKE_MMCO
-  if ( p_Inp->HM50LikeMMCO )
+  if ( p_Inp->HM50RefStructure )
   {
     if (p_Vid->structure == FRAME && p_Dpb->ref_frames_in_buffer == active_sps->num_ref_frames)
       hm50_ref_management_frame_pic(p_Dpb, p_Vid->frame_num);
@@ -1472,7 +1479,7 @@ void init_slice (VideoParameters *p_Vid, Slice **currSlice, int start_mb_addr)
 #endif
 
 #if LD_REF_SETTING
-  if ( p_Inp->useF701RefForLD )
+  if ( p_Inp->LDRefSetting )
   {
     if (p_Vid->structure == FRAME && p_Dpb->ref_frames_in_buffer == active_sps->num_ref_frames)
       low_delay_ref_management_frame_pic(p_Dpb, p_Vid->frame_num);

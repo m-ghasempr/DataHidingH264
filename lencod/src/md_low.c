@@ -555,7 +555,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
     }
   }
 
-  intra1 = IS_INTRA(currMB);
+  intra1 = is_intra(currMB);
 
   //=====  S E T   F I N A L   M A C R O B L O C K   P A R A M E T E R S ======
   //---------------------------------------------------------------------------

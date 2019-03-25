@@ -967,7 +967,7 @@ int residual_transform_quant_chroma_4x4(Macroblock *currMB, int uv, int cr_cbp)
   int   b4;
   int*  DCLevel = currSlice->cofDC[uv+1][0];
   int*  DCRun   = currSlice->cofDC[uv+1][1];
-  int   intra = IS_INTRA (currMB);
+  int   intra = is_intra (currMB);
   int   uv_scale = uv * (p_Vid->num_blk8x8_uv >> 1);
 
   //FRExt
@@ -1730,7 +1730,7 @@ int residual_transform_quant_chroma_4x4_sp(Macroblock *currMB, int uv,int cr_cbp
   const byte *c_cost = COEFF_COST4x4[currSlice->disthres];
   const byte (*pos_scan)[2] = currMB->is_field_mode ? FIELD_SCAN : SNGL_SCAN;
 
-  int   intra = IS_INTRA (currMB);
+  int   intra = is_intra (currMB);
 
   int   b4;
   int*  DCLevel = currSlice->cofDC[uv+1][0];
@@ -2227,7 +2227,7 @@ int residual_transform_quant_chroma_4x4_sp2(Macroblock *currMB, int uv,int cr_cb
   int    **mb_rres = currSlice->mb_rres[uv + 1]; 
   //int    **mb_ores = currSlice->mb_ores[uv + 1]; 
   imgpel **mb_pred = currSlice->mb_pred[uv + 1]; 
-  int   intra = IS_INTRA (currMB);
+  int   intra = is_intra (currMB);
 
   int qpChroma   = currMB->qpc[uv] + currSlice->bitdepth_chroma_qp_scale;   
 

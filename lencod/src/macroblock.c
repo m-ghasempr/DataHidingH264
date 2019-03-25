@@ -175,7 +175,7 @@ void next_macroblock(Macroblock *currMB)
   cur_stats->bit_use_delta_quant[slice_type]   += mbBits->mb_delta_quant;
   cur_stats->bit_use_stuffing_bits[slice_type] += mbBits->mb_stuffing;
 
-  if (IS_INTRA(currMB))
+  if (is_intra(currMB))
   {
     ++cur_stats->intra_chroma_mode[ (short) currMB->c_ipred_mode];
 
@@ -2051,7 +2051,7 @@ int write_b_slice_MB_layer (Macroblock *currMB, int rdopt, int *coeff_rate)
       prevMbSkipped = p_Vid->mb_data[prev_mb_nr].skip_flag;
     }
   }
-  currMB->IntraChromaPredModeFlag = (char) IS_INTRA(currMB);
+  currMB->IntraChromaPredModeFlag = (char) is_intra(currMB);
 
   if (currSlice->symbol_mode == CABAC)
   {
@@ -2257,7 +2257,7 @@ int write_b_slice_MB_layer (Macroblock *currMB, int rdopt, int *coeff_rate)
   //since cabac needs the right neighborhood for the later MBs
 
   //----- motion information -----
-  if (currMB->mb_type !=0 && currMB->mb_type != P8x8 && (!IS_INTRA(currMB)))
+  if (currMB->mb_type !=0 && currMB->mb_type != P8x8 && (!is_intra(currMB)))
   {
     no_bits  += currSlice->writeMotionInfo2NAL (currMB);
   }
@@ -2336,7 +2336,7 @@ int write_p_slice_MB_layer (Macroblock *currMB, int rdopt, int *coeff_rate)
       prevMbSkipped = p_Vid->mb_data[prev_mb_nr].skip_flag;
     }
   }
-  currMB->IntraChromaPredModeFlag = (char) IS_INTRA(currMB);
+  currMB->IntraChromaPredModeFlag = (char) is_intra(currMB);
 
   if (currSlice->symbol_mode == CABAC)
   {
@@ -2542,7 +2542,7 @@ int write_p_slice_MB_layer (Macroblock *currMB, int rdopt, int *coeff_rate)
   //since cabac needs the right neighborhood for the later MBs
 
   //----- motion information -----
-  if (currMB->mb_type !=0 && currMB->mb_type != P8x8 && (!IS_INTRA(currMB)))
+  if (currMB->mb_type !=0 && currMB->mb_type != P8x8 && (!is_intra(currMB)))
   {
     no_bits  += currSlice->writeMotionInfo2NAL (currMB);
   }
@@ -2614,7 +2614,7 @@ int write_i_slice_MB_layer (Macroblock *currMB, int rdopt, int *coeff_rate)
       no_bits         += se.len;
     }
   }
-  currMB->IntraChromaPredModeFlag = (char) IS_INTRA(currMB);
+  currMB->IntraChromaPredModeFlag = (char) is_intra(currMB);
 
 
   //========= write mb_type (I_SLICE) =========
@@ -2829,7 +2829,7 @@ void write_macroblock (Macroblock* currMB, int eos_bit)
   //--- constrain intra prediction ---
   if(p_Inp->UseConstrainedIntraPred && (currSlice->slice_type==P_SLICE || currSlice->slice_type==B_SLICE))
   {
-    p_Vid->intra_block[currMB->mbAddrX] = IS_INTRA(currMB);
+    p_Vid->intra_block[currMB->mbAddrX] = is_intra(currMB);
   }
 
   //===== init and update number of intra macroblocks =====
@@ -2839,7 +2839,7 @@ void write_macroblock (Macroblock* currMB, int eos_bit)
     p_Vid->iInterViewMBs =0;
   }
 
-  if (IS_INTRA(currMB))
+  if (is_intra(currMB))
     ++p_Vid->intras;
 #if (MVC_EXTENSION_ENABLE)
   else if(p_Vid->num_of_layers==2 && p_Vid->dpb_layer_id==1)
@@ -3245,7 +3245,7 @@ static int write_chroma_coeff (Macroblock* currMB)
     }
     else
     {
-      currMB->is_intra_block = (byte) IS_INTRA(currMB);
+      currMB->is_intra_block = (byte) is_intra(currMB);
       se.type             = (currMB->is_intra_block ? SE_CHR_DC_INTRA : SE_CHR_DC_INTER);
       // choose the appropriate data partition
       dataPart            = &(currSlice->partArr[partMap[se.type]]);
@@ -3296,7 +3296,7 @@ static int write_chroma_coeff (Macroblock* currMB)
     else
     {
       block_rate = 0;
-      currMB->is_intra_block = (byte) IS_INTRA(currMB);
+      currMB->is_intra_block = (byte) is_intra(currMB);
       se.context          = CHROMA_AC;
       se.type             = (currMB->is_intra_block ? SE_CHR_AC_INTRA : SE_CHR_AC_INTER);
       // choose the appropriate data partition
@@ -3887,7 +3887,7 @@ int predict_nnz(Macroblock *currMB, int block_type, int i,int j)
   // left block
   get4x4Neighbour(currMB, (i << 2) - 1, (j << 2), p_Vid->mb_size[IS_LUMA], &pix);
 
-  if (IS_INTRA(currMB) && pix.available && p_Vid->active_pps->constrained_intra_pred_flag && ((currSlice->partition_mode != 0) && !currSlice->idr_flag))
+  if (is_intra(currMB) && pix.available && p_Vid->active_pps->constrained_intra_pred_flag && ((currSlice->partition_mode != 0) && !currSlice->idr_flag))
   {
     pix.available &= p_Vid->intra_block[pix.mb_addr];
     if (!pix.available)
@@ -3919,7 +3919,7 @@ int predict_nnz(Macroblock *currMB, int block_type, int i,int j)
   // top block
   get4x4Neighbour(currMB, (i<<2), (j<<2) - 1, p_Vid->mb_size[IS_LUMA], &pix);
 
-  if (IS_INTRA(currMB) && pix.available && p_Vid->active_pps->constrained_intra_pred_flag && ((currSlice->partition_mode != 0) && !currSlice->idr_flag))
+  if (is_intra(currMB) && pix.available && p_Vid->active_pps->constrained_intra_pred_flag && ((currSlice->partition_mode != 0) && !currSlice->idr_flag))
   {
     pix.available &= p_Vid->intra_block[pix.mb_addr];
     if (!pix.available)
@@ -3981,7 +3981,7 @@ int predict_nnz_chroma(Macroblock *currMB, int i,int j)
     // left block
     get4x4Neighbour(currMB, ((i & 0x01)<<2) - 1, ((j-4)<<2), p_Vid->mb_size[IS_CHROMA], &pix);
 
-    if (IS_INTRA(currMB) && pix.available && p_Vid->active_pps->constrained_intra_pred_flag && ((currSlice->partition_mode != 0) && !currSlice->idr_flag))
+    if (is_intra(currMB) && pix.available && p_Vid->active_pps->constrained_intra_pred_flag && ((currSlice->partition_mode != 0) && !currSlice->idr_flag))
     {
       pix.available &= p_Vid->intra_block[pix.mb_addr];
       if (!pix.available)
@@ -3997,7 +3997,7 @@ int predict_nnz_chroma(Macroblock *currMB, int i,int j)
     // top block
     get4x4Neighbour(currMB, ((i & 0x01)<<2), ((j-4)<<2) -1, p_Vid->mb_size[IS_CHROMA],  &pix);
 
-    if (IS_INTRA(currMB) && pix.available && p_Vid->active_pps->constrained_intra_pred_flag && ((currSlice->partition_mode != 0) && !currSlice->idr_flag))
+    if (is_intra(currMB) && pix.available && p_Vid->active_pps->constrained_intra_pred_flag && ((currSlice->partition_mode != 0) && !currSlice->idr_flag))
     {
       pix.available &= p_Vid->intra_block[pix.mb_addr];
       if (!pix.available)
@@ -4069,7 +4069,7 @@ int writeCoeff4x4_CAVLC_normal (Macroblock* currMB, int block_type, int b8, int 
 #if TRACE
     sprintf(type, "%s", "Luma");
 #endif
-    dptype = (IS_INTRA (currMB)) ? SE_LUM_AC_INTRA : SE_LUM_AC_INTER;
+    dptype = (is_intra (currMB)) ? SE_LUM_AC_INTRA : SE_LUM_AC_INTER;
     break;
 
   case CHROMA_AC:
@@ -4082,7 +4082,7 @@ int writeCoeff4x4_CAVLC_normal (Macroblock* currMB, int block_type, int b8, int 
 #if TRACE
     sprintf(type, "%s", "ChrAC");
 #endif
-    dptype = (IS_INTRA (currMB)) ? SE_CHR_AC_INTRA : SE_CHR_AC_INTER;
+    dptype = (is_intra (currMB)) ? SE_CHR_AC_INTRA : SE_CHR_AC_INTER;
     break;
 
   case CHROMA_DC:
@@ -4095,7 +4095,7 @@ int writeCoeff4x4_CAVLC_normal (Macroblock* currMB, int block_type, int b8, int 
 #if TRACE
     sprintf(type, "%s", "ChrDC");
 #endif
-    dptype = (IS_INTRA (currMB)) ? SE_CHR_DC_INTRA : SE_CHR_DC_INTER;
+    dptype = (is_intra (currMB)) ? SE_CHR_DC_INTRA : SE_CHR_DC_INTER;
     break;
 
   case LUMA_INTRA16x16AC:
@@ -4402,7 +4402,7 @@ int writeCoeff4x4_CAVLC_444 (Macroblock* currMB, int block_type, int b8, int b4,
 #if TRACE
     sprintf(type, "%s", "Luma");
 #endif
-    dptype = (IS_INTRA (currMB)) ? SE_LUM_AC_INTRA : SE_LUM_AC_INTER;
+    dptype = (is_intra (currMB)) ? SE_LUM_AC_INTRA : SE_LUM_AC_INTER;
     break;
   case LUMA_INTRA16x16DC:
     max_coeff_num = 16;
@@ -4433,7 +4433,7 @@ int writeCoeff4x4_CAVLC_444 (Macroblock* currMB, int block_type, int b8, int b4,
 #if TRACE    
     sprintf(type, "%s", "CB");
 #endif
-    dptype = (IS_INTRA (currMB)) ? SE_LUM_AC_INTRA : SE_LUM_AC_INTER;
+    dptype = (is_intra (currMB)) ? SE_LUM_AC_INTRA : SE_LUM_AC_INTER;
     break;
   case CB_INTRA16x16DC:
     max_coeff_num = 16;
@@ -4467,7 +4467,7 @@ int writeCoeff4x4_CAVLC_444 (Macroblock* currMB, int block_type, int b8, int b4,
 #if TRACE    
     sprintf(type, "%s", "CR");
 #endif
-    dptype = (IS_INTRA (currMB)) ? SE_LUM_AC_INTRA : SE_LUM_AC_INTER;
+    dptype = (is_intra (currMB)) ? SE_LUM_AC_INTRA : SE_LUM_AC_INTER;
     break;
   case CR_INTRA16x16DC:
     max_coeff_num = 16;
@@ -4502,7 +4502,7 @@ int writeCoeff4x4_CAVLC_444 (Macroblock* currMB, int block_type, int b8, int b4,
 #if TRACE
     sprintf(type, "%s", "ChrDC");
 #endif
-    dptype = (IS_INTRA (currMB)) ? SE_CHR_DC_INTRA : SE_CHR_DC_INTER;
+    dptype = (is_intra (currMB)) ? SE_CHR_DC_INTRA : SE_CHR_DC_INTER;
     break;
   case CHROMA_AC:
     max_coeff_num = 15;
@@ -4514,7 +4514,7 @@ int writeCoeff4x4_CAVLC_444 (Macroblock* currMB, int block_type, int b8, int b4,
 #if TRACE
     sprintf(type, "%s", "ChrAC");
 #endif
-    dptype = (IS_INTRA (currMB)) ? SE_CHR_AC_INTRA : SE_CHR_AC_INTER;
+    dptype = (is_intra (currMB)) ? SE_CHR_AC_INTRA : SE_CHR_AC_INTER;
     break;
   default:
     error("writeCoeff4x4_CAVLC: Invalid block type", 600);

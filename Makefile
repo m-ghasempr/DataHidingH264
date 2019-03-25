@@ -14,12 +14,21 @@ M32?= 0
 ### static link : 1=yes, 0=no
 STC?= 0
 ### OPENMP support : 1=yes, 0=no
-OPENMP?= 1
+OPENMP?= 0
+
+#check for LLVM and silence warnings accordingly
+LLVM = $(shell $(CC) --version | grep LLVM)
+ifneq ($(LLVM),)
+	CFLAGS+=-Qunused-arguments
+else
+	CFLAGS+=-Wno-unused-but-set-variable
+endif
 
 export DBG
 export STC 
 export M32
 export OPENMP
+export CFLAGS
 
 .PHONY: default all distclean clean tags depend $(SUBDIRS)
 

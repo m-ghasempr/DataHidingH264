@@ -385,6 +385,9 @@
     <ClInclude Include="lencod\inc\refbuf_otf.h">
       <Filter>Project Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="lencod\inc\wp_random.h">
+      <Filter>Project Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="lencod\src\pred_struct.c">
@@ -764,6 +767,12 @@
     </ClCompile>
     <ClCompile Include="lencod\src\img_luma.c">
       <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="lencod\src\wp_random.c">
+      <Filter>Project Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="lencod\src\wp_periodic.c">
+      <Filter>Project Source Files</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

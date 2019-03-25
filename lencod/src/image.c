@@ -1478,7 +1478,7 @@ static void writeout_picture(VideoParameters *p_Vid, Picture *pic, int is_bottom
       {
         if(p_Vid->p_Inp->num_of_views==2 && p_Vid->view_id==0)
         {
-          nalu = AllocNALU(64000);
+          nalu = AllocNALU(MAXNALUSIZE);
           nalu->startcodeprefix_len = 4;
           nalu->nal_unit_type       = NALU_TYPE_PREFIX;
           nalu->nal_reference_idc   = NALU_PRIORITY_HIGHEST;

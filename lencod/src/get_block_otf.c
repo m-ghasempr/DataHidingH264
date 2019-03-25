@@ -1081,3 +1081,4 @@ void mc_get_block_chroma_otf_L1 (        VideoParameters *p_Vid, //!< video enco
     }
   }
 }
+

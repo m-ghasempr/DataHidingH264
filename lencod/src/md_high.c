@@ -252,8 +252,10 @@ void encode_one_macroblock_high (Macroblock *currMB)
     for (index=0; index < max_index; index++)
     {
       mode = mb_mode_table[index];
+      //printf("mode %d %7.3f", mode, (double) currMB->min_rdcost);
       if (enc_mb.valid[mode])
       {
+        //printf(" mode %d is valid", mode);
         if (p_Vid->yuv_format != YUV400)
         {           
           currMB->i16mode = 0; 
@@ -287,12 +289,13 @@ void encode_one_macroblock_high (Macroblock *currMB)
         compute_mode_RD_cost(currMB, &enc_mb, (short) mode, &inter_skip);
         
       }
+      //printf(" best %d %7.2f\n", currMB->best_mode, (double) currMB->min_rdcost);
     }// for (index=0; index<max_index; index++)
   }// for (currMB->c_ipred_mode=DC_PRED_8; currMB->c_ipred_mode<=chroma_pred_mode_range[1]; currMB->c_ipred_mode++)                     
 
   restore_nz_coeff(currMB);
 
-  intra1 = IS_INTRA(currMB);
+  intra1 = is_intra(currMB);
 
   //=====  S E T   F I N A L   M A C R O B L O C K   P A R A M E T E R S ======
   //---------------------------------------------------------------------------

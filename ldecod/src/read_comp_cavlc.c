@@ -2004,8 +2004,8 @@ static void read_CBP_and_coeffs_from_NAL_CAVLC_420(Macroblock *currMB)
       if (smb || (currMB->is_lossless == TRUE)) // check to see if MB type is SPred or SIntra4x4
       {
         currSlice->cof[PLANE_U + uv][0][0] = currSlice->cofu[0];
-        currSlice->cof[PLANE_U + uv][4][0] = currSlice->cofu[1];
-        currSlice->cof[PLANE_U + uv][0][4] = currSlice->cofu[2];
+        currSlice->cof[PLANE_U + uv][0][4] = currSlice->cofu[1];
+        currSlice->cof[PLANE_U + uv][4][0] = currSlice->cofu[2];
         currSlice->cof[PLANE_U + uv][4][4] = currSlice->cofu[3];
         //currSlice->fcf[PLANE_U + uv][0][0] = currSlice->cofu[0];
         //currSlice->fcf[PLANE_U + uv][4][0] = currSlice->cofu[1];

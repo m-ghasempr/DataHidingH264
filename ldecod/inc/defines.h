@@ -30,7 +30,7 @@
 #endif
 
 #define JM                  "18 (FRExt)"
-#define VERSION             "18.2"
+#define VERSION             "18.4"
 #define EXT_VERSION         "(FRExt)"
 
 #define DUMP_DPB                  0    //!< Dump DPB info for debug purposes
@@ -42,7 +42,7 @@
 #define ZEROSNR                   0    //!< PSNR computation method
 #define ENABLE_OUTPUT_TONEMAPPING 1    //!< enable tone map the output if tone mapping SEI present
 #define JCOST_CALC_SCALEUP        1    //!< 1: J = (D<<LAMBDA_ACCURACY_BITS)+Lambda*R; 0: J = D + ((Lambda*R+Rounding)>>LAMBDA_ACCURACY_BITS)
-#define DISABLE_ERC               1    //!< Disable any error concealment processes
+#define DISABLE_ERC               0    //!< Disable any error concealment processes
 #define JM_PARALLEL_DEBLOCK       0    //!< Enables Parallel Deblocking
 #define SIMULCAST_ENABLE          0    //!< to test the decoder
 

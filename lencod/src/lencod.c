@@ -14,7 +14,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 18.2 (FRExt)
+ *     JM 18.4 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -2260,9 +2260,12 @@ static void set_level_indices(VideoParameters *p_Vid)
   case 51:
     p_Vid->LevelIndex=16;
     break;
+  case 52:
+    p_Vid->LevelIndex=17;
+    break;
   default:
-    fprintf ( stderr, "Warning: unknown LevelIDC, using maximum level 5.1 \n" );
-    p_Vid->LevelIndex=16;
+    fprintf ( stderr, "Warning: unknown LevelIDC, using maximum level 5.2 \n" );
+    p_Vid->LevelIndex=17;
     break;
   }
 }

@@ -217,8 +217,8 @@ static void updateOutFormat(InputParameters *p_Inp)
 
   if (p_Inp->src_resize == 0)
   {
-    output->width[0]  = source->width[0];
-    output->height[0] = source->height[0];
+    output->width[0]   = source->width[0];
+    output->height[0]  = source->height[0];
   }
 
   if (p_Inp->yuv_format == YUV400) // reset bitdepth of chroma for 400 content
@@ -1444,35 +1444,64 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
     snprintf(errortext, ET_SIZE, "CRA cannot be used when LowDelay is 1");
     error (errortext, 500);
   }
+  if ( (p_Inp->useCRA == 1) && (p_Inp->PicInterlace > 0) )
+  {
+    snprintf(errortext, ET_SIZE, "HM5 like configuration options (CRA) cannot be used together with PicInterlace");
+    error (errortext, 500);
+  }
 #endif
 
 #if HM50_LIKE_MMCO
-  if ( p_Inp->HM50LikeMMCO == 1 )
+  if ( p_Inp->HM50RefStructure == 1 )
   {
-    printf("Warning: HM50LikeMMCO can only be used for random access case with GOP size equal to 8 and HM-5.0 coding order\n");
+    printf("Warning: HM50RefStructure can only be used for random access case with GOP size equal to 8 and HM-5.0 coding order\n");
     printf("         If it used for other coding structure, the performance may loss\n");
   }
-  if ( p_Inp->HM50LikeMMCO == 1 && p_Inp->NumberBFrames != 7 )
+  if ( p_Inp->HM50RefStructure == 1 && p_Inp->NumberBFrames != 7 )
   {
-    printf("Warning: HM50LikeMMCO can only be used for random access case with NumberBFrames equal to 7, turn it off\n");
-    p_Inp->HM50LikeMMCO = 0;
+    printf("Warning: HM50RefStructure can only be used for random access case with NumberBFrames equal to 7, turn it off\n");
+    p_Inp->HM50RefStructure = 0;
   }
-  if ( p_Inp->HM50LikeMMCO == 1 && p_Inp->LowDelay == 1 )
+  if ( p_Inp->HM50RefStructure == 1 && p_Inp->LowDelay == 1 )
   {
-    printf("Warning: HM50LikeMMCO cannot be used for low delay, turn it off\n");
-    p_Inp->HM50LikeMMCO = 0;
+    printf("Warning: HM50RefStructure cannot be used for low delay, turn it off\n");
+    p_Inp->HM50RefStructure = 0;
+  }
+  if ( (p_Inp->HM50RefStructure == 1) && (p_Inp->PicInterlace > 0) )
+  {
+    snprintf(errortext, ET_SIZE, "HM5 like configuration options (HM50RefStructure) cannot be used together with PicInterlace");
+    error (errortext, 500);
   }
 #endif
 
 #if LD_REF_SETTING
-  if ( p_Inp->useF701RefForLD == 1 )
+  if ( p_Inp->LDRefSetting == 1 )
   {
-    printf("Warning: useF701RefForLD can only be used for low delay case with GOP size equal to 4 and 4 reference frames as HM-5.0 low delay\n");
-    printf("         If other GOP size or number of reference frames are used, the performance may be loss with useF701RefForLD\n");
+    printf("Warning: LDRefSetting can only be used for low delay case with GOP size equal to 4 and 4 reference frames as HM-5.0 low delay\n");
+    printf("         If other GOP size or number of reference frames are used, the performance may be loss with LDRefSetting\n");
   }
-  if ( p_Inp->useF701RefForLD == 1 && p_Inp->LowDelay == 0 )
+  if ( p_Inp->LDRefSetting == 1 && p_Inp->LowDelay == 0 )
   {
-    snprintf(errortext, ET_SIZE, "useF701RefForLD can only be used when LowDelay is 1");
+    snprintf(errortext, ET_SIZE, "LDRefSetting can only be used when LowDelay is 1");
+    error (errortext, 500);
+  }
+  if ( (p_Inp->LDRefSetting == 1) && (p_Inp->PicInterlace > 0) )
+  {
+    snprintf(errortext, ET_SIZE, "HM5 like configuration options (LDRefSetting) cannot be used together with PicInterlace");
+    error (errortext, 500);
+  }
+#endif
+#if B0_MORE_REF
+  if ( (p_Inp->BLevel0MoreRef == 1) && (p_Inp->PicInterlace > 0) )
+  {
+    snprintf(errortext, ET_SIZE, "HM5 like configuration options (BLevel0MoreRef) cannot be used together with PicInterlace");
+    error (errortext, 500);
+  }
+#endif
+#if KEEP_B_SAME_LIST
+  if ( (p_Inp->BIdenticalList == 1) && (p_Inp->PicInterlace > 0) )
+  {
+    snprintf(errortext, ET_SIZE, "HM5 like configuration options (BIdenticalList) cannot be used together with PicInterlace");
     error (errortext, 500);
   }
 #endif

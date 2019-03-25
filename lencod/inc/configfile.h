@@ -188,7 +188,7 @@ Mapping Map[] = {
     {"RandomIntraMBRefresh",     &cfgparams.RandomIntraMBRefresh,         0,   0.0,                       2,  0.0,              0.0,                             },
     {"WeightedPrediction",       &cfgparams.WeightedPrediction,           0,   0.0,                       1,  0.0,              1.0,                             },
     {"WeightedBiprediction",     &cfgparams.WeightedBiprediction,         0,   0.0,                       1,  0.0,              2.0,                             },
-    {"WPMethod",                 &cfgparams.WPMethod,                     0,   0.0,                       1,  0.0,              1.0,                             }, 
+    {"WPMethod",                 &cfgparams.WPMethod,                     0,   0.0,                       1,  0.0,              3.0,                             }, 
     {"WPIterMC",                 &cfgparams.WPIterMC,                     0,   0.0,                       1,  0.0,              1.0,                             },     
     {"ChromaWeightSupport",      &cfgparams.ChromaWeightSupport,          0,   0.0,                       1,  0.0,              1.0,                             },    
     {"EnhancedBWeightSupport",   &cfgparams.EnhancedBWeightSupport,       0,   0.0,                       1,  0.0,              2.0,                             },    
@@ -273,7 +273,7 @@ Mapping Map[] = {
     {"OnTheFlyFractMCP",         &cfgparams.OnTheFlyFractMCP,             0,   0.0,                       1,  0.0,              3.0,                             },
     {"ChromaMCBuffer",           &cfgparams.ChromaMCBuffer,               0,   0.0,                       1,  0.0,              1.0,                             },
     {"ChromaMEEnable",           &cfgparams.ChromaMEEnable,               0,   0.0,                       1,  0.0,              2.0,                             },
-    {"ChromaMEWeight",           &cfgparams.ChromaMEWeight,               0,   1.0,                       2,  1.0,              0.0,                             },    
+    {"ChromaMEWeight",           &cfgparams.ChromaMEWeight,               0,   1.0,                       2,  0.0,              1.0,                             },    
     {"MESoftenSSEMetric",        &cfgparams.MESoftenSSEMetric,            0,   0.0,                       1,  0.0,              1.0,                             },
     {"MEDistortionFPel",         &cfgparams.MEErrorMetric[F_PEL],         0,   0.0,                       1,  0.0,              3.0,                             },
     {"MEDistortionHPel",         &cfgparams.MEErrorMetric[H_PEL],         0,   0.0,                       1,  0.0,              3.0,                             },
@@ -512,21 +512,21 @@ Mapping Map[] = {
     {"VUI_log2_max_mv_length_horizontal",      &cfgparams.VUI.log2_max_mv_length_horizontal,      0,  16.0,                       1,  0.0,             16.0,     },
     {"VUI_num_reorder_frames",                 &cfgparams.VUI.num_reorder_frames,                 0,  16.0,                       1,  0.0,             16.0,     },
     {"VUI_max_dec_frame_buffering",            &cfgparams.VUI.max_dec_frame_buffering,            0,  16.0,                       1,  0.0,             16.0,     },
-    {"SEIMessageText",           &cfgparams.SEIMessageText,               1,   0.0,                       0,  0.0,              0.0,             INPUT_TEXT_SIZE,},
+    {"SEIMessageText",                         &cfgparams.SEIMessageText,                         1,   0.0,                       0,  0.0,              0.0,             INPUT_TEXT_SIZE,},
 #if B0_MORE_REF
-    {"BLevel0MoreRef",           &cfgparams.BLevel0MoreRef,               0,   1.0,                       1,  0.0,              1.0,                             },
+    {"BLevel0MoreRef",                         &cfgparams.BLevel0MoreRef,                         0,   0.0,                       1,  0.0,              1.0,                             },
 #endif
 #if KEEP_B_SAME_LIST
-    {"BIdenticalList",           &cfgparams.BIdenticalList,               0,   1.0,                       1,  0.0,              2.0,                             },
+    {"BIdenticalList",                         &cfgparams.BIdenticalList,                         0,   0.0,                       1,  0.0,              2.0,                             },
 #endif
 #if CRA
-    {"CRA",                      &cfgparams.useCRA,                       0,   1.0,                       1,  0.0,              1.0,                             },
+    {"CRA",                                    &cfgparams.useCRA,                                 0,   0.0,                       1,  0.0,              1.0,                             },
 #endif
 #if HM50_LIKE_MMCO
-    {"HM50RefStructure",         &cfgparams.HM50LikeMMCO,                 0,   1.0,                       1,  0.0,              1.0,                             },
+    {"HM50RefStructure",                       &cfgparams.HM50RefStructure,                       0,   0.0,                       1,  0.0,              1.0,                             },
 #endif
 #if LD_REF_SETTING
-    {"LDRefSetting",             &cfgparams.useF701RefForLD,              0,   1.0,                       1,  0.0,              1.0,                             },
+    {"LDRefSetting",                           &cfgparams.LDRefSetting,                           0,   0.0,                       1,  0.0,              1.0,                             },
 #endif
     {NULL,                       NULL,                                   -1,   0.0,                       0,  0.0,              0.0,                             },
 };

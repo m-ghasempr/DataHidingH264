@@ -382,6 +382,7 @@
     <ClInclude Include="lencod\inc\wp_lms.h" />
     <ClInclude Include="lencod\inc\wp_mciter.h" />
     <ClInclude Include="lencod\inc\wp_mcprec.h" />
+    <ClInclude Include="lencod\inc\wp_random.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="lcommon\src\blk_prediction.c" />
@@ -508,6 +509,8 @@
     <ClCompile Include="lencod\src\wp_lms.c" />
     <ClCompile Include="lencod\src\wp_mciter.c" />
     <ClCompile Include="lencod\src\wp_mcprec.c" />
+    <ClCompile Include="lencod\src\wp_periodic.c" />
+    <ClCompile Include="lencod\src\wp_random.c" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

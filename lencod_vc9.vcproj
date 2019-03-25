@@ -876,6 +876,14 @@
 				RelativePath=".\lencod\src\wp_mcprec.c"
 				>
 			</File>
+			<File
+				RelativePath=".\lencod\src\wp_periodic.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\wp_random.c"
+				>
+			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"
@@ -1367,6 +1375,14 @@
 			</File>
 			<File
 				RelativePath=".\lencod\inc\wp_mcprec.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\inc\wp_periodic.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\inc\wp_random.h"
 				>
 			</File>
 		</Filter>

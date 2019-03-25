@@ -18,7 +18,7 @@ OPT?= 3
 ### Static Compilation
 STC?= 0
 ### OPENMP support : 1=yes, 0=no
-OPENMP?= 1
+OPENMP?= 0
 
 
 DEPEND= dependencies
@@ -43,7 +43,7 @@ STATIC=
 endif
 
 LIBS=   -lm $(STATIC)
-CFLAGS=  -std=gnu99 -pedantic -ffloat-store -fno-strict-aliasing -fsigned-char $(STATIC)
+CFLAGS+=  -std=gnu99 -pedantic -ffloat-store -fno-strict-aliasing -fsigned-char $(STATIC)
 FLAGS=  $(CFLAGS) -Wall -I$(INCDIR) -I$(ADDINCDIR) -D __USE_LARGEFILE64 -D _FILE_OFFSET_BITS=64
 
 ifeq ($(M32),1)

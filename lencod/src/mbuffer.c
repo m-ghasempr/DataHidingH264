@@ -156,6 +156,9 @@ int getDpbSize(VideoParameters *p_Vid, seq_parameter_set_rbsp_t *active_sps)
   case 51:
     size = 70778880;
     break;
+  case 52:
+    size = 70778880;
+    break;
   default:
     error ("undefined level", 500);
     break;
@@ -2729,36 +2732,12 @@ void dpb_split_field(VideoParameters *p_Vid, FrameStore *fs)
           fs->bottom_field->mv_info[j][i].mv[LIST_0] = fs->frame->mv_info[jj4][i].mv[LIST_0];
           fs->bottom_field->mv_info[j][i].mv[LIST_1] = fs->frame->mv_info[jj4][i].mv[LIST_1];
           fs->bottom_field->mv_info[j][i].ref_idx[LIST_0] = fs->frame->mv_info[jj4][i].ref_idx[LIST_0];
-          /*
-          if(fs->bottom_field->mv_info[j][i].ref_idx[LIST_0] >=0)
-            fs->bottom_field->mv_info[j][i].ref_pic[LIST_0] = currSlice->listX[4][(short) fs->bottom_field->mv_info[j][i].ref_idx[LIST_0]];
-          else
-            fs->bottom_field->mv_info[j][i].ref_pic[LIST_0] = NULL;
-            */
           fs->bottom_field->mv_info[j][i].ref_idx[LIST_1] = fs->frame->mv_info[jj4][i].ref_idx[LIST_1];
-          /*
-          if(fs->bottom_field->mv_info[j][i].ref_idx[LIST_1] >=0)
-            fs->bottom_field->mv_info[j][i].ref_pic[LIST_1] = currSlice->listX[5][(short) fs->bottom_field->mv_info[j][i].ref_idx[LIST_1]];
-          else
-            fs->bottom_field->mv_info[j][i].ref_pic[LIST_1] = NULL;
-            */
 
           fs->top_field->mv_info[j][i].mv[LIST_0] = fs->frame->mv_info[jj][i].mv[LIST_0];
           fs->top_field->mv_info[j][i].mv[LIST_1] = fs->frame->mv_info[jj][i].mv[LIST_1];
           fs->top_field->mv_info[j][i].ref_idx[LIST_0] = fs->frame->mv_info[jj][i].ref_idx[LIST_0];
-          /*
-          if(fs->top_field->mv_info[j][i].ref_idx[LIST_0] >=0)
-            fs->top_field->mv_info[j][i].ref_pic[LIST_0] = currSlice->listX[2][(short) fs->top_field->mv_info[j][i].ref_idx[LIST_0]];
-          else
-            fs->top_field->mv_info[j][i].ref_pic[LIST_0] = NULL;
-            */
           fs->top_field->mv_info[j][i].ref_idx[LIST_1] = fs->frame->mv_info[jj][i].ref_idx[LIST_1];
-          /*
-          if(fs->top_field->mv_info[j][i].ref_idx[LIST_1] >=0)
-            fs->top_field->mv_info[j][i].ref_pic[LIST_1] = currSlice->listX[3][(short) fs->top_field->mv_info[j][i].ref_idx[LIST_1]];
-          else
-            fs->top_field->mv_info[j][i].ref_pic[LIST_1] = NULL;
-            */
         }
       }
     }
@@ -2793,7 +2772,6 @@ void dpb_split_field(VideoParameters *p_Vid, FrameStore *fs)
           else
           {
             fs->top_field->mv_info[j][i].ref_idx[LIST_0] = fs->bottom_field->mv_info[j][i].ref_idx[LIST_0] = fs->frame->mv_info[jj][ii].ref_idx[LIST_0];
-            //fs->top_field->mv_info[j][i].ref_pic[LIST_0] = fs->bottom_field->mv_info[j][i].ref_pic[LIST_0] = currSlice->listX[LIST_0][fs->frame->mv_info[jj][ii].ref_idx[LIST_0]];
           }
 
           if (fs->frame->mv_info[jj][ii].ref_idx[LIST_1] == -1)
@@ -2801,7 +2779,6 @@ void dpb_split_field(VideoParameters *p_Vid, FrameStore *fs)
           else
           {
             fs->top_field->mv_info[j][i].ref_idx[LIST_1] = fs->bottom_field->mv_info[j][i].ref_idx[LIST_1] = fs->frame->mv_info[jj][ii].ref_idx[LIST_1];
-            //fs->top_field->mv_info[j][i].ref_pic[LIST_1] = fs->bottom_field->mv_info[j][i].ref_pic[LIST_1] =  currSlice->listX[LIST_1][fs->frame->mv_info[jj][ii].ref_idx[LIST_1]];
           }
         }
         else
@@ -3211,12 +3188,6 @@ static void copy_storable_picture(VideoParameters *p_Vid, StorablePicture *s, St
   int   size_y_cr = s->size_y_cr;
   imgpel***  s_img;
   extern void check_value(imgpel **pBufIn, int width, int height, int max);
-  // these ones are set in UnifiedOneForthPix
-  //d->imgY_sub   = NULL;
-  //d->imgUV_sub  = NULL;
-  //d->p_img_sub[0] = NULL;
-  //d->p_img_sub[1] = NULL;
-  //d->p_img_sub[2] = NULL;
 
   // store BL reconstruction
   if (s->structure == FRAME)

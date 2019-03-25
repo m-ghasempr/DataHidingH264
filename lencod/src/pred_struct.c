@@ -932,6 +932,7 @@ static int get_fixed_frame( InputParameters *p_Inp, SeqStructure *p_seq_struct, 
     is_rnd_acc = establish_random_access( p_Inp, p_seq_struct, curr_frame + idx, avail_frames - idx, 1 );
     is_intra   = establish_intra( p_Inp, p_seq_struct, curr_frame + idx, avail_frames - idx, 1 );
     is_sp      = establish_sp( p_Inp, p_seq_struct, curr_frame + idx, avail_frames - idx, 1 );
+
     if ( is_rnd_acc || is_intra || is_sp )
     {
       return idx;
@@ -1679,7 +1680,6 @@ static void init_pred_struct( VideoParameters *p_Vid, InputParameters *p_Inp, Se
     case 3: // explicit structure
       {
         int max_layer = 0;
-
         // encode without delay
         if ( p_Inp->LowDelay ) 
         {
@@ -1722,7 +1722,7 @@ static void init_pred_struct( VideoParameters *p_Vid, InputParameters *p_Inp, Se
           p_dst->slice_qp_off  = ( p_Inp->BRefPictures == 2 ) ? (p_Inp->qp[B_SLICE] - p_Inp->qp[P_SLICE]) : 0; // ensure all types of frames have identical QP (modifiers)
           p_dst->random_access = 0;
           p_dst->temporal_layer = 0;
-
+          
           for ( idx = 1; idx < length; idx++ )
           {
             p_dst = p_cur_prd->p_frm + idx;
@@ -1740,7 +1740,7 @@ static void init_pred_struct( VideoParameters *p_Vid, InputParameters *p_Inp, Se
               max_layer = p_Vid->gop_structure[idx - 1].hierarchy_layer;
             }
           }
-        } 
+        }
         p_cur_prd->gop_levels = max_layer + 1;
       }
       break;

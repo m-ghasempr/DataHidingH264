@@ -154,7 +154,7 @@ void cra_ref_management_frame_pic(DecodedPictureBuffer *p_Dpb, int current_pic_n
   unsigned i;
   int pic_num = 0;
 
-  int min_poc=INT_MAX;
+  //int min_poc=INT_MAX;
   DecRefPicMarking_t *tmp_drpm,*tmp_drpm2;
 
   int last_intra_poc = p_Vid->currentSlice->ThisPOC / 2 / p_Vid->p_Inp->intra_period * p_Vid->p_Inp->intra_period * 2;
@@ -194,7 +194,7 @@ void cra_ref_management_frame_pic(DecodedPictureBuffer *p_Dpb, int current_pic_n
       {
         tmp_drpm2->difference_of_pic_nums_minus1 += p_Vid->currentSlice->max_frame_num;
       }
-      if ( tmp_drpm2->difference_of_pic_nums_minus1 >= p_Vid->currentSlice->max_frame_num )
+      if ( tmp_drpm2->difference_of_pic_nums_minus1 >= (int) p_Vid->currentSlice->max_frame_num )
       {
         tmp_drpm2->difference_of_pic_nums_minus1 -= p_Vid->currentSlice->max_frame_num;
       }
@@ -310,7 +310,7 @@ void poc_based_ref_management_frame_pic(DecodedPictureBuffer *p_Dpb, int current
 #endif
 
 #if HM50_LIKE_MMCO
-  if ( p_Vid->p_Inp->HM50LikeMMCO )
+  if ( p_Vid->p_Inp->HM50RefStructure )
   {
     // for the case that we already have MMCO, just return
     if ( p_Vid->p_Inp->NumberBFrames != 7 ||

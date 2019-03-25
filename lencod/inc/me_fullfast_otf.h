@@ -15,3 +15,4 @@
 void SetupFastFullPelSearch_otf (Macroblock *, MEBlock *, int ) ;
 
 #endif
+

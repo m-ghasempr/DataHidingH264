@@ -20,6 +20,8 @@
 #include "wp_lms.h"
 #include "wp_mcprec.h"
 #include "wp_mciter.h"
+#include "wp_random.h"
+#include "wp_periodic.h"
 
 #define DEBUG_WP  0
 
@@ -37,20 +39,6 @@ extern int64  ComputeSumBlockBased   (imgpel **CurrentImage, int height_in_blk, 
 extern void   ComputeImplicitWeights    (Slice *currSlice,
                                          short default_weight[3],
                                          short im_weight[6][MAX_REFERENCE_PICTURES][MAX_REFERENCE_PICTURES][3]);
-extern void   ComputeExplicitWPParamsLMS(Slice *currSlice,
-                                         int select_offset,
-                                         int start_mb,
-                                         int end_mb, 
-                                         short default_weight[3],
-                                         short weight[6][MAX_REFERENCE_PICTURES][3],
-                                         short offset[6][MAX_REFERENCE_PICTURES][3]);
-extern void   ComputeExplicitWPParamsJNT(Slice *currSlice,
-                                         int start_mb,
-                                         int end_mb, 
-                                         short default_weight[3],
-                                         short weight[6][MAX_REFERENCE_PICTURES][3],
-                                         short offset[6][MAX_REFERENCE_PICTURES][3]);
-
 
 #endif
 

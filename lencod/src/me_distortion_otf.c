@@ -1271,3 +1271,4 @@ distblk computeBiPredSSE2_otf(StorablePicture *ref1,
   CHECKOVERFLOW(mcost);
   return dist_scale((distblk)mcost);
 }
+

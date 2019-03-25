@@ -517,7 +517,7 @@ int mode_decision_for_I16x16_MB_RDO (Macroblock* currMB, int lambda)
           {
             for(b4 = 0; b4 < 4; b4++)
             {
-              memcpy(bestCofAC[b8][b4][0], currSlice->cofAC[b8][b4][0], 2 * sizeof(int) * 65);
+              memcpy(bestCofAC[b8][b4][0], currSlice->cofAC[b8][b4][0], sizeof(int) * 65);
               memcpy(bestCofAC[b8][b4][1], currSlice->cofAC[b8][b4][1], sizeof(int) * 65);
             }
           }

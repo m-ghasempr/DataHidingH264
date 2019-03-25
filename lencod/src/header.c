@@ -22,9 +22,7 @@
 #include "mbuffer.h"
 #include "vlc.h"
 #include "parset.h"
-#if (MVC_EXTENSION_ENABLE)
 #include "list_reorder.h"
-#endif
 
 // A little trick to avoid those horrible #if TRACE all over the source code
 #if TRACE
@@ -270,7 +268,7 @@ int SliceHeader(Slice* currSlice)
  *    number of bits used
  ********************************************************************************************
 */
-int ref_pic_list_reordering(Slice *currSlice, Bitstream *bitstream)
+static int ref_pic_list_reordering(Slice *currSlice, Bitstream *bitstream)
 {
   int list; 
   int i, len=0;

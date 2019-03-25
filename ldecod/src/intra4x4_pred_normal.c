@@ -1,6 +1,6 @@
 /*!
  *************************************************************************************
- * \file intra4x4_pred.c
+ * \file intra4x4_pred_normal.c
  *
  * \brief
  *    Functions for intra 4x4 prediction
@@ -138,7 +138,7 @@ static int intra4x4_dc_pred(Macroblock *currMB,
  *    makes and returns 4x4 vertical prediction mode
  *
  * \return
- *    DECODING_OK   decoding of intraprediction mode was successful            \n
+ *    DECODING_OK   decoding of intra prediction mode was successful            \n
  *
  ***********************************************************************
  */
@@ -268,7 +268,7 @@ static int intra4x4_hor_pred(Macroblock *currMB,
  *    makes and returns 4x4 diagonal down right prediction mode
  *
  * \return
- *    DECODING_OK   decoding of intraprediction mode was successful            \n
+ *    DECODING_OK   decoding of intra prediction mode was successful            \n
  *
  ***********************************************************************
  */
@@ -352,7 +352,7 @@ static int intra4x4_diag_down_right_pred(Macroblock *currMB,    //!< current mac
  *    makes and returns 4x4 diagonal down left prediction mode
  *
  * \return
- *    DECODING_OK   decoding of intraprediction mode was successful            \n
+ *    DECODING_OK   decoding of intra prediction mode was successful            \n
  *
  ***********************************************************************
  */
@@ -438,7 +438,7 @@ static int intra4x4_diag_down_left_pred(Macroblock *currMB,    //!< current macr
  *    makes and returns 4x4 vertical right prediction mode
  *
  * \return
- *    DECODING_OK   decoding of intraprediction mode was successful            \n
+ *    DECODING_OK   decoding of intra prediction mode was successful            \n
  *
  ***********************************************************************
  */
@@ -523,7 +523,7 @@ static int intra4x4_vert_right_pred(Macroblock *currMB,    //!< current macroblo
  *    makes and returns 4x4 vertical left prediction mode
  *
  * \return
- *    DECODING_OK   decoding of intraprediction mode was successful            \n
+ *    DECODING_OK   decoding of intra prediction mode was successful            \n
  *
  ***********************************************************************
  */
@@ -609,7 +609,7 @@ static int intra4x4_vert_left_pred(Macroblock *currMB,    //!< current macrobloc
  *    makes and returns 4x4 horizontal up prediction mode
  *
  * \return
- *    DECODING_OK   decoding of intraprediction mode was successful            \n
+ *    DECODING_OK   decoding of intra prediction mode was successful            \n
  *
  ***********************************************************************
  */
@@ -679,7 +679,7 @@ static int intra4x4_hor_up_pred(Macroblock *currMB,    //!< current macroblock
  *    makes and returns 4x4 horizontal down prediction mode
  *
  * \return
- *    DECODING_OK   decoding of intraprediction mode was successful            \n
+ *    DECODING_OK   decoding of intra prediction mode was successful            \n
  *
  ***********************************************************************
  */
@@ -765,7 +765,7 @@ static int intra4x4_hor_down_pred(Macroblock *currMB,    //!< current macroblock
  *    makes and returns 4x4 intra prediction blocks 
  *
  * \return
- *    DECODING_OK   decoding of intraprediction mode was successful            \n
+ *    DECODING_OK   decoding of intra prediction mode was successful            \n
  *    SEARCH_SYNC   search next sync element as errors while decoding occured
  ***********************************************************************
  */

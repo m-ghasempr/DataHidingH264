@@ -782,7 +782,7 @@ void compute_offset(Slice *currSlice)
     {
       { 
         currMB = &p_Vid->mb_data[((i*p_Vid->width) >> 4)+j];
-        if(IS_INTRA(currMB)) //intra macroblocks are not used for calculation of the filter coeffs.
+        if(is_intra(currMB)) //intra macroblocks are not used for calculation of the filter coeffs.
           continue;
 
         x_orig = MB_BLOCK_SIZE*j;

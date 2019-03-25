@@ -1,3 +1,9 @@
+Changes in Version JM 18.4 (since JM 18.3)
+------------------------------------------
+- turn HM like configuration option off by default
+- fixed for high bit depth and lossless
+
+
 Changes in Version JM 18.3 (since JM 18.2)
 ------------------------------------------
 - encoder: allow coding with the same GOP/reference picture settings like HM5 (BiL)

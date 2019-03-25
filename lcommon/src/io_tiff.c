@@ -849,7 +849,7 @@ void horizontal_half_1chan_cosite (uint16  *srcPtr,
     }
 
     limit = srcXres - (srcXres & 1);  // must round down to not exceed dst
-    for (x=x; x < limit; x+=2) 
+    for (; x < limit; x+=2) 
     {
       n1 = (x < srcXres-1) ? 1 : 0;
       n3 = (x < srcXres-3) ? 3 : (srcXres-1-x);
@@ -944,7 +944,7 @@ void vertical_half_1chan (uint16  *srcPtr,
   }
 
   limit = srcYres - (srcYres & 1);    // must round down to not exceed dst
-  for (y=y; y < limit; y+=2) 
+  for (; y < limit; y+=2) 
   {
     n1 = (y < srcYres-1) ? 1 : 0;
     n2 = (y < srcYres-2) ? 2 : (srcYres-1-y);

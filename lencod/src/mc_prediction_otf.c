@@ -385,3 +385,4 @@ void chroma_prediction_otf ( Macroblock* currMB, // <-- Current Macroblock
     }
   }
 }
+

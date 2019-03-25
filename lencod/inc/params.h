@@ -428,10 +428,10 @@ struct inp_par_enc
   int useCRA;
 #endif
 #if HM50_LIKE_MMCO
-  int HM50LikeMMCO;
+  int HM50RefStructure;
 #endif
 #if LD_REF_SETTING
-  int useF701RefForLD;
+  int LDRefSetting;
 #endif
 };
 

@@ -36,7 +36,6 @@ NALU_t *AllocNALU(int buffersize)
     no_mem_exit ("AllocNALU: n");
 
   n->max_size=buffersize;
-
   if ((n->buf = (byte*)calloc (buffersize, sizeof (byte))) == NULL)
   {
     free (n);

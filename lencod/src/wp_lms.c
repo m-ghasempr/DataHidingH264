@@ -17,6 +17,7 @@
 
 #include "global.h"
 #include "image.h"
+#include "wp_lms.h"
 #include "wp.h"
 
 

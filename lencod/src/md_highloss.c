@@ -298,7 +298,7 @@ void encode_one_macroblock_highloss (Macroblock *currMB)
     restore_nz_coeff(currMB);
 
     if (rerun==0)
-      intra1 = IS_INTRA(currMB);
+      intra1 = is_intra(currMB);
   } // for (rerun=0; rerun<runs; rerun++)
 
   //=====  S E T   F I N A L   M A C R O B L O C K   P A R A M E T E R S ======

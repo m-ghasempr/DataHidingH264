@@ -317,7 +317,7 @@ int est_write_and_store_CBP_block_bit(Macroblock* currMB, int type)
   int j           = (y_ac || u_ac || v_ac ? currMB->subblock_y : 0);
   int i           = (y_ac || u_ac || v_ac ? currMB->subblock_x : 0);
   int bit;
-  int default_bit =  (IS_INTRA(currMB) ? 1 : 0);
+  int default_bit =  (is_intra(currMB) ? 1 : 0);
   int upper_bit   = default_bit;
   int left_bit    = default_bit;
   int ctx, estBits = 0;

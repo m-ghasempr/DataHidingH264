@@ -19,17 +19,17 @@
 // Max Frame Size Limit
 // Level Limit                          -  -  -  -  -  -  -  -  -  1b  10  11   12   13   -  -  -  -  -  -  20   21   22    -  -  -  -  -  -  -
 static const unsigned int  MaxFs [] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 99, 99, 396, 396, 396, 0, 0, 0, 0, 0, 0, 396, 792, 1620, 0, 0, 0, 0, 0, 0, 0,  
-//                        30    31    32    -  -  -  -  -  -  -  40    41    42    -  -  -  -  -  -  -  50     51
-                          1620, 3600, 5120, 0, 0, 0, 0, 0, 0, 0, 8192, 8192, 8704, 0, 0, 0, 0, 0, 0, 0, 22080, 36864 };
+//                        30    31    32    -  -  -  -  -  -  -  40    41    42    -  -  -  -  -  -  -  50     51    52
+                          1620, 3600, 5120, 0, 0, 0, 0, 0, 0, 0, 8192, 8192, 8704, 0, 0, 0, 0, 0, 0, 0, 22080, 36864, 36864 };
 static const unsigned int  MinCR [] = { 0, 0, 0, 0, 0, 0, 0, 0, 0,  2,  2,   2,   2,   2, 0, 0, 0, 0, 0, 0,   2,   2,   2, 0, 0, 0, 0, 0, 0, 0,  
-                             2,    4,    4, 0, 0, 0, 0, 0, 0, 0,    4,    2,    2, 0, 0, 0, 0, 0, 0, 0,     2,     2 };
+                             2,    4,    4, 0, 0, 0, 0, 0, 0, 0,    4,    2,    2, 0, 0, 0, 0, 0, 0, 0,     2,     2,     2 };
 static const unsigned int  MaxBR [] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 64,128, 192, 384, 768, 0, 0, 0, 0, 0, 0,2000,4000,4000, 0, 0, 0, 0, 0, 0, 0,  
-                         10000,14000,20000, 0, 0, 0, 0, 0, 0, 0,20000,50000,50000, 0, 0, 0, 0, 0, 0, 0,135000,240000 };
+                         10000,14000,20000, 0, 0, 0, 0, 0, 0, 0,20000,50000,50000, 0, 0, 0, 0, 0, 0, 0,135000, 240000, 240000 };
 static const unsigned int  MaxCPB[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0,175,350, 500,1000,2000, 0, 0, 0, 0, 0, 0,2000,4000,4000, 0, 0, 0, 0, 0, 0, 0,  
-                         10000,14000,20000, 0, 0, 0, 0, 0, 0, 0,25000,62500,62500, 0, 0, 0, 0, 0, 0, 0,135000,240000 };
+                         10000,14000,20000, 0, 0, 0, 0, 0, 0, 0,25000,62500,62500, 0, 0, 0, 0, 0, 0, 0,135000, 240000, 240000 };
 // Max macroblock processing rate
 static const unsigned int MaxMBPS[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 1485, 1485, 3000, 6000, 11880, 0, 0, 0, 0, 0, 0, 11880, 19800, 20250, 0, 0, 0, 0, 0, 0, 0,  
-                          40500, 108000, 216000, 0, 0, 0, 0, 0, 0, 0, 245760, 245760, 522240, 0, 0, 0, 0, 0, 0, 0, 589824, 983040 };
+                          40500, 108000, 216000, 0, 0, 0, 0, 0, 0, 0, 245760, 245760, 522240, 0, 0, 0, 0, 0, 0, 0, 589824, 983040, 2073600 };
 // Vertical MV Limits (integer/halfpel/quarterpel)
 // Currently only Integer Pel restrictions are used,
 // since the way values are specified
@@ -68,7 +68,7 @@ unsigned int getMaxFs (unsigned int levelIdc)
 {
   unsigned int ret;
 
-  if ( (levelIdc < 9) || (levelIdc > 51))
+  if ( (levelIdc < 9) || (levelIdc > 52))
     error ("getMaxFs: Unknown LevelIdc", 500);
 
   // in Baseline, Main and Extended: Level 1b is specified with LevelIdc==11 and constrained_set3_flag == 1
@@ -91,7 +91,7 @@ unsigned int getMaxMBPS (unsigned int levelIdc)
 {
   unsigned int ret;
 
-  if ( (levelIdc < 9) || (levelIdc > 51))
+  if ( (levelIdc < 9) || (levelIdc > 52))
     error ("getMaxMBPS: Unknown LevelIdc", 500);
 
   // in Baseline, Main and Extended: Level 1b is specified with LevelIdc==11 and constrained_set3_flag == 1
@@ -114,7 +114,7 @@ unsigned int getMinCR (unsigned int levelIdc)
 {
   unsigned int ret;
 
-  if ( (levelIdc < 9) || (levelIdc > 51))
+  if ( (levelIdc < 9) || (levelIdc > 52))
     error ("getMinCR: Unknown LevelIdc", 500);
 
   // in Baseline, Main and Extended: Level 1b is specified with LevelIdc==11 and constrained_set3_flag == 1
@@ -137,7 +137,7 @@ unsigned int getMaxBR (unsigned int levelIdc)
 {
   unsigned int ret;
 
-  if ( (levelIdc < 9) || (levelIdc > 51))
+  if ( (levelIdc < 9) || (levelIdc > 52))
     error ("getMaxBR: Unknown LevelIdc", 500);
 
   // in Baseline, Main and Extended: Level 1b is specified with LevelIdc==11 and constrained_set3_flag == 1
@@ -160,7 +160,7 @@ unsigned int getMaxCPB (unsigned int levelIdc)
 {
   unsigned int ret;
 
-  if ( (levelIdc < 9) || (levelIdc > 51))
+  if ( (levelIdc < 9) || (levelIdc > 52))
     error ("getMaxCPB: Unknown LevelIdc", 500);
 
   // in Baseline, Main and Extended: Level 1b is specified with LevelIdc==11 and constrained_set3_flag == 1

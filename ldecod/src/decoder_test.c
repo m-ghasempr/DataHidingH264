@@ -145,7 +145,7 @@ static int WriteOneFrame(DecodedPicList *pDecPic, int hFileOutput0, int hFileOut
         iOutputFrame++;
       }
 
-      if((pPic->iYUVStorageFormat==2))
+      if (pPic->iYUVStorageFormat == 2)
       {
         hFileOutput = ((pPic->iViewId>>16)&0xffff)? hFileOutput1 : hFileOutput0;
         if(hFileOutput>=0)

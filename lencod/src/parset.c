@@ -1333,6 +1333,9 @@ static int getMaxDpbSize(seq_parameter_set_rbsp_t *active_sps)
   case 51:
     size = 70778880;
     break;
+  case 52:
+    size = 70778880;
+    break;
   default:
     error ("undefined level", 500);
     break;

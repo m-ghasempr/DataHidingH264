@@ -133,7 +133,7 @@ int mode_decision_for_I4x4_blocks_JM_High444 (Macroblock *currMB, int  b8,  int 
       if (p_Vid->yuv_format == YUV444)
       {
         currMB->ipmode_DPCM = (short) ipmode;
-        if ((p_Inp->separate_colour_plane_flag == 0)) 
+        if (p_Inp->separate_colour_plane_flag == 0)
         {
           // generate intra 4x4 prediction block given availability
           get_intrapred_4x4(currMB, PLANE_U, ipmode, block_x, block_y, left_available, up_available);

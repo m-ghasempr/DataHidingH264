@@ -93,3 +93,4 @@ static inline int is_qpel( int x, int y, int bx, int by )
 }
 
 #endif
+

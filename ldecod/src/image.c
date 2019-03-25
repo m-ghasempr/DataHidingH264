@@ -1569,16 +1569,20 @@ process_nalu:
       currSlice->dp_mode     = PAR_DP_3;
       currSlice->max_part_nr = 3;
       currSlice->ei_flag     = 0;
+#if MVC_EXTENSION_ENABLE
       currSlice->p_Dpb = p_Vid->p_Dpb_layer[0];
+#endif
       currStream             = currSlice->partArr[0].bitstream;
       currStream->ei_flag    = 0;
       currStream->frame_bitoffset = currStream->read_len = 0;
       memcpy (currStream->streamBuffer, &nalu->buf[1], nalu->len-1);
       currStream->code_len = currStream->bitstream_length = RBSPtoSODB(currStream->streamBuffer, nalu->len-1);
+#if MVC_EXTENSION_ENABLE
       currSlice->view_id = GetBaseViewId(p_Vid, &p_Vid->active_subset_sps);
       currSlice->inter_view_flag = 1;
       currSlice->layer_id = currSlice->view_id = GetVOIdx( p_Vid, currSlice->view_id );
       currSlice->anchor_pic_flag = currSlice->idr_flag;
+#endif
 
       BitsUsedByHeader = FirstPartOfSliceHeader(currSlice);
       UseParameterSet (currSlice);
@@ -1588,7 +1592,9 @@ process_nalu:
       currSlice->chroma444_not_separate = (p_Vid->active_sps->chroma_format_idc==YUV444)&&((p_Vid->separate_colour_plane_flag == 0));
 
       BitsUsedByHeader += RestOfSliceHeader (currSlice);
+#if MVC_EXTENSION_ENABLE
       currSlice->p_Dpb = p_Vid->p_Dpb_layer[currSlice->view_id];
+#endif
 
       assign_quant_params (currSlice);        
 
@@ -1904,7 +1910,7 @@ void exit_picture(VideoParameters *p_Vid, StorablePicture **dec_picture)
     int i;
     ercStartSegment(0, ercSegment, 0 , p_Vid->erc_errorVar);
     //! generate the segments according to the macroblock map
-    for(i = 1; i<(*dec_picture)->PicSizeInMbs; ++i)
+    for(i = 1; i < (int) (*dec_picture)->PicSizeInMbs; ++i)
     {
       if(p_Vid->mb_data[i].ei_flag != p_Vid->mb_data[i-1].ei_flag)
       {

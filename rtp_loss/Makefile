@@ -24,7 +24,7 @@ OBJDIR= obj
 
 LIBS=   -lm
 AFLAGS=  
-CFLAGS=  -ffloat-store -fsigned-char
+CFLAGS+=  -ffloat-store -fsigned-char
 FLAGS=  $(CFLAGS) -Wall -I$(INCDIR) -D __USE_LARGEFILE64 -D _FILE_OFFSET_BITS=64
 
 ifeq ($(M32),1)

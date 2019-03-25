@@ -98,7 +98,7 @@ void end_encode_one_macroblock(Macroblock *currMB)
   //--- constrain intra prediction ---
   if(p_Inp->UseConstrainedIntraPred && (currSlice->slice_type == P_SLICE || currSlice->slice_type == B_SLICE))
   {
-    p_Vid->intra_block[currMB->mbAddrX] = IS_INTRA(currMB);
+    p_Vid->intra_block[currMB->mbAddrX] = is_intra(currMB);
   }
 }
 
@@ -436,7 +436,7 @@ void compute_mode_RD_cost(Macroblock *currMB,
   // Encode with coefficients
   currSlice->NoResidueDirect = 0;
 
-  if ((p_Inp->FastCrIntraDecision ) || (currMB->c_ipred_mode == DC_PRED_8 || (IS_INTRA(currMB) )))
+  if ((p_Inp->FastCrIntraDecision ) || (currMB->c_ipred_mode == DC_PRED_8 || (is_intra(currMB) )))
   {
     do
     {

@@ -25,6 +25,7 @@ static inline int ReadData (int vfile,  FrameFormat *source, unsigned char *buf)
   unsigned char *cur_buf = buf;
   int read_size = source->pic_unit_size_shift3 * source->width[0];
   int i, j;
+
   for (i = 0; i < source->height[0]; i++)
   {
     if (read(vfile, cur_buf, read_size) != read_size)

@@ -1,6 +1,6 @@
 /*!
  *************************************************************************************
- * \file intra4x4_pred.c
+ * \file intra4x4_pred_mbaff.c
  *
  * \brief
  *    Functions for intra 4x4 prediction

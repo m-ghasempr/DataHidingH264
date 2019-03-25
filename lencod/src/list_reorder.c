@@ -291,7 +291,8 @@ void poc_ref_pic_reorder_frame_enh(Slice *currSlice, unsigned num_ref_idx_lX_act
 
   // First find inter view ref/s
   // This code is idiotic since this can be found immediately given that reference is in p_Dpb->fs_ilref
-  
+
+#if (MVC_EXTENSION_ENABLE)
   if (currSlice->layer_id > 0)
   {
     for (i = 0; i < (int) num_ref_idx_lX_active; i++)
@@ -304,6 +305,7 @@ void poc_ref_pic_reorder_frame_enh(Slice *currSlice, unsigned num_ref_idx_lX_act
       }
     }
   }
+#endif
 
   // Now access all references in buffer and assign them
   // to a potential reordering list. For each one of these
@@ -436,6 +438,7 @@ void poc_ref_pic_reorder_field_enh(Slice *currSlice, unsigned num_ref_idx_lX_act
 
 
   // First find inter view ref
+#if (MVC_EXTENSION_ENABLE)
   if (currSlice->layer_id > 0)
   {
     for (i = 0; i < (int) num_ref_idx_lX_active; i++)
@@ -448,6 +451,7 @@ void poc_ref_pic_reorder_field_enh(Slice *currSlice, unsigned num_ref_idx_lX_act
       }
     }
   }
+#endif
 
   // Now access all references in buffer and assign them
   // to a potential reordering list. For each one of these
@@ -1134,7 +1138,7 @@ void reorder_lists( Slice *currSlice )
 
     if ( iSendAddtionalRPLR )
     {
-      int i, num_ref, diff_num, last_frame_num;
+      int i, diff_num, last_frame_num;
 
       alloc_ref_pic_list_reordering_buffer(currSlice);
 
@@ -1144,8 +1148,6 @@ void reorder_lists( Slice *currSlice )
         currSlice->abs_diff_pic_num_minus1[LIST_1][i] = 0;
         currSlice->long_term_pic_idx[LIST_1][i] = 0;
       }
-
-      num_ref = currSlice->num_ref_idx_active[LIST_1];
 
       last_frame_num = currSlice->frame_num;
       for ( i=0; i<currSlice->num_ref_idx_active[LIST_1]; i++ )
@@ -1292,11 +1294,13 @@ void reorder_against_default_ref_pic_lists(Slice *currSlice, int cur_list)
   VideoParameters *p_Vid = currSlice->p_Vid;
   int *modification_of_pic_nums_idc = currSlice->modification_of_pic_nums_idc[cur_list];
   int *abs_diff_pic_num_minus1 = currSlice->abs_diff_pic_num_minus1[cur_list];
+#if MVC_EXTENSION_ENABLE
   int *abs_diff_view_idx_minus1 = currSlice->abs_diff_view_idx_minus1[cur_list];
+  int picViewIdxLX;
+#endif
   int i;
 
   int maxPicNum, currPicNum, picNumLXNoWrap, picNumLXPred;
-  int picViewIdxLX;
   int maxViewIdx =0;
   int currViewIdx = -1;
   int picViewIdxLXPred=-1;
@@ -1347,6 +1351,7 @@ void reorder_against_default_ref_pic_lists(Slice *currSlice, int cur_list)
   {
     StorablePicture *ref_pic = currSlice->listX[cur_list][i];
     // inter_view ref reordering
+#if MVC_EXTENSION_ENABLE
     if(ref_pic->view_id != currViewIdx)
     {
       diff = 1;
@@ -1356,6 +1361,7 @@ void reorder_against_default_ref_pic_lists(Slice *currSlice, int cur_list)
     }
     // temporal ref reordering
     else
+#endif
     {
       diff = ref_pic->pic_num-picNumLXPred;
       if (diff <= 0)
@@ -1390,6 +1396,7 @@ void reorder_against_default_ref_pic_lists(Slice *currSlice, int cur_list)
       }
       picNumLXPred = picNumLXNoWrap;
     }
+#if MVC_EXTENSION_ENABLE
     else if (modification_of_pic_nums_idc[i] == 4 || modification_of_pic_nums_idc[i] == 5)
     {
       if(modification_of_pic_nums_idc[i] == 4) 
@@ -1406,6 +1413,7 @@ void reorder_against_default_ref_pic_lists(Slice *currSlice, int cur_list)
       }
       picViewIdxLXPred = picViewIdxLX;
     }
+#endif
   }
 }
 
