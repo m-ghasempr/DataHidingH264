@@ -152,6 +152,26 @@ void intrapred_luma(int img_x,int img_y, int *left_available, int *up_available,
     block_available_up_left  = pix_d.available;
   }
 
+    //sw paff
+  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive)
+  {
+    if(img->field_mode)
+    {
+      if(img_x%MB_BLOCK_SIZE == 12 && img_y%MB_BLOCK_SIZE )
+        block_available_up_right = 0; // for MB pairs some blocks will not have block available up right  
+    }
+    else
+    {
+      if(img_x%MB_BLOCK_SIZE == 12 && img_y%(2*MB_BLOCK_SIZE) )
+        block_available_up_right = 0; // for MB pairs some blocks will not have block available up right  
+    }
+
+    /*
+    if(img_x%MB_BLOCK_SIZE == 12)   
+      block_available_up_right = 0; // for MB pairs some blocks will not have block available up right  
+      */
+  }
+  
   *left_available = block_available_left;
   *up_available   = block_available_up;
   *all_available  = block_available_up && block_available_left && block_available_up_left;
@@ -404,6 +424,7 @@ void intrapred_luma_16x16()
 
   int ih,iv;
   int ib,ic,iaa;
+  int mb_width = img->width/16;
 
   byte **imgY_pred = enc_picture->imgY;  // For Mb level field/frame coding tools -- default to frame pred
   int mb_nr=img->current_mb_nr;
@@ -433,6 +454,25 @@ void intrapred_luma_16x16()
     for (i=1, left_avail=1; i<17;i++)
       left_avail  &= left[i].available ? img->intra_block[left[i].mb_addr]: 0;
     left_up_avail = left[0].available ? img->intra_block[left[0].mb_addr]: 0;
+  }
+
+  //sw paff
+  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
+  {
+    if(img->top_field)
+    {
+      up_avail = (img->mb_y/2 == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
+      left_up_avail = (img->mb_y/2 == 0 || img->mb_x==0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr);
+      //pix_y   = img->field_pix_y; // set pix_y to field pix_y
+      imgY_pred = enc_top_picture->imgY; // set the prediction image to top field
+    }
+    else
+    {
+      up_avail = ((img->mb_y-1)/2 == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
+      left_up_avail = ((img->mb_y-1)/2 == 0 || img->mb_x==0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr);
+      imgY_pred = enc_bottom_picture->imgY;
+      //pix_y   = img->field_pix_y; // set pix_y to field pix_y
+    }
   }
 
   s1=s2=0;

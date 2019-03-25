@@ -165,11 +165,11 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
     img->current_slice_nr++;
   }
 
+  //deblocking for frame or first field
+  DeblockFrame( img, dec_picture->imgY, dec_picture->imgUV ) ;
   if (img->MbaffFrameFlag)
     MbAffPostProc();
 
-  //deblocking for frame or first field
-  DeblockFrame( img, dec_picture->imgY, dec_picture->imgUV ) ;
   store_picture_in_dpb(dec_picture);
   dec_picture=NULL;
 
@@ -587,6 +587,12 @@ static void reorder_lists(int currSliceType, Slice * currSlice)
                            currSlice->abs_diff_pic_num_minus1_l0, 
                            currSlice->long_term_pic_idx_l0);
     }
+    if (NULL == listX[0][img->num_ref_idx_l0_active-1])
+    {
+      error("number of entries in list 0 smaller than num_ref_idx_l0_active_minus1",500);
+    }
+    // that's a definition
+    listXsize[0] = img->num_ref_idx_l0_active;
   }
   if (currSliceType == B_SLICE)
   {
@@ -598,6 +604,12 @@ static void reorder_lists(int currSliceType, Slice * currSlice)
                            currSlice->abs_diff_pic_num_minus1_l1, 
                            currSlice->long_term_pic_idx_l1);
     }
+    if (NULL == listX[1][img->num_ref_idx_l1_active-1])
+    {
+      error("number of entries in list 1 smaller than num_ref_idx_l1_active_minus1",500);
+    }
+    // that's a definition
+    listXsize[1] = img->num_ref_idx_l1_active;
   }
 
   free_ref_pic_list_reordering_buffer(currSlice);
@@ -647,9 +659,9 @@ int read_new_slice()
       if(expected_slice_type != NALU_TYPE_DPA)
       {
         /* oops... we found the next slice, go back! */
-	      fseek(bits, ftell_position, SEEK_SET);
+        fseek(bits, ftell_position, SEEK_SET);
         FreeNALU(nalu);
-	      return current_header;
+        return current_header;
       }
       else
         return EOS;
@@ -698,7 +710,8 @@ int read_new_slice()
               write_picture(listX[0][i], p_out2);
         }
 */
-        if (img->MbaffFrameFlag)
+        //if (img->MbaffFrameFlag)
+        if (img->structure==FRAME)
         {
           init_mbaff_lists();
         }
@@ -767,7 +780,7 @@ int read_new_slice()
 
         /* 
             LC: inserting the code related to DP processing, mainly copying some of the parts
-	          related to NALU_TYPE_SLICE, NALU_TYPE_IDR.
+            related to NALU_TYPE_SLICE, NALU_TYPE_IDR.
         */
 
         if(expected_slice_type != NALU_TYPE_DPA)
@@ -809,7 +822,7 @@ int read_new_slice()
           img->height /=2 ;
           img->height_cr /=2;
         }
-	
+
         // From here on, active_sps, active_pps and the slice header are valid
         img->current_mb_nr = currSlice->start_mb_nr;
 
@@ -987,19 +1000,21 @@ void init_frame(struct img_par *img, struct inp_par *inp)
 
   for (i=0;i<listXsize[LIST_0];i++)
   {
-    dec_picture->ref_pic_num[LIST_0][i]=listX[LIST_0][i]->poc;
+    dec_picture->ref_pic_num[LIST_0][i]=listX[LIST_0][i]->poc * 2 + ((listX[LIST_0][i]->structure==BOTTOM_FIELD)?1:0) ; 
   }
 
   for (i=0;i<listXsize[LIST_1];i++)
   {
-    dec_picture->ref_pic_num[LIST_1][i]=listX[LIST_1][i]->poc;
+    dec_picture->ref_pic_num[LIST_1][i]=listX[LIST_1][i]->poc  *2 + ((listX[LIST_1][i]->structure==BOTTOM_FIELD)?1:0);
   }
 
-  if (img->MbaffFrameFlag)
+//  if (img->MbaffFrameFlag)
+  if (img->structure==FRAME)
     for (j=2;j<6;j++)
       for (i=0;i<listXsize[j];i++)
       {
-        dec_picture->ref_pic_num[j][i]=listX[j][i]->poc;        
+//        dec_picture->ref_pic_num[j][i]=min (listX[j][i]->top_poc,listX[j][i]->bottom_poc) * 2 ;// + ((listX[j][i]->structure==BOTTOM_FIELD)?1:0);
+        dec_picture->ref_pic_num[j][i] = listX[j][i]->poc * 2 + ((listX[j][i]->structure==BOTTOM_FIELD)?1:0);
       }
     
   img->current_slice_nr=0;
@@ -1047,8 +1062,7 @@ void init_frame(struct img_par *img, struct inp_par *inp)
  */
 void exit_frame(struct img_par *img, struct inp_par *inp)
 {
-
-  // !!!KS: hmm, nothing remaining here 
+  img->pre_frame_num = img->frame_num;
 }
 
 /*!
@@ -1305,12 +1319,12 @@ void init_top(struct img_par *img, struct inp_par *inp)
 
   for (i=0;i<listXsize[LIST_0];i++)
   {
-    dec_picture->ref_pic_num[LIST_0][i]=listX[LIST_0][i]->poc;
+    dec_picture->ref_pic_num[LIST_0][i]=listX[LIST_0][i]->poc * 2 + ((listX[LIST_0][i]->structure==BOTTOM_FIELD)?1:0);
   }
   
   for (i=0;i<listXsize[LIST_1];i++)
   {
-    dec_picture->ref_pic_num[LIST_1][i]=listX[LIST_1][i]->poc;
+    dec_picture->ref_pic_num[LIST_1][i]=listX[LIST_1][i]->poc * 2 + ((listX[LIST_1][i]->structure==BOTTOM_FIELD)?1:0);
   }
 
   img->number *= 2;
@@ -1365,18 +1379,18 @@ void init_bottom(struct img_par *img, struct inp_par *inp)
   dec_picture->poc=img->bottompoc;
   dec_picture->top_poc=img->toppoc;
   dec_picture->bottom_poc=img->bottompoc;
-  dec_picture->pic_num = img->frame_num + 1;
+  dec_picture->pic_num = img->frame_num;
   dec_picture->coded_frame = (img->structure==FRAME);
   dec_picture->mb_adaptive_frame_field_flag = img->MbaffFrameFlag;
 
   for (i=0;i<listXsize[LIST_0];i++)
   {
-    dec_picture->ref_pic_num[LIST_0][i]=listX[LIST_0][i]->poc;
+    dec_picture->ref_pic_num[LIST_0][i]=listX[LIST_0][i]->poc * 2 + ((listX[LIST_0][i]->structure==BOTTOM_FIELD)?1:0);
   }
   
   for (i=0;i<listXsize[LIST_1];i++)
   {
-    dec_picture->ref_pic_num[LIST_1][i]=listX[LIST_1][i]->poc;
+    dec_picture->ref_pic_num[LIST_1][i]=listX[LIST_1][i]->poc * 2 + ((listX[LIST_1][i]->structure==BOTTOM_FIELD)?1:0);
   }
 
   img->number++;

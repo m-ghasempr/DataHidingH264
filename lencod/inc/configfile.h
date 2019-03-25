@@ -119,6 +119,12 @@ Mapping Map[] = {
 
     {"ContextInitMethod",        &configinput.context_init_method,     0},
     {"FixedModelNumber",         &configinput.model_number,            0},
+		// Rate Control on JVT Standard
+		{"RateControlEnable",        &configinput.RCEnable,                0},
+		{"Bitrate",                  &configinput.bit_rate,                     0},
+		{"InitialQP",                &configinput.SeinitialQP,        0},
+		{"BasicUnit",               &configinput.basicunit,        0},
+		{"ChannelType",               &configinput.channel_type,        0},
 
     {NULL,                       NULL,                                -1}
 };

@@ -36,10 +36,14 @@
 #define MAXPPS  128
 
 //! Boolean Type
+#ifdef FALSE
+#  define Boolean int
+#else
 typedef enum {
   FALSE,
   TRUE
 } Boolean;
+#endif
 
 #define MAXIMUMVALUEOFcpb_cnt   32
 typedef struct

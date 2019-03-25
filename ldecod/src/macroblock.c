@@ -36,12 +36,15 @@
 #include "vlc.h"
 #include "image.h"
 #include "mb_access.h"
+#include "biaridecod.h"
 
 #if TRACE
 #define TRACE_STRING(s) strncpy(currSE.tracestring, s, TRACESTRING_SIZE)
 #else
 #define TRACE_STRING(s) // do nothing
 #endif
+
+extern int last_dquant;
 
 static void SetMotionVectorPredictor (struct img_par  *img,
                                       int             *pmv_x,
@@ -201,6 +204,7 @@ void interpret_mb_mode_P(struct img_par *img)
 #define MODE_IS_P8x8  (mbmode==4 || mbmode==5)
 #define MODE_IS_I4x4  (mbmode==6)
 #define I16OFFSET     (mbmode-7)
+#define MODE_IS_IPCM  (mbmode==31)
 
   if(mbmode <4)
   {
@@ -224,6 +228,17 @@ void interpret_mb_mode_P(struct img_par *img)
       currMB->b8mode[i] = IBLOCK;
       currMB->b8pdir[i] = -1;
     }
+  }
+  else if(MODE_IS_IPCM)
+  {
+    currMB->mb_type=IPCM;
+    
+    for (i=0;i<4;i++) 
+    {
+      currMB->b8mode[i]=0; currMB->b8pdir[i]=-1; 
+    }
+    currMB->cbp= -1;
+    currMB->i16mode = 0;
   }
   else
   {
@@ -251,6 +266,15 @@ void interpret_mb_mode_I(struct img_par *img)
   {
     currMB->mb_type = I4MB;
     for (i=0;i<4;i++) {currMB->b8mode[i]=IBLOCK; currMB->b8pdir[i]=-1; }
+  }
+  else if(mbmode==25)
+  {
+    currMB->mb_type=IPCM;
+
+    for (i=0;i<4;i++) {currMB->b8mode[i]=0; currMB->b8pdir[i]=-1; }
+    currMB->cbp= -1;
+    currMB->i16mode = 0;
+
   }
   else
   {
@@ -292,7 +316,7 @@ void interpret_mb_mode_B(struct img_par *img)
   {
     mbmode=I4MB;    for(i=0;i<4;i++) {b8mode[i]=IBLOCK;     b8pdir[i]=-1; }
   }
-  else if (mbtype>23) // intra16x16
+  else if ((mbtype>23) && (mbtype<48) ) // intra16x16
   {
     mbmode=I16MB;   for(i=0;i<4;i++) {b8mode[i]=0;          b8pdir[i]=-1; }
     currMB->cbp     = ICBPTAB[(mbtype-24)>>2];
@@ -306,6 +330,14 @@ void interpret_mb_mode_B(struct img_par *img)
   {
     mbmode=1;       for(i=0;i<4;i++) {b8mode[i]=1;          b8pdir[i]=offset2pdir16x16[mbtype]; }
   }
+  else if(mbtype==48)
+  {
+    mbmode=IPCM;
+    for (i=0;i<4;i++) {currMB->b8mode[i]=0; currMB->b8pdir[i]=-1; }
+    currMB->cbp= -1;
+    currMB->i16mode = 0;
+  }
+
   else if (mbtype%2==0) // 16x8
   {
     mbmode=2;       for(i=0;i<4;i++) {b8mode[i]=2;          b8pdir[i]=offset2pdir16x8 [mbtype][i/2]; }
@@ -340,6 +372,16 @@ void interpret_mb_mode_SI(struct img_par *img)
     currMB->mb_type = I4MB;
     for (i=0;i<4;i++) {currMB->b8mode[i]=IBLOCK; currMB->b8pdir[i]=-1; }
   }
+  else if(mbmode==26)
+  {
+    currMB->mb_type=IPCM;
+
+    for (i=0;i<4;i++) {currMB->b8mode[i]=0; currMB->b8pdir[i]=-1; }
+    currMB->cbp= -1;
+    currMB->i16mode = 0;
+
+  }
+
   else
   {
     currMB->mb_type = I16MB;
@@ -376,8 +418,8 @@ void init_macroblock(struct img_par *img)
     {
       dec_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j] = -1;
       dec_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j] = -1;
-      dec_picture->ref_pic_id[LIST_0][img->block_x+i][img->block_y+j] = -1;
-      dec_picture->ref_pic_id[LIST_1][img->block_x+i][img->block_y+j] = -1;
+      dec_picture->ref_pic_id[LIST_0][img->block_x+i][img->block_y+j] = INT64_MIN;
+      dec_picture->ref_pic_id[LIST_1][img->block_x+i][img->block_y+j] = INT64_MIN;
     }
 }
 
@@ -762,6 +804,7 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
     int      a_ref_idx = 0;
     int      b_mv_y = 0;
     int      b_ref_idx = 0;
+    int      list_offset = ((img->MbaffFrameFlag)&&(currMB->mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
 
     getLuma4x4Neighbour(img->current_mb_nr,0,0,-1, 0,&mb_a);
     getLuma4x4Neighbour(img->current_mb_nr,0,0, 0,-1,&mb_b);
@@ -831,26 +874,174 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
       for(j=0;j<BLOCK_SIZE;j++)
       {
         dec_picture->ref_idx[LIST_0][img->block_x+i][img_block_y+j] = 0;
-        dec_picture->ref_pic_id[LIST_0][img->block_x+i][img_block_y+j] = dec_picture->ref_pic_num[LIST_0][dec_picture->ref_idx[LIST_0][img->block_x+i][img_block_y+j]];
+        dec_picture->ref_pic_id[LIST_0][img->block_x+i][img_block_y+j] = dec_picture->ref_pic_num[LIST_0 + list_offset][dec_picture->ref_idx[LIST_0][img->block_x+i][img_block_y+j]];
       }
 
     return DECODE_MB;
   }
-
-  // intra prediction modes for a macroblock 4x4 **********************************************
-  read_ipred_modes(img,inp);
-
-  // read inter frame vector data *********************************************************
-  if (IS_INTERMV (currMB))
+  if(currMB->mb_type!=IPCM)
   {
-    readMotionInfoFromNAL (img, inp);
+    
+    // intra prediction modes for a macroblock 4x4 **********************************************
+    read_ipred_modes(img,inp);
+    
+    // read inter frame vector data *********************************************************
+    if (IS_INTERMV (currMB))
+    {
+      readMotionInfoFromNAL (img, inp);
+    }
+    // read CBP and Coeffs  ***************************************************************
+    readCBPandCoeffsFromNAL (img,inp);
   }
-
-  // read CBP and Coeffs  ***************************************************************
-  readCBPandCoeffsFromNAL (img,inp);
-
+  else
+  {
+    //read pcm_alignment_zero_bit and pcm_byte[i] 
+    
+    // here dP is assigned with the same dP as SE_MBTYPE, because IPCM syntax is in the 
+    // same category as MBTYPE
+    dP = &(currSlice->partArr[partMap[SE_MBTYPE]]);
+    readIPCMcoeffsFromNAL(img,inp,dP);
+  }
   return DECODE_MB;
 }
+
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Initialize decoding engine after decoding an IPCM macroblock
+ *    (for IPCM CABAC  28/11/2003)
+ *
+ * \author
+ *    Dong Wang <Dong.Wang@bristol.ac.uk>  
+ ************************************************************************
+ */
+void init_decoding_engine_IPCM(struct img_par *img)
+{
+  Slice *currSlice = img->currentSlice;
+  Bitstream *currStream;
+  int ByteStartPosition;
+  int PartitionNumber;
+  int i;
+  
+  if(currSlice->dp_mode==PAR_DP_1)
+    PartitionNumber=1;
+  else if(currSlice->dp_mode==PAR_DP_3)
+    PartitionNumber=3;
+  else
+  {
+    printf("Partition Mode is not supported\n");
+    exit(1);
+  }
+  
+  for(i=0;i<PartitionNumber;i++)
+  {
+    currStream = currSlice->partArr[i].bitstream;
+    ByteStartPosition = currStream->read_len;
+    
+    
+    arideco_start_decoding (&currSlice->partArr[i].de_cabac, currStream->streamBuffer, ByteStartPosition, &currStream->read_len, img->type);
+  }
+}
+
+
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Read IPCM pcm_alignment_zero_bit and pcm_byte[i] from stream to img->cof
+ *    (for IPCM CABAC and IPCM CAVLC  28/11/2003)
+ *
+ * \author
+ *    Dong Wang <Dong.Wang@bristol.ac.uk>
+ ************************************************************************
+ */
+
+void readIPCMcoeffsFromNAL(struct img_par *img, struct inp_par *inp, struct datapartition *dP)
+{
+  SyntaxElement currSE;
+  int i,j;
+  
+  //For CABAC, we don't need to read bits to let stream byte aligned
+  //  because we have variable for integer bytes position
+  if(active_pps->entropy_coding_mode_flag  == CABAC)
+  {
+    //read luma and chroma IPCM coefficients
+    currSE.len=8;
+
+  for(i=0;i<16;i++)
+    for(j=0;j<16;j++)
+    {
+      readIPCMBytes_CABAC(&currSE, dP->bitstream);
+      img->cof[i/4][j/4][i%4][j%4]=currSE.value1;
+    }
+
+  for(i=0;i<8;i++)
+    for(j=0;j<8;j++)
+    {
+      readIPCMBytes_CABAC(&currSE, dP->bitstream);
+      img->cof[i/4][j/4+4][i%4][j%4]=currSE.value1;
+    }
+
+  for(i=0;i<8;i++)
+    for(j=0;j<8;j++)
+    {
+      readIPCMBytes_CABAC(&currSE, dP->bitstream);
+      img->cof[i/4+2][j/4+4][i%4][j%4]=currSE.value1;
+    }
+
+  //If the decoded MB is IPCM MB, decoding engine is initialized
+
+  // here the decoding engine is directly initialized without checking End of Slice
+  // The reason is that, whether current MB is the last MB in slice or not, there is
+  // at least one 'end of slice' syntax after this MB. So when fetching bytes in this 
+    // initialisation process, we can guarantee there is bits available in bitstream. 
+  init_decoding_engine_IPCM(img);
+
+  }
+  else
+  { 
+
+  //read bits to let stream byte aligned
+
+
+  if((dP->bitstream->frame_bitoffset)%8!=0)
+  {
+
+    currSE.len=8-(dP->bitstream->frame_bitoffset)%8;
+    readSyntaxElement_FLC(&currSE, dP->bitstream);
+  
+  }
+
+  //read luma and chroma IPCM coefficients
+  currSE.len=8;
+
+  for(i=0;i<16;i++)
+    for(j=0;j<16;j++)
+    {
+      readSyntaxElement_FLC(&currSE, dP->bitstream);
+      img->cof[i/4][j/4][i%4][j%4]=currSE.value1;
+    }
+
+  for(i=0;i<8;i++)
+    for(j=0;j<8;j++)
+    {
+      readSyntaxElement_FLC(&currSE, dP->bitstream);
+      img->cof[i/4][j/4+4][i%4][j%4]=currSE.value1;
+    }
+
+  for(i=0;i<8;i++)
+    for(j=0;j<8;j++)
+    {
+      readSyntaxElement_FLC(&currSE, dP->bitstream);
+      img->cof[i/4+2][j/4+4][i%4][j%4]=currSE.value1;
+    }
+  }
+}
+
+
 
 void read_ipred_modes(struct img_par *img,struct inp_par *inp)
 {
@@ -1224,13 +1415,15 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
 
   int flag_mode;
 
+  int list_offset = ((img->MbaffFrameFlag)&&(currMB->mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
+
   if (bframe && IS_P8x8 (currMB))
   {
     if (img->direct_type)
     {
       //int pic_blocky          = (img->mb_frame_field_flag && currMB->mb_field)? ((img->current_mb_nr%2)?img->block_y/2-BLOCK_SIZE / 2:img->block_y/2):img->block_y;
       int imgblock_y= ((img->MbaffFrameFlag)&&(currMB->mb_field))? (img->current_mb_nr%2) ? (img->block_y-4)/2:img->block_y/2: img->block_y;
-      int list_offset = ((img->MbaffFrameFlag)&&(currMB->mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
+      //int list_offset = ((img->MbaffFrameFlag)&&(currMB->mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
       int fw_rFrameL, fw_rFrameU, fw_rFrameUL, fw_rFrameUR;
       int bw_rFrameL, bw_rFrameU, bw_rFrameUL, bw_rFrameUR;
       
@@ -1445,7 +1638,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
               else
               {
               
-                if (dec_picture->ref_pic_num[LIST_0 + list_offset][ref_idx]==listX[LIST_1 + list_offset][0]->ref_pic_num[refList][ref_idx])                
+                if (dec_picture->ref_pic_num[LIST_0 + list_offset][ref_idx]==listX[LIST_1 + list_offset][0]->ref_pic_num[refList][ref_idx])
                 {
                   mapped_idx=ref_idx;
                 }
@@ -1459,7 +1652,11 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
                       break;
                     }
                     else //! invalid index. Default to zero even though this case should not happen
-                      mapped_idx=0;
+                      mapped_idx=INVALIDINDEX;
+                  }
+                  if (INVALIDINDEX == mapped_idx)
+                  {
+                    error("temporal direct error\ncolocated block has ref that is unavailable",-1111);
                   }
                 }
                 dec_picture->ref_idx [LIST_0][img->block_x + k][img->block_y + j] = mapped_idx;
@@ -1721,7 +1918,11 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
                   break;
                 }
                 else //! invalid index. Default to zero even though this case should not happen
-                  mapped_idx=0;
+                  mapped_idx=INVALIDINDEX;
+              }
+              if (INVALIDINDEX == mapped_idx)
+              {
+                error("temporal direct error\ncolocated block has ref that is unavailable",-1111);
               }
             }
             
@@ -1738,9 +1939,9 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
                   else
                   {
                     if (img->current_mb_nr%2 == 0)
-                  iTRb = Clip3( -128, 127, dec_picture->poc - listX[LIST_0 + list_offset][mapped_idx]->poc );
+                      iTRb = Clip3( -128, 127, dec_picture->top_poc - listX[LIST_0 + list_offset][mapped_idx]->poc );
                     else
-                      iTRb = Clip3( -128, 127, dec_picture->poc + 1 - listX[LIST_0 + list_offset][mapped_idx]->poc );
+                      iTRb = Clip3( -128, 127, dec_picture->bottom_poc - listX[LIST_0 + list_offset][mapped_idx]->poc );
                   }
 
                   iTRp = Clip3( -128, 127,  listX[LIST_1 + list_offset][0]->poc - listX[LIST_0 + list_offset][mapped_idx]->poc);
@@ -1835,17 +2036,18 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
     }
   }
   // record reference picture Ids for deblocking decisions
+ 
   for(i4=img->block_x;i4<(img->block_x+4);i4++)
   for(j4=img->block_y;j4<(img->block_y+4);j4++)
   {
     if(dec_picture->ref_idx[LIST_0][i4][j4]>=0)
-       dec_picture->ref_pic_id[LIST_0][i4][j4] = dec_picture->ref_pic_num[LIST_0][dec_picture->ref_idx[LIST_0][i4][j4]];
+       dec_picture->ref_pic_id[LIST_0][i4][j4] = dec_picture->ref_pic_num[LIST_0 + list_offset][dec_picture->ref_idx[LIST_0][i4][j4]];
     else
-       dec_picture->ref_pic_id[LIST_0][i4][j4] = -1;
+       dec_picture->ref_pic_id[LIST_0][i4][j4] = INT64_MIN;
     if(dec_picture->ref_idx[LIST_1][i4][j4]>=0)
-       dec_picture->ref_pic_id[LIST_1][i4][j4] = dec_picture->ref_pic_num[LIST_1][dec_picture->ref_idx[LIST_1][i4][j4]];  
+       dec_picture->ref_pic_id[LIST_1][i4][j4] = dec_picture->ref_pic_num[LIST_1 + list_offset][dec_picture->ref_idx[LIST_1][i4][j4]];  
     else
-       dec_picture->ref_pic_id[LIST_1][i4][j4] = -1;  
+       dec_picture->ref_pic_id[LIST_1][i4][j4] = INT64_MIN;  
   }
 }
 
@@ -2266,8 +2468,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
   int block_x,block_y;
   int start_scan;
   int uv;
-
-
+  int qp_uv;
   int run, len;
   int levarr[16], runarr[16], numcoeff;
 
@@ -2276,6 +2477,12 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
   int qp_per_uv = QP_SCALE_CR[img->qp-MIN_QP]/6;
   int qp_rem_uv = QP_SCALE_CR[img->qp-MIN_QP]%6;
   int smb       = ((img->type==SP_SLICE) && IS_INTER (currMB)) || (img->type == SI_SLICE && currMB->mb_type == SI4MB);
+
+  // QPI
+  qp_uv = img->qp + active_pps->chroma_qp_index_offset;
+  qp_uv = Clip3(0, 51, qp_uv);
+  qp_per_uv = QP_SCALE_CR[qp_uv-MIN_QP]/6;
+  qp_rem_uv = QP_SCALE_CR[qp_uv-MIN_QP]%6;
 
   // read CBP if not new intra mode
   if (!IS_NEWINTRA (currMB))
@@ -2444,8 +2651,10 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
 
   qp_per    = (img->qp-MIN_QP)/6;
   qp_rem    = (img->qp-MIN_QP)%6;
-  qp_per_uv = QP_SCALE_CR[img->qp-MIN_QP]/6;
-  qp_rem_uv = QP_SCALE_CR[img->qp-MIN_QP]%6;
+  qp_uv = img->qp + active_pps->chroma_qp_index_offset;
+  qp_uv = Clip3(0, 51, qp_uv);
+  qp_per_uv = QP_SCALE_CR[qp_uv-MIN_QP]/6;
+  qp_rem_uv = QP_SCALE_CR[qp_uv-MIN_QP]%6;
   currMB->qp = img->qp;
 
   // luma coefficients
@@ -2780,6 +2989,70 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
 }
 
 
+/*!
+ ************************************************************************
+ * \brief
+ *    Copy IPCM coefficients to decoded picture buffer and set parameters for this MB
+ *    (for IPCM CABAC and IPCM CAVLC  28/11/2003)
+ *
+ * \author
+ *    Dong Wang <Dong.Wang@bristol.ac.uk>
+ ************************************************************************
+ */
+
+void decode_ipcm_mb(struct img_par *img)
+{
+  int i,j;
+
+  Macroblock *currMb = &img->mb_data[img->mb_y*img->PicWidthInMbs + img->mb_x] ;    
+
+  int dy;
+
+
+  //Copy coefficents to decoded picture buffer
+  //IPCM coefficents are stored in img->cof which is set in function readIPCMcoeffsFromNAL()
+  if (img->MbaffFrameFlag==1)
+    dy=2;
+  else
+    dy=1;
+
+  for(i=0;i<16;i++)
+    for(j=0;j<16;j++)
+      dec_picture->imgY[img->pix_y+i*dy][img->pix_x+j]=img->cof[i/4][j/4][i%4][j%4];
+
+  for(i=0;i<8;i++)
+    for(j=0;j<8;j++)
+      dec_picture->imgUV[0][img->pix_c_y+i*dy][img->pix_c_x+j]=img->cof[i/4][j/4+4][i%4][j%4];
+
+  for(i=0;i<8;i++)
+    for(j=0;j<8;j++)
+      dec_picture->imgUV[1][img->pix_c_y+i*dy][img->pix_c_x+j]=img->cof[i/4+2][j/4+4][i%4][j%4];
+
+
+
+  //For Deblocking Filter  16/08/2003
+  if (currMb->mb_type==IPCM)
+    currMb->qp=0;
+
+  //For CAVLC
+  //Set the nz_coeff to 16. 
+  //These parameters are to be used in CAVLC decoding of neighbour blocks
+  for(i=0;i<4;i++)
+    for (j=0;j<6;j++)
+      img->nz_coeff[img->current_mb_nr][i][j]=16;
+
+
+  //For CABAC decoding of MB skip flag 
+  if (currMb->mb_type==IPCM)
+    currMb->skip_flag=1;
+
+  //for Loop filter CABAC
+  if (currMb->mb_type==IPCM)
+    currMb->cbp_blk=0xFFFF;
+
+  //For CABAC decoding of Dquant
+  last_dquant=0;
+}
 
 /*!
  ************************************************************************
@@ -2830,6 +3103,16 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
   int direct_pdir;
 
   int curr_mb_field = ((img->MbaffFrameFlag)&&(currMB->mb_field));
+
+
+  if(currMB->mb_type==IPCM)
+  {
+    //copy readed data into imgY and set parameters
+    decode_ipcm_mb(img);
+    return 0;
+  }
+
+//////////////////////////
 
   // find out the correct list offsets
   if (curr_mb_field)
@@ -3234,8 +3517,12 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                     }
                     else //! invalid index. Default to zero even though this case should not happen
                     {                        
-                      mapped_idx=0;
+                      mapped_idx=INVALIDINDEX;
                     }
+                  }
+                  if (INVALIDINDEX == mapped_idx)
+                  {
+                    error("temporal direct error\ncolocated block has ref that is unavailable",-1111);
                   }
                 }
                 
@@ -3248,9 +3535,9 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                 else
                 {
                   if (img->current_mb_nr%2 == 0)
-                    iTRb = Clip3( -128, 127, dec_picture->poc - listX[LIST_0 + list_offset][mapped_idx]->poc );
+                    iTRb = Clip3( -128, 127, dec_picture->top_poc - listX[LIST_0 + list_offset][mapped_idx]->poc );
                   else
-                    iTRb = Clip3( -128, 127, dec_picture->poc + 1 - listX[LIST_0 + list_offset][mapped_idx]->poc );
+                    iTRb = Clip3( -128, 127, dec_picture->bottom_poc - listX[LIST_0 + list_offset][mapped_idx]->poc );
                 }
                 
                 iTRp = Clip3( -128, 127, listX[LIST_1 + list_offset][0]->poc - listX[LIST_0 + list_offset][mapped_idx]->poc);
@@ -3286,8 +3573,8 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
               }
             }
             // store reference picture ID determined by direct mode
-            dec_picture->ref_pic_id[LIST_0][i4][j4] = dec_picture->ref_pic_num[LIST_0][dec_picture->ref_idx[LIST_0][i4][j4]];
-            dec_picture->ref_pic_id[LIST_1][i4][j4] = dec_picture->ref_pic_num[LIST_1][dec_picture->ref_idx[LIST_1][i4][j4]];  
+            dec_picture->ref_pic_id[LIST_0][i4][j4] = dec_picture->ref_pic_num[LIST_0 + list_offset][dec_picture->ref_idx[LIST_0][i4][j4]];
+            dec_picture->ref_pic_id[LIST_1][i4][j4] = dec_picture->ref_pic_num[LIST_1 + list_offset][dec_picture->ref_idx[LIST_1][i4][j4]];  
           }
                  
           if (mv_mode==0 && img->direct_type )

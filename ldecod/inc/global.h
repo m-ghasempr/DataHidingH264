@@ -39,6 +39,16 @@ typedef unsigned char   byte;                   //!<  8 bit unsigned
 typedef int             int32;
 typedef unsigned int    u_int32;
 
+
+#ifdef WIN32
+  typedef __int64   int64;
+# define INT64_MIN		    (-9223372036854775807i64 - 1i64)
+#else
+  typedef long long int64;
+# define INT64_MIN		    (-9223372036854775807LL - 1LL)
+#endif
+
+
 pic_parameter_set_rbsp_t *active_pps;
 seq_parameter_set_rbsp_t *active_sps;
 
@@ -314,6 +324,8 @@ typedef struct macroblock
   int           c_ipred_mode;       //!< chroma intra prediction mode
   int           mb_field;
 
+  int           skip_flag;
+
   int mbAddrA, mbAddrB, mbAddrC, mbAddrD;
   int mbAvailA, mbAvailB, mbAvailC, mbAvailD;
 
@@ -439,6 +451,9 @@ typedef struct img_par
   // For MB level frame/field coding
   int MbaffFrameFlag;
 
+  // for signalling to the neighbour logic that this is a deblocker call
+  int DeblockCall;
+
   int **field_anchor;
 
   DecRefPicMarking_t *dec_ref_pic_marking_buffer;                    //<! stores the memory management control operations
@@ -454,7 +469,7 @@ typedef struct img_par
 
   int explicit_B_prediction;
 
-
+  unsigned int pre_frame_num;           //!< store the frame_num in the last decoded slice. For detecting gap in frame_num.
 
   // End JVT-D101
   // POC200301: from unsigned int to int
@@ -532,6 +547,9 @@ typedef struct img_par
   int long_term_reference_flag;
   int adaptive_ref_pic_buffering_flag;
 
+  int last_has_mmco_5;
+  int last_pic_bottom_field;
+  
   int model_number;
 
 } ImageParameters;
@@ -615,9 +633,13 @@ int  read_one_macroblock(struct img_par *img,struct inp_par *inp);
 void read_ipred_modes(struct img_par *img,struct inp_par *inp);
 int  decode_one_macroblock(struct img_par *img,struct inp_par *inp);
 int  exit_macroblock(struct img_par *img,struct inp_par *inp, int eos_bit);
+void decode_ipcm_mb(struct img_par *img);
+
 
 void readMotionInfoFromNAL (struct img_par *img,struct inp_par *inp);
 void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp);
+void readIPCMcoeffsFromNAL(struct img_par *img, struct inp_par *inp, struct datapartition *dP);
+
 
 void copyblock_sp(struct img_par *img,int block_x,int block_y);
 void itrans_sp_chroma(struct img_par *img,int ll);
@@ -676,6 +698,7 @@ DataPartition *AllocPartition();
 
 void tracebits2(const char *trace_str, int len, int info);
 
-
+void init_decoding_engine_IPCM(struct img_par *img);
+void readIPCMBytes_CABAC(SyntaxElement *sym, Bitstream *currStream);
 
 #endif

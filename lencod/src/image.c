@@ -43,6 +43,7 @@
 #include "sei.h"
 #include "memalloc.h"
 #include "nalu.h"
+#include "ratectl.h"
 
 #define TO_SAVE 4711
 #define FROM_SAVE 4712
@@ -108,7 +109,8 @@ StorablePicture *enc_picture;
 StorablePicture *enc_frame_picture;
 StorablePicture *enc_top_picture;
 StorablePicture *enc_bottom_picture;
-
+//Rate control
+int    QP;
 
 const int ONE_FOURTH_TAP[3][2] =
 {
@@ -206,7 +208,7 @@ void code_a_picture(Picture *pic)
   if (input->rdopt == 2 && (img->type != B_SLICE))
     for (j = 0; j < input->NoOfDecoders; j++)
       DeblockFrame (img, decs->decY_best[j], NULL);
-  DeblockFrame (img, enc_picture->imgY, enc_picture->imgUV);
+//	DeblockFrame (img, enc_picture->imgY, enc_picture->imgUV);
 }
 
 
@@ -243,6 +245,9 @@ int encode_one_frame ()
   float dis_frm = 0, dis_frm_y = 0, dis_frm_u = 0, dis_frm_v = 0;
   float dis_fld = 0, dis_fld_y = 0, dis_fld_u = 0, dis_fld_v = 0;
 
+	//Rate control
+	int pic_type, bits; 
+
 #ifdef WIN32
   _ftime (&tstruct1);           // start time ms
 #else
@@ -250,6 +255,9 @@ int encode_one_frame ()
 #endif
   time (&ltime1);               // start time s
 
+	//Rate control 
+  img->mb_aff_field = 0;
+  img->write_macroblock = 0;
 /*
   //Shankar Regunathan (Oct 2002)
   //Prepare Panscanrect SEI payload
@@ -276,24 +284,58 @@ int encode_one_frame ()
 
   if (input->InterlaceCodingOption == FIELD_CODING)
   {
+		//Rate control
+	  img->FieldControl=1;
+
     img->field_picture = 1;  // we encode fields
     field_picture (top_pic, bottom_pic);
     img->fld_flag = 1;
   }
   else
   {
+		//Rate control
+		img->FieldControl=0;
+
     // For frame coding, turn MB level field/frame coding flag on
     if (input->InterlaceCodingOption >= MB_CODING)
       mb_adaptive = 1;
     img->field_picture = 0; // we encode a frame
 
+		//Rate control
+		if(input->RCEnable)
+		{ 
+		/*update the number of MBs in the basic unit for MB adaptive 
+			f/f coding*/
+			if((input->InterlaceCodingOption==3)&&(input->basicunit<img->Frame_Total_Number_MB)\
+				&&(img->type==P_SLICE)&&(img->IFLAG==0))
+				img->BasicUnit=input->basicunit*2;
+			else
+				img->BasicUnit=input->basicunit;
+			
+			rc_init_pict(1,0,1); 
+			img->qp  = updateQuantizationParameter(0); 
+			
+			
+			pic_type = img->type;
+			QP =0;
+		}
+		if(!input->InterlaceCodingOption)
+			img->TopFieldFlag=0;
+
     frame_picture (frame_pic);
+   
     // For field coding, turn MB level field/frame coding flag off
     if (input->InterlaceCodingOption >= MB_CODING)
       mb_adaptive = 0;
     
     if (input->InterlaceCodingOption != FRAME_CODING)
     {
+			//Rate control
+			img->FieldControl=1;
+			img->write_macroblock = 0;
+			img->bot_MB = 0;
+			img->mb_aff_field = 0;
+
       img->field_picture = 1;  // we encode fields
       field_picture (top_pic, bottom_pic);
       
@@ -304,8 +346,16 @@ int encode_one_frame ()
       
       img->fld_flag = picture_structure_decision (frame_pic, top_pic, bottom_pic);
       update_field_frame_contexts (img->fld_flag);
+
+			//Rate control
+			if(img->fld_flag==0)
+				img->FieldFrame=1;
+			/*the current choice is field coding*/
+			else
+				img->FieldFrame=0;
     }
     else
+   
       img->fld_flag = 0;
   }
 
@@ -350,6 +400,16 @@ int encode_one_frame ()
     CalculateSparePicture ();
 */
 
+	//Rate control
+	if(input->RCEnable)
+	{
+	  if((input->symbol_mode == 0)&&(input->of_mode ==0))
+		  bits = bits_frm;   //UVLC && Bitstream output mode 
+	  else
+	    bits = stat->bit_ctr-stat->bit_ctr_n;//CABAC*/
+	  rc_update_pict_frame(bits);
+	}
+
   if (input->InterlaceCodingOption != FRAME_CODING)
     {
       store_field_MV (IMG_NUMBER);      // assume that img->number = frame_number
@@ -386,9 +446,18 @@ int encode_one_frame ()
 	if (input->InterlaceCodingOption == FIELD_CODING)
 	{
 			store_picture_in_dpb(enc_bottom_picture);
-			enc_picture = enc_top_picture = enc_bottom_picture = NULL;	
-	}
-	else
+			enc_picture = enc_top_picture = enc_bottom_picture = NULL;
+  }else if (input->InterlaceCodingOption == ADAPTIVE_CODING || input->InterlaceCodingOption==MB_CODING)//sw paff
+  {
+    
+    if (!img->fld_flag)
+    {
+      dpb.used_size--;
+    	store_picture_in_dpb(enc_frame_picture);
+    }else
+      store_picture_in_dpb(enc_bottom_picture);
+			enc_picture = enc_frame_picture = NULL;
+  }else
 	{
 		if (img->fld_flag)
 		{
@@ -441,6 +510,18 @@ int encode_one_frame ()
     ReportFirstframe(tmp_time);
   else
   {
+		//Rate control
+		if(input->RCEnable)
+		{
+			if(!input->InterlaceCodingOption)
+				bits=stat->bit_ctr-stat->bit_ctr_n;
+			else
+			{
+				bits = stat->bit_ctr -Pprev_bits; // used for rate control update */
+				Pprev_bits = stat->bit_ctr;
+			}
+		}
+
     switch (img->type)
     {
     case I_SLICE:
@@ -451,11 +532,6 @@ int encode_one_frame ()
       stat->bit_ctr_P += stat->bit_ctr - stat->bit_ctr_n;
       ReportSP(tmp_time);
       break;
-    //case BS_IMG:
-    //case BS_IMG:
-    //  stat->bit_ctr_P += stat->bit_ctr - stat->bit_ctr_n;
-     // ReportBS(tmp_time);
-    //  break;
     case B_SLICE:
       stat->bit_ctr_B += stat->bit_ctr - stat->bit_ctr_n;
       if (img->nal_reference_idc>0)
@@ -469,6 +545,18 @@ int encode_one_frame ()
     }
   }
   stat->bit_ctr_n = stat->bit_ctr;
+
+	//Rate control
+	if(input->RCEnable) 
+  {
+	  rc_update_pict(bits);
+	    /*update the parameters of quadratic R-D model*/
+	  if((img->type==P_SLICE)&&(!input->InterlaceCodingOption))
+		  updateRCModel();
+	  else if((img->type==P_SLICE)&&input->InterlaceCodingOption\
+		  &&(img->IFLAG==0))
+		  updateRCModel();
+  }
 
   FreeSourceframe (srcframe);
 
@@ -538,6 +626,21 @@ void frame_picture (Picture *frame)
 
   enc_picture=enc_frame_picture;
 
+  //sw PAFF
+  if(input->InterlaceCodingOption==MB_CODING)
+  {
+    enc_top_picture  = alloc_storable_picture (img->structure, img->width, img->height, img->width_cr, img->height_cr);
+    enc_top_picture->poc=img->toppoc;
+    enc_top_picture->pic_num = img->frame_num;
+    enc_top_picture->coded_frame = 1;
+    enc_top_picture->mb_adaptive_frame_field_flag = img->MbaffFrameFlag = (input->InterlaceCodingOption == MB_CODING);
+    
+    enc_bottom_picture  = alloc_storable_picture (img->structure, img->width, img->height, img->width_cr, img->height_cr);
+    enc_bottom_picture->poc=img->bottompoc;
+    enc_bottom_picture->pic_num = img->frame_num;
+    enc_bottom_picture->coded_frame = 1;
+    enc_bottom_picture->mb_adaptive_frame_field_flag = img->MbaffFrameFlag = (input->InterlaceCodingOption == MB_CODING);
+  }
 
   stat->em_prev_bits_frm = 0;
   stat->em_prev_bits = &stat->em_prev_bits_frm;
@@ -581,6 +684,13 @@ void frame_picture (Picture *frame)
  */
 void field_picture (Picture *top, Picture *bottom)
 {
+	//Rate control
+  int old_pic_type;              // picture type of top field used for rate control    
+  int TopFieldBits;
+  
+	//Rate control
+  old_pic_type = img->type;
+
   stat->em_prev_bits_fld = 0;
   stat->em_prev_bits = &stat->em_prev_bits_fld;
   img->number *= 2;
@@ -614,6 +724,20 @@ void field_picture (Picture *top, Picture *bottom)
   img->fld_flag = 1;
 //  img->bottom_field_flag = 0;
  
+	//Rate control
+	if(input->RCEnable)
+  {
+	  img->BasicUnit=input->basicunit;
+
+	  if(input->InterlaceCodingOption==2)
+		  rc_init_pict(0,1,1); 
+	  else
+		  rc_init_pict(0,1,0);
+
+	  img->qp  = updateQuantizationParameter(1); 
+   }
+  img->TopFieldFlag=1;
+
   code_a_picture(top_pic);
   enc_picture->structure = 1;
     
@@ -621,6 +745,9 @@ void field_picture (Picture *top, Picture *bottom)
   store_picture_in_dpb(enc_top_picture);
 
   top->bits_per_picture = 8 * ((((img->currentSlice)->partArr[0]).bitstream)->byte_pos);
+
+	//Rate control
+	TopFieldBits=top->bits_per_picture;
 
   //  Bottom field
 //  img->bottom_field_flag = 0;
@@ -650,6 +777,15 @@ void field_picture (Picture *top, Picture *bottom)
   }
   img->fld_flag = 1;
 //  img->bottom_field_flag = 1;
+
+	//Rate control
+	if(input->RCEnable)  setbitscount(TopFieldBits);
+  if(input->RCEnable)
+  {
+	  rc_init_pict(0,0,0); 
+	  img->qp  = updateQuantizationParameter(0); 
+  }
+  img->TopFieldFlag=0;
 
   enc_picture->structure = 2;
   code_a_picture(bottom_pic);
@@ -846,24 +982,27 @@ static void init_frame ()
     if (IMG_NUMBER != 0 && input->successive_Bframe != 0)     // B pictures to encode
       nextP_tr_frm = img->tr;
     
-    if (img->type == I_SLICE)
-      img->qp = input->qp0;   // set quant. parameter for I-frame
-    else
+		//Rate control
+		if(!input->RCEnable)                  // without using rate control
     {
+			if (img->type == I_SLICE)
+				img->qp = input->qp0;   // set quant. parameter for I-frame
+			else
+			{
 #ifdef _CHANGE_QP_
-      if (input->qp2start > 0 && img->tr >= input->qp2start)
-        img->qp = input->qpN2;
-      else
+				if (input->qp2start > 0 && img->tr >= input->qp2start)
+					img->qp = input->qpN2;
+				else
 #endif
-        img->qp = input->qpN;
-      
-      if (img->type == SP_SLICE)
-      {
-        img->qp = input->qpsp;
-        img->qpsp = input->qpsp_pred;
-      }
-      
-    }
+					img->qp = input->qpN;
+				
+				if (img->type == SP_SLICE)
+				{
+					img->qp = input->qpsp;
+					img->qpsp = input->qpsp_pred;
+				}		
+			}
+		}
 
     img->mb_y_intra = img->mb_y_upd;  //  img->mb_y_intra indicates which GOB to intra code for this frame
     
@@ -898,14 +1037,16 @@ static void init_frame ()
 
     if (img->tr >= nextP_no)
       img->tr = nextP_no - 1;
-    
+		//Rate control
+	  if(!input->RCEnable)                  // without using rate control
+    {    
 #ifdef _CHANGE_QP_
     if (input->qp2start > 0 && img->tr >= input->qp2start)
       img->qp = input->qpB2;
     else
 #endif
       img->qp = input->qpB;
-
+		}
     // initialize arrays
     for (k = 0; k < 2; k++)
       for (i = 0; i < img->height / BLOCK_SIZE; i++)
@@ -997,10 +1138,13 @@ static void init_field ()
 #endif
       if (img->number != 0 && input->successive_Bframe != 0)    // B pictures to encode
         nextP_tr_fld = img->tr;
-
-      if (img->type == I_SLICE)
-        img->qp = input->qp0;   // set quant. parameter for I-frame
-      else
+			
+			//Rate control
+			if(!input->RCEnable)                  // without using rate control
+			{
+				if (img->type == I_SLICE)
+					img->qp = input->qp0;   // set quant. parameter for I-frame
+				else
         {
 #ifdef _CHANGE_QP_
           if (input->qp2start > 0 && img->tr >= input->qp2start)
@@ -1009,12 +1153,12 @@ static void init_field ()
 #endif
             img->qp = input->qpN;
           if (img->type == SP_SLICE)
-            {
-              img->qp = input->qpsp;
-              img->qpsp = input->qpsp_pred;
-            }
-
+					{
+						img->qp = input->qpsp;
+						img->qpsp = input->qpsp_pred;
+					}
         }
+			}
 
       img->mb_y_intra = img->mb_y_upd;  //  img->mb_y_intra indicates which GOB to intra code for this frame
 
@@ -1065,14 +1209,16 @@ static void init_field ()
       img->tr = prevP_no + (img->b_interval + 1) * img->b_frame_to_code;        // from prev_P
       if (img->tr >= nextP_no)
         img->tr = nextP_no - 1; // ?????
-
+			//Rate control
+			if(!input->RCEnable)                  // without using rate control
+			{
 #ifdef _CHANGE_QP_
       if (input->qp2start > 0 && img->tr >= input->qp2start)
         img->qp = input->qpB2;
       else
 #endif
         img->qp = input->qpB;
-
+			}
       // initialize arrays
       for (k = 0; k < 2; k++)
         for (i = 0; i < img->height / BLOCK_SIZE; i++)
@@ -1557,8 +1703,9 @@ static void find_snr ()
   impix = img->height * img->width;
   
 	//SW paff
- // if (input->InterlaceCodingOption == FIELD_CODING)
-	if (input->InterlaceCodingOption != FRAME_CODING)
+  //SW paff
+  if ((input->InterlaceCodingOption == FIELD_CODING) || 
+    ((input->InterlaceCodingOption == ADAPTIVE_CODING || input->InterlaceCodingOption == MB_CODING) && img->fld_flag))
   {
       
     diff_y = 0;
@@ -1583,7 +1730,14 @@ static void find_snr ()
        }
     }
   }else
-  {
+  { 
+     //sw PAFF
+    if (input->InterlaceCodingOption == ADAPTIVE_CODING || input->InterlaceCodingOption == MB_CODING)
+    {
+      if (!img->fld_flag)
+        enc_picture = enc_frame_picture;
+    }
+ 
     diff_y = 0;
     for (i = 0; i < img->width; ++i)
     {
@@ -2243,7 +2397,7 @@ void copy_rdopt_data (int bot_block)
 static void copy_motion_vectors_MB (int bot_block)
 {
   int ***tmp_mv_fld, ***tmp_fwMV_fld, ***tmp_bwMV_fld;
-  int *****mv_fld, *****all_mv_fld, *****all_bmv_fld;
+  int *****pred_mv_fld, *****all_mv_fld, *****all_bmv_fld;
   int *****p_fwMV_fld, *****p_bwMV_fld;
   int mode8, pdir8, l, by, bxr, bx;
   int **frefar, **refar;
@@ -2253,7 +2407,7 @@ static void copy_motion_vectors_MB (int bot_block)
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
   int *****all_mv = img->all_mv;
   int *****all_bmv = img->all_bmv;
-  int *****imgmv = img->mv;
+  int *****pred_mv = img->pred_mv;
   int *****p_fwMV = img->p_fwMV;
   int *****p_bwMV = img->p_bwMV;
   
@@ -2262,7 +2416,7 @@ static void copy_motion_vectors_MB (int bot_block)
     tmp_mv_fld = tmp_mv_top;
     tmp_fwMV_fld = tmp_fwMV_top;
     tmp_bwMV_fld = tmp_bwMV_top;
-    mv_fld = img->mv_top;
+    pred_mv_fld = img->pred_mv_top;
     all_mv_fld = img->all_mv_top;
     all_bmv_fld = img->all_bmv_top;
     p_fwMV_fld = img->p_fwMV_top;
@@ -2275,7 +2429,7 @@ static void copy_motion_vectors_MB (int bot_block)
     tmp_mv_fld = tmp_mv_bot;
     tmp_fwMV_fld = tmp_fwMV_bot;
     tmp_bwMV_fld = tmp_bwMV_bot;
-    mv_fld = img->mv_bot;
+    pred_mv_fld = img->pred_mv_bot;
     all_mv_fld = img->all_mv_bot;
     all_bmv_fld = img->all_bmv_bot;
     p_fwMV_fld = img->p_fwMV_bot;
@@ -2290,7 +2444,7 @@ static void copy_motion_vectors_MB (int bot_block)
     {
       all_mv = img->all_mv_top;
       all_bmv = img->all_bmv_top;
-      imgmv = img->mv_top;
+      pred_mv = img->pred_mv_top;
       p_fwMV = img->p_fwMV_top;
       p_bwMV = img->p_bwMV_top;
     }
@@ -2298,7 +2452,7 @@ static void copy_motion_vectors_MB (int bot_block)
     {
       all_mv = img->all_mv_bot;
       all_bmv = img->all_bmv_bot;
-      imgmv = img->mv_bot;
+      pred_mv = img->pred_mv_bot;
       p_fwMV = img->p_fwMV_bot;
       p_bwMV = img->p_bwMV_bot;
     }
@@ -2535,13 +2689,13 @@ static void copy_motion_vectors_MB (int bot_block)
           all_bmv[i][j][k][l][0] = rdopt->all_bmv[i][j][k][l][0];
           p_fwMV[i][j][k][l][0] = rdopt->p_fwMV[i][j][k][l][0];
           p_bwMV[i][j][k][l][0] = rdopt->p_bwMV[i][j][k][l][0];
-          imgmv[i][j][k][l][0] = rdopt->mv[i][j][k][l][0];
+          pred_mv[i][j][k][l][0] = rdopt->pred_mv[i][j][k][l][0];
           
           all_mv[i][j][k][l][1] = rdopt->all_mv[i][j][k][l][1];
           all_bmv[i][j][k][l][1] = rdopt->all_bmv[i][j][k][l][1];
           p_fwMV[i][j][k][l][1] = rdopt->p_fwMV[i][j][k][l][1];
           p_bwMV[i][j][k][l][1] = rdopt->p_bwMV[i][j][k][l][1];
-          imgmv[i][j][k][l][1] = rdopt->mv[i][j][k][l][1];
+          pred_mv[i][j][k][l][1] = rdopt->pred_mv[i][j][k][l][1];
           
         }
   }
@@ -2617,10 +2771,25 @@ static void copy_mv_to_or_from_save (int direction)
 
 static void ReportFirstframe(int tmp_time)
 {
+	//Rate control
+	int bits;
+
   printf ("%3d(I)  %8d %4d %7.4f %7.4f %7.4f  %5d       %3s \n",
           frame_no, stat->bit_ctr - stat->bit_ctr_n,
           img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time,
           img->fld_flag ? "FLD" : "FRM");
+
+	//Rate control
+	if(input->RCEnable)
+	{
+		if(!input->InterlaceCodingOption)
+				bits = stat->bit_ctr-stat->bit_ctr_n; // used for rate control update 
+		else
+		{
+			bits = stat->bit_ctr - Iprev_bits; // used for rate control update 
+			Iprev_bits = stat->bit_ctr;
+		}
+	}
 
   stat->bitr0 = stat->bitr;
   stat->bit_ctr_0 = stat->bit_ctr;
@@ -3055,140 +3224,4 @@ static void writeUnit(Bitstream* currStream)
   stat->bit_ctr += WriteNALU (nalu);
   
   FreeNALU(nalu);
-}
-
-
-void get_block(int ref_frame, StorablePicture **list, int x_pos, int y_pos, int block[BLOCK_SIZE][BLOCK_SIZE])
-{
-  int dx, dy;
-  int x, y;
-  int i, j;
-  int maxold_x,maxold_y;
-  int result;
-  int pres_x;
-  int pres_y; 
-  int tmp_res[4][9];
-  static const int COEF[6] = {
-			1, -5, 20, 20, -5, 1
-		};
-
- 
-  dx = x_pos&3;
-  dy = y_pos&3;
-  x_pos = (x_pos-dx)/4;
-  y_pos = (y_pos-dy)/4;
-
-  maxold_x = img->width-1;
-  maxold_y = img->height-1;
-
-  if (enc_picture->mb_field[img->current_mb_nr])
-    maxold_y = img->height/2 - 1;
-
-if (dx == 0 && dy == 0) {  /* fullpel position */
-    for (j = 0; j < BLOCK_SIZE; j++)
-      for (i = 0; i < BLOCK_SIZE; i++)
-        block[i][j] = list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j))][max(0,min(maxold_x,x_pos+i))];
-  }
-  else { /* other positions */
-
-    if (dy == 0) { /* No vertical interpolation */
-
-      for (j = 0; j < BLOCK_SIZE; j++) {
-        for (i = 0; i < BLOCK_SIZE; i++) {
-          for (result = 0, x = -2; x < 4; x++)
-            result += list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j))][max(0,min(maxold_x,x_pos+i+x))]*COEF[x+2];
-          block[i][j] = max(0, min(255, (result+16)/32));
-        }
-      }
-
-      if ((dx&1) == 1) {
-        for (j = 0; j < BLOCK_SIZE; j++)
-          for (i = 0; i < BLOCK_SIZE; i++)
-            block[i][j] = (block[i][j] + list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j))][max(0,min(maxold_x,x_pos+i+dx/2))] +1 )/2;
-      }
-    }
-    else if (dx == 0) {  /* No horizontal interpolation */
-
-      for (j = 0; j < BLOCK_SIZE; j++) {
-        for (i = 0; i < BLOCK_SIZE; i++) {
-          for (result = 0, y = -2; y < 4; y++)
-            result += list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j+y))][max(0,min(maxold_x,x_pos+i))]*COEF[y+2];
-          block[i][j] = max(0, min(255, (result+16)/32));
-        }
-      }
-
-      if ((dy&1) == 1) {
-        for (j = 0; j < BLOCK_SIZE; j++)
-          for (i = 0; i < BLOCK_SIZE; i++)
-           block[i][j] = (block[i][j] + list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j+dy/2))][max(0,min(maxold_x,x_pos+i))] +1 )/2;
-      }
-    }
-    else if (dx == 2) {  /* Vertical & horizontal interpolation */
-
-      for (j = -2; j < BLOCK_SIZE+3; j++) {
-        for (i = 0; i < BLOCK_SIZE; i++)
-          for (tmp_res[i][j+2] = 0, x = -2; x < 4; x++)
-            tmp_res[i][j+2] += list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j))][max(0,min(maxold_x,x_pos+i+x))]*COEF[x+2];
-      }
-
-      for (j = 0; j < BLOCK_SIZE; j++) {
-        for (i = 0; i < BLOCK_SIZE; i++) {
-          for (result = 0, y = -2; y < 4; y++)
-            result += tmp_res[i][j+y+2]*COEF[y+2];
-          block[i][j] = max(0, min(255, (result+512)/1024));
-        } 
-      }
-
-      if ((dy&1) == 1) {
-        for (j = 0; j < BLOCK_SIZE; j++)
-          for (i = 0; i < BLOCK_SIZE; i++)
-            block[i][j] = (block[i][j] + max(0, min(255, (tmp_res[i][j+2+dy/2]+16)/32)) +1 )/2;
-      }
-    }
-    else if (dy == 2) {  /* Horizontal & vertical interpolation */
-
-      for (j = 0; j < BLOCK_SIZE; j++) {
-        for (i = -2; i < BLOCK_SIZE+3; i++)
-          for (tmp_res[j][i+2] = 0, y = -2; y < 4; y++)
-            tmp_res[j][i+2] += list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j+y))][max(0,min(maxold_x,x_pos+i))]*COEF[y+2];
-      }
-
-      for (j = 0; j < BLOCK_SIZE; j++) {
-        for (i = 0; i < BLOCK_SIZE; i++) {
-          for (result = 0, x = -2; x < 4; x++)
-            result += tmp_res[j][i+x+2]*COEF[x+2];
-          block[i][j] = max(0, min(255, (result+512)/1024));
-        }
-      }
-
-      if ((dx&1) == 1) {
-        for (j = 0; j < BLOCK_SIZE; j++)
-          for (i = 0; i < BLOCK_SIZE; i++)
-            block[i][j] = (block[i][j] + max(0, min(255, (tmp_res[j][i+2+dx/2]+16)/32))+1)/2;
-      }
-    }
-    else {  /* Diagonal interpolation */
-
-      for (j = 0; j < BLOCK_SIZE; j++) {
-        for (i = 0; i < BLOCK_SIZE; i++) {
-          pres_y = dy == 1 ? y_pos+j : y_pos+j+1;
-          pres_y = max(0,min(maxold_y,pres_y));
-          for (result = 0, x = -2; x < 4; x++)
-            result += list[ref_frame]->imgY[pres_y][max(0,min(maxold_x,x_pos+i+x))]*COEF[x+2];
-          block[i][j] = max(0, min(255, (result+16)/32));
-        }
-      }
-
-      for (j = 0; j < BLOCK_SIZE; j++) {
-        for (i = 0; i < BLOCK_SIZE; i++) {
-          pres_x = dx == 1 ? x_pos+i : x_pos+i+1;
-          pres_x = max(0,min(maxold_x,pres_x));
-          for (result = 0, y = -2; y < 4; y++)
-            result += list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j+y))][pres_x]*COEF[y+2];
-          block[i][j] = (block[i][j] + max(0, min(255, (result+16)/32)) +1 ) / 2;
-        }
-      }
-
-    }
-  }
 }

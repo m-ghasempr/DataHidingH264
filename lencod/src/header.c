@@ -58,7 +58,10 @@ int SliceHeader()
   len += ue_v("SH: pic_parameter_set_id" , 0 ,partition);
 
   // frame_num
-  assert (img->frame_num < 1<<(LOG2_MAX_FRAME_NUM_MINUS4+4));  // check that it fits
+  //assert (img->frame_num < 1<<(LOG2_MAX_FRAME_NUM_MINUS4+4));  // check that it fits
+	//sw
+	if(input->no_frames >= 1<<(LOG2_MAX_FRAME_NUM_MINUS4+4))
+		error ("Too many frames.  Increase LOG2_MAX_FRAME_NUM_MINUS4",-999);  
   len += u_v (LOG2_MAX_FRAME_NUM_MINUS4 + 4,"SH: frame_num", img->frame_num, partition);
 
   if (input->InterlaceCodingOption != FRAME_CODING) // same condition as for sps->frame_mbs_only_flag!
@@ -130,8 +133,7 @@ int SliceHeader()
     len +=  u_1 ("SH: direct_spatial_mv_pred_flag", input->direct_type, partition);
   }
 
-//  if ((img->type == P_SLICE) || (img->type == B_SLICE) || (img->type == BS_IMG) || (img->type==SP_SLICE))
-	  if ((img->type == P_SLICE) || (img->type == B_SLICE) || (img->type==SP_SLICE))
+  if ((img->type == P_SLICE) || (img->type == B_SLICE) || (img->type==SP_SLICE))
   {
     // num_ref_idx_active_override_flag here always 1
     len +=  u_1 ("SH: num_ref_idx_active_override_flag", 1, partition);

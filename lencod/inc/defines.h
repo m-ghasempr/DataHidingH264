@@ -24,7 +24,7 @@
 #if defined _DEBUG
 #define TRACE           1                   //!< 0:Trace off 1:Trace on
 #else
-#define TRACE           0                   //!< 0:Trace off 1:Trace on
+#define TRACE           1                   //!< 0:Trace off 1:Trace on
 #endif
 
 typedef unsigned char byte;    //!< byte type definition
@@ -73,6 +73,9 @@ typedef unsigned char byte;    //!< byte type definition
 #define INTERIM_FILE_MINOR_NO 1
 
 #define _FAST_FULL_ME_
+
+//#define _Fast_ME_  //defnition for fast motion estiamtion , added by Zhibo Chen, refer JVT-D016 for detail
+
 #define _FULL_SEARCH_RANGE_
 #define _ADAPT_LAST_GROUP_
 #define _CHANGE_QP_

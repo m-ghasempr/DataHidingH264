@@ -21,18 +21,17 @@
  *  \brief
  *     H.264/AVC reference encoder project main()
  *  \author
- *     Main contributors (see contributors.h for copyright, address and affiliation details)
- *     - Inge Lille-Langøy               <inge.lille-langoy@telenor.com>
- *     - Rickard Sjoberg                 <rickard.sjoberg@era.ericsson.se>
- *     - Stephan Wenger                  <stewe@cs.tu-berlin.de>
- *     - Jani Lainema                    <jani.lainema@nokia.com>
- *     - Byeong-Moon Jeon                <jeonbm@lge.com>
- *     - Yoon-Seong Soh                  <yunsung@lge.com>
- *     - Thomas Stockhammer              <stockhammer@ei.tum.de>
- *     - Detlev Marpe                    <marpe@hhi.de>
- *     - Guido Heising                   <heising@hhi.de>
- *     - Karsten Suehring                <suehring@hhi.de>
- *
+ *   Main contributors (see contributors.h for copyright, address and affiliation details)
+ *   - Inge Lille-Langøy               <inge.lille-langoy@telenor.com>
+ *   - Rickard Sjoberg                 <rickard.sjoberg@era.ericsson.se>
+ *   - Stephan Wenger                  <stewe@cs.tu-berlin.de>
+ *   - Jani Lainema                    <jani.lainema@nokia.com>
+ *   - Byeong-Moon Jeon                <jeonbm@lge.com>
+ *   - Yoon-Seong Soh                  <yunsung@lge.com>
+ *   - Thomas Stockhammer              <stockhammer@ei.tum.de>
+ *   - Detlev Marpe                    <marpe@hhi.de>
+ *   - Guido Heising                   <heising@hhi.de>
+ *   - Karsten Suehring                <suehring@hhi.de>
  ***********************************************************************
  */
 
@@ -60,6 +59,8 @@
 #include "parset.h"
 #include "image.h"
 #include "output.h"
+#include "fast_me.h"
+#include "ratectl.h"
 
 #define JM      "7"
 #define VERSION "7.3"
@@ -99,8 +100,9 @@ void Clear_Motion_Search_Module ();
 
 int main(int argc,char **argv)
 {
+  int M,N,n,np,nb;           //Rate control
   
-  p_dec = p_stat = p_log = p_trace = NULL;
+	p_dec = p_stat = p_log = p_trace = NULL;
 
   Configure (argc, argv);
   init_img();
@@ -126,6 +128,14 @@ int main(int argc,char **argv)
   Init_Motion_Search_Module ();
 
   information_init();
+
+	//Rate control 
+	if(input->RCEnable)	
+		rc_init_seq();
+
+#ifdef _Fast_ME_
+  DefineThreshold();
+#endif
 
   // B pictures
   Bframe_ctr=0;
@@ -185,6 +195,49 @@ int main(int argc,char **argv)
 #endif
     img->framepoc = min (img->toppoc, img->bottompoc);
 
+		//Rate control
+		if (img->type == I_SLICE)
+		{
+			if(input->RCEnable)
+			{
+				if (input->intra_period == 0)
+				{
+					n = input->no_frames + (input->no_frames - 1) * input->successive_Bframe;
+					
+					/* number of P frames */
+					np = input->no_frames-1; 
+					
+					/* number of B frames */
+					nb = (input->no_frames - 1) * input->successive_Bframe;
+				}else
+				{
+					N = input->intra_period*(input->successive_Bframe+1);
+					M = input->successive_Bframe+1;
+					n = (img->number==0) ? N - ( M - 1) : N;
+					
+					/* last GOP may contain less frames */
+					if(img->number/input->intra_period >= input->no_frames / input->intra_period)
+					{
+						if (img->number != 0)
+							n = (input->no_frames - img->number) + (input->no_frames - img->number - 1) * input->successive_Bframe + input->successive_Bframe;
+						else
+							n = input->no_frames  + (input->no_frames - 1) * input->successive_Bframe;
+					}
+					
+					/* number of P frames */
+					if (img->number == 0)
+						np = (n + 2 * (M - 1)) / M - 1; /* first GOP */
+					else
+						np = (n + (M - 1)) / M - 1;
+					
+					/* number of B frames */
+					nb = n - np - 1;
+				}
+				rc_init_GOP(np,nb);
+			}
+		}
+
+
     // which layer the image belonged to?
     if ( IMG_NUMBER % (input->NumFramesInELSubSeq+1) == 0 )
       img->layer = 0;
@@ -236,7 +289,6 @@ int main(int argc,char **argv)
     }
     
     process_2nd_IGOP();
-
   }
   // terminate sequence
   terminate_sequence();
@@ -280,7 +332,7 @@ int main(int argc,char **argv)
   free_context_memory ();
   FreeNalPayloadBuffer();
   FreeParameterSets();
-  return 0;
+  return 0;					//encode JM73_FME version
 }
 
 
@@ -410,7 +462,7 @@ void init_img()
   if(input->InterlaceCodingOption != FRAME_CODING) 
     img->buf_cycle *= 2;
 
-  get_mem_mv (&(img->mv));
+  get_mem_mv (&(img->pred_mv));
   get_mem_mv (&(img->p_fwMV));
   get_mem_mv (&(img->p_bwMV));
   get_mem_mv (&(img->all_mv));
@@ -422,37 +474,37 @@ void init_img()
 
   if(input->InterlaceCodingOption >= MB_CODING) 
   {
-    get_mem_mv (&(img->mv_top));
+    get_mem_mv (&(img->pred_mv_top));
     get_mem_mv (&(img->p_fwMV_top));
     get_mem_mv (&(img->p_bwMV_top));
     get_mem_mv (&(img->all_mv_top));
     get_mem_mv (&(img->all_bmv_top));
 
-    get_mem_mv (&(img->mv_bot));
+    get_mem_mv (&(img->pred_mv_bot));
     get_mem_mv (&(img->p_fwMV_bot));
     get_mem_mv (&(img->p_bwMV_bot));
     get_mem_mv (&(img->all_mv_bot));
     get_mem_mv (&(img->all_bmv_bot));
 
-    get_mem_mv (&(rddata_top_frame_mb.mv));
+    get_mem_mv (&(rddata_top_frame_mb.pred_mv));
     get_mem_mv (&(rddata_top_frame_mb.p_fwMV));
     get_mem_mv (&(rddata_top_frame_mb.p_bwMV));
     get_mem_mv (&(rddata_top_frame_mb.all_mv));
     get_mem_mv (&(rddata_top_frame_mb.all_bmv));
 
-    get_mem_mv (&(rddata_bot_frame_mb.mv));
+    get_mem_mv (&(rddata_bot_frame_mb.pred_mv));
     get_mem_mv (&(rddata_bot_frame_mb.p_fwMV));
     get_mem_mv (&(rddata_bot_frame_mb.p_bwMV));
     get_mem_mv (&(rddata_bot_frame_mb.all_mv));
     get_mem_mv (&(rddata_bot_frame_mb.all_bmv));
 
-    get_mem_mv (&(rddata_top_field_mb.mv));
+    get_mem_mv (&(rddata_top_field_mb.pred_mv));
     get_mem_mv (&(rddata_top_field_mb.p_fwMV));
     get_mem_mv (&(rddata_top_field_mb.p_bwMV));
     get_mem_mv (&(rddata_top_field_mb.all_mv));
     get_mem_mv (&(rddata_top_field_mb.all_bmv));
 
-    get_mem_mv (&(rddata_bot_field_mb.mv));
+    get_mem_mv (&(rddata_bot_field_mb.pred_mv));
     get_mem_mv (&(rddata_bot_field_mb.p_fwMV));
     get_mem_mv (&(rddata_bot_field_mb.p_bwMV));
     get_mem_mv (&(rddata_bot_field_mb.all_mv));
@@ -565,7 +617,7 @@ void init_img()
 void free_img ()
 {
   CloseSEIMessages(); // Tian Dong (Sept 2002)
-  free_mem_mv (img->mv);
+  free_mem_mv (img->pred_mv);
   free_mem_mv (img->p_fwMV);
   free_mem_mv (img->p_bwMV);
   free_mem_mv (img->all_mv);
@@ -1412,6 +1464,10 @@ int init_global_buffers()
 
   }
 
+#ifdef  _Fast_ME_
+  memory_size += get_mem_FME();
+#endif
+
   return (memory_size);
 }
 
@@ -1568,6 +1624,11 @@ void free_global_buffers()
   if (img->nz_coeff !=NULL) free(img->nz_coeff );
 
   free_mem2Dint(img->field_anchor);
+
+
+#ifdef _Fast_ME_
+  free_mem_FME();
+#endif
 }
 
 /*!

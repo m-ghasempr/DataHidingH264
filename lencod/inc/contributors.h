@@ -192,6 +192,12 @@
       Haidian District
       Beijing, China
 
+	  Zhibo Chen                      <chenzhibo@tsinghua.org.cn>
+	  JianFeng Xu					  <fenax@video.mdc.tsinghua.edu.cn>  
+	  Dept.of E&E, Tsinghua Univ
+	  Haidian District 
+	  Beijing China, 100084
+
     \endverbatim
  */
 

@@ -617,8 +617,19 @@ static void PatchInp ()
     if(input->mb_allocation_map_type >= 3)
       input->num_slice_groups_minus1 = input->num_slice_groups_minus1 = 1;
   }
-  // End JVT-D095, JVT-D097
 
+	// Rate control
+	if(input->RCEnable)
+  {
+	  if ( (input->img_height*input->img_width/256)%input->basicunit!=0)
+	  {
+		  snprintf(errortext, ET_SIZE, "Basic unit is not defined correctly.");
+		  error (errortext, 500);
+	  }
+  }
+  // End JVT-D095, JVT-D097
+  if( !input->direct_type && input->num_reference_frames<2 && input->successive_Bframe >0)
+	  error("temporal direct needs at least 2 ref frames\n",-1000);
 }
 
 void PatchInputNoFrames()

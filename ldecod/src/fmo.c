@@ -378,7 +378,7 @@ static void FmoGenerateType1MapUnitMap (pic_parameter_set_rbsp_t* pps, seq_param
   for( i = 0; i < PicSizeInMapUnits; i++ )
   {
     MapUnitToSliceGroupMap[i] = ((i%img->PicWidthInMbs)+(((i/img->PicWidthInMbs)*(pps->num_slice_groups_minus1+1))/2))
-		                            %(pps->num_slice_groups_minus1+1);
+                                %(pps->num_slice_groups_minus1+1);
   }
 }
 

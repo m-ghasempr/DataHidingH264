@@ -318,8 +318,7 @@ void UseParameterSet (int PicParsetId)
   else if (img->pic_order_cnt_type == 1) // POC200301
   {
     img->num_ref_frames_in_pic_order_cnt_cycle = sps->num_ref_frames_in_pic_order_cnt_cycle;
-    if(img->num_ref_frames_in_pic_order_cnt_cycle != 1)
-      error("num_ref_frames_in_pic_order_cnt_cycle != 1",-1001);
+
     if(img->num_ref_frames_in_pic_order_cnt_cycle >= MAXnum_ref_frames_in_pic_order_cnt_cycle)
       error("num_ref_frames_in_pic_order_cnt_cycle too large",-1011);
 

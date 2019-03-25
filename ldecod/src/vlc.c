@@ -735,6 +735,8 @@ int readSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *sym,  DataPartition *d
   };
 
   vlcnum = sym->value1;
+  // vlcnum is the index of Table used to code coeff_token
+  // vlcnum==3 means (8<=nC) which uses 6bit FLC
 
   if (vlcnum == 3)
   {

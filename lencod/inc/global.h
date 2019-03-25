@@ -328,6 +328,14 @@ typedef struct macroblock
   int mbAddrA, mbAddrB, mbAddrC, mbAddrD;
   int mbAvailA, mbAvailB, mbAvailC, mbAvailD;
 
+	// rate control
+  double              actj;               // macroblock activity measure for macroblock j
+  int                 prev_qp;
+  int                 prev_cbp;
+  int                 predict_qp;
+  int                 predict_error;
+
+
 } Macroblock;
 
 
@@ -696,6 +704,13 @@ typedef struct
   int context_init_method;
   int model_number;
 
+	//! Rate Control on JVT standard 
+  int RCEnable;    
+  int bit_rate;
+  int SeinitialQP;
+  int basicunit;
+  int channel_type;
+
 } InputParameters;
 
 //! ImageParameters
@@ -746,7 +761,7 @@ typedef struct
 
   int mprr_2[5][16][16];       //!< all 4 new intra prediction modes
   int mprr_c[2][4][8][8];      //!< new chroma 8x8 intra prediction modes
-  int***** mv;                 //!< motion vectors for all block types and all reference frames
+  int***** pred_mv;                 //!< motion vector predictors for all block types and all reference frames
   int mpr[16][16];             //!< current best prediction mode
   int m7[16][16];              //!< the diff pixel values between orginal image and prediction
 
@@ -794,8 +809,8 @@ typedef struct
   int field_block_y;  // Vertical block number for the first block of a field MB
   int field_pix_y;    // Co-ordinates of current macroblock in terms of field pixels (luma)
   int field_pix_c_y;  // Co-ordinates of current macroblock in terms of field pixels (chroma)
-  int *****mv_top;    //!< For MB level field/frame coding tools
-  int *****mv_bot;    //!< For MB level field/frame coding tools
+  int *****pred_mv_top;    //!< For MB level field/frame coding tools
+  int *****pred_mv_bot;    //!< For MB level field/frame coding tools
   int *****p_fwMV_top;    //!< For MB level field/frame coding tools
   int *****p_fwMV_bot;    //!< For MB level field/frame coding tools
   int *****p_bwMV_top;    //!< For MB level field/frame coding tools
@@ -872,6 +887,34 @@ typedef struct
 
   int model_number;
 
+	
+	  /*rate control*/
+  int NumberofHeaderBits; 
+  int NumberofTextureBits;
+  int NumberofBasicUnitHeaderBits;
+  int NumberofBasicUnitTextureBits;
+  double TotalMADBasicUnit;
+  int NumberofMBTextureBits;
+  int NumberofMBHeaderBits;
+  int NumberofCodedBFrame; 
+  int NumberofCodedPFrame;
+  int NumberofGOP;
+  int TotalQpforPPicture;
+  int NumberofPPicture;
+  double MADofMB[6336];
+  int BasicUnitQP;
+  int TopFieldFlag;
+  int FieldControl;
+  int FieldFrame;
+  int Frame_Total_Number_MB;
+  int IFLAG;
+  int NumberofCodedMacroBlocks;
+  int BasicUnit;
+  int mb_aff_field;	
+  int write_macroblock;	
+  int bot_MB;
+  int write_macroblock_frame;
+
 } ImageParameters;
 
                                 //!< statistics
@@ -934,7 +977,7 @@ typedef struct
   int    intra_pred_modes[16];
   int    cbp, cbp_blk;
   int    mode;
-  int    *****mv, *****p_fwMV, *****p_bwMV ;
+  int    *****pred_mv, *****p_fwMV, *****p_bwMV ;
   int    *****all_mv;
   int    *****all_bmv;
   int    i16offset;

@@ -88,7 +88,8 @@ void CheckAvailabilityOfNeighbors()
 void get_mb_block_pos (int mb_addr, int *x, int*y)
 {
 
-  if (img->MbaffFrameFlag)
+  //sw mb aff
+  if (img->MbaffFrameFlag&&mb_adaptive)
   {
     *x = ((mb_addr/2) % img->PicWidthInMbs);
     *y = ( ((mb_addr/2) / img->PicWidthInMbs)  * 2 + (mb_addr%2));
@@ -236,7 +237,9 @@ void getAffNeighbour(int curr_mb_nr, int xN, int yN, int luma, PixelPos *pix)
   {
     if (yN < 0)
     {
-      if(!currMb->mb_field)
+      //sw mbaff
+      //if(!currMb->mb_field)
+      if(mb_adaptive)
       {
         // frame
         if (curr_mb_nr%2 == 0)
@@ -299,7 +302,9 @@ void getAffNeighbour(int curr_mb_nr, int xN, int yN, int luma, PixelPos *pix)
     { // xN < 0 && yN >= 0
       if ((yN >= 0) && (yN <maxWH))
       {
-        if (!currMb->mb_field)
+        //sw mbaff
+        //if(!currMb->mb_field)
+        if(mb_adaptive)
         {
           // frame
           if(curr_mb_nr % 2 == 0)
@@ -419,7 +424,9 @@ void getAffNeighbour(int curr_mb_nr, int xN, int yN, int luma, PixelPos *pix)
     {
       if (yN<0)
       {
-        if (!currMb->mb_field)
+        //sw mbaff
+        //if(!currMb->mb_field)
+        if(mb_adaptive)
         {
           //frame
           if (curr_mb_nr % 2 == 0)
@@ -483,7 +490,9 @@ void getAffNeighbour(int curr_mb_nr, int xN, int yN, int luma, PixelPos *pix)
       // xN >= maxWH
       if(yN < 0)
       {
-        if (!currMb->mb_field)
+        //sw mbaff
+        //if(!currMb->mb_field)
+        if(mb_adaptive)
         {
           // frame
           if (curr_mb_nr % 2 == 0)

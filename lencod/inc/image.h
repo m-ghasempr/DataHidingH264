@@ -23,6 +23,6 @@ Boolean dummy_slice_too_big(int bits_slice);
 void copy_rdopt_data (int field_type);    //!< For MB level field/frame coding tools
 
 void UnifiedOneForthPix (StorablePicture *s);
-void get_block(int ref_frame, StorablePicture **list, int x_pos, int y_pos, int block[BLOCK_SIZE][BLOCK_SIZE]);
+
 #endif
 

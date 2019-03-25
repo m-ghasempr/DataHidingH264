@@ -26,27 +26,29 @@ typedef struct storable_picture
   int         top_poc;
   int         bottom_poc;
   int         order_num;
-  int         ref_pic_num[6][20];
+  int64       ref_pic_num[6][32];
   int         pic_num;
   int         long_term_pic_num;
   int         long_term_frame_idx;
 
   int         is_long_term;
   int         used_for_reference;
+  int         is_output;
+  int         non_existing;
 
   int         size_x, size_y, size_x_cr, size_y_cr;
   int         chroma_vector_adjustment;
   int         coded_frame;
   int         mb_adaptive_frame_field_flag;
 
-  byte **     imgY;
-  byte ***    imgUV;
+  byte **     imgY;          //!< Y picture component
+  byte ***    imgUV;         //!< U and V picture components
 
   byte *      mb_field;      //<! field macroblock indicator
 
   int  ***    ref_idx;       //<! reference picture   [list][subblock_x][subblock_y]
                              //   [list][mb_nr][subblock_x][subblock_y]
-  int  ***    ref_pic_id;    //<! reference picture identifier [list][subblock_x][subblock_y]
+  int64 ***    ref_pic_id;    //<! reference picture identifier [list][subblock_x][subblock_y]
                              //   (not  simply index) 
   int  ****   mv;            //<! motion vector       [list][subblock_x][subblock_y][component]
   
@@ -119,6 +121,8 @@ void             reorder_ref_pic_list(StorablePicture **list, int *list_size,
 void             init_mbaff_lists();
 void             alloc_ref_pic_list_reordering_buffer(Slice *currSlice);
 void             free_ref_pic_list_reordering_buffer(Slice *currSlice);
+
+void             fill_frame_num_gap(ImageParameters *img);
 
 #endif
 

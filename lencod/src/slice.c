@@ -234,6 +234,12 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
 
   len = start_slice ();
 
+  //Rate control
+  img->NumberofHeaderBits +=len;
+  /*basic unit layer rate control*/
+	  if(img->BasicUnit<img->Frame_Total_Number_MB)
+		  img->NumberofBasicUnitHeaderBits +=len;
+
 //  printf("short size, used, num-used: (%d,%d,%d)\n", fb->short_size, fb->short_used, fb->num_short_used);
 
 /*
@@ -251,7 +257,9 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
 
   while (end_of_slice == FALSE) // loop over macroblocks
   {
-    if (!img->MbaffFrameFlag)
+    //sw paff
+    //if (!img->MbaffFrameFlag)
+    if (input->InterlaceCodingOption < MB_CODING || mb_adaptive == 0)    if (!img->MbaffFrameFlag)
     {
       recode_macroblock = FALSE;
       set_MB_parameters (CurrentMbInScanOrder);
@@ -323,6 +331,11 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
       img->field_mode = 0;  // MB coded as frame
       img->top_field = 0;   // Set top field to 0
 
+			//Rate control
+			img->write_macroblock = 0;
+		  img->bot_MB = 0;   
+		  img->mb_aff_field = 0;
+
       set_MB_parameters (CurrentMbInScanOrder);
       start_macroblock ();
       
@@ -335,6 +348,9 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
       FrameRDCost = rdopt->min_rdcost;
       //***   Top MB coded as frame MB ***//
       
+			//Rate control
+			img->bot_MB = 1; //for Rate control
+
       // go to the bottom MB in the MB pair
       CurrentMbInScanOrder = img->current_mb_nr + MBRowSize;
       img->field_mode = 0;  // MB coded as frame  //GB
@@ -349,6 +365,9 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
 
       //***   Bottom MB coded as frame MB ***//
       
+			//Rate control
+			img->bot_MB = 0; 
+		  img->mb_aff_field =1;
       
       // start coding the MB pair as a field MB pair
       CurrentMbInScanOrder -= MBRowSize;                //! FMO problem and generally dirty, just to go back like this
@@ -372,7 +391,9 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
       field_mb[img->mb_y][img->mb_x] = 1;   // set the MB as field (for use in FindSkipMotionVector)
       FieldRDCost = rdopt->min_rdcost;
       //***   Top MB coded as field MB ***//
-      
+      //Rate control
+			img->bot_MB = 1;//for Rate control
+
       CurrentMbInScanOrder += MBRowSize;
       img->top_field = 0;   // Set top field to 0
       set_MB_parameters (CurrentMbInScanOrder);
@@ -384,6 +405,9 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
       field_mb[img->mb_y][img->mb_x] = 1;   // set the MB as field (for use in FindSkipMotionVector)
       FieldRDCost += rdopt->min_rdcost;
       //***   Bottom MB coded as field MB ***//
+			
+			//Rate control
+			img->write_macroblock_frame = 0;  //Rate control
       
       // decide between frame/field MB pair
       if (FrameRDCost < FieldRDCost)
@@ -396,6 +420,8 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
         img->num_ref_idx_l0_active -= 1;
         img->num_ref_idx_l0_active >>= 1;
         
+				//Rate control
+				img->write_macroblock_frame = 1;  //for Rate control
       }
       else
       {
@@ -405,12 +431,17 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
         img->height = input->img_height / 2;      // set image height as frame height
       }
       
+			//Rate control
+			img->write_macroblock = 1;//Rate control 
       
       if (MBPairIsField)
         img->top_field = 1;
       else
         img->top_field = 0;
       
+			//Rate control
+			img->bot_MB = 0;// for Rate control
+
       // go back to the Top MB in the MB pair
       CurrentMbInScanOrder -= MBRowSize;
       set_MB_parameters (CurrentMbInScanOrder);
@@ -428,6 +459,8 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
       terminate_macroblock (&end_of_slice, &recode_macroblock);     // done coding the Top MB 
       proceed2nextMacroblock (CurrentMbInScanOrder);        // Go to next macroblock
       
+			//Rate control
+			img->bot_MB = 1;//for Rate control
       // go to the Bottom MB in the MB pair
       CurrentMbInScanOrder += MBRowSize;
       img->top_field = 0;

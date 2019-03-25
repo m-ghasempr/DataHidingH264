@@ -49,6 +49,7 @@ typedef struct storable_picture
   int  ***    ref_pic_id;    //<! reference picture identifier [list][subblock_x][subblock_y]
                              //   (not  simply index) 
   int  ****   mv;            //<! motion vector       [list][mb_nr][subblock_x][subblock_y]
+  byte **     moving_block;
   
   struct storable_picture *top_field;     // for mb aff, if frame for referencing the top field
   struct storable_picture *bottom_field;  // for mb aff, if frame for referencing the bottom field

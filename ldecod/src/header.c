@@ -107,6 +107,22 @@ int RestOfSliceHeader()
 
   img->frame_num = u_v (active_sps->log2_max_frame_num_minus4 + 4, "SH: frame_num", currStream);
 
+  /* Tian Dong: frame_num gap processing, if found */
+  if (img->idr_flag)
+  {
+    img->pre_frame_num = img->frame_num;
+    assert(img->frame_num == 0);
+  }
+  if (img->frame_num != img->pre_frame_num && img->frame_num != (img->pre_frame_num + 1) % img->MaxFrameNum) 
+  {
+    if (active_sps->gaps_in_frame_num_value_allowed_flag == 0)
+    {
+      /* Advanced Error Concealment would be called here to combat unintentional loss of pictures. */
+      error("An unintentional loss of pictures occurs! Exit\n", 100);
+    }
+    fill_frame_num_gap(img);
+  }
+
   if (active_sps->frame_mbs_only_flag)
   {
     img->structure = FRAME;
@@ -534,24 +550,39 @@ void decoding_poc(struct img_par *img)
     // 1st
     if(img->idr_flag)
       img->PicOrderCntMsb = 0;
-
+    else
+    {
+      if (img->last_has_mmco_5) 
+      {
+        if (img->last_pic_bottom_field)
+        {
+          img->PicOrderCntMsb     = 0;
+          img->PrevPicOrderCntLsb = 0;
+        }
+        else
+        {
+          img->PicOrderCntMsb     = 0;
+          img->PrevPicOrderCntLsb = img->toppoc;
+        }
+      }
+    }
     // Calculate the MSBs of current picture
     if( img->pic_order_cnt_lsb  <  img->PrevPicOrderCntLsb  &&  
       ( img->PrevPicOrderCntLsb - img->pic_order_cnt_lsb )  >=  ( MaxPicOrderCntLsb / 2 ) )
-	    img->CurrPicOrderCntMsb = img->PicOrderCntMsb + MaxPicOrderCntLsb;
+      img->CurrPicOrderCntMsb = img->PicOrderCntMsb + MaxPicOrderCntLsb;
     else if ( img->pic_order_cnt_lsb  >  img->PrevPicOrderCntLsb  &&
       ( img->pic_order_cnt_lsb - img->PrevPicOrderCntLsb )  >  ( MaxPicOrderCntLsb / 2 ) )
-	    img->CurrPicOrderCntMsb = img->PicOrderCntMsb - MaxPicOrderCntLsb;
+      img->CurrPicOrderCntMsb = img->PicOrderCntMsb - MaxPicOrderCntLsb;
     else
-	    img->CurrPicOrderCntMsb = img->PicOrderCntMsb;
+      img->CurrPicOrderCntMsb = img->PicOrderCntMsb;
     
     // 2nd
 
     img->toppoc = img->CurrPicOrderCntMsb + img->pic_order_cnt_lsb;
     if( img->bottom_field_flag ) 
-	    img->bottompoc = img->CurrPicOrderCntMsb + img->pic_order_cnt_lsb;
+      img->bottompoc = img->CurrPicOrderCntMsb + img->pic_order_cnt_lsb;
     else
-	    img->bottompoc = img->toppoc + img->delta_pic_order_cnt_bottom;
+      img->bottompoc = img->toppoc + img->delta_pic_order_cnt_bottom;
 
     // last: some post-processing. 
     if ( img->toppoc <= img->bottompoc )
@@ -569,13 +600,20 @@ void decoding_poc(struct img_par *img)
       img->delta_pic_order_cnt[0]=0;                        //ignore first delta
       if(img->frame_num)  error("frame_num != 0 in idr pix", -1020);
     }
-    else if (img->frame_num<img->PreviousFrameNum)
-    {             //not first pix of IDRGOP
-      img->FrameNumOffset = img->PreviousFrameNumOffset + img->MaxFrameNum;
-    }
     else 
     {
-      img->FrameNumOffset = img->PreviousFrameNumOffset;
+      if (img->last_has_mmco_5)
+      {
+        img->PreviousFrameNumOffset = 0;
+      }
+      if (img->frame_num<img->PreviousFrameNum)
+      {             //not first pix of IDRGOP
+        img->FrameNumOffset = img->PreviousFrameNumOffset + img->MaxFrameNum;
+      }
+      else 
+      {
+        img->FrameNumOffset = img->PreviousFrameNumOffset;
+      }
     }
 
     // 2nd
@@ -640,6 +678,10 @@ void decoding_poc(struct img_par *img)
     }
     else
     {
+      if (img->last_has_mmco_5)
+      {
+        img->PreviousFrameNumOffset = 0;
+      }
       if (img->frame_num<img->PreviousFrameNum)
         img->FrameNumOffset = img->PreviousFrameNumOffset + img->MaxFrameNum;
       else 

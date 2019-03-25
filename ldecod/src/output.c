@@ -38,21 +38,59 @@ void write_picture(StorablePicture *p, FILE *p_out)
 {
   int i,j;
 
-  for(i=0;i<p->size_y;i++)
-    for(j=0;j<p->size_x;j++)
+  int crop_left, crop_right, crop_top, crop_bottom;
+  int crop_vert_mult;
+  
+  if (active_sps->frame_mbs_only_flag)
+  {
+    crop_vert_mult = 2;
+  }
+  else
+  {
+    if (p->structure != FRAME)
+    {
+      crop_vert_mult = 2;
+    }
+    else
+    {
+      crop_vert_mult = 4;
+    }
+  }
+
+  if (active_sps->frame_cropping_flag)
+  {
+    crop_left   = 2 * active_sps->frame_cropping_rect_left_offset;
+    crop_right  = 2 * active_sps->frame_cropping_rect_right_offset;
+    crop_top    = crop_vert_mult * active_sps->frame_cropping_rect_top_offset;
+    crop_bottom = crop_vert_mult * active_sps->frame_cropping_rect_bottom_offset;
+  }
+  else
+  {
+    crop_left = crop_right = crop_top = crop_bottom = 0;
+  }
+
+  for(i=crop_top;i<p->size_y-crop_bottom;i++)
+    for(j=crop_left;j<p->size_x-crop_right;j++)
     {
       fputc(p->imgY[i][j],p_out);
     }
-  for(i=0;i<p->size_y_cr;i++)
-    for(j=0;j<p->size_x_cr;j++)
+
+  crop_left   /= 2;
+  crop_right  /= 2;
+  crop_top    /= 2;
+  crop_bottom /= 2;
+
+  for(i=crop_top;i<p->size_y_cr-crop_bottom;i++)
+    for(j=crop_left;j<p->size_x_cr-crop_right;j++)
     {
       fputc(p->imgUV[0][i][j],p_out);
     }
-  for(i=0;i<p->size_y_cr;i++)
-    for(j=0;j<p->size_x_cr;j++)
+  for(i=crop_top;i<p->size_y_cr-crop_bottom;i++)
+    for(j=crop_left;j<p->size_x_cr-crop_right;j++)
     {
       fputc(p->imgUV[1][i][j],p_out);
     }
+    
   fflush(p_out);
 }
 

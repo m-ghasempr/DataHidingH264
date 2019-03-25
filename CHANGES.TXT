@@ -1,3 +1,24 @@
+Changes for Version JM7.4 to JM 7.3
+-----------------------------------
+Bug fixes
+- decoder: lt.ref. pic handling with sliding window (AF) 
+- decoder: fix CABAC parsing bug for skip_flag (KS)
+- decoder: gaps in frame_num (DT)
+- decoder: error message, if direct mode fails (BH)
+- decoder: fix long term reference pictures (KS)
+- decoder: deblocking filter for picture aff (PN)
+- decoder: long term picture handling/MMCO (AF/KS)
+- decoder: chroma QP offset (JS)
+- decoder: frame cropping support (KS)
+- decoder: deblocking filter fix (SY, others)
+
+New features:
+- decoder: I_PCM macroblock mode for VLC (DW)
+- decoder: I_PCM macroblock mode for CABAC (DW)
+- encoder: I_PCM macroblock mode for VLC (DW)
+- encoder: I_PCM macroblock mode for CABAC (DW)
+
+
 Changes for Version JM7.3 to JM 7.2
 -----------------------------------
 Bug fixes
@@ -638,39 +659,43 @@ Bug Fixes
 People:
 KS      Karsten Suehring        suehring@hhi.de
 SM      Siwei Ma                swma@jdl.ac.cn
+AF      Arild Fuldseth          arild.fuldseth@tandberg.no
 AH      Antti Hallapuro         antti.hallapuro@nokia.com
-AT      Alexis Michael Tourapis alexismt@ieee.org
 AJ      Anthony Joch            anthony@ubvideo.com
-CG      Cristina Gomila         GomilaC@tce.com
+AT      Alexis Michael Tourapis alexismt@ieee.org
 BH      Barry Haskell           bhaskell@apple.com
+CG      Cristina Gomila         GomilaC@tce.com
 DC      Doug Chin               dougchin@sandvideo.com
 DH      Dzung Hoang             dzung.hoang@conexant.com
 DK      Dimitris Kontopodis     dkonto@eikon.tum.de
 DM      Detlev Marpe            marpe@hhi.de
 DT      Dong Tian               tian@cs.tut.fi
+DW      Dong Wang               Dong.Wang@bristol.ac.uk
 FB      Frank Bossen            bossen@docomolabs-usa.com
+GB      Gabi Blaetterman        blaetter@hhi.de
 GC      Guy Cote                guy@videolocus.com
 GrC     Greg Conklin            gregc@real.com
-GB      Gabi Blaetterman        blaetter@hhi.de
 GS      Gary Sullivan           garysull@microsoft.com
 FW      Feng Wu                 fengwu@microsoft.com
 HS      Heiko Schwarz           hschwarz@hhi.de
 IL      Inge Lille-Langoy       Inge.Lille-Langoy@telenor.com
+IM      Iole Moccagatta         imoccaga@lsil.com
+JA      James Au                james@ubvideo.com
 JB      Jill Boyce              BoyceJ@tce.com
 JL      Jani Lainema            Jani.Lainema@nokia.com
-JA      James Au                james@ubvideo.com
-IM      Iole Moccagatta         imoccaga@lsil.com
-KSa     Kazushi Sato            kazushi@av.crl.sony.co.jp
-KP      Krit Panusopone         KPanusopone@gi.com
+JS      Joonho Song             jhsong@varovision.com
 KL      Karl Lillevold          Karll@real.com
+KP      Krit Panusopone         KPanusopone@gi.com
+KSa     Kazushi Sato            kazushi@av.crl.sony.co.jp
 LK      Louis Kerofsky          lkerofsky@sharplabs.com
 LW      Limin Wang              liwang@gi.com
 LWi     Lowell Winger           lwinger@videolocus.com
 MB      Marcus Barkowsky        Marcus.Barkowsky@nt.e-technik.uni-erlangen.de
-MN      Mike Nilsson            mike.nilsson@bt.com
 MG      Michael Gallant         mgallant@videolocus.com
+MN      Mike Nilsson            mike.nilsson@bt.com
 MW      Mathias Wien            wien@ient.rwth-aachen.de
 PL      Peter List              Peter.List@t-systems.de
+PN      Pavel Novotny           pnovotny@lsil.com
 PW      Ping Wu                 pwu@tandbergtv.com
 RG      Rajeev Gandhi           rajeev@motorola.com
 RK      Ragip Kurceren          ragip.kurceren@nokia.com
@@ -678,6 +703,7 @@ RS      Rickard Sjoberg         Rickard.Sjoberg@era.ericsson.se
 RaS     Raghavan Subramaniyan   Raghavan.S@motorola.com
 SR      Shankar Regunathan      shanre@microsoft.com
 SW      Stephan Wenger          stewe@cs.tu-berlin.de
+SY      Steve Yao               steveyao@sandvideo.com
 TH      Till Hallbach           halbach@tele.ntnu.no
 TO      Tobias Oelbaum          drehvial@gmx.net
 TS      Teruhiko Suzuki         teruhiko@av.crl.sony.co.jp
@@ -690,5 +716,5 @@ WYK     Ye-Kui Wang             wyk@ieee.org
 YK      Yoshihiro Kikuchi       yoshihiro.kikuchi@toshiba.co.jp
 YL      Yann Lemaguet           yann.lemaguet@philips.com
 YW      Ye-Kui Wang             wyk@ieee.org
-ZX      Z. Xue                  jon_xz@yahoo.com
 XS      Xiaoyan Sun             sunxiaoyan@msrchina.research.microsoft.com      
+ZX      Z. Xue                  jon_xz@yahoo.com

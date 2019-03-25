@@ -480,6 +480,8 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, char *rbsp)
   // .. and use the rbsp provided (or allocated above) for the data
   partition->bitstream->streamBuffer = rbsp;
   partition->bitstream->bits_to_go = 8;
+  //sw paff
+  pps->pic_order_present_flag = img->pic_order_present_flag;
 
   len+=ue_v ("PPS: pic_parameter_set_id",                    pps->pic_parameter_set_id,                      partition);
   len+=ue_v ("PPS: seq_parameter_set_id",                    pps->seq_parameter_set_id,                      partition);
@@ -628,7 +630,9 @@ int IdentifyLevel()
 
 int IdentifyNumRefFrames()
 {
-  return input->num_reference_frames;
+	if(input->num_reference_frames > 16)error("no ref frames too large",-100);
+
+	return input->num_reference_frames;
 }
 
 

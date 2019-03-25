@@ -19,7 +19,7 @@
 #define _DEFINES_H_
 
 #if defined _DEBUG
-#define TRACE           1                   //!< 0:Trace off 1:Trace on
+#define TRACE           0                   //!< 0:Trace off 1:Trace on
 #else
 #define TRACE           0                   //!< 0:Trace off 1:Trace on
 #endif
@@ -63,12 +63,14 @@
 #define IBLOCK  11
 #define SI4MB   12
 #define MAXMODE 13
+#define IPCM    14
 
-#define IS_INTRA(MB)    ((MB)->mb_type==I4MB  || (MB)->mb_type==I16MB)
-#define IS_NEWINTRA(MB) ((MB)->mb_type==I16MB)
+#define IS_INTRA(MB)    ((MB)->mb_type==I4MB  || (MB)->mb_type==I16MB ||(MB)->mb_type==IPCM)
+#define IS_NEWINTRA(MB) ((MB)->mb_type==I16MB  || (MB)->mb_type==IPCM)
+
 #define IS_OLDINTRA(MB) ((MB)->mb_type==I4MB)
-#define IS_INTER(MB)    ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB)
-#define IS_INTERMV(MB)  ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB       && (MB)->mb_type!=0)
+#define IS_INTER(MB)    ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB  && (MB)->mb_type!=IPCM)
+#define IS_INTERMV(MB)  ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB  && (MB)->mb_type!=0 && (MB)->mb_type!=IPCM)
 #define IS_DIRECT(MB)   ((MB)->mb_type==0     && (img->type==B_SLICE ))
 #define IS_COPY(MB)     ((MB)->mb_type==0     && (img->type==P_SLICE || img->type==SP_SLICE))
 #define IS_P8x8(MB)     ((MB)->mb_type==P8x8)
@@ -115,7 +117,9 @@
 #define SEARCH_SYNC     1
 #define PICTURE_DECODED 2
 
-#define MAX_REFERENCE_PICTURES 32		//!< H264 allows 32 fields
+#define MAX_REFERENCE_PICTURES 32               //!< H264 allows 32 fields
+
+#define INVALIDINDEX  (-135792468)
 
 #ifndef WIN32
 #define max(a, b)      ((a) > (b) ? (a) : (b))  //!< Macro returning max value

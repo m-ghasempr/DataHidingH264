@@ -115,6 +115,10 @@ SOURCE=.\lencod\src\decoder.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\lencod\src\fast_me.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\src\filehandle.c
 # End Source File
 # Begin Source File
@@ -188,6 +192,10 @@ SOURCE=.\lencod\src\parset.c
 # Begin Source File
 
 SOURCE=.\lencod\src\parsetcommon.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\ratectl.c
 # End Source File
 # Begin Source File
 
@@ -267,6 +275,10 @@ SOURCE=.\lencod\inc\encodeiff.h
 # End Source File
 # Begin Source File
 
+SOURCE=.\lencod\inc\fast_me.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\inc\fmo.h
 # End Source File
 # Begin Source File
@@ -328,6 +340,10 @@ SOURCE=.\lencod\inc\parset.h
 # Begin Source File
 
 SOURCE=.\lencod\inc\parsetcommon.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\inc\ratectl.h
 # End Source File
 # Begin Source File
 
