@@ -70,6 +70,26 @@ static void pred_weight_table();
 /*!
  ************************************************************************
  * \brief
+ *    calculate Ceil(Log2(uiVal))
+ ************************************************************************
+ */
+unsigned CeilLog2( unsigned uiVal)
+{
+  unsigned uiTmp = uiVal;
+  unsigned uiRet = 0;
+
+  while( uiTmp != 0 )
+  {
+    uiTmp >>= 1;
+    uiRet++;
+  }
+  return uiRet;
+}
+
+
+/*!
+ ************************************************************************
+ * \brief
  *    read the first part of the header (only the pic_parameter_set_id)
  * \return
  *    Length of the first part of the slice header (in bits)
@@ -81,13 +101,18 @@ int FirstPartOfSliceHeader()
   int dP_nr = assignSE2partition[currSlice->dp_mode][SE_HEADER];
   DataPartition *partition = &(currSlice->partArr[dP_nr]);
   Bitstream *currStream = partition->bitstream;
+  int tmp;
 
   UsedBits= partition->bitstream->frame_bitoffset; // was hardcoded to 31 for previous start-code. This is better.
 
   // Get first_mb_in_slice
   currSlice->start_mb_nr = ue_v ("SH: first_mb_in_slice", currStream);
 
-  currSlice->picture_type = ue_v ("SH: slice_type", currStream);
+  tmp = ue_v ("SH: slice_type", currStream);
+  
+  if (tmp>4) tmp -=5;
+
+  img->type = currSlice->picture_type = (SliceType) tmp;
 
   currSlice->pic_parameter_set_id = ue_v ("SH: pic_parameter_set_id", currStream);
   
@@ -109,33 +134,7 @@ int RestOfSliceHeader()
   DataPartition *partition = &(currSlice->partArr[dP_nr]);
   Bitstream *currStream = partition->bitstream;
 
-  int val;
-
-  // set the img->type to the old style defines
-  switch (currSlice->picture_type)
-  {
-  case 0:
-  case 5:
-    currSlice->picture_type = INTER_IMG;
-    break;
-  case 1:
-  case 6:
-    currSlice->picture_type = B_IMG;
-    break;
-  case 2:
-  case 7:
-    currSlice->picture_type = INTRA_IMG;
-    break;
-  case 3:
-  case 8:
-    currSlice->picture_type = SP_IMG;
-    break;
-  default:
-    error("Invalid Slice Type", 500);
-    break;
-  }
-
-  img->type = currSlice->picture_type;
+  int val, len;
 
   img->frame_num = u_v (active_sps->log2_max_frame_num_minus4 + 4, "SH: frame_num", currStream);
 
@@ -195,7 +194,7 @@ int RestOfSliceHeader()
     img->redundant_pic_cnt = u_1 ("SH: redundant_pic_cnt", currStream);
   }
 
-  if(img->type==B_IMG)
+  if(img->type==B_SLICE)
   {
     img->direct_type = u_1 ("SH: direct_spatial_mv_pred_flag", currStream);
   }
@@ -203,14 +202,14 @@ int RestOfSliceHeader()
   img->num_ref_pic_active_fwd = active_pps->num_ref_idx_l0_active_minus1 + 1;
   img->num_ref_pic_active_bwd = active_pps->num_ref_idx_l1_active_minus1 + 1;
 
-  if(img->type==INTER_IMG || img->type == SP_IMG || img->type==B_IMG)
+  if(img->type==P_SLICE || img->type == SP_SLICE || img->type==B_SLICE)
   {
     val = u_1 ("SH: num_ref_idx_override_flag", currStream);
     if (val)
     {
       img->num_ref_pic_active_fwd = 1 + ue_v ("SH: num_ref_pic_active_fwd_minus1", currStream);
       
-      if(img->type==B_IMG)
+      if(img->type==B_SLICE)
       {
         img->num_ref_pic_active_bwd = 1 + ue_v ("SH: num_ref_pic_active_bwd_minus1", currStream);
       }
@@ -219,18 +218,18 @@ int RestOfSliceHeader()
 
   ref_pic_list_reordering();
 
-  img->apply_weights = ((img->weighted_pred_flag && (currSlice->picture_type == INTER_IMG || currSlice->picture_type == SP_IMG) )
-          || ((img->weighted_bipred_idc > 0 ) && (currSlice->picture_type == B_IMG)));
+  img->apply_weights = ((img->weighted_pred_flag && (currSlice->picture_type == P_SLICE || currSlice->picture_type == SP_SLICE) )
+          || ((img->weighted_bipred_idc > 0 ) && (currSlice->picture_type == B_SLICE)));
 
-  if ((active_pps->weighted_pred_flag&&(img->type==INTER_IMG|| img->type == SP_IMG))||
-      (active_pps->weighted_bipred_idc==1 && (img->type==B_IMG)))
+  if ((active_pps->weighted_pred_flag&&(img->type==P_SLICE|| img->type == SP_SLICE))||
+      (active_pps->weighted_bipred_idc==1 && (img->type==B_SLICE)))
   {
     pred_weight_table();
   }
 
   dec_ref_pic_marking(currStream);
 
-  if (active_pps->entropy_coding_mode && img->type!=INTRA_IMG && img->type!=SI_IMG)
+  if (active_pps->entropy_coding_mode && img->type!=I_SLICE && img->type!=SI_SLICE)
   {
     img->model_number = ue_v("SH: cabac_init_idc", currStream);
   }
@@ -242,9 +241,9 @@ int RestOfSliceHeader()
   val = se_v("SH: slice_qp_delta", currStream);
   currSlice->qp = img->qp = 26 + active_pps->pic_init_qp_minus26 + val;
 
-  if(img->type==SP_IMG || img->type == SI_IMG) 
+  if(img->type==SP_SLICE || img->type == SI_SLICE) 
   {
-    if(img->type==SP_IMG)
+    if(img->type==SP_SLICE)
     {
       img->sp_switch = u_1 ("SH: sp_for_switch_flag", currStream);
     }
@@ -264,11 +263,17 @@ int RestOfSliceHeader()
     }
   }
 
-  if (active_pps->num_slice_groups_minus1>0 && active_pps->mb_slice_group_map_type>=3 &&
-      active_pps->mb_slice_group_map_type<=5)
+  if (active_pps->num_slice_groups_minus1>0 && active_pps->slice_group_map_type>=3 &&
+      active_pps->slice_group_map_type<=5)
   {
-    assert ("FMO not yet completely supported");
-    assert (0==1);
+    len = (active_sps->pic_height_in_map_units_minus1+1)*(active_sps->pic_width_in_mbs_minus1+1)/ 
+          (active_pps->slice_group_change_rate_minus1+1);
+    if (((active_sps->pic_height_in_map_units_minus1+1)*(active_sps->pic_width_in_mbs_minus1+1))% 
+          (active_pps->slice_group_change_rate_minus1+1))
+          len +=1;
+    len = CeilLog2(len);
+
+    img->slice_group_change_cycle = u_v (len, "SH: slice_group_change_cycle", currStream);
   }
   // 5. Finally, read Reference Picture ID (same as TR here).  Note that this is an
   // optional field that is not present if the input parameters do not indicate
@@ -300,6 +305,9 @@ int RestOfSliceHeader()
     UsedBits += sym.len;
   }
 */
+  img->PicHeightInMbs = img->FrameHeightInMbs / ( 1 + img->field_pic_flag );
+  img->PicSizeInMbs   = img->PicWidthInMbs * img->PicHeightInMbs;
+  img->FrameSizeInMbs = img->PicWidthInMbs * img->FrameHeightInMbs;
 
   img->buf_cycle = input->buf_cycle+1;
   img->pn=(((img->structure==BOTTOM_FIELD) ? (img->number/2):img->number)%img->buf_cycle);
@@ -330,7 +338,7 @@ static void ref_pic_list_reordering()
 
   alloc_ref_pic_list_reordering_buffer(currSlice);
   
-  if (img->type!=INTRA_IMG && img->type!=SI_IMG)
+  if (img->type!=I_SLICE && img->type!=SI_SLICE)
   {
     val = currSlice->ref_pic_list_reordering_flag_l0 = u_1 ("SH: ref_pic_list_reordering_flag_l0", currStream);
     
@@ -357,7 +365,7 @@ static void ref_pic_list_reordering()
     }
   }
 
-  if (img->type==B_IMG)
+  if (img->type==B_SLICE)
   {
     val = currSlice->ref_pic_list_reordering_flag_l1 = u_1 ("SH: ref_pic_list_reordering_flag_l1", currStream);
     
@@ -439,7 +447,7 @@ static void pred_weight_table()
       }
     }
   }
-  if ((img->type == B_IMG) && img->weighted_bipred_idc == 1)
+  if ((img->type == B_SLICE) && img->weighted_bipred_idc == 1)
   {
     for (i=0; i<img->num_ref_pic_active_bwd; i++)
     {
@@ -749,7 +757,7 @@ void decoding_poc(struct img_par *img)
             //soon to be obsolete
   if(!img->current_slice_nr)
   { 
-    if((img->type != B_IMG) || !img->disposable_flag) 
+    if((img->type != B_SLICE) || !img->disposable_flag) 
     {
       img->pstruct_next_P = img->structure;
       if(img->structure == TOP_FIELD)

@@ -599,8 +599,7 @@ SetMotionVectorPredictor (int  pmv[2],
     }
     else
     {
-      if( block_available_upright && refFrArr[pic_block_y-1][pic_block_x+blockshape_x/4] == ref_frame)
-      //if(rFrameUR == ref_frame) // not correct
+      if(rFrameUR == ref_frame)
         mvPredType = MVPRED_UR;
     }
   }

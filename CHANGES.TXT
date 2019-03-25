@@ -1,3 +1,12 @@
+Changes for Version JM 6.1b to JM 6.1a
+--------------------------------------
+Bug fixes
+* FMO decoding (KS)
+* fix motion vector predictor (HS/KS)
+* intra prediction mode selection (KS)
+* SPS Syntax update frame_height_in_mb -> pic_height_in_mb (KS)
+* fix memory leak (KSa)
+
 Changes for Version JM 6.1a to JM 6.1
 -------------------------------------
 Bug fixes
@@ -589,6 +598,7 @@ JB      Jill Boyce              BoyceJ@tce.com
 JL      Jani Lainema            Jani.Lainema@nokia.com
 JA      James Au                james@ubvideo.com
 IM      Iole Moccagatta         imoccaga@lsil.com
+KSa     Kazushi Sato            kazushi@av.crl.sony.co.jp
 KP      Krit Panusopone         KPanusopone@gi.com
 KL      Karl Lillevold          Karll@real.com
 LK      Louis Kerofsky          lkerofsky@sharplabs.com

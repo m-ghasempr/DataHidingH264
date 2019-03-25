@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 6.1a
+ *     JM 6.1b
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -124,7 +124,7 @@
 #include "erc_api.h"
 
 #define JM          "6"
-#define VERSION     "6.1a"
+#define VERSION     "6.1b"
 
 #define LOGFILE     "log.dec"
 #define DATADECFILE "dataDec.txt"
@@ -186,7 +186,7 @@ int main(int argc, char **argv)
 
   init(img);
   img->number=0;
-  img->type = INTRA_IMG;
+  img->type = I_SLICE;
   img->tr_old = -1; // WYK: Oct. 8, 2001, for detection of a new frame
   img->refPicID = -1; // WYK: for detection of a new non-B frame
   img->imgtr_last_P = 0;

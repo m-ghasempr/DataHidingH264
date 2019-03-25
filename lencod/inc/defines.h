@@ -51,7 +51,7 @@
 #define _DEFINES_H_
 
 
-#define TRACE           0   //!< 0:Trace off 1:Trace on
+#define TRACE           1   //!< 0:Trace off 1:Trace on
 
 // APJ: Added the following define
 #define PROFILE_IDC     66

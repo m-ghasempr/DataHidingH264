@@ -329,7 +329,7 @@ int encode_one_frame ()
   if (top_pic)
     free_slice_list(top_pic);
   if (bottom_pic)
-    free_slice_list(top_pic);
+    free_slice_list(bottom_pic);
 
   /*
   // Tian Dong (Sept 2002)

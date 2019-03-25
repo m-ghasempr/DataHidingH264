@@ -64,7 +64,7 @@
   for (i=0; i<ii; i++) \
   for (j=0; j<jj; j++) \
   { \
-    if      (img->type==INTRA_IMG)  biari_init_context (img, &(ctx[i][j]), &(tab ## _I[num][i][j][0])); \
+    if      (img->type==I_SLICE)  biari_init_context (img, &(ctx[i][j]), &(tab ## _I[num][i][j][0])); \
     else                            biari_init_context (img, &(ctx[i][j]), &(tab ## _P[num][i][j][0])); \
   } \
 }
@@ -72,7 +72,7 @@
 { \
   for (j=0; j<jj; j++) \
   { \
-    if      (img->type==INTRA_IMG)  biari_init_context (img, &(ctx[j]), &(tab ## _I[num][0][j][0])); \
+  if      (img->type==I_SLICE)  biari_init_context (img, &(ctx[j]), &(tab ## _I[num][0][j][0])); \
     else                            biari_init_context (img, &(ctx[j]), &(tab ## _P[num][0][j][0])); \
   } \
 }

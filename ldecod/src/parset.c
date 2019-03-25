@@ -103,8 +103,8 @@ int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
   }
   sps->num_ref_frames                        = ue_v ("SPS: num_ref_frames"                         , s);
   sps->required_frame_num_update_behaviour_flag = u_1 ("SPS: required_frame_num_update_behaviour_flag", s);
-  sps->frame_width_in_mbs_minus1             = ue_v ("SPS: frame_width_in_mbs_minus1"              , s);
-  sps->frame_height_in_mbs_minus1            = ue_v ("SPS: frame_height_in_mbs_minus1"             , s);
+  sps->pic_width_in_mbs_minus1               = ue_v ("SPS: pic_width_in_mbs_minus1"                , s);
+  sps->pic_height_in_map_units_minus1        = ue_v ("SPS: pic_height_in_map_units_minus1"         , s);
   sps->frame_mbs_only_flag                   = u_1  ("SPS: frame_mbs_only_flag"                    , s);
   if (!sps->frame_mbs_only_flag)
   {
@@ -147,48 +147,48 @@ int InterpretPPS (DataPartition *p, pic_parameter_set_rbsp_t *pps)
 
   pps->num_slice_groups_minus1               = ue_v ("PPS: num_slice_groups_minus1"                , s);
 
-  //! InterpretSPS is able to process all different FMO modes, but UseParameterSet() is not (yet
-  //! Hence, make sure FMO is not used.
-
-  assert (pps->num_slice_groups_minus1 == 0);
-
   // FMO stuff begins here
   if (pps->num_slice_groups_minus1 > 0)
   {
-    pps->mb_slice_group_map_type               = ue_v ("PPS: mb_slice_group_map_type"                , s);
-    if (pps->mb_slice_group_map_type == 0)
-      for (i=0; i<pps->num_slice_groups_minus1; i++)
-        pps->run_length [i]                        = ue_v ("PPS: run_length [i]"                         , s);
-    else if (pps->mb_slice_group_map_type == 2)
+    pps->slice_group_map_type               = ue_v ("PPS: slice_group_map_type"                , s);
+    if (pps->slice_group_map_type == 0)
+    {
+      for (i=0; i<=pps->num_slice_groups_minus1; i++)
+        pps->run_length_minus1 [i]                  = ue_v ("PPS: run_length_minus1 [i]"              , s);
+    }
+    else if (pps->slice_group_map_type == 2)
+    {
       for (i=0; i<pps->num_slice_groups_minus1; i++)
       {
         //! JVT-F078: avoid reference of SPS by using ue(v) instead of u(v)
-        pps->top_left_mb [i]                       = ue_v ("PPS: top_left_mb [i]"                        , s);
-        pps->bottom_right_mb [i]                   = ue_v ("PPS: bottom_right_mb [i]"                    , s);
+        pps->top_left [i]                          = ue_v ("PPS: top_left [i]"                        , s);
+        pps->bottom_right [i]                      = ue_v ("PPS: bottom_right [i]"                    , s);
       }
-    else if (pps->mb_slice_group_map_type == 3 ||
-             pps->mb_slice_group_map_type == 4 ||
-             pps->mb_slice_group_map_type == 5)
+    }
+    else if (pps->slice_group_map_type == 3 ||
+             pps->slice_group_map_type == 4 ||
+             pps->slice_group_map_type == 5)
     {
       pps->slice_group_change_direction_flag     = u_1  ("PPS: slice_group_change_direction_flag"      , s);
       pps->slice_group_change_rate_minus1        = ue_v ("PPS: slice_group_change_rate_minus1"         , s);
     }
-    else if (pps->mb_slice_group_map_type == 6)
+    else if (pps->slice_group_map_type == 6)
     {
-      if (pps->num_slice_groups_minus1 >= 4)
+      if (pps->num_slice_groups_minus1+1 >= 4)
         NumberBitsPerSliceGroupId = 3;
-      else if (pps->num_ref_idx_l0_active_minus1 >= 2)
+      else if (pps->num_slice_groups_minus1+1 >= 2)
         NumberBitsPerSliceGroupId = 2;
-      else if (pps->num_ref_idx_l0_active_minus1 >= 1)
+      else if (pps->num_slice_groups_minus1+1 >= 1)
         NumberBitsPerSliceGroupId = 1;
       else
         NumberBitsPerSliceGroupId = 0;
       //! JVT-F078, exlicitly signal number of MBs in the map
-      pps->slice_group_id_cnt_minus1              = ue_v ("PPS: slice_group_id_cnt_minus1"               , s);
-      for (i=0; i<=pps->slice_group_id_cnt_minus1; i++)
+      pps->num_slice_group_map_units_minus1      = ue_v ("PPS: num_slice_group_map_units_minus1"               , s);
+      for (i=0; i<=pps->num_slice_group_map_units_minus1; i++)
         pps->slice_group_id[i] = u_v (NumberBitsPerSliceGroupId, "slice_group_id[i]", s);
     }
   }
+
   // End of FMO stuff
 
   pps->num_ref_idx_l0_active_minus1          = ue_v ("PPS: num_ref_idx_l0_active_minus1"           , s);
@@ -244,10 +244,10 @@ void MakePPSavailable (int id, pic_parameter_set_rbsp_t *pps)
     free (PicParSet[id].slice_group_id);
 
   memcpy (&PicParSet[id], pps, sizeof (pic_parameter_set_rbsp_t));
-  if ((PicParSet[id].slice_group_id = calloc (PicParSet[id].slice_group_id_cnt_minus1+1, sizeof(int))) == NULL)
+  if ((PicParSet[id].slice_group_id = calloc (PicParSet[id].num_slice_group_map_units_minus1+1, sizeof(int))) == NULL)
     no_mem_exit ("MakePPSavailable: Cannot calloc slice_group_id");
   
-  memcpy (PicParSet[id].slice_group_id, pps->slice_group_id, (pps->slice_group_id_cnt_minus1+1)*sizeof(int));
+  memcpy (PicParSet[id].slice_group_id, pps->slice_group_id, (pps->num_slice_group_map_units_minus1+1)*sizeof(int));
 }
 
 void MakeSPSavailable (int id, seq_parameter_set_rbsp_t *sps)
@@ -366,9 +366,13 @@ void UseParameterSet (int PicParsetId)
       }
   }
   
-  img->width = (sps->frame_width_in_mbs_minus1+1) * MB_BLOCK_SIZE;
+  img->PicWidthInMbs = (active_sps->pic_width_in_mbs_minus1 +1);
+  img->PicHeightInMapUnits = (active_sps->pic_height_in_map_units_minus1 +1);
+  img->FrameHeightInMbs = ( 2 - active_sps->frame_mbs_only_flag ) * img->PicHeightInMapUnits;
+
+  img->width = img->PicWidthInMbs * MB_BLOCK_SIZE;
   img->width_cr = img->width /2;
-  img->height = (sps->frame_height_in_mbs_minus1+1) * MB_BLOCK_SIZE;
+  img->height = img->FrameHeightInMbs * MB_BLOCK_SIZE;
   img->height_cr = img->height / 2;
 
   // Picture Parameter Stuff

@@ -1139,6 +1139,53 @@ int writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *thi
   return (se->len);
 }
 
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Write out a trace string on the trace file
+ ************************************************************************
+ */
+#if TRACE
+void trace2out(SyntaxElement *sym)
+{
+  static int bitcounter = 0;
+  int i, chars;
+
+  if (p_trace != NULL)
+  {
+    putc('@', p_trace);
+    chars = fprintf(p_trace, "%i", bitcounter);
+    while(chars++ < 6)
+      putc(' ',p_trace);
+
+    chars += fprintf(p_trace, "%s", sym->tracestring);
+    while(chars++ < 55)
+      putc(' ',p_trace);
+
+  // Align bitpattern
+    if(sym->len<15)
+    {
+      for(i=0 ; i<15-sym->len ; i++)
+        fputc(' ', p_trace);
+    }
+    
+    // Print bitpattern
+    bitcounter += sym->len;
+    for(i=1 ; i<=sym->len ; i++)
+    {
+      if((sym->bitpattern >> (sym->len-i)) & 0x1)
+        fputc('1', p_trace);
+      else
+        fputc('0', p_trace);
+    }
+    fprintf(p_trace, " (%3d) \n",sym->value1);
+  }
+  fflush (p_trace);
+}
+#endif
+
+
 /*!
  ************************************************************************
  * \brief
@@ -1150,7 +1197,6 @@ int writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *thi
  *
  ************************************************************************
  */
-
 void writeVlcByteAlign(Bitstream* currStream)
 {
   if (currStream->bits_to_go < 8)

@@ -186,7 +186,7 @@ void GetStrength(byte Strength[4],struct img_par *img,Macroblock* MbP,Macroblock
     blkP = BLK_NUM[dir][(edge-1) & 3][idx] ; 
     
 
-    if( ( img->type != SP_IMG) && (img->type != SI_IMG)
+    if( ( img->type != SP_SLICE) && (img->type != SI_SLICE)
           && !(MbP->mb_type==I4MB || MbP->mb_type==I16MB)
           && !(MbQ->mb_type==I4MB || MbQ->mb_type==I16MB) )
     {
@@ -197,7 +197,7 @@ void GetStrength(byte Strength[4],struct img_par *img,Macroblock* MbP,Macroblock
         blk_y  = block_y + (blkQ >> 2) ;   blk_y2 = blk_y -  dir ;
         blk_x  = block_x + (blkQ  & 3)+4 ; blk_x2 = blk_x - !dir ;
 
-        if( (img->type == B_IMG) )
+        if( (img->type == B_SLICE) )
         {
           Strength[idx] =  (abs( fw_mv[blk_x][blk_y][0] - fw_mv[blk_x2][blk_y2][0]) >= 4) |
                            (abs( fw_mv[blk_x][blk_y][1] - fw_mv[blk_x2][blk_y2][1]) >= 4) |

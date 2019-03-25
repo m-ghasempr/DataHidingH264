@@ -104,8 +104,8 @@
 #define IS_OLDINTRA(MB) ((MB)->mb_type==I4MB)
 #define IS_INTER(MB)    ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB)
 #define IS_INTERMV(MB)  ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB       && (MB)->mb_type!=0)
-#define IS_DIRECT(MB)   ((MB)->mb_type==0     && (img->   type==    B_IMG ))
-#define IS_COPY(MB)     ((MB)->mb_type==0     && (img->   type==INTER_IMG || img->type==SP_IMG))
+#define IS_DIRECT(MB)   ((MB)->mb_type==0     && (img->   type==    B_SLICE ))
+#define IS_COPY(MB)     ((MB)->mb_type==0     && (img->   type==P_SLICE || img->type==SP_SLICE))
 #define IS_P8x8(MB)     ((MB)->mb_type==P8x8)
 
 
@@ -113,15 +113,6 @@
 
 #define MIN_QP          0
 #define MAX_QP          51
-#define SHIFT_QP        12
-
-#define INTER_IMG       0
-#define INTRA_IMG       2
-// B pictures
-#define B_IMG           3
-// SP Pictures
-#define SP_IMG          5
-#define SI_IMG          7
 
 #define BLOCK_SIZE      4
 #define MB_BLOCK_SIZE   16

@@ -173,7 +173,7 @@ int check_next_mb_and_get_field_mode_CABAC( SyntaxElement *se,
   int length;
   DecodingEnvironmentPtr    dep_dp = &(act_dp->de_cabac);
 
-  int bframe = (img->type==B_IMG);
+  int bframe = (img->type==B_SLICE);
   int skip   = 0;
   int field  = 0;
   int i;
@@ -350,7 +350,7 @@ void readB8_typeInfoFromBuffer_CABAC (SyntaxElement *se,
                                       DecodingEnvironmentPtr dep_dp)
 {
   int act_sym = 0;
-  int bframe  = (img->type==B_IMG);
+  int bframe  = (img->type==B_SLICE);
 
   MotionInfoContexts *ctx = (img->currentSlice)->mot_ctx;
 
@@ -431,7 +431,7 @@ void readMB_skip_flagInfoFromBuffer_CABAC( SyntaxElement *se,
 {
   int a, b;
   int act_ctx;
-  int bframe=(img->type==B_IMG);
+  int bframe=(img->type==B_SLICE);
   MotionInfoContexts *ctx = (img->currentSlice)->mot_ctx;
   Macroblock *currMB = &img->mb_data[img->map_mb_nr];//GB current_mb_nr];
 
@@ -491,7 +491,7 @@ void readMB_typeInfoFromBuffer_CABAC( SyntaxElement *se,
   int a, b;
   int act_ctx;
   int act_sym;
-  int bframe=(img->type==B_IMG);
+  int bframe=(img->type==B_SLICE);
   int mode_sym;
   int ct = 0;
   int curr_mb_type;
@@ -500,7 +500,7 @@ void readMB_typeInfoFromBuffer_CABAC( SyntaxElement *se,
   MotionInfoContexts *ctx = (img->currentSlice)->mot_ctx;
   Macroblock *currMB = &img->mb_data[img->map_mb_nr];//GB current_mb_nr];
 
-  if(img->type == INTRA_IMG)  // INTRA-frame
+  if(img->type == I_SLICE)  // INTRA-frame
   {
     if (currMB->mb_available[0][1] == NULL)
       b = 0;
@@ -554,7 +554,7 @@ void readMB_typeInfoFromBuffer_CABAC( SyntaxElement *se,
       }
     }
   }
-  else if(img->type == SI_IMG)  // SI-frame
+  else if(img->type == SI_SLICE)  // SI-frame
   {
     // special ctx's for SI4MB
     if (currMB->mb_available[0][1] == NULL)
@@ -708,7 +708,7 @@ void readMB_typeInfoFromBuffer_CABAC( SyntaxElement *se,
       }
     }
 
-    if (act_sym<=6 || (((img->type == B_IMG)?1:0) && act_sym<=23))
+    if (act_sym<=6 || (((img->type == B_SLICE)?1:0) && act_sym<=23))
     {
       curr_mb_type = act_sym;
     }
@@ -808,23 +808,23 @@ void readRefFrameFromBuffer_CABAC(  SyntaxElement *se,
   int   a, b;
   int   act_ctx;
   int   act_sym;
-  int** refframe_array = ((img->type==B_IMG) ? img->fw_refFrArr : refFrArr);
+  int** refframe_array = ((img->type==B_SLICE) ? img->fw_refFrArr : refFrArr);
   int   block_y        = img->block_y;
 
   if( img->mb_frame_field_flag )
   {
     if( !img->mb_field )
     {
-      refframe_array = ((img->type==B_IMG) ? img->fw_refFrArr_frm : refFrArr_frm);
+      refframe_array = ((img->type==B_SLICE) ? img->fw_refFrArr_frm : refFrArr_frm);
     }
     else if ( img->current_mb_nr % 2 )
     {
-      refframe_array = ((img->type==B_IMG) ? img->fw_refFrArr_bot : refFrArr_bot);
+      refframe_array = ((img->type==B_SLICE) ? img->fw_refFrArr_bot : refFrArr_bot);
       block_y        = ( img->block_y - 4 ) / 2;
     }
     else
     {
-      refframe_array = ((img->type==B_IMG) ? img->fw_refFrArr_top : refFrArr_top);
+      refframe_array = ((img->type==B_SLICE) ? img->fw_refFrArr_top : refFrArr_top);
       block_y        = img->block_y / 2;
     }
   }
@@ -1671,7 +1671,7 @@ int cabac_startcode_follows(struct img_par *img, struct inp_par *inp, int eos_bi
   unsigned int  bit;
   DecodingEnvironmentPtr dep_dp;
   
-  if(img->type == B_IMG) dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+  if(img->type == B_SLICE) dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
   else                   dP = &(currSlice->partArr[partMap[SE_MBTYPE]]);
   dep_dp = &(dP->de_cabac);
 

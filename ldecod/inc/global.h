@@ -215,6 +215,14 @@ typedef enum {
   BOTTOM_FIELD
 } PictureType;           //!< New enum for field processing
 
+typedef enum {
+  P_SLICE = 0,
+  B_SLICE,
+  I_SLICE,
+  SP_SLICE,
+  SI_SLICE
+} SliceType;
+
 /***********************************************************************
  * D a t a    t y p e s   f o r  C A B A C
  ***********************************************************************
@@ -449,6 +457,7 @@ typedef struct img_par
   int number;                                 //<! frame number
   int pn;                                     //<! short term picture number
   int current_mb_nr; // bitstream order
+  unsigned num_dec_mb;
   int map_mb_nr;  //related to mb_data
   int max_mb_nr;
   int current_slice_nr;
@@ -632,6 +641,13 @@ typedef struct img_par
   int idr_flag;
   int idr_pic_id;
   int MaxFrameNum;
+
+  unsigned PicWidthInMbs;
+  unsigned PicHeightInMapUnits;
+  unsigned FrameHeightInMbs;
+  unsigned PicHeightInMbs;
+  unsigned PicSizeInMbs;
+  unsigned FrameSizeInMbs;
 
   int no_output_of_prior_pics_flag;
   int long_term_reference_flag;

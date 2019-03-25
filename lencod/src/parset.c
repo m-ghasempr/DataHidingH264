@@ -234,12 +234,13 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
   //required_frame_num_update_behaviour_flag hardcoded to zero
   sps->required_frame_num_update_behaviour_flag = FALSE;    // double check
 
+  sps->frame_mbs_only_flag = (input->InterlaceCodingOption == FRAME_CODING);
+
   // Picture size, finally a simple one :-)
-  sps->frame_width_in_mbs_minus1 = (input->img_width/16) -1;
-  sps->frame_height_in_mbs_minus1 = (input->img_height/16) -1;
+  sps->pic_width_in_mbs_minus1 = (input->img_width/16) -1;
+  sps->pic_height_in_map_units_minus1 = ((input->img_height/16)/ (2 - sps->frame_mbs_only_flag)) - 1;
 
   // a couple of flags, simple
-  sps->frame_mbs_only_flag = (input->InterlaceCodingOption == FRAME_CODING);
   sps->mb_adaptive_frame_field_flag = (input->InterlaceCodingOption == MB_CODING);
   sps->direct_8x8_inference_flag = FALSE;
 
@@ -265,7 +266,7 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
     switch (input->mb_allocation_map_type)
     {
     case 0:
-      pps->mb_slice_group_map_type = 6;       // This implementation always uses the fully flexible map
+      pps->slice_group_map_type = 6;       // This implementation always uses the fully flexible map
       printf ("Param.c: FMO type 0 not yet signalled, using 6 instead\n");
       goto FMOTYPE6;
       // This code should work as soon as the re-generation of the MBAmap in
@@ -275,7 +276,7 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
       //   pps->run_length[i] = img->width/16;    // Line interleaving
       break;
     case 1:
-      pps->mb_slice_group_map_type = 6;       // This implementation always uses the fully flexible map
+      pps->slice_group_map_type = 6;       // This implementation always uses the fully flexible map
       printf ("Param.c: FMO type 1 not yet signalled, using 6 instead\n");
       goto FMOTYPE6;
       // This code should work as soon as the re-generation of the MBAmap in
@@ -286,8 +287,8 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
       assert(pps->num_slice_groups_minus1 == 1);      // restriction of the config file
       for(i=0; i<pps->num_slice_groups_minus1; i++)
       {
-        pps->top_left_mb[i] = input->top_left_mb;
-        pps->bottom_right_mb[i] = input->bottom_right_mb;
+        pps->top_left[i] = input->top_left_mb;
+        pps->bottom_right[i] = input->bottom_right_mb;
       }
      break;
     case 3:
@@ -298,9 +299,9 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
       break;
     case 6:
 FMOTYPE6:
-      pps->mb_slice_group_map_type = 6;       // This implementation always uses the fully flexible map
-      pps->slice_group_id_cnt_minus1 = (img->height/16) * (img->width/16) - 1;
-      for (i=0;i<=pps->slice_group_id_cnt_minus1; i++)
+      pps->slice_group_map_type = 6;       // This implementation always uses the fully flexible map
+      pps->num_slice_group_map_units_minus1 = (img->height/16) * (img->width/16) - 1;
+      for (i=0;i<=pps->num_slice_group_map_units_minus1; i++)
         pps->slice_group_id[i++] = FmoMB2SliceGroup (i);
       break;
     default:
@@ -388,8 +389,8 @@ int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, char *rbsp)
   }
   len+=ue_v ("SPS: num_ref_frames",                          sps->num_ref_frames,                            partition);
   len+=u_1  ("SPS: required_frame_num_update_behaviour_flag",sps->required_frame_num_update_behaviour_flag,  partition);
-  len+=ue_v ("SPS: frame_width_in_mbs_minus1",               sps->frame_width_in_mbs_minus1,                 partition);
-  len+=ue_v ("SPS: frame_height_in_mbs_minus1",              sps->frame_height_in_mbs_minus1,                partition);
+  len+=ue_v ("SPS: pic_width_in_mbs_minus1",                 sps->pic_width_in_mbs_minus1,                   partition);
+  len+=ue_v ("SPS: pic_height_in_map_units_minus1",          sps->pic_height_in_map_units_minus1,            partition);
   len+=u_1  ("SPS: frame_mbs_only_flag",                     sps->frame_mbs_only_flag,                       partition);
   if (!sps->frame_mbs_only_flag)
   {
@@ -456,24 +457,24 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, char *rbsp)
   // FMO stuff
   if(pps->num_slice_groups_minus1 > 0 )
   {
-    len+=ue_v ("PPS: mb_slice_group_map_type",                 pps->mb_slice_group_map_type,                   partition);
-    if (pps->mb_slice_group_map_type == 0)
+    len+=ue_v ("PPS: slice_group_map_type",                 pps->slice_group_map_type,                   partition);
+    if (pps->slice_group_map_type == 0)
       for (i=0; i<pps->num_slice_groups_minus1; i++)
-        len+=ue_v ("PPS: run_length[i]",                           pps->run_length[i],                             partition);
-    else if (pps->mb_slice_group_map_type==2)
+        len+=ue_v ("PPS: run_length_minus1[i]",                           pps->run_length_minus1[i],                             partition);
+    else if (pps->slice_group_map_type==2)
       for (i=0; i<pps->num_slice_groups_minus1; i++)
       {
-        len+=ue_v ("PPS: top_left_mb[i]",                          pps->top_left_mb[i],                           partition);
-        len+=ue_v ("PPS: bottom_right_mb[i]",                      pps->bottom_right_mb[i],                       partition);
+        len+=ue_v ("PPS: top_left[i]",                          pps->top_left[i],                           partition);
+        len+=ue_v ("PPS: bottom_right[i]",                      pps->bottom_right[i],                       partition);
       }
-    else if (pps->mb_slice_group_map_type == 3 ||
-             pps->mb_slice_group_map_type == 4 ||
-             pps->mb_slice_group_map_type == 5) 
+    else if (pps->slice_group_map_type == 3 ||
+             pps->slice_group_map_type == 4 ||
+             pps->slice_group_map_type == 5) 
     {
       len+=u_1  ("PPS: slice_group_change_direction_flag",         pps->slice_group_change_direction_flag,         partition);
       len+=ue_v ("PPS: slice_group_change_rate_minus1",            pps->slice_group_change_rate_minus1,            partition);
     } 
-    else if (pps->mb_slice_group_map_type == 6)
+    else if (pps->slice_group_map_type == 6)
     {
       if (pps->num_slice_groups_minus1>=4)
         NumberBitsPerSliceGroupId=3;
@@ -484,8 +485,8 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, char *rbsp)
       else
         NumberBitsPerSliceGroupId=0;
         
-      len+=ue_v ("PPS: slice_group_id_cnt_minus1",                  pps->slice_group_id_cnt_minus1,                 partition);
-      for(i=0; i<=pps->slice_group_id_cnt_minus1; i++)
+      len+=ue_v ("PPS: num_slice_group_map_units_minus1",                  pps->num_slice_group_map_units_minus1,                 partition);
+      for(i=0; i<=pps->num_slice_group_map_units_minus1; i++)
         len+= u_v  (NumberBitsPerSliceGroupId, "PPS: >slice_group_id[i]",                            pps->slice_group_id[i],                         partition);
     }
   }

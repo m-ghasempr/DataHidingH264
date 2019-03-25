@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 6.1a
+ *     JM 6.1b
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -91,7 +91,7 @@
 #include "image.h"
 
 #define JM      "6"
-#define VERSION "6.1a"
+#define VERSION "6.1b"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;

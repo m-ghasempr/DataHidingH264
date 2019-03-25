@@ -653,7 +653,7 @@ void itrans_sp(struct img_par *img,  //!< image parameters
   int q_bits_sp    = Q_BITS+qp_per_sp;
   int qp_const2=(1<<q_bits_sp)/2;  //sp_pred
 
-  if (img->sp_switch || img->type == SI_IMG)
+  if (img->sp_switch || img->type == SI_SLICE)
   {
     qp_per = (img->qpsp-MIN_QP)/6;
     qp_rem = (img->qpsp-MIN_QP)%6;
@@ -872,7 +872,7 @@ void itrans_sp_chroma(struct img_par *img,int ll)
   q_bits_sp    = Q_BITS+qp_per_sp;
   qp_const2=(1<<q_bits_sp)/2;  //sp_pred
 
-  if (img->sp_switch || img->type == SI_IMG)
+  if (img->sp_switch || img->type == SI_SLICE)
   {
     qp_per    = ((img->qpsp < 0 ? img->qpsp : QP_SCALE_CR[img->qpsp]) - MIN_QP) / 6;
     qp_rem    = ((img->qpsp < 0 ? img->qpsp : QP_SCALE_CR[img->qpsp]) - MIN_QP) % 6;

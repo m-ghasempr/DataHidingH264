@@ -340,7 +340,7 @@ void intrapred_luma(int img_x,int img_y)
   }
 
   /*  Prediction according to 'diagonal' modes */
-  if (block_available_up && block_available_left) 
+  if (block_available_left) 
   {
     // Mode HOR_UP_PRED
     img->mprr[HOR_UP_PRED][0][0] = (P_I + P_J + 1) / 2;
@@ -362,7 +362,7 @@ void intrapred_luma(int img_x,int img_y)
   }
 
   /*  Prediction according to 'diagonal' modes */
-  if (block_available_up && block_available_left) 
+  if (block_available_up && block_available_left && block_available_up_left) 
   {
     // Mode DIAG_DOWN_RIGHT_PRED
     img->mprr[DIAG_DOWN_RIGHT_PRED][3][0] = (P_L + 2*P_K + P_J + 2) / 4; 
