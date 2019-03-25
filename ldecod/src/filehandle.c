@@ -119,14 +119,11 @@ void tracebits2(
   int i, chars;
   // int outint = 1;
 
-
   if(len>=45)
   {
     snprintf(errortext, ET_SIZE, "Length argument to put too long for trace to work");
     error (errortext, 600);
   }
-
-
 
   putc('@', p_trace);
   chars = fprintf(p_trace, "%i", bitcounter);
@@ -164,7 +161,6 @@ void tracebits2(
   fprintf(p_trace, "  (%3d)\n", info);
 
   fflush (p_trace);
-
 }
-
 #endif
+

@@ -793,8 +793,8 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
   //transform size flag for INTRA_4x4 and INTRA_8x8 modes
   if (currMB->mb_type == I4MB && img->Transform8x8Mode)
   {
-    currSE.type   =  SE_TRANSFORM_SIZE_FLAG;
-    dP = &(currSlice->partArr[partMap[SE_TRANSFORM_SIZE_FLAG]]);
+    currSE.type   =  SE_HEADER;
+    dP = &(currSlice->partArr[partMap[SE_HEADER]]);
     currSE.reading = readMB_transform_size_flag_CABAC;
     TRACE_STRING("transform size 8x8 flag");
 
@@ -1756,6 +1756,24 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
               {
                 for (iref=0;iref<min(img->num_ref_idx_l0_active,listXsize[LIST_0 + list_offset]);iref++)
                 {
+#if 1
+                int curr_mb_field = ((img->MbaffFrameFlag)&&(currMB->mb_field));
+
+                  if(img->structure==0 && curr_mb_field==0)
+                  {
+                    // If the current MB is a frame MB and the colocated is from a field picture, 
+                    // then the co_located_ref_id may have been generated from the wrong value of 
+                    // frame_poc if it references it's complementary field, so test both POC values
+                    if(listX[0][iref]->top_poc*2 == co_located_ref_id[refList][imgblock_y + j][img->block_x + k] || listX[0][iref]->bottom_poc*2 == co_located_ref_id[refList][imgblock_y + j][img->block_x + k])
+                    {
+                      mapped_idx=iref;
+                      break;
+                    }
+                    else //! invalid index. Default to zero even though this case should not happen
+                      mapped_idx=INVALIDINDEX;
+                    continue;
+                  }    
+#endif                                        
                   if (dec_picture->ref_pic_num[img->current_slice_nr][LIST_0 + list_offset][iref]==co_located_ref_id[refList][imgblock_y + j][img->block_x + k])
                   {
                     mapped_idx=iref;
@@ -2014,6 +2032,24 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
             for (iref=0;iref<min(img->num_ref_idx_l0_active,listXsize[LIST_0 + list_offset]);iref++)
             {
               
+#if 1
+                int curr_mb_field = ((img->MbaffFrameFlag)&&(currMB->mb_field));
+
+                  if(img->structure==0 && curr_mb_field==0)
+                  {
+                    // If the current MB is a frame MB and the colocated is from a field picture, 
+                    // then the co_located_ref_id may have been generated from the wrong value of 
+                    // frame_poc if it references it's complementary field, so test both POC values
+                    if(listX[0][iref]->top_poc*2 == co_located_ref_id[refList][imgblock_y + j0][img->block_x + i0] || listX[0][iref]->bottom_poc*2 == co_located_ref_id[refList][imgblock_y + j0][img->block_x + i0])
+                    {
+                      mapped_idx=iref;
+                      break;
+                    }
+                    else //! invalid index. Default to zero even though this case should not happen
+                      mapped_idx=INVALIDINDEX;
+                    continue;
+                  }    
+#endif                                        
               if (dec_picture->ref_pic_num[img->current_slice_nr][LIST_0 + list_offset][iref]==co_located_ref_id[refList][imgblock_y+j0][img->block_x+i0])
               {
                 mapped_idx=iref;
@@ -2814,8 +2850,8 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
 
     if (need_transform_size_flag)
     {
-      currSE.type   =  SE_TRANSFORM_SIZE_FLAG;
-      dP = &(currSlice->partArr[partMap[SE_TRANSFORM_SIZE_FLAG]]);
+      currSE.type   =  SE_HEADER;
+      dP = &(currSlice->partArr[partMap[SE_HEADER]]);
       currSE.reading = readMB_transform_size_flag_CABAC;
       TRACE_STRING("transform size 8x8 flag");
 
@@ -4349,6 +4385,22 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                 {
                   for (iref=0;iref<min(img->num_ref_idx_l0_active,listXsize[LIST_0 + list_offset]);iref++)
                   {
+#if 1
+                    if(img->structure==0 && curr_mb_field==0)
+                    {
+                      // If the current MB is a frame MB and the colocated is from a field picture, 
+                      // then the co_located_ref_id may have been generated from the wrong value of 
+                      // frame_poc if it references it's complementary field, so test both POC values
+                      if(listX[0][iref]->top_poc*2 == co_located_ref_id[refList][j6][i4] || listX[0][iref]->bottom_poc*2 == co_located_ref_id[refList][j6][i4])
+                      {
+                        mapped_idx=iref;
+                        break;
+                      }
+                      else //! invalid index. Default to zero even though this case should not happen
+                        mapped_idx=INVALIDINDEX;
+                      continue;
+                    }    
+#endif                                        
                     if (dec_picture->ref_pic_num[img->current_slice_nr][LIST_0 + list_offset][iref]==co_located_ref_id[refList][j6][i4])
                     {
                       mapped_idx=iref;

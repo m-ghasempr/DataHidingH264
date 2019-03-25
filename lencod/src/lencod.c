@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 9.5 (FRExt)
+ *     JM 9.7 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -42,6 +42,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <math.h>
 #include <sys/timeb.h>
 
 #ifdef WIN32
@@ -66,7 +67,7 @@
 #include "explicit_gop.h"
 
 #define JM      "9 (FRExt)"
-#define VERSION "9.5"
+#define VERSION "9.7"
 #define EXT_VERSION "(FRExt)"
 
 InputParameters inputs,      *input = &inputs;
@@ -108,6 +109,13 @@ void init_stats()
   snr->snr_ya = 0.0;
   snr->snr_ua = 0.0;
   snr->snr_va = 0.0;
+  snr->sse_y  = 0.0;
+  snr->sse_u  = 0.0;
+  snr->sse_v  = 0.0;
+  snr->msse_y = 0.0;
+  snr->msse_u = 0.0;
+  snr->msse_v = 0.0;
+  snr->frame_ctr = 0;
 }
 /*!
  ***********************************************************************
@@ -232,11 +240,11 @@ int main(int argc,char **argv)
 
     //frame_num for this frame
     //if (input->BRefPictures== 0 || input->successive_Bframe == 0 || img-> number < 2)
-    if ((input->BRefPictures== 0 &&  input->PyramidCoding == 0) || input->successive_Bframe == 0 || img-> number < 2)// ||  input->PyramidCoding == 0)
+    if ((input->BRefPictures != 1 &&  input->PyramidCoding == 0) || input->successive_Bframe == 0 || img-> number < 2)// ||  input->PyramidCoding == 0)
       img->frame_num = (input->intra_period && input->idr_enable ? IMG_NUMBER % input->intra_period : IMG_NUMBER) % (1 << (log2_max_frame_num_minus4 + 4)); 
     else 
     {
-      img->frame_num ++;
+      //img->frame_num ++;
       if (input->intra_period && input->idr_enable)
       {
         if (0== (img->number % input->intra_period))
@@ -250,7 +258,7 @@ int main(int argc,char **argv)
     //the following is sent in the slice header
     img->delta_pic_order_cnt[0]=0;
 
-    if (input->BRefPictures)
+    if (input->BRefPictures == 1)
     {
       if (img->number)
       {
@@ -468,7 +476,7 @@ void init_poc()
   img->delta_pic_order_always_zero_flag=0;
   img->num_ref_frames_in_pic_order_cnt_cycle= 1;
 
-  if (input->BRefPictures)
+  if (input->BRefPictures == 1)
   {
     img->offset_for_non_ref_pic  =   0;
     img->offset_for_ref_frame[0] =   2;
@@ -1213,9 +1221,23 @@ void report()
   fprintf(stdout,"------------------ Average data all frames  -----------------------------------\n");
   if (input->Verbose != 0)
   {
+    int  impix = input->img_height * input->img_width;
+    int  impix_cr = input->img_height_cr * input->img_width_cr;
+    unsigned int max_pix_value_sqd = img->max_imgpel_value * img->max_imgpel_value;
+    unsigned int max_pix_value_sqd_uv = img->max_imgpel_value_uv * img->max_imgpel_value_uv;
+    float csnr_y = (float) (10 * log10 (max_pix_value_sqd * 
+      (double)((double) impix / (snr->msse_y == 0.0? 1.0 : snr->msse_y))));  
+    float csnr_u = (float) (10 * log10 (max_pix_value_sqd_uv * 
+      (double)((double) impix_cr / (snr->msse_u == 0.0? 1.0 : snr->msse_u))));  
+    float csnr_v = (float) (10 * log10 (max_pix_value_sqd_uv * 
+      (double)((double) impix_cr / (snr->msse_v == 0.0? 1.0 : snr->msse_v))));  
+
     fprintf(stdout," SNR Y(dB)                         : %5.2f\n",snr->snr_ya);
     fprintf(stdout," SNR U(dB)                         : %5.2f\n",snr->snr_ua);
     fprintf(stdout," SNR V(dB)                         : %5.2f\n",snr->snr_va);
+    fprintf(stdout," cSNR Y(dB)                        : %5.2f (%5.2f)\n",csnr_y,snr->msse_y/impix);
+    fprintf(stdout," cSNR U(dB)                        : %5.2f (%5.2f)\n",csnr_u,snr->msse_u/impix_cr);
+    fprintf(stdout," cSNR V(dB)                        : %5.2f (%5.2f)\n",csnr_v,snr->msse_v/impix_cr);
   }
   else
     fprintf(stdout,  " Total encoding time for the seq.  : %.3f sec (%.2f fps)\n",tot_time*0.001, 1000.0*(input->no_frames + frame_ctr[B_SLICE])/tot_time);
@@ -2262,40 +2284,15 @@ void process_2nd_IGOP()
  */
 void SetImgType()
 {
-  if (input->intra_period == 0)
+  int intra_refresh = input->intra_period == 0 ? (IMG_NUMBER == 0) : ((IMG_NUMBER%input->intra_period) == 0);
+  
+  if (intra_refresh)
   {
-    if (IMG_NUMBER == 0)
-    {
-      img->type = I_SLICE;        // set image type for first image to I-frame
-    }
-    else
-    {
-      img->type = P_SLICE;        // P-frame
-
-      if (input->sp_periodicity)
-      {
-        if ((IMG_NUMBER % input->sp_periodicity) ==0)
-        {
-          img->type=SP_SLICE;
-        }
-      }
-    }
+    img->type = I_SLICE;        // set image type for first image to I-frame
   }
   else
   {
-    if ((IMG_NUMBER%input->intra_period) == 0)
-    {
-      img->type = I_SLICE;
-    }
-    else
-    {
-      img->type = P_SLICE;        // P-frame
-      if (input->sp_periodicity)
-      {
-        if ((IMG_NUMBER % input->sp_periodicity) ==0)
-            img->type=SP_SLICE;
-      }
-    }
+    img->type = input->sp_periodicity && ((IMG_NUMBER % input->sp_periodicity) ==0) ? SP_SLICE : ((input->BRefPictures == 2) ? B_SLICE : P_SLICE);      
   }  
 }
 

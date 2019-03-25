@@ -33,6 +33,7 @@ void create_pyramid()
 {
   int i, j;
   int centerB=input->successive_Bframe/2;
+  GOP_DATA tmp;
 
   if (input->PyramidCoding == 1)
   {
@@ -44,6 +45,8 @@ void create_pyramid()
         gop_structure[i].display_no = i * 2 + 1;
         gop_structure[i].pyramid_layer = 0;
         gop_structure[i].reference_idc = NALU_PRIORITY_HIGH;
+        gop_structure[i].slice_qp = max(0, (input->qpB + (input->PyramidLevelQPEnable ? -1: input->qpBRSOffset)));
+
       }
       else
       {
@@ -51,14 +54,13 @@ void create_pyramid()
         gop_structure[i].display_no = (i - centerB) * 2;
         gop_structure[i].pyramid_layer = 1;
         gop_structure[i].reference_idc = NALU_PRIORITY_DISPOSABLE;
-
+        gop_structure[i].slice_qp = input->qpB;
       }      
     }
-   
   }
   else
   {    
-    int GOPlevels = 0;
+    int GOPlevels = 1;
     int Bframes = input->successive_Bframe;
     int *curGOPLevelfrm,*curGOPLeveldist ;
     int curlevel = GOPlevels ;
@@ -66,116 +68,46 @@ void create_pyramid()
     int levelrefs = input->successive_Bframe;
     int i;
 
-    while (Bframes > 2)
+    while (((Bframes + 1 ) >> GOPlevels) > 1)
     {
-      Bframes  /= 2;
       GOPlevels ++;
     }
      
     curlevel = GOPlevels ;
-    if (NULL == (curGOPLevelfrm = (int*)malloc((GOPlevels + 1)*sizeof(int)))) no_mem_exit("create_pyramid:curGOPLevelfrm");
-    if (NULL == (curGOPLeveldist= (int*)malloc((GOPlevels + 1)*sizeof(int)))) no_mem_exit("create_pyramid:curGOPLeveldist");
+
+    if (NULL == (curGOPLevelfrm = (int*)malloc(GOPlevels * sizeof(int)))) no_mem_exit("create_pyramid:curGOPLevelfrm");
+    if (NULL == (curGOPLeveldist= (int*)malloc(GOPlevels * sizeof(int)))) no_mem_exit("create_pyramid:curGOPLeveldist");
     
     for (i=0; i <input->successive_Bframe; i++)
     {
-      gop_structure[i].display_no = 0;
+      gop_structure[i].display_no = i;
       gop_structure[i].slice_type = B_SLICE;
+      gop_structure[i].pyramid_layer = 0;
+      gop_structure[i].reference_idc = NALU_PRIORITY_DISPOSABLE;
+      gop_structure[i].slice_qp = input->qpB;
     }
 
-    while (levelrefs > 2)
+    for (j = 1; j < GOPlevels; j++) 
     {
-      levelrefs /= 2;
-      curGOPLevelfrm[ curlevel ] = prvlevelrefs - levelrefs;
-      curGOPLeveldist[ GOPlevels - curlevel ] = levelrefs+ (levelrefs )% 2;
-    
-      prvlevelrefs =levelrefs ;
-      curlevel --;
-    }
-
-    curGOPLevelfrm[ 0] = levelrefs;
-    curGOPLeveldist[ GOPlevels] = levelrefs + (levelrefs )% 2;
-  
-        
-    for (j=0; j<curGOPLevelfrm[0]; j++)
-    {
-      gop_pyramid(GOPlevels, (j+ 1) * curGOPLeveldist[ 0] - 1, curGOPLeveldist[ 0]-1, gop_structure);
-
-    }
-
-	
-    for (j=input->successive_Bframe; j>0; j--)
-    {
-      for (i=1; i<j; i++)
-      {
-        int tempnum;      
-
-        if (gop_structure[i].pyramid_layer>gop_structure[i-1].pyramid_layer)
-        {
-          tempnum=gop_structure[i -1].display_no;
-          gop_structure[i-1].display_no = gop_structure[i].display_no;
-          gop_structure[i].display_no = tempnum;
-          
-          tempnum=gop_structure[i-1].pyramid_layer;
-          gop_structure[i-1].pyramid_layer = gop_structure[i].pyramid_layer;
-          gop_structure[i].pyramid_layer = tempnum;
-
-          tempnum=gop_structure[i -1].reference_idc;
-          gop_structure[i-1].reference_idc = gop_structure[i].reference_idc;
-          gop_structure[i].reference_idc = tempnum;
-
-          tempnum=gop_structure[i -1].slice_type;
-          gop_structure[i-1].slice_type = gop_structure[i].slice_type;
-          gop_structure[i].slice_type = tempnum;
-
-          tempnum=gop_structure[i -1].slice_qp;
-          gop_structure[i-1].slice_qp = gop_structure[i].slice_qp;
-          gop_structure[i].slice_qp = tempnum;
- 
-          tempnum=gop_structure[i -1].pyramidPocDelta;
-          gop_structure[i-1].pyramidPocDelta = gop_structure[i].pyramidPocDelta;
-          gop_structure[i].pyramidPocDelta = tempnum;
-
-        }
-
+      for (i = (1 << j) - 1; i < Bframes + 1 - (1 << j); i += (1 << j)) {
+        gop_structure[i].pyramid_layer  = j;
+        gop_structure[i].reference_idc  = NALU_PRIORITY_HIGH;
+        gop_structure[i].slice_qp = max(0, input->qpB + (input->PyramidLevelQPEnable ? -j: input->qpBRSOffset));
       }     
    }
 
-  }
-}
-
-
-/*!
-************************************************************************
-* \brief
-*    True Pyramid GOP generation 
-************************************************************************
-*/
-void gop_pyramid(int level, int frm_no, int frames, GOP_DATA *pyramid_structure)
+    for (i = 1; i < Bframes; i++) 
 {
+      j = i;
   
-  if (level == 0 )
+      while (j > 0 && gop_structure[j].pyramid_layer > gop_structure[j-1].pyramid_layer) 
   {
-    if (frm_no>=0 && frm_no<input->successive_Bframe && pyramid_structure[frm_no].display_no == 0)
-    {
-        pyramid_structure[frm_no].slice_type = B_SLICE;
-        pyramid_structure[frm_no].display_no = frm_no;
-        pyramid_structure[frm_no].pyramid_layer = 0;
-        pyramid_structure[frm_no].reference_idc = NALU_PRIORITY_DISPOSABLE;
+        tmp = gop_structure[j-1];
+        gop_structure[j-1] = gop_structure[j];
+        gop_structure[j] = tmp;
+        j--;
     }
   }
-  else
-  {
-    if (frm_no>=0 && frm_no<input->successive_Bframe)
-    {
-      pyramid_structure[frm_no].slice_type = B_SLICE;
-      pyramid_structure[frm_no].display_no = frm_no;
-      pyramid_structure[frm_no].pyramid_layer = level;
-      pyramid_structure[frm_no].reference_idc = NALU_PRIORITY_HIGH;
-    }
-
-    
-    gop_pyramid(level - 1, frm_no - (frames+1)/2,(frames+1)/2,pyramid_structure);
-    gop_pyramid(level - 1, frm_no + (frames+1)/2,(frames+1)/2,pyramid_structure);
   }  
 }
 
@@ -220,11 +152,10 @@ void interpret_gop_structure()
 {
 
   int nLength = strlen(input->ExplicitPyramidFormat);
-  int i =0, k, qp, display_no;
+  int i =0, k, dqp, display_no;
   int slice_read =0, order_read = 0, stored_read = 0, qp_read =0;
   int coded_frame = 0;
   
-   
   if (nLength > 0)
   {
     
@@ -309,14 +240,17 @@ void interpret_gop_structure()
           {
             if (isdigit((int)(*(input->ExplicitPyramidFormat+i))))
             {
-              sscanf(input->ExplicitPyramidFormat+i,"%d",&qp);
-              gop_structure[coded_frame].slice_qp= qp;
+              sscanf(input->ExplicitPyramidFormat+i,"%d",&dqp);
+
+              if (gop_structure[coded_frame].slice_type == I_SLICE)
+                gop_structure[coded_frame].slice_qp = input->qp0;
+              else if (gop_structure[coded_frame].slice_type == P_SLICE)
+                gop_structure[coded_frame].slice_qp = input->qpN;
+              else
+                gop_structure[coded_frame].slice_qp = input->qpB;
+
+              gop_structure[coded_frame].slice_qp = Clip3(-img->bitdepth_luma_qp_scale, 51,gop_structure[coded_frame].slice_qp + dqp);
                 qp_read = 1;
-                if (qp<0 || qp>51)
-                {
-                  snprintf(errortext, ET_SIZE, "Invalid QP value. Please check configuration file.");
-                  error (errortext, 400);          
-                }
             }
             else
             {
@@ -357,125 +291,140 @@ void interpret_gop_structure()
 /*!
 ************************************************************************
 * \brief
-*    Encode Enhancement Layer. 
+*    Encode Enhancement Layer.
 ************************************************************************
 */
 void encode_enhancement_layer()
 {
-    if ((input->successive_Bframe != 0) && (IMG_NUMBER > 0)) // B-frame(s) to encode
+  int previous_ref_idc = 1;
+  
+  if ((input->successive_Bframe != 0) && (IMG_NUMBER > 0)) // B-frame(s) to encode
+  {
+    img->type = B_SLICE;            // set image type to B-frame
+    
+    if (input->NumFramesInELSubSeq == 0)
+      img->layer = 0;
+    else
+      img->layer = 1;
+    
+    if (input->BRefPictures != 1 && input->PyramidCoding==0)
     {
-      img->type = B_SLICE;            // set image type to B-frame
-      
-      if (input->NumFramesInELSubSeq == 0) 
-        img->layer = 0;
-      else 
-        img->layer = 1;
-      
-      if (input->BRefPictures == 0 && input->PyramidCoding==0)
+      img->frame_num++; //increment frame_num once for B-frames
+      img->frame_num %= (1 << (log2_max_frame_num_minus4 + 4));
+    }
+    img->nal_reference_idc = 0;    
+    
+    //if (input->PyramidCoding == 3 || input->PyramidCoding == 1)
+    if (input->PyramidCoding)
+    {
+      for(img->b_frame_to_code=1; img->b_frame_to_code<=input->successive_Bframe; img->b_frame_to_code++)
       {
-        img->frame_num++;                 //increment frame_num once for B-frames
-        img->frame_num %= (1 << (log2_max_frame_num_minus4 + 4));
+        
+        img->nal_reference_idc = 0;    
+        
+        img->type = gop_structure[img->b_frame_to_code - 1].slice_type;
+        
+        if (previous_ref_idc == 1)           
+        {
+          img->frame_num++;                 //increment frame_num for each stored B slice
+          img->frame_num %= (1 << (log2_max_frame_num_minus4 + 4));
+        }
+        
+        if (gop_structure[img->b_frame_to_code - 1].reference_idc== NALU_PRIORITY_HIGH )
+        {
+          img->nal_reference_idc = 1;
+          previous_ref_idc = 1;
+        }
+        else
+          previous_ref_idc = 0;
+        
+        img->b_interval =
+          ((double) (input->jumpd + 1) / (input->successive_Bframe + 1.0) );
+        
+        if (input->PyramidCoding == 3)
+          img->b_interval = 1.0;
+        
+        if(input->intra_period && input->idr_enable)
+          img->toppoc = 2*(((IMG_NUMBER%input->intra_period)-1)*(input->jumpd+1) + (int)(img->b_interval * (double)(1 + gop_structure[img->b_frame_to_code - 1].display_no)));
+        else
+          img->toppoc = 2*((IMG_NUMBER-1)*(input->jumpd + 1) + (int)(img->b_interval * (double)(1 + gop_structure[img->b_frame_to_code -1].display_no)));
+        
+        if (img->b_frame_to_code == 1)
+          img->delta_pic_order_cnt[0] = img->toppoc - 2*(start_tr_in_this_IGOP  + (IMG_NUMBER)*((input->jumpd+1)));
+        else
+          img->delta_pic_order_cnt[0] = img->toppoc - 2*(start_tr_in_this_IGOP  + (IMG_NUMBER-1)*((input->jumpd+1)) + (int) (2.0 *img->b_interval * (double) (1+ gop_structure[img->b_frame_to_code - 2].display_no)));
+        
+        if ((input->PicInterlace==FRAME_CODING)&&(input->MbInterlace==FRAME_CODING))
+          img->bottompoc = img->toppoc;     //progressive
+        else
+          img->bottompoc = img->toppoc+1;
+        
+        img->framepoc = min (img->toppoc, img->bottompoc);
+        
+        img->delta_pic_order_cnt[1]= 0;   // POC200301
+        
+        encode_one_frame();  // encode one B-frame
+        if (input->ReportFrameStats)
+          report_frame_statistic();
+        
+        if (gop_structure[img->b_frame_to_code - 1].reference_idc== NALU_PRIORITY_HIGH && img->b_frame_to_code==input->successive_Bframe)           
+        {
+          img->frame_num++;                 //increment frame_num for each stored B slice
+          img->frame_num %= (1 << (log2_max_frame_num_minus4 + 4));
+        }
       }
-      img->nal_reference_idc = 0;     
-
-      //if (input->PyramidCoding == 3 || input->PyramidCoding == 1)
-      if (input->PyramidCoding)
+      img->b_frame_to_code = 0;
+    }
+    else
+    {     
+      for(img->b_frame_to_code=1; img->b_frame_to_code<=input->successive_Bframe; img->b_frame_to_code++)
       {
-        for(img->b_frame_to_code=1; img->b_frame_to_code<=input->successive_Bframe; img->b_frame_to_code++)
+        
+        img->nal_reference_idc = 0;    
+        if (input->BRefPictures == 1 )
         {
-          
-          img->nal_reference_idc = 0;     
-
-          img->type = gop_structure[img->b_frame_to_code - 1].slice_type;
-
-          if (gop_structure[img->b_frame_to_code - 1].reference_idc== NALU_PRIORITY_HIGH )            
-          {
-            img->nal_reference_idc = 1;
-            img->frame_num++;                 //increment frame_num for each stored B slice
-            img->frame_num %= (1 << (log2_max_frame_num_minus4 + 4));
-          } 
-
-          img->b_interval =
-            ((double) (input->jumpd + 1) / (input->successive_Bframe + 1.0) );
-
-          if (input->PyramidCoding == 3)
-            img->b_interval = 1.0;
-          
-          if(input->intra_period && input->idr_enable)
-            img->toppoc = 2*(((IMG_NUMBER%input->intra_period)-1)*(input->jumpd+1) + (int)(img->b_interval * (double)(1 + gop_structure[img->b_frame_to_code - 1].display_no)));
-          else
-            img->toppoc = 2*((IMG_NUMBER-1)*(input->jumpd + 1) + (int)(img->b_interval * (double)(1 + gop_structure[img->b_frame_to_code -1].display_no)));
-
-          if (img->b_frame_to_code == 1)
-            img->delta_pic_order_cnt[0] = img->toppoc - 2*(start_tr_in_this_IGOP  + (IMG_NUMBER)*((input->jumpd+1)));
-          else
-            img->delta_pic_order_cnt[0] = img->toppoc - 2*(start_tr_in_this_IGOP  + (IMG_NUMBER-1)*((input->jumpd+1)) + (int) (2.0 *img->b_interval * (double) (1+ gop_structure[img->b_frame_to_code - 2].display_no)));
-
-          if ((input->PicInterlace==FRAME_CODING)&&(input->MbInterlace==FRAME_CODING))
-            img->bottompoc = img->toppoc;     //progressive
-          else 
-            img->bottompoc = img->toppoc+1;
-          
-          img->framepoc = min (img->toppoc, img->bottompoc);
-          
-          img->delta_pic_order_cnt[1]= 0;   // POC200301
-          
-          encode_one_frame();  // encode one B-frame
-          if (input->ReportFrameStats)
-            report_frame_statistic();
+          img->nal_reference_idc = 1;
+          img->frame_num++;                 //increment frame_num once for B-frames
+          img->frame_num %= (1 << (log2_max_frame_num_minus4 + 4));
         }
-        img->b_frame_to_code = 0;
-      }
-      else 
-      {      
-        for(img->b_frame_to_code=1; img->b_frame_to_code<=input->successive_Bframe; img->b_frame_to_code++)
+        
+        img->b_interval =
+          ((double) (input->jumpd + 1) / (input->successive_Bframe + 1.0) );
+        
+        if (input->PyramidCoding == 3)
+          img->b_interval = 1.0;
+        
+        if(input->intra_period && input->idr_enable)
+          img->toppoc = 2*(((IMG_NUMBER% input->intra_period)-1)*(input->jumpd+1) + (int) (img->b_interval * (double)img->b_frame_to_code));
+        else
+          img->toppoc = 2*((IMG_NUMBER-1)*(input->jumpd+1) + (int) (img->b_interval * (double)img->b_frame_to_code));
+        
+        if ((input->PicInterlace==FRAME_CODING)&&(input->MbInterlace==FRAME_CODING))
+          img->bottompoc = img->toppoc;     //progressive
+        else
+          img->bottompoc = img->toppoc+1;
+        
+        img->framepoc = min (img->toppoc, img->bottompoc);
+        
+        //the following is sent in the slice header
+        if (input->BRefPictures != 1)
         {
-          
-          img->nal_reference_idc = 0;     
-          if (input->BRefPictures == 1 )
-          {
-            img->nal_reference_idc = 1;
-            img->frame_num++;                 //increment frame_num once for B-frames
-            img->frame_num %= (1 << (log2_max_frame_num_minus4 + 4));
-          }
-
-          img->b_interval =
-            ((double) (input->jumpd + 1) / (input->successive_Bframe + 1.0) );
-
-          if (input->PyramidCoding == 3)
-            img->b_interval = 1.0;
-          
-          if(input->intra_period && input->idr_enable)
-            img->toppoc = 2*(((IMG_NUMBER% input->intra_period)-1)*(input->jumpd+1) + (int) (img->b_interval * (double)img->b_frame_to_code));
-          else
-            img->toppoc = 2*((IMG_NUMBER-1)*(input->jumpd+1) + (int) (img->b_interval * (double)img->b_frame_to_code));
-
-          if ((input->PicInterlace==FRAME_CODING)&&(input->MbInterlace==FRAME_CODING))
-            img->bottompoc = img->toppoc;     //progressive
-          else 
-            img->bottompoc = img->toppoc+1;
-          
-          img->framepoc = min (img->toppoc, img->bottompoc);
-          
-          //the following is sent in the slice header
-          if (!input->BRefPictures)
-          {
-            img->delta_pic_order_cnt[0]= 2*(img->b_frame_to_code-1);
-          }
-          else
-          {
-            img->delta_pic_order_cnt[0]= -2;
-          }
-          
-          img->delta_pic_order_cnt[1]= 0;   // POC200301
-          
-          encode_one_frame();  // encode one B-frame
-          if (input->ReportFrameStats)
-            report_frame_statistic();
+          img->delta_pic_order_cnt[0]= 2*(img->b_frame_to_code-1);
         }
+        else
+        {
+          img->delta_pic_order_cnt[0]= -2;
+        }
+        
+        img->delta_pic_order_cnt[1]= 0;   // POC200301
+        
+        encode_one_frame();  // encode one B-frame
+        if (input->ReportFrameStats)
+          report_frame_statistic();
       }
     }
-    img->b_frame_to_code = 0;
+  }
+  img->b_frame_to_code = 0;
 }
 
 

@@ -251,7 +251,6 @@ void code_a_picture(Picture *pic)
 
   if (img->MbaffFrameFlag)
     MbAffPostProc();
-
 }
 
 
@@ -346,6 +345,7 @@ int encode_one_frame ()
   // Following code should consider optimal coding mode. Currently also does not support
   // multiple slices per frame.
   frame_ctr[img->type]++;
+  snr->frame_ctr++;
 
   if (input->PicInterlace == FIELD_CODING)
   {
@@ -510,6 +510,9 @@ int encode_one_frame ()
      snr->snr_y = 0.0;
      snr->snr_u = 0.0;
      snr->snr_v = 0.0;
+     snr->sse_y = 0.0;
+     snr->sse_u = 0.0;
+     snr->sse_v = 0.0;
    }
 
   time (&ltime2);               // end time sec
@@ -892,7 +895,7 @@ void field_picture (Picture *top, Picture *bottom)
     nextP_tr_fld++;             //check once coding B field
 
  if (img->type == I_SLICE && input->IntraBottom!=1)
-    img->type = P_SLICE;
+   img->type = (input->BRefPictures == 2) ? B_SLICE : P_SLICE;
 
   img->fld_flag = 1;
 
@@ -1141,7 +1144,7 @@ static void init_frame ()
     if (img->tr >= nextP_no)
       img->tr = nextP_no - 1;
     //Rate control
-    if(!input->RCEnable && input->PyramidCoding !=3)                  // without using rate control
+    if(!input->RCEnable && input->PyramidCoding == 0)                  // without using rate control   
     {    
 #ifdef _CHANGE_QP_
       if (input->qp2start > 0 && img->tr >= input->qp2start)
@@ -1159,21 +1162,20 @@ static void init_frame ()
 #ifdef _CHANGE_QP_
         if (input->qp2start > 0 && img->tr >= input->qp2start)
         {
-          img->qp = Clip3(0,51,input->qpB2 + input->qpBRS2Offset);
+          img->qp = Clip3(-img->bitdepth_luma_qp_scale,51,input->qpB2 + input->qpBRS2Offset);
         }
         else
 #endif
         {
-          img->qp = Clip3(0,51,input->qpB + input->qpBRSOffset);
+          img->qp = Clip3(-img->bitdepth_luma_qp_scale,51,input->qpB + input->qpBRSOffset);
         }
       }
     }
-    else if (input->PyramidCoding ==3)  
+    else if (input->PyramidCoding !=0)  
     {
+      // Note that _CHANGE_QP_ does not anymore work for gop_structure. Needs to be fixed
       img->qp =  gop_structure[img->b_frame_to_code - 1].slice_qp;
-
     }
-
   }
   
   UpdateSubseqInfo (img->layer);        // Tian Dong (Sept 2002)
@@ -1215,132 +1217,129 @@ static void init_field ()
   img->block_x = img->pix_x = img->block_c_x = img->pix_c_x = 0;        // define horizontal positions
 
   if (!img->b_frame_to_code)
-  //if (img->type != B_SLICE)
+  {
+    img->tr = img->number * (input->jumpd + 2) + img->fld_type;
+    
+    if (!img->fld_type)
     {
-      img->tr = img->number * (input->jumpd + 2) + img->fld_type;
-
-      if (!img->fld_type)
-        {
-          img->imgtr_last_P_fld = img->imgtr_next_P_fld;
-          img->imgtr_next_P_fld = img->tr;
-        }
-
-#ifdef _ADAPT_LAST_GROUP_
-      if (input->last_frame && img->number + 1 == input->no_frames)
-        img->tr = input->last_frame;
-#endif
-      if (img->number != 0 && input->successive_Bframe != 0)    // B pictures to encode
-        nextP_tr_fld = img->tr;
-      
-      //Rate control
-      if(!input->RCEnable)                  // without using rate control
-      {
-        if (img->type == I_SLICE)
-        {
-#ifdef _CHANGE_QP_
-          if (input->qp2start > 0 && img->tr >= input->qp2start)
-            img->qp = input->qp02;
-          else
-#endif    
-            img->qp = input->qp0;   // set quant. parameter for I-frame
-        }
-        else
-        {
-#ifdef _CHANGE_QP_
-          if (input->qp2start > 0 && img->tr >= input->qp2start)
-            img->qp = input->qpN2;
-          else
-#endif
-            img->qp = input->qpN;
-          if (img->type == SP_SLICE)
-          {
-            img->qp = input->qpsp;
-            img->qpsp = input->qpsp_pred;
-          }
-        }
-      }
-      img->mb_y_intra = img->mb_y_upd;  //  img->mb_y_intra indicates which GOB to intra code for this frame
-
-      if (input->intra_upd > 0) // if error robustness, find next GOB to update
-        {
-          img->mb_y_upd =
-            (img->number / input->intra_upd) % (img->width / MB_BLOCK_SIZE);
-        }
+      img->imgtr_last_P_fld = img->imgtr_next_P_fld;
+      img->imgtr_next_P_fld = img->tr;
     }
-  else
-    {
-      img->p_interval = input->jumpd + 2;
-      prevP_no = (img->number - 1) * img->p_interval + img->fld_type;
-      nextP_no = img->number * img->p_interval + img->fld_type;
+    
 #ifdef _ADAPT_LAST_GROUP_
-      if (!img->fld_type)       // top field
-        {
-          last_P_no[0] = prevP_no + 1;
-          last_P_no[1] = prevP_no;
-          for (i = 1; i <= img->buf_cycle; i++)
-            {
-              last_P_no[2 * i] = last_P_no[2 * i - 2] - img->p_interval;
-              last_P_no[2 * i + 1] = last_P_no[2 * i - 1] - img->p_interval;
-            }
-        }
-      else                      // bottom field
-        {
-          last_P_no[0] = nextP_no - 1;
-          last_P_no[1] = prevP_no;
-          for (i = 1; i <= img->buf_cycle; i++)
-            {
-              last_P_no[2 * i] = last_P_no[2 * i - 2] - img->p_interval;
-              last_P_no[2 * i + 1] = last_P_no[2 * i - 1] - img->p_interval;
-            }
-        }
-
-      if (input->last_frame && img->number + 1 == input->no_frames)
-        {
-          nextP_no = input->last_frame;
-          img->p_interval = nextP_no - prevP_no;
-        }
+    if (input->last_frame && img->number + 1 == input->no_frames)
+      img->tr = input->last_frame;
 #endif
-      img->b_interval =
-      ((double) (input->jumpd + 1) / (input->successive_Bframe + 1.0) );
-
-      if (input->PyramidCoding == 3)
-        img->b_interval = 1.0;
-      
-      if (input->PyramidCoding)
-        img->tr = prevP_no + (int) ((img->b_interval + 1.0) * (double) (1 + gop_structure[img->b_frame_to_code - 1].display_no));      // from prev_P
-      else      
-        img->tr = prevP_no + (int) ((img->b_interval + 1.0) * (double) img->b_frame_to_code);      // from prev_P
-      
-
-      if (img->tr >= nextP_no)
-        img->tr = nextP_no - 1; // ?????
+    if (img->number != 0 && input->successive_Bframe != 0)    // B pictures to encode
+      nextP_tr_fld = img->tr;
+    
       //Rate control
-      if(!input->RCEnable && input->PyramidCoding !=3)                  // without using rate control
+    if(!input->RCEnable)                  // without using rate control
+    {
+      if (img->type == I_SLICE)
       {
 #ifdef _CHANGE_QP_
         if (input->qp2start > 0 && img->tr >= input->qp2start)
-          img->qp = input->qpB2;
+          img->qp = input->qp02;
+        else
+#endif    
+          img->qp = input->qp0;   // set quant. parameter for I-frame
+      }
+      else
+      {
+#ifdef _CHANGE_QP_
+        if (input->qp2start > 0 && img->tr >= input->qp2start)
+          img->qp = input->qpN2;
         else
 #endif
-          img->qp = input->qpB;
-        if (img->nal_reference_idc)
+          img->qp = input->qpN;
+        if (img->type == SP_SLICE)
         {
-#ifdef _CHANGE_QP_
-          if (input->qp2start > 0 && img->tr >= input->qp2start)
-            img->qp = Clip3(0,51,input->qpB2 + input->qpBRS2Offset);
-          else
-#endif
-            img->qp = Clip3(0,51,input->qpB + input->qpBRSOffset);
-          
+          img->qp = input->qpsp;
+          img->qpsp = input->qpsp_pred;
         }
       }
-      else if (input->PyramidCoding ==3)  
-      {          
-        img->qp =  gop_structure[img->b_frame_to_code - 1].slice_qp;
-      }
-      
-
     }
+    img->mb_y_intra = img->mb_y_upd;  //  img->mb_y_intra indicates which GOB to intra code for this frame
+
+    if (input->intra_upd > 0) // if error robustness, find next GOB to update
+    {
+      img->mb_y_upd =
+        (img->number / input->intra_upd) % (img->width / MB_BLOCK_SIZE);
+    }
+  }
+  else
+  {
+    img->p_interval = input->jumpd + 2;
+    prevP_no = (img->number - 1) * img->p_interval + img->fld_type;
+    nextP_no = img->number * img->p_interval + img->fld_type;
+#ifdef _ADAPT_LAST_GROUP_
+    if (!img->fld_type)       // top field
+    {
+      last_P_no[0] = prevP_no + 1;
+      last_P_no[1] = prevP_no;
+      for (i = 1; i <= img->buf_cycle; i++)
+      {
+        last_P_no[2 * i] = last_P_no[2 * i - 2] - img->p_interval;
+        last_P_no[2 * i + 1] = last_P_no[2 * i - 1] - img->p_interval;
+      }
+    }
+    else                      // bottom field
+    {
+      last_P_no[0] = nextP_no - 1;
+      last_P_no[1] = prevP_no;
+      for (i = 1; i <= img->buf_cycle; i++)
+      {
+        last_P_no[2 * i] = last_P_no[2 * i - 2] - img->p_interval;
+        last_P_no[2 * i + 1] = last_P_no[2 * i - 1] - img->p_interval;
+      }
+    }
+    
+    if (input->last_frame && img->number + 1 == input->no_frames)
+    {
+      nextP_no = input->last_frame;
+      img->p_interval = nextP_no - prevP_no;
+    }
+#endif
+    img->b_interval =
+      ((double) (input->jumpd + 1) / (input->successive_Bframe + 1.0) );
+    
+    if (input->PyramidCoding == 3)
+      img->b_interval = 1.0;
+    
+    if (input->PyramidCoding)
+      img->tr = prevP_no + (int) ((img->b_interval + 1.0) * (double) (1 + gop_structure[img->b_frame_to_code - 1].display_no));      // from prev_P
+    else      
+      img->tr = prevP_no + (int) ((img->b_interval + 1.0) * (double) img->b_frame_to_code);      // from prev_P
+    
+    
+    if (img->tr >= nextP_no)
+      img->tr = nextP_no - 1; // ?????
+    //Rate control
+    if(!input->RCEnable && input->PyramidCoding == 0)                  // without using rate control
+    {
+#ifdef _CHANGE_QP_
+      if (input->qp2start > 0 && img->tr >= input->qp2start)
+        img->qp = input->qpB2;
+      else
+#endif
+        img->qp = input->qpB;
+      if (img->nal_reference_idc)
+      {
+#ifdef _CHANGE_QP_
+        if (input->qp2start > 0 && img->tr >= input->qp2start)
+          img->qp = Clip3(-img->bitdepth_luma_qp_scale,51,input->qpB2 + input->qpBRS2Offset);
+        else
+#endif
+          img->qp = Clip3(-img->bitdepth_luma_qp_scale,51,input->qpB + input->qpBRSOffset);
+        
+      }
+    }
+    else if (input->PyramidCoding != 0)
+    {          
+      img->qp =  gop_structure[img->b_frame_to_code - 1].slice_qp;
+    }
+  }
   input->jumpd /= 2;
   input->successive_Bframe /= 2;
   img->buf_cycle *= 2;
@@ -1349,8 +1348,6 @@ static void init_field ()
 
 
 #define Clip(min,max,val) (((val)<(min))?(min):(((val)>(max))?(max):(val)))
-
-
 
 
 /*!
@@ -1581,6 +1578,9 @@ static void find_snr ()
       }
     }
   }
+  snr->sse_y = (float)diff_y;
+  snr->sse_u = (float)diff_u;
+  snr->sse_v = (float)diff_v;
 
 #if ZEROSNR
   if (diff_y == 0)
@@ -1616,6 +1616,10 @@ static void find_snr ()
     snr->snr_ya = snr->snr_y1;
     snr->snr_ua = snr->snr_u1;
     snr->snr_va = snr->snr_v1;
+    // sse stats
+    snr->msse_y = snr->sse_y;
+    snr->msse_u = snr->sse_u;
+    snr->msse_v = snr->sse_v;
     for (i=0; i<5; i++)
     {
       snr->snr_yt[i] = 0.0;
@@ -1623,12 +1627,17 @@ static void find_snr ()
       snr->snr_vt[i] = 0.0;
     }
   }
-  // B pictures
   else
   {
-    snr->snr_ya = (float) (snr->snr_ya * (img->number + frame_ctr[B_SLICE]) + snr->snr_y) / (img->number + frame_ctr[B_SLICE] + 1); // average snr lume for all frames inc. first
-    snr->snr_ua = (float) (snr->snr_ua * (img->number + frame_ctr[B_SLICE]) + snr->snr_u) / (img->number + frame_ctr[B_SLICE] + 1); // average snr u croma for all frames inc. first
-    snr->snr_va = (float) (snr->snr_va * (img->number + frame_ctr[B_SLICE]) + snr->snr_v) / (img->number + frame_ctr[B_SLICE] + 1); // average snr v croma for all frames inc. first
+    //int total_frames = img->number + frame_ctr[B_SLICE];
+    int total_frames = snr->frame_ctr - 1;
+
+    snr->snr_ya = (float) (snr->snr_ya * total_frames + snr->snr_y) / (total_frames + 1); // average snr luma for all frames inc. first
+    snr->snr_ua = (float) (snr->snr_ua * total_frames + snr->snr_u) / (total_frames + 1); // average snr u croma for all frames inc. first
+    snr->snr_va = (float) (snr->snr_va * total_frames + snr->snr_v) / (total_frames + 1); // average snr v croma for all frames inc. first
+    snr->msse_y = (float) (snr->msse_y * total_frames + snr->sse_y) / (total_frames + 1); // average mse luma for all frames inc. first
+    snr->msse_u = (float) (snr->msse_u * total_frames + snr->sse_u) / (total_frames + 1); // average mse u croma for all frames inc. first
+    snr->msse_v = (float) (snr->msse_v * total_frames + snr->sse_v) / (total_frames + 1); // average mse v croma for all frames inc. first  
   }
   
   snr->snr_yt[img->type] = (float) (snr->snr_yt[img->type] * (frame_ctr[img->type] - 1) + snr->snr_y) / ( frame_ctr[img->type] );  // average luma snr for img->type coded frames
@@ -2210,7 +2219,6 @@ void buf2img ( imgpel** imgX,           //!< Pointer to image plane
               ui16  = (tmp16 >> 8) | ((tmp16&0xFF)<<8);
               imgX[j][i] = (imgpel) ui16;
             }
-
           break;
         }
       case 4:

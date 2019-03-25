@@ -1067,7 +1067,7 @@ void SetLagrangianMultipliers()
     {
       for (qp = 0; qp < 52; qp++)
       {          
-        qp_temp = (double)qp - SHIFT_QP;
+        qp_temp = max(0.0,(double)qp - SHIFT_QP);
 
         if (input->UseExplicitLambdaParams) // consideration of explicit weights.
         {
@@ -1094,6 +1094,7 @@ void SetLagrangianMultipliers()
             * ( (j == B_SLICE) ? 4.0 : (j == SP_SLICE) ? Clip3(1.4,3.0,(qp_temp / 12.0)) : 1.0);
           // Scale lambda due to hadamard qpel only consideration
           img->lambda_md[j][qp] = (input->hadamard == 2 ? 0.95 : 1.00) * img->lambda_md[j][qp];
+          img->lambda_md[j][qp] = (input->BRefPictures == 2 && img->b_frame_to_code == 0 ? 0.50 : 1.00) * img->lambda_md[j][qp];
           
           if (j == B_SLICE)
           {
@@ -1109,6 +1110,7 @@ void SetLagrangianMultipliers()
           }
           else
             img->lambda_md[j][qp] *= lambda_scale;
+
           img->lambda_me[j][qp] = sqrt(img->lambda_md[j][qp]);  
           img->lambda_mf[j][qp] = LAMBDA_FACTOR (img->lambda_me[j][qp]);
         }

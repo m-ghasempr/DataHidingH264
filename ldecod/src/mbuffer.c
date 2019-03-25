@@ -143,9 +143,13 @@ int getDpbSize()
   case 41:
     size = 12582912;
     break;
-  case 42:
-    size = 12582912;
-    break;
+ case 42:
+   if(  (active_sps->profile_idc==FREXT_HP   ) || (active_sps->profile_idc==FREXT_Hi10P)
+     || (active_sps->profile_idc==FREXT_Hi422) || (active_sps->profile_idc==FREXT_Hi444))
+     size = 13369344;
+   else
+     size = 12582912;
+   break; 
   case 50:
     size = 42393600;
     break;
@@ -1271,7 +1275,7 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
 /*!
  ************************************************************************
  * \brief
- *    Initilaize listX[2..5] from lists 0 and 1
+ *    Initialize listX[2..5] from lists 0 and 1
  *    listX[2]: list0 for current_field==top
  *    listX[3]: list1 for current_field==top
  *    listX[4]: list0 for current_field==bottom
@@ -3019,14 +3023,12 @@ void dpb_combine_field_yuv(FrameStore *fs)
     memcpy(fs->frame->imgUV[1][i*2 + 1], fs->bottom_field->imgUV[1][i], fs->bottom_field->size_x_cr*sizeof(imgpel));
   }
   
-  
   fs->poc=fs->frame->poc =fs->frame->frame_poc = min (fs->top_field->poc, fs->bottom_field->poc);
 
-  fs->bottom_field->frame_poc=fs->top_field->frame_poc=
-  fs->bottom_field->top_poc=fs->frame->frame_poc=fs->frame->top_poc=fs->top_field->poc;
-  fs->top_field->bottom_poc=fs->bottom_field->poc;
+  fs->bottom_field->frame_poc=fs->top_field->frame_poc=fs->frame->poc;
 
-  fs->frame->bottom_poc=fs->bottom_field->poc;
+  fs->bottom_field->top_poc=fs->frame->top_poc=fs->top_field->poc;
+  fs->top_field->bottom_poc=fs->frame->bottom_poc=fs->bottom_field->poc;
 
   fs->frame->used_for_reference = (fs->top_field->used_for_reference && fs->bottom_field->used_for_reference );
   fs->frame->is_long_term = (fs->top_field->is_long_term && fs->bottom_field->is_long_term );
@@ -3344,7 +3346,6 @@ void free_colocated(ColocatedParams* p)
       p->field_frame=NULL;
     }
 
-    
     if (p->mb_adaptive_frame_field_flag)
     {
       free_mem3D      ((byte***)p->top_ref_idx, 2);
@@ -3718,7 +3719,6 @@ void compute_colocated(ColocatedParams* p, StorablePicture **listX[6])
     {                
       for (i=0 ; i<fs->size_x/4 ; i++)          
       {                
-        
         if ((!img->MbaffFrameFlag &&!img->structure && fs->field_frame[j][i]) || (img->MbaffFrameFlag && fs->field_frame[j][i]))
         {
           p->mv[LIST_0][j][i][1] *= 2;        

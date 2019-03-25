@@ -153,7 +153,6 @@ typedef enum {
   SE_DELTA_QUANT_INTRA,
   SE_BFRAME,
   SE_EOS,
-  SE_TRANSFORM_SIZE_FLAG,
   SE_MAX_ELEMENTS //!< number of maximum syntax elements, this MUST be the last one!
 } SE_type;        // substituting the definitions in element.h
 
@@ -654,7 +653,6 @@ struct inp_par
   char LeakyBucketParamFile[100];         //!< LeakyBucketParamFile
 #endif
 
-  int LowPassForIntra8x8;
 };
 
 extern struct inp_par *input;

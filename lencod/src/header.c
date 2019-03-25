@@ -403,20 +403,23 @@ static int pred_weight_table()
         len += u_1 ("SH: luma_weight_flag_l0", 0, bitstream);
     }
 
-    if ( (wp_weight[0][i][1] != 1<<chroma_log_weight_denom) || (wp_offset[0][i][1] != 0) || 
-     (wp_weight[0][i][2] != 1<<chroma_log_weight_denom) || (wp_offset[0][i][2] != 0)  )
+    if (active_sps->chroma_format_idc!=0)
     {
-      len += u_1 ("chroma_weight_flag_l0", 1, bitstream);
-      for (j=1; j<3; j++)
+      if ( (wp_weight[0][i][1] != 1<<chroma_log_weight_denom) || (wp_offset[0][i][1] != 0) || 
+        (wp_weight[0][i][2] != 1<<chroma_log_weight_denom) || (wp_offset[0][i][2] != 0)  )
       {
-        len += se_v ("chroma_weight_l0", wp_weight[0][i][j] ,bitstream);
-      
-        len += se_v ("chroma_offset_l0", wp_offset[0][i][j] ,bitstream);
+        len += u_1 ("chroma_weight_flag_l0", 1, bitstream);
+        for (j=1; j<3; j++)
+        {
+          len += se_v ("chroma_weight_l0", wp_weight[0][i][j] ,bitstream);
+          
+          len += se_v ("chroma_offset_l0", wp_offset[0][i][j] ,bitstream);
+        }
       }
-    }
-    else
-    {
-      len += u_1 ("chroma_weight_flag_l0", 0, bitstream);
+      else
+      {
+        len += u_1 ("chroma_weight_flag_l0", 0, bitstream);
+      }
     }
   }
 
@@ -437,20 +440,23 @@ static int pred_weight_table()
         len += u_1 ("SH: luma_weight_flag_l1", 0, bitstream);
       }
       
-      if ( (wp_weight[1][i][1] != 1<<chroma_log_weight_denom) || (wp_offset[1][i][1] != 0) || 
-      (wp_weight[1][i][2] != 1<<chroma_log_weight_denom) || (wp_offset[1][i][2] != 0) )
+      if (active_sps->chroma_format_idc!=0)
       {
-        len += u_1 ("chroma_weight_flag_l1", 1, bitstream);
-        for (j=1; j<3; j++)
+        if ( (wp_weight[1][i][1] != 1<<chroma_log_weight_denom) || (wp_offset[1][i][1] != 0) || 
+          (wp_weight[1][i][2] != 1<<chroma_log_weight_denom) || (wp_offset[1][i][2] != 0) )
         {
-          len += se_v ("chroma_weight_l1", wp_weight[1][i][j] ,bitstream);
-          
-          len += se_v ("chroma_offset_l1", wp_offset[1][i][j] ,bitstream);
+          len += u_1 ("chroma_weight_flag_l1", 1, bitstream);
+          for (j=1; j<3; j++)
+          {
+            len += se_v ("chroma_weight_l1", wp_weight[1][i][j] ,bitstream);
+            
+            len += se_v ("chroma_offset_l1", wp_offset[1][i][j] ,bitstream);
+          }
         }
-      }
-      else
-      {
-        len += u_1 ("chroma_weight_flag_l1", 0, bitstream);
+        else
+        {
+          len += u_1 ("chroma_weight_flag_l1", 0, bitstream);
+        }
       }
     }
   }

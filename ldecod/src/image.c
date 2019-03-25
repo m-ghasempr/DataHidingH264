@@ -287,7 +287,7 @@ void find_snr(
   unsigned char *buf;
 
   // calculate frame number
-  int  psnrPOC = active_sps->mb_adaptive_frame_field_flag ? p->poc /(input->poc_scale) : p->poc/(3-input->poc_scale);
+  int  psnrPOC = active_sps->mb_adaptive_frame_field_flag ? p->poc /(input->poc_scale) : p->poc/(input->poc_scale);
 
   // cropping for luma
   if (p->frame_cropping_flag)
@@ -416,11 +416,11 @@ void find_snr(
   if (diff_y != 0)
     snr->snr_y=(float)(10*log10(max_pix_value_sqd*(double)((double)(size_x)*(size_y) / diff_y)));        // luma snr for current frame
   else
-    snr->snr_y=0;
+    snr->snr_y=0.0;
   if (diff_u != 0)
     snr->snr_u=(float)(10*log10(max_pix_value_sqd_uv*(double)((double)(size_x_cr)*(size_y_cr) / (diff_u))));    //  chroma snr for current frame
   else
-    snr->snr_u=0;
+    snr->snr_u=0.0;
   if (diff_v != 0)
     snr->snr_v=(float)(10*log10(max_pix_value_sqd_uv*(double)((double)(size_x_cr)*(size_y_cr) / (diff_v))));    //  chroma snr for current frame
   else

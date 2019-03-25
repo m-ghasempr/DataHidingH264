@@ -1096,7 +1096,7 @@ double RDCost_for_8x8blocks (int*    cnt_nonz,   // --> number of nonzero coeffi
         }
       }
     }
-    
+    reset_coding_state (cs_cm);  
     /* Inverse Residue Transform */
     for (j=pay; j<pay+8; j++)
       for (i=pax; i<pax+8; i++)
@@ -1608,6 +1608,7 @@ void SetCoeffAndReconstruction8x8 (Macroblock* currMB)
     
     //============= get pre-calculated data ==============
     //restore coefficients from 8x8 transform
+    
     for (block = 0; block<4; block++)
     {
       for (k = 0; k<4; k++)

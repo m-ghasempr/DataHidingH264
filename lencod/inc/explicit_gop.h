@@ -19,7 +19,6 @@
 void init_gop_structure(); 
 void interpret_gop_structure();
 void create_pyramid();
-void gop_pyramid(int level, int frm_no, int frames, GOP_DATA *pyramid_structure);
 void clear_gop_structure();
 void encode_enhancement_layer();
 

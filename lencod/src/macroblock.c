@@ -94,7 +94,7 @@ void set_MB_parameters (int mb_addr)
   if (img->yuv_format != YUV400)
   {
     img->pix_c_x = (img->mb_cr_size_x * img->pix_x) >> 4;
-    img->pix_c_y = (img->mb_cr_size_x * img->pix_y) >> 4;
+    img->pix_c_y = (img->mb_cr_size_y * img->pix_y) >> 4;
     
     img->opix_c_x = (img->mb_cr_size_x * img->opix_x) >> 4;
     img->opix_c_y = (img->mb_cr_size_y * img->opix_y) >> 4;
@@ -286,7 +286,14 @@ void start_macroblock(int mb_addr, int mb_field)
     if (prev_mb>-1)
     {
       currMB->prev_qp = img->mb_data[prev_mb].qp;
-      currMB->prev_delta_qp = img->mb_data[prev_mb].delta_qp;
+      if (img->mb_data[prev_mb].slice_nr == img->current_slice_nr)
+      {
+        currMB->prev_delta_qp = img->mb_data[prev_mb].delta_qp;
+      }
+      else
+      {
+        currMB->prev_delta_qp = 0;
+      }
     }
     else
     {
@@ -480,7 +487,14 @@ void start_macroblock(int mb_addr, int mb_field)
     if (prev_mb>-1)
     {
       currMB->prev_qp = img->mb_data[prev_mb].qp;
-      currMB->prev_delta_qp = img->mb_data[prev_mb].delta_qp;
+      if (img->mb_data[prev_mb].slice_nr == img->current_slice_nr)
+      {
+        currMB->prev_delta_qp = img->mb_data[prev_mb].delta_qp;
+      }
+      else
+      {
+        currMB->prev_delta_qp = 0;
+      }
     }
     else
     {
@@ -2674,7 +2688,7 @@ int writeMBLayer (int rdopt, int *coeff_rate)
   if ((currMB->mb_type == I8MB || currMB->mb_type == I4MB) && input->Transform8x8Mode)
   {
     currSE->value1 = currMB->luma_transform_size_8x8_flag;
-    currSE->type   = SE_TRANSFORM_SIZE_FLAG;
+    currSE->type   = SE_HEADER;
         
     if( input->symbol_mode==UVLC)
     {
@@ -3540,7 +3554,7 @@ int writeCBPandLumaCoeff ()
     if (need_transform_size_flag)
     {
       currSE->value1 = currMB->luma_transform_size_8x8_flag;
-      currSE->type   = SE_TRANSFORM_SIZE_FLAG;
+      currSE->type   = SE_HEADER;
     
       if (input->symbol_mode==UVLC)   currSE->mapping = ue_linfo;
       else                            currSE->writing = writeMB_transform_size_CABAC;

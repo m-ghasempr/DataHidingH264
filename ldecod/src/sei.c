@@ -678,12 +678,11 @@ void interpret_scene_information( byte* payload, int size, ImageParameters *img 
  */
 void interpret_filler_payload_info( byte* payload, int size, ImageParameters *img )
 {
-  int  offset = 0;
-  byte payload_cnt = 0;
+  int payload_cnt = 0;
 
-  while (offset<size)
+  while (payload_cnt<size)
   {
-    if (payload[offset] == 0xFF)
+    if (payload[payload_cnt] == 0xFF)
     {
        payload_cnt++;
     }
@@ -1461,7 +1460,7 @@ void interpret_picture_timing_info( byte* payload, int size, ImageParameters *im
 
   if (picture_structure_present_flag)
   {
-    picture_structure = u_v(3, "SEI: picture_structure" , buf);
+    picture_structure = u_v(4, "SEI: pic_struct" , buf);
 #ifdef PRINT_PCITURE_TIMING_INFO
     printf("picture_structure = %d\n",picture_structure);
 #endif    

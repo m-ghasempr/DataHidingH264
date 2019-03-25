@@ -174,9 +174,9 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
   register unsigned int low = Elow;
   unsigned int rLPS = rLPS_table_64x4[bi_ct->state][(range>>6) & 3];
   
-#if TRACE
-//  if (cabac_encoding)
-//    fprintf(p_trace, "%d  0x%04x  %d  %d\n", binCount++, Erange , bi_ct->state, bi_ct->MPS );
+#if (2==TRACE)
+  if (cabac_encoding)
+    fprintf(p_trace, "%d  0x%04x  %d  %d\n", binCount++, Erange , bi_ct->state, bi_ct->MPS );
 #endif
   
   range -= rLPS;  
@@ -235,10 +235,10 @@ void biari_encode_symbol_eq_prob(EncodingEnvironmentPtr eep, signed short symbol
 {
   register unsigned int low = (Elow<<1);
   
-#if TRACE
-//  extern int cabac_encoding;
-//  if (cabac_encoding)
-//    fprintf(p_trace, "%d  0x%04x\n", binCount++, Erange );
+#if (2==TRACE)
+  extern int cabac_encoding;
+  if (cabac_encoding)
+    fprintf(p_trace, "%d  0x%04x\n", binCount++, Erange );
 #endif
   
   if (symbol != 0)
@@ -276,10 +276,10 @@ void biari_encode_symbol_final(EncodingEnvironmentPtr eep, signed short symbol)
   register unsigned int range = Erange-2;
   register unsigned int low = Elow;
   
-#if TRACE
-//  extern int cabac_encoding;
-//  if (cabac_encoding)
-//    fprintf(p_trace, "%d  0x%04x\n", binCount++, Erange);
+#if (2==TRACE)
+  extern int cabac_encoding;
+  if (cabac_encoding)
+    fprintf(p_trace, "%d  0x%04x\n", binCount++, Erange);
 #endif
   
   if (symbol) {

@@ -15,7 +15,7 @@
 #include "contributors.h"
 
 #include "global.h"
-
+#include <memory.h>
 #include "image.h"
 
 /*!
@@ -151,7 +151,7 @@ void estimate_weighting_factor_P_slice(int select_offset)
 */
 void estimate_weighting_factor_B_slice()
 {
-  int i, j, n, l;
+  int i, j, k, n;
   
   int tx,DistScaleFactor;
   double dc_org = 0.0;
@@ -163,6 +163,9 @@ void estimate_weighting_factor_B_slice()
   
   pel_t*  ref_pic;   
   pel_t*  ref_pic_w;   
+  pel_t**  ref_qpic;   
+  pel_t**  ref_qpic_w;   
+
   int default_weight[3];
   int list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? (img->current_mb_nr & 0x01) ? 4 : 2 : 0;
   int weight[6][MAX_REFERENCE_PICTURES][3]; 
@@ -270,25 +273,14 @@ void estimate_weighting_factor_B_slice()
         wp_offset[clist][index][2] = 0;
       }
     }
-    for (i = 0; i < listXsize[LIST_0]; i++)
+        
+    for (k= 0; k<2; k++) 
     {
-      for (j = 0; j < listXsize[LIST_1]; j++)
+      for (i = 0; i < listXsize[k]; i++)
       {
-        
-        for (n = 0; n < img->height * img->width; n++)
-        {
-          listX[0][i]->imgY_11_w[n] = listX[0][i]->imgY_11[n];
-          listX[1][j]->imgY_11_w[n] = listX[1][j]->imgY_11[n];
-        }
-        
-        for (n = 0; n < 4*(img->height + 2*IMG_PAD_SIZE) ; n++)
-        {
-          for (l = 0; l< 4*(img->width + 2*IMG_PAD_SIZE); l++)
-          {
-            listX[LIST_0][i]->imgY_ups_w[n][l] =   listX[LIST_0 ][i]->imgY_ups[n][l];
-            listX[LIST_1][j]->imgY_ups_w[n][l] =   listX[LIST_1 ][j]->imgY_ups[n][l];
-          }
-        }
+        memcpy(listX[k][i]->imgY_11_w, listX[k][i]->imgY_11, img->height * img->width * sizeof(imgpel));
+        memcpy(&listX[k][i]->imgY_ups_w[0][0], &listX[k][i]->imgY_ups[0][0], 
+          16 * (img->height + 2*IMG_PAD_SIZE) * (img->width + 2*IMG_PAD_SIZE) * sizeof(imgpel));
       }
     }
   }
@@ -310,7 +302,8 @@ void estimate_weighting_factor_B_slice()
         
         ref_pic       = listX[clist][n]->imgY_11;
         ref_pic_w     = listX[clist][n]->imgY_11_w;
-        
+        ref_qpic      = listX[clist][n]->imgY_ups;
+        ref_qpic_w    = listX[clist][n]->imgY_ups_w;
         // Y
         for (i = 0; i < img->height * img->width; i++)
         {
@@ -327,7 +320,6 @@ void estimate_weighting_factor_B_slice()
         }
         wf_offset = 0;
         
-        
         //    printf("dc_org = %d, dc_ref = %d, weight[%d] = %d\n",dc_org, dc_ref[n],n,weight[n][0]);        
         
         weight[clist][n][0] = wf_weight;
@@ -336,7 +328,6 @@ void estimate_weighting_factor_B_slice()
         offset[clist][n][0] = 0;
         offset[clist][n][1] = 0;
         offset[clist][n][2] = 0;
-        
         
         /* store weighted reference pic for motion estimation */
         for (i = 0; i < img->height * img->width; i++)
@@ -347,9 +338,8 @@ void estimate_weighting_factor_B_slice()
         {
           for (j = 0; j< 4*(img->width + 2*IMG_PAD_SIZE); j++)
           {
-            listX[LIST_0][n]->imgY_ups_w[i][j] =   Clip3 (0, img->max_imgpel_value, (((int) listX[LIST_0][n]->imgY_ups[i][j] * wf_weight + wp_luma_round) >> (luma_log_weight_denom)) + wf_offset );      	
+            ref_qpic_w[i][j] =   Clip3 (0, img->max_imgpel_value, (((int) ref_qpic[i][j] * wf_weight + wp_luma_round) >> (luma_log_weight_denom)) + wf_offset );      	
           }
-          
         }
       }
     }
@@ -492,7 +482,6 @@ int test_wp_P_slice(int select_offset)
         offset[clist][n][0] = (offset[clist][n][0]<-128) ? -128: (offset[clist][n][0]>127) ? 127:offset[clist][n][0];
         weight[clist][n][0] = default_weight;
       }
-      
       
       /* for now always use default weight for chroma weight */
       weight[clist][n][1] = default_weight_chroma;

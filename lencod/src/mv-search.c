@@ -385,8 +385,8 @@ void SetupFastFullPelSearch (short ref, int list)  // <--  reference frame param
   //===== determine position of (0,0)-vector =====
   if (!input->rdopt)
   {
-    ref_x = offset_x - img->opix_x;
-    ref_y = offset_y - img->opix_y;
+    ref_x = img->opix_x - offset_x;
+    ref_y = img->opix_y - offset_y;
 
     for (pos = 0; pos < max_pos; pos++)
     {

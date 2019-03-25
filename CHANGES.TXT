@@ -1,3 +1,23 @@
+Changes for Version JM 9.7 to JM 9.6
+------------------------------------
+- encoder: revert zero motion vector change in low complexity mode (YH)
+- encoder: fix 4:2:2 encoding (KS)
+- encoder: fix mb_qp_delta CABAC context selection (KS)
+- encoder: weighted prediction fix
+- encoder: fix frame_poc setting (AS)
+- decoder: fix direct mode rare case problem (AS)
+- decoder: fix pic_struct parsing in timing SEI
+- decoder: fix parsing of filler data SEI
+- encoder/decoder: fix deblocking filter strength calculation for negative POC (AS/KS)
+- encoder/decoder: fix frame_poc setting (AS)
+- encoder/decoder: fix SE_TRANSFORM_SIZE usage (KS)
+- encoder: updates to explicit hierarchical coding  and picture coding structures (AT)
+- encoder: update/enhance control of log2_max_pic_order_cnt_lsb_minus4 and log2_max_frame_num_minus4 (AT)
+- encoder: addition of computation of Sequence Level PSNR statistics (AT)
+- encoder: fix frame_num setting for pyramid coding (AT)
+- encoder/decoder: fix invalid line in deblocking filter (PL)
+
+
 Changes for Version JM 9.6 to JM 9.5
 ------------------------------------
 - encoder: FME fixes (WF)

@@ -20,6 +20,7 @@
 
 #include <stdlib.h>
 #include <assert.h>
+#include <memory.h>
 
 #include "global.h"
 
@@ -79,8 +80,7 @@ int RBSPtoEBSP(byte *streamBuffer, int begin_bytepos, int end_bytepos, int min_n
   
   int i, j, count;
 
-  for(i = begin_bytepos; i < end_bytepos; i++)
-    NAL_Payload_buffer[i] = streamBuffer[i];
+  memcpy(&NAL_Payload_buffer[begin_bytepos],&streamBuffer[begin_bytepos], (end_bytepos - begin_bytepos) * sizeof(unsigned char));
 
   count = 0;
   j = begin_bytepos;
@@ -120,7 +120,7 @@ int RBSPtoEBSP(byte *streamBuffer, int begin_bytepos, int end_bytepos, int min_n
 
 void AllocNalPayloadBuffer()
 {
-  const int buffer_size = ((input->img_width+img->auto_crop_right) * (input->img_height+img->auto_crop_bottom) * 4); // AH 190202: There can be data expansion with 
+  const int buffer_size = ((input->img_width+img->auto_crop_right) * (input->img_height+img->auto_crop_bottom) * 5); // AH 190202: There can be data expansion with 
                                                           // low QP values. So, we make sure that buffer 
                                                           // does not overflow. 4 is probably safe multiplier.
   FreeNalPayloadBuffer();

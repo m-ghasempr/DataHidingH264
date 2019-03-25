@@ -99,6 +99,17 @@ int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
   UsedBits = 0;
 
   sps->profile_idc                            = u_v  (8, "SPS: profile_idc"                           , s);
+  
+  if ((sps->profile_idc!=66 ) &&
+      (sps->profile_idc!=77 ) &&
+      (sps->profile_idc!=88 ) &&
+      (sps->profile_idc!=100 ) &&
+      (sps->profile_idc!=110 ) && 
+      (sps->profile_idc!=122 ) &&  
+      (sps->profile_idc!=144 ))
+  {
+    return UsedBits;
+  }
 
   sps->constrained_set0_flag                  = u_1  (   "SPS: constrained_set0_flag"                 , s);
   sps->constrained_set1_flag                  = u_1  (   "SPS: constrained_set1_flag"                 , s);
@@ -467,24 +478,27 @@ void ProcessSPS (NALU_t *nalu)
   dp->bitstream->read_len = dp->bitstream->frame_bitoffset = 0;
   dummy = InterpretSPS (dp, sps);
 
-  if (active_sps)
+  if (sps->Valid)
   {
-    if (sps->seq_parameter_set_id == active_sps->seq_parameter_set_id)
+    if (active_sps)
     {
-      if (!sps_is_equal(sps, active_sps))
+      if (sps->seq_parameter_set_id == active_sps->seq_parameter_set_id)
       {
-        if (dec_picture)
+        if (!sps_is_equal(sps, active_sps))
         {
-          // this may only happen on slice loss
-          exit_picture();
+          if (dec_picture)
+          {
+            // this may only happen on slice loss
+            exit_picture();
+          }
+          active_sps=NULL;
         }
-        active_sps=NULL;
       }
     }
+    // SPSConsistencyCheck (pps);
+    MakeSPSavailable (sps->seq_parameter_set_id, sps);
+    img->profile_idc = sps->profile_idc; //ADD-VG
   }
-  // SPSConsistencyCheck (pps);
-  MakeSPSavailable (sps->seq_parameter_set_id, sps);
-  img->profile_idc = sps->profile_idc; //ADD-VG
 
   FreePartition (dp, 1);
   FreeSPS (sps);

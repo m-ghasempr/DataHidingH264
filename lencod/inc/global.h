@@ -130,7 +130,6 @@ typedef enum
   SE_DELTA_QUANT_INTRA,
   SE_BFRAME,
   SE_EOS,
-  SE_TRANSFORM_SIZE_FLAG,
   SE_MAX_ELEMENTS  //!< number of maximum syntax elements
 } SE_type;         // substituting the definitions in elements.h
 
@@ -568,6 +567,13 @@ typedef struct
   float snr_ya;              //!< Average SNR Y(dB) remaining frames
   float snr_ua;              //!< Average SNR U(dB) remaining frames
   float snr_va;              //!< Average SNR V(dB) remaining frames
+  float sse_y;               //!< SSE Y
+  float sse_u;               //!< SSE U
+  float sse_v;               //!< SSE V
+  float msse_y;              //!< Average SSE Y
+  float msse_u;              //!< Average SSE U
+  float msse_v;              //!< Average SSE V
+  int   frame_ctr;           //!< number of coded frames
 } SNRParameters;
 
 #define FILE_NAME_SIZE 200
@@ -591,7 +597,8 @@ typedef struct
   int P_List0_refs;
   int B_List0_refs;
   int B_List1_refs;
-  int Log2MaxFrameNum;
+  int Log2MaxFNumMinus4;
+  int Log2MaxPOCLsbMinus4;
   int ResendPPS;
   int GenerateMultiplePPS;
 
@@ -647,6 +654,7 @@ typedef struct
   int SkipIntraInInterSlices;    //!< Skip intra type checking in inter slices if best_mode is skip/direct
   int BRefPictures;              //!< B coded reference pictures replace P pictures (0: not used, 1: used)
   int PyramidCoding;
+  int PyramidLevelQPEnable;
   char ExplicitPyramidFormat[1024];  //!< Explicit GOP format (PyramidCoding==3). 
   int PyramidRefReorder;       //!< Reordering based on Poc distances for PyramidCoding
   int PocMemoryManagement;       //!< Memory management based on Poc distances for PyramidCoding
@@ -740,7 +748,6 @@ typedef struct
   int context_init_method;
   int model_number;
   int Transform8x8Mode;
-  int LowPassForIntra8x8;
   int ReportFrameStats;
   int DisplayEncParams;
   int Verbose;

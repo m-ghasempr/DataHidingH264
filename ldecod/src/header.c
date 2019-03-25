@@ -394,19 +394,22 @@ static void pred_weight_table()
       img->wp_offset[0][i][0] = 0;
     }
     
-    chroma_weight_flag_l0 = u_1 ("SH: chroma_weight_flag_l0", currStream);
-    
-    for (j=1; j<3; j++)
+    if (active_sps->chroma_format_idc != 0)
     {
-      if (chroma_weight_flag_l0)
+      chroma_weight_flag_l0 = u_1 ("SH: chroma_weight_flag_l0", currStream);
+      
+      for (j=1; j<3; j++)
       {
-        img->wp_weight[0][i][j] = se_v("SH: chroma_weight_l0", currStream);
-        img->wp_offset[0][i][j] = se_v("SH: chroma_offset_l0", currStream);
-      }
-      else
-      {
-        img->wp_weight[0][i][j] = 1<<img->chroma_log2_weight_denom;
-        img->wp_offset[0][i][j] = 0;
+        if (chroma_weight_flag_l0)
+        {
+          img->wp_weight[0][i][j] = se_v("SH: chroma_weight_l0", currStream);
+          img->wp_offset[0][i][j] = se_v("SH: chroma_offset_l0", currStream);
+        }
+        else
+        {
+          img->wp_weight[0][i][j] = 1<<img->chroma_log2_weight_denom;
+          img->wp_offset[0][i][j] = 0;
+        }
       }
     }
   }
@@ -427,23 +430,26 @@ static void pred_weight_table()
         img->wp_offset[1][i][0] = 0;
       }
       
-      chroma_weight_flag_l1 = u_1 ("SH: chroma_weight_flag_l1", currStream);
-      
-      for (j=1; j<3; j++)
+      if (active_sps->chroma_format_idc != 0)
       {
-        if (chroma_weight_flag_l1)
+        chroma_weight_flag_l1 = u_1 ("SH: chroma_weight_flag_l1", currStream);
+        
+        for (j=1; j<3; j++)
         {
-          img->wp_weight[1][i][j] = se_v("SH: chroma_weight_l1", currStream);
-          img->wp_offset[1][i][j] = se_v("SH: chroma_offset_l1", currStream);
-        }
-        else
-        {
-          img->wp_weight[1][i][j] = 1<<img->chroma_log2_weight_denom;
-          img->wp_offset[1][i][j] = 0;
+          if (chroma_weight_flag_l1)
+          {
+            img->wp_weight[1][i][j] = se_v("SH: chroma_weight_l1", currStream);
+            img->wp_offset[1][i][j] = se_v("SH: chroma_offset_l1", currStream);
+          }
+          else
+          {
+            img->wp_weight[1][i][j] = 1<<img->chroma_log2_weight_denom;
+            img->wp_offset[1][i][j] = 0;
+          }
         }
       }
-    }
-  }    
+    }  
+  }
 }
 
 

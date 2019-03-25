@@ -619,12 +619,10 @@ static void PatchInp ()
   
   // These variables are added for FMO
   FILE * sgfile=NULL;
-  int i;
+  int i,j;
   int frame_mb_only;
   int mb_width, mb_height, mapunit_height;
-
-//  input->BitDepthChroma = input->BitDepthLuma;
-  input->LowPassForIntra8x8 = 1;                    //low pass is always used
+  int storedBplus1;
 
   TestEncoderParams(bitdepth_qp_scale);
 
@@ -633,62 +631,55 @@ static void PatchInp ()
 
   // Set block sizes
 
-    input->blc_size[0][0]=16;
-    input->blc_size[0][1]=16;
-
-    input->blc_size[1][0]=16;
-    input->blc_size[1][1]=16;
-
-    input->blc_size[2][0]=16;
-    input->blc_size[2][1]= 8;
-
-    input->blc_size[3][0]= 8;
-    input->blc_size[3][1]=16;
-
-    input->blc_size[4][0]= 8;
-    input->blc_size[4][1]= 8;
-
-    input->blc_size[5][0]= 8;
-    input->blc_size[5][1]= 4;
-
-    input->blc_size[6][0]= 4;
-    input->blc_size[6][1]= 8;
-
-    input->blc_size[7][0]= 4;
-    input->blc_size[7][1]= 4;
-
-
+    // Skip/Direct16x16
     input->part_size[0][0] = 4;
     input->part_size[0][1] = 4;
+  // 16x16
     input->part_size[1][0] = 4;
     input->part_size[1][1] = 4;
+  // 16x8
     input->part_size[2][0] = 4;
     input->part_size[2][1] = 2;
+  // 8x16
     input->part_size[3][0] = 2;
     input->part_size[3][1] = 4;
+  // 8x8
     input->part_size[4][0] = 2;
     input->part_size[4][1] = 2;
+  // 8x4
     input->part_size[5][0] = 2;
     input->part_size[5][1] = 1;
+  // 4x8
     input->part_size[6][0] = 1;
     input->part_size[6][1] = 2;
+  // 4x4
     input->part_size[7][0] = 1;
     input->part_size[7][1] = 1;
 
-
-  // set proper log2_max_frame_num_minus4.
+  for (j = 0; j<8;j++)
   {
-    int storedBplus1 = (input->BRefPictures ) ? input->successive_Bframe + 1: 1;
-
-//    log2_max_frame_num_minus4 = max( (int)(CeilLog2(input->no_frames * storedBplus1))-4, 0);
-    if (input->Log2MaxFrameNum < 4)
-      log2_max_frame_num_minus4 = max( (int)(CeilLog2(input->no_frames *storedBplus1 ))-4, 0);
-    else 
-      log2_max_frame_num_minus4 = input->Log2MaxFrameNum - 4;
-  
+    for (i = 0; i<2; i++) 
+    {
+      input->blc_size[j][i] = input->part_size[j][i] * BLOCK_SIZE;
+    }
   }
 
-  log2_max_pic_order_cnt_lsb_minus4 = max( (int)(CeilLog2( 2*input->no_frames * (input->jumpd + 1))) -4, 0);
+  // set proper log2_max_frame_num_minus4.
+  storedBplus1 = (input->BRefPictures ) ? input->successive_Bframe + 1: 1;
+
+  if (input->Log2MaxFNumMinus4 == -1)
+    log2_max_frame_num_minus4 = Clip3(0,12, (int) (CeilLog2(input->no_frames * storedBplus1) - 4));
+    else 
+    log2_max_frame_num_minus4 = input->Log2MaxFNumMinus4;
+  
+  // set proper log2_max_pic_order_cnt_lsb_minus4.
+  if (input->Log2MaxPOCLsbMinus4 == - 1)
+    log2_max_pic_order_cnt_lsb_minus4 = Clip3(0,12, (int) (CeilLog2( 2*input->no_frames * (input->jumpd + 1)) - 4));
+  else 
+    log2_max_pic_order_cnt_lsb_minus4 = input->Log2MaxPOCLsbMinus4;
+
+  if (((1<<(log2_max_pic_order_cnt_lsb_minus4 + 3)) < input->jumpd * 4) && input->Log2MaxPOCLsbMinus4 != -1)
+    error("log2_max_pic_order_cnt_lsb_minus4 might not be sufficient for encoding. Increase value.",400);
 
   // B picture consistency check
   if(input->successive_Bframe > input->jumpd)
@@ -866,7 +857,6 @@ static void PatchInp ()
         }
       }
       fclose(sgfile);
-      
     }
   }
   
@@ -976,7 +966,7 @@ static void PatchInp ()
   {
     if ( ((input->img_height+img->auto_crop_bottom)*(input->img_width+img->auto_crop_right)/256)%input->basicunit!=0)
     {
-      snprintf(errortext, ET_SIZE, "Basic unit is not defined correctly.");
+      snprintf(errortext, ET_SIZE, "Frame size in macroblocks must be a multiple of BasicUnit.");
       error (errortext, 500);
     }
   }
@@ -1032,6 +1022,13 @@ static void PatchInp ()
   }
 
 
+  if (input->EnableOpenGOP) input->PyramidRefReorder = 1;
+  if (input->EnableOpenGOP && input->PicInterlace) 
+  {
+    snprintf(errortext, ET_SIZE, "Open Gop currently not supported for Field coded pictures.");
+    error (errortext, 500);
+  }
+  
   ProfileCheck();
   LevelCheck();
 }
@@ -1137,12 +1134,6 @@ static void ProfileCheck()
     }
   }
   
-  if (input->EnableOpenGOP) input->PyramidRefReorder = 1;
-  if (input->EnableOpenGOP && input->PicInterlace) 
-    {
-      snprintf(errortext, ET_SIZE, "Open Gop currently not supported for Field coded pictures.");
-      error (errortext, 500);
-    }
 }
 
 static void LevelCheck()
@@ -1152,5 +1143,11 @@ static void LevelCheck()
     printf("\nLevelIDC 3.0 and above require direct_8x8_inference to be set to 1. Please check your settings.\n");
     input->directInferenceFlag=1;
   }
+  if ( ((input->LevelIDC<21) || (input->LevelIDC>41)) && (input->PicInterlace > 0 || input->MbInterlace > 0) )
+  {
+    snprintf(errortext, ET_SIZE, "nInterlace modes only supported for LevelIDC in the range of 2.1 and 4.1. Please check your settings.\n");
+    error (errortext, 500);
+  }
+
 }
 

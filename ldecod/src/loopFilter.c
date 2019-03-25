@@ -34,8 +34,13 @@ byte mixedModeEdgeFlag, fieldModeFilteringFlag;
 
 #define  IClip( Min, Max, Val) (((Val)<(Min))? (Min):(((Val)>(Max))? (Max):(Val)))
 
-// NOTE: to change the tables below for instance when the QP doubling is changed from 6 to 8 values 
-//       send an e-mail to Peter.List@t-systems.com to get a little program that calculates them automatically 
+// NOTE: In principle, the alpha and beta tables are calculated with the formulas below
+//       Alpha( qp ) = 0.8 * (2^(qp/6)  -  1)
+//       Beta ( qp ) = 0.5 * qp  -  7
+
+// The tables actually used have been "hand optimized" though (by Anthony Joch). So, the
+// table values might be a little different to formula-generated values. Also, the first
+// few values of both tables is set to zero to force the filter off at low qp’s 
 
 byte ALPHA_TABLE[52]  = {0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,4,4,5,6,  7,8,9,10,12,13,15,17,  20,22,25,28,32,36,40,45,  50,56,63,71,80,90,101,113,  127,144,162,182,203,226,255,255} ;
 byte  BETA_TABLE[52]  = {0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,2,2,2,3,  3,3,3, 4, 4, 4, 6, 6,   7, 7, 8, 8, 9, 9,10,10,  11,11,12,12,13,13, 14, 14,   15, 15, 16, 16, 17, 17, 18, 18} ;
@@ -174,7 +179,7 @@ void DeblockMb(ImageParameters *img, StorablePicture *p, int MbQAddr)
           // this is the extra horizontal edge between a frame macroblock pair and a field above it
           img->DeblockCall = 2;
           GetStrength(Strength,img,MbQAddr,dir,4, mvlimit, p); // Strength for 4 blks in 1 stripe
-          if( *((int*)Strength) )                      // only if one of the 4 Strength bytes is != 0
+          //if( *((int*)Strength) )                      // only if one of the 4 Strength bytes is != 0
           {
             if (filterNon8x8LumaEdgesFlag[edge])
               EdgeLoop( imgY, Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, 4, p->size_x, 0, 0, p) ; 
@@ -272,10 +277,10 @@ void GetStrength(byte Strength[16],struct img_par *img,int MbQAddr,int dir,int e
             blk_x2 = pixP.pos_x >> 2;
             {
               int64 ref_p0,ref_p1,ref_q0,ref_q1;      
-              ref_p0 = list0_refIdxArr[blk_y] [blk_x] <0 ? -1 : list0_refPicIdArr[blk_y] [blk_x];
-              ref_q0 = list0_refIdxArr[blk_y2][blk_x2]<0 ? -1 : list0_refPicIdArr[blk_y2][blk_x2];
-              ref_p1 = list1_refIdxArr[blk_y] [blk_x] <0 ? -1 : list1_refPicIdArr[blk_y] [blk_x];
-              ref_q1 = list1_refIdxArr[blk_y2][blk_x2]<0 ? -1 : list1_refPicIdArr[blk_y2][blk_x2];
+              ref_p0 = list0_refIdxArr[blk_y] [blk_x] <0 ? INT64_MIN : list0_refPicIdArr[blk_y] [blk_x];
+              ref_q0 = list0_refIdxArr[blk_y2][blk_x2]<0 ? INT64_MIN : list0_refPicIdArr[blk_y2][blk_x2];
+              ref_p1 = list1_refIdxArr[blk_y] [blk_x] <0 ? INT64_MIN : list1_refPicIdArr[blk_y] [blk_x];
+              ref_q1 = list1_refIdxArr[blk_y2][blk_x2]<0 ? INT64_MIN : list1_refPicIdArr[blk_y2][blk_x2];
               if ( ((ref_p0==ref_q0) && (ref_p1==ref_q1)) ||
                 ((ref_p0==ref_q1) && (ref_p1==ref_q0))) 
               {

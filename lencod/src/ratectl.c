@@ -758,11 +758,14 @@ int updateQuantizationParameter(int topfield)
                 }
               }
             }
-
+/*
           if(PreviousQp1==PreviousQp2)
             m_Qc=PreviousQp1+2;
           else
             m_Qc=(PreviousQp1+PreviousQp2)/2+1;
+            */
+          m_Qc = max(max(min(PreviousQp1,PreviousQp2) + 2, max(PreviousQp1,PreviousQp2)), PreviousQp2 + 1);
+
           m_Qc = MIN(m_Qc, RC_MAX_QUANT); // clipping
           m_Qc = MAX(RC_MIN_QUANT, m_Qc);//clipping
         }
