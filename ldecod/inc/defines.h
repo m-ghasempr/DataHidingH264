@@ -41,6 +41,8 @@
 #define YUV444 3
 
 
+#define ZEROSNR 0
+
 // CAVLC
 #define LUMA              0
 #define LUMA_INTRA16x16DC 1

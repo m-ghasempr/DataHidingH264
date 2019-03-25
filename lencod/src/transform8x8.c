@@ -246,8 +246,8 @@ int Mode_Decision_for_new_8x8IntraBlocks (int b8, double lambda, int *min_cost)
   imgpel  rec8x8[8][8];
   double  rdcost = 0.0;
   int     block4x4_x, block4x4_y;
-  int     block_x     = 8*(b8%2);
-  int     block_y     = 8*(b8/2);
+  int     block_x     = 8*(b8 & 0x01);
+  int     block_y     = 8*(b8 >> 1);
   int     pic_pix_x   = img->pix_x+block_x;
   int     pic_pix_y   = img->pix_y+block_y;
   int     pic_opix_x   = img->opix_x+block_x;
@@ -284,11 +284,11 @@ int Mode_Decision_for_new_8x8IntraBlocks (int b8, double lambda, int *min_cost)
     left_block.available = left_block.available ? img->intra_block [left_block.mb_addr] : 0;
   }
 
-  if(b8/2)
+  if(b8 >> 1)
     upMode    =  top_block.available ? img->ipredmode8x8[top_block.pos_y ][top_block.pos_x ] : -1; 
   else
     upMode    =  top_block.available ? img->ipredmode   [top_block.pos_y ][top_block.pos_x ] : -1;
-  if(b8%2)
+  if(b8 & 0x01)
     leftMode  = left_block.available ? img->ipredmode8x8[left_block.pos_y][left_block.pos_x] : -1;
   else
     leftMode  = left_block.available ? img->ipredmode[left_block.pos_y][left_block.pos_x] : -1;
@@ -330,38 +330,36 @@ int Mode_Decision_for_new_8x8IntraBlocks (int b8, double lambda, int *min_cost)
         {
           // get prediction and prediction error
           for (j=0; j<8; j++)
+          {
+            memcpy(&img->mpr[block_y+j][block_x],img->mprr_3[ipmode][j], 8 * sizeof(imgpel));
             for (i=0; i<8; i++)
             {
-              img->mpr[block_y+j][block_x+i]  = img->mprr_3[ipmode][j][i];
-              img->m7[i][j]                   = imgY_orig[pic_opix_y+j][pic_opix_x+i] - img->mprr_3[ipmode][j][i];
+              img->m7[j][i] = imgY_orig[pic_opix_y+j][pic_opix_x+i] - img->mprr_3[ipmode][j][i];
             }
-
+          }
           //===== store the coding state =====
-          store_coding_state_cs_cm();
+          //store_coding_state_cs_cm();
           // get and check rate-distortion cost
           
           if ((rdcost = RDCost_for_8x8IntraBlocks (&c_nz, b8, ipmode, lambda, min_rdcost, mostProbableMode)) < min_rdcost)
           {
             //--- set coefficients ---
-            for (j=0; j<2; j++)
+            for(k=0; k<4; k++) // do 4x now
             {
-              for (i=0; i<65;i++)  
-                for(k=0; k<4; k++) // do 4x now
-                  cofAC8x8[b8][k][j][i]=img->cofAC[b8][k][j][i]; // k vs 0
+              for (j=0; j<2; j++)
+                memcpy(cofAC8x8[b8][k][j],img->cofAC[b8][k][j], 65 * sizeof(int));
             }
             
             //--- set reconstruction ---
             for (y=0; y<8; y++)
             {
-              for (x=0; x<8; x++)  
-                rec8x8[y][x] = enc_picture->imgY[pic_pix_y+y][pic_pix_x+x];
+              memcpy(rec8x8[y],&enc_picture->imgY[pic_pix_y+y][pic_pix_x], 8 * sizeof(imgpel));
             }
 
             if (img->AdaptiveRounding)
             {
-              for (j=0; j<8; j++)
-                for (i=0; i<8;i++)  
-                  fadjust8x8[1][block_y+j][block_x+i] = img->fadjust8x8[1][block_y+j][block_x+i];
+              for (j=block_y; j<block_y + 8; j++)
+                memcpy(&fadjust8x8[1][j][block_x],&img->fadjust8x8[1][j][block_x], 8 * sizeof(int));
             }
             
             //--- flag if dct-coefficients must be coded ---
@@ -393,48 +391,49 @@ int Mode_Decision_for_new_8x8IntraBlocks (int b8, double lambda, int *min_cost)
           for (j=0; j<8; j++)
           for (i=0; i<8; i++)
           {
-            img->m7[i][j]  = resTrans_G[j][i];
+            img->m7[j][i]  = resTrans_G[j][i];
           }
 
-          store_coding_state_cs_cm();
+          //store_coding_state_cs_cm();
           rate = (int) RDCost_for_8x8IntraBlocks (&c_nz, b8, ipmode, lambda, min_rdcost, mostProbableMode);
           reset_coding_state_cs_cm();
 
           for (j=0; j<8; j++)
             for (i=0; i<8; i++)
             {
-              rec_resG[j][i] = img->m7[i][j];            
+              rec_resG[j][i] = img->m7[j][i];            
             }
 
-          store_coding_state_cs_cm();
+
           for(b4=0;b4<4;b4++)
           {
             
-            block4x4_x = 4*(b4%2);
-            block4x4_y = 4*(b4/2);
+            block4x4_x = 4*(b4 & 0x01);
+            block4x4_y = 4*(b4 >> 1);
             
             for (j=0; j<4; j++)
               for (i=0; i<4; i++)
               {
-                img->m7[i][j]  = resTrans_R[j+block4x4_y][i+block4x4_x];
+                img->m7[j][i]  = resTrans_B[j+block4x4_y][i+block4x4_x];
               }
             rate += RDCost_for_4x4Blocks_Chroma (b8+4, b4, 0);
             for (j=0; j<4; j++)
               for (i=0; i<4; i++)
               {
-                rec_resR[j+block4x4_y][i+block4x4_x] = img->m7[i][j];
-                img->m7[i][j]  = resTrans_B[j+block4x4_y][i+block4x4_x];
+                rec_resB[j+block4x4_y][i+block4x4_x] = img->m7[j][i];
+                img->m7[j][i]  = resTrans_R[j+block4x4_y][i+block4x4_x];
               }
             rate += RDCost_for_4x4Blocks_Chroma (b8+8, b4, 1);
             for (j=0; j<4; j++)
               for (i=0; i<4; i++)
               {
-                rec_resB[j+block4x4_y][i+block4x4_x] = img->m7[i][j];
+                rec_resR[j+block4x4_y][i+block4x4_x] = img->m7[j][i];
               }
           }
           reset_coding_state_cs_cm();
 
           for (j=0; j<8; j++)
+          {
             for (i=0; i<8; i++)
             {
               /* Inverse Residue Transform */
@@ -446,6 +445,7 @@ int Mode_Decision_for_new_8x8IntraBlocks (int b8, double lambda, int *min_cost)
               enc_picture->imgY[pic_pix_y+j][pic_pix_x+i]     = min(img->max_imgpel_value,max(0,residue_G+(int)img->mprr_3[ipmode][j][i]));
               enc_picture->imgUV[1][pic_pix_y+j][pic_pix_x+i] = min(img->max_imgpel_value_uv,max(0,residue_R+(int)img->mprr_c[1][c_ipmode][block_y+j][block_x+i]));
             }
+          }
           //===== get distortion (SSD) of 8x8 block =====
           distortion = 0;
           for (y=0; y<8; y++)
@@ -467,8 +467,8 @@ int Mode_Decision_for_new_8x8IntraBlocks (int b8, double lambda, int *min_cost)
 
             for(b4=0; b4<4; b4++)
             {
-              block4x4_x = 4*(b4%2);
-              block4x4_y = 4*(b4/2);
+              block4x4_x = 4*(b4 & 0x01);
+              block4x4_y = 4*(b4 >> 1);
 
               for (j=0; j<2; j++)
                 for (i=0; i<18;i++)  cofAC8x8_chroma[0][b4][j][i]=img->cofAC[b8+4][b4][j][i];
@@ -477,8 +477,8 @@ int Mode_Decision_for_new_8x8IntraBlocks (int b8, double lambda, int *min_cost)
 
               for (i=0; i<2; i++)
               { //uv
-                dc_level[i][2*(b8%2)+(b4%2)][2*(b8/2)+(b4/2)] = dc_level_temp[i][2*(b8%2)+(b4%2)][2*(b8/2)+(b4/2)];
-                cbp_chroma_block[i][2*(b8%2)+(b4%2)][2*(b8/2)+(b4/2)] = cbp_chroma_block_temp[i][2*(b8%2)+(b4%2)][2*(b8/2)+(b4/2)];
+                dc_level[i][2*(b8 & 0x01)+(b4 & 0x01)][2*(b8 >> 1)+(b4 >> 1)] = dc_level_temp[i][2*(b8 & 0x01)+(b4 & 0x01)][2*(b8 >> 1)+(b4 >> 1)];
+                cbp_chroma_block[i][2*(b8 & 0x01)+(b4 & 0x01)][2*(b8 >> 1)+(b4 >> 1)] = cbp_chroma_block_temp[i][2*(b8 & 0x01)+(b4 & 0x01)][2*(b8 >> 1)+(b4 >> 1)];
                 //--- set reconstruction ---
                 for (y=0; y<4; y++)
                   for (x=0; x<4; x++)  rec8x8_c[i][b4][y][x] = enc_picture->imgUV[i][pic_pix_y+y+block4x4_y][pic_pix_x+x+block4x4_x];
@@ -508,8 +508,8 @@ int Mode_Decision_for_new_8x8IntraBlocks (int b8, double lambda, int *min_cost)
     ? -1 
     : (best_ipmode < mostProbableMode ? best_ipmode : best_ipmode-1);
 
-  for(j = img->mb_y*4+(b8/2)*2; j < img->mb_y*4+(b8/2)*2 + 2; j++)   //loop 4x4s in the subblock for 8x8 prediction setting
-   memset(&img->ipredmode8x8[j][img->mb_x*4+(b8%2)*2], best_ipmode, 2 * sizeof(char));
+  for(j = img->mb_y*4+(b8 >> 1)*2; j < img->mb_y*4+(b8 >> 1)*2 + 2; j++)   //loop 4x4s in the subblock for 8x8 prediction setting
+   memset(&img->ipredmode8x8[j][img->mb_x*4+(b8 & 0x01)*2], best_ipmode, 2 * sizeof(char));
 
 
   if (!input->rdopt)
@@ -519,17 +519,19 @@ int Mode_Decision_for_new_8x8IntraBlocks (int b8, double lambda, int *min_cost)
     {
       // get prediction and prediction error
       for (j=0; j<8; j++)
-      for (i=0; i<8; i++)
       {
-        img->mpr[block_y+j][block_x+i]  = img->mprr_3[best_ipmode][j][i];
-        img->m7[i][j]                   = imgY_orig[pic_opix_y+j][pic_opix_x+i] - img->mprr_3[best_ipmode][j][i];
-      }
-
+        memcpy(&img->mpr[block_y+j][block_x],img->mprr_3[best_ipmode][j], 8 * sizeof(imgpel));
+        for (i=0; i<8; i++)
+        {
+          img->m7[j][i] = imgY_orig[pic_opix_y+j][pic_opix_x+i] - img->mprr_3[best_ipmode][j][i];
+        }
+      } 
       nonzero = dct_luma8x8 (b8, &dummy, 1);
-    } 
+    }
     else 
     {
       for (j=0; j<8; j++)
+      {
         for (i=0; i<8; i++)
         {
           img->mpr[block_y+j][block_x+i]  = img->mprr_3[best_ipmode][j][i];
@@ -543,49 +545,54 @@ int Mode_Decision_for_new_8x8IntraBlocks (int b8, double lambda, int *min_cost)
           resTrans_B[j][i] = residue_G-temp;
           resTrans_G[j][i] = temp+(resTrans_B[j][i]>>1);
         }
-
+      } 
       for (j=0; j<8; j++)
+      {
         for (i=0; i<8; i++)
-        {
-          img->m7[i][j]  = resTrans_G[i][j];
-        }
-
+          
+          img->m7[j][i]  = resTrans_G[j][i];
+      }
+      
       nonzero = dct_luma8x8 (b8, &dummy, 1);
-
+      
       for (j=0; j<8; j++)
+      {
         for (i=0; i<8; i++)
-        {
-          rec_resG[j][i] = img->m7[i][j];
-        }
-
+          rec_resG[j][i] = img->m7[j][i];
+      }
+      
       for(b4=0;b4<4;b4++)
       {
-        block4x4_x = 4*(b4%2);
-        block4x4_y = 4*(b4/2);
 
+        block4x4_x = 4*(b4 & 0x01);
+        block4x4_y = 4*(b4 >> 1);
+        
         for (j=0; j<4; j++)
+        {
+          for (i=0; i<4; i++)                
+            img->m7[j][i]  = resTrans_B[j+block4x4_y][i+block4x4_x];
+        }
+        cbp_chroma_block[0][2*(b8 & 0x01)+(b4 & 0x01)][2*(b8 >> 1)+(b4 >> 1)] = dct_chroma4x4 (0, b8+4, b4);
+        dc_level        [0][2*(b8 & 0x01)+(b4 & 0x01)][2*(b8 >> 1)+(b4 >> 1)] = dc_level_temp[0][2*(b8 & 0x01)+(b4 & 0x01)][2*(b8 >> 1)+(b4 >> 1)];
+        for (j=0; j<4; j++)
+        {
           for (i=0; i<4; i++)
           {
-            img->m7[i][j]  = resTrans_R[j+block4x4_y][i+block4x4_x];
+            rec_resB[j+block4x4_y][i+block4x4_x] = img->m7[j][i];
+            img->m7[j][i]  = resTrans_R[j+block4x4_y][i+block4x4_x];
           }
-        cbp_chroma_block[0][2*(b8%2)+(b4%2)][2*(b8/2)+(b4/2)] = dct_chroma4x4 (0, b8+4, b4);
-        dc_level[0][2*(b8%2)+(b4%2)][2*(b8/2)+(b4/2)] = dc_level_temp[0][2*(b8%2)+(b4%2)][2*(b8/2)+(b4/2)];
+        }
+        cbp_chroma_block[1][2*(b8 & 0x01)+(b4 & 0x01)][2*(b8 >> 1)+(b4 >> 1)] = dct_chroma4x4 (1, b8+8, b4);
+        dc_level        [1][2*(b8 & 0x01)+(b4 & 0x01)][2*(b8 >> 1)+(b4 >> 1)] = dc_level_temp[1][2*(b8 & 0x01)+(b4 & 0x01)][2*(b8 >> 1)+(b4 >> 1)];
         for (j=0; j<4; j++)
+        {
           for (i=0; i<4; i++)
-          {
-            rec_resR[j+block4x4_y][i+block4x4_x] = img->m7[i][j];
-            img->m7[i][j]  = resTrans_B[j+block4x4_y][i+block4x4_x];
-          }
-        cbp_chroma_block[1][2*(b8%2)+(b4%2)][2*(b8/2)+(b4/2)] = dct_chroma4x4 (1, b8+8, b4);
-        dc_level[1][2*(b8%2)+(b4%2)][2*(b8/2)+(b4/2)] = dc_level_temp[1][2*(b8%2)+(b4%2)][2*(b8/2)+(b4/2)];
-        for (j=0; j<4; j++)
-          for (i=0; i<4; i++)
-          {
-            rec_resB[j+block4x4_y][i+block4x4_x] = img->m7[i][j];
-          }
+            rec_resR[j+block4x4_y][i+block4x4_x] = img->m7[j][i];
+        }
       }
-
+      
       for (j=0; j<8; j++)
+      {
         for (i=0; i<8; i++)
         {
           /* Inverse Residue Transform */
@@ -597,54 +604,54 @@ int Mode_Decision_for_new_8x8IntraBlocks (int b8, double lambda, int *min_cost)
           enc_picture->imgY[pic_pix_y+j][pic_pix_x+i]     = min(img->max_imgpel_value,max(0,residue_G+(int)img->mprr_3[best_ipmode][j][i]));
           enc_picture->imgUV[1][pic_pix_y+j][pic_pix_x+i] = min(img->max_imgpel_value_uv,max(0,residue_R+(int)img->mprr_c[1][c_ipmode][block_y+j][block_x+i]));
         }
+      }
     }
   }
   else
   {
     //===== restore coefficients =====
-    for (j=0; j<2; j++)
+    for(k=0; k<4; k++) // do 4x now    
     {
-      for (i=0; i<65;i++)
-        for(k=0; k<4; k++) // do 4x now
-          img->cofAC[b8][k][j][i]=cofAC8x8[b8][k][j][i]; // k vs. 0
+      for (j=0; j<2; j++)
+        memcpy(img->cofAC[b8][k][j],cofAC8x8[b8][k][j], 65 * sizeof(int));
     }
 
     if (img->AdaptiveRounding)
     {
       for (j=0; j<8; j++)
-        for (i=0; i<8;i++)  
-          img->fadjust8x8[1][block_y+j][block_x+i] = fadjust8x8[1][block_y+j][block_x+i];
+        memcpy(&img->fadjust8x8[1][block_y+j][block_x], &fadjust8x8[1][block_y+j][block_x], 8 * sizeof(int));
     }
     
     // Residue Color Transform
     if(img->residue_transform_flag)
     for(b4=0; b4<4; b4++){
       for (j=0; j<2; j++)
-      for (i=0; i<18;i++)  img->cofAC[b8+4][b4][j][i]=cofAC8x8_chroma[0][b4][j][i];
+      for (i=0; i<18;i++)  
+        img->cofAC[b8+4][b4][j][i]=cofAC8x8_chroma[0][b4][j][i];
       for (j=0; j<2; j++)
-      for (i=0; i<18;i++)  img->cofAC[b8+8][b4][j][i]=cofAC8x8_chroma[1][b4][j][i];
+      for (i=0; i<18;i++)  
+        img->cofAC[b8+8][b4][j][i]=cofAC8x8_chroma[1][b4][j][i];
     }
 
     //===== restore reconstruction and prediction (needed if single coeffs are removed) =====
-    for (y=0; y<8; y++)
-      for (x=0; x<8; x++)
-      {
-        enc_picture->imgY[pic_pix_y+y][pic_pix_x+x] = rec8x8[y][x];
-        img->mpr[block_y+y][block_x+x] = img->mprr_3[best_ipmode][y][x];
-      }
+    for (y=0; y<8; y++) 
+    {
+      memcpy(&enc_picture->imgY[pic_pix_y+y][pic_pix_x], rec8x8[y], 8 * sizeof(imgpel));
+      memcpy(&  img->mpr[block_y+y][block_x], img->mprr_3[best_ipmode][y], 8 * sizeof(imgpel));
+    }
 
     // Residue Color Transform
       if(img->residue_transform_flag)
       {
         for(b4=0; b4<4; b4++)
         {
-          block4x4_x = 4*(b4%2);
-          block4x4_y = 4*(b4/2);
+          block4x4_x = 4*(b4 & 0x01);
+          block4x4_y = 4*(b4>>1);
           for (i=0; i<2; i++)
           { //uv
             //--- set reconstruction ---
             for (y=0; y<4; y++)
-              for (x=0; x<4; x++) enc_picture->imgUV[i][pic_pix_y+y+block4x4_y][pic_pix_x+x+block4x4_x] = rec8x8_c[i][b4][y][x];
+              memcpy(&enc_picture->imgUV[i][pic_pix_y + block4x4_y + y][pic_pix_x + block4x4_x], rec8x8_c[i][b4][y], 4 * sizeof(imgpel));
           }
         }
       }
@@ -855,7 +862,7 @@ void intrapred_luma8x8(int img_x,int img_y, int *left_available, int *up_availab
     // top left corner, nothing to predict from
     s0 = img->dc_pred_value;                           
   }
-   
+  
   // store DC prediction
   for (j=0; j < 2*BLOCK_SIZE; j++)
   {
@@ -1398,8 +1405,8 @@ double RDCost_for_8x8IntraBlocks(int *nonzero, int b8, int ipmode, double lambda
   double  rdcost = 0.0;
   int     dummy, x, y, rate;
   int64   distortion  = 0;
-  int     block_x     = 8*(b8%2);
-  int     block_y     = 8*(b8/2);
+  int     block_x     = 8*(b8 & 0x01);
+  int     block_y     = 8*(b8 >> 1);
   int     pic_pix_x   = img->pix_x+block_x;
   int     pic_pix_y   = img->pix_y+block_y;
   int     pic_opix_y  = img->opix_y+block_y;
@@ -1453,9 +1460,9 @@ double RDCost_for_8x8IntraBlocks(int *nonzero, int b8, int ipmode, double lambda
 
   if (input->symbol_mode == UVLC)
   {
-	int b4;
-	for(b4=0; b4<4; b4++)
-		rate  += writeCoeff4x4_CAVLC (LUMA, b8, b4, 0);
+    int b4;
+    for(b4=0; b4<4; b4++)
+      rate  += writeCoeff4x4_CAVLC (LUMA, b8, b4, 0);
   }
   else
   {
@@ -1500,14 +1507,17 @@ int dct_luma8x8(int b8,int *coeff_cost, int intra)
   int qp_per,qp_rem,q_bits;
   int dq_lshift = 0, dq_rshift = 0, dq_round = 0;
 
-  int block_x = 8*(b8%2);
-  int block_y = 8*(b8/2);
+  int block_x = 8*(b8 & 0x01);
+  int block_y = 8*(b8 >> 1);
   int*  ACLevel = img->cofAC[b8][0][0];
   int*  ACRun   = img->cofAC[b8][0][1];
   int m6[8][8];
+  int a[8], b[8];
   int scan_poss[4],runs[4];
-  int pix_x, pix_y;
-
+  int pix_x, pix_y, ipix_y;
+  int **levelscale,**leveloffset;
+  int **invlevelscale;
+  int MCcoeff;
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
   short is_field_mode = (img->field_picture || ( img->MbaffFrameFlag && currMB->mb_field));
 
@@ -1516,6 +1526,9 @@ int dct_luma8x8(int b8,int *coeff_cost, int intra)
   qp_per    = (img->qp + img->bitdepth_luma_qp_scale - MIN_QP)/6;
   qp_rem    = (img->qp + img->bitdepth_luma_qp_scale - MIN_QP)%6;
   q_bits    = Q_BITS_8+qp_per;
+  levelscale    = LevelScale8x8Luma[intra][qp_rem];
+  leveloffset   = LevelOffset8x8Luma[intra][qp_per];
+  invlevelscale = InvLevelScale8x8Luma[intra][qp_rem];
 
   if (qp_per < 6)
   {
@@ -1527,73 +1540,73 @@ int dct_luma8x8(int b8,int *coeff_cost, int intra)
     
 
   // horizontal transform
-  for( i=0; i<8 && !lossless_qpprime; i++)
+  if (!lossless_qpprime) 
   {
-    int a[8], b[8];
-    a[0] = img->m7[0][i] + img->m7[7][i];
-    a[1] = img->m7[1][i] + img->m7[6][i];
-    a[2] = img->m7[2][i] + img->m7[5][i];
-    a[3] = img->m7[3][i] + img->m7[4][i];
-
-    b[0] = a[0] + a[3];
-    b[1] = a[1] + a[2];
-    b[2] = a[0] - a[3];
-    b[3] = a[1] - a[2];
-
-    a[4] = img->m7[0][i] - img->m7[7][i];
-    a[5] = img->m7[1][i] - img->m7[6][i];
-    a[6] = img->m7[2][i] - img->m7[5][i];
-    a[7] = img->m7[3][i] - img->m7[4][i];
-
-    b[4]= a[5] + a[6] + ((a[4]>>1) + a[4]);
-    b[5]= a[4] - a[7] - ((a[6]>>1) + a[6]);
-    b[6]= a[4] + a[7] - ((a[5]>>1) + a[5]);
-    b[7]= a[5] - a[6] + ((a[7]>>1) + a[7]);
-
-    m6[0][i] = b[0] + b[1];
-    m6[2][i] = b[2] + (b[3]>>1);
-    m6[4][i] = b[0] - b[1];
-    m6[6][i] = (b[2]>>1) - b[3];
-    m6[1][i] =   b[4] + (b[7]>>2);
-    m6[3][i] =   b[5] + (b[6]>>2);
-    m6[5][i] =   b[6] - (b[5]>>2);
-    m6[7][i] = - b[7] + (b[4]>>2);
-
+    for( i=0; i<8; i++)
+    {
+      a[0] = img->m7[i][0] + img->m7[i][7];
+      a[1] = img->m7[i][1] + img->m7[i][6];
+      a[2] = img->m7[i][2] + img->m7[i][5];
+      a[3] = img->m7[i][3] + img->m7[i][4];
+      
+      b[0] = a[0] + a[3];
+      b[1] = a[1] + a[2];
+      b[2] = a[0] - a[3];
+      b[3] = a[1] - a[2];
+      
+      a[4] = img->m7[i][0] - img->m7[i][7];
+      a[5] = img->m7[i][1] - img->m7[i][6];
+      a[6] = img->m7[i][2] - img->m7[i][5];
+      a[7] = img->m7[i][3] - img->m7[i][4];
+      
+      b[4]= a[5] + a[6] + ((a[4]>>1) + a[4]);
+      b[5]= a[4] - a[7] - ((a[6]>>1) + a[6]);
+      b[6]= a[4] + a[7] - ((a[5]>>1) + a[5]);
+      b[7]= a[5] - a[6] + ((a[7]>>1) + a[7]);
+      
+      m6[0][i] = b[0] + b[1];
+      m6[2][i] = b[2] + (b[3]>>1);
+      m6[4][i] = b[0] - b[1];
+      m6[6][i] = (b[2]>>1) - b[3];
+      m6[1][i] =   b[4] + (b[7]>>2);
+      m6[3][i] =   b[5] + (b[6]>>2);
+      m6[5][i] =   b[6] - (b[5]>>2);
+      m6[7][i] = - b[7] + (b[4]>>2);
+      
+    }
+    // vertical transform
+    for( i=0; i<8; i++)
+    {
+      a[0] = m6[i][0] + m6[i][7];
+      a[1] = m6[i][1] + m6[i][6];
+      a[2] = m6[i][2] + m6[i][5];
+      a[3] = m6[i][3] + m6[i][4];
+      
+      b[0] = a[0] + a[3];
+      b[1] = a[1] + a[2];
+      b[2] = a[0] - a[3];
+      b[3] = a[1] - a[2];
+      
+      a[4] = m6[i][0] - m6[i][7];
+      a[5] = m6[i][1] - m6[i][6];
+      a[6] = m6[i][2] - m6[i][5];
+      a[7] = m6[i][3] - m6[i][4];
+      
+      b[4]= a[5] + a[6] + ((a[4]>>1) + a[4]);
+      b[5]= a[4] - a[7] - ((a[6]>>1) + a[6]);
+      b[6]= a[4] + a[7] - ((a[5]>>1) + a[5]);
+      b[7]= a[5] - a[6] + ((a[7]>>1) + a[7]);
+      
+      img->m7[0][i] = b[0] + b[1];
+      img->m7[2][i] = b[2] + (b[3]>>1);
+      img->m7[4][i] = b[0] - b[1];
+      img->m7[6][i] = (b[2]>>1) - b[3];
+      img->m7[1][i] =   b[4] + (b[7]>>2);
+      img->m7[3][i] =   b[5] + (b[6]>>2);
+      img->m7[5][i] =   b[6] - (b[5]>>2);
+      img->m7[7][i] = - b[7] + (b[4]>>2);
+    }
   }
-  // vertical transform
-  for( i=0; i<8 && !lossless_qpprime; i++)
-  {
-    int a[8], b[8];
-    a[0] = m6[i][0] + m6[i][7];
-    a[1] = m6[i][1] + m6[i][6];
-    a[2] = m6[i][2] + m6[i][5];
-    a[3] = m6[i][3] + m6[i][4];
-    
-    b[0] = a[0] + a[3];
-    b[1] = a[1] + a[2];
-    b[2] = a[0] - a[3];
-    b[3] = a[1] - a[2];
-    
-    a[4] = m6[i][0] - m6[i][7];
-    a[5] = m6[i][1] - m6[i][6];
-    a[6] = m6[i][2] - m6[i][5];
-    a[7] = m6[i][3] - m6[i][4];
-    
-    b[4]= a[5] + a[6] + ((a[4]>>1) + a[4]);
-    b[5]= a[4] - a[7] - ((a[6]>>1) + a[6]);
-    b[6]= a[4] + a[7] - ((a[5]>>1) + a[5]);
-    b[7]= a[5] - a[6] + ((a[7]>>1) + a[7]);
-    
-    img->m7[i][0] = b[0] + b[1];
-    img->m7[i][2] = b[2] + (b[3]>>1);
-    img->m7[i][4] = b[0] - b[1];
-    img->m7[i][6] = (b[2]>>1) - b[3];
-    img->m7[i][1] =   b[4] + (b[7]>>2);
-    img->m7[i][3] =   b[5] + (b[6]>>2);
-    img->m7[i][5] =   b[6] - (b[5]>>2);
-    img->m7[i][7] = - b[7] + (b[4]>>2);
-  }
-
 
   // Quant  
   nonzero=FALSE;
@@ -1617,18 +1630,16 @@ int dct_luma8x8(int b8,int *coeff_cost, int intra)
       i=SNGL_SCAN8x8[coeff_ctr][0];
       j=SNGL_SCAN8x8[coeff_ctr][1];
     }
-    
+    MCcoeff = MC(coeff_ctr);
     run++;
     ilev=0;
     
-    runs[MC(coeff_ctr)]++;
+    runs[MCcoeff]++;
     
     if(lossless_qpprime)
-      level = abs (img->m7[i][j]);
-    else if(intra == 1)      
-      level = (abs (img->m7[i][j]) * LevelScale8x8Luma_Intra[qp_rem][i][j] + LevelOffset8x8Luma_Intra[qp_per][i][j]) >> q_bits;
-    else
-      level = (abs (img->m7[i][j]) * LevelScale8x8Luma_Inter[qp_rem][i][j] + LevelOffset8x8Luma_Inter[qp_per][i][j]) >> q_bits;
+      level = absm (img->m7[j][i]);
+    else 
+      level = (absm (img->m7[j][i]) * levelscale[i][j] + leveloffset[i][j]) >> q_bits;
   
     if (img->AdaptiveRounding)
     {
@@ -1636,15 +1647,10 @@ int dct_luma8x8(int b8,int *coeff_cost, int intra)
       {
         img->fadjust8x8[intra][block_y+j][block_x+i] = 0;
       }
-      else if(intra == 1)
+      else 
       {
-        img->fadjust8x8[intra][block_y + j][block_x + i] = AdaptRndWeight * (abs(img->m7[i][j]) * LevelScale8x8Luma_Intra[qp_rem][i][j] - (level << q_bits)) + (1<< (q_bits)); 
-        img->fadjust8x8[intra][block_y + j][block_x + i] >>= (q_bits + 1);       
-      }
-      else
-      {
-        img->fadjust8x8[intra][block_y + j][block_x + i] = AdaptRndWeight * (abs(img->m7[i][j]) * LevelScale8x8Luma_Inter[qp_rem][i][j] - (level << q_bits)) + (1<< (q_bits)); 
-        img->fadjust8x8[intra][block_y + j][block_x + i] >>= (q_bits + 1);       
+        img->fadjust8x8[intra][block_y + j][block_x + i] = 
+          (AdaptRndWeight * (absm (img->m7[j][i]) * levelscale[i][j] - (level << q_bits)) + (1<< (q_bits))) >> (q_bits + 1);       
       }
     }
 
@@ -1654,157 +1660,151 @@ int dct_luma8x8(int b8,int *coeff_cost, int intra)
       
       if (currMB->luma_transform_size_8x8_flag && input->symbol_mode == UVLC)
       {
-        if (level > 1)
-          *coeff_cost += MAX_VALUE;                // set high cost, shall not be discarded
-        else
-          *coeff_cost += COEFF_COST8x8[input->disthres][runs[MC(coeff_ctr)]];
-        
-        img->cofAC[b8][MC(coeff_ctr)][0][scan_poss[MC(coeff_ctr)]] = sign(level,img->m7[i][j]);
-        img->cofAC[b8][MC(coeff_ctr)][1][scan_poss[MC(coeff_ctr)]] = runs[MC(coeff_ctr)];
-        ++scan_poss[MC(coeff_ctr)];
-        runs[MC(coeff_ctr)]=-1;
+        *coeff_cost += (level > 1) ? MAX_VALUE : COEFF_COST8x8[input->disthres][runs[MCcoeff]];
+
+        img->cofAC[b8][MCcoeff][0][scan_poss[MCcoeff]] = sign(level,img->m7[j][i]);
+        img->cofAC[b8][MCcoeff][1][scan_poss[MCcoeff]] = runs[MCcoeff];
+        ++scan_poss[MCcoeff];
+        runs[MCcoeff]=-1;
       }
       else
       {
-        if (level > 1)
-          *coeff_cost += MAX_VALUE;                // set high cost, shall not be discarded
-        else
-          *coeff_cost += COEFF_COST8x8[input->disthres][run];
-        ACLevel[scan_pos] = sign(level,img->m7[i][j]);
+        *coeff_cost += (level > 1) ? MAX_VALUE : COEFF_COST8x8[input->disthres][run];
+        ACLevel[scan_pos] = sign(level,img->m7[j][i]);
         ACRun  [scan_pos] = run;
         ++scan_pos;
         run=-1;                     // reset zero level counter
       }      
-      level = sign(level, img->m7[i][j]);
+      level = sign(level, img->m7[j][i]);
       if(lossless_qpprime)
       {
         ilev = level;
       }
-      else if(intra == 1)
+      else 
       {
         if (qp_per>=6)
-          ilev = level*InvLevelScale8x8Luma_Intra[qp_rem][i][j]<<dq_lshift; // dequantization
+          ilev = level*invlevelscale[i][j]<<dq_lshift; // dequantization
         else
-          ilev = (level*InvLevelScale8x8Luma_Intra[qp_rem][i][j] + dq_round)>>dq_rshift; // dequantization
-      }
-      else
-      {
-        if (qp_per>=6)
-          ilev = level*InvLevelScale8x8Luma_Inter[qp_rem][i][j]<<dq_lshift; // dequantization
-        else
-          ilev = (level*InvLevelScale8x8Luma_Inter[qp_rem][i][j] + dq_round)>>dq_rshift; // dequantization
+          ilev = (level*invlevelscale[i][j] + dq_round)>>dq_rshift; // dequantization
       }
     }
     if(!lossless_qpprime)
-      img->m7[i][j] = ilev;
+      img->m7[j][i] = ilev;
   }
   if (!currMB->luma_transform_size_8x8_flag || input->symbol_mode != UVLC)
     ACLevel[scan_pos] = 0;
   else
+  {
     for(i=0; i<4; i++)
       img->cofAC[b8][i][0][scan_poss[i]] = 0;
+  }
  
   
   //    Inverse Transform
   // horizontal inverse transform
-  for( i=0; i<8 && !lossless_qpprime; i++)
+  if (!lossless_qpprime)
   {
-    int a[8], b[8];
-    a[0] = img->m7[0][i] + img->m7[4][i];
-    a[4] = img->m7[0][i] - img->m7[4][i];
-    a[2] = (img->m7[2][i]>>1) - img->m7[6][i];
-    a[6] = img->m7[2][i] + (img->m7[6][i]>>1);
-
-    b[0] = a[0] + a[6];
-    b[2] = a[4] + a[2];
-    b[4] = a[4] - a[2];
-    b[6] = a[0] - a[6];
-
-    a[1] = -img->m7[3][i] + img->m7[5][i] - img->m7[7][i] - (img->m7[7][i]>>1);
-    a[3] = img->m7[1][i] + img->m7[7][i] - img->m7[3][i] - (img->m7[3][i]>>1);
-    a[5] = -img->m7[1][i] + img->m7[7][i] + img->m7[5][i] + (img->m7[5][i]>>1);
-    a[7] = img->m7[3][i] + img->m7[5][i] + img->m7[1][i] + (img->m7[1][i]>>1);
-
-    b[1] = a[1] + (a[7]>>2);
-    b[7] = -(a[1]>>2) + a[7];
-    b[3] = a[3] + (a[5]>>2);
-    b[5] = (a[3]>>2) - a[5];
-
-    m6[0][i] = b[0] + b[7];
-    m6[1][i] = b[2] + b[5];
-    m6[2][i] = b[4] + b[3];
-    m6[3][i] = b[6] + b[1];
-    m6[4][i] = b[6] - b[1];
-    m6[5][i] = b[4] - b[3];
-    m6[6][i] = b[2] - b[5];
-    m6[7][i] = b[0] - b[7];
-  }
-
-  // vertical inverse transform
-  for( i=0; i<8 && !lossless_qpprime; i++)
-  {
-    int a[8], b[8];
-    a[0] = m6[i][0] + m6[i][4];
-    a[4] = m6[i][0] - m6[i][4];
-    a[2] = (m6[i][2]>>1) - m6[i][6];
-    a[6] = m6[i][2] + (m6[i][6]>>1);
-
-    b[0] = a[0] + a[6];
-    b[2] = a[4] + a[2];
-    b[4] = a[4] - a[2];
-    b[6] = a[0] - a[6];
-
-    a[1] = -m6[i][3] + m6[i][5] - m6[i][7] - (m6[i][7]>>1);
-    a[3] = m6[i][1] + m6[i][7] - m6[i][3] - (m6[i][3]>>1);
-    a[5] = -m6[i][1] + m6[i][7] + m6[i][5] + (m6[i][5]>>1);
-    a[7] = m6[i][3] + m6[i][5] + m6[i][1] + (m6[i][1]>>1);
-
-    b[1] = a[1] + (a[7]>>2);
-    b[7] = -(a[1]>>2) + a[7];
-    b[3] = a[3] + (a[5]>>2);
-    b[5] = (a[3]>>2) - a[5];
-		
-    img->m7[i][0] = b[0] + b[7];
-    img->m7[i][1] = b[2] + b[5];
-    img->m7[i][2] = b[4] + b[3];
-    img->m7[i][3] = b[6] + b[1];
-    img->m7[i][4] = b[6] - b[1];
-    img->m7[i][5] = b[4] - b[3];
-    img->m7[i][6] = b[2] - b[5];
-    img->m7[i][7] = b[0] - b[7];
-  }
- 
-  for( i=0; i<8; i++)
-  {
-    pix_x = block_x+i;
-    for( j=0; j<8; j++)
+    for( i=0; i<8; i++)
     {
-      pix_y = block_y+j;
-      if(lossless_qpprime)
-        img->m7[i][j] = img->m7[i][j]+img->mpr[pix_y][pix_x];
-      else
-      {
-        // Residue Color Transform
-        if (!img->residue_transform_flag)
-          img->m7[i][j] =min(img->max_imgpel_value,max(0,(img->m7[i][j]+((long)img->mpr[pix_y][pix_x] << DQ_BITS_8)+DQ_ROUND_8)>>DQ_BITS_8));
-        else
-          img->m7[i][j] =(img->m7[i][j]+DQ_ROUND_8)>>DQ_BITS_8;
-      }
-    }
-  }
-
-  //  Decoded block moved to frame memory
-  if (!img->residue_transform_flag)
-    for (j=0; j < 2*BLOCK_SIZE; j++)
-    {
-      pix_y = img->pix_y+block_y+j;
-      for (i=0; i < 2*BLOCK_SIZE; i++)
-      {
-        pix_x = img->pix_x+block_x+i;
-        enc_picture->imgY[pix_y][pix_x]=img->m7[i][j];
-      }
+      a[0] = img->m7[i][0] + img->m7[i][4];
+      a[4] = img->m7[i][0] - img->m7[i][4];
+      a[2] = (img->m7[i][2]>>1) - img->m7[i][6];
+      a[6] = img->m7[i][2] + (img->m7[i][6]>>1);
+      
+      b[0] = a[0] + a[6];
+      b[2] = a[4] + a[2];
+      b[4] = a[4] - a[2];
+      b[6] = a[0] - a[6];
+      
+      a[1] = -img->m7[i][3] + img->m7[i][5] - img->m7[i][7] - (img->m7[i][7]>>1);
+      a[3] =  img->m7[i][1] + img->m7[i][7] - img->m7[i][3] - (img->m7[i][3]>>1);
+      a[5] = -img->m7[i][1] + img->m7[i][7] + img->m7[i][5] + (img->m7[i][5]>>1);
+      a[7] =  img->m7[i][3] + img->m7[i][5] + img->m7[i][1] + (img->m7[i][1]>>1);
+      
+      b[1] = a[1] + (a[7]>>2);
+      b[7] = -(a[1]>>2) + a[7];
+      b[3] = a[3] + (a[5]>>2);
+      b[5] = (a[3]>>2) - a[5];
+      
+      m6[0][i] = b[0] + b[7];
+      m6[1][i] = b[2] + b[5];
+      m6[2][i] = b[4] + b[3];
+      m6[3][i] = b[6] + b[1];
+      m6[4][i] = b[6] - b[1];
+      m6[5][i] = b[4] - b[3];
+      m6[6][i] = b[2] - b[5];
+      m6[7][i] = b[0] - b[7];
     }
     
+    // vertical inverse transform
+    for( i=0; i<8; i++)
+    {
+      a[0] =  m6[i][0] + m6[i][4];
+      a[4] =  m6[i][0] - m6[i][4];
+      a[2] = (m6[i][2]>>1) - m6[i][6];
+      a[6] =  m6[i][2] + (m6[i][6]>>1);
+      
+      b[0] = a[0] + a[6];
+      b[2] = a[4] + a[2];
+      b[4] = a[4] - a[2];
+      b[6] = a[0] - a[6];
+      
+      a[1] = -m6[i][3] + m6[i][5] - m6[i][7] - (m6[i][7]>>1);
+      a[3] =  m6[i][1] + m6[i][7] - m6[i][3] - (m6[i][3]>>1);
+      a[5] = -m6[i][1] + m6[i][7] + m6[i][5] + (m6[i][5]>>1);
+      a[7] =  m6[i][3] + m6[i][5] + m6[i][1] + (m6[i][1]>>1);
+      
+      b[1] =   a[1] + (a[7]>>2);
+      b[7] = -(a[1]>>2) + a[7];
+      b[3] =   a[3] + (a[5]>>2);
+      b[5] =  (a[3]>>2) - a[5];
+      
+      img->m7[0][i] = b[0] + b[7];
+      img->m7[1][i] = b[2] + b[5];
+      img->m7[2][i] = b[4] + b[3];
+      img->m7[3][i] = b[6] + b[1];
+      img->m7[4][i] = b[6] - b[1];
+      img->m7[5][i] = b[4] - b[3];
+      img->m7[6][i] = b[2] - b[5];
+      img->m7[7][i] = b[0] - b[7];
+    }
+  }
+  
+  if (!img->residue_transform_flag)
+  {
+    for( j=0; j<2*BLOCK_SIZE; j++)
+    {
+      pix_y = block_y+j;    
+      ipix_y = img->pix_y + pix_y;
+      for( i=0; i<2*BLOCK_SIZE; i++)
+      {
+        pix_x = block_x+i;
+        img->m7[j][i] = clip1a((img->m7[j][i]+((long)img->mpr[pix_y][pix_x] << DQ_BITS_8)+DQ_ROUND_8)>>DQ_BITS_8);
+        enc_picture->imgY[ipix_y][img->pix_x + pix_x]=img->m7[j][i];
+      }
+    }
+  }
+  else 
+  {
+    if(lossless_qpprime)
+    {
+      for( j=0; j<2*BLOCK_SIZE; j++)
+      {
+        pix_y = block_y+j;    
+        for( i=0; i<2*BLOCK_SIZE; i++)
+          img->m7[j][i] = img->m7[j][i]+img->mpr[pix_y][block_x+i];
+      }
+    }
+    else         // Residue Color Transform
+    {
+      for( j=0; j<2*BLOCK_SIZE; j++)
+        for( i=0; i<2*BLOCK_SIZE; i++)
+          img->m7[j][i] =(img->m7[j][i]+DQ_ROUND_8)>>DQ_BITS_8;
+    }
+  }
+  
+  //  Decoded block moved to frame memory
+  
   return nonzero;
 }
 

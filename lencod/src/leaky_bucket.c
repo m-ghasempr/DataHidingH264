@@ -51,7 +51,7 @@ int get_LeakyBucketRate(unsigned long NumberLeakyBuckets, unsigned long *Rmin)
   
   if((f = fopen(input->LeakyBucketRateFile, "r")) == NULL)
   {
-    printf(" LeakyBucketRate File does not exist; using rate calculated from avg. rate \n");
+    printf(" LeakyBucketRate File does not exist. Using rate calculated from avg. rate \n");
     return 0;
   }
   
@@ -59,7 +59,7 @@ int get_LeakyBucketRate(unsigned long NumberLeakyBuckets, unsigned long *Rmin)
   {
     if(1 != fscanf(f, "%ld", &buf)) 
     {
-      printf(" Leaky BucketRateFile does not have valid entries;\n using rate calculated from avg. rate \n");
+      printf(" Leaky BucketRateFile does not have valid entries.\n Using rate calculated from avg. rate \n");
       fclose (f);
       return 0;
     }
@@ -125,15 +125,16 @@ void write_buffer(unsigned long NumberLeakyBuckets, unsigned long Rmin[], unsign
 {
   FILE *outf;
   unsigned long iBucket;
-        
+  
   if ((outf=fopen(input->LeakyBucketParamFile,"wb"))==NULL)
   {
     snprintf(errortext, ET_SIZE, "Error open file %s  \n",input->LeakyBucketParamFile);
     error(errortext,1);
   }
-
+  
   PutBigDoubleWord(NumberLeakyBuckets, outf);
-  printf(" Number Leaky Buckets: %ld \n     Rmin     Bmin     Fmin \n", NumberLeakyBuckets);
+  if (input->Verbose != 0)
+    printf(" Number Leaky Buckets: %ld \n     Rmin     Bmin     Fmin \n", NumberLeakyBuckets);
   for(iBucket =0; iBucket < NumberLeakyBuckets; iBucket++) 
   {
     //assert(Rmin[iBucket]<4294967296); //Overflow should be corrected already.
@@ -142,7 +143,8 @@ void write_buffer(unsigned long NumberLeakyBuckets, unsigned long Rmin[], unsign
     PutBigDoubleWord(Rmin[iBucket], outf);
     PutBigDoubleWord(Bmin[iBucket], outf);
     PutBigDoubleWord(Fmin[iBucket], outf);
-    printf(" %8ld %8ld %8ld \n", Rmin[iBucket], Bmin[iBucket], Fmin[iBucket]);
+    if (input->Verbose != 0)
+      printf(" %8ld %8ld %8ld \n", Rmin[iBucket], Bmin[iBucket], Fmin[iBucket]);
   }
   fclose(outf);
 }

@@ -106,6 +106,7 @@ void start_macroblock(struct img_par *img,struct inp_par *inp, int CurrentMBInSc
   /* Define horizontal positions */
   img->block_x = img->mb_x * BLOCK_SIZE;      /* luma block position */
   img->pix_x   = img->mb_x * MB_BLOCK_SIZE;   /* luma pixel position */
+  
   img->pix_c_x = img->mb_x * img->mb_cr_size_x; /* chroma pixel position */
 
   // Save the slice number of this macroblock. When the macroblock below
@@ -1038,71 +1039,87 @@ void readIPCMcoeffsFromNAL(struct img_par *img, struct inp_par *inp, struct data
   {
     //read luma and chroma IPCM coefficients
     currSE.len=8;
-
-    for(i=0;i<16;i++)
-      for(j=0;j<16;j++)
+    
+    for(i=0;i<MB_BLOCK_SIZE;i++)
+    {
+      for(j=0;j<MB_BLOCK_SIZE;j++)
       {
         readIPCMBytes_CABAC(&currSE, dP->bitstream);
         img->cof[i/4][j/4][i%4][j%4]=currSE.value1;
       }
-
-    for(i=0;i<8;i++)
-      for(j=0;j<8;j++)
+    } 
+    if (dec_picture->chroma_format_idc != YUV400)
+    {
+      TRACE_STRING("pcm_byte chroma");
+      for(i=0;i<img->mb_cr_size_y;i++)
       {
-        readIPCMBytes_CABAC(&currSE, dP->bitstream);
-        img->cof[i/4][j/4+4][i%4][j%4]=currSE.value1;
-      }
-
-    for(i=0;i<8;i++)
-      for(j=0;j<8;j++)
+        for(j=0;j<img->mb_cr_size_x;j++)
+        {
+          readIPCMBytes_CABAC(&currSE, dP->bitstream);
+          img->cof[i/4][j/4+4][i%4][j%4]=currSE.value1;
+        }
+      } 
+      for(i=0;i<img->mb_cr_size_y;i++)
       {
-        readIPCMBytes_CABAC(&currSE, dP->bitstream);
-        img->cof[i/4+2][j/4+4][i%4][j%4]=currSE.value1;
-      }
-
+        for(j=0;j<img->mb_cr_size_x;j++)
+        {
+          readIPCMBytes_CABAC(&currSE, dP->bitstream);
+          img->cof[i/4+2][j/4+4][i%4][j%4]=currSE.value1;
+        }
+      } 
+    }
     //If the decoded MB is IPCM MB, decoding engine is initialized
-
+    
     // here the decoding engine is directly initialized without checking End of Slice
     // The reason is that, whether current MB is the last MB in slice or not, there is
     // at least one 'end of slice' syntax after this MB. So when fetching bytes in this 
     // initialisation process, we can guarantee there is bits available in bitstream. 
-
+    
     init_decoding_engine_IPCM(img);
   }
   else
   { 
     //read bits to let stream byte aligned
-
+    
     if((dP->bitstream->frame_bitoffset)%8!=0)
     {
       TRACE_STRING("pcm_alignment_zero_bit");
       currSE.len=8-(dP->bitstream->frame_bitoffset)%8;
       readSyntaxElement_FLC(&currSE, dP->bitstream);
-  }
-
-  //read luma and chroma IPCM coefficients
-  currSE.len=8;
-  TRACE_STRING("pcm_byte");
-
-  for(i=0;i<16;i++)
-    for(j=0;j<16;j++)
-    {
-      readSyntaxElement_FLC(&currSE, dP->bitstream);
-      img->cof[i/4][j/4][i%4][j%4]=currSE.value1;
     }
-
-  for(i=0;i<8;i++)
-    for(j=0;j<8;j++)
+    
+    //read luma and chroma IPCM coefficients
+    currSE.len=img->bitdepth_luma;
+    TRACE_STRING("pcm_byte luma");
+    
+    for(i=0;i<MB_BLOCK_SIZE;i++)
     {
-      readSyntaxElement_FLC(&currSE, dP->bitstream);
-      img->cof[i/4][j/4+4][i%4][j%4]=currSE.value1;
-    }
-
-  for(i=0;i<8;i++)
-    for(j=0;j<8;j++)
+      for(j=0;j<MB_BLOCK_SIZE;j++)
+      {
+        readSyntaxElement_FLC(&currSE, dP->bitstream);
+        img->cof[i/4][j/4][i%4][j%4]=currSE.value1;
+      }
+    } 
+    currSE.len=img->bitdepth_chroma;
+    if (dec_picture->chroma_format_idc != YUV400)
     {
-      readSyntaxElement_FLC(&currSE, dP->bitstream);
-      img->cof[i/4+2][j/4+4][i%4][j%4]=currSE.value1;
+      TRACE_STRING("pcm_byte chroma");
+      for(i=0;i<img->mb_cr_size_y;i++)
+      {
+        for(j=0;j<img->mb_cr_size_x;j++)
+        {
+          readSyntaxElement_FLC(&currSE, dP->bitstream);
+          img->cof[i/4][j/4+4][i%4][j%4]=currSE.value1;
+        }
+      } 
+      for(i=0;i<img->mb_cr_size_y;i++)
+      {
+        for(j=0;j<img->mb_cr_size_x;j++)
+        {
+          readSyntaxElement_FLC(&currSE, dP->bitstream);
+          img->cof[i/4+2][j/4+4][i%4][j%4]=currSE.value1;
+        }
+      }
     }
   }
 }
@@ -1412,7 +1429,6 @@ static void SetMotionVectorPredictor (struct img_par  *img,
       }
     }
 
-
     switch (mvPredType)
     {
     case MVPRED_MEDIAN:
@@ -1720,7 +1736,6 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
       {
         if (currMB->b8mode[i] == 0)
         {
-
           for(j=2*(i/2);j<2*(i/2)+2;j++)
           {
             for(k=2*(i%2);k<2*(i%2)+2;k++)
@@ -2255,8 +2270,7 @@ int predict_nnz_chroma(struct img_par *img, int i,int j)
     {
       pred_nnz += img->nz_coeff [pix.mb_addr ][pix.x][j_off + pix.y];
       cnt++;
-    }
-    
+    }    
   }
   
   if (cnt==2)
@@ -4556,7 +4570,8 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
             if(!residue_transform_flag)
             {
               dec_picture->imgY[j4*BLOCK_SIZE+jj][i4*BLOCK_SIZE+ii]=img->m7[ii][jj]; // construct picture from 4x4 blocks
-            } else 
+            } 
+            else 
             {
               mprRGB[0][ii+ioff][jj+joff] = img->mpr[ii+ioff][jj+joff];
               rec_res[0][ii+ioff][jj+joff] = img->m7[ii][jj];
@@ -4995,10 +5010,10 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
           for(ii=0;ii<BLOCK_SIZE;ii++)
           {
             /* Inverse Residue Transform */
-            temp      = rec_res[0][ii+ioff][jj+joff]-(rec_res[2][ii+ioff][jj+joff]>>1);
-            residue_G = rec_res[2][ii+ioff][jj+joff]+temp;
-            residue_B = temp - (rec_res[1][ii+ioff][jj+joff]>>1);
-            residue_R = residue_B+rec_res[1][ii+ioff][jj+joff];
+            temp      = rec_res[0][ii+ioff][jj+joff]-(rec_res[1][ii+ioff][jj+joff]>>1);
+            residue_G = rec_res[1][ii+ioff][jj+joff]+temp;
+            residue_B = temp - (rec_res[2][ii+ioff][jj+joff]>>1);
+            residue_R = residue_B+rec_res[2][ii+ioff][jj+joff];
             
             dec_picture->imgUV[0][j4*BLOCK_SIZE+jj][i4*BLOCK_SIZE+ii] = min(img->max_imgpel_value_uv,max(0,residue_B+mprRGB[1][ii+ioff][jj+joff]));
             dec_picture->imgY[j4*BLOCK_SIZE+jj][i4*BLOCK_SIZE+ii]     = min(img->max_imgpel_value,max(0,residue_G+mprRGB[0][ii+ioff][jj+joff]));
@@ -5026,10 +5041,10 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
           for(ii=0;ii<8;ii++)
           {
             /* Inverse Residue Transform */
-            temp      = rec_res[0][ii+ioff][jj+joff]-(rec_res[2][ii+ioff][jj+joff]>>1);
-            residue_G = rec_res[2][ii+ioff][jj+joff]+temp;
-            residue_B = temp - (rec_res[1][ii+ioff][jj+joff]>>1);
-            residue_R = residue_B+rec_res[1][ii+ioff][jj+joff];
+            temp      = rec_res[0][ii+ioff][jj+joff]-(rec_res[1][ii+ioff][jj+joff]>>1);
+            residue_G = rec_res[1][ii+ioff][jj+joff]+temp;
+            residue_B = temp - (rec_res[2][ii+ioff][jj+joff]>>1);
+            residue_R = residue_B+rec_res[2][ii+ioff][jj+joff];
             
             dec_picture->imgUV[0][img->pix_y+joff+jj][img->pix_x+ioff+ii] = min(img->max_imgpel_value_uv,max(0,residue_B+mprRGB[1][ii+ioff][jj+joff]));
             dec_picture->imgY[img->pix_y+joff+jj][img->pix_x+ioff+ii]     = min(img->max_imgpel_value,max(0,residue_G+mprRGB[0][ii+ioff][jj+joff]));

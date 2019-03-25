@@ -12,6 +12,7 @@
 #include <string.h>
 
 #include "global.h"
+#include "memalloc.h"
 
 extern char *GetConfigFileContent (char *Filename, int error_type);
 
@@ -43,23 +44,13 @@ static const char MatrixType8x8[2][20] =
   "INTER8X8_LUMA",
 };
 
-int LevelScale4x4Luma_Intra[6][4][4];
-int LevelScale4x4Chroma_Intra[2][6][4][4];
+int ****LevelScale4x4Luma;
+int *****LevelScale4x4Chroma;
+int ****LevelScale8x8Luma;
 
-int LevelScale4x4Luma_Inter[6][4][4];
-int LevelScale4x4Chroma_Inter[2][6][4][4];
-
-int LevelScale8x8Luma_Intra[6][8][8];
-int LevelScale8x8Luma_Inter[6][8][8];
-
-int InvLevelScale4x4Luma_Intra[6][4][4];
-int InvLevelScale4x4Chroma_Intra[2][6][4][4];
-
-int InvLevelScale4x4Luma_Inter[6][4][4];
-int InvLevelScale4x4Chroma_Inter[2][6][4][4];
-
-int InvLevelScale8x8Luma_Intra[6][8][8];
-int InvLevelScale8x8Luma_Inter[6][8][8];
+int ****InvLevelScale4x4Luma;
+int *****InvLevelScale4x4Chroma;
+int ****InvLevelScale8x8Luma;
 
 short ScalingList4x4input[6][16];
 short ScalingList8x8input[2][64];
@@ -363,12 +354,50 @@ void PatchMatrix(void)
 /*!
  ***********************************************************************
  * \brief
+ *    Allocate Q matrix arrays
+ ***********************************************************************
+ */
+void allocate_QMatrix ()
+{
+  get_mem4Dint(&LevelScale4x4Luma,      2, 6, 4, 4);
+  get_mem5Dint(&LevelScale4x4Chroma, 2, 2, 6, 4, 4);
+  get_mem4Dint(&LevelScale8x8Luma,      2, 6, 8, 8);
+  
+  get_mem4Dint(&InvLevelScale4x4Luma,      2, 6, 4, 4);
+  get_mem5Dint(&InvLevelScale4x4Chroma, 2, 2, 6, 4, 4);
+  get_mem4Dint(&InvLevelScale8x8Luma,      2, 6, 8, 8);
+}
+
+/*!
+ ***********************************************************************
+ * \brief
+ *    Free Q matrix arrays
+ ***********************************************************************
+ */
+void free_QMatrix ()
+{
+  free_mem4Dint(LevelScale4x4Luma,      2, 6);
+  free_mem5Dint(LevelScale4x4Chroma, 2, 2, 6);
+  free_mem4Dint(LevelScale8x8Luma,      2, 6);
+  
+  free_mem4Dint(InvLevelScale4x4Luma,      2, 6);
+  free_mem5Dint(InvLevelScale4x4Chroma, 2, 2, 6);
+  free_mem4Dint(InvLevelScale8x8Luma,      2, 6);
+}
+
+
+/*!
+ ***********************************************************************
+ * \brief
  *    Initialise Q matrix values.
  ***********************************************************************
  */
 void Init_QMatrix (void)
 {
   char *content;
+
+
+  allocate_QMatrix ();
 
   if(input->ScalingMatrixPresentFlag)
   {
@@ -382,7 +411,7 @@ void Init_QMatrix (void)
     PatchMatrix();
     printf("\n");
 
-    memset(UseDefaultScalingMatrix4x4Flag, 0, sizeof(short)*6);
+    memset(UseDefaultScalingMatrix4x4Flag, 0, 6 * sizeof(short));
     UseDefaultScalingMatrix8x8Flag[0]=UseDefaultScalingMatrix8x8Flag[1]=0;
   
     free(content);
@@ -433,23 +462,24 @@ void CalculateQuantParam(void)
       for(j=0; j<4; j++)
         for(i=0; i<4; i++)
         {
-          LevelScale4x4Luma_Intra[k][j][i]         = quant_coef[k][j][i];
-          InvLevelScale4x4Luma_Intra[k][j][i]      = dequant_coef[k][j][i]<<4;
+          LevelScale4x4Luma[1][k][j][i]         = quant_coef[k][j][i];
+          InvLevelScale4x4Luma[1][k][j][i]      = dequant_coef[k][j][i]<<4;
 
-          LevelScale4x4Chroma_Intra[0][k][j][i]    = quant_coef[k][j][i];
-          InvLevelScale4x4Chroma_Intra[0][k][j][i] = dequant_coef[k][j][i]<<4;
+          LevelScale4x4Chroma[0][1][k][j][i]    = quant_coef[k][j][i];
+          InvLevelScale4x4Chroma[0][1][k][j][i] = dequant_coef[k][j][i]<<4;
 
-          LevelScale4x4Chroma_Intra[1][k][j][i]    = quant_coef[k][j][i];
-          InvLevelScale4x4Chroma_Intra[1][k][j][i] = dequant_coef[k][j][i]<<4;
+          LevelScale4x4Chroma[1][1][k][j][i]    = quant_coef[k][j][i];
+          InvLevelScale4x4Chroma[1][1][k][j][i] = dequant_coef[k][j][i]<<4;
 
-          LevelScale4x4Luma_Inter[k][j][i]         = quant_coef[k][j][i];
-          InvLevelScale4x4Luma_Inter[k][j][i]      = dequant_coef[k][j][i]<<4;
+          // Inter
+          LevelScale4x4Luma[0][k][j][i]         = quant_coef[k][j][i];
+          InvLevelScale4x4Luma[0][k][j][i]      = dequant_coef[k][j][i]<<4;
 
-          LevelScale4x4Chroma_Inter[0][k][j][i]    = quant_coef[k][j][i];
-          InvLevelScale4x4Chroma_Inter[0][k][j][i] = dequant_coef[k][j][i]<<4;
+          LevelScale4x4Chroma[0][0][k][j][i]    = quant_coef[k][j][i];
+          InvLevelScale4x4Chroma[0][0][k][j][i] = dequant_coef[k][j][i]<<4;
 
-          LevelScale4x4Chroma_Inter[1][k][j][i]    = quant_coef[k][j][i];
-          InvLevelScale4x4Chroma_Inter[1][k][j][i] = dequant_coef[k][j][i]<<4;
+          LevelScale4x4Chroma[1][0][k][j][i]    = quant_coef[k][j][i];
+          InvLevelScale4x4Chroma[1][0][k][j][i] = dequant_coef[k][j][i]<<4;
         }
   }
   else
@@ -461,68 +491,68 @@ void CalculateQuantParam(void)
           temp = (i<<2)+j;
           if((!present[0]) || UseDefaultScalingMatrix4x4Flag[0])
           {
-            LevelScale4x4Luma_Intra[k][j][i]         = (quant_coef[k][j][i]<<4)/Quant_intra_default[temp];
-            InvLevelScale4x4Luma_Intra[k][j][i]      = dequant_coef[k][j][i]*Quant_intra_default[temp];
+            LevelScale4x4Luma[1][k][j][i]         = (quant_coef[k][j][i]<<4)/Quant_intra_default[temp];
+            InvLevelScale4x4Luma[1][k][j][i]      = dequant_coef[k][j][i]*Quant_intra_default[temp];
           }
           else
           {
-            LevelScale4x4Luma_Intra[k][j][i]         = (quant_coef[k][j][i]<<4)/ScalingList4x4[0][temp];
-            InvLevelScale4x4Luma_Intra[k][j][i]      = dequant_coef[k][j][i]*ScalingList4x4[0][temp];
+            LevelScale4x4Luma[1][k][j][i]         = (quant_coef[k][j][i]<<4)/ScalingList4x4[0][temp];
+            InvLevelScale4x4Luma[1][k][j][i]      = dequant_coef[k][j][i]*ScalingList4x4[0][temp];
           }
 
           if(!present[1])
           {
-            LevelScale4x4Chroma_Intra[0][k][j][i]    = LevelScale4x4Luma_Intra[k][j][i];
-            InvLevelScale4x4Chroma_Intra[0][k][j][i] = InvLevelScale4x4Luma_Intra[k][j][i];
+            LevelScale4x4Chroma[0][1][k][j][i]    = LevelScale4x4Luma[1][k][j][i];
+            InvLevelScale4x4Chroma[0][1][k][j][i] = InvLevelScale4x4Luma[1][k][j][i];
           }
           else
           {
-            LevelScale4x4Chroma_Intra[0][k][j][i]    = (quant_coef[k][j][i]<<4)/(UseDefaultScalingMatrix4x4Flag[1] ? Quant_intra_default[temp]:ScalingList4x4[1][temp]);
-            InvLevelScale4x4Chroma_Intra[0][k][j][i] = dequant_coef[k][j][i]*(UseDefaultScalingMatrix4x4Flag[1] ? Quant_intra_default[temp]:ScalingList4x4[1][temp]);
+            LevelScale4x4Chroma[0][1][k][j][i]    = (quant_coef[k][j][i]<<4)/(UseDefaultScalingMatrix4x4Flag[1] ? Quant_intra_default[temp]:ScalingList4x4[1][temp]);
+            InvLevelScale4x4Chroma[0][1][k][j][i] = dequant_coef[k][j][i]*(UseDefaultScalingMatrix4x4Flag[1] ? Quant_intra_default[temp]:ScalingList4x4[1][temp]);
           }
 
           if(!present[2])
           {
-            LevelScale4x4Chroma_Intra[1][k][j][i]    = LevelScale4x4Chroma_Intra[0][k][j][i];
-            InvLevelScale4x4Chroma_Intra[1][k][j][i] = InvLevelScale4x4Chroma_Intra[0][k][j][i];
+            LevelScale4x4Chroma[1][1][k][j][i]    = LevelScale4x4Chroma[0][1][k][j][i];
+            InvLevelScale4x4Chroma[1][1][k][j][i] = InvLevelScale4x4Chroma[0][1][k][j][i];
           }
           else
           {
-            LevelScale4x4Chroma_Intra[1][k][j][i]    = (quant_coef[k][j][i]<<4)/(UseDefaultScalingMatrix4x4Flag[2] ? Quant_intra_default[temp]:ScalingList4x4[2][temp]);
-            InvLevelScale4x4Chroma_Intra[1][k][j][i] = dequant_coef[k][j][i]*(UseDefaultScalingMatrix4x4Flag[2] ? Quant_intra_default[temp]:ScalingList4x4[2][temp]);
+            LevelScale4x4Chroma[1][1][k][j][i]    = (quant_coef[k][j][i]<<4)/(UseDefaultScalingMatrix4x4Flag[2] ? Quant_intra_default[temp]:ScalingList4x4[2][temp]);
+            InvLevelScale4x4Chroma[1][1][k][j][i] = dequant_coef[k][j][i]*(UseDefaultScalingMatrix4x4Flag[2] ? Quant_intra_default[temp]:ScalingList4x4[2][temp]);
           }
 
           if((!present[3]) || UseDefaultScalingMatrix4x4Flag[3])
           {
-            LevelScale4x4Luma_Inter[k][j][i]         = (quant_coef[k][j][i]<<4)/Quant_inter_default[temp];
-            InvLevelScale4x4Luma_Inter[k][j][i]      = dequant_coef[k][j][i]*Quant_inter_default[temp];
+            LevelScale4x4Luma[0][k][j][i]         = (quant_coef[k][j][i]<<4)/Quant_inter_default[temp];
+            InvLevelScale4x4Luma[0][k][j][i]      = dequant_coef[k][j][i]*Quant_inter_default[temp];
           }
           else
           {
-            LevelScale4x4Luma_Inter[k][j][i]         = (quant_coef[k][j][i]<<4)/ScalingList4x4[3][temp];
-            InvLevelScale4x4Luma_Inter[k][j][i]      = dequant_coef[k][j][i]*ScalingList4x4[3][temp];
+            LevelScale4x4Luma[0][k][j][i]         = (quant_coef[k][j][i]<<4)/ScalingList4x4[3][temp];
+            InvLevelScale4x4Luma[0][k][j][i]      = dequant_coef[k][j][i]*ScalingList4x4[3][temp];
           }
 
           if(!present[4])
           {
-            LevelScale4x4Chroma_Inter[0][k][j][i]    = LevelScale4x4Luma_Inter[k][j][i];
-            InvLevelScale4x4Chroma_Inter[0][k][j][i] = InvLevelScale4x4Luma_Inter[k][j][i];
+            LevelScale4x4Chroma[0][0][k][j][i]    = LevelScale4x4Luma[0][k][j][i];
+            InvLevelScale4x4Chroma[0][0][k][j][i] = InvLevelScale4x4Luma[0][k][j][i];
           }
           else
           {
-            LevelScale4x4Chroma_Inter[0][k][j][i]    = (quant_coef[k][j][i]<<4)/(UseDefaultScalingMatrix4x4Flag[4] ? Quant_inter_default[temp]:ScalingList4x4[4][temp]);
-            InvLevelScale4x4Chroma_Inter[0][k][j][i] = dequant_coef[k][j][i]*(UseDefaultScalingMatrix4x4Flag[4] ? Quant_inter_default[temp]:ScalingList4x4[4][temp]);
+            LevelScale4x4Chroma[0][0][k][j][i]    = (quant_coef[k][j][i]<<4)/(UseDefaultScalingMatrix4x4Flag[4] ? Quant_inter_default[temp]:ScalingList4x4[4][temp]);
+            InvLevelScale4x4Chroma[0][0][k][j][i] = dequant_coef[k][j][i]*(UseDefaultScalingMatrix4x4Flag[4] ? Quant_inter_default[temp]:ScalingList4x4[4][temp]);
           }
 
           if(!present[5])
           {
-            LevelScale4x4Chroma_Inter[1][k][j][i]    = LevelScale4x4Chroma_Inter[0][k][j][i];
-            InvLevelScale4x4Chroma_Inter[1][k][j][i] = InvLevelScale4x4Chroma_Inter[0][k][j][i];
+            LevelScale4x4Chroma[1][0][k][j][i]    = LevelScale4x4Chroma[0][0][k][j][i];
+            InvLevelScale4x4Chroma[1][0][k][j][i] = InvLevelScale4x4Chroma[0][0][k][j][i];
           }
           else
           {
-            LevelScale4x4Chroma_Inter[1][k][j][i]    = (quant_coef[k][j][i]<<4)/(UseDefaultScalingMatrix4x4Flag[5] ? Quant_inter_default[temp]:ScalingList4x4[5][temp]);
-            InvLevelScale4x4Chroma_Inter[1][k][j][i] = dequant_coef[k][j][i]*(UseDefaultScalingMatrix4x4Flag[5] ? Quant_inter_default[temp]:ScalingList4x4[5][temp]);
+            LevelScale4x4Chroma[1][0][k][j][i]    = (quant_coef[k][j][i]<<4)/(UseDefaultScalingMatrix4x4Flag[5] ? Quant_inter_default[temp]:ScalingList4x4[5][temp]);
+            InvLevelScale4x4Chroma[1][0][k][j][i] = dequant_coef[k][j][i]*(UseDefaultScalingMatrix4x4Flag[5] ? Quant_inter_default[temp]:ScalingList4x4[5][temp]);
           }
         }
   }
@@ -540,13 +570,13 @@ void CalculateQuant8Param()
   int i, j, k, temp;
   int present[2];
   int no_q_matrix=FALSE;
-
+  
   if(!active_sps->seq_scaling_matrix_present_flag && !active_pps->pic_scaling_matrix_present_flag) //set to default matrix
     no_q_matrix=TRUE;
   else
   {
     memset(present, 0, sizeof(int)*2);
-
+    
     if(active_sps->seq_scaling_matrix_present_flag)
       for(i=0; i<2; i++)
         present[i] = active_sps->seq_scaling_list_present_flag[i+6];
@@ -562,11 +592,11 @@ void CalculateQuant8Param()
       for(j=0; j<8; j++)
         for(i=0; i<8; i++)
         {
-          LevelScale8x8Luma_Intra[k][j][i]         = quant_coef8[k][j][i];
-          InvLevelScale8x8Luma_Intra[k][j][i]      = dequant_coef8[k][j][i]<<4;
-
-          LevelScale8x8Luma_Inter[k][j][i]         = quant_coef8[k][j][i];
-          InvLevelScale8x8Luma_Inter[k][j][i]      = dequant_coef8[k][j][i]<<4;
+          LevelScale8x8Luma[1][k][j][i]         = quant_coef8[k][j][i];
+          InvLevelScale8x8Luma[1][k][j][i]      = dequant_coef8[k][j][i]<<4;
+          
+          LevelScale8x8Luma[0][k][j][i]         = quant_coef8[k][j][i];
+          InvLevelScale8x8Luma[0][k][j][i]      = dequant_coef8[k][j][i]<<4;
         }
   }
   else
@@ -578,24 +608,24 @@ void CalculateQuant8Param()
           temp = (i<<3)+j;
           if((!present[0]) || UseDefaultScalingMatrix8x8Flag[0])
           {
-            LevelScale8x8Luma_Intra[k][j][i]    = (quant_coef8[k][j][i]<<4)/Quant8_intra_default[temp];
-            InvLevelScale8x8Luma_Intra[k][j][i] = dequant_coef8[k][j][i]*Quant8_intra_default[temp];
+            LevelScale8x8Luma[1][k][j][i]    = (quant_coef8[k][j][i]<<4)/Quant8_intra_default[temp];
+            InvLevelScale8x8Luma[1][k][j][i] = dequant_coef8[k][j][i]*Quant8_intra_default[temp];
           }
           else
           {
-            LevelScale8x8Luma_Intra[k][j][i]    = (quant_coef8[k][j][i]<<4)/ScalingList8x8[0][temp];
-            InvLevelScale8x8Luma_Intra[k][j][i] = dequant_coef8[k][j][i]*ScalingList8x8[0][temp];
+            LevelScale8x8Luma[1][k][j][i]    = (quant_coef8[k][j][i]<<4)/ScalingList8x8[0][temp];
+            InvLevelScale8x8Luma[1][k][j][i] = dequant_coef8[k][j][i]*ScalingList8x8[0][temp];
           }
-
+          
           if((!present[1]) || UseDefaultScalingMatrix8x8Flag[1])
           {
-            LevelScale8x8Luma_Inter[k][j][i]    = (quant_coef8[k][j][i]<<4)/Quant8_inter_default[temp];
-            InvLevelScale8x8Luma_Inter[k][j][i] = dequant_coef8[k][j][i]*Quant8_inter_default[temp];
+            LevelScale8x8Luma[0][k][j][i]    = (quant_coef8[k][j][i]<<4)/Quant8_inter_default[temp];
+            InvLevelScale8x8Luma[0][k][j][i] = dequant_coef8[k][j][i]*Quant8_inter_default[temp];
           }
           else
           {
-            LevelScale8x8Luma_Inter[k][j][i]    = (quant_coef8[k][j][i]<<4)/ScalingList8x8[1][temp];
-            InvLevelScale8x8Luma_Inter[k][j][i] = dequant_coef8[k][j][i]*ScalingList8x8[1][temp];
+            LevelScale8x8Luma[0][k][j][i]    = (quant_coef8[k][j][i]<<4)/ScalingList8x8[1][temp];
+            InvLevelScale8x8Luma[0][k][j][i] = dequant_coef8[k][j][i]*ScalingList8x8[1][temp];
           }
         }
   }

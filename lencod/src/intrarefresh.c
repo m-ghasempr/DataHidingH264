@@ -48,27 +48,35 @@ void RandomIntraInit(int xsize, int ysize, int refresh)
   NumberOfMBs = xsize * ysize;
   NumberIntraPerPicture = refresh;
 
-  RefreshPattern = malloc (sizeof (int) * NumberOfMBs);
-  if (RefreshPattern == NULL) no_mem_exit("RandomIntraInit: RefreshPattern");
-
-  IntraMBs = malloc (sizeof (int) * refresh);
-  if (IntraMBs == NULL) no_mem_exit("RandomIntraInit: IntraMBs");
-
-  for (i= 0; i<NumberOfMBs; i++)
-    RefreshPattern[i] = -1;
-
-   for (i=0; i<NumberOfMBs; i++)
-   {
-     do
-     {
-       pos = rand() % NumberOfMBs;
-     } while (RefreshPattern [pos] != -1);
-     RefreshPattern [pos] = i;
-   }
-/*
-for (i=0; i<NumberOfMBs; i++) printf ("%d\t", RefreshPattern[i]);
-getchar();
-*/
+  if (refresh != 0) 
+  { 
+    RefreshPattern = malloc (sizeof (int) * NumberOfMBs);
+    if (RefreshPattern == NULL) no_mem_exit("RandomIntraInit: RefreshPattern");
+    
+    IntraMBs = malloc (sizeof (int) * refresh);
+    if (IntraMBs == NULL) no_mem_exit("RandomIntraInit: IntraMBs");
+    
+    for (i= 0; i<NumberOfMBs; i++)
+      RefreshPattern[i] = -1;
+    
+    for (i=0; i<NumberOfMBs; i++)
+    {
+      do
+      {
+        pos = rand() % NumberOfMBs;
+      } while (RefreshPattern [pos] != -1);
+      RefreshPattern [pos] = i;
+    }
+    /*
+    for (i=0; i<NumberOfMBs; i++) printf ("%d\t", RefreshPattern[i]);
+    getchar();
+    */
+  }
+  else
+  {
+    RefreshPattern = NULL;
+    IntraMBs = NULL;
+  }
 }
 
 /*!
@@ -120,6 +128,9 @@ void RandomIntraNewPicture ()
 
 void RandomIntraUninit()
 {
-  free(RefreshPattern);
-  free(IntraMBs);
+  if (NumberIntraPerPicture >0 )
+  {
+    free(RefreshPattern);
+    free(IntraMBs);
+  }
 }

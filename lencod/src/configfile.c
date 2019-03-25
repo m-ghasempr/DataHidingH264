@@ -64,6 +64,7 @@
 
 #if defined WIN32
   #include <io.h>
+  #define strcasecmp strcmpi
 #else
   #include <unistd.h>
 #endif
@@ -398,7 +399,7 @@ void ParseContent (char *buf, int bufsize)
       snprintf (errortext, ET_SIZE, " Parsing error in config file: Parameter Name '%s' not recognized.", items[i]);
       error (errortext, 300);
     }
-    if (strcmp ("=", items[i+1]))
+    if (strcasecmp ("=", items[i+1]))
     {
       snprintf (errortext, ET_SIZE, " Parsing error in config file: '=' expected as the second token in each line.");
       error (errortext, 300);
@@ -453,7 +454,7 @@ static int ParameterNameToMapIndex (char *s)
   int i = 0;
 
   while (Map[i].TokenName != NULL)
-    if (0==strcmp (Map[i].TokenName, s))
+    if (0==strcasecmp (Map[i].TokenName, s))
       return i;
     else
       i++;
@@ -1024,6 +1025,13 @@ static void PatchInp ()
     error (errortext, 500);
   }
 
+  if (input->search_range < input->BiPredMESearchRange)
+  {
+    snprintf(errortext, ET_SIZE, "\nBiPredMESearchRange must be smaller or equal SearchRange.");
+    error (errortext, 500);
+  }
+
+
   ProfileCheck();
   LevelCheck();
 }
@@ -1128,10 +1136,17 @@ static void ProfileCheck()
       error (errortext, 500);
     }
   }
+  
+  if (input->EnableOpenGOP) input->PyramidRefReorder = 1;
+  if (input->EnableOpenGOP && input->PicInterlace) 
+    {
+      snprintf(errortext, ET_SIZE, "Open Gop currently not supported for Field coded pictures.");
+      error (errortext, 500);
+    }
 }
 
 static void LevelCheck()
-{
+{  
   if ( (input->LevelIDC>=30) && (input->directInferenceFlag==0))
   {
     printf("\nLevelIDC 3.0 and above require direct_8x8_inference to be set to 1. Please check your settings.\n");

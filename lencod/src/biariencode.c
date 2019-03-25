@@ -51,7 +51,6 @@ int binCount = 0;
                                           } \
                                          }
 
-
 int pic_bin_count;
 
 void reset_pic_bin_count()
@@ -63,6 +62,7 @@ int get_pic_bin_count()
 {
   return pic_bin_count;
 }
+
 
 
 /*!
@@ -119,7 +119,6 @@ void arienco_start_encoding(EncodingEnvironmentPtr eep,
 
   Ecodestrm = code_buffer;
   Ecodestrm_len = code_len;
-//  Ecodestrm_laststartcode = last_startcode;
 
   Erange = HALF-2;
 
@@ -136,7 +135,7 @@ void arienco_start_encoding(EncodingEnvironmentPtr eep,
  */
 int arienco_bits_written(EncodingEnvironmentPtr eep)
 {
-   return (8 * (*Ecodestrm_len /*-*Ecodestrm_laststartcode*/) + Ebits_to_follow + 8  - Ebits_to_go);
+   return (8 * (*Ecodestrm_len) + Ebits_to_follow + 8  - Ebits_to_go);
 }
 
 
@@ -158,13 +157,9 @@ void arienco_done_encoding(EncodingEnvironmentPtr eep)
     put_one_bit(0);
 
   pic_bin_count += eep->E*8 + eep->C; // no of processed bins
-
-/*  eep->E= eep->E*8 + eep->C; // no of processed bins
-  eep->E -= (img->current_mb_nr-img->currentSlice->start_mb_nr);
-  eep->E = (eep->E + 31)>>5;  */
-  // eep->E now contains the minimum number of bytes for the NAL unit
 }
 
+extern int cabac_encoding;
 
 /*!
  ************************************************************************
@@ -178,27 +173,20 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
   register unsigned int range = Erange;
   register unsigned int low = Elow;
   unsigned int rLPS = rLPS_table_64x4[bi_ct->state][(range>>6) & 3];
-
-  extern int cabac_encoding;
   
 #if TRACE
 //  if (cabac_encoding)
 //    fprintf(p_trace, "%d  0x%04x  %d  %d\n", binCount++, Erange , bi_ct->state, bi_ct->MPS );
 #endif
   
-  if( cabac_encoding )
-  {
-    bi_ct->count++;
-  }
+  range -= rLPS;  
+  bi_ct->count += cabac_encoding;
 
   /* covers all cases where code does not bother to shift down symbol to be 
    * either 0 or 1, e.g. in some cases for cbp, mb_Type etc the code simply 
    * masks off the bit position and passes in the resulting value */
+  symbol = (symbol != 0);
 
-  if (symbol != 0) 
-    symbol = 1;
-  
-  range -= rLPS;
   if (symbol != bi_ct->MPS) 
   {
     low += range;
@@ -211,7 +199,6 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
   else 
     bi_ct->state = AC_next_state_MPS_64[bi_ct->state]; // next state
  
-
   /* renormalisation */    
   while (range < QUARTER)
   {
@@ -220,27 +207,22 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
       put_one_bit_plus_outstanding(1);
       low -= HALF;
     }
-    else 
-      if (low < QUARTER)
-      {
-        put_one_bit_plus_outstanding(0);
-      }
-      else
-      {
-        Ebits_to_follow++;
-        low -= QUARTER;
-      }
+    else if (low < QUARTER)
+    {
+      put_one_bit_plus_outstanding(0);
+    }
+    else
+    {
+      Ebits_to_follow++;
+      low -= QUARTER;
+    }
     low <<= 1;
     range <<= 1;
   }
   Erange = range;
   Elow = low;
   eep->C++;
-
 }
-
-
-
 
 /*!
  ************************************************************************
@@ -252,7 +234,6 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
 void biari_encode_symbol_eq_prob(EncodingEnvironmentPtr eep, signed short symbol)
 {
   register unsigned int low = (Elow<<1);
-
   
 #if TRACE
 //  extern int cabac_encoding;
@@ -281,8 +262,7 @@ void biari_encode_symbol_eq_prob(EncodingEnvironmentPtr eep, signed short symbol
       low -= HALF;
     }
     Elow = low;
-    eep->C++;
-    
+    eep->C++;    
 }
 
 /*!
@@ -331,7 +311,6 @@ void biari_encode_symbol_final(EncodingEnvironmentPtr eep, signed short symbol)
   Elow = low;
   eep->C++;
 }
-
 
 
 /*!

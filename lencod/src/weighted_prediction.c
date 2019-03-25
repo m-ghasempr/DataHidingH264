@@ -38,7 +38,7 @@ void estimate_weighting_factor_P_slice(int select_offset)
   pel_t*  ref_pic_w;   
   int default_weight[3];
 
-  int list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
+  int list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? (img->current_mb_nr & 0x01) ? 4 : 2 : 0;
   int weight[2][MAX_REFERENCE_PICTURES][3]; 
   int offset[2][MAX_REFERENCE_PICTURES][3];       
   int clist;
@@ -164,7 +164,7 @@ void estimate_weighting_factor_B_slice()
   pel_t*  ref_pic;   
   pel_t*  ref_pic_w;   
   int default_weight[3];
-  int list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
+  int list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? (img->current_mb_nr & 0x01) ? 4 : 2 : 0;
   int weight[6][MAX_REFERENCE_PICTURES][3]; 
   int offset[6][MAX_REFERENCE_PICTURES][3];       
   int im_weight[6][MAX_REFERENCE_PICTURES][MAX_REFERENCE_PICTURES][3]; 
@@ -223,7 +223,7 @@ void estimate_weighting_factor_B_slice()
         }
         else
         {            
-          tx = (16384 + abs(td/2))/td;
+          tx = (16384 + absm(td/2))/td;
           DistScaleFactor = Clip3(-1024, 1023, (tx*tb + 32 )>>6);
           im_weight[1][i][j][comp] = DistScaleFactor>>2;
           if (im_weight[1][i][j][comp] < -64 || im_weight[1][i][j][comp] >128)
@@ -425,7 +425,7 @@ int test_wp_P_slice(int select_offset)
   pel_t*  ref_pic_w;   
   int default_weight;
   int default_weight_chroma;
-  int list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
+  int list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? (img->current_mb_nr & 0x01) ? 4 : 2 : 0;
   int weight[2][MAX_REFERENCE_PICTURES][3]; 
   int offset[2][MAX_REFERENCE_PICTURES][3];       
   int clist;
@@ -543,7 +543,7 @@ int test_wp_B_slice(int select_method)
   pel_t*  ref_pic;   
   int default_weight[3];
   // this needs to be fixed. 
-  int list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
+  int list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? (img->current_mb_nr & 0x01) ? 4 : 2 : 0;
   int weight[6][MAX_REFERENCE_PICTURES][3]; 
   int offset[6][MAX_REFERENCE_PICTURES][3];       
   int im_weight[6][MAX_REFERENCE_PICTURES][MAX_REFERENCE_PICTURES][3]; 
@@ -603,7 +603,7 @@ int test_wp_B_slice(int select_method)
         }
         else
         {            
-          tx = (16384 + abs(td/2))/td;
+          tx = (16384 + absm(td/2))/td;
           DistScaleFactor = Clip3(-1024, 1023, (tx*tb + 32 )>>6);
           im_weight[1][i][j][comp] = DistScaleFactor>>2;
           if (im_weight[1][i][j][comp] < -64 || im_weight[1][i][j][comp] >128)

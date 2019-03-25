@@ -72,7 +72,7 @@ extern int    RDCost_for_macroblocks (double, int, double*, double*, int);
 extern double RDCost_for_8x8blocks (int*, int64*, double, int, int, short, short, short);
 
 extern const int  b8_mode_table[6];
-extern const int  mb_mode_table[8];
+extern const int  mb_mode_table[9];
   // Residue Color Transform
 extern const int  mb_mode_table_RCT[11];
 

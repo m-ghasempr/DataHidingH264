@@ -72,6 +72,8 @@ int testEndian()
  *    horizontal size
  * \param size_y
  *    vertical size
+ * \param symbol_size_in_bytes
+ *    number of bytes used per pel
  * \param crop_left
  *    pixels to crop from left
  * \param crop_right

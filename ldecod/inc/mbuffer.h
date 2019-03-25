@@ -28,7 +28,6 @@ typedef struct storable_picture
   int         top_poc;
   int         bottom_poc;
   int         frame_poc;
-  int         order_num;
   int64       ref_pic_num        [MAX_NUM_SLICES][6][MAX_LIST_SIZE];
   int64       frm_ref_pic_num    [MAX_NUM_SLICES][6][MAX_LIST_SIZE];
   int64       top_ref_pic_num    [MAX_NUM_SLICES][6][MAX_LIST_SIZE];

@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 9.4 (FRExt)
+ *     JM 9.5 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -66,7 +66,7 @@
 #include "explicit_gop.h"
 
 #define JM      "9 (FRExt)"
-#define VERSION "9.4"
+#define VERSION "9.5"
 #define EXT_VERSION "(FRExt)"
 
 InputParameters inputs,      *input = &inputs;
@@ -92,6 +92,23 @@ void Init_Motion_Search_Module ();
 void Clear_Motion_Search_Module ();
 void report_frame_statistic();
 void SetLevelIndices();
+
+void init_stats()
+{
+  stats->successive_Bframe = input->successive_Bframe;
+  stats->bit_ctr_I = 0;
+  stats->bit_ctr_P = 0;
+  stats->bit_ctr_B = 0;
+  snr->snr_y = 0.0;
+  snr->snr_u = 0.0;
+  snr->snr_v = 0.0;
+  snr->snr_y1 = 0.0;
+  snr->snr_u1 = 0.0;
+  snr->snr_v1 = 0.0;
+  snr->snr_ya = 0.0;
+  snr->snr_ua = 0.0;
+  snr->snr_va = 0.0;
+}
 /*!
  ***********************************************************************
  * \brief
@@ -158,8 +175,8 @@ int main(int argc,char **argv)
   dpb.init_done = 0;
   init_dpb(input);
   init_out_buffer();
+  init_stats();
 
-  stats->successive_Bframe = input->successive_Bframe;
 
   enc_picture = enc_frame_picture = enc_top_picture = enc_bottom_picture = NULL;
 
@@ -179,11 +196,9 @@ int main(int argc,char **argv)
     DefineThreshold();
 
   // Init frame type counter. Only supports single slice per frame.
-  Iframe_ctr=0;
-  Pframe_ctr=0;
+  memset(frame_ctr, 0, 5 * sizeof(int));
 
-  // B pictures
-  Bframe_ctr=0;
+  img->last_valid_reference = 0;
   tot_time=0;                 // time for total encoding session
 
 #ifdef _ADAPT_LAST_GROUP_
@@ -310,6 +325,8 @@ int main(int argc,char **argv)
       img->layer = 1;
 
     encode_one_frame(); // encode one I- or P-frame
+    if (img->type == I_SLICE && input->EnableOpenGOP)
+      img->last_valid_reference = img->ThisPOC;
 
     if (input->ReportFrameStats)
       report_frame_statistic();
@@ -453,7 +470,7 @@ void init_poc()
 
   if (input->BRefPictures)
   {
-    img->offset_for_non_ref_pic  =  0;
+    img->offset_for_non_ref_pic  =   0;
     img->offset_for_ref_frame[0] =   2;
   }
   else
@@ -528,11 +545,6 @@ void init_img()
   //pel bitdepth init
   img->bitdepth_luma   = input->BitDepthLuma;
   
-  if((img->bitdepth_luma > img->bitdepth_chroma) || img->yuv_format == YUV400)
-    img->pic_unit_size_on_disk = (img->bitdepth_luma > 8)? 16:8;
-  else
-    img->pic_unit_size_on_disk = (img->bitdepth_chroma > 8)? 16:8;
-
   img->bitdepth_luma_qp_scale   = 6*(img->bitdepth_luma   - 8);
   img->bitdepth_lambda_scale    = 2*(img->bitdepth_luma   - 8);
 
@@ -571,9 +583,13 @@ void init_img()
     img->chroma_qp_offset[1] = 0;
   }
 
+  if((img->bitdepth_luma > img->bitdepth_chroma) || img->yuv_format == YUV400)
+    img->pic_unit_size_on_disk = (img->bitdepth_luma > 8)? 16:8;
+  else
+    img->pic_unit_size_on_disk = (img->bitdepth_chroma > 8)? 16:8;
+
   img->num_ref_frames = active_sps->num_ref_frames;
   img->max_num_references   = active_sps->frame_mbs_only_flag ? active_sps->num_ref_frames : 2 * active_sps->num_ref_frames;
-
 
   img->buf_cycle = input->num_ref_frames;
 
@@ -1038,9 +1054,9 @@ void report()
 #else
   char timebuf[128];
 #endif
-  bit_use[I_SLICE][0] = Iframe_ctr;
-  bit_use[P_SLICE][0] = max(Pframe_ctr,1);
-  bit_use[B_SLICE][0] = Bframe_ctr;
+  bit_use[I_SLICE][0] = frame_ctr[I_SLICE];
+  bit_use[P_SLICE][0] = max(frame_ctr[P_SLICE] + frame_ctr[SP_SLICE],1);
+  bit_use[B_SLICE][0] = frame_ctr[B_SLICE];
 
   //  Accumulate bit usage for inter and intra frames
   for (j=0;j<NUM_PIC_TYPE;j++)
@@ -1065,144 +1081,152 @@ void report()
   frame_rate = (img->framerate *(float)(stats->successive_Bframe + 1)) / (float) (input->jumpd+1);
 
 //! Currently adding NVB bits on P rate. Maybe additional stats info should be created instead and added in log file
-  stats->bitrate_I = (stats->bit_ctr_I)*(frame_rate)/(float) (input->no_frames + Bframe_ctr);
-  stats->bitrate_P = (stats->bit_ctr_P)*(frame_rate)/(float) (input->no_frames + Bframe_ctr);
-  stats->bitrate_B = (stats->bit_ctr_B)*(frame_rate)/(float) (input->no_frames + Bframe_ctr);    
+  stats->bitrate_I = (stats->bit_ctr_I)*(frame_rate)/(float) (input->no_frames + frame_ctr[B_SLICE]);
+  stats->bitrate_P = (stats->bit_ctr_P)*(frame_rate)/(float) (input->no_frames + frame_ctr[B_SLICE]);
+  stats->bitrate_B = (stats->bit_ctr_B)*(frame_rate)/(float) (input->no_frames + frame_ctr[B_SLICE]);    
 
   fprintf(stdout,"-------------------------------------------------------------------------------\n");
-  fprintf(stdout,  " Freq. for encoded bitstream       : %1.0f\n",img->framerate/(float)(input->jumpd+1));
-  switch (input->hadamard)
+  if (input->Verbose != 0)
   {
-  case 2:
-    fprintf(stdout," Hadamard transform                : Used for QPel\n");
-    break;
-  case 1:
-    fprintf(stdout," Hadamard transform                : Used\n");    
-    break;
-  default:
-    fprintf(stdout," Hadamard transform                : Not used\n");
-    break;
-  }
-
-  fprintf(stdout,  " Image format                      : %dx%d\n",input->img_width,input->img_height);
-
-  if(input->intra_upd)
-    fprintf(stdout," Error robustness                  : On\n");
-  else
-    fprintf(stdout," Error robustness                  : Off\n");
-  fprintf(stdout,  " Search range                      : %d\n",input->search_range);
-
-  fprintf(stdout,  " Total number of references        : %d\n",input->num_ref_frames);
-  fprintf(stdout,  " References for P slices           : %d\n",input->P_List0_refs? input->P_List0_refs:input->num_ref_frames);
-  if(stats->successive_Bframe != 0)
-  {
-    fprintf(stdout," List0 references for B slices     : %d\n",input->B_List0_refs? input->B_List0_refs:input->num_ref_frames);
-    fprintf(stdout," List1 references for B slices     : %d\n",input->B_List1_refs? input->B_List1_refs:input->num_ref_frames);
-  }
-
-  fprintf(stdout,  " Total encoding time for the seq.  : %.3f sec \n",tot_time*0.001);
-  fprintf(stdout,  " Total ME time for sequence        : %.3f sec \n",me_tot_time*0.001);
-
-  // B pictures
-  fprintf(stdout,  " Sequence type                     :" );
-
-  if(stats->successive_Bframe>0 && input->PyramidCoding) 
-  {
-    fprintf(stdout, " Pyramid (QP: I %d, P %d, B %d) \n",
-    input->qp0, input->qpN, input->qpB);
-  }
-  else if(stats->successive_Bframe>0) 
-  {
-    char seqtype[80];
-    int i,j;
-
-    strcpy (seqtype,"I");
-
-    for (j=0;j<2;j++)
+    fprintf(stdout,  " Freq. for encoded bitstream       : %1.0f\n",img->framerate/(float)(input->jumpd+1));
+    switch (input->hadamard)
     {
-      for (i=0;i<stats->successive_Bframe;i++)
-      {
-        if (input->BRefPictures)
-          strncat(seqtype,"-RB",max (0, (int) (79-strlen(seqtype))));
-        else
-          strncat(seqtype,"-B",max (0, (int) (79-strlen(seqtype))));
-      }
-      strncat(seqtype,"-P",max (0, (int) (79-strlen(seqtype))));
+    case 2:
+      fprintf(stdout," Hadamard transform                : Used for QPel\n");
+      break;
+    case 1:
+      fprintf(stdout," Hadamard transform                : Used\n");    
+      break;
+    default:
+      fprintf(stdout," Hadamard transform                : Not used\n");
+      break;
     }
-    if (input->BRefPictures)
-      fprintf(stdout, " %s (QP: I %d, P %d, RB %d) \n", seqtype,input->qp0, input->qpN, Clip3(0,51,input->qpB+input->qpBRSOffset));
+    
+    fprintf(stdout,  " Image format                      : %dx%d\n",input->img_width,input->img_height);
+    
+    if(input->intra_upd)
+      fprintf(stdout," Error robustness                  : On\n");
     else
-      fprintf(stdout, " %s (QP: I %d, P %d, B %d) \n", seqtype,input->qp0, input->qpN, input->qpB);
-  }
-  else if(stats->successive_Bframe==0 && input->sp_periodicity==0) fprintf(stdout, " IPPP (QP: I %d, P %d) \n",   input->qp0, input->qpN);
-
-  else fprintf(stdout, " I-P-P-SP-P (QP: I %d, P %d, SP (%d, %d)) \n",  input->qp0, input->qpN, input->qpsp, input->qpsp_pred);
-
-  // report on entropy coding  method
-  if (input->symbol_mode == UVLC)
-    fprintf(stdout," Entropy coding method             : CAVLC\n");
-  else
-    fprintf(stdout," Entropy coding method             : CABAC\n");
-
-  fprintf(stdout,  " Profile/Level IDC                 : (%d,%d)\n",input->ProfileIDC,input->LevelIDC);
+      fprintf(stdout," Error robustness                  : Off\n");
+    fprintf(stdout,  " Search range                      : %d\n",input->search_range);
+    
+    fprintf(stdout,  " Total number of references        : %d\n",input->num_ref_frames);
+    fprintf(stdout,  " References for P slices           : %d\n",input->P_List0_refs? input->P_List0_refs:input->num_ref_frames);
+    if(stats->successive_Bframe != 0)
+    {
+      fprintf(stdout," List0 references for B slices     : %d\n",input->B_List0_refs? input->B_List0_refs:input->num_ref_frames);
+      fprintf(stdout," List1 references for B slices     : %d\n",input->B_List1_refs? input->B_List1_refs:input->num_ref_frames);
+    }
+    
+    fprintf(stdout,  " Total encoding time for the seq.  : %.3f sec (%.2f fps)\n",tot_time*0.001, 1000.0*(input->no_frames + frame_ctr[B_SLICE])/tot_time);
+    fprintf(stdout,  " Total ME time for sequence        : %.3f sec \n",me_tot_time*0.001);
+    
+    // B pictures
+    fprintf(stdout,  " Sequence type                     :" );
+    
+    if(stats->successive_Bframe>0 && input->PyramidCoding) 
+    {
+      fprintf(stdout, " Pyramid (QP: I %d, P %d, B %d) \n",
+        input->qp0, input->qpN, input->qpB);
+    }
+    else if(stats->successive_Bframe>0) 
+    {
+      char seqtype[80];
+      int i,j;
+      
+      strcpy (seqtype,"I");
+      
+      for (j=0;j<2;j++)
+      {
+        for (i=0;i<stats->successive_Bframe;i++)
+        {
+          if (input->BRefPictures)
+            strncat(seqtype,"-RB",max (0, (int) (79-strlen(seqtype))));
+          else
+            strncat(seqtype,"-B",max (0, (int) (79-strlen(seqtype))));
+        }
+        strncat(seqtype,"-P",max (0, (int) (79-strlen(seqtype))));
+      }
+      if (input->BRefPictures)
+        fprintf(stdout, " %s (QP: I %d, P %d, RB %d) \n", seqtype,input->qp0, input->qpN, Clip3(0,51,input->qpB+input->qpBRSOffset));
+      else
+        fprintf(stdout, " %s (QP: I %d, P %d, B %d) \n", seqtype,input->qp0, input->qpN, input->qpB);
+    }
+    else if(stats->successive_Bframe==0 && input->sp_periodicity==0) fprintf(stdout, " IPPP (QP: I %d, P %d) \n",   input->qp0, input->qpN);
+    
+    else fprintf(stdout, " I-P-P-SP-P (QP: I %d, P %d, SP (%d, %d)) \n",  input->qp0, input->qpN, input->qpsp, input->qpsp_pred);
+    
+    // report on entropy coding  method
+    if (input->symbol_mode == UVLC)
+      fprintf(stdout," Entropy coding method             : CAVLC\n");
+    else
+      fprintf(stdout," Entropy coding method             : CABAC\n");
+    
+    fprintf(stdout,  " Profile/Level IDC                 : (%d,%d)\n",input->ProfileIDC,input->LevelIDC);
+    
 #ifdef _FULL_SEARCH_RANGE_
-  if (input->full_search == 2)
-    fprintf(stdout," Search range restrictions         : none\n");
-  else if (input->full_search == 1)
-    fprintf(stdout," Search range restrictions         : older reference frames\n");
-  else
-    fprintf(stdout," Search range restrictions         : smaller blocks and older reference frames\n");
+    if (input->full_search == 2)
+      fprintf(stdout," Search range restrictions         : none\n");
+    else if (input->full_search == 1)
+      fprintf(stdout," Search range restrictions         : older reference frames\n");
+    else
+      fprintf(stdout," Search range restrictions         : smaller blocks and older reference frames\n");
 #endif
-
-  if (input->rdopt)
-    fprintf(stdout," RD-optimized mode decision        : used\n");
-  else
-    fprintf(stdout," RD-optimized mode decision        : not used\n");
-
-  switch(input->partition_mode)
-  {
-  case PAR_DP_1:
-    fprintf(stdout," Data Partitioning Mode            : 1 partition \n");
-    break;
-  case PAR_DP_3:
-    fprintf(stdout," Data Partitioning Mode            : 3 partitions \n");
-    break;
-  default:
-    fprintf(stdout," Data Partitioning Mode            : not supported\n");
-    break;
-  }
-  
-  switch(input->of_mode)
-  {
-  case PAR_OF_ANNEXB:
-    fprintf(stdout," Output File Format                : H.264 Bit Stream File Format \n");
-    break;
-  case PAR_OF_RTP:
-    fprintf(stdout," Output File Format                : RTP Packet File Format \n");
-    break;
-  default:
-    fprintf(stdout," Output File Format                : not supported\n");
-    break;
-  }
-  // Residue Color Transform
-  if(input->residue_transform_flag)
-    fprintf(stdout," Residue Color Transform           : used\n");
-  else
-    fprintf(stdout," Residue Color Transform           : not used\n");
-
+    
+    if (input->rdopt)
+      fprintf(stdout," RD-optimized mode decision        : used\n");
+    else
+      fprintf(stdout," RD-optimized mode decision        : not used\n");
+    
+    switch(input->partition_mode)
+    {
+    case PAR_DP_1:
+      fprintf(stdout," Data Partitioning Mode            : 1 partition \n");
+      break;
+    case PAR_DP_3:
+      fprintf(stdout," Data Partitioning Mode            : 3 partitions \n");
+      break;
+    default:
+      fprintf(stdout," Data Partitioning Mode            : not supported\n");
+      break;
+    }
+    
+    switch(input->of_mode)
+    {
+    case PAR_OF_ANNEXB:
+      fprintf(stdout," Output File Format                : H.264 Bit Stream File Format \n");
+      break;
+    case PAR_OF_RTP:
+      fprintf(stdout," Output File Format                : RTP Packet File Format \n");
+      break;
+    default:
+      fprintf(stdout," Output File Format                : not supported\n");
+      break;
+    }
+    // Residue Color Transform
+    if(input->residue_transform_flag)
+      fprintf(stdout," Residue Color Transform           : used\n");
+    else
+      fprintf(stdout," Residue Color Transform           : not used\n");
+}
 
   fprintf(stdout,"------------------ Average data all frames  -----------------------------------\n");
-  fprintf(stdout," SNR Y(dB)                         : %5.2f\n",snr->snr_ya);
-  fprintf(stdout," SNR U(dB)                         : %5.2f\n",snr->snr_ua);
-  fprintf(stdout," SNR V(dB)                         : %5.2f\n",snr->snr_va);
-  
-  if(Bframe_ctr!=0)
+  if (input->Verbose != 0)
+  {
+    fprintf(stdout," SNR Y(dB)                         : %5.2f\n",snr->snr_ya);
+    fprintf(stdout," SNR U(dB)                         : %5.2f\n",snr->snr_ua);
+    fprintf(stdout," SNR V(dB)                         : %5.2f\n",snr->snr_va);
+  }
+  else
+    fprintf(stdout,  " Total encoding time for the seq.  : %.3f sec (%.2f fps)\n",tot_time*0.001, 1000.0*(input->no_frames + frame_ctr[B_SLICE])/tot_time);
+
+  if(frame_ctr[B_SLICE]!=0)
   {
     fprintf(stdout, " Total bits                        : %d (I %5d, P %5d, B %d NVB %d) \n",
       total_bits=stats->bit_ctr_P + stats->bit_ctr_I + stats->bit_ctr_B + stats->bit_ctr_parametersets, stats->bit_ctr_I, stats->bit_ctr_P, stats->bit_ctr_B,stats->bit_ctr_parametersets);
     
     frame_rate = (img->framerate *(float)(stats->successive_Bframe + 1)) / (float) (input->jumpd+1);
-    stats->bitrate= ((float) total_bits * frame_rate)/((float) (input->no_frames + Bframe_ctr));
+    stats->bitrate= ((float) total_bits * frame_rate)/((float) (input->no_frames + frame_ctr[B_SLICE]));
     
     fprintf(stdout, " Bit rate (kbit/s)  @ %2.2f Hz     : %5.2f\n", frame_rate, stats->bitrate/1000);
     
@@ -1247,7 +1271,7 @@ void report()
   fprintf(p_stat,"  This file contains statistics for the last encoded sequence   \n");
   fprintf(p_stat," -------------------------------------------------------------- \n");
   fprintf(p_stat,   " Sequence                     : %s\n",input->infile);
-  fprintf(p_stat,   " No.of coded pictures         : %4d\n",input->no_frames+Bframe_ctr);
+  fprintf(p_stat,   " No.of coded pictures         : %4d\n",input->no_frames+frame_ctr[B_SLICE]);
   fprintf(p_stat,   " Freq. for encoded bitstream  : %4.0f\n",frame_rate);
 
   fprintf(p_stat,   " I Slice Bitrate(kb/s)        : %6.2f\n", stats->bitrate_I/1000);
@@ -1343,7 +1367,7 @@ void report()
   fprintf(p_stat," Mode 0  intra 4x4    |  %5d         |\n",stats->mode_use[I_SLICE][I4MB ]);
   fprintf(p_stat," Mode 1  intra 8x8    |  %5d         |\n",stats->mode_use[I_SLICE][I8MB ]);
   fprintf(p_stat," Mode 2+ intra 16x16  |  %5d         |\n",stats->mode_use[I_SLICE][I16MB]);
-
+  fprintf(p_stat," Mode    intra IPCM   |  %5d         |\n",stats->mode_use[I_SLICE][IPCM ]);
   
   fprintf(p_stat,"\n ---------------------|----------------|-----------------|\n");
   fprintf(p_stat,"   Inter              |   Mode used    | MotionInfo bits |\n");
@@ -1356,26 +1380,28 @@ void report()
   fprintf(p_stat,"\n Mode  5  intra 4x4   |  %5d         |-----------------|",stats->mode_use[P_SLICE][I4MB]);
   fprintf(p_stat,"\n Mode  6  intra 8x8   |  %5d         |",stats->mode_use[P_SLICE][I8MB]);
   fprintf(p_stat,"\n Mode  7+ intra 16x16 |  %5d         |",stats->mode_use[P_SLICE][I16MB]);
+  fprintf(p_stat,"\n Mode     intra IPCM  |  %5d         |",stats->mode_use[P_SLICE][IPCM ]);
   mean_motion_info_bit_use[0] = (float)(stats->bit_use_mode[P_SLICE][0] + stats->bit_use_mode[P_SLICE][1] + stats->bit_use_mode[P_SLICE][2] 
                                       + stats->bit_use_mode[P_SLICE][3] + stats->bit_use_mode[P_SLICE][P8x8])/(float) bit_use[P_SLICE][0]; 
 
   // B pictures
-  if(stats->successive_Bframe!=0 && Bframe_ctr!=0)
+  if(stats->successive_Bframe!=0 && frame_ctr[B_SLICE]!=0)
   {
  
     fprintf(p_stat,"\n\n ---------------------|----------------|-----------------|\n");
     fprintf(p_stat,"   B frame            |   Mode used    | MotionInfo bits |\n");
     fprintf(p_stat," ---------------------|----------------|-----------------|");
-    fprintf(p_stat,"\n Mode  0  (copy)      |  %5d         |    %8.2f     |",stats->mode_use[B_SLICE][0   ],(float)stats->bit_use_mode[B_SLICE][0   ]/(float)Bframe_ctr);
-    fprintf(p_stat,"\n Mode  1  (16x16)     |  %5d         |    %8.2f     |",stats->mode_use[B_SLICE][1   ],(float)stats->bit_use_mode[B_SLICE][1   ]/(float)Bframe_ctr);
-    fprintf(p_stat,"\n Mode  2  (16x8)      |  %5d         |    %8.2f     |",stats->mode_use[B_SLICE][2   ],(float)stats->bit_use_mode[B_SLICE][2   ]/(float)Bframe_ctr);
-    fprintf(p_stat,"\n Mode  3  (8x16)      |  %5d         |    %8.2f     |",stats->mode_use[B_SLICE][3   ],(float)stats->bit_use_mode[B_SLICE][3   ]/(float)Bframe_ctr);
-    fprintf(p_stat,"\n Mode  4  (8x8)       |  %5d         |    %8.2f     |",stats->mode_use[B_SLICE][P8x8],(float)stats->bit_use_mode[B_SLICE][P8x8]/(float)Bframe_ctr);
+    fprintf(p_stat,"\n Mode  0  (copy)      |  %5d         |    %8.2f     |",stats->mode_use[B_SLICE][0   ],(float)stats->bit_use_mode[B_SLICE][0   ]/(float)frame_ctr[B_SLICE]);
+    fprintf(p_stat,"\n Mode  1  (16x16)     |  %5d         |    %8.2f     |",stats->mode_use[B_SLICE][1   ],(float)stats->bit_use_mode[B_SLICE][1   ]/(float)frame_ctr[B_SLICE]);
+    fprintf(p_stat,"\n Mode  2  (16x8)      |  %5d         |    %8.2f     |",stats->mode_use[B_SLICE][2   ],(float)stats->bit_use_mode[B_SLICE][2   ]/(float)frame_ctr[B_SLICE]);
+    fprintf(p_stat,"\n Mode  3  (8x16)      |  %5d         |    %8.2f     |",stats->mode_use[B_SLICE][3   ],(float)stats->bit_use_mode[B_SLICE][3   ]/(float)frame_ctr[B_SLICE]);
+    fprintf(p_stat,"\n Mode  4  (8x8)       |  %5d         |    %8.2f     |",stats->mode_use[B_SLICE][P8x8],(float)stats->bit_use_mode[B_SLICE][P8x8]/(float)frame_ctr[B_SLICE]);
     fprintf(p_stat,"\n Mode  5  intra 4x4   |  %5d         |-----------------|",stats->mode_use[B_SLICE][I4MB]);
     fprintf(p_stat,"\n Mode  6  intra 8x8   |  %5d         |",stats->mode_use[B_SLICE][I8MB]);
     fprintf(p_stat,"\n Mode  7+ intra 16x16 |  %5d         |",stats->mode_use[B_SLICE][I16MB]);
+    fprintf(p_stat,"\n Mode     intra IPCM  |  %5d         |",stats->mode_use[B_SLICE][IPCM ]);
     mean_motion_info_bit_use[1] = (float)(stats->bit_use_mode[B_SLICE][0] + stats->bit_use_mode[B_SLICE][1] + stats->bit_use_mode[B_SLICE][2] 
-                                      + stats->bit_use_mode[B_SLICE][3] + stats->bit_use_mode[B_SLICE][P8x8])/(float) Bframe_ctr; 
+                                      + stats->bit_use_mode[B_SLICE][3] + stats->bit_use_mode[B_SLICE][P8x8])/(float) frame_ctr[B_SLICE]; 
 
   }
 
@@ -1386,23 +1412,23 @@ void report()
   fprintf(p_stat," Header               |");
   fprintf(p_stat," %10.2f     |",(float) stats->bit_use_header[I_SLICE]/bit_use[I_SLICE][0]);
   fprintf(p_stat," %10.2f     |",(float) stats->bit_use_header[P_SLICE]/bit_use[P_SLICE][0]);
-  if(stats->successive_Bframe!=0 && Bframe_ctr!=0)
-    fprintf(p_stat," %10.2f     |",(float) stats->bit_use_header[B_SLICE]/Bframe_ctr);
+  if(stats->successive_Bframe!=0 && frame_ctr[B_SLICE]!=0)
+    fprintf(p_stat," %10.2f     |",(float) stats->bit_use_header[B_SLICE]/frame_ctr[B_SLICE]);
   else fprintf(p_stat," %10.2f     |", 0.);
   fprintf(p_stat,"\n");
 
   fprintf(p_stat," Mode                 |");
   fprintf(p_stat," %10.2f     |",(float)stats->bit_use_mb_type[I_SLICE]/bit_use[I_SLICE][0]);
   fprintf(p_stat," %10.2f     |",(float)stats->bit_use_mb_type[P_SLICE]/bit_use[P_SLICE][0]);
-  if(stats->successive_Bframe!=0 && Bframe_ctr!=0)
-    fprintf(p_stat," %10.2f     |",(float)stats->bit_use_mb_type[B_SLICE]/Bframe_ctr);
+  if(stats->successive_Bframe!=0 && frame_ctr[B_SLICE]!=0)
+    fprintf(p_stat," %10.2f     |",(float)stats->bit_use_mb_type[B_SLICE]/frame_ctr[B_SLICE]);
   else fprintf(p_stat," %10.2f     |", 0.);
   fprintf(p_stat,"\n");
 
   fprintf(p_stat," Motion Info          |");
   fprintf(p_stat,"        ./.     |");
   fprintf(p_stat," %10.2f     |",mean_motion_info_bit_use[0]);
-  if(stats->successive_Bframe!=0 && Bframe_ctr!=0)
+  if(stats->successive_Bframe!=0 && frame_ctr[B_SLICE]!=0)
     fprintf(p_stat," %10.2f     |",mean_motion_info_bit_use[1]);
   else fprintf(p_stat," %10.2f     |", 0.);
   fprintf(p_stat,"\n");
@@ -1415,30 +1441,30 @@ void report()
   else fprintf(p_stat," %10.2f     |", 0.);
   fprintf(p_stat,"\n");
 
-  if(stats->successive_Bframe!=0 && Bframe_ctr!=0)
+  if(stats->successive_Bframe!=0 && frame_ctr[B_SLICE]!=0)
     fprintf(p_stat," Coeffs. Y            | %10.2f     | %10.2f     | %10.2f     |\n",
-    (float)stats->bit_use_coeffY[I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_coeffY[P_SLICE]/bit_use[P_SLICE][0], (float)stats->bit_use_coeffY[B_SLICE]/Bframe_ctr);
+    (float)stats->bit_use_coeffY[I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_coeffY[P_SLICE]/bit_use[P_SLICE][0], (float)stats->bit_use_coeffY[B_SLICE]/frame_ctr[B_SLICE]);
   else
     fprintf(p_stat," Coeffs. Y            | %10.2f     | %10.2f     | %10.2f     |\n",
       (float)stats->bit_use_coeffY[I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_coeffY[P_SLICE]/(float)bit_use[P_SLICE][0], 0.);
 
-  if(stats->successive_Bframe!=0 && Bframe_ctr!=0)
+  if(stats->successive_Bframe!=0 && frame_ctr[B_SLICE]!=0)
     fprintf(p_stat," Coeffs. C            | %10.2f     | %10.2f     | %10.2f     |\n",
-      (float)stats->bit_use_coeffC[I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_coeffC[P_SLICE]/bit_use[P_SLICE][0], (float)stats->bit_use_coeffC[B_SLICE]/Bframe_ctr);
+      (float)stats->bit_use_coeffC[I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_coeffC[P_SLICE]/bit_use[P_SLICE][0], (float)stats->bit_use_coeffC[B_SLICE]/frame_ctr[B_SLICE]);
   else
     fprintf(p_stat," Coeffs. C            | %10.2f     | %10.2f     | %10.2f     |\n",
       (float)stats->bit_use_coeffC[I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_coeffC[P_SLICE]/bit_use[P_SLICE][0], 0.);
 
-  if(stats->successive_Bframe!=0 && Bframe_ctr!=0)
+  if(stats->successive_Bframe!=0 && frame_ctr[B_SLICE]!=0)
     fprintf(p_stat," Delta quant          | %10.2f     | %10.2f     | %10.2f     |\n",
-      (float)stats->bit_use_delta_quant[I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_delta_quant[P_SLICE]/bit_use[P_SLICE][0], (float)stats->bit_use_delta_quant[B_SLICE]/Bframe_ctr);
+      (float)stats->bit_use_delta_quant[I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_delta_quant[P_SLICE]/bit_use[P_SLICE][0], (float)stats->bit_use_delta_quant[B_SLICE]/frame_ctr[B_SLICE]);
   else
     fprintf(p_stat," Delta quant          | %10.2f     | %10.2f     | %10.2f     |\n",
       (float)stats->bit_use_delta_quant[I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_delta_quant[P_SLICE]/bit_use[P_SLICE][0], 0.);
 
-  if(stats->successive_Bframe!=0 && Bframe_ctr!=0)
+  if(stats->successive_Bframe!=0 && frame_ctr[B_SLICE]!=0)
     fprintf(p_stat," Stuffing Bits        | %10.2f     | %10.2f     | %10.2f     |\n",
-      (float)stats->bit_use_stuffingBits[I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_stuffingBits[P_SLICE]/bit_use[P_SLICE][0], (float)stats->bit_use_stuffingBits[B_SLICE]/Bframe_ctr);
+      (float)stats->bit_use_stuffingBits[I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_stuffingBits[P_SLICE]/bit_use[P_SLICE][0], (float)stats->bit_use_stuffingBits[B_SLICE]/frame_ctr[B_SLICE]);
   else
     fprintf(p_stat," Stuffing Bits        | %10.2f     | %10.2f     | %10.2f     |\n",
       (float)stats->bit_use_stuffingBits[I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_stuffingBits[P_SLICE]/bit_use[P_SLICE][0], 0.);
@@ -1452,8 +1478,8 @@ void report()
   fprintf(p_stat," %10.2f     |", (float) bit_use[I_SLICE][1]/(float) bit_use[I_SLICE][0] );
   fprintf(p_stat," %10.2f     |", (float) bit_use[P_SLICE][1]/(float) bit_use[P_SLICE][0] );
 
-  if(stats->successive_Bframe!=0 && Bframe_ctr!=0)
-    fprintf(p_stat," %10.2f     |", (float) bit_use[B_SLICE][1]/ (float) Bframe_ctr );
+  if(stats->successive_Bframe!=0 && frame_ctr[B_SLICE]!=0)
+    fprintf(p_stat," %10.2f     |", (float) bit_use[B_SLICE][1]/ (float) frame_ctr[B_SLICE] );
   else fprintf(p_stat," %10.2f     |", 0.);
 
   fprintf(p_stat,"\n");
@@ -1471,11 +1497,11 @@ void report()
     }
     else                                            // Create header for new log file
     {
-      fprintf(p_log," -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
-      fprintf(p_log,"|                   Encoder statistics. This file is generated during first encoding session, new sessions will be appended                                                                                                                                                            |\n");
-      fprintf(p_log," -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
-      fprintf(p_log,"|    ver    | Date  | Time  |    Sequence        | #Img |P/MbInt| QPI| QPP| QPB| Format  |Iperiod| #B | FMES | Hdmd | S.R |#Ref | Freq |Coding|RD-opt|Intra upd|8x8Tr|SNRY 1|SNRU 1|SNRV 1|SNRY N|SNRU N|SNRV N|#Bitr I|#Bitr P|#Bitr B|#Bitr IPB|     Total Time   |      Me Time     |\n");
-      fprintf(p_log," -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
+      fprintf(p_log," ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ \n");
+      fprintf(p_log,"|                   Encoder statistics. This file is generated during first encoding session, new sessions will be appended                                                                                                                                                                            |\n");
+      fprintf(p_log," ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ \n");
+      fprintf(p_log,"|    ver    | Date  | Time  |         Sequence             | #Img |P/MbInt| QPI| QPP| QPB| Format  |Iperiod| #B | FMES | Hdmd | S.R |#Ref | Freq |Coding|RD-opt|Intra upd|8x8Tr| SNRY 1| SNRU 1| SNRV 1| SNRY N| SNRU N| SNRV N|#Bitr I|#Bitr P|#Bitr B|#Bitr IPB|     Total Time   |      Me Time     |\n");
+      fprintf(p_log," ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ \n");
     }
   }
   else
@@ -1506,9 +1532,9 @@ void report()
   fprintf(p_log," %1.5s |",string );
 #endif
 
-  for (i=0;i<20;i++)
-    name[i]=input->infile[i+max(0,((int)strlen(input->infile))-20)]; // write last part of path, max 20 chars
-  fprintf(p_log,"%20.20s|",name);
+  for (i=0;i<30;i++)
+    name[i]=input->infile[i+max(0,((int)strlen(input->infile))-30)]; // write last part of path, max 20 chars
+  fprintf(p_log,"%30.30s|",name);
 
   fprintf(p_log,"%5d |",input->no_frames);
   fprintf(p_log,"  %d/%d  |",input->PicInterlace, input->MbInterlace);
@@ -1545,7 +1571,7 @@ void report()
 
 
 //  fprintf(p_log," %3d  |",img->framerate/(input->jumpd+1));
-    fprintf(p_log," %3.2f|",(img->framerate *(float) (stats->successive_Bframe + 1)) / (float)(input->jumpd+1));
+    fprintf(p_log," %5.2f|",(img->framerate *(float) (stats->successive_Bframe + 1)) / (float)(input->jumpd+1));
 
   if (input->symbol_mode == UVLC)
     fprintf(p_log," CAVLC|");
@@ -1561,12 +1587,12 @@ void report()
 
   fprintf(p_log,"  %d  |",input->Transform8x8Mode);
   
-  fprintf(p_log,"%-5.3f|",snr->snr_y1);
-  fprintf(p_log,"%-5.3f|",snr->snr_u1);
-  fprintf(p_log,"%-5.3f|",snr->snr_v1);
-  fprintf(p_log,"%-5.3f|",snr->snr_ya);
-  fprintf(p_log,"%-5.3f|",snr->snr_ua);
-  fprintf(p_log,"%-5.3f|",snr->snr_va);
+  fprintf(p_log,"%7.3f|",snr->snr_y1);
+  fprintf(p_log,"%7.3f|",snr->snr_u1);
+  fprintf(p_log,"%7.3f|",snr->snr_v1);
+  fprintf(p_log,"%7.3f|",snr->snr_ya);
+  fprintf(p_log,"%7.3f|",snr->snr_ua);
+  fprintf(p_log,"%7.3f|",snr->snr_va);
 /*
   fprintf(p_log,"%-5.3f|",snr->snr_yt[I_SLICE]);
   fprintf(p_log,"%-5.3f|",snr->snr_ut[I_SLICE]);
@@ -1590,7 +1616,7 @@ void report()
 
   p_log=fopen("data.txt","a");
 
-  if(stats->successive_Bframe != 0 && Bframe_ctr != 0) // B picture used
+  if(stats->successive_Bframe != 0 && frame_ctr[B_SLICE] != 0) // B picture used
   {
     fprintf(p_log, "%3d %2d %2d %2.2f %2.2f %2.2f %5d "
           "%2.2f %2.2f %2.2f %5d "
@@ -1607,9 +1633,9 @@ void report()
         snr->snr_ya,
         snr->snr_ua,
         snr->snr_va,
-        (stats->bit_ctr_I+stats->bit_ctr)/(input->no_frames+Bframe_ctr),
-        stats->bit_ctr_B/Bframe_ctr,
-        (double)0.001*tot_time/(input->no_frames+Bframe_ctr));
+        (stats->bit_ctr_I+stats->bit_ctr)/(input->no_frames+frame_ctr[B_SLICE]),
+        stats->bit_ctr_B/frame_ctr[B_SLICE],
+        (double)0.001*tot_time/(input->no_frames+frame_ctr[B_SLICE]));
   }
   else
   {
@@ -1665,19 +1691,37 @@ void report()
 void information_init()
 {
   char yuv_types[4][10]= {"YUV 4:0:0","YUV 4:2:0","YUV 4:2:2","YUV 4:4:4"};
-
-  printf("------------------------------- JM %s %s --------------------------------\n",VERSION, EXT_VERSION);
+  if (input->Verbose == 0 || input->Verbose  == 1)
+    printf("------------------------------- JM %s %s --------------------------------\n",VERSION, EXT_VERSION);    
+  else   
+    printf("------------------------------- JM %s %s ------------------------------------------\n",VERSION, EXT_VERSION);
   printf(" Input YUV file                    : %s \n",input->infile);
   printf(" Output H.264 bitstream            : %s \n",input->outfile);
   if (p_dec != -1)
-   printf(" Output YUV file                   : %s \n",input->ReconFile);
+    printf(" Output YUV file                   : %s \n",input->ReconFile);
   printf(" YUV Format                        : %s \n", &yuv_types[img->yuv_format][0]);//img->yuv_format==YUV422?"YUV 4:2:2":(img->yuv_format==YUV444)?"YUV 4:4:4":"YUV 4:2:0");
   printf(" Frames to be encoded I-P/B        : %d/%d\n", input->no_frames, (input->successive_Bframe*(input->no_frames-1)));
   printf(" PicInterlace / MbInterlace        : %d/%d\n", input->PicInterlace, input->MbInterlace);
   printf(" Transform8x8Mode                  : %d\n", input->Transform8x8Mode);
-  printf("-------------------------------------------------------------------------------\n");
-  printf("  Frame  Bit/pic WP QP   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D\n");
-  printf("-------------------------------------------------------------------------------\n");
+  
+  switch (input->Verbose) 
+  {
+    case 1:         
+      printf("-------------------------------------------------------------------------------\n");    
+      printf("  Frame  Bit/pic    QP   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld      \n");
+      printf("-------------------------------------------------------------------------------\n");
+      break;
+    case 2:         
+      printf("-----------------------------------------------------------------------------------------\n");
+      printf("  Frame  Bit/pic WP QP   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP\n");
+      printf("-----------------------------------------------------------------------------------------\n");
+      break;
+    case 0:
+    default:
+      printf("-------------------------------------------------------------------------------\n");
+      printf("\nEncoding. Please Wait.\n\n");
+      break;
+  }
 }
  
 /*!
@@ -1760,8 +1804,8 @@ int init_global_buffers()
 
   if(input->successive_Bframe!=0 || input->BRefPictures> 0)
   {    
-    memory_size += get_mem3D     ((byte ****)(void*)(&direct_ref_idx), 2, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
-    memory_size += get_mem2Dshort(&direct_pdir, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
+    memory_size += get_mem3D     ((byte ****)(void*)(&direct_ref_idx), 2, img->height >> BLOCK_SHIFT, img->width >> BLOCK_SHIFT);
+    memory_size += get_mem2Dshort(&direct_pdir, img->height >> BLOCK_SHIFT, img->width >> BLOCK_SHIFT);
   }
 
   // allocate memory for temp quarter pel luma frame buffer: img4Y_tmp
@@ -1865,6 +1909,10 @@ void free_global_buffers()
 #endif
 
   free_orig_planes();
+
+  // Free Qmatrices and offsets
+  free_QMatrix();
+  free_QOffsets();
 
   if (input->WeightedPrediction || input->WeightedBiprediction || input->GenerateMultiplePPS)
   {
@@ -2248,7 +2296,7 @@ void SetImgType()
             img->type=SP_SLICE;
       }
     }
-  }
+  }  
 }
 
  

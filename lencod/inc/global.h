@@ -204,6 +204,8 @@ typedef struct
   unsigned int  Ebits_to_follow;
   byte          *Ecodestrm;
   int           *Ecodestrm_len;
+  int           C;
+  int           E;
 
   // storage in case of recode MB
   unsigned int  ElowS, ErangeS;
@@ -212,8 +214,8 @@ typedef struct
   unsigned int  Ebits_to_followS;
   byte          *EcodestrmS;
   int           *Ecodestrm_lenS;
-  int           C, CS;
-  int           E, ES;
+  int           CS;
+  int           ES;
 } EncodingEnvironment;
 
 typedef EncodingEnvironment *EncodingEnvironmentPtr;
@@ -523,7 +525,7 @@ byte **pixel_map;   //!< Shows the latest reference frame that is reliable for e
 byte **refresh_map; //!< Stores the new values for pixel_map  
 int intras;         //!< Counts the intra updates in each frame.
 
-int  Iframe_ctr, Pframe_ctr,Bframe_ctr;
+int  frame_ctr[5];
 int  frame_no, nextP_tr_fld, nextP_tr_frm;
 int  tot_time;
 
@@ -560,9 +562,9 @@ typedef struct
   float snr_y1;              //!< SNR Y(dB) first frame
   float snr_u1;              //!< SNR U(dB) first frame
   float snr_v1;              //!< SNR V(dB) first frame
-  float snr_yt[3];           //!< SNR Y(dB) based on frame type
-  float snr_ut[3];           //!< SNR U(dB) based on frame type
-  float snr_vt[3];           //!< SNR V(dB) based on frame type
+  float snr_yt[5];           //!< SNR Y(dB) based on frame type
+  float snr_ut[5];           //!< SNR U(dB) based on frame type
+  float snr_vt[5];           //!< SNR V(dB) based on frame type
   float snr_ya;              //!< Average SNR Y(dB) remaining frames
   float snr_ua;              //!< Average SNR U(dB) remaining frames
   float snr_va;              //!< Average SNR V(dB) remaining frames
@@ -581,6 +583,7 @@ typedef struct
   int jumpd;                    //!< number of frames to skip in input sequence (e.g 2 takes frame 0,3,6,9...)
   int hadamard;                 /*!< 0: 'normal' SAD in sub pixel search.  1: use 4x4 Hadamard transform and '
                                      Sum of absolute transform difference' in sub pixel search                   */
+  int DisableSubpelME;          //!< Disable Subpixel Motion Estimation
   int search_range;             /*!< search range - integer pel search and 16x16 blocks.  The search window is
                                      generally around the predicted vector. Max vector is 2xmcrange.  For 8x8
                                      and 4x4 block sizes the search range is 1/2 of that for 16x16 blocks.       */
@@ -611,6 +614,7 @@ typedef struct
   char TraceFile[FILE_NAME_SIZE];          //!< Trace Outputs
   char QmatrixFile[FILE_NAME_SIZE];        //!< Q matrix cfg file
   int intra_period;             //!< Random Access period though intra
+  int EnableOpenGOP;            //!< support for open gops.
 
   int idr_enable;				//!< Encode intra slices as IDR
   int start_frame;				//!< Encode sequence starting from Frame start_frame
@@ -666,6 +670,8 @@ typedef struct
   int Intra16x16ParDisable;
   int Intra16x16PlaneDisable;
   int ChromaIntraDisable;
+
+  int EnableIPCM;
 
   double FrameRate;
 
@@ -737,6 +743,7 @@ typedef struct
   int LowPassForIntra8x8;
   int ReportFrameStats;
   int DisplayEncParams;
+  int Verbose;
 
   //! Rate Control on JVT standard 
   int RCEnable;    
@@ -1021,9 +1028,11 @@ typedef struct
   int auto_crop_right;
   int auto_crop_bottom;
 
-  int vcl_byte_count;
   short checkref;
+  int last_valid_reference;
 
+
+  int bytes_in_picture;
 } ImageParameters;
 
 #define NUM_PIC_TYPE 5
@@ -1039,8 +1048,8 @@ typedef struct
   int   bit_slice;              //!< number of bits in current slice
   int   bit_ctr_emulationprevention; //!< stored bits needed to prevent start code emulation
   int   b8_mode_0_use[NUM_PIC_TYPE][2];
-  int   mode_use_transform_8x8[2][MAXMODE];
-  int   mode_use_transform_4x4[2][MAXMODE];
+  int   mode_use_transform_8x8[NUM_PIC_TYPE][MAXMODE];
+  int   mode_use_transform_4x4[NUM_PIC_TYPE][MAXMODE];
   int   intra_chroma_mode[4];
   
   // B pictures
@@ -1181,7 +1190,6 @@ int glob_long_term_pic_idx_l1[20];
 
 void intrapred_luma(int CurrPixX,int CurrPixY, int *left_available, int *up_available, int *all_available);
 void init();
-int  find_sad(int hadamard, int m7[16][16]);
 int  dct_luma(int pos_mb1,int pos_mb2,int *cnt_nonz, int intra);
 int  dct_luma_sp(int pos_mb1,int pos_mb2,int *cnt_nonz);
 void copyblock_sp(int pos_mb1,int pos_mb2);
@@ -1214,6 +1222,7 @@ int  SATD8X8(int*, int);
 
 void LumaPrediction4x4 (int, int, int, int, int, short, short);
 int  SATD (int*, int);
+int  find_SATD (int c_diff[MB_PIXELS], int blocktype);
 
 pel_t* FastLineX (int, pel_t*, int, int, int, int);
 pel_t* UMVLineX  (int, pel_t*, int, int, int, int);
@@ -1229,7 +1238,7 @@ extern int*   refbits;
 extern int**** motion_cost;
 
 void  Get_Direct_Motion_Vectors ();
-void  PartitionMotionSearch     (int, int, double);
+void  PartitionMotionSearch     (int, int, int);
 int   BIDPartitionCost          (int, int, short, short, int);
 int   LumaResidualCoding8x8     (int*, int64*, int, short, int, int, short, short);
 int   writeLumaCoeff8x8         (int, int, int);
@@ -1254,10 +1263,10 @@ int   BPredPartitionCost  (int, int, short, short, int, int);
 void  LumaPrediction4x4Bi (int, int,   int,   int, int, short, short, int);
 int   SATDBI (int* , int );
 
-int  Get_Direct_CostMB  (double);
+int  Get_Direct_CostMB  (int);
 int  B8Mode2Value (int b8mode, int b8pdir);
 
-int  GetSkipCostMB (double lambda);
+int  GetSkipCostMB (int lambda_factor);
 void FindSkipModeMotionVector ();
 
 
@@ -1390,7 +1399,7 @@ void modify_redundant_pic_cnt(unsigned char *streamBuffer);
 // End JVT-D101
 
 // Fast ME enable
-int BlockMotionSearch (short,int,int,int,int,int,double);
+int BlockMotionSearch (short,int,int,int,int,int, int);
 void low_complexity_encode_md (void);
 void encode_one_macroblock (void);
 void fasthigh_complexity_encode_md (void);
@@ -1403,3 +1412,7 @@ int RDCost_for_4x4Blocks_Chroma (int b8, int b4, int  chroma);
 
 void store_coding_state_cs_cm();
 void reset_coding_state_cs_cm();
+
+int writeIPCMBytes(Bitstream *currStream);
+int writePCMByteAlign(Bitstream *currStream);
+

@@ -29,18 +29,18 @@
 
 // some definitions to increase the readability of the source code
 
-#define Elow            (eep->Elow)
-#define Erange          (eep->Erange)
-#define Ebits_to_follow (eep->Ebits_to_follow)
-#define Ebuffer         (eep->Ebuffer)
-#define Ebits_to_go     (eep->Ebits_to_go)
-#define Ecodestrm       (eep->Ecodestrm)
-#define Ecodestrm_len   (eep->Ecodestrm_len)
+#define Elow                      (eep->Elow)
+#define Erange                    (eep->Erange)
+#define Ebits_to_follow           (eep->Ebits_to_follow)
+#define Ebuffer                   (eep->Ebuffer)
+#define Ebits_to_go               (eep->Ebits_to_go)
+#define Ecodestrm                 (eep->Ecodestrm)
+#define Ecodestrm_len             (eep->Ecodestrm_len)
 #define Ecodestrm_laststartcode   (eep->Ecodestrm_laststartcode)
-#define B_BITS     10 // Number of bits to represent the whole coding interval
-#define ONE                              (1 << B_BITS)
-#define HALF                     (1 << (B_BITS-1))
-#define QUARTER    (1 << (B_BITS-2))
+#define B_BITS                    10 // Number of bits to represent the whole coding interval
+#define ONE                       (1 << B_BITS)
+#define HALF                      (1 << (B_BITS-1))
+#define QUARTER                   (1 << (B_BITS-2))
 
 /* Range table for LPS */ 
 const byte rLPS_table_64x4[64][4]=
@@ -110,7 +110,6 @@ const byte rLPS_table_64x4[64][4]=
         {   6,   7,   8,   9},
         {   2,   2,   2,   2}
 };
-
 
 const unsigned short AC_next_state_MPS_64[64] =    
 {

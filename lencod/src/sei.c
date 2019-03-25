@@ -1624,7 +1624,8 @@ void FinalizeRandomAccess()
     (bitstream->byte_buf) <<= 1;
     bitstream->byte_buf |= 1;
     bitstream->bits_to_go--;
-    if ( bitstream->bits_to_go != 0 ) (bitstream->byte_buf) <<= (bitstream->bits_to_go);
+    if ( bitstream->bits_to_go != 0 ) 
+      (bitstream->byte_buf) <<= (bitstream->bits_to_go);
     bitstream->bits_to_go = 8;
     bitstream->streamBuffer[bitstream->byte_pos++]=bitstream->byte_buf;
     bitstream->byte_buf = 0;

@@ -249,7 +249,7 @@ unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi
   register unsigned int bit = bi_ct->MPS;
   register unsigned int value = dep->Dvalue;
   register unsigned int range = dep->Drange;
-  register unsigned int rLPS = rLPS_table_64x4[bi_ct->state][(range>>6) & 0x03];
+  register unsigned int rLPS = (unsigned int) rLPS_table_64x4[bi_ct->state][(range>>6) & 0x03];
 
 #if TRACE
 //  fprintf(p_trace, "%d  0x%04x  %d  %d\n", binCount++, dep->Drange, bi_ct->state, bi_ct->MPS );

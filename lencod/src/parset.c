@@ -294,7 +294,7 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps, //!< Sequence 
     width = PicWidthInMbs * MB_BLOCK_SIZE;
     height = FrameHeightInMbs * MB_BLOCK_SIZE;
     
-    Co_located = alloc_colocated (width, height,sps->mb_adaptive_frame_field_flag);
+    Co_located = alloc_colocated (width, height,sps->mb_adaptive_frame_field_flag);    
     
   }
 
@@ -512,8 +512,8 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Pa
  *    size of the scaling list
  * \param UseDefaultScalingMatrix
  *    usage of default Scaling Matrix
- * \param partition
- *    partition info for writing syntax
+ * \param bitstream
+ *    target bitstream for writing syntax
  *
  * \return
  *    size of the RBSP in bytes

@@ -41,8 +41,8 @@
  *    the string for the trace file
  * \param value
  *    the value to be coded
- *  \param part
- *    the Data Partition the value should be coded into
+ *  \param bitstream
+ *    the target bitstream the value should be coded into
  *
  * \return
  *    Number of bits used by the coded syntax element
@@ -86,8 +86,8 @@ int ue_v (char *tracestring, int value, Bitstream *bitstream)
  *    the string for the trace file
  * \param value
  *    the value to be coded
- *  \param part
- *    the Data Partition the value should be coded into
+ *  \param bitstream
+ *    the target bitstream the value should be coded into
  *
  * \return
  *    Number of bits used by the coded syntax element
@@ -132,8 +132,8 @@ int se_v (char *tracestring, int value, Bitstream *bitstream)
  *    the string for the trace file
  * \param value
  *    the value to be coded
- *  \param part
- *    the Data Partition the value should be coded into
+ *  \param bitstream
+ *    the target bitstream the value should be coded into
  *
  * \return
  *    Number of bits used by the coded syntax element (always 1)
@@ -178,8 +178,8 @@ int u_1 (char *tracestring, int value, Bitstream *bitstream)
  *    the string for the trace file
  * \param value
  *    the value to be coded
- *  \param part
- *    the Data Partition the value should be coded into
+ *  \param bitstream
+ *    the target bitstream the value should be coded into
  *
  * \return
  *    Number of bits used by the coded syntax element 
@@ -651,7 +651,6 @@ int writeSyntaxElement2Buf_Fixed(SyntaxElement *se, Bitstream* this_streamBuffer
   if(se->type <= 1)
     trace2out (se);
 #endif
-
   return (se->len);
 }
 
@@ -1263,3 +1262,4 @@ void writeVlcByteAlign(Bitstream* currStream)
     currStream->bits_to_go = 8;
   }
 }
+

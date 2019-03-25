@@ -187,7 +187,9 @@ void getNonAffNeighbour(unsigned int curr_mb_nr, int xN, int yN, int luma, Pixel
   {
     pix->x = (xN + maxW) % maxW;
     pix->y = (yN + maxH) % maxH;
+
     get_mb_pos(pix->mb_addr, &(pix->pos_x), &(pix->pos_y));
+
     if (luma)
     {
       pix->pos_x += pix->x;
@@ -195,8 +197,10 @@ void getNonAffNeighbour(unsigned int curr_mb_nr, int xN, int yN, int luma, Pixel
     }
     else
     {
-      pix->pos_x = pix->pos_x/(16/img->mb_cr_size_x) + pix->x;
-      pix->pos_y = pix->pos_y/(16/img->mb_cr_size_y) + pix->y;
+      //pix->pos_x = pix->pos_x/(16/img->mb_cr_size_x) + pix->x;
+      //pix->pos_y = pix->pos_y/(16/img->mb_cr_size_y) + pix->y;
+      pix->pos_x = ((img->mb_cr_size_x * pix->pos_x) >> 4) + pix->x;
+      pix->pos_y = ((img->mb_cr_size_y * pix->pos_y) >> 4) + pix->y;      
     }
   }
 }
@@ -572,8 +576,10 @@ void getAffNeighbour(unsigned int curr_mb_nr, int xN, int yN, int luma, PixelPos
     }
     else
     {
-      pix->pos_x = pix->pos_x/(16/img->mb_cr_size_x) + pix->x;
-      pix->pos_y = pix->pos_y/(16/img->mb_cr_size_y) + pix->y;
+      //pix->pos_x = pix->pos_x/(16/img->mb_cr_size_x) + pix->x;
+      //pix->pos_y = pix->pos_y/(16/img->mb_cr_size_y) + pix->y;        
+      pix->pos_x = ((img->mb_cr_size_x * pix->pos_x) >> 4) + pix->x;
+      pix->pos_y = ((img->mb_cr_size_y * pix->pos_y) >> 4) + pix->y;      
     }
   }
 }
@@ -634,10 +640,10 @@ void getLuma4x4Neighbour (int curr_mb_nr, int block_x, int block_y, int rel_x, i
 
   if (pix->available)
   {
-    pix->x /= 4;
-    pix->y /= 4;
-    pix->pos_x /= 4;
-    pix->pos_y /= 4;
+    pix->x >>= 2;
+    pix->y >>= 2;
+    pix->pos_x >>= 2;
+    pix->pos_y >>= 2;
   }
 }
 
@@ -669,9 +675,9 @@ void getChroma4x4Neighbour (int curr_mb_nr, int block_x, int block_y, int rel_x,
 
   if (pix->available)
   {
-    pix->x /= 4;
-    pix->y /= 4;
-    pix->pos_x /= 4;
-    pix->pos_y /= 4;
+    pix->x >>= 2;
+    pix->y >>= 2;
+    pix->pos_x >>= 2;
+    pix->pos_y >>= 2;
   }
 }

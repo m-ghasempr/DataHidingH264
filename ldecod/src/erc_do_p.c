@@ -60,6 +60,8 @@ static int uv_div[2][4] = {{0, 1, 1, 0}, {0, 1, 0, 0}}; //[x/y][yuv_format]
  *      Height of the frame in pixels
  * \param errorVar   
  *      Variables for error concealment
+ * \param chroma_format_idc   
+ *      Chroma format IDC
  ************************************************************************
  */
 int ercConcealInterFrame(frame *recfr, objectBuffer_t *object_list, 

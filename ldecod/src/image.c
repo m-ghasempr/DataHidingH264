@@ -170,8 +170,12 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
  *    Pointer to image plane
  * \param buf
  *    Buffer for file output
- * \param size
- *    image size in pixel
+ * \param size_x
+ *    horizontal image size in pixel
+ * \param size_y
+ *    vertical image size in pixel
+ * \param symbol_size_in_bytes
+ *    number of bytes used per pel
  ************************************************************************
  */
 void buf2img (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes)

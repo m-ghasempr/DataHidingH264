@@ -369,7 +369,7 @@ StorablePicture* alloc_storable_picture(PictureStructure structure, int size_x, 
     size_y_cr /= 2; 
   }
 
-  s->PicSizeInMbs                  = (size_x*size_y)/256;
+  s->PicSizeInMbs = (size_x*size_y)/256;
   s->imgUV = NULL;
 
   get_mem2Dpel (&(s->imgY), size_y, size_x);
@@ -948,7 +948,17 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
             dpb.fs_ref[i]->frame_num_wrap = dpb.fs_ref[i]->frame_num;
           }
           dpb.fs_ref[i]->frame->pic_num = dpb.fs_ref[i]->frame_num_wrap;
-          dpb.fs_ref[i]->frame->order_num=list0idx;
+        }
+      }
+    }
+    // update long_term_pic_num
+    for (i=0; i<dpb.ltref_frames_in_buffer; i++)
+    {
+      if (dpb.fs_ltref[i]->is_used==3)
+      {
+        if (dpb.fs_ltref[i]->frame->is_long_term)
+        {
+          dpb.fs_ltref[i]->frame->long_term_pic_num = dpb.fs_ltref[i]->frame->long_term_frame_idx;
         }
       }
     }
@@ -988,7 +998,21 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
         }
       }
     }
+    // update long_term_pic_num
+    for (i=0; i<dpb.ltref_frames_in_buffer; i++)
+    {
+      if (dpb.fs_ltref[i]->is_long_term & 1)
+      {
+        dpb.fs_ltref[i]->top_field->long_term_pic_num = 2 * dpb.fs_ltref[i]->top_field->long_term_frame_idx + add_top;
+      }
+      if (dpb.fs_ltref[i]->is_long_term & 2)
+      {
+        dpb.fs_ltref[i]->bottom_field->long_term_pic_num = 2 * dpb.fs_ltref[i]->bottom_field->long_term_frame_idx + add_bottom;
+      }
+    }
   }
+
+
 
   if ((currSliceType == I_SLICE)||(currSliceType == SI_SLICE))
   {
@@ -1024,8 +1048,6 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
         {
           if (dpb.fs_ltref[i]->frame->is_long_term)
           {
-            dpb.fs_ltref[i]->frame->long_term_pic_num = dpb.fs_ltref[i]->frame->long_term_frame_idx;
-            dpb.fs_ltref[i]->frame->order_num=list0idx;
             listX[0][list0idx++]=dpb.fs_ltref[i]->frame;
           }
         }
@@ -1063,14 +1085,6 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
       for (i=0; i<dpb.ltref_frames_in_buffer; i++)
       {
         fs_listlt[listltidx++]=dpb.fs_ltref[i];
-        if (dpb.fs_ltref[i]->is_long_term & 1)
-        {
-          dpb.fs_ltref[i]->top_field->long_term_pic_num = 2 * dpb.fs_ltref[i]->top_field->long_term_frame_idx + add_top;
-        }
-        if (dpb.fs_ltref[i]->is_long_term & 2)
-        {
-          dpb.fs_ltref[i]->bottom_field->long_term_pic_num = 2 * dpb.fs_ltref[i]->bottom_field->long_term_frame_idx + add_bottom;
-        }
       }
 
       qsort((void *)fs_listlt, listltidx, sizeof(FrameStore*), compare_fs_by_lt_pic_idx_asc);
@@ -1095,7 +1109,6 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
           {
             if (img->framepoc > dpb.fs_ref[i]->frame->poc)
             {
-              dpb.fs_ref[i]->frame->order_num=list0idx;
               listX[0][list0idx++] = dpb.fs_ref[i]->frame;
             }
           }
@@ -1111,7 +1124,6 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
           {
             if (img->framepoc < dpb.fs_ref[i]->frame->poc)
             {
-              dpb.fs_ref[i]->frame->order_num=list0idx;
               listX[0][list0idx++] = dpb.fs_ref[i]->frame;
             }
           }
@@ -1140,9 +1152,6 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
         {
           if (dpb.fs_ltref[i]->frame->is_long_term)
           {
-            dpb.fs_ltref[i]->frame->long_term_pic_num = dpb.fs_ltref[i]->frame->long_term_frame_idx;
-            dpb.fs_ltref[i]->frame->order_num=list0idx;
-            
             listX[0][list0idx]  =dpb.fs_ltref[i]->frame;
             listX[1][list0idx++]=dpb.fs_ltref[i]->frame;
           }
@@ -1215,14 +1224,6 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
       for (i=0; i<dpb.ltref_frames_in_buffer; i++)
       {
         fs_listlt[listltidx++]=dpb.fs_ltref[i];
-        if (dpb.fs_ltref[i]->is_long_term & 1)
-        {
-          dpb.fs_ltref[i]->top_field->long_term_pic_num = 2 * dpb.fs_ltref[i]->top_field->long_term_frame_idx + add_top;
-        }
-        if (dpb.fs_ltref[i]->is_long_term & 2)
-        {
-          dpb.fs_ltref[i]->bottom_field->long_term_pic_num = 2 * dpb.fs_ltref[i]->bottom_field->long_term_frame_idx + add_bottom;
-        }
       }
 
       qsort((void *)fs_listlt, listltidx, sizeof(FrameStore*), compare_fs_by_lt_pic_idx_asc);

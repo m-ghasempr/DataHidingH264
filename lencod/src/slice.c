@@ -136,8 +136,8 @@ int start_slice()
  */
 int terminate_slice(int lastslice)
 {
-  int MbWidthC  [4]= { 0, 8, 8,  16};
-  int MbHeightC [4]= { 0, 8, 16, 16};
+  static int MbWidthC  [4]= { 0, 8, 8,  16};
+  static int MbHeightC [4]= { 0, 8, 16, 16};
 
   int bytes_written;
   Bitstream *currStream;
@@ -146,6 +146,7 @@ int terminate_slice(int lastslice)
   int i;
   int byte_pos_before_startcode_emu_prevention;
   int min_num_bytes=0;
+  int stuffing_bytes=0;
   int RawMbBits;
 
   if (input->symbol_mode == CABAC)
@@ -169,18 +170,22 @@ int terminate_slice(int lastslice)
       currStream->bits_to_go = eep->Ebits_to_go;
       currStream->byte_buf = 0;
       bytes_written = currStream->byte_pos;
+      img->bytes_in_picture += currStream->byte_pos;
+
       byte_pos_before_startcode_emu_prevention= currStream->byte_pos;
-//      min_num_bytes = eep->E;
-      if (lastslice)
+      if (lastslice && i==((currSlice->max_part_nr-1)))
       {
         RawMbBits = 256 * img->bitdepth_luma + 2 * MbWidthC[active_sps->chroma_format_idc] * MbHeightC[active_sps->chroma_format_idc] * img->bitdepth_chroma;
         min_num_bytes = ((96 * get_pic_bin_count()) - (RawMbBits * (int)img->PicSizeInMbs *3) + 511) / 1024;
+        if (min_num_bytes>img->bytes_in_picture)
+        {
+          stuffing_bytes = min_num_bytes - img->bytes_in_picture;
+          printf ("CABAC stuffing words = %6d\n", stuffing_bytes/3);
+        }
       }
 
 //      printf ("bytepos: %d\n", currStream->byte_pos);
-      if (min_num_bytes>currStream->byte_pos)
-        printf ("CABAC stuffing words = %6d\n", (min_num_bytes-currStream->byte_pos)/3);
-      currStream->byte_pos = RBSPtoEBSP(currStream->streamBuffer, 0, currStream->byte_pos, min_num_bytes);
+      currStream->byte_pos = RBSPtoEBSP(currStream->streamBuffer, 0, currStream->byte_pos, currStream->byte_pos + stuffing_bytes);
       *(stats->em_prev_bits) += (currStream->byte_pos - byte_pos_before_startcode_emu_prevention) * 8;
     }           // CABAC
   }           // partition loop
@@ -280,6 +285,7 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
       
       start_macroblock (CurrentMbAddr, FALSE);
       encode_one_macroblock ();
+
       write_one_macroblock (1);
       
       terminate_macroblock (&end_of_slice, &recode_macroblock);
@@ -581,9 +587,9 @@ static void init_slice (int start_mb_addr)
       listXsize[1] = min(listXsize[1], input->B_List1_refs * ((img->structure !=0) + 1));  
     }
   }
-  
+
   //Perform memory management based on poc distances for PyramidCoding
-  if (img->nal_reference_idc  && input->PyramidCoding && input->PocMemoryManagement && dpb.used_size == dpb.size)
+  if (img->nal_reference_idc  && input->PyramidCoding && input->PocMemoryManagement && dpb.ref_frames_in_buffer==active_sps->num_ref_frames)
   {    
     poc_based_ref_management(img->frame_num);
   }
@@ -655,6 +661,26 @@ static void init_slice (int start_mb_addr)
   }
 
 
+  if (input->EnableOpenGOP)
+  {
+    for (i = 0; i<listXsize[0]; i++)
+    {    
+      if (listX[0][i]->poc < img->last_valid_reference && img->ThisPOC > img->last_valid_reference)      
+      {
+        listXsize[0] = img->num_ref_idx_l0_active = i;
+        break;
+      }
+    }
+    
+    for (i = 0; i<listXsize[1]; i++)
+    {
+      if (listX[1][i]->poc < img->last_valid_reference && img->ThisPOC > img->last_valid_reference)
+      {
+        listXsize[1] = img->num_ref_idx_l1_active = i;
+        break;
+      }
+    }
+  }
   //if (img->MbaffFrameFlag)
   if (img->structure==FRAME)
     init_mbaff_lists();
@@ -818,38 +844,40 @@ void modify_redundant_pic_cnt(unsigned char *buffer)
 void set_ref_pic_num()
 {
   int i,j;
+  StorablePicture *this_ref;
   
   //! need to add field ref_pic_num that handles field pair.
-
+  
   for (i=0;i<listXsize[LIST_0];i++)
   {
-    enc_picture->ref_pic_num        [LIST_0][i]=listX[LIST_0][i]->poc * 2 + ((listX[LIST_0][i]->structure==BOTTOM_FIELD)?1:0) ; 
-    enc_picture->frm_ref_pic_num    [LIST_0][i]=listX[LIST_0][i]->frame_poc * 2; 
-    enc_picture->top_ref_pic_num    [LIST_0][i]=listX[LIST_0][i]->top_poc * 2; 
-    enc_picture->bottom_ref_pic_num [LIST_0][i]=listX[LIST_0][i]->bottom_poc * 2 + 1; 
+    this_ref = listX[LIST_0][i];
+    enc_picture->ref_pic_num        [LIST_0][i] = this_ref->poc * 2 + ((this_ref->structure==BOTTOM_FIELD)?1:0) ; 
+    enc_picture->frm_ref_pic_num    [LIST_0][i] = this_ref->frame_poc * 2; 
+    enc_picture->top_ref_pic_num    [LIST_0][i] = this_ref->top_poc * 2; 
+    enc_picture->bottom_ref_pic_num [LIST_0][i] = this_ref->bottom_poc * 2 + 1; 
   }
-
+  
   for (i=0;i<listXsize[LIST_1];i++)
   {
-    enc_picture->ref_pic_num        [LIST_1][i]=listX[LIST_1][i]->poc  *2 + ((listX[LIST_1][i]->structure==BOTTOM_FIELD)?1:0);
-    enc_picture->frm_ref_pic_num    [LIST_1][i]=listX[LIST_1][i]->frame_poc * 2; 
-    enc_picture->top_ref_pic_num    [LIST_1][i]=listX[LIST_1][i]->top_poc * 2; 
-    enc_picture->bottom_ref_pic_num [LIST_1][i]=listX[LIST_1][i]->bottom_poc * 2 + 1; 
+    this_ref = listX[LIST_1][i];
+    enc_picture->ref_pic_num        [LIST_1][i] = this_ref->poc  *2 + ((this_ref->structure==BOTTOM_FIELD)?1:0);
+    enc_picture->frm_ref_pic_num    [LIST_1][i] = this_ref->frame_poc * 2; 
+    enc_picture->top_ref_pic_num    [LIST_1][i] = this_ref->top_poc * 2; 
+    enc_picture->bottom_ref_pic_num [LIST_1][i] = this_ref->bottom_poc * 2 + 1; 
   }
-
-  if (!active_sps->frame_mbs_only_flag)
+  
+  if (!active_sps->frame_mbs_only_flag && img->structure==FRAME)
   {
-    if (img->structure==FRAME)
-      for (j=2;j<6;j++)
-        for (i=0;i<listXsize[j];i++)
-        {    
-          enc_picture->ref_pic_num[j][i] = listX[j][i]->poc * 2 + ((listX[j][i]->structure==BOTTOM_FIELD)?1:0);
-          enc_picture->frm_ref_pic_num[j][i] = listX[j][i]->frame_poc * 2 ;
-          enc_picture->top_ref_pic_num[j][i] = listX[j][i]->top_poc * 2 ;
-          enc_picture->bottom_ref_pic_num[j][i] = listX[j][i]->bottom_poc * 2 + 1;
-        }
+    for (j=2;j<6;j++)
+      for (i=0;i<listXsize[j];i++)
+      {    
+        this_ref = listX[j][i];
+        enc_picture->ref_pic_num[j][i] = this_ref->poc * 2 + ((this_ref->structure==BOTTOM_FIELD)?1:0);
+        enc_picture->frm_ref_pic_num[j][i] = this_ref->frame_poc * 2 ;
+        enc_picture->top_ref_pic_num[j][i] = this_ref->top_poc * 2 ;
+        enc_picture->bottom_ref_pic_num[j][i] = this_ref->bottom_poc * 2 + 1;
+      }
   }
-
 }
 
 /*!
@@ -908,25 +936,11 @@ void poc_ref_pic_reorder(StorablePicture **list, unsigned num_ref_idx_lX_active,
       poc_diff[i] = abs_poc_dist;
       if (list_no == LIST_0)
       {
-        if ( enc_picture->poc < dpb.fs_ref[i]->frame->poc)
-        {
-          list_sign[i] = +1;
-        }
-        else
-        {
-          list_sign[i] = -1;
-        }
+        list_sign[i] = (enc_picture->poc < dpb.fs_ref[i]->frame->poc) ? +1 : -1;
       }
       else
       {
-        if (enc_picture->poc > dpb.fs_ref[i]->frame->poc)
-        {
-          list_sign[i] = +1;
-        }
-        else
-        {
-          list_sign[i] = -1;
-        }
+        list_sign[i] = (enc_picture->poc > dpb.fs_ref[i]->frame->poc) ? +1 : -1;
       }
     }
   }
@@ -936,8 +950,7 @@ void poc_ref_pic_reorder(StorablePicture **list, unsigned num_ref_idx_lX_active,
   for (i=0; i< dpb.ref_frames_in_buffer-1; i++)
   {
     for (j=i+1; j< dpb.ref_frames_in_buffer; j++)
-    {
-      
+    {      
       if (poc_diff[i]>poc_diff[j] || (poc_diff[i] == poc_diff[j] && list_sign[j] > list_sign[i]))
       {
         
@@ -1111,4 +1124,4 @@ void SetLagrangianMultipliers()
     }
   }
 }
-
+ 

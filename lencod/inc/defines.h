@@ -117,9 +117,10 @@ enum {
 #define  MV_COST(f,s,cx,cy,px,py)     (WEIGHTED_COST(f,mvbits[((cx)<<(s))-px]+mvbits[((cy)<<(s))-py]))
 #define  REF_COST(f,ref,list_offset) (WEIGHTED_COST(f,((listXsize[list_offset]<=1)? 0:refbits[(ref)])))
 
-#define IS_INTRA(MB)    ((MB)->mb_type==I4MB  || (MB)->mb_type==I16MB || (MB)->mb_type==I8MB)
+#define IS_INTRA(MB)    ((MB)->mb_type==I4MB  || (MB)->mb_type==I16MB || (MB)->mb_type==I8MB || (MB)->mb_type==IPCM)
 #define IS_NEWINTRA(MB) ((MB)->mb_type==I16MB)
 #define IS_OLDINTRA(MB) ((MB)->mb_type==I4MB)
+#define IS_IPCM(MB) ((MB)->mb_type==IPCM)
 
 #define IS_INTER(MB)    ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB && (MB)->mb_type!=I8MB)
 #define IS_INTERMV(MB)  ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB && (MB)->mb_type!=I8MB  && (MB)->mb_type!=0)
@@ -139,6 +140,7 @@ enum {
 
 #define MAX_REFERENCE_PICTURES 32
 
+#define BLOCK_SHIFT     2
 #define BLOCK_SIZE      4
 #define MB_BLOCK_SIZE   16
 
