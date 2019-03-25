@@ -190,6 +190,11 @@
       500 El Camino Real
       Santa Clara, CA 95053
 
+      Shun-ichi Sekiguchi             <Sekiguchi.Shunichi@eb.MitsubishiElectric.co.jp>
+      Information Technology R&D Center, 
+      Mitsubishi Electric Corporation
+      5-1-1, Ofuna, Kamakura, Japan
+
    \endverbatim
  */
 

@@ -206,7 +206,10 @@
       2 Independence Way
       Princeton, NJ 08540
 
-
+      Shun-ichi Sekiguchi             <Sekiguchi.Shunichi@eb.MitsubishiElectric.co.jp>
+      Information Technology R&D Center, 
+      Mitsubishi Electric Corporation
+      5-1-1, Ofuna, Kamakura, Japan
 
   \endverbatim
 */

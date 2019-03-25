@@ -1,3 +1,9 @@
+Changes in Version JM 12.4 (since JM 12.3)
+------------------------------------------
+Professional Profiles:
+- encoder/decoder: 4:4:4 independent mode quantization matrix bug fix (SSe)
+- encoder: 4:4:4 independent config file update (SSe)
+
 Changes in Version JM 12.3 (since JM 12.2)
 ------------------------------------------
 Professional Profiles:

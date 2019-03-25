@@ -15,7 +15,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 12.3 (FRExt)
+ *     JM 12.4 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -72,7 +72,7 @@
 
 
 #define JM      "12 (FRExt)"
-#define VERSION "12.3"
+#define VERSION "12.4"
 #define EXT_VERSION "(FRExt)"
 
 InputParameters inputs,      *input = &inputs;

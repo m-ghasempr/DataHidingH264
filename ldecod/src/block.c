@@ -892,7 +892,7 @@ void AssignQuantParam(pic_parameter_set_rbsp_t* pps, seq_parameter_set_rbsp_t* s
         }
         else
         {
-          if(!sps->seq_scaling_list_present_flag[i-6]) // fall-back rule A
+          if(!sps->seq_scaling_list_present_flag[i]) // fall-back rule A
           {
             if((i==6) || (i==7))
               qmatrix[i] = (i==6) ? quant8_intra_default:quant8_inter_default;

@@ -66,7 +66,7 @@ void encode_one_macroblock_low ()
   Macroblock* prevMB      = (prev_mb_nr >= 0) ? &img->mb_data[prev_mb_nr]:NULL ;
 
   char   **ipredmodes = img->ipredmode;
-  short   *allmvs = img->all_mv[0][0][0][0][0];
+  short   *allmvs = input->IntraProfile ? NULL: img->all_mv[0][0][0][0][0];
   int     ****i4p;  //for non-RD-opt. mode
 
   int tmp_8x8_flag, tmp_no_mbpart;

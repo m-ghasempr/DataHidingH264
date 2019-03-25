@@ -649,7 +649,12 @@ void CalculateQuant8Param()
 
       if(active_pps->pic_scaling_matrix_present_flag)
         for(i=0; i<n_ScalingList8x8; i++)
-          present[i] |= active_pps->pic_scaling_list_present_flag[i+6];
+        {
+          if( i==0 || i==1 )
+            present[i] |= active_pps->pic_scaling_list_present_flag[i+6];
+          else
+            present[i] = active_pps->pic_scaling_list_present_flag[i+6];
+        }
   }
 
   if(no_q_matrix==TRUE)
