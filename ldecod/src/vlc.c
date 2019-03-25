@@ -605,12 +605,8 @@ int GetVLCSymbol (byte buffer[],int totbitoffset,int *info, int bytecount)
  *
  * \param inf
  *    bytes to extract numbits from with bitoffset already applied
- * \param bytecount
- *    total bytes in bitstream
  * \param numbits
  *    number of bits to read
- * \param code
- *    threshold parameter 
  *
  ************************************************************************
  */
@@ -1228,7 +1224,7 @@ int readSyntaxElement_Run(SyntaxElement *sym, Bitstream *currStream)
  *    bit offset from start of partition
  * \param info
  *    returns value of the read bits
- * \param bytecount
+ * \param bitcount
  *    total bytes in bitstream
  * \param numbits
  *    number of bits to read
@@ -1278,7 +1274,7 @@ int GetBits (byte buffer[],int totbitoffset,int *info, int bitcount,
  *    buffer containing VLC-coded data bits
  * \param totbitoffset
  *    bit offset from start of partition
- * \param bytecount
+ * \param bitcount
  *    total bytes in bitstream
  * \param numbits
  *    number of bits to read

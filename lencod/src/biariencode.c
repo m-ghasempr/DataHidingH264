@@ -359,11 +359,11 @@ extern int cabac_encoding;
  */
 void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiContextTypePtr bi_ct )
 {
-  register unsigned int range = eep->Erange;
-  register unsigned int low = eep->Elow;
+  unsigned int low = eep->Elow;
+  unsigned int range = eep->Erange;  
+  int bl = eep->Ebits_to_go;
   unsigned int rLPS = rLPS_table_64x4[bi_ct->state][(range>>6) & 3]; 
-  register int bl = eep->Ebits_to_go;
-
+ 
   range -= rLPS;
 
   eep->C++;
@@ -393,41 +393,36 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
         return;
       }
     }
-
   } 
   else         //LPS
   {
-    unsigned int renorm;
+    unsigned int renorm = renorm_table_32[(rLPS>> 3) & 0x1F];
 
     low += range<<bl;
-    range = rLPS;
+    range = (rLPS <<renorm);
+    bl-=renorm;
 
     if (!bi_ct->state)
       bi_ct->MPS ^= 0x01;               // switch MPS if necessary
 
     bi_ct->state = AC_next_state_LPS_64[bi_ct->state]; // next state
 
-    renorm= renorm_table_32[(rLPS>> 3) & 0x1F];
-    bl-=renorm;
-
-    range<<=renorm;
-
     if (low >= ONE) // output of carry needed
     {
       low -= ONE;
       propagate_carry(eep);
     }
+
     if( bl > MIN_BITS_TO_GO )
     {
-      eep->Erange = range;
       eep->Elow = low;
+      eep->Erange = range;      
       eep->Ebits_to_go = bl;
       return;
     }
   }
 
   //renorm needed
-
   eep->Elow = (low << BITS_TO_LOAD )& (ONE_M1);
   low = (low >> B_BITS) & B_LOAD_MASK; // mask out the 8/16 MSBs for output
 
@@ -439,9 +434,8 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
   {
     eep->Echunks_outstanding++;
   }
-  eep->Erange = range;
-  bl += BITS_TO_LOAD;
-  eep->Ebits_to_go = bl;
+  eep->Erange = range;  
+  eep->Ebits_to_go = bl + BITS_TO_LOAD;
 }
 
 /*!

@@ -70,10 +70,10 @@
 
 char *GetConfigFileContent (char *Filename);
 static void ParseContent (char *buf, int bufsize);
-static int ParameterNameToMapIndex (char *s);
-static int InitEncoderParams(void);
-static int TestEncoderParams(int bitdepth_qp_scale[3]);
-static int DisplayEncoderParams(void);
+static int  ParameterNameToMapIndex (char *s);
+static int  InitEncoderParams(void);
+static int  TestEncoderParams(int bitdepth_qp_scale[3]);
+static int  DisplayEncoderParams(void);
 static void PatchInp (void);
 
 static int mb_width_cr[4] = {0,8, 8,16};
@@ -355,7 +355,7 @@ void Configure (int ac, char *av[])
           *destin = '\0';
           CLcount++;
         }
-        printf ("Parsing command line string '%s'\n", content);
+        printf ("Parsing command line string '%s'", content);
         ParseContent (content, strlen(content));
         free (content);
         printf ("\n");
@@ -887,7 +887,7 @@ void read_slice_group_info()
  ************************************************************************
  * \brief
  *    Compute frame numbering related parameters
- * \notes
+ * \note
  *    The set variables seem to now be primarily useful only for 
  *    RC purposes. Can we ommit them completely? The use of 
  *    lastframe can also be modified as to ommit this parameter.

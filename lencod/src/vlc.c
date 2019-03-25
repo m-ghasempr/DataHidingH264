@@ -587,6 +587,8 @@ int writeSyntaxElement2Buf_UVLC(SyntaxElement *se, Bitstream* this_streamBuffer 
 void  writeUVLC2buffer(SyntaxElement *se, Bitstream *currStream)
 {
   unsigned int mask = 1 << (se->len - 1);
+  byte *byte_buf  = &currStream->byte_buf;
+  int *bits_to_go = &currStream->bits_to_go;
   int i;
 
   // Add the new bits to the bitstream.
@@ -595,18 +597,18 @@ void  writeUVLC2buffer(SyntaxElement *se, Bitstream *currStream)
   {
     for (i = 0; i < se->len; i++)
     {
-      currStream->byte_buf <<= 1;
+      *byte_buf <<= 1;
 
       if (se->bitpattern & mask)
-        currStream->byte_buf |= 1;
+        *byte_buf |= 1;
 
       mask >>= 1;
 
-      if ((--currStream->bits_to_go) == 0)
+      if ((--(*bits_to_go)) == 0)
       {
-        currStream->bits_to_go = 8;      
-        currStream->streamBuffer[currStream->byte_pos++] = currStream->byte_buf;
-        currStream->byte_buf = 0;      
+        *bits_to_go = 8;      
+        currStream->streamBuffer[currStream->byte_pos++] = *byte_buf;
+        *byte_buf = 0;      
       }
     }
   }
@@ -615,31 +617,31 @@ void  writeUVLC2buffer(SyntaxElement *se, Bitstream *currStream)
     // zeros
     for (i = 0; i < (se->len - 32); i++)
     {
-      currStream->byte_buf <<= 1;
+      *byte_buf <<= 1;
 
-      if ((--currStream->bits_to_go) == 0)
+      if ((--(*bits_to_go)) == 0)
       {
-        currStream->bits_to_go = 8;      
-        currStream->streamBuffer[currStream->byte_pos++] = currStream->byte_buf;
-        currStream->byte_buf = 0;      
+        *bits_to_go = 8;      
+        currStream->streamBuffer[currStream->byte_pos++] = *byte_buf;
+        *byte_buf = 0;      
       }
     }
     // actual info
     mask = 1 << 31;
     for (i = 0; i < 32; i++)
     {
-      currStream->byte_buf <<= 1;
+      *byte_buf <<= 1;
 
       if (se->bitpattern & mask)
-        currStream->byte_buf |= 1;
+        *byte_buf |= 1;
 
       mask >>= 1;
 
-      if ((--currStream->bits_to_go) == 0)
+      if ((--(*bits_to_go)) == 0)
       {
-        currStream->bits_to_go = 8;      
-        currStream->streamBuffer[currStream->byte_pos++] = currStream->byte_buf;
-        currStream->byte_buf = 0;      
+        *bits_to_go = 8;      
+        currStream->streamBuffer[currStream->byte_pos++] = *byte_buf;
+        *byte_buf = 0;      
       }
     }
   }
@@ -1411,8 +1413,10 @@ void trace2out_cabac(SyntaxElement *sym)
  *    puts the less than 8 bits in the byte buffer of the Bitstream into
  *    the streamBuffer.
  *
- * \param
- *   currStream: the Bitstream the alignment should be established
+ * \param currStream
+ *    the Bitstream the alignment should be established
+ * \param cur_stats
+ *   currently used statistics parameters
  *
  ************************************************************************
  */

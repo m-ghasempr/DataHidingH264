@@ -489,3 +489,18 @@ int InvalidMotionVectors(Block8x8Info* b8x8info, int mode)
 
   return invalid_mode;
 }
+
+int CheckPredictionParams(pic_parameter_set_rbsp_t *active_pps, Block8x8Info *b8x8info, int mode, int bslice)
+{
+  // check if weights are in valid range for biprediction.
+  if (bslice && active_pps->weighted_bipred_idc == 1 &&  mode < P8x8) 
+  {
+    if (InvalidWeightsForBiPrediction(b8x8info, mode))
+      return 0;
+  }
+
+  if (InvalidMotionVectors(b8x8info, mode))
+    return 0;
+  
+  return 1;
+}

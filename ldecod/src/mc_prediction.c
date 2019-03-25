@@ -193,6 +193,7 @@ void get_block_luma(ColorPlane pl, StorablePicture *curr_ref, int x_pos, int y_p
     for (j = 0; j < ver_block_size; j++)
       for (i = 0; i < hor_block_size; i++)
         block[j][i] = 128;
+
     return;
   }
 

@@ -822,7 +822,7 @@ void find_snr(struct snr_par  *snr,   //!< pointer to snr parameters
   status = lseek (*p_ref, framesize_in_bytes * frame_no, SEEK_SET);
   if (status == -1)
   {
-    fprintf(stderr, "Error in seeking frame number: %d\n", frame_no);
+    fprintf(stderr, "Warning: Could not seek to frame number %d in reference file. Shown PSNR might be wrong.\n", frame_no);
     free (buf);
     return;
   }

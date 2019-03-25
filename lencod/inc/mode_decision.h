@@ -25,9 +25,9 @@ extern RD_8x8DATA tr4x4, tr8x8;
 extern double mb16x16_cost;
 extern double lambda_mf_factor;
 
-
-extern int    ****cofAC8x8ts[3];        // [8x8block][4x4block][level/run][scan_pos]
-extern int    ****cofAC, ****cofAC8x8;        // [8x8block][4x4block][level/run][scan_pos]
+extern int    *****coefAC8x8;
+extern int    *****cofAC8x8ts;        // [8x8block][4x4block][level/run][scan_pos]
+extern int    ****cofAC;        // [8x8block][4x4block][level/run][scan_pos]
 extern int    QP2QUANT[40];
 extern int    cbp_blk8x8;
 extern int    cbp, cbp8x8, cnt_nonz_8x8;
@@ -68,8 +68,8 @@ extern const int  b8_mode_table[6];
 extern const int  mb_mode_table[9];
 
 void rc_store_diff(int cpix_x, int cpix_y, imgpel **prediction);
-void submacroblock_mode_decision    (Slice *currSlice, RD_PARAMS *, RD_8x8DATA *, Macroblock *,int ***, int ***, int ***, int *, short, int, int *, int *, int *, int, int);
-void submacroblock_mode_decision_low(Slice *currSlice, RD_PARAMS *, RD_8x8DATA *, Macroblock *,int ***, int ***, int ***, int *, short, int, int *, int *, int *, int, int);
+void submacroblock_mode_decision    (Slice *currSlice, RD_PARAMS *, RD_8x8DATA *, Macroblock *,int ****, int *, short, int, int *, int *, int *, int, int);
+void submacroblock_mode_decision_low(Slice *currSlice, RD_PARAMS *, RD_8x8DATA *, Macroblock *,int ****, int *, short, int, int *, int *, int *, int, int);
 void init_enc_mb_params(Macroblock* currMB, RD_PARAMS *enc_mb, int intra, int bslice);
 void list_prediction_cost(Macroblock *currMB, int list, int block, int mode, RD_PARAMS *enc_mb, int bmcost[5], char best_ref[2]);
 void determine_prediction_list(int, int [5], char [2], char *, int *, short *);

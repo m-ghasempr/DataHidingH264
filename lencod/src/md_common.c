@@ -416,4 +416,3 @@ void SetMotionVectorsMB (ImageParameters *img, PicMotionParams *motion, Macroblo
   }
 }
 
-

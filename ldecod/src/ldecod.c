@@ -15,7 +15,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 15.0 (FRExt)
+ *     JM 15.1 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -63,7 +63,7 @@
 #include "nalu.h"
 
 #define JM          "15 (FRExt)"
-#define VERSION     "15.0"
+#define VERSION     "15.1"
 #define EXT_VERSION "(FRExt)"
 
 #define LOGFILE     "log.dec"

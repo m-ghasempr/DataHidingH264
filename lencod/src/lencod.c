@@ -14,7 +14,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 15.0 (FRExt)
+ *     JM 15.1 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -1769,7 +1769,7 @@ int get_mem_ACcoeff (int***** cofAC)
  */
 int get_mem_ACcoeff_new (int****** cofAC, int chroma)
 { 
-  get_mem5Dint(cofAC, chroma, BLOCK_SIZE, BLOCK_SIZE, 2, 65);
+  get_mem5Dint(cofAC, BLOCK_SIZE, chroma, BLOCK_SIZE, 2, 65);
   return chroma * BLOCK_SIZE * BLOCK_SIZE * 2 * 65 * sizeof(int);// 18->65 for ABT
 }
 
@@ -2016,9 +2016,12 @@ void encode_one_redundant_frame()
   redundant_coding = 1;
   img->redundant_pic_cnt = 1;
 
-  if (img->type == I_SLICE)
+  if (!img->currentPicture->idr_flag)
   {
-    set_slice_type( img, P_SLICE );
+    if (img->type == I_SLICE)
+    {
+      set_slice_type( img, P_SLICE );
+    }
   }
 
   encode_one_frame(img);

@@ -23,8 +23,7 @@ void clip_mv_range(ImageParameters *img, int search_range, MotionVector *mv, int
 int  out_of_bounds_mvs(ImageParameters *img, short mv[2]);
 void test_clip_mvs(ImageParameters *img, short mv[2], Boolean write_mb);
 
-int InvalidWeightsForBiPrediction(Block8x8Info* b8x8info, int mode);
-int InvalidMotionVectors(Block8x8Info* b8x8info, int mode);
+int CheckPredictionParams(pic_parameter_set_rbsp_t *active_pps, Block8x8Info *b8x8info, int mode, int bslice);
 
 #endif
 

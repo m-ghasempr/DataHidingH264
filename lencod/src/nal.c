@@ -99,6 +99,8 @@ int RBSPtoEBSP(byte *NaluBuffer, unsigned char *rbsp, int rbsp_size)
 *
 *  \param nalu
 *            target NAL unit
+*  \param cur_stats
+*            currently used statistics parameters
 *  \return
 *           number of added bytes
 *

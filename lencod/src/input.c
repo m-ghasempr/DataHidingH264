@@ -137,8 +137,8 @@ void fillPlane ( imgpel** imgX,                 //!< Pointer to image plane
  */
 static void deinterleave ( unsigned char** input,       //!< input buffer
                            unsigned char** output,      //!< output buffer
-                           FrameFormat *source,
-                           int symbol_size_in_bytes
+                           FrameFormat *source,         //!< format of source buffer
+                           int symbol_size_in_bytes     //!< number of bytes per symbol
                           )
 {
   // original buffer
@@ -578,6 +578,8 @@ void DeleteFrameMemory (void)
  * \brief
  *    Reads one new frame from file
  *
+ * \param input_file
+ *    structure containing information (filename, format) about the source file
  * \param FrameNoInFile
  *    Frame number in the source file
  * \param HeaderSize
@@ -586,6 +588,8 @@ void DeleteFrameMemory (void)
  *    source file (on disk) information 
  * \param output
  *    output file (for encoding) information
+ * \param pImage
+ *    Image planes
  ************************************************************************
  */
 void ReadOneFrame (VideoDataFile *input_file, int FrameNoInFile, int HeaderSize, FrameFormat *source, FrameFormat *output, imgpel **pImage[3])

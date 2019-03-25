@@ -59,7 +59,7 @@ imgpel **rec_mbY = NULL, ***rec_mb_cr = NULL;
 static int **lrec_rec = NULL, ***lrec_rec_uv = NULL; // store the transf. and quantized coefficients for SP frames
 
 
-int   ****cofAC  = NULL, ****cofAC8x8 = NULL;        // [8x8block][4x4block][level/run][scan_pos]
+int   ****cofAC  = NULL;        // [8x8block][4x4block][level/run][scan_pos]
 int   ***cofDC   = NULL;                       // [yuv][level/run][scan_pos]
 int   **cofAC4x4 = NULL, ****cofAC4x4intern = NULL; // [level/run][scan_pos]
 int   cbp, cbp8x8, cnt_nonz_8x8;
@@ -78,9 +78,9 @@ int   luma_transform_size_8x8_flag;
 
 short *****all_mv8x8 = NULL;       //[8x8_data/temp_data][LIST][block_x][block_y][MVx/MVy]
 
-int   ****cofAC8x8ts[3] = {NULL, NULL, NULL};        // [plane][8x8block][4x4block][level/run][scan_pos]
 int   *****cofAC4x4CbCrintern = NULL;
-int   *****cofAC8x8CbCr = NULL;
+int   *****cofAC8x8ts = NULL;        // [plane][8x8block][4x4block][level/run][scan_pos]
+int   *****coefAC8x8 = NULL;
 int   **cofAC4x4CbCr[2];
 
 
@@ -128,21 +128,16 @@ void clear_rdopt (InputParameters *params)
 {  
   free_mem_DCcoeff (cofDC);
   free_mem_ACcoeff (cofAC);
-  free_mem_ACcoeff (cofAC8x8);
   free_mem_ACcoeff (cofAC4x4intern);
+  free_mem_ACcoeff_new(coefAC8x8);
 
   if (params->Transform8x8Mode)
   {
-    free_mem_ACcoeff (cofAC8x8ts[0]);
-    //if (img->P444_joined)
-    {
-      free_mem_ACcoeff (cofAC8x8ts[1]);
-      free_mem_ACcoeff (cofAC8x8ts[2]);
-    }
+    free_mem_ACcoeff_new(cofAC8x8ts);
   }
   //if (img->P444_joined)
   {
-    free_mem_ACcoeff_new(cofAC8x8CbCr);
+
     free_mem_ACcoeff_new(cofAC4x4CbCrintern);
   }
 
@@ -185,18 +180,13 @@ void init_rdopt (InputParameters *params)
 
   get_mem_DCcoeff (&cofDC);
   get_mem_ACcoeff (&cofAC);
-  get_mem_ACcoeff (&cofAC8x8);
   get_mem_ACcoeff (&cofAC4x4intern);
   cofAC4x4 = cofAC4x4intern[0][0];
+  get_mem_ACcoeff_new(&coefAC8x8, 3);
 
   if (params->Transform8x8Mode)
   {
-    get_mem_ACcoeff (&cofAC8x8ts[0]);
-    //if (img->P444_joined)
-    {
-      get_mem_ACcoeff (&cofAC8x8ts[1]);
-      get_mem_ACcoeff (&cofAC8x8ts[2]);
-    }
+    get_mem_ACcoeff_new(&cofAC8x8ts, 3);
   }
 
   alloc_rd8x8data(&tr4x4);
@@ -217,11 +207,11 @@ void init_rdopt (InputParameters *params)
 
   //if (img->P444_joined)
   {
-    get_mem_ACcoeff_new(&cofAC8x8CbCr, 2);
+
     get_mem_ACcoeff_new(&cofAC4x4CbCrintern, 2);
 
     cofAC4x4CbCr[0] = cofAC4x4CbCrintern[0][0][0];
-    cofAC4x4CbCr[1] = cofAC4x4CbCrintern[1][0][0];    
+    cofAC4x4CbCr[1] = cofAC4x4CbCrintern[0][1][0];    
   }
 
   SetLagrangianMultipliers = params->rdopt == 0 ? SetLagrangianMultipliersOff : SetLagrangianMultipliersOn;
@@ -1117,7 +1107,10 @@ void SetCoeffAndReconstruction8x8 (Macroblock* currMB)
     //============= get pre-calculated data ==============
     //restore coefficients from 8x8 transform
 
-    memcpy (img->cofAC[0][0][0],cofAC8x8ts[0][0][0][0], 4 * 4 * 2 * 65 * sizeof(int));
+    for (block = 0; block<4; block++)
+    {
+      memcpy (img->cofAC[block][0][0],cofAC8x8ts[block][0][0][0], 4 * 2 * 65 * sizeof(int));
+    }
 
     if (img->P444_joined)
     {
@@ -1125,7 +1118,7 @@ void SetCoeffAndReconstruction8x8 (Macroblock* currMB)
       {
         for (block = 0; block<4; block++)
         {
-          memcpy (img->cofAC[4+block+uv*4][0][0],cofAC8x8ts[uv + 1][block][0][0], 4 * 2 * 65 * sizeof(int));
+          memcpy (img->cofAC[4+block+uv*4][0][0],cofAC8x8ts[block][uv + 1][0][0], 4 * 2 * 65 * sizeof(int));
         }
       }
     }
@@ -1217,14 +1210,18 @@ void SetCoeffAndReconstruction8x8 (Macroblock* currMB)
     //============= get pre-calculated data ==============
     //---------------------------------------------------
     //--- restore coefficients ---
-    memcpy (img->cofAC[0][0][0],cofAC8x8[0][0][0], (4+img->num_blk8x8_uv) * 4 * 2 * 65 * sizeof(int));
+    //memcpy (img->cofAC[0][0][0],coefAC8x8[0][0][0][0], (4+img->num_blk8x8_uv) * 4 * 2 * 65 * sizeof(int));
+    for (block = 0; block < 4; block ++)
+    {
+      memcpy (img->cofAC[block][0][0],coefAC8x8[block][0][0][0], 4 * 2 * 65 * sizeof(int));     
+    }
 
     if (img->P444_joined) 
     {
       for (block = 0; block<4; block++)
       {
-        memcpy (img->cofAC[block+4][0][0],cofAC8x8CbCr[0][block][0][0], 4 * 2 * 65 * sizeof(int));     
-        memcpy (img->cofAC[block+8][0][0],cofAC8x8CbCr[1][block][0][0], 4 * 2 * 65 * sizeof(int));   
+        memcpy (img->cofAC[block+4][0][0],coefAC8x8[block][1][0][0], 4 * 2 * 65 * sizeof(int));     
+        memcpy (img->cofAC[block+8][0][0],coefAC8x8[block][2][0][0], 4 * 2 * 65 * sizeof(int));   
       }
     }
 
@@ -1325,8 +1322,7 @@ int RDCost_for_macroblocks (Slice *currSlice,      // <-- Current Slice to code
   int         rate = 0, coeff_rate = 0;
   int64       distortion = 0;
   double      rdcost;
-  int         prev_mb_nr  = FmoGetPreviousMBNr(img->current_mb_nr);  
-  Macroblock  *prevMB   = (prev_mb_nr >= 0) ? &img->mb_data[prev_mb_nr] : NULL;
+  Macroblock  *prevMB   = currMB->PrevMB; 
   int         bslice    = (img->type==B_SLICE);
   int         tmp_cc;
   int         use_of_cc =  (img->type!=I_SLICE &&  is_cavlc);
@@ -1408,7 +1404,7 @@ int RDCost_for_macroblocks (Slice *currSlice,      // <-- Current Slice to code
     }
     for (j=0;j<4;j++)
       for (i=0; i<(4+img->num_blk8x8_uv); i++)
-        img->nz_coeff[img->current_mb_nr][j][i] = 16;
+        img->nz_coeff[currMB->mb_nr][j][i] = 16;
   }
 
   if (params->rdopt == 3)
@@ -1421,9 +1417,9 @@ int RDCost_for_macroblocks (Slice *currSlice,      // <-- Current Slice to code
   if (params->RCEnable)
   {
     if (mode == I16MB)
-      memcpy(pred[0], curr_mpr_16x16[i16mode], MB_PIXELS * sizeof(imgpel));
+      memcpy(pred[0], curr_mpr_16x16[i16mode][0], MB_PIXELS * sizeof(imgpel));
     else
-      memcpy(pred[0], mb_pred, MB_PIXELS * sizeof(imgpel));
+      memcpy(pred[0], mb_pred[0], MB_PIXELS * sizeof(imgpel));
   }
 
   img->i16offset = 0;
@@ -1527,7 +1523,7 @@ int RDCost_for_macroblocks (Slice *currSlice,      // <-- Current Slice to code
 
   if ((img->MbaffFrameFlag) && (mode ? 0: ((img->type == B_SLICE) ? !currMB->cbp:1)))  // AFF and current is skip
   {
-    if (img->current_mb_nr & 0x01) //bottom
+    if (currMB->mb_nr & 0x01) //bottom
     {
       if (prevMB->mb_type ? 0:((img->type == B_SLICE) ? !prevMB->cbp:1)) //top is skip
       {
@@ -1545,7 +1541,7 @@ int RDCost_for_macroblocks (Slice *currSlice,      // <-- Current Slice to code
 
 #ifdef BEST_NZ_COEFF
   for (j=0;j<4;j++)
-    memcpy(&gaaiMBAFF_NZCoeff[j][0], &img->nz_coeff[img->current_mb_nr][j][0], (4 + img->num_blk8x8_uv) * sizeof(int));
+    memcpy(&gaaiMBAFF_NZCoeff[j][0], &img->nz_coeff[currMB->mb_nr][j][0], (4 + img->num_blk8x8_uv) * sizeof(int));
 #endif
 
   return 1;

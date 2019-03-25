@@ -19,6 +19,7 @@
 #define _BLOCK_H_
 
 #include "global.h"
+#include "transform8x8.h"
 
 extern const byte QP_SCALE_CR[52] ;
 //! look up tables for FRExt_chroma support
@@ -30,7 +31,6 @@ extern void iMBtrans8x8(ImageParameters *img, Macroblock *currMB, ColorPlane pl)
 
 extern void itrans_sp_cr(ImageParameters *img, int uv);
 
-extern int  intrapred_luma_16x16  (ImageParameters *img, Macroblock *currMB, ColorPlane pl, int predmode);
 extern void intrapred_chroma      (ImageParameters *img, Macroblock *currMB, int uv);
 
 void (*itrans_4x4)(ImageParameters *img, ColorPlane pl, int ioff, int joff);
@@ -39,7 +39,6 @@ void (*itrans_8x8)(ImageParameters *img, Macroblock *currMB, ColorPlane pl, int 
 extern void Inv_Residual_trans_4x4(ImageParameters *img, ColorPlane pl, int ioff, int joff);
 extern void Inv_Residual_trans_8x8(ImageParameters *img, Macroblock *currMB, ColorPlane pl, int ioff,int joff);
 
-extern void itrans8x8   (ImageParameters *img, Macroblock *currMB, ColorPlane pl, int ioff, int joff);
 extern void itrans4x4   (ImageParameters *img, ColorPlane pl, int ioff, int joff);
 extern void itrans4x4_ls(ImageParameters *img, ColorPlane pl, int ioff, int joff);
 extern void itrans_sp   (ImageParameters *img, ColorPlane pl, int ioff, int joff);

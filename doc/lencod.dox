@@ -118,7 +118,6 @@ HTML_OUTPUT            = html
 HTML_FILE_EXTENSION    = .html
 HTML_HEADER            = 
 HTML_FOOTER            = ./foot.html
-HTML_STYLESHEET        = ./h26l.css
 HTML_ALIGN_MEMBERS     = YES
 GENERATE_HTMLHELP      = NO
 HTML_DYNAMIC_SECTIONS  = NO

@@ -345,7 +345,7 @@ int computeSAD(imgpel* src_pic,
   int pad_size_x = img_padded_size_x - blocksize_x;
 
   src_line = src_pic;
-  ref_line = UMVLine4X (ref_pic_sub.luma, cand_y, cand_x);
+  ref_line = UMVLine4X (ref_pic_sub.luma, cand_y, cand_x, height_pad, width_pad);
   for (y=0; y<blocksize_y; y++)
   {
     for (x = 0; x < blocksize_x; x+=4)
@@ -370,7 +370,7 @@ int computeSAD(imgpel* src_pic,
     for (k=0; k < 2; k++)
     {
       src_line = src_pic + (256 << k);
-      ref_line = UMVLine8X_chroma ( ref_pic_sub.crcb[k], cand_y, cand_x);
+      ref_line = UMVLine8X_chroma ( ref_pic_sub.crcb[k], cand_y, cand_x, height_pad_cr, width_pad_cr);
       mcr_cost = 0;
 
       for (y=0; y<blocksize_y_cr; y++)
@@ -409,7 +409,7 @@ int computeSADWP(imgpel* src_pic,
   int pad_size_x = img_padded_size_x - blocksize_x;
 
   src_line = src_pic;
-  ref_line = UMVLine4X (ref_pic_sub.luma, cand_y, cand_x);
+  ref_line = UMVLine4X (ref_pic_sub.luma, cand_y, cand_x, height_pad, width_pad);
   for (y=0; y<blocksize_y; y++)
   {
     for (x = 0; x < blocksize_x; x+=4)
@@ -440,7 +440,7 @@ int computeSADWP(imgpel* src_pic,
     {
       mcr_cost = 0;
       src_line = src_pic + (256 << k);
-      ref_line = UMVLine8X_chroma ( ref_pic_sub.crcb[k], cand_y, cand_x);
+      ref_line = UMVLine8X_chroma ( ref_pic_sub.crcb[k], cand_y, cand_x, height_pad_cr, width_pad_cr);
       for (y=0; y<blocksize_y_cr; y++)
       {
         for (x = 0; x < blocksize_x_cr; x+=2)
@@ -479,8 +479,8 @@ int computeBiPredSAD1(imgpel* src_pic,
   int pad_size_x = img_padded_size_x - blocksize_x;
 
   src_line   = src_pic;
-  ref2_line  = UMVLine4X(ref_pic2_sub.luma, cand_y2, cand_x2);
-  ref1_line  = UMVLine4X(ref_pic1_sub.luma, cand_y1, cand_x1);
+  ref2_line  = UMVLine4X(ref_pic2_sub.luma, cand_y2, cand_x2, height_pad, width_pad);
+  ref1_line  = UMVLine4X(ref_pic1_sub.luma, cand_y1, cand_x1, height_pad, width_pad);
 
   for (y = 0; y < blocksize_y; y++)
   {
@@ -513,8 +513,8 @@ int computeBiPredSAD1(imgpel* src_pic,
     {
       mcr_cost = 0;
       src_line = src_pic + (256 << k);
-      ref2_line = UMVLine8X_chroma ( ref_pic2_sub.crcb[k], cand_y2, cand_x2);
-      ref1_line = UMVLine8X_chroma ( ref_pic1_sub.crcb[k], cand_y1, cand_x1);      
+      ref2_line = UMVLine8X_chroma ( ref_pic2_sub.crcb[k], cand_y2, cand_x2, height_pad_cr, width_pad_cr);
+      ref1_line = UMVLine8X_chroma ( ref_pic1_sub.crcb[k], cand_y1, cand_x1, height_pad_cr, width_pad_cr);
 
       for (y=0; y<blocksize_y_cr; y++)
       {
@@ -557,8 +557,8 @@ int computeBiPredSAD2(imgpel* src_pic,
   int pad_size_x = img_padded_size_x - blocksize_x;
 
   src_line   = src_pic;
-  ref2_line  = UMVLine4X(ref_pic2_sub.luma, cand_y2, cand_x2);
-  ref1_line  = UMVLine4X(ref_pic1_sub.luma, cand_y1, cand_x1);
+  ref2_line  = UMVLine4X(ref_pic2_sub.luma, cand_y2, cand_x2, height_pad, width_pad);
+  ref1_line  = UMVLine4X(ref_pic1_sub.luma, cand_y1, cand_x1, height_pad, width_pad);
 
   for (y=0; y<blocksize_y; y++)
   {
@@ -607,8 +607,8 @@ int computeBiPredSAD2(imgpel* src_pic,
     {
       mcr_cost = 0;
       src_line = src_pic + (256 << k);
-      ref2_line = UMVLine8X_chroma ( ref_pic2_sub.crcb[k], cand_y2, cand_x2);
-      ref1_line = UMVLine8X_chroma ( ref_pic1_sub.crcb[k], cand_y1, cand_x1);
+      ref2_line = UMVLine8X_chroma ( ref_pic2_sub.crcb[k], cand_y2, cand_x2, height_pad_cr, width_pad_cr);
+      ref1_line = UMVLine8X_chroma ( ref_pic1_sub.crcb[k], cand_y1, cand_x1, height_pad_cr, width_pad_cr);
 
       for (y=0; y<blocksize_y_cr; y++)
       {
@@ -664,7 +664,7 @@ int computeSATD(imgpel* src_pic,
       for (x=0; x<blocksize_x; x += BLOCK_SIZE)
       {
         d    = diff;
-        ref_line = UMVLine4X (ref_pic_sub.luma, y, cand_x + (x<<2));
+        ref_line = UMVLine4X (ref_pic_sub.luma, y, cand_x + (x<<2), height_pad, width_pad);
         src_line = src_tmp + x;
         for (y4 = 0; y4 < BLOCK_SIZE; y4++ )
         {
@@ -690,7 +690,7 @@ int computeSATD(imgpel* src_pic,
       for (x=0; x<blocksize_x; x += BLOCK_SIZE_8x8 )
       {
         d = diff;
-        ref_line  = UMVLine4X (ref_pic_sub.luma, y, cand_x + (x<<2));
+        ref_line  = UMVLine4X (ref_pic_sub.luma, y, cand_x + (x<<2), height_pad, width_pad);
         src_line = src_tmp + x;
         for (y4 = 0; y4 < BLOCK_SIZE_8x8; y4++ )
         {
@@ -742,7 +742,7 @@ int computeSATDWP(imgpel* src_pic,
       for (x=0; x<blocksize_x; x += BLOCK_SIZE)
       {
         d    = diff;
-        ref_line = UMVLine4X (ref_pic_sub.luma, y, cand_x + (x<<2));
+        ref_line = UMVLine4X (ref_pic_sub.luma, y, cand_x + (x<<2), height_pad, width_pad);
         src_line = src_tmp + x;
         for (y4 = 0; y4 < BLOCK_SIZE; y4++ )
         {
@@ -772,7 +772,7 @@ int computeSATDWP(imgpel* src_pic,
       for (x=0; x<blocksize_x; x += BLOCK_SIZE_8x8 )
       {
         d = diff;
-        ref_line  = UMVLine4X (ref_pic_sub.luma, y, cand_x + (x<<2));
+        ref_line  = UMVLine4X (ref_pic_sub.luma, y, cand_x + (x<<2), height_pad, width_pad);
         src_line = src_tmp + x;
         for (y4 = 0; y4 < BLOCK_SIZE_8x8; y4++ )
         {
@@ -832,8 +832,8 @@ int computeBiPredSATD1(imgpel* src_pic,
       {
         d    = diff;
         src_line   = src_tmp + x;
-        ref2_line  = UMVLine4X(ref_pic2_sub.luma, cand_y2 + y, cand_x2 + (x<<2));
-        ref1_line  = UMVLine4X(ref_pic1_sub.luma, cand_y1 + y, cand_x1 + (x<<2));
+        ref2_line  = UMVLine4X(ref_pic2_sub.luma, cand_y2 + y, cand_x2 + (x<<2), height_pad, width_pad);
+        ref1_line  = UMVLine4X(ref_pic1_sub.luma, cand_y1 + y, cand_x1 + (x<<2), height_pad, width_pad);
         for (y4 = 0; y4 < BLOCK_SIZE; y4++ )
         {
           *d++ = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
@@ -862,8 +862,8 @@ int computeBiPredSATD1(imgpel* src_pic,
       {
         d = diff;
         src_line   = src_tmp + x;
-        ref2_line  = UMVLine4X(ref_pic2_sub.luma, y_pos2, cand_x2 + (x<<2));
-        ref1_line  = UMVLine4X(ref_pic1_sub.luma, y_pos1, cand_x1 + (x<<2));
+        ref2_line  = UMVLine4X(ref_pic2_sub.luma, y_pos2, cand_x2 + (x<<2), height_pad, width_pad);
+        ref1_line  = UMVLine4X(ref_pic1_sub.luma, y_pos1, cand_x1 + (x<<2), height_pad, width_pad);
         for (y4 = 0; y4 < BLOCK_SIZE_8x8; y4++ )
         {
           *d++ = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
@@ -918,8 +918,8 @@ int computeBiPredSATD2(imgpel* src_pic,
       {
         d    = diff;
         src_line   = src_tmp + x;
-        ref2_line  = UMVLine4X(ref_pic2_sub.luma, cand_y2 + y, cand_x2 + (x<<2));
-        ref1_line  = UMVLine4X(ref_pic1_sub.luma, cand_y1 + y, cand_x1 + (x<<2));
+        ref2_line  = UMVLine4X(ref_pic2_sub.luma, cand_y2 + y, cand_x2 + (x<<2), height_pad, width_pad);
+        ref1_line  = UMVLine4X(ref_pic1_sub.luma, cand_y1 + y, cand_x1 + (x<<2), height_pad, width_pad);
         for (y4 = 0; y4 < BLOCK_SIZE; y4++ )
         {
           // 0
@@ -964,8 +964,8 @@ int computeBiPredSATD2(imgpel* src_pic,
       {
         d = diff;
         src_line   = src_tmp + x;
-        ref2_line  = UMVLine4X(ref_pic2_sub.luma, y_pos2, cand_x2 + (x<<2));
-        ref1_line  = UMVLine4X(ref_pic1_sub.luma, y_pos1, cand_x1 + (x<<2));
+        ref2_line  = UMVLine4X(ref_pic2_sub.luma, y_pos2, cand_x2 + (x<<2), height_pad, width_pad);
+        ref1_line  = UMVLine4X(ref_pic1_sub.luma, y_pos1, cand_x1 + (x<<2), height_pad, width_pad);
         for (y4 = 0; y4 < BLOCK_SIZE_8x8; y4++ )
         {
           // 0
@@ -1041,7 +1041,7 @@ int computeSSE(imgpel* src_pic,
   int pad_size_x = img_padded_size_x - blocksize_x;
 
   src_line = src_pic;
-  ref_line = UMVLine4X (ref_pic_sub.luma, cand_y, cand_x);
+  ref_line = UMVLine4X (ref_pic_sub.luma, cand_y, cand_x, height_pad, width_pad);
   for (y=0; y<blocksize_y; y++)
   {
     for (x = 0; x < blocksize_x; x+=4)
@@ -1068,7 +1068,7 @@ int computeSSE(imgpel* src_pic,
     {
       mcr_cost = 0;
       src_line = src_pic + (256 << k);
-      ref_line = UMVLine8X_chroma ( ref_pic_sub.crcb[k], cand_y, cand_x);
+      ref_line = UMVLine8X_chroma ( ref_pic_sub.crcb[k], cand_y, cand_x, height_pad_cr, width_pad_cr);
       for (y=0; y<blocksize_y_cr; y++)
       {
         for (x = 0; x < blocksize_x_cr; x+=2)
@@ -1108,7 +1108,7 @@ int computeSSEWP(imgpel* src_pic,
   int pad_size_x = img_padded_size_x - blocksize_x;
 
   src_line = src_pic;
-  ref_line = UMVLine4X (ref_pic_sub.luma, cand_y, cand_x);
+  ref_line = UMVLine4X (ref_pic_sub.luma, cand_y, cand_x, height_pad, width_pad);
   for (y=0; y<blocksize_y; y++)
   {
     for (x = 0; x < blocksize_x; x+=4)
@@ -1141,7 +1141,7 @@ int computeSSEWP(imgpel* src_pic,
     {
       mcr_cost = 0;
       src_line = src_pic + (256 << k);
-      ref_line = UMVLine8X_chroma ( ref_pic_sub.crcb[k], cand_y, cand_x);
+      ref_line = UMVLine8X_chroma ( ref_pic_sub.crcb[k], cand_y, cand_x, height_pad_cr, width_pad_cr);
       for (y=0; y<blocksize_y_cr; y++)
       {
 
@@ -1182,8 +1182,8 @@ int computeBiPredSSE1(imgpel* src_pic,
   int pad_size_x = img_padded_size_x - blocksize_x;
 
   src_line   = src_pic;
-  ref2_line  = UMVLine4X(ref_pic2_sub.luma, cand_y2, cand_x2);
-  ref1_line  = UMVLine4X(ref_pic1_sub.luma, cand_y1, cand_x1);
+  ref2_line  = UMVLine4X(ref_pic2_sub.luma, cand_y2, cand_x2, height_pad, width_pad);
+  ref1_line  = UMVLine4X(ref_pic1_sub.luma, cand_y1, cand_x1, height_pad, width_pad);
 
   for (y = 0; y < blocksize_y; y++)
   {
@@ -1217,8 +1217,8 @@ int computeBiPredSSE1(imgpel* src_pic,
     {
       mcr_cost = 0;
       src_line = src_pic + (256 << k);
-      ref2_line = UMVLine8X_chroma ( ref_pic2_sub.crcb[k], cand_y2, cand_x2);
-      ref1_line = UMVLine8X_chroma ( ref_pic1_sub.crcb[k], cand_y1, cand_x1);
+      ref2_line = UMVLine8X_chroma ( ref_pic2_sub.crcb[k], cand_y2, cand_x2, height_pad_cr, width_pad_cr);
+      ref1_line = UMVLine8X_chroma ( ref_pic1_sub.crcb[k], cand_y1, cand_x1, height_pad_cr, width_pad_cr);
 
       for (y=0; y<blocksize_y_cr; y++)
       {
@@ -1263,8 +1263,8 @@ int computeBiPredSSE2(imgpel* src_pic,
   int pad_size_x = img_padded_size_x - blocksize_x;
 
   src_line   = src_pic;
-  ref2_line  = UMVLine4X(ref_pic2_sub.luma, cand_y2, cand_x2);
-  ref1_line  = UMVLine4X(ref_pic1_sub.luma, cand_y1, cand_x1);
+  ref2_line  = UMVLine4X(ref_pic2_sub.luma, cand_y2, cand_x2, height_pad, width_pad);
+  ref1_line  = UMVLine4X(ref_pic1_sub.luma, cand_y1, cand_x1, height_pad, width_pad);
   for (y=0; y<blocksize_y; y++)
   {
     for (x = 0; x < blocksize_x; x+=4)
@@ -1312,8 +1312,8 @@ int computeBiPredSSE2(imgpel* src_pic,
     {
       mcr_cost = 0;
       src_line = src_pic + (256 << k);
-      ref2_line = UMVLine8X_chroma ( ref_pic2_sub.crcb[k], cand_y2, cand_x2);
-      ref1_line = UMVLine8X_chroma ( ref_pic1_sub.crcb[k], cand_y1, cand_x1);
+      ref2_line = UMVLine8X_chroma ( ref_pic2_sub.crcb[k], cand_y2, cand_x2, height_pad_cr, width_pad_cr);
+      ref1_line = UMVLine8X_chroma ( ref_pic1_sub.crcb[k], cand_y1, cand_x1, height_pad_cr, width_pad_cr);
 
       for (y=0; y<blocksize_y_cr; y++)
       {

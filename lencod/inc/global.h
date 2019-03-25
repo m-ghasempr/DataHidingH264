@@ -346,9 +346,10 @@ typedef struct syntaxelement
 //! Macroblock
 typedef struct macroblock
 {
+  int                 mb_nr;
   int                 mb_type;
   short               slice_nr;
-  short               delta_qp;
+  short               delta_qp;  
   int                 qp;                         //!< QP luma  
   int                 qpc[2];                     //!< QP chroma
   int                 qp_scaled[MAX_PLANE];       //!< QP scaled for all comps.
@@ -399,6 +400,7 @@ typedef struct macroblock
 
   struct macroblock   *mb_available_up;   //!< pointer to neighboring MB (CABAC)
   struct macroblock   *mb_available_left; //!< pointer to neighboring MB (CABAC)
+  struct macroblock   *PrevMB;
 
 } Macroblock;
 

@@ -61,8 +61,7 @@ void encode_one_macroblock_highloss (Slice *currSlice, Macroblock *currMB)
   int         lambda_mf[3];
   short       runs        = (short) ((params->RestrictRef==1 && (pslice  || (bslice && img->nal_reference_idc>0))) ? 2 : 1);
 
-  int         prev_mb_nr  = FmoGetPreviousMBNr(img->current_mb_nr);
-  Macroblock* prevMB      = (prev_mb_nr >= 0) ? &img->mb_data[prev_mb_nr]:NULL ;
+  Macroblock     *prevMB     = currMB->PrevMB; 
   imgpel  **mb_pred = img->mb_pred[0];
   Block8x8Info *b8x8info   = img->b8x8info;
 
@@ -216,7 +215,7 @@ void encode_one_macroblock_highloss (Slice *currSlice, Macroblock *currMB)
           //=====  LOOP OVER 8x8 SUB-PARTITIONS  (Motion Estimation & Mode Decision) =====
           for (cost_direct=cbp8x8=cbp_blk8x8=cnt_nonz_8x8=0, block=0; block<4; block++)
           {
-            submacroblock_mode_decision(currSlice, &enc_mb, &tr8x8, currMB, cofAC8x8ts[0][block], cofAC8x8ts[1][block], cofAC8x8ts[2][block],
+            submacroblock_mode_decision(currSlice, &enc_mb, &tr8x8, currMB, cofAC8x8ts[block],
               &have_direct, bslice, block, &cost_direct, &cost, &cost8x8_direct, 1, is_cavlc);
             set_subblock8x8_info(b8x8info, P8x8, block, &tr8x8);
           }
@@ -241,7 +240,7 @@ void encode_one_macroblock_highloss (Slice *currSlice, Macroblock *currMB)
           //=====  LOOP OVER 8x8 SUB-PARTITIONS  (Motion Estimation & Mode Decision) =====
           for (cost_direct=cbp8x8=cbp_blk8x8=cnt_nonz_8x8=0, block=0; block<4; block++)
           {
-            submacroblock_mode_decision(currSlice, &enc_mb, &tr4x4, currMB, cofAC8x8[block], cofAC8x8CbCr[0][block], cofAC8x8CbCr[1][block],
+            submacroblock_mode_decision(currSlice, &enc_mb, &tr4x4, currMB, coefAC8x8[block],
               &have_direct, bslice, block, &cost_direct, &cost, &cost8x8_direct, 0, is_cavlc);
             set_subblock8x8_info(b8x8info, P8x8, block, &tr4x4);
           }
@@ -332,13 +331,8 @@ void encode_one_macroblock_highloss (Slice *currSlice, Macroblock *currMB)
              continue;
          }
 
-        // check if weights are in valid range for biprediction.
-        if (active_pps->weighted_bipred_idc == 1 && bslice && mode < P8x8) 
-        {
-          if (InvalidWeightsForBiPrediction(b8x8info, mode))
-            continue;
-        }
-        if (InvalidMotionVectors(b8x8info, mode))
+        // check if prediction parameters are in valid range.
+        if (CheckPredictionParams(active_pps, b8x8info, mode, bslice) == 0)
           continue;
 
         if (enc_mb.valid[mode])

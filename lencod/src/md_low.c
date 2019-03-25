@@ -60,8 +60,7 @@ void encode_one_macroblock_low (Slice *currSlice, Macroblock *currMB)
   short       pslice      = (short) ((img->type==P_SLICE) || (img->type==SP_SLICE));
   short       intra       = (short) (islice || (pslice && img->mb_y==img->mb_y_upd && img->mb_y_upd!=img->mb_y_intra));
   int         lambda_mf[3];
-  int         prev_mb_nr  = FmoGetPreviousMBNr(img->current_mb_nr);
-  Macroblock* prevMB      = (prev_mb_nr >= 0) ? &img->mb_data[prev_mb_nr]:NULL ;
+  Macroblock     *prevMB     = currMB->PrevMB; 
   Block8x8Info *b8x8info   = img->b8x8info;
 
   char   **ipredmodes = img->ipredmode;
@@ -96,9 +95,6 @@ void encode_one_macroblock_low (Slice *currSlice, Macroblock *currMB)
 
   //===== Setup Macroblock encoding parameters =====
   init_enc_mb_params(currMB, &enc_mb, intra, bslice);
-
-  // reset chroma intra predictor to default
-  currMB->c_ipred_mode = DC_PRED_8;
 
   //=====   S T O R E   C O D I N G   S T A T E   =====
   //---------------------------------------------------
@@ -218,7 +214,7 @@ void encode_one_macroblock_low (Slice *currSlice, Macroblock *currMB)
         //=====  LOOP OVER 8x8 SUB-PARTITIONS  (Motion Estimation & Mode Decision) =====
         for (cost_direct=cbp8x8=cbp_blk8x8=cnt_nonz_8x8=0, block = 0; block < 4; block++)
         {
-          submacroblock_mode_decision_low(currSlice, &enc_mb, &tr8x8, currMB, cofAC8x8ts[0][block], cofAC8x8ts[1][block], cofAC8x8ts[2][block],
+          submacroblock_mode_decision_low(currSlice, &enc_mb, &tr8x8, currMB, cofAC8x8ts[block], 
             &have_direct, bslice, block, &cost_direct, &cost, &cost8x8_direct, 1, is_cavlc);
           set_subblock8x8_info(b8x8info, P8x8, block, &tr8x8);
         }
@@ -243,7 +239,7 @@ void encode_one_macroblock_low (Slice *currSlice, Macroblock *currMB)
         //=====  LOOP OVER 8x8 SUB-PARTITIONS  (Motion Estimation & Mode Decision) =====
         for (cost_direct=cbp8x8=cbp_blk8x8=cnt_nonz_8x8=0, block=0; block<4; block++)
         {
-          submacroblock_mode_decision_low(currSlice, &enc_mb, &tr4x4, currMB, cofAC8x8[block], cofAC8x8CbCr[0][block], cofAC8x8CbCr[1][block],
+          submacroblock_mode_decision_low(currSlice, &enc_mb, &tr4x4, currMB, coefAC8x8[block],
             &have_direct, bslice, block, &cost_direct, &cost, &cost8x8_direct, 0, is_cavlc);
           set_subblock8x8_info(b8x8info, P8x8, block, &tr4x4);
         }
@@ -515,6 +511,10 @@ void encode_one_macroblock_low (Slice *currSlice, Macroblock *currMB)
       best_mode   = I16MB;      
       min_rd_cost  = rd_cost; 
       currMB->cbp = pDCT_16x16 (currMB, PLANE_Y, i16mode, is_cavlc);
+/*
+      if (img->AdaptiveRounding)
+        store_adaptive_rounding_parameters_luma (currMB, best_mode);
+        */
 
       if (img->P444_joined)
       {

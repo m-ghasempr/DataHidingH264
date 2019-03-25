@@ -393,7 +393,7 @@ static void ref_pic_list_reordering(Slice *currSlice)
   }
 
   // set reference index of redundant slices.
-  if(img->redundant_pic_cnt)
+  if(img->redundant_pic_cnt && (img->type != I_SLICE) )
   {
     redundant_slice_ref_idx = currSlice->abs_diff_pic_num_minus1_l0[0] + 1;
   }

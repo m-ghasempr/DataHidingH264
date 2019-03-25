@@ -14,10 +14,8 @@
 
 #include "global.h"
 #include "rdopt_coding_state.h"
-#include "mb_access.h"
 #include "intrarefresh.h"
 #include "image.h"
-#include "transform8x8.h"
 #include "ratectl.h"
 #include "mode_decision.h"
 #include "fmo.h"
@@ -59,8 +57,7 @@ void encode_one_macroblock_high (Slice *currSlice, Macroblock *currMB)
   int         lambda_mf[3];
   int         is_cavlc = (img->currentSlice->symbol_mode == CAVLC);
 
-  int         prev_mb_nr    = FmoGetPreviousMBNr(img->current_mb_nr);
-  Macroblock* prevMB        = (prev_mb_nr >= 0) ? &img->mb_data[prev_mb_nr]:NULL ;
+  Macroblock* prevMB      = currMB->PrevMB; 
   imgpel    **mb_pred = img->mb_pred[0];
   Block8x8Info *b8x8info   = img->b8x8info;
   
@@ -68,7 +65,7 @@ void encode_one_macroblock_high (Slice *currSlice, Macroblock *currMB)
 
   short   inter_skip = 0;
   short   bipred_me = 0;
-  double min_rate = 0;
+  double  min_rate = 0;
 
   if(params->SearchMode == UM_HEX)
   {
@@ -83,18 +80,16 @@ void encode_one_macroblock_high (Slice *currSlice, Macroblock *currMB)
   {
     reset_adaptive_rounding();
   }
+
   if (img->MbaffFrameFlag)
   {
-    reset_mb_nz_coeff(img->current_mb_nr);
+    reset_mb_nz_coeff(currMB->mb_nr);
   }
 
-  intra |= RandomIntra (img->current_mb_nr);    // Forced Pseudo-Random Intra
+  intra |= RandomIntra (currMB->mb_nr);    // Forced Pseudo-Random Intra
 
   //===== Setup Macroblock encoding parameters =====
   init_enc_mb_params(currMB, &enc_mb, intra, bslice);
-
-  // reset chroma intra predictor to default
-  currMB->c_ipred_mode = DC_PRED_8;
 
   //=====   S T O R E   C O D I N G   S T A T E   =====
   //---------------------------------------------------
@@ -123,7 +118,6 @@ void encode_one_macroblock_high (Slice *currSlice, Macroblock *currMB)
       {
         for (cost=0, block=0; block<(mode==1?1:2); block++)
         {
-    
           update_lambda_costs(&enc_mb, lambda_mf);
           PartitionMotionSearch (currMB, mode, block, lambda_mf);
 
@@ -187,7 +181,6 @@ void encode_one_macroblock_high (Slice *currSlice, Macroblock *currMB)
       } // if (enc_mb.valid[mode])
     } // for (mode=1; mode<4; mode++)
 
-
     if (enc_mb.valid[P8x8])
     {
       giRDOpt_B8OnlyFlag = 1;
@@ -210,7 +203,7 @@ void encode_one_macroblock_high (Slice *currSlice, Macroblock *currMB)
         //=====  LOOP OVER 8x8 SUB-PARTITIONS  (Motion Estimation & Mode Decision) =====
         for (cost_direct=cbp8x8=cbp_blk8x8=cnt_nonz_8x8=0, block = 0; block < 4; block++)
         {
-          submacroblock_mode_decision(currSlice, &enc_mb, &tr8x8, currMB, cofAC8x8ts[0][block], cofAC8x8ts[1][block], cofAC8x8ts[2][block],
+          submacroblock_mode_decision(currSlice, &enc_mb, &tr8x8, currMB, cofAC8x8ts[block],
             &have_direct, bslice, block, &cost_direct, &cost, &cost8x8_direct, 1, is_cavlc);
           set_subblock8x8_info(b8x8info, P8x8, block, &tr8x8);
         }
@@ -235,9 +228,8 @@ void encode_one_macroblock_high (Slice *currSlice, Macroblock *currMB)
         //=====  LOOP OVER 8x8 SUB-PARTITIONS  (Motion Estimation & Mode Decision) =====
         for (cost_direct = cbp8x8 = cbp_blk8x8 = cnt_nonz_8x8 = 0, block = 0; block < 4; block++)
         {
-          submacroblock_mode_decision(currSlice, &enc_mb, &tr4x4, currMB, cofAC8x8[block], cofAC8x8CbCr[0][block], cofAC8x8CbCr[1][block],
+          submacroblock_mode_decision(currSlice, &enc_mb, &tr4x4, currMB, coefAC8x8[block],
             &have_direct, bslice, block, &cost_direct, &cost, &cost8x8_direct, 0, is_cavlc);
-
           set_subblock8x8_info(b8x8info, P8x8, block, &tr4x4);
         }
         //--- re-set coding state (as it was before 8x8 block coding) ---
@@ -247,11 +239,9 @@ void encode_one_macroblock_high (Slice *currSlice, Macroblock *currMB)
       //--- re-set coding state (as it was before 8x8 block coding) ---
       reset_coding_state (currSlice, currMB, cs_mb);
 
-      // This is not enabled yet since mpr has reverse order.
       if (params->RCEnable)
         rc_store_diff(img->opix_x, img->opix_y, mb_pred);
 
-      //check cost for P8x8 for non-rdopt mode
       giRDOpt_B8OnlyFlag = 0;
     }
     else // if (enc_mb.valid[P8x8])
@@ -326,14 +316,8 @@ void encode_one_macroblock_high (Slice *currSlice, Macroblock *currMB)
           continue;
       }
 
-      // check if weights are in valid range for biprediction.
-      if (bslice && active_pps->weighted_bipred_idc == 1 &&  mode < P8x8) 
-      {
-        if (InvalidWeightsForBiPrediction(b8x8info, mode))
-          continue;
-      }
-
-      if (InvalidMotionVectors(b8x8info, mode))
+      // check if prediction parameters are in valid range.
+      if (CheckPredictionParams(active_pps, b8x8info, mode, bslice) == 0)
         continue;
 
       if (enc_mb.valid[mode])
@@ -344,7 +328,7 @@ void encode_one_macroblock_high (Slice *currSlice, Macroblock *currMB)
 #ifdef BEST_NZ_COEFF
   for (j=0;j<4;j++)
     for (i=0; i<(4+img->num_blk8x8_uv); i++)
-      img->nz_coeff[img->current_mb_nr][j][i] = gaaiMBAFF_NZCoeff[j][i]; 
+      img->nz_coeff[currMB->mb_nr][j][i] = gaaiMBAFF_NZCoeff[j][i]; 
 #endif
 
   intra1 = IS_INTRA(currMB);
@@ -363,7 +347,7 @@ void encode_one_macroblock_high (Slice *currSlice, Macroblock *currMB)
   rdopt->min_dcost = min_dcost;
 
   if ( (img->MbaffFrameFlag)
-    && (img->current_mb_nr%2)
+    && (currMB->mb_nr & 0x01)
     && (currMB->mb_type ? 0:((bslice) ? !currMB->cbp:1))  // bottom is skip
     && (prevMB->mb_type ? 0:((bslice) ? !prevMB->cbp:1))
     && !(field_flag_inference(currMB) == enc_mb.curr_mb_field)) // top is skip
@@ -387,7 +371,7 @@ void encode_one_macroblock_high (Slice *currSlice, Macroblock *currMB)
   //--- constrain intra prediction ---
   if(params->UseConstrainedIntraPred && (img->type==P_SLICE || img->type==B_SLICE))
   {
-    img->intra_block[img->current_mb_nr] = IS_INTRA(currMB);
+    img->intra_block[currMB->mb_nr] = IS_INTRA(currMB);
   }
 }
 

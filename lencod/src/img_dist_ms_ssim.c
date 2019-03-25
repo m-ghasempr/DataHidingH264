@@ -179,35 +179,28 @@ void horizontal_symmetric_extension(int **buffer, int width, int height )
 void vertical_symmetric_extension(int **buffer, int width, int height)
 {
   int i;
-  int* bufminus1;
-  int* bufminus2;
-  int* bufminus3;
-  int* bufplus1;
-  int* bufplus2;
-  int* bufplus3;
 
-  bufminus1 = &buffer[MS_SSIM_PAD2-1][MS_SSIM_PAD2];
-  bufminus2 = &buffer[MS_SSIM_PAD2-2][MS_SSIM_PAD2];
-  bufplus1  = &buffer[MS_SSIM_PAD2+1][MS_SSIM_PAD2];
-  bufplus2  = &buffer[MS_SSIM_PAD2+2][MS_SSIM_PAD2];
+  int *bufminus1 = &buffer[MS_SSIM_PAD2-1][MS_SSIM_PAD2];
+  int *bufminus2 = &buffer[MS_SSIM_PAD2-2][MS_SSIM_PAD2];
+  int *bufplus1  = &buffer[MS_SSIM_PAD2+1][MS_SSIM_PAD2];
+  int *bufplus2  = &buffer[MS_SSIM_PAD2+2][MS_SSIM_PAD2];
 
+  int *bufhminus1 = &buffer[height + MS_SSIM_PAD2-2][MS_SSIM_PAD2];
+  int *bufhminus2 = &buffer[height + MS_SSIM_PAD2-3][MS_SSIM_PAD2];
+  int *bufhminus3 = &buffer[height + MS_SSIM_PAD2-4][MS_SSIM_PAD2];
+  int *bufhplus1  = &buffer[height + MS_SSIM_PAD2][MS_SSIM_PAD2];
+  int *bufhplus2  = &buffer[height + MS_SSIM_PAD2+1][MS_SSIM_PAD2];
+  int *bufhplus3  = &buffer[height + MS_SSIM_PAD2+2][MS_SSIM_PAD2];
+  
   for (i = 0; i < width; i++)
   {
+    //Top Rows
     bufminus1[i] = bufplus1[i];
     bufminus2[i] = bufplus2[i];
-  }
-
-  bufminus1 = &buffer[height + MS_SSIM_PAD2-2][MS_SSIM_PAD2];
-  bufminus2 = &buffer[height + MS_SSIM_PAD2-3][MS_SSIM_PAD2];
-  bufminus3 = &buffer[height + MS_SSIM_PAD2-4][MS_SSIM_PAD2];
-  bufplus1  = &buffer[height + MS_SSIM_PAD2][MS_SSIM_PAD2];
-  bufplus2  = &buffer[height + MS_SSIM_PAD2+1][MS_SSIM_PAD2];
-  bufplus3  = &buffer[height + MS_SSIM_PAD2+2][MS_SSIM_PAD2];
-  for (i = 0; i < width; i++)
-  {
-    bufplus1[i] = bufminus1[i];
-    bufplus2[i] = bufminus2[i];
-    bufplus3[i] = bufminus3[i];
+    //Bottom Rows
+    bufhplus1[i] = bufhminus1[i];
+    bufhplus2[i] = bufhminus2[i];
+    bufhplus3[i] = bufhminus3[i];
   }
 }
 

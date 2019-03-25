@@ -1063,8 +1063,6 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
     }
   }
 
-
-
   if ((currSliceType == I_SLICE)||(currSliceType == SI_SLICE))
   {
     listXsize[0] = 0;
@@ -3526,19 +3524,20 @@ void compute_colocated(ColocatedParams* p, StorablePicture **listX[6])
   if (!active_sps->frame_mbs_only_flag || active_sps->direct_8x8_inference_flag)
   {
     if (!img->MbaffFrameFlag)
-    {   
-      for (j=0 ; j < (fs->size_y>>2); j++)
+    { 
+      int k;
+
+      for (k = LIST_0; k<=LIST_1; k++)
       {
-        for (i=0 ; i < fs_size_x4 ; i++)
+        for (j = 0; j < (fs->size_y>>2); j++)
         {
-          p_motion->mv[LIST_0][j][i][0]      = p_frm_motion->mv[LIST_0][j][i][0];
-          p_motion->mv[LIST_0][j][i][1]      = p_frm_motion->mv[LIST_0][j][i][1];
-          p_motion->mv[LIST_1][j][i][0]      = p_frm_motion->mv[LIST_1][j][i][0];
-          p_motion->mv[LIST_1][j][i][1]      = p_frm_motion->mv[LIST_1][j][i][1];
-          p_motion->ref_idx[LIST_0][j][i]    = p_frm_motion->ref_idx[LIST_0][j][i];
-          p_motion->ref_idx[LIST_1][j][i]    = p_frm_motion->ref_idx[LIST_1][j][i];
-          p_motion->ref_pic_id[LIST_0][j][i] = p_frm_motion->ref_id[LIST_0][j][i];
-          p_motion->ref_pic_id[LIST_1][j][i] = p_frm_motion->ref_id[LIST_1][j][i];
+          for (i = 0 ; i < fs_size_x4 ; i++)
+          {
+            p_motion->mv[k][j][i][0]      = p_frm_motion->mv[k][j][i][0];
+            p_motion->mv[k][j][i][1]      = p_frm_motion->mv[k][j][i][1];
+            p_motion->ref_idx[k][j][i]    = p_frm_motion->ref_idx[k][j][i];
+            p_motion->ref_pic_id[k][j][i] = p_frm_motion->ref_id[k][j][i];
+          }
         }
       }
       p->is_long_term = fs->is_long_term;
@@ -3605,10 +3604,10 @@ void compute_colocated(ColocatedParams* p, StorablePicture **listX[6])
   //! Generate field MVs from Frame MVs
   if (img->structure || img->MbaffFrameFlag)
   {
-    for (j=0 ; j<fs->size_y/8 ; j++)
+    for (j = 0; j < fs->size_y >> 3; j++)
     {
       jj = RSD(j);
-      for (i=0 ; i<fs->size_x/4 ; i++)
+      for (i = 0 ; i < fs->size_x >> 2; i++)
       {
         ii = RSD(i);
         //! Do nothing if macroblock as field coded in MB-AFF

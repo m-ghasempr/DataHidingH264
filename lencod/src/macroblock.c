@@ -268,7 +268,7 @@ void set_MB_parameters (int mb_addr)
  *    next macroblock
  ************************************************************************
  */
-void proceed2nextMacroblock(Macroblock *currMB)
+void next_macroblock(ImageParameters *img, Macroblock *currMB)
 {
 #if TRACE
   int use_bitstream_backing = (params->slice_mode == FIXED_RATE || params->slice_mode == CALL_BACK);
@@ -371,7 +371,7 @@ void update_qp(ImageParameters *img, Macroblock *currMB)
  *    previous macroblock address
  ************************************************************************
  */
-void reset_macroblock(Macroblock *currMB, int prev_mb)
+void reset_macroblock(ImageParameters *img, Macroblock *currMB, int prev_mb)
 {
   int i,j,l;
 
@@ -406,7 +406,7 @@ void reset_macroblock(Macroblock *currMB, int prev_mb)
   currMB->write_mb = FALSE;
 
   //initialize the whole MB as INTRA coded
-  //Blocks are set to notINTRA in write_one_macroblock
+  //Blocks are set to notINTRA in write_macroblock
   if (params->UseConstrainedIntraPred)
   {
     img->intra_block[img->current_mb_nr] = 1;
@@ -436,6 +436,8 @@ void reset_macroblock(Macroblock *currMB, int prev_mb)
  * \brief
  *    initializes the current macroblock
  *
+ * \param currSlice
+ *    current slice
  * \param currMB
  *    current macroblock
  * \param mb_addr
@@ -444,7 +446,7 @@ void reset_macroblock(Macroblock *currMB, int prev_mb)
  *    true for field macroblock coding
  ************************************************************************
  */
-void start_macroblock(Slice *currSlice, Macroblock **currMB, int mb_addr, byte mb_field)
+void start_macroblock(ImageParameters *img, Slice *currSlice, Macroblock **currMB, int mb_addr, byte mb_field)
 {
   int i, mb_qp;
   int use_bitstream_backing = (params->slice_mode == FIXED_RATE || params->slice_mode == CALL_BACK);
@@ -456,7 +458,8 @@ void start_macroblock(Slice *currSlice, Macroblock **currMB, int mb_addr, byte m
   int prev_mb;
 
   *currMB = &img->mb_data[mb_addr];
-  (*currMB)->mbAddrX = mb_addr;
+  (*currMB)->mb_nr = mb_addr;
+  (*currMB)->mbAddrX = mb_addr;  
 
 
   (*currMB)->mb_field = mb_field;
@@ -466,7 +469,7 @@ void start_macroblock(Slice *currSlice, Macroblock **currMB, int mb_addr, byte m
 
   set_MB_parameters (mb_addr);
 
-  prev_mb = FmoGetPreviousMBNr(img->current_mb_nr);
+  prev_mb = FmoGetPreviousMBNr(mb_addr);
 
   if(use_bitstream_backing)
   {
@@ -503,11 +506,13 @@ void start_macroblock(Slice *currSlice, Macroblock **currMB, int mb_addr, byte m
 
   if (prev_mb > -1 && (img->mb_data[prev_mb].slice_nr == img->current_slice_nr))
   {
-    (*currMB)->prev_qp  = img->mb_data[prev_mb].qp;
-    (*currMB)->prev_dqp = img->mb_data[prev_mb].delta_qp;
+    (*currMB)->PrevMB   = &img->mb_data[prev_mb];
+    (*currMB)->prev_qp  = (*currMB)->PrevMB->qp;
+    (*currMB)->prev_dqp = (*currMB)->PrevMB->delta_qp;
   }
   else
   {
+    (*currMB)->PrevMB   = NULL;
     (*currMB)->prev_qp  = currSlice->qp;
     (*currMB)->prev_dqp = 0;
   }
@@ -549,7 +554,7 @@ void start_macroblock(Slice *currSlice, Macroblock **currMB, int mb_addr, byte m
   if (currSlice->symbol_mode == CABAC)
     CheckAvailabilityOfNeighborsCABAC(*currMB);
 
-  reset_macroblock(*currMB, prev_mb);
+  reset_macroblock(img, *currMB, prev_mb);
 
   if ((params->SearchMode == FAST_FULL_SEARCH) && (!params->IntraProfile))
     ResetFastFullIntegerSearch ();
@@ -571,11 +576,12 @@ void start_macroblock(Slice *currSlice, Macroblock **currMB, int mb_addr, byte m
  *    on the chosen slice mode
  ************************************************************************
  */
-void terminate_macroblock(Slice *currSlice,           //!< Current slice
-                          Macroblock *currMB,         //!< Current Macroblock
-                          Boolean *end_of_slice,      //!< returns true for last macroblock of a slice, otherwise false
-                          Boolean *recode_macroblock  //!< returns true if max. slice size is exceeded an macroblock must be recoded in next slice
-                          )
+void end_macroblock(ImageParameters *img,
+                    Slice *currSlice,           //!< Current slice
+                    Macroblock *currMB,         //!< Current Macroblock
+                    Boolean *end_of_slice,      //!< returns true for last macroblock of a slice, otherwise false
+                    Boolean *recode_macroblock  //!< returns true if max. slice size is exceeded an macroblock must be recoded in next slice
+                    )
 {
   int i;
   SyntaxElement se;
@@ -589,7 +595,7 @@ void terminate_macroblock(Slice *currSlice,           //!< Current slice
 
   // if previous mb in the same slice group has different slice number as the current, it's the
   // the start of new slice
-  if ((img->current_mb_nr==0) || (FmoGetPreviousMBNr(img->current_mb_nr)<0) || ( img->mb_data[FmoGetPreviousMBNr(img->current_mb_nr)].slice_nr != img->current_slice_nr ))
+  if ((currMB->mb_nr == 0) || currMB->PrevMB == NULL || ( currMB->PrevMB->slice_nr != img->current_slice_nr ))
     new_slice=1;
 
   *recode_macroblock=FALSE;
@@ -603,7 +609,7 @@ void terminate_macroblock(Slice *currSlice,           //!< Current slice
       *end_of_slice = TRUE;
 
     // if it's end of current slice group, slice ends too
-    *end_of_slice = (Boolean) (*end_of_slice | (img->current_mb_nr == FmoGetLastCodedMBOfSliceGroup (FmoMB2SliceGroup (img->current_mb_nr))));
+    *end_of_slice = (Boolean) (*end_of_slice | (currMB->mb_nr == FmoGetLastCodedMBOfSliceGroup (FmoMB2SliceGroup (currMB->mb_nr))));
 
     break;
   case FIXED_MB:
@@ -611,7 +617,7 @@ void terminate_macroblock(Slice *currSlice,           //!< Current slice
     currSlice->num_mb++;
     *recode_macroblock = FALSE;
     //! Check end-of-slice group condition first
-    *end_of_slice = (Boolean) (img->current_mb_nr == FmoGetLastCodedMBOfSliceGroup (FmoMB2SliceGroup (img->current_mb_nr)));
+    *end_of_slice = (Boolean) (currMB->mb_nr == FmoGetLastCodedMBOfSliceGroup (FmoMB2SliceGroup (currMB->mb_nr)));
     //! Now check maximum # of MBs in slice
     *end_of_slice = (Boolean) (*end_of_slice | (currSlice->num_mb >= params->slice_argument));
 
@@ -661,7 +667,7 @@ void terminate_macroblock(Slice *currSlice,           //!< Current slice
     // maximum number of MBs
 
     // check if current slice group is finished
-    if ((*recode_macroblock == FALSE) && (img->current_mb_nr == FmoGetLastCodedMBOfSliceGroup (FmoMB2SliceGroup (img->current_mb_nr))))
+    if ((*recode_macroblock == FALSE) && (currMB->mb_nr == FmoGetLastCodedMBOfSliceGroup (FmoMB2SliceGroup (currMB->mb_nr))))
     {
       *end_of_slice = TRUE;
       if(!img->cod_counter)
@@ -680,7 +686,7 @@ void terminate_macroblock(Slice *currSlice,           //!< Current slice
     break;
 
   case  CALL_BACK:
-    if (img->current_mb_nr > 0 && !new_slice)
+    if (currMB->mb_nr > 0 && !new_slice)
     {
       if (currSlice->slice_too_big(rlc_bits))
       {
@@ -689,7 +695,7 @@ void terminate_macroblock(Slice *currSlice,           //!< Current slice
       }
     }
 
-    if ( (*recode_macroblock == FALSE) && (img->current_mb_nr == FmoGetLastCodedMBOfSliceGroup (FmoMB2SliceGroup (img->current_mb_nr))))
+    if ( (*recode_macroblock == FALSE) && (currMB->mb_nr == FmoGetLastCodedMBOfSliceGroup (FmoMB2SliceGroup (currMB->mb_nr))))
       *end_of_slice = TRUE;
     break;
 
@@ -1749,6 +1755,8 @@ static int writeIPCMByteAlign(Bitstream *currStream, SyntaxElement *se, int *bit
 ************************************************************************
 * \brief
 *    Codes macroblock header
+* \param currSlice
+*    current slice
 * \param currMB
 *    current macroblock
 * \param rdopt
@@ -1760,9 +1768,9 @@ static int writeIPCMByteAlign(Bitstream *currStream, SyntaxElement *se, int *bit
 int writeMBLayer (Slice* currSlice, Macroblock *currMB, int rdopt, int *coeff_rate)
 {
   int             i;
-  int             mb_nr      = img->current_mb_nr;
+  int             mb_nr      = currMB->mb_nr;
   int             prev_mb_nr = FmoGetPreviousMBNr(img->current_mb_nr);
-  Macroblock*     prevMB     = mb_nr ? (&img->mb_data[prev_mb_nr]) : NULL;
+  Macroblock     *prevMB     = currMB->PrevMB; 
   SyntaxElement   se;
   int*            bitCount   = currMB->bitcounter;
   DataPartition*  dataPart;
@@ -2142,7 +2150,7 @@ int writeChromaIntraPredMode(Slice* currSlice, Macroblock* currMB)
  *    Passes the chosen syntax elements to the NAL
  ************************************************************************
  */
-void write_one_macroblock (Slice *currSlice, Macroblock* currMB, int eos_bit, Boolean prev_recode_mb)
+void write_macroblock (ImageParameters *img, Slice *currSlice, Macroblock* currMB, int eos_bit, Boolean prev_recode_mb)
 {
   int*        bitCount = currMB->bitcounter;
   int i;
@@ -2167,14 +2175,14 @@ void write_one_macroblock (Slice *currSlice, Macroblock* currMB, int eos_bit, Bo
   }
 
   //===== init and update number of intra macroblocks =====
-  if (img->current_mb_nr==0)
+  if (currMB->mb_nr == 0)
     intras=0;
 
   if (IS_INTRA(currMB))
     intras++;
 
   //--- write non-slice termination symbol if the macroblock is not the first one in its slice ---
-  if (currSlice->symbol_mode==CABAC && img->current_mb_nr != currSlice->start_mb_nr && eos_bit)
+  if (currSlice->symbol_mode==CABAC && currMB->mb_nr != currSlice->start_mb_nr && eos_bit)
   {
     write_terminating_bit (currSlice, 0);
   }
@@ -2183,7 +2191,7 @@ void write_one_macroblock (Slice *currSlice, Macroblock* currMB, int eos_bit, Bo
   // trace: write macroblock header
   if (p_trace)
   {
-    fprintf(p_trace, "\n*********** Pic: %i (I/P) MB: %i Slice: %i **********\n\n", frame_no, img->current_mb_nr, img->current_slice_nr);
+    fprintf(p_trace, "\n*********** Pic: %i (I/P) MB: %i Slice: %i **********\n\n", img->frame_no, currMB->mb_nr, img->current_slice_nr);
   }
 #endif
 
@@ -2196,7 +2204,7 @@ void write_one_macroblock (Slice *currSlice, Macroblock* currMB, int eos_bit, Bo
 
   if (!((currMB->mb_type !=0 ) || ((img->type==B_SLICE) && currMB->cbp != 0) ))
   {
-      reset_mb_nz_coeff(img->current_mb_nr);  // CAVLC
+      reset_mb_nz_coeff(currMB->mb_nr);  // CAVLC
   }
 
   //--- set total bit-counter ---
@@ -2887,11 +2895,11 @@ int writeCoeff16x16 (Slice* currSlice, Macroblock* currMB, ColorPlane plane, int
   {
     for (i=0; i < 4; i++)
       for (k=4*plane; k<4*(plane+1); k++)
-        img->nz_coeff [img->current_mb_nr][i][k] = 0;
+        img->nz_coeff [currMB->mb_nr][i][k] = 0;
   }
   else
   {
-    reset_mb_nz_coeff(img->current_mb_nr);
+    reset_mb_nz_coeff(currMB->mb_nr);
   }
 
 
@@ -3428,7 +3436,7 @@ int writeCoeff4x4_CAVLC (Slice* currSlice, Macroblock* currMB, int block_type, i
         subblock_y = param & 15;
         nnz = predict_nnz_chroma(currMB, subblock_x, subblock_y);
       }
-      img->nz_coeff [img->current_mb_nr ][subblock_x][subblock_y] = numcoeff;
+      img->nz_coeff [currMB->mb_nr ][subblock_x][subblock_y] = numcoeff;
     }
     else if (block_type==CB || block_type==CB_INTRA16x16DC 
       || block_type==CB_INTRA16x16AC)
@@ -3438,7 +3446,7 @@ int writeCoeff4x4_CAVLC (Slice* currSlice, Macroblock* currMB, int block_type, i
       subblock_y = (b8 < 2) ? ((b4 < 2) ? 0 : 1) : ((b4 < 2) ? 2 : 3); 
       // vert.  position for coeff_count context
       nnz = predict_nnz(currMB, CB, subblock_x,subblock_y);
-      img->nz_coeff [img->current_mb_nr ][subblock_x][4+subblock_y] = numcoeff;
+      img->nz_coeff [currMB->mb_nr ][subblock_x][4+subblock_y] = numcoeff;
     }
     else
     { //CR in the common mode in 4:4:4 profiles 
@@ -3447,7 +3455,7 @@ int writeCoeff4x4_CAVLC (Slice* currSlice, Macroblock* currMB, int block_type, i
       subblock_y = (b8 < 2) ? ((b4 < 2) ? 0 : 1) : ((b4 < 2) ? 2 : 3); 
       // vert.  position for coeff_count context
       nnz = predict_nnz(currMB, CR, subblock_x,subblock_y);
-      img->nz_coeff [img->current_mb_nr ][subblock_x][8+subblock_y] = numcoeff;
+      img->nz_coeff [currMB->mb_nr ][subblock_x][8+subblock_y] = numcoeff;
     }
 
     if (nnz < 2)

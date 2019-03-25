@@ -1,3 +1,9 @@
+Changes in Version JM 15.1 (since JM 15.0)
+------------------------------------------
+- encoder/decoder: Redundant picture bug fixes (KS)
+- encoder: fix config limit type for IntraProfile (KS, bug id #153)
+- decoder: fix copy and paste bug in pps_is_equal() (KS, bug id #157)
+
 Changes in Version JM 15.0 (since JM 14.2)
 ------------------------------------------
 - encoder: Various bug fixes relating to MBAFF and High 444P profile (EM)

@@ -608,7 +608,7 @@ void SetupFastFullPelSearch (Macroblock *currMB, short ref, int list)  // <--  r
       srcptr = orig_pels;
       bindex = 0;
 
-      refptr = UMVLine4X (ref_pic_sub.luma, abs_y4, abs_x4);
+      refptr = UMVLine4X (ref_pic_sub.luma, abs_y4, abs_x4, height_pad, width_pad);
 
       for (blky = 0; blky < 4; blky++)
       {
@@ -663,7 +663,7 @@ void SetupFastFullPelSearch (Macroblock *currMB, short ref, int list)  // <--  r
         {
           bindex = 0;
 
-          refptr = UMVLine8X_chroma (ref_pic_sub.crcb[k], abs_y4, abs_x4);
+          refptr = UMVLine8X_chroma (ref_pic_sub.crcb[k], abs_y4, abs_x4, height_pad_cr, width_pad_cr);
           for (blky = 0; blky < 4; blky++)
           {
             LineSadBlk0 = LineSadBlk1 = LineSadBlk2 = LineSadBlk3 = 0;
@@ -706,7 +706,7 @@ void SetupFastFullPelSearch (Macroblock *currMB, short ref, int list)  // <--  r
       srcptr = orig_pels;
       bindex = 0;
 
-      refptr = UMVLine4X (ref_pic_sub.luma, abs_y4, abs_x4);
+      refptr = UMVLine4X (ref_pic_sub.luma, abs_y4, abs_x4, height_pad, width_pad);
 
       for (blky = 0; blky < 4; blky++)
       {
@@ -745,7 +745,7 @@ void SetupFastFullPelSearch (Macroblock *currMB, short ref, int list)  // <--  r
         {
           bindex = 0;
 
-          refptr = UMVLine8X_chroma (ref_pic_sub.crcb[k], abs_y4, abs_x4);
+          refptr = UMVLine8X_chroma (ref_pic_sub.crcb[k], abs_y4, abs_x4, height_pad_cr, width_pad_cr);
           for (blky = 0; blky < 4; blky++)
           {
             LineSadBlk0 = LineSadBlk1 = LineSadBlk2 = LineSadBlk3 = 0;

@@ -217,22 +217,22 @@ int pps_is_equal(pic_parameter_set_rbsp_t *pps1, pic_parameter_set_rbsp_t *pps2)
   //Fidelity Range Extensions Stuff
   //It is initialized to zero, so should be ok to check all the time.
   equal &= (pps1->transform_8x8_mode_flag == pps2->transform_8x8_mode_flag);
-  equal &= (pps1->pic_scaling_matrix_present_flag == pps2->transform_8x8_mode_flag);
+  equal &= (pps1->pic_scaling_matrix_present_flag == pps2->pic_scaling_matrix_present_flag);
   if(pps1->pic_scaling_matrix_present_flag)
   {
     for(i = 0; i < (6 + ((unsigned)pps1->transform_8x8_mode_flag << 1)); i++)
     {
-      equal &= (pps1->pic_scaling_list_present_flag[i] == pps2->pic_scaling_list_present_flag[i]); 
+      equal &= (pps1->pic_scaling_list_present_flag[i] == pps2->pic_scaling_list_present_flag[i]);
       if(pps1->pic_scaling_list_present_flag[i])
       {
         if(i < 6)
         {
-          for (j = 0; j < 16; j++)         
+          for (j = 0; j < 16; j++)
             equal &= (pps1->ScalingList4x4[i][j] == pps2->ScalingList4x4[i][j]);
         }
         else
         {
-          for (j = 0; j < 64; j++)                 
+          for (j = 0; j < 64; j++)
             equal &= (pps1->ScalingList8x8[i-6][j] == pps2->ScalingList8x8[i-6][j]);
         }
       }

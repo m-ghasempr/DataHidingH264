@@ -189,6 +189,15 @@
 				RelativePath=".\ldecod\src\image.c">
 			</File>
 			<File
+				RelativePath=".\ldecod\src\intra16x16_pred.c">
+			</File>
+			<File
+				RelativePath=".\ldecod\src\intra4x4_pred.c">
+			</File>
+			<File
+				RelativePath=".\ldecod\src\intra8x8_pred.c">
+			</File>
+			<File
 				RelativePath=".\ldecod\src\ldecod.c">
 			</File>
 			<File
@@ -311,6 +320,15 @@
 			</File>
 			<File
 				RelativePath=".\ldecod\inc\image.h">
+			</File>
+			<File
+				RelativePath=".\ldecod\inc\intra16x16_pred.h">
+			</File>
+			<File
+				RelativePath=".\ldecod\inc\intra4x4_pred.h">
+			</File>
+			<File
+				RelativePath=".\ldecod\inc\intra8x8_pred.h">
 			</File>
 			<File
 				RelativePath=".\ldecod\inc\leaky_bucket.h">

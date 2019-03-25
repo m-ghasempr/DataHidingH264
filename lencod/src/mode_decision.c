@@ -172,9 +172,9 @@ void init_enc_mb_params(Macroblock* currMB, RD_PARAMS *enc_mb, int intra, int bs
         for(k = 0; k < listXsize[l]; k++)
         {
           listX[l][k]->chroma_vector_adjustment= 0;
-          if((img->current_mb_nr & 0x01) == 0 && listX[l][k]->structure == BOTTOM_FIELD)
+          if((currMB->mb_nr & 0x01) == 0 && listX[l][k]->structure == BOTTOM_FIELD)
             listX[l][k]->chroma_vector_adjustment = -2;
-          if((img->current_mb_nr & 0x01) == 1 && listX[l][k]->structure == TOP_FIELD)
+          if((currMB->mb_nr & 0x01) == 1 && listX[l][k]->structure == TOP_FIELD)
             listX[l][k]->chroma_vector_adjustment = 2;
         }
       }
@@ -188,6 +188,9 @@ void init_enc_mb_params(Macroblock* currMB, RD_PARAMS *enc_mb, int intra, int bs
       }
     }
   }
+
+  // reset chroma intra predictor to default
+  currMB->c_ipred_mode = DC_PRED_8;
 }
 
 /*!
@@ -405,9 +408,7 @@ void submacroblock_mode_decision(Slice *currSlice,
                                  RD_PARAMS *enc_mb,
                                  RD_8x8DATA *dataTr,
                                  Macroblock *currMB,
-                                 int ***cofACtr,
-                                 int ***cofACCbCrtr1, 
-                                 int ***cofACCbCrtr2,
+                                 int ****cofACtr,
                                  int *have_direct,
                                  short bslice,
                                  int block,
@@ -453,7 +454,7 @@ void submacroblock_mode_decision(Slice *currSlice,
   for(j = 0; j <= 1; j++)
   {
     for(i = 0; i <= 1; i++)
-      best_nz_coeff[i][j] = img->nz_coeff[img->current_mb_nr][i1 + i][j1 + j] = 0;
+      best_nz_coeff[i][j] = img->nz_coeff[currMB->mb_nr][i1 + i][j1 + j] = 0;
   }
 #endif
 
@@ -610,8 +611,8 @@ void submacroblock_mode_decision(Slice *currSlice,
         {
           for(i = 0; i <= 1; i++)
           {
-            best_nz_coeff[i][0]= img->nz_coeff[img->current_mb_nr][i1 + i][j1    ];
-            best_nz_coeff[i][1]= img->nz_coeff[img->current_mb_nr][i1 + i][j1 + 1];
+            best_nz_coeff[i][0]= img->nz_coeff[currMB->mb_nr][i1 + i][j1    ];
+            best_nz_coeff[i][1]= img->nz_coeff[currMB->mb_nr][i1 + i][j1 + 1];
           }
         }
         else
@@ -632,13 +633,13 @@ void submacroblock_mode_decision(Slice *currSlice,
         cbp_blk8x8 |= curr_cbp_blk;
 
         //--- store coefficients ---
-        memcpy(&cofACtr[0][0][0],&img->cofAC[block][0][0][0], 4 * 2 * 65 * sizeof(int));
+        memcpy(&cofACtr[0][0][0][0],&img->cofAC[block][0][0][0], 4 * 2 * 65 * sizeof(int));
 
         if( img->P444_joined ) 
         {
           //--- store coefficients ---
-          memcpy(&cofACCbCrtr1[0][0][0],&img->cofAC[block + 4][0][0][0], 4 * 2 * 65 * sizeof(int));
-          memcpy(&cofACCbCrtr2[0][0][0],&img->cofAC[block + 8][0][0][0], 4 * 2 * 65 * sizeof(int));
+          memcpy(&cofACtr[1][0][0][0],&img->cofAC[block + 4][0][0][0], 4 * 2 * 65 * sizeof(int));
+          memcpy(&cofACtr[2][0][0][0],&img->cofAC[block + 8][0][0][0], 4 * 2 * 65 * sizeof(int));
         }
 
         //--- store reconstruction and prediction ---
@@ -693,7 +694,7 @@ void submacroblock_mode_decision(Slice *currSlice,
     for(i = 0; i <= 1; i++)  
     {
       for(j = 0; j <= 1; j++)
-        img->nz_coeff[img->current_mb_nr][i1 + i][j1 + j] = best_nz_coeff[i][j];
+        img->nz_coeff[currMB->mb_nr][i1 + i][j1 + j] = best_nz_coeff[i][j];
     }
 #endif
 
@@ -779,9 +780,7 @@ void submacroblock_mode_decision_low(Slice *currSlice,
                                      RD_PARAMS *enc_mb,
                                      RD_8x8DATA *dataTr,
                                      Macroblock *currMB,
-                                     int ***cofACtr,
-                                     int ***cofACCbCrtr1, 
-                                     int ***cofACCbCrtr2,
+                                     int ****cofACtr,
                                      int *have_direct,
                                      short bslice,
                                      int block,
@@ -829,7 +828,7 @@ void submacroblock_mode_decision_low(Slice *currSlice,
   for(j = 0; j <= 1; j++)
   {
     for(i = 0; i <= 1; i++)
-      best_nz_coeff[i][j] = img->nz_coeff[img->current_mb_nr][i1 + i][j1 + j] = 0;
+      best_nz_coeff[i][j] = img->nz_coeff[currMB->mb_nr][i1 + i][j1 + j] = 0;
   }
 #endif
 
@@ -1008,10 +1007,10 @@ void submacroblock_mode_decision_low(Slice *currSlice,
 #ifdef BEST_NZ_COEFF
         if (cnt_nonz)
         {
-          best_nz_coeff[0][0]= img->nz_coeff[img->current_mb_nr][i1    ][j1    ];
-          best_nz_coeff[0][1]= img->nz_coeff[img->current_mb_nr][i1    ][j1 + 1];
-          best_nz_coeff[1][0]= img->nz_coeff[img->current_mb_nr][i1 + 1][j1    ];
-          best_nz_coeff[1][1]= img->nz_coeff[img->current_mb_nr][i1 + 1][j1 + 1];
+          best_nz_coeff[0][0]= img->nz_coeff[currMB->mb_nr][i1    ][j1    ];
+          best_nz_coeff[0][1]= img->nz_coeff[currMB->mb_nr][i1    ][j1 + 1];
+          best_nz_coeff[1][0]= img->nz_coeff[currMB->mb_nr][i1 + 1][j1    ];
+          best_nz_coeff[1][1]= img->nz_coeff[currMB->mb_nr][i1 + 1][j1 + 1];
         }
         else
         {
@@ -1044,7 +1043,7 @@ void submacroblock_mode_decision_low(Slice *currSlice,
     for(i = 0; i <= 1; i++)  
     {
       for(j = 0; j <= 1; j++)
-        img->nz_coeff[img->current_mb_nr][i1 + i][j1 + j] = best_nz_coeff[i][j];
+        img->nz_coeff[currMB->mb_nr][i1 + i][j1 + j] = best_nz_coeff[i][j];
     }
 #endif
 
@@ -1087,13 +1086,13 @@ void submacroblock_mode_decision_low(Slice *currSlice,
     cbp_blk8x8   |= curr_cbp_blk;
 
     //--- store coefficients ---
-    memcpy(cofACtr[0][0],img->cofAC[block][0][0],4 * 2 * 65 * sizeof(int));
+    memcpy(cofACtr[0][0][0],img->cofAC[block][0][0], 4 * 2 * 65 * sizeof(int));
 
     if(img->P444_joined) 
     {
       //--- store coefficients ---
-      memcpy(cofACCbCrtr1[0][0],img->cofAC[block + 4][0][0], 4 * 2 * 65 * sizeof(int));
-      memcpy(cofACCbCrtr2[0][0],img->cofAC[block + 8][0][0], 4 * 2 * 65 * sizeof(int));
+      memcpy(cofACtr[1][0][0],img->cofAC[block + 4][0][0], 4 * 2 * 65 * sizeof(int));
+      memcpy(cofACtr[2][0][0],img->cofAC[block + 8][0][0], 4 * 2 * 65 * sizeof(int));
     }
 
 
@@ -1102,6 +1101,7 @@ void submacroblock_mode_decision_low(Slice *currSlice,
     {
       memcpy(&dataTr->rec_mbY8x8[j][i0], &enc_picture->imgY[img->pix_y + j][img->pix_x + i0], BLOCK_SIZE_8x8 * sizeof (imgpel));
     }
+
     for (j = j0; j < j0 + BLOCK_SIZE_8x8; j++)
     {
       memcpy(&dataTr->mpr8x8[j][i0], &mb_pred[j][i0], BLOCK_SIZE_8x8 * sizeof (imgpel));
@@ -1209,16 +1209,16 @@ void get_initial_mb16x16_cost(Macroblock* currMB)
 {
   if (currMB->mb_available_left && currMB->mb_available_up)
   {
-    mb16x16_cost = (mb16x16_cost_frame[img->current_mb_nr - 1] +
-      mb16x16_cost_frame[img->current_mb_nr - (img->width>>4)] + 1)/2.0;
+    mb16x16_cost = (mb16x16_cost_frame[currMB->mb_nr - 1] +
+      mb16x16_cost_frame[currMB->mb_nr - (img->width>>4)] + 1)/2.0;
   }
   else if (currMB->mb_available_left)
   {
-    mb16x16_cost = mb16x16_cost_frame[img->current_mb_nr - 1];
+    mb16x16_cost = mb16x16_cost_frame[currMB->mb_nr - 1];
   }
   else if (currMB->mb_available_up)
   {
-    mb16x16_cost = mb16x16_cost_frame[img->current_mb_nr - (img->width>>4)];
+    mb16x16_cost = mb16x16_cost_frame[currMB->mb_nr - (img->width>>4)];
   }
   else
   {

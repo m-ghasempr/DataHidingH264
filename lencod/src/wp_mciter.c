@@ -1,7 +1,7 @@
 
 /*!
 *************************************************************************************
-* \file wp_itermc.c
+* \file wp_mciter.c
 *
 * \brief
 *    Estimate weights for WP using iterative MC method

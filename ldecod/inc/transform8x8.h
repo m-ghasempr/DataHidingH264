@@ -17,6 +17,6 @@
 #ifndef _TRANSFORM8X8_H_
 #define _TRANSFORM8X8_H_
 
-int    intrapred8x8(ImageParameters *img, Macroblock *currMB, ColorPlane pl, int b8);
+extern void itrans8x8   (ImageParameters *img, Macroblock *currMB, ColorPlane pl, int ioff, int joff);
 
 #endif

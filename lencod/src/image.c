@@ -454,7 +454,6 @@ int encode_one_frame (ImageParameters *img)
     pWPX->curr_wp_rd_pass->algorithm = WP_REGULAR;
   }
 
-
   if (params->PicInterlace == FIELD_CODING)
   {
     //Rate control
@@ -499,6 +498,7 @@ int encode_one_frame (ImageParameters *img)
       si_frame_indicator=1;
       frame_picture (frame_pic_si, &imgData, 0);
     }
+
     if ((img->type == SP_SLICE) && (params->sp_output_indicator))
     {
       // output the transformed and quantized coefficients (useful for switching SP frames)
@@ -725,8 +725,11 @@ int encode_one_frame (ImageParameters *img)
 
 #ifdef _LEAKYBUCKET_
   // Store bits used for this frame and increment counter of no. of coded frames
-  Bit_Buffer[total_frame_buffer] = (long) (stats->bit_ctr - stats->bit_ctr_n);
-  total_frame_buffer++;
+  if (!redundant_coding)
+  {
+    Bit_Buffer[total_frame_buffer] = (long) (stats->bit_ctr - stats->bit_ctr_n);
+    total_frame_buffer++;
+  }
 #endif
 
   // POC200301: Verify that POC coding type 2 is not used if more than one consecutive
@@ -1274,7 +1277,11 @@ static void init_frame (ImageParameters *img)
           img->qp = params->qp[1][I_SLICE];
         else
           img->qp = params->qp[0][I_SLICE];   // set quant. parameter for I-frame
-
+        if (redundant_coding)
+        {
+          //!KS: hard code qp increment
+          img->qp = imin(img->qp + 5, 51);
+        }
       }
       else
       {
@@ -1864,10 +1871,15 @@ static void ReportIntra(int64 tmp_time, int64 me_time)
 {
   char pic_type[4];
 
-  if (img->currentPicture->idr_flag == TRUE)
-    strcpy(pic_type,"IDR");
+  if ((params->redundant_pic_flag == 0) || !redundant_coding )
+  {
+    if (img->currentPicture->idr_flag == TRUE)
+      strcpy(pic_type,"IDR");
+    else
+      strcpy(pic_type," I ");
+  }
   else
-    strcpy(pic_type," I ");
+    strcpy(pic_type,"R");
 
   if (params->Verbose == 1)
   {
@@ -1972,6 +1984,8 @@ static void ReportP(int64 tmp_time, int64 me_time)
  *    coded image horizontal size (chroma)
  * \param img_size_y_cr
  *    code image vertical size (chroma)
+ * \param pImage
+ *    image planes
  ************************************************************************
  */
 static void PaddAutoCropBorders (FrameFormat output, int img_size_x, int img_size_y, int img_size_x_cr, int img_size_y_cr, imgpel **pImage[3])

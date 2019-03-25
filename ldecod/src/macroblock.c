@@ -41,6 +41,9 @@
 #include "transform.h"
 #include "mc_prediction.h"
 #include "quant.h"
+#include "intra4x4_pred.h"
+#include "intra8x8_pred.h"
+#include "intra16x16_pred.h"
 
 #if TRACE
 #define TRACE_STRING(s) strncpy(currSE.tracestring, s, TRACESTRING_SIZE)
@@ -4241,7 +4244,7 @@ int decode_one_component(ImageParameters *img, ColorPlane curr_plane, imgpel **c
 
   if (IS_I16MB (currMB)) // get prediction for INTRA_MB_16x16
   {
-    intrapred_luma_16x16(img, currMB, curr_plane, currMB->i16mode);
+    intrapred16x16(img, currMB, curr_plane, currMB->i16mode);
     ipmode_DPCM = currMB->i16mode; //For residual DPCM
     // =============== 4x4 itrans ================
     // -------------------------------------------
@@ -4461,7 +4464,6 @@ int decode_one_component(ImageParameters *img, ColorPlane curr_plane, imgpel **c
                 motion->mv  [LIST_1][j4][i4][0] = 0;
                 motion->mv  [LIST_1][j4][i4][1] = 0;
                 motion->ref_idx[LIST_1][j4][i4] = l1_rFrame;
-
               }
               else
               {

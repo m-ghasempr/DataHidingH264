@@ -24,32 +24,6 @@
 #include "quant.h"
 #include "memalloc.h"
 
-// Notation for comments regarding prediction and predictors.
-// The pels of the 4x4 block are labelled a..p. The predictor pels above
-// are labelled A..H, from the left I..L, and from above left X, as follows:
-//
-//  X A B C D E F G H
-//  I a b c d
-//  J e f g h
-//  K i j k l
-//  L m n o p
-//
-
-// Predictor array index definitions
-#define P_X (PredPel[0])
-#define P_A (PredPel[1])
-#define P_B (PredPel[2])
-#define P_C (PredPel[3])
-#define P_D (PredPel[4])
-#define P_E (PredPel[5])
-#define P_F (PredPel[6])
-#define P_G (PredPel[7])
-#define P_H (PredPel[8])
-#define P_I (PredPel[9])
-#define P_J (PredPel[10])
-#define P_K (PredPel[11])
-#define P_L (PredPel[12])
-
 static int **M4;
 static int **PBlock;  
 
@@ -110,454 +84,6 @@ static void intra_chroma_DC_all(imgpel **curr_img, int up_avail, int left_avail,
 }
 
 /*!
- ***********************************************************************
- * \brief
- *    makes and returns 4x4 blocks with all 5 intra prediction modes
- *
- * \return
- *    DECODING_OK   decoding of intraprediction mode was sucessfull            \n
- *    SEARCH_SYNC   search next sync element as errors while decoding occured
- ***********************************************************************
- */
-int intrapred(ImageParameters *img,  //!< image parameters 
-              Macroblock *currMB, 
-              ColorPlane pl,               
-              int ioff,             //!< pixel offset X within MB
-              int joff,             //!< pixel offset Y within MB
-              int img_block_x,      //!< location of block X, multiples of 4
-              int img_block_y)      //!< location of block Y, multiples of 4
-{
-  int i,j;
-  int s0;  
-  imgpel PredPel[13];  // array of predictor pels
-  int uv = pl-1;
-  imgpel **imgY = (pl) ? dec_picture->imgUV[uv] : dec_picture->imgY;
-
-  PixelPos pix_a[4];
-  PixelPos pix_b, pix_c, pix_d;
-
-  int block_available_up;
-  int block_available_left;
-  int block_available_up_left;
-  int block_available_up_right;
-
-  byte predmode = img->ipredmode[img_block_y][img_block_x];
-  int jpos0 = joff, jpos1 = joff + 1, jpos2 = joff + 2, jpos3 = joff + 3;
-  int ipos0 = ioff, ipos1 = ioff + 1, ipos2 = ioff + 2, ipos3 = ioff + 3;
-  imgpel *predrow, prediction, **mb_pred = img->mb_pred[pl];
-
-  ipmode_DPCM = predmode; //For residual DPCM
-
-  for (i=0;i<4;i++)
-  {
-    getNeighbour(currMB, ioff -1 , joff +i , img->mb_size[IS_LUMA], &pix_a[i]);
-  }
-
-  getNeighbour(currMB, ioff    , joff -1 , img->mb_size[IS_LUMA], &pix_b);
-  getNeighbour(currMB, ioff +4 , joff -1 , img->mb_size[IS_LUMA], &pix_c);
-  getNeighbour(currMB, ioff -1 , joff -1 , img->mb_size[IS_LUMA], &pix_d);
-
-  pix_c.available = pix_c.available && !((ioff==4) && ((joff==4)||(joff==12)));
-
-  if (active_pps->constrained_intra_pred_flag)
-  {
-    for (i=0, block_available_left=1; i<4;i++)
-      block_available_left  &= pix_a[i].available ? img->intra_block[pix_a[i].mb_addr]: 0;
-    block_available_up       = pix_b.available ? img->intra_block [pix_b.mb_addr] : 0;
-    block_available_up_right = pix_c.available ? img->intra_block [pix_c.mb_addr] : 0;
-    block_available_up_left  = pix_d.available ? img->intra_block [pix_d.mb_addr] : 0;
-  }
-  else
-  {
-    block_available_left     = pix_a[0].available;
-    block_available_up       = pix_b.available;
-    block_available_up_right = pix_c.available;
-    block_available_up_left  = pix_d.available;
-  }
-
-  // form predictor pels
-  if (block_available_up)
-  {
-    P_A = imgY[pix_b.pos_y][pix_b.pos_x + 0];
-    P_B = imgY[pix_b.pos_y][pix_b.pos_x + 1];
-    P_C = imgY[pix_b.pos_y][pix_b.pos_x + 2];
-    P_D = imgY[pix_b.pos_y][pix_b.pos_x + 3];
-
-  }
-  else
-  {
-    P_A = P_B = P_C = P_D = (imgpel) img->dc_pred_value_comp[pl];
-  }
-
-  if (block_available_up_right)
-  {
-    P_E = imgY[pix_c.pos_y][pix_c.pos_x + 0];
-    P_F = imgY[pix_c.pos_y][pix_c.pos_x + 1];
-    P_G = imgY[pix_c.pos_y][pix_c.pos_x + 2];
-    P_H = imgY[pix_c.pos_y][pix_c.pos_x + 3];
-  }
-  else
-  {
-    P_E = P_F = P_G = P_H = P_D;
-  }
-
-  if (block_available_left)
-  {
-    P_I = imgY[pix_a[0].pos_y][pix_a[0].pos_x];
-    P_J = imgY[pix_a[1].pos_y][pix_a[1].pos_x];
-    P_K = imgY[pix_a[2].pos_y][pix_a[2].pos_x];
-    P_L = imgY[pix_a[3].pos_y][pix_a[3].pos_x];
-  }
-  else
-  {
-    P_I = P_J = P_K = P_L = (imgpel) img->dc_pred_value_comp[pl];
-  }
-
-  if (block_available_up_left)
-  {
-    P_X = imgY[pix_d.pos_y][pix_d.pos_x];
-  }
-  else
-  {
-    P_X = (imgpel) img->dc_pred_value_comp[pl];
-  }
-
-
-  switch (predmode)
-  {
-  case DC_PRED:                         /* DC prediction */
-
-    s0 = 0;
-    if (block_available_up && block_available_left)
-    {
-      // no edge
-      s0 = (P_A + P_B + P_C + P_D + P_I + P_J + P_K + P_L + 4)>>3;
-    }
-    else if (!block_available_up && block_available_left)
-    {
-      // upper edge
-      s0 = (P_I + P_J + P_K + P_L + 2)>>2;
-    }
-    else if (block_available_up && !block_available_left)
-    {
-      // left edge
-      s0 = (P_A + P_B + P_C + P_D + 2)>>2;
-    }
-    else //if (!block_available_up && !block_available_left)
-    {
-      // top left corner, nothing to predict from
-      s0 = img->dc_pred_value_comp[pl];
-    }
-
-    for (j=joff; j < joff + BLOCK_SIZE; j++)
-    {
-      for (i=ioff; i < ioff + BLOCK_SIZE; i++)
-      {
-        // store DC prediction
-        mb_pred[j][i] = (imgpel) s0;
-      }
-    }
-    break;
-
-  case VERT_PRED:                       /* vertical prediction from block above */
-    if (!block_available_up)
-      printf ("warning: Intra_4x4_Vertical prediction mode not allowed at mb %d\n", (int) img->current_mb_nr);
-
-    for(j = joff; j < joff + BLOCK_SIZE; j++) /* store predicted 4x4 block */
-      memcpy(&(mb_pred[j][ioff]), &(imgY[pix_b.pos_y][pix_b.pos_x]), BLOCK_SIZE * sizeof(imgpel));
-    break;
-
-  case HOR_PRED:                        /* horizontal prediction from left block */
-    if (!block_available_left)
-      printf ("warning: Intra_4x4_Horizontal prediction mode not allowed at mb %d\n",(int) img->current_mb_nr);
-
-    for(j=0;j<BLOCK_SIZE;j++)
-    {
-      predrow = mb_pred[j+joff];
-      prediction = imgY[pix_a[j].pos_y][pix_a[j].pos_x];
-      for(i = ioff;i < ioff + BLOCK_SIZE;i++)
-        predrow[i]= prediction; /* store predicted 4x4 block */
-    }
-    break;
-
-  case DIAG_DOWN_RIGHT_PRED:
-    if ((!block_available_up)||(!block_available_left)||(!block_available_up_left))
-      printf ("warning: Intra_4x4_Diagonal_Down_Right prediction mode not allowed at mb %d\n",(int) img->current_mb_nr);
-
-    mb_pred[jpos3][ipos0] = (imgpel) ((P_L + 2*P_K + P_J + 2) >> 2);
-    mb_pred[jpos2][ipos0] =
-    mb_pred[jpos3][ipos1] = (imgpel) ((P_K + 2*P_J + P_I + 2) >> 2);
-    mb_pred[jpos1][ipos0] =
-    mb_pred[jpos2][ipos1] =
-    mb_pred[jpos3][ipos2] = (imgpel) ((P_J + 2*P_I + P_X + 2) >> 2);
-    mb_pred[jpos0][ipos0] =
-    mb_pred[jpos1][ipos1] =
-    mb_pred[jpos2][ipos2] =
-    mb_pred[jpos3][ipos3] = (imgpel) ((P_I + 2*P_X + P_A + 2) >> 2);
-    mb_pred[jpos0][ipos1] =
-    mb_pred[jpos1][ipos2] =
-    mb_pred[jpos2][ipos3] = (imgpel) ((P_X + 2*P_A + P_B + 2) >> 2);
-    mb_pred[jpos0][ipos2] =
-    mb_pred[jpos1][ipos3] = (imgpel) ((P_A + 2*P_B + P_C + 2) >> 2);
-    mb_pred[jpos0][ipos3] = (imgpel) ((P_B + 2*P_C + P_D + 2) >> 2);
-    break;
-
-  case DIAG_DOWN_LEFT_PRED:
-    if (!block_available_up)
-      printf ("warning: Intra_4x4_Diagonal_Down_Left prediction mode not allowed at mb %d\n", (int) img->current_mb_nr);
-
-    mb_pred[jpos0][ipos0] = (imgpel) ((P_A + P_C + 2*(P_B) + 2) >> 2);
-    mb_pred[jpos0][ipos1] =
-    mb_pred[jpos1][ipos0] = (imgpel) ((P_B + P_D + 2*(P_C) + 2) >> 2);
-    mb_pred[jpos0][ipos2] =
-    mb_pred[jpos1][ipos1] =
-    mb_pred[jpos2][ipos0] = (imgpel) ((P_C + P_E + 2*(P_D) + 2) >> 2);
-    mb_pred[jpos0][ipos3] =
-    mb_pred[jpos1][ipos2] =
-    mb_pred[jpos2][ipos1] =
-    mb_pred[jpos3][ipos0] = (imgpel) ((P_D + P_F + 2*(P_E) + 2) >> 2);
-    mb_pred[jpos1][ipos3] =
-    mb_pred[jpos2][ipos2] =
-    mb_pred[jpos3][ipos1] = (imgpel) ((P_E + P_G + 2*(P_F) + 2) >> 2);
-    mb_pred[jpos2][ipos3] =
-    mb_pred[jpos3][ipos2] = (imgpel) ((P_F + P_H + 2*(P_G) + 2) >> 2);
-    mb_pred[jpos3][ipos3] = (imgpel) ((P_G + 3*(P_H) + 2) >> 2);
-    break;
-
-  case  VERT_RIGHT_PRED:/* diagonal prediction -22.5 deg to horizontal plane */
-    if ((!block_available_up)||(!block_available_left)||(!block_available_up_left))
-      printf ("warning: Intra_4x4_Vertical_Right prediction mode not allowed at mb %d\n", (int) img->current_mb_nr);
-
-    mb_pred[jpos0][ipos0] =
-    mb_pred[jpos2][ipos1] = (imgpel) ((P_X + P_A + 1) >> 1);
-    mb_pred[jpos0][ipos1] =
-    mb_pred[jpos2][ipos2] = (imgpel) ((P_A + P_B + 1) >> 1);
-    mb_pred[jpos0][ipos2] =
-    mb_pred[jpos2][ipos3] = (imgpel) ((P_B + P_C + 1) >> 1);
-    mb_pred[jpos0][ipos3] = (imgpel) ((P_C + P_D + 1) >> 1);
-    mb_pred[jpos1][ipos0] =
-    mb_pred[jpos3][ipos1] = (imgpel) ((P_I + 2*P_X + P_A + 2) >> 2);
-    mb_pred[jpos1][ipos1] =
-    mb_pred[jpos3][ipos2] = (imgpel) ((P_X + 2*P_A + P_B + 2) >> 2);
-    mb_pred[jpos1][ipos2] =
-    mb_pred[jpos3][ipos3] = (imgpel) ((P_A + 2*P_B + P_C + 2) >> 2);
-    mb_pred[jpos1][ipos3] = (imgpel) ((P_B + 2*P_C + P_D + 2) >> 2);
-    mb_pred[jpos2][ipos0] = (imgpel) ((P_X + 2*P_I + P_J + 2) >> 2);
-    mb_pred[jpos3][ipos0] = (imgpel) ((P_I + 2*P_J + P_K + 2) >> 2);
-    break;
-
-  case  VERT_LEFT_PRED:/* diagonal prediction -22.5 deg to horizontal plane */
-    if (!block_available_up)
-      printf ("warning: Intra_4x4_Vertical_Left prediction mode not allowed at mb %d\n", (int) img->current_mb_nr);
-
-    mb_pred[jpos0][ipos0] = (imgpel) ((P_A + P_B + 1) >> 1);
-    mb_pred[jpos0][ipos1] =
-    mb_pred[jpos2][ipos0] = (imgpel) ((P_B + P_C + 1) >> 1);
-    mb_pred[jpos0][ipos2] =
-    mb_pred[jpos2][ipos1] = (imgpel) ((P_C + P_D + 1) >> 1);
-    mb_pred[jpos0][ipos3] =
-    mb_pred[jpos2][ipos2] = (imgpel) ((P_D + P_E + 1) >> 1);
-    mb_pred[jpos2][ipos3] = (imgpel) ((P_E + P_F + 1) >> 1);
-    mb_pred[jpos1][ipos0] = (imgpel) ((P_A + 2*P_B + P_C + 2) >> 2);
-    mb_pred[jpos1][ipos1] =
-    mb_pred[jpos3][ipos0] = (imgpel) ((P_B + 2*P_C + P_D + 2) >> 2);
-    mb_pred[jpos1][ipos2] =
-    mb_pred[jpos3][ipos1] = (imgpel) ((P_C + 2*P_D + P_E + 2) >> 2);
-    mb_pred[jpos1][ipos3] =
-    mb_pred[jpos3][ipos2] = (imgpel) ((P_D + 2*P_E + P_F + 2) >> 2);
-    mb_pred[jpos3][ipos3] = (imgpel) ((P_E + 2*P_F + P_G + 2) >> 2);
-    break;
-
-  case  HOR_UP_PRED:/* diagonal prediction -22.5 deg to horizontal plane */
-    if (!block_available_left)
-      printf ("warning: Intra_4x4_Horizontal_Up prediction mode not allowed at mb %d\n",(int) img->current_mb_nr);
-
-    mb_pred[jpos0][ipos0] = (imgpel) ((P_I + P_J + 1) >> 1);
-    mb_pred[jpos0][ipos1] = (imgpel) ((P_I + 2*P_J + P_K + 2) >> 2);
-    mb_pred[jpos0][ipos2] =
-    mb_pred[jpos1][ipos0] = (imgpel) ((P_J + P_K + 1) >> 1);
-    mb_pred[jpos0][ipos3] =
-    mb_pred[jpos1][ipos1] = (imgpel) ((P_J + 2*P_K + P_L + 2) >> 2);
-    mb_pred[jpos1][ipos2] =
-    mb_pred[jpos2][ipos0] = (imgpel) ((P_K + P_L + 1) >> 1);
-    mb_pred[jpos1][ipos3] =
-    mb_pred[jpos2][ipos1] = (imgpel) ((P_K + 2*P_L + P_L + 2) >> 2);
-    mb_pred[jpos2][ipos3] =
-    mb_pred[jpos3][ipos1] =
-    mb_pred[jpos3][ipos0] =
-    mb_pred[jpos2][ipos2] =
-    mb_pred[jpos3][ipos2] =
-    mb_pred[jpos3][ipos3] = (imgpel) P_L;
-    break;
-
-  case  HOR_DOWN_PRED:/* diagonal prediction -22.5 deg to horizontal plane */
-    if ((!block_available_up)||(!block_available_left)||(!block_available_up_left))
-      printf ("warning: Intra_4x4_Horizontal_Down prediction mode not allowed at mb %d\n", (int) img->current_mb_nr);
-
-    mb_pred[jpos0][ipos0] =
-    mb_pred[jpos1][ipos2] = (imgpel) ((P_X + P_I + 1) >> 1);
-    mb_pred[jpos0][ipos1] =
-    mb_pred[jpos1][ipos3] = (imgpel) ((P_I + 2*P_X + P_A + 2) >> 2);
-    mb_pred[jpos0][ipos2] = (imgpel) ((P_X + 2*P_A + P_B + 2) >> 2);
-    mb_pred[jpos0][ipos3] = (imgpel) ((P_A + 2*P_B + P_C + 2) >> 2);
-    mb_pred[jpos1][ipos0] =
-    mb_pred[jpos2][ipos2] = (imgpel) ((P_I + P_J + 1) >> 1);
-    mb_pred[jpos1][ipos1] =
-    mb_pred[jpos2][ipos3] = (imgpel) ((P_X + 2*P_I + P_J + 2) >> 2);
-    mb_pred[jpos2][ipos0] =
-    mb_pred[jpos3][ipos2] = (imgpel) ((P_J + P_K + 1) >> 1);
-    mb_pred[jpos2][ipos1] =
-    mb_pred[jpos3][ipos3] = (imgpel) ((P_I + 2*P_J + P_K + 2) >> 2);
-    mb_pred[jpos3][ipos0] = (imgpel) ((P_K + P_L + 1) >> 1);
-    mb_pred[jpos3][ipos1] = (imgpel) ((P_J + 2*P_K + P_L + 2) >> 2);
-    break;
-
-  default:
-    printf("Error: illegal intra_4x4 prediction mode: %d\n", (int) predmode);
-    return SEARCH_SYNC;
-    break;
-  }
-
-  return DECODING_OK;
-}
-
-
-/*!
- ***********************************************************************
- * \return
- *    best SAD
- ***********************************************************************
- */ 
-int intrapred_luma_16x16(ImageParameters *img, //!< image parameters
-                         Macroblock *currMB,  //!< Current Macroblock
-                         ColorPlane pl,       //!< Current colorplane (for 4:4:4)                         
-                         int predmode)        //!< prediction mode
-{
-  int s0 = 0, s1, s2;
-
-  int i,j;
-
-  int ih,iv;
-  int ib,ic,iaa;
-
-  int uv = pl-1;
-  imgpel **imgY = (pl) ? dec_picture->imgUV[uv] : dec_picture->imgY;
-  imgpel **mb_pred = &(img->mb_pred[pl][0]); 
-  imgpel *mpr_line;
-  imgpel prediction;
-  int max_imgpel_value = img->max_imgpel_value_comp[pl];
-
-  PixelPos up;          //!< pixel position p(0,-1)
-  PixelPos left[17];    //!< pixel positions p(-1, -1..15)
-
-  int up_avail, left_avail, left_up_avail;
-
-  s1=s2=0;
-
-  for (i=0;i<17;i++)
-  {
-    getNeighbour(currMB, -1 ,  i-1 , img->mb_size[IS_LUMA], &left[i]);
-  }
-  getNeighbour(currMB, 0     ,  -1 , img->mb_size[IS_LUMA], &up);
-
-  if (!active_pps->constrained_intra_pred_flag)
-  {
-    up_avail   = up.available;
-    left_avail = left[1].available;
-    left_up_avail = left[0].available;
-  }
-  else
-  {
-    up_avail      = up.available ? img->intra_block[up.mb_addr] : 0;
-    for (i=1, left_avail=1; i<17;i++)
-      left_avail  &= left[i].available ? img->intra_block[left[i].mb_addr]: 0;
-    left_up_avail = left[0].available ? img->intra_block[left[0].mb_addr]: 0;
-  }
-
-  switch (predmode)
-  {
-  case VERT_PRED_16:                       // vertical prediction from block above
-    if (!up_avail)
-      error ("invalid 16x16 intra pred Mode VERT_PRED_16",500);
-    for(j=0;j<MB_BLOCK_SIZE;j++)
-      memcpy(img->mb_pred[pl][j], &(imgY[up.pos_y][up.pos_x]), MB_BLOCK_SIZE * sizeof(imgpel));
-    break;
-  case HOR_PRED_16:                        // horizontal prediction from left block
-    if (!left_avail)
-      error ("invalid 16x16 intra pred Mode HOR_PRED_16",500);
-    for(j = 0; j < MB_BLOCK_SIZE; j++)
-    {
-      prediction = imgY[left[j+1].pos_y][left[j+1].pos_x];
-      for(i=0;i<MB_BLOCK_SIZE;i++)
-        mb_pred[j][i]= prediction; // store predicted 16x16 block
-    }
-    break;
-  case DC_PRED_16:                         // DC prediction
-    s1=s2=0;
-    for (i = 0; i < MB_BLOCK_SIZE; i++)
-    {
-      if (up_avail)
-        s1 += imgY[up.pos_y][up.pos_x+i];    // sum hor pix
-      if (left_avail)
-        s2 += imgY[left[i + 1].pos_y][left[i + 1].pos_x];    // sum vert pix
-    }
-    if (up_avail && left_avail)
-      s0 = (s1 + s2 + 16)>>5;       // no edge
-    if (!up_avail && left_avail)
-      s0 = (s2 + 8)>>4;              // upper edge
-    if (up_avail && !left_avail)
-      s0 = (s1 + 8)>>4;              // left edge
-    if (!up_avail && !left_avail)
-      s0 = img->dc_pred_value_comp[pl];                            // top left corner, nothing to predict from
-
-    for(j = 0; j < MB_BLOCK_SIZE; j++)
-      for(i = 0; i < MB_BLOCK_SIZE; i++)
-      {
-        mb_pred[j][i]=(imgpel) s0;
-      }
-
-    break;
-  case PLANE_16:// 16 bit integer plan pred
-    if (!up_avail || !left_up_avail  || !left_avail)
-      error ("invalid 16x16 intra pred Mode PLANE_16",500);
-
-    ih=0;
-    iv=0;
-
-    mpr_line = &imgY[up.pos_y][up.pos_x+7];
-    for (i = 1; i < 8; i++)
-    {
-      ih += i*(mpr_line[i] - mpr_line[-i]);
-      iv += i*(imgY[left[8+i].pos_y][left[8+i].pos_x] - imgY[left[8-i].pos_y][left[8-i].pos_x]);
-    }
-
-    ih += 8*(mpr_line[8] - imgY[left[0].pos_y][left[0].pos_x]);
-    iv += 8*(imgY[left[16].pos_y][left[16].pos_x] - imgY[left[0].pos_y][left[0].pos_x]);
-
-    ib=(5*ih+32)>>6;
-    ic=(5*iv+32)>>6;
-
-    iaa=16*(mpr_line[8] + imgY[left[16].pos_y][left[16].pos_x]);
-    for (j=0;j< MB_BLOCK_SIZE;j++)
-    {
-      for (i=0;i< MB_BLOCK_SIZE;i++)
-      {
-        mb_pred[j][i]=(imgpel) iClip1(max_imgpel_value,((iaa+(i-7)*ib +(j-7)*ic + 16)>>5));
-      }
-    }// store plane prediction
-    break;
-
-  default:
-    {                                    // indication of fault in bitstream,exit
-      printf("illegal 16x16 intra prediction mode input: %d\n",predmode);
-      return SEARCH_SYNC;
-    }
-  }
-
-  return DECODING_OK;
-}
-
-/*!
  ************************************************************************
  * \brief
  *    Chroma Intra prediction. Note that many operations can be moved
@@ -614,8 +140,10 @@ void intrapred_chroma(ImageParameters *img, Macroblock *currMB, int uv)
     up_avail = up.available ? img->intra_block[up.mb_addr] : 0;
     for (i=0, left_avail[0] = 1; i < cr_MB_y2;i++)
       left_avail[0]  &= left[i + 1].available ? img->intra_block[left[i + 1].mb_addr]: 0;
+
     for (i = cr_MB_y2, left_avail[1] = 1; i<cr_MB_y;i++)
       left_avail[1]  &= left[i + 1].available ? img->intra_block[left[i + 1].mb_addr]: 0;
+
     left_up_avail = left[0].available ? img->intra_block[left[0].mb_addr]: 0;
   }
 
@@ -652,10 +180,12 @@ void intrapred_chroma(ImageParameters *img, Macroblock *currMB, int uv)
         }
         
         for (jj = blk_y; jj < blk_y + BLOCK_SIZE; jj++)
+        {
           for (ii = blk_x; ii < blk_x + BLOCK_SIZE; ii++)
           {
             mb_pred[jj][ii]=(imgpel) pred;
           }
+        }
       }
     }
     break;
@@ -706,7 +236,8 @@ void intrapred_chroma(ImageParameters *img, Macroblock *currMB, int uv)
 
       for (j = 0; j < cr_MB_y; j++)
         for (i = 0; i < cr_MB_x; i++)
-          mb_pred[j][i]=(imgpel) iClip1(max_imgpel_value, ((iaa + (i - cr_MB_x2 + 1) * ib + (j - cr_MB_y2 + 1) * ic + 16) >> 5));  }
+          mb_pred[j][i]=(imgpel) iClip1(max_imgpel_value, ((iaa + (i - cr_MB_x2 + 1) * ib + (j - cr_MB_y2 + 1) * ic + 16) >> 5));  
+    }
     break;
   default:
     error("illegal chroma intra prediction mode", 600);
@@ -721,9 +252,9 @@ void intrapred_chroma(ImageParameters *img, Macroblock *currMB, int uv)
  ***********************************************************************
  */
 void itrans4x4(ImageParameters *img, //!< image parameters
-               ColorPlane pl,              
-               int ioff,            //!< index to 4x4 block
-               int joff)            //!<
+               ColorPlane pl,        //!< used color plane
+               int ioff,             //!< index to 4x4 block
+               int joff)             //!< index to 4x4 block
 {
   static int i,j;
 
@@ -753,7 +284,7 @@ void itrans4x4(ImageParameters *img, //!< image parameters
 void itrans4x4_ls(ImageParameters *img, //!< image parameters
                   ColorPlane pl,        //!< Color plane (for 4:4:4)                  
                   int ioff,             //!< index to 4x4 block
-                  int joff)             //!<
+                  int joff)             //!< index to 4x4 block
 {
   static int i,j;
 
@@ -779,14 +310,12 @@ void itrans4x4_ls(ImageParameters *img, //!< image parameters
 * \brief
 *    Inverse residual DPCM for Intra lossless coding
 *
-* \par Input:
-*    ioff_x,joff_y: Block position inside a macro block (0,4,8,12).
 ************************************************************************
-*/  //For residual DPCM
+*/
 void Inv_Residual_trans_4x4(ImageParameters *img, //!< image parameters
-                            ColorPlane pl,                            
-                            int ioff,            //!< index to 4x4 block
-                            int joff)
+                            ColorPlane pl,        //!< used color plane
+                            int ioff,             //!< index to 4x4 block
+                            int joff)             //!< index to 4x4 block
 {
   int i,j;
   int temp[4][4];
@@ -933,19 +462,21 @@ void Inv_Residual_trans_8x8(ImageParameters *img, Macroblock *currMB, ColorPlane
  *    Luma DC inverse transform
  ***********************************************************************
  */ 
-void itrans_2(ImageParameters *img, Macroblock *currMB, ColorPlane pl) //!< image parameters
+void itrans_2(ImageParameters *img,  //!< image parameters
+              Macroblock *currMB,    //!< current macroblock
+              ColorPlane pl)         //!< used color plane
 {
   int i,j;
 
-  int **cof = img->cof[pl];
+  int transform_pl = IS_INDEPENDENT(img) ? PLANE_Y /*img->colour_plane_id*/ : pl;
+  int **cof = img->cof[transform_pl];
   int qp_scaled = currMB->qp_scaled[pl];
 
   int qp_per = qp_per_matrix[ qp_scaled ];
-  int qp_rem = qp_rem_matrix[ qp_scaled ];    
-  int transform_pl = IS_INDEPENDENT(img) ? img->colour_plane_id : pl;
+  int qp_rem = qp_rem_matrix[ qp_scaled ];      
 
-  int invLevelScale = InvLevelScale4x4_Intra[transform_pl][qp_rem][0][0];
-
+  int invLevelScale = InvLevelScale4x4_Intra[pl][qp_rem][0][0];
+  
   // horizontal
   for (j=0; j < 4;j++) 
   {
@@ -968,10 +499,10 @@ void itrans_2(ImageParameters *img, Macroblock *currMB, ColorPlane pl) //!< imag
 }
 
 
-void itrans_sp(ImageParameters *img,  //!< image parameters
-               ColorPlane pl, 
+void itrans_sp(ImageParameters *img, //!< image parameters
+               ColorPlane pl,        //!< used color plane
                int ioff,             //!< index to 4x4 block
-               int joff)              //!<
+               int joff)             //!< index to 4x4 block
 {
   int i,j;  
   int ilev, icof;

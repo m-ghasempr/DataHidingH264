@@ -334,7 +334,7 @@ void DumpRTPHeader (RTPpacket_t *p)
  * \param p
  *    packet data structure, with memory for p->packet allocated
  *
- * \param bits
+ * \param bitstream
  *    target file
  *
  * \par Side effects:

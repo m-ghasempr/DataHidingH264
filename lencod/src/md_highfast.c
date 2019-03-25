@@ -18,7 +18,6 @@
 #include "mb_access.h"
 #include "intrarefresh.h"
 #include "image.h"
-#include "transform8x8.h"
 #include "ratectl.h"
 #include "mode_decision.h"
 #include "fmo.h"
@@ -29,7 +28,61 @@
 #include "vlc.h"
 #include "rdopt.h"
 
-static void fast_mode_intra_decision(Macroblock *currMB, short *intra_skip, double min_rate);
+/*!
+*************************************************************************************
+* \brief
+*    Fast intra decision
+*************************************************************************************
+*/
+
+static void fast_mode_intra_decision(Macroblock *currMB, short *intra_skip, double min_rate)
+{
+  int i;
+  int mb_available_up, mb_available_left, mb_available_up_left;
+  long SBE;
+  double AR = 0, ABE = 0;
+  PixelPos up;       //!< pixel position p(0,-1)
+  PixelPos left[2];  //!< pixel positions p(-1, -1..0)
+
+  getNeighbour(currMB,  0 ,  -1 , img->mb_size[IS_LUMA], &up);
+  getNeighbour(currMB, -1 ,  -1 , img->mb_size[IS_LUMA], &left[0]);
+  getNeighbour(currMB, -1 ,   0 , img->mb_size[IS_LUMA], &left[1]);
+  
+  mb_available_up       = up.available;
+  mb_available_up_left  = left[0].available;
+  mb_available_left     = left[1].available;
+
+  AR=(1.0/384)*min_rate;
+
+  SBE = 0;
+
+  if( (img->mb_y != (int)img->FrameHeightInMbs-1) && (img->mb_x != (int)img->PicWidthInMbs-1) && mb_available_left && mb_available_up)
+  {
+    for(i = 0; i < MB_BLOCK_SIZE; i++)
+    {
+      SBE += iabs(pCurImg[img->opix_y][img->opix_x+i] - enc_picture->imgY[img->pix_y-1][img->pix_x+i]);
+      SBE += iabs(pCurImg[img->opix_y+i][img->opix_x] - enc_picture->imgY[img->pix_y+i][img->pix_x-1]);
+    }
+
+    for(i = 0; i < 8; i++)
+    {
+      SBE += iabs(pImgOrg[1][img->opix_c_y][img->opix_c_x+i] - enc_picture->imgUV[0][img->pix_c_y-1][img->pix_c_x+i]);
+      SBE += iabs(pImgOrg[1][img->opix_c_y+i][img->opix_c_x] - enc_picture->imgUV[0][img->pix_c_y+i][img->pix_c_x-1]);
+      SBE += iabs(pImgOrg[2][img->opix_c_y][img->opix_c_x+i] - enc_picture->imgUV[1][img->pix_c_y-1][img->pix_c_x+i]);
+      SBE += iabs(pImgOrg[2][img->opix_c_y+i][img->opix_c_x] - enc_picture->imgUV[1][img->pix_c_y+i][img->pix_c_x-1]);
+    }
+    ABE = 1.0/64 * SBE;
+  }
+  else  // Image boundary
+  {
+    ABE = 0;
+  }
+
+  if(AR <= ABE)
+  {
+    *intra_skip = 1;
+  }
+}
 
 /*!
 *************************************************************************************
@@ -39,7 +92,7 @@ static void fast_mode_intra_decision(Macroblock *currMB, short *intra_skip, doub
 */
 void encode_one_macroblock_highfast (Slice *currSlice, Macroblock *currMB)
 {
-  int max_index;
+  int         max_index;
 
   int         block, index, mode, i, j, ctr16x16;
   char        best_pdir;
@@ -58,8 +111,7 @@ void encode_one_macroblock_highfast (Slice *currSlice, Macroblock *currMB)
   short       pslice      = (img->type==P_SLICE) || (img->type==SP_SLICE);
   short       intra       = (islice || (pslice && img->mb_y==img->mb_y_upd && img->mb_y_upd!=img->mb_y_intra));
   int         is_cavlc = (img->currentSlice->symbol_mode == CAVLC);
-  int         prev_mb_nr  = FmoGetPreviousMBNr(img->current_mb_nr);
-  Macroblock* prevMB      = (prev_mb_nr >= 0) ? &img->mb_data[prev_mb_nr]:NULL ;
+  Macroblock     *prevMB     = currMB->PrevMB; 
   Block8x8Info *b8x8info   = img->b8x8info;
 
   short   *allmvs = img->all_mv[0][0][0][0][0];
@@ -81,6 +133,12 @@ void encode_one_macroblock_highfast (Slice *currSlice, Macroblock *currMB)
   {
     smpUMHEX_decide_intrabk_SAD();
   }
+
+  if (params->AdaptiveRounding)
+  {
+    reset_adaptive_rounding();
+  }
+
   if (img->MbaffFrameFlag)
   {
     reset_mb_nz_coeff(img->current_mb_nr);
@@ -90,9 +148,6 @@ void encode_one_macroblock_highfast (Slice *currSlice, Macroblock *currMB)
 
   //===== Setup Macroblock encoding parameters =====
   init_enc_mb_params(currMB, &enc_mb, intra, bslice);
-
-  // reset chroma intra predictor to default
-  currMB->c_ipred_mode = DC_PRED_8;
 
   //=====   S T O R E   C O D I N G   S T A T E   =====
   //---------------------------------------------------
@@ -170,6 +225,7 @@ void encode_one_macroblock_highfast (Slice *currSlice, Macroblock *currMB)
           }
 
           assign_enc_picture_params(mode, best_pdir, 2 * block, enc_mb.list_offset[LIST_0], best_ref[LIST_0], best_ref[LIST_1], bslice, bipred_me);
+
           //----- set reference frame and direction parameters -----
           set_block8x8_info(b8x8info, mode, block, best_ref, best_pdir, bipred_me);
           
@@ -219,7 +275,6 @@ void encode_one_macroblock_highfast (Slice *currSlice, Macroblock *currMB)
         {
           best_mode = mode;
           min_cost  = cost;
-
           if (params->CtxAdptLagrangeMult == 1)
           {
             adjust_mb16x16_cost(cost);
@@ -248,7 +303,7 @@ void encode_one_macroblock_highfast (Slice *currSlice, Macroblock *currMB)
         //=====  LOOP OVER 8x8 SUB-PARTITIONS  (Motion Estimation & Mode Decision) =====
         for (cost_direct=cbp8x8=cbp_blk8x8=cnt_nonz_8x8=0, block=0; block<4; block++)
         {
-          submacroblock_mode_decision(currSlice, &enc_mb, &tr8x8, currMB, cofAC8x8ts[0][block], cofAC8x8ts[1][block], cofAC8x8ts[2][block],
+          submacroblock_mode_decision(currSlice, &enc_mb, &tr8x8, currMB, cofAC8x8ts[block],
             &have_direct, bslice, block, &cost_direct, &cost, &cost8x8_direct, 1, is_cavlc);
           set_subblock8x8_info(b8x8info, P8x8, block, &tr8x8);
         }
@@ -260,7 +315,7 @@ void encode_one_macroblock_highfast (Slice *currSlice, Macroblock *currMB)
         currMB->luma_transform_size_8x8_flag = 0; //switch to 4x4 transform size
 
         //--- re-set coding state (as it was before 8x8 block coding) ---
-        //reset_coding_state (currSlice, currMB, cs_mb);
+        reset_coding_state (currSlice, currMB, cs_mb);
       }// if (params->Transform8x8Mode)
 
 
@@ -273,7 +328,7 @@ void encode_one_macroblock_highfast (Slice *currSlice, Macroblock *currMB)
         //=====  LOOP OVER 8x8 SUB-PARTITIONS  (Motion Estimation & Mode Decision) =====
         for (cost_direct=cbp8x8=cbp_blk8x8=cnt_nonz_8x8=0, block=0; block<4; block++)
         {
-          submacroblock_mode_decision(currSlice, &enc_mb, &tr4x4, currMB, cofAC8x8[block], cofAC8x8CbCr[0][block], cofAC8x8CbCr[1][block],
+          submacroblock_mode_decision(currSlice, &enc_mb, &tr4x4, currMB, coefAC8x8[block],
             &have_direct, bslice, block, &cost_direct, &cost, &cost8x8_direct, 0, is_cavlc);
           set_subblock8x8_info(b8x8info, P8x8, block, &tr4x4);
         }
@@ -331,6 +386,7 @@ void encode_one_macroblock_highfast (Slice *currSlice, Macroblock *currMB)
         if (params->FastCrIntraDecision)
         {
           IntraChromaRDDecision(currMB, enc_mb);
+
           min_chroma_pred_mode = (short) currMB->c_ipred_mode;
           max_chroma_pred_mode = (short) currMB->c_ipred_mode;
         }
@@ -378,13 +434,8 @@ void encode_one_macroblock_highfast (Slice *currSlice, Macroblock *currMB)
               continue;
           }
 
-          // check if weights are in valid range for biprediction.
-          if (active_pps->weighted_bipred_idc == 1 && bslice && mode < P8x8) 
-          {
-            if (InvalidWeightsForBiPrediction(b8x8info, mode))
-              continue;
-          }
-          if (InvalidMotionVectors(b8x8info, mode))
+          // check if prediction parameters are in valid range.
+          if (CheckPredictionParams(active_pps, b8x8info, mode, bslice) == 0)
             continue;
 
           if (enc_mb.valid[mode])
@@ -512,58 +563,3 @@ void encode_one_macroblock_highfast (Slice *currSlice, Macroblock *currMB)
   }
 }
 
-/*!
-*************************************************************************************
-* \brief
-*    Fast intra decision
-*************************************************************************************
-*/
-
-static void fast_mode_intra_decision(Macroblock *currMB, short *intra_skip, double min_rate)
-{
-  int i;
-  int mb_available_up, mb_available_left, mb_available_up_left;
-  long SBE;
-  double AR = 0, ABE = 0;
-  PixelPos up;       //!< pixel position p(0,-1)
-  PixelPos left[2];  //!< pixel positions p(-1, -1..0)
-
-  getNeighbour(currMB,  0 ,  -1 , img->mb_size[IS_LUMA], &up);
-  getNeighbour(currMB, -1 ,  -1 , img->mb_size[IS_LUMA], &left[0]);
-  getNeighbour(currMB, -1 ,   0 , img->mb_size[IS_LUMA], &left[1]);
-  
-  mb_available_up       = up.available;
-  mb_available_up_left  = left[0].available;
-  mb_available_left     = left[1].available;
-
-  AR=(1.0/384)*min_rate;
-
-  SBE = 0;
-
-  if( (img->mb_y != (int)img->FrameHeightInMbs-1) && (img->mb_x != (int)img->PicWidthInMbs-1) && mb_available_left && mb_available_up)
-  {
-    for(i = 0; i < MB_BLOCK_SIZE; i++)
-    {
-      SBE += iabs(pCurImg[img->opix_y][img->opix_x+i] - enc_picture->imgY[img->pix_y-1][img->pix_x+i]);
-      SBE += iabs(pCurImg[img->opix_y+i][img->opix_x] - enc_picture->imgY[img->pix_y+i][img->pix_x-1]);
-    }
-
-    for(i = 0; i < 8; i++)
-    {
-      SBE += iabs(pImgOrg[1][img->opix_c_y][img->opix_c_x+i] - enc_picture->imgUV[0][img->pix_c_y-1][img->pix_c_x+i]);
-      SBE += iabs(pImgOrg[1][img->opix_c_y+i][img->opix_c_x] - enc_picture->imgUV[0][img->pix_c_y+i][img->pix_c_x-1]);
-      SBE += iabs(pImgOrg[2][img->opix_c_y][img->opix_c_x+i] - enc_picture->imgUV[1][img->pix_c_y-1][img->pix_c_x+i]);
-      SBE += iabs(pImgOrg[2][img->opix_c_y+i][img->opix_c_x] - enc_picture->imgUV[1][img->pix_c_y+i][img->pix_c_x-1]);
-    }
-    ABE = 1.0/64 * SBE;
-  }
-  else  // Image boundary
-  {
-    ABE = 0;
-  }
-
-  if(AR <= ABE)
-  {
-    *intra_skip = 1;
-  }
-}

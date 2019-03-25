@@ -2468,12 +2468,10 @@ void updateModelQPFrame( rc_quadratic *prc, int m_Bits )
 int rc_handle_mb( int prev_mb, Macroblock *currMB, Slice *currSlice )
 {
   int  mb_qp = img->qp;
-  Macroblock *prevMB = NULL;
+  Macroblock  *prevMB = currMB->PrevMB; 
 
   if (prev_mb > -1)
   {
-    prevMB = &img->mb_data[prev_mb];
-
     if ( params->MbInterlace == ADAPTIVE_CODING && !img->bot_MB && currMB->mb_field )
       mb_qp = prevMB->qp;
   }

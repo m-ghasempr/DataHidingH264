@@ -72,7 +72,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="odbc32.lib odbccp32.lib Ws2_32.lib"
+				AdditionalDependencies="Ws2_32.lib"
 				OutputFile="./bin/lencod.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -167,7 +167,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalOptions="/FIXED:NO"
-				AdditionalDependencies="odbc32.lib odbccp32.lib Ws2_32.lib"
+				AdditionalDependencies="Ws2_32.lib"
 				OutputFile="./bin/lencod.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"

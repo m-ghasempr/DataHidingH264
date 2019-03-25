@@ -41,7 +41,7 @@ InputParameters cfgparams;
 // We could separate this based on types to make it more flexible and allow also defaults for text types.
 Mapping Map[] = {
     {"ProfileIDC",               &cfgparams.ProfileIDC,                   0,   (double) PROFILE_IDC,      0,  0.0,              0.0,                             },
-    {"IntraProfile",             &cfgparams.IntraProfile,                 0,   0.0,                       3,  0.0,              1.0,                             }, 
+    {"IntraProfile",             &cfgparams.IntraProfile,                 0,   0.0,                       1,  0.0,              1.0,                             }, 
     {"LevelIDC",                 &cfgparams.LevelIDC,                     0,   (double) LEVEL_IDC,        0,  0.0,              0.0,                             },
     {"FrameRate",                &cfgparams.source.frame_rate,            2,   (double) INIT_FRAME_RATE,  1,  0.0,            100.0,                             },
     {"ResendSPS",                &cfgparams.ResendSPS,                    0,   0.0,                       1,  0.0,              3.0,                             },

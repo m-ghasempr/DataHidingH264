@@ -371,7 +371,7 @@ void trellis_mp(Slice *currSlice, Macroblock *currMB, int CurrentMbAddr, Boolean
       continue;
 #endif
 
-    reset_macroblock(currMB, prev_mb);
+    reset_macroblock(img, currMB, prev_mb);
     currMB->qp       = img->qp;
     currMB->delta_qp = currMB->qp - currMB->prev_qp;
     update_qp (img, currMB);
@@ -397,11 +397,11 @@ void trellis_mp(Slice *currSlice, Macroblock *currMB, int CurrentMbAddr, Boolean
 #endif
   }
 
-  reset_macroblock(currMB, prev_mb);
+  reset_macroblock(img, currMB, prev_mb);
   rdopt = &rddata_trellis_best;
 
-  copy_rdopt_data (currMB, FALSE);  // copy the MB data for Top MB from the temp buffers
-  write_one_macroblock (currSlice, currMB, 1, prev_recode_mb);
+  copy_rdopt_data  (currMB, FALSE);  // copy the MB data for Top MB from the temp buffers
+  write_macroblock (img, currSlice, currMB, 1, prev_recode_mb);
   img->qp = masterQP;
 }
 
@@ -430,7 +430,8 @@ void trellis_sp(Slice *currSlice, Macroblock *currMB, int CurrentMbAddr, Boolean
   }
 
   encode_one_macroblock (currSlice, currMB);
-  write_one_macroblock (currSlice, currMB, 1, prev_recode_mb);    
+
+  write_macroblock (img, currSlice, currMB, 1, prev_recode_mb);    
 }
 
 void trellis_coding(Slice *currSlice, Macroblock *currMB, int CurrentMbAddr, Boolean prev_recode_mb)

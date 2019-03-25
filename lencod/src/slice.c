@@ -346,7 +346,7 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
     else
       rdopt = &rddata_top_frame_mb;   // store data in top frame MB
 
-    start_macroblock (currSlice,  &currMB, CurrentMbAddr, FALSE);
+    start_macroblock (img, currSlice,  &currMB, CurrentMbAddr, FALSE);
 
     if(params->UseRDOQuant)
     {
@@ -358,10 +358,10 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
 
       encode_one_macroblock (currSlice, currMB);
 
-      write_one_macroblock (currSlice, currMB, 1, prev_recode_mb);    
+      write_macroblock (img, currSlice, currMB, 1, prev_recode_mb);    
     }
 
-    terminate_macroblock (currSlice, currMB, &end_of_slice, &recode_macroblock);
+    end_macroblock (img, currSlice, currMB, &end_of_slice, &recode_macroblock);
     prev_recode_mb = recode_macroblock;
     //       printf ("encode_one_slice: mb %d,  slice %d,   bitbuf bytepos %d EOS %d\n",
     //       img->current_mb_nr, img->current_slice_nr,
@@ -377,7 +377,7 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
         end_of_slice = TRUE;
       }
       NumberOfCodedMBs++;       // only here we are sure that the coded MB is actually included in the slice
-      proceed2nextMacroblock (currMB);
+      next_macroblock (img, currMB);
     }
     else
     {
@@ -497,7 +497,7 @@ int encode_one_slice_MBAFF (int SliceGroupId, Picture *pic, int TotalCodedMBs)
     //!      dummy encoding processes (for the R-D based selection), but that they are never
     //!      reset, once the selection is made.  I believe that this breaks the MB-adaptive
     //!      frame/field coding.  The necessary code for the state saves is readily available
-    //!      in macroblock.c, start_macroblock() and terminate_macroblock() (this code needs
+    //!      in macroblock.c, start_macroblock() and end_macroblock() (this code needs
     //!      to be double checked that it works with CA-VLC as well
     //!   2. would it be an option to allocate Bitstreams with zero data in them (or copy the
     //!      already generated bitstream) for the "test coding"?
@@ -528,7 +528,7 @@ int encode_one_slice_MBAFF (int SliceGroupId, Picture *pic, int TotalCodedMBs)
           rc_copy_generic( generic_RC_init, generic_RC ); // save initial RC status
       }
 
-      start_macroblock (currSlice, &currMB, CurrentMbAddr, FALSE);
+      start_macroblock (img, currSlice, &currMB, CurrentMbAddr, FALSE);
 
       rdopt = &rddata_top_frame_mb; // store data in top frame MB
       img->masterQP = img->qp;
@@ -543,7 +543,7 @@ int encode_one_slice_MBAFF (int SliceGroupId, Picture *pic, int TotalCodedMBs)
       // go to the bottom MB in the MB pair
       img->field_mode = FALSE;  // MB coded as frame  //GB
 
-      start_macroblock (currSlice, &currMB, CurrentMbAddr + 1, FALSE);
+      start_macroblock (img, currSlice, &currMB, CurrentMbAddr + 1, FALSE);
       rdopt = &rddata_bot_frame_mb; // store data in top frame MB
       img->masterQP = img->qp;
       encode_one_macroblock (currSlice, currMB);         // code the MB as frame
@@ -588,7 +588,7 @@ int encode_one_slice_MBAFF (int SliceGroupId, Picture *pic, int TotalCodedMBs)
           rc_copy_generic( generic_RC, generic_RC_init ); // reset RC stats
       }
 
-      start_macroblock (currSlice, &currMB, CurrentMbAddr, TRUE);
+      start_macroblock (img, currSlice, &currMB, CurrentMbAddr, TRUE);
 
       rdopt = &rddata_top_field_mb; // store data in top frame MB
       //        TopFieldIsSkipped = 0;        // set the top field MB skipped flag to 0
@@ -601,7 +601,7 @@ int encode_one_slice_MBAFF (int SliceGroupId, Picture *pic, int TotalCodedMBs)
       img->bot_MB = TRUE;//for Rate control
 
       img->top_field = FALSE;   // Set top field to 0
-      start_macroblock (currSlice, &currMB, CurrentMbAddr+1, TRUE);
+      start_macroblock (img, currSlice, &currMB, CurrentMbAddr+1, TRUE);
       rdopt = &rddata_bot_field_mb; // store data in top frame MB
       img->masterQP = img->qp;
       encode_one_macroblock (currSlice, currMB);         // code the MB as field
@@ -658,12 +658,12 @@ int encode_one_slice_MBAFF (int SliceGroupId, Picture *pic, int TotalCodedMBs)
     img->bot_MB = FALSE;// for Rate control
 
     // go back to the Top MB in the MB pair
-    start_macroblock (currSlice, &currMB, CurrentMbAddr, img->field_mode);
+    start_macroblock (img, currSlice, &currMB, CurrentMbAddr, img->field_mode);
 
     rdopt =  img->field_mode ? &rddata_top_field_mb : &rddata_top_frame_mb;
     copy_rdopt_data (currMB, 0);  // copy the MB data for Top MB from the temp buffers
-    write_one_macroblock (currSlice, currMB, 1, prev_recode_mb);     // write the Top MB data to the bitstream
-    terminate_macroblock (currSlice, currMB, &end_of_slice, &recode_macroblock);     // done coding the Top MB
+    write_macroblock (img, currSlice, currMB, 1, prev_recode_mb);     // write the Top MB data to the bitstream
+    end_macroblock   (img, currSlice, currMB, &end_of_slice, &recode_macroblock);     // done coding the Top MB
     prev_recode_mb = recode_macroblock;
 
     if (recode_macroblock == FALSE)       // The final processing of the macroblock has been done
@@ -676,19 +676,19 @@ int encode_one_slice_MBAFF (int SliceGroupId, Picture *pic, int TotalCodedMBs)
         end_of_slice = TRUE;
       }
       NumberOfCodedMBs++;       // only here we are sure that the coded MB is actually included in the slice
-      proceed2nextMacroblock (currMB);
+      next_macroblock (img, currMB);
 
       //Rate control
       img->bot_MB = TRUE;//for Rate control
       // go to the Bottom MB in the MB pair
       img->top_field = FALSE;
-      start_macroblock (currSlice, &currMB, CurrentMbAddr, img->field_mode);
+      start_macroblock (img, currSlice, &currMB, CurrentMbAddr, img->field_mode);
 
       rdopt = img->field_mode ? &rddata_bot_field_mb : &rddata_bot_frame_mb;
       copy_rdopt_data (currMB, 1);  // copy the MB data for Bottom MB from the temp buffers
 
-      write_one_macroblock (currSlice, currMB, 0, prev_recode_mb);     // write the Bottom MB data to the bitstream
-      terminate_macroblock (currSlice, currMB, &end_of_slice, &recode_macroblock);     // done coding the Top MB
+      write_macroblock (img, currSlice, currMB, 0, prev_recode_mb);     // write the Bottom MB data to the bitstream
+      end_macroblock   (img, currSlice, currMB, &end_of_slice, &recode_macroblock);     // done coding the Top MB
       prev_recode_mb = recode_macroblock;
       if (recode_macroblock == FALSE)       // The final processing of the macroblock has been done
       {
@@ -700,12 +700,11 @@ int encode_one_slice_MBAFF (int SliceGroupId, Picture *pic, int TotalCodedMBs)
           end_of_slice = TRUE;
         }
         NumberOfCodedMBs++;       // only here we are sure that the coded MB is actually included in the slice
-        proceed2nextMacroblock (currMB);
+        next_macroblock (img, currMB);
       }
       else
       {
         //Go back to the beginning of the macroblock pair to recode it
-        img->current_mb_nr = FmoGetPreviousMBNr(img->current_mb_nr);
         img->current_mb_nr = FmoGetPreviousMBNr(img->current_mb_nr);
         img->NumberofCodedMacroBlocks -= 2;
         if(img->current_mb_nr == -1 )   // The first MB of the slice group  is too big,
@@ -744,7 +743,7 @@ int encode_one_slice_MBAFF (int SliceGroupId, Picture *pic, int TotalCodedMBs)
       assert( CurrentMbAddr < (int)img->PicSizeInMbs );
       assert( CurrentMbAddr >= 0 );
       if (CurrentMbAddr == FmoGetLastCodedMBOfSliceGroup (FmoMB2SliceGroup (CurrentMbAddr)))
-        end_of_slice = TRUE;        // just in case it doesn't get set in terminate_macroblock
+        end_of_slice = TRUE;        // just in case it doesn't get set in end_macroblock
     }
   }
 

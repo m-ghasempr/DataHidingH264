@@ -66,7 +66,7 @@ static inline void ReadData (int vfile, int framesize_in_bytes, unsigned char *b
  *    Reads one new frame from concatenated raw file
  *    Code does not distinguish between planar and interleaved data
  *
- * \param vfile
+ * \param input_file
  *    Input file to read from
  * \param FrameNoInFile
  *    Frame number in the source file
@@ -142,7 +142,7 @@ void ReadFrameConcatenated (VideoDataFile *input_file, int FrameNoInFile, int He
  *    Reads one new frame from separate data files
  *    Code does not distinguish between planar and interleaved data
  *
- * \param vfile
+ * \param input_file
  *    Input file to read from
  * \param FrameNoInFile
  *    Frame number in the source file
@@ -150,8 +150,8 @@ void ReadFrameConcatenated (VideoDataFile *input_file, int FrameNoInFile, int He
  *    Number of bytes in the source file to be skipped
  * \param source
  *    source file (on disk) information 
- * \param output
- *    output file (for encoding) information
+ * \param buf
+ *    taget buffer
  ************************************************************************
  */
 void ReadFrameSeparate (VideoDataFile *input_file, int FrameNoInFile, int HeaderSize, FrameFormat *source, unsigned char *buf)

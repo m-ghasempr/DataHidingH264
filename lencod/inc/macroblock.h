@@ -20,16 +20,14 @@
 
 #include "block.h"
 
-void  proceed2nextMacroblock(Macroblock* currMB);
-void  start_macroblock(Slice *currSlice, Macroblock** currMB, int mb_addr, byte mb_field);
-void  reset_macroblock(Macroblock *currMB, int prev_mb);
-void  terminate_macroblock(Slice *currSlice, Macroblock* currMB, Boolean *end_of_slice, Boolean *recode_macroblock);
-
-void  write_one_macroblock(Slice *currSlice, Macroblock* currMB, int eos_bit, Boolean prev_recode_mb);
+void  next_macroblock  (ImageParameters *img, Macroblock* currMB);
+void  start_macroblock (ImageParameters *img, Slice *currSlice, Macroblock** currMB, int mb_addr, byte mb_field);
+void  reset_macroblock (ImageParameters *img, Macroblock *currMB, int prev_mb);
+void  end_macroblock   (ImageParameters *img, Slice *currSlice, Macroblock* currMB, Boolean *end_of_slice, Boolean *recode_macroblock);
+void  write_macroblock (ImageParameters *img, Slice *currSlice, Macroblock* currMB, int eos_bit, Boolean prev_recode_mb);
 
 int  LumaResidualCoding8x8(Macroblock* currMB, int*, int64*, int, short, int, int, short, short, int);
 void LumaResidualCoding   (Macroblock *currMB, int is_cavlc);
-
 void ChromaResidualCoding (Macroblock *currMB, int is_cavlc);
 
 void IntraChromaPrediction(Macroblock *currMB, int*, int*, int*);

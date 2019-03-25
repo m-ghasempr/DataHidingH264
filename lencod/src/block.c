@@ -1226,7 +1226,7 @@ static int Inv_Residual_DPCM_4x4(int **m7, int block_y, int block_x)
   {
     for(i=0; i<4; i++)
     {
-      temp[i][0] = m7[block_y+i][block_x+0];
+      temp[i][0] = m7[block_y + i][block_x + 0];
       temp[i][1] = m7[block_y + i][block_x + 1] + temp[i][0];
       temp[i][2] = m7[block_y + i][block_x + 2] + temp[i][1];
       temp[i][3] = m7[block_y + i][block_x + 3] + temp[i][2];    

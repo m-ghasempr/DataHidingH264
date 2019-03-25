@@ -245,24 +245,24 @@ static int ref_pic_list_reordering(Bitstream *bitstream)
   Slice *currSlice = img->currentSlice;
 
   int i, len=0;
-
-  // RPLR for redundant pictures
-  if(params->redundant_pic_flag && redundant_coding)
-  {
-    currSlice->ref_pic_list_reordering_flag_l0 = 1;
-    currSlice->reordering_of_pic_nums_idc_l0[0] = 0;
-    currSlice->reordering_of_pic_nums_idc_l0[1] = 3;
-    currSlice->abs_diff_pic_num_minus1_l0[0] = redundant_ref_idx - 1;
-    currSlice->long_term_pic_idx_l0[0] = 0;
-    reorder_ref_pic_list( listX[LIST_0], &listXsize[LIST_0],
-                          img->num_ref_idx_l0_active-1,
-                          currSlice->reordering_of_pic_nums_idc_l0,
-                          currSlice->abs_diff_pic_num_minus1_l0,
-                          currSlice->long_term_pic_idx_l0);
-  }
-
   if ((img->type!=I_SLICE) /*&&(img->type!=SI_IMG)*/ )
   {
+    // RPLR for redundant pictures
+    // !KS: that should actually be moved somewhere else
+    if(params->redundant_pic_flag && redundant_coding)
+    {
+      currSlice->ref_pic_list_reordering_flag_l0 = 1;
+      currSlice->reordering_of_pic_nums_idc_l0[0] = 0;
+      currSlice->reordering_of_pic_nums_idc_l0[1] = 3;
+      currSlice->abs_diff_pic_num_minus1_l0[0] = redundant_ref_idx - 1;
+      currSlice->long_term_pic_idx_l0[0] = 0;
+      reorder_ref_pic_list( listX[LIST_0], &listXsize[LIST_0],
+                            img->num_ref_idx_l0_active-1,
+                            currSlice->reordering_of_pic_nums_idc_l0,
+                            currSlice->abs_diff_pic_num_minus1_l0,
+                            currSlice->long_term_pic_idx_l0);
+    }
+
     len += u_1 ("SH: ref_pic_list_reordering_flag_l0", currSlice->ref_pic_list_reordering_flag_l0, bitstream);
     if (currSlice->ref_pic_list_reordering_flag_l0)
     {

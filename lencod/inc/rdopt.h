@@ -17,8 +17,8 @@
 #ifndef _RDO_H_
 #define _RDO_H_
 
-extern int   *****cofAC8x8CbCr;
-extern int   ****cofAC, ****cofAC8x8;        // [8x8block][4x4block][level/run][scan_pos]
+extern int   *****coefAC8x8;
+extern int   ****cofAC;        // [8x8block][4x4block][level/run][scan_pos]
 extern int   ***cofDC;                       // [yuv][level/run][scan_pos]
 extern int   **cofAC4x4; // [level/run][scan_pos]
 extern int   cbp, cbp8x8, cnt_nonz_8x8;
@@ -34,7 +34,7 @@ extern short best_mode;
 //mixed transform sizes definitions
 extern int   luma_transform_size_8x8_flag;
 
-extern int   ****cofAC8x8ts[3];        // [plane][8x8block][4x4block][level/run][scan_pos]
+extern int   *****cofAC8x8ts;        // [plane][8x8block][4x4block][level/run][scan_pos]
 extern int   **cofAC4x4CbCr[2];
 
 extern int64    cbp_blk8_8x8ts;

@@ -299,6 +299,8 @@ static void EPZSWindowPredictorInit (short search_range, EPZSStructure * predict
   int prednum = 0;
   int i;
   int search_range_qpel = params->EPZSSubPelGrid ? 2 : 0;
+  SPoint *point = predictor->point;
+
   if (mode == 0)
   {
     for (pos = RoundLog2 (search_range) - 2; pos > -1; pos--)
@@ -307,14 +309,14 @@ static void EPZSWindowPredictorInit (short search_range, EPZSStructure * predict
 
       for (i=1; i>=-1; i-=2)
       {
-        predictor->point[prednum  ].motion.mv_x =  i * searchpos;
-        predictor->point[prednum++].motion.mv_y =  0;
-        predictor->point[prednum  ].motion.mv_x =  i * searchpos;
-        predictor->point[prednum++].motion.mv_y =  i * searchpos;
-        predictor->point[prednum  ].motion.mv_x =  0;
-        predictor->point[prednum++].motion.mv_y =  i * searchpos;
-        predictor->point[prednum  ].motion.mv_x = -i * searchpos;
-        predictor->point[prednum++].motion.mv_y =  i * searchpos;
+        point[prednum  ].motion.mv_x =  i * searchpos;
+        point[prednum++].motion.mv_y =  0;
+        point[prednum  ].motion.mv_x =  i * searchpos;
+        point[prednum++].motion.mv_y =  i * searchpos;
+        point[prednum  ].motion.mv_x =  0;
+        point[prednum++].motion.mv_y =  i * searchpos;
+        point[prednum  ].motion.mv_x = -i * searchpos;
+        point[prednum++].motion.mv_y =  i * searchpos;
       }
     }
   }
@@ -327,30 +329,30 @@ static void EPZSWindowPredictorInit (short search_range, EPZSStructure * predict
 
       for (i=1; i>=-1; i-=2)
       {
-        predictor->point[prednum  ].motion.mv_x =  i * searchpos;
-        predictor->point[prednum++].motion.mv_y =  0;
-        predictor->point[prednum  ].motion.mv_x =  i * searchpos;
-        predictor->point[prednum++].motion.mv_y =  i * searchpos;
-        predictor->point[prednum  ].motion.mv_x =  0;
-        predictor->point[prednum++].motion.mv_y =  i * searchpos;
-        predictor->point[prednum  ].motion.mv_x = -i * searchpos;
-        predictor->point[prednum++].motion.mv_y =  i * searchpos;
+        point[prednum  ].motion.mv_x =  i * searchpos;
+        point[prednum++].motion.mv_y =  0;
+        point[prednum  ].motion.mv_x =  i * searchpos;
+        point[prednum++].motion.mv_y =  i * searchpos;
+        point[prednum  ].motion.mv_x =  0;
+        point[prednum++].motion.mv_y =  i * searchpos;
+        point[prednum  ].motion.mv_x = -i * searchpos;
+        point[prednum++].motion.mv_y =  i * searchpos;
       }
 
       for (i=1; i>=-1; i-=2)
       {
-        predictor->point[prednum  ].motion.mv_x =  i * fieldsearchpos;
-        predictor->point[prednum++].motion.mv_y = -i * searchpos;
-        predictor->point[prednum  ].motion.mv_x =  i * fieldsearchpos;
-        predictor->point[prednum++].motion.mv_y =  0;
-        predictor->point[prednum  ].motion.mv_x =  i * fieldsearchpos;
-        predictor->point[prednum++].motion.mv_y =  i * searchpos;
-        predictor->point[prednum  ].motion.mv_x =  i * searchpos;
-        predictor->point[prednum++].motion.mv_y =  i * fieldsearchpos;
-        predictor->point[prednum  ].motion.mv_x =  0;
-        predictor->point[prednum++].motion.mv_y =  i * fieldsearchpos;
-        predictor->point[prednum  ].motion.mv_x = -i * searchpos;
-        predictor->point[prednum++].motion.mv_y =  i * fieldsearchpos;
+        point[prednum  ].motion.mv_x =  i * fieldsearchpos;
+        point[prednum++].motion.mv_y = -i * searchpos;
+        point[prednum  ].motion.mv_x =  i * fieldsearchpos;
+        point[prednum++].motion.mv_y =  0;
+        point[prednum  ].motion.mv_x =  i * fieldsearchpos;
+        point[prednum++].motion.mv_y =  i * searchpos;
+        point[prednum  ].motion.mv_x =  i * searchpos;
+        point[prednum++].motion.mv_y =  i * fieldsearchpos;
+        point[prednum  ].motion.mv_x =  0;
+        point[prednum++].motion.mv_y =  i * fieldsearchpos;
+        point[prednum  ].motion.mv_x = -i * searchpos;
+        point[prednum++].motion.mv_y =  i * fieldsearchpos;
       }
     }
   }
@@ -1156,7 +1158,7 @@ static short EPZSSpatialPredictors (PixelPos *block_a,
                                     short ref,
                                     char **refPic,
                                     short ***tmp_mv,
-                                    EPZSStructure * predictor)
+                                    SPoint *point)
 {
   int refA, refB, refC, refD;
   int *mot_scale = mv_scale[list + list_offset][ref];
@@ -1164,8 +1166,8 @@ static short EPZSSpatialPredictors (PixelPos *block_a,
   int   fixed_mv = (12 >> mv_rescale);
 
   // zero predictor
-  predictor->point[0].motion.mv_x = 0;
-  predictor->point[0].motion.mv_y = 0;
+  point[0].motion.mv_x = 0;
+  point[0].motion.mv_y = 0;
 
   // Non MB-AFF mode
   if (!img->MbaffFrameFlag)
@@ -1178,48 +1180,48 @@ static short EPZSSpatialPredictors (PixelPos *block_a,
     // Left Predictor
     if (block_a->available)
     {
-      predictor->point[1].motion.mv_x = rshift_rnd_sf((mot_scale[refA] * tmp_mv[block_a->pos_y][block_a->pos_x][0]), sp_shift_mv);
-      predictor->point[1].motion.mv_y = rshift_rnd_sf((mot_scale[refA] * tmp_mv[block_a->pos_y][block_a->pos_x][1]), sp_shift_mv);
+      point[1].motion.mv_x = rshift_rnd_sf((mot_scale[refA] * tmp_mv[block_a->pos_y][block_a->pos_x][0]), sp_shift_mv);
+      point[1].motion.mv_y = rshift_rnd_sf((mot_scale[refA] * tmp_mv[block_a->pos_y][block_a->pos_x][1]), sp_shift_mv);
     }
     else
     {
-      predictor->point[1].motion.mv_x = fixed_mv;
-      predictor->point[1].motion.mv_y = 0;
+      point[1].motion.mv_x = fixed_mv;
+      point[1].motion.mv_y = 0;
     }
     // Up predictor
     if (block_b->available)
     {
-      predictor->point[2].motion.mv_x = rshift_rnd_sf((mot_scale[refB] * tmp_mv[block_b->pos_y][block_b->pos_x][0]), sp_shift_mv);
-      predictor->point[2].motion.mv_y = rshift_rnd_sf((mot_scale[refB] * tmp_mv[block_b->pos_y][block_b->pos_x][1]), sp_shift_mv);
+      point[2].motion.mv_x = rshift_rnd_sf((mot_scale[refB] * tmp_mv[block_b->pos_y][block_b->pos_x][0]), sp_shift_mv);
+      point[2].motion.mv_y = rshift_rnd_sf((mot_scale[refB] * tmp_mv[block_b->pos_y][block_b->pos_x][1]), sp_shift_mv);
     }
     else
     {
-      predictor->point[2].motion.mv_x = 0;
-      predictor->point[2].motion.mv_y = fixed_mv;
+      point[2].motion.mv_x = 0;
+      point[2].motion.mv_y = fixed_mv;
     }
 
     // Up-Right predictor
     if (block_c->available)
     {
-      predictor->point[3].motion.mv_x = rshift_rnd_sf((mot_scale[refC] * tmp_mv[block_c->pos_y][block_c->pos_x][0]), sp_shift_mv);
-      predictor->point[3].motion.mv_y = rshift_rnd_sf((mot_scale[refC] * tmp_mv[block_c->pos_y][block_c->pos_x][1]), sp_shift_mv);
+      point[3].motion.mv_x = rshift_rnd_sf((mot_scale[refC] * tmp_mv[block_c->pos_y][block_c->pos_x][0]), sp_shift_mv);
+      point[3].motion.mv_y = rshift_rnd_sf((mot_scale[refC] * tmp_mv[block_c->pos_y][block_c->pos_x][1]), sp_shift_mv);
     }
     else
     {
-      predictor->point[3].motion.mv_x = -fixed_mv;
-      predictor->point[3].motion.mv_y = 0;
+      point[3].motion.mv_x = -fixed_mv;
+      point[3].motion.mv_y = 0;
     }
 
     //Up-Left predictor
     if (block_d->available)
     {
-      predictor->point[4].motion.mv_x = rshift_rnd_sf((mot_scale[refD] * tmp_mv[block_d->pos_y][block_d->pos_x][0]), sp_shift_mv);
-      predictor->point[4].motion.mv_y = rshift_rnd_sf((mot_scale[refD] * tmp_mv[block_d->pos_y][block_d->pos_x][1]), sp_shift_mv);
+      point[4].motion.mv_x = rshift_rnd_sf((mot_scale[refD] * tmp_mv[block_d->pos_y][block_d->pos_x][0]), sp_shift_mv);
+      point[4].motion.mv_y = rshift_rnd_sf((mot_scale[refD] * tmp_mv[block_d->pos_y][block_d->pos_x][1]), sp_shift_mv);
     }
     else
     {
-      predictor->point[4].motion.mv_x = 0;
-      predictor->point[4].motion.mv_y = -fixed_mv;
+      point[4].motion.mv_x = 0;
+      point[4].motion.mv_y = -fixed_mv;
     }
   }
   else  // MB-AFF mode
@@ -1245,33 +1247,33 @@ static short EPZSSpatialPredictors (PixelPos *block_a,
         : (int) refPic[block_d->pos_y][block_d->pos_x] * 2 : -1;
 
       // Left Predictor
-      predictor->point[1].motion.mv_x = (block_a->available)
+      point[1].motion.mv_x = (block_a->available)
         ? rshift_rnd_sf((mot_scale[refA] * tmp_mv[block_a->pos_y][block_a->pos_x][0]), sp_shift_mv) :  fixed_mv;
-      predictor->point[1].motion.mv_y = (block_a->available)
+      point[1].motion.mv_y = (block_a->available)
         ? img->mb_data[block_a->mb_addr].mb_field
         ? rshift_rnd_sf((mot_scale[refA] * tmp_mv[block_a->pos_y][block_a->pos_x][1]), sp_shift_mv)
         : rshift_rnd_sf((mot_scale[refA] * tmp_mv[block_a->pos_y][block_a->pos_x][1]), sp_shift_mv + 1) :  0;
 
       // Up predictor
-      predictor->point[2].motion.mv_x = (block_b->available)
+      point[2].motion.mv_x = (block_b->available)
         ? rshift_rnd_sf((mot_scale[refB] * tmp_mv[block_b->pos_y][block_b->pos_x][0]), sp_shift_mv) : 0;
-      predictor->point[2].motion.mv_y = (block_b->available)
+      point[2].motion.mv_y = (block_b->available)
         ? img->mb_data[block_b->mb_addr].mb_field
         ? rshift_rnd_sf((mot_scale[refB] * tmp_mv[block_b->pos_y][block_b->pos_x][1]), sp_shift_mv)
         : rshift_rnd_sf((mot_scale[refB] * tmp_mv[block_b->pos_y][block_b->pos_x][1]), sp_shift_mv + 1) : fixed_mv;
 
       // Up-Right predictor
-      predictor->point[3].motion.mv_x = (block_c->available)
+      point[3].motion.mv_x = (block_c->available)
         ? rshift_rnd_sf((mot_scale[refC] * tmp_mv[block_c->pos_y][block_c->pos_x][0]), sp_shift_mv) : -fixed_mv;
-      predictor->point[3].motion.mv_y = (block_c->available)
+      point[3].motion.mv_y = (block_c->available)
         ? img->mb_data[block_c->mb_addr].mb_field
         ? rshift_rnd_sf((mot_scale[refC] * tmp_mv[block_c->pos_y][block_c->pos_x][1]), sp_shift_mv)
         : rshift_rnd_sf((mot_scale[refC] * tmp_mv[block_c->pos_y][block_c->pos_x][1]), sp_shift_mv + 1) : 0;
 
       //Up-Left predictor
-      predictor->point[4].motion.mv_x = (block_d->available)
+      point[4].motion.mv_x = (block_d->available)
         ? rshift_rnd_sf((mot_scale[refD] * tmp_mv[block_d->pos_y][block_d->pos_x][0]), sp_shift_mv) : 0;
-      predictor->point[4].motion.mv_y = (block_d->available)
+      point[4].motion.mv_y = (block_d->available)
         ? img->mb_data[block_d->mb_addr].mb_field
         ? rshift_rnd_sf((mot_scale[refD] * tmp_mv[block_d->pos_y][block_d->pos_x][1]), sp_shift_mv)
         : rshift_rnd_sf((mot_scale[refD] * tmp_mv[block_d->pos_y][block_d->pos_x][1]), sp_shift_mv + 1) : -fixed_mv;
@@ -1296,33 +1298,33 @@ static short EPZSSpatialPredictors (PixelPos *block_a,
         : (int) refPic[block_d->pos_y][block_d->pos_x] : -1;
 
       // Left Predictor
-      predictor->point[1].motion.mv_x = (block_a->available)
+      point[1].motion.mv_x = (block_a->available)
         ? rshift_rnd_sf((mot_scale[refA] * tmp_mv[block_a->pos_y][block_a->pos_x][0]), sp_shift_mv) : fixed_mv;
-      predictor->point[1].motion.mv_y = (block_a->available)
+      point[1].motion.mv_y = (block_a->available)
         ? img->mb_data[block_a->mb_addr].mb_field
         ? rshift_rnd_sf((mot_scale[refA] * tmp_mv[block_a->pos_y][block_a->pos_x][1]), sp_shift_mv - 1)
         : rshift_rnd_sf((mot_scale[refA] * tmp_mv[block_a->pos_y][block_a->pos_x][1]), sp_shift_mv) : 0;
 
       // Up predictor
-      predictor->point[2].motion.mv_x = (block_b->available)
+      point[2].motion.mv_x = (block_b->available)
         ? rshift_rnd_sf((mot_scale[refB] * tmp_mv[block_b->pos_y][block_b->pos_x][0]), sp_shift_mv) : 0;
-      predictor->point[2].motion.mv_y = (block_b->available)
+      point[2].motion.mv_y = (block_b->available)
         ? img->mb_data[block_b->mb_addr].mb_field
         ? rshift_rnd_sf((mot_scale[refB] * tmp_mv[block_b->pos_y][block_b->pos_x][1]), sp_shift_mv - 1)
         : rshift_rnd_sf((mot_scale[refB] * tmp_mv[block_b->pos_y][block_b->pos_x][1]), sp_shift_mv) :  fixed_mv;
 
       // Up-Right predictor
-      predictor->point[3].motion.mv_x = (block_c->available)
+      point[3].motion.mv_x = (block_c->available)
         ? rshift_rnd_sf((mot_scale[refC] * tmp_mv[block_c->pos_y][block_c->pos_x][0]), sp_shift_mv) : -fixed_mv;
-      predictor->point[3].motion.mv_y = (block_c->available)
+      point[3].motion.mv_y = (block_c->available)
         ? img->mb_data[block_c->mb_addr].mb_field
         ? rshift_rnd_sf((mot_scale[refC] * tmp_mv[block_c->pos_y][block_c->pos_x][1]), sp_shift_mv - 1)
         : rshift_rnd_sf((mot_scale[refC] * tmp_mv[block_c->pos_y][block_c->pos_x][1]), sp_shift_mv) : 0;
 
       //Up-Left predictor
-      predictor->point[4].motion.mv_x = (block_d->available)
+      point[4].motion.mv_x = (block_d->available)
         ? rshift_rnd_sf((mot_scale[refD] * tmp_mv[block_d->pos_y][block_d->pos_x][0]), sp_shift_mv) : 0;
-      predictor->point[4].motion.mv_y = (block_d->available)
+      point[4].motion.mv_y = (block_d->available)
         ? img->mb_data[block_d->mb_addr].mb_field
         ? rshift_rnd_sf((mot_scale[refD] * tmp_mv[block_d->pos_y][block_d->pos_x][1]), sp_shift_mv - 1)
         : rshift_rnd_sf((mot_scale[refD] * tmp_mv[block_d->pos_y][block_d->pos_x][1]), sp_shift_mv) : -fixed_mv;
@@ -1349,18 +1351,18 @@ static void EPZSSpatialMemPredictors (int list,
                                       int by,
                                       int *prednum,
                                       int img_width,
-                                      EPZSStructure * predictor)
+                                      SPoint *point)
 {
 #if EPZSREF
   MotionVector **prd_mv = EPZS_Motion[list][ref][blocktype];
-  MotionVector *cur_mv = &predictor->point[*prednum].motion;
+  MotionVector *cur_mv  = &point[*prednum].motion;
 
   // Left Predictor
   if (pic_x > 0)
   {
     *cur_mv = prd_mv[by][pic_x - bs_x];
     *prednum += (*((int*) cur_mv) != 0);
-    cur_mv = &predictor->point[*prednum].motion;
+    cur_mv = &point[*prednum].motion;
   }
   
   by = (by > 0) ? by - bs_y: 4 - bs_y;
@@ -1371,7 +1373,7 @@ static void EPZSSpatialMemPredictors (int list,
   // Up-Right predictor
   if (pic_x + bs_x < img_width)
   {
-    cur_mv = &predictor->point[*prednum].motion;
+    cur_mv = &point[*prednum].motion;
     *cur_mv = prd_mv[by][pic_x + bs_x];
     *prednum += (*((int*) cur_mv) != 0);
   }
@@ -1381,35 +1383,35 @@ static void EPZSSpatialMemPredictors (int list,
   MotionVector **prd_mv = EPZS_Motion[list][blocktype];
 
   // Left Predictor
-  predictor->point[*prednum].motion.mv_x = (pic_x > 0)
+  point[*prednum].motion.mv_x = (pic_x > 0)
     ? rshift_rnd_sf((mot_scale * prd_mv[by][pic_x - bs_x].mv_x), 8)
     : 0;
-  predictor->point[*prednum].motion.mv_y = (pic_x > 0)
+  point[*prednum].motion.mv_y = (pic_x > 0)
     ? rshift_rnd_sf((mot_scale * prd_mv[by][pic_x - bs_x].mv_y), 8)
     : 0;
-  *prednum += ((predictor->point[*prednum].motion.mv_x != 0) || (predictor->point[*prednum].motion.mv_y != 0));
+  *prednum += ((point[*prednum].motion.mv_x != 0) || (point[*prednum].motion.mv_y != 0));
 
   // Up predictor
-  predictor->point[*prednum].motion.mv_x = (by > 0)
+  point[*prednum].motion.mv_x = (by > 0)
     ? rshift_rnd_sf((mot_scale * prd_mv[by - bs_y][pic_x].mv_x), 8)
     : rshift_rnd_sf((mot_scale * prd_mv[4  - bs_y][pic_x].mv_x), 8);
-  predictor->point[*prednum].motion.mv_y = (by > 0)
+  point[*prednum].motion.mv_y = (by > 0)
     ? rshift_rnd_sf((mot_scale * prd_mv[by - bs_y][pic_x].mv_y), 8)
     : rshift_rnd_sf((mot_scale * prd_mv[4  - bs_y][pic_x].mv_y), 8);
-  *prednum += ((predictor->point[*prednum].motion.mv_x != 0) || (predictor->point[*prednum].motion.mv_y != 0));
+  *prednum += ((point[*prednum].motion.mv_x != 0) || (point[*prednum].motion.mv_y != 0));
 
   // Up-Right predictor
-  predictor->point[*prednum].motion.mv_x = (pic_x + bs_x < img_width)
+  point[*prednum].motion.mv_x = (pic_x + bs_x < img_width)
     ? (by > 0)
     ? rshift_rnd_sf((mot_scale * prd_mv[by - bs_y][pic_x + bs_x].mv_x), 8)
     : rshift_rnd_sf((mot_scale * prd_mv[4  - bs_y][pic_x + bs_x].mv_x), 8)
     : 0;
-  predictor->point[*prednum].motion.mv_y = (pic_x + bs_x < img_width)
+  point[*prednum].motion.mv_y = (pic_x + bs_x < img_width)
     ? (by > 0)
     ? rshift_rnd_sf((mot_scale * prd_mv[by - bs_y][pic_x + bs_x].mv_y), 8)
     : rshift_rnd_sf((mot_scale * prd_mv[4  - bs_y][pic_x + bs_x].mv_y), 8)
     : 0;
-  *prednum += ((predictor->point[*prednum].motion.mv_x != 0) || (predictor->point[*prednum].motion.mv_y != 0));
+  *prednum += ((point[*prednum].motion.mv_x != 0) || (point[*prednum].motion.mv_y != 0));
 #endif
 }
 
@@ -1427,7 +1429,7 @@ EPZSTemporalPredictors (int list,         // <--  current list
                         short ref,        // <--  current reference frame
                         int o_block_x,    // <--  absolute x-coordinate of regarded AxB block
                         int o_block_y,    // <--  absolute y-coordinate of regarded AxB block
-                        EPZSStructure * predictor,
+                        SPoint *point,
                         int *prednum,
                         int block_available_left,
                         int block_available_up,
@@ -1441,8 +1443,8 @@ EPZSTemporalPredictors (int list,         // <--  current list
   int mvScale = mv_scale[list + list_offset][ref][0];
   MotionVector **col_mv = (list_offset == 0) ? EPZSCo_located->frame[list]  
     : (list_offset == 2) ? EPZSCo_located->top[list] : EPZSCo_located->bot[list];
-  short temp_shift_mv = 8 + mv_rescale; // 16 - invmv_precision + mv_rescale
-  MotionVector *cur_mv = &predictor->point[*prednum].motion;
+  short temp_shift_mv = 8 + mv_rescale; // 16 - invmv_precision + mv_rescale  
+  MotionVector *cur_mv = &point[*prednum].motion;
 
   *prednum += add_predictor(cur_mv, col_mv[o_block_y][o_block_x], mvScale, temp_shift_mv);
 
@@ -1450,43 +1452,43 @@ EPZSTemporalPredictors (int list,         // <--  current list
   {
     if (block_available_left)
     {
-      *prednum += add_predictor( &predictor->point[*prednum].motion, col_mv[o_block_y][o_block_x - 1], mvScale, temp_shift_mv);
+      *prednum += add_predictor( &point[*prednum].motion, col_mv[o_block_y][o_block_x - 1], mvScale, temp_shift_mv);
 
       //Up_Left
       if (block_available_up)
       {
-        *prednum += add_predictor( &predictor->point[*prednum].motion, col_mv[o_block_y - 1][o_block_x - 1], mvScale, temp_shift_mv);
+        *prednum += add_predictor( &point[*prednum].motion, col_mv[o_block_y - 1][o_block_x - 1], mvScale, temp_shift_mv);
       }
       //Down_Left
       if (block_available_below)
       {
-        *prednum += add_predictor( &predictor->point[*prednum].motion, col_mv[o_block_y + blockshape_y][o_block_x - 1], mvScale, temp_shift_mv);
+        *prednum += add_predictor( &point[*prednum].motion, col_mv[o_block_y + blockshape_y][o_block_x - 1], mvScale, temp_shift_mv);
       }
     }
     // Up
     if (block_available_up)
     {
-      *prednum += add_predictor( &predictor->point[*prednum].motion, col_mv[o_block_y - 1][o_block_x], mvScale, temp_shift_mv);
+      *prednum += add_predictor( &point[*prednum].motion, col_mv[o_block_y - 1][o_block_x], mvScale, temp_shift_mv);
     }
 
     // Up - Right
     if (block_available_right)
     {
-      *prednum += add_predictor( &predictor->point[*prednum].motion, col_mv[o_block_y][o_block_x + blockshape_x], mvScale, temp_shift_mv);
+      *prednum += add_predictor( &point[*prednum].motion, col_mv[o_block_y][o_block_x + blockshape_x], mvScale, temp_shift_mv);
 
       if (block_available_up)
       {
-        *prednum += add_predictor( &predictor->point[*prednum].motion, col_mv[o_block_y - 1][o_block_x + blockshape_x], mvScale, temp_shift_mv);
+        *prednum += add_predictor( &point[*prednum].motion, col_mv[o_block_y - 1][o_block_x + blockshape_x], mvScale, temp_shift_mv);
       }
       if (block_available_below)
       {
-        *prednum += add_predictor( &predictor->point[*prednum].motion, col_mv[o_block_y + blockshape_y][o_block_x + blockshape_x], mvScale, temp_shift_mv);
+        *prednum += add_predictor( &point[*prednum].motion, col_mv[o_block_y + blockshape_y][o_block_x + blockshape_x], mvScale, temp_shift_mv);
       }
     }
 
     if (block_available_below)
     {
-      *prednum += add_predictor( &predictor->point[*prednum].motion, col_mv[o_block_y + blockshape_y][o_block_x], mvScale, temp_shift_mv);
+      *prednum += add_predictor( &point[*prednum].motion, col_mv[o_block_y + blockshape_y][o_block_x], mvScale, temp_shift_mv);
     }
   }
 }
@@ -1498,11 +1500,11 @@ EPZSTemporalPredictors (int list,         // <--  current list
 ************************************************************************
 */
 static void EPZSBlockTypePredictors (int block_x, int block_y, int blocktype, int ref, int list,
-                                     EPZSStructure * predictor, int *prednum)
+                                     SPoint *point, int *prednum)
 {
   short *****all_mv = img->all_mv[list];
   short block_shift_mv = 8 + mv_rescale;
-  MotionVector *cur_mv = &predictor->point[*prednum].motion;
+  MotionVector *cur_mv = &point[*prednum].motion;
 
   cur_mv->mv_x = rshift_rnd((all_mv[ref][blk_parent[blocktype]][block_y][block_x][0]), mv_rescale);
   cur_mv->mv_y = rshift_rnd((all_mv[ref][blk_parent[blocktype]][block_y][block_x][1]), mv_rescale);
@@ -1511,13 +1513,13 @@ static void EPZSBlockTypePredictors (int block_x, int block_y, int blocktype, in
 
   if ((ref > 0) && (blocktype < 5 || img->structure != FRAME))
   {
-    cur_mv = &predictor->point[*prednum].motion;
+    cur_mv = &point[*prednum].motion;
     cur_mv->mv_x = rshift_rnd_sf((mv_scale[list][ref][ref-1] * all_mv[ref-1][blocktype][block_y][block_x][0]), block_shift_mv );
     cur_mv->mv_y = rshift_rnd_sf((mv_scale[list][ref][ref-1] * all_mv[ref-1][blocktype][block_y][block_x][1]), block_shift_mv );
     //*prednum += ((cur_mv->mv_x | cur_mv->mv_y) != 0);
     *prednum += (*((int*) cur_mv) != 0);
 
-    cur_mv = &predictor->point[*prednum].motion;
+    cur_mv = &point[*prednum].motion;
     cur_mv->mv_x = rshift_rnd_sf((mv_scale[list][ref][0] * all_mv[0][blocktype][block_y][block_x][0]), block_shift_mv );
     cur_mv->mv_y = rshift_rnd_sf((mv_scale[list][ref][0] * all_mv[0][blocktype][block_y][block_x][1]), block_shift_mv );
     //*prednum += ((cur_mv->mv_x | cur_mv->mv_y) != 0);
@@ -1526,7 +1528,7 @@ static void EPZSBlockTypePredictors (int block_x, int block_y, int blocktype, in
 
   if (blocktype != 1)
   {
-    cur_mv = &predictor->point[*prednum].motion;
+    cur_mv = &point[*prednum].motion;
     cur_mv->mv_x = rshift_rnd((all_mv[ref][1][block_y][block_x][0]), mv_rescale);
     cur_mv->mv_y = rshift_rnd((all_mv[ref][1][block_y][block_x][1]), mv_rescale);
     //*prednum += ((cur_mv->mv_x | cur_mv->mv_y) != 0);
@@ -1535,7 +1537,7 @@ static void EPZSBlockTypePredictors (int block_x, int block_y, int blocktype, in
 
   if (blocktype != 4)
   {
-    cur_mv = &predictor->point[*prednum].motion;
+    cur_mv = &point[*prednum].motion;
     cur_mv->mv_x = rshift_rnd((all_mv[ref][4][block_y][block_x][0]), mv_rescale);
     cur_mv->mv_y = rshift_rnd((all_mv[ref][4][block_y][block_x][1]), mv_rescale);
     //*prednum += ((cur_mv->mv_x | cur_mv->mv_y) != 0);
@@ -1734,15 +1736,15 @@ EPZSPelBlockMotionSearch (Macroblock *currMB, // <--  current Macroblock
     //! Scheme adds zero, left, top-left, top, top-right. Note that top-left adds very little
     //! in terms of performance and could be removed with little penalty if any.
     invalid_refs = EPZSSpatialPredictors (&block_a, &block_b, &block_c, &block_d,
-      list, currMB->list_offset, ref, refPic[list], tmp_mv[list], predictor);
+      list, currMB->list_offset, ref, refPic[list], tmp_mv[list], predictor->point);
     if (params->EPZSSpatialMem)
       EPZSSpatialMemPredictors (cur_list, ref, blocktype - 1, pic_pix_x2,
-      blockshape_x, blockshape_y, block_y, &prednum, img_width>>2, predictor);
+      blockshape_x, blockshape_y, block_y, &prednum, img_width>>2, predictor->point);
 
     // Temporal predictors
     //if (params->EPZSTemporal && blocktype < 5)
     if (params->EPZSTemporal)
-      EPZSTemporalPredictors (list, currMB->list_offset, ref, pic_pix_x2, pic_pix_y2, predictor, &prednum,
+      EPZSTemporalPredictors (list, currMB->list_offset, ref, pic_pix_x2, pic_pix_y2, predictor->point, &prednum,
       block_a.available, block_b.available, block_available_right,
       block_available_below, blockshape_x, blockshape_y, stopCriterion, min_mcost);
 
@@ -1775,8 +1777,8 @@ EPZSPelBlockMotionSearch (Macroblock *currMB, // <--  current Macroblock
     //conditionEPZS = (ref == 0 || (ref > 0 && min_mcost > stopCriterion) || img->structure != FRAME || currMB->list_offset);
     conditionEPZS = (ref == 0 || (ref > 0 && min_mcost > stopCriterion));
 
-    if (conditionEPZS && img->current_mb_nr != 0 && params->EPZSBlockType)
-      EPZSBlockTypePredictors (block_x, block_y, blocktype, ref, list, predictor, &prednum);
+    if (conditionEPZS && currMB->mb_nr != 0 && params->EPZSBlockType)
+      EPZSBlockTypePredictors (block_x, block_y, blocktype, ref, list, predictor->point, &prednum);
 
     //! Check all predictors
     for (pos = 0; pos < prednum; pos++)
@@ -1786,7 +1788,7 @@ EPZSPelBlockMotionSearch (Macroblock *currMB, // <--  current Macroblock
       if (iabs (tmv.mv_x - mv->mv_x) > search_range || iabs (tmv.mv_y - mv->mv_y) > search_range)
         continue;
 
-      if ((iabs (tmv.mv_x - mv->mv_x) <= search_range) && (iabs (tmv.mv_y - mv->mv_y) <= search_range))
+      //if ((iabs (tmv.mv_x - mv->mv_x) <= search_range) && (iabs (tmv.mv_y - mv->mv_y) <= search_range))
       {
         if (EPZSMap[mapCenter_y + tmv.mv_y][mapCenter_x + tmv.mv_x] == EPZSBlkCount)
           continue;
@@ -1794,16 +1796,15 @@ EPZSPelBlockMotionSearch (Macroblock *currMB, // <--  current Macroblock
           EPZSMap[mapCenter_y + tmv.mv_y][mapCenter_x + tmv.mv_x] = EPZSBlkCount;
       }
 
-      cand.mv_x = (pic_pix_x + tmv.mv_x)<<mv_rescale;
-      cand.mv_y = (pic_pix_y + tmv.mv_y)<<mv_rescale;
+      cand.mv_x = (pic_pix_x + tmv.mv_x) << mv_rescale;
+      cand.mv_y = (pic_pix_y + tmv.mv_y) << mv_rescale;
 
       //--- set motion cost (cost for motion vector) and check ---
       mcost = MV_COST_SMP (lambda_factor, cand.mv_x, cand.mv_y, pred.mv_x, pred.mv_y);
 
       if (mcost >= second_mcost) continue;
 
-      mcost += computePred(cur_pic, blocksize_y, blocksize_x,
-        second_mcost - mcost, 
+      mcost += computePred(cur_pic, blocksize_y, blocksize_x, second_mcost - mcost, 
         cand.mv_x + IMG_PAD_SIZE_TIMES4, cand.mv_y + IMG_PAD_SIZE_TIMES4);
 
       //--- check if motion cost is less than minimum cost ---
@@ -1858,8 +1859,9 @@ EPZSPelBlockMotionSearch (Macroblock *currMB, // <--  current Macroblock
           checkPts = totalCheckPts;
           do
           {
-            tmv.mv_x = center.mv_x + searchPatternF->point[pointNumber].motion.mv_x;
-            tmv.mv_y = center.mv_y + searchPatternF->point[pointNumber].motion.mv_y;
+            tmv       = center;
+            tmv.mv_x += searchPatternF->point[pointNumber].motion.mv_x;
+            tmv.mv_y += searchPatternF->point[pointNumber].motion.mv_y;
 
             if ((iabs (tmv.mv_x - mv->mv_x) <= search_range) && (iabs (tmv.mv_y - mv->mv_y) <= search_range))
             {
@@ -1867,10 +1869,10 @@ EPZSPelBlockMotionSearch (Macroblock *currMB, // <--  current Macroblock
                 EPZSMap[mapCenter_y + tmv.mv_y][mapCenter_x + tmv.mv_x] = EPZSBlkCount;
               else
               {
-                pointNumber += 1;
+                pointNumber ++;
                 if (pointNumber >= searchPatternF->searchPoints)
                   pointNumber -= searchPatternF->searchPoints;
-                checkPts -= 1;
+                checkPts --;
                 continue;
               }
               cand.mv_x = (pic_pix_x + tmv.mv_x)<<mv_rescale;
@@ -1881,8 +1883,7 @@ EPZSPelBlockMotionSearch (Macroblock *currMB, // <--  current Macroblock
               if (mcost < min_mcost)
               {
 
-                mcost += computePred(cur_pic, blocksize_y,blocksize_x,
-                  min_mcost - mcost, 
+                mcost += computePred(cur_pic, blocksize_y, blocksize_x, min_mcost - mcost, 
                   cand.mv_x + IMG_PAD_SIZE_TIMES4, cand.mv_y + IMG_PAD_SIZE_TIMES4);
 
                 if (mcost < min_mcost)
@@ -1893,10 +1894,10 @@ EPZSPelBlockMotionSearch (Macroblock *currMB, // <--  current Macroblock
                 }
               }
             }
-            pointNumber += 1;
+            pointNumber ++;
             if (pointNumber >= searchPatternF->searchPoints)
               pointNumber -= searchPatternF->searchPoints;
-            checkPts -= 1;
+            checkPts --;
           }
           while (checkPts > 0);
 
@@ -2028,6 +2029,7 @@ EPZSBiPredBlockMotionSearch (Macroblock *currMB,   // <--  Current Macroblock
   int   mapCenter_y = search_range - mv1->mv_y;
   int   second_mcost = INT_MAX;
   int   *prevSad = EPZSBiDistortion[list + currMB->list_offset][blocktype - 1];
+  int   mv_range = (2<<(2-mv_rescale));
   short invalid_refs = 0;
   byte  checkMedian = FALSE;
   EPZSStructure *searchPatternF = searchPattern;
@@ -2140,6 +2142,7 @@ EPZSBiPredBlockMotionSearch (Macroblock *currMB,   // <--  Current Macroblock
     {
       block_available_right = (mb_x + blocksize_x != MB_BLOCK_SIZE) || mb_available_right;
     }
+
     block_available_below = (mb_y + blocksize_y != MB_BLOCK_SIZE) || (mb_available_below);
 
     stopCriterion = EPZSDetermineStopCriterion(prevSad, &block_a, &block_b, &block_c, pic_pix_x2, blocktype, blockshape_x);
@@ -2150,7 +2153,7 @@ EPZSBiPredBlockMotionSearch (Macroblock *currMB,   // <--  Current Macroblock
     //! Scheme adds zero, left, top-left, top, top-right. Note that top-left adds very little
     //! in terms of performance and could be removed with little penalty if any.
     invalid_refs = EPZSSpatialPredictors (&block_a, &block_b, &block_c, &block_d,
-      list, currMB->list_offset, ref, refPic[list], tmp_mv[list], predictor);
+      list, currMB->list_offset, ref, refPic[list], tmp_mv[list], predictor->point);
 
     //! Check all predictors
     for (pos = 0; pos < prednum; pos++)
@@ -2160,7 +2163,7 @@ EPZSBiPredBlockMotionSearch (Macroblock *currMB,   // <--  Current Macroblock
       if (iabs (tmv.mv_x - mv1->mv_x) > search_range || iabs (tmv.mv_y - mv1->mv_y) > search_range)
         continue;
 
-      if ((iabs (tmv.mv_x - mv1->mv_x) <= search_range) && (iabs (tmv.mv_y - mv1->mv_y) <= search_range))
+      //if ((iabs (tmv.mv_x - mv1->mv_x) <= search_range) && (iabs (tmv.mv_y - mv1->mv_y) <= search_range))
       {
         if (EPZSMap[mapCenter_y + tmv.mv_y][mapCenter_x + tmv.mv_x] == EPZSBlkCount)
           continue;
@@ -2168,8 +2171,8 @@ EPZSBiPredBlockMotionSearch (Macroblock *currMB,   // <--  Current Macroblock
           EPZSMap[mapCenter_y + tmv.mv_y][mapCenter_x + tmv.mv_x] = EPZSBlkCount;
       }
 
-      cand1.mv_x = (pic_pix_x + tmv.mv_x)<<mv_rescale;
-      cand1.mv_y = (pic_pix_y + tmv.mv_y)<<mv_rescale;
+      cand1.mv_x = (pic_pix_x + tmv.mv_x) << mv_rescale;
+      cand1.mv_y = (pic_pix_y + tmv.mv_y) << mv_rescale;
 
       //--- set motion cost (cost for motion vector) and check ---
       mcost  = MV_COST_SMP (lambda_factor, cand1.mv_x, cand1.mv_y, pred1.mv_x, pred1.mv_y);
@@ -2177,8 +2180,7 @@ EPZSBiPredBlockMotionSearch (Macroblock *currMB,   // <--  Current Macroblock
 
       if (mcost >= second_mcost) continue;
 
-      mcost += computeBiPred(cur_pic, blocksize_y, blocksize_x, 
-        second_mcost - mcost,
+      mcost += computeBiPred(cur_pic, blocksize_y, blocksize_x, second_mcost - mcost,
         cand1.mv_x + IMG_PAD_SIZE_TIMES4 , cand1.mv_y + IMG_PAD_SIZE_TIMES4,
         cand2.mv_x + IMG_PAD_SIZE_TIMES4, cand2.mv_y + IMG_PAD_SIZE_TIMES4);
 
@@ -2212,7 +2214,7 @@ EPZSBiPredBlockMotionSearch (Macroblock *currMB,   // <--  Current Macroblock
         if ((min_mcost < stopCriterion + ((3 * medthres[blocktype]) >> 1)))
         {
           if ((tmp.mv_x == 0 && tmp.mv_y == 0)
-            || (iabs (tmp.mv_x - mv1->mv_x) < (2<<(2-mv_rescale)) && iabs (tmp.mv_y - mv1->mv_y) < (2<<(2-mv_rescale))))
+            || (iabs (tmp.mv_x - mv1->mv_x) < (mv_range) && iabs (tmp.mv_y - mv1->mv_y) < (mv_range)))
             searchPatternF = sdiamond;
           else
             searchPatternF = square;
@@ -2234,8 +2236,9 @@ EPZSBiPredBlockMotionSearch (Macroblock *currMB,   // <--  Current Macroblock
           checkPts = totalCheckPts;
           do
           {
-            tmv.mv_x = center1.mv_x + searchPatternF->point[pointNumber].motion.mv_x;
-            tmv.mv_y = center1.mv_y + searchPatternF->point[pointNumber].motion.mv_y;
+            tmv       = center1;   
+            tmv.mv_x += searchPatternF->point[pointNumber].motion.mv_x;
+            tmv.mv_y += searchPatternF->point[pointNumber].motion.mv_y;
 
             if ((iabs (tmv.mv_x - mv1->mv_x) <= search_range) && (iabs (tmv.mv_y - mv1->mv_y) <= search_range))
             {
@@ -2243,13 +2246,13 @@ EPZSBiPredBlockMotionSearch (Macroblock *currMB,   // <--  Current Macroblock
                 EPZSMap[mapCenter_y + tmv.mv_y][mapCenter_x + tmv.mv_x] = EPZSBlkCount;
               else
               {
-                pointNumber += 1;
+                pointNumber ++;
                 if (pointNumber >= searchPatternF->searchPoints)
                   pointNumber -= searchPatternF->searchPoints;
-                checkPts -= 1;
+                checkPts --;
                 continue;
               }
-              
+
               cand1.mv_x = (pic_pix_x + tmv.mv_x)<<mv_rescale;
               cand1.mv_y = (pic_pix_y + tmv.mv_y)<<mv_rescale;
 
@@ -2258,8 +2261,7 @@ EPZSBiPredBlockMotionSearch (Macroblock *currMB,   // <--  Current Macroblock
 
               if (mcost < min_mcost)
               {
-                mcost += computeBiPred(cur_pic, blocksize_y, blocksize_x,
-                  min_mcost - mcost,
+                mcost += computeBiPred(cur_pic, blocksize_y, blocksize_x, min_mcost - mcost,
                   cand1.mv_x + IMG_PAD_SIZE_TIMES4, cand1.mv_y + IMG_PAD_SIZE_TIMES4,
                   cand2.mv_x + IMG_PAD_SIZE_TIMES4, cand2.mv_y + IMG_PAD_SIZE_TIMES4);
 
@@ -2271,10 +2273,10 @@ EPZSBiPredBlockMotionSearch (Macroblock *currMB,   // <--  Current Macroblock
                 }
               }
             }
-            pointNumber += 1;
+            pointNumber ++;
             if (pointNumber >= searchPatternF->searchPoints)
               pointNumber -= searchPatternF->searchPoints;
-            checkPts -= 1;
+            checkPts --;
           }
           while (checkPts > 0);
 
@@ -2310,7 +2312,7 @@ EPZSBiPredBlockMotionSearch (Macroblock *currMB,   // <--  Current Macroblock
 
         if ((tmp.mv_x == 0 && tmp.mv_y == 0) || (tmp.mv_x == mv1->mv_x && tmp.mv_y == mv1->mv_y))
         {
-          if (iabs (tmp.mv_x - mv1->mv_x) < (2<<(2-mv_rescale)) && iabs (tmp.mv_y - mv1->mv_y) < (2<<(2-mv_rescale)))
+          if (iabs (tmp.mv_x - mv1->mv_x) < (mv_range) && iabs (tmp.mv_y - mv1->mv_y) < (mv_range))
             searchPatternF = sdiamond;
           else
             searchPatternF = square;
@@ -2335,6 +2337,7 @@ EPZSBiPredBlockMotionSearch (Macroblock *currMB,   // <--  Current Macroblock
 
   return min_mcost;
 }
+
 
 
 /*!
@@ -2398,7 +2401,7 @@ EPZSSubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original pixel val
   int   pos, best_pos = 0, second_pos = 0, mcost;
   int   second_mcost = INT_MAX;
 
-  int   cand_mv_x, cand_mv_y;
+  MotionVector cand;
 
   int   blocksize_x     = params->blc_size[blocktype][0];
   int   blocksize_y     = params->blc_size[blocktype][1];
@@ -2435,13 +2438,13 @@ EPZSSubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original pixel val
   //===== loop over search positions =====
   for (best_pos = 0, pos = start_me_refinement_hp; pos < 5; pos++)
   {
-    cand_mv_x = mv->mv_x + search_point_hp[pos][0];    // quarter-pel units
-    cand_mv_y = mv->mv_y + search_point_hp[pos][1];    // quarter-pel units
+    cand.mv_x = mv->mv_x + search_point_hp[pos][0];    // quarter-pel units
+    cand.mv_y = mv->mv_y + search_point_hp[pos][1];    // quarter-pel units
 
     //----- set motion vector cost -----
-    mcost = MV_COST_SMP (lambda_factor, cand_mv_x, cand_mv_y, pred->mv_x, pred->mv_y);
+    mcost = MV_COST_SMP (lambda_factor, cand.mv_x, cand.mv_y, pred->mv_x, pred->mv_y);
     mcost += computePred( orig_pic, blocksize_y, blocksize_x,
-      INT_MAX, cand_mv_x + pic4_pix_x, cand_mv_y + pic4_pix_y);
+      INT_MAX, cand.mv_x + pic4_pix_x, cand.mv_y + pic4_pix_y);
 
     if (mcost < min_mcost)
     {
@@ -2457,7 +2460,7 @@ EPZSSubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original pixel val
     }
   }
 
-  if (best_pos ==0 && (pred->mv_x == mv->mv_x) && (pred->mv_y - mv->mv_y)== 0 && min_mcost < subthres[blocktype])
+  if (best_pos ==0 && (pred->mv_x == mv->mv_x) && (pred->mv_y == mv->mv_y) && min_mcost < subthres[blocktype])
       return min_mcost;
 
   if (best_pos != 0 && second_pos != 0)
@@ -2517,16 +2520,16 @@ EPZSSubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original pixel val
   {
     for (pos = start_pos; pos < end_pos; pos++)
     {
-      cand_mv_x = mv->mv_x + search_point_hp[pos][0];    // quarter-pel units
-      cand_mv_y = mv->mv_y + search_point_hp[pos][1];    // quarter-pel units
+      cand.mv_x = mv->mv_x + search_point_hp[pos][0];    // quarter-pel units
+      cand.mv_y = mv->mv_y + search_point_hp[pos][1];    // quarter-pel units
 
       //----- set motion vector cost -----
-      mcost = MV_COST_SMP (lambda_factor, cand_mv_x, cand_mv_y, pred->mv_x, pred->mv_y);
+      mcost = MV_COST_SMP (lambda_factor, cand.mv_x, cand.mv_y, pred->mv_x, pred->mv_y);
 
       if (mcost >= min_mcost) continue;
 
       mcost += computePred( orig_pic, blocksize_y, blocksize_x,
-        min_mcost - mcost, cand_mv_x + pic4_pix_x, cand_mv_y + pic4_pix_y);
+        min_mcost - mcost, cand.mv_x + pic4_pix_x, cand.mv_y + pic4_pix_y);
 
       if (mcost < min_mcost)
       {
@@ -2558,13 +2561,13 @@ EPZSSubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original pixel val
   //===== loop over search positions =====
   for (best_pos = 0, pos = start_me_refinement_qp; pos < 5; pos++)
   {
-    cand_mv_x = mv->mv_x + search_point_qp[pos][0];    // quarter-pel units
-    cand_mv_y = mv->mv_y + search_point_qp[pos][1];    // quarter-pel units
+    cand.mv_x = mv->mv_x + search_point_qp[pos][0];    // quarter-pel units
+    cand.mv_y = mv->mv_y + search_point_qp[pos][1];    // quarter-pel units
 
     //----- set motion vector cost -----
-    mcost = MV_COST_SMP (lambda_factor, cand_mv_x, cand_mv_y, pred->mv_x, pred->mv_y);
+    mcost = MV_COST_SMP (lambda_factor, cand.mv_x, cand.mv_y, pred->mv_x, pred->mv_y);
     mcost += computePred( orig_pic, blocksize_y, blocksize_x,
-      INT_MAX, cand_mv_x + pic4_pix_x, cand_mv_y + pic4_pix_y);
+      INT_MAX, cand.mv_x + pic4_pix_x, cand.mv_y + pic4_pix_y);
 
     if (mcost < min_mcost)
     {
@@ -2580,7 +2583,7 @@ EPZSSubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original pixel val
     }
   }
 
-  if (best_pos ==0 && (pred->mv_x == mv->mv_x) && (pred->mv_y - mv->mv_y)== 0 && min_mcost < subthres[blocktype])
+  if (best_pos ==0 && (pred->mv_x == mv->mv_x) && (pred->mv_y == mv->mv_y) && min_mcost < subthres[blocktype])
   {
     return min_mcost;
   }
@@ -2645,15 +2648,15 @@ EPZSSubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original pixel val
   {
     for (pos = start_pos; pos < end_pos; pos++)
     {
-      cand_mv_x = mv->mv_x + search_point_qp[pos][0];    // quarter-pel units
-      cand_mv_y = mv->mv_y + search_point_qp[pos][1];    // quarter-pel units
+      cand.mv_x = mv->mv_x + search_point_qp[pos][0];    // quarter-pel units
+      cand.mv_y = mv->mv_y + search_point_qp[pos][1];    // quarter-pel units
 
       //----- set motion vector cost -----
-      mcost = MV_COST_SMP (lambda_factor, cand_mv_x, cand_mv_y, pred->mv_x, pred->mv_y);
+      mcost = MV_COST_SMP (lambda_factor, cand.mv_x, cand.mv_y, pred->mv_x, pred->mv_y);
 
       if (mcost >= min_mcost) continue;
       mcost += computePred( orig_pic, blocksize_y, blocksize_x,
-        min_mcost - mcost, cand_mv_x + pic4_pix_x, cand_mv_y + pic4_pix_y);
+        min_mcost - mcost, cand.mv_x + pic4_pix_x, cand.mv_y + pic4_pix_y);
 
       if (mcost < min_mcost)
       {
@@ -2701,7 +2704,7 @@ EPZSSubPelBlockSearchBiPred (imgpel*   orig_pic,      // <--  original pixel val
   int   pos, best_pos = 0, second_pos = 0, mcost;
   int   second_mcost = INT_MAX;
 
-  int   cand_mv_x, cand_mv_y;
+  MotionVector cand, sand;
 
   int   blocksize_x = params->blc_size[blocktype][0];
   int   blocksize_y = params->blc_size[blocktype][1];
@@ -2709,16 +2712,16 @@ EPZSSubPelBlockSearchBiPred (imgpel*   orig_pic,      // <--  original pixel val
   int   pic4_pix_y  = ((pic_pix_y + IMG_PAD_SIZE)<< 2);
 
   int   start_hp    = (min_mcost == INT_MAX) ? 0 : start_me_refinement_hp;
-  int   max_pos2    = ( (!start_me_refinement_hp || !start_me_refinement_qp) ? imax(1,search_pos2) : search_pos2);
-
-  int   smv_x = mv2->mv_x + pic4_pix_x;
-  int   smv_y = mv2->mv_y + pic4_pix_y;
+  int   max_pos2    = ( (!start_me_refinement_hp || !start_me_refinement_qp) ? imax(1,search_pos2) : search_pos2);  
 
   StorablePicture *ref_picture1 = listX[list       + list_offset][ref];
   StorablePicture *ref_picture2 = listX[(list ^ 1) + list_offset][0];
 
   int start_pos = 5, end_pos = max_pos2;
   int lambda_factor = lambda[H_PEL];
+
+  sand.mv_x = mv2->mv_x + pic4_pix_x;
+  sand.mv_y = mv2->mv_y + pic4_pix_y;
 
   ref_pic1_sub.luma = ref_picture1->p_curr_img_sub;
   ref_pic2_sub.luma = ref_picture2->p_curr_img_sub;
@@ -2754,14 +2757,14 @@ EPZSSubPelBlockSearchBiPred (imgpel*   orig_pic,      // <--  original pixel val
   //===== loop over search positions =====
   for (best_pos = 0, pos = start_hp; pos < 5; pos++)
   {
-    cand_mv_x = mv1->mv_x + search_point_hp[pos][0];    // quarter-pel units
-    cand_mv_y = mv1->mv_y + search_point_hp[pos][1];    // quarter-pel units
+    cand.mv_x = mv1->mv_x + search_point_hp[pos][0];    // quarter-pel units
+    cand.mv_y = mv1->mv_y + search_point_hp[pos][1];    // quarter-pel units
 
     //----- set motion vector cost -----
-    mcost  = MV_COST_SMP (lambda_factor, cand_mv_x, cand_mv_y, pred_mv1->mv_x, pred_mv1->mv_y);
+    mcost  = MV_COST_SMP (lambda_factor, cand.mv_x, cand.mv_y, pred_mv1->mv_x, pred_mv1->mv_y);
     mcost += MV_COST_SMP (lambda_factor, mv2->mv_x, mv2->mv_y, pred_mv2->mv_x, pred_mv2->mv_y);
     mcost += computeBiPred(orig_pic, blocksize_y, blocksize_x, INT_MAX,
-      cand_mv_x + pic4_pix_x, cand_mv_y + pic4_pix_y, smv_x, smv_y);
+      cand.mv_x + pic4_pix_x, cand.mv_y + pic4_pix_y, sand.mv_x, sand.mv_y);
 
     if (mcost < min_mcost)
     {
@@ -2837,16 +2840,16 @@ EPZSSubPelBlockSearchBiPred (imgpel*   orig_pic,      // <--  original pixel val
   {
     for (pos = start_pos; pos < end_pos; pos++)
     {
-      cand_mv_x = mv1->mv_x + search_point_hp[pos][0];    // quarter-pel units
-      cand_mv_y = mv1->mv_y + search_point_hp[pos][1];    // quarter-pel units
+      cand.mv_x = mv1->mv_x + search_point_hp[pos][0];    // quarter-pel units
+      cand.mv_y = mv1->mv_y + search_point_hp[pos][1];    // quarter-pel units
 
       //----- set motion vector cost -----
-      mcost  = MV_COST_SMP (lambda_factor, cand_mv_x, cand_mv_y, pred_mv1->mv_x, pred_mv1->mv_y);
+      mcost  = MV_COST_SMP (lambda_factor, cand.mv_x, cand.mv_y, pred_mv1->mv_x, pred_mv1->mv_y);
       mcost += MV_COST_SMP (lambda_factor, mv2->mv_x, mv2->mv_y, pred_mv2->mv_x, pred_mv2->mv_y);
       if (mcost >= min_mcost) continue;
 
       mcost += computeBiPred(orig_pic, blocksize_y, blocksize_x, min_mcost - mcost,
-        cand_mv_x + pic4_pix_x, cand_mv_y + pic4_pix_y, smv_x, smv_y);
+        cand.mv_x + pic4_pix_x, cand.mv_y + pic4_pix_y, sand.mv_x, sand.mv_y);
 
       if (mcost < min_mcost)
       {
@@ -2878,15 +2881,15 @@ EPZSSubPelBlockSearchBiPred (imgpel*   orig_pic,      // <--  original pixel val
   //===== loop over search positions =====
   for (best_pos = 0, pos = start_me_refinement_qp; pos < 5; pos++)
   {
-    cand_mv_x = mv1->mv_x + search_point_qp[pos][0];    // quarter-pel units
-    cand_mv_y = mv1->mv_y + search_point_qp[pos][1];    // quarter-pel units
+    cand.mv_x = mv1->mv_x + search_point_qp[pos][0];    // quarter-pel units
+    cand.mv_y = mv1->mv_y + search_point_qp[pos][1];    // quarter-pel units
 
     //----- set motion vector cost -----
-    mcost  = MV_COST_SMP (lambda_factor, cand_mv_x, cand_mv_y, pred_mv1->mv_x, pred_mv1->mv_y);
+    mcost  = MV_COST_SMP (lambda_factor, cand.mv_x, cand.mv_y, pred_mv1->mv_x, pred_mv1->mv_y);
     mcost += MV_COST_SMP (lambda_factor, mv2->mv_x, mv2->mv_y, pred_mv2->mv_x, pred_mv2->mv_y);
 
     mcost += computeBiPred(orig_pic, blocksize_y, blocksize_x, INT_MAX,
-      cand_mv_x + pic4_pix_x, cand_mv_y + pic4_pix_y, smv_x, smv_y);
+      cand.mv_x + pic4_pix_x, cand.mv_y + pic4_pix_y, sand.mv_x, sand.mv_y);
 
     if (mcost < min_mcost)
     {
@@ -2962,17 +2965,16 @@ EPZSSubPelBlockSearchBiPred (imgpel*   orig_pic,      // <--  original pixel val
   {
     for (pos = start_pos; pos < end_pos; pos++)
     {
-      cand_mv_x = mv1->mv_x + search_point_qp[pos][0];    // quarter-pel units
-      cand_mv_y = mv1->mv_y + search_point_qp[pos][1];    // quarter-pel units
+      cand.mv_x = mv1->mv_x + search_point_qp[pos][0];    // quarter-pel units
+      cand.mv_y = mv1->mv_y + search_point_qp[pos][1];    // quarter-pel units
 
       //----- set motion vector cost -----
-      mcost  = MV_COST_SMP (lambda_factor, cand_mv_x, cand_mv_y, pred_mv1->mv_x, pred_mv1->mv_y);
+      mcost  = MV_COST_SMP (lambda_factor, cand.mv_x, cand.mv_y, pred_mv1->mv_x, pred_mv1->mv_y);
       mcost += MV_COST_SMP (lambda_factor, mv2->mv_x, mv2->mv_y, pred_mv2->mv_x, pred_mv2->mv_y);
       if (mcost >= min_mcost) continue;
 
-      mcost += computeBiPred(orig_pic, blocksize_y, blocksize_x, 
-        min_mcost - mcost,
-        cand_mv_x + pic4_pix_x, cand_mv_y + pic4_pix_y, smv_x, smv_y);
+      mcost += computeBiPred(orig_pic, blocksize_y, blocksize_x, min_mcost - mcost,        
+        cand.mv_x + pic4_pix_x, cand.mv_y + pic4_pix_y, sand.mv_x, sand.mv_y);
 
       if (mcost < min_mcost)
       {

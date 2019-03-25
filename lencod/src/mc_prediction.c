@@ -1,4 +1,3 @@
-
 /*!
  *************************************************************************************
  * \file mc_prediction.c
@@ -33,6 +32,84 @@ static imgpel l0_pred[MB_PIXELS];
 static imgpel l1_pred[MB_PIXELS];
 
 
+/*!
+ ************************************************************************
+ * \brief
+ *    Weighted BiPrediction
+ ************************************************************************
+ */
+static inline void MCWeightedBiPrediction(imgpel** mb_pred, imgpel* l0pred, imgpel *l1pred, 
+                                          int block_size_y, int block_x, int block_size_x,
+                                          int max_imgpel_value,
+                                          int wbp0, int wbp1, int offset, int wp_round, int weight_denom)
+{
+  int i, j;
+  int block_x4 = block_x + block_size_x;
+
+  for   (j = 0; j< block_size_y; j++)
+  {
+    for (i=block_x; i<block_x4; i++)  
+      mb_pred[j][i] = iClip1( max_imgpel_value, 
+      ((wbp0 * *l0pred++ + wbp1 * *l1pred++ + wp_round) >> (weight_denom)) + offset); 
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Weighted Prediction
+ ************************************************************************
+ */
+static inline void MCWeightedPrediction(imgpel** mb_pred, imgpel* lpred, 
+                                        int block_size_y, int block_x, int block_size_x,
+                                        int max_imgpel_value,
+                                        int wp, int offset, int wp_round, int weight_denom)
+{
+  int i, j;
+  int block_x4 = block_x + block_size_x;
+
+  for   (j = 0; j < block_size_y; j++)
+  {
+    for (i=block_x; i<block_x4; i++)
+      mb_pred[j][i] = iClip1( max_imgpel_value, 
+      ((wp * *lpred++  + wp_round) >> weight_denom) + offset);
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    BiPrediction
+ ************************************************************************
+ */
+static inline void MCBiPrediction(imgpel** mb_pred, imgpel* l0pred, imgpel *l1pred, 
+                                  int block_size_y, int block_x, int block_size_x)
+{
+  int i, j;
+  int block_x4 = block_x + block_size_x;
+
+  for   (j = 0; j < block_size_y; j++)
+  {
+    for (i=block_x; i<block_x4; i++)
+      mb_pred[j][i] = (*l0pred++ + *l1pred++ + 1) >> 1;
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    BiPrediction
+ ************************************************************************
+ */
+static inline void MCPrediction(imgpel** mb_pred, imgpel* lpred, int block_size_y, int block_x, int block_size_x)
+{
+  int j;
+  for (j = 0; j < block_size_y; j++)
+  {
+    memcpy(&(mb_pred[j][block_x]), lpred, block_size_x * sizeof(imgpel));
+    lpred += block_size_x;
+  }
+}
 
 /*!
  ************************************************************************
@@ -49,10 +126,7 @@ static inline void OneComponentLumaPrediction ( imgpel*   mpred,       //!< arra
                                                )
 {
   int     j;
-  imgpel *ref_line = UMVLine4X (list->p_curr_img_sub, pic_pix_y, pic_pix_x);
-
-  width_pad  = list->size_x_pad;
-  height_pad = list->size_y_pad;
+  imgpel *ref_line = UMVLine4X (list->p_curr_img_sub, pic_pix_y, pic_pix_x, list->size_y_pad, list->size_x_pad);
 
   for (j = 0; j < block_size_y; j++) 
   {
@@ -82,15 +156,10 @@ void LumaPrediction ( Macroblock* currMB,//!< Current Macroblock
                      short bipred_me     //!< use bi prediction mv (0=no bipred, 1 = use set 1, 2 = use set 2)
                      )
 {
-  int  i, j;
-  int  block_x4     = block_x + block_size_x;
-  int  block_y4     = block_y + block_size_y;
   int  pic_opix_x   = ((img->opix_x + block_x) << 2) + IMG_PAD_SIZE_TIMES4;
   int  pic_opix_y   = ((img->opix_y + block_y) << 2) + IMG_PAD_SIZE_TIMES4;
   int  bx           = block_x >> 2;
   int  by           = block_y >> 2;
-  imgpel* l0pred    = l0_pred;
-  imgpel* l1pred    = l1_pred;  
   short****** mv_array = img->all_mv;
   short   *curr_mv = NULL;
   imgpel **mb_pred = img->mb_pred[0];
@@ -125,58 +194,38 @@ void LumaPrediction ( Macroblock* currMB,//!< Current Macroblock
   {
     if (p_dir==2)
     {
-      int wbp0 = wbp_weight[0][l0_ref_idx][l1_ref_idx][0];
-      int wbp1 = wbp_weight[1][l0_ref_idx][l1_ref_idx][0];
-      int offset = (wp_offset[0][l0_ref_idx][0] + wp_offset[1][l1_ref_idx][0] + 1)>>1;
-      int wp_round = 2 * wp_luma_round;
-      int weight_denom = luma_log_weight_denom + 1;
-      for   (j=block_y; j<block_y4; j++)
-        for (i=block_x; i<block_x4; i++)  
-          mb_pred[j][i] = iClip1( img->max_imgpel_value, 
-          ((wbp0 * *l0pred++ + wbp1 * *l1pred++ + wp_round) >> (weight_denom)) + offset); 
+      MCWeightedBiPrediction(&mb_pred[block_y], l0_pred, l1_pred, block_size_y, block_x, block_size_x, 
+        img->max_imgpel_value,
+        wbp_weight[0][l0_ref_idx][l1_ref_idx][0], wbp_weight[1][l0_ref_idx][l1_ref_idx][0],
+        (wp_offset[0][l0_ref_idx][0] + wp_offset[1][l1_ref_idx][0] + 1)>>1, 
+         (wp_luma_round << 1), luma_log_weight_denom + 1);
     }
     else if (p_dir==0)
     {
-      int wp = wp_weight[0][l0_ref_idx][0];
-      int offset = wp_offset[0][l0_ref_idx][0];
-      for   (j=block_y; j<block_y4; j++)
-        for (i=block_x; i<block_x4; i++)
-          mb_pred[j][i] = iClip1( img->max_imgpel_value, 
-          ((wp * *l0pred++  + wp_luma_round) >> luma_log_weight_denom) + offset);
+      MCWeightedPrediction(&mb_pred[block_y], l0_pred, block_size_y, block_x, block_size_x,
+        img->max_imgpel_value,
+        wp_weight[0][l0_ref_idx][0], wp_offset[0][l0_ref_idx][0], wp_luma_round, luma_log_weight_denom);
     }
     else // (p_dir==1)
     {
-      int wp = wp_weight[1][l1_ref_idx][0];
-      int offset = wp_offset[1][l1_ref_idx][0];
-      for   (j=block_y; j<block_y4; j++)
-        for (i=block_x; i<block_x4; i++)
-          mb_pred[j][i] = iClip1( img->max_imgpel_value, 
-          ((wp * *l1pred++  + wp_luma_round) >> luma_log_weight_denom) + offset );
+      MCWeightedPrediction(&mb_pred[block_y], l1_pred, block_size_y, block_x, block_size_x,
+        img->max_imgpel_value,
+        wp_weight[1][l1_ref_idx][0], wp_offset[1][l1_ref_idx][0], wp_luma_round, luma_log_weight_denom);
     }
   }
   else
   {
     if (p_dir==2)
     {
-      for   (j=block_y; j<block_y4; j++)
-        for (i=block_x; i<block_x4; i++)
-          mb_pred[j][i] = (*l0pred++ + *l1pred++ + 1) >> 1;
+      MCBiPrediction(&mb_pred[block_y], l0_pred, l1_pred, block_size_y, block_x, block_size_x);    
     }
     else if (p_dir==0)
     {
-      for (j=block_y; j<block_y4; j++)
-      {
-        memcpy(&(mb_pred[j][block_x]), l0pred, block_size_x * sizeof(imgpel));
-        l0pred += block_size_x;
-      }
+      MCPrediction(&mb_pred[block_y], l0_pred, block_size_y, block_x, block_size_x);
     }
     else // (p_dir==1)
     {
-      for (j=block_y; j<block_y4; j++)
-      {
-        memcpy(&(mb_pred[j][block_x]), l1pred, block_size_x * sizeof(imgpel));
-        l1pred += block_size_x;
-      }
+      MCPrediction(&mb_pred[block_y], l1_pred, block_size_y, block_x, block_size_x);
     }
   }
 }
@@ -199,18 +248,14 @@ void LumaPredictionBi ( Macroblock* currMB, //!< Current Macroblock
                         int   list          //!< current list for prediction.
                         )
 {
-  int  i, j;
-  int  block_x4  = block_x + block_size_x;
-  int  block_y4  = block_y + block_size_y;
   int  pic_opix_x = ((img->opix_x + block_x) << 2) + IMG_PAD_SIZE_TIMES4;
   int  pic_opix_y = ((img->opix_y + block_y) << 2) + IMG_PAD_SIZE_TIMES4;
   int  bx        = block_x >> 2;
   int  by        = block_y >> 2;
-  imgpel* l0pred     = l0_pred;
-  imgpel* l1pred     = l1_pred;
 
   int  apply_weights = ( (active_pps->weighted_pred_flag && (img->type == P_SLICE || img->type == SP_SLICE)) ||
     (active_pps->weighted_bipred_idc && (img->type == B_SLICE)));  
+
   short   ******mv_array = img->bipred_mv[list]; 
   short   *mv_arrayl0 = mv_array[LIST_0][l0_ref_idx][l0_mode][by][bx];
   short   *mv_arrayl1 = mv_array[LIST_1][l1_ref_idx][l1_mode][by][bx];
@@ -221,22 +266,15 @@ void LumaPredictionBi ( Macroblock* currMB, //!< Current Macroblock
 
   if (apply_weights)
   {
-    int wbp0 = wbp_weight[0][l0_ref_idx][l1_ref_idx][0];
-    int wbp1 = wbp_weight[1][l0_ref_idx][l1_ref_idx][0];
-    int offset = (wp_offset[0][l0_ref_idx][0] + wp_offset[1][l1_ref_idx][0] + 1)>>1;
-    int wp_round = 2*wp_luma_round;
-    int weight_denom = luma_log_weight_denom + 1;
-
-    for   (j=block_y; j<block_y4; j++)
-      for (i=block_x; i<block_x4; i++)
-        mb_pred[j][i] = iClip1( img->max_imgpel_value,
-        ((wbp0 * *l0pred++ + wbp1 * *l1pred++ + wp_round) >> weight_denom) + offset);
+    MCWeightedBiPrediction(&mb_pred[block_y], l0_pred, l1_pred, block_size_y, block_x, block_size_x, 
+      img->max_imgpel_value,
+      wbp_weight[0][l0_ref_idx][l1_ref_idx][0], wbp_weight[1][l0_ref_idx][l1_ref_idx][0],
+      (wp_offset[0][l0_ref_idx][0] + wp_offset[1][l1_ref_idx][0] + 1)>>1, 
+      (wp_luma_round << 1), luma_log_weight_denom + 1);
   }
   else
   {
-    for   (j=block_y; j<block_y4; j++)
-      for (i=block_x; i<block_x4; i++)
-        mb_pred[j][i] = (*l0pred++ + *l1pred++ + 1) >> 1;
+    MCBiPrediction(&mb_pred[block_y], l0_pred, l1_pred, block_size_y, block_x, block_size_x);
   }
 }
 
@@ -252,7 +290,7 @@ void OneComponentChromaPrediction4x4_regenerate (
                                  int         block_c_x,  //!< horizontal pixel coordinate of 4x4 block
                                  int         block_c_y,  //!< vertical   pixel coordinate of 4x4 block
                                  short***    mv,         //!< motion vector array
-                                 StorablePicture *list,
+                                 StorablePicture *list,  //!< image components (color planes)
                                  int         uv)         //!< chroma component
 {
   int     i, j, ii, jj, ii0, jj0, ii1, jj1, if0, if1, jf0, jf1;
@@ -317,7 +355,7 @@ void OneComponentChromaPrediction4x4_retrieve (imgpel*        mpred,      //!< a
                                  int         block_c_x,  //!< horizontal pixel coordinate of 4x4 block
                                  int         block_c_y,  //!< vertical   pixel coordinate of 4x4 block
                                  short***    mv,         //!< motion vector array
-                                 StorablePicture *list,
+                                 StorablePicture *list,  //!< image components (color planes)
                                  int         uv)         //!< chroma component
 {
   int     j, ii, jj;
@@ -352,7 +390,7 @@ void OneComponentChromaPrediction4x4_retrieve (imgpel*        mpred,      //!< a
     ii   = ipos1 + mvb[0];
     jj   = jpos  + mvb[1];
 
-    line_ptr = UMVLine8X_chroma ( refsubimage, jj, ii);
+    line_ptr = UMVLine8X_chroma ( refsubimage, jj, ii, height_pad_cr, width_pad_cr);
     *mpred++ = *line_ptr++;
     *mpred++ = *line_ptr;
 
@@ -361,7 +399,7 @@ void OneComponentChromaPrediction4x4_retrieve (imgpel*        mpred,      //!< a
     ii   = ipos2 + mvb[0];
     jj   = jpos  + mvb[1];
 
-    line_ptr = UMVLine8X_chroma ( refsubimage, jj, ii);
+    line_ptr = UMVLine8X_chroma ( refsubimage, jj, ii, height_pad_cr, width_pad_cr);
     *mpred++ = *line_ptr++;
     *mpred++ = *line_ptr;
   }
@@ -384,10 +422,7 @@ void OneComponentChromaPrediction ( imgpel* mpred,      //!< array to store pred
                                    int         uv)         //!< chroma component
 {
   int     j;
-  imgpel *ref_line = UMVLine4X (list->imgUV_sub[uv], pic_pix_y, pic_pix_x);
-
-  width_pad_cr  = list->size_x_cr_pad;
-  height_pad_cr = list->size_y_cr_pad;
+  imgpel *ref_line = UMVLine4X (list->imgUV_sub[uv], pic_pix_y, pic_pix_x, list->size_y_cr_pad, list->size_x_cr_pad);
 
   for (j = 0; j < block_size_y; j++) 
   {
@@ -404,10 +439,10 @@ void OneComponentChromaPrediction ( imgpel* mpred,      //!< array to store pred
  ************************************************************************
  */
 static inline
-void IntraChromaPrediction4x4 (Macroblock* currMB, //! <-- Current Macroblock
-                               int  uv,            //! <-- colour component
-                               int  block_x,       //! <-- relative horizontal block coordinate of 4x4 block
-                               int  block_y)       //! <-- relative vertical   block coordinate of 4x4 block
+void IntraChromaPrediction4x4 (Macroblock* currMB, //!< Current Macroblock
+                               int  uv,            //!< color component
+                               int  block_x,       //!< relative horizontal block coordinate of 4x4 block
+                               int  block_y)       //!< relative vertical   block coordinate of 4x4 block
 {
   int j;
   imgpel **mb_pred        = img->mb_pred[ uv ];
@@ -438,17 +473,11 @@ void ChromaPrediction ( Macroblock* currMB, // <-- Current Macroblock
                        short bipred_me      // <-- use bi prediction mv (0=no bipred, 1 = use set 1, 2 = use set 2)
                        )    
 {
-  int  i, j;
-  int  block_x4     = block_x + block_size_x;
-  int  block_y4     = block_y + block_size_y;
   int  pic_opix_x   = ((img->opix_c_x + block_x) << 2) + IMG_PAD_SIZE_TIMES4;
   int  pic_opix_y   = ((img->opix_c_y + block_y) << 2) + IMG_PAD_SIZE_TIMES4;
   int  bx           = block_x >> 2;
   int  by           = block_y >> 2;
-  imgpel* l0pred     = l0_pred;
-  imgpel* l1pred     = l1_pred;
   short****** mv_array = img->all_mv;    
-  int max_imgpel_value_uv = img->max_imgpel_value_comp[1];
   int uv_comp = uv + 1;
   imgpel **mb_pred = img->mb_pred[ uv_comp];
 
@@ -486,59 +515,38 @@ void ChromaPrediction ( Macroblock* currMB, // <-- Current Macroblock
   {
     if (p_dir==2)
     {
-      int wbp0 = wbp_weight[0][l0_ref_idx][l1_ref_idx][uv_comp];
-      int wbp1 = wbp_weight[1][l0_ref_idx][l1_ref_idx][uv_comp];
-      int offset = (wp_offset[0][l0_ref_idx][uv_comp] + wp_offset[1][l1_ref_idx][uv_comp] + 1)>>1;
-      int wp_round = 2*wp_chroma_round;
-      int weight_denom = luma_log_weight_denom + 1;
-
-
-      for   (j=block_y; j<block_y4; j++)
-        for (i=block_x; i<block_x4; i++)
-          mb_pred[j][i] =  iClip1( max_imgpel_value_uv,
-          ((wbp0 * *l0pred++ + wbp1 * *l1pred++ + wp_round) >> (weight_denom)) + (offset) );
+      MCWeightedBiPrediction(&mb_pred[block_y], l0_pred, l1_pred, block_size_y, block_x, block_size_x, 
+      img->max_imgpel_value_comp[1],
+        wbp_weight[0][l0_ref_idx][l1_ref_idx][uv_comp], wbp_weight[1][l0_ref_idx][l1_ref_idx][uv_comp],
+        (wp_offset[0][l0_ref_idx][uv_comp] + wp_offset[1][l1_ref_idx][uv_comp] + 1)>>1, 
+         (wp_chroma_round << 1), chroma_log_weight_denom + 1);
     }
     else if (p_dir==0)
     {
-      int wp = wp_weight[0][l0_ref_idx][uv_comp];
-      int offset = wp_offset[0][l0_ref_idx][uv_comp];
-      for   (j=block_y; j<block_y4; j++)
-        for (i=block_x; i<block_x4; i++)
-          mb_pred[j][i] = iClip1( max_imgpel_value_uv, (( wp * *l0pred++ + wp_chroma_round) >> chroma_log_weight_denom) +  offset);
+      MCWeightedPrediction(&mb_pred[block_y], l0_pred, block_size_y, block_x, block_size_x,
+      img->max_imgpel_value_comp[1],
+        wp_weight[0][l0_ref_idx][uv_comp], wp_offset[0][l0_ref_idx][uv_comp], wp_chroma_round, chroma_log_weight_denom);
     }
     else // (p_dir==1)
     {
-      int wp = wp_weight[1][l1_ref_idx][uv_comp];
-      int offset = wp_offset[1][l1_ref_idx][uv_comp];
-
-      for   (j=block_y; j<block_y4; j++)
-        for (i=block_x; i<block_x4; i++)
-          mb_pred[j][i] = iClip1( max_imgpel_value_uv, ((wp * *l1pred++ + wp_chroma_round) >> chroma_log_weight_denom) + offset);
+      MCWeightedPrediction(&mb_pred[block_y], l1_pred, block_size_y, block_x, block_size_x,
+      img->max_imgpel_value_comp[1],
+        wp_weight[1][l1_ref_idx][uv_comp], wp_offset[1][l1_ref_idx][uv_comp], wp_chroma_round, chroma_log_weight_denom);
     }
   }
   else
   {
     if (p_dir==2)
     {
-      for   (j=block_y; j<block_y4; j++)
-        for (i=block_x; i<block_x4; i++)
-          mb_pred[j][i] = (*l0pred++ + *l1pred++ + 1) >> 1;
+      MCBiPrediction(&mb_pred[block_y], l0_pred, l1_pred, block_size_y, block_x, block_size_x);
     }
     else if (p_dir==0)
     {
-      for (j=block_y; j<block_y4; j++)
-      {
-        memcpy(&(mb_pred[j][block_x]), l0pred, block_size_x * sizeof(imgpel));
-        l0pred += block_size_x;
-      }
+      MCPrediction(&mb_pred[block_y], l0_pred, block_size_y, block_x, block_size_x);
     }
     else // (p_dir==1)
     {
-      for (j=block_y; j<block_y4; j++)
-      {
-        memcpy(&(mb_pred[j][block_x]), l1pred, block_size_x * sizeof(imgpel));
-        l1pred += block_size_x;
-      }
+      MCPrediction(&mb_pred[block_y], l1_pred, block_size_y, block_x, block_size_x);
     }
   }
 }
@@ -563,13 +571,7 @@ void ChromaPrediction4x4 ( Macroblock* currMB, // <-- Current Macroblock
                            short bipred_me     // <-- use bi prediction mv (0=no bipred, 1 = use set 1, 2 = use set 2)
                            )   
 {
-  int  i, j;
-  int  block_x4  = block_x + BLOCK_SIZE;
-  int  block_y4  = block_y + BLOCK_SIZE;
-  imgpel* l0pred     = l0_pred;
-  imgpel* l1pred     = l1_pred;
   short****** mv_array = img->all_mv;
-  int max_imgpel_value_uv = img->max_imgpel_value_comp[1];
   int uv_comp = uv + 1;
   imgpel **mb_pred = img->mb_pred[uv_comp];
   int     list_offset = currMB->list_offset;
@@ -580,7 +582,6 @@ void ChromaPrediction4x4 ( Macroblock* currMB, // <-- Current Macroblock
   if (bipred_me && l0_ref_idx == 0 && l1_ref_idx == 0 && p_dir == 2 && is_bipred_enabled(l0_mode)  && is_bipred_enabled(l1_mode) )
     mv_array = img->bipred_mv[bipred_me - 1]; 
   //===== INTRA PREDICTION =====
-  
   if (p_dir==-1)
   {
     IntraChromaPrediction4x4 (currMB, uv_comp, block_x, block_y);
@@ -608,58 +609,39 @@ void ChromaPrediction4x4 ( Macroblock* currMB, // <-- Current Macroblock
   {
     if (p_dir==2)
     {
-      int wbp0 = wbp_weight[0][l0_ref_idx][l1_ref_idx][uv_comp];
-      int wbp1 = wbp_weight[1][l0_ref_idx][l1_ref_idx][uv_comp];
-      int offset = (wp_offset[0][l0_ref_idx][uv_comp] + wp_offset[1][l1_ref_idx][uv_comp] + 1)>>1;
-      int wp_round = 2 * wp_chroma_round;
-      int weight_denom = luma_log_weight_denom + 1;
+      MCWeightedBiPrediction(&mb_pred[block_y], l0_pred, l1_pred, BLOCK_SIZE, block_x, BLOCK_SIZE, 
+        img->max_imgpel_value_comp[1],
+        wbp_weight[0][l0_ref_idx][l1_ref_idx][uv_comp], wbp_weight[1][l0_ref_idx][l1_ref_idx][uv_comp],
+        (wp_offset[0][l0_ref_idx][uv_comp] + wp_offset[1][l1_ref_idx][uv_comp] + 1)>>1, 
+         (wp_chroma_round << 1), chroma_log_weight_denom + 1);
 
-      for (j=block_y; j<block_y4; j++)
-        for (i=block_x; i<block_x4; i++)
-          mb_pred[j][i] =  iClip1( max_imgpel_value_uv,
-          ((wbp0 * *l0pred++ + wbp1 * *l1pred++ + wp_round) >> (weight_denom)) + (offset) );
     }
     else if (p_dir==0)
     {
-      int wp = wp_weight[0][l0_ref_idx][uv_comp];
-      int offset = wp_offset[0][l0_ref_idx][uv_comp];
-      for (j=block_y; j<block_y4; j++)
-        for (i=block_x; i<block_x4; i++)
-          mb_pred[j][i] = iClip1( max_imgpel_value_uv, (( wp * *l0pred++ + wp_chroma_round) >> chroma_log_weight_denom) +  offset);
+      MCWeightedPrediction(&mb_pred[block_y], l0_pred, BLOCK_SIZE, block_x, BLOCK_SIZE,
+      img->max_imgpel_value_comp[1],
+        wp_weight[0][l0_ref_idx][uv_comp], wp_offset[0][l0_ref_idx][uv_comp], wp_chroma_round, chroma_log_weight_denom);
     }
     else // (p_dir==1)
     {
-      int wp = wp_weight[1][l1_ref_idx][uv_comp];
-      int offset = wp_offset[1][l1_ref_idx][uv_comp];
-
-      for (j=block_y; j<block_y4; j++)
-        for (i=block_x; i<block_x4; i++)
-          mb_pred[j][i] = iClip1( max_imgpel_value_uv, ((wp * *l1pred++ + wp_chroma_round) >> chroma_log_weight_denom) + offset);
+      MCWeightedPrediction(&mb_pred[block_y], l1_pred, BLOCK_SIZE, block_x, BLOCK_SIZE,
+      img->max_imgpel_value_comp[1],
+        wp_weight[1][l1_ref_idx][uv_comp], wp_offset[1][l1_ref_idx][uv_comp], wp_chroma_round, chroma_log_weight_denom);
     }
   }
   else
   {
     if (p_dir==2)
     {
-      for (j=block_y; j<block_y4; j++)
-        for (i=block_x; i<block_x4; i++)
-          mb_pred[j][i] = (*l0pred++ + *l1pred++ + 1) >> 1;
+      MCBiPrediction(&mb_pred[block_y], l0_pred, l1_pred, BLOCK_SIZE, block_x, BLOCK_SIZE);
     }
     else if (p_dir==0)
     {
-      for (j=block_y; j<block_y4; j++)
-      {
-        memcpy(&(mb_pred[j][block_x]), l0pred, BLOCK_SIZE * sizeof(imgpel));
-        l0pred += BLOCK_SIZE;
-      }
+      MCPrediction(&mb_pred[block_y], l0_pred, BLOCK_SIZE, block_x, BLOCK_SIZE);
     }
     else // (p_dir==1)
     {
-      for (j=block_y; j<block_y4; j++)
-      {
-        memcpy(&(mb_pred[j][block_x]), l1pred, BLOCK_SIZE * sizeof(imgpel));
-        l1pred += BLOCK_SIZE;
-      }
+      MCPrediction(&mb_pred[block_y], l1_pred, BLOCK_SIZE, block_x, BLOCK_SIZE);
     }
   }
 }
@@ -714,7 +696,6 @@ void IntraChromaPrediction (Macroblock *currMB, int *mb_up, int *mb_left, int*mb
     getNeighbour(currMB, -1 , i-1 , img->mb_size[IS_CHROMA], &left[i]);
   }
   getNeighbour(currMB, 0 , -1 , img->mb_size[IS_CHROMA], &up);
-
 
   mb_available_up                             = up.available;
   mb_available_up_left                        = left[0].available;

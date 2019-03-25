@@ -28,7 +28,7 @@
 #endif
 
 #define JM                  "15 (FRExt)"
-#define VERSION             "15.0"
+#define VERSION             "15.1"
 #define EXT_VERSION         "(FRExt)"
 
 #define GET_METIME                1    //!< Enables or disables ME computation time
@@ -40,7 +40,7 @@
 #define ALLOW_GRAYSCALE           0    //!< Allow encoding in grayscale
 #define ZEROSNR                   1    //!< PSNR computation method
 
-#define MAX_RC_MODE         3
+#define MAX_RC_MODE              3
 #define RC_MAX_TEMPORAL_LEVELS   5
 
 //#define BEST_NZ_COEFF 1   // yuwen 2005.11.03 => for high complexity mode decision (CAVLC, #TotalCoeff)

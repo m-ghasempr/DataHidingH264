@@ -245,16 +245,14 @@ static void ParseTIFFIFD (unsigned short ifd_count, TIFFIFDEntry *tiffIFD, Frame
  *    Reads entire tiff file from harddrive. Any processing is done
  *    in memory, reducing I/O processing
  *
- * \param vfile
+ * \param input_file
  *    Input file to read from
  * \param FrameNoInFile
  *    Frame number in the source file
- * \param HeaderSize
- *    Number of bytes in the source file to be skipped
  * \param source
  *    source file (on disk) information 
- * \param output
- *    output file (for encoding) information
+ * \param buf
+ *    memory buffer
  ************************************************************************
  */
 void ReadTIFFImage (VideoDataFile *input_file, int FrameNoInFile, FrameFormat *source, unsigned char *buf)
