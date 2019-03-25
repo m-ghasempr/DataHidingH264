@@ -175,14 +175,15 @@ void code_a_picture(Picture *pic)
 
   img->currentPicture = pic;
 
-  img->currentPicture->idr_flag = (!IMG_NUMBER) && (!(img->structure==BOTTOM_FIELD));
+//  img->currentPicture->idr_flag = (!IMG_NUMBER) && (!(img->structure==BOTTOM_FIELD));
+  img->currentPicture->idr_flag = ((!IMG_NUMBER) && (!(img->structure==BOTTOM_FIELD))) || (input->idr_enable && (img->type == I_SLICE || img->type==SP_SLICE || img->type==SI_SLICE)&& (!(img->structure==BOTTOM_FIELD)));
 
   pic->no_slices = 0;
   pic->distortion_u = pic->distortion_v = pic->distortion_y = 0.0;
 
   // restrict list 1 size
   img->num_ref_idx_l0_active = active_pps->num_ref_idx_l0_active_minus1 + 1 ;
-  img->num_ref_idx_l1_active = (img->type==B_SLICE ? active_pps->num_ref_idx_l0_active_minus1 + 1 : 0);
+  img->num_ref_idx_l1_active = (img->type==B_SLICE ? active_pps->num_ref_idx_l1_active_minus1 + 1 : 0);
 
   // generate reference picture lists
   init_lists(img->type, img->structure);
@@ -191,11 +192,16 @@ void code_a_picture(Picture *pic)
   img->num_ref_idx_l0_active = listXsize[0];
   img->num_ref_idx_l1_active = listXsize[1];
 
+  if (img->type != I_SLICE && (input->WeightedPrediction == 1 || (input->WeightedBiprediction > 0 && (img->type == B_SLICE))))
+  {
+    estimate_weighting_factor ();
+  }
+
   //if (img->MbaffFrameFlag)
   if (img->structure==FRAME)
     init_mbaff_lists();
 
-	// update reference picture number index
+  // update reference picture number index
   for (i=0;i<listXsize[LIST_0];i++)
   {
     enc_picture->ref_pic_num[LIST_0][i]=listX[LIST_0][i]->poc * 2 + ((listX[LIST_0][i]->structure==BOTTOM_FIELD)?1:0) ; 
@@ -239,7 +245,7 @@ void code_a_picture(Picture *pic)
     for (j = 0; j < input->NoOfDecoders; j++)
       DeblockFrame (img, decs->decY_best[j], NULL);
 
-	DeblockFrame (img, enc_picture->imgY, enc_picture->imgUV);
+  DeblockFrame (img, enc_picture->imgY, enc_picture->imgUV);
 
   if (img->MbaffFrameFlag)
     MbAffPostProc();
@@ -280,8 +286,8 @@ int encode_one_frame ()
   float dis_frm = 0, dis_frm_y = 0, dis_frm_u = 0, dis_frm_v = 0;
   float dis_fld = 0, dis_fld_y = 0, dis_fld_u = 0, dis_fld_v = 0;
 
-	//Rate control
-	int pic_type, bits = 0; 
+  //Rate control
+  int pic_type, bits = 0; 
 
 #ifdef WIN32
   _ftime (&tstruct1);           // start time ms
@@ -290,7 +296,7 @@ int encode_one_frame ()
 #endif
   time (&ltime1);               // start time s
 
-	//Rate control 
+  //Rate control 
   img->write_macroblock = 0;
 /*
   //Shankar Regunathan (Oct 2002)
@@ -318,8 +324,8 @@ int encode_one_frame ()
 
   if (input->PicInterlace == FIELD_CODING)
   {
-		//Rate control
-	  img->FieldControl=1;
+    //Rate control
+    img->FieldControl=1;
 
     img->field_picture = 1;  // we encode fields
     field_picture (top_pic, bottom_pic);
@@ -327,8 +333,8 @@ int encode_one_frame ()
   }
   else
   {
-		//Rate control
-		img->FieldControl=0;
+    //Rate control
+    img->FieldControl=0;
 
     // For frame coding, turn MB level field/frame coding flag on
     if (input->MbInterlace)
@@ -336,27 +342,27 @@ int encode_one_frame ()
 
     img->field_picture = 0; // we encode a frame
 
-		//Rate control
-		if(input->RCEnable)
-		{ 
-		/*update the number of MBs in the basic unit for MB adaptive 
-			f/f coding*/
-			if((input->MbInterlace)&&(input->basicunit<img->Frame_Total_Number_MB)\
-				&&(img->type==P_SLICE)&&(img->IFLAG==0))
-				img->BasicUnit=input->basicunit*2;
-			else
-				img->BasicUnit=input->basicunit;
-			
-			rc_init_pict(1,0,1); 
-			img->qp  = updateQuantizationParameter(0); 
-			
-			
-			pic_type = img->type;
-			QP =0;
-		}
+    //Rate control
+    if(input->RCEnable)
+    { 
+    /*update the number of MBs in the basic unit for MB adaptive 
+      f/f coding*/
+      if((input->MbInterlace)&&(input->basicunit<img->Frame_Total_Number_MB)\
+        &&(img->type==P_SLICE)&&(img->IFLAG==0))
+        img->BasicUnit=input->basicunit*2;
+      else
+        img->BasicUnit=input->basicunit;
+      
+      rc_init_pict(1,0,1); 
+      img->qp  = updateQuantizationParameter(0); 
+      
+      
+      pic_type = img->type;
+      QP =0;
+    }
 
-		if( active_sps->frame_mbs_only_flag)
-			img->TopFieldFlag=0;
+    if( active_sps->frame_mbs_only_flag)
+      img->TopFieldFlag=0;
 
     frame_picture (frame_pic);
    
@@ -366,10 +372,10 @@ int encode_one_frame ()
     
     if (input->PicInterlace == ADAPTIVE_CODING)
     {
-			//Rate control
-			img->FieldControl=1;
-			img->write_macroblock = 0;
-			img->bot_MB = 0;
+      //Rate control
+      img->FieldControl=1;
+      img->write_macroblock = 0;
+      img->bot_MB = 0;
 
       img->field_picture = 1;  // we encode fields
       field_picture (top_pic, bottom_pic);
@@ -382,12 +388,12 @@ int encode_one_frame ()
       img->fld_flag = picture_structure_decision (frame_pic, top_pic, bottom_pic);
       update_field_frame_contexts (img->fld_flag);
 
-			//Rate control
-			if(img->fld_flag==0)
-				img->FieldFrame=1;
-			/*the current choice is field coding*/
-			else
-				img->FieldFrame=0;
+      //Rate control
+      if(img->fld_flag==0)
+        img->FieldFrame=1;
+      /*the current choice is field coding*/
+      else
+        img->FieldFrame=0;
     }
     else
    
@@ -435,15 +441,15 @@ int encode_one_frame ()
     CalculateSparePicture ();
 */
 
-	//Rate control
-	if(input->RCEnable)
-	{
-	  if((input->symbol_mode == 0)&&(input->of_mode ==0))
-		  bits = bits_frm;   //UVLC && Bitstream output mode 
-	  else
-	    bits = stat->bit_ctr-stat->bit_ctr_n;//CABAC*/
-	  rc_update_pict_frame(bits);
-	}
+  //Rate control
+  if(input->RCEnable)
+  {
+    if((input->symbol_mode == 0)&&(input->of_mode ==0))
+      bits = bits_frm;   //UVLC && Bitstream output mode 
+    else
+      bits = stat->bit_ctr-stat->bit_ctr_n;//CABAC*/
+    rc_update_pict_frame(bits);
+  }
 
 /*
     
@@ -520,17 +526,17 @@ int encode_one_frame ()
     ReportFirstframe(tmp_time);
   else
   {
-		//Rate control
-		if(input->RCEnable)
-		{
-			if((!input->PicInterlace)&&(!input->MbInterlace))
-				bits=stat->bit_ctr-stat->bit_ctr_n;
-			else
-			{
-				bits = stat->bit_ctr -Pprev_bits; // used for rate control update */
-				Pprev_bits = stat->bit_ctr;
-			}
-		}
+    //Rate control
+    if(input->RCEnable)
+    {
+      if((!input->PicInterlace)&&(!input->MbInterlace))
+        bits=stat->bit_ctr-stat->bit_ctr_n;
+      else
+      {
+        bits = stat->bit_ctr -Pprev_bits; // used for rate control update */
+        Pprev_bits = stat->bit_ctr;
+      }
+    }
 
     switch (img->type)
     {
@@ -556,16 +562,16 @@ int encode_one_frame ()
   }
   stat->bit_ctr_n = stat->bit_ctr;
 
-	//Rate control
-	if(input->RCEnable) 
+  //Rate control
+  if(input->RCEnable) 
   {
-	  rc_update_pict(bits);
-	    /*update the parameters of quadratic R-D model*/
-	  if((img->type==P_SLICE)&&(active_sps->frame_mbs_only_flag))
-		  updateRCModel();
-	  else if((img->type==P_SLICE)&&(!active_sps->frame_mbs_only_flag)\
-		  &&(img->IFLAG==0))
-		  updateRCModel();
+    rc_update_pict(bits);
+      /*update the parameters of quadratic R-D model*/
+    if((img->type==P_SLICE)&&(active_sps->frame_mbs_only_flag))
+      updateRCModel();
+    else if((img->type==P_SLICE)&&(!active_sps->frame_mbs_only_flag)\
+      &&(img->IFLAG==0))
+      updateRCModel();
   }
 
   FreeSourceframe (srcframe);
@@ -644,11 +650,6 @@ void frame_picture (Picture *frame)
     CopyBottomFieldToOldImgOrgVariables (srcframe);
   }
 
-  if (img->type != I_SLICE && (input->WeightedPrediction == 1 || (input->WeightedBiprediction > 0 && (img->type == B_SLICE))))
-  {
-    estimate_weighting_factor ();
-  }
-
   img->fld_flag = 0;
   code_a_picture(frame);
 
@@ -672,11 +673,11 @@ void frame_picture (Picture *frame)
  */
 void field_picture (Picture *top, Picture *bottom)
 {
-	//Rate control
+  //Rate control
   int old_pic_type;              // picture type of top field used for rate control    
   int TopFieldBits;
   
-	//Rate control
+  //Rate control
   old_pic_type = img->type;
 
   stat->em_prev_bits_fld = 0;
@@ -704,25 +705,26 @@ void field_picture (Picture *top, Picture *bottom)
     nextP_tr_fld--;
 
   CopyTopFieldToOldImgOrgVariables (srcframe);
- 
-	if (img->type != I_SLICE && (input->WeightedPrediction == 1 || (input->WeightedBiprediction > 0 && (img->type == B_SLICE))))  if (img->type == B_SLICE)
+/* 
+  if (img->type != I_SLICE && (input->WeightedPrediction == 1 || (input->WeightedBiprediction > 0 && (img->type == B_SLICE))))  if (img->type == B_SLICE)
   {
     estimate_weighting_factor ();
   }
+  */
   img->fld_flag = 1;
 //  img->bottom_field_flag = 0;
  
-	//Rate control
-	if(input->RCEnable)
+  //Rate control
+  if(input->RCEnable)
   {
-	  img->BasicUnit=input->basicunit;
+    img->BasicUnit=input->basicunit;
 
-	  if(input->PicInterlace==FIELD_CODING)
-		  rc_init_pict(0,1,1); 
-	  else
-		  rc_init_pict(0,1,0);
+    if(input->PicInterlace==FIELD_CODING)
+      rc_init_pict(0,1,1); 
+    else
+      rc_init_pict(0,1,0);
 
-	  img->qp  = updateQuantizationParameter(1); 
+    img->qp  = updateQuantizationParameter(1); 
    }
   img->TopFieldFlag=1;
 
@@ -733,8 +735,8 @@ void field_picture (Picture *top, Picture *bottom)
 
   top->bits_per_picture = 8 * ((((img->currentSlice)->partArr[0]).bitstream)->byte_pos);
 
-	//Rate control
-	TopFieldBits=top->bits_per_picture;
+  //Rate control
+  TopFieldBits=top->bits_per_picture;
 
   //  Bottom field
 //  img->bottom_field_flag = 0;
@@ -743,7 +745,7 @@ void field_picture (Picture *top, Picture *bottom)
   enc_bottom_picture->pic_num = img->frame_num;
   enc_bottom_picture->coded_frame = 1;
   enc_bottom_picture->mb_adaptive_frame_field_flag = img->MbaffFrameFlag = FALSE;
-	img->ThisPOC = img->bottompoc;
+  img->ThisPOC = img->bottompoc;
   img->structure = BOTTOM_FIELD;
   enc_picture = enc_bottom_picture;
   put_buffer_bot ();
@@ -758,20 +760,21 @@ void field_picture (Picture *top, Picture *bottom)
     img->type = P_SLICE;
 
   CopyBottomFieldToOldImgOrgVariables (srcframe);
- 
+/* 
   if (img->type != I_SLICE && (input->WeightedPrediction == 1 || (input->WeightedBiprediction > 0 && (img->type == B_SLICE))))
   {
     estimate_weighting_factor ();
   }
+  */
   img->fld_flag = 1;
 //  img->bottom_field_flag = 1;
 
-	//Rate control
-	if(input->RCEnable)  setbitscount(TopFieldBits);
+  //Rate control
+  if(input->RCEnable)  setbitscount(TopFieldBits);
   if(input->RCEnable)
   {
-	  rc_init_pict(0,0,0); 
-	  img->qp  = updateQuantizationParameter(0); 
+    rc_init_pict(0,0,0); 
+    img->qp  = updateQuantizationParameter(0); 
   }
   img->TopFieldFlag=0;
 
@@ -944,27 +947,27 @@ static void init_frame ()
     if (IMG_NUMBER != 0 && input->successive_Bframe != 0)     // B pictures to encode
       nextP_tr_frm = img->tr;
     
-		//Rate control
-		if(!input->RCEnable)                  // without using rate control
+    //Rate control
+    if(!input->RCEnable)                  // without using rate control
     {
-			if (img->type == I_SLICE)
-				img->qp = input->qp0;   // set quant. parameter for I-frame
-			else
-			{
+      if (img->type == I_SLICE)
+        img->qp = input->qp0;   // set quant. parameter for I-frame
+      else
+      {
 #ifdef _CHANGE_QP_
-				if (input->qp2start > 0 && img->tr >= input->qp2start)
-					img->qp = input->qpN2;
-				else
+        if (input->qp2start > 0 && img->tr >= input->qp2start)
+          img->qp = input->qpN2;
+        else
 #endif
-					img->qp = input->qpN;
-				
-				if (img->type == SP_SLICE)
-				{
-					img->qp = input->qpsp;
-					img->qpsp = input->qpsp_pred;
-				}		
-			}
-		}
+          img->qp = input->qpN;
+        
+        if (img->type == SP_SLICE)
+        {
+          img->qp = input->qpsp;
+          img->qpsp = input->qpsp_pred;
+        }   
+      }
+    }
 
     img->mb_y_intra = img->mb_y_upd;  //  img->mb_y_intra indicates which GOB to intra code for this frame
     
@@ -999,8 +1002,8 @@ static void init_frame ()
 
     if (img->tr >= nextP_no)
       img->tr = nextP_no - 1;
-		//Rate control
-	  if(!input->RCEnable)                  // without using rate control
+    //Rate control
+    if(!input->RCEnable)                  // without using rate control
     {    
 #ifdef _CHANGE_QP_
     if (input->qp2start > 0 && img->tr >= input->qp2start)
@@ -1008,7 +1011,7 @@ static void init_frame ()
     else
 #endif
       img->qp = input->qpB;
-		}
+    }
 
   }
   
@@ -1079,13 +1082,13 @@ static void init_field ()
 #endif
       if (img->number != 0 && input->successive_Bframe != 0)    // B pictures to encode
         nextP_tr_fld = img->tr;
-			
-			//Rate control
-			if(!input->RCEnable)                  // without using rate control
-			{
-				if (img->type == I_SLICE)
-					img->qp = input->qp0;   // set quant. parameter for I-frame
-				else
+      
+      //Rate control
+      if(!input->RCEnable)                  // without using rate control
+      {
+        if (img->type == I_SLICE)
+          img->qp = input->qp0;   // set quant. parameter for I-frame
+        else
         {
 #ifdef _CHANGE_QP_
           if (input->qp2start > 0 && img->tr >= input->qp2start)
@@ -1094,12 +1097,12 @@ static void init_field ()
 #endif
             img->qp = input->qpN;
           if (img->type == SP_SLICE)
-					{
-						img->qp = input->qpsp;
-						img->qpsp = input->qpsp_pred;
-					}
+          {
+            img->qp = input->qpsp;
+            img->qpsp = input->qpsp_pred;
+          }
         }
-			}
+      }
 
       img->mb_y_intra = img->mb_y_upd;  //  img->mb_y_intra indicates which GOB to intra code for this frame
 
@@ -1150,16 +1153,16 @@ static void init_field ()
       img->tr = prevP_no + (img->b_interval + 1) * img->b_frame_to_code;        // from prev_P
       if (img->tr >= nextP_no)
         img->tr = nextP_no - 1; // ?????
-			//Rate control
-			if(!input->RCEnable)                  // without using rate control
-			{
+      //Rate control
+      if(!input->RCEnable)                  // without using rate control
+      {
 #ifdef _CHANGE_QP_
       if (input->qp2start > 0 && img->tr >= input->qp2start)
         img->qp = input->qpB2;
       else
 #endif
         img->qp = input->qpB;
-			}
+      }
     }
   input->jumpd /= 2;
   input->successive_Bframe /= 2;
@@ -1179,14 +1182,15 @@ static void init_field ()
  */
 static void estimate_weighting_factor ()
 {
-  int i, j, l, n;
+  int i, j, n;
+  //int l;
   int x,z;
   int dc_org = 0;
   int index;
   int comp;
   int p0, pt;
   int fwd_ref[MAX_REFERENCE_PICTURES], bwd_ref[MAX_REFERENCE_PICTURES];
-	int bframe = (img->type == B_SLICE);
+  int bframe = (img->type == B_SLICE);
   int num_ref = min (img->number-((enc_picture!=enc_frame_picture)&&img->fld_type&&bframe), img->buf_cycle);
   int dc_ref[MAX_REFERENCE_PICTURES];
   int log_weight_denom;
@@ -1195,6 +1199,7 @@ static void estimate_weighting_factor ()
   pel_t*  ref_pic_w;   
   int default_weight;
   int default_weight_chroma;
+  int     list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
 
   luma_log_weight_denom = 5;
   chroma_log_weight_denom = 5;
@@ -1204,13 +1209,17 @@ static void estimate_weighting_factor ()
   default_weight_chroma = 1<<chroma_log_weight_denom;
 
   /* set all values to defaults */
-  for (i = 0; i < 2; i++)
-    for (j = 0; j < MAX_REFERENCE_PICTURES; j++)
+  for (i = 0; i < 2 + list_offset; i++)
+  {
+    for (j = 0; j < listXsize[i]; j++)
+    {
       for (n = 0; n < 3; n++)
       {
         wp_weight[i][j][n] = default_weight;
         wp_offset[i][j][n] = 0;
       }
+    }
+  }
 
   for (i = 0; i < img->height; i++)
     for (j = 0; j < img->width; j++)
@@ -1219,9 +1228,9 @@ static void estimate_weighting_factor ()
     }
 
 
- for (l=0; l<2; l++)
+ //for (l=0; l<2; l++)
  {
- for (n = 0; n < num_ref; n++)
+ for (n = 0; n < listXsize[0]; n++)
  {
    dc_ref[n] = 0;
    
@@ -1239,7 +1248,7 @@ static void estimate_weighting_factor ()
    else
      weight[n][0] = 2*default_weight;  // only used when reference picture is black
    
-	  printf("dc_org = %d, dc_ref = %d, weight[%d] = %d\n",dc_org, dc_ref[n],n,weight[n][0]);
+//    printf("dc_org = %d, dc_ref = %d, weight[%d] = %d\n",dc_org, dc_ref[n],n,weight[n][0]);
     
     /* for now always use default weight for chroma weight */
     weight[n][1] = default_weight_chroma;
@@ -1256,23 +1265,24 @@ static void estimate_weighting_factor ()
     {
       for (j = 0; j< 4*(img->width + 2*IMG_PAD_SIZE); j++)
       {
-        mref_w[n][i][j] =   Clip (0, 255, ((int) mref[n][i][j] * weight[n][0] + wp_luma_round) / default_weight);
+//        mref_w[n][i][j] =   Clip (0, 255, ((int) mref[n][i][j] * weight[n][0] + wp_luma_round) / default_weight);
+        listX[LIST_0][n]->imgY_ups_w[i][j] =   Clip (0, 255, ((int) listX[LIST_0 ][n]->imgY_ups[i][j] * weight[n][0] + wp_luma_round) / default_weight);
       }
     }
  }
  }
   if ((img->type == P_SLICE)||(img->type == SP_SLICE))
   {
-	  num_bwd_ref = 0;
-	  num_fwd_ref = num_ref;
+    num_bwd_ref = 0;
+    num_fwd_ref = num_ref;
   }
   else
   {
-		num_bwd_ref = (img->type == B_SLICE && img->nal_reference_idc>0) ? num_ref : 1;
+    num_bwd_ref = (img->type == B_SLICE && img->nal_reference_idc>0) ? num_ref : 1;
     num_fwd_ref = (img->type == B_SLICE && img->nal_reference_idc>0) ? num_ref+1 : num_ref;
   }
 
-//	printf("num_fwd_ref = %d num_bwd_ref = %d\n",num_fwd_ref,num_bwd_ref);
+//  printf("num_fwd_ref = %d num_bwd_ref = %d\n",num_fwd_ref,num_bwd_ref);
 
   {                             /* forward list */
     if ((img->type == P_SLICE || img->type == SP_SLICE) && input->WeightedPrediction)
@@ -1285,7 +1295,7 @@ static void estimate_weighting_factor ()
         // printf ("wp weight[%d] = %d  \n", index, wp_weight[0][index][0]);
       }
     }
-		else if (img->type == B_SLICE && img->nal_reference_idc>0 && (input->WeightedBiprediction == 1))
+    else if (img->type == B_SLICE && img->nal_reference_idc>0 && (input->WeightedBiprediction == 1))
     {
       for (index = 0; index < num_ref; index++)
       {
@@ -1327,10 +1337,10 @@ static void estimate_weighting_factor ()
         wp_weight[1][index][2] = 1<<chroma_log_weight_denom;
       }
     }
-	
+
     if (input->WeightedBiprediction > 0 && (img->type == B_SLICE))
     {
-			if (img->nal_reference_idc>0)
+      if (img->nal_reference_idc>0)
       {
         for (index = 0; index < num_fwd_ref; index++)
         {
@@ -1354,12 +1364,12 @@ static void estimate_weighting_factor ()
       }
     }      
 
-	  if (img->type == B_SLICE) // need to fill in wbp_weight values
+    if (img->type == B_SLICE) // need to fill in wbp_weight values
     { 
       
-      for (i = 0; i < num_fwd_ref; i++)
+      for (i = 0; i < listXsize[LIST_0]; i++)
       {
-        for (j = 0; j < num_bwd_ref; j++)
+        for (j = 0; j < listXsize[LIST_1]; j++)
         {
           for (comp = 0; comp < 3; comp++)
           {
@@ -1371,13 +1381,14 @@ static void estimate_weighting_factor ()
             }
             else if (input->WeightedBiprediction == 2)
             { // implicit mode
-              pt = poc_distance (fwd_ref[i], bwd_ref[j]);
-              p0 = poc_distance (fwd_ref[i], -1);
+                pt = (listX[LIST_0][i]->poc - listX[LIST_1][j]->poc);
+                p0 = (listX[LIST_0][i]->poc - enc_picture->poc);
+
               if (pt == 0)
               {
                 wbp_weight[1][i][j][comp] =  32 ;
                 wbp_weight[0][i][j][comp] = 32;
-              }	
+              }
               else
               {
                 x = (16384 + (pt>>1))/pt;
@@ -1388,10 +1399,9 @@ static void estimate_weighting_factor ()
                 wbp_weight[0][i][j][comp] = 64 - wbp_weight[1][i][j][comp];
                 
               }
-              // if (comp == 0 )
-              //   printf ("bpw weight[%d][%d] = %d  , %d \n", i, j, wbp_weight[0][i][j][0], wbp_weight[1][i][j][0]);
             }
           }
+         // printf ("bpw weight[%d][%d] = %d  , %d (%d %d %d) (%d %d)\n", i, j, wbp_weight[0][i][j][0], wbp_weight[1][i][j][0],enc_picture->poc,listX[0][i]->poc, listX[1][j]->poc,num_fwd_ref,listXsize[0]);
         }
       }
     }
@@ -1446,6 +1456,11 @@ void UnifiedOneForthPix (StorablePicture *s)
   
   get_mem2D (&(s->imgY_ups), (2*IMG_PAD_SIZE + s->size_y)*4, (2*IMG_PAD_SIZE + s->size_x)*4);
 
+  if (input->WeightedPrediction || input->WeightedBiprediction)
+  {
+      s->imgY_11_w = malloc ((s->size_x * s->size_y) * sizeof (byte));
+      get_mem2D (&(s->imgY_ups_w), (2*IMG_PAD_SIZE + s->size_y)*4, (2*IMG_PAD_SIZE + s->size_x)*4);
+  }
   out4Y = s->imgY_ups;
   ref11 = s->imgY_11;
 
@@ -1705,59 +1720,59 @@ static void find_distortion ()
   //     Luma.
   impix = img->height * img->width;
   
-	if (img->structure!=FRAME)
-	{
-		
-		diff_y = 0;
-		for (i = 0; i < img->width; ++i)
-		{
-			for (j = 0; j < img->height; ++j)
-			{
-				diff_y += img->quad[abs (imgY_org[j][i] - imgY_com[j][i])];
-			}
-		}
-		
-		//     Chroma.
-		
-		diff_u = 0;
-		diff_v = 0;
-		
-		for (i = 0; i < img->width_cr; i++)
-		{
-			for (j = 0; j < img->height_cr; j++)
-			{
-				diff_u += img->quad[abs (imgUV_org[0][j][i] - imgUV_com[0][j][i])];
-				diff_v += img->quad[abs (imgUV_org[1][j][i] - imgUV_com[1][j][i])];
-			}
-		}
-	}else
-	{
+  if (img->structure!=FRAME)
+  {
+
+    diff_y = 0;
+    for (i = 0; i < img->width; ++i)
+    {
+      for (j = 0; j < img->height; ++j)
+      {
+        diff_y += img->quad[abs (imgY_org[j][i] - imgY_com[j][i])];
+      }
+    }
+    
+    //     Chroma.
+    
+    diff_u = 0;
+    diff_v = 0;
+    
+    for (i = 0; i < img->width_cr; i++)
+    {
+      for (j = 0; j < img->height_cr; j++)
+      {
+        diff_u += img->quad[abs (imgUV_org[0][j][i] - imgUV_com[0][j][i])];
+        diff_v += img->quad[abs (imgUV_org[1][j][i] - imgUV_com[1][j][i])];
+      }
+    }
+  }else
+  {
       imgY_org   = imgY_org_frm;
       imgUV_org = imgUV_org_frm;
 
-			diff_y = 0;
-			for (i = 0; i < img->width; ++i)
-			{
-				for (j = 0; j < img->height; ++j)
-				{
-					diff_y += img->quad[abs (imgY_org[j][i] - enc_picture->imgY[j][i])];
-				}
-			}
-			
-			//     Chroma.
-			
-			diff_u = 0;
-			diff_v = 0;
-			
-			for (i = 0; i < img->width_cr; i++)
-			{
-				for (j = 0; j < img->height_cr; j++)
-				{
-					diff_u += img->quad[abs (imgUV_org[0][j][i] - enc_picture->imgUV[0][j][i])];
-					diff_v += img->quad[abs (imgUV_org[1][j][i] - enc_picture->imgUV[1][j][i])];
-				}
-			}
-	}
+      diff_y = 0;
+      for (i = 0; i < img->width; ++i)
+      {
+        for (j = 0; j < img->height; ++j)
+        {
+          diff_y += img->quad[abs (imgY_org[j][i] - enc_picture->imgY[j][i])];
+        }
+      }
+      
+      //     Chroma.
+      
+      diff_u = 0;
+      diff_v = 0;
+      
+      for (i = 0; i < img->width_cr; i++)
+      {
+        for (j = 0; j < img->height_cr; j++)
+        {
+          diff_u += img->quad[abs (imgUV_org[0][j][i] - enc_picture->imgUV[0][j][i])];
+          diff_v += img->quad[abs (imgUV_org[1][j][i] - enc_picture->imgUV[1][j][i])];
+        }
+      }
+  }
   // Calculate real PSNR at find_snr_avg()
   snr->snr_y = (float) diff_y;
   snr->snr_u = (float) diff_u;
@@ -1970,25 +1985,25 @@ static void copy_motion_vectors_MB ()
 
 static void ReportFirstframe(int tmp_time)
 {
-	//Rate control
-	int bits;
+  //Rate control
+  int bits;
 
-  printf ("%3d(I)  %8d %4d %7.4f %7.4f %7.4f  %5d       %3s \n",
+  printf ("%4d(I)  %8d %4d %7.4f %7.4f %7.4f  %5d       %3s \n",
           frame_no, stat->bit_ctr - stat->bit_ctr_n,
           img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time,
           img->fld_flag ? "FLD" : "FRM");
 
-	//Rate control
-	if(input->RCEnable)
-	{
-		if((!input->PicInterlace)&&(!input->MbInterlace))
-				bits = stat->bit_ctr-stat->bit_ctr_n; // used for rate control update 
-		else
-		{
-			bits = stat->bit_ctr - Iprev_bits; // used for rate control update 
-			Iprev_bits = stat->bit_ctr;
-		}
-	}
+  //Rate control
+  if(input->RCEnable)
+  {
+    if((!input->PicInterlace)&&(!input->MbInterlace))
+        bits = stat->bit_ctr-stat->bit_ctr_n; // used for rate control update 
+    else
+    {
+      bits = stat->bit_ctr - Iprev_bits; // used for rate control update 
+      Iprev_bits = stat->bit_ctr;
+    }
+  }
 
   stat->bitr0 = stat->bitr;
   stat->bit_ctr_0 = stat->bit_ctr;
@@ -1998,8 +2013,13 @@ static void ReportFirstframe(int tmp_time)
 
 static void ReportIntra(int tmp_time)
 {
-
-  printf ("%3d(I)  %8d %4d %7.4f %7.4f %7.4f  %5d       %3s \n",
+  if (img->currentPicture->idr_flag == 1)
+    printf ("%4d(IDR)%8d %4d %7.4f %7.4f %7.4f  %5d       %3s \n",
+          frame_no, stat->bit_ctr - stat->bit_ctr_n,
+          img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time,
+          img->fld_flag ? "FLD" : "FRM"); 
+  else
+    printf ("%4d(I)  %8d %4d %7.4f %7.4f %7.4f  %5d       %3s \n",
           frame_no, stat->bit_ctr - stat->bit_ctr_n,
           img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time,
           img->fld_flag ? "FLD" : "FRM");
@@ -2007,7 +2027,7 @@ static void ReportIntra(int tmp_time)
 
 static void ReportSP(int tmp_time)
 {
-  printf ("%3d(SP) %8d %4d %7.4f %7.4f %7.4f  %5d       %3s   %3d\n",
+  printf ("%4d(SP) %8d %4d %7.4f %7.4f %7.4f  %5d       %3s    %4d\n",
           frame_no, stat->bit_ctr - stat->bit_ctr_n, img->qp, snr->snr_y,
           snr->snr_u, snr->snr_v, tmp_time,
           img->fld_flag ? "FLD" : "FRM", intras);
@@ -2015,7 +2035,7 @@ static void ReportSP(int tmp_time)
 
 static void ReportBS(int tmp_time)
 {
-  printf ("%3d(BS) %8d %4d %7.4f %7.4f %7.4f  %5d       %3s   %3d\n",
+  printf ("%4d(BS) %8d %4d %7.4f %7.4f %7.4f  %5d       %3s    %4d\n",
           frame_no, stat->bit_ctr - stat->bit_ctr_n, img->qp, snr->snr_y,
           snr->snr_u, snr->snr_v, tmp_time,
           img->fld_flag ? "FLD" : "FRM", intras);
@@ -2023,7 +2043,7 @@ static void ReportBS(int tmp_time)
 
 static void ReportB(int tmp_time)
 {
-  printf ("%3d(B)  %8d %4d %7.4f %7.4f %7.4f  %5d       %3s \n",
+  printf ("%4d(B)  %8d %4d %7.4f %7.4f %7.4f  %5d       %3s \n",
           frame_no, stat->bit_ctr - stat->bit_ctr_n, img->qp,
           snr->snr_y, snr->snr_u, snr->snr_v, tmp_time,
           img->fld_flag ? "FLD" : "FRM");
@@ -2032,7 +2052,7 @@ static void ReportB(int tmp_time)
 
 static void ReportP(int tmp_time)
 {            
-  printf ("%3d(P)  %8d %4d %7.4f %7.4f %7.4f  %5d       %3s   %3d\n",
+  printf ("%4d(P)  %8d %4d %7.4f %7.4f %7.4f  %5d       %3s    %4d\n",
           frame_no, stat->bit_ctr - stat->bit_ctr_n, img->qp, snr->snr_y,
           snr->snr_u, snr->snr_v, tmp_time,
           img->fld_flag ? "FLD" : "FRM", intras);

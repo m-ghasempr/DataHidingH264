@@ -207,11 +207,11 @@ void writeMB_skip_flagInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_d
     if (currMB->mb_available_up == NULL)
       b = 0;
     else
-      b = (currMB->mb_available_up->mb_type==0 && currMB->mb_available_up->cbp==0 ? 0 : 1);
+      b = (currMB->mb_available_up->skip_flag==0 ? 0 : 1);
     if (currMB->mb_available_left == NULL)
       a = 0;
     else
-      a = (currMB->mb_available_left->mb_type==0 && currMB->mb_available_left->cbp==0 ? 0 : 1);
+      a = (currMB->mb_available_left->skip_flag==0 ? 0 : 1);
     
     act_ctx = 7 + a + b;
 
@@ -219,17 +219,19 @@ void writeMB_skip_flagInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_d
       biari_encode_symbol (eep_dp, 1, &ctx->mb_type_contexts[2][act_ctx]);
     else
       biari_encode_symbol (eep_dp, 0, &ctx->mb_type_contexts[2][act_ctx]);   
+
+    currMB->skip_flag = (se->value1==0 && se->value2==0)?0:1;
   }
   else
   {
     if (currMB->mb_available_up == NULL)
       b = 0;
     else
-      b = (( (currMB->mb_available_up)->mb_type != 0) ? 1 : 0 );
+      b = (( (currMB->mb_available_up)->skip_flag != 0) ? 1 : 0 );
     if (currMB->mb_available_left == NULL)
       a = 0;
     else
-      a = (( (currMB->mb_available_left)->mb_type != 0) ? 1 : 0 );
+      a = (( (currMB->mb_available_left)->skip_flag != 0) ? 1 : 0 );
 
     act_ctx = a + b;
 
@@ -237,10 +239,13 @@ void writeMB_skip_flagInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_d
       biari_encode_symbol(eep_dp, 1,&ctx->mb_type_contexts[1][act_ctx]);
     else
       biari_encode_symbol(eep_dp, 0,&ctx->mb_type_contexts[1][act_ctx]);
+
+    currMB->skip_flag = (curr_mb_type==0)?0:1;
   }
   se->context = act_ctx;
 
-  if (!se->value1)
+
+  if (!currMB->skip_flag)
   {
     last_dquant=0;
   }
@@ -644,6 +649,8 @@ void writeRefFrame_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
   int   act_sym;
   int** refframe_array = enc_picture->ref_idx[se->value2];
 
+  int bslice = (img->type==B_SLICE);
+
   int   b8a, b8b;
 
   PixelPos block_a, block_b;
@@ -657,27 +664,27 @@ void writeRefFrame_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
   
   if (!block_b.available)
     b=0;
-  else if (IS_DIRECT(&img->mb_data[block_b.mb_addr]) || (img->mb_data[block_b.mb_addr].b8mode[b8b]==0 && img->mb_data[block_b.mb_addr].b8pdir[b8b]==2))
+  else if (IS_DIRECT(&img->mb_data[block_b.mb_addr]) || (img->mb_data[block_b.mb_addr].b8mode[b8b]==0 && bslice))
     b=0;
   else
-	{
-		if (img->MbaffFrameFlag && (currMB->mb_field == 0) && (img->mb_data[block_b.mb_addr].mb_field == 1))
-			b = (refframe_array[block_b.pos_x][block_b.pos_y] > 1 ? 1 : 0);
-		else
-			b = (refframe_array[block_b.pos_x][block_b.pos_y] > 0 ? 1 : 0);
-	}
+  {
+    if (img->MbaffFrameFlag && (currMB->mb_field == 0) && (img->mb_data[block_b.mb_addr].mb_field == 1))
+      b = (refframe_array[block_b.pos_x][block_b.pos_y] > 1 ? 1 : 0);
+    else
+      b = (refframe_array[block_b.pos_x][block_b.pos_y] > 0 ? 1 : 0);
+  }
 
   if (!block_a.available)
     a=0;
-  else if (IS_DIRECT(&img->mb_data[block_a.mb_addr]) || (img->mb_data[block_a.mb_addr].b8mode[b8a]==0 && img->mb_data[block_a.mb_addr].b8pdir[b8a]==2))
+  else if (IS_DIRECT(&img->mb_data[block_a.mb_addr]) || (img->mb_data[block_a.mb_addr].b8mode[b8a]==0 && bslice))
     a=0;
   else 
-	{
-		if (img->MbaffFrameFlag && (currMB->mb_field == 0) && (img->mb_data[block_a.mb_addr].mb_field == 1))
-			a = (refframe_array[block_a.pos_x][block_a.pos_y] > 1 ? 1 : 0);
-		else
-			a = (refframe_array[block_a.pos_x][block_a.pos_y] > 0 ? 1 : 0);
-	}
+  {
+    if (img->MbaffFrameFlag && (currMB->mb_field == 0) && (img->mb_data[block_a.mb_addr].mb_field == 1))
+      a = (refframe_array[block_a.pos_x][block_a.pos_y] > 1 ? 1 : 0);
+    else
+      a = (refframe_array[block_a.pos_x][block_a.pos_y] > 0 ? 1 : 0);
+  }
 
   act_ctx     = a + 2*b; 
   se->context = act_ctx; // store context
@@ -706,7 +713,6 @@ void writeRefFrame_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 void writeDquant_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
   MotionInfoContexts *ctx = img->currentSlice->mot_ctx;
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
 
   int act_ctx;
   int act_sym;
@@ -861,32 +867,50 @@ void writeCIPredMode_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
  */
 void writeCBP_BIT_CABAC (int b8, int bit, int cbp, Macroblock* currMB, int inter, EncodingEnvironmentPtr eep_dp)
 {
+  PixelPos block_a;
   int a, b;
-
-  //===== GET CONTEXT FOR CBP-BIT =====
-  if (b8/2 == 0) // upper block is in upper macroblock
+  
+  int mb_x=(b8%2)<<1;
+  int mb_y=(b8/2)<<1;
+  
+  if (mb_y == 0)
   {
     if (currMB->mb_available_up == NULL)
       b = 0;
     else
-      b = ((currMB->mb_available_up->cbp & (1<<(b8+2))) == 0 ? 1 : 0);
+    {
+      if((currMB->mb_available_up)->mb_type==IPCM)
+        b=0;
+      else
+        b = ((currMB->mb_available_up->cbp & (1<<(b8+2))) == 0 ? 1 : 0);
+    }
+    
   }
   else
-    b   = ((cbp & (1<<(b8-2))) == 0 ? 1: 0);
-  if (b8%2 == 0) // left block is in left macroblock
+    b = ( ((cbp & (1<<(mb_x/2))) == 0) ? 1: 0);
+  
+  if (mb_x == 0)
   {
-    if (currMB->mb_available_left == NULL)
-      a = 0;
+    getLuma4x4Neighbour(img->current_mb_nr, mb_x, mb_y, -1, 0, &block_a);
+    if (block_a.available)
+    {
+      {
+        if(img->mb_data[block_a.mb_addr].mb_type==IPCM)
+          a=0;
+        else
+          a = ( (img->mb_data[block_a.mb_addr].cbp  & (1<<(b8+1))) == 0 ? 1 : 0);
+      }
+      
+    }
     else
-      a = ((currMB->mb_available_left->cbp & (1<<(b8+1))) == 0 ? 1 : 0);
+      a=0;
   }
   else
-    a   = ((cbp & (1<<(b8-1))) == 0 ? 1: 0);
-
+    a = ( ((cbp & (1<<mb_y)) == 0) ? 1: 0);
+  
   //===== WRITE BIT =====
   biari_encode_symbol (eep_dp, (unsigned char) bit,
                        img->currentSlice->tex_ctx->cbp_contexts[0] + a+2*b);
-
 }
 
 /*!
@@ -921,11 +945,22 @@ void writeCBP_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
   // coding of chroma part
   b = 0;
   if (currMB->mb_available_up != NULL)
-    b = ((currMB->mb_available_up)->cbp > 15) ? 1 : 0;
+  {
+    if((currMB->mb_available_up)->mb_type==IPCM)
+      b=1;
+    else
+      b = ((currMB->mb_available_up)->cbp > 15) ? 1 : 0;
+  }
+
 
   a = 0;
   if (currMB->mb_available_left != NULL)
-    a = ((currMB->mb_available_left)->cbp > 15) ? 1 : 0;
+  {
+    if((currMB->mb_available_left)->mb_type==IPCM)
+      a=1;
+    else
+      a = ((currMB->mb_available_left)->cbp > 15) ? 1 : 0;
+  }
 
   curr_cbp_ctx = a+2*b;
   cbp_bit = (cbp > 15 ) ? 1 : 0;
@@ -935,13 +970,24 @@ void writeCBP_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
   {
     b = 0;
     if (currMB->mb_available_up != NULL)
-      if ((currMB->mb_available_up)->cbp > 15)
-        b = (( ((currMB->mb_available_up)->cbp >> 4) == 2) ? 1 : 0);
+    {
+      if((currMB->mb_available_up)->mb_type==IPCM)
+        b=1;
+      else
+        if ((currMB->mb_available_up)->cbp > 15)
+          b = (( ((currMB->mb_available_up)->cbp >> 4) == 2) ? 1 : 0);
+    }
+
 
     a = 0;
     if (currMB->mb_available_left != NULL)
-      if ((currMB->mb_available_left)->cbp > 15)
-        a = (( ((currMB->mb_available_left)->cbp >> 4) == 2) ? 1 : 0);
+    {
+      if((currMB->mb_available_left)->mb_type==IPCM)
+        a=1;
+      else
+        if ((currMB->mb_available_left)->cbp > 15)
+          a = (( ((currMB->mb_available_left)->cbp >> 4) == 2) ? 1 : 0);
+    }
 
     curr_cbp_ctx = a+2*b;
     cbp_bit = ((cbp>>4) == 2) ? 1 : 0;

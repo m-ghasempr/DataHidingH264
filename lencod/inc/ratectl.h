@@ -78,15 +78,15 @@ double MADPictureC2;
 double PMADPictureC1;
 double PMADPictureC2;
 /* LIZG JVT50V2 picture layer MAD */
-Boolean PictureRejected[20];
-double PPictureMAD[20];
-double PictureMAD[20];
-double ReferenceMAD[20];
+Boolean PictureRejected[21];
+double PPictureMAD[21];
+double PictureMAD[21];
+double ReferenceMAD[21];
 
 /*quadratic rate-distortion model*/
-Boolean   m_rgRejected[20];
-double  m_rgQp[20];
-double m_rgRp[20];
+Boolean   m_rgRejected[21];
+double  m_rgQp[21];
+double m_rgRp[21];
 double m_X1;
 double m_X2;
 int m_Qc;
@@ -139,7 +139,7 @@ double BUPFMAD[6336];//LIZG
 double BUCFMAD[6336];//LIZG
 double FCBUCFMAD[6336];
 double FCBUPFMAD[6336];
-	
+
 Boolean GOPOverdue;
 
 

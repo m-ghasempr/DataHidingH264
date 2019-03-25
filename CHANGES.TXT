@@ -1,3 +1,13 @@
+Changes for Version JM7.5b to JM 7.5a
+-------------------------------------
+Bug fixes
+- encoder: b-frame performance fix (KS)
+- encoder: CABAC context selection fix (KS)
+- encoder: fix typo in rd-opt labda calculation (AT)
+- encoder: weighted prediction updates (AT)
+- encoder: fix wrong reference index if NumberReferenceFrames=1 (KS)
+- encoder: add IDR picture selection parameter (AT)
+
 Changes for Version JM7.5a to JM 7.5
 ------------------------------------
 Bug fixes
@@ -36,8 +46,8 @@ Bug fixes
 New features:
 - decoder: I_PCM macroblock mode for VLC (DW)
 - decoder: I_PCM macroblock mode for CABAC (DW)
-- encoder: I_PCM macroblock mode for VLC (DW)
-- encoder: I_PCM macroblock mode for CABAC (DW)
+- encoder: fast motion estimation
+- encoder: rate control
 
 
 Changes for Version JM7.3 to JM 7.2

@@ -39,10 +39,10 @@
 
 #ifdef WIN32
   typedef __int64   int64;
-# define INT64_MIN		    (-9223372036854775807i64 - 1i64)
+# define INT64_MIN        (-9223372036854775807i64 - 1i64)
 #else
   typedef long long int64;
-# define INT64_MIN		    (-9223372036854775807LL - 1LL)
+# define INT64_MIN        (-9223372036854775807LL - 1LL)
 #endif
 
 
@@ -335,7 +335,7 @@ typedef struct macroblock
   int mbAddrA, mbAddrB, mbAddrC, mbAddrD;
   int mbAvailA, mbAvailB, mbAvailC, mbAvailD;
 
-	// rate control
+  // rate control
   double              actj;               // macroblock activity measure for macroblock j
   int                 prev_qp;
   int                 prev_cbp;
@@ -345,6 +345,8 @@ typedef struct macroblock
   int                 LFDisableIdc;
   int                 LFAlphaC0Offset;
   int                 LFBetaOffset;
+
+  int                 skip_flag;
 } Macroblock;
 
 
@@ -575,6 +577,8 @@ typedef struct
   char TraceFile[100];          //!< Trace Outputs
   int intra_period;             //!< Random Access period though intra
 
+  int idr_enable;
+
   // B pictures
   int successive_Bframe;        //!< number of B frames that will be used
   int qpB;                      //!< QP of B frames
@@ -603,6 +607,7 @@ typedef struct
   int InterSearch4x4;
 
   char PictureTypeSequence[MAXPICTURETYPESEQUENCELEN];
+  int PictureRate;
 
 #ifdef _FULL_SEARCH_RANGE_
   int full_search;
@@ -659,7 +664,7 @@ typedef struct
   int context_init_method;
   int model_number;
 
-	//! Rate Control on JVT standard 
+  //! Rate Control on JVT standard 
   int RCEnable;    
   int bit_rate;
   int SeinitialQP;
@@ -824,8 +829,8 @@ typedef struct
 
   int model_number;
 
-	
-	  /*rate control*/
+
+  /*rate control*/
   int NumberofHeaderBits; 
   int NumberofTextureBits;
   int NumberofBasicUnitHeaderBits;
@@ -847,7 +852,7 @@ typedef struct
   int IFLAG;
   int NumberofCodedMacroBlocks;
   int BasicUnit;
-  int write_macroblock;	
+  int write_macroblock;
   int bot_MB;
   int write_macroblock_frame;
 
@@ -856,7 +861,7 @@ typedef struct
   int last_pic_bottom_field;
   int last_has_mmco_5;
   int pre_frame_num;
- 
+
 } ImageParameters;
 
                                 //!< statistics

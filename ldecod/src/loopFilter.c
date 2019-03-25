@@ -184,8 +184,8 @@ void GetStrength(byte Strength[16],struct img_par *img,int MbQAddr,int dir,int e
   int    ***list1_mv = dec_picture->mv[LIST_1];
   int    **list0_refIdxArr = dec_picture->ref_idx[LIST_0];
   int    **list1_refIdxArr = dec_picture->ref_idx[LIST_1];
-	int64    **list0_refPicIdArr = dec_picture->ref_pic_id[LIST_0];
-	int64    **list1_refPicIdArr = dec_picture->ref_pic_id[LIST_1];
+  int64    **list0_refPicIdArr = dec_picture->ref_pic_id[LIST_0];
+  int64    **list1_refPicIdArr = dec_picture->ref_pic_id[LIST_1];
   int    xQ, xP, yQ, yP;
   int    mb_x, mb_y;
   Macroblock    *MbQ;
@@ -234,7 +234,7 @@ void GetStrength(byte Strength[16],struct img_par *img,int MbQAddr,int dir,int e
         blk_x2 = pixP.pos_x >> 2;
         if( (img->type == B_SLICE) )
         {
-            int64 ref_p0,ref_p1,ref_q0,ref_q1;	    
+            int64 ref_p0,ref_p1,ref_q0,ref_q1;      
             ref_p0 = list0_refIdxArr[blk_x][blk_y]<0 ? -1 : list0_refPicIdArr[blk_x][blk_y];
             ref_q0 = list0_refIdxArr[blk_x2][blk_y2]<0 ? -1 : list0_refPicIdArr[blk_x2][blk_y2];
             ref_p1 = list1_refIdxArr[blk_x][blk_y]<0 ? -1 : list1_refPicIdArr[blk_x][blk_y];
@@ -245,7 +245,7 @@ void GetStrength(byte Strength[16],struct img_par *img,int MbQAddr,int dir,int e
               Strength[idx]=0;
               // L0 and L1 reference pictures of p0 are different; q0 as well
               if (ref_p0 != ref_p1) 
-              {	
+              { 
                 // compare MV for the same reference picture
                 if (ref_p0==ref_q0) 
                 {
@@ -260,10 +260,10 @@ void GetStrength(byte Strength[16],struct img_par *img,int MbQAddr,int dir,int e
                     (abs( list0_mv[blk_x][blk_y][1] - list1_mv[blk_x2][blk_y2][1]) >= mvlimit) |
                     (abs( list1_mv[blk_x][blk_y][0] - list0_mv[blk_x2][blk_y2][0]) >= 4) |
                     (abs( list1_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= mvlimit);
-                }	
+                } 
               }
               else 
-              {	// L0 and L1 reference pictures of p0 are the same; q0 as well
+              { // L0 and L1 reference pictures of p0 are the same; q0 as well
                 
                 Strength[idx] =  ((abs( list0_mv[blk_x][blk_y][0] - list0_mv[blk_x2][blk_y2][0]) >= 4) |
                   (abs( list0_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= mvlimit ) |
@@ -274,16 +274,16 @@ void GetStrength(byte Strength[16],struct img_par *img,int MbQAddr,int dir,int e
                   (abs( list0_mv[blk_x][blk_y][1] - list1_mv[blk_x2][blk_y2][1]) >= mvlimit) |
                   (abs( list1_mv[blk_x][blk_y][0] - list0_mv[blk_x2][blk_y2][0]) >= 4) |
                   (abs( list1_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= mvlimit));
-              }				
+              }       
             }
             else 
             {
-              Strength[idx] = 1;				
-            }	
+              Strength[idx] = 1;        
+            } 
           }
-        else	
-        {	// P slice
-            int64 ref_p0,ref_q0;	    
+        else  
+        { // P slice
+            int64 ref_p0,ref_q0;      
             ref_p0 = list0_refIdxArr[blk_x][blk_y]<0 ? -1 : list0_refPicIdArr[blk_x][blk_y];
             ref_q0 = list0_refIdxArr[blk_x2][blk_y2]<0 ? -1 : list0_refPicIdArr[blk_x2][blk_y2];
             Strength[idx] =  (ref_p0 != ref_q0 ) |
@@ -422,7 +422,6 @@ void EdgeLoop(byte** Img, byte Strength[16],struct img_par *img, int MbQAddr, in
         } ;
       } ;
     } ;
-//    pel    += yuv ;
   }
 }
 

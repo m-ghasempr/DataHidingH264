@@ -391,9 +391,9 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
         FieldRDCost += rdopt->min_rdcost;
         //***   Bottom MB coded as field MB ***//
       }
-			
-			//Rate control
-			img->write_macroblock_frame = 0;  //Rate control
+
+      //Rate control
+      img->write_macroblock_frame = 0;  //Rate control
 
       
       // decide between frame/field MB pair
@@ -407,8 +407,8 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
         img->num_ref_idx_l0_active -= 1;
         img->num_ref_idx_l0_active >>= 1;
         
-				//Rate control
-				img->write_macroblock_frame = 1;  //for Rate control
+        //Rate control
+        img->write_macroblock_frame = 1;  //for Rate control
       }
       else
       {
@@ -417,16 +417,16 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
         SetStateVariablesForFieldMode();
       }
       
-			//Rate control
-			img->write_macroblock = 1;//Rate control 
+      //Rate control
+      img->write_macroblock = 1;//Rate control 
       
       if (MBPairIsField)
         img->top_field = 1;
       else
         img->top_field = 0;
       
-			//Rate control
-			img->bot_MB = 0;// for Rate control
+      //Rate control
+      img->bot_MB = 0;// for Rate control
 
       // go back to the Top MB in the MB pair
       start_macroblock (CurrentMbAddr, img->field_mode);
@@ -438,8 +438,8 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
       terminate_macroblock (&end_of_slice, &recode_macroblock);     // done coding the Top MB 
       proceed2nextMacroblock (CurrentMbAddr);        // Go to next macroblock
       
-			//Rate control
-			img->bot_MB = 1;//for Rate control
+      //Rate control
+      img->bot_MB = 1;//for Rate control
       // go to the Bottom MB in the MB pair
       img->top_field = 0;
       start_macroblock (CurrentMbAddr+1, img->field_mode);

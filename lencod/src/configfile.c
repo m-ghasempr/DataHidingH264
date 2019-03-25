@@ -414,6 +414,20 @@ static void PatchInp ()
     error (errortext, 400);
   }
 */
+  if (input->PictureRate < 0 || input->PictureRate>100)   
+  {
+    snprintf(errortext, ET_SIZE, "Error in input parameter PictureRate, check configuration file");
+    error (errortext, 400);
+  }
+  if (input->PictureRate == 0)
+    input->PictureRate = INIT_FRAME_RATE;
+
+  if (input->idr_enable < 0 || input->idr_enable > 1)   
+  {
+    snprintf(errortext, ET_SIZE, "Error in input parameter IDRIntraEnable, check configuration file");
+    error (errortext, 400);
+  }
+
   // consistency check num_reference_frames
   if (input->num_reference_frames<1) input->num_reference_frames=1;
 
@@ -624,18 +638,18 @@ static void PatchInp ()
       input->num_slice_groups_minus1 = input->num_slice_groups_minus1 = 1;
   }
 
-	// Rate control
-	if(input->RCEnable)
+  // Rate control
+  if(input->RCEnable)
   {
-	  if ( (input->img_height*input->img_width/256)%input->basicunit!=0)
-	  {
-		  snprintf(errortext, ET_SIZE, "Basic unit is not defined correctly.");
-		  error (errortext, 500);
-	  }
+    if ( (input->img_height*input->img_width/256)%input->basicunit!=0)
+    {
+      snprintf(errortext, ET_SIZE, "Basic unit is not defined correctly.");
+      error (errortext, 500);
+    }
   }
   // End JVT-D095, JVT-D097
   if( !input->direct_type && input->num_reference_frames<2 && input->successive_Bframe >0)
-	  error("temporal direct needs at least 2 ref frames\n",-1000);
+    error("temporal direct needs at least 2 ref frames\n",-1000);
 }
 
 void PatchInputNoFrames()

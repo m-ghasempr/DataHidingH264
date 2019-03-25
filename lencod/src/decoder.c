@@ -96,7 +96,7 @@ void decode_one_b8block (int decoder, int mbmode, int b8block, int b8mode, int b
     }
 
     // Decode Luminance
-		if ((b8mode>=1 && b8mode<=7) || (mbmode==0 && (img->type==P_SLICE || (img->type==B_SLICE && img->nal_reference_idc>0))))
+    if ((b8mode>=1 && b8mode<=7) || (mbmode==0 && (img->type==P_SLICE || (img->type==B_SLICE && img->nal_reference_idc>0))))
     {
       for (by=by0; by<by1; by++)
       for (bx=bx0; bx<bx1; bx++)
@@ -518,7 +518,7 @@ void Conceal_Error(byte **inY, int mb_y, int mb_x, byte ***refY, byte **s_map)
   int pos_y = mb_y*MB_BLOCK_SIZE, pos_x = mb_x*MB_BLOCK_SIZE;
   int mv[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE];
   int resY[MB_BLOCK_SIZE][MB_BLOCK_SIZE];
-	int copy  = (decs->dec_mb_mode[mb_x][mb_y]==0 && (img->type==P_SLICE || (img->type==B_SLICE && img->nal_reference_idc>0)));
+  int copy  = (decs->dec_mb_mode[mb_x][mb_y]==0 && (img->type==P_SLICE || (img->type==B_SLICE && img->nal_reference_idc>0)));
   int inter = (((decs->dec_mb_mode[mb_x][mb_y]>=1 && decs->dec_mb_mode[mb_x][mb_y]<=3) || decs->dec_mb_mode[mb_x][mb_y]==P8x8) && (img->type==P_SLICE || (img->type==B_SLICE && img->nal_reference_idc>0)));
   int ***tmp_mv = enc_picture->mv[LIST_0];
   

@@ -37,8 +37,8 @@ static const int INIT_MB_TYPE_P[3][3][11][2] =
   //----- model 0 -----
   {
     {  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED },
-	{ {  23,  33} , {  23,   2} , {  21,   0} ,  CTX_UNUSED , {   1,   9} , {   0,  49} , { -37, 118} , {   5,  57} , { -13,  78} , { -11,  65} , {   1,  62} },
-	{ {  26,  67} , {  16,  90} , {   9, 104} ,  CTX_UNUSED , { -46, 127} , { -20, 104} , {   1,  67} , {  18,  64} , {   9,  43} , {  29,   0} ,  CTX_UNUSED }
+  { {  23,  33} , {  23,   2} , {  21,   0} ,  CTX_UNUSED , {   1,   9} , {   0,  49} , { -37, 118} , {   5,  57} , { -13,  78} , { -11,  65} , {   1,  62} },
+  { {  26,  67} , {  16,  90} , {   9, 104} ,  CTX_UNUSED , { -46, 127} , { -20, 104} , {   1,  67} , {  18,  64} , {   9,  43} , {  29,   0} ,  CTX_UNUSED }
   },
   //----- model 1 -----
   {
@@ -50,7 +50,7 @@ static const int INIT_MB_TYPE_P[3][3][11][2] =
   {
     {  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED },
     { {  29,  16} , {  25,   0} , {  14,   0} ,  CTX_UNUSED , { -10,  51} , {  -3,  62} , { -27,  99} , {  26,  16} , {  -4,  85} , { -24, 102} , {   5,  57} },
-	{ {  54,   0} , {  37,  42} , {  12,  97} ,  CTX_UNUSED , { -32, 127} , { -22, 117} , {  -2,  74} , {  20,  40} , {  20,  10} , {  29,   0} ,  CTX_UNUSED }
+  { {  54,   0} , {  37,  42} , {  12,  97} ,  CTX_UNUSED , { -32, 127} , { -22, 117} , {  -2,  74} , {  20,  40} , {  20,  10} , {  29,   0} ,  CTX_UNUSED }
   }
 };
 
@@ -209,22 +209,22 @@ static const int INIT_IPR_I[1][1][2][2] =
 {
   //----- model 0 -----
   {
-	  { { 13,  41} , {   3,  62} }
+    { { 13,  41} , {   3,  62} }
   }
 };
 static const int INIT_IPR_P[3][1][2][2] =
 {
   //----- model 0 -----
   {
-	  { { 13,  41} , {   3,  62} }
+    { { 13,  41} , {   3,  62} }
   },
   //----- model 1 -----
   {
-	  { { 13,  41} , {   3,  62} }
+    { { 13,  41} , {   3,  62} }
   },
   //----- model 2 -----
   {
-	  { { 13,  41} , {   3,  62} }
+    { { 13,  41} , {   3,  62} }
   }
 };
 

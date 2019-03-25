@@ -58,7 +58,7 @@ void GenerateParameterSets ()
   pps = AllocPPS();
 
   FillParameterSetStructures (sps, pps);
-	
+  
   active_sps = sps;
   active_pps = pps;
 }
@@ -102,11 +102,11 @@ NALU_t *GenerateSeq_parameter_set_NALU ()
   int RBSPlen = 0;
   int NALUlen;
   byte rbsp[MAXRBSPSIZE];
-	
+
   RBSPlen = GenerateSeq_parameter_set_rbsp (active_sps, rbsp);
   NALUlen = RBSPtoNALU (rbsp, n, RBSPlen, NALU_TYPE_SPS, NALU_PRIORITY_HIGHEST, 0, 1);
   n->startcodeprefix_len = 4;
-	
+
   return n;
 }
 
@@ -131,11 +131,11 @@ NALU_t *GeneratePic_parameter_set_NALU()
   int RBSPlen = 0;
   int NALUlen;
   byte rbsp[MAXRBSPSIZE];
-	
+
   RBSPlen = GeneratePic_parameter_set_rbsp (active_pps, rbsp);
   NALUlen = RBSPtoNALU (rbsp, n, RBSPlen, NALU_TYPE_PPS, NALU_PRIORITY_HIGHEST, 0, 1);
   n->startcodeprefix_len = 4;
-	
+
   return n;
 }
 
@@ -598,9 +598,9 @@ int IdentifyLevel()
 
 int IdentifyNumRefFrames()
 {
-	if(input->num_reference_frames > 16)error("no ref frames too large",-100);
-
-	return input->num_reference_frames;
+  if(input->num_reference_frames > 16)error("no ref frames too large",-100);
+  
+  return input->num_reference_frames;
 }
 
 

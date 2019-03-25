@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 7.5a
+ *     JM 7.5b
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -63,7 +63,7 @@
 #include "ratectl.h"
 
 #define JM      "7"
-#define VERSION "7.5a"
+#define VERSION "7.5b"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
@@ -102,12 +102,12 @@ int main(int argc,char **argv)
 {
   int M,N,n,np,nb;           //Rate control
   
-	p_dec = p_stat = p_log = p_trace = NULL;
+  p_dec = p_stat = p_log = p_trace = NULL;
 
   Configure (argc, argv);
 
   AllocNalPayloadBuffer();
-	GenerateParameterSets();
+  GenerateParameterSets();
 
   init_img();
 
@@ -132,9 +132,9 @@ int main(int argc,char **argv)
 
   information_init();
 
-	//Rate control 
-	if(input->RCEnable)	
-		rc_init_seq();
+  //Rate control 
+  if(input->RCEnable)
+    rc_init_seq();
 
 #ifdef _Fast_ME_
   DefineThreshold();
@@ -170,7 +170,7 @@ int main(int argc,char **argv)
       img->bottompoc = img->toppoc+1;   //hard coded
 
     push_poc(img->toppoc, img->bottompoc, REFFRAME);               //push poc values into array
-		img->framepoc = min (img->toppoc, img->bottompoc);
+    img->framepoc = min (img->toppoc, img->bottompoc);
     
     //frame_num for this frame
     img->frame_num = IMG_NUMBER % (1 << (LOG2_MAX_FRAME_NUM_MINUS4 + 4));
@@ -197,47 +197,47 @@ int main(int argc,char **argv)
     }
 #endif
 
-		//Rate control
-		if (img->type == I_SLICE)
-		{
-			if(input->RCEnable)
-			{
-				if (input->intra_period == 0)
-				{
-					n = input->no_frames + (input->no_frames - 1) * input->successive_Bframe;
-					
-					/* number of P frames */
-					np = input->no_frames-1; 
-					
-					/* number of B frames */
-					nb = (input->no_frames - 1) * input->successive_Bframe;
-				}else
-				{
-					N = input->intra_period*(input->successive_Bframe+1);
-					M = input->successive_Bframe+1;
-					n = (img->number==0) ? N - ( M - 1) : N;
-					
-					/* last GOP may contain less frames */
-					if(img->number/input->intra_period >= input->no_frames / input->intra_period)
-					{
-						if (img->number != 0)
-							n = (input->no_frames - img->number) + (input->no_frames - img->number - 1) * input->successive_Bframe + input->successive_Bframe;
-						else
-							n = input->no_frames  + (input->no_frames - 1) * input->successive_Bframe;
-					}
-					
-					/* number of P frames */
-					if (img->number == 0)
-						np = (n + 2 * (M - 1)) / M - 1; /* first GOP */
-					else
-						np = (n + (M - 1)) / M - 1;
-					
-					/* number of B frames */
-					nb = n - np - 1;
-				}
-				rc_init_GOP(np,nb);
-			}
-		}
+     //Rate control
+    if (img->type == I_SLICE)
+    {
+      if(input->RCEnable)
+      {
+        if (input->intra_period == 0)
+        {
+          n = input->no_frames + (input->no_frames - 1) * input->successive_Bframe;
+          
+          /* number of P frames */
+          np = input->no_frames-1; 
+          
+          /* number of B frames */
+          nb = (input->no_frames - 1) * input->successive_Bframe;
+        }else
+        {
+          N = input->intra_period*(input->successive_Bframe+1);
+          M = input->successive_Bframe+1;
+          n = (img->number==0) ? N - ( M - 1) : N;
+          
+          /* last GOP may contain less frames */
+          if(img->number/input->intra_period >= input->no_frames / input->intra_period)
+          {
+            if (img->number != 0)
+              n = (input->no_frames - img->number) + (input->no_frames - img->number - 1) * input->successive_Bframe + input->successive_Bframe;
+            else
+              n = input->no_frames  + (input->no_frames - 1) * input->successive_Bframe;
+          }
+          
+          /* number of P frames */
+          if (img->number == 0)
+            np = (n + 2 * (M - 1)) / M - 1; /* first GOP */
+          else
+            np = (n + (M - 1)) / M - 1;
+          
+          /* number of B frames */
+          nb = n - np - 1;
+        }
+        rc_init_GOP(np,nb);
+      }
+    }
 
 
     // which layer the image belonged to?
@@ -255,7 +255,6 @@ int main(int argc,char **argv)
     if ((input->successive_Bframe != 0) && (IMG_NUMBER > 0)) // B-frame(s) to encode
     {
       img->type = B_SLICE;            // set image type to B-frame
-      img->num_ref_idx_l1_active = 1;
 
       if (input->NumFramesInELSubSeq == 0) 
         img->layer = 0;
@@ -334,7 +333,7 @@ int main(int argc,char **argv)
   free_context_memory ();
   FreeNalPayloadBuffer();
   FreeParameterSets();
-  return 0;					//encode JM73_FME version
+  return 0;                         //encode JM73_FME version
 }
 
 
@@ -455,7 +454,9 @@ void init_img()
 
   img->DeblockCall = 0;
     
-  img->framerate=INIT_FRAME_RATE;   // The basic frame rate (of the original sequence)
+//  img->framerate=INIT_FRAME_RATE;   // The basic frame rate (of the original sequence)
+  img->framerate=input->PictureRate;   // The basic frame rate (of the original sequence)
+
 
   get_mem_mv (&(img->pred_mv));
   get_mem_mv (&(img->all_mv));
@@ -1259,6 +1260,18 @@ int init_global_buffers()
   memory_size += get_mem2D(&imgY_org_frm, img->height, img->width);
   memory_size += get_mem3D(&imgUV_org_frm, 2, img->height_cr, img->width_cr);
 
+
+    if (input->WeightedPrediction || input->WeightedBiprediction)
+    {
+      // Currently only use up to 20 references. Need to use different indicator such as maximum num of references in list
+      memory_size += get_mem3Dint(&wp_weight,6,MAX_REFERENCE_PICTURES,3);
+      memory_size += get_mem3Dint(&wp_offset,6,MAX_REFERENCE_PICTURES,3);
+      memory_size += get_mem2Dint(&weight,MAX_REFERENCE_PICTURES,3);
+      memory_size += get_mem4Dint(&wbp_weight, 6, MAX_REFERENCE_PICTURES, MAX_REFERENCE_PICTURES, 3);
+      memory_size += get_mem3D(&mref_frm_w, 20,4*(img->height + 2*IMG_PAD_SIZE) , 4*(img->width + 2*IMG_PAD_SIZE));
+
+    }
+
   // allocate memory for reference frames of each block: refFrArr
   // int  refFrArr[72][88];
   memory_size += get_mem2Dint(&abp_type_arr, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
@@ -1345,12 +1358,22 @@ void free_global_buffers()
   // free multiple ref frame buffers
   // number of reference frames increased by one for next P-frame
 
+#if (!OLDWEIGHT)
+  if (input->WeightedPrediction || input->WeightedBiprediction)
+  {
+    free_mem3Dint(wp_weight,6);
+    free_mem3Dint(wp_offset,6);
+    free_mem2Dint(weight);
+    free_mem4Dint(wbp_weight,6,MAX_REFERENCE_PICTURES);
+  }
+#endif
+/*
   if (input->WeightedPrediction || input->WeightedBiprediction)
     free(mref_frm_w);
  
   if (input->WeightedPrediction || input->WeightedBiprediction)
         free (Refbuf11_frm_w);
-
+*/
   // free multiple ref frame buffers
   // number of reference frames increased by one for next P-frame
 

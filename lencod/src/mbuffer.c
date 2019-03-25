@@ -83,7 +83,7 @@ void init_dpb(InputParameters *inp)
 {
   unsigned i,j;
 
-	dpb.size      = inp->num_reference_frames + inp->successive_Bframe;
+  dpb.size      = inp->num_reference_frames + inp->successive_Bframe;
 
   dpb.used_size = 0;
 
@@ -229,6 +229,12 @@ StorablePicture* alloc_storable_picture(PictureStructure structure, int size_x, 
   s->imgY_11 = NULL;
   s->imgY_ups = NULL;
 
+  if (input->WeightedPrediction || input->WeightedBiprediction)
+  {
+      s->imgY_11_w = NULL;
+      s->imgY_ups_w = NULL;
+  }
+
   get_mem3D (&(s->imgUV), 2, size_y_cr, size_x_cr );
 
   s->mb_field = calloc (img->PicSizeInMbs, sizeof(int));
@@ -341,7 +347,19 @@ void free_storable_picture(StorablePicture* p)
       free_mem3D (p->imgUV, 2);
       p->imgUV=NULL;
     }
-    
+    if (input->WeightedPrediction || input->WeightedBiprediction)
+    {
+      if (p->imgY_11)
+      {
+        free (p->imgY_11);
+        p->imgY_11=NULL;
+      }
+      if (p->imgY_ups)
+      {
+        free_mem2D (p->imgY_ups);
+        p->imgY_ups=NULL;
+      }
+    }
     free(p->mb_field);
 
     free(p);
@@ -995,10 +1013,10 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
       listX[1][1]=tmp_s;
     }
   }
-	// set max size
+  // set max size
   listXsize[0] = min (listXsize[0], img->num_ref_idx_l0_active);
   listXsize[1] = min (listXsize[1], img->num_ref_idx_l1_active);
-	
+
   // set the unused list entries to NULL
   for (i=listXsize[0]; i< (2*dpb.size) ; i++)
   {
@@ -1143,7 +1161,7 @@ static void reorder_short_term(StorablePicture **RefPicListX, int num_ref_idx_lX
   for( cIdx = *refIdxLX; cIdx <= num_ref_idx_lX_active_minus1+1; cIdx++ )
     if (RefPicListX[ cIdx ])
       if( (RefPicListX[ cIdx ]->is_long_term ) ||  (RefPicListX[ cIdx ]->pic_num != picNumLX ))
-	      RefPicListX[ nIdx++ ] = RefPicListX[ cIdx ];
+        RefPicListX[ nIdx++ ] = RefPicListX[ cIdx ];
 
 }
 
@@ -1172,7 +1190,7 @@ static void reorder_long_term(StorablePicture **RefPicListX, int num_ref_idx_lX_
 
   for( cIdx = *refIdxLX; cIdx <= num_ref_idx_lX_active_minus1+1; cIdx++ )
     if( (!RefPicListX[ cIdx ]->is_long_term ) ||  (RefPicListX[ cIdx ]->long_term_pic_num != LongTermPicNum ))
-	    RefPicListX[ nIdx++ ] = RefPicListX[ cIdx ];
+      RefPicListX[ nIdx++ ] = RefPicListX[ cIdx ];
 }
 
 
@@ -2452,8 +2470,8 @@ void dpb_split_field(FrameStore *fs)
   UnifiedOneForthPix(fs->top_field);
   UnifiedOneForthPix(fs->bottom_field);
 
-    fs->poc = fs->top_field->poc 
-    = fs->frame->poc;
+  fs->poc = fs->top_field->poc 
+          = fs->frame->poc;
   
   fs->bottom_field->poc =  fs->frame->bottom_poc;
   
@@ -2472,55 +2490,45 @@ void dpb_split_field(FrameStore *fs)
   fs->frame->top_field    = fs->top_field;
   fs->frame->bottom_field = fs->bottom_field;
 
-	//store reference picture index
-	 if (!active_sps->frame_mbs_only_flag)
-	 {
-		 for (i=0;i<listXsize[LIST_1];i++)
-		 {
-    fs->top_field->ref_pic_num[LIST_1][2*i]     =fs->frame->ref_pic_num[2 + LIST_1][2*i];
-    fs->top_field->ref_pic_num[LIST_1][2*i + 1] =fs->frame->ref_pic_num[2 + LIST_1][2*i+1];
-    fs->bottom_field->ref_pic_num[LIST_1][2*i]  =fs->frame->ref_pic_num[4 + LIST_1][2*i];
-    fs->bottom_field->ref_pic_num[LIST_1][2*i+1]=fs->frame->ref_pic_num[4 + LIST_1][2*i+1] ;
-/*    fs->top_field->ref_pic_num[LIST_1][2*i]     =fs->frame->ref_pic_num[LIST_1][i];
-			 fs->top_field->ref_pic_num[LIST_1][2*i + 1]=fs->frame->ref_pic_num[LIST_1][i] + 1;
-			 fs->bottom_field->ref_pic_num[LIST_1][2*i]=fs->frame->ref_pic_num[LIST_1][i] + 1;
-			 fs->bottom_field->ref_pic_num[LIST_1][2*i+1]=fs->frame->ref_pic_num[LIST_1][i] ;
-    */
-		 }
-		 
-		 for (i=0;i<listXsize[LIST_0];i++)
-		 {
-    fs->top_field->ref_pic_num[LIST_0][2*i]     =fs->frame->ref_pic_num[2 + LIST_0][2*i];
-    fs->top_field->ref_pic_num[LIST_0][2*i + 1] =fs->frame->ref_pic_num[2 + LIST_0][2*i+1];
-    fs->bottom_field->ref_pic_num[LIST_0][2*i]  =fs->frame->ref_pic_num[4 + LIST_0][2*i];
-    fs->bottom_field->ref_pic_num[LIST_0][2*i+1]=fs->frame->ref_pic_num[4 + LIST_0][2*i+1] ;
-/*    fs->top_field->ref_pic_num[LIST_0][2*i]=fs->frame->ref_pic_num[LIST_0][i];
-			 fs->top_field->ref_pic_num[LIST_0][2*i + 1]=fs->frame->ref_pic_num[LIST_0][i] + 1;
-			 fs->bottom_field->ref_pic_num[LIST_0][2*i]=fs->frame->ref_pic_num[LIST_0][i] + 1;
-			 fs->bottom_field->ref_pic_num[LIST_0][2*i+1]=fs->frame->ref_pic_num[LIST_0][i] ;
-    */
-		 }
-	 }
-
+  //store reference picture index
+  if (!active_sps->frame_mbs_only_flag)
+  {
+    for (i=0;i<listXsize[LIST_1];i++)
+    {
+      fs->top_field->ref_pic_num[LIST_1][2*i]     =fs->frame->ref_pic_num[2 + LIST_1][2*i];
+      fs->top_field->ref_pic_num[LIST_1][2*i + 1] =fs->frame->ref_pic_num[2 + LIST_1][2*i+1];
+      fs->bottom_field->ref_pic_num[LIST_1][2*i]  =fs->frame->ref_pic_num[4 + LIST_1][2*i];
+      fs->bottom_field->ref_pic_num[LIST_1][2*i+1]=fs->frame->ref_pic_num[4 + LIST_1][2*i+1] ;
+    }
+    
+    for (i=0;i<listXsize[LIST_0];i++)
+    {
+      fs->top_field->ref_pic_num[LIST_0][2*i]     =fs->frame->ref_pic_num[2 + LIST_0][2*i];
+      fs->top_field->ref_pic_num[LIST_0][2*i + 1] =fs->frame->ref_pic_num[2 + LIST_0][2*i+1];
+      fs->bottom_field->ref_pic_num[LIST_0][2*i]  =fs->frame->ref_pic_num[4 + LIST_0][2*i];
+      fs->bottom_field->ref_pic_num[LIST_0][2*i+1]=fs->frame->ref_pic_num[4 + LIST_0][2*i+1] ;
+    }
+  }
+   
   if (!active_sps->frame_mbs_only_flag || active_sps->direct_8x8_inference_flag)      
   {    
-  for (i=0 ; i<fs->frame->size_x/4 ; i++)
+    for (i=0 ; i<fs->frame->size_x/4 ; i++)
     {                
       for (j=0 ; j<fs->frame->size_y/8; j++)      
       { 
         int idiv4=i/4,jdiv4=j/2;
-
+        
         int currentmb=2*(fs->frame->size_x/16)*(jdiv4/2)+ (idiv4)*2 + (jdiv4%2);
         // Assign field mvs attached to MB-Frame buffer to the proper buffer
         if (img->MbaffFrameFlag && img->mb_data[currentmb].mb_field)
-          {
+        {
           fs->bottom_field->mv[LIST_0][i][j][0] = fs->frame->mv[LIST_0][i][(j/4)*8 + j%4 + 4][0];
           fs->bottom_field->mv[LIST_0][i][j][1] = fs->frame->mv[LIST_0][i][(j/4)*8 + j%4 + 4][1];
           fs->bottom_field->mv[LIST_1][i][j][0] = fs->frame->mv[LIST_1][i][(j/4)*8 + j%4 + 4][0];
           fs->bottom_field->mv[LIST_1][i][j][1] = fs->frame->mv[LIST_1][i][(j/4)*8 + j%4 + 4][1];
           fs->bottom_field->ref_idx[LIST_0][i][j] = fs->frame->ref_idx[LIST_0][i][(j/4)*8 + j%4 + 4];
           fs->bottom_field->ref_idx[LIST_1][i][j] = fs->frame->ref_idx[LIST_1][i][(j/4)*8 + j%4 + 4];
-            
+          
           fs->top_field->mv[LIST_0][i][j][0] = fs->frame->mv[LIST_0][i][(j/4)*8 + j%4][0];
           fs->top_field->mv[LIST_0][i][j][1] = fs->frame->mv[LIST_0][i][(j/4)*8 + j%4][1];
           fs->top_field->mv[LIST_1][i][j][0] = fs->frame->mv[LIST_1][i][(j/4)*8 + j%4][0];
@@ -2534,12 +2542,12 @@ void dpb_split_field(FrameStore *fs)
           
   if (!active_sps->frame_mbs_only_flag || active_sps->direct_8x8_inference_flag)      
   {
-  for (j=0 ; j<fs->frame->size_y/4 ; j++)      
-  {                
-    for (i=0 ; i<fs->frame->size_x/4 ; i++)          
+    for (j=0 ; j<fs->frame->size_y/4 ; j++)      
     {                
-      int idiv4=i/4,jdiv4=j/4;
-      int currentmb=2*(fs->frame->size_x/16)*(jdiv4/2)+ (idiv4)*2 + (jdiv4%2);
+      for (i=0 ; i<fs->frame->size_x/4 ; i++)          
+      {                
+        int idiv4=i/4,jdiv4=j/4;
+        int currentmb=2*(fs->frame->size_x/16)*(jdiv4/2)+ (idiv4)*2 + (jdiv4%2);
         if (img->MbaffFrameFlag && img->mb_data[currentmb].mb_field)
         { 
           //! Assign frame buffers for field MBs           
@@ -2549,22 +2557,22 @@ void dpb_split_field(FrameStore *fs)
           fs->frame->mv[LIST_1][i][j][1]    = fs->top_field->mv[LIST_1][i][j/2][1] ;           
           fs->frame->ref_idx[LIST_0][i][j]  = fs->top_field->ref_idx[LIST_0][i][j/2];         
           fs->frame->ref_idx[LIST_1][i][j]  = fs->top_field->ref_idx[LIST_1][i][j/2];                   
-          }
+        }
       }
     }             
   }
     
   //! Generate field MVs from Frame MVs
-   for (i=0 ; i<fs->frame->size_x/4 ; i++)
-   {
-     for (j=0 ; j<fs->frame->size_y/8 ; j++)
-     {
-       int idiv4=i/4,jdiv4=j/2;
-       
-       int currentmb=2*(fs->frame->size_x/16)*(jdiv4/2)+ (idiv4)*2 + (jdiv4%2);
-       //! Do nothing if macroblock as field coded in MB-AFF
-       if (!img->MbaffFrameFlag || !img->mb_data[currentmb].mb_field)    
-       {
+  for (i=0 ; i<fs->frame->size_x/4 ; i++)
+  {
+    for (j=0 ; j<fs->frame->size_y/8 ; j++)
+    {
+      int idiv4=i/4,jdiv4=j/2;
+      
+      int currentmb=2*(fs->frame->size_x/16)*(jdiv4/2)+ (idiv4)*2 + (jdiv4%2);
+      //! Do nothing if macroblock as field coded in MB-AFF
+      if (!img->MbaffFrameFlag || !img->mb_data[currentmb].mb_field)    
+      {
         fs->top_field->mv[LIST_0][i][j][0] = fs->bottom_field->mv[LIST_0][i][j][0] = fs->frame->mv[LIST_0][RSD(i)][2*RSD(j)][0];
         fs->top_field->mv[LIST_0][i][j][1] = fs->bottom_field->mv[LIST_0][i][j][1] = (fs->frame->mv[LIST_0][RSD(i)][2*RSD(j)][1]);
         fs->top_field->mv[LIST_1][i][j][0] = fs->bottom_field->mv[LIST_1][i][j][0] = fs->frame->mv[LIST_1][RSD(i)][2*RSD(j)][0];
@@ -2580,39 +2588,39 @@ void dpb_split_field(FrameStore *fs)
           fs->top_field->ref_idx[LIST_1][i][j] = fs->bottom_field->ref_idx[LIST_1][i][j] = - 1;
         else
           fs->top_field->ref_idx[LIST_1][i][j] = fs->bottom_field->ref_idx[LIST_1][i][j] = fs->frame->ref_idx[LIST_1][RSD(i)][2*RSD(j)]*2;
-
-         fs->top_field->moving_block[i][j] = fs->bottom_field->moving_block[i][j]= 
-           !(((fs->top_field->ref_idx[LIST_0][i][j] == 0) && 
-           (abs(fs->top_field->mv[LIST_0][i][j][0])>>1 == 0) && 
-           (abs(fs->top_field->mv[LIST_0][i][j][1])>>1 == 0)) || 
-           ((fs->top_field->ref_idx[LIST_0][i][j] == -1) && 
-           (fs->top_field->ref_idx[LIST_1][i][j] == 0) && 
-           (abs(fs->top_field->mv[LIST_1][i][j][0])>>1 == 0) && 
-           (abs(fs->top_field->mv[LIST_1][i][j][1])>>1 == 0)));
+        
+        fs->top_field->moving_block[i][j] = fs->bottom_field->moving_block[i][j]= 
+          !(((fs->top_field->ref_idx[LIST_0][i][j] == 0) && 
+          (abs(fs->top_field->mv[LIST_0][i][j][0])>>1 == 0) && 
+          (abs(fs->top_field->mv[LIST_0][i][j][1])>>1 == 0)) || 
+          ((fs->top_field->ref_idx[LIST_0][i][j] == -1) && 
+          (fs->top_field->ref_idx[LIST_1][i][j] == 0) && 
+          (abs(fs->top_field->mv[LIST_1][i][j][0])>>1 == 0) && 
+          (abs(fs->top_field->mv[LIST_1][i][j][1])>>1 == 0)));
 
         fs->top_field->mv[LIST_0][i][j][1] /= 2;
         fs->top_field->mv[LIST_1][i][j][1] /= 2;
         fs->bottom_field->mv[LIST_0][i][j][1] /= 2;
         fs->bottom_field->mv[LIST_1][i][j][1] /= 2;
-       }
-       else
-       {  
+      }
+      else
+      {  
         fs->bottom_field->mv[LIST_0][i][j][0] = fs->bottom_field->mv[LIST_0][RSD(i)][RSD(j)][0];
         fs->bottom_field->mv[LIST_0][i][j][1] = fs->bottom_field->mv[LIST_0][RSD(i)][RSD(j)][1];
         fs->bottom_field->mv[LIST_1][i][j][0] = fs->bottom_field->mv[LIST_1][RSD(i)][RSD(j)][0];
         fs->bottom_field->mv[LIST_1][i][j][1] = fs->bottom_field->mv[LIST_1][RSD(i)][RSD(j)][1];
         fs->bottom_field->ref_idx[LIST_0][i][j] = fs->bottom_field->ref_idx[LIST_0][RSD(i)][RSD(j)]; 
         fs->bottom_field->ref_idx[LIST_1][i][j] = fs->bottom_field->ref_idx[LIST_0][RSD(i)][RSD(j)]; 
-      
-         fs->bottom_field->moving_block[i][j] = 
-           !(((fs->bottom_field->ref_idx[LIST_0][i][j] == 0) && 
-           (abs(fs->bottom_field->mv[LIST_0][i][j][0])>>1 == 0) && 
-           (abs(fs->bottom_field->mv[LIST_0][i][j][1])>>1 == 0)) || 
-           ((fs->bottom_field->ref_idx[LIST_0][i][j] == -1) && 
-           (fs->bottom_field->ref_idx[LIST_1][i][j] == 0) && 
-           (abs(fs->bottom_field->mv[LIST_1][i][j][0])>>1 == 0) && 
-           (abs(fs->bottom_field->mv[LIST_1][i][j][1])>>1 == 0)));
-         
+        
+        fs->bottom_field->moving_block[i][j] = 
+          !(((fs->bottom_field->ref_idx[LIST_0][i][j] == 0) && 
+          (abs(fs->bottom_field->mv[LIST_0][i][j][0])>>1 == 0) && 
+          (abs(fs->bottom_field->mv[LIST_0][i][j][1])>>1 == 0)) || 
+          ((fs->bottom_field->ref_idx[LIST_0][i][j] == -1) && 
+          (fs->bottom_field->ref_idx[LIST_1][i][j] == 0) && 
+          (abs(fs->bottom_field->mv[LIST_1][i][j][0])>>1 == 0) && 
+          (abs(fs->bottom_field->mv[LIST_1][i][j][1])>>1 == 0)));
+        
         fs->top_field->mv[LIST_0][i][j][0] = fs->top_field->mv[LIST_0][RSD(i)][RSD(j)][0];
         fs->top_field->mv[LIST_0][i][j][1] = fs->top_field->mv[LIST_0][RSD(i)][RSD(j)][1];
         fs->top_field->mv[LIST_1][i][j][0] = fs->top_field->mv[LIST_1][RSD(i)][RSD(j)][0];
@@ -2620,67 +2628,67 @@ void dpb_split_field(FrameStore *fs)
         fs->top_field->ref_idx[LIST_0][i][j] = fs->top_field->ref_idx[LIST_0][RSD(i)][RSD(j)]; 
         fs->top_field->ref_idx[LIST_1][i][j] = fs->top_field->ref_idx[LIST_0][RSD(i)][RSD(j)]; 
         
-         fs->top_field->moving_block[i][j] = 
-           !(((fs->top_field->ref_idx[LIST_0][i][j] == 0) && 
-           (abs(fs->top_field->mv[LIST_0][i][j][0])>>1 == 0) && 
-           (abs(fs->top_field->mv[LIST_0][i][j][1])>>1 == 0)) || 
-           ((fs->top_field->ref_idx[LIST_0][i][j] == -1) && 
-           (fs->top_field->ref_idx[LIST_1][i][j] == 0) && 
-           (abs(fs->top_field->mv[LIST_1][i][j][0])>>1 == 0) && 
-           (abs(fs->top_field->mv[LIST_1][i][j][1])>>1 == 0)));
-       }
-     }
-   }
-   
-
-  
-   for (j=0 ; j<fs->frame->size_y/4 ; j++)      
-   {                
-     for (i=0 ; i<fs->frame->size_x/4 ; i++)          
-     {                
-      if (!active_sps->frame_mbs_only_flag || active_sps->direct_8x8_inference_flag)      
-      {
-          //! Use inference flag to remap mvs/references
-          fs->frame->mv[LIST_0][i][j][0]=fs->frame->mv[LIST_0][RSD(i)][RSD(j)][0];
-          fs->frame->mv[LIST_0][i][j][1]=fs->frame->mv[LIST_0][RSD(i)][RSD(j)][1];
-          fs->frame->mv[LIST_1][i][j][0]=fs->frame->mv[LIST_1][RSD(i)][RSD(j)][0];
-          fs->frame->mv[LIST_1][i][j][1]=fs->frame->mv[LIST_1][RSD(i)][RSD(j)][1];        
-          
-          fs->frame->ref_idx[LIST_0][i][j]=fs->frame->ref_idx[LIST_0][RSD(i)][RSD(j)] ;     
-          fs->frame->ref_idx[LIST_1][i][j]=fs->frame->ref_idx[LIST_1][RSD(i)][RSD(j)] ;     
+        fs->top_field->moving_block[i][j] = 
+          !(((fs->top_field->ref_idx[LIST_0][i][j] == 0) && 
+          (abs(fs->top_field->mv[LIST_0][i][j][0])>>1 == 0) && 
+          (abs(fs->top_field->mv[LIST_0][i][j][1])>>1 == 0)) || 
+          ((fs->top_field->ref_idx[LIST_0][i][j] == -1) && 
+          (fs->top_field->ref_idx[LIST_1][i][j] == 0) && 
+          (abs(fs->top_field->mv[LIST_1][i][j][0])>>1 == 0) && 
+          (abs(fs->top_field->mv[LIST_1][i][j][1])>>1 == 0)));
       }
-       fs->frame->moving_block[i][j]= 
-         !(((fs->frame->ref_idx[LIST_0][i][j] == 0) && 
-         (abs(fs->frame->mv[LIST_0][i][j][0])>>1 == 0) && 
-         (abs(fs->frame->mv[LIST_0][i][j][1])>>1 == 0)) || 
-         ((fs->frame->ref_idx[LIST_0][i][j] == -1) && 
-         (fs->frame->ref_idx[LIST_1][i][j] == 0) && 
-         (abs(fs->frame->mv[LIST_1][i][j][0])>>1 == 0) && 
-         (abs(fs->frame->mv[LIST_1][i][j][1])>>1 == 0)));
-     }      
-   }
+    }
+  }
   
-  if (!active_sps->frame_mbs_only_flag || active_sps->direct_8x8_inference_flag)      
-  {
+  
+  
   for (j=0 ; j<fs->frame->size_y/4 ; j++)      
   {                
     for (i=0 ; i<fs->frame->size_x/4 ; i++)          
     {                
-      int idiv4=i/4,jdiv4=j/4;
-      int currentmb=2*(fs->frame->size_x/16)*(jdiv4/2)+ (idiv4)*2 + (jdiv4%2);
-
-      if (img->MbaffFrameFlag && img->mb_data[currentmb].mb_field)
+      if (!active_sps->frame_mbs_only_flag || active_sps->direct_8x8_inference_flag)      
       {
-        fs->frame->mv[LIST_0][i][j][1] *= 2;
-        fs->frame->mv[LIST_1][i][j][1] *= 2;
-        if (fs->frame->ref_idx[LIST_0][i][j] != -1)
+        //! Use inference flag to remap mvs/references
+        fs->frame->mv[LIST_0][i][j][0]=fs->frame->mv[LIST_0][RSD(i)][RSD(j)][0];
+        fs->frame->mv[LIST_0][i][j][1]=fs->frame->mv[LIST_0][RSD(i)][RSD(j)][1];
+        fs->frame->mv[LIST_1][i][j][0]=fs->frame->mv[LIST_1][RSD(i)][RSD(j)][0];
+        fs->frame->mv[LIST_1][i][j][1]=fs->frame->mv[LIST_1][RSD(i)][RSD(j)][1];        
+        
+        fs->frame->ref_idx[LIST_0][i][j]=fs->frame->ref_idx[LIST_0][RSD(i)][RSD(j)] ;     
+        fs->frame->ref_idx[LIST_1][i][j]=fs->frame->ref_idx[LIST_1][RSD(i)][RSD(j)] ;     
+      }
+      fs->frame->moving_block[i][j]= 
+        !(((fs->frame->ref_idx[LIST_0][i][j] == 0) && 
+        (abs(fs->frame->mv[LIST_0][i][j][0])>>1 == 0) && 
+        (abs(fs->frame->mv[LIST_0][i][j][1])>>1 == 0)) || 
+        ((fs->frame->ref_idx[LIST_0][i][j] == -1) && 
+        (fs->frame->ref_idx[LIST_1][i][j] == 0) && 
+        (abs(fs->frame->mv[LIST_1][i][j][0])>>1 == 0) && 
+        (abs(fs->frame->mv[LIST_1][i][j][1])>>1 == 0)));
+    }      
+  }
+  
+  if (!active_sps->frame_mbs_only_flag || active_sps->direct_8x8_inference_flag)      
+  {
+    for (j=0 ; j<fs->frame->size_y/4 ; j++)      
+    {                
+      for (i=0 ; i<fs->frame->size_x/4 ; i++)          
+      {                
+        int idiv4=i/4,jdiv4=j/4;
+        int currentmb=2*(fs->frame->size_x/16)*(jdiv4/2)+ (idiv4)*2 + (jdiv4%2);
+        
+        if (img->MbaffFrameFlag && img->mb_data[currentmb].mb_field)
+        {
+          fs->frame->mv[LIST_0][i][j][1] *= 2;
+          fs->frame->mv[LIST_1][i][j][1] *= 2;
+          if (fs->frame->ref_idx[LIST_0][i][j] != -1)
             fs->frame->ref_idx[LIST_0][i][j] >>= 1;
-        if (fs->frame->ref_idx[LIST_1][i][j] != -1)
+          if (fs->frame->ref_idx[LIST_1][i][j] != -1)
             fs->frame->ref_idx[LIST_1][i][j] >>= 1;
+        }
       }
     }
   }
-}
 }
 
 
@@ -2727,8 +2735,8 @@ void dpb_combine_field(FrameStore *fs)
   
   fs->top_field->frame = fs->bottom_field->frame = fs->frame;
 
-	//combine field for frame
-	for (i=0;i<(listXsize[LIST_1]+1)/2;i++)
+  //combine field for frame
+  for (i=0;i<(listXsize[LIST_1]+1)/2;i++)
   {
 //    fs->frame->ref_pic_num[LIST_1][i]=   (fs->top_field->ref_pic_num[LIST_1][2*i]/2)*2;
     fs->frame->ref_pic_num[LIST_1][i]=   min ((fs->top_field->ref_pic_num[LIST_1][2*i]/2)*2, (fs->bottom_field->ref_pic_num[LIST_1][2*i]/2)*2);
@@ -2743,59 +2751,59 @@ void dpb_combine_field(FrameStore *fs)
    //! Use inference flag to remap mvs/references 
   
     //! Generate Frame parameters from field information.
-	for (i=0 ; i<fs->top_field->size_x/4 ; i++)
-	{
-		for (j=0 ; j<fs->top_field->size_y/2 ; j++)
-		{        
-			fs->frame->mv[LIST_0][i][j][0] = fs->top_field->mv[LIST_0][i][j/2][0];
-			fs->frame->mv[LIST_0][i][j][1] = fs->top_field->mv[LIST_0][i][j/2][1] ;
-			fs->frame->mv[LIST_1][i][j][0] = fs->top_field->mv[LIST_1][i][j/2][0];
-			fs->frame->mv[LIST_1][i][j][1] = fs->top_field->mv[LIST_1][i][j/2][1] ; 
-			
-			fs->frame->ref_idx[LIST_0][i][j]  = fs->top_field->ref_idx[LIST_0][i][j/2];
-			fs->frame->ref_idx[LIST_1][i][j]  = fs->top_field->ref_idx[LIST_1][i][j/2];
-		}     
-	}
-	
-	for (i=0 ; i<fs->top_field->size_x/4 ; i++)
-	{
-		for (j=0 ; j<fs->top_field->size_y/2 ; j++)
-		{
-			//! Use inference flag to remap mvs/references
-			fs->frame->mv[LIST_0][i][j][0]=fs->frame->mv[LIST_0][RSD(i)][RSD(j)][0];
-			fs->frame->mv[LIST_0][i][j][1]=fs->frame->mv[LIST_0][RSD(i)][RSD(j)][1];
-			fs->frame->mv[LIST_1][i][j][0]=fs->frame->mv[LIST_1][RSD(i)][RSD(j)][0];
-			fs->frame->mv[LIST_1][i][j][1]=fs->frame->mv[LIST_1][RSD(i)][RSD(j)][1];        
-			
-			fs->frame->ref_idx[LIST_0][i][j]=fs->frame->ref_idx[LIST_0][RSD(i)][RSD(j)] ;     
-			fs->frame->ref_idx[LIST_1][i][j]=fs->frame->ref_idx[LIST_1][RSD(i)][RSD(j)] ;     
-			
+  for (i=0 ; i<fs->top_field->size_x/4 ; i++)
+  {
+    for (j=0 ; j<fs->top_field->size_y/2 ; j++)
+    {        
+      fs->frame->mv[LIST_0][i][j][0] = fs->top_field->mv[LIST_0][i][j/2][0];
+      fs->frame->mv[LIST_0][i][j][1] = fs->top_field->mv[LIST_0][i][j/2][1] ;
+      fs->frame->mv[LIST_1][i][j][0] = fs->top_field->mv[LIST_1][i][j/2][0];
+      fs->frame->mv[LIST_1][i][j][1] = fs->top_field->mv[LIST_1][i][j/2][1] ; 
+      
+      fs->frame->ref_idx[LIST_0][i][j]  = fs->top_field->ref_idx[LIST_0][i][j/2];
+      fs->frame->ref_idx[LIST_1][i][j]  = fs->top_field->ref_idx[LIST_1][i][j/2];
+    }     
+  }
+  
+  for (i=0 ; i<fs->top_field->size_x/4 ; i++)
+  {
+    for (j=0 ; j<fs->top_field->size_y/2 ; j++)
+    {
+      //! Use inference flag to remap mvs/references
+      fs->frame->mv[LIST_0][i][j][0]=fs->frame->mv[LIST_0][RSD(i)][RSD(j)][0];
+      fs->frame->mv[LIST_0][i][j][1]=fs->frame->mv[LIST_0][RSD(i)][RSD(j)][1];
+      fs->frame->mv[LIST_1][i][j][0]=fs->frame->mv[LIST_1][RSD(i)][RSD(j)][0];
+      fs->frame->mv[LIST_1][i][j][1]=fs->frame->mv[LIST_1][RSD(i)][RSD(j)][1];        
+      
+      fs->frame->ref_idx[LIST_0][i][j]=fs->frame->ref_idx[LIST_0][RSD(i)][RSD(j)] ;     
+      fs->frame->ref_idx[LIST_1][i][j]=fs->frame->ref_idx[LIST_1][RSD(i)][RSD(j)] ;     
+      
         fs->frame->moving_block[i][j]= 
-					!(((fs->frame->ref_idx[LIST_0][i][j] == 0) && 
-					(abs(fs->frame->mv[LIST_0][i][j][0])>>1 == 0) && 
-					(abs(fs->frame->mv[LIST_0][i][j][1])>>1 == 0)) || 
-					((fs->frame->ref_idx[LIST_0][i][j] == -1) && 
-					(fs->frame->ref_idx[LIST_1][i][j] == 0) && 
-					(abs(fs->frame->mv[LIST_1][i][j][0])>>1 == 0) && 
-					(abs(fs->frame->mv[LIST_1][i][j][1])>>1 == 0)));
-		}      
-	}
-	
-	//scaling of mvs/references needs to be done separately 
-	for (i=0 ; i<fs->top_field->size_x/4 ; i++)
-	{
-		for (j=0 ; j<fs->top_field->size_y/2 ; j++)
-		{                
-			fs->frame->mv[LIST_0][i][j][1] *= 2;        
-			fs->frame->mv[LIST_1][i][j][1] *= 2;
-			if (fs->frame->ref_idx[LIST_0][i][j] != -1)
+          !(((fs->frame->ref_idx[LIST_0][i][j] == 0) && 
+          (abs(fs->frame->mv[LIST_0][i][j][0])>>1 == 0) && 
+          (abs(fs->frame->mv[LIST_0][i][j][1])>>1 == 0)) || 
+          ((fs->frame->ref_idx[LIST_0][i][j] == -1) && 
+          (fs->frame->ref_idx[LIST_1][i][j] == 0) && 
+          (abs(fs->frame->mv[LIST_1][i][j][0])>>1 == 0) && 
+          (abs(fs->frame->mv[LIST_1][i][j][1])>>1 == 0)));
+    }      
+  }
+
+  //scaling of mvs/references needs to be done separately 
+  for (i=0 ; i<fs->top_field->size_x/4 ; i++)
+  {
+    for (j=0 ; j<fs->top_field->size_y/2 ; j++)
+    {                
+      fs->frame->mv[LIST_0][i][j][1] *= 2;        
+      fs->frame->mv[LIST_1][i][j][1] *= 2;
+      if (fs->frame->ref_idx[LIST_0][i][j] != -1)
         fs->frame->ref_idx[LIST_0][i][j] >>= 1;
-			if (fs->frame->ref_idx[LIST_1][i][j] != -1)
+      if (fs->frame->ref_idx[LIST_1][i][j] != -1)
         fs->frame->ref_idx[LIST_1][i][j] >>= 1;
-		}     
-	}
-	
-	
+    }     
+  }
+  
+
   if (!active_sps->frame_mbs_only_flag || active_sps->direct_8x8_inference_flag)      
   {        
     for (i=0 ; i<fs->top_field->size_x/4 ; i++)
@@ -2817,7 +2825,7 @@ void dpb_combine_field(FrameStore *fs)
         
         fs->bottom_field->ref_idx[LIST_0][i][j]=fs->bottom_field->ref_idx[LIST_0][RSD(i)][RSD(j)] ;     
         fs->bottom_field->ref_idx[LIST_1][i][j]=fs->bottom_field->ref_idx[LIST_1][RSD(i)][RSD(j)] ;     
-				
+
         fs->top_field->moving_block[i][j] =  
           !(((fs->top_field->ref_idx[LIST_0][i][j] == 0) && 
           (abs(fs->top_field->mv[LIST_0][i][j][0])>>1 == 0) && 

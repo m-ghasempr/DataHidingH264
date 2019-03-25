@@ -1786,13 +1786,13 @@ int field_flag_inference()
    //===== SET LAGRANGE PARAMETERS =====
    if (input->rdopt)
    {
-     qp            = (double)img->qp; // - SHIFT_QP;
+     qp            = (double)img->qp - SHIFT_QP;
      
-     if (input->successive_Bframe>0)
+    if (input->successive_Bframe>0)
        lambda_mode   = 0.68 * pow (2, qp/3.0) * (img->type==B_SLICE? max(2.00,min(4.00,(qp / 6.0))):spframe?max(1.4,min(3.0,(qp / 12.0))):1.0);  
      else
        lambda_mode   = 0.85 * pow (2, qp/3.0) * (img->type==B_SLICE? 4.0:spframe?max(1.4,min(3.0,(qp / 12.0))):1.0);  
-//     lambda_mode = 0.85 * pow( 2.0, (double)qp / 3.0 - 4.0 );
+       
      lambda_motion = sqrt (lambda_mode);
    }
    else
@@ -1851,9 +1851,7 @@ int field_flag_inference()
                  }
                }
              }
-             //arbitrary fix for P  ref too large
-             if(!bframe && !input->direct_type &&(best_fw_ref+1)==input->num_reference_frames)best_fw_ref--;  //temp ref fix
-             
+            
              if (bframe)
              {
                //--- get cost for bidirectional prediction ---
@@ -2132,8 +2130,6 @@ int field_flag_inference()
                     }
                   }
                 }
-                //arbitrary fix for P  ref too large
-                if(!bframe && !input->direct_type &&(best_fw_ref+1)==input->num_reference_frames)best_fw_ref--; //temp ref fix
                 
                 //store forward reference index for every block
                 for (j=0; j<2; j++)
@@ -2393,9 +2389,6 @@ int field_flag_inference()
                 }
               }
             }
-            //arbitrary fix for P  ref too large
-//            if(!bframe && !input->direct_type &&(best_fw_ref+1)==input->num_reference_frames)best_fw_ref--; //temp ref fix
-            if(!bframe && !input->direct_type &&(best_fw_ref+1)==input->num_reference_frames) assert(1); //!KS
             
             if (bframe)
             {
@@ -2717,11 +2710,16 @@ int field_flag_inference()
                     for(j=0; j<16; j++)
                       diffy[j][i] = imgY_org[img->opix_y+j][img->opix_x+i]-img->mprr_2[i16mode][j][i];
                 }
-                else
+                else if(mode == P8x8)
                 {
                   for (i=0; i<16; i++)
                     for(j=0; j<16; j++)
-                      diffy[j][i] = imgY_org[img->opix_y+j][img->opix_x+i]-img->mpr[j][i];
+                      diffy[j][i] = imgY_org[img->opix_y+j][img->opix_x+i]-mpr8x8[i][j];
+                }else
+                {
+                  for (i=0; i<16; i++)
+                    for(j=0; j<16; j++)
+                      diffy[j][i] = imgY_org[img->opix_y+j][img->opix_x+i]-img->mpr[i][j];
                 }
                 
                 store_macroblock_parameters (mode);
@@ -2736,7 +2734,7 @@ int field_flag_inference()
               //Rate control
               for (i=0; i<16; i++)
                 for(j=0; j<16; j++)
-                  diffy[j][i] = imgY_org[img->opix_y+j][img->opix_x+i]-img->mpr[j][i];
+                  diffy[j][i] = imgY_org[img->opix_y+j][img->opix_x+i]-img->mpr[i][j];
                 store_macroblock_parameters (mode);
             }
           }
@@ -2754,7 +2752,7 @@ int field_flag_inference()
           //Rate control
           for (i=0; i<16; i++)
             for(j=0; j<16; j++)
-              diffy[j][i] = imgY_org[img->pix_y+j][img->pix_x+i]-img->mpr[j][i];
+              diffy[j][i] = imgY_org[img->pix_y+j][img->pix_x+i]-img->mpr[i][j];
             
             min_cost  = cost;
             best_mode = 0;
@@ -2768,7 +2766,7 @@ int field_flag_inference()
           //Rate control
           for (i=0; i<16; i++)
             for(j=0; j<16; j++)
-              diffy[j][i] = imgY_org[img->pix_y+j][img->pix_x+i]-img->mpr[j][i];
+              diffy[j][i] = imgY_org[img->pix_y+j][img->pix_x+i]-img->mpr[i][j];
             
             min_cost  = cost;
             best_mode = I4MB;

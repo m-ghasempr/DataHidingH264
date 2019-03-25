@@ -79,8 +79,6 @@ typedef unsigned char byte;    //!< byte type definition
 
 #define IMG_PAD_SIZE    4   //!< Number of pixels padded around the reference frame (>=4)
 
-#define BDIRECTINTRA        1        //!< Direct SpatioTemporal Prediction 
-
 #define absm(A) ((A)<(0) ? (-(A)):(A)) //!< abs macro, faster than procedure
 #define MAX_VALUE       999999   //!< used for start value for some variables
 

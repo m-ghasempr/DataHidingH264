@@ -42,10 +42,10 @@ typedef unsigned int    u_int32;
 
 #ifdef WIN32
   typedef __int64   int64;
-# define INT64_MIN		    (-9223372036854775807i64 - 1i64)
+# define INT64_MIN        (-9223372036854775807i64 - 1i64)
 #else
   typedef long long int64;
-# define INT64_MIN		    (-9223372036854775807LL - 1LL)
+# define INT64_MIN        (-9223372036854775807LL - 1LL)
 #endif
 
 

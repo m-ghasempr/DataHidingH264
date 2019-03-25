@@ -61,8 +61,8 @@ int SliceHeader()
   len += ue_v("SH: pic_parameter_set_id" , 0 ,partition);
 
   // frame_num
-	if(input->no_frames >= 1<<(LOG2_MAX_FRAME_NUM_MINUS4+4))
-		error ("Too many frames.  Increase LOG2_MAX_FRAME_NUM_MINUS4",-999);  
+  if(input->no_frames >= 1<<(LOG2_MAX_FRAME_NUM_MINUS4+4))
+    error ("Too many frames.  Increase LOG2_MAX_FRAME_NUM_MINUS4",-999);  
 
   len += u_v (LOG2_MAX_FRAME_NUM_MINUS4 + 4,"SH: frame_num", img->frame_num, partition);
 
@@ -130,7 +130,7 @@ int SliceHeader()
   }
 
   // Direct Mode Type selection for B pictures
-	if (img->type==B_SLICE)
+  if (img->type==B_SLICE)
   {
     len +=  u_1 ("SH: direct_spatial_mv_pred_flag", input->direct_type, partition);
   }
@@ -153,7 +153,7 @@ int SliceHeader()
     if (override_flag) 
     {
       len += ue_v ("SH: num_ref_idx_l0_active_minus1", img->num_ref_idx_l0_active-1, partition);
-		  if (img->type==B_SLICE)
+      if (img->type==B_SLICE)
       {
         len += ue_v ("SH: num_ref_idx_l1_active_minus1", img->num_ref_idx_l1_active-1, partition);
       }
@@ -163,7 +163,7 @@ int SliceHeader()
   len += ref_pic_list_reordering();
 
   if (((img->type == P_SLICE || img->type == SP_SLICE) && input->WeightedPrediction) || 
-		 ((img->type == B_SLICE) && input->WeightedBiprediction == 1))
+     ((img->type == B_SLICE) && input->WeightedBiprediction == 1))
   {
     len += pred_weight_table();
   }
@@ -363,7 +363,7 @@ static int pred_weight_table()
 
   for (i=0; i< img->num_ref_idx_l0_active; i++)
   {
-	  if ( (wp_weight[0][i][0] != 1<<luma_log_weight_denom) || (wp_offset[0][i][0] != 0) )
+    if ( (wp_weight[0][i][0] != 1<<luma_log_weight_denom) || (wp_offset[0][i][0] != 0) )
     {
       len += u_1 ("SH: luma_weight_flag_l0", 1, partition);
       
@@ -377,7 +377,7 @@ static int pred_weight_table()
     }
 
     if ( (wp_weight[0][i][1] != 1<<chroma_log_weight_denom) || (wp_offset[0][i][1] != 0) || 
-		 (wp_weight[0][i][2] != 1<<chroma_log_weight_denom) || (wp_offset[0][i][2] != 0)	)
+     (wp_weight[0][i][2] != 1<<chroma_log_weight_denom) || (wp_offset[0][i][2] != 0)  )
     {
       len += u_1 ("chroma_weight_flag_l0", 1, partition);
       for (j=1; j<3; j++)
@@ -393,7 +393,7 @@ static int pred_weight_table()
     }
   }
 
-	if (img->type == B_SLICE)
+  if (img->type == B_SLICE)
   {
     for (i=0; i< img->num_ref_idx_l1_active; i++)
     {
@@ -411,7 +411,7 @@ static int pred_weight_table()
       }
       
       if ( (wp_weight[1][i][1] != 1<<chroma_log_weight_denom) || (wp_offset[1][i][1] != 0) || 
-		  (wp_weight[1][i][2] != 1<<chroma_log_weight_denom) || (wp_offset[1][i][2] != 0) )
+      (wp_weight[1][i][2] != 1<<chroma_log_weight_denom) || (wp_offset[1][i][2] != 0) )
       {
         len += u_1 ("chroma_weight_flag_l1", 1, partition);
         for (j=1; j<3; j++)
