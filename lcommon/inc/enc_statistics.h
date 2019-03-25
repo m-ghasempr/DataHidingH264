@@ -19,7 +19,6 @@
 
 struct stat_parameters
 {
-  float  bitr;                        //!< bit rate for current frame, used only for output til terminal
   float  bitrate;                     //!< average bit rate for the sequence except first frame
   int64  bit_ctr;                     //!< counter for bit usage
   int64  bit_ctr_n;                   //!< bit usage for the current frame
@@ -54,6 +53,17 @@ struct stat_parameters
   int64  bit_ctr_filler_data;
   int64  bit_ctr_filler_data_n;
 
+#if (MVC_EXTENSION_ENABLE)
+  float  bitrate_v[2];                       //!< average bit rate for the sequence except first frame
+  int64  bit_ctr_v[2];                     //!< counter for bit usage
+  int64  bit_ctr_n_v[2];                   //!< bit usage for the current frame
+  int64  bit_ctr_emulationprevention_v[2]; //!< stored bits needed to prevent start code emulation
+  int64  bit_counter_v[2][NUM_SLICE_TYPES];
+  int    bit_ctr_parametersets_v[2];
+  int    bit_ctr_parametersets_n_v[2];
+  int64  bit_ctr_filler_data_v[2];
+  int64  bit_ctr_filler_data_n_v[2];
+#endif
 };
 typedef struct stat_parameters StatParameters;
 

@@ -16,8 +16,6 @@
 #include "global.h"
 #include "transform.h"
 
-#if !defined(USEMMX)   // MMX, SSE, SSE2 intrinsic support
-
 
 void forward4x4(int **block, int **tblock, int pos_y, int pos_x)
 {
@@ -548,4 +546,3 @@ void inverse8x8(int **tblock, int **block, int pos_y, int pos_x)
   }
 }
 
-#endif

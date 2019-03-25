@@ -11,7 +11,7 @@ NAME=   rtp_loss
 
 ### include debug information: 1=yes, 0=no
 DBG?= 0
-### include M32 optimization : 1=yes, 0=no
+### enforce 32-bit build : 1=yes, 0=no
 M32?= 0
 
 DEPEND= dependencies
@@ -21,16 +21,15 @@ INCDIR= .
 SRCDIR= .
 OBJDIR= obj
 
-ifeq ($(M32),1)
-CC=     $(shell which gcc) -m32
-else
-CC=     $(shell which gcc)
-endif
 
 LIBS=   -lm
 AFLAGS=  
 CFLAGS=  -ffloat-store -fsigned-char
 FLAGS=  $(CFLAGS) -Wall -I$(INCDIR) -D __USE_LARGEFILE64 -D _FILE_OFFSET_BITS=64
+
+ifeq ($(M32),1)
+FLAGS+=-m32
+endif
 
 ifeq ($(DBG),1)
 SUFFIX= .dbg
@@ -74,14 +73,14 @@ tags:
 bin:    $(OBJ)
 	@echo
 	@echo 'creating binary "$(BIN)"'
-	@$(CXX) $(AFLAGS) -o $(BIN) $(OBJ) $(LIBS)
+	@$(CXX) $(FLAGS) -o $(BIN) $(OBJ) $(LIBS)
 	@echo '... done'
 	@echo
 
 depend:
 	@echo
 	@echo 'checking dependencies'
-	@$(SHELL) -ec '$(CXX) $(AFLAGS) -MM $(CFLAGS) -I$(INCDIR) $(SRC)            \
+	@$(SHELL) -ec '$(CXX) $(FLAGS) -MM $(CFLAGS) -I$(INCDIR) $(SRC)            \
          | sed '\''s@\(.*\)\.o[ :]@$(OBJDIR)/\1.o$(SUFFIX):@g'\''               \
          >$(DEPEND)'
 	@echo

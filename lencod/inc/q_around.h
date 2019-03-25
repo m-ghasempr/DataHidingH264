@@ -20,7 +20,7 @@ extern void update_adaptive_rounding_4x4  (VideoParameters *p_Vid, int****ARCofA
 extern void update_adaptive_rounding_16x16(VideoParameters *p_Vid, int****ARCofAdj , int mode);
 extern void store_adaptive_rounding_16x16 (VideoParameters *p_Vid, int****ARCofAdj, int mode);
 extern void reset_adaptive_rounding_direct(VideoParameters *p_Vid);
-extern void update_offset_params          (Macroblock *currMB, int mode, Boolean luma_transform_size_8x8_flag);
+extern void update_offset_params          (Macroblock *currMB, int mode, byte luma_transform_size_8x8_flag);
 
 #endif
 

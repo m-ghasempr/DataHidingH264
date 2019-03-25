@@ -70,9 +70,9 @@ MBxy2YBlock(xPosMB((currMBNum),(picSizeX)),yPosMB((currMBNum),(picSizeX)),(comp)
 /* segment data structure */
 typedef struct ercSegment_s
 {
-  int      startMBPos;
-  int      endMBPos;
-  int      fCorrupted;
+  short     startMBPos;
+  short     endMBPos;
+  char      fCorrupted;
 } ercSegment_t;
 
 /* Error detector & concealment instance data structure */
@@ -84,18 +84,18 @@ typedef struct ercVariables_s
   int     nOfSegments;
 
   /*  Array for conditions of Y blocks */
-  int     *yCondition;
+  char     *yCondition;
   /*  Array for conditions of U blocks */
-  int     *uCondition;
+  char     *uCondition;
   /*  Array for conditions of V blocks */
-  int     *vCondition;
+  char     *vCondition;
 
   /* Array for Slice level information */
   ercSegment_t *segments;
   int     currSegment;
 
   /* Conditions of the MBs of the previous frame */
-  int   *prevFrameYCondition;
+  char   *prevFrameYCondition;
 
   /* Flag telling if the current segment was found to be corrupted */
   int   currSegmentCorrupted;
@@ -142,15 +142,14 @@ struct concealment_node {
 extern struct concealment_node * init_node(StorablePicture* , int );
 extern void print_node( struct concealment_node * );
 extern void print_list( struct concealment_node * );
-extern void init_lists_for_non_reference_loss(VideoParameters *p_Vid, int , PictureStructure );
+extern void init_lists_for_non_reference_loss(DecodedPictureBuffer *p_Dpb, int , PictureStructure );
 
-extern void conceal_non_ref_pics(VideoParameters *p_Vid, int diff);
-extern void conceal_lost_frames(VideoParameters *p_Vid);
+extern void conceal_non_ref_pics(DecodedPictureBuffer *p_Dpb, int diff);
+extern void conceal_lost_frames (DecodedPictureBuffer *p_Dpb, Slice *pSlice);
 
 extern void sliding_window_poc_management(DecodedPictureBuffer *p_Dpb, StorablePicture *p);
-
-extern void write_lost_non_ref_pic(VideoParameters *p_Vid, int poc, int p_out);
-extern void write_lost_ref_after_idr(VideoParameters *p_Vid, int pos);
+extern void write_lost_non_ref_pic       (DecodedPictureBuffer *p_Dpb, int poc, int p_out);
+extern void write_lost_ref_after_idr     (DecodedPictureBuffer *p_Dpb, int pos);
 
 extern int comp(const void *, const void *);
 

@@ -23,13 +23,13 @@
 static inline int ReadData (int vfile,  FrameFormat *source, unsigned char *buf)
 {
   unsigned char *cur_buf = buf;
-  int read_size = source->pic_unit_size_shift3 * source->width;
+  int read_size = source->pic_unit_size_shift3 * source->width[0];
   int i, j;
-  for (i = 0; i < source->height; i++)
+  for (i = 0; i < source->height[0]; i++)
   {
     if (read(vfile, cur_buf, read_size) != read_size)
     {
-      printf ("ReadOneFrame: cannot read %d bytes from input file, unexpected EOF!\n", source->width);
+      printf ("read_one_frame: cannot read %d bytes from input file, unexpected EOF!\n", source->width[0]);
       return 0;
     }
     cur_buf += read_size;
@@ -37,14 +37,14 @@ static inline int ReadData (int vfile,  FrameFormat *source, unsigned char *buf)
 
   if (source->yuv_format != YUV400)
   {
-    read_size = source->pic_unit_size_shift3 * source->width_cr;
+    read_size = source->pic_unit_size_shift3 * source->width[1];
     for (j = 0; j < 2; j++)
     {
-      for (i = 0; i < source->height_cr; i++)
+      for (i = 0; i < source->height[1]; i++)
       {
         if (read(vfile, cur_buf, read_size) != read_size)
         {
-          printf ("ReadOneFrame: cannot read %d bytes from input file, unexpected EOF!\n", source->width_cr);
+          printf ("read_one_frame: cannot read %d bytes from input file, unexpected EOF!\n", source->width[1]);
           return 0;
         }
         cur_buf += read_size;
@@ -58,7 +58,7 @@ static inline int ReadData (int vfile, int framesize_in_bytes, unsigned char *bu
 {
   if (read(vfile, buf, (int) framesize_in_bytes) != (int) framesize_in_bytes)
   {
-    printf ("ReadOneFrame: cannot read %d bytes from input file, unexpected EOF!\n", (int) framesize_in_bytes);
+    printf ("read_one_frame: cannot read %d bytes from input file, unexpected EOF!\n", (int) framesize_in_bytes);
     return 0;
   }
   else
@@ -75,8 +75,6 @@ static inline int ReadData (int vfile, int framesize_in_bytes, unsigned char *bu
  *    Reads one new frame from concatenated raw file
  *    Code does not distinguish between planar and interleaved data
  *
- * \param p_Inp
- *    Input configuration parameters 
  * \param input_file
  *    Input file to read from
  * \param FrameNoInFile
@@ -100,34 +98,12 @@ int ReadFrameConcatenated (InputParameters *p_Inp, VideoDataFile *input_file, in
 
   const int64 framesize_in_bytes = bytes_y + 2*bytes_uv;
   
-#if 0
-  // skip Header
-  if (lseek (vfile, HeaderSize, SEEK_SET) != HeaderSize)
-  {
-    error ("ReadOneFrame: cannot fseek to (Header size) in input file", -1);
-  }
-
-  // skip starting frames
-  if (lseek (vfile, framesize_in_bytes * p_Inp->start_frame, SEEK_CUR) == -1)
-  {
-    snprintf(errortext, ET_SIZE, "ReadOneFrame: cannot advance file pointer in input file beyond frame %d\n", p_Inp->start_frame);
-    error (errortext,-1);
-  }
-
-  // seek to current frame
-  if (lseek (vfile, framesize_in_bytes * (FrameNoInFile), SEEK_CUR) == -1)
-  {
-    snprintf(errortext, ET_SIZE, "ReadOneFrame: cannot advance file pointer in input file beyond frame %d\n", p_Inp->start_frame + FrameNoInFile);
-    error (errortext,-1);
-  }
-#else
   // Let us seek directly to the current frame
   if (lseek (vfile, HeaderSize + framesize_in_bytes * (FrameNoInFile + p_Inp->start_frame), SEEK_SET) == -1)
   {
-    snprintf(errortext, ET_SIZE, "ReadOneFrame: cannot advance file pointer in input file beyond frame %d\n", p_Inp->start_frame + FrameNoInFile);
+    snprintf(errortext, ET_SIZE, "read_one_frame: cannot advance file pointer in input file beyond frame %d\n", p_Inp->start_frame + FrameNoInFile);
     error (errortext,-1);
   }
-#endif
   // Here we are at the correct position for the source frame in the file.  
   // Now read it.
   if ((source->pic_unit_size_on_disk & 0x07) == 0)
@@ -140,7 +116,7 @@ int ReadFrameConcatenated (InputParameters *p_Inp, VideoDataFile *input_file, in
   }
   else
   {
-    printf ("ReadOneFrame (NOT IMPLEMENTED): pic unit size on disk must be divided by 8");
+    printf ("read_one_frame (NOT IMPLEMENTED): pic unit size on disk must be divided by 8");
     exit (-1);
   }
   return file_read;
@@ -152,8 +128,6 @@ int ReadFrameConcatenated (InputParameters *p_Inp, VideoDataFile *input_file, in
  *    Reads one new frame from separate data files
  *    Code does not distinguish between planar and interleaved data
  *
- * \param p_Inp
- *    Input configuration parameters 
  * \param input_file
  *    Input file to read from
  * \param FrameNoInFile
@@ -176,7 +150,7 @@ int ReadFrameSeparate (InputParameters *p_Inp, VideoDataFile *input_file, int Fr
   // skip Header
   if (lseek (vfile, HeaderSize, SEEK_SET) != HeaderSize)
   {
-    error ("ReadOneFrame: cannot fseek to (Header size) in input file", -1);
+    error ("read_one_frame: cannot fseek to (Header size) in input file", -1);
   }
 
   // Read data
@@ -196,7 +170,7 @@ int ReadFrameSeparate (InputParameters *p_Inp, VideoDataFile *input_file, int Fr
   }
   else
   {
-    printf ("ReadOneFrame (NOT IMPLEMENTED): pic unit size on disk must be divisible by 8");
+    printf ("read_one_frame (NOT IMPLEMENTED): pic unit size on disk must be divisible by 8");
     exit (-1);
   }
 

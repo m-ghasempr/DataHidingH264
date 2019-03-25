@@ -28,13 +28,9 @@
 #include "mv_search.h"
 #include "md_distortion.h"
 
-
 void setupDistortion(Slice *currSlice)
 {
-
   currSlice->getDistortion = distortionSSE;
-
-
 }
 
 /*!
@@ -102,6 +98,26 @@ distblk compute_SSE16x16(imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc)
   return dist_scale(distortion);
 }
 
+distblk compute_SSE16x16_thres(imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc, distblk min_cost)
+{
+  int i, j;
+  imgpel *lineRef, *lineSrc;
+  distblk distortion = 0;
+  int imin_cost = dist_down(min_cost);
+
+  for (j = 0; j < MB_BLOCK_SIZE; j++)
+  {
+    lineRef = &imgRef[j][xRef];    
+    lineSrc = &imgSrc[j][xSrc];
+
+    for (i = 0; i < MB_BLOCK_SIZE; i++)
+      distortion += iabs2( *lineRef++ - *lineSrc++ );
+    if (distortion > imin_cost)
+      return (min_cost);
+  }
+
+  return dist_scale(distortion);
+}
 /*!
  ***********************************************************************
  * \brief
@@ -168,7 +184,7 @@ distblk distortionSSE(Macroblock *currMB)
   distortionY = compute_SSE16x16(&p_Vid->pCurImg[currMB->opix_y], &p_Vid->enc_picture->p_curr_img[currMB->pix_y], currMB->pix_x, currMB->pix_x);
 
   // CHROMA
-  if ((p_Vid->yuv_format != YUV400) && !IS_INDEPENDENT(p_Inp))
+  if ((p_Vid->yuv_format != YUV400) && (p_Inp->separate_colour_plane_flag == 0))
   {
     distortionCr[0] = compute_SSE_cr(&p_Vid->pImgOrg[1][currMB->opix_c_y], &p_Vid->enc_picture->imgUV[0][currMB->pix_c_y], currMB->pix_c_x, currMB->pix_c_x, p_Vid->mb_cr_size_y, p_Vid->mb_cr_size_x);
     distortionCr[1] = compute_SSE_cr(&p_Vid->pImgOrg[2][currMB->opix_c_y], &p_Vid->enc_picture->imgUV[1][currMB->pix_c_y], currMB->pix_c_x, currMB->pix_c_x, p_Vid->mb_cr_size_y, p_Vid->mb_cr_size_x);
@@ -182,8 +198,4 @@ distblk distortionSSE(Macroblock *currMB)
 #endif  //end;
   return (distblk)( distortionY * p_Inp->WeightY + distortionCr[0] * p_Inp->WeightCb + distortionCr[1] * p_Inp->WeightCr );
 }
-
-
-
-
 

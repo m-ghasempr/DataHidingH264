@@ -13,23 +13,12 @@
 #ifndef _CONFIGFILE_H_
 #define _CONFIGFILE_H_
 
+#include "config_common.h"
+
 #define DEFAULTCONFIGFILENAME "encoder.cfg"
 
 #define PROFILE_IDC     88
 #define LEVEL_IDC       21
-
-
-//! Maps parameter name to its address, type etc.
-typedef struct {
-  char *TokenName;    //!< name
-  void *Place;        //!< address
-  int Type;           //!< type:  0-int, 1-char[], 2-double
-  double Default;     //!< default value
-  int param_limits;   //!< 0: no limits, 1: both min and max, 2: only min (i.e. no negatives), 3: special case for QPs since min needs bitdepth_qp_scale
-  double min_limit;
-  double max_limit;
-  int    char_size;   //!< Dimension of type char[]
-} Mapping;
 
 InputParameters cfgparams;
 
@@ -44,7 +33,8 @@ Mapping Map[] = {
     {"ProfileIDC",               &cfgparams.ProfileIDC,                   0,   (double) PROFILE_IDC,      0,  0.0,              0.0,                             },
     {"IntraProfile",             &cfgparams.IntraProfile,                 0,   0.0,                       1,  0.0,              1.0,                             }, 
     {"LevelIDC",                 &cfgparams.LevelIDC,                     0,   (double) LEVEL_IDC,        0,  0.0,              0.0,                             },
-    {"FrameRate",                &cfgparams.source.frame_rate,            2,   (double) INIT_FRAME_RATE,  1,  0.0,            100.0,                             },
+    {"FrameRate",                &cfgparams.source.frame_rate,            2,   (double) INIT_FRAME_RATE,  1,  0.0,            480.0,                             },
+    {"Enable32Pulldown",         &cfgparams.enable_32_pulldown,           0,   0.0,                       1,  0.0,              2.0,                             },
     {"ResendSPS",                &cfgparams.ResendSPS,                    0,   0.0,                       1,  0.0,              3.0,                             },
     {"StartFrame",               &cfgparams.start_frame,                  0,   0.0,                       2,  0.0,              0.0,                             },
     {"IntraPeriod",              &cfgparams.intra_period,                 0,   0.0,                       2,  0.0,              0.0,                             },
@@ -74,16 +64,24 @@ Mapping Map[] = {
     {"PList0References",         &cfgparams.P_List0_refs,                 0,   0.0,                       1,  0.0,             16.0,                             },
     {"BList0References",         &cfgparams.B_List0_refs,                 0,   0.0,                       1,  0.0,             16.0,                             },
     {"BList1References",         &cfgparams.B_List1_refs,                 0,   1.0,                       1,  0.0,             16.0,                             },
+#if (MVC_EXTENSION_ENABLE)
+    {"NumberOfViews",            &cfgparams.num_of_views,                 0,   1.0,                       1,  1.0,              2.0,                             },
+    {"MVCInterViewReorder",      &cfgparams.MVCInterViewReorder,          0,   0.0,                       1,  0.0,              2.0,                             },
+    {"MVCFlipViews",             &cfgparams.MVCFlipViews,                 0,   0.0,                       1,  0.0,              1.0,                             },
+    {"View1QPOffset",            &cfgparams.View1QPOffset,                0,   0.0,                       0,  (double) -MAX_QP, (double) MAX_QP,                 },
+    {"MVCInterViewForceB",       &cfgparams.MVCInterViewForceB,           0,   0.0,                       1,  0.0,              1.0,                             },
+    {"MVCEnableInterViewFlag",   &cfgparams.enable_inter_view_flag,       0,   1.0,                       1,  0.0,              1.0,                             },    
+#endif
     {"Log2MaxFNumMinus4",        &cfgparams.Log2MaxFNumMinus4,            0,   0.0,                       1, -1.0,             12.0,                             },
     {"Log2MaxPOCLsbMinus4",      &cfgparams.Log2MaxPOCLsbMinus4,          0,   2.0,                       1, -1.0,             12.0,                             },
     {"GenerateMultiplePPS",      &cfgparams.GenerateMultiplePPS,          0,   0.0,                       1,  0.0,              1.0,                             },
     {"ResendPPS",                &cfgparams.ResendPPS,                    0,   0.0,                       1,  0.0,              1.0,                             },
-    {"SendAUD",                  &cfgparams.SendAUD,                      0,   0.0,                       1,  0.0,              1.0,                             },
-    {"SourceWidth",              &cfgparams.source.width,                 0,   176.0,                     2,  0.0,              0.0,                             },
-    {"SourceHeight",             &cfgparams.source.height,                0,   144.0,                     2,  0.0,              0.0,                             },
+    {"SendAUD",                  &cfgparams.SendAUD,                      0,   0.0,                       1,  0.0,              2.0,                             },
+    {"SourceWidth",              &cfgparams.source.width[0],              0,   176.0,                     2,  0.0,              0.0,                             },
+    {"SourceHeight",             &cfgparams.source.height[0],             0,   144.0,                     2,  0.0,              0.0,                             },
     {"SourceResize",             &cfgparams.src_resize,                   0,   0.0,                       1,  0.0,              1.0,                             },
-    {"OutputWidth",              &cfgparams.output.width,                 0,   176.0,                     2, 16.0,              0.0,                             },
-    {"OutputHeight",             &cfgparams.output.height,                0,   144.0,                     2, 16.0,              0.0,                             },
+    {"OutputWidth",              &cfgparams.output.width[0],              0,   176.0,                     2, 16.0,              0.0,                             },
+    {"OutputHeight",             &cfgparams.output.height[0],             0,   144.0,                     2, 16.0,              0.0,                             },
     {"Grayscale",                &cfgparams.grayscale,                    0,   0.0,                       0,  0.0,              1.0,                             },
     {"MbLineIntraUpdate",        &cfgparams.intra_upd,                    0,   0.0,                       1,  0.0,              1.0,                             },
     {"SliceMode",                &cfgparams.slice_mode,                   0,   0.0,                       1,  0.0,              3.0,                             },
@@ -94,6 +92,8 @@ Mapping Map[] = {
     {"InputHeaderLength",        &cfgparams.infile_header,                0,   0.0,                       2,  0.0,              1.0,                             },
     {"OutputFile",               &cfgparams.outfile,                      1,   0.0,                       0,  0.0,              0.0,             FILE_NAME_SIZE, },
     {"ReconFile",                &cfgparams.ReconFile,                    1,   0.0,                       0,  0.0,              0.0,             FILE_NAME_SIZE, },
+    {"ReconFile1",               &cfgparams.ReconFile,                    1,   0.0,                       0,  0.0,              0.0,             FILE_NAME_SIZE, },
+    {"ReconFile2",               &cfgparams.ReconFile2,                   1,   0.0,                       0,  0.0,              0.0,             FILE_NAME_SIZE, },
     {"TraceFile",                &cfgparams.TraceFile,                    1,   0.0,                       0,  0.0,              0.0,             FILE_NAME_SIZE, },
     {"StatsFile",                &cfgparams.StatsFile,                    1,   0.0,                       0,  0.0,              0.0,             FILE_NAME_SIZE, },
     {"DisposableP",              &cfgparams.DisposableP,                  0,   0.0,                       1,  0.0,              1.0,                             },
@@ -128,7 +128,6 @@ Mapping Map[] = {
     {"PSliceSearch8x4",          &cfgparams.InterSearch[0][5],            0,   1.0,                       1,  0.0,              1.0,                             },
     {"PSliceSearch4x8",          &cfgparams.InterSearch[0][6],            0,   1.0,                       1,  0.0,              1.0,                             },
     {"PSliceSearch4x4",          &cfgparams.InterSearch[0][7],            0,   1.0,                       1,  0.0,              1.0,                             },
-    
     // B slice partition modes.
     {"BSliceDirect",             &cfgparams.InterSearch[1][0],            0,   1.0,                       1,  0.0,              1.0,                             },
     {"BSliceSearch16x16",        &cfgparams.InterSearch[1][1],            0,   1.0,                       1,  0.0,              1.0,                             },
@@ -161,6 +160,8 @@ Mapping Map[] = {
     {"EnableIPCM",               &cfgparams.EnableIPCM,                   0,   0.0,                       1,  0.0,              2.0,                             },
     {"ChromaIntraDisable",       &cfgparams.ChromaIntraDisable,           0,   0.0,                       1,  0.0,              1.0,                             },
     {"RDOptimization",           &cfgparams.rdopt,                        0,   0.0,                       1,  0.0,              3.0,                             },
+
+    {"DistortionEstimation",     &cfgparams.de,                           0,   1.0,                       2,  0.0,              8.0,                             },
     {"SubMBCodingState",         &cfgparams.subMBCodingState,             0,   2.0,                       1,  0.0,              2.0,                             },
     {"I16RDOpt",                 &cfgparams.I16rdo,                       0,   0.0,                       1,  0.0,              1.0,                             },
     {"DistortionSSIM",           &cfgparams.Distortion[SSIM],             0,   0.0,                       1,  0.0,              1.0,                             },
@@ -171,10 +172,12 @@ Mapping Map[] = {
     {"FastCrIntraDecision",      &cfgparams.FastCrIntraDecision,          0,   0.0,                       1,  0.0,              1.0,                             },
     {"DisableThresholding",      &cfgparams.disthres,                     0,   0.0,                       1,  0.0,              1.0,                             },
     {"DisableBSkipRDO",          &cfgparams.nobskip,                      0,   0.0,                       1,  0.0,              1.0,                             },
+    {"BiasSkipRDO",              &cfgparams.BiasSkipRDO,                  0,   0.0,                       1,  0.0,              1.0,                             },
     {"ForceTrueRateRDO",         &cfgparams.ForceTrueRateRDO,             0,   0.0,                       1,  0.0,              2.0,                             },    
-    {"LossRateA",                &cfgparams.LossRateA,                    0,   0.0,                       2,  0.0,              0.0,                             },
-    {"LossRateB",                &cfgparams.LossRateB,                    0,   0.0,                       2,  0.0,              0.0,                             },
-    {"LossRateC",                &cfgparams.LossRateC,                    0,   0.0,                       2,  0.0,              0.0,                             },
+    {"LossRateA",                &cfgparams.LossRateA,                    2,   0.0,                       2,  0.0,              0.0,                             },
+    {"LossRateB",                &cfgparams.LossRateB,                    2,   0.0,                       2,  0.0,              0.0,                             },
+    {"LossRateC",                &cfgparams.LossRateC,                    2,   0.0,                       2,  0.0,              0.0,                             },
+    {"FirstFrameCorrect",        &cfgparams.FirstFrameCorrect,            0,   0.0,                       2,  0.0,              0.0,                             },
     {"NumberOfDecoders",         &cfgparams.NoOfDecoders,                 0,   0.0,                       2,  0.0,              0.0,                             },
     {"ErrorConcealment",         &cfgparams.ErrorConcealment,             0,   0.0,                       2,  0.0,              0.0,                             },
     {"RestrictRefFrames",        &cfgparams.RestrictRef ,                 0,   0.0,                       1,  0.0,              1.0,                             },
@@ -195,14 +198,17 @@ Mapping Map[] = {
     {"WPMethod",                 &cfgparams.WPMethod,                     0,   0.0,                       1,  0.0,              1.0,                             }, 
     {"WPIterMC",                 &cfgparams.WPIterMC,                     0,   0.0,                       1,  0.0,              1.0,                             },     
     {"ChromaWeightSupport",      &cfgparams.ChromaWeightSupport,          0,   0.0,                       1,  0.0,              1.0,                             },    
-    {"EnhancedBWeightSupport",   &cfgparams.EnhancedBWeightSupport,       0,   0.0,                       1,  0.0,              1.0,                             },    
+    {"EnhancedBWeightSupport",   &cfgparams.EnhancedBWeightSupport,       0,   0.0,                       1,  0.0,              2.0,                             },    
     {"UseWeightedReferenceME",   &cfgparams.UseWeightedReferenceME,       0,   0.0,                       1,  0.0,              1.0,                             },
     {"RDPictureDecision",        &cfgparams.RDPictureDecision,            0,   0.0,                       1,  0.0,              1.0,                             },
-    {"RDPictureIntra",           &cfgparams.RDPictureIntra,               0,   0.0,                       1,  0.0,              1.0,                             },
-    {"RDPSliceWeightOnly",       &cfgparams.RDPSliceWeightOnly,           0,   1.0,                       1,  0.0,              2.0,                             },
     {"RDPSliceBTest",            &cfgparams.RDPSliceBTest,                0,   0.0,                       1,  0.0,              1.0,                             },
-    {"RDBSliceWeightOnly",       &cfgparams.RDBSliceWeightOnly,           0,   0.0,                       1,  0.0,              2.0,                             },
-
+    {"RDPictureMaxPassISlice",   &cfgparams.RDPictureMaxPassISlice,       0,   1.0,                       1,  1.0,              3.0,                             },
+    {"RDPictureMaxPassPSlice",   &cfgparams.RDPictureMaxPassPSlice,       0,   2.0,                       1,  1.0,              6.0,                             },
+    {"RDPictureMaxPassBSlice",   &cfgparams.RDPictureMaxPassBSlice,       0,   3.0,                       1,  1.0,              6.0,                             },
+    {"RDPictureDeblocking",      &cfgparams.RDPictureDeblocking,          0,   0.0,                       1,  0.0,              1.0,                             },
+    {"RDPictureDirectMode",      &cfgparams.RDPictureDirectMode,          0,   0.0,                       1,  0.0,              1.0,                             },
+    {"RDPictureFrameQPPSlice",   &cfgparams.RDPictureFrameQPPSlice,       0,   0.0,                       1,  0.0,              1.0,                             },
+    {"RDPictureFrameQPBSlice",   &cfgparams.RDPictureFrameQPBSlice,       0,   0.0,                       1,  0.0,              1.0,                             },
     {"SkipIntraInInterSlices",   &cfgparams.SkipIntraInInterSlices,       0,   0.0,                       1,  0.0,              1.0,                             },
     {"BReferencePictures",       &cfgparams.BRefPictures,                 0,   0.0,                       1,  0.0,              2.0,                             },
     {"HierarchicalCoding",       &cfgparams.HierarchicalCoding,           0,   0.0,                       1,  0.0,              3.0,                             },
@@ -212,7 +218,9 @@ Mapping Map[] = {
     {"ExplicitSeqFile",          &cfgparams.ExplicitSeqFile,              1,   0.0,                       0,  0.0,              0.0,             FILE_NAME_SIZE, },
     {"LowDelay",                 &cfgparams.LowDelay,                     0,   0.0,                       1,  0.0,              1.0,                             },
     {"ReferenceReorder",         &cfgparams.ReferenceReorder,             0,   0.0,                       1,  0.0,              2.0,                             },
-    {"MemoryManagement",         &cfgparams.MemoryManagement,          0,   0.0,                       1,  0.0,              2.0,                             },
+    {"PocMemoryManagement",      &cfgparams.PocMemoryManagement,          0,   0.0,                       1,  0.0,              2.0,                             },
+
+
     {"DFParametersFlag",         &cfgparams.DFSendParameters,             0,   0.0,                       1,  0.0,              1.0,                             },
     {"DFDisableRefISlice",       &cfgparams.DFDisableIdc[1][I_SLICE],     0,   0.0,                       1,  0.0,              2.0,                             },
     {"DFDisableNRefISlice",      &cfgparams.DFDisableIdc[0][I_SLICE],     0,   0.0,                       1,  0.0,              2.0,                             },
@@ -336,6 +344,8 @@ Mapping Map[] = {
     {"YUVFormat",                &cfgparams.yuv_format,                   0,   1.0,                       1,  0.0,              3.0,                             },
     {"RGBInput",                 &cfgparams.source.color_model,               0,   0.0,                       1,  0.0,              1.0,                             },
     {"Interleaved",              &cfgparams.input_file1.is_interleaved ,  0,   0.0,                       1,  0.0,              1.0,                             },    
+    {"StandardRange",            &cfgparams.stdRange,                     0,   0.0,                       1,  0.0,              1.0,                             },
+    {"VideoCode",                &cfgparams.videoCode,                    0,   1.0,                       1,  0.0,              8.0,                             },
     {"CbQPOffset",               &cfgparams.cb_qp_index_offset,           0,   0.0,                       1,-51.0,             51.0,                             },
     {"CrQPOffset",               &cfgparams.cr_qp_index_offset,           0,   0.0,                       1,-51.0,             51.0,                             },
     {"Transform8x8Mode",         &cfgparams.Transform8x8Mode,             0,   0.0,                       1,  0.0,              2.0,                             },
@@ -428,6 +438,7 @@ Mapping Map[] = {
     {"WPMCPrecision",            &cfgparams.WPMCPrecision,                0,   0.0,                       1,  0.0,              2.0,                             },
     {"WPMCPrecFullRef",          &cfgparams.WPMCPrecFullRef,              0,   0.0,                       1,  0.0,              1.0,                             },
     {"WPMCPrecBSlice",           &cfgparams.WPMCPrecBSlice,               0,   1.0,                       1,  0.0,              2.0,                             },
+    {"MinIDRDistance",           &cfgparams.MinIDRDistance,               0,  10.0,                       1,  0.0,            128.0,                             },
     // Trellis based quantization
     {"UseRDOQuant",              &cfgparams.UseRDOQuant,                  0,   0.0,                       1,  0.0,              1.0,                             },
     {"RDOQ_DC",                  &cfgparams.RDOQ_DC,                      0,   1.0,                       1,  0.0,              1.0,                             },
@@ -504,7 +515,7 @@ extern Mapping Map[];
 #endif
 
 extern void Configure            (VideoParameters *p_Vid, InputParameters *p_Inp, int ac, char *av[]);
-extern void getNumberOfFrames    (InputParameters *p_Inp, VideoDataFile *input_file);
+extern void get_number_of_frames (InputParameters *p_Inp, VideoDataFile *input_file);
 extern void read_slice_group_info(VideoParameters *p_Vid, InputParameters *p_Inp);
 
 #endif

@@ -32,6 +32,7 @@
 #include "elements.h"
 #include "macroblock.h"
 #include "memalloc.h"
+#include "mode_decision_p8x8.h"
 #include "symbol.h"
 #include "context_ini.h"
 #include "enc_statistics.h"
@@ -53,11 +54,18 @@
 #include "quantChroma.h"
 #include "rdopt.h"
 #include "rdopt_coding_state.h"
+#include "lambda.h"
+#include "intra4x4.h"
+#include "intra8x8.h"
+#include "intra16x16.h"
+#include "mc_prediction.h"
+#include "rd_intra_jm.h"
+#include "rd_intra_jm444.h"
+
 
 // Local declarations
 static Slice *malloc_slice(VideoParameters *p_Vid, InputParameters *p_Inp);
-static void  free_slice   (Slice *currSlice);
-static void  set_ref_pic_num(Slice *currSlice);
+
 
 //! convert from H.263 QP to H.264 quant given by: quant=pow(2,QP/6)
 
@@ -106,12 +114,12 @@ static void CAVLC_init(Slice *currSlice)
  * \return memory size in bytes
  ************************************************************************
  */
-static int get_mem_mv (Slice *currSlice, short ******* mv)
+static int get_mem_mv (Slice *currSlice, MotionVector ****** mv)
 {
   // LIST, reference, block_type, block_y, block_x, component
-  get_mem6Dshort(mv, 2, currSlice->max_num_references, 9, 4, 4, 2);
+  get_mem5Dmv (mv, 2, currSlice->max_num_references, 9, 4, 4);
 
-  return 576 * currSlice->max_num_references * sizeof(short); // 2 * ref * 9 * 4 * 4 * 2
+  return 288 * currSlice->max_num_references * sizeof(MotionVector); // 2 * ref * 9 * 4 * 4
 }
 
 /*!
@@ -124,11 +132,11 @@ static int get_mem_mv (Slice *currSlice, short ******* mv)
  * \return memory size in bytes
  ************************************************************************
  */
-static int get_mem_bipred_mv (Slice *currSlice, short******** bipred_mv) 
+static int get_mem_bipred_mv (Slice *currSlice, MotionVector ******* bipred_mv) 
 {
-  get_mem7Dshort(bipred_mv, 2, 2, currSlice->max_num_references, 9, 4, 4, 2);
+  get_mem6Dmv (bipred_mv, 2, 2, currSlice->max_num_references, 9, 4, 4);
   
-  return 1152 * currSlice->max_num_references * sizeof(short);
+  return 576 * currSlice->max_num_references * sizeof(MotionVector);
 }
 
 /*!
@@ -139,9 +147,9 @@ static int get_mem_bipred_mv (Slice *currSlice, short******** bipred_mv)
  *    int****** mv
  ************************************************************************
  */
-static void free_mem_mv (short****** mv)
+static void free_mem_mv (MotionVector ***** mv)
 {
-  free_mem6Dshort(mv);
+  free_mem5Dmv(mv);
 }
 
 
@@ -153,9 +161,9 @@ static void free_mem_mv (short****** mv)
  *    int****** mv
  ************************************************************************
  */
-static void free_mem_bipred_mv (short******* bipred_mv) 
+static void free_mem_bipred_mv (MotionVector ****** bipred_mv) 
 {
-  free_mem7Dshort(bipred_mv);
+  free_mem6Dmv(bipred_mv);
 }
 
 
@@ -271,11 +279,15 @@ static int start_slice(Slice *currSlice, StatParameters *cur_stats)
 *
 ************************************************************************
 */
-void create_slice_nalus(Slice *currSlice)
+void create_slice_nalus(Slice *currSlice, int is_bottom)
 {
   // KS: this is approx. max. allowed code picture size
   //const int buffer_size = 500 + p_Vid->FrameSizeInMbs * (128 + 256 * p_Vid->bitdepth_luma + 512 * p_Vid->bitdepth_chroma);
   int buffer_size = currSlice->partArr[0].bitstream->buffer_size;
+#if (MVC_EXTENSION_ENABLE)
+  VideoParameters *p_Vid = currSlice->p_Vid;
+  InputParameters *p_Inp = currSlice->p_Inp;
+#endif
   
   int part;
   NALU_t *nalu;
@@ -289,6 +301,19 @@ void create_slice_nalus(Slice *currSlice)
       nalu->startcodeprefix_len = 1+ (currSlice->start_mb_nr == 0 && part == 0 ?ZEROBYTES_SHORTSTARTCODE+1:ZEROBYTES_SHORTSTARTCODE);
       nalu->forbidden_bit = 0;
 
+#if (MVC_EXTENSION_ENABLE)
+      if(p_Inp->num_of_views==2)
+      {
+        nalu->non_idr_flag        = p_Vid->non_idr_flag[is_bottom];
+        nalu->priority_id         = p_Vid->priority_id;
+        nalu->view_id             = p_Vid->view_id;
+        nalu->temporal_id         = p_Vid->temporal_id;
+        nalu->anchor_pic_flag     = p_Vid->anchor_pic_flag[is_bottom];
+        nalu->inter_view_flag     = p_Vid->inter_view_flag[is_bottom];
+        nalu->reserved_one_bit    = 1;
+      }
+#endif
+
       if (currSlice->idr_flag)
       {
         nalu->nal_unit_type = NALU_TYPE_IDR;
@@ -296,10 +321,23 @@ void create_slice_nalus(Slice *currSlice)
       }
       else
       {
+#if (MVC_EXTENSION_ENABLE)
+        nalu->non_idr_flag = 1;
+#endif
+
         //different nal header for different partitions
         if(currSlice->partition_mode == 0)
         {
+#if (MVC_EXTENSION_ENABLE)
+          if(p_Inp->num_of_views==2)
+          {
+              nalu->nal_unit_type = p_Vid->view_id==0 ? NALU_TYPE_SLICE : NALU_TYPE_SLC_EXT;
+          }
+          else
+            nalu->nal_unit_type = NALU_TYPE_SLICE;
+#else
           nalu->nal_unit_type = NALU_TYPE_SLICE;
+#endif
         }
         else
         {
@@ -336,9 +374,8 @@ void create_slice_nalus(Slice *currSlice)
  */
 static int terminate_slice(Macroblock *currMB, int lastslice, StatParameters *cur_stats )
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currMB->p_Vid;
-  InputParameters *p_Inp = currMB->p_Inp;
 
   Bitstream *currStream;
   NALU_t    *currNalu;
@@ -349,15 +386,7 @@ static int terminate_slice(Macroblock *currMB, int lastslice, StatParameters *cu
   if (currSlice->symbol_mode == CABAC)
     write_terminating_bit (currSlice, 1);      // only once, not for all partitions
 
-  create_slice_nalus(currSlice);
-
-  if (currSlice->slice_type != I_SLICE && currSlice->slice_type != SI_SLICE)
-  {
-    if (p_Inp->SearchMode == EPZS)
-    {
-      EPZSStructDelete (currSlice);    
-    }
-  }
+  create_slice_nalus(currSlice, 0);
 
   for (part = 0; part < currSlice->max_part_nr; part++)
   {
@@ -400,10 +429,20 @@ static int terminate_slice(Macroblock *currMB, int lastslice, StatParameters *cu
 
   cur_stats->bit_use_stuffingBits[currSlice->slice_type] += currMB->bits.mb_stuffing - tmp_stuffingbits;
 
-  if (currSlice->slice_type != I_SLICE && currSlice->slice_type != SI_SLICE)
-    free_ref_pic_list_reordering_buffer (currSlice);
-
   return 0;
+}
+
+static void init_bipred_enabled(VideoParameters *p_Vid)
+{
+  InputParameters *p_Inp = p_Vid->p_Inp;
+  int mode;
+
+  memset(p_Vid->bipred_enabled, 0, sizeof(int)*MAXMODE);
+  if (p_Vid->currentSlice->slice_type != B_SLICE || !p_Inp->BiPredMotionEstimation)
+    return;
+
+  for(mode = 1; mode < 5; mode++)
+    p_Vid->bipred_enabled[mode] = (p_Inp->BiPredSearch[mode - 1]) ? 1: 0;
 }
 
 /*!
@@ -418,17 +457,15 @@ int encode_one_slice (VideoParameters *p_Vid, int SliceGroupId, int TotalCodedMB
 {
   InputParameters *p_Inp = p_Vid->p_Inp;
   Boolean end_of_slice = FALSE;
-  Boolean recode_macroblock;
+  
   int len;
   int NumberOfCodedMBs = 0;
   Macroblock* currMB   = NULL;
   int CurrentMbAddr;
   StatParameters *cur_stats = &p_Vid->enc_picture->stats;
-  Slice *currSlice = NULL;
+  Slice *currSlice = NULL;  
 
-  p_Vid->Motion_Selected = 0;
-
-  if( IS_INDEPENDENT(p_Inp) )
+  if( (p_Inp->separate_colour_plane_flag != 0) )
   {
     change_plane_JV( p_Vid, p_Vid->colour_plane_id );
   }
@@ -438,16 +475,19 @@ int encode_one_slice (VideoParameters *p_Vid, int SliceGroupId, int TotalCodedMB
   CurrentMbAddr = FmoGetFirstMacroblockInSlice (p_Vid, SliceGroupId);
   // printf ("\n\nEncode_one_slice: PictureID %d SliceGroupId %d  SliceID %d  FirstMB %d \n", p_Vid->frame_no, SliceGroupId, p_Vid->current_slice_nr, CurrentMbInScanOrder);
 
-  p_Vid->enc_picture->temporal_layer = p_Vid->p_curr_frm_struct->temporal_layer;
+  p_Vid->enc_picture->temporal_layer = p_Vid->p_curr_frm_struct->temporal_layer; 
 
   init_slice (p_Vid, &currSlice, CurrentMbAddr);
+  currSlice->rdoq_motion_copy = 0;
+  init_bipred_enabled(p_Vid);
+
   // Initialize quantization functions based on rounding/quantization method
   // Done here since we may wish to disable adaptive rounding on occasional intervals (even at a frame or gop level).
   init_quant_4x4   (currSlice);
   init_quant_8x8   (currSlice);
   init_quant_Chroma(currSlice);
 
-  currSlice->SetLagrangianMultipliers(p_Vid, p_Inp);
+  currSlice->set_lagrangian_multipliers(currSlice);
 
   if (currSlice->symbol_mode == CABAC)
   {
@@ -471,6 +511,7 @@ int encode_one_slice (VideoParameters *p_Vid, int SliceGroupId, int TotalCodedMB
 
   while (end_of_slice == FALSE) // loop over macroblocks
   {
+    Boolean recode_macroblock = FALSE;
     if (p_Vid->AdaptiveRounding && p_Inp->AdaptRndPeriod && (p_Vid->current_mb_nr % p_Inp->AdaptRndPeriod == 0))
     {
       CalculateOffset4x4Param(p_Vid);
@@ -478,7 +519,6 @@ int encode_one_slice (VideoParameters *p_Vid, int SliceGroupId, int TotalCodedMB
         CalculateOffset8x8Param(p_Vid);
     }
 
-    recode_macroblock = FALSE;
     if(currSlice->UseRDOQuant) // This needs revisit
       currSlice->rddata = &currSlice->rddata_trellis_curr;
     else
@@ -536,7 +576,7 @@ int encode_one_slice (VideoParameters *p_Vid, int SliceGroupId, int TotalCodedMB
 
   if ((p_Inp->WPIterMC) && (p_Vid->frameOffsetAvail == 0) && p_Vid->nal_reference_idc)
   {
-    compute_offset(p_Vid);
+    compute_offset(currSlice);
   }
   p_Vid->num_ref_idx_l0_active = currSlice->num_ref_idx_active[LIST_0];
   p_Vid->num_ref_idx_l1_active = currSlice->num_ref_idx_active[LIST_1];
@@ -565,11 +605,9 @@ int encode_one_slice_MBAFF (VideoParameters *p_Vid, int SliceGroupId, int TotalC
   int CurrentMbAddr;
   double FrameRDCost = DBL_MAX, FieldRDCost = DBL_MAX;
   StatParameters *cur_stats = &p_Vid->enc_picture->stats;
-  Slice *currSlice = NULL;
+  Slice *currSlice = NULL;  
 
-  p_Vid->Motion_Selected = 0;
-
-  if( IS_INDEPENDENT(p_Inp) )
+  if( (p_Inp->separate_colour_plane_flag != 0) )
   {
     change_plane_JV( p_Vid, p_Vid->colour_plane_id );
   }
@@ -580,13 +618,16 @@ int encode_one_slice_MBAFF (VideoParameters *p_Vid, int SliceGroupId, int TotalC
   // printf ("\n\nEncode_one_slice: PictureID %d SliceGroupId %d  SliceID %d  FirstMB %d \n", p_Vid->frame_no, SliceGroupId, p_Vid->current_slice_nr, CurrentMbInScanOrder);
 
   init_slice (p_Vid, &currSlice, CurrentMbAddr);
+  currSlice->rdoq_motion_copy = 0;
+  init_bipred_enabled(p_Vid);
+
   // Initialize quantization functions based on rounding/quantization method
   // Done here since we may wish to disable adaptive rounding on occasional intervals (even at a frame or gop level).
   init_quant_4x4   (currSlice);
   init_quant_8x8   (currSlice);
   init_quant_Chroma(currSlice);
 
-  currSlice->SetLagrangianMultipliers(p_Vid, p_Inp);
+  currSlice->set_lagrangian_multipliers(currSlice);
 
   if (currSlice->symbol_mode == CABAC)
   {
@@ -1049,6 +1090,39 @@ static void setup_cavlc(Slice *currSlice, char *listXsize)
   else
     currSlice->writeCoeff4x4_CAVLC = writeCoeff4x4_CAVLC_normal;
 }
+    
+
+static void setup_slice(Slice *currSlice)
+{  
+  if (currSlice->slice_type == P_SLICE || currSlice->slice_type == SP_SLICE)
+  {
+    VideoParameters *p_Vid = currSlice->p_Vid;
+    InputParameters *p_Inp = currSlice->p_Inp;
+    currSlice->weighted_prediction = p_Vid->active_pps->weighted_pred_flag;
+
+    currSlice->set_modes_and_refs_for_blocks = set_modes_and_refs_for_blocks_p_slice;
+    currSlice->set_coeff_and_recon_8x8       = set_coeff_and_recon_8x8_p_slice;
+    currSlice->init_lists = init_lists_p_slice;
+    currSlice->submacroblock_mode_decision = submacroblock_mode_decision_p_slice;
+  }
+  else if (currSlice->slice_type == B_SLICE)
+  {
+    VideoParameters *p_Vid = currSlice->p_Vid;
+    //InputParameters *p_Inp = currSlice->p_Inp;
+    currSlice->weighted_prediction = p_Vid->active_pps->weighted_bipred_idc;
+    currSlice->set_modes_and_refs_for_blocks = set_modes_and_refs_for_blocks_b_slice;
+    currSlice->set_coeff_and_recon_8x8 = set_coeff_and_recon_8x8_b_slice;
+    currSlice->init_lists = init_lists_b_slice;
+    currSlice->submacroblock_mode_decision = submacroblock_mode_decision_b_slice;
+  }
+  else
+  {
+    currSlice->set_modes_and_refs_for_blocks = set_modes_and_refs_for_blocks_i_slice;
+    currSlice->set_coeff_and_recon_8x8 = NULL;
+    currSlice->init_lists = init_lists_i_slice;
+    currSlice->submacroblock_mode_decision = NULL;
+  }
+}
 
 /*!
  ************************************************************************
@@ -1070,6 +1144,24 @@ void init_slice (VideoParameters *p_Vid, Slice **currSlice, int start_mb_addr)
   DataPartition *dataPart;
   Bitstream *currStream;
   int active_ref_lists = (p_Vid->mb_aff_frame_flag) ? 6 : 2;
+  DecodedPictureBuffer *p_Dpb = p_Vid->p_Dpb;
+
+#if (MVC_EXTENSION_ENABLE)
+  if(p_Inp->num_of_views == 2)
+  {
+    int enable_inter_view = (p_Vid->nal_reference_idc || p_Inp->enable_inter_view_flag) ? 1 : 0;
+    p_Vid->non_idr_flag[p_Vid->structure!=BOTTOM_FIELD ? 0:1] = ((p_Vid->currentPicture->idr_flag==1) ? 0:1);
+    p_Vid->priority_id                                      = ((p_Vid->view_id==0) ? 0:1);
+    p_Vid->temporal_id                                      = 0;
+    p_Vid->inter_view_flag[0]                               = ((p_Vid->view_id == 0) ? enable_inter_view : 0);
+    p_Vid->inter_view_flag[1]                               = ((p_Vid->view_id == 0) ? enable_inter_view : 0);
+
+    if(p_Vid->structure!=BOTTOM_FIELD)
+      p_Vid->anchor_pic_flag[0] = (((p_Vid->currentPicture->idr_flag && p_Vid->nal_reference_idc!=0) || p_Vid->prev_view_is_anchor) ? 1:0);
+    else	// bottom will follow top for now
+      p_Vid->anchor_pic_flag[1] = p_Vid->anchor_pic_flag[0];
+  }
+#endif
 
   p_Vid->current_mb_nr = start_mb_addr;
 
@@ -1087,11 +1179,9 @@ void init_slice (VideoParameters *p_Vid, Slice **currSlice, int start_mb_addr)
   // Using this trick we can basically reference back to the image and input parameter structures
   (*currSlice)->p_Vid             = p_Vid;
   (*currSlice)->p_Inp             = p_Inp;
+  (*currSlice)->p_Dpb             = p_Dpb;
   (*currSlice)->active_sps        = active_sps;
   (*currSlice)->active_pps        = p_Vid->active_pps;
-
-  //printf("Value %d\n", ((VideoParameters *)(*currSlice)->p_Vid)->frame_no);
-
   (*currSlice)->picture_id        = (p_Vid->frame_no & 0xFF); // % 255
   (*currSlice)->slice_nr          = p_Vid->current_slice_nr;
   (*currSlice)->idr_flag          = p_Vid->currentPicture->idr_flag;
@@ -1105,7 +1195,7 @@ void init_slice (VideoParameters *p_Vid, Slice **currSlice, int start_mb_addr)
   (*currSlice)->start_mb_nr       = start_mb_addr;
   (*currSlice)->colour_plane_id   = p_Vid->colour_plane_id;
 
-  (*currSlice)->si_frame_indicator =  p_Vid->type == SI_SLICE ? 1 : 0;
+  (*currSlice)->si_frame_indicator =  p_Vid->type == SI_SLICE ? TRUE : FALSE;
   (*currSlice)->sp2_frame_indicator = p_Vid->sp2_frame_indicator;
 
   (*currSlice)->P444_joined       = p_Vid->P444_joined;
@@ -1123,25 +1213,12 @@ void init_slice (VideoParameters *p_Vid, Slice **currSlice, int start_mb_addr)
   (*currSlice)->nal_reference_idc = p_Vid->nal_reference_idc;
   (*currSlice)->bitdepth_luma     = p_Vid->bitdepth_luma;
   (*currSlice)->bitdepth_chroma   = p_Vid->bitdepth_chroma;  
-
-  for (i = 0; i < (*currSlice)->max_part_nr; i++)
-  {
-    dataPart = &(*currSlice)->partArr[i];
-
-    currStream = dataPart->bitstream;
-    currStream->bits_to_go = 8;
-    currStream->byte_pos = 0;
-    currStream->byte_buf = 0;
-  }
-
   (*currSlice)->direct_spatial_mv_pred_flag  = p_Vid->direct_spatial_mv_pred_flag;
   (*currSlice)->mb_aff_frame_flag = p_Vid->mb_aff_frame_flag;
   (*currSlice)->structure      = p_Vid->structure;
-
   (*currSlice)->num_ref_idx_active[LIST_0] = p_Vid->active_pps->num_ref_idx_l0_active_minus1 + 1;
   (*currSlice)->num_ref_idx_active[LIST_1] = p_Vid->active_pps->num_ref_idx_l1_active_minus1 + 1;
-
-  (*currSlice)->DFDisableIdc    = p_Vid->DFDisableIdc;
+  (*currSlice)->DFDisableIdc  = (p_Vid->TurnDBOff) ? 1 : p_Vid->DFDisableIdc;
   (*currSlice)->DFAlphaC0Offset = p_Vid->DFAlphaC0Offset;
   (*currSlice)->DFBetaOffset    = p_Vid->DFBetaOffset;
 
@@ -1157,6 +1234,16 @@ void init_slice (VideoParameters *p_Vid, Slice **currSlice, int start_mb_addr)
       // 1 reference picture for redundant slices
       (*currSlice)->num_ref_idx_active[LIST_0] = 1;
     }
+  }
+
+  for (i = 0; i < (*currSlice)->max_part_nr; i++)
+  {
+    dataPart = &(*currSlice)->partArr[i];
+
+    currStream = dataPart->bitstream;
+    currStream->bits_to_go = 8;
+    currStream->byte_pos = 0;
+    currStream->byte_buf = 0;
   }
 
   // code now also considers fields. Issue whether we should account this within the appropriate input p_Inp directly
@@ -1179,32 +1266,73 @@ void init_slice (VideoParameters *p_Vid, Slice **currSlice, int start_mb_addr)
     get_mem2D((byte ***) (void*)&(*currSlice)->direct_pdir,    (*currSlice)->height_blk, (*currSlice)->width_blk);
   }
 
+  if ((*currSlice)->P444_joined)
+  {
+    (*currSlice)->luma_residual_coding = luma_residual_coding_p444;
+    (*currSlice)->luma_residual_coding_8x8 = luma_residual_coding_p444_8x8;
+  }
+  else
+  {
+    if ((*currSlice)->slice_type == SP_SLICE)
+      (*currSlice)->luma_residual_coding = luma_residual_coding_sp;
+    else
+      (*currSlice)->luma_residual_coding = luma_residual_coding;
+    (*currSlice)->luma_residual_coding_8x8 = luma_residual_coding_8x8;
+  }
+  if ((*currSlice)->slice_type == SP_SLICE)
+    (*currSlice)->chroma_residual_coding = chroma_residual_coding_sp;
+  else if ((*currSlice)->slice_type == SI_SLICE)
+    (*currSlice)->chroma_residual_coding = chroma_residual_coding_si;
+  else
+    (*currSlice)->chroma_residual_coding = chroma_residual_coding;
+
+  setup_slice(*currSlice);
+
   // generate reference picture lists
-  init_lists(*currSlice);
+#if (MVC_EXTENSION_ENABLE)
+  //if (p_Vid->p_Inp->num_of_views == 2)
+  {
+    update_ref_list(p_Dpb);
+    update_ltref_list(p_Dpb);
+    check_num_ref(p_Dpb);
+  }
+#endif
+  update_pic_num(*currSlice);
+  (*currSlice)->init_lists(*currSlice);
 
   // assign list 0 size from list size
-  (*currSlice)->num_ref_idx_active[LIST_0] = p_Vid->listXsize[0];
-  (*currSlice)->num_ref_idx_active[LIST_1] = p_Vid->listXsize[1];
+  (*currSlice)->num_ref_idx_active[LIST_0] = (*currSlice)->listXsize[LIST_0];
+  (*currSlice)->num_ref_idx_active[LIST_1] = (*currSlice)->listXsize[LIST_1];
+
+#if !(MVC_EXTENSION_ENABLE)
+  if(p_Inp->BListSingleDirRefFlag && (*currSlice)->slice_type == B_SLICE)
+  {
+     ChangeLists(*currSlice); 
+  }
+#endif
+
 
   if ( p_Inp->WPMCPrecision && p_Inp->WPMCPrecFullRef )
     wpxAdaptRefNum(*currSlice);
+
+  (*currSlice)->num_ref_idx_active[LIST_0] = (*currSlice)->listXsize[0];
+  (*currSlice)->num_ref_idx_active[LIST_1] = (*currSlice)->listXsize[1];
 
   //Perform memory management based on poc distances  
   if (p_Inp->SetFirstAsLongTerm && p_Vid->number == 0)
   {
     mmco_long_term(p_Vid, p_Vid->number);
   }
-  else if (p_Vid->nal_reference_idc && p_Inp->MemoryManagement == 1)
+  else if (p_Vid->nal_reference_idc && p_Inp->PocMemoryManagement == 1)
   {
-    if (p_Vid->structure == FRAME && p_Vid->p_Dpb->ref_frames_in_buffer == active_sps->num_ref_frames)
-      poc_based_ref_management_frame_pic(p_Vid, p_Vid->frame_num);
-    else if (p_Vid->structure == TOP_FIELD && p_Vid->p_Dpb->ref_frames_in_buffer== active_sps->num_ref_frames)
-      poc_based_ref_management_field_pic(p_Vid, (p_Vid->frame_num << 1) + 1);      
+    if (p_Vid->structure == FRAME && p_Dpb->ref_frames_in_buffer == active_sps->num_ref_frames)
+      poc_based_ref_management_frame_pic(p_Dpb, p_Vid->frame_num);
+    else if (p_Vid->structure == TOP_FIELD && p_Dpb->ref_frames_in_buffer== active_sps->num_ref_frames)
+      poc_based_ref_management_field_pic(p_Dpb, (p_Vid->frame_num << 1) + 1);      
     else if (p_Vid->structure == BOTTOM_FIELD)
-      poc_based_ref_management_field_pic(p_Vid, (p_Vid->frame_num << 1) + 1);
+      poc_based_ref_management_field_pic(p_Dpb, (p_Vid->frame_num << 1) + 1);
   }
-
-  else if (p_Vid->nal_reference_idc && p_Inp->MemoryManagement == 2) 
+  else if (p_Vid->nal_reference_idc && p_Inp->PocMemoryManagement == 2) 
   {
     if (p_Vid->structure == FRAME)
       tlyr_based_ref_management_frame_pic(p_Vid, p_Vid->frame_num);
@@ -1212,31 +1340,50 @@ void init_slice (VideoParameters *p_Vid, Slice **currSlice, int start_mb_addr)
 
   if (p_Inp->EnableOpenGOP)
   {
-    for (i = 0; i<p_Vid->listXsize[0]; i++)
+    if ((*currSlice)->slice_type != I_SLICE && (*currSlice)->slice_type != SI_SLICE)
     {
-      if (p_Vid->listX[0][i]->poc < p_Vid->last_valid_reference && p_Vid->ThisPOC > p_Vid->last_valid_reference)
+      for (i = 0; i<(*currSlice)->listXsize[0]; i++)
       {
-        p_Vid->listXsize[0] = (*currSlice)->num_ref_idx_active[LIST_0] = (char) imax(1, i);
-        break;
+        if ((*currSlice)->listX[0][i]->poc < p_Vid->last_valid_reference && p_Vid->ThisPOC > p_Vid->last_valid_reference)
+        {
+          (*currSlice)->listXsize[0] = (*currSlice)->num_ref_idx_active[LIST_0] = (char) imax(1, i);
+          break;
+        }
       }
-    }
 
-    for (i = 0; i<p_Vid->listXsize[1]; i++)
-    {
-      if (p_Vid->listX[1][i]->poc < p_Vid->last_valid_reference && p_Vid->ThisPOC > p_Vid->last_valid_reference)
+      for (i = 0; i<(*currSlice)->listXsize[1]; i++)
       {
-        p_Vid->listXsize[1] = (*currSlice)->num_ref_idx_active[LIST_1] = (char) imax(1,i);
-        break;
+        if ((*currSlice)->listX[1][i]->poc < p_Vid->last_valid_reference && p_Vid->ThisPOC > p_Vid->last_valid_reference)
+        {
+          (*currSlice)->listXsize[1] = (*currSlice)->num_ref_idx_active[LIST_1] = (char) imax(1,i);
+          break;
+        }
       }
     }
   }
 
-#if 1 // danny@vidyo.com 
   init_ref_pic_list_reordering(*currSlice, p_Inp->ReferenceReorder);
-#else
-  init_ref_pic_list_reordering(*currSlice);
-#endif
 
+#if (MVC_EXTENSION_ENABLE)
+  p_Vid->MVCInterViewReorder = 0;
+  if(p_Inp->num_of_views==2 && p_Inp->MVCInterViewReorder==1 && p_Vid->view_id==1)
+  {
+    // enable MVC reordering
+    p_Vid->MVCInterViewReorder = 1;
+
+    alloc_ref_pic_list_reordering_buffer(*currSlice);
+    if((*currSlice)->listXsize[0]!=0)
+    {
+      StorablePicture *Inter_ViewL0 = (*currSlice)->listX[0][(*currSlice)->listXsize[0]-1];
+      for(i=(*currSlice)->listXsize[0]-1; i>0; i--)
+        (*currSlice)->listX[0][i] = (*currSlice)->listX[0][i-1];
+      (*currSlice)->listX[0][0] = Inter_ViewL0;
+      (*currSlice)->listXsize[0] = (char) imin ((*currSlice)->listXsize[0], (*currSlice)->num_ref_idx_active[LIST_0]);
+    }
+    // perform reordering of interview pictures
+  }
+  else
+#endif
     // reference list reordering 
     // RPLR for redundant pictures
     // !KS: that should actually be moved somewhere else
@@ -1247,12 +1394,63 @@ void init_slice (VideoParameters *p_Vid, Slice **currSlice, int start_mb_addr)
       (*currSlice)->reordering_of_pic_nums_idc[LIST_0][1] = 3;
       (*currSlice)->abs_diff_pic_num_minus1[LIST_0][0] = p_Vid->redundant_ref_idx - 1;
       (*currSlice)->long_term_pic_idx[LIST_0][0] = 0;
-      reorder_ref_pic_list ( *currSlice, p_Vid->listX, p_Vid->listXsize, LIST_0);
+      
+      reorder_ref_pic_list ( *currSlice, LIST_0);
     }
     else if ( (p_Vid->type == P_SLICE || p_Vid->type == B_SLICE) && p_Inp->WPMCPrecision && p_Vid->pWPX->curr_wp_rd_pass->algorithm != WP_REGULAR )
       wp_mcprec_reorder_lists( *currSlice );
     else
       reorder_lists( *currSlice );
+
+    if ( p_Vid->type == P_SLICE )
+    {
+#if PRINTREFLIST
+#if (MVC_EXTENSION_ENABLE)
+      // print out for debug purpose
+      if(p_Inp->num_of_views==2 && p_Vid->current_slice_nr==0)
+      {
+        if((*currSlice)->listXsize[0]>0)
+        {
+          printf("\n");
+          printf(" ** (CurViewID:%d) %s Ref Pic List 0 ****\n", p_Vid->view_id, (*currSlice)->structure==FRAME ? "FRM":((*currSlice)->structure==TOP_FIELD ? "TOP":"BOT"));
+          for(i=0; i<(int)((*currSlice)->listXsize[0]); i++)	//ref list 0
+          {
+            printf("   %2d -> POC: %4d PicNum: %4d ViewID: %d\n", i, currSlice->listX[0][i]->poc, currSlice->listX[0][i]->pic_num, currSlice->listX[0][i]->view_id);
+          }
+        }
+      }
+#endif
+#endif
+    }
+    else if ( p_Vid->type == B_SLICE )
+    {
+#if PRINTREFLIST
+#if (MVC_EXTENSION_ENABLE)
+      // print out for debug purpose
+      if(p_Inp->num_of_views==2 && p_Vid->current_slice_nr==0)
+      {
+        if(((*currSlice)->listXsize[0]>0) || ((*currSlice)->listXsize[1]>0))
+          printf("\n");
+        if((*currSlice)->listXsize[0]>0)
+        {
+          printf(" ** (CurViewID:%d) %s Ref Pic List 0 ****\n", p_Vid->view_id, (*currSlice)->structure==FRAME ? "FRM":((*currSlice)->structure==TOP_FIELD ? "TOP":"BOT"));
+          for(i=0; i<(int)((*currSlice)->listXsize[0]); i++)	//ref list 0
+          {
+            printf("   %2d -> POC: %4d PicNum: %4d ViewID: %d\n", i, currSlice->listX[0][i]->poc, currSlice->listX[0][i]->pic_num, currSlice->listX[0][i]->view_id);
+          }
+        }
+        if((*currSlice)->listXsize[1]>0)
+        {
+          printf(" ** (CurViewID:%d) %s Ref Pic List 1 ****\n", p_Vid->view_id, (*currSlice)->structure==FRAME ? "FRM":((*currSlice)->structure==TOP_FIELD ? "TOP":"BOT"));
+          for(i=0; i<(int)((*currSlice)->listXsize[1]); i++)	//ref list 1
+          {
+            printf("   %2d -> POC: %4d PicNum: %4d ViewID: %d\n", i, currSlice->listX[1][i]->poc, currSlice->listX[1][i]->pic_num, currSlice->listX[1][i]->view_id);
+          }
+        }
+      }
+#endif
+#endif
+    }
 
   (*currSlice)->max_num_references = (short) p_Vid->max_num_references;
 
@@ -1280,13 +1478,6 @@ void init_slice (VideoParameters *p_Vid, Slice **currSlice, int start_mb_addr)
   if (p_Vid->mb_aff_frame_flag)
     init_mbaff_lists(*currSlice);
 
-  InitWP(p_Vid, p_Inp);
-
-  if ((*currSlice)->slice_type == B_SLICE)
-    (*currSlice)->weighted_prediction = p_Vid->active_pps->weighted_bipred_idc;
-  else if (((*currSlice)->slice_type != I_SLICE) && (*currSlice)->slice_type != SI_SLICE)
-    (*currSlice)->weighted_prediction = p_Vid->active_pps->weighted_pred_flag;
-
   if ((p_Vid->type != I_SLICE && p_Vid->type != SI_SLICE) && (p_Vid->active_pps->weighted_pred_flag == 1 || (p_Vid->active_pps->weighted_bipred_idc > 0 && (p_Vid->type == B_SLICE))))
   {
     if (p_Vid->type == P_SLICE || p_Vid->type == SP_SLICE)
@@ -1298,22 +1489,10 @@ void init_slice (VideoParameters *p_Vid, Slice **currSlice, int start_mb_addr)
       p_Vid->EstimateWPBSlice (*currSlice);
   }
 
-  set_ref_pic_num(*currSlice);
-
-
   if (p_Vid->type == B_SLICE)
   {
-    if( IS_INDEPENDENT(p_Inp) )
-    {
-       (*currSlice)->p_colocated = alloc_colocated (p_Vid->width, p_Vid->height, active_sps->mb_adaptive_frame_field_flag);           
-      compute_colocated_JV(*currSlice, (*currSlice)->p_colocated, p_Vid->listX);
-    }
-    else
-    {
-      // Allocation should be based on slice size, not image
-      (*currSlice)->p_colocated = alloc_colocated (p_Vid->width, p_Vid->height, active_sps->mb_adaptive_frame_field_flag);
-      compute_colocated(*currSlice, (*currSlice)->p_colocated, p_Vid->listX);
-    }
+     // Allocation should be based on slice size, not image
+      compute_colocated(*currSlice, (*currSlice)->listX);
   }
 
   if (p_Vid->type != I_SLICE && p_Vid->type != SI_SLICE)
@@ -1331,23 +1510,23 @@ void init_slice (VideoParameters *p_Vid, Slice **currSlice, int start_mb_addr)
 
   if ((*currSlice)->symbol_mode == CAVLC)
   {
-    setup_cavlc(*currSlice, p_Vid->listXsize);
+    setup_cavlc(*currSlice, (*currSlice)->listXsize);
   }
   else
   {
-    setup_cabac(*currSlice, p_Vid->listXsize);
+    setup_cabac(*currSlice, (*currSlice)->listXsize);
   }
 
   // assign luma common reference picture pointers to be used for ME/sub-pel interpolation
 
   for(i = 0; i < active_ref_lists; i++)
   {
-    for(j = 0; j < p_Vid->listXsize[i]; j++)
+    for(j = 0; j < (*currSlice)->listXsize[i]; j++)
     {
-      if( p_Vid->listX[i][j] )
+      if( (*currSlice)->listX[i][j] )
       {
-        p_Vid->listX[i][j]->p_curr_img     = p_Vid->listX[i][j]->p_img    [(short) p_Vid->colour_plane_id];
-        p_Vid->listX[i][j]->p_curr_img_sub = p_Vid->listX[i][j]->p_img_sub[(short) p_Vid->colour_plane_id];
+        (*currSlice)->listX[i][j]->p_curr_img     = (*currSlice)->listX[i][j]->p_img    [(short) p_Vid->colour_plane_id];
+        (*currSlice)->listX[i][j]->p_curr_img_sub = (*currSlice)->listX[i][j]->p_img_sub[(short) p_Vid->colour_plane_id];
       }
     }
   }
@@ -1379,20 +1558,24 @@ void init_slice (VideoParameters *p_Vid, Slice **currSlice, int start_mb_addr)
 
   if ((*currSlice)->slice_type == B_SLICE)
   {
-    (*currSlice)->SetMotionVectorsMB = SetMotionVectorsMBBSlice;
+    (*currSlice)->set_motion_vectors_mb = SetMotionVectorsMBBSlice;
   }
   else if ((*currSlice)->slice_type == P_SLICE || (*currSlice)->slice_type == SP_SLICE)
   {
-    (*currSlice)->SetMotionVectorsMB = SetMotionVectorsMBPSlice;
+    (*currSlice)->set_motion_vectors_mb = SetMotionVectorsMBPSlice;
   }
   else
   {
-    (*currSlice)->SetMotionVectorsMB = SetMotionVectorsMBISlice;
+    (*currSlice)->set_motion_vectors_mb = SetMotionVectorsMBISlice;
   }
-
 
   if (p_Vid->mb_aff_frame_flag)
   {
+    (*currSlice)->set_intrapred_4x4 = set_intrapred_4x4_mbaff;
+    (*currSlice)->set_intrapred_8x8 = set_intrapred_8x8_mbaff;
+    (*currSlice)->set_intrapred_16x16 = set_intrapred_16x16_mbaff;
+    (*currSlice)->rdo_low_intra_chroma_decision = rdo_low_intra_chroma_decision_mbaff;
+    (*currSlice)->intra_chroma_prediction = intra_chroma_prediction_mbaff;
     if (p_Vid->direct_spatial_mv_pred_flag)  //spatial direct 
       (*currSlice)->Get_Direct_Motion_Vectors = Get_Direct_MV_Spatial_MBAFF;
     else
@@ -1400,11 +1583,23 @@ void init_slice (VideoParameters *p_Vid, Slice **currSlice, int start_mb_addr)
   }
   else
   {
+    (*currSlice)->set_intrapred_4x4 = set_intrapred_4x4;
+    (*currSlice)->set_intrapred_8x8 = set_intrapred_8x8;
+    (*currSlice)->set_intrapred_16x16 = set_intrapred_16x16;
+    (*currSlice)->rdo_low_intra_chroma_decision = rdo_low_intra_chroma_decision;
+    (*currSlice)->intra_chroma_prediction = intra_chroma_prediction;
     if (p_Vid->direct_spatial_mv_pred_flag)  //spatial direct 
       (*currSlice)->Get_Direct_Motion_Vectors = Get_Direct_MV_Spatial_Normal;
     else
       (*currSlice)->Get_Direct_Motion_Vectors = Get_Direct_MV_Temporal;
   }
+
+  if (active_sps->chroma_format_idc == YUV444)
+    (*currSlice)->mode_decision_for_I16x16_MB = mode_decision_for_I16x16_MB_444;
+  else if(p_Inp->I16rdo)
+    (*currSlice)->mode_decision_for_I16x16_MB = mode_decision_for_I16x16_MB_RDO;
+  else
+    (*currSlice)->mode_decision_for_I16x16_MB = mode_decision_for_I16x16_MB;
 
   get_mem3Dpel(&((*currSlice)->mb_pred),   MAX_PLANE, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
   get_mem3Dint(&((*currSlice)->mb_rres),   MAX_PLANE, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
@@ -1415,7 +1610,6 @@ void init_slice (VideoParameters *p_Vid, Slice **currSlice, int start_mb_addr)
 
   get_mem_ACcoeff (p_Vid, &((*currSlice)->cofAC));
   get_mem_DCcoeff (&((*currSlice)->cofDC));
-
 
   allocate_block_mem(*currSlice);
   init_coding_state_methods(*currSlice);
@@ -1436,7 +1630,7 @@ static Slice *malloc_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
   int i;
   DataPartition *dataPart;
   Slice *currSlice;
-  int cr_size = IS_INDEPENDENT( p_Inp ) ? 0 : 512;
+  int cr_size = (p_Inp->separate_colour_plane_flag != 0) ? 0 : 512;
 
   int buffer_size;
 
@@ -1447,10 +1641,10 @@ static Slice *malloc_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
     buffer_size = imax(2 * p_Inp->slice_argument, 764);
     break;
   case 1:
-    buffer_size = 500 + p_Inp->slice_argument * (128 + 256 * p_Vid->bitdepth_luma + cr_size * p_Vid->bitdepth_chroma);
+    buffer_size = 500 + p_Inp->slice_argument * ((128 + 256 * p_Vid->bitdepth_luma + cr_size * p_Vid->bitdepth_chroma) >> 3);
     break;
   default:
-    buffer_size = 500 + p_Vid->FrameSizeInMbs * (128 + 256 * p_Vid->bitdepth_luma + cr_size * p_Vid->bitdepth_chroma);
+    buffer_size = 500 + p_Vid->FrameSizeInMbs * ((128 + 256 * p_Vid->bitdepth_luma + cr_size * p_Vid->bitdepth_chroma) >> 3);
     break;
   }
 
@@ -1553,31 +1747,6 @@ static void free_nal_unit(Picture *pic)
   }
 }
 
-/*!
- ************************************************************************
- * \brief
- *    Memory frees of all Slice structures and of its dependent
- *    data structures
- * \par Input:
- *    Picture *currPic
- ************************************************************************
- */
-void free_slice_list(Picture *currPic)
-{
-  int i;
-
-  if (currPic !=  NULL)
-  {
-    free_nal_unit(currPic);
-
-    for (i = 0; i < currPic->no_slices; i++)
-    {
-      free_slice (currPic->slices[i]);
-      currPic->slices[i] = NULL;
-    }
-  }
-}
-
 
 /*!
  ************************************************************************
@@ -1588,7 +1757,7 @@ void free_slice_list(Picture *currPic)
  *    Slice to be freed
  ************************************************************************
  */
-static void free_slice(Slice *currSlice)
+void free_slice(Slice *currSlice)
 {
   if (currSlice != NULL)
   {
@@ -1597,6 +1766,15 @@ static void free_slice(Slice *currSlice)
 
     int i;
     DataPartition *dataPart;
+
+    for (i=0; i<6; i++)
+    {
+      if (currSlice->listX[i])
+      {
+        free (currSlice->listX[i]);
+        currSlice->listX[i] = NULL;
+      }
+    }
 
     for (i=0; i<currSlice->max_part_nr; i++) // loop over all data partitions
     {
@@ -1617,6 +1795,9 @@ static void free_slice(Slice *currSlice)
       }
     }
 
+    if (currSlice->slice_type != I_SLICE && currSlice->slice_type != SI_SLICE)
+      free_ref_pic_list_reordering_buffer (currSlice);
+
     // free structure for rd-opt. mode decision
     clear_rdopt (currSlice);
     free (currSlice->p_RDO);
@@ -1630,11 +1811,6 @@ static void free_slice(Slice *currSlice)
     free_mem4Dpel(currSlice->mpr_16x16);
     free_mem4Dpel(currSlice->mpr_8x8  );
     free_mem4Dpel(currSlice->mpr_4x4  );
-
-    if (currSlice->slice_type == B_SLICE)
-    {
-      free_colocated(currSlice->p_colocated);
-    }
 
 
     if (currSlice->partArr != NULL)
@@ -1704,85 +1880,100 @@ static void free_slice(Slice *currSlice)
     }
 
     free_block_mem(currSlice);
+
+    if (currSlice->slice_type != I_SLICE && currSlice->slice_type != SI_SLICE)
+    {
+      if (p_Inp->SearchMode == EPZS)
+      {
+        EPZSStructDelete (currSlice);    
+      }
+    }
+
     free(currSlice);
   }
 }
 
-static void set_ref_pic_num(Slice *currSlice)
+/*!
+ ************************************************************************
+ * \brief
+ *    Memory frees of all Slice structures and of its dependent
+ *    data structures
+ * \par Input:
+ *    Picture *currPic
+ ************************************************************************
+ */
+void free_slice_list(Picture *currPic)
 {
-  int i,j;
-  StorablePicture *this_ref;
-  VideoParameters *p_Vid = currSlice->p_Vid;
+  int i;
 
-  //! need to add field ref_pic_num that handles field pair.
-
-  for (i=0;i<p_Vid->listXsize[LIST_0];i++)
+  if (currPic !=  NULL)
   {
-    this_ref = p_Vid->listX[LIST_0][i];
-    p_Vid->enc_picture->ref_pic_num        [LIST_0][i] = this_ref->poc * 2 + ((this_ref->structure==BOTTOM_FIELD)?1:0) ;
-    p_Vid->enc_picture->frm_ref_pic_num    [LIST_0][i] = this_ref->frame_poc * 2;
-    p_Vid->enc_picture->top_ref_pic_num    [LIST_0][i] = this_ref->top_poc * 2;
-    p_Vid->enc_picture->bottom_ref_pic_num [LIST_0][i] = this_ref->bottom_poc * 2 + 1;
-  }
+    free_nal_unit(currPic);
 
-  for (i=0;i<p_Vid->listXsize[LIST_1];i++)
-  {
-    this_ref = p_Vid->listX[LIST_1][i];
-    p_Vid->enc_picture->ref_pic_num        [LIST_1][i] = this_ref->poc * 2 + ((this_ref->structure==BOTTOM_FIELD)?1:0);
-    p_Vid->enc_picture->frm_ref_pic_num    [LIST_1][i] = this_ref->frame_poc * 2;
-    p_Vid->enc_picture->top_ref_pic_num    [LIST_1][i] = this_ref->top_poc * 2;
-    p_Vid->enc_picture->bottom_ref_pic_num [LIST_1][i] = this_ref->bottom_poc * 2 + 1;
-  }
-
-  if (!currSlice->active_sps->frame_mbs_only_flag && currSlice->structure==FRAME)
-  {
-    for (j=2;j<6;j++)
+    for (i = 0; i < currPic->no_slices; i++)
     {
-      for (i=0;i<p_Vid->listXsize[j];i++)
-      {
-        this_ref = p_Vid->listX[j][i];
-        p_Vid->enc_picture->ref_pic_num[j][i] = this_ref->poc * 2 + ((this_ref->structure==BOTTOM_FIELD)?1:0);
-        p_Vid->enc_picture->frm_ref_pic_num[j][i] = this_ref->frame_poc * 2 ;
-        p_Vid->enc_picture->top_ref_pic_num[j][i] = this_ref->top_poc * 2 ;
-        p_Vid->enc_picture->bottom_ref_pic_num[j][i] = this_ref->bottom_poc * 2 + 1;
-      }
+      free_slice (currPic->slices[i]);
+      currPic->slices[i] = NULL;
     }
   }
 }
 
-void UpdateMELambda(VideoParameters *p_Vid, InputParameters *p_Inp)
-{
-  int j, k, qp;
+void UpdateMELambda(Slice *currSlice)
+{  
+  InputParameters *p_Inp = currSlice->p_Inp;
+
   if (p_Inp->UpdateLambdaChromaME)
   {
-    for (j = 0; j < 6; j++)
+    VideoParameters *p_Vid = currSlice->p_Vid;
+    int j, k, qp;
+    if (currSlice->slice_type == B_SLICE)
+      j = currSlice->nal_reference_idc ? 5 : B_SLICE;
+    else
+      j = currSlice->slice_type;
+
+    switch(p_Vid->yuv_format)
     {
+    case YUV420:
       for (qp = -p_Vid->bitdepth_luma_qp_scale; qp < 52; qp++)
       { 
         for (k = 0; k < 3; k++)
         {
           if ((p_Inp->MEErrorMetric[k] == ERROR_SAD) && (p_Inp->ChromaMEEnable))
           {
-            switch(p_Vid->yuv_format)
-            {
-            case YUV420:
-              p_Vid->lambda_mf[j][qp][k] = (3 * p_Vid->lambda_mf[j][qp][k] + 1) >> 1;
-              p_Vid->lambda_me[j][qp][k] *= 1.5;
-              break;
-            case YUV422:
-              p_Vid->lambda_mf[j][qp][k] *= 2;
-              p_Vid->lambda_me[j][qp][k] *= 2.0;
-              break;
-            case YUV444:
-              p_Vid->lambda_mf[j][qp][k] *= 3;
-              p_Vid->lambda_me[j][qp][k] *= 3.0;
-              break;
-            default:
-              break;
-            }
+            p_Vid->lambda_mf[j][qp][k] = (3 * p_Vid->lambda_mf[j][qp][k] + 1) >> 1;
+            p_Vid->lambda_me[j][qp][k] *= 1.5;
           }
         }
       }
+      break;
+    case YUV422:
+      for (qp = -p_Vid->bitdepth_luma_qp_scale; qp < 52; qp++)
+      { 
+        for (k = 0; k < 3; k++)
+        {
+          if ((p_Inp->MEErrorMetric[k] == ERROR_SAD) && (p_Inp->ChromaMEEnable))
+          {
+            p_Vid->lambda_mf[j][qp][k] *= 2;
+            p_Vid->lambda_me[j][qp][k] *= 2.0;
+          }
+        }
+      }
+      break;
+    case YUV444:
+      for (qp = -p_Vid->bitdepth_luma_qp_scale; qp < 52; qp++)
+      { 
+        for (k = 0; k < 3; k++)
+        {
+          if ((p_Inp->MEErrorMetric[k] == ERROR_SAD) && (p_Inp->ChromaMEEnable))
+          {
+            p_Vid->lambda_mf[j][qp][k] *= 3;
+            p_Vid->lambda_me[j][qp][k] *= 3.0;
+          }
+        }
+      }
+      break;
+    default:
+      break;
     }
   }
 }
@@ -1804,11 +1995,11 @@ void CalcMaxLamdaMD(VideoParameters *p_Vid, double *p_lambda_md)
 {
   double max_lambda_md;
   int iBits;
-  
+
   if(p_Vid->p_Inp->ProfileIDC >= FREXT_HP)
-      iBits=128;  //Spec. Page 306
+    iBits=128;  //Spec. Page 306
   else
-      iBits=80;
+    iBits=80;
 
   if(p_Vid->yuv_format == YUV420)
     iBits += 3072; //(256+128)*8;
@@ -1837,124 +2028,45 @@ void ClipLambda(double *p_lambda_max, double *p_lambda)
     *p_lambda = *p_lambda_max;
   }
 }
-void SetLagrangianMultipliersOn(VideoParameters *p_Vid, InputParameters *p_Inp)
+
+void SetLagrangianMultipliersOn(Slice *currSlice)
 {
-  int qp, j;
-  double qp_temp;
-  double lambda_scale = 1.0 - dClip3(0.0,0.5,0.05 * (double) p_Inp->jumpd);
-  FrameUnitStruct *p_cur_frm = p_Vid->p_curr_frm_struct;
-  //limit lambda for mode decison;
-  int bLimitsLambdaMD = ((p_Inp->EnableIPCM >0) && (IMGTYPE==0));
-  double dMaxLambdaMD = 0.0;
+  InputParameters *p_Inp = currSlice->p_Inp;
 
-  if(bLimitsLambdaMD)
-    CalcMaxLamdaMD(p_Vid, &dMaxLambdaMD);
   if (p_Inp->UseExplicitLambdaParams == 1) // consideration of explicit lambda weights.
-  {
-    for (j = 0; j < 6; j++)
-    {
-      for (qp = -p_Vid->bitdepth_luma_qp_scale; qp < 52; qp++)
-      {
-        qp_temp = (double)qp + p_Vid->bitdepth_luma_qp_scale - SHIFT_QP;
-
-        p_Vid->lambda_md[j][qp] = p_Inp->LambdaWeight[j] * pow (2, qp_temp/3.0);
-        //clip lambda; 
-        if(bLimitsLambdaMD)
-          ClipLambda(&dMaxLambdaMD, &p_Vid->lambda_md[j][qp]);
-
-        SetLambda(p_Vid, j, qp, ((p_Inp->MEErrorMetric[H_PEL] == ERROR_SATD && p_Inp->MEErrorMetric[Q_PEL] == ERROR_SATD) ? 1.00 : 0.95));
-
-        if (j != B_SLICE)
-          p_Vid->lambda_md[j][qp] *= lambda_scale;
-
-      }
-    }
-  }
+    get_explicit_lambda(currSlice);
   else if (p_Inp->UseExplicitLambdaParams == 2) // consideration of fixed lambda values.
-  {
-    for (j = 0; j < 6; j++)
-    {
-      for (qp = -p_Vid->bitdepth_luma_qp_scale; qp < 52; qp++)
-      {
-        qp_temp = (double)qp + p_Vid->bitdepth_luma_qp_scale - SHIFT_QP;
-
-        p_Vid->lambda_md[j][qp] = p_Inp->FixedLambda[j];
-        //clip lambda; 
-        if(bLimitsLambdaMD)
-          ClipLambda(&dMaxLambdaMD, &p_Vid->lambda_md[j][qp]);
-
-        SetLambda(p_Vid, j, qp, ((p_Inp->MEErrorMetric[H_PEL] == ERROR_SATD && p_Inp->MEErrorMetric[Q_PEL] == ERROR_SATD) ? 1.00 : 0.95));
-      }
-    }
-  }
+    get_fixed_lambda(currSlice);
   else
-  {
-    for (j = 0; j < 5; j++)
+  {    
+    switch(currSlice->slice_type)
     {
-      for (qp = -p_Vid->bitdepth_luma_qp_scale; qp < 52; qp++)
-      {
-        qp_temp = (double)qp + p_Vid->bitdepth_luma_qp_scale - SHIFT_QP;
-
-        if(p_Inp->UseRDOQuant && p_Vid->type == I_SLICE && p_Vid->qp==qp)
-          p_Vid->lambda_md[j][qp] = 0.57 * pow (2.0, qp_temp/3.0); 
-        else  if (p_Inp->NumberBFrames > 0)
-        {
-          /*
-          if(j != B_SLICE)
-               p_Vid->lambda_md[j][qp] = 0.85 * pow (2.0, qp_temp/3.0) * ((j == SP_SLICE || j == SI_SLICE) ? dClip3(1.4, 3.0,(qp_temp / 12.0)) : 1.0);
-          else
-          */
-          p_Vid->lambda_md[j][qp] = 0.68 * pow (2.0, qp_temp/3.0)
-            * (j == B_SLICE && p_cur_frm->layer != 0 ? dClip3(2.00, 4.00, (qp_temp / 6.0)) : (j == SP_SLICE || j == SI_SLICE) ? dClip3(1.4,3.0,(qp_temp / 12.0)) : 1.0);
-        }
-        else
-          p_Vid->lambda_md[j][qp] = 0.85 * pow (2.0, qp_temp/3.0) * ((j == SP_SLICE || j == SI_SLICE) ? dClip3(1.4, 3.0,(qp_temp / 12.0)) : 1.0);
-        
-        // Scale lambda due to hadamard qpel only consideration
-        p_Vid->lambda_md[j][qp] = ((p_Inp->MEErrorMetric[H_PEL] == ERROR_SATD && p_Inp->MEErrorMetric[Q_PEL] == ERROR_SATD) ? 1.00 : 0.95) * p_Vid->lambda_md[j][qp];
-
-        if (j == B_SLICE)
-        {
-          p_Vid->lambda_md[5][qp] = p_Vid->lambda_md[j][qp];
-
-          if (p_cur_frm->layer != 0)
-          {
-            if (p_Inp->HierarchicalCoding == 2)
-              p_Vid->lambda_md[5][qp] *= (1.0 - dmin(0.4, 0.2 * (double) (p_cur_frm->p_atom->gop_levels - p_cur_frm->layer)));
-            else
-              p_Vid->lambda_md[5][qp] *= 0.80;
-          }
-          //clip lambda; 
-          if(bLimitsLambdaMD)
-            ClipLambda(&dMaxLambdaMD, &p_Vid->lambda_md[5][qp]);
-
-          SetLambda(p_Vid, 5, qp, lambda_scale);
-        }
-        else
-          p_Vid->lambda_md[j][qp] *= lambda_scale;
-
-        //clip lambda; 
-        if(bLimitsLambdaMD)
-          ClipLambda(&dMaxLambdaMD, &p_Vid->lambda_md[j][qp]);
-
-        SetLambda(p_Vid, j, qp, 1.0);
-
-        if (p_Inp->CtxAdptLagrangeMult == 1)
-        {
-          int lambda_qp = (qp >= 32 && !p_Inp->RCEnable) ? imax(0, qp - 4) : imax(0, qp - 6);
-          p_Vid->lambda_mf_factor[j][qp] = log (p_Vid->lambda_me[j][lambda_qp][Q_PEL] + 1.0) / log (2.0);
-        }
-      }
+    case I_SLICE:
+      get_implicit_lambda_i_slice(currSlice);     
+      break;
+    default:
+    case P_SLICE:      
+      get_implicit_lambda_p_slice(currSlice);
+      break;
+    case B_SLICE:
+      get_implicit_lambda_b_slice(currSlice);
+      break;
+    case SI_SLICE:
+    case SP_SLICE:
+      get_implicit_lambda_sp_slice(currSlice);
+      break;
     }
   }
 
-  UpdateMELambda(p_Vid, p_Inp);
-
+  UpdateMELambda(currSlice);
 }
 
 
-void SetLagrangianMultipliersOff(VideoParameters *p_Vid, InputParameters *p_Inp)
+void SetLagrangianMultipliersOff(Slice *currSlice)
 {
+  VideoParameters *p_Vid = currSlice->p_Vid;
+  InputParameters *p_Inp = currSlice->p_Inp;
+
   int qp, j, k;
   double qp_temp;
 
@@ -1990,7 +2102,7 @@ void SetLagrangianMultipliersOff(VideoParameters *p_Vid, InputParameters *p_Inp)
       }
     }
   }
-  UpdateMELambda(p_Vid, p_Inp);
+  UpdateMELambda(currSlice);
 }
 
 

@@ -95,8 +95,8 @@ void YUVtoRGB(VideoParameters *p_Vid, ImageStructure *YUV, ImageStructure *RGB)
   int wbuv, wguv, wruv;
   imgpel *Y, *U, *V, *R, *G, *B;
   FrameFormat format = YUV->format;
-  int width = format.width;
-  int height = format.height;
+  int width = format.width[0];
+  int height = format.height[0];
   int max_value = format.max_value[0];
 
   // Color conversion
@@ -136,8 +136,8 @@ void YUVtoRGB(VideoParameters *p_Vid, ImageStructure *YUV, ImageStructure *RGB)
   RGB->format = format;  // copy format information from YUV to RGB
   RGB->format.yuv_format  = YUV444;
   RGB->format.color_model = CM_RGB;
-  RGB->format.height_cr   = format.height;
-  RGB->format.width_cr    = format.width;
+  RGB->format.height[1]   = format.height[0];
+  RGB->format.width[1]    = format.width[0];
   for (i = 1; i < 3; i++)
   {
     RGB->format.size_cmp[i]     = format.size_cmp[0];

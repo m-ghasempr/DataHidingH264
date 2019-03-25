@@ -20,12 +20,12 @@
 #include "memalloc.h"
 #include "sei.h"
 #include "input.h"
+#include "fast_memory.h"
 
 static void write_out_picture(VideoParameters *p_Vid, StorablePicture *p, int p_out);
-static void img2buf_byte   (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom);
-static void img2buf_normal (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom);
-static void img2buf_endian (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom);
-
+static void img2buf_byte   (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom, int iOutStride);
+static void img2buf_normal (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom, int iOutStride);
+static void img2buf_endian (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom, int iOutStride);
 
 
 /*!
@@ -75,7 +75,7 @@ static void initOutput(VideoParameters *p_Vid, int symbol_size_in_bytes)
  *    pixels to crop from bottom
  ************************************************************************
  */
-static void img2buf_normal (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom)
+static void img2buf_normal (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom, int iOutStride)
 {
   int i,j;
 
@@ -91,7 +91,8 @@ static void img2buf_normal (imgpel** imgX, unsigned char* buf, int size_x, int s
     // this should not happen. we should not have smaller imgpel than our source material.
     size = sizeof (imgpel);
     // clear buffer
-    memset (buf, 0, (twidth * theight * symbol_size_in_bytes));
+    for(j=0; j<theight; j++)
+      memset (buf+j*iOutStride, 0, (twidth * symbol_size_in_bytes));
   }
   else
   {
@@ -100,12 +101,12 @@ static void img2buf_normal (imgpel** imgX, unsigned char* buf, int size_x, int s
 
   if ((crop_top || crop_bottom || crop_left || crop_right) || (size != 1))
   {
-    for(i=crop_top;i<size_y-crop_bottom;i++)
+    for(i=crop_top; i<size_y-crop_bottom; i++)
     {
-      int ipos = (i - crop_top) * (twidth);
-      for(j=crop_left;j<size_x-crop_right;j++)
+      int ipos = (i - crop_top) * iOutStride;
+      for(j=crop_left; j<size_x-crop_right; j++)
       {
-        memcpy(buf+((j-crop_left+(ipos))*symbol_size_in_bytes),&(imgX[i][j]), size);
+        memcpy(buf+(ipos+(j-crop_left)*symbol_size_in_bytes),&(imgX[i][j]), size);
       }
     }
   }
@@ -113,14 +114,20 @@ static void img2buf_normal (imgpel** imgX, unsigned char* buf, int size_x, int s
   {
     if (sizeof(imgpel) == sizeof(char))
     {
-      memcpy(buf, &(imgX[0][0]), size_y * size_x * sizeof(imgpel));
+      //memcpy(buf, &(imgX[0][0]), size_y * size_x * sizeof(imgpel));
+      for(j=0; j<size_y; j++)
+        memcpy(buf+j*iOutStride, imgX[j], size_x*sizeof(imgpel));
     }
     else
     {
-      imgpel *cur_pixel = &(imgX[0][0]);
-      for(i = 0; i < size_y * size_x; i++)
-      {          
-        *(buf++)=(char) *(cur_pixel++);
+      imgpel *cur_pixel;
+      unsigned char *pDst; 
+      for(j = 0; j < size_y; j++)
+      {  
+        cur_pixel = imgX[j];
+        pDst = buf +j*iOutStride;
+        for(i=0; i < size_x; i++)
+          *(pDst++)=(unsigned char)*(cur_pixel++);
       }
     }
   }
@@ -150,18 +157,17 @@ static void img2buf_normal (imgpel** imgX, unsigned char* buf, int size_x, int s
  *    pixels to crop from bottom
  ************************************************************************
  */
-static void img2buf_byte (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom)
+static void img2buf_byte (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom, int iOutStride)
 {
-  int i;
-
   int twidth  = size_x - crop_left - crop_right;
   int theight = size_y - crop_top - crop_bottom;
+  imgpel **img = &imgX[crop_top];
+  int i;
 
-  // imgpel == pixel_in_file == 1 byte -> simple copy
   for(i = 0; i < theight; i++) 
   {
-    memcpy(buf, &(imgX[i + crop_top][crop_left]), twidth);
-    buf += twidth;
+    memcpy(buf, *img++ + crop_left, twidth);
+    buf += iOutStride;
   }
 }
 
@@ -189,14 +195,14 @@ static void img2buf_byte (imgpel** imgX, unsigned char* buf, int size_x, int siz
  *    pixels to crop from bottom
  ************************************************************************
  */
-static void img2buf_endian (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom)
+static void img2buf_endian (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom, int iOutStride)
 {
   int i,j;
   unsigned char  ui8;
   uint16 tmp16, ui16;
   unsigned long  tmp32, ui32;
 
-  int twidth  = size_x - crop_left - crop_right;
+  //int twidth  = size_x - crop_left - crop_right;
 
   // big endian
   switch (symbol_size_in_bytes)
@@ -207,7 +213,7 @@ static void img2buf_endian (imgpel** imgX, unsigned char* buf, int size_x, int s
         for(j=crop_left;j<size_x-crop_right;j++)
         {
           ui8 = (unsigned char) (imgX[i][j]);
-          buf[(j-crop_left+((i-crop_top)*(twidth)))] = ui8;
+          buf[(j-crop_left+((i-crop_top)*iOutStride))] = ui8;
         }
         break;
     }
@@ -218,7 +224,7 @@ static void img2buf_endian (imgpel** imgX, unsigned char* buf, int size_x, int s
         {
           tmp16 = (uint16) (imgX[i][j]);
           ui16  = (uint16) ((tmp16 >> 8) | ((tmp16&0xFF)<<8));
-          memcpy(buf+((j-crop_left+((i-crop_top)*(twidth)))*2),&(ui16), 2);
+          memcpy(buf+((j-crop_left+((i-crop_top)*iOutStride))*2),&(ui16), 2);
         }
         break;
     }
@@ -229,7 +235,7 @@ static void img2buf_endian (imgpel** imgX, unsigned char* buf, int size_x, int s
         {
           tmp32 = (unsigned long) (imgX[i][j]);
           ui32  = (unsigned long) (((tmp32&0xFF00)<<8) | ((tmp32&0xFF)<<24) | ((tmp32&0xFF0000)>>8) | ((tmp32&0xFF000000)>>24));
-          memcpy(buf+((j-crop_left+((i-crop_top)*(twidth)))*4),&(ui32), 4);
+          memcpy(buf+((j-crop_left+((i-crop_top)*iOutStride))*4),&(ui32), 4);
         }
         break;
     }
@@ -294,6 +300,7 @@ void write_picture(VideoParameters *p_Vid, StorablePicture *p, int p_out, int re
 
   if (real_structure==FRAME)
   {
+    
     flush_pending_output(p_Vid, p_out);
     write_out_picture(p_Vid, p, p_out);
     return;
@@ -416,6 +423,7 @@ void write_picture(VideoParameters *p_Vid, StorablePicture *p, int p_out, int re
 
 #endif
 
+
 /*!
 ************************************************************************
 * \brief
@@ -432,19 +440,30 @@ void write_picture(VideoParameters *p_Vid, StorablePicture *p, int p_out, int re
 static void write_out_picture(VideoParameters *p_Vid, StorablePicture *p, int p_out)
 {
   InputParameters *p_Inp = p_Vid->p_Inp;
+  DecodedPicList *pDecPic;
 
   static const int SubWidthC  [4]= { 1, 2, 2, 1};
   static const int SubHeightC [4]= { 1, 2, 1, 1};
 
+#if (MVC_EXTENSION_ENABLE)
+  char out_ViewFileName[FILE_NAME_SIZE], chBuf[FILE_NAME_SIZE], *pch;  
+  int iViewIdx = GetVOIdx(p_Vid, p->view_id);
+#endif
+
   int crop_left, crop_right, crop_top, crop_bottom;
-  int symbol_size_in_bytes = (p_Vid->pic_unit_bitsize_on_disk >> 3);
+  int symbol_size_in_bytes = ((p_Vid->pic_unit_bitsize_on_disk+7) >> 3);
   Boolean rgb_output = (Boolean) (p_Vid->active_sps->vui_seq_parameters.matrix_coefficients==0);
   unsigned char *buf;
+  //int iPicSizeTab[4] = {2, 3, 4, 6};
+  int iLumaSize, iFrameSize;
+  int iLumaSizeX, iLumaSizeY;
+  int iChromaSizeX, iChromaSizeY;
 
   int ret;
 
   if (p->non_existing)
     return;
+
 
 #if (ENABLE_OUTPUT_TONEMAPPING)
   // note: this tone-mapping is working for RGB format only. Sharp
@@ -469,29 +488,109 @@ static void write_out_picture(VideoParameters *p_Vid, StorablePicture *p, int p_
   {
     crop_left = crop_right = crop_top = crop_bottom = 0;
   }
+  iChromaSizeX =  p->size_x_cr- p->frame_cropping_rect_left_offset -p->frame_cropping_rect_right_offset;
+  iChromaSizeY = p->size_y_cr - ( 2 - p->frame_mbs_only_flag ) * p->frame_cropping_rect_top_offset -( 2 - p->frame_mbs_only_flag ) * p->frame_cropping_rect_bottom_offset;
+  iLumaSizeX = p->size_x-crop_left-crop_right;
+  iLumaSizeY = p->size_y-crop_top-crop_bottom;
+  iLumaSize = iLumaSizeX*iLumaSizeY*symbol_size_in_bytes;
+  iFrameSize = (iLumaSizeX*iLumaSizeY + 2*(iChromaSizeX*iChromaSizeY))*symbol_size_in_bytes; //iLumaSize*iPicSizeTab[p->chroma_format_idc]/2;
 
   //printf ("write frame size: %dx%d\n", p->size_x-crop_left-crop_right,p->size_y-crop_top-crop_bottom );
   initOutput(p_Vid, symbol_size_in_bytes);
 
   // KS: this buffer should actually be allocated only once, but this is still much faster than the previous version
-  buf = malloc (p->size_x*p->size_y*symbol_size_in_bytes);
-  if (NULL==buf)
+  pDecPic = GetOneAvailDecPicFromList(p_Vid->pDecOuputPic, 0);
+  
+  if(pDecPic->pY == NULL)
+  {
+    pDecPic->pY = malloc(iFrameSize);
+    pDecPic->pU = pDecPic->pY+iLumaSize;
+    pDecPic->pV = pDecPic->pU + ((iFrameSize-iLumaSize)>>1);
+    //init;
+    pDecPic->iYUVFormat = p->chroma_format_idc;
+    pDecPic->iYUVStorageFormat = 0;
+    pDecPic->iBitDepth = p_Vid->pic_unit_bitsize_on_disk;
+    pDecPic->iWidth = iLumaSizeX; //p->size_x;
+    pDecPic->iHeight = iLumaSizeY; //p->size_y;
+    pDecPic->iYBufStride = iLumaSizeX*symbol_size_in_bytes; //p->size_x *symbol_size_in_bytes;
+    pDecPic->iUVBufStride = iChromaSizeX*symbol_size_in_bytes; //p->size_x_cr*symbol_size_in_bytes;
+  }
+
+#if (MVC_EXTENSION_ENABLE)
+  {
+    pDecPic->bValid = 1;
+    pDecPic->iViewId = p->view_id >=0 ? p->view_id : -1;
+  }
+#else
+  pDecPic->bValid = 1;
+#endif
+  
+  pDecPic->iPOC = p->frame_poc;
+  //buf = pDecPic->pY; //malloc (p->size_x*p->size_y*symbol_size_in_bytes);
+  if (NULL==pDecPic->pY)
   {
     no_mem_exit("write_out_picture: buf");
   }
 
+#if (MVC_EXTENSION_ENABLE)
+  if (p->view_id >= 0 && p_Inp->DecodeAllLayers == 1)
+  {
+    if((p_Vid->p_out_mvc[iViewIdx] == -1) && (strcasecmp(p_Inp->outfile, "\"\"")!=0) && (strlen(p_Inp->outfile)>0))
+    {
+      strcpy(chBuf, p_Inp->outfile);
+      pch = strrchr(chBuf, '.');
+      if(pch)
+        *pch = '\0';
+      if (strcmp("nul", chBuf))
+      {
+        sprintf(out_ViewFileName, "%s_ViewId%04d.yuv", chBuf, p->view_id);
+
+        if ((p_Vid->p_out_mvc[iViewIdx]=open(out_ViewFileName, OPENFLAGS_WRITE, OPEN_PERMISSIONS))==-1)
+        {
+          snprintf(errortext, ET_SIZE, "Error open file %s ", out_ViewFileName);
+          fprintf(stderr, "%s\n", errortext);
+          exit(500);
+        }
+      }
+      else
+      {
+        p_Vid->p_out_mvc[iViewIdx] = -1;
+      }
+    }
+    p_out = p_Vid->p_out_mvc[iViewIdx];
+  }
+  else
+  { //Normal AVC
+    if((p_Vid->p_out_mvc[0] == -1) && (strcasecmp(p_Inp->outfile, "\"\"")!=0) && (strlen(p_Inp->outfile)>0))
+    {
+      if( (strcasecmp(p_Inp->outfile, "\"\"")!=0) && ((p_Vid->p_out_mvc[0]=open(p_Inp->outfile, OPENFLAGS_WRITE, OPEN_PERMISSIONS))==-1) )
+      {
+        snprintf(errortext, ET_SIZE, "Error open file %s ",p_Inp->outfile);
+        //error(errortext,500);
+        fprintf(stderr, "%s\n", errortext);
+        exit(500);
+      }
+    }
+    p_out = p_Vid->p_out_mvc[0];
+  }
+#endif
+
   if(rgb_output)
   {
+    buf = malloc (p->size_x*p->size_y*symbol_size_in_bytes);
     crop_left   = p->frame_cropping_rect_left_offset;
     crop_right  = p->frame_cropping_rect_right_offset;
     crop_top    = ( 2 - p->frame_mbs_only_flag ) * p->frame_cropping_rect_top_offset;
     crop_bottom = ( 2 - p->frame_mbs_only_flag ) * p->frame_cropping_rect_bottom_offset;
 
-    p_Vid->img2buf (p->imgUV[1], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
-    ret = write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes);
-    if (ret != ((p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes))
+    p_Vid->img2buf (p->imgUV[1], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom, pDecPic->iYBufStride);
+    if (p_out >= 0)
     {
-      error ("write_out_picture: error writing to RGB file", 500);
+      ret = write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes);
+      if (ret != ((p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes))
+      {
+        error ("write_out_picture: error writing to RGB file", 500);
+      }
     }
 
     if (p->frame_cropping_flag)
@@ -505,13 +604,21 @@ static void write_out_picture(VideoParameters *p_Vid, StorablePicture *p, int p_
     {
       crop_left = crop_right = crop_top = crop_bottom = 0;
     }
+    if(buf) 
+      free(buf);
   }
 
-  p_Vid->img2buf (p->imgY, buf, p->size_x, p->size_y, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
-  ret = write(p_out, buf, (p->size_y-crop_bottom-crop_top)*(p->size_x-crop_right-crop_left)*symbol_size_in_bytes);
-  if (ret != ((p->size_y-crop_bottom-crop_top)*(p->size_x-crop_right-crop_left)*symbol_size_in_bytes))
+  buf = (pDecPic->bValid==1)? pDecPic->pY: pDecPic->pY+iLumaSizeX*symbol_size_in_bytes;
+
+    p_Vid->img2buf (p->imgY, buf, p->size_x, p->size_y, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom, pDecPic->iYBufStride);
+
+  if(p_out >=0)
   {
-    error ("write_out_picture: error writing to YUV file", 500);
+    ret = write(p_out, buf, (p->size_y-crop_bottom-crop_top)*(p->size_x-crop_right-crop_left)*symbol_size_in_bytes);
+    if (ret != ((p->size_y-crop_bottom-crop_top)*(p->size_x-crop_right-crop_left)*symbol_size_in_bytes))
+    {
+      error ("write_out_picture: error writing to YUV file", 500);
+    }
   }
 
   if (p->chroma_format_idc!=YUV400)
@@ -520,20 +627,30 @@ static void write_out_picture(VideoParameters *p_Vid, StorablePicture *p, int p_
     crop_right  = p->frame_cropping_rect_right_offset;
     crop_top    = ( 2 - p->frame_mbs_only_flag ) * p->frame_cropping_rect_top_offset;
     crop_bottom = ( 2 - p->frame_mbs_only_flag ) * p->frame_cropping_rect_bottom_offset;
+    buf = (pDecPic->bValid==1)? pDecPic->pU : pDecPic->pU + iChromaSizeX*symbol_size_in_bytes;
 
-    p_Vid->img2buf (p->imgUV[0], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
-    ret = write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)* symbol_size_in_bytes);
-    if (ret != ((p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)* symbol_size_in_bytes))
+      p_Vid->img2buf (p->imgUV[0], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom, pDecPic->iUVBufStride);
+    if(p_out >= 0)
     {
-      error ("write_out_picture: error writing to YUV file", 500);
-    }
-    if (!rgb_output)
-    {
-      p_Vid->img2buf (p->imgUV[1], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
-      ret = write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes);
-      if (ret != ((p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes))
+      ret = write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)* symbol_size_in_bytes);
+      if (ret != ((p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)* symbol_size_in_bytes))
       {
         error ("write_out_picture: error writing to YUV file", 500);
+      }
+    }
+
+    if (!rgb_output)
+    {
+      buf = (pDecPic->bValid==1)? pDecPic->pV : pDecPic->pV + iChromaSizeX*symbol_size_in_bytes;
+      p_Vid->img2buf (p->imgUV[1], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom, pDecPic->iUVBufStride);
+
+      if(p_out >= 0)
+      {
+        ret = write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes);
+        if (ret != ((p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes))
+        {
+          error ("write_out_picture: error writing to YUV file", 500);
+        }
       }
     }
   }
@@ -545,12 +662,18 @@ static void write_out_picture(VideoParameters *p_Vid, StorablePicture *p, int p_
       imgpel cr_val = (imgpel) (1<<(p_Vid->bitdepth_luma - 1));
 
       get_mem3Dpel (&(p->imgUV), 1, p->size_y/2, p->size_x/2);
+      
       for (j=0; j<p->size_y/2; j++)
+      {
         for (i=0; i<p->size_x/2; i++)
+        {
           p->imgUV[0][j][i]=cr_val;
+        }
+      }
 
       // fake out U=V=128 to make a YUV 4:2:0 stream
-      p_Vid->img2buf (p->imgUV[0], buf, p->size_x/2, p->size_y/2, symbol_size_in_bytes, crop_left/2, crop_right/2, crop_top/2, crop_bottom/2);
+      buf = malloc (p->size_x*p->size_y*symbol_size_in_bytes);
+      p_Vid->img2buf (p->imgUV[0], buf, p->size_x/2, p->size_y/2, symbol_size_in_bytes, crop_left/2, crop_right/2, crop_top/2, crop_bottom/2, pDecPic->iYBufStride/2);
 
       ret = write(p_out, buf, symbol_size_in_bytes * (p->size_y-crop_bottom-crop_top)/2 * (p->size_x-crop_right-crop_left)/2 );
       if (ret != (symbol_size_in_bytes * (p->size_y-crop_bottom-crop_top)/2 * (p->size_x-crop_right-crop_left)/2))
@@ -562,15 +685,15 @@ static void write_out_picture(VideoParameters *p_Vid, StorablePicture *p, int p_
       {
         error ("write_out_picture: error writing to YUV file", 500);
       }
-
+      free(buf);
       free_mem3Dpel(p->imgUV);
       p->imgUV=NULL;
     }
   }
 
-  free(buf);
+  //free(buf);
 
-//  fsync(p_out);
+  //  fsync(p_out);
 }
 
 /*!
@@ -662,6 +785,9 @@ void write_unpaired_field(VideoParameters *p_Vid, FrameStore* fs, int p_out)
     fs->bottom_field->chroma_format_idc = p->chroma_format_idc;
     clear_picture(p_Vid, fs->bottom_field);
     dpb_combine_field_yuv(p_Vid, fs);
+#if (MVC_EXTENSION_ENABLE)
+    fs->frame->view_id = fs->view_id;
+#endif
     write_picture (p_Vid, fs->frame, p_out, TOP_FIELD);
   }
 
@@ -682,6 +808,9 @@ void write_unpaired_field(VideoParameters *p_Vid, FrameStore* fs, int p_out)
       fs ->top_field->frame_cropping_rect_right_offset = fs->bottom_field->frame_cropping_rect_right_offset;
     }
     dpb_combine_field_yuv(p_Vid, fs);
+#if (MVC_EXTENSION_ENABLE)
+    fs->frame->view_id = fs->view_id;
+#endif
     write_picture (p_Vid, fs->frame, p_out, BOTTOM_FIELD);
   }
 
@@ -796,6 +925,9 @@ void direct_output(VideoParameters *p_Vid, StorablePicture *p, int p_out)
   {
     // we have both fields, so output them
     dpb_combine_field_yuv(p_Vid, p_Vid->out_buffer);
+#if (MVC_EXTENSION_ENABLE)
+    p_Vid->out_buffer->frame->view_id = p_Vid->out_buffer->view_id;
+#endif
     write_picture (p_Vid, p_Vid->out_buffer->frame, p_Vid->p_out, FRAME);
 
     calculate_frame_no(p_Vid, p);

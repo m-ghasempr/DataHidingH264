@@ -62,7 +62,7 @@ typedef enum
   SBDIAMOND = 4
 } EPZSPatterns;
 
-struct epzs_params {
+typedef struct epzs_params {
   VideoParameters *p_Vid;
   uint16 BlkCount;
   int   searcharray;
@@ -95,13 +95,11 @@ struct epzs_params {
   EPZSStructure *window_predictor_ext;
   // Colocated helper
   EPZSColocParams *p_colocated;
-};
-
-typedef struct epzs_params EPZSParameters;
+} EPZSParameters;
 
 
 extern void    EPZSBlockTypePredictorsMB (Slice *currSlice, MEBlock *mv_block, SPoint *point, int *prednum);
-extern short   EPZSSpatialPredictors     (EPZSParameters *p_EPZS, MEBlock *mv_block /*PixelPos *block*/, int list, int list_offset, short ref, char **refPic, short ***tmp_mv);
+extern short   EPZSSpatialPredictors     (EPZSParameters *p_EPZS, MEBlock *mv_block /*PixelPos *block*/, int list, int list_offset, short ref, struct pic_motion_params **mv_info);
 extern void    EPZSTemporalPredictors    (Macroblock *currMB, StorablePicture *ref_picture, EPZSParameters *p_EPZS, MEBlock *mv_block, int *prednum, distblk stopCriterion, distblk min_mcost);
 extern distblk EPZSDetermineStopCriterion(EPZSParameters *p_EPZS, distblk* prevSad, MEBlock *mv_block ,distblk lambda_dist);
 extern void    EPZSBlockTypePredictors   (Slice *currSlice, MEBlock *mv_block, SPoint *point, int *prednum);
@@ -132,24 +130,24 @@ static inline int add_predictor(MotionVector *cur_mv, MotionVector prd_mv, int m
   return (*((int*) cur_mv) != 0);
 }
 
-static inline void scale_mv(MotionVector *out_mv, int scale, short *mv, int shift_mv)
+static inline void scale_mv(MotionVector *out_mv, int scale, const MotionVector *mv, int shift_mv)
 {
-  out_mv->mv_x = (short) rshift_rnd_sf((scale * mv[0]), shift_mv);
-  out_mv->mv_y = (short) rshift_rnd_sf((scale * mv[1]), shift_mv);
+  out_mv->mv_x = (short) rshift_rnd_sf((scale * mv->mv_x), shift_mv);
+  out_mv->mv_y = (short) rshift_rnd_sf((scale * mv->mv_y), shift_mv);
 }
 
-static inline void scale_mv_xy(MotionVector *out_mv, int *scale, short *mv, int shift_mv)
+static inline void scale_mv_xy(MotionVector *out_mv, int *scale, const MotionVector *mv, int shift_mv)
 {
-  out_mv->mv_x = (short) rshift_rnd_sf((scale[0] * mv[0]), shift_mv);
-  out_mv->mv_y = (short) rshift_rnd_sf((scale[1] * mv[1]), shift_mv);
+  out_mv->mv_x = (short) rshift_rnd_sf((scale[0] * mv->mv_x), shift_mv);
+  out_mv->mv_y = (short) rshift_rnd_sf((scale[1] * mv->mv_y), shift_mv);
 }
 
-static inline void compute_scaled(MotionVector *MotionVector0, MotionVector *MotionVector1, int tempmv_scale[2], short *mv, int invmv_precision)
+static inline void compute_scaled(MotionVector *MotionVector0, MotionVector *MotionVector1, int tempmv_scale[2], const MotionVector *mv, int invmv_precision)
 {
-  MotionVector0->mv_x = (short) iClip3 (-32768, 32767, rshift_rnd_sf((tempmv_scale[LIST_0] * mv[0]), invmv_precision));
-  MotionVector0->mv_y = (short) iClip3 (-32768, 32767, rshift_rnd_sf((tempmv_scale[LIST_0] * mv[1]), invmv_precision));
-  MotionVector1->mv_x = (short) iClip3 (-32768, 32767, rshift_rnd_sf((tempmv_scale[LIST_1] * mv[0]), invmv_precision));
-  MotionVector1->mv_y = (short) iClip3 (-32768, 32767, rshift_rnd_sf((tempmv_scale[LIST_1] * mv[1]), invmv_precision));
+  MotionVector0->mv_x = (short) iClip3 (-32768, 32767, rshift_rnd_sf((tempmv_scale[LIST_0] * mv->mv_x), invmv_precision));
+  MotionVector0->mv_y = (short) iClip3 (-32768, 32767, rshift_rnd_sf((tempmv_scale[LIST_0] * mv->mv_y), invmv_precision));
+  MotionVector1->mv_x = (short) iClip3 (-32768, 32767, rshift_rnd_sf((tempmv_scale[LIST_1] * mv->mv_x), invmv_precision));
+  MotionVector1->mv_y = (short) iClip3 (-32768, 32767, rshift_rnd_sf((tempmv_scale[LIST_1] * mv->mv_y), invmv_precision));
 }
 
 #endif

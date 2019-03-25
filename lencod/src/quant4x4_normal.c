@@ -38,16 +38,22 @@
  */
 int quant_4x4_normal(Macroblock *currMB, int **tblock, struct quant_methods *q_method)
 {
-  QuantParameters *p_Quant = currMB->p_Vid->p_Quant;
+  VideoParameters *p_Vid = currMB->p_Vid;
+  QuantParameters *p_Quant = p_Vid->p_Quant;
+  Slice *currSlice = currMB->p_Slice;
+  Boolean is_cavlc = (Boolean) (currSlice->symbol_mode == CAVLC);
+
   int   block_x = q_method->block_x;
   int  qp = q_method->qp;
-  int*  ACLevel = q_method->ACLevel;
-  int*  ACRun   = q_method->ACRun;  
+  int*  ACL = &q_method->ACLevel[0];
+  int*  ACR = &q_method->ACRun[0];  
   LevelQuantParams **q_params_4x4 = q_method->q_params;
   const byte (*pos_scan)[2] = q_method->pos_scan;
   const byte *c_cost = q_method->c_cost;
   int *coeff_cost = q_method->coeff_cost;
-  Boolean is_cavlc = (currMB->p_slice->symbol_mode == CAVLC);
+
+  
+  LevelQuantParams *q_params = NULL;
   int i,j, coeff_ctr;
 
   int *m7;
@@ -58,11 +64,9 @@ int quant_4x4_normal(Macroblock *currMB, int **tblock, struct quant_methods *q_m
   int   qp_per = p_Quant->qp_per_matrix[qp];
   int   q_bits = Q_BITS + qp_per;
   const byte *p_scan = &pos_scan[0][0];
-  int*  ACL = &ACLevel[0];
-  int*  ACR = &ACRun[0];
 
   // Quantization
-  for (coeff_ctr = 0; coeff_ctr < 16; coeff_ctr++)
+  for (coeff_ctr = 0; coeff_ctr < 16; ++coeff_ctr)
   {
     i = *p_scan++;  // horizontal position
     j = *p_scan++;  // vertical position
@@ -71,8 +75,9 @@ int quant_4x4_normal(Macroblock *currMB, int **tblock, struct quant_methods *q_m
 
     if (*m7 != 0)
     {
-      scaled_coeff = iabs (*m7) * q_params_4x4[j][i].ScaleComp;
-      level = (scaled_coeff + q_params_4x4[j][i].OffsetComp) >> q_bits;
+      q_params = &q_params_4x4[j][i];
+      scaled_coeff = iabs (*m7) * q_params->ScaleComp;
+      level = (scaled_coeff + q_params->OffsetComp) >> q_bits;
 
       if (level != 0)
       {
@@ -82,10 +87,10 @@ int quant_4x4_normal(Macroblock *currMB, int **tblock, struct quant_methods *q_m
         *coeff_cost += (level > 1) ? MAX_VALUE : c_cost[run];
 
         level  = isignab(level, *m7);
-        *m7    = rshift_rnd_sf(((level * q_params_4x4[j][i].InvScaleComp) << qp_per), 4);
+        *m7     = rshift_rnd_sf(((level * q_params->InvScaleComp) << qp_per), 4);
         // inverse scale can be alternative performed as follows to ensure 16bit
         // arithmetic is satisfied.
-        // *m7 = (qp_per<4) ? rshift_rnd_sf((level*q_params_4x4[j][i].InvScaleComp),4-qp_per) : (level*q_params_4x4[j][i].InvScaleComp)<<(qp_per-4);
+        // *m7 = (qp_per<4) ? rshift_rnd_sf((level*q_params->InvScaleComp),4-qp_per) : (level*q_params->InvScaleComp)<<(qp_per-4);
         *ACL++ = level;
         *ACR++ = run; 
         // reset zero level counter
@@ -94,13 +99,13 @@ int quant_4x4_normal(Macroblock *currMB, int **tblock, struct quant_methods *q_m
       }
       else
       {
-        run++;
         *m7 = 0;
+        ++run;
       }
     }
     else
     {
-      run++;
+      ++run;
     } 
   }
 
@@ -112,16 +117,20 @@ int quant_4x4_normal(Macroblock *currMB, int **tblock, struct quant_methods *q_m
 int quant_ac4x4_normal(Macroblock *currMB, int **tblock, struct quant_methods *q_method)
 {
   int   block_x = q_method->block_x;
+
   int   qp = q_method->qp;
-  int*  ACLevel = q_method->ACLevel;
-  int*  ACRun   = q_method->ACRun; 
+  int*  ACL = &q_method->ACLevel[0];
+  int*  ACR = &q_method->ACRun[0]; 
   LevelQuantParams **q_params_4x4 = q_method->q_params;
   const byte (*pos_scan)[2] = q_method->pos_scan;
   const byte *c_cost = q_method->c_cost;
   int *coeff_cost = q_method->coeff_cost;
 
-  QuantParameters *p_Quant = currMB->p_Vid->p_Quant;
-  Boolean is_cavlc = (currMB->p_slice->symbol_mode == CAVLC);
+  Boolean is_cavlc = (Boolean) (currMB->p_Slice->symbol_mode == CAVLC);
+  VideoParameters *p_Vid = currMB->p_Vid;
+  QuantParameters *p_Quant = p_Vid->p_Quant;
+  LevelQuantParams *q_params = NULL;
+
   int i,j, coeff_ctr;
 
   int *m7;
@@ -132,11 +141,9 @@ int quant_ac4x4_normal(Macroblock *currMB, int **tblock, struct quant_methods *q
   int   qp_per = p_Quant->qp_per_matrix[qp];
   int   q_bits = Q_BITS + qp_per;
   const byte *p_scan = &pos_scan[1][0];
-  int*  ACL = &ACLevel[0];
-  int*  ACR = &ACRun[0];
 
   // Quantization
-  for (coeff_ctr = 1; coeff_ctr < 16; coeff_ctr++)
+  for (coeff_ctr = 1; coeff_ctr < 16; ++coeff_ctr)
   {
     i = *p_scan++;  // horizontal position
     j = *p_scan++;  // vertical position
@@ -144,8 +151,9 @@ int quant_ac4x4_normal(Macroblock *currMB, int **tblock, struct quant_methods *q
     m7 = &tblock[j][block_x + i];
     if (*m7 != 0)
     {
-      scaled_coeff = iabs (*m7) * q_params_4x4[j][i].ScaleComp;
-      level = (scaled_coeff + q_params_4x4[j][i].OffsetComp) >> q_bits;
+      q_params = &q_params_4x4[j][i];
+      scaled_coeff = iabs (*m7) * q_params->ScaleComp;
+      level = (scaled_coeff + q_params->OffsetComp) >> q_bits;
 
       if (level != 0)
       {
@@ -155,10 +163,10 @@ int quant_ac4x4_normal(Macroblock *currMB, int **tblock, struct quant_methods *q
         *coeff_cost += (level > 1) ? MAX_VALUE : c_cost[run];
 
         level  = isignab(level, *m7);
-        *m7    = rshift_rnd_sf(((level * q_params_4x4[j][i].InvScaleComp) << qp_per), 4);
+        *m7    = rshift_rnd_sf(((level * q_params->InvScaleComp) << qp_per), 4);
         // inverse scale can be alternative performed as follows to ensure 16bit
         // arithmetic is satisfied.
-        // *m7 = (qp_per<4) ? rshift_rnd_sf((level*q_params_4x4[j][i].InvScaleComp),4-qp_per) : (level*q_params_4x4[j][i].InvScaleComp)<<(qp_per-4);
+        // *m7 = (qp_per<4) ? rshift_rnd_sf((level*q_params->InvScaleComp),4-qp_per) : (level*q_params->InvScaleComp)<<(qp_per-4);
         *ACL++  = level;
         *ACR++  = run; 
         // reset zero level counter
@@ -167,13 +175,13 @@ int quant_ac4x4_normal(Macroblock *currMB, int **tblock, struct quant_methods *q
       }
       else
       {
-        run++;
         *m7 = 0;
+        ++run;        
       }
     }
     else
     {
-      run++;
+      ++run;
     }          
   }
 
@@ -193,7 +201,7 @@ int quant_dc4x4_normal(Macroblock *currMB, int **tblock, int qp, int* DCLevel, i
                        LevelQuantParams *q_params_4x4, const byte (*pos_scan)[2])
 {
   QuantParameters *p_Quant = currMB->p_Vid->p_Quant;
-  Boolean is_cavlc = (currMB->p_slice->symbol_mode == CAVLC);
+  Boolean is_cavlc = (Boolean) (currMB->p_Slice->symbol_mode == CAVLC);
   int i,j, coeff_ctr;
 
   int *m7;
@@ -208,7 +216,7 @@ int quant_dc4x4_normal(Macroblock *currMB, int **tblock, int qp, int* DCLevel, i
   int*  DCR = &DCRun[0];
 
   // Quantization
-  for (coeff_ctr = 0; coeff_ctr < 16; coeff_ctr++)
+  for (coeff_ctr = 0; coeff_ctr < 16; ++coeff_ctr)
   {
     i = *p_scan++;  // horizontal position
     j = *p_scan++;  // vertical position
@@ -224,8 +232,8 @@ int quant_dc4x4_normal(Macroblock *currMB, int **tblock, int qp, int* DCLevel, i
       {
         if (is_cavlc)
           level = imin(level, CAVLC_LEVEL_LIMIT);
-        level = isignab(level, *m7);
 
+        level   = isignab(level, *m7);
         *m7     = level;
         *DCL++  = level;
         *DCR++  = run;
@@ -235,13 +243,13 @@ int quant_dc4x4_normal(Macroblock *currMB, int **tblock, int qp, int* DCLevel, i
       }
       else
       {
-        run++;
+        ++run;
         *m7 = 0;
       }
     }
     else
     {
-      run++;
+      ++run;
     }                    
   }
 

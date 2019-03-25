@@ -148,6 +148,9 @@ typedef struct
   Boolean   constrained_set1_flag;                                // u(1)
   Boolean   constrained_set2_flag;                                // u(1)
   Boolean   constrained_set3_flag;                                // u(1)
+#if (MVC_EXTENSION_ENABLE)
+  Boolean   constrained_set4_flag;                                // u(1)
+#endif
   unsigned  int level_idc;                                        // u(8)
   unsigned  int seq_parameter_set_id;                             // ue(v)
   unsigned  int chroma_format_idc;                                // ue(v)
@@ -188,7 +191,73 @@ typedef struct
   Boolean   vui_parameters_present_flag;                      // u(1)
     vui_seq_parameters_t vui_seq_parameters;                  // vui_seq_parameters_t
     unsigned  separate_colour_plane_flag;                       // u(1)
+#if (MVC_EXTENSION_ENABLE)
+    int max_dec_frame_buffering;
+#endif
 } seq_parameter_set_rbsp_t;
+
+#if (MVC_EXTENSION_ENABLE)
+typedef struct mvcvui_tag
+{
+   int num_ops_minus1;
+   char *temporal_id;
+   int *num_target_output_views_minus1;
+   int **view_id;
+   char *timing_info_present_flag;
+   int *num_units_in_tick;
+   int *time_scale;
+   char *fixed_frame_rate_flag;
+   char *nal_hrd_parameters_present_flag;
+   char *vcl_hrd_parameters_present_flag;
+   char *low_delay_hrd_flag;
+   char *pic_struct_present_flag;
+
+    //hrd parameters;
+    char cpb_cnt_minus1;
+	char bit_rate_scale;
+	char cpb_size_scale;
+	int bit_rate_value_minus1[32];
+	int cpb_size_value_minus1[32];
+	char cbr_flag[32];
+	char initial_cpb_removal_delay_length_minus1;
+    char cpb_removal_delay_length_minus1;
+	char dpb_output_delay_length_minus1;
+	char time_offset_length;
+}MVCVUI_t;
+
+typedef struct
+{
+  seq_parameter_set_rbsp_t sps;
+
+  unsigned int bit_equal_to_one;
+  int num_views_minus1;
+  int *view_id;
+  int *num_anchor_refs_l0;
+  int **anchor_ref_l0;
+  int *num_anchor_refs_l1;
+  int **anchor_ref_l1;
+
+  int *num_non_anchor_refs_l0;
+  int **non_anchor_ref_l0;
+  int *num_non_anchor_refs_l1;
+  int **non_anchor_ref_l1;
+   
+  int num_level_values_signalled_minus1;
+  int *level_idc;
+  int *num_applicable_ops_minus1;
+  int **applicable_op_temporal_id;
+  int **applicable_op_num_target_views_minus1;
+  int ***applicable_op_target_view_id;
+  int **applicable_op_num_views_minus1;
+
+  unsigned int mvc_vui_parameters_present_flag;
+  Boolean   Valid;                  // indicates the parameter set is valid
+  MVCVUI_t  MVCVUIParams;
+} subset_seq_parameter_set_rbsp_t;
+
+subset_seq_parameter_set_rbsp_t *AllocSubsetSPS (void);
+void FreeSubsetSPS (subset_seq_parameter_set_rbsp_t *subset_sps);
+#endif
 
 pic_parameter_set_rbsp_t *AllocPPS (void);
 seq_parameter_set_rbsp_t *AllocSPS (void);

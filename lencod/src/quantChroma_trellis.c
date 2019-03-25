@@ -37,9 +37,9 @@
 int quant_dc2x2_trellis(Macroblock *currMB, int **tblock, int qp, int* DCLevel, int* DCRun, 
                        LevelQuantParams *q_params_4x4, int **fadjust, const byte (*pos_scan)[2])
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   QuantParameters *p_Quant = currMB->p_Vid->p_Quant;
-  Boolean is_cavlc = (currMB->p_slice->symbol_mode == CAVLC);
+  Boolean is_cavlc = (Boolean) (currSlice->symbol_mode == CAVLC);
   int coeff_ctr;
 
   int *m7;
@@ -114,9 +114,9 @@ int quant_dc2x2_trellis(Macroblock *currMB, int **tblock, int qp, int* DCLevel, 
 int quant_dc4x2_trellis(Macroblock *currMB, int **tblock, int qp, int* DCLevel, int* DCRun, 
                        LevelQuantParams *q_params_4x4, int **fadjust, const byte (*pos_scan)[2])
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   QuantParameters *p_Quant = currMB->p_Vid->p_Quant;
-  Boolean is_cavlc = (currMB->p_slice->symbol_mode == CAVLC);
+  Boolean is_cavlc = (Boolean) (currSlice->symbol_mode == CAVLC);
   int i,j, coeff_ctr;
 
   int *m7;
@@ -191,14 +191,7 @@ void rdoq_dc_cr_CAVLC(Macroblock *currMB, int **tblock, int qp_per, int qp_rem, 
   levelDataStruct levelData[16];
   double  lambda_md = 0.0;
 
-  if ((p_Vid->type==B_SLICE) && p_Vid->nal_reference_idc)
-  {
-    lambda_md = p_Vid->lambda_md[5][p_Vid->masterQP];  
-  }
-  else
-  {
-    lambda_md = p_Vid->lambda_md[p_Vid->type][p_Vid->masterQP]; 
-  }
+  lambda_md = p_Vid->lambda_md[p_Vid->type][p_Vid->masterQP]; 
 
   init_trellis_data_DC_cr_CAVLC(currMB, tblock, qp_per, qp_rem, q_params_4x4, p_scan, &levelData[0]);
   est_RunLevel_CAVLC(currMB, levelData, levelTrellis, CHROMA_DC, 0, 0, p_Vid->num_cdc_coeff, lambda_md);
@@ -220,14 +213,7 @@ void rdoq_dc_cr_CABAC(Macroblock *currMB, int **tblock, int qp_per, int qp_rem, 
   double  lambda_md = 0.0;
   int kStart=0, kStop=0, noCoeff = 0, estBits;
 
-  if ((p_Vid->type==B_SLICE) && p_Vid->nal_reference_idc)
-  {
-    lambda_md = p_Vid->lambda_md[5][p_Vid->masterQP];  
-  }
-  else
-  {
-    lambda_md = p_Vid->lambda_md[p_Vid->type][p_Vid->masterQP]; 
-  }
+  lambda_md = p_Vid->lambda_md[p_Vid->type][p_Vid->masterQP]; 
 
   noCoeff = init_trellis_data_DC_cr_CABAC(currMB, tblock, qp_per, qp_rem, q_params_4x4, p_scan, &levelData[0], &kStart, &kStop);
   estBits = est_write_and_store_CBP_block_bit(currMB, type);

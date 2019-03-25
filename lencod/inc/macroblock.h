@@ -21,6 +21,27 @@
 #include "block.h"
 #include "macroblock_p444.h"
 
+static const int block8x8_idx[3][4][4] = 
+{
+  { 
+    {0, 1, 0, 0},
+    {2, 3, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0}
+  },
+  {
+    {0, 1, 0, 0},
+    {0, 1, 0, 0},
+    {2, 3, 0, 0},
+    {2, 3, 0, 0}
+  },
+  {
+    {0, 0, 1, 1},
+    {0, 0, 1, 1},
+    {2, 2, 3, 3},
+    {2, 2, 3, 3}
+  }
+};
 
 static const short part_size[8][2] = 
 {
@@ -53,11 +74,18 @@ extern void  end_macroblock   (Macroblock* currMB, Boolean *end_of_slice, Boolea
 extern void  write_macroblock (Macroblock* currMB, int eos_bit);
 
 
-extern int  luma_residual_coding_16x16 (Macroblock* currMB, int, int[2]);
-extern int  luma_residual_coding_8x8   (Macroblock* currMB, int*, int64*, int, short, int[2], char *);
-extern void luma_residual_coding       (Macroblock *currMB);
-extern void chroma_residual_coding     (Macroblock *currMB);
-extern void intra_chroma_RD_decision   (Macroblock *currMB, RD_PARAMS);
+extern int  reset_block(Macroblock* currMB, int *cbp, int64 *cbp_blk, int block8x8);
+
+extern int  luma_residual_coding_16x16     (Macroblock* currMB, int, int[2]);
+extern int  luma_residual_coding_8x8       (Macroblock* currMB, int*, int64*, int, short, int[2], char *);
+extern void luma_residual_coding           (Macroblock *currMB);
+extern void luma_residual_coding_sp        (Macroblock *currMB);
+extern void chroma_residual_coding         (Macroblock *currMB);
+extern void chroma_residual_coding_sp      (Macroblock *currMB);
+extern void chroma_residual_coding_si      (Macroblock *currMB);
+extern void intra_chroma_RD_decision       (Macroblock *currMB, RD_PARAMS *);
+extern void intra_chroma_RD_decision_mbaff (Macroblock *currMB, RD_PARAMS *);
+
 extern byte TransformDecision     (Macroblock *currMB, int, distblk*);
 extern int  B8Mode2Value          (Slice *currSlice, short b8mode, short b8pdir);
 
@@ -65,7 +93,7 @@ extern int  writeMBLayerPSlice    (Macroblock *currMB, int rdopt, int *coeff_rat
 extern int  writeMBLayerBSlice    (Macroblock *currMB, int rdopt, int *coeff_rate);
 extern int  writeMBLayerISlice    (Macroblock *currMB, int rdopt, int *coeff_rate);
 
-extern void write_terminating_bit (Slice* currSlice, short bit);
+extern void write_terminating_bit (Slice* currSlice, int bit);
 
 extern int writeMotionInfo2NAL (Macroblock* currMB);
 extern int  write_pslice_motion_info_to_NAL (Macroblock* currMB);
@@ -83,16 +111,8 @@ extern int  writeCoeff16x16_CAVLC (Macroblock* currMB, ColorPlane);
 extern int  writeCoeff4x4_CAVLC_normal (Macroblock* currMB, int block_type, int b8, int b4, int param);
 extern int  writeCoeff4x4_CAVLC_444    (Macroblock* currMB, int block_type, int b8, int b4, int param);
 
-extern distblk distI16x16_sad  (Macroblock *currMB, imgpel **img_org, imgpel **pred_img, distblk min_cost);
-extern distblk distI16x16_sse  (Macroblock *currMB, imgpel **img_org, imgpel **pred_img, distblk min_cost);
-extern distblk distI16x16_satd (Macroblock *currMB, imgpel **img_org, imgpel **pred_img, distblk min_cost);
-extern distblk find_sad_16x16_JM (Macroblock *currMB);
-
 extern int   predict_nnz       (Macroblock *currMB, int block_type, int i,int j);
 extern int   predict_nnz_chroma(Macroblock *currMB, int i,int j);
-
-extern void SetLagrangianMultipliersOn (VideoParameters *p_Vid, InputParameters *p_Inp);
-extern void SetLagrangianMultipliersOff(VideoParameters *p_Vid, InputParameters *p_Inp);
 
 extern void set_modes_and_reframe (Macroblock* currMB, int b8, short* p_dir, int list_mode[2], char *list_ref_idx);
 extern void set_modes_and_reframe_b_slice (Macroblock* currMB, int b8, short* p_dir, int list_mode[2], char *list_ref_idx);

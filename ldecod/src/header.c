@@ -28,6 +28,9 @@
 
 static void ref_pic_list_reordering(Slice *currSlice);
 static void pred_weight_table(Slice *currSlice);
+#if (MVC_EXTENSION_ENABLE)
+static void ref_pic_list_mvc_modification(Slice *currSlice);
+#endif
 
 
 /*!
@@ -92,9 +95,9 @@ int FirstPartOfSliceHeader(Slice *currSlice)
   currSlice->pic_parameter_set_id = ue_v ("SH: pic_parameter_set_id", currStream);
 
   if( p_Vid->separate_colour_plane_flag )
-    p_Vid->colour_plane_id = u_v (2, "SH: colour_plane_id", currStream);
+    currSlice->colour_plane_id = u_v (2, "SH: colour_plane_id", currStream);
   else
-    p_Vid->colour_plane_id = PLANE_Y;
+    currSlice->colour_plane_id = PLANE_Y;
 
   return p_Dec->UsedBits;
 }
@@ -119,82 +122,82 @@ int RestOfSliceHeader(Slice *currSlice)
 
   int val, len;
 
-  p_Vid->frame_num = u_v (active_sps->log2_max_frame_num_minus4 + 4, "SH: frame_num", currStream);
+  currSlice->frame_num = u_v (active_sps->log2_max_frame_num_minus4 + 4, "SH: frame_num", currStream);
 
   /* Tian Dong: frame_num gap processing, if found */
-  if (p_Vid->idr_flag)
+  if(currSlice->idr_flag) //if (p_Vid->idr_flag)
   {
-    p_Vid->pre_frame_num = p_Vid->frame_num;
+    p_Vid->pre_frame_num = currSlice->frame_num;
     // picture error concealment
     p_Vid->last_ref_pic_poc = 0;
-    assert(p_Vid->frame_num == 0);
+    assert(currSlice->frame_num == 0);
   }
 
   if (active_sps->frame_mbs_only_flag)
   {
     p_Vid->structure = FRAME;
-    p_Vid->field_pic_flag=0;
+    currSlice->field_pic_flag=0;
   }
   else
   {
     // field_pic_flag   u(1)
-    p_Vid->field_pic_flag = u_1("SH: field_pic_flag", currStream);
-    if (p_Vid->field_pic_flag)
+    currSlice->field_pic_flag = u_1("SH: field_pic_flag", currStream);
+    if (currSlice->field_pic_flag)
     {
       // bottom_field_flag  u(1)
-      p_Vid->bottom_field_flag = (byte) u_1("SH: bottom_field_flag", currStream);
-      p_Vid->structure = p_Vid->bottom_field_flag ? BOTTOM_FIELD : TOP_FIELD;
+      currSlice->bottom_field_flag = (byte) u_1("SH: bottom_field_flag", currStream);
+      p_Vid->structure = currSlice->bottom_field_flag ? BOTTOM_FIELD : TOP_FIELD;
     }
     else
     {
       p_Vid->structure = FRAME;
-      p_Vid->bottom_field_flag = FALSE;
+      currSlice->bottom_field_flag = FALSE;
     }
   }
 
   currSlice->structure = (PictureStructure) p_Vid->structure;
 
-  p_Vid->mb_aff_frame_flag = (active_sps->mb_adaptive_frame_field_flag && (p_Vid->field_pic_flag==0));
-  currSlice->mb_aff_frame_flag = p_Vid->mb_aff_frame_flag;
+  currSlice->mb_aff_frame_flag = (active_sps->mb_adaptive_frame_field_flag && (currSlice->field_pic_flag==0));
+  //currSlice->mb_aff_frame_flag = p_Vid->mb_aff_frame_flag;
 
   if (p_Vid->structure == FRAME       ) 
-    assert (p_Vid->field_pic_flag == 0);
+    assert (currSlice->field_pic_flag == 0);
   if (p_Vid->structure == TOP_FIELD   ) 
-    assert (p_Vid->field_pic_flag == 1 && (p_Vid->bottom_field_flag == FALSE));
+    assert (currSlice->field_pic_flag == 1 && (currSlice->bottom_field_flag == FALSE));
   if (p_Vid->structure == BOTTOM_FIELD) 
-    assert (p_Vid->field_pic_flag == 1 && (p_Vid->bottom_field_flag == TRUE ));
+    assert (currSlice->field_pic_flag == 1 && (currSlice->bottom_field_flag == TRUE ));
 
-  if (p_Vid->idr_flag)
+  if (currSlice->idr_flag)
   {
-    p_Vid->idr_pic_id = ue_v("SH: idr_pic_id", currStream);
+    currSlice->idr_pic_id = ue_v("SH: idr_pic_id", currStream);
   }
 
   if (active_sps->pic_order_cnt_type == 0)
   {
-    p_Vid->pic_order_cnt_lsb = u_v(active_sps->log2_max_pic_order_cnt_lsb_minus4 + 4, "SH: pic_order_cnt_lsb", currStream);
-    if( p_Vid->active_pps->bottom_field_pic_order_in_frame_present_flag  ==  1 &&  !p_Vid->field_pic_flag )
-      p_Vid->delta_pic_order_cnt_bottom = se_v("SH: delta_pic_order_cnt_bottom", currStream);
+    currSlice->pic_order_cnt_lsb = u_v(active_sps->log2_max_pic_order_cnt_lsb_minus4 + 4, "SH: pic_order_cnt_lsb", currStream);
+    if( p_Vid->active_pps->bottom_field_pic_order_in_frame_present_flag  ==  1 &&  !currSlice->field_pic_flag )
+      currSlice->delta_pic_order_cnt_bottom = se_v("SH: delta_pic_order_cnt_bottom", currStream);
     else
-      p_Vid->delta_pic_order_cnt_bottom = 0;
+      currSlice->delta_pic_order_cnt_bottom = 0;
   }
   if( active_sps->pic_order_cnt_type == 1 && !active_sps->delta_pic_order_always_zero_flag )
   {
-    p_Vid->delta_pic_order_cnt[ 0 ] = se_v("SH: delta_pic_order_cnt[0]", currStream);
-    if( p_Vid->active_pps->bottom_field_pic_order_in_frame_present_flag  ==  1  &&  !p_Vid->field_pic_flag )
-      p_Vid->delta_pic_order_cnt[ 1 ] = se_v("SH: delta_pic_order_cnt[1]", currStream);
+    currSlice->delta_pic_order_cnt[ 0 ] = se_v("SH: delta_pic_order_cnt[0]", currStream);
+    if( p_Vid->active_pps->bottom_field_pic_order_in_frame_present_flag  ==  1  &&  !currSlice->field_pic_flag )
+      currSlice->delta_pic_order_cnt[ 1 ] = se_v("SH: delta_pic_order_cnt[1]", currStream);
   }else
   {
     if (active_sps->pic_order_cnt_type == 1)
     {
-      p_Vid->delta_pic_order_cnt[ 0 ] = 0;
-      p_Vid->delta_pic_order_cnt[ 1 ] = 0;
+      currSlice->delta_pic_order_cnt[ 0 ] = 0;
+      currSlice->delta_pic_order_cnt[ 1 ] = 0;
     }
   }
 
   //! redundant_pic_cnt is missing here
   if (p_Vid->active_pps->redundant_pic_cnt_present_flag)
   {
-    p_Vid->redundant_pic_cnt = ue_v ("SH: redundant_pic_cnt", currStream);
+    currSlice->redundant_pic_cnt = ue_v ("SH: redundant_pic_cnt", currStream);
   }
 
   if(currSlice->slice_type == B_SLICE)
@@ -202,31 +205,40 @@ int RestOfSliceHeader(Slice *currSlice)
     currSlice->direct_spatial_mv_pred_flag = u_1 ("SH: direct_spatial_mv_pred_flag", currStream);
   }
 
-  currSlice->num_ref_idx_l0_active = p_Vid->active_pps->num_ref_idx_l0_active_minus1 + 1;
-  currSlice->num_ref_idx_l1_active = p_Vid->active_pps->num_ref_idx_l1_active_minus1 + 1;
+  currSlice->num_ref_idx_active[LIST_0] = p_Vid->active_pps->num_ref_idx_l0_active_minus1 + 1;
+  currSlice->num_ref_idx_active[LIST_1] = p_Vid->active_pps->num_ref_idx_l1_active_minus1 + 1;
 
   if(p_Vid->type==P_SLICE || p_Vid->type == SP_SLICE || p_Vid->type==B_SLICE)
   {
     val = u_1 ("SH: num_ref_idx_override_flag", currStream);
     if (val)
     {
-      currSlice->num_ref_idx_l0_active = 1 + ue_v ("SH: num_ref_idx_l0_active_minus1", currStream);
+      currSlice->num_ref_idx_active[LIST_0] = 1 + ue_v ("SH: num_ref_idx_l0_active_minus1", currStream);
 
       if(p_Vid->type==B_SLICE)
       {
-        currSlice->num_ref_idx_l1_active = 1 + ue_v ("SH: num_ref_idx_l1_active_minus1", currStream);
+        currSlice->num_ref_idx_active[LIST_1] = 1 + ue_v ("SH: num_ref_idx_l1_active_minus1", currStream);
       }
     }
   }
   if (currSlice->slice_type!=B_SLICE)
   {
-    currSlice->num_ref_idx_l1_active = 0;
+    currSlice->num_ref_idx_active[LIST_1] = 0;
   }
 
+#if (MVC_EXTENSION_ENABLE)
+  if (currSlice->svc_extension_flag == 0 || currSlice->svc_extension_flag == 1)
+    ref_pic_list_mvc_modification(currSlice);
+  else
+    ref_pic_list_reordering(currSlice);
+#else
   ref_pic_list_reordering(currSlice);
+#endif
 
-  currSlice->apply_weights = ((p_Vid->active_pps->weighted_pred_flag && (currSlice->slice_type == P_SLICE || currSlice->slice_type == SP_SLICE) )
-          || ((p_Vid->active_pps->weighted_bipred_idc > 0 ) && (currSlice->slice_type == B_SLICE)));
+  currSlice->weighted_pred_flag = (currSlice->slice_type == P_SLICE || currSlice->slice_type == SP_SLICE) 
+    ? p_Vid->active_pps->weighted_pred_flag 
+    : (currSlice->slice_type == B_SLICE && p_Vid->active_pps->weighted_bipred_idc == 1);
+  currSlice->weighted_bipred_idc = (currSlice->slice_type == B_SLICE && p_Vid->active_pps->weighted_bipred_idc > 0);
 
   if ((p_Vid->active_pps->weighted_pred_flag&&(p_Vid->type==P_SLICE|| p_Vid->type == SP_SLICE))||
       (p_Vid->active_pps->weighted_bipred_idc==1 && (p_Vid->type==B_SLICE)))
@@ -234,8 +246,8 @@ int RestOfSliceHeader(Slice *currSlice)
     pred_weight_table(currSlice);
   }
 
-  if (p_Vid->nal_reference_idc)
-    dec_ref_pic_marking(p_Vid, currStream);
+  if (currSlice->nal_reference_idc)
+    dec_ref_pic_marking(p_Vid, currStream, currSlice);
 
   if (p_Vid->active_pps->entropy_coding_mode_flag && p_Vid->type!=I_SLICE && p_Vid->type!=SI_SLICE)
   {
@@ -247,16 +259,17 @@ int RestOfSliceHeader(Slice *currSlice)
   }
 
   currSlice->slice_qp_delta = val = se_v("SH: slice_qp_delta", currStream);
-  currSlice->qp = p_Vid->qp = 26 + p_Vid->active_pps->pic_init_qp_minus26 + val;
+  //currSlice->qp = p_Vid->qp = 26 + p_Vid->active_pps->pic_init_qp_minus26 + val;
+  currSlice->qp = 26 + p_Vid->active_pps->pic_init_qp_minus26 + val;
 
-  if ((p_Vid->qp < -p_Vid->bitdepth_luma_qp_scale) || (p_Vid->qp > 51))
+  if ((currSlice->qp < -p_Vid->bitdepth_luma_qp_scale) || (currSlice->qp > 51))
     error ("slice_qp_delta makes slice_qp_y out of range", 500);
 
   if(p_Vid->type==SP_SLICE || p_Vid->type == SI_SLICE)
   {
     if(p_Vid->type==SP_SLICE)
     {
-      p_Vid->sp_switch = u_1 ("SH: sp_for_switch_flag", currStream);
+      currSlice->sp_switch = u_1 ("SH: sp_for_switch_flag", currStream);
     }
     currSlice->slice_qs_delta = val = se_v("SH: slice_qs_delta", currStream);
     currSlice->qs = 26 + p_Vid->active_pps->pic_init_qs_minus26 + val;    
@@ -316,9 +329,9 @@ int RestOfSliceHeader(Slice *currSlice)
 
     len = CeilLog2(len+1);
 
-    p_Vid->slice_group_change_cycle = u_v (len, "SH: slice_group_change_cycle", currStream);
+    currSlice->slice_group_change_cycle = u_v (len, "SH: slice_group_change_cycle", currStream);
   }
-  p_Vid->PicHeightInMbs = p_Vid->FrameHeightInMbs / ( 1 + p_Vid->field_pic_flag );
+  p_Vid->PicHeightInMbs = p_Vid->FrameHeightInMbs / ( 1 + currSlice->field_pic_flag );
   p_Vid->PicSizeInMbs   = p_Vid->PicWidthInMbs * p_Vid->PicHeightInMbs;
   p_Vid->FrameSizeInMbs = p_Vid->PicWidthInMbs * p_Vid->FrameHeightInMbs;
 
@@ -344,65 +357,151 @@ static void ref_pic_list_reordering(Slice *currSlice)
 
   if (p_Vid->type!=I_SLICE && p_Vid->type!=SI_SLICE)
   {
-    val = currSlice->ref_pic_list_reordering_flag_l0 = u_1 ("SH: ref_pic_list_reordering_flag_l0", currStream);
+    val = currSlice->ref_pic_list_reordering_flag[LIST_0] = u_1 ("SH: ref_pic_list_reordering_flag_l0", currStream);
 
     if (val)
     {
       i=0;
       do
       {
-        val = currSlice->reordering_of_pic_nums_idc_l0[i] = ue_v("SH: reordering_of_pic_nums_idc_l0", currStream);
+        val = currSlice->reordering_of_pic_nums_idc[LIST_0][i] = ue_v("SH: reordering_of_pic_nums_idc_l0", currStream);
         if (val==0 || val==1)
         {
-          currSlice->abs_diff_pic_num_minus1_l0[i] = ue_v("SH: abs_diff_pic_num_minus1_l0", currStream);
+          currSlice->abs_diff_pic_num_minus1[LIST_0][i] = ue_v("SH: abs_diff_pic_num_minus1_l0", currStream);
         }
         else
         {
           if (val==2)
           {
-            currSlice->long_term_pic_idx_l0[i] = ue_v("SH: long_term_pic_idx_l0", currStream);
+            currSlice->long_term_pic_idx[LIST_0][i] = ue_v("SH: long_term_pic_idx_l0", currStream);
           }
         }
         i++;
-        // assert (i>currSlice->num_ref_idx_l0_active);
+        // assert (i>currSlice->num_ref_idx_active[LIST_0]);
       } while (val != 3);
     }
   }
 
   if (p_Vid->type==B_SLICE)
   {
-    val = currSlice->ref_pic_list_reordering_flag_l1 = u_1 ("SH: ref_pic_list_reordering_flag_l1", currStream);
+    val = currSlice->ref_pic_list_reordering_flag[LIST_1] = u_1 ("SH: ref_pic_list_reordering_flag_l1", currStream);
 
     if (val)
     {
       i=0;
       do
       {
-        val = currSlice->reordering_of_pic_nums_idc_l1[i] = ue_v("SH: reordering_of_pic_nums_idc_l1", currStream);
+        val = currSlice->reordering_of_pic_nums_idc[LIST_1][i] = ue_v("SH: reordering_of_pic_nums_idc_l1", currStream);
         if (val==0 || val==1)
         {
-          currSlice->abs_diff_pic_num_minus1_l1[i] = ue_v("SH: abs_diff_pic_num_minus1_l1", currStream);
+          currSlice->abs_diff_pic_num_minus1[LIST_1][i] = ue_v("SH: abs_diff_pic_num_minus1_l1", currStream);
         }
         else
         {
           if (val==2)
           {
-            currSlice->long_term_pic_idx_l1[i] = ue_v("SH: long_term_pic_idx_l1", currStream);
+            currSlice->long_term_pic_idx[LIST_1][i] = ue_v("SH: long_term_pic_idx_l1", currStream);
           }
         }
         i++;
-        // assert (i>currSlice->num_ref_idx_l1_active);
+        // assert (i>currSlice->num_ref_idx_active[LIST_1]);
       } while (val != 3);
     }
   }
 
   // set reference index of redundant slices.
-  if(p_Vid->redundant_pic_cnt && (p_Vid->type != I_SLICE) )
+  if(currSlice->redundant_pic_cnt && (p_Vid->type != I_SLICE) )
   {
-    p_Vid->redundant_slice_ref_idx = currSlice->abs_diff_pic_num_minus1_l0[0] + 1;
+    currSlice->redundant_slice_ref_idx = currSlice->abs_diff_pic_num_minus1[LIST_0][0] + 1;
   }
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    read the MVC reference picture reordering information
+ ************************************************************************
+ */
+#if (MVC_EXTENSION_ENABLE)
+static void ref_pic_list_mvc_modification(Slice *currSlice)
+{
+  VideoParameters *p_Vid = currSlice->p_Vid;
+	byte dP_nr = assignSE2partition[currSlice->dp_mode][SE_HEADER];
+	DataPartition *partition = &(currSlice->partArr[dP_nr]);
+	Bitstream *currStream = partition->bitstream;
+	int i, val;
+
+	alloc_ref_pic_list_reordering_buffer(currSlice);
+
+	if ((p_Vid->type % 5) != I_SLICE && (p_Vid->type % 5) != SI_SLICE)
+	{
+		val = currSlice->ref_pic_list_reordering_flag[LIST_0] = u_1 ("SH: ref_pic_list_modification_flag_l0", currStream);
+
+		if (val)
+		{
+			i=0;
+			do
+			{
+				val = currSlice->reordering_of_pic_nums_idc[LIST_0][i] = ue_v("SH: modification_of_pic_nums_idc_l0", currStream);
+				if (val==0 || val==1)
+				{
+					currSlice->abs_diff_pic_num_minus1[LIST_0][i] = ue_v("SH: abs_diff_pic_num_minus1_l0", currStream);
+				}
+				else
+				{
+					if (val==2)
+					{
+						currSlice->long_term_pic_idx[LIST_0][i] = ue_v("SH: long_term_pic_idx_l0", currStream);
+					}
+          else if (val==4 || val==5)
+					{
+						currSlice->abs_diff_view_idx_minus1[LIST_0][i] = ue_v("SH: abs_diff_view_idx_minus1_l0", currStream);
+					}
+				}
+				i++;
+				// assert (i>img->num_ref_idx_l0_active);
+			} while (val != 3);
+		}
+	}
+
+	if ((p_Vid->type % 5) == B_SLICE)
+	{
+		val = currSlice->ref_pic_list_reordering_flag[LIST_1] = u_1 ("SH: ref_pic_list_reordering_flag_l1", currStream);
+
+		if (val)
+		{
+			i=0;
+			do
+			{
+				val = currSlice->reordering_of_pic_nums_idc[LIST_1][i] = ue_v("SH: modification_of_pic_nums_idc_l1", currStream);
+				if (val==0 || val==1)
+				{
+					currSlice->abs_diff_pic_num_minus1[LIST_1][i] = ue_v("SH: abs_diff_pic_num_minus1_l1", currStream);
+				}
+				else
+				{
+					if (val==2)
+					{
+						currSlice->long_term_pic_idx[LIST_1][i] = ue_v("SH: long_term_pic_idx_l1", currStream);
+					}
+          else if (val==4 || val==5)
+					{
+						currSlice->abs_diff_view_idx_minus1[LIST_1][i] = ue_v("SH: abs_diff_view_idx_minus1_l1", currStream);
+					}
+				}
+				i++;
+				// assert (i>img->num_ref_idx_l1_active);
+			} while (val != 3);
+		}
+	}
+
+	// set reference index of redundant slices.
+  if(currSlice->redundant_pic_cnt && (p_Vid->type != I_SLICE) )
+	{
+		currSlice->redundant_slice_ref_idx = currSlice->abs_diff_pic_num_minus1[LIST_0][0] + 1;
+	}
+}
+#endif
 
 static void reset_wp_params(Slice *currSlice)
 {
@@ -447,7 +546,7 @@ static void pred_weight_table(Slice *currSlice)
 
   reset_wp_params(currSlice);
 
-  for (i=0; i<currSlice->num_ref_idx_l0_active; i++)
+  for (i=0; i<currSlice->num_ref_idx_active[LIST_0]; i++)
   {
     luma_weight_flag_l0 = u_1("SH: luma_weight_flag_l0", currStream);
 
@@ -485,7 +584,7 @@ static void pred_weight_table(Slice *currSlice)
   }
   if ((p_Vid->type == B_SLICE) && p_Vid->active_pps->weighted_bipred_idc == 1)
   {
-    for (i=0; i<currSlice->num_ref_idx_l1_active; i++)
+    for (i=0; i<currSlice->num_ref_idx_active[LIST_1]; i++)
     {
       luma_weight_flag_l1 = u_1("SH: luma_weight_flag_l1", currStream);
 
@@ -531,30 +630,31 @@ static void pred_weight_table(Slice *currSlice)
  *    read the memory control operations
  ************************************************************************
  */
-void dec_ref_pic_marking(VideoParameters *p_Vid, Bitstream *currStream)
+void dec_ref_pic_marking(VideoParameters *p_Vid, Bitstream *currStream, Slice *pSlice)
 {
   int val;
 
   DecRefPicMarking_t *tmp_drpm,*tmp_drpm2;
 
   // free old buffer content
-  while (p_Vid->dec_ref_pic_marking_buffer)
+  while (pSlice->dec_ref_pic_marking_buffer)
   {
-    tmp_drpm=p_Vid->dec_ref_pic_marking_buffer;
+    tmp_drpm=pSlice->dec_ref_pic_marking_buffer;
 
-    p_Vid->dec_ref_pic_marking_buffer=tmp_drpm->Next;
+    pSlice->dec_ref_pic_marking_buffer=tmp_drpm->Next;
     free (tmp_drpm);
   }
 
-  if (p_Vid->idr_flag)
+  if (pSlice->idr_flag)
   {
-    p_Vid->no_output_of_prior_pics_flag = u_1("SH: no_output_of_prior_pics_flag", currStream);
-    p_Vid->long_term_reference_flag = u_1("SH: long_term_reference_flag", currStream);
+    pSlice->no_output_of_prior_pics_flag = u_1("SH: no_output_of_prior_pics_flag", currStream);
+    p_Vid->no_output_of_prior_pics_flag = pSlice->no_output_of_prior_pics_flag;
+    pSlice->long_term_reference_flag = u_1("SH: long_term_reference_flag", currStream);
   }
   else
   {
-    p_Vid->adaptive_ref_pic_buffering_flag = u_1("SH: adaptive_ref_pic_buffering_flag", currStream);
-    if (p_Vid->adaptive_ref_pic_buffering_flag)
+    pSlice->adaptive_ref_pic_buffering_flag = u_1("SH: adaptive_ref_pic_buffering_flag", currStream);
+    if (pSlice->adaptive_ref_pic_buffering_flag)
     {
       // read Memory Management Control Operation
       do
@@ -583,13 +683,13 @@ void dec_ref_pic_marking(VideoParameters *p_Vid, Bitstream *currStream)
         }
 
         // add command
-        if (p_Vid->dec_ref_pic_marking_buffer==NULL)
+        if (pSlice->dec_ref_pic_marking_buffer==NULL)
         {
-          p_Vid->dec_ref_pic_marking_buffer=tmp_drpm;
+          pSlice->dec_ref_pic_marking_buffer=tmp_drpm;
         }
         else
         {
-          tmp_drpm2=p_Vid->dec_ref_pic_marking_buffer;
+          tmp_drpm2=pSlice->dec_ref_pic_marking_buffer;
           while (tmp_drpm2->Next!=NULL) tmp_drpm2=tmp_drpm2->Next;
           tmp_drpm2->Next=tmp_drpm;
         }
@@ -611,7 +711,7 @@ void dec_ref_pic_marking(VideoParameters *p_Vid, Bitstream *currStream)
  *    none
  ************************************************************************
  */
-void decode_poc(VideoParameters *p_Vid)
+void decode_poc(VideoParameters *p_Vid, Slice *pSlice)
 {
   seq_parameter_set_rbsp_t *active_sps = p_Vid->active_sps;
   int i;
@@ -622,7 +722,7 @@ void decode_poc(VideoParameters *p_Vid)
   {
   case 0: // POC MODE 0
     // 1st
-    if(p_Vid->idr_flag)
+    if(pSlice->idr_flag)
     {
       p_Vid->PrevPicOrderCntMsb = 0;
       p_Vid->PrevPicOrderCntLsb = 0;
@@ -639,56 +739,58 @@ void decode_poc(VideoParameters *p_Vid)
         else
         {
           p_Vid->PrevPicOrderCntMsb = 0;
-          p_Vid->PrevPicOrderCntLsb = p_Vid->toppoc;
+          p_Vid->PrevPicOrderCntLsb = pSlice->toppoc;
         }
       }
     }
     // Calculate the MSBs of current picture
-    if( p_Vid->pic_order_cnt_lsb  <  p_Vid->PrevPicOrderCntLsb  &&
-      ( p_Vid->PrevPicOrderCntLsb - p_Vid->pic_order_cnt_lsb )  >=  ( MaxPicOrderCntLsb / 2 ) )
-      p_Vid->PicOrderCntMsb = p_Vid->PrevPicOrderCntMsb + MaxPicOrderCntLsb;
-    else if ( p_Vid->pic_order_cnt_lsb  >  p_Vid->PrevPicOrderCntLsb  &&
-      ( p_Vid->pic_order_cnt_lsb - p_Vid->PrevPicOrderCntLsb )  >  ( MaxPicOrderCntLsb / 2 ) )
-      p_Vid->PicOrderCntMsb = p_Vid->PrevPicOrderCntMsb - MaxPicOrderCntLsb;
+    if( pSlice->pic_order_cnt_lsb  <  p_Vid->PrevPicOrderCntLsb  &&
+      ( p_Vid->PrevPicOrderCntLsb - pSlice->pic_order_cnt_lsb )  >=  ( MaxPicOrderCntLsb / 2 ) )
+      pSlice->PicOrderCntMsb = p_Vid->PrevPicOrderCntMsb + MaxPicOrderCntLsb;
+    else if ( pSlice->pic_order_cnt_lsb  >  p_Vid->PrevPicOrderCntLsb  &&
+      ( pSlice->pic_order_cnt_lsb - p_Vid->PrevPicOrderCntLsb )  >  ( MaxPicOrderCntLsb / 2 ) )
+      pSlice->PicOrderCntMsb = p_Vid->PrevPicOrderCntMsb - MaxPicOrderCntLsb;
     else
-      p_Vid->PicOrderCntMsb = p_Vid->PrevPicOrderCntMsb;
+      pSlice->PicOrderCntMsb = p_Vid->PrevPicOrderCntMsb;
 
     // 2nd
 
-    if(p_Vid->field_pic_flag==0)
+    if(pSlice->field_pic_flag==0)
     {           //frame pix
-      p_Vid->toppoc = p_Vid->PicOrderCntMsb + p_Vid->pic_order_cnt_lsb;
-      p_Vid->bottompoc = p_Vid->toppoc + p_Vid->delta_pic_order_cnt_bottom;
-      p_Vid->ThisPOC = p_Vid->framepoc = (p_Vid->toppoc < p_Vid->bottompoc)? p_Vid->toppoc : p_Vid->bottompoc; // POC200301
+      pSlice->toppoc = pSlice->PicOrderCntMsb + pSlice->pic_order_cnt_lsb;
+      pSlice->bottompoc = pSlice->toppoc + pSlice->delta_pic_order_cnt_bottom;
+      pSlice->ThisPOC = pSlice->framepoc = (pSlice->toppoc < pSlice->bottompoc)? pSlice->toppoc : pSlice->bottompoc; // POC200301
     }
-    else if (p_Vid->bottom_field_flag == FALSE)
+    else if (pSlice->bottom_field_flag == FALSE)
     {  //top field
-      p_Vid->ThisPOC= p_Vid->toppoc = p_Vid->PicOrderCntMsb + p_Vid->pic_order_cnt_lsb;
+      pSlice->ThisPOC= pSlice->toppoc = pSlice->PicOrderCntMsb + pSlice->pic_order_cnt_lsb;
     }
     else
     {  //bottom field
-      p_Vid->ThisPOC= p_Vid->bottompoc = p_Vid->PicOrderCntMsb + p_Vid->pic_order_cnt_lsb;
+      pSlice->ThisPOC= pSlice->bottompoc = pSlice->PicOrderCntMsb + pSlice->pic_order_cnt_lsb;
     }
-    p_Vid->framepoc=p_Vid->ThisPOC;
+    pSlice->framepoc = pSlice->ThisPOC;
 
-    if ( p_Vid->frame_num!=p_Vid->PreviousFrameNum)
-      p_Vid->PreviousFrameNum=p_Vid->frame_num;
+    p_Vid->ThisPOC = pSlice->ThisPOC;
 
-    if(p_Vid->nal_reference_idc)
+    if ( pSlice->frame_num != p_Vid->PreviousFrameNum)
+      p_Vid->PreviousFrameNum = pSlice->frame_num;
+
+    if(pSlice->nal_reference_idc)
     {
-      p_Vid->PrevPicOrderCntLsb = p_Vid->pic_order_cnt_lsb;
-      p_Vid->PrevPicOrderCntMsb = p_Vid->PicOrderCntMsb;
+      p_Vid->PrevPicOrderCntLsb = pSlice->pic_order_cnt_lsb;
+      p_Vid->PrevPicOrderCntMsb = pSlice->PicOrderCntMsb;
     }
 
     break;
 
   case 1: // POC MODE 1
     // 1st
-    if(p_Vid->idr_flag)
+    if(pSlice->idr_flag)
     {
       p_Vid->FrameNumOffset=0;     //  first pix of IDRGOP,
-      p_Vid->delta_pic_order_cnt[0]=0;                        //ignore first delta
-      if(p_Vid->frame_num)
+      pSlice->delta_pic_order_cnt[0]=0;                        //ignore first delta
+      if(pSlice->frame_num)
         error("frame_num not equal to zero in IDR picture", -1020);
     }
     else
@@ -698,7 +800,7 @@ void decode_poc(VideoParameters *p_Vid)
         p_Vid->PreviousFrameNumOffset = 0;
         p_Vid->PreviousFrameNum = 0;
       }
-      if (p_Vid->frame_num<p_Vid->PreviousFrameNum)
+      if (pSlice->frame_num<p_Vid->PreviousFrameNum)
       {             //not first pix of IDRGOP
         p_Vid->FrameNumOffset = p_Vid->PreviousFrameNumOffset + p_Vid->MaxFrameNum;
       }
@@ -710,11 +812,11 @@ void decode_poc(VideoParameters *p_Vid)
 
     // 2nd
     if(active_sps->num_ref_frames_in_pic_order_cnt_cycle)
-      p_Vid->AbsFrameNum = p_Vid->FrameNumOffset+p_Vid->frame_num;
+      pSlice->AbsFrameNum = p_Vid->FrameNumOffset+pSlice->frame_num;
     else
-      p_Vid->AbsFrameNum=0;
-    if( (!p_Vid->nal_reference_idc) && p_Vid->AbsFrameNum > 0)
-      p_Vid->AbsFrameNum--;
+      pSlice->AbsFrameNum=0;
+    if( (!pSlice->nal_reference_idc) && pSlice->AbsFrameNum > 0)
+      pSlice->AbsFrameNum--;
 
     // 3rd
     p_Vid->ExpectedDeltaPerPicOrderCntCycle=0;
@@ -723,10 +825,10 @@ void decode_poc(VideoParameters *p_Vid)
     for(i=0;i<(int) active_sps->num_ref_frames_in_pic_order_cnt_cycle;i++)
       p_Vid->ExpectedDeltaPerPicOrderCntCycle += active_sps->offset_for_ref_frame[i];
 
-    if(p_Vid->AbsFrameNum)
+    if(pSlice->AbsFrameNum)
     {
-      p_Vid->PicOrderCntCycleCnt = (p_Vid->AbsFrameNum-1)/active_sps->num_ref_frames_in_pic_order_cnt_cycle;
-      p_Vid->FrameNumInPicOrderCntCycle = (p_Vid->AbsFrameNum-1)%active_sps->num_ref_frames_in_pic_order_cnt_cycle;
+      p_Vid->PicOrderCntCycleCnt = (pSlice->AbsFrameNum-1)/active_sps->num_ref_frames_in_pic_order_cnt_cycle;
+      p_Vid->FrameNumInPicOrderCntCycle = (pSlice->AbsFrameNum-1)%active_sps->num_ref_frames_in_pic_order_cnt_cycle;
       p_Vid->ExpectedPicOrderCnt = p_Vid->PicOrderCntCycleCnt*p_Vid->ExpectedDeltaPerPicOrderCntCycle;
       for(i=0;i<=(int)p_Vid->FrameNumInPicOrderCntCycle;i++)
         p_Vid->ExpectedPicOrderCnt += active_sps->offset_for_ref_frame[i];
@@ -734,37 +836,37 @@ void decode_poc(VideoParameters *p_Vid)
     else
       p_Vid->ExpectedPicOrderCnt=0;
 
-    if(!p_Vid->nal_reference_idc)
+    if(!pSlice->nal_reference_idc)
       p_Vid->ExpectedPicOrderCnt += active_sps->offset_for_non_ref_pic;
 
-    if(p_Vid->field_pic_flag==0)
+    if(pSlice->field_pic_flag==0)
     {           //frame pix
-      p_Vid->toppoc = p_Vid->ExpectedPicOrderCnt + p_Vid->delta_pic_order_cnt[0];
-      p_Vid->bottompoc = p_Vid->toppoc + active_sps->offset_for_top_to_bottom_field + p_Vid->delta_pic_order_cnt[1];
-      p_Vid->ThisPOC = p_Vid->framepoc = (p_Vid->toppoc < p_Vid->bottompoc)? p_Vid->toppoc : p_Vid->bottompoc; // POC200301
+      pSlice->toppoc = p_Vid->ExpectedPicOrderCnt + pSlice->delta_pic_order_cnt[0];
+      pSlice->bottompoc = pSlice->toppoc + active_sps->offset_for_top_to_bottom_field + pSlice->delta_pic_order_cnt[1];
+      pSlice->ThisPOC = pSlice->framepoc = (pSlice->toppoc < pSlice->bottompoc)? pSlice->toppoc : pSlice->bottompoc; // POC200301
     }
-    else if (p_Vid->bottom_field_flag == FALSE)
+    else if (pSlice->bottom_field_flag == FALSE)
     {  //top field
-      p_Vid->ThisPOC = p_Vid->toppoc = p_Vid->ExpectedPicOrderCnt + p_Vid->delta_pic_order_cnt[0];
+      pSlice->ThisPOC = pSlice->toppoc = p_Vid->ExpectedPicOrderCnt + pSlice->delta_pic_order_cnt[0];
     }
     else
     {  //bottom field
-      p_Vid->ThisPOC = p_Vid->bottompoc = p_Vid->ExpectedPicOrderCnt + active_sps->offset_for_top_to_bottom_field + p_Vid->delta_pic_order_cnt[0];
+      pSlice->ThisPOC = pSlice->bottompoc = p_Vid->ExpectedPicOrderCnt + active_sps->offset_for_top_to_bottom_field + pSlice->delta_pic_order_cnt[0];
     }
-    p_Vid->framepoc=p_Vid->ThisPOC;
+    pSlice->framepoc=pSlice->ThisPOC;
 
-    p_Vid->PreviousFrameNum=p_Vid->frame_num;
+    p_Vid->PreviousFrameNum=pSlice->frame_num;
     p_Vid->PreviousFrameNumOffset=p_Vid->FrameNumOffset;
 
     break;
 
 
   case 2: // POC MODE 2
-    if(p_Vid->idr_flag) // IDR picture
+    if(pSlice->idr_flag) // IDR picture
     {
       p_Vid->FrameNumOffset=0;     //  first pix of IDRGOP,
-      p_Vid->ThisPOC = p_Vid->framepoc = p_Vid->toppoc = p_Vid->bottompoc = 0;
-      if(p_Vid->frame_num)
+      pSlice->ThisPOC = pSlice->framepoc = pSlice->toppoc = pSlice->bottompoc = 0;
+      if(pSlice->frame_num)
         error("frame_num not equal to zero in IDR picture", -1020);
     }
     else
@@ -774,26 +876,27 @@ void decode_poc(VideoParameters *p_Vid)
         p_Vid->PreviousFrameNum = 0;
         p_Vid->PreviousFrameNumOffset = 0;
       }
-      if (p_Vid->frame_num<p_Vid->PreviousFrameNum)
+      if (pSlice->frame_num<p_Vid->PreviousFrameNum)
         p_Vid->FrameNumOffset = p_Vid->PreviousFrameNumOffset + p_Vid->MaxFrameNum;
       else
         p_Vid->FrameNumOffset = p_Vid->PreviousFrameNumOffset;
 
 
-      p_Vid->AbsFrameNum = p_Vid->FrameNumOffset+p_Vid->frame_num;
-      if(!p_Vid->nal_reference_idc)
-        p_Vid->ThisPOC = (2*p_Vid->AbsFrameNum - 1);
+      pSlice->AbsFrameNum = p_Vid->FrameNumOffset+pSlice->frame_num;
+      if(!pSlice->nal_reference_idc)
+        pSlice->ThisPOC = (2*pSlice->AbsFrameNum - 1);
       else
-        p_Vid->ThisPOC = (2*p_Vid->AbsFrameNum);
+        pSlice->ThisPOC = (2*pSlice->AbsFrameNum);
 
-      if (p_Vid->field_pic_flag==0)
-        p_Vid->toppoc = p_Vid->bottompoc = p_Vid->framepoc = p_Vid->ThisPOC;
-      else if (p_Vid->bottom_field_flag == FALSE)
-         p_Vid->toppoc = p_Vid->framepoc = p_Vid->ThisPOC;
-      else p_Vid->bottompoc = p_Vid->framepoc = p_Vid->ThisPOC;
+      if (pSlice->field_pic_flag==0)
+        pSlice->toppoc = pSlice->bottompoc = pSlice->framepoc = pSlice->ThisPOC;
+      else if (pSlice->bottom_field_flag == FALSE)
+         pSlice->toppoc = pSlice->framepoc = pSlice->ThisPOC;
+      else 
+        pSlice->bottompoc = pSlice->framepoc = pSlice->ThisPOC;
     }
 
-    p_Vid->PreviousFrameNum=p_Vid->frame_num;
+    p_Vid->PreviousFrameNum=pSlice->frame_num;
     p_Vid->PreviousFrameNumOffset=p_Vid->FrameNumOffset;
     break;
 
@@ -818,11 +921,11 @@ int dumppoc(VideoParameters *p_Vid)
   seq_parameter_set_rbsp_t *active_sps = p_Vid->active_sps;
 
   printf ("\nPOC locals...\n");
-  printf ("toppoc                                %d\n", (int) p_Vid->toppoc);
-  printf ("bottompoc                             %d\n", (int) p_Vid->bottompoc);
-  printf ("frame_num                             %d\n", (int) p_Vid->frame_num);
-  printf ("field_pic_flag                        %d\n", (int) p_Vid->field_pic_flag);
-  printf ("bottom_field_flag                     %d\n", (int) p_Vid->bottom_field_flag);
+  printf ("toppoc                                %d\n", (int) p_Vid->ppSliceList[0]->toppoc);
+  printf ("bottompoc                             %d\n", (int) p_Vid->ppSliceList[0]->bottompoc);
+  printf ("frame_num                             %d\n", (int) p_Vid->ppSliceList[0]->frame_num);
+  printf ("field_pic_flag                        %d\n", (int) p_Vid->ppSliceList[0]->field_pic_flag);
+  printf ("bottom_field_flag                     %d\n", (int) p_Vid->ppSliceList[0]->bottom_field_flag);
   printf ("POC SPS\n");
   printf ("log2_max_frame_num_minus4             %d\n", (int) active_sps->log2_max_frame_num_minus4);         // POC200301
   printf ("log2_max_pic_order_cnt_lsb_minus4     %d\n", (int) active_sps->log2_max_pic_order_cnt_lsb_minus4);
@@ -835,10 +938,10 @@ int dumppoc(VideoParameters *p_Vid)
   printf ("offset_for_ref_frame[1]               %d\n", (int) active_sps->offset_for_ref_frame[1]);
   printf ("POC in SLice Header\n");
   printf ("bottom_field_pic_order_in_frame_present_flag                %d\n", (int) p_Vid->active_pps->bottom_field_pic_order_in_frame_present_flag);
-  printf ("delta_pic_order_cnt[0]                %d\n", (int) p_Vid->delta_pic_order_cnt[0]);
-  printf ("delta_pic_order_cnt[1]                %d\n", (int) p_Vid->delta_pic_order_cnt[1]);
-  printf ("delta_pic_order_cnt[2]                %d\n", (int) p_Vid->delta_pic_order_cnt[2]);
-  printf ("idr_flag                              %d\n", (int) p_Vid->idr_flag);
+  printf ("delta_pic_order_cnt[0]                %d\n", (int) p_Vid->ppSliceList[0]->delta_pic_order_cnt[0]);
+  printf ("delta_pic_order_cnt[1]                %d\n", (int) p_Vid->ppSliceList[0]->delta_pic_order_cnt[1]);
+  printf ("delta_pic_order_cnt[2]                %d\n", (int) p_Vid->ppSliceList[0]->delta_pic_order_cnt[2]);
+  printf ("idr_flag                              %d\n", (int) p_Vid->ppSliceList[0]->idr_flag);
   printf ("MaxFrameNum                           %d\n", (int) p_Vid->MaxFrameNum);
 
   return 0;
@@ -851,13 +954,13 @@ int dumppoc(VideoParameters *p_Vid)
  *  POC200301
  ************************************************************************
  */
-int picture_order(VideoParameters *p_Vid)
+int picture_order(VideoParameters *p_Vid, Slice *pSlice)
 {
-  if (p_Vid->field_pic_flag==0) // is a frame
-    return p_Vid->framepoc;
-  else if (p_Vid->bottom_field_flag == FALSE) // top field
-    return p_Vid->toppoc;
+  if (pSlice->field_pic_flag==0) // is a frame
+    return pSlice->framepoc;
+  else if (pSlice->bottom_field_flag == FALSE) // top field
+    return pSlice->toppoc;
   else // bottom field
-    return p_Vid->bottompoc;
+    return pSlice->bottompoc;
 }
 

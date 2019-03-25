@@ -102,18 +102,18 @@ void find_distortion (VideoParameters *p_Vid, ImageData *imgData)
   if (p_Vid->structure!=FRAME)
   {
     // Luma.
-    diff_cmp[0] += compute_SSE(p_Vid->pCurImg, p_Vid->imgY_com, 0, 0, p_Inp->output.height, p_Inp->output.width);
+    diff_cmp[0] += compute_SSE(p_Vid->pCurImg, p_Vid->imgY_com, 0, 0, p_Inp->output.height[0], p_Inp->output.width[0]);
 
     // Chroma.
     if (p_Vid->yuv_format != YUV400)
     {
-      diff_cmp[1] += compute_SSE(p_Vid->pImgOrg[1], p_Vid->imgUV_com[0], 0, 0, p_Inp->output.height_cr, p_Inp->output.width_cr);
-      diff_cmp[2] += compute_SSE(p_Vid->pImgOrg[2], p_Vid->imgUV_com[1], 0, 0, p_Inp->output.height_cr, p_Inp->output.width_cr);
+      diff_cmp[1] += compute_SSE(p_Vid->pImgOrg[1], p_Vid->imgUV_com[0], 0, 0, p_Inp->output.height[1], p_Inp->output.width[1]);
+      diff_cmp[2] += compute_SSE(p_Vid->pImgOrg[2], p_Vid->imgUV_com[1], 0, 0, p_Inp->output.height[1], p_Inp->output.width[1]);
     }
   }
   else
   {
-    if( IS_INDEPENDENT(p_Inp) )
+    if( (p_Inp->separate_colour_plane_flag != 0) )
     {
       p_Vid->enc_picture = p_Vid->enc_frame_picture[0];     
     }
@@ -121,7 +121,7 @@ void find_distortion (VideoParameters *p_Vid, ImageData *imgData)
     p_Vid->pImgOrg[0] = imgData->frm_data[0];
 
     // Luma.
-    diff_cmp[0] += compute_SSE(p_Vid->pImgOrg[0], p_Vid->enc_picture->imgY, 0, 0, p_Inp->output.height, p_Inp->output.width);
+    diff_cmp[0] += compute_SSE(p_Vid->pImgOrg[0], p_Vid->enc_picture->imgY, 0, 0, p_Inp->output.height[0], p_Inp->output.width[0]);
 
     // Chroma.
     if (p_Vid->yuv_format != YUV400)
@@ -129,8 +129,8 @@ void find_distortion (VideoParameters *p_Vid, ImageData *imgData)
       p_Vid->pImgOrg[1] = imgData->frm_data[1];
       p_Vid->pImgOrg[2] = imgData->frm_data[2]; 
 
-      diff_cmp[1] += compute_SSE(p_Vid->pImgOrg[1], p_Vid->enc_picture->imgUV[0], 0, 0, p_Inp->output.height_cr, p_Inp->output.width_cr);
-      diff_cmp[2] += compute_SSE(p_Vid->pImgOrg[2], p_Vid->enc_picture->imgUV[1], 0, 0, p_Inp->output.height_cr, p_Inp->output.width_cr);
+      diff_cmp[1] += compute_SSE(p_Vid->pImgOrg[1], p_Vid->enc_picture->imgUV[0], 0, 0, p_Inp->output.height[1], p_Inp->output.width[1]);
+      diff_cmp[2] += compute_SSE(p_Vid->pImgOrg[2], p_Vid->enc_picture->imgUV[1], 0, 0, p_Inp->output.height[1], p_Inp->output.width[1]);
     }
   }
 
@@ -166,7 +166,7 @@ void select_img(VideoParameters *p_Vid, ImageStructure *imgSRC, ImageStructure *
 
     imgREF->data[0] = imgData->frm_data[0];
 
-    if ((p_Inp->PicInterlace == ADAPTIVE_CODING) || IS_INDEPENDENT(p_Inp))
+    if ((p_Inp->PicInterlace == ADAPTIVE_CODING) || (p_Inp->separate_colour_plane_flag != 0))
     {
       p_Vid->enc_picture = p_Vid->enc_frame_picture[0];
     }

@@ -18,6 +18,7 @@
 #include "global.h"
 #include "memalloc.h"
 #include "erc_api.h"
+#include "fast_memory.h"
 
 /*!
  ************************************************************************
@@ -83,11 +84,12 @@ ercVariables_t *ercOpen( void )
  */
 void ercReset( ercVariables_t *errorVar, int nOfMBs, int numOfSegments, int picSizeX )
 {
-  int *tmp = NULL;
+  char *tmp = NULL;
   int i = 0;
 
   if ( errorVar && errorVar->concealment )
   {
+    ercSegment_t *segments = NULL;
     // If frame size has been changed
     if ( nOfMBs != errorVar->nOfMBs && errorVar->yCondition != NULL )
     {
@@ -108,16 +110,16 @@ void ercReset( ercVariables_t *errorVar, int nOfMBs, int numOfSegments, int picS
     {
       errorVar->segments = (ercSegment_t *)malloc( numOfSegments*sizeof(ercSegment_t) );
       if ( errorVar->segments == NULL ) no_mem_exit("ercReset: errorVar->segments");
-      memset( errorVar->segments, 0, numOfSegments*sizeof(ercSegment_t));
+      fast_memset( errorVar->segments, 0, numOfSegments*sizeof(ercSegment_t));
       errorVar->nOfSegments = numOfSegments;
 
-      errorVar->yCondition = (int *)malloc( 4*nOfMBs*sizeof(int) );
+      errorVar->yCondition = (char *)malloc( 4*nOfMBs*sizeof(char) );
       if ( errorVar->yCondition == NULL ) no_mem_exit("ercReset: errorVar->yCondition");
-      errorVar->prevFrameYCondition = (int *)malloc( 4*nOfMBs*sizeof(int) );
+      errorVar->prevFrameYCondition = (char *)malloc( 4*nOfMBs*sizeof(char) );
       if ( errorVar->prevFrameYCondition == NULL ) no_mem_exit("ercReset: errorVar->prevFrameYCondition");
-      errorVar->uCondition = (int *)malloc( nOfMBs*sizeof(int) );
+      errorVar->uCondition = (char *)malloc( nOfMBs*sizeof(char) );
       if ( errorVar->uCondition == NULL ) no_mem_exit("ercReset: errorVar->uCondition");
-      errorVar->vCondition = (int *)malloc( nOfMBs*sizeof(int) );
+      errorVar->vCondition = (char *)malloc( nOfMBs*sizeof(char) );
       if ( errorVar->vCondition == NULL ) no_mem_exit("ercReset: errorVar->vCondition");
       errorVar->nOfMBs = nOfMBs;
     }
@@ -130,9 +132,9 @@ void ercReset( ercVariables_t *errorVar, int nOfMBs, int numOfSegments, int picS
     }
 
     // Reset tables and parameters
-    memset( errorVar->yCondition, 0, 4*nOfMBs*sizeof(*errorVar->yCondition));
-    memset( errorVar->uCondition, 0,   nOfMBs*sizeof(*errorVar->uCondition));
-    memset( errorVar->vCondition, 0,   nOfMBs*sizeof(*errorVar->vCondition));
+    fast_memset( errorVar->yCondition, 0, 4*nOfMBs*sizeof(*errorVar->yCondition));
+    fast_memset( errorVar->uCondition, 0,   nOfMBs*sizeof(*errorVar->uCondition));
+    fast_memset( errorVar->vCondition, 0,   nOfMBs*sizeof(*errorVar->vCondition));
 
     if (errorVar->nOfSegments != numOfSegments)
     {
@@ -143,13 +145,14 @@ void ercReset( ercVariables_t *errorVar, int nOfMBs, int numOfSegments, int picS
       errorVar->nOfSegments = numOfSegments;
     }
 
-    memset( errorVar->segments, 0, errorVar->nOfSegments*sizeof(ercSegment_t));
+    //memset( errorVar->segments, 0, errorVar->nOfSegments * sizeof(ercSegment_t));
 
+    segments = errorVar->segments;
     for ( i = 0; i < errorVar->nOfSegments; i++ )
     {
-      errorVar->segments[i].fCorrupted = 1; //! mark segments as corrupted
-      errorVar->segments[i].startMBPos = 0;
-      errorVar->segments[i].endMBPos = nOfMBs - 1;
+      segments->startMBPos = 0;
+      segments->endMBPos = (short) (nOfMBs - 1);
+      (segments++)->fCorrupted = 1; //! mark segments as corrupted
     }
 
     errorVar->currSegment = 0;
@@ -231,7 +234,7 @@ void ercStartSegment( int currMBNum, int segment, unsigned int bitPos, ercVariab
     errorVar->currSegmentCorrupted = 0;
 
     errorVar->segments[ segment ].fCorrupted = 0;
-    errorVar->segments[ segment ].startMBPos = currMBNum;
+    errorVar->segments[ segment ].startMBPos = (short) currMBNum;
 
   }
 }
@@ -255,7 +258,7 @@ void ercStopSegment( int currMBNum, int segment, unsigned int bitPos, ercVariabl
 {
   if ( errorVar && errorVar->concealment )
   {
-    errorVar->segments[ segment ].endMBPos = currMBNum; //! Changed TO 12.11.2001
+    errorVar->segments[ segment ].endMBPos = (short) currMBNum; //! Changed TO 12.11.2001
     errorVar->currSegment++;
   }
 }

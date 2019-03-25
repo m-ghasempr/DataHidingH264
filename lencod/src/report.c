@@ -28,6 +28,8 @@
 #include "output.h"
 #include "parset.h"
 #include "report.h"
+#include "img_process_types.h"
+
 
 static const char DistortionType[3][20] = {"SAD", "SSE", "Hadamard SAD"};
 
@@ -115,8 +117,11 @@ void report_frame_statistic(VideoParameters *p_Vid, InputParameters *p_Inp)
   fprintf(p_stat_frm, "%3d |", p_Vid->qp);
   fprintf(p_stat_frm, "  %d/%d  |", p_Inp->PicInterlace, p_Inp->MbInterlace);
 
-
+#if (MVC_EXTENSION_ENABLE)
+  if (p_Vid->curr_frm_idx == 0 && p_Vid->frame_num == 0 && !p_Vid->view_id)
+#else
   if (p_Vid->curr_frm_idx == 0 && p_Vid->frame_num == 0)
+#endif
   {
     bitcounter = (int) p_Vid->p_Stats->bit_counter[I_SLICE];
   }
@@ -284,7 +289,7 @@ void report_stats(VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters
     break;
   }
 
-  fprintf(p_stat,  " Image format                 : %dx%d\n", p_Inp->output.width, p_Inp->output.height);
+  fprintf(p_stat,  " Image format                 : %dx%d\n", p_Inp->output.width[0], p_Inp->output.height[0]);
 
   if (p_Inp->intra_upd)
     fprintf(p_stat," Error robustness             : On\n");
@@ -312,7 +317,9 @@ void report_stats(VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters
     fprintf(p_stat, " MB Field Coding : On \n");
 
   if (p_Inp->SearchMode == EPZS)
+  {
     EPZSOutputStats(p_Inp, p_stat, 1);
+  }
 
   if (p_Inp->full_search == 2)
     fprintf(p_stat," Search range restrictions    : none\n");
@@ -527,7 +534,7 @@ void report_log(VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *
   fprintf(p_log,"%5d |  %d/%d  |", p_Inp->no_frames, p_Inp->PicInterlace, p_Inp->MbInterlace);
   fprintf(p_log," %-3d| %-3d| %-3d|", p_Inp->qp[I_SLICE], p_Inp->qp[P_SLICE], p_Inp->qp[B_SLICE]);
 
-  fprintf(p_log,"%4dx%-4d|", p_Inp->output.width, p_Inp->output.height);
+  fprintf(p_log,"%4dx%-4d|", p_Inp->output.width[0], p_Inp->output.height[0]);
   fprintf(p_log,"  %3d  |%3d |", p_Inp->intra_period, p_Stats->NumberBFrames);
 
 
@@ -656,6 +663,9 @@ void report( VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *p_S
   int64 bit_use[NUM_SLICE_TYPES][2];
   int i,j;
   int64 total_bits;
+#if (MVC_EXTENSION_ENABLE)
+  int64 total_bits_v[NUM_VIEWS];
+#endif
 
   bit_use[ I_SLICE][0] = p_Stats->frame_ctr[I_SLICE];
   bit_use[ P_SLICE][0] = imax(p_Stats->frame_ctr[P_SLICE ] + p_Stats->frame_ctr[SP_SLICE], 1);
@@ -665,8 +675,6 @@ void report( VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *p_S
   // normalize time p_Stats
   p_Vid->tot_time    = timenorm(p_Vid->tot_time);
   p_Vid->me_tot_time = timenorm(p_Vid->me_tot_time);
-
-
   //  Accumulate bit usage for inter and intra frames
   for (j=0; j < NUM_SLICE_TYPES; j++)
   {
@@ -724,6 +732,28 @@ void report( VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *p_S
     float csnr_u = psnr(p_Vid->max_imgpel_value_comp_sq[1], impix_cr, sse->average[1]);
     float csnr_v = psnr(p_Vid->max_imgpel_value_comp_sq[2], impix_cr, sse->average[2]);
 
+#if (MVC_EXTENSION_ENABLE)
+    DistMetric *snr_v[2] = {NULL, NULL};
+    DistMetric *sse_v[2] = {NULL, NULL};
+    float csnr_y_v[2] = {0.0, 0.0};
+    float csnr_u_v[2] = {0.0, 0.0};
+    float csnr_v_v[2] = {0.0, 0.0};
+
+    if (p_Inp->num_of_views == 2)
+    {
+      snr_v[0] = &p_Dist->metric_v[0][PSNR];
+      snr_v[1] = &p_Dist->metric_v[1][PSNR];
+      sse_v[0] = &p_Dist->metric_v[0][SSE];
+      sse_v[1] = &p_Dist->metric_v[1][SSE];
+      csnr_y_v[0] = psnr(p_Vid->max_imgpel_value_comp_sq[0], impix   , sse_v[0]->average[0]);
+      csnr_u_v[0] = psnr(p_Vid->max_imgpel_value_comp_sq[1], impix_cr, sse_v[0]->average[1]);
+      csnr_v_v[0] = psnr(p_Vid->max_imgpel_value_comp_sq[2], impix_cr, sse_v[0]->average[2]);
+      csnr_y_v[1] = psnr(p_Vid->max_imgpel_value_comp_sq[0], impix   , sse_v[1]->average[0]);
+      csnr_u_v[1] = psnr(p_Vid->max_imgpel_value_comp_sq[1], impix_cr, sse_v[1]->average[1]);
+      csnr_v_v[1] = psnr(p_Vid->max_imgpel_value_comp_sq[2], impix_cr, sse_v[1]->average[2]);
+    }
+#endif
+
     fprintf(stdout,  " Total encoding time for the seq.  : %7.3f sec (%3.2f fps)\n", (float) p_Vid->tot_time * 0.001, 1000.0 * (float) (p_Stats->frame_counter) / (float)p_Vid->tot_time);
     fprintf(stdout,  " Total ME time for sequence        : %7.3f sec \n\n", (float)p_Vid->me_tot_time * 0.001);
 
@@ -733,6 +763,25 @@ void report( VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *p_S
       snr->average[1], csnr_u, sse->average[1]/(float)impix_cr);
     fprintf(stdout," V { PSNR (dB), cSNR (dB), MSE }   : { %7.3f, %7.3f, %9.5f }\n",
       snr->average[2], csnr_v, sse->average[2]/(float)impix_cr);
+#if (MVC_EXTENSION_ENABLE)
+    if (p_Inp->num_of_views == 2)
+    {
+      fprintf( stdout, "\n" );
+      fprintf(stdout," View0_Y { PSNR (dB), cSNR (dB), MSE }   : { %7.3f, %7.3f, %9.5f }\n", 
+        snr_v[0]->average[0], csnr_y_v[0], sse_v[0]->average[0]/(float)impix);
+      fprintf(stdout," View0_U { PSNR (dB), cSNR (dB), MSE }   : { %7.3f, %7.3f, %9.5f }\n",
+        snr_v[0]->average[1], csnr_u_v[0], sse_v[0]->average[1]/(float)impix_cr);
+      fprintf(stdout," View0_V { PSNR (dB), cSNR (dB), MSE }   : { %7.3f, %7.3f, %9.5f }\n",
+        snr_v[0]->average[2], csnr_v_v[0], sse_v[0]->average[2]/(float)impix_cr);
+      fprintf( stdout, "\n" );
+      fprintf(stdout," View1_Y { PSNR (dB), cSNR (dB), MSE }   : { %7.3f, %7.3f, %9.5f }\n", 
+        snr_v[1]->average[0], csnr_y_v[1], sse_v[1]->average[0]/(float)impix);
+      fprintf(stdout," View1_U { PSNR (dB), cSNR (dB), MSE }   : { %7.3f, %7.3f, %9.5f }\n",
+        snr_v[1]->average[1], csnr_u_v[1], sse_v[1]->average[1]/(float)impix_cr);
+      fprintf(stdout," View1_V { PSNR (dB), cSNR (dB), MSE }   : { %7.3f, %7.3f, %9.5f }\n",
+        snr_v[1]->average[2], csnr_v_v[1], sse_v[1]->average[2]/(float)impix_cr);
+    }
+#endif
 
     if(p_Inp->DistortionYUVtoRGB == 1)
     {
@@ -787,31 +836,103 @@ void report( VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *p_S
   total_bits += p_Stats->bit_ctr_filler_data;
   for (i = 0; i < NUM_SLICE_TYPES; i++)
     total_bits += p_Stats->bit_counter[i];
+#if (MVC_EXTENSION_ENABLE)
+  if (p_Inp->num_of_views == 2)
+  {
+    for ( j = 0; j < NUM_VIEWS; j++ )
+    {
+      total_bits_v[j] = p_Stats->bit_ctr_parametersets_v[j];
+      total_bits_v[j] += p_Stats->bit_ctr_filler_data_v[j];
+      for (i = 0; i < NUM_SLICE_TYPES; i++)
+        total_bits_v[j] += p_Stats->bit_counter_v[j][i];
+    }
+  }
 
+  if (p_Inp->num_of_views == 2 && p_Vid->fld_flag)
+  {
+    if (p_Stats->frame_ctr[B_SLICE] != 0)
+    {
+      fprintf(stdout, " Total bits                        : %" FORMAT_OFF_T  " (I %" FORMAT_OFF_T  ", P %" FORMAT_OFF_T  ", B %" FORMAT_OFF_T  " NVB %d) \n",
+        total_bits_v[0] + total_bits_v[1], 
+        p_Stats->bit_counter_v[0][I_SLICE] + p_Stats->bit_counter_v[1][I_SLICE],
+        p_Stats->bit_counter_v[0][P_SLICE] + p_Stats->bit_counter_v[1][P_SLICE], 
+        p_Stats->bit_counter_v[0][B_SLICE] + p_Stats->bit_counter_v[1][B_SLICE], 
+        p_Stats->bit_ctr_parametersets_v[0] + p_Stats->bit_ctr_parametersets_v[1]);
+    }
+    else
+    {
+      fprintf(stdout, " Total bits                        : %" FORMAT_OFF_T  " (I %" FORMAT_OFF_T  ", P %" FORMAT_OFF_T  ", NVB %d) \n",
+        total_bits_v[0] + total_bits_v[1], 
+        p_Stats->bit_counter_v[0][I_SLICE] + p_Stats->bit_counter_v[1][I_SLICE],
+        p_Stats->bit_counter_v[0][P_SLICE] + p_Stats->bit_counter_v[1][P_SLICE], 
+        p_Stats->bit_ctr_parametersets_v[0] + p_Stats->bit_ctr_parametersets_v[1]);
+    }
+  }
+  else
+#endif
+  {
   if (p_Stats->frame_ctr[B_SLICE] != 0)
   {
     fprintf(stdout, " Total bits                        : %" FORMAT_OFF_T  " (I %" FORMAT_OFF_T  ", P %" FORMAT_OFF_T  ", B %" FORMAT_OFF_T  " NVB %d) \n",
       total_bits, p_Stats->bit_counter[I_SLICE], p_Stats->bit_counter[P_SLICE], p_Stats->bit_counter[B_SLICE], p_Stats->bit_ctr_parametersets);
-  }
-  else if (p_Inp->sp_periodicity == 0)
-  {
-    fprintf(stdout, " Total bits                        : %" FORMAT_OFF_T  " (I %" FORMAT_OFF_T  ", P %" FORMAT_OFF_T  ", NVB %d) \n",
-      total_bits, p_Stats->bit_counter[I_SLICE], p_Stats->bit_counter[P_SLICE], p_Stats->bit_ctr_parametersets);
   }
   else
   {
     fprintf(stdout, " Total bits                        : %" FORMAT_OFF_T  " (I %" FORMAT_OFF_T  ", P %" FORMAT_OFF_T  ", NVB %d) \n",
       total_bits, p_Stats->bit_counter[I_SLICE], p_Stats->bit_counter[P_SLICE], p_Stats->bit_ctr_parametersets);
   }
+  }
+#if (MVC_EXTENSION_ENABLE)
+  if (p_Inp->num_of_views == 2)
+  {
+    int view_id;
 
+    for ( view_id = 0; view_id < NUM_VIEWS; view_id++ )
+    {
+      if (p_Stats->frame_ctr[B_SLICE] != 0)
+      {
+        fprintf(stdout, " View %1d Total-bits                 : %" FORMAT_OFF_T  " (I %" FORMAT_OFF_T  ", P %" FORMAT_OFF_T  ", B %" FORMAT_OFF_T  " NVB %d) \n",
+          view_id, total_bits_v[view_id],  p_Stats->bit_counter_v[view_id][I_SLICE], p_Stats->bit_counter_v[view_id][P_SLICE], p_Stats->bit_counter_v[view_id][B_SLICE], p_Stats->bit_ctr_parametersets_v[view_id]);
+      }
+      else
+      {
+        fprintf(stdout, " View %1d Total-bits                 : %" FORMAT_OFF_T  " (I %" FORMAT_OFF_T  ", P %" FORMAT_OFF_T  ", NVB %d) \n",
+          view_id, total_bits_v[view_id], p_Stats->bit_counter_v[view_id][I_SLICE], p_Stats->bit_counter_v[view_id][P_SLICE], p_Stats->bit_ctr_parametersets_v[view_id]);
+      }
+    }
+  }
 
+  if (p_Inp->num_of_views == 2)
+  {
+    p_Stats->bitrate= ((float) total_bits * (float) p_Inp->output.frame_rate) / ((float) (p_Stats->frame_counter>>1));
+  }
+  else
+#endif
   p_Stats->bitrate= ((float) total_bits * (float) p_Inp->output.frame_rate) / ((float) (p_Stats->frame_counter));
   fprintf(stdout, " Bit rate (kbit/s)  @ %2.2f Hz     : %5.2f\n", p_Inp->output.frame_rate, p_Stats->bitrate / 1000.0);
+#if (MVC_EXTENSION_ENABLE)
+  if (p_Inp->num_of_views == 2)
+  {
+    p_Stats->bitrate_v[0] = ((float) total_bits_v[0] * (float) p_Inp->output.frame_rate) / ((float) (p_Stats->frame_counter >> 1));
+    p_Stats->bitrate_v[1] = ((float) total_bits_v[1] * (float) p_Inp->output.frame_rate) / ((float) (p_Stats->frame_counter >> 1));
+    fprintf(stdout, " View 0 BR (kbit/s)  @ %2.2f Hz    : %5.2f\n", p_Inp->output.frame_rate, p_Stats->bitrate_v[0] / 1000.0);
+    fprintf(stdout, " View 1 BR (kbit/s)  @ %2.2f Hz    : %5.2f\n", p_Inp->output.frame_rate, p_Stats->bitrate_v[1] / 1000.0);
+  }
+#endif
   
   for (i = 0; i < 5; i++)
   {
     p_Stats->bit_ctr_emulationprevention += p_Stats->bit_use_stuffingBits[i];
   }
+#if (MVC_EXTENSION_ENABLE)
+  if ( p_Inp->num_of_views == 2 )
+  {
+    for (i = 0; i < 5; i++)
+    {
+      p_Stats->bit_ctr_emulationprevention_v[p_Vid->view_id] += p_Stats->bit_use_stuffingBits[i];
+    }
+  }
+#endif
 
   fprintf(stdout, " Bits to avoid Startcode Emulation : %" FORMAT_OFF_T  " \n", p_Stats->bit_ctr_emulationprevention);
   fprintf(stdout, " Bits for parameter sets           : %d \n", p_Stats->bit_ctr_parametersets);
@@ -887,10 +1008,21 @@ void information_init ( VideoParameters *p_Vid, InputParameters *p_Inp, StatPara
   }
 
   fprintf(stdout,  " Input YUV file                    : %s \n", p_Inp->input_file1.fname);
+#if (MVC_EXTENSION_ENABLE)
+  if(p_Inp->num_of_views==2)
+    fprintf(stdout,  " Input YUV file 2                  : %s \n", p_Inp->input_file2.fname);
+#endif
 
   fprintf(stdout,  " Output H.264 bitstream            : %s \n", p_Inp->outfile);
   if (p_Vid->p_dec != -1)
     fprintf(stdout,  " Output YUV file                   : %s \n", p_Inp->ReconFile);
+#if (MVC_EXTENSION_ENABLE)
+  if(p_Inp->num_of_views==2)
+  {
+    if (p_Vid->p_dec2 != -1)
+      fprintf(stdout,  " Output YUV file 2                 : %s \n", p_Inp->ReconFile2);
+  }
+#endif
   fprintf(stdout,  " YUV Format                        : %s \n", &yuv_types[p_Vid->yuv_format][0]);//p_Vid->yuv_format==YUV422?"YUV 4:2:2":(p_Vid->yuv_format==YUV444)?"YUV 4:4:4":"YUV 4:2:0");
   fprintf(stdout,  " Frames to be encoded              : %d\n", p_Inp->no_frames);
   if (p_Inp->Verbose != 0)
@@ -915,7 +1047,7 @@ void information_init ( VideoParameters *p_Vid, InputParameters *p_Inp, StatPara
       break;
     }
 
-    fprintf(stdout,  " Image format                      : %dx%d (%dx%d)\n", p_Inp->output.width, p_Inp->output.height, p_Vid->width,p_Vid->height);
+    fprintf(stdout,  " Image format                      : %dx%d (%dx%d)\n", p_Inp->output.width[0], p_Inp->output.height[0], p_Vid->width,p_Vid->height);
 
     if (p_Inp->intra_upd)
       fprintf(stdout," Error robustness                  : On\n");
@@ -1036,11 +1168,41 @@ void information_init ( VideoParameters *p_Vid, InputParameters *p_Inp, StatPara
     printf("\nEncoding. Please Wait.\n\n");
     break;    
   case 1:
+#if (MVC_EXTENSION_ENABLE)
+    if (p_Inp->num_of_views == 2)
+    {
+      printf("------------------------------------------------------------------------------------\n");
+      printf("Frame     View Bit/pic    QP   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld Ref  \n");
+      printf("------------------------------------------------------------------------------------\n");
+    }
+    else
+#endif
+    {
     printf("-------------------------------------------------------------------------------\n");
     printf("Frame     Bit/pic    QP   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld Ref  \n");
     printf("-------------------------------------------------------------------------------\n");
+    }
     break;
   case 2:
+#if (MVC_EXTENSION_ENABLE)
+    if (p_Inp->num_of_views == 2)
+    {
+      if (p_Inp->Distortion[SSIM] == 1)
+      {
+        printf("--------------------------------------------------------------------------------------------------------------------------------\n");
+        printf("Frame     View Bit/pic WP QP QL   SnrY    SnrU    SnrV   SsimY   SsimU   SsimV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
+        printf("--------------------------------------------------------------------------------------------------------------------------------\n");
+      }
+      else
+      {
+        printf("--------------------------------------------------------------------------------------------------------\n");
+        printf("Frame     View Bit/pic WP QP QL   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
+        printf("--------------------------------------------------------------------------------------------------------\n");
+      }
+    }
+    else
+#endif
+    {
     if (p_Inp->Distortion[SSIM] == 1)
     {
       printf("-------------------------------------------------------------------------------------------------------------------------\n");
@@ -1053,8 +1215,28 @@ void information_init ( VideoParameters *p_Vid, InputParameters *p_Inp, StatPara
       printf("Frame     Bit/pic WP QP QL   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
       printf("-------------------------------------------------------------------------------------------------\n");
     }
+    }
     break;
   case 3:
+#if (MVC_EXTENSION_ENABLE)
+    if (p_Inp->num_of_views == 2)
+    {
+      if (p_Inp->Distortion[SSIM] == 1)
+      {
+        printf("-------------------------------------------------------------------------------------------------------------------------------------\n");
+        printf("Frame      View Bit/pic NVB WP QP QL   SnrY    SnrU    SnrV   SsimY   SsimU   SsimV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
+        printf("-------------------------------------------------------------------------------------------------------------------------------------\n");
+      }
+      else
+      {
+        printf("-------------------------------------------------------------------------------------------------------------\n");
+        printf("Frame      View Bit/pic NVB WP QP QL   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
+        printf("-------------------------------------------------------------------------------------------------------------\n");
+      }
+    }
+    else
+#endif
+    {
     if (p_Inp->Distortion[SSIM] == 1)
     {
       printf("------------------------------------------------------------------------------------------------------------------------------\n");
@@ -1067,8 +1249,28 @@ void information_init ( VideoParameters *p_Vid, InputParameters *p_Inp, StatPara
       printf("Frame      Bit/pic NVB WP QP QL   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
       printf("------------------------------------------------------------------------------------------------------\n");
     }
+    }
     break;
   case 4:
+#if (MVC_EXTENSION_ENABLE)
+    if (p_Inp->num_of_views == 2)
+    {
+      if (p_Inp->Distortion[SSIM] == 1)
+      {
+        printf("-----------------------------------------------------------------------------------------------------------------------------------------------\n");
+        printf("Frame     View Bit/pic   Filler NVB  WP QP QL   SnrY    SnrU    SnrV   SsimY   SsimU   SsimV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
+        printf("-----------------------------------------------------------------------------------------------------------------------------------------------\n");
+      }
+      else
+      {
+        printf("-----------------------------------------------------------------------------------------------------------------------\n");
+        printf("Frame     View Bit/pic   Filler NVB  WP QP QL   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
+        printf("-----------------------------------------------------------------------------------------------------------------------\n");
+      }
+    }
+    else
+#endif
+    {
     if (p_Inp->Distortion[SSIM] == 1)
     {
       printf("----------------------------------------------------------------------------------------------------------------------------------------\n");
@@ -1080,6 +1282,7 @@ void information_init ( VideoParameters *p_Vid, InputParameters *p_Inp, StatPara
       printf("----------------------------------------------------------------------------------------------------------------\n");
       printf("Frame      Bit/pic   Filler NVB  WP QP QL   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
       printf("----------------------------------------------------------------------------------------------------------------\n");
+    }
     }
     break;
   }

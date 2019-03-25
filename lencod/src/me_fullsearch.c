@@ -45,14 +45,14 @@ FullPelBlockMotionSearch (Macroblock   *currMB ,       // <--  current Macrobloc
 {
   VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   int  search_range = imin(mv_block->searchRange.max_x, mv_block->searchRange.max_y)>> 2;
   distblk mcost;
   int   pos;
   MotionVector cand, center, pred;
   short ref = mv_block->ref_idx;
 
-  StorablePicture *ref_picture = p_Vid->listX[mv_block->list+currMB->list_offset][ref];
+  StorablePicture *ref_picture = currSlice->listX[mv_block->list+currMB->list_offset][ref];
 
   int   best_pos      = 0;                                        // position with minimum motion cost
   int   max_pos       = (2*search_range+1)*(2*search_range+1);    // number of search positions
@@ -121,10 +121,11 @@ FullPelBlockMotionBiPred (Macroblock *currMB,      // <--  current Macroblock
                           int       lambda_factor  // <--  lagrangian parameter for determining motion cost
                           ) 
 {
+  Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currMB->p_Vid;
   short ref = mv_block->ref_idx;
-  StorablePicture *ref_picture1 = p_Vid->listX[list       + currMB->list_offset][ref];
-  StorablePicture *ref_picture2 = p_Vid->listX[(list ^ 1) + currMB->list_offset][0];
+  StorablePicture *ref_picture1 = currSlice->listX[list       + currMB->list_offset][ref];
+  StorablePicture *ref_picture2 = currSlice->listX[(list ^ 1) + currMB->list_offset][0];
   distblk mcost;
   int   pos;
 
@@ -189,7 +190,7 @@ SubPelBlockMotionSearch (Macroblock   *currMB,      // <--  Current Macroblock
                          int*          lambda       // <--  lagrangian parameter for determining motion cost                         
                          )
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
   distblk mcost;
@@ -199,7 +200,7 @@ SubPelBlockMotionSearch (Macroblock   *currMB,      // <--  Current Macroblock
   int list = mv_block->list;
   int cur_list = list + currMB->list_offset;
   short ref = mv_block->ref_idx;
-  StorablePicture *ref_picture = p_Vid->listX[cur_list][ref];
+  StorablePicture *ref_picture = currSlice->listX[cur_list][ref];
 
   MotionVector *mv  = &mv_block->mv[list];
 
@@ -306,19 +307,19 @@ SubPelBlockSearchBiPred (Macroblock   *currMB,    // <--  current Macroblock
                          )
 {
   VideoParameters *p_Vid = currMB->p_Vid;
- 
-  int   list_offset   = p_Vid->mb_data[p_Vid->current_mb_nr].list_offset;
+  Slice *currSlice = currMB->p_Slice; 
+  int   list_offset   = p_Vid->mb_data[currMB->mbAddrX].list_offset;
   distblk mcost;
   int   pos, best_pos;
   MotionVector cand;
-
+  int   start_hp    = (min_mcost == DISTBLK_MAX) ? 0 : p_Vid->start_me_refinement_hp;
   int   max_pos2        = ( !p_Vid->start_me_refinement_hp ? imax(1, mv_block->search_pos2) : mv_block->search_pos2);
 
   MotionVector cmv, smv = pad_MVs(*mv2, mv_block);
   short ref = mv_block->ref_idx;
 
-  StorablePicture *ref_picture1 = p_Vid->listX[list       + list_offset][ref];
-  StorablePicture *ref_picture2 = p_Vid->listX[(list ^ 1) + list_offset][0];
+  StorablePicture *ref_picture1 = currSlice->listX[list       + list_offset][ref];
+  StorablePicture *ref_picture2 = currSlice->listX[(list ^ 1) + list_offset][0];
 
   int lambda_factor = lambda[H_PEL];
 
@@ -329,7 +330,7 @@ SubPelBlockSearchBiPred (Macroblock   *currMB,    // <--  current Macroblock
    *********************************/
 
   //===== loop over search positions =====
-  for (best_pos = 0, pos = p_Vid->start_me_refinement_hp; pos < max_pos2; pos++)
+  for (best_pos = 0, pos = start_hp; pos < max_pos2; pos++)
   {
     cand.mv_x = mv1->mv_x + p_Vid->spiral_hpel_search[pos].mv_x;    // quarter-pel units
     cand.mv_y = mv1->mv_y + p_Vid->spiral_hpel_search[pos].mv_y;    // quarter-pel units

@@ -9,7 +9,7 @@
  *
  *  \author
  *      Main contributors (see contributors.h for copyright, address and affiliation details)
- *      - Karsten Suering          <suehring@hhi.de>
+ *      - Karsten Sühring          <suehring@hhi.de>
  *      - Alexis Michael Tourapis  <alexismt@ieee.org>
  ***********************************************************************
  */
@@ -27,8 +27,27 @@ typedef struct picture_stats
   double dvar[3];
 } PictureStats;
 
+typedef struct distortion_estimation Dist_Estm;
+
+//! definition of pic motion parameters
+typedef struct pic_motion_params_old
+{
+  byte *      mb_field;      //!< field macroblock indicator
+} PicMotionParamsOld;
+
+
+//! definition of pic motion parameters
+typedef struct pic_motion_params
+{
+  struct storable_picture *ref_pic[2];  //!< referrence picture pointer
+  char                     ref_idx[2];  //!< reference picture   [list][subblock_y][subblock_x]
+  MotionVector             mv[2];       //!< motion vector  
+  byte                     field_frame; //!< indicates if co_located is field or frame. Will be removed at some point
+} PicMotionParams;
+
+
 //! definition a picture (field or frame)
-struct storable_picture
+typedef struct storable_picture
 {
   PictureStructure structure;
 
@@ -37,15 +56,10 @@ struct storable_picture
   int         bottom_poc;
   int         frame_poc;
   int         order_num;
-  int64       ref_pic_num[6][MAX_LIST_SIZE];
-  int64       frm_ref_pic_num[6][MAX_LIST_SIZE];
-  int64       top_ref_pic_num[6][MAX_LIST_SIZE];
-  int64       bottom_ref_pic_num[6][MAX_LIST_SIZE];
   unsigned    frame_num;
   int         pic_num;
   int         long_term_pic_num;
   int         long_term_frame_idx;
-
   int         temporal_layer;     
 
   byte        is_long_term;
@@ -57,6 +71,7 @@ struct storable_picture
   int         size_x_padded, size_y_padded;
   int         size_x_pad, size_y_pad;
   int         size_x_cr_pad, size_y_cr_pad;
+  int         pad_size_uv_y, pad_size_uv_x; 
   int         chroma_vector_adjustment;
   int         coded_frame;
   int         mb_aff_frame_flag;
@@ -66,21 +81,22 @@ struct storable_picture
   imgpel ***  imgUV;         //!< U and V picture components
   imgpel *****imgUV_sub;     //!< UV picture component upsampled (Quarter/One-Eighth pel)
 
-  //Multiple Decoder Buffers (used if rdopt==3)
-  imgpel ***  dec_imgY;       //!< Decoded Y component in multiple hypothetical decoders
-  imgpel **** dec_imgUV;      //!< Decoded U and V components in multiple hypothetical decoders
   imgpel ***  p_dec_img[MAX_PLANE];      //!< pointer array for accessing decoded pictures in hypothetical decoders
-
-  byte   ***  mb_error_map;    //!< Map of macroblock errors in hypothetical decoders.
 
   imgpel **   p_img[MAX_PLANE];          //!< pointer array for accessing imgY/imgUV[]
   imgpel **** p_img_sub[MAX_PLANE];      //!< pointer array for storing top address of imgY_sub/imgUV_sub[]
   imgpel **   p_curr_img;                //!< current int-pel ref. picture area to be used for motion estimation
   imgpel **** p_curr_img_sub;            //!< current sub-pel ref. picture area to be used for motion estimation
+  //hme;
+  imgpel ***  p_hme_int_img;     //!< [level][y][x];
+  imgpel *****  p_hme_sub_img;   //!< [level][y_frac][x_frac][y][x];
 
-  //PicMotionParams2 ***mv_info;    //!< Motion info
-  PicMotionParams  motion;    //!< Motion info
-  PicMotionParams JVmotion[MAX_PLANE];    //!< Motion info for 4:4:4 independent coding
+  Dist_Estm * de_mem; 
+
+  PicMotionParams **mv_info;                 //!< Motion info
+  PicMotionParams **JVmv_info[MAX_PLANE];    //!< Motion info for 4:4:4 independent coding
+  PicMotionParamsOld  motion;    //!< Motion info
+  PicMotionParamsOld JVmotion[MAX_PLANE];    //!< Motion info for 4:4:4 independent coding
 
   int colour_plane_id;                     //!< colour_plane_id to be used for 4:4:4 independent mode encoding
 
@@ -104,21 +120,28 @@ struct storable_picture
   StatParameters stats;
 
   int         type;
-};
 
-typedef struct storable_picture StorablePicture;
+#if (MVC_EXTENSION_ENABLE)
+  int         view_id;
+  int         inter_view_flag[2];
+  int         anchor_pic_flag[2];
+#endif
+  int  bInterpolated;
+} StorablePicture;
+
+typedef StorablePicture *StorablePicturePtr;
 
 //! definition of motion parameters
-struct motion_params
+typedef struct motion_params
 {
   int64 ***   ref_pic_id;    //!< reference picture identifier [list][subblock_y][subblock_x]
-  short ****  mv;            //!< motion vector       [list][subblock_x][subblock_y][component]
+  MotionVector ***mv;            //!< motion vector       [list][subblock_x][subblock_y][component]
   char  ***   ref_idx;       //!< reference picture   [list][subblock_y][subblock_x]
   byte **     moving_block;
-};
+} MotionParams;
 
 //! definition a picture (field or frame)
-struct colocated_params
+typedef struct colocated_params
 {
   int         mb_adaptive_frame_field_flag;
   int         size_x, size_y;
@@ -127,11 +150,7 @@ struct colocated_params
   struct motion_params frame;
   struct motion_params top;
   struct motion_params bottom;
-
-};
-
-typedef struct motion_params MotionParams;
-typedef struct colocated_params ColocatedParams;
+} ColocatedParams;
 
 //! Frame Stores for Decoded Picture Buffer
 struct frame_store
@@ -152,6 +171,12 @@ struct frame_store
   StorablePicture *frame;
   StorablePicture *top_field;
   StorablePicture *bottom_field;
+
+#if (MVC_EXTENSION_ENABLE)
+  int       view_id;
+  int       inter_view_flag[2];
+  int       anchor_pic_flag[2];
+#endif
 };
 
 typedef struct frame_store FrameStore;
@@ -165,11 +190,15 @@ struct decoded_picture_buffer
   FrameStore  **fs;
   FrameStore  **fs_ref;
   FrameStore  **fs_ltref;
+  int           num_ref_frames;
   unsigned      size;
   unsigned      used_size;
   unsigned      ref_frames_in_buffer;
   unsigned      ltref_frames_in_buffer;
   int           last_output_poc;
+#if (MVC_EXTENSION_ENABLE)
+  int           last_output_view_id;
+#endif
   int           max_long_term_pic_idx;
 
   int           init_done;
@@ -180,31 +209,36 @@ struct decoded_picture_buffer
 typedef struct decoded_picture_buffer DecodedPictureBuffer;
 
 extern void             init_dpb                  (VideoParameters *p_Vid, DecodedPictureBuffer *dpb);
-extern void             free_dpb                  (VideoParameters *p_Vid, DecodedPictureBuffer *dpb);
+extern void             free_dpb                  (DecodedPictureBuffer *p_Dpb);
 extern FrameStore*      alloc_frame_store(void);
 extern void             free_frame_store          (VideoParameters *p_Vid, FrameStore* f);
 extern StorablePicture* alloc_storable_picture    (VideoParameters *p_Vid, PictureStructure type, int size_x, int size_y, int size_x_cr, int size_y_cr);
 extern void             free_storable_picture     (VideoParameters *p_Vid, StorablePicture* p);
-extern void             store_picture_in_dpb      (VideoParameters *p_Vid, StorablePicture* p, FrameFormat *output);
-extern void             replace_top_pic_with_frame(VideoParameters *p_Vid, StorablePicture* p, FrameFormat *output);
-extern void             flush_dpb                 (VideoParameters *p_Vid, FrameFormat *output);
+extern void             store_picture_in_dpb      (DecodedPictureBuffer *p_Dpb, StorablePicture* p, FrameFormat *output);
+extern void             replace_top_pic_with_frame(DecodedPictureBuffer *p_Dpb, StorablePicture* p, FrameFormat *output);
+extern void             flush_dpb                 (DecodedPictureBuffer *p_Dpb, FrameFormat *output);
 extern void             dpb_split_field           (VideoParameters *p_Vid, FrameStore *fs);
 extern void             dpb_combine_field         (VideoParameters *p_Vid, FrameStore *fs);
 extern void             dpb_combine_field_yuv     (VideoParameters *p_Vid, FrameStore *fs);
-extern void             init_lists                (Slice *currSlice);
-extern void             init_lists_single_dir     (Slice *currSlice);
-extern void             reorder_ref_pic_list      (Slice *currSlice, StorablePicture **list[6], char list_size[6], int cur_list);
+extern void             init_lists_p_slice        (Slice *currSlice);
+extern void             init_lists_b_slice        (Slice *currSlice);
+extern void             init_lists_i_slice        (Slice *currSlice);
+extern void             update_pic_num            (Slice *currSlice);
+extern void             reorder_ref_pic_list      (Slice *currSlice, int cur_list);
 extern void             init_mbaff_lists          (Slice *currSlice);
 extern void             alloc_ref_pic_list_reordering_buffer (Slice *currSlice);
 extern void             free_ref_pic_list_reordering_buffer  (Slice *currSlice);
 extern void             fill_frame_num_gap        (VideoParameters *p_Vid, FrameFormat *output);
 extern ColocatedParams* alloc_colocated           (int size_x, int size_y,int mb_adaptive_frame_field_flag);
 extern void             free_colocated            (ColocatedParams* p);
-extern void             compute_colocated         (Slice *currSlice, ColocatedParams* p, StorablePicture **listX[6]);
+extern void             compute_colocated         (Slice *currSlice, StorablePicture **listX[6]);
 
-// For 4:4:4 independent mode
-extern void             compute_colocated_JV      ( Slice *currSlice, ColocatedParams* p, StorablePicture **listX[6]);
-extern void             copy_storable_param_JV    ( VideoParameters *p_Vid, int nplane, StorablePicture *d, StorablePicture *s );
+#if (MVC_EXTENSION_ENABLE)
+void update_ref_list(DecodedPictureBuffer *p_Dpb);
+void update_ltref_list(DecodedPictureBuffer *p_Dpb);
+void check_num_ref(DecodedPictureBuffer *p_Dpb);
+#endif
 
+extern void ChangeLists(Slice *currSlice);
 #endif
 

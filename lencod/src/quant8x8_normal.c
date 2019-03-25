@@ -152,9 +152,9 @@ int quant_8x8cavlc_normal(Macroblock *currMB, int **tblock, struct quant_methods
   }
 
   // Quantization
-  for (coeff_ctr = 0; coeff_ctr < 16; coeff_ctr++)
+  for (k = 0; k < 4; k++)
   {
-    for (k = 0; k < 4; k++)
+    for (coeff_ctr = 0; coeff_ctr < 16; coeff_ctr++)
     {
       i = *p_scan++;  // horizontal position
       j = *p_scan++;  // vertical position

@@ -482,7 +482,7 @@ void est_RunLevel_CAVLC(Macroblock *currMB, levelDataStruct *levelData, int *lev
 void init_trellis_data_4x4_CAVLC(Macroblock *currMB, int **tblock, int block_x, int qp_per, int qp_rem, LevelQuantParams **q_params_4x4,
                                  const byte *p_scan, levelDataStruct *dataLevel, int type)
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   int i, j, coeff_ctr; 
   int *m7;
   int end_coeff_ctr = ( ( type == LUMA_4x4 ) ? 16 : 15 );
@@ -566,7 +566,7 @@ void init_trellis_data_DC_CAVLC(Macroblock *currMB, int **tblock, int qp_per, in
                          LevelQuantParams *q_params_4x4, const byte *p_scan, 
                          levelDataStruct *dataLevel)
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   int i, j, coeff_ctr, end_coeff_ctr = 16;
   int q_bits   = Q_BITS + qp_per + 1; 
   int q_offset = ( 1 << (q_bits - 1) );
@@ -644,7 +644,7 @@ void init_trellis_data_DC_CAVLC(Macroblock *currMB, int **tblock, int qp_per, in
 void init_trellis_data_8x8_CAVLC(Macroblock *currMB, int **tblock, int block_x, int qp_per, int qp_rem, LevelQuantParams **q_params_8x8, 
                                  const byte *p_scan, levelDataStruct levelData[4][16])
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   int i, j, block, coeff_ctr;
   int *m7;
   int q_bits   = Q_BITS_8 + qp_per;

@@ -21,5 +21,5 @@ extern void Init_QOffsetMatrix      (VideoParameters *p_Vid);
 extern void CalculateOffset4x4Param (VideoParameters *p_Vid);
 extern void CalculateOffset8x8Param (VideoParameters *p_Vid);
 extern void free_QOffsets           (QuantParameters *p_Quant, InputParameters *p_Inp);
-
+extern void InitOffsetParam (QuantParameters *p_Quant, InputParameters *p_Inp);
 #endif

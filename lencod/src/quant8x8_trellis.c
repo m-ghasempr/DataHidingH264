@@ -44,14 +44,7 @@ static void rdoq_8x8_CABAC(Macroblock *currMB, int **tblock, int block_x,int qp_
   double  lambda_md = 0.0;
   int kStart = 0, kStop = 0, noCoeff = 0;
 
-  if ((p_Vid->type==B_SLICE) && p_Vid->nal_reference_idc)
-  {
-    lambda_md = p_Vid->lambda_md[5][p_Vid->masterQP];  
-  }
-  else
-  {
-    lambda_md = p_Vid->lambda_md[p_Vid->type][p_Vid->masterQP]; 
-  }
+  lambda_md = p_Vid->lambda_md[p_Vid->type][p_Vid->masterQP]; 
 
   noCoeff = init_trellis_data_8x8_CABAC(currMB,tblock, block_x, qp_per, qp_rem, q_params_8x8, p_scan, &levelData[0], &kStart, &kStop);
   est_writeRunLevel_CABAC(currMB, levelData, levelTrellis, LUMA_8x8, lambda_md, kStart, kStop, noCoeff, 0);
@@ -75,14 +68,7 @@ static void rdoq_8x8_CAVLC(Macroblock *currMB, int **tblock, int block_y, int bl
   
   int b8 = ((block_y >> 3)<<1) + (block_x >> 3);
 
-  if ((p_Vid->type==B_SLICE) && p_Vid->nal_reference_idc)
-  {
-    lambda_md = p_Vid->lambda_md[5][p_Vid->masterQP];  
-  }
-  else
-  {
-    lambda_md = p_Vid->lambda_md[p_Vid->type][p_Vid->masterQP]; 
-  }
+  lambda_md = p_Vid->lambda_md[p_Vid->type][p_Vid->masterQP]; 
 
   init_trellis_data_8x8_CAVLC (currMB, tblock, block_x, qp_per, qp_rem, q_params_8x8, p_scan, levelData);
 
@@ -214,9 +200,9 @@ int quant_8x8cavlc_trellis(Macroblock *currMB, int **tblock, struct quant_method
   }
 
   // Quantization
-  for (coeff_ctr = 0; coeff_ctr < 16; coeff_ctr++)
+  for (k = 0; k < 4; k++)
   {
-    for (k = 0; k < 4; k++)
+    for (coeff_ctr = 0; coeff_ctr < 16; coeff_ctr++)
     {
       i = *p_scan++;  // horizontal position
       j = *p_scan++;  // vertical position

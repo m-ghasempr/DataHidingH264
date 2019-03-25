@@ -52,7 +52,7 @@ extern int     smpUMHEX_get_mem           (VideoParameters *p_Vid);
 extern void    smpUMHEX_free_mem          (VideoParameters *p_Vid);
 extern void    smpUMHEX_decide_intrabk_SAD(Macroblock *currMB);
 extern void    smpUMHEX_skip_intrabk_SAD  (Macroblock *currMB);
-extern void    smpUMHEX_setup             (Macroblock *currMB, short, int, int, int, int, short ******);
+extern void    smpUMHEX_setup             (Macroblock *currMB, short, int, int, int, int, MotionVector *****);
 extern distblk smpUMHEXBipredIntegerPelBlockMotionSearch (Macroblock *, int, MotionVector *, MotionVector *, MotionVector *, MotionVector *, MEBlock *, int, distblk, int);
 extern distblk smpUMHEXIntegerPelBlockMotionSearch       (Macroblock *currMB, MotionVector *pred_mv, MEBlock *mv_block, distblk min_mcost, int lambda_factor);
 extern distblk smpUMHEXSubPelBlockMotionSearch           (Macroblock *currMB, MotionVector *pred_mv, MEBlock *mv_block, distblk min_mcost, int lambda_factor);

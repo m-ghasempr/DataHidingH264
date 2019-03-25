@@ -61,6 +61,7 @@
 #include <sys/stat.h>
 
 #include "global.h"
+#include "config_common.h"
 #include "configfile.h"
 #include "fmo.h"
 #include "conformance.h"
@@ -69,11 +70,7 @@
 #include "img_io.h"
 #include "ratectl.h"
 
-char *GetConfigFileContent (char *Filename);
-static void ParseContent            (InputParameters *p_Inp, Mapping *Map, char *buf, int bufsize);
 static void PatchInp                (VideoParameters *p_Vid, InputParameters *p_Inp);
-static int  ParameterNameToMapIndex (Mapping *Map, char *s);
-static int  InitEncoderParams       (Mapping *Map);
 static int  TestEncoderParams       (Mapping *Map, int bitdepth_qp_scale[3]);
 static int  DisplayEncoderParams    (Mapping *Map);
 
@@ -143,7 +140,7 @@ int64 getVideoFileSize(int video_file)
  *
  ************************************************************************
  */
-void getNumberOfFrames (InputParameters *p_Inp, VideoDataFile *input_file)
+void get_number_of_frames (InputParameters *p_Inp, VideoDataFile *input_file)
 {
   int64 fsize = getVideoFileSize(input_file->f_num);
   int64 isize = (int64) p_Inp->source.size;
@@ -186,45 +183,53 @@ static void updateOutFormat(InputParameters *p_Inp)
 
   if (p_Inp->src_resize == 0)
   {
-    output->width  = source->width;
-    output->height = source->height;
+    output->width[0]  = source->width[0];
+    output->height[0] = source->height[0];
   }
 
   if (p_Inp->yuv_format == YUV400) // reset bitdepth of chroma for 400 content
   {
     source->bit_depth[1] = 8;
     output->bit_depth[1] = 8;
-    source->width_cr  = 0;
-    source->height_cr = 0;
-    output->width_cr  = 0;
-    output->height_cr = 0;
+    source->width[1]  = 0;
+    source->width[2]  = 0;
+    source->height[1] = 0;
+    source->height[2] = 0;
+    output->width[1]  = 0;
+    output->width[2]  = 0;
+    output->height[1] = 0;
+    output->height[2] = 0;
   }
   else
   {
-    source->width_cr  = (source->width  * mb_width_cr [output->yuv_format]) >> 4;
-    source->height_cr = (source->height * mb_height_cr[output->yuv_format]) >> 4;
-    output->width_cr  = (output->width  * mb_width_cr [output->yuv_format]) >> 4;
-    output->height_cr = (output->height * mb_height_cr[output->yuv_format]) >> 4;
+    source->width[1]  = (source->width[0]  * mb_width_cr [output->yuv_format]) >> 4;
+    source->width[2]  = source->width[1];
+    source->height[1] = (source->height[0] * mb_height_cr[output->yuv_format]) >> 4;
+    source->height[2] = source->height[1];
+    output->width[1]  = (output->width[0]  * mb_width_cr [output->yuv_format]) >> 4;
+    output->width[2]  = output->width[1];
+    output->height[1] = (output->height[0] * mb_height_cr[output->yuv_format]) >> 4;
+    output->height[2] = output->height[1];
   }
 
   // source size
-  source->size_cmp[0] = source->width * source->height;
-  source->size_cmp[1] = source->width_cr * source->height_cr;
+  source->size_cmp[0] = source->width[0] * source->height[0];
+  source->size_cmp[1] = source->width[1] * source->height[1];
   source->size_cmp[2] = source->size_cmp[1];
   source->size        = source->size_cmp[0] + source->size_cmp[1] + source->size_cmp[2];
-  source->mb_width    = source->width  / MB_BLOCK_SIZE;
-  source->mb_height   = source->height / MB_BLOCK_SIZE;
+  source->mb_width    = source->width[0]  / MB_BLOCK_SIZE;
+  source->mb_height   = source->height[0] / MB_BLOCK_SIZE;
   source->pic_unit_size_on_disk = (imax(source->bit_depth[0], source->bit_depth[1]) > 8) ? 16 : 8;
   source->pic_unit_size_shift3 = source->pic_unit_size_on_disk >> 3;
 
 
   // output size (excluding padding)
-  output->size_cmp[0] = output->width * output->height;
-  output->size_cmp[1] = output->width_cr * output->height_cr;
+  output->size_cmp[0] = output->width[0] * output->height[0];
+  output->size_cmp[1] = output->width[1] * output->height[1];
   output->size_cmp[2] = output->size_cmp[1];
   output->size        = output->size_cmp[0] + output->size_cmp[1] + output->size_cmp[2];
-  output->mb_width    = output->width  / MB_BLOCK_SIZE;
-  output->mb_height   = output->height / MB_BLOCK_SIZE;
+  output->mb_width    = output->width[0]  / MB_BLOCK_SIZE;
+  output->mb_height   = output->height[0] / MB_BLOCK_SIZE;
 
 
   // both chroma components have the same bitdepth
@@ -241,6 +246,14 @@ static void updateOutFormat(InputParameters *p_Inp)
   output->pic_unit_size_on_disk = (imax(output->bit_depth[0], output->bit_depth[1]) > 8) ? 16 : 8;
   output->pic_unit_size_shift3 = output->pic_unit_size_on_disk >> 3;
   
+  if (p_Inp->enable_32_pulldown)
+  {
+    source->frame_rate  = source->frame_rate  * 5 / 4;
+    p_Inp->idr_period   = p_Inp->idr_period   * 5 / 4;
+    p_Inp->intra_period = p_Inp->intra_period * 5 / 4;
+    p_Inp->no_frames    = p_Inp->no_frames    * 5 / 4;
+  }
+
   output->frame_rate = source->frame_rate / (p_Inp->frame_skip + 1);
   output->color_model = source->color_model;
 
@@ -300,7 +313,7 @@ void Configure (VideoParameters *p_Vid, InputParameters *p_Inp, int ac, char *av
   memset (&cfgparams, 0, sizeof (InputParameters));
   //Set default parameters.
   printf ("Setting Default Parameters...\n");
-  InitEncoderParams(Map);
+  InitParams(Map);
 
   // Process default config file
   CLcount = 1;
@@ -321,7 +334,7 @@ void Configure (VideoParameters *p_Vid, InputParameters *p_Inp, int ac, char *av
   content = GetConfigFileContent (filename);
   if (NULL==content)
     error (errortext, 300);
-  ParseContent (p_Inp, Map, content, strlen(content));
+  ParseContent (p_Inp, Map, content, (int) strlen(content));
   printf ("\n");
   free (content);
 
@@ -340,7 +353,7 @@ void Configure (VideoParameters *p_Vid, InputParameters *p_Inp, int ac, char *av
       if (NULL==content)
         error (errortext, 300);
       printf ("Parsing Configfile %s", av[CLcount+1]);
-      ParseContent (p_Inp, Map, content, strlen (content));
+      ParseContent (p_Inp, Map, content, (int) strlen (content));
       printf ("\n");
       free (content);
       CLcount += 2;
@@ -358,7 +371,7 @@ void Configure (VideoParameters *p_Vid, InputParameters *p_Inp, int ac, char *av
 
         // determine the necessary size for content
         while (NumberParams < ac && av[NumberParams][0] != '-')
-          ContentLen += strlen (av[NumberParams++]);        // Space for all the strings
+          ContentLen += (int) strlen (av[NumberParams++]);        // Space for all the strings
         ContentLen += 1000;                     // Additional 1000 bytes for spaces and \0s
 
 
@@ -370,7 +383,7 @@ void Configure (VideoParameters *p_Vid, InputParameters *p_Inp, int ac, char *av
         while (CLcount < NumberParams)
         {
           char *source = &av[CLcount][0];
-          char *destin = &content[strlen (content)];
+          char *destin = &content[(int) strlen (content)];
 
           while (*source != '\0')
           {
@@ -386,7 +399,7 @@ void Configure (VideoParameters *p_Vid, InputParameters *p_Inp, int ac, char *av
           CLcount++;
         }
         printf ("Parsing command line string '%s'", content);
-        ParseContent (p_Inp, Map, content, strlen(content));
+        ParseContent (p_Inp, Map, content, (int) strlen(content));
         free (content);
         printf ("\n");
       }
@@ -400,252 +413,14 @@ void Configure (VideoParameters *p_Vid, InputParameters *p_Inp, int ac, char *av
   printf ("\n");
   PatchInp(p_Vid, p_Inp);
 
-  memcpy (&cfgparams, p_Inp, sizeof (InputParameters));
+  cfgparams = *p_Inp;
 
   if (p_Inp->DisplayEncParams)
     DisplayEncoderParams(Map);
 }
 
-/*!
- ***********************************************************************
- * \brief
- *    allocates memory buf, opens file Filename in f, reads contents into
- *    buf and returns buf
- * \param Filename
- *    name of config file
- * \return
- *    if successfull, content of config file
- *    NULL in case of error. Error message will be set in errortext
- ***********************************************************************
- */
-char *GetConfigFileContent (char *Filename)
-{
-  long FileSize;
-  FILE *f;
-  char *buf;
-
-  if (NULL == (f = fopen (Filename, "r")))
-  {
-      snprintf (errortext, ET_SIZE, "Cannot open configuration file %s.", Filename);
-      return NULL;
-  }
-
-  if (0 != fseek (f, 0, SEEK_END))
-  {
-    snprintf (errortext, ET_SIZE, "Cannot fseek in configuration file %s.", Filename);
-    return NULL;
-  }
-
-  FileSize = ftell (f);
-  if (FileSize < 0 || FileSize > 100000)
-  {
-    snprintf (errortext, ET_SIZE, "Unreasonable Filesize %ld reported by ftell for configuration file %s.", FileSize, Filename);
-    return NULL;
-  }
-  if (0 != fseek (f, 0, SEEK_SET))
-  {
-    snprintf (errortext, ET_SIZE, "Cannot fseek in configuration file %s.", Filename);
-    return NULL;
-  }
-
-  if ((buf = malloc (FileSize + 1))==NULL) no_mem_exit("GetConfigFileContent: buf");
-
-  // Note that ftell() gives us the file size as the file system sees it.  The actual file size,
-  // as reported by fread() below will be often smaller due to CR/LF to CR conversion and/or
-  // control characters after the dos EOF marker in the file.
-
-  FileSize = fread (buf, 1, FileSize, f);
-  buf[FileSize] = '\0';
 
 
-  fclose (f);
-  return buf;
-}
-
-
-/*!
- ***********************************************************************
- * \brief
- *    Parses the character array buf and writes global variable input, which is defined in
- *    configfile.h.  This hack will continue to be necessary to facilitate the addition of
- *    new parameters through the Map[] mechanism (Need compiler-generated addresses in map[]).
- * \param p_Inp
- *    InputParameters of configuration
- * \param Map
- *    Mapping structure to specify the name and value mapping relation
- * \param buf
- *    buffer to be parsed
- * \param bufsize
- *    buffer size of buffer
- ***********************************************************************
- */
-void ParseContent (InputParameters *p_Inp, Mapping *Map, char *buf, int bufsize)
-{
-  char *items[MAX_ITEMS_TO_PARSE] = {NULL};
-  int MapIdx;
-  int item = 0;
-  int InString = 0, InItem = 0;
-  char *p = buf;
-  char *bufend = &buf[bufsize];
-  int IntContent;
-  double DoubleContent;
-  int i;
-
-  // Stage one: Generate an argc/argv-type list in items[], without comments and whitespace.
-  // This is context insensitive and could be done most easily with lex(1).
-
-  while (p < bufend)
-  {
-    switch (*p)
-    {
-    case 13:
-      ++p;
-      break;
-    case '#':                 // Found comment
-      *p = '\0';              // Replace '#' with '\0' in case of comment immediately following integer or string
-      while (*p != '\n' && p < bufend)  // Skip till EOL or EOF, whichever comes first
-        ++p;
-      InString = 0;
-      InItem = 0;
-      break;
-    case '\n':
-      InItem = 0;
-      InString = 0;
-      *p++='\0';
-      break;
-    case ' ':
-    case '\t':              // Skip whitespace, leave state unchanged
-      if (InString)
-        p++;
-      else
-      {                     // Terminate non-strings once whitespace is found
-        *p++ = '\0';
-        InItem = 0;
-      }
-      break;
-
-    case '"':               // Begin/End of String
-      *p++ = '\0';
-      if (!InString)
-      {
-        items[item++] = p;
-        InItem = ~InItem;
-      }
-      else
-        InItem = 0;
-      InString = ~InString; // Toggle
-      break;
-
-    default:
-      if (!InItem)
-      {
-        items[item++] = p;
-        InItem = ~InItem;
-      }
-      p++;
-    }
-  }
-
-  item--;
-
-  for (i=0; i<item; i+= 3)
-  {
-    if (0 > (MapIdx = ParameterNameToMapIndex (Map, items[i])))
-    {
-      //snprintf (errortext, ET_SIZE, " Parsing error in config file: Parameter Name '%s' not recognized.", items[i]);
-      //error (errortext, 300);
-      printf ("\n\tParsing error in config file: Parameter Name '%s' not recognized.", items[i]);
-      continue;
-    }
-    if (strcasecmp ("=", items[i+1]))
-    {
-      snprintf (errortext, ET_SIZE, " Parsing error in config file: '=' expected as the second token in each line.");
-      error (errortext, 300);
-    }
-
-    // Now interpret the Value, context sensitive...
-
-    switch (Map[MapIdx].Type)
-    {
-    case 0:           // Numerical
-      if (1 != sscanf (items[i+2], "%d", &IntContent))
-      {
-        snprintf (errortext, ET_SIZE, " Parsing error: Expected numerical value for Parameter of %s, found '%s'.", items[i], items[i+2]);
-        error (errortext, 300);
-      }
-      * (int *) (Map[MapIdx].Place) = IntContent;
-      printf (".");
-      break;
-    case 1:
-      if (items[i + 2] == NULL)
-        memset((char *) Map[MapIdx].Place, 0, Map[MapIdx].char_size);
-      else
-        strncpy ((char *) Map[MapIdx].Place, items [i+2], Map[MapIdx].char_size);
-      printf (".");
-      break;
-    case 2:           // Numerical double
-      if (1 != sscanf (items[i+2], "%lf", &DoubleContent))
-      {
-        snprintf (errortext, ET_SIZE, " Parsing error: Expected numerical value for Parameter of %s, found '%s'.", items[i], items[i+2]);
-        error (errortext, 300);
-      }
-      * (double *) (Map[MapIdx].Place) = DoubleContent;
-      printf (".");
-      break;
-    default:
-      error ("Unknown value type in the map definition of configfile.h",-1);
-    }
-  }
-  memcpy (p_Inp, &cfgparams, sizeof (InputParameters));
-}
-
-/*!
- ***********************************************************************
- * \brief
- *    Returns the index number from Map[] for a given parameter name.
- * \param Map
- *    Mapping structure
- * \param s
- *    parameter name string
- * \return
- *    the index number if the string is a valid parameter name,         \n
- *    -1 for error
- ***********************************************************************
- */
-static int ParameterNameToMapIndex (Mapping *Map, char *s)
-{
-  int i = 0;
-
-  while (Map[i].TokenName != NULL)
-    if (0==strcasecmp (Map[i].TokenName, s))
-      return i;
-    else
-      i++;
-  return -1;
-}
-
-/*!
- ***********************************************************************
- * \brief
- *    Sets initial values for encoding parameters.
- * \return
- *    -1 for error
- ***********************************************************************
- */
-static int InitEncoderParams(Mapping *Map)
-{
-  int i = 0;
-
-  while (Map[i].TokenName != NULL)
-  {
-    if (Map[i].Type == 0)
-        * (int *) (Map[i].Place) = (int) Map[i].Default;
-    else if (Map[i].Type == 2)
-    * (double *) (Map[i].Place) = Map[i].Default;
-      i++;
-  }
-  return -1;
-}
 
 /*!
  ***********************************************************************
@@ -765,7 +540,7 @@ void read_slice_group_info(VideoParameters *p_Vid, InputParameters *p_Inp)
   FILE * sgfile=NULL;
   int i;
   int ret;
-  unsigned PicSizeInMapUnits;
+  unsigned int PicSizeInMapUnits;
 
   if ((p_Inp->slice_group_map_type != 0) && (p_Inp->slice_group_map_type != 2) && (p_Inp->slice_group_map_type != 6))
   {
@@ -774,7 +549,7 @@ void read_slice_group_info(VideoParameters *p_Vid, InputParameters *p_Inp)
   }
 
   // do we have a file name (not only NULL character)
-  if (strlen (p_Inp->SliceGroupConfigFileName) <= 1)
+  if ((int) strlen (p_Inp->SliceGroupConfigFileName) <= 1)
     error ("No slice group config file name specified", 500);
     
   // open file
@@ -813,12 +588,12 @@ void read_slice_group_info(VideoParameters *p_Vid, InputParameters *p_Inp)
 
   case 2:
     // determine expected frame size in map units
-    PicSizeInMapUnits = (p_Inp->output.width >> 4) * (p_Inp->output.height >> 4);
+    PicSizeInMapUnits = (p_Inp->output.width[0] >> 4) * (p_Inp->output.height[0] >> 4);
     if (p_Inp->MbInterlace||p_Inp->PicInterlace) 
       PicSizeInMapUnits >>= 1;
 
-    p_Inp->top_left=(unsigned *)malloc(sizeof(unsigned)*p_Inp->num_slice_groups_minus1);
-    p_Inp->bottom_right=(unsigned *)malloc(sizeof(unsigned)*p_Inp->num_slice_groups_minus1);
+    p_Inp->top_left     = (unsigned *)malloc(sizeof(unsigned)*p_Inp->num_slice_groups_minus1);
+    p_Inp->bottom_right = (unsigned *)malloc(sizeof(unsigned)*p_Inp->num_slice_groups_minus1);
     
     if (NULL==p_Inp->top_left)
     {
@@ -870,8 +645,8 @@ void read_slice_group_info(VideoParameters *p_Vid, InputParameters *p_Inp)
       int mb_width, mb_height, mapunit_height;
 
       frame_mb_only = !(p_Inp->PicInterlace || p_Inp->MbInterlace);
-      mb_width  = (p_Inp->output.width + p_Vid->auto_crop_right)>>4;
-      mb_height = (p_Inp->output.height + p_Vid->auto_crop_bottom)>>4;
+      mb_width  = (p_Inp->output.width[0] + p_Vid->auto_crop_right)>>4;
+      mb_height = (p_Inp->output.height[0] + p_Vid->auto_crop_bottom)>>4;
       mapunit_height = mb_height / (2-frame_mb_only);
 
       p_Inp->slice_group_id=(byte * ) malloc(sizeof(byte)*mapunit_height*mb_width);
@@ -946,10 +721,18 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
   ParseVideoType(&p_Inp->input_file1);
   ParseFrameNoFormatFromString (&p_Inp->input_file1);
 
-  // Read resolution from file name
-  if (p_Inp->source.width == 0 || p_Inp->source.height == 0)
+#if (MVC_EXTENSION_ENABLE)
+  if ( p_Inp->num_of_views == 2 )
   {
-    if (ParseSizeFromString (&p_Inp->input_file1, &(p_Inp->source.width), &(p_Inp->source.height), &(p_Inp->source.frame_rate)) == 0)
+    ParseVideoType(&p_Inp->input_file2);
+    ParseFrameNoFormatFromString (&p_Inp->input_file2);
+  }
+#endif
+
+  // Read resolution from file name
+  if (p_Inp->source.width[0] == 0 || p_Inp->source.height[0] == 0)
+  {
+    if (ParseSizeFromString (&p_Inp->input_file1, &(p_Inp->source.width[0]), &(p_Inp->source.height[0]), &(p_Inp->source.frame_rate)) == 0)
     {
       snprintf(errortext, ET_SIZE, "File name does not contain resolution information.");    
       error (errortext, 500);
@@ -981,21 +764,16 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
     error (errortext, 500);
   }
 
-  if (p_Inp->idr_period && p_Inp->intra_delay && p_Inp->adaptive_idr_period)
-  {
-    snprintf(errortext, ET_SIZE, " IntraDelay can not be used with AdaptiveIDRPeriod.");
-    error (errortext, 500);
-  }
-
   // Let us set up p_Inp->jumpd from frame_skip and NumberBFrames
   p_Inp->jumpd = (p_Inp->NumberBFrames + 1) * (p_Inp->frame_skip + 1) - 1;
+
 
   updateOutFormat(p_Inp);
 
   if (p_Inp->no_frames == -1)
   {
     OpenFiles(&p_Inp->input_file1);
-    getNumberOfFrames(p_Inp, &p_Inp->input_file1);
+    get_number_of_frames (p_Inp, &p_Inp->input_file1);
     CloseFiles(&p_Inp->input_file1);
   }
 
@@ -1022,7 +800,7 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
   }
 
 #if TRACE
-  if (strlen (p_Inp->TraceFile) > 0 && (p_Enc->p_trace = fopen(p_Inp->TraceFile,"w"))==NULL)
+  if ((int) strlen (p_Inp->TraceFile) > 0 && (p_Enc->p_trace = fopen(p_Inp->TraceFile,"w"))==NULL)
   {
     snprintf(errortext, ET_SIZE, "Error open file %s", p_Inp->TraceFile);
     error (errortext, 500);
@@ -1084,7 +862,7 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
     }
     if (p_Inp->ReferenceReorder == 2)
     {
-      snprintf(errortext, ET_SIZE, "MemoryManagement = 2 is not supported with field encoding\n");
+      snprintf(errortext, ET_SIZE, "PocMemoryManagement = 2 is not supported with field encoding\n");
       error (errortext, 400);
     }
   }
@@ -1101,9 +879,9 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
     p_Inp->ReferenceReorder = 0;
   }
 
-  if (p_Inp->MemoryManagement && p_Inp->MbInterlace )
+  if (p_Inp->PocMemoryManagement && p_Inp->MbInterlace )
   {
-    snprintf(errortext, ET_SIZE, "MemoryManagement not supported with MBAFF\n");
+    snprintf(errortext, ET_SIZE, "PocMemoryManagement not supported with MBAFF\n");
     error (errortext, 400);
   }
 
@@ -1162,12 +940,18 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
 
   // Rate control
   if(p_Inp->RCEnable)
-  { 
+  {
 
     if ( p_Inp->RCUpdateMode == RC_MODE_1 && 
       !( (p_Inp->intra_period == 1 || p_Inp->idr_period == 1 || p_Inp->BRefPictures == 2 ) && !p_Inp->NumberBFrames ) )
     {
       snprintf(errortext, ET_SIZE, "Use RCUpdateMode = 1 only for all intra or all B-slice coding.");
+      error (errortext, 500);
+    }
+    if ( (p_Inp->RCUpdateMode == RC_MODE_0 || p_Inp->RCUpdateMode == RC_MODE_2 || p_Inp->RCUpdateMode == RC_MODE_3) && 
+      (p_Inp->PReplaceBSlice && p_Inp->NumberBFrames ) )
+    {
+      snprintf(errortext, ET_SIZE, "PReplaceBSlice is not supported with RCUpdateMode=0,2,3.");
       error (errortext, 500);
     }
 
@@ -1283,7 +1067,7 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
   if ( p_Inp->ChromaMEEnable && p_Inp->yuv_format ==  YUV400) 
   {
     fprintf(stderr, "Warning: ChromaMEEnable cannot be used with monochrome color format, disabling ChromaMEEnable.\n");
-    p_Inp->ChromaMEEnable = 0;
+    p_Inp->ChromaMEEnable = FALSE;
   }
 
   if ( (p_Inp->ChromaMCBuffer == 0) && (( p_Inp->yuv_format ==  YUV444) && (!p_Inp->separate_colour_plane_flag)) )
@@ -1299,6 +1083,27 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
 
   if (p_Inp->EnableOpenGOP)
     p_Inp->ReferenceReorder = 1;
+
+#if (MVC_EXTENSION_ENABLE)
+  if((p_Inp->ProfileIDC==MULTIVIEW_HIGH || p_Inp->ProfileIDC==STEREO_HIGH) && p_Inp->num_of_views != 2)
+  {
+    snprintf(errortext, ET_SIZE, "NumberOfViews must be two if ProfileIDC is set to 118 (Multiview High Profile). Otherwise (for a single view) please select a non-multiview profile such as 100.");
+    error (errortext, 500);
+  }
+  if(p_Inp->MVCInterViewReorder)
+  {
+    if(p_Inp->ProfileIDC!=MULTIVIEW_HIGH && p_Inp->ProfileIDC!=STEREO_HIGH)
+    {
+      snprintf(errortext, ET_SIZE, "ProfileIDC must be 118 or 128 to use MVCInterViewReorder=1.");
+      error (errortext, 500);
+    }
+    if(p_Inp->ReferenceReorder!=0)
+    {
+      snprintf(errortext, ET_SIZE, "ReferenceReorder=1 is not supported with MVCInterViewReorder=1.");
+      error (errortext, 500);
+    }
+  }
+#endif
 
   if (p_Inp->SearchMode != EPZS)
     p_Inp->EPZSSubPelGrid = 0;
@@ -1392,10 +1197,23 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
 
   if(p_Inp->num_slice_groups_minus1 > 0 && (p_Inp->GenerateMultiplePPS ==1 && p_Inp->RDPictureDecision == 1))
   {
-    printf("Warning: Weighted Prediction is disabled as it may not function correctly for multiple slices\n"); 
+    printf("Warning: Weighted Prediction may not function correctly for multiple slices\n"); 
   }
+
 
 
   ProfileCheck(p_Inp);
 
+
+  if(!p_Inp->RDPictureDecision)
+  {
+    p_Inp->RDPictureMaxPassISlice = 1;
+    p_Inp->RDPictureMaxPassPSlice = 1;
+    p_Inp->RDPictureMaxPassBSlice = 1;
+    p_Inp->RDPictureDeblocking    = 0;
+    p_Inp->RDPictureDirectMode    = 0;
+    p_Inp->RDPictureFrameQPPSlice = 0;
+    p_Inp->RDPictureFrameQPBSlice = 0;
+  }
 }
+

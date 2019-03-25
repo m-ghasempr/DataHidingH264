@@ -21,45 +21,71 @@
 
 #ifndef _DEFINES_H_
 #define _DEFINES_H_
-
+#ifdef TRACE
+#undef TRACE
+#endif
 #if defined _DEBUG
-# define TRACE           0      //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
+# define TRACE           0     //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
 #else
-# define TRACE           0      //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
+# define TRACE           0     //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
 #endif
 
-#define JM                  "16.2 (FRExt)"
-#define VERSION             "16.2"
+#define JM                  "17 (FRExt)"
+#define VERSION             "17.0"
 #define EXT_VERSION         "(FRExt)"
 
 #define DUMP_DPB                  0    //!< Dump DPB info for debug purposes
+#define PRINTREFLIST              0    //!< Print ref list info for debug purposes
 #define PAIR_FIELDS_IN_OUTPUT     0    //!< Pair field pictures for output purposes
-#define IMGTYPE                   0    //!< Define imgpel size type. 0 implies byte (cannot handle >8 bit depths) and 1 implies unsigned short
+#define IMGTYPE                   1    //!< Define imgpel size type. 0 implies byte (cannot handle >8 bit depths) and 1 implies unsigned short
 #define ENABLE_FIELD_CTX          1    //!< Enables Field mode related context types for CABAC
 #define ENABLE_HIGH444_CTX        1    //!< Enables High 444 profile context types for CABAC. 
 #define ZEROSNR                   0    //!< PSNR computation method
 #define ENABLE_OUTPUT_TONEMAPPING 1    //!< enable tone map the output if tone mapping SEI present
 #define JCOST_CALC_SCALEUP        1    //!< 1: J = (D<<LAMBDA_ACCURACY_BITS)+Lambda*R; 0: J = D + ((Lambda*R+Rounding)>>LAMBDA_ACCURACY_BITS)
+#define DISABLE_ERC               1    //!< Disable any error concealment processes
+#define DISABLE_REF_ID            0
+#define JM_PARALLEL_DEBLOCK       0    //!< Enables Parallel Deblocking
+
+#define MVC_EXTENSION_ENABLE      1    //!< enable support for the Multiview High Profile
+
+#if (MVC_EXTENSION_ENABLE)
+#define MVC_INIT_VIEW_ID          -1
+#define MAX_VIEW_NUM              1024   
+#define BASE_VIEW_IDX             0
+#define FREEPTR(ptr) { if(ptr) {free(ptr); (ptr)=NULL;} }
+#endif
+
 
 #include "typedefs.h"
 
 #define SSE_MEMORY_ALIGNMENT      16
 
 //#define MAX_NUM_SLICES 150
-#define MAX_NUM_SLICES 50
+#define MAX_NUM_SLICES     50
 #define MAX_REFERENCE_PICTURES 32               //!< H.264 allows 32 fields
 #define MAX_CODED_FRAME_SIZE 8000000         //!< bytes for one frame
+#define MAX_NUM_DECSLICES  16
+#define MAX_DEC_THREADS    16                  //16 core deocoding;
+#define MCBUF_LUMA_PAD_X        32
+#define MCBUF_LUMA_PAD_Y        12
+#define MCBUF_CHROMA_PAD_X      16
+#define MCBUF_CHROMA_PAD_Y      8
 
 //AVC Profile IDC definitions
-#define BASELINE         66      //!< YUV 4:2:0/8  "Baseline"
-#define MAIN             77      //!< YUV 4:2:0/8  "Main"
-#define EXTENDED         88      //!< YUV 4:2:0/8  "Extended"
-#define FREXT_HP        100      //!< YUV 4:2:0/8 "High"
-#define FREXT_Hi10P     110      //!< YUV 4:2:0/10 "High 10"
-#define FREXT_Hi422     122      //!< YUV 4:2:2/10 "High 4:2:2"
-#define FREXT_Hi444     244      //!< YUV 4:4:4/14 "High 4:4:4"
-#define FREXT_CAVLC444   44      //!< YUV 4:4:4/14 "CAVLC 4:4:4"
-
+typedef enum {
+  FREXT_CAVLC444 = 44,       //!< YUV 4:4:4/14 "CAVLC 4:4:4"
+  BASELINE       = 66,       //!< YUV 4:2:0/8  "Baseline"
+  MAIN           = 77,       //!< YUV 4:2:0/8  "Main"
+  EXTENDED       = 88,       //!< YUV 4:2:0/8  "Extended"
+  FREXT_HP       = 100,      //!< YUV 4:2:0/8  "High"
+  FREXT_Hi10P    = 110,      //!< YUV 4:2:0/10 "High 10"
+  FREXT_Hi422    = 122,      //!< YUV 4:2:2/10 "High 4:2:2"
+  FREXT_Hi444    = 244,      //!< YUV 4:4:4/14 "High 4:4:4"
+  MVC_HIGH       = 118,      //!< YUV 4:2:0/8  "Multiview High"
+  MULTIVIEW_FIELDHIGH = 119, //!< YUV 4:2:0/8  "Multiview Field High"
+  STEREO_HIGH    = 128       //!< YUV 4:2:0/8  "Stereo High"
+} ProfileIDC;
 
 #define FILE_NAME_SIZE  255
 #define INPUT_TEXT_SIZE 1024
@@ -91,7 +117,7 @@
 #define BLOCK_SIZE_8x8_SP  32  // BLOCK_SIZE8x8 << 2
 
 //  Available MB modes
-enum {
+typedef enum {
   PSKIP        =  0,
   BSKIP_DIRECT =  0,
   P16x16       =  1,
@@ -115,13 +141,13 @@ enum {
 #define NO_INTRA_PMODE  9
 
 // Direct Mode types
-enum {
+typedef enum {
   DIR_TEMPORAL = 0, //!< Temporal Direct Mode
   DIR_SPATIAL  = 1 //!< Spatial Direct Mode
 } DirectModes;
 
 // CAVLC block types
-enum {
+typedef enum {
   LUMA              =  0,
   LUMA_INTRA16x16DC =  1,
   LUMA_INTRA16x16AC =  2,
@@ -134,7 +160,7 @@ enum {
 } CAVLCBlockTypes;
 
 // CABAC block types
-enum {
+typedef enum {
   LUMA_16DC     =   0,
   LUMA_16AC     =   1,
   LUMA_8x8      =   2,
@@ -166,13 +192,8 @@ enum {
 #define DQ_BITS_8        6 
 
 
-#define IS_INTRA(MB)    ((MB)->mb_type==I4MB  || (MB)->mb_type==I16MB ||(MB)->mb_type==IPCM || (MB)->mb_type==I8MB || (MB)->mb_type==SI4MB)
 #define IS_I16MB(MB)    ((MB)->mb_type==I16MB  || (MB)->mb_type==IPCM)
-
-#define IS_INTER(MB)    ((MB)->mb_type!=SI4MB && (MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB && (MB)->mb_type!=I8MB  && (MB)->mb_type!=IPCM)
-#define IS_INTERMV(MB)  ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB && (MB)->mb_type!=I8MB  && (MB)->mb_type!=0 && (MB)->mb_type!=IPCM)
 #define IS_DIRECT(MB)   ((MB)->mb_type==0     && (currSlice->slice_type == B_SLICE ))
-#define IS_SKIP(MB)     ((MB)->mb_type==0     && (currSlice->slice_type == P_SLICE || currSlice->slice_type == SP_SLICE))
 
 #define TOTRUN_NUM       15
 #define RUNBEFORE_NUM     7
@@ -182,7 +203,7 @@ enum {
 #define MIN_QP          0
 #define MAX_QP          51
 // 4x4 intra prediction modes 
-enum {
+typedef enum {
   VERT_PRED            = 0,
   HOR_PRED             = 1,
   DC_PRED              = 2,
@@ -195,7 +216,7 @@ enum {
 } I4x4PredModes;
 
 // 16x16 intra prediction modes
-enum {
+typedef enum {
   VERT_PRED_16   = 0,
   HOR_PRED_16    = 1,
   DC_PRED_16     = 2,
@@ -203,7 +224,7 @@ enum {
 } I16x16PredModes;
 
 // 8x8 chroma intra prediction modes
-enum {
+typedef enum {
   DC_PRED_8     =  0,
   HOR_PRED_8    =  1,
   VERT_PRED_8   =  2,
@@ -213,11 +234,12 @@ enum {
 enum {
   EOS = 1,    //!< End Of Sequence
   SOP = 2,    //!< Start Of Picture
-  SOS = 3     //!< Start Of Slice
+  SOS = 3,     //!< Start Of Slice
+  SOS_CONT = 4
 };
 
 // MV Prediction types
-enum {
+typedef enum {
   MVPRED_MEDIAN   = 0,
   MVPRED_L        = 1,
   MVPRED_U        = 2,
@@ -239,8 +261,8 @@ enum {
 #define ZEROBYTES_SHORTSTARTCODE 2 //indicates the number of zero bytes in the short start-code prefix
 
 #define MAX_PLANE       3
-#define IS_INDEPENDENT(IMG)           ((IMG)->separate_colour_plane_flag)
 #define IS_FREXT_PROFILE(profile_idc) ( profile_idc>=FREXT_HP || profile_idc == FREXT_CAVLC444 )
-#define HI_INTRA_ONLY_PROFILE (((p_Vid->active_sps->profile_idc>=FREXT_Hi10P)&&(p_Vid->active_sps->constrained_set3_flag))||(p_Vid->active_sps->profile_idc==FREXT_CAVLC444)) 
+#define HI_INTRA_ONLY_PROFILE         (((p_Vid->active_sps->profile_idc>=FREXT_Hi10P)&&(p_Vid->active_sps->constrained_set3_flag))||(p_Vid->active_sps->profile_idc==FREXT_CAVLC444)) 
+
 #endif
 

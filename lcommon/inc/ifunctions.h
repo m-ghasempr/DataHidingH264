@@ -17,7 +17,7 @@
 #ifndef _IFUNCTIONS_H_
 #define _IFUNCTIONS_H_
 
-# if !defined(WIN32) && (__STDC_VERSION__ < 199901L)
+# if !(defined(WIN32) || defined(WIN64)) && (__STDC_VERSION__ < 199901L)
   #define static
   #define inline
 #endif
@@ -43,6 +43,33 @@ static inline int imin(int a, int b)
 static inline int imax(int a, int b)
 {
   return ((a) > (b)) ? (a) : (b);
+}
+
+static inline int imedian(int a,int b,int c)
+{
+  if (a > b) // a > b
+  { 
+    if (b > c) 
+      return(b); // a > b > c
+    else if (a > c) 
+	    return(c); // a > c > b
+    else 
+      return(a); // c > a > b
+  }
+  else // b > a
+  { 
+    if (a > c) 
+      return(a); // b > a > c
+    else if (b > c)
+	    return(c); // b > c > a
+    else
+      return(b);  // c > b > a
+  }
+}
+
+static inline int imedian_old(int a, int b, int c)
+{
+  return (a + b + c - imin(a, imin(b, c)) - imax(a, imax(b ,c)));
 }
 
 static inline double dmin(double a, double b)
@@ -146,6 +173,11 @@ static inline int rshift_rnd_sf(int x, int a)
   return ((x + (1 << (a-1) )) >> a);
 }
 
+static inline int shift_off_sf(int x, int o, int a)
+{
+  return ((x + o) >> a);
+}
+
 static inline unsigned int rshift_rnd_us_sf(unsigned int x, unsigned int a)
 {
   return ((x + (1 << (a-1))) >> a);
@@ -183,6 +215,7 @@ static inline double dClip3(double low, double high, double x)
   return x;
 }
 
+
 static inline distblk weighted_cost(int factor, int bits)
 {
 #if JCOST_CALC_SCALEUP
@@ -204,6 +237,22 @@ static inline int RSD(int x)
 static inline int power2(int x) 
 {
   return 1 << (x);
+}
+
+
+static const int64 po2[64] = {0x1,0x2,0x4,0x8,0x10,0x20,0x40,0x80,0x100,0x200,0x400,0x800,0x1000,0x2000,0x4000,0x8000,
+                              0x10000,0x20000,0x40000,0x80000,0x100000,0x200000,0x400000,0x800000,0x1000000,0x2000000,0x4000000,0x8000000,
+                              0x10000000,0x20000000,0x40000000,0x80000000,0x100000000,0x200000000,0x400000000,0x800000000,
+                              0x1000000000,0x2000000000,0x4000000000,0x8000000000,0x10000000000,0x20000000000,0x40000000000,0x80000000000,
+                              0x100000000000,0x200000000000,0x400000000000,0x800000000000,
+                              0x1000000000000,0x2000000000000,0x4000000000000,0x8000000000000,
+                              0x10000000000000,0x20000000000000,0x40000000000000,0x80000000000000,
+                              0x100000000000000,0x200000000000000,0x400000000000000,0x800000000000000,
+                              0x1000000000000000,0x2000000000000000,0x4000000000000000,0x8000000000000000};
+
+static inline int64 i64_power2(int x)
+{
+  return((x > 63) ? 0 : po2[x]);
 }
 
 static inline int float2int (float x)
@@ -289,7 +338,7 @@ static inline int dist_down(distblk blkdistCost)
 #endif
 }
 
-# if !defined(WIN32) && (__STDC_VERSION__ < 199901L)
+# if !(defined(WIN32) || defined(WIN64)) && (__STDC_VERSION__ < 199901L)
   #undef static
   #undef inline
 #endif

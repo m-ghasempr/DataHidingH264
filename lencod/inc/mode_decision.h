@@ -26,28 +26,24 @@ extern distblk  BPredPartitionCost               (Macroblock *currMB, int, int, 
 extern void   StoreMV8x8                       (Slice *currSlice, int dir);
 extern void   RestoreMV8x8                     (Slice *currSlice, int dir);
 extern void   store_macroblock_parameters      (Macroblock *currMB, int);
-extern void   SetModesAndRefframeForBlocks     (Macroblock *currMB, short);
 extern void   StoreNewMotionVectorsBlock8x8    (Slice *currSlice, int, int, Info8x8 *);
 extern void   assign_enc_picture_params        (Macroblock *currMB, int mode, Info8x8 *best, int block);
 extern void   set_subblock8x8_info             (Block8x8Info*, int, int, RD_8x8DATA*);
 extern void   set_block8x8_info                (Block8x8Info*, int, int, Info8x8 *best);
 extern void   update_refresh_map               (Macroblock *currMB, int intra, int intra1);
-extern void   SetCoeffAndReconstruction8x8     (Macroblock *currMB);
 extern void   get_bipred_cost                  (Macroblock *currMB, int mode, int block, int i, int j, Info8x8  *best, RD_PARAMS *enc_mb, distblk bmcost[5]);
 extern short  I16Offset (int, short);
-extern int    CheckReliabilityOfRef                (Macroblock *currMB, int block, int list_idx, int ref, int mode);
-extern int    RDCost_for_macroblocks               (Macroblock *currMB, int, short);
-extern int    Mode_Decision_for_Intra4x4Macroblock (Macroblock *currMB, int, distblk*);
-extern distblk  RDCost_for_8x8blocks                 (Macroblock *currMB, RD_8x8DATA *dataTr, int*, int64*, int, int, short, Info8x8 *, distblk);
+extern int    CheckReliabilityOfRef            (Macroblock *currMB, int block, int list_idx, int ref, int mode);
+extern int    RDCost_for_macroblocks           (Macroblock *currMB, int, short);
+extern int    mode_decision_for_I4x4_MB        (Macroblock *currMB, int, distblk*);
+extern distblk  rdcost_for_8x8blocks           (Macroblock *currMB, RD_8x8DATA *dataTr, int*, int64*, int, int, short, Info8x8 *, distblk);
 
 extern void rc_store_diff                  (int diff[16][16], imgpel **p_curImg, int cpix_x,imgpel **prediction);
-extern void submacroblock_mode_decision    (Macroblock *currMB, RD_PARAMS *, RD_8x8DATA *, int ****, int, distblk *);
-extern void submacroblock_mode_decision_low(Macroblock *currMB, RD_PARAMS *, RD_8x8DATA *, int ****, int *, int, distblk *, distblk *, distblk *, int);
 
 extern void init_enc_mb_params             (Macroblock* currMB, RD_PARAMS *enc_mb, int intra);
 extern void list_prediction_cost           (Macroblock *currMB, int list, int block, int mode, RD_PARAMS *enc_mb, distblk bmcost[5], char best_ref[2]);
 extern void determine_prediction_list      (distblk [5], Info8x8 *, distblk *);
-extern void compute_mode_RD_cost    (Macroblock *currMB, RD_PARAMS *enc_mb, short mode, short *inter_skip);
+extern void compute_mode_RD_cost           (Macroblock *currMB, RD_PARAMS *enc_mb, short mode, short *inter_skip);
 
 extern int transform_termination_control   (Macroblock* currMB, int mode);
 extern int bslice_16x16_termination_control(InputParameters *p_Inp, Block8x8Info *b8x8info, int *ctr16x16, int mode, int bslice);

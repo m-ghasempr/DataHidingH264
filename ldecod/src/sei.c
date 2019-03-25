@@ -62,7 +62,7 @@
  *
  ************************************************************************
  */
-void InterpretSEIMessage(byte* msg, int size, VideoParameters *p_Vid)
+void InterpretSEIMessage(byte* msg, int size, VideoParameters *p_Vid, Slice *pSlice)
 {
   int payload_type = 0;
   int payload_size = 0;
@@ -114,7 +114,7 @@ void InterpretSEIMessage(byte* msg, int size, VideoParameters *p_Vid)
       interpret_recovery_point_info( msg+offset, payload_size, p_Vid );
       break;
     case  SEI_DEC_REF_PIC_MARKING_REPETITION:
-      interpret_dec_ref_pic_marking_repetition_info( msg+offset, payload_size, p_Vid );
+      interpret_dec_ref_pic_marking_repetition_info( msg+offset, payload_size, p_Vid, pSlice );
       break;
     case  SEI_SPARE_PIC:
       interpret_spare_pic( msg+offset, payload_size, p_Vid );
@@ -939,7 +939,7 @@ void interpret_recovery_point_info( byte* payload, int size, VideoParameters *p_
  *
  ************************************************************************
  */
-void interpret_dec_ref_pic_marking_repetition_info( byte* payload, int size, VideoParameters *p_Vid )
+void interpret_dec_ref_pic_marking_repetition_info( byte* payload, int size, VideoParameters *p_Vid, Slice *pSlice )
 {
   int original_idr_flag, original_frame_num;
   int original_field_pic_flag, original_bottom_field_flag;
@@ -986,18 +986,19 @@ void interpret_dec_ref_pic_marking_repetition_info( byte* payload, int size, Vid
 #endif
 
   // we need to save everything that is probably overwritten in dec_ref_pic_marking()
-  old_drpm = p_Vid->dec_ref_pic_marking_buffer;
-  old_idr_flag = p_Vid->idr_flag;
+  old_drpm = pSlice->dec_ref_pic_marking_buffer;
+  old_idr_flag = pSlice->idr_flag; //p_Vid->idr_flag;
 
-  old_no_output_of_prior_pics_flag = p_Vid->no_output_of_prior_pics_flag;
-  old_long_term_reference_flag = p_Vid->long_term_reference_flag;
-  old_adaptive_ref_pic_buffering_flag = p_Vid->adaptive_ref_pic_buffering_flag;
+  old_no_output_of_prior_pics_flag = pSlice->no_output_of_prior_pics_flag; //p_Vid->no_output_of_prior_pics_flag;
+  old_long_term_reference_flag = pSlice->long_term_reference_flag;
+  old_adaptive_ref_pic_buffering_flag = pSlice->adaptive_ref_pic_buffering_flag;
 
   // set new initial values
-  p_Vid->idr_flag = original_idr_flag;
-  p_Vid->dec_ref_pic_marking_buffer = NULL;
+  //p_Vid->idr_flag = original_idr_flag;
+  pSlice->idr_flag = original_idr_flag;
+  pSlice->dec_ref_pic_marking_buffer = NULL;
 
-  dec_ref_pic_marking(p_Vid, buf);
+  dec_ref_pic_marking(p_Vid, buf, pSlice);
 
   // print out decoded values
 #ifdef PRINT_DEC_REF_PIC_MARKING
@@ -1038,20 +1039,21 @@ void interpret_dec_ref_pic_marking_repetition_info( byte* payload, int size, Vid
   }
 #endif
 
-  while (p_Vid->dec_ref_pic_marking_buffer)
+  while (pSlice->dec_ref_pic_marking_buffer)
   {
-    tmp_drpm=p_Vid->dec_ref_pic_marking_buffer;
+    tmp_drpm=pSlice->dec_ref_pic_marking_buffer;
 
-    p_Vid->dec_ref_pic_marking_buffer=tmp_drpm->Next;
+    pSlice->dec_ref_pic_marking_buffer=tmp_drpm->Next;
     free (tmp_drpm);
   }
 
   // restore old values in p_Vid
-  p_Vid->dec_ref_pic_marking_buffer = old_drpm;
-  p_Vid->idr_flag = old_idr_flag;
-  p_Vid->no_output_of_prior_pics_flag = old_no_output_of_prior_pics_flag;
-  p_Vid->long_term_reference_flag = old_long_term_reference_flag;
-  p_Vid->adaptive_ref_pic_buffering_flag = old_adaptive_ref_pic_buffering_flag;
+  pSlice->dec_ref_pic_marking_buffer = old_drpm;
+  pSlice->idr_flag = old_idr_flag;
+  pSlice->no_output_of_prior_pics_flag = old_no_output_of_prior_pics_flag;
+  p_Vid->no_output_of_prior_pics_flag = pSlice->no_output_of_prior_pics_flag;
+  pSlice->long_term_reference_flag = old_long_term_reference_flag;
+  pSlice->adaptive_ref_pic_buffering_flag = old_adaptive_ref_pic_buffering_flag;
 
   free (buf);
 #ifdef PRINT_DEC_REF_PIC_MARKING
@@ -1586,7 +1588,6 @@ void interpret_buffering_period_info( byte* payload, int size, VideoParameters *
   Bitstream* buf;
   seq_parameter_set_rbsp_t *sps;
 
-
   buf = malloc(sizeof(Bitstream));
   buf->bitstream_length = size;
   buf->streamBuffer = payload;
@@ -2009,13 +2010,8 @@ void interpret_tone_mapping( byte* payload, int size, VideoParameters *p_Vid )
 
         for (i=0; i < max_coded_num; i++) 
         {
-#if 0
-          int j = (int)(1 + exp( -6*(double)(i-seiToneMappingTmp.sigmoid_midpoint)/seiToneMappingTmp.sigmoid_width));
-          p_Vid->seiToneMapping->lut[i] = ((max_output_num-1)+(j>>1)) / j;
-#else
           double tmp = 1.0 + exp( -6*(double)(i-seiToneMappingTmp.sigmoid_midpoint)/seiToneMappingTmp.sigmoid_width);
           p_Vid->seiToneMapping->lut[i] = (imgpel)( (double)(max_output_num-1)/ tmp + 0.5);
-#endif
         }
         break;
       case 2: // user defined table
@@ -2034,19 +2030,11 @@ void interpret_tone_mapping( byte* payload, int size, VideoParameters *p_Vid )
       case 3: // piecewise linear mapping
         for (j=0; j<seiToneMappingTmp.num_pivots+1; j++) 
         {
-#if 0
-          slope = ((seiToneMappingTmp.sei_pivot_value[j+1] - seiToneMappingTmp.sei_pivot_value[j])<<16)/(seiToneMappingTmp.coded_pivot_value[j+1]-seiToneMappingTmp.coded_pivot_value[j]);
-          for (i=seiToneMappingTmp.coded_pivot_value[j]; i <= seiToneMappingTmp.coded_pivot_value[j+1]; i++) 
-          {
-            p_Vid->seiToneMapping->lut[i] = seiToneMappingTmp.sei_pivot_value[j] + (( (i - seiToneMappingTmp.coded_pivot_value[j]) * slope)>>16);
-          }
-#else
           double slope = (double)(seiToneMappingTmp.sei_pivot_value[j+1] - seiToneMappingTmp.sei_pivot_value[j])/(seiToneMappingTmp.coded_pivot_value[j+1]-seiToneMappingTmp.coded_pivot_value[j]);
           for (i=seiToneMappingTmp.coded_pivot_value[j]; i <= seiToneMappingTmp.coded_pivot_value[j+1]; i++) 
           {
             p_Vid->seiToneMapping->lut[i] = (imgpel) (seiToneMappingTmp.sei_pivot_value[j] + (int)(( (i - seiToneMappingTmp.coded_pivot_value[j]) * slope)));
           }
-#endif
         }
         break;
 

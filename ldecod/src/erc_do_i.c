@@ -18,7 +18,7 @@
 #include "global.h"
 #include "erc_do.h"
 
-static void concealBlocks          ( VideoParameters *p_Vid, int lastColumn, int lastRow, int comp, frame *recfr, int picSizeX, int *condition );
+static void concealBlocks          ( VideoParameters *p_Vid, int lastColumn, int lastRow, int comp, frame *recfr, int picSizeX, char *condition );
 static void pixMeanInterpolateBlock( VideoParameters *p_Vid, imgpel *src[], imgpel *block, int blockSize, int frameWidth );
 
 /*!
@@ -151,7 +151,7 @@ void ercPixConcealIMB(VideoParameters *p_Vid, imgpel *currFrame, int row, int co
  *      No corner neighbors are considered
  ************************************************************************
  */
-int ercCollect8PredBlocks( int predBlocks[], int currRow, int currColumn, int *condition,
+int ercCollect8PredBlocks( int predBlocks[], int currRow, int currColumn, char *condition,
                            int maxRow, int maxColumn, int step, byte fNoCornerNeigh )
 {
   int srcCounter  = 0;
@@ -260,7 +260,7 @@ int ercCollect8PredBlocks( int predBlocks[], int currRow, int currColumn, int *c
  *      in vertical/horizontal direction. (Y:2 U,V:1)
  ************************************************************************
  */
-int ercCollectColumnBlocks( int predBlocks[], int currRow, int currColumn, int *condition, int maxRow, int maxColumn, int step )
+int ercCollectColumnBlocks( int predBlocks[], int currRow, int currColumn, char *condition, int maxRow, int maxColumn, int step )
 {
   int srcCounter = 0, threshold = ERC_BLOCK_CORRUPTED;
 
@@ -306,7 +306,7 @@ int ercCollectColumnBlocks( int predBlocks[], int currRow, int currColumn, int *
  *      The block condition (ok, lost) table
  ************************************************************************
  */
-static void concealBlocks( VideoParameters *p_Vid, int lastColumn, int lastRow, int comp, frame *recfr, int picSizeX, int *condition )
+static void concealBlocks( VideoParameters *p_Vid, int lastColumn, int lastRow, int comp, frame *recfr, int picSizeX, char *condition )
 {
   int row, column, srcCounter = 0,  thr = ERC_BLOCK_CORRUPTED,
       lastCorruptedRow = -1, firstCorruptedRow = -1, currRow = 0,
@@ -537,7 +537,7 @@ static void pixMeanInterpolateBlock( VideoParameters *p_Vid, imgpel *src[], imgp
       if ( srcCounter > 0 )
         block[ k + column ] = (byte)(tmp/srcCounter);
       else
-        block[ k + column ] = blockSize == 8 ? p_Vid->dc_pred_value_comp[1] : p_Vid->dc_pred_value_comp[0];
+        block[ k + column ] = (imgpel) (blockSize == 8 ? p_Vid->dc_pred_value_comp[1] : p_Vid->dc_pred_value_comp[0]);
     }
     k += frameWidth;
   }

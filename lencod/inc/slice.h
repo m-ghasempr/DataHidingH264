@@ -40,7 +40,10 @@ extern void init_slice             ( VideoParameters *p_Vid, Slice **currSlice, 
 extern void free_slice_list        ( Picture *currPic );
 
 extern void SetLambda(VideoParameters *p_Vid, int j, int qp, double lambda_scale);
-extern void SetLagrangianMultipliersOn( VideoParameters *p_Vid, InputParameters *p_Inp );
-extern void SetLagrangianMultipliersOff( VideoParameters *p_Vid, InputParameters *p_Inp );
+extern void CalcMaxLamdaMD(VideoParameters *p_Vid, double *p_lambda_md);
+extern void SetLagrangianMultipliersOn (Slice *currSlice);
+extern void SetLagrangianMultipliersOff(Slice *currSlice);
+extern void  free_slice                (Slice *currSlice);
+
 
 #endif

@@ -109,7 +109,7 @@ void fillPlane ( imgpel** imgX,                 //!< Pointer to image plane
 
   if (sizeof(imgpel) == sizeof(char))
   {
-    memset(&imgX[0][0], nVal, size_y * size_x);
+    memset(imgX[0], nVal, size_y * size_x);
   }
   else
   {
@@ -572,10 +572,6 @@ void DeleteFrameMemory (VideoParameters *p_Vid)
  * \brief
  *    Reads one new frame from file
  *
- * \param p_Img
- *      image encoding parameters for current picture
- * \param p_Inp
- *    Input configuration parameters 
  * \param input_file
  *    structure containing information (filename, format) about the source file
  * \param FrameNoInFile
@@ -590,7 +586,7 @@ void DeleteFrameMemory (VideoParameters *p_Vid)
  *    Image planes
  ************************************************************************
  */
-int ReadOneFrame (VideoParameters *p_Vid, VideoDataFile *input_file, int FrameNoInFile, int HeaderSize, FrameFormat *source, FrameFormat *output, imgpel **pImage[3])
+int read_one_frame (VideoParameters *p_Vid, VideoDataFile *input_file, int FrameNoInFile, int HeaderSize, FrameFormat *source, FrameFormat *output, imgpel **pImage[3])
 {
   InputParameters *p_Inp = p_Vid->p_Inp;
   int file_read = 0;
@@ -631,12 +627,12 @@ int ReadOneFrame (VideoParameters *p_Vid, VideoDataFile *input_file, int FrameNo
 	bit_scale = source->bit_depth[0] - output->bit_depth[0];  
 
 	if(rgb_input)
-		p_Vid->buf2img(pImage[0], p_Vid->buf + bytes_y, source->width, source->height, output->width, output->height, symbol_size_in_bytes, bit_scale);
+		p_Vid->buf2img(pImage[0], p_Vid->buf + bytes_y, source->width[0], source->height[0], output->width[0], output->height[0], symbol_size_in_bytes, bit_scale);
 	else
-		p_Vid->buf2img(pImage[0], p_Vid->buf, source->width, source->height, output->width, output->height, symbol_size_in_bytes, bit_scale);
+		p_Vid->buf2img(pImage[0], p_Vid->buf, source->width[0], source->height[0], output->width[0], output->height[0], symbol_size_in_bytes, bit_scale);
 
 #if (DEBUG_BITDEPTH)
-	MaskMSBs(pImage[0], ((1 << output->bit_depth[0]) - 1), output->width, output->height);
+	MaskMSBs(pImage[0], ((1 << output->bit_depth[0]) - 1), output->width[0], output->height[0]);
 #endif
 
 	if (p_Vid->yuv_format != YUV400)
@@ -647,19 +643,19 @@ int ReadOneFrame (VideoParameters *p_Vid, VideoDataFile *input_file, int FrameNo
 #endif
 		{
 			if(rgb_input)
-				p_Vid->buf2img(pImage[1], p_Vid->buf + bytes_y + bytes_uv, source->width_cr, source->height_cr, output->width_cr, output->height_cr, symbol_size_in_bytes, bit_scale);
+				p_Vid->buf2img(pImage[1], p_Vid->buf + bytes_y + bytes_uv, source->width[1], source->height[1], output->width[1], output->height[1], symbol_size_in_bytes, bit_scale);
 			else 
-				p_Vid->buf2img(pImage[1], p_Vid->buf + bytes_y, source->width_cr, source->height_cr, output->width_cr, output->height_cr, symbol_size_in_bytes, bit_scale);
+				p_Vid->buf2img(pImage[1], p_Vid->buf + bytes_y, source->width[1], source->height[1], output->width[1], output->height[1], symbol_size_in_bytes, bit_scale);
 
 			bit_scale = source->bit_depth[2] - output->bit_depth[2];
 			if(rgb_input)
-				p_Vid->buf2img(pImage[2], p_Vid->buf, source->width_cr, source->height_cr, output->width_cr, output->height_cr, symbol_size_in_bytes, bit_scale);
+				p_Vid->buf2img(pImage[2], p_Vid->buf, source->width[1], source->height[1], output->width[1], output->height[1], symbol_size_in_bytes, bit_scale);
 			else
-				p_Vid->buf2img(pImage[2], p_Vid->buf + bytes_y + bytes_uv, source->width_cr, source->height_cr, output->width_cr, output->height_cr, symbol_size_in_bytes, bit_scale);
+				p_Vid->buf2img(pImage[2], p_Vid->buf + bytes_y + bytes_uv, source->width[1], source->height[1], output->width[1], output->height[1], symbol_size_in_bytes, bit_scale);
 		}
 #if (DEBUG_BITDEPTH)
-		MaskMSBs(pImage[1], ((1 << output->bit_depth[1]) - 1), output->width_cr, output->height_cr);
-		MaskMSBs(pImage[2], ((1 << output->bit_depth[2]) - 1), output->width_cr, output->height_cr);
+		MaskMSBs(pImage[1], ((1 << output->bit_depth[1]) - 1), output->width[1], output->height[1]);
+		MaskMSBs(pImage[2], ((1 << output->bit_depth[2]) - 1), output->width[1], output->height[1]);
 #endif
 	}
 
@@ -686,20 +682,20 @@ int ReadOneFrame (VideoParameters *p_Vid, VideoDataFile *input_file, int FrameNo
  *    image planes
  ************************************************************************
  */
-void PaddAutoCropBorders (FrameFormat output, int img_size_x, int img_size_y, int img_size_x_cr, int img_size_y_cr, imgpel **pImage[3])
+void pad_borders (FrameFormat output, int img_size_x, int img_size_y, int img_size_x_cr, int img_size_y_cr, imgpel **pImage[3])
 {
   int x, y;
 
   // Luma or 1st component
   //padding right border
-  if (output.width < img_size_x)
-    for (y=0; y < output.height; y++)
-      for (x = output.width; x < img_size_x; x++)
+  if (output.width[0] < img_size_x)
+    for (y=0; y < output.height[0]; y++)
+      for (x = output.width[0]; x < img_size_x; x++)
         pImage[0] [y][x] = pImage[0][y][x-1];
 
   //padding bottom border
-  if (output.height < img_size_y)
-    for (y = output.height; y<img_size_y; y++)
+  if (output.height[0] < img_size_y)
+    for (y = output.height[0]; y<img_size_y; y++)
       memcpy(pImage[0][y], pImage[0][y - 1], img_size_x * sizeof(imgpel));
 
   // Chroma or all other components
@@ -710,14 +706,14 @@ void PaddAutoCropBorders (FrameFormat output, int img_size_x, int img_size_y, in
     for (k = 1; k < 3; k++)
     {
       //padding right border
-      if (output.width_cr < img_size_x_cr)
-        for (y=0; y < output.height_cr; y++)
-          for (x = output.width_cr; x < img_size_x_cr; x++)
+      if (output.width[1] < img_size_x_cr)
+        for (y=0; y < output.height[1]; y++)
+          for (x = output.width[1]; x < img_size_x_cr; x++)
             pImage [k][y][x] = pImage[k][y][x-1];
 
       //padding bottom border
-      if (output.height_cr < img_size_y_cr)
-        for (y = output.height_cr; y < img_size_y_cr; y++)
+      if (output.height[1] < img_size_y_cr)
+        for (y = output.height[1]; y < img_size_y_cr; y++)
           memcpy(pImage[k][y], pImage[k][y - 1], img_size_x_cr * sizeof(imgpel));
     }
   }

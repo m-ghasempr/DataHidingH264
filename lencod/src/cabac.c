@@ -161,7 +161,7 @@ static void exp_golomb_encode_eq_prob( EncodingEnvironmentPtr eep_dp,
     {
       biari_encode_symbol_eq_prob(eep_dp, 0);   //now terminated zero of unary part
       while (k--)                               //next binary part
-        biari_encode_symbol_eq_prob(eep_dp, (signed short)((symbol>>k)&1));
+        biari_encode_symbol_eq_prob(eep_dp, ((symbol>>k)&1));
       break;
     }
   }
@@ -411,7 +411,7 @@ void writeFieldModeInfo_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartiti
 #if ENABLE_FIELD_CTX
   TextureInfoContexts *ctx = dp->p_Slice->tex_ctx;
   
-  biari_encode_symbol(eep_dp, (signed short) (se->value1 != 0), &ctx->mb_aff_contexts[act_ctx]);
+  biari_encode_symbol(eep_dp, (se->value1 != 0), &ctx->mb_aff_contexts[act_ctx]);
 #endif
 
   se->context = act_ctx;
@@ -429,7 +429,7 @@ void writeFieldModeInfo_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartiti
 */
 void writeMB_Pskip_flagInfo_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartition *dp)
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   EncodingEnvironmentPtr eep_dp = &(dp->ee_cabac);
   int curr_len = arienco_bits_written(eep_dp);
   MotionInfoContexts *ctx = currSlice->mot_ctx;
@@ -461,7 +461,7 @@ void writeMB_Pskip_flagInfo_CABAC(Macroblock *currMB, SyntaxElement *se, DataPar
 */
 void writeMB_Bskip_flagInfo_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartition *dp)
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   EncodingEnvironmentPtr eep_dp = &(dp->ee_cabac);
   int curr_len = arienco_bits_written(eep_dp);
   MotionInfoContexts *ctx = currSlice->mot_ctx;
@@ -508,7 +508,7 @@ void writeMB_transform_size_CABAC(Macroblock *currMB, SyntaxElement *se, DataPar
   int act_ctx     = a + b;
 
   se->context = act_ctx; // store context
-  biari_encode_symbol(eep_dp, (signed short) (act_sym != 0), ctx->transform_size_contexts + act_ctx );
+  biari_encode_symbol(eep_dp, (act_sym != 0), ctx->transform_size_contexts + act_ctx );
 
   dp->bitstream->write_flag = 1;
   se->len = (arienco_bits_written(eep_dp) - curr_len);
@@ -593,7 +593,7 @@ void writeMB_P_typeInfo_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartiti
 
     act_ctx = 8;
     act_sym = mode_sym/12;
-    biari_encode_symbol(eep_dp, (signed short) act_sym, mb_type_contexts + act_ctx ); // coding of AC/no AC
+    biari_encode_symbol(eep_dp, act_sym, mb_type_contexts + act_ctx ); // coding of AC/no AC
     mode_sym = mode_sym % 12;
 
     act_sym = mode_sym >> 2; // coding of cbp: 0,1,2
@@ -605,15 +605,15 @@ void writeMB_P_typeInfo_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartiti
     else
     {
       biari_encode_symbol(eep_dp, 1, mb_type_contexts + act_ctx );
-      biari_encode_symbol(eep_dp, (signed short) (act_sym!=1), mb_type_contexts + act_ctx );
+      biari_encode_symbol(eep_dp, (act_sym!=1), mb_type_contexts + act_ctx );
     }
 
     mode_sym = mode_sym & 0x03; // coding of I pred-mode: 0,1,2,3
     act_ctx  = 10;
     act_sym  = mode_sym >> 1;
-    biari_encode_symbol(eep_dp, (signed short) act_sym, mb_type_contexts + act_ctx );
+    biari_encode_symbol(eep_dp, act_sym, mb_type_contexts + act_ctx );
     act_sym  = (mode_sym & 0x01);
-    biari_encode_symbol(eep_dp, (signed short) act_sym, mb_type_contexts + act_ctx );
+    biari_encode_symbol(eep_dp, act_sym, mb_type_contexts + act_ctx );
   }
 
   dp->bitstream->write_flag = 1;
@@ -634,7 +634,7 @@ void writeMB_B_typeInfo_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartiti
   EncodingEnvironmentPtr eep_dp = &(dp->ee_cabac);
   int curr_len = arienco_bits_written(eep_dp);  
   
-  signed short csym;  
+  int csym;  
   int act_sym = se->value1;  
 
   int mode_sym = 0;
@@ -662,7 +662,7 @@ void writeMB_B_typeInfo_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartiti
   {
     biari_encode_symbol (eep_dp, 1, &mb_type_contexts[act_ctx]);
     biari_encode_symbol (eep_dp, 0, &mb_type_contexts[4]);
-    csym = (short) (act_sym-1 != 0);
+    csym =  (act_sym-1 != 0);
     biari_encode_symbol (eep_dp, csym, &mb_type_contexts[6]);
   }
   else if (act_sym<=10)
@@ -671,11 +671,11 @@ void writeMB_B_typeInfo_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartiti
     biari_encode_symbol (eep_dp, 1, &mb_type_contexts[act_ctx]);
     biari_encode_symbol (eep_dp, 1, &mb_type_contexts[4]);
     biari_encode_symbol (eep_dp, 0, &mb_type_contexts[5]);
-    csym = (short) ((temp_sym >> 2)&0x01) != 0;
+    csym =  ((temp_sym >> 2)&0x01) != 0;
     biari_encode_symbol (eep_dp, csym, &mb_type_contexts[6]);
-    csym = (short) ((temp_sym >> 1)&0x01) != 0;
+    csym =  ((temp_sym >> 1)&0x01) != 0;
     biari_encode_symbol (eep_dp, csym, &mb_type_contexts[6]);
-    csym = (short) (temp_sym & 0x01) != 0;
+    csym =  (temp_sym & 0x01) != 0;
     biari_encode_symbol (eep_dp, csym, &mb_type_contexts[6]);
   }
   else if (act_sym==11 || act_sym==22)
@@ -685,7 +685,7 @@ void writeMB_B_typeInfo_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartiti
     biari_encode_symbol (eep_dp, 1, &mb_type_contexts[5]);
     biari_encode_symbol (eep_dp, 1, &mb_type_contexts[6]);
     biari_encode_symbol (eep_dp, 1, &mb_type_contexts[6]);
-    csym = (short) (act_sym != 11);
+    csym =  (act_sym != 11);
     biari_encode_symbol (eep_dp, csym, &mb_type_contexts[6]);
   }
   else
@@ -694,13 +694,13 @@ void writeMB_B_typeInfo_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartiti
     biari_encode_symbol (eep_dp, 1, &mb_type_contexts[act_ctx]);
     biari_encode_symbol (eep_dp, 1, &mb_type_contexts[4]);
     biari_encode_symbol (eep_dp, 1, &mb_type_contexts[5]);
-    csym = (short) ((temp_sym >> 3)&0x01) != 0;
+    csym = ((temp_sym >> 3)&0x01) != 0;
     biari_encode_symbol (eep_dp, csym, &mb_type_contexts[6]);
-    csym = (short) ((temp_sym >> 2)&0x01) != 0;
+    csym = ((temp_sym >> 2)&0x01) != 0;
     biari_encode_symbol (eep_dp, csym, &mb_type_contexts[6]);
-    csym = (short) ((temp_sym >> 1)&0x01) != 0;
+    csym = ((temp_sym >> 1)&0x01) != 0;
     biari_encode_symbol (eep_dp, csym, &mb_type_contexts[6]);
-    csym = (short) (temp_sym & 0x01) != 0;
+    csym = (temp_sym & 0x01) != 0;
     biari_encode_symbol (eep_dp, csym, &mb_type_contexts[6]);
   }
 
@@ -720,7 +720,7 @@ void writeMB_B_typeInfo_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartiti
 
     act_ctx = 8;
     act_sym = mode_sym/12;
-    biari_encode_symbol(eep_dp, (signed short) act_sym, mb_type_contexts + act_ctx ); // coding of AC/no AC
+    biari_encode_symbol(eep_dp, act_sym, mb_type_contexts + act_ctx ); // coding of AC/no AC
     mode_sym = mode_sym % 12;
 
     act_sym = mode_sym >> 2; // coding of cbp: 0,1,2
@@ -732,15 +732,15 @@ void writeMB_B_typeInfo_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartiti
     else
     {
       biari_encode_symbol(eep_dp, 1, mb_type_contexts + act_ctx );
-      biari_encode_symbol(eep_dp, (signed short) (act_sym!=1), mb_type_contexts + act_ctx );
+      biari_encode_symbol(eep_dp, (act_sym!=1), mb_type_contexts + act_ctx );
     }
 
     mode_sym = mode_sym & 0x03; // coding of I pred-mode: 0,1,2,3
     act_ctx  = 10;
     act_sym  = mode_sym >> 1;
-    biari_encode_symbol(eep_dp, (signed short) act_sym, mb_type_contexts + act_ctx );
+    biari_encode_symbol(eep_dp, act_sym, mb_type_contexts + act_ctx );
     act_sym  = (mode_sym & 0x01);
-    biari_encode_symbol(eep_dp, (signed short) act_sym, mb_type_contexts + act_ctx );
+    biari_encode_symbol(eep_dp, act_sym, mb_type_contexts + act_ctx );
   }
 
   dp->bitstream->write_flag = 1;
@@ -799,7 +799,7 @@ void writeMB_I_typeInfo_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartiti
     mode_sym = act_sym-1; // Values in the range of 0...23
     act_ctx  = 4;
     act_sym  = mode_sym/12;
-    biari_encode_symbol(eep_dp, (signed short) act_sym, ctx->mb_type_contexts[0] + act_ctx ); // coding of AC/no AC
+    biari_encode_symbol(eep_dp, act_sym, ctx->mb_type_contexts[0] + act_ctx ); // coding of AC/no AC
     mode_sym = mode_sym % 12;
     act_sym  = mode_sym / 4; // coding of cbp: 0,1,2
     act_ctx  = 5;
@@ -811,15 +811,15 @@ void writeMB_I_typeInfo_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartiti
     {
       biari_encode_symbol(eep_dp, 1, ctx->mb_type_contexts[0] + act_ctx );
       act_ctx=6;
-      biari_encode_symbol(eep_dp, (signed short) (act_sym!=1), ctx->mb_type_contexts[0] + act_ctx );
+      biari_encode_symbol(eep_dp, (act_sym!=1), ctx->mb_type_contexts[0] + act_ctx );
     }
     mode_sym = mode_sym & 0x03; // coding of I pred-mode: 0,1,2,3
     act_sym  = mode_sym >> 1;
     act_ctx  = 7;
-    biari_encode_symbol(eep_dp, (signed short) act_sym, ctx->mb_type_contexts[0] + act_ctx );
+    biari_encode_symbol(eep_dp, act_sym, ctx->mb_type_contexts[0] + act_ctx );
     act_ctx  = 8;
     act_sym  = mode_sym & 0x01;
-    biari_encode_symbol(eep_dp, (signed short) act_sym, ctx->mb_type_contexts[0] + act_ctx );
+    biari_encode_symbol(eep_dp, act_sym, ctx->mb_type_contexts[0] + act_ctx );
   }
 
   dp->bitstream->write_flag = 1;
@@ -859,7 +859,7 @@ void writeB8_B_typeInfo_CABAC(SyntaxElement *se, DataPartition *dp)
   if (act_sym < 2)
   {
     biari_encode_symbol (eep_dp, 0, &b8_type_contexts[1]);
-    biari_encode_symbol (eep_dp, (signed short) (act_sym!=0), &b8_type_contexts[3]);
+    biari_encode_symbol (eep_dp, (act_sym!=0), &b8_type_contexts[3]);
   }
   else if (act_sym < 6)
   {
@@ -956,9 +956,9 @@ void writeIntraPredMode_CABAC(SyntaxElement *se, DataPartition *dp)
     biari_encode_symbol(eep_dp, 0, ipr_contexts);
 
     // remaining_mode_selector
-    biari_encode_symbol(eep_dp,(signed short)( se->value1 & 0x1    ), ipr_contexts+1);
-    biari_encode_symbol(eep_dp,(signed short)((se->value1 & 0x2)>>1), ipr_contexts+1);
-    biari_encode_symbol(eep_dp,(signed short)((se->value1 & 0x4)>>2), ipr_contexts+1);
+    biari_encode_symbol(eep_dp, ( se->value1 & 0x1    ), ipr_contexts+1);
+    biari_encode_symbol(eep_dp, ((se->value1 & 0x2)>>1), ipr_contexts+1);
+    biari_encode_symbol(eep_dp, ((se->value1 & 0x4)>>2), ipr_contexts+1);
   }
 
   dp->bitstream->write_flag = 1;
@@ -979,7 +979,7 @@ void writeRefPic_P_CABAC(SyntaxElement *se, DataPartition *dp)
   int curr_len = arienco_bits_written(eep_dp);
   Slice *currSlice = dp->p_Slice;
   VideoParameters *p_Vid = dp->p_Vid;
-  PicMotionParams *motion = &p_Vid->enc_picture->motion;
+  PicMotionParams **motion = p_Vid->enc_picture->mv_info;
   MotionInfoContexts  *ctx    = currSlice->mot_ctx;
   Macroblock          *currMB = &p_Vid->mb_data[p_Vid->current_mb_nr];
   int                 addctx  = 0;
@@ -987,7 +987,7 @@ void writeRefPic_P_CABAC(SyntaxElement *se, DataPartition *dp)
   int   a = 0, b = 0;
   int   act_ctx;
   int   act_sym;
-  char** refframe_array = motion->ref_idx[se->value2];
+  int   list = se->value2;  
 
   PixelPos block_a, block_b;
   int *mb_size = p_Vid->mb_size[IS_LUMA];
@@ -998,17 +998,17 @@ void writeRefPic_P_CABAC(SyntaxElement *se, DataPartition *dp)
   if (block_b.available)
   {
     if (p_Vid->mb_aff_frame_flag && (currMB->mb_field == FALSE) && (p_Vid->mb_data[block_b.mb_addr].mb_field == TRUE))
-      b = (refframe_array[block_b.pos_y][block_b.pos_x] > 1 ? 2 : 0);
+      b = (motion[block_b.pos_y][block_b.pos_x].ref_idx[list] > 1 ? 2 : 0);
     else
-      b = (refframe_array[block_b.pos_y][block_b.pos_x] > 0 ? 2 : 0);
+      b = (motion[block_b.pos_y][block_b.pos_x].ref_idx[list] > 0 ? 2 : 0);
   }
 
   if (block_a.available)
   {
     if (p_Vid->mb_aff_frame_flag && (currMB->mb_field == FALSE) && (p_Vid->mb_data[block_a.mb_addr].mb_field == TRUE))
-      a = (refframe_array[block_a.pos_y][block_a.pos_x] > 1 ? 1 : 0);
+      a = (motion[block_a.pos_y][block_a.pos_x].ref_idx[list] > 1 ? 1 : 0);
     else
-      a = (refframe_array[block_a.pos_y][block_a.pos_x] > 0 ? 1 : 0);
+      a = (motion[block_a.pos_y][block_a.pos_x].ref_idx[list] > 0 ? 1 : 0);
   }
 
   act_ctx     = a + b;
@@ -1045,7 +1045,7 @@ void writeRefPic_B_CABAC(SyntaxElement *se, DataPartition *dp)
   int curr_len = arienco_bits_written(eep_dp);
   Slice *currSlice = dp->p_Slice;
   VideoParameters *p_Vid = dp->p_Vid;
-  PicMotionParams *motion = &p_Vid->enc_picture->motion;
+  PicMotionParams **motion = p_Vid->enc_picture->mv_info;
   MotionInfoContexts  *ctx    = currSlice->mot_ctx;
   Macroblock          *currMB = &p_Vid->mb_data[p_Vid->current_mb_nr];
   int                 addctx  = 0;
@@ -1053,7 +1053,7 @@ void writeRefPic_B_CABAC(SyntaxElement *se, DataPartition *dp)
   int   a = 0, b = 0;
   int   act_ctx;
   int   act_sym;
-  char** refframe_array = motion->ref_idx[se->value2];
+  int   list = se->value2;
 
   int   b8a, b8b;
 
@@ -1072,9 +1072,9 @@ void writeRefPic_B_CABAC(SyntaxElement *se, DataPartition *dp)
     else
     {
       if (p_Vid->mb_aff_frame_flag && (currMB->mb_field == FALSE) && (p_Vid->mb_data[block_b.mb_addr].mb_field == TRUE))
-        b = (refframe_array[block_b.pos_y][block_b.pos_x] > 1 ? 1 : 0);
+        b = (motion[block_b.pos_y][block_b.pos_x].ref_idx[list] > 1 ? 1 : 0);
       else
-        b = (refframe_array[block_b.pos_y][block_b.pos_x] > 0 ? 1 : 0);
+        b = (motion[block_b.pos_y][block_b.pos_x].ref_idx[list] > 0 ? 1 : 0);
     }
   }
 
@@ -1086,9 +1086,9 @@ void writeRefPic_B_CABAC(SyntaxElement *se, DataPartition *dp)
     else
     {
       if (p_Vid->mb_aff_frame_flag && (currMB->mb_field == FALSE) && (p_Vid->mb_data[block_a.mb_addr].mb_field == TRUE))
-        a = (refframe_array[block_a.pos_y][block_a.pos_x] > 1 ? 1 : 0);
+        a = (motion[block_a.pos_y][block_a.pos_x].ref_idx[list] > 1 ? 1 : 0);
       else
-        a = (refframe_array[block_a.pos_y][block_a.pos_x] > 0 ? 1 : 0);
+        a = (motion[block_a.pos_y][block_a.pos_x].ref_idx[list] > 0 ? 1 : 0);
     }
   }
 
@@ -1234,7 +1234,7 @@ void writeMVD_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartition *dp)
     act_ctx=5*k;
     unary_exp_golomb_mv_encode(eep_dp,act_sym,ctx->mv_res_contexts[1]+act_ctx,3);
     mv_sign = (mv_pred_res<0) ? 1: 0;
-    biari_encode_symbol_eq_prob(eep_dp, (signed short) mv_sign);
+    biari_encode_symbol_eq_prob(eep_dp, mv_sign);
   }
 
   dp->bitstream->write_flag = 1;
@@ -1320,7 +1320,7 @@ void writeCBP_BIT_CABAC (Macroblock* currMB, int b8, int bit, int cbp, EncodingE
     a = ( ((cbp & (1<<mb_y)) == 0) ? 1: 0);
 
   //===== WRITE BIT =====
-  biari_encode_symbol (eep_dp, (signed short) bit, ctx->cbp_contexts[0] + a+2*b);
+  biari_encode_symbol (eep_dp, bit, ctx->cbp_contexts[0] + a+2*b);
 }
 
 /*!
@@ -1332,7 +1332,7 @@ void writeCBP_BIT_CABAC (Macroblock* currMB, int b8, int bit, int cbp, EncodingE
 */
 void writeCBP_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartition *dp)
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currSlice->p_Vid;
   EncodingEnvironmentPtr eep_dp = &(dp->ee_cabac);
   int curr_len = arienco_bits_written(eep_dp);
@@ -1367,7 +1367,7 @@ void writeCBP_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartition *dp)
 
     curr_cbp_ctx = a0 + b0;
     cbp_bit = (cbp > 15 ) ? 1 : 0;
-    biari_encode_symbol(eep_dp, (signed short) cbp_bit, ctx->cbp_contexts[1] + curr_cbp_ctx );
+    biari_encode_symbol(eep_dp, cbp_bit, ctx->cbp_contexts[1] + curr_cbp_ctx );
 
     if (cbp > 15)
     {
@@ -1387,7 +1387,7 @@ void writeCBP_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartition *dp)
 
       curr_cbp_ctx = a1 + b1;
       cbp_bit = ((cbp>>4) == 2) ? 1 : 0;
-      biari_encode_symbol(eep_dp, (signed short) cbp_bit, ctx->cbp_contexts[2] + curr_cbp_ctx );
+      biari_encode_symbol(eep_dp, cbp_bit, ctx->cbp_contexts[2] + curr_cbp_ctx );
     }
   }
 
@@ -1541,10 +1541,10 @@ void write_and_store_CBP_block_bit_444 (Macroblock* currMB, EncodingEnvironmentP
       ctx = (upper_bit << 1) + left_bit;
 
       //===== encode symbol =====
-      biari_encode_symbol (eep_dp, (short)cbp_bit, tex_ctx->bcbp_contexts[type2ctx_bcbp[type]] + ctx);
+      biari_encode_symbol (eep_dp, cbp_bit, tex_ctx->bcbp_contexts[type2ctx_bcbp[type]] + ctx);
     }
   }
-  else if( IS_INDEPENDENT(currMB->p_Inp) )
+  else if( (currMB->p_Inp->separate_colour_plane_flag != 0) )
   {
     if (type!=LUMA_8x8)
     {
@@ -1568,7 +1568,7 @@ void write_and_store_CBP_block_bit_444 (Macroblock* currMB, EncodingEnvironmentP
       ctx = (upper_bit << 1) + left_bit;
 
       //===== encode symbol =====
-      biari_encode_symbol (eep_dp, (short)cbp_bit, tex_ctx->bcbp_contexts[type2ctx_bcbp[type]] + ctx);
+      biari_encode_symbol (eep_dp, cbp_bit, tex_ctx->bcbp_contexts[type2ctx_bcbp[type]] + ctx);
     }
   }
   else 
@@ -1618,7 +1618,7 @@ void write_and_store_CBP_block_bit_444 (Macroblock* currMB, EncodingEnvironmentP
     ctx = 2*upper_bit+left_bit;
 
     //===== encode symbol =====
-    biari_encode_symbol (eep_dp, (short)cbp_bit, tex_ctx->bcbp_contexts[type2ctx_bcbp[type]]+ctx);
+    biari_encode_symbol (eep_dp, cbp_bit, tex_ctx->bcbp_contexts[type2ctx_bcbp[type]]+ctx);
   }
 }
 
@@ -1724,7 +1724,7 @@ void write_and_store_CBP_block_bit (Macroblock* currMB, EncodingEnvironmentPtr e
     ctx = (upper_bit << 1) + left_bit;
 
     //===== encode symbol =====    
-    biari_encode_symbol (eep_dp, (short)cbp_bit, tex_ctx->bcbp_contexts[type2ctx_bcbp[type]] + ctx);
+    biari_encode_symbol (eep_dp, cbp_bit, tex_ctx->bcbp_contexts[type2ctx_bcbp[type]] + ctx);
   }
 }
 
@@ -1737,7 +1737,7 @@ void write_and_store_CBP_block_bit (Macroblock* currMB, EncodingEnvironmentPtr e
 void write_significance_map (Macroblock* currMB, EncodingEnvironmentPtr eep_dp, int type, int coeff[], int coeff_ctr, TextureInfoContexts*  tex_ctx)
 {
   int   k;
-  uint16 sig, last;
+  int   sig, last;
   int   k0 = 0;
   int   k1 = maxpos[type];
 
@@ -1761,11 +1761,11 @@ void write_significance_map (Macroblock* currMB, EncodingEnvironmentPtr eep_dp, 
 
   for (k=k0; k<k1; ++k) // if last coeff is reached, it has to be significant
   {
-    sig   = (uint16) (coeff[k] != 0);
+    sig   = (coeff[k] != 0);
     biari_encode_symbol  (eep_dp, sig,  map_ctx + pos2ctxmap[k]);
     if (sig)
     {
-      last = (uint16) (--coeff_ctr == 0);
+      last = (--coeff_ctr == 0);
 
       biari_encode_symbol(eep_dp, last, last_ctx + pos2ctxlast[k]);
       if (last) 
@@ -1781,22 +1781,24 @@ void write_significance_map (Macroblock* currMB, EncodingEnvironmentPtr eep_dp, 
  *    Write Levels
  ****************************************************************************
  */
-void write_significant_coefficients (EncodingEnvironmentPtr eep_dp, int type, int coeff[], TextureInfoContexts*  tex_ctx)
+void write_significant_coefficients (EncodingEnvironmentPtr eep_dp, int type, int coeff[], TextureInfoContexts*  tex_ctx, int coeff_cnt)
 {
   BiContextType *one_contexts = tex_ctx->one_contexts[type2ctx_one[type]];
   BiContextType *abs_contexts = tex_ctx->abs_contexts[type2ctx_abs[type]];  
   int   absLevel;
   int   ctx;
   short sign;
-  short greater_one;
+  int greater_one;
   int   c1 = 1;
   int   c2 = 0;
   int   i;
 
-  for (i=maxpos[type]; i>=0; i--)
+  for (i=maxpos[type]; (i>=0) && (coeff_cnt); i--)
   {
     if (coeff[i]!=0)
     {
+      coeff_cnt--;
+
       if (coeff[i] > 0)
       {
         absLevel =  coeff[i];  
@@ -1808,7 +1810,7 @@ void write_significant_coefficients (EncodingEnvironmentPtr eep_dp, int type, in
         sign = 1;
       }
 
-      greater_one = (short) (absLevel > 1);
+      greater_one = (absLevel > 1);
 
       //--- if coefficient is one ---
       ctx = imin(c1, 4);
@@ -1839,7 +1841,7 @@ void write_significant_coefficients (EncodingEnvironmentPtr eep_dp, int type, in
  */
 void writeRunLevel_CABAC (Macroblock* currMB, SyntaxElement *se, DataPartition *dp)
 {  
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   EncodingEnvironmentPtr eep_dp = &(dp->ee_cabac);
   int curr_len = arienco_bits_written(eep_dp);
 
@@ -1860,14 +1862,15 @@ void writeRunLevel_CABAC (Macroblock* currMB, SyntaxElement *se, DataPartition *
       //===== encode significance map =====
       write_significance_map         (currMB, eep_dp, se->context, currSlice->coeff, currSlice->coeff_ctr, tex_ctx);
       //===== encode significant coefficients =====
-      write_significant_coefficients (eep_dp, se->context, currSlice->coeff, tex_ctx);
+      write_significant_coefficients (eep_dp, se->context, currSlice->coeff, tex_ctx, currSlice->coeff_ctr);
+
+      memset(currSlice->coeff, 0 , 64 * sizeof(int));
     }
     else
       currSlice->write_and_store_CBP_block_bit  (currMB, eep_dp, se->context, 0, tex_ctx);
 
     //--- reset counters ---
     currSlice->pos = currSlice->coeff_ctr = 0;
-    memset(currSlice->coeff, 0 , 64 * sizeof(int));
   }
 
   dp->bitstream->write_flag = 1;

@@ -38,7 +38,7 @@ int luma_residual_coding_p444_16x16 (Macroblock* currMB,  //!< Current Macrobloc
 
   int   *cbp     = &(currMB->cbp);
   int64 *cbp_blk = &(currMB->cbp_blk);
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currMB->p_Vid;  
   int    i, j, nonzero = 0, cbp_blk_mask;
   int    coeff_cost = 0;
@@ -73,7 +73,7 @@ int luma_residual_coding_p444_16x16 (Macroblock* currMB,  //!< Current Macrobloc
   //===== loop over 4x4 blocks =====
   if(!currMB->luma_transform_size_8x8_flag)
   {
-    //===== DCT, Quantization, inverse Quantization, IDCT, Reconstruction =====
+    //===== forward transform, Quantization, inverse Quantization, inverse transform, Reconstruction =====
     if (!skipped && ( (currSlice->NoResidueDirect != 1) || (currMB->qp_scaled[0] == 0 && p_Vid->lossless_qpprime_flag == 1) ))
     {
       int block_y, block_x;
@@ -82,8 +82,8 @@ int luma_residual_coding_p444_16x16 (Macroblock* currMB,  //!< Current Macrobloc
       {
         for (block_x=mb_x; block_x<mb_x + 8; block_x += 4)
         {          
-          //===== DCT, Quantization, inverse Quantization, IDCT, Reconstruction =====
-          nonzero = currMB->trans_4x4 (currMB, PLANE_Y, block_x, block_y, &coeff_cost, 0);
+          //===== forward transform, Quantization, inverse Quantization, inverse transform, Reconstruction =====
+          nonzero = currMB->residual_transform_quant_luma_4x4 (currMB, PLANE_Y, block_x, block_y, &coeff_cost, 0);
 
           if (nonzero)
           {
@@ -97,7 +97,7 @@ int luma_residual_coding_p444_16x16 (Macroblock* currMB,  //!< Current Macrobloc
             for (uv = PLANE_U; uv <= PLANE_V; ++uv)
             {
               select_plane(p_Vid, (ColorPlane) uv);
-              nonzero = currMB->trans_4x4( currMB, (ColorPlane) uv, block_x, block_y, &currSlice->coeff_cost_cr[uv], 0);
+              nonzero = currMB->residual_transform_quant_luma_4x4( currMB, (ColorPlane) uv, block_x, block_y, &currSlice->coeff_cost_cr[uv], 0);
               if (nonzero)
               {
                 cbp_blk_mask = (block_x >> 2) + block_y;
@@ -120,7 +120,7 @@ int luma_residual_coding_p444_16x16 (Macroblock* currMB,  //!< Current Macrobloc
     if (currSlice->NoResidueDirect != 1 && !skipped)
     {
       if (currSlice->slice_type != SP_SLICE && currSlice->slice_type != SI_SLICE)
-        nonzero = currMB->trans_8x8 (currMB, PLANE_Y, block8x8, &coeff_cost, 0);
+        nonzero = currMB->residual_transform_quant_luma_8x8 (currMB, PLANE_Y, block8x8, &coeff_cost, 0);
 
       if (nonzero)
       {
@@ -133,7 +133,7 @@ int luma_residual_coding_p444_16x16 (Macroblock* currMB,  //!< Current Macrobloc
         for (uv = PLANE_U; uv <= PLANE_V; ++uv)
         {
           select_plane(p_Vid, (ColorPlane) uv);
-          nonzero = currMB->trans_8x8( currMB, (ColorPlane) uv, block8x8, &currSlice->coeff_cost_cr[uv], 0);
+          nonzero = currMB->residual_transform_quant_luma_8x8( currMB, (ColorPlane) uv, block8x8, &currSlice->coeff_cost_cr[uv], 0);
           if (nonzero)
           {
             (currSlice->cur_cbp_blk[uv]) |= 51 << (4*block8x8-2*(block8x8 & 0x01)); // corresponds to 110011, as if all four 4x4 blocks contain coeff, shifted to block position
@@ -144,26 +144,6 @@ int luma_residual_coding_p444_16x16 (Macroblock* currMB,  //!< Current Macrobloc
       }
     }
   }
-
-  /*
-  The purpose of the action below is to prevent that single or 'expensive' coefficients are coded.
-  With 4x4 transform there is larger chance that a single coefficient in a 8x8 or 16x16 block may be nonzero.
-  A single small (level=1) coefficient in a 8x8 block will cost: 3 or more bits for the coefficient,
-  4 bits for EOBs for the 4x4 blocks,possibly also more bits for CBP.  Hence the total 'cost' of that single
-  coefficient will typically be 10-12 bits which in a RD consideration is too much to justify the distortion improvement.
-  The action below is to watch such 'single' coefficients and set the reconstructed block equal to the prediction according
-  to a given criterium.  The action is taken only for inter luma blocks.
-
-  Notice that this is a pure encoder issue and hence does not have any implication on the standard.
-  coeff_cost is a parameter set in dct_4x4() and accumulated for each 8x8 block.  If level=1 for a coefficient,
-  coeff_cost is increased by a number depending on RUN for that coefficient.The numbers are (see also dct_4x4()): 3,2,2,1,1,1,0,0,...
-  when RUN equals 0,1,2,3,4,5,6, etc.
-  If level >1 coeff_cost is increased by 9 (or any number above 3). The threshold is set to 3. This means for example:
-  1: If there is one coefficient with (RUN,level)=(0,1) in a 8x8 block this coefficient is discarded.
-  2: If there are two coefficients with (RUN,level)=(1,1) and (4,1) the coefficients are also discarded
-  sum_cnt_nonz[0] is the accumulation of coeff_cost over a whole macro block.  If sum_cnt_nonz[0] is 5 or less for the whole MB,
-  all nonzero coefficients are discarded for the MB and the reconstructed block is set equal to the prediction.
-  */
 
   if (currSlice->NoResidueDirect != 1 && !skipped && coeff_cost <= _LUMA_COEFF_COST_ &&
     ((currMB->qp_scaled[0])!=0 || p_Vid->lossless_qpprime_flag==0)&&
@@ -222,9 +202,9 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
                                    int   list_mode[2], //!< list prediction mode (1-7, 0=DIRECT)
                                    char  *ref_idx)     //!< reference pictures for each list
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currSlice->p_Vid;  
-  int    block_y, block_x, pic_pix_x, i, j, nonzero = 0, cbp_blk_mask;
+  int    block_y, block_x, pic_pix_x, nonzero = 0, cbp_blk_mask;
   int    coeff_cost = 0;
   int    mb_y       = (block8x8 >> 1) << 3;
   int    mb_x       = (block8x8 & 0x01) << 3;
@@ -275,11 +255,11 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
         }
         select_plane(p_Vid, PLANE_Y);
 
-        //===== DCT, Quantization, inverse Quantization, IDCT, Reconstruction =====
+        //===== forward transform, Quantization, inverse Quantization, inverse transform, Reconstruction =====
         if (!skipped && ( (currSlice->NoResidueDirect != 1) || (currMB->qp_scaled[0] == 0 && p_Vid->lossless_qpprime_flag == 1) ))
         {
-          //===== DCT, Quantization, inverse Quantization, IDCT, Reconstruction =====
-          nonzero = currMB->trans_4x4 (currMB, PLANE_Y, block_x, block_y, &coeff_cost, 0);
+          //===== forward transform, Quantization, inverse Quantization, inverse transform, Reconstruction =====
+          nonzero = currMB->residual_transform_quant_luma_4x4 (currMB, PLANE_Y, block_x, block_y, &coeff_cost, 0);
 
           if (nonzero)
           {
@@ -292,7 +272,7 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
             for (uv = PLANE_U; uv <= PLANE_V; ++uv)
             {
               select_plane(p_Vid, (ColorPlane) uv);
-              nonzero = currMB->trans_4x4( currMB, (ColorPlane) uv, block_x, block_y, &currSlice->coeff_cost_cr[uv], 0);
+              nonzero = currMB->residual_transform_quant_luma_4x4( currMB, (ColorPlane) uv, block_x, block_y, &currSlice->coeff_cost_cr[uv], 0);
               if (nonzero)
               {
                 (currSlice->cur_cbp_blk[uv]) |= (int64) 1 << cbp_blk_mask;  // one bit for every 4x4 block
@@ -337,7 +317,7 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
     if (currSlice->NoResidueDirect != 1 && !skipped)
     {
       if (currSlice->slice_type != SP_SLICE && currSlice->slice_type != SI_SLICE)
-        nonzero = currMB->trans_8x8 (currMB, PLANE_Y, block8x8, &coeff_cost, 0);
+        nonzero = currMB->residual_transform_quant_luma_8x8 (currMB, PLANE_Y, block8x8, &coeff_cost, 0);
 
       if (nonzero)
       {
@@ -350,7 +330,7 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
         for (uv = PLANE_U; uv <= PLANE_V; ++uv)
         {
           select_plane(p_Vid, (ColorPlane) uv);
-          nonzero = currMB->trans_8x8( currMB, (ColorPlane) uv, block8x8, &currSlice->coeff_cost_cr[uv], 0);
+          nonzero = currMB->residual_transform_quant_luma_8x8( currMB, (ColorPlane) uv, block8x8, &currSlice->coeff_cost_cr[uv], 0);
           if (nonzero)
           {
             (currSlice->cur_cbp_blk[uv]) |= 51 << (4*block8x8-2*(block8x8 & 0x01)); // corresponds to 110011, as if all four 4x4 blocks contain coeff, shifted to block position
@@ -362,45 +342,12 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
     }
   }
 
-  /*
-  The purpose of the action below is to prevent that single or 'expensive' coefficients are coded.
-  With 4x4 transform there is larger chance that a single coefficient in a 8x8 or 16x16 block may be nonzero.
-  A single small (level=1) coefficient in a 8x8 block will cost: 3 or more bits for the coefficient,
-  4 bits for EOBs for the 4x4 blocks,possibly also more bits for CBP.  Hence the total 'cost' of that single
-  coefficient will typically be 10-12 bits which in a RD consideration is too much to justify the distortion improvement.
-  The action below is to watch such 'single' coefficients and set the reconstructed block equal to the prediction according
-  to a given criterium.  The action is taken only for inter luma blocks.
-
-  Notice that this is a pure encoder issue and hence does not have any implication on the standard.
-  coeff_cost is a parameter set in dct_4x4() and accumulated for each 8x8 block.  If level=1 for a coefficient,
-  coeff_cost is increased by a number depending on RUN for that coefficient.The numbers are (see also dct_4x4()): 3,2,2,1,1,1,0,0,...
-  when RUN equals 0,1,2,3,4,5,6, etc.
-  If level >1 coeff_cost is increased by 9 (or any number above 3). The threshold is set to 3. This means for example:
-  1: If there is one coefficient with (RUN,level)=(0,1) in a 8x8 block this coefficient is discarded.
-  2: If there are two coefficients with (RUN,level)=(1,1) and (4,1) the coefficients are also discarded
-  sum_cnt_nonz[0] is the accumulation of coeff_cost over a whole macro block.  If sum_cnt_nonz[0] is 5 or less for the whole MB,
-  all nonzero coefficients are discarded for the MB and the reconstructed block is set equal to the prediction.
-  */
-
   if (currSlice->NoResidueDirect != 1 && !skipped && coeff_cost <= _LUMA_COEFF_COST_ &&
     ((currMB->qp_scaled[0])!=0 || p_Vid->lossless_qpprime_flag==0)&&
     !(currSlice->slice_type == SI_SLICE || (currSlice->slice_type == SP_SLICE && p_Vid->sp2_frame_indicator == TRUE )))// last set of conditions
     // cannot skip when perfect reconstruction is as in switching pictures or SI pictures
   {
-    coeff_cost  = 0;
-    (*cbp)     &=  (63 - cbp_mask);
-    (*cbp_blk) &= ~(51 << (4 * block8x8 - 2 * (block8x8 & 0x01)));
-
-    memset( currSlice->cofAC[block8x8][0][0], 0, 4 * 2 * 65 * sizeof(int));
-
-    copy_image_data_8x8(&p_Vid->enc_picture->imgY[currMB->pix_y + mb_y], &currSlice->mb_pred[0][mb_y], currMB->pix_x + mb_x, mb_x);
-
-    if (currSlice->slice_type == SP_SLICE || currSlice->slice_type == SI_SLICE)
-    {
-      for (i=mb_x; i < mb_x + BLOCK_SIZE_8x8; i+=BLOCK_SIZE)
-        for (j=mb_y; j < mb_y + BLOCK_SIZE_8x8; j+=BLOCK_SIZE)
-          copyblock_sp(currMB, PLANE_Y, i, j);
-    }
+    coeff_cost  = reset_block(currMB, cbp, cbp_blk, block8x8);
   }
 
   for (uv = PLANE_U; uv <= PLANE_V; ++uv)
@@ -430,7 +377,7 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
  */
 void luma_residual_coding_p444 (Macroblock *currMB)
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currMB->p_Vid;
 
   int uv, i,j,block8x8,b8_x,b8_y;

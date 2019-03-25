@@ -28,8 +28,11 @@ extern void delete_contexts_TextureInfo(TextureInfoContexts *enco_ctx);
 
 extern void cabac_new_slice(Slice *currSlice);
 
-extern void readMB_typeInfo_CABAC           (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
-extern void readB8_typeInfo_CABAC           (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
+extern void readMB_typeInfo_CABAC_i_slice   (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
+extern void readMB_typeInfo_CABAC_p_slice   (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
+extern void readMB_typeInfo_CABAC_b_slice   (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
+extern void readB8_typeInfo_CABAC_p_slice   (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
+extern void readB8_typeInfo_CABAC_b_slice   (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
 extern void readIntraPredMode_CABAC         (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
 extern void readRefFrame_CABAC              (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
 extern void readMVD_CABAC                   (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
@@ -37,7 +40,8 @@ extern void readCBP_CABAC                   (Macroblock *currMB, SyntaxElement *
 extern void readRunLevel_CABAC              (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
 extern void readDquant_CABAC                (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
 extern void readCIPredMode_CABAC            (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
-extern void readMB_skip_flagInfo_CABAC      (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
+extern void readMB_skip_flagInfo_CABAC_p_slice (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
+extern void readMB_skip_flagInfo_CABAC_b_slice (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
 extern void readFieldModeInfo_CABAC         (Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
 extern void readMB_transform_size_flag_CABAC(Macroblock *currMB, SyntaxElement *se, DecodingEnvironmentPtr dep_dp);
 
@@ -47,7 +51,8 @@ extern int  cabac_startcode_follows(Slice *currSlice, int eos_bit);
 
 extern int  readSyntaxElement_CABAC         (Macroblock *currMB, SyntaxElement *se, DataPartition *this_dataPart);
 
-extern int check_next_mb_and_get_field_mode_CABAC( Slice *currSlice, SyntaxElement *se, DataPartition  *act_dp);
+extern int check_next_mb_and_get_field_mode_CABAC_p_slice( Slice *currSlice, SyntaxElement *se, DataPartition  *act_dp);
+extern int check_next_mb_and_get_field_mode_CABAC_b_slice( Slice *currSlice, SyntaxElement *se, DataPartition  *act_dp);
 
 extern void CheckAvailabilityOfNeighborsCABAC(Macroblock *currMB);
 

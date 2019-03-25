@@ -107,10 +107,13 @@ extern void iMBtrans8x8(Macroblock *currMB, ColorPlane pl);
 
 extern void itrans_sp_cr(Macroblock *currMB, int uv);
 
-extern void intrapred_chroma      (Macroblock *currMB, int uv);
+extern void intrapred_chroma      (Macroblock *currMB);
+extern void intrapred_chroma_mbaff(Macroblock *currMB);
 
 extern void Inv_Residual_trans_4x4(Macroblock *currMB, ColorPlane pl, int ioff, int joff);
 extern void Inv_Residual_trans_8x8(Macroblock *currMB, ColorPlane pl, int ioff,int joff);
+extern void Inv_Residual_trans_16x16 (Macroblock *currMB, ColorPlane pl);
+extern void Inv_Residual_trans_Chroma(Macroblock *currMB, int uv);
 
 extern void itrans4x4   (Macroblock *currMB, ColorPlane pl, int ioff, int joff);
 extern void itrans4x4_ls(Macroblock *currMB, ColorPlane pl, int ioff, int joff);
@@ -123,6 +126,6 @@ extern void copy_image_data       (imgpel  **imgBuf1, imgpel  **imgBuf2, int off
 extern void copy_image_data_16x16 (imgpel  **imgBuf1, imgpel  **imgBuf2, int off1, int off2);
 extern void copy_image_data_8x8   (imgpel  **imgBuf1, imgpel  **imgBuf2, int off1, int off2);
 extern void copy_image_data_4x4   (imgpel  **imgBuf1, imgpel  **imgBuf2, int off1, int off2);
-
+extern int CheckVertMV(Macroblock *currMB, int vec1_y, int block_size_y);
 #endif
 

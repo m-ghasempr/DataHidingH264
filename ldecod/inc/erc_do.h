@@ -21,9 +21,9 @@
 
 void ercPixConcealIMB    (VideoParameters *p_Vid, imgpel *currFrame, int row, int column, int predBlocks[], int frameWidth, int mbWidthInBlocks);
 
-int ercCollect8PredBlocks( int predBlocks[], int currRow, int currColumn, int *condition,
+int ercCollect8PredBlocks( int predBlocks[], int currRow, int currColumn, char *condition,
                           int maxRow, int maxColumn, int step, byte fNoCornerNeigh );
-int ercCollectColumnBlocks( int predBlocks[], int currRow, int currColumn, int *condition, int maxRow, int maxColumn, int step );
+int ercCollectColumnBlocks( int predBlocks[], int currRow, int currColumn, char *condition, int maxRow, int maxColumn, int step );
 
 #define isSplitted(object_list,currMBNum) \
     ((object_list+((currMBNum)<<2))->regionMode >= REGMODE_SPLITTED)

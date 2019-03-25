@@ -129,7 +129,7 @@ void update_adaptive_rounding_16x16(VideoParameters *p_Vid, int****ARCofAdj , in
 *    update rounding offsets based on JVT-N011
 ************************************************************************
 */
-void update_offset_params(Macroblock *currMB, int mode, Boolean luma_transform_size_8x8_flag)
+void update_offset_params(Macroblock *currMB, int mode, byte luma_transform_size_8x8_flag)
 {
   VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
@@ -144,17 +144,19 @@ void update_offset_params(Macroblock *currMB, int mode, Boolean luma_transform_s
   int blk_mask = 0x03 + (luma_transform_size_8x8_flag<<2);
   int blk_shift = 2 + luma_transform_size_8x8_flag;  
   short **offsetList = luma_transform_size_8x8_flag ? p_Quant->OffsetList8x8[cur_qp] : p_Quant->OffsetList4x4[cur_qp];
+  short *cur_offset_list = offsetList[luma_pos];
 
   int **fAdjust = luma_transform_size_8x8_flag ? p_Vid->ARCofAdj8x8[0][mode] : p_Vid->ARCofAdj4x4[0][mode];
   
   if (mode == IPCM) return;
 
-  if( (p_Vid->active_sps->chroma_format_idc == YUV444) && IS_INDEPENDENT(p_Inp) )
+  if( (p_Vid->active_sps->chroma_format_idc == YUV444) && (p_Inp->separate_colour_plane_flag != 0) )
   {
     if( luma_transform_size_8x8_flag )  // 8x8
       luma_pos += 5 * p_Vid->colour_plane_id;
     else  // 4x4
       luma_pos += p_Vid->colour_plane_id;
+    cur_offset_list = offsetList[luma_pos];
   }
  
   for (j=0; j < MB_BLOCK_SIZE; j++)
@@ -163,8 +165,7 @@ void update_offset_params(Macroblock *currMB, int mode, Boolean luma_transform_s
     for (i=0; i < MB_BLOCK_SIZE; i++)
     {
       temp = j_pos + (i & blk_mask);
-      offsetList[luma_pos][temp] = offsetList[luma_pos][temp] + (short) fAdjust[j][i];
-      offsetList[luma_pos][temp] = (short) iClip3(0, offsetRange, offsetList[luma_pos][temp]);
+      cur_offset_list[temp] = (short) iClip3(0, offsetRange, cur_offset_list[temp] + (short) fAdjust[j][i]);
     }
   }
 
@@ -181,14 +182,14 @@ void update_offset_params(Macroblock *currMB, int mode, Boolean luma_transform_s
         luma_pos += 5 * (uv+1);
       else  // 4x4
         luma_pos += (uv+1);
+      cur_offset_list = offsetList[luma_pos];
       for (j=0; j < MB_BLOCK_SIZE; j++)
       {
         int j_pos = ((j & blk_mask)<<blk_shift);
         for (i=0; i < MB_BLOCK_SIZE; i++)
         {
           temp = j_pos + (i & blk_mask);
-          offsetList[luma_pos][temp] = offsetList[luma_pos][temp] + (short) fAdjustCbCr[j][i];
-          offsetList[luma_pos][temp] = (short) iClip3(0,offsetRange,offsetList[luma_pos][temp]);
+          cur_offset_list[temp] = (short) iClip3(0, offsetRange, cur_offset_list[temp] + (short) fAdjustCbCr[j][i]);
         }
       }
     }
@@ -196,27 +197,24 @@ void update_offset_params(Macroblock *currMB, int mode, Boolean luma_transform_s
 
   if ((p_Inp->AdaptRndChroma) && (p_Vid->yuv_format == YUV420 || p_Vid->yuv_format == YUV422 ))
   {  
-    int temp_offset;
     int u_pos = AdaptRndCrPos[is_inter][p_Vid->type];
     int v_pos = u_pos + 1;
-    int jpos;
+    int k, jpos, uv = 1;
 
-    //int ***fAdjustCr = is_inter ? bestOffset.InterFAdjust4x4Cr : bestOffset.IntraFAdjust4x4Cr;
-
-    int **fAdjustCb = (luma_transform_size_8x8_flag && mode == P8x8 )? p_Vid->ARCofAdj4x4[1][4] : p_Vid->ARCofAdj4x4[1][mode];
-    int **fAdjustCr = (luma_transform_size_8x8_flag && mode == P8x8 )? p_Vid->ARCofAdj4x4[2][4] : p_Vid->ARCofAdj4x4[2][mode];
-
-  
-    for (j = 0; j < p_Vid->mb_cr_size_y; j++)
+    for (k = u_pos; k <= v_pos; k++)
     {
-      jpos = ((j & 0x03)<<2);
-      for (i = 0; i < p_Vid->mb_cr_size_x; i++)
+      int **fAdjustChroma = (luma_transform_size_8x8_flag && mode == P8x8 )? p_Vid->ARCofAdj4x4[uv][4] : p_Vid->ARCofAdj4x4[uv][mode];
+      uv++;
+      cur_offset_list = p_Quant->OffsetList4x4[cur_qp][k];
+
+      for (j = 0; j < p_Vid->mb_cr_size_y; j++)
       {
-        temp = jpos + (i & 0x03);
-        temp_offset = p_Quant->OffsetList4x4[cur_qp][u_pos][temp] + (short) fAdjustCb[j][i];
-        p_Quant->OffsetList4x4[cur_qp][u_pos][temp] = (short) iClip3(0, offsetRange, temp_offset);
-        temp_offset = p_Quant->OffsetList4x4[cur_qp][v_pos][temp] + (short) fAdjustCr[j][i];
-        p_Quant->OffsetList4x4[cur_qp][v_pos][temp] = (short) iClip3(0, offsetRange, temp_offset);
+        jpos = ((j & 0x03)<<2);
+        for (i = 0; i < p_Vid->mb_cr_size_x; i++)
+        {
+          temp = jpos + (i & 0x03);
+          cur_offset_list[temp] = (short) iClip3(0, offsetRange, cur_offset_list[temp] + (short) fAdjustChroma[j][i]);
+        }
       }
     }
   }
@@ -234,8 +232,11 @@ void reset_adaptive_rounding(VideoParameters *p_Vid)
   int maxplane;
   maxplane = (p_Vid->yuv_format == YUV400)?  1 : 3;
   memset(&p_Vid->ARCofAdj4x4[0][0][0][0], 0, maxplane * MAXMODE * MB_PIXELS * sizeof (int));
-  maxplane = (p_Vid->yuv_format == YUV400)?  1 : (p_Vid->P444_joined ? 3 : 1);
-  memset(&p_Vid->ARCofAdj8x8[0][0][0][0], 0, maxplane * MAXMODE * MB_PIXELS * sizeof (int));
+  if (p_Vid->p_Inp->Transform8x8Mode)
+  {
+    maxplane = (p_Vid->yuv_format == YUV400)?  1 : (p_Vid->P444_joined ? 3 : 1);
+    memset(&p_Vid->ARCofAdj8x8[0][0][0][0], 0, maxplane * MAXMODE * MB_PIXELS * sizeof (int));
+  }
 }
 
 /*!
@@ -251,9 +252,12 @@ void reset_adaptive_rounding_direct(VideoParameters *p_Vid)
   for (pl = 0; pl < maxplane; pl++)
     memset(&p_Vid->ARCofAdj4x4[pl][DUMMY][0][0], 0, MB_PIXELS * sizeof (int));
 
-  maxplane = (p_Vid->yuv_format == YUV400)?  1 : (p_Vid->P444_joined ? 3 : 1);
-  for (pl = 0; pl < maxplane; pl++)
-    memset(&p_Vid->ARCofAdj8x8[pl][DUMMY][0][0], 0, MB_PIXELS * sizeof (int));
+  if (p_Vid->p_Inp->Transform8x8Mode)
+  {
+    maxplane = (p_Vid->yuv_format == YUV400)?  1 : (p_Vid->P444_joined ? 3 : 1);
+    for (pl = 0; pl < maxplane; pl++)
+      memset(&p_Vid->ARCofAdj8x8[pl][DUMMY][0][0], 0, MB_PIXELS * sizeof (int));
+  }
  
 }
 

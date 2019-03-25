@@ -28,6 +28,7 @@
 #include "rd_intra_jm.h"
 #include "q_around.h"
 #include "intra4x4.h"
+#include "rd_intra_jm.h"
 
 /*!
  *************************************************************************************
@@ -35,11 +36,11 @@
  *    Mode Decision for an 4x4 Intra block
  *************************************************************************************
  */
-int Mode_Decision_for_4x4IntraBlocks_JM_High444 (Macroblock *currMB, int  b8,  int  b4,  int  lambda,  distblk*  min_cost)
+int mode_decision_for_I4x4_blocks_JM_High444 (Macroblock *currMB, int  b8,  int  b4,  int  lambda,  distblk*  min_cost)
 {
   VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   RDOPTStructure  *p_RDO = currSlice->p_RDO;
 
   int    ipmode, best_ipmode = 0, i, j, y, dummy;
@@ -99,14 +100,14 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High444 (Macroblock *currMB, int  b8,  i
 
   //===== INTRA PREDICTION FOR 4x4 BLOCK =====
   // set intra prediction values for 4x4 intra prediction
-  set_intrapred_4x4(currMB, PLANE_Y, pic_pix_x, pic_pix_y, &left_available, &up_available, &all_available);  
+  currSlice->set_intrapred_4x4(currMB, PLANE_Y, pic_pix_x, pic_pix_y, &left_available, &up_available, &all_available);  
 
   if (currSlice->P444_joined)
   {
     select_plane(p_Vid, PLANE_U);
-    set_intrapred_4x4(currMB, PLANE_U, pic_pix_x, pic_pix_y, &left_available, &up_available, &all_available);  
+    currSlice->set_intrapred_4x4(currMB, PLANE_U, pic_pix_x, pic_pix_y, &left_available, &up_available, &all_available);  
     select_plane(p_Vid, PLANE_V);
-    set_intrapred_4x4(currMB, PLANE_V, pic_pix_x, pic_pix_y, &left_available, &up_available, &all_available);  
+    currSlice->set_intrapred_4x4(currMB, PLANE_V, pic_pix_x, pic_pix_y, &left_available, &up_available, &all_available);  
     select_plane(p_Vid, PLANE_Y);
   }
 
@@ -131,7 +132,7 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High444 (Macroblock *currMB, int  b8,  i
       if (p_Vid->yuv_format == YUV444)
       {
         currMB->ipmode_DPCM = (short) ipmode;
-        if (!IS_INDEPENDENT(p_Inp)) 
+        if ((p_Inp->separate_colour_plane_flag == 0)) 
         {
           // generate intra 4x4 prediction block given availability
           get_intrapred_4x4(currMB, PLANE_U, ipmode, block_x, block_y, left_available, up_available);
@@ -179,7 +180,7 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High444 (Macroblock *currMB, int  b8,  i
             copy_4x4block(p_RDO->rec4x4[uv + 1], &p_Vid->enc_picture->imgUV[uv][pic_pix_y], 0, pic_pix_x);
           }
         }
-        //--- flag if dct-coefficients must be coded ---
+        //--- flag if transform coefficients must be coded ---
         nonzero = c_nz;
 
         //--- set best mode update minimum cost ---
@@ -187,7 +188,7 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High444 (Macroblock *currMB, int  b8,  i
         min_rdcost    = rdcost;
         best_ipmode   = ipmode;
 
-        best_nz_coeff = p_Vid->nz_coeff [p_Vid->current_mb_nr][block_x4][block_y4];
+        best_nz_coeff = p_Vid->nz_coeff [currMB->mbAddrX][block_x4][block_y4];
 #ifdef BEST_NZ_COEFF
         best_coded_block_flag = (int)((currMB->cbp_bits[0] >> bit_pos)&(int64)(1));
 #endif
@@ -199,7 +200,7 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High444 (Macroblock *currMB, int  b8,  i
     }
   }
 #if INTRA_RDCOSTCALC_NNZ
-  p_Vid->nz_coeff [p_Vid->current_mb_nr][block_x4][block_y4] = best_nz_coeff;
+  p_Vid->nz_coeff [currMB->mbAddrX][block_x4][block_y4] = best_nz_coeff;
 #endif
 #ifdef BEST_NZ_COEFF
   cbp_bits &= (~(int64)(1<<bit_pos));
@@ -226,7 +227,7 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High444 (Macroblock *currMB, int  b8,  i
           currSlice->mb_ores[k][block_y+j][block_x+i]   = p_Vid->pImgOrg[k][currMB->pix_y+block_y+j][currMB->pix_x+block_x+i] - currSlice->mpr_4x4[k][best_ipmode][j][i];
         }
       }
-      currMB->cr_cbp[k] = currMB->trans_4x4(currMB, k, block_x,block_y,&dummy,1);
+      currMB->cr_cbp[k] = currMB->residual_transform_quant_luma_4x4(currMB, k, block_x,block_y,&dummy,1);
     }
     select_plane(p_Vid, PLANE_Y);
   }
@@ -274,11 +275,11 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High444 (Macroblock *currMB, int  b8,  i
  *    Mode Decision for an 4x4 Intra block
  *************************************************************************************
  */
-int Mode_Decision_for_4x4IntraBlocks_JM_Low444 (Macroblock *currMB, int  b8,  int  b4,  int  lambda,  distblk*  min_cost)
+int mode_decision_for_I4x4_blocks_JM_Low444 (Macroblock *currMB, int  b8,  int  b4,  int  lambda,  distblk*  min_cost)
 {
   VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
 
   int     ipmode, best_ipmode = 0, i, j, dummy;
   distblk cost;
@@ -335,14 +336,14 @@ int Mode_Decision_for_4x4IntraBlocks_JM_Low444 (Macroblock *currMB, int  b8,  in
 
   //===== INTRA PREDICTION FOR 4x4 BLOCK =====
   // set intra prediction values for 4x4 intra prediction
-  set_intrapred_4x4(currMB, PLANE_Y, pic_pix_x, pic_pix_y, &left_available, &up_available, &all_available);  
+  currSlice->set_intrapred_4x4(currMB, PLANE_Y, pic_pix_x, pic_pix_y, &left_available, &up_available, &all_available);  
 
   if (currSlice->P444_joined)
   {
     select_plane(p_Vid, PLANE_U);
-    set_intrapred_4x4(currMB, PLANE_U, pic_pix_x, pic_pix_y, &left_available, &up_available, &all_available);  
+    currSlice->set_intrapred_4x4(currMB, PLANE_U, pic_pix_x, pic_pix_y, &left_available, &up_available, &all_available);  
     select_plane(p_Vid, PLANE_V);
-    set_intrapred_4x4(currMB, PLANE_V, pic_pix_x, pic_pix_y, &left_available, &up_available, &all_available);  
+    currSlice->set_intrapred_4x4(currMB, PLANE_V, pic_pix_x, pic_pix_y, &left_available, &up_available, &all_available);  
     select_plane(p_Vid, PLANE_Y);
   }
 
@@ -363,13 +364,13 @@ int Mode_Decision_for_4x4IntraBlocks_JM_Low444 (Macroblock *currMB, int  b8,  in
       // mode availability.
       get_intrapred_4x4(currMB, PLANE_Y, ipmode, block_x, block_y, left_available, up_available);
       cost  = (ipmode == mostProbableMode) ? 0 : fixedcost;
-      currSlice->compute_cost4x4(p_Vid, &p_Vid->pCurImg[pic_opix_y], currSlice->mpr_4x4[0][ipmode], pic_opix_x, &cost, *min_cost);
+      cost += currSlice->compute_cost4x4(p_Vid, &p_Vid->pCurImg[pic_opix_y], currSlice->mpr_4x4[0][ipmode], pic_opix_x, *min_cost - cost);
       if (currSlice->P444_joined)
       {
         get_intrapred_4x4(currMB, PLANE_U, ipmode, block_x, block_y, left_available, up_available);
-        currSlice->compute_cost4x4(p_Vid, &p_Vid->pImgOrg[1][pic_opix_y], currSlice->mpr_4x4[1][ipmode], pic_opix_x, &cost, (int) *min_cost);
+        cost += currSlice->compute_cost4x4(p_Vid, &p_Vid->pImgOrg[1][pic_opix_y], currSlice->mpr_4x4[1][ipmode], pic_opix_x, *min_cost - cost);
         get_intrapred_4x4(currMB, PLANE_V, ipmode, block_x, block_y, left_available, up_available);
-        currSlice->compute_cost4x4(p_Vid, &p_Vid->pImgOrg[2][pic_opix_y], currSlice->mpr_4x4[2][ipmode], pic_opix_x, &cost, (int) *min_cost);
+        cost += currSlice->compute_cost4x4(p_Vid, &p_Vid->pImgOrg[2][pic_opix_y], currSlice->mpr_4x4[2][ipmode], pic_opix_x, *min_cost - cost);
       }
       
       if (cost < *min_cost)
@@ -381,7 +382,7 @@ int Mode_Decision_for_4x4IntraBlocks_JM_Low444 (Macroblock *currMB, int  b8,  in
   }
 
 #if INTRA_RDCOSTCALC_NNZ
-  p_Vid->nz_coeff [p_Vid->current_mb_nr][block_x4][block_y4] = best_nz_coeff;
+  p_Vid->nz_coeff [currMB->mbAddrX][block_x4][block_y4] = best_nz_coeff;
 #endif
 #ifdef BEST_NZ_COEFF  
   cbp_bits &= (~(int64)(1<<bit_pos));
@@ -397,8 +398,8 @@ int Mode_Decision_for_4x4IntraBlocks_JM_Low444 (Macroblock *currMB, int  b8,  in
 
   currMB->ipmode_DPCM = (short) best_ipmode;  
 
-  select_dct(currMB);
-  nonzero = currMB->cr_cbp[0] = currMB->trans_4x4 (currMB, PLANE_Y, block_x, block_y, &dummy, 1);
+  select_transform(currMB);
+  nonzero = currMB->cr_cbp[0] = currMB->residual_transform_quant_luma_4x4 (currMB, PLANE_Y, block_x, block_y, &dummy, 1);
 
   if (currSlice->P444_joined)
   {
@@ -415,7 +416,7 @@ int Mode_Decision_for_4x4IntraBlocks_JM_Low444 (Macroblock *currMB, int  b8,  in
         }
       }
 
-      currMB->cr_cbp[k] = currMB->trans_4x4 (currMB, k, block_x, block_y, &dummy, 1);
+      currMB->cr_cbp[k] = currMB->residual_transform_quant_luma_4x4 (currMB, k, block_x, block_y, &dummy, 1);
     }
     select_plane(p_Vid, PLANE_Y);
   }
@@ -429,40 +430,32 @@ int Mode_Decision_for_4x4IntraBlocks_JM_Low444 (Macroblock *currMB, int  b8,  in
 *    Intra 16x16 mode decision
 *************************************************************************************
 */
-void Intra16x16_Mode_Decision444 (Macroblock* currMB)
+int mode_decision_for_I16x16_MB_444 (Macroblock* currMB, int lambda)
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
+  int cbp;
+  find_best_mode_I16x16_MB(currMB, lambda, DISTBLK_MAX);
+
   if (!currSlice->P444_joined)
   {
-    /* generate intra prediction samples for all 4 16x16 modes */
-    intrapred_16x16 (currMB, PLANE_Y);
-    currSlice->find_sad_16x16 (currMB);   /* get best new intra mode */
-    currMB->cbp = currMB->trans_16x16 (currMB, PLANE_Y);    
+    cbp = currMB->residual_transform_quant_luma_16x16 (currMB, PLANE_Y);    
   }
   else
   {
     VideoParameters *p_Vid = currSlice->p_Vid;
 
-    /* generate intra prediction samples for all 4 16x16 modes */
-    intrapred_16x16 (currMB, PLANE_Y);
+    cbp = currMB->residual_transform_quant_luma_16x16 (currMB, PLANE_Y);
     select_plane(p_Vid, PLANE_U);
-    intrapred_16x16 (currMB, PLANE_U);
+    currSlice->cmp_cbp[1] = currMB->residual_transform_quant_luma_16x16 (currMB, PLANE_U);
     select_plane(p_Vid, PLANE_V);
-    intrapred_16x16 (currMB, PLANE_V);
+    currSlice->cmp_cbp[2] = currMB->residual_transform_quant_luma_16x16 (currMB, PLANE_V);
     select_plane(p_Vid, PLANE_Y);
 
-    currSlice->find_sad_16x16 (currMB);   /* get best new intra mode */
-
-    currMB->cbp = currMB->trans_16x16 (currMB, PLANE_Y);
-    select_plane(p_Vid, PLANE_U);
-    currSlice->cmp_cbp[1] = currMB->trans_16x16 (currMB, PLANE_U);
-    select_plane(p_Vid, PLANE_V);
-    currSlice->cmp_cbp[2] = currMB->trans_16x16 (currMB, PLANE_V);
-    select_plane(p_Vid, PLANE_Y);
-
-    currMB->cbp |= (currSlice->cmp_cbp[1] | currSlice->cmp_cbp[2]);
-    currSlice->cmp_cbp[1] = currMB->cbp;
-    currSlice->cmp_cbp[2] = currMB->cbp;
+    cbp |= (currSlice->cmp_cbp[1] | currSlice->cmp_cbp[2]);
+    currSlice->cmp_cbp[1] = cbp;
+    currSlice->cmp_cbp[2] = cbp;
   }
+
+  return cbp;
 }
 

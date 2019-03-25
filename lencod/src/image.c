@@ -63,29 +63,37 @@
 #include "configfile.h"
 
 
+#include "md_common.h"
+#include "me_epzs_common.h"
+
+extern void UpdateDecoders            (VideoParameters *p_Vid, InputParameters *p_Inp, StorablePicture *enc_pic);
+
 extern void DeblockFrame              (VideoParameters *p_Vid, imgpel **, imgpel ***);
 
 static void code_a_picture            (VideoParameters *p_Vid, Picture *pic);
 static void field_picture             (VideoParameters *p_Vid, Picture *top, Picture *bottom);
 static void prepare_enc_frame_picture (VideoParameters *p_Vid, StorablePicture **stored_pic);
+#if (MVC_EXTENSION_ENABLE)
+static void writeout_picture          (VideoParameters *p_Vid, Picture *pic, int is_bottom);
+#else
 static void writeout_picture          (VideoParameters *p_Vid, Picture *pic);
+#endif
 static byte picture_structure_decision(VideoParameters *p_Vid, Picture *frame, Picture *top, Picture *bot);
 static void distortion_fld            (VideoParameters *p_Vid, InputParameters *p_Inp, Picture *field_pic, ImageData *imgData);
 
-
 static void field_mode_buffer (VideoParameters *p_Vid);
-static void frame_mode_buffer (VideoParameters *p_Vid, InputParameters *p_Inp);
+static void frame_mode_buffer (VideoParameters *p_Vid);
 static void init_frame        (VideoParameters *p_Vid, InputParameters *p_Inp);
 static void init_field        (VideoParameters *p_Vid, InputParameters *p_Inp);
 static void put_buffer_frame  (VideoParameters *p_Vid);
 static void put_buffer_top    (VideoParameters *p_Vid);
 static void put_buffer_bot    (VideoParameters *p_Vid);
 
-static void ReportFirstframe   (VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *p_Stats, int64 tmp_time);
-static void ReportI            (VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *p_Stats, int64 tmp_time);
-static void ReportP            (VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *p_Stats, int64 tmp_time);
-static void ReportB            (VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *p_Stats, int64 tmp_time);
-static void ReportNALNonVLCBits(VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *p_Stats, int64 tmp_time);
+static void ReportFirstframe   (VideoParameters *p_Vid, int64 tmp_time);
+static void ReportI            (VideoParameters *p_Vid, int64 tmp_time);
+static void ReportP            (VideoParameters *p_Vid, int64 tmp_time);
+static void ReportB            (VideoParameters *p_Vid, int64 tmp_time);
+static void ReportNALNonVLCBits(VideoParameters *p_Vid, int64 tmp_time);
 
 extern void rd_picture_coding(VideoParameters *p_Vid, InputParameters *p_Inp);
 
@@ -169,6 +177,8 @@ static void code_a_plane(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   unsigned int NumberOfCodedMBs = 0;
   int SliceGroup = 0;
+  DistMetric distortion; 
+
   // The slice_group_change_cycle can be changed here.
   // FmoInit() is called before coding each picture, frame or field
   p_Vid->slice_group_change_cycle=1;
@@ -209,7 +219,32 @@ static void code_a_plane(VideoParameters *p_Vid, InputParameters *p_Inp)
   FmoEndPicture ();
 
   if ((p_Inp->SkipDeBlockNonRef == 0) || (p_Vid->nal_reference_idc != 0))
+  {
+    if(p_Inp->RDPictureDeblocking && !p_Vid->TurnDBOff)
+    {
+      find_distortion(p_Vid, &p_Vid->imgData);
+      distortion.value[0] = p_Vid->p_Dist->metric[SSE].value[0];
+      distortion.value[1] = p_Vid->p_Dist->metric[SSE].value[1];
+      distortion.value[2] = p_Vid->p_Dist->metric[SSE].value[2];
+    }
+    else
+      distortion.value[0] = distortion.value[1] = distortion.value[2] = 0;
+
     DeblockFrame (p_Vid, p_Vid->enc_picture->imgY, p_Vid->enc_picture->imgUV); //comment out to disable deblocking filter
+
+    if(p_Inp->RDPictureDeblocking && !p_Vid->TurnDBOff)
+    {
+      find_distortion(p_Vid, &p_Vid->imgData);
+      if(distortion.value[0]+distortion.value[1]+distortion.value[2] < 
+        p_Vid->p_Dist->metric[SSE].value[0]+
+        p_Vid->p_Dist->metric[SSE].value[1]+
+        p_Vid->p_Dist->metric[SSE].value[2])
+      {
+        p_Vid->EvaluateDBOff = 1; 
+      }
+    }
+  }
+
 }
 /*!
  ************************************************************************
@@ -233,8 +268,7 @@ static void code_a_picture(VideoParameters *p_Vid, Picture *pic)
   pic->no_slices = 0;
 
   RandomIntraNewPicture (p_Vid);     //! Allocates forced INTRA MBs (even for fields!)
-
-  if( IS_INDEPENDENT( p_Inp ) )
+  if( (p_Inp->separate_colour_plane_flag != 0) )
   {
     for( pl=0; pl<MAX_PLANE; pl++ )
     {
@@ -256,6 +290,7 @@ static void code_a_picture(VideoParameters *p_Vid, Picture *pic)
 
   if (p_Vid->mb_aff_frame_flag)
     MbAffPostProc(p_Vid);
+
 }
 
 /*!
@@ -371,14 +406,668 @@ static void storeRedundantFrame(VideoParameters *p_Vid)
  *    Free storable pictures
  ************************************************************************
  */
-void free_pictures(VideoParameters *p_Vid, int stored_pic)
+void free_pictures(VideoParameters *p_Vid, int dummy)
 {
   int i;
   for (i = 0; i < 6; i++)
   {
-    if (i != stored_pic)
+    if(p_Vid->enc_picture != p_Vid->enc_frame_picture[i])
       free_storable_picture(p_Vid, p_Vid->enc_frame_picture[i]);
   }
+}
+
+#if (MVC_EXTENSION_ENABLE)
+void write_el_field_vlc_nalu(VideoParameters *p_Vid)
+{
+  int temp1_nal_reference_idc;
+  int temp1_non_idr_flag[2];
+  int temp1_priority_id;
+  int temp1_view_id;
+  int temp1_temporal_id;
+  int temp1_anchor_pic_flag[2];
+  int temp1_inter_view_flag[2];
+
+  if(p_Vid->view_id == 1)
+  {
+    int temp_view_id = p_Vid->view_id;
+
+    p_Vid->view_id = 0;
+    write_non_vcl_nalu_mvc(p_Vid);
+
+    //backup view_id 1
+    temp1_nal_reference_idc   = p_Vid->nal_reference_idc;
+    temp1_non_idr_flag[0]     = p_Vid->non_idr_flag[0];
+    temp1_non_idr_flag[1]     = p_Vid->non_idr_flag[1];
+    temp1_priority_id         = p_Vid->priority_id;
+    temp1_view_id             = temp_view_id;
+    temp1_temporal_id         = p_Vid->temporal_id;
+    temp1_anchor_pic_flag[0]  = p_Vid->anchor_pic_flag[0];
+    temp1_anchor_pic_flag[1]  = p_Vid->anchor_pic_flag[1];
+    temp1_inter_view_flag[0]  = p_Vid->inter_view_flag[0];
+    temp1_inter_view_flag[1]  = p_Vid->inter_view_flag[1];
+
+    //restore view_id 0
+    p_Vid->nal_reference_idc  = p_Vid->temp0_nal_reference_idc;
+    p_Vid->non_idr_flag[0]    = p_Vid->temp0_non_idr_flag[0];
+    p_Vid->non_idr_flag[1]    = p_Vid->temp0_non_idr_flag[1];
+    p_Vid->priority_id        = p_Vid->temp0_priority_id;
+    p_Vid->view_id            = p_Vid->temp0_view_id;
+    p_Vid->temporal_id        = p_Vid->temp0_temporal_id;
+    p_Vid->anchor_pic_flag[0] = p_Vid->temp0_anchor_pic_flag[0];
+    p_Vid->anchor_pic_flag[1] = p_Vid->temp0_anchor_pic_flag[1];
+    p_Vid->inter_view_flag[0] = p_Vid->temp0_inter_view_flag[0];
+    p_Vid->inter_view_flag[1] = p_Vid->temp0_inter_view_flag[1];
+    writeout_picture (p_Vid, p_Vid->field_pic1[0], 0);	//top
+
+    //restore view_id 1
+    p_Vid->nal_reference_idc  = temp1_nal_reference_idc;
+    p_Vid->non_idr_flag[0]    = temp1_non_idr_flag[0];
+    p_Vid->non_idr_flag[1]    = temp1_non_idr_flag[1];
+    p_Vid->priority_id        = temp1_priority_id;
+    p_Vid->view_id            = temp1_view_id;
+    p_Vid->temporal_id        = temp1_temporal_id;
+    p_Vid->anchor_pic_flag[0] = temp1_anchor_pic_flag[0];
+    p_Vid->anchor_pic_flag[1] = temp1_anchor_pic_flag[1];
+    p_Vid->inter_view_flag[0] = temp1_inter_view_flag[0];
+    p_Vid->inter_view_flag[1] = temp1_inter_view_flag[1];
+    writeout_picture (p_Vid, p_Vid->field_pic2[0], 0);	//top
+
+    //restore view_id 0
+    p_Vid->nal_reference_idc  = p_Vid->temp0_nal_reference_idc;
+    p_Vid->non_idr_flag[0]    = p_Vid->temp0_non_idr_flag[0];
+    p_Vid->non_idr_flag[1]    = p_Vid->temp0_non_idr_flag[1];
+    p_Vid->priority_id        = p_Vid->temp0_priority_id;
+    p_Vid->view_id            = p_Vid->temp0_view_id;
+    p_Vid->temporal_id        = p_Vid->temp0_temporal_id;
+    p_Vid->anchor_pic_flag[0] = p_Vid->temp0_anchor_pic_flag[0];
+    p_Vid->anchor_pic_flag[1] = p_Vid->temp0_anchor_pic_flag[1];
+    p_Vid->inter_view_flag[0] = p_Vid->temp0_inter_view_flag[0];
+    p_Vid->inter_view_flag[1] = p_Vid->temp0_inter_view_flag[1];
+    writeout_picture (p_Vid, p_Vid->field_pic1[1], 1);	//bot
+
+    //restore view_id 1
+    p_Vid->nal_reference_idc  = temp1_nal_reference_idc;
+    p_Vid->non_idr_flag[0]    = temp1_non_idr_flag[0];
+    p_Vid->non_idr_flag[1]    = temp1_non_idr_flag[1];
+    p_Vid->priority_id        = temp1_priority_id;
+    p_Vid->view_id            = temp1_view_id;
+    p_Vid->temporal_id        = temp1_temporal_id;
+    p_Vid->anchor_pic_flag[0] = temp1_anchor_pic_flag[0];
+    p_Vid->anchor_pic_flag[1] = temp1_anchor_pic_flag[1];
+    p_Vid->inter_view_flag[0] = temp1_inter_view_flag[0];
+    p_Vid->inter_view_flag[1] = temp1_inter_view_flag[1];
+    writeout_picture (p_Vid, p_Vid->field_pic2[1], 1);	//bot
+  }
+  else	// store the first view nal unit
+  {
+    p_Vid->temp0_nal_reference_idc   = p_Vid->nal_reference_idc;
+    p_Vid->temp0_non_idr_flag[0]     = p_Vid->non_idr_flag[0];
+    p_Vid->temp0_non_idr_flag[1]     = p_Vid->non_idr_flag[1];
+    p_Vid->temp0_priority_id         = p_Vid->priority_id;
+    p_Vid->temp0_view_id             = p_Vid->view_id;
+    p_Vid->temp0_temporal_id         = p_Vid->temporal_id;
+    p_Vid->temp0_anchor_pic_flag[0]  = p_Vid->anchor_pic_flag[0];
+    p_Vid->temp0_anchor_pic_flag[1]  = p_Vid->anchor_pic_flag[1];
+    p_Vid->temp0_inter_view_flag[0]  = p_Vid->inter_view_flag[0];
+    p_Vid->temp0_inter_view_flag[1]  = p_Vid->inter_view_flag[1];
+  }
+}
+
+void write_frame_picture(VideoParameters *p_Vid)
+{
+  if (p_Vid->fld_flag)            // field mode (use field when fld_flag=1 only)
+  {
+    field_mode_buffer (p_Vid);
+
+    if(p_Vid->p_Inp->num_of_views==1)
+    {
+      write_non_vcl_nalu(p_Vid);
+      writeout_picture  (p_Vid, p_Vid->field_pic1[0], 0);
+      writeout_picture  (p_Vid, p_Vid->field_pic1[1], 1);
+    }
+    else
+    {
+      write_el_field_vlc_nalu(p_Vid);
+    }
+  }
+  else                          //frame mode
+  {
+    frame_mode_buffer (p_Vid);
+
+#if (MVC_EXTENSION_ENABLE)
+    if ( p_Vid->p_Inp->num_of_views == 2 )
+    {
+      write_non_vcl_nalu_mvc(p_Vid);
+    }
+    else
+#endif
+    write_non_vcl_nalu(p_Vid);
+    if (p_Vid->type==SI_SLICE)
+    { 
+      writeout_picture  (p_Vid, p_Vid->frame_pic_si, 0);
+    }
+    else
+    {
+      writeout_picture  (p_Vid, p_Vid->p_frame_pic, 0);
+    }
+  }
+}
+#else
+void write_frame_picture(VideoParameters *p_Vid)
+{
+  if (p_Vid->fld_flag)            // field mode (use field when fld_flag=1 only)
+  {
+    field_mode_buffer (p_Vid);
+    write_non_vcl_nalu(p_Vid);
+    writeout_picture  (p_Vid, p_Vid->field_pic[0]);
+    writeout_picture  (p_Vid, p_Vid->field_pic[1]);
+  }
+  else                          //frame mode
+  {
+    frame_mode_buffer (p_Vid);
+
+    write_non_vcl_nalu(p_Vid);
+    if (p_Vid->type==SI_SLICE)
+    { 
+      writeout_picture  (p_Vid, p_Vid->frame_pic_si);
+    }
+    else
+    {
+      writeout_picture  (p_Vid, p_Vid->p_frame_pic);
+    }
+  }
+}
+#endif
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Read input data while considering and performing a 3:2 pulldown
+ *    process.
+ ************************************************************************
+ */
+static int read_input_data_32pulldown(VideoParameters *p_Vid)
+{
+  InputParameters *p_Inp = p_Vid->p_Inp;
+  int file_read = 0;
+  int frm_no_in_file_first = 0;
+  int frm_no_in_file_second = 0;
+  int pull_down_offset = p_Inp->enable_32_pulldown == 1 ? 1 : 2;
+
+#if (MVC_EXTENSION_ENABLE)
+    if(p_Inp->num_of_views==2 && p_Vid->view_id == 1)
+    {
+      frm_no_in_file_first = ((p_Vid->frm_no_in_file * 4 + pull_down_offset)/ 5);
+      frm_no_in_file_second = ((p_Vid->frm_no_in_file * 4 + 3)/ 5);
+
+      // Read frame data (first frame)
+      file_read = read_one_frame (p_Vid, &p_Inp->input_file2, frm_no_in_file_first, p_Inp->infile_header, &p_Inp->source, &p_Inp->output, p_Vid->imgData0.frm_data);
+      if ( !file_read )
+      {
+        // end of file or stream found: trigger error handling
+        get_number_of_frames (p_Inp, &p_Inp->input_file2);
+        fprintf(stdout, "\nIncorrect FramesToBeEncoded: actual number is %6d frames!\n", p_Inp->no_frames );
+        return 0;
+      }
+      pad_borders (p_Inp->output, p_Vid->width, p_Vid->height, p_Vid->width_cr, p_Vid->height_cr, p_Vid->imgData0.frm_data);
+
+      // Read frame data (second frame)
+      file_read = read_one_frame (p_Vid, &p_Inp->input_file2, frm_no_in_file_second, p_Inp->infile_header, &p_Inp->source, &p_Inp->output, p_Vid->imgData4.frm_data);
+      if ( !file_read )
+      {
+        // end of file or stream found: trigger error handling
+        get_number_of_frames (p_Inp, &p_Inp->input_file2);
+        fprintf(stdout, "\nIncorrect FramesToBeEncoded: actual number is %6d frames!\n", p_Inp->no_frames );
+        return 0;
+      }
+      pad_borders (p_Inp->output, p_Vid->width, p_Vid->height, p_Vid->width_cr, p_Vid->height_cr, p_Vid->imgData4.frm_data);
+    }
+    else
+#endif
+    {
+      frm_no_in_file_first = ((p_Vid->frm_no_in_file * 4 + pull_down_offset)/ 5);
+      frm_no_in_file_second = ((p_Vid->frm_no_in_file * 4 + 3)/ 5);
+
+      // Read frame data (first frame)
+      file_read = read_one_frame (p_Vid, &p_Inp->input_file1, frm_no_in_file_first, p_Inp->infile_header, &p_Inp->source, &p_Inp->output, p_Vid->imgData0.frm_data);
+      if ( !file_read )
+      {
+        // end of file or stream found: trigger error handling
+        get_number_of_frames (p_Inp, &p_Inp->input_file1);
+        fprintf(stdout, "\nIncorrect FramesToBeEncoded: actual number is %6d frames!\n", p_Inp->no_frames );
+        return 0;
+      }
+      pad_borders (p_Inp->output, p_Vid->width, p_Vid->height, p_Vid->width_cr, p_Vid->height_cr, p_Vid->imgData0.frm_data);
+
+      // Read frame data (second frame)
+      file_read = read_one_frame (p_Vid, &p_Inp->input_file1, frm_no_in_file_second, p_Inp->infile_header, &p_Inp->source, &p_Inp->output, p_Vid->imgData4.frm_data);
+      if ( !file_read )
+      {
+        // end of file or stream found: trigger error handling
+        get_number_of_frames (p_Inp, &p_Inp->input_file1);
+        fprintf(stdout, "\nIncorrect FramesToBeEncoded: actual number is %6d frames!\n", p_Inp->no_frames );
+        return 0;
+      }
+      pad_borders (p_Inp->output, p_Vid->width, p_Vid->height, p_Vid->width_cr, p_Vid->height_cr, p_Vid->imgData4.frm_data);
+    }
+
+
+    return 1;
+}
+
+static int read_input_data(VideoParameters *p_Vid)
+{
+  InputParameters *p_Inp = p_Vid->p_Inp;
+  int file_read = 0;
+#if (MVC_EXTENSION_ENABLE)
+  if(p_Inp->num_of_views==2 && p_Vid->view_id==1)
+  {
+      file_read = read_one_frame (p_Vid, &p_Inp->input_file2, p_Vid->frm_no_in_file, p_Inp->infile_header, &p_Inp->source, &p_Inp->output, p_Vid->imgData0.frm_data);
+    if ( !file_read )
+    {
+      // end of file or stream found: trigger error handling
+        get_number_of_frames (p_Inp, &p_Inp->input_file2);
+      fprintf(stdout, "\nIncorrect FramesToBeEncoded: actual number is %6d frames!\n", p_Inp->no_frames );
+      return 0;
+    }
+      pad_borders (p_Inp->output, p_Vid->width, p_Vid->height, p_Vid->width_cr, p_Vid->height_cr, p_Vid->imgData0.frm_data);
+  }
+  else
+#endif
+  {
+      file_read = read_one_frame (p_Vid, &p_Inp->input_file1, p_Vid->frm_no_in_file, p_Inp->infile_header, &p_Inp->source, &p_Inp->output, p_Vid->imgData0.frm_data);
+      if ( !file_read )
+      {
+        // end of file or stream found: trigger error handling
+        get_number_of_frames (p_Inp, &p_Inp->input_file1);
+        fprintf(stdout, "\nIncorrect FramesToBeEncoded: actual number is %6d frames!\n", p_Inp->no_frames );
+        return 0;
+      }
+      pad_borders (p_Inp->output, p_Vid->width, p_Vid->height, p_Vid->width_cr, p_Vid->height_cr, p_Vid->imgData0.frm_data);
+    }  
+
+  return 1;
+}
+
+void perform_encode_field(VideoParameters *p_Vid)
+{
+  InputParameters *p_Inp = p_Vid->p_Inp;
+
+  //Rate control
+  if ( p_Inp->RCEnable && p_Inp->RCUpdateMode <= MAX_RC_MODE )
+    p_Vid->p_rc_gen->FieldControl = 1;
+
+  p_Vid->field_picture = 1;  // we encode fields
+#if (MVC_EXTENSION_ENABLE)
+  field_picture (p_Vid, p_Vid->field_pic_ptr[0], p_Vid->field_pic_ptr[1]);
+#else
+  field_picture (p_Vid, p_Vid->field_pic[0], p_Vid->field_pic[1]);
+#endif
+  p_Vid->fld_flag = TRUE;
+}
+
+void perform_encode_frame(VideoParameters *p_Vid)
+{
+  InputParameters *p_Inp = p_Vid->p_Inp;
+  int tmpFrameQP = 0;
+  int num_ref_idx_l0 = 0;
+  int num_ref_idx_l1 = 0;
+
+#if (MVC_EXTENSION_ENABLE)
+  int frame_type;
+#endif
+
+  //Rate control
+  if ( p_Inp->RCEnable && p_Inp->RCUpdateMode <= MAX_RC_MODE )
+    p_Vid->p_rc_gen->FieldControl = 0;
+
+  p_Vid->field_picture = 0; // we encode a frame
+
+  //Rate control
+  if(p_Inp->RCEnable)
+    rc_init_frame(p_Vid, p_Inp);
+  // Ensure that p_Vid->p_curr_frm_struct->qp is properly set
+  p_Vid->p_curr_frm_struct->qp = p_Vid->qp;
+
+  p_Vid->active_pps = p_Vid->PicParSet[0];
+
+#if (MVC_EXTENSION_ENABLE)
+  if(p_Vid->view_id!=1 || !p_Vid->sec_view_force_fld)
+  {
+#endif
+    if ((p_Vid->type == B_SLICE || p_Vid->type == P_SLICE || p_Vid->type==I_SLICE) && p_Inp->RDPictureDecision)
+    {
+      frame_picture_mp (p_Vid, p_Inp); 
+    }
+    else
+    {
+      frame_picture (p_Vid, p_Vid->frame_pic[0], &p_Vid->imgData, 0);
+      p_Vid->p_frame_pic = p_Vid->frame_pic[0]; 
+    }
+
+    tmpFrameQP = p_Vid->SumFrameQP; // call it here since rd_picture_coding buffers it and may modify it
+    num_ref_idx_l0 = p_Vid->num_ref_idx_l0_active;
+    num_ref_idx_l1 = p_Vid->num_ref_idx_l1_active;
+
+    if (p_Vid->p_curr_frm_struct->type == SI_SLICE)
+    {
+      // once the picture has been encoded as a primary SP frame encode as an SI frame
+      set_slice_type( p_Vid, p_Inp, SI_SLICE );
+      frame_picture (p_Vid, p_Vid->frame_pic_si, &p_Vid->imgData, 0);
+    }
+
+    if ((p_Vid->type == SP_SLICE) && (p_Inp->sp_output_indicator))
+    {
+      // output the transformed and quantized coefficients (useful for switching SP frames)
+      output_SP_coefficients(p_Vid, p_Inp);
+    }
+#if (MVC_EXTENSION_ENABLE)
+  }
+#endif
+
+  if (p_Inp->PicInterlace == ADAPTIVE_CODING)
+  {
+    //Rate control
+
+    if ( p_Inp->RCEnable && p_Inp->RCUpdateMode <= MAX_RC_MODE )
+      p_Vid->p_rc_gen->FieldControl=1;
+    p_Vid->write_macroblock = FALSE;
+    p_Vid->bot_MB = FALSE;
+
+#if (MVC_EXTENSION_ENABLE)
+    frame_type = p_Vid->type;
+#endif
+
+    p_Vid->field_picture = 1;  // we encode fields
+
+#if (MVC_EXTENSION_ENABLE)
+    field_picture (p_Vid, p_Vid->field_pic_ptr[0], p_Vid->field_pic_ptr[1]);
+
+    if(p_Inp->num_of_views==1 || p_Vid->view_id==0)	// first view will make the decision
+    {
+      if(p_Vid->rd_pass == 0)
+        p_Vid->fld_flag = picture_structure_decision (p_Vid, p_Vid->frame_pic[0], p_Vid->field_pic_ptr[0], p_Vid->field_pic_ptr[1]);
+      else if(p_Vid->rd_pass == 1)
+        p_Vid->fld_flag = picture_structure_decision (p_Vid, p_Vid->frame_pic[1], p_Vid->field_pic_ptr[0], p_Vid->field_pic_ptr[1]);
+      else
+        p_Vid->fld_flag = picture_structure_decision (p_Vid, p_Vid->frame_pic[2], p_Vid->field_pic_ptr[0], p_Vid->field_pic_ptr[1]);
+
+      p_Vid->sec_view_force_fld = p_Vid->fld_flag;		// store 1st view decision, same coding structure to be used for second view
+    }
+    else
+    {
+      p_Vid->fld_flag = (byte) p_Vid->sec_view_force_fld;
+    }
+#else
+    field_picture (p_Vid, p_Vid->field_pic[0], p_Vid->field_pic[1]);
+
+    if(p_Vid->rd_pass == 0)
+      p_Vid->fld_flag = picture_structure_decision (p_Vid, p_Vid->frame_pic[0], p_Vid->field_pic[0], p_Vid->field_pic[1]);
+    else if(p_Vid->rd_pass == 1)
+      p_Vid->fld_flag = picture_structure_decision (p_Vid, p_Vid->frame_pic[1], p_Vid->field_pic[0], p_Vid->field_pic[1]);
+    else
+      p_Vid->fld_flag = picture_structure_decision (p_Vid, p_Vid->frame_pic[2], p_Vid->field_pic[0], p_Vid->field_pic[1]);
+#endif
+
+    if ( p_Vid->fld_flag )
+    {
+      tmpFrameQP = p_Vid->SumFrameQP;
+      num_ref_idx_l0 = p_Vid->num_ref_idx_l0_active;
+      num_ref_idx_l1 = p_Vid->num_ref_idx_l1_active;
+    }
+#if (MVC_EXTENSION_ENABLE)
+    if ( p_Inp->num_of_views==2 && p_Vid->fld_flag==0 )
+    {
+      p_Vid->type = (short) frame_type;
+    }
+#endif
+
+    update_field_frame_contexts (p_Vid, p_Vid->fld_flag);
+
+    //Rate control
+    if ( p_Inp->RCEnable && p_Inp->RCUpdateMode <= MAX_RC_MODE )
+      p_Vid->p_rc_gen->FieldFrame = !(p_Vid->fld_flag) ? 1 : 0;
+  }
+  else
+    p_Vid->fld_flag = FALSE;
+
+  p_Vid->SumFrameQP = tmpFrameQP;
+  p_Vid->num_ref_idx_l0_active = num_ref_idx_l0;
+  p_Vid->num_ref_idx_l1_active = num_ref_idx_l1;
+}
+
+void free_slice_data(VideoParameters *p_Vid)
+{
+  int i;
+
+  if (p_Vid->frame_pic_si)
+  {
+    free_slice_list(p_Vid->frame_pic_si);
+  }
+
+  for (i = 0; i < p_Vid->frm_iter; i++)
+  {
+    if (p_Vid->frame_pic[i])
+    {
+      free_slice_list(p_Vid->frame_pic[i]);
+    }
+  }
+
+#if (MVC_EXTENSION_ENABLE)
+  if ( p_Vid->field_pic_ptr && (p_Vid->p_Inp->num_of_views==1 || p_Vid->view_id==1) )
+  {
+    for (i = 0; i < 2; i++)
+    {
+      if (p_Vid->field_pic1[i])
+        free_slice_list(p_Vid->field_pic1[i]);
+      if (p_Vid->p_Inp->num_of_views==2 && p_Vid->field_pic2)
+      {
+        if (p_Vid->field_pic2[i])
+          free_slice_list(p_Vid->field_pic2[i]);
+      }
+    }
+  }
+#else
+  if (p_Vid->field_pic)
+  {
+    for (i = 0; i < 2; i++)
+    {
+      if (p_Vid->field_pic[i])
+        free_slice_list(p_Vid->field_pic[i]);
+    }
+  }
+#endif
+}
+
+void store_coded_picture(DecodedPictureBuffer *p_Dpb)
+{
+  VideoParameters *p_Vid = p_Dpb->p_Vid;
+  InputParameters *p_Inp = p_Vid->p_Inp;
+
+  if (p_Inp->PicInterlace == ADAPTIVE_CODING)
+  {
+    if (p_Vid->fld_flag)
+    {      
+      update_global_stats(p_Inp, p_Vid->p_Stats, &p_Vid->enc_field_picture[0]->stats);
+      update_global_stats(p_Inp, p_Vid->p_Stats, &p_Vid->enc_field_picture[1]->stats);
+      // store bottom field
+      store_picture_in_dpb (p_Dpb, p_Vid->enc_field_picture[1], &p_Inp->output);
+      free_storable_picture(p_Vid, p_Vid->enc_frame_picture[0]);
+      free_storable_picture(p_Vid, p_Vid->enc_frame_picture[1]);
+      free_storable_picture(p_Vid, p_Vid->enc_frame_picture[2]);
+    }
+    else
+    {
+      update_global_stats(p_Inp, p_Vid->p_Stats, &p_Vid->enc_frame_picture[p_Vid->rd_pass]->stats);
+      // replace top with frame
+      if (p_Vid->rd_pass==2)
+      {
+        replace_top_pic_with_frame(p_Dpb, p_Vid->enc_frame_picture[2], &p_Inp->output);
+        free_storable_picture     (p_Vid, p_Vid->enc_frame_picture[0]);
+        free_storable_picture     (p_Vid, p_Vid->enc_frame_picture[1]);
+      }
+      else if (p_Vid->rd_pass==1)
+      {
+        replace_top_pic_with_frame(p_Dpb, p_Vid->enc_frame_picture[1], &p_Inp->output);
+        free_storable_picture     (p_Vid, p_Vid->enc_frame_picture[0]);
+        free_storable_picture     (p_Vid, p_Vid->enc_frame_picture[2]);
+      }
+      else
+      {
+        if(p_Inp->redundant_pic_flag==0 || (p_Vid->key_frame==0))
+        {
+          replace_top_pic_with_frame(p_Dpb, p_Vid->enc_frame_picture[0], &p_Inp->output);
+          free_storable_picture     (p_Vid, p_Vid->enc_frame_picture[1]);
+          free_storable_picture     (p_Vid, p_Vid->enc_frame_picture[2]);
+        }
+      }
+      free_storable_picture(p_Vid, p_Vid->enc_field_picture[1]);      
+    }
+  }
+  else
+  {
+    if (p_Vid->fld_flag)
+    {
+      update_global_stats(p_Inp, p_Vid->p_Stats, &p_Vid->enc_field_picture[0]->stats);
+      update_global_stats(p_Inp, p_Vid->p_Stats, &p_Vid->enc_field_picture[1]->stats);
+      store_picture_in_dpb(p_Dpb, p_Vid->enc_field_picture[1], &p_Inp->output);
+    }
+    else
+    {      
+      if ((p_Inp->redundant_pic_flag != 1) || (p_Vid->key_frame == 0))
+      {
+        update_global_stats(p_Inp, p_Vid->p_Stats, &p_Vid->enc_picture->stats);
+        store_picture_in_dpb (p_Dpb, p_Vid->enc_picture, &p_Inp->output);
+        free_pictures(p_Vid, -1);
+      }
+    }
+  }
+}
+
+void update_bitcounter_stats(VideoParameters *p_Vid)
+{
+  p_Vid->p_Stats->bit_ctr_n = p_Vid->p_Stats->bit_ctr;
+  p_Vid->p_Stats->bit_ctr_parametersets_n = 0;
+  p_Vid->p_Stats->bit_ctr_filler_data_n = p_Vid->p_Stats->bit_ctr_filler_data;
+
+#if (MVC_EXTENSION_ENABLE)
+  if ( p_Vid->p_Inp->num_of_views == 2 )
+  {
+    p_Vid->p_Stats->bit_ctr_parametersets_v[p_Vid->view_id] += p_Vid->p_Stats->bit_ctr_parametersets_n_v[p_Vid->view_id];
+    if ( p_Vid->fld_flag )
+    {
+      if ( p_Vid->view_id == 1 )
+      {
+        p_Vid->p_Stats->bit_ctr_n_v[0] = p_Vid->p_Stats->bit_ctr_v[0];
+        p_Vid->p_Stats->bit_ctr_n_v[1] = p_Vid->p_Stats->bit_ctr_v[1];
+        p_Vid->p_Stats->bit_ctr_parametersets_n_v[0] = 0;
+        p_Vid->p_Stats->bit_ctr_parametersets_n_v[1] = 0;
+        p_Vid->p_Stats->bit_ctr_filler_data_n_v[0] = p_Vid->p_Stats->bit_ctr_filler_data_v[0];
+        p_Vid->p_Stats->bit_ctr_filler_data_n_v[1] = p_Vid->p_Stats->bit_ctr_filler_data_v[1];
+      }
+    }
+    else // this seems to be enough and the check above seems redundant...check later...
+    {
+      p_Vid->p_Stats->bit_ctr_n_v[p_Vid->view_id] = p_Vid->p_Stats->bit_ctr_v[p_Vid->view_id];
+      p_Vid->p_Stats->bit_ctr_parametersets_n_v[p_Vid->view_id] = 0;
+      p_Vid->p_Stats->bit_ctr_filler_data_n_v[p_Vid->view_id] = p_Vid->p_Stats->bit_ctr_filler_data_v[p_Vid->view_id];
+    }
+  }
+#endif
+}
+
+void update_idr_order_stats(VideoParameters *p_Vid)
+{
+  if ( p_Vid->fld_flag ) // need to check both fields here
+  {
+    // top field picture
+    if ( p_Vid->p_curr_frm_struct->p_top_fld_pic->p_Slice[0].type == I_SLICE && p_Vid->p_curr_frm_struct->p_top_fld_pic->nal_ref_idc)
+    {
+      p_Vid->lastINTRA       = imax(p_Vid->lastINTRA, p_Vid->frame_no);
+      p_Vid->lastIntraNumber = p_Vid->curr_frm_idx;
+      if ( p_Vid->p_curr_frm_struct->p_top_fld_pic->idr_flag )
+      {
+        p_Vid->last_idr_disp_order = imax( p_Vid->frame_no, p_Vid->last_idr_disp_order );
+        p_Vid->last_idr_code_order = p_Vid->curr_frm_idx;
+      }
+    }
+    // bottom field picture
+    if ( p_Vid->p_curr_frm_struct->p_bot_fld_pic->p_Slice[0].type == I_SLICE && p_Vid->p_curr_frm_struct->p_bot_fld_pic->nal_ref_idc)
+    {
+      p_Vid->lastINTRA       = imax(p_Vid->lastINTRA, p_Vid->frame_no);
+      p_Vid->lastIntraNumber = p_Vid->curr_frm_idx;
+      if ( p_Vid->p_curr_frm_struct->p_bot_fld_pic->idr_flag )
+      {
+        p_Vid->last_idr_disp_order = imax( p_Vid->frame_no, p_Vid->last_idr_disp_order );
+        p_Vid->last_idr_code_order = p_Vid->curr_frm_idx;
+      }
+    }
+  }
+  else
+  {
+    // frame picture
+    if ( p_Vid->p_curr_frm_struct->p_frame_pic->p_Slice[0].type == I_SLICE && p_Vid->p_curr_frm_struct->p_frame_pic->nal_ref_idc)
+    {
+      p_Vid->lastINTRA       = imax(p_Vid->lastINTRA, p_Vid->frame_no);
+      p_Vid->lastIntraNumber = p_Vid->curr_frm_idx;
+      if ( p_Vid->p_curr_frm_struct->p_frame_pic->idr_flag )
+      {
+        p_Vid->last_idr_disp_order = imax( p_Vid->frame_no, p_Vid->last_idr_disp_order );
+        p_Vid->last_idr_code_order = p_Vid->curr_frm_idx;
+      }
+    }
+  }
+}
+
+int update_video_stats(VideoParameters *p_Vid)
+{
+  int bits = 0;
+  InputParameters *p_Inp = p_Vid->p_Inp;
+
+  //Rate control
+  if(p_Inp->RCEnable)
+  {
+    if ((!p_Inp->PicInterlace) && (!p_Inp->MbInterlace))
+    {
+      bits = (int) (p_Vid->p_Stats->bit_ctr - p_Vid->p_Stats->bit_ctr_n)
+        + (int)( p_Vid->p_Stats->bit_ctr_filler_data - p_Vid->p_Stats->bit_ctr_filler_data_n );
+    }
+    else if ( p_Inp->RCUpdateMode <= MAX_RC_MODE )
+    {
+      bits = (int)(p_Vid->p_Stats->bit_ctr - (p_Vid->p_rc_quad->Pprev_bits))
+        + (int)( p_Vid->p_Stats->bit_ctr_filler_data - p_Vid->p_Stats->bit_ctr_filler_data_n ); // used for rate control update
+      p_Vid->p_rc_quad->Pprev_bits = p_Vid->p_Stats->bit_ctr + p_Vid->p_Stats->bit_ctr_filler_data;
+    }
+    else
+    {
+      bits = (int) (p_Vid->p_Stats->bit_ctr - p_Vid->p_Stats->bit_ctr_n)
+        + (int)( p_Vid->p_Stats->bit_ctr_filler_data - p_Vid->p_Stats->bit_ctr_filler_data_n );
+    }
+  }
+
+  p_Vid->p_Stats->bit_counter[p_Vid->type] += p_Vid->p_Stats->bit_ctr - p_Vid->p_Stats->bit_ctr_n;
+
+#if (MVC_EXTENSION_ENABLE)
+  if ( p_Inp->num_of_views == 2 )
+  {
+    if ( p_Vid->fld_flag )
+    {
+      if ( p_Vid->view_id == 1 )
+      {
+        int prev_type = (p_Vid->p_pred->p_frm_mvc + ( (p_Vid->curr_frm_idx << 1) % p_Vid->p_pred->num_frames_mvc ))->type;
+
+        p_Vid->p_Stats->bit_counter_v[0][prev_type]   += p_Vid->p_Stats->bit_ctr_v[0] - p_Vid->p_Stats->bit_ctr_n_v[0];
+        p_Vid->p_Stats->bit_counter_v[1][p_Vid->type] += p_Vid->p_Stats->bit_ctr_v[1] - p_Vid->p_Stats->bit_ctr_n_v[1];
+      }
+    }
+    else
+    {
+      p_Vid->p_Stats->bit_counter_v[p_Vid->view_id][p_Vid->type] += p_Vid->p_Stats->bit_ctr_v[p_Vid->view_id] - p_Vid->p_Stats->bit_ctr_n_v[p_Vid->view_id];
+    }
+  }
+#endif
+
+  return bits;
 }
 
 /*!
@@ -391,7 +1080,6 @@ int encode_one_frame (VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   int i;
   int nplane;
-  int file_read = 0;
 
   //Rate control
   int bits = 0;
@@ -403,7 +1091,7 @@ int encode_one_frame (VideoParameters *p_Vid, InputParameters *p_Inp)
   p_Vid->me_time = 0;
   p_Vid->rd_pass = 0;
 
-  if( IS_INDEPENDENT(p_Inp) )
+  if( (p_Inp->separate_colour_plane_flag != 0) )
   {
     for( nplane=0; nplane<MAX_PLANE; nplane++ ){
       p_Vid->enc_frame_picture_JV[nplane] = NULL;
@@ -429,32 +1117,51 @@ int encode_one_frame (VideoParameters *p_Vid, InputParameters *p_Inp)
   UpdateRandomAccess (p_Vid);
   */
 
-
   put_buffer_frame (p_Vid);    // sets the pointers to the frame structures
                                // (and not to one of the field structures)
   init_frame (p_Vid, p_Inp);
 
-  file_read = ReadOneFrame (p_Vid, &p_Inp->input_file1, p_Vid->frm_no_in_file, p_Inp->infile_header, &p_Inp->source, &p_Inp->output, p_Vid->imgData0.frm_data);
-  if ( !file_read )
+  if (p_Inp->enable_32_pulldown)
   {
-    // end of file or stream found: trigger error handling
-    getNumberOfFrames(p_Inp, &p_Inp->input_file1);
-    fprintf(stdout, "\nIncorrect FramesToBeEncoded: actual number is %6d frames!\n", p_Inp->no_frames );
-    return 0;
+    if ( !read_input_data_32pulldown (p_Vid) )
+    {
+      return 0;
+    }
   }
-  PaddAutoCropBorders (p_Inp->output, p_Vid->width, p_Vid->height, p_Vid->width_cr, p_Vid->height_cr, p_Vid->imgData0.frm_data);
+  else
+  {
+    if ( !read_input_data (p_Vid) )
+    {
+      return 0;
+    }
+  }
 
+  process_image(p_Vid, p_Inp);
+  pad_borders (p_Inp->output, p_Vid->width, p_Vid->height, p_Vid->width_cr, p_Vid->height_cr, p_Vid->imgData.frm_data);
 
-  ProcessImage(p_Vid, p_Inp);
-  PaddAutoCropBorders (p_Inp->output, p_Vid->width, p_Vid->height, p_Vid->width_cr, p_Vid->height_cr, p_Vid->imgData.frm_data);
+#if (MVC_EXTENSION_ENABLE)
+  if(p_Inp->num_of_views==1 || p_Vid->view_id==0)
+  {
+    p_Vid->field_pic_ptr = p_Vid->field_pic1;
+  }
+  else
+  {
+    p_Vid->field_pic_ptr = p_Vid->field_pic2;
+  }
+#endif
 
-
+  
 
 
   // Following code should consider optimal coding mode. Currently also does not support
   // multiple slices per frame.
-
   p_Vid->p_Dist->frame_ctr++;
+#if (MVC_EXTENSION_ENABLE)
+  if (p_Inp->num_of_views == 2)
+  {
+    p_Vid->p_Dist->frame_ctr_v[p_Vid->view_id]++;
+  }
+#endif
 
   if(p_Vid->type == SP_SLICE)
   {
@@ -468,6 +1175,7 @@ int encode_one_frame (VideoParameters *p_Vid, InputParameters *p_Inp)
   {
     p_Vid->sp2_frame_indicator = FALSE;
   }
+
   if ( p_Inp->WPMCPrecision )
   {
     wpxInitWPXPasses(p_Vid, p_Inp);
@@ -476,161 +1184,32 @@ int encode_one_frame (VideoParameters *p_Vid, InputParameters *p_Inp)
   }
 
   if (p_Inp->PicInterlace == FIELD_CODING)
-  {
-    //Rate control
-    if ( p_Inp->RCEnable && p_Inp->RCUpdateMode <= MAX_RC_MODE )
-      p_Vid->p_rc_gen->FieldControl = 1;
-
-    p_Vid->field_picture = 1;  // we encode fields
-    field_picture (p_Vid, p_Vid->field_pic[0], p_Vid->field_pic[1]);
-    p_Vid->fld_flag = TRUE;
-  }
+    perform_encode_field(p_Vid);
   else
-  {
-    int tmpFrameQP;
-    int num_ref_idx_l0;
-    int num_ref_idx_l1;
-
-    //Rate control
-    if ( p_Inp->RCEnable && p_Inp->RCUpdateMode <= MAX_RC_MODE )
-      p_Vid->p_rc_gen->FieldControl = 0;
-
-    p_Vid->field_picture = 0; // we encode a frame
-
-    //Rate control
-    if(p_Inp->RCEnable)
-      rc_init_frame(p_Vid, p_Inp);
-
-    if (p_Inp->GenerateMultiplePPS)
-      p_Vid->active_pps = p_Vid->PicParSet[0];
-
-    frame_picture (p_Vid, p_Vid->frame_pic[0], &p_Vid->imgData, 0);
-
-    if(p_Inp->WPIterMC)
-      p_Vid->frameOffsetAvail = 1; 
-
-    if ((p_Inp->RDPictureIntra || p_Vid->type!=I_SLICE) && p_Inp->RDPictureDecision)
-    {
-      rd_picture_coding(p_Vid, p_Inp);
-    }
-
-    tmpFrameQP = p_Vid->SumFrameQP; // call it here since rd_picture_coding buffers it and may modify it
-    num_ref_idx_l0 = p_Vid->num_ref_idx_l0_active;
-    num_ref_idx_l1 = p_Vid->num_ref_idx_l1_active;
-
-
-
-    if (p_Vid->p_curr_frm_struct->type == SI_SLICE)
-    {
-      // once the picture has been encoded as a primary SP frame encode as an SI frame
-      set_slice_type( p_Vid, p_Inp, SI_SLICE );
-      frame_picture (p_Vid, p_Vid->frame_pic_si, &p_Vid->imgData, 0);
-    }
-
-    if ((p_Vid->type == SP_SLICE) && (p_Inp->sp_output_indicator))
-    {
-      // output the transformed and quantized coefficients (useful for switching SP frames)
-      output_SP_coefficients(p_Vid, p_Inp);
-    }
-
-    if (p_Inp->PicInterlace == ADAPTIVE_CODING)
-    {
-      //Rate control
-      if ( p_Inp->RCEnable && p_Inp->RCUpdateMode <= MAX_RC_MODE )
-        p_Vid->p_rc_gen->FieldControl=1;
-      p_Vid->write_macroblock = FALSE;
-      p_Vid->bot_MB = FALSE;
-
-      p_Vid->field_picture = 1;  // we encode fields
-      field_picture (p_Vid, p_Vid->field_pic[0], p_Vid->field_pic[1]);
-
-      if(p_Vid->rd_pass == 0)
-        p_Vid->fld_flag = picture_structure_decision (p_Vid, p_Vid->frame_pic[0], p_Vid->field_pic[0], p_Vid->field_pic[1]);
-      else if(p_Vid->rd_pass == 1)
-        p_Vid->fld_flag = picture_structure_decision (p_Vid, p_Vid->frame_pic[1], p_Vid->field_pic[0], p_Vid->field_pic[1]);
-      else
-        p_Vid->fld_flag = picture_structure_decision (p_Vid, p_Vid->frame_pic[2], p_Vid->field_pic[0], p_Vid->field_pic[1]);
-
-      if ( p_Vid->fld_flag )
-      {
-        tmpFrameQP = p_Vid->SumFrameQP;
-        num_ref_idx_l0 = p_Vid->num_ref_idx_l0_active;
-        num_ref_idx_l1 = p_Vid->num_ref_idx_l1_active;
-      }
-
-      update_field_frame_contexts (p_Vid, p_Vid->fld_flag);
-
-      //Rate control
-      if ( p_Inp->RCEnable && p_Inp->RCUpdateMode <= MAX_RC_MODE )
-        p_Vid->p_rc_gen->FieldFrame = !(p_Vid->fld_flag) ? 1 : 0;
-    }
-    else
-      p_Vid->fld_flag = FALSE;
-
-    p_Vid->SumFrameQP = tmpFrameQP;
-    p_Vid->num_ref_idx_l0_active = num_ref_idx_l0;
-    p_Vid->num_ref_idx_l1_active = num_ref_idx_l1;
-  }
+    perform_encode_frame(p_Vid);
 
   p_Vid->p_Stats->frame_counter++;
   p_Vid->p_Stats->frame_ctr[p_Vid->type]++;
 
-
   // Here, p_Vid->structure may be either FRAME or BOTTOM FIELD depending on whether AFF coding is used
   // The picture structure decision changes really only the fld_flag
+  write_frame_picture(p_Vid);
 
-  if (p_Vid->fld_flag)            // field mode (use field when fld_flag=1 only)
+#if (MVC_EXTENSION_ENABLE)
+  if(p_Inp->num_of_views==2)
   {
-    field_mode_buffer (p_Vid);
-    write_non_vcl_nalu(p_Vid, p_Inp);
-    writeout_picture  (p_Vid, p_Vid->field_pic[0]);
-    writeout_picture  (p_Vid, p_Vid->field_pic[1]);
-  }
-  else                          //frame mode
-  {
-    frame_mode_buffer (p_Vid, p_Inp);
-
-    write_non_vcl_nalu(p_Vid, p_Inp);
-    if (p_Vid->type==SI_SLICE)
-    { 
-      writeout_picture  (p_Vid, p_Vid->frame_pic_si);
+    // view_id 1 will follow view_id 0 anchor_pic_flag value
+    if((p_Vid->anchor_pic_flag[0]==1) && (p_Vid->view_id&1)==0)
+    {
+      p_Vid->prev_view_is_anchor = 1;
     }
     else
     {
-      writeout_picture  (p_Vid, p_Vid->frame_pic[p_Vid->rd_pass]);
+      p_Vid->prev_view_is_anchor = 0;
     }
   }
-
-  if (p_Vid->frame_pic_si)
-  {
-    free_slice_list(p_Vid->frame_pic_si);
-  }
-
-  for (i = 0; i < p_Vid->frm_iter; i++)
-  {
-    if (p_Vid->frame_pic[i])
-    {
-      free_slice_list(p_Vid->frame_pic[i]);
-    }
-  }
-
-  if (p_Vid->field_pic)
-  {
-    for (i = 0; i < 2; i++)
-    {
-      if (p_Vid->field_pic[i])
-        free_slice_list(p_Vid->field_pic[i]);
-    }
-  }
-
-  /*
-  // Tian Dong (Sept 2002)
-  // in frame mode, the newly reconstructed frame has been inserted to the mem buffer
-  // and it is time to prepare the spare picture SEI payload.
-  if (p_Inp->InterlaceCodingOption == FRAME_CODING
-  && p_Inp->SparePictureOption && p_Vid->type != B_SLICE)
-  CalculateSparePicture ();
-  */
+#endif
+  free_slice_data(p_Vid);
 
   //Rate control
   if ( p_Inp->RCEnable )
@@ -645,7 +1224,7 @@ int encode_one_frame (VideoParameters *p_Vid, InputParameters *p_Inp)
 
   if (p_Inp->PicInterlace == FRAME_CODING)
   {
-    if ((p_Inp->rdopt == 3) && (p_Vid->nal_reference_idc != 0))
+    if ((p_Inp->rdopt == 3) && (p_Inp->de == LLN || p_Inp->de == FAST_LLN) && (p_Vid->nal_reference_idc != 0))
     {
       UpdateDecoders (p_Vid, p_Inp, p_Vid->enc_picture);      // simulate packet losses and move decoded image to reference buffers
     }
@@ -653,7 +1232,6 @@ int encode_one_frame (VideoParameters *p_Vid, InputParameters *p_Inp)
     if (p_Inp->RestrictRef)
       UpdatePixelMap (p_Vid, p_Inp);
   }
-
   compute_distortion(p_Vid, &p_Vid->imgData);
 
   // redundant pictures: save reconstruction to calculate SNR and replace reference picture
@@ -661,65 +1239,7 @@ int encode_one_frame (VideoParameters *p_Vid, InputParameters *p_Inp)
   {
     storeRedundantFrame(p_Vid);
   }
-
-  if (p_Inp->PicInterlace == ADAPTIVE_CODING)
-  {
-    if (p_Vid->fld_flag)
-    {      
-      update_global_stats(p_Inp, p_Vid->p_Stats, &p_Vid->enc_field_picture[0]->stats);
-      update_global_stats(p_Inp, p_Vid->p_Stats, &p_Vid->enc_field_picture[1]->stats);
-      // store bottom field
-      store_picture_in_dpb (p_Vid, p_Vid->enc_field_picture[1], &p_Inp->output);
-      free_storable_picture(p_Vid, p_Vid->enc_frame_picture[0]);
-      free_storable_picture(p_Vid, p_Vid->enc_frame_picture[1]);
-      free_storable_picture(p_Vid, p_Vid->enc_frame_picture[2]);
-    }
-    else
-    {
-      update_global_stats(p_Inp, p_Vid->p_Stats, &p_Vid->enc_frame_picture[p_Vid->rd_pass]->stats);
-      // replace top with frame
-      if (p_Vid->rd_pass==2)
-      {
-        replace_top_pic_with_frame(p_Vid, p_Vid->enc_frame_picture[2], &p_Inp->output);
-        free_storable_picture     (p_Vid, p_Vid->enc_frame_picture[0]);
-        free_storable_picture     (p_Vid, p_Vid->enc_frame_picture[1]);
-      }
-      else if (p_Vid->rd_pass==1)
-      {
-        replace_top_pic_with_frame(p_Vid, p_Vid->enc_frame_picture[1], &p_Inp->output);
-        free_storable_picture     (p_Vid, p_Vid->enc_frame_picture[0]);
-        free_storable_picture     (p_Vid, p_Vid->enc_frame_picture[2]);
-      }
-      else
-      {
-        if(p_Inp->redundant_pic_flag==0 || (p_Vid->key_frame==0))
-        {
-          replace_top_pic_with_frame(p_Vid, p_Vid->enc_frame_picture[0], &p_Inp->output);
-          free_storable_picture     (p_Vid, p_Vid->enc_frame_picture[1]);
-          free_storable_picture     (p_Vid, p_Vid->enc_frame_picture[2]);
-        }
-      }
-      free_storable_picture(p_Vid, p_Vid->enc_field_picture[1]);      
-    }
-  }
-  else
-  {
-    if (p_Vid->fld_flag)
-    {
-      update_global_stats(p_Inp, p_Vid->p_Stats, &p_Vid->enc_field_picture[0]->stats);
-      update_global_stats(p_Inp, p_Vid->p_Stats, &p_Vid->enc_field_picture[1]->stats);
-      store_picture_in_dpb(p_Vid, p_Vid->enc_field_picture[1], &p_Inp->output);
-    }
-    else
-    {      
-      if ((p_Inp->redundant_pic_flag != 1) || (p_Vid->key_frame == 0))
-      {
-        update_global_stats(p_Inp, p_Vid->p_Stats, &p_Vid->enc_frame_picture[p_Vid->rd_pass]->stats);
-        store_picture_in_dpb (p_Vid, p_Vid->enc_frame_picture[p_Vid->rd_pass], &p_Inp->output);
-        free_pictures(p_Vid, p_Vid->rd_pass);
-      }
-    }
-  }
+  store_coded_picture(p_Vid->p_Dpb);
 
   p_Vid->AverageFrameQP = isign(p_Vid->SumFrameQP) * ((iabs(p_Vid->SumFrameQP) + (int) (p_Vid->FrameSizeInMbs >> 1))/ (int) p_Vid->FrameSizeInMbs);  
 
@@ -754,47 +1274,34 @@ int encode_one_frame (VideoParameters *p_Vid, InputParameters *p_Inp)
   p_Vid->tot_time += tmp_time;
   tmp_time  = timenorm(tmp_time);
   p_Vid->me_time   = timenorm(p_Vid->me_time);
-
   if (p_Vid->p_Stats->bit_ctr_parametersets_n!=0 && p_Inp->Verbose != 3)
-    ReportNALNonVLCBits(p_Vid, p_Inp, p_Vid->p_Stats, tmp_time);
+    ReportNALNonVLCBits(p_Vid, tmp_time);
 
+#if (MVC_EXTENSION_ENABLE)
+  if (p_Vid->curr_frm_idx == 0 && !p_Vid->view_id)
+#else
   if (p_Vid->curr_frm_idx == 0)
-    ReportFirstframe(p_Vid, p_Inp, p_Vid->p_Stats, tmp_time);
+#endif
+    ReportFirstframe(p_Vid, tmp_time);
   else
   {
-    //Rate control
-    if(p_Inp->RCEnable)
-    {
-      if ((!p_Inp->PicInterlace) && (!p_Inp->MbInterlace))
-      {
-        bits = (int) (p_Vid->p_Stats->bit_ctr - p_Vid->p_Stats->bit_ctr_n)
-          + (int)( p_Vid->p_Stats->bit_ctr_filler_data - p_Vid->p_Stats->bit_ctr_filler_data_n );
-      }
-      else if ( p_Inp->RCUpdateMode <= MAX_RC_MODE )
-      {
-        bits = (int)(p_Vid->p_Stats->bit_ctr - (p_Vid->p_rc_quad->Pprev_bits))
-          + (int)( p_Vid->p_Stats->bit_ctr_filler_data - p_Vid->p_Stats->bit_ctr_filler_data_n ); // used for rate control update
-        p_Vid->p_rc_quad->Pprev_bits = p_Vid->p_Stats->bit_ctr + p_Vid->p_Stats->bit_ctr_filler_data;
-      }
-    }
-
-    p_Vid->p_Stats->bit_counter[p_Vid->type] += p_Vid->p_Stats->bit_ctr - p_Vid->p_Stats->bit_ctr_n;
+    bits = update_video_stats(p_Vid);
 
     switch (p_Vid->type)
     {
     case I_SLICE:
     case SI_SLICE:
-      ReportI(p_Vid, p_Inp, p_Vid->p_Stats, tmp_time);
+      ReportI(p_Vid, tmp_time);
       break;
     case B_SLICE:
-      ReportB(p_Vid, p_Inp, p_Vid->p_Stats, tmp_time);
+      ReportB(p_Vid, tmp_time);
       break;
     case SP_SLICE:
-      ReportP(p_Vid, p_Inp, p_Vid->p_Stats, tmp_time);
+      ReportP(p_Vid, tmp_time);
       break;
     case P_SLICE:
     default:
-      ReportP(p_Vid, p_Inp, p_Vid->p_Stats, tmp_time);
+      ReportP(p_Vid, tmp_time);
     }
   }
 
@@ -813,50 +1320,9 @@ int encode_one_frame (VideoParameters *p_Vid, InputParameters *p_Inp)
     p_Vid->rc_update_picture_ptr( p_Vid, p_Inp, bits );
 
   // update bit counters
-  p_Vid->p_Stats->bit_ctr_n = p_Vid->p_Stats->bit_ctr;
-  p_Vid->p_Stats->bit_ctr_parametersets_n = 0;
-  p_Vid->p_Stats->bit_ctr_filler_data_n = p_Vid->p_Stats->bit_ctr_filler_data;
+  update_bitcounter_stats(p_Vid);
 
-  if ( p_Vid->fld_flag ) // need to check both fields here
-  {
-    // top field picture
-    if ( p_Vid->p_curr_frm_struct->p_top_fld_pic->p_slice[0].type == I_SLICE && p_Vid->p_curr_frm_struct->p_top_fld_pic->nal_ref_idc)
-    {
-      p_Vid->lastINTRA       = imax(p_Vid->lastINTRA, p_Vid->frame_no);
-      p_Vid->lastIntraNumber = p_Vid->curr_frm_idx;
-      if ( p_Vid->p_curr_frm_struct->p_top_fld_pic->idr_flag )
-      {
-        p_Vid->last_idr_disp_order = imax( p_Vid->frame_no, p_Vid->last_idr_disp_order );
-        p_Vid->last_idr_code_order = p_Vid->curr_frm_idx;
-      }
-    }
-    // bottom field picture
-    if ( p_Vid->p_curr_frm_struct->p_bot_fld_pic->p_slice[0].type == I_SLICE && p_Vid->p_curr_frm_struct->p_bot_fld_pic->nal_ref_idc)
-    {
-      p_Vid->lastINTRA       = imax(p_Vid->lastINTRA, p_Vid->frame_no);
-      p_Vid->lastIntraNumber = p_Vid->curr_frm_idx;
-      if ( p_Vid->p_curr_frm_struct->p_bot_fld_pic->idr_flag )
-      {
-        p_Vid->last_idr_disp_order = imax( p_Vid->frame_no, p_Vid->last_idr_disp_order );
-        p_Vid->last_idr_code_order = p_Vid->curr_frm_idx;
-      }
-    }
-  }
-  else
-  {
-    // frame picture
-    if ( p_Vid->p_curr_frm_struct->p_frame_pic->p_slice[0].type == I_SLICE && p_Vid->p_curr_frm_struct->p_frame_pic->nal_ref_idc)
-    {
-      p_Vid->lastINTRA       = imax(p_Vid->lastINTRA, p_Vid->frame_no);
-      p_Vid->lastIntraNumber = p_Vid->curr_frm_idx;
-      if ( p_Vid->p_curr_frm_struct->p_frame_pic->idr_flag )
-      {
-        p_Vid->last_idr_disp_order = imax( p_Vid->frame_no, p_Vid->last_idr_disp_order );
-        p_Vid->last_idr_code_order = p_Vid->curr_frm_idx;
-      }
-    }
-  }
-
+  update_idr_order_stats(p_Vid);
 
   return 1;
 }
@@ -872,9 +1338,61 @@ int encode_one_frame (VideoParameters *p_Vid, InputParameters *p_Inp)
  *
  ************************************************************************
  */
+#if (MVC_EXTENSION_ENABLE)
+static void writeout_picture(VideoParameters *p_Vid, Picture *pic, int is_bottom)
+{
+  int partition, slice, bits;
+  Slice  *currSlice;
+  NALU_t *nalu = NULL;
+
+  p_Vid->currentPicture = pic;
+
+  // loop over all slices of the picture
+  for (slice=0; slice < pic->no_slices; slice++)
+  {
+    currSlice = pic->slices[slice];
+
+    // loop over the partitions
+    for (partition=0; partition < currSlice->max_part_nr; partition++)
+    {
+      // write only if the partition has content
+      if ( currSlice->partArr[partition].bitstream->write_flag )
+      {
+        if(p_Vid->p_Inp->num_of_views==2 && p_Vid->view_id==0)
+        {
+          nalu = AllocNALU(64000);
+          nalu->startcodeprefix_len = 4;
+          nalu->nal_unit_type       = NALU_TYPE_PREFIX;
+          nalu->nal_reference_idc   = NALU_PRIORITY_HIGHEST;
+          nalu->svc_extension_flag  = 0;
+          nalu->non_idr_flag        = p_Vid->non_idr_flag[is_bottom];
+          nalu->priority_id         = p_Vid->priority_id;
+          nalu->view_id             = p_Vid->view_id;
+          nalu->temporal_id         = p_Vid->temporal_id;
+          nalu->anchor_pic_flag     = p_Vid->anchor_pic_flag[is_bottom];
+          nalu->inter_view_flag     = p_Vid->inter_view_flag[is_bottom];
+          nalu->reserved_one_bit    = 1;
+
+          bits = p_Vid->WriteNALU (p_Vid, nalu);
+          p_Vid->p_Stats->bit_ctr += bits;
+          p_Vid->p_Stats->bit_ctr_v[0] += bits;
+          FreeNALU(nalu);
+        }
+
+        bits = p_Vid->WriteNALU (p_Vid, currSlice->partArr[partition].nal_unit);
+        p_Vid->p_Stats->bit_ctr += bits;
+        if ( p_Vid->p_Inp->num_of_views == 2 )
+        {
+          p_Vid->p_Stats->bit_ctr_v[p_Vid->view_id] += bits;
+        }
+      }
+    }
+  }
+}
+#else
 static void writeout_picture(VideoParameters *p_Vid, Picture *pic)
 {
-  int partition, slice;
+  int partition, slice, bits;
   Slice  *currSlice;
 
   p_Vid->currentPicture = pic;
@@ -890,12 +1408,14 @@ static void writeout_picture(VideoParameters *p_Vid, Picture *pic)
       // write only if the partition has content
       if (currSlice->partArr[partition].bitstream->write_flag )
       {
-        p_Vid->p_Stats->bit_ctr += p_Vid->WriteNALU (p_Vid, currSlice->partArr[partition].nal_unit);
+        bits = p_Vid->WriteNALU (p_Vid, currSlice->partArr[partition].nal_unit);
+        p_Vid->p_Stats->bit_ctr += bits;
+
       }
     }
   }
 }
-
+#endif
 
 void copy_params(VideoParameters *p_Vid, StorablePicture *enc_picture, seq_parameter_set_rbsp_t *active_sps)
 {
@@ -906,7 +1426,6 @@ void copy_params(VideoParameters *p_Vid, StorablePicture *enc_picture, seq_param
   enc_picture->chroma_mask_mv_y    = p_Vid->chroma_mask_mv_y;
   enc_picture->chroma_shift_y      = p_Vid->chroma_shift_y;
   enc_picture->chroma_shift_x      = p_Vid->chroma_shift_x;
-
 
   if (active_sps->frame_cropping_flag)
   {
@@ -933,7 +1452,7 @@ void copy_params(VideoParameters *p_Vid, StorablePicture *enc_picture, seq_param
 static void prepare_enc_frame_picture (VideoParameters *p_Vid, StorablePicture **stored_pic)
 {
   InputParameters *p_Inp = p_Vid->p_Inp;
-  (*stored_pic)                 = alloc_storable_picture (p_Vid, (PictureStructure) p_Vid->structure, p_Vid->width, p_Vid->height, p_Vid->width_cr, p_Vid->height_cr);
+  (*stored_pic)              = alloc_storable_picture (p_Vid, (PictureStructure) p_Vid->structure, p_Vid->width, p_Vid->height, p_Vid->width_cr, p_Vid->height_cr);
   
   p_Vid->ThisPOC             = p_Vid->framepoc;
   (*stored_pic)->poc         = p_Vid->framepoc;
@@ -967,6 +1486,7 @@ static void calc_picture_bits(Picture *frame)
       frame->bits_per_picture += 8 * ((thisSlice->partArr[j]).bitstream)->byte_pos;
   }
 }
+
 /*!
  ************************************************************************
  * \brief
@@ -977,6 +1497,7 @@ void frame_picture (VideoParameters *p_Vid, Picture *frame, ImageData *imgData, 
 {
   int nplane;
   InputParameters *p_Inp = p_Vid->p_Inp;
+  p_Vid->rd_pass = rd_pass;
   p_Vid->SumFrameQP = 0;
   p_Vid->num_ref_idx_l0_active = 0;
   p_Vid->num_ref_idx_l1_active = 0;
@@ -986,8 +1507,13 @@ void frame_picture (VideoParameters *p_Vid, Picture *frame, ImageData *imgData, 
   //set mv limits to frame type
   update_mv_limits(p_Vid, FALSE);
 
+  InitWP(p_Vid, p_Inp, 0);
+  if(rd_pass == 0 && p_Vid->wp_parameters_set == 0)
+    ResetWP(p_Vid, p_Inp); 
 
-  if( IS_INDEPENDENT(p_Inp) )
+
+
+  if( (p_Inp->separate_colour_plane_flag != 0) )
   {
     for( nplane=0; nplane<MAX_PLANE; nplane++ )
     {
@@ -999,11 +1525,10 @@ void frame_picture (VideoParameters *p_Vid, Picture *frame, ImageData *imgData, 
     prepare_enc_frame_picture( p_Vid, &p_Vid->enc_frame_picture[rd_pass] );
   }
 
-
   p_Vid->fld_flag = FALSE;
   code_a_picture(p_Vid, frame);
 
-  if( IS_INDEPENDENT(p_Inp) )
+  if( (p_Inp->separate_colour_plane_flag != 0) )
   {
     make_frame_picture_JV(p_Vid);
   }
@@ -1041,7 +1566,7 @@ static void field_picture (VideoParameters *p_Vid, Picture *top, Picture *bottom
   //Rate control
   old_pic_type = p_Vid->type;
 
-  p_Vid->height    = (p_Inp->output.height + p_Vid->auto_crop_bottom) >> 1;
+  p_Vid->height    = (p_Inp->output.height[0] + p_Vid->auto_crop_bottom) >> 1;
   p_Vid->height_cr = p_Vid->height_cr_frame >> 1;
   p_Vid->fld_flag  = TRUE;
   p_Vid->PicSizeInMbs = p_Vid->FrameSizeInMbs >> 1;
@@ -1065,7 +1590,7 @@ static void field_picture (VideoParameters *p_Vid, Picture *top, Picture *bottom
 
   put_buffer_top (p_Vid);
   init_field (p_Vid, p_Inp);
-  set_slice_type(p_Vid, p_Inp, p_Vid->p_curr_pic->p_slice[0].type);
+  set_slice_type(p_Vid, p_Inp, p_Vid->p_curr_pic->p_Slice[0].type);
 
   p_Vid->fld_flag = TRUE;
 
@@ -1073,10 +1598,10 @@ static void field_picture (VideoParameters *p_Vid, Picture *top, Picture *bottom
   if(p_Inp->RCEnable && p_Inp->RCUpdateMode <= MAX_RC_MODE)
     rc_init_top_field(p_Vid, p_Inp);
 
-  code_a_picture(p_Vid, p_Vid->field_pic[0]);
+  code_a_picture(p_Vid, top);
   p_Vid->enc_picture->structure = TOP_FIELD;
 
-  store_picture_in_dpb(p_Vid, p_Vid->enc_field_picture[0], &p_Inp->output);
+  store_picture_in_dpb(p_Vid->p_Dpb, p_Vid->enc_field_picture[0], &p_Inp->output);
 
   calc_picture_bits(top);
 
@@ -1102,7 +1627,7 @@ static void field_picture (VideoParameters *p_Vid, Picture *top, Picture *bottom
   put_buffer_bot (p_Vid);
   
   init_field (p_Vid, p_Inp);
-  set_slice_type(p_Vid, p_Inp, p_Vid->p_curr_pic->p_slice[0].type);
+  set_slice_type(p_Vid, p_Inp, p_Vid->p_curr_pic->p_Slice[0].type);
 
   p_Vid->fld_flag = TRUE;
 
@@ -1111,7 +1636,7 @@ static void field_picture (VideoParameters *p_Vid, Picture *top, Picture *bottom
     rc_init_bottom_field( p_Vid, p_Inp, TopFieldBits );
 
   p_Vid->enc_picture->structure = BOTTOM_FIELD;
-  code_a_picture(p_Vid, p_Vid->field_pic[1]);
+  code_a_picture(p_Vid, bottom);
 
   calc_picture_bits(bottom);
 
@@ -1142,8 +1667,8 @@ static void combine_field(VideoParameters *p_Vid)
     {
       for (i = 0; i < (p_Vid->height_cr >> 1); i++)
       {
-        memcpy(p_Vid->imgUV_com[k][i*2],     p_Vid->enc_field_picture[0]->imgUV[k][i], p_Vid->width_cr*sizeof(imgpel));
-        memcpy(p_Vid->imgUV_com[k][i*2 + 1], p_Vid->enc_field_picture[1]->imgUV[k][i], p_Vid->width_cr*sizeof(imgpel));
+        memcpy(p_Vid->imgUV_com[k][i * 2],     p_Vid->enc_field_picture[0]->imgUV[k][i], p_Vid->width_cr*sizeof(imgpel));
+        memcpy(p_Vid->imgUV_com[k][i * 2 + 1], p_Vid->enc_field_picture[1]->imgUV[k][i], p_Vid->width_cr*sizeof(imgpel));
       }
     }
   }
@@ -1157,7 +1682,7 @@ static void combine_field(VideoParameters *p_Vid)
  */
 static void distortion_fld (VideoParameters *p_Vid, InputParameters *p_Inp, Picture *field_pic, ImageData *imgData)
 {
-  p_Vid->height    = (p_Inp->output.height + p_Vid->auto_crop_bottom);
+  p_Vid->height    = (p_Inp->output.height[0] + p_Vid->auto_crop_bottom);
   p_Vid->height_cr = p_Vid->height_cr_frame;
 
   combine_field (p_Vid);
@@ -1237,8 +1762,9 @@ static void field_mode_buffer (VideoParameters *p_Vid)
  *    Frame Mode Buffer
  ************************************************************************
  */
-static void frame_mode_buffer (VideoParameters *p_Vid, InputParameters *p_Inp)
+static void frame_mode_buffer (VideoParameters *p_Vid)
 {
+  InputParameters *p_Inp = p_Vid->p_Inp;
   put_buffer_frame (p_Vid);
 
   if ((p_Inp->PicInterlace != FRAME_CODING)||(p_Inp->MbInterlace != FRAME_CODING))
@@ -1250,7 +1776,7 @@ static void frame_mode_buffer (VideoParameters *p_Vid, InputParameters *p_Inp)
 
     put_buffer_bot (p_Vid);
 
-    p_Vid->height = (p_Inp->output.height + p_Vid->auto_crop_bottom);
+    p_Vid->height = (p_Inp->output.height[0] + p_Vid->auto_crop_bottom);
     p_Vid->height_cr = p_Vid->height_cr_frame;
  
     put_buffer_frame (p_Vid);
@@ -1285,12 +1811,6 @@ static inline void init_fixed_qp_i_slice(VideoParameters *p_Vid, InputParameters
   {
     //!KS: hard code qp increment
     p_Vid->qp = imin(p_Vid->qp + 5, 51);
-  }
-
-  // Change QP
-  if ( p_Inp->qp2frame && p_Inp->qp2frame < p_Vid->frame_no )
-  {
-    p_Vid->p_curr_frm_struct->qp = p_Vid->qp = iClip3( -p_Vid->bitdepth_luma_qp_scale, MAX_QP, p_Vid->qp + p_Inp->qp2off[p_cur_frm->type] );
   }
 }
 
@@ -1409,11 +1929,11 @@ static void init_frame (VideoParameters *p_Vid, InputParameters *p_Inp)
   // The 'slice_nr' of each macroblock is set to -1 here, to guarantee the correct encoding
   // with FMO (if no FMO, encoding is correct without following assignment),
   // for which MBs may not be encoded with scan order
-  if( IS_INDEPENDENT(p_Inp) )
+  if( (p_Inp->separate_colour_plane_flag != 0) )
   {
-    for( j=0; j<MAX_PLANE; j++ ){
-      for(i=0;i< ((int) (p_Vid->FrameSizeInMbs));i++)
-        p_Vid->mb_data_JV[j][i].slice_nr=-1;
+    for( j = 0; j < MAX_PLANE; j++ ){
+      for(i = 0; i < ((int) (p_Vid->FrameSizeInMbs));i++)
+        p_Vid->mb_data_JV[j][i].slice_nr = -1;
     }
   }
   else
@@ -1496,51 +2016,14 @@ static void init_field (VideoParameters *p_Vid, InputParameters *p_Inp)
 void UnifiedOneForthPix ( VideoParameters *p_Vid, StorablePicture *s)
 {
   InputParameters *p_Inp = p_Vid->p_Inp;
-  int ypadded_size = s->size_y_padded;
-  int xpadded_size = s->size_x_padded;
-
-  // don't upsample twice
-  if (s->imgY_sub)
+  if(s->bInterpolated)
     return;
+  s->bInterpolated = 1;
+
   // Y component
-  get_mem4Dpel (&(s->imgY_sub), 4, 4, ypadded_size, xpadded_size);
-  if (NULL == s->imgY_sub)
-    no_mem_exit("alloc_storable_picture: s->imgY_sub");
   s->p_img_sub[0] = s->imgY_sub;
   s->p_curr_img_sub = s->imgY_sub;
   s->p_curr_img = s->imgY;
-
-  if ( p_Inp->ChromaMCBuffer || p_Vid->P444_joined)
-  {
-    // UV components
-    if ( p_Vid->yuv_format != YUV400 )
-    {
-      if ( p_Vid->yuv_format == YUV420 )
-      {
-        get_mem5Dpel (&(s->imgUV_sub), 2, 8, 8, ypadded_size>>1, xpadded_size>>1);
-      }
-      else if ( p_Vid->yuv_format == YUV422 )
-      {
-        get_mem5Dpel (&(s->imgUV_sub), 2, 4, 8, ypadded_size, xpadded_size>>1);
-      }
-      else
-      { // YUV444
-        get_mem5Dpel (&(s->imgUV_sub), 2, 4, 4, ypadded_size, xpadded_size);
-      }
-      s->p_img_sub[1] = s->imgUV_sub[0];
-      s->p_img_sub[2] = s->imgUV_sub[1];
-    }
-    else
-    {
-      s->p_img_sub[1] = NULL;
-      s->p_img_sub[2] = NULL;
-    }
-  }
-  else
-  {
-    s->p_img_sub[1] = NULL;
-    s->p_img_sub[2] = NULL;
-  }
 
   // derive the subpixel images for first component
   // No need to interpolate if intra only encoding
@@ -1580,27 +2063,14 @@ void UnifiedOneForthPix ( VideoParameters *p_Vid, StorablePicture *s)
  ************************************************************************/
 void UnifiedOneForthPix_JV (VideoParameters *p_Vid, int nplane, StorablePicture *s)
 {
-  int ypadded_size = s->size_y_padded;
-  int xpadded_size = s->size_x_padded;
+  //int ypadded_size = s->size_y_padded;
+  //int xpadded_size = s->size_x_padded;
 
   if( nplane == 0 )
   {
-    // don't upsample twice
-    if (s->imgY_sub)
-      return;
-    // Y component
-    get_mem4Dpel (&(s->imgY_sub), 4, 4, ypadded_size, xpadded_size);
-    if (NULL == s->imgY_sub)
-      no_mem_exit("UnifiedOneForthPix_JV: s->imgY_sub");
-
-    // don't upsample twice
-    if (s->imgUV_sub)
-      return;
-    // Y component
-    get_mem5Dpel (&(s->imgUV_sub), 2, 4, 4, ypadded_size, xpadded_size);
-    if (NULL == s->imgUV_sub)
-      no_mem_exit("UnifiedOneForthPix_JV: s->imgUV_sub");
-
+  if(s->bInterpolated)
+    return;
+  s->bInterpolated = 1;
     s->p_img[0] = s->imgY;
     s->p_img[1] = s->imgUV[0];
     s->p_img[2] = s->imgUV[1];
@@ -1631,6 +2101,65 @@ Boolean dummy_slice_too_big (int bits_slice)
 
 static void ReportSimple(VideoParameters *p_Vid, char *pic_type, int cur_bits, DistMetric *metric, int tmp_time)
 {
+#if (MVC_EXTENSION_ENABLE)
+  if ( p_Vid->p_Inp->num_of_views == 2 )
+  {
+    if ( p_Vid->fld_flag && p_Vid->view_id == 0 )
+    {
+      p_Vid->prev_cs.frm_no_in_file = p_Vid->frm_no_in_file;
+      p_Vid->prev_cs.view_id = p_Vid->view_id;
+      p_Vid->prev_cs.cur_bits = cur_bits;
+      strcpy( p_Vid->prev_cs.pic_type, pic_type );
+      p_Vid->prev_cs.AverageFrameQP = p_Vid->AverageFrameQP;
+      p_Vid->prev_cs.lambda = 0;
+      p_Vid->prev_cs.psnr_value[0] = metric->value[0];
+      p_Vid->prev_cs.psnr_value[1] = metric->value[1];
+      p_Vid->prev_cs.psnr_value[2] = metric->value[2];
+      p_Vid->prev_cs.ssim_value[0] = 0;
+      p_Vid->prev_cs.ssim_value[1] = 0;
+      p_Vid->prev_cs.ssim_value[2] = 0;
+      p_Vid->prev_cs.tmp_time = tmp_time;
+      p_Vid->prev_cs.me_time = (int)p_Vid->me_time;
+      p_Vid->prev_cs.fld_flag = p_Vid->fld_flag;
+      p_Vid->prev_cs.intras = p_Vid->intras;
+      p_Vid->prev_cs.direct_mode = 0;
+      p_Vid->prev_cs.num_ref_idx_l0_active = p_Vid->num_ref_idx_l0_active;
+      p_Vid->prev_cs.num_ref_idx_l1_active = p_Vid->num_ref_idx_l1_active;
+      p_Vid->prev_cs.rd_pass = p_Vid->rd_pass;
+      p_Vid->prev_cs.nal_reference_idc = p_Vid->nal_reference_idc;
+    }
+    else if ( p_Vid->fld_flag && p_Vid->view_id == 1 )
+    {
+      printf ("%05d(%3s)  %1d  %8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s    %d\n",
+        p_Vid->prev_cs.frm_no_in_file, p_Vid->prev_cs.pic_type, p_Vid->prev_cs.view_id,
+        (int)(p_Vid->p_Stats->bit_ctr_v[0] - p_Vid->p_Stats->bit_ctr_n_v[0]) + (int)(p_Vid->p_Stats->bit_ctr_filler_data_v[0] - p_Vid->p_Stats->bit_ctr_filler_data_n_v[0]),
+        p_Vid->prev_cs.AverageFrameQP,
+        p_Vid->prev_cs.psnr_value[0], p_Vid->prev_cs.psnr_value[1], p_Vid->prev_cs.psnr_value[2], 
+        p_Vid->prev_cs.tmp_time, (int) p_Vid->prev_cs.me_time,
+        p_Vid->prev_cs.fld_flag ? "FLD" : "FRM", 
+        p_Vid->prev_cs.nal_reference_idc);
+      printf ("%05d(%3s)  %1d  %8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s    %d\n",
+        p_Vid->frm_no_in_file, pic_type, p_Vid->view_id, 
+        (int)(p_Vid->p_Stats->bit_ctr_v[1] - p_Vid->p_Stats->bit_ctr_n_v[1]) + (int)(p_Vid->p_Stats->bit_ctr_filler_data_v[1] - p_Vid->p_Stats->bit_ctr_filler_data_n_v[1]), 
+        p_Vid->AverageFrameQP,
+        metric->value[0], metric->value[1], metric->value[2], 
+        tmp_time, (int) p_Vid->me_time,
+        p_Vid->fld_flag ? "FLD" : "FRM", 
+        p_Vid->nal_reference_idc);      
+    }
+    else
+    {
+      printf ("%05d(%3s)  %1d  %8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s    %d\n",
+        p_Vid->frm_no_in_file, pic_type, p_Vid->view_id, cur_bits, 
+        p_Vid->AverageFrameQP,
+        metric->value[0], metric->value[1], metric->value[2], 
+        tmp_time, (int) p_Vid->me_time,
+        p_Vid->fld_flag ? "FLD" : "FRM", 
+        p_Vid->nal_reference_idc);
+    }
+  }
+  else
+#endif
   printf ("%05d(%3s)%8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s    %d\n",
     p_Vid->frm_no_in_file, pic_type, cur_bits, 
     p_Vid->AverageFrameQP,
@@ -1642,6 +2171,66 @@ static void ReportSimple(VideoParameters *p_Vid, char *pic_type, int cur_bits, D
 
 static void ReportVerbose(VideoParameters *p_Vid, char *pic_type, int cur_bits, int wp_method, int lambda, DistMetric *mPSNR, int tmp_time, int direct_mode)
 {
+#if (MVC_EXTENSION_ENABLE)
+  if ( p_Vid->p_Inp->num_of_views == 2 )
+  {
+    if ( p_Vid->fld_flag && p_Vid->view_id == 0 )
+    {
+      p_Vid->prev_cs.frm_no_in_file = p_Vid->frm_no_in_file;
+      p_Vid->prev_cs.view_id = p_Vid->view_id;
+      p_Vid->prev_cs.cur_bits = cur_bits;
+      strcpy( p_Vid->prev_cs.pic_type, pic_type );
+      p_Vid->prev_cs.AverageFrameQP = p_Vid->AverageFrameQP;
+      p_Vid->prev_cs.lambda = 0;
+      p_Vid->prev_cs.psnr_value[0] = mPSNR->value[0];
+      p_Vid->prev_cs.psnr_value[1] = mPSNR->value[1];
+      p_Vid->prev_cs.psnr_value[2] = mPSNR->value[2];
+      p_Vid->prev_cs.ssim_value[0] = 0;
+      p_Vid->prev_cs.ssim_value[1] = 0;
+      p_Vid->prev_cs.ssim_value[2] = 0;
+      p_Vid->prev_cs.tmp_time = tmp_time;
+      p_Vid->prev_cs.me_time = (int)p_Vid->me_time;
+      p_Vid->prev_cs.fld_flag = p_Vid->fld_flag;
+      p_Vid->prev_cs.intras = p_Vid->intras;
+      p_Vid->prev_cs.direct_mode = direct_mode;
+      p_Vid->prev_cs.num_ref_idx_l0_active = p_Vid->num_ref_idx_l0_active;
+      p_Vid->prev_cs.num_ref_idx_l1_active = p_Vid->num_ref_idx_l1_active;
+      p_Vid->prev_cs.rd_pass = p_Vid->rd_pass;
+      p_Vid->prev_cs.nal_reference_idc = p_Vid->nal_reference_idc;
+    }
+    else if ( p_Vid->fld_flag && p_Vid->view_id == 1 )
+    {
+      printf ("%05d(%3s)  %1d  %8d %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+        p_Vid->prev_cs.frm_no_in_file, p_Vid->prev_cs.pic_type, p_Vid->prev_cs.view_id,
+        (int)(p_Vid->p_Stats->bit_ctr_v[0] - p_Vid->p_Stats->bit_ctr_n_v[0]) + (int)(p_Vid->p_Stats->bit_ctr_filler_data_v[0] - p_Vid->p_Stats->bit_ctr_filler_data_n_v[0]),
+        p_Vid->prev_cs.wp_method, p_Vid->prev_cs.AverageFrameQP, p_Vid->prev_cs.lambda, 
+        p_Vid->prev_cs.psnr_value[0], p_Vid->prev_cs.psnr_value[1], p_Vid->prev_cs.psnr_value[2], 
+        p_Vid->prev_cs.tmp_time, (int) p_Vid->prev_cs.me_time,
+        p_Vid->prev_cs.fld_flag ? "FLD" : "FRM", p_Vid->prev_cs.intras, p_Vid->prev_cs.direct_mode,
+        p_Vid->prev_cs.num_ref_idx_l0_active, p_Vid->prev_cs.num_ref_idx_l1_active, p_Vid->prev_cs.rd_pass, p_Vid->prev_cs.nal_reference_idc);
+      printf ("%05d(%3s)  %1d  %8d %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+        p_Vid->frm_no_in_file, pic_type, p_Vid->view_id, 
+        (int)(p_Vid->p_Stats->bit_ctr_v[1] - p_Vid->p_Stats->bit_ctr_n_v[1]) + (int)(p_Vid->p_Stats->bit_ctr_filler_data_v[1] - p_Vid->p_Stats->bit_ctr_filler_data_n_v[1]), wp_method,
+        p_Vid->AverageFrameQP, lambda, 
+        mPSNR->value[0], mPSNR->value[1], mPSNR->value[2],     
+        tmp_time, (int) p_Vid->me_time,
+        p_Vid->fld_flag ? "FLD" : "FRM", p_Vid->intras, direct_mode,
+        p_Vid->num_ref_idx_l0_active, p_Vid->num_ref_idx_l1_active, p_Vid->rd_pass, p_Vid->nal_reference_idc);
+    }
+    else
+    {
+      printf ("%05d(%3s)  %1d  %8d %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+        p_Vid->frm_no_in_file, pic_type, p_Vid->view_id, cur_bits, wp_method,
+        p_Vid->AverageFrameQP, lambda, 
+        mPSNR->value[0], mPSNR->value[1], mPSNR->value[2],     
+        tmp_time, (int) p_Vid->me_time,
+        p_Vid->fld_flag ? "FLD" : "FRM", p_Vid->intras, direct_mode,
+        p_Vid->num_ref_idx_l0_active, p_Vid->num_ref_idx_l1_active, p_Vid->rd_pass, p_Vid->nal_reference_idc);
+    }
+  }
+  else
+#endif
+  {
   printf ("%05d(%3s)%8d %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
     p_Vid->frm_no_in_file, pic_type, cur_bits, wp_method,
     p_Vid->AverageFrameQP, lambda, 
@@ -1649,21 +2238,154 @@ static void ReportVerbose(VideoParameters *p_Vid, char *pic_type, int cur_bits, 
     tmp_time, (int) p_Vid->me_time,
     p_Vid->fld_flag ? "FLD" : "FRM", p_Vid->intras, direct_mode,
     p_Vid->num_ref_idx_l0_active, p_Vid->num_ref_idx_l1_active, p_Vid->rd_pass, p_Vid->nal_reference_idc);
+  }
 }
 
 static void ReportVerboseNVB(VideoParameters *p_Vid, char *pic_type, int cur_bits, int nvb_bits, int wp_method, int lambda, DistMetric *mPSNR, int tmp_time, int direct_mode)
 {
-  printf ("%05d(%3s)%8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
-    p_Vid->frm_no_in_file, pic_type, cur_bits, nvb_bits, wp_method,
-    p_Vid->AverageFrameQP, lambda, 
-    mPSNR->value[0], mPSNR->value[1], mPSNR->value[2],     
-    tmp_time, (int) p_Vid->me_time,
-    p_Vid->fld_flag ? "FLD" : "FRM", p_Vid->intras, direct_mode,
-    p_Vid->num_ref_idx_l0_active, p_Vid->num_ref_idx_l1_active, p_Vid->rd_pass, p_Vid->nal_reference_idc);
+#if (MVC_EXTENSION_ENABLE)
+  if ( p_Vid->p_Inp->num_of_views == 2 )
+  {
+    if ( p_Vid->fld_flag && p_Vid->view_id == 0 )
+    {
+      p_Vid->prev_cs.frm_no_in_file = p_Vid->frm_no_in_file;
+      p_Vid->prev_cs.view_id = p_Vid->view_id;
+      p_Vid->prev_cs.cur_bits = cur_bits;
+      strcpy( p_Vid->prev_cs.pic_type, pic_type );
+      p_Vid->prev_cs.AverageFrameQP = p_Vid->AverageFrameQP;
+      p_Vid->prev_cs.lambda = 0;
+      p_Vid->prev_cs.psnr_value[0] = mPSNR->value[0];
+      p_Vid->prev_cs.psnr_value[1] = mPSNR->value[1];
+      p_Vid->prev_cs.psnr_value[2] = mPSNR->value[2];
+      p_Vid->prev_cs.ssim_value[0] = 0;
+      p_Vid->prev_cs.ssim_value[1] = 0;
+      p_Vid->prev_cs.ssim_value[2] = 0;
+      p_Vid->prev_cs.tmp_time = tmp_time;
+      p_Vid->prev_cs.me_time = (int)p_Vid->me_time;
+      p_Vid->prev_cs.fld_flag = p_Vid->fld_flag;
+      p_Vid->prev_cs.intras = p_Vid->intras;
+      p_Vid->prev_cs.direct_mode = direct_mode;
+      p_Vid->prev_cs.num_ref_idx_l0_active = p_Vid->num_ref_idx_l0_active;
+      p_Vid->prev_cs.num_ref_idx_l1_active = p_Vid->num_ref_idx_l1_active;
+      p_Vid->prev_cs.rd_pass = p_Vid->rd_pass;
+      p_Vid->prev_cs.nal_reference_idc = p_Vid->nal_reference_idc;
+    }
+    else if ( p_Vid->fld_flag && p_Vid->view_id == 1 )
+    {
+      printf ("%05d(%3s)  %1d  %8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+        p_Vid->prev_cs.frm_no_in_file, p_Vid->prev_cs.pic_type, p_Vid->prev_cs.view_id,
+        (int)(p_Vid->p_Stats->bit_ctr_v[0] - p_Vid->p_Stats->bit_ctr_n_v[0]) 
+        + (int)(p_Vid->p_Stats->bit_ctr_filler_data_v[0] - p_Vid->p_Stats->bit_ctr_filler_data_n_v[0]) + p_Vid->p_Stats->bit_ctr_parametersets_n_v[0],
+        p_Vid->p_Stats->bit_ctr_parametersets_n_v[0], p_Vid->prev_cs.wp_method, p_Vid->prev_cs.AverageFrameQP, p_Vid->prev_cs.lambda, 
+        p_Vid->prev_cs.psnr_value[0], p_Vid->prev_cs.psnr_value[1], p_Vid->prev_cs.psnr_value[2], 
+        p_Vid->prev_cs.tmp_time, (int) p_Vid->prev_cs.me_time,
+        p_Vid->prev_cs.fld_flag ? "FLD" : "FRM", p_Vid->prev_cs.intras, p_Vid->prev_cs.direct_mode,
+        p_Vid->prev_cs.num_ref_idx_l0_active, p_Vid->prev_cs.num_ref_idx_l1_active, p_Vid->prev_cs.rd_pass, p_Vid->prev_cs.nal_reference_idc);
+      printf ("%05d(%3s)  %1d  %8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+        p_Vid->frm_no_in_file, pic_type, p_Vid->view_id, 
+        (int)(p_Vid->p_Stats->bit_ctr_v[1] - p_Vid->p_Stats->bit_ctr_n_v[1]) 
+        + (int)(p_Vid->p_Stats->bit_ctr_filler_data_v[1] - p_Vid->p_Stats->bit_ctr_filler_data_n_v[1]) + p_Vid->p_Stats->bit_ctr_parametersets_n_v[1], 
+        p_Vid->p_Stats->bit_ctr_parametersets_n_v[1], wp_method,
+        p_Vid->AverageFrameQP, lambda, 
+        mPSNR->value[0], mPSNR->value[1], mPSNR->value[2],     
+        tmp_time, (int) p_Vid->me_time,
+        p_Vid->fld_flag ? "FLD" : "FRM", p_Vid->intras, direct_mode,
+        p_Vid->num_ref_idx_l0_active, p_Vid->num_ref_idx_l1_active, p_Vid->rd_pass, p_Vid->nal_reference_idc);
+    }
+    else
+    {
+      printf ("%05d(%3s)  %1d  %8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+        p_Vid->frm_no_in_file, pic_type, p_Vid->view_id, cur_bits, nvb_bits, wp_method,
+        p_Vid->AverageFrameQP, lambda, 
+        mPSNR->value[0], mPSNR->value[1], mPSNR->value[2],     
+        tmp_time, (int) p_Vid->me_time,
+        p_Vid->fld_flag ? "FLD" : "FRM", p_Vid->intras, direct_mode,
+        p_Vid->num_ref_idx_l0_active, p_Vid->num_ref_idx_l1_active, p_Vid->rd_pass, p_Vid->nal_reference_idc);
+    }
+  }
+  else
+#endif
+  {
+    printf ("%05d(%3s)%8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+      p_Vid->frm_no_in_file, pic_type, cur_bits, nvb_bits, wp_method,
+      p_Vid->AverageFrameQP, lambda, 
+      mPSNR->value[0], mPSNR->value[1], mPSNR->value[2],     
+      tmp_time, (int) p_Vid->me_time,
+      p_Vid->fld_flag ? "FLD" : "FRM", p_Vid->intras, direct_mode,
+      p_Vid->num_ref_idx_l0_active, p_Vid->num_ref_idx_l1_active, p_Vid->rd_pass, p_Vid->nal_reference_idc);
+
+  }
 }
 
 static void ReportVerboseFDN(VideoParameters *p_Vid, char *pic_type, int cur_bits, int fdn_bits, int nvb_bits, int wp_method, int lambda, DistMetric *mPSNR, int tmp_time, int direct_mode)
 {
+#if (MVC_EXTENSION_ENABLE)
+  if ( p_Vid->p_Inp->num_of_views == 2 )
+  {
+    if ( p_Vid->fld_flag && p_Vid->view_id == 0 )
+    {
+      p_Vid->prev_cs.frm_no_in_file = p_Vid->frm_no_in_file;
+      p_Vid->prev_cs.view_id = p_Vid->view_id;
+      p_Vid->prev_cs.cur_bits = cur_bits;
+      strcpy( p_Vid->prev_cs.pic_type, pic_type );
+      p_Vid->prev_cs.AverageFrameQP = p_Vid->AverageFrameQP;
+      p_Vid->prev_cs.lambda = 0;
+      p_Vid->prev_cs.psnr_value[0] = mPSNR->value[0];
+      p_Vid->prev_cs.psnr_value[1] = mPSNR->value[1];
+      p_Vid->prev_cs.psnr_value[2] = mPSNR->value[2];
+      p_Vid->prev_cs.ssim_value[0] = 0;
+      p_Vid->prev_cs.ssim_value[1] = 0;
+      p_Vid->prev_cs.ssim_value[2] = 0;
+      p_Vid->prev_cs.tmp_time = tmp_time;
+      p_Vid->prev_cs.me_time = (int)p_Vid->me_time;
+      p_Vid->prev_cs.fld_flag = p_Vid->fld_flag;
+      p_Vid->prev_cs.intras = p_Vid->intras;
+      p_Vid->prev_cs.direct_mode = direct_mode;
+      p_Vid->prev_cs.num_ref_idx_l0_active = p_Vid->num_ref_idx_l0_active;
+      p_Vid->prev_cs.num_ref_idx_l1_active = p_Vid->num_ref_idx_l1_active;
+      p_Vid->prev_cs.rd_pass = p_Vid->rd_pass;
+      p_Vid->prev_cs.nal_reference_idc = p_Vid->nal_reference_idc;
+    }
+    else if ( p_Vid->fld_flag && p_Vid->view_id == 1 )
+    {
+      printf ("%05d(%3s)  %1d  %8d %8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+        p_Vid->prev_cs.frm_no_in_file, p_Vid->prev_cs.pic_type, p_Vid->prev_cs.view_id,
+        (int)(p_Vid->p_Stats->bit_ctr_v[0] - p_Vid->p_Stats->bit_ctr_n_v[0]) 
+        + (int)(p_Vid->p_Stats->bit_ctr_filler_data_v[0] - p_Vid->p_Stats->bit_ctr_filler_data_n_v[0]) + p_Vid->p_Stats->bit_ctr_parametersets_n_v[0], 
+        (int)(p_Vid->p_Stats->bit_ctr_filler_data_v[0] - p_Vid->p_Stats->bit_ctr_filler_data_n_v[0]), 
+        p_Vid->p_Stats->bit_ctr_parametersets_n_v[0],
+        p_Vid->prev_cs.wp_method, p_Vid->prev_cs.AverageFrameQP, p_Vid->prev_cs.lambda, 
+        p_Vid->prev_cs.psnr_value[0], p_Vid->prev_cs.psnr_value[1], p_Vid->prev_cs.psnr_value[2], 
+        p_Vid->prev_cs.tmp_time, (int) p_Vid->prev_cs.me_time,
+        p_Vid->prev_cs.fld_flag ? "FLD" : "FRM", p_Vid->prev_cs.intras, p_Vid->prev_cs.direct_mode,
+        p_Vid->prev_cs.num_ref_idx_l0_active, p_Vid->prev_cs.num_ref_idx_l1_active, p_Vid->prev_cs.rd_pass, p_Vid->prev_cs.nal_reference_idc);
+      printf ("%05d(%3s)  %1d  %8d %8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+        p_Vid->frm_no_in_file, pic_type, p_Vid->view_id, 
+        (int)(p_Vid->p_Stats->bit_ctr_v[1] - p_Vid->p_Stats->bit_ctr_n_v[1]) 
+        + (int)(p_Vid->p_Stats->bit_ctr_filler_data_v[1] - p_Vid->p_Stats->bit_ctr_filler_data_n_v[1]) + p_Vid->p_Stats->bit_ctr_parametersets_n_v[1], 
+        (int)(p_Vid->p_Stats->bit_ctr_filler_data_v[1] - p_Vid->p_Stats->bit_ctr_filler_data_n_v[1]), 
+        p_Vid->p_Stats->bit_ctr_parametersets_n_v[1], 
+        wp_method,
+        p_Vid->AverageFrameQP, lambda, 
+        mPSNR->value[0], mPSNR->value[1], mPSNR->value[2],     
+        tmp_time, (int) p_Vid->me_time,
+        p_Vid->fld_flag ? "FLD" : "FRM", p_Vid->intras, direct_mode,
+        p_Vid->num_ref_idx_l0_active, p_Vid->num_ref_idx_l1_active, p_Vid->rd_pass, p_Vid->nal_reference_idc);
+    }
+    else
+    {
+      printf ("%05d(%3s)  %1d  %8d %8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+        p_Vid->frm_no_in_file, pic_type, p_Vid->view_id, cur_bits, fdn_bits, nvb_bits, wp_method,
+        p_Vid->AverageFrameQP, lambda, 
+        mPSNR->value[0], mPSNR->value[1], mPSNR->value[2],     
+        tmp_time, (int) p_Vid->me_time,
+        p_Vid->fld_flag ? "FLD" : "FRM", p_Vid->intras, direct_mode,
+        p_Vid->num_ref_idx_l0_active, p_Vid->num_ref_idx_l1_active, p_Vid->rd_pass, p_Vid->nal_reference_idc);
+    }
+  }
+  else
+#endif
+  {
   printf ("%05d(%3s)%8d %8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
     p_Vid->frm_no_in_file, pic_type, cur_bits, fdn_bits, nvb_bits, wp_method,
     p_Vid->AverageFrameQP, lambda, 
@@ -1671,10 +2393,26 @@ static void ReportVerboseFDN(VideoParameters *p_Vid, char *pic_type, int cur_bit
     tmp_time, (int) p_Vid->me_time,
     p_Vid->fld_flag ? "FLD" : "FRM", p_Vid->intras, direct_mode,
     p_Vid->num_ref_idx_l0_active, p_Vid->num_ref_idx_l1_active, p_Vid->rd_pass, p_Vid->nal_reference_idc);
+  }
 }
 
 static void ReportVerboseSSIM(VideoParameters *p_Vid, char *pic_type, int cur_bits, int wp_method, int lambda, DistMetric *mPSNR, DistMetric *mSSIM,int tmp_time, int direct_mode)
 {
+#if (MVC_EXTENSION_ENABLE)
+  if ( p_Vid->p_Inp->num_of_views == 2 )
+  {
+    printf ("%05d(%3s)  %1d  %8d %1d %2d %2d %7.3f %7.3f %7.3f %7.4f %7.4f %7.4f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+      p_Vid->frm_no_in_file, pic_type, p_Vid->view_id, cur_bits, wp_method,
+      p_Vid->AverageFrameQP, lambda, 
+      mPSNR->value[0], mPSNR->value[1], mPSNR->value[2], 
+      mSSIM->value[0], mSSIM->value[1], mSSIM->value[2], 
+      tmp_time, (int) p_Vid->me_time,
+      p_Vid->fld_flag ? "FLD" : "FRM", p_Vid->intras, direct_mode,
+      p_Vid->num_ref_idx_l0_active, p_Vid->num_ref_idx_l1_active,p_Vid->rd_pass, p_Vid->nal_reference_idc);
+  }
+  else
+#endif
+  {
   printf ("%05d(%3s)%8d %1d %2d %2d %7.3f %7.3f %7.3f %7.4f %7.4f %7.4f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
     p_Vid->frm_no_in_file, pic_type, cur_bits, wp_method,
     p_Vid->AverageFrameQP, lambda, 
@@ -1683,10 +2421,26 @@ static void ReportVerboseSSIM(VideoParameters *p_Vid, char *pic_type, int cur_bi
     tmp_time, (int) p_Vid->me_time,
     p_Vid->fld_flag ? "FLD" : "FRM", p_Vid->intras, direct_mode,
     p_Vid->num_ref_idx_l0_active, p_Vid->num_ref_idx_l1_active,p_Vid->rd_pass, p_Vid->nal_reference_idc);
+  }
 }
 
 static void ReportVerboseNVBSSIM(VideoParameters *p_Vid, char *pic_type, int cur_bits, int nvb_bits, int wp_method, int lambda, DistMetric *mPSNR, DistMetric *mSSIM,int tmp_time, int direct_mode)
 {
+#if (MVC_EXTENSION_ENABLE)
+  if ( p_Vid->p_Inp->num_of_views == 2 )
+  {
+    printf ("%05d(%3s)  %1d  %8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %7.4f %7.4f %7.4f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+      p_Vid->frm_no_in_file, pic_type, p_Vid->view_id, cur_bits, nvb_bits, wp_method,
+      p_Vid->AverageFrameQP, lambda, 
+      mPSNR->value[0], mPSNR->value[1], mPSNR->value[2], 
+      mSSIM->value[0], mSSIM->value[1], mSSIM->value[2], 
+      tmp_time, (int) p_Vid->me_time,
+      p_Vid->fld_flag ? "FLD" : "FRM", p_Vid->intras, direct_mode,
+      p_Vid->num_ref_idx_l0_active, p_Vid->num_ref_idx_l1_active, p_Vid->rd_pass, p_Vid->nal_reference_idc);
+  }
+  else
+#endif
+  {
   printf ("%05d(%3s)%8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %7.4f %7.4f %7.4f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
     p_Vid->frm_no_in_file, pic_type, cur_bits, nvb_bits, wp_method,
     p_Vid->AverageFrameQP, lambda, 
@@ -1695,10 +2449,26 @@ static void ReportVerboseNVBSSIM(VideoParameters *p_Vid, char *pic_type, int cur
     tmp_time, (int) p_Vid->me_time,
     p_Vid->fld_flag ? "FLD" : "FRM", p_Vid->intras, direct_mode,
     p_Vid->num_ref_idx_l0_active, p_Vid->num_ref_idx_l1_active, p_Vid->rd_pass, p_Vid->nal_reference_idc);
+  }
 }
 
 static void ReportVerboseFDNSSIM(VideoParameters *p_Vid, char *pic_type, int cur_bits, int fdn_bits, int nvb_bits, int wp_method, int lambda, DistMetric *mPSNR, DistMetric *mSSIM,int tmp_time, int direct_mode)
 {
+#if (MVC_EXTENSION_ENABLE)
+  if ( p_Vid->p_Inp->num_of_views == 2 )
+  {
+    printf ("%05d(%3s)  %1d  %8d %8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %7.4f %7.4f %7.4f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+      p_Vid->frm_no_in_file, pic_type, p_Vid->view_id, cur_bits, fdn_bits, nvb_bits, wp_method,
+      p_Vid->AverageFrameQP, lambda, 
+      mPSNR->value[0], mPSNR->value[1], mPSNR->value[2], 
+      mSSIM->value[0], mSSIM->value[1], mSSIM->value[2], 
+      tmp_time, (int) p_Vid->me_time,
+      p_Vid->fld_flag ? "FLD" : "FRM", p_Vid->intras, direct_mode,
+      p_Vid->num_ref_idx_l0_active, p_Vid->num_ref_idx_l1_active, p_Vid->rd_pass, p_Vid->nal_reference_idc);
+  }
+  else
+#endif
+  {
   printf ("%05d(%3s)%8d %8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %7.4f %7.4f %7.4f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
     p_Vid->frm_no_in_file, pic_type, cur_bits, fdn_bits, nvb_bits, wp_method,
     p_Vid->AverageFrameQP, lambda, 
@@ -1707,18 +2477,35 @@ static void ReportVerboseFDNSSIM(VideoParameters *p_Vid, char *pic_type, int cur
     tmp_time, (int) p_Vid->me_time,
     p_Vid->fld_flag ? "FLD" : "FRM", p_Vid->intras, direct_mode,
     p_Vid->num_ref_idx_l0_active, p_Vid->num_ref_idx_l1_active, p_Vid->rd_pass, p_Vid->nal_reference_idc);
+  }
 }
 
 
-static void ReportNALNonVLCBits(VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *p_Stats, int64 tmp_time)
+static void ReportNALNonVLCBits(VideoParameters *p_Vid, int64 tmp_time)
 {
+  InputParameters *p_Inp = p_Vid->p_Inp;
+  StatParameters *p_Stats = p_Vid->p_Stats;
+
   //! Need to add type (i.e. SPS, PPS, SEI etc).
-  if (p_Inp->Verbose != 0)
-    printf ("%05d(NVB)%8d \n", p_Vid->frame_no, p_Stats->bit_ctr_parametersets_n);
+#if (MVC_EXTENSION_ENABLE)
+  if (p_Inp->num_of_views == 2)
+  {
+    if (p_Inp->Verbose != 0)
+      printf ("%05d(NVB)     %8d \n", p_Vid->frame_no, p_Stats->bit_ctr_parametersets_n);
+  }
+  else
+#endif
+  {
+    if (p_Inp->Verbose != 0)
+      printf ("%05d(NVB)%8d \n", p_Vid->frame_no, p_Stats->bit_ctr_parametersets_n);
+  }
 }
 
-static void ReportFirstframe(VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *stats, int64 tmp_time)
+static void ReportFirstframe(VideoParameters *p_Vid, int64 tmp_time)
 {
+  InputParameters *p_Inp = p_Vid->p_Inp;
+  StatParameters *stats = p_Vid->p_Stats;
+
   int cur_bits = (int)(stats->bit_ctr - stats->bit_ctr_n)
     + (int)(stats->bit_ctr_filler_data - stats->bit_ctr_filler_data_n);
 
@@ -1752,11 +2539,24 @@ static void ReportFirstframe(VideoParameters *p_Vid, InputParameters *p_Inp, Sta
   }
 
   stats->bit_counter[I_SLICE] = stats->bit_ctr;
+#if (MVC_EXTENSION_ENABLE)
+  if ( p_Inp->num_of_views == 2 )
+  {
+    if ( !p_Vid->fld_flag )
+    {
+      stats->bit_counter_v[p_Vid->view_id][I_SLICE] = stats->bit_ctr;
+    }
+    stats->bit_ctr_v[0] = 0;
+    stats->bit_ctr_v[1] = 0;
+  }
+#endif
   stats->bit_ctr = 0;
 }
 
-static void ReportI(VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *stats, int64 tmp_time)
+static void ReportI(VideoParameters *p_Vid, int64 tmp_time)
 {
+  InputParameters *p_Inp = p_Vid->p_Inp;
+  StatParameters *stats = p_Vid->p_Stats;
   char pic_type[4];
   int  cur_bits = (int)(stats->bit_ctr - stats->bit_ctr_n)
     + (int)(stats->bit_ctr_filler_data - stats->bit_ctr_filler_data_n);
@@ -1815,8 +2615,11 @@ static void ReportI(VideoParameters *p_Vid, InputParameters *p_Inp, StatParamete
   }
 }
 
-static void ReportB(VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *stats, int64 tmp_time)
+static void ReportB(VideoParameters *p_Vid, int64 tmp_time)
 {
+  InputParameters *p_Inp = p_Vid->p_Inp;
+  StatParameters *stats = p_Vid->p_Stats;
+
   int cur_bits = (int)(stats->bit_ctr - stats->bit_ctr_n)
     + (int)(stats->bit_ctr_filler_data - stats->bit_ctr_filler_data_n);
 
@@ -1850,8 +2653,11 @@ static void ReportB(VideoParameters *p_Vid, InputParameters *p_Inp, StatParamete
   }
 }
 
-static void ReportP(VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *stats, int64 tmp_time)
+static void ReportP(VideoParameters *p_Vid, int64 tmp_time)
 {
+  InputParameters *p_Inp = p_Vid->p_Inp;
+  StatParameters *stats = p_Vid->p_Stats;
+
   char pic_type[4];
   int  cur_bits = (int)(stats->bit_ctr - stats->bit_ctr_n)
     + (int)(stats->bit_ctr_filler_data - stats->bit_ctr_filler_data_n);
@@ -1982,7 +2788,7 @@ void output_SP_coefficients(VideoParameters *p_Vid, InputParameters *p_Inp)
 
   for(i=0;i<p_Vid->height;i++)
   {
-    ret = fwrite(p_Vid->lrec[i],sizeof(int),p_Vid->width,SP_coeff_file);
+    ret = (int) fwrite(p_Vid->lrec[i], sizeof(int), p_Vid->width, SP_coeff_file);
     if (ret != p_Vid->width)
     {
       error ("cannot write to SP output file", -1);
@@ -1993,7 +2799,7 @@ void output_SP_coefficients(VideoParameters *p_Vid, InputParameters *p_Inp)
   {
     for(i=0;i<p_Vid->height_cr;i++)
     {
-      ret = fwrite(p_Vid->lrec_uv[k][i],sizeof(int),p_Vid->width_cr,SP_coeff_file);
+      ret = (int) fwrite(p_Vid->lrec_uv[k][i], sizeof(int), p_Vid->width_cr, SP_coeff_file);
       if (ret != p_Vid->width_cr)
       {
         error ("cannot write to SP output file", -1);
@@ -2094,27 +2900,25 @@ static int is_gop_first_unit(VideoParameters *p_Vid, InputParameters *p_Inp)
 *     AUD, SPS, PPS, and SEI messages
 *************************************************************************************
 */
-void write_non_vcl_nalu( VideoParameters *p_Vid, InputParameters *p_Inp )
+void write_non_vcl_nalu( VideoParameters *p_Vid )
 {
-  // SPS + PPS
+  InputParameters *p_Inp = p_Vid->p_Inp;
+
+  // SPS + PPS + AUD
   if (p_Inp->ResendSPS == 3 && is_gop_first_unit(p_Vid, p_Inp) && p_Vid->number)
   {
     p_Vid->p_Stats->bit_slice = rewrite_paramsets(p_Vid);
   }
-
-  if (p_Inp->ResendSPS == 2 && get_idr_flag(p_Vid) && p_Vid->number)
+  else if (p_Inp->ResendSPS == 2 && get_idr_flag(p_Vid) && p_Vid->number)
   {
     p_Vid->p_Stats->bit_slice = rewrite_paramsets(p_Vid);
   }
-  if (p_Inp->ResendSPS == 1 && p_Vid->type == I_SLICE && p_Vid->curr_frm_idx != 0)
+  else if (p_Inp->ResendSPS == 1 && p_Vid->type == I_SLICE && p_Vid->curr_frm_idx != 0)
   {
     p_Vid->p_Stats->bit_slice = rewrite_paramsets(p_Vid);
   }
-  // PPS
-  if ( p_Inp->ResendPPS && p_Vid->curr_frm_idx != 0
-    && (p_Vid->type != I_SLICE || p_Inp->ResendSPS != 1) 
-    && (!(p_Inp->ResendSPS == 2 && get_idr_flag(p_Vid)))
-    && (!(p_Inp->ResendSPS == 3 && is_gop_first_unit(p_Vid, p_Inp))) )
+  // PPS + AUD
+  else if ( p_Inp->ResendPPS && p_Vid->curr_frm_idx != 0 )
   {
     // Access Unit Delimiter NALU
     if ( p_Inp->SendAUD )
@@ -2128,11 +2932,7 @@ void write_non_vcl_nalu( VideoParameters *p_Vid, InputParameters *p_Inp )
     }
   }
   // Access Unit Delimiter NALU
-  if ( p_Inp->SendAUD
-    && (!(p_Inp->ResendPPS && p_Vid->curr_frm_idx != 0))
-    && (p_Vid->type != I_SLICE || p_Inp->ResendSPS != 1) 
-    && (!(p_Inp->ResendSPS == 2 && get_idr_flag(p_Vid)))
-    && (!(p_Inp->ResendSPS == 3 && is_gop_first_unit(p_Vid, p_Inp))) )
+  else if ( p_Inp->SendAUD )
   {
     p_Vid->p_Stats->bit_ctr_parametersets_n += Write_AUD_NALU(p_Vid);
   }
@@ -2152,8 +2952,89 @@ void write_non_vcl_nalu( VideoParameters *p_Vid, InputParameters *p_Inp )
   PrepareAggregationSEIMessage(p_Vid);
   
   p_Vid->p_Stats->bit_ctr_parametersets_n += Write_SEI_NALU(p_Vid, 0);
+
   // update seq NVB counter
   p_Vid->p_Stats->bit_ctr_parametersets   += p_Vid->p_Stats->bit_ctr_parametersets_n;
 }
+
+#if (MVC_EXTENSION_ENABLE)
+/*!
+*************************************************************************************
+* Brief
+*     MVC AUD, SPS, PPS, and SEI messages
+*************************************************************************************
+*/
+void write_non_vcl_nalu_mvc( VideoParameters *p_Vid )
+{
+  InputParameters *p_Inp = p_Vid->p_Inp;
+  int prev_paramsets_bits = 0;
+
+  if ( p_Vid->view_id )
+  {
+    if ( p_Inp->SendAUD )
+    {
+      prev_paramsets_bits = p_Vid->p_Stats->bit_ctr_parametersets_n;
+      p_Vid->p_Stats->bit_ctr_parametersets_n += Write_AUD_NALU(p_Vid);
+    }
+  }
+  else // view_id == 0
+  {
+    // SPS + PPS + AUD
+    if (p_Inp->ResendSPS == 3 && is_gop_first_unit(p_Vid, p_Inp) && p_Vid->number)
+    {
+      p_Vid->p_Stats->bit_slice = rewrite_paramsets(p_Vid);
+    }
+    else if (p_Inp->ResendSPS == 2 && get_idr_flag(p_Vid) && p_Vid->number)
+    {
+      p_Vid->p_Stats->bit_slice = rewrite_paramsets(p_Vid);
+    }
+    else if (p_Inp->ResendSPS == 1 && p_Vid->type == I_SLICE && p_Vid->curr_frm_idx != 0 && !p_Vid->view_id)
+    {
+      p_Vid->p_Stats->bit_slice = rewrite_paramsets(p_Vid);
+    }
+    // PPS + AUD
+    else if ( p_Inp->ResendPPS && p_Vid->curr_frm_idx != 0 )
+    {
+      prev_paramsets_bits = p_Vid->p_Stats->bit_ctr_parametersets_n;
+      // Access Unit Delimiter NALU
+      if ( p_Inp->SendAUD )
+      {
+        p_Vid->p_Stats->bit_ctr_parametersets_n = Write_AUD_NALU(p_Vid);
+        p_Vid->p_Stats->bit_ctr_parametersets_n += write_PPS(p_Vid, 0, 0);
+      }
+      else
+      {
+        p_Vid->p_Stats->bit_ctr_parametersets_n = write_PPS(p_Vid, 0, 0);
+      }
+    }
+    // Access Unit Delimiter NALU
+    else if ( p_Inp->SendAUD )
+    {
+      prev_paramsets_bits = p_Vid->p_Stats->bit_ctr_parametersets_n;
+      p_Vid->p_Stats->bit_ctr_parametersets_n += Write_AUD_NALU(p_Vid);
+    }
+  }
+
+  UpdateSubseqInfo (p_Vid, p_Inp, p_Vid->layer);        // Tian Dong (Sept 2002)
+  UpdateSceneInformation (p_Vid->p_SEI, FALSE, 0, 0, -1); // JVT-D099, scene information SEI, nothing included by default
+
+  //! Commented out by StW, needs fixing in SEI.h to keep the trace file clean
+  //  PrepareAggregationSEIMessage (p_Vid);
+
+  // write tone mapping SEI message
+  if (p_Inp->ToneMappingSEIPresentFlag)
+  {
+    UpdateToneMapping(p_Vid->p_SEI);
+  }
+
+  PrepareAggregationSEIMessage(p_Vid);
+  
+  p_Vid->p_Stats->bit_ctr_parametersets_n += Write_SEI_NALU(p_Vid, 0);
+
+  // update seq NVB counter
+  p_Vid->p_Stats->bit_ctr_parametersets   += p_Vid->p_Stats->bit_ctr_parametersets_n;
+  p_Vid->p_Stats->bit_ctr_parametersets_n_v[p_Vid->view_id] += (p_Vid->p_Stats->bit_ctr_parametersets_n - prev_paramsets_bits);
+}
+#endif
 
 

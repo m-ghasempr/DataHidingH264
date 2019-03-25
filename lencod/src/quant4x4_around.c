@@ -41,17 +41,21 @@ int quant_4x4_around(Macroblock *currMB, int **tblock, struct quant_methods *q_m
 {
   VideoParameters *p_Vid = currMB->p_Vid;
   QuantParameters *p_Quant = p_Vid->p_Quant;
+  Slice *currSlice = currMB->p_Slice;
+  Boolean is_cavlc = (Boolean) (currSlice->symbol_mode == CAVLC);
+
   int AdaptRndWeight = p_Vid->AdaptRndWeight;
 
   int   block_x = q_method->block_x;
   int  qp = q_method->qp;
-  int*  ACLevel = q_method->ACLevel;
-  int*  ACRun   = q_method->ACRun;
+  int*  ACL = &q_method->ACLevel[0];
+  int*  ACR = &q_method->ACRun[0];  
   LevelQuantParams **q_params_4x4 = q_method->q_params;
   const byte (*pos_scan)[2] = q_method->pos_scan;
   const byte *c_cost = q_method->c_cost;
   int *coeff_cost = q_method->coeff_cost;
-  Boolean is_cavlc = (currMB->p_slice->symbol_mode == CAVLC);
+
+  
   LevelQuantParams *q_params = NULL;
   int **fadjust4x4 = q_method->fadjust;
 
@@ -65,8 +69,7 @@ int quant_4x4_around(Macroblock *currMB, int **tblock, struct quant_methods *q_m
   int   qp_per = p_Quant->qp_per_matrix[qp];
   int   q_bits = Q_BITS + qp_per;
   const byte *p_scan = &pos_scan[0][0];
-  int*  ACL = &ACLevel[0];
-  int*  ACR = &ACRun[0];
+
   int*  padjust4x4;
 
   // Quantization
@@ -128,15 +131,15 @@ int quant_ac4x4_around(Macroblock *currMB, int **tblock, struct quant_methods *q
   int   block_x = q_method->block_x;
 
   int qp = q_method->qp;
-  int*  ACLevel = q_method->ACLevel;
-  int*  ACRun   = q_method->ACRun;
+  int*  ACL = &q_method->ACLevel[0];
+  int*  ACR = &q_method->ACRun[0]; 
   LevelQuantParams **q_params_4x4 = q_method->q_params;
   int **fadjust4x4 = q_method->fadjust;
   const byte (*pos_scan)[2] = q_method->pos_scan;
   const byte *c_cost = q_method->c_cost;
   int *coeff_cost = q_method->coeff_cost;
 
-  Boolean is_cavlc = (currMB->p_slice->symbol_mode == CAVLC);
+  Boolean is_cavlc = (Boolean) (currMB->p_Slice->symbol_mode == CAVLC);
   VideoParameters *p_Vid = currMB->p_Vid;
   QuantParameters *p_Quant = p_Vid->p_Quant;
   int AdaptRndWeight = p_Vid->AdaptRndWeight;
@@ -152,8 +155,6 @@ int quant_ac4x4_around(Macroblock *currMB, int **tblock, struct quant_methods *q
   int   qp_per = p_Quant->qp_per_matrix[qp];
   int   q_bits = Q_BITS + qp_per;
   const byte *p_scan = &pos_scan[1][0];
-  int*  ACL = &ACLevel[0];
-  int*  ACR = &ACRun[0];
   int*  padjust4x4;
 
   // Quantization
@@ -220,7 +221,7 @@ int quant_dc4x4_around(Macroblock *currMB, int **tblock, int qp, int* DCLevel, i
                        LevelQuantParams *q_params_4x4, const byte (*pos_scan)[2])
 {
   QuantParameters *p_Quant = currMB->p_Vid->p_Quant;
-  Boolean is_cavlc = (currMB->p_slice->symbol_mode == CAVLC);
+  Boolean is_cavlc = (Boolean) (currMB->p_Slice->symbol_mode == CAVLC);
   int i,j, coeff_ctr;
 
   int *m7;

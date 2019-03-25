@@ -17,7 +17,6 @@
 #include "global.h"
 #include "memalloc.h"
 
-#if !defined(USEMMX)
  /*!
  ************************************************************************
  * \brief
@@ -157,40 +156,40 @@ void free_mem2Dlm(LambdaParams **array2D)
 /*!
  ************************************************************************
  * \brief
- *    Allocate 2D memory array -> PicMotionParams2 array2D[dim0][dim1]
+ *    Allocate 2D memory array -> PicMotionParams array2D[dim0][dim1]
  *
  * \par Output:
  *    memory size in bytes
  ************************************************************************/
-int get_mem2Dmp(PicMotionParams2 ***array2D, int dim0, int dim1)
+int get_mem2Dmp(PicMotionParams ***array2D, int dim0, int dim1)
 {
   int i;
 
-  if((*array2D    = (PicMotionParams2**)malloc(dim0 *      sizeof(PicMotionParams2*))) == NULL)
+  if((*array2D    = (PicMotionParams**)malloc(dim0 *      sizeof(PicMotionParams*))) == NULL)
     no_mem_exit("get_mem2Dmv: array2D");
-  if((*(*array2D) = (PicMotionParams2* )calloc(dim0 * dim1,sizeof(PicMotionParams2 ))) == NULL)
+  if((*(*array2D) = (PicMotionParams* )calloc(dim0 * dim1,sizeof(PicMotionParams ))) == NULL)
     no_mem_exit("get_mem2Dmp: array2D");
 
   for(i = 1 ; i < dim0; i++)
     (*array2D)[i] =  (*array2D)[i-1] + dim1;
 
-  return dim0 * (sizeof(PicMotionParams2*) + dim1 * sizeof(PicMotionParams2));
+  return dim0 * (sizeof(PicMotionParams*) + dim1 * sizeof(PicMotionParams));
 }
 
 /*!
  ************************************************************************
  * \brief
- *    Allocate 3D memory array -> PicMotionParams2 array3D[frames][dim0][dim1]
+ *    Allocate 3D memory array -> PicMotionParams array3D[frames][dim0][dim1]
  *
  * \par Output:
  *    memory size in bytes
  ************************************************************************
  */
-int get_mem3Dmp(PicMotionParams2 ****array3D, int dim0, int dim1, int dim2)
+int get_mem3Dmp(PicMotionParams ****array3D, int dim0, int dim1, int dim2)
 {
-  int i, mem_size = dim0 * sizeof(PicMotionParams2**);
+  int i, mem_size = dim0 * sizeof(PicMotionParams**);
 
-  if(((*array3D) = (PicMotionParams2***)malloc(dim0 * sizeof(PicMotionParams2**))) == NULL)
+  if(((*array3D) = (PicMotionParams***)malloc(dim0 * sizeof(PicMotionParams**))) == NULL)
     no_mem_exit("get_mem3Dmp: array3D");
 
   mem_size += get_mem2Dmp(*array3D, dim0 * dim1, dim2);
@@ -208,7 +207,7 @@ int get_mem3Dmp(PicMotionParams2 ****array3D, int dim0, int dim1, int dim2)
  *    which was allocated with get_mem2Dmp()
  ************************************************************************
  */
-void free_mem2Dmp(PicMotionParams2 **array2D)
+void free_mem2Dmp(PicMotionParams **array2D)
 {
   if (array2D)
   {
@@ -233,7 +232,7 @@ void free_mem2Dmp(PicMotionParams2 **array2D)
  *    which was allocated with get_mem3Dmp()
  ************************************************************************
  */
-void free_mem3Dmp(PicMotionParams2 ***array3D)
+void free_mem3Dmp(PicMotionParams ***array3D)
 {
   if (array3D)
   {
@@ -428,6 +427,54 @@ void free_mem5Dquant(LevelQuantParams *****array5D)
   }
 }
 
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Allocate 2D memory array -> StorablePicturePtr array2D[dim0][dim1]
+ *
+ * \par Output:
+ *    memory size in bytes
+ ************************************************************************/
+int get_mem2D_spp(StorablePicturePtr ***array2D, int dim0, int dim1)
+{
+  int i;
+
+  if((*array2D    = (StorablePicturePtr**)malloc(dim0 *      sizeof(StorablePicturePtr*))) == NULL)
+    no_mem_exit("get_mem2D_spp: array2D");
+  if((*(*array2D) = (StorablePicturePtr* )calloc(dim0 * dim1,sizeof(StorablePicturePtr ))) == NULL)
+    no_mem_exit("get_mem2D_spp: array2D");
+
+  for(i = 1 ; i < dim0; i++)
+    (*array2D)[i] =  (*array2D)[i-1] + dim1;
+
+  return dim0 * (sizeof(StorablePicturePtr*) + dim1 * sizeof(StorablePicturePtr));
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Allocate 3D memory array -> StorablePicturePtr array3D[dim0][dim1][dim2]
+ *
+ * \par Output:
+ *    memory size in bytes
+ ************************************************************************
+ */
+int get_mem3D_spp(StorablePicturePtr ****array3D, int dim0, int dim1, int dim2)
+{
+  int i, mem_size = dim0 * sizeof(StorablePicturePtr**);
+
+  if(((*array3D) = (StorablePicturePtr***)malloc(dim0 * sizeof(StorablePicturePtr**))) == NULL)
+    no_mem_exit("get_mem3D_spp: array3D");
+
+  mem_size += get_mem2D_spp(*array3D, dim0 * dim1, dim2);
+
+  for(i = 1; i < dim0; i++)
+    (*array3D)[i] = (*array3D)[i - 1] + dim1;
+  
+  return mem_size;
+}
+
 /*!
  ************************************************************************
  * \brief
@@ -526,6 +573,100 @@ int get_mem5Dmv(MotionVector ******array5D, int dim0, int dim1, int dim2, int di
 /*!
  ************************************************************************
  * \brief
+ *    Allocate 6D memory array -> MotionVector array6D[dim0][dim1][dim2][dim3][dim4][dim5]
+ *
+ * \par Output:
+ *    memory size in bytes
+ ************************************************************************
+ */
+int get_mem6Dmv(MotionVector *******array6D, int dim0, int dim1, int dim2, int dim3, int dim4, int dim5)
+{
+  int i, mem_size = dim0 * sizeof(MotionVector*****);
+
+  if(((*array6D) = (MotionVector******)malloc(dim0 * sizeof(MotionVector*****))) == NULL)
+    no_mem_exit("get_mem5Dpel: array6D");
+
+  mem_size += get_mem5Dmv(*array6D, dim0 * dim1, dim2, dim3, dim4, dim5);
+
+  for(i = 1; i < dim0; i++)
+    (*array6D)[i] = (*array6D)[i - 1] + dim1;
+  
+  return mem_size;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Allocate 7D memory array -> MotionVector array7D[dim0][dim1][dim2][dim3][dim4][dim5][dim6]
+ *
+ * \par Output:
+ *    memory size in bytes
+ ************************************************************************
+ */
+int get_mem7Dmv(MotionVector ********array7D, int dim0, int dim1, int dim2, int dim3, int dim4, int dim5, int dim6)
+{
+  int i, mem_size = dim0 * sizeof(MotionVector******);
+
+  if(((*array7D) = (MotionVector*******)malloc(dim0 * sizeof(MotionVector******))) == NULL)
+    no_mem_exit("get_mem7Dmv: array7D");
+
+  mem_size += get_mem6Dmv(*array7D, dim0 * dim1, dim2, dim3, dim4, dim5, dim6);
+
+  for(i = 1; i < dim0; i++)
+    (*array7D)[i] = (*array7D)[i - 1] + dim1;
+  
+  return mem_size;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    free 2D memory array
+ *    which was allocated with get_mem2D_spp()
+ ************************************************************************
+ */
+void free_mem2D_spp(StorablePicturePtr **array2D)
+{
+  if (array2D)
+  {
+    if (*array2D)
+      free (*array2D);
+    else 
+      error ("free_mem2D_spp: trying to free unused memory",100);
+
+    free (array2D);
+  } 
+  else
+  {
+    error ("free_mem2D_spp: trying to free unused memory",100);
+  }
+}
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    free 3D memory array
+ *    which was allocated with get_mem3D_spp()
+ ************************************************************************
+ */
+void free_mem3D_spp(StorablePicturePtr ***array3D)
+{
+  if (array3D)
+  {
+    free_mem2D_spp(*array3D);
+    free (array3D);
+  }
+  else
+  {
+    error ("free_mem3D_spp: trying to free unused memory",100);
+  }
+}
+
+
+/*!
+ ************************************************************************
+ * \brief
  *    free 2D memory array
  *    which was allocated with get_mem2Dmv()
  ************************************************************************
@@ -607,6 +748,47 @@ void free_mem5Dmv(MotionVector *****array5D)
     error ("free_mem5Dmv: trying to free unused memory",100);
   }
 }
+/*!
+ ************************************************************************
+ * \brief
+ *    free 6D memory array
+ *    which was allocated with get_mem6Dmv()
+ ************************************************************************
+ */
+void free_mem6Dmv(MotionVector ******array6D)
+{
+  if (array6D)
+  {
+    free_mem5Dmv(*array6D);
+    free (array6D);
+  }
+  else
+  {
+    error ("free_mem6Dmv: trying to free unused memory",100);
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    free 7D memory array
+ *    which was allocated with get_mem7Dmv()
+ ************************************************************************
+ */
+void free_mem7Dmv(MotionVector *******array7D)
+{
+  if (array7D)
+  {
+    free_mem6Dmv(*array7D);
+    free (array7D);
+  }
+  else
+  {
+    error ("free_mem7Dmv: trying to free unused memory",100);
+  }
+}
+
+
 
 /*!
  ************************************************************************
@@ -647,6 +829,31 @@ int get_mem2Dpel(imgpel ***array2D, int dim0, int dim1)
   return dim0 * (sizeof(imgpel*) + dim1 * sizeof(imgpel));
 }
 
+int get_mem2DpelWithPad(imgpel ***array2D, int dim0, int dim1, int iPadY, int iPadX)
+{
+  int i;
+  imgpel *curr = NULL;
+  int iHeight, iWidth;
+  
+  iHeight = dim0+2*iPadY;
+  iWidth = dim1+2*iPadX;
+  if((*array2D    = (imgpel**)malloc(iHeight*sizeof(imgpel*))) == NULL)
+    no_mem_exit("get_mem2DpelWithPad: array2D");
+  if((*(*array2D) = (imgpel* )calloc(iHeight * iWidth, sizeof(imgpel ))) == NULL)
+    no_mem_exit("get_mem2DpelWithPad: array2D");
+
+  (*array2D)[0] += iPadX;
+  curr = (*array2D)[0];
+  for(i = 1 ; i < iHeight; i++)
+  {
+    curr += iWidth;
+    (*array2D)[i] = curr;
+  }
+  (*array2D) = &((*array2D)[iPadY]);
+
+  return iHeight * (sizeof(imgpel*) + iWidth * sizeof(imgpel));
+}
+
 
 /*!
  ************************************************************************
@@ -671,6 +878,82 @@ int get_mem3Dpel(imgpel ****array3D, int dim0, int dim1, int dim2)
   
   return mem_size;
 }
+
+int get_mem3DpelWithPad(imgpel ****array3D, int dim0, int dim1, int dim2, int iPadY, int iPadX)
+{
+  int i, mem_size = dim0 * sizeof(imgpel**);
+
+  if(((*array3D) = (imgpel***)malloc(dim0*sizeof(imgpel**))) == NULL)
+    no_mem_exit("get_mem3DpelWithPad: array3D");
+
+  mem_size += get_mem2DpelWithPad(*array3D, dim0*dim1+2*(dim0-1)*iPadY, dim2, iPadY, iPadX);
+
+  for(i = 1; i < dim0; i++)
+    (*array3D)[i] = (*array3D)[i - 1] + (dim1+2*iPadY);
+  
+  return mem_size;
+}
+
+int get_mem3DpelWithPadSeparately(imgpel ****array3D, int dim0, int dim1, int dim2, int iPadY, int iPadX)
+{
+  int i, mem_size = dim0 * sizeof(imgpel**);
+
+  if(((*array3D) = (imgpel***)malloc(dim0*sizeof(imgpel**))) == NULL)
+    no_mem_exit("get_mem3DpelWithPadSeparately: array3D");
+
+  for(i = 0; i < dim0; i++)
+    mem_size += get_mem2DpelWithPad((*array3D)+i, dim1, dim2, iPadY, iPadX);
+  
+  return mem_size;
+}
+
+int realloc_mem3DpelFrom5DpelWithPad(imgpel *****array5D, int dim3, int dim4, int iOldPadY, int iOldPadX, 
+                                     imgpel ****array3D, int dim0, int dim1, int dim2, int iNewPadY, int iNewPadX)
+{
+  int i, iSize =0;
+  int iHeight = (dim0*dim1+2*(dim0-1)*iNewPadY) + 2*iNewPadY;
+  int iWidth = dim2 + 2*iNewPadX;
+  imgpel *pNew1DMem, **pNew2DMem;
+  if(!array5D || !*array5D || !**array5D || !***array5D || !****array5D)
+    return iSize;
+  if(((*array3D) = (imgpel***)malloc(dim0*sizeof(imgpel**))) == NULL)
+    return iSize;
+  if((**array3D = (imgpel**)malloc(iHeight * sizeof(imgpel*))) == NULL)
+  {
+    free(*array3D);
+    return iSize;
+  }
+  //copy v;
+  for(i=0; i<dim1; i++)
+    memcpy(array5D[0][0][1][i], array5D[1][0][0][i], dim2);
+  pNew1DMem = (imgpel*)realloc((***array5D)[-iOldPadY]-iOldPadX, iWidth*iHeight*sizeof(imgpel));
+  if(!pNew1DMem)
+  {
+    free(**array3D);
+    free(*array3D);
+    return iSize;
+  }
+  //free;
+  free (&((***array5D)[-iOldPadY]));
+  free(**array5D);
+  free(*array5D);
+  free(array5D);
+
+  //set;
+  pNew2DMem = **array3D;
+  pNew2DMem[0] = pNew1DMem + iNewPadX;
+  for(i = 1 ; i < iHeight; i++)
+  {
+    pNew2DMem[i] = pNew2DMem[i-1] + iWidth;
+  }
+  **array3D = &(pNew2DMem[iNewPadY]);
+
+  for(i = 1; i < dim0; i++)
+    (*array3D)[i] = (*array3D)[i - 1] + (dim1+2*iNewPadY);
+
+  iSize = dim0 * sizeof(imgpel**) + iHeight * sizeof(imgpel*) + iWidth*iHeight*sizeof(imgpel);
+  return iSize;
+}
 /*!
  ************************************************************************
  * \brief
@@ -688,6 +971,36 @@ int get_mem4Dpel(imgpel *****array4D, int dim0, int dim1, int dim2, int dim3)
     no_mem_exit("get_mem4Dpel: array4D");
 
   mem_size += get_mem3Dpel(*array4D, dim0 * dim1, dim2, dim3);
+
+  for(i = 1; i < dim0; i++)
+    (*array4D)[i] = (*array4D)[i - 1] + dim1;
+
+  return mem_size;
+}
+
+int get_mem4DpelWithPad(imgpel *****array4D, int dim0, int dim1, int dim2, int dim3, int iPadY, int iPadX)
+{  
+  int  i, mem_size = dim0 * sizeof(imgpel***);
+
+  if(((*array4D) = (imgpel****)malloc(dim0 * sizeof(imgpel***))) == NULL)
+    no_mem_exit("get_mem4DpelWithPad: array4D");
+
+  mem_size += get_mem3DpelWithPad(*array4D, dim0 * dim1, dim2, dim3, iPadY, iPadX);
+
+  for(i = 1; i < dim0; i++)
+    (*array4D)[i] = (*array4D)[i - 1] + dim1;
+
+  return mem_size;
+}
+
+int get_mem4DpelWithPadSeparately(imgpel *****array4D, int dim0, int dim1, int dim2, int dim3, int iPadY, int iPadX)
+{  
+  int  i, mem_size = dim0 * sizeof(imgpel***);
+
+  if(((*array4D) = (imgpel****)malloc(dim0 * sizeof(imgpel***))) == NULL)
+    no_mem_exit("get_mem4DpelWithPadSeparately: array4D");
+
+  mem_size += get_mem3DpelWithPadSeparately(*array4D, dim0 * dim1, dim2, dim3, iPadY, iPadX);
 
   for(i = 1; i < dim0; i++)
     (*array4D)[i] = (*array4D)[i - 1] + dim1;
@@ -719,6 +1032,35 @@ int get_mem5Dpel(imgpel ******array5D, int dim0, int dim1, int dim2, int dim3, i
   return mem_size;
 }
 
+int get_mem5DpelWithPad(imgpel ******array5D, int dim0, int dim1, int dim2, int dim3, int dim4, int iPadY, int iPadX)
+{
+  int  i, mem_size = dim0 * sizeof(imgpel****);
+
+  if(((*array5D) = (imgpel*****)malloc(dim0 * sizeof(imgpel****))) == NULL)
+    no_mem_exit("get_mem5DpelWithPad: array5D");
+
+  mem_size += get_mem4DpelWithPad(*array5D, dim0 * dim1, dim2, dim3, dim4, iPadY, iPadX);
+
+  for(i = 1; i < dim0; i++)
+    (*array5D)[i] = (*array5D)[i - 1] + dim1;
+
+  return mem_size;
+}
+
+int get_mem5DpelWithPadSeparately(imgpel ******array5D, int dim0, int dim1, int dim2, int dim3, int dim4, int iPadY, int iPadX)
+{
+  int  i, mem_size = dim0 * sizeof(imgpel****);
+
+  if(((*array5D) = (imgpel*****)malloc(dim0 * sizeof(imgpel****))) == NULL)
+    no_mem_exit("get_mem5DpelWithPadSeparately: array5D");
+
+  mem_size += get_mem4DpelWithPadSeparately(*array5D, dim0 * dim1, dim2, dim3, dim4, iPadY, iPadX);
+
+  for(i = 1; i < dim0; i++)
+    (*array5D)[i] = (*array5D)[i - 1] + dim1;
+
+  return mem_size;
+}
 
 /*!
  ************************************************************************
@@ -763,6 +1105,23 @@ void free_mem2Dpel(imgpel **array2D)
   }
 }
 
+void free_mem2DpelWithPad(imgpel **array2D, int iPadY, int iPadX)
+{
+  if (array2D)
+  {
+    if (*array2D)
+      free (array2D[-iPadY]-iPadX);
+    else 
+      error ("free_mem2DpelWithPad: trying to free unused memory",100);
+
+    free (&array2D[-iPadY]);
+  } 
+  else
+  {
+    error ("free_mem2DpelWithPad: trying to free unused memory",100);
+  }
+}
+
 
 /*!
  ************************************************************************
@@ -783,6 +1142,41 @@ void free_mem3Dpel(imgpel ***array3D)
     error ("free_mem3Dpel: trying to free unused memory",100);
   }
 }
+
+void free_mem3DpelWithPad(imgpel ***array3D, int iPadY, int iPadX)
+{
+  if (array3D)
+  {
+    free_mem2DpelWithPad(*array3D, iPadY, iPadX);
+    free (array3D);
+  }
+  else
+  {
+    error ("free_mem3Dpel: trying to free unused memory",100);
+  }
+  
+}
+
+void free_mem3DpelWithPadSeparately(imgpel ***array3D, int iDim12, int iPadY, int iPadX)
+{
+  if (array3D)
+  {
+    int i;
+    for(i=0; i<iDim12; i++)
+      if(array3D[i])
+      {
+        free_mem2DpelWithPad(array3D[i], iPadY, iPadX);
+        array3D[i] = NULL;
+      }
+    free (array3D);
+  }
+  else
+  {
+    error ("free_mem3DpelWithPadSeparately: trying to free unused memory",100);
+  }
+  
+}
+
 /*!
  ************************************************************************
  * \brief
@@ -802,6 +1196,33 @@ void free_mem4Dpel(imgpel ****array4D)
     error ("free_mem4Dpel: trying to free unused memory",100);
   }
 }
+
+void free_mem4DpelWithPad(imgpel  ****array4D, int iPadY, int iPadX)
+{
+  if (array4D)
+  {
+    free_mem3DpelWithPad(*array4D, iPadY, iPadX);
+    free (array4D);
+  }
+  else
+  {
+    error ("free_mem4DpelWithPad: trying to free unused memory",100);
+  }
+}
+
+void free_mem4DpelWithPadSeparately(imgpel  ****array4D, int iFrames, int iPadY, int iPadX)
+{
+  if (array4D)
+  {
+    free_mem3DpelWithPadSeparately(*array4D, iFrames, iPadY, iPadX);
+    free (array4D);
+  }
+  else
+  {
+    error ("free_mem4DpelWithPadSeparately: trying to free unused memory",100);
+  }
+}
+
 /*!
  ************************************************************************
  * \brief
@@ -820,6 +1241,57 @@ void free_mem5Dpel(imgpel *****array5D)
   {
     error ("free_mem5Dpel: trying to free unused memory",100);
   }
+}
+
+void free_mem5DpelWithPad(imgpel *****array5D, int iPadY, int iPadX)
+{
+  if (array5D)
+  {
+    free_mem4DpelWithPad(*array5D, iPadY, iPadX);
+    free (array5D);
+  }
+  else
+  {
+    error ("free_mem5DpelWithPad: trying to free unused memory",100);
+  }
+}
+
+void free_mem5DpelWithPadSeparately(imgpel *****array5D, int iFrames, int iPadY, int iPadX)
+{
+  if (array5D)
+  {
+    free_mem4DpelWithPadSeparately(*array5D, iFrames, iPadY, iPadX);
+    free (array5D);
+  }
+  else
+  {
+    error ("free_mem5DpelWithPad: trying to free unused memory",100);
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Create 2D memory array -> byte array2D[dim0][dim1]
+ *
+ * \par Output:
+ *    byte type array of size dim0 * dim1
+ ************************************************************************
+ */
+byte** new_mem2D(int dim0, int dim1)
+{
+  int i;
+  byte **array2D;
+
+  if((  array2D  = (byte**)malloc(dim0 *      sizeof(byte*))) == NULL)
+    no_mem_exit("get_mem2D: array2D");
+  if((*(array2D) = (byte* )calloc(dim0 * dim1,sizeof(byte ))) == NULL)
+    no_mem_exit("get_mem2D: array2D");
+
+  for(i = 1; i < dim0; i++)
+    array2D[i] = array2D[i-1] + dim1;
+
+  return (array2D);
 }
 
 /*!
@@ -845,6 +1317,32 @@ int get_mem2D(byte ***array2D, int dim0, int dim1)
   return dim0 * (sizeof(byte*) + dim1 * sizeof(byte));
 }
 
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Create 2D memory array -> int array2D[dim0][dim1]
+ *
+ * \par Output:
+ *    int type array of size dim0 * dim1
+ ************************************************************************
+ */
+int** new_mem2Dint(int dim0, int dim1)
+{
+  int i;
+  int **array2D;
+
+  if((array2D    = (int**)malloc(dim0 *        sizeof(int*))) == NULL)
+    no_mem_exit("get_mem2Dint: array2D");
+  if((*(array2D) = (int* )calloc(dim0 * dim1, sizeof(int ))) == NULL)
+    no_mem_exit("get_mem2Dint: array2D");
+
+  for(i = 1 ; i < dim0; i++)
+    (array2D)[i] =  (array2D)[i-1] + dim1;
+
+  return (array2D);
+}
+
 /*!
  ************************************************************************
  * \brief
@@ -867,6 +1365,31 @@ int get_mem2Dint(int ***array2D, int dim0, int dim1)
     (*array2D)[i] =  (*array2D)[i-1] + dim1;
 
   return dim0 * (sizeof(int*) + dim1 * sizeof(int));
+}
+
+int get_mem2DintWithPad(int ***array2D, int dim0, int dim1, int iPadY, int iPadX)
+{
+  int i;
+  int *curr = NULL;
+  int iHeight, iWidth;
+  
+  iHeight = dim0+2*iPadY;
+  iWidth = dim1+2*iPadX;
+  if((*array2D    = (int**)malloc(iHeight*sizeof(int*))) == NULL)
+    no_mem_exit("get_mem2DintWithPad: array2D");
+  if((*(*array2D) = (int* )calloc(iHeight * iWidth, sizeof(int ))) == NULL)
+    no_mem_exit("get_mem2DintWithPad: array2D");
+
+  (*array2D)[0] += iPadX;
+  curr = (*array2D)[0];
+  for(i = 1 ; i < iHeight; i++)
+  {
+    curr += iWidth;
+    (*array2D)[i] = curr;
+  }
+  (*array2D) = &((*array2D)[iPadY]);
+
+  return iHeight * (sizeof(int*) + iWidth * sizeof(int));
 }
 
 /*!
@@ -1146,6 +1669,23 @@ void free_mem2Dint(int **array2D)
   }
 }
 
+void free_mem2DintWithPad(int **array2D, int iPadY, int iPadX)
+{
+  if (array2D)
+  {
+    if (*array2D)
+      free (array2D[-iPadY]-iPadX);
+    else 
+      error ("free_mem2DintWithPad: trying to free unused memory",100);
+
+    free (&array2D[-iPadY]);
+  } 
+  else
+  {
+    error ("free_mem2DintWithPad: trying to free unused memory",100);
+  }
+}
+
 /*!
  ************************************************************************
  * \brief
@@ -1340,6 +1880,31 @@ void no_mem_exit(char *where)
    error (errortext, 100);
 }
 
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Create 2D memory array -> uint16 array2D[dim0][dim1]
+ *
+ * \par Output:
+ *    uint16 type array of size dim0 * dim1
+ ************************************************************************
+ */
+uint16** new_mem2Duint16(int dim0, int dim1)
+{
+  int i;
+  uint16 **array2D;
+
+  if(( array2D = (uint16**)malloc(dim0 *      sizeof(uint16*))) == NULL)
+    no_mem_exit("get_mem2Duint16: array2D");
+  if((*array2D = (uint16* )calloc(dim0 * dim1,sizeof(uint16 ))) == NULL)
+    no_mem_exit("get_mem2Duint16: array2D");
+
+  for(i = 1; i < dim0; i++)
+    array2D[i] = array2D[i-1] + dim1;
+
+  return (array2D);
+}
 
 /*!
  ************************************************************************
@@ -1774,6 +2339,26 @@ int get_mem2Ddouble(double ***array2D, int dim0, int dim1)
 /*!
  ************************************************************************
  * \brief
+ *    Allocate 1D memory array -> double array1D[dim0]
+ *    Note that array is shifted towards offset allowing negative values
+ *
+ * \par Output:
+ *    memory size in bytes
+ ************************************************************************
+ */
+int get_mem1Dodouble(double **array1D, int dim0, int offset)
+{
+  if((*array1D      = (double*)malloc(dim0 *       sizeof(double))) == NULL)
+    no_mem_exit("get_mem1Dodouble: array2D");
+
+  *array1D += offset;
+
+  return dim0 * sizeof(double);
+}
+
+/*!
+ ************************************************************************
+ * \brief
  *    Allocate 2D memory array -> double array2D[dim0][dim1]
  *    Note that array is shifted towards offset allowing negative values
  *
@@ -1977,6 +2562,25 @@ void free_mem2Ddouble(double **array2D)
   }
 }
 
+/*!
+************************************************************************
+* \brief
+*    free 1D double memory array (with offset)
+*    which was allocated with get_mem1Ddouble()
+************************************************************************
+*/
+void free_mem1Dodouble(double *array1D, int offset)
+{
+  if (array1D)
+  {
+    array1D -= offset;
+    free (array1D);
+  } 
+  else
+  {
+    error ("free_mem1Dodouble: trying to free unused memory",100);
+  }
+}
 
 /*!
 ************************************************************************
@@ -2215,5 +2819,3 @@ void free_mem2Ddistblk(distblk **array2D)
     error ("free_mem2Ddistblk: trying to free unused memory",100);
   }
 }
-
-#endif

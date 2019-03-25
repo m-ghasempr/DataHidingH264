@@ -59,11 +59,16 @@ void img2buf (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int sym
   {
     // imgpel == pixel_in_file == 1 byte -> simple copy
     if (crop_left == 0 && crop_top == 0 && crop_right == 0 && crop_bottom == 0)
-      memcpy(buf,&(imgX[0][0]), twidth * theight);
+    {
+      //memcpy(buf,&(imgX[0][0]), twidth * theight);
+      for(j=0; j<theight; j++)
+        memcpy(buf+j*twidth, imgX[j], twidth);
+    }
     else
     {
       for(i=0;i<theight;i++)
-        memcpy(buf + crop_left + (i * twidth),&(imgX[i + crop_top][crop_left]), twidth);
+        //memcpy(buf + crop_left + (i * twidth),&(imgX[i + crop_top][crop_left]), twidth); //? bug???
+        memcpy(buf + (i*twidth), &(imgX[i + crop_top][crop_left]), twidth);
     }
   }
   else

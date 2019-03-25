@@ -64,10 +64,20 @@ struct inp_par_enc
   int  MultiSourceData;
   VideoDataFile   input_file2;          //!< Input video file2
   VideoDataFile   input_file3;          //!< Input video file3
+#if (MVC_EXTENSION_ENABLE)
+  int num_of_views;                     //!< number of views to encode (1=1view, 2=2views)
+  int MVCInterViewReorder;              //!< Reorder References according to interview pictures
+  int MVCFlipViews;                     //!< Reverse the order of the views in the bitstream (view 1 has VOIdx 0 and view 1 has VOIdx 0)
+  int MVCInterViewForceB;               //!< Force B slices for enhancement layer
+  int View1QPOffset;                    //!< QP offset during rate control for View 1
+  int enable_inter_view_flag;           //!< Enables inter_view_flag (allows pictures that are to be used for inter-view only prediction)
+#endif
 
   VideoDataFile   input_file1;          //!< Input video file1
   char outfile       [FILE_NAME_SIZE];  //!< H.264 compressed output bitstream
-  char ReconFile     [FILE_NAME_SIZE];  //!< Reconstructed Pictures
+  char ReconFile     [FILE_NAME_SIZE];  //!< Reconstructed Pictures (view 0 for MVC profile)
+  char ReconFile2    [FILE_NAME_SIZE];  //!< Reconstructed Pictures (view 1)
+
   char TraceFile     [FILE_NAME_SIZE];  //!< Trace Outputs
   char StatsFile     [FILE_NAME_SIZE];  //!< Stats File
   char QmatrixFile   [FILE_NAME_SIZE];  //!< Q matrix cfg file
@@ -83,6 +93,8 @@ struct inp_par_enc
   int adaptive_intra_period;            //!< reinitialize start of intra period
 
   int start_frame;                      //!< Encode sequence starting from Frame start_frame
+
+  int enable_32_pulldown;
 
   int GenerateMultiplePPS;
   int GenerateSEIMessage;
@@ -129,10 +141,15 @@ struct inp_par_enc
   int ChromaWeightSupport;           //!< Weighted prediction support for chroma (0: disabled, 1: enabled)
   int UseWeightedReferenceME;        //!< Use Weighted Reference for ME.
   int RDPictureDecision;             //!< Perform RD optimal decision between various coded versions of same picture
-  int RDPictureIntra;                //!< Enabled RD pic decision for intra as well.
-  int RDPSliceWeightOnly;            //!< If enabled, does not check QP variations for P slices.
   int RDPSliceBTest;                 //!< Tests B slice replacement for P.
-  int RDBSliceWeightOnly;            //!< If enabled, does not check QP variations for B slices.
+  int RDPictureMaxPassISlice;        //!< Max # of coding passes for I-slice
+  int RDPictureMaxPassPSlice;        //!< Max # of coding passes for P-slice
+  int RDPictureMaxPassBSlice;        //!< Max # of coding passes for B-slice
+  int RDPictureDeblocking;           //!< Whether to choose between deblocked and non-deblocked picture
+  int RDPictureDirectMode;           //!< Whether to check the other direct mode for B slices
+  int RDPictureFrameQPPSlice;        //!< Whether to check additional frame level QP values for P slices
+  int RDPictureFrameQPBSlice;        //!< Whether to check additional frame level QP values for B slices
+
   int SkipIntraInInterSlices;        //!< Skip intra type checking in inter slices if best_mode is skip/direct
   int BRefPictures;                  //!< B coded reference pictures replace P pictures (0: not used, 1: used)
   int HierarchicalCoding;
@@ -140,10 +157,11 @@ struct inp_par_enc
   char ExplicitHierarchyFormat[INPUT_TEXT_SIZE]; //!< Explicit GOP format (HierarchicalCoding==3).
   // explicit sequence information parameters
   int  ExplicitSeqCoding;
-  char ExplicitSeqFile[FILE_NAME_SIZE];  
+  char ExplicitSeqFile[FILE_NAME_SIZE];
   int  LowDelay;                      //!< Apply HierarchicalCoding without delay (i.e., encode in the captured/display order)
+
   int  ReferenceReorder;              //!< Reordering based on Poc distances
-  int  MemoryManagement;              //!< Memory management based on Poc distances for hierarchical coding
+  int  PocMemoryManagement;           //!< Memory management based on Poc distances for hierarchical coding
 
   int symbol_mode;                   //!< Specifies the mode the symbols are mapped on bits
   int of_mode;                       //!< Specifies the mode of the output file
@@ -177,6 +195,7 @@ struct inp_par_enc
   int full_search;
 
   int rdopt;
+  int de;     //!< the algorithm to estimate the distortion in the decoder
   int I16rdo; 
   int subMBCodingState;
   int Distortion[TOTAL_DIST_TYPES];
@@ -187,6 +206,7 @@ struct inp_par_enc
   int FastCrIntraDecision;
   int disthres;
   int nobskip;
+  int BiasSkipRDO;
   int ForceTrueRateRDO;
 
 #ifdef _LEAKYBUCKET_
@@ -200,9 +220,10 @@ struct inp_par_enc
   int IntraBottom;            //!< Force Intra Bottom at GOP periods.
 
   // Error resilient RDO parameters
-  int LossRateA;              //!< assumed loss probablility of partition A (or full slice), in per cent, used for loss-aware R/D optimization
-  int LossRateB;              //!< assumed loss probablility of partition B, in per cent, used for loss-aware R/D
-  int LossRateC;              //!< assumed loss probablility of partition C, in per cent, used for loss-aware R/D
+  double LossRateA;              //!< assumed loss probablility of partition A (or full slice), in per cent, used for loss-aware R/D optimization
+  double LossRateB;              //!< assumed loss probablility of partition B, in per cent, used for loss-aware R/D
+  double LossRateC;              //!< assumed loss probablility of partition C, in per cent, used for loss-aware R/D
+  int FirstFrameCorrect;      //!< the first frame is encoded under the assumption that it is always correctly received.
   int NoOfDecoders;
   int ErrorConcealment;       //!< Error concealment method used for loss-aware RDO (0: Copy Concealment)
   int RestrictRef;
@@ -212,7 +233,7 @@ struct inp_par_enc
 
   // Chroma interpolation and buffering
   int ChromaMCBuffer;
-  int ChromaMEEnable;
+  Boolean ChromaMEEnable;
   int ChromaMEWeight;
   int MEErrorMetric[3];
   int ModeDecisionMetric;
@@ -233,10 +254,10 @@ struct inp_par_enc
   int num_slice_groups_minus1;           //!< "FmoNumSliceGroups" in encoder.cfg, same as FmoNumSliceGroups, which should be erased later
   int slice_group_map_type;
 
-  unsigned *top_left;                     //!< for slice_group_map_type=2: top left positions of foreground rectangles
-  unsigned *bottom_right;                 //!< for slice_group_map_type=2: bottom right positions of foreground rectangles
-  byte *slice_group_id;                   //!< for slice_group_map_type=6: slice_group_id values for each slice group map unit
-  int *run_length_minus1;                 //!< for slice_group_map_type=1: run_length_minus1 value list
+  unsigned int *top_left;                         //!< top_left and bottom_right store values indicating foregrounds
+  unsigned int *bottom_right;
+  byte *slice_group_id;                   //!< slice_group_id is for slice group type being 6
+  int *run_length_minus1;                //!< run_length_minus1 is for slice group type being 0
 
   int slice_group_change_direction_flag;
   int slice_group_change_rate_minus1;
@@ -338,7 +359,7 @@ struct inp_par_enc
   // prediction structure
   int PreferDispOrder;       //!< Prefer display order when building the prediction structure as opposed to coding order
   int PreferPowerOfTwo;      //!< Prefer prediction structures that have lengths expressed as powers of two
-  int FrmStructBufferLength; //!< Length of the frame structure unit buffer; it can be overriden for certain cases
+  int FrmStructBufferLength; //!< Number of frames that is populated every time populate_frm_struct is called
 
   int separate_colour_plane_flag;
   double WeightY;
@@ -358,6 +379,9 @@ struct inp_par_enc
   VUIParameters VUI;
   // end of VUI parameters
 
+  int  MinIDRDistance;
+  int stdRange;                         //!< 1 - standard range, 0 - full range
+  int videoCode;                        //!< 1 - 709, 3 - 601:  See VideoCode in io_tiff.
 };
 
 #endif

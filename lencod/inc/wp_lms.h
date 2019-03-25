@@ -19,8 +19,8 @@
 
 extern void EstimateWPPSliceAlg1(Slice *currSlice, int offset);
 extern void EstimateWPBSliceAlg1(Slice *currSlice);
-extern int  TestWPPSliceAlg1    (VideoParameters *p_Vid, int offset);
-extern int  TestWPBSliceAlg1    (VideoParameters *p_Vid, int method);
+extern int  TestWPPSliceAlg1    (Slice *currSlice, int offset);
+extern int  TestWPBSliceAlg1    (Slice *currSlice, int method);
 
 #endif
 

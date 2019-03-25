@@ -6,6 +6,7 @@
  *
  * \author
  *    Zhengguo LI
+ *    Athanasios Leontaris
  *
  * \date
  *    14 Jan 2003

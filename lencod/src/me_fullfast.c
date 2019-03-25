@@ -268,15 +268,14 @@ SetupLargerBlocks (MEFullFast *p_ffast_me, int list, int refindex, int max_pos)
  */
 void SetupFastFullPelSearch (Macroblock *currMB, MEBlock *mv_block, int list)  // <--  reference frame parameter, list0 or 1
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currSlice->p_Vid;
   InputParameters *p_Inp = currSlice->p_Inp;
-  PicMotionParams *motion = &p_Vid->enc_picture->motion;
   int (*dist_method) (int x) = p_Inp->MEErrorMetric[0] ? iabs2 : iabs;
 #if (JM_MEM_DISTORTION)
   int*    imgpel_dist   = p_Inp->MEErrorMetric[0] ? p_Vid->imgpel_quad : p_Vid->imgpel_abs;
 #endif
-  short   pmv[2];
+  MotionVector   pmv;
   imgpel orig_pels[768];
   imgpel  *srcptr = orig_pels, *refptr;
   int     k, x, y;
@@ -296,7 +295,7 @@ void SetupFastFullPelSearch (Macroblock *currMB, MEBlock *mv_block, int list)  /
   int     apply_weights = ( (p_Vid->active_pps->weighted_pred_flag && (currSlice->slice_type == P_SLICE || (currSlice->slice_type == SP_SLICE))) ||
     (p_Vid->active_pps->weighted_bipred_idc && (currSlice->slice_type == B_SLICE))) && p_Inp->UseWeightedReferenceME;
   int     weighted_pel;
-  StorablePicture *ref_picture = p_Vid->listX[list+list_offset][ref];
+  StorablePicture *ref_picture = currSlice->listX[list+list_offset][ref];
 
   int   wp_luma_round = 0;
   short luma_log_weight_denom  = 5;
@@ -308,14 +307,14 @@ void SetupFastFullPelSearch (Macroblock *currMB, MEBlock *mv_block, int list)  /
 
   //===== get search center: predictor of 16x16 block =====
   get_neighbors(currMB, block, 0, 0, 16);
-  currMB->GetMVPredictor (currMB, block, pmv, ref, motion->ref_idx[list], motion->mv[list], 0, 0, 16, 16);
+  currMB->GetMVPredictor (currMB, block, &pmv, ref, p_Vid->enc_picture->mv_info, list, 0, 0, 16, 16);
 
 #if (JM_INT_DIVIDE)
-  p_Vid->p_ffast_me->search_center[list][ref].mv_x = ((pmv[0] + 2) >> 2) * 4;
-  p_Vid->p_ffast_me->search_center[list][ref].mv_y = ((pmv[1] + 2) >> 2) * 4;
+  p_Vid->p_ffast_me->search_center[list][ref].mv_x = ((pmv.mv_x + 2) >> 2) * 4;
+  p_Vid->p_ffast_me->search_center[list][ref].mv_y = ((pmv.mv_y + 2) >> 2) * 4;
 #else
-  p_Vid->p_ffast_me->search_center[list][ref].mv_x = (pmv[0] / 4) * 4;
-  p_Vid->p_ffast_me->search_center[list][ref].mv_y = (pmv[1] / 4) * 4;
+  p_Vid->p_ffast_me->search_center[list][ref].mv_x = (pmv.mv_x / 4) * 4;
+  p_Vid->p_ffast_me->search_center[list][ref].mv_y = (pmv.mv_y / 4) * 4;
 #endif
   if (!p_Inp->rdopt)
   {
@@ -628,7 +627,7 @@ FastFullPelBlockMotionSearch (Macroblock   *currMB,       // <--  current Macrob
   MEFullFast *p_me_ffast = p_Vid->p_ffast_me;
   distblk mcost;
   int   pos;  
-  int  search_range   = imin(mv_block->searchRange.max_x, mv_block->searchRange.max_y) >> 2;
+  int  search_range   = imax(mv_block->searchRange.max_x, mv_block->searchRange.max_y) >> 2;
   int   max_pos       = (2*search_range+1)*(2*search_range+1);              // number of search positions
   int   best_pos      = 0;                                                  // position with minimum motion cost
   int   block_index;                                                        // block index for indexing SAD array
@@ -663,7 +662,12 @@ FastFullPelBlockMotionSearch (Macroblock   *currMB,       // <--  current Macrob
   {
     mcost  = dist_scale(*block_sad);
     cand = add_MVs (p_Vid->spiral_qpel_search[pos], offset);
-
+    /* //only for debug purpose;
+    if(GetMaxMVD(&cand, pred_mv) >= max_mvd)
+    {
+      printf("\n\n%d: out of range(%s%d)!\n\n", p_Vid->frame_no, __FILE__, __LINE__);
+    }
+    */
     //--- check residual cost ---
     if (mcost < min_mcost && GetMaxMVD(&cand, pred_mv)<max_mvd)
     {

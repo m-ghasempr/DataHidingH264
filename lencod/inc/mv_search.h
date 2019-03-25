@@ -45,7 +45,7 @@ extern void init_ME_engine    (Macroblock *currMB);
 extern distblk  BlockMotionSearch (Macroblock *currMB, MEBlock *mv_block, int,int, int*);
 extern void init_mv_block     (Macroblock *currMB, MEBlock *mv_block, short blocktype, int list, char ref_idx, short mb_x, short mb_y);
 extern void get_original_block(VideoParameters *p_Vid, MEBlock *mv_block);
-extern void free_mv_block     (InputParameters *p_Inp, MEBlock *mv_block);
+extern void free_mv_block     (MEBlock *mv_block);
 extern void update_mv_block   (Macroblock *currMB, MEBlock *mv_block, int h, int v);
 extern void get_search_range(MEBlock *mv_block, InputParameters *p_Inp, short ref, int blocktype);
 
@@ -100,7 +100,8 @@ static inline distblk weight_cost(int lambda, int bits)
 static inline distblk mv_cost(const VideoParameters *p_Vid, int lambda, const MotionVector *mv, const MotionVector *pmv)
 {
 #if JCOST_CALC_SCALEUP
-  return ( ((distblk)lambda) *((distblk)(p_Vid->mvbits[mv->mv_x - pmv->mv_x] + p_Vid->mvbits[mv->mv_y - pmv->mv_y])) );
+  int *mvbits = p_Vid->mvbits;
+  return ( ((distblk)lambda) *((distblk)(mvbits[mv->mv_x - pmv->mv_x] + mvbits[mv->mv_y - pmv->mv_y])) );
 #else
 #if (USE_RND_COST)
   return (rshift_rnd_sf((lambda *(p_Vid->mvbits[mv->mv_x - pmv->mv_x] + p_Vid->mvbits[mv->mv_y - pmv->mv_y])), LAMBDA_ACCURACY_BITS));
@@ -110,12 +111,13 @@ static inline distblk mv_cost(const VideoParameters *p_Vid, int lambda, const Mo
 #endif
 }
 
-static inline distblk ref_cost(const VideoParameters *p_Vid, int lambda, short ref, int list_offset)
+static inline distblk ref_cost(const Slice *currSlice, int lambda, short ref, int list_offset)
 {
-  if (p_Vid->listXsize[list_offset] <= 1)
+  if (currSlice->listXsize[list_offset] <= 1)
     return 0;
   else
   {
+    VideoParameters *p_Vid = currSlice->p_Vid;
 #if JCOST_CALC_SCALEUP
     return ( ((distblk)lambda) *((distblk)(p_Vid->refbits[(ref)])) );
 #else

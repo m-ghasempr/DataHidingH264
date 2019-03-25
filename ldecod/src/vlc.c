@@ -122,6 +122,7 @@ int u_v (int LenInBits, char*tracestring, Bitstream *bitstream)
   SYMTRACESTRING(tracestring);
   readSyntaxElement_FLC (&symbol, bitstream);
   p_Dec->UsedBits+=symbol.len;
+
   return symbol.inf;
 }
 
@@ -148,7 +149,6 @@ int u_v (int LenInBits, char*tracestring, Bitstream *bitstream)
 int i_v (int LenInBits, char*tracestring, Bitstream *bitstream)
 {
   SyntaxElement symbol;
-
   symbol.inf = 0;
 
   //assert (bitstream->streamBuffer != NULL);
@@ -641,8 +641,8 @@ static int code_from_bitstream_2d(SyntaxElement *sym,
     {
       if ((*len == 0) || (ShowBitsThres(inf, (int) *len) != *cod))
       {
-        len++;
-        cod++;
+        ++len;
+        ++cod;
       }
       else
       {

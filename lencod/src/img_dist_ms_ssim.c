@@ -334,15 +334,15 @@ void find_ms_ssim (VideoParameters *p_Vid, InputParameters *p_Inp, ImageStructur
   DistortionParams *p_Dist = p_Vid->p_Dist;
   FrameFormat *format = &ref->format;
 
-  metricSSIM->value[0] = compute_ms_ssim (p_Vid, p_Inp, ref->data[0], src->data[0], format->height, format->width, BLOCK_SIZE_8x8, BLOCK_SIZE_8x8, 0);
+  metricSSIM->value[0] = compute_ms_ssim (p_Vid, p_Inp, ref->data[0], src->data[0], format->height[0], format->width[0], BLOCK_SIZE_8x8, BLOCK_SIZE_8x8, 0);
   // Chroma.
   if (format->yuv_format != YUV400)
   {     
-    metricSSIM->value[1]  = compute_ms_ssim (p_Vid, p_Inp, ref->data[1], src->data[1], format->height_cr, format->width_cr, p_Vid->mb_cr_size_y, p_Vid->mb_cr_size_x, 1);
-    metricSSIM->value[2]  = compute_ms_ssim (p_Vid, p_Inp, ref->data[2], src->data[2], format->height_cr, format->width_cr, p_Vid->mb_cr_size_y, p_Vid->mb_cr_size_x, 2);
+    metricSSIM->value[1]  = compute_ms_ssim (p_Vid, p_Inp, ref->data[1], src->data[1], format->height[1], format->width[1], p_Vid->mb_cr_size_y, p_Vid->mb_cr_size_x, 1);
+    metricSSIM->value[2]  = compute_ms_ssim (p_Vid, p_Inp, ref->data[2], src->data[2], format->height[1], format->width[1], p_Vid->mb_cr_size_y, p_Vid->mb_cr_size_x, 2);
   }
 
- {
+  {
     accumulate_average(metricSSIM,  p_Dist->frame_ctr);
     accumulate_avslice(metricSSIM,  p_Vid->type, p_Vid->p_Stats->frame_ctr[p_Vid->type]);
   }

@@ -13,6 +13,7 @@
  */
 
 #include "global.h"
+#include "mbuffer.h"
 
 /*!
  ************************************************************************
@@ -22,10 +23,10 @@
  */
 static void GetMotionVectorPredictorMBAFF (Macroblock *currMB, 
                                     PixelPos *block,        // <--> block neighbors
-                                    short  pmv[2],
+                                    MotionVector *pmv,
                                     short  ref_frame,
-                                    char   **refPic,
-                                    short  ***tmp_mv,
+                                    PicMotionParams **mv_info,
+                                    int    list,
                                     int    mb_x,
                                     int    mb_y,
                                     int    blockshape_x,
@@ -43,31 +44,31 @@ static void GetMotionVectorPredictorMBAFF (Macroblock *currMB,
   {
     rFrameL  = block[0].available
       ? (p_Vid->mb_data[block[0].mb_addr].mb_field
-      ? refPic[block[0].pos_y][block[0].pos_x]
-    : refPic[block[0].pos_y][block[0].pos_x] * 2) : -1;
+      ? mv_info[block[0].pos_y][block[0].pos_x].ref_idx[list]
+    : mv_info[block[0].pos_y][block[0].pos_x].ref_idx[list] * 2) : -1;
     rFrameU  = block[1].available
       ? (p_Vid->mb_data[block[1].mb_addr].mb_field
-      ? refPic[block[1].pos_y][block[1].pos_x]
-    : refPic[block[1].pos_y][block[1].pos_x] * 2) : -1;
+      ? mv_info[block[1].pos_y][block[1].pos_x].ref_idx[list]
+    : mv_info[block[1].pos_y][block[1].pos_x].ref_idx[list] * 2) : -1;
     rFrameUR = block[2].available
       ? (p_Vid->mb_data[block[2].mb_addr].mb_field
-      ? refPic[block[2].pos_y][block[2].pos_x]
-    : refPic[block[2].pos_y][block[2].pos_x] * 2) : -1;
+      ? mv_info[block[2].pos_y][block[2].pos_x].ref_idx[list]
+    : mv_info[block[2].pos_y][block[2].pos_x].ref_idx[list] * 2) : -1;
   }
   else
   {
     rFrameL = block[0].available
       ? (p_Vid->mb_data[block[0].mb_addr].mb_field
-      ? refPic[block[0].pos_y][block[0].pos_x] >>1
-      : refPic[block[0].pos_y][block[0].pos_x]) : -1;
+      ? mv_info[block[0].pos_y][block[0].pos_x].ref_idx[list] >>1
+      : mv_info[block[0].pos_y][block[0].pos_x].ref_idx[list]) : -1;
     rFrameU  = block[1].available
       ? (p_Vid->mb_data[block[1].mb_addr].mb_field
-      ? refPic[block[1].pos_y][block[1].pos_x] >>1
-      : refPic[block[1].pos_y][block[1].pos_x]) : -1;
+      ? mv_info[block[1].pos_y][block[1].pos_x].ref_idx[list] >>1
+      : mv_info[block[1].pos_y][block[1].pos_x].ref_idx[list]) : -1;
     rFrameUR = block[2].available
       ? (p_Vid->mb_data[block[2].mb_addr].mb_field
-      ? refPic[block[2].pos_y][block[2].pos_x] >>1
-      : refPic[block[2].pos_y][block[2].pos_x]) : -1;
+      ? mv_info[block[2].pos_y][block[2].pos_x].ref_idx[list] >>1
+      : mv_info[block[2].pos_y][block[2].pos_x].ref_idx[list]) : -1;
   }
 
 
@@ -112,40 +113,40 @@ static void GetMotionVectorPredictorMBAFF (Macroblock *currMB,
   {
     if (hv == 0)
     {
-      mv_a = block[0].available ? tmp_mv[block[0].pos_y][block[0].pos_x][hv] : 0;
-      mv_b = block[1].available ? tmp_mv[block[1].pos_y][block[1].pos_x][hv] : 0;
-      mv_c = block[2].available ? tmp_mv[block[2].pos_y][block[2].pos_x][hv] : 0;
+      mv_a = block[0].available ? mv_info[block[0].pos_y][block[0].pos_x].mv[list].mv_x : 0;
+      mv_b = block[1].available ? mv_info[block[1].pos_y][block[1].pos_x].mv[list].mv_x : 0;
+      mv_c = block[2].available ? mv_info[block[2].pos_y][block[2].pos_x].mv[list].mv_x : 0;
     }
     else
     {
       if (currMB->mb_field)
       {
         mv_a = block[0].available  ? p_Vid->mb_data[block[0].mb_addr].mb_field
-          ? tmp_mv[block[0].pos_y][block[0].pos_x][hv]
-        : tmp_mv[block[0].pos_y][block[0].pos_x][hv] / 2
+          ? mv_info[block[0].pos_y][block[0].pos_x].mv[list].mv_y
+        : mv_info[block[0].pos_y][block[0].pos_x].mv[list].mv_y / 2
           : 0;
         mv_b = block[1].available  ? p_Vid->mb_data[block[1].mb_addr].mb_field
-          ? tmp_mv[block[1].pos_y][block[1].pos_x][hv]
-        : tmp_mv[block[1].pos_y][block[1].pos_x][hv] / 2
+          ? mv_info[block[1].pos_y][block[1].pos_x].mv[list].mv_y
+        : mv_info[block[1].pos_y][block[1].pos_x].mv[list].mv_y / 2
           : 0;
         mv_c = block[2].available  ? p_Vid->mb_data[block[2].mb_addr].mb_field
-          ? tmp_mv[block[2].pos_y][block[2].pos_x][hv]
-        : tmp_mv[block[2].pos_y][block[2].pos_x][hv] / 2
+          ? mv_info[block[2].pos_y][block[2].pos_x].mv[list].mv_y
+        : mv_info[block[2].pos_y][block[2].pos_x].mv[list].mv_y / 2
           : 0;
       }
       else
       {
         mv_a = block[0].available  ? p_Vid->mb_data[block[0].mb_addr].mb_field
-          ? tmp_mv[block[0].pos_y][block[0].pos_x][hv] * 2
-          : tmp_mv[block[0].pos_y][block[0].pos_x][hv]
+          ? mv_info[block[0].pos_y][block[0].pos_x].mv[list].mv_y * 2
+          : mv_info[block[0].pos_y][block[0].pos_x].mv[list].mv_y
         : 0;
         mv_b = block[1].available  ? p_Vid->mb_data[block[1].mb_addr].mb_field
-          ? tmp_mv[block[1].pos_y][block[1].pos_x][hv] * 2
-          : tmp_mv[block[1].pos_y][block[1].pos_x][hv]
+          ? mv_info[block[1].pos_y][block[1].pos_x].mv[list].mv_y * 2
+          : mv_info[block[1].pos_y][block[1].pos_x].mv[list].mv_y
         : 0;
         mv_c = block[2].available  ? p_Vid->mb_data[block[2].mb_addr].mb_field
-          ? tmp_mv[block[2].pos_y][block[2].pos_x][hv] * 2
-          : tmp_mv[block[2].pos_y][block[2].pos_x][hv]
+          ? mv_info[block[2].pos_y][block[2].pos_x].mv[list].mv_y * 2
+          : mv_info[block[2].pos_y][block[2].pos_x].mv[list].mv_y
         : 0;
       }
     }
@@ -159,7 +160,7 @@ static void GetMotionVectorPredictorMBAFF (Macroblock *currMB,
       }
       else
       {
-        pred_vec = mv_a + mv_b + mv_c - imin(mv_a, imin(mv_b, mv_c)) - imax(mv_a, imax(mv_b ,mv_c));
+        pred_vec = imedian(mv_a, mv_b, mv_c);
       }
       break;
     case MVPRED_L:
@@ -175,7 +176,10 @@ static void GetMotionVectorPredictorMBAFF (Macroblock *currMB,
       break;
     }
 
-    pmv[hv] = (short) pred_vec;
+    if (hv == 0)
+      pmv->mv_x = (short) pred_vec;
+    else
+      pmv->mv_y = (short) pred_vec;
   }
 }
 
@@ -187,23 +191,20 @@ static void GetMotionVectorPredictorMBAFF (Macroblock *currMB,
  */
 static void GetMotionVectorPredictorNormal (Macroblock *currMB, 
                                             PixelPos *block,      // <--> block neighbors
-                                            short  pmv[2],
+                                            MotionVector *pmv,
                                             short  ref_frame,
-                                            char   **refPic,
-                                            short  ***tmp_mv,
+                                            PicMotionParams **mv_info,
+                                            int    list,
                                             int    mb_x,
                                             int    mb_y,
                                             int    blockshape_x,
                                             int    blockshape_y)
 {
-  int pred_vec = 0;
-  int hv;
-
   int mvPredType = MVPRED_MEDIAN;
 
-  int rFrameL    = block[0].available ? refPic[block[0].pos_y][block[0].pos_x] : -1;
-  int rFrameU    = block[1].available ? refPic[block[1].pos_y][block[1].pos_x] : -1;
-  int rFrameUR   = block[2].available ? refPic[block[2].pos_y][block[2].pos_x] : -1;
+  int rFrameL    = block[0].available ? mv_info[block[0].pos_y][block[0].pos_x].ref_idx[list] : -1;
+  int rFrameU    = block[1].available ? mv_info[block[1].pos_y][block[1].pos_x].ref_idx[list] : -1;
+  int rFrameUR   = block[2].available ? mv_info[block[2].pos_y][block[2].pos_x].ref_idx[list] : -1;
 
   /* Prediction if only one of the neighbors uses the reference frame
   *  we are checking
@@ -243,38 +244,62 @@ static void GetMotionVectorPredictorNormal (Macroblock *currMB,
     }
   }
 
-  for (hv=0; hv < 2; hv++)
+  switch (mvPredType)
   {
-    switch (mvPredType)
+  case MVPRED_MEDIAN:
+    if(!(block[1].available || block[2].available))
     {
-    case MVPRED_MEDIAN:
-      if(!(block[1].available || block[2].available))
+      if (block[0].available)
       {
-        pred_vec = block[0].available ? tmp_mv[block[0].pos_y][block[0].pos_x][hv] : 0;
+        *pmv = mv_info[block[0].pos_y][block[0].pos_x].mv[list];
       }
       else
       {
-        int mv_a = block[0].available ? tmp_mv[block[0].pos_y][block[0].pos_x][hv] : 0;
-        int mv_b = block[1].available ? tmp_mv[block[1].pos_y][block[1].pos_x][hv] : 0;
-        int mv_c = block[2].available ? tmp_mv[block[2].pos_y][block[2].pos_x][hv] : 0;   
-
-        pred_vec = mv_a + mv_b + mv_c - imin(mv_a, imin(mv_b, mv_c)) - imax(mv_a, imax(mv_b ,mv_c));
-      }
-      break;
-    case MVPRED_L:
-      pred_vec = block[0].available ? tmp_mv[block[0].pos_y][block[0].pos_x][hv] : 0;
-      break;
-    case MVPRED_U:
-      pred_vec = block[1].available ? tmp_mv[block[1].pos_y][block[1].pos_x][hv] : 0;
-      break;
-    case MVPRED_UR:
-      pred_vec = block[2].available ? tmp_mv[block[2].pos_y][block[2].pos_x][hv] : 0;   
-      break;
-    default:
-      break;
+        *pmv = zero_mv;
+      }        
     }
+    else
+    {
+      MotionVector *mv_a = block[0].available ? &mv_info[block[0].pos_y][block[0].pos_x].mv[list] : (MotionVector *) &zero_mv;
+      MotionVector *mv_b = block[1].available ? &mv_info[block[1].pos_y][block[1].pos_x].mv[list] : (MotionVector *) &zero_mv;
+      MotionVector *mv_c = block[2].available ? &mv_info[block[2].pos_y][block[2].pos_x].mv[list] : (MotionVector *) &zero_mv;
 
-    pmv[hv] = (short) pred_vec;
+      pmv->mv_x = (short) imedian(mv_a->mv_x, mv_b->mv_x, mv_c->mv_x);
+      pmv->mv_y = (short) imedian(mv_a->mv_y, mv_b->mv_y, mv_c->mv_y);
+    }    
+    break;
+  case MVPRED_L:
+    if (block[0].available)
+    {
+      *pmv = mv_info[block[0].pos_y][block[0].pos_x].mv[list];
+    }
+    else
+    {
+      *pmv = zero_mv;
+    }
+    break;
+  case MVPRED_U:
+    if (block[1].available)
+    {
+      *pmv = mv_info[block[1].pos_y][block[1].pos_x].mv[list];
+    }
+    else
+    {
+      *pmv = zero_mv;
+    }
+    break;
+  case MVPRED_UR:
+    if (block[2].available)
+    {
+      *pmv = mv_info[block[2].pos_y][block[2].pos_x].mv[list];
+    }
+    else
+    {
+      *pmv = zero_mv;
+    }
+    break;
+  default:
+    break;
   }
 }
 

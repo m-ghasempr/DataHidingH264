@@ -38,6 +38,9 @@ const int assignSE2partition_DP[SE_MAX_ELEMENTS] =
   // 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17
   {  0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 0, 0, 0 } ;
 
+#if (MVC_EXTENSION_ENABLE)
+static int mvc_ref_pic_list_reordering(Slice *currSlice, Bitstream *bitstream);
+#endif
 static int ref_pic_list_reordering(Slice *currSlice, Bitstream *bitstream);
 static int pred_weight_table      (Slice *currSlice, Bitstream *bitstream);
 static int get_picture_type       (Slice *currSlice);
@@ -53,6 +56,7 @@ static int get_picture_type       (Slice *currSlice);
 int SliceHeader(Slice* currSlice)
 {
   VideoParameters *p_Vid = currSlice->p_Vid;
+  InputParameters *p_Inp = currSlice->p_Inp;
   seq_parameter_set_rbsp_t *active_sps = currSlice->active_sps;
   pic_parameter_set_rbsp_t *active_pps = currSlice->active_pps;
 
@@ -77,7 +81,14 @@ int SliceHeader(Slice* currSlice)
   if( active_sps->separate_colour_plane_flag == 1 )
     len += u_v( 2, "SH: colour_plane_id", p_Vid->colour_plane_id, bitstream );
 
+#if (MVC_EXTENSION_ENABLE)
+  if(p_Inp->num_of_views==2)
+    len += u_v (p_Vid->log2_max_frame_num_minus4 + 4,"SH: frame_num", p_Vid->frame_num/2, bitstream);
+  else
+    len += u_v (p_Vid->log2_max_frame_num_minus4 + 4,"SH: frame_num", p_Vid->frame_num, bitstream);
+#else
   len += u_v (p_Vid->log2_max_frame_num_minus4 + 4,"SH: frame_num", p_Vid->frame_num, bitstream);
+#endif
 
   if (!currSlice->active_sps->frame_mbs_only_flag)
   {
@@ -167,7 +178,12 @@ int SliceHeader(Slice* currSlice)
     }
 
   }
-  len += ref_pic_list_reordering(currSlice, bitstream);
+#if (MVC_EXTENSION_ENABLE)
+  if(p_Inp->num_of_views==2 && p_Vid->MVCInterViewReorder && p_Vid->view_id==1)
+    len += mvc_ref_pic_list_reordering(currSlice, bitstream);
+  else
+#endif
+    len += ref_pic_list_reordering(currSlice, bitstream);
 
   if (((currSlice->slice_type == P_SLICE || currSlice->slice_type == SP_SLICE) && active_pps->weighted_pred_flag) ||
      ((currSlice->slice_type == B_SLICE) && currSlice->weighted_prediction == 1))
@@ -257,7 +273,7 @@ static int ref_pic_list_reordering(Slice *currSlice, Bitstream *bitstream)
         i++;
         len += ue_v ("SH: reordering_of_pic_nums_idc", currSlice->reordering_of_pic_nums_idc[LIST_0][i], bitstream);
         if (currSlice->reordering_of_pic_nums_idc[LIST_0][i]==0 ||
-            currSlice->reordering_of_pic_nums_idc[LIST_0][i]==1)
+          currSlice->reordering_of_pic_nums_idc[LIST_0][i]==1)
         {
           len += ue_v ("SH: abs_diff_pic_num_minus1_l0", currSlice->abs_diff_pic_num_minus1[LIST_0][i], bitstream);
         }
@@ -284,7 +300,7 @@ static int ref_pic_list_reordering(Slice *currSlice, Bitstream *bitstream)
         i++;
         len += ue_v ("SH: remapping_of_pic_num_idc", currSlice->reordering_of_pic_nums_idc[LIST_1][i], bitstream);
         if (currSlice->reordering_of_pic_nums_idc[LIST_1][i]==0 ||
-            currSlice->reordering_of_pic_nums_idc[LIST_1][i]==1)
+          currSlice->reordering_of_pic_nums_idc[LIST_1][i]==1)
         {
           len += ue_v ("SH: abs_diff_pic_num_minus1_l1", currSlice->abs_diff_pic_num_minus1[LIST_1][i], bitstream);
         }
@@ -302,6 +318,57 @@ static int ref_pic_list_reordering(Slice *currSlice, Bitstream *bitstream)
   return len;
 }
 
+#if (MVC_EXTENSION_ENABLE)
+/*!
+********************************************************************************************
+* \brief
+*    writes the mvc_ref_pic_list_reordering syntax
+*    based on content of according fields in img structure
+*
+* \return
+*    number of bits used
+********************************************************************************************
+*/
+
+static int mvc_ref_pic_list_reordering(Slice *currSlice, Bitstream *bitstream)
+{
+  int i, len=0;
+
+  if(currSlice->num_ref_idx_active[LIST_0]!=0)
+  {
+    currSlice->ref_pic_list_reordering_flag[LIST_0] = 1;
+    currSlice->ref_pic_list_reordering_flag[LIST_1] = 0;
+    currSlice->reordering_of_pic_nums_idc[LIST_0][0] = 5;
+    currSlice->reordering_of_pic_nums_idc[LIST_0][1] = 3;
+    currSlice->abs_diff_pic_num_minus1[LIST_0][0] = 0;
+
+    if (currSlice->slice_type!=I_SLICE && currSlice->slice_type!=SI_SLICE)
+    {
+      currSlice->ref_pic_list_reordering_flag[LIST_0] = 1;
+      len += u_1 ("SH: ref_pic_list_reordering_flag_l0", currSlice->ref_pic_list_reordering_flag[LIST_0], bitstream);
+      if (currSlice->ref_pic_list_reordering_flag[LIST_0])
+      {
+        i=-1;
+        do
+        {
+          i++;
+          len += ue_v ("SH: reordering_of_pic_nums_idc", currSlice->reordering_of_pic_nums_idc[LIST_0][i], bitstream);
+          if (currSlice->reordering_of_pic_nums_idc[LIST_0][i]!=3)
+          {
+            len += ue_v ("SH: abs_diff_pic_num_minus1_l0", currSlice->abs_diff_pic_num_minus1[LIST_0][i], bitstream);
+          }
+        } while (currSlice->reordering_of_pic_nums_idc[LIST_0][i] != 3);
+      }
+    }
+    if (currSlice->slice_type==B_SLICE)
+    {
+      len += u_1 ("SH: ref_pic_list_reordering_flag_l1", currSlice->ref_pic_list_reordering_flag[LIST_1], bitstream);
+    }
+  }
+
+  return len;
+}
+#endif
 
 /*!
  ************************************************************************
@@ -473,6 +540,13 @@ static int get_picture_type(Slice *currSlice)
   // set this value to zero for transmission without signaling
   // that the whole picture has the same slice type
   int same_slicetype_for_whole_frame = 5;
+
+#if (MVC_EXTENSION_ENABLE)
+  if(currSlice->p_Inp->num_of_views==2)
+  {
+    same_slicetype_for_whole_frame = 0;
+  }
+#endif
 
   switch (currSlice->slice_type)
   {

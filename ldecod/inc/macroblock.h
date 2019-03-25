@@ -147,5 +147,6 @@ extern int  decode_one_macroblock(Macroblock *currMB, StorablePicture *dec_pictu
 extern Boolean  exit_macroblock  (Slice *currSlice, int eos_bit);
 extern void update_qp            (Macroblock *currMB, int qp);
 
+
 #endif
 

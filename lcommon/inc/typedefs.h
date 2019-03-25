@@ -28,17 +28,20 @@ typedef          short int16;
 typedef          int   int32;
 
 #if (IMGTYPE == 0)
-typedef byte   imgpel;
-typedef uint16 distpel;
-typedef int32  distblk;
+typedef byte   imgpel;           //!< pixel type
+typedef uint16 distpel;          //!< distortion type (for pixels)
+typedef int32  distblk;          //!< distortion type (for Macroblock)
+typedef int32  transpel;         //!< transformed coefficient type
 #elif (IMGTYPE == 2)
 typedef float imgpel;
 typedef float distpel;
 typedef float distblk;
+typedef int32 transpel;
 #else
 typedef uint16 imgpel;
 typedef uint32 distpel;
 typedef int64  distblk;
+typedef int32  transpel;
 #endif
 
 //! Boolean Type
@@ -49,6 +52,10 @@ typedef enum {
   FALSE,
   TRUE
 } Boolean;
+#endif
+
+#ifndef MAXINT64
+#define MAXINT64     0x7fffffffffffffff
 #endif
 
 /*

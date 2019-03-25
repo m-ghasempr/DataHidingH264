@@ -148,6 +148,7 @@ smpUMHEXIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  current Ma
                                      )
 {
   VideoParameters *p_Vid = currMB->p_Vid;
+  Slice           *currSlice = currMB->p_Slice;
   UMHexSMPStruct *p_UMHexSMP = p_Vid->p_UMHexSMP;
   int   blocktype     = mv_block->blocktype;  
   short blocksize_x   = mv_block->blocksize_x;            // horizontal block size  
@@ -158,7 +159,7 @@ smpUMHEXIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  current Ma
   int   list = mv_block->list;
   int   cur_list = list + currMB->list_offset;
   short ref = mv_block->ref_idx;
-  StorablePicture *ref_picture = p_Vid->listX[cur_list][ref];
+  StorablePicture *ref_picture = currSlice->listX[cur_list][ref];
   int  search_range = mv_block->searchRange.max_x >> 2;
 
   MotionVector *mv    = &mv_block->mv[list];
@@ -386,7 +387,7 @@ smpUMHEXFullSubPelBlockMotionSearch (Macroblock *currMB,      // <--  current Ma
 {
   VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   UMHexSMPStruct *p_UMHexSMP = p_Vid->p_UMHexSMP;
   int   pos, best_pos;
   distblk mcost;
@@ -404,7 +405,7 @@ smpUMHEXFullSubPelBlockMotionSearch (Macroblock *currMB,      // <--  current Ma
   int   max_pos2        = ( !p_Vid->start_me_refinement_hp ? imax(1, mv_block->search_pos2) : mv_block->search_pos2);
   MotionVector cmv;
 
-  StorablePicture *ref_picture = p_Vid->listX[list + list_offset][ref];
+  StorablePicture *ref_picture = currSlice->listX[list + list_offset][ref];
 
 
   /*********************************
@@ -516,6 +517,7 @@ smpUMHEXSubPelBlockMotionSearch  (
                                   )
 {
   VideoParameters *p_Vid = currMB->p_Vid;
+  Slice *currSlice = currMB->p_Slice;
   UMHexSMPStruct *p_UMHexSMP = p_Vid->p_UMHexSMP;
   distblk   mcost;
   MotionVector cand, iMinNow, currmv = {0, 0}, candWithPad;
@@ -526,7 +528,7 @@ smpUMHEXSubPelBlockMotionSearch  (
   short ref = mv_block->ref_idx;
   MotionVector *mv  = &mv_block->mv[list];
 
-  StorablePicture *ref_picture = p_Vid->listX[list+list_offset][ref];
+  StorablePicture *ref_picture = currSlice->listX[list+list_offset][ref];
 
   short dynamic_search_range = 3, i, m;
   int   pred_frac_mv_x,pred_frac_mv_y,abort_search;
@@ -675,6 +677,7 @@ smpUMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  curr
                                            )
 {
   VideoParameters *p_Vid = currMB->p_Vid;
+  Slice *currSlice = currMB->p_Slice;
   UMHexSMPStruct *p_UMHexSMP = p_Vid->p_UMHexSMP;
 
   int   search_step;
@@ -686,8 +689,8 @@ smpUMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  curr
   short pic_pix_y     = mv_block->pos_y_padded;
   short ref = mv_block->ref_idx;
 
-  StorablePicture *ref_picture1 = p_Vid->listX[list + currMB->list_offset][ref];
-  StorablePicture *ref_picture2 = p_Vid->listX[list == 0 ? 1 + currMB->list_offset: currMB->list_offset][ 0 ];  
+  StorablePicture *ref_picture1 = currSlice->listX[list + currMB->list_offset][ref];
+  StorablePicture *ref_picture2 = currSlice->listX[list == 0 ? 1 + currMB->list_offset: currMB->list_offset][ 0 ];  
 
   MotionVector iMinNow, best, cand, pred1, pred2, center1, center2;
   search_range >>= 2;
@@ -882,7 +885,7 @@ smpUMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  curr
  */
 void smpUMHEX_decide_intrabk_SAD(Macroblock *currMB)
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currMB->p_Vid;
   UMHexSMPStruct *p_UMHexSMP = p_Vid->p_UMHexSMP;
 
@@ -921,7 +924,7 @@ void smpUMHEX_skip_intrabk_SAD(Macroblock *currMB)
 {
   short i, j, k;
   VideoParameters *p_Vid = currMB->p_Vid;
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   UMHexSMPStruct *p_UMHexSMP = p_Vid->p_UMHexSMP;
 
   if (p_Vid->number > 0)
@@ -959,30 +962,30 @@ void smpUMHEX_setup(Macroblock *currMB,
                     int block_y,
                     int block_x,
                     int blocktype,
-                    short ******all_mv)
+                    MotionVector *****all_mv)
 {
   VideoParameters *p_Vid = currMB->p_Vid;
   UMHexSMPStruct *p_UMHexSMP = p_Vid->p_UMHexSMP;
 
   if (blocktype > 6)
   {
-    p_UMHexSMP->pred_MV_uplayer_X = all_mv[list][ref][5][block_y][block_x][0];
-    p_UMHexSMP->pred_MV_uplayer_Y = all_mv[list][ref][5][block_y][block_x][1];
+    p_UMHexSMP->pred_MV_uplayer_X = all_mv[list][ref][5][block_y][block_x].mv_x;
+    p_UMHexSMP->pred_MV_uplayer_Y = all_mv[list][ref][5][block_y][block_x].mv_y;
   }
   else if (blocktype > 4)
   {
-    p_UMHexSMP->pred_MV_uplayer_X = all_mv[list][ref][4][block_y][block_x][0];
-    p_UMHexSMP->pred_MV_uplayer_Y = all_mv[list][ref][4][block_y][block_x][1];
+    p_UMHexSMP->pred_MV_uplayer_X = all_mv[list][ref][4][block_y][block_x].mv_x;
+    p_UMHexSMP->pred_MV_uplayer_Y = all_mv[list][ref][4][block_y][block_x].mv_y;
   }
   else if (blocktype == 4)
   {
-    p_UMHexSMP->pred_MV_uplayer_X = all_mv[list][ref][2][block_y][block_x][0];
-    p_UMHexSMP->pred_MV_uplayer_Y = all_mv[list][ref][2][block_y][block_x][1];
+    p_UMHexSMP->pred_MV_uplayer_X = all_mv[list][ref][2][block_y][block_x].mv_x;
+    p_UMHexSMP->pred_MV_uplayer_Y = all_mv[list][ref][2][block_y][block_x].mv_y;
   }
   else if (blocktype > 1)
   {
-    p_UMHexSMP->pred_MV_uplayer_X = all_mv[list][ref][1][block_y][block_x][0];
-    p_UMHexSMP->pred_MV_uplayer_Y = all_mv[list][ref][1][block_y][block_x][1];
+    p_UMHexSMP->pred_MV_uplayer_X = all_mv[list][ref][1][block_y][block_x].mv_x;
+    p_UMHexSMP->pred_MV_uplayer_Y = all_mv[list][ref][1][block_y][block_x].mv_y;
   }
 
   if (blocktype > 1)

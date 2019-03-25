@@ -36,7 +36,7 @@ struct coding_state {
   // elements of current macroblock
   short                 mvd[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE][2];
   int64                 cbp_bits[3];
-  int64                 cbp_bits_8x8[3];
+  int64                 *cbp_bits_8x8;
 };
 
 typedef struct coding_state CSobj;

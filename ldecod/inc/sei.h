@@ -64,7 +64,7 @@ typedef struct tone_mapping_struct_s
 
 #endif
 
-void InterpretSEIMessage                                ( byte* payload, int size, VideoParameters *p_Vid );
+void InterpretSEIMessage                                ( byte* payload, int size, VideoParameters *p_Vid, Slice *pSlice );
 void interpret_spare_pic                                ( byte* payload, int size, VideoParameters *p_Vid );
 void interpret_subsequence_info                         ( byte* payload, int size, VideoParameters *p_Vid );
 void interpret_subsequence_layer_characteristics_info   ( byte* payload, int size, VideoParameters *p_Vid );
@@ -75,7 +75,7 @@ void interpret_user_data_unregistered_info              ( byte* payload, int siz
 void interpret_pan_scan_rect_info                       ( byte* payload, int size, VideoParameters *p_Vid );
 void interpret_recovery_point_info                      ( byte* payload, int size, VideoParameters *p_Vid );
 void interpret_filler_payload_info                      ( byte* payload, int size, VideoParameters *p_Vid );
-void interpret_dec_ref_pic_marking_repetition_info      ( byte* payload, int size, VideoParameters *p_Vid );
+void interpret_dec_ref_pic_marking_repetition_info      ( byte* payload, int size, VideoParameters *p_Vid, Slice *pSlice );
 void interpret_full_frame_freeze_info                   ( byte* payload, int size, VideoParameters *p_Vid );
 void interpret_full_frame_freeze_release_info           ( byte* payload, int size, VideoParameters *p_Vid );
 void interpret_full_frame_snapshot_info                 ( byte* payload, int size, VideoParameters *p_Vid );

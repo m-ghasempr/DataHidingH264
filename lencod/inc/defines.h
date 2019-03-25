@@ -27,8 +27,8 @@
 # define TRACE           0      //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
 #endif
 
-#define JM                  "16.2 (FRExt)"
-#define VERSION             "16.2"
+#define JM                  "17 (FRExt)"
+#define VERSION             "17.0"
 #define EXT_VERSION         "(FRExt)"
 
 #define GET_METIME                1    //!< Enables or disables ME computation time
@@ -40,7 +40,6 @@
 #define DEBUG_BITDEPTH            0    //!< Ensures that > 8 bit content have no values that would result in out of range results
 #define ALLOW_GRAYSCALE           1    //!< Allow encoding in grayscale
 #define ZEROSNR                   1    //!< PSNR computation method
-#define PAD_AFTER                 0
 #define USE_RND_COST              0    //!< Perform ME RD decision using a rounding estimate of the motion cost
 #define JM_INT_DIVIDE             1
 #define JM_MEM_DISTORTION         0
@@ -48,27 +47,34 @@
 #define INTRA_RDCOSTCALC_EARLY_TERMINATE  1
 #define INTRA_RDCOSTCALC_NNZ      1    //1: to recover block's nzn after rdcost calculation;
 #define JCOST_OVERFLOWCHECK       0    //!<1: to check the J cost if it is overflow>
+#define JM_PARALLEL_DEBLOCK       0    //!< Enables Parallel Deblocking
+
+#define MVC_EXTENSION_ENABLE      1    //!< enable support for the Multiview High Profile
+#define EOS_OUTPUT                0 
 
 #define EPZSREF                   1
 
 #define MAX_RC_MODE               3
 #define RC_MAX_TEMPORAL_LEVELS    5
 
+#define SSE_MEMORY_ALIGNMENT      16
+
 //#define BEST_NZ_COEFF 1   // yuwen 2005.11.03 => for high complexity mode decision (CAVLC, #TotalCoeff)
 
 //AVC Profile IDC definitions
 enum {
-  FREXT_CAVLC444 = 44,      //!< YUV 4:4:4/14 "CAVLC 4:4:4"
-  BASELINE       = 66,      //!< YUV 4:2:0/8  "Baseline"
-  MAIN           = 77,      //!< YUV 4:2:0/8  "Main"
-  EXTENDED       = 88,      //!< YUV 4:2:0/8  "Extended"
-  FREXT_HP       = 100,     //!< YUV 4:2:0/8  "High"
-  FREXT_Hi10P    = 110,     //!< YUV 4:2:0/10 "High 10"
-  FREXT_Hi422    = 122,     //!< YUV 4:2:2/10 "High 4:2:2"
-  FREXT_Hi444    = 244      //!< YUV 4:4:4/14 "High 4:4:4"
+  FREXT_CAVLC444 = 44,       //!< YUV 4:4:4/14 "CAVLC 4:4:4"
+  BASELINE       = 66,       //!< YUV 4:2:0/8  "Baseline"
+  MAIN           = 77,       //!< YUV 4:2:0/8  "Main"
+  EXTENDED       = 88,       //!< YUV 4:2:0/8  "Extended"
+  FREXT_HP       = 100,      //!< YUV 4:2:0/8  "High"
+  FREXT_Hi10P    = 110,      //!< YUV 4:2:0/10 "High 10"
+  FREXT_Hi422    = 122,      //!< YUV 4:2:2/10 "High 4:2:2"
+  FREXT_Hi444    = 244,      //!< YUV 4:4:4/14 "High 4:4:4"
+  MULTIVIEW_HIGH = 118,      //!< YUV 4:2:0/8  "Multiview High"
+  MULTIVIEW_FIELDHIGH = 119,  //!< YUV 4:2:0/8  "Multiview Field High"
+  STEREO_HIGH    = 128       //!< YUV 4:2:0/8  "Stereo High"
 } ProfileIDC;
-
-#define SSE_MEMORY_ALIGNMENT      16
 
 // Some typedefs used in the software
 #include "types.h"
@@ -95,9 +101,12 @@ enum {
 #define _LUMA_MB_COEFF_COST_    5 //!< threshold for luma coeffs of inter Macroblocks
 #define _LUMA_8x8_COEFF_COST_   5 //!< threshold for luma coeffs of 8x8 Inter Partition
 
-#define IMG_PAD_SIZE           20 //!< Number of pixels padded around the reference frame (>=4)
-#define IMG_PAD_SIZE_TIMES4    80 //!< Number of pixels padded around the reference frame in subpel units(>=16)
-
+//#define IMG_PAD_SIZE           20 //!< Number of pixels padded around the reference frame (>=4)
+//#define IMG_PAD_SIZE_TIMES4    80 //!< Number of pixels padded around the reference frame in subpel units(>=16)
+#define IMG_PAD_SIZE_X         32 //!< Number of pixels padded around the reference frame (>=4)
+#define IMG_PAD_SIZE_Y         18  //!< Number of pixels padded around the reference frame (>=4)
+#define IMG_PAD_SIZE_X_TIMES4  128 //!< Number of pixels padded around the reference frame in subpel units(>=16)
+#define IMG_PAD_SIZE_Y_TIMES4  72 //!< Number of pixels padded around the reference frame in subpel units(>=16)
 
 #define MAX_VALUE       999999   //!< used for start value for some variables
 #define INVALIDINDEX  (-135792468)
@@ -134,6 +143,9 @@ enum {
 // These variables relate to the subpel accuracy supported by the software (1/4)
 #define BLOCK_SIZE_SP      16  // BLOCK_SIZE << 2
 #define BLOCK_SIZE_8x8_SP  32  // BLOCK_SIZE8x8 << 2
+
+// wavelet based weighted PSNR wavelet levels
+#define NUM_WAVELET_LEVEL 4
 
 // RDOQ
 #define MAX_PREC_COEFF    25
@@ -287,7 +299,6 @@ enum {
 #define CALM_MF_FACTOR_THRESHOLD 512.0
 
 #define MAX_PLANE       3
-#define IS_INDEPENDENT(IMG)           ((IMG)->separate_colour_plane_flag)
 #define IS_FREXT_PROFILE(profile_idc) ( profile_idc>=FREXT_HP || profile_idc == FREXT_CAVLC444 )
 
 #define MAXSLICEGROUPIDS 8

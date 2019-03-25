@@ -14,8 +14,8 @@
 #ifndef _GLOBAL_H_
 #define _GLOBAL_H_
 
-#include "win32.h"
 #include "defines.h"
+#include "win32.h"
 #include "typedefs.h"
 #include "parsetcommon.h"
 #include "ifunctions.h"
@@ -30,6 +30,7 @@
 #include "rc_types.h"
 #include "pred_struct_types.h"
 
+typedef struct bit_stream Bitstream;
 
 
 /***********************************************************************
@@ -41,7 +42,8 @@ typedef struct inp_par_enc InputParameters;
 // structures that will be declared somewhere else
 struct storable_picture;
 struct coding_state;
-
+struct pic_motion_params_old;
+struct pic_motion_params;
 
 typedef struct image_structure
 {  
@@ -101,7 +103,7 @@ typedef EncodingEnvironment *EncodingEnvironmentPtr;
 typedef struct
 {
   unsigned long  count;
-  uint16 state;         // index into state-table CP
+  byte state; //uint16 state;         // index into state-table CP
   unsigned char  MPS;           // Least Probable Symbol 0/1 CP  
 } BiContextType;
 
@@ -161,16 +163,48 @@ typedef struct
   short mv_y;
 } MotionVector;
 
-//! definition of pic motion parameters
-typedef struct pic_motion_params
+//! Bipred Motion Vector structure
+typedef struct
 {
-  int64 ***   ref_pic_id;    //!< reference picture identifier [list][subblock_y][subblock_x]
-  int64 ***   ref_id;        //!< reference picture identifier [list][subblock_y][subblock_x]
-  short ****  mv;            //!< motion vector       [list][subblock_x][subblock_y][component]
-  char  ***   ref_idx;       //!< reference picture   [list][subblock_y][subblock_x]
-  byte *      mb_field;      //!< field macroblock indicator
-  byte **     field_frame;   //!< indicates if co_located is field or frame.
-} PicMotionParams;
+  short refIdx[2];
+  MotionVector mv[2];
+  distblk dist;
+  distblk sad;
+} BiPredMVInfo;
+
+static const MotionVector zero_mv = {0, 0};
+
+typedef struct rd_8x8_data
+{
+  distblk  mb_p8x8_cost;  
+  distblk  smb_p8x8_cost[4];  
+  distblk  smb_p8x8_rdcost[4];
+  Info8x8 part[4];
+
+  int cbp8x8;
+  int cbp_blk8x8;
+  int cnt_nonz_8x8;    
+  
+  int **lrec; // transform and quantized coefficients will be stored here for SP frames
+  imgpel **mpr8x8;
+  imgpel ***mpr8x8CbCr;
+  imgpel **rec_mbY8x8;
+  imgpel ***rec_mb8x8_cr;
+} RD_8x8DATA;
+
+typedef struct rd_params
+{
+  double lambda_md;        //!< Mode decision Lambda
+//#if JCOST_CALC_SCALEUP
+  int    lambda_mdfp;       //!< Fixed point mode decision lambda;
+//#endif
+  double lambda_me[3];     //!< Motion Estimation Lambda
+  int    lambda_mf[3];     //!< Integer formatted Motion Estimation Lambda
+  int    best_mcost[2];
+
+  short  valid[MAXMODE];
+  short  curr_mb_field;
+} RD_PARAMS;
 
 
 //! Set Explicit GOP Parameters.
@@ -183,13 +217,12 @@ typedef struct
   int slice_qp;           //! Assigned QP
   int hierarchy_layer;    //! Hierarchy layer (used with GOP Hierarchy option 2)
   int hierarchyPocDelta;  //! Currently unused
-
   int temporal_layer;     //! Temporal layer; 
-  //! This information is used for hierarchical coding with temporal scalability feature
-  //! If ReferenceReorder = 2, then
-  //!    reference reordering is applied based on POC and then frames of higher temporal layer are prevented from being referenced
-  //! If MemoryManagement = 2, then
-  //!    after encoding a reference frame with temporal layer T, a list of MMCO commands to delete higher temporal layer frames is created
+  // This information is used for hierarchical coding with temporal scalability feature
+  // If ReferenceReorder = 2, then
+  //    reference reordering is applied based on POC and then frames of higher temporal layer are prevented from being referenced
+  // If PocMemoryManagement = 2, then
+  //    after encoding a reference frame with temporal layer T, a list of MMCO commands to delete higher temporal layer frames is created
 
 } GOP_DATA;
 
@@ -206,7 +239,7 @@ typedef struct DecRefPicMarking_s
 
 typedef struct me_block
 {
-  struct video_par  *p_Vid;
+  struct video_par *p_Vid;
 
   short            pos_x_padded;    //!< position x in image
   short            pos_y_padded;    //!< position y in image
@@ -227,12 +260,17 @@ typedef struct me_block
 
   short            pos_cr_x;        //!< position x in image
   short            pos_cr_y;        //!< position y in image
-
+  
+  short            hme_level;        //!< level for HME search;
+  int              hme_ref_size_y_pad;
+  int              hme_ref_size_x_pad;
+  int              hme_ref_size_y_max;
+  int              hme_ref_size_x_max;
   char             list;             //!< current list (list 0 or list 1). This is needed for bipredictive ME
   char             ref_idx;          //!< current reference index
   MotionVector     mv[2];            //!< motion vectors (L0/L1)
   PixelPos         block[4];
-  struct slice    *p_slice;
+  struct slice    *p_Slice;
   struct search_window searchRange;
   int              cost;           //!< Rate Distortion cost
   imgpel         **orig_pic;      //!< Block Data
@@ -293,8 +331,8 @@ typedef struct syntaxelement
 //! Macroblock
 typedef struct macroblock
 {
-  struct slice       *p_slice;                    //!< pointer to the current slice
-  struct video_par     *p_Vid;                      //!< pointer to VideoParameters
+  struct slice       *p_Slice;                    //!< pointer to the current slice
+  struct video_par   *p_Vid;                      //!< pointer to VideoParameters
   InputParameters    *p_Inp;
   int                 mbAddrX;                    //!< current MB address
   short               mb_type;                    //!< current MB mode type
@@ -317,6 +355,7 @@ typedef struct macroblock
 
   short               list_offset;
   Boolean             prev_recode_mb;
+  Boolean             DeblockCall;
 
   int                 mbAddrA, mbAddrB, mbAddrC, mbAddrD;
   byte                mbAvailA, mbAvailB, mbAvailC, mbAvailD;
@@ -345,6 +384,7 @@ typedef struct macroblock
   //imgpel              intra4x4_pred[16][17]; //!< 4x4 Intra prediction samples
   imgpel              intra4x4_pred[3][17]; //!< 4x4 Intra prediction samples
   imgpel              intra8x8_pred[3][25]; //!< 8x8 Intra prediction samples
+  imgpel              intra16x16_pred[3][33]; //!< 8x8 Intra prediction samples
 
   char                IntraChromaPredModeFlag;
   byte                mb_field;
@@ -353,6 +393,7 @@ typedef struct macroblock
   byte                temp_transform_size_8x8_flag;
   byte                NoMbPartLessThan8x8Flag;
   byte                valid_8x8;
+  byte                valid_4x4;
   byte                write_mb;
   byte                is_intra_block;
 
@@ -374,9 +415,9 @@ typedef struct macroblock
   distblk              min_rate;
 
   short               best_mode;
-  char                best_c_imode;
   short               best_i16offset;
   char                best_i16mode;
+  char                best_c_imode;
   int                 best_cbp;
 
   //For residual DPCM
@@ -389,25 +430,25 @@ typedef struct macroblock
   struct macroblock   *PrevMB;
 
   // Functions
-  void (*GetMVPredictor) (struct macroblock *currMB, PixelPos *block, short pmv[2], short ref_frame, 
-    char **refPic, short ***tmp_mv, int mb_x, int mb_y, int blockshape_x, int blockshape_y);
+  void (*GetMVPredictor) (struct macroblock *currMB, PixelPos *block, MotionVector *pmv, short ref_frame, 
+    struct pic_motion_params **mv_info, int list, int mb_x, int mb_y, int blockshape_x, int blockshape_y);
   distblk (*IntPelME)       (struct macroblock *currMB, MotionVector *, struct me_block *mv_block, distblk, int);
   distblk (*SubPelBiPredME) (struct macroblock *currMB, struct me_block *, int list, 
     MotionVector *pred_mv1, MotionVector *pred_mv2, MotionVector *mv1, MotionVector *mv2, distblk min_mcost, int* lambda_factor);
   distblk (*SubPelME)       (struct macroblock *currMB, 
     MotionVector *pred_mv, struct me_block *mv_block, distblk min_mcost, int* lambda_factor);
   distblk (*BiPredME)       (struct macroblock *currMB, int, MotionVector *, MotionVector *, MotionVector *, MotionVector *, struct me_block *, int, distblk, int);
-  int (*trans_4x4)       (struct macroblock *currMB, ColorPlane pl, int block_x, int block_y, int *coeff_cost, int intra);
-  int (*trans_16x16)     (struct macroblock *currMB, ColorPlane pl);
-  int (*trans_8x8)       (struct macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int intra);
-  int  (*trans_cr_4x4[2])(struct macroblock *currMB, int uv,int i11);
+  int (*residual_transform_quant_luma_4x4)      (struct macroblock *currMB, ColorPlane pl, int block_x, int block_y, int *coeff_cost, int intra);
+  int (*residual_transform_quant_luma_16x16)    (struct macroblock *currMB, ColorPlane pl);
+  int (*residual_transform_quant_luma_8x8)      (struct macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int intra);
+  int  (*residual_transform_quant_chroma_4x4[2])(struct macroblock *currMB, int uv,int i11);
 
   void (*cbp_linfo_intra)(int cbp, int dummy, int *len,int *info);
   void (*cbp_linfo_inter)(int cbp, int dummy, int *len,int *info);    
 } Macroblock;
 
 //! Bitstream
-typedef struct
+struct bit_stream
 {
   int     buffer_size;        //!< Buffer size      
   int     byte_pos;           //!< current position in bitstream;
@@ -427,7 +468,7 @@ typedef struct
 #if TRACE
   Boolean trace_enabled;
 #endif
-} Bitstream;
+};
 
 
 //! DataPartition
@@ -472,22 +513,24 @@ typedef struct rd_data
   Info8x8 b8x8[4];
   
   // These need to be changed to MotionVector parameters
-  short   ******all_mv;               //!< all modes motion vectors
-  short *******bipred_mv;             //!<Biprediction MVs  
+  MotionVector   *****all_mv;         //!< all modes motion vectors
+  MotionVector ******bipred_mv;       //!<Biprediction MVs  
 
   char    intra_pred_modes[16];
   char    intra_pred_modes8x8[16];
   char    **ipredmode;
-  char    ***refar;                  //!< reference frame array [list][y][x]
+  char    ***refar;                   //!< reference frame array [list][y][x]
 } RD_DATA;
 
  //! Slice
 typedef struct slice
 {
-  struct video_par      *p_Vid;   // pointer to the original video structure
+  struct video_par    *p_Vid;   // pointer to the original video structure
   InputParameters     *p_Inp;   // pointer to the input parameters
   pic_parameter_set_rbsp_t *active_pps;
   seq_parameter_set_rbsp_t *active_sps;
+
+  struct decoded_picture_buffer *p_Dpb;
 
   int                 picture_id;
   int                 qp;
@@ -504,6 +547,7 @@ typedef struct slice
   int                 P444_joined;
   int                 disthres;
   int                 Transform8x8Mode;
+  int                 rdoq_motion_copy;
   // RDOQ at the slice level (note this allows us to reduce passed parameters, 
   // but also could enable RDOQ control at the slice level.
   int                 UseRDOQuant;
@@ -561,8 +605,8 @@ typedef struct slice
   short  max_num_references;      //!< maximum number of reference pictures that may occur
   // Motion vectors for a macroblock
   // These need to be changed to MotionVector parameters
-  short ******all_mv;         //!< replaces local all_mv
-  short *******bipred_mv;     //!< Biprediction MVs  
+  MotionVector *****all_mv;         //!< replaces local all_mv
+  MotionVector ******bipred_mv;     //!< Biprediction MVs  
   //Weighted prediction
   short ***wp_weight;         //!< weight in [list][index][component] order
   short ***wp_offset;         //!< offset in [list][index][component] order
@@ -627,7 +671,6 @@ typedef struct slice
   char b4_intra_pred_modes[16];
 
   struct rdo_structure    *p_RDO;
-  struct colocated_params *p_colocated;
   struct epzs_params      *p_EPZS;  
 
   // This should be the right location for this
@@ -640,26 +683,41 @@ typedef struct slice
   int  pos;
 
 
-  // Function pointers
-  int     (*Mode_Decision_for_4x4IntraBlocks)   (Macroblock *currMB, int  b8,  int  b4,  int  lambda, distblk*  min_cost);
-  int     (*Mode_Decision_for_8x8IntraBlocks)   (Macroblock *currMB, int b8, int lambda, distblk *min_cost);
-  distblk   (*rdcost_for_4x4_intra_blocks)        (Macroblock *currMB, int *c_nz, int b8, int b4, int ipmode, int lambda, int mostProbableMode, distblk min_rdcost);
-  distblk   (*rdcost_for_8x8_intra_blocks)        (Macroblock *currMB, int *c_nz, int b8, int ipmode, int lambda, distblk min_rdcost, int mostProbableMode);
+  // Function pointers  
+  int     (*mode_decision_for_I16x16_MB)        (Macroblock *currMB, int lambda);
+  int     (*mode_decision_for_I4x4_blocks)      (Macroblock *currMB, int  b8,  int  b4,  int  lambda, distblk*  min_cost);
+  int     (*mode_decision_for_I8x8_blocks)      (Macroblock *currMB, int b8, int lambda, distblk *min_cost);
+  distblk (*rdcost_for_4x4_intra_blocks)        (Macroblock *currMB, int *c_nz, int b8, int b4, int ipmode, int lambda, int mostProbableMode, distblk min_rdcost);
+  distblk (*rdcost_for_8x8_intra_blocks)        (Macroblock *currMB, int *c_nz, int b8, int ipmode, int lambda, distblk min_rdcost, int mostProbableMode);
+  void    (*submacroblock_mode_decision)        (Macroblock *currMB, RD_PARAMS *, RD_8x8DATA *, int ****, int, distblk *);
+  void    (*intra_chroma_RD_decision)           (Macroblock *currMB, RD_PARAMS *);
+
+  void    (*set_intrapred_4x4)                  (Macroblock *currMB, ColorPlane pl, int img_x,int img_y, int *left_available, int *up_available, int *all_available);
+  void    (*set_intrapred_8x8)                  (Macroblock *currMB, ColorPlane pl, int img_x,int img_y, int *left_available, int *up_available, int *all_available);
+  void    (*set_intrapred_16x16)                (Macroblock *currMB, ColorPlane pl, int *left_available, int *up_available, int *all_available);
+  void    (*intra_chroma_prediction)            (Macroblock *currMB, int*, int*, int*);
+  void    (*rdo_low_intra_chroma_decision)      (Macroblock *currMB, int mb_available_up, int mb_available_left[2], int mb_available_up_left);
 
   void    (*Get_Direct_Motion_Vectors)          (Macroblock *currMB);
   Boolean (*slice_too_big)                      (int bits_slice); //!< for use of callback functions
-  void    (*SetMotionVectorsMB)                 (Macroblock *currMB, struct pic_motion_params *motion);
+  void    (*set_motion_vectors_mb)              (Macroblock *currMB);
   void    (*encode_one_macroblock)              (Macroblock *currMB);
   void    (*set_stored_mb_parameters)           (Macroblock *currMB);
-  void    (*set_ref_and_motion_vectors)         (Macroblock *currMB, struct pic_motion_params *motion, Info8x8 *part, int block);
+  void    (*set_ref_and_motion_vectors)         (Macroblock *currMB, struct pic_motion_params **motion, Info8x8 *part, int block);
 
-  void    (*compute_cost8x8)                    (struct video_par *p_Vid, imgpel **cur_img, imgpel **prd_img, int pic_opix_x, distblk *cost, distblk min_cost);
-  void    (*compute_cost4x4)                    (struct video_par *p_Vid, imgpel **cur_img, imgpel **prd_img, int pic_opix_x, distblk *cost, distblk min_cost);
-  distblk   (*find_sad_16x16)                   (Macroblock *currMB);
-  distblk    (*distI16x16)                      (Macroblock *currMB, imgpel **img_org, imgpel **pred_img, distblk min_cost);
+  void    (*luma_residual_coding)               (Macroblock *currMB);
+  int     (*luma_residual_coding_8x8)           (Macroblock* currMB, int*, int64*, int, short, int[2], char *);
+  void    (*chroma_residual_coding)             (Macroblock *currMB);
 
-  void    (*SetLagrangianMultipliers)           (struct video_par *p_Vid, InputParameters *p_Inp);
+  distblk (*compute_cost8x8)                    (struct video_par *p_Vid, imgpel **cur_img, imgpel **prd_img, int pic_opix_x, distblk min_cost);
+  distblk (*compute_cost4x4)                    (struct video_par *p_Vid, imgpel **cur_img, imgpel **prd_img, int pic_opix_x, distblk min_cost);
+  distblk (*find_sad_16x16)                     (Macroblock *currMB);
+  distblk (*distI16x16)                         (Macroblock *currMB, imgpel **img_org, imgpel **pred_img, distblk min_cost);
 
+  void    (*set_lagrangian_multipliers)         (struct slice *currSlice);  
+
+  void (*set_modes_and_refs_for_blocks)         (Macroblock *currMB, short mode);
+  void (*set_coeff_and_recon_8x8      )         (Macroblock *currMB);
   // Write MB info function pointers
   void (*writeMB_typeInfo)      (Macroblock *currMB, SyntaxElement *se, DataPartition *dP);
   void (*writeMB_Skip)          (Macroblock *currMB, SyntaxElement *se, DataPartition *dP);
@@ -682,9 +740,11 @@ typedef struct slice
   void (*reset_coding_state) (Macroblock *currMB, struct coding_state *);
   void (*store_coding_state) (Macroblock *currMB, struct coding_state *);
 
-  // Reordering
-  void (*poc_ref_pic_reorder_frame) ( struct slice *currSlice, struct storable_picture **list, unsigned num_ref_idx_lX_active, 
+  // List initialization / reordering
+  void (*init_lists               ) (struct slice *currSlice);
+  void (*poc_ref_pic_reorder_frame) (struct slice *currSlice, struct storable_picture **list, unsigned num_ref_idx_lX_active, 
     int *reordering_of_pic_nums_idc, int *abs_diff_pic_num_minus1, int *long_term_pic_idx, int list_no );
+   
 
   // Quantization
   int (*quant_4x4)     (Macroblock *currMB, int **tblock, struct quant_methods *q_method);
@@ -708,9 +768,34 @@ typedef struct slice
 
   void (*set_modes_and_reframe)    (Macroblock *currMB, int b8, short* p_dir, int list_mode[2], char *list_ref_idx);
   void (*store_8x8_motion_vectors) (struct slice *currSlice, int dir, int block8x8, Info8x8 *B8x8Info);
+  distblk (*getDistortion)         ( Macroblock *currMB );  
 
-  distblk (*getDistortion)       ( Macroblock *currMB );
 } Slice;
+
+#if (MVC_EXTENSION_ENABLE)
+typedef struct prev_coding_stats
+{
+  int frm_no_in_file;
+  char pic_type[256];
+  int view_id;
+  int cur_bits;
+  int wp_method;
+  int AverageFrameQP;
+  int lambda;
+  float psnr_value[3];
+  float ssim_value[3];
+  int tmp_time;
+  int me_time;
+  int fld_flag;
+  int intras;
+  int direct_mode;
+  int num_ref_idx_l0_active;
+  int num_ref_idx_l1_active;
+  int rd_pass;
+  int nal_reference_idc;
+
+} PrevCodingStats;
+#endif
 
 //! DistortionParams
 typedef struct distortion_metric
@@ -724,6 +809,10 @@ typedef struct distortion_params
 {
   int        frame_ctr;                     //!< number of coded frames
   DistMetric metric[TOTAL_DIST_TYPES];      //!< Distortion metrics
+#if (MVC_EXTENSION_ENABLE)
+  int        frame_ctr_v[2];                //!< number of coded frames for each view
+  DistMetric metric_v[2][TOTAL_DIST_TYPES]; //!< Distortion metrics for each view
+#endif
 } DistortionParams;
 
 typedef struct picture
@@ -741,7 +830,7 @@ typedef struct block_8x8_info
 {
   Info8x8 best[MAXMODE][4];
 } Block8x8Info;
-                             
+
 //! VideoParameters
 typedef struct video_par
 {
@@ -775,7 +864,7 @@ typedef struct video_par
   int last_idr_disp_order;
   int last_mmco_5_code_order; //!< it is a good idea to re-initialize POCs after such a frame: while seemingly not required it is critical for good implicit WP performance (I *THINK*) since POCs are set internally to zero after an MMCO=5 command.
   int last_mmco_5_disp_order;
-  int curr_frm_idx;           //!< frame we wish to code in coding order (points also to p_frm_struct)
+  int curr_frm_idx;           //!< frame we wish to code in coding order (points also to p_frm)
   int FrameNumOffset;         //!< POC type 1
   int prevFrameNumOffset;     //!< POC type 1
   unsigned int prevFrameNum;  //!< POC type 1
@@ -789,6 +878,18 @@ typedef struct video_par
   ImageData imgData0;          //!< Input Image Data
   ImageData imgData1;
   ImageData imgData2;
+  ImageData imgData3;
+  // Data needed for 3:2 pulldown or temporal interleaving
+  ImageData imgData32;           //!< Image data to be encoded
+  ImageData imgData4;
+  ImageData imgData5;
+  ImageData imgData6;
+
+  int   num_slices_wp;
+  int   wp_parameters_set; 
+  short ****wp_weights;   // explicit WP weights
+  short ****wp_offsets;   // explicit WP offsets
+  short *****wbp_weight;  // implicit WP weights
 
   struct image_structure imgSRC;
   struct image_structure imgREF;
@@ -804,7 +905,14 @@ typedef struct video_par
 
   Picture *p_frame_pic;
   Picture **frame_pic;
+#if (MVC_EXTENSION_ENABLE)
+  Picture **field_pic_ptr;
+  Picture **field_pic1;
+  Picture **field_pic2;
+#else
   Picture **field_pic;
+#endif
+
   Picture *frame_pic_si;
 
   byte *MapUnitToSliceGroupMap;
@@ -909,20 +1017,20 @@ typedef struct video_par
   int ****ARCofAdj8x8;         //!< Transform coefficients for 4x4 luma/chroma. 
 
 
-  Picture       *currentPicture;         //!< The coded picture currently in the works (typically p_frame_pic, p_Vid->field_pic[0], or p_Vid->field_pic[1])
-  struct slice  *currentSlice;           //!< pointer to current Slice data struct
-  Macroblock    *mb_data;                //!< array containing all MBs of a whole frame
-  Block8x8Info  *b8x8info;               //!< block 8x8 information for RDopt
+  Picture       *currentPicture; //!< The coded picture currently in the works (typically p_frame_pic, p_Vid->field_pic[0], or p_Vid->field_pic[1])
+  struct slice  *currentSlice;                                //!< pointer to current Slice data struct
+  Macroblock    *mb_data;                                   //!< array containing all MBs of a whole frame
+  Block8x8Info  *b8x8info;                                  //!< block 8x8 information for RDopt
 
   //FAST_REFPIC_DECISION
   int           mb_refpic_used; //<! [2][16] for fast reference decision;
   int           parent_part_refpic_used; //<! [2][16] for fast reference decision;
   int           submb_parent_part_refpic_used;//<! [2][16] for fast reference decision;
   //end;
-  int *intra_block;
+  short   *intra_block;
 
   int frame_no;
-  int fld_type;                          //!< top or bottom field
+  int fld_type;                        //!< top or bottom field
   byte fld_flag;
   unsigned int rd_pass;
 
@@ -1024,8 +1132,6 @@ typedef struct video_par
   byte bot_MB;
   int write_mbaff_frame;
 
-  int DeblockCall;
-
   int last_pic_bottom_field;
   int last_has_mmco_5;
   int pre_frame_num;
@@ -1089,6 +1195,9 @@ typedef struct video_par
   int idr_refresh;
 
   int p_dec;                      //!< decoded image file handle
+#if (MVC_EXTENSION_ENABLE)
+  int p_dec2;                     //!< decoded image file handle for view 1
+#endif
   int frame_statistic_start;
   int initial_Bframes;
   int cabac_encoding;
@@ -1098,7 +1207,31 @@ typedef struct video_par
   int frameOffsetTotal[2][MAX_REFERENCE_PICTURES]; 
   int frameOffsetCount[2][MAX_REFERENCE_PICTURES]; 
   short frameOffset[2][MAX_REFERENCE_PICTURES];
-  int frameOffsetAvail; 
+  int frameOffsetAvail;
+
+#if (MVC_EXTENSION_ENABLE)
+  int sec_view_force_fld;	   //!< if view 0 is coded as FLD then force also view to be coded as FLD as well
+
+  int prev_view_is_anchor;
+
+  int temp0_nal_reference_idc;
+  int temp0_non_idr_flag[2];
+  int temp0_priority_id;
+  int temp0_view_id;
+  int temp0_temporal_id;
+  int temp0_anchor_pic_flag[2];
+  int temp0_inter_view_flag[2];
+
+  int non_idr_flag[2];
+  int priority_id;
+  int view_id;
+  int temporal_id;
+  int anchor_pic_flag[2];
+  int inter_view_flag[2];
+
+  PrevCodingStats prev_cs;
+  int MVCInterViewReorder;
+#endif
 
   double *mb16x16_cost_frame;
   double mb16x16_cost;
@@ -1115,14 +1248,12 @@ typedef struct video_par
   imgpel **imgY_tmp;
   imgpel **imgUV_tmp[2];
 
-  // RDOQ related parameters
-  int Motion_Selected;
-  //int Intra_Selected; 
-
   int CbCr_predmode_8x8[4]; 
   distblk ****motion_cost;
   int*** initialized;
   int*** modelNumber;
+  int    bipred_enabled[MAXMODE];
+
 
   int num_mb_per_slice;
   int number_of_slices;
@@ -1134,7 +1265,6 @@ typedef struct video_par
 #endif
 
   GOP_DATA *gop_structure;
-
   byte *MBAmap;
   unsigned int PicSizeInMapUnits;
   int FirstMBInSlice[MAXSLICEGROUPIDS];
@@ -1156,8 +1286,8 @@ typedef struct video_par
   //!< incremented by one for each sent packet
 
   // This should be the right location for this
-  struct storable_picture **listX[6];
-  char listXsize[6];  
+  //struct storable_picture **listX[6];
+  //char listXsize[6];  
 
   DistortionParams *p_Dist;
   struct stat_parameters  *p_Stats;
@@ -1187,12 +1317,21 @@ typedef struct video_par
   // Weighted prediction
   struct wpx_object   *pWPX;
 
+  // Wavelet PSNR
+  int ***wavREF[NUM_WAVELET_LEVEL+1];
+  int ***wavSRC[NUM_WAVELET_LEVEL+1];
+  double JND[NUM_WAVELET_LEVEL][4];
+  int *temp_low, *temp_high;
+
 #ifdef BEST_NZ_COEFF
   int gaaiMBAFF_NZCoeff[4][12];
 #endif
 
+
   int offset_y, offset_cr;
   int wka0, wka1, wka2, wka3, wka4;
+  int EvaluateDBOff;
+  int TurnDBOff;
   // Note that these function pointers definitely affect now parallelization since they are only
   // allocated once. We need to add such info at maybe within picture information or at a lower level
   // RC
@@ -1207,22 +1346,25 @@ typedef struct video_par
   void (*get_mb_block_pos)     (int mb_addr, short *x, short *y);
   int  (*WriteNALU)            (struct video_par *p_Vid, NALU_t *n);     //! Hides the write function in Annex B or RTP
   void (*error_conceal_picture)(struct video_par *p_Vid, struct storable_picture *enc_pic, int decoder);
-  
+  distblk (*estimate_distortion)(Macroblock *currMB, int block, int block_size, short mode, short pdir, distblk min_rdcost);
   // function pointer for different ways of obtaining chroma interpolation
-  void (*OneComponentChromaPrediction4x4)   (Macroblock *currMB, imgpel* , int , int , short*** , struct storable_picture *listX, int );
+  void (*OneComponentChromaPrediction4x4)   (Macroblock *currMB, imgpel* , int , int , MotionVector ** , struct storable_picture *listX, int );
   
   // deblocking
-  void (*GetStrength)    (byte Strength[16], Macroblock *MbQ, int dir,int edge, int mvlimit);
-  void (*EdgeLoopLuma)   (ColorPlane pl, imgpel** Img, byte Strength[16], Macroblock *MbQ, int dir, int edge, int width);
-  void (*EdgeLoopChroma)(imgpel** Img, byte Strength[16], Macroblock *MbQ, int dir, int edge, int width, int uv);
+  void (*GetStrengthVer)    (byte Strength[16], Macroblock *MbQ, int dir,int edge, int mvlimit);
+  void (*GetStrengthHor)    (byte Strength[16], Macroblock *MbQ, int dir,int edge, int mvlimit);
+  void (*EdgeLoopLumaHor)   (ColorPlane pl, imgpel** Img, byte Strength[16], Macroblock *MbQ, int dir, int edge, int width);
+  void (*EdgeLoopLumaVer)   (ColorPlane pl, imgpel** Img, byte Strength[16], Macroblock *MbQ, int dir, int edge, int width);
+  void (*EdgeLoopChromaVer)(imgpel** Img, byte Strength[16], Macroblock *MbQ, int dir, int edge, int width, int uv);
+  void (*EdgeLoopChromaHor)(imgpel** Img, byte Strength[16], Macroblock *MbQ, int dir, int edge, int width, int uv);
 
   // We should move these at the slice level at some point.
   void (*EstimateWPBSlice) (struct slice *currSlice);
   void (*EstimateWPPSlice) (struct slice *currSlice, int offset);
-  int  (*TestWPPSlice)     (struct video_par *p_Vid, int offset);
-  int  (*TestWPBSlice)     (struct video_par *p_Vid, int method);
-  distblk  (*distortion4x4)(int*, distblk);
-  distblk  (*distortion8x8)(int*, distblk);
+  int  (*TestWPPSlice)     (struct slice *currSlice, int offset);
+  int  (*TestWPBSlice)     (struct slice *currSlice, int method);
+  distblk  (*distortion4x4)(short*, distblk);
+  distblk  (*distortion8x8)(short*, distblk);
 
   // ME distortion Function pointers. We need to move this to the MB or slice level
   distblk (*computeUniPred[6])   (struct storable_picture *ref1, struct me_block *, distblk , MotionVector * );
@@ -1230,49 +1372,6 @@ typedef struct video_par
   distblk (*computeBiPred2[3])   (struct storable_picture *ref1, struct storable_picture *ref2, struct me_block*, distblk , MotionVector *, MotionVector *);
 } VideoParameters;
 
-
-//! definition of pic motion parameters
-typedef struct pic_motion_params2
-{
-  int64    ref_pic_id;    //!< reference picture identifier [list][subblock_y][subblock_x]
-  int64    ref_id;        //!< reference picture identifier [list][subblock_y][subblock_x]
-  short    mv[2];         //!< motion vector       [list][subblock_x][subblock_y][component]
-  char     ref_idx;       //!< reference picture   [list][subblock_y][subblock_x]
-  byte     mb_field;      //!< field macroblock indicator
-  byte     field_frame;   //!< indicates if co_located is field or frame.
-} PicMotionParams2;
-
-typedef struct
-{
-  distblk  mb_p8x8_cost;  
-  distblk  smb_p8x8_cost[4];  
-  distblk  smb_p8x8_rdcost[4];
-  Info8x8 part[4];
-
-  int cbp8x8;
-  int cbp_blk8x8;
-  int cnt_nonz_8x8;    
-  
-  int **lrec; //!< transform and quantized coefficients will be stored here for SP frames
-  imgpel **mpr8x8;
-  imgpel ***mpr8x8CbCr;
-  imgpel **rec_mbY8x8;
-  imgpel ***rec_mb8x8_cr;
-} RD_8x8DATA;
-
-typedef struct
-{
-  double lambda_md;        //!< Mode decision Lambda
-//#if JCOST_CALC_SCALEUP
-  int    lambda_mdfp;       //!< Fixed point mode decision lambda;
-//#endif
-  double lambda_me[3];     //!< Motion Estimation Lambda
-  int    lambda_mf[3];     //!< Integer formatted Motion Estimation Lambda
-  int    best_mcost[2];
-
-  short  valid[MAXMODE];
-  short  curr_mb_field;
-} RD_PARAMS;
 
 typedef struct scaling_list      ScaleParameters;
 typedef struct rdo_structure     RDOPTStructure;
@@ -1291,14 +1390,12 @@ extern EncoderParams  *p_Enc;
  * P r o t o t y p e s   f o r    T M L
  ***********************************************************************
  */
-extern void intrapred_16x16 (Macroblock *currMB, ColorPlane pl);
 // Transform function pointers
 
 extern void copyblock_sp    (Macroblock *currMB, ColorPlane pl, int pos_mb1,int pos_mb2);
-extern int  dct_chroma      (Macroblock *currMB, int uv, int cr_cbp);
-extern int  dct_chroma_sp   (Macroblock *currMB, int uv,int i11);
-extern int  dct_chroma_sp2  (Macroblock *currMB, int uv,int i11);
-
+extern int  residual_transform_quant_chroma_4x4      (Macroblock *currMB, int uv, int cr_cbp);
+extern int  residual_transform_quant_chroma_4x4_sp   (Macroblock *currMB, int uv,int i11);
+extern int  residual_transform_quant_chroma_4x4_sp2  (Macroblock *currMB, int uv,int i11);
 
 
 extern distblk   GetDirectCostMB           (Macroblock *currMB);
@@ -1323,16 +1420,16 @@ extern void error(char *text, int code);
 extern void set_mbaff_parameters(Macroblock  *currMB);
 
 //============= restriction of reference frames based on the latest intra-refreshes==========
-extern int  is_bipred_enabled          (InputParameters *p_Inp, int mode); 
+extern int  is_bipred_enabled          (VideoParameters *p_Vid, int mode); 
 extern void update_qp                  (Macroblock *currMB);
 extern void select_plane               (VideoParameters *p_Vid, ColorPlane color_plane);
-extern void select_dct                 (Macroblock *currMB);
+extern void select_transform           (Macroblock *currMB);
 extern void set_slice_type             (VideoParameters *p_Vid, InputParameters *p_Inp, int slice_type);
 extern void free_encoder_memory        (VideoParameters *p_Vid, InputParameters *p_Inp);
 extern void output_SP_coefficients     (VideoParameters *p_Vid, InputParameters *p_Inp);
 extern void read_SP_coefficients       (VideoParameters *p_Vid, InputParameters *p_Inp);
-extern void Init_redundant_frame       (VideoParameters *p_Vid, InputParameters *p_Inp);
-extern void Set_redundant_frame        (VideoParameters *p_Vid, InputParameters *p_Inp);
+extern void init_redundant_frame       (VideoParameters *p_Vid, InputParameters *p_Inp);
+extern void set_redundant_frame        (VideoParameters *p_Vid, InputParameters *p_Inp);
 extern void encode_one_redundant_frame (VideoParameters *p_Vid, InputParameters *p_Inp);
 
 

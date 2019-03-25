@@ -227,7 +227,7 @@ UMHEXIntegerPelBlockMotionSearch  (Macroblock *currMB,     // <--  current Macro
                                    int       lambda_factor  // < <--  lagrangian parameter for determining motion cost
                                    )
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
   UMHexStruct *p_UMHex = p_Vid->p_UMHex;
@@ -242,7 +242,7 @@ UMHEXIntegerPelBlockMotionSearch  (Macroblock *currMB,     // <--  current Macro
   int   list = mv_block->list;
   int   cur_list = list + currMB->list_offset;
   short ref = mv_block->ref_idx;
-  StorablePicture *ref_picture = p_Vid->listX[cur_list][ref];
+  StorablePicture *ref_picture = currSlice->listX[cur_list][ref];
 
   MotionVector *mv = &mv_block->mv[list];
   MotionVector iMinNow, cand, center, pred, best = {0, 0};
@@ -507,6 +507,7 @@ UMHEXSubPelBlockMotionSearch (Macroblock *currMB,     // <--  current Macroblock
                               )
 {
   VideoParameters *p_Vid = currMB->p_Vid;
+  Slice *currSlice = currMB->p_Slice;
   UMHexStruct *p_UMHex = p_Vid->p_UMHex;
   static const MotionVector DiamondQ[4] = {{-1, 0}, { 0, 1}, { 1, 0}, { 0, -1}};
   distblk mcost;
@@ -517,7 +518,7 @@ UMHEXSubPelBlockMotionSearch (Macroblock *currMB,     // <--  current Macroblock
   short ref = mv_block->ref_idx;
   MotionVector *mv    = &mv_block->mv[list];
 
-  StorablePicture *ref_picture = p_Vid->listX[list+list_offset][ref];
+  StorablePicture *ref_picture = currSlice->listX[list+list_offset][ref];
 
   int   dynamic_search_range = 3, i;
   int   m;  
@@ -646,9 +647,10 @@ UMHEXSubPelBlockME (Macroblock *currMB,        // <-- Current Macroblock
 */
 void UMHEX_decide_intrabk_SAD(Macroblock *currMB)
 {
+  Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currMB->p_Vid;
   UMHexStruct *p_UMHex = p_Vid->p_UMHex;
-  if (currMB->p_slice->slice_type != I_SLICE && currMB->p_slice->slice_type != SI_SLICE)
+  if (currSlice->slice_type != I_SLICE && currSlice->slice_type != SI_SLICE)
   {
     if (currMB->pix_x == 0 && currMB->pix_y == 0)
     {
@@ -672,7 +674,7 @@ void UMHEX_decide_intrabk_SAD(Macroblock *currMB)
 
 void UMHEX_skip_intrabk_SAD(Macroblock *currMB, int ref_max)
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currMB->p_Vid;
   UMHexStruct *p_UMHex = p_Vid->p_UMHex;
   int i,j,k, ref;
@@ -703,9 +705,9 @@ void UMHEX_skip_intrabk_SAD(Macroblock *currMB, int ref_max)
 }
 
 
-void UMHEX_setup(Macroblock *currMB, short ref, int list, int block_y, int block_x, int blocktype, short   ******all_mv)
+void UMHEX_setup(Macroblock *currMB, short ref, int list, int block_y, int block_x, int blocktype, MotionVector  *****all_mv)
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currMB->p_Vid;
   UMHexStruct *p_UMHex = p_Vid->p_UMHex;
 
@@ -723,8 +725,8 @@ void UMHEX_setup(Macroblock *currMB, short ref, int list, int block_y, int block
   if (blocktype>1)
   {
     temp_blocktype = indication_blocktype[blocktype];
-    p_UMHex->pred_MV_uplayer[0] = all_mv[list][ref][temp_blocktype][block_y][block_x][0];
-    p_UMHex->pred_MV_uplayer[1] = all_mv[list][ref][temp_blocktype][block_y][block_x][1];
+    p_UMHex->pred_MV_uplayer[0] = all_mv[list][ref][temp_blocktype][block_y][block_x].mv_x;
+    p_UMHex->pred_MV_uplayer[1] = all_mv[list][ref][temp_blocktype][block_y][block_x].mv_y;
   }
 
 
@@ -736,16 +738,16 @@ void UMHEX_setup(Macroblock *currMB, short ref, int list, int block_y, int block
     {
       if ( ref > 1)
       {
-        p_UMHex->pred_MV_ref[0] = all_mv[0][ref-2][blocktype][block_y][block_x][0];
+        p_UMHex->pred_MV_ref[0] = all_mv[0][ref-2][blocktype][block_y][block_x].mv_x;
         p_UMHex->pred_MV_ref[0] = (int)(p_UMHex->pred_MV_ref[0]*((ref>>1)+1)/(float)((ref>>1)));
-        p_UMHex->pred_MV_ref[1] = all_mv[0][ref-2][blocktype][block_y][block_x][1];
+        p_UMHex->pred_MV_ref[1] = all_mv[0][ref-2][blocktype][block_y][block_x].mv_y;
         p_UMHex->pred_MV_ref[1] = (int)(p_UMHex->pred_MV_ref[1]*((ref>>1)+1)/(float)((ref>>1)));
         p_UMHex->pred_MV_ref_flag = 1;
       }
       if (currSlice->slice_type == B_SLICE &&  (ref==0 || ref==1) )
       {
-        p_UMHex->pred_MV_ref[0] =(int) (all_mv[1][0][blocktype][block_y][block_x][0]*(-n_Bframe)/(N_Bframe-n_Bframe+1.0f));
-        p_UMHex->pred_MV_ref[1] =(int) (all_mv[1][0][blocktype][block_y][block_x][1]*(-n_Bframe)/(N_Bframe-n_Bframe+1.0f));
+        p_UMHex->pred_MV_ref[0] =(int) (all_mv[1][0][blocktype][block_y][block_x].mv_x * (-n_Bframe)/(N_Bframe-n_Bframe+1.0f));
+        p_UMHex->pred_MV_ref[1] =(int) (all_mv[1][0][blocktype][block_y][block_x].mv_y * (-n_Bframe)/(N_Bframe-n_Bframe+1.0f));
         p_UMHex->pred_MV_ref_flag = 1;
       }
     }
@@ -753,16 +755,16 @@ void UMHEX_setup(Macroblock *currMB, short ref, int list, int block_y, int block
     {
       if ( ref > 0)
       {
-        p_UMHex->pred_MV_ref[0] = all_mv[0][ref-1][blocktype][block_y][block_x][0];
+        p_UMHex->pred_MV_ref[0] = all_mv[0][ref-1][blocktype][block_y][block_x].mv_x;
         p_UMHex->pred_MV_ref[0] = (int)(p_UMHex->pred_MV_ref[0]*(ref+1)/(float)(ref));
-        p_UMHex->pred_MV_ref[1] = all_mv[0][ref-1][blocktype][block_y][block_x][1];
+        p_UMHex->pred_MV_ref[1] = all_mv[0][ref-1][blocktype][block_y][block_x].mv_y;
         p_UMHex->pred_MV_ref[1] = (int)(p_UMHex->pred_MV_ref[1]*(ref+1)/(float)(ref));
         p_UMHex->pred_MV_ref_flag = 1;
       }
       if (currSlice->slice_type == B_SLICE && (ref==0)) //B frame forward prediction, first ref
       {
-        p_UMHex->pred_MV_ref[0] =(int) (all_mv[1][0][blocktype][block_y][block_x][0] * (-n_Bframe)/(N_Bframe-n_Bframe+1.0f));
-        p_UMHex->pred_MV_ref[1] =(int) (all_mv[1][0][blocktype][block_y][block_x][1] * (-n_Bframe)/(N_Bframe-n_Bframe+1.0f));
+        p_UMHex->pred_MV_ref[0] =(int) (all_mv[1][0][blocktype][block_y][block_x].mv_x * (-n_Bframe)/(N_Bframe-n_Bframe+1.0f));
+        p_UMHex->pred_MV_ref[1] =(int) (all_mv[1][0][blocktype][block_y][block_x].mv_y * (-n_Bframe)/(N_Bframe-n_Bframe+1.0f));
         p_UMHex->pred_MV_ref_flag = 1;
       }
     }
@@ -839,7 +841,7 @@ UMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  current
                                         int       lambda_factor  // <--  lagrangian parameter for determining motion cost
                                         )
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
   UMHexStruct *p_UMHex = p_Vid->p_UMHex;
@@ -863,8 +865,8 @@ UMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  current
   distblk   ET_Thred      = p_UMHex->Median_Pred_Thd_MB[blocktype];
   short ref           = mv_block->ref_idx;
 
-  StorablePicture *ref_picture1 = p_Vid->listX[list + currMB->list_offset][ref];
-  StorablePicture *ref_picture2 = p_Vid->listX[list == 0 ? 1 + currMB->list_offset: currMB->list_offset][ 0 ];
+  StorablePicture *ref_picture1 = currSlice->listX[list + currMB->list_offset][ref];
+  StorablePicture *ref_picture2 = currSlice->listX[list == 0 ? 1 + currMB->list_offset: currMB->list_offset][ 0 ];
 
   MotionVector iMinNow, best, cand;
 
@@ -927,7 +929,7 @@ UMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  current
   {
     int  N_Bframe=0;
     int  n_Bframe=0;
-    short****** bipred_mv = currSlice->bipred_mv[list];
+    MotionVector *****bipred_mv = currSlice->bipred_mv[list];
     N_Bframe = p_Inp->NumberBFrames;
     n_Bframe = p_Vid->p_Stats->frame_ctr[B_SLICE]%(N_Bframe+1);
 
@@ -942,13 +944,13 @@ UMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  current
     {
       if (p_Vid->field_picture)
       {
-        p_UMHex->pred_MV_ref[0] =(int) (bipred_mv[1][0][blocktype][block_y][block_x][0]*(-n_Bframe)/(N_Bframe-n_Bframe+1.0f));
-        p_UMHex->pred_MV_ref[1] =(int) (bipred_mv[1][0][blocktype][block_y][block_x][1]*(-n_Bframe)/(N_Bframe-n_Bframe+1.0f));
+        p_UMHex->pred_MV_ref[0] =(int) (bipred_mv[1][0][blocktype][block_y][block_x].mv_x * (-n_Bframe)/(N_Bframe-n_Bframe+1.0f));
+        p_UMHex->pred_MV_ref[1] =(int) (bipred_mv[1][0][blocktype][block_y][block_x].mv_y * (-n_Bframe)/(N_Bframe-n_Bframe+1.0f));
       }
       else //frame case
       {
-        p_UMHex->pred_MV_ref[0] =(int) (bipred_mv[1][0][blocktype][block_y][block_x][0]*(-n_Bframe)/(N_Bframe-n_Bframe+1.0f));
-        p_UMHex->pred_MV_ref[1] =(int) (bipred_mv[1][0][blocktype][block_y][block_x][1]*(-n_Bframe)/(N_Bframe-n_Bframe+1.0f));
+        p_UMHex->pred_MV_ref[0] =(int) (bipred_mv[1][0][blocktype][block_y][block_x].mv_x * (-n_Bframe)/(N_Bframe-n_Bframe+1.0f));
+        p_UMHex->pred_MV_ref[1] =(int) (bipred_mv[1][0][blocktype][block_y][block_x].mv_y * (-n_Bframe)/(N_Bframe-n_Bframe+1.0f));
       }
     }
     /******************************SAD prediction**********************************/
@@ -1113,9 +1115,8 @@ terminate_step:
 ************************************************************************
 */
 void UMHEXSetMotionVectorPredictor (Macroblock *currMB, 
-                                    short       pmv[2],
-                                    char      **refPic,
-                                    short    ***tmp_mv,
+                                    MotionVector *pmv,
+                                    struct pic_motion_params **mv_info,
                                     short       ref_frame,
                                     int         list,
                                     int         mb_x,
@@ -1182,9 +1183,9 @@ void UMHEXSetMotionVectorPredictor (Macroblock *currMB,
 
   if (!p_Vid->mb_aff_frame_flag)
   {
-    rFrameL    = block_a.available    ? refPic[block_a.pos_y][block_a.pos_x] : -1;
-    rFrameU    = block_b.available    ? refPic[block_b.pos_y][block_b.pos_x] : -1;
-    rFrameUR   = block_c.available    ? refPic[block_c.pos_y][block_c.pos_x] : -1;
+    rFrameL    = block_a.available    ? mv_info[block_a.pos_y][block_a.pos_x].ref_idx[list] : -1;
+    rFrameU    = block_b.available    ? mv_info[block_b.pos_y][block_b.pos_x].ref_idx[list] : -1;
+    rFrameUR   = block_c.available    ? mv_info[block_c.pos_y][block_c.pos_x].ref_idx[list] : -1;
   }
   else
   {
@@ -1192,32 +1193,32 @@ void UMHEXSetMotionVectorPredictor (Macroblock *currMB,
     {
       rFrameL  = block_a.available
         ? (p_Vid->mb_data[block_a.mb_addr].mb_field
-        ? refPic[block_a.pos_y][block_a.pos_x]
-      : refPic[block_a.pos_y][block_a.pos_x] * 2) : -1;
+        ? mv_info[block_a.pos_y][block_a.pos_x].ref_idx[list]
+      : mv_info[block_a.pos_y][block_a.pos_x].ref_idx[list] * 2) : -1;
       rFrameU  = block_b.available
         ? (p_Vid->mb_data[block_b.mb_addr].mb_field
-        ? refPic[block_b.pos_y][block_b.pos_x]
-      : refPic[block_b.pos_y][block_b.pos_x] * 2) : -1;
+        ? mv_info[block_b.pos_y][block_b.pos_x].ref_idx[list]
+      : mv_info[block_b.pos_y][block_b.pos_x].ref_idx[list] * 2) : -1;
       rFrameUR = block_c.available
         ? (p_Vid->mb_data[block_c.mb_addr].mb_field
-        ? refPic[block_c.pos_y][block_c.pos_x]
-      : refPic[block_c.pos_y][block_c.pos_x] * 2) : -1;
+        ? mv_info[block_c.pos_y][block_c.pos_x].ref_idx[list]
+      : mv_info[block_c.pos_y][block_c.pos_x].ref_idx[list] * 2) : -1;
     }
     else
     {
       rFrameL = block_a.available
         ? (p_Vid->mb_data[block_a.mb_addr].mb_field
-        ? refPic[block_a.pos_y][block_a.pos_x] >>1
-        : refPic[block_a.pos_y][block_a.pos_x]) : -1;
+        ? mv_info[block_a.pos_y][block_a.pos_x].ref_idx[list] >>1
+        : mv_info[block_a.pos_y][block_a.pos_x].ref_idx[list]) : -1;
       rFrameU    = block_b.available    ?
         p_Vid->mb_data[block_b.mb_addr].mb_field ?
-        refPic[block_b.pos_y][block_b.pos_x] >>1:
-      refPic[block_b.pos_y][block_b.pos_x] :
+        mv_info[block_b.pos_y][block_b.pos_x].ref_idx[list] >>1:
+      mv_info[block_b.pos_y][block_b.pos_x].ref_idx[list] :
       -1;
       rFrameUR    = block_c.available    ?
         p_Vid->mb_data[block_c.mb_addr].mb_field ?
-        refPic[block_c.pos_y][block_c.pos_x] >>1:
-      refPic[block_c.pos_y][block_c.pos_x] :
+        mv_info[block_c.pos_y][block_c.pos_x].ref_idx[list] >>1:
+      mv_info[block_c.pos_y][block_c.pos_x].ref_idx[list] :
       -1;
     }
   }
@@ -1268,40 +1269,40 @@ void UMHEXSetMotionVectorPredictor (Macroblock *currMB,
   {
     if (!p_Vid->mb_aff_frame_flag || hv==0)
     {
-      mv_a = block_a.available  ? tmp_mv[block_a.pos_y][block_a.pos_x][hv] : 0;
-      mv_b = block_b.available  ? tmp_mv[block_b.pos_y][block_b.pos_x][hv] : 0;
-      mv_c = block_c.available  ? tmp_mv[block_c.pos_y][block_c.pos_x][hv] : 0;
+      mv_a = block_a.available  ? mv_info[block_a.pos_y][block_a.pos_x].mv[list].mv_x : 0;
+      mv_b = block_b.available  ? mv_info[block_b.pos_y][block_b.pos_x].mv[list].mv_x : 0;
+      mv_c = block_c.available  ? mv_info[block_c.pos_y][block_c.pos_x].mv[list].mv_x : 0;
     }
     else
     {
       if (p_Vid->mb_data[currMB->mbAddrX].mb_field)
       {
         mv_a = block_a.available  ? p_Vid->mb_data[block_a.mb_addr].mb_field
-          ? tmp_mv[block_a.pos_y][block_a.pos_x][hv]
-        : tmp_mv[block_a.pos_y][block_a.pos_x][hv] / 2
+          ? mv_info[block_a.pos_y][block_a.pos_x].mv[list].mv_y
+        : mv_info[block_a.pos_y][block_a.pos_x].mv[list].mv_y / 2
           : 0;
         mv_b = block_b.available  ? p_Vid->mb_data[block_b.mb_addr].mb_field
-          ? tmp_mv[block_b.pos_y][block_b.pos_x][hv]
-        : tmp_mv[block_b.pos_y][block_b.pos_x][hv] / 2
+          ? mv_info[block_b.pos_y][block_b.pos_x].mv[list].mv_y
+        : mv_info[block_b.pos_y][block_b.pos_x].mv[list].mv_y / 2
           : 0;
         mv_c = block_c.available  ? p_Vid->mb_data[block_c.mb_addr].mb_field
-          ? tmp_mv[block_c.pos_y][block_c.pos_x][hv]
-        : tmp_mv[block_c.pos_y][block_c.pos_x][hv] / 2
+          ? mv_info[block_c.pos_y][block_c.pos_x].mv[list].mv_y
+        : mv_info[block_c.pos_y][block_c.pos_x].mv[list].mv_y / 2
           : 0;
       }
       else
       {
         mv_a = block_a.available  ? p_Vid->mb_data[block_a.mb_addr].mb_field
-          ? tmp_mv[block_a.pos_y][block_a.pos_x][hv] * 2
-          : tmp_mv[block_a.pos_y][block_a.pos_x][hv]
+          ? mv_info[block_a.pos_y][block_a.pos_x].mv[list].mv_y * 2
+          : mv_info[block_a.pos_y][block_a.pos_x].mv[list].mv_y
         : 0;
         mv_b = block_b.available  ? p_Vid->mb_data[block_b.mb_addr].mb_field
-          ? tmp_mv[block_b.pos_y][block_b.pos_x][hv] * 2
-          : tmp_mv[block_b.pos_y][block_b.pos_x][hv]
+          ? mv_info[block_b.pos_y][block_b.pos_x].mv[list].mv_y * 2
+          : mv_info[block_b.pos_y][block_b.pos_x].mv[list].mv_y
         : 0;
         mv_c = block_c.available  ? p_Vid->mb_data[block_c.mb_addr].mb_field
-          ? tmp_mv[block_c.pos_y][block_c.pos_x][hv] * 2
-          : tmp_mv[block_c.pos_y][block_c.pos_x][hv]
+          ? mv_info[block_c.pos_y][block_c.pos_x].mv[list].mv_y * 2
+          : mv_info[block_c.pos_y][block_c.pos_x].mv[list].mv_y
         : 0;
       }
     }
@@ -1331,7 +1332,11 @@ void UMHEXSetMotionVectorPredictor (Macroblock *currMB,
       break;
     }
 
-    pmv[hv] = pred_vec;
+    if (hv == 0)
+      pmv->mv_x = pred_vec;
+    else
+      pmv->mv_y = pred_vec;
+
     //Dynamic Search Range
     if (p_Inp->UMHexDSR)
     {

@@ -32,10 +32,11 @@ NOTE: This file contains only a quick overview.
 1.1 Windows
 -----------
   
-  Workspaces for MS Visual C++ 2003/2005 are provided with the names 
+  Workspaces for MS Visual C++ 2003/2005/2008 are provided with the names 
 
     jm_vc7.sln  - MS Visual C++ 2003
     jm_vc8.sln  - MS Visual C++ 2005
+    jm_vc9.sln  - MS Visual C++ 2008
 
   These contain encoder and decoder projects.
 
@@ -86,14 +87,43 @@ NOTE: This file contains only a quick overview.
              and are themselfes overridden by future -p parameters.  There must 
              be whitespace between -f and -p commands and their respecitive 
              parameters.
+  -v
+             Show short version info.
+  -V
+             Show long version info.
 
 2.2 Decoder
 -----------
 
-    ldecod.exe decoder.cfg
+    ldecod.exe [-h] [-d default-file] [-f file] [-p parameter=value]
 
-  The decoder configuration file name must be provided as the first parameter. All
-  decoding parameters are read from this file.
+  All Parameters are initially taken from DEFAULTCONFIGFILENAME, defined in 
+  configfile.h (typically: "encoder.cfg")
+
+  -h
+             Show help on parameters.
+
+  -d default-file    
+             Use the specified file as default configuration instead of the file in 
+             DEFAULTCONFIGFILENAME.  
+
+  -f file    
+             If an -f parameter is present in the command line then 
+             this file is used to update the defaults of DEFAULTCONFIGFILENAME.  
+             There can be more than one -f parameters present.  
+
+  -p parameter=value 
+
+             If -p <ParameterName = ParameterValue> parameters are present then 
+             these overide the default and the additional config file's settings, 
+             and are themselfes overridden by future -p parameters.  There must 
+             be whitespace between -f and -p commands and their respecitive 
+             parameters.
+  -v
+             Show short version info.
+  -V
+             Show long version info.
+
 
 
 3. Input/Output file format
@@ -137,9 +167,7 @@ NOTE: This file contains only a quick overview.
  
 4.2 Decoder
 -----------
-  <value>    #comment
-
-  The values are read in a predefined order. See the example file for details.
+  Beginning with JM 17.0 the decoder uses the same config file style like the encoder.
 
 
 5. Platform specific notes

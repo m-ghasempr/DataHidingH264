@@ -19,6 +19,7 @@
 #include "image.h"
 #include "ratectl.h"
 #include "mode_decision.h"
+#include "mode_decision_p8x8.h"
 #include "fmo.h"
 #include "me_umhex.h"
 #include "me_umhexsmp.h"
@@ -93,10 +94,10 @@ static void fast_mode_intra_decision(Macroblock *currMB, short *intra_skip)
 */
 void encode_one_macroblock_highfast (Macroblock *currMB)
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
-  PicMotionParams *motion = &p_Vid->enc_picture->motion;
+  PicMotionParams **motion = p_Vid->enc_picture->mv_info;
   RDOPTStructure  *p_RDO = currSlice->p_RDO;
 
   int         max_index;
@@ -121,7 +122,7 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
   char       chroma_pred_mode_range[2];
 
 
-  short   *allmvs = (currSlice->slice_type == I_SLICE) ? NULL: currSlice->all_mv[0][0][0][0][0];
+  MotionVector *allmvs = (currSlice->slice_type == I_SLICE) ? NULL: &currSlice->all_mv[0][0][0][0][0];
 
   // Fast Mode Decision
   short inter_skip = 0, intra_skip = 0;
@@ -204,7 +205,7 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
             list_prediction_cost(currMB, BI_PRED, block, mode, &enc_mb, bmcost, best.ref);
 
             // currently Bi predictive ME is only supported for modes 1, 2, 3 and ref 0
-            if (is_bipred_enabled(p_Inp, mode))
+            if (is_bipred_enabled(p_Vid, mode))
             {
               get_bipred_cost(currMB, mode, block, i, j, &best, &enc_mb, bmcost);
             }
@@ -250,9 +251,9 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
             if(p_Inp->EarlySkipEnable)
             {
               //===== check for SKIP mode =====
-              if ( currMB->cbp==0 && motion->ref_idx[LIST_0][currMB->block_y][currMB->block_x]==0 &&
-                motion->mv[LIST_0][currMB->block_y][currMB->block_x][0]==allmvs[0] &&
-                motion->mv[LIST_0][currMB->block_y][currMB->block_x][1]==allmvs[1]               )
+              if ( currMB->cbp==0 && motion[currMB->block_y][currMB->block_x].ref_idx[LIST_0]==0 &&
+                motion[currMB->block_y][currMB->block_x].mv[LIST_0].mv_x == allmvs->mv_x &&
+                motion[currMB->block_y][currMB->block_x].mv[LIST_0].mv_y == allmvs->mv_y)
               {
                 inter_skip = 1;
                 currMB->best_mode = 0;
@@ -293,13 +294,14 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
         //=====  LOOP OVER 8x8 SUB-PARTITIONS  (Motion Estimation & Mode Decision) =====
         for (block = 0; block < 4; block++)
         {
-          submacroblock_mode_decision(currMB, &enc_mb, p_RDO->tr8x8, p_RDO->cofAC8x8ts[block], block, &cost);
-
+          currSlice->submacroblock_mode_decision(currMB, &enc_mb, p_RDO->tr8x8, p_RDO->cofAC8x8ts[block], block, &cost);
+          if(!currMB->valid_8x8)
+            break;
           set_subblock8x8_info(b8x8info, P8x8, block, p_RDO->tr8x8);
         }
       }// if (p_Inp->Transform8x8Mode)
 
-
+      currMB->valid_4x4 = FALSE;
       if (p_Inp->Transform8x8Mode != 2)
       {
         currMB->luma_transform_size_8x8_flag = FALSE; //switch to 8x8 transform size
@@ -310,8 +312,9 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
         //=====  LOOP OVER 8x8 SUB-PARTITIONS  (Motion Estimation & Mode Decision) =====
         for (block = 0; block < 4; block++)
         {
-          submacroblock_mode_decision(currMB, &enc_mb, p_RDO->tr4x4, p_RDO->coefAC8x8[block], block, &cost);
-
+          currSlice->submacroblock_mode_decision(currMB, &enc_mb, p_RDO->tr4x4, p_RDO->coefAC8x8[block], block, &cost);
+          if(!currMB->valid_4x4)
+            break;
           set_subblock8x8_info(b8x8info, P8x8, block, p_RDO->tr4x4);
         }
       }// if (p_Inp->Transform8x8Mode != 2)
@@ -344,7 +347,7 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
       max_index = ((!intra && p_Inp->SelectiveIntraEnable ) ? 5 : 9);
 
       // Set Chroma mode
-      SetChromaPredMode(currMB, enc_mb, mb_available, chroma_pred_mode_range);
+      set_chroma_pred_mode(currMB, enc_mb, mb_available, chroma_pred_mode_range);
 
       //========= C H O O S E   B E S T   M A C R O B L O C K   M O D E =========
       //-------------------------------------------------------------------------
@@ -397,7 +400,7 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
         if(!intra_skip)
         {
           // Set Chroma mode
-          SetChromaPredMode(currMB, enc_mb, mb_available, chroma_pred_mode_range);
+          set_chroma_pred_mode(currMB, enc_mb, mb_available, chroma_pred_mode_range);
 
           max_index = 9;
 

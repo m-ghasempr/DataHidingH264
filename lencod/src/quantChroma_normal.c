@@ -38,7 +38,7 @@ int quant_dc2x2_normal(Macroblock *currMB, int **tblock, int qp, int* DCLevel, i
                        LevelQuantParams *q_params_4x4, int **fadjust, const byte (*pos_scan)[2])
 {
   QuantParameters *p_Quant = currMB->p_Vid->p_Quant;
-  Boolean is_cavlc = (currMB->p_slice->symbol_mode == CAVLC);
+  Boolean is_cavlc = (Boolean) (currMB->p_Slice->symbol_mode == CAVLC);
   int coeff_ctr;
 
   int *m7;
@@ -111,7 +111,7 @@ int quant_dc4x2_normal(Macroblock *currMB, int **tblock, int qp, int* DCLevel, i
                        LevelQuantParams *q_params_4x4, int **fadjust, const byte (*pos_scan)[2])
 {
   QuantParameters *p_Quant = currMB->p_Vid->p_Quant;
-  Boolean is_cavlc = (currMB->p_slice->symbol_mode == CAVLC);
+  Boolean is_cavlc = (Boolean) (currMB->p_Slice->symbol_mode == CAVLC);
   int i,j, coeff_ctr;
 
   int *m7;

@@ -40,9 +40,7 @@ typedef struct pred_struct_frm
   int layer; // the lower the higher the priority
   int slice_qp;
   int random_access;
-
   int temporal_layer; 
-
 } PredStructFrm;
 
 // prediction structure
@@ -69,7 +67,7 @@ typedef struct pic_struct
   int idr_flag;
   int nal_ref_idc;
   int num_slices;
-  SliceStructure *p_slice;
+  SliceStructure *p_Slice;
 } PicStructure;
 
 // frame structure
@@ -86,11 +84,10 @@ typedef struct frame_struct
   int num_refs;
   int random_access;      // random access point (IDR or Intra-coded picture that precludes future pictures in display order to reference pictures decoded prior to this picture)
   int atom_idx;           // index in the prediction structure pointed to be *p_atom
-
-#if 1 // danny@vidyo.com
   int temporal_layer;     
-#endif 
-
+#if (MVC_EXTENSION_ENABLE)
+  int view_id;
+#endif
   PicStructure *p_frame_pic;
   PicStructure *p_top_fld_pic;
   PicStructure *p_bot_fld_pic;
@@ -131,7 +128,12 @@ typedef struct seq_struct
 
   int max_num_slices;
 
-  FrameUnitStruct *p_frm;
+#if (MVC_EXTENSION_ENABLE)
+  int num_frames_mvc;
+  FrameUnitStruct *p_frm_mvc; // frame struct store for num_views > 1
+#endif
+
+  FrameUnitStruct *p_frm;  
   GOPStructure   *p_idr_gop;
   PredStructAtom *p_prd; // regular prediction structure
   PredStructAtom *p_gop;

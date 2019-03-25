@@ -60,8 +60,9 @@ void mmco_long_term(VideoParameters *p_Vid, int current_pic_num)
 ************************************************************************
 */
 
-void poc_based_ref_management_frame_pic(VideoParameters *p_Vid, int current_pic_num)
+void poc_based_ref_management_frame_pic(DecodedPictureBuffer *p_Dpb, int current_pic_num)
 {
+  VideoParameters *p_Vid = p_Dpb->p_Vid;
   unsigned i, pic_num = 0;
 
   int min_poc=INT_MAX;
@@ -73,15 +74,15 @@ void poc_based_ref_management_frame_pic(VideoParameters *p_Vid, int current_pic_
   if ( p_Vid->currentPicture->idr_flag )
     return;
 
-  if ((p_Vid->p_Dpb->ref_frames_in_buffer + p_Vid->p_Dpb->ltref_frames_in_buffer)==0)
+  if ((p_Dpb->ref_frames_in_buffer + p_Dpb->ltref_frames_in_buffer)==0)
     return;
 
-  for (i = 0; i < p_Vid->p_Dpb->used_size; i++)
+  for (i = 0; i < p_Dpb->used_size; i++)
   {
-    if (p_Vid->p_Dpb->fs[i]->is_reference  && (!(p_Vid->p_Dpb->fs[i]->is_long_term)) && p_Vid->p_Dpb->fs[i]->poc < min_poc)
+    if (p_Dpb->fs[i]->is_reference  && (!(p_Dpb->fs[i]->is_long_term)) && p_Dpb->fs[i]->poc < min_poc)
     {
-      min_poc = p_Vid->p_Dpb->fs[i]->frame->poc ;
-      pic_num = p_Vid->p_Dpb->fs[i]->frame->pic_num;
+      min_poc = p_Dpb->fs[i]->frame->poc ;
+      pic_num = p_Dpb->fs[i]->frame->pic_num;
     }
   }
 
@@ -107,8 +108,9 @@ void poc_based_ref_management_frame_pic(VideoParameters *p_Vid, int current_pic_
 ************************************************************************
 */
 
-void poc_based_ref_management_field_pic(VideoParameters *p_Vid, int current_pic_num)
+void poc_based_ref_management_field_pic(DecodedPictureBuffer *p_Dpb, int current_pic_num)
 {
+  VideoParameters *p_Vid = p_Dpb->p_Vid;
   unsigned int i, pic_num1 = 0, pic_num2 = 0;
 
   int min_poc=INT_MAX;
@@ -120,18 +122,18 @@ void poc_based_ref_management_field_pic(VideoParameters *p_Vid, int current_pic_
   if ( p_Vid->currentPicture->idr_flag )
     return;
 
-  if ((p_Vid->p_Dpb->ref_frames_in_buffer+p_Vid->p_Dpb->ltref_frames_in_buffer)==0)
+  if ((p_Dpb->ref_frames_in_buffer + p_Dpb->ltref_frames_in_buffer)==0)
     return;
 
   if ( p_Vid->structure == TOP_FIELD )
   {
-    for (i=0; i<p_Vid->p_Dpb->used_size;i++)
+    for (i=0; i<p_Dpb->used_size;i++)
     {
-      if (p_Vid->p_Dpb->fs[i]->is_reference && (!(p_Vid->p_Dpb->fs[i]->is_long_term)) && p_Vid->p_Dpb->fs[i]->poc < min_poc)
+      if (p_Dpb->fs[i]->is_reference && (!(p_Dpb->fs[i]->is_long_term)) && p_Dpb->fs[i]->poc < min_poc)
       {      
-        min_poc  = p_Vid->p_Dpb->fs[i]->poc;
-        pic_num1 = p_Vid->p_Dpb->fs[i]->top_field->pic_num;
-        pic_num2 = p_Vid->p_Dpb->fs[i]->bottom_field->pic_num;
+        min_poc  = p_Dpb->fs[i]->poc;
+        pic_num1 = p_Dpb->fs[i]->top_field->pic_num;
+        pic_num2 = p_Dpb->fs[i]->bottom_field->pic_num;
       }
     }
   }
@@ -169,8 +171,8 @@ void poc_based_ref_management_field_pic(VideoParameters *p_Vid, int current_pic_
 
 void tlyr_based_ref_management_frame_pic(VideoParameters *p_Vid, int current_pic_num)
 {
-  unsigned i, first = 1, pic_num = 0;
-  DecRefPicMarking_t *drpm, *current_drpm, *tmp_drpm;
+  unsigned i, first = 1;
+  DecRefPicMarking_t *drpm = NULL, *current_drpm = NULL, *tmp_drpm = NULL;
 
   if (p_Vid->dec_ref_pic_marking_buffer!=NULL)
     return;

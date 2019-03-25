@@ -44,11 +44,11 @@
  *    8x8 Intra mode decision for a macroblock - Low complexity
  *************************************************************************************
  */
-int Mode_Decision_for_8x8IntraBlocks_JM_Low444 (Macroblock *currMB, int b8, int lambda, distblk *min_cost)
+int mode_decision_for_I8x8_blocks_JM_Low444 (Macroblock *currMB, int b8, int lambda, distblk *min_cost)
 {
   VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
 
   int     ipmode, best_ipmode = 0, i, j, dummy;
   distblk   cost;
@@ -89,6 +89,7 @@ int Mode_Decision_for_8x8IntraBlocks_JM_Low444 (Macroblock *currMB, int b8, int 
     upMode    =  top_block.available ? p_Vid->ipredmode8x8[top_block.pos_y ][top_block.pos_x ] : -1;
   else
     upMode    =  top_block.available ? p_Vid->ipredmode   [top_block.pos_y ][top_block.pos_x ] : -1;
+
   if(b8 & 0x01)
     leftMode  = left_block.available ? p_Vid->ipredmode8x8[left_block.pos_y][left_block.pos_x] : -1;
   else
@@ -99,14 +100,14 @@ int Mode_Decision_for_8x8IntraBlocks_JM_Low444 (Macroblock *currMB, int b8, int 
   currMB->ipmode_DPCM = NO_INTRA_PMODE; //For residual DPCM
 
   //===== INTRA PREDICTION FOR 8x8 BLOCK =====
-  set_intrapred_8x8(currMB, PLANE_Y, pic_pix_x, pic_pix_y, &left_available, &up_available, &all_available);
+  currSlice->set_intrapred_8x8(currMB, PLANE_Y, pic_pix_x, pic_pix_y, &left_available, &up_available, &all_available);
 
   if(currSlice->P444_joined)
   { 
     select_plane(p_Vid, PLANE_U);
-    set_intrapred_8x8(currMB, PLANE_U, pic_pix_x, pic_pix_y, &left_available, &up_available, &all_available);
+    currSlice->set_intrapred_8x8(currMB, PLANE_U, pic_pix_x, pic_pix_y, &left_available, &up_available, &all_available);
     select_plane(p_Vid, PLANE_V);
-    set_intrapred_8x8(currMB, PLANE_V, pic_pix_x, pic_pix_y, &left_available, &up_available, &all_available);
+    currSlice->set_intrapred_8x8(currMB, PLANE_V, pic_pix_x, pic_pix_y, &left_available, &up_available, &all_available);
     select_plane(p_Vid, PLANE_Y);
   }
 
@@ -120,14 +121,14 @@ int Mode_Decision_for_8x8IntraBlocks_JM_Low444 (Macroblock *currMB, int b8, int 
     {
       get_intrapred_8x8(currMB, PLANE_Y, ipmode, left_available, up_available);
       cost  = (ipmode == mostProbableMode) ? 0 : ( weighted_cost(lambda, 4) );
-      currSlice->compute_cost8x8(p_Vid, &p_Vid->pImgOrg[0][pic_opix_y], currSlice->mpr_8x8[0][ipmode], pic_opix_x, &cost, *min_cost);
+      cost += currSlice->compute_cost8x8(p_Vid, &p_Vid->pImgOrg[0][pic_opix_y], currSlice->mpr_8x8[0][ipmode], pic_opix_x, *min_cost - cost);
 
       if(currSlice->P444_joined)
       {
         get_intrapred_8x8(currMB, PLANE_U, ipmode, left_available, up_available);
-        currSlice->compute_cost8x8(p_Vid, &p_Vid->pImgOrg[PLANE_U][pic_opix_y], currSlice->mpr_8x8[PLANE_U][ipmode], pic_opix_x, &cost, (int) *min_cost);
+        cost += currSlice->compute_cost8x8(p_Vid, &p_Vid->pImgOrg[PLANE_U][pic_opix_y], currSlice->mpr_8x8[PLANE_U][ipmode], pic_opix_x, *min_cost - cost);
         get_intrapred_8x8(currMB, PLANE_V, ipmode, left_available, up_available);
-        currSlice->compute_cost8x8(p_Vid, &p_Vid->pImgOrg[PLANE_V][pic_opix_y], currSlice->mpr_8x8[PLANE_V][ipmode], pic_opix_x, &cost, (int) *min_cost);
+        cost += currSlice->compute_cost8x8(p_Vid, &p_Vid->pImgOrg[PLANE_V][pic_opix_y], currSlice->mpr_8x8[PLANE_V][ipmode], pic_opix_x, *min_cost - cost);
       }
 
       if (cost < *min_cost)
@@ -160,7 +161,7 @@ int Mode_Decision_for_8x8IntraBlocks_JM_Low444 (Macroblock *currMB, int b8, int 
       }
 
       currMB->ipmode_DPCM = (short) best_ipmode; 
-      if (currMB->trans_8x8(currMB, k, b8, &dummy, 1))
+      if (currMB->residual_transform_quant_luma_8x8(currMB, k, b8, &dummy, 1))
         currMB->cr_cbp[k] = 1;
     }
     select_plane(p_Vid, PLANE_Y);
@@ -187,7 +188,7 @@ int Mode_Decision_for_8x8IntraBlocks_JM_Low444 (Macroblock *currMB, int b8, int 
   }
 
   currMB->ipmode_DPCM = (short) best_ipmode;
-  nonzero = currMB->trans_8x8 (currMB, PLANE_Y, b8, &dummy, 1);    
+  nonzero = currMB->residual_transform_quant_luma_8x8 (currMB, PLANE_Y, b8, &dummy, 1);    
   return nonzero;
 }
 
@@ -197,11 +198,11 @@ int Mode_Decision_for_8x8IntraBlocks_JM_Low444 (Macroblock *currMB, int b8, int 
 *    8x8 Intra mode decision for a macroblock - High complexity
 *************************************************************************************
 */
-int Mode_Decision_for_8x8IntraBlocks_JM_High444 (Macroblock *currMB, int b8, int lambda, distblk *min_cost)
+int mode_decision_for_I8x8_blocks_JM_High444 (Macroblock *currMB, int b8, int lambda, distblk *min_cost)
 {
   VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   RDOPTStructure  *p_RDO = currSlice->p_RDO;
 
   int     ipmode, best_ipmode = 0, i, j, dummy;
@@ -253,14 +254,14 @@ int Mode_Decision_for_8x8IntraBlocks_JM_High444 (Macroblock *currMB, int b8, int
   currMB->ipmode_DPCM = NO_INTRA_PMODE; //For residual DPCM
 
   //===== INTRA PREDICTION FOR 8x8 BLOCK =====
-  set_intrapred_8x8(currMB, PLANE_Y, pic_pix_x, pic_pix_y, &left_available, &up_available, &all_available);
+  currSlice->set_intrapred_8x8(currMB, PLANE_Y, pic_pix_x, pic_pix_y, &left_available, &up_available, &all_available);
 
   if(currSlice->P444_joined)
   { 
     select_plane(p_Vid, PLANE_U);
-    set_intrapred_8x8(currMB, PLANE_U, pic_pix_x, pic_pix_y, &left_available, &up_available, &all_available);
+    currSlice->set_intrapred_8x8(currMB, PLANE_U, pic_pix_x, pic_pix_y, &left_available, &up_available, &all_available);
     select_plane(p_Vid, PLANE_V);
-    set_intrapred_8x8(currMB, PLANE_V, pic_pix_x, pic_pix_y, &left_available, &up_available, &all_available);
+    currSlice->set_intrapred_8x8(currMB, PLANE_V, pic_pix_x, pic_pix_y, &left_available, &up_available, &all_available);
     select_plane(p_Vid, PLANE_Y);
   }
 
@@ -324,7 +325,7 @@ int Mode_Decision_for_8x8IntraBlocks_JM_High444 (Macroblock *currMB, int b8, int
           }
         }
 
-        //--- flag if dct-coefficients must be coded ---
+        //--- flag if transform coefficients must be coded ---
         nonzero = c_nz;
 
         //--- set best mode update minimum cost ---
@@ -357,7 +358,7 @@ int Mode_Decision_for_8x8IntraBlocks_JM_High444 (Macroblock *currMB, int b8, int
       }
       currMB->ipmode_DPCM = (short) best_ipmode; 
 
-      if (currMB->trans_8x8(currMB, k, b8, &dummy, 1))
+      if (currMB->residual_transform_quant_luma_8x8(currMB, k, b8, &dummy, 1))
         currMB->cr_cbp[k] = 1;
     }
     select_plane(p_Vid, PLANE_Y);

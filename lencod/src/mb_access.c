@@ -28,7 +28,7 @@ Boolean mb_is_available(int mbAddr, Macroblock *currMB)
     return FALSE;
 
   // the following line checks both: slice number and if the mb has been decoded
-  if (!p_Vid->DeblockCall)
+  if (!currMB->DeblockCall)
   {
     if (p_Vid->mb_data[mbAddr].slice_nr != currMB->slice_nr)
       return FALSE;
@@ -143,30 +143,41 @@ void get_mb_pos (VideoParameters *p_Vid, int mb_addr, int mb_size[2], short *x, 
  */
 void getNonAffNeighbour(Macroblock *currMB, int xN, int yN, int mb_size[2], PixelPos *pix)
 {
-  VideoParameters *p_Vid = currMB->p_Vid;
-  int maxW = mb_size[0], maxH = mb_size[1];
-
-  if ((xN < 0) && (yN < 0))
+  if (xN < 0)
   {
-    pix->mb_addr   = currMB->mbAddrD;
-    pix->available = currMB->mbAvailD;
+    if (yN < 0)
+    {
+      pix->mb_addr   = currMB->mbAddrD;
+      pix->available = currMB->mbAvailD;
+    }
+    else if ((yN >= 0)&&(yN < mb_size[1]))
+    {
+      pix->mb_addr   = currMB->mbAddrA;
+      pix->available = currMB->mbAvailA;
+    }
+    else
+    {
+      pix->available = FALSE;
+    }
   }
-  else if ((xN < 0)&&((yN >= 0)&&(yN < maxH)))
+  else if ((xN >= 0)&&(xN < mb_size[0]))
   {
-    pix->mb_addr   = currMB->mbAddrA;
-    pix->available = currMB->mbAvailA;
+    if (yN<0)
+    {
+      pix->mb_addr   = currMB->mbAddrB;
+      pix->available = currMB->mbAvailB;
+    }
+    else if (((yN >= 0)&&(yN < mb_size[1])))
+    {
+      pix->mb_addr   = currMB->mbAddrX;
+      pix->available = TRUE;
+    }
+    else
+    {
+      pix->available = FALSE;
+    }
   }
-  else if (((xN >= 0)&&(xN < maxW))&&(yN<0))
-  {
-    pix->mb_addr   = currMB->mbAddrB;
-    pix->available = currMB->mbAvailB;
-  }
-  else if (((xN >= 0)&&(xN < maxW))&&((yN >= 0)&&(yN < maxH)))
-  {
-    pix->mb_addr   = currMB->mbAddrX;
-    pix->available = TRUE;
-  }
-  else if ((xN >= maxW)&&(yN < 0))
+  else if ((xN >= mb_size[0])&&(yN < 0))
   {
     pix->mb_addr   = currMB->mbAddrC;
     pix->available = currMB->mbAvailC;
@@ -176,12 +187,12 @@ void getNonAffNeighbour(Macroblock *currMB, int xN, int yN, int mb_size[2], Pixe
     pix->available = FALSE;
   }
 
-  if (pix->available || p_Vid->DeblockCall)
+  if (pix->available || currMB->DeblockCall)
   {
-    pix->x     = (short) (xN & (maxW - 1));
-    pix->pos_x = (short) (pix->x + PicPos[ pix->mb_addr ][0] * maxW);
-    pix->y     = (short) (yN & (maxH - 1));    
-    pix->pos_y = (short) (pix->y + PicPos[ pix->mb_addr ][1] * maxH);
+    pix->x     = (short) (xN & (mb_size[0] - 1));
+    pix->y     = (short) (yN & (mb_size[1] - 1)); 
+    pix->pos_x = (short) (pix->x + PicPos[ pix->mb_addr ][0] * mb_size[0]);    
+    pix->pos_y = (short) (pix->y + PicPos[ pix->mb_addr ][1] * mb_size[1]);
   }
 }
 
@@ -405,7 +416,7 @@ void getAffNeighbour(Macroblock *currMB, int xN, int yN, int mb_size[2], PixelPo
             // then the neighbor is the top MB of the pair
             if (currMB->mbAvailB)
             {
-              if (!(p_Vid->DeblockCall == 1 && (p_Vid->mb_data[currMB->mbAddrB]).mb_field))
+              if (!(currMB->DeblockCall == 1 && (p_Vid->mb_data[currMB->mbAddrB]).mb_field))
                 pix->mb_addr  += 1;
             }
 
@@ -454,7 +465,7 @@ void getAffNeighbour(Macroblock *currMB, int xN, int yN, int mb_size[2], PixelPo
       {
         // yN >=0
         // for the deblocker if this is the extra edge then do this special stuff
-        if (yN == 0 && p_Vid->DeblockCall == 2)
+        if (yN == 0 && currMB->DeblockCall == 2)
         {
           pix->mb_addr  = currMB->mbAddrB + 1;
           pix->available = TRUE;
@@ -521,7 +532,7 @@ void getAffNeighbour(Macroblock *currMB, int xN, int yN, int mb_size[2], PixelPo
       }
     }
   }
-  if (pix->available || p_Vid->DeblockCall)
+  if (pix->available || currMB->DeblockCall)
   {
     pix->x = (short) (xN & (maxW - 1));
     pix->y = (short) (yM & (maxH - 1));

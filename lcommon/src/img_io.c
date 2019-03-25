@@ -199,7 +199,7 @@ void ParseFrameNoFormatFromString (VideoDataFile *input_file)
     *p2 = 'd';
 
     tail++;
-    strncpy(ftail, tail, strlen(tail));
+    strncpy(ftail, tail, (int) strlen(tail));
     break;
   }
 
@@ -222,7 +222,7 @@ void OpenFrameFile( VideoDataFile *input_file, int FrameNumberInFile)
   char infile [FILE_NAME_SIZE], in_number[16];
   int length = 0;
   in_number[length]='\0';
-  length = strlen(input_file->fhead);
+  length = (int) strlen(input_file->fhead);
   strncpy(infile, input_file->fhead, length);
   infile[length]='\0';
   if (input_file->zero_pad)       
@@ -234,7 +234,7 @@ void OpenFrameFile( VideoDataFile *input_file, int FrameNumberInFile)
   length += sizeof(in_number);
   infile[length]='\0';
   strncat(infile, input_file->ftail, strlen(input_file->ftail));
-  length += strlen(input_file->ftail);
+  length += (int) strlen(input_file->ftail);
   infile[length]='\0';
 
   if ((input_file->f_num = open(infile, OPENFLAGS_READ)) == -1)
@@ -254,7 +254,7 @@ void OpenFiles( VideoDataFile *input_file)
 {
   if (input_file->is_concatenated == 1)
   {
-    if (strlen(input_file->fname) == 0)
+    if ((int) strlen(input_file->fname) == 0)
     {
       snprintf(errortext, ET_SIZE, "No input sequence name was provided. Please check settings.");
       error (errortext, 500);
@@ -291,7 +291,7 @@ VideoFileType ParseVideoType (VideoDataFile *input_file)
 {
   char *format;
 
-  format = input_file->fname + strlen(input_file->fname) - 3;
+  format = input_file->fname + (int) strlen(input_file->fname) - 3;
 
   if (strcasecmp (format, "yuv") == 0)
   {

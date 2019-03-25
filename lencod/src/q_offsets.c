@@ -132,7 +132,7 @@ static const short Offset8_inter_default[64] = {
 
 
 // Function prototypes
-static void InitOffsetParam (QuantParameters *p_Quant, InputParameters *p_Inp);
+void InitOffsetParam (QuantParameters *p_Quant, InputParameters *p_Inp);
 /*!
  ***********************************************************************
  * \brief
@@ -404,12 +404,10 @@ void Init_QOffsetMatrix (VideoParameters *p_Vid)
       p_Inp->QOffsetMatrixFile);
     content = GetConfigFileContent (p_Inp->QOffsetMatrixFile, 0);
     if (content != '\0')
-      ParseQOffsetMatrix (p_Vid->p_Quant, content, strlen (content));
+      ParseQOffsetMatrix (p_Vid->p_Quant, content, (int) strlen (content));
     else
     {
-      printf
-        ("\nError: %s\nProceeding with default values for all matrices.",
-        errortext);
+      printf ("\nError: %s\nProceeding with default values for all matrices.", errortext);
       p_Inp->OffsetMatrixPresentFlag = 0;
     }
 
@@ -434,7 +432,7 @@ void Init_QOffsetMatrix (VideoParameters *p_Vid)
  ************************************************************************
  */
 
-static void InitOffsetParam (QuantParameters *p_Quant, InputParameters *p_Inp)
+void InitOffsetParam (QuantParameters *p_Quant, InputParameters *p_Inp)
 {
   int i, k;
   int max_qp_luma = (4 + 6*(p_Inp->output.bit_depth[0]));

@@ -35,7 +35,7 @@ void rc_store_mad(Macroblock *currMB)
   InputParameters *p_Inp = currMB->p_Inp;
   RCGeneric *p_gen = p_Vid->p_rc_gen;
 
-  p_gen->MADofMB[currMB->mbAddrX] = ComputeMBMAD(currMB->p_slice->diffy);
+  p_gen->MADofMB[currMB->mbAddrX] = ComputeMBMAD(currMB->p_Slice->diffy);
 
   if(p_Inp->basicunit < p_Vid->FrameSizeInMbs)
   {

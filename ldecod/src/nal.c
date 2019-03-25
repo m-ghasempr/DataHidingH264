@@ -41,18 +41,17 @@ int RBSPtoSODB(byte *streamBuffer, int last_byte_pos)
 
   while (ctr_bit==0)
   {                 // find trailing 1 bit
-    bitoffset++;
+    ++bitoffset;
     if(bitoffset == 8)
     {
       if(last_byte_pos == 0)
         printf(" Panic: All zero data sequence in RBSP \n");
       assert(last_byte_pos != 0);
-      last_byte_pos -= 1;
+      --last_byte_pos;
       bitoffset = 0;
     }
-    ctr_bit= streamBuffer[last_byte_pos-1] & (0x01<<(bitoffset));
+    ctr_bit= streamBuffer[last_byte_pos - 1] & (0x01<<(bitoffset));
   }
-
 
   // We keep the stop bit for now
 /*  if (remove_stop)
@@ -92,7 +91,7 @@ int EBSPtoRBSP(byte *streamBuffer, int end_bytepos, int begin_bytepos)
 
   j = begin_bytepos;
 
-  for(i = begin_bytepos; i < end_bytepos; i++)
+  for(i = begin_bytepos; i < end_bytepos; ++i)
   { //starting from begin_bytepos to avoid header information
     //in NAL unit, 0x000000, 0x000001 or 0x000002 shall not occur at any byte-aligned position
     if(count == ZEROBYTES_SHORTSTARTCODE && streamBuffer[i] < 0x03) 
@@ -106,15 +105,15 @@ int EBSPtoRBSP(byte *streamBuffer, int end_bytepos, int begin_bytepos)
       if(i == end_bytepos-1)
         return j;
 
-      i++;
+      ++i;
       count = 0;
     }
     streamBuffer[j] = streamBuffer[i];
     if(streamBuffer[i] == 0x00)
-      count++;
+      ++count;
     else
       count = 0;
-    j++;
+    ++j;
   }
 
   return j;

@@ -208,13 +208,8 @@ double XRate (VideoParameters *p_Vid, BiContextTypePtr ctx, const char* model)
   mod_state = iClip3(0, 127, mod_state);
   ctx_state = (ctx->MPS ? 64 + ctx->state : 63 - ctx->state);
 
-#if 0
-  xr -= weight * p_Vid->probability[      ctx_state] * p_Vid->entropy[      mod_state];
-  xr -= weight * p_Vid->probability[127 - ctx_state] * p_Vid->entropy[127 - mod_state];
-#else
   //xr -= weight * (p_Vid->probability[ctx_state] * (p_Vid->entropy[mod_state] - p_Vid->entropy[127 - mod_state]) + p_Vid->entropy[127 - mod_state]);
   xr -= weight * (p_Vid->probability[ctx_state] * p_Vid->enorm[mod_state] + p_Vid->entropy[127 - mod_state]);
-#endif
 
   return xr;
 }

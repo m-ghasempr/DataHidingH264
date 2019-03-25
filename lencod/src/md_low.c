@@ -21,6 +21,7 @@
 #include "transform8x8.h"
 #include "ratectl.h"
 #include "mode_decision.h"
+#include "mode_decision_p8x8.h"
 #include "fmo.h"
 #include "me_umhex.h"
 #include "me_umhexsmp.h"
@@ -31,6 +32,7 @@
 #include "rdopt.h"
 #include "memalloc.h"
 #include "mc_prediction.h"
+#include "rd_intra_jm.h"
 
 
 /*!
@@ -41,11 +43,11 @@
 */
 void encode_one_macroblock_low (Macroblock *currMB)
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   RDOPTStructure  *p_RDO = currSlice->p_RDO;
   VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
-  PicMotionParams *motion = &p_Vid->enc_picture->motion;
+  PicMotionParams **motion = p_Vid->enc_picture->mv_info;
 
   imgpel ***temp_img; // to temp store the Y data for 8x8 transform
 
@@ -60,7 +62,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
   int         have_direct=0;
   int         intra1 = 0;
   int         temp_cpb = 0;
-  Boolean     best_transform_flag = FALSE;
+  byte        best_transform_flag = (byte) 0;
   short       islice      = (short) (currSlice->slice_type == I_SLICE);
   short       bslice      = (short) (currSlice->slice_type == B_SLICE);
   short       pslice      = (short) ((currSlice->slice_type == P_SLICE) || (currSlice->slice_type == SP_SLICE));
@@ -70,26 +72,24 @@ void encode_one_macroblock_low (Macroblock *currMB)
   //int         mb_available[3] = { 1, 1, 1};
 
   char   **ipredmodes = p_Vid->ipredmode;
-  short   *allmvs = (currSlice->slice_type == I_SLICE || (currSlice->slice_type == SI_SLICE)) ? NULL: currSlice->all_mv[0][0][0][0][0];
+  MotionVector *allmvs = (currSlice->slice_type == I_SLICE || (currSlice->slice_type == SI_SLICE)) ? NULL: &currSlice->all_mv[0][0][0][0][0];
   int     ****i4p;  //for non-RD-opt. mode
   imgpel  **mb_pred = currSlice->mb_pred[0];
 
-  Boolean tmp_8x8_flag, tmp_no_mbpart;
+  byte tmp_8x8_flag, tmp_no_mbpart;
 
   BestMode    md_best;
-  Info8x8 best;
+  Info8x8 best = init_info_8x8_struct();
 
   init_md_best(&md_best);
   
-  // Init best (need to create simple function)
-  best.pdir = 0;
-  best.bipred = 0;
-  best.ref[LIST_0] = 0;
-  best.ref[LIST_1] = -1;
-
   get_mem3Dpel(&temp_img, 3, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
   
   intra |= RandomIntra (p_Vid, currMB->mbAddrX);    // Forced Pseudo-Random Intra
+#if (MVC_EXTENSION_ENABLE)
+  if(p_Inp->num_of_views==2)
+    intra |= (currSlice->num_ref_idx_active[LIST_0]==0 && currSlice->num_ref_idx_active[LIST_1]==0);	// force intra if no ref available
+#endif
 
   //===== Setup Macroblock encoding parameters =====
   init_enc_mb_params(currMB, &enc_mb, intra);
@@ -152,7 +152,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
             list_prediction_cost(currMB, BI_PRED, block, mode, &enc_mb, bmcost, best.ref);
 
             // currently Bi predictive ME is only supported for modes 1, 2, 3 and ref 0
-            if (is_bipred_enabled(p_Inp, mode))
+            if (is_bipred_enabled(p_Vid, mode))
             {
               list_prediction_cost(currMB, BI_PRED_L0, block, mode, &enc_mb, bmcost, 0);
               list_prediction_cost(currMB, BI_PRED_L1, block, mode, &enc_mb, bmcost, 0);
@@ -185,7 +185,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
         currMB->luma_transform_size_8x8_flag = FALSE;
         if (p_Inp->Transform8x8Mode) //for inter rd-off, set 8x8 to do 8x8 transform
         {
-          SetModesAndRefframeForBlocks(currMB, (short) mode);
+          currSlice->set_modes_and_refs_for_blocks(currMB, (short) mode);
           currMB->luma_transform_size_8x8_flag = (byte) TransformDecision(currMB, -1, &cost);
         }
 
@@ -310,7 +310,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
   tmp_no_mbpart = currMB->NoMbPartLessThan8x8Flag;      //save no-part-less
   if ((p_Vid->yuv_format != YUV400) && (p_Vid->yuv_format != YUV444))
     // precompute all chroma intra prediction modes
-    intra_chroma_prediction(currMB, NULL, NULL, NULL);
+    currSlice->intra_chroma_prediction(currMB, NULL, NULL, NULL);
 
   if (enc_mb.valid[0] && bslice) // check DIRECT MODE
   {
@@ -366,8 +366,8 @@ void encode_one_macroblock_low (Macroblock *currMB)
     }
     else
     {
-      currMB->luma_transform_size_8x8_flag = (byte) tmp_8x8_flag; // restore if not best
-      currMB->NoMbPartLessThan8x8Flag = (byte) tmp_no_mbpart; // restore if not best
+      currMB->luma_transform_size_8x8_flag = tmp_8x8_flag; // restore if not best
+      currMB->NoMbPartLessThan8x8Flag = tmp_no_mbpart; // restore if not best
     }
   }
   currMB->min_rdcost = min_cost;
@@ -376,7 +376,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
     currMB->luma_transform_size_8x8_flag = TRUE; // at this point cost will ALWAYS be less than min_cost
 
     currMB->mb_type = currMB->ar_mode = I8MB;
-    temp_cpb = Mode_Decision_for_Intra8x8Macroblock (currMB, enc_mb.lambda_mdfp, &rd_cost);
+    temp_cpb = mode_decision_for_I8x8_MB (currMB, enc_mb.lambda_mdfp, &rd_cost);
 
     if (rd_cost <= currMB->min_rdcost) //HYU_NOTE. bug fix. 08/15/07
     {
@@ -416,7 +416,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
     }
     else
     {
-      currMB->luma_transform_size_8x8_flag = (byte) tmp_8x8_flag; // restore if not best
+      currMB->luma_transform_size_8x8_flag = tmp_8x8_flag; // restore if not best
       if (p_Vid->P444_joined)
       {
         currMB->cbp |= currSlice->curr_cbp[0];    
@@ -431,7 +431,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
   {
     currMB->luma_transform_size_8x8_flag = FALSE;
     currMB->mb_type = currMB->ar_mode = I4MB;
-    temp_cpb = Mode_Decision_for_Intra4x4Macroblock (currMB, enc_mb.lambda_mdfp, &rd_cost);
+    temp_cpb = mode_decision_for_I4x4_MB (currMB, enc_mb.lambda_mdfp, &rd_cost);
     if (rd_cost <= currMB->min_rdcost) 
     {
       currMB->cbp = temp_cpb;
@@ -446,7 +446,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
     }
     else
     {
-      currMB->luma_transform_size_8x8_flag = (byte) tmp_8x8_flag; // restore if not best
+      currMB->luma_transform_size_8x8_flag = tmp_8x8_flag; // restore if not best
       if (p_Vid->P444_joined)
       {
         currMB->cbp |= currSlice->curr_cbp[0];
@@ -462,18 +462,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
   }
   if (enc_mb.valid[I16MB]) // check INTRA16x16
   {
-    currMB->luma_transform_size_8x8_flag = FALSE;
-    intrapred_16x16 (currMB, PLANE_Y);
-    if (p_Vid->P444_joined)
-    {
-      select_plane(p_Vid, PLANE_U);
-      intrapred_16x16 (currMB, PLANE_U);
-      select_plane(p_Vid, PLANE_V);
-      intrapred_16x16 (currMB, PLANE_V);
-      select_plane(p_Vid, PLANE_Y);
-    }
-
-    rd_cost = currSlice->find_sad_16x16 (currMB);
+    rd_cost = find_best_mode_I16x16_MB (currMB, enc_mb.lambda_mdfp, currMB->min_rdcost);
 
     if (rd_cost < currMB->min_rdcost)
     {
@@ -483,14 +472,14 @@ void encode_one_macroblock_low (Macroblock *currMB)
 
       currMB->best_mode   = I16MB;      
       currMB->min_rdcost  = rd_cost; 
-      currMB->cbp = currMB->trans_16x16 (currMB, PLANE_Y);
+      currMB->cbp = currMB->residual_transform_quant_luma_16x16 (currMB, PLANE_Y);
 
       if (p_Vid->P444_joined)
       {
         select_plane(p_Vid, PLANE_U);
-        currSlice->cmp_cbp[1] = currMB->trans_16x16(currMB, PLANE_U);
+        currSlice->cmp_cbp[1] = currMB->residual_transform_quant_luma_16x16(currMB, PLANE_U);
         select_plane(p_Vid, PLANE_V);
-        currSlice->cmp_cbp[2] = currMB->trans_16x16(currMB, PLANE_V);   
+        currSlice->cmp_cbp[2] = currMB->residual_transform_quant_luma_16x16(currMB, PLANE_V);   
 
         select_plane(p_Vid, PLANE_Y);
         currMB->cbp |= currSlice->cmp_cbp[1];    
@@ -502,8 +491,8 @@ void encode_one_macroblock_low (Macroblock *currMB)
     }
     else
     {
-      currMB->luma_transform_size_8x8_flag = (byte) tmp_8x8_flag; // restore
-      currMB->NoMbPartLessThan8x8Flag = (byte) tmp_no_mbpart;     // restore
+      currMB->luma_transform_size_8x8_flag = tmp_8x8_flag; // restore
+      currMB->NoMbPartLessThan8x8Flag = tmp_no_mbpart;     // restore
     }
   }
 
@@ -513,14 +502,14 @@ void encode_one_macroblock_low (Macroblock *currMB)
   //---------------------------------------------------------------------------
   {
     //===== set parameters for chosen mode =====
-    SetModesAndRefframeForBlocks (currMB, currMB->best_mode);
+    currSlice->set_modes_and_refs_for_blocks (currMB, currMB->best_mode);
 
     if (currMB->best_mode == P8x8)
     {
       if (currMB->luma_transform_size_8x8_flag && (p_RDO->tr8x8->cbp8x8 == 0) && p_Inp->Transform8x8Mode != 2)
         currMB->luma_transform_size_8x8_flag = FALSE;
 
-      SetCoeffAndReconstruction8x8 (currMB);
+      currSlice->set_coeff_and_recon_8x8 (currMB);
 
       memset(currMB->intra_pred_modes, DC_PRED, MB_BLOCK_PARTITIONS * sizeof(char));
       for (j = currMB->block_y; j < currMB->block_y + BLOCK_MULTIPLE; j++)
@@ -555,17 +544,16 @@ void encode_one_macroblock_low (Macroblock *currMB)
         if (currMB->best_mode!=I16MB)
         {
           if((currMB->best_mode >= 1) && (currMB->best_mode <= 3))
-            currMB->luma_transform_size_8x8_flag = (byte) best_transform_flag;
+            currMB->luma_transform_size_8x8_flag = best_transform_flag;
           
+          currSlice->luma_residual_coding(currMB);
           if (currSlice->P444_joined)
-          {
-            luma_residual_coding_p444(currMB);
+          {            
             if((currMB->cbp==0 && currSlice->cmp_cbp[1] == 0 && currSlice->cmp_cbp[2] == 0) &&(currMB->best_mode == 0))
               currMB->luma_transform_size_8x8_flag = FALSE;
           }
           else
-          {
-            luma_residual_coding(currMB);
+          {            
             if((currMB->cbp==0)&&(currMB->best_mode == 0))
               currMB->luma_transform_size_8x8_flag = FALSE;
           }
@@ -582,36 +570,36 @@ void encode_one_macroblock_low (Macroblock *currMB)
 
     // precompute all chroma intra prediction modes
     if ((p_Vid->yuv_format != YUV400) && (p_Vid->yuv_format != YUV444))
-      intra_chroma_prediction(currMB, NULL, NULL, NULL);
+      currSlice->intra_chroma_prediction(currMB, NULL, NULL, NULL);
 
     currMB->i16offset = 0;
 
     if ((p_Vid->yuv_format != YUV400) && (p_Vid->yuv_format != YUV444))
-      chroma_residual_coding (currMB);
+      currSlice->chroma_residual_coding (currMB);
 
     if (currMB->best_mode == I16MB)
     {
       currMB->i16offset = I16Offset  (currMB->cbp, currMB->i16mode);
     }
 
-    currSlice->SetMotionVectorsMB (currMB, motion);
+    currSlice->set_motion_vectors_mb (currMB);
 
     //===== check for SKIP mode =====
     if(p_Vid->P444_joined)
     {
       if ((pslice) && currMB->best_mode == 1 && currMB->cbp==0 && currSlice->cmp_cbp[1] == 0 && currSlice->cmp_cbp[2] == 0 &&
-        motion->ref_idx[LIST_0][currMB->block_y][currMB->block_x]    == 0 &&
-        motion->mv     [LIST_0][currMB->block_y][currMB->block_x][0] == allmvs[0] &&
-        motion->mv     [LIST_0][currMB->block_y][currMB->block_x][1] == allmvs[1])
+        motion[currMB->block_y][currMB->block_x].ref_idx[LIST_0]    == 0 &&
+        motion[currMB->block_y][currMB->block_x].mv     [LIST_0].mv_x == allmvs->mv_x &&
+        motion[currMB->block_y][currMB->block_x].mv     [LIST_0].mv_y == allmvs->mv_y)
       {
         currMB->mb_type = currMB->b8x8[0].mode = currMB->b8x8[1].mode = currMB->b8x8[2].mode = currMB->b8x8[3].mode = 0;
         currMB->luma_transform_size_8x8_flag = FALSE;
       }
     }
     else if ((pslice) && currMB->best_mode == 1 && currMB->cbp==0 &&
-      motion->ref_idx[LIST_0][currMB->block_y][currMB->block_x]    == 0 &&
-      motion->mv     [LIST_0][currMB->block_y][currMB->block_x][0] == allmvs[0] &&
-      motion->mv     [LIST_0][currMB->block_y][currMB->block_x][1] == allmvs[1])
+      motion[currMB->block_y][currMB->block_x].ref_idx[LIST_0]    == 0 &&
+      motion[currMB->block_y][currMB->block_x].mv     [LIST_0].mv_x == allmvs->mv_x &&
+      motion[currMB->block_y][currMB->block_x].mv     [LIST_0].mv_y == allmvs->mv_y)
     {
       currMB->mb_type = currMB->b8x8[0].mode = currMB->b8x8[1].mode = currMB->b8x8[2].mode = currMB->b8x8[3].mode = 0;
       currMB->luma_transform_size_8x8_flag = FALSE;

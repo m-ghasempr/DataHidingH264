@@ -18,6 +18,26 @@
 #include "image.h"
 #include "mb_access.h"
 
+void generate_pred_error_4x4(imgpel **cur_img, imgpel **prd_img, imgpel **cur_prd, 
+                         int **m7, int pic_opix_x, int block_x)
+{
+  int j, i, *m7_line;
+  imgpel *cur_line, *prd_line;
+
+  for (j = 0; j < BLOCK_SIZE; j++)
+  {
+    m7_line = &m7[j][block_x];
+    cur_line = &cur_img[j][pic_opix_x];
+    prd_line = prd_img[j];
+    memcpy(&cur_prd[j][block_x], prd_line, BLOCK_SIZE * sizeof(imgpel));
+
+    for (i = 0; i < BLOCK_SIZE; i++)
+    {
+      *m7_line++ = (int) (*cur_line++ - *prd_line++);
+    }
+  }        
+}
+
 // Notation for comments regarding prediction and predictors.
 // The pels of the 4x4 block are labelled a..p. The predictor pels above
 // are labelled A..H, from the left I..P, and from above left X, as follows:
@@ -57,6 +77,7 @@ static inline void get_i4x4_vertical(imgpel **cur_pred, imgpel *PredPel)
   memcpy(cur_pred[2], &PredPel[1], BLOCK_SIZE * sizeof(imgpel));
   memcpy(cur_pred[3], &PredPel[1], BLOCK_SIZE * sizeof(imgpel));
 }
+
 
 
 /*!
@@ -289,7 +310,7 @@ static inline void get_i4x4_horup(imgpel **cur_pred, imgpel *PredPel)
  *      none
  ************************************************************************
  */
-void set_intrapred_4x4(Macroblock *currMB, ColorPlane pl, int img_x,int img_y, int *left_available, int *up_available, int *all_available)
+void set_intrapred_4x4_mbaff(Macroblock *currMB, ColorPlane pl, int img_x,int img_y, int *left_available, int *up_available, int *all_available)
 {
   VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
@@ -297,7 +318,6 @@ void set_intrapred_4x4(Macroblock *currMB, ColorPlane pl, int img_x,int img_y, i
   int i;
   imgpel  *PredPel = currMB->intra4x4_pred[pl];  // array of predictor pels
   imgpel   **img_enc = p_Vid->enc_picture->p_curr_img;
-  imgpel   *img_pel;  
 
   int ioff = (img_x & 15);
   int joff = (img_y & 15);
@@ -311,14 +331,14 @@ void set_intrapred_4x4(Macroblock *currMB, ColorPlane pl, int img_x,int img_y, i
   int block_available_up_right;
   int *mb_size = p_Vid->mb_size[IS_LUMA];
 
-  for (i=0;i<4;i++)
+  for (i = 0; i < 4; i++)
   {
-    p_Vid->getNeighbour(currMB, ioff -1 , joff +i , mb_size, &pix_a[i]);
+    p_Vid->getNeighbour(currMB, ioff -1 , joff + i , mb_size, &pix_a[i]);
   }
 
-  p_Vid->getNeighbour(currMB, ioff    , joff -1 , mb_size, &pix_b);
-  p_Vid->getNeighbour(currMB, ioff +4 , joff -1 , mb_size, &pix_c);
-  p_Vid->getNeighbour(currMB, ioff -1 , joff -1 , mb_size, &pix_d);
+  p_Vid->getNeighbour(currMB, ioff     , joff -1 , mb_size, &pix_b);
+  p_Vid->getNeighbour(currMB, ioff + 4 , joff -1 , mb_size, &pix_c);
+  p_Vid->getNeighbour(currMB, ioff - 1 , joff -1 , mb_size, &pix_d);
 
   pix_c.available = pix_c.available && !((ioff==4) && ((joff==4)||(joff==12)));
 
@@ -343,17 +363,11 @@ void set_intrapred_4x4(Macroblock *currMB, ColorPlane pl, int img_x,int img_y, i
   *all_available  = block_available_up && block_available_left && block_available_up_left;
 
   i = (img_x & 15);
-  //j = (img_y & 15);
 
   // form predictor pels
   if (block_available_up)
   {
-    img_pel = &img_enc[pix_b.pos_y][pix_b.pos_x];
-    P_A = *(img_pel++);
-    P_B = *(img_pel++);
-    P_C = *(img_pel++);
-    P_D = *(img_pel);
-
+    memcpy(&PredPel[1], &img_enc[pix_b.pos_y][pix_b.pos_x], BLOCK_SIZE * sizeof(imgpel));
   }
   else
   {
@@ -362,11 +376,7 @@ void set_intrapred_4x4(Macroblock *currMB, ColorPlane pl, int img_x,int img_y, i
 
   if (block_available_up_right)
   {
-    img_pel = &img_enc[pix_c.pos_y][pix_c.pos_x];
-    P_E = *(img_pel++);
-    P_F = *(img_pel++);
-    P_G = *(img_pel++);
-    P_H = *(img_pel);
+    memcpy(&PredPel[5], &img_enc[pix_c.pos_y][pix_c.pos_x], BLOCK_SIZE * sizeof(imgpel));
   }
   else
   {
@@ -398,6 +408,113 @@ void set_intrapred_4x4(Macroblock *currMB, ColorPlane pl, int img_x,int img_y, i
 /*!
  ************************************************************************
  * \brief
+ *    Make intra 4x4 prediction according to all 9 prediction modes.
+ *    The routine uses left and upper neighbouring points from
+ *    previous coded blocks to do this (if available). Notice that
+ *    inaccessible neighbouring points are signalled with a negative
+ *    value in the predmode array .
+ *
+ *  \par Input:
+ *     Starting point of current 4x4 block image posision
+ *
+ *  \par Output:
+ *      none
+ ************************************************************************
+ */
+void set_intrapred_4x4(Macroblock *currMB, ColorPlane pl, int img_x,int img_y, int *left_available, int *up_available, int *all_available)
+{
+  VideoParameters *p_Vid = currMB->p_Vid;
+  InputParameters *p_Inp = currMB->p_Inp;
+
+  int i;
+  imgpel  *PredPel = currMB->intra4x4_pred[pl];  // array of predictor pels
+  imgpel   **img_enc = p_Vid->enc_picture->p_curr_img;
+
+  int ioff = (img_x & 15);
+  int joff = (img_y & 15);
+
+  PixelPos pix_a, pix_b, pix_c, pix_d;
+
+  int block_available_up;
+  int block_available_left;
+  int block_available_up_left;
+  int block_available_up_right;
+  int *mb_size = p_Vid->mb_size[IS_LUMA];
+
+  p_Vid->getNeighbour(currMB, ioff - 1, joff    , mb_size, &pix_a);
+  p_Vid->getNeighbour(currMB, ioff    , joff - 1, mb_size, &pix_b);
+  p_Vid->getNeighbour(currMB, ioff + 4, joff - 1, mb_size, &pix_c);
+  p_Vid->getNeighbour(currMB, ioff - 1, joff - 1, mb_size, &pix_d);
+
+  pix_c.available = pix_c.available && !((ioff==4) && ((joff==4)||(joff==12)));
+
+  if (p_Inp->UseConstrainedIntraPred)
+  {
+    block_available_left     = pix_a.available ? p_Vid->intra_block [pix_a.mb_addr]: 0;
+    block_available_up       = pix_b.available ? p_Vid->intra_block [pix_b.mb_addr] : 0;
+    block_available_up_right = pix_c.available ? p_Vid->intra_block [pix_c.mb_addr] : 0;
+    block_available_up_left  = pix_d.available ? p_Vid->intra_block [pix_d.mb_addr] : 0;
+  }
+  else
+  {
+    block_available_left     = pix_a.available;
+    block_available_up       = pix_b.available;
+    block_available_up_right = pix_c.available;
+    block_available_up_left  = pix_d.available;
+  }
+
+  *left_available = block_available_left;
+  *up_available   = block_available_up;
+  *all_available  = block_available_up && block_available_left && block_available_up_left;
+
+  i = (img_x & 15);
+
+  // form predictor pels
+  if (block_available_up)
+  {
+    memcpy(&PredPel[1], &img_enc[pix_b.pos_y][pix_b.pos_x], BLOCK_SIZE * sizeof(imgpel));
+  }
+  else
+  {
+    P_A = P_B = P_C = P_D = (imgpel) p_Vid->dc_pred_value;
+  }
+
+  if (block_available_up_right)
+  {
+    memcpy(&PredPel[5], &img_enc[pix_c.pos_y][pix_c.pos_x], BLOCK_SIZE * sizeof(imgpel));
+  }
+  else
+  {
+    P_E = P_F = P_G = P_H = P_D;
+  }
+
+  if (block_available_left)
+  {
+    int pos_y = pix_a.pos_y;
+    int pos_x = pix_a.pos_x;
+    P_I = img_enc[pos_y++][pos_x];
+    P_J = img_enc[pos_y++][pos_x];
+    P_K = img_enc[pos_y++][pos_x];
+    P_L = img_enc[pos_y  ][pos_x];
+  }
+  else
+  {
+    P_I = P_J = P_K = P_L = p_Vid->dc_pred_value;
+  }
+
+  if (block_available_up_left)
+  {
+    P_X = img_enc[pix_d.pos_y][pix_d.pos_x];
+  }
+  else
+  {
+    P_X = p_Vid->dc_pred_value;
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
  *    Generate 4x4 intra prediction block
  *
  *  \par Input:
@@ -410,7 +527,7 @@ void set_intrapred_4x4(Macroblock *currMB, ColorPlane pl, int img_x,int img_y, i
 void get_intrapred_4x4(Macroblock *currMB, ColorPlane pl, int i4x4_mode, int img_x, int img_y, int left_available, int up_available)
 {
   imgpel        *PredPel = currMB->intra4x4_pred[pl];  // array of predictor pels
-  imgpel ***curr_mpr_4x4 = currMB->p_slice->mpr_4x4[pl];
+  imgpel ***curr_mpr_4x4 = currMB->p_Slice->mpr_4x4[pl];
 
   // Note that currently prediction values are always placed starting from (0,0) and not according to block position. 
 
@@ -448,3 +565,4 @@ void get_intrapred_4x4(Macroblock *currMB, ColorPlane pl, int i4x4_mode, int img
     break;
   }
 }
+

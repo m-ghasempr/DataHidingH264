@@ -20,6 +20,7 @@
 
 extern void getSubImagesLuma       ( VideoParameters *p_Vid, StorablePicture *s );
 extern void getSubImageInteger     ( StorablePicture *s, imgpel **dstImg, imgpel **srcImg);
+extern void getSubImageInteger_s   ( StorablePicture *s, imgpel **dstImg, imgpel **srcImg);
 extern void getHorSubImageSixTap   ( VideoParameters *p_Vid, StorablePicture *s, imgpel **dst_imgY, imgpel **ref_imgY);
 extern void getVerSubImageSixTap   ( VideoParameters *p_Vid, StorablePicture *s, imgpel **dst_imgY, imgpel **ref_imgY);
 extern void getVerSubImageSixTapTmp( VideoParameters *p_Vid, StorablePicture *s, imgpel **dst_imgY);

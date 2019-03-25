@@ -1,9 +1,28 @@
+Changes in Version JM 17.0 (since JM 16.2)
+------------------------------------------
+- encoder: TIFF input support (LZL)
+- encoder: Reorganization/Generalization of RDPictureDecision (YY)
+- encoder: Weighted Prediction bug fixes (YY)
+- encoder: Hierarchical Coding structure bug fixes (AL)
+- encoder: Architecture changes/bug fixes for error resilient video coding (ZC, PeP)
+- encoder/decoder: Codec architecture reorganization/structure renaming (AT, AL, CV, PeP, YHe)
+- encoder/decoder: lossless coding bug fixes to align code with the spec, and various encoder/decoder mismatch bug fixes(LZ/YY)
+- encoder/decoder: initial MVC extension, i.e. stereo high profile, support (CL/SWi/TN)
+- encoder/decoder: various architectural improvements/bug fixes for stereo high profile support (AT/AL/PeP/YHe)
+- encoder/decoder: deblocking filter reorganization/rewrite (AT/YHe/CV)
+- decoder: Multislice handling support (YHe)
+- encoder/decoder: motion information handling reorganization (AT/YHe)
+- encoder/decoder: direct mode handling reorganization/rewrite (YHe/AT)
+- encoder/decoder: 4:2:2/4:4:4 profile support bug fixes (YHe)
+- encoder/decoder: Interlace handling bug fixes (YHe, AT)
+- encoder/decoder: intra prediction process rewrite (AT, CV)
+- decoder: Motion Compensation operation rewrite (CV/AT/YHe)
+
 Changes in Version JM 16.2 (since JM 16.1)
 ------------------------------------------
 - encoder: changes necessary for low delay anchor generation (DHo)
            see doc/jm16.2_changes.doc for details
 - encoder: update encoder.cfg for high performance based on VCEG common coding condition (KS)
-
 
 Changes in Version JM 16.1 (since JM 16.0)
 ------------------------------------------
@@ -1354,13 +1373,14 @@ BL      Brandon Lin             brandon@ubvideo.com
 BY      Bill Yi                 bill.xyi@gmail.com
 CG      Cristina Gomila         GomilaC@tce.com
 CK      Christopher Kotchey     ckotchey@us.ibm.com
+CL      ChongSoon Lim           chongsoon.lim@sg.panasonic.com
 CS      Christian Schmidt       schmidt@ece.ucsb.edu
+CV      Chris Vogt
 CZ      Chunbo Zhu              cbzhu@mail.ustc.edu.cn
 DA      D. Agrafiotis           d.agrafiotis@bristol.ac.uk
 DC      Doug Chin               dougchin@sandvideo.com
 DD      Dmitriy Demin           Dmitriy.Demin@Sun.COM
 DH      Dzung Hoang             dzung.hoang@conexant.com
-DHo     Danny Hong              danny@vidyo.com
 DK      Dimitris Kontopodis     dkonto@eikon.tum.de
 DM      Detlev Marpe            marpe@hhi.de
 DT      Dong Tian               tian@cs.tut.fi
@@ -1402,6 +1422,8 @@ LlL     Loïc Le Loarer          loic_leloarer@sdesigns.eu
 LW      Limin Wang              liwang@gi.com
 LWi     Lowell Winger           lwinger@videolocus.com
 LP      Luca Pezzoni            luca.pezzoni@st.com
+LZ      lzyn                    llzzyynjupt@sina.com
+LZL     Larry Luther            lzl@dolby.com
 MA      Mauricio Alvarez        alvarez@ac.upc.edu
 MB      Marcus Barkowsky        Marcus.Barkowsky@nt.e-technik.uni-erlangen.de
 MG      Michael Gallant         mgallant@videolocus.com
@@ -1448,6 +1470,7 @@ TB      Tomás Brandão           tomas.brandao@iscte.pt
 TH      Till Hallbach           halbach@tele.ntnu.no
 THi     Tobias Hinz             hinz@hhi.de
 TK      Thomas Kunlin           thomas.kunlin@st.com
+TN      Takahiro Nishi          nishi.takahiro@jp.panasonic.com
 TO      Tobias Oelbaum          drehvial@gmx.net
 TP      Tom Pycke               tom.pycke@ugent.be
 TS      Teruhiko Suzuki         teruhiko@av.crl.sony.co.jp
@@ -1477,6 +1500,7 @@ YW      Ye-Kui Wang             ye-kui.wang@nokia.com
 YL      Yiting Liao             yliao@dolby.com
 YX      Yanjun Xu               yxu@sarnoff.com
 YY      Yan Ye                  yye@dolby.com
+ZC      Zhifeng Chen            Zhifeng@ecel.ufl.edu
 ZH      Zhou Heng               zhou_heng@yahoo.com
 ZHL     Zhen Li                 zhen.li@dolby.com
 ZL      Li Zhang                zhangli@jdl.ac.cn

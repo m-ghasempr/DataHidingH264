@@ -114,7 +114,7 @@ extern void UMHEX_free_mem         (VideoParameters *p_Vid, InputParameters *p_I
 
 extern void UMHEX_decide_intrabk_SAD(Macroblock *currMB);
 extern void UMHEX_skip_intrabk_SAD  (Macroblock *currMB, int ref_max);
-extern void UMHEX_setup             (Macroblock *currMB, short ref, int list, int block_y, int block_x, int blocktype, short   ******all_mv);
+extern void UMHEX_setup             (Macroblock *currMB, short ref, int list, int block_y, int block_x, int blocktype, MotionVector  *****all_mv);
 
 extern distblk                                     //  ==> minimum motion cost after search
 UMHEXIntegerPelBlockMotionSearch  (Macroblock *currMB,     // <--  current Macroblock
@@ -141,7 +141,7 @@ extern distblk UMHEXBipredIntegerPelBlockMotionSearch (Macroblock *, int,
                                        MotionVector *, MotionVector *, MotionVector *, MotionVector *, 
                                        MEBlock *, int, distblk, int);
 
-extern void UMHEXSetMotionVectorPredictor (Macroblock *currMB, short pmv[2], char **refPic, short ***tmp_mv,
+extern void UMHEXSetMotionVectorPredictor (Macroblock *currMB, MotionVector *pmv, struct pic_motion_params **mv_info,
                                     short  ref_frame, int list, int mb_x, int mb_y, int bl_x, int bl_y, MEBlock *mv_block);
 
 #endif

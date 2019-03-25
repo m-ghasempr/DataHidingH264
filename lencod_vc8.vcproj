@@ -234,6 +234,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lcommon\src\config_common.c"
+				>
+			</File>
+			<File
 				RelativePath=".\lencod\src\configfile.c"
 				>
 			</File>
@@ -250,7 +254,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\src\errdo_mc_prediction.c"
+				RelativePath=".\lencod\src\errdo_dist_mhyp.c"
 				>
 			</File>
 			<File
@@ -275,6 +279,10 @@
 			</File>
 			<File
 				RelativePath=".\lencod\src\image.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\image_mp.c"
 				>
 			</File>
 			<File
@@ -314,11 +322,19 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lencod\src\intra16x16.c"
+				>
+			</File>
+			<File
 				RelativePath=".\lencod\src\intra4x4.c"
 				>
 			</File>
 			<File
 				RelativePath=".\lencod\src\intra8x8.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\intra_chroma.c"
 				>
 			</File>
 			<File
@@ -334,6 +350,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lencod\src\lambda.c"
+				>
+			</File>
+			<File
 				RelativePath=".\lencod\src\leaky_bucket.c"
 				>
 			</File>
@@ -343,6 +363,10 @@
 			</File>
 			<File
 				RelativePath=".\lencod\src\list_reorder.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\lln_mc_prediction.c"
 				>
 			</File>
 			<File
@@ -439,6 +463,14 @@
 			</File>
 			<File
 				RelativePath=".\lencod\src\mode_decision.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\mode_decision_P8x8.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\mv_direct.c"
 				>
 			</File>
 			<File
@@ -558,10 +590,6 @@
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\src\rd_pic_coding.c"
-				>
-			</File>
-			<File
 				RelativePath=".\lencod\src\rdopt.c"
 				>
 			</File>
@@ -671,6 +699,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lcommon\inc\config_common.h"
+				>
+			</File>
+			<File
 				RelativePath=".\lencod\inc\configfile.h"
 				>
 			</File>
@@ -711,7 +743,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\inc\errdo_mc_prediction.h"
+				RelativePath=".\lencod\inc\errdo_dist_mhyp.h"
 				>
 			</File>
 			<File
@@ -720,6 +752,10 @@
 			</File>
 			<File
 				RelativePath=".\lencod\inc\explicit_seq.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lcommon\inc\fast_memory.h"
 				>
 			</File>
 			<File
@@ -783,7 +819,15 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lcommon\inc\img_process_types.h"
+				>
+			</File>
+			<File
 				RelativePath=".\lcommon\inc\input.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\inc\intra16x16.h"
 				>
 			</File>
 			<File
@@ -819,11 +863,19 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lencod\inc\lambda.h"
+				>
+			</File>
+			<File
 				RelativePath=".\lencod\inc\leaky_bucket.h"
 				>
 			</File>
 			<File
 				RelativePath=".\lencod\inc\list_reorder.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\inc\lln_mc_prediction.h"
 				>
 			</File>
 			<File
@@ -896,6 +948,10 @@
 			</File>
 			<File
 				RelativePath=".\lencod\inc\mode_decision.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\inc\mode_decision_p8x8.h"
 				>
 			</File>
 			<File

@@ -61,11 +61,10 @@
 
 void init_contexts (Slice *currSlice)
 {
-  VideoParameters *p_Vid = currSlice->p_Vid;
   MotionInfoContexts*  mc = currSlice->mot_ctx;
   TextureInfoContexts* tc = currSlice->tex_ctx;
   int i, j;
-  int qp = imax(0, p_Vid->qp);
+  int qp = imax(0, currSlice->qp); //p_Vid->qp);
   int model_number = currSlice->model_number;
 
   //printf("%d -", p_Vid->currentSlice->model_number);

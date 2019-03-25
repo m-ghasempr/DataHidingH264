@@ -14,7 +14,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 16.2 (FRExt)
+ *     JM 17.0 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -138,6 +138,9 @@ static void alloc_img( VideoParameters **p_Vid)
 
 
   (*p_Vid)->p_dec = -1;
+#if (MVC_EXTENSION_ENABLE)
+  (*p_Vid)->p_dec2 = -1;
+#endif
   (*p_Vid)->p_log = NULL;
   (*p_Vid)->f_annexb = NULL;
   // Init rtp related info
@@ -240,7 +243,7 @@ int main(int argc, char **argv)
  *    calculate Ceil(Log2(uiVal))
  ************************************************************************
  */
-unsigned CeilLog2( unsigned uiVal)
+static unsigned CeilLog2( unsigned uiVal)
 {
   unsigned uiTmp = uiVal-1;
   unsigned uiRet = 0;
@@ -284,7 +287,7 @@ static void init_encoder(VideoParameters *p_Vid, InputParameters *p_Inp)
 
   // set proper p_Vid->log2_max_pic_order_cnt_lsb_minus4.
   if (p_Inp->Log2MaxPOCLsbMinus4 == - 1)
-    p_Vid->log2_max_pic_order_cnt_lsb_minus4 = iClip3(0,12, (int) (CeilLog2( p_Inp->no_frames << 1 ) - 4)); // hack for now
+    p_Vid->log2_max_pic_order_cnt_lsb_minus4 = iClip3(0,12, (int) (CeilLog2( imax( p_Inp->no_frames, (p_Inp->NumberBFrames + 1) << 1 ) << 1 ) - 4)); // hack for now
   else
     p_Vid->log2_max_pic_order_cnt_lsb_minus4 = p_Inp->Log2MaxPOCLsbMinus4;
 
@@ -297,9 +300,20 @@ static void init_encoder(VideoParameters *p_Vid, InputParameters *p_Inp)
     error (errortext, 500);
   }
 
-  if ((p_Inp->output.width & 0x0F) != 0)
+#if (MVC_EXTENSION_ENABLE)
+  if (p_Inp->num_of_views == 2)
   {
-    p_Vid->auto_crop_right = 16 - (p_Inp->output.width & 0x0F);
+    if (strlen (p_Inp->ReconFile2) > 0 && (p_Vid->p_dec2 = open(p_Inp->ReconFile2, OPENFLAGS_WRITE, OPEN_PERMISSIONS))==-1)
+    {
+      snprintf(errortext, ET_SIZE, "Error open file %s", p_Inp->ReconFile2);
+      error (errortext, 500);
+    }
+  }
+#endif
+
+  if ((p_Inp->output.width[0] & 0x0F) != 0)
+  {
+    p_Vid->auto_crop_right = 16 - (p_Inp->output.width[0] & 0x0F);
   }
   else
   {
@@ -308,14 +322,14 @@ static void init_encoder(VideoParameters *p_Vid, InputParameters *p_Inp)
 
   if (p_Inp->PicInterlace || p_Inp->MbInterlace)
   {
-    if ((p_Inp->output.height & 0x01) != 0)
+    if ((p_Inp->output.height[0] & 0x01) != 0)
     {
       error ("even number of lines required for interlaced coding", 500);
     }
     
-    if ((p_Inp->output.height & 0x1F) != 0)
+    if ((p_Inp->output.height[0] & 0x1F) != 0)
     {
-      p_Vid->auto_crop_bottom = 32 - (p_Inp->output.height & 0x1F);
+      p_Vid->auto_crop_bottom = 32 - (p_Inp->output.height[0] & 0x1F);
     }
     else
     {
@@ -324,9 +338,9 @@ static void init_encoder(VideoParameters *p_Vid, InputParameters *p_Inp)
   }
   else
   {
-    if ((p_Inp->output.height & 0x0F) != 0)
+    if ((p_Inp->output.height[0] & 0x0F) != 0)
     {
-      p_Vid->auto_crop_bottom = 16 - (p_Inp->output.height & 0x0F);
+      p_Vid->auto_crop_bottom = 16 - (p_Inp->output.height[0] & 0x0F);
     }
     else
     {
@@ -336,7 +350,7 @@ static void init_encoder(VideoParameters *p_Vid, InputParameters *p_Inp)
   if (p_Vid->auto_crop_bottom || p_Vid->auto_crop_right)
   {
     fprintf (stderr, "Warning: Automatic cropping activated: Coded frame Size: %dx%d\n", 
-      p_Inp->output.width + p_Vid->auto_crop_right, p_Inp->output.height + p_Vid->auto_crop_bottom);
+      p_Inp->output.width[0] + p_Vid->auto_crop_right, p_Inp->output.height[0] + p_Vid->auto_crop_bottom);
   }
 
   // read the slice group configuration file. Only for types 0, 2 or 6
@@ -354,9 +368,9 @@ static void init_encoder(VideoParameters *p_Vid, InputParameters *p_Inp)
   if(p_Inp->RCEnable)
   {
     if (p_Inp->basicunit == 0)
-      p_Inp->basicunit = (p_Inp->output.height + p_Vid->auto_crop_bottom)*(p_Inp->output.width + p_Vid->auto_crop_right)/256;
+      p_Inp->basicunit = (p_Inp->output.height[0] + p_Vid->auto_crop_bottom)*(p_Inp->output.width[0] + p_Vid->auto_crop_right)/256;
 
-    if ( ((p_Inp->output.height + p_Vid->auto_crop_bottom)*(p_Inp->output.width + p_Vid->auto_crop_right)/256) % p_Inp->basicunit != 0)
+    if ( ((p_Inp->output.height[0] + p_Vid->auto_crop_bottom)*(p_Inp->output.width[0] + p_Vid->auto_crop_right)/256) % p_Inp->basicunit != 0)
     {
       snprintf(errortext, ET_SIZE, "Frame size in macroblocks must be a multiple of BasicUnit.");
       error (errortext, 500);
@@ -367,7 +381,14 @@ static void init_encoder(VideoParameters *p_Vid, InputParameters *p_Inp)
 
   // Open Files
   OpenFiles(&p_Inp->input_file1);
-
+#if (MVC_EXTENSION_ENABLE)
+  if(p_Inp->num_of_views==2)
+  {
+    OpenFiles(&p_Inp->input_file2);
+  }
+  p_Vid->prev_view_is_anchor = 0;
+  p_Vid->view_id = 0;	// initialise view_id
+#endif
 
   Init_QMatrix(p_Vid, p_Inp);
   Init_QOffsetMatrix(p_Vid);
@@ -381,11 +402,22 @@ static void init_encoder(VideoParameters *p_Vid, InputParameters *p_Inp)
   if (p_Inp->rdopt == 3)
   {
     init_error_conceal(p_Vid,p_Inp->ErrorConcealment); 
+    //Zhifeng 090611
+    init_distortion_estimation(p_Vid,p_Inp->de);
   }
 
 #ifdef _LEAKYBUCKET_
   p_Vid->initial_Bframes = 0;
+#if (MVC_EXTENSION_ENABLE)
+  if ( p_Inp->num_of_views == 2 )
+  {
+    p_Vid->Bit_Buffer = (long *)malloc(((p_Inp->no_frames << 1) + 1) * sizeof(long));
+  }
+  else
+    p_Vid->Bit_Buffer = (long *)malloc((p_Inp->no_frames + 1) * sizeof(long));
+#else
   p_Vid->Bit_Buffer = (long *)malloc((p_Inp->no_frames + 1) * sizeof(long));
+#endif
   p_Vid->total_frame_buffer = 0;
 #endif
 
@@ -404,9 +436,20 @@ static void init_encoder(VideoParameters *p_Vid, InputParameters *p_Inp)
   init_stats (p_Inp, p_Vid->p_Stats);
   init_dstats(p_Vid->p_Dist);
 
+#if (MVC_EXTENSION_ENABLE)
+  if (p_Inp->num_of_views == 2)
+  {
+    p_Vid->p_Dist->frame_ctr_v[0] = 0;
+    p_Vid->p_Dist->frame_ctr_v[1] = 0;
+    memset(p_Vid->p_Dist->metric_v[0], 0, TOTAL_DIST_TYPES * sizeof(DistMetric));
+    memset(p_Vid->p_Dist->metric_v[1], 0, TOTAL_DIST_TYPES * sizeof(DistMetric));
+  }
+#endif
+
   p_Vid->enc_picture = NULL;
 
   init_global_buffers(p_Vid, p_Inp);
+
 
   if ( p_Inp->WPMCPrecision )
   {
@@ -434,6 +477,19 @@ static void init_encoder(VideoParameters *p_Vid, InputParameters *p_Inp)
   p_Vid->p_Stats->bit_ctr_filler_data = 0;
   p_Vid->p_Stats->bit_ctr_filler_data_n = 0;
   p_Vid->p_Stats->bit_ctr_parametersets = 0;
+
+#if (MVC_EXTENSION_ENABLE)
+  if ( p_Inp->num_of_views == 2 )
+  {
+    p_Vid->p_Stats->bit_ctr_filler_data_v[0] = 0;
+    p_Vid->p_Stats->bit_ctr_filler_data_v[1] = 0;
+    p_Vid->p_Stats->bit_ctr_filler_data_n_v[0] = 0;
+    p_Vid->p_Stats->bit_ctr_filler_data_n_v[1] = 0;
+    p_Vid->p_Stats->bit_ctr_parametersets_v[0] = 0;
+    p_Vid->p_Stats->bit_ctr_parametersets_v[1] = 0;
+  }
+#endif
+
   p_Vid->p_Stats->bit_slice = start_sequence(p_Vid, p_Inp);
 
   if (p_Inp->UseRDOQuant)
@@ -516,21 +572,84 @@ static void prepare_frame_params(VideoParameters *p_Vid, InputParameters *p_Inp,
 static void encode_sequence(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   int curr_frame_to_code;
-  int frames_to_code = p_Inp->no_frames;
+  int frames_to_code;
   int frame_num_bak = 0, frame_coded;
+  int frm_struct_buffer;
   SeqStructure *p_seq_struct = p_Vid->p_pred;
-  FrameUnitStruct *p_frm = p_seq_struct->p_frm;
+  FrameUnitStruct *p_frm;
 
+#if (MVC_EXTENSION_ENABLE)
+  int tmp_rate_control_enable = p_Inp->RCEnable;
+
+  if ( p_Inp->num_of_views == 2 )
+  {
+    frames_to_code = p_Inp->no_frames << 1;
+    p_frm = p_seq_struct->p_frm_mvc;
+    frm_struct_buffer = p_seq_struct->num_frames_mvc;
+  }
+  else
+#endif
+  {
+    frames_to_code = p_Inp->no_frames;
+    p_frm = p_seq_struct->p_frm;
+    frm_struct_buffer = p_Vid->frm_struct_buffer;
+  }
+  
   for (curr_frame_to_code = 0; curr_frame_to_code < frames_to_code; curr_frame_to_code++)
-  {     
-    // determine whether to populate additional frames in the prediction structure
-    if ( curr_frame_to_code >= p_Vid->p_pred->pop_start_frame )
+  {
+#if (MVC_EXTENSION_ENABLE)
+    if ( p_Inp->num_of_views == 2 )
     {
-      populate_frm_struct( p_Vid, p_Inp, p_Vid->p_pred, p_Inp->FrmStructBufferLength, frames_to_code );
+      if ( (curr_frame_to_code & 1) == 0 ) // call only for view_id 0
+      {
+        // determine whether to populate additional frames in the prediction structure
+        if ( (curr_frame_to_code >> 1) >= p_Vid->p_pred->pop_start_frame )
+        {
+          int start = p_seq_struct->pop_start_frame, end;
+
+          populate_frm_struct( p_Vid, p_Inp, p_seq_struct, p_Inp->FrmStructBufferLength, frames_to_code >> 1 );
+          end = p_seq_struct->pop_start_frame;
+          populate_frm_struct_mvc( p_Vid, p_Inp, p_seq_struct, start, end );
+        }
+      }
     }
+    else
+#endif
+    {
+      // determine whether to populate additional frames in the prediction structure
+      if ( curr_frame_to_code >= p_Vid->p_pred->pop_start_frame )
+      {
+        populate_frm_struct( p_Vid, p_Inp, p_seq_struct, p_Inp->FrmStructBufferLength, frames_to_code );
+      }
+    }
+
     p_Vid->curr_frm_idx = curr_frame_to_code;
-    p_Vid->p_curr_frm_struct = p_frm + ( p_Vid->curr_frm_idx % p_Vid->frm_struct_buffer ); // pointer to current frame structure
+    p_Vid->p_curr_frm_struct = p_frm + ( p_Vid->curr_frm_idx % frm_struct_buffer ); // pointer to current frame structure
     p_Vid->number = curr_frame_to_code;
+
+#if (MVC_EXTENSION_ENABLE)
+    if(p_Inp->num_of_views==2)
+    {
+      p_Vid->view_id = p_Vid->p_curr_frm_struct->view_id;
+      if ( p_Vid->view_id == 1 )
+      {
+        p_Vid->curr_frm_idx = p_Vid->number = (curr_frame_to_code - 1) >> 1;
+        p_Vid->p_curr_frm_struct->qp = p_Vid->qp = iClip3( -p_Vid->bitdepth_luma_qp_scale, MAX_QP, p_Vid->AverageFrameQP + p_Inp->View1QPOffset );
+      }
+      else
+      {
+        p_Vid->curr_frm_idx = p_Vid->number = curr_frame_to_code >> 1;
+      }
+      if ( p_Vid->view_id == 1 && tmp_rate_control_enable )
+      {
+        p_Inp->RCEnable = 0;        
+      }
+      else
+      {
+        p_Inp->RCEnable = tmp_rate_control_enable;
+      }
+    }
+#endif
 
     if ( p_Vid->p_curr_frm_struct->frame_no >= p_Inp->no_frames )
     {
@@ -542,6 +661,13 @@ static void encode_sequence(VideoParameters *p_Vid, InputParameters *p_Inp)
     if (p_Vid->last_ref_idc == 1)
     {      
       p_Vid->frame_num++;
+#if (MVC_EXTENSION_ENABLE)
+      if ( p_Inp->num_of_views == 2 )
+      {
+        p_Vid->frame_num %= (p_Vid->max_frame_num << 1);
+      }
+      else
+#endif
       p_Vid->frame_num %= p_Vid->max_frame_num;
     }
 
@@ -550,8 +676,8 @@ static void encode_sequence(VideoParameters *p_Vid, InputParameters *p_Inp)
     // redundant frame initialization and allocation
     if (p_Inp->redundant_pic_flag)
     {
-      Init_redundant_frame(p_Vid, p_Inp);
-      Set_redundant_frame(p_Vid, p_Inp);
+      init_redundant_frame(p_Vid, p_Inp);
+      set_redundant_frame(p_Vid, p_Inp);
     }
 
     frame_coded = encode_one_frame(p_Vid, p_Inp); // encode one frame;
@@ -576,6 +702,17 @@ static void encode_sequence(VideoParameters *p_Vid, InputParameters *p_Inp)
       report_frame_statistic(p_Vid, p_Inp);
 
   }
+
+#if EOS_OUTPUT
+  end_of_stream(p_Vid);
+#endif
+
+#if (MVC_EXTENSION_ENABLE)
+  if(p_Inp->num_of_views == 2)
+  {
+    p_Inp->RCEnable = tmp_rate_control_enable;
+  }
+#endif
 }
 
 
@@ -590,12 +727,19 @@ void free_encoder_memory(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   terminate_sequence(p_Vid, p_Inp);
 
-  flush_dpb(p_Vid, &p_Inp->output);
+  flush_dpb(p_Vid->p_Dpb, &p_Inp->output);
 
   CloseFiles(&p_Inp->input_file1);
-
+  
   if (-1 != p_Vid->p_dec)
     close(p_Vid->p_dec);
+
+#if (MVC_EXTENSION_ENABLE)
+  if(p_Inp->num_of_views==2)
+    CloseFiles(&p_Inp->input_file2);
+  if (-1 != p_Vid->p_dec2)
+    close(p_Vid->p_dec2);
+#endif
   
   if (p_Enc->p_trace)
     fclose(p_Enc->p_trace);
@@ -625,7 +769,7 @@ void free_encoder_memory(VideoParameters *p_Vid, InputParameters *p_Inp)
   }
 #endif
 
-  free_dpb(p_Vid, p_Vid->p_Dpb);
+  free_dpb(p_Vid->p_Dpb);
 
   uninit_out_buffer(p_Vid);
 
@@ -664,7 +808,7 @@ static void init_img( VideoParameters *p_Vid)
   p_Vid->last_mmco_5_disp_order = -1;
   // Color format
   p_Vid->yuv_format  = p_Inp->output.yuv_format;
-  p_Vid->P444_joined = (p_Vid->yuv_format == YUV444 && !IS_INDEPENDENT(p_Inp));  
+  p_Vid->P444_joined = (p_Vid->yuv_format == YUV444 && (p_Inp->separate_colour_plane_flag == 0));  
 
   //pel bitdepth init
   p_Vid->bitdepth_luma            = (short) p_Inp->output.bit_depth[0];
@@ -743,6 +887,15 @@ static void init_img( VideoParameters *p_Vid)
   p_Vid->num_ref_frames = p_Vid->active_sps->num_ref_frames;
   p_Vid->max_num_references = p_Vid->active_sps->frame_mbs_only_flag ? p_Vid->active_sps->num_ref_frames : 2 * p_Vid->active_sps->num_ref_frames;
 
+#if (MVC_EXTENSION_ENABLE)
+  if(p_Inp->num_of_views==2)
+  {
+    //p_Vid->num_ref_frames <<= 1;
+    p_Vid->max_num_references <<= 1;
+  }
+  p_Vid->sec_view_force_fld = 0;
+#endif
+
   p_Vid->base_dist = p_Inp->jumpd + 1;  
 
   // Intra/IDR related parameters
@@ -751,7 +904,6 @@ static void init_img( VideoParameters *p_Vid)
   p_Vid->last_ref_idc    = 0;
   p_Vid->idr_refresh     = 0;
 
-  p_Vid->DeblockCall     = 0;
   p_Vid->framerate       = (float) p_Inp->output.frame_rate;   // The basic frame rate (of the original sequence)
 
   if (p_Inp->AdaptiveRounding)
@@ -770,12 +922,12 @@ static void init_img( VideoParameters *p_Vid)
 
   imgpel_abs_range = (imax(p_Vid->max_pel_value_comp[0], p_Vid->max_pel_value_comp[1]) + 1) * 2;
 
-  p_Vid->width         = (p_Inp->output.width  + p_Vid->auto_crop_right);
-  p_Vid->height        = (p_Inp->output.height + p_Vid->auto_crop_bottom);
+  p_Vid->width         = (p_Inp->output.width[0]  + p_Vid->auto_crop_right);
+  p_Vid->height        = (p_Inp->output.height[0] + p_Vid->auto_crop_bottom);
   p_Vid->width_blk     = p_Vid->width  / BLOCK_SIZE;
   p_Vid->height_blk    = p_Vid->height / BLOCK_SIZE;
-  p_Vid->width_padded  = p_Vid->width  + 2 * IMG_PAD_SIZE;
-  p_Vid->height_padded = p_Vid->height + 2 * IMG_PAD_SIZE;
+  p_Vid->width_padded  = p_Vid->width  + 2 * IMG_PAD_SIZE_X;
+  p_Vid->height_padded = p_Vid->height + 2 * IMG_PAD_SIZE_Y;
 
   if (p_Vid->yuv_format != YUV400)
   {
@@ -802,7 +954,7 @@ static void init_img( VideoParameters *p_Vid)
   if ((p_Vid->b8x8info = (Block8x8Info *) calloc(1, sizeof(Block8x8Info))) == NULL)
      no_mem_exit("init_img: p_Vid->block8x8info");
 
-  if( IS_INDEPENDENT(p_Inp) )
+  if( (p_Inp->separate_colour_plane_flag != 0) )
   {
     for( i = 0; i < MAX_PLANE; i++ ){
       if ((p_Vid->mb_data_JV[i] = (Macroblock *) calloc(p_Vid->FrameSizeInMbs,sizeof(Macroblock))) == NULL)
@@ -818,7 +970,7 @@ static void init_img( VideoParameters *p_Vid)
 
   if (p_Inp->UseConstrainedIntraPred)
   {
-    if ((p_Vid->intra_block = (int*)calloc(p_Vid->FrameSizeInMbs, sizeof(int))) == NULL)
+    if ((p_Vid->intra_block = (short*) calloc(p_Vid->FrameSizeInMbs, sizeof(short))) == NULL)
       no_mem_exit("init_img: p_Vid->intra_block");
   }
 
@@ -849,6 +1001,32 @@ static void init_img( VideoParameters *p_Vid)
   }
 
   p_Vid->mb_y_upd  = 0;
+
+  if(((p_Inp->RDPictureDecision) && p_Inp->GenerateMultiplePPS) || (p_Inp->WeightedPrediction || p_Inp->WeightedBiprediction))
+  {
+    int num_slices;
+    
+    if(p_Inp->slice_mode == 1)
+    {
+      num_slices = p_Vid->FrameSizeInMbs/p_Inp->slice_argument;
+      if((unsigned int)(num_slices * p_Inp->slice_argument) < p_Vid->FrameSizeInMbs)
+        num_slices++;
+    }
+    else 
+      num_slices = 1; 
+
+    p_Vid->num_slices_wp = num_slices;
+    get_mem4Dshort(&(p_Vid->wp_weights), 3, 2, p_Inp->num_ref_frames, num_slices);
+    get_mem4Dshort(&(p_Vid->wp_offsets), 3, 2, p_Inp->num_ref_frames, num_slices);
+    get_mem5Dshort(&(p_Vid->wbp_weight), 3, 2, p_Inp->num_ref_frames, p_Inp->num_ref_frames, num_slices);
+  }
+  else
+  {
+    p_Vid->num_slices_wp = 0;
+    p_Vid->wp_weights = NULL;
+    p_Vid->wp_offsets = NULL;
+    p_Vid->wbp_weight = NULL;
+  }
 
   RandomIntraInit (p_Vid, p_Vid->PicWidthInMbs, p_Vid->FrameHeightInMbs, p_Inp->RandomIntraMBRefresh);
 
@@ -900,9 +1078,12 @@ static void init_img( VideoParameters *p_Vid)
   p_Vid->prev_frame_no = 0; // POC200301
   p_Vid->consecutive_non_reference_pictures = 0; // POC200301
 
+  p_Vid->fld_type = 0;
+
   p_Vid->p_Inp = p_Inp;
 
   create_context_memory (p_Vid, p_Inp);
+
 }
 
 
@@ -929,6 +1110,12 @@ static void free_img (VideoParameters *p_Vid, InputParameters *p_Inp)
     free_mem4Dint(p_Vid->ARCofAdj8x8);
   }
 
+  if (p_Vid->wp_weights)
+    free_mem4Dshort(p_Vid->wp_weights);
+  if (p_Vid->wp_offsets)
+    free_mem4Dshort(p_Vid->wp_offsets);
+  if (p_Vid->wbp_weight)
+    free_mem5Dshort(p_Vid->wbp_weight);
 
   free (p_Vid->p_SEI);
   free (p_Vid->p_QScale);
@@ -1014,17 +1201,21 @@ int init_orig_buffers(VideoParameters *p_Vid, ImageData *imgData)
 
   // allocate memory for reference frame buffers: imgData->frm_data
   imgData->format           = p_Inp->output;
-  imgData->format.width     = p_Vid->width;    
-  imgData->format.height    = p_Vid->height;
-  imgData->format.width_cr  = p_Vid->width_cr;
-  imgData->format.height_cr = p_Vid->height_cr;
+  imgData->format.width[0]  = p_Vid->width;    
+  imgData->format.width[1]  = p_Vid->width_cr;
+  imgData->format.width[2]  = p_Vid->width_cr;
+  imgData->format.height[0] = p_Vid->height;
+  imgData->format.height[1] = p_Vid->height_cr;
+  imgData->format.height[2] = p_Vid->height_cr;
   imgData->format.yuv_format = p_Vid->yuv_format;
   imgData->format.auto_crop_bottom = p_Vid->auto_crop_bottom;
   imgData->format.auto_crop_right  = p_Vid->auto_crop_right;
   imgData->format.auto_crop_bottom_cr = (p_Vid->auto_crop_bottom * mb_height_cr [p_Vid->yuv_format]) / MB_BLOCK_SIZE;
   imgData->format.auto_crop_right_cr  = (p_Vid->auto_crop_right * mb_width_cr [p_Vid->yuv_format]) / MB_BLOCK_SIZE;
+  imgData->frm_stride[0]    = p_Vid->width;
+  imgData->frm_stride[1] = imgData->frm_stride[2] = p_Vid->width_cr;
 
-  if( IS_INDEPENDENT(p_Inp) )
+  if( (p_Inp->separate_colour_plane_flag != 0) )
   {
 
     for( nplane=0; nplane<MAX_PLANE; nplane++ )
@@ -1119,6 +1310,30 @@ static int init_global_buffers(VideoParameters *p_Vid, InputParameters *p_Inp)
     get_mem3Dint (&p_Vid->lrec_uv, 2, p_Vid->height, p_Vid->width);
   }
 
+#if (MVC_EXTENSION_ENABLE)
+  p_Vid->field_pic_ptr = NULL;
+  p_Vid->field_pic1    = NULL;
+  p_Vid->field_pic2    = NULL;
+
+  // Allocate memory for field picture coding
+  if (p_Inp->PicInterlace != FRAME_CODING)
+  {
+    if ((p_Vid->field_pic1 = (Picture**)malloc(2 * sizeof(Picture*))) == NULL)
+      no_mem_exit("init_global_buffers: *p_Vid->field_pic1");
+
+    for (j = 0; j < 2; j++)
+      p_Vid->field_pic1[j] = malloc_picture();
+
+    if(p_Inp->num_of_views==2)
+    {
+      if ((p_Vid->field_pic2 = (Picture**)malloc(2 * sizeof(Picture*))) == NULL)
+        no_mem_exit("init_global_buffers: *p_Vid->field_pic2");
+
+      for (j = 0; j < 2; j++)
+        p_Vid->field_pic2[j] = malloc_picture();
+    }
+  }
+#else
   // Allocate memory for field picture coding
   if (p_Inp->PicInterlace != FRAME_CODING)
   { 
@@ -1128,6 +1343,7 @@ static int init_global_buffers(VideoParameters *p_Vid, InputParameters *p_Inp)
     for (j = 0; j < 2; j++)
       p_Vid->field_pic[j] = malloc_picture();
   }
+#endif
 
   // Init memory data for input & encoded images
   memory_size += init_orig_buffers(p_Vid, &p_Vid->imgData);
@@ -1184,7 +1400,6 @@ static int init_global_buffers(VideoParameters *p_Vid, InputParameters *p_Inp)
     {
       memory_size += EPZSInit(p_Vid);
     }
-
   }
 
   if (p_Inp->RCEnable)
@@ -1197,12 +1412,12 @@ static int init_global_buffers(VideoParameters *p_Vid, InputParameters *p_Inp)
     memory_size += get_mem2Dpel(&p_Vid->imgUV_tmp[1], p_Vid->height_cr, p_Vid->width_cr);
   }
 
-  memory_size += get_mem2Dint (&p_Vid->imgY_sub_tmp, p_Vid->height_padded, p_Vid->width_padded);
+  memory_size += get_mem2DintWithPad (&p_Vid->imgY_sub_tmp, p_Vid->height, p_Vid->width, IMG_PAD_SIZE_Y, IMG_PAD_SIZE_X);
 
   if ( p_Inp->ChromaMCBuffer )
     chroma_mc_setup(p_Vid);
 
-  p_Vid->padded_size_x       = (p_Vid->width + 2 * IMG_PAD_SIZE);
+  p_Vid->padded_size_x       = (p_Vid->width + 2 * IMG_PAD_SIZE_X);
   p_Vid->padded_size_x_m8x8  = (p_Vid->padded_size_x - BLOCK_SIZE_8x8);
   p_Vid->padded_size_x_m4x4  = (p_Vid->padded_size_x - BLOCK_SIZE);
   p_Vid->cr_padded_size_x    = (p_Vid->width_cr + 2 * p_Vid->pad_size_uv_x);
@@ -1224,13 +1439,12 @@ static int init_global_buffers(VideoParameters *p_Vid, InputParameters *p_Inp)
     wpxInitWPXObject(p_Vid);
   }
 
-  memory_size += InitProcessImage( p_Vid, p_Inp );
+  memory_size += init_process_image( p_Vid, p_Inp );
 
   p_Vid->p_pred = init_seq_structure( p_Vid, p_Inp, &memory_size );
 
   return memory_size;
 }
-
 
 /*!
  ************************************************************************
@@ -1240,7 +1454,7 @@ static int init_global_buffers(VideoParameters *p_Vid, InputParameters *p_Inp)
  */
 void free_orig_planes(VideoParameters *p_Vid, ImageData *imgData)
 {
-  if( IS_INDEPENDENT(p_Vid->p_Inp) )
+  if( (p_Vid->p_Inp->separate_colour_plane_flag != 0) )
   {
     int nplane;
     for( nplane=0; nplane<MAX_PLANE; nplane++ )
@@ -1291,6 +1505,7 @@ static void free_global_buffers(VideoParameters *p_Vid, InputParameters *p_Inp)
 
   if (p_Vid->enc_frame_picture)
     free (p_Vid->enc_frame_picture);
+
   if (p_Vid->frame_pic)
   {
     for (j = 0; j < p_Vid->frm_iter; j++)
@@ -1303,6 +1518,28 @@ static void free_global_buffers(VideoParameters *p_Vid, InputParameters *p_Inp)
 
   if (p_Vid->enc_field_picture)
     free (p_Vid->enc_field_picture);
+
+#if (MVC_EXTENSION_ENABLE)
+  if (p_Vid->field_pic1)
+  {
+    for (j = 0; j < 2; j++)
+    {
+      if (p_Vid->field_pic1[j])
+        free_picture (p_Vid->field_pic1[j]);
+    }
+    free (p_Vid->field_pic1);
+
+    if(p_Inp->num_of_views==2)
+    {
+      for (j = 0; j < 2; j++)
+      {
+        if (p_Vid->field_pic2[j])
+          free_picture (p_Vid->field_pic2[j]);
+      }
+      free (p_Vid->field_pic2);
+    }
+  }
+#else
   if (p_Vid->field_pic)
   {
     for (j = 0; j < 2; j++)
@@ -1312,6 +1549,7 @@ static void free_global_buffers(VideoParameters *p_Vid, InputParameters *p_Inp)
     }
     free (p_Vid->field_pic);
   }
+#endif
 
   // Deallocation of SI picture related memory
   if (p_Inp->si_frame_indicator || p_Inp->sp_periodicity)
@@ -1339,7 +1577,7 @@ static void free_global_buffers(VideoParameters *p_Vid, InputParameters *p_Inp)
 
   if (p_Vid->imgY_sub_tmp) // free temp quarter pel frame buffers
   {
-    free_mem2Dint (p_Vid->imgY_sub_tmp);
+    free_mem2DintWithPad (p_Vid->imgY_sub_tmp, IMG_PAD_SIZE_Y, IMG_PAD_SIZE_X);
     p_Vid->imgY_sub_tmp = NULL;
   }
 
@@ -1359,7 +1597,9 @@ static void free_global_buffers(VideoParameters *p_Vid, InputParameters *p_Inp)
     p_Vid->ipredmode8x8_line = NULL;
   }
 
-  if( IS_INDEPENDENT(p_Inp) )
+  free( p_Vid->b8x8info );
+
+  if( (p_Inp->separate_colour_plane_flag != 0) )
   {
     for( i=0; i<MAX_PLANE; i++ ){
       free(p_Vid->mb_data_JV[i]);
@@ -1448,7 +1688,7 @@ static void free_global_buffers(VideoParameters *p_Vid, InputParameters *p_Inp)
     delete_RGB_memory(p_Vid);
   }
 
-  ClearProcessImage( p_Vid, p_Inp );
+  clear_process_image( p_Vid, p_Inp );
 
   free_seq_structure( p_Vid->p_pred );
 }
@@ -1478,7 +1718,7 @@ int get_mem_ACcoeff (VideoParameters *p_Vid, int***** cofAC)
 int get_mem_ACcoeff_new (int****** cofAC, int chroma)
 { 
   get_mem5Dint(cofAC, BLOCK_SIZE, chroma, BLOCK_SIZE, 2, 65);
-  return chroma * BLOCK_SIZE * BLOCK_SIZE * 2 * 65 * sizeof(int);// 18->65 for ABT
+  return chroma * BLOCK_PIXELS * 2 * 65 * sizeof(int);// 18->65 for ABT
 }
 
 /*!
@@ -1605,7 +1845,7 @@ static void SetLevelIndices(VideoParameters *p_Vid)
  *    initialize key frames and corresponding redundant frames.
  ************************************************************************
  */
-void Init_redundant_frame(VideoParameters *p_Vid, InputParameters *p_Inp)
+void init_redundant_frame(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   if (p_Inp->redundant_pic_flag)
   {
@@ -1651,7 +1891,7 @@ void Init_redundant_frame(VideoParameters *p_Vid, InputParameters *p_Inp)
  *    allocate redundant frames in a primary GOP.
  ************************************************************************
  */
-void Set_redundant_frame(VideoParameters *p_Vid, InputParameters *p_Inp)
+void set_redundant_frame(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   int GOPlength = p_Inp->PrimaryGOPLength;
 
@@ -1746,8 +1986,8 @@ static void chroma_mc_setup(VideoParameters *p_Vid)
   // initialize global variables used for chroma interpolation and buffering
   if ( p_Vid->yuv_format == YUV420 )
   {
-    p_Vid->pad_size_uv_x = IMG_PAD_SIZE >> 1;
-    p_Vid->pad_size_uv_y = IMG_PAD_SIZE >> 1;
+    p_Vid->pad_size_uv_x = IMG_PAD_SIZE_X >> 1;
+    p_Vid->pad_size_uv_y = IMG_PAD_SIZE_Y >> 1;
     p_Vid->chroma_mask_mv_y = 7;
     p_Vid->chroma_mask_mv_x = 7;
     p_Vid->chroma_shift_x = 3;
@@ -1755,8 +1995,8 @@ static void chroma_mc_setup(VideoParameters *p_Vid)
   }
   else if ( p_Vid->yuv_format == YUV422 )
   {
-    p_Vid->pad_size_uv_x = IMG_PAD_SIZE >> 1;
-    p_Vid->pad_size_uv_y = IMG_PAD_SIZE;
+    p_Vid->pad_size_uv_x = IMG_PAD_SIZE_X >> 1;
+    p_Vid->pad_size_uv_y = IMG_PAD_SIZE_Y;
     p_Vid->chroma_mask_mv_y = 3;
     p_Vid->chroma_mask_mv_x = 7;
     p_Vid->chroma_shift_y = 2;
@@ -1764,8 +2004,8 @@ static void chroma_mc_setup(VideoParameters *p_Vid)
   }
   else
   { // YUV444
-    p_Vid->pad_size_uv_x = IMG_PAD_SIZE;
-    p_Vid->pad_size_uv_y = IMG_PAD_SIZE;
+    p_Vid->pad_size_uv_x = IMG_PAD_SIZE_X;
+    p_Vid->pad_size_uv_y = IMG_PAD_SIZE_Y;
     p_Vid->chroma_mask_mv_y = 3;
     p_Vid->chroma_mask_mv_x = 3;
     p_Vid->chroma_shift_y = 2;

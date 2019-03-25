@@ -47,7 +47,7 @@ int init_trellis_data_DC_cr_CAVLC(Macroblock *currMB, int **tblock, int qp_per, 
                          LevelQuantParams *q_params_4x4, const byte *p_scan, 
                          levelDataStruct *dataLevel)
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currMB->p_Vid;
   int i, j, coeff_ctr, end_coeff_ctr = p_Vid->num_cdc_coeff;
   int *m7;
@@ -129,7 +129,7 @@ int init_trellis_data_DC_cr_CABAC(Macroblock *currMB, int **tblock, int qp_per, 
                          LevelQuantParams *q_params_4x4, const byte *p_scan, 
                          levelDataStruct *dataLevel, int* kStart, int* kStop)
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currMB->p_Vid;
   int noCoeff = 0;
   int i, j, coeff_ctr, end_coeff_ctr = p_Vid->num_cdc_coeff;
@@ -224,7 +224,7 @@ void get_dQP_table(Slice *currSlice)
 
 void trellis_mp(Macroblock *currMB)
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
 
@@ -238,7 +238,9 @@ void trellis_mp(Macroblock *currMB)
   int   qp_anchor;
 
   masterQP = p_Vid->masterQP = p_Vid->qp;
-  p_Vid->Motion_Selected = 0;
+  
+  currSlice->rdoq_motion_copy = 0;
+
   currSlice->rddata_trellis_best.min_rdcost = 1e30;
 
   if (p_Inp->symbol_mode == CABAC)
@@ -301,7 +303,7 @@ void trellis_mp(Macroblock *currMB)
       copy_rddata_trellis(currMB, &currSlice->rddata_trellis_best, currSlice->rddata);
 
     if (p_Inp->RDOQ_CP_MV)
-      p_Vid->Motion_Selected = 1;
+      currSlice->rdoq_motion_copy = 1;
 
 #if (!RDOQ_BASE)
     if (p_Inp->RDOQ_Fast == 1)
@@ -328,7 +330,7 @@ void trellis_sp(Macroblock *currMB)
 {
   VideoParameters *p_Vid     = currMB->p_Vid;
   InputParameters *p_Inp     = currMB->p_Inp;
-  Slice           *currSlice = currMB->p_slice;
+  Slice           *currSlice = currMB->p_Slice;
 
   p_Vid->masterQP = p_Vid->qp;
 
@@ -362,7 +364,7 @@ void trellis_sp(Macroblock *currMB)
 
 void trellis_coding(Macroblock *currMB)
 {
-  if (currMB->p_slice->RDOQ_QP_Num > 1)
+  if (currMB->p_Slice->RDOQ_QP_Num > 1)
   {
     trellis_mp(currMB);   
   }
@@ -434,7 +436,7 @@ void copy_rddata_trellis (Macroblock *currMB, RD_DATA *dest, RD_DATA *src)
   if (p_Vid->type != I_SLICE && p_Vid->type != SI_SLICE)
   {
     // note that this is not copying the bipred mvs!!!
-    memcpy(&dest->all_mv [0][0][0][0][0][0], &src->all_mv [0][0][0][0][0][0], p_Vid->max_num_references * 576 * sizeof(short)); // 2 * ref * 9 * 4 * 4 * 2
+    memcpy(&dest->all_mv [0][0][0][0][0], &src->all_mv [0][0][0][0][0], p_Vid->max_num_references * 288 * sizeof(MotionVector)); // 2 * ref * 9 * 4 * 4
   }
 
   memcpy(dest->intra_pred_modes,src->intra_pred_modes, MB_BLOCK_PARTITIONS * sizeof(char));
@@ -449,7 +451,7 @@ void copy_rddata_trellis (Macroblock *currMB, RD_DATA *dest, RD_DATA *src)
 void updateMV_mp(Macroblock *currMB, distblk *m_cost, short ref, int list, int h, int v, int blocktype, int block8x8)
 {
   InputParameters *p_Inp = currMB->p_Inp;
-  Slice       *currSlice = currMB->p_slice;
+  Slice       *currSlice = currMB->p_Slice;
 
   int       i, j;
   int       bsx       = block_size[blocktype][0] >> 2;
@@ -468,16 +470,14 @@ void updateMV_mp(Macroblock *currMB, distblk *m_cost, short ref, int list, int h
   }
   else
   {
-    all_mv.mv_x = currSlice->rddata_trellis_best.all_mv[list][ref][blocktype][v][h][0];
-    all_mv.mv_y = currSlice->rddata_trellis_best.all_mv[list][ref][blocktype][v][h][1];
+    all_mv = currSlice->rddata_trellis_best.all_mv[list][ref][blocktype][v][h];
   }
 
   for (j = 0; j < bsy; j++)
   {
     for (i = 0; i < bsx; i++) 
     {
-      currSlice->all_mv[list][ref][blocktype][v+j][h+i][0] = all_mv.mv_x;
-      currSlice->all_mv[list][ref][blocktype][v+j][h+i][1] = all_mv.mv_y;
+      currSlice->all_mv[list][ref][blocktype][v+j][h+i] = all_mv;
     }
   }
 }

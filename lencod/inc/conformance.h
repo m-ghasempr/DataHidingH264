@@ -19,8 +19,8 @@ extern void    ProfileCheck         (InputParameters *p_Inp);
 extern void    LevelCheck           (VideoParameters *p_Vid, InputParameters *p_Inp);
 extern void    update_mv_limits     (VideoParameters *p_Vid, byte is_field);
 extern void    clip_mv_range        (VideoParameters *p_Vid, int search_range, MotionVector *mv, int res);
-extern int     out_of_bounds_mvs    (VideoParameters *p_Vid, short mv[2]);
-extern void    test_clip_mvs        (VideoParameters *p_Vid, short mv[2], Boolean write_mb);
+extern int     out_of_bounds_mvs    (VideoParameters *p_Vid, const MotionVector *mv);
+extern void    test_clip_mvs        (VideoParameters *p_Vid, MotionVector *mv, Boolean write_mb);
 extern Boolean CheckPredictionParams(Macroblock  *currMB, Block8x8Info *b8x8info, int mode);
 
 extern unsigned int getMaxMBPS(unsigned int levelIdc);

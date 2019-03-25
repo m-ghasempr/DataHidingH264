@@ -42,9 +42,9 @@ int quant_4x4_trellis(Macroblock *currMB, int **tblock, struct quant_methods *q_
 {
   int   block_x = q_method->block_x;
 
-  int*  ACLevel = q_method->ACLevel;
-  int*  ACRun   = q_method->ACRun;
-  Slice *currSlice = currMB->p_slice;
+  int*  ACL = &q_method->ACLevel[0];
+  int*  ACR = &q_method->ACRun[0];  
+  Slice *currSlice = currMB->p_Slice;
   QuantParameters *p_Quant = currMB->p_Vid->p_Quant;
   int  qp = q_method->qp;
   LevelQuantParams **q_params_4x4 = q_method->q_params;
@@ -52,7 +52,8 @@ int quant_4x4_trellis(Macroblock *currMB, int **tblock, struct quant_methods *q_
   const byte *c_cost = q_method->c_cost;
   int *coeff_cost = q_method->coeff_cost;
 
-  Boolean is_cavlc = (currSlice->symbol_mode == CAVLC);
+  Boolean is_cavlc = (Boolean) (currSlice->symbol_mode == CAVLC);
+
   int i,j, coeff_ctr;
 
   int *m7;
@@ -61,15 +62,13 @@ int quant_4x4_trellis(Macroblock *currMB, int **tblock, struct quant_methods *q_
   int   nonzero = FALSE;
   int   qp_per = p_Quant->qp_per_matrix[qp];
   const byte *p_scan = &pos_scan[0][0];
-  int*  ACL = &ACLevel[0];
-  int*  ACR = &ACRun[0];
 
   int levelTrellis[16];
 
   currSlice->rdoq_4x4(currMB, tblock, q_method, levelTrellis);
 
   // Quantization
-  for (coeff_ctr = 0; coeff_ctr < 16; coeff_ctr++)
+  for (coeff_ctr = 0; coeff_ctr < 16; ++coeff_ctr)
   {
     i = *p_scan++;  // horizontal position
     j = *p_scan++;  // vertical position
@@ -101,13 +100,13 @@ int quant_4x4_trellis(Macroblock *currMB, int **tblock, struct quant_methods *q_
       }
       else
       {
-        run++;
         *m7 = 0;
+        ++run;
       } 
     }
     else
     {
-      run++;
+      ++run;
     } 
   }
 
@@ -146,14 +145,7 @@ void rdoq_4x4_CAVLC(Macroblock *currMB, int **tblock, struct quant_methods *q_me
   int   b8      = 2*(pos_y >> 1) + (pos_x >> 1);
   int   b4      = 2*(pos_y & 0x01) + (pos_x & 0x01);
 
-  if ((p_Vid->type==B_SLICE) && p_Vid->nal_reference_idc)
-  {
-    lambda_md = p_Vid->lambda_md[5][p_Vid->masterQP];  
-  }
-  else
-  {
-    lambda_md = p_Vid->lambda_md[p_Vid->type][p_Vid->masterQP]; 
-  }
+  lambda_md = p_Vid->lambda_md[p_Vid->type][p_Vid->masterQP]; 
 
   init_trellis_data_4x4_CAVLC(currMB, tblock, block_x, qp_per, qp_rem, q_params_4x4, p_scan, &levelData[0], type);
   est_RunLevel_CAVLC(currMB, levelData, levelTrellis, LUMA, b8, b4, 16, lambda_md);
@@ -179,19 +171,11 @@ void rdoq_4x4_CABAC(Macroblock *currMB, int **tblock, struct quant_methods *q_me
   int   qp_rem = p_Quant->qp_rem_matrix[qp];
 
   levelDataStruct levelData[16];
-  double  lambda_md = 0.0;
   int kStart=0, kStop=0, noCoeff = 0, estBits;
 
   int type = LUMA_4x4;
 
-  if ((p_Vid->type==B_SLICE) && p_Vid->nal_reference_idc)
-  {
-    lambda_md = p_Vid->lambda_md[5][p_Vid->masterQP];  
-  }
-  else
-  {
-    lambda_md = p_Vid->lambda_md[p_Vid->type][p_Vid->masterQP]; 
-  }
+  double lambda_md = p_Vid->lambda_md[p_Vid->type][p_Vid->masterQP]; 
 
   noCoeff = init_trellis_data_4x4_CABAC(currMB, tblock, block_x, qp_per, qp_rem, q_params_4x4, p_scan, &levelData[0], &kStart, &kStop, type);
   estBits = est_write_and_store_CBP_block_bit(currMB, LUMA_4x4);
@@ -217,9 +201,9 @@ int quant_ac4x4_trellis(Macroblock *currMB, int **tblock, struct quant_methods *
   const byte *c_cost = q_method->c_cost;
   int *coeff_cost = q_method->coeff_cost;
 
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   QuantParameters *p_Quant = currMB->p_Vid->p_Quant;
-  Boolean is_cavlc = (currSlice->symbol_mode == CAVLC);
+  Boolean is_cavlc = (Boolean) (currSlice->symbol_mode == CAVLC);
   int i,j, coeff_ctr;
 
   int *m7;
@@ -315,14 +299,7 @@ void rdoq_ac4x4_CAVLC(Macroblock *currMB, int **tblock, struct quant_methods *q_
   int   b4      = 2*(pos_y & 0x01) + (pos_x & 0x01);
   int   block_type = ( (type == CHROMA_AC) ? CHROMA_AC : LUMA_INTRA16x16AC);
 
-  if ((p_Vid->type==B_SLICE) && p_Vid->nal_reference_idc)
-  {
-    lambda_md = p_Vid->lambda_md[5][p_Vid->masterQP];  
-  }
-  else
-  {
-    lambda_md = p_Vid->lambda_md[p_Vid->type][p_Vid->masterQP]; 
-  }
+  lambda_md = p_Vid->lambda_md[p_Vid->type][p_Vid->masterQP]; 
 
   init_trellis_data_4x4_CAVLC(currMB, tblock, block_x, qp_per, qp_rem, q_params_4x4, p_scan, &levelData[0], type);
   est_RunLevel_CAVLC(currMB, levelData, levelTrellis, block_type, b8, b4, 15, lambda_md);
@@ -352,14 +329,7 @@ void rdoq_ac4x4_CABAC(Macroblock *currMB, int **tblock, struct quant_methods *q_
   double  lambda_md = 0.0;
   int kStart = 0, kStop = 0, noCoeff = 0, estBits;
 
-  if ((p_Vid->type==B_SLICE) && p_Vid->nal_reference_idc)
-  {
-    lambda_md = p_Vid->lambda_md[5][p_Vid->masterQP];  
-  }
-  else
-  {
-    lambda_md = p_Vid->lambda_md[p_Vid->type][p_Vid->masterQP]; 
-  }
+  lambda_md = p_Vid->lambda_md[p_Vid->type][p_Vid->masterQP]; 
 
   noCoeff = init_trellis_data_4x4_CABAC(currMB, tblock, block_x, qp_per, qp_rem, q_params_4x4, p_scan, &levelData[0], &kStart, &kStop, type);
   estBits = est_write_and_store_CBP_block_bit(currMB, type);
@@ -376,9 +346,9 @@ void rdoq_ac4x4_CABAC(Macroblock *currMB, int **tblock, struct quant_methods *q_
 int quant_dc4x4_trellis(Macroblock *currMB, int **tblock, int qp, int* DCLevel, int* DCRun, 
                        LevelQuantParams *q_params_4x4, const byte (*pos_scan)[2])
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   QuantParameters *p_Quant = currMB->p_Vid->p_Quant;
-  Boolean is_cavlc = (currSlice->symbol_mode == CAVLC);
+  Boolean is_cavlc = (Boolean) (currSlice->symbol_mode == CAVLC);
   int i,j, coeff_ctr;
 
   int *m7;
@@ -453,14 +423,7 @@ void rdoq_dc_CAVLC(Macroblock *currMB, int **tblock, int qp_per, int qp_rem, Lev
   levelDataStruct levelData[16];
   double  lambda_md = 0.0;
   
-  if ((p_Vid->type==B_SLICE) && p_Vid->nal_reference_idc)
-  {
-    lambda_md = p_Vid->lambda_md[5][p_Vid->masterQP];  
-  }
-  else
-  {
-    lambda_md = p_Vid->lambda_md[p_Vid->type][p_Vid->masterQP]; 
-  }
+  lambda_md = p_Vid->lambda_md[p_Vid->type][p_Vid->masterQP]; 
 
   init_trellis_data_DC_CAVLC(currMB, tblock, qp_per, qp_rem, q_params_4x4, p_scan, &levelData[0]);
   est_RunLevel_CAVLC(currMB, levelData, levelTrellis, LUMA_INTRA16x16DC, 0, 0, 16, lambda_md);
@@ -483,14 +446,7 @@ void rdoq_dc_CABAC(Macroblock *currMB, int **tblock, int qp_per, int qp_rem, Lev
   double  lambda_md = 0.0;
   int kStart=0, kStop=0, noCoeff = 0, estBits;
 
-  if ((p_Vid->type==B_SLICE) && p_Vid->nal_reference_idc)
-  {
-    lambda_md = p_Vid->lambda_md[5][p_Vid->masterQP];  
-  }
-  else
-  {
-    lambda_md = p_Vid->lambda_md[p_Vid->type][p_Vid->masterQP]; 
-  }
+  lambda_md = p_Vid->lambda_md[p_Vid->type][p_Vid->masterQP]; 
 
   noCoeff = init_trellis_data_DC_CABAC(currMB, tblock, qp_per, qp_rem, q_params_4x4, p_scan, &levelData[0], &kStart, &kStop);
   estBits = est_write_and_store_CBP_block_bit(currMB, type);

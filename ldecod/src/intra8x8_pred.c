@@ -240,7 +240,7 @@ static inline int intra8x8_dc_pred(Macroblock *currMB,    //!< current macrobloc
   Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currMB->p_Vid;
 
-  StorablePicture *dec_picture = p_Vid->dec_picture;
+  StorablePicture *dec_picture = currSlice->dec_picture;
   imgpel **imgY = (pl) ? dec_picture->imgUV[pl - 1] : dec_picture->imgY; // For MB level frame/field coding tools -- set default to imgY
 
   PixelPos pix_a[8];
@@ -269,10 +269,10 @@ static inline int intra8x8_dc_pred(Macroblock *currMB,    //!< current macrobloc
   if (p_Vid->active_pps->constrained_intra_pred_flag)
   {
     for (i=0, block_available_left=1; i<8;i++)
-      block_available_left  &= pix_a[i].available ? p_Vid->intra_block[pix_a[i].mb_addr]: 0;
-    block_available_up       = pix_b.available ? p_Vid->intra_block [pix_b.mb_addr] : 0;
-    block_available_up_right = pix_c.available ? p_Vid->intra_block [pix_c.mb_addr] : 0;
-    block_available_up_left  = pix_d.available ? p_Vid->intra_block [pix_d.mb_addr] : 0;
+      block_available_left  &= pix_a[i].available ? currSlice->intra_block[pix_a[i].mb_addr]: 0;
+    block_available_up       = pix_b.available ? currSlice->intra_block [pix_b.mb_addr] : 0;
+    block_available_up_right = pix_c.available ? currSlice->intra_block [pix_c.mb_addr] : 0;
+    block_available_up_left  = pix_d.available ? currSlice->intra_block [pix_d.mb_addr] : 0;
   }
   else
   {
@@ -393,7 +393,7 @@ static inline int intra8x8_vert_pred(Macroblock *currMB,    //!< current macrobl
   
   int i;
   imgpel PredPel[25];  // array of predictor pels  
-  imgpel **imgY = (pl) ? p_Vid->dec_picture->imgUV[pl - 1] : p_Vid->dec_picture->imgY; // For MB level frame/field coding tools -- set default to imgY
+  imgpel **imgY = (pl) ? currSlice->dec_picture->imgUV[pl - 1] : currSlice->dec_picture->imgY; // For MB level frame/field coding tools -- set default to imgY
 
   PixelPos pix_a[8];
   PixelPos pix_b, pix_c, pix_d;
@@ -421,10 +421,10 @@ static inline int intra8x8_vert_pred(Macroblock *currMB,    //!< current macrobl
   if (p_Vid->active_pps->constrained_intra_pred_flag)
   {
     for (i=0, block_available_left=1; i<8;i++)
-      block_available_left  &= pix_a[i].available ? p_Vid->intra_block[pix_a[i].mb_addr]: 0;
-    block_available_up       = pix_b.available ? p_Vid->intra_block [pix_b.mb_addr] : 0;
-    block_available_up_right = pix_c.available ? p_Vid->intra_block [pix_c.mb_addr] : 0;
-    block_available_up_left  = pix_d.available ? p_Vid->intra_block [pix_d.mb_addr] : 0;
+      block_available_left  &= pix_a[i].available ? currSlice->intra_block[pix_a[i].mb_addr]: 0;
+    block_available_up       = pix_b.available ? currSlice->intra_block [pix_b.mb_addr] : 0;
+    block_available_up_right = pix_c.available ? currSlice->intra_block [pix_c.mb_addr] : 0;
+    block_available_up_left  = pix_d.available ? currSlice->intra_block [pix_d.mb_addr] : 0;
   }
   else
   {
@@ -435,7 +435,7 @@ static inline int intra8x8_vert_pred(Macroblock *currMB,    //!< current macrobl
   }
 
   if (!block_available_up)
-    printf ("warning: Intra_8x8_Vertical prediction mode not allowed at mb %d\n", (int) p_Vid->current_mb_nr);
+    printf ("warning: Intra_8x8_Vertical prediction mode not allowed at mb %d\n", (int) currSlice->current_mb_nr);
 
   // form predictor pels
   if (block_available_up)
@@ -512,7 +512,7 @@ static inline int intra8x8_hor_pred(Macroblock *currMB,    //!< current macroblo
 
   int i,j;
   imgpel PredPel[25];  // array of predictor pels
-  imgpel **imgY = (pl) ? p_Vid->dec_picture->imgUV[pl - 1] : p_Vid->dec_picture->imgY; // For MB level frame/field coding tools -- set default to imgY
+  imgpel **imgY = (pl) ? currSlice->dec_picture->imgUV[pl - 1] : currSlice->dec_picture->imgY; // For MB level frame/field coding tools -- set default to imgY
 
   PixelPos pix_a[8];
   PixelPos pix_b, pix_c, pix_d;
@@ -542,10 +542,10 @@ static inline int intra8x8_hor_pred(Macroblock *currMB,    //!< current macroblo
   if (p_Vid->active_pps->constrained_intra_pred_flag)
   {
     for (i=0, block_available_left=1; i<8;i++)
-      block_available_left  &= pix_a[i].available ? p_Vid->intra_block[pix_a[i].mb_addr]: 0;
-    block_available_up       = pix_b.available ? p_Vid->intra_block [pix_b.mb_addr] : 0;
-    block_available_up_right = pix_c.available ? p_Vid->intra_block [pix_c.mb_addr] : 0;
-    block_available_up_left  = pix_d.available ? p_Vid->intra_block [pix_d.mb_addr] : 0;
+      block_available_left  &= pix_a[i].available ? currSlice->intra_block[pix_a[i].mb_addr]: 0;
+    block_available_up       = pix_b.available ? currSlice->intra_block [pix_b.mb_addr] : 0;
+    block_available_up_right = pix_c.available ? currSlice->intra_block [pix_c.mb_addr] : 0;
+    block_available_up_left  = pix_d.available ? currSlice->intra_block [pix_d.mb_addr] : 0;
   }
   else
   {
@@ -556,7 +556,7 @@ static inline int intra8x8_hor_pred(Macroblock *currMB,    //!< current macroblo
   }
 
   if (!block_available_left)
-    printf ("warning: Intra_8x8_Horizontal prediction mode not allowed at mb %d\n", (int) p_Vid->current_mb_nr);
+    printf ("warning: Intra_8x8_Horizontal prediction mode not allowed at mb %d\n", (int) currSlice->current_mb_nr);
 
   // form predictor pels
   if (block_available_left)
@@ -623,7 +623,7 @@ static inline int intra8x8_diag_down_right_pred(Macroblock *currMB,    //!< curr
 
   int i;
   imgpel PredPel[25];  // array of predictor pels
-  imgpel **imgY = (pl) ? p_Vid->dec_picture->imgUV[pl - 1] : p_Vid->dec_picture->imgY; // For MB level frame/field coding tools -- set default to imgY
+  imgpel **imgY = (pl) ? currSlice->dec_picture->imgUV[pl - 1] : currSlice->dec_picture->imgY; // For MB level frame/field coding tools -- set default to imgY
 
   PixelPos pix_a[8];
   PixelPos pix_b, pix_c, pix_d;
@@ -655,10 +655,10 @@ static inline int intra8x8_diag_down_right_pred(Macroblock *currMB,    //!< curr
   if (p_Vid->active_pps->constrained_intra_pred_flag)
   {
     for (i=0, block_available_left=1; i<8;i++)
-      block_available_left  &= pix_a[i].available ? p_Vid->intra_block[pix_a[i].mb_addr]: 0;
-    block_available_up       = pix_b.available ? p_Vid->intra_block [pix_b.mb_addr] : 0;
-    block_available_up_right = pix_c.available ? p_Vid->intra_block [pix_c.mb_addr] : 0;
-    block_available_up_left  = pix_d.available ? p_Vid->intra_block [pix_d.mb_addr] : 0;
+      block_available_left  &= pix_a[i].available ? currSlice->intra_block[pix_a[i].mb_addr]: 0;
+    block_available_up       = pix_b.available ? currSlice->intra_block [pix_b.mb_addr] : 0;
+    block_available_up_right = pix_c.available ? currSlice->intra_block [pix_c.mb_addr] : 0;
+    block_available_up_left  = pix_d.available ? currSlice->intra_block [pix_d.mb_addr] : 0;
   }
   else
   {
@@ -669,7 +669,7 @@ static inline int intra8x8_diag_down_right_pred(Macroblock *currMB,    //!< curr
   }
 
   if ((!block_available_up)||(!block_available_left)||(!block_available_up_left))
-    printf ("warning: Intra_8x8_Diagonal_Down_Right prediction mode not allowed at mb %d\n", (int) p_Vid->current_mb_nr);
+    printf ("warning: Intra_8x8_Diagonal_Down_Right prediction mode not allowed at mb %d\n", (int) currSlice->current_mb_nr);
 
   // form predictor pels
   if (block_available_up)
@@ -823,7 +823,7 @@ static inline int intra8x8_diag_down_left_pred(Macroblock *currMB,    //!< curre
   
   int i;
   imgpel PredPel[25];  // array of predictor pels
-  imgpel **imgY = (pl) ? p_Vid->dec_picture->imgUV[pl - 1] : p_Vid->dec_picture->imgY; // For MB level frame/field coding tools -- set default to imgY
+  imgpel **imgY = (pl) ? currSlice->dec_picture->imgUV[pl - 1] : currSlice->dec_picture->imgY; // For MB level frame/field coding tools -- set default to imgY
 
   PixelPos pix_a[8];
   PixelPos pix_b, pix_c, pix_d;
@@ -855,10 +855,10 @@ static inline int intra8x8_diag_down_left_pred(Macroblock *currMB,    //!< curre
   if (p_Vid->active_pps->constrained_intra_pred_flag)
   {
     for (i=0, block_available_left=1; i<8;i++)
-      block_available_left  &= pix_a[i].available ? p_Vid->intra_block[pix_a[i].mb_addr]: 0;
-    block_available_up       = pix_b.available ? p_Vid->intra_block [pix_b.mb_addr] : 0;
-    block_available_up_right = pix_c.available ? p_Vid->intra_block [pix_c.mb_addr] : 0;
-    block_available_up_left  = pix_d.available ? p_Vid->intra_block [pix_d.mb_addr] : 0;
+      block_available_left  &= pix_a[i].available ? currSlice->intra_block[pix_a[i].mb_addr]: 0;
+    block_available_up       = pix_b.available ? currSlice->intra_block [pix_b.mb_addr] : 0;
+    block_available_up_right = pix_c.available ? currSlice->intra_block [pix_c.mb_addr] : 0;
+    block_available_up_left  = pix_d.available ? currSlice->intra_block [pix_d.mb_addr] : 0;
   }
   else
   {
@@ -869,7 +869,7 @@ static inline int intra8x8_diag_down_left_pred(Macroblock *currMB,    //!< curre
   }
 
   if (!block_available_up)
-    printf ("warning: Intra_8x8_Diagonal_Down_Left prediction mode not allowed at mb %d\n", (int) p_Vid->current_mb_nr);
+    printf ("warning: Intra_8x8_Diagonal_Down_Left prediction mode not allowed at mb %d\n", (int) currSlice->current_mb_nr);
 
   // form predictor pels
   if (block_available_up)
@@ -1023,7 +1023,7 @@ static inline int intra8x8_vert_right_pred(Macroblock *currMB,    //!< current m
   
   int i;
   imgpel PredPel[25];  // array of predictor pels
-  imgpel **imgY = (pl) ? p_Vid->dec_picture->imgUV[pl - 1] : p_Vid->dec_picture->imgY; // For MB level frame/field coding tools -- set default to imgY
+  imgpel **imgY = (pl) ? currSlice->dec_picture->imgUV[pl - 1] : currSlice->dec_picture->imgY; // For MB level frame/field coding tools -- set default to imgY
 
   PixelPos pix_a[8];
   PixelPos pix_b, pix_c, pix_d;
@@ -1053,10 +1053,10 @@ static inline int intra8x8_vert_right_pred(Macroblock *currMB,    //!< current m
   if (p_Vid->active_pps->constrained_intra_pred_flag)
   {
     for (i=0, block_available_left=1; i<8;i++)
-      block_available_left  &= pix_a[i].available ? p_Vid->intra_block[pix_a[i].mb_addr]: 0;
-    block_available_up       = pix_b.available ? p_Vid->intra_block [pix_b.mb_addr] : 0;
-    block_available_up_right = pix_c.available ? p_Vid->intra_block [pix_c.mb_addr] : 0;
-    block_available_up_left  = pix_d.available ? p_Vid->intra_block [pix_d.mb_addr] : 0;
+      block_available_left  &= pix_a[i].available ? currSlice->intra_block[pix_a[i].mb_addr]: 0;
+    block_available_up       = pix_b.available ? currSlice->intra_block [pix_b.mb_addr] : 0;
+    block_available_up_right = pix_c.available ? currSlice->intra_block [pix_c.mb_addr] : 0;
+    block_available_up_left  = pix_d.available ? currSlice->intra_block [pix_d.mb_addr] : 0;
   }
   else
   {
@@ -1067,7 +1067,7 @@ static inline int intra8x8_vert_right_pred(Macroblock *currMB,    //!< current m
   }
 
   if ((!block_available_up)||(!block_available_left)||(!block_available_up_left))
-    printf ("warning: Intra_8x8_Vertical_Right prediction mode not allowed at mb %d\n", (int) p_Vid->current_mb_nr);
+    printf ("warning: Intra_8x8_Vertical_Right prediction mode not allowed at mb %d\n", (int) currSlice->current_mb_nr);
 
   // form predictor pels
   if (block_available_up)
@@ -1221,7 +1221,7 @@ static inline int intra8x8_vert_left_pred(Macroblock *currMB,    //!< current ma
   
   int i;
   imgpel PredPel[25];  // array of predictor pels  
-  imgpel **imgY = (pl) ? p_Vid->dec_picture->imgUV[pl - 1] : p_Vid->dec_picture->imgY; // For MB level frame/field coding tools -- set default to imgY
+  imgpel **imgY = (pl) ? currSlice->dec_picture->imgUV[pl - 1] : currSlice->dec_picture->imgY; // For MB level frame/field coding tools -- set default to imgY
 
   PixelPos pix_a[8];
   PixelPos pix_b, pix_c, pix_d;
@@ -1252,10 +1252,10 @@ static inline int intra8x8_vert_left_pred(Macroblock *currMB,    //!< current ma
   if (p_Vid->active_pps->constrained_intra_pred_flag)
   {
     for (i=0, block_available_left=1; i<8;i++)
-      block_available_left  &= pix_a[i].available ? p_Vid->intra_block[pix_a[i].mb_addr]: 0;
-    block_available_up       = pix_b.available ? p_Vid->intra_block [pix_b.mb_addr] : 0;
-    block_available_up_right = pix_c.available ? p_Vid->intra_block [pix_c.mb_addr] : 0;
-    block_available_up_left  = pix_d.available ? p_Vid->intra_block [pix_d.mb_addr] : 0;
+      block_available_left  &= pix_a[i].available ? currSlice->intra_block[pix_a[i].mb_addr]: 0;
+    block_available_up       = pix_b.available ? currSlice->intra_block [pix_b.mb_addr] : 0;
+    block_available_up_right = pix_c.available ? currSlice->intra_block [pix_c.mb_addr] : 0;
+    block_available_up_left  = pix_d.available ? currSlice->intra_block [pix_d.mb_addr] : 0;
   }
   else
   {
@@ -1266,7 +1266,7 @@ static inline int intra8x8_vert_left_pred(Macroblock *currMB,    //!< current ma
   }
 
   if (!block_available_up)
-    printf ("warning: Intra_4x4_Vertical_Left prediction mode not allowed at mb %d\n", (int) p_Vid->current_mb_nr);
+    printf ("warning: Intra_4x4_Vertical_Left prediction mode not allowed at mb %d\n", (int) currSlice->current_mb_nr);
 
   // form predictor pels
   if (block_available_up)
@@ -1419,7 +1419,7 @@ static inline int intra8x8_hor_up_pred(Macroblock *currMB,    //!< current macro
   
   int i;
   imgpel PredPel[25];  // array of predictor pels
-  imgpel **imgY = (pl) ? p_Vid->dec_picture->imgUV[pl - 1] : p_Vid->dec_picture->imgY; // For MB level frame/field coding tools -- set default to imgY
+  imgpel **imgY = (pl) ? currSlice->dec_picture->imgUV[pl - 1] : currSlice->dec_picture->imgY; // For MB level frame/field coding tools -- set default to imgY
 
   PixelPos pix_a[8];
   PixelPos pix_b, pix_c, pix_d;
@@ -1450,10 +1450,10 @@ static inline int intra8x8_hor_up_pred(Macroblock *currMB,    //!< current macro
   if (p_Vid->active_pps->constrained_intra_pred_flag)
   {
     for (i=0, block_available_left=1; i<8;i++)
-      block_available_left  &= pix_a[i].available ? p_Vid->intra_block[pix_a[i].mb_addr]: 0;
-    block_available_up       = pix_b.available ? p_Vid->intra_block [pix_b.mb_addr] : 0;
-    block_available_up_right = pix_c.available ? p_Vid->intra_block [pix_c.mb_addr] : 0;
-    block_available_up_left  = pix_d.available ? p_Vid->intra_block [pix_d.mb_addr] : 0;
+      block_available_left  &= pix_a[i].available ? currSlice->intra_block[pix_a[i].mb_addr]: 0;
+    block_available_up       = pix_b.available ? currSlice->intra_block [pix_b.mb_addr] : 0;
+    block_available_up_right = pix_c.available ? currSlice->intra_block [pix_c.mb_addr] : 0;
+    block_available_up_left  = pix_d.available ? currSlice->intra_block [pix_d.mb_addr] : 0;
   }
   else
   {
@@ -1464,7 +1464,7 @@ static inline int intra8x8_hor_up_pred(Macroblock *currMB,    //!< current macro
   }
 
   if (!block_available_left)
-    printf ("warning: Intra_8x8_Horizontal_Up prediction mode not allowed at mb %d\n", (int) p_Vid->current_mb_nr);
+    printf ("warning: Intra_8x8_Horizontal_Up prediction mode not allowed at mb %d\n", (int) currSlice->current_mb_nr);
 
   // form predictor pels
   if (block_available_up)
@@ -1617,7 +1617,7 @@ static inline int intra8x8_hor_down_pred(Macroblock *currMB,    //!< current mac
 
   int i;
   imgpel PredPel[25];  // array of predictor pels
-  imgpel **imgY = (pl) ? p_Vid->dec_picture->imgUV[pl - 1] : p_Vid->dec_picture->imgY; // For MB level frame/field coding tools -- set default to imgY
+  imgpel **imgY = (pl) ? currSlice->dec_picture->imgUV[pl - 1] : currSlice->dec_picture->imgY; // For MB level frame/field coding tools -- set default to imgY
 
   PixelPos pix_a[8];
   PixelPos pix_b, pix_c, pix_d;
@@ -1648,10 +1648,10 @@ static inline int intra8x8_hor_down_pred(Macroblock *currMB,    //!< current mac
   if (p_Vid->active_pps->constrained_intra_pred_flag)
   {
     for (i=0, block_available_left=1; i<8;i++)
-      block_available_left  &= pix_a[i].available ? p_Vid->intra_block[pix_a[i].mb_addr]: 0;
-    block_available_up       = pix_b.available ? p_Vid->intra_block [pix_b.mb_addr] : 0;
-    block_available_up_right = pix_c.available ? p_Vid->intra_block [pix_c.mb_addr] : 0;
-    block_available_up_left  = pix_d.available ? p_Vid->intra_block [pix_d.mb_addr] : 0;
+      block_available_left  &= pix_a[i].available ? currSlice->intra_block[pix_a[i].mb_addr]: 0;
+    block_available_up       = pix_b.available ? currSlice->intra_block [pix_b.mb_addr] : 0;
+    block_available_up_right = pix_c.available ? currSlice->intra_block [pix_c.mb_addr] : 0;
+    block_available_up_left  = pix_d.available ? currSlice->intra_block [pix_d.mb_addr] : 0;
   }
   else
   {
@@ -1662,7 +1662,7 @@ static inline int intra8x8_hor_down_pred(Macroblock *currMB,    //!< current mac
   }
 
   if ((!block_available_up)||(!block_available_left)||(!block_available_up_left))
-    printf ("warning: Intra_8x8_Horizontal_Down prediction mode not allowed at mb %d\n", (int) p_Vid->current_mb_nr);
+    printf ("warning: Intra_8x8_Horizontal_Down prediction mode not allowed at mb %d\n", (int) currSlice->current_mb_nr);
 
   // form predictor pels
   if (block_available_up)
@@ -1815,10 +1815,10 @@ int intrapred8x8(Macroblock *currMB,    //!< Current Macroblock
                  int joff)              //!< joff
 
 {  
-  VideoParameters *p_Vid = currMB->p_Vid;
+  //VideoParameters *p_Vid = currMB->p_Vid;
   int block_x = (currMB->block_x) + (ioff >> 2);
   int block_y = (currMB->block_y) + (joff >> 2);
-  byte predmode = p_Vid->ipredmode[block_y][block_x];
+  byte predmode = currMB->p_Slice->ipredmode[block_y][block_x];
 
   currMB->ipmode_DPCM = predmode;  //For residual DPCM
 

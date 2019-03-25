@@ -190,7 +190,7 @@
       Athanasios Leontaris            <aleon@dolby.com>
       Peshala Pahalawatta             <ppaha@dolby.com>
       Yuwen He                        <yhe@dolby.com>  
-	    Yan Ye                          <yye@dolby.com>
+	    Yan Ye                          <yye@dolby.com>      
       Dolby Laboratories Inc.
       3601 West Alameda Ave.
       Burbank, CA 91505

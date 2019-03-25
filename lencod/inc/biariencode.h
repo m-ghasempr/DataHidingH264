@@ -50,9 +50,9 @@ extern void arienco_start_encoding(EncodingEnvironmentPtr eep, unsigned char *co
 extern void arienco_reset_EC      (EncodingEnvironmentPtr eep);
 extern void arienco_done_encoding (Macroblock *currMB, EncodingEnvironmentPtr eep);
 extern void biari_init_context    (int qp, BiContextTypePtr ctx, const char* ini);
-extern void biari_encode_symbol   (EncodingEnvironmentPtr eep, signed short symbol, BiContextTypePtr bi_ct );
-extern void biari_encode_symbol_eq_prob(EncodingEnvironmentPtr eep, signed short symbol);
-extern void biari_encode_symbol_final(EncodingEnvironmentPtr eep, signed short symbol);
+extern void biari_encode_symbol   (EncodingEnvironmentPtr eep, int symbol, BiContextTypePtr bi_ct );
+extern void biari_encode_symbol_eq_prob(EncodingEnvironmentPtr eep, int symbol);
+extern void biari_encode_symbol_final(EncodingEnvironmentPtr eep, int symbol);
 
 /*!
 ************************************************************************

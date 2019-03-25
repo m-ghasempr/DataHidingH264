@@ -23,87 +23,58 @@
 #include "img_chroma.h"
 
 
-/*!
- ************************************************************************
- * \brief
- *    Integer sample position image generation routine
- ************************************************************************
- */
 static void generateChroma00( VideoParameters *p_Vid, int size_x_minus1, int size_y_minus1, imgpel **wImgDst, imgpel **imgUV)
 {
-  int i, j;
-  int jpad = 0;
+  int i;//, j;
+  int jpad = -p_Vid->pad_size_uv_y;
   imgpel *wBufDst;
   imgpel *wBufSrc0;
 
-  wBufDst  = wImgDst[jpad++];
+  wBufDst  = wImgDst[jpad++]-p_Vid->pad_size_uv_x;
   wBufSrc0 = imgUV[0];
 
   for (i = -p_Vid->pad_size_uv_x; i < 0; i++)
   {
-    *wBufDst = *wBufSrc0;
-    ++wBufDst;
+    *wBufDst++ = *wBufSrc0;
   }
 
   memcpy(wBufDst, wBufSrc0, size_x_minus1 * sizeof(imgpel));
   wBufDst  += size_x_minus1;
   wBufSrc0 += size_x_minus1;
 
-  for (i = 0; i < p_Vid->pad_size_uv_x; i++)
+  for (i = -1; i < p_Vid->pad_size_uv_x; i++)
   {
-    *wBufDst = *wBufSrc0;
-    ++wBufDst;
+    *wBufDst++ = *wBufSrc0;
   }
 
-  for (j = -p_Vid->pad_size_uv_y; j < -1; j++, jpad++)
+  for(; jpad < 0; jpad++)
   {
-    memcpy(wImgDst[jpad], wImgDst[jpad - 1], (2 * p_Vid->pad_size_uv_x + size_x_minus1) * sizeof(imgpel));
+    memcpy(wImgDst[jpad]-p_Vid->pad_size_uv_x, wImgDst[jpad - 1]-p_Vid->pad_size_uv_x, (2 * p_Vid->pad_size_uv_x + size_x_minus1+1) * sizeof(imgpel));
   }
 
-  for (j = 0; j < size_y_minus1; j++)
+  for (jpad = 0; jpad < size_y_minus1+1; jpad++)
   {
-    wBufDst  = wImgDst[jpad++];
-    wBufSrc0 = imgUV[j    ];
+    wBufDst  = wImgDst[jpad]-p_Vid->pad_size_uv_x;
+    wBufSrc0 = imgUV[jpad];
 
     for (i = -p_Vid->pad_size_uv_x; i < 0; i++)
     {
-      *wBufDst = *wBufSrc0;
-      ++wBufDst;
+      *wBufDst++ = *wBufSrc0;
     }
 
-    memcpy(wBufDst, wBufSrc0, size_x_minus1 * sizeof(imgpel));
-    wBufDst  += size_x_minus1;
+    //memcpy(wBufDst, wBufSrc0, size_x_minus1 * sizeof(imgpel));
+    wBufDst  += size_x_minus1+1;
     wBufSrc0 += size_x_minus1;
 
     for (i = 0; i < p_Vid->pad_size_uv_x; i++)
     {
-      *wBufDst = *wBufSrc0;
-      ++wBufDst;
+      *wBufDst++ = *wBufSrc0;
     }
   }
-  
-  wBufDst  = wImgDst[jpad++];
-  wBufSrc0 = imgUV[size_y_minus1];
 
-  for (i = -p_Vid->pad_size_uv_x; i < 0; i++)
+  for (jpad = size_y_minus1+1; jpad < size_y_minus1+1+p_Vid->pad_size_uv_y; jpad++)
   {
-    *wBufDst = *wBufSrc0;
-    ++wBufDst;
-  }
-
-  memcpy(wBufDst, wBufSrc0, size_x_minus1 * sizeof(imgpel));
-  wBufDst  += size_x_minus1;
-  wBufSrc0 += size_x_minus1;
-
-  for (i = 0; i < p_Vid->pad_size_uv_x; i++)
-  {
-    *wBufDst = *wBufSrc0;
-    ++wBufDst;
-  }
-
-  for (j = 1; j < p_Vid->pad_size_uv_y; j++, jpad++)
-  {
-    memcpy(wImgDst[jpad], wImgDst[jpad - 1], (2 * p_Vid->pad_size_uv_x + size_x_minus1) * sizeof(imgpel));
+    memcpy(wImgDst[jpad]-p_Vid->pad_size_uv_x, wImgDst[jpad - 1]-p_Vid->pad_size_uv_x, (2 * p_Vid->pad_size_uv_x + size_x_minus1+1) * sizeof(imgpel));
   }
 }
 
@@ -115,13 +86,13 @@ static void generateChroma00( VideoParameters *p_Vid, int size_x_minus1, int siz
  */
 static void generateChroma01( VideoParameters *p_Vid, int size_x_minus1, int size_y_minus1, int weight00, int weight01, imgpel **wImgDst, imgpel **imgUV)
 {
-  int i, j;
-  int jpad = 0;
+  int i;//, j;
+  int jpad = -p_Vid->pad_size_uv_y;
   int cur_value;
   imgpel *wBufDst;
   imgpel *wBufSrc0;
 
-  wBufDst  = wImgDst[jpad++];
+  wBufDst  = wImgDst[jpad++]-p_Vid->pad_size_uv_x;
   wBufSrc0 = imgUV[0];
 
   for (i = -p_Vid->pad_size_uv_x; i < 0; i++)
@@ -136,20 +107,20 @@ static void generateChroma01( VideoParameters *p_Vid, int size_x_minus1, int siz
     *(wBufDst++) = (imgpel) rshift_rnd_sf(cur_value, 6);
   }
 
-  for (i = 0; i < p_Vid->pad_size_uv_x; i++)
+  for (i = -1; i < p_Vid->pad_size_uv_x; i++)
   {
     *(wBufDst++) = *wBufSrc0;
   }
 
-  for (j = -p_Vid->pad_size_uv_y; j < -1; j++, jpad++)
+  for (; jpad < 1; jpad++)
   {
-    memcpy(wImgDst[jpad], wImgDst[jpad - 1], (2 * p_Vid->pad_size_uv_x + size_x_minus1) * sizeof(imgpel));
+    memcpy(wImgDst[jpad]-p_Vid->pad_size_uv_x, wImgDst[jpad - 1]-p_Vid->pad_size_uv_x, (2 * p_Vid->pad_size_uv_x + size_x_minus1+1) * sizeof(imgpel));
   }
 
-  for (j = 0; j < size_y_minus1; j++)
+  for (jpad = 1; jpad < size_y_minus1+1; jpad++)
   {
-    wBufDst  = wImgDst[jpad++];
-    wBufSrc0 = imgUV[j    ];
+    wBufDst  = wImgDst[jpad]-p_Vid->pad_size_uv_x;
+    wBufSrc0 = imgUV[jpad];
 
     for (i = -p_Vid->pad_size_uv_x; i < 0; i++)
     {
@@ -163,35 +134,15 @@ static void generateChroma01( VideoParameters *p_Vid, int size_x_minus1, int siz
       *(wBufDst++) = (imgpel) rshift_rnd_sf(cur_value, 6);
     }
 
-    for (i = 0; i < p_Vid->pad_size_uv_x; i++)
+    for (i = -1; i < p_Vid->pad_size_uv_x; i++)
     {
       *(wBufDst++) = *wBufSrc0;
     }
   }
 
-  wBufDst  = wImgDst[jpad++];
-  wBufSrc0 = imgUV[size_y_minus1];
-
-  for (i = -p_Vid->pad_size_uv_x; i < 0; i++)
+  for (jpad = size_y_minus1+1; jpad < size_y_minus1+1+p_Vid->pad_size_uv_y; jpad++)
   {
-    *(wBufDst++) = *wBufSrc0;
-  }
-
-  for (i = 0; i < size_x_minus1; i++)
-  {
-    cur_value  = weight00 * (*wBufSrc0++);
-    cur_value += weight01 * (*wBufSrc0  );
-    *(wBufDst++) = (imgpel) rshift_rnd_sf(cur_value, 6);
-  }
-
-  for (i = 0; i < p_Vid->pad_size_uv_x; i++)
-  {
-    *(wBufDst++) = *wBufSrc0;
-  }
-
-  for (j = 1; j < p_Vid->pad_size_uv_y; j++, jpad++)
-  {
-    memcpy(wImgDst[jpad], wImgDst[jpad - 1], (2 * p_Vid->pad_size_uv_x + size_x_minus1) * sizeof(imgpel));
+    memcpy(wImgDst[jpad]-p_Vid->pad_size_uv_x, wImgDst[jpad - 1]-p_Vid->pad_size_uv_x, (2 * p_Vid->pad_size_uv_x + size_x_minus1+1) * sizeof(imgpel));
   }
 }
 
@@ -203,13 +154,13 @@ static void generateChroma01( VideoParameters *p_Vid, int size_x_minus1, int siz
  */
 static void generateChroma10(VideoParameters *p_Vid, int size_x_minus1, int size_y_minus1, int weight00, int weight10, imgpel **wImgDst, imgpel **imgUV)
 {
-  int i, j;
-  int jpad = 0;
+  int i;//, j;
+  int jpad = -p_Vid->pad_size_uv_y;
   int cur_value;
   imgpel *wBufDst;
   imgpel *wBufSrc0, *wBufSrc1;
 
-  wBufDst = wImgDst[jpad++];
+  wBufDst = wImgDst[jpad++]-p_Vid->pad_size_uv_x;
   wBufSrc0 = imgUV[0];
 
 
@@ -222,21 +173,21 @@ static void generateChroma10(VideoParameters *p_Vid, int size_x_minus1, int size
   wBufDst  += size_x_minus1;
   wBufSrc0 += size_x_minus1;
 
-  for (i = 0; i < p_Vid->pad_size_uv_x; i++)
+  for (i = -1; i < p_Vid->pad_size_uv_x; i++)
   {
     *(wBufDst++) = *wBufSrc0;
   }
 
-  for (j = -p_Vid->pad_size_uv_y; j < -1; j++, jpad++)
+  for(;jpad < 0; jpad++)
   {
-    memcpy(wImgDst[jpad], wImgDst[jpad - 1], (2 * p_Vid->pad_size_uv_x + size_x_minus1) * sizeof(imgpel));
+    memcpy(wImgDst[jpad]-p_Vid->pad_size_uv_x, wImgDst[jpad - 1]-p_Vid->pad_size_uv_x, (2 * p_Vid->pad_size_uv_x + size_x_minus1+1) * sizeof(imgpel));
   }
 
-  for (j = 0; j < size_y_minus1; j++)
+  for (jpad = 0; jpad < size_y_minus1; jpad++)
   {
-    wBufDst = wImgDst[jpad++];
-    wBufSrc0 = imgUV[j    ];
-    wBufSrc1 = imgUV[j + 1];
+    wBufDst = wImgDst[jpad]-p_Vid->pad_size_uv_x;
+    wBufSrc0 = imgUV[jpad];
+    wBufSrc1 = imgUV[jpad+1];
 
     cur_value = rshift_rnd_sf(weight00 * (*wBufSrc0) + weight10 * (*wBufSrc1), 6 );
     for (i = -p_Vid->pad_size_uv_x; i < 0; i++)
@@ -251,13 +202,13 @@ static void generateChroma10(VideoParameters *p_Vid, int size_x_minus1, int size
     }
 
     cur_value = rshift_rnd_sf(weight00 * (*wBufSrc0) + weight10 * (*wBufSrc1), 6 );
-    for (i = 0; i < p_Vid->pad_size_uv_x; i++)
+    for (i = -1; i < p_Vid->pad_size_uv_x; i++)
     {
       *(wBufDst++) = (imgpel) cur_value;
     }
   }
 
-  wBufDst = wImgDst[jpad++];
+  wBufDst = wImgDst[jpad]-p_Vid->pad_size_uv_x;
   wBufSrc0 = imgUV[size_y_minus1];
 
   for (i = -p_Vid->pad_size_uv_x; i < 0; i++)
@@ -269,14 +220,14 @@ static void generateChroma10(VideoParameters *p_Vid, int size_x_minus1, int size
   wBufDst  += size_x_minus1;
   wBufSrc0 += size_x_minus1;
 
-  for (i = 0; i < p_Vid->pad_size_uv_x; i++)
+  for (i = -1; i < p_Vid->pad_size_uv_x; i++)
   {
     *(wBufDst++) = *wBufSrc0;
   }
 
-  for (j = 1; j < p_Vid->pad_size_uv_y; j++, jpad++)
+  for (jpad = size_y_minus1+1; jpad < size_y_minus1+1+p_Vid->pad_size_uv_y; jpad++)
   {
-    memcpy(wImgDst[jpad], wImgDst[jpad - 1], (2 * p_Vid->pad_size_uv_x + size_x_minus1) * sizeof(imgpel));
+    memcpy(wImgDst[jpad]-p_Vid->pad_size_uv_x, wImgDst[jpad - 1]-p_Vid->pad_size_uv_x, (2 * p_Vid->pad_size_uv_x + size_x_minus1+1) * sizeof(imgpel));
   }
 }
 
@@ -288,8 +239,8 @@ static void generateChroma10(VideoParameters *p_Vid, int size_x_minus1, int size
  */
 static void generateChromaXX( VideoParameters *p_Vid, int size_x_minus1, int size_y_minus1, int weight00, int weight01, int weight10, int weight11, imgpel **wImgDst, imgpel **imgUV)
 {
-  int i, j;
-  int jpad = 0;
+  int i;//, j;
+  int jpad = -p_Vid->pad_size_uv_y;
   int cur_value;
   imgpel *wBufDst;
   imgpel *wBufSrc0, *wBufSrc1;
@@ -298,7 +249,7 @@ static void generateChromaXX( VideoParameters *p_Vid, int size_x_minus1, int siz
   int weight0010 = weight00 + weight10;
   int weight0111 = weight01 + weight11;
 
-  wBufDst = wImgDst[jpad++];
+  wBufDst = wImgDst[jpad++]-p_Vid->pad_size_uv_x;
   wBufSrc0 = imgUV[0];
 
   for (i = -p_Vid->pad_size_uv_x; i < 0; i++)
@@ -313,21 +264,21 @@ static void generateChromaXX( VideoParameters *p_Vid, int size_x_minus1, int siz
     *(wBufDst++) = (imgpel) rshift_rnd_sf(cur_value, 6);
   }
 
-  for (i = 0; i < p_Vid->pad_size_uv_x; i++)
+  for (i = -1; i < p_Vid->pad_size_uv_x; i++)
   {
     *(wBufDst++) = *wBufSrc0;
   }
 
-  for (j = -p_Vid->pad_size_uv_y; j < -1; j++, jpad++)
+  for (; jpad < 0; jpad++)
   {
-    memcpy(wImgDst[jpad], wImgDst[jpad - 1], (2 * p_Vid->pad_size_uv_x + size_x_minus1) * sizeof(imgpel));
+    memcpy(wImgDst[jpad]-p_Vid->pad_size_uv_x, wImgDst[jpad - 1]-p_Vid->pad_size_uv_x, (2 * p_Vid->pad_size_uv_x + size_x_minus1+1) * sizeof(imgpel));
   }
 
-  for (j = 0; j < size_y_minus1; j++)
+  for (jpad = 0; jpad < size_y_minus1; jpad++)
   {
-    wBufDst = wImgDst[jpad++];
-    wBufSrc0 = imgUV[j    ];
-    wBufSrc1 = imgUV[j + 1];
+    wBufDst = wImgDst[jpad]-p_Vid->pad_size_uv_x;
+    wBufSrc0 = imgUV[jpad];
+    wBufSrc1 = imgUV[jpad + 1];
 
     cur_value = rshift_rnd_sf(weight0001 * (*wBufSrc0) + weight1011 * (*wBufSrc1), 6 );
     for (i = -p_Vid->pad_size_uv_x; i < 0; i++)
@@ -343,13 +294,13 @@ static void generateChromaXX( VideoParameters *p_Vid, int size_x_minus1, int siz
     }
 
     cur_value = rshift_rnd_sf(weight0001 * (*wBufSrc0) + weight1011 * (*wBufSrc1), 6 );
-    for (i = 0; i < p_Vid->pad_size_uv_x; i++)
+    for (i = -1; i < p_Vid->pad_size_uv_x; i++)
     {
       *(wBufDst++) = (imgpel) cur_value;
     }
   }
 
-    wBufDst =  wImgDst[jpad++];
+    wBufDst =  wImgDst[jpad]-p_Vid->pad_size_uv_x;
     wBufSrc0 = imgUV[size_y_minus1];
 
     for (i = -p_Vid->pad_size_uv_x; i < 0; i++)
@@ -364,14 +315,14 @@ static void generateChromaXX( VideoParameters *p_Vid, int size_x_minus1, int siz
       *(wBufDst++) = (imgpel) rshift_rnd_sf(cur_value, 6);
     }
 
-    for (i = 0; i < p_Vid->pad_size_uv_x; i++)
+    for (i = -1; i < p_Vid->pad_size_uv_x; i++)
     {
       *(wBufDst++) = *wBufSrc0;
     }
   
-  for (j = 1; j < p_Vid->pad_size_uv_y; j++, jpad++)
+  for (jpad = size_y_minus1+1; jpad < size_y_minus1+1+p_Vid->pad_size_uv_y; jpad++)
   {
-    memcpy(wImgDst[jpad], wImgDst[jpad - 1], (2 * p_Vid->pad_size_uv_x + size_x_minus1) * sizeof(imgpel));
+    memcpy(wImgDst[jpad]-p_Vid->pad_size_uv_x, wImgDst[jpad - 1]-p_Vid->pad_size_uv_x, (2 * p_Vid->pad_size_uv_x + size_x_minus1+1) * sizeof(imgpel));
   }
 }
 
@@ -445,7 +396,7 @@ void getSubImagesChroma( VideoParameters *p_Vid, StorablePicture *s )
         }
         else if (weight10 == 0 && weight11 == 0) // horizontal
         {
-          generateChroma01( p_Vid, size_x_minus1, size_y_minus1, weight00, weight01, curr_img_sub[suby][subx], curr_img);
+           generateChroma01( p_Vid, size_x_minus1, size_y_minus1, weight00, weight01, curr_img_sub[suby][subx], curr_img);
         }
         else if (weight01 == 0 && weight11 == 0) // vertical
         {
@@ -459,4 +410,3 @@ void getSubImagesChroma( VideoParameters *p_Vid, StorablePicture *s )
     }
   }
 }
-

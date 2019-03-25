@@ -18,8 +18,8 @@
 #ifndef _ME_DISTORTION_H_
 #define _ME_DISTORTION_H_
 
-extern int HadamardSAD4x4(int* diff);
-extern int HadamardSAD8x8(int* diff);
+extern int HadamardSAD4x4(short* diff);
+extern int HadamardSAD8x8(short* diff);
 // SAD functions
 extern distblk computeSAD         (StorablePicture *ref1, MEBlock*, distblk, MotionVector *);
 extern distblk computeSAD16x16    (StorablePicture *ref1, MEBlock*, distblk, MotionVector *);

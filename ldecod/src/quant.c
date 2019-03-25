@@ -257,6 +257,34 @@ void assign_quant_params(Slice *currSlice)
     CalculateQuant8x8Param(currSlice);
 }
 
+static void set_dequant4x4(int (*InvLevelScale4x4)[4],  const int (*dequant)[4], int *qmatrix)
+{
+  int j;
+  for(j=0; j<4; j++)
+  {
+    *(*InvLevelScale4x4      ) = *(*dequant      ) * *qmatrix++;
+    *(*InvLevelScale4x4   + 1) = *(*dequant   + 1) * *qmatrix++;
+    *(*InvLevelScale4x4   + 2) = *(*dequant   + 2) * *qmatrix++;
+    *(*InvLevelScale4x4++ + 3) = *(*dequant++ + 3) * *qmatrix++;
+  }
+}
+
+static void set_dequant8x8(int (*InvLevelScale8x8)[8],  const int (*dequant)[8], int *qmatrix)
+{
+  int j;
+  for(j = 0; j < 8; j++)
+  {
+    *(*InvLevelScale8x8      ) = *(*dequant      ) * *qmatrix++;
+    *(*InvLevelScale8x8   + 1) = *(*dequant   + 1) * *qmatrix++;
+    *(*InvLevelScale8x8   + 2) = *(*dequant   + 2) * *qmatrix++;
+    *(*InvLevelScale8x8   + 3) = *(*dequant   + 3) * *qmatrix++;
+    *(*InvLevelScale8x8   + 4) = *(*dequant   + 4) * *qmatrix++;
+    *(*InvLevelScale8x8   + 5) = *(*dequant   + 5) * *qmatrix++;
+    *(*InvLevelScale8x8   + 6) = *(*dequant   + 6) * *qmatrix++;
+    *(*InvLevelScale8x8++ + 7) = *(*dequant++ + 7) * *qmatrix++;
+  }
+}
+
 /*!
  ************************************************************************
  * \brief
@@ -266,24 +294,24 @@ void assign_quant_params(Slice *currSlice)
  */
 void CalculateQuant4x4Param(Slice *currSlice)
 {
-  int i, j, k, temp;
+  int k;
+  const int (*p_dequant_coef)[4][4] = dequant_coef;
+  int  (*InvLevelScale4x4_Intra_0)[4][4] = currSlice->InvLevelScale4x4_Intra[0];
+  int  (*InvLevelScale4x4_Intra_1)[4][4] = currSlice->InvLevelScale4x4_Intra[1];
+  int  (*InvLevelScale4x4_Intra_2)[4][4] = currSlice->InvLevelScale4x4_Intra[2];
+  int  (*InvLevelScale4x4_Inter_0)[4][4] = currSlice->InvLevelScale4x4_Inter[0];
+  int  (*InvLevelScale4x4_Inter_1)[4][4] = currSlice->InvLevelScale4x4_Inter[1];
+  int  (*InvLevelScale4x4_Inter_2)[4][4] = currSlice->InvLevelScale4x4_Inter[2];
+
 
   for(k=0; k<6; k++)
   {
-    for(i=0; i<4; i++)
-    {
-      for(j=0; j<4; j++)
-      {
-        temp = (i<<2)+j;
-        currSlice->InvLevelScale4x4_Intra[0][k][i][j] = dequant_coef[k][i][j] * currSlice->qmatrix[0][temp];
-        currSlice->InvLevelScale4x4_Intra[1][k][i][j] = dequant_coef[k][i][j] * currSlice->qmatrix[1][temp];
-        currSlice->InvLevelScale4x4_Intra[2][k][i][j] = dequant_coef[k][i][j] * currSlice->qmatrix[2][temp];
-
-        currSlice->InvLevelScale4x4_Inter[0][k][i][j] = dequant_coef[k][i][j] * currSlice->qmatrix[3][temp];
-        currSlice->InvLevelScale4x4_Inter[1][k][i][j] = dequant_coef[k][i][j] * currSlice->qmatrix[4][temp];
-        currSlice->InvLevelScale4x4_Inter[2][k][i][j] = dequant_coef[k][i][j] * currSlice->qmatrix[5][temp];
-      }
-    }
+    set_dequant4x4(*InvLevelScale4x4_Intra_0++, *p_dequant_coef  , currSlice->qmatrix[0]);
+    set_dequant4x4(*InvLevelScale4x4_Intra_1++, *p_dequant_coef  , currSlice->qmatrix[1]);
+    set_dequant4x4(*InvLevelScale4x4_Intra_2++, *p_dequant_coef  , currSlice->qmatrix[2]);
+    set_dequant4x4(*InvLevelScale4x4_Inter_0++, *p_dequant_coef  , currSlice->qmatrix[3]);
+    set_dequant4x4(*InvLevelScale4x4_Inter_1++, *p_dequant_coef  , currSlice->qmatrix[4]);
+    set_dequant4x4(*InvLevelScale4x4_Inter_2++, *p_dequant_coef++, currSlice->qmatrix[5]);
   }
 }
 
@@ -296,37 +324,30 @@ void CalculateQuant4x4Param(Slice *currSlice)
  */
 void CalculateQuant8x8Param(Slice *currSlice)
 {
-  VideoParameters *p_Vid = currSlice->p_Vid;
-  int i, j, k, temp;
+  int k;
+  const int (*p_dequant_coef)[8][8] = dequant_coef8;
+  int  (*InvLevelScale8x8_Intra_0)[8][8] = currSlice->InvLevelScale8x8_Intra[0];
+  int  (*InvLevelScale8x8_Intra_1)[8][8] = currSlice->InvLevelScale8x8_Intra[1];
+  int  (*InvLevelScale8x8_Intra_2)[8][8] = currSlice->InvLevelScale8x8_Intra[2];
+  int  (*InvLevelScale8x8_Inter_0)[8][8] = currSlice->InvLevelScale8x8_Inter[0];
+  int  (*InvLevelScale8x8_Inter_1)[8][8] = currSlice->InvLevelScale8x8_Inter[1];
+  int  (*InvLevelScale8x8_Inter_2)[8][8] = currSlice->InvLevelScale8x8_Inter[2];
 
   for(k=0; k<6; k++)
   {
-    for(i=0; i<8; i++)
-    {
-      for(j=0; j<8; j++)
-      {
-        temp = (i<<3)+j;
-        currSlice->InvLevelScale8x8_Intra[0][k][i][j] = dequant_coef8[k][i][j] * currSlice->qmatrix[6][temp];
-        currSlice->InvLevelScale8x8_Inter[0][k][i][j] = dequant_coef8[k][i][j] * currSlice->qmatrix[7][temp];
-      }
-    }
+    set_dequant8x8(*InvLevelScale8x8_Intra_0++, *p_dequant_coef  , currSlice->qmatrix[6]);
+    set_dequant8x8(*InvLevelScale8x8_Inter_0++, *p_dequant_coef++, currSlice->qmatrix[7]);
   }
 
-  if( p_Vid->active_sps->chroma_format_idc == 3 )  // 4:4:4
+  p_dequant_coef = dequant_coef8;
+  if( currSlice->active_sps->chroma_format_idc == 3 )  // 4:4:4
   {
     for(k=0; k<6; k++)
     {
-      for(i=0; i<8; i++)
-      {
-        for(j=0; j<8; j++)
-        {
-          temp = (i<<3)+j;
-          currSlice->InvLevelScale8x8_Intra[1][k][i][j] = dequant_coef8[k][i][j] * currSlice->qmatrix[8][temp];
-          currSlice->InvLevelScale8x8_Inter[1][k][i][j] = dequant_coef8[k][i][j] * currSlice->qmatrix[9][temp];
-          currSlice->InvLevelScale8x8_Intra[2][k][i][j] = dequant_coef8[k][i][j] * currSlice->qmatrix[10][temp];
-          currSlice->InvLevelScale8x8_Inter[2][k][i][j] = dequant_coef8[k][i][j] * currSlice->qmatrix[11][temp];
-        }
-      }
+      set_dequant8x8(*InvLevelScale8x8_Intra_1++, *p_dequant_coef  , currSlice->qmatrix[8]);
+      set_dequant8x8(*InvLevelScale8x8_Inter_1++, *p_dequant_coef  , currSlice->qmatrix[9]);
+      set_dequant8x8(*InvLevelScale8x8_Intra_2++, *p_dequant_coef  , currSlice->qmatrix[10]);
+      set_dequant8x8(*InvLevelScale8x8_Inter_2++, *p_dequant_coef++, currSlice->qmatrix[11]);
     }
   }
 }

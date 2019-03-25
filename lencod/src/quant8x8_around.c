@@ -52,6 +52,8 @@ int quant_8x8_around(Macroblock *currMB, int **tblock, struct quant_methods *q_m
   int*  ACLevel = q_method->ACLevel;
   int*  ACRun   = q_method->ACRun;
   LevelQuantParams **q_params_8x8 = q_method->q_params;
+  LevelQuantParams *q_params = NULL;
+
   int **fadjust8x8 = q_method->fadjust;
   const byte (*pos_scan)[2] = q_method->pos_scan;
   const byte *c_cost = q_method->c_cost;
@@ -81,8 +83,9 @@ int quant_8x8_around(Macroblock *currMB, int **tblock, struct quant_methods *q_m
     m7 = &tblock[j][block_x + i];
     if (*m7 != 0)
     {
-      scaled_coeff = iabs (*m7) * q_params_8x8[j][i].ScaleComp;
-      level = (scaled_coeff + q_params_8x8[j][i].OffsetComp) >> q_bits;
+      q_params = &q_params_8x8[j][i];
+      scaled_coeff = iabs (*m7) * q_params->ScaleComp;
+      level = (scaled_coeff + q_params->OffsetComp) >> q_bits;
 
       if (level != 0)
       {
@@ -93,7 +96,7 @@ int quant_8x8_around(Macroblock *currMB, int **tblock, struct quant_methods *q_m
         *coeff_cost += (level > 1) ? MAX_VALUE : c_cost[run];
 
         level  = isignab(level, *m7);
-        *m7    = rshift_rnd_sf(((level * q_params_8x8[j][i].InvScaleComp) << qp_per), 6);
+        *m7    = rshift_rnd_sf(((level * q_params->InvScaleComp) << qp_per), 6);
         *ACL++ = level;
         *ACR++ = run; 
         // reset zero level counter
@@ -165,9 +168,9 @@ int quant_8x8cavlc_around(Macroblock *currMB, int **tblock, struct quant_methods
   }
 
   // Quantization
-  for (coeff_ctr = 0; coeff_ctr < 16; ++coeff_ctr)
+  for (k = 0; k < 4; ++k)
   {
-    for (k = 0; k < 4; ++k)
+    for (coeff_ctr = 0; coeff_ctr < 16; ++coeff_ctr)
     {
       i = *p_scan++;  // horizontal position
       j = *p_scan++;  // vertical position

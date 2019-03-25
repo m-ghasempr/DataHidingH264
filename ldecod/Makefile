@@ -28,12 +28,6 @@ OBJDIR= obj
 ADDSRCDIR= ../lcommon/src
 ADDINCDIR= ../lcommon/inc
 
-ifeq ($(M32),1)
-CC=     $(shell which gcc) -m32
-else
-CC=     $(shell which gcc) 
-endif
-
 ifeq ($(STC),1)
 ifeq ($(DBG),1)  ### Do not use static compilation for Debug mode
 STC=0
@@ -46,9 +40,13 @@ STATIC=
 endif
 
 LIBS=   -lm $(STATIC)
-AFLAGS=  
 CFLAGS=  -std=gnu99 -pedantic -ffloat-store -fno-strict-aliasing -fsigned-char $(STATIC)
 FLAGS=  $(CFLAGS) -Wall -I$(INCDIR) -I$(ADDINCDIR) -D __USE_LARGEFILE64 -D _FILE_OFFSET_BITS=64
+
+ifeq ($(M32),1)
+FLAGS+=-m32
+endif
+
 
 OPT_FLAG = -O$(OPT)
 ifeq ($(DBG),1)
@@ -97,14 +95,14 @@ tags:
 bin:    $(OBJ)
 	@echo
 	@echo 'creating binary "$(BIN)"'
-	@$(CC) $(AFLAGS) -o $(BIN) $(OBJ) $(LIBS)
+	@$(CC) $(FLAGS) -o $(BIN) $(OBJ) $(LIBS)
 	@echo '... done'
 	@echo
 
 depend:
 	@echo
 	@echo 'checking dependencies'
-	@$(SHELL) -ec '$(CC) $(AFLAGS) -MM $(CFLAGS) -I$(INCDIR) -I$(ADDINCDIR) $(SRC) $(ADDSRC)                  \
+	@$(SHELL) -ec '$(CC) $(FLAGS) -MM $(CFLAGS) -I$(INCDIR) -I$(ADDINCDIR) $(SRC) $(ADDSRC)                  \
          | sed '\''s@\(.*\)\.o[ :]@$(OBJDIR)/\1.o$(SUFFIX):@g'\''               \
          >$(DEPEND)'
 	@echo

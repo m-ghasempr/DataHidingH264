@@ -196,6 +196,10 @@
 
       Alexis Michael Tourapis         <alexismt@ieee.org><atour@dolby.com>
       Athanasios Leontaris            <aleon@dolby.com>
+      Chris Vogt
+      Peshala Pahalawatta             <ppaha@dolby.com>
+      Yan Ye                          <yye@dolby.com>
+      Yuwen He                        <yhe@dolby.com>
       Dolby Laboratories Inc.
       3601 West Alameda Ave.
       Burbank, CA 91505
@@ -217,6 +221,11 @@
       Department of Computer Engineering, 
       Sejong University
       98 Kunja-Dong, Kwangjin-Gu, Seoul 143-747, Korea
+
+			Jianhua Wu                      <jianhua.wu@sg.panasonic.com>
+			Panasonic Singapore Laboratories Pte Ltd
+			Blk 1022 Tai Seng Ave #06-3530 Tai Seng Ind Est
+			Singapore 534415
 
   \endverbatim
 */

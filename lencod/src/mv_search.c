@@ -56,7 +56,6 @@ static const short bx0[5][4] = {{0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,2,0,0}, {0,2
 static const short by0[5][4] = {{0,0,0,0}, {0,0,0,0}, {0,2,0,0}, {0,0,0,0}, {0,0,2,2}};
 
 
-
 static distblk GetSkipCostMB          (Macroblock *currMB, int lambda);
 static distblk BiPredBlockMotionSearch(Macroblock *currMB, MEBlock *, MotionVector*, int, int , int*);
 
@@ -68,23 +67,25 @@ static distblk BiPredBlockMotionSearch(Macroblock *currMB, MEBlock *, MotionVect
  */
 void get_search_range(MEBlock *mv_block, InputParameters *p_Inp, short ref, int blocktype)
 {
-  mv_block->searchRange = mv_block->p_Vid->searchRange;
+  SearchWindow *searchRange = &mv_block->searchRange;
+
+  *searchRange = mv_block->p_Vid->searchRange;
   //----- set search range ---
   if (p_Inp->full_search == 1)
   {
     int scale = (imin(ref,1)+1);
-    mv_block->searchRange.min_x /= scale;
-    mv_block->searchRange.max_x /= scale;
-    mv_block->searchRange.min_y /= scale;
-    mv_block->searchRange.max_y /= scale;
+    searchRange->min_x /= scale;
+    searchRange->max_x /= scale;
+    searchRange->min_y /= scale;
+    searchRange->max_y /= scale;
   }
   else if  (p_Inp->full_search != 2)
   {
     int scale = ((imin(ref,1)+1) * imin(2,blocktype));
-    mv_block->searchRange.min_x /= scale;
-    mv_block->searchRange.max_x /= scale;
-    mv_block->searchRange.min_y /= scale;
-    mv_block->searchRange.max_y /= scale;
+    searchRange->min_x /= scale;
+    searchRange->max_x /= scale;
+    searchRange->min_y /= scale;
+    searchRange->max_y /= scale;
   }
 }
 
@@ -94,23 +95,18 @@ void get_search_range(MEBlock *mv_block, InputParameters *p_Inp, short ref, int 
  *    Set search range. This needs to be changed to provide 2D support
  ************************************************************************
  */
-static inline void set_me_parameters( char  **ref_array, short ***mv_array ,short *all_mv, short ref, int step_h, int step_v, int pic_block_x)
+static inline void set_me_parameters( PicMotionParams **motion, const MotionVector *all_mv, int list, char ref, int step_h, int step_v, int pic_block_y, int pic_block_x)
 {
   int i, j;
-  for (j = 0; j < step_v; j++)
-  {
-    memset(&ref_array [j][pic_block_x], ref, step_h * sizeof(char));
-  }
 
   // Set first line
-  for (i=pic_block_x; i<pic_block_x + step_h; i++)
+  for (j = pic_block_y; j < pic_block_y + step_v; j++)
   {
-    memcpy(mv_array  [0][i], all_mv, 2* sizeof(short));
-  }
-  // Set remaining lines 
-  for (j = 1; j < step_v; j++)
-  {
-    memcpy(mv_array  [j][pic_block_x], mv_array  [j - 1][pic_block_x], 2 * step_h * sizeof(short));
+    for (i=pic_block_x; i<pic_block_x + step_h; i++)
+    {
+      motion[j][i].mv[list] = *all_mv;
+      motion[j][i].ref_idx[list] = ref;
+    }
   }
 }
 
@@ -144,21 +140,10 @@ void init_ME_engine(Macroblock *currMB)
   switch (p_Inp->SearchMode)
   {
    case EPZS:
-     if (p_Inp->EPZSSubPelGrid)
-     {
-       currMB->IntPelME       = EPZSIntPelBlockMotionSearch;
-       currMB->SubPelME       = (p_Inp->EPZSSubPelME) ? EPZSSubPelBlockMotionSearch : SubPelBlockMotionSearch;
-       currMB->BiPredME       = EPZSIntBiPredBlockMotionSearch;
-       currMB->SubPelBiPredME = (p_Inp->EPZSSubPelMEBiPred) ? EPZSSubPelBlockSearchBiPred : SubPelBlockSearchBiPred;
-       
-     }
-     else
-     {
-       currMB->IntPelME       = EPZSPelBlockMotionSearch;
-       currMB->BiPredME       = EPZSBiPredBlockMotionSearch;
-       currMB->SubPelBiPredME = (p_Inp->EPZSSubPelMEBiPred) ? EPZSSubPelBlockSearchBiPred : SubPelBlockSearchBiPred;
-       currMB->SubPelME       = (p_Inp->EPZSSubPelME) ? EPZSSubPelBlockMotionSearch : SubPelBlockMotionSearch;
-     }
+     currMB->IntPelME = (p_Inp->EPZSSubPelGrid) ? EPZSIntPelBlockMotionSearch : EPZSPelBlockMotionSearch;
+     currMB->BiPredME = (p_Inp->EPZSSubPelGrid) ? EPZSIntBiPredBlockMotionSearch : EPZSBiPredBlockMotionSearch;
+     currMB->SubPelME       = (p_Inp->EPZSSubPelME) ? EPZSSubPelBlockMotionSearch : SubPelBlockMotionSearch;
+     currMB->SubPelBiPredME = (p_Inp->EPZSSubPelMEBiPred) ? EPZSSubPelBlockSearchBiPred : SubPelBlockSearchBiPred;
      break;
    case UM_HEX:
      currMB->IntPelME       = UMHEXIntegerPelBlockMotionSearch;
@@ -331,14 +316,13 @@ void Init_Motion_Search_Module (VideoParameters *p_Vid, InputParameters *p_Inp)
   int bits;
   int i_min, i_max,k;
   int i, l;
-
   int search_range               = p_Inp->search_range;
   int max_search_points          = imax(9, (2 * search_range + 1) * (2 * search_range + 1));
   int max_ref_bits               = 1 + 2 * (int)floor(log(imax(16, p_Vid->max_num_references + 1)) / log(2) + 1e-10);
   int max_ref                    = (1<<((max_ref_bits>>1)+1))-1;
   int number_of_subpel_positions = 4 * (2*search_range+3);
   int max_mv_bits                = 3 + 2 * (int)ceil (log(number_of_subpel_positions + 1) / log(2) + 1e-10);
-  int max_mvd                    = (1<<( max_mv_bits >>1)   ) - 1;
+  int max_mvd                    = p_Inp->UseMVLimits? imax(4*imax(p_Inp->SetMVXLimit, p_Inp->SetMVYLimit), ((1<<( max_mv_bits >>1) ) - 1)): ((1<<( max_mv_bits >>1)) - 1);
   
   p_Vid->max_mvd = max_mvd;
   p_Vid->imgpel_abs_range          = (imax(p_Vid->max_pel_value_comp[0],p_Vid->max_pel_value_comp[1]) + 1) * 64;
@@ -351,6 +335,7 @@ void Init_Motion_Search_Module (VideoParameters *p_Vid, InputParameters *p_Inp)
     no_mem_exit("Init_Motion_Search_Module: p_Vid->spiral_hpel_search");
   if ((p_Vid->spiral_qpel_search = (MotionVector*)calloc(max_search_points, sizeof(MotionVector))) == NULL)
     no_mem_exit("Init_Motion_Search_Module: p_Vid->spiral_qpel_search");
+
 
   if ((p_Vid->mvbits = (int*)calloc(2 * max_mvd + 1, sizeof(int))) == NULL)
     no_mem_exit("Init_Motion_Search_Module: p_Vid->mvbits");
@@ -530,6 +515,7 @@ Clear_Motion_Search_Module (VideoParameters *p_Vid, InputParameters *p_Inp)
   free (p_Vid->imgpel_quad);
 #endif
 
+
   if (p_Vid->motion_cost)
     free_mem4Ddistblk (p_Vid->motion_cost);
 
@@ -550,13 +536,12 @@ static inline int mv_bits_cost(VideoParameters *p_Vid, short ***all_mv, short **
   return mvd_bits;
 }
 
-static inline int mv_bit_cost(Macroblock *currMB, short ***all_mv, int cur_list, short cur_ref, int by, int bx, int step_v0, int step_v, int step_h0, int step_h, int mvd_bits)
+static inline int mv_bit_cost(Macroblock *currMB, MotionVector **all_mv, int cur_list, short cur_ref, int by, int bx, int step_v0, int step_v, int step_h0, int step_h, int mvd_bits)
 {
   int v, h;
-  short predMV[2]; 
+  MotionVector predMV;
   PixelPos block[4];  // neighbor blocks
   VideoParameters *p_Vid = currMB->p_Vid;
-  PicMotionParams *motion = &p_Vid->enc_picture->motion;
 
   for (v=by; v<by + step_v0; v+=step_v)
   {
@@ -565,10 +550,10 @@ static inline int mv_bit_cost(Macroblock *currMB, short ***all_mv, int cur_list,
 
       get_neighbors(currMB, block, h, v, step_h);
       // Lets recompute MV predictor. This should avoid any problems with alterations of the motion vectors after ME
-      currMB->GetMVPredictor (currMB, block, predMV, cur_ref, motion->ref_idx[cur_list], motion->mv[cur_list], h, v, step_h, step_v);
+      currMB->GetMVPredictor (currMB, block, &predMV, cur_ref, p_Vid->enc_picture->mv_info, cur_list, h, v, step_h, step_v);
 
-      mvd_bits += p_Vid->mvbits[ all_mv[v][h][0] - predMV[0] ];
-      mvd_bits += p_Vid->mvbits[ all_mv[v][h][1] - predMV[1] ];
+      mvd_bits += p_Vid->mvbits[ all_mv[v][h].mv_x - predMV.mv_x ];
+      mvd_bits += p_Vid->mvbits[ all_mv[v][h].mv_y - predMV.mv_y ];
     }
   }
 
@@ -590,33 +575,28 @@ distblk BPredPartitionCost (Macroblock *currMB,
                         int   list)
 {
   VideoParameters *p_Vid = currMB->p_Vid;
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   imgpel **cur_img = p_Vid->pCurImg;
-
-  int   curr_blk[MB_BLOCK_SIZE][MB_BLOCK_SIZE]; // ABT pred.error buffer
-  int bsx = (short) imin(block_size[blocktype][0], 8);
-  int bsy = (short) imin(block_size[blocktype][1], 8);
 
   short pic_pix_x, pic_pix_y;
   short  v, h;
-  int i, j, k;
+  int i, j;
   distblk mcost;
 
   int   mvd_bits  = 0;
-  int diff64[64];
-
 
   short parttype  = (short) (blocktype < 4 ? blocktype : 4);
   short step_h0   = (part_size[ parttype][0]);
   short step_v0   = (part_size[ parttype][1]);
   short step_h    = (part_size[blocktype][0]);
-  short step_v    = (part_size[blocktype][1]);
-  int   bxx, byy;                               // indexing curr_blk
-  short by0_part = by0[parttype][block8x8];
-  short bx0_part = bx0[parttype][block8x8];
+  short step_v    = (part_size[blocktype][1]);  
+  short by0_part  = by0[parttype][block8x8];
+  short bx0_part  = bx0[parttype][block8x8];
+  short block_size_x = block_size[blocktype][0];
+  short block_size_y = block_size[blocktype][1];
 
-  short   ***all_mv_l0 = currSlice->bipred_mv[list][LIST_0][ref_l0][blocktype]; 
-  short   ***all_mv_l1 = currSlice->bipred_mv[list][LIST_1][ref_l1][blocktype]; 
+  MotionVector  **all_mv_l0 = currSlice->bipred_mv[list][LIST_0][ref_l0][blocktype]; 
+  MotionVector  **all_mv_l1 = currSlice->bipred_mv[list][LIST_1][ref_l1][blocktype]; 
   imgpel  **mb_pred    = currSlice->mb_pred[0];
 
   // List0 
@@ -626,57 +606,59 @@ distblk BPredPartitionCost (Macroblock *currMB,
 
   mcost = weighted_cost (lambda_factor, mvd_bits);
 
+  // Get prediction  
+  for (v = by0_part << 2; v < (by0_part + step_v0) << 2; v += block_size_y)
+  {
+    for (h = (bx0_part << 2); h < (bx0_part + step_h0) << 2; h += block_size_x)
+    {      
+      luma_prediction_bi (currMB, h, v, block_size_x, block_size_y, blocktype, blocktype, ref_l0, ref_l1, list);
+    }
+  }
+
   //----- cost of residual signal -----
   if ((!currSlice->p_Inp->Transform8x8Mode) || (blocktype>4))
   {
-    for (byy=0, v = by0_part << 2; v < (by0_part + step_v0) << 2; byy += 4, v += 4)
-    {
+    short diff16[16];
+    short *diff;
 
-      pic_pix_y = currMB->opix_y + v;
-      for (bxx=0, h = (bx0_part << 2); h < (bx0_part + step_h0) << 2; bxx += 4, h += 4)
+    pic_pix_y = currMB->opix_y;
+    pic_pix_x = currMB->pix_x;
+    for (v = by0_part << 2; v < (by0_part + step_v0) << 2; v += 4)
+    {            
+      for (h = (bx0_part << 2); h < (bx0_part + step_h0) << 2; h += 4)
       {
-        pic_pix_x = currMB->pix_x + h;
-        luma_prediction_bi (currMB, h, v, 4, 4, blocktype, blocktype, ref_l0, ref_l1, list);
-
-        for (k = j = 0; j < 4; j++)
+        diff = diff16;
+        for (j = v; j < v + 4; j++)
         {
-          for (i = 0; i < 4; i++)
-            diff64[k++] = cur_img[pic_pix_y+j][pic_pix_x+i] - mb_pred[j + v][i + h];
+          for (i = h; i < h + 4; i++)
+            *diff++ = cur_img[pic_pix_y+j][pic_pix_x+i] - mb_pred[j][i];
         }
-        mcost += p_Vid->distortion4x4 (diff64, DISTBLK_MAX);
+        mcost += p_Vid->distortion4x4 (diff16, DISTBLK_MAX);
       }
     }
   }
   else
   {
-    for (byy=0, v = by0_part << 2; v < (by0_part + step_v0) << 2; byy += 4, v += 4)
+  short diff64[64];
+  short *diff;
+
+    pic_pix_y = currMB->opix_y;
+    pic_pix_x = currMB->pix_x;
+    for (v = by0_part << 2; v < (by0_part + step_v0) << 2; v += 8)
     {
-
-      pic_pix_y = currMB->opix_y + v;
-      for (bxx=0, h = (bx0_part << 2); h < (bx0_part + step_h0) << 2; bxx += 4, h += 4)
+      for (h = (bx0_part << 2); h < (bx0_part + step_h0) << 2; h += 8)
       {
-        pic_pix_x = currMB->pix_x + h;
-        luma_prediction_bi (currMB, h, v, 4, 4, blocktype, blocktype, ref_l0, ref_l1, list);
-
-        for (k = j = 0; j < 4; j++)
-        {
-          for (i = 0; i < 4; i++)
-            curr_blk[byy+j][bxx+i] = cur_img[pic_pix_y+j][pic_pix_x+i] - mb_pred[j + v][i + h];
+        diff = diff64;
+        for (j = v; j < v + 8; j++)
+    {      
+          for (i = h; i < h + 8; i++)
+            *diff++ = cur_img[pic_pix_y+j][pic_pix_x+i] - mb_pred[j][i];
         }
-      }
-    }
-
-    for (byy=0; byy < block_size[parttype][1]; byy += bsy)
-    {
-      for (bxx=0; bxx < block_size[parttype][0]; bxx += bsx)
-      {
-        for (k=0, j = byy; j < byy + 8; j++, k += 8)
-          memcpy(&diff64[k], &(curr_blk[j][bxx]), 8 * sizeof(int));
-
         mcost += p_Vid->distortion8x8(diff64, DISTBLK_MAX);
       }
     }
   }
+
   return mcost;
 }
 
@@ -688,13 +670,9 @@ void update_mv_block(Macroblock *currMB, MEBlock *mv_block, int h, int v)
   mv_block->pos_y        = (short) (currMB->opix_y + (v << 2));
   mv_block->pos_x2       = (short) (mv_block->pos_x >> 2);
   mv_block->pos_y2       = (short) (mv_block->pos_y >> 2);
-#if (PAD_AFTER)
   mv_block->pos_x_padded = (short) (mv_block->pos_x << 2);
   mv_block->pos_y_padded = (short) (mv_block->pos_y << 2);
-#else
-  mv_block->pos_x_padded = (short) (mv_block->pos_x << 2) + IMG_PAD_SIZE_TIMES4;
-  mv_block->pos_y_padded = (short) (mv_block->pos_y << 2) + IMG_PAD_SIZE_TIMES4;
-#endif
+
   mv_block->pos_cr_x     = (short) (mv_block->pos_x >> currMB->p_Vid->shift_cr_x);
   mv_block->pos_cr_y     = (short) (mv_block->pos_y >> currMB->p_Vid->shift_cr_y);
 }
@@ -709,7 +687,7 @@ void init_mv_block(Macroblock *currMB, MEBlock *mv_block, short blocktype, int l
 {
   InputParameters *p_Inp = currMB->p_Inp;
   VideoParameters *p_Vid = currMB->p_Vid;
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   mv_block->blocktype         = blocktype;
   mv_block->blocksize_x       = block_size[blocktype][0];  // horizontal block size
   mv_block->blocksize_y       = block_size[blocktype][1];  // vertical block size
@@ -725,15 +703,15 @@ void init_mv_block(Macroblock *currMB, MEBlock *mv_block, short blocktype, int l
   mv_block->mv[LIST_1].mv_y   = 0;
   // Init WP parameters
   mv_block->p_Vid             = p_Vid;
-  mv_block->p_slice           = currSlice;
+  mv_block->p_Slice           = currSlice;
   mv_block->cost              = INT_MAX;
   mv_block->search_pos2       = 9;
   mv_block->search_pos4       = 9;
 
-  if ((mv_block->orig_pic = (imgpel**)calloc(3, sizeof(imgpel *))) == NULL)
-    no_mem_exit("init_mv_block: mv_block->orig_pic");
-
-  get_mem1Dpel(&(mv_block->orig_pic[0]), mv_block->blocksize_x * mv_block->blocksize_y);
+  if (p_Inp->ChromaMEEnable)
+    get_mem2Dpel(&mv_block->orig_pic, 3, mv_block->blocksize_x * mv_block->blocksize_y);
+  else
+    get_mem2Dpel(&mv_block->orig_pic, 1, mv_block->blocksize_x * mv_block->blocksize_y);
   
   mv_block->ChromaMEEnable = p_Inp->ChromaMEEnable;
 
@@ -746,15 +724,23 @@ void init_mv_block(Macroblock *currMB, MEBlock *mv_block, short blocktype, int l
     mv_block->blocksize_cr_y = (short) (mv_block->blocksize_y >> p_Vid->shift_cr_y);
 
     mv_block->ChromaMEWeight = p_Inp->ChromaMEWeight;
-    get_mem1Dpel(&(mv_block->orig_pic[1]), mv_block->blocksize_cr_x * mv_block->blocksize_cr_y);
-    get_mem1Dpel(&(mv_block->orig_pic[2]), mv_block->blocksize_cr_x * mv_block->blocksize_cr_y);
   }
 
   if (mv_block->apply_weights)
   {
-    mv_block->computePredFPel   = p_Vid->computeUniPred[F_PEL + 3];
-    mv_block->computePredHPel   = p_Vid->computeUniPred[H_PEL + 3];
-    mv_block->computePredQPel   = p_Vid->computeUniPred[Q_PEL + 3];
+    // If implicit WP, single list weights are always non weighted
+    if ((currSlice->slice_type == B_SLICE) && (p_Vid->active_pps->weighted_bipred_idc == 2))
+    {
+      mv_block->computePredFPel   = p_Vid->computeUniPred[F_PEL];
+      mv_block->computePredHPel   = p_Vid->computeUniPred[H_PEL];
+      mv_block->computePredQPel   = p_Vid->computeUniPred[Q_PEL];
+    }
+    else
+    {
+      mv_block->computePredFPel   = p_Vid->computeUniPred[F_PEL + 3];
+      mv_block->computePredHPel   = p_Vid->computeUniPred[H_PEL + 3];
+      mv_block->computePredQPel   = p_Vid->computeUniPred[Q_PEL + 3];
+    }
     mv_block->computeBiPredFPel = p_Vid->computeBiPred2[F_PEL];
     mv_block->computeBiPredHPel = p_Vid->computeBiPred2[H_PEL];
     mv_block->computeBiPredQPel = p_Vid->computeBiPred2[Q_PEL];    
@@ -776,17 +762,11 @@ void init_mv_block(Macroblock *currMB, MEBlock *mv_block, short blocktype, int l
  *    free motion vector block
  ***********************************************************************
  */
-void free_mv_block(InputParameters *p_Inp, MEBlock *mv_block)
+void free_mv_block(MEBlock *mv_block)
 {
   if (mv_block->orig_pic)
   {
-    free_mem1Dpel(mv_block->orig_pic[0]);
-    if (p_Inp->ChromaMEEnable)
-    {
-      free_mem1Dpel(mv_block->orig_pic[1]);
-      free_mem1Dpel(mv_block->orig_pic[2]);
-    }
-    free(mv_block->orig_pic);
+    free_mem2Dpel(mv_block->orig_pic);
   }
 }
 
@@ -829,48 +809,33 @@ void get_original_block(VideoParameters *p_Vid, MEBlock *mv_block)
 
 void CheckSearchRange(VideoParameters *p_Vid, MotionVector *pPredMV, MotionVector *pSWC, MEBlock *mv_block)
 {
-   int iMaxMVD = p_Vid->max_mvd-2;
-   int left, right, top, down;
-   left = pSWC->mv_x+mv_block->searchRange.min_x;
-   right = pSWC->mv_x+mv_block->searchRange.max_x;
-   top = pSWC->mv_y+mv_block->searchRange.min_y;
-   down = pSWC->mv_y+mv_block->searchRange.max_y;
-   //left;
-   if(left < pPredMV->mv_x-iMaxMVD)
-     left =pPredMV->mv_x-iMaxMVD;
-   else if(left > pPredMV->mv_x+iMaxMVD)
-     left =pPredMV->mv_x+iMaxMVD;
-   //right;
-   if(right < pPredMV->mv_x-iMaxMVD)
-     right =pPredMV->mv_x-iMaxMVD;
-   else if(right > pPredMV->mv_x+iMaxMVD)
-     right =pPredMV->mv_x+iMaxMVD;
-   
-   //top;
-   if(top < pPredMV->mv_y-iMaxMVD)
-     top =pPredMV->mv_y-iMaxMVD;
-   else if(top > pPredMV->mv_y+iMaxMVD)
-     top =pPredMV->mv_y+iMaxMVD;
-   //down;
-   if(down < pPredMV->mv_y-iMaxMVD)
-     down =pPredMV->mv_y-iMaxMVD;
-   else if(down > pPredMV->mv_y+iMaxMVD)
-     down =pPredMV->mv_y+iMaxMVD;
-   
-   if(left<right && top<down)
-   {
-     pSWC->mv_x = (short) ((left + right)>>1);
-     pSWC->mv_y = (short) ((top + down)>>1);
-     mv_block->searchRange.min_x = left - pSWC->mv_x;
-     mv_block->searchRange.max_x = imin(pSWC->mv_x-left, right-pSWC->mv_x);
-     mv_block->searchRange.min_y = top - pSWC->mv_y;
-     mv_block->searchRange.max_y = imin(pSWC->mv_y-top, down-pSWC->mv_y);
-   }
-   else
-   {
-      *pSWC = *pPredMV;
-   }
+  int iMaxMVD = p_Vid->max_mvd - 2;
+  SearchWindow *searchRange = &mv_block->searchRange;
+  int left  = pSWC->mv_x + searchRange->min_x;
+  int right = pSWC->mv_x + searchRange->max_x;
+  int top   = pSWC->mv_y + searchRange->min_y;
+  int down  = pSWC->mv_y + searchRange->max_y;
+  
+  left  = iClip3(pPredMV->mv_x - iMaxMVD, pPredMV->mv_x + iMaxMVD, left);
+  right = iClip3(pPredMV->mv_x - iMaxMVD, pPredMV->mv_x + iMaxMVD, right);
+  top   = iClip3(pPredMV->mv_y - iMaxMVD, pPredMV->mv_y + iMaxMVD, top); 
+  down  = iClip3(pPredMV->mv_y - iMaxMVD, pPredMV->mv_y + iMaxMVD, down);
+
+  if(left<right && top<down)
+  {
+    pSWC->mv_x = (short) ((left + right)>>1);
+    pSWC->mv_y = (short) ((top + down)>>1);
+    searchRange->min_x = left - pSWC->mv_x;
+    searchRange->max_x = imin(pSWC->mv_x-left, right-pSWC->mv_x);
+    searchRange->min_y = top - pSWC->mv_y;
+    searchRange->max_y = imin(pSWC->mv_y-top, down-pSWC->mv_y);
+  }
+  else
+  {
+    *pSWC = *pPredMV;
+  }
 }
+
 /*!
  ***********************************************************************
  * \brief
@@ -886,11 +851,10 @@ BlockMotionSearch (Macroblock *currMB,      //!< Current Macroblock
 {
   // each 48-pel line stores the 16 luma pels (at 0) followed by 8 or 16 crcb[0] (at 16) and crcb[1] (at 32) pels
   // depending on the type of chroma subsampling used: YUV 4:4:4, 4:2:2, and 4:2:0
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
 
-  short pred_mv[2];
   int   i, j;
   distblk   max_value = DISTBLK_MAX;
   distblk   min_mcost = max_value;
@@ -907,13 +871,11 @@ BlockMotionSearch (Macroblock *currMB,      //!< Current Macroblock
   short ref = mv_block->ref_idx;
   MotionVector *mv = &mv_block->mv[list], pred; 
 
-  short***   all_mv = &currSlice->all_mv[list][ref][blocktype][block_y];
-  PicMotionParams *motion = &p_Vid->enc_picture->motion;
+  MotionVector **all_mv = &currSlice->all_mv[list][ref][blocktype][block_y];
+
   distblk *prevSad = (p_Inp->SearchMode == EPZS)? currSlice->p_EPZS->distortion[list + currMB->list_offset][blocktype - 1]: NULL;
 
   get_neighbors(currMB, mv_block->block, mb_x, mb_y, bsx);
-
-
 
   PrepareMEParams(currSlice, mv_block, p_Inp->ChromaMEEnable, list + currMB->list_offset, ref);
 
@@ -930,20 +892,19 @@ BlockMotionSearch (Macroblock *currMB,      //!< Current Macroblock
   {
     p_Vid->p_UMHex->UMHEX_blocktype = blocktype;
     p_Vid->p_UMHex->bipred_flag = 0;
-    UMHEXSetMotionVectorPredictor(currMB, pred_mv, motion->ref_idx[list], motion->mv[list], ref, list, mb_x, mb_y, bsx, bsy, mv_block);
+    UMHEXSetMotionVectorPredictor(currMB, &pred, p_Vid->enc_picture->mv_info, ref, list, mb_x, mb_y, bsx, bsy, mv_block);
   }
   else if (p_Inp->SearchMode == UM_HEX_SIMPLE)
   {
     smpUMHEX_setup(currMB, ref, list, block_y, block_x, blocktype, currSlice->all_mv );
-    currMB->GetMVPredictor (currMB, mv_block->block, pred_mv, ref, motion->ref_idx[list], motion->mv[list], mb_x, mb_y, bsx, bsy);
+    currMB->GetMVPredictor (currMB, mv_block->block, &pred, ref, p_Vid->enc_picture->mv_info, list, mb_x, mb_y, bsx, bsy);
   }
   else
   {
-    currMB->GetMVPredictor (currMB, mv_block->block, pred_mv, ref, motion->ref_idx[list], motion->mv[list], mb_x, mb_y, bsx, bsy);
+    currMB->GetMVPredictor (currMB, mv_block->block, &pred, ref, p_Vid->enc_picture->mv_info, list, mb_x, mb_y, bsx, bsy);
   }
 
-  pred.mv_x = pred_mv[0];
-  pred.mv_y = pred_mv[1];
+
 
   //==================================
   //=====   INTEGER-PEL SEARCH   =====
@@ -983,7 +944,7 @@ BlockMotionSearch (Macroblock *currMB,      //!< Current Macroblock
   //==============================
   //=====   SUB-PEL SEARCH   =====
   //============================== 
-  mv_block->ChromaMEEnable = (p_Inp->ChromaMEEnable == ME_YUV_FP_SP ) ? 1 : 0; // set it externally
+  mv_block->ChromaMEEnable = (p_Inp->ChromaMEEnable == ME_YUV_FP_SP ) ? TRUE : FALSE; // set it externally
 
   if (!p_Inp->DisableSubpelME)
   {
@@ -1013,8 +974,7 @@ BlockMotionSearch (Macroblock *currMB,      //!< Current Macroblock
       if (cost < min_mcost)
       {
         min_mcost = cost;
-        mv->mv_x = currSlice->all_mv [0][0][0][0][0][0];
-        mv->mv_y = currSlice->all_mv [0][0][0][0][0][1];
+        *mv = currSlice->all_mv [0][0][0][0][0];
       }
     } 
   }
@@ -1026,19 +986,18 @@ BlockMotionSearch (Macroblock *currMB,      //!< Current Macroblock
   // Set first line
   for (i=block_x; i < block_x + (bsx>>2); i++)
   {
-    all_mv[0][i][0] = mv->mv_x;
-    all_mv[0][i][1] = mv->mv_y;
+    all_mv[0][i] = *mv;
   }
 
   // set all other lines
   for (j=1; j < (bsy>>2); j++)
   {
-    memcpy(all_mv[j][block_x], all_mv[0][block_x], (bsx>>2) * 2 * sizeof(short));
+    memcpy(&all_mv[j][block_x], &all_mv[0][block_x], (bsx>>2) * sizeof(MotionVector));
   }
 
 
   // Bipred ME consideration: returns minimum bipred cost
-  if (currSlice->slice_type == B_SLICE && is_bipred_enabled(p_Inp, blocktype) && (ref == 0)) 
+  if (is_bipred_enabled(p_Vid, blocktype) && (ref == 0)) 
   {
     BiPredBlockMotionSearch(currMB, mv_block, &pred, mb_x, mb_y, lambda_factor);
   }
@@ -1062,38 +1021,33 @@ static distblk BiPredBlockMotionSearch(Macroblock *currMB,      //!< Current Mac
 {
   VideoParameters *p_Vid     = currMB->p_Vid;
   InputParameters *p_Inp     = currMB->p_Inp;
-  Slice           *currSlice = currMB->p_slice;
+  Slice           *currSlice = currMB->p_Slice;
   int         list = mv_block->list;
   int         i, j;
   short       bipred_type = list ? 0 : 1;
-  short****** bipred_mv = currSlice->bipred_mv[bipred_type];
+  MotionVector ***** bipred_mv = currSlice->bipred_mv[bipred_type];
   distblk     min_mcostbi = DISTBLK_MAX;
   MotionVector *mv = &mv_block->mv[list];
   MotionVector bimv, tempmv;
   MotionVector pred_mv1, pred_mv2, pred_bi;
-  MotionVector bi_mv1 = { 0, 0}, bi_mv2 = { 0, 0};
-  short       iterlist = (short) list;
-  short       pred_mv_bi[2];
+  MotionVector *bi_mv1 = NULL, *bi_mv2 = NULL;
+  short       iterlist = (short) list;  
   int         block_x   = (mb_x>>2);
   int         block_y   = (mb_y>>2);
   int  blocktype = mv_block->blocktype;
   int         bsx       = mv_block->blocksize_x;
   int         bsy       = mv_block->blocksize_y;
   //PixelPos    block[4];  // neighbor blocks
-  PicMotionParams *motion = &p_Vid->enc_picture->motion;
   
   //get_neighbors(currMB, mv_block->block, mb_x, mb_y, bsx);
 
   if (p_Inp->SearchMode == UM_HEX)
   {
     p_Vid->p_UMHex->bipred_flag = 1;
-    UMHEXSetMotionVectorPredictor(currMB, pred_mv_bi, motion->ref_idx[list ^ 1], motion->mv[list ^ 1], 0, list ^ 1, mb_x, mb_y, bsx, bsy, mv_block);
+    UMHEXSetMotionVectorPredictor(currMB, &pred_bi, p_Vid->enc_picture->mv_info, 0, list ^ 1, mb_x, mb_y, bsx, bsy, mv_block);
   }
   else
-    currMB->GetMVPredictor (currMB, mv_block->block, pred_mv_bi, 0, motion->ref_idx[list ^ 1], motion->mv[list ^ 1], mb_x, mb_y, bsx, bsy);
-
-  pred_bi.mv_x = pred_mv_bi[0];
-  pred_bi.mv_y = pred_mv_bi[1];
+    currMB->GetMVPredictor (currMB, mv_block->block, &pred_bi, 0, p_Vid->enc_picture->mv_info, list ^ 1, mb_x, mb_y, bsx, bsy);
 
   if ((p_Inp->SearchMode != EPZS) || (p_Inp->EPZSSubPelGrid == 0))
   {
@@ -1114,28 +1068,28 @@ static distblk BiPredBlockMotionSearch(Macroblock *currMB,      //!< Current Mac
     {
       pred_mv1  = *pred_mv;
       pred_mv2  = pred_bi;
-      bi_mv1    = *mv;
-      bi_mv2    = bimv;
+      bi_mv1    = mv;
+      bi_mv2    = &bimv;
       iterlist  = (short) list;
     }
     else
     {
       pred_mv1  = pred_bi;
       pred_mv2  = *pred_mv;
-      bi_mv1    = bimv;
-      bi_mv2    = *mv;
+      bi_mv1    = &bimv;
+      bi_mv2    = mv;
       iterlist = (short) (list ^ 1);
     }
 
-    tempmv = bi_mv1;
+    tempmv = *bi_mv1;
 
     PrepareBiPredMEParams(currSlice, mv_block, mv_block->ChromaMEEnable, iterlist, currMB->list_offset, mv_block->ref_idx);
     // Get bipred mvs for list iterlist given previously computed mvs from other list
     min_mcostbi = currMB->BiPredME (currMB, iterlist, 
-      &pred_mv1, &pred_mv2, &bi_mv1, &bi_mv2, mv_block, 
+      &pred_mv1, &pred_mv2, bi_mv1, bi_mv2, mv_block, 
       (p_Inp->BiPredMESearchRange <<2)>>mv_block->iteration_no, min_mcostbi, lambda_factor[F_PEL]);
 
-    if (mv_block->iteration_no > 0 && (tempmv.mv_x == bi_mv1.mv_x) && (tempmv.mv_y == bi_mv1.mv_y))
+    if (mv_block->iteration_no > 0 && (tempmv.mv_x == bi_mv1->mv_x) && (tempmv.mv_y == bi_mv1->mv_y))
     {
       break;
     }
@@ -1145,34 +1099,36 @@ static distblk BiPredBlockMotionSearch(Macroblock *currMB,      //!< Current Mac
   {
     if (p_Inp->BiPredMESubPel)
     {
-      min_mcostbi = DISTBLK_MAX;
+			if ( !p_Vid->start_me_refinement_hp )
+				min_mcostbi = DISTBLK_MAX;
       PrepareBiPredMEParams(currSlice, mv_block, mv_block->ChromaMEEnable, iterlist, currMB->list_offset, mv_block->ref_idx);
 
-      min_mcostbi =  currMB->SubPelBiPredME (currMB, mv_block, iterlist, &pred_mv1, &pred_mv2, &bi_mv1, &bi_mv2, min_mcostbi, lambda_factor);
+      min_mcostbi =  currMB->SubPelBiPredME (currMB, mv_block, iterlist, &pred_mv1, &pred_mv2, bi_mv1, bi_mv2, min_mcostbi, lambda_factor);
     }
 
     if (p_Inp->BiPredMESubPel==2)
     {
-      min_mcostbi = DISTBLK_MAX;
+			if ( !p_Vid->start_me_refinement_qp )
+        min_mcostbi = DISTBLK_MAX;
       PrepareBiPredMEParams(currSlice, mv_block, mv_block->ChromaMEEnable, iterlist ^ 1, currMB->list_offset, mv_block->ref_idx);
 
-      min_mcostbi =  currMB->SubPelBiPredME (currMB, mv_block, iterlist ^ 1, &pred_mv2, &pred_mv1, &bi_mv2, &bi_mv1, min_mcostbi, lambda_factor);
+      min_mcostbi =  currMB->SubPelBiPredME (currMB, mv_block, iterlist ^ 1, &pred_mv2, &pred_mv1, bi_mv2, bi_mv1, min_mcostbi, lambda_factor);
     }
   }
 
-  clip_mv_range(p_Vid, 0, &bi_mv1, Q_PEL);
-  clip_mv_range(p_Vid, 0, &bi_mv2, Q_PEL);
+  clip_mv_range(p_Vid, 0, bi_mv1, Q_PEL);
+  clip_mv_range(p_Vid, 0, bi_mv2, Q_PEL);
 
   for (j=block_y; j < block_y + (bsy>>2); j++)
   {
     for (i=block_x ; i < block_x + (bsx>>2); i++)
     {
-      bipred_mv[iterlist    ][(short) mv_block->ref_idx][blocktype][j][i][0] = bi_mv1.mv_x;
-      bipred_mv[iterlist    ][(short) mv_block->ref_idx][blocktype][j][i][1] = bi_mv1.mv_y;
-      bipred_mv[iterlist ^ 1][(short) mv_block->ref_idx][blocktype][j][i][0] = bi_mv2.mv_x;
-      bipred_mv[iterlist ^ 1][(short) mv_block->ref_idx][blocktype][j][i][1] = bi_mv2.mv_y;
+      bipred_mv[iterlist    ][(short) mv_block->ref_idx][blocktype][j][i] = *bi_mv1;
+      bipred_mv[iterlist ^ 1][(short) mv_block->ref_idx][blocktype][j][i] = *bi_mv2;
     }
   }
+
+
   return min_mcostbi;
 }
 
@@ -1189,33 +1145,29 @@ distblk BIDPartitionCost (Macroblock *currMB,
                       int   lambda_factor)
 {
   VideoParameters *p_Vid = currMB->p_Vid;
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   imgpel **cur_img = p_Vid->pCurImg;
 
-  int   curr_blk[MB_BLOCK_SIZE][MB_BLOCK_SIZE]; // ABT pred.error buffer
-  int   bsx       = imin(block_size[blocktype][0],8);
-  int   bsy       = imin(block_size[blocktype][1],8);
-
-  short pic_pix_x, pic_pix_y, block_x, block_y;
-  int   v, h, i, j, k;
+  short pic_pix_x, pic_pix_y;
+  int   v, h, i, j;
   distblk mcost;
 
   int   mvd_bits  = 0;
 
   int   parttype  = (blocktype < 4 ? blocktype : 4);
-  int   step_h0   = (part_size[ parttype][0]);
-  int   step_v0   = (part_size[ parttype][1]);
-  int   step_h    = (part_size[blocktype][0]);
-  int   step_v    = (part_size[blocktype][1]);
-  int   bxx, byy;                               // indexing curr_blk
-  int   bx = bx0[parttype][block8x8];
-  int   by = by0[parttype][block8x8];
-  short   *** all_mv_l0 = currSlice->all_mv [LIST_0][(int) cur_ref[LIST_0]][blocktype];
-  short   *** all_mv_l1 = currSlice->all_mv [LIST_1][(int) cur_ref[LIST_1]][blocktype];
+  int   step_h0   = part_size[ parttype][0];
+  int   step_v0   = part_size[ parttype][1];
+  int   step_h    = part_size[blocktype][0];
+  int   step_v    = part_size[blocktype][1];
+  int   bx        = bx0[parttype][block8x8];
+  int   by        = by0[parttype][block8x8];
+  short block_size_x = block_size[blocktype][0];
+  short block_size_y = block_size[blocktype][1];
+
+  MotionVector **all_mv_l0 = currSlice->all_mv [LIST_0][(int) cur_ref[LIST_0]][blocktype];
+  MotionVector **all_mv_l1 = currSlice->all_mv [LIST_1][(int) cur_ref[LIST_1]][blocktype];
   short bipred_me =  0; //no bipred for this case 
   imgpel  **mb_pred = currSlice->mb_pred[0];
-  int diff64[64];
-
   int   list_mode[2];
   list_mode[0] = blocktype;
   list_mode[1] = blocktype;
@@ -1231,58 +1183,60 @@ distblk BIDPartitionCost (Macroblock *currMB,
 
   mcost = weighted_cost (lambda_factor, mvd_bits);
 
+  // Get prediction
+  for (v = by << 2; v < (by + step_v0) << 2; v += block_size_y)
+  {
+    for (h = (bx << 2); h < (bx + step_h0) << 2; h += block_size_x)
+    {
+      luma_prediction (currMB, h, v, block_size_x, block_size_y, 2, list_mode, cur_ref, bipred_me);
+    }
+  }
+
   //----- cost of residual signal -----
   if ((!currSlice->p_Inp->Transform8x8Mode) || (blocktype>4))
   {
-    for (byy=0, v=by; v<by + step_v0; byy+=4, v++)
-    {
-      pic_pix_y = (short) (currMB->opix_y + (block_y = (short) (v<<2)));
-      for (bxx=0, h=bx; h<bx + step_h0; bxx+=4, h++)
-      {
-        pic_pix_x = (short) (currMB->pix_x + (block_x = (short) (h<<2)));
-        luma_prediction (currMB, block_x, block_y, 4, 4, 2, list_mode, cur_ref, bipred_me);
+    short diff16[16];
+    short *diff;
 
-        for (k=j=0; j<4; j++)
+    pic_pix_y = (short) currMB->opix_y;
+    pic_pix_x = (short) currMB->pix_x;
+    for (v= (by << 2); v < (by + step_v0) << 2; v += 4)
+    {
+      for (h = (bx << 2); h < (bx + step_h0) << 2; h += 4)
+      {        
+       diff = diff16;
+        for (j = v; j < v + 4; j++)
         {
-          for (  i=0; i<4; i++)
-            diff64[k++] = curr_blk[byy+j][bxx+i] =
-            cur_img[pic_pix_y+j][pic_pix_x+i] - mb_pred[j+block_y][i+block_x];
+          for (i = h; i < h + 4; i++)
+            *diff++ = cur_img[pic_pix_y+j][pic_pix_x+i] - mb_pred[j][i];
         }
 
-        mcost += p_Vid->distortion4x4 (diff64, DISTBLK_MAX);
+        mcost += p_Vid->distortion4x4 (diff16, DISTBLK_MAX);
       }
     }
   }
   else
   {
-    for (byy=0, v= (by << 2); v < (by + step_v0) << 2; byy += 4, v += 4)
-    {
-      pic_pix_y = (short) (currMB->opix_y + v);
-      for (bxx=0, h = (bx << 2); h < (bx + step_h0) << 2; bxx+=4, h += 4)
-      {
-        pic_pix_x = (short) (currMB->pix_x + h);
-        luma_prediction (currMB, h, v, 4, 4, 2, list_mode, cur_ref, bipred_me);
+    short diff64[64];
+    short *diff;
 
-        for (k=j=0; j<4; j++)
-        {
-          for (  i=0; i<4; i++)
-            diff64[k++] = curr_blk[byy+j][bxx+i] =
-            cur_img[pic_pix_y+j][pic_pix_x+i] - mb_pred[j + v][i + h];
-        }
+    pic_pix_y = (short) currMB->opix_y;
+    pic_pix_x = (short) currMB->pix_x;
+    for (v= (by << 2); v < (by + step_v0) << 2; v += 8)
+    {
+      for (h = (bx << 2); h < (bx + step_h0) << 2; h += 8)
+      {
+        diff = diff64;
+        for (j = v; j < v + 8; j++)
+    {
+          for (i = h; i < h + 8; i++)
+            *diff++ = cur_img[pic_pix_y + j][pic_pix_x + i] - mb_pred[j][i];
       }
-    }
-
-    for (byy=0; byy < block_size[parttype][1]; byy+=bsy)
-    {
-      for (bxx=0; bxx<block_size[parttype][0]; bxx+=bsx)
-      {
-        for (k=0, j=byy;j<byy + 8;j++, k += 8)
-          memcpy(&diff64[k], &(curr_blk[j][bxx]), 8 * sizeof(int));
-
         mcost += p_Vid->distortion8x8(diff64, DISTBLK_MAX);
       }
     }
   }
+
   return mcost;
 }
 
@@ -1294,52 +1248,75 @@ distblk BIDPartitionCost (Macroblock *currMB,
  */
 static distblk GetSkipCostMB (Macroblock *currMB, int lambda)
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currMB->p_Vid;
-  InputParameters *p_Inp = currMB->p_Inp;
-  int block_y, block_x, pic_pix_y, pic_pix_x, i, j, k;
+  InputParameters *p_Inp = currMB->p_Inp;  
   distblk cost = 0;
-  int curr_diff[8][8];
-  int mb_x, mb_y;
+  
   int block;
   imgpel  **mb_pred = currSlice->mb_pred[0];
   char  cur_ref[2] = {0, 0};
   int   list_mode[2] = {0, 0};
-  int diff  [16];
-  int diff64[64];
 
-  for(block = 0;block < 4;block++)
+  //===== prediction of 16x16 skip block =====
+  luma_prediction (currMB, 0, 0, MB_BLOCK_SIZE, MB_BLOCK_SIZE, 0, list_mode, cur_ref, 0);
+
+  if (p_Inp->Transform8x8Mode == 0)
   {
-    mb_y    = (block >>   1)<<3;
-    mb_x    = (block & 0x01)<<3;
-    for (block_y = mb_y; block_y < mb_y+8; block_y += 4)
+    short diff16[16];
+    short *diff;
+    int block_y, block_x, i, j;
+    int mb_x, mb_y;
+
+    int pic_pix_y = currMB->opix_y;
+    int pic_pix_x = currMB->pix_x;
+
+    for(block = 0;block < 4; block++)
     {
-      pic_pix_y = currMB->opix_y + block_y;
-      for (block_x = mb_x; block_x < mb_x + 8; block_x += 4)
+      mb_y = (block >>   1)<<3;
+      mb_x = (block & 0x01)<<3;
+      for (block_y = mb_y; block_y < mb_y + 8; block_y += 4)
       {
-        pic_pix_x = currMB->pix_x + block_x;
-
-        //===== prediction of 4x4 block =====
-        luma_prediction (currMB, block_x, block_y, 4, 4, 0, list_mode, cur_ref, 0);
-
-        //===== get displaced frame difference ======
-        for (k = j = 0; j < 4; j++)
+        for (block_x = mb_x; block_x < mb_x + 8; block_x += 4)
         {
-          for (i = 0; i < 4; i++, k++)
+          diff = diff16;
+          //===== get displaced frame difference ======
+          for (j = block_y; j < 4 + block_y; j++)
           {
-            diff[k] = curr_diff[block_y-mb_y+j][block_x-mb_x+i] = p_Vid->pCurImg[pic_pix_y+j][pic_pix_x+i] - mb_pred[j+block_y][i+block_x];
+            for (i = block_x; i < 4 + block_x; i++)
+            {
+              *diff++ = p_Vid->pCurImg[pic_pix_y + j][pic_pix_x + i] - mb_pred[j][i];
+            }
           }
+          cost += p_Vid->distortion4x4 (diff16, DISTBLK_MAX);
         }
-
-        if(!((p_Inp->rdopt == 0) && (p_Inp->Transform8x8Mode)))
-          cost += p_Vid->distortion4x4 (diff, DISTBLK_MAX);
       }
     }
+  }
+  else
+  {
+    short diff64[64];
+    short *diff;
+    int i, j;
+    int mb_x, mb_y;
 
-    if((p_Inp->rdopt == 0) && (p_Inp->Transform8x8Mode))
+    int pic_pix_y = currMB->opix_y;
+    int pic_pix_x = currMB->pix_x;
+
+    for(block = 0;block < 4;block++)
     {
-      for(k=j=0; j<8; j++, k+=8)
-        memcpy(&diff64[k], &(curr_diff[j]), 8 * sizeof(int));
+      mb_y = (block >>   1)<<3;
+      mb_x = (block & 0x01)<<3;
+
+      //===== get displaced frame difference ======
+      diff = diff64;
+      for (j = mb_y; j < mb_y + 8; j++)
+      {
+        for (i = mb_x; i < mb_x + 8; i++)
+        {
+          *diff++ = p_Vid->pCurImg[pic_pix_y + j][pic_pix_x + i] - mb_pred[j][i];
+        }
+      }
       cost += p_Vid->distortion8x8 (diff64, DISTBLK_MAX);
     }
   }
@@ -1358,13 +1335,13 @@ static distblk GetSkipCostMB (Macroblock *currMB, int lambda)
  */
 void FindSkipModeMotionVector (Macroblock *currMB)
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currMB->p_Vid;
-  PicMotionParams *motion = &p_Vid->enc_picture->motion;
+  PicMotionParams **motion = p_Vid->enc_picture->mv_info;
   int   bx, by;
-  short ***all_mv = currSlice->all_mv[0][0][0];
+  MotionVector **all_mv = currSlice->all_mv[0][0][0];
 
-  short pmv[2];
+  MotionVector pmv;
 
   int zeroMotionAbove;
   int zeroMotionLeft;
@@ -1373,14 +1350,13 @@ void FindSkipModeMotionVector (Macroblock *currMB)
   int      a_ref_idx = 0;
   int      b_mv_y = 0;
   int      b_ref_idx = 0;
-  short    ***mv = motion->mv[LIST_0];
 
   get_neighbors(currMB, mb, 0, 0, 16);
 
   if (mb[0].available)
   {
-    a_mv_y    = mv[mb[0].pos_y][mb[0].pos_x][1];
-    a_ref_idx = motion->ref_idx[LIST_0][mb[0].pos_y][mb[0].pos_x];
+    a_mv_y    = motion[mb[0].pos_y][mb[0].pos_x].mv[LIST_0].mv_y;
+    a_ref_idx = motion[mb[0].pos_y][mb[0].pos_x].ref_idx[LIST_0];
 
     if (currMB->mb_field && !p_Vid->mb_data[mb[0].mb_addr].mb_field)
     {
@@ -1396,8 +1372,8 @@ void FindSkipModeMotionVector (Macroblock *currMB)
 
   if (mb[1].available)
   {
-    b_mv_y    = mv[mb[1].pos_y][mb[1].pos_x][1];
-    b_ref_idx = motion->ref_idx[LIST_0][mb[1].pos_y][mb[1].pos_x];
+    b_mv_y    = motion[mb[1].pos_y][mb[1].pos_x].mv[LIST_0].mv_y;
+    b_ref_idx = motion[mb[1].pos_y][mb[1].pos_x].ref_idx[LIST_0];
 
     if (currMB->mb_field && !p_Vid->mb_data[mb[1].mb_addr].mb_field)
     {
@@ -1411,24 +1387,22 @@ void FindSkipModeMotionVector (Macroblock *currMB)
     }
   }
 
-  zeroMotionLeft  = !mb[0].available ? 1 : a_ref_idx==0 && mv[mb[0].pos_y][mb[0].pos_x][0]==0 && a_mv_y==0 ? 1 : 0;
-  zeroMotionAbove = !mb[1].available ? 1 : b_ref_idx==0 && mv[mb[1].pos_y][mb[1].pos_x][0]==0 && b_mv_y==0 ? 1 : 0;
+  zeroMotionLeft  = !mb[0].available ? 1 : a_ref_idx==0 && motion[mb[0].pos_y][mb[0].pos_x].mv[LIST_0].mv_x ==0 && a_mv_y==0 ? 1 : 0;
+  zeroMotionAbove = !mb[1].available ? 1 : b_ref_idx==0 && motion[mb[1].pos_y][mb[1].pos_x].mv[LIST_0].mv_x ==0 && b_mv_y==0 ? 1 : 0;
 
   if (zeroMotionAbove || zeroMotionLeft)
   {
-    memset(all_mv [0][0], 0, 32 * sizeof(short)); // 4 * 4 * 2
+    memset(&all_mv [0][0], 0, 16 * sizeof(MotionVector)); // 4 * 4
   }
   else
   {
-    currMB->GetMVPredictor (currMB, mb, pmv, 0, motion->ref_idx[LIST_0], mv, 0, 0, 16, 16);
+    currMB->GetMVPredictor (currMB, mb, &pmv, 0, motion, LIST_0, 0, 0, 16, 16);
 
+    for (by = 0;by < 4;by++)
     for (bx = 0;bx < 4;bx++)
     {
-      memcpy(all_mv [0][bx], pmv, 2* sizeof(short));
+      all_mv [by][bx] = pmv;
     }
-
-    for (by = 1;by < 4;by++)
-      memcpy(all_mv [by][0], all_mv [0][0], 4 * 2* sizeof(short));
   }
 }
 
@@ -1440,59 +1414,97 @@ void FindSkipModeMotionVector (Macroblock *currMB)
  */
 distblk GetDirectCost8x8 (Macroblock *currMB, int block, distblk *cost8x8)
 {
-  Slice *currSlice = currMB->p_slice; 
+  Slice *currSlice = currMB->p_Slice; 
   VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
-  int block_y, block_x, pic_pix_y, pic_pix_x, i, j, k;
-  int curr_diff[8][8];
+  int pic_pix_y, pic_pix_x, i, j;
+
   distblk cost  = 0;
   int mb_y  = (block >> 1)<<3;
   int mb_x  = (block & 0x01)<<3;
-  short bipred_me  = 0;
   imgpel  **mb_pred = currSlice->mb_pred[0];
   int   list_mode[2] = {0, 0};
-  int diff  [16];
-  int diff64[64];
 
-
-  for (block_y=mb_y; block_y < mb_y + 8; block_y += 4)
+  // Check if valid
+  for (j=(currMB->opix_y + mb_y) >> 2; j < (currMB->opix_y + mb_y + 8) >> 2; j++)
   {
-    pic_pix_y = currMB->opix_y + block_y;
-
-    for (block_x=mb_x; block_x<mb_x+8; block_x+=4)
+    for (i=(currMB->pix_x + mb_x) >> 2; i < (currMB->pix_x + mb_x + 8) >> 2; i++)
     {
-      pic_pix_x = currMB->pix_x + block_x;
-
-      if (currSlice->direct_pdir[pic_pix_y>>2][pic_pix_x>>2]<0)
+      if (currSlice->direct_pdir[j][i] < 0)
       {
-        *cost8x8=DISTBLK_MAX;
+        *cost8x8 = DISTBLK_MAX;
         return DISTBLK_MAX; //mode not allowed
       }
-
-      //===== prediction of 4x4 block =====
-
-      luma_prediction (currMB, block_x, block_y, 4, 4,
-        currSlice->direct_pdir[pic_pix_y>>2][pic_pix_x>>2], list_mode,
-        currSlice->direct_ref_idx[pic_pix_y>>2][pic_pix_x>>2], bipred_me);
-
-      //===== get displaced frame difference ======
-      for (k=j=0; j<4; j++)
-        for (i=0; i<4; i++, k++)
-        {
-          diff[k] = curr_diff[block_y-mb_y+j][block_x - mb_x+i] =
-            p_Vid->pCurImg[pic_pix_y+j][pic_pix_x+i] - mb_pred[j+block_y][i+block_x];
-        }
-        cost += p_Vid->distortion4x4 (diff, DISTBLK_MAX);
     }
   }
 
-  if((p_Inp->rdopt == 0) && (p_Inp->Transform8x8Mode))
+  //===== Generate direct prediction =====
+  for (j = mb_y; j < mb_y + 8; j += 4)
   {
-    k=0;
-    for(j=0; j<8; j++, k+=8)
-      memcpy(&diff64[k], &(curr_diff[j]), 8 * sizeof(int));          
+    pic_pix_y = (currMB->opix_y + j) >> 2;
+    for (i = mb_x; i < mb_x + 8; i += 4)
+    {
+      pic_pix_x = (currMB->pix_x + i) >> 2;
+      luma_prediction (currMB, i, j, 4, 4, currSlice->direct_pdir[pic_pix_y][pic_pix_x], 
+        list_mode, currSlice->direct_ref_idx[pic_pix_y][pic_pix_x], 0);
+    }
+  }
 
+  if(p_Inp->Transform8x8Mode)
+  {
+    short diff16[4][16];
+    short diff64[64];
+    short *tmp64 = diff64;
+    short *tmp16[4]; //{diff16[0], diff16[1], diff16[2], diff16[3]};
+    int index;
+
+    tmp16[0] = diff16[0];
+    tmp16[1] = diff16[1];
+    tmp16[2] = diff16[2];
+    tmp16[3] = diff16[3];
+
+    pic_pix_y = currMB->opix_y;
+    pic_pix_x = currMB->pix_x;
+    //===== get displaced frame difference ======
+    for (j = mb_y; j < 8 + mb_y; j++)
+    {
+      for (i = mb_x; i < 8 + mb_x; i++)
+      {
+        index = 2 * ((j - mb_y)> 3) + ((i - mb_x)> 3);
+        *tmp64++ = *(tmp16[index])++ = (short) (p_Vid->pCurImg[pic_pix_y + j][pic_pix_x + i] - mb_pred[j][i]);
+      }
+    }
+
+    cost += p_Vid->distortion4x4 (diff16[0], DISTBLK_MAX);
+    cost += p_Vid->distortion4x4 (diff16[1], DISTBLK_MAX);
+    cost += p_Vid->distortion4x4 (diff16[2], DISTBLK_MAX);
+    cost += p_Vid->distortion4x4 (diff16[3], DISTBLK_MAX);
     *cost8x8 += p_Vid->distortion8x8 (diff64, DISTBLK_MAX);
+  }
+  else
+  {
+    int block_y, block_x;
+    short diff16[16];
+    short *diff;
+
+    for (block_y=mb_y; block_y < mb_y + 8; block_y += 4)
+    {
+      pic_pix_y = currMB->opix_y + block_y;
+
+      for (block_x=mb_x; block_x<mb_x+8; block_x+=4)
+      {
+        pic_pix_x = currMB->pix_x + block_x;
+        diff = diff16;
+
+        //===== get displaced frame difference ======
+        for (j=0; j<4; j++)
+          for (i=0; i<4; i++)
+          {
+            *diff++ = (short) (p_Vid->pCurImg[pic_pix_y+j][pic_pix_x+i] - mb_pred[j+block_y][i+block_x]);
+          }
+          cost += p_Vid->distortion4x4 (diff16, DISTBLK_MAX);
+      }
+    }
   }
 
   return cost;
@@ -1508,7 +1520,7 @@ distblk GetDirectCost8x8 (Macroblock *currMB, int block, distblk *cost8x8)
  */
 distblk GetDirectCostMB (Macroblock *currMB)
 {
-  Slice *currSlice = currMB->p_slice; 
+  Slice *currSlice = currMB->p_Slice; 
   InputParameters *p_Inp = currSlice->p_Inp;
   int i;
   distblk cost = 0;
@@ -1543,7 +1555,6 @@ distblk GetDirectCostMB (Macroblock *currMB)
   return cost;
 }
 
-
 /*!
  ************************************************************************
  * \brief
@@ -1556,25 +1567,7 @@ void PartitionMotionSearch (Macroblock *currMB,
                             int    *lambda_factor)
 {
   VideoParameters *p_Vid = currMB->p_Vid;
-  InputParameters *p_Inp = currMB->p_Inp;
-  Slice *currSlice = currMB->p_slice;
-  PicMotionParams *motion = &p_Vid->enc_picture->motion;
-
-  char  **ref_array;
-  short ***mv_array;
-  short ref = 0;
-  int   step_h    = (part_size[blocktype][0]);
-  int   step_v    = (part_size[blocktype][1]);
-  int   list = LIST_0;
-  int   numlists  = (currSlice->slice_type == B_SLICE) ? 2 : 1;
-  int   list_offset = currMB->list_offset;
-  distblk *m_cost;
-  short   by = by0[blocktype][block8x8];
-  short bx = bx0[blocktype][block8x8];
-  short pic_block_y = currMB->block_y + by;
-  short pic_block_x = currMB->block_x + bx;
-  MEBlock  mv_block;
-  //int ref_lambda = (p_Inp->rdopt) ? lambda_factor[Q_PEL] :  lambda_factor[Q_PEL] >> 2;
+  Slice *currSlice = currMB->p_Slice;
 
 #if GET_METIME
   TIME_T me_time_start;
@@ -1583,30 +1576,57 @@ void PartitionMotionSearch (Macroblock *currMB,
   gettime( &me_time_start );    // start time ms
 #endif
 
-  if (p_Vid->Motion_Selected == 1)
+  if (currSlice->rdoq_motion_copy == 1)
   {
-    //===== LOOP OVER REFERENCE FRAMES =====
-    for (list=0; list<numlists;list++)
-    {
-      //----- set arrays -----
-      ref_array = &motion->ref_idx[list][pic_block_y];
-      mv_array  = &motion->mv     [list][pic_block_y];
+    PicMotionParams **motion = p_Vid->enc_picture->mv_info;
+    short by = by0[blocktype][block8x8];
+    short bx = bx0[blocktype][block8x8];
+    short step_h = (part_size[blocktype][0]);
+    short step_v = (part_size[blocktype][1]);
 
-      for (ref=0; ref < p_Vid->listXsize[list+list_offset]; ref++)
+    short pic_block_y = currMB->block_y + by;
+    short pic_block_x = currMB->block_x + bx;
+    int   list_offset = currMB->list_offset;
+    int   numlists    = (currSlice->slice_type == B_SLICE) ? 2 : 1;
+    distblk *m_cost;
+   
+    short list = LIST_0;
+    short ref = 0;
+
+    //===== LOOP OVER REFERENCE FRAMES =====
+    for (list = 0; list < numlists; list++)
+    {
+      for (ref=0; ref < currSlice->listXsize[list+list_offset]; ref++)
       {
         m_cost = &p_Vid->motion_cost[blocktype][list][ref][block8x8];
 
         //===== LOOP OVER SUB MACRO BLOCK partitions
         updateMV_mp(currMB, m_cost, ref, list, bx, by, blocktype, block8x8);
-        set_me_parameters(ref_array, mv_array, currSlice->all_mv[list][ref][blocktype][by][bx], ref, step_h, step_v, pic_block_x);
+        set_me_parameters(motion, &currSlice->all_mv[list][ref][blocktype][by][bx], list, (char) ref, step_h, step_v, pic_block_y, pic_block_x);
       }
     }
   }
   else
   {
-    //int ref_pics_valid=-1;
+    InputParameters *p_Inp = currMB->p_Inp;
+    short by = by0[blocktype][block8x8];
+    short bx = bx0[blocktype][block8x8];
+    short step_h    = (part_size[blocktype][0]);
+    short step_v    = (part_size[blocktype][1]);
 
-    // Set flag for 8x8 Hadamard consideration for SATD (only used when 8x8 integer DCT is used for encoding)
+    short pic_block_y = currMB->block_y + by;
+    short pic_block_x = currMB->block_x + bx;
+    int   list_offset = currMB->list_offset;
+    int   numlists  = (currSlice->slice_type == B_SLICE) ? 2 : 1;
+    short list = LIST_0;
+    short ref = 0;
+    MEBlock  mv_block;
+    distblk *m_cost;
+
+
+    PicMotionParams **motion = p_Vid->enc_picture->mv_info;  
+
+    // Set flag for 8x8 Hadamard consideration for SATD (only used when 8x8 integer transform is used for encoding)
     mv_block.test8x8 = p_Inp->Transform8x8Mode;
 
     init_mv_block(currMB, &mv_block, (short) blocktype, list, (char) ref, bx, by);
@@ -1620,33 +1640,33 @@ void PartitionMotionSearch (Macroblock *currMB,
     }
 
     get_original_block(p_Vid, &mv_block);
+
     //--- motion search for block ---   
     {
       //===== LOOP OVER REFERENCE FRAMES =====
       for (list = 0; list < numlists; list++)
       {
         //----- set arrays -----
-        ref_array = &motion->ref_idx[list][pic_block_y];
-        mv_array  = &motion->mv     [list][pic_block_y];
         mv_block.list = (char) list;
-        for (ref=0; ref < p_Vid->listXsize[list+list_offset]; ref++) 
+        for (ref=0; ref < currSlice->listXsize[list+list_offset]; ref++) 
         {
             mv_block.ref_idx = (char) ref;
             m_cost = &p_Vid->motion_cost[blocktype][list][ref][block8x8];
 
-            //----- set search range ---
-            get_search_range(&mv_block, p_Inp, ref, blocktype);
+            {
+              //----- set search range ---
+              get_search_range(&mv_block, p_Inp, ref, blocktype);
 
-            //===== LOOP OVER MACROBLOCK partitions        
-            *m_cost = BlockMotionSearch (currMB, &mv_block, bx<<2, by<<2, lambda_factor);             
-            //--- set motion vectors and reference frame ---
-            set_me_parameters(ref_array, mv_array, currSlice->all_mv[list][ref][blocktype][by][bx], ref, step_h, step_v, pic_block_x);        
+              //===== LOOP OVER MACROBLOCK partitions        
+              *m_cost = BlockMotionSearch (currMB, &mv_block, bx<<2, by<<2, lambda_factor);     
+            }
+            //--- set motion vectors and reference frame ---            
+            set_me_parameters(motion, &currSlice->all_mv[list][ref][blocktype][by][bx], list, (char) ref, step_h, step_v, pic_block_y, pic_block_x);
         }
-
       }
     }
 
-    free_mv_block(p_Inp, &mv_block);
+    free_mv_block(&mv_block);
   }
 
 #if GET_METIME
@@ -1667,32 +1687,10 @@ void SubPartitionMotionSearch (Macroblock *currMB,
                                int    blocktype,
                                int    block8x8,
                                int    *lambda_factor)
-{
-  Slice *currSlice = currMB->p_slice;
-  VideoParameters *p_Vid = currSlice->p_Vid;
-  InputParameters *p_Inp = currSlice->p_Inp;
-  PicMotionParams *motion = &p_Vid->enc_picture->motion;
 
-  char  **ref_array;
-  short ***mv_array;
-  short *all_mv;
-  short ref = 0;
-  int   v, h;
-  int   pic_block_y;
-  int   parttype  = 4;
-  short step_h0   = (part_size[ parttype][0]);
-  short step_v0   = (part_size[ parttype][1]);
-  short step_h    = (part_size[blocktype][0]);
-  short step_v    = (part_size[blocktype][1]);
-  short list = LIST_0;
-  int   numlists  = (currSlice->slice_type == B_SLICE) ? 2 : 1;
-  int   list_offset = currMB->list_offset;
-  distblk   mcost;
-  distblk   *m_cost;
-  short by = by0[parttype][block8x8];
-  short bx = bx0[parttype][block8x8];
-  MEBlock  mv_block;
-  //int ref_lambda = (p_Inp->rdopt) ? lambda_factor[Q_PEL] :  lambda_factor[Q_PEL] >> 2;
+{
+  Slice *currSlice = currMB->p_Slice;
+  VideoParameters *p_Vid = currMB->p_Vid;  
 
 #if GET_METIME
   TIME_T me_time_start;
@@ -1701,14 +1699,31 @@ void SubPartitionMotionSearch (Macroblock *currMB,
   gettime( &me_time_start );    // start time ms
 #endif
 
-  if (p_Vid->Motion_Selected == 1)
+  if (currSlice->rdoq_motion_copy == 1)
   {
+    int   parttype  = 4;
+    PicMotionParams **motion = p_Vid->enc_picture->mv_info;
+    short by = by0[parttype][block8x8];
+    short bx = bx0[parttype][block8x8];
+    short step_h    = (part_size[blocktype][0]);
+    short step_v    = (part_size[blocktype][1]);
+    int   list_offset = currMB->list_offset;
+    int   numlists  = (currSlice->slice_type == B_SLICE) ? 2 : 1;
+    distblk *m_cost;
+    MotionVector *all_mv;
+    short list = LIST_0;
+    short ref = 0;
+
+    short step_h0   = (part_size[ parttype][0]);
+    short step_v0   = (part_size[ parttype][1]);
+
+    int   v, h;
+    int   pic_block_y;
+
     //===== LOOP OVER REFERENCE FRAMES =====
-    for (list=0; list<numlists;list++)
+    for (list = 0; list < numlists; list++)
     {
-      ref_array = motion->ref_idx[list];
-      mv_array  = motion->mv[list];
-      for (ref=0; ref < p_Vid->listXsize[list+list_offset]; ref++)
+      for (ref=0; ref < currSlice->listXsize[list+list_offset]; ref++)
       {
         m_cost = &p_Vid->motion_cost[blocktype][list][ref][block8x8];
 
@@ -1718,12 +1733,12 @@ void SubPartitionMotionSearch (Macroblock *currMB,
           pic_block_y = currMB->block_y + v;
           for (h=bx; h<bx+step_h0; h+=step_h)
           {
-            all_mv = currSlice->all_mv[list][ref][blocktype][v][h];
+            all_mv = &currSlice->all_mv[list][ref][blocktype][v][h];
 
             updateMV_mp(currMB, m_cost, ref, list, h, v, blocktype, block8x8);
 
             //--- set motion vectors and reference frame (for motion vector prediction) ---
-            set_me_parameters(&ref_array [pic_block_y], &mv_array [pic_block_y], all_mv, ref, step_h, step_v, currMB->block_x + h);
+            set_me_parameters(motion, all_mv, list, (char) ref, step_h, step_v, pic_block_y, currMB->block_x + h);
           } // h
         } // v
       }
@@ -1731,7 +1746,26 @@ void SubPartitionMotionSearch (Macroblock *currMB,
   }
   else
   {
-    //int ref_pics_valid = -1;
+    InputParameters *p_Inp = currMB->p_Inp;
+    PicMotionParams **motion = p_Vid->enc_picture->mv_info;
+    int   parttype  = 4;
+    short by = by0[parttype][block8x8];
+    short bx = bx0[parttype][block8x8];
+    short step_h0   = (part_size[ parttype][0]);
+    short step_v0   = (part_size[ parttype][1]);
+    short step_h    = (part_size[blocktype][0]);
+    short step_v    = (part_size[blocktype][1]);
+    int   list_offset = currMB->list_offset;
+    int   numlists  = (currSlice->slice_type == B_SLICE) ? 2 : 1;
+    MotionVector *all_mv;
+    short list = LIST_0;
+    short ref = 0;
+    MEBlock  mv_block;
+    distblk *m_cost;
+    distblk  mcost; 
+    int   v, h;
+    int   pic_block_y;
+
     // Set if 8x8 transform will be used if SATD is used
     mv_block.test8x8 = p_Inp->Transform8x8Mode && blocktype == 4;
 
@@ -1754,70 +1788,66 @@ void SubPartitionMotionSearch (Macroblock *currMB,
     }
 
     init_mv_block(currMB, &mv_block, (short) blocktype, list, (char) ref, bx, by);
+
     if (blocktype == 4)
       get_original_block(p_Vid, &mv_block);
-
 
     //===== LOOP OVER REFERENCE FRAMES =====
     for (list=0; list<numlists;list++)
     {
       mv_block.list = (char) list;
-      //----- set arrays -----
-      ref_array = motion->ref_idx[list];
-      mv_array  = motion->mv[list];
-
-      for (ref=0; ref < p_Vid->listXsize[list+list_offset]; ref++)
+      for (ref=0; ref < currSlice->listXsize[list+list_offset]; ref++)
       {
-        mv_block.ref_idx = (char) ref;
-        m_cost = &p_Vid->motion_cost[blocktype][list][ref][block8x8];
-        //----- set search range ---
-        get_search_range(&mv_block, p_Inp, ref, blocktype);
+          mv_block.ref_idx = (char) ref;
+          m_cost = &p_Vid->motion_cost[blocktype][list][ref][block8x8];
+          //----- set search range ---
+          get_search_range(&mv_block, p_Inp, ref, blocktype);
 
-        //----- init motion cost -----
-        *m_cost = 0;
+          //----- init motion cost -----
+          *m_cost = 0;
 
-        //===== LOOP OVER SUB MACRO BLOCK partitions
-        for (v=by; v<by + step_v0; v += step_v)
-        {
-          pic_block_y = currMB->block_y + v;
-
-          for (h=bx; h<bx+step_h0; h+=step_h)
+          //===== LOOP OVER SUB MACRO BLOCK partitions
+          for (v=by; v<by + step_v0; v += step_v)
           {
-            all_mv = currSlice->all_mv[list][ref][blocktype][v][h];
+            pic_block_y = currMB->block_y + v;
 
-            //--- motion search for block ---          
+            for (h=bx; h<bx+step_h0; h+=step_h)
             {
+              all_mv = &currSlice->all_mv[list][ref][blocktype][v][h];
+
+              //--- motion search for block ---          
               update_mv_block(currMB, &mv_block, h, v);
-              //----- set search range ---
-              get_search_range(&mv_block, p_Inp, ref, blocktype);
+              {
+                //----- set search range ---
+                get_search_range(&mv_block, p_Inp, ref, blocktype);
 
-              mcost = BlockMotionSearch (currMB, &mv_block, h<<2, v<<2, lambda_factor);
+                mcost = BlockMotionSearch (currMB, &mv_block, h<<2, v<<2, lambda_factor);
 
-              *m_cost += mcost;
-
+                *m_cost += mcost;
+              }
+              //--- set motion vectors and reference frame (for motion vector prediction) ---
+              set_me_parameters(motion, all_mv, list, (char) ref, step_h, step_v, pic_block_y, currMB->block_x + h);
             }
-
-            //--- set motion vectors and reference frame (for motion vector prediction) ---
-            set_me_parameters(&ref_array [pic_block_y], &mv_array [pic_block_y], all_mv, ref, step_h, step_v, currMB->block_x + h);
           }
-        }
 
-        if ( (p_Inp->Transform8x8Mode == 1) && p_Inp->RDOQ_CP_MV && (blocktype == 4) && currMB->luma_transform_size_8x8_flag)
-        {
-          currSlice->tmp_mv8[list][ref][by][bx].mv_x = currSlice->all_mv[list][ref][blocktype][by][bx][0];
-          currSlice->tmp_mv8[list][ref][by][bx].mv_y = currSlice->all_mv[list][ref][blocktype][by][bx][1];
-          currSlice->motion_cost8[list][ref][block8x8] = *m_cost;
-        }
-        else if ( (p_Inp->Transform8x8Mode == 1) && p_Inp->RDOQ_CP_MV && (blocktype == 4) && currMB->luma_transform_size_8x8_flag == 0)
-        {
-          currSlice->tmp_mv4[list][ref][by][bx].mv_x = currSlice->all_mv[list][ref][blocktype][by][bx][0];
-          currSlice->tmp_mv4[list][ref][by][bx].mv_y = currSlice->all_mv[list][ref][blocktype][by][bx][1];
-          currSlice->motion_cost4[list][ref][block8x8] = *m_cost;
-        }
+          if ((p_Inp->Transform8x8Mode == 1) && p_Inp->RDOQ_CP_MV && (blocktype == 4))
+          {
+            if (currMB->luma_transform_size_8x8_flag)
+            {
+              currSlice->tmp_mv8[list][ref][by][bx] = currSlice->all_mv[list][ref][blocktype][by][bx];
+              currSlice->motion_cost8[list][ref][block8x8] = *m_cost;
+            }
+            else
+            {
+              currSlice->tmp_mv4[list][ref][by][bx] = currSlice->all_mv[list][ref][blocktype][by][bx];
+              currSlice->motion_cost4[list][ref][block8x8] = *m_cost;
+            }
+          }
       }
+
     }
 
-    free_mv_block(p_Inp, &mv_block);
+    free_mv_block(&mv_block);
   }
 
 #if GET_METIME
@@ -1828,523 +1858,4 @@ void SubPartitionMotionSearch (Macroblock *currMB,
 #endif
 }
 
-/*!
- ************************************************************************
- * \brief
- *    Calculate Temporal Direct Mode Motion Vectors
- ************************************************************************
- */
-void Get_Direct_MV_Temporal (Macroblock *currMB)
-{
-  Slice *currSlice = currMB->p_slice; 
-  int   block_x, block_y, pic_block_x, pic_block_y, opic_block_x, opic_block_y;
-  short ******all_mvs;
-  int   mv_scale;
-  int refList;
-  int ref_idx;
-  VideoParameters *p_Vid = currMB->p_Vid;
-  int64 *refpic = p_Vid->enc_picture->ref_pic_num[LIST_0 +currMB->list_offset];  
 
-  MotionParams *colocated;  
-
-  if (currMB->list_offset)
-  {
-    if(currMB->mbAddrX & 0x01)
-    {
-      colocated = &currSlice->p_colocated->bottom;
-    }
-    else
-    {
-      colocated = &currSlice->p_colocated->top;
-    }
-  }
-  else
-  {
-    colocated = &currSlice->p_colocated->frame;
-  }
-
-
-  //temporal direct mode copy from decoder
-  for (block_y = 0; block_y < 4; block_y++)
-  {
-    pic_block_y  = currMB->block_y + block_y;
-    opic_block_y = (currMB->opix_y >> 2) + block_y;
-
-    for (block_x = 0; block_x < 4; block_x++)
-    {
-      pic_block_x  = currMB->block_x + block_x;
-      opic_block_x = (currMB->pix_x>>2) + block_x;
-      all_mvs = currSlice->all_mv;
-
-      refList = (colocated->ref_idx[LIST_0][opic_block_y][opic_block_x]== -1 ? LIST_1 : LIST_0);
-      ref_idx = colocated->ref_idx[refList][opic_block_y][opic_block_x];
-
-      // next P is intra mode
-      if (ref_idx==-1)
-      {
-        memset(all_mvs[LIST_0][0][0][block_y][block_x], 0, 2* sizeof(short));
-        memset(all_mvs[LIST_1][0][0][block_y][block_x], 0, 2* sizeof(short));
-        currSlice->direct_ref_idx[pic_block_y][pic_block_x][LIST_0] = 0;
-        currSlice->direct_ref_idx[pic_block_y][pic_block_x][LIST_1] = 0;
-        currSlice->direct_pdir[pic_block_y][pic_block_x] = 2;
-      }
-      // next P is skip or inter mode
-      else
-      {
-        int mapped_idx=INVALIDINDEX;
-        int iref;
-
-        for (iref = 0; iref < imin(currSlice->num_ref_idx_active[LIST_0], p_Vid->listXsize[LIST_0 + currMB->list_offset]); iref++)
-        {
-          if (refpic[iref]==colocated->ref_pic_id[refList ][opic_block_y][opic_block_x])
-          {
-            mapped_idx=iref;
-            break;
-          }
-          else //! invalid index. Default to zero even though this case should not happen
-          {
-            mapped_idx=INVALIDINDEX;
-          }
-        }
-
-        if (mapped_idx !=INVALIDINDEX)
-        {
-          mv_scale = currSlice->mvscale[LIST_0+currMB->list_offset][mapped_idx];
-
-          if (mv_scale==9999)
-          {
-            // forward
-            memcpy(all_mvs[LIST_0][0][0][block_y][block_x], colocated->mv[refList][opic_block_y][opic_block_x], 2* sizeof(short));
-            // backward
-            memset(all_mvs[LIST_1][0][0][block_y][block_x], 0, 2* sizeof(short));
-          }
-          else
-          {
-            // forward
-            all_mvs[LIST_0][mapped_idx][0][block_y][block_x][0] = (short) ((mv_scale * colocated->mv[refList][opic_block_y][opic_block_x][0] + 128) >> 8);
-            all_mvs[LIST_0][mapped_idx][0][block_y][block_x][1] = (short) ((mv_scale * colocated->mv[refList][opic_block_y][opic_block_x][1] + 128) >> 8);
-            // backward
-            all_mvs[LIST_1][         0][0][block_y][block_x][0] = (short) (((mv_scale - 256)* colocated->mv[refList][opic_block_y][opic_block_x][0] + 128) >> 8);
-            all_mvs[LIST_1][         0][0][block_y][block_x][1] = (short) (((mv_scale - 256)* colocated->mv[refList][opic_block_y][opic_block_x][1] + 128) >> 8);
-          }
-
-          // Test Level Limits if satisfied.
-          if ( out_of_bounds_mvs(p_Vid, all_mvs[LIST_0][mapped_idx][0][block_y][block_x])|| out_of_bounds_mvs(p_Vid, all_mvs[LIST_1][0][0][block_y][block_x]))
-          {
-            currSlice->direct_ref_idx[pic_block_y][pic_block_x][LIST_0] = -1;
-            currSlice->direct_ref_idx[pic_block_y][pic_block_x][LIST_1] = -1;
-            currSlice->direct_pdir[pic_block_y][pic_block_x] = -1;
-          }
-          else
-          {
-            currSlice->direct_ref_idx[pic_block_y][pic_block_x][LIST_0] = (char) mapped_idx;
-            currSlice->direct_ref_idx[pic_block_y][pic_block_x][LIST_1] = 0;
-            currSlice->direct_pdir[pic_block_y][pic_block_x] = 2;
-          }
-        }
-        else
-        {
-          currSlice->direct_ref_idx[pic_block_y][pic_block_x][LIST_0] = -1;
-          currSlice->direct_ref_idx[pic_block_y][pic_block_x][LIST_1] = -1;
-          currSlice->direct_pdir[pic_block_y][pic_block_x] = -1;
-        }
-      }
-      if (p_Vid->active_pps->weighted_bipred_idc == 1 && currSlice->direct_pdir[pic_block_y][pic_block_x] == 2)
-      {
-        int weight_sum, i;
-        short l0_refX = currSlice->direct_ref_idx[pic_block_y][pic_block_x][LIST_0];
-        short l1_refX = currSlice->direct_ref_idx[pic_block_y][pic_block_x][LIST_1];
-        for (i=0;i< (p_Vid->active_sps->chroma_format_idc == YUV400 ? 1 : 3); i++)
-        {
-          weight_sum = currSlice->wbp_weight[0][l0_refX][l1_refX][i] + currSlice->wbp_weight[1][l0_refX][l1_refX][i];
-          if (weight_sum < -128 ||  weight_sum > 127)
-          {
-            currSlice->direct_ref_idx[pic_block_y][pic_block_x][LIST_0] = -1;
-            currSlice->direct_ref_idx[pic_block_y][pic_block_x][LIST_1] = -1;
-            currSlice->direct_pdir   [pic_block_y][pic_block_x]         = -1;
-            break;
-          }
-        }
-      }
-    }
-  }
-}
-
-/*!
-************************************************************************
-* \brief
-*    Calculate Spatial Direct Mode Motion Vectors 
-************************************************************************
-*/
-void Get_Direct_MV_Spatial_Normal (Macroblock *currMB)
-{
-  Slice *currSlice = currMB->p_slice; 
-  VideoParameters *p_Vid = currMB->p_Vid;
-  PicMotionParams *motion = &p_Vid->enc_picture->motion;
-  short l0_refA, l0_refB, l0_refC;
-  short l1_refA, l1_refB, l1_refC;
-  short l0_refX,l1_refX;
-  short pmvfw[2]={0,0},pmvbw[2]={0,0};
-
-  int   block_x, block_y, pic_block_x, pic_block_y, opic_block_x, opic_block_y;
-  short ******all_mvs;
-  char  *direct_ref_idx;
-
-  MotionParams *colocated;
-  char  **     ref_pic_l0 = motion->ref_idx[LIST_0];
-  char  **     ref_pic_l1 = motion->ref_idx[LIST_1];
-
-  PixelPos mb[4];  
-  get_neighbors(currMB, mb, 0, 0, 16);
-
-  if (currMB->list_offset)
-  {
-    if(currMB->mbAddrX & 0x01)
-    {
-      colocated = &currSlice->p_colocated->bottom;
-    }
-    else
-    {
-      colocated = &currSlice->p_colocated->top;
-    }
-  }
-  else
-  {
-    colocated = &currSlice->p_colocated->frame;
-  }
-
-  l0_refA = mb[0].available ? ref_pic_l0[mb[0].pos_y][mb[0].pos_x] : -1;
-  l0_refB = mb[1].available ? ref_pic_l0[mb[1].pos_y][mb[1].pos_x] : -1;
-  l0_refC = mb[2].available ? ref_pic_l0[mb[2].pos_y][mb[2].pos_x] : -1;
-
-  l1_refA = mb[0].available ? ref_pic_l1[mb[0].pos_y][mb[0].pos_x] : -1;
-  l1_refB = mb[1].available ? ref_pic_l1[mb[1].pos_y][mb[1].pos_x] : -1;
-  l1_refC = mb[2].available ? ref_pic_l1[mb[2].pos_y][mb[2].pos_x] : -1;
-
-  l0_refX = (short) ((l0_refA >= 0 && l0_refB >= 0) ? imin(l0_refA,l0_refB): imax(l0_refA,l0_refB));
-  l0_refX = (short) ((l0_refX >= 0 && l0_refC >= 0) ? imin(l0_refX,l0_refC): imax(l0_refX,l0_refC));
-
-  l1_refX = (short) ((l1_refA >= 0 && l1_refB >= 0) ? imin(l1_refA,l1_refB): imax(l1_refA,l1_refB));
-  l1_refX = (short) ((l1_refX >= 0 && l1_refC >= 0) ? imin(l1_refX,l1_refC): imax(l1_refX,l1_refC));
-
-  if (l0_refX >=0)
-    currMB->GetMVPredictor (currMB, mb, pmvfw, l0_refX, motion->ref_idx[LIST_0], motion->mv[LIST_0], 0, 0, 16, 16);
-
-  if (l1_refX >=0)
-    currMB->GetMVPredictor (currMB, mb, pmvbw, l1_refX, motion->ref_idx[LIST_1], motion->mv[LIST_1], 0, 0, 16, 16);
-
-  for (block_y=0; block_y<4; block_y++)
-  {
-    pic_block_y  = currMB->block_y + block_y;
-    opic_block_y = (currMB->opix_y >> 2) + block_y;
-
-    for (block_x=0; block_x<4; block_x++)
-    {
-      pic_block_x  = currMB->block_x + block_x;
-      direct_ref_idx = currSlice->direct_ref_idx[pic_block_y][pic_block_x];
-      opic_block_x = (currMB->pix_x >> 2) + block_x;
-
-      all_mvs = currSlice->all_mv;
-
-      if (l0_refX >=0)
-      {
-        if (!l0_refX  && !colocated->moving_block[opic_block_y][opic_block_x])
-        {
-          memset(all_mvs[LIST_0][0][0][block_y][block_x], 0, 2 * sizeof(short));
-          direct_ref_idx[LIST_0]=0;
-        }
-        else
-        {
-          memcpy(all_mvs[LIST_0][l0_refX][0][block_y][block_x], pmvfw, 2 * sizeof(short));
-          direct_ref_idx[LIST_0]= (char)l0_refX;
-        }
-      }
-      else
-      {
-        memset(all_mvs[LIST_0][0][0][block_y][block_x], 0, 2 * sizeof(short));
-        direct_ref_idx[LIST_0]=-1;
-      }
-
-      if (l1_refX >=0)
-      {
-        if(l1_refX==0 && !colocated->moving_block[opic_block_y][opic_block_x])
-        {
-          memset(all_mvs[LIST_1][0][0][block_y][block_x], 0, 2 * sizeof(short));
-          direct_ref_idx[LIST_1]= (char)l1_refX;
-        }
-        else
-        {
-          memcpy(all_mvs[LIST_1][l1_refX][0][block_y][block_x], pmvbw, 2 * sizeof(short));
-          direct_ref_idx[LIST_1] = (char)l1_refX;
-        }
-      }
-      else
-      {
-        memset(all_mvs[LIST_1][0][0][block_y][block_x], 0, 2 * sizeof(short));
-        direct_ref_idx[LIST_1] = -1;
-      }
-
-      // Test Level Limits if satisfied.
-      if (l0_refX < 0 && l1_refX < 0)
-      {
-        direct_ref_idx[LIST_0] = direct_ref_idx[LIST_1] = 0;
-        l0_refX = 0;
-        l1_refX = 0;
-      }
-
-      if      (direct_ref_idx[LIST_1] == -1)
-        currSlice->direct_pdir[pic_block_y][pic_block_x] = 0;
-      else if (direct_ref_idx[LIST_0] == -1)
-        currSlice->direct_pdir[pic_block_y][pic_block_x] = 1;
-      else if (p_Vid->active_pps->weighted_bipred_idc == 1)
-      {
-        int weight_sum, i;
-        Boolean invalid_wp = FALSE;
-        for (i=0;i< (p_Vid->active_sps->chroma_format_idc == YUV400 ? 1 : 3); i++)
-        {
-          weight_sum = currSlice->wbp_weight[0][l0_refX][l1_refX][i] + currSlice->wbp_weight[1][l0_refX][l1_refX][i];
-          if (weight_sum < -128 ||  weight_sum > 127)
-          {
-            invalid_wp = TRUE;
-            break;
-          }
-        }
-        if (invalid_wp == FALSE)
-          currSlice->direct_pdir[pic_block_y][pic_block_x] = 2;
-        else
-        {
-          direct_ref_idx[LIST_0] = -1;
-          direct_ref_idx[LIST_1] = -1;
-          currSlice->direct_pdir           [pic_block_y][pic_block_x] = -1;
-        }
-      }
-      else
-        currSlice->direct_pdir[pic_block_y][pic_block_x] = 2;
-    }
-  }
-}
-
-
-/*!
-************************************************************************
-* \brief
-*    Calculate Spatial Direct Mode Motion Vectors 
-************************************************************************
-*/
-void Get_Direct_MV_Spatial_MBAFF (Macroblock *currMB)
-{
-  short l0_refA, l0_refB, l0_refC;
-  short l1_refA, l1_refB, l1_refC;
-  short l0_refX,l1_refX;
-  short pmvfw[2]={0,0},pmvbw[2]={0,0};
-
-  int   block_x, block_y, pic_block_x, pic_block_y, opic_block_x, opic_block_y;
-  short ******all_mvs;
-  char  *direct_ref_idx;
-
-  MotionParams *colocated;
-  Slice *currSlice = currMB->p_slice;
-  VideoParameters *p_Vid = currMB->p_Vid;
-  PicMotionParams *motion = &p_Vid->enc_picture->motion;
-
-  char  **ref_pic_l0 = motion->ref_idx[LIST_0];
-  char  **ref_pic_l1 = motion->ref_idx[LIST_1];
-
-  PixelPos mb[4];  
-  get_neighbors(currMB, mb, 0, 0, 16);
-
-  if (currMB->list_offset)
-  {
-    if(currMB->mbAddrX & 0x01)
-    {
-      colocated = &currSlice->p_colocated->bottom;
-    }
-    else
-    {
-      colocated = &currSlice->p_colocated->top;
-    }
-  }
-  else
-  {
-    colocated = &currSlice->p_colocated->frame;
-  }
-
-  if (currMB->mb_field)
-  {
-    l0_refA = mb[0].available
-      ? (p_Vid->mb_data[mb[0].mb_addr].mb_field  || ref_pic_l0[mb[0].pos_y][mb[0].pos_x] < 0
-      ?  ref_pic_l0[mb[0].pos_y][mb[0].pos_x]
-    :  ref_pic_l0[mb[0].pos_y][mb[0].pos_x] * 2) : -1;
-
-    l0_refB = mb[1].available
-      ? (p_Vid->mb_data[mb[1].mb_addr].mb_field || ref_pic_l0[mb[1].pos_y][mb[1].pos_x] < 0
-      ?  ref_pic_l0[mb[1].pos_y][mb[1].pos_x]
-    :  ref_pic_l0[mb[1].pos_y][mb[1].pos_x] * 2) : -1;
-
-    l0_refC = mb[2].available
-      ? (p_Vid->mb_data[mb[2].mb_addr].mb_field || ref_pic_l0[mb[2].pos_y][mb[2].pos_x] < 0
-      ?  ref_pic_l0[mb[2].pos_y][mb[2].pos_x]
-    :  ref_pic_l0[mb[2].pos_y][mb[2].pos_x] * 2) : -1;
-
-    l1_refA = mb[0].available
-      ? (p_Vid->mb_data[mb[0].mb_addr].mb_field || ref_pic_l1[mb[0].pos_y][mb[0].pos_x] < 0
-      ?  ref_pic_l1[mb[0].pos_y][mb[0].pos_x]
-    :  ref_pic_l1[mb[0].pos_y][mb[0].pos_x] * 2) : -1;
-
-    l1_refB = mb[1].available
-      ? (p_Vid->mb_data[mb[1].mb_addr].mb_field || ref_pic_l1[mb[1].pos_y][mb[1].pos_x] < 0
-      ?  ref_pic_l1[mb[1].pos_y][mb[1].pos_x]
-    :  ref_pic_l1[mb[1].pos_y][mb[1].pos_x] * 2) : -1;
-
-    l1_refC = mb[2].available
-      ? (p_Vid->mb_data[mb[2].mb_addr].mb_field || ref_pic_l1[mb[2].pos_y][mb[2].pos_x] < 0
-      ?  ref_pic_l1[mb[2].pos_y][mb[2].pos_x]
-    :  ref_pic_l1[mb[2].pos_y][mb[2].pos_x] * 2) : -1;
-  }
-  else
-  {
-    l0_refA = mb[0].available
-      ? (p_Vid->mb_data[mb[0].mb_addr].mb_field || ref_pic_l0[mb[0].pos_y][mb[0].pos_x]  < 0
-      ?  ref_pic_l0[mb[0].pos_y][mb[0].pos_x] >> 1
-      :  ref_pic_l0[mb[0].pos_y][mb[0].pos_x]) : -1;
-
-    l0_refB = mb[1].available
-      ? (p_Vid->mb_data[mb[1].mb_addr].mb_field || ref_pic_l0[mb[1].pos_y][mb[1].pos_x] < 0
-      ?  ref_pic_l0[mb[1].pos_y][mb[1].pos_x] >> 1
-      :  ref_pic_l0[mb[1].pos_y][mb[1].pos_x]) : -1;
-
-    l0_refC = mb[2].available
-      ? (p_Vid->mb_data[mb[2].mb_addr].mb_field || ref_pic_l0[mb[2].pos_y][mb[2].pos_x] < 0
-      ?  ref_pic_l0[mb[2].pos_y][mb[2].pos_x] >> 1
-      :  ref_pic_l0[mb[2].pos_y][mb[2].pos_x]) : -1;
-
-    l1_refA = mb[0].available
-      ? (p_Vid->mb_data[mb[0].mb_addr].mb_field || ref_pic_l1[mb[0].pos_y][mb[0].pos_x] < 0
-      ?  ref_pic_l1[mb[0].pos_y][mb[0].pos_x] >> 1
-      :  ref_pic_l1[mb[0].pos_y][mb[0].pos_x]) : -1;
-
-    l1_refB = mb[1].available
-      ? (p_Vid->mb_data[mb[1].mb_addr].mb_field || ref_pic_l1[mb[1].pos_y][mb[1].pos_x] < 0
-      ?  ref_pic_l1[mb[1].pos_y][mb[1].pos_x] >> 1
-      :  ref_pic_l1[mb[1].pos_y][mb[1].pos_x]) : -1;
-
-    l1_refC = mb[2].available
-      ? (p_Vid->mb_data[mb[2].mb_addr].mb_field || ref_pic_l1[mb[2].pos_y][mb[2].pos_x] < 0
-      ?  ref_pic_l1[mb[2].pos_y][mb[2].pos_x] >> 1
-      :  ref_pic_l1[mb[2].pos_y][mb[2].pos_x]) : -1;
-  }
-
-  l0_refX = (short) ((l0_refA >= 0 && l0_refB >= 0) ? imin(l0_refA,l0_refB): imax(l0_refA,l0_refB));
-  l0_refX = (short) ((l0_refX >= 0 && l0_refC >= 0) ? imin(l0_refX,l0_refC): imax(l0_refX,l0_refC));
-
-  l1_refX = (short) ((l1_refA >= 0 && l1_refB >= 0) ? imin(l1_refA,l1_refB): imax(l1_refA,l1_refB));
-  l1_refX = (short) ((l1_refX >= 0 && l1_refC >= 0) ? imin(l1_refX,l1_refC): imax(l1_refX,l1_refC));
-
-  if (l0_refX >=0)
-    currMB->GetMVPredictor (currMB, mb, pmvfw, l0_refX, motion->ref_idx[LIST_0], motion->mv[LIST_0], 0, 0, 16, 16);
-
-  if (l1_refX >=0)
-    currMB->GetMVPredictor (currMB, mb, pmvbw, l1_refX, motion->ref_idx[LIST_1], motion->mv[LIST_1], 0, 0, 16, 16);
-
-  for (block_y=0; block_y<4; block_y++)
-  {
-    pic_block_y  = currMB->block_y + block_y;
-    opic_block_y = (currMB->opix_y >> 2) + block_y;
-
-    for (block_x=0; block_x<4; block_x++)
-    {
-      pic_block_x  = currMB->block_x + block_x;
-      direct_ref_idx = currSlice->direct_ref_idx[pic_block_y][pic_block_x];
-      opic_block_x = (currMB->pix_x >> 2) + block_x;
-
-      all_mvs = currSlice->all_mv;
-
-      if (l0_refX >=0)
-      {
-        if (!l0_refX  && !colocated->moving_block[opic_block_y][opic_block_x])
-        {
-          memset(all_mvs[LIST_0][0][0][block_y][block_x], 0, 2 * sizeof(short));
-          direct_ref_idx[LIST_0] = 0;
-        }
-        else
-        {
-          memcpy(all_mvs[LIST_0][l0_refX][0][block_y][block_x], pmvfw, 2 * sizeof(short));
-          direct_ref_idx[LIST_0] = (char)l0_refX;
-        }
-      }
-      else
-      {
-        memset(all_mvs[LIST_0][0][0][block_y][block_x], 0, 2 * sizeof(short));
-        direct_ref_idx[LIST_0] = -1;
-      }
-
-      if (l1_refX >=0)
-      {
-        if(l1_refX==0 && !colocated->moving_block[opic_block_y][opic_block_x])
-        {
-          memset(all_mvs[LIST_1][0][0][block_y][block_x], 0, 2 * sizeof(short));
-          direct_ref_idx[LIST_1] = (char)l1_refX;
-        }
-        else
-        {
-          memcpy(all_mvs[LIST_1][l1_refX][0][block_y][block_x], pmvbw, 2 * sizeof(short));
-          direct_ref_idx[LIST_1] = (char)l1_refX;
-        }
-      }
-      else
-      {
-        memset(all_mvs[LIST_1][0][0][block_y][block_x], 0, 2 * sizeof(short));
-        direct_ref_idx[LIST_1] = -1;
-      }
-
-     // Test Level Limits if satisfied.
-
-      // Test Level Limits if satisfied.
-      if ((out_of_bounds_mvs(p_Vid, all_mvs[LIST_0][l0_refX < 0? 0 : l0_refX][0][block_y][block_x])
-        ||  out_of_bounds_mvs(p_Vid, all_mvs[LIST_1][l1_refX < 0? 0 : l1_refX][0][block_y][block_x])))
-      {
-        direct_ref_idx[LIST_0] = -1;
-        direct_ref_idx[LIST_1] = -1;
-        currSlice->direct_pdir   [pic_block_y][pic_block_x]         = -1;
-      }     
-      else
-      {
-        if (l0_refX < 0 && l1_refX < 0)
-        {
-          direct_ref_idx[LIST_0] = direct_ref_idx[LIST_1] = 0;
-          l0_refX = 0;
-          l1_refX = 0;
-        }
-
-          if      (direct_ref_idx[LIST_1] == -1)
-            currSlice->direct_pdir[pic_block_y][pic_block_x] = 0;
-          else if (direct_ref_idx[LIST_0] == -1)
-            currSlice->direct_pdir[pic_block_y][pic_block_x] = 1;
-          else if (p_Vid->active_pps->weighted_bipred_idc == 1)
-          {
-            int weight_sum, i;
-            Boolean invalid_wp = FALSE;
-            for (i=0;i< (p_Vid->active_sps->chroma_format_idc == YUV400 ? 1 : 3); i++)
-            {
-              weight_sum = currSlice->wbp_weight[0][l0_refX][l1_refX][i] + currSlice->wbp_weight[1][l0_refX][l1_refX][i];
-              if (weight_sum < -128 ||  weight_sum > 127)
-              {
-                invalid_wp = TRUE;
-                break;
-              }
-            }
-            if (invalid_wp == FALSE)
-              currSlice->direct_pdir[pic_block_y][pic_block_x] = 2;
-            else
-            {
-              direct_ref_idx[LIST_0] = -1;
-              direct_ref_idx[LIST_1] = -1;
-              currSlice->direct_pdir           [pic_block_y][pic_block_x] = -1;
-            }
-          }
-          else
-            currSlice->direct_pdir[pic_block_y][pic_block_x] = 2;
-        }
-    }
-  }
-}

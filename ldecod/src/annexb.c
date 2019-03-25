@@ -15,8 +15,9 @@
 #include "global.h"
 #include "annexb.h"
 #include "memalloc.h"
+#include "fast_memory.h"
 
-static const unsigned int IOBUFFERSIZE = 65536;
+static const int IOBUFFERSIZE = 512*1024; //65536;
 
 void malloc_annex_b(VideoParameters *p_Vid)
 {
@@ -24,8 +25,13 @@ void malloc_annex_b(VideoParameters *p_Vid)
   {
     snprintf(errortext, ET_SIZE, "Memory allocation for Annex_B file failed");
     error(errortext,100);
-  }  
+  }
+  if ((p_Vid->annex_b->Buf = (byte*) malloc(p_Vid->nalu->max_size)) == NULL)
+  {
+    error("GetAnnexbNALU: Buf", 101);
+  }
 }
+
 
 void init_annex_b(ANNEXB_t *annex_b)
 {
@@ -40,8 +46,10 @@ void init_annex_b(ANNEXB_t *annex_b)
 
 void free_annex_b(VideoParameters *p_Vid)
 {
+  free(p_Vid->annex_b->Buf);
+  p_Vid->annex_b->Buf = NULL;
   free(p_Vid->annex_b);
-  p_Vid->annex_b = NULL;
+  p_Vid->annex_b = NULL;  
 }
 
 /*!
@@ -52,7 +60,7 @@ void free_annex_b(VideoParameters *p_Vid)
 */
 static inline int getChunk(ANNEXB_t *annex_b)
 {
-  unsigned int readbytes = read (annex_b->BitStreamFile, annex_b->iobuffer, IOBUFFERSIZE);
+  unsigned int readbytes = read (annex_b->BitStreamFile, annex_b->iobuffer, annex_b->iIOBufferSize); 
   if (0==readbytes)
   {
     annex_b->is_eof = TRUE;
@@ -63,7 +71,6 @@ static inline int getChunk(ANNEXB_t *annex_b)
   annex_b->iobufferread = annex_b->iobuffer;
   return readbytes;
 }
-
 
 /*!
 ************************************************************************
@@ -81,7 +88,6 @@ static inline byte getfbyte(ANNEXB_t *annex_b)
   annex_b->bytesinbuffer--;
   return (*annex_b->iobufferread++);
 }
-
 
 /*!
  ************************************************************************
@@ -136,6 +142,7 @@ static inline int FindStartCode (unsigned char *Buf, int zeros_in_startcode)
  *
  ************************************************************************
  */
+
 int GetAnnexbNALU (VideoParameters *p_Vid, NALU_t *nalu)
 {
   ANNEXB_t *annex_b = p_Vid->annex_b;
@@ -143,12 +150,7 @@ int GetAnnexbNALU (VideoParameters *p_Vid, NALU_t *nalu)
   int info2 = 0, info3 = 0, pos = 0;
   int StartCodeFound = 0;
   int LeadingZero8BitsCount = 0;
-  byte *pBuf; 
-
-  if ((annex_b->Buf = (byte*) calloc (nalu->max_size , sizeof(char))) == NULL) 
-    no_mem_exit("GetAnnexbNALU: Buf");
-
-  pBuf = annex_b->Buf;
+  byte *pBuf = annex_b->Buf;
 
   if (annex_b->nextstartcodebytes != 0)
   {
@@ -171,7 +173,6 @@ int GetAnnexbNALU (VideoParameters *p_Vid, NALU_t *nalu)
   }
   if(annex_b->is_eof == TRUE)
   {
-    free (annex_b->Buf);
     if(pos==0)
     {
       return 0;
@@ -186,7 +187,6 @@ int GetAnnexbNALU (VideoParameters *p_Vid, NALU_t *nalu)
   if(*(pBuf - 1) != 1 || pos < 3)
   {
     printf ("GetAnnexbNALU: no Start Code at the beginning of the NALU, return -1\n");
-    free (annex_b->Buf);
     return -1;
   }
 
@@ -206,7 +206,6 @@ int GetAnnexbNALU (VideoParameters *p_Vid, NALU_t *nalu)
   if(!annex_b->IsFirstByteStreamNALU && LeadingZero8BitsCount > 0)
   {
     printf ("GetAnnexbNALU: The leading_zero_8bits syntax can only be present in the first byte stream NAL unit, return -1\n");
-    free (annex_b->Buf);
     return -1;
   }
 
@@ -236,8 +235,6 @@ int GetAnnexbNALU (VideoParameters *p_Vid, NALU_t *nalu)
         nalu->startcodeprefix_len == 4?"long":"short", nalu->len, nalu->forbidden_bit, nalu->nal_reference_idc, nalu->nal_unit_type);
       fflush (p_Dec->p_trace);
 #endif
-
-      free (annex_b->Buf);
       return (pos - 1);
     }
 
@@ -247,7 +244,7 @@ int GetAnnexbNALU (VideoParameters *p_Vid, NALU_t *nalu)
     if(info3 != 1)
     {
       info2 = FindStartCode(pBuf - 3, 2);
-      StartCodeFound = (info2 == 1);
+      StartCodeFound = info2 & 0x01;
     }
     else
       StartCodeFound = 1;
@@ -267,7 +264,6 @@ int GetAnnexbNALU (VideoParameters *p_Vid, NALU_t *nalu)
   else
   {
     printf(" Panic: Error in next start code search \n");
-    free (annex_b->Buf);
     return -1;
   }
 
@@ -280,7 +276,7 @@ int GetAnnexbNALU (VideoParameters *p_Vid, NALU_t *nalu)
   // is the size of the NALU.
 
   nalu->len = pos - LeadingZero8BitsCount;
-  memcpy (nalu->buf, annex_b->Buf + LeadingZero8BitsCount, nalu->len);
+  fast_memcpy (nalu->buf, annex_b->Buf + LeadingZero8BitsCount, nalu->len);
   nalu->forbidden_bit     = (*(nalu->buf) >> 7) & 1;
   nalu->nal_reference_idc = (NalRefIdc) ((*(nalu->buf) >> 5) & 3);
   nalu->nal_unit_type     = (NaluType) ((*(nalu->buf)) & 0x1f);
@@ -294,9 +290,10 @@ int GetAnnexbNALU (VideoParameters *p_Vid, NALU_t *nalu)
   fflush (p_Dec->p_trace);
 #endif
 
-  free (annex_b->Buf);
   return (pos);
+
 }
+
 
 
 /*!
@@ -319,7 +316,9 @@ void OpenAnnexBFile (VideoParameters *p_Vid, char *fn)
     snprintf (errortext, ET_SIZE, "Cannot open Annex B ByteStream file '%s'", fn);
     error(errortext,500);
   }
-  annex_b->iobuffer = malloc (IOBUFFERSIZE * sizeof (byte));
+
+  annex_b->iIOBufferSize = IOBUFFERSIZE * sizeof (byte);
+  annex_b->iobuffer = malloc (annex_b->iIOBufferSize);
   if (NULL == annex_b->iobuffer)
   {
     error ("OpenAnnexBFile: cannot allocate IO buffer",500);
@@ -347,3 +346,10 @@ void CloseAnnexBFile(VideoParameters *p_Vid)
   annex_b->iobuffer = NULL;
 }
 
+
+void ResetAnnexB(ANNEXB_t *annex_b)
+{
+  annex_b->is_eof = FALSE;
+  annex_b->bytesinbuffer = 0;
+  annex_b->iobufferread = annex_b->iobuffer;
+}

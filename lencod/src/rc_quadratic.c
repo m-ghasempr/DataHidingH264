@@ -2542,7 +2542,6 @@ int rc_handle_mb( Macroblock *currMB, int prev_mb )
             if(p_Vid->active_sps->frame_mbs_only_flag)
             {
               p_Vid->BasicUnitQP = p_Vid->updateQP(p_Vid, p_Inp, p_quad, p_gen, p_gen->TopFieldFlag) - p_quad->bitdepth_qp_scale;
-
             }
             // picture adaptive field/frame coding
             else if(p_Inp->MbInterlace || ((p_Inp->PicInterlace!=FRAME_CODING) && (p_gen->NoGranularFieldRC==0)))

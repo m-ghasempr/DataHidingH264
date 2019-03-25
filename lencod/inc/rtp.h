@@ -45,21 +45,6 @@ typedef struct
   unsigned int packlen;    //!< length of packet, typically paylen+12
 } RTPpacket_t;
 
-#if 0
-extern int  ComposeRTPPacket (RTPpacket_t *p);
-extern int  DecomposeRTPpacket (RTPpacket_t *p);
-extern int  WriteRTPPacket (RTPpacket_t *p, FILE *f);
-extern void DumpRTPHeader (RTPpacket_t *p);
-extern int  RTPWriteBits (int Marker, int PacketType, void * bitstream,
-                   int BitStreamLenInByte, FILE *out);
-
-extern Boolean isAggregationPacket(VideoParameters *p_Vid);
-extern int aggregationRTPWriteBits (int Marker, int PacketType, int subPacketType, void * bitstream, int BitStreamLenInByte, FILE *out);
-
-extern void begin_sub_sequence_rtp(VideoParameters *p_Vid, InputParameters *p_Inp);
-extern void end_sub_sequence_rtp  (VideoParameters *p_Vid, InputParameters *p_Inp);
-#endif
-
 extern void RTPUpdateTimestamp (VideoParameters *p_Vid, int tr);
 extern void OpenRTPFile        (VideoParameters *p_Vid, char *Filename);
 extern void CloseRTPFile       (VideoParameters *p_Vid);

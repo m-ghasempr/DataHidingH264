@@ -30,9 +30,9 @@ static FrameUnitStruct * alloc_frame_buffer( InputParameters *p_Inp, int num_fra
 static void free_frame_buffer( FrameUnitStruct *p_frm_struct, int num_frames );
 
 static inline int check_power_of_two( int number );
-static int  establish_random_access( InputParameters *p_Inp, SeqStructure *p_seq_struct, int curr_frame, int avail_frames );
-static int  establish_intra( InputParameters *p_Inp, SeqStructure *p_seq_struct, int curr_frame, int avail_frames );
-static int  establish_sp( InputParameters *p_Inp, SeqStructure *p_seq_struct, int curr_frame, int avail_frames );
+static int  establish_random_access( InputParameters *p_Inp, SeqStructure *p_seq_struct, int curr_frame, int avail_frames, int sim );
+static int  establish_intra( InputParameters *p_Inp, SeqStructure *p_seq_struct, int curr_frame, int avail_frames, int sim );
+static int  establish_sp( InputParameters *p_Inp, SeqStructure *p_seq_struct, int curr_frame, int avail_frames, int sim );
 static int  get_fixed_frame( InputParameters *p_Inp, SeqStructure *p_seq_struct, int curr_frame, int avail_frames );
 static int  get_prd_index( InputParameters *p_Inp, SeqStructure *p_seq_struct, int num_frames );
 static int  get_idr_index( InputParameters *p_Inp, SeqStructure *p_seq_struct, int num_frames );
@@ -41,8 +41,11 @@ static void populate_frame( InputParameters *p_Inp, SeqStructure *p_seq_struct, 
 static void update_frame_indices( SeqStructure *p_seq_struct, FrameUnitStruct *p_frm_struct, int curr_frame, int pred_frame );
 static int  populate_reg_pred_struct_atom( VideoParameters *p_Vid, InputParameters *p_Inp, SeqStructure *p_seq_struct, 
                                   int curr_frame, int proc_frames, int *terminate_pop );
-static int  populate_rnd_acc_pred_struct_atom( VideoParameters *p_Vid, InputParameters *p_Inp, SeqStructure *p_seq_struct, 
+static int  populate_rnd_acc_pred_struct_atom( VideoParameters *p_Vid, InputParameters *p_Inp, SeqStructure *p_seq_struct,
                                       int curr_frame, int proc_frames, int *terminate_pop, int is_idr, int no_rnd_acc );
+#if (MVC_EXTENSION_ENABLE)
+static void copy_frame_mvc( InputParameters *p_Inp, FrameUnitStruct *p_src, FrameUnitStruct *p_dst, int num_slices, int view_id );
+#endif
 
 /*!
  ***********************************************************************
@@ -283,8 +286,8 @@ static PicStructure * alloc_pic_struct( int num_slices, int *memory_size )
   *memory_size += sizeof( PicStructure );
 
   p_pic->num_slices = num_slices; // this could also be set on a frame basis
-  p_pic->p_slice = (SliceStructure *)malloc( num_slices * sizeof( SliceStructure ) );
-  if ( p_pic->p_slice == NULL )
+  p_pic->p_Slice = (SliceStructure *)malloc( num_slices * sizeof( SliceStructure ) );
+  if ( p_pic->p_Slice == NULL )
   {
     fprintf(stderr, "\nNot enough memory or error during memory allocation: alloc_pic_struct()");
     exit(1);
@@ -307,10 +310,10 @@ static void free_pic_struct( PicStructure *p_pic )
 {
   if ( p_pic != NULL )
   {
-    if ( p_pic->p_slice != NULL )
+    if ( p_pic->p_Slice != NULL )
     {
-      free( p_pic->p_slice );
-      p_pic->p_slice = NULL;
+      free( p_pic->p_Slice );
+      p_pic->p_Slice = NULL;
     }
     free( p_pic );
   }
@@ -430,7 +433,11 @@ static void free_frame_buffer( FrameUnitStruct *p_frm_struct, int num_frames )
 
 SeqStructure * init_seq_structure( VideoParameters *p_Vid, InputParameters *p_Inp, int *memory_size )
 {
+#if (MVC_EXTENSION_ENABLE)
+  int start, end;
+#endif
   SeqStructure *p_seq_struct = (SeqStructure *)malloc( sizeof( SeqStructure ) );
+  int frames_to_pop;
 
   if ( p_seq_struct == NULL )
   {
@@ -446,7 +453,7 @@ SeqStructure * init_seq_structure( VideoParameters *p_Vid, InputParameters *p_In
 
   *memory_size += sizeof( SeqStructure );
 
-  p_seq_struct->max_num_slices           = (p_Inp->slice_mode == 1) ? (p_Vid->FrameSizeInMbs / p_Inp->slice_argument) : 1;
+  p_seq_struct->max_num_slices           = (p_Inp->slice_mode == 1) ? imax(1, p_Vid->FrameSizeInMbs / p_Inp->slice_argument) : 1;
   p_seq_struct->num_frames               = p_Vid->frm_struct_buffer;
   p_seq_struct->p_frm                    = alloc_frame_buffer( p_Inp, p_seq_struct->num_frames, p_seq_struct->max_num_slices, memory_size );
   p_seq_struct->last_random_access_frame = 0;
@@ -462,12 +469,31 @@ SeqStructure * init_seq_structure( VideoParameters *p_Vid, InputParameters *p_In
   p_seq_struct->last_sp_frame            = 0;
   p_seq_struct->last_sp_disp             = 0;
 
+#if (MVC_EXTENSION_ENABLE)
+  p_seq_struct->num_frames_mvc           = p_seq_struct->num_frames << 1; // two views hence twice the buffer size
+  p_seq_struct->p_frm_mvc                = alloc_frame_buffer( p_Inp, p_seq_struct->num_frames_mvc, p_seq_struct->max_num_slices, memory_size );
+#endif
+
   // initialize prediction structures
   init_pred_struct( p_Vid, p_Inp, p_seq_struct, memory_size );
   init_gop_struct( p_Inp, p_seq_struct, memory_size );
 
+  {
+    frames_to_pop = p_Vid->frm_struct_buffer;
+  }
+
   // populate frames
-  populate_frm_struct( p_Vid, p_Inp, p_seq_struct, p_Vid->frm_struct_buffer, p_Inp->no_frames );
+#if (MVC_EXTENSION_ENABLE)
+  start = p_seq_struct->pop_start_frame;
+  populate_frm_struct( p_Vid, p_Inp, p_seq_struct, frames_to_pop, p_Inp->no_frames );
+  if ( p_Inp->num_of_views == 2 )
+  {
+    end = p_seq_struct->pop_start_frame;
+    populate_frm_struct_mvc( p_Vid, p_Inp, p_seq_struct, start, end );
+  }
+#else
+  populate_frm_struct( p_Vid, p_Inp, p_seq_struct, frames_to_pop, p_Inp->no_frames );
+#endif
 
   return p_seq_struct;
 }
@@ -485,6 +511,10 @@ void free_seq_structure( SeqStructure *p_seq_struct )
 {
   free_frame_buffer( p_seq_struct->p_frm, p_seq_struct->num_frames );
   p_seq_struct->p_frm = NULL;
+#if (MVC_EXTENSION_ENABLE)
+  free_frame_buffer( p_seq_struct->p_frm_mvc, p_seq_struct->num_frames_mvc );
+  p_seq_struct->p_frm_mvc = NULL;
+#endif
   free_gop_struct( p_seq_struct );
   p_seq_struct->p_gop = NULL;
   free_pred_struct( p_seq_struct );
@@ -508,14 +538,17 @@ void free_seq_structure( SeqStructure *p_seq_struct )
  *    coding order of the current frame
  * \param avail_frames
  *    frames available for population
+ * \param sim
+ *    simulate the insertion: this disables checks about available frames ;)
  * \return
  *    returns 1 when current frame will be a random access frame \n
  *    if PreferDispOrder == 1 then it returns 1 + disp_offset (for the random access frame)
  ***********************************************************************
  */
 
-static int establish_random_access( InputParameters *p_Inp, SeqStructure *p_seq_struct, int curr_frame, int avail_frames )
+static int establish_random_access( InputParameters *p_Inp, SeqStructure *p_seq_struct, int curr_frame, int avail_frames, int sim )
 {
+  int delta;
   int is_random_access = 0;
 
   if ( !curr_frame ) // first frame in coding order
@@ -535,10 +568,21 @@ static int establish_random_access( InputParameters *p_Inp, SeqStructure *p_seq_
       {
         p_cur_gop = p_seq_struct->p_gop + idx;
         // check if length of structure overflows the available frame number
-        if ( p_cur_gop->length <= avail_frames )
+        if ( sim )
         {
-          is_random_access = 1 + idx;
-          break;
+          if ( (curr_frame + p_cur_gop->length) <= p_Inp->no_frames )
+          {
+            is_random_access = 1 + idx;
+            break;
+          }
+        }
+        else
+        {
+          if ( p_cur_gop->length <= avail_frames )
+          {
+            is_random_access = 1 + idx;
+            break;
+          }
         }
       }
     }
@@ -557,13 +601,15 @@ static int establish_random_access( InputParameters *p_Inp, SeqStructure *p_seq_
         }
         break;
       case 1:
-        if ( (curr_frame - p_seq_struct->last_random_access_frame) % p_Inp->idr_period == 0 )
+        delta = curr_frame - p_seq_struct->last_random_access_frame;
+        if ( delta >= p_Inp->idr_period && delta >= p_Inp->MinIDRDistance )
         {
           is_random_access = 1;
         }
         break;
       case 2:
-        if ( (curr_frame - imax( p_seq_struct->last_random_access_frame, p_seq_struct->last_intra_frame)) % p_Inp->idr_period == 0 )
+        delta = curr_frame - imax( p_seq_struct->last_random_access_frame, p_seq_struct->last_intra_frame);
+        if ( delta >= p_Inp->idr_period && delta >= p_Inp->MinIDRDistance )
         {
           is_random_access = 1;
         }
@@ -582,9 +628,19 @@ static int establish_random_access( InputParameters *p_Inp, SeqStructure *p_seq_
       {
         p_cur_gop = p_seq_struct->p_gop + idx;
         // check if length of structure overflows the available frame number
-        if ( p_cur_gop->length > avail_frames )
+        if ( sim )
         {
-          continue;
+          if ( (curr_frame + p_cur_gop->length) > p_Inp->no_frames )
+          {
+            continue;
+          }
+        }
+        else
+        {
+          if ( p_cur_gop->length > avail_frames )
+          {
+            continue;
+          }
         }
         // recall that frame "0" is the random access frame in those prediction structures
         offset = p_cur_gop->p_frm[0].disp_offset;
@@ -600,13 +656,15 @@ static int establish_random_access( InputParameters *p_Inp, SeqStructure *p_seq_
           }
           break;
         case 1:
-          if ( !curr_frame || ((curr_frame + offset) - p_seq_struct->last_rand_access_disp) % p_Inp->idr_period == 0 )
+          delta = (curr_frame + offset) - p_seq_struct->last_rand_access_disp;
+          if ( !curr_frame || (delta >= p_Inp->idr_period && delta >= p_Inp->MinIDRDistance) )
           {
             is_random_access = 1 + idx;
           }
           break;
         case 2:
-          if ( !curr_frame || ((curr_frame + offset) - imax( p_seq_struct->last_rand_access_disp, p_seq_struct->last_intra_disp)) % p_Inp->idr_period == 0 )
+          delta = (curr_frame + offset) - imax( p_seq_struct->last_rand_access_disp, p_seq_struct->last_intra_disp);
+          if ( !curr_frame || (delta >= p_Inp->idr_period && delta >= p_Inp->MinIDRDistance) )
           {
             is_random_access = 1 + idx;
           }
@@ -642,7 +700,7 @@ static int establish_random_access( InputParameters *p_Inp, SeqStructure *p_seq_
  ***********************************************************************
  */
 
-static int establish_intra( InputParameters *p_Inp, SeqStructure *p_seq_struct, int curr_frame, int avail_frames )
+static int establish_intra( InputParameters *p_Inp, SeqStructure *p_seq_struct, int curr_frame, int avail_frames, int sim )
 {
   int is_intra = 0;
 
@@ -683,9 +741,19 @@ static int establish_intra( InputParameters *p_Inp, SeqStructure *p_seq_struct, 
       {
         p_cur_gop = p_seq_struct->p_gop + idx;
         // check if length of structure overflows the available frame number
-        if ( p_cur_gop->length > avail_frames )
+        if ( sim )
         {
-          continue;
+          if ( (curr_frame + p_cur_gop->length) > p_Inp->no_frames )
+          {
+            continue;
+          }
+        }
+        else
+        {
+          if ( p_cur_gop->length > avail_frames )
+          {
+            continue;
+          }
         }
         // recall that frame "0" is the random access frame in those prediction structures
         offset = p_cur_gop->p_frm[0].disp_offset;
@@ -737,7 +805,7 @@ static int establish_intra( InputParameters *p_Inp, SeqStructure *p_seq_struct, 
  ***********************************************************************
  */
 
-static int establish_sp( InputParameters *p_Inp, SeqStructure *p_seq_struct, int curr_frame, int avail_frames )
+static int establish_sp( InputParameters *p_Inp, SeqStructure *p_seq_struct, int curr_frame, int avail_frames, int sim )
 {
   int is_sp = 0;
 
@@ -762,10 +830,21 @@ static int establish_sp( InputParameters *p_Inp, SeqStructure *p_seq_struct, int
       {
         p_cur_gop = p_seq_struct->p_gop + idx;
         // check if length of structure overflows the available frame number
-        if ( p_cur_gop->length > avail_frames )
+        if ( sim )
         {
-          continue;
+          if ( (curr_frame + p_cur_gop->length) > p_Inp->no_frames )
+          {
+            continue;
+          }
         }
+        else
+        {
+          if ( p_cur_gop->length > avail_frames )
+          {
+            continue;
+          }
+        }
+
         // recall that frame "0" is the random access frame in those prediction structures
         offset = p_cur_gop->p_frm[0].disp_offset;
 
@@ -808,9 +887,9 @@ static int get_fixed_frame( InputParameters *p_Inp, SeqStructure *p_seq_struct, 
 
   while ( idx < avail_frames )
   {
-    is_rnd_acc = establish_random_access( p_Inp, p_seq_struct, curr_frame + idx, avail_frames - idx );
-    is_intra   = establish_intra( p_Inp, p_seq_struct, curr_frame + idx, avail_frames - idx );
-    is_sp      = establish_sp( p_Inp, p_seq_struct, curr_frame + idx, avail_frames - idx );
+    is_rnd_acc = establish_random_access( p_Inp, p_seq_struct, curr_frame + idx, avail_frames - idx, 1 );
+    is_intra   = establish_intra( p_Inp, p_seq_struct, curr_frame + idx, avail_frames - idx, 1 );
+    is_sp      = establish_sp( p_Inp, p_seq_struct, curr_frame + idx, avail_frames - idx, 1 );
     if ( is_rnd_acc || is_intra || is_sp )
     {
       return idx;
@@ -931,7 +1010,23 @@ static void init_gop_struct( InputParameters *p_Inp, SeqStructure *p_seq_struct,
   PredStructAtom *p_cur_gop, *p_cur_prd, *p_cur_prd_tail = NULL;
   PredStructFrm *p_dst, *p_src;
 
-  p_seq_struct->num_gops = ( ( (p_Inp->idr_period != 1 && p_Inp->intra_period != 1) && (p_Inp->intra_delay || !p_Inp->EnableIDRGOP) ) ? 1 : 0 ) + 1;
+  // derive number of gop atoms
+  if ( p_Inp->idr_period == 1 || p_Inp->intra_period == 1 )
+  {
+    p_seq_struct->num_gops = 1;
+  }
+  else if ( p_Inp->intra_delay && !p_Inp->EnableIDRGOP )
+  {
+    p_seq_struct->num_gops = 3;
+  }
+  else if ( p_Inp->intra_delay || !p_Inp->EnableIDRGOP )
+  {
+    p_seq_struct->num_gops = 2;
+  }
+  else
+  {
+    p_seq_struct->num_gops = 1;
+  }
 
   // we assume that intra_delay is ALWAYS lesser than the idr_period
   if ( p_Inp->idr_period )
@@ -958,7 +1053,6 @@ static void init_gop_struct( InputParameters *p_Inp, SeqStructure *p_seq_struct,
   p_dst->layer         = 0;
   p_dst->slice_qp      = 0;
   p_dst->random_access = 1;
-
   p_dst->temporal_layer = 0;
 
   // intra-delayed IDR GOP
@@ -969,14 +1063,8 @@ static void init_gop_struct( InputParameters *p_Inp, SeqStructure *p_seq_struct,
     int idr_idx = 0;
     int curr_prd;
 
-    if ( p_Inp->EnableIDRGOP == 0 )
-    {
-      // longest structure
-      p_cur_prd_tail = p_seq_struct->p_prd + p_seq_struct->num_prds - 1;
-    }
-
     // allocate atoms
-    length = p_Inp->intra_delay + 1 + ( !p_Inp->EnableIDRGOP ? (p_cur_prd_tail->length - 1) : 0 );
+    length = p_Inp->intra_delay + 1;
     p_cur_gop = p_seq_struct->p_gop + 1;
     p_cur_gop->length = length;
     p_cur_gop->gop_levels = 1;
@@ -986,12 +1074,12 @@ static void init_gop_struct( InputParameters *p_Inp, SeqStructure *p_seq_struct,
     // IDR picture
     p_cur_gop = p_seq_struct->p_gop + 1;
     p_dst = p_cur_gop->p_frm + idr_idx;
-    p_dst->slice_type     = I_SLICE;
-    p_dst->nal_ref_idc    = p_Inp->EnableOpenGOP ? NALU_PRIORITY_HIGH : NALU_PRIORITY_HIGHEST;
-    p_dst->disp_offset    = p_Inp->intra_delay;
-    p_dst->layer          = 0;
-    p_dst->slice_qp       = 0;
-    p_dst->random_access  = 1;
+    p_dst->slice_type    = I_SLICE;
+    p_dst->nal_ref_idc   = p_Inp->EnableOpenGOP ? NALU_PRIORITY_HIGH : NALU_PRIORITY_HIGHEST;
+    p_dst->disp_offset   = p_Inp->intra_delay;
+    p_dst->layer         = 0;
+    p_dst->slice_qp      = 0;
+    p_dst->random_access = 1;
     p_dst->temporal_layer = 0;
 
     idr_idx++;
@@ -1009,40 +1097,95 @@ static void init_gop_struct( InputParameters *p_Inp, SeqStructure *p_seq_struct,
         p_dst = p_cur_gop->p_frm + idr_idx;
         p_src = p_cur_prd->p_frm + idx;
 
-        p_dst->slice_type     = p_src->slice_type;
-        p_dst->nal_ref_idc    = p_src->nal_ref_idc;
-        p_dst->disp_offset    = start_frame - p_src->disp_offset;
-        p_dst->layer          = p_src->layer;
-        p_dst->slice_qp       = p_src->slice_qp;
-        p_dst->random_access  = 0;
+        p_dst->slice_type    = p_src->slice_type;
+        p_dst->nal_ref_idc   = p_src->nal_ref_idc;
+        p_dst->disp_offset   = start_frame - p_src->disp_offset;
+        p_dst->layer         = p_src->layer;
+        p_dst->slice_qp      = p_src->slice_qp;
+        p_dst->random_access = 0;
         p_dst->temporal_layer = p_src->temporal_layer;
       }      
       // update start_frame
       start_frame -= p_cur_prd->length;      
     }
 
-    // for not properly terminated GOPs...
-    if ( p_Inp->EnableIDRGOP == 0 )
+    // two separate cases
+    if ( !p_Inp->EnableIDRGOP ) // an additional atom: the longest one
     {
+      proc_frames = 0;
+      start_frame = p_Inp->intra_delay - 1;
+      idr_idx = 0;
+
+      // longest structure
+      p_cur_prd_tail = p_seq_struct->p_prd + p_seq_struct->num_prds - 1;
+
+      // allocate atoms
+      length = p_Inp->intra_delay + 1 + (p_cur_prd_tail->length - 1);
+      p_cur_gop = p_seq_struct->p_gop + 2;
+      p_cur_gop->length = length;
+      p_cur_gop->gop_levels = 1;
+      p_cur_gop->p_frm = (PredStructFrm *)malloc( length * sizeof( PredStructFrm ) );
+      *memory_size += length * sizeof( PredStructFrm );
+      idr_idx = 0;
+
+      // IDR picture
+      p_cur_gop = p_seq_struct->p_gop + 2;
+      p_dst = p_cur_gop->p_frm + idr_idx;
+      p_dst->slice_type    = I_SLICE;
+      p_dst->nal_ref_idc   = p_Inp->EnableOpenGOP ? NALU_PRIORITY_HIGH : NALU_PRIORITY_HIGHEST;
+      p_dst->disp_offset   = p_Inp->intra_delay;
+      p_dst->layer         = 0;
+      p_dst->slice_qp      = 0;
+      p_dst->random_access = 1;
+      p_dst->temporal_layer = 0;
+
+      idr_idx++;
+
+      while ( proc_frames < p_Inp->intra_delay )
+      {
+        // given the available slots select the index to the pred structure to use for current segment
+        curr_prd = get_prd_index( p_Inp, p_seq_struct, p_Inp->intra_delay - proc_frames );
+        p_cur_prd = p_seq_struct->p_prd + curr_prd;
+        // set gop_levels
+        p_cur_gop->gop_levels = p_cur_prd->gop_levels;
+        // populate gop structure from selected structure
+        for ( idx = 0; idx < p_cur_prd->length; idx++, idr_idx++, proc_frames++ )
+        {
+          p_dst = p_cur_gop->p_frm + idr_idx;
+          p_src = p_cur_prd->p_frm + idx;
+
+          p_dst->slice_type    = p_src->slice_type;
+          p_dst->nal_ref_idc   = p_src->nal_ref_idc;
+          p_dst->disp_offset   = start_frame - p_src->disp_offset;
+          p_dst->layer         = p_src->layer;
+          p_dst->slice_qp      = p_src->slice_qp;
+          p_dst->random_access = 0;
+          p_dst->temporal_layer = p_src->temporal_layer;
+
+        }      
+        // update start_frame
+        start_frame -= p_cur_prd->length;      
+      }
+
       // add an offset to the display offsets
       for ( idr_idx = 0; idr_idx < (p_Inp->intra_delay + 1); idr_idx++ )
       {
         p_cur_gop->p_frm[idr_idx].disp_offset += (p_cur_prd_tail->length - 1);
       }
       p_cur_gop->gop_levels = imax( p_cur_gop->gop_levels, p_cur_prd_tail->gop_levels );
-      // and now place the prd struct *before* them (set idx to 1 to avoid copying the I/P frame, we only seek the hierarchy if it exists)
+      // and now place the prd struct *before* them in display order (set idx to 1 to avoid copying the I/P frame, we only seek the hierarchy if it exists)
       for ( idx = 1; idx < p_cur_prd_tail->length; idx++, idr_idx++ )
       {
         p_dst = p_cur_gop->p_frm + idr_idx;
         p_src = p_cur_prd_tail->p_frm + idx;
 
-        p_dst->slice_type     = p_src->slice_type;
-        p_dst->nal_ref_idc    = p_src->nal_ref_idc;
-        p_dst->disp_offset    = p_src->disp_offset;
-        p_dst->layer          = p_src->layer;
-        p_dst->slice_qp       = p_src->slice_qp;
-        p_dst->random_access  = 0;
-        p_dst->temporal_layer = p_src->temporal_layer; 
+        p_dst->slice_type    = p_src->slice_type;
+        p_dst->nal_ref_idc   = p_src->nal_ref_idc;
+        p_dst->disp_offset   = p_src->disp_offset;
+        p_dst->layer         = p_src->layer;
+        p_dst->slice_qp      = p_src->slice_qp;
+        p_dst->random_access = 0;
+        p_dst->temporal_layer = p_src->temporal_layer;
       }
     }
   }
@@ -1065,14 +1208,13 @@ static void init_gop_struct( InputParameters *p_Inp, SeqStructure *p_seq_struct,
     p_cur_gop = p_seq_struct->p_gop + 1;
     p_cur_gop->gop_levels = p_cur_prd->gop_levels;
     p_dst = p_cur_gop->p_frm + idr_idx;
-    p_dst->slice_type     = I_SLICE;
-    p_dst->nal_ref_idc    = p_Inp->EnableOpenGOP ? NALU_PRIORITY_HIGH : NALU_PRIORITY_HIGHEST;
-    p_dst->disp_offset    = p_cur_prd->p_frm[0].disp_offset;
-    p_dst->layer          = 0;
-    p_dst->slice_qp       = 0;
-    p_dst->random_access  = 1;
+    p_dst->slice_type    = I_SLICE;
+    p_dst->nal_ref_idc   = p_Inp->EnableOpenGOP ? NALU_PRIORITY_HIGH : NALU_PRIORITY_HIGHEST;
+    p_dst->disp_offset   = p_cur_prd->p_frm[0].disp_offset;
+    p_dst->layer         = 0;
+    p_dst->slice_qp      = 0;
+    p_dst->random_access = 1;
     p_dst->temporal_layer = 0;
-
     idr_idx++;
     
     // populate gop structure from selected structure
@@ -1081,13 +1223,14 @@ static void init_gop_struct( InputParameters *p_Inp, SeqStructure *p_seq_struct,
       p_dst = p_cur_gop->p_frm + idr_idx;
       p_src = p_cur_prd->p_frm + idx;
 
-      p_dst->slice_type     = p_src->slice_type;
-      p_dst->nal_ref_idc    = p_src->nal_ref_idc;
-      p_dst->disp_offset    = p_src->disp_offset;
-      p_dst->layer          = p_src->layer;
-      p_dst->slice_qp       = p_src->slice_qp;
-      p_dst->random_access  = 0;
+      p_dst->slice_type    = p_src->slice_type;
+      p_dst->nal_ref_idc   = p_src->nal_ref_idc;
+      p_dst->disp_offset   = p_src->disp_offset;
+      p_dst->layer         = p_src->layer;
+      p_dst->slice_qp      = p_src->slice_qp;
+      p_dst->random_access = 0;
       p_dst->temporal_layer = p_src->temporal_layer;
+
     }      
   }
 }
@@ -1153,7 +1296,14 @@ static void init_pred_struct( VideoParameters *p_Vid, InputParameters *p_Inp, Se
       break;
     case 3:
       // check again if power of two
-      pred_mode = (length == (p_Inp->NumberBFrames + 1)) ? 3 : (check_power_of_two( length ) ? 2 : ( length > 4 ? 1 : 0 ));
+      if ( p_Inp->LowDelay )
+      {
+        pred_mode = 3;
+      }
+      else
+      {
+        pred_mode = (length == (p_Inp->NumberBFrames + 1)) ? 3 : (check_power_of_two( length ) ? 2 : ( length > 4 ? 1 : 0 ));
+      }
       break;
     }
 
@@ -1165,25 +1315,26 @@ static void init_pred_struct( VideoParameters *p_Vid, InputParameters *p_Inp, Se
     case 0: // disposable B-pics of equal priority
       p_dst = p_cur_prd->p_frm + 0;
 
-      p_dst->slice_type     = ( p_Inp->BRefPictures == 2 ) ? B_SLICE : P_SLICE;
-      p_dst->nal_ref_idc    = NALU_PRIORITY_HIGH;
-      p_dst->disp_offset    = length - 1;
-      p_dst->layer          = 0;
-      p_dst->slice_qp       = ( p_Inp->BRefPictures == 2 ) ? (p_Inp->qp[P_SLICE] - p_Inp->qp[B_SLICE]) : 0; // ensure all types of frames have identical QP (modifiers)
-      p_dst->random_access  = 0;
+      p_dst->slice_type    = ( p_Inp->BRefPictures == 2 ) ? B_SLICE : P_SLICE;
+      p_dst->nal_ref_idc   = NALU_PRIORITY_HIGH;
+      p_dst->disp_offset   = length - 1;
+      p_dst->layer         = 0;
+      p_dst->slice_qp      = ( p_Inp->BRefPictures == 2 ) ? (p_Inp->qp[P_SLICE] - p_Inp->qp[B_SLICE]) : 0; // ensure all types of frames have identical QP (modifiers)
+      p_dst->random_access = 0;
       p_dst->temporal_layer = 0;
+
 
       for ( idx = 1; idx < length; idx++ )
       {
         p_dst = p_cur_prd->p_frm + idx;
 
-        p_dst->slice_type       = ( p_Inp->PReplaceBSlice ) ? P_SLICE : B_SLICE;
-        p_dst->nal_ref_idc      = ( p_Inp->BRefPictures == 1 && p_dst->slice_type == B_SLICE ) ? NALU_PRIORITY_LOW : NALU_PRIORITY_DISPOSABLE;
-        p_dst->disp_offset      = idx - 1;
-        p_dst->layer            = 1;
-        p_dst->slice_qp         = p_dst->nal_ref_idc ? p_Inp->qpBRSOffset : 0; //2; 2 when depends on QPPSlice (highest layer QP)
-        p_dst->random_access    = 0;
-          p_dst->temporal_layer = 0;
+        p_dst->slice_type    = ( p_Inp->PReplaceBSlice ) ? P_SLICE : B_SLICE;
+        p_dst->nal_ref_idc   = ( p_Inp->BRefPictures == 1 && p_dst->slice_type == B_SLICE ) ? NALU_PRIORITY_LOW : NALU_PRIORITY_DISPOSABLE;
+        p_dst->disp_offset   = idx - 1;
+        p_dst->layer         = 2;
+        p_dst->slice_qp      = ( p_Inp->PReplaceBSlice ) ? (p_Inp->qp[B_SLICE] - p_Inp->qp[P_SLICE]) : (p_dst->nal_ref_idc ? p_Inp->qpBRSOffset : 0); //2; 2 when depends on QPPSlice (highest layer QP)
+        p_dst->random_access = 0;
+        p_dst->temporal_layer = 0;
       }
       if ( length > 1 )
       {
@@ -1195,37 +1346,37 @@ static void init_pred_struct( VideoParameters *p_Vid, InputParameters *p_Inp, Se
 
       p_dst = p_cur_prd->p_frm + 0;
 
-      p_dst->slice_type     = ( p_Inp->BRefPictures == 2 ) ? B_SLICE : P_SLICE;
-      p_dst->nal_ref_idc    = NALU_PRIORITY_HIGH;
-      p_dst->disp_offset    = length - 1;
-      p_dst->layer          = 0;
-      p_dst->slice_qp       = ( p_Inp->BRefPictures == 2 ) ? (p_Inp->qp[B_SLICE] - p_Inp->qp[P_SLICE]) : 0; // ensure all types of frames have identical QP (modifiers)
-      p_dst->random_access  = 0;
+      p_dst->slice_type    = ( p_Inp->BRefPictures == 2 ) ? B_SLICE : P_SLICE;
+      p_dst->nal_ref_idc   = NALU_PRIORITY_HIGH;
+      p_dst->disp_offset   = length - 1;
+      p_dst->layer         = 0;
+      p_dst->slice_qp      = ( p_Inp->BRefPictures == 2 ) ? (p_Inp->qp[B_SLICE] - p_Inp->qp[P_SLICE]) : 0; // ensure all types of frames have identical QP (modifiers)
+      p_dst->random_access = 0;
       p_dst->temporal_layer = 0;
 
       for ( idx = 1; idx < length2; idx++ )
       {
         p_dst = p_cur_prd->p_frm + idx;
 
-        p_dst->slice_type     = ( p_Inp->PReplaceBSlice ) ? P_SLICE : B_SLICE;
-        p_dst->nal_ref_idc    = NALU_PRIORITY_LOW;
-        p_dst->disp_offset    = 2*(idx - 1) + 1;
-        p_dst->layer          = 1;
-        p_dst->slice_qp       = p_dst->slice_type == B_SLICE ? 
+        p_dst->slice_type    = ( p_Inp->PReplaceBSlice ) ? P_SLICE : B_SLICE;
+        p_dst->nal_ref_idc   = NALU_PRIORITY_LOW;
+        p_dst->disp_offset   = 2*(idx - 1) + 1;
+        p_dst->layer         = 1;
+        p_dst->slice_qp      = p_dst->slice_type == B_SLICE ? 
           (p_Inp->HierarchyLevelQPEnable ? -1: p_Inp->qpBRSOffset) : (p_Inp->HierarchyLevelQPEnable ? 1 : 0); // 1
-        p_dst->random_access  = 0;
+        p_dst->random_access = 0;
         p_dst->temporal_layer = 0;
       }
       for ( idx = length2; idx < length; idx++ )
       {
         p_dst = p_cur_prd->p_frm + idx;
 
-        p_dst->slice_type     = ( p_Inp->PReplaceBSlice ) ? P_SLICE : B_SLICE;
-        p_dst->nal_ref_idc    = NALU_PRIORITY_DISPOSABLE;
-        p_dst->disp_offset    = (idx - length2) * 2;
-        p_dst->layer          = 2;
-        p_dst->slice_qp       = p_dst->slice_type == B_SLICE ? 0 : 2;//2;
-        p_dst->random_access  = 0;
+        p_dst->slice_type    = ( p_Inp->PReplaceBSlice ) ? P_SLICE : B_SLICE;
+        p_dst->nal_ref_idc   = NALU_PRIORITY_DISPOSABLE;
+        p_dst->disp_offset   = (idx - length2) * 2;
+        p_dst->layer         = 2;
+        p_dst->slice_qp      = p_dst->slice_type == B_SLICE ? 0 : 2;//2;
+        p_dst->random_access = 0;
         p_dst->temporal_layer = 0;
       }
       if ( length > 1 )
@@ -1236,13 +1387,14 @@ static void init_pred_struct( VideoParameters *p_Vid, InputParameters *p_Inp, Se
     case 2: // full binary decomposition
       p_dst = p_cur_prd->p_frm + 0;
 
-      p_dst->slice_type     = ( p_Inp->BRefPictures == 2 ) ? B_SLICE : P_SLICE;
-      p_dst->nal_ref_idc    = NALU_PRIORITY_HIGH;
-      p_dst->disp_offset    = length - 1;
-      p_dst->layer          = 0;
-      p_dst->slice_qp       = ( p_Inp->BRefPictures == 2 ) ? (p_Inp->qp[B_SLICE] - p_Inp->qp[P_SLICE]) : 0; // ensure all types of frames have identical QP (modifiers)
-      p_dst->random_access  = 0;
+      p_dst->slice_type    = ( p_Inp->BRefPictures == 2 ) ? B_SLICE : P_SLICE;
+      p_dst->nal_ref_idc   = NALU_PRIORITY_HIGH;
+      p_dst->disp_offset   = length - 1;
+      p_dst->layer         = 0;
+      p_dst->slice_qp      = ( p_Inp->BRefPictures == 2 ) ? (p_Inp->qp[B_SLICE] - p_Inp->qp[P_SLICE]) : 0; // ensure all types of frames have identical QP (modifiers)
+      p_dst->random_access = 0;
       p_dst->temporal_layer = 0;
+
 
       if ( length > 3 )
       {
@@ -1263,13 +1415,13 @@ static void init_pred_struct( VideoParameters *p_Vid, InputParameters *p_Inp, Se
           {
             p_dst = p_cur_prd->p_frm + order;
 
-            p_dst->slice_type     = ( p_Inp->PReplaceBSlice ) ? P_SLICE : B_SLICE;
-            p_dst->nal_ref_idc    = (frm == (length >> 1)) ? NALU_PRIORITY_DISPOSABLE : NALU_PRIORITY_LOW;
-            p_dst->disp_offset    = ((length - 1) >> layer) + idx * (length >> (layer - 1));
-            p_dst->layer          = layer;
-            p_dst->slice_qp       = p_dst->slice_type == B_SLICE ? 
+            p_dst->slice_type    = ( p_Inp->PReplaceBSlice ) ? P_SLICE : B_SLICE;
+            p_dst->nal_ref_idc   = (frm == (length >> 1)) ? NALU_PRIORITY_DISPOSABLE : NALU_PRIORITY_LOW;
+            p_dst->disp_offset   = ((length - 1) >> layer) + idx * (length >> (layer - 1));
+            p_dst->layer         = layer;
+            p_dst->slice_qp      = p_dst->slice_type == B_SLICE ? 
               (p_Inp->HierarchyLevelQPEnable ? (-GOPlevels + layer): (p_dst->nal_ref_idc != NALU_PRIORITY_DISPOSABLE ? p_Inp->qpBRSOffset : 0)) : (p_Inp->HierarchyLevelQPEnable ? layer : 0); // layer
-            p_dst->random_access  = 0;
+            p_dst->random_access = 0;
             p_dst->temporal_layer = 0;
           }
         }
@@ -1280,12 +1432,12 @@ static void init_pred_struct( VideoParameters *p_Vid, InputParameters *p_Inp, Se
         {
           p_dst = p_cur_prd->p_frm + idx;
 
-          p_dst->slice_type     = ( p_Inp->PReplaceBSlice ) ? P_SLICE : B_SLICE;
-          p_dst->nal_ref_idc    = NALU_PRIORITY_DISPOSABLE;
-          p_dst->disp_offset    = idx - 1;
-          p_dst->layer          = 1;
-          p_dst->slice_qp       = 0; //2;
-          p_dst->random_access  = 0;
+          p_dst->slice_type    = ( p_Inp->PReplaceBSlice ) ? P_SLICE : B_SLICE;
+          p_dst->nal_ref_idc   = NALU_PRIORITY_DISPOSABLE;
+          p_dst->disp_offset   = idx - 1;
+          p_dst->layer         = 2;
+          p_dst->slice_qp      = 0; //2;
+          p_dst->random_access = 0;
           p_dst->temporal_layer = 0;
         }
         if ( length > 1 )
@@ -1298,9 +1450,10 @@ static void init_pred_struct( VideoParameters *p_Vid, InputParameters *p_Inp, Se
       {
         int max_layer = 0;
 
-        if ( p_Inp->LowDelay) 
+       // encode without delay
+        if ( p_Inp->LowDelay ) 
         {
-          for ( idx = 0; idx < length-1; idx++ )
+          for ( idx = 0; idx < (length - 1); idx++ )
           {
             p_dst = p_cur_prd->p_frm + idx;
 
@@ -1330,36 +1483,34 @@ static void init_pred_struct( VideoParameters *p_Vid, InputParameters *p_Inp, Se
         } 
         else 
         {
-          p_dst = p_cur_prd->p_frm + 0;
+        p_dst = p_cur_prd->p_frm + 0;
 
-          p_dst->slice_type    = ( p_Inp->BRefPictures == 2 ) ? B_SLICE : P_SLICE;
-          p_dst->nal_ref_idc   = NALU_PRIORITY_HIGH;
-          p_dst->disp_offset   = length - 1;
-          p_dst->layer         = 0;
-          p_dst->slice_qp      = ( p_Inp->BRefPictures == 2 ) ? (p_Inp->qp[B_SLICE] - p_Inp->qp[P_SLICE]) : 0; // ensure all types of frames have identical QP (modifiers)
+        p_dst->slice_type    = ( p_Inp->BRefPictures == 2 ) ? B_SLICE : P_SLICE;
+        p_dst->nal_ref_idc   = NALU_PRIORITY_HIGH;
+        p_dst->disp_offset   = length - 1;
+        p_dst->layer         = 0;
+        p_dst->slice_qp      = ( p_Inp->BRefPictures == 2 ) ? (p_Inp->qp[B_SLICE] - p_Inp->qp[P_SLICE]) : 0; // ensure all types of frames have identical QP (modifiers)
+        p_dst->random_access = 0;
+        p_dst->temporal_layer = 0;
+
+        for ( idx = 1; idx < length; idx++ )
+        {
+          p_dst = p_cur_prd->p_frm + idx;
+
+          p_dst->slice_type    = p_Vid->gop_structure[idx - 1].slice_type;
+          p_dst->nal_ref_idc   = p_Vid->gop_structure[idx - 1].reference_idc;
+          p_dst->disp_offset   = p_Vid->gop_structure[idx - 1].display_no;
+          p_dst->layer         = ((p_Vid->gop_structure[idx - 1].hierarchy_layer == 1) ? 0 : 1) + 1; // invert in new notation
+          p_dst->slice_qp      = p_Vid->gop_structure[idx - 1].slice_qp; // warning: the latter SLICE_QP may be the actual QP and *NOT* a modifier!
           p_dst->random_access = 0;
+          p_dst->temporal_layer = 0;
 
-          p_dst->temporal_layer = 0; // danny@vidyo.com
-
-          for ( idx = 1; idx < length; idx++ )
+          if ( p_Vid->gop_structure[idx - 1].hierarchy_layer > max_layer )
           {
-            p_dst = p_cur_prd->p_frm + idx;
-
-            p_dst->slice_type    = p_Vid->gop_structure[idx - 1].slice_type;
-            p_dst->nal_ref_idc   = p_Vid->gop_structure[idx - 1].reference_idc;
-            p_dst->disp_offset   = p_Vid->gop_structure[idx - 1].display_no;
-            p_dst->layer         = ((p_Vid->gop_structure[idx - 1].hierarchy_layer == 1) ? 0 : 1) + 1; // invert in new notation
-            p_dst->slice_qp      = p_Vid->gop_structure[idx - 1].slice_qp; // warning: the latter SLICE_QP may be the actual QP and *NOT* a modifier!
-            p_dst->random_access = 0;
-
-            p_dst->temporal_layer = 0; // danny@vidyo.com
-
-            if ( p_Vid->gop_structure[idx - 1].hierarchy_layer > max_layer )
-            {
-              max_layer = p_Vid->gop_structure[idx - 1].hierarchy_layer;
-            }
+            max_layer = p_Vid->gop_structure[idx - 1].hierarchy_layer;
           }
         }
+        } 
         p_cur_prd->gop_levels = max_layer + 1;
       }
       break;
@@ -1405,7 +1556,7 @@ void populate_frm_struct( VideoParameters *p_Vid, InputParameters *p_Inp, SeqStr
     // we have to check here for inserted frames (e.g. due to pre-analysis) and assign them to the structure (future work)
 
     // establish if it is an IDR frame
-    is_idr = establish_random_access( p_Inp, p_seq_struct, curr_frame, p_seq_struct->curr_num_to_populate - proc_frames );
+    is_idr = establish_random_access( p_Inp, p_seq_struct, curr_frame, p_seq_struct->curr_num_to_populate - proc_frames, 0 );
     if ( is_idr )
     {
       // random access structure
@@ -1421,7 +1572,7 @@ void populate_frm_struct( VideoParameters *p_Vid, InputParameters *p_Inp, SeqStr
     }
     else if ( !is_idr )
     {
-      is_intra = establish_intra( p_Inp, p_seq_struct, curr_frame, p_seq_struct->curr_num_to_populate - proc_frames );
+      is_intra = establish_intra( p_Inp, p_seq_struct, curr_frame, p_seq_struct->curr_num_to_populate - proc_frames, 0 );
       if ( is_intra )
       {
         // intra structure (not random access)
@@ -1437,7 +1588,7 @@ void populate_frm_struct( VideoParameters *p_Vid, InputParameters *p_Inp, SeqStr
       }
       else // SP frames check
       {
-        is_sp = establish_sp( p_Inp, p_seq_struct, curr_frame, p_seq_struct->curr_num_to_populate - proc_frames );
+        is_sp = establish_sp( p_Inp, p_seq_struct, curr_frame, p_seq_struct->curr_num_to_populate - proc_frames, 0 );
         if ( is_sp )
         {
           // intra structure (not random access)
@@ -1494,9 +1645,9 @@ void populate_reg_pic( InputParameters *p_Inp, PicStructure *p_pic, FrameUnitStr
   int deblock       = p_Inp->DFSendParameters ? 
     (!(p_Inp->DFDisableIdc[p_frm_struct->nal_ref_idc][p_frm_struct->type])) : 1;
   int weighted_pred = (slice_type == P_SLICE) ?
-    p_Inp->WeightedPrediction : ((slice_type == P_SLICE) ? 
+    p_Inp->WeightedPrediction : ((slice_type == B_SLICE) ? 
     p_Inp->WeightedBiprediction : 0);
-  SliceStructure *p_slice;
+  SliceStructure *p_Slice;
 
   // if bottom field picture idr_flag has to be 0 (even when an IDR top field pic precedes it)
   p_pic->idr_flag    = !is_bot_fld ? p_frm_struct->idr_flag : 0;
@@ -1506,13 +1657,13 @@ void populate_reg_pic( InputParameters *p_Inp, PicStructure *p_pic, FrameUnitStr
   for ( slice = 0; slice < p_pic->num_slices; slice++ )
   {
     // Slice Structure
-    p_slice = p_pic->p_slice + slice;
+    p_Slice = p_pic->p_Slice + slice;
 
-    p_slice->type          = slice_type;
-    p_slice->deblock       = deblock;
-    p_slice->weighted_pred = weighted_pred;
-    p_slice->num_refs      = p_frm_struct->num_refs;
-    p_slice->qp            = p_frm_struct->qp;
+    p_Slice->type          = slice_type;
+    p_Slice->deblock       = deblock;
+    p_Slice->weighted_pred = weighted_pred;
+    p_Slice->num_refs      = p_frm_struct->num_refs;
+    p_Slice->qp            = p_frm_struct->qp;
   }
 }
 
@@ -1555,6 +1706,7 @@ static void populate_frame( InputParameters *p_Inp, SeqStructure *p_seq_struct, 
   p_frm_struct->mod_qp         = p_src->slice_qp;  
   p_frm_struct->field_pic_flag = 0; // need to add better support for field coded pictures
   p_frm_struct->frame_no       = curr_frame + pred_frame + p_src->disp_offset;
+
   p_frm_struct->temporal_layer = p_src->temporal_layer;
 
   if ( !(curr_frame + pred_frame + idx) )
@@ -1647,6 +1799,9 @@ static void populate_frame( InputParameters *p_Inp, SeqStructure *p_seq_struct, 
   // store a pointer to the prediction structure
   p_frm_struct->p_atom   = p_cur_prd;
   p_frm_struct->atom_idx = idx;
+#if (MVC_EXTENSION_ENABLE)
+  p_frm_struct->view_id  = 0;
+#endif
 
   // Picture Structure
   switch( p_Inp->PicInterlace )
@@ -1785,12 +1940,17 @@ static int populate_reg_pred_struct_atom( VideoParameters *p_Vid, InputParameter
     avail_frames = fixed_idx; // frames including "curr_frame"
   }
   // in the future we have to take care of the avail_frames = 0 case
+  if ( !avail_frames )
+  {
+    *terminate_pop = 1;
+  }
 
   // loop through these frames and apply the appropriate prediction structure (p_prd)
   while ( pred_frame < avail_frames )
   {
     pred_idx = get_prd_index( p_Inp, p_seq_struct, avail_frames - pred_frame );
-    // check here whether the prediction structure does not fit even if there is no fixed frame detected; if we proceed we will allocate an inefficient pred structure; better to terminate the frame population here
+    // check here whether the prediction structure does not fit even if there is no fixed frame detected;
+    // if we proceed we will allocate an inefficient pred structure; better to terminate the frame population here
     if ( fixed_idx == -1 && (curr_frame + avail_frames) < p_Inp->no_frames )
     {
       if ( (p_seq_struct->num_prds - 1) != pred_idx )
@@ -1876,6 +2036,10 @@ static int populate_rnd_acc_pred_struct_atom( VideoParameters *p_Vid, InputParam
   if ( !curr_frame && !(p_Inp->EnableIDRGOP) && !(p_Inp->intra_delay) )
   {
     gop_idx = 0; // force shortest IDR pred struct for first frame
+  }
+  else if ( !curr_frame && !(p_Inp->EnableIDRGOP) && p_Inp->intra_delay )
+  {
+    gop_idx = 1; // force middle IDR pred struct ( 2 corresponds to the longest that is though reserved for within the sequence)
   }
   else
   {
@@ -2040,3 +2204,102 @@ void populate_frame_slice_type( InputParameters *p_Inp, FrameUnitStruct *p_frm_s
   // frame (RDPictureDecision only called for frame pictures so no need to check here)
   populate_reg_pic( p_Inp, p_frm_struct->p_frame_pic, p_frm_struct, num_slices, 0 );
 }
+
+#if (MVC_EXTENSION_ENABLE)
+/*!
+ ***********************************************************************
+ * \brief
+ *    Populate frame structure
+ * \param p_Vid
+ *    pointer to the VideoParameters structure
+ * \param p_Inp
+ *    pointer to the InputParameters structure
+ * \param p_seq_struct
+ *    pointer to the sequence structure
+ * \param start
+ *    starting number of frame unit structures to populate
+ * \param end
+ *    starting number of frame unit structures to populate
+ ***********************************************************************
+ */
+
+void populate_frm_struct_mvc( VideoParameters *p_Vid, InputParameters *p_Inp, SeqStructure *p_seq_struct, int start, int end )
+{
+  int idx;
+  FrameUnitStruct *p_curr_frm, *p_frm = p_seq_struct->p_frm;
+  FrameUnitStruct *p_curr_frm_mvc, *p_frm_mvc = p_seq_struct->p_frm_mvc;
+
+  for ( idx = start; idx < end; idx++ )
+  {
+    p_curr_frm = p_frm + (idx % p_Vid->frm_struct_buffer);
+
+    // view 0
+    p_curr_frm_mvc = p_frm_mvc + ((idx << 1) % p_seq_struct->num_frames_mvc);
+    copy_frame_mvc( p_Inp, p_curr_frm, p_curr_frm_mvc, p_seq_struct->max_num_slices, 0 );
+    // view 1
+    p_curr_frm_mvc = p_frm_mvc + (((idx << 1) + 1) % p_seq_struct->num_frames_mvc);
+    copy_frame_mvc( p_Inp, p_curr_frm, p_curr_frm_mvc, p_seq_struct->max_num_slices, 1 );
+  }
+}
+
+
+/*!
+ ***********************************************************************
+ * \brief
+ *    Set parameters for a single frame unit for MVC compression
+ * \param p_Inp
+ *    pointer to the InputParameters structure
+ * \param p_src
+ *    pointer to the source frame unit structure
+ * \param p_dst
+ *    pointer to the destination frame unit structure
+ * \param num_slices
+ *    number of slices for the current picture
+ * \param view_id
+ *    view id
+ ***********************************************************************
+ */
+
+
+static void copy_frame_mvc( InputParameters *p_Inp, FrameUnitStruct *p_src, FrameUnitStruct *p_dst, int num_slices, int view_id )
+{
+  // Frame Unit Structure
+  p_dst->type           = view_id ? p_Inp->MVCInterViewForceB != 0? B_SLICE : (p_src->type == I_SLICE ? (p_Inp->BRefPictures == 2 ? B_SLICE : P_SLICE) : p_src->type) : p_src->type;
+  p_dst->random_access  = p_src->random_access;
+  p_dst->num_refs       = p_src->num_refs;
+  p_dst->layer          = p_src->layer;
+  p_dst->mod_qp         = p_src->mod_qp;  
+  p_dst->field_pic_flag = p_src->field_pic_flag;
+  p_dst->frame_no       = p_src->frame_no;
+  p_dst->idr_flag       = view_id ? 0 : p_src->idr_flag;
+  p_dst->nal_ref_idc    = view_id ? (p_src->idr_flag ? NALU_PRIORITY_HIGH : p_src->nal_ref_idc) : p_src->nal_ref_idc;
+  p_dst->qp             = p_src->qp;
+  p_dst->p_atom         = p_src->p_atom;
+  p_dst->atom_idx       = p_src->atom_idx;
+  p_dst->view_id        = view_id;
+
+  // Picture Structure
+  switch( p_Inp->PicInterlace )
+  {
+  default:
+  case FRAME_CODING:
+    // frame
+    populate_reg_pic( p_Inp, p_dst->p_frame_pic, p_dst, num_slices, 0 );
+    break;
+  case FIELD_CODING:
+    // top field
+    populate_reg_pic( p_Inp, p_dst->p_top_fld_pic, p_dst, num_slices, 0 );
+    // bottom field
+    populate_reg_pic( p_Inp, p_dst->p_bot_fld_pic, p_dst, num_slices, 1 );
+    break;
+  case ADAPTIVE_CODING:
+    // frame
+    populate_reg_pic( p_Inp, p_dst->p_frame_pic, p_dst, num_slices, 0 );
+    // top field
+    populate_reg_pic( p_Inp, p_dst->p_top_fld_pic, p_dst, num_slices, 0 );
+    // bottom field
+    populate_reg_pic( p_Inp, p_dst->p_bot_fld_pic, p_dst, num_slices, 1 );
+    break;
+  }
+}
+#endif

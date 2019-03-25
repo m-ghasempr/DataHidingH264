@@ -46,11 +46,11 @@ EPZSPelBlockMotionSearch (Macroblock * currMB,     // <--  current Macroblock
                           int lambda_factor        // <--  lagrangian parameter for determining motion cost
                           )
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
   EPZSParameters *p_EPZS = currSlice->p_EPZS;
-  PicMotionParams *motion = &p_Vid->enc_picture->motion;
+  PicMotionParams **motion = p_Vid->enc_picture->mv_info;
 
   int blocktype = mv_block->blocktype;
 
@@ -61,7 +61,7 @@ EPZSPelBlockMotionSearch (Macroblock * currMB,     // <--  current Macroblock
   SearchWindow *searchRange = &mv_block->searchRange;
   int mapCenter_x = searchRange->max_x - mv->mv_x;
   int mapCenter_y = searchRange->max_y - mv->mv_y;
-  StorablePicture *ref_picture = p_Vid->listX[cur_list][ref];
+  StorablePicture *ref_picture = currSlice->listX[cur_list][ref];
 
   distblk lambda_dist = weighted_cost(lambda_factor,2);
   distblk stopCriterion = p_EPZS->medthres[blocktype] + lambda_dist;
@@ -147,8 +147,7 @@ EPZSPelBlockMotionSearch (Macroblock * currMB,     // <--  current Macroblock
     //! Add Spatial Predictors in predictor list.
     //! Scheme adds zero, left, top-left, top, top-right. Note that top-left adds very little
     //! in terms of performance and could be removed with little penalty if any.
-    invalid_refs = EPZSSpatialPredictors (p_EPZS, mv_block/*->block*/, 
-      list, currMB->list_offset, ref, motion->ref_idx[list], motion->mv[list]);
+    invalid_refs = EPZSSpatialPredictors (p_EPZS, mv_block/*->block*/, list, currMB->list_offset, ref, motion);
 
     if (p_Inp->EPZSSpatialMem)
       EPZSSpatialMemPredictors (p_EPZS, mv_block, cur_list, &prednum, ref_picture->size_x >> 2);
@@ -399,17 +398,17 @@ EPZSPelBlockMotionSearchSubMB (Macroblock * currMB,     // <--  current Macroblo
                                int lambda_factor        // <--  lagrangian parameter for determining motion cost
                                )
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
   EPZSParameters *p_EPZS = currSlice->p_EPZS;
-  PicMotionParams *motion = &p_Vid->enc_picture->motion;
+  PicMotionParams **motion = p_Vid->enc_picture->mv_info;
 
   int blocktype = mv_block->blocktype;
   int list = mv_block->list;
   int cur_list = list + currMB->list_offset;
   short ref = mv_block->ref_idx;
-  StorablePicture *ref_picture = p_Vid->listX[cur_list][ref];
+  StorablePicture *ref_picture = currSlice->listX[cur_list][ref];
 
   MotionVector *mv = &mv_block->mv[list];
   MotionVector center = pad_MVs (*mv, mv_block);
@@ -500,7 +499,7 @@ EPZSPelBlockMotionSearchSubMB (Macroblock * currMB,     // <--  current Macroblo
     //! Add Spatial Predictors in predictor list.
     //! Scheme adds zero, left, top-left, top, top-right. Note that top-left adds very little
     //! in terms of performance and could be removed with little penalty if any.
-    EPZSSpatialPredictors (p_EPZS, mv_block/*->block*/, list, currMB->list_offset, ref, motion->ref_idx[list], motion->mv[list]);
+    EPZSSpatialPredictors (p_EPZS, mv_block/*->block*/, list, currMB->list_offset, ref, motion);
 
     if (p_Inp->EPZSSpatialMem)
       EPZSSpatialMemPredictors (p_EPZS, mv_block, cur_list, &prednum, ref_picture->size_x >> 2);
@@ -739,17 +738,17 @@ EPZSBiPredBlockMotionSearch (Macroblock * currMB,     // <--  Current Macroblock
                              int lambda_factor        // <--  lagrangian parameter for determining motion cost
                              )
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
   EPZSParameters *p_EPZS = currSlice->p_EPZS;
-  PicMotionParams *motion = &p_Vid->enc_picture->motion;
+  PicMotionParams **motion = p_Vid->enc_picture->mv_info;
 
   int blocktype = mv_block->blocktype;
   short ref = mv_block->ref_idx;
 
-  StorablePicture *ref_picture1 = p_Vid->listX[list + currMB->list_offset][ref];
-  StorablePicture *ref_picture2 = p_Vid->listX[(list ^ 1) + currMB->list_offset][0];
+  StorablePicture *ref_picture1 = currSlice->listX[list + currMB->list_offset][ref];
+  StorablePicture *ref_picture2 = currSlice->listX[(list ^ 1) + currMB->list_offset][0];
 
   int mapCenter_x = search_range - mv1->mv_x;
   int mapCenter_y = search_range - mv1->mv_y;
@@ -799,7 +798,7 @@ EPZSBiPredBlockMotionSearch (Macroblock * currMB,     // <--  Current Macroblock
     //! Add Spatial Predictors in predictor list.
     //! Scheme adds zero, left, top-left, top, top-right. Note that top-left adds very little
     //! in terms of performance and could be removed with little penalty if any.
-    EPZSSpatialPredictors (p_EPZS, mv_block/*->block*/, list, currMB->list_offset, ref, motion->ref_idx[list], motion->mv[list]);
+    EPZSSpatialPredictors (p_EPZS, mv_block/*->block*/, list, currMB->list_offset, ref, motion);
 
     //! Check all predictors
     for (pos = 0; pos < prednum; ++pos)

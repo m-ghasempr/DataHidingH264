@@ -86,7 +86,7 @@
 
 */
 
-#ifdef WIN32
+#if defined(WIN32) || defined(WIN64)
 #include <Winsock2.h>
 #else
 #include <netinet/in.h>

@@ -549,7 +549,7 @@ void Init_QMatrix (VideoParameters *p_Vid, InputParameters *p_Inp)
     printf ("Parsing QMatrix file %s ", p_Inp->QmatrixFile);
     content = GetConfigFileContent(p_Inp->QmatrixFile, 0);
     if(content!='\0')
-      ParseMatrix(p_Vid, content, strlen (content));
+      ParseMatrix(p_Vid, content, (int) strlen (content));
     else
       printf("\nError: %s\nProceeding with default values for all matrices.", errortext);
 
@@ -560,6 +560,19 @@ void Init_QMatrix (VideoParameters *p_Vid, InputParameters *p_Inp)
     memset(p_QScale->UseDefaultScalingMatrix8x8Flag, 0, 6 * sizeof(short));
 
     free(content);
+  }
+}
+
+static void set_default_quant4x4(LevelQuantParams **q_params_4x4,  const int (*quant)[4], const int (*dequant)[4])
+{
+  int i, j;
+  for(j=0; j<4; j++)
+  {
+    for(i=0; i<4; i++)
+    {
+      q_params_4x4[j][i].ScaleComp    = quant[j][i];
+      q_params_4x4[j][i].InvScaleComp = dequant[j][i]<<4;
+    }
   }
 }
 
@@ -617,30 +630,12 @@ void CalculateQuant4x4Param(VideoParameters *p_Vid)
     for(k_mod=0; k_mod<max_qp; k_mod++)
     {
       k = k_mod % 6;
-      for(j=0; j<4; j++)
-      {
-        for(i=0; i<4; i++)
-        {
-          p_Quant->q_params_4x4[0][1][k_mod][j][i].ScaleComp    = quant_coef[k][j][i];
-          p_Quant->q_params_4x4[0][1][k_mod][j][i].InvScaleComp = dequant_coef[k][j][i]<<4;
-
-          p_Quant->q_params_4x4[1][1][k_mod][j][i].ScaleComp    = quant_coef[k][j][i];
-          p_Quant->q_params_4x4[1][1][k_mod][j][i].InvScaleComp = dequant_coef[k][j][i]<<4;
-
-          p_Quant->q_params_4x4[2][1][k_mod][j][i].ScaleComp    = quant_coef[k][j][i];
-          p_Quant->q_params_4x4[2][1][k_mod][j][i].InvScaleComp = dequant_coef[k][j][i]<<4;
-
-          // Inter
-          p_Quant->q_params_4x4[0][0][k_mod][j][i].ScaleComp    = quant_coef[k][j][i];
-          p_Quant->q_params_4x4[0][0][k_mod][j][i].InvScaleComp = dequant_coef[k][j][i]<<4;
-
-          p_Quant->q_params_4x4[1][0][k_mod][j][i].ScaleComp    = quant_coef[k][j][i];
-          p_Quant->q_params_4x4[1][0][k_mod][j][i].InvScaleComp = dequant_coef[k][j][i]<<4;
-
-          p_Quant->q_params_4x4[2][0][k_mod][j][i].ScaleComp    = quant_coef[k][j][i];
-          p_Quant->q_params_4x4[2][0][k_mod][j][i].InvScaleComp = dequant_coef[k][j][i]<<4;
-        }
-      }
+      set_default_quant4x4(p_Quant->q_params_4x4[0][0][k_mod],  quant_coef[k], dequant_coef[k]);
+      set_default_quant4x4(p_Quant->q_params_4x4[0][1][k_mod],  quant_coef[k], dequant_coef[k]);
+      set_default_quant4x4(p_Quant->q_params_4x4[1][0][k_mod],  quant_coef[k], dequant_coef[k]);
+      set_default_quant4x4(p_Quant->q_params_4x4[1][1][k_mod],  quant_coef[k], dequant_coef[k]);
+      set_default_quant4x4(p_Quant->q_params_4x4[2][0][k_mod],  quant_coef[k], dequant_coef[k]);
+      set_default_quant4x4(p_Quant->q_params_4x4[2][1][k_mod],  quant_coef[k], dequant_coef[k]);
     }
   }
   else

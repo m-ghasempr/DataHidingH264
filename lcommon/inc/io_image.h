@@ -31,6 +31,10 @@ typedef struct image_data
   uint16 **frm_uint16[MAX_PLANE];   //!< optional frame Data for uint16
   uint16 **top_uint16[MAX_PLANE];   //!< optional pointers to top field data
   uint16 **bot_uint16[MAX_PLANE];   //!< optional pointers to bottom field data
+
+  int frm_stride[MAX_PLANE];
+  int top_stride[MAX_PLANE];
+  int bot_stride[MAX_PLANE];
 } ImageData;
 
 #endif

@@ -17,6 +17,10 @@
 #include "nalu.h"
 #include "memalloc.h"
 #include "rtp.h"
+#if (MVC_EXTENSION_ENABLE)
+#include "vlc.h"
+#endif
+
 
 /*!
 *************************************************************************************
@@ -101,7 +105,7 @@ int read_next_nalu(VideoParameters *p_Vid, NALU_t *nalu)
   }
   if (ret == 0)
   {
-    FreeNALU(nalu);
+    //FreeNALU(nalu);
     return 0;
   }
 
@@ -150,7 +154,7 @@ void CheckZeroByteNonVCL(VideoParameters *p_Vid, NALU_t *nalu)
   //for the first NAL unit in an access unit, zero_byte shall exists
   if(p_Vid->NALUCount==1)
     CheckZeroByte=1;
-  if(CheckZeroByte && nalu->startcodeprefix_len==3)
+  if(CheckZeroByte && nalu->startcodeprefix_len==3)   
   {
     printf("Warning: zero_byte shall exist\n");
     //because it is not a very serious problem, we do not exit here
@@ -162,7 +166,7 @@ void CheckZeroByteVCL(VideoParameters *p_Vid, NALU_t *nalu)
   int CheckZeroByte=0;
 
   //This function deals only with VCL NAL units
-  if(!(nalu->nal_unit_type>=1&&nalu->nal_unit_type<=5))
+  if(!(nalu->nal_unit_type>=NALU_TYPE_SLICE && nalu->nal_unit_type <= NALU_TYPE_IDR))
     return;
 
   if(p_Vid->LastAccessUnitExists)
@@ -181,3 +185,32 @@ void CheckZeroByteVCL(VideoParameters *p_Vid, NALU_t *nalu)
     //because it is not a very serious problem, we do not exit here
   }
 }
+
+#if (MVC_EXTENSION_ENABLE)
+void nal_unit_header_mvc_extension(NALUnitHeaderMVCExt_t *NaluHeaderMVCExt, Bitstream *s)
+{  
+ 	//to be implemented;  
+	NaluHeaderMVCExt->non_idr_flag = u_v (1, "non_idr_flag"						, s);
+	NaluHeaderMVCExt->priority_id = u_v (6, "priority_id"						, s);
+	NaluHeaderMVCExt->view_id = u_v (10, "view_id"								, s);
+	NaluHeaderMVCExt->temporal_id = u_v (3, "temporal_id"						, s);
+	NaluHeaderMVCExt->anchor_pic_flag = u_v (1, "anchor_pic_flag"				, s);
+	NaluHeaderMVCExt->inter_view_flag = u_v (1, "inter_view_flag"				, s);
+	NaluHeaderMVCExt->reserved_one_bit = u_v (1, "reserved_one_bit"				, s);
+	if(NaluHeaderMVCExt->reserved_one_bit != 1)
+	{
+		printf("Nalu Header MVC Extension: reserved_one_bit is not 1!\n");
+	}
+}
+
+void nal_unit_header_svc_extension( void )
+{
+	//to be implemented for Annex G;
+}
+
+void prefix_nal_unit_svc( void )
+{
+	//to be implemented for Annex G;
+}
+
+#endif

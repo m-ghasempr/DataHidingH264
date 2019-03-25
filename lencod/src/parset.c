@@ -1,4 +1,3 @@
-
 /*!
  **************************************************************************************
  * \file
@@ -151,13 +150,48 @@ NALU_t *GenerateSeq_parameter_set_NALU (VideoParameters *p_Vid)
   int NALUlen;
   byte rbsp[MAXRBSPSIZE];
 
+#if (MVC_EXTENSION_ENABLE)
+  RBSPlen = GenerateSeq_parameter_set_rbsp (p_Vid, p_Vid->active_sps, rbsp, 0);
+#else
   RBSPlen = GenerateSeq_parameter_set_rbsp (p_Vid, p_Vid->active_sps, rbsp);
+#endif
   NALUlen = RBSPtoNALU (rbsp, n, RBSPlen, NALU_TYPE_SPS, NALU_PRIORITY_HIGHEST, 1);
   n->startcodeprefix_len = 4;
 
   return n;
 }
 
+#if (MVC_EXTENSION_ENABLE)
+/*!
+*************************************************************************************
+* \brief
+*    int GenerateSubsetSeq_parameter_set_NALU (VideoParameters *p_Vid);
+*
+* \note
+*    Uses the global variables through GenerateSequenceParameterSet()
+*    and GeneratePictureParameterSet
+* \param p_Vid
+* VideoParameters structure
+* \return
+*    A NALU containing the Sequence ParameterSet
+*
+*************************************************************************************
+*/
+
+NALU_t *GenerateSubsetSeq_parameter_set_NALU (VideoParameters *p_Vid)
+{
+  NALU_t *n = AllocNALU(MAXNALUSIZE);
+  int RBSPlen = 0;
+  int NALUlen;
+  byte rbsp[MAXRBSPSIZE];
+
+  RBSPlen = GenerateSeq_parameter_set_rbsp (p_Vid, p_Vid->active_sps, rbsp, 1);
+  NALUlen = RBSPtoNALU (rbsp, n, RBSPlen, NALU_TYPE_SUB_SPS, NALU_PRIORITY_HIGHEST, 1);
+  n->startcodeprefix_len = 4;
+
+  return n;
+}
+#endif
 
 /*!
 *************************************************************************************
@@ -224,8 +258,13 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps,  //!< Sequence
                       (IdentifyProfile(p_Inp)==FREXT_Hi10P) ||
                       (IdentifyProfile(p_Inp)==FREXT_Hi422) ||
                       (IdentifyProfile(p_Inp)==FREXT_Hi444) ||
-                      (IdentifyProfile(p_Inp)==FREXT_CAVLC444));
-
+                      (IdentifyProfile(p_Inp)==FREXT_CAVLC444)
+#if (MVC_EXTENSION_ENABLE)
+                      || (IdentifyProfile(p_Inp)==MULTIVIEW_HIGH)
+                      || (IdentifyProfile(p_Inp)==MULTIVIEW_FIELDHIGH)
+                      || (IdentifyProfile(p_Inp)==STEREO_HIGH)
+#endif
+                      );
   // *************************************************************************
   // Sequence Parameter Set
   // *************************************************************************
@@ -292,8 +331,8 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps,  //!< Sequence
   sps->frame_mbs_only_flag = (Boolean) !(p_Inp->PicInterlace || p_Inp->MbInterlace);
 
   // Picture size, finally a simple one :-)
-  sps->pic_width_in_mbs_minus1        = (( p_Inp->output.width  + p_Vid->auto_crop_right) >> 4) -1;
-  sps->pic_height_in_map_units_minus1 = (((p_Inp->output.height + p_Vid->auto_crop_bottom) >> 4)/ (2 - sps->frame_mbs_only_flag)) - 1;
+  sps->pic_width_in_mbs_minus1        = (( p_Inp->output.width[0]  + p_Vid->auto_crop_right) >> 4) -1;
+  sps->pic_height_in_map_units_minus1 = (((p_Inp->output.height[0] + p_Vid->auto_crop_bottom) >> 4)/ (2 - sps->frame_mbs_only_flag)) - 1;
 
   // a couple of flags, simple
   sps->mb_adaptive_frame_field_flag = (Boolean) (FRAME_CODING != p_Inp->MbInterlace);
@@ -391,7 +430,13 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Pa
                       (IdentifyProfile(p_Inp)==FREXT_Hi10P) ||
                       (IdentifyProfile(p_Inp)==FREXT_Hi422) ||
                       (IdentifyProfile(p_Inp)==FREXT_Hi444) ||
-                      (IdentifyProfile(p_Inp)==FREXT_CAVLC444));
+                      (IdentifyProfile(p_Inp)==FREXT_CAVLC444)
+#if (MVC_EXTENSION_ENABLE)
+                      || (IdentifyProfile(p_Inp)==MULTIVIEW_HIGH)
+                      || (IdentifyProfile(p_Inp)==MULTIVIEW_FIELDHIGH)
+                      || (IdentifyProfile(p_Inp)==STEREO_HIGH)
+#endif
+                      );
 
   // *************************************************************************
   // Picture Parameter Set
@@ -476,8 +521,8 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Pa
     case 6:
       pps->slice_group_map_type = 6;
       pps->pic_size_in_map_units_minus1 =
-        (((p_Inp->output.height + p_Vid->auto_crop_bottom)/MB_BLOCK_SIZE)/(2-sps->frame_mbs_only_flag))
-        *((p_Inp->output.width  + p_Vid->auto_crop_right)/MB_BLOCK_SIZE) -1;
+        (((p_Inp->output.height[0] + p_Vid->auto_crop_bottom)/MB_BLOCK_SIZE)/(2-sps->frame_mbs_only_flag))
+        *((p_Inp->output.width[0]  + p_Vid->auto_crop_right)/MB_BLOCK_SIZE) -1;
 
       for (i=0;i<=pps->pic_size_in_map_units_minus1; i++)
         pps->slice_group_id[i] = p_Inp->slice_group_id[i];
@@ -490,8 +535,8 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Pa
   }
 // End FMO stuff
 
-  pps->num_ref_idx_l0_active_minus1 = sps->frame_mbs_only_flag ? (sps->num_ref_frames-1) : (2 * sps->num_ref_frames - 1) ;   // set defaults
-  pps->num_ref_idx_l1_active_minus1 = sps->frame_mbs_only_flag ? (sps->num_ref_frames-1) : (2 * sps->num_ref_frames - 1) ;   // set defaults
+  pps->num_ref_idx_l0_active_minus1 = sps->frame_mbs_only_flag ? (sps->num_ref_frames - 1) : (2 * sps->num_ref_frames - 1) ;   // set defaults
+  pps->num_ref_idx_l1_active_minus1 = sps->frame_mbs_only_flag ? (sps->num_ref_frames - 1) : (2 * sps->num_ref_frames - 1) ;   // set defaults
 
   pps->weighted_pred_flag  = (byte) WeightedPrediction;
   pps->weighted_bipred_idc = (byte) WeightedBiprediction;
@@ -508,7 +553,8 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Pa
   else
     pps->cb_qp_index_offset = pps->cr_qp_index_offset = pps->chroma_qp_index_offset;
 
-  pps->deblocking_filter_control_present_flag = (Boolean) p_Inp->DFSendParameters;
+  pps->deblocking_filter_control_present_flag = (Boolean) ((p_Inp->DFSendParameters != 0) || (p_Inp->RDPictureDeblocking != 0));
+
   pps->constrained_intra_pred_flag = (Boolean) p_Inp->UseConstrainedIntraPred;
 
   // if redundant slice is in use.
@@ -589,7 +635,11 @@ int Scaling_List(short *scalingListinput, short *scalingList, int sizeOfScalingL
  *    an exit (-1)
  *************************************************************************************
  */
+#if (MVC_EXTENSION_ENABLE)
+int GenerateSeq_parameter_set_rbsp (VideoParameters *p_Vid, seq_parameter_set_rbsp_t *sps, byte *rbsp, short Is_Subset)
+#else
 int GenerateSeq_parameter_set_rbsp (VideoParameters *p_Vid, seq_parameter_set_rbsp_t *sps, byte *rbsp)
+#endif
 {
   Bitstream *bitstream;
   int len = 0, LenInBytes;
@@ -604,7 +654,20 @@ int GenerateSeq_parameter_set_rbsp (VideoParameters *p_Vid, seq_parameter_set_rb
   bitstream->streamBuffer = rbsp;
   bitstream->bits_to_go = 8;
 
-  len+=u_v  (8, "SPS: profile_idc",                             sps->profile_idc,                               bitstream);
+#if (MVC_EXTENSION_ENABLE)
+  if(p_Vid->p_Inp->num_of_views==2)
+  {
+    if(Is_Subset==1)
+    {
+      assert(sps->profile_idc==MULTIVIEW_HIGH || sps->profile_idc==STEREO_HIGH);
+      len+=u_v  (8, "SPS: profile_idc",                             sps->profile_idc,                               bitstream);
+    }
+    else
+      len+=u_v  (8, "SPS: profile_idc",                             100,                               bitstream);
+  }
+  else
+#endif
+    len+=u_v  (8, "SPS: profile_idc",                             sps->profile_idc,                               bitstream);
 
   len+=u_1  ("SPS: constrained_set0_flag",                      sps->constrained_set0_flag,    bitstream);
   len+=u_1  ("SPS: constrained_set1_flag",                      sps->constrained_set1_flag,    bitstream);
@@ -686,6 +749,89 @@ int GenerateSeq_parameter_set_rbsp (VideoParameters *p_Vid, seq_parameter_set_rb
   if (sps->vui_parameters_present_flag)
     len+=GenerateVUI_parameters_rbsp(sps, bitstream);    // currently a dummy, asserting
 
+#if (MVC_EXTENSION_ENABLE)
+  if(Is_Subset==1)
+  {
+    // profile_idc fixed to 118 only
+    len+=u_1  ("SPS: bit_equal_to_one",                                   1,           bitstream);
+
+    // fixed to 2 views only
+    {
+      len+=ue_v ("SPS: num_views_minus1",                                 1,           bitstream);
+      if ( p_Vid->p_Inp->MVCFlipViews )
+      {
+        len+=ue_v ("SPS: view_id[ 0 ]",                                     1,           bitstream);
+        len+=ue_v ("SPS: view_id[ 1 ]",                                     0,           bitstream);
+
+        len+=ue_v ("SPS: num_anchor_refs_l0[ 1 ]",                          1,           bitstream);
+        len+=ue_v ("SPS: anchor_ref_l0[ 1 ][ 0 ]",                          1,           bitstream);
+        len+=ue_v ("SPS: num_anchor_refs_l1[ 1 ]",                          1,           bitstream);
+        len+=ue_v ("SPS: anchor_ref_l1[ 1 ][ 0 ]",                          1,           bitstream);
+
+        len+=ue_v ("SPS: num_non_anchor_refs_l0[ 1 ]",                      1,           bitstream);
+        len+=ue_v ("SPS: non_anchor_ref_l0[ 1 ][ 0 ]",                      1,           bitstream);
+        len+=ue_v ("SPS: num_non_anchor_refs_l1[ 1 ]",                      1,           bitstream);
+        len+=ue_v ("SPS: non_anchor_ref_l1[ 1 ][ 0 ]",                      1,           bitstream);
+      }
+      else
+      {
+        len+=ue_v ("SPS: view_id[ 0 ]",                                     0,           bitstream);
+        len+=ue_v ("SPS: view_id[ 1 ]",                                     1,           bitstream);
+
+        len+=ue_v ("SPS: num_anchor_refs_l0[ 1 ]",                          1,           bitstream);
+        len+=ue_v ("SPS: anchor_ref_l0[ 1 ][ 0 ]",                          0,           bitstream);
+        len+=ue_v ("SPS: num_anchor_refs_l1[ 1 ]",                          1,           bitstream);
+        len+=ue_v ("SPS: anchor_ref_l1[ 1 ][ 0 ]",                          0,           bitstream);
+
+        len+=ue_v ("SPS: num_non_anchor_refs_l0[ 1 ]",                      1,           bitstream);
+        len+=ue_v ("SPS: non_anchor_ref_l0[ 1 ][ 0 ]",                      0,           bitstream);
+        len+=ue_v ("SPS: num_non_anchor_refs_l1[ 1 ]",                      1,           bitstream);
+        len+=ue_v ("SPS: non_anchor_ref_l1[ 1 ][ 0 ]",                      0,           bitstream);
+      }
+
+      len+=ue_v ("SPS: num_level_values_signalled_minus1",                0,           bitstream);
+      len+=u_v  (8, "SPS: level_idc[ 0 ]",                                sps->level_idc,           bitstream);
+      len+=ue_v ("SPS: num_applicable_ops_minus1[ 0 ]",                   0,           bitstream);
+      len+=u_v  (3, "SPS: applicable_op_temporal_id[ 0 ][ 0 ]",           0,           bitstream);
+      len+=ue_v ("SPS: applicable_op_num_target_views_minus1[ 0 ][ 0 ]",  0,           bitstream);
+      len+=ue_v ("SPS: applicable_op_target_view_id[ 0 ][ 0 ][ 0 ]",      0,           bitstream);
+      len+=ue_v ("SPS: applicable_op_num_views_minus1[ 0 ][ 0 ]",         0,           bitstream);
+    }
+
+    len+=u_1  ("SPS: mvc_vui_parameters_present_flag",                    sps->vui_parameters_present_flag,           bitstream);
+    {
+      len+=ue_v ("SPS: vui_mvc_num_ops_minus1",                           0,           bitstream);
+      len+=u_v  (3, "SPS: vui_mvc_temporal_id[ 0 ]",                      0,           bitstream);
+      len+=ue_v ("SPS: vui_mvc_num_target_output_views_minus1[ 0 ]",      0,           bitstream);
+      len+=ue_v ("SPS: vui_mvc_view_id[ 0 ][ 0 ]",                        0,           bitstream);
+      len+=u_1  ("SPS: vui_mvc_timing_info_present_flag[ 0 ]",            sps->vui_parameters_present_flag,               bitstream);
+      if(sps->vui_parameters_present_flag)
+      {
+        len+=u_v (32,"SPS: vui_mvc_num_units_in_tick[ 0 ]",               sps->vui_seq_parameters.num_units_in_tick,      bitstream);
+        len+=u_v (32,"SPS: vui_mvc_time_scale[ 0 ]",                      sps->vui_seq_parameters.time_scale,             bitstream);
+        len+=u_1 ("SPS: vui_mvc_fixed_frame_rate_flag[ 0 ]",              sps->vui_seq_parameters.fixed_frame_rate_flag,  bitstream);
+      }
+      len+=u_1  ("SPS: vui_mvc_nal_hrd_parameters_present_flag[ 0 ]",     sps->vui_seq_parameters.nal_hrd_parameters_present_flag,           bitstream);
+      if(sps->vui_seq_parameters.nal_hrd_parameters_present_flag)
+      {
+        len += WriteHRDParameters(sps, bitstream);
+      }
+      len+=u_1 ("SPS: vui_mvc_vcl_hrd_parameters_present_flag[ 0 ]",      sps->vui_seq_parameters.vcl_hrd_parameters_present_flag,           bitstream);
+      if ( sps->vui_seq_parameters.vcl_hrd_parameters_present_flag )
+      {
+        len += WriteHRDParameters(sps, bitstream);
+      }
+      if ( sps->vui_seq_parameters.nal_hrd_parameters_present_flag || sps->vui_seq_parameters.vcl_hrd_parameters_present_flag )
+      {
+        len+=u_1 ("SPS: vui_mvc_low_delay_hrd_flag[ 0 ]",                 sps->vui_seq_parameters.low_delay_hrd_flag,                        bitstream );
+      }
+      len+=u_1 ("SPS: vui_mvc_pic_struct_present_flag[ 0 ]",              sps->vui_seq_parameters.pic_struct_present_flag,                   bitstream);
+    }
+
+    len+=u_1 ("SPS: additional_extension2_flag",                          0,           bitstream);
+  }
+#endif
+
   SODBtoRBSP(bitstream);     // copies the last couple of bits into the byte buffer
 
   LenInBytes=bitstream->byte_pos;
@@ -737,8 +883,10 @@ int GeneratePic_parameter_set_rbsp (VideoParameters *p_Vid, pic_parameter_set_rb
 
   pps->bottom_field_pic_order_in_frame_present_flag = p_Vid->bottom_field_pic_order_in_frame_present_flag;
 
+  {
   len+=ue_v ("PPS: pic_parameter_set_id",                    pps->pic_parameter_set_id,                      bitstream);
   len+=ue_v ("PPS: seq_parameter_set_id",                    pps->seq_parameter_set_id,                      bitstream);
+  }
   len+=u_1  ("PPS: entropy_coding_mode_flag",                pps->entropy_coding_mode_flag,                  bitstream);
   len+=u_1  ("PPS: bottom_field_pic_order_in_frame_present_flag", pps->bottom_field_pic_order_in_frame_present_flag,                    bitstream);
   len+=ue_v ("PPS: num_slice_groups_minus1",                 pps->num_slice_groups_minus1,                   bitstream);
@@ -1028,7 +1176,7 @@ int GenerateSEImessage_rbsp (InputParameters *p_Inp, int id, byte *rbsp)
   {
     char sei_message[500] = "";
     char uuid_message[9] = "Random"; // This is supposed to be Random
-    unsigned int i, message_size = strlen(p_Inp->SEIMessageText);
+    unsigned int i, message_size = (unsigned int) strlen(p_Inp->SEIMessageText);
     TIME_T start_time;
     gettime(&start_time);    // start time
 

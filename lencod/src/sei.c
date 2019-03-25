@@ -2366,6 +2366,7 @@ static void FinalizePicTiming(VideoParameters *p_Vid)
       // bottom field, top field, bottom field repeated, in that order
       assert( p_Vid->fld_flag == FALSE );
       NumClockTS = 3;
+      break;
     case 7:
       // frame doubling
       assert( (p_Vid->fld_flag == FALSE) && active_sps->vui_seq_parameters.fixed_frame_rate_flag == 1 );

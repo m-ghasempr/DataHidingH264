@@ -47,13 +47,29 @@ int RBSPtoNALU (unsigned char *rbsp, NALU_t *nalu, int rbsp_size, int nal_unit_t
 
   assert (nalu != NULL);
   assert (nal_reference_idc <=3 && nal_reference_idc >=0);
-  assert (nal_unit_type > 0 && nal_unit_type <= 12);
+#if (MVC_EXTENSION_ENABLE)
+  assert (nal_unit_type > 0 && nal_unit_type <= NALU_TYPE_SLC_EXT);
+#else
+  assert (nal_unit_type > 0 && nal_unit_type <= NALU_TYPE_FILL);
+#endif
   assert (rbsp_size < MAXRBSPSIZE);
   
   nalu->startcodeprefix_len = UseAnnexbLongStartcode ? 4 : 3;
   nalu->forbidden_bit       = 0;  
   nalu->nal_reference_idc   = (NalRefIdc) nal_reference_idc;
   nalu->nal_unit_type       = (NaluType) nal_unit_type;
+
+#if (MVC_EXTENSION_ENABLE)
+  if(nal_unit_type==NALU_TYPE_PREFIX || nal_unit_type==NALU_TYPE_SLC_EXT)
+  {
+    nalu->svc_extension_flag = 0;
+    nalu->non_idr_flag       = (nal_reference_idc==NALU_PRIORITY_HIGHEST) ? 0:1;
+    nalu->reserved_one_bit   = 1;
+
+  }
+  else
+    nalu->svc_extension_flag = 0;
+#endif
 
   len = RBSPtoEBSP (nalu->buf, rbsp, rbsp_size);
   nalu->len = len;

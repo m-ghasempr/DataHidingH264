@@ -63,7 +63,7 @@ void EstimateWPPSliceAlg2(Slice *currSlice, int select_offset)
 
   for (clist = 0; clist < 2 + list_offset; clist++)
   {
-    for (n = 0; n < p_Vid->listXsize[clist]; n++)
+    for (n = 0; n < currSlice->listXsize[clist]; n++)
     {
       if ( wpxDetermineWP( currSlice, clist, n ) )
       {
@@ -77,7 +77,7 @@ void EstimateWPPSliceAlg2(Slice *currSlice, int select_offset)
         }
 
         // Y
-        tmpPtr = p_Vid->listX[clist][n]->p_curr_img;      
+        tmpPtr = currSlice->listX[clist][n]->p_curr_img;      
         dc_ref[n] = ComputeImgSum(tmpPtr, p_Vid->height, p_Vid->width);
 
         if (p_Inp->ChromaWeightSupport == 1)
@@ -85,7 +85,7 @@ void EstimateWPPSliceAlg2(Slice *currSlice, int select_offset)
           for (k = 0; k < 2; k++)
           {
             // UV
-            tmpPtr = p_Vid->listX[clist][n]->imgUV[k];
+            tmpPtr = currSlice->listX[clist][n]->imgUV[k];
             dc_ref_UV[n][k] = ComputeImgSum(tmpPtr, p_Vid->height_cr, p_Vid->width_cr);
           }        
         }
@@ -200,12 +200,12 @@ void EstimateWPBSliceAlg2(Slice *currSlice)
 
   if (p_Vid->active_pps->weighted_bipred_idc == 2) //! implicit mode
   {
-    for (i = 0; i < p_Vid->listXsize[LIST_0]; i++)
+    for (i = 0; i < currSlice->listXsize[LIST_0]; i++)
     {
-      for (j = 0; j < p_Vid->listXsize[LIST_1]; j++)
+      for (j = 0; j < currSlice->listXsize[LIST_1]; j++)
       {
-        td = (short) iClip3(-128, 127,(p_Vid->listX[LIST_1][j]->poc - p_Vid->listX[LIST_0][i]->poc));
-        tb = (short)iClip3(-128, 127,(p_Vid->enc_picture->poc - p_Vid->listX[LIST_0][i]->poc));
+        td = (short) iClip3(-128, 127,(currSlice->listX[LIST_1][j]->poc - currSlice->listX[LIST_0][i]->poc));
+        tb = (short)iClip3(-128, 127,(p_Vid->enc_picture->poc - currSlice->listX[LIST_0][i]->poc));
         for (comp = 0; comp < 3; comp++)
         {
           // implicit weights
@@ -226,7 +226,7 @@ void EstimateWPBSliceAlg2(Slice *currSlice)
         }
 #if DEBUG_WP
         printf ("%d imp weight[%d][%d] = %d  , %d (%d %d %d) (%d %d) (%d %d)\n",p_Vid->enc_picture->poc, i, j,  im_weight[0][i][j][0], im_weight[1][i][j][0],
-          p_Vid->enc_picture->poc,p_Vid->listX[LIST_0][i]->poc, p_Vid->listX[LIST_1][j]->poc,
+          p_Vid->enc_picture->poc,currSlice->listX[LIST_0][i]->poc, currSlice->listX[LIST_1][j]->poc,
           DistScaleFactor ,tx,td,tb);
 #endif
       }
@@ -234,9 +234,9 @@ void EstimateWPBSliceAlg2(Slice *currSlice)
 
     for (k = 0; k < 2; k++)
     {
-      for (i = 0; i < p_Vid->listXsize[LIST_0]; i++)
+      for (i = 0; i < currSlice->listXsize[LIST_0]; i++)
       {
-        for (j = 0; j < p_Vid->listXsize[LIST_1]; j++)
+        for (j = 0; j < currSlice->listXsize[LIST_1]; j++)
         {
           for (comp = 0; comp < 3; comp++)
           {
@@ -248,7 +248,7 @@ void EstimateWPBSliceAlg2(Slice *currSlice)
 
     for (clist=0; clist<2 + list_offset; clist++)
     {
-      for (index = 0; index < p_Vid->listXsize[clist]; index++)
+      for (index = 0; index < currSlice->listXsize[clist]; index++)
       {
         for (comp = 0; comp < 3; comp++)
         {
@@ -272,7 +272,7 @@ void EstimateWPBSliceAlg2(Slice *currSlice)
 
     for (clist=0; clist<2 + list_offset; clist++)
     {
-      for (n = 0; n < p_Vid->listXsize[clist]; n++)
+      for (n = 0; n < currSlice->listXsize[clist]; n++)
       {
         if ( wpxDetermineWP( currSlice, clist, n ) )
         {
@@ -294,7 +294,7 @@ void EstimateWPBSliceAlg2(Slice *currSlice)
           {          
             for (k = 0; k < 2; k++)
             {        	
-              tmpPtr = p_Vid->listX[clist][n]->imgUV[k];
+              tmpPtr = currSlice->listX[clist][n]->imgUV[k];
               dc_ref_UV[clist][n][k] = ComputeImgSum(tmpPtr, p_Vid->height_cr, p_Vid->width_cr);
 
               if (dc_ref_UV[clist][n][k] != 0.0)
@@ -332,7 +332,7 @@ void EstimateWPBSliceAlg2(Slice *currSlice)
     {
       for (clist=0; clist<2 + list_offset; clist++)
       {
-        for (index = 0; index < p_Vid->listXsize[clist]; index++)
+        for (index = 0; index < currSlice->listXsize[clist]; index++)
         {
           memcpy(currSlice->wp_weight[clist][index], default_weight, 3 * sizeof(short));
           memset(currSlice->wp_offset[clist][index], 0, 3 * sizeof(short));
@@ -341,9 +341,9 @@ void EstimateWPBSliceAlg2(Slice *currSlice)
     }
 
 
-    for (i = 0; i < p_Vid->listXsize[LIST_0]; i++)
+    for (i = 0; i < currSlice->listXsize[LIST_0]; i++)
     {
-      for (j = 0; j < p_Vid->listXsize[LIST_1]; j++)
+      for (j = 0; j < currSlice->listXsize[LIST_1]; j++)
       {
         for (comp = 0; comp < 3; comp++)
         {
@@ -352,7 +352,7 @@ void EstimateWPBSliceAlg2(Slice *currSlice)
         }
 #if DEBUG_WP
         printf ("bpw weight[%d][%d] = %d  , %d (%d %d %d) (%d %d) (%d %d)\n", i, j, currSlice->wbp_weight[0][i][j][0], currSlice->wbp_weight[1][i][j][0],
-        p_Vid->enc_picture->poc,p_Vid->listX[LIST_0][i]->poc, p_Vid->listX[LIST_1][j]->poc,
+        p_Vid->enc_picture->poc,currSlice->listX[LIST_0][i]->poc, currSlice->listX[LIST_1][j]->poc,
         DistScaleFactor ,tx,tx,tx);
 #endif
       }
@@ -368,8 +368,9 @@ void EstimateWPBSliceAlg2(Slice *currSlice)
 ************************************************************************
 */
 
-int TestWPPSliceAlg2(VideoParameters *p_Vid, int select_offset)
+int TestWPPSliceAlg2(Slice *currSlice, int select_offset)
 {
+  VideoParameters *p_Vid = currSlice->p_Vid;
   InputParameters *p_Inp = p_Vid->p_Inp;
   int i, j, k, n;
 
@@ -400,7 +401,7 @@ int TestWPPSliceAlg2(VideoParameters *p_Vid, int select_offset)
   /* set all values to defaults */
   for (i = 0; i < 2 + list_offset; i++)
   {
-    for (j = 0; j < p_Vid->listXsize[i]; j++)
+    for (j = 0; j < currSlice->listXsize[i]; j++)
     {
       for (n = 0; n < 3; n++)
       {
@@ -424,16 +425,16 @@ int TestWPPSliceAlg2(VideoParameters *p_Vid, int select_offset)
 
   for (clist = 0; clist < 2 + list_offset; clist++)
   {
-    for (n = 0; n < p_Vid->listXsize[clist]; n++)
+    for (n = 0; n < currSlice->listXsize[clist]; n++)
     {
-      tmpPtr = p_Vid->listX[clist][n]->p_curr_img;
+      tmpPtr = currSlice->listX[clist][n]->p_curr_img;
       dc_ref[n] = ComputeImgSum(tmpPtr, p_Vid->height, p_Vid->width);
 
       if (p_Inp->ChromaWeightSupport == 1)
       {
         for (k = 0; k < 2; k++)
         {
-          tmpPtr = p_Vid->listX[clist][n]->imgUV[k];
+          tmpPtr = currSlice->listX[clist][n]->imgUV[k];
           dc_ref_UV[n][k] = ComputeImgSum(tmpPtr, p_Vid->height_cr, p_Vid->width_cr);
         }        
       }
@@ -491,7 +492,7 @@ int TestWPPSliceAlg2(VideoParameters *p_Vid, int select_offset)
 
   for (clist=0; clist<2 + list_offset; clist++)
   {
-    for (index = 0; index < p_Vid->listXsize[clist]; index++)
+    for (index = 0; index < currSlice->listXsize[clist]; index++)
     {
       for (comp=0; comp < 3; comp ++)
       {
@@ -520,8 +521,9 @@ int TestWPPSliceAlg2(VideoParameters *p_Vid, int select_offset)
 *    Tests B slice weighting prediction
 ************************************************************************
 */
-int TestWPBSliceAlg2(VideoParameters *p_Vid, int select_method)
+int TestWPBSliceAlg2(Slice *currSlice, int select_method)
 {
+  VideoParameters *p_Vid = currSlice->p_Vid;
   InputParameters *p_Inp = p_Vid->p_Inp;
   int i, j, k, n;
 
@@ -558,7 +560,7 @@ int TestWPBSliceAlg2(VideoParameters *p_Vid, int select_method)
   /* set all values to defaults */
   for (i = 0; i < 2 + list_offset; i++)
   {
-    for (j = 0; j < p_Vid->listXsize[i]; j++)
+    for (j = 0; j < currSlice->listXsize[i]; j++)
     {
       for (n = 0; n < 3; n++)
       {
@@ -570,12 +572,12 @@ int TestWPBSliceAlg2(VideoParameters *p_Vid, int select_method)
     }
   }
 
-  for (i = 0; i < p_Vid->listXsize[LIST_0]; i++)
+  for (i = 0; i < currSlice->listXsize[LIST_0]; i++)
   {
-    for (j = 0; j < p_Vid->listXsize[LIST_1]; j++)
+    for (j = 0; j < currSlice->listXsize[LIST_1]; j++)
     {
-      td = (short) iClip3(-128, 127,(p_Vid->listX[LIST_1][j]->poc - p_Vid->listX[LIST_0][i]->poc));
-      tb = (short) iClip3(-128, 127,(p_Vid->enc_picture->poc - p_Vid->listX[LIST_0][i]->poc));
+      td = (short) iClip3(-128, 127,(currSlice->listX[LIST_1][j]->poc - currSlice->listX[LIST_0][i]->poc));
+      tb = (short) iClip3(-128, 127,(p_Vid->enc_picture->poc - currSlice->listX[LIST_0][i]->poc));
       for (comp = 0; comp < 3; comp++)
       {
         // implicit weights
@@ -600,9 +602,9 @@ int TestWPBSliceAlg2(VideoParameters *p_Vid, int select_method)
 
   if (select_method == 1) //! implicit mode
   {
-    for (i = 0; i < p_Vid->listXsize[LIST_0]; i++)
+    for (i = 0; i < currSlice->listXsize[LIST_0]; i++)
     {
-      for (j = 0; j < p_Vid->listXsize[LIST_1]; j++)
+      for (j = 0; j < currSlice->listXsize[LIST_1]; j++)
       {
         for (comp = 0; comp < 3; comp++)
         {
@@ -614,7 +616,7 @@ int TestWPBSliceAlg2(VideoParameters *p_Vid, int select_method)
 
     for (clist=0; clist<2 + list_offset; clist++)
     {
-      for (index = 0; index < p_Vid->listXsize[clist]; index++)
+      for (index = 0; index < currSlice->listXsize[clist]; index++)
       {
         for (comp = 0; comp < 3; comp++)
         {
@@ -638,7 +640,7 @@ int TestWPBSliceAlg2(VideoParameters *p_Vid, int select_method)
 
     for (clist=0; clist<2 + list_offset; clist++)
     {
-      for (n = 0; n < p_Vid->listXsize[clist]; n++)
+      for (n = 0; n < currSlice->listXsize[clist]; n++)
       {
         offset[clist][n][0] = wf_offset = p_Vid->frameOffset[clist][n];          
         weight[clist][n][0] = wf_weight = default_weight[0];         
@@ -648,7 +650,7 @@ int TestWPBSliceAlg2(VideoParameters *p_Vid, int select_method)
         {          
           for (k = 0; k < 2; k++)
           {
-            tmpPtr = p_Vid->listX[clist][n]->imgUV[k];
+            tmpPtr = currSlice->listX[clist][n]->imgUV[k];
             dc_ref_UV[clist][n][k] = ComputeImgSum(tmpPtr, p_Vid->height_cr, p_Vid->width_cr);
 
             if (dc_ref_UV[clist][n][k] != 0.0)
@@ -676,7 +678,7 @@ int TestWPBSliceAlg2(VideoParameters *p_Vid, int select_method)
     {
       for (clist=0; clist<2 + list_offset; clist++)
       {
-        for (index = 0; index < p_Vid->listXsize[clist]; index++)
+        for (index = 0; index < currSlice->listXsize[clist]; index++)
         {
           memcpy(p_Vid->currentSlice->wp_weight[clist][index], weight[clist][index], 3 * sizeof(short));
           memcpy(p_Vid->currentSlice->wp_offset[clist][index], offset[clist][index], 3 * sizeof(short));
@@ -687,7 +689,7 @@ int TestWPBSliceAlg2(VideoParameters *p_Vid, int select_method)
     {
       for (clist=0; clist<2 + list_offset; clist++)
       {
-        for (index = 0; index < p_Vid->listXsize[clist]; index++)
+        for (index = 0; index < currSlice->listXsize[clist]; index++)
         {
           memcpy(wp_weight[clist][index], default_weight, 3 * sizeof(short));
           memset(wp_offset[clist][index], 0, 3 * sizeof(short));
@@ -695,9 +697,9 @@ int TestWPBSliceAlg2(VideoParameters *p_Vid, int select_method)
       }
     }
 
-    for (i = 0; i < p_Vid->listXsize[LIST_0]; i++)
+    for (i = 0; i < currSlice->listXsize[LIST_0]; i++)
     {
-      for (j = 0; j < p_Vid->listXsize[LIST_1]; j++)
+      for (j = 0; j < currSlice->listXsize[LIST_1]; j++)
       {
         for (comp = 0; comp < 3; comp++)
         {
@@ -706,7 +708,7 @@ int TestWPBSliceAlg2(VideoParameters *p_Vid, int select_method)
         }
 #if DEBUG_WP
         printf ("bpw weight[%d][%d] = %d  , %d (%d %d %d) (%d %d) (%d %d)\n", i, j, p_Vid->currentSlice->wbp_weight[0][i][j][0], p_Vid->currentSlice->wbp_weight[1][i][j][0],
-        p_Vid->enc_picture->poc,p_Vid->listX[LIST_0][i]->poc, p_Vid->listX[LIST_1][j]->poc,
+        p_Vid->enc_picture->poc,currSlice->listX[LIST_0][i]->poc, currSlice->listX[LIST_1][j]->poc,
         DistScaleFactor ,tx,tx,tx);
 #endif
       }
@@ -717,8 +719,8 @@ int TestWPBSliceAlg2(VideoParameters *p_Vid, int select_method)
   {
     int active_refs[2];
 
-    active_refs[0] = (p_Inp->B_List0_refs == 0 ? p_Vid->listXsize[0] : imin(p_Inp->B_List0_refs, p_Vid->listXsize[0]));
-    active_refs[1] = (p_Inp->B_List1_refs == 0 ? p_Vid->listXsize[1] : imin(p_Inp->B_List1_refs, p_Vid->listXsize[1]));
+    active_refs[0] = (p_Inp->B_List0_refs == 0 ? currSlice->listXsize[0] : imin(p_Inp->B_List0_refs, currSlice->listXsize[0]));
+    active_refs[1] = (p_Inp->B_List1_refs == 0 ? currSlice->listXsize[1] : imin(p_Inp->B_List1_refs, currSlice->listXsize[1]));
 
     for (clist=0; clist<2 + list_offset; clist++)
     {
@@ -740,9 +742,10 @@ int TestWPBSliceAlg2(VideoParameters *p_Vid, int select_method)
   return perform_wp;
 }
 
-void compute_offset(VideoParameters *p_Vid)
+void compute_offset(Slice *currSlice)
 {
-  PicMotionParams *motion = &p_Vid->enc_picture->motion;
+  VideoParameters *p_Vid = currSlice->p_Vid;
+  PicMotionParams **motion = p_Vid->enc_picture->mv_info;
   Macroblock *currMB;
   int i, j, x, y, xj, yi, temp, valOrg;
   int mvx=0,  mvy=0;
@@ -750,8 +753,8 @@ void compute_offset(VideoParameters *p_Vid)
   int subblock=0;
   int x_orig, y_orig;       
   int x_pos, y_pos;
-  int out4Y_width  = (p_Vid->width  + 2 * IMG_PAD_SIZE) * 4 - 1;  
-  int out4Y_height = (p_Vid->height + 2 * IMG_PAD_SIZE) * 4 - 1;
+  int out4Y_width  = (p_Vid->width  + IMG_PAD_SIZE_X) * 4 - 1;  
+  int out4Y_height = (p_Vid->height + IMG_PAD_SIZE_Y) * 4 - 1;
 
   int frame, list, offset; 
   double dtemp;
@@ -785,9 +788,9 @@ void compute_offset(VideoParameters *p_Vid)
           //List 0
           x = x_orig+4*(subblock & 0x03);
           y = y_orig+4*(subblock >> 2);
-          mvx = motion->mv[LIST_0][y >> 2][x >> 2][0];
-          mvy = motion->mv[LIST_0][y >> 2][x >> 2][1];
-          ref_frame = motion->ref_idx[LIST_0][y >> 2][x >> 2];
+          mvx = motion[y >> 2][x >> 2].mv[LIST_0].mv_x;
+          mvy = motion[y >> 2][x >> 2].mv[LIST_0].mv_y;
+          ref_frame = motion[y >> 2][x >> 2].ref_idx[LIST_0];
 
           if(ref_frame != -1)
           {
@@ -797,10 +800,12 @@ void compute_offset(VideoParameters *p_Vid)
               {  //x
                 valOrg   = p_Vid->pCurImg[y+yi][x+xj];
 
-                y_pos = imax(0,imin(out4Y_height,4*(y+yi)+4*IMG_PAD_SIZE+mvy));
-                x_pos = imax(0,imin(out4Y_width, 4*(x+xj)+4*IMG_PAD_SIZE+mvx));
+                //y_pos = imax(0,imin(out4Y_height,4*(y+yi)+4*IMG_PAD_SIZE+mvy));
+                y_pos = imax(-4*IMG_PAD_SIZE_Y, imin(out4Y_height, 4*(y+yi)+mvy));
+                //x_pos = imax(0,imin(out4Y_width, 4*(x+xj)+4*IMG_PAD_SIZE+mvx));
+                x_pos = imax(-4*IMG_PAD_SIZE_X, imin(out4Y_width, 4*(x+xj)+mvx));
 
-                temp=p_Vid->listX[LIST_0][ref_frame]->p_curr_img_sub[(y_pos & 0x03)][(x_pos & 0x03)][y_pos >> 2][x_pos >> 2];
+                temp=currSlice->listX[LIST_0][ref_frame]->p_curr_img_sub[(y_pos & 0x03)][(x_pos & 0x03)][y_pos >> 2][x_pos >> 2];
                 p_Vid->frameOffsetTotal[LIST_0][ref_frame]+=(valOrg-temp);
                 p_Vid->frameOffsetCount[LIST_0][ref_frame]++;          
               }
@@ -809,9 +814,9 @@ void compute_offset(VideoParameters *p_Vid)
 
 
           //List 1
-          mvx = motion->mv[LIST_1][y >> 2][x >> 2][0];
-          mvy = motion->mv[LIST_1][y >> 2][x >> 2][1];
-          ref_frame = motion->ref_idx[LIST_1][y >> 2][x >> 2];
+          mvx = motion[y >> 2][x >> 2].mv[LIST_1].mv_x;
+          mvy = motion[y >> 2][x >> 2].mv[LIST_1].mv_y;
+          ref_frame = motion[y >> 2][x >> 2].ref_idx[LIST_1];
           if(ref_frame != -1)
           {
             for(yi = 0; yi < 4; yi++)
@@ -820,10 +825,12 @@ void compute_offset(VideoParameters *p_Vid)
               {  //x
                 valOrg   = p_Vid->pCurImg[y+yi][x+xj];
 
-                y_pos = imax(0,imin(out4Y_height,4*(y+yi)+4*IMG_PAD_SIZE+mvy));
-                x_pos = imax(0,imin(out4Y_width, 4*(x+xj)+4*IMG_PAD_SIZE+mvx));
+                //y_pos = imax(0,imin(out4Y_height,4*(y+yi)+4*IMG_PAD_SIZE+mvy));
+                y_pos = imax(-4*IMG_PAD_SIZE_Y, imin(out4Y_height, 4*(y+yi) + mvy));
+                //x_pos = imax(0, imin(out4Y_width, 4*(x+xj)+4*IMG_PAD_SIZE+mvx));
+                x_pos = imax(-4*IMG_PAD_SIZE_X, imin(out4Y_width, 4*(x+xj) + mvx));
 
-                temp=p_Vid->listX[LIST_0][ref_frame]->p_curr_img_sub[(y_pos & 0x03)][(x_pos & 0x03)][y_pos >> 2][x_pos >> 2];
+                temp=currSlice->listX[LIST_0][ref_frame]->p_curr_img_sub[(y_pos & 0x03)][(x_pos & 0x03)][y_pos >> 2][x_pos >> 2];
                 p_Vid->frameOffsetTotal[LIST_1][ref_frame]+=(valOrg-temp);
                 p_Vid->frameOffsetCount[LIST_1][ref_frame]++;          
               }
@@ -835,7 +842,7 @@ void compute_offset(VideoParameters *p_Vid)
 
     for(list = 0; list < numlists; list++)
     {
-      for(frame = 0; frame < p_Vid->listXsize[list]; frame++)
+      for(frame = 0; frame < currSlice->listXsize[list]; frame++)
       {
         dtemp=(double)p_Vid->frameOffsetTotal[list][frame];
 

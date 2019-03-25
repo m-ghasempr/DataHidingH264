@@ -11,7 +11,7 @@
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
  *     - Athanasios Leontaris            <aleon@dolby.com>
- *     - Karsten Suehring                <suehring@hhi.de> 
+ *     - Karsten Sühring                 <suehring@hhi.de> 
  *     - Alexis Michael Tourapis         <alexismt@ieee.org> 
  **************************************************************************
  */
@@ -34,5 +34,6 @@ extern void poc_ref_pic_reorder_field( Slice *currSlice, StorablePicture **list,
 
 extern void tlyr_ref_pic_reorder_frame_default( Slice *currSlice, StorablePicture **list, unsigned num_ref_idx_lX_active, 
                                        int *reordering_of_pic_nums_idc, int *abs_diff_pic_num_minus1, int *long_term_pic_idx, int list_no );
+
 
 #endif

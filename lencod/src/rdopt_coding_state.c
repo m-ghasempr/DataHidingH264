@@ -18,7 +18,7 @@
 
 #include "rdopt_coding_state.h"
 #include "cabac.h"
-
+#include "memalloc.h"
 
 /*!
  ************************************************************************
@@ -31,12 +31,26 @@ void delete_coding_state (CSobj *cs)
   if (cs != NULL)
   {
     //=== structures of data partition array ===
-    if (cs->encenv    != NULL)   free (cs->encenv);
-    if (cs->bitstream != NULL)   free (cs->bitstream);
+    if (cs->encenv    != NULL)
+    {
+      free (cs->encenv);
+      cs->encenv = NULL;
+    }
+    if (cs->bitstream != NULL)
+    {
+      free (cs->bitstream);
+      cs->bitstream = NULL;
+    }
 
     //=== contexts for binary arithmetic coding ===
     delete_contexts_MotionInfo  (cs->mot_ctx);
     delete_contexts_TextureInfo (cs->tex_ctx);
+
+    if (cs->cbp_bits_8x8 != NULL)
+    {
+      free (cs->cbp_bits_8x8);
+      cs->cbp_bits_8x8 = NULL;
+    }
 
     //=== coding state structure ===
     free (cs);
@@ -65,25 +79,31 @@ CSobj *create_coding_state (InputParameters *p_Inp)
   {
     if ((cs->encenv = (EncodingEnvironment*) calloc (cs->no_part, sizeof(EncodingEnvironment))) == NULL)
       no_mem_exit("init_coding_state: cs->encenv");
+
+    if ((cs->bitstream = (Bitstream*) calloc (cs->no_part, sizeof(Bitstream))) == NULL)
+      no_mem_exit("init_coding_state: cs->bitstream");
+    //=== context for binary arithmetic coding ===
+    cs->mot_ctx = create_contexts_MotionInfo ();
+    cs->tex_ctx = create_contexts_TextureInfo();
+
   }
   else
   {
     cs->encenv = NULL;
-  }
-  if ((cs->bitstream = (Bitstream*) calloc (cs->no_part, sizeof(Bitstream))) == NULL)
-    no_mem_exit("init_coding_state: cs->bitstream");
+    if ((cs->bitstream = (Bitstream*) calloc (cs->no_part, sizeof(Bitstream))) == NULL)
+      no_mem_exit("init_coding_state: cs->bitstream");
 
-  //=== context for binary arithmetic coding ===
-  if (p_Inp->symbol_mode == CABAC)
-  {
-    cs->mot_ctx = create_contexts_MotionInfo ();
-    cs->tex_ctx = create_contexts_TextureInfo();
-  }
-  else
-  {
     cs->mot_ctx = NULL;
     cs->tex_ctx = NULL;
   }
+  
+  if (p_Inp->ProfileIDC == 244)
+  {
+    if ((cs->cbp_bits_8x8 = (int64 *) calloc (3, sizeof(int64))) == NULL)
+      no_mem_exit("init_coding_state: cs->cbp_bits_8x8"); 
+  }
+  else
+    cs->cbp_bits_8x8 = NULL;
 
   return cs;
 }
@@ -108,7 +128,7 @@ static void store_coding_state_nordo (Macroblock *currMB, CSobj *cs)
 static void store_coding_state_cavlc (Macroblock *currMB, CSobj *cs)
 {
   int  i;
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   int  i_last = currSlice->idr_flag? 1 : cs->no_part;  
 
   //=== important variables of data partition array ===
@@ -138,7 +158,7 @@ static void store_coding_state_cavlc (Macroblock *currMB, CSobj *cs)
 static void store_coding_state_cabac (Macroblock *currMB, CSobj *cs)
 {
   int  i;
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   int  i_last = currSlice->idr_flag? 1:cs->no_part;  
   DataPartition *partArr = &currSlice->partArr[0];
 
@@ -185,7 +205,7 @@ static void reset_coding_state_nordo (Macroblock *currMB, CSobj *cs)
 static void reset_coding_state_cavlc (Macroblock *currMB, CSobj *cs)
 {
   int  i;
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   int  i_last = currSlice->idr_flag? 1:cs->no_part;   
 
   //=== important variables of data partition array ===
@@ -217,7 +237,7 @@ static void reset_coding_state_cavlc (Macroblock *currMB, CSobj *cs)
 static void reset_coding_state_cabac (Macroblock *currMB, CSobj *cs)
 {
   int  i;
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   int  i_last = currSlice->idr_flag? 1:cs->no_part;   
   DataPartition *partArr = &currSlice->partArr[0];
 

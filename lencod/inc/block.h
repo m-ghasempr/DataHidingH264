@@ -21,7 +21,7 @@
 
 #include "global.h"
 
-extern int dct_4x4(Macroblock *currMB, ColorPlane pl, int block_x,int block_y, int *coeff_cost, int intra);
+extern int residual_transform_quant_luma_4x4(Macroblock *currMB, ColorPlane pl, int block_x,int block_y, int *coeff_cost, int intra);
 
 static const byte QP_SCALE_CR[52]=
 {

@@ -25,7 +25,42 @@
 #include "transform.h"
 #include "quant.h"
 
+static void recon8x8(int **m7, imgpel **mb_rec, imgpel **mpr, int max_imgpel_value, int ioff)
+{
+  int j;
+  int    *m_tr  = NULL;
+  imgpel *m_rec = NULL;
+  imgpel *m_prd = NULL;
 
+  for( j = 0; j < 8; j++)
+  {
+    m_tr = (*m7++) + ioff;
+    m_rec = (*mb_rec++) + ioff;
+    m_prd = (*mpr++) + ioff;
+
+    *m_rec++ = (imgpel) iClip1(max_imgpel_value, (*m_prd++) + rshift_rnd_sf(*m_tr++, DQ_BITS_8)); 
+    *m_rec++ = (imgpel) iClip1(max_imgpel_value, (*m_prd++) + rshift_rnd_sf(*m_tr++, DQ_BITS_8)); 
+    *m_rec++ = (imgpel) iClip1(max_imgpel_value, (*m_prd++) + rshift_rnd_sf(*m_tr++, DQ_BITS_8)); 
+    *m_rec++ = (imgpel) iClip1(max_imgpel_value, (*m_prd++) + rshift_rnd_sf(*m_tr++, DQ_BITS_8)); 
+    *m_rec++ = (imgpel) iClip1(max_imgpel_value, (*m_prd++) + rshift_rnd_sf(*m_tr++, DQ_BITS_8)); 
+    *m_rec++ = (imgpel) iClip1(max_imgpel_value, (*m_prd++) + rshift_rnd_sf(*m_tr++, DQ_BITS_8)); 
+    *m_rec++ = (imgpel) iClip1(max_imgpel_value, (*m_prd++) + rshift_rnd_sf(*m_tr++, DQ_BITS_8)); 
+    *m_rec   = (imgpel) iClip1(max_imgpel_value, (*m_prd  ) + rshift_rnd_sf(*m_tr  , DQ_BITS_8)); 
+  }
+}
+
+static void recon8x8_lossless(int **m7, imgpel **mb_rec, imgpel **mpr, int max_imgpel_value, int ioff)
+{
+  int i, j;
+  for( j = 0; j < 8; j++)
+  {
+    for( i = ioff; i < ioff + 8; i++)
+      (*mb_rec)[i] = (imgpel) iClip1(max_imgpel_value, ((*m7)[i] + (long)(*mpr)[i])); 
+    mb_rec++;
+    m7++;
+    mpr++;
+  }
+}
 
 /*!
  ***********************************************************************
@@ -38,31 +73,17 @@ void itrans8x8(Macroblock *currMB,   //!< current macroblock
                int ioff,             //!< index to 4x4 block
                int joff)             //!< index to 4x4 block
 {
-  VideoParameters *p_Vid = currMB->p_Vid;
   Slice *currSlice = currMB->p_Slice;
-  int i,j;
 
-  imgpel **mpr    = currSlice->mb_pred[pl];
-  imgpel **mb_rec = currSlice->mb_rec[pl];
   int    **m7     = currSlice->mb_rres[pl];
-  int     max_imgpel_value = p_Vid->max_pel_value_comp[pl];
 
   if (currMB->is_lossless == TRUE)
   {
-    for( j = joff; j < joff + 8; j++)
-    {
-      for( i = ioff; i < ioff + 8; i++)
-        mb_rec[j][i] = (imgpel) iClip1(max_imgpel_value, (m7[j][i] + (long)mpr[j][i])); 
-    }
+    recon8x8_lossless(&m7[joff], &currSlice->mb_rec[pl][joff], &currSlice->mb_pred[pl][joff], currMB->p_Vid->max_pel_value_comp[pl], ioff);
   }
   else
   {
     inverse8x8(m7, m7, joff, ioff);
-    for( j = joff; j < joff + 8; j++)
-    {
-      for( i = ioff; i < ioff + 8; i++)
-        //mb_rec[j][i] = (imgpel) iClip1(max_imgpel_value, rshift_rnd_sf((m7[j][i] + ((long)mpr[j][i] << DQ_BITS_8)), DQ_BITS_8)); 
-        mb_rec[j][i] = (imgpel) iClip1(max_imgpel_value, mpr[j][i] + rshift_rnd_sf(m7[j][i], DQ_BITS_8)); 
-    }
+    recon8x8  (&m7[joff], &currSlice->mb_rec[pl][joff], &currSlice->mb_pred[pl][joff], currMB->p_Vid->max_pel_value_comp[pl], ioff);
   }
 }

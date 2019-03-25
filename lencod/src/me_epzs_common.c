@@ -38,8 +38,8 @@ static const char EPZS_DUAL_PATTERN[7][20] =
 { "Disabled", "Diamond", "Square", "Extended Diamond", "Large Diamond", "SBP Large Diamond", "PMVFAST" };
 static const char EPZS_FIXED_PREDICTORS[3][20] = { "Disabled", "All P", "All P + B" };
 static const char EPZS_OTHER_PREDICTORS[2][20] = { "Disabled", "Enabled" };
+static const char EPZS_SUBPEL_METHOD[3][20]    = { "Full", "Basic", "Enhanced" };
 
-//! Define EPZS Refinement patterns
 //! Define EPZS Refinement patterns
 static const short pattern_data[5][12][4] =
 {
@@ -537,11 +537,11 @@ EPZSSliceInit (Slice * currSlice)
   InputParameters *p_Inp = currSlice->p_Inp;
   StorablePicture *p_Pic = p_Vid->enc_picture;
   EPZSColocParams *p = currSlice->p_EPZS->p_colocated;
-  StorablePicture ***listX = p_Vid->listX;
+  StorablePicture ***listX = currSlice->listX;
   StorablePicture *fs, *fs_top, *fs_bottom;
   StorablePicture *fs1, *fs_top1, *fs_bottom1, *fsx;
   EPZSParameters *p_EPZS = currSlice->p_EPZS;
-  PicMotionParams *p_motion = NULL;
+  PicMotionParamsOld *p_motion = NULL;
   int i, j, k, jj, jdiv, loffset;
   int prescale, iTRb, iTRp;
   int list = (currSlice->slice_type == B_SLICE) ? LIST_1 : LIST_0;
@@ -554,9 +554,9 @@ EPZSSliceInit (Slice * currSlice)
   // Needed to scale spatial predictors.
   for (j = LIST_0; j < 2 + (currSlice->mb_aff_frame_flag << 2); ++j)
   {
-    for (k = 0; k < p_Vid->listXsize[j]; ++k)
+    for (k = 0; k < currSlice->listXsize[j]; ++k)
     {
-      for (i = 0; i < p_Vid->listXsize[j]; ++i)
+      for (i = 0; i < currSlice->listXsize[j]; ++i)
       {
         if ((j >> 1) == 0)
         {
@@ -591,7 +591,7 @@ EPZSSliceInit (Slice * currSlice)
     MotionVector **MotionVector1 = p->frame[LIST_1];
 
     fs_top = fs_bottom = fs = listX[list][0];
-    if (p_Vid->listXsize[list] > 1)
+    if (currSlice->listXsize[list] > 1)
       fs_top1 = fs_bottom1 = fs1 = listX[list][1];
     else
       fs_top1 = fs_bottom1 = fs1 = listX[list][0];
@@ -606,7 +606,7 @@ EPZSSliceInit (Slice * currSlice)
 
     for (j = 0; j < 2 + (currSlice->mb_aff_frame_flag << 2); j += 2)
     {
-      for (i = 0; i < p_Vid->listXsize[j]; ++i)
+      for (i = 0; i < currSlice->listXsize[j]; ++i)
       {
         if (j == 0)
           iTRb = iClip3 (-128, 127, p_Pic->poc - listX[LIST_0 + j][i]->poc);
@@ -629,7 +629,7 @@ EPZSSliceInit (Slice * currSlice)
         epzs_scale[0][j][i] = rshift_rnd_sf ((p_EPZS->mv_scale[j][0][i] * prescale), 8);
         epzs_scale[0][j + 1][i] = prescale - 256;
 
-        if (p_Vid->listXsize[list + j] > 1)
+        if (currSlice->listXsize[list + j] > 1)
         {
           iTRp = iClip3 (-128, 127, listX[list + j][1]->poc - listX[LIST_0 + j][i]->poc);
           if (iTRp != 0)
@@ -657,7 +657,7 @@ EPZSSliceInit (Slice * currSlice)
       fs_top = listX[list + 2][0];
       fs_bottom = listX[list + 4][0];
 
-      if (p_Vid->listXsize[0] > 1)
+      if (currSlice->listXsize[0] > 1)
       {
         fs_top1 = listX[list + 2][1];
         fs_bottom1 = listX[list + 4][1];
@@ -695,7 +695,7 @@ EPZSSliceInit (Slice * currSlice)
           jdiv = jj + 4 * (j >> 3);
           for (i = 0; i < fs->size_x >> 2; ++i)
           {
-            if (p_motion->field_frame[j][i])
+            if (fs->mv_info[j][i].field_frame)
             {
               //! Assign frame buffers for field MBs
               //! Check whether we should use top or bottom field mvs.
@@ -705,7 +705,7 @@ EPZSSliceInit (Slice * currSlice)
                 tempmv_scale[LIST_0] = 256;
                 tempmv_scale[LIST_1] = 0;
 
-                if (p_motion->ref_id[LIST_0][jdiv][i] < 0 && p_Vid->listXsize[LIST_0] > 1)
+                if (fs->mv_info[jdiv][i].ref_pic[LIST_0] == NULL && currSlice->listXsize[LIST_0] > 1)
                 {
                   fsx = fs_top1;
                   loffset = 1;
@@ -716,11 +716,11 @@ EPZSSliceInit (Slice * currSlice)
                   loffset = 0;
                 }
 
-                if (p_motion->ref_id[LIST_0][jdiv][i] != -1)
+                if (fs->mv_info[jdiv][i] .ref_pic[LIST_0] != NULL)
                 {
-                  for (iref = 0; iref < imin (currSlice->num_ref_idx_active[LIST_0], p_Vid->listXsize[LIST_0]); ++iref)
+                  for (iref = 0; iref < imin (currSlice->num_ref_idx_active[LIST_0], currSlice->listXsize[LIST_0]); ++iref)
                   {
-                    if (p_Pic->ref_pic_num[LIST_0][iref] == p_motion->ref_id[LIST_0][jdiv][i])
+                    if (currSlice->listX[LIST_0][iref] == fs->mv_info[jdiv][i].ref_pic[LIST_0])
                     {
                       tempmv_scale[LIST_0] = epzs_scale[loffset][LIST_0][iref];
                       tempmv_scale[LIST_1] = epzs_scale[loffset][LIST_1][iref];
@@ -728,21 +728,19 @@ EPZSSliceInit (Slice * currSlice)
                     }
                   }
 
-                  compute_scaled (&MotionVector0[j][i], &MotionVector1[j][i], tempmv_scale, fsx->motion.mv[LIST_0][jj][i], invmv_precision);
+                  compute_scaled (&MotionVector0[j][i], &MotionVector1[j][i], tempmv_scale, &fsx->mv_info[jj][i].mv[LIST_0], invmv_precision);
                 }
                 else
                 {
-                  MotionVector0[j][i].mv_x = 0;
-                  MotionVector0[j][i].mv_y = 0;
-                  MotionVector1[j][i].mv_x = 0;
-                  MotionVector1[j][i].mv_y = 0;
+                  MotionVector0[j][i] = zero_mv;
+                  MotionVector1[j][i] = zero_mv;
                 }
               }
               else
               {
                 tempmv_scale[LIST_0] = 256;
                 tempmv_scale[LIST_1] = 0;
-                if (p_motion->ref_id[LIST_0][jdiv + 4][i] < 0 && p_Vid->listXsize[LIST_0] > 1)
+                if (fs->mv_info[jdiv + 4][i].ref_pic[LIST_0] == NULL && currSlice->listXsize[LIST_0] > 1)
                 {
                   fsx = fs_bottom1;
                   loffset = 1;
@@ -753,11 +751,11 @@ EPZSSliceInit (Slice * currSlice)
                   loffset = 0;
                 }
 
-                if (p_motion->ref_id[LIST_0][jdiv + 4][i] != -1)
+                if (fs->mv_info[jdiv + 4][i].ref_pic[LIST_0] != NULL)
                 {
-                  for (iref = 0; iref < imin (currSlice->num_ref_idx_active[LIST_0], p_Vid->listXsize[LIST_0]); ++iref)
+                  for (iref = 0; iref < imin (currSlice->num_ref_idx_active[LIST_0], currSlice->listXsize[LIST_0]); ++iref)
                   {
-                    if (p_Pic->ref_pic_num[LIST_0][iref] == p_motion->ref_id[LIST_0][jdiv + 4][i])
+                    if (currSlice->listX[LIST_0][iref] == fs->mv_info[jdiv + 4][i].ref_pic[LIST_0])
                     {
                       tempmv_scale[LIST_0] = epzs_scale[loffset][LIST_0][iref];
                       tempmv_scale[LIST_1] = epzs_scale[loffset][LIST_1][iref];
@@ -765,14 +763,12 @@ EPZSSliceInit (Slice * currSlice)
                     }
                   }
 
-                  compute_scaled (&MotionVector0[j][i], &MotionVector1[j][i], tempmv_scale, fsx->motion.mv[LIST_0][jj][i], invmv_precision);
+                  compute_scaled (&MotionVector0[j][i], &MotionVector1[j][i], tempmv_scale, &fsx->mv_info[jj][i].mv[LIST_0], invmv_precision);
                 }
                 else
                 {
-                  MotionVector0[j][i].mv_x = 0;
-                  MotionVector0[j][i].mv_y = 0;
-                  MotionVector1[j][i].mv_x = 0;
-                  MotionVector1[j][i].mv_y = 0;
+                  MotionVector0[j][i] = zero_mv;
+                  MotionVector1[j][i] = zero_mv;
                 }
               }
             }
@@ -781,7 +777,7 @@ EPZSSliceInit (Slice * currSlice)
               tempmv_scale[LIST_0] = 256;
               tempmv_scale[LIST_1] = 0;
 
-              if (p_motion->ref_id[LIST_0][j][i] < 0 && p_Vid->listXsize[LIST_0] > 1)
+              if (fs->mv_info[j][i].ref_pic[LIST_0] == NULL && currSlice->listXsize[LIST_0] > 1)
               {
                 fsx = fs1;
                 loffset = 1;
@@ -792,25 +788,23 @@ EPZSSliceInit (Slice * currSlice)
                 loffset = 0;
               }
 
-              if (fsx->motion.ref_id[LIST_0][j][i] != -1)
+              if (fsx->mv_info[j][i].ref_pic[LIST_0] != NULL)
               {
-                for (iref = 0; iref < imin (currSlice->num_ref_idx_active[LIST_0], p_Vid->listXsize[LIST_0]); ++iref)
+                for (iref = 0; iref < imin (currSlice->num_ref_idx_active[LIST_0], currSlice->listXsize[LIST_0]); ++iref)
                 {
-                  if (p_Pic->ref_pic_num[LIST_0][iref] == fsx->motion.ref_id[LIST_0][j][i])
+                  if (currSlice->listX[LIST_0][iref] == fsx->mv_info[j][i].ref_pic[LIST_0])
                   {
                     tempmv_scale[LIST_0] = epzs_scale[loffset][LIST_0][iref];
                     tempmv_scale[LIST_1] = epzs_scale[loffset][LIST_1][iref];
                     break;
                   }
                 }
-                compute_scaled (&MotionVector0[j][i], &MotionVector1[j][i], tempmv_scale, fsx->motion.mv[LIST_0][j][i], invmv_precision);
+                compute_scaled (&MotionVector0[j][i], &MotionVector1[j][i], tempmv_scale, &fsx->mv_info[j][i].mv[LIST_0], invmv_precision);
               }
               else
               {
-                MotionVector0[j][i].mv_x = 0;
-                MotionVector0[j][i].mv_y = 0;
-                MotionVector1[j][i].mv_x = 0;
-                MotionVector1[j][i].mv_y = 0;
+                MotionVector0[j][i] = zero_mv;
+                MotionVector1[j][i] = zero_mv;
               }
             }
           }
@@ -826,7 +820,7 @@ EPZSSliceInit (Slice * currSlice)
           {
             tempmv_scale[LIST_0] = 256;
             tempmv_scale[LIST_1] = 0;
-            if (p_motion->ref_id[LIST_0][j][i] < 0 && p_Vid->listXsize[LIST_0] > 1)
+            if (fs->mv_info[j][i].ref_pic[LIST_0] == NULL && currSlice->listXsize[LIST_0] > 1)
             {
               fsx = fs1;
               loffset = 1;
@@ -837,11 +831,11 @@ EPZSSliceInit (Slice * currSlice)
               loffset = 0;
             }
 
-            if (fsx->motion.ref_id[LIST_0][j][i] != -1)
+            if (fsx->mv_info[j][i].ref_pic[LIST_0] != NULL)
             {
-              for (iref = 0; iref < imin (currSlice->num_ref_idx_active[LIST_0], p_Vid->listXsize[LIST_0]); ++iref)
+              for (iref = 0; iref < imin (currSlice->num_ref_idx_active[LIST_0], currSlice->listXsize[LIST_0]); ++iref)
               {
-                if (p_Pic->ref_pic_num[LIST_0][iref] == fsx->motion.ref_id[LIST_0][j][i])
+                if (currSlice->listX[LIST_0][iref] == fsx->mv_info[j][i].ref_pic[LIST_0])
                 {
                   tempmv_scale[LIST_0] = epzs_scale[loffset][LIST_0][iref];
                   tempmv_scale[LIST_1] = epzs_scale[loffset][LIST_1][iref];
@@ -850,14 +844,12 @@ EPZSSliceInit (Slice * currSlice)
                 }
               }
 
-              compute_scaled (&MotionVector0[j][i], &MotionVector1[j][i], tempmv_scale, fsx->motion.mv[LIST_0][j][i], invmv_precision);
+              compute_scaled (&MotionVector0[j][i], &MotionVector1[j][i], tempmv_scale, &fsx->mv_info[j][i].mv[LIST_0], invmv_precision);
             }
             else
             {
-              MotionVector0[j][i].mv_x = 0;
-              MotionVector0[j][i].mv_y = 0;
-              MotionVector1[j][i].mv_x = 0;
-              MotionVector1[j][i].mv_y = 0;
+              MotionVector0[j][i] = zero_mv;
+              MotionVector1[j][i] = zero_mv;
             }
           }
         }
@@ -874,7 +866,7 @@ EPZSSliceInit (Slice * currSlice)
             {
               tempmv_scale[LIST_0] = 256;
               tempmv_scale[LIST_1] = 0;
-              if (p_motion->ref_id[LIST_0][j][i] < 0 && p_Vid->listXsize[LIST_0] > 1)
+              if (fs->mv_info[j][i].ref_pic[LIST_0] == NULL && currSlice->listXsize[LIST_0] > 1)
               {
                 fsx = fs1;
                 loffset = 1;
@@ -885,32 +877,30 @@ EPZSSliceInit (Slice * currSlice)
                 loffset = 0;
               }
 
-              if (fsx->motion.ref_id[LIST_0][j][i] != -1)
+              if (fsx->mv_info[j][i].ref_pic[LIST_0] != NULL)
               {
-                for (iref = 0; iref < imin (currSlice->num_ref_idx_active[LIST_0], p_Vid->listXsize[LIST_0]); ++iref)
+                for (iref = 0; iref < imin (currSlice->num_ref_idx_active[LIST_0], currSlice->listXsize[LIST_0]); ++iref)
                 {
-                  if (p_Pic->ref_pic_num[LIST_0][iref] == fsx->motion.ref_id[LIST_0][j][i])
+                  if (currSlice->listX[LIST_0][iref] == fsx->mv_info[j][i].ref_pic[LIST_0])
                   {
                     tempmv_scale[LIST_0] = epzs_scale[loffset][LIST_0][iref];
                     tempmv_scale[LIST_1] = epzs_scale[loffset][LIST_1][iref];
                     break;
                   }
                 }
-                compute_scaled (&MotionVector0[j][i], &MotionVector1[j][i], tempmv_scale, fsx->motion.mv[LIST_0][j][i], invmv_precision);
+                compute_scaled (&MotionVector0[j][i], &MotionVector1[j][i], tempmv_scale, &fsx->mv_info[j][i].mv[LIST_0], invmv_precision);
               }
               else
               {
-                MotionVector0[j][i].mv_x = 0;
-                MotionVector0[j][i].mv_y = 0;
-                MotionVector1[j][i].mv_x = 0;
-                MotionVector1[j][i].mv_y = 0;
+                MotionVector0[j][i] = zero_mv;
+                MotionVector1[j][i] = zero_mv;
               }
             }
             else
             {
               tempmv_scale[LIST_0] = 256;
               tempmv_scale[LIST_1] = 0;
-              if (fs_bottom->motion.ref_id[LIST_0][j][i] < 0 && p_Vid->listXsize[LIST_0] > 1)
+              if (fs_bottom->mv_info[j][i].ref_pic[LIST_0] == NULL && currSlice->listXsize[LIST_0] > 1)
               {
                 fsx = fs_bottom1;
                 loffset = 1;
@@ -921,11 +911,11 @@ EPZSSliceInit (Slice * currSlice)
                 loffset = 0;
               }
 
-              if (fsx->motion.ref_id[LIST_0][j][i] != -1)
+              if (fsx->mv_info[j][i].ref_pic[LIST_0] != NULL)
               {
-                for (iref = 0; iref < imin (2 * currSlice->num_ref_idx_active[LIST_0], p_Vid->listXsize[LIST_0 + 4]); ++iref)
+                for (iref = 0; iref < imin (2 * currSlice->num_ref_idx_active[LIST_0], currSlice->listXsize[LIST_0 + 4]); ++iref)
                 {
-                  if (p_Pic->ref_pic_num[LIST_0 + 4][iref] == fsx->motion.ref_id[LIST_0][j][i])
+                  if (currSlice->listX[LIST_0 + 4][iref] == fsx->mv_info[j][i].ref_pic[LIST_0])
                   {
                     tempmv_scale[LIST_0] = epzs_scale[loffset][LIST_0 + 4][iref];
                     tempmv_scale[LIST_1] = epzs_scale[loffset][LIST_1 + 4][iref];
@@ -933,17 +923,15 @@ EPZSSliceInit (Slice * currSlice)
                   }
                 }
 
-                compute_scaled (&p->bot[LIST_0][j][i], &p->bot[LIST_1][j][i], tempmv_scale, fsx->motion.mv[LIST_0][j][i], invmv_precision);
+                compute_scaled (&p->bot[LIST_0][j][i], &p->bot[LIST_1][j][i], tempmv_scale, &fsx->mv_info[j][i].mv[LIST_0], invmv_precision);
               }
               else
               {
-                p->bot[LIST_0][j][i].mv_x = 0;
-                p->bot[LIST_0][j][i].mv_y = 0;
-                p->bot[LIST_1][j][i].mv_x = 0;
-                p->bot[LIST_1][j][i].mv_y = 0;
+                p->bot[LIST_0][j][i] = zero_mv;
+                p->bot[LIST_1][j][i] = zero_mv;
               }
 
-              if (!p_motion->field_frame[2 * j][i])
+              if (!fs->mv_info[2 * j][i].field_frame)
               {
                 p->bot[LIST_0][j][i].mv_y = (p->bot[LIST_0][j][i].mv_y + 1) >> 1;
                 p->bot[LIST_1][j][i].mv_y = (p->bot[LIST_1][j][i].mv_y + 1) >> 1;
@@ -951,7 +939,7 @@ EPZSSliceInit (Slice * currSlice)
 
               tempmv_scale[LIST_0] = 256;
               tempmv_scale[LIST_1] = 0;
-              if (fs_top->motion.ref_id[LIST_0][j][i] < 0 && p_Vid->listXsize[LIST_0] > 1)
+              if (fs_top->mv_info[j][i].ref_pic[LIST_0] == NULL && currSlice->listXsize[LIST_0] > 1)
               {
                 fsx = fs_top1;
                 loffset = 1;
@@ -961,11 +949,11 @@ EPZSSliceInit (Slice * currSlice)
                 fsx = fs_top;
                 loffset = 0;
               }
-              if (fsx->motion.ref_id[LIST_0][j][i] != -1)
+              if (fsx->mv_info[j][i].ref_pic[LIST_0] != NULL)
               {
-                for (iref = 0; iref < imin (2 * currSlice->num_ref_idx_active[LIST_0], p_Vid->listXsize[LIST_0 + 2]); ++iref)
+                for (iref = 0; iref < imin (2 * currSlice->num_ref_idx_active[LIST_0], currSlice->listXsize[LIST_0 + 2]); ++iref)
                 {
-                  if (p_Pic->ref_pic_num[LIST_0 + 2][iref] == fsx->motion.ref_id[LIST_0][j][i])
+                  if (currSlice->listX[LIST_0 + 2][iref] == fsx->mv_info[j][i].ref_pic[LIST_0])
                   {
                     tempmv_scale[LIST_0] = epzs_scale[loffset][LIST_0 + 2][iref];
                     tempmv_scale[LIST_1] = epzs_scale[loffset][LIST_1 + 2][iref];
@@ -973,17 +961,15 @@ EPZSSliceInit (Slice * currSlice)
                   }
                 }
 
-                compute_scaled (&p->top[LIST_0][j][i], &p->top[LIST_1][j][i], tempmv_scale, fsx->motion.mv[LIST_0][j][i], invmv_precision);
+                compute_scaled (&p->top[LIST_0][j][i], &p->top[LIST_1][j][i], tempmv_scale, &fsx->mv_info[j][i].mv[LIST_0], invmv_precision);
               }
               else
               {
-                p->top[LIST_0][j][i].mv_x = 0;
-                p->top[LIST_0][j][i].mv_y = 0;
-                p->top[LIST_1][j][i].mv_x = 0;
-                p->top[LIST_1][j][i].mv_y = 0;
+                p->top[LIST_0][j][i] = zero_mv;
+                p->top[LIST_1][j][i] = zero_mv;
               }
 
-              if (!p_motion->field_frame[2 * j][i])
+              if (!fs->mv_info[2 * j][i].field_frame)
               {
                 p->top[LIST_0][j][i].mv_y = (p->top[LIST_0][j][i].mv_y + 1) >> 1;
                 p->top[LIST_1][j][i].mv_y = (p->top[LIST_1][j][i].mv_y + 1) >> 1;
@@ -1003,11 +989,11 @@ EPZSSliceInit (Slice * currSlice)
           jdiv = (j >> 1) + ((j >> 3) << 2);
           for (i = 0; i < fs->size_x >> 2; ++i)
           {
-            if (p_motion->field_frame[j][i])
+            if (fs->mv_info[j][i].field_frame)
             {
               tempmv_scale[LIST_0] = 256;
               tempmv_scale[LIST_1] = 0;
-              if (p_motion->ref_id[LIST_0][jdiv][i] < 0 && p_Vid->listXsize[LIST_0] > 1)
+              if (fs->mv_info[jdiv][i].ref_pic[LIST_0] == NULL && currSlice->listXsize[LIST_0] > 1)
               {
                 fsx = fs1;
                 loffset = 1;
@@ -1018,11 +1004,11 @@ EPZSSliceInit (Slice * currSlice)
                 loffset = 0;
               }
 
-              if (fsx->motion.ref_id[LIST_0][jdiv][i] != -1)
+              if (fsx->mv_info[jdiv][i].ref_pic[LIST_0] != NULL)
               {
-                for (iref = 0; iref < imin (currSlice->num_ref_idx_active[LIST_0], p_Vid->listXsize[LIST_0]); ++iref)
+                for (iref = 0; iref < imin (currSlice->num_ref_idx_active[LIST_0], currSlice->listXsize[LIST_0]); ++iref)
                 {
-                  if (p_Pic->ref_pic_num[LIST_0][iref] == fsx->motion.ref_id[LIST_0][jdiv][i])
+                  if (currSlice->listX[LIST_0][iref] == fsx->mv_info[jdiv][i].ref_pic[LIST_0])
                   {
                     tempmv_scale[LIST_0] = epzs_scale[loffset][LIST_0][iref];
                     tempmv_scale[LIST_1] = epzs_scale[loffset][LIST_1][iref];
@@ -1032,20 +1018,18 @@ EPZSSliceInit (Slice * currSlice)
                 if (iabs (p_Pic->poc - fsx->bottom_field->poc) > iabs (p_Pic->poc - fsx->top_field->poc))
                 {
                   compute_scaled (&MotionVector0[j][i], &MotionVector1[j][i], tempmv_scale,
-                    fsx->top_field->motion.mv[LIST_0][j][i], invmv_precision);
+                    &fsx->top_field->mv_info[jj][i].mv[LIST_0], invmv_precision);
                 }
                 else
                 {
                   compute_scaled (&MotionVector0[j][i], &MotionVector1[j][i], tempmv_scale,
-                    fsx->bottom_field->motion.mv[LIST_0][j][i], invmv_precision);
+                    &fsx->bottom_field->mv_info[jj][i].mv[LIST_0], invmv_precision);
                 }
               }
               else
               {
-                MotionVector0[j][i].mv_x = 0;
-                MotionVector0[j][i].mv_y = 0;
-                MotionVector1[j][i].mv_x = 0;
-                MotionVector1[j][i].mv_y = 0;
+                MotionVector0[j][i] = zero_mv;
+                MotionVector1[j][i] = zero_mv;
               }
             }
           }
@@ -1060,8 +1044,7 @@ EPZSSliceInit (Slice * currSlice)
         {
           tempmv_scale[LIST_0] = 256;
           tempmv_scale[LIST_1] = 0;
-
-          if (p_motion->ref_id[LIST_0][j][i] < 0 && p_Vid->listXsize[LIST_0] > 1)
+          if (fs->mv_info[j][i].ref_pic[LIST_0] == NULL && currSlice->listXsize[LIST_0] > 1)
           {
             fsx = fs1;
             loffset = 1;
@@ -1071,11 +1054,11 @@ EPZSSliceInit (Slice * currSlice)
             fsx = fs;
             loffset = 0;
           }
-          if (fsx->motion.ref_id[LIST_0][j][i] != -1)
+          if (fsx->mv_info[j][i].ref_pic[LIST_0] != NULL)
           {
-            for (iref = 0; iref < imin (currSlice->num_ref_idx_active[LIST_0], p_Vid->listXsize[LIST_0]); ++iref)
+            for (iref = 0; iref < imin (currSlice->num_ref_idx_active[LIST_0], currSlice->listXsize[LIST_0]); ++iref)
             {
-              if (p_Pic->ref_pic_num[LIST_0][iref] == fsx->motion.ref_id[LIST_0][j][i])
+              if (currSlice->listX[LIST_0][iref] == fsx->mv_info[j][i].ref_pic[LIST_0])
               {
                 tempmv_scale[LIST_0] = epzs_scale[loffset][LIST_0][iref];
                 tempmv_scale[LIST_1] = epzs_scale[loffset][LIST_1][iref];
@@ -1083,14 +1066,12 @@ EPZSSliceInit (Slice * currSlice)
               }
             }
 
-            compute_scaled (&MotionVector0[j][i], &MotionVector1[j][i], tempmv_scale, fsx->motion.mv[LIST_0][j][i], invmv_precision);
+            compute_scaled (&MotionVector0[j][i], &MotionVector1[j][i], tempmv_scale, &fsx->mv_info[j][i].mv[LIST_0], invmv_precision);
           }
           else
           {
-            MotionVector0[j][i].mv_x = 0;
-            MotionVector0[j][i].mv_y = 0;
-            MotionVector1[j][i].mv_x = 0;
-            MotionVector1[j][i].mv_y = 0;
+            MotionVector0[j][i] = zero_mv;
+            MotionVector1[j][i] = zero_mv;
           }
         }
       }
@@ -1102,13 +1083,13 @@ EPZSSliceInit (Slice * currSlice)
       {
         for (i = 0; i < fs->size_x >> 2; ++i)
         {
-          if ((!currSlice->mb_aff_frame_flag && !currSlice->structure && p_motion->field_frame[j][i])
-            || (currSlice->mb_aff_frame_flag && p_motion->field_frame[j][i]))
+          if ((!currSlice->mb_aff_frame_flag && !currSlice->structure && fs->mv_info[j][i].field_frame)
+            || (currSlice->mb_aff_frame_flag && fs->mv_info[j][i].field_frame))
           {
             MotionVector0[j][i].mv_y *= 2;
             MotionVector1[j][i].mv_y *= 2;
           }
-          else if (currSlice->structure && !p_motion->field_frame[j][i])
+          else if (currSlice->structure && !fs->mv_info[j][i].field_frame)
           {
             MotionVector0[j][i].mv_y = (short) rshift_rnd_sf (MotionVector0[j][i].mv_y, 1);
             MotionVector1[j][i].mv_y = (short) rshift_rnd_sf (MotionVector1[j][i].mv_y, 1);
@@ -1167,23 +1148,20 @@ EPZSBlockTypePredictorsMB (Slice * currSlice, MEBlock * mv_block, SPoint * point
   int list      = mv_block->list;
   int ref       = mv_block->ref_idx;
   EPZSParameters *p_EPZS = currSlice->p_EPZS;
-  short *****all_mv = currSlice->all_mv[list];
+  MotionVector ****all_mv = currSlice->all_mv[list];
   MotionVector *cur_mv = &point[*prednum].motion;
 
   if (blocktype != 1)
   {
-    short *mv = all_mv[ref][BLOCK_PARENT[blocktype]][block_y][block_x];
-    cur_mv->mv_x = mv[0];
-    cur_mv->mv_y = mv[1];
+    *cur_mv = all_mv[ref][BLOCK_PARENT[blocktype]][block_y][block_x];
+
     //*prednum += ((cur_mv->mv_x | cur_mv->mv_y) != 0);
     *prednum += (*((int *) cur_mv) != 0);
 
     if(BLOCK_PARENT[blocktype] !=1)
     {
-      cur_mv = &point[*prednum].motion;
-      mv = all_mv[ref][1][block_y][block_x];
-      cur_mv->mv_x = mv[0];
-      cur_mv->mv_y = mv[1];
+      cur_mv  = &point[*prednum].motion;
+      *cur_mv = all_mv[ref][1][block_y][block_x];
       //*prednum += ((cur_mv->mv_x | cur_mv->mv_y) != 0);
       *prednum += (*((int *) cur_mv) != 0);
     }
@@ -1192,14 +1170,14 @@ EPZSBlockTypePredictorsMB (Slice * currSlice, MEBlock * mv_block, SPoint * point
   if (ref > 0)
   {
     cur_mv = &point[*prednum].motion;
-    scale_mv (cur_mv, p_EPZS->mv_scale[list][ref][ref - 1], all_mv[ref - 1][blocktype][block_y][block_x], 8);
+    scale_mv (cur_mv, p_EPZS->mv_scale[list][ref][ref - 1], &all_mv[ref - 1][blocktype][block_y][block_x], 8);
     //*prednum += ((cur_mv->mv_x | cur_mv->mv_y) != 0);
     *prednum += (*((int *) cur_mv) != 0);
 
     if (ref > 1)
     {
       cur_mv = &point[*prednum].motion;
-      scale_mv (cur_mv, p_EPZS->mv_scale[list][ref][0], all_mv[0][blocktype][block_y][block_x], 8);
+      scale_mv (cur_mv, p_EPZS->mv_scale[list][ref][0], &all_mv[0][blocktype][block_y][block_x], 8);
       //*prednum += ((cur_mv->mv_x | cur_mv->mv_y) != 0);
       *prednum += (*((int *) cur_mv) != 0);
     }
@@ -1214,7 +1192,7 @@ EPZSBlockTypePredictorsMB (Slice * currSlice, MEBlock * mv_block, SPoint * point
 ***********************************************************************
 */
 short
-EPZSSpatialPredictors (EPZSParameters * p_EPZS, MEBlock *mv_block, int list, int list_offset, short ref, char **refPic, short ***tmp_mv)
+EPZSSpatialPredictors (EPZSParameters * p_EPZS, MEBlock *mv_block, int list, int list_offset, short ref, struct pic_motion_params **mv_info)
 {
   PixelPos * block = mv_block->block;
   short refA = 0, refB = 0, refC = 0, refD = 0;
@@ -1223,21 +1201,20 @@ EPZSSpatialPredictors (EPZSParameters * p_EPZS, MEBlock *mv_block, int list, int
   SPoint *point = p_EPZS->predictor->point;
 
   // zero predictor
-  (point)->motion.mv_x = 0;
-  (point++)->motion.mv_y = 0;
+  (point++)->motion = zero_mv;
 
   // Non MB-AFF mode
   if (!p_Vid->mb_aff_frame_flag)
   {
-    refA = block[0].available ? (short) refPic[block[0].pos_y][block[0].pos_x] : -1;
-    refB = block[1].available ? (short) refPic[block[1].pos_y][block[1].pos_x] : -1;
-    refC = block[2].available ? (short) refPic[block[2].pos_y][block[2].pos_x] : -1;
-    refD = block[3].available ? (short) refPic[block[3].pos_y][block[3].pos_x] : -1;
+    refA = block[0].available ? (short) mv_info[block[0].pos_y][block[0].pos_x].ref_idx[list] : -1;
+    refB = block[1].available ? (short) mv_info[block[1].pos_y][block[1].pos_x].ref_idx[list] : -1;
+    refC = block[2].available ? (short) mv_info[block[2].pos_y][block[2].pos_x].ref_idx[list] : -1;
+    refD = block[3].available ? (short) mv_info[block[3].pos_y][block[3].pos_x].ref_idx[list] : -1;
 
     // Left Predictor
     if (block[0].available)
     {
-      scale_mv (&point->motion, mot_scale[refA], tmp_mv[block[0].pos_y][block[0].pos_x], 8);
+      scale_mv (&point->motion, mot_scale[refA], &mv_info[block[0].pos_y][block[0].pos_x].mv[list], 8);
       /*
       if (*((int*) &point->motion) == 0)
       {
@@ -1255,7 +1232,7 @@ EPZSSpatialPredictors (EPZSParameters * p_EPZS, MEBlock *mv_block, int list, int
     // Up predictor
     if (block[1].available)
     {
-      scale_mv (&point->motion, mot_scale[refB], tmp_mv[block[1].pos_y][block[1].pos_x], 8);
+      scale_mv (&point->motion, mot_scale[refB], &mv_info[block[1].pos_y][block[1].pos_x].mv[list], 8);
       /*
       if (*((int*) &point->motion) == 0)
       {
@@ -1274,7 +1251,7 @@ EPZSSpatialPredictors (EPZSParameters * p_EPZS, MEBlock *mv_block, int list, int
     // Up-Right predictor
     if (block[2].available)
     {
-      scale_mv (&point->motion, mot_scale[refC], tmp_mv[block[2].pos_y][block[2].pos_x], 8);
+      scale_mv (&point->motion, mot_scale[refC], &mv_info[block[2].pos_y][block[2].pos_x].mv[list], 8);
       /*
       if (*((int*) &point->motion) == 0)
       {
@@ -1293,7 +1270,7 @@ EPZSSpatialPredictors (EPZSParameters * p_EPZS, MEBlock *mv_block, int list, int
     //Up-Left predictor
     if (block[3].available)
     {
-      scale_mv (&point->motion, mot_scale[refD], tmp_mv[block[3].pos_y][block[3].pos_x], 8);
+      scale_mv (&point->motion, mot_scale[refD], &mv_info[block[3].pos_y][block[3].pos_x].mv[list], 8);
       /*
       if (*((int*) &point->motion) == 0)
       {
@@ -1314,19 +1291,19 @@ EPZSSpatialPredictors (EPZSParameters * p_EPZS, MEBlock *mv_block, int list, int
     // Field Macroblock
     if (list_offset)
     {
-      refA = block[0].available ? p_Vid->mb_data[block[0].mb_addr].mb_field ? (short) refPic[block[0].pos_y][block[0].pos_x]
-      : (short) refPic[block[0].pos_y][block[0].pos_x] * 2 : -1;
-      refB = block[1].available ? p_Vid->mb_data[block[1].mb_addr].mb_field ? (short) refPic[block[1].pos_y][block[1].pos_x]
-      : (short) refPic[block[1].pos_y][block[1].pos_x] * 2 : -1;
-      refC = block[2].available ? p_Vid->mb_data[block[2].mb_addr].mb_field ? (short) refPic[block[2].pos_y][block[2].pos_x]
-      : (short) refPic[block[2].pos_y][block[2].pos_x] * 2 : -1;
-      refD = block[3].available ? p_Vid->mb_data[block[3].mb_addr].mb_field ? (short) refPic[block[3].pos_y][block[3].pos_x]
-      : (short) refPic[block[3].pos_y][block[3].pos_x] * 2 : -1;
+      refA = block[0].available ? p_Vid->mb_data[block[0].mb_addr].mb_field ? (short) mv_info[block[0].pos_y][block[0].pos_x].ref_idx[list]
+      : (short) mv_info[block[0].pos_y][block[0].pos_x].ref_idx[list] * 2 : -1;
+      refB = block[1].available ? p_Vid->mb_data[block[1].mb_addr].mb_field ? (short) mv_info[block[1].pos_y][block[1].pos_x].ref_idx[list]
+      : (short) mv_info[block[1].pos_y][block[1].pos_x].ref_idx[list] * 2 : -1;
+      refC = block[2].available ? p_Vid->mb_data[block[2].mb_addr].mb_field ? (short) mv_info[block[2].pos_y][block[2].pos_x].ref_idx[list]
+      : (short) mv_info[block[2].pos_y][block[2].pos_x].ref_idx[list] * 2 : -1;
+      refD = block[3].available ? p_Vid->mb_data[block[3].mb_addr].mb_field ? (short) mv_info[block[3].pos_y][block[3].pos_x].ref_idx[list]
+      : (short) mv_info[block[3].pos_y][block[3].pos_x].ref_idx[list] * 2 : -1;
 
       // Left Predictor
       if (block[0].available)
       {
-        scale_mv (&point->motion, mot_scale[refA], tmp_mv[block[0].pos_y][block[0].pos_x], 8);
+        scale_mv (&point->motion, mot_scale[refA], &mv_info[block[0].pos_y][block[0].pos_x].mv[list], 8);
         if (!p_Vid->mb_data[block[0].mb_addr].mb_field)
           //point->motion.mv_y = (short) rshift_rnd_sf(point->motion.mv_y, 1);
           point->motion.mv_y <<= 1;
@@ -1341,7 +1318,7 @@ EPZSSpatialPredictors (EPZSParameters * p_EPZS, MEBlock *mv_block, int list, int
       // Up predictor
       if (block[1].available)
       {
-        scale_mv (&point->motion, mot_scale[refB], tmp_mv[block[1].pos_y][block[1].pos_x], 8);
+        scale_mv (&point->motion, mot_scale[refB], &mv_info[block[1].pos_y][block[1].pos_x].mv[list], 8);
         if (!p_Vid->mb_data[block[1].mb_addr].mb_field)
           //point->motion.mv_y = (short) rshift_rnd_sf(point->motion.mv_y, 1);
           point->motion.mv_y <<= 1;
@@ -1356,7 +1333,7 @@ EPZSSpatialPredictors (EPZSParameters * p_EPZS, MEBlock *mv_block, int list, int
       // Up-Right predictor
       if (block[2].available)
       {
-        scale_mv (&point->motion, mot_scale[refC], tmp_mv[block[2].pos_y][block[2].pos_x], 8);
+        scale_mv (&point->motion, mot_scale[refC], &mv_info[block[2].pos_y][block[2].pos_x].mv[list], 8);
         if (!p_Vid->mb_data[block[2].mb_addr].mb_field)
           //point->motion.mv_y = (short) rshift_rnd_sf(point->motion.mv_y, 1);
           point->motion.mv_y <<= 1;
@@ -1371,7 +1348,7 @@ EPZSSpatialPredictors (EPZSParameters * p_EPZS, MEBlock *mv_block, int list, int
       //Up-Left predictor
       if (block[3].available)
       {
-        scale_mv (&point->motion, mot_scale[refD], tmp_mv[block[3].pos_y][block[3].pos_x], 8);
+        scale_mv (&point->motion, mot_scale[refD], &mv_info[block[3].pos_y][block[3].pos_x].mv[list], 8);
         if (!p_Vid->mb_data[block[3].mb_addr].mb_field)
           //point->motion.mv_y = (short) rshift_rnd_sf(point->motion.mv_y, 1);
           point->motion.mv_y <<= 1;
@@ -1387,21 +1364,21 @@ EPZSSpatialPredictors (EPZSParameters * p_EPZS, MEBlock *mv_block, int list, int
     {
       refA = block[0].available
         ? p_Vid->mb_data[block[0].mb_addr].mb_field
-        ? (short) refPic[block[0].pos_y][block[0].pos_x] >> 1 : (short) refPic[block[0].pos_y][block[0].pos_x] : -1;
+        ? (short) mv_info[block[0].pos_y][block[0].pos_x].ref_idx[list] >> 1 : (short) mv_info[block[0].pos_y][block[0].pos_x].ref_idx[list] : -1;
       refB = block[1].available
         ? p_Vid->mb_data[block[1].mb_addr].mb_field
-        ? (short) refPic[block[1].pos_y][block[1].pos_x] >> 1 : (short) refPic[block[1].pos_y][block[1].pos_x] : -1;
+        ? (short) mv_info[block[1].pos_y][block[1].pos_x].ref_idx[list] >> 1 : (short) mv_info[block[1].pos_y][block[1].pos_x].ref_idx[list] : -1;
       refC = block[2].available
         ? p_Vid->mb_data[block[2].mb_addr].mb_field
-        ? (short) refPic[block[2].pos_y][block[2].pos_x] >> 1 : (short) refPic[block[2].pos_y][block[2].pos_x] : -1;
+        ? (short) mv_info[block[2].pos_y][block[2].pos_x].ref_idx[list] >> 1 : (short) mv_info[block[2].pos_y][block[2].pos_x].ref_idx[list] : -1;
       refD = block[3].available
         ? p_Vid->mb_data[block[3].mb_addr].mb_field
-        ? (short) refPic[block[3].pos_y][block[3].pos_x] >> 1 : (short) refPic[block[3].pos_y][block[3].pos_x] : -1;
+        ? (short) mv_info[block[3].pos_y][block[3].pos_x].ref_idx[list] >> 1 : (short) mv_info[block[3].pos_y][block[3].pos_x].ref_idx[list] : -1;
 
       // Left Predictor
       if (block[0].available)
       {
-        scale_mv (&point->motion, mot_scale[refA], tmp_mv[block[0].pos_y][block[0].pos_x], 8);
+        scale_mv (&point->motion, mot_scale[refA], &mv_info[block[0].pos_y][block[0].pos_x].mv[list], 8);
         if (p_Vid->mb_data[block[0].mb_addr].mb_field)
           point->motion.mv_y = (short) rshift_rnd_sf (point->motion.mv_y, 1);
         ++point;
@@ -1415,7 +1392,7 @@ EPZSSpatialPredictors (EPZSParameters * p_EPZS, MEBlock *mv_block, int list, int
       // Up predictor
       if (block[1].available)
       {
-        scale_mv (&point->motion, mot_scale[refB], tmp_mv[block[1].pos_y][block[1].pos_x], 8);
+        scale_mv (&point->motion, mot_scale[refB], &mv_info[block[1].pos_y][block[1].pos_x].mv[list], 8);
         if (p_Vid->mb_data[block[1].mb_addr].mb_field)
           point->motion.mv_y = (short) rshift_rnd_sf (point->motion.mv_y, 1);
         ++point;
@@ -1429,7 +1406,7 @@ EPZSSpatialPredictors (EPZSParameters * p_EPZS, MEBlock *mv_block, int list, int
       // Up-Right predictor
       if (block[2].available)
       {
-        scale_mv (&point->motion, mot_scale[refC], tmp_mv[block[2].pos_y][block[2].pos_x], 8);
+        scale_mv (&point->motion, mot_scale[refC], &mv_info[block[2].pos_y][block[2].pos_x].mv[list], 8);
         if (p_Vid->mb_data[block[2].mb_addr].mb_field)
           point->motion.mv_y = (short) rshift_rnd_sf (point->motion.mv_y, 1);
         ++point;
@@ -1443,7 +1420,7 @@ EPZSSpatialPredictors (EPZSParameters * p_EPZS, MEBlock *mv_block, int list, int
       //Up-Left predictor
       if (block[3].available)
       {
-        scale_mv (&point->motion, mot_scale[refD], tmp_mv[block[3].pos_y][block[3].pos_x], 8);
+        scale_mv (&point->motion, mot_scale[refD], &mv_info[block[3].pos_y][block[3].pos_x].mv[list], 8);
         if (p_Vid->mb_data[block[3].mb_addr].mb_field)
           point->motion.mv_y = (short) rshift_rnd_sf (point->motion.mv_y, 1);
         ++point;
@@ -1556,13 +1533,11 @@ EPZSBlockTypePredictors (Slice * currSlice, MEBlock *mv_block, SPoint * point, i
   int block_y   = mv_block->block_y;
   int list      = mv_block->list;
   int ref       = mv_block->ref_idx; 
-  short *****all_mv = currSlice->all_mv[list];
-  short *mv = all_mv[ref][BLOCK_PARENT[blocktype]][block_y][block_x];
+  MotionVector ****all_mv = currSlice->all_mv[list];
   MotionVector *cur_mv = &point[*prednum].motion;
 
-  cur_mv->mv_x = mv[0];
-  cur_mv->mv_y = mv[1];
-
+  *cur_mv = all_mv[ref][BLOCK_PARENT[blocktype]][block_y][block_x];
+  
   //*prednum += ((cur_mv->mv_x | cur_mv->mv_y) != 0);
   *prednum += (*((int *) cur_mv) != 0);
 
@@ -1570,23 +1545,22 @@ EPZSBlockTypePredictors (Slice * currSlice, MEBlock *mv_block, SPoint * point, i
   {
     EPZSParameters *p_EPZS = currSlice->p_EPZS;
     cur_mv = &point[*prednum].motion;
-    scale_mv (cur_mv, p_EPZS->mv_scale[list][ref][ref - 1], all_mv[ref - 1][blocktype][block_y][block_x], 8);
+    scale_mv (cur_mv, p_EPZS->mv_scale[list][ref][ref - 1], &all_mv[ref - 1][blocktype][block_y][block_x], 8);
 
     //*prednum += ((cur_mv->mv_x | cur_mv->mv_y) != 0);
     *prednum += (*((int *) cur_mv) != 0);
     if (ref > 1)
     {
       cur_mv = &point[*prednum].motion;
-      scale_mv (cur_mv, p_EPZS->mv_scale[list][ref][0], all_mv[0][blocktype][block_y][block_x], 8);
+      scale_mv (cur_mv, p_EPZS->mv_scale[list][ref][0], &all_mv[0][blocktype][block_y][block_x], 8);
       //*prednum += ((cur_mv->mv_x | cur_mv->mv_y) != 0);
       *prednum += (*((int *) cur_mv) != 0);
     }
   }
 
   cur_mv = &point[*prednum].motion;
-  mv = all_mv[ref][1][block_y][block_x];
-  cur_mv->mv_x = mv[0];
-  cur_mv->mv_y = mv[1];
+  *cur_mv = all_mv[ref][1][block_y][block_x];
+
   //*prednum += ((cur_mv->mv_x | cur_mv->mv_y) != 0);
   *prednum += (*((int *) cur_mv) != 0);
 }
@@ -1744,8 +1718,8 @@ EPZSOutputStats (InputParameters * p_Inp, FILE * stat, short stats_file)
     fprintf (stat, " EPZS Temporal Predictors     : %s\n", EPZS_OTHER_PREDICTORS[p_Inp->EPZSTemporal]);
     fprintf (stat, " EPZS Spatial Predictors      : %s\n", EPZS_OTHER_PREDICTORS[p_Inp->EPZSSpatialMem]);
     fprintf (stat, " EPZS Threshold Multipliers   : (%d %d %d)\n", p_Inp->EPZSMedThresScale, p_Inp->EPZSMinThresScale, p_Inp->EPZSMaxThresScale);
-    fprintf (stat, " EPZS Subpel ME               : %s\n", EPZS_OTHER_PREDICTORS[p_Inp->EPZSSubPelME]);
-    fprintf (stat, " EPZS Subpel ME BiPred        : %s\n", EPZS_OTHER_PREDICTORS[p_Inp->EPZSSubPelMEBiPred]);
+    fprintf (stat, " EPZS Subpel ME               : %s\n", EPZS_SUBPEL_METHOD[p_Inp->EPZSSubPelME]);
+    fprintf (stat, " EPZS Subpel ME BiPred        : %s\n", EPZS_SUBPEL_METHOD[p_Inp->EPZSSubPelMEBiPred]);
   }
   else
   {
@@ -1755,7 +1729,7 @@ EPZSOutputStats (InputParameters * p_Inp, FILE * stat, short stats_file)
     fprintf (stat, " EPZS Temporal Predictors          : %s\n", EPZS_OTHER_PREDICTORS[p_Inp->EPZSTemporal]);
     fprintf (stat, " EPZS Spatial Predictors           : %s\n", EPZS_OTHER_PREDICTORS[p_Inp->EPZSSpatialMem]);
     fprintf (stat, " EPZS Threshold Multipliers        : (%d %d %d)\n", p_Inp->EPZSMedThresScale, p_Inp->EPZSMinThresScale, p_Inp->EPZSMaxThresScale);
-    fprintf (stat, " EPZS Subpel ME                    : %s\n", EPZS_OTHER_PREDICTORS[p_Inp->EPZSSubPelME]);
-    fprintf (stat, " EPZS Subpel ME BiPred             : %s\n", EPZS_OTHER_PREDICTORS[p_Inp->EPZSSubPelMEBiPred]);
+    fprintf (stat, " EPZS Subpel ME                    : %s\n", EPZS_SUBPEL_METHOD[p_Inp->EPZSSubPelME]);
+    fprintf (stat, " EPZS Subpel ME BiPred             : %s\n", EPZS_SUBPEL_METHOD[p_Inp->EPZSSubPelMEBiPred]);
   }
 }

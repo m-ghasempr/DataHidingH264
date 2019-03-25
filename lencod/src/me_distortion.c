@@ -35,7 +35,7 @@
 *    Calculate SAD
 ***********************************************************************
 */
-distblk distortion4x4SAD(int* diff, distblk min_dist)
+distblk distortion4x4SAD(short* diff, distblk min_dist)
 {
   int distortion = 0, k;
   for (k = 0; k < 16; k++)
@@ -51,7 +51,7 @@ distblk distortion4x4SAD(int* diff, distblk min_dist)
 *    Calculate SSE 4x4
 ***********************************************************************
 */
-distblk distortion4x4SSE(int* diff, distblk min_dist)
+distblk distortion4x4SSE(short* diff, distblk min_dist)
 {
   int distortion = 0, k;
   for (k = 0; k < 16; k++)
@@ -67,7 +67,7 @@ distblk distortion4x4SSE(int* diff, distblk min_dist)
 *    Calculate SATD
 ***********************************************************************
 */
-distblk distortion4x4SATD(int* diff, distblk min_dist)
+distblk distortion4x4SATD(short* diff, distblk min_dist)
 {
   distblk i64Ret = HadamardSAD4x4( diff );
   return (dist_scale(i64Ret));
@@ -79,7 +79,7 @@ distblk distortion4x4SATD(int* diff, distblk min_dist)
 *    Calculate SAD for 8x8 (with a threshold)
 ***********************************************************************
 */
-distblk distortion8x8SADthres(int* diff, distblk min_cost)
+distblk distortion8x8SADthres(short* diff, distblk min_cost)
 {
   int distortion = 0;
   int i, j;  
@@ -104,7 +104,7 @@ distblk distortion8x8SADthres(int* diff, distblk min_cost)
 *    Calculate SAD for 8x8
 ***********************************************************************
 */
-distblk distortion8x8SAD(int* diff, distblk min_diff)
+distblk distortion8x8SAD(short* diff, distblk min_dist)
 {
   int distortion = 0;
   int k;
@@ -123,7 +123,7 @@ distblk distortion8x8SAD(int* diff, distblk min_diff)
 *    Calculate SSE for 8x8
 ***********************************************************************
 */
-distblk distortion8x8SSE(int* diff, distblk min_dist)
+distblk distortion8x8SSE(short* diff, distblk min_dist)
 {
   distblk distortion = 0;
   int k;
@@ -139,7 +139,7 @@ distblk distortion8x8SSE(int* diff, distblk min_dist)
 *    Calculate SATD for 8x8
 ***********************************************************************
 */
-distblk distortion8x8SATD(int* diff, distblk min_dist)
+distblk distortion8x8SATD(short* diff, distblk min_dist)
 {
   distblk i64Ret = HadamardSAD8x8( diff );
   return (dist_scale(i64Ret));
@@ -172,7 +172,7 @@ void select_distortion(VideoParameters *p_Vid, InputParameters *p_Inp)
 *    Calculate 4x4 Hadamard-Transformed SAD
 ***********************************************************************
 */
-int HadamardSAD4x4 (int* diff)
+int HadamardSAD4x4 (short* diff)
 {
   int k, satd = 0;
   int m[16], d[16];
@@ -263,7 +263,7 @@ int HadamardSAD4x4 (int* diff)
 *    Calculate 8x8 Hadamard-Transformed SAD
 ***********************************************************************
 */
-int HadamardSAD8x8 (int* diff)
+int HadamardSAD8x8 (short* diff)
 {
   int i, j, jj, sad=0;
 
@@ -445,7 +445,7 @@ distblk computeSADWP(StorablePicture *ref1,
   short blocksize_y = mv_block->blocksize_y;
 
   VideoParameters *p_Vid = mv_block->p_Vid;
-  Slice *currSlice = mv_block->p_slice;  
+  Slice *currSlice = mv_block->p_Slice;  
   int pad_size_x = p_Vid->padded_size_x - blocksize_x;
   int max_imgpel_value = p_Vid->max_imgpel_value;
   short weight = mv_block->weight_luma;
@@ -632,7 +632,7 @@ distblk computeBiPredSAD2(StorablePicture *ref1,
   int mcost = 0;
   int bi_diff;
   VideoParameters *p_Vid = mv_block->p_Vid;
-  Slice *currSlice = mv_block->p_slice;
+  Slice *currSlice = mv_block->p_Slice;
   int denom = currSlice->luma_log_weight_denom + 1;
   int lround = 2 * currSlice->wp_luma_round;  
   int max_imgpel_value = p_Vid->max_imgpel_value;
@@ -750,13 +750,13 @@ distblk computeSATD(StorablePicture *ref1,
 {
   int imin_cost = dist_down(min_mcost);
   int mcost = 0;
-  int y, x, y4, *d;
+  int y, x, y4;
   int src_size_x, src_size_mul;
   short blocksize_x = mv_block->blocksize_x;
   short blocksize_y = mv_block->blocksize_y;
   VideoParameters *p_Vid = mv_block->p_Vid;
   imgpel *src_tmp = mv_block->orig_pic[0];
-  int diff[MB_PIXELS];
+  short *d, diff[MB_PIXELS];
   imgpel *src_line, *ref_line;
 
   if ( !mv_block->test8x8 )
@@ -838,7 +838,7 @@ distblk computeSATDWP(StorablePicture *ref1,
 {
   int imin_cost = dist_down(min_mcost);
   int mcost = 0;
-  int y, x, y4, *d;
+  int y, x, y4;
   int weighted_pel;
   int src_size_x, src_size_mul;
   short blocksize_x = mv_block->blocksize_x;
@@ -846,14 +846,14 @@ distblk computeSATDWP(StorablePicture *ref1,
 
   imgpel *src_tmp = mv_block->orig_pic[0];
   VideoParameters *p_Vid = mv_block->p_Vid;
-  Slice *currSlice = mv_block->p_slice;
+  Slice *currSlice = mv_block->p_Slice;
   short luma_log_weight_denom = currSlice->luma_log_weight_denom;
   short weight = mv_block->weight_luma;
   short offset = mv_block->offset_luma; 
 
   int wp_luma_round = currSlice->wp_luma_round;  
   int max_imgpel_value = p_Vid->max_imgpel_value;
-  int diff[MB_PIXELS];
+  short *d, diff[MB_PIXELS];
   imgpel *src_line, *ref_line;
 
   if ( !mv_block->test8x8 )
@@ -870,13 +870,13 @@ distblk computeSATDWP(StorablePicture *ref1,
         for (y4 = 0; y4 < BLOCK_SIZE; y4++ )
         {
           weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
-          *d++ = *src_line++ - weighted_pel;
+          *d++ = (short) (*src_line++ - weighted_pel);
           weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
-          *d++ = *src_line++ - weighted_pel;
+          *d++ = (short) (*src_line++ - weighted_pel);
           weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
-          *d++ = *src_line++ - weighted_pel;
+          *d++ = (short) (*src_line++ - weighted_pel);
           weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
-          *d++ = *src_line++ - weighted_pel;
+          *d++ = (short) (*src_line++ - weighted_pel);
 
           ref_line += p_Vid->padded_size_x_m4x4;
           src_line += src_size_x;
@@ -903,21 +903,21 @@ distblk computeSATDWP(StorablePicture *ref1,
         for (y4 = 0; y4 < BLOCK_SIZE_8x8; y4++ )
         {
           weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
-          *d++ = *src_line++ - weighted_pel;
+          *d++ = (short) (*src_line++ - weighted_pel);
           weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
-          *d++ = *src_line++ - weighted_pel;
+          *d++ = (short) (*src_line++ - weighted_pel);
           weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
-          *d++ = *src_line++ - weighted_pel;
+          *d++ = (short) (*src_line++ - weighted_pel);
           weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
-          *d++ = *src_line++ - weighted_pel;
+          *d++ = (short) (*src_line++ - weighted_pel);
           weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
-          *d++ = *src_line++ - weighted_pel;
+          *d++ = (short) (*src_line++ - weighted_pel);
           weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
-          *d++ = *src_line++ - weighted_pel;
+          *d++ = (short) (*src_line++ - weighted_pel);
           weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
-          *d++ = *src_line++ - weighted_pel;
+          *d++ = (short) (*src_line++ - weighted_pel);
           weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
-          *d++ = *src_line++ - weighted_pel;
+          *d++ = (short) (*src_line++ - weighted_pel);
 
           ref_line += p_Vid->padded_size_x_m8x8;
           src_line += src_size_x;
@@ -949,10 +949,10 @@ distblk computeBiPredSATD1(StorablePicture *ref1,
 {
   int imin_cost = dist_down(min_mcost);
   int mcost = 0;
-  int y, x, y4, *d;
+  int y, x, y4;
   int src_size_x, src_size_mul;
   imgpel *src_tmp = mv_block->orig_pic[0];
-  int diff[MB_PIXELS];
+  short *d, diff[MB_PIXELS];
   imgpel *src_line, *ref1_line, *ref2_line;
   short blocksize_x = mv_block->blocksize_x;
   short blocksize_y = mv_block->blocksize_y;
@@ -1044,10 +1044,10 @@ distblk computeBiPredSATD2(StorablePicture *ref1,
 {
   int imin_cost = dist_down(min_mcost);
   int mcost = 0;
-  int y, x, y4, *d;
+  int y, x, y4;
   int weighted_pel, pixel1, pixel2;
   VideoParameters *p_Vid = mv_block->p_Vid;
-  Slice *currSlice = mv_block->p_slice;
+  Slice *currSlice = mv_block->p_Slice;
   int denom = currSlice->luma_log_weight_denom + 1;
   int lround = 2 * currSlice->wp_luma_round;
   short weight1 = mv_block->weight1;
@@ -1058,7 +1058,7 @@ distblk computeBiPredSATD2(StorablePicture *ref1,
   int max_imgpel_value = p_Vid->max_imgpel_value;
   int src_size_x, src_size_mul;
   imgpel *src_tmp = mv_block->orig_pic[0];
-  int diff[MB_PIXELS];
+  short *d, diff[MB_PIXELS];
   imgpel *src_line, *ref1_line, *ref2_line;
   short blocksize_x = mv_block->blocksize_x;
   short blocksize_y = mv_block->blocksize_y;
@@ -1081,22 +1081,22 @@ distblk computeBiPredSATD2(StorablePicture *ref1,
           pixel1 = weight1 * (*ref1_line++);
           pixel2 = weight2 * (*ref2_line++);
           weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
-          *d++ =  (*src_line++) - weighted_pel;
+          *d++ =  (short) ((*src_line++) - weighted_pel);
           // 1
           pixel1 = weight1 * (*ref1_line++);
           pixel2 = weight2 * (*ref2_line++);
           weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
-          *d++ =  (*src_line++) - weighted_pel;
+          *d++ =  (short) ((*src_line++) - weighted_pel);
           // 2
           pixel1 = weight1 * (*ref1_line++);
           pixel2 = weight2 * (*ref2_line++);
           weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
-          *d++ =  (*src_line++) - weighted_pel;
+          *d++ =  (short) ((*src_line++) - weighted_pel);
           // 3
           pixel1 = weight1 * (*ref1_line++);
           pixel2 = weight2 * (*ref2_line++);
           weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
-          *d++ =  (*src_line++) - weighted_pel;
+          *d++ =  (short) ((*src_line++) - weighted_pel);
 
           ref1_line += p_Vid->padded_size_x_m4x4;
           ref2_line += p_Vid->padded_size_x_m4x4;
@@ -1129,42 +1129,42 @@ distblk computeBiPredSATD2(StorablePicture *ref1,
           pixel1 = weight1 * (*ref1_line++);
           pixel2 = weight2 * (*ref2_line++);
           weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
-          *d++ =  (*src_line++) - weighted_pel;
+          *d++ =  (short) ((*src_line++) - weighted_pel);
           // 1
           pixel1 = weight1 * (*ref1_line++);
           pixel2 = weight2 * (*ref2_line++);
           weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
-          *d++ =  (*src_line++) - weighted_pel;
+          *d++ =  (short) ((*src_line++) - weighted_pel);
           // 2
           pixel1 = weight1 * (*ref1_line++);
           pixel2 = weight2 * (*ref2_line++);
           weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
-          *d++ =  (*src_line++) - weighted_pel;
+          *d++ =  (short) ((*src_line++) - weighted_pel);
           // 3
           pixel1 = weight1 * (*ref1_line++);
           pixel2 = weight2 * (*ref2_line++);
           weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
-          *d++ =  (*src_line++) - weighted_pel;
+          *d++ =  (short) ((*src_line++) - weighted_pel);
           // 4
           pixel1 = weight1 * (*ref1_line++);
           pixel2 = weight2 * (*ref2_line++);
           weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
-          *d++ =  (*src_line++) - weighted_pel;
+          *d++ =  (short) ((*src_line++) - weighted_pel);
           // 5
           pixel1 = weight1 * (*ref1_line++);
           pixel2 = weight2 * (*ref2_line++);
           weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
-          *d++ =  (*src_line++) - weighted_pel;
+          *d++ =  (short) ((*src_line++) - weighted_pel);
           // 6
           pixel1 = weight1 * (*ref1_line++);
           pixel2 = weight2 * (*ref2_line++);
           weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
-          *d++ =  (*src_line++) - weighted_pel;
+          *d++ =  (short) ((*src_line++) - weighted_pel);
           // 7
           pixel1 = weight1 * (*ref1_line++);
           pixel2 = weight2 * (*ref2_line++);
           weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
-          *d++ =  (*src_line) - weighted_pel;
+          *d++ =  (short) ((*src_line) - weighted_pel);
 
           ref1_line += p_Vid->padded_size_x_m8x8;
           ref2_line += p_Vid->padded_size_x_m8x8;
@@ -1271,7 +1271,7 @@ distblk computeSSEWP(StorablePicture *ref1,
   short blocksize_x = mv_block->blocksize_x;
   short blocksize_y = mv_block->blocksize_y;
   VideoParameters *p_Vid = mv_block->p_Vid;
-  Slice *currSlice = mv_block->p_slice;  
+  Slice *currSlice = mv_block->p_Slice;  
   short weight = mv_block->weight_luma;
   short offset = mv_block->offset_luma; 
 
@@ -1446,7 +1446,7 @@ distblk computeBiPredSSE2(StorablePicture *ref1,
   int mcost = 0;
   int bi_diff;
   VideoParameters *p_Vid = mv_block->p_Vid;
-  Slice *currSlice = mv_block->p_slice;  
+  Slice *currSlice = mv_block->p_Slice;  
   int denom = currSlice->luma_log_weight_denom + 1;
   int lround = 2 * currSlice->wp_luma_round;
   int max_imgpel_value = p_Vid->max_imgpel_value;

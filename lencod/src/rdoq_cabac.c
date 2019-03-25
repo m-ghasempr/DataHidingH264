@@ -71,7 +71,7 @@ static int biari_state(signed short symbol, BiContextTypePtr bi_ct )
 */
 static void est_CBP_block_bit (Macroblock* currMB, int type)
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   estBitsCabacStruct *cabacEstBits = &currSlice->estBitsCabac[type];
   int ctx;
 
@@ -91,7 +91,7 @@ static void est_CBP_block_bit (Macroblock* currMB, int type)
 */
 static void est_significance_map(Macroblock* currMB, int type)
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   int   k;
   int   k1  = maxpos[type]-1;
 #if ENABLE_FIELD_CTX
@@ -131,7 +131,7 @@ static void est_significance_map(Macroblock* currMB, int type)
 */
 static void est_significant_coefficients (Macroblock* currMB, int type)
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   int   ctx;
   int maxCtx = imin(4, max_c2[type]);
   estBitsCabacStruct *cabacEstBits = &currSlice->estBitsCabac[type];
@@ -163,7 +163,7 @@ static void est_significant_coefficients (Macroblock* currMB, int type)
 */
 static int est_unary_exp_golomb_level_encode(Macroblock *currMB, unsigned int symbol, int ctx, int type)
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   estBitsCabacStruct *cabacEstBits = &currSlice->estBitsCabac[type];
   unsigned int l = symbol, k = 1;
   unsigned int exp_start = 13; // 15-2 : 0,1 level decision always sent
@@ -299,7 +299,7 @@ void estRunLevel_CABAC (Macroblock *currMB, int context) // marta - writes CABAC
 */
 int est_write_and_store_CBP_block_bit(Macroblock* currMB, int type) 
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currMB->p_Vid;
   estBitsCabacStruct *cabacEstBits = &currSlice->estBitsCabac[type];  
 
@@ -352,7 +352,7 @@ int est_write_and_store_CBP_block_bit(Macroblock* currMB, int type)
 
   bit = (y_dc ? 0 : y_ac ? 1 : u_dc ? 17 : v_dc ? 18 : u_ac ? 19 : 35);
 
-  if (p_Vid->enc_picture->chroma_format_idc!=YUV444 || IS_INDEPENDENT(currMB->p_Inp))
+  if (p_Vid->enc_picture->chroma_format_idc!=YUV444 || (currMB->p_Inp->separate_colour_plane_flag != 0))
   {
     if (type!=LUMA_8x8)
     {
@@ -439,7 +439,7 @@ void est_writeRunLevel_CABAC(Macroblock *currMB, levelDataStruct levelData[], in
                              int noCoeff, int estCBP)
 {
   VideoParameters *p_Vid = currMB->p_Vid;
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   estBitsCabacStruct *cabacEstBits = &currSlice->estBitsCabac[type];
   int   k, i;
   int   estBits;
@@ -606,7 +606,7 @@ int init_trellis_data_4x4_CABAC(Macroblock *currMB, int **tblock, int block_x, i
                                 LevelQuantParams **q_params_4x4, const byte *p_scan, 
                                 levelDataStruct *dataLevel, int* kStart, int* kStop, int type)
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   int noCoeff = 0;
   int i, j, coeff_ctr;
   int *m7;
@@ -691,7 +691,7 @@ int init_trellis_data_4x4_CABAC(Macroblock *currMB, int **tblock, int block_x, i
 int init_trellis_data_8x8_CABAC(Macroblock *currMB, int **tblock, int block_x, int qp_per, int qp_rem, LevelQuantParams **q_params_8x8, const byte *p_scan, 
                       levelDataStruct *dataLevel, int* kStart, int* kStop)
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   int noCoeff = 0;
   int *m7;
   int i, j, coeff_ctr, end_coeff_ctr = 64;
@@ -775,7 +775,7 @@ int init_trellis_data_DC_CABAC(Macroblock *currMB, int **tblock, int qp_per, int
                          LevelQuantParams *q_params_4x4, const byte *p_scan, 
                          levelDataStruct *dataLevel, int* kStart, int* kStop)
 {
-  Slice *currSlice = currMB->p_slice;
+  Slice *currSlice = currMB->p_Slice;
   int noCoeff = 0;
   int i, j, coeff_ctr, end_coeff_ctr = 16;
   int q_bits   = Q_BITS + qp_per + 1; 

@@ -19,6 +19,7 @@
 #include "slice.h"
 #include "list_reorder.h"
 #include "wp_mcprec.h"
+#include "memalloc.h"
 
 /*!
 ************************************************************************
@@ -113,6 +114,7 @@ void wpxModifyRefPicList( Slice *currSlice )
   int   default_order_list1[32];
   int   re_order[32], *list_order;  
   int          pred_list;
+  DecodedPictureBuffer *p_Dpb = currSlice->p_Dpb;
 
   StorablePicture **list;
 
@@ -122,14 +124,14 @@ void wpxModifyRefPicList( Slice *currSlice )
   memset( (void *)re_order,            1<<20, 32 * sizeof( int ) );
 
   // First assign default list orders
-  list = p_Vid->listX[LIST_0];
+  list = currSlice->listX[LIST_0];
   for (i=0; i<(unsigned int)(currSlice->num_ref_idx_active[LIST_0]); i++)
   {
     default_order_list0[i] = list[i]->pic_num;
   }
   if ( currSlice->slice_type == B_SLICE )
   {
-    list = p_Vid->listX[LIST_1];
+    list = currSlice->listX[LIST_1];
     for (i=0; i<(unsigned int)(currSlice->num_ref_idx_active[LIST_1]); i++)
     {
       default_order_list1[i] = list[i]->pic_num;
@@ -144,21 +146,21 @@ void wpxModifyRefPicList( Slice *currSlice )
     int  tmp_value;
     int  abs_poc_dist;
     
-    for (i=0; i<p_Vid->p_Dpb->ref_frames_in_buffer; i++)
+    for (i=0; i < p_Dpb->ref_frames_in_buffer; i++)
     {
-      re_order[i] = p_Vid->p_Dpb->fs_ref[i]->frame->pic_num;
-      if (p_Vid->p_Dpb->fs_ref[i]->is_used==3 && (p_Vid->p_Dpb->fs_ref[i]->frame->used_for_reference)&&(!p_Vid->p_Dpb->fs_ref[i]->frame->is_long_term))
+      re_order[i] = p_Dpb->fs_ref[i]->frame->pic_num;
+      if (p_Dpb->fs_ref[i]->is_used==3 && (p_Dpb->fs_ref[i]->frame->used_for_reference)&&(!p_Dpb->fs_ref[i]->frame->is_long_term))
       {
-        abs_poc_dist = iabs(p_Vid->p_Dpb->fs_ref[i]->frame->poc - p_Vid->enc_picture->poc) ;
+        abs_poc_dist = iabs(p_Dpb->fs_ref[i]->frame->poc - p_Vid->enc_picture->poc) ;
         poc_diff[i]  = abs_poc_dist;
-        list_sign[i] = (p_Vid->enc_picture->poc < p_Vid->p_Dpb->fs_ref[i]->frame->poc) ? +1 : -1;
+        list_sign[i] = (p_Vid->enc_picture->poc < p_Dpb->fs_ref[i]->frame->poc) ? +1 : -1;
       }
     }
 
     // sort these references based on poc (temporal) distance
-    for (i=0; i< p_Vid->p_Dpb->ref_frames_in_buffer-1; i++)
+    for (i=0; i< p_Dpb->ref_frames_in_buffer-1; i++)
     {
-      for (j=i+1; j< p_Vid->p_Dpb->ref_frames_in_buffer; j++)
+      for (j=i+1; j< p_Dpb->ref_frames_in_buffer; j++)
       {
         if (poc_diff[i]>poc_diff[j] || (poc_diff[i] == poc_diff[j] && list_sign[j] > list_sign[i]))
         {
@@ -204,7 +206,7 @@ void wpxModifyRefPicList( Slice *currSlice )
         p_Vid->pWPX->wp_ref_list[pred_list][j].PicNum = list_order[0];
       }
       // shift the rest
-      for ( j = cloned_refs; j < p_Vid->p_Dpb->ref_frames_in_buffer; j++ )
+      for ( j = cloned_refs; j < p_Dpb->ref_frames_in_buffer; j++ )
       {
         p_Vid->pWPX->wp_ref_list[pred_list][j].PicNum = list_order[j - (cloned_refs - 1)];
         p_Vid->pWPX->num_wp_ref_list[pred_list]++;
@@ -218,7 +220,7 @@ void wpxModifyRefPicList( Slice *currSlice )
         p_Vid->pWPX->wp_ref_list[pred_list][j].PicNum = list_order[0];
       }
       // shift the rest
-      for ( j = cloned_refs; j < p_Vid->p_Dpb->ref_frames_in_buffer; j++ )
+      for ( j = cloned_refs; j < p_Dpb->ref_frames_in_buffer; j++ )
       {
         p_Vid->pWPX->wp_ref_list[pred_list][j].PicNum = list_order[j - (cloned_refs - 1)];
         p_Vid->pWPX->num_wp_ref_list[pred_list]++;

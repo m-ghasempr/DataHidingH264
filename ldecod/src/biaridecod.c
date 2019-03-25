@@ -158,56 +158,57 @@ int arideco_bits_read(DecodingEnvironmentPtr dep)
 ************************************************************************
 */
 unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi_ct )
-{
-  unsigned int state = bi_ct->state;
+{  
   unsigned int bit   = bi_ct->MPS;
-  unsigned int value = dep->Dvalue;
-  unsigned int range = dep->Drange;
-  int renorm = 1;
-  unsigned int rLPS  = rLPS_table_64x4[state][(range>>6) & 0x03];
+  unsigned int *value = &dep->Dvalue;
+  unsigned int *range = &dep->Drange;  
+  unsigned int state = bi_ct->state;
+  unsigned int rLPS  = rLPS_table_64x4[state][(*range>>6) & 0x03];
+  int *DbitsLeft = &dep->DbitsLeft;
 
-  range -= rLPS;
+  *range -= rLPS;
 
-  if(value < (range << dep->DbitsLeft))   //MPS
+  if(*value < (*range << *DbitsLeft))   //MPS
   {
     bi_ct->state = AC_next_state_MPS_64[state]; // next state 
 
-    if( range >= QUARTER )
+    if( *range >= QUARTER )
     {
-      dep->Drange = range;
       return (bit);
     }
     else 
-      range <<= 1;
+      *range <<= 1;
 
+    (*DbitsLeft)--;
   }
   else         // LPS 
   {
-    value -= (range << dep->DbitsLeft);
-    bit ^= 0x01;
+    int renorm = renorm_table_32[(rLPS>>3) & 0x1F];
+    *value -= (*range << dep->DbitsLeft);
 
+    *range = (rLPS << renorm);
+    (*DbitsLeft) -= renorm;
+
+    bit ^= 0x01;
     if (!state)          // switch meaning of MPS if necessary 
       bi_ct->MPS ^= 0x01; 
 
     bi_ct->state = AC_next_state_LPS_64[state]; // next state 
-
-    renorm = renorm_table_32[(rLPS>>3) & 0x1F]; 
-    range = (rLPS << renorm);
   }
 
-  dep->Drange = range;
-  dep->DbitsLeft -= renorm;
-  if( dep->DbitsLeft > 0 )
-  { 
-    dep->Dvalue = value;
+  if( *DbitsLeft > 0 )
+  {     
     return(bit);
   } 
+  else
+  {
+    *value <<= 16;
+    *value |=  getword(dep);    // lookahead of 2 bytes: always make sure that bitstream buffer
+    // contains 2 more bytes than actual bitstream
+    (*DbitsLeft) += 16;
 
-  dep->Dvalue = (value << 16) | getword(dep);    // lookahead of 2 bytes: always make sure that bitstream buffer
-                                                 // contains 2 more bytes than actual bitstream
-  dep->DbitsLeft += 16;
-
-  return(bit);
+    return(bit);
+  }
 }
 
 
@@ -222,24 +223,24 @@ unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi
 unsigned int biari_decode_symbol_eq_prob(DecodingEnvironmentPtr dep)
 {
    int tmp_value;
-   int value = dep->Dvalue;
+   unsigned int *value = &dep->Dvalue;
+   int *DbitsLeft = &dep->DbitsLeft;
 
-  if(--(dep->DbitsLeft) == 0)  
+  if(--(*DbitsLeft) == 0)  
   {
-    value = (value << 16) | getword( dep );  // lookahead of 2 bytes: always make sure that bitstream buffer
+    *value = (*value << 16) | getword( dep );  // lookahead of 2 bytes: always make sure that bitstream buffer
                                              // contains 2 more bytes than actual bitstream
-    dep->DbitsLeft = 16;
+    *DbitsLeft = 16;
   }
-  tmp_value  = value - (dep->Drange << dep->DbitsLeft);
+  tmp_value  = *value - (dep->Drange << *DbitsLeft);
 
   if (tmp_value < 0)
   {
-    dep->Dvalue = value;
     return 0;
   }
   else
   {
-    dep->Dvalue = tmp_value;
+    *value = tmp_value;
     return 1;
   }
 }

@@ -5,7 +5,7 @@
  *     win32.h
  *
  *  \brief
- *     win32 definitions for H.264 encoder.
+ *     win32 definitions for H.264 codec.
  *
  *  \author
  *
@@ -20,11 +20,25 @@
 # include <string.h>
 # include <assert.h>
 
-#if defined(WIN32)
+#if (_MSC_VER >= 1400) || defined(__INTEL_COMPILER) || (__GNUC__  >= 5) // Check OPENMP compatibility
+# define OPENMP
+# define NUM_THREADS 8
+#endif
+
+#if defined(WIN32) || defined (WIN64)
 # include <io.h>
 # include <sys/types.h>
 # include <sys/stat.h>
 # include <windows.h>
+#if (_MSC_VER < 1400)
+typedef int   intptr_t;
+#else
+# include <crtdefs.h>
+#endif
+#if defined(OPENMP)
+# include <omp.h>
+#endif
+
 # define strcasecmp _strcmpi
 
 # define  snprintf _snprintf
@@ -47,6 +61,10 @@
 # include <sys/time.h>
 # include <sys/stat.h>
 # include <time.h>
+# include <stdint.h>
+#if defined(OPENMP)
+# include <omp.h>
+#endif
 
 # define  TIMEB    timeb
 # define  TIME_T   struct timeval
@@ -63,7 +81,7 @@
 # define  forceinline inline
 #endif
 
-#if defined(WIN32) && !defined(__GNUC__)
+#if (defined(WIN32) || defined(WIN64)) && !defined(__GNUC__)
 typedef __int64   int64;
 typedef unsigned __int64   uint64;
 # define FORMAT_OFF_T "I64d"
