@@ -320,6 +320,7 @@ void estimate_weighting_factor_B_slice()
           wf_weight = (int) (default_weight[0] * dc_org / dc_ref[clist][n] + 0.5);
         else
           wf_weight = default_weight[0];  // only used when reference picture is black
+        
         if ( (wf_weight<-64) || (wf_weight>127) )
         {
           wf_weight = default_weight[0];
@@ -374,9 +375,9 @@ void estimate_weighting_factor_B_slice()
       {
         for (index = 0; index < listXsize[clist]; index++)
         {
-          wp_weight[clist][index][0] = 1<<luma_log_weight_denom;
-          wp_weight[clist][index][1] = 1<<chroma_log_weight_denom;
-          wp_weight[clist][index][2] = 1<<chroma_log_weight_denom;
+          wp_weight[clist][index][0] = default_weight[0];
+          wp_weight[clist][index][1] = default_weight[1];
+          wp_weight[clist][index][2] = default_weight[2];
           wp_offset[clist][index][0] = 0;
           wp_offset[clist][index][1] = 0;
           wp_offset[clist][index][2] = 0;
@@ -488,7 +489,6 @@ int test_wp_P_slice(int select_offset)
       else
       {        
         offset[clist][n][0] = (int) ((dc_org-dc_ref[n])/(img->height*img->width)+0.5);
-        //printf("offset[clist][%d][0] %d %.2f %.2f\n",n,offset[clist][n][0], dc_org,dc_ref[n] );
         offset[clist][n][0] = (offset[clist][n][0]<-128) ? -128: (offset[clist][n][0]>127) ? 127:offset[clist][n][0];
         weight[clist][n][0] = default_weight;
       }
@@ -541,9 +541,7 @@ int test_wp_B_slice(int select_method)
   int log_weight_denom;
   
   pel_t*  ref_pic;   
-  pel_t*  ref_pic_w;   
-  int default_weight;
-  int default_weight_chroma;
+  int default_weight[3];
   int list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
   int weight[6][MAX_REFERENCE_PICTURES][3]; 
   int offset[6][MAX_REFERENCE_PICTURES][3];       
@@ -553,12 +551,22 @@ int test_wp_B_slice(int select_method)
   int wf_weight, wf_offset;
   int perform_wp = 0;      
   
-  luma_log_weight_denom = 5;
-  chroma_log_weight_denom = 5;
+  if (select_method == 1) //! implicit mode
+  {
+    luma_log_weight_denom = 5;
+    chroma_log_weight_denom = 5;
+  }
+  else
+  {
+    luma_log_weight_denom = 6;
+    chroma_log_weight_denom = 6;
+  }
+
   wp_luma_round = 1 << (luma_log_weight_denom - 1);
   wp_chroma_round = 1 << (chroma_log_weight_denom - 1);
-  default_weight = 1<<luma_log_weight_denom;
-  default_weight_chroma = 1<<chroma_log_weight_denom;
+  default_weight[0] = 1<<luma_log_weight_denom;
+  default_weight[1] = 1<<chroma_log_weight_denom;
+  default_weight[2] = 1<<chroma_log_weight_denom;
   
   /* set all values to defaults */
   for (i = 0; i < 2 + list_offset; i++)
@@ -567,10 +575,10 @@ int test_wp_B_slice(int select_method)
     {
       for (n = 0; n < 3; n++)
       {
-        wp_weight[i][j][n] = default_weight;
+        wp_weight[i][j][n] = default_weight[n];
         wp_offset[i][j][n] = 0;
         offset   [i][j][n] = 0;
-        weight   [i][j][n] = default_weight;
+        weight   [i][j][n] = default_weight[n];
       }
     }
   }
@@ -587,8 +595,8 @@ int test_wp_B_slice(int select_method)
         // implicit weights          
         if (td == 0)
         {
-          im_weight[1][i][j][comp] = 32 ;
-          im_weight[0][i][j][comp] = 32;
+          im_weight[1][i][j][comp] = default_weight[comp];
+          im_weight[0][i][j][comp] = default_weight[comp];
           im_offset[1][i][j][comp] = 0;
           im_offset[0][i][j][comp] = 0;
         }
@@ -604,11 +612,6 @@ int test_wp_B_slice(int select_method)
           im_offset[0][i][j][comp] = 0;
         }        
       }
-      /*
-      printf ("%d imp weight[%d][%d] = %d  , %d (%d %d %d) (%d %d) (%d %d)\n",enc_picture->poc, i, j,  im_weight[0][i][j][0], im_weight[1][i][j][0],
-        enc_picture->poc,listX[LIST_0][i]->poc, listX[LIST_1][j]->poc,
-        DistScaleFactor ,tx,td,tb);
-      */
     }
   }
   
@@ -633,9 +636,9 @@ int test_wp_B_slice(int select_method)
     {
       for (index = 0; index < listXsize[clist]; index++)
       {
-        wp_weight[clist][index][0] = 1<<luma_log_weight_denom;
-        wp_weight[clist][index][1] = 1<<chroma_log_weight_denom;
-        wp_weight[clist][index][2] = 1<<chroma_log_weight_denom;
+        wp_weight[clist][index][0] = default_weight[0];
+        wp_weight[clist][index][1] = default_weight[1];
+        wp_weight[clist][index][2] = default_weight[2];
         wp_offset[clist][index][0] = 0;
         wp_offset[clist][index][1] = 0;
         wp_offset[clist][index][2] = 0;
@@ -658,36 +661,38 @@ int test_wp_B_slice(int select_method)
       {
         dc_ref[clist][n] = 0;
         
+
         ref_pic       = listX[clist][n]->imgY_11;
-        ref_pic_w     = listX[clist][n]->imgY_11_w;
         
         // Y
         for (i = 0; i < img->height * img->width; i++)
         {
           dc_ref[clist][n] += (double) ref_pic[i];
         }
+
         if (dc_ref[clist][n] != 0.0)
-          wf_weight = (int) (default_weight * dc_org / dc_ref[clist][n] + 0.5);
+          wf_weight = (int) (default_weight[0] * dc_org / dc_ref[clist][n] + 0.5);
         else
-          wf_weight = default_weight;  // only used when reference picture is black
+          wf_weight = default_weight[0];  // only used when reference picture is black
+
         if ( (wf_weight<-64) || (wf_weight>127) )
         {
-          wf_weight = default_weight;
+          wf_weight = default_weight[0];
         }
         wf_offset = 0;
         
                
         weight[clist][n][0] = wf_weight;
-        weight[clist][n][1] = default_weight_chroma;
-        weight[clist][n][2] = default_weight_chroma;
+        weight[clist][n][1] = default_weight[1];
+        weight[clist][n][2] = default_weight[2];
         offset[clist][n][0] = 0;
         offset[clist][n][1] = 0;
         offset[clist][n][2] = 0;
-        
+       
       }
     }
     
-    if (active_pps->weighted_bipred_idc == 1)
+    if (select_method == 0) //! explicit mode
     {
       for (clist=0; clist<2 + list_offset; clist++)
       {
@@ -707,9 +712,9 @@ int test_wp_B_slice(int select_method)
       {
         for (index = 0; index < listXsize[clist]; index++)
         {
-          wp_weight[clist][index][0] = 1<<luma_log_weight_denom;
-          wp_weight[clist][index][1] = 1<<chroma_log_weight_denom;
-          wp_weight[clist][index][2] = 1<<chroma_log_weight_denom;
+          wp_weight[clist][index][0] = default_weight[0];
+          wp_weight[clist][index][1] = default_weight[1];
+          wp_weight[clist][index][2] = default_weight[2];
           wp_offset[clist][index][0] = 0;
           wp_offset[clist][index][1] = 0;
           wp_offset[clist][index][2] = 0;
@@ -735,23 +740,25 @@ int test_wp_B_slice(int select_method)
     }
   }
 
-  for (clist=0; clist<2 + list_offset; clist++)
+  if (select_method == 0) //! implicit mode
   {
-    for (index = 0; index < listXsize[clist]; index++)
+    for (clist=0; clist<2 + list_offset; clist++)
     {
-      for (comp=0; comp < 3; comp ++)
+      for (index = 0; index < listXsize[clist]; index++)
       {
-        if (wp_weight[clist][index][comp] != default_weight ||  wp_offset[clist][index][comp] != 0)
+        for (comp=0; comp < 3; comp ++)
         {
-          perform_wp = 1;
-          break;
+          if (wp_weight[clist][index][comp] != default_weight[comp])
+          {
+            perform_wp = 1;
+            break;
+          }
         }
+        if (perform_wp == 1) break;
       }
       if (perform_wp == 1) break;
     }
-    if (perform_wp == 1) break;
   }
-
   return perform_wp;
 }
     

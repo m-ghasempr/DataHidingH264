@@ -37,7 +37,7 @@ typedef struct {
 
   // elements of current macroblock
   int                   mvd[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE][2];
-  unsigned long         cbp_bits;
+  int64                 cbp_bits;
 } CSobj;
 typedef CSobj* CSptr;
 

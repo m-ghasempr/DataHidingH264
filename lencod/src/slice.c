@@ -213,7 +213,6 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
   if (input->NumFramesInELSubSeq)
     {
       short_used = fb->short_used;
-      img_ref = img->nb_references;
     }
 */
 
@@ -233,7 +232,6 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
   if (input->NumFramesInELSubSeq)
     {
       fb->short_used = fb->num_short_used;
-      img->nb_references = fb->short_used + fb->long_used;
     }
 */
   // Update statistics
@@ -462,7 +460,6 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
   if (input->NumFramesInELSubSeq)
     {
       fb->short_used = short_used;
-      img->nb_references = img_ref;
     }
 */
   terminate_slice ();

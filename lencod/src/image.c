@@ -1994,7 +1994,8 @@ static void copy_motion_vectors_MB ()
 static void ReportNALNonVLCBits(int tmp_time, int me_time)
 {
   //! Need to add type (i.e. SPS, PPS, SEI etc).
-    printf ("%04d(NVB)%8d \n", frame_no, stats->bit_ctr_parametersets_n);
+  printf ("%04d(NVB)%8d \n", frame_no, stats->bit_ctr_parametersets_n);
+  fflush (stdout);
 
 }
 static void ReportFirstframe(int tmp_time,int me_time)
@@ -2005,6 +2006,7 @@ static void ReportFirstframe(int tmp_time,int me_time)
     frame_no, stats->bit_ctr - stats->bit_ctr_n,0,
     img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time, me_time,
     img->fld_flag ? "FLD" : "FRM", intras);
+  fflush (stdout);
 
   //Rate control
   if(input->RCEnable)
@@ -2037,6 +2039,7 @@ static void ReportIntra(int tmp_time, int me_time)
     img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time, me_time,
     img->fld_flag ? "FLD" : "FRM", intras);
 
+  fflush (stdout);
 }
 
 static void ReportSP(int tmp_time, int me_time)
@@ -2045,6 +2048,7 @@ static void ReportSP(int tmp_time, int me_time)
     frame_no, stats->bit_ctr - stats->bit_ctr_n, active_pps->weighted_pred_flag, img->qp, snr->snr_y,
     snr->snr_u, snr->snr_v, tmp_time, me_time,
           img->fld_flag ? "FLD" : "FRM", intras);
+  fflush (stdout);
 }
 
 static void ReportRB(int tmp_time, int me_time)
@@ -2053,6 +2057,7 @@ static void ReportRB(int tmp_time, int me_time)
     frame_no, stats->bit_ctr - stats->bit_ctr_n, active_pps->weighted_bipred_idc, img->qp, snr->snr_y,
     snr->snr_u, snr->snr_v, tmp_time, me_time,
     img->fld_flag ? "FLD" : "FRM", intras,img->direct_spatial_mv_pred_flag);
+  fflush (stdout);
 }
 
 static void ReportB(int tmp_time, int me_time)
@@ -2061,16 +2066,18 @@ static void ReportB(int tmp_time, int me_time)
     frame_no, stats->bit_ctr - stats->bit_ctr_n, active_pps->weighted_bipred_idc,img->qp,
     snr->snr_y, snr->snr_u, snr->snr_v, tmp_time,me_time,
     img->fld_flag ? "FLD" : "FRM",intras,img->direct_spatial_mv_pred_flag);
+  fflush (stdout);
 }
 
 
 static void ReportP(int tmp_time, int me_time)
 {            
-    printf ("%04d(P)  %8d %1d %2d %7.3f %7.3f %7.3f  %7d   %5d     %3s   %3d\n",
+  printf ("%04d(P)  %8d %1d %2d %7.3f %7.3f %7.3f  %7d   %5d     %3s   %3d\n",
     frame_no, stats->bit_ctr - stats->bit_ctr_n, active_pps->weighted_pred_flag, img->qp, snr->snr_y,
     snr->snr_u, snr->snr_v, tmp_time, me_time,
           img->fld_flag ? "FLD" : "FRM", intras);
 
+  fflush (stdout);
 }
 
 /*!

@@ -1203,7 +1203,7 @@ int read_and_store_CBP_block_bit (Macroblock              *currMB,
                                   struct img_par          *img,
                                   int                     type)
 {
-#define BIT_SET(x,n)  ((int)(((x)&(1<<(n)))>>(n)))
+#define BIT_SET(x,n)  ((int)(((x)&((int64)1<<(n)))>>(n)))
   
   int y_ac        = (type==LUMA_16AC || type==LUMA_8x8 || type==LUMA_8x4 || type==LUMA_4x8 || type==LUMA_4x4);
   int y_dc        = (type==LUMA_16DC);
@@ -1214,7 +1214,7 @@ int read_and_store_CBP_block_bit (Macroblock              *currMB,
   int v_dc        = (chroma_dc &&  img->is_v_block);
   int j           = (y_ac || u_ac || v_ac ? img->subblock_y : 0);
   int i           = (y_ac || u_ac || v_ac ? img->subblock_x : 0);
-  int bit         = (y_dc ? 0 : y_ac ? 1 : u_dc ? 17 : v_dc ? 18 : u_ac ? 19 : 23);
+  int bit         = (y_dc ? 0 : y_ac ? 1 : u_dc ? 17 : v_dc ? 18 : u_ac ? 19 : 35);
   int default_bit = (img->is_intra_block ? 1 : 0);
   int upper_bit   = default_bit;
   int left_bit    = default_bit;
@@ -1243,9 +1243,9 @@ int read_and_store_CBP_block_bit (Macroblock              *currMB,
     if (u_ac||v_ac)
     {
       if (block_a.available)
-        bit_pos_a = 2*block_a.y + block_a.x;
+        bit_pos_a = 4*block_a.y + block_a.x;
       if (block_b.available)
-        bit_pos_b = 2*block_b.y + block_b.x;
+        bit_pos_b = 4*block_b.y + block_b.x;
     }
   }
 
@@ -1278,7 +1278,7 @@ int read_and_store_CBP_block_bit (Macroblock              *currMB,
   }
   
   //--- set bits for current block ---
-  bit         = (y_dc ? 0 : y_ac ? 1+4*j+i : u_dc ? 17 : v_dc ? 18 : u_ac ? 19+2*j+i : 23+2*j+i);
+  bit         = (y_dc ? 0 : y_ac ? 1+4*j+i : u_dc ? 17 : v_dc ? 18 : u_ac ? 19+4*j+i : 35+4*j+i);
   
   if (cbp_bit)
   {
@@ -1301,7 +1301,7 @@ int read_and_store_CBP_block_bit (Macroblock              *currMB,
     }
     else
     {
-      currMB->cbp_bits   |= (1<<bit);
+      currMB->cbp_bits   |= ((int64)1<<bit);
     }
   }
 

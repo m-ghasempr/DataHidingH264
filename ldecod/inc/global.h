@@ -348,8 +348,8 @@ typedef struct macroblock
   int           mb_type;
   int           mvd[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE][2];      //!< indices correspond to [forw,backw][block_y][block_x][x,y]
   int           cbp;
-  int64       cbp_blk ;
-  unsigned long cbp_bits;
+  int64         cbp_blk ;
+  int64         cbp_bits;
 
   int           is_skip;
 

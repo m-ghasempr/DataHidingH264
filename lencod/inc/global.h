@@ -356,7 +356,7 @@ typedef struct macroblock
   int64               cbp_blk ;    //!< 1 bit set for every 4x4 block with coefs (not implemented for INTRA)
   int                 b8mode[4];
   int                 b8pdir[4];
-  unsigned long       cbp_bits;
+  int64               cbp_bits;
 
   int                 lf_disable;
   int                 lf_alpha_c0_offset;
@@ -783,7 +783,6 @@ typedef struct
 {
   int number;                  //!< current image number to be encoded
   int pn;                      //!< picture number
-  int nb_references;
   int current_mb_nr;
   int total_number_mb;
   int current_slice_nr;
@@ -1052,6 +1051,7 @@ typedef struct
   int  *em_prev_bits;
   int   bit_ctr_parametersets;
   int   bit_ctr_parametersets_n;
+  int   successive_Bframe;
 } StatParameters;
 
 //!< For MB level field/frame coding tools

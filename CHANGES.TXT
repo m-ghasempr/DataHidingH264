@@ -1,3 +1,11 @@
+Changes for Version JM 9.3a to JM 9.3
+-------------------------------------
+- encoder: weighted prediction fix (AT)
+- encoder: fix reported bit rate with LastFrameNumber parameter (AT)
+- decoder: fix timing SEI parsing (IP)
+- encoder/decoder: fix CABAC CBP_block_bit (VG)
+
+
 Changes for Version JM 9.3 to JM 9.2
 ------------------------------------
 - encoder: Bi predictive ME (AT)
@@ -17,6 +25,7 @@ Changes for Version JM 9.3 to JM 9.2
 - decoder: fix CABAC SI context selection (DM/KS)
 - encoder/decoder: fix neighboring of TotalCoeff in CAVLC (KS/WC)
 - encoder/decoder: fix PSNR calculation if cropping is enabled (KS)
+
 
 Changes for Version JM 9.2 to JM 9.1
 ------------------------------------
@@ -958,6 +967,7 @@ FW      Feng Wu                 fengwu@microsoft.com
 HS      Heiko Schwarz           hschwarz@hhi.de
 IL      Inge Lille-Langoy       Inge.Lille-Langoy@telenor.com
 IM      Iole Moccagatta         imoccaga@lsil.com
+IP	Isabelle Perroux	isabelle.perroux@allegrodvt.com
 JA      James Au                james@ubvideo.com
 JB      Jill Boyce              BoyceJ@tce.com
 JC      John Cox                jc@sj.co.uk
