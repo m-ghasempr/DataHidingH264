@@ -353,11 +353,18 @@ static inline void free_pointer(void *pointer)
   }
 }
 
-static inline void i32_swap(int x, int y) 
+static inline void i32_swap(int *x, int *y) 
 {
-  int temp = x;
-  x = y;
-  y = temp;
+  int temp = *x;
+  *x = *y;
+  *y = temp;
+}
+
+static inline void i64_swap(int64 *x, int64 *y)
+{
+  int64 temp = *x;
+  *x = *y;
+  *y = temp;
 }
 
 static inline int is_intra_mb(short mb_type)

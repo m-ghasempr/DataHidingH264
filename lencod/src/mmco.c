@@ -251,10 +251,21 @@ void low_delay_ref_management_frame_pic(DecodedPictureBuffer *p_Dpb, int current
   }
   for (i = 0; i < p_Dpb->used_size; i++)
   {
-    if (p_Dpb->fs[i]->is_reference  && (!(p_Dpb->fs[i]->is_long_term)) && p_Dpb->fs[i]->poc < min_poc_not_4x && (p_Dpb->fs[i]->poc/2)%4!=0 )
+    if((p_Vid->currentSlice->ThisPOC/2-p_Dpb->fs[i]->poc/2)>4)
+    {      
+      if (p_Dpb->fs[i]->is_reference  && (!(p_Dpb->fs[i]->is_long_term)) &&  p_Dpb->fs[i]->poc < min_poc_not_4x && (p_Dpb->fs[i]->poc/2)%(p_Vid->p_Inp->NumberBFrames+1)!=0 )
+      {
+        min_poc_not_4x = p_Dpb->fs[i]->frame->poc ;
+        pic_num = p_Dpb->fs[i]->frame->pic_num;
+      }
+    }
+    else
     {
-      min_poc_not_4x = p_Dpb->fs[i]->frame->poc ;
-      pic_num = p_Dpb->fs[i]->frame->pic_num;
+      if (p_Dpb->fs[i]->is_reference  && (!(p_Dpb->fs[i]->is_long_term)) &&  p_Dpb->fs[i]->poc < min_poc_not_4x && (p_Dpb->fs[i]->poc/2)%((p_Vid->p_Inp->NumberBFrames+1)/2)!=0 )
+      {
+        min_poc_not_4x = p_Dpb->fs[i]->frame->poc ;
+        pic_num = p_Dpb->fs[i]->frame->pic_num;
+      }
     }
   }
 

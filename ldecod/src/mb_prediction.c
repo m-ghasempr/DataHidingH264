@@ -156,7 +156,7 @@ static void set_chroma_vector(Macroblock *currMB)
       {
         for(k = 0; k < currSlice->listXsize[l]; k++)
         {
-          if(p_Vid->structure != currSlice->listX[l][k]->structure)
+          if(currSlice->structure != currSlice->listX[l][k]->structure)
             currSlice->chroma_vector_adjustment[l][k] = -2; 
           else
             currSlice->chroma_vector_adjustment[l][k] = 0; 
@@ -170,7 +170,7 @@ static void set_chroma_vector(Macroblock *currMB)
       {
         for(k = 0; k < currSlice->listXsize[l]; k++)
         {
-          if (p_Vid->structure != currSlice->listX[l][k]->structure)
+          if (currSlice->structure != currSlice->listX[l][k]->structure)
             currSlice->chroma_vector_adjustment[l][k] = 2; 
           else
             currSlice->chroma_vector_adjustment[l][k] = 0; 

@@ -203,7 +203,6 @@ static void DeblockMb(VideoParameters *p_Vid, StorablePicture *p, int MbQAddr)
     int           edge;
 
     byte Strength[16];
-    int64         *p_Strength64 = (int64 *) Strength;
     short         mb_x, mb_y;
 
     int           filterNon8x8LumaEdgesFlag[4] = {1,1,1,1};
@@ -266,7 +265,10 @@ static void DeblockMb(VideoParameters *p_Vid, StorablePicture *p, int MbQAddr)
         // Strength for 4 blks in 1 stripe
         get_strength_ver_MBAff(Strength, MbQ, edge << 2, mvlimit, p);
 
-        if ((p_Strength64[0]) || (p_Strength64[1])) // only if one of the 16 Strength bytes is != 0
+        if ( Strength[0] != 0 || Strength[1] != 0 || Strength[2] != 0 || Strength[3] !=0 ||
+        Strength[4] != 0 || Strength[5] != 0 || Strength[6] != 0 || Strength[7] !=0 ||
+        Strength[8] != 0 || Strength[9] != 0 || Strength[10] != 0 || Strength[11] !=0 ||
+        Strength[12] != 0 || Strength[13] != 0 || Strength[14] != 0 || Strength[15] !=0 ) // only if one of the 16 Strength bytes is != 0
         {
           if (filterNon8x8LumaEdgesFlag[edge])
           {
@@ -312,7 +314,10 @@ static void DeblockMb(VideoParameters *p_Vid, StorablePicture *p, int MbQAddr)
         // Strength for 4 blks in 1 stripe
         get_strength_hor_MBAff(Strength, MbQ, edge << 2, mvlimit, p);
 
-        if ((p_Strength64[0]) || (p_Strength64[1])) // only if one of the 16 Strength bytes is != 0
+        if ( Strength[0] != 0 || Strength[1] != 0 || Strength[2] != 0 || Strength[3] !=0 ||
+        Strength[4] != 0 || Strength[5] != 0 || Strength[6] != 0 || Strength[7] !=0 ||
+        Strength[8] != 0 || Strength[9] != 0 || Strength[10] != 0 || Strength[11] !=0 ||
+        Strength[12] != 0 || Strength[13] != 0 || Strength[14] != 0 || Strength[15] !=0 ) // only if one of the 16 Strength bytes is != 0
         {
           if (filterNon8x8LumaEdgesFlag[edge])
           {
@@ -554,7 +559,7 @@ static void perform_db(VideoParameters *p_Vid, StorablePicture *p, int MbQAddr)
       {      
         byte *Strength = MbQ->strength_ver[edge];
 
-        if ((*((int *) Strength))) // only if one of the 16 Strength bytes is != 0
+        if ( Strength[0] != 0 || Strength[1] != 0 || Strength[2] != 0 || Strength[3] != 0 ) // only if one of the 4 first Strength bytes is != 0
         {
           if (filterNon8x8LumaEdgesFlag[edge])
           {
@@ -599,7 +604,10 @@ static void perform_db(VideoParameters *p_Vid, StorablePicture *p, int MbQAddr)
       {
         byte *Strength = MbQ->strength_hor[edge];
 
-        if ((*((int64 *) Strength)) || ((*(((int64 *) Strength) + 1)))) // only if one of the 16 Strength bytes is != 0
+        if ( Strength[0] != 0 || Strength[1] != 0 || Strength[2] != 0 || Strength[3] !=0 ||
+        Strength[4] != 0 || Strength[5] != 0 || Strength[6] != 0 || Strength[7] !=0 ||
+        Strength[8] != 0 || Strength[9] != 0 || Strength[10] != 0 || Strength[11] !=0 ||
+        Strength[12] != 0 || Strength[13] != 0 || Strength[14] != 0 || Strength[15] !=0 ) // only if one of the 16 Strength bytes is != 0
         {
           if (filterNon8x8LumaEdgesFlag[edge])
           {

@@ -24,6 +24,7 @@
 #include "macroblock.h"
 #include "me_distortion.h"
 #include "me_epzs.h"
+#include "me_hme.h"
 #include "me_epzs_common.h"
 #include "me_epzs_int.h"
 #include "me_fullsearch.h"
@@ -31,7 +32,8 @@
 
 static const short BLOCK_PARENT[8] = { 1, 1, 1, 1, 2, 4, 4, 5 };  //!< {skip, 16x16, 16x8, 8x16, 8x8, 8x4, 4x8, 4x4}
 static const int MIN_THRES_BASE[8] = { 0, 64, 32, 32, 16, 8, 8, 4 };
-static const int MED_THRES_BASE[8] = { 0, 256, 128, 128, 64, 32, 32, 16 };
+//static const int MED_THRES_BASE[8] = { 0, 256, 128, 128, 64, 32, 32, 16 };
+static const int MED_THRES_BASE[8] = { 0, 192,  96,  96, 48, 24, 24, 12 };
 static const int MAX_THRES_BASE[8] = { 0, 768, 384, 384, 192, 96, 96, 48 };
 
 // Other definitions
@@ -353,52 +355,57 @@ EPZSWindowPredictorInit (short search_range, EPZSStructure * predictor, short mo
     {
       searchpos = ((search_range << search_range_qpel) >> pos);
 
-      for (i = 1; i >= -1; i -= 2)
+     for (i = 1; i >= -1; i -= 2)
       {
         point[++prednum].motion.mv_x = i * searchpos;
-        point[prednum].motion.mv_y = 0;
+        point[  prednum].motion.mv_y = 0;
         point[++prednum].motion.mv_x = i * searchpos;
-        point[prednum].motion.mv_y = i * searchpos;
+        point[  prednum].motion.mv_y = i * searchpos;
         point[++prednum].motion.mv_x = 0;
-        point[prednum].motion.mv_y = i * searchpos;
+        point[  prednum].motion.mv_y = i * searchpos;
         point[++prednum].motion.mv_x = -i * searchpos;
-        point[prednum].motion.mv_y = i * searchpos;
+        point[  prednum].motion.mv_y = i * searchpos;
       }
     }
   }
-  else                          // if (mode == 0)
+  else // if (mode == 0)
   {
     for (pos = (short) (RoundLog2 (search_range) - 2); pos > -1; pos--)
     {
       searchpos = ((search_range << search_range_qpel) >> pos);
 
-      fieldsearchpos = ((3 * searchpos + 1) << search_range_qpel) >> 1;
+      //fieldsearchpos = ((3 * searchpos + 1) << search_range_qpel) >> (pos + 1);
+      fieldsearchpos = (3 * searchpos + 2) >> 2;
       for (i = 1; i >= -1; i -= 2)
       {
-        point[++prednum].motion.mv_x = i * searchpos;
-        point[prednum].motion.mv_y = 0;
-        point[++prednum].motion.mv_x = i * searchpos;
-        point[prednum].motion.mv_y = i * searchpos;
+        point[++prednum].motion.mv_x = i * fieldsearchpos;
+        point[  prednum].motion.mv_y = 0;
+        point[++prednum].motion.mv_x = i * fieldsearchpos;
+        point[  prednum].motion.mv_y = i * fieldsearchpos;
         point[++prednum].motion.mv_x = 0;
-        point[prednum].motion.mv_y = i * searchpos;
-        point[++prednum].motion.mv_x = -i * searchpos;
-        point[prednum].motion.mv_y = i * searchpos;
+        point[  prednum].motion.mv_y = i * fieldsearchpos;
+        point[++prednum].motion.mv_x = -i * fieldsearchpos;
+        point[  prednum].motion.mv_y = i * fieldsearchpos;
       }
-
+      
       for (i = 1; i >= -1; i -= 2)
       {
-        point[++prednum].motion.mv_x = i * fieldsearchpos;
-        point[prednum].motion.mv_y = -i * searchpos;
-        point[++prednum].motion.mv_x = i * fieldsearchpos;
-        point[prednum].motion.mv_y = 0;
-        point[++prednum].motion.mv_x = i * fieldsearchpos;
-        point[prednum].motion.mv_y = i * searchpos;
         point[++prednum].motion.mv_x = i * searchpos;
-        point[prednum].motion.mv_y = i * fieldsearchpos;
+        point[  prednum].motion.mv_y = 0;
+        point[++prednum].motion.mv_x = i * searchpos;
+        point[  prednum].motion.mv_y = i * fieldsearchpos;
+        point[++prednum].motion.mv_x = i * searchpos;
+        point[  prednum].motion.mv_y = i * searchpos;
+        point[++prednum].motion.mv_x = i * fieldsearchpos;
+        point[  prednum].motion.mv_y = i * searchpos;
         point[++prednum].motion.mv_x = 0;
-        point[prednum].motion.mv_y = i * fieldsearchpos;
+        point[  prednum].motion.mv_y = i * searchpos;
+        point[++prednum].motion.mv_x = -i * fieldsearchpos;
+        point[  prednum].motion.mv_y = i * searchpos;
         point[++prednum].motion.mv_x = -i * searchpos;
-        point[prednum].motion.mv_y = i * fieldsearchpos;
+        point[  prednum].motion.mv_y = i * searchpos;
+        point[++prednum].motion.mv_x = -i * searchpos;
+        point[  prednum].motion.mv_y = i * fieldsearchpos;
       }
     }
   }
@@ -470,16 +477,16 @@ EPZSStructInit (Slice * currSlice)
   //! made a bit more adaptive (i.e. patterns could be assigned
   //! based on neighborhood
   p_EPZS->window_predictor = allocEPZSpattern (searchlevels * 8);
-  p_EPZS->window_predictor_ext = allocEPZSpattern (searchlevels * 20);
+  p_EPZS->window_predictor_ext = allocEPZSpattern (searchlevels * 24);
   EPZSWindowPredictorInit ((short) p_Inp->search_range[p_Vid->view_id], p_EPZS->window_predictor, 0);
   EPZSWindowPredictorInit ((short) p_Inp->search_range[p_Vid->view_id], p_EPZS->window_predictor_ext, 1);
 
-  //! Also assing search predictor memory
-  // maxwindow + spatial + blocktype + temporal + memspatial
+  //! Also assign search predictor memory
+  // hierarchical + maxwindow + spatial + blocktype + temporal + memspatial
 #if (MVC_EXTENSION_ENABLE)
-  p_EPZS->predictor = allocEPZSpattern (searchlevels * 20 + 5 + 5 + 9 * (p_Inp->EPZSTemporal[0] | p_Inp->EPZSTemporal[1]) + 3 * (p_Inp->EPZSSpatialMem));
+  p_EPZS->predictor = allocEPZSpattern (10 + searchlevels * 24 + 5 + 5 + 9 * (p_Inp->EPZSTemporal[0] | p_Inp->EPZSTemporal[1]) + 3 * (p_Inp->EPZSSpatialMem));
 #else
-  p_EPZS->predictor = allocEPZSpattern (searchlevels * 20 + 5 + 5 + 9 * (p_Inp->EPZSTemporal) + 3 * (p_Inp->EPZSSpatialMem));
+  p_EPZS->predictor = allocEPZSpattern (10 + searchlevels * 24 + 5 + 5 + 9 * (p_Inp->EPZSTemporal) + 3 * (p_Inp->EPZSSpatialMem));
 #endif
 
   //! Finally assign memory for all other elements
@@ -1755,6 +1762,109 @@ EPZS_spatial_memory_predictors (EPZSParameters * p_EPZS,  //!< EPZS Parameters
 }
 
 /*!
+***********************************************************************
+* \brief
+*    Hierarchical Predictors
+*    AMT
+***********************************************************************
+*/
+void
+EPZS_hierarchical_predictors (EPZSParameters * p_EPZS,  //!< EPZS Parameters
+                          MEBlock * mv_block, //!< Motion estimation structure
+                          int *prednum, //!< predictor position
+                          StorablePicture *ref_picture,       //! <-- Current reference picture
+                          Slice *currSlice)
+{
+  HMEInfo_t *pHMEInfo = currSlice->p_Vid->pHMEInfo;
+  SPoint *point = p_EPZS->predictor->point;
+
+  int list = mv_block->list;
+  int ref  = mv_block->ref_idx;
+  int bx   = (mv_block->pos_x >> pHMEInfo->HMEBlockSizeIdx);
+  int by   = (mv_block->pos_y >> pHMEInfo->HMEBlockSizeIdx);
+
+  MotionVector *cur_mv = &point[*prednum].motion;
+  MotionVector **hme_mv;
+  int i;
+
+  for (i = 0; i < (int) currSlice->p_Dpb->ref_frames_in_buffer; i++)
+  {
+     if (ref_picture->poc == pHMEInfo->poc[0][list][i])
+     {
+       ref = i;
+       break;
+     }
+  }
+
+  hme_mv = pHMEInfo->p_hme_mv[0][list][ref];
+  
+  //printf("reference poc %d %lld\n", ref_picture->poc, pHMEInfo->poc[0][list][ref]);
+  // co-located
+  *cur_mv = hme_mv[by][bx];
+  *prednum += (*((int *) cur_mv) != 0);
+  cur_mv = &point[*prednum].motion;
+
+  // All left predictors
+  if (bx > 0)
+  {
+    // left predictor
+    *cur_mv = hme_mv[by][bx - 1];
+    *prednum += (*((int *) cur_mv) != 0);
+    cur_mv = &point[*prednum].motion;
+    // left above
+    if (by > 0)
+    {
+      *cur_mv = hme_mv[by - 1][bx - 1];
+      *prednum += (*((int *) cur_mv) != 0);
+      cur_mv = &point[*prednum].motion;
+    }
+    // left below
+    if (by + 1 < (ref_picture->size_y >> pHMEInfo->HMEBlockSizeIdx))
+    {
+      *cur_mv = hme_mv[by + 1][bx - 1];
+      *prednum += (*((int *) cur_mv) != 0);
+      cur_mv = &point[*prednum].motion;
+    }
+  }
+  // All right predictors
+  if (bx + 1 < (ref_picture->size_x >> pHMEInfo->HMEBlockSizeIdx))
+  {
+    // right predictor
+    *cur_mv = hme_mv[by][bx + 1];
+    *prednum += (*((int *) cur_mv) != 0);
+    cur_mv = &point[*prednum].motion;
+    // right above
+    if (by > 0)
+    {
+      *cur_mv = hme_mv[by - 1][bx + 1];
+      *prednum += (*((int *) cur_mv) != 0);
+      cur_mv = &point[*prednum].motion;
+    }
+    // right below
+    if (by + 1 < (ref_picture->size_y >> pHMEInfo->HMEBlockSizeIdx))
+    {
+      *cur_mv = hme_mv[by + 1][bx + 1];
+      *prednum += (*((int *) cur_mv) != 0);
+      cur_mv = &point[*prednum].motion;
+    }
+  }
+  // above
+  if (by > 0)
+  {
+    *cur_mv = hme_mv[by - 1][bx];
+    *prednum += (*((int *) cur_mv) != 0);
+    cur_mv = &point[*prednum].motion;
+  }
+  // below
+  if (by + 1 < (ref_picture->size_y >> pHMEInfo->HMEBlockSizeIdx))
+  {
+    *cur_mv = hme_mv[by + 1][bx];
+    *prednum += (*((int *) cur_mv) != 0);
+    cur_mv = &point[*prednum].motion;
+  }
+}
+
+/*!
 *************************************************************************************
 * \brief
 *    Determine stop criterion for EPZS
@@ -1774,7 +1884,7 @@ EPZSDetermineStopCriterion (EPZSParameters * p_EPZS, distblk *prevSad, MEBlock *
   stopCriterion = distblkmin (sadA, distblkmin (sadB, sadC));
   stopCriterion = distblkmax (stopCriterion, p_EPZS->minthres[blocktype]);
   stopCriterion = distblkmin (stopCriterion, p_EPZS->maxthres[blocktype] + lambda_dist);
-  stopCriterion = (9 * distblkmax (p_EPZS->medthres[blocktype] + lambda_dist, stopCriterion) + 2 * p_EPZS->medthres[blocktype]) >> 3;
+  stopCriterion = (8 * distblkmax (p_EPZS->medthres[blocktype] + lambda_dist, stopCriterion) + 1 * p_EPZS->medthres[blocktype]) >> 3;
 
   return stopCriterion + lambda_dist;
 }
@@ -1794,6 +1904,7 @@ EPZSOutputStats (InputParameters * p_Inp, FILE * stat, short stats_file)
     fprintf (stat, " EPZS Pattern                 : %s\n", EPZS_PATTERN[p_Inp->EPZSPattern]);
     fprintf (stat, " EPZS Dual Pattern            : %s\n", EPZS_DUAL_PATTERN[p_Inp->EPZSDual]);
     fprintf (stat, " EPZS Fixed Predictors        : %s\n", EPZS_FIXED_PREDICTORS[p_Inp->EPZSFixed]);
+    fprintf (stat, " EPZS Aggressive Predictors   : %s\n", EPZS_OTHER_PREDICTORS[p_Inp->EPZSAggressiveWindow]);
 #if (MVC_EXTENSION_ENABLE)
     if (p_Inp->num_of_views == 2)
     {
@@ -1829,6 +1940,8 @@ EPZSOutputStats (InputParameters * p_Inp, FILE * stat, short stats_file)
     fprintf (stat, " EPZS Pattern                      : %s\n", EPZS_PATTERN[p_Inp->EPZSPattern]);
     fprintf (stat, " EPZS Dual Pattern                 : %s\n", EPZS_DUAL_PATTERN[p_Inp->EPZSDual]);
     fprintf (stat, " EPZS Fixed Predictors             : %s\n", EPZS_FIXED_PREDICTORS[p_Inp->EPZSFixed]);
+    fprintf (stat, " EPZS Aggressive Predictors        : %s\n", EPZS_OTHER_PREDICTORS[p_Inp->EPZSAggressiveWindow]);
+
 #if (MVC_EXTENSION_ENABLE)
     if (p_Inp->num_of_views == 2)
     {

@@ -1476,7 +1476,7 @@ void reorder_ref_pic_list(Slice *currSlice, int cur_list)
   int maxPicNum, currPicNum, picNumLXNoWrap, picNumLXPred, picNumLX;
   int refIdxLX = 0;
 
-  if (p_Vid->structure==FRAME)
+  if (currSlice->structure==FRAME)
   {
     maxPicNum  = p_Vid->max_frame_num;
     currPicNum = currSlice->frame_num;

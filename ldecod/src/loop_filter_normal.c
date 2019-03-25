@@ -94,14 +94,14 @@ static void get_strength_ver(Macroblock *MbQ, int edge, int mvlimit, StorablePic
 {
   byte *Strength = MbQ->strength_ver[edge];
   Slice *currSlice = MbQ->p_Slice;
-  int     StrValue;
+  int     StrValue, i;
   BlockPos *PicPos = MbQ->p_Vid->PicPos;
 
   if ((currSlice->slice_type==SP_SLICE)||(currSlice->slice_type==SI_SLICE) )
   {
     // Set strength to either 3 or 4 regardless of pixel position
     StrValue = (edge == 0) ? 4 : 3;
-    memset(Strength, (byte) StrValue, BLOCK_SIZE * sizeof(byte));
+    for( i = 0; i < BLOCK_SIZE; i ++ ) Strength[i] = StrValue;
   }
   else
   {    
@@ -116,7 +116,7 @@ static void get_strength_ver(Macroblock *MbQ, int edge, int mvlimit, StorablePic
       {
         if (edge && (currSlice->slice_type == P_SLICE && MbQ->mb_type == PSKIP))
         {
-          memset(Strength, 0, BLOCK_SIZE * sizeof(byte));
+          for( i = 0; i < BLOCK_SIZE; i ++ ) Strength[i] = 0;
         }
         else  if (edge && ((MbQ->mb_type == P16x16)  || (MbQ->mb_type == P16x8)))
         {
@@ -202,14 +202,14 @@ static void get_strength_ver(Macroblock *MbQ, int edge, int mvlimit, StorablePic
       {
         // Start with Strength=3. or Strength=4 for Mb-edge
         StrValue = (edge == 0) ? 4 : 3;
-        memset(Strength, (byte) StrValue, BLOCK_SIZE * sizeof(byte));
+        for( i = 0; i < BLOCK_SIZE; i ++ ) Strength[i] = StrValue;
       }      
     }
     else
     {
       // Start with Strength=3. or Strength=4 for Mb-edge
       StrValue = (edge == 0) ? 4 : 3;
-      memset(Strength, (byte) StrValue, BLOCK_SIZE * sizeof(byte));
+      for( i = 0; i < BLOCK_SIZE; i ++ ) Strength[i] = StrValue;
     }      
   }
 }
@@ -223,7 +223,7 @@ static void get_strength_ver(Macroblock *MbQ, int edge, int mvlimit, StorablePic
 static void get_strength_hor(Macroblock *MbQ, int edge, int mvlimit, StorablePicture *p)
 {  
   byte  *Strength = MbQ->strength_hor[edge];
-  int    StrValue;
+  int    StrValue, i;
   Slice *currSlice = MbQ->p_Slice;
   BlockPos *PicPos = MbQ->p_Vid->PicPos;
 
@@ -231,7 +231,7 @@ static void get_strength_hor(Macroblock *MbQ, int edge, int mvlimit, StorablePic
   {
     // Set strength to either 3 or 4 regardless of pixel position
     StrValue = (edge == 0 && (((p->structure==FRAME)))) ? 4 : 3;
-    memset(Strength, (byte) StrValue, BLOCK_SIZE * sizeof(byte));
+    for( i = 0; i < BLOCK_SIZE; i ++ ) Strength[i] = StrValue;
   }
   else
   {    
@@ -248,7 +248,7 @@ static void get_strength_hor(Macroblock *MbQ, int edge, int mvlimit, StorablePic
       {       
         if (edge && (currSlice->slice_type == P_SLICE && MbQ->mb_type == PSKIP))
         {
-          memset(Strength, 0, BLOCK_SIZE * sizeof(byte));
+          for( i = 0; i < BLOCK_SIZE; i ++ ) Strength[i] = 0;
         }
         else if (edge && ((MbQ->mb_type == P16x16)  || (MbQ->mb_type == P8x16)))
         {
@@ -264,7 +264,7 @@ static void get_strength_hor(Macroblock *MbQ, int edge, int mvlimit, StorablePic
             else
               StrValue = 0; // if internal edge of certain types, we already know StrValue should be 0
 
-            *(int*)(Strength + idx) = StrValue;
+            Strength[idx] = StrValue;
           }
         }
         else
@@ -329,7 +329,7 @@ static void get_strength_hor(Macroblock *MbQ, int edge, int mvlimit, StorablePic
               else
                 StrValue = 1;
             }
-            *(int*)(Strength + idx) = StrValue;
+            Strength[idx] = StrValue;
           }
         }
       }
@@ -337,14 +337,14 @@ static void get_strength_hor(Macroblock *MbQ, int edge, int mvlimit, StorablePic
       {
         // Start with Strength=3. or Strength=4 for Mb-edge
         StrValue = (edge == 0 && (p->structure == FRAME)) ? 4 : 3;
-        memset(Strength, (byte) StrValue, BLOCK_SIZE * sizeof(byte));
+        for( i = 0; i < BLOCK_SIZE; i ++ ) Strength[i] = StrValue;
       }      
     }
     else
     {
       // Start with Strength=3. or Strength=4 for Mb-edge
       StrValue = (edge == 0 && (p->structure == FRAME)) ? 4 : 3;
-      memset(Strength, (byte) StrValue, BLOCK_SIZE * sizeof(byte));
+      for( i = 0; i < BLOCK_SIZE; i ++ ) Strength[i] = StrValue;
     }      
   }
 }
@@ -983,7 +983,7 @@ static void perform_db_dep_normal(Macroblock   *MbQ, StorablePicture *p)
       {      
         byte *Strength = MbQ->strength_ver[edge];
 
-        if ((*((int *) Strength))) // only if one of the 16 Strength bytes is != 0
+        if ( Strength[0] != 0 || Strength[1] != 0 || Strength[2] != 0 || Strength[3] != 0 ) // only if one of the first 4 Strength bytes is != 0
         {
           edge_loop_luma_ver( PLANE_Y, imgY, Strength, MbQ, edge << 2);
           edge_loop_luma_ver(PLANE_U, imgUV[0], Strength, MbQ, edge << 2);
@@ -1009,7 +1009,7 @@ static void perform_db_dep_normal(Macroblock   *MbQ, StorablePicture *p)
       {
         byte *Strength = MbQ->strength_hor[edge];
 
-        if ((*((int *) Strength))) // only if one of the 16 Strength bytes is != 0
+        if (Strength[0]!=0 || Strength[1]!=0 || Strength[2]!=0 || Strength[3]!=0) // only if one of the 16 Strength bytes is != 0
         {
           edge_loop_luma_hor( PLANE_Y, imgY, Strength, MbQ, edge << 2, p) ;
           edge_loop_luma_hor(PLANE_U, imgUV[0], Strength, MbQ, edge << 2, p);
@@ -1039,7 +1039,7 @@ static void perform_db_dep_normal(Macroblock   *MbQ, StorablePicture *p)
       {      
         byte *Strength = MbQ->strength_ver[edge];
 
-        if ((*((int *) Strength))) // only if one of the 16 Strength bytes is != 0
+        if ( Strength[0] != 0 || Strength[1] != 0 || Strength[2] != 0 || Strength[3] != 0 ) // only if one of the first 4 Strength bytes is != 0
         {              
           edge_loop_luma_ver( PLANE_Y, imgY, Strength, MbQ, edge << 2);
           edge_loop_luma_ver(PLANE_U, imgUV[0], Strength, MbQ, edge << 2);
@@ -1067,7 +1067,7 @@ static void perform_db_dep_normal(Macroblock   *MbQ, StorablePicture *p)
       {
         byte *Strength = MbQ->strength_hor[edge];
 
-        if ((*((int *) Strength))) // only if one of the 16 Strength bytes is != 0
+        if ( Strength[0] != 0 || Strength[1] != 0 || Strength[2] != 0 || Strength[3] != 0 ) // only if one of the first 4 Strength bytes is != 0
         {
           edge_loop_luma_hor( PLANE_Y, imgY, Strength, MbQ, edge << 2, p) ;          
           edge_loop_luma_hor(PLANE_U, imgUV[0], Strength, MbQ, edge << 2, p);
@@ -1117,7 +1117,7 @@ static void perform_db_ind_normal(Macroblock *MbQ, StorablePicture *p)
       {      
         byte *Strength = MbQ->strength_ver[edge];
 
-        if ((*((int *) Strength))) // only if one of the 16 Strength bytes is != 0
+        if ( Strength[0] != 0 || Strength[1] != 0 || Strength[2] != 0 || Strength[3] != 0 ) // only if one of the first 4 Strength bytes is != 0
         {
           edge_loop_luma_ver( PLANE_Y, imgY, Strength, MbQ, edge << 2);
 
@@ -1141,7 +1141,7 @@ static void perform_db_ind_normal(Macroblock *MbQ, StorablePicture *p)
       {
         byte *Strength = MbQ->strength_hor[edge];
 
-        if ((*((int *) Strength))) // only if one of the 16 Strength bytes is != 0
+        if ( Strength[0] != 0 || Strength[1] != 0 || Strength[2] != 0 || Strength[3] != 0 ) // only if one of the first 4 Strength bytes is != 0
         {
           edge_loop_luma_hor( PLANE_Y, imgY, Strength, MbQ, edge << 2, p) ;
 
@@ -1167,7 +1167,7 @@ static void perform_db_ind_normal(Macroblock *MbQ, StorablePicture *p)
       {      
         byte *Strength = MbQ->strength_ver[0];
 
-        if ((*((int *) Strength))) // only if one of the 16 Strength bytes is != 0
+        if ( Strength[0] != 0 || Strength[1] != 0 || Strength[2] != 0 || Strength[3] != 0 ) // only if one of the first 4 Strength bytes is != 0
         {
           edge_loop_luma_ver( PLANE_Y, imgY, Strength, MbQ, 0);                
 
@@ -1188,7 +1188,7 @@ static void perform_db_ind_normal(Macroblock *MbQ, StorablePicture *p)
       {
         byte *Strength = MbQ->strength_hor[0];
 
-        if ((*((int *) Strength))) // only if one of the 16 Strength bytes is != 0
+        if ( Strength[0] != 0 || Strength[1] != 0 || Strength[2] != 0 || Strength[3] != 0 ) // only if one of the first 4 Strength bytes is != 0
         {
           edge_loop_luma_hor( PLANE_Y, imgY, Strength, MbQ, 0, p) ;
 
@@ -1211,7 +1211,7 @@ static void perform_db_ind_normal(Macroblock *MbQ, StorablePicture *p)
       {      
         byte *Strength = MbQ->strength_ver[0];
 
-        if ((*((int *) Strength))) // only if one of the 16 Strength bytes is != 0
+        if ( Strength[0] != 0 || Strength[1] != 0 || Strength[2] != 0 || Strength[3] != 0 ) // only if one of the first 4 Strength bytes is != 0
         {
           edge_loop_luma_ver( PLANE_Y, imgY, Strength, MbQ, 0); 
 
@@ -1233,7 +1233,7 @@ static void perform_db_ind_normal(Macroblock *MbQ, StorablePicture *p)
         {
           byte *Strength = MbQ->strength_hor[edge];
 
-          if ((*((int *) Strength))) // only if one of the 16 Strength bytes is != 0
+          if ( Strength[0] != 0 || Strength[1] != 0 || Strength[2] != 0 || Strength[3] != 0 ) // only if one of the first 4 Strength bytes is != 0
           {
             edge_loop_luma_hor( PLANE_Y, imgY, Strength, MbQ, edge << 2, p) ;
 
@@ -1260,7 +1260,7 @@ static void perform_db_ind_normal(Macroblock *MbQ, StorablePicture *p)
         {      
           byte *Strength = MbQ->strength_ver[edge];
 
-          if ((*((int *) Strength))) // only if one of the 16 Strength bytes is != 0
+          if ( Strength[0] != 0 || Strength[1] != 0 || Strength[2] != 0 || Strength[3] != 0 ) // only if one of the first 4 Strength bytes is != 0
           {
             edge_loop_luma_ver( PLANE_Y, imgY, Strength, MbQ, edge << 2);                
 
@@ -1282,7 +1282,7 @@ static void perform_db_ind_normal(Macroblock *MbQ, StorablePicture *p)
       {
         byte *Strength = MbQ->strength_hor[0];
 
-        if ((*((int *) Strength))) // only if one of the 16 Strength bytes is != 0
+        if ( Strength[0] != 0 || Strength[1] != 0 || Strength[2] != 0 || Strength[3] != 0 ) // only if one of the first 4 Strength bytes is != 0
         {
           edge_loop_luma_hor( PLANE_Y, imgY, Strength, MbQ, 0, p) ;
 
@@ -1307,7 +1307,7 @@ static void perform_db_ind_normal(Macroblock *MbQ, StorablePicture *p)
         {      
           byte *Strength = MbQ->strength_ver[edge];
 
-          if ((*((int *) Strength))) // only if one of the 16 Strength bytes is != 0
+          if ( Strength[0] != 0 || Strength[1] != 0 || Strength[2] != 0 || Strength[3] != 0 ) // only if one of the first 4 Strength bytes is != 0
           {
             edge_loop_luma_ver( PLANE_Y, imgY, Strength, MbQ, edge << 2);                
 
@@ -1331,7 +1331,7 @@ static void perform_db_ind_normal(Macroblock *MbQ, StorablePicture *p)
         {
           byte *Strength = MbQ->strength_hor[edge];
 
-          if ((*((int *) Strength))) // only if one of the 16 Strength bytes is != 0
+          if ( Strength[0] != 0 || Strength[1] != 0 || Strength[2] != 0 || Strength[3] != 0 ) // only if one of the first 4 Strength bytes is != 0
           {
             edge_loop_luma_hor( PLANE_Y, imgY, Strength, MbQ, edge << 2, p) ;
 
@@ -1358,7 +1358,7 @@ static void perform_db_ind_normal(Macroblock *MbQ, StorablePicture *p)
         {      
           byte *Strength = MbQ->strength_ver[edge];
 
-          if ((*((int *) Strength))) // only if one of the 16 Strength bytes is != 0
+          if ( Strength[0] != 0 || Strength[1] != 0 || Strength[2] != 0 || Strength[3] != 0 ) // only if one of the first 4 Strength bytes is != 0
           {
             edge_loop_luma_ver( PLANE_Y, imgY, Strength, MbQ, edge << 2);                
 
@@ -1382,7 +1382,7 @@ static void perform_db_ind_normal(Macroblock *MbQ, StorablePicture *p)
         {
           byte *Strength = MbQ->strength_hor[edge];
 
-          if ((*((int *) Strength))) // only if one of the 16 Strength bytes is != 0
+          if ( Strength[0] != 0 || Strength[1] != 0 || Strength[2] != 0 || Strength[3] != 0 ) // only if one of the first 4 Strength bytes is != 0
           {
             edge_loop_luma_hor( PLANE_Y, imgY, Strength, MbQ, edge << 2, p) ;
 

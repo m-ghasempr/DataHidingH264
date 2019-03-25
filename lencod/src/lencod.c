@@ -70,6 +70,7 @@
 #include "me_epzs_int.h"
 #include "me_umhex.h"
 #include "me_umhexsmp.h"
+#include "me_hme.h"
 #include "output.h"
 #include "parset.h"
 #include "q_matrix.h"
@@ -649,6 +650,14 @@ static void init_encoder(VideoParameters *p_Vid, InputParameters *p_Inp)
   p_Vid->searchRange.max_x =  p_Inp->search_range[0] << 2;
   p_Vid->searchRange.min_y = -p_Inp->search_range[0] << 2;
   p_Vid->searchRange.max_y =  p_Inp->search_range[0] << 2;
+
+  
+  if(p_Inp->HMEEnable)
+    InitHMEInfo(p_Vid, p_Inp); 
+  else
+    p_Vid->pHMEInfo = NULL;
+
+  p_Vid->is_hme = 0;
 
   for ( i = 0; i < p_Vid->num_of_layers; i++ )
   {
@@ -1464,11 +1473,11 @@ static void free_img (VideoParameters *p_Vid, InputParameters *p_Inp)
   if (p_Vid->wbp_weight)
     free_mem5Dshort(p_Vid->wbp_weight);
 
-
+  FreeHMEInfo  (p_Vid);
   free_pointer (p_Vid->p_SEI);
   free_pointer (p_Vid->p_QScale);
   free_pointer (p_Vid->p_Quant);
-  free_pointer(p_Vid->p_Dpb_layer[0]);
+  free_pointer (p_Vid->p_Dpb_layer[0]);
   p_Vid->p_Dpb_layer[0] = p_Vid->p_Dpb_layer[1] = NULL;
   free_pointer (p_Vid->p_Stats);
   free_pointer (p_Vid->p_Dist);

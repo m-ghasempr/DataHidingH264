@@ -23,6 +23,7 @@
 #include "image.h"
 #include "wp.h"
 #include "list_reorder.h"
+#include "me_hme.h"
 
 static void poc_ref_pic_reorder_dummy(Slice *currSlice, unsigned num_ref_idx_lX_active, int list_no);
 static void reorder_lists_dummy( Slice *currSlice );
@@ -33,12 +34,17 @@ static void reorder_lists_dummy( Slice *currSlice );
  *    init_ref_pic_list_reordering initializations should go here
  ************************************************************************
  */
-void init_ref_pic_list_reordering(Slice* currSlice, int refReorderMethod)
+void init_ref_pic_list_reordering(Slice* currSlice, int refReorderMethod, int useDistortionReordering)
 {
   currSlice->ref_pic_list_reordering_flag[LIST_0] = 0;
   currSlice->ref_pic_list_reordering_flag[LIST_1] = 0;
 
-  if (refReorderMethod == 2)
+  if (refReorderMethod == 1 && useDistortionReordering == 1)
+  {
+    currSlice->poc_ref_pic_reorder_frame = mse_ref_pic_reorder_frame;
+    currSlice->reorder_lists             = reorder_lists;
+  }
+  else if (refReorderMethod == 2)
   {
     currSlice->poc_ref_pic_reorder_frame = tlyr_ref_pic_reorder_frame_default;
     currSlice->reorder_lists             = reorder_lists;
@@ -62,7 +68,7 @@ void init_ref_pic_list_reordering(Slice* currSlice, int refReorderMethod)
   }
   else
   {
-    currSlice->poc_ref_pic_reorder_frame = poc_ref_pic_reorder_frame_enh;      
+    currSlice->poc_ref_pic_reorder_frame = poc_ref_pic_reorder_frame_enh;
     currSlice->reorder_lists             = reorder_lists;
   }
 }
@@ -142,9 +148,9 @@ void poc_ref_pic_reorder_frame_default(Slice *currSlice, unsigned num_ref_idx_lX
     {
       if (poc_diff[i]>poc_diff[j] || (poc_diff[i] == poc_diff[j] && list_sign[j] > list_sign[i]))
       {
-        i32_swap(poc_diff[i], poc_diff[j]);
-        i32_swap(re_order[i], re_order[j]);
-        i32_swap(list_sign[i], list_sign[j]);
+        i32_swap(&poc_diff[i], &poc_diff[j]);
+        i32_swap(&re_order[i], &re_order[j]);
+        i32_swap(&list_sign[i], &list_sign[j]);
       }
     }
   }
@@ -330,25 +336,26 @@ void poc_ref_pic_reorder_frame_enh(Slice *currSlice, unsigned num_ref_idx_lX_act
       {
         list_sign[i] = (p_Enc_Pic->poc > p_Dpb->fs_ref[i]->frame->poc) ? +1 : -1;
       }
+      //printf("Reference %d %d %d %d %d\n", i, p_Dpb->fs_ref[i]->frame->poc, p_Enc_Pic->poc, poc_diff[i], list_sign[i]);
     }
   }
 
   // now sort these references based on poc (temporal) distance
-  for (i = 0; i < (num_refs - 1); i++)
+  for (i = 0; i < (num_refs - 1 ); i++)
   {
     for (j = i + 1; j < num_refs; j++)
     {
       if (poc_diff[i] > poc_diff[j] || (poc_diff[i] == poc_diff[j] && list_sign[j] > list_sign[i]))
       {
-        i32_swap(poc_diff[i], poc_diff[j]);
+        i32_swap(&poc_diff[i], &poc_diff[j]);
         tmp_pic_value = re_order[i];
         re_order[i]   = re_order[j];
         re_order[j]   = tmp_pic_value ;
-        i32_swap(list_sign[i], list_sign[j]);
+        i32_swap(&list_sign[i], &list_sign[j]);
       }
     }
   }
-
+  
   // populate list with selections from the pre-analysis stage
   if ( p_Inp->WPMCPrecision 
     && p_Vid->pWPX->curr_wp_rd_pass->algorithm != WP_REGULAR
@@ -500,15 +507,15 @@ void poc_ref_pic_reorder_field_enh(Slice *currSlice, unsigned num_ref_idx_lX_act
       if (poc_diff[i] > poc_diff[j] || (poc_diff[i] == poc_diff[j] && list_sign[j] > list_sign[i]))
       {
         // poc_diff
-        i32_swap (poc_diff[i], poc_diff[j]);
+        i32_swap (&poc_diff[i], &poc_diff[j]);
         // re_order (PicNum)
         tmp_pic_value   = re_order[i];
         re_order[i] = re_order[j];
         re_order[j] = tmp_pic_value;
         // list_sign
-        i32_swap (list_sign[i], list_sign[j]);
+        i32_swap (&list_sign[i], &list_sign[j]);
         // fld_type
-        i32_swap (fld_type[i], fld_type[j]);
+        i32_swap (&fld_type[i], &fld_type[j]);
       }
     }
   }
@@ -846,6 +853,146 @@ void poc_ref_pic_reorder_field(Slice *currSlice, unsigned num_ref_idx_lX_active,
   }
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    Decide reference picture reordering based on mse distortion given zero mvs; 
+ *    Frame only
+ ************************************************************************
+ */
+void mse_ref_pic_reorder_frame(Slice *currSlice, unsigned num_ref_idx_lX_active, int list_no)
+{
+  StorablePicture **list = currSlice->listX[list_no];
+  VideoParameters *p_Vid = currSlice->p_Vid;
+  HMEInfo_t *pHMEInfo = p_Vid->pHMEInfo;
+  InputParameters *p_Inp = currSlice->p_Inp;
+  //StorablePicture *p_Enc_Pic = p_Vid->enc_picture;
+  DecodedPictureBuffer *p_Dpb = currSlice->p_Dpb;
+  
+  int i, j, k, l, m;
+  int found = 0, diff;
+  int64 iDistortion = 0;
+
+  StorablePicture *re_order[32];
+  StorablePicture *inter_layer_ref[32];
+  StorablePicture *tmp_pic_value;
+  
+  int list_sign[32];
+  int64 mse_diff[32];
+  int inter_layer_ref_idx[32];
+  
+  int   num_refs = p_Dpb->ref_frames_in_buffer;
+  
+  //printf("num %d (%d %d)\n", num_refs, p_Vid->ThisPOC, p_Vid->last_valid_reference);
+  if (num_refs > 1) // pointless to reorder if only one reference
+  {
+    // access all references in dpb and extract their distortion information versus the current reference
+    for (i = 0; i < num_refs; i++)
+    {
+      // initialization value
+      mse_diff[i] = 0x7FFFFFFFFFFFFFFF;
+      if (p_Dpb->fs_ref[i])
+        re_order[i] = p_Dpb->fs_ref[i]->frame;
+      else
+      {
+        re_order[i] = NULL;
+        //printf("null reference found\n");
+        continue;
+      }
+      
+      // open gop test
+      if (p_Inp->EnableOpenGOP)
+      {
+        
+        if (p_Dpb->fs_ref[i]->poc < p_Vid->last_valid_reference && p_Vid->ThisPOC >= p_Vid->last_valid_reference)
+        {
+          //printf("invalid poc %d\n", p_Dpb->fs_ref[i]->poc);
+          continue;
+        }
+      }
+      
+      
+      // following code seems to exclude long term references
+      if (p_Dpb->fs_ref[i]->is_used==3 && (p_Dpb->fs_ref[i]->frame->used_for_reference))
+      {
+        iDistortion = 0;
+        if (p_Vid->p_Inp->HMEEnable == 1)
+        {
+          int ii;
+          for (ii = 0; ii < num_refs; ii++)
+          {
+            if (p_Dpb->fs_ref[i]->frame->poc == pHMEInfo->poc[0][0][ii])
+            {
+              mse_diff[i] = pHMEInfo->hme_distortion[0][0][ii];
+              break;
+            }
+          }
+          //printf("distortion (%d) %lld \n", p_Dpb->fs_ref[i]->poc, mse_diff[i]);
+        }
+        else
+        {
+          for (l = 0; l < p_Vid->height; l++)
+          {
+            for (m = 0; m < p_Vid->width; m++) {
+              diff = p_Vid->pCurImg[l][l] - p_Dpb->fs_ref[i]->frame->imgY[l][m];
+              iDistortion += diff * diff;
+            }
+          }
+          //abs_poc_dist = iabs(p_Dpb->fs_ref[i]->frame->poc - p_Enc_Pic->poc) ;
+          mse_diff[i] = iDistortion;
+          list_sign[i] = 0;
+        }
+        //printf("distortion %d %lld %d\n", i, mse_diff[i], p_Dpb->fs_ref[i]->frame->poc);
+      }
+    }
+    // now sort these references based on distortion
+    for (i = 0; i < (num_refs - 1); i++)
+    {
+      for (j = i + 1; j < num_refs; j++)
+      {
+        if (mse_diff[i] > mse_diff[j])
+        {
+          i64_swap(&mse_diff[i], &mse_diff[j]);
+          tmp_pic_value = re_order[i];
+          re_order[i]   = re_order[j];
+          re_order[j]   = tmp_pic_value ;
+        }
+      }
+    }
+    if (currSlice->layer_id > 0)
+    {
+      // This code currently only supports a single inter-layer reference.
+      // We need to have a flag in the code that points to how many such references
+      // exist and appropriately scan fl_ilref.
+      j = 0;
+      k = 0;
+      for (i = 0; i < (int) num_ref_idx_lX_active+found; i++)
+      {
+        if ((found > 0) && (i == inter_layer_ref_idx[k]))
+        {
+          list[i] = inter_layer_ref[k++];
+          //printf("values %d %d", (int) list[i],  (int) p_Dpb->fs_ilref[0]->frame);
+          found--;
+        }
+        else
+        {
+          list[i] = re_order[j++];
+        }
+      }
+    }
+    else
+    {
+      //printf("references : {");
+      for (i = 0; i < (int) num_ref_idx_lX_active; i++)
+      //for (i = 0; i < (int) num_refs; i++)
+      {
+        list[i] = re_order[i];
+        //printf("(%d)", (int) list[i]->poc);
+      }
+      //printf("}\n");
+    }
+  }
+}
 
 /*!
 ************************************************************************
@@ -866,7 +1013,6 @@ void tlyr_ref_pic_reorder_frame_default(Slice *currSlice, unsigned num_ref_idx_l
 
   unsigned int i,j,k;
 
-  int currPicNum, picNumLXPred;
 
   int default_order[32];
   int re_order[32];
@@ -880,7 +1026,6 @@ void tlyr_ref_pic_reorder_frame_default(Slice *currSlice, unsigned num_ref_idx_l
   int diff;
 
   int abs_poc_dist;
-  int maxPicNum;
   unsigned int num_refs;
 
   int tmp_poc_diff, tmp_re_order, tmp_list_sign, tmp_temporal_layer;
@@ -888,10 +1033,10 @@ void tlyr_ref_pic_reorder_frame_default(Slice *currSlice, unsigned num_ref_idx_l
   char newSize = 0;
 
 
-  maxPicNum  = p_Vid->max_frame_num;
-  currPicNum = p_Vid->frame_num;
+  int maxPicNum  = p_Vid->max_frame_num;
+  int currPicNum = p_Vid->frame_num;
 
-  picNumLXPred = currPicNum;
+  int picNumLXPred = currPicNum;
 
   // First assign default list order.
   for (i=0; i<num_ref_idx_lX_active; i++)
@@ -904,7 +1049,7 @@ void tlyr_ref_pic_reorder_frame_default(Slice *currSlice, unsigned num_ref_idx_l
   // references compute the poc distance compared to current
   // frame.
   num_refs = p_Dpb->ref_frames_in_buffer;
-  for (i=0; i<p_Dpb->ref_frames_in_buffer; i++)
+  for (i = 0; i < num_refs; i++)
   {
     poc_diff[i] = 0xFFFF;
     re_order[i] = p_Dpb->fs_ref[i]->frame->pic_num;
@@ -1090,7 +1235,9 @@ void reorder_lists( Slice *currSlice )
   InputParameters *p_Inp = currSlice->p_Inp;
 
   // Perform reordering based on poc distances for HierarchicalCoding
-  if ( p_Inp->ReferenceReorder && (currSlice->slice_type == P_SLICE  || currSlice->slice_type == SP_SLICE))
+  if ( p_Inp->ReferenceReorder &&
+       ((currSlice->slice_type == P_SLICE  || currSlice->slice_type == SP_SLICE) || 
+        (p_Inp->UseDistortionReorder == 1 && p_Inp->EnableReorderBslice == 1 && currSlice->slice_type == B_SLICE)) )
   {
     int i, num_ref;
 
@@ -1102,9 +1249,8 @@ void reorder_lists( Slice *currSlice )
     }
 
     num_ref = currSlice->num_ref_idx_active[LIST_0];
-
-      if ( p_Inp->ReferenceReorder == 2 ) // temporal layer based
-      {
+    if ( p_Inp->ReferenceReorder == 2 ) // temporal layer based
+    {
       if ( currSlice->structure == FRAME )
         currSlice->poc_ref_pic_reorder_frame(currSlice, num_ref, LIST_0);
     }

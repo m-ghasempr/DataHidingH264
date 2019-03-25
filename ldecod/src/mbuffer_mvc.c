@@ -676,7 +676,7 @@ void reorder_ref_pic_list_mvc(Slice *currSlice, int cur_list, int **anchor_ref, 
   int curr_VOIdx = -1;
   int picViewIdxLXPred=-1;
 
-  if (p_Vid->structure==FRAME)
+  if (currSlice->structure==FRAME)
   {
     maxPicNum  = p_Vid->max_frame_num;
     currPicNum = currSlice->frame_num;

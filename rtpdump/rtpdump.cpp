@@ -22,7 +22,9 @@ int main(int argc, char* argv[])
 
   if (argc != 2)
   {
-    printf ("Usage: %s <H.264 RTP packet file>\n", argv[0]);
+    printf ("This tool displays information about the RTP packets in the given input file.");
+    printf ("Note: the input file needs to be a H.264/AVC RTP dump file (lencod: OutFileMode=1)");
+    printf ("Usage: %s input_file\n", argv[0]);
     return -1;
   }
 
@@ -39,13 +41,13 @@ int main(int argc, char* argv[])
 
     if (4 != fread (&intime, 1, 4, f))
     {
-      printf ("Panic, cannot read timestamp, old software version file?\n");
+      printf ("Panic, cannot read timestamp (is this a valid RTP dump file?)\n");
       return -1;
     }
     printf ("\n\npacket #%4d containing %5d bytes\n", pacno++, bufsize);
     if (bufsize != fread (buf, 1, bufsize, f))
     {
-      printf ("Problems while reading buffer, exit\n");
+      printf ("Cannot read packet with indicated length (is this a valid RTP dump file?)\n");
       return -3;
     }
 

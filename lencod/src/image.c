@@ -64,9 +64,10 @@
 #include "configfile.h"
 #include "mbuffer.h"
 
-//#include "resize.h"
+#include "resize.h"
 #include "md_common.h"
 #include "me_epzs_common.h"
+#include "me_hme.h"
 
 extern void UpdateDecoders            (VideoParameters *p_Vid, InputParameters *p_Inp, StorablePicture *enc_pic);
 
@@ -788,6 +789,13 @@ void perform_encode_frame(VideoParameters *p_Vid)
 
   p_Vid->active_pps = p_Vid->PicParSet[0];
 
+  // HME. Currently not supported for B slices
+  if(p_Inp->HMEEnable)
+  {
+    if (p_Vid->type!=I_SLICE && p_Vid->type!=SI_SLICE)
+      invoke_HME(p_Vid, 0);
+  }
+    
 #if (MVC_EXTENSION_ENABLE)
   if(p_Vid->view_id!=1 || !p_Vid->sec_view_force_fld)
   {
@@ -2133,6 +2141,37 @@ static void init_field (VideoParameters *p_Vid, InputParameters *p_Inp)
   }
 }
 
+void GenerateImagePyramid(VideoParameters *p_Vid, int size_x, int size_y, imgpel ***p_hme_img, int offset_x, int offset_y)
+{
+  int i, iPrevWidth, iPrevHeight,iCurrWidth, iCurrHeight;
+  HMEInfo_t *pHMEInfo = p_Vid->pHMEInfo;
+  
+  iPrevWidth = size_x;
+  iPrevHeight = size_y;
+ 
+  for(i=1; i < pHMEInfo->iPyramidLevels; i++)
+  {
+    iCurrWidth  = iPrevWidth  >>1;
+    iCurrHeight = iPrevHeight >>1;
+
+    PyrDownG5x5_U8CnR((const imgpel *) *(p_hme_img[i-1]), (int) ((p_hme_img[i-1][1]-p_hme_img[i-1][0])*sizeof(imgpel)), iPrevWidth, iPrevHeight, *(p_hme_img[i]), (int) ((p_hme_img[i][1]-p_hme_img[i][0])*sizeof(imgpel)), 1);
+
+    // update image dimensions
+    iPrevWidth = iCurrWidth;
+    iPrevHeight = iCurrHeight;
+
+  }
+}
+
+void GenerateHMELayers(VideoParameters *p_Vid, StorablePicture *s)
+{
+    //Generate Image pyramid;
+    s->pHmeImage[0] = s->p_curr_img;
+    GenerateImagePyramid(p_Vid, s->size_x, s->size_y, s->pHmeImage, IMG_PAD_SIZE_X, IMG_PAD_SIZE_Y);
+    //Add Padding (we could remove this as well);
+    GetHMEIntImagesLuma(p_Vid, s->size_x, s->size_y, s->pHmeImage);
+ }
+ 
 /*!
  ************************************************************************
  * \brief

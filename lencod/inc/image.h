@@ -32,6 +32,7 @@ extern int     encode_one_frame      ( VideoParameters *p_Vid, InputParameters *
 extern Boolean dummy_slice_too_big   ( int bits_slice);
 extern void    copy_rdopt_data       ( Macroblock *currMB);       // For MB level field/frame coding tools
 extern void    UnifiedOneForthPix    ( VideoParameters *p_Vid, StorablePicture *s);
+extern void    GenerateHMELayers     ( VideoParameters *p_Vid, StorablePicture *s);
 // For 4:4:4 independent mode
 extern void    UnifiedOneForthPix_JV ( VideoParameters *p_Vid, int nplane, StorablePicture *s);
 extern void    frame_picture         ( VideoParameters *p_Vid, Picture *frame, ImageData *imgData, int rd_pass);
@@ -50,10 +51,14 @@ extern void    store_coding_and_rc_info( VideoParameters *p_Vid, CodingInfo *cod
 extern void    swap_frame_buffer     ( VideoParameters *p_Vid, int a, int b );
 extern void    frame_picture_mp_exit ( VideoParameters *p_Vid, CodingInfo *coding_info );
 
-extern void GenerateImagePyramid(VideoParameters *p_Vid, int size_x, int size_y, imgpel ***p_hme_int_img, int offset_x, int offset_y);
-extern void OutputImage(char *pcPrefix, int iFrameNo, int iLevel, imgpel **pImg, int iWidth, int iHeight, int iXOffset, int iYOffset);
-extern void copy_params(VideoParameters *p_Vid, StorablePicture *enc_picture, seq_parameter_set_rbsp_t *active_sps);
-extern void OtfCompatibility_copyWithPadding ( imgpel **dstImg, imgpel **srcImg, int size_x, int size_y, int padding_x, int padding_y ); // JLT
+
+extern void GenerateImagePyramid(VideoParameters *p_Vid, int size_x, int size_y, imgpel ***pHmeImage, int offset_x, int offset_y);
+extern void GetHMEIntImagesLuma( VideoParameters *p_Vid, int size_x, int size_y, imgpel ***cImgInt);
+
+extern void    GenerateHMEBuffers    ( VideoParameters *p_Vid, int size_x, int size_y, imgpel ***pHmeImage, int offset_x, int offset_y);
+extern void    OutputImage           ( char *pcPrefix, int iFrameNo, int iLevel, imgpel **pImg, int iWidth, int iHeight, int iXOffset, int iYOffset);
+extern void    copy_params           ( VideoParameters *p_Vid, StorablePicture *enc_picture, seq_parameter_set_rbsp_t *active_sps);
+extern void    OtfCompatibility_copyWithPadding ( imgpel **dstImg, imgpel **srcImg, int size_x, int size_y, int padding_x, int padding_y ); // JLT
 
 #endif
 

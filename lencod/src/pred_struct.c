@@ -1695,10 +1695,9 @@ static void init_pred_struct( VideoParameters *p_Vid, InputParameters *p_Inp, Se
             p_dst->random_access = 0;
 
             p_dst->temporal_layer = p_Vid->gop_structure[idx].temporal_layer; 
-
-            if ( p_Vid->gop_structure[idx - 1].hierarchy_layer > max_layer )
+            if ( p_Vid->gop_structure[idx].hierarchy_layer > max_layer )
             {
-              max_layer = p_Vid->gop_structure[idx - 1].hierarchy_layer;
+              max_layer = p_Vid->gop_structure[idx].hierarchy_layer;
             }
           }
           p_dst = p_cur_prd->p_frm + idx;

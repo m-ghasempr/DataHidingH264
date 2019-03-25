@@ -1,3 +1,17 @@
+Changes in Version JM 18.6 (since JM 18.5)
+------------------------------------------
+- fix ctxIdxInc derivation of coded_block flag for 4:4:4 and 8x8 transform (bug: 0000300)
+- apply patch for deblocking filter compatibility with ARM and DSP platforms from bug 0000328, remove additional cast in encoder
+- improve some error messages in rtp_dump and rtp_loss
+- fix reordering bug (AT)
+- Add Hierarchical Motion Estimation support (YHe/AT)
+- Add Distortion Based Reordering (AT)
+- Add out of order mode decision that provides alternative biases for skip modes in P slices (AT)
+- Additional control for quantization rounding parameters (AT)
+- Extension of Low Delay MMCO operations (KA) 
+- Minor cleanups (AT)
+
+
 Changes in Version JM 18.5 (since JM 18.4)
 ------------------------------------------
 - fix uninitialized memory access for newly introduced level 5.2 which could result in low performance
@@ -1475,6 +1489,7 @@ JSa     Jose Sanches            jose.sanches@st.com
 JX      Jian Feng Xu            fenax@video.mdc.tsinghua.edu.cn
 JXi     Jun Xin                 jxin@merl.com
 JZ      Jun Zhang               j_zhang1999@yahoo.com
+KA      Kenneth Andersson       kenneth.r.andersson@ericsson.com>
 KL      Karl Lillevold          Karll@real.com
 KHH     Ki-Hun Han              khhan@dms.sejong.ac.kr
 KP      Krit Panusopone         KPanusopone@gi.com

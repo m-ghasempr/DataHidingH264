@@ -388,6 +388,18 @@
     <ClInclude Include="lencod\inc\wp_random.h">
       <Filter>Project Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="lcommon\inc\resize.h">
+      <Filter>Common Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="lencod\inc\hme_distortion.h">
+      <Filter>Project Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="lencod\inc\me_hme.h">
+      <Filter>Project Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="lencod\inc\wp_periodic.h">
+      <Filter>Project Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="lencod\src\pred_struct.c">
@@ -772,6 +784,21 @@
       <Filter>Project Source Files</Filter>
     </ClCompile>
     <ClCompile Include="lencod\src\wp_periodic.c">
+      <Filter>Project Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="lcommon\src\resize.c">
+      <Filter>Common Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="lencod\src\hme_distortion.c">
+      <Filter>Project Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="lencod\src\hme_luma.c">
+      <Filter>Project Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="lencod\src\md_high_updated.c">
+      <Filter>Project Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="lencod\src\me_hme.c">
       <Filter>Project Source Files</Filter>
     </ClCompile>
   </ItemGroup>

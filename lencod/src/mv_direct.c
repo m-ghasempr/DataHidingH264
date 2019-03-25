@@ -149,7 +149,7 @@ void Get_Direct_MV_Temporal (Macroblock *currMB)
           }
         }
       }
-      else if(!p_Vid->active_sps->frame_mbs_only_flag && !p_Vid->structure && !currSlice->listX[LIST_1][0]->coded_frame)
+      else if(!p_Vid->active_sps->frame_mbs_only_flag && !currSlice->structure && !currSlice->listX[LIST_1][0]->coded_frame)
       {
         if (iabs(p_Vid->enc_picture->poc - list1[0]->bottom_field->poc)> iabs(p_Vid->enc_picture->poc -list1[0]->top_field->poc) )
         {
@@ -162,13 +162,13 @@ void Get_Direct_MV_Temporal (Macroblock *currMB)
             list1[0]->bottom_field->mv_info[RSD(opic_block_y)>>1][RSD(opic_block_x)] : list1[0]->bottom_field->mv_info[(opic_block_y)>>1][opic_block_x];
         }
       }
-      else if(!p_Vid->active_sps->frame_mbs_only_flag && p_Vid->structure && list1[0]->coded_frame)
+      else if(!p_Vid->active_sps->frame_mbs_only_flag && currSlice->structure && list1[0]->coded_frame)
       {
         int iPosBlkY; 
         int currentmb = 2*(list1[0]->size_x>>4) * (opic_block_y >> 2)+ (opic_block_x>>2)*2 + ((opic_block_y>>1) & 0x01);
-        if(p_Vid->structure!=list1[0]->structure)
+        if(currSlice->structure!=list1[0]->structure)
         {
-          if (p_Vid->structure == TOP_FIELD)
+          if (currSlice->structure == TOP_FIELD)
           {
             colocated = p_Vid->active_sps->direct_8x8_inference_flag ? 
               list1[0]->frame->top_field->mv_info[RSD(opic_block_y)][RSD(opic_block_x)] : list1[0]->frame->top_field->mv_info[opic_block_y][opic_block_x];
@@ -183,7 +183,7 @@ void Get_Direct_MV_Temporal (Macroblock *currMB)
         if(!currSlice->listX[LIST_1][0]->frame->mb_aff_frame_flag || !list1[0]->frame->motion.mb_field[currentmb])
           iPosBlkY = 2*(RSD(opic_block_y));
         else
-          iPosBlkY = (RSD(opic_block_y)>>2)*8 + (RSD(opic_block_y) & 0x03)+4*(p_Vid->structure == BOTTOM_FIELD);
+          iPosBlkY = (RSD(opic_block_y)>>2)*8 + (RSD(opic_block_y) & 0x03)+4*(currSlice->structure == BOTTOM_FIELD);
         if(colocated.ref_idx[LIST_0] >=0) // && !colocated.ref_pic[LIST_0])
           colocated.ref_pic[LIST_0] = list1[0]->frame->mv_info[iPosBlkY][RSD(opic_block_x)].ref_pic[LIST_0];
         if(colocated.ref_idx[LIST_1] >=0)// && !colocated.ref_pic[LIST_1])
@@ -207,58 +207,64 @@ void Get_Direct_MV_Temporal (Macroblock *currMB)
       {
         int mapped_idx=INVALIDINDEX;
         int iref;
-        if( (currSlice->mb_aff_frame_flag && ( (currMB->mb_field && colocated.ref_pic[refList]->structure==FRAME) || 
-          (!currMB->mb_field && colocated.ref_pic[refList]->structure!=FRAME))) ||
-          (!currSlice->mb_aff_frame_flag && ((p_Vid->structure==FRAME && colocated.ref_pic[refList]->structure!=FRAME)||
-          (p_Vid->structure!=FRAME && colocated.ref_pic[refList]->structure==FRAME))) )
+        if (colocated.ref_pic[refList] == NULL) 
         {
-          //! Frame with field co-located
-          for (iref = 0; iref < imin(currSlice->num_ref_idx_active[LIST_0], currSlice->listXsize[LIST_0 + list_offset]); iref++)
+           printf("invalid index found\n");
+        }
+        else
+        {    
+          if( (currSlice->mb_aff_frame_flag && ( (currMB->mb_field && colocated.ref_pic[refList]->structure==FRAME) || 
+            (!currMB->mb_field && colocated.ref_pic[refList]->structure!=FRAME))) ||
+            (!currSlice->mb_aff_frame_flag && ((currSlice->structure==FRAME && colocated.ref_pic[refList]->structure!=FRAME)||
+            (currSlice->structure!=FRAME && colocated.ref_pic[refList]->structure==FRAME))) )
           {
-            if (currSlice->listX[LIST_0 + list_offset][iref]->top_field == colocated.ref_pic[refList] ||
-              currSlice->listX[LIST_0 + list_offset][iref]->bottom_field == colocated.ref_pic[refList] ||
-              currSlice->listX[LIST_0 + list_offset][iref]->frame == colocated.ref_pic[refList] ) 
+            //! Frame with field co-located
+            for (iref = 0; iref < imin(currSlice->num_ref_idx_active[LIST_0], currSlice->listXsize[LIST_0 + list_offset]); iref++)
             {
-              if ((p_Vid->field_picture==1) && (currSlice->listX[LIST_0 + list_offset][iref]->structure != currSlice->structure))
+              if (currSlice->listX[LIST_0 + list_offset][iref]->top_field == colocated.ref_pic[refList] ||
+                currSlice->listX[LIST_0 + list_offset][iref]->bottom_field == colocated.ref_pic[refList] ||
+                currSlice->listX[LIST_0 + list_offset][iref]->frame == colocated.ref_pic[refList] ) 
               {
-                mapped_idx=INVALIDINDEX;
+                if ((p_Vid->field_picture==1) && (currSlice->listX[LIST_0 + list_offset][iref]->structure != currSlice->structure))
+                {
+                  mapped_idx=INVALIDINDEX;
+                }
+                else
+                {
+                  mapped_idx = iref;            
+                  break;
+                }
               }
-              else
+              else //! invalid index. Default to zero even though this case should not happen
+                mapped_idx=INVALIDINDEX;
+            }
+          }
+          else
+          {
+            for (iref = 0; iref < imin(currSlice->num_ref_idx_active[LIST_0], currSlice->listXsize[LIST_0 + list_offset]);iref++)
+            {
+              if(currSlice->listX[LIST_0 + list_offset][iref] == colocated.ref_pic[refList])
               {
                 mapped_idx = iref;            
                 break;
               }
+              else //! invalid index. Default to zero even though this case should not happen
+              {
+                mapped_idx=INVALIDINDEX;
+              }
             }
-            else //! invalid index. Default to zero even though this case should not happen
-              mapped_idx=INVALIDINDEX;
           }
         }
-        else
-        {
-        for (iref = 0; iref < imin(currSlice->num_ref_idx_active[LIST_0], currSlice->listXsize[LIST_0 + list_offset]);iref++)
-        {
-          if(currSlice->listX[LIST_0 + list_offset][iref] == colocated.ref_pic[refList])
-          {
-            mapped_idx = iref;            
-            break;
-          }
-          else //! invalid index. Default to zero even though this case should not happen
-          {
-            mapped_idx=INVALIDINDEX;
-          }
-        }
-        }
-
         if (mapped_idx != INVALIDINDEX)
         {
           MotionVector mv = colocated.mv[refList];
           mv_scale = currSlice->mvscale[LIST_0 + list_offset][mapped_idx];
 
           if((currSlice->mb_aff_frame_flag && !currMB->mb_field && colocated.ref_pic[refList]->structure!=FRAME) ||
-            (!currSlice->mb_aff_frame_flag && p_Vid->structure==FRAME && colocated.ref_pic[refList]->structure!=FRAME))
+            (!currSlice->mb_aff_frame_flag && currSlice->structure==FRAME && colocated.ref_pic[refList]->structure!=FRAME))
             mv.mv_y *= 2;
           else if((currSlice->mb_aff_frame_flag && currMB->mb_field && colocated.ref_pic[refList]->structure==FRAME) ||
-            (!currSlice->mb_aff_frame_flag && p_Vid->structure!=FRAME && colocated.ref_pic[refList]->structure==FRAME))
+            (!currSlice->mb_aff_frame_flag && currSlice->structure!=FRAME && colocated.ref_pic[refList]->structure==FRAME))
             mv.mv_y /= 2;
 
           if (mv_scale==9999)

@@ -1452,11 +1452,13 @@ void init_slice (VideoParameters *p_Vid, Slice **currSlice, int start_mb_addr)
   update_pic_num(*currSlice);
 
   (*currSlice)->init_lists(*currSlice);
-
+  
   // assign list sizes
   (*currSlice)->num_ref_idx_active[LIST_0] = (*currSlice)->listXsize[LIST_0];
   (*currSlice)->num_ref_idx_active[LIST_1] = (*currSlice)->listXsize[LIST_1];
 
+  if (p_Vid->is_hme == 0) 
+  {
 #if CRA
   if ( p_Inp->useCRA )
   {
@@ -1479,7 +1481,7 @@ void init_slice (VideoParameters *p_Vid, Slice **currSlice, int start_mb_addr)
 #endif
 
 #if LD_REF_SETTING
-  if ( p_Inp->LDRefSetting )
+  if (p_Inp->HMEDisableMMCO == 0 &&  p_Inp->LDRefSetting && p_Inp->UnconstrainedLDRef == 0)
   {
     if (p_Vid->structure == FRAME && p_Dpb->ref_frames_in_buffer == active_sps->num_ref_frames)
       low_delay_ref_management_frame_pic(p_Dpb, p_Vid->frame_num);
@@ -1509,7 +1511,7 @@ void init_slice (VideoParameters *p_Vid, Slice **currSlice, int start_mb_addr)
   set_default_ref_pic_lists(*currSlice);
 
   // initialize reordering arrays
-  init_ref_pic_list_reordering(*currSlice, p_Inp->ReferenceReorder);
+  init_ref_pic_list_reordering(*currSlice, p_Inp->ReferenceReorder, p_Inp->UseDistortionReorder);
   alloc_ref_pic_list_reordering_buffer(*currSlice);
 
 #if (MVC_EXTENSION_ENABLE)
@@ -1604,6 +1606,7 @@ void init_slice (VideoParameters *p_Vid, Slice **currSlice, int start_mb_addr)
     }
 #endif
 #endif
+  }
 
   (*currSlice)->max_num_references = (short) p_Vid->max_num_references;
 
@@ -1815,7 +1818,7 @@ void init_slice_lite (VideoParameters *p_Vid, Slice **currSlice, int start_mb_ad
 
   set_default_ref_pic_lists(*currSlice);
 
-  init_ref_pic_list_reordering(*currSlice, p_Inp->ReferenceReorder);
+  init_ref_pic_list_reordering(*currSlice, p_Inp->ReferenceReorder, p_Inp->UseDistortionReorder);
   alloc_ref_pic_list_reordering_buffer(*currSlice);
 
 #if (MVC_EXTENSION_ENABLE)

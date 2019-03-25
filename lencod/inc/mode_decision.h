@@ -19,8 +19,9 @@
 #define _MODE_DECISION_H_
 
 //==== MODULE PARAMETERS ====
-static const int  b8_mode_table[6]   = {0, 4, 5, 6, 7};                             // DO NOT CHANGE ORDER !!!
-static const char mb_mode_table[10]  = {0, 1, 2, 3, P8x8, I16MB, I4MB, I8MB, IPCM, SI4MB}; // DO NOT CHANGE ORDER !!!
+static const int  b8_mode_table[6]           = {0, 4, 5, 6, 7};                             // DO NOT CHANGE ORDER !!!
+static const char mb_mode_table[10]          = {0, 1, 2, 3, P8x8, I16MB, I4MB, I8MB, IPCM, SI4MB}; // DO NOT CHANGE ORDER !!!
+static const char mb_mode_table_updated[10]  = {P8x8, 3, 2, 1, 0, I16MB, I4MB, I8MB, IPCM, SI4MB}; // DO NOT CHANGE ORDER !!!
 extern distblk  BIDPartitionCost                 (Macroblock *currMB, int, int, char[2], int);
 extern distblk  BPredPartitionCost               (Macroblock *currMB, int, int, short, short, int, int);
 extern void   StoreMV8x8                       (Slice *currSlice, int dir);

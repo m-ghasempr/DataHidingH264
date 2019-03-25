@@ -461,6 +461,14 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lencod\src\hme_distortion.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\hme_luma.c"
+				>
+			</File>
+			<File
 				RelativePath=".\lencod\src\image.c"
 				>
 			</File>
@@ -605,6 +613,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lencod\src\md_high_updated.c"
+				>
+			</File>
+			<File
 				RelativePath=".\lencod\src\md_highfast.c"
 				>
 			</File>
@@ -650,6 +662,10 @@
 			</File>
 			<File
 				RelativePath=".\lencod\src\me_fullsearch.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\me_hme.c"
 				>
 			</File>
 			<File
@@ -822,6 +838,10 @@
 			</File>
 			<File
 				RelativePath=".\lencod\src\report.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lcommon\src\resize.c"
 				>
 			</File>
 			<File
@@ -1315,6 +1335,10 @@
 			</File>
 			<File
 				RelativePath=".\lcommon\inc\report.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lcommon\inc\resize.h"
 				>
 			</File>
 			<File

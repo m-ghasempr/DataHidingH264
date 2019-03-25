@@ -26,6 +26,7 @@
 #include "img_luma.h"
 #include "img_chroma.h"
 #include "errdo.h"
+#include "me_hme.h"
 
 extern void SbSMuxBasic(ImageData *imgOut, ImageData *imgIn0, ImageData *imgIn1, int offset);
 extern void init_stats                   (InputParameters *p_Inp, StatParameters *stats);
@@ -532,6 +533,12 @@ StorablePicture* alloc_storable_picture(VideoParameters *p_Vid, PictureStructure
     errdo_alloc_storable_picture(s, p_Vid, p_Inp, size_x, size_y, size_x_cr, size_y_cr);
   }
 
+  // Allocate memory for HME
+  if(p_Inp->HMEEnable && p_Vid->nal_reference_idc != NALU_PRIORITY_DISPOSABLE)
+  {
+      AllocHMEMemory(&s->pHmeImage, p_Vid, size_y, size_x, IMG_PAD_SIZE_Y, IMG_PAD_SIZE_X, 1);
+  }
+  
   s->pic_num=0;
   s->frame_num=0;
   s->long_term_frame_idx=0;
@@ -716,21 +723,21 @@ void free_storable_picture(VideoParameters *p_Vid, StorablePicture* p)
   if (p)
   {
     InputParameters *p_Inp = p_Vid->p_Inp;
-
+    
     if(p->imgY && !p->imgY_sub)
-    {      
+    {
       free_mem2Dpel_pad(p->imgY, IMG_PAD_SIZE_Y, IMG_PAD_SIZE_X);
-      p->imgY=NULL;      
-    }      
-
+      p->imgY=NULL;
+    }
+    
     if (p->imgUV && !p->imgUV_sub)
     {
       free_mem3Dpel_pad(p->imgUV, 2, p->pad_size_uv_y, p->pad_size_uv_x);
       p->imgUV=NULL;
     }
-
+    
     free_frame_data_memory(p, 1);
-
+    
     if( (p_Inp->separate_colour_plane_flag != 0) )
     {
       int nplane;
@@ -752,12 +759,18 @@ void free_storable_picture(VideoParameters *p_Vid, StorablePicture* p)
       p->p_img_sub[1]   = NULL;
       p->p_img_sub[2]   = NULL;
     }
-
-    if (p_Inp->rdopt == 3) 
+    
+    if (p_Inp->rdopt == 3)
     {
       errdo_free_storable_picture(p);
     }
-
+    
+    //free memory for HME;
+    if(p_Inp->HMEEnable)
+    {
+      FreeHMEMemory(&(p->pHmeImage), p_Vid, 1, IMG_PAD_SIZE_Y, IMG_PAD_SIZE_X);
+    }
+    
     free(p);
     p = NULL;
   }
@@ -1017,7 +1030,6 @@ void init_lists_p_slice(Slice *currSlice)
     qsort((void *)currSlice->listX[0], list0idx, sizeof(StorablePicture*), compare_pic_by_pic_num_desc);
     currSlice->listXsize[0] = (char) list0idx;
     //printf("listX[0] (PicNum): "); for (i=0; i<list0idx; i++){printf ("%d  ", currSlice->listX[0][i]->pic_num);} printf("\n");
-
     // long term handling
     for (i=0; i<p_Dpb->ltref_frames_in_buffer; i++)
     {
@@ -1073,7 +1085,6 @@ void init_lists_p_slice(Slice *currSlice)
   }
   currSlice->listXsize[1] = 0;
 
-
 #if (MVC_EXTENSION_ENABLE && !SIMULCAST_ENABLE)
   // MVC interview pictures list
   if(p_Inp->num_of_views == 2 && p_Vid->view_id == 1)
@@ -1123,6 +1134,8 @@ void init_lists_p_slice(Slice *currSlice)
 #endif
 
   // set max size
+if (p_Vid->is_hme == 0)
+{
 #if (MVC_EXTENSION_ENABLE)
   if(p_Vid->num_of_layers == 2 && p_Inp->MVCInterViewReorder && p_Vid->view_id == 1)
   {
@@ -1135,6 +1148,7 @@ void init_lists_p_slice(Slice *currSlice)
     currSlice->listXsize[0] = (char) imin (currSlice->listXsize[0], currSlice->num_ref_idx_active[LIST_0]);
     currSlice->listXsize[1] = (char) imin (currSlice->listXsize[1], currSlice->num_ref_idx_active[LIST_1]);
   }
+}
 
   // set the unused list entries to NULL
   for (i=currSlice->listXsize[0]; i< (MAX_LIST_SIZE) ; i++)
@@ -2120,6 +2134,8 @@ void replace_top_proc_pic_with_frame(DecodedPictureBuffer *p_Dpb, StorablePictur
   else
   {
     UnifiedOneForthPix(p_Vid, proc_picture);
+    if (p_Vid->p_Inp->HMEEnable)
+      GenerateHMELayers(p_Vid, proc_picture);
   }
 
   found=0;
@@ -2203,6 +2219,8 @@ void replace_top_pic_with_frame(DecodedPictureBuffer *p_Dpb, StorablePicture* p,
     else
     {
       UnifiedOneForthPix(p_Vid, p);
+      if (p_Vid->p_Inp->HMEEnable)
+        GenerateHMELayers(p_Vid, p);
     }
   }
 
@@ -2302,12 +2320,18 @@ static void insert_picture_in_dpb(VideoParameters *p_Vid, FrameStore* fs, Storab
     else
     {
       UnifiedOneForthPix(p_Vid, p);
+      if (p_Vid->p_Inp->HMEEnable)
+      {
+        GenerateHMELayers(p_Vid, p);
+      }
     }
   }
 #if (MVC_EXTENSION_ENABLE)
   else if(p_Vid->p_Inp->num_of_views==2 && p->inter_view_flag[p->structure>>1])
   {
     UnifiedOneForthPix(p_Vid, p);
+    if (p_Vid->p_Inp->HMEEnable)
+      GenerateHMELayers(p_Vid, p);
   }
 #endif
 
@@ -2659,6 +2683,11 @@ void dpb_split_field(VideoParameters *p_Vid, FrameStore *fs)
       {
         UnifiedOneForthPix(p_Vid, fs->top_field);
         UnifiedOneForthPix(p_Vid, fs->bottom_field);
+        if (p_Vid->p_Inp->HMEEnable)
+        {
+          GenerateHMELayers(p_Vid, fs->top_field);
+          GenerateHMELayers(p_Vid, fs->bottom_field);
+        }
       }
     }
     fs->top_field->poc = frame->top_poc;
@@ -2899,6 +2928,8 @@ void dpb_combine_field(VideoParameters *p_Vid, FrameStore *fs)
     else
     {
       UnifiedOneForthPix(p_Vid, fs->frame);
+      if (p_Vid->p_Inp->HMEEnable)
+        GenerateHMELayers(p_Vid, fs->frame);
     }
   }
 

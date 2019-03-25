@@ -432,9 +432,12 @@ full_sub_pel_motion_estimation (Macroblock   *currMB,      // <--  Current Macro
   MotionVector cmv;
 
   int lambda_factor = lambda[Q_PEL];
+  // reset distortion. We are always checking all positions to ensure
+  // distortion computation is done correctly.
+  min_mcost = DISTBLK_MAX;
 
   //===== loop over all search positions =====
-  for (best_pos = 0, pos = 0; pos < 81; pos++)
+  for (best_pos = 0, pos = 0; pos < 49; pos++)
   {
     cand.mv_x = mv->mv_x + p_Vid->spiral_search[pos].mv_x;   
     cand.mv_y = mv->mv_y + p_Vid->spiral_search[pos].mv_y;
@@ -500,9 +503,12 @@ full_sub_pel_bipred_motion_estimation (Macroblock   *currMB,    // <--  current 
   StorablePicture *ref_picture2 = currSlice->listX[(list ^ 1) + list_offset][0];
 
   int lambda_factor = lambda[Q_PEL];
+  
+  // reset distortion. We are always checking all positions to ensure
+  // distortion computation is done correctly.
 
   //===== loop over search positions =====
-  for (best_pos = 0, pos = 0; pos < 81; pos++)
+  for (best_pos = 0, pos = 0; pos < 49; pos++)
   {
     cand.mv_x = mv1->mv_x + p_Vid->spiral_search[pos].mv_x;    // quarter-pel units
     cand.mv_y = mv1->mv_y + p_Vid->spiral_search[pos].mv_y;    // quarter-pel units

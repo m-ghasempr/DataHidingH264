@@ -1486,13 +1486,6 @@ process_nalu:
         }
       }
      currSlice->layer_id = currSlice->view_id = GetVOIdx( p_Vid, currSlice->view_id );
-      /*
-      if(currSlice->view_id >=0)
-      {
-        currSlice->p_Dpb = p_Vid->p_Dpb_layer[currSlice->view_id];
-        currSlice->imgtype = currSlice->p_Dpb->imgtype;
-      }
-      */
 #endif
 
       // Some syntax of the Slice Header depends on the parameter set, which depends on

@@ -161,6 +161,7 @@ struct inp_par_enc
   int RDPictureFrameQPBSlice;        //!< Whether to check additional frame level QP values for B slices
 
   int SkipIntraInInterSlices;        //!< Skip intra type checking in inter slices if best_mode is skip/direct
+  int PSliceSkipDecisionMethod;             //!< Use of a NaturalSkip method for deciding skip modes in P slices
   int BRefPictures;                  //!< B coded reference pictures replace P pictures (0: not used, 1: used)
   int HierarchicalCoding;
   int HierarchyLevelQPEnable;
@@ -171,6 +172,8 @@ struct inp_par_enc
   int  LowDelay;                      //!< Apply HierarchicalCoding without delay (i.e., encode in the captured/display order)
 
   int  ReferenceReorder;              //!< Reordering based on Poc distances
+  int  EnableReorderBslice;           //!< Perform reordering for B slice List0. Only makes sense if MSE reordering is used.
+  int  UseDistortionReorder;          //!< for method ReferenceReorder = 1, use distortion based reordering
   int  PocMemoryManagement;           //!< Memory management based on Poc distances for hierarchical coding
 
   int symbol_mode;                   //!< Specifies the mode the symbols are mapped on bits
@@ -322,6 +325,7 @@ struct inp_par_enc
   int EPZSPattern;
   int EPZSDual;
   int EPZSFixed;
+  int EPZSAggressiveWindow;
 #if (MVC_EXTENSION_ENABLE)
   int EPZSTemporal[2];
 #else
@@ -345,10 +349,19 @@ struct inp_par_enc
   int EPZSSubPelGrid;
   int EPZSSubPelME;
   int EPZSSubPelMEBiPred;
-
-  int  MinIDRDistance;
+  int EPZSUseHMEPredictors;
+ 
+  // HME Related parameter
+  int HMEEnable;
+  int HMEDisableMMCO;
+  int PyramidLevels;
+  
+  
+  // IDR min distance
+  int MinIDRDistance;
   // Lambda Params
   int UseExplicitLambdaParams;
+  int DisableDistanceLambdaScale;
   int UpdateLambdaChromaME;
   double LambdaWeight[6];
   double FixedLambda[6];
@@ -362,6 +375,7 @@ struct inp_par_enc
   int AdaptRndChroma;
   int AdaptRndWFactor  [2][NUM_SLICE_TYPES];     //!< Weighting factors for luma component based on reference indicator and slice type
   int AdaptRndCrWFactor[2][NUM_SLICE_TYPES];     //!< Weighting factors for chroma components based on reference indicator and slice type
+  int OffsetMatrixFlat;
 
 //////////////////////////////////////////////////////////////////////////
   // Fidelity Range Extensions
@@ -432,6 +446,7 @@ struct inp_par_enc
 #endif
 #if LD_REF_SETTING
   int LDRefSetting;
+  int UnconstrainedLDRef;
 #endif
 };
 

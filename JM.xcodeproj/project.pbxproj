@@ -201,6 +201,11 @@
 		71927E391472DFE1000AB618 /* parsetcommon.c in Sources */ = {isa = PBXBuildFile; fileRef = 71927E1D1472DFE1000AB618 /* parsetcommon.c */; };
 		71927E3A1472DFE1000AB618 /* transform.c in Sources */ = {isa = PBXBuildFile; fileRef = 71927E1E1472DFE1000AB618 /* transform.c */; };
 		71927E3B1472DFE1000AB618 /* win32.c in Sources */ = {isa = PBXBuildFile; fileRef = 71927E1F1472DFE1000AB618 /* win32.c */; };
+		C548919A183D2914001D41AE /* md_high_updated.c in Sources */ = {isa = PBXBuildFile; fileRef = C5489199183D2914001D41AE /* md_high_updated.c */; };
+		C5CD63BF185285B3005ED0FB /* me_hme.c in Sources */ = {isa = PBXBuildFile; fileRef = C5CD63BD185285B3005ED0FB /* me_hme.c */; };
+		C5CD63C0185285B3005ED0FB /* hme_distortion.c in Sources */ = {isa = PBXBuildFile; fileRef = C5CD63BE185285B3005ED0FB /* hme_distortion.c */; };
+		C5CD63C3185FBB3E005ED0FB /* hme_luma.c in Sources */ = {isa = PBXBuildFile; fileRef = C5CD63C2185FBB3E005ED0FB /* hme_luma.c */; };
+		C5CD63C5185FBE9F005ED0FB /* resize.c in Sources */ = {isa = PBXBuildFile; fileRef = C5CD63C4185FBE9F005ED0FB /* resize.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -608,6 +613,13 @@
 		71927E1E1472DFE1000AB618 /* transform.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = transform.c; sourceTree = "<group>"; };
 		71927E1F1472DFE1000AB618 /* win32.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = win32.c; sourceTree = "<group>"; };
 		8DD76FB20486AB0100D96B5E /* lencod */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = lencod; sourceTree = BUILT_PRODUCTS_DIR; };
+		C5489199183D2914001D41AE /* md_high_updated.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = md_high_updated.c; path = lencod/src/md_high_updated.c; sourceTree = "<group>"; };
+		C5CD63BD185285B3005ED0FB /* me_hme.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = me_hme.c; path = lencod/src/me_hme.c; sourceTree = "<group>"; };
+		C5CD63BE185285B3005ED0FB /* hme_distortion.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = hme_distortion.c; path = lencod/src/hme_distortion.c; sourceTree = "<group>"; };
+		C5CD63C1185285C7005ED0FB /* me_hme.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = me_hme.h; path = lencod/inc/me_hme.h; sourceTree = "<group>"; };
+		C5CD63C2185FBB3E005ED0FB /* hme_luma.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = hme_luma.c; path = lencod/src/hme_luma.c; sourceTree = "<group>"; };
+		C5CD63C4185FBE9F005ED0FB /* resize.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = resize.c; sourceTree = "<group>"; };
+		C5CD63C6185FBEAC005ED0FB /* resize.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = resize.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -720,6 +732,7 @@
 		43FA4A100D4EE91C001709F1 /* inc */ = {
 			isa = PBXGroup;
 			children = (
+				C5CD63C1185285C7005ED0FB /* me_hme.h */,
 				71927C2D1472DF4A000AB618 /* annexb.h */,
 				71927C2E1472DF4A000AB618 /* biariencode.h */,
 				71927C2F1472DF4A000AB618 /* block.h */,
@@ -819,6 +832,9 @@
 		43FA4A110D4EE920001709F1 /* src */ = {
 			isa = PBXGroup;
 			children = (
+				C5CD63C2185FBB3E005ED0FB /* hme_luma.c */,
+				C5CD63BD185285B3005ED0FB /* me_hme.c */,
+				C5CD63BE185285B3005ED0FB /* hme_distortion.c */,
 				7125586C15CC59C4005F1CC1 /* wp_periodic.c */,
 				7125586D15CC59C4005F1CC1 /* wp_random.c */,
 				7125586A15CC59B1005F1CC1 /* wp_periodic.h */,
@@ -869,6 +885,7 @@
 				71927CB41472DF74000AB618 /* md_common.c */,
 				71927CB51472DF74000AB618 /* md_distortion.c */,
 				71927CB61472DF74000AB618 /* md_high.c */,
+				C5489199183D2914001D41AE /* md_high_updated.c */,
 				71927CB71472DF74000AB618 /* md_highfast.c */,
 				71927CB81472DF74000AB618 /* md_highloss.c */,
 				71927CB91472DF74000AB618 /* md_low.c */,
@@ -958,6 +975,7 @@
 		71C904180FE283370095EA3A /* inc */ = {
 			isa = PBXGroup;
 			children = (
+				C5CD63C6185FBEAC005ED0FB /* resize.h */,
 				71927DF41472DFCB000AB618 /* blk_prediction.h */,
 				71927DF51472DFCB000AB618 /* config_common.h */,
 				71927DF61472DFCB000AB618 /* ctx_tables.h */,
@@ -996,6 +1014,7 @@
 		71C904320FE283370095EA3A /* src */ = {
 			isa = PBXGroup;
 			children = (
+				C5CD63C4185FBE9F005ED0FB /* resize.c */,
 				71927E121472DFE1000AB618 /* blk_prediction.c */,
 				71927E131472DFE1000AB618 /* config_common.c */,
 				71927E141472DFE1000AB618 /* img_io.c */,
@@ -1203,7 +1222,7 @@
 		08FB7793FE84155DC02AAC07 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastUpgradeCheck = 0440;
+				LastUpgradeCheck = 0500;
 			};
 			buildConfigurationList = 1DEB928908733DD80010E9CD /* Build configuration list for PBXProject "JM" */;
 			compatibilityVersion = "Xcode 3.2";
@@ -1322,9 +1341,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				71927CF71472DF74000AB618 /* annexb.c in Sources */,
+				C5CD63C3185FBB3E005ED0FB /* hme_luma.c in Sources */,
 				71927CF81472DF74000AB618 /* biariencode.c in Sources */,
 				71927CF91472DF74000AB618 /* block.c in Sources */,
 				71927CFA1472DF74000AB618 /* cabac.c in Sources */,
+				C5CD63BF185285B3005ED0FB /* me_hme.c in Sources */,
 				71927CFB1472DF74000AB618 /* cconv_yuv2rgb.c in Sources */,
 				71927CFC1472DF74000AB618 /* configfile.c in Sources */,
 				71927CFD1472DF74000AB618 /* conformance.c in Sources */,
@@ -1345,6 +1366,7 @@
 				71927D0C1472DF74000AB618 /* img_dist_ssim.c in Sources */,
 				71927D0D1472DF74000AB618 /* img_distortion.c in Sources */,
 				71927D0E1472DF74000AB618 /* img_luma.c in Sources */,
+				C5CD63C5185FBE9F005ED0FB /* resize.c in Sources */,
 				71927D0F1472DF74000AB618 /* intra_chroma.c in Sources */,
 				71927D101472DF74000AB618 /* intra4x4.c in Sources */,
 				71927D111472DF74000AB618 /* intra8x8.c in Sources */,
@@ -1392,6 +1414,7 @@
 				71927D3B1472DF74000AB618 /* parset.c in Sources */,
 				71927D3C1472DF74000AB618 /* pred_struct.c in Sources */,
 				71927D3D1472DF74000AB618 /* q_around.c in Sources */,
+				C5CD63C0185285B3005ED0FB /* hme_distortion.c in Sources */,
 				71927D3E1472DF74000AB618 /* q_matrix.c in Sources */,
 				71927D3F1472DF74000AB618 /* q_offsets.c in Sources */,
 				71927D401472DF74000AB618 /* quant4x4_2step.c in Sources */,
@@ -1447,6 +1470,7 @@
 				71927E3B1472DFE1000AB618 /* win32.c in Sources */,
 				7125586E15CC59C4005F1CC1 /* wp_periodic.c in Sources */,
 				7125586F15CC59C4005F1CC1 /* wp_random.c in Sources */,
+				C548919A183D2914001D41AE /* md_high_updated.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1456,7 +1480,6 @@
 		1DEB928608733DD80010E9CD /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_64_BIT)";
 				COPY_PHASE_STRIP = NO;
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_DYNAMIC_NO_PIC = NO;
@@ -1475,7 +1498,6 @@
 		1DEB928708733DD80010E9CD /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_64_BIT)";
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_MODEL_TUNING = G5;
@@ -1493,6 +1515,7 @@
 				ENABLE_OPENMP_SUPPORT = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.5.sdk";
 			};
 			name = Debug;
@@ -1500,10 +1523,6 @@
 		1DEB928B08733DD80010E9CD /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = (
-					ppc,
-					i386,
-				);
 				ENABLE_OPENMP_SUPPORT = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
@@ -1514,7 +1533,6 @@
 		436FC29A0D85FB4900D8E371 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_64_BIT)";
 				COPY_PHASE_STRIP = NO;
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_DYNAMIC_NO_PIC = NO;
@@ -1531,7 +1549,6 @@
 		436FC29B0D85FB4900D8E371 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_64_BIT)";
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_MODEL_TUNING = G5;
@@ -1545,7 +1562,6 @@
 		436FC2A80D85FC1C00D8E371 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_64_BIT)";
 				COPY_PHASE_STRIP = NO;
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_DYNAMIC_NO_PIC = NO;
@@ -1562,7 +1578,6 @@
 		436FC2A90D85FC1C00D8E371 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_64_BIT)";
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_MODEL_TUNING = G5;
@@ -1576,7 +1591,6 @@
 		43FA4B150D4EECBB001709F1 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_64_BIT)";
 				COPY_PHASE_STRIP = NO;
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_DYNAMIC_NO_PIC = NO;
@@ -1594,7 +1608,6 @@
 		43FA4B160D4EECBB001709F1 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_64_BIT)";
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_MODEL_TUNING = G5;

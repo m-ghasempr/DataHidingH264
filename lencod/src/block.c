@@ -69,10 +69,11 @@
 #define P_L (PredPel[12])
 
 //! array used to find expensive coefficients
-static const byte COEFF_COST4x4[2][16] =
+static const byte COEFF_COST4x4[3][16] =
 {
   {3,2,2,1,1,1,0,0,0,0,0,0,0,0,0,0},
-  {9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9}
+  {9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9},
+  {3,2,2,1,1,1,0,0,0,0,0,0,0,0,0,0},
 };
 
 static const byte SCAN_YUV420  [4][2] =
@@ -1000,7 +1001,7 @@ int residual_transform_quant_chroma_4x4(Macroblock *currMB, int uv, int cr_cbp)
   }
 
   quant_methods.pos_scan      = currMB->is_field_mode ? FIELD_SCAN : SNGL_SCAN;
-  quant_methods.c_cost        = COEFF_COST4x4[currSlice->disthres];
+  quant_methods.c_cost        = (currSlice->disthres == 2 && intra ) ? COEFF_COST4x4[1] : COEFF_COST4x4[currSlice->disthres];
   quant_methods.coeff_cost    = &coeff_cost;
 
 
@@ -1520,7 +1521,6 @@ int residual_transform_quant_luma_4x4_sp(Macroblock *currMB, ColorPlane pl, int 
   int qp_const,ilev, level,scan_pos = 0,run = -1;
   int nonzero = FALSE;
   VideoParameters *p_Vid = currMB->p_Vid;
-  InputParameters *p_Inp = currMB->p_Inp;
   Slice *currSlice = currMB->p_Slice;
 
   imgpel **img_enc = p_Vid->enc_picture->p_curr_img;
@@ -1532,7 +1532,7 @@ int residual_transform_quant_luma_4x4_sp(Macroblock *currMB, ColorPlane pl, int 
   int   qp = currMB->qp_scaled[pl]; 
   int   qp_sp = (currMB->qpsp);
 
-  const byte *c_cost = COEFF_COST4x4[p_Inp->disthres];
+  const byte *c_cost = COEFF_COST4x4[currSlice->disthres];
   const byte (*pos_scan)[2] = currMB->is_field_mode ? FIELD_SCAN : SNGL_SCAN;
 
   int   pos_x   = block_x >> BLOCK_SHIFT;
@@ -1558,20 +1558,6 @@ int residual_transform_quant_luma_4x4_sp(Macroblock *currMB, ColorPlane pl, int 
   LevelQuantParams **q_params_4x4 = p_Quant->q_params_4x4[pl][intra][qp]; 
   LevelQuantParams **quant_params_sp = p_Quant->q_params_4x4[pl][intra][qp_sp]; 
 
-  //QuantMethods quant_methods;
-  //quant_methods.ACLevel = currSlice->cofAC[b8][b4][0];
-  //quant_methods.ACRun   = currSlice->cofAC[b8][b4][1];
-  
-  //quant_methods.block_x    = block_x;
-  //quant_methods.block_y    = block_y;
-  //quant_methods.qp         = qp;
-
-  //quant_methods.q_params   = p_Quant->q_params_4x4[pl][intra][qp]; 
-  //quant_methods.fadjust    = p_Vid->AdaptiveRounding ? (&p_Vid->ARCofAdj4x4[pl][currMB->ar_mode][block_y]) : NULL;
-  //quant_methods.coeff_cost = coeff_cost; 
-  //quant_methods.pos_scan   = currMB->is_field_mode ? FIELD_SCAN : SNGL_SCAN;    
-  //quant_methods.c_cost     = COEFF_COST4x4[currSlice->disthres];
-    
   qp_const  = (1<<q_bits)/6;    // inter
   qp_const2 = (1<<q_bits_sp)>>1;  //sp_pred
 
@@ -1674,17 +1660,13 @@ int residual_transform_quant_luma_4x4_sp(Macroblock *currMB, ColorPlane pl, int 
 
   // inverse transform
   inverse4x4(mb_rres, mb_rres, block_y, block_x);
-  // inverse4x4(currSlice->tblk16x16, mb_rres, 0, 0);
-
 
   for (j=block_y; j < block_y+BLOCK_SIZE; ++j)
   {
     for (i=block_x; i < block_x+BLOCK_SIZE; ++i)
     {
-      //printf("%d ",mb_rres[j][i]);
       mb_rres[j][i] = iClip1 (p_Vid->max_imgpel_value, rshift_rnd_sf(mb_rres[j][i], DQ_BITS));
-       //printf("%d\n",mb_rres[j][i]);
-    }
+   }
   }
   
   //  Decoded block moved to frame memory
@@ -1693,8 +1675,6 @@ int residual_transform_quant_luma_4x4_sp(Macroblock *currMB, ColorPlane pl, int 
     for (i=0; i < BLOCK_SIZE; ++i)
     {
       img_enc[currMB->pix_y+block_y+j][currMB->pix_x+block_x+i]= (imgpel) mb_rres[block_y+j][block_x+i];
-
-  //printf("%d\n",mb_rres[j][i]);
     }
   }
          
@@ -2108,12 +2088,9 @@ int residual_transform_quant_luma_4x4_sp2(Macroblock *currMB, ColorPlane pl, int
   const byte (*pos_scan)[2] = currMB->is_field_mode ? FIELD_SCAN : SNGL_SCAN;
 
   int level1;
-
-  //int   qp    = (currMB->qpsp); // should double check spec why these are equal
+  
   int   qp_sp = (currMB->qpsp);
 
-  //int qp_per    = p_Quant->qp_per_matrix[qp];
-  //int q_bits    = Q_BITS + qp_per;
   int qp_per_sp = p_Quant->qp_per_matrix[qp_sp];
   int q_bits_sp = Q_BITS + qp_per_sp;
 
@@ -2124,7 +2101,6 @@ int residual_transform_quant_luma_4x4_sp2(Macroblock *currMB, ColorPlane pl, int
   quant_methods.ACLevel = currSlice->cofAC[b8][b4][0];
   quant_methods.ACRun   = currSlice->cofAC[b8][b4][1];
 
-  //qp_const=(1<<q_bits)/6;    // inter
   qp_const2=(1<<q_bits_sp)>>1;  //sp_pred
 
   for (j=0; j< BLOCK_SIZE; ++j)
@@ -2225,7 +2201,6 @@ int residual_transform_quant_chroma_4x4_sp2(Macroblock *currMB, int uv,int cr_cb
   int*  DCRun   = currSlice->cofDC[uv+1][1];
   int  level1;
   int    **mb_rres = currSlice->mb_rres[uv + 1]; 
-  //int    **mb_ores = currSlice->mb_ores[uv + 1]; 
   imgpel **mb_pred = currSlice->mb_pred[uv + 1]; 
   int   intra = is_intra (currMB);
 
@@ -2236,7 +2211,6 @@ int residual_transform_quant_chroma_4x4_sp2(Macroblock *currMB, int uv,int cr_cb
   int qpChromaSP = qpc_sp < 0 ? qpc_sp : QP_SCALE_CR[qpc_sp];
 
   int qp_per    = p_Quant->qp_per_matrix[qpChroma];
-  //int qp_rem    = p_Quant->qp_rem_matrix[qpChroma];
 
   int qp_per_sp = p_Quant->qp_per_matrix[qpChromaSP];
   int q_bits_sp = Q_BITS + qp_per;

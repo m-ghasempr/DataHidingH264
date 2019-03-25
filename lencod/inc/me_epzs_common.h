@@ -19,7 +19,6 @@
 #ifndef _ME_EPZS_COMMON_H_
 #define _ME_EPZS_COMMON_H_
 
-
 // Structure definitions
 typedef struct
 {
@@ -105,7 +104,8 @@ extern distblk EPZSDetermineStopCriterion(EPZSParameters *p_EPZS, distblk* prevS
 extern void    EPZSBlockTypePredictors   (Slice *currSlice, MEBlock *mv_block, SPoint *point, int *prednum);
 extern void    EPZSWindowPredictors      (MotionVector *mv, EPZSStructure *predictor, int *prednum, EPZSStructure *windowPred);
 extern void    EPZS_spatial_memory_predictors  (EPZSParameters *p_EPZS, MEBlock *mv_block, int list, int *prednum, int img_width);
-
+extern void    EPZS_hierarchical_predictors    (EPZSParameters * p_EPZS, MEBlock * mv_block, int *prednum, StorablePicture *ref_picture, Slice *currSlice);
+ 
 extern void  EPZSDelete                (VideoParameters *p_Vid);
 extern void  EPZSStructDelete          (Slice *currSlice);
 extern void  EPZSSliceInit             (Slice *currSlice);

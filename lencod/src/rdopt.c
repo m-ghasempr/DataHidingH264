@@ -241,19 +241,22 @@ void init_rdopt (Slice *currSlice)
 
   switch (p_Inp->rdopt)
   {
-  case 0:
-    currSlice->encode_one_macroblock = encode_one_macroblock_low;
-    break;
-  case 1:
-  default:
-    currSlice->encode_one_macroblock = encode_one_macroblock_high;
-    break;
-  case 2:
-    currSlice->encode_one_macroblock = encode_one_macroblock_highfast;
-    break;
-  case 3:
-    currSlice->encode_one_macroblock = encode_one_macroblock_highloss;
-    break;
+    case 0:
+      currSlice->encode_one_macroblock = encode_one_macroblock_low;
+      break;
+    case 1:
+    default:
+      currSlice->encode_one_macroblock = encode_one_macroblock_high;
+      break;
+    case 2:
+      currSlice->encode_one_macroblock = encode_one_macroblock_highfast;
+      break;
+    case 3:
+      currSlice->encode_one_macroblock = encode_one_macroblock_highloss;
+      break;
+    case 4:
+      currSlice->encode_one_macroblock = encode_one_macroblock_high_updated;
+      break;
   }
 
   if (currSlice->mb_aff_frame_flag || (currSlice->UseRDOQuant && currSlice->RDOQ_QP_Num > 1))

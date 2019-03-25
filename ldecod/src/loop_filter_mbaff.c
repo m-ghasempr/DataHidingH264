@@ -89,7 +89,7 @@ void get_strength_ver_MBAff(byte *Strength, Macroblock *MbQ, int edge, int mvlim
   short  blkP, blkQ, idx;
   //short  blk_x, blk_x2, blk_y, blk_y2 ;
 
-  int    StrValue;
+  int    StrValue, i;
   short  mb_x, mb_y;
 
   Macroblock *MbP;
@@ -126,7 +126,7 @@ void get_strength_ver_MBAff(byte *Strength, Macroblock *MbQ, int edge, int mvlim
         //printf("idx %d %d %d %d %d\n", idx, pixP.x, pixP.y, pixP.pos_x, pixP.pos_y);
         // Start with Strength=3. or Strength=4 for Mb-edge
         StrValue = (edge == 0) ? 4 : 3;
-        memset(Strength, (byte) StrValue, MB_BLOCK_SIZE * sizeof(byte));
+        for( i = 0; i < MB_BLOCK_SIZE; i ++ ) Strength[i] = StrValue;
       }
       else
       {
@@ -189,7 +189,10 @@ void get_strength_ver_MBAff(byte *Strength, Macroblock *MbQ, int edge, int mvlim
               StrValue = 1;
             }                      
           }
-          *(int*)(Strength+idx) = StrValue * 0x01010101;
+          Strength[idx] = StrValue;
+          Strength[idx + 1] = StrValue;
+          Strength[idx + 2] = StrValue;
+          Strength[idx + 3] = StrValue;
           pixP.y += 4;
           pixP.pos_y += 4;
         }
@@ -295,7 +298,7 @@ void get_strength_hor_MBAff(byte *Strength, Macroblock *MbQ, int edge, int mvlim
   short  blkP, blkQ, idx;
   short  blk_x, blk_x2, blk_y, blk_y2 ;
 
-  int    StrValue;
+  int    StrValue, i;
   int    xQ, yQ = (edge < MB_BLOCK_SIZE ? edge : 1);
   short  mb_x, mb_y;
 
@@ -320,7 +323,10 @@ void get_strength_hor_MBAff(byte *Strength, Macroblock *MbQ, int edge, int mvlim
 
       StrValue = (edge == 0 && (!MbP->mb_field && !MbQ->mb_field)) ? 4 : 3;
       
-      *(int*)(Strength+idx) = StrValue * 0x01010101;
+      Strength[idx] = StrValue;
+      Strength[idx+1] = StrValue;
+      Strength[idx+2] = StrValue;
+      Strength[idx+3] = StrValue;
     }
   }
   else
@@ -333,7 +339,7 @@ void get_strength_hor_MBAff(byte *Strength, Macroblock *MbQ, int edge, int mvlim
     if (MbQ->is_intra_block == TRUE || MbP->is_intra_block == TRUE)
     {      
       StrValue = (edge == 0 && (!MbP->mb_field && !MbQ->mb_field)) ? 4 : 3;
-      memset(Strength, (byte) StrValue, MB_BLOCK_SIZE * sizeof(byte));
+      for( i = 0; i < MB_BLOCK_SIZE; i ++ ) Strength[i] = StrValue;
     }
     else
     {
@@ -412,7 +418,10 @@ void get_strength_hor_MBAff(byte *Strength, Macroblock *MbQ, int edge, int mvlim
             }
           }
         }
-        *(int*)(Strength+idx) = StrValue * 0x01010101;
+        Strength[idx] = StrValue;
+        Strength[idx + 1] = StrValue;
+        Strength[idx + 2] = StrValue;
+        Strength[idx + 3] = StrValue;
       }
     }
   }

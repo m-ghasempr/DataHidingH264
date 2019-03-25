@@ -150,7 +150,7 @@ Mapping Map[] = {
     {"Intra16x16PlaneDisable",   &cfgparams.Intra16x16PlaneDisable,       0,   0.0,                       1,  0.0,              1.0,                             },
     {"EnableIPCM",               &cfgparams.EnableIPCM,                   0,   0.0,                       1,  0.0,              2.0,                             },
     {"ChromaIntraDisable",       &cfgparams.ChromaIntraDisable,           0,   0.0,                       1,  0.0,              1.0,                             },
-    {"RDOptimization",           &cfgparams.rdopt,                        0,   0.0,                       1,  0.0,              3.0,                             },
+    {"RDOptimization",           &cfgparams.rdopt,                        0,   0.0,                       1,  0.0,              4.0,                             },
 
     {"DistortionEstimation",     &cfgparams.de,                           0,   1.0,                       2,  0.0,              8.0,                             },
     {"SubMBCodingState",         &cfgparams.subMBCodingState,             0,   2.0,                       1,  0.0,              2.0,                             },
@@ -163,7 +163,7 @@ Mapping Map[] = {
     {"DistortionYUVtoRGB",       &cfgparams.DistortionYUVtoRGB,           0,   0.0,                       1,  0.0,              1.0,                             },
     {"CtxAdptLagrangeMult",      &cfgparams.CtxAdptLagrangeMult,          0,   0.0,                       1,  0.0,              1.0,                             },
     {"FastCrIntraDecision",      &cfgparams.FastCrIntraDecision,          0,   0.0,                       1,  0.0,              1.0,                             },
-    {"DisableThresholding",      &cfgparams.disthres,                     0,   0.0,                       1,  0.0,              1.0,                             },
+    {"DisableThresholding",      &cfgparams.disthres,                     0,   0.0,                       1,  0.0,              2.0,                             },
     {"DisableBSkipRDO",          &cfgparams.nobskip,                      0,   0.0,                       1,  0.0,              1.0,                             },
     {"BiasSkipRDO",              &cfgparams.BiasSkipRDO,                  0,   0.0,                       1,  0.0,              1.0,                             },
     {"ForceTrueRateRDO",         &cfgparams.ForceTrueRateRDO,             0,   0.0,                       1,  0.0,              2.0,                             },    
@@ -204,6 +204,7 @@ Mapping Map[] = {
     {"RDPictureFrameQPPSlice",   &cfgparams.RDPictureFrameQPPSlice,       0,   0.0,                       1,  0.0,              1.0,                             },
     {"RDPictureFrameQPBSlice",   &cfgparams.RDPictureFrameQPBSlice,       0,   0.0,                       1,  0.0,              1.0,                             },
     {"SkipIntraInInterSlices",   &cfgparams.SkipIntraInInterSlices,       0,   0.0,                       1,  0.0,              1.0,                             },
+    {"PSliceSkipDecisionMethod", &cfgparams.PSliceSkipDecisionMethod,     0,   0.0,                       1,  0.0,              5.0,                             },
     {"BReferencePictures",       &cfgparams.BRefPictures,                 0,   0.0,                       1,  0.0,              2.0,                             },
     {"HierarchicalCoding",       &cfgparams.HierarchicalCoding,           0,   0.0,                       1,  0.0,              3.0,                             },
     {"HierarchyLevelQPEnable",   &cfgparams.HierarchyLevelQPEnable,       0,   0.0,                       1,  0.0,              1.0,                             },
@@ -212,6 +213,8 @@ Mapping Map[] = {
     {"ExplicitSeqFile",          &cfgparams.ExplicitSeqFile,              1,   0.0,                       0,  0.0,              0.0,             FILE_NAME_SIZE, },
     {"LowDelay",                 &cfgparams.LowDelay,                     0,   0.0,                       1,  0.0,              1.0,                             },
     {"ReferenceReorder",         &cfgparams.ReferenceReorder,             0,   0.0,                       1,  0.0,              2.0,                             },
+    {"EnableReorderBslice",      &cfgparams.EnableReorderBslice,          0,   0.0,                       1,  0.0,              1.0,                             },
+    {"UseDistortionReorder",     &cfgparams.UseDistortionReorder,         0,   0.0,                       1,  0.0,              1.0,                             },
     {"PocMemoryManagement",      &cfgparams.PocMemoryManagement,          0,   0.0,                       1,  0.0,              2.0,                             },
 
 
@@ -350,7 +353,8 @@ Mapping Map[] = {
 
     // Explicit Lambda Parameters for RDO
     {"UseExplicitLambdaParams",  &cfgparams.UseExplicitLambdaParams,      0,   0.0,                       1,  0.0,              3.0,                             },
-    {"UpdateLambdaChromaME",     &cfgparams.UpdateLambdaChromaME,         0,   0.0,                       1,  0.0,              3.0,                             },    
+    {"DisableDistanceLambdaScale", &cfgparams.DisableDistanceLambdaScale, 0,   0.0,                       1,  0.0,              1.0,                             },
+    {"UpdateLambdaChromaME",     &cfgparams.UpdateLambdaChromaME,         0,   0.0,                       1,  0.0,              1.0,                             },
     {"FixedLambdaPSlice",        &cfgparams.FixedLambda[P_SLICE],         2,   0.1,                       2,  0.0,              0.0,                             },
     {"FixedLambdaBSlice",        &cfgparams.FixedLambda[B_SLICE],         2,   0.1,                       2,  0.0,              0.0,                             },
     {"FixedLambdaISlice",        &cfgparams.FixedLambda[I_SLICE],         2,   0.1,                       2,  0.0,              0.0,                             },
@@ -366,7 +370,7 @@ Mapping Map[] = {
     // Usage of explicit "initial" offsets for quantization
     {"QOffsetMatrixFile",        &cfgparams.QOffsetMatrixFile,            1,   0.0,                       0,  0.0,              0.0,             FILE_NAME_SIZE, },
     {"OffsetMatrixPresentFlag",  &cfgparams.OffsetMatrixPresentFlag,      0,   0.0,                       1,  0.0,              1.0,                             },
-
+    {"OffsetMatrixFlat",         &cfgparams.OffsetMatrixFlat,             0,   0.0,                       1,  0.0,              2.0,                             },
     // Adaptive rounding technique based on JVT-N011
     {"AdaptiveRounding",         &cfgparams.AdaptiveRounding,             0,   0.0,                       1,  0.0,              1.0,                             },
     {"AdaptRoundingFixed",       &cfgparams.AdaptRoundingFixed,           0,   1.0,                       1,  0.0,              1.0,                             },    
@@ -412,6 +416,7 @@ Mapping Map[] = {
     {"EPZSPattern",              &cfgparams.EPZSPattern,                  0,   2.0,                       1,  0.0,              5.0,                             },
     {"EPZSDualRefinement",       &cfgparams.EPZSDual,                     0,   3.0,                       1,  0.0,              6.0,                             },
     {"EPZSFixedPredictors",      &cfgparams.EPZSFixed,                    0,   3.0,                       1,  0.0,              3.0,                             },
+    {"EPZSAggressiveWindow",     &cfgparams.EPZSAggressiveWindow,         0,   0.0,                       1,  0.0,              1.0,                             },
 #if (MVC_EXTENSION_ENABLE)
     {"EPZSTemporal",             &cfgparams.EPZSTemporal[0],              0,   1.0,                       1,  0.0,              1.0,                             },
 #else
@@ -434,7 +439,12 @@ Mapping Map[] = {
     {"EPZSSubPelMEBiPred",       &cfgparams.EPZSSubPelMEBiPred,           0,   1.0,                       1,  0.0,              2.0,                             },
     {"EPZSSubPelGrid",           &cfgparams.EPZSSubPelGrid,               0,   0.0,                       1,  0.0,              1.0,                             },
     {"EPZSSubPelThresScale",     &cfgparams.EPZSSubPelThresScale,         0,   1.0,                       0,  0.0,              0.0,                             },
+    {"EPZSUseHMEPredictors",     &cfgparams.EPZSUseHMEPredictors,         0,   0.0,                       1,  0.0,              1.0,                             },
     {"DisableMEPrediction",      &cfgparams.DisableMEPrediction,          0,   0.0,                       1,  0.0,              1.0,                             },    
+    {"HMEEnable",                &cfgparams.HMEEnable,                    0,   0.0,                       1,  0.0,              1.0,                             },
+    {"HMEDisableMMCO",           &cfgparams.HMEDisableMMCO,               0,   0.0,                       1,  0.0,              1.0,                             },
+    {"PyramidLevels",            &cfgparams.PyramidLevels,                0,   0.0,                       1,  0.0,              6.0,                             },
+
     // Tone mapping SEI cfg file
     {"ToneMappingSEIPresentFlag",&cfgparams.ToneMappingSEIPresentFlag,    0,   0.0,                       1,  0.0,              1.0,                             },
     {"ToneMappingFile",          &cfgparams.ToneMappingFile,              1,   0.0,                       0,  0.0,              0.0,             FILE_NAME_SIZE, },
@@ -527,6 +537,8 @@ Mapping Map[] = {
 #endif
 #if LD_REF_SETTING
     {"LDRefSetting",                           &cfgparams.LDRefSetting,                           0,   0.0,                       1,  0.0,              1.0,                             },
+    {"UnconstrainedLDRef",                     &cfgparams.UnconstrainedLDRef,                     0,   0.0,                       1,  0.0,              1.0,                             },
+  
 #endif
     {NULL,                       NULL,                                   -1,   0.0,                       0,  0.0,              0.0,                             },
 };

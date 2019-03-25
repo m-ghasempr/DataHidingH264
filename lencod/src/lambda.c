@@ -87,7 +87,7 @@ void get_implicit_lambda_p_slice(Slice *currSlice)
   int qp;
   double qp_temp;
   double lambda_md;
-  double lambda_scale = 1.0 - dClip3(0.0,0.5,0.05 * (double) p_Inp->jumpd);
+  double lambda_scale = p_Inp->DisableDistanceLambdaScale ? 1.0 : 1.0 - dClip3(0.0,0.5,0.05 * (double) p_Inp->jumpd);
   //limit lambda for mode decison;
   int bLimitsLambdaMD = ((p_Inp->EnableIPCM > 0) && (IMGTYPE==0));
   double dMaxLambdaMD =0;
@@ -184,7 +184,7 @@ void get_implicit_lambda_i_slice(Slice *currSlice)
   int qp;
   double qp_temp;
   double lambda_md;
-  double lambda_scale = 1.0 - dClip3(0.0,0.5,0.05 * (double) p_Inp->jumpd);
+  double lambda_scale = p_Inp->DisableDistanceLambdaScale ? 1.0 : 1.0 - dClip3(0.0,0.5,0.05 * (double) p_Inp->jumpd);
   //limit lambda for mode decison;
   int bLimitsLambdaMD = ((p_Inp->EnableIPCM > 0) && (IMGTYPE==0));
   double dMaxLambdaMD =0;
@@ -230,7 +230,7 @@ void get_implicit_lambda_sp_slice(Slice *currSlice)
   int qp;
   double qp_temp;
   double lambda_md;
-  double lambda_scale = 1.0 - dClip3(0.0,0.5,0.05 * (double) p_Inp->jumpd);
+  double lambda_scale = p_Inp->DisableDistanceLambdaScale ? 1.0 : 1.0 - dClip3(0.0,0.5,0.05 * (double) p_Inp->jumpd);
   //limit lambda for mode decison;
   int bLimitsLambdaMD = ((p_Inp->EnableIPCM > 0) && (IMGTYPE==0));
   double dMaxLambdaMD =0;
@@ -278,7 +278,7 @@ void get_explicit_lambda(Slice *currSlice)
   InputParameters *p_Inp = currSlice->p_Inp;
   int qp;
   double qp_temp;
-  double lambda_scale = 1.0 - dClip3(0.0,0.5,0.05 * (double) p_Inp->jumpd);
+  double lambda_scale = p_Inp->DisableDistanceLambdaScale ? 1.0 : 1.0 - dClip3(0.0,0.5,0.05 * (double) p_Inp->jumpd);
   //limit lambda for mode decison;
   int bLimitsLambdaMD = ((p_Inp->EnableIPCM > 0) && (IMGTYPE==0));
   double dMaxLambdaMD =0;

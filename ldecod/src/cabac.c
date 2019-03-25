@@ -1465,11 +1465,15 @@ static int read_and_store_CBP_block_bit_444 (Macroblock              *currMB,
   {
     if (block_b.available)
     {
-      if((type==LUMA_8x8 || type==CB_8x8 || type==CR_8x8) &&
-         !mb_data[block_b.mb_addr].luma_transform_size_8x8_flag)
-      {}
-      else if(mb_data[block_b.mb_addr].mb_type==IPCM)
+      if(mb_data[block_b.mb_addr].mb_type==IPCM)
+      {
         upper_bit=1;
+      }
+      else if((type==LUMA_8x8 || type==CB_8x8 || type==CR_8x8) &&
+         !mb_data[block_b.mb_addr].luma_transform_size_8x8_flag)
+      {
+        upper_bit = 0;
+      }
       else
       {
         if(type==LUMA_8x8)
@@ -1490,11 +1494,15 @@ static int read_and_store_CBP_block_bit_444 (Macroblock              *currMB,
     
     if (block_a.available)
     {
-      if((type==LUMA_8x8 || type==CB_8x8 || type==CR_8x8) &&
-         !mb_data[block_a.mb_addr].luma_transform_size_8x8_flag)
-      {}
-      else if(mb_data[block_a.mb_addr].mb_type==IPCM)
+      if(mb_data[block_a.mb_addr].mb_type==IPCM)
+      {
         left_bit=1;
+      }
+      else if((type==LUMA_8x8 || type==CB_8x8 || type==CR_8x8) &&
+         !mb_data[block_a.mb_addr].luma_transform_size_8x8_flag)
+      {
+        left_bit=0;
+      }
       else
       {
         if(type==LUMA_8x8)

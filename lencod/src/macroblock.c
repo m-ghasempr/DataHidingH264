@@ -366,7 +366,7 @@ void start_macroblock(Slice *currSlice, Macroblock **currMB, int mb_addr, Boolea
 
   (*currMB)->is_field_mode = (byte) (p_Vid->field_picture || ( currSlice->mb_aff_frame_flag && (*currMB)->mb_field));
   (*currMB)->prev_recode_mb = FALSE;
-  (*currMB)->DeblockCall = FALSE;
+  (*currMB)->DeblockCall = 0;
   //set buffer;
   (*currMB)->intra4x4_pred = (*currMB)->intra4x4_pred_buf[p_Vid->dpb_layer_id];
   (*currMB)->intra8x8_pred = (*currMB)->intra8x8_pred_buf[p_Vid->dpb_layer_id];

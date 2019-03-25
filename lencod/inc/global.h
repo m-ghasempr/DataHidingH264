@@ -375,7 +375,7 @@ typedef struct macroblock_enc
 
   short               list_offset;
   Boolean             prev_recode_mb;
-  Boolean             DeblockCall;
+  int                 DeblockCall;
 
   int                 mbAddrA, mbAddrB, mbAddrC, mbAddrD;
   byte                mbAvailA, mbAvailB, mbAvailC, mbAvailD;
@@ -983,6 +983,11 @@ typedef struct video_par
   SliceStructure  *p_curr_slice;
   int pic_struct;
   struct search_window searchRange;
+  
+  //Hierarchical Motion Estimation structure
+  struct hme_info *pHMEInfo;  //!< HME information
+  int    is_hme;
+ 
   ImageData imgData;           //!< Image data to be encoded
   ImageData imgData0;          //!< Input Image Data
   ImageData imgData1;

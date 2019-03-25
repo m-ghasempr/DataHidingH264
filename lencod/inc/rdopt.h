@@ -99,6 +99,7 @@ extern void end_encode_one_macroblock(Macroblock *currMB);
 
 extern void encode_one_macroblock_low          (Macroblock *currMB);
 extern void encode_one_macroblock_high         (Macroblock *currMB);
+extern void encode_one_macroblock_high_updated (Macroblock *currMB);
 extern void encode_one_macroblock_highfast     (Macroblock *currMB);
 extern void encode_one_macroblock_highloss     (Macroblock *currMB);
 

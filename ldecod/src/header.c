@@ -160,11 +160,11 @@ int RestOfSliceHeader(Slice *currSlice)
   currSlice->mb_aff_frame_flag = (active_sps->mb_adaptive_frame_field_flag && (currSlice->field_pic_flag==0));
   //currSlice->mb_aff_frame_flag = p_Vid->mb_aff_frame_flag;
 
-  if (p_Vid->structure == FRAME       ) 
+  if (currSlice->structure == FRAME       ) 
     assert (currSlice->field_pic_flag == 0);
-  if (p_Vid->structure == TOP_FIELD   ) 
+  if (currSlice->structure == TOP_FIELD   ) 
     assert (currSlice->field_pic_flag == 1 && (currSlice->bottom_field_flag == FALSE));
-  if (p_Vid->structure == BOTTOM_FIELD) 
+  if (currSlice->structure == BOTTOM_FIELD) 
     assert (currSlice->field_pic_flag == 1 && (currSlice->bottom_field_flag == TRUE ));
 
   if (currSlice->idr_flag)

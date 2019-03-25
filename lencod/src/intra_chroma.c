@@ -817,9 +817,9 @@ void intra_chroma_prediction_mbaff(Macroblock *currMB, int *mb_up, int *mb_left,
 
   static const int block_pos[3][4][4]= //[yuv][b8][b4]
   {
-    { {0, 1, 2, 3},{0, 0, 0, 0},{0, 0, 0, 0},{0, 0, 0, 0}},
-    { {0, 1, 2, 3},{2, 3, 2, 3},{0, 0, 0, 0},{0, 0, 0, 0}},
-    { {0, 1, 2, 3},{1, 1, 3, 3},{2, 3, 2, 3},{3, 3, 3, 3}}
+    { {0, 1, 4, 5},{0, 0, 0, 0},{0, 0, 0, 0},{0, 0, 0, 0}},
+    { {0, 1, 2, 3},{4, 5, 4, 5},{0, 0, 0, 0},{0, 0, 0, 0}},
+    { {0, 1, 2, 3},{1, 1, 3, 3},{4, 5, 4, 5},{5, 5, 5, 5}}
   };
 
   for (i = 0; i < cr_MB_y + 1; ++i)
@@ -874,7 +874,7 @@ void intra_chroma_prediction_mbaff(Macroblock *currMB, int *mb_up, int *mb_left,
         //===== get prediction value =====
         switch (block_pos[yuv][b8][b4])
         {
-        case 0:  //===== TOP LEFT =====
+        case 0:  //===== TOP TOP-LEFT =====
           {
             int s0 = 0, s2 = 0;
             if      (mb_available_up)       
@@ -891,7 +891,7 @@ void intra_chroma_prediction_mbaff(Macroblock *currMB, int *mb_up, int *mb_left,
               s  = (s2   + 2) >> 2;
           }
           break;
-        case 1: //===== TOP RIGHT =====
+        case 1: //===== TOP TOP-RIGHT =====
           {
             int s1 = 0, s2 = 0;
             if      (mb_available_up)       
@@ -906,7 +906,41 @@ void intra_chroma_prediction_mbaff(Macroblock *currMB, int *mb_up, int *mb_left,
               s  = (s2   +2) >> 2;
           }
           break;
-        case 2: //===== BOTTOM LEFT =====
+        case 2:  //===== TOP BOTTOM-LEFT =====
+          if      (mb_available_left[0])  
+          {
+            int s3 = 0;
+            for (i=blk_y;i<(blk_y+4);i++)  
+              s3 += image[pix_a[i].pos_y][pix_a[i].pos_x];
+            s  = (s3 + 2) >> 2;
+          }
+          else if (mb_available_up)       
+          {
+            int s0 = 0;
+            for (i=blk_x;i<(blk_x+4);i++)  
+              s0 += image[pix_b.pos_y][pix_b.pos_x + i];
+            s  = (s0 + 2) >> 2;
+          }
+          break;
+        case 3: //===== TOP BOTTOM-RIGHT =====
+          {
+            int s1 = 0, s3 = 0;
+            if      (mb_available_up) 
+              for (i=blk_x;i<(blk_x+4);i++)
+                s1 += image[pix_b.pos_y][pix_b.pos_x + i];
+            if      (mb_available_left[0]) 
+              for (i=blk_y;i<(blk_y+4);i++)
+                s3 += image[pix_a[i].pos_y][pix_a[i].pos_x];
+            if      (mb_available_up && mb_available_left[0])
+              s  = (s1 + s3 + 4) >> 3;
+            else if (mb_available_up)
+              s  = (s1 + 2) >> 2;
+            else if (mb_available_left[0])
+              s  = (s3 + 2) >> 2;
+          }
+          break;
+
+        case 4: //===== BOTTOM LEFT =====
           if      (mb_available_left[1])  
           {
             int s3 = 0;
@@ -922,7 +956,7 @@ void intra_chroma_prediction_mbaff(Macroblock *currMB, int *mb_up, int *mb_left,
             s  = (s0 + 2) >> 2;
           }
           break;
-        case 3: //===== BOTTOM RIGHT =====
+        case 5: //===== BOTTOM RIGHT =====
           {
             int s1 = 0, s3 = 0;
             if      (mb_available_up)       

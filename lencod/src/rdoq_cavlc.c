@@ -400,7 +400,7 @@ void est_RunLevel_CAVLC(Macroblock *currMB, levelDataStruct *levelData, int *lev
       dataLevel->errLevel[k] /= 32768;
     }
 
-    lagrAcc += dataLevel->errLevel[dataLevel->noLevels - 1];
+    lagrAcc += dataLevel->errLevel[imax(0, dataLevel->noLevels - 1)];
 
     level_to_enc[coeff_ctr] = dataLevel->pre_level;
     sign_to_enc[coeff_ctr]  = dataLevel->sign;

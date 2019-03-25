@@ -285,6 +285,7 @@
     <ClInclude Include="lcommon\inc\parsetcommon.h" />
     <ClInclude Include="lcommon\inc\quant_params.h" />
     <ClInclude Include="lcommon\inc\report.h" />
+    <ClInclude Include="lcommon\inc\resize.h" />
     <ClInclude Include="lcommon\inc\transform.h" />
     <ClInclude Include="lcommon\inc\typedefs.h" />
     <ClInclude Include="lcommon\inc\types.h" />
@@ -310,6 +311,7 @@
     <ClInclude Include="lencod\inc\get_block_otf.h" />
     <ClInclude Include="lencod\inc\global.h" />
     <ClInclude Include="lencod\inc\header.h" />
+    <ClInclude Include="lencod\inc\hme_distortion.h" />
     <ClInclude Include="lencod\inc\image.h" />
     <ClInclude Include="lencod\inc\img_chroma.h" />
     <ClInclude Include="lencod\inc\img_distortion.h" />
@@ -341,6 +343,7 @@
     <ClInclude Include="lencod\inc\me_fullfast.h" />
     <ClInclude Include="lencod\inc\me_fullfast_otf.h" />
     <ClInclude Include="lencod\inc\me_fullsearch.h" />
+    <ClInclude Include="lencod\inc\me_hme.h" />
     <ClInclude Include="lencod\inc\me_umhex.h" />
     <ClInclude Include="lencod\inc\me_umhexsmp.h" />
     <ClInclude Include="lencod\inc\mmco.h" />
@@ -382,6 +385,7 @@
     <ClInclude Include="lencod\inc\wp_lms.h" />
     <ClInclude Include="lencod\inc\wp_mciter.h" />
     <ClInclude Include="lencod\inc\wp_mcprec.h" />
+    <ClInclude Include="lencod\inc\wp_periodic.h" />
     <ClInclude Include="lencod\inc\wp_random.h" />
   </ItemGroup>
   <ItemGroup>
@@ -397,6 +401,7 @@
     <ClCompile Include="lcommon\src\mv_prediction.c" />
     <ClCompile Include="lcommon\src\nalucommon.c" />
     <ClCompile Include="lcommon\src\parsetcommon.c" />
+    <ClCompile Include="lcommon\src\resize.c" />
     <ClCompile Include="lcommon\src\transform.c" />
     <ClCompile Include="lcommon\src\win32.c" />
     <ClCompile Include="lencod\src\annexb.c" />
@@ -415,6 +420,8 @@
     <ClCompile Include="lencod\src\fmo.c" />
     <ClCompile Include="lencod\src\get_block_otf.c" />
     <ClCompile Include="lencod\src\header.c" />
+    <ClCompile Include="lencod\src\hme_distortion.c" />
+    <ClCompile Include="lencod\src\hme_luma.c" />
     <ClCompile Include="lencod\src\image.c" />
     <ClCompile Include="lencod\src\image_mp.c" />
     <ClCompile Include="lencod\src\img_chroma.c" />
@@ -447,6 +454,7 @@
     <ClCompile Include="lencod\src\md_high.c" />
     <ClCompile Include="lencod\src\md_highfast.c" />
     <ClCompile Include="lencod\src\md_highloss.c" />
+    <ClCompile Include="lencod\src\md_high_updated.c" />
     <ClCompile Include="lencod\src\md_low.c" />
     <ClCompile Include="lencod\src\me_distortion.c" />
     <ClCompile Include="lencod\src\me_distortion_otf.c" />
@@ -457,6 +465,7 @@
     <ClCompile Include="lencod\src\me_fullfast.c" />
     <ClCompile Include="lencod\src\me_fullfast_otf.c" />
     <ClCompile Include="lencod\src\me_fullsearch.c" />
+    <ClCompile Include="lencod\src\me_hme.c" />
     <ClCompile Include="lencod\src\me_umhex.c" />
     <ClCompile Include="lencod\src\me_umhexsmp.c" />
     <ClCompile Include="lencod\src\mmco.c" />

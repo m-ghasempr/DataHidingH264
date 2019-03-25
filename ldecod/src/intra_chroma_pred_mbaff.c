@@ -117,9 +117,9 @@ void intra_pred_chroma_mbaff(Macroblock *currMB)
   int        pred;
   static const int block_pos[3][4][4]= //[yuv][b8][b4]
   {
-    { {0, 1, 2, 3},{0, 0, 0, 0},{0, 0, 0, 0},{0, 0, 0, 0}},
-    { {0, 1, 2, 3},{2, 3, 2, 3},{0, 0, 0, 0},{0, 0, 0, 0}},
-    { {0, 1, 2, 3},{1, 1, 3, 3},{2, 3, 2, 3},{3, 3, 3, 3}}
+    { {0, 1, 4, 5},{0, 0, 0, 0},{0, 0, 0, 0},{0, 0, 0, 0}},
+    { {0, 1, 2, 3},{4, 5, 4, 5},{0, 0, 0, 0},{0, 0, 0, 0}},
+    { {0, 1, 2, 3},{1, 1, 3, 3},{4, 5, 4, 5},{5, 5, 5, 5}}
   };
 
   switch (currMB->c_ipred_mode) 
@@ -174,19 +174,28 @@ void intra_pred_chroma_mbaff(Macroblock *currMB)
             //===== get prediction value =====
             switch (block_pos[yuv][b8][b4])
             {
-            case 0:  //===== TOP LEFT =====
+            case 0:  //===== TOP TOP-LEFT =====
               intra_chroma_DC_all_mbaff    (imgUV0, up_avail, left_avail[0], up, left, blk_x, blk_y + 1, &pred);
               intra_chroma_DC_all_mbaff    (imgUV1, up_avail, left_avail[0], up, left, blk_x, blk_y + 1, &pred1);
               break;
-            case 1: //===== TOP RIGHT =====
+            case 1: //===== TOP TOP-RIGHT =====
               intra_chroma_DC_single_mbaff (imgUV0, up_avail, left_avail[0], up, left, blk_x, blk_y + 1, &pred, 1);
               intra_chroma_DC_single_mbaff (imgUV1, up_avail, left_avail[0], up, left, blk_x, blk_y + 1, &pred1, 1);
               break;
-            case 2: //===== BOTTOM LEFT =====
+            case 2:  //===== TOP BOTTOM-LEFT =====
+              intra_chroma_DC_single_mbaff (imgUV0, up_avail, left_avail[0], up, left, blk_x, blk_y + 1, &pred, 0);
+              intra_chroma_DC_single_mbaff (imgUV1, up_avail, left_avail[0], up, left, blk_x, blk_y + 1, &pred1, 0);
+              break;
+            case 3: //===== TOP BOTTOM-RIGHT =====
+              intra_chroma_DC_all_mbaff    (imgUV0, up_avail, left_avail[0], up, left, blk_x, blk_y + 1, &pred);
+              intra_chroma_DC_all_mbaff    (imgUV1, up_avail, left_avail[0], up, left, blk_x, blk_y + 1, &pred1);
+              break;
+
+            case 4: //===== BOTTOM LEFT =====
               intra_chroma_DC_single_mbaff (imgUV0, up_avail, left_avail[1], up, left, blk_x, blk_y + 1, &pred, 0);
               intra_chroma_DC_single_mbaff (imgUV1, up_avail, left_avail[1], up, left, blk_x, blk_y + 1, &pred1, 0);
               break;
-            case 3: //===== BOTTOM RIGHT =====
+            case 5: //===== BOTTOM RIGHT =====
               intra_chroma_DC_all_mbaff   (imgUV0, up_avail, left_avail[1], up, left, blk_x, blk_y + 1, &pred);
               intra_chroma_DC_all_mbaff   (imgUV1, up_avail, left_avail[1], up, left, blk_x, blk_y + 1, &pred1);
               break;

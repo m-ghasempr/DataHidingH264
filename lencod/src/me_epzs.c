@@ -166,6 +166,11 @@ EPZS_motion_estimation (Macroblock * currMB,     // <--  current Macroblock
 
     if (p_Inp->EPZSSpatialMem)
       EPZS_spatial_memory_predictors (p_EPZS, mv_block, cur_list, &prednum, ref_picture->size_x >> 2);
+   
+    //if (p_Inp->HMEEnable == 1 && p_Inp->EPZSUseHMEPredictors == 1 && blocktype == 4)
+    //if (p_Inp->HMEEnable == 1 && p_Inp->EPZSUseHMEPredictors == 1 && (currSlice->slice_type == P_SLICE || currSlice->slice_type == SP_SLICE || p_Inp->EnableReorderBslice) )
+    if (p_Inp->HMEEnable == 1 && p_Inp->EPZSUseHMEPredictors == 1)
+      EPZS_hierarchical_predictors (p_EPZS, mv_block, &prednum, ref_picture, currSlice);
 
 #if (MVC_EXTENSION_ENABLE)
     if ( p_Inp->EPZSTemporal[currSlice->view_id] && blocktype < 5 ) 
@@ -198,7 +203,7 @@ EPZS_motion_estimation (Macroblock * currMB,     // <--  current Macroblock
 
     if (conditionEPZS)
       EPZSWindowPredictors (mv, p_EPZS->predictor, &prednum, 
-      (blocktype < 5) && (invalid_refs > 2) && (ref < 1 + (currSlice->structure != FRAME || currMB->list_offset)) 
+      (p_Inp->EPZSAggressiveWindow != 0) || ((blocktype < 5) && (invalid_refs > 2) && (ref < 1 + (currSlice->structure != FRAME || currMB->list_offset)))
       ? p_EPZS->window_predictor_ext : p_EPZS->window_predictor);
 
     //! Blocktype/Reference dependent predictors.

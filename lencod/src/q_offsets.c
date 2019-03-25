@@ -57,6 +57,81 @@ static const char OffsetType8x8[15][24] = {
   "INTER8X8_CHROMAV_INTERB"
 };
 
+static const short Offset_intra_flat_intra[16] = {
+ 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024
+};
+
+static const short Offset_intra_flat_chroma[16] = {
+ 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024
+};
+
+
+static const short Offset_intra_flat_inter[16] = {
+ 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024,
+};
+
+static const short Offset_inter_flat[16] = {
+ 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024,
+};
+
+static const short Offset8_intra_flat_intra[64] = {
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+};
+
+static const short Offset8_intra_flat_chroma[64] = {
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+};
+
+static const short Offset8_intra_flat_inter[64] = {
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+};
+
+static const short Offset8_inter_flat[64] = {
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+ 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024,
+};
+
+
+// Default offsets
 static const short Offset_intra_default_intra[16] = {
   682, 682, 682, 682,
   682, 682, 682, 682,
@@ -438,35 +513,106 @@ void InitOffsetParam (QuantParameters *p_Quant, InputParameters *p_Inp)
     }
     else
     {
-      // 0 (INTRA4X4_LUMA_INTRA)
-      memcpy(&(p_Quant->OffsetList4x4[i][0][0]),&(Offset_intra_default_intra[0]), 16 * sizeof(short));
-      for (k = 1; k < 3; k++) // 1,2 (INTRA4X4_CHROMA_INTRA)
-        memcpy(&(p_Quant->OffsetList4x4[i][k][0]),&(Offset_intra_default_chroma[0]),  16 * sizeof(short));
-      for (k = 3; k < 9; k++) // 3,4,5,6,7,8 (INTRA4X4_LUMA/CHROMA_INTERP/INTERB)
-        memcpy(&(p_Quant->OffsetList4x4[i][k][0]),&(Offset_intra_default_inter[0]),  16 * sizeof(short));
-      for (k = 9; k < 25; k++) // 9,10,11,12,13,14 (INTER4X4)
-        memcpy(&(p_Quant->OffsetList4x4[i][k][0]),&(Offset_inter_default[0]),  16 * sizeof(short));
+      if (p_Inp->OffsetMatrixFlat == 1)
+      {
+        // 0 (INTRA4X4_LUMA_INTRA)
+        memcpy(&(p_Quant->OffsetList4x4[i][0][0]),&(Offset_intra_flat_intra[0]), 16 * sizeof(short));
+        for (k = 1; k < 3; k++) // 1,2 (INTRA4X4_CHROMA_INTRA)
+          memcpy(&(p_Quant->OffsetList4x4[i][k][0]),&(Offset_intra_flat_chroma[0]),  16 * sizeof(short));
+        for (k = 3; k < 9; k++) // 3,4,5,6,7,8 (INTRA4X4_LUMA/CHROMA_INTERP/INTERB)
+          memcpy(&(p_Quant->OffsetList4x4[i][k][0]),&(Offset_intra_flat_inter[0]),  16 * sizeof(short));
+        for (k = 9; k < 25; k++) // 9,10,11,12,13,14 (INTER4X4)
+          memcpy(&(p_Quant->OffsetList4x4[i][k][0]),&(Offset_inter_flat[0]),  16 * sizeof(short));
+  
+        // 0 (INTRA8X8_LUMA_INTRA)
+        memcpy(&(p_Quant->OffsetList8x8[i][0][0]),&(Offset8_intra_flat_intra[0]), 64 * sizeof(short));
+        for (k = 1; k < 3; k++)  // 1,2 (INTRA8X8_LUMA_INTERP/INTERB)
+          memcpy(&(p_Quant->OffsetList8x8[i][k][0]),&(Offset8_intra_flat_inter[0]),  64 * sizeof(short));
+        for (k = 3; k < 5; k++)  // 3,4 (INTER8X8_LUMA_INTERP/INTERB)
+          memcpy(&(p_Quant->OffsetList8x8[i][k][0]),&(Offset8_inter_flat[0]),  64 * sizeof(short));
+  
+        // 5 (INTRA8X8_CHROMAU_INTRA)
+        memcpy(&(p_Quant->OffsetList8x8[i][5][0]),&(Offset8_intra_flat_chroma[0]), 64 * sizeof(short));
+        for (k = 6; k < 8; k++)  // 6,7 (INTRA8X8_CHROMAU_INTERP/INTERB)
+          memcpy(&(p_Quant->OffsetList8x8[i][k][0]),&(Offset8_intra_flat_inter[0]),  64 * sizeof(short));
+        for (k = 8; k < 10; k++)  // 8,9 (INTER8X8_CHROMAU_INTERP/INTERB)
+          memcpy(&(p_Quant->OffsetList8x8[i][k][0]),&(Offset8_inter_flat[0]),  64 * sizeof(short));
 
-      // 0 (INTRA8X8_LUMA_INTRA)
-      memcpy(&(p_Quant->OffsetList8x8[i][0][0]),&(Offset8_intra_default_intra[0]), 64 * sizeof(short));
-      for (k = 1; k < 3; k++)  // 1,2 (INTRA8X8_LUMA_INTERP/INTERB)
-        memcpy(&(p_Quant->OffsetList8x8[i][k][0]),&(Offset8_intra_default_inter[0]),  64 * sizeof(short));
-      for (k = 3; k < 5; k++)  // 3,4 (INTER8X8_LUMA_INTERP/INTERB)
-        memcpy(&(p_Quant->OffsetList8x8[i][k][0]),&(Offset8_inter_default[0]),  64 * sizeof(short));
+        // 10 (INTRA8X8_CHROMAV_INTRA)
+        memcpy(&(p_Quant->OffsetList8x8[i][10][0]),&(Offset8_intra_flat_chroma[0]), 64 * sizeof(short));
+        for (k = 11; k < 13; k++)  // 11,12 (INTRA8X8_CHROMAV_INTERP/INTERB)
+          memcpy(&(p_Quant->OffsetList8x8[i][k][0]),&(Offset8_intra_flat_inter[0]),  64 * sizeof(short));
+        for (k = 13; k < 15; k++)  // 8,9 (INTER8X8_CHROMAV_INTERP/INTERB)
+          memcpy(&(p_Quant->OffsetList8x8[i][k][0]),&(Offset8_inter_flat[0]),  64 * sizeof(short));
+      }
+      else if (p_Inp->OffsetMatrixFlat == 2)
+      {
+        // 0 (INTRA4X4_LUMA_INTRA)
+        memcpy(&(p_Quant->OffsetList4x4[i][0][0]),&(Offset_intra_default_intra[0]), 16 * sizeof(short));
+        for (k = 1; k < 3; k++) // 1,2 (INTRA4X4_CHROMA_INTRA)
+          memcpy(&(p_Quant->OffsetList4x4[i][k][0]),&(Offset_intra_flat_chroma[0]),  16 * sizeof(short));
+        memcpy(&(p_Quant->OffsetList4x4[i][3][0]),&(Offset_intra_default_inter[0]),  16 * sizeof(short));
+        for (k = 4; k < 6; k++) // 4,5 (INTRA4X4_CHROMA_INTERP)
+          memcpy(&(p_Quant->OffsetList4x4[i][k][0]),&(Offset_intra_flat_inter[0]),  16 * sizeof(short));
+        memcpy(&(p_Quant->OffsetList4x4[i][6][0]),&(Offset_intra_default_inter[0]),  16 * sizeof(short));
+        for (k = 7; k < 9; k++) // 7,8 (INTRA4X4_CHROMA_INTERB)
+          memcpy(&(p_Quant->OffsetList4x4[i][k][0]),&(Offset_intra_flat_inter[0]),  16 * sizeof(short));
+        for (k = 9; k < 25; k++) // 9,10,11,12,13,14 (INTER4X4)
+          memcpy(&(p_Quant->OffsetList4x4[i][k][0]),&(Offset_inter_default[0]),  16 * sizeof(short));
+  
+        // 0 (INTRA8X8_LUMA_INTRA)
+        memcpy(&(p_Quant->OffsetList8x8[i][0][0]),&(Offset8_intra_default_intra[0]), 64 * sizeof(short));
+        for (k = 1; k < 3; k++)  // 1,2 (INTRA8X8_LUMA_INTERP/INTERB)
+          memcpy(&(p_Quant->OffsetList8x8[i][k][0]),&(Offset8_intra_default_inter[0]),  64 * sizeof(short));
+        for (k = 3; k < 5; k++)  // 3,4 (INTER8X8_LUMA_INTERP/INTERB)
+          memcpy(&(p_Quant->OffsetList8x8[i][k][0]),&(Offset8_inter_default[0]),  64 * sizeof(short));
+  
+        // 5 (INTRA8X8_CHROMAU_INTRA)
+        memcpy(&(p_Quant->OffsetList8x8[i][5][0]),&(Offset8_intra_flat_chroma[0]), 64 * sizeof(short));
+        for (k = 6; k < 8; k++)  // 6,7 (INTRA8X8_CHROMAU_INTERP/INTERB)
+          memcpy(&(p_Quant->OffsetList8x8[i][k][0]),&(Offset8_intra_flat_inter[0]),  64 * sizeof(short));
+        for (k = 8; k < 10; k++)  // 8,9 (INTER8X8_CHROMAU_INTERP/INTERB)
+          memcpy(&(p_Quant->OffsetList8x8[i][k][0]),&(Offset8_inter_default[0]),  64 * sizeof(short));
 
-      // 5 (INTRA8X8_CHROMAU_INTRA)
-      memcpy(&(p_Quant->OffsetList8x8[i][5][0]),&(Offset8_intra_default_chroma[0]), 64 * sizeof(short));
-      for (k = 6; k < 8; k++)  // 6,7 (INTRA8X8_CHROMAU_INTERP/INTERB)
-        memcpy(&(p_Quant->OffsetList8x8[i][k][0]),&(Offset8_intra_default_inter[0]),  64 * sizeof(short));
-      for (k = 8; k < 10; k++)  // 8,9 (INTER8X8_CHROMAU_INTERP/INTERB)
-        memcpy(&(p_Quant->OffsetList8x8[i][k][0]),&(Offset8_inter_default[0]),  64 * sizeof(short));
+        // 10 (INTRA8X8_CHROMAV_INTRA)
+        memcpy(&(p_Quant->OffsetList8x8[i][10][0]),&(Offset8_intra_flat_chroma[0]), 64 * sizeof(short));
+        for (k = 11; k < 13; k++)  // 11,12 (INTRA8X8_CHROMAV_INTERP/INTERB)
+          memcpy(&(p_Quant->OffsetList8x8[i][k][0]),&(Offset8_intra_flat_inter[0]),  64 * sizeof(short));
+        for (k = 13; k < 15; k++)  // 8,9 (INTER8X8_CHROMAV_INTERP/INTERB)
+          memcpy(&(p_Quant->OffsetList8x8[i][k][0]),&(Offset8_inter_default[0]),  64 * sizeof(short));
+      }
+      else
+      {
+        // 0 (INTRA4X4_LUMA_INTRA)
+        memcpy(&(p_Quant->OffsetList4x4[i][0][0]),&(Offset_intra_default_intra[0]), 16 * sizeof(short));
+        for (k = 1; k < 3; k++) // 1,2 (INTRA4X4_CHROMA_INTRA)
+          memcpy(&(p_Quant->OffsetList4x4[i][k][0]),&(Offset_intra_default_chroma[0]),  16 * sizeof(short));
+        for (k = 3; k < 9; k++) // 3,4,5,6,7,8 (INTRA4X4_LUMA/CHROMA_INTERP/INTERB)
+          memcpy(&(p_Quant->OffsetList4x4[i][k][0]),&(Offset_intra_default_inter[0]),  16 * sizeof(short));
+        for (k = 9; k < 25; k++) // 9,10,11,12,13,14 (INTER4X4)
+          memcpy(&(p_Quant->OffsetList4x4[i][k][0]),&(Offset_inter_default[0]),  16 * sizeof(short));
+  
+        // 0 (INTRA8X8_LUMA_INTRA)
+        memcpy(&(p_Quant->OffsetList8x8[i][0][0]),&(Offset8_intra_default_intra[0]), 64 * sizeof(short));
+        for (k = 1; k < 3; k++)  // 1,2 (INTRA8X8_LUMA_INTERP/INTERB)
+          memcpy(&(p_Quant->OffsetList8x8[i][k][0]),&(Offset8_intra_default_inter[0]),  64 * sizeof(short));
+        for (k = 3; k < 5; k++)  // 3,4 (INTER8X8_LUMA_INTERP/INTERB)
+          memcpy(&(p_Quant->OffsetList8x8[i][k][0]),&(Offset8_inter_default[0]),  64 * sizeof(short));
+  
+        // 5 (INTRA8X8_CHROMAU_INTRA)
+        memcpy(&(p_Quant->OffsetList8x8[i][5][0]),&(Offset8_intra_default_chroma[0]), 64 * sizeof(short));
+        for (k = 6; k < 8; k++)  // 6,7 (INTRA8X8_CHROMAU_INTERP/INTERB)
+          memcpy(&(p_Quant->OffsetList8x8[i][k][0]),&(Offset8_intra_default_inter[0]),  64 * sizeof(short));
+        for (k = 8; k < 10; k++)  // 8,9 (INTER8X8_CHROMAU_INTERP/INTERB)
+          memcpy(&(p_Quant->OffsetList8x8[i][k][0]),&(Offset8_inter_default[0]),  64 * sizeof(short));
 
-      // 10 (INTRA8X8_CHROMAV_INTRA)
-      memcpy(&(p_Quant->OffsetList8x8[i][10][0]),&(Offset8_intra_default_chroma[0]), 64 * sizeof(short));
-      for (k = 11; k < 13; k++)  // 11,12 (INTRA8X8_CHROMAV_INTERP/INTERB)
-        memcpy(&(p_Quant->OffsetList8x8[i][k][0]),&(Offset8_intra_default_inter[0]),  64 * sizeof(short));
-      for (k = 13; k < 15; k++)  // 8,9 (INTER8X8_CHROMAV_INTERP/INTERB)
-        memcpy(&(p_Quant->OffsetList8x8[i][k][0]),&(Offset8_inter_default[0]),  64 * sizeof(short));
+        // 10 (INTRA8X8_CHROMAV_INTRA)
+        memcpy(&(p_Quant->OffsetList8x8[i][10][0]),&(Offset8_intra_default_chroma[0]), 64 * sizeof(short));
+        for (k = 11; k < 13; k++)  // 11,12 (INTRA8X8_CHROMAV_INTERP/INTERB)
+          memcpy(&(p_Quant->OffsetList8x8[i][k][0]),&(Offset8_intra_default_inter[0]),  64 * sizeof(short));
+        for (k = 13; k < 15; k++)  // 8,9 (INTER8X8_CHROMAV_INTERP/INTERB)
+          memcpy(&(p_Quant->OffsetList8x8[i][k][0]),&(Offset8_inter_default[0]),  64 * sizeof(short));
+      }
     }
   }  
 }

@@ -92,10 +92,12 @@ typedef struct storable_picture
   imgpel **** p_img_sub[MAX_PLANE];      //!< pointer array for storing top address of imgY_sub/imgUV_sub[]
   imgpel **   p_curr_img;                //!< current int-pel ref. picture area to be used for motion estimation
   imgpel **** p_curr_img_sub;            //!< current sub-pel ref. picture area to be used for motion estimation
-  //hme;
-  imgpel ***  p_hme_int_img;     //!< [level][y][x];
-  imgpel *****  p_hme_sub_img;   //!< [level][y_frac][x_frac][y][x];
-
+  
+  // Hierarchical ME Image buffer
+  imgpel ***  pHmeImage;     //!< Array allocated with dimensions [level][y][x];
+  int    *    pHmeWidth;     //!< Width of hierarchical image at each level
+  int    *    pHmeHeight;    //!< Height of hierarchical image at each level
+  
   Dist_Estm * de_mem; 
 
   PicMotionParams **mv_info;                 //!< Motion info
@@ -198,8 +200,11 @@ typedef struct decoded_picture_buffer
   unsigned      used_size_il;
 
   FrameFormat   storage_format;
+  
+  void (*pf_GetHMEIntImagesLuma)( VideoParameters *p_Vid, int size_x, int size_y, imgpel ***cImgInt);
 
-  void (*pf_luma_prediction)    ( Macroblock* currMB, int, int, int, int, int, int[2], char *, short );
+
+  void (*pf_luma_prediction)       ( Macroblock* currMB, int, int, int, int, int, int[2], char *, short );
   void (*pf_luma_prediction_bi)    ( Macroblock* currMB, int, int, int, int, int, int, short, short, int );
   void (*pf_chroma_prediction)     ( Macroblock* currMB, int, int, int, int, int, int, int, int, short, short, short );
   void (*pf_get_block_luma)        ( struct video_par *, imgpel*, int*, int, int, int, int, struct storable_picture*, int );

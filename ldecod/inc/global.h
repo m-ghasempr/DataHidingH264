@@ -224,7 +224,7 @@ typedef struct macroblock_dec
   Boolean       is_lossless;
   Boolean       is_intra_block;
   Boolean       is_v_block;
-  Boolean       DeblockCall;
+  int           DeblockCall;
 
   short         slice_nr;
   char          ei_flag;             //!< error indicator flag that enables concealment

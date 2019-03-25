@@ -12,6 +12,8 @@
 
 void print_usage(char *argv [])
 {
+  printf ("This tool allows dropping RTP packets from the given input file.");
+  printf ("Note: the input file needs to be a H.264/AVC RTP dump file (lencod: OutFileMode=1)");
   printf ("Usage: %s input_file output_file loss_percent <keep_leading_packets>\n", argv[0]);
   exit (-1);
 }
@@ -65,12 +67,12 @@ int main(int argc, char* argv[])
         return 0;
       if (4 != fread (&intime, 1, 4, fr))
       {
-        printf ("Panic, cannot read timestamp, old software version file?\n");
+        printf ("Panic, cannot read timestamp (is this a valid RTP dump file?)\n");
         return -1;
       }
       if (bufsize != fread (buf, 1, bufsize, fr))
       {
-        printf ("Problems while reading buffer, exit\n");
+        printf ("Cannot read packet with indicated length (is this a valid RTP dump file?), exit\n");
         return -3;
       }
 
@@ -100,12 +102,12 @@ int main(int argc, char* argv[])
       return 0;
     if (4 != fread (&intime, 1, 4, fr))
     {
-      printf ("Panic, cannot read timestamp, old software version file?\n");
+      printf ("Panic, cannot read timestamp (is this a valid RTP dump file?)\n");
       return -1;
     }
     if (bufsize != fread (buf, 1, bufsize, fr))
     {
-      printf ("Problems while reading buffer, exit\n");
+      printf ("Cannot read packet with indicated length (is this a valid RTP dump file?)\n");
       return -3;
     }
     if (keep_packet(atoi (argv[3])))

@@ -28,7 +28,7 @@
 #endif
 
 #define JM                  "18 (FRExt)"
-#define VERSION             "18.5"
+#define VERSION             "18.6"
 #define EXT_VERSION         "(FRExt)"
 
 #define GET_METIME                1    //!< Enables or disables ME computation time
