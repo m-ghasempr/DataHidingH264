@@ -12,7 +12,6 @@
  *************************************************************************************
  */
 
-#include <stdlib.h>
 #include <ctype.h>
 #include <limits.h>
 #include "global.h"
@@ -20,7 +19,6 @@
 #include "explicit_gop.h"
 #include "image.h"
 #include "nalucommon.h"
-#include "string.h"
 
 
 /*!
@@ -88,11 +86,12 @@ void create_hierarchy()
 
     for (j = 1; j < GOPlevels; j++)
     {
-      for (i = (1 << j) - 1; i < Bframes + 1 - (1 << j); i += (1 << j)) {
+      for (i = (1 << j) - 1; i < Bframes + 1 - (1 << j); i += (1 << j)) 
+      {
         gop_structure[i].hierarchy_layer  = j;
         gop_structure[i].reference_idc  = NALU_PRIORITY_LOW;
         gop_structure[i].slice_qp = imax(0, input->qpB + (input->HierarchyLevelQPEnable ? -j: input->qpBRSOffset));
-        //KHHan, for inter lossless code(refereced B picture)
+        //KHHan, for inter lossless code(referenced B picture)
         //if(!input->lossless_qpprime_y_zero_flag)
         //  gop_structure[i].slice_qp = imax(0, input->qpB + (input->HierarchyLevelQPEnable ? -j: input->qpBRSOffset));
         //else

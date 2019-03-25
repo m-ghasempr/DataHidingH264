@@ -15,8 +15,6 @@
  */
 
 
-#include <stdlib.h>
-
 #include "global.h"
 #include "memalloc.h"
 #include "erc_api.h"

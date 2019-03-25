@@ -20,7 +20,6 @@
 
 int    Mode_Decision_for_new_Intra8x8Macroblock (Macroblock *currMB, double lambda, double *min_cost);
 int    Mode_Decision_for_new_8x8IntraBlocks (Macroblock *currMB, int b8, double lambda, double *min_cost, int cr_cbp[3]);
-int    dct_8x8(Macroblock *currMB, ColorPlane pl, int b8,int *coeff_cost, int intra);
 
 double RDCost_for_8x8IntraBlocks(Macroblock *currMB, int *c_nz, int b8, int ipmode, double lambda, double min_rdcost, int mostProbableMode, int c_nzCbCr[3]);
 

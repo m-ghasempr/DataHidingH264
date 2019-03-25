@@ -19,10 +19,7 @@
  ***********************************************************************
  */
 
-#include <stdlib.h>
-#include <assert.h>
 #include <limits.h>
-#include <string.h>
 
 #include "global.h"
 #include "mbuffer.h"

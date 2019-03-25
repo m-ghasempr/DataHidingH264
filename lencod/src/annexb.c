@@ -12,9 +12,6 @@
  *************************************************************************************
  */
 
-#include <stdlib.h>
-#include <assert.h>
-
 #include "global.h"
 #include "nalucommon.h"
 
@@ -104,7 +101,8 @@ void OpenAnnexbFile (char *Filename)
  *    none.  Funtion trerminates the program in case of an error
  ********************************************************************************************
 */
-void CloseAnnexbFile(void) {
+void CloseAnnexbFile(void) 
+{
   if (fclose (f))
   {
     printf ("Fatal: cannot close Annex B bytestream file, exit (-1)\n");

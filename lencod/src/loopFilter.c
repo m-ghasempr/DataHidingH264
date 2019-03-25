@@ -19,9 +19,6 @@
  *    - Alexis Michael Tourapis atour@dolby.com:   Speed/Architecture improvements               (08-Feb-2007)
  *************************************************************************************
  */
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
 
 #include "global.h"
 #include "image.h"
@@ -218,7 +215,8 @@ void DeblockMb(ImageParameters *img, imgpel **imgY, imgpel ***imgUV, int MbQAddr
           }
         }
 
-        if (dir && !edge && !MbQ->mb_field && mixedModeEdgeFlag) {
+        if (dir && !edge && !MbQ->mb_field && mixedModeEdgeFlag) 
+        {
           // this is the extra horizontal edge between a frame macroblock pair and a field above it
           img->DeblockCall = 2;
           GetStrength(Strength, img, MbQAddr, dir, MB_BLOCK_SIZE, mvlimit); // Strength for 4 blks in 1 stripe

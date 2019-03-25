@@ -14,9 +14,6 @@
  *    17. April 2001
  **************************************************************************/
 
-#include <stdlib.h>
-#include <memory.h>
-
 #include "global.h"
 
 #include "rdopt_coding_state.h"
@@ -135,7 +132,9 @@ store_coding_state (Macroblock *currMB, CSptr cs)
 
   //=== elements of current macroblock ===
   memcpy (cs->mvd, currMB->mvd, BLOCK_CONTEXT * sizeof(int));
-  memcpy (cs->cbp_bits    , currMB->cbp_bits    , 3 * sizeof(int64));
+  memcpy (cs->cbp_bits, currMB->cbp_bits, 3 * sizeof(int64));
+  
+  if (img->yuv_format==YUV444 && !IS_INDEPENDENT(input))
   memcpy (cs->cbp_bits_8x8, currMB->cbp_bits_8x8, 3 * sizeof(int64));
 }
 
@@ -185,7 +184,8 @@ void reset_coding_state (Macroblock *currMB, CSptr cs)
 
   //=== elements of current macroblock ===
   memcpy (currMB->mvd, cs->mvd, BLOCK_CONTEXT * sizeof(int));
-  memcpy (currMB->cbp_bits    , cs->cbp_bits    , 3 * sizeof(int64));
-  memcpy (currMB->cbp_bits_8x8, cs->cbp_bits_8x8, 3 * sizeof(int64));
+  memcpy (currMB->cbp_bits, cs->cbp_bits, 3 * sizeof(int64));
+  if(img->yuv_format==YUV444 && !IS_INDEPENDENT(input))
+    memcpy (currMB->cbp_bits_8x8, cs->cbp_bits_8x8, 3 * sizeof(int64));
 }
 

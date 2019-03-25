@@ -24,10 +24,6 @@ void  terminate_macroblock(Macroblock* currMB, Boolean *end_of_slice, Boolean *r
 
 void  write_one_macroblock(Macroblock* currMB, int eos_bit);
 
-void LumaPrediction   (Macroblock* currMB, int, int, int, int, int, int, int, short, short );
-void LumaPredictionBi (Macroblock* currMB, int, int, int, int, int, int, short, short, int );
-void ChromaPrediction (Macroblock* currMB, int, int, int, int, int, int, int, int, short, short );
-
 int  LumaResidualCoding8x8 (Macroblock* currMB, int*, int64*, int, short, int, int, short, short);
 void LumaResidualCoding (Macroblock *currMB);
 

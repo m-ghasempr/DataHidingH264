@@ -5,7 +5,7 @@
  *    parset.h
  * \brief
  *    Picture and Sequence Parameter Sets, decoder operations
- *    This code reflects JVT version xxx
+ * 
  * \date 25 November 2002
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)

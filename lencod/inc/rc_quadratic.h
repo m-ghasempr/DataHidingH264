@@ -19,8 +19,6 @@
 #ifndef _RC_QUADRATIC_H_
 #define _RC_QUADRATIC_H_
 
-#include "ratectl.h"
-
 #define RC_MODEL_HISTORY 21
 
 typedef struct

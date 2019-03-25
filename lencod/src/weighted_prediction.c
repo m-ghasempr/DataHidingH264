@@ -12,11 +12,9 @@
 *     - Athanasios Leontaris            <aleon@dolby.com>
 *************************************************************************************
 */
-#include <stdlib.h>
 #include "contributors.h"
 
 #include "global.h"
-#include <memory.h>
 #include "image.h"
 
 

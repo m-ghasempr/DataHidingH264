@@ -15,7 +15,6 @@
 
 #define CONTEXT_INI_C
 
-#include <stdlib.h>
 #include <math.h>
 
 #include "global.h"

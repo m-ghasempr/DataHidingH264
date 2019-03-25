@@ -8,11 +8,11 @@
  *
  *************************************************************************************
  */
-#include <stdlib.h>
-#include <string.h>
 
 #include "global.h"
 #include "memalloc.h"
+#include "q_matrix.h"
+#include "q_offsets.h"
 
 extern char *GetConfigFileContent (char *Filename, int error_type);
 
@@ -427,6 +427,7 @@ void Init_QOffsetMatrix ()
  *    none
  ************************************************************************
  */
+
 void InitOffsetParam ()
 {
   int i, k;
@@ -437,8 +438,8 @@ void InitOffsetParam ()
   {
     if (input->OffsetMatrixPresentFlag)
     {
-      memcpy(&(OffsetList4x4[i][0][0]),&(OffsetList4x4input[0][0]), 25 * 16 * sizeof(short));
-      memcpy(&(OffsetList8x8[i][0][0]),&(OffsetList8x8input[0][0]), 15 * 64 * sizeof(short));
+      memcpy(&(OffsetList4x4[i][0][0]),&(OffsetList4x4input[0][0]), 400 * sizeof(short)); // 25 * 16
+      memcpy(&(OffsetList8x8[i][0][0]),&(OffsetList8x8input[0][0]), 960 * sizeof(short)); // 15 * 64
     }
     else
     {

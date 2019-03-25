@@ -23,9 +23,6 @@
 #include "contributors.h"
 
 #include <math.h>
-#include <stdlib.h>
-#include <assert.h>
-#include <string.h>
 
 #include "global.h"
 #include "mbuffer.h"
@@ -2610,6 +2607,9 @@ void readLumaCoeff8x8_CABAC (Macroblock *currMB, ColorPlane pl, struct img_par *
     else
       currSE.context = CR_8x8;  
 
+    if( IS_INDEPENDENT(img) )
+      currSE.context = LUMA_8x8;
+
     if(!lossless_qpprime)
     {
       for(k=start_scan;(k < 65) && (level != 0);k++)
@@ -3346,6 +3346,9 @@ void readCBPandCoeffsFromNAL(Macroblock *currMB, struct img_par *img,struct inp_
           else
             currSE.context   = CR_16DC; 
 
+		  if( IS_INDEPENDENT(img) )
+            currSE.context   = LUMA_16DC; 
+
           currSE.type         = SE_LUM_DC_INTRA;
           img->is_intra_block = 1;
 
@@ -3572,6 +3575,9 @@ void readCBPandCoeffsFromNAL(Macroblock *currMB, struct img_par *img,struct inp_
                         else
                           currSE.context = (IS_NEWINTRA(currMB) ? CR_16AC: CR_4x4);
 
+						if( IS_INDEPENDENT(img) )
+                          currSE.context = (IS_NEWINTRA(currMB) ? LUMA_16AC: LUMA_4x4);
+
                         currSE.type         = (img->is_intra_block 
                           ? (k==0 ? SE_LUM_DC_INTRA : SE_LUM_AC_INTRA) 
                           : (k==0 ? SE_LUM_DC_INTER : SE_LUM_AC_INTER)); 
@@ -3621,6 +3627,9 @@ void readCBPandCoeffsFromNAL(Macroblock *currMB, struct img_par *img,struct inp_
                           currSE.context = (IS_NEWINTRA(currMB) ? CB_16AC: CB_4x4);
                         else
                           currSE.context = (IS_NEWINTRA(currMB) ? CR_16AC: CR_4x4);
+
+						if( IS_INDEPENDENT(img) )
+                          currSE.context = (IS_NEWINTRA(currMB) ? LUMA_16AC: LUMA_4x4);
 
                         currSE.type         = (img->is_intra_block 
                           ? (k==0 ? SE_LUM_DC_INTRA : SE_LUM_AC_INTRA) 
@@ -3887,34 +3896,34 @@ void readCBPandCoeffsFromNAL(Macroblock *currMB, struct img_par *img,struct inp_
               {
                 if(intra == 1)
                 {
-                  imgcof[i<<2][ 0] = ((((m6[0]+m6[3])*InvLevelScale4x4Chroma_Intra[uv][qp_rem_uv_dc][0][0]+(1<<(3-qp_per_uv_dc)))>>(4-qp_per_uv_dc))+2)>>2;
-                  imgcof[i<<2][ 4] = ((((m6[1]+m6[2])*InvLevelScale4x4Chroma_Intra[uv][qp_rem_uv_dc][0][0]+(1<<(3-qp_per_uv_dc)))>>(4-qp_per_uv_dc))+2)>>2;
-                  imgcof[i<<2][ 8] = ((((m6[1]-m6[2])*InvLevelScale4x4Chroma_Intra[uv][qp_rem_uv_dc][0][0]+(1<<(3-qp_per_uv_dc)))>>(4-qp_per_uv_dc))+2)>>2;
-                  imgcof[i<<2][12] = ((((m6[0]-m6[3])*InvLevelScale4x4Chroma_Intra[uv][qp_rem_uv_dc][0][0]+(1<<(3-qp_per_uv_dc)))>>(4-qp_per_uv_dc))+2)>>2;
+                  imgcof[ 0][i<<2] = ((((m6[0]+m6[3])*InvLevelScale4x4Chroma_Intra[uv][qp_rem_uv_dc][0][0]+(1<<(3-qp_per_uv_dc)))>>(4-qp_per_uv_dc))+2)>>2;
+                  imgcof[ 4][i<<2] = ((((m6[1]+m6[2])*InvLevelScale4x4Chroma_Intra[uv][qp_rem_uv_dc][0][0]+(1<<(3-qp_per_uv_dc)))>>(4-qp_per_uv_dc))+2)>>2;
+                  imgcof[ 8][i<<2] = ((((m6[1]-m6[2])*InvLevelScale4x4Chroma_Intra[uv][qp_rem_uv_dc][0][0]+(1<<(3-qp_per_uv_dc)))>>(4-qp_per_uv_dc))+2)>>2;
+                  imgcof[12][i<<2] = ((((m6[0]-m6[3])*InvLevelScale4x4Chroma_Intra[uv][qp_rem_uv_dc][0][0]+(1<<(3-qp_per_uv_dc)))>>(4-qp_per_uv_dc))+2)>>2;
                 }
                 else
                 {
-                  imgcof[i<<2][ 0] = ((((m6[0]+m6[3])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_uv_dc][0][0]+(1<<(3-qp_per_uv_dc)))>>(4-qp_per_uv_dc))+2)>>2;
-                  imgcof[i<<2][ 4] = ((((m6[1]+m6[2])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_uv_dc][0][0]+(1<<(3-qp_per_uv_dc)))>>(4-qp_per_uv_dc))+2)>>2;
-                  imgcof[i<<2][ 8] = ((((m6[1]-m6[2])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_uv_dc][0][0]+(1<<(3-qp_per_uv_dc)))>>(4-qp_per_uv_dc))+2)>>2;
-                  imgcof[i<<2][12] = ((((m6[1]-m6[2])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_uv_dc][0][0]+(1<<(3-qp_per_uv_dc)))>>(4-qp_per_uv_dc))+2)>>2;
+                  imgcof[ 0][i<<2] = ((((m6[0]+m6[3])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_uv_dc][0][0]+(1<<(3-qp_per_uv_dc)))>>(4-qp_per_uv_dc))+2)>>2;
+                  imgcof[ 4][i<<2] = ((((m6[1]+m6[2])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_uv_dc][0][0]+(1<<(3-qp_per_uv_dc)))>>(4-qp_per_uv_dc))+2)>>2;
+                  imgcof[ 8][i<<2] = ((((m6[1]-m6[2])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_uv_dc][0][0]+(1<<(3-qp_per_uv_dc)))>>(4-qp_per_uv_dc))+2)>>2;
+                  imgcof[12][i<<2] = ((((m6[1]-m6[2])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_uv_dc][0][0]+(1<<(3-qp_per_uv_dc)))>>(4-qp_per_uv_dc))+2)>>2;
                 }
               }
               else
               {
                 if(intra == 1)
                 {
-                  imgcof[i<<2][ 0] = ((((m6[0]+m6[3])*InvLevelScale4x4Chroma_Intra[uv][qp_rem_uv_dc][0][0])<<(qp_per_uv_dc-4))+2)>>2;
-                  imgcof[i<<2][ 4] = ((((m6[1]+m6[2])*InvLevelScale4x4Chroma_Intra[uv][qp_rem_uv_dc][0][0])<<(qp_per_uv_dc-4))+2)>>2;
-                  imgcof[i<<2][ 8] = ((((m6[1]-m6[2])*InvLevelScale4x4Chroma_Intra[uv][qp_rem_uv_dc][0][0])<<(qp_per_uv_dc-4))+2)>>2;
-                  imgcof[i<<2][12] = ((((m6[0]-m6[3])*InvLevelScale4x4Chroma_Intra[uv][qp_rem_uv_dc][0][0])<<(qp_per_uv_dc-4))+2)>>2;
+                  imgcof[ 0][i<<2] = ((((m6[0]+m6[3])*InvLevelScale4x4Chroma_Intra[uv][qp_rem_uv_dc][0][0])<<(qp_per_uv_dc-4))+2)>>2;
+                  imgcof[ 4][i<<2] = ((((m6[1]+m6[2])*InvLevelScale4x4Chroma_Intra[uv][qp_rem_uv_dc][0][0])<<(qp_per_uv_dc-4))+2)>>2;
+                  imgcof[ 8][i<<2] = ((((m6[1]-m6[2])*InvLevelScale4x4Chroma_Intra[uv][qp_rem_uv_dc][0][0])<<(qp_per_uv_dc-4))+2)>>2;
+                  imgcof[12][i<<2] = ((((m6[0]-m6[3])*InvLevelScale4x4Chroma_Intra[uv][qp_rem_uv_dc][0][0])<<(qp_per_uv_dc-4))+2)>>2;
                 }
                 else
                 {
-                  imgcof[i<<2][ 0] = ((((m6[0]+m6[3])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_uv_dc][0][0])<<(qp_per_uv_dc-4))+2)>>2;
-                  imgcof[i<<2][ 4] = ((((m6[1]+m6[2])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_uv_dc][0][0])<<(qp_per_uv_dc-4))+2)>>2;
-                  imgcof[i<<2][ 8] = ((((m6[1]-m6[2])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_uv_dc][0][0])<<(qp_per_uv_dc-4))+2)>>2;
-                  imgcof[i<<2][12] = ((((m6[0]-m6[3])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_uv_dc][0][0])<<(qp_per_uv_dc-4))+2)>>2;
+                  imgcof[ 0][i<<2] = ((((m6[0]+m6[3])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_uv_dc][0][0])<<(qp_per_uv_dc-4))+2)>>2;
+                  imgcof[ 4][i<<2] = ((((m6[1]+m6[2])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_uv_dc][0][0])<<(qp_per_uv_dc-4))+2)>>2;
+                  imgcof[ 8][i<<2] = ((((m6[1]-m6[2])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_uv_dc][0][0])<<(qp_per_uv_dc-4))+2)>>2;
+                  imgcof[12][i<<2] = ((((m6[0]-m6[3])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_uv_dc][0][0])<<(qp_per_uv_dc-4))+2)>>2;
                 }
               }
             }//for (i=0;i<2;i++)

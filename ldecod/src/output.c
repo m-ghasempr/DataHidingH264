@@ -14,16 +14,6 @@
 
 #include "contributors.h"
 
-#include <stdlib.h>
-#include <assert.h>
-#include <string.h>
-
-#ifdef WIN32
-#include <io.h>
-#else
-#include <unistd.h>
-#endif
-
 #include "global.h"
 #include "mbuffer.h"
 #include "image.h"

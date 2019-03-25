@@ -15,7 +15,6 @@
 #ifndef _ERC_GLOBALS_H_
 #define _ERC_GLOBALS_H_
 
-#include <string.h>
 #include "defines.h"
 
 /* "block" means an 8x8 pixel area */

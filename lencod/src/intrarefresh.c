@@ -14,9 +14,6 @@
  *    Stephan Wenger   stewe@cs.tu-berlin.de
  *****************************************************************************/
 
-#include <stdlib.h>
-#include <assert.h>
-
 #include "global.h"
 
 static int *RefreshPattern;

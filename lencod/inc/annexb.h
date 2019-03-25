@@ -5,7 +5,7 @@
  *    annexb.h
  * \brief
  *    Byte stream operations support
- *    This code reflects JVT version xxx
+ *
  *  \date 7 December 2002
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)

@@ -2,7 +2,7 @@
 /*!
  ***************************************************************************
  *
- * \file transform4x4.h
+ * \file transform.h
  *
  * \brief
 *    prototypes of 4x4 transform functions

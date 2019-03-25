@@ -13,11 +13,6 @@
  */
 
 #include "contributors.h"
-
-#include <stdlib.h>
-#include <assert.h>
-#include <string.h>
-
 #include "global.h"
 #include "image.h"
 

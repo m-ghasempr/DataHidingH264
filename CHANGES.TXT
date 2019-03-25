@@ -1,3 +1,14 @@
+Changes in Version JM 13.1 (since JM 13.0)
+------------------------------------------
+- encoder: 4:4:4 performance fix (4x4 intra) (KS)
+- encoder: always use ChromaMEEnable for 4:4:4 common mode (KS)
+- decoder: fix slice_group_id allocation (KS)
+- encoder/decoder: fix inline functions for compilers without c99 support (KS)
+- encoder/decoder: makefile updates (LW/KS)
+- encoder/decoder: 4:0:0 fixes (KS)
+
+
+
 Changes in Version JM 13.0 (since JM 12.4)
 ------------------------------------------
 Professional Profiles:

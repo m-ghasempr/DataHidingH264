@@ -17,7 +17,11 @@
 #ifndef _IFUNCTIONS_H_
 #define _IFUNCTIONS_H_
 
-# if defined(WIN32) || (__STDC_VERSION__ >= 199901L)
+# if !defined(WIN32) && (__STDC_VERSION__ < 199901L)
+  #define static
+  #define inline
+#endif
+
 static inline int imin(int a, int b)
 {
   return ((a) < (b)) ? (a) : (b);
@@ -68,7 +72,8 @@ static inline double dabs2(double x)
   return (x) * (x);
 }
 
-static inline int iabs2(int x) {
+static inline int iabs2(int x) 
+{
   return (x) * (x);
 }
 
@@ -151,34 +156,10 @@ static inline int float2int (float x)
   return (int)((x < 0) ? (x - 0.5f) : (x + 0.5f));
 }
 
-# else
+# if !defined(WIN32) && (__STDC_VERSION__ < 199901L)
+  #undef static
+  #undef inline
+#endif
 
-#  define imin(a, b)                  (((a) < (b)) ? (a) : (b))
-#  define imax(a, b)                  (((a) > (b)) ? (a) : (b))
-#  define dmin(a, b)                  (((a) < (b)) ? (a) : (b))
-#  define dmax(a, b)                  (((a) > (b)) ? (a) : (b))
-#  define i64min(a, b)                (((a) < (b)) ? (a) : (b))
-#  define i64max(a, b)                (((a) > (b)) ? (a) : (b))
-#  define iabs(x)                     (((x) < 0)   ? -(x) : (x))
-#  define dabs(x)                     (((x) < 0)   ? -(x) : (x))
-#  define i64abs(x)                   (((x) < 0)   ? -(x) : (x))
-#  define iabs2(x)                    ((x) * (x))
-#  define dabs2(x)                    ((x) * (x))
-#  define i64abs2(x)                  ((x) * (x))
-#  define isign(x)                    (((x) < 0)   ? -1 : 1)
-#  define isignab(a, b)               (((b) < 0)   ? -iabs(a) : iabs(a))
-#  define rshift_rnd(x, a)            (((a) > 0)   ? (((x) + (1 << ((a)-1))) >> (a)) : ((x) << (-(a))))
-#  define rshift_rnd_us(x, a)         (((a) > 0)   ? (((x) + (1 << ((a)-1))) >> (a)) : (x))
-#  define rshift_rnd_sf(x, a)         (((x) + (1 << ((a)-1))) >> (a))
-#  define rshift_rnd_us_sf(x, a)      (((x) + (1 << ((a)-1))) >> (a))
-#  define iClip1(high, x)             (imax( imin(x, high), 0))
-#  define iClip3(low, high, x)        (imax( imin(x, high), low))
-#  define dClip3(low, high, x)        (dmax( dmin(x, high), low))
-#  define RSD(x)                      (((x)&2)?((x)|1):((x)&(~1)))
-#  define power2(x)                   (1 << (x))
-#  define weighted_cost(factor, bits) (((factor)*(bits))>>LAMBDA_ACCURACY_BITS)
-#  define float2int(x)                ((int)(((x) < 0)   ? ((x) - 0.5f) : ((x) + 0.5f)))
-
-# endif
 #endif
 

@@ -9,11 +9,6 @@
  *************************************************************************************
  */
 
-#include <stdlib.h>
-#include <assert.h>
-#include <string.h>
-#include <stdio.h>
-
 #include "global.h"
 #include "elements.h"
 #include "defines.h"
@@ -794,7 +789,8 @@ void decode_poc(struct img_par *img)
  *    none
  ************************************************************************
  */
-int dumppoc(struct img_par *img) {
+int dumppoc(struct img_par *img) 
+{
     printf ("\nPOC locals...\n");
     printf ("toppoc                                %d\n", img->toppoc);
     printf ("bottompoc                             %d\n", img->bottompoc);

@@ -1,8 +1,8 @@
 ###
-###     Makefile for H.26L encoder
+###     Makefile for H.264/AVC encoder
 ###
 ###             generated for UNIX/LINUX environments
-###             by H. Schwarz
+###             by H. Schwarz, Limin Wang
 ###
 
 
@@ -10,7 +10,7 @@
 NAME=   lencod
 
 ### include debug information: 1=yes, 0=no
-#DBG= 0
+DBG?= 0
 
 DEPEND= dependencies
 
@@ -28,7 +28,7 @@ LIBS=   -lm
 CFLAGS=  -std=gnu99 -pedantic -ffloat-store -fno-strict-aliasing
 FLAGS=  $(CFLAGS) -Wall -I$(INCDIR) -I$(ADDINCDIR) -D __USE_LARGEFILE64 -D _FILE_OFFSET_BITS=64
 
-ifdef DBG
+ifeq ($(DBG),1)
 SUFFIX= .dbg
 FLAGS+= -g
 else
@@ -43,15 +43,17 @@ ADDSRC= $(wildcard $(ADDSRCDIR)/*.c)
 OBJ=    $(SRC:$(SRCDIR)/%.c=$(OBJDIR)/%.o$(SUFFIX)) $(ADDSRC:$(ADDSRCDIR)/%.c=$(OBJDIR)/%.o$(SUFFIX)) 
 BIN=    $(BINDIR)/$(NAME)$(SUFFIX).exe
 
+.PHONY: default distclean clean tags depend
 
-default: depend bin tags
-
-dependencies:
-	@echo "" >dependencies
+default: objdir_mk depend bin 
 
 clean:
 	@echo remove all objects
-	@rm -f $(OBJDIR)/*
+	@rm -rf $(OBJDIR)
+
+distclean: clean
+	@rm -f $(DEPEND) tags
+	@rm -f $(BIN)
 
 tags:
 	@echo update tag table
@@ -80,6 +82,9 @@ $(OBJDIR)/%.o$(SUFFIX): $(ADDSRCDIR)/%.c
 	@echo 'compiling object file "$@" ...'
 	@$(CC) -c -o $@ $(FLAGS) $<
 
+objdir_mk:
+	@echo 'Creating $(OBJDIR) ...'
+	@mkdir -p $(OBJDIR)
 
-include $(DEPEND)
+-include $(DEPEND)
 

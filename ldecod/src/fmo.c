@@ -14,12 +14,6 @@
  ******************************************************************************
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
-
-
 #include "global.h"
 #include "elements.h"
 #include "defines.h"

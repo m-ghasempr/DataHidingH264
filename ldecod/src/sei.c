@@ -14,9 +14,6 @@
 
 #include "contributors.h"
 
-#include <stdlib.h>
-#include <assert.h>
-#include <string.h>
 #include <math.h>
 #include "global.h"
 #include "memalloc.h"
@@ -855,9 +852,11 @@ void interpret_pan_scan_rect_info( byte* payload, int size, ImageParameters *img
   pan_scan_rect_id = ue_v("SEI: pan_scan_rect_id", buf);
 
   pan_scan_rect_cancel_flag = u_1("SEI: pan_scan_rect_cancel_flag", buf);
-  if (!pan_scan_rect_cancel_flag) {
+  if (!pan_scan_rect_cancel_flag) 
+  {
     pan_scan_cnt_minus1 = ue_v("SEI: pan_scan_cnt_minus1", buf);
-    for (i = 0; i <= pan_scan_cnt_minus1; i++) {
+    for (i = 0; i <= pan_scan_cnt_minus1; i++) 
+    {
       pan_scan_rect_left_offset   = se_v("SEI: pan_scan_rect_left_offset"  , buf);
       pan_scan_rect_right_offset  = se_v("SEI: pan_scan_rect_right_offset" , buf);
       pan_scan_rect_top_offset    = se_v("SEI: pan_scan_rect_top_offset"   , buf);

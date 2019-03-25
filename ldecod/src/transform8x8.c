@@ -18,10 +18,6 @@
 
 #include "global.h"
 
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
-
 #include "image.h"
 #include "mb_access.h"
 #include "elements.h"
@@ -945,8 +941,8 @@ void itrans8x8(ColorPlane pl,
     for( j = joff; j < joff + 8; j++)
     {
       for( i = ioff; i < ioff + 8; i++)
-        m7[j][i] = iClip1(img->max_imgpel_value,  
-        rshift_rnd_sf((m7[j][i]+((long)mpr[j][i] << DQ_BITS_8)),DQ_BITS_8)); 
+        m7[j][i] = iClip1(max_imgpel_value, 
+        rshift_rnd_sf((m7[j][i] + ((long)mpr[j][i] << DQ_BITS_8)), DQ_BITS_8)); 
     }
   }
 }

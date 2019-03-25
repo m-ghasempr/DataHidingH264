@@ -87,13 +87,6 @@
 */
 
 #include "contributors.h"
-
-#include <assert.h>
-#include <stdlib.h>
-#include <math.h>
-#include <string.h>
-#include <ctype.h>
-
 #include "global.h"
 #include "errorconcealment.h"
 #include "rtp.h"

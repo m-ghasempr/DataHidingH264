@@ -26,8 +26,10 @@
 #ifndef _GLOBAL_H_
 #define _GLOBAL_H_
 
-#include <stdio.h>
+#include <stdlib.h>
 #include <stdarg.h>
+#include <string.h>
+#include <assert.h>
 
 #include <time.h>
 #include <sys/timeb.h>

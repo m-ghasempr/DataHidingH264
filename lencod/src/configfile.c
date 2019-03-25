@@ -58,14 +58,9 @@
 
 #define INCLUDED_BY_CONFIGFILE_C
 
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
-#include <fcntl.h>
 #include <sys/stat.h>
 
 #include "global.h"
-#include "win32.h"
 #include "configfile.h"
 #include "fmo.h"
 
@@ -1194,14 +1189,22 @@ static void PatchInp (void)
   }
 
   // check consistency
-  if ( input->ChromaMEEnable && !(input->ChromaMCBuffer) ) {
+  if ( input->ChromaMEEnable && !(input->ChromaMCBuffer) ) 
+  {
     snprintf(errortext, ET_SIZE, "\nChromaMCBuffer must be set to 1 if ChromaMEEnable is set.");
     error (errortext, 500);
   }
 
-  if ( input->ChromaMEEnable && input->yuv_format ==  YUV400) {
-    snprintf(errortext, ET_SIZE, "\nChromaMEEnable cannot be used with YUV400 color format.");
+  if ( input->ChromaMEEnable && input->yuv_format ==  YUV400) 
+  {
+    fprintf(stderr, "Warning: ChromaMEEnable cannot be used with YUV400 color format, disabling ChromaMEEnable.\n");
     input->ChromaMEEnable = 0;
+  }
+
+  if ( (0 == input->ChromaMCBuffer) && (( input->yuv_format ==  YUV444) && (!input->separate_colour_plane_flag)) )
+  {
+    fprintf(stderr, "Warning: Enabling ChromaMCBuffer for YUV444 combined color coding.\n");
+    input->ChromaMCBuffer = 1;
   }
 
   if (input->EnableOpenGOP && input->PicInterlace)

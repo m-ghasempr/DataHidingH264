@@ -17,10 +17,7 @@
  **************************************************************************
  */
 
-#include <stdlib.h>
 #include <math.h>
-#include <assert.h>
-#include <memory.h>
 #include <limits.h>
 
 #include "global.h"
@@ -775,7 +772,7 @@ void rc_update_pict(rc_quadratic *prc, int nbits)
  * \brief
  *    update one picture after coding
  *
- * \param nbits
+ * \param bits
  *    number of bits used for picture
  *
  *************************************************************************************
@@ -2578,7 +2575,7 @@ void rc_init_top_field ( void )
   img->BasicUnit = input->basicunit;
   generic_RC->TopFieldFlag = 1;
   rc_init_pict_ptr(quadratic_RC, 0, 1, (input->PicInterlace == FIELD_CODING), 1.0F); 
-  img->qp = updateQP(quadratic_RC, 1);  
+  img->qp = updateQP(quadratic_RC, 1);
 }
 
 void rc_init_bottom_field ( int TopFieldBits )

@@ -11,11 +11,6 @@
  *    Stephan Wenger    stewe@cs.tu-berlin.de
  *****************************************************************************/
 
-#include <stdlib.h>
-#include <assert.h>
-#include <memory.h>
-
-
 #ifdef WIN32
 #include <Winsock2.h>
 #else

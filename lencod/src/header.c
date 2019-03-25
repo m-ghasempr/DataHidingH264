@@ -14,9 +14,6 @@
  */
 
 #include <math.h>
-#include <assert.h>
-#include <string.h>
-#include <stdlib.h>
 
 #include "global.h"
 
@@ -24,7 +21,6 @@
 #include "header.h"
 #include "rtp.h"
 #include "mbuffer.h"
-#include "defines.h"
 #include "vlc.h"
 #include "parset.h"
 

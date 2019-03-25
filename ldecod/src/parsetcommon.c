@@ -2,7 +2,7 @@
 /*!
  **************************************************************************************
  * \file
- *    parset.c
+ *    parsetcommon.c
  * \brief
  *    Picture and Sequence Parameter set generation and handling
  *  \date 25 November 2002
@@ -12,10 +12,8 @@
  *
  **************************************************************************************
  */
-#include <assert.h>
-#include <stdio.h>
-#include <stdlib.h>
 
+#include "global.h"
 #include "parsetcommon.h"
 #include "memalloc.h"
 /*!

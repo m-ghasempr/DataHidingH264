@@ -14,7 +14,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 13.0 (FRExt)
+ *     JM 13.1 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -44,8 +44,6 @@
 
 #include "contributors.h"
 
-#include <stdlib.h>
-#include <string.h>
 #include <time.h>
 #include <math.h>
 #include <sys/timeb.h>
@@ -69,9 +67,11 @@
 #include "explicit_gop.h"
 #include "context_ini.h"
 
+#include "q_matrix.h"
+#include "q_offsets.h"
 
 #define JM      "13 (FRExt)"
-#define VERSION "13.0"
+#define VERSION "13.1"
 #define EXT_VERSION "(FRExt)"
 
 InputParameters inputs,      *input = &inputs;
@@ -1614,33 +1614,35 @@ void report()
     name[i] = input->infile[i + imax(0, ((int) strlen(input->infile)) - 40)]; // write last part of path, max 40 chars
   fprintf(p_log,"%40.40s|",name);
 
-  fprintf(p_log,"%5d |", input->no_frames);
-  fprintf(p_log,"  %d/%d  |", input->PicInterlace, input->MbInterlace);
-  fprintf(p_log," %-3d|", input->qp0);
-  fprintf(p_log," %-3d|", input->qpN);
-  fprintf(p_log," %-3d|", input->qpB);
+  fprintf(p_log,"%5d |  %d/%d  |", input->no_frames, input->PicInterlace, input->MbInterlace);
+  fprintf(p_log," %-3d| %-3d| %-3d|", input->qp0, input->qpN, input->qpB);
 
   fprintf(p_log,"%4dx%-4d|", input->img_width, input->img_height);
+  fprintf(p_log,"  %3d  |%3d |", input->intra_period, stats->successive_Bframe);
 
-  fprintf(p_log,"  %3d  |", input->intra_period);
-  fprintf(p_log,"%3d |", stats->successive_Bframe);
 
-  if (input->SearchMode == UM_HEX)
-    fprintf(p_log,"  HEX |");
-  else if (input->SearchMode == UM_HEX_SIMPLE)
-    fprintf(p_log," SHEX |");
-  else if (input->SearchMode == EPZS)
-    fprintf(p_log," EPZS |");
-  else if (input->SearchMode == FAST_FULL_SEARCH)
-    fprintf(p_log,"  FFS |");
-  else
-    fprintf(p_log,"  FS  |");
+  switch( input->SearchMode ) 
+  {
+    case UM_HEX:
+      fprintf(p_log,"  HEX |");
+      break;
+    case UM_HEX_SIMPLE:
+      fprintf(p_log," SHEX |");
+      break;
+    case EPZS:
+      fprintf(p_log," EPZS |");
+      break;
+    case FAST_FULL_SEARCH:
+      fprintf(p_log,"  FFS |");
+      break;
+    default:
+      fprintf(p_log,"  FS  |");
+      break;
+  }
 
   fprintf(p_log,"  %1d%1d%1d |", input->MEErrorMetric[F_PEL], input->MEErrorMetric[H_PEL], input->MEErrorMetric[Q_PEL]);
 
-  fprintf(p_log," %3d |", input->search_range );
-
-  fprintf(p_log," %2d  |", input->num_ref_frames);
+  fprintf(p_log," %3d | %2d  |", input->search_range, input->num_ref_frames );
 
   fprintf(p_log," %5.2f|", (img->framerate *(float) (stats->successive_Bframe + 1)) / (float)(input->jumpd + 1));
 
@@ -1658,30 +1660,18 @@ void report()
 
   fprintf(p_log,"  %d  |", input->Transform8x8Mode);
 
-  fprintf(p_log,"%7.3f|", snr->snr_y1);
-  fprintf(p_log,"%7.3f|", snr->snr_u1);
-  fprintf(p_log,"%7.3f|", snr->snr_v1);
-  fprintf(p_log,"%7.3f|", snr->snr_ya);
-  fprintf(p_log,"%7.3f|", snr->snr_ua);
-  fprintf(p_log,"%7.3f|", snr->snr_va);
+  fprintf(p_log,"%7.3f|%7.3f|%7.3f|", snr->snr_y1,snr->snr_u1,snr->snr_v1);
+  fprintf(p_log,"%7.3f|%7.3f|%7.3f|", snr->snr_ya,snr->snr_ua,snr->snr_va);
   /*
-  fprintf(p_log,"%-5.3f|", snr->snr_yt[I_SLICE]);
-  fprintf(p_log,"%-5.3f|", snr->snr_ut[I_SLICE]);
-  fprintf(p_log,"%-5.3f|", snr->snr_vt[I_SLICE]);
-  fprintf(p_log,"%-5.3f|", snr->snr_yt[P_SLICE]);
-  fprintf(p_log,"%-5.3f|", snr->snr_ut[P_SLICE]);
-  fprintf(p_log,"%-5.3f|", snr->snr_vt[P_SLICE]);
-  fprintf(p_log,"%-5.3f|", snr->snr_yt[B_SLICE]);
-  fprintf(p_log,"%-5.3f|", snr->snr_ut[B_SLICE]);
-  fprintf(p_log,"%-5.3f|", snr->snr_vt[B_SLICE]);
+  fprintf(p_log,"%-5.3f|%-5.3f|%-5.3f|", snr->snr_yt[I_SLICE], snr->snr_ut[I_SLICE], snr->snr_vt[I_SLICE]);
+  fprintf(p_log,"%-5.3f|%-5.3f|%-5.3f|", snr->snr_yt[P_SLICE], snr->snr_ut[P_SLICE], snr->snr_vt[P_SLICE]);
+  fprintf(p_log,"%-5.3f|%-5.3f|%-5.3f|", snr->snr_yt[B_SLICE], snr->snr_ut[B_SLICE], snr->snr_vt[B_SLICE]);
   */
-  fprintf(p_log,"%7.0f|", stats->bitrate_I);
-  fprintf(p_log,"%7.0f|", stats->bitrate_P);
-  fprintf(p_log,"%7.0f|", stats->bitrate_B);
-  fprintf(p_log,"%9.0f|", stats->bitrate);
+  fprintf(p_log,"%7.0f|%7.0f|%7.0f|%9.0f|", stats->bitrate_I,stats->bitrate_P,stats->bitrate_B, stats->bitrate);
 
-  fprintf(p_log,"   %12d   |", (int)tot_time);
-  fprintf(p_log,"   %12d   |", (int)me_tot_time);
+  fprintf(p_log,"   %12d   |   %12d   |", (int)tot_time,(int)me_tot_time);
+
+
   fprintf(p_log,"\n");
 
   fclose(p_log);
@@ -2063,7 +2053,7 @@ int init_global_buffers(void)
 
   if (input->WeightedPrediction || input->WeightedBiprediction || input->GenerateMultiplePPS)
   {
-    // Currently only use up to 20 references. Need to use different indicator such as maximum num of references in list
+    // Currently only use up to 32 references. Need to use different indicator such as maximum num of references in list
     memory_size += get_mem3Dint(&wp_weight, 6, MAX_REFERENCE_PICTURES, 3);
     memory_size += get_mem3Dint(&wp_offset, 6, MAX_REFERENCE_PICTURES, 3);
 

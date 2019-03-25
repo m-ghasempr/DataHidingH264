@@ -16,8 +16,6 @@
 
 #include "contributors.h"
 
-#include <stdlib.h>
-#include <string.h>
 #include <limits.h>
 
 #include "global.h"
@@ -387,18 +385,21 @@ void getSubImagesChroma( StorablePicture *s )
   size_x_minus1 = s->size_x_cr - 1;
   size_y_minus1 = s->size_y_cr - 1;
 
-  if ( img->yuv_format == YUV420 ) {
+  if ( img->yuv_format == YUV420 ) 
+  {
     subimages_x = 8;
     subimages_y = 8;
     mul_x = mul_y = 1;
   }
-  else if ( img->yuv_format == YUV422 ) {
+  else if ( img->yuv_format == YUV422 ) 
+  {
     subimages_x = 8;
     subimages_y = 4;
     mul_y = 2;
     mul_x = 1;
   }
-  else { // YUV444
+  else 
+  { // YUV444
     subimages_x = 4;
     subimages_y = 4;
     mul_x = mul_y = 2;

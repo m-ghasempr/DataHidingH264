@@ -30,40 +30,31 @@
 
 #include <math.h>
 #include <limits.h>
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
-
-#ifdef WIN32
-#include <io.h>
-#else
-#include <unistd.h>
-#endif
 
 #include "global.h"
-#include "errorconcealment.h"
 #include "image.h"
-#include "mbuffer.h"
 #include "fmo.h"
 #include "nalu.h"
-#include "parsetcommon.h"
 #include "parset.h"
 #include "header.h"
+
+#include "annexb.h"
 #include "rtp.h"
 #include "sei.h"
 #include "output.h"
-#include "biaridecod.h"
 #include "mb_access.h"
 #include "memalloc.h"
-#include "annexb.h"
 
-#include "context_ini.h"
-#include "cabac.h"
 #include "loopfilter.h"
 
+#include "biaridecod.h"
+#include "context_ini.h"
+#include "cabac.h"
 #include "vlc.h"
 
+#include "errorconcealment.h"
 #include "erc_api.h"
+
 extern objectBuffer_t *erc_object_list;
 extern ercVariables_t *erc_errorVar;
 extern frame erc_recfr;

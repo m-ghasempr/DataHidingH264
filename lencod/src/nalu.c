@@ -12,9 +12,6 @@
  ************************************************************************
  */
 
-#include <assert.h>
-#include <memory.h>
-
 #include "global.h"
 #include "nalu.h"
 

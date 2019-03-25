@@ -12,10 +12,6 @@
  ***********************************************************************
  */
 
-#include <stdlib.h>
-#include <assert.h>
-#include <string.h>
-
 #include "global.h"
 #include "parsetcommon.h"
 #include "parset.h"

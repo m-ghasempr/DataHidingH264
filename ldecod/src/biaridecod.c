@@ -19,8 +19,6 @@
  *************************************************************************************
  */
 
-#include <stdlib.h>
-
 #include "global.h"
 #include "memalloc.h"
 #include "biaridecod.h"

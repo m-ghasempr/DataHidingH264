@@ -15,7 +15,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 13.0 (FRExt)
+ *     JM 13.1 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -44,22 +44,7 @@
 
 #include "contributors.h"
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <time.h>
-#include <sys/timeb.h>
-
-#if defined WIN32
-  #include <io.h>
-#else
-  #include <unistd.h>
-#endif
 #include <sys/stat.h>
-#include <fcntl.h>
-
-
-#include <assert.h>
 
 #include "global.h"
 #include "rtp.h"
@@ -75,7 +60,7 @@
 #include "erc_api.h"
 
 #define JM          "13 (FRExt)"
-#define VERSION     "13.0"
+#define VERSION     "13.1"
 #define EXT_VERSION "(FRExt)"
 
 #define LOGFILE     "log.dec"

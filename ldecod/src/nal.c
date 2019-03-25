@@ -14,13 +14,6 @@
  */
 
 #include "contributors.h"
-
-#include <assert.h>
-#include <stdlib.h>
-#include <math.h>
-#include <string.h>
-
-#include "defines.h"
 #include "global.h"
 
 

@@ -11,7 +11,6 @@
  *    - Shankar Regunathan                   <shanre@microsoft.com>
  ***************************************************************************
  */
-#include <stdlib.h>
 
 #include "contributors.h"
 #include "global.h"
@@ -175,7 +174,8 @@ void Sort(unsigned long NumberLeakyBuckets, unsigned long *Rmin)
   {
     for(j=i+1; j<NumberLeakyBuckets; j++)
     {
-      if(Rmin[i] > Rmin[j]) {
+      if(Rmin[i] > Rmin[j]) 
+      {
         temp = Rmin[i];
         Rmin[i] = Rmin[j];
         Rmin[j] = temp;
@@ -288,7 +288,8 @@ void calc_buffer()
     for(iFrame=0; iFrame < FrameIndex+1; iFrame++)
     {
       buffer_frame[iFrame] = buffer_frame[iFrame] - Bit_Buffer[iFrame];
-      if(buffer_frame[iFrame] < 0) {
+      if(buffer_frame[iFrame] < 0) 
+      {
         InitFullness -= buffer_frame[iFrame];
         buffer_frame[iFrame] = 0;
       }

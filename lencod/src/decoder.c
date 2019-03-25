@@ -16,9 +16,6 @@
  *************************************************************************************
  */
 
-#include <stdlib.h>
-#include <memory.h>
-
 #include "global.h"
 #include "refbuf.h"
 #include "image.h"
@@ -221,51 +218,61 @@ byte Get_Reference_Pixel(imgpel **imY, int y_pos, int x_pos)
   maxold_x = img->width-1;
   maxold_y = img->height-1;
 
-  if (dx == 0 && dy == 0) { /* fullpel position */
+  if (dx == 0 && dy == 0) 
+  { /* fullpel position */
     result = imY[iClip3(0,maxold_y,y_pos)][iClip3(0,maxold_x,x_pos)];
   }
   else { /* other positions */
 
-    if (dy == 0) {
-
+    if (dy == 0) 
+    {
       pres_y = iClip3(0,maxold_y,y_pos);
-      for(x=-2;x<4;x++) {
+      for(x=-2;x<4;x++) 
+      {
         pres_x = iClip3(0,maxold_x,x_pos+x);
         result += imY[pres_y][pres_x]*COEF[x+2];
       }
 
       result = iClip3(0, img->max_imgpel_value, (result+16)/32);
 
-      if (dx == 1) {
+      if (dx == 1) 
+      {
         result = (result + imY[pres_y][iClip3(0,maxold_x,x_pos)])/2;
       }
-      else if (dx == 3) {
+      else if (dx == 3) 
+      {
         result = (result + imY[pres_y][iClip3(0,maxold_x,x_pos+1)])/2;
       }
     }
-    else if (dx == 0) {
-
+    else if (dx == 0) 
+    {
       pres_x = iClip3(0,maxold_x,x_pos);
-      for(y=-2;y<4;y++) {
+      for(y=-2;y<4;y++) 
+      {
         pres_y = iClip3(0,maxold_y,y_pos+y);
         result += imY[pres_y][pres_x]*COEF[y+2];
       }
 
       result = iClip3(0, img->max_imgpel_value, (result+16)/32);
 
-      if (dy == 1) {
+      if (dy == 1) 
+      {
         result = (result + imY[iClip3(0,maxold_y,y_pos)][pres_x])/2;
       }
-      else if (dy == 3) {
+      else if (dy == 3) 
+      {
         result = (result + imY[iClip3(0,maxold_y,y_pos+1)][pres_x])/2;
       }
     }
-    else if (dx == 2) {
+    else if (dx == 2) 
+    {
 
-      for(y=-2;y<4;y++) {
+      for(y=-2;y<4;y++) 
+      {
         result = 0;
         pres_y = iClip3(0,maxold_y,y_pos+y);
-        for(x=-2;x<4;x++) {
+        for(x=-2;x<4;x++) 
+        {
           pres_x = iClip3(0,maxold_x,x_pos+x);
           result += imY[pres_y][pres_x]*COEF[x+2];
         }
@@ -273,25 +280,31 @@ byte Get_Reference_Pixel(imgpel **imY, int y_pos, int x_pos)
       }
 
       result = 0;
-      for(y=-2;y<4;y++) {
+      for(y=-2;y<4;y++) 
+      {
         result += tmp_res[y+2]*COEF[y+2];
       }
 
       result = iClip3(0, img->max_imgpel_value, (result+512)/1024);
 
-      if (dy == 1) {
+      if (dy == 1) 
+      {
         result = (result + iClip3(0, img->max_imgpel_value, (tmp_res[2]+16)/32))/2;
       }
-      else if (dy == 3) {
+      else if (dy == 3) 
+      {
         result = (result + iClip3(0, img->max_imgpel_value, (tmp_res[3]+16)/32))/2;
       }
     }
-    else if (dy == 2) {
+    else if (dy == 2) 
+    {
 
-      for(x=-2;x<4;x++) {
+      for(x=-2;x<4;x++) 
+      {
         result = 0;
         pres_x = iClip3(0,maxold_x,x_pos+x);
-        for(y=-2;y<4;y++) {
+        for(y=-2;y<4;y++) 
+        {
           pres_y = iClip3(0,maxold_y,y_pos+y);
           result += imY[pres_y][pres_x]*COEF[y+2];
         }
@@ -299,13 +312,15 @@ byte Get_Reference_Pixel(imgpel **imY, int y_pos, int x_pos)
       }
 
       result = 0;
-      for(x=-2;x<4;x++) {
+      for(x=-2;x<4;x++) 
+      {
         result += tmp_res[x+2]*COEF[x+2];
       }
 
       result = iClip3(0, img->max_imgpel_value, (result+512)/1024);
 
-      if (dx == 1) {
+      if (dx == 1) 
+      {
         result = (result + iClip3(0, img->max_imgpel_value, (tmp_res[2]+16)/32))/2;
       }
       else {
@@ -318,7 +333,8 @@ byte Get_Reference_Pixel(imgpel **imY, int y_pos, int x_pos)
       pres_y = dy == 1 ? y_pos : y_pos+1;
       pres_y = iClip3(0,maxold_y,pres_y);
 
-      for(x=-2;x<4;x++) {
+      for(x=-2;x<4;x++) 
+      {
         pres_x = iClip3(0,maxold_x,x_pos+x);
         result += imY[pres_y][pres_x]*COEF[x+2];
       }
@@ -329,7 +345,8 @@ byte Get_Reference_Pixel(imgpel **imY, int y_pos, int x_pos)
       pres_x = dx == 1 ? x_pos : x_pos+1;
       pres_x = iClip3(0,maxold_x,pres_x);
 
-      for(y=-2;y<4;y++) {
+      for(y=-2;y<4;y++) 
+      {
         pres_y = iClip3(0,maxold_y,y_pos+y);
         result += imY[pres_y][pres_x]*COEF[y+2];
       }

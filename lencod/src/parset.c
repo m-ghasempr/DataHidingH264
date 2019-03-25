@@ -13,9 +13,6 @@
  **************************************************************************************
  */
 
-#include <stdlib.h>
-#include <assert.h>
-#include <string.h>
 #include <time.h>
 #include <sys/timeb.h>
 
@@ -25,6 +22,7 @@
 #include "mbuffer.h"
 #include "parset.h"
 #include "vlc.h"
+#include "q_matrix.h"
 
 // Local helpers
 static int IdentifyProfile(void);
@@ -1113,7 +1111,7 @@ int WriteHRDParameters(seq_parameter_set_rbsp_t *sps, Bitstream *bitstream)
   {
     len+=ue_v ("VUI: bit_rate_value_minus1", hrd->bit_rate_value_minus1[SchedSelIdx], bitstream);
     len+=ue_v ("VUI: cpb_size_value_minus1", hrd->cpb_size_value_minus1[SchedSelIdx], bitstream);
-    len+=u_1  ("VUI: cbr_flag", hrd->vbr_cbr_flag[SchedSelIdx], bitstream);
+    len+=u_1  ("VUI: cbr_flag", hrd->cbr_flag[SchedSelIdx], bitstream);
   }
 
   len+=u_v  (5, "VUI: initial_cpb_removal_delay_length_minus1", hrd->initial_cpb_removal_delay_length_minus1, bitstream);
@@ -1175,7 +1173,7 @@ void GenerateVUIParameters(seq_parameter_set_rbsp_t *sps)
   {
     nal_hrd->bit_rate_value_minus1[SchedSelIdx]    = (unsigned int) iVui->nal_bit_rate_value_minus1;
     nal_hrd->cpb_size_value_minus1[SchedSelIdx]    = (unsigned int) iVui->nal_cpb_size_value_minus1;
-    nal_hrd->vbr_cbr_flag[SchedSelIdx]             = (unsigned int) iVui->nal_vbr_cbr_flag;
+    nal_hrd->cbr_flag[SchedSelIdx]             = (unsigned int) iVui->nal_vbr_cbr_flag;
   }
   nal_hrd->initial_cpb_removal_delay_length_minus1 = (unsigned int) iVui->nal_initial_cpb_removal_delay_length_minus1;
   nal_hrd->cpb_removal_delay_length_minus1         = (unsigned int) iVui->nal_cpb_removal_delay_length_minus1;
@@ -1191,7 +1189,7 @@ void GenerateVUIParameters(seq_parameter_set_rbsp_t *sps)
   {
     vcl_hrd->bit_rate_value_minus1[SchedSelIdx]    = (unsigned int) iVui->vcl_bit_rate_value_minus1;
     vcl_hrd->cpb_size_value_minus1[SchedSelIdx]    = (unsigned int) iVui->vcl_cpb_size_value_minus1;
-    vcl_hrd->vbr_cbr_flag[SchedSelIdx]             = (unsigned int) iVui->vcl_vbr_cbr_flag;
+    vcl_hrd->cbr_flag[SchedSelIdx]             = (unsigned int) iVui->vcl_vbr_cbr_flag;
   }
   vcl_hrd->initial_cpb_removal_delay_length_minus1 = (unsigned int) iVui->vcl_initial_cpb_removal_delay_length_minus1;
   vcl_hrd->cpb_removal_delay_length_minus1         = (unsigned int) iVui->vcl_cpb_removal_delay_length_minus1;

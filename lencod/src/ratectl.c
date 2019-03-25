@@ -16,10 +16,7 @@
  **************************************************************************
  */
 
-#include <stdlib.h>
 #include <math.h>
-#include <assert.h>
-#include <memory.h>
 #include <limits.h>
 
 #include "global.h"
@@ -282,7 +279,7 @@ void rc_init_gop_params(void)
   switch( input->RCUpdateMode )
   {
   case RC_MODE_1: case RC_MODE_3: 
-    if (!(img->number) )
+    if ( !(img->number) )
     {
       /* number of P frames */
       np = input->no_frames - 1;

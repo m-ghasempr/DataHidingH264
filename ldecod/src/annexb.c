@@ -12,9 +12,6 @@
  *************************************************************************************
  */
 
-#include <stdlib.h>
-#include <string.h>
-
 #include "global.h"
 #include "annexb.h"
 #include "memalloc.h"

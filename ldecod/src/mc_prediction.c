@@ -13,9 +13,6 @@
  *
  *************************************************************************************
  */
-#include <assert.h>
-#include <string.h>
-
 #include "global.h"
 #include "block.h"
 #include "mc_prediction.h"
@@ -100,7 +97,7 @@ static inline void bi_prediction(struct img_par *img,
 
   for(jj = 0;jj < ver_block_size;jj++)
   {
-    mpr = &img->mpr[yuv][jj + joff][ioff];    
+    mpr = &img->mpr[yuv][jj + joff][ioff];
     b0 = block_l0[jj];
     b1 = block_l1[jj];
     for(ii = 0; ii < hor_block_size;ii++)
@@ -929,8 +926,8 @@ void intra_cr_decoding(Macroblock *currMB, int yuv, struct img_par *img, int smb
 
           itrans4x4(img, ioff, joff, uv + 1);
 
-          for(jj=joff;jj<joff + 4;jj++)
-            {
+          for(jj=joff; jj<joff + 4;jj++)
+          {
             cur_img = &curUV[img->pix_c_y+jj][img->pix_c_x + ioff];
             m7 = &m7UV[jj][ioff];
 
@@ -938,7 +935,7 @@ void intra_cr_decoding(Macroblock *currMB, int yuv, struct img_par *img, int smb
             {
               cur_img[ii] = m7[ii];
             }
-            }
+          }
         }
       }
     }

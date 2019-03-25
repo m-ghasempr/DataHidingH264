@@ -50,11 +50,6 @@
 //#define PRINT_FMO_MAPS  1
 
 
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
-#include <memory.h>
-
 #include "global.h"
 
 #include "fmo.h"

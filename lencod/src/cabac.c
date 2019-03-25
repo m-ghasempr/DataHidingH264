@@ -12,9 +12,6 @@
  **************************************************************************************
  */
 
-#include <stdlib.h>
-#include <assert.h>
-#include <memory.h>
 #include "global.h"
 
 #include "cabac.h"
@@ -1257,6 +1254,33 @@ void write_and_store_CBP_block_bit (Macroblock* currMB, EncodingEnvironmentPtr e
       biari_encode_symbol (eep_dp, (short)cbp_bit, img->currentSlice->tex_ctx->bcbp_contexts[type2ctx_bcbp[type]] + ctx);
     }
   }
+  else if( IS_INDEPENDENT(input) )
+  {
+    if (type!=LUMA_8x8)
+    {
+      if (block_b.available)
+      {
+        if(img->mb_data[block_b.mb_addr].mb_type==IPCM)
+          upper_bit = 1;
+        else
+          upper_bit = BIT_SET(img->mb_data[block_b.mb_addr].cbp_bits[0],bit+bit_pos_b);
+      }
+
+
+      if (block_a.available)
+      {
+        if(img->mb_data[block_a.mb_addr].mb_type == IPCM)
+          left_bit = 1;
+        else
+          left_bit = BIT_SET(img->mb_data[block_a.mb_addr].cbp_bits[0], bit + bit_pos_a);
+      }
+
+      ctx = 2 * upper_bit + left_bit;
+
+      //===== encode symbol =====
+      biari_encode_symbol (eep_dp, (short)cbp_bit, img->currentSlice->tex_ctx->bcbp_contexts[type2ctx_bcbp[type]] + ctx);
+    }
+  }
   else 
   {
     if (block_b.available)
@@ -1460,7 +1484,7 @@ void write_significant_coefficients (Macroblock* currMB, EncodingEnvironmentPtr 
       if (coeff[i]>0) {absLevel =  coeff[i];  sign = 0;}
       else            {absLevel = -coeff[i];  sign = 1;}
 
-      greater_one = (absLevel>1);
+      greater_one = (absLevel > 1);
 
       //--- if coefficient is one ---
       ctx = imin(c1,4);

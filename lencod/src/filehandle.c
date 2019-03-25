@@ -14,8 +14,6 @@
 
 #include "contributors.h"
 
-#include <stdlib.h>
-
 #include "global.h"
 
 #include "rtp.h"
@@ -89,7 +87,7 @@ int start_sequence()
       return 1;
   }
 
-  //! As a sequence header, here we write the both sequence and picture
+  //! As a sequence header, here we write both sequence and picture
   //! parameter sets.  As soon as IDR is implemented, this should go to the
   //! IDR part, as both parsets have to be transmitted as part of an IDR.
   //! An alternative may be to consider this function the IDR start function.
@@ -129,8 +127,7 @@ int rewrite_paramsets()
   int i,len=0, total_pps = (input->GenerateMultiplePPS) ? 3 : 1;
   NALU_t *nalu;
 
-
-  //! As a sequence header, here we write the both sequence and picture
+  //! As a sequence header, here we write both sequence and picture
   //! parameter sets.  As soon as IDR is implemented, this should go to the
   //! IDR part, as both parsets have to be transmitted as part of an IDR.
   //! An alternative may be to consider this function the IDR start function.

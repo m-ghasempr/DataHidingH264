@@ -16,9 +16,7 @@
 
 #include "contributors.h"
 
-#include <stdlib.h>
 #include <limits.h>
-#include <string.h>
 
 #include "global.h"
 #include "image.h"
@@ -2049,7 +2047,8 @@ EPZSBiPredBlockMotionSearch (Macroblock *currMB,  // <--  Current Macroblock
     computeBiPred = computeBiPred1[F_PEL];
   }
 
-  if ( ChromaMEEnable ) {
+  if ( ChromaMEEnable ) 
+  {
     ref_pic1_sub.crcb[0] = ref_picture1->imgUV_sub[0];
     ref_pic1_sub.crcb[1] = ref_picture1->imgUV_sub[1];
     ref_pic2_sub.crcb[0] = ref_picture2->imgUV_sub[0];

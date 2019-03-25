@@ -16,9 +16,7 @@
 
 #include "contributors.h"
 
-#include <stdlib.h>
 #include <limits.h>
-#include <string.h>
 
 #include "global.h"
 #include "image.h"
@@ -373,7 +371,8 @@ int computeSAD(imgpel* src_pic,
     if (mcost >= min_mcost) return mcost;
     ref_line += pad_size_x;
   }
-  if ( ChromaMEEnable ) {
+  if ( ChromaMEEnable ) 
+  {
     // calculate chroma conribution to motion compensation error
     int blocksize_x_cr = blocksize_x >> shift_cr_x;
     int blocksize_y_cr = blocksize_y >> shift_cr_y;
@@ -440,7 +439,8 @@ int computeSADWP(imgpel* src_pic,
     if (mcost >= min_mcost) return mcost;
     ref_line += pad_size_x;
   }
-  if ( ChromaMEEnable ) {
+  if ( ChromaMEEnable ) 
+  {
     // calculate chroma conribution to motion compensation error
     int blocksize_x_cr = blocksize_x >> shift_cr_x;
     int blocksize_y_cr = blocksize_y >> shift_cr_y;
@@ -513,7 +513,8 @@ int computeBiPredSAD1(imgpel* src_pic,
     ref1_line += pad_size_x;
   }
 
-  if ( ChromaMEEnable ) {
+  if ( ChromaMEEnable ) 
+  {
     // calculate chroma conribution to motion compensation error
     int blocksize_x_cr = blocksize_x >> shift_cr_x;
     int blocksize_y_cr = blocksize_y >> shift_cr_y;
@@ -605,7 +606,8 @@ int computeBiPredSAD2(imgpel* src_pic,
     ref1_line += pad_size_x;
   }
 
-  if ( ChromaMEEnable ) {
+  if ( ChromaMEEnable ) 
+  {
     // calculate chroma conribution to motion compensation error
     int blocksize_x_cr = blocksize_x >> shift_cr_x;
     int blocksize_y_cr = blocksize_y >> shift_cr_y;
@@ -1066,7 +1068,8 @@ int computeSSE(imgpel* src_pic,
     ref_line += pad_size_x;
   }
 
-  if ( ChromaMEEnable ) {
+  if ( ChromaMEEnable ) 
+  {
     // calculate chroma conribution to motion compensation error
     int blocksize_x_cr = blocksize_x >> shift_cr_x;
     int blocksize_y_cr = blocksize_y >> shift_cr_y;
@@ -1136,7 +1139,8 @@ int computeSSEWP(imgpel* src_pic,
     ref_line += pad_size_x;
   }
 
-  if ( ChromaMEEnable ) {
+  if ( ChromaMEEnable ) 
+  {
     // calculate chroma conribution to motion compensation error
     // These could be made global to reduce computations
     int blocksize_x_cr = blocksize_x >> shift_cr_x;
@@ -1213,7 +1217,8 @@ int computeBiPredSSE1(imgpel* src_pic,
     ref1_line += pad_size_x;
   }
 
-  if ( ChromaMEEnable ) {
+  if ( ChromaMEEnable ) 
+  {
     // calculate chroma conribution to motion compensation error
     int blocksize_x_cr = blocksize_x >> shift_cr_x;
     int blocksize_y_cr = blocksize_y >> shift_cr_y;
@@ -1306,7 +1311,8 @@ int computeBiPredSSE2(imgpel* src_pic,
     ref1_line += pad_size_x;
   }
 
-  if ( ChromaMEEnable ) {
+  if ( ChromaMEEnable ) 
+  {
     // calculate chroma conribution to motion compensation error
     int blocksize_x_cr = blocksize_x >> shift_cr_x;
     int blocksize_y_cr = blocksize_y >> shift_cr_y;

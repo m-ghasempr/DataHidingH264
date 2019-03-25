@@ -28,13 +28,11 @@
 #ifndef _GLOBAL_H_
 #define _GLOBAL_H_
 
-#include <stdio.h>
+#include <memory.h>
 
 #include "win32.h"
 #include "defines.h"
 #include "parsetcommon.h"
-#include "q_matrix.h"
-#include "q_offsets.h"
 #include "ifunctions.h"
 
 /***********************************************************************
@@ -1374,14 +1372,21 @@ int CbCr_predmode_8x8[4];
  */
 
 void intrapred_4x4   (Macroblock *currMB, ColorPlane pl, int CurrPixX,int CurrPixY, int *left_available, int *up_available, int *all_available);
-int (*pDCT_4x4)      (Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *coeff_cost, int intra);
-int  dct_4x4         (Macroblock *currMB, ColorPlane pl, int pos_mb1,int pos_mb2,int *cnt_nonz, int intra);
+int (*pDCT_4x4)      (Macroblock *currMB, ColorPlane pl, int block_x, int block_y, int *coeff_cost, int intra);
+int (*pDCT_16x16)    (Macroblock *currMB, ColorPlane pl, int);
+int (*pDCT_8x8)      (Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int intra);
+int  dct_4x4         (Macroblock *currMB, ColorPlane pl, int pos_mb1, int pos_mb2, int *cnt_nonz, int intra);
+int  dct_4x4_ls      (Macroblock *currMB, ColorPlane pl, int block_x, int block_y, int *coeff_cost, int intra);
 int  dct_16x16       (Macroblock *currMB, ColorPlane pl, int);
-int  dct_4x4_qpprime (Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *coeff_cost, int intra);
+int  dct_16x16_ls    (Macroblock *currMB, ColorPlane pl, int);
+int  dct_8x8         (Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int intra);
+int  dct_8x8_ls      (Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int intra);
+
+
 int  dct_4x4_sp      (Macroblock *currMB, ColorPlane pl, int pos_mb1,int pos_mb2,int *cnt_nonz, int intra);
 int  dct_4x4_sp2     (Macroblock *currMB, ColorPlane pl, int pos_mb1,int pos_mb2,int *cnt_nonz, int intra);
 void copyblock_sp    (Macroblock *currMB, ColorPlane pl, int pos_mb1,int pos_mb2);
-int  (*dct_cr_4x4)   (Macroblock *currMB, int uv,int i11);
+int  (*dct_cr_4x4[2])   (Macroblock *currMB, int uv,int i11);
 int  dct_chroma      (Macroblock *currMB, int uv,int i11);
 int  dct_chroma_sp   (Macroblock *currMB, int uv,int i11);
 int  dct_chroma_sp2  (Macroblock *currMB, int uv,int i11);

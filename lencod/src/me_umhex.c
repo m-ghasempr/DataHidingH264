@@ -23,8 +23,6 @@
  ************************************************************************
  */
 
-#include <stdlib.h>
-#include <string.h>
 #include <limits.h>
 
 #include "global.h"
@@ -1537,7 +1535,8 @@ void UMHEXSetMotionVectorPredictor (Macroblock *currMB,
   }
 
   //Dynamic Search Range
-  if (input->UMHexDSR) {
+  if (input->UMHexDSR) 
+  {
     dsr_new_search_range = imax(dsr_temp_search_range[0],dsr_temp_search_range[1]);
 
     if      (input->full_search == 2) 

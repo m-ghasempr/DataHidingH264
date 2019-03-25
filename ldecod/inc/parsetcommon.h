@@ -5,8 +5,8 @@
  *    parsetcommon.h
  * \brief
  *    Picture and Sequence Parameter Sets, structures common to encoder and decoder
- *    This code reflects JVT version xxx
- *  \date 25 November 2002
+ *
+ * \date 25 November 2002
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
  *      - Stephan Wenger        <stewe@cs.tu-berlin.de>
@@ -69,7 +69,7 @@ typedef struct
   Boolean      overscan_info_present_flag;                       // u(1)
     Boolean      overscan_appropriate_flag;                      // u(1)
   Boolean      video_signal_type_present_flag;                   // u(1)
-    unsigned  video_format;                                   // u(3)
+    unsigned int video_format;                                   // u(3)
     Boolean      video_full_range_flag;                          // u(1)
     Boolean      colour_description_present_flag;                // u(1)
       unsigned int colour_primaries;                             // u(8)
@@ -79,8 +79,8 @@ typedef struct
     unsigned int  chroma_sample_loc_type_top_field;               // ue(v)
     unsigned int  chroma_sample_loc_type_bottom_field;            // ue(v)
   Boolean      timing_info_present_flag;                         // u(1)
-    unsigned  int num_units_in_tick;                              // u(32)
-    unsigned  int time_scale;                                     // u(32)
+    unsigned int num_units_in_tick;                              // u(32)
+    unsigned int time_scale;                                     // u(32)
     Boolean      fixed_frame_rate_flag;                          // u(1)
   Boolean      nal_hrd_parameters_present_flag;                  // u(1)
     hrd_parameters_t nal_hrd_parameters;                      // hrd_paramters_t
@@ -104,8 +104,8 @@ typedef struct
 typedef struct
 {
   Boolean   Valid;                  // indicates the parameter set is valid
-  unsigned  int pic_parameter_set_id;                             // ue(v)
-  unsigned  int seq_parameter_set_id;                             // ue(v)
+  unsigned int pic_parameter_set_id;                             // ue(v)
+  unsigned int seq_parameter_set_id;                             // ue(v)
   Boolean   entropy_coding_mode_flag;                         // u(1)
 
   Boolean   transform_8x8_mode_flag;                          // u(1)
@@ -119,23 +119,24 @@ typedef struct
 
   // if( pic_order_cnt_type < 2 )  in the sequence parameter set
   Boolean      pic_order_present_flag;                           // u(1)
-  unsigned  int num_slice_groups_minus1;                          // ue(v)
-    unsigned  int slice_group_map_type;                        // ue(v)
+  unsigned int num_slice_groups_minus1;                          // ue(v)
+    unsigned int slice_group_map_type;                        // ue(v)
     // if( slice_group_map_type = = 0 )
-      unsigned  int run_length_minus1[MAXnum_slice_groups_minus1]; // ue(v)
+      unsigned int run_length_minus1[MAXnum_slice_groups_minus1]; // ue(v)
     // else if( slice_group_map_type = = 2 )
-      unsigned  int top_left[MAXnum_slice_groups_minus1];         // ue(v)
-      unsigned  int bottom_right[MAXnum_slice_groups_minus1];     // ue(v)
+      unsigned int top_left[MAXnum_slice_groups_minus1];         // ue(v)
+      unsigned int bottom_right[MAXnum_slice_groups_minus1];     // ue(v)
     // else if( slice_group_map_type = = 3 || 4 || 5
       Boolean   slice_group_change_direction_flag;            // u(1)
-      unsigned  int slice_group_change_rate_minus1;               // ue(v)
+      unsigned int slice_group_change_rate_minus1;               // ue(v)
     // else if( slice_group_map_type = = 6 )
-      unsigned  int num_slice_group_map_units_minus1;             // ue(v)
-      unsigned  int *slice_group_id;                              // complete MBAmap u(v)
-  unsigned  int num_ref_idx_l0_active_minus1;                     // ue(v)
-  unsigned  int num_ref_idx_l1_active_minus1;                     // ue(v)
+      unsigned int num_slice_group_map_units_minus1;             // ue(v)
+      unsigned char *slice_group_id;                              // complete MBAmap u(v)
+
+  int num_ref_idx_l0_active_minus1;                     // ue(v)
+  int num_ref_idx_l1_active_minus1;                     // ue(v)
   Boolean   weighted_pred_flag;                               // u(1)
-  unsigned  int weighted_bipred_idc;                              // u(2)
+  unsigned int  weighted_bipred_idc;                              // u(2)
   int       pic_init_qp_minus26;                              // se(v)
   int       pic_init_qs_minus26;                              // se(v)
   int       chroma_qp_index_offset;                           // se(v)
@@ -153,7 +154,7 @@ typedef struct
 {
   Boolean   Valid;                  // indicates the parameter set is valid
 
-  unsigned  int profile_idc;                                      // u(8)
+  unsigned int profile_idc;                                      // u(8)
   Boolean   constrained_set0_flag;                            // u(1)
   Boolean   constrained_set1_flag;                            // u(1)
   Boolean   constrained_set2_flag;                            // u(1)
@@ -162,20 +163,19 @@ typedef struct
   unsigned  int seq_parameter_set_id;                             // ue(v)
   unsigned  int chroma_format_idc;                                // ue(v)
 
-  Boolean  seq_scaling_matrix_present_flag;                   // u(1)
-  int      seq_scaling_list_present_flag[12];                 // u(1)
-  int      ScalingList4x4[6][16];                             // se(v)
-  int      ScalingList8x8[6][64];                             // se(v)
-  Boolean  UseDefaultScalingMatrix4x4Flag[6];
-  Boolean  UseDefaultScalingMatrix8x8Flag[6];
+  Boolean   seq_scaling_matrix_present_flag;                   // u(1)
+  int       seq_scaling_list_present_flag[12];                 // u(1)
+  int       ScalingList4x4[6][16];                             // se(v)
+  int       ScalingList8x8[6][64];                             // se(v)
+  Boolean   UseDefaultScalingMatrix4x4Flag[6];
+  Boolean   UseDefaultScalingMatrix8x8Flag[6];
 
   unsigned int bit_depth_luma_minus8;                            // ue(v)
   unsigned int bit_depth_chroma_minus8;                          // ue(v)
-
   unsigned int log2_max_frame_num_minus4;                        // ue(v)
   unsigned int pic_order_cnt_type;
   // if( pic_order_cnt_type == 0 )
-  unsigned log2_max_pic_order_cnt_lsb_minus4;                 // ue(v)
+  unsigned int log2_max_pic_order_cnt_lsb_minus4;                 // ue(v)
   // else if( pic_order_cnt_type == 1 )
     Boolean delta_pic_order_always_zero_flag;               // u(1)
     int     offset_for_non_ref_pic;                         // se(v)
@@ -201,9 +201,8 @@ typedef struct
     unsigned  separate_colour_plane_flag;                       // u(1)
 } seq_parameter_set_rbsp_t;
 
-
-pic_parameter_set_rbsp_t *AllocPPS ();
-seq_parameter_set_rbsp_t *AllocSPS ();
+pic_parameter_set_rbsp_t *AllocPPS (void);
+seq_parameter_set_rbsp_t *AllocSPS (void);
 
 void FreePPS (pic_parameter_set_rbsp_t *pps);
 void FreeSPS (seq_parameter_set_rbsp_t *sps);

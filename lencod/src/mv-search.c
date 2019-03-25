@@ -23,10 +23,8 @@
 
 #include "contributors.h"
 
-#include <stdlib.h>
 #include <math.h>
 #include <limits.h>
-#include <string.h>
 #include <time.h>
 #include <sys/timeb.h>
 
@@ -38,6 +36,7 @@
 #include "memalloc.h"
 #include "mb_access.h"
 #include "macroblock.h"
+#include "mc_prediction.h"
 
 // Motion estimation distortion header file
 #include "me_distortion.h"

@@ -11,12 +11,7 @@
  ************************************************************************
  */
 
-#include <stdlib.h>
-#include <assert.h>
-#include <memory.h>
-#include <string.h>
 #include "global.h"
-
 #include "memalloc.h"
 #include "rtp.h"
 #include "mbuffer.h"
@@ -1685,7 +1680,8 @@ int ParseToneMappingConfigFile(tone_mapping_struct* pSeiToneMapping)
   unsigned int tmp;
 
   printf ("Parsing Tone mapping cfg file %s ..........\n\n", input->ToneMappingFile);
-  if ((fp = fopen(input->ToneMappingFile, "r")) == NULL) {
+  if ((fp = fopen(input->ToneMappingFile, "r")) == NULL) 
+  {
     fprintf(stderr, "Tone mapping config file %s is not found, disable tone mapping SEI\n", input->ToneMappingFile);
     seiHasTone_mapping=FALSE;
 

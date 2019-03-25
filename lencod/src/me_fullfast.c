@@ -15,9 +15,7 @@
 
 // Includes
 #include "contributors.h"
-#include <stdlib.h>
 #include <limits.h>
-#include <string.h>
 
 #include "global.h"
 #include "image.h"
@@ -611,28 +609,28 @@ void SetupFastFullPelSearch (Macroblock *currMB, short ref, int list)  // <--  r
       {
         pos_00[list][ref] = pos;
         break;
-        }
       }
     }
+  }
 
-    //===== loop over search range (spiral search): get blockwise SAD =====
-    for (pos = 0; pos < max_pos; pos++)
+  //===== loop over search range (spiral search): get blockwise SAD =====
+  for (pos = 0; pos < max_pos; pos++)
+  {
+    abs_y = offset_y + spiral_search_y[pos];
+    abs_x = offset_x + spiral_search_x[pos];
+
+    abs_y4 = (abs_y + IMG_PAD_SIZE) << 2;
+    abs_x4 = (abs_x + IMG_PAD_SIZE) << 2;
+
+    if (range_partly_outside)
     {
-      abs_y = offset_y + spiral_search_y[pos];
-      abs_x = offset_x + spiral_search_x[pos];
-
-      abs_y4 = (abs_y + IMG_PAD_SIZE) << 2;
-      abs_x4 = (abs_x + IMG_PAD_SIZE) << 2;
-
-      if (range_partly_outside)
-      {
       if (abs_y >= 0 && abs_y <= max_height&&
         abs_x >= 0 && abs_x <= max_width  )
-        {
+      {
         ref_access_method = FAST_ACCESS;
-        }
-        else
-        {
+      }
+      else
+      {
         ref_access_method = UMV_ACCESS;
       }
     }

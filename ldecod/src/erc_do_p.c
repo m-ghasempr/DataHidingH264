@@ -18,10 +18,8 @@
  *************************************************************************************
  */
 
-#include <stdlib.h>
-#include <assert.h>
-#include "mbuffer.h"
 #include "global.h"
+#include "mbuffer.h"
 #include "memalloc.h"
 #include "erc_do.h"
 #include "image.h"
@@ -49,9 +47,8 @@ static void buildPredRegionYUV(struct img_par *img, int *mv, int x, int y, imgpe
 // picture error concealment
 static void buildPredblockRegionYUV(struct img_par *img, int *mv,
                                     int x, int y, imgpel *predMB, int list);
-static void CopyImgData(imgpel **inputY, imgpel ***inputUV, imgpel **outputY,
-                        imgpel ***outputUV, int img_width, int img_height);
-
+static void CopyImgData(imgpel **inputY, imgpel ***inputUV, imgpel **outputY, imgpel ***outputUV, 
+                        int img_width, int img_height, int img_width_cr, int img_height_cr);
 
 static void copyPredMB (int currYBlockNum, imgpel *predMB, frame *recfr,
                         int picSizeX, int regionSize);
@@ -1033,8 +1030,8 @@ static int compare_pic_by_poc_desc( const void *arg1, const void *arg2 )
 ************************************************************************
 */
 
-static void CopyImgData(imgpel **inputY, imgpel ***inputUV, imgpel **outputY,
-                        imgpel ***outputUV, int img_width, int img_height)
+static void CopyImgData(imgpel **inputY, imgpel ***inputUV, imgpel **outputY, imgpel ***outputUV, 
+                        int img_width, int img_height, int img_width_cr, int img_height_cr)
 {
   int x, y;
 
@@ -1042,8 +1039,8 @@ static void CopyImgData(imgpel **inputY, imgpel ***inputUV, imgpel **outputY,
     for (x=0; x<img_width; x++)
       outputY[y][x] = inputY[y][x];
 
-  for (y=0; y<img_height/2; y++)
-    for (x=0; x<img_width/2; x++)
+  for (y=0; y<img_height_cr; y++)
+    for (x=0; x<img_width_cr; x++)
     {
       outputUV[0][y][x] = inputUV[0][y][x];
       outputUV[1][y][x] = inputUV[1][y][x];
@@ -1130,10 +1127,7 @@ static void copy_to_conceal(StorablePicture *src, StorablePicture *dst, ImagePar
     dst->PicWidthInMbs = src->PicWidthInMbs;
     dst->PicSizeInMbs = src->PicSizeInMbs;
 
-    CopyImgData(src->imgY, src->imgUV,
-      dst->imgY, dst->imgUV,
-      img->width, img->height);
-
+    CopyImgData( src->imgY, src->imgUV, dst->imgY, dst->imgUV, img->width, img->height, img->width_cr, img->height_cr);
   }
 
   // Conceals the missing frame by motion vector copy concealment
@@ -1632,7 +1626,8 @@ void add_node( struct concealment_node *concealment_new )
 void delete_node( struct concealment_node *ptr )
 {
   // We only need to delete the first node in the linked list
-  if( ptr == concealment_head ) {
+  if( ptr == concealment_head ) 
+  {
     concealment_head = concealment_head->next;
     if( concealment_end == ptr )
       concealment_end = concealment_end->next;
@@ -1654,7 +1649,8 @@ void delete_list( struct concealment_node *ptr )
 
   if( concealment_head == NULL ) return;
 
-  if( ptr == concealment_head ) {
+  if( ptr == concealment_head ) 
+  {
     concealment_head = NULL;
     concealment_end = NULL;
   }
@@ -1667,7 +1663,8 @@ void delete_list( struct concealment_node *ptr )
     concealment_end = temp;
   }
 
-  while( ptr != NULL ) {
+  while( ptr != NULL ) 
+  {
     temp = ptr->next;
     free( ptr );
     ptr = temp;

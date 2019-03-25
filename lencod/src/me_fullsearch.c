@@ -16,9 +16,7 @@
 
 // Includes
 #include "contributors.h"
-#include <stdlib.h>
 #include <limits.h>
-#include <string.h>
 
 #include "global.h"
 #include "image.h"

@@ -11,7 +11,6 @@
  *      - Karsten Sühring          <suehring@hhi.de>
  *************************************************************************************
  */
-#include <assert.h>
 
 #include "global.h"
 #include "mb_access.h"
@@ -128,8 +127,8 @@ void get_mb_pos (int mb_addr, int *x, int*y, int is_chroma)
  ************************************************************************
  * \brief
  *    get neighbouring positions for non-aff coding
- * \param curr_mb_nr
- *   current macroblock number (decoding order)
+ * \param currMb
+ *   current macroblock
  * \param xN
  *    input x position
  * \param yN
@@ -189,8 +188,8 @@ void getNonAffNeighbour(Macroblock *currMb, int xN, int yN, int is_chroma, Pixel
  ************************************************************************
  * \brief
  *    get neighboring positions for aff coding
- * \param curr_mb_nr
- *   current macroblock number (decoding order)
+ * \param currMb
+ *   current macroblock
  * \param xN
  *    input x position
  * \param yN
@@ -534,8 +533,8 @@ void getAffNeighbour(Macroblock *currMb, int xN, int yN, int is_chroma, PixelPos
  ************************************************************************
  * \brief
  *    get neighboring 4x4 luma block
- * \param curr_mb_nr
- *   current macroblock number (decoding order)
+ * \param currMb
+ *   current macroblock
  * \param block_x_pos
  *    input x block position
  * \param block_y_pos
@@ -562,8 +561,8 @@ void getLuma4x4Neighbour (Macroblock *currMb, int block_x_pos, int block_y_pos, 
  ************************************************************************
  * \brief
  *    get neighboring 4x4 chroma block
- * \param curr_mb_nr
- *   current macroblock number (decoding order)
+ * \param currMb
+ *   current macroblock
  * \param block_x
  *    input x block position
  * \param block_y

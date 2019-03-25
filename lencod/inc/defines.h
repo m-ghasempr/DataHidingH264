@@ -27,7 +27,9 @@
 #define GET_METIME        1       //!< Enables or disables ME computation time
 #define DUMP_DPB          0       //!< Dump DPB for debug purposes
 #define IMGTYPE           1       //!< Define imgpel size type. 0 implies byte (cannot handle >8 bit depths) and 1 implies unsigned short
-#define ENABLE_FIELD_CTX  1       //!< Enables field context types for CABAC. If disabled, results in speedup for progressive content.
+#define ENABLE_FIELD_CTX    1       //!< Enables field context types for CABAC. If disabled, results in speedup for progressive content.
+#define ENABLE_HIGH444_CTX  1       //!< Enables field context types for CABAC. If disabled, results in speedup for progressive content.
+
 
 #define MAX_RC_MODE              3
 #define RC_MAX_TEMPORAL_LEVELS   5
@@ -89,7 +91,12 @@
 #define CR_8x4          19
 #define CR_4x8          20
 #define CR_4x4          21 
-#define NUM_BLOCK_TYPES 22  
+
+#if (ENABLE_HIGH444_CTX == 1)
+# define NUM_BLOCK_TYPES 22  
+#else
+# define NUM_BLOCK_TYPES 10
+#endif
 
 #define _FULL_SEARCH_RANGE_
 #define _ADAPT_LAST_GROUP_

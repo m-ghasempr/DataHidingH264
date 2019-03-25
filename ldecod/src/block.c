@@ -16,9 +16,6 @@
 
 #include "contributors.h"
 
-#include <stdlib.h>
-#include <string.h>
-
 #include "global.h"
 #include "block.h"
 #include "image.h"
@@ -145,7 +142,7 @@ int intrapred( Macroblock *currMB,
 {
   int i,j;
   int s0;
-  int img_y,img_x;
+  int img_y, img_x;
   imgpel PredPel[13];  // array of predictor pels
   int uv = pl-1;
   imgpel **imgY = (pl) ? dec_picture->imgUV[uv] : dec_picture->imgY;
@@ -199,10 +196,10 @@ int intrapred( Macroblock *currMB,
   // form predictor pels
   if (block_available_up)
   {
-    P_A = imgY[pix_b.pos_y][pix_b.pos_x+0];
-    P_B = imgY[pix_b.pos_y][pix_b.pos_x+1];
-    P_C = imgY[pix_b.pos_y][pix_b.pos_x+2];
-    P_D = imgY[pix_b.pos_y][pix_b.pos_x+3];
+    P_A = imgY[pix_b.pos_y][pix_b.pos_x + 0];
+    P_B = imgY[pix_b.pos_y][pix_b.pos_x + 1];
+    P_C = imgY[pix_b.pos_y][pix_b.pos_x + 2];
+    P_D = imgY[pix_b.pos_y][pix_b.pos_x + 3];
 
   }
   else
@@ -212,10 +209,10 @@ int intrapred( Macroblock *currMB,
 
   if (block_available_up_right)
   {
-    P_E = imgY[pix_c.pos_y][pix_c.pos_x+0];
-    P_F = imgY[pix_c.pos_y][pix_c.pos_x+1];
-    P_G = imgY[pix_c.pos_y][pix_c.pos_x+2];
-    P_H = imgY[pix_c.pos_y][pix_c.pos_x+3];
+    P_E = imgY[pix_c.pos_y][pix_c.pos_x + 0];
+    P_F = imgY[pix_c.pos_y][pix_c.pos_x + 1];
+    P_G = imgY[pix_c.pos_y][pix_c.pos_x + 2];
+    P_H = imgY[pix_c.pos_y][pix_c.pos_x + 3];
   }
   else
   {
@@ -1193,7 +1190,25 @@ void itrans_2(ColorPlane pl, struct img_par *img) //!< image parameters
   {
     qp_per = (img->qp + img->bitdepth_luma_qp_scale - MIN_QP)/6;
     qp_rem = (img->qp + img->bitdepth_luma_qp_scale - MIN_QP)%6;
-    invLevelScale = InvLevelScale4x4Luma_Intra[qp_rem][0][0];
+    if( IS_INDEPENDENT(img) )
+	{
+      if( img->colour_plane_id == 0 )
+      {
+        invLevelScale = InvLevelScale4x4Luma_Intra[qp_rem][0][0];
+      }
+      else if( img->colour_plane_id == 1 )
+      {
+        invLevelScale = InvLevelScale4x4Chroma_Intra[0][qp_rem][0][0];
+      }
+      else if( img->colour_plane_id == 2 )
+      {
+        invLevelScale = InvLevelScale4x4Chroma_Intra[1][qp_rem][0][0];
+      }
+	}
+	else
+	{
+      invLevelScale = InvLevelScale4x4Luma_Intra[qp_rem][0][0];
+	}
   }
 
   // horizontal
@@ -1711,7 +1726,7 @@ void iTransform(Macroblock *currMB, ColorPlane pl, struct img_par *img,  int nee
               {
                 *(cur_line++) = *(m7++);
               }
-              }
+            }
           }
         }
       }

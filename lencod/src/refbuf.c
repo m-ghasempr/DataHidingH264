@@ -8,10 +8,7 @@
  ************************************************************************
  */
 
-#include <stdlib.h>
-#include <memory.h>
 #include "global.h"
-
 #include "refbuf.h"
 
 

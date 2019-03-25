@@ -12,9 +12,6 @@
  **************************************************************************************
  */
 
-#include <stdlib.h>
-#include <string.h>
-
 #include "global.h"
 #include "cabac.h"
 #include "memalloc.h"
@@ -1245,8 +1242,35 @@ int read_and_store_CBP_block_bit (Macroblock              *currMB,
       cbp_bit = biari_decode_symbol (dep_dp, img->currentSlice->tex_ctx->bcbp_contexts[type2ctx_bcbp[type]] + ctx);
     }
   }
-  else 
+  else if( IS_INDEPENDENT(img) )
   {
+    if (type!=LUMA_8x8)
+    {
+      //--- get bits from neighbouring blocks ---
+      if (block_b.available)
+      {
+        if(img->mb_data[block_b.mb_addr].mb_type==IPCM)
+          upper_bit=1;
+        else
+          upper_bit = BIT_SET(img->mb_data[block_b.mb_addr].cbp_bits[0],bit+bit_pos_b);
+      }
+      
+      
+      if (block_a.available)
+      {
+        if(img->mb_data[block_a.mb_addr].mb_type==IPCM)
+          left_bit=1;
+        else
+          left_bit = BIT_SET(img->mb_data[block_a.mb_addr].cbp_bits[0],bit+bit_pos_a);
+      }
+      
+      
+      ctx = 2*upper_bit+left_bit;     
+      //===== encode symbol =====
+      cbp_bit = biari_decode_symbol (dep_dp, img->currentSlice->tex_ctx->bcbp_contexts[type2ctx_bcbp[type]] + ctx);
+    }
+  }
+  else {
     if (block_b.available)
     {
       if(img->mb_data[block_b.mb_addr].mb_type==IPCM)

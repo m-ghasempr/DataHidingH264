@@ -26,13 +26,9 @@
  */
 #include "contributors.h"
 
-#include <stdlib.h>
 #include <math.h>
 #include <time.h>
 #include <sys/timeb.h>
-#include <string.h>
-#include <memory.h>
-#include <assert.h>
 
 #include "global.h"
 
@@ -50,6 +46,9 @@
 #include "output.h"
 #include "cabac.h"
 #include "context_ini.h"
+
+#include "q_matrix.h"
+#include "q_offsets.h"
 
 extern pic_parameter_set_rbsp_t *PicParSet[MAXPPS];
 
@@ -1119,8 +1118,11 @@ static void distortion_fld (float *dis_fld_y, float *dis_fld_u, float *dis_fld_v
   imgUV_org = imgUV_org_frm;
 
   pImgOrg[0] = imgY_org_frm;
-  pImgOrg[1] = imgUV_org_frm[0];
-  pImgOrg[2] = imgUV_org_frm[1];
+  if (input->yuv_format != YUV400)
+  {
+    pImgOrg[1] = imgUV_org_frm[0];
+    pImgOrg[2] = imgUV_org_frm[1];
+  }
 
   find_distortion ();   // find snr from original frame picture
 
@@ -1631,9 +1633,19 @@ void UnifiedOneForthPix (StorablePicture *s)
       { // YUV444
         get_mem5Dpel (&(s->imgUV_sub), 2, 4, 4, ypadded_size, xpadded_size);
       }
+      s->p_img_sub[1] = s->imgUV_sub[0];
+      s->p_img_sub[2] = s->imgUV_sub[1];
     }
-    s->p_img_sub[1] = s->imgUV_sub[0];
-    s->p_img_sub[2] = s->imgUV_sub[1];
+    else
+    {
+      s->p_img_sub[1] = NULL;
+      s->p_img_sub[2] = NULL;
+    }
+  }
+  else
+  {
+    s->p_img_sub[1] = NULL;
+    s->p_img_sub[2] = NULL;
   }
   s->p_curr_img = s->imgY;
   s->p_curr_img_sub = s->imgY_sub;
@@ -1656,7 +1668,7 @@ void UnifiedOneForthPix (StorablePicture *s)
       select_plane(PLANE_Y);
     }
     else
-    getSubImagesChroma( s );
+      getSubImagesChroma( s );
   }
 }
 
@@ -1763,8 +1775,6 @@ static void find_snr (void)
     pCurImg  = imgY_org_frm;
     imgUV_org = imgUV_org_frm;
     pImgOrg[0] = imgY_org_frm;
-    pImgOrg[1] = imgUV_org_frm[0];
-    pImgOrg[2] = imgUV_org_frm[1];
 
 
     if(input->PicInterlace==ADAPTIVE_CODING)
@@ -1784,6 +1794,8 @@ static void find_snr (void)
     if (img->yuv_format != YUV400)
     {
       //     Chroma.
+      pImgOrg[1] = imgUV_org_frm[0];
+      pImgOrg[2] = imgUV_org_frm[1];
       diff_u = 0;
       diff_v = 0;
 
@@ -2070,8 +2082,6 @@ static void find_distortion (void)
     pCurImg  = imgY_org_frm;
     imgUV_org = imgUV_org_frm;
     pImgOrg[0] = imgY_org_frm;
-    pImgOrg[1] = imgUV_org_frm[0];
-    pImgOrg[2] = imgUV_org_frm[1];
 
     for (i = 0; i < input->img_width; ++i)
     {
@@ -2084,6 +2094,8 @@ static void find_distortion (void)
     if (img->yuv_format != YUV400)
     {
       //     Chroma.
+      pImgOrg[1] = imgUV_org_frm[0];
+      pImgOrg[2] = imgUV_org_frm[1];
       for (uv = 0; uv < 2; uv ++)
       {
         for (i = 0; i < input->img_width_cr; i++)
@@ -2304,7 +2316,8 @@ void copy_rdopt_data (Macroblock *currMB, int bot_block)
   {
     memcpy(currMB->intra_pred_modes,rdopt->intra_pred_modes, MB_BLOCK_PARTITIONS * sizeof(char));
     memcpy(currMB->intra_pred_modes8x8,rdopt->intra_pred_modes8x8, MB_BLOCK_PARTITIONS * sizeof(char));
-    for (j = img->block_y; j < img->block_y + BLOCK_MULTIPLE; j++) {
+    for (j = img->block_y; j < img->block_y + BLOCK_MULTIPLE; j++) 
+    {
       memcpy(&img->ipredmode[j][img->block_x],&rdopt->ipredmode[j][img->block_x], BLOCK_MULTIPLE * sizeof(char));
     }
   }
@@ -2966,8 +2979,11 @@ static void put_buffer_frame(void)
   pCurImg    = imgY_org_frm;
   imgUV_org  = imgUV_org_frm;
   pImgOrg[0] = imgY_org_frm;
-  pImgOrg[1] = imgUV_org_frm[0];
-  pImgOrg[2] = imgUV_org_frm[1];
+  if (img->yuv_format != YUV400)
+  {
+    pImgOrg[1] = imgUV_org_frm[0];
+    pImgOrg[2] = imgUV_org_frm[1];
+  }
 }
 
 /*!
@@ -2983,9 +2999,11 @@ static void put_buffer_top(void)
   pCurImg    = imgY_org_top;
   imgUV_org  = imgUV_org_top;
   pImgOrg[0] = imgY_org_top;
-  pImgOrg[1] = imgUV_org_top[0];
-  pImgOrg[2] = imgUV_org_top[1];
-
+  if (img->yuv_format != YUV400)
+  {
+    pImgOrg[1] = imgUV_org_top[0];
+    pImgOrg[2] = imgUV_org_top[1];
+  }
 }
 
 /*!
@@ -3001,8 +3019,11 @@ static void put_buffer_bot(void)
   pCurImg    = imgY_org_bot;
   imgUV_org  = imgUV_org_bot;
   pImgOrg[0] = imgY_org_bot;
-  pImgOrg[1] = imgUV_org_bot[0];
-  pImgOrg[2] = imgUV_org_bot[1];
+  if (img->yuv_format != YUV400)
+  {
+    pImgOrg[1] = imgUV_org_bot[0];
+    pImgOrg[2] = imgUV_org_bot[1];
+  }
 }
 
 /*!

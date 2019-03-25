@@ -14,7 +14,6 @@
 
 #include "contributors.h"
 #include "global.h"
-#include "stdlib.h"
 
 #ifdef _LEAKYBUCKET_
 /*!
@@ -108,8 +107,10 @@ void calc_buffer(struct inp_par *inp)
   }
 
   printf("\n");
-  if(iBucket > 0 ) {
-    if(iBucket < NumberLeakyBuckets) {
+  if(iBucket > 0 ) 
+  {
+    if(iBucket < NumberLeakyBuckets) 
+    {
       dnr = (float) (Rmin[iBucket] - Rmin[iBucket-1]);
       frac1 = (float) (R_decoder - Rmin[iBucket-1]);
       frac2 = (float) (Rmin[iBucket] - R_decoder);

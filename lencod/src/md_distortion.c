@@ -9,13 +9,9 @@
  **************************************************************************
  */
 
-#include <stdlib.h>
 #include <math.h>
-#include <assert.h>
 #include <limits.h>
 #include <float.h>
-#include <memory.h>
-#include <string.h>
 
 #include "global.h"
 #include "rdopt_coding_state.h"

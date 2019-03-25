@@ -18,8 +18,6 @@
 
 #include "contributors.h"
 
-#include <stdlib.h>
-#include <assert.h>
 #include <math.h>
 #include <float.h>
 
@@ -36,6 +34,8 @@
 #include "context_ini.h"
 #include "ratectl.h"
 #include "me_epzs.h"
+
+#include "q_offsets.h"
 
 // Local declarations
 static Slice *malloc_slice();
@@ -911,7 +911,6 @@ static void init_slice (int start_mb_addr)
         }
       }
   }
-
 }
 
 
@@ -1132,7 +1131,7 @@ void poc_ref_pic_reorder(StorablePicture **list, unsigned num_ref_idx_lX_active,
   }
 
   // Now access all references in buffer and assign them
-  // to a pottential reordering list. For each one of these
+  // to a potential reordering list. For each one of these
   // references compute the poc distance compared to current
   // frame.
   for (i=0; i<dpb.ref_frames_in_buffer; i++)
@@ -1153,7 +1152,6 @@ void poc_ref_pic_reorder(StorablePicture **list, unsigned num_ref_idx_lX_active,
       }
     }
   }
-
 
   // now sort these references based on poc (temporal) distance
   for (i=0; i< dpb.ref_frames_in_buffer-1; i++)
@@ -1234,18 +1232,13 @@ void poc_ref_pic_reorder(StorablePicture **list, unsigned num_ref_idx_lX_active,
         break;
       }
 
-      for(j=0; j<num_ref_idx_lX_active; j++)
-      {
-        default_order[j] = tmp_reorder[j];
-      }
+      memcpy ( default_order, tmp_reorder, num_ref_idx_lX_active * sizeof(int));
 
     }
     reordering_of_pic_nums_idc[i] = 3;
 
-    for(j=0; j<num_ref_idx_lX_active; j++)
-    {
-      default_order[j] = tmp_reorder[j];
-    }
+    memcpy ( default_order, tmp_reorder, num_ref_idx_lX_active * sizeof(int));
+
 
     if (list_no==0)
     {

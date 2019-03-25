@@ -209,6 +209,9 @@
 				RelativePath=".\lencod\src\mbuffer.c">
 			</File>
 			<File
+				RelativePath=".\lencod\src\mc_prediction.c">
+			</File>
+			<File
 				RelativePath=".\lencod\src\md_distortion.c">
 			</File>
 			<File
@@ -388,6 +391,9 @@
 			</File>
 			<File
 				RelativePath=".\lencod\inc\mbuffer.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\mc_prediction.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\me_distortion.h">

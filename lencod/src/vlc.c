@@ -16,13 +16,9 @@
 
 #include "contributors.h"
 
-#include <stdlib.h>
 #include <math.h>
-#include <string.h>
-#include <assert.h>
 
 #include "global.h"
-
 #include "vlc.h"
 
 #if TRACE

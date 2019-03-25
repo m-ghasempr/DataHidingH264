@@ -15,7 +15,11 @@
 #define _WIN32_H_
 
 # include <fcntl.h>
+# include <stdlib.h>
 # include <stdio.h>
+# include <string.h>
+# include <assert.h>
+
 
 #if defined(WIN32)
 # include <io.h>
@@ -39,7 +43,6 @@
 # define  inline   _inline
 #else
 # include <unistd.h>
-# include <strings.h>
 # define  TIMEB    timeb
 # define  tell(fd) lseek(fd, 0, SEEK_CUR)
 # define  OPENFLAGS_WRITE O_WRONLY|O_CREAT|O_TRUNC
