@@ -50,6 +50,8 @@
 // #define PRINT_TONE_MAPPING                         // uncomment to print tone-mapping SEI info
 // #define PRINT_POST_FILTER_HINT_INFO                // uncomment to print post-filter hint SEI info
 // #define PRINT_FRAME_PACKING_ARRANGEMENT_INFO       // uncomment to print frame packing arrangement SEI info
+// #define PRINT_GREEN_METADATA_INFO      // uncomment to print Green Metadata SEI info
+
 /*!
  ************************************************************************
  *  \brief
@@ -166,6 +168,9 @@ void InterpretSEIMessage(byte* msg, int size, VideoParameters *p_Vid, Slice *pSl
       break;
     case  SEI_FRAME_PACKING_ARRANGEMENT:
       interpret_frame_packing_arrangement_info( msg+offset, payload_size, p_Vid );
+      break;
+    case  SEI_GREEN_METADATA:
+      interpret_green_metadata_info( msg+offset, payload_size, p_Vid );
       break;
     default:
       interpret_reserved_info( msg+offset, payload_size, p_Vid );
@@ -2233,4 +2238,77 @@ void interpret_post_filter_hints_info( byte* payload, int size, VideoParameters 
 
   free_mem3Dint (filter_hint);
   free( buf );
+}
+
+
+void interpret_green_metadata_info(byte* payload, int size, VideoParameters *p_Vid )
+{
+  Green_metadata_information_struct seiGreenMetadataInfo;
+
+  Bitstream* buf;
+
+  buf = malloc(sizeof(Bitstream));
+
+  buf->bitstream_length = size;
+  buf->streamBuffer = payload;
+  buf->frame_bitoffset = 0;
+
+  p_Dec->UsedBits = 0;
+
+#ifdef PRINT_GREEN_METADATA_INFO
+  printf("Green Metadata Info SEI message\n");
+#endif
+
+  seiGreenMetadataInfo.green_metadata_type=(unsigned char)read_u_v(8, "SEI: green_metadata_type", buf, &p_Dec->UsedBits );
+#ifdef PRINT_GREEN_METADATA_INFO
+  printf("green_metadata_type                 = %d\n", seiGreenMetadataInfo.green_metadata_type);
+#endif
+  if ( seiGreenMetadataInfo.green_metadata_type == 0)
+  {
+      seiGreenMetadataInfo.period_type=(unsigned char)read_u_v(8, "SEI: green_metadata_period_type", buf, &p_Dec->UsedBits );
+#ifdef PRINT_GREEN_METADATA_INFO
+    printf("green_metadata_period_type     = %d\n", seiGreenMetadataInfo.period_type);
+#endif
+
+    if ( seiGreenMetadataInfo.period_type == 2)
+    {
+      seiGreenMetadataInfo.num_seconds = (unsigned short)read_u_v(16, "SEI: green_metadata_num_seconds", buf, &p_Dec->UsedBits );
+#ifdef PRINT_GREEN_METADATA_INFO
+      printf("green_metadata_num_seconds      = %d\n", seiGreenMetadataInfo.num_seconds);
+#endif
+    }
+    else if ( seiGreenMetadataInfo.period_type == 3)
+    {
+      seiGreenMetadataInfo.num_pictures = (unsigned short)read_u_v(16, "SEI: green_metadata_num_pictures", buf, &p_Dec->UsedBits );
+  #ifdef PRINT_GREEN_METADATA_INFO
+      printf("green_metadata_num_pictures      = %d\n", seiGreenMetadataInfo.num_pictures);
+  #endif
+    }
+
+    seiGreenMetadataInfo.percent_non_zero_macroblocks=(unsigned char)read_u_v(8, "SEI: percent_non_zero_macroblocks", buf, &p_Dec->UsedBits );
+    seiGreenMetadataInfo.percent_intra_coded_macroblocks=(unsigned char)read_u_v(8, "SEI: percent_intra_coded_macroblocks", buf, &p_Dec->UsedBits );
+    seiGreenMetadataInfo.percent_six_tap_filtering=(unsigned char)read_u_v(8, "SEI: percent_six_tap_filtering", buf, &p_Dec->UsedBits );
+    seiGreenMetadataInfo.percent_alpha_point_deblocking_instance=(unsigned char)read_u_v(8, "SEI: percent_alpha_point_deblocking_instance", buf, &p_Dec->UsedBits );
+
+#ifdef PRINT_GREEN_METADATA_INFO
+    printf("percent_non_zero_macroblocks      = %f\n", (float)seiGreenMetadataInfo.percent_non_zero_macroblocks/255);
+    printf("percent_intra_coded_macroblocks      = %f\n", (float)seiGreenMetadataInfo.percent_intra_coded_macroblocks/255);
+    printf("percent_six_tap_filtering      = %f\n", (float)seiGreenMetadataInfo.percent_six_tap_filtering/255);
+    printf("percent_alpha_point_deblocking_instance      = %f\n", (float)seiGreenMetadataInfo.percent_alpha_point_deblocking_instance/255);
+#endif
+
+  }
+  else if( seiGreenMetadataInfo.green_metadata_type == 1)
+  {
+    seiGreenMetadataInfo.xsd_metric_type=(unsigned char)read_u_v(8, "SEI: xsd_metric_type", buf, &p_Dec->UsedBits );
+    seiGreenMetadataInfo.xsd_metric_value=(unsigned short)read_u_v(16, "SEI: xsd_metric_value", buf, &p_Dec->UsedBits );
+#ifdef PRINT_GREEN_METADATA_INFO
+    printf("xsd_metric_type      = %d\n", seiGreenMetadataInfo.xsd_metric_type);
+    if ( seiGreenMetadataInfo.xsd_metric_type == 0)
+        printf("xsd_metric_value      = %f\n", (float)seiGreenMetadataInfo.xsd_metric_value/100);
+#endif
+
+  }
+
+  free (buf);
 }

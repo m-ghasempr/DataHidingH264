@@ -1611,7 +1611,8 @@ extern void setup_coding_layer(VideoParameters *p_Vid);
 
 static inline int is_FREXT_profile(unsigned int profile_idc) 
 {
-  return ( profile_idc>=FREXT_HP || profile_idc == FREXT_CAVLC444 );
+  // we allow all FRExt tools, when no profile is active
+  return ( profile_idc==NO_PROFILE || profile_idc==FREXT_HP || profile_idc==FREXT_Hi10P || profile_idc==FREXT_Hi422 || profile_idc==FREXT_Hi444 || profile_idc == FREXT_CAVLC444 );
 }
 
 

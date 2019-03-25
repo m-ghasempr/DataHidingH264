@@ -456,99 +456,96 @@ static void edge_loop_luma_ver_MBAff(ColorPlane pl, imgpel** Img, byte *Strength
   Macroblock *MbP;
   imgpel   *SrcPtrP, *SrcPtrQ;
 
-  if (MbQ->DFDisableIdc == 0)
+  for( pel = 0 ; pel < MB_BLOCK_SIZE ; ++pel )
   {
-    for( pel = 0 ; pel < MB_BLOCK_SIZE ; ++pel )
+    getAffNeighbour(MbQ, edge - 1, pel, p_Vid->mb_size[IS_LUMA], &pixP);     
+
+    if ( pixP.available || (MbQ->DFDisableIdc == 0))
     {
-      getAffNeighbour(MbQ, edge - 1, pel, p_Vid->mb_size[IS_LUMA], &pixP);     
-
-      if (pixP.available)
+      if( (Strng = Strength[pel]) != 0)
       {
-        if( (Strng = Strength[pel]) != 0)
-        {
-          getAffNeighbour(MbQ, edge, pel, p_Vid->mb_size[IS_LUMA], &pixQ);
+        getAffNeighbour(MbQ, edge, pel, p_Vid->mb_size[IS_LUMA], &pixQ);
 
-          MbP = &(p_Vid->mb_data[pixP.mb_addr]);
+        MbP = &(p_Vid->mb_data[pixP.mb_addr]);
 
-          SrcPtrQ = &(Img[pixQ.pos_y][pixQ.pos_x]);
-          SrcPtrP = &(Img[pixP.pos_y][pixP.pos_x]);
+        SrcPtrQ = &(Img[pixQ.pos_y][pixQ.pos_x]);
+        SrcPtrP = &(Img[pixP.pos_y][pixP.pos_x]);
 
-          // Average QP of the two blocks
-          QP = pl? ((MbP->qpc[pl-1] + MbQ->qpc[pl-1] + 1) >> 1) : (MbP->qp + MbQ->qp + 1) >> 1;
+        // Average QP of the two blocks
+        QP = pl? ((MbP->qpc[pl-1] + MbQ->qpc[pl-1] + 1) >> 1) : (MbP->qp + MbQ->qp + 1) >> 1;
 
-          indexA = iClip3(0, MAX_QP, QP + AlphaC0Offset);
-          indexB = iClip3(0, MAX_QP, QP + BetaOffset);
+        indexA = iClip3(0, MAX_QP, QP + AlphaC0Offset);
+        indexB = iClip3(0, MAX_QP, QP + BetaOffset);
 
-          Alpha   = ALPHA_TABLE[indexA] * bitdepth_scale;
-          Beta    = BETA_TABLE [indexB] * bitdepth_scale;
-          ClipTab = CLIP_TAB[indexA];
+        Alpha   = ALPHA_TABLE[indexA] * bitdepth_scale;
+        Beta    = BETA_TABLE [indexB] * bitdepth_scale;
+        ClipTab = CLIP_TAB[indexA];
 
-          L0  = SrcPtrP[ 0] ;
-          R0  = SrcPtrQ[ 0] ;      
+        L0  = SrcPtrP[ 0] ;
+        R0  = SrcPtrQ[ 0] ;      
 
-          if( iabs( R0 - L0 ) < Alpha )
-          {          
-            L1  = SrcPtrP[-1];
-            R1  = SrcPtrQ[ 1];                
+        if( iabs( R0 - L0 ) < Alpha )
+        {          
+          L1  = SrcPtrP[-1];
+          R1  = SrcPtrQ[ 1];                
 
-            if ((iabs( R0 - R1) < Beta )   && (iabs(L0 - L1) < Beta ))
+          if ((iabs( R0 - R1) < Beta )   && (iabs(L0 - L1) < Beta ))
+          {
+            L2  = SrcPtrP[-2];
+            R2  = SrcPtrQ[ 2];
+            if(Strng == 4 )    // INTRA strong filtering
             {
-              L2  = SrcPtrP[-2];
-              R2  = SrcPtrQ[ 2];
-              if(Strng == 4 )    // INTRA strong filtering
+              int RL0 = L0 + R0;
+              int small_gap = (iabs( R0 - L0 ) < ((Alpha >> 2) + 2));
+              int aq  = ( iabs( R0 - R2) < Beta ) & small_gap;               
+              int ap  = ( iabs( L0 - L2) < Beta ) & small_gap;
+
+              if (ap)
               {
-                int RL0 = L0 + R0;
-                int small_gap = (iabs( R0 - L0 ) < ((Alpha >> 2) + 2));
-                int aq  = ( iabs( R0 - R2) < Beta ) & small_gap;               
-                int ap  = ( iabs( L0 - L2) < Beta ) & small_gap;
-
-                if (ap)
-                {
-                  int L3  = SrcPtrP[-3];
-                  SrcPtrP[-2 ] = (imgpel) ((((L3 + L2) << 1) + L2 + L1 + RL0 + 4) >> 3);
-                  SrcPtrP[-1 ] = (imgpel) (( L2 + L1 + L0 + R0 + 2) >> 2);
-                  SrcPtrP[ 0 ] = (imgpel) (( R1 + ((L1 + RL0) << 1) +  L2 + 4) >> 3);
-                }
-                else
-                {
-                  SrcPtrP[ 0 ] = (imgpel) (((L1 << 1) + L0 + R1 + 2) >> 2) ;
-                }
-
-                if (aq)
-                {
-                  imgpel R3  = SrcPtrQ[ 3];
-                  SrcPtrQ[ 0 ] = (imgpel) (( L1 + ((R1 + RL0) << 1) +  R2 + 4) >> 3);
-                  SrcPtrQ[ 1 ] = (imgpel) (( R2 + R0 + R1 + L0 + 2) >> 2);
-                  SrcPtrQ[ 2 ] = (imgpel) ((((R3 + R2) << 1) + R2 + R1 + RL0 + 4) >> 3);
-                }
-                else
-                {
-                  SrcPtrQ[ 0 ] = (imgpel) (((R1 << 1) + R0 + L1 + 2) >> 2);
-                }
+                int L3  = SrcPtrP[-3];
+                SrcPtrP[-2 ] = (imgpel) ((((L3 + L2) << 1) + L2 + L1 + RL0 + 4) >> 3);
+                SrcPtrP[-1 ] = (imgpel) (( L2 + L1 + L0 + R0 + 2) >> 2);
+                SrcPtrP[ 0 ] = (imgpel) (( R1 + ((L1 + RL0) << 1) +  L2 + 4) >> 3);
               }
-              else   // normal filtering
-              {              
-                int RL0 = (L0 + R0 + 1) >> 1;
-                int aq  = (iabs( R0 - R2) < Beta);
-                int ap  = (iabs( L0 - L2) < Beta);
+              else
+              {
+                SrcPtrP[ 0 ] = (imgpel) (((L1 << 1) + L0 + R1 + 2) >> 2) ;
+              }
 
-                int C0  = ClipTab[ Strng ] * bitdepth_scale;
-                int tc0  = (C0 + ap + aq) ;
-                int dif = iClip3( -tc0, tc0, (((R0 - L0) << 2) + (L1 - R1) + 4) >> 3) ;
-
-                if( ap && (C0 != 0))
-                  *(SrcPtrP - 1) += iClip3( -C0,  C0, ( L2 + RL0 - (L1 << 1)) >> 1 ) ;
-
-                if (dif)
-                {
-                  *SrcPtrP  = (imgpel) iClip1 (max_imgpel_value, L0 + dif) ;
-                  *SrcPtrQ  = (imgpel) iClip1 (max_imgpel_value, R0 - dif) ;
-                }
-
-                if( aq  && (C0 != 0))
-                  *(SrcPtrQ + 1) += iClip3( -C0,  C0, ( R2 + RL0 - (R1 << 1)) >> 1 ) ;
-              }            
+              if (aq)
+              {
+                imgpel R3  = SrcPtrQ[ 3];
+                SrcPtrQ[ 0 ] = (imgpel) (( L1 + ((R1 + RL0) << 1) +  R2 + 4) >> 3);
+                SrcPtrQ[ 1 ] = (imgpel) (( R2 + R0 + R1 + L0 + 2) >> 2);
+                SrcPtrQ[ 2 ] = (imgpel) ((((R3 + R2) << 1) + R2 + R1 + RL0 + 4) >> 3);
+              }
+              else
+              {
+                SrcPtrQ[ 0 ] = (imgpel) (((R1 << 1) + R0 + L1 + 2) >> 2);
+              }
             }
+            else   // normal filtering
+            {              
+              int RL0 = (L0 + R0 + 1) >> 1;
+              int aq  = (iabs( R0 - R2) < Beta);
+              int ap  = (iabs( L0 - L2) < Beta);
+
+              int C0  = ClipTab[ Strng ] * bitdepth_scale;
+              int tc0  = (C0 + ap + aq) ;
+              int dif = iClip3( -tc0, tc0, (((R0 - L0) << 2) + (L1 - R1) + 4) >> 3) ;
+
+              if( ap && (C0 != 0))
+                *(SrcPtrP - 1) += iClip3( -C0,  C0, ( L2 + RL0 - (L1 << 1)) >> 1 ) ;
+
+              if (dif)
+              {
+                *SrcPtrP  = (imgpel) iClip1 (max_imgpel_value, L0 + dif) ;
+                *SrcPtrQ  = (imgpel) iClip1 (max_imgpel_value, R0 - dif) ;
+              }
+
+              if( aq  && (C0 != 0))
+                *(SrcPtrQ + 1) += iClip3( -C0,  C0, ( R2 + RL0 - (R1 << 1)) >> 1 ) ;
+            }            
           }
         }
       }

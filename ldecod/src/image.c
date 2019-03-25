@@ -1350,6 +1350,8 @@ int read_new_slice(Slice *currSlice)
   int BitsUsedByHeader;
   Bitstream *currStream = NULL;
 
+  static NALU_t *pending_nalu = NULL;
+
   int slice_id_a, slice_id_b, slice_id_c;
 
   for (;;)
@@ -1357,8 +1359,16 @@ int read_new_slice(Slice *currSlice)
 #if (MVC_EXTENSION_ENABLE)
     currSlice->svc_extension_flag = -1;
 #endif
-    if (0 == read_next_nalu(p_Vid, nalu))
-      return EOS;
+    if (!pending_nalu)
+    {
+      if (0 == read_next_nalu(p_Vid, nalu))
+        return EOS;
+    }
+    else
+    {
+      nalu = pending_nalu;
+      pending_nalu = NULL;
+    }
 
 #if (MVC_EXTENSION_ENABLE)
     if(p_Inp->DecodeAllLayers == 1 && (nalu->nal_unit_type == NALU_TYPE_PREFIX || nalu->nal_unit_type == NALU_TYPE_SLC_EXT))
@@ -1685,10 +1695,11 @@ process_nalu:
       else
       {
         currSlice->dpC_NotPresent =1;
+        pending_nalu = nalu;
       }
 
       // check if we read anything else than the expected partitions
-      if ((nalu->nal_unit_type != NALU_TYPE_DPB) && (nalu->nal_unit_type != NALU_TYPE_DPC))
+      if ((nalu->nal_unit_type != NALU_TYPE_DPB) && (nalu->nal_unit_type != NALU_TYPE_DPC) && (!currSlice->dpC_NotPresent))
       {
         // we have a NALI that we can't process here, so restart processing
         goto process_nalu;

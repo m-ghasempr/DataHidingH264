@@ -286,48 +286,35 @@ int RestOfSliceHeader(Slice *currSlice)
       error ("slice_qs_delta makes slice_qs_y out of range", 500);
   }
 
-  if ( !HI_intra_only_profile(active_sps->profile_idc, active_sps->constrained_set3_flag) || (p_Inp->intra_profile_deblocking == 1) )
-  //then read flags and parameters from bistream
-  {
 #if DPF_PARAM_DISP
-    printf("deblocking_filter_control_present_flag:%d\n", p_Vid->active_pps->deblocking_filter_control_present_flag);
+  printf("deblocking_filter_control_present_flag:%d\n", p_Vid->active_pps->deblocking_filter_control_present_flag);
 #endif
-    if (p_Vid->active_pps->deblocking_filter_control_present_flag)
-    {
-      currSlice->DFDisableIdc = (short) read_ue_v ("SH: disable_deblocking_filter_idc", currStream, &p_Dec->UsedBits);
+  if (p_Vid->active_pps->deblocking_filter_control_present_flag)
+  {
+    currSlice->DFDisableIdc = (short) read_ue_v ("SH: disable_deblocking_filter_idc", currStream, &p_Dec->UsedBits);
 
-      if (currSlice->DFDisableIdc!=1)
-      {
-        currSlice->DFAlphaC0Offset = (short) (2 * read_se_v("SH: slice_alpha_c0_offset_div2", currStream, &p_Dec->UsedBits));
-        currSlice->DFBetaOffset    = (short) (2 * read_se_v("SH: slice_beta_offset_div2", currStream, &p_Dec->UsedBits));
-      }
-      else
-      {
-        currSlice->DFAlphaC0Offset = currSlice->DFBetaOffset = 0;
-      }
+    if (currSlice->DFDisableIdc!=1)
+    {
+      currSlice->DFAlphaC0Offset = (short) (2 * read_se_v("SH: slice_alpha_c0_offset_div2", currStream, &p_Dec->UsedBits));
+      currSlice->DFBetaOffset    = (short) (2 * read_se_v("SH: slice_beta_offset_div2", currStream, &p_Dec->UsedBits));
     }
     else
     {
-      currSlice->DFDisableIdc = currSlice->DFAlphaC0Offset = currSlice->DFBetaOffset = 0;
+      currSlice->DFAlphaC0Offset = currSlice->DFBetaOffset = 0;
     }
-#if DPF_PARAM_DISP
-    printf("Slice:%d, DFParameters:(%d,%d,%d)\n\n", currSlice->current_slice_nr, currSlice->DFDisableIdc, currSlice->DFAlphaC0Offset, currSlice->DFBetaOffset);
-#endif
   }
-  else //By default the Loop Filter is Off
-  { //444_TEMP_NOTE: change made below. 08/07/07
-    //still need to parse the SEs (read flags and parameters from bistream) but will ignore
-    if (p_Vid->active_pps->deblocking_filter_control_present_flag)
-    {
-      currSlice->DFDisableIdc = (short) read_ue_v ("SH: disable_deblocking_filter_idc", currStream, &p_Dec->UsedBits);
+  else
+  {
+    currSlice->DFDisableIdc = currSlice->DFAlphaC0Offset = currSlice->DFBetaOffset = 0;
+  }
+#if DPF_PARAM_DISP
+  printf("Slice:%d, DFParameters:(%d,%d,%d)\n\n", currSlice->current_slice_nr, currSlice->DFDisableIdc, currSlice->DFAlphaC0Offset, currSlice->DFBetaOffset);
+#endif
 
-      if (currSlice->DFDisableIdc!=1)
-      {
-        currSlice->DFAlphaC0Offset = (short) (2 * read_se_v("SH: slice_alpha_c0_offset_div2", currStream, &p_Dec->UsedBits));
-        currSlice->DFBetaOffset    = (short) (2 * read_se_v("SH: slice_beta_offset_div2", currStream, &p_Dec->UsedBits));
-      }
-    }//444_TEMP_NOTE. the end of change. 08/07/07
-    //Ignore the SEs, by default the Loop Filter is Off
+  // The conformance point for intra profiles is without deblocking, but decoders are still recommended to filter the output.
+  // We allow in the decoder config to skip the loop filtering. This is achieved by modifying the parameters here.
+  if ( is_HI_intra_only_profile(active_sps->profile_idc, active_sps->constrained_set3_flag) && (p_Inp->intra_profile_deblocking == 0) )
+  {
     currSlice->DFDisableIdc =1;
     currSlice->DFAlphaC0Offset = currSlice->DFBetaOffset = 0;
   }

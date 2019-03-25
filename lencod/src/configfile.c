@@ -803,7 +803,7 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
 #endif
 
 #if (!ENABLE_HIGH444_CTX)
-  if ( p_Inp->ProfileIDC == 244 && p_Inp->symbol_mode )
+  if ( (p_Inp->ProfileIDC == FREXT_Hi444 || p_Inp->ProfileIDC == NO_PROFILE )&& p_Inp->symbol_mode )
   {
     snprintf(errortext, ET_SIZE, "Recompile with ENABLE_HIGH444_CTX set to one to enable the High 4:4:4 Profile with CABAC.");    
     error (errortext, 500);
@@ -1049,21 +1049,6 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
     p_Inp->ReferenceReorder = 0;
   }
 
-  if ( is_MVC_profile(p_Inp->ProfileIDC) )
-  {
-    if (p_Inp->ReferenceReorder > 1)
-    {
-      snprintf(errortext, ET_SIZE, "ReferenceReorder > 1 is not supported with the Multiview (118) or Stereo High (128) profiles and is therefore disabled. \n");
-      p_Inp->ReferenceReorder = 0;
-    }
-    if ( (p_Inp->PocMemoryManagement) && (p_Inp->PicInterlace > 0) )
-    {
-      snprintf(errortext, ET_SIZE, "PocMemoryManagement>0 is not supported with the Multiview (118) or Stereo High (128) profiles and is therefore disabled. \n");
-      p_Inp->PocMemoryManagement = 0;
-    }
-  }
-
-
   if (p_Inp->PocMemoryManagement && p_Inp->MbInterlace )
   {
     snprintf(errortext, ET_SIZE, "PocMemoryManagement is not supported with MBAFF\n");
@@ -1079,13 +1064,6 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
   if ((!p_Inp->rdopt)&&(p_Inp->MbInterlace==2))
   {
     snprintf(errortext, ET_SIZE, "MB AFF is not compatible with non-rd-optimized coding.");
-    error (errortext, 500);
-  }
-
-  // check RDoptimization mode and profile. FMD does not support Frex Profiles.
-  if (p_Inp->rdopt==2 && ( p_Inp->ProfileIDC>=FREXT_HP || p_Inp->ProfileIDC==FREXT_CAVLC444 ))
-  {
-    snprintf(errortext, ET_SIZE, "Fast Mode Decision methods not supported in FREX Profiles");
     error (errortext, 500);
   }
 
@@ -1115,13 +1093,6 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
   if (p_Inp->of_mode != PAR_OF_RTP && p_Inp->SparePictureOption == TRUE)
   {
     snprintf(errortext, ET_SIZE, "Only RTP output mode is compatible with spare picture features.");
-    error (errortext, 500);
-  }
-
-  // RTP is not defined for MVC yet
-  if (p_Inp->of_mode == PAR_OF_RTP && (( p_Inp->ProfileIDC == STEREO_HIGH ) || (p_Inp->ProfileIDC == MULTIVIEW_HIGH) ))
-  {
-    snprintf(errortext, ET_SIZE, "RTP output mode is not compatible with MVC profiles.");
     error (errortext, 500);
   }
 
@@ -1220,32 +1191,9 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
     error (errortext, 500);
   }
 
-  if(p_Inp->Transform8x8Mode && ( p_Inp->ProfileIDC<FREXT_HP && p_Inp->ProfileIDC!=FREXT_CAVLC444 ))
-  {
-    snprintf(errortext, ET_SIZE, "\nTransform8x8Mode may be used only with ProfileIDC %d to %d.", FREXT_HP, FREXT_Hi444);
-    error (errortext, 500);
-  }
-
   if (p_Inp->DisableIntra4x4 == 1 && p_Inp->DisableIntra16x16 == 1 && p_Inp->EnableIPCM == 0 && p_Inp->Transform8x8Mode == 0)
   {
     snprintf(errortext, ET_SIZE, "\nAt least one intra prediction mode needs to be enabled.");
-    error (errortext, 500);
-  }
-
-  if(p_Inp->ScalingMatrixPresentFlag && ( p_Inp->ProfileIDC<FREXT_HP && p_Inp->ProfileIDC!=FREXT_CAVLC444 ))
-  {
-    snprintf(errortext, ET_SIZE, "\nScalingMatrixPresentFlag may be used only with ProfileIDC %d to %d.", FREXT_HP, FREXT_Hi444);
-    error (errortext, 500);
-  }
-
-  if(p_Inp->yuv_format==YUV422 && ( p_Inp->ProfileIDC < FREXT_Hi422 && p_Inp->ProfileIDC!=FREXT_CAVLC444 ))
-  {
-    snprintf(errortext, ET_SIZE, "\nFRExt Profile(YUV Format) Error!\nYUV422 can be used only with ProfileIDC %d or %d\n",FREXT_Hi422, FREXT_Hi444);
-    error (errortext, 500);
-  }
-  if(p_Inp->yuv_format==YUV444 && ( p_Inp->ProfileIDC < FREXT_Hi444 && p_Inp->ProfileIDC!=FREXT_CAVLC444 ))
-  {
-    snprintf(errortext, ET_SIZE, "\nFRExt Profile(YUV Format) Error!\nYUV444 can be used only with ProfileIDC %d.\n",FREXT_Hi444);
     error (errortext, 500);
   }
 
@@ -1303,29 +1251,6 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
 
   if (p_Inp->EnableOpenGOP)
     p_Inp->ReferenceReorder = 1;
-
-#if (MVC_EXTENSION_ENABLE)
-  if((p_Inp->ProfileIDC==MULTIVIEW_HIGH || p_Inp->ProfileIDC==STEREO_HIGH) && p_Inp->num_of_views != 2)
-  {
-    snprintf(errortext, ET_SIZE, "NumberOfViews must be two if ProfileIDC is set to 118 (Multiview High Profile). Otherwise (for a single view) please select a non-multiview profile such as 100.");
-    error (errortext, 500);
-  }
-
-//  if (p_Inp->PicInterlace == 2 && p_Inp->MVCInterViewReorder != 0)
-//  {
-//    snprintf(errortext, ET_SIZE, "MVCInterViewReorder not supported with Adaptive Frame Field Coding");
-//    error (errortext, 500);
-//  }
-
-  if(p_Inp->MVCInterViewReorder)
-  {
-    if ( !is_MVC_profile(p_Inp->ProfileIDC) )
-    {
-      snprintf(errortext, ET_SIZE, "ProfileIDC must be 118, 128, 134, or 135 to use MVCInterViewReorder=1.");
-      error (errortext, 500);
-    }
-  }
-#endif
 
   if (p_Inp->SearchMode[0] != EPZS 
 #if (MVC_EXTENSION_ENABLE)

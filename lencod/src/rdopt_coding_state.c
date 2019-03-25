@@ -97,7 +97,7 @@ CSobj *create_coding_state (InputParameters *p_Inp)
     cs->tex_ctx = NULL;
   }
   
-  if (p_Inp->ProfileIDC == 244)
+  if (p_Inp->ProfileIDC == FREXT_Hi444)
   {
     if ((cs->cbp_bits_8x8 = (int64 *) calloc (3, sizeof(int64))) == NULL)
       no_mem_exit("init_coding_state: cs->cbp_bits_8x8"); 

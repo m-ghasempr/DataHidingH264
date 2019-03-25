@@ -39,18 +39,22 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v110</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v110</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v110</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v110</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -72,20 +76,20 @@
     <_ProjectFileVersion>10.0.30319.1</_ProjectFileVersion>
     <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">.\bin\</OutDir>
     <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">.\bin\</OutDir>
-    <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">.\lencod/$(Configuration)_$(Platform)_vc10\</IntDir>
-    <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">.\lencod/$(Configuration)_$(Platform)_vc10\</IntDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">.\lencod/$(Configuration)_$(Platform)_vc11\</IntDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">.\lencod/$(Configuration)_$(Platform)_vc11\</IntDir>
     <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</LinkIncremental>
     <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</LinkIncremental>
     <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">.\bin\</OutDir>
     <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">.\bin\</OutDir>
-    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">.\lencod\$(Configuration)_$(Platform)_vc10\</IntDir>
-    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">.\lencod\$(Configuration)_$(Platform)_vc10\</IntDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">.\lencod\$(Configuration)_$(Platform)_vc11\</IntDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">.\lencod\$(Configuration)_$(Platform)_vc11\</IntDir>
     <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</LinkIncremental>
     <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkIncremental>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Midl>
-      <TypeLibraryName>.\lencod/$(Configuration)_$(Platform)_vc10/lencod.tlb</TypeLibraryName>
+      <TypeLibraryName>.\lencod/$(Configuration)_$(Platform)_vc11/lencod.tlb</TypeLibraryName>
       <HeaderFileName>
       </HeaderFileName>
     </Midl>
@@ -98,14 +102,14 @@
       <OpenMPSupport>false</OpenMPSupport>
       <PrecompiledHeader>
       </PrecompiledHeader>
-      <PrecompiledHeaderOutputFile>.\lencod/$(Configuration)_$(Platform)_vc10/lencod.pch</PrecompiledHeaderOutputFile>
-      <AssemblerListingLocation>.\lencod/$(Configuration)_$(Platform)_vc10/</AssemblerListingLocation>
-      <ObjectFileName>.\lencod/$(Configuration)_$(Platform)_vc10/</ObjectFileName>
-      <ProgramDataBaseFileName>.\lencod/$(Configuration)_$(Platform)_vc10/</ProgramDataBaseFileName>
+      <PrecompiledHeaderOutputFile>.\lencod/$(Configuration)_$(Platform)_vc11/lencod.pch</PrecompiledHeaderOutputFile>
+      <AssemblerListingLocation>.\lencod/$(Configuration)_$(Platform)_vc11/</AssemblerListingLocation>
+      <ObjectFileName>.\lencod/$(Configuration)_$(Platform)_vc11/</ObjectFileName>
+      <ProgramDataBaseFileName>.\lencod/$(Configuration)_$(Platform)_vc11/</ProgramDataBaseFileName>
       <BrowseInformation>true</BrowseInformation>
       <WarningLevel>Level3</WarningLevel>
       <SuppressStartupBanner>true</SuppressStartupBanner>
-      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <CompileAs>Default</CompileAs>
     </ClCompile>
     <ResourceCompile>
@@ -117,7 +121,7 @@
       <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <ProgramDatabaseFile>.\lencod/$(Configuration)_$(Platform)_vc10/lencod.pdb</ProgramDatabaseFile>
+      <ProgramDatabaseFile>.\lencod/$(Configuration)_$(Platform)_vc11/lencod.pdb</ProgramDatabaseFile>
       <SubSystem>Console</SubSystem>
       <RandomizedBaseAddress>false</RandomizedBaseAddress>
       <DataExecutionPrevention>
@@ -127,7 +131,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Midl>
-      <TypeLibraryName>.\lencod/$(Configuration)_$(Platform)_vc10/lencod.tlb</TypeLibraryName>
+      <TypeLibraryName>.\lencod/$(Configuration)_$(Platform)_vc11/lencod.tlb</TypeLibraryName>
       <HeaderFileName>
       </HeaderFileName>
     </Midl>
@@ -140,10 +144,10 @@
       <OpenMPSupport>false</OpenMPSupport>
       <PrecompiledHeader>
       </PrecompiledHeader>
-      <PrecompiledHeaderOutputFile>.\lencod/$(Configuration)_$(Platform)_vc10/lencod.pch</PrecompiledHeaderOutputFile>
-      <AssemblerListingLocation>.\lencod/$(Configuration)_$(Platform)_vc10/</AssemblerListingLocation>
-      <ObjectFileName>.\lencod/$(Configuration)_$(Platform)_vc10/</ObjectFileName>
-      <ProgramDataBaseFileName>.\lencod/$(Configuration)_$(Platform)_vc10/</ProgramDataBaseFileName>
+      <PrecompiledHeaderOutputFile>.\lencod/$(Configuration)_$(Platform)_vc11/lencod.pch</PrecompiledHeaderOutputFile>
+      <AssemblerListingLocation>.\lencod/$(Configuration)_$(Platform)_vc11/</AssemblerListingLocation>
+      <ObjectFileName>.\lencod/$(Configuration)_$(Platform)_vc11/</ObjectFileName>
+      <ProgramDataBaseFileName>.\lencod/$(Configuration)_$(Platform)_vc11/</ProgramDataBaseFileName>
       <BrowseInformation>true</BrowseInformation>
       <WarningLevel>Level3</WarningLevel>
       <SuppressStartupBanner>true</SuppressStartupBanner>
@@ -159,7 +163,7 @@
       <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <ProgramDatabaseFile>.\lencod/$(Configuration)_$(Platform)_vc10/lencod.pdb</ProgramDatabaseFile>
+      <ProgramDatabaseFile>.\lencod/$(Configuration)_$(Platform)_vc11/lencod.pdb</ProgramDatabaseFile>
       <SubSystem>Console</SubSystem>
       <RandomizedBaseAddress>false</RandomizedBaseAddress>
       <DataExecutionPrevention>
@@ -168,7 +172,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <Midl>
-      <TypeLibraryName>.\lencod\$(Configuration)_$(Platform)_vc10/lencod.tlb</TypeLibraryName>
+      <TypeLibraryName>.\lencod\$(Configuration)_$(Platform)_vc11/lencod.tlb</TypeLibraryName>
       <HeaderFileName>
       </HeaderFileName>
     </Midl>
@@ -183,10 +187,10 @@
       <OpenMPSupport>false</OpenMPSupport>
       <PrecompiledHeader>
       </PrecompiledHeader>
-      <PrecompiledHeaderOutputFile>.\lencod\$(Configuration)_$(Platform)_vc10/lencod.pch</PrecompiledHeaderOutputFile>
-      <AssemblerListingLocation>.\lencod\$(Configuration)_$(Platform)_vc10/</AssemblerListingLocation>
-      <ObjectFileName>.\lencod\$(Configuration)_$(Platform)_vc10/</ObjectFileName>
-      <ProgramDataBaseFileName>.\lencod\$(Configuration)_$(Platform)_vc10/</ProgramDataBaseFileName>
+      <PrecompiledHeaderOutputFile>.\lencod\$(Configuration)_$(Platform)_vc11/lencod.pch</PrecompiledHeaderOutputFile>
+      <AssemblerListingLocation>.\lencod\$(Configuration)_$(Platform)_vc11/</AssemblerListingLocation>
+      <ObjectFileName>.\lencod\$(Configuration)_$(Platform)_vc11/</ObjectFileName>
+      <ProgramDataBaseFileName>.\lencod\$(Configuration)_$(Platform)_vc11/</ProgramDataBaseFileName>
       <BrowseInformation>true</BrowseInformation>
       <WarningLevel>Level3</WarningLevel>
       <SuppressStartupBanner>true</SuppressStartupBanner>
@@ -203,7 +207,7 @@
       <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <ProgramDatabaseFile>.\lencod\$(Configuration)_$(Platform)_vc10/lencod.pdb</ProgramDatabaseFile>
+      <ProgramDatabaseFile>.\lencod\$(Configuration)_$(Platform)_vc11/lencod.pdb</ProgramDatabaseFile>
       <SubSystem>Console</SubSystem>
       <RandomizedBaseAddress>false</RandomizedBaseAddress>
       <DataExecutionPrevention>
@@ -213,7 +217,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Midl>
-      <TypeLibraryName>.\lencod\$(Configuration)_$(Platform)_vc10/lencod.tlb</TypeLibraryName>
+      <TypeLibraryName>.\lencod\$(Configuration)_$(Platform)_vc11/lencod.tlb</TypeLibraryName>
       <HeaderFileName>
       </HeaderFileName>
     </Midl>
@@ -228,10 +232,10 @@
       <OpenMPSupport>false</OpenMPSupport>
       <PrecompiledHeader>
       </PrecompiledHeader>
-      <PrecompiledHeaderOutputFile>.\lencod\$(Configuration)_$(Platform)_vc10/lencod.pch</PrecompiledHeaderOutputFile>
-      <AssemblerListingLocation>.\lencod\$(Configuration)_$(Platform)_vc10/</AssemblerListingLocation>
-      <ObjectFileName>.\lencod\$(Configuration)_$(Platform)_vc10/</ObjectFileName>
-      <ProgramDataBaseFileName>.\lencod\$(Configuration)_$(Platform)_vc10/</ProgramDataBaseFileName>
+      <PrecompiledHeaderOutputFile>.\lencod\$(Configuration)_$(Platform)_vc11/lencod.pch</PrecompiledHeaderOutputFile>
+      <AssemblerListingLocation>.\lencod\$(Configuration)_$(Platform)_vc11/</AssemblerListingLocation>
+      <ObjectFileName>.\lencod\$(Configuration)_$(Platform)_vc11/</ObjectFileName>
+      <ProgramDataBaseFileName>.\lencod\$(Configuration)_$(Platform)_vc11/</ProgramDataBaseFileName>
       <BrowseInformation>true</BrowseInformation>
       <WarningLevel>Level3</WarningLevel>
       <SuppressStartupBanner>true</SuppressStartupBanner>
@@ -248,7 +252,7 @@
       <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <ProgramDatabaseFile>.\lencod\$(Configuration)_$(Platform)_vc10/lencod.pdb</ProgramDatabaseFile>
+      <ProgramDatabaseFile>.\lencod\$(Configuration)_$(Platform)_vc11/lencod.pdb</ProgramDatabaseFile>
       <SubSystem>Console</SubSystem>
       <RandomizedBaseAddress>false</RandomizedBaseAddress>
       <DataExecutionPrevention>

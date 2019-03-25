@@ -1508,72 +1508,80 @@ int GetBaseViewId(VideoParameters *p_Vid, subset_seq_parameter_set_rbsp_t **subs
 
 void get_max_dec_frame_buf_size(seq_parameter_set_rbsp_t *sps)
 {
-  int pic_size = (sps->pic_width_in_mbs_minus1 + 1) * (sps->pic_height_in_map_units_minus1 + 1) * (sps->frame_mbs_only_flag?1:2) * 384;
+  int pic_size_mb = (sps->pic_width_in_mbs_minus1 + 1) * (sps->pic_height_in_map_units_minus1 + 1) * (sps->frame_mbs_only_flag?1:2);
 
   int size = 0;
 
   switch (sps->level_idc)
   {
+  case 0:
+    // if there is no level defined, we expect experimental usage and return a DPB size of 16
+    size = 16 * pic_size_mb;
   case 9:
-    size = 152064;
+    size = 396;
     break;
   case 10:
-    size = 152064;
+    size = 396;
     break;
   case 11:
     if (!is_FREXT_profile(sps->profile_idc) && (sps->constrained_set3_flag == 1))
-      size = 152064;
+      size = 396;
     else
-      size = 345600;
+      size = 900;
     break;
   case 12:
-    size = 912384;
+    size = 2376;
     break;
   case 13:
-    size = 912384;
+    size = 2376;
     break;
   case 20:
-    size = 912384;
+    size = 2376;
     break;
   case 21:
-    size = 1824768;
+    size = 4752;
     break;
   case 22:
-    size = 3110400;
+    size = 8100;
     break;
   case 30:
-    size = 3110400;
+    size = 8100;
     break;
   case 31:
-    size = 6912000;
+    size = 18000;
     break;
   case 32:
-    size = 7864320;
+    size = 20480;
     break;
   case 40:
-    size = 12582912;
+    size = 32768;
     break;
   case 41:
-    size = 12582912;
+    size = 32768;
     break;
   case 42:
-    size = 13369344;
+    size = 34816;
     break;
   case 50:
-    size = 42393600;
+    size = 110400;
     break;
   case 51:
-    size = 70778880;
+    size = 184320;
     break;
   case 52:
-    size = 70778880;
+    size = 184320;
+    break;
+  case 60:
+  case 61:
+  case 62:
+    size = 696320;
     break;
   default:
     error ("undefined level", 500);
     break;
   }
 
-  size /= pic_size;
+  size /= pic_size_mb;
   size = imin( size, 16);
   sps->max_dec_frame_buffering = size;
 }

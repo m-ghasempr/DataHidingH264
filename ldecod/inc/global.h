@@ -1088,11 +1088,13 @@ extern void set_global_coding_par(VideoParameters *p_Vid, CodingParameters *cps)
 
 static inline int is_FREXT_profile(unsigned int profile_idc) 
 {
-  return ( profile_idc >= FREXT_HP || profile_idc == FREXT_CAVLC444 );
+  // we allow all FRExt tools, when no profile is active
+  return ( profile_idc==NO_PROFILE || profile_idc==FREXT_HP || profile_idc==FREXT_Hi10P || profile_idc==FREXT_Hi422 || profile_idc==FREXT_Hi444 || profile_idc == FREXT_CAVLC444 );
 }
-static inline int HI_intra_only_profile(unsigned int profile_idc, Boolean constrained_set3_flag)
+
+static inline int is_HI_intra_only_profile(unsigned int profile_idc, Boolean constrained_set3_flag)
 {
-  return ( ((profile_idc >= FREXT_Hi10P) && constrained_set3_flag) || (profile_idc == FREXT_CAVLC444) );
+  return ( ( ( (profile_idc == FREXT_Hi10P)||(profile_idc == FREXT_Hi422)|| (profile_idc == FREXT_Hi444)) && constrained_set3_flag) || (profile_idc == FREXT_CAVLC444) );
 }
 static inline int is_BL_profile(unsigned int profile_idc) 
 {
@@ -1101,8 +1103,7 @@ static inline int is_BL_profile(unsigned int profile_idc)
 }
 static inline int is_EL_profile(unsigned int profile_idc) 
 {
-  return ( (profile_idc == MVC_HIGH) || (profile_idc == STEREO_HIGH)
-           );
+  return ( (profile_idc == MVC_HIGH) || (profile_idc == STEREO_HIGH) );
 }
 
 static inline int is_MVC_profile(unsigned int profile_idc)

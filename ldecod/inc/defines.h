@@ -29,8 +29,8 @@
 # define TRACE           0     //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
 #endif
 
-#define JM                  "18 (FRExt)"
-#define VERSION             "18.6"
+#define JM                  "19 (FRExt)"
+#define VERSION             "19.0"
 #define EXT_VERSION         "(FRExt)"
 
 #define DUMP_DPB                  0    //!< Dump DPB info for debug purposes
@@ -71,6 +71,7 @@
 
 //AVC Profile IDC definitions
 typedef enum {
+  NO_PROFILE     =  0,       //!< disable profile checking for experimental coding (enables FRExt, but disables MV)
   FREXT_CAVLC444 = 44,       //!< YUV 4:4:4/14 "CAVLC 4:4:4"
   BASELINE       = 66,       //!< YUV 4:2:0/8  "Baseline"
   MAIN           = 77,       //!< YUV 4:2:0/8  "Main"
@@ -268,8 +269,6 @@ enum {
 #define ZEROBYTES_SHORTSTARTCODE 2 //indicates the number of zero bytes in the short start-code prefix
 
 #define MAX_PLANE       3
-#define IS_FREXT_PROFILE(profile_idc) ( profile_idc>=FREXT_HP || profile_idc == FREXT_CAVLC444 )
-#define HI_INTRA_ONLY_PROFILE         (((p_Vid->active_sps->profile_idc>=FREXT_Hi10P)&&(p_Vid->active_sps->constrained_set3_flag))||(p_Vid->active_sps->profile_idc==FREXT_CAVLC444)) 
 
 #endif
 

@@ -409,6 +409,7 @@ struct inp_par_enc
   // support for "soft" 3:2 pulldown
   int rc_cpb_size;
   int SEIVUI32Pulldown;                //!< Enable 3:2 pulldown through VUI and SEI metadata signalling. Three methods are supported.
+  int SEIFPAType;                      //!< Value of frame_packing_arrangement_type in SEI FPA message
 
   int separate_colour_plane_flag;
   double WeightY;

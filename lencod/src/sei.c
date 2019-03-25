@@ -2709,6 +2709,11 @@ void UpdateFramePackingArrangement(VideoParameters *p_Vid, InputParameters *p_In
   SEIParameters *p_SEI = p_Vid->p_SEI;
 
   p_SEI->seiHasFramePackingArrangement_info = FALSE;
+  if ( p_Inp->SEIFPAType != -1 )
+  {
+    p_SEI->seiHasFramePackingArrangement_info = TRUE;
+    p_SEI->seiFramePackingArrangement.frame_packing_arrangement_type = p_Inp->SEIFPAType;
+  }
 }
 
 static void FinalizeFramePackingArrangement(SEIParameters *p_SEI, InputParameters *p_Inp)

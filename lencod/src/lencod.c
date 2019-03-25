@@ -2213,70 +2213,7 @@ void free_mem_DCcoeff (int*** cofDC)
  */
 static void set_level_indices(VideoParameters *p_Vid)
 {
-  switch(p_Vid->active_sps->level_idc)
-  {
-  case 9:
-    p_Vid->LevelIndex=1;
-    break;
-  case 10:
-    p_Vid->LevelIndex=0;
-    break;
-  case 11:
-    if (!is_FREXT_profile(p_Vid->active_sps->profile_idc) && (p_Vid->active_sps->constrained_set3_flag == 0))
-      p_Vid->LevelIndex=2;
-    else
-      p_Vid->LevelIndex=1;
-    break;
-  case 12:
-    p_Vid->LevelIndex=3;
-    break;
-  case 13:
-    p_Vid->LevelIndex=4;
-    break;
-  case 20:
-    p_Vid->LevelIndex=5;
-    break;
-  case 21:
-    p_Vid->LevelIndex=6;
-    break;
-  case 22:
-    p_Vid->LevelIndex=7;
-    break;
-  case 30:
-    p_Vid->LevelIndex=8;
-    break;
-  case 31:
-    p_Vid->LevelIndex=9;
-    break;
-  case 32:
-    p_Vid->LevelIndex=10;
-    break;
-  case 40:
-    p_Vid->LevelIndex=11;
-    break;
-  case 41:
-    p_Vid->LevelIndex=12;
-    break;
-  case 42:
-    if (!is_FREXT_profile(p_Vid->active_sps->profile_idc))
-      p_Vid->LevelIndex=13;
-    else
-      p_Vid->LevelIndex=14;
-    break;
-  case 50:
-    p_Vid->LevelIndex=15;
-    break;
-  case 51:
-    p_Vid->LevelIndex=16;
-    break;
-  case 52:
-    p_Vid->LevelIndex=17;
-    break;
-  default:
-    fprintf ( stderr, "Warning: unknown LevelIDC, using maximum level 5.2 \n" );
-    p_Vid->LevelIndex=17;
-    break;
-  }
+  p_Vid->LevelIndex = get_level_index (p_Vid->active_sps->profile_idc, p_Vid->active_sps->level_idc, p_Vid->active_sps->constrained_set3_flag);
 }
 
 /*!

@@ -349,7 +349,7 @@ static inline void free_pointer(void *pointer)
   if (pointer != NULL)
   {
     free(pointer);
-    pointer = NULL;
+    // pointer = NULL; // we would only set the copy of the pointer to zero
   }
 }
 

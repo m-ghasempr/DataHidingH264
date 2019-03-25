@@ -1,3 +1,15 @@
+Changes in Version JM 19.0 (since JM 18.6)
+------------------------------------------
+- Support for levels 6, 6.1 and 6.2
+- Unconstrained (exprimental) coding without profile / level checks (set ProfileIdc/LevelIdc to 0)
+- Support for reading Green Metadata SEI
+- Fix the following bugs:
+  * 0000330: [encoder and decoder] use of >, >=, <, <= with profile_idc
+  * 0000348: [decoder] Static buffer overflow in function biari_init_context() on arrays INIT_FLD_MAP_I and INIT_FLD_LAST_I
+  * 0000345: [decoder] MBAFF loopfilter mismatch with standard
+  * 0000347: [encoder] "double free" crash in the low-delay mode
+
+
 Changes in Version JM 18.6 (since JM 18.5)
 ------------------------------------------
 - fix ctxIdxInc derivation of coded_block flag for 4:4:4 and 8x8 transform (bug: 0000300)

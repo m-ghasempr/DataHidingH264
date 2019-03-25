@@ -17,47 +17,167 @@
 #include "conformance.h"
 
 // Max Frame Size Limit
-// Level Limit                          -  -  -  -  -  -  -  -  -  1b  10  11   12   13   -  -  -  -  -  -  20   21   22    -  -  -  -  -  -  -
-static const unsigned int  MaxFs [] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 99, 99, 396, 396, 396, 0, 0, 0, 0, 0, 0, 396, 792, 1620, 0, 0, 0, 0, 0, 0, 0,  
-//                        30    31    32    -  -  -  -  -  -  -  40    41    42    -  -  -  -  -  -  -  50     51    52
-                          1620, 3600, 5120, 0, 0, 0, 0, 0, 0, 0, 8192, 8192, 8704, 0, 0, 0, 0, 0, 0, 0, 22080, 36864, 36864 };
-static const unsigned int  MinCR [] = { 0, 0, 0, 0, 0, 0, 0, 0, 0,  2,  2,   2,   2,   2, 0, 0, 0, 0, 0, 0,   2,   2,   2, 0, 0, 0, 0, 0, 0, 0,  
-                             2,    4,    4, 0, 0, 0, 0, 0, 0, 0,    4,    2,    2, 0, 0, 0, 0, 0, 0, 0,     2,     2,     2 };
-static const unsigned int  MaxBR [] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 64,128, 192, 384, 768, 0, 0, 0, 0, 0, 0,2000,4000,4000, 0, 0, 0, 0, 0, 0, 0,  
-                         10000,14000,20000, 0, 0, 0, 0, 0, 0, 0,20000,50000,50000, 0, 0, 0, 0, 0, 0, 0,135000, 240000, 240000 };
-static const unsigned int  MaxCPB[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0,175,350, 500,1000,2000, 0, 0, 0, 0, 0, 0,2000,4000,4000, 0, 0, 0, 0, 0, 0, 0,  
-                         10000,14000,20000, 0, 0, 0, 0, 0, 0, 0,25000,62500,62500, 0, 0, 0, 0, 0, 0, 0,135000, 240000, 240000 };
+// Level                                  1  1b  1.1  1.2  1.3    2  2.1   2.2     3   3.1   3.2     4   4.1   4.2      5    5.1   5.2        6     6.1     6.2  unconstrained
+static const unsigned int  MaxFs [] = {  99, 99, 396, 396, 396, 396, 792, 1620, 1620, 3600, 5120, 8192, 8192, 8704, 22080, 36864, 36864, 139264, 139264, 139264, UINT_MAX };
+// Level                                1.b   1  1.1  1.2  1.3   2  2.1  2.2   3  3.1  3.2    4  4.1  4.2   5  5.1  5.2   6  6.1  6.2   unconstrained
+static const unsigned int  MinCR [] = {   2,  2,   2,   2,   2,  2,   2,   2,  2,   4,   4,   4,   2,   2,  2,   2,   2,  2,   2,   2,  0  };
+// Level                                  1   1b  1.1  1.2  1.3     2   2.1   2.2      3    3.1    3.2      4    4.1    4.2       5     5.1     5.2       6     6.1     6.2  unconstrained
+static const unsigned int  MaxBR [] = {  64, 128, 192, 384, 768, 2000, 4000, 4000, 10000, 14000, 20000, 20000, 50000, 50000, 135000, 240000, 240000, 240000, 480000, 800000, UINT_MAX };
+// Level                                  1   1b  1.1   1.2   1.3     2   2.1   2.2      3    3.1    3.2      4    4.1    4.2       5     5.1     5.2       6     6.1     6.2  unconstrained
+static const unsigned int  MaxCPB[] = { 175, 350, 500, 1000, 2000, 2000, 4000, 4000, 10000, 14000, 20000, 25000, 62500, 62500, 135000, 240000, 240000, 240000, 480000, 800000, UINT_MAX };
 // Max macroblock processing rate
-static const unsigned int MaxMBPS[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 1485, 1485, 3000, 6000, 11880, 0, 0, 0, 0, 0, 0, 11880, 19800, 20250, 0, 0, 0, 0, 0, 0, 0,  
-                          40500, 108000, 216000, 0, 0, 0, 0, 0, 0, 0, 245760, 245760, 522240, 0, 0, 0, 0, 0, 0, 0, 589824, 983040, 2073600 };
+// Level                                   1    1b   1.1   1.2    1.3      2    2.1    2.2      3     3.1     3.2       4     4.1     4.2       5     5.1      5.2        6      6.1      6.2  unconstrained
+static const unsigned int MaxMBPS[] = { 1485, 1485, 3000, 6000, 11880, 11880, 19800, 20250, 40500, 108000, 216000, 245760, 245760, 522240, 589824, 983040, 2073600, 4177920, 8355840, 16711680, UINT_MAX };
+
 // Vertical MV Limits (integer/halfpel/quarterpel)
 // Currently only Integer Pel restrictions are used,
 // since the way values are specified
 // (i.e. mvlowbound = (levelmvlowbound + 1) and the way
 // Subpel ME is performed, subpel will always be within range.
-static const int LEVELVMVLIMIT[18][6] =
+static const int LEVELVMVLIMIT[21][6] =
 {
-  {  -63,  63,  -128,  127,  -256,  255},
-  {  -63,  63,  -128,  127,  -256,  255},
-  { -127, 127,  -256,  255,  -512,  511},
-  { -127, 127,  -256,  255,  -512,  511},
-  { -127, 127,  -256,  255,  -512,  511},
-  { -127, 127,  -256,  255,  -512,  511},
-  { -255, 255,  -512,  511, -1024, 1023},
-  { -255, 255,  -512,  511, -1024, 1023},
-  { -255, 255,  -512,  511, -1024, 1023},
-  { -511, 511, -1024, 1023, -2048, 2047},
-  { -511, 511, -1024, 1023, -2048, 2047},
-  { -511, 511, -1024, 1023, -2048, 2047},
-  { -511, 511, -1024, 1023, -2048, 2047},
-  { -511, 511, -1024, 1023, -2048, 2047},
-  { -511, 511, -1024, 1023, -2048, 2047},
-  { -511, 511, -1024, 1023, -2048, 2047},
-  { -511, 511, -1024, 1023, -2048, 2047},
-  { -511, 511, -1024, 1023, -2048, 2047}
+  //    1pel      1/2 pel      1/4 pel
+  {  -63,  63,  -128,  127,  -256,  255},  // level 1
+  {  -63,  63,  -128,  127,  -256,  255},  // level 1b
+  { -127, 127,  -256,  255,  -512,  511},  // level 1.1
+  { -127, 127,  -256,  255,  -512,  511},  // level 1.2
+  { -127, 127,  -256,  255,  -512,  511},  // level 1.3
+  { -127, 127,  -256,  255,  -512,  511},  // level 2
+  { -255, 255,  -512,  511, -1024, 1023},  // level 2.1
+  { -255, 255,  -512,  511, -1024, 1023},  // level 2.2
+  { -255, 255,  -512,  511, -1024, 1023},  // level 3
+  { -511, 511, -1024, 1023, -2048, 2047},  // level 3.1
+  { -511, 511, -1024, 1023, -2048, 2047},  // level 3.2
+  { -511, 511, -1024, 1023, -2048, 2047},  // level 4
+  { -511, 511, -1024, 1023, -2048, 2047},  // level 4.1
+  { -511, 511, -1024, 1023, -2048, 2047},  // level 4.2
+  { -511, 511, -1024, 1023, -2048, 2047},  // level 5
+  { -511, 511, -1024, 1023, -2048, 2047},  // level 5.1
+  { -511, 511, -1024, 1023, -2048, 2047},  // level 5.2
+  {-8192,8191,-16384,16383,-32768,32767},  // level 6   unconstrained (signed 16 bit)
+  {-8192,8191,-16384,16383,-32768,32767},  // level 6.1 unconstrained (signed 16 bit)
+  {-8192,8191,-16384,16383,-32768,32767},  // level 6.2 unconstrained (signed 16 bit)
+  {-8192,8191,-16384,16383,-32768,32767}   // unconstrained (signed 16 bit)
 };
 
-const int LEVELHMVLIMIT[6] =  { -2047, 2047, -4096, 4095, -8192, 8191};
+const int LEVELHMVLIMIT[2][6] = 
+{
+  { -2047, 2047,  -4096,  4095,  -8192,  8191},  // below 6.0
+   {-8192, 8191, -16384, 16383, -32768, 32767}   // 6.0 and above: unconstrained
+};
+
+Boolean is_valid_level(unsigned int profileIdc, unsigned int levelIdc)
+{
+  // level 1b is indicated by value 9 in FRExt and (value 11 + constraint_set3_flag) in base spec profiles
+  switch (levelIdc)
+  {
+  case  9:
+    return (is_FREXT_profile(profileIdc));
+  case 10:
+  case 11:
+  case 12:
+  case 13:
+  case 20:
+  case 21:
+  case 22:
+  case 30:
+  case 31:
+  case 32:
+  case 40:
+  case 41:
+  case 42:
+  case 50:
+  case 51:
+  case 52:
+  case 60:
+  case 61:
+  case 62:
+     return 1;
+  default:
+    return 0;
+  }
+}
+
+/*! Map a profile/level to a Level index for accessing Level constraint tables */
+int get_level_index(unsigned int profile_idc, unsigned int level_idc, unsigned int constrained_set3_flag)
+{
+  switch(level_idc)
+  {
+  case 9:
+    // we will accept level_idc equal to 9 for non-FRExt profiles, 
+    // because it may be specified this way in the encoder config file
+    return LEVEL_1b;
+    break;
+  case 10:
+    return LEVEL_1;
+    break;
+  case 11:
+    if (!is_FREXT_profile(profile_idc) && (constrained_set3_flag == 0))
+      return LEVEL_1_1;
+    else
+      return LEVEL_1b;
+    break;
+  case 12:
+    return LEVEL_1_2;
+    break;
+  case 13:
+    return LEVEL_1_3;
+    break;
+  case 20:
+    return LEVEL_2;
+    break;
+  case 21:
+    return LEVEL_2_1;
+    break;
+  case 22:
+    return LEVEL_2_2;
+    break;
+  case 30:
+    return LEVEL_3;
+    break;
+  case 31:
+    return LEVEL_3_1;
+    break;
+  case 32:
+    return LEVEL_3_2;
+    break;
+  case 40:
+    return LEVEL_4;
+    break;
+  case 41:
+    return LEVEL_4_1;
+    break;
+  case 42:
+    return LEVEL_4_2;
+    break;
+  case 50:
+    return LEVEL_5;
+    break;
+  case 51:
+    return LEVEL_5_1;
+    break;
+  case 52:
+    return LEVEL_5_2;
+    break;
+  case 60:
+    return LEVEL_6;
+    break;
+  case 61:
+    return LEVEL_6_1;
+    break;
+  case 62:
+    return LEVEL_6_2;
+    break;
+  case 0:
+    return LEVEL_UNCONSTRAINED; // unconstrained experimental coding
+    break;
+  default:
+    fprintf ( stderr, "Warning: unknown LevelIDC, setting to (mostly) unconstrained\n" );
+    return 17;
+    break;
+  }
+}
+
 
 /*!
  ***********************************************************************
@@ -65,21 +185,14 @@ const int LEVELHMVLIMIT[6] =  { -2047, 2047, -4096, 4095, -8192, 8191};
  *    Get maximum frame size (in MBs) supported given a level
  ***********************************************************************
  */
-unsigned int getMaxFs (unsigned int levelIdc)
+unsigned int getMaxFs (unsigned int profile_idc, unsigned int level_idc, unsigned int constrained_set3_flag)
 {
-  unsigned int ret;
-
-  if ( (levelIdc < 9) || (levelIdc > 52))
+  if ( !is_valid_level(profile_idc, level_idc))
+  {
     error ("getMaxFs: Unknown LevelIdc", 500);
+  }
 
-  // in Baseline, Main and Extended: Level 1b is specified with LevelIdc==11 and constrained_set3_flag == 1
-
-  ret = MaxFs[levelIdc];
-
-  if ( 0 == ret )
-    error ("getMaxFs: Unknown LevelIdc", 500);
-
-  return ret;
+  return MaxFs[get_level_index(profile_idc, level_idc, constrained_set3_flag)];
 }
 
 /*!
@@ -88,21 +201,14 @@ unsigned int getMaxFs (unsigned int levelIdc)
  *    Get maximum processing rate (in MB/s) supported given a level
  ***********************************************************************
  */
-unsigned int getMaxMBPS (unsigned int levelIdc)
+unsigned int getMaxMBPS (unsigned int profile_idc, unsigned int level_idc, unsigned int constrained_set3_flag)
 {
-  unsigned int ret;
-
-  if ( (levelIdc < 9) || (levelIdc > 52))
+  if ( !is_valid_level(profile_idc, level_idc))
+  {
     error ("getMaxMBPS: Unknown LevelIdc", 500);
+  }
 
-  // in Baseline, Main and Extended: Level 1b is specified with LevelIdc==11 and constrained_set3_flag == 1
-
-  ret = MaxMBPS[levelIdc];
-
-  if ( 0 == ret )
-    error ("getMaxMBPS: Unknown LevelIdc", 500);
-
-  return ret;
+  return MaxMBPS[get_level_index(profile_idc, level_idc, constrained_set3_flag)];
 }
 
 /*!
@@ -111,21 +217,14 @@ unsigned int getMaxMBPS (unsigned int levelIdc)
  *    Get minimum compression ratio supported given a level
  ***********************************************************************
  */
-unsigned int getMinCR (unsigned int levelIdc)
+unsigned int getMinCR (unsigned int profile_idc, unsigned int level_idc, unsigned int constrained_set3_flag)
 {
-  unsigned int ret;
-
-  if ( (levelIdc < 9) || (levelIdc > 52))
+  if ( !is_valid_level(profile_idc, level_idc))
+  {
     error ("getMinCR: Unknown LevelIdc", 500);
+  }
 
-  // in Baseline, Main and Extended: Level 1b is specified with LevelIdc==11 and constrained_set3_flag == 1
-
-  ret = MinCR[levelIdc];
-
-  if ( 0 == ret )
-    error ("getMinCR: Unknown LevelIdc", 500);
-
-  return ret;
+  return MinCR[get_level_index(profile_idc, level_idc, constrained_set3_flag)];
 }
 
 /*!
@@ -134,21 +233,14 @@ unsigned int getMinCR (unsigned int levelIdc)
  *    Get maximum bit rate (in bits/s) supported given a level
  ***********************************************************************
  */
-unsigned int getMaxBR (unsigned int levelIdc)
+unsigned int getMaxBR (unsigned int profile_idc, unsigned int level_idc, unsigned int constrained_set3_flag)
 {
-  unsigned int ret;
-
-  if ( (levelIdc < 9) || (levelIdc > 52))
+  if ( !is_valid_level(profile_idc, level_idc))
+  {
     error ("getMaxBR: Unknown LevelIdc", 500);
+  }
 
-  // in Baseline, Main and Extended: Level 1b is specified with LevelIdc==11 and constrained_set3_flag == 1
-
-  ret = MaxBR[levelIdc];
-
-  if ( 0 == ret )
-    error ("getMaxBR: Unknown LevelIdc", 500);
-
-  return ret;
+  return MaxBR[get_level_index(profile_idc, level_idc, constrained_set3_flag)];
 }
 
 /*!
@@ -157,21 +249,14 @@ unsigned int getMaxBR (unsigned int levelIdc)
  *    Get maximum coded buffer size (in bits) supported given a level
  ***********************************************************************
  */
-unsigned int getMaxCPB (unsigned int levelIdc)
+unsigned int getMaxCPB (unsigned int profile_idc, unsigned int level_idc, unsigned int constrained_set3_flag)
 {
-  unsigned int ret;
-
-  if ( (levelIdc < 9) || (levelIdc > 52))
+  if ( !is_valid_level(profile_idc, level_idc))
+  {
     error ("getMaxCPB: Unknown LevelIdc", 500);
+  }
 
-  // in Baseline, Main and Extended: Level 1b is specified with LevelIdc==11 and constrained_set3_flag == 1
-
-  ret = MaxCPB[levelIdc];
-
-  if ( 0 == ret )
-    error ("getMaxCPB: Unknown LevelIdc", 500);
-
-  return ret;
+  return MaxCPB[get_level_index(profile_idc, level_idc, constrained_set3_flag)];
 }
 
 /*!
@@ -188,21 +273,27 @@ void profile_check(InputParameters *p_Inp)
      (p_Inp->ProfileIDC != FREXT_HP    ) &&
      (p_Inp->ProfileIDC != FREXT_Hi10P ) &&
 #if (MVC_EXTENSION_ENABLE)
-     (p_Inp->ProfileIDC != MULTIVIEW_HIGH )         &&  // MVC multiview high profile
+     (p_Inp->ProfileIDC != MULTIVIEW_HIGH )      &&  // MVC multiview high profile
      (p_Inp->ProfileIDC != STEREO_HIGH )         &&  // MVC stereo high profile
 #endif
      (p_Inp->ProfileIDC != FREXT_Hi422 ) &&
      (p_Inp->ProfileIDC != FREXT_Hi444 ) &&
-     (p_Inp->ProfileIDC != FREXT_CAVLC444 ))
+     (p_Inp->ProfileIDC != FREXT_CAVLC444 )&&
+     (p_Inp->ProfileIDC != NO_PROFILE))
   {
 #if (MVC_EXTENSION_ENABLE)
     snprintf(errortext, ET_SIZE, "Profile must be in\n\n  66 (Baseline),\n  77 (Main),\n  88 (Extended),\n 100 (High),\n 110 (High 10 or High 10 Intra)\n"
-      " 122 (High 4:2:2 or High 4:2:2 Intra),\n 244 (High 4:4:4 predictive or High 4:4:4 Intra),\n  44 (CAVLC 4:4:4 Intra)\n 118 (MVC profile)\n");
+      " 122 (High 4:2:2 or High 4:2:2 Intra),\n 244 (High 4:4:4 predictive or High 4:4:4 Intra),\n  44 (CAVLC 4:4:4 Intra)\n 118 (MVC profile),\n 0 (no profile checking)\n");
 #else
     snprintf(errortext, ET_SIZE, "Profile must be in\n\n  66 (Baseline),\n  77 (Main),\n  88 (Extended),\n 100 (High),\n 110 (High 10 or High 10 Intra)\n"
-      " 122 (High 4:2:2 or High 4:2:2 Intra),\n 244 (High 4:4:4 predictive or High 4:4:4 Intra),\n  44 (CAVLC 4:4:4 Intra)\n");
+      " 122 (High 4:2:2 or High 4:2:2 Intra),\n 244 (High 4:4:4 predictive or High 4:4:4 Intra),\n  44 (CAVLC 4:4:4 Intra),\n 0 (no profile checking)\n");
 #endif
     error (errortext, 500);
+  }
+  if (p_Inp->ProfileIDC == NO_PROFILE)
+  {
+    printf("WARNING: ProfileIDC equal to 0 disables profile checking. \nThis allows experimental coding, but will create non-conforming streams!\n");
+    return;
   }
 
   if ((p_Inp->partition_mode) && (p_Inp->symbol_mode==CABAC))
@@ -331,9 +422,9 @@ void profile_check(InputParameters *p_Inp)
   }
 
   // Intra only profiles
-  if (p_Inp->IntraProfile && ( p_Inp->ProfileIDC<FREXT_HP && p_Inp->ProfileIDC!=FREXT_CAVLC444 ))
+  if (p_Inp->IntraProfile && ( !is_FREXT_profile(p_Inp->ProfileIDC)))
   {
-    snprintf(errortext, ET_SIZE, "\nIntraProfile is allowed only with ProfileIDC %d to %d.", FREXT_HP, FREXT_Hi444);
+    snprintf(errortext, ET_SIZE, "\nIntraProfile is allowed only with FRExt profiles.");
     error (errortext, 500);
   }
 
@@ -360,6 +451,80 @@ void profile_check(InputParameters *p_Inp)
     snprintf(errortext, ET_SIZE, "\nProfiles other than IntraProfile require NumberReferenceFrames > 0.");
     error (errortext, 500);
   }
+
+  if(p_Inp->Transform8x8Mode && ( !is_FREXT_profile (p_Inp->ProfileIDC)))
+  {
+    snprintf(errortext, ET_SIZE, "\nTransform8x8Mode may be used only with FRExt profiles.");
+    error (errortext, 500);
+  }
+
+  if(p_Inp->ScalingMatrixPresentFlag && ( !is_FREXT_profile(p_Inp->ProfileIDC) ))
+  {
+    snprintf(errortext, ET_SIZE, "\nScalingMatrixPresentFlag may be used only with FRExt profiles.");
+    error (errortext, 500);
+  }
+
+  if(p_Inp->yuv_format==YUV422 && ( p_Inp->ProfileIDC != FREXT_Hi422 && p_Inp->ProfileIDC !=FREXT_Hi444 && p_Inp->ProfileIDC!=FREXT_CAVLC444 ))
+  {
+    snprintf(errortext, ET_SIZE, "\nFRExt Profile(YUV Format) Error!\nYUV422 can be used only with ProfileIDC %d or %d or %d\n",FREXT_Hi422, FREXT_Hi444, FREXT_CAVLC444);
+    error (errortext, 500);
+  }
+  if(p_Inp->yuv_format==YUV444 && ( p_Inp->ProfileIDC != FREXT_Hi444 && p_Inp->ProfileIDC!=FREXT_CAVLC444 ))
+  {
+    snprintf(errortext, ET_SIZE, "\nFRExt Profile(YUV Format) Error!\nYUV444 can be used only with ProfileIDC %d or %d.\n",FREXT_Hi444, FREXT_CAVLC444);
+    error (errortext, 500);
+  }
+
+  // check RDoptimization mode and profile. FMD does not support Frex Profiles.
+  if (p_Inp->rdopt==2 && ( is_FREXT_profile(p_Inp->ProfileIDC)))
+  {
+    snprintf(errortext, ET_SIZE, "Fast Mode Decision methods not supported in FREX Profiles");
+    error (errortext, 500);
+  }
+
+#if (MVC_EXTENSION_ENABLE)
+  if( is_MVC_profile(p_Inp->ProfileIDC) && p_Inp->num_of_views != 2)
+  {
+    snprintf(errortext, ET_SIZE, "NumberOfViews must be two if ProfileIDC is set to 118 (Multiview High Profile). Otherwise (for a single view) please select a non-multiview profile such as 100.");
+    error (errortext, 500);
+  }
+
+  //  if (p_Inp->PicInterlace == 2 && p_Inp->MVCInterViewReorder != 0)
+  //  {
+  //    snprintf(errortext, ET_SIZE, "MVCInterViewReorder not supported with Adaptive Frame Field Coding");
+  //    error (errortext, 500);
+  //  }
+
+  if(p_Inp->MVCInterViewReorder)
+  {
+    if ( !is_MVC_profile(p_Inp->ProfileIDC) )
+    {
+      snprintf(errortext, ET_SIZE, "ProfileIDC must be 118, 128, 134, or 135 to use MVCInterViewReorder=1.");
+      error (errortext, 500);
+    }
+  }
+  if ( is_MVC_profile(p_Inp->ProfileIDC) )
+  {
+    if (p_Inp->ReferenceReorder > 1)
+    {
+      snprintf(errortext, ET_SIZE, "ReferenceReorder > 1 is not supported with the Multiview (118) or Stereo High (128) profiles and is therefore disabled. \n");
+      p_Inp->ReferenceReorder = 0;
+    }
+    if ( (p_Inp->PocMemoryManagement) && (p_Inp->PicInterlace > 0) )
+    {
+      snprintf(errortext, ET_SIZE, "PocMemoryManagement>0 is not supported with the Multiview (118) or Stereo High (128) profiles and is therefore disabled. \n");
+      p_Inp->PocMemoryManagement = 0;
+    }
+  }
+  // RTP is not defined for MVC yet
+  if (p_Inp->of_mode == PAR_OF_RTP && ( is_MVC_profile( p_Inp->ProfileIDC ) ))
+  {
+    snprintf(errortext, ET_SIZE, "RTP output mode is not compatible with MVC profiles.");
+    error (errortext, 500);
+  }
+
+#endif
+
 }
 
 /*!
@@ -374,6 +539,18 @@ void level_check(VideoParameters *p_Vid, InputParameters *p_Inp)
   unsigned int MBProcessingRate = (unsigned int) (PicSizeInMbs * p_Inp->output.frame_rate + 0.5);
   int cpbBrFactor = ( p_Inp->ProfileIDC >= FREXT_HP ) ? 1500 : 1200;
   
+  if (p_Inp->LevelIDC == 0)
+  {
+    printf("WARNING: LevelIDC equal to 0 disables level checking. \nThis allows experimental coding, but will create non-conforming streams!\n");
+    return;
+  }
+
+  if (!is_valid_level((p_Inp)->ProfileIDC, (p_Inp)->LevelIDC))
+  {
+    snprintf(errortext, ET_SIZE, "\nSpecified LevelIDC value is undefined. Please check your settings.\n");
+    error (errortext, 500);
+  }
+
   if ( (p_Inp->LevelIDC>=30) && (p_Inp->directInferenceFlag==0))
   {
     fprintf( stderr, "\nWarning: LevelIDC 3.0 and above require direct_8x8_inference to be set to 1. Please check your settings.\n");
@@ -385,7 +562,7 @@ void level_check(VideoParameters *p_Vid, InputParameters *p_Inp)
     error (errortext, 500);
   }
 
-  if ( PicSizeInMbs > getMaxFs(p_Inp->LevelIDC) )
+  if ( PicSizeInMbs > getMaxFs(p_Inp->ProfileIDC, p_Inp->LevelIDC, 0) )
   {
     snprintf(errortext, ET_SIZE, "\nPicSizeInMbs exceeds maximum allowed size at specified LevelIdc %.1f\n", (float) p_Inp->LevelIDC / 10.0);
     error (errortext, 500);
@@ -396,24 +573,24 @@ void level_check(VideoParameters *p_Vid, InputParameters *p_Inp)
     error ("\nIntraProfile with PicSizeInMbs > 1620 requires SliceMode equal 1.", 500);
   }
 
-  if (p_Inp->IntraProfile && (PicSizeInMbs > 1620) && ((unsigned int)p_Inp->slice_argument > (  getMaxFs(p_Inp->LevelIDC) >> 2 ) ) )
+  if (p_Inp->IntraProfile && (PicSizeInMbs > 1620) && ((unsigned int)p_Inp->slice_argument > (  getMaxFs(p_Inp->ProfileIDC, p_Inp->LevelIDC, 0) >> 2 ) ) )
   {
     //when PicSizeInMbs is greater than 1620, the number of macroblocks in any coded slice shall not exceed MaxFS / 4
     snprintf(errortext, ET_SIZE, "\nIntraProfile requires SliceArgument smaller or equal to 1/4 MaxFs at specified LevelIdc %d.", p_Inp->LevelIDC);
     error (errortext, 500);
   }
 
-  if ( MBProcessingRate > getMaxMBPS(p_Inp->LevelIDC) )
+  if ( MBProcessingRate > getMaxMBPS(p_Inp->ProfileIDC, p_Inp->LevelIDC, 0) )
   {
     snprintf(errortext, ET_SIZE, "\nMB Processing Rate (%d) exceeds maximum allowed processing rate (%d) at specified LevelIdc %.1f\n", 
-      MBProcessingRate, getMaxMBPS(p_Inp->LevelIDC), (float) p_Inp->LevelIDC / 10.0);
+      MBProcessingRate, getMaxMBPS(p_Inp->ProfileIDC, p_Inp->LevelIDC, 0), (float) p_Inp->LevelIDC / 10.0);
     error (errortext, 500);
   }
 
-  if ( p_Inp->bit_rate > (int)(cpbBrFactor * getMaxBR(p_Inp->LevelIDC)) )
+  if ( p_Inp->bit_rate > (int)(cpbBrFactor * getMaxBR(p_Inp->ProfileIDC, p_Inp->LevelIDC, 0)) )
   {
     snprintf(errortext, ET_SIZE, "\nBit Rate (%d) exceeds maximum allowed bit rate (%d) at specified LevelIdc %.1f for NAL HRD\n", 
-      p_Inp->bit_rate, cpbBrFactor * getMaxBR(p_Inp->LevelIDC), (float) p_Inp->LevelIDC / 10.0);
+      p_Inp->bit_rate, cpbBrFactor * getMaxBR(p_Inp->ProfileIDC, p_Inp->LevelIDC, 0), (float) p_Inp->LevelIDC / 10.0);
     error (errortext, 500);
   }
 }
@@ -428,7 +605,7 @@ void update_mv_limits(VideoParameters *p_Vid, byte is_field)
 {
   InputParameters *p_Inp = p_Vid->p_Inp;
   memcpy(p_Vid->MaxVmvR, LEVELVMVLIMIT[p_Vid->LevelIndex], 6 * sizeof(int));
-  memcpy(p_Vid->MaxHmvR, LEVELHMVLIMIT, 6 * sizeof(int));
+  memcpy(p_Vid->MaxHmvR, LEVELHMVLIMIT[p_Vid->LevelIndex<17 ? 0 : 1], 6 * sizeof(int));
   if (is_field)
   {
     int i;

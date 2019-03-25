@@ -58,6 +58,7 @@ typedef enum {
   SEI_OPERATION_POINTS_NOT_PRESENT,
   SEI_BASE_VIEW_TEMPORAL_HRD,
   SEI_FRAME_PACKING_ARRANGEMENT,
+  SEI_GREEN_METADATA=56,
 
   SEI_MAX_ELEMENTS  //!< number of maximum syntax elements
 } SEI_type;
@@ -108,6 +109,23 @@ typedef struct
   Boolean       frame_packing_arrangement_extension_flag;
 } frame_packing_arrangement_information_struct;
 
+
+//! Green metada Information
+typedef struct
+{
+  unsigned char  green_metadata_type;
+  unsigned char  period_type;
+  unsigned short num_seconds;
+  unsigned short num_pictures;
+  unsigned char percent_non_zero_macroblocks;
+  unsigned char percent_intra_coded_macroblocks;
+  unsigned char percent_six_tap_filtering;
+  unsigned char percent_alpha_point_deblocking_instance;
+  unsigned char xsd_metric_type;
+  unsigned short xsd_metric_value;
+} Green_metadata_information_struct;
+
+
 void InterpretSEIMessage                                ( byte* payload, int size, VideoParameters *p_Vid, Slice *pSlice );
 void interpret_spare_pic                                ( byte* payload, int size, VideoParameters *p_Vid );
 void interpret_subsequence_info                         ( byte* payload, int size, VideoParameters *p_Vid );
@@ -135,6 +153,7 @@ void interpret_stereo_video_info_info                   ( byte* payload, int siz
 void interpret_post_filter_hints_info                   ( byte* payload, int size, VideoParameters *p_Vid );
 void interpret_tone_mapping                             ( byte* payload, int size, VideoParameters *p_Vid );
 void interpret_frame_packing_arrangement_info           ( byte* payload, int size, VideoParameters *p_Vid );
+void interpret_green_metadata_info                       (byte* payload, int size, VideoParameters *p_Vid );
 
 #if (ENABLE_OUTPUT_TONEMAPPING)
 void tone_map               (imgpel** imgX, imgpel* lut, int size_x, int size_y);
