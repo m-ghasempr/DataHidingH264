@@ -24,7 +24,7 @@ typedef struct {
   void *Place;
   int Type;
   double Default;
-  int param_limits; //! 0: no limits, 1: both min and max, 2: only min (i.e. no negatives), 3: specialcase for QPs since min needs bitdepth_qp_scale
+  int param_limits; //! 0: no limits, 1: both min and max, 2: only min (i.e. no negatives), 3: special case for QPs since min needs bitdepth_qp_scale
   double min_limit;
   double max_limit;
 } Mapping;
@@ -64,7 +64,7 @@ Mapping Map[] = {
     {"SourceHeight",             &configinput.img_height,                   0,   144.0,                     2, 16.0,              0.0              },
     {"MbLineIntraUpdate",        &configinput.intra_upd,                    0,   0.0,                       1,  0.0,              1.0              },
     {"SliceMode",                &configinput.slice_mode,                   0,   0.0,                       1,  0.0,              3.0              },
-    {"SliceArgument",            &configinput.slice_argument,               0,   0.0,                       2,  1.0,              1.0              },
+    {"SliceArgument",            &configinput.slice_argument,               0,   1.0,                       2,  1.0,              1.0              },
     {"UseConstrainedIntraPred",  &configinput.UseConstrainedIntraPred,      0,   0.0,                       1,  0.0,              1.0              },
     {"InputFile",                &configinput.infile,                       1,   0.0,                       0,  0.0,              0.0              },
     {"InputHeaderLength",        &configinput.infile_header,                0,   0.0,                       2,  0.0,              1.0              },
@@ -118,7 +118,7 @@ Mapping Map[] = {
     {"ChangeQPBSRefOffset",      &configinput.qpBRS2Offset,                 0,   0.0,                       1,-51.0,             51.0              },
     {"ChangeQPStart",            &configinput.qp2start,                     0,   0.0,                       2,  0.0,              0.0              },
 #endif
-    {"RDOptimization",           &configinput.rdopt,                        0,   0.0,                       1,  0.0,              2.0              },
+    {"RDOptimization",           &configinput.rdopt,                        0,   0.0,                       1,  0.0,              3.0              },
     {"DisableThresholding",      &configinput.disthres,                     0,   0.0,                       1,  0.0,              1.0              },
     {"DisableBSkipRDO",          &configinput.nobskip,                      0,   0.0,                       1,  0.0,              1.0              },
     {"LossRateA",                &configinput.LossRateA,                    0,   0.0,                       2,  0.0,              0.0              },
@@ -152,10 +152,10 @@ Mapping Map[] = {
 
     {"SkipIntraInInterSlices",   &configinput.SkipIntraInInterSlices,       0,   0.0,                       1,  0.0,              1.0              },    
     {"BReferencePictures",       &configinput.BRefPictures,                 0,   0.0,                       1,  0.0,              2.0              },
-    {"PyramidCoding",            &configinput.PyramidCoding,                0,   0.0,                       1,  0.0,              3.0              },
-    {"PyramidLevelQPEnable",     &configinput.PyramidLevelQPEnable,         0,   0.0,                       1,  0.0,              1.0              },
-    {"ExplicitPyramidFormat",    &configinput.ExplicitPyramidFormat,        1,   0.0,                       0,  0.0,              0.0              },
-    {"PyramidRefReorder",        &configinput.PyramidRefReorder,            0,   0.0,                       1,  0.0,              1.0              },
+    {"HierarchicalCoding",       &configinput.HierarchicalCoding,           0,   0.0,                       1,  0.0,              3.0              },
+    {"HierarchyLevelQPEnable",   &configinput.HierarchyLevelQPEnable,       0,   0.0,                       1,  0.0,              1.0              },
+    {"ExplicitHierarchyFormat",  &configinput.ExplicitHierarchyFormat,      1,   0.0,                       0,  0.0,              0.0              },
+    {"ReferenceReorder",         &configinput.ReferenceReorder,             0,   0.0,                       1,  0.0,              1.0              },
     {"PocMemoryManagement",      &configinput.PocMemoryManagement,          0,   0.0,                       1,  0.0,              1.0              },
 
     {"BiPredMotionEstimation",   &configinput.BiPredMotionEstimation,       0,   0.0,                       1,  0.0,              1.0              },
@@ -177,8 +177,11 @@ Mapping Map[] = {
     {"slice_group_change_rate_minus1",    &configinput.slice_group_change_rate_minus1,    0,   0.0,         2,  0.0,              1.0              },
     {"SliceGroupConfigFileName", &configinput.SliceGroupConfigFileName,     1,   0.0,                       0,  0.0,              0.0              },
 		
+    {"UseRedundantPicture",      &configinput.redundant_pic_flag,           0,   0.0,                       1,  0.0,              1.0              },
+    {"NumRedundantHierarchy",    &configinput.NumRedundantHierarchy,        0,   0.0,                       1,  0.0,              4.0              },
+    {"PrimaryGOPLength",         &configinput.PrimaryGOPLength,             0,   1.0,                       1,  1.0,              16.0             },
+    {"NumRefPrimary",            &configinput.NumRefPrimary,                0,   1.0,                       1,  1.0,              16.0             },
 
-    {"UseRedundantSlice",        &configinput.redundant_slice_flag,         0,   0.0,                       1,  0.0,              1.0              },
     {"PicOrderCntType",          &configinput.pic_order_cnt_type,           0,   0.0,                       1,  0.0,              2.0              },
 
     {"ContextInitMethod",        &configinput.context_init_method,          0,   0.0,                       1,  0.0,              1.0              },
@@ -209,6 +212,8 @@ Mapping Map[] = {
 
     // Fast ME enable
     {"UseFME",                   &configinput.FMEnable,                     0,   0.0,                       1,  0.0,              3.0              },
+    {"FMEDSR",                   &configinput.DynamicSearchRange,           0,   1.0,                       1,  0.0,              1.0              },//Dynamic Search Range. added by xxz
+    {"FMEScale",                 &configinput.FMEScale,                     0,   1.0,                       0,  0.0,              0.0              },//added by xxz
     {"EPZSPattern",              &configinput.EPZSPattern,                  0,   2.0,                       1,  0.0,              3.0              },
     {"EPZSDualRefinement",       &configinput.EPZSDual,                     0,   3.0,                       1,  0.0,              4.0              },
     {"EPZSFixedPredictors",      &configinput.EPZSFixed,                    0,   2.0,                       1,  0.0,              2.0              },

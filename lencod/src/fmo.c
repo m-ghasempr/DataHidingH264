@@ -64,7 +64,7 @@ static int FirstMBInSlice[MAXSLICEGROUPIDS];
 
 byte *MBAmap = NULL;   
 byte *MapUnitToSliceGroupMap = NULL; 
-unsigned PicSizeInMapUnits;
+unsigned int PicSizeInMapUnits;
 
 
 static void FmoGenerateType0MapUnitMap (ImageParameters * img, pic_parameter_set_rbsp_t * pps);

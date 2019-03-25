@@ -4,7 +4,7 @@
  * \file explicit_gop.c
  *
  * \brief
- *    Code for explicit gop support and pyramidal coding.
+ *    Code for explicit gop support and hierarchical coding.
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
@@ -26,16 +26,16 @@
 /*!
 ************************************************************************
 * \brief
-*    Generation of Pyramid GOP
+*    Generation of hierarchical GOP
 ************************************************************************
 */
-void create_pyramid()
+void create_hierarchy()
 {
   int i, j;
   int centerB=input->successive_Bframe/2;
   GOP_DATA tmp;
 
-  if (input->PyramidCoding == 1)
+  if (input->HierarchicalCoding == 1)
   {
     for (i=0;i<input->successive_Bframe;i++)
     {
@@ -43,16 +43,16 @@ void create_pyramid()
       {
         gop_structure[i].slice_type = B_SLICE;
         gop_structure[i].display_no = i * 2 + 1;
-        gop_structure[i].pyramid_layer = 0;
+        gop_structure[i].hierarchy_layer = 0;
         gop_structure[i].reference_idc = NALU_PRIORITY_HIGH;
-        gop_structure[i].slice_qp = max(0, (input->qpB + (input->PyramidLevelQPEnable ? -1: input->qpBRSOffset)));
+        gop_structure[i].slice_qp = max(0, (input->qpB + (input->HierarchyLevelQPEnable ? -1: input->qpBRSOffset)));
 
       }
       else
       {
         gop_structure[i].slice_type = B_SLICE;
         gop_structure[i].display_no = (i - centerB) * 2;
-        gop_structure[i].pyramid_layer = 1;
+        gop_structure[i].hierarchy_layer = 1;
         gop_structure[i].reference_idc = NALU_PRIORITY_DISPOSABLE;
         gop_structure[i].slice_qp = input->qpB;
       }      
@@ -73,14 +73,14 @@ void create_pyramid()
      
     curlevel = GOPlevels ;
 
-    if (NULL == (curGOPLevelfrm = (int*)malloc(GOPlevels * sizeof(int)))) no_mem_exit("create_pyramid:curGOPLevelfrm");
-    if (NULL == (curGOPLeveldist= (int*)malloc(GOPlevels * sizeof(int)))) no_mem_exit("create_pyramid:curGOPLeveldist");
+    if (NULL == (curGOPLevelfrm = (int*)malloc(GOPlevels * sizeof(int)))) no_mem_exit("create_hierarchy:curGOPLevelfrm");
+    if (NULL == (curGOPLeveldist= (int*)malloc(GOPlevels * sizeof(int)))) no_mem_exit("create_hierarchy:curGOPLeveldist");
     
     for (i=0; i <input->successive_Bframe; i++)
     {
       gop_structure[i].display_no = i;
       gop_structure[i].slice_type = B_SLICE;
-      gop_structure[i].pyramid_layer = 0;
+      gop_structure[i].hierarchy_layer = 0;
       gop_structure[i].reference_idc = NALU_PRIORITY_DISPOSABLE;
       gop_structure[i].slice_qp = input->qpB;
     }
@@ -88,9 +88,9 @@ void create_pyramid()
     for (j = 1; j < GOPlevels; j++) 
     {
       for (i = (1 << j) - 1; i < Bframes + 1 - (1 << j); i += (1 << j)) {
-        gop_structure[i].pyramid_layer  = j;
+        gop_structure[i].hierarchy_layer  = j;
         gop_structure[i].reference_idc  = NALU_PRIORITY_HIGH;
-        gop_structure[i].slice_qp = max(0, input->qpB + (input->PyramidLevelQPEnable ? -j: input->qpBRSOffset));
+        gop_structure[i].slice_qp = max(0, input->qpB + (input->HierarchyLevelQPEnable ? -j: input->qpBRSOffset));
       }     
    }
 
@@ -98,7 +98,7 @@ void create_pyramid()
 {
       j = i;
   
-      while (j > 0 && gop_structure[j].pyramid_layer > gop_structure[j-1].pyramid_layer) 
+      while (j > 0 && gop_structure[j].hierarchy_layer > gop_structure[j-1].hierarchy_layer) 
   {
         tmp = gop_structure[j-1];
         gop_structure[j-1] = gop_structure[j];
@@ -119,7 +119,7 @@ void create_pyramid()
 */
 void init_gop_structure()
 {
-  int max_gopsize = input->PyramidCoding != 3 ? input->successive_Bframe  : input->jumpd;
+  int max_gopsize = input->HierarchicalCoding != 3 ? input->successive_Bframe  : input->jumpd;
   
   gop_structure = calloc(max(10,max_gopsize), sizeof (GOP_DATA)); // +1 for reordering
   if (NULL==gop_structure) 
@@ -149,7 +149,7 @@ void clear_gop_structure()
 void interpret_gop_structure()
 {
 
-  int nLength = strlen(input->ExplicitPyramidFormat);
+  int nLength = strlen(input->ExplicitHierarchyFormat);
   int i =0, k, dqp, display_no;
   int slice_read =0, order_read = 0, stored_read = 0, qp_read =0;
   int coded_frame = 0;
@@ -162,7 +162,7 @@ void interpret_gop_structure()
       //! First lets read slice type
       if (slice_read == 0)
       {
-        switch (input->ExplicitPyramidFormat[i])
+        switch (input->ExplicitHierarchyFormat[i])
         {
         case 'P':
         case 'p':
@@ -177,7 +177,7 @@ void interpret_gop_structure()
           gop_structure[coded_frame].slice_type=I_SLICE;
           break;
         default:
-          snprintf(errortext, ET_SIZE, "Slice Type invalid in ExplicitPyramidFormat param. Please check configuration file.");
+          snprintf(errortext, ET_SIZE, "Slice Type invalid in ExplicitHierarchyFormat param. Please check configuration file.");
           error (errortext, 400);
           break;
         }
@@ -188,9 +188,9 @@ void interpret_gop_structure()
         //! Next is Display Order
         if (order_read == 0)
         {
-          if (isdigit((int)(*(input->ExplicitPyramidFormat+i))))
+          if (isdigit((int)(*(input->ExplicitHierarchyFormat+i))))
           {
-            sscanf(input->ExplicitPyramidFormat+i,"%d",&display_no);
+            sscanf(input->ExplicitHierarchyFormat+i,"%d",&display_no);
             gop_structure[coded_frame].display_no = display_no;
             order_read = 1;
             if (display_no<0 || display_no>=input->jumpd)
@@ -215,9 +215,9 @@ void interpret_gop_structure()
         }
         else if (order_read == 1)
         { 
-          if (stored_read == 0 && !(isdigit((int)(*(input->ExplicitPyramidFormat+i)))))
+          if (stored_read == 0 && !(isdigit((int)(*(input->ExplicitHierarchyFormat+i)))))
           {
-            switch (input->ExplicitPyramidFormat[i])
+            switch (input->ExplicitHierarchyFormat[i])
             {
             case 'E':
             case 'e':
@@ -228,7 +228,7 @@ void interpret_gop_structure()
               gop_structure[coded_frame].reference_idc= NALU_PRIORITY_HIGH;
               break;
             default:
-              snprintf(errortext, ET_SIZE, "Reference_IDC invalid in ExplicitPyramidFormat param. Please check configuration file.");
+              snprintf(errortext, ET_SIZE, "Reference_IDC invalid in ExplicitHierarchyFormat param. Please check configuration file.");
               error (errortext, 400);
               break;
             }
@@ -236,9 +236,9 @@ void interpret_gop_structure()
           }
           else if (stored_read == 1 && qp_read == 0)
           {
-            if (isdigit((int)(*(input->ExplicitPyramidFormat+i))))
+            if (isdigit((int)(*(input->ExplicitHierarchyFormat+i))))
             {
-              sscanf(input->ExplicitPyramidFormat+i,"%d",&dqp);
+              sscanf(input->ExplicitHierarchyFormat+i,"%d",&dqp);
 
               if (gop_structure[coded_frame].slice_type == I_SLICE)
                 gop_structure[coded_frame].slice_qp = input->qp0;
@@ -256,7 +256,7 @@ void interpret_gop_structure()
               error (errortext, 400);
             }
           }
-          else if (stored_read == 1 && qp_read == 1 && !(isdigit((int)(*(input->ExplicitPyramidFormat+i)))) && (i < nLength - 2))
+          else if (stored_read == 1 && qp_read == 1 && !(isdigit((int)(*(input->ExplicitHierarchyFormat+i)))) && (i < nLength - 2))
           {
             stored_read =0;
             qp_read=0;
@@ -278,7 +278,7 @@ void interpret_gop_structure()
   }
   else
   {
-    snprintf(errortext, ET_SIZE, "ExplicitPyramidFormat is empty. Please check configuration file.");
+    snprintf(errortext, ET_SIZE, "ExplicitHierarchyFormat is empty. Please check configuration file.");
     error (errortext, 400);
   }
 
@@ -305,15 +305,15 @@ void encode_enhancement_layer()
     else
       img->layer = 1;
     
-    if (input->BRefPictures != 1 && input->PyramidCoding==0)
+    if (input->BRefPictures != 1 && input->HierarchicalCoding==0)
     {
       img->frame_num++; //increment frame_num once for B-frames
       img->frame_num %= (1 << (log2_max_frame_num_minus4 + 4));
     }
     img->nal_reference_idc = 0;    
     
-    //if (input->PyramidCoding == 3 || input->PyramidCoding == 1)
-    if (input->PyramidCoding)
+    //if (input->HierarchicalCoding == 3 || input->HierarchicalCoding == 1)
+    if (input->HierarchicalCoding)
     {
       for(img->b_frame_to_code=1; img->b_frame_to_code<=input->successive_Bframe; img->b_frame_to_code++)
       {
@@ -339,7 +339,7 @@ void encode_enhancement_layer()
         img->b_interval =
           ((double) (input->jumpd + 1) / (input->successive_Bframe + 1.0) );
         
-        if (input->PyramidCoding == 3)
+        if (input->HierarchicalCoding == 3)
           img->b_interval = 1.0;
         
         if(input->intra_period && input->idr_enable)
@@ -389,7 +389,7 @@ void encode_enhancement_layer()
         img->b_interval =
           ((double) (input->jumpd + 1) / (input->successive_Bframe + 1.0) );
         
-        if (input->PyramidCoding == 3)
+        if (input->HierarchicalCoding == 3)
           img->b_interval = 1.0;
         
         if(input->intra_period && input->idr_enable)

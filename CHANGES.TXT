@@ -1,3 +1,38 @@
+Changes in Version JM 11.0 (since JM 10.2)
+------------------------------------------
+- encoder: FME updated [JVT-R085 and JVT-Q088] (XX)
+- encoder: I_PCM support for CABAC (SL)
+- encoder: fix crash with large number of frames (AT)
+- encoder: disable writing if no yuv output file is specified (AT)
+- encoder: disallow POC reorder with field coding (AT)
+- encoder: rename Pyramid->Hierarchy (AT/KS)
+- encoder: remove remainings of former redundant slice implementation (KS)
+- encoder: fix IPCM encoding with rate control (AT/HZ)
+- encoder: Intra 8x8 prediction mode write cleanup (KS)
+- encoder: Avoid I_PCM trace data during rdopt (KS)
+- encoder: LA-RDO bug fix (CZ)
+- encoder: disallow DP+CABAC (KS)
+- encoder: SP pictures cannot be IDR (KS)
+- encoder: fix overwritten line buffer in fast ME (KS)
+- encoder: allow picture frame/field encoding of non-reference pictures when DPB is full of reference pictures (AT)
+- encoder: enable EPZSSubPelME (AT)
+- decoder: start decoding after recovery point SEI (BL) [JVT-R017]
+- decoder: remove size restriction when parsing reserved SEI (KS/MW)
+- decoder: fix weighted prediction initializations (AT)
+- decoder: fix Motion-constrained slice group set SEI message reading (AT)
+- decoder: fix dec_picture->slice_id memory leak (KS)
+- decoder: fix SEI MMCO list free (RB)
+- decoder: make vlc tables static const (SF)
+- decoder: fix for poc_order_cnt_type=2 (JXi)
+- decoder: fix field combine/split for different reference picture size per slice (KS/AT)
+- encoder/decoder: Redundant picture for error resilience [JVT-R058] (CZ)
+- encoder/decoder: don't write empty DP NALUs and handle this at the decoder (KS)
+- encoder/decoder: fix predict_nnz for constrained intra and data partitioning (SMy/KS)
+- encoder/decoder: fix cabac context initilization (DM)
+- encoder/decoder: fix various chroma bitdepth related issues (KS/YC)
+
+
+
 Changes in Version JM 10.2 (since JM 10.1)
 ------------------------------------------
 - encoder: fast subpixel motion estimation for EPZS [JVT-Q079] (AT)
@@ -514,7 +549,7 @@ Cleanups
 * remove many gcc warnings (KS)
 * remove unused code (KS)
 * clean up VLC reading (KS)
-* allocate less memory (WYK)
+* allocate less memory (YW)
 
 
 Changes for Version JM 6.0a to JM 6.0
@@ -657,10 +692,10 @@ Bug Fixes
 Changes for Version JM 4.4 to JM 4.3a
 -------------------------------------
 New features
-* FMO mode 3# [JVT-D095] (WYK)
-* FMO modes 4#~6# [JVT-D097] (WYK)
-* Scene information SEI message [JVT-D099] (WYK)
-* Redundant slices [JVT-D101] (WYK)
+* FMO mode 3# [JVT-D095] (YW)
+* FMO modes 4#~6# [JVT-D097] (YW)
+* Scene information SEI message [JVT-D099] (YW)
+* Redundant slices [JVT-D101] (YW)
 
 Note: FMO is broken.
 
@@ -989,7 +1024,7 @@ Bug Fixes
 * fix frame_rate calculation for B-frames (GH)
 * fix restriction on reference frames for intra frame period (KS)
 * first step RPSL fixes (KS)
-* fix RTP assert (WYK)
+* fix RTP assert (YW)
 * tracefile fix (DC)
 * fix spelling of config file parameter "NumberReferenceFrames" (MB)
 
@@ -1059,8 +1094,10 @@ AT      Alexis Michael Tourapis alexismt@ieee.org
 AW      Armand Wemelsfelder     wemel@planet.nl
 BH      Barry Haskell           bhaskell@apple.com
 BJ	Byeungwoo Jeon		bjeon@yurim.skku.ac.kr
+BL	Brandon Lin		brandon@ubvideo.com
 CG      Cristina Gomila         GomilaC@tce.com
 CS	Christian Schmidt	schmidt@ece.ucsb.edu
+CZ	Chunbo Zhu		cbzhu@mail.ustc.edu.cn
 DC      Doug Chin               dougchin@sandvideo.com
 DD      Dmitriy Demin           Dmitriy.Demin@Sun.COM
 DH      Dzung Hoang             dzung.hoang@conexant.com
@@ -1076,6 +1113,7 @@ GrC     Greg Conklin            gregc@real.com
 GS      Gary Sullivan           garysull@microsoft.com
 FW      Feng Wu                 fengwu@microsoft.com
 HS      Heiko Schwarz           hschwarz@hhi.de
+HZ	Huipin Zhang		hzhang@mobilygen.com
 IL      Inge Lille-Langoy       Inge.Lille-Langoy@telenor.com
 IM      Iole Moccagatta         imoccaga@lsil.com
 IP	Isabelle Perroux	isabelle.perroux@allegrodvt.com
@@ -1087,6 +1125,7 @@ JL      Jani Lainema            Jani.Lainema@nokia.com
 JS      Joonho Song             jhsong@varovision.com
 JSa     Jose Sanches		jose.sanches@st.com
 JX      Jian Feng Xu            fenax@video.mdc.tsinghua.edu.cn
+JXi     Jun Xin                 jxin@merl.com
 KL      Karl Lillevold          Karll@real.com
 KP      Krit Panusopone         KPanusopone@gi.com
 KSa     Kazushi Sato            kazushi@av.crl.sony.co.jp
@@ -1108,16 +1147,20 @@ PL      Peter List              Peter.List@t-systems.de
 PN      Pavel Novotny           pnovotny@lsil.com
 PP      Purvin Pandit           purvin.pandit@thomson.net
 PW      Ping Wu                 pwu@tandbergtv.com
+RB	Roman Barsky		romanb@dsp.co.il
 RG      Rajeev Gandhi           rajeev@motorola.com
 RK      Ragip Kurceren          ragip.kurceren@nokia.com
 RS      Rickard Sjoberg         Rickard.Sjoberg@era.ericsson.se
 RaS     Raghavan Subramaniyan   Raghavan.S@motorola.com
 RV      Rajesh Kumar S Venkata  v-rajesh.kumar@st.com
 SB      Saurav Bandyopadhyay	skb3@buffalo.edu
+SF	Simon Fenney		simon.fenney@powervr.com
 SG      Steve Gordon            sgordon@broadcom.com
 SK	Shafi Ullah Khan	shafi@sarayusoftech.com
+SL	Stephan Lachowsky	stephan@mobilygen.com
 SKa	Shinya Kadono		kadono.shinya@jp.panasonic.com
 SM	Sebastian Manciulea	sebastian@splash.ro
+SMy	Stefaan Mys		stefaan.mys@ugent.be
 SN	Satoshi Nakagawa	nakagawa@okilab.net
 SR      Shankar Regunathan      shanre@microsoft.com
 SeS	Sergey A. Sablin	sergey@elecard.net.ru
@@ -1141,15 +1184,16 @@ VV      Viktor Varsa            viktor.varsa@nokia.com
 WC	Woong Il Choi		creata@ece.skku.ac.kr
 WF	Wenfang Fu		fwf@video.mdc.tsinghua.edu.cn
 WK	Woo-Shik Kim		wskim@sait.samsung.co.kr
-WYK     Ye-Kui Wang             wyk@ieee.org
 WZ      Weimin Zeng		wzeng@wischip.com
 XI	Xin			xin@apple.com
 XS      Xiaoyan Sun             sunxiaoyan@msrchina.research.microsoft.com   
+XX	Xiaozhong Xu		xxz@video.mdc.tsinghua.edu.cn
 XY      Xiaoquan Yi             xyi@scu.edu
+YC	Yi-Jen Chiu		yi-jen.chiu@intel.com
 YH	Yu-Wen Huang		YW_Huang@mtk.com.tw
 YK      Yoshihiro Kikuchi       yoshihiro.kikuchi@toshiba.co.jp
 YL      Yann Lemaguet           yann.lemaguet@philips.com
-YW      Ye-Kui Wang             wyk@ieee.org
+YW      Ye-Kui Wang             ye-kui.wang@nokia.com
 YX      Yanjun Xu               yxu@sarnoff.com
 ZH	Zhou Heng		zhou_heng@yahoo.com
 ZL      Li Zhang                zhangli@jdl.ac.cn

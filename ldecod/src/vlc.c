@@ -205,7 +205,8 @@ int u_1 (char *tracestring, Bitstream *bitstream)
  */
 void linfo_ue(int len, int info, int *value1, int *dummy)
 {
-  *value1 = (int)pow(2,(len/2))+info-1; // *value1 = (int)(2<<(len>>1))+info-1;
+  assert (len/2<32);
+  *value1 = (1<<(len/2))+info-1;
 }
 
 /*!
@@ -221,7 +222,8 @@ void linfo_ue(int len, int info, int *value1, int *dummy)
 void linfo_se(int len,  int info, int *value1, int *dummy)
 {
   int n;
-  n = (int)pow(2,(len/2))+info-1;
+  assert (len/2<32);
+  n = (1 << (len/2))+info-1;
   *value1 = (n+1)/2;
   if((n & 0x01)==0)                           // lsb is signed bit
     *value1 = -*value1;
@@ -274,6 +276,7 @@ void linfo_levrun_inter(int len, int info, int *level, int *irun)
 {
   int l2;
   int inf;
+  assert ((len/2-5)<32);
   if (len<=9)
   {
     l2=max(0,len/2-1);
@@ -286,7 +289,7 @@ void linfo_levrun_inter(int len, int info, int *level, int *irun)
   else                                  // if len > 9, skip using the array
   {
     *irun=(info&0x1e)>>1;
-    *level = LEVRUN1[*irun] + info/32 + (int)pow(2,len/2 - 5);
+    *level = LEVRUN1[*irun] + info/32 + ( 1<< (len/2 - 5));
     if ((info&0x01)==1)
       *level=-*level;
   }
@@ -320,7 +323,7 @@ void linfo_levrun_c2x2(int len, int info, int *level, int *irun)
   else                                  // if len > 5, skip using the array
   {
     *irun=(info&0x06)>>1;
-    *level = LEVRUN3[*irun] + info/8 + (int)pow(2,len/2 - 3);
+    *level = LEVRUN3[*irun] + info/8 + (1 << (len/2 - 3));
     if ((info&0x01)==1)
       *level=-*level;
   }
@@ -600,8 +603,8 @@ extern void tracebits2(const char *trace_str,  int len,  int info) ;
 
 int code_from_bitstream_2d(SyntaxElement *sym,  
                            DataPartition *dP,
-                           int *lentab,
-                           int *codtab,
+                           const int *lentab,
+                           const int *codtab,
                            int tabwidth,
                            int tabheight,
                            int *code)
@@ -689,9 +692,9 @@ int readSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *sym,  DataPartition *d
   int BitstreamLengthInBytes = currStream->bitstream_length;
 
   int vlcnum, retval;
-  int code, *ct, *lt;
+  int code;
 
-  int lentab[3][4][17] = 
+  static const int lentab[3][4][17] = 
   {
     {   // 0702
       { 1, 6, 8, 9,10,11,13,13,13,14,14,15,15,16,16,16,16},
@@ -714,7 +717,7 @@ int readSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *sym,  DataPartition *d
 
   };
 
-  int codtab[3][4][17] = 
+  static const int codtab[3][4][17] = 
   {
     {
       { 1, 5, 7, 7, 7, 7,15,11, 8,15,11,15,11,15,11, 7,4}, 
@@ -763,8 +766,8 @@ int readSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *sym,  DataPartition *d
   else
 
   {
-    lt = &lentab[vlcnum][0][0];
-    ct = &codtab[vlcnum][0][0];
+    const int *lt = &lentab[vlcnum][0][0];
+    const int *ct = &codtab[vlcnum][0][0];
     retval = code_from_bitstream_2d(sym, dP, lt, ct, 17, 4, &code);
   }
 
@@ -795,9 +798,9 @@ int readSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *sym,  DataPartition *d
 int readSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *sym,  DataPartition *dP)
 {
   int retval;
-  int code, *ct, *lt;
+  int code;
 
-  int lentab[3][4][17] = 
+  static const int lentab[3][4][17] = 
   {
     //YUV420
    {{ 2, 6, 6, 6, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -816,7 +819,7 @@ int readSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *sym,  DataPart
     { 0, 0, 0, 5, 6, 7, 8, 9,10,11,13,14,14,15,15,16,16}}
   };
 
-  int codtab[3][4][17] = 
+  static const int codtab[3][4][17] = 
   {
     //YUV420
    {{ 1, 7, 4, 3, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -836,10 +839,9 @@ int readSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *sym,  DataPart
   
   };
   int yuv = active_sps->chroma_format_idc - 1;
-  //ADD-VG-14052004-END
 
-  lt = &lentab[yuv][0][0];
-  ct = &codtab[yuv][0][0];
+  const int *lt = &lentab[yuv][0][0];
+  const int *ct = &codtab[yuv][0][0];
 
   retval = code_from_bitstream_2d(sym, dP, lt, ct, 17, 4, &code);
 
@@ -1017,10 +1019,10 @@ int readSyntaxElement_Level_VLCN(SyntaxElement *sym, int vlc, struct datapartiti
  */
 int readSyntaxElement_TotalZeros(SyntaxElement *sym,  DataPartition *dP)
 {
-  int vlcnum, retval;
-  int code, *ct, *lt;
+  int retval;
+  int code;
 
-  int lentab[TOTRUN_NUM][16] = 
+  static const int lentab[TOTRUN_NUM][16] = 
   {
     
     { 1,3,3,4,4,5,5,6,6,7,7,8,8,9,9,9},  
@@ -1040,7 +1042,7 @@ int readSyntaxElement_TotalZeros(SyntaxElement *sym,  DataPartition *dP)
     { 1,1},  
   };
 
-  int codtab[TOTRUN_NUM][16] = 
+  static const int codtab[TOTRUN_NUM][16] = 
   {
     {1,3,2,3,2,3,2,3,2,3,2,3,2,3,2,1},
     {7,6,5,4,3,5,4,3,2,3,2,3,2,1,0},
@@ -1058,10 +1060,11 @@ int readSyntaxElement_TotalZeros(SyntaxElement *sym,  DataPartition *dP)
     {0,1,1},
     {0,1},  
   };
-  vlcnum = sym->value1;
 
-  lt = &lentab[vlcnum][0];
-  ct = &codtab[vlcnum][0];
+  int vlcnum = sym->value1;
+
+  const int *lt = &lentab[vlcnum][0];
+  const int *ct = &codtab[vlcnum][0];
 
   retval = code_from_bitstream_2d(sym, dP, lt, ct, 16, 1, &code);
 
@@ -1088,10 +1091,10 @@ int readSyntaxElement_TotalZeros(SyntaxElement *sym,  DataPartition *dP)
  */
 int readSyntaxElement_TotalZerosChromaDC(SyntaxElement *sym,  DataPartition *dP)
 {
-  int vlcnum, retval;
-  int code, *ct, *lt;
+  int retval;
+  int code;
 
-  int lentab[3][TOTRUN_NUM][16] = 
+  static const int lentab[3][TOTRUN_NUM][16] = 
   {
     //YUV420
    {{ 1,2,3,3},
@@ -1123,7 +1126,7 @@ int readSyntaxElement_TotalZerosChromaDC(SyntaxElement *sym,  DataPartition *dP)
     { 1,1}}  
   };
 
-  int codtab[3][TOTRUN_NUM][16] = 
+  static const int codtab[3][TOTRUN_NUM][16] = 
   {
     //YUV420
    {{ 1,1,1,0},
@@ -1156,10 +1159,10 @@ int readSyntaxElement_TotalZerosChromaDC(SyntaxElement *sym,  DataPartition *dP)
   };
   int yuv = active_sps->chroma_format_idc - 1;
 
-  vlcnum = sym->value1;
+  int vlcnum = sym->value1;
 
-  lt = &lentab[yuv][vlcnum][0];
-  ct = &codtab[yuv][vlcnum][0];
+  const int *lt = &lentab[yuv][vlcnum][0];
+  const int *ct = &codtab[yuv][vlcnum][0];
 
   retval = code_from_bitstream_2d(sym, dP, lt, ct, 16, 1, &code);
 
@@ -1187,10 +1190,10 @@ int readSyntaxElement_TotalZerosChromaDC(SyntaxElement *sym,  DataPartition *dP)
  */
 int readSyntaxElement_Run(SyntaxElement *sym,  DataPartition *dP)
 {
-  int vlcnum, retval;
-  int code, *ct, *lt;
+  int retval;
+  int code;
 
-  int lentab[TOTRUN_NUM][16] = 
+  static const int lentab[TOTRUN_NUM][16] = 
   {
     {1,1},
     {1,2,2},
@@ -1201,7 +1204,7 @@ int readSyntaxElement_Run(SyntaxElement *sym,  DataPartition *dP)
     {3,3,3,3,3,3,3,4,5,6,7,8,9,10,11},
   };
 
-  int codtab[TOTRUN_NUM][16] = 
+  static const int codtab[TOTRUN_NUM][16] = 
   {
     {1,0},
     {1,1,0},
@@ -1212,10 +1215,10 @@ int readSyntaxElement_Run(SyntaxElement *sym,  DataPartition *dP)
     {7,6,5,4,3,2,1,1,1,1,1,1,1,1,1},
   };
 
-  vlcnum = sym->value1;
+  int vlcnum = sym->value1;
 
-  lt = &lentab[vlcnum][0];
-  ct = &codtab[vlcnum][0];
+  const int *lt = &lentab[vlcnum][0];
+  const int *ct = &codtab[vlcnum][0];
 
   retval = code_from_bitstream_2d(sym, dP, lt, ct, 16, 1, &code);
 

@@ -488,14 +488,25 @@ void SetMotionVectorPredictor (short  pmv[2],
   int hv;
   
   PixelPos block_a, block_b, block_c, block_d;
-  
-  int SAD_a=0, SAD_b=0, SAD_c=0, SAD_d=0;
-  int temp_pred_SAD[2];
 
-  int fastme_sp_enable=(input->FMEnable==1 && (ref_frame<=0) && (FME_blocktype==1));
-  if (fastme_sp_enable) 
-    pred_SAD_space=0;
- 
+  // added for bipred mode
+  int *** fastme_l0_cost_flag = (input->FMEnable == 1) ? (bipred_flag ? fastme_l0_cost_bipred:fastme_l0_cost) : NULL;
+  int *** fastme_l1_cost_flag = (input->FMEnable == 1) ? (bipred_flag ? fastme_l1_cost_bipred:fastme_l1_cost) : NULL;    
+
+  //Dynamic Search Range
+
+  int dsr_temp_search_range[2];
+  int dsr_mv_avail, dsr_mv_max, dsr_mv_sum, dsr_small_search_range;
+
+   // neighborhood SAD init
+  if(input->FMEnable == 1) 
+  {
+    SAD_a=0;
+    SAD_b=0; 
+    SAD_c=0; 
+    SAD_d=0;
+  }
+
   getLuma4x4Neighbour(mb_nr, block_x, block_y,           -1,  0, &block_a);
   getLuma4x4Neighbour(mb_nr, block_x, block_y,            0, -1, &block_b);
   getLuma4x4Neighbour(mb_nr, block_x, block_y, blockshape_x, -1, &block_c);
@@ -606,7 +617,15 @@ void SetMotionVectorPredictor (short  pmv[2],
         mvPredType = MVPRED_L;
     }
   }
-  
+
+  // neighborhood SAD prediction
+  if(input->FMEnable == 1 &&(input->DynamicSearchRange == 1 || input->BiPredMotionEstimation == 1))
+  {
+    SAD_a = block_a.available ? ((list==1) ? (fastme_l1_cost_flag[FME_blocktype][block_a.pos_y][block_a.pos_x]) : (fastme_l0_cost_flag[FME_blocktype][block_a.pos_y][block_a.pos_x])) : 0;
+    SAD_b = block_b.available ? ((list==1) ? (fastme_l1_cost_flag[FME_blocktype][block_b.pos_y][block_b.pos_x]) : (fastme_l0_cost_flag[FME_blocktype][block_b.pos_y][block_b.pos_x])) : 0;
+    SAD_d = block_d.available ? ((list==1) ? (fastme_l1_cost_flag[FME_blocktype][block_d.pos_y][block_d.pos_x]) : (fastme_l0_cost_flag[FME_blocktype][block_d.pos_y][block_d.pos_x])) : 0;
+    SAD_c = block_c.available ? ((list==1) ? (fastme_l1_cost_flag[FME_blocktype][block_c.pos_y][block_c.pos_x]) : (fastme_l0_cost_flag[FME_blocktype][block_c.pos_y][block_c.pos_x])) : SAD_d;
+  }
   for (hv=0; hv < 2; hv++)
   {
     if (!img->MbaffFrameFlag || hv==0)
@@ -649,54 +668,58 @@ void SetMotionVectorPredictor (short  pmv[2],
       }
     }
     
-    if(fastme_sp_enable)
-    {
-      SAD_a = block_a.available ? ((list==1) ? (fastme_l1_cost[FME_blocktype][block_a.pos_y][block_a.pos_x]) : (fastme_l0_cost[FME_blocktype][block_a.pos_y][block_a.pos_x])) : 0;
-      SAD_b = block_b.available ? ((list==1) ? (fastme_l1_cost[FME_blocktype][block_b.pos_y][block_b.pos_x]) : (fastme_l0_cost[FME_blocktype][block_b.pos_y][block_b.pos_x])) : 0;
-      SAD_d = block_d.available ? ((list==1) ? (fastme_l1_cost[FME_blocktype][block_d.pos_y][block_d.pos_x]) : (fastme_l0_cost[FME_blocktype][block_d.pos_y][block_d.pos_x])) : 0;
-      SAD_c = block_c.available ? ((list==1) ? (fastme_l1_cost[FME_blocktype][block_c.pos_y][block_c.pos_x]) : (fastme_l0_cost[FME_blocktype][block_c.pos_y][block_c.pos_x])) : SAD_d;
-    }
-    
     switch (mvPredType)
     {
     case MVPRED_MEDIAN:
       if(!(block_b.available || block_c.available))
       {
         pred_vec = mv_a;
-        if(fastme_sp_enable) temp_pred_SAD[hv] = SAD_a;
       }
       else
       {
         pred_vec = mv_a+mv_b+mv_c-min(mv_a,min(mv_b,mv_c))-max(mv_a,max(mv_b,mv_c));
       }
-      if(fastme_sp_enable)
-      {
-        if (pred_vec == mv_a && SAD_a != 0) temp_pred_SAD[hv] = SAD_a;
-        else if (pred_vec == mv_b && SAD_b!=0) temp_pred_SAD[hv] = SAD_b;
-        else temp_pred_SAD[hv] = SAD_c;
-      }
       break;
     case MVPRED_L:
       pred_vec = mv_a;
-      if(fastme_sp_enable) temp_pred_SAD[hv] = SAD_a;
       break;
     case MVPRED_U:
       pred_vec = mv_b;
-      if(fastme_sp_enable) temp_pred_SAD[hv] = SAD_b;
       break;
     case MVPRED_UR:
       pred_vec = mv_c;
-      if(fastme_sp_enable) temp_pred_SAD[hv] = SAD_c;
       break;
     default:
       break;
     }
     
     pmv[hv] = pred_vec;
-    
+    //Dynamic Search Range
+    if (input->FMEnable == 1 && input->DynamicSearchRange)
+    {
+      dsr_mv_avail=block_a.available+block_b.available+block_c.available;
+      if(dsr_mv_avail < 2)
+      {
+        dsr_temp_search_range[hv] = input->search_range;
+      }
+      else
+      {
+        dsr_mv_max = max(abs(mv_a),max(abs(mv_b),abs(mv_c)));
+        dsr_mv_sum = (abs(mv_a)+abs(mv_b)+abs(mv_c));
+        if(dsr_mv_sum == 0) dsr_small_search_range = (input->search_range + 4) >> 3;
+        else if(dsr_mv_sum > 3 ) dsr_small_search_range = (input->search_range + 2) >>2;
+        else dsr_small_search_range = (3*input->search_range + 8) >> 4;
+        dsr_temp_search_range[hv]=min(input->search_range,max(dsr_small_search_range,dsr_mv_max<<1));		
+        if(max(SAD_a,max(SAD_b,SAD_c)) > Threshold_DSR_MB[FME_blocktype])
+          dsr_temp_search_range[hv] = input->search_range;
+      }	   	
+    }
   }
   
-  if(fastme_sp_enable) pred_SAD_space = temp_pred_SAD[0]>temp_pred_SAD[1]?temp_pred_SAD[1]:temp_pred_SAD[0];
+  //Dynamic Search Range
+  if (input->FMEnable == 1 && input->DynamicSearchRange)
+    dsr_new_search_range = max(dsr_temp_search_range[0],dsr_temp_search_range[1]);
+
 }
 
 /*!
@@ -1930,7 +1953,7 @@ FullPelBlockMotionBiPred (pel_t**   orig_pic,      // <--  original pixel values
   }
   else
   {
-    get_ref_line2 = UMVLineX;
+    get_ref_line2 = UMVLineX2;
   }
   
   //===== set function for getting reference picture lines =====
@@ -2128,7 +2151,7 @@ SubPelBlockSearchBiPred (pel_t**   orig_pic,      // <--  original pixel values 
   } 
   else
   {
-    get_line_p2 = UMVLine4X;    
+    get_line_p2 = UMVLine4X2;
   }
   
   if ((pic4_pix_x + *s_mv_x > 2) && (pic4_pix_x + *s_mv_x < max_pos_x4 - 1) &&
@@ -2351,7 +2374,7 @@ SubPelBlockSearchBiPred (pel_t**   orig_pic,      // <--  original pixel values 
   }
   else
   {
-    get_line_p2 = UMVLine4X;    
+    get_line_p2 = UMVLine4X2;    
   }
   
   if ((pic4_pix_x + *s_mv_x > 0) && (pic4_pix_x + *s_mv_x < max_pos_x4) &&
@@ -2711,7 +2734,8 @@ BlockMotionSearch (short     ref,           //!< reference idx
   
   if(input->FMEnable == 1)
   {
-    setup_FME(ref, list, block_y, block_x, blocktype, all_mv );
+    FME_blocktype = blocktype;
+    bipred_flag = 0;
   }
   else if (input->FMEnable == 2)
   {
@@ -2721,8 +2745,19 @@ BlockMotionSearch (short     ref,           //!< reference idx
   //===========================================
   //=====   GET MOTION VECTOR PREDICTOR   =====
   //===========================================
- 
+
   SetMotionVectorPredictor (pred_mv, enc_picture->ref_idx[list], enc_picture->mv[list], ref, list, block_x, block_y, bsx, bsy);
+  //Dynamic Search Range
+  if (input->FMEnable == 1 && input->DynamicSearchRange)
+  {
+#ifdef _FULL_SEARCH_RANGE_
+    if      (input->full_search == 2) search_range = dsr_new_search_range;
+    else if (input->full_search == 1) search_range = dsr_new_search_range /  (min(ref,1)+1);
+    else                              search_range = dsr_new_search_range / ((min(ref,1)+1) * min(2,blocktype));
+#else
+    search_range = dsr_new_search_range / ((min(ref,1)+1) * min(2,blocktype));
+#endif
+  }
   
   pred_mv_x = pred_mv[0];
   pred_mv_y = pred_mv[1];
@@ -2750,23 +2785,6 @@ BlockMotionSearch (short     ref,           //!< reference idx
     min_mcost = FastIntegerPelBlockMotionSearch(orig_pic, ref, list, pic_pix_x, pic_pix_y, blocktype,
       pred_mv_x, pred_mv_y, &mv_x, &mv_y, search_range,
       min_mcost, lambda_factor);
-    //FAST MOTION ESTIMATION. ZHIBO CHEN 2003.3
-    for (i=0; i < (bsx>>2); i++)
-    {
-      for (j=0; j < (bsy>>2); j++)
-      {
-        if(list == 0) 
-        {
-          fastme_ref_cost[ref][blocktype][block_y+j][block_x+i] = min_mcost;
-          if (ref==0)
-            fastme_l0_cost[blocktype][(img->pix_y>>2)+block_y+j][(img->pix_x>>2)+block_x+i] = min_mcost;
-        }
-        else
-        {
-          fastme_l1_cost[blocktype][(img->pix_y>>2)+block_y+j][(img->pix_x>>2)+block_x+i] = min_mcost;
-        }
-      }
-    }
   }
   else if (input->FMEnable == 2)
   {
@@ -2884,7 +2902,7 @@ BlockMotionSearch (short     ref,           //!< reference idx
         else
         {
           min_mcost =  SubPelBlockMotionSearch (orig_pic, ref, list, pic_pix_x, pic_pix_y, blocktype,
-            pred_mv_x, pred_mv_y, &mv_x, &mv_y, 9, 9, min_mcost, lambda_factor);
+                       pred_mv_x, pred_mv_y, &mv_x, &mv_y, 9, 9, min_mcost, lambda_factor);
         }
       }
       else if (input->FMEnable == 2)
@@ -2892,19 +2910,23 @@ BlockMotionSearch (short     ref,           //!< reference idx
         if(blocktype > 1)
         {
           min_mcost =  simplified_FastSubPelBlockMotionSearch (orig_pic, ref, list, pic_pix_x, pic_pix_y,
-            blocktype, pred_mv_x, pred_mv_y, &mv_x, &mv_y, 9, 9, min_mcost, lambda_factor, 
-            (input->Transform8x8Mode && blocktype <= 4 && input->hadamard));
+                       blocktype, pred_mv_x, pred_mv_y, &mv_x, &mv_y, 9, 9, min_mcost, lambda_factor, 
+                       (input->Transform8x8Mode && blocktype <= 4 && input->hadamard));
         }
         else
         {
           min_mcost =  simplified_FastFullSubPelBlockMotionSearch (orig_pic, ref, list, pic_pix_x, pic_pix_y, 
-            blocktype, pred_mv_x, pred_mv_y, &mv_x, &mv_y, 9, 9, min_mcost, lambda_factor);
+                       blocktype, pred_mv_x, pred_mv_y, &mv_x, &mv_y, 9, 9, min_mcost, lambda_factor);
         }
       }
       else
-      {      
-        min_mcost =  SubPelBlockMotionSearch (orig_pic, ref, list, pic_pix_x, pic_pix_y, blocktype,
-          pred_mv_x, pred_mv_y, &mv_x, &mv_y, 9, 9, min_mcost, lambda_factor);            
+      {
+        if (input->EPZSSubPelME)
+          min_mcost =  EPZSSubPelBlockMotionSearch (orig_pic, ref, list, pic_pix_x, pic_pix_y, blocktype,
+                       pred_mv_x, pred_mv_y, &mv_x, &mv_y, 9, 9, min_mcost, lambda_factor);            
+        else
+          min_mcost =  SubPelBlockMotionSearch (orig_pic, ref, list, pic_pix_x, pic_pix_y, blocktype,
+          pred_mv_x, pred_mv_y, &mv_x, &mv_y, 9, 9, min_mcost, lambda_factor); 
       }
     }
   }
@@ -2953,7 +2975,10 @@ BlockMotionSearch (short     ref,           //!< reference idx
     short   pred_mv_x2 = 0, pred_mv_y2 = 0;
     short   iterlist=list;
     short   pred_mv_bi[2];
-    
+
+    if(input->FMEnable == 1)
+      bipred_flag = 1;
+
     SetMotionVectorPredictor (pred_mv_bi, enc_picture->ref_idx[list ^ 1], enc_picture->mv[(list == LIST_0? LIST_1: LIST_0)], 0, (list == LIST_0? LIST_1: LIST_0), block_x, block_y, bsx, bsy);
 
     mv_x=(mv_x + 2)>>2;
@@ -3006,6 +3031,15 @@ BlockMotionSearch (short     ref,           //!< reference idx
           pred_mv_x1, pred_mv_y1, pred_mv_x2, pred_mv_y2, 
           &bimv_x, &bimv_y, &tempmv_x, &tempmv_y, 
           input->BiPredMESearchRange, min_mcostbi, lambda_factor);
+      }
+      //bipred mode
+      else  if(input->FMEnable == 1)
+      {
+          min_mcostbi = FastBipredIntegerPelBlockMotionSearch (orig_pic, ref, iterlist, 
+          pic_pix_x, pic_pix_y, blocktype, 
+          pred_mv_x1, pred_mv_y1, pred_mv_x2, pred_mv_y2, 
+          &bimv_x, &bimv_y, &tempmv_x, &tempmv_y, 
+          input->BiPredMESearchRange>>i, min_mcostbi, lambda_factor);
       }
       else
       {

@@ -413,7 +413,7 @@ void interpret_spare_pic( byte* payload, int size, ImageParameters *img )
       for (k=0; k < 2; k++)
         for (i=0; i < img->height/2; i++)
           for (j=0; j < img->width/2; j++)
-            fwrite(&(img->dc_pred_value), symbol_size_in_bytes, 1, p_out);
+            fwrite(&(img->dc_pred_value_chroma), symbol_size_in_bytes, 1, p_out);
     }
     fclose( fp );
     free_mem2Dpel( Y );
@@ -905,6 +905,9 @@ void interpret_recovery_point_info( byte* payload, int size, ImageParameters *im
   broken_link_flag         = u_1 (    "SEI: broken_link_flag"        , buf);
   changing_slice_group_idc = u_v ( 2, "SEI: changing_slice_group_idc", buf);
 
+  img->recovery_point = 1;
+  img->recovery_frame_cnt = recovery_frame_cnt;
+
 #ifdef PRINT_RECOVERY_POINT
   printf("Recovery point SEI message\n");
   printf("recovery_frame_cnt       = %d\n", recovery_frame_cnt);
@@ -1015,10 +1018,12 @@ void interpret_dec_ref_pic_marking_repetition_info( byte* payload, int size, Ima
 #endif
 
   while (img->dec_ref_pic_marking_buffer)
-  {
-    tmp_drpm = img->dec_ref_pic_marking_buffer->Next;
+  { 
+    tmp_drpm=img->dec_ref_pic_marking_buffer;
+
+    img->dec_ref_pic_marking_buffer=tmp_drpm->Next;
     free (tmp_drpm);
-  }
+  } 
 
   // restore old values in img
   img->dec_ref_pic_marking_buffer = old_drpm;
@@ -1226,6 +1231,7 @@ void interpret_motion_constrained_slice_group_set_info( byte* payload, int size,
 {
   int num_slice_groups_minus1, slice_group_id, exact_match_flag, pan_scan_rect_flag, pan_scan_rect_id;
   int i;
+  int sliceGroupSize;
 
   Bitstream* buf;
 
@@ -1237,7 +1243,7 @@ void interpret_motion_constrained_slice_group_set_info( byte* payload, int size,
   UsedBits = 0;
   
   num_slice_groups_minus1   = ue_v("SEI: num_slice_groups_minus1"  , buf);
-  
+  sliceGroupSize = CeilLog2( num_slice_groups_minus1 + 1 );
 #ifdef PRINT_MOTION_CONST_SLICE_GROUP_SET_INFO
   printf("Motion-constrained slice group set SEI message\n");
   printf("num_slice_groups_minus1   = %d\n", num_slice_groups_minus1);
@@ -1245,7 +1251,8 @@ void interpret_motion_constrained_slice_group_set_info( byte* payload, int size,
 
   for (i=0; i<=num_slice_groups_minus1;i++)
   {
-    slice_group_id   = ue_v("SEI: slice_group_id"  , buf);
+
+    slice_group_id   = u_v (sliceGroupSize, "SEI: slice_group_id" , buf)    ;
 #ifdef PRINT_MOTION_CONST_SLICE_GROUP_SET_INFO
     printf("slice_group_id            = %d\n", slice_group_id);
 #endif
@@ -1516,7 +1523,6 @@ void interpret_reserved_info( byte* payload, int size, ImageParameters *img )
 #ifdef PRINT_RESERVED_INFO
   printf("Reserved SEI message\n");
 #endif
-  assert (size<16);
 
   while (offset < size)
   {

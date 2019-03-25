@@ -360,6 +360,12 @@ static void ref_pic_list_reordering()
       } while (val != 3);
     }
   }
+
+  // set reference index of redundant slices.
+  if(img->redundant_pic_cnt)
+  {
+    redundant_slice_ref_idx = currSlice->abs_diff_pic_num_minus1_l0[0] + 1;
+  }
 }
 
 /*!
@@ -552,7 +558,7 @@ void decode_poc(struct img_par *img)
 {
   int i;
   // for POC mode 0:
-  unsigned int        MaxPicOrderCntLsb = (1<<(active_sps->log2_max_pic_order_cnt_lsb_minus4+4));
+  unsigned int MaxPicOrderCntLsb = (1<<(active_sps->log2_max_pic_order_cnt_lsb_minus4+4));
 
   switch ( active_sps->pic_order_cnt_type )
   {
@@ -610,7 +616,7 @@ void decode_poc(struct img_par *img)
     if ( img->frame_num!=img->PreviousFrameNum)
       img->PreviousFrameNum=img->frame_num;
 
-    if(!img->disposable_flag)
+    if(img->nal_reference_idc)
     {
       img->PrevPicOrderCntLsb = img->pic_order_cnt_lsb;
       img->PrevPicOrderCntMsb = img->PicOrderCntMsb;
@@ -624,7 +630,8 @@ void decode_poc(struct img_par *img)
     {
       img->FrameNumOffset=0;     //  first pix of IDRGOP, 
       img->delta_pic_order_cnt[0]=0;                        //ignore first delta
-      if(img->frame_num)  error("frame_num != 0 in idr pix", -1020);
+      if(img->frame_num)
+        error("frame_num not equal to zero in IDR picture", -1020);
     }
     else 
     {
@@ -648,7 +655,7 @@ void decode_poc(struct img_par *img)
       img->AbsFrameNum = img->FrameNumOffset+img->frame_num;
     else 
       img->AbsFrameNum=0;
-    if(img->disposable_flag && img->AbsFrameNum>0)
+    if( (!img->nal_reference_idc) && img->AbsFrameNum>0)
       img->AbsFrameNum--;
 
     // 3rd
@@ -669,7 +676,7 @@ void decode_poc(struct img_par *img)
     else 
       img->ExpectedPicOrderCnt=0;
 
-    if(img->disposable_flag)
+    if(!img->nal_reference_idc)
       img->ExpectedPicOrderCnt += active_sps->offset_for_non_ref_pic;
 
     if(img->field_pic_flag==0)
@@ -699,7 +706,8 @@ void decode_poc(struct img_par *img)
     {
       img->FrameNumOffset=0;     //  first pix of IDRGOP, 
       img->ThisPOC = img->framepoc = img->toppoc = img->bottompoc = 0;
-      if(img->frame_num)  error("frame_num != 0 in idr pix", -1020);
+      if(img->frame_num) 
+        error("frame_num not equal to zero in IDR picture", -1020);
     }
     else
     {
@@ -715,7 +723,7 @@ void decode_poc(struct img_par *img)
 
 
       img->AbsFrameNum = img->FrameNumOffset+img->frame_num;
-      if(img->disposable_flag)
+      if(!img->nal_reference_idc)
         img->ThisPOC = (2*img->AbsFrameNum - 1);
       else
         img->ThisPOC = (2*img->AbsFrameNum);
@@ -727,8 +735,7 @@ void decode_poc(struct img_par *img)
       else img->bottompoc = img->framepoc = img->ThisPOC;
     }
 
-    if (!img->disposable_flag)
-      img->PreviousFrameNum=img->frame_num;
+    img->PreviousFrameNum=img->frame_num;
     img->PreviousFrameNumOffset=img->FrameNumOffset;
     break;
 

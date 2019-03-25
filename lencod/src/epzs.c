@@ -524,7 +524,7 @@ EPZSSliceInit (EPZSColocParams * p,
   if (input->EPZSTemporal)
   {
     fs_top = fs_bottom = fs = listX[list][0];
-    if (listXsize[0]> 1)
+    if (listXsize[list]> 1)
       fs_top1 = fs_bottom1 = fs1 = listX[list][1];
     else
       fs_top1 = fs_bottom1 = fs1 = listX[list][0];
@@ -559,7 +559,7 @@ EPZSSliceInit (EPZSColocParams * p,
           prescale = 256;      
         epzs_scale[0][j][i] = (mv_scale[j][0][i] * prescale + 128) >> 8;
         epzs_scale[0][j + 1][i] = prescale - 256;      
-        if (listXsize[j]>1)
+        if (listXsize[list + j]>1)
         {
           iTRp = Clip3 (-128, 127, listX[list + j][1]->poc - listX[LIST_0 + j][i]->poc);      
           if (iTRp != 0)
@@ -2060,7 +2060,7 @@ EPZSBiPredBlockMotionSearch (pel_t ** cur_pic,	  // <--  original pixel values f
   }
   else
   {
-    get_ref_line2 = UMVLineX;
+    get_ref_line2 = UMVLineX2;
   }
   
   //===== set function for getting reference picture lines from reference 2=====

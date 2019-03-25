@@ -26,8 +26,8 @@
 const double THETA=1.3636;
 const int Switch=0;
 
-int Iprev_bits=0;
-int Pprev_bits=0;
+int64 Iprev_bits=0;
+int64 Pprev_bits=0;
 
 
 /* rate control variables */

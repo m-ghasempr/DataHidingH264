@@ -75,6 +75,9 @@ extern struct img_par *erc_img;
 extern StorablePicture **listX[6];
 extern ColocatedParams *Co_located;
 
+extern StorablePicture *no_reference_picture;
+int non_conforming_stream;
+
 StorablePicture *dec_picture;
 
 OldSliceParams old_slice;
@@ -138,6 +141,7 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
 {
   int current_header;
   Slice *currSlice = img->currentSlice;
+  int i;
 
   img->current_slice_nr = 0;
   img->current_mb_nr = -4711;     // initialized to an impossible value for debugging -- correct value is taken from slice header
@@ -148,6 +152,28 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
   while ((currSlice->next_header != EOS && currSlice->next_header != SOP))
   {
     current_header = read_new_slice();
+
+    // error tracking of primary and redundant slices.
+    Error_tracking();
+
+    // If primary and redundant are received and primary is correct, discard the redundant
+    // else, primary slice will be replaced with redundant slice.
+    if(img->frame_num == previous_frame_num && img->redundant_pic_cnt !=0
+      && Is_primary_correct !=0 && current_header != EOS)
+    {
+      continue;
+    }
+
+    // update reference flags and set current ref_flag
+    if(!(img->redundant_pic_cnt != 0 && previous_frame_num == img->frame_num))
+    {
+      for(i=16;i>0;i--)
+      {
+        ref_flag[i] = ref_flag[i-1];
+      }
+    }
+    ref_flag[0] = img->redundant_pic_cnt==0 ? Is_primary_correct : Is_redundant_correct;
+    previous_frame_num = img->frame_num;
 
     if (current_header == EOS)
     {
@@ -478,6 +504,16 @@ void get_block(int ref_frame, StorablePicture **list, int x_pos, int y_pos, stru
   int tmp_res[4][9];
   static const int COEF[6] = {    1, -5, 20, 20, -5, 1  };
 
+  if (list[ref_frame] == no_reference_picture && img->framepoc < img->recovery_poc)
+  {
+      printf("list[ref_frame] is equal to 'no reference picture' before RAP\n");
+
+      /* fill the block with sample value 128 */
+      for (j = 0; j < BLOCK_SIZE; j++)
+        for (i = 0; i < BLOCK_SIZE; i++)
+          block[i][j] = 128;
+      return;
+  }
   dx = x_pos&3;
   dy = y_pos&3;
   x_pos = (x_pos-dx)/4;
@@ -637,9 +673,12 @@ void reorder_lists(int currSliceType, Slice * currSlice)
                            currSlice->abs_diff_pic_num_minus1_l0, 
                            currSlice->long_term_pic_idx_l0);
     }
-    if (NULL == listX[0][img->num_ref_idx_l0_active-1])
+    if (no_reference_picture == listX[0][img->num_ref_idx_l0_active-1])
     {
-      error("RefPicList0[ num_ref_idx_l0_active_minus1 ] is equal to 'no reference picture', invalid bitstream",500);
+      if (non_conforming_stream)
+        printf("RefPicList0[ num_ref_idx_l0_active_minus1 ] is equal to 'no reference picture'\n");
+      else
+        error("RefPicList0[ num_ref_idx_l0_active_minus1 ] is equal to 'no reference picture', invalid bitstream",500);
     }
     // that's a definition
     listXsize[0] = img->num_ref_idx_l0_active;
@@ -654,9 +693,12 @@ void reorder_lists(int currSliceType, Slice * currSlice)
                            currSlice->abs_diff_pic_num_minus1_l1, 
                            currSlice->long_term_pic_idx_l1);
     }
-    if (NULL == listX[1][img->num_ref_idx_l1_active-1])
+    if (no_reference_picture == listX[1][img->num_ref_idx_l1_active-1])
     {
-      error("RefPicList1[ num_ref_idx_l1_active_minus1 ] is equal to 'no reference picture', invalid bitstream",500);
+      if (non_conforming_stream)
+        printf("RefPicList1[ num_ref_idx_l1_active_minus1 ] is equal to 'no reference picture'\n");
+      else
+        error("RefPicList1[ num_ref_idx_l1_active_minus1 ] is equal to 'no reference picture', invalid bitstream",500);
     }
     // that's a definition
     listXsize[1] = img->num_ref_idx_l1_active;
@@ -729,11 +771,8 @@ int read_new_slice()
 
   int slice_id_a, slice_id_b, slice_id_c;
   int redundant_pic_cnt_b, redundant_pic_cnt_c;
-  long ftell_position, expected_slice_type;
+  long ftell_position;
   
-//  int i;
-  expected_slice_type = NALU_TYPE_DPA;
-
   while (1)
   {
     ftell_position = ftell(bits);
@@ -748,21 +787,11 @@ int read_new_slice()
     CheckZeroByteNonVCL(nalu, &ret);
 
     NALUtoRBSP(nalu);
-//    printf ("nalu->len %d\n", nalu->len);
     
     if (ret < 0)
       printf ("Error while getting the NALU in file format %s, exit\n", input->FileFormat==PAR_OF_ANNEXB?"Annex B":"RTP");
     if (ret == 0)
     {
-//      printf ("read_new_slice: returning %s\n", "EOS");
-      if(expected_slice_type != NALU_TYPE_DPA)
-      {
-        /* oops... we found the next slice, go back! */
-        fseek(bits, ftell_position, SEEK_SET);
-        FreeNALU(nalu);
-        return current_header;
-      }
-      else
         return EOS;
     }
 
@@ -776,9 +805,27 @@ int read_new_slice()
     {
       case NALU_TYPE_SLICE:
       case NALU_TYPE_IDR:
+
+        if (img->recovery_point || nalu->nal_unit_type == NALU_TYPE_IDR)
+        {
+          if (img->recovery_point_found == 0)
+          {
+            if (nalu->nal_unit_type != NALU_TYPE_IDR)
+            {
+              printf("Warning: Decoding does not start with an IDR picture.\n");
+              non_conforming_stream = 1;
+            }
+            else
+              non_conforming_stream = 0;
+          }
+          img->recovery_point_found = 1;
+        }
+
+        if (img->recovery_point_found == 0)
+            break;
+
         img->idr_flag = (nalu->nal_unit_type == NALU_TYPE_IDR);
         img->nal_reference_idc = nalu->nal_reference_idc;
-        img->disposable_flag = (nalu->nal_reference_idc == NALU_PRIORITY_DISPOSABLE);
         currSlice->dp_mode = PAR_DP_1;
         currSlice->max_part_nr = 1;
         currSlice->ei_flag = 0;
@@ -799,6 +846,12 @@ int read_new_slice()
         FmoInit (active_pps, active_sps);
 
         AssignQuantParam (active_pps, active_sps);
+
+        // if primary slice is replaced with redundant slice, set the correct image type
+        if(img->redundant_pic_cnt && Is_primary_correct==0 && Is_redundant_correct)
+        {
+          dec_picture->slice_type=img->type; 
+        }
 
         if(is_new_picture())
         {
@@ -845,39 +898,17 @@ int read_new_slice()
         }
 // printf ("read_new_slice: returning %s\n", current_header == SOP?"SOP":"SOS");
         FreeNALU(nalu);
+        img->recovery_point = 0;
         return current_header;
         break;
       case NALU_TYPE_DPA:
-        //! The state machine here should follow the same ideas as the old readSliceRTP()
-        //! basically:
-        //! work on DPA (as above)
-        //! read and process all following SEI/SPS/PPS/PD/Filler NALUs
-        //! if next video NALU is dpB, 
-        //!   then read and check whether it belongs to DPA, if yes, use it
-        //! else
-        //!   ;   // nothing
-        //! read and process all following SEI/SPS/PPS/PD/Filler NALUs
-        //! if next video NALU is dpC
-        //!   then read and check whether it belongs to DPA (and DPB, if present), if yes, use it, done
-        //! else
-        //!   use the DPA (and the DPB if present)
-
-        /* 
-            LC: inserting the code related to DP processing, mainly copying some of the parts
-            related to NALU_TYPE_SLICE, NALU_TYPE_IDR.
-        */
-
-        if(expected_slice_type != NALU_TYPE_DPA)
-        {
-          /* oops... we found the next slice, go back! */
-          fseek(bits, ftell_position, SEEK_SET);
-          FreeNALU(nalu);
-          return current_header;
-        }
-
+        // read DP_A
         img->idr_flag          = (nalu->nal_unit_type == NALU_TYPE_IDR);
+        if (img->idr_flag)
+        {
+          printf ("Data partiton A cannot have idr_flag set, trying anyway \n");
+        }
         img->nal_reference_idc = nalu->nal_reference_idc;
-        img->disposable_flag   = (nalu->nal_reference_idc == NALU_PRIORITY_DISPOSABLE);
         currSlice->dp_mode     = PAR_DP_3;
         currSlice->max_part_nr = 3;
         currSlice->ei_flag     = 0;
@@ -901,7 +932,6 @@ int read_new_slice()
         }
         else
           current_header = SOS;
-
         
         init_lists(img->type, img->currentSlice->structure);
         reorder_lists (img->type, img->currentSlice);
@@ -917,91 +947,107 @@ int read_new_slice()
         else
           img->current_mb_nr = currSlice->start_mb_nr;
 
-
-        /* 
-           LC:
-              Now I need to read the slice ID, which depends on the value of 
-              redundant_pic_cnt_present_flag (pag.49). 
-        */
+        // Now I need to read the slice ID, which depends on the value of 
+        // redundant_pic_cnt_present_flag
         
-        slice_id_a  = ue_v("NALU:SLICE_A slice_idr", currStream);
+        slice_id_a  = ue_v("NALU: DP_A slice_id", currStream);
+
         if (active_pps->entropy_coding_mode_flag)
+          error ("received data partition with CABAC, this is not allowed", 500);
+
+        // continue with reading next DP
+        ftell_position = ftell(bits);
+        if (input->FileFormat == PAR_OF_ANNEXB)
+          ret=GetAnnexbNALU (nalu);
+        else
+          ret=GetRTPNALU (nalu);
+
+        CheckZeroByteNonVCL(nalu, &ret);
+        NALUtoRBSP(nalu);
+
+        if (ret < 0)
+          printf ("Error while getting the NALU in file format %s, exit\n", input->FileFormat==PAR_OF_ANNEXB?"Annex B":"RTP");
+        if (ret == 0)
+          return current_header;
+
+        if ( NALU_TYPE_DPB == nalu->nal_unit_type)
         {
-          int ByteStartPosition = currStream->frame_bitoffset/8;
-          if (currStream->frame_bitoffset%8 != 0) 
+          // we got a DPB
+          currStream             = currSlice->partArr[1].bitstream;
+          currStream->ei_flag    = 0;
+          currStream->frame_bitoffset = currStream->read_len = 0;
+
+          memcpy (currStream->streamBuffer, &nalu->buf[1], nalu->len-1);
+          currStream->code_len = currStream->bitstream_length = RBSPtoSODB(currStream->streamBuffer, nalu->len-1);
+
+          slice_id_b  = ue_v("NALU: DP_B slice_id", currStream);
+
+          if (slice_id_b != slice_id_a)
           {
-            ByteStartPosition++;
+            printf ("got a data partition B which does not match DP_A\n");
+            // KS: needs error handling !!!
           }
-          arideco_start_decoding (&currSlice->partArr[0].de_cabac, currStream->streamBuffer, ByteStartPosition, &currStream->read_len, img->type);
+
+          if (active_pps->redundant_pic_cnt_present_flag)
+            redundant_pic_cnt_b = ue_v("NALU: DP_B redudant_pic_cnt", currStream);
+          else
+            redundant_pic_cnt_b = 0;
+
+          // we're finished with DP_B, so let's continue with next DP
+          ftell_position = ftell(bits);
+          if (input->FileFormat == PAR_OF_ANNEXB)
+            ret=GetAnnexbNALU (nalu);
+          else
+            ret=GetRTPNALU (nalu);
+
+          CheckZeroByteNonVCL(nalu, &ret);
+          NALUtoRBSP(nalu);
+
+          if (ret < 0)
+            printf ("Error while getting the NALU in file format %s, exit\n", input->FileFormat==PAR_OF_ANNEXB?"Annex B":"RTP");
+          if (ret == 0)
+            return current_header;
         }
-// printf ("read_new_slice: returning %s\n", current_header == SOP?"SOP":"SOS");
-        break;
-      case NALU_TYPE_DPB:
-        /* LC: inserting the code related to DP processing */
 
-        currStream             = currSlice->partArr[1].bitstream;
-        currStream->ei_flag    = 0;
-        currSlice->dp_mode     = PAR_DP_3;
-        currStream->frame_bitoffset = currStream->read_len = 0;
-        memcpy (currStream->streamBuffer, &nalu->buf[1], nalu->len-1);
-        currStream->code_len = currStream->bitstream_length = RBSPtoSODB(currStream->streamBuffer, nalu->len-1);
-
-        slice_id_b  = ue_v("NALU:SLICE_B slice_idr", currStream);
-        if (active_pps->redundant_pic_cnt_present_flag)
-          redundant_pic_cnt_b = ue_v("NALU:SLICE_B redudand_pic_cnt", currStream);
-        else
-          redundant_pic_cnt_b = 0;
-        
-        /*  LC: Initializing CABAC for the current data stream. */
-
-        if (active_pps->entropy_coding_mode_flag)
+        // check if we got DP_C
+        if ( NALU_TYPE_DPC == nalu->nal_unit_type)
         {
-          int ByteStartPosition = currStream->frame_bitoffset/8;
-          if (currStream->frame_bitoffset % 8 != 0) 
-            ByteStartPosition++;
-          
-          arideco_start_decoding (&currSlice->partArr[1].de_cabac, currStream->streamBuffer, 
-            ByteStartPosition, &currStream->read_len, img->type);
-          
+          currStream             = currSlice->partArr[2].bitstream;
+          currStream->ei_flag    = 0;
+          currStream->frame_bitoffset = currStream->read_len = 0;
+
+          memcpy (currStream->streamBuffer, &nalu->buf[1], nalu->len-1);
+          currStream->code_len = currStream->bitstream_length = RBSPtoSODB(currStream->streamBuffer, nalu->len-1);
+
+          slice_id_c  = ue_v("NALU: DP_C slice_id", currStream);
+          if (slice_id_c != slice_id_a)
+          {
+            printf ("got a data partition C which does not match DP_A\n");
+            // KS: needs error handling !!!
+          }
+
+          if (active_pps->redundant_pic_cnt_present_flag)
+            redundant_pic_cnt_c = ue_v("NALU:SLICE_C redudand_pic_cnt", currStream);
+          else
+            redundant_pic_cnt_c = 0;
         }
 
-        /* LC: resilience code to be inserted */
-        /*         FreeNALU(nalu); */
-        /*         return current_header; */
-
-        break;
-      case NALU_TYPE_DPC:
-        /* LC: inserting the code related to DP processing */
-        currSlice->dp_mode     = PAR_DP_3;
-        currStream             = currSlice->partArr[2].bitstream;
-        currStream->ei_flag    = 0;
-        currStream->frame_bitoffset = currStream->read_len = 0;
-        memcpy (currStream->streamBuffer, &nalu->buf[1], nalu->len-1);
-        currStream->code_len = currStream->bitstream_length = RBSPtoSODB(currStream->streamBuffer, nalu->len-1);
-        
-        slice_id_c  = ue_v("NALU:SLICE_C slice_idr", currStream);
-        if (active_pps->redundant_pic_cnt_present_flag)
-          redundant_pic_cnt_c = ue_v("NALU:SLICE_C redudand_pic_cnt", currStream);
-        else
-          redundant_pic_cnt_c = 0;
-        
-        /* LC: Initializing CABAC for the current data stream. */
-
-        if (active_pps->entropy_coding_mode_flag)
+        // check if we read anything else than the expected partitions
+        if ((nalu->nal_unit_type != NALU_TYPE_DPB) && (nalu->nal_unit_type != NALU_TYPE_DPC))
         {
-          int ByteStartPosition = currStream->frame_bitoffset/8;
-          if (currStream->frame_bitoffset % 8 != 0) 
-            ByteStartPosition++;
-          
-          arideco_start_decoding (&currSlice->partArr[2].de_cabac, currStream->streamBuffer, 
-            ByteStartPosition, &currStream->read_len, img->type);
+          // reset bitstream position and read again in next call
+          fseek(bits, ftell_position, SEEK_SET);
         }
-
-        /* LC: resilience code to be inserted */
 
         FreeNALU(nalu);
         return current_header;
 
+        break;
+      case NALU_TYPE_DPB:
+        printf ("found data partition B without matching DP A, discarding\n");
+        break;
+      case NALU_TYPE_DPC:
+        printf ("found data partition C without matching DP A, discarding\n");
         break;
       case NALU_TYPE_SEI:
         printf ("read_new_slice: Found NALU_TYPE_SEI, len %d\n", nalu->len);
@@ -1010,7 +1056,6 @@ int read_new_slice()
       case NALU_TYPE_PPS:
         ProcessPPS(nalu);
         break;
-
       case NALU_TYPE_SPS:
         ProcessSPS(nalu);
         break;
@@ -1053,8 +1098,15 @@ void init_picture(struct img_par *img, struct inp_par *inp)
     // this may only happen on slice loss
     exit_picture();
   }
+  if (img->recovery_point)
+    img->recovery_frame_num = (img->frame_num + img->recovery_frame_cnt) % img->MaxFrameNum;
 
-  if (img->frame_num != img->pre_frame_num && img->frame_num != (img->pre_frame_num + 1) % img->MaxFrameNum) 
+  if (img->idr_flag)
+    img->recovery_frame_num = img->frame_num;
+
+  if (img->recovery_point == 0 && 
+      img->frame_num != img->pre_frame_num && 
+      img->frame_num != (img->pre_frame_num + 1) % img->MaxFrameNum) 
   {
     if (active_sps->gaps_in_frame_num_value_allowed_flag == 0)
     {
@@ -1099,6 +1151,10 @@ void init_picture(struct img_par *img, struct inp_par *inp)
   
   //calculate POC
   decode_poc(img);
+
+  if (img->recovery_frame_num == img->frame_num && 
+      img->recovery_poc == 0x7fffffff)
+    img->recovery_poc = img->framepoc;
 
   if(img->nal_reference_idc)
     img->last_ref_pic_poc = img->framepoc;
@@ -1201,6 +1257,9 @@ void init_picture(struct img_par *img, struct inp_par *inp)
   dec_picture->PicWidthInMbs = img->PicWidthInMbs;
   dec_picture->pic_num = img->frame_num;
   dec_picture->frame_num = img->frame_num;
+
+  dec_picture->recovery_frame = (img->frame_num == img->recovery_frame_num);
+
   dec_picture->coded_frame = (img->structure==FRAME);
 
   dec_picture->chroma_format_idc = active_sps->chroma_format_idc;
@@ -1548,6 +1607,8 @@ int is_new_picture()
 {
   int result=0;
 
+  result |= (NULL==dec_picture);
+
   result |= (old_slice.pps_id != img->currentSlice->pic_parameter_set_id);
 
   result |= (old_slice.frame_num != img->frame_num);
@@ -1770,7 +1831,7 @@ void fill_wp_params(struct img_par *img)
                 img->wbp_weight[0][i][j][comp] = 32;
                 img->wbp_weight[1][i][j][comp] = 32;
                 img->wp_offset[0][i][comp] = 0;
-                img->wp_offset[1][i][comp] = 0;
+                img->wp_offset[1][j][comp] = 0;
               }
             }
           }
@@ -1790,7 +1851,7 @@ void fill_wp_params(struct img_par *img)
           for (k=2; k<6; k+=2)
           {
             img->wp_offset[k+0][i][comp] = img->wp_offset[0][i/2][comp];
-            img->wp_offset[k+1][i][comp] = img->wp_offset[1][i/2][comp];
+            img->wp_offset[k+1][j][comp] = img->wp_offset[1][j/2][comp];
 
             log_weight_denom = (comp == 0) ? img->luma_log2_weight_denom : img->chroma_log2_weight_denom;
             if (active_pps->weighted_bipred_idc == 1)
@@ -1820,13 +1881,48 @@ void fill_wp_params(struct img_par *img)
                   img->wbp_weight[k+1][i][j][comp] = 32;
                   img->wbp_weight[k+0][i][j][comp] = 32;
                   img->wp_offset[k+0][i][comp] = 0;
-                  img->wp_offset[k+1][i][comp] = 0;
+                  img->wp_offset[k+1][j][comp] = 0;
                 }
               }
             }
           }
         }
       }
+    }
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Error tracking: if current frame is lost or any reference frame of 
+ *                    current frame is lost, current frame is incorrect.
+ ************************************************************************
+ */
+void Error_tracking()
+{
+  int i;
+
+  if(img->redundant_pic_cnt == 0)
+    {
+      Is_primary_correct = Is_redundant_correct = 1;
+    }
+	  
+  if(img->redundant_pic_cnt == 0 && img->type != I_SLICE)
+  {
+    for(i=0;i<img->num_ref_idx_l0_active;i++)
+    {
+      if(ref_flag[i] == 0)  // any reference of primary slice is incorrect
+      {
+        Is_primary_correct = 0; // primary slice is incorrect
+      }
+    }
+  }
+  else if(img->redundant_pic_cnt != 0 && img->type != I_SLICE)
+  {
+    if(ref_flag[redundant_slice_ref_idx] == 0)  // reference of redundant slice is incorrect
+    {
+      Is_redundant_correct = 0;  // redundant slice is incorrect
     }
   }
 }

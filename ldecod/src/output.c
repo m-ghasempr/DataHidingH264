@@ -33,7 +33,9 @@ FrameStore* out_buffer;
 
 StorablePicture *pending_output = NULL;
 int              pending_output_state = FRAME;
+int recovery_flag = 0;
 
+extern int non_conforming_stream;
 
 void write_out_picture(StorablePicture *p, int p_out);
 
@@ -450,8 +452,8 @@ void write_out_picture(StorablePicture *p, int p_out)
       // fake out U=V=128 to make a YUV 4:2:0 stream
       img2buf (p->imgUV[0], buf, p->size_x/2, p->size_y/2, symbol_size_in_bytes, crop_left/2, crop_right/2, crop_top/2, crop_bottom/2);
         
-      write(p_out, buf, (p->size_y-crop_bottom-crop_top)/2 * (p->size_x-crop_right-crop_left)/2 );
-      write(p_out, buf, (p->size_y-crop_bottom-crop_top)/2 * (p->size_x-crop_right-crop_left)/2 );
+      write(p_out, buf, symbol_size_in_bytes * (p->size_y-crop_bottom-crop_top)/2 * (p->size_x-crop_right-crop_left)/2 );
+      write(p_out, buf, symbol_size_in_bytes * (p->size_y-crop_bottom-crop_top)/2 * (p->size_x-crop_right-crop_left)/2 );
       
       free_mem3Dpel(p->imgUV, 1);
       p->imgUV=NULL;
@@ -509,17 +511,17 @@ void clear_picture(StorablePicture *p)
   for(i=0;i<p->size_y;i++)
   {
     for (j=0; j<p->size_x; j++)
-      p->imgY[i][j] = img->dc_pred_value;
+      p->imgY[i][j] = img->dc_pred_value_luma;
   }
   for(i=0;i<p->size_y_cr;i++)
   {
     for (j=0; j<p->size_x_cr; j++)
-      p->imgUV[0][i][j] = img->dc_pred_value;
+      p->imgUV[0][i][j] = img->dc_pred_value_chroma;
   }
   for(i=0;i<p->size_y_cr;i++)
   {
     for (j=0; j<p->size_x_cr; j++)
-      p->imgUV[1][i][j] = img->dc_pred_value;
+      p->imgUV[1][i][j] = img->dc_pred_value_chroma;
   }
     
 }
@@ -617,7 +619,10 @@ void write_stored_frame( FrameStore *fs,int p_out)
   }
   else
   {
-    write_picture(fs->frame, p_out, FRAME);
+    if (fs->recovery_frame)
+      recovery_flag = 1;
+    if ((!non_conforming_stream) || recovery_flag)
+      write_picture(fs->frame, p_out, FRAME);
   }
 
   fs->is_output = 1;

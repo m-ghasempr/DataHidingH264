@@ -384,7 +384,7 @@ int CheckReliabilityOfRef (int block, int list_idx, int ref, int mode)
 double RDCost_for_4x4IntraBlocks (int*    nonzero,
                                   int     b8,
                                   int     b4,
-                                  int    ipmode,
+                                  int     ipmode,
                                   double  lambda,
                                   double  min_rdcost,
                                   int mostProbableMode)
@@ -438,15 +438,16 @@ double RDCost_for_4x4IntraBlocks (int*    nonzero,
   currSE->context = 4*b8 + b4;
   currSE->type    = SE_INTRAPREDMODE;
   
-  //--- set function pointer ----
-  if (input->symbol_mode != UVLC)    
-    currSE->writing = writeIntraPredMode_CABAC;
-  
   //--- choose data partition ---
   dataPart = &(currSlice->partArr[partMap[SE_INTRAPREDMODE]]);
   //--- encode and update rate ---
-  if (input->symbol_mode == UVLC)    writeSyntaxElement_Intra4x4PredictionMode(currSE, dataPart);
-  else                               dataPart->writeSyntaxElement (currSE, dataPart);
+  if (input->symbol_mode == UVLC)    
+    writeSyntaxElement_Intra4x4PredictionMode(currSE, dataPart);
+  else
+  {
+    currSE->writing = writeIntraPredMode_CABAC;
+    dataPart->writeSyntaxElement (currSE, dataPart);
+  }
   
   rate = currSE->len;
   currSE++;
@@ -1481,8 +1482,7 @@ void SetModesAndRefframeForBlocks (int mode)
  *    Intra 16x16 mode decision
  *************************************************************************************
  */
-void
-Intra16x16_Mode_Decision (Macroblock* currMB, int* i16mode)
+void Intra16x16_Mode_Decision (Macroblock* currMB, int* i16mode)
 {
   // Residue Color Transform
   int residue_R, residue_G, residue_B;
@@ -2071,6 +2071,10 @@ int RDCost_for_macroblocks (double   lambda,       // <-- lagrange multiplier
         }
       }
     }  
+    for (j=0;j<4;j++)
+      for (i=0; i<(4+img->num_blk8x8_uv); i++)
+        img->nz_coeff[img->current_mb_nr][j][i] = 16;
+
   }
 
   if (input->rdopt==3 && img->type!=B_SLICE)
@@ -2090,8 +2094,10 @@ int RDCost_for_macroblocks (double   lambda,       // <-- lagrange multiplier
 
   img->i16offset = 0;
   dummy = 0;
-  if ((!(img->residue_transform_flag && (mode==I4MB || mode==I16MB || mode==I8MB))) && img->yuv_format!=YUV400)
+  if ((!(img->residue_transform_flag && (mode==I4MB || mode==I16MB || mode==I8MB)))
+      && (img->yuv_format!=YUV400) && (mode != IPCM))
     ChromaResidualCoding (&dummy);
+
   if (mode==I16MB)     
     img->i16offset = I16Offset  (currMB->cbp, i16mode);
   
@@ -2137,7 +2143,7 @@ int RDCost_for_macroblocks (double   lambda,       // <-- lagrange multiplier
       }
     }
   }  
-  
+
   //=====   S T O R E   C O D I N G   S T A T E   =====
   //---------------------------------------------------
   store_coding_state (cs_cm);
@@ -2621,9 +2627,13 @@ void set_stored_macroblock_parameters ()
   
   if(currMB->mb_type == I8MB)
   {
-    memcpy(currMB->intra_pred_modes,currMB->intra_pred_modes8x8, MB_BLOCK_PARTITIONS * sizeof(char));
-    for(j = img->block_y; j < img->block_y + BLOCK_MULTIPLE; j++)
-      memcpy(&img->ipredmode[j][img->block_x],&img->ipredmode8x8[j][img->block_x], BLOCK_MULTIPLE * sizeof(char));
+    memcpy(currMB->intra_pred_modes8x8,b8_intra_pred_modes8x8, MB_BLOCK_PARTITIONS * sizeof(char));            
+    memcpy(currMB->intra_pred_modes,b8_intra_pred_modes8x8, MB_BLOCK_PARTITIONS * sizeof(char));            
+    for(j = 0; j < BLOCK_MULTIPLE; j++)
+    {
+      memcpy(&img->ipredmode[img->block_y+j][img->block_x],b8_ipredmode8x8[j], BLOCK_MULTIPLE * sizeof(char));
+      memcpy(&img->ipredmode8x8[img->block_y+j][img->block_x], b8_ipredmode8x8[j], BLOCK_MULTIPLE * sizeof(char));
+    }
   }
   else if (mode!=I4MB && mode!=I8MB)
   {
@@ -2638,14 +2648,6 @@ void set_stored_macroblock_parameters ()
     for(j = 0; j < BLOCK_MULTIPLE; j++)
       memcpy(&img->ipredmode[img->block_y + j][img->block_x],&b4_ipredmode[BLOCK_MULTIPLE * j], BLOCK_MULTIPLE * sizeof(char));
   }
-  
-  if(currMB->mb_type == I8MB)
-  {
-    memcpy(currMB->intra_pred_modes,b8_intra_pred_modes8x8, MB_BLOCK_PARTITIONS * sizeof(char));            
-    for(j = 0; j < BLOCK_MULTIPLE; j++)
-      memcpy(&img->ipredmode[img->block_y + j][img->block_x],&b8_ipredmode8x8[j], BLOCK_MULTIPLE * sizeof(char));
-  }
-  
   
   if(img->MbaffFrameFlag)
   {

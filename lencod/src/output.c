@@ -210,6 +210,8 @@ void write_out_picture(StorablePicture *p, int p_out)
 
   if (p->non_existing)
     return;
+  if (p_out == -1)
+	  return;
 
   if (p->frame_cropping_flag)
   {
@@ -314,11 +316,11 @@ void clear_picture(StorablePicture *p)
   int i;
 
   for(i=0;i<p->size_y;i++)
-    memset(p->imgY[i], img->dc_pred_value, p->size_x*sizeof(imgpel));
+    memset(p->imgY[i], img->dc_pred_value_luma, p->size_x*sizeof(imgpel));
   for(i=0;i<p->size_y_cr;i++)
-    memset(p->imgUV[0][i], img->dc_pred_value, p->size_x_cr*sizeof(imgpel));
+    memset(p->imgUV[0][i], img->dc_pred_value_chroma, p->size_x_cr*sizeof(imgpel));
   for(i=0;i<p->size_y_cr;i++)
-    memset(p->imgUV[1][i], img->dc_pred_value, p->size_x_cr*sizeof(imgpel));
+    memset(p->imgUV[1][i], img->dc_pred_value_chroma, p->size_x_cr*sizeof(imgpel));
 }
 
 /*!
@@ -475,3 +477,28 @@ void direct_output(StorablePicture *p, int p_out)
   }
 }
 
+
+/*!
+************************************************************************
+* \brief
+*    For adaptive frame/field coding remove dangling top field from direct 
+*    output frame version instead.
+* \param p
+*    Picture for output
+* \param p_out
+*    Output file
+************************************************************************
+*/
+void direct_output_paff(StorablePicture *p, int p_out)
+{
+  printf("Warning!!! Frame can't fit in DPB. Displayed out of sequence.\n");
+  free_storable_picture(out_buffer->frame);
+  out_buffer->frame = NULL;
+  free_storable_picture(out_buffer->top_field);
+  out_buffer->top_field = NULL;
+  free_storable_picture(out_buffer->bottom_field);
+  out_buffer->bottom_field = NULL;
+  out_buffer->is_used = 0;
+
+  direct_output(p, p_out);
+}

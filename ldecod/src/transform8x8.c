@@ -317,7 +317,7 @@ int intrapred8x8( struct img_par *img,  //!< image parameters
   }
   else
   {
-    P_A = P_B = P_C = P_D = P_E = P_F = P_G = P_H = img->dc_pred_value;
+    P_A = P_B = P_C = P_D = P_E = P_F = P_G = P_H = img->dc_pred_value_luma;
   }
 
   if (block_available_up_right)
@@ -350,7 +350,7 @@ int intrapred8x8( struct img_par *img,  //!< image parameters
   }
   else
   {
-    P_Q = P_R = P_S = P_T = P_U = P_V = P_W = P_X = img->dc_pred_value;
+    P_Q = P_R = P_S = P_T = P_U = P_V = P_W = P_X = img->dc_pred_value_luma;
   }
 
   if (block_available_up_left)
@@ -359,7 +359,7 @@ int intrapred8x8( struct img_par *img,  //!< image parameters
   }
   else
   {
-    P_Z = img->dc_pred_value;
+    P_Z = img->dc_pred_value_luma;
   }
   
   LowPassForIntra8x8Pred(&(P_Z), block_available_up_left, block_available_up, block_available_left);
@@ -387,7 +387,7 @@ int intrapred8x8( struct img_par *img,  //!< image parameters
     else //if (!block_available_up && !block_available_left)
     {
       // top left corner, nothing to predict from
-      s0 = img->dc_pred_value;                           
+      s0 = img->dc_pred_value_luma;                           
     }
     for(i = 0; i < 2*BLOCK_SIZE; i++)
       for(j = 0; j < 2*BLOCK_SIZE; j++)

@@ -118,8 +118,8 @@ int diffy[16][16];
 int diffyy[16][16];
 int diffy8[16][16];//for P8X8 mode 
 
-extern int Iprev_bits;
-extern int Pprev_bits;
+extern int64 Iprev_bits;
+extern int64 Pprev_bits;
 
 void rc_alloc(void);
 void rc_free(void);

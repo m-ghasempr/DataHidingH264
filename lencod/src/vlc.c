@@ -239,7 +239,7 @@ void ue_linfo(int ue, int dummy, int *len,int *info)
     nn /= 2;
   }
   *len= 2*i + 1;
-  *info=ue+1-(int)pow(2,i);
+  *info=ue+1-(1<<i);
 }
 
 
@@ -270,17 +270,15 @@ void se_linfo(int se, int dummy, int *len,int *info)
   }
   n=absm(se) << 1;
 
-  /*
-  n+1 is the number in the code table.  Based on this we find length and info
-  */
-
+  //  n+1 is the number in the code table.  Based on this we find length and info
+  
   nn=n/2;
   for (i=0; i < 16 && nn != 0; i++)
   {
     nn /= 2;
   }
   *len=i*2 + 1;
-  *info=n - (int)pow(2,i) + sign;
+  *info=n - (1 << i) + sign;
 }
 
 
@@ -367,7 +365,7 @@ void levrun_linfo_c2x2(int level,int run,int *len,int *info)
     nn /= 2;
   }
   *len= 2*i + 1;
-  *info=n-(int)pow(2,i)+sign;
+  *info=n-(1 << i)+sign;
 }
 
 
@@ -427,7 +425,7 @@ void levrun_linfo_inter(int level,int run,int *len,int *info)
     nn /= 2;
   }
   *len= 2*i + 1;
-  *info=n-(int)pow(2,i)+sign;
+  *info=n-(1 << i)+sign;
 
 }
 
@@ -493,7 +491,7 @@ void levrun_linfo_intra(int level,int run,int *len,int *info)
     nn /= 2;
   }
   *len= 2*i + 1;
-  *info=n-(int)pow(2,i)+sign;
+  *info=n-(1 << i)+sign;
 }
 
 
@@ -512,6 +510,7 @@ void levrun_linfo_intra(int level,int run,int *len,int *info)
 int symbol2uvlc(SyntaxElement *sym)
 {
   int suffix_len=sym->len/2;  
+  assert (suffix_len<32);
   sym->bitpattern = (1<<suffix_len)|(sym->inf&((1<<suffix_len)-1));
   return 0;
 }
@@ -614,6 +613,7 @@ void  writeUVLC2buffer(SyntaxElement *se, Bitstream *currStream)
 
   int i;
   unsigned int mask = 1 << (se->len-1);
+  assert ((se->len-1)<32);
 
   // Add the new bits to the bitstream.
   // Write out a byte if it is full
@@ -697,6 +697,10 @@ int writeSyntaxElement_VLC(SyntaxElement *se, DataPartition *this_dataPart)
   symbol2vlc(se);
 
   writeUVLC2buffer(se, this_dataPart->bitstream);
+
+  if(se->type != SE_HEADER)
+    this_dataPart->bitstream->write_flag = 1;
+
 #if TRACE
   if (se->type <= 1)
     trace2out (se);
@@ -795,6 +799,10 @@ int writeSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *se, DataPartition *th
   symbol2vlc(se);
 
   writeUVLC2buffer(se, this_dataPart->bitstream);
+
+  if(se->type != SE_HEADER)
+    this_dataPart->bitstream->write_flag = 1;
+
 #if TRACE
   if (se->type <= 1)
     trace2out (se);
@@ -867,6 +875,10 @@ int writeSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *se, DataParti
   symbol2vlc(se);
 
   writeUVLC2buffer(se, this_dataPart->bitstream);
+
+  if(se->type != SE_HEADER)
+    this_dataPart->bitstream->write_flag = 1;
+
 #if TRACE
   if (se->type <= 1)
     trace2out (se);
@@ -938,6 +950,10 @@ int writeSyntaxElement_TotalZeros(SyntaxElement *se, DataPartition *this_dataPar
   symbol2vlc(se);
 
   writeUVLC2buffer(se, this_dataPart->bitstream);
+
+  if(se->type != SE_HEADER)
+    this_dataPart->bitstream->write_flag = 1;
+
 #if TRACE
   if (se->type <= 1)
     trace2out (se);
@@ -1036,6 +1052,10 @@ int writeSyntaxElement_TotalZerosChromaDC(SyntaxElement *se, DataPartition *this
   symbol2vlc(se);
 
   writeUVLC2buffer(se, this_dataPart->bitstream);
+
+  if(se->type != SE_HEADER)
+    this_dataPart->bitstream->write_flag = 1;
+
 #if TRACE
   if (se->type <= 1)
     trace2out (se);
@@ -1091,6 +1111,10 @@ int writeSyntaxElement_Run(SyntaxElement *se, DataPartition *this_dataPart)
   symbol2vlc(se);
 
   writeUVLC2buffer(se, this_dataPart->bitstream);
+
+  if(se->type != SE_HEADER)
+    this_dataPart->bitstream->write_flag = 1;
+
 #if TRACE
   if (se->type <= 1)
     trace2out (se);
@@ -1137,6 +1161,10 @@ int writeSyntaxElement_Level_VLC1(SyntaxElement *se, DataPartition *this_dataPar
   symbol2vlc(se);
 
   writeUVLC2buffer(se, this_dataPart->bitstream);
+
+  if(se->type != SE_HEADER)
+    this_dataPart->bitstream->write_flag = 1;
+
 #if TRACE
   if (se->type <= 1)
     trace2out (se);
@@ -1186,6 +1214,10 @@ int writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *thi
   symbol2vlc(se);
 
   writeUVLC2buffer(se, this_dataPart->bitstream);
+
+  if(se->type != SE_HEADER)
+    this_dataPart->bitstream->write_flag = 1;
+
 #if TRACE
   if (se->type <= 1)
     trace2out (se);

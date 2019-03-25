@@ -42,11 +42,13 @@
 
 #if defined(WIN32) && !defined(__GNUC__)
   typedef __int64   int64;
+# define FORMAT_OFF_T "I64d"
 #ifndef INT64_MIN
 # define INT64_MIN        (-9223372036854775807i64 - 1i64)
 #endif
 #else
   typedef long long int64;
+# define FORMAT_OFF_T "lld"
 #ifndef INT64_MIN
 # define INT64_MIN        (-9223372036854775807LL - 1LL)
 #endif
@@ -344,7 +346,8 @@ typedef struct macroblock
   int                 currSEnr;                   //!< number of current syntax element
   int                 slice_nr;
   int                 delta_qp;
-  int                 qp ;
+  int                 qp;                         //!< QP luma
+  int                 qpc[2];                     //!< QP chroma
   int                 qpsp ;
   int                 bitcounter[MAX_BITCOUNTER_MB];
 
@@ -476,6 +479,10 @@ Picture *frame_pic_1;
 Picture *frame_pic_2;
 Picture *frame_pic_3;
 
+#ifdef _LEAKYBUCKET_
+long *Bit_Buffer;
+#endif
+
 // global picture format dependend buffers, mem allocation in image.c
 imgpel **imgY_org;           //!< Reference luma image
 imgpel ***imgUV_org;         //!< Reference chroma image
@@ -490,6 +497,9 @@ int  me_tot_time,me_time;
 pic_parameter_set_rbsp_t *active_pps;
 seq_parameter_set_rbsp_t *active_sps;
 
+
+int dsr_new_search_range; //!<Dynamic Search Range.
+//////////////////////////////////////////////////////////////////////////
 // B pictures
 // motion vector : forward, backward, direct
 int  mb_adaptive;       //!< For MB level field/frame coding tools
@@ -663,11 +673,11 @@ typedef struct
   int RDBSliceWeightOnly;        //!< If enabled, does not check QP variations for B slices.
   int SkipIntraInInterSlices;    //!< Skip intra type checking in inter slices if best_mode is skip/direct
   int BRefPictures;              //!< B coded reference pictures replace P pictures (0: not used, 1: used)
-  int PyramidCoding;
-  int PyramidLevelQPEnable;
-  char ExplicitPyramidFormat[1024];  //!< Explicit GOP format (PyramidCoding==3). 
-  int PyramidRefReorder;       //!< Reordering based on Poc distances for PyramidCoding
-  int PocMemoryManagement;       //!< Memory management based on Poc distances for PyramidCoding
+  int HierarchicalCoding;
+  int HierarchyLevelQPEnable;
+  char ExplicitHierarchyFormat[1024];  //!< Explicit GOP format (HierarchicalCoding==3). 
+  int ReferenceReorder;          //!< Reordering based on Poc distances
+  int PocMemoryManagement;       //!< Memory management based on Poc distances for hierarchical coding
 
   int symbol_mode;              //!< Specifies the mode the symbols are mapped on bits
   int of_mode;                  //!< Specifies the mode of the output file
@@ -763,8 +773,8 @@ typedef struct
   int slice_group_change_rate_minus1;
   int slice_group_change_cycle;
 
-  int redundant_slice_flag; //! whether redundant slices exist,  JVT-D101
-  int pic_order_cnt_type;   // POC200301
+  int redundant_pic_flag;   //! encoding of redundant pictures
+  int pic_order_cnt_type;   //! POC type
 
   int context_init_method;
   int model_number;
@@ -786,6 +796,9 @@ typedef struct
   // FastME enable
   int FMEnable;
 
+  int DynamicSearchRange;//!< Dynamic Search Range
+  int FMEScale;
+//////////////////////////////////////////////////////////////////////////
   // Fidelity Range Extensions
   int BitDepthLuma;
   int BitDepthChroma;
@@ -817,6 +830,11 @@ typedef struct
   int SelectiveIntraEnable;
   int DisposableP;
   int DispPQPOffset;
+
+  //Redundant picture
+  int NumRedundantHierarchy;   //!< number of entries to allocate redundant pictures in a GOP
+  int PrimaryGOPLength;        //!< GOP length of primary pictures  
+  int NumRefPrimary;           //!< number of reference frames for primary picture
 } InputParameters;
 
 //! ImageParameters
@@ -971,12 +989,12 @@ typedef struct
     signed int ThisPOC;     //!< current picture POC
   unsigned int frame_num;   //!< frame_num for this frame
   
-  unsigned PicWidthInMbs;
-  unsigned PicHeightInMapUnits;
-  unsigned FrameHeightInMbs;
-  unsigned PicHeightInMbs;
-  unsigned PicSizeInMbs;
-  unsigned FrameSizeInMbs;
+  unsigned int PicWidthInMbs;
+  unsigned int PicHeightInMapUnits;
+  unsigned int FrameHeightInMbs;
+  unsigned int PicHeightInMbs;
+  unsigned int PicSizeInMbs;
+  unsigned int FrameSizeInMbs;
 
   //the following should probably go in picture parameters
   unsigned int pic_order_present_flag; // ????????
@@ -1039,8 +1057,9 @@ typedef struct
   double **lambda_me;     //!< Motion Estimation Lambda
   int    **lambda_mf;     //!< Integer formatted Motion Estimation Lambda
 
-  unsigned int dc_pred_value;   //!< value for DC prediction (depends on pel bit depth)
-  int max_imgpel_value;         //!< max value that one picture element (pixel) can take (depends on pic_unit_bitdepth)
+  unsigned int dc_pred_value_luma;   //!< luma value for DC prediction (depends on luma pel bit depth)
+  unsigned int dc_pred_value_chroma; //!< chroma value for DC prediction (depends on chroma pel bit depth)
+  int max_imgpel_value;              //!< max value that one picture element (pixel) can take (depends on pic_unit_bitdepth)
   int max_imgpel_value_uv;
 
   int num_blk8x8_uv;
@@ -1073,8 +1092,8 @@ typedef struct
   int   quant1;                 //!< average quant for the remaining frames
   float bitr;                   //!< bit rate for current frame, used only for output til terminal
   float bitrate;                //!< average bit rate for the sequence except first frame
-  int   bit_ctr;                //!< counter for bit usage
-  int   bit_ctr_n;              //!< bit usage for the current frame
+  int64   bit_ctr;                //!< counter for bit usage
+  int64   bit_ctr_n;              //!< bit usage for the current frame
   int   bit_slice;              //!< number of bits in current slice
   int   bit_ctr_emulationprevention; //!< stored bits needed to prevent start code emulation
   int   b8_mode_0_use[NUM_PIC_TYPE][2];
@@ -1086,22 +1105,22 @@ typedef struct
   int   successive_Bframe;
   int   *mode_use_Bframe;
   int   *bit_use_mode_Bframe;
-  int   bit_ctr_I;
-  int   bit_ctr_P;
-  int   bit_ctr_B;
+  int64   bit_ctr_I;
+  int64   bit_ctr_P;
+  int64   bit_ctr_B;
   float bitrate_I;
   float bitrate_P;
   float bitrate_B;
 
-  int   mode_use            [NUM_PIC_TYPE][MAXMODE]; //!< Macroblock mode usage for Intra frames
-  int   bit_use_mode        [NUM_PIC_TYPE][MAXMODE]; //!< statistics of bit usage
-  int   bit_use_stuffingBits[NUM_PIC_TYPE];
-  int   bit_use_mb_type     [NUM_PIC_TYPE];
-  int   bit_use_header      [NUM_PIC_TYPE];
-  int   tmp_bit_use_cbp     [NUM_PIC_TYPE];
-  int   bit_use_coeffY      [NUM_PIC_TYPE];
-  int   bit_use_coeffC      [NUM_PIC_TYPE];
-  int   bit_use_delta_quant [NUM_PIC_TYPE];
+  int64   mode_use            [NUM_PIC_TYPE][MAXMODE]; //!< Macroblock mode usage for Intra frames
+  int64   bit_use_mode        [NUM_PIC_TYPE][MAXMODE]; //!< statistics of bit usage
+  int64   bit_use_stuffingBits[NUM_PIC_TYPE];
+  int64   bit_use_mb_type     [NUM_PIC_TYPE];
+  int64   bit_use_header      [NUM_PIC_TYPE];
+  int64   tmp_bit_use_cbp     [NUM_PIC_TYPE];
+  int64   bit_use_coeffY      [NUM_PIC_TYPE];
+  int64   bit_use_coeffC      [NUM_PIC_TYPE];
+  int64   bit_use_delta_quant [NUM_PIC_TYPE];
 
   int   em_prev_bits_frm;
   int   em_prev_bits_fld;
@@ -1154,8 +1173,8 @@ typedef struct
   int display_no;       //! GOP Display order
   int reference_idc;    //! Is reference?
   int slice_qp;         //! Assigned QP
-  int pyramid_layer;    //! Pyramid layer (used with GOP Pyramid option 2
-  int pyramidPocDelta;  //! Currently unused
+  int hierarchy_layer;    //! Hierarchy layer (used with GOP Hierarchy option 2)
+  int hierarchyPocDelta;  //! Currently unused
 } GOP_DATA;
 
 
@@ -1248,9 +1267,6 @@ void LumaPrediction4x4 (int, int, int, int, int, short, short);
 int  SATD (int*, int);
 int  find_SATD (int c_diff[MB_PIXELS], int blocktype);
 
-pel_t* FastLineX (int, pel_t*, int, int, int, int);
-pel_t* UMVLineX  (int, pel_t*, int, int, int, int);
-
 void LumaResidualCoding (void);
 void ChromaResidualCoding (int*);
 void IntraChromaPrediction (int*, int*, int*);
@@ -1269,7 +1285,6 @@ int   writeLumaCoeff8x8         (int, int, int);
 int   writeMotionVector8x8      (int  i0, int  j0, int  i1, int  j1, int  refframe, int  list_idx, int  mv_mode);
 int   writeReferenceFrame       (int, int, int, int, int);
 int   writeAbpCoeffIndex        (int, int, int, int);
-int   writeIntra4x4Modes        (int);
 int   writeChromaIntraPredMode  (void);
 
 void estimate_weighting_factor_B_slice(void);
@@ -1415,13 +1430,6 @@ void SODBtoRBSP(Bitstream *currStream);
 int RBSPtoEBSP(byte *streamBuffer, int begin_bytepos, int end_bytepos, int min_num_bytes);
 int Bytes_After_Header;
 
-// JVT-D101: the bit for redundant_pic_cnt in slice header may be changed, 
-// therefore the bit position in the bitstream must be stored.
-int rpc_bytes_to_go;
-int rpc_bits_to_go;
-void modify_redundant_pic_cnt(unsigned char *streamBuffer);
-// End JVT-D101
-
 // Fast ME enable
 int BlockMotionSearch (short,int,int,int,int,int, int);
 void low_complexity_encode_md (void);
@@ -1430,6 +1438,7 @@ void fasthigh_complexity_encode_md (void);
 
 int RDCost_for_4x4Blocks_Chroma (int b8, int b4, int  chroma);
 
+void set_chroma_qp(Macroblock *currMB);
 
 
 #include "context_ini.h"
@@ -1461,5 +1470,16 @@ int giRDOpt_B8OnlyFlag;
 #ifdef BEST_NZ_COEFF
 int gaaiMBAFF_NZCoeff[4][12];
 #endif
+
+// Redundant picture
+imgpel **imgY_tmp;
+imgpel **imgUV_tmp[2];
+int frameNuminGOP;
+int redundant_coding;
+int key_frame;
+int redundant_ref_idx;
+void Init_redundant_frame(void);
+void Set_redundant_frame(void);
+void encode_one_redundant_frame(void);
 
 #endif

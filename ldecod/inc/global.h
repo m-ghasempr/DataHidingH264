@@ -58,11 +58,13 @@ typedef unsigned int    u_int32;
 
 #if defined(WIN32) && !defined(__GNUC__)
   typedef __int64   int64;
+# define FORMAT_OFF_T "I64d"
 #ifndef INT64_MIN
 # define INT64_MIN        (-9223372036854775807i64 - 1i64)
 #endif
 #else
   typedef long long int64;
+# define FORMAT_OFF_T "lld"
 #ifndef INT64_MIN
 # define INT64_MIN        (-9223372036854775807LL - 1LL)
 #endif
@@ -336,7 +338,9 @@ typedef struct syntaxelement
 //! Macroblock
 typedef struct macroblock
 {
-  int           qp;
+  int           qp;                  //!< QP luma
+  int           qpc[2];              //!< QP chroma
+
   int           slice_nr;
   int           delta_quant;          //!< for rate control
   
@@ -442,8 +446,8 @@ typedef struct
 typedef struct img_par
 {
   int number;                                 //!< frame number
-  unsigned current_mb_nr; // bitstream order
-  unsigned num_dec_mb;
+  unsigned int current_mb_nr; // bitstream order
+  unsigned int num_dec_mb;
   int current_slice_nr;
   int *intra_block;
   int tr;                                     //!< temporal reference, 8 bit, wrapps at 255
@@ -500,13 +504,11 @@ typedef struct img_par
 
   DecRefPicMarking_t *dec_ref_pic_marking_buffer;                    //!< stores the memory management control operations
 
-  int disposable_flag;                          //!< flag for disposable frame, 1:disposable
   int num_ref_idx_l0_active;             //!< number of forward reference
   int num_ref_idx_l1_active;             //!< number of backward reference
 
   int slice_group_change_cycle;
-  // JVT-D101
-  int redundant_slice_flag; 
+
   int redundant_pic_cnt; 
 
   int explicit_B_prediction;
@@ -561,13 +563,13 @@ typedef struct img_par
 
   int MaxFrameNum;
 
-  unsigned PicWidthInMbs;
-  unsigned PicHeightInMapUnits;
-  unsigned FrameHeightInMbs;
-  unsigned PicHeightInMbs;
-  unsigned PicSizeInMbs;
-  unsigned FrameSizeInMbs;
-  unsigned oldFrameSizeInMbs;
+  unsigned int PicWidthInMbs;
+  unsigned int PicHeightInMapUnits;
+  unsigned int FrameHeightInMbs;
+  unsigned int PicHeightInMbs;
+  unsigned int PicSizeInMbs;
+  unsigned int FrameSizeInMbs;
+  unsigned int oldFrameSizeInMbs;
 
   int no_output_of_prior_pics_flag;
   int long_term_reference_flag;
@@ -584,7 +586,8 @@ typedef struct img_par
   int bitdepth_chroma;
   int bitdepth_luma_qp_scale;
   int bitdepth_chroma_qp_scale;
-  unsigned int dc_pred_value;                 //!< value for DC prediction (depends on pel bit depth)
+  unsigned int dc_pred_value_luma;            //!< luma value for DC prediction (depends on luma pel bit depth)
+  unsigned int dc_pred_value_chroma;          //!< chroma value for DC prediction (depends on chroma pel bit depth)
   int max_imgpel_value;                       //!< max value that one luma picture element (pixel) can take (depends on pic_unit_bitdepth)
   int max_imgpel_value_uv;                    //!< max value that one chroma picture element (pixel) can take (depends on pic_unit_bitdepth)
   int Transform8x8Mode;        
@@ -622,6 +625,13 @@ typedef struct img_par
   unsigned int frame_to_conceal;
   int IDR_concealment_flag;
   int conceal_slice_type;
+
+  // random access point decoding
+  int recovery_point;           
+  int recovery_point_found;
+  int recovery_frame_cnt;
+  int recovery_frame_num;
+  int recovery_poc;
 
 } ImageParameters;
 
@@ -719,6 +729,15 @@ FILE *p_trace;
 int mprRGB[3][16][16];
 int rec_res[3][16][16];
 
+// Redundant slices
+int previous_frame_num;          //!< frame number of previous slice
+int ref_flag[17];                //!< 0: i-th previous frame is incorrect 
+                                 //!< non-zero: i-th previous frame is correct
+int Is_primary_correct;          //!< if primary frame is correct, 0: incorrect
+int Is_redundant_correct;        //!< if redundant frame is correct, 0:incorrect
+int redundant_slice_ref_idx;     //!< reference index of redundant slice
+void Error_tracking(void);       
+
 // prototypes
 void init_conf(struct inp_par *inp, char *config_filename);
 void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr);
@@ -807,10 +826,13 @@ void tracebits2(const char *trace_str, int len, int info);
 void init_decoding_engine_IPCM(struct img_par *img);
 void readIPCMBytes_CABAC(SyntaxElement *sym, Bitstream *currStream);
 
-#endif
+unsigned CeilLog2( unsigned uiVal);
 
 // For Q-matrix
 void AssignQuantParam(pic_parameter_set_rbsp_t* pps, seq_parameter_set_rbsp_t* sps);
 void CalculateQuantParam(void);
 void CalculateQuant8Param(void);
+
+#endif
+
 

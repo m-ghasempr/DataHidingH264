@@ -153,8 +153,7 @@ store_coding_state (CSptr cs)
  *    restore coding state (for rd-optimized mode decision)
  ************************************************************************
  */
-void
-reset_coding_state (CSptr cs)
+void reset_coding_state (CSptr cs)
 {
   int  i;
   int  i_last = img->currentPicture->idr_flag? 1:cs->no_part; 
@@ -192,7 +191,7 @@ reset_coding_state (CSptr cs)
     }
   }
   
-  //=== syntax element number and bitcounters ===
+  //=== syntax element number and bit counters ===
   currMB->currSEnr = cs->currSEnr;
   memcpy (currMB->bitcounter, cs->bitcounter, MAX_BITCOUNTER_MB * sizeof(int));
   

@@ -87,6 +87,14 @@ void DeblockFrame(ImageParameters *img, imgpel **imgY, imgpel ***imgUV)
 
   for (i=0; i<img->PicSizeInMbs; i++)
   {
+    if (img->mb_data[i].mb_type==IPCM)
+    {
+      img->mb_data[i].qp = 0;
+    }
+  }
+  
+  for (i=0; i<img->PicSizeInMbs; i++)
+  {
     DeblockMb( img, imgY, imgUV, i ) ;
   }
 } 
@@ -335,8 +343,6 @@ void GetStrength(byte Strength[16],ImageParameters *img,int MbQAddr,int dir,int 
   }
 }
 
-#define CQPOF(qp, uv) (Clip3(0, 51, qp + img->chroma_qp_offset[uv]))
-
 /*!
  *****************************************************************************************
  * \brief
@@ -391,7 +397,7 @@ void EdgeLoop(imgpel** Img, byte Strength[16],ImageParameters *img, int MbQAddr,
       SrcPtrP = &(Img[pixP.pos_y][pixP.pos_x]);
 
       // Average QP of the two blocks
-      QP  = yuv ? (QP_SCALE_CR[CQPOF(MbP->qp,uv)] + QP_SCALE_CR[CQPOF(MbQ->qp,uv)] + 1) >> 1 : (MbP->qp + MbQ->qp + 1) >> 1;
+      QP  = yuv ? (MbP->qpc[uv] + MbQ->qpc[uv] + 1) >> 1 : (MbP->qp + MbQ->qp + 1) >> 1;
 
       indexA = IClip(0, MAX_QP, QP + AlphaC0Offset);
       indexB = IClip(0, MAX_QP, QP + BetaOffset);

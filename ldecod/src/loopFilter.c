@@ -26,8 +26,6 @@
 #include "mb_access.h"
 #include "loopfilter.h"
 
-extern const byte QP_SCALE_CR[52] ;
-
 byte mixedModeEdgeFlag, fieldModeFilteringFlag;
 
 /*********************************************************************************************************/
@@ -330,8 +328,6 @@ void GetStrength(byte Strength[16],struct img_par *img,int MbQAddr,int dir,int e
   }
 }
 
-#define CQPOF(qp, uv) (Clip3(0, 51, qp + p->chroma_qp_offset[uv]))
-
 /*!
  *****************************************************************************************
  * \brief
@@ -387,7 +383,7 @@ void EdgeLoop(imgpel** Img, byte Strength[16],struct img_par *img, int MbQAddr, 
       SrcPtrP = &(Img[pixP.pos_y][pixP.pos_x]);
 
       // Average QP of the two blocks
-      QP  = yuv ? (QP_SCALE_CR[CQPOF(MbP->qp,uv)] + QP_SCALE_CR[CQPOF(MbQ->qp,uv)] + 1) >> 1 : (MbP->qp + MbQ->qp + 1) >> 1;
+      QP = yuv ? (MbP->qpc[uv] + MbQ->qpc[uv] + 1) >> 1 : (MbP->qp + MbQ->qp + 1) >> 1;
 
       indexA = IClip(0, MAX_QP, QP + AlphaC0Offset);
       indexB = IClip(0, MAX_QP, QP + BetaOffset);

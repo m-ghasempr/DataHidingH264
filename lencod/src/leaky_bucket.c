@@ -18,7 +18,7 @@
 
 #ifdef _LEAKYBUCKET_
 
-long Bit_Buffer[10000];
+//long Bit_Buffer[20000];
 unsigned long total_frame_buffer = 0;
 
 

@@ -522,6 +522,17 @@ void field_flag_inference()
   
 }
 
+void set_chroma_qp(Macroblock* currMB)
+{
+  int i;
+  for (i=0; i<2; i++)
+  {
+    currMB->qpc[i] = Clip3 ( -img->bitdepth_chroma_qp_scale, 51, currMB->qp + dec_picture->chroma_qp_offset[i] );
+    currMB->qpc[i] = currMB->qpc[i] < 0 ? currMB->qpc[i] : QP_SCALE_CR[currMB->qpc[i]];
+  }
+}
+
+
 /*!
  ************************************************************************
  * \brief
@@ -564,6 +575,11 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
 
 
   currMB->qp = img->qp ;
+  for (i=0; i<2; i++)
+  {
+    currMB->qpc[i] = Clip3 ( -img->bitdepth_chroma_qp_scale, 51, img->qp + dec_picture->chroma_qp_offset[i] );
+    currMB->qpc[i] = currMB->qpc[i] < 0 ? currMB->qpc[i] : QP_SCALE_CR[currMB->qpc[i]];
+  }
 
   currSE.type = SE_MBTYPE;
 
@@ -830,10 +846,10 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
     }
   }
 
-  //! TO for Error Concelament
+  //! TO for error concealment
   //! If we have an INTRA Macroblock and we lost the partition
   //! which contains the intra coefficients Copy MB would be better 
-  //! than just a grey block.
+  //! than just a gray block.
   //! Seems to be a bit at the wrong place to do this right here, but for this case 
   //! up to now there is no other way.
   dP = &(currSlice->partArr[partMap[SE_CBP_INTRA]]);
@@ -972,6 +988,8 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
     dP = &(currSlice->partArr[partMap[SE_MBTYPE]]);
     readIPCMcoeffsFromNAL(img,inp,dP);
   }
+  
+
   return DECODE_MB;
 }
 
@@ -1040,6 +1058,7 @@ void readIPCMcoeffsFromNAL(struct img_par *img, struct inp_par *inp, struct data
   {
     //read luma and chroma IPCM coefficients
     currSE.len=8;
+    TRACE_STRING("pcm_byte luma");
     
     for(i=0;i<MB_BLOCK_SIZE;i++)
     {
@@ -1679,7 +1698,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
                   
               
               if (fw_rFrame >= 0)
-                {
+              {
                 
                 if  (!fw_rFrame  && ((!moving_block[j6][i4]) && (!listX[1+list_offset][0]->is_long_term)))
                   {                    
@@ -1702,8 +1721,8 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
                 dec_picture->ref_idx[LIST_0][j4][i4] = -1;
                 }
               if (bw_rFrame >= 0)
-                {
-                if  (bw_rFrame==0 && ((!moving_block[j6][i4])&& (!listX[1+list_offset][0]->is_long_term)))
+              {
+                  if  (bw_rFrame==0 && ((!moving_block[j6][i4])&& (!listX[1+list_offset][0]->is_long_term)))
                   {
                   dec_picture->mv  [LIST_1][j4][i4][0] = 0;
                   dec_picture->mv  [LIST_1][j4][i4][1] = 0;
@@ -2199,6 +2218,7 @@ int predict_nnz(struct img_par *img, int i,int j)
   if (pix.available && active_pps->constrained_intra_pred_flag && (img->currentSlice->dp_mode==PAR_DP_3))
   {
     pix.available &= img->intra_block[pix.mb_addr];
+    cnt--;
   }
 
   if (pix.available)
@@ -2213,6 +2233,7 @@ int predict_nnz(struct img_par *img, int i,int j)
   if (pix.available && active_pps->constrained_intra_pred_flag && (img->currentSlice->dp_mode==PAR_DP_3))
   {
     pix.available &= img->intra_block[pix.mb_addr];
+    cnt--;
   }
 
   if (pix.available)
@@ -2224,7 +2245,7 @@ int predict_nnz(struct img_par *img, int i,int j)
   if (cnt==2)
   {
     pred_nnz++;
-    pred_nnz/=cnt; 
+    pred_nnz>>=1; 
   }
 
   return pred_nnz;
@@ -2258,6 +2279,7 @@ int predict_nnz_chroma(struct img_par *img, int i,int j)
     if (pix.available && active_pps->constrained_intra_pred_flag && (img->currentSlice->dp_mode==PAR_DP_3))
     {
       pix.available &= img->intra_block[pix.mb_addr];
+      cnt--;
     }
 
     if (pix.available)
@@ -2272,6 +2294,7 @@ int predict_nnz_chroma(struct img_par *img, int i,int j)
     if (pix.available && active_pps->constrained_intra_pred_flag && (img->currentSlice->dp_mode==PAR_DP_3))
     {
       pix.available &= img->intra_block[pix.mb_addr];
+      cnt--;
     }
 
     if (pix.available)
@@ -2289,6 +2312,7 @@ int predict_nnz_chroma(struct img_par *img, int i,int j)
     if (pix.available && active_pps->constrained_intra_pred_flag && (img->currentSlice->dp_mode==PAR_DP_3))
     {
       pix.available &= img->intra_block[pix.mb_addr];
+      cnt--;
     }
 
     if (pix.available)
@@ -2303,6 +2327,7 @@ int predict_nnz_chroma(struct img_par *img, int i,int j)
     if (pix.available && active_pps->constrained_intra_pred_flag && (img->currentSlice->dp_mode==PAR_DP_3))
     {
       pix.available &= img->intra_block[pix.mb_addr];
+      cnt--;
     }
 
     if (pix.available)
@@ -2315,7 +2340,7 @@ int predict_nnz_chroma(struct img_par *img, int i,int j)
   if (cnt==2)
   {
     pred_nnz++;
-    pred_nnz/=cnt; 
+    pred_nnz>>=1;
   }
 
   return pred_nnz;
@@ -2782,11 +2807,9 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
   int smb       = ((img->type==SP_SLICE) && IS_INTER (currMB)) || (img->type == SI_SLICE && currMB->mb_type == SI4MB);
 
   int uv;
-  int qp_uv[2];
   int qp_const_uv[2];
   int qp_per_uv[2];
   int qp_rem_uv[2];
-  int qp_c[2];
   
   int intra     = IS_INTRA (currMB);
   int temp[4];
@@ -2811,11 +2834,8 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
   {
     for (i=0; i<2; i++)
     {
-      qp_uv[i] = img->qp + dec_picture->chroma_qp_offset[i];
-      qp_uv[i] = Clip3(-(img->bitdepth_chroma_qp_scale), 51, qp_uv[i]);
-      qp_c[i]  = (qp_uv[i] < 0)? qp_uv[i] : QP_SCALE_CR[qp_uv[i]-MIN_QP];
-      qp_per_uv[i] = (qp_c[i] + img->bitdepth_chroma_qp_scale)/6;
-      qp_rem_uv[i] = (qp_c[i] + img->bitdepth_chroma_qp_scale)%6;
+      qp_per_uv[i] = (currMB->qpc[i] + img->bitdepth_chroma_qp_scale)/6;
+      qp_rem_uv[i] = (currMB->qpc[i] + img->bitdepth_chroma_qp_scale)%6;
     }
   }
 
@@ -3027,6 +3047,10 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
       itrans_2(img);// transform new intra DC
   }
 
+  currMB->qp = img->qp;
+
+  set_chroma_qp(currMB);
+
   qp_per    = (img->qp + img->bitdepth_luma_qp_scale - MIN_QP)/6;
   qp_rem    = (img->qp + img->bitdepth_luma_qp_scale - MIN_QP)%6;
   qp_const  = 1<<(3-qp_per);
@@ -3036,17 +3060,12 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
   {
     for(i=0; i < 2; i++)
     {
-      qp_uv[i] = img->qp + dec_picture->chroma_qp_offset[i];
-      qp_uv[i] = Clip3(-(img->bitdepth_chroma_qp_scale), 51, qp_uv[i]);
-      qp_c[i]  = (qp_uv[i] < 0)? qp_uv[i] : QP_SCALE_CR[qp_uv[i]-MIN_QP];
-      qp_per_uv[i] = (qp_c[i] + img->bitdepth_chroma_qp_scale)/6;
-      qp_rem_uv[i] = (qp_c[i] + img->bitdepth_chroma_qp_scale)%6;
+      qp_per_uv[i] = (currMB->qpc[i] + img->bitdepth_chroma_qp_scale)/6;
+      qp_rem_uv[i] = (currMB->qpc[i] + img->bitdepth_chroma_qp_scale)%6;
     }
   }
 
-  currMB->qp = img->qp;
-
-  
+ 
   // luma coefficients
   for (block_y=0; block_y < 4; block_y += 2) /* all modes */
   {
@@ -3401,8 +3420,8 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
           int uv_idx = ll;
           int m3[2][4] = {{0,0,0,0},{0,0,0,0}};
           int m4[2][4] = {{0,0,0,0},{0,0,0,0}};
-          int qp_per_uv_dc = (qp_c[uv] + 3 + img->bitdepth_chroma_qp_scale)/6;       //for YUV422 only
-          int qp_rem_uv_dc = (qp_c[uv] + 3 + img->bitdepth_chroma_qp_scale)%6;       //for YUV422 only
+          int qp_per_uv_dc = (currMB->qpc[uv] + 3 + img->bitdepth_chroma_qp_scale)/6;       //for YUV422 only
+          int qp_rem_uv_dc = (currMB->qpc[uv] + 3 + img->bitdepth_chroma_qp_scale)%6;       //for YUV422 only
         
           //===================== CHROMA DC YUV422 ======================
           if (active_pps->entropy_coding_mode_flag == UVLC)
@@ -3866,6 +3885,7 @@ void decode_ipcm_mb(struct img_par *img)
 
   // for deblocking filter
   currMb->qp=0;
+  set_chroma_qp(currMb);
 
   // for CAVLC: Set the nz_coeff to 16. 
   // These parameters are to be used in CAVLC decoding of neighbour blocks

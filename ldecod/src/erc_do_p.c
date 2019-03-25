@@ -1266,6 +1266,7 @@ void conceal_lost_frames(ImageParameters *img)
     StorablePicture *picture = NULL;
     int tmp1 = img->delta_pic_order_cnt[0];
     int tmp2 = img->delta_pic_order_cnt[1];
+    int i;
 
     img->delta_pic_order_cnt[0] = img->delta_pic_order_cnt[1] = 0;
 
@@ -1327,6 +1328,13 @@ void conceal_lost_frames(ImageParameters *img)
 
         img->pre_frame_num = UnusedShortTermFrameNum;
         UnusedShortTermFrameNum = (UnusedShortTermFrameNum + 1) % img->MaxFrameNum;
+
+        // update reference flags and set current flag.
+        for(i=16;i>0;i--)
+        {
+          ref_flag[i] = ref_flag[i-1];
+        }
+        ref_flag[0] = 0;
     }
     img->delta_pic_order_cnt[0] = tmp1;
     img->delta_pic_order_cnt[1] = tmp2;
@@ -1475,8 +1483,8 @@ void init_lists_for_non_reference_loss(int currSliceType, PictureStructure currP
 
 
     // set max size
-    listXsize[0] = min (listXsize[0], active_sps->num_ref_frames);
-    listXsize[1] = min (listXsize[1], active_sps->num_ref_frames);
+    listXsize[0] = min (listXsize[0], (int)active_sps->num_ref_frames);
+    listXsize[1] = min (listXsize[1], (int)active_sps->num_ref_frames);
 
     listXsize[1] = 0;
     // set the unused list entries to NULL

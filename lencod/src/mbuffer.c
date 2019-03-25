@@ -1309,6 +1309,7 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
       listX[1][1]=tmp_s;
     }
   }
+
   // set max size
   listXsize[0] = min (listXsize[0], img->num_ref_idx_l0_active);
   listXsize[1] = min (listXsize[1], img->num_ref_idx_l1_active);
@@ -2443,25 +2444,28 @@ void replace_top_pic_with_frame(StorablePicture* p)
 
   if (!found)
   {
-    error("replace_top_pic_with_frame: error storing reference frame (top field not found)",500);
+    // this should only happen for non-reference pictures when the dpb is full of reference pics
+    direct_output_paff(p, p_dec);
   }
-
-  free_storable_picture(fs->top_field);
-  fs->top_field=NULL;
-  fs->frame=p;
-  fs->is_used = 3;
-  if (p->used_for_reference)
+  else
   {
-    fs->is_reference = 3;
-    if (p->is_long_term)
+    free_storable_picture(fs->top_field);
+    fs->top_field=NULL;
+    fs->frame=p;
+    fs->is_used = 3;
+    if (p->used_for_reference)
     {
-      fs->is_long_term = 3;
+      fs->is_reference = 3;
+      if (p->is_long_term)
+      {
+        fs->is_long_term = 3;
+      }
     }
+    // generate field views
+    dpb_split_field(fs);
+    update_ref_list();
+    update_ltref_list();
   }
-  // generate field views
-  dpb_split_field(fs);
-  update_ref_list();
-  update_ltref_list();
 }
 
 
@@ -2819,11 +2823,16 @@ static void output_one_frame_from_dpb(void)
 
   write_stored_frame(dpb.fs[pos], p_dec);
 
-  if (dpb.last_output_poc >= poc)
+  // if redundant picture in use, output POC may be not in ascending order
+  if(input->redundant_pic_flag == 0)
   {
-    error ("output POC must be in ascending order", 150);
-  } 
+    if (dpb.last_output_poc >= poc)
+    {
+      error ("output POC must be in ascending order", 150);
+    } 
+  }
   dpb.last_output_poc = poc;
+  
   // free frame store and move empty store to end of buffer
   if (!is_used_for_reference(dpb.fs[pos]))
   {

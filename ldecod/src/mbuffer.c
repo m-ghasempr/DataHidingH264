@@ -47,6 +47,8 @@ DecodedPictureBuffer dpb;
 
 StorablePicture **listX[6];
 
+StorablePicture *no_reference_picture; //!< dummy storable picture for recovery point
+
 ColocatedParams *Co_located = NULL;
 
 extern StorablePicture *dec_picture;
@@ -258,6 +260,13 @@ void init_dpb()
       no_mem_exit("init_dpb: listX[i]");
   }
 
+  /* allocate a dummy storable picture */
+  no_reference_picture = alloc_storable_picture (FRAME, img->width, img->height, img->width_cr, img->height_cr);
+  no_reference_picture->top_field    = no_reference_picture;
+  no_reference_picture->bottom_field = no_reference_picture;
+  no_reference_picture->frame        = no_reference_picture;
+
+
   for (j=0;j<6;j++)
   {
     for (i=0; i<MAX_LIST_SIZE; i++)
@@ -317,6 +326,8 @@ void free_dpb()
   // picture error concealment
   if(img->conceal_mode != 0)
       free_frame_store(last_out_fs);
+
+  free_storable_picture(no_reference_picture);
 }
 
 
@@ -425,9 +436,12 @@ StorablePicture* alloc_storable_picture(PictureStructure structure, int size_x, 
   s->size_x_cr = size_x_cr;
   s->size_y_cr = size_y_cr;
   
-  s->top_field    = NULL;
-  s->bottom_field = NULL;
-  s->frame        = NULL;
+//  s->top_field    = NULL;
+//  s->bottom_field = NULL;
+//  s->frame        = NULL;
+  s->top_field    = no_reference_picture;
+  s->bottom_field = no_reference_picture;
+  s->frame        = no_reference_picture;
 
   s->dec_ref_pic_marking_buffer = NULL;
 
@@ -534,6 +548,12 @@ void free_storable_picture(StorablePicture* p)
     {
       free(p->mb_field);
       p->mb_field=NULL;
+    }
+
+    if (p->slice_id)
+    {
+      free_mem2Dshort(p->slice_id);
+      p->slice_id=NULL;
     }
 
     free(p);
@@ -1279,11 +1299,14 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
   // set the unused list entries to NULL
   for (i=listXsize[0]; i< (MAX_LIST_SIZE) ; i++)
   {
-    listX[0][i] = NULL;
+//    listX[0][i] = NULL;
+      listX[0][i] = no_reference_picture;
+      
   }
   for (i=listXsize[1]; i< (MAX_LIST_SIZE) ; i++)
   {
-    listX[1][i] = NULL;
+//    listX[1][i] = NULL;
+      listX[1][i] = no_reference_picture;
   }
 }
 
@@ -1307,7 +1330,8 @@ void init_mbaff_lists()
   {
     for (j=0; j<MAX_LIST_SIZE; j++)
     {
-      listX[i][j] = NULL;
+//      listX[i][j] = NULL;
+      listX[i][j] = no_reference_picture;
     }
     listXsize[i]=0;
   }
@@ -1360,7 +1384,8 @@ static StorablePicture*  get_short_term_pic(int picNum)
           return dpb.fs_ref[i]->bottom_field;
     }
   }
-  return NULL;
+//  return NULL;
+  return no_reference_picture;
 }
 
 /*!
@@ -2473,6 +2498,8 @@ static void insert_picture_in_dpb(FrameStore* fs, StorablePicture* p)
     break;
   }
   fs->frame_num = p->pic_num;
+  fs->recovery_frame = p->recovery_frame;
+
   fs->is_output = p->is_output;
 
   if (fs->is_used==3)
@@ -2901,16 +2928,13 @@ void dpb_split_field(FrameStore *fs)
     //store reference picture index
     for (j=0; j<=fs->frame->max_slice_id; j++)
     {
-      for (i=0;i<listXsize[LIST_1];i++)
+      for (i=0;i<16;i++)
       {
         fs->top_field->ref_pic_num[j][LIST_1][2*i]     =fs->frame->ref_pic_num[j][2 + LIST_1][2*i];
         fs->top_field->ref_pic_num[j][LIST_1][2*i + 1] =fs->frame->ref_pic_num[j][2 + LIST_1][2*i+1];
         fs->bottom_field->ref_pic_num[j][LIST_1][2*i]  =fs->frame->ref_pic_num[j][4 + LIST_1][2*i];
         fs->bottom_field->ref_pic_num[j][LIST_1][2*i+1]=fs->frame->ref_pic_num[j][4 + LIST_1][2*i+1] ;
-      }
-      
-      for (i=0;i<listXsize[LIST_0];i++)
-      {
+
         fs->top_field->ref_pic_num[j][LIST_0][2*i]     =fs->frame->ref_pic_num[j][2 + LIST_0][2*i];
         fs->top_field->ref_pic_num[j][LIST_0][2*i + 1] =fs->frame->ref_pic_num[j][2 + LIST_0][2*i+1];
         fs->bottom_field->ref_pic_num[j][LIST_0][2*i]  =fs->frame->ref_pic_num[j][4 + LIST_0][2*i];
@@ -3133,12 +3157,12 @@ void dpb_combine_field(FrameStore *fs)
   //combine field for frame
   for (j=0; j<=(max(fs->top_field->max_slice_id, fs->bottom_field->max_slice_id)); j++)
   {
-    for (i=0;i<(listXsize[LIST_1]+1)/2;i++)
+    for (i=0;i<16;i++)
     {
       fs->frame->ref_pic_num[j][LIST_1][i]=   min ((fs->top_field->ref_pic_num[j][LIST_1][2*i]/2)*2, (fs->bottom_field->ref_pic_num[j][LIST_1][2*i]/2)*2);
     }
 
-    for (i=0;i<(listXsize[LIST_0]+1)/2;i++)
+    for (i=0;i<16;i++)
     {
       fs->frame->ref_pic_num[j][LIST_0][i] =   min ((fs->top_field->ref_pic_num[j][LIST_0][2*i]/2)*2, (fs->bottom_field->ref_pic_num[j][LIST_0][2*i]/2)*2);  
     }

@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 10.2 (FRExt)
+ *     JM 11.0 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -67,8 +67,8 @@
 
 #include "erc_api.h"
 
-#define JM          "10 (FRExt)"
-#define VERSION     "10.2"
+#define JM          "11 (FRExt)"
+#define VERSION     "11.0"
 #define EXT_VERSION "(FRExt)"
 
 #define LOGFILE     "log.dec"
@@ -200,7 +200,7 @@ void Configure(int ac, char *av[])
       strcpy(input->reffile,av[CLcount+1]);
       CLcount += 2;
     }
-    else if (0 == strncmp (av[CLcount], "-uv", 2))  //! indicate UV writing for 4:0:0
+    else if (0 == strncmp (av[CLcount], "-uv", 3))  //! indicate UV writing for 4:0:0
     {
       input->write_uv = 1;
       CLcount ++;
@@ -274,6 +274,8 @@ void Configure(int ac, char *av[])
  */
 int main(int argc, char **argv)
 {
+  int i;
+  
   // allocate memory for the structures
   if ((input =  (struct inp_par *)calloc(1, sizeof(struct inp_par)))==NULL) no_mem_exit("main: input");
   if ((snr   =  (struct snr_par *)calloc(1, sizeof(struct snr_par)))==NULL) no_mem_exit("main: snr");
@@ -320,6 +322,13 @@ int main(int argc, char **argv)
 
   // time for total decoding session
   tot_time = 0;
+
+  // reference flag initialization
+  for(i=0;i<17;i++)
+  {
+    ref_flag[i]=1; 
+  }
+  
   while (decode_one_frame(img, input, snr) != EOS)
     ;
 
@@ -371,12 +380,16 @@ void init(struct img_par *img)  //!< image parameters
 
   imgY_ref  = NULL;
   imgUV_ref = NULL;
+
+  img->recovery_point = 0;
+  img->recovery_point_found = 0;
+  img->recovery_poc = 0x7fffffff; /* set to a max value */
 }
 
 /*!
  ***********************************************************************
  * \brief
- *    Initilize FREXT variables
+ *    Initialize FREXT variables
  ***********************************************************************
  */
 void init_frext(struct img_par *img)  //!< image parameters
@@ -387,13 +400,14 @@ void init_frext(struct img_par *img)  //!< image parameters
     img->pic_unit_bitsize_on_disk = (img->bitdepth_luma > 8)? 16:8;
   else
     img->pic_unit_bitsize_on_disk = (img->bitdepth_chroma > 8)? 16:8;
-  img->dc_pred_value = 1<<(img->bitdepth_luma - 1);
+  img->dc_pred_value_luma = 1<<(img->bitdepth_luma - 1);
   img->max_imgpel_value = (1<<img->bitdepth_luma) - 1;
 
   if (active_sps->chroma_format_idc != YUV400)
   {
     //for chrominance part
     img->bitdepth_chroma_qp_scale = 6*(img->bitdepth_chroma - 8);
+    img->dc_pred_value_chroma     = 1<<(img->bitdepth_chroma - 1);
     img->max_imgpel_value_uv      = (1<<img->bitdepth_chroma) - 1;
     img->num_blk8x8_uv = (1<<active_sps->chroma_format_idc)&(~(0x1));
     img->num_cdc_coeff = img->num_blk8x8_uv<<1;
@@ -617,10 +631,13 @@ void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr)
   fprintf(p_log,"%4dx%-4d|", img->width, img->height);
   fprintf(p_log," %s |", &(yuv_formats[img->yuv_format][0]));
 
-  if (active_pps->entropy_coding_mode_flag == UVLC)
-    fprintf(p_log," CAVLC|");
-  else
-    fprintf(p_log," CABAC|");
+  if (active_pps)
+  {
+    if (active_pps->entropy_coding_mode_flag == UVLC)
+      fprintf(p_log," CAVLC|");
+    else
+      fprintf(p_log," CABAC|");
+  }
 
 
   fprintf(p_log,"%6.3f|",snr->snr_y1);

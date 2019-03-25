@@ -27,7 +27,7 @@
 
 typedef unsigned char byte;    //!< byte type definition
 
-#define BEST_NZ_COEFF	1		// yuwen 2005.11.03 => for high complexity mode decision (CAVLC, #TotalCoeff)
+//#define BEST_NZ_COEFF	1		// yuwen 2005.11.03 => for high complexity mode decision (CAVLC, #TotalCoeff)
 
 //FREXT Profile IDC definitions
 #define FREXT_HP        100      //!< YUV 4:2:0/8 "High"
@@ -121,12 +121,12 @@ enum {
 #define IS_INTRA(MB)    ((MB)->mb_type==I4MB  || (MB)->mb_type==I16MB || (MB)->mb_type==I8MB || (MB)->mb_type==IPCM)
 #define IS_NEWINTRA(MB) ((MB)->mb_type==I16MB)
 #define IS_OLDINTRA(MB) ((MB)->mb_type==I4MB)
-#define IS_IPCM(MB) ((MB)->mb_type==IPCM)
+#define IS_IPCM(MB)     ((MB)->mb_type==IPCM)
 
 #define IS_INTER(MB)    ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB && (MB)->mb_type!=I8MB)
 #define IS_INTERMV(MB)  ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB && (MB)->mb_type!=I8MB  && (MB)->mb_type!=0)
 #define IS_DIRECT(MB)   ((MB)->mb_type==0     && (img->type==B_SLICE))
-#define IS_COPY(MB)     ((MB)->mb_type==0     && (img->type==P_SLICE||img ->type==SP_SLICE));
+#define IS_COPY(MB)     ((MB)->mb_type==0     && (img->type==P_SLICE||img ->type==SP_SLICE))
 #define IS_P8x8(MB)     ((MB)->mb_type==P8x8)
 
 // Quantization parameter range

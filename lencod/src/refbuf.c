@@ -38,7 +38,6 @@ void PutPel_11 (pel_t *Pic, int pel_pos, pel_t val)
  ************************************************************************
  */
 static pel_t line[16];
-static pel_t line4[64];
 
 pel_t *FastLine16Y_11 (pel_t *Pic, int y, int x, int height, int width)
 {
@@ -85,8 +84,9 @@ pel_t *FastLineX (int dummy, pel_t* Pic, int y, int x, int height, int width)
   return Pic + y*width + x;
 }
 
+static pel_t umv_line[2][16];
 
-pel_t *UMVLineX (int size, pel_t* Pic, int y, int x, int height, int width)
+pel_t *UMVLineX_impl (int size, pel_t* Pic, int y, int x, int height, int width, int line_idx)
 {
   int i;
   pel_t *Picy;
@@ -97,17 +97,17 @@ pel_t *UMVLineX (int size, pel_t* Pic, int y, int x, int height, int width)
   {   
     for (i = x; i < min(0,x+size); i++)
     {
-      line[i-x] = Picy [0];             // Replicate left edge pixel
+      umv_line[line_idx][i-x] = Picy [0];             // Replicate left edge pixel
     }
 
-    memcpy(&line[min(-x,15)],Picy,max(x+size,0) * sizeof(pel_t)); // Copy non-edge pixels
+    memcpy(&umv_line[line_idx][min(-x,15)],Picy,max(x+size,0) * sizeof(pel_t)); // Copy non-edge pixels
   }
   else if (x > width-size)         // Right edge
   {
-    memcpy(line,&Picy[x], max((width - x),0) * sizeof(pel_t)); // Copy non-edge pixels
+    memcpy(umv_line[line_idx],&Picy[x], max((width - x),0) * sizeof(pel_t)); // Copy non-edge pixels
     for (i = max(width,x); i < x+size; i++)
     {
-      line[i-x] = Picy [width-1];  // Replicate right edge pixel
+      umv_line[line_idx][i-x] = Picy [width-1];  // Replicate right edge pixel
     }
   }
   else                                  // No edge
@@ -115,8 +115,19 @@ pel_t *UMVLineX (int size, pel_t* Pic, int y, int x, int height, int width)
     return Picy + x;
   }
 
-  return line;
+  return umv_line[line_idx];
 }
+
+pel_t *UMVLineX (int size, pel_t* Pic, int y, int x, int height, int width)
+{
+  return UMVLineX_impl (size, Pic, y, x, height, width, 0);
+}
+
+pel_t *UMVLineX2 (int size, pel_t* Pic, int y, int x, int height, int width)
+{
+  return UMVLineX_impl (size, Pic, y, x, height, width, 1);
+}
+
 
 /*!
  ************************************************************************
@@ -144,13 +155,15 @@ pel_t *FastLine4X (pel_t **Pic, int y, int x, int height, int width)
   return &Pic [y][x];
 }
 
+static pel_t line4[2][64];
+
 /*!
  ************************************************************************
  * \brief
  *    Reference buffer, 1/4 pel
  ************************************************************************
  */
-pel_t *UMVLine4X (pel_t **Pic, int y, int x, int height4, int width4)
+pel_t *UMVLine4X_impl (pel_t **Pic, int y, int x, int height4, int width4, int line_idx)
 {
   int i, xx;
 
@@ -160,8 +173,17 @@ pel_t *UMVLine4X (pel_t **Pic, int y, int x, int height4, int width4)
   {
     xx = x + i;
     xpos = (xx < 0 ? (xx) &3 : ((xx) >  width4 ? width4+((xx) &3) : (xx) ));
-    line4[i] = Pic [ypos][xpos];
+    line4[line_idx][i] = Pic [ypos][xpos];
   }
-  return line4;
+  return line4[line_idx];
 }
 
+pel_t *UMVLine4X (pel_t **Pic, int y, int x, int height4, int width4)
+{
+  return UMVLine4X_impl (Pic, y, x, height4, width4, 0);
+}
+
+pel_t *UMVLine4X2 (pel_t **Pic, int y, int x, int height4, int width4)
+{
+  return UMVLine4X_impl (Pic, y, x, height4, width4, 1);
+}

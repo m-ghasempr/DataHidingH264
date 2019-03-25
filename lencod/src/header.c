@@ -41,9 +41,9 @@ int assignSE2partition_NoDP[SE_MAX_ELEMENTS] =
 int assignSE2partition_DP[SE_MAX_ELEMENTS] =
   {  0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 2, 2, 2, 2, 0, 0, 0, 0 } ;
 
-static int ref_pic_list_reordering();
-static int dec_ref_pic_marking();
-static int pred_weight_table();
+static int ref_pic_list_reordering(Bitstream *bitstream);
+static int dec_ref_pic_marking    (Bitstream *bitstream);
+static int pred_weight_table      (Bitstream *bitstream);
 
 /*!
  ********************************************************************************************
@@ -128,7 +128,7 @@ int SliceHeader()
     }
   }
 
-  if (input->redundant_slice_flag)
+  if (active_pps->redundant_pic_cnt_present_flag)
   {
     len += ue_v ("SH: redundant_pic_cnt", img->redundant_pic_cnt, bitstream);
   }
@@ -164,16 +164,16 @@ int SliceHeader()
     }
 
   }
-  len += ref_pic_list_reordering();
+  len += ref_pic_list_reordering(bitstream);
 
   if (((img->type == P_SLICE || img->type == SP_SLICE) && active_pps->weighted_pred_flag) || 
      ((img->type == B_SLICE) && active_pps->weighted_bipred_idc == 1))  
   {
-    len += pred_weight_table();
+    len += pred_weight_table(bitstream);
   }
 
   if (img->nal_reference_idc)
-    len += dec_ref_pic_marking();
+    len += dec_ref_pic_marking(bitstream);
 
   if(input->symbol_mode==CABAC && img->type!=I_SLICE /*&& img->type!=SI_IMG*/)
   {
@@ -235,13 +235,26 @@ int SliceHeader()
  *    number of bits used 
  ********************************************************************************************
 */
-static int ref_pic_list_reordering()
+static int ref_pic_list_reordering(Bitstream *bitstream)
 {
-  int dP_nr = assignSE2partition[input->partition_mode][SE_HEADER];
-  Bitstream *bitstream = img->currentSlice->partArr[dP_nr].bitstream;
   Slice *currSlice = img->currentSlice;
 
   int i, len=0;
+
+  // RPLR for redundant pictures
+  if(input->redundant_pic_flag && redundant_coding)
+  {
+    currSlice->ref_pic_list_reordering_flag_l0 = 1;
+    currSlice->reordering_of_pic_nums_idc_l0[0] = 0;
+    currSlice->reordering_of_pic_nums_idc_l0[1] = 3;
+    currSlice->abs_diff_pic_num_minus1_l0[0] = redundant_ref_idx - 1;
+    currSlice->long_term_pic_idx_l0[0] = 0;
+    reorder_ref_pic_list( listX[LIST_0], &listXsize[LIST_0], 
+                          img->num_ref_idx_l0_active-1, 
+                          currSlice->reordering_of_pic_nums_idc_l0, 
+                          currSlice->abs_diff_pic_num_minus1_l0, 
+                          currSlice->long_term_pic_idx_l0);
+  }
 
   if ((img->type!=I_SLICE) /*&&(img->type!=SI_IMG)*/ )
   {
@@ -309,11 +322,8 @@ static int ref_pic_list_reordering()
  *    number of bits used 
  ************************************************************************
  */
-static int dec_ref_pic_marking()
+static int dec_ref_pic_marking(Bitstream *bitstream)
 {
-  int dP_nr = assignSE2partition[input->partition_mode][SE_HEADER];
-  Bitstream *bitstream = img->currentSlice->partArr[dP_nr].bitstream;
-
   DecRefPicMarking_t *tmp_drpm;
 
   int val, len=0;
@@ -376,11 +386,8 @@ static int dec_ref_pic_marking()
  *    number of bits used 
  ************************************************************************
  */
-static int pred_weight_table()
+static int pred_weight_table(Bitstream *bitstream)
 {
-  int dP_nr = assignSE2partition[input->partition_mode][SE_HEADER];
-  Bitstream *bitstream = img->currentSlice->partArr[dP_nr].bitstream;
-
   int len = 0;
   int i,j;
 
@@ -552,13 +559,6 @@ int Partition_BC_Header(int PartNo)
   sym->value1 = img->current_slice_nr;
   len += writeSyntaxElement_UVLC (sym, partition);
 
-  if(active_pps->redundant_pic_cnt_present_flag)
-  {
-  SYMTRACESTRING("RTP-PH: Picture ID");
-  sym->value1 = img->currentSlice->picture_id;
-  len += writeSyntaxElement_UVLC (sym, partition);
-  }
-
-
   return len;
 }
+

@@ -883,18 +883,17 @@ static void PatchInp (void)
   }
   
   
-  if (input->PyramidRefReorder && input->PyramidCoding && (input->PicInterlace || input->MbInterlace))
+  if (input->ReferenceReorder && (input->PicInterlace || input->MbInterlace))
   {
-    snprintf(errortext, ET_SIZE, "PyramidRefReorder Not supported with Interlace encoding methods\n");
+    snprintf(errortext, ET_SIZE, "ReferenceReorder Not supported with Interlace encoding methods\n");
     error (errortext, 400);
   }
-
-  if (input->PocMemoryManagement && input->PyramidCoding && (input->PicInterlace || input->MbInterlace))
+  
+  if (input->PocMemoryManagement && (input->PicInterlace || input->MbInterlace))
   {
     snprintf(errortext, ET_SIZE, "PocMemoryManagement not supported with Interlace encoding methods\n");
     error (errortext, 400);
   }
-
 
   // frame/field consistency check
   if (input->PicInterlace != FRAME_CODING && input->PicInterlace != ADAPTIVE_CODING && input->PicInterlace != FIELD_CODING)
@@ -917,11 +916,11 @@ static void PatchInp (void)
     error (errortext, 500);
   }
 
-  if (input->rdopt>2)
+  /*if (input->rdopt>2)
   {
     snprintf(errortext, ET_SIZE, "RDOptimization=3 mode has been deactivated do to diverging of real and simulated decoders.");
     error (errortext, 500);
-  }
+  }*/
 
   // check RDoptimization mode and profile. FMD does not support Frex Profiles.
   if (input->rdopt==2 && input->ProfileIDC>=FREXT_HP)
@@ -1047,11 +1046,42 @@ static void PatchInp (void)
   }
 
 
-  if (input->EnableOpenGOP) input->PyramidRefReorder = 1;
+  if (input->EnableOpenGOP) 
+    input->ReferenceReorder = 1;
+
   if (input->EnableOpenGOP && input->PicInterlace) 
   {
-    snprintf(errortext, ET_SIZE, "Open Gop currently not supported for Field coded pictures.");
+    snprintf(errortext, ET_SIZE, "Open GOP currently not supported for Field coded pictures.");
     error (errortext, 500);
+  }
+
+  if (input->redundant_pic_flag)
+  {
+    if (input->PicInterlace || input->MbInterlace)
+    {
+      snprintf(errortext, ET_SIZE, "Redundant pictures cannot be used with interlaced tools.");
+      error (errortext, 500);
+    }
+    if (input->RDPictureDecision)
+    {
+      snprintf(errortext, ET_SIZE, "Redundant pictures cannot be used with RDPictureDecision.");
+      error (errortext, 500);
+    }
+    if (input->successive_Bframe)
+    {
+      snprintf(errortext, ET_SIZE, "Redundant pictures cannot be used with B frames.");
+      error (errortext, 500);
+    }
+    if (input->PrimaryGOPLength < (1 << input->NumRedundantHierarchy))
+    {
+      snprintf(errortext, ET_SIZE, "PrimaryGOPLength must be equal or greater than 2^NumRedundantHierarchy.");
+      error (errortext, 500);
+    }
+    if (input->num_ref_frames < input->PrimaryGOPLength)
+    {
+      snprintf(errortext, ET_SIZE, "NumberReferenceFrames must be greater than or equal to PrimaryGOPLength.");
+      error (errortext, 500);
+    }
   }
   
   ProfileCheck();
@@ -1083,6 +1113,32 @@ static void ProfileCheck(void)
     snprintf(errortext, ET_SIZE, "Profile must be baseline(66)/main(77)/extended(88) or FRExt (%d to %d).", FREXT_HP,FREXT_Hi444);
     error (errortext, 500);
   }
+
+  if ((input->partition_mode) && (input->symbol_mode==CABAC))
+  {
+    snprintf(errortext, ET_SIZE, "Data partitioning and CABAC is not supported in any profile.");
+    error (errortext, 500);
+  }
+  
+  if (input->redundant_pic_flag)
+  {
+    if (input->ProfileIDC != 66)
+    {
+      snprintf(errortext, ET_SIZE, "Redundant pictures are only allowed in Baseline profile.");
+      error (errortext, 500);
+    }
+  }
+
+  if (input->partition_mode)
+  {
+    if (input->ProfileIDC != 88)
+    {
+      snprintf(errortext, ET_SIZE, "Data partitioning is only allowed in extended profile.");
+      error (errortext, 500);
+    }
+  }
+
+
   // baseline
   if (input->ProfileIDC == 66 )
   {
@@ -1094,11 +1150,6 @@ static void ProfileCheck(void)
     if (input->sp_periodicity)
     {
       snprintf(errortext, ET_SIZE, "SP pictures are not allowed in baseline.");
-      error (errortext, 500);
-    }
-    if (input->partition_mode)
-    {
-      snprintf(errortext, ET_SIZE, "Data partitioning is not allowed in baseline.");
       error (errortext, 500);
     }
     if (input->WeightedPrediction)
@@ -1126,19 +1177,9 @@ static void ProfileCheck(void)
       snprintf(errortext, ET_SIZE, "SP pictures are not allowed in main.");
       error (errortext, 500);
     }
-    if (input->partition_mode)
-    {
-      snprintf(errortext, ET_SIZE, "Data partitioning is not allowed in main.");
-      error (errortext, 500);
-    }
     if (input->num_slice_groups_minus1)
     {
       snprintf(errortext, ET_SIZE, "num_slice_groups_minus1>0 (FMO) is not allowed in main.");
-      error (errortext, 500);
-    }
-    if (input->redundant_slice_flag)
-    {
-      snprintf(errortext, ET_SIZE, "Redundant pictures are not allowed in main.");
       error (errortext, 500);
     }
   }

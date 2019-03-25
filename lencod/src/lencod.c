@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 10.2 (FRExt)
+ *     JM 11.0 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -68,8 +68,8 @@
 #include "explicit_gop.h"
 #include "epzs.h"
 
-#define JM      "10 (FRExt)"
-#define VERSION "10.2"
+#define JM      "11 (FRExt)"
+#define VERSION "11.0"
 #define EXT_VERSION "(FRExt)"
 
 InputParameters inputs,      *input = &inputs;
@@ -191,17 +191,20 @@ int main(int argc,char **argv)
     bottom_pic = malloc_picture();
   }
   init_rdopt ();
+#ifdef _LEAKYBUCKET_
+  Bit_Buffer = malloc((input->no_frames * (input->successive_Bframe + 1) + 1) * sizeof(long));
+#endif
 
-  if (input->PyramidCoding )
+  if (input->HierarchicalCoding )
   {
     init_gop_structure();
-    if (input->PyramidCoding == 3)
+    if (input->HierarchicalCoding == 3)
     {
       interpret_gop_structure();
     }
     else
     {
-      create_pyramid();
+      create_hierarchy();
     }
   }  
 
@@ -269,7 +272,7 @@ int main(int argc,char **argv)
 
     //frame_num for this frame
     //if (input->BRefPictures== 0 || input->successive_Bframe == 0 || img-> number < 2)
-    if ((input->BRefPictures != 1 &&  input->PyramidCoding == 0) || input->successive_Bframe == 0 || img-> number < 2)// ||  input->PyramidCoding == 0)
+    if ((input->BRefPictures != 1 &&  input->HierarchicalCoding == 0) || input->successive_Bframe == 0 || img-> number < 2)// ||  input->HierarchicalCoding == 0)
     {
       if (input->intra_period && input->idr_enable)
       {
@@ -376,7 +379,21 @@ int main(int argc,char **argv)
     else
       img->layer = 1;
 
+    // redundant frame initialization and allocation
+    if(input->redundant_pic_flag)
+    {
+      Init_redundant_frame();
+      Set_redundant_frame();
+    }
+
     encode_one_frame(); // encode one I- or P-frame
+
+    // if key frame is encoded, encode one redundant frame
+    if(input->redundant_pic_flag && key_frame)
+    {
+      encode_one_redundant_frame();
+    }
+    
     if (img->type == I_SLICE && input->EnableOpenGOP)
       img->last_valid_reference = img->ThisPOC;
 
@@ -409,7 +426,7 @@ int main(int argc,char **argv)
   RandomIntraUninit();
   FmoUninit();
   
-  if (input->PyramidCoding)
+  if (input->HierarchicalCoding)
     clear_gop_structure ();
 
   // free structure for rd-opt. mode decision
@@ -422,6 +439,9 @@ int main(int argc,char **argv)
   // report everything
   report();
 
+#ifdef _LEAKYBUCKET_
+  free(Bit_Buffer);
+#endif
   free_picture (frame_pic_1);
   
   if (input->RDPictureDecision)
@@ -474,7 +494,7 @@ void report_stats_on_error(void)
   RandomIntraUninit();
   FmoUninit();
   
-  if (input->PyramidCoding)
+  if (input->HierarchicalCoding)
     clear_gop_structure ();
   
   // free structure for rd-opt. mode decision
@@ -604,17 +624,18 @@ void init_img()
   img->bitdepth_luma_qp_scale   = 6*(img->bitdepth_luma   - 8);
   img->bitdepth_lambda_scale    = 2*(img->bitdepth_luma   - 8);
 
-  img->dc_pred_value = 1<<(img->bitdepth_luma - 1);
+  img->dc_pred_value_luma   = 1<<(img->bitdepth_luma - 1);
   img->max_imgpel_value = (1<<img->bitdepth_luma) - 1;
 
   if (img->yuv_format != YUV400)  
   {
-    img->bitdepth_chroma     = input->BitDepthChroma;
-    img->max_imgpel_value_uv = (1<<img->bitdepth_chroma) - 1;
-    img->num_blk8x8_uv       = (1<<img->yuv_format)&(~(0x1));
-    img->num_cdc_coeff       = img->num_blk8x8_uv<<1;
-    img->mb_cr_size_x        = (img->yuv_format==YUV420 || img->yuv_format==YUV422)? 8:16;
-    img->mb_cr_size_y        = (img->yuv_format==YUV444 || img->yuv_format==YUV422)? 16:8;
+    img->bitdepth_chroma      = input->BitDepthChroma;
+    img->dc_pred_value_chroma = 1<<(img->bitdepth_chroma - 1);
+    img->max_imgpel_value_uv  = (1<<img->bitdepth_chroma) - 1;
+    img->num_blk8x8_uv        = (1<<img->yuv_format)&(~(0x1));
+    img->num_cdc_coeff        = img->num_blk8x8_uv<<1;
+    img->mb_cr_size_x         = (img->yuv_format==YUV420 || img->yuv_format==YUV422)? 8:16;
+    img->mb_cr_size_y         = (img->yuv_format==YUV444 || img->yuv_format==YUV422)? 16:8;
 
     img->bitdepth_chroma_qp_scale = 6*(img->bitdepth_chroma - 8);
     if(img->residue_transform_flag)
@@ -908,7 +929,7 @@ void report_frame_statistic()
   static int   last_mode_use[NUM_PIC_TYPE][MAXMODE];
   static int   last_b8_mode_0[NUM_PIC_TYPE][2];
   static int   last_mode_chroma_use[4];
-  static int   last_bit_ctr_n = 0;
+  static int64   last_bit_ctr_n = 0;
   int i;
   char name[20];
   int bitcounter;
@@ -986,11 +1007,11 @@ void report_frame_statistic()
   
   if (img->frame_num == 0)
   {
-    bitcounter = stats->bit_ctr_I;
+    bitcounter = (int) stats->bit_ctr_I;
   }
   else
   {
-    bitcounter = stats->bit_ctr_n - last_bit_ctr_n;
+    bitcounter = (int) (stats->bit_ctr_n - last_bit_ctr_n);
     last_bit_ctr_n = stats->bit_ctr_n;
   }
 
@@ -1002,9 +1023,10 @@ void report_frame_statistic()
   
   //report modes
   //I-Modes
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[I_SLICE][I4MB] - last_mode_use[I_SLICE][I4MB]);
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[I_SLICE][I8MB] - last_mode_use[I_SLICE][I8MB]);
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[I_SLICE][I16MB] - last_mode_use[I_SLICE][I16MB]);
+  //fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[I_SLICE][I4MB] - last_mode_use[I_SLICE][I4MB]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[I_SLICE][I4MB] - last_mode_use[I_SLICE][I4MB]);  
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[I_SLICE][I8MB] - last_mode_use[I_SLICE][I8MB]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[I_SLICE][I16MB] - last_mode_use[I_SLICE][I16MB]);
   
   //chroma intra mode
   fprintf(p_stat_frm, " %5d|",stats->intra_chroma_mode[0] - last_mode_chroma_use[0]);
@@ -1013,14 +1035,14 @@ void report_frame_statistic()
   fprintf(p_stat_frm, " %5d|",stats->intra_chroma_mode[3] - last_mode_chroma_use[3]);
   
   //P-Modes
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[P_SLICE][I4MB] - last_mode_use[P_SLICE][I4MB]);
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[P_SLICE][I8MB] - last_mode_use[P_SLICE][I8MB]);
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[P_SLICE][I16MB] - last_mode_use[P_SLICE][I16MB]);
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[P_SLICE][0   ] - last_mode_use[P_SLICE][0   ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[P_SLICE][I4MB] - last_mode_use[P_SLICE][I4MB]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[P_SLICE][I8MB] - last_mode_use[P_SLICE][I8MB]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[P_SLICE][I16MB] - last_mode_use[P_SLICE][I16MB]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[P_SLICE][0   ] - last_mode_use[P_SLICE][0   ]);
   
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[P_SLICE][1   ] - last_mode_use[P_SLICE][1   ]);
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[P_SLICE][2   ] - last_mode_use[P_SLICE][2   ]);
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[P_SLICE][3   ] - last_mode_use[P_SLICE][3   ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[P_SLICE][1   ] - last_mode_use[P_SLICE][1   ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[P_SLICE][2   ] - last_mode_use[P_SLICE][2   ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[P_SLICE][3   ] - last_mode_use[P_SLICE][3   ]);
   fprintf(p_stat_frm, " %5d|",stats->mode_use_transform_8x8[0][1]);
   fprintf(p_stat_frm, " %5d|",stats->mode_use_transform_4x4[0][1]);
   fprintf(p_stat_frm, " %5d|",stats->mode_use_transform_8x8[0][2]);
@@ -1028,28 +1050,28 @@ void report_frame_statistic()
   fprintf(p_stat_frm, " %5d|",stats->mode_use_transform_8x8[0][3]);
   fprintf(p_stat_frm, " %5d|",stats->mode_use_transform_4x4[0][3]);
   
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[P_SLICE][P8x8] - last_mode_use[P_SLICE][P8x8]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[P_SLICE][P8x8] - last_mode_use[P_SLICE][P8x8]);
 //  fprintf(p_stat_frm, " %5d|",stats->b8_mode_0_use[P_SLICE][0]  - last_b8_mode_0[P_SLICE ][0]);
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[P_SLICE][4   ] - last_mode_use[P_SLICE][4   ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[P_SLICE][4   ] - last_mode_use[P_SLICE][4   ]);
   fprintf(p_stat_frm, " %5d|",stats->mode_use_transform_8x8[0][4]);
   fprintf(p_stat_frm, " %5d|",stats->mode_use_transform_4x4[0][4]);
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[P_SLICE][5   ] - last_mode_use[P_SLICE][5   ]);
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[P_SLICE][6   ] - last_mode_use[P_SLICE][6   ]);
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[P_SLICE][7   ] - last_mode_use[P_SLICE][7   ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[P_SLICE][5   ] - last_mode_use[P_SLICE][5   ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[P_SLICE][6   ] - last_mode_use[P_SLICE][6   ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[P_SLICE][7   ] - last_mode_use[P_SLICE][7   ]);
   
   //B-Modes
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[B_SLICE][I4MB] - last_mode_use[B_SLICE][I4MB]);
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[B_SLICE][I8MB] - last_mode_use[B_SLICE][I8MB]);
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[B_SLICE][I16MB] - last_mode_use[B_SLICE][I16MB]);
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[B_SLICE][0   ] - last_mode_use[B_SLICE][0   ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[B_SLICE][I4MB] - last_mode_use[B_SLICE][I4MB]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[B_SLICE][I8MB] - last_mode_use[B_SLICE][I8MB]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[B_SLICE][I16MB] - last_mode_use[B_SLICE][I16MB]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[B_SLICE][0   ] - last_mode_use[B_SLICE][0   ]);
   /*
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[B_SLICE][1   ] - last_mode_use[B_SLICE][1   ]);
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[B_SLICE][2   ] - last_mode_use[B_SLICE][2   ]);
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[B_SLICE][3   ] - last_mode_use[B_SLICE][3   ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[B_SLICE][1   ] - last_mode_use[B_SLICE][1   ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[B_SLICE][2   ] - last_mode_use[B_SLICE][2   ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[B_SLICE][3   ] - last_mode_use[B_SLICE][3   ]);
   */
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[B_SLICE][1   ] - last_mode_use[B_SLICE][1   ]);
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[B_SLICE][2   ] - last_mode_use[B_SLICE][2   ]);
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[B_SLICE][3   ] - last_mode_use[B_SLICE][3   ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[B_SLICE][1   ] - last_mode_use[B_SLICE][1   ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[B_SLICE][2   ] - last_mode_use[B_SLICE][2   ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[B_SLICE][3   ] - last_mode_use[B_SLICE][3   ]);
   fprintf(p_stat_frm, " %5d|",stats->mode_use_transform_8x8[1][0]);
   fprintf(p_stat_frm, " %5d|",stats->mode_use_transform_4x4[1][0]);
   fprintf(p_stat_frm, " %5d|",stats->mode_use_transform_8x8[1][1]);
@@ -1059,16 +1081,16 @@ void report_frame_statistic()
   fprintf(p_stat_frm, " %5d|",stats->mode_use_transform_8x8[1][3]);
   fprintf(p_stat_frm, " %5d|",stats->mode_use_transform_4x4[1][3]);
   
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[B_SLICE][P8x8] - last_mode_use[B_SLICE][P8x8]);
-  fprintf(p_stat_frm, " %5d|",(stats->b8_mode_0_use [B_SLICE][0]+stats->b8_mode_0_use [B_SLICE][1]) - (last_b8_mode_0[B_SLICE][0]+last_b8_mode_0[B_SLICE][1]));
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[B_SLICE][P8x8] - last_mode_use[B_SLICE][P8x8]);
+  fprintf(p_stat_frm, " %d|",(stats->b8_mode_0_use [B_SLICE][0]+stats->b8_mode_0_use [B_SLICE][1]) - (last_b8_mode_0[B_SLICE][0]+last_b8_mode_0[B_SLICE][1]));
   fprintf(p_stat_frm, " %5d|",stats->b8_mode_0_use [B_SLICE][1] - last_b8_mode_0[B_SLICE][1]);
   fprintf(p_stat_frm, " %5d|",stats->b8_mode_0_use [B_SLICE][0] - last_b8_mode_0[B_SLICE][0]);
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[B_SLICE][4   ] - last_mode_use[B_SLICE][4   ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[B_SLICE][4   ] - last_mode_use[B_SLICE][4   ]);
   fprintf(p_stat_frm, " %5d|",stats->mode_use_transform_8x8[1][4]);
   fprintf(p_stat_frm, " %5d|",stats->mode_use_transform_4x4[1][4]);
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[B_SLICE][5   ] - last_mode_use[B_SLICE][5   ]);
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[B_SLICE][6   ] - last_mode_use[B_SLICE][6   ]);
-  fprintf(p_stat_frm, " %5d|",stats->mode_use[B_SLICE][7   ] - last_mode_use[B_SLICE][7   ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[B_SLICE][5   ] - last_mode_use[B_SLICE][5   ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[B_SLICE][6   ] - last_mode_use[B_SLICE][6   ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|",stats->mode_use[B_SLICE][7   ] - last_mode_use[B_SLICE][7   ]);
 
   fprintf(p_stat_frm, "\n");
   
@@ -1102,12 +1124,12 @@ void report_frame_statistic()
  */
 void report()
 {
-  int bit_use[NUM_PIC_TYPE][2] ;
+  int64 bit_use[NUM_PIC_TYPE][2] ;
   int i,j;
   char name[30];
-  int total_bits;
+  int64 total_bits;
   float frame_rate;
-  float mean_motion_info_bit_use[2] = {0.0};
+  double mean_motion_info_bit_use[2] = {0.0};
 
 #ifndef WIN32
   time_t now;
@@ -1186,9 +1208,9 @@ void report()
     // B pictures
     fprintf(stdout,  " Sequence type                     :" );
     
-    if(stats->successive_Bframe>0 && input->PyramidCoding) 
+    if(stats->successive_Bframe>0 && input->HierarchicalCoding) 
     {
-      fprintf(stdout, " Pyramid (QP: I %d, P %d, B %d) \n",
+      fprintf(stdout, " Hierarchy (QP: I %d, P %d, B %d) \n",
         input->qp0, input->qpN, input->qpB);
     }
     else if(stats->successive_Bframe>0) 
@@ -1300,9 +1322,9 @@ void report()
     float csnr_v = (float) (10 * log10 (max_pix_value_sqd_uv * 
       (double)((double) impix_cr / (snr->msse_v == 0.0? 1.0 : snr->msse_v))));  
 
-    fprintf(stdout," SNR Y(dB)                         : %5.2f\n",snr->snr_ya);
-    fprintf(stdout," SNR U(dB)                         : %5.2f\n",snr->snr_ua);
-    fprintf(stdout," SNR V(dB)                         : %5.2f\n",snr->snr_va);
+    fprintf(stdout," PSNR Y(dB)                        : %5.2f\n",snr->snr_ya);
+    fprintf(stdout," PSNR U(dB)                        : %5.2f\n",snr->snr_ua);
+    fprintf(stdout," PSNR V(dB)                        : %5.2f\n",snr->snr_va);
     fprintf(stdout," cSNR Y(dB)                        : %5.2f (%5.2f)\n",csnr_y,snr->msse_y/impix);
     fprintf(stdout," cSNR U(dB)                        : %5.2f (%5.2f)\n",csnr_u,snr->msse_u/impix_cr);
     fprintf(stdout," cSNR V(dB)                        : %5.2f (%5.2f)\n",csnr_v,snr->msse_v/impix_cr);
@@ -1312,8 +1334,9 @@ void report()
 
   if(frame_ctr[B_SLICE]!=0)
   {
-    fprintf(stdout, " Total bits                        : %d (I %5d, P %5d, B %d NVB %d) \n",
-      total_bits=stats->bit_ctr_P + stats->bit_ctr_I + stats->bit_ctr_B + stats->bit_ctr_parametersets, stats->bit_ctr_I, stats->bit_ctr_P, stats->bit_ctr_B,stats->bit_ctr_parametersets);
+    fprintf(stdout, " Total bits                        : %" FORMAT_OFF_T  " (I %" FORMAT_OFF_T  ", P %" FORMAT_OFF_T  ", B %" FORMAT_OFF_T  " NVB %d) \n",
+      total_bits=stats->bit_ctr_P + stats->bit_ctr_I + stats->bit_ctr_B + stats->bit_ctr_parametersets, 
+	  stats->bit_ctr_I, stats->bit_ctr_P, stats->bit_ctr_B, stats->bit_ctr_parametersets);
     
     frame_rate = (img->framerate *(float)(stats->successive_Bframe + 1)) / (float) (input->jumpd+1);
 //    stats->bitrate= ((float) total_bits * frame_rate)/((float) (input->no_frames + frame_ctr[B_SLICE]));
@@ -1324,7 +1347,7 @@ void report()
   }
   else if (input->sp_periodicity==0)
   {
-    fprintf(stdout, " Total bits                        : %d (I %5d, P %5d, NVB %d) \n",
+    fprintf(stdout, " Total bits                        : %" FORMAT_OFF_T  " (I %" FORMAT_OFF_T  ", P %" FORMAT_OFF_T  ", NVB %d) \n",
       total_bits=stats->bit_ctr_P + stats->bit_ctr_I + stats->bit_ctr_parametersets, stats->bit_ctr_I, stats->bit_ctr_P, stats->bit_ctr_parametersets);
     
     
@@ -1335,7 +1358,7 @@ void report()
   }
   else
   {
-    fprintf(stdout, " Total bits                        : %d (I %5d, P %5d, NVB %d) \n",
+    fprintf(stdout, " Total bits                        : %" FORMAT_OFF_T  " (I %" FORMAT_OFF_T  ", P %" FORMAT_OFF_T  ", NVB %d) \n",
       total_bits=stats->bit_ctr_P + stats->bit_ctr_I + stats->bit_ctr_parametersets, stats->bit_ctr_I, stats->bit_ctr_P, stats->bit_ctr_parametersets);
     
     
@@ -1458,25 +1481,25 @@ void report()
   fprintf(p_stat,"   Intra              |   Mode used    |\n");
   fprintf(p_stat," ---------------------|----------------|\n");
 
-  fprintf(p_stat," Mode 0  intra 4x4    |  %5d         |\n",stats->mode_use[I_SLICE][I4MB ]);
-  fprintf(p_stat," Mode 1  intra 8x8    |  %5d         |\n",stats->mode_use[I_SLICE][I8MB ]);
-  fprintf(p_stat," Mode 2+ intra 16x16  |  %5d         |\n",stats->mode_use[I_SLICE][I16MB]);
-  fprintf(p_stat," Mode    intra IPCM   |  %5d         |\n",stats->mode_use[I_SLICE][IPCM ]);
+  fprintf(p_stat," Mode 0  intra 4x4    |  %5" FORMAT_OFF_T  "         |\n",stats->mode_use[I_SLICE][I4MB ]);
+  fprintf(p_stat," Mode 1  intra 8x8    |  %5" FORMAT_OFF_T  "         |\n",stats->mode_use[I_SLICE][I8MB ]);
+  fprintf(p_stat," Mode 2+ intra 16x16  |  %5" FORMAT_OFF_T  "         |\n",stats->mode_use[I_SLICE][I16MB]);
+  fprintf(p_stat," Mode    intra IPCM   |  %5" FORMAT_OFF_T  "         |\n",stats->mode_use[I_SLICE][IPCM ]);
   
   fprintf(p_stat,"\n ---------------------|----------------|-----------------|\n");
   fprintf(p_stat,"   Inter              |   Mode used    | MotionInfo bits |\n");
   fprintf(p_stat," ---------------------|----------------|-----------------|");
-  fprintf(p_stat,"\n Mode  0  (copy)      |  %5d         |    %8.2f     |",stats->mode_use[P_SLICE][0   ],(float)stats->bit_use_mode[P_SLICE][0   ]/(float)bit_use[P_SLICE][0]);
-  fprintf(p_stat,"\n Mode  1  (16x16)     |  %5d         |    %8.2f     |",stats->mode_use[P_SLICE][1   ],(float)stats->bit_use_mode[P_SLICE][1   ]/(float)bit_use[P_SLICE][0]);
-  fprintf(p_stat,"\n Mode  2  (16x8)      |  %5d         |    %8.2f     |",stats->mode_use[P_SLICE][2   ],(float)stats->bit_use_mode[P_SLICE][2   ]/(float)bit_use[P_SLICE][0]);
-  fprintf(p_stat,"\n Mode  3  (8x16)      |  %5d         |    %8.2f     |",stats->mode_use[P_SLICE][3   ],(float)stats->bit_use_mode[P_SLICE][3   ]/(float)bit_use[P_SLICE][0]);
-  fprintf(p_stat,"\n Mode  4  (8x8)       |  %5d         |    %8.2f     |",stats->mode_use[P_SLICE][P8x8],(float)stats->bit_use_mode[P_SLICE][P8x8]/(float)bit_use[P_SLICE][0]);
-  fprintf(p_stat,"\n Mode  5  intra 4x4   |  %5d         |-----------------|",stats->mode_use[P_SLICE][I4MB]);
-  fprintf(p_stat,"\n Mode  6  intra 8x8   |  %5d         |",stats->mode_use[P_SLICE][I8MB]);
-  fprintf(p_stat,"\n Mode  7+ intra 16x16 |  %5d         |",stats->mode_use[P_SLICE][I16MB]);
-  fprintf(p_stat,"\n Mode     intra IPCM  |  %5d         |",stats->mode_use[P_SLICE][IPCM ]);
-  mean_motion_info_bit_use[0] = (float)(stats->bit_use_mode[P_SLICE][0] + stats->bit_use_mode[P_SLICE][1] + stats->bit_use_mode[P_SLICE][2] 
-                                      + stats->bit_use_mode[P_SLICE][3] + stats->bit_use_mode[P_SLICE][P8x8])/(float) bit_use[P_SLICE][0]; 
+  fprintf(p_stat,"\n Mode  0  (copy)      |  %5" FORMAT_OFF_T  "         |    %8.2f     |",stats->mode_use[P_SLICE][0   ],(double)stats->bit_use_mode[P_SLICE][0   ]/(double)bit_use[P_SLICE][0]);
+  fprintf(p_stat,"\n Mode  1  (16x16)     |  %5" FORMAT_OFF_T  "         |    %8.2f     |",stats->mode_use[P_SLICE][1   ],(double)stats->bit_use_mode[P_SLICE][1   ]/(double)bit_use[P_SLICE][0]);
+  fprintf(p_stat,"\n Mode  2  (16x8)      |  %5" FORMAT_OFF_T  "         |    %8.2f     |",stats->mode_use[P_SLICE][2   ],(double)stats->bit_use_mode[P_SLICE][2   ]/(double)bit_use[P_SLICE][0]);
+  fprintf(p_stat,"\n Mode  3  (8x16)      |  %5" FORMAT_OFF_T  "         |    %8.2f     |",stats->mode_use[P_SLICE][3   ],(double)stats->bit_use_mode[P_SLICE][3   ]/(double)bit_use[P_SLICE][0]);
+  fprintf(p_stat,"\n Mode  4  (8x8)       |  %5" FORMAT_OFF_T  "         |    %8.2f     |",stats->mode_use[P_SLICE][P8x8],(double)stats->bit_use_mode[P_SLICE][P8x8]/(double)bit_use[P_SLICE][0]);
+  fprintf(p_stat,"\n Mode  5  intra 4x4   |  %5" FORMAT_OFF_T  "         |-----------------|",stats->mode_use[P_SLICE][I4MB]);
+  fprintf(p_stat,"\n Mode  6  intra 8x8   |  %5" FORMAT_OFF_T  "         |",stats->mode_use[P_SLICE][I8MB]);
+  fprintf(p_stat,"\n Mode  7+ intra 16x16 |  %5" FORMAT_OFF_T  "         |",stats->mode_use[P_SLICE][I16MB]);
+  fprintf(p_stat,"\n Mode     intra IPCM  |  %5" FORMAT_OFF_T  "         |",stats->mode_use[P_SLICE][IPCM ]);
+  mean_motion_info_bit_use[0] = (double)(stats->bit_use_mode[P_SLICE][0] + stats->bit_use_mode[P_SLICE][1] + stats->bit_use_mode[P_SLICE][2] 
+                                      + stats->bit_use_mode[P_SLICE][3] + stats->bit_use_mode[P_SLICE][P8x8])/(double) bit_use[P_SLICE][0]; 
 
   // B pictures
   if(stats->successive_Bframe!=0 && frame_ctr[B_SLICE]!=0)
@@ -1485,17 +1508,17 @@ void report()
     fprintf(p_stat,"\n\n ---------------------|----------------|-----------------|\n");
     fprintf(p_stat,"   B frame            |   Mode used    | MotionInfo bits |\n");
     fprintf(p_stat," ---------------------|----------------|-----------------|");
-    fprintf(p_stat,"\n Mode  0  (copy)      |  %5d         |    %8.2f     |",stats->mode_use[B_SLICE][0   ],(float)stats->bit_use_mode[B_SLICE][0   ]/(float)frame_ctr[B_SLICE]);
-    fprintf(p_stat,"\n Mode  1  (16x16)     |  %5d         |    %8.2f     |",stats->mode_use[B_SLICE][1   ],(float)stats->bit_use_mode[B_SLICE][1   ]/(float)frame_ctr[B_SLICE]);
-    fprintf(p_stat,"\n Mode  2  (16x8)      |  %5d         |    %8.2f     |",stats->mode_use[B_SLICE][2   ],(float)stats->bit_use_mode[B_SLICE][2   ]/(float)frame_ctr[B_SLICE]);
-    fprintf(p_stat,"\n Mode  3  (8x16)      |  %5d         |    %8.2f     |",stats->mode_use[B_SLICE][3   ],(float)stats->bit_use_mode[B_SLICE][3   ]/(float)frame_ctr[B_SLICE]);
-    fprintf(p_stat,"\n Mode  4  (8x8)       |  %5d         |    %8.2f     |",stats->mode_use[B_SLICE][P8x8],(float)stats->bit_use_mode[B_SLICE][P8x8]/(float)frame_ctr[B_SLICE]);
-    fprintf(p_stat,"\n Mode  5  intra 4x4   |  %5d         |-----------------|",stats->mode_use[B_SLICE][I4MB]);
-    fprintf(p_stat,"\n Mode  6  intra 8x8   |  %5d         |",stats->mode_use[B_SLICE][I8MB]);
-    fprintf(p_stat,"\n Mode  7+ intra 16x16 |  %5d         |",stats->mode_use[B_SLICE][I16MB]);
-    fprintf(p_stat,"\n Mode     intra IPCM  |  %5d         |",stats->mode_use[B_SLICE][IPCM ]);
-    mean_motion_info_bit_use[1] = (float)(stats->bit_use_mode[B_SLICE][0] + stats->bit_use_mode[B_SLICE][1] + stats->bit_use_mode[B_SLICE][2] 
-                                      + stats->bit_use_mode[B_SLICE][3] + stats->bit_use_mode[B_SLICE][P8x8])/(float) frame_ctr[B_SLICE]; 
+    fprintf(p_stat,"\n Mode  0  (copy)      |  %5" FORMAT_OFF_T  "         |    %8.2f     |",stats->mode_use[B_SLICE][0   ],(double)stats->bit_use_mode[B_SLICE][0   ]/(double)frame_ctr[B_SLICE]);
+    fprintf(p_stat,"\n Mode  1  (16x16)     |  %5" FORMAT_OFF_T  "         |    %8.2f     |",stats->mode_use[B_SLICE][1   ],(double)stats->bit_use_mode[B_SLICE][1   ]/(double)frame_ctr[B_SLICE]);
+    fprintf(p_stat,"\n Mode  2  (16x8)      |  %5" FORMAT_OFF_T  "         |    %8.2f     |",stats->mode_use[B_SLICE][2   ],(double)stats->bit_use_mode[B_SLICE][2   ]/(double)frame_ctr[B_SLICE]);
+    fprintf(p_stat,"\n Mode  3  (8x16)      |  %5" FORMAT_OFF_T  "         |    %8.2f     |",stats->mode_use[B_SLICE][3   ],(double)stats->bit_use_mode[B_SLICE][3   ]/(double)frame_ctr[B_SLICE]);
+    fprintf(p_stat,"\n Mode  4  (8x8)       |  %5" FORMAT_OFF_T  "         |    %8.2f     |",stats->mode_use[B_SLICE][P8x8],(double)stats->bit_use_mode[B_SLICE][P8x8]/(double)frame_ctr[B_SLICE]);
+    fprintf(p_stat,"\n Mode  5  intra 4x4   |  %5" FORMAT_OFF_T  "         |-----------------|",stats->mode_use[B_SLICE][I4MB]);
+    fprintf(p_stat,"\n Mode  6  intra 8x8   |  %5" FORMAT_OFF_T  "         |",stats->mode_use[B_SLICE][I8MB]);
+    fprintf(p_stat,"\n Mode  7+ intra 16x16 |  %5" FORMAT_OFF_T  "         |",stats->mode_use[B_SLICE][I16MB]);
+    fprintf(p_stat,"\n Mode     intra IPCM  |  %5" FORMAT_OFF_T  "         |",stats->mode_use[B_SLICE][IPCM ]);
+    mean_motion_info_bit_use[1] = (double)(stats->bit_use_mode[B_SLICE][0] + stats->bit_use_mode[B_SLICE][1] + stats->bit_use_mode[B_SLICE][2] 
+                                      + stats->bit_use_mode[B_SLICE][3] + stats->bit_use_mode[B_SLICE][P8x8])/(double) frame_ctr[B_SLICE]; 
   }
 
   fprintf(p_stat,"\n\n ---------------------|----------------|----------------|----------------|\n");
@@ -1715,9 +1738,9 @@ void report()
 
   if(stats->successive_Bframe != 0 && frame_ctr[B_SLICE] != 0) // B picture used
   {
-    fprintf(p_log, "%3d %2d %2d %2.2f %2.2f %2.2f %5d "
+    fprintf(p_log, "%3d %2d %2d %2.2f %2.2f %2.2f %5" FORMAT_OFF_T  " "
           "%2.2f %2.2f %2.2f %5d "
-        "%2.2f %2.2f %2.2f %5d %5d %.3f\n",
+        "%2.2f %2.2f %2.2f %5" FORMAT_OFF_T  " %5" FORMAT_OFF_T  " %.3f\n",
         input->no_frames, input->qp0, input->qpN,
         snr->snr_y1,
         snr->snr_u1,
@@ -1737,9 +1760,9 @@ void report()
   else
   {
     if (input->no_frames!=0)
-    fprintf(p_log, "%3d %2d %2d %2.2f %2.2f %2.2f %5d "
+    fprintf(p_log, "%3d %2d %2d %2.2f %2.2f %2.2f %5" FORMAT_OFF_T  " "
           "%2.2f %2.2f %2.2f %5d "
-        "%2.2f %2.2f %2.2f %5d %5d %.3f\n",
+        "%2.2f %2.2f %2.2f %5" FORMAT_OFF_T  " %5d %.3f\n",
         input->no_frames, input->qp0, input->qpN,
         snr->snr_y1,
         snr->snr_u1,
@@ -1971,6 +1994,13 @@ int init_global_buffers(void)
     rc_alloc();
   }
 
+  if(input->redundant_pic_flag)
+  {
+    memory_size += get_mem2Dpel(&imgY_tmp, img->height, input->img_width);
+    memory_size += get_mem2Dpel(&imgUV_tmp[0], input->img_height/2, input->img_width/2);
+    memory_size += get_mem2Dpel(&imgUV_tmp[1], input->img_height/2, input->img_width/2);
+  }
+  
   return (memory_size);
 }
 
@@ -2134,6 +2164,13 @@ void free_global_buffers(void)
     rc_free();
   }
 
+  if(input->redundant_pic_flag)
+  {
+    free_mem2Dpel(imgY_tmp);
+    free_mem2Dpel(imgUV_tmp[0]);
+    free_mem2Dpel(imgUV_tmp[1]);
+  }
+  
 }
 
 /*!
@@ -2360,7 +2397,7 @@ int decide_fld_frame(float snr_frame_Y, float snr_field_Y, int bit_field, int bi
 /*!
  ************************************************************************
  * \brief
- *    Do some initializaiton work for encoding the 2nd IGOP
+ *    Do some initialization work for encoding the 2nd IGOP
  ************************************************************************
  */
 void process_2nd_IGOP(void)
@@ -2466,3 +2503,135 @@ void SetLevelIndices(void)
   }
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    initialize key frames and corresponding redundant frames.
+ ************************************************************************
+ */
+void Init_redundant_frame()
+{
+  if(input->redundant_pic_flag)
+  {
+    if(input->successive_Bframe)
+    {
+      error("B frame not supported when redundant picture used!",100);
+    }
+    
+    if(input->PicInterlace)
+    {
+      error("Interlace not supported when redundant picture used!",100);
+    }
+    
+    if(input->num_ref_frames<input->PrimaryGOPLength)
+    {
+      error("NumberReferenceFrames must be no less than PrimaryGOPLength",100);
+    }
+    
+    if((1<<input->NumRedundantHierarchy)>input->PrimaryGOPLength)
+    {
+      error("PrimaryGOPLength must be greater than 2^NumRedundantHeirarchy",100);
+    }
+    
+    if(input->Verbose!=1)
+    { 
+      error("Redundant slices not supported when Verbose!=1",100);
+    }
+  }
+  
+  key_frame = 0;
+  redundant_coding = 0;
+  img->redundant_pic_cnt = 0;
+  frameNuminGOP = img->number % input->PrimaryGOPLength;
+  if(img->number == 0)
+  {
+    frameNuminGOP = -1;
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    allocate redundant frames in a primary GOP.
+ ************************************************************************
+ */
+void Set_redundant_frame()
+{
+  int GOPlength = input->PrimaryGOPLength;
+  
+  //start frame of GOP
+  if(frameNuminGOP == 0)         
+  {
+    redundant_coding = 0;
+    key_frame = 1;
+    redundant_ref_idx = GOPlength;
+  }
+  
+  //1/2 position
+  if(input->NumRedundantHierarchy>0)
+  {
+    if(frameNuminGOP == GOPlength/2)
+    {
+      redundant_coding = 0;
+      key_frame = 1;
+      redundant_ref_idx = GOPlength/2;
+    }
+  }
+  
+  //1/4, 3/4 position
+  if(input->NumRedundantHierarchy>1)
+  {
+    if(frameNuminGOP == GOPlength/4 || frameNuminGOP == GOPlength*3/4)
+    {
+      redundant_coding = 0;
+      key_frame = 1;
+      redundant_ref_idx = GOPlength/4;
+    }
+  }
+  
+  //1/8, 3/8, 5/8, 7/8 position
+  if(input->NumRedundantHierarchy>2)
+  {
+    if(frameNuminGOP == GOPlength/8 || frameNuminGOP == GOPlength*3/8
+      || frameNuminGOP == GOPlength*5/8 || frameNuminGOP == GOPlength*7/8)
+    {
+      redundant_coding = 0;
+      key_frame = 1;
+      redundant_ref_idx = GOPlength/8;
+    }
+  }
+  
+  //1/16, 3/16, 5/16, 7/16, 9/16, 11/16, 13/16 position
+  if(input->NumRedundantHierarchy>3)
+  {
+    if(frameNuminGOP == GOPlength/16 || frameNuminGOP == GOPlength*3/16
+      || frameNuminGOP == GOPlength*5/16 || frameNuminGOP == GOPlength*7/16
+      || frameNuminGOP == GOPlength*9/16 || frameNuminGOP == GOPlength*11/16
+      || frameNuminGOP == GOPlength*13/16)
+    {
+      redundant_coding = 0;
+      key_frame = 1;
+      redundant_ref_idx = GOPlength/16;
+    }
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    encode on redundant frame.
+ ************************************************************************
+ */
+void encode_one_redundant_frame()
+{
+  key_frame = 0;
+  redundant_coding = 1;
+  img->redundant_pic_cnt = 1;
+  
+  if(img->type == I_SLICE)
+  {
+    img->type = P_SLICE;
+  }
+
+  encode_one_frame();
+}

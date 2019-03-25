@@ -77,7 +77,7 @@ void update_rc(Macroblock *currMB, short best_mode)
       img->TotalMADBasicUnit +=img->MADofMB[img->current_mb_nr];
       
       // delta_qp is present only for non-skipped macroblocks
-      if ((currMB->cbp!=0 || best_mode==I16MB))
+      if ((currMB->cbp!=0 || best_mode==I16MB) && (best_mode!=IPCM))
         currMB->prev_cbp = 1;
       else
       {
@@ -102,6 +102,7 @@ void update_rc(Macroblock *currMB, short best_mode)
         }
       }       
     }
+    set_chroma_qp(currMB);
   }
 }
 
@@ -184,7 +185,7 @@ void init_enc_mb_params(Macroblock* currMB, RD_PARAMS *enc_mb, int intra, int bs
   enc_mb->valid[I8MB]  = input->Transform8x8Mode;
   enc_mb->valid[I4MB]  = (input->Transform8x8Mode==2) ? 0:1;
   enc_mb->valid[I16MB] = 1;
-  enc_mb->valid[IPCM]  = (input->symbol_mode != CABAC && input->EnableIPCM);
+  enc_mb->valid[IPCM]  = input->EnableIPCM;
   
   enc_mb->valid[0]     = (!intra );
   enc_mb->valid[1]     = (!intra && input->InterSearch16x16);
@@ -1809,13 +1810,14 @@ void encode_one_macroblock ()
   //---------------------------------------------------------------------------  
   if (input->rdopt)
   {   
-    if ((cbp!=0 || best_mode==I16MB ))
+    if (((cbp!=0 || best_mode==I16MB) && (best_mode!=IPCM) ))
       currMB->prev_cbp = 1;    
-    else if (cbp==0 && !input->RCEnable)
+    else if ((cbp==0 && !input->RCEnable) || (best_mode==IPCM))
     {
       currMB->delta_qp = 0;
-      currMB->qp = currMB->prev_qp;
-      img->qp = currMB->qp;
+      currMB->qp       = currMB->prev_qp;
+      set_chroma_qp(currMB);
+      img->qp          = currMB->qp;
       currMB->prev_cbp = 0;
     }    
     set_stored_macroblock_parameters ();

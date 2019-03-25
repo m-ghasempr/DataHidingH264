@@ -145,12 +145,10 @@ void decode_one_b8block (int decoder, int mbmode, int b8block, int b8mode, int b
  */
 void decode_one_mb (int decoder, Macroblock* currMB)
 {
-  /*
-  decode_one_b8block (decoder, currMB->mb_type, 0, currMB->b8mode[0], refFrArr[img->block_y+0][img->block_x+0]);
-  decode_one_b8block (decoder, currMB->mb_type, 1, currMB->b8mode[1], refFrArr[img->block_y+0][img->block_x+2]);
-  decode_one_b8block (decoder, currMB->mb_type, 2, currMB->b8mode[2], refFrArr[img->block_y+2][img->block_x+0]);
-  decode_one_b8block (decoder, currMB->mb_type, 3, currMB->b8mode[3], refFrArr[img->block_y+2][img->block_x+2]);
-  */
+  decode_one_b8block (decoder, currMB->mb_type, 0, currMB->b8mode[0], enc_picture->ref_idx[LIST_0][img->block_y+0][img->block_x+0]);//refFrArr[img->block_y+0][img->block_x+0]);
+  decode_one_b8block (decoder, currMB->mb_type, 1, currMB->b8mode[1], enc_picture->ref_idx[LIST_0][img->block_y+0][img->block_x+2]);//refFrArr[img->block_y+0][img->block_x+2]);
+  decode_one_b8block (decoder, currMB->mb_type, 2, currMB->b8mode[2], enc_picture->ref_idx[LIST_0][img->block_y+2][img->block_x+0]);//refFrArr[img->block_y+2][img->block_x+0]);
+  decode_one_b8block (decoder, currMB->mb_type, 3, currMB->b8mode[3], enc_picture->ref_idx[LIST_0][img->block_y+2][img->block_x+2]);//refFrArr[img->block_y+2][img->block_x+2]);
 }
 
 /*! 

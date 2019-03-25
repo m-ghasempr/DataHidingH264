@@ -604,6 +604,36 @@ static void init_slice (int start_mb_addr)
   img->num_ref_idx_l0_active = active_pps->num_ref_idx_l0_active_minus1 + 1; 
   img->num_ref_idx_l1_active = active_pps->num_ref_idx_l1_active_minus1 + 1;
 
+  // primary and redundant slices: number of references overriding.
+  if(input->redundant_pic_flag)
+  {
+    if(!redundant_coding)
+    {
+      img->num_ref_idx_l0_active = min(img->number,input->NumRefPrimary);
+    }
+    else
+    {
+      // 1 reference picture for redundant slices 
+      img->num_ref_idx_l0_active = 1;   
+    }
+  }
+  
+  // code now also considers fields. Issue whether we should account this within the appropriate input params directly
+  if ((img->type == P_SLICE || img->type == SP_SLICE) && input->P_List0_refs)
+  {
+    img->num_ref_idx_l0_active = min(img->num_ref_idx_l0_active, input->P_List0_refs * ((img->structure !=0) + 1));
+  }
+  if (img->type == B_SLICE )
+  {
+    if (input->B_List0_refs)
+    {
+      img->num_ref_idx_l0_active = min(img->num_ref_idx_l0_active, input->B_List0_refs * ((img->structure !=0) + 1));
+    }
+    if (input->B_List1_refs)
+    {
+      img->num_ref_idx_l1_active = min(img->num_ref_idx_l1_active, input->B_List1_refs * ((img->structure !=0) + 1));
+    }
+  }
   // generate reference picture lists
   init_lists(img->type, img->structure);
 
@@ -611,29 +641,8 @@ static void init_slice (int start_mb_addr)
   img->num_ref_idx_l0_active = listXsize[0];
   img->num_ref_idx_l1_active = listXsize[1];
   
-  // code now also considers fields. Issue whether we should account this within the appropriate input params directly
-  if ((img->type == P_SLICE || img->type == SP_SLICE) && input->P_List0_refs)
-  {
-    img->num_ref_idx_l0_active = min(img->num_ref_idx_l0_active, input->P_List0_refs * ((img->structure !=0) + 1));
-    listXsize[0] = min(listXsize[0], input->P_List0_refs * ((img->structure !=0) + 1));  
-  }
-  if (img->type == B_SLICE )
-  {
-    if (input->B_List0_refs)
-    {
-      img->num_ref_idx_l0_active = min(img->num_ref_idx_l0_active, input->B_List0_refs * ((img->structure !=0) + 1));
-      listXsize[0] = min(listXsize[0], input->B_List0_refs * ((img->structure !=0) + 1));  
-    }
-    if (input->B_List1_refs)
-    {
-      
-      img->num_ref_idx_l1_active = min(img->num_ref_idx_l1_active, input->B_List1_refs * ((img->structure !=0) + 1));
-      listXsize[1] = min(listXsize[1], input->B_List1_refs * ((img->structure !=0) + 1));  
-    }
-  }
-
-  //Perform memory management based on poc distances for PyramidCoding
-  if (img->nal_reference_idc  && input->PyramidCoding && input->PocMemoryManagement && dpb.ref_frames_in_buffer==active_sps->num_ref_frames)
+  //Perform memory management based on poc distances for HierarchicalCoding
+  if (img->nal_reference_idc  && input->HierarchicalCoding && input->PocMemoryManagement && dpb.ref_frames_in_buffer==active_sps->num_ref_frames)
   {    
     poc_based_ref_management(img->frame_num);
   }
@@ -661,9 +670,9 @@ static void init_slice (int start_mb_addr)
 
   init_ref_pic_list_reordering();
 
-  //Perform reordering based on poc distances for PyramidCoding
-  //if (img->type==P_SLICE && input->PyramidCoding && input->PyramidRefReorder)
-  if (img->type==P_SLICE && input->PyramidRefReorder)
+  //Perform reordering based on poc distances for HierarchicalCoding
+  //if (img->type==P_SLICE && input->HierarchicalCoding && input->ReferenceReorder)
+  if (img->type==P_SLICE && input->ReferenceReorder)
   {
     
     int i, num_ref;
@@ -876,19 +885,6 @@ static void free_slice(Slice *slice)
 
     free(slice);
   }
-}
-
-
-/*!
- ************************************************************************
- * \brief
- *    This function set the value of a bit in a bitstream to 1
- ************************************************************************
- */
-void modify_redundant_pic_cnt(unsigned char *buffer)
-{
-  unsigned char tmp = 1 << (rpc_bits_to_go-1);
-  buffer[rpc_bytes_to_go] |= tmp;
 }
 
 void set_ref_pic_num()
@@ -1147,8 +1143,8 @@ void SetLagrangianMultipliers()
           {
             img->lambda_md[5][qp] = img->lambda_md[j][qp];
 
-            if (input->PyramidCoding == 2)
-              img->lambda_md[5][qp] *= (1.0 - min(0.4,0.2 * (double) gop_structure[img->b_frame_to_code-1].pyramid_layer)) ;
+            if (input->HierarchicalCoding == 2)
+              img->lambda_md[5][qp] *= (1.0 - min(0.4,0.2 * (double) gop_structure[img->b_frame_to_code-1].hierarchy_layer)) ;
             else
               img->lambda_md[5][qp] *= 0.80;
             img->lambda_md[5][qp] *= lambda_scale;

@@ -38,6 +38,8 @@ typedef struct storable_picture
   int64       top_ref_pic_num    [MAX_NUM_SLICES][6][MAX_LIST_SIZE];
   int64       bottom_ref_pic_num [MAX_NUM_SLICES][6][MAX_LIST_SIZE];
   unsigned    frame_num;
+  unsigned    recovery_frame;
+
   int         pic_num;
   int         long_term_pic_num;
   int         long_term_frame_idx;
@@ -147,6 +149,8 @@ typedef struct frame_store
   int       is_non_existent;
 
   unsigned  frame_num;
+  unsigned  recovery_frame;
+
   int       frame_num_wrap;
   int       long_term_frame_idx;
   int       is_output;

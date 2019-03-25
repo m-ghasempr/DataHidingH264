@@ -61,6 +61,14 @@ static const int A[4][4] = {
 };
 
 
+const byte QP_SCALE_CR[52]=
+{
+  0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,
+  12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,
+  28,29,29,30,31,32,32,33,34,34,35,35,36,36,37,37,
+  37,38,38,38,39,39,39,39
+};
+
 // Notation for comments regarding prediction and predictors.
 // The pels of the 4x4 block are labelled a..p. The predictor pels above
 // are labelled A..H, from the left I..P, and from above left X, as follows:
@@ -131,7 +139,7 @@ void intrapred_luma(int img_x,int img_y, int *left_available, int *up_available,
   getNeighbour(mb_nr, ioff +4 , joff -1 , 1, &pix_c);
   getNeighbour(mb_nr, ioff -1 , joff -1 , 1, &pix_d);
 
-  pix_c.available = pix_c.available && !(((ioff==4)||(ioff==12)) && ((joff==4)||(joff==12)));
+  pix_c.available = pix_c.available && !((ioff==4) && ((joff==4)||(joff==12)));
 
   if (input->UseConstrainedIntraPred)
   {
@@ -167,7 +175,7 @@ void intrapred_luma(int img_x,int img_y, int *left_available, int *up_available,
   }
   else
   {
-    P_A = P_B = P_C = P_D = img->dc_pred_value;
+    P_A = P_B = P_C = P_D = img->dc_pred_value_luma;
   }
 
   if (block_available_up_right)
@@ -191,7 +199,7 @@ void intrapred_luma(int img_x,int img_y, int *left_available, int *up_available,
   }
   else
   {
-    P_I = P_J = P_K = P_L = img->dc_pred_value;
+    P_I = P_J = P_K = P_L = img->dc_pred_value_luma;
   }
 
   if (block_available_up_left)
@@ -200,7 +208,7 @@ void intrapred_luma(int img_x,int img_y, int *left_available, int *up_available,
   }
   else
   {
-    P_X = img->dc_pred_value;
+    P_X = img->dc_pred_value_luma;
   }
 
   for(i=0;i<9;i++)
@@ -228,7 +236,7 @@ void intrapred_luma(int img_x,int img_y, int *left_available, int *up_available,
   else //if (!block_available_up && !block_available_left)
   {
     // top left corner, nothing to predict from
-    s0 = img->dc_pred_value;                           
+    s0 = img->dc_pred_value_luma;                           
   }
 
   // store DC prediction
@@ -454,7 +462,7 @@ void intrapred_luma_16x16()
     s0=(s1+8)/MB_BLOCK_SIZE;                     // left edge
   
   if (!up_avail && !left_avail)
-    s0=img->dc_pred_value;                       // top left corner, nothing to predict from
+    s0=img->dc_pred_value_luma;                       // top left corner, nothing to predict from
 
   // vertical prediction
   if (up_avail)
@@ -1148,7 +1156,6 @@ int dct_chroma(int uv,int cr_cbp)
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
  
   int qp_per,qp_rem,q_bits;
-  int qp_c;
 
   int   b4;
   int*  DCLevel = img->cofDC[uv+1][0];
@@ -1175,13 +1182,8 @@ int dct_chroma(int uv,int cr_cbp)
 
   Boolean lossless_qpprime = ((currMB->qp + img->bitdepth_luma_qp_scale)==0 && img->lossless_qpprime_flag==1);
 
-  qp_c      = currMB->qp + img->chroma_qp_offset[uv];
-  qp_c      = Clip3(-img->bitdepth_chroma_qp_scale,51,qp_c);
-  qp_c      = (qp_c < 0)? qp_c : QP_SCALE_CR[qp_c - MIN_QP];
-
-
-  qp_per    = qp_per_matrix[(qp_c + img->bitdepth_chroma_qp_scale)];
-  qp_rem    = qp_rem_matrix[(qp_c + img->bitdepth_chroma_qp_scale)];
+  qp_per    = qp_per_matrix[(currMB->qpc[uv] + img->bitdepth_chroma_qp_scale)];
+  qp_rem    = qp_rem_matrix[(currMB->qpc[uv] + img->bitdepth_chroma_qp_scale)];
 
   q_bits    = Q_BITS+qp_per;
 
@@ -1192,8 +1194,8 @@ int dct_chroma(int uv,int cr_cbp)
   if (img->yuv_format == YUV422)
   {
     //for YUV422 only
-    qp_per_dc = (qp_c + 3 + img->bitdepth_chroma_qp_scale)/6;
-    qp_rem_dc = (qp_c + 3 + img->bitdepth_chroma_qp_scale)%6;
+    qp_per_dc = (currMB->qpc[uv] + 3 + img->bitdepth_chroma_qp_scale)/6;
+    qp_rem_dc = (currMB->qpc[uv] + 3 + img->bitdepth_chroma_qp_scale)%6;
     
     q_bits_422 = Q_BITS+qp_per_dc;  
   }
@@ -1753,7 +1755,6 @@ int dct_chroma4x4(int uv, int b8, int b4)
   int   intra = IS_INTRA (currMB);
 
   int qp_per,qp_rem,q_bits;
-  int qp_c;
 
   int*  ACLevel = img->cofAC[b8][b4][0];
   int*  ACRun   = img->cofAC[b8][b4][1];
@@ -1763,11 +1764,8 @@ int dct_chroma4x4(int uv, int b8, int b4)
 
   Boolean lossless_qpprime = ((img->qp + img->bitdepth_luma_qp_scale)==0 && img->lossless_qpprime_flag==1);
 
-  qp_c      = currMB->qp + img->chroma_qp_offset[uv];
-  qp_c      = (qp_c < 0)? qp_c : QP_SCALE_CR[qp_c - MIN_QP];
-
-  qp_per    = qp_per_matrix[(qp_c + img->bitdepth_chroma_qp_scale)];
-  qp_rem    = qp_rem_matrix[(qp_c + img->bitdepth_chroma_qp_scale)];
+  qp_per    = qp_per_matrix[(currMB->qpc[uv] + img->bitdepth_chroma_qp_scale)];
+  qp_rem    = qp_rem_matrix[(currMB->qpc[uv] + img->bitdepth_chroma_qp_scale)];
   q_bits    = Q_BITS+qp_per;
 
   levelscale = LevelScale4x4Chroma[uv][intra][qp_rem];
@@ -2267,8 +2265,8 @@ int dct_chroma_sp(int uv,int cr_cbp)
   double lambda_mode   = 0.85 * pow (2, (currMB->qp -SHIFT_QP)/3.0) * 4; 
 
 
-  int qpChroma=Clip3(0, 51, currMB->qp + active_pps->chroma_qp_index_offset);
-  int qpChromaSP=Clip3(0, 51, currMB->qpsp + active_pps->chroma_qp_index_offset);
+  int qpChroma = Clip3(-img->bitdepth_chroma_qp_scale, 51, currMB->qp + active_pps->chroma_qp_index_offset);
+  int qpChromaSP=Clip3(-img->bitdepth_chroma_qp_scale, 51, currMB->qpsp + active_pps->chroma_qp_index_offset);
 
   qp_per    = ((qpChroma<0?qpChroma:QP_SCALE_CR[qpChroma])-MIN_QP)/6;
   qp_rem    = ((qpChroma<0?qpChroma:QP_SCALE_CR[qpChroma])-MIN_QP)%6;

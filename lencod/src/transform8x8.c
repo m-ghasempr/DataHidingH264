@@ -788,7 +788,7 @@ void intrapred_luma8x8(int img_x,int img_y, int *left_available, int *up_availab
   }
   else
   {
-    P_A = P_B = P_C = P_D = P_E = P_F = P_G = P_H = img->dc_pred_value;
+    P_A = P_B = P_C = P_D = P_E = P_F = P_G = P_H = img->dc_pred_value_luma;
   }
 
   if (block_available_up_right)
@@ -821,7 +821,7 @@ void intrapred_luma8x8(int img_x,int img_y, int *left_available, int *up_availab
   }
   else
   {
-    P_Q = P_R = P_S = P_T = P_U = P_V = P_W = P_X = img->dc_pred_value;
+    P_Q = P_R = P_S = P_T = P_U = P_V = P_W = P_X = img->dc_pred_value_luma;
   }
 
   if (block_available_up_left)
@@ -830,7 +830,7 @@ void intrapred_luma8x8(int img_x,int img_y, int *left_available, int *up_availab
   }
   else
   {
-    P_Z = img->dc_pred_value;
+    P_Z = img->dc_pred_value_luma;
   }
 
   for(i=0;i<9;i++)
@@ -860,7 +860,7 @@ void intrapred_luma8x8(int img_x,int img_y, int *left_available, int *up_availab
   else //if (!block_available_up && !block_available_left)
   {
     // top left corner, nothing to predict from
-    s0 = img->dc_pred_value;                           
+    s0 = img->dc_pred_value_luma;                           
   }
   
   // store DC prediction
@@ -1436,10 +1436,6 @@ double RDCost_for_8x8IntraBlocks(int *nonzero, int b8, int ipmode, double lambda
   currSE->context = b8;
   currSE->type    = SE_INTRAPREDMODE;
 
-  //--- set function pointer ----
-  if (input->symbol_mode != UVLC)    
-    currSE->writing = writeIntraPredMode_CABAC;
-
   //--- choose data partition ---
   if (img->type!=B_SLICE)
     dataPart = &(currSlice->partArr[partMap[SE_INTRAPREDMODE]]);
@@ -1450,7 +1446,10 @@ double RDCost_for_8x8IntraBlocks(int *nonzero, int b8, int ipmode, double lambda
   if (input->symbol_mode == UVLC)
     writeSyntaxElement_Intra4x4PredictionMode(currSE, dataPart);
   else
+  {
+    currSE->writing = writeIntraPredMode_CABAC;
     dataPart->writeSyntaxElement (currSE, dataPart);
+  }
 
   rate = currSE->len;
   currSE++;
@@ -1468,7 +1467,6 @@ double RDCost_for_8x8IntraBlocks(int *nonzero, int b8, int ipmode, double lambda
   {
     rate  += writeLumaCoeff8x8_CABAC (b8, 1);
   }
-
 
   rdcost = (double)distortion + lambda*(double)rate;
 

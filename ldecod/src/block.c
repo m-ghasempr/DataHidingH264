@@ -133,12 +133,11 @@ int quant8_org[64] = { //to be use if no q matrix is chosen
  ***********************************************************************
  */
 
-int intrapred(
-  struct img_par *img,  //!< image parameters
-  int ioff,             //!< pixel offset X within MB
-  int joff,             //!< pixel offset Y within MB
-  int img_block_x,      //!< location of block X, multiples of 4
-  int img_block_y)      //!< location of block Y, multiples of 4
+int intrapred( struct img_par *img,  //!< image parameters
+               int ioff,             //!< pixel offset X within MB
+               int joff,             //!< pixel offset Y within MB
+               int img_block_x,      //!< location of block X, multiples of 4
+               int img_block_y)      //!< location of block Y, multiples of 4
 {
   int i,j;
   int s0;
@@ -171,7 +170,7 @@ int intrapred(
   getNeighbour(mb_nr, ioff +4 , joff -1 , 1, &pix_c);
   getNeighbour(mb_nr, ioff -1 , joff -1 , 1, &pix_d);
 
-  pix_c.available = pix_c.available && !(((ioff==4)||(ioff==12)) && ((joff==4)||(joff==12)));
+  pix_c.available = pix_c.available && !((ioff==4) && ((joff==4)||(joff==12)));
 
   if (active_pps->constrained_intra_pred_flag)
   {
@@ -200,7 +199,7 @@ int intrapred(
   }
   else
   {
-    P_A = P_B = P_C = P_D = img->dc_pred_value;
+    P_A = P_B = P_C = P_D = img->dc_pred_value_luma;
   }
 
   if (block_available_up_right)
@@ -224,7 +223,7 @@ int intrapred(
   }
   else
   {
-    P_I = P_J = P_K = P_L = img->dc_pred_value;
+    P_I = P_J = P_K = P_L = img->dc_pred_value_luma;
   }
 
   if (block_available_up_left)
@@ -233,7 +232,7 @@ int intrapred(
   }
   else
   {
-    P_X = img->dc_pred_value;
+    P_X = img->dc_pred_value_luma;
   }
 
   
@@ -260,7 +259,7 @@ int intrapred(
     else //if (!block_available_up && !block_available_left)
     {
       // top left corner, nothing to predict from
-      s0 = img->dc_pred_value;                           
+      s0 = img->dc_pred_value_luma;
     }
 
     for (j=0; j < BLOCK_SIZE; j++)
@@ -491,9 +490,9 @@ int intrapred_luma_16x16(struct img_par *img, //!< image parameters
         img->mpr[i][j]=imgY[up.pos_y][up.pos_x+i];// store predicted 16x16 block
     break;
 
-  case HOR_PRED_16:                        // horisontal prediction from left block
+  case HOR_PRED_16:                        // horizontal prediction from left block
     if (!left_avail)
-      error ("invalid 16x16 intra pred Mode VERT_PRED_16",500);
+      error ("invalid 16x16 intra pred Mode HOR_PRED_16",500);
     for(j=0;j<MB_BLOCK_SIZE;j++)
       for(i=0;i<MB_BLOCK_SIZE;i++)
         img->mpr[i][j]=imgY[left[j+1].pos_y][left[j+1].pos_x]; // store predicted 16x16 block
@@ -515,7 +514,7 @@ int intrapred_luma_16x16(struct img_par *img, //!< image parameters
     if (up_avail && !left_avail)
       s0=(s1+8)>>4;              // left edge
     if (!up_avail && !left_avail)
-      s0=img->dc_pred_value;                            // top left corner, nothing to predict from
+      s0=img->dc_pred_value_luma;                            // top left corner, nothing to predict from
     for(i=0;i<MB_BLOCK_SIZE;i++)
       for(j=0;j<MB_BLOCK_SIZE;j++)
       {
@@ -629,7 +628,7 @@ void intrapred_chroma(struct img_par *img, int uv)
         blk_x = subblk_offset_x[yuv][b8][b4]; 
         
         s0=s1=s2=s3=0;
-        js[b8][b4]=img->dc_pred_value;
+        js[b8][b4]=img->dc_pred_value_chroma;
         
         //===== get prediction value =====
         switch (block_pos[yuv][b8][b4])
@@ -978,8 +977,7 @@ void CalculateQuantParam()
  *    Luma DC inverse transform
  ***********************************************************************
  */
-void itrans_2(
-   struct img_par *img) //!< image parameters
+void itrans_2(struct img_par *img) //!< image parameters
 {
   int i,j,i1,j1;
   int M5[4];
