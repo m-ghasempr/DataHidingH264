@@ -468,9 +468,6 @@ int  ***dfMV;
 int  ***dbMV;
 int   **fw_refFrArr;
 int   **bw_refFrArr;
-byte  **nextP_imgY;
-byte ***nextP_imgUV;
-pel_t **Refbuf11;            //!< 1/1th pel (full pel) reference frame buffer
 pel_t **Refbuf11_w;           // for weighted reference frame buffer
 
 //Weighted prediction
@@ -491,26 +488,18 @@ byte   **imgY_org_bot;
 byte  ***imgUV_org_bot;
 byte   **imgY_com;               //!< Encoded luma images
 byte  ***imgUV_com;              //!< Encoded croma images
-pel_t **Refbuf11_fld;            //!< 1/1th pel (full pel) reference frame buffer
 pel_t **Refbuf11_fld_w;            //!< 1/1th pel (full pel) reference frame buffer
 int    **refFrArr_top;           //!< Array for reference frames of each block
 int    **refFrArr_bot;           //!< Array for reference frames of each block
-// int    **refFrArr_top_save;      //!< For MB level field/frame coding tools
-// int    **refFrArr_bot_save;      //!< For MB level field/frame coding tools
 
 
 // global picture format dependend buffers, mem allocation in image.c (field picture)
-byte  ***mref_fld;               //!< 1/4 pix luma
 byte  ***mref_fld_w;               //!< 1/4 pix luma for wp
-byte ****mcef_fld;               //!< pix chroma
-byte ***mref_mbfld;        //!< For MB level field/frame coding tools 
 byte ***mref_mbfld_w;        //!< For MB level field/frame coding tools for wp
 
 
 // global picture format dependend buffers, mem allocation in image.c (frame buffer)
-byte  ***mref_frm;               //!< 1/4 pix luma
 byte  ***mref_frm_w;               //!< 1/4 pix luma
-byte ****mcef_frm;               //!< pix chroma
 
 // B pictures
 // motion vector : forward, backward, direct
@@ -531,9 +520,6 @@ int   **bwdir_refFrArr;         //!< direct mode backward reference buffer
 // global picture format dependend buffers, mem allocation in image.c (frame buffer)
 byte   **imgY_org_frm;
 byte  ***imgUV_org_frm;
-byte   **imgY_frm;               //!< Encoded luma images
-byte  ***imgUV_frm;              //!< Encoded croma images
-pel_t **Refbuf11_frm;            //!< 1/1th pel (full pel) reference frame buffer
 pel_t **Refbuf11_frm_w;            //!< 1/1th pel (full pel) reference frame buffer
 int    **refFrArr_frm;           //!< Array for reference frames of each block
 int   direct_mode;
@@ -1056,8 +1042,6 @@ int  get_mem_DCcoeff  (int****);
 void free_mem_ACcoeff (int****);
 void free_mem_DCcoeff (int***);
 
-void split_field_top();
-void split_field_bot();
 int  decide_fld_frame(float snr_frame_Y, float snr_field_Y, int bit_field, int bit_frame, double lambda_picture);
 int  get_mem4global_buffers_field();
 void free_mem4global_buffers_field();

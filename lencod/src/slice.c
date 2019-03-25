@@ -173,10 +173,8 @@ int terminate_slice()
 
 void SetStateVariablesForFrameMode()
 {
-  mcef = mcef_frm;      // set mcef to mcef_frm
-  mref = mref_frm;      // set mref to mref_frm
+
   mref_w = mref_frm_w;  // set mref to mref_frm
-  Refbuf11 = Refbuf11_frm;      // set Refbuff to frm
   Refbuf11_w = Refbuf11_frm_w;  // set Refbuff to frm
   img->height = input->img_height;      // set image height as frame height
 }
@@ -184,10 +182,7 @@ void SetStateVariablesForFrameMode()
 
 void SetStateVariablesForFieldMode()
 {
-  mcef = mcef_fld;      // set mcef to mcef_frm
-  mref = mref_mbfld;    // set mref to mref_frm
   mref_w = mref_mbfld_w;        // set mref to mref_frm
-  Refbuf11 = Refbuf11_fld;      // set Refbuff to frm
   Refbuf11_w = Refbuf11_fld_w;  // set Refbuff to frm
 }
 

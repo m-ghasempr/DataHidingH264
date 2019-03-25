@@ -25,8 +25,11 @@
 #include "global.h"
 #include "defines.h"
 #include "header.h"
+#include "image.h"
 
 #define MAXSLICEGROUPIDS 8
+
+
 
 int *MBAmap = NULL;   
 static int PictureXSize, PictureYSize, PictureSizeInMBs;
@@ -254,14 +257,14 @@ int FmoGetNextMBNr (int CurrentMbNr)
   
   while (++CurrentMbNr<PictureSizeInMBs && MBAmap[CurrentMbNr] != SliceGroupID)
     ;
-/*  if (mref==mref_fld) //KS: dirty hack - field coding
+  if (enc_picture!=enc_frame_picture) //KS: dirty hack - field coding
   {
     if (CurrentMbNr >= PictureSizeInMBs / 2)
       return -1;    // No further MB in this slice group 
     else
       return CurrentMbNr;
   }
-  else */
+  else 
   {
     if (CurrentMbNr >= PictureSizeInMBs)
       return -1;    // No further MB in this slice group 

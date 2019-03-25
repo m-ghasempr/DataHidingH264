@@ -291,6 +291,8 @@ int ercCollectColumnBlocks( int predBlocks[], int currRow, int currColumn, int *
  *      Number of block columns in the frame
  * \param lastRow     
  *      Number of block rows in the frame
+ * \param comp
+ *      color component
  * \param recfr
  *      Reconstructed frame buffer
  * \param picSizeX

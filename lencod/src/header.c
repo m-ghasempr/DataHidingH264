@@ -125,12 +125,13 @@ int SliceHeader()
   }
 
   // Direct Mode Type selection for B pictures
-  if (img->type==B_SLICE || img->type==BS_IMG)
+	if (img->type==B_SLICE)
   {
     len +=  u_1 ("SH: direct_spatial_mv_pred_flag", input->direct_type, partition);
   }
 
-  if ((img->type == P_SLICE) || (img->type == B_SLICE) || (img->type == BS_IMG) || (img->type==SP_SLICE))
+//  if ((img->type == P_SLICE) || (img->type == B_SLICE) || (img->type == BS_IMG) || (img->type==SP_SLICE))
+	  if ((img->type == P_SLICE) || (img->type == B_SLICE) || (img->type==SP_SLICE))
   {
     // num_ref_idx_active_override_flag here always 1
     len +=  u_1 ("SH: num_ref_idx_active_override_flag", 1, partition);
@@ -138,7 +139,7 @@ int SliceHeader()
     if (1) // if (num_ref_idx_active_override_flag)
     {
       len += ue_v ("SH: num_ref_idx_l0_active_minus1", img->num_ref_idx_l0_active-1, partition);
-      if (img->type==B_SLICE || img->type==BS_IMG)
+		  if (img->type==B_SLICE)
       {
         len += ue_v ("SH: num_ref_idx_l1_active_minus1", img->num_ref_idx_l1_active-1, partition);
       }
@@ -148,7 +149,7 @@ int SliceHeader()
   len += ref_pic_list_reordering();
 
   if (((img->type == P_SLICE || img->type == SP_SLICE) && input->WeightedPrediction) || 
-     ((img->type == B_SLICE || img->type == BS_IMG) && input->WeightedBiprediction == 1))
+		 ((img->type == B_SLICE) && input->WeightedBiprediction == 1))
   {
     len += pred_weight_table();
   }
@@ -378,7 +379,7 @@ static int pred_weight_table()
     }
   }
 
-  if (img->type == B_SLICE || img->type == BS_IMG)
+	if (img->type == B_SLICE)
   {
     for (i=0; i< img->num_ref_idx_l1_active; i++)
     {
@@ -452,7 +453,6 @@ int get_picture_type()
     return 0 + same_slicetype_for_whole_frame;
     break;
   case B_SLICE:
-  case BS_IMG:
     return 1 + same_slicetype_for_whole_frame;
     break;
   case SP_SLICE:

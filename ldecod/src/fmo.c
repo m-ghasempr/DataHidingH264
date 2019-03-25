@@ -302,7 +302,7 @@ int FmoGetLastMBInSliceGroup (int SliceGroup)
 /*!
  ************************************************************************
  * \brief
- *    FReturns SliceGroupID for a given MB
+ *    Returns SliceGroupID for a given MB
  *
  * \param mb
  *    Macroblock number (in scan order)
@@ -322,7 +322,7 @@ int FmoGetSliceGroupId (int mb)
  *    FmoGetNextMBBr: Returns the MB-Nr (in scan order) of the next
  *    MB in the (scattered) Slice, -1 if the slice is finished
  *
- * \param CurrentMbNumber
+ * \param CurrentMbNr
  *    number of the current macroblock
  ************************************************************************
  */

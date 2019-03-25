@@ -23,6 +23,8 @@
  *    with supplied code.
  * \param text
  *    Error message
+ * \param code
+ *    Exit code
  ************************************************************************
  */
 void error(char *text, int code)

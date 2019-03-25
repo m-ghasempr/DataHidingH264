@@ -506,8 +506,7 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
   currSE.type = SE_MBTYPE;
 
   //  read MB mode *****************************************************************
-  if(img->type == B_SLICE) dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-  else                     dP = &(currSlice->partArr[partMap[currSE.type]]);
+  dP = &(currSlice->partArr[partMap[currSE.type]]);
   
   if (active_pps->entropy_coding_mode_flag == UVLC || dP->bitstream->ei_flag)   currSE.mapping = linfo_ue;
 
@@ -701,8 +700,7 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
   if (IS_P8x8 (currMB))
   {
     currSE.type    = SE_MBTYPE;
-    if (img->type==B_SLICE)    dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-    else                       dP = &(currSlice->partArr[partMap[SE_MBTYPE]]);
+    dP = &(currSlice->partArr[partMap[SE_MBTYPE]]);
 
     for (i=0; i<4; i++)
     {
@@ -736,8 +734,7 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
     currMB->ei_flag = 1;
     for (i=0;i<4;i++) {currMB->b8mode[i]=currMB->b8pdir[i]=0; }
   }
-  if(img->type == B_SLICE)  dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-  else                    dP = &(currSlice->partArr[partMap[currSE.type]]);
+  dP = &(currSlice->partArr[partMap[currSE.type]]);
   //! End TO
 
 
@@ -882,8 +879,7 @@ void read_ipred_modes(struct img_par *img,struct inp_par *inp)
   currSE.type = SE_INTRAPREDMODE;
 
   TRACE_STRING("intra4x4_pred_mode");
-  if(img->type == B_SLICE)     dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-  else                         dP = &(currSlice->partArr[partMap[currSE.type]]);
+  dP = &(currSlice->partArr[partMap[currSE.type]]);
 
   if (!(active_pps->entropy_coding_mode_flag == UVLC || dP->bitstream->ei_flag)) 
     currSE.reading = readIntraPredMode_CABAC;
@@ -952,8 +948,7 @@ void read_ipred_modes(struct img_par *img,struct inp_par *inp)
   {
     currSE.type = SE_INTRAPREDMODE;
     TRACE_STRING("intra_chroma_pred_mode");
-    if(img->type == B_SLICE)     dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-    else                         dP = &(currSlice->partArr[partMap[currSE.type]]);
+    dP = &(currSlice->partArr[partMap[currSE.type]]);
 
     if (active_pps->entropy_coding_mode_flag == UVLC || dP->bitstream->ei_flag) currSE.mapping = linfo_ue;
     else                                                    currSE.reading = readCIPredMode_CABAC;
@@ -1483,8 +1478,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
     flag_mode = ( img->num_ref_idx_l0_active == 2 ? 1 : 0);
 
     currSE.type = SE_REFFRAME;
-    if (bframe)                                               dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-    else                                                      dP = &(currSlice->partArr[partMap[SE_REFFRAME]]);
+    dP = &(currSlice->partArr[partMap[SE_REFFRAME]]);
 
     if (active_pps->entropy_coding_mode_flag == UVLC || dP->bitstream->ei_flag)   currSE.mapping = linfo_ue;
     else                                                      currSE.reading = readRefFrame_CABAC;
@@ -1565,8 +1559,8 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
   {
     flag_mode = ( img->num_ref_idx_l1_active == 2 ? 1 : 0);
 
-    currSE.type = SE_BFRAME;
-    dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
+    currSE.type = SE_REFFRAME;
+    dP = &(currSlice->partArr[partMap[SE_REFFRAME]]);
     if (active_pps->entropy_coding_mode_flag == UVLC || dP->bitstream->ei_flag)   currSE.mapping = linfo_ue;
     else                                                      currSE.reading = readRefFrame_CABAC;
     
@@ -1628,8 +1622,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
 
   //=====  READ FORWARD MOTION VECTORS =====
   currSE.type = SE_MVD;
-  if (bframe)   dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-  else          dP = &(currSlice->partArr[partMap[SE_MVD]]);
+  dP = &(currSlice->partArr[partMap[SE_MVD]]);
 
   if (active_pps->entropy_coding_mode_flag == UVLC || dP->bitstream->ei_flag) currSE.mapping = linfo_se;
   else                                                  currSE.reading = readMVD_CABAC;
@@ -1787,7 +1780,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
   
   //=====  READ BACKWARD MOTION VECTORS =====
   currSE.type = SE_MVD;
-  dP          = &(currSlice->partArr[partMap[SE_BFRAME]]);
+  dP          = &(currSlice->partArr[partMap[SE_MVD]]);
 
   if (active_pps->entropy_coding_mode_flag == UVLC || dP->bitstream->ei_flag) currSE.mapping = linfo_se;
   else                                                    currSE.reading = readMVD_CABAC;
@@ -2057,11 +2050,6 @@ void readCoeff4x4_CAVLC (struct img_par *img,struct inp_par *inp,
     break;
   }
 
-  if(img->type == B_SLICE)
-  {
-    dptype = SE_BFRAME;
-  }
-
   currSE.type = dptype;
   dP = &(currSlice->partArr[partMap[dptype]]);
 
@@ -2295,8 +2283,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
     if (IS_OLDINTRA (currMB) || currMB->mb_type == SI4MB )   currSE.type = SE_CBP_INTRA;
     else                        currSE.type = SE_CBP_INTER;
 
-    if(img->type == B_SLICE)  dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-    else                    dP = &(currSlice->partArr[partMap[currSE.type]]);
+    dP = &(currSlice->partArr[partMap[currSE.type]]);
     
     if (active_pps->entropy_coding_mode_flag == UVLC || dP->bitstream->ei_flag)
     {
@@ -2318,8 +2305,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
       if (IS_INTER (currMB))  currSE.type = SE_DELTA_QUANT_INTER;
       else                    currSE.type = SE_DELTA_QUANT_INTRA;
 
-      if(img->type == B_SLICE)  dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-      else                    dP = &(currSlice->partArr[partMap[currSE.type]]);
+      dP = &(currSlice->partArr[partMap[currSE.type]]);
       
       if (active_pps->entropy_coding_mode_flag == UVLC || dP->bitstream->ei_flag)
       {
@@ -2351,8 +2337,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
   {
     currSE.type = SE_DELTA_QUANT_INTRA;
 
-    if(img->type == B_SLICE)  dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-    else                    dP = &(currSlice->partArr[partMap[currSE.type]]);
+    dP = &(currSlice->partArr[partMap[currSE.type]]);
     
     if (active_pps->entropy_coding_mode_flag == UVLC || dP->bitstream->ei_flag)
     {
@@ -2406,8 +2391,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
     {
 
       currSE.type = SE_LUM_DC_INTRA;
-      if(img->type == B_SLICE)  dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-      else                      dP = &(currSlice->partArr[partMap[currSE.type]]);
+      dP = &(currSlice->partArr[partMap[currSE.type]]);
 
       currSE.context      = LUMA_16DC;
       currSE.type         = SE_LUM_DC_INTRA;
@@ -2560,8 +2544,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
 #if TRACE
                   sprintf(currSE.tracestring, "Luma sng ");
 #endif
-                  if(img->type == B_SLICE)  dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-                  else                    dP = &(currSlice->partArr[partMap[currSE.type]]);
+                  dP = &(currSlice->partArr[partMap[currSE.type]]);
                   
                   if (active_pps->entropy_coding_mode_flag == UVLC || dP->bitstream->ei_flag)  currSE.mapping = linfo_levrun_inter;
                   else                                                     currSE.reading = readRunLevel_CABAC;
@@ -2644,10 +2627,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
 #if TRACE
           snprintf(currSE.tracestring, TRACESTRING_SIZE, " 2x2 DC Chroma ");
 #endif
-          if(img->type == B_SLICE)
-            dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-          else
-            dP = &(currSlice->partArr[partMap[currSE.type]]);
+          dP = &(currSlice->partArr[partMap[currSE.type]]);
         
           if (active_pps->entropy_coding_mode_flag == UVLC || dP->bitstream->ei_flag)
             currSE.mapping = linfo_levrun_c2x2;
@@ -2763,10 +2743,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
 #if TRACE
               snprintf(currSE.tracestring, TRACESTRING_SIZE, " AC Chroma ");
 #endif
-              if(img->type == B_SLICE)
-                dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-              else
-                dP = &(currSlice->partArr[partMap[currSE.type]]);
+              dP = &(currSlice->partArr[partMap[currSE.type]]);
             
               if (active_pps->entropy_coding_mode_flag == UVLC || dP->bitstream->ei_flag)
                 currSE.mapping = linfo_levrun_inter;

@@ -1515,8 +1515,7 @@ int cabac_startcode_follows(struct img_par *img, struct inp_par *inp, int eos_bi
   unsigned int  bit;
   DecodingEnvironmentPtr dep_dp;
   
-  if(img->type == B_SLICE) dP = &(currSlice->partArr[partMap[SE_BFRAME]]);
-  else                   dP = &(currSlice->partArr[partMap[SE_MBTYPE]]);
+  dP = &(currSlice->partArr[partMap[SE_MBTYPE]]);
   dep_dp = &(dP->de_cabac);
 
   if( eos_bit )

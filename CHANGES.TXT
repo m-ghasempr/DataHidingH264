@@ -1,3 +1,15 @@
+Changes for Version JM7.3 to JM 7.2
+-----------------------------------
+Bug fixes
+- encoder: DPB for field coding (SM)
+- encoder: Spatial direct mode (SM)
+- decoder: POC mode 2 with multiple slices (BH)
+- decoder: data partitioning (has known problem in CAVLC/CABAC parsing when 
+           constrained intra an dp are used)
+- both   : reference picture list generation
+- both   : doxygen documentation generation fixes (KS)
+
+
 Changes for Encoder Version JM7.2 to JM 6.2
 --------------------------------------------
 Bug fixes

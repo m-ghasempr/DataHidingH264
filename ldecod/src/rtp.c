@@ -304,6 +304,9 @@ void DumpRTPHeader (RTPpacket_t *p)
  * \param p
  *    packet data structure, with memory for p->packet allocated
  *
+ * \param bits
+ *    target file
+ *
  * \par Side effects:
  *   - File pointer in bits moved
  *   - p->xxx filled by reading and Decomposepacket()

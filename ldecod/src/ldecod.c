@@ -2,58 +2,24 @@
 /*!
  ***********************************************************************
  *  \mainpage
- *     This is the H.26L decoder reference software. For detailed documentation
+ *     This is the H.264/AVC decoder reference software. For detailed documentation
  *     see the comments in each file.
  *
  *  \author
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 7.2
+ *     JM 7.3
  *
  *  \note
  *     tags are used for document system "doxygen"
  *     available at http://www.doxygen.org
- *
- *  \par Limitations:
- *     Using different NAL's the assignment of partition-id to containing
- *     syntax elements may got lost, if this information is not transmitted.
- *     The same has to be stated for the partitionlength if partitions are
- *     merged by the NAL.
- *  \par
- *     The presented solution in Q15-K-16 solves both of this problems as the
- *     departitioner parses the bitstream before decoding. Due to syntax element
- *     dependencies both, partition bounds and partitionlength information can
- *     be parsed by the departitioner.
- *
- *  \par Handling partition information in external file:
- *     As the TML is still a work in progress, it makes sense to handle this
- *     information for simplification in an external file, here called partition
- *     information file, which can be found by the extension .dp extending the
- *     original encoded H.26L bitstream. In this file partition-ids followed by its
- *     partitionlength is written. Instead of parsing the bitstream we get the
- *     partition information now out of this file.
- *     This information is assumed to be never sent over transmission channels
- *     (simulation scenarios) as it's information we allways get using a
- *     "real" departitioner before decoding
- *
- *  \par Extension of Interim File Format:
- *     Therefore a convention has to be made within the interim file format.
- *     The underlying NAL has to take care of fulfilling these conventions.
- *     All partitions have to be bytealigned to be readable by the decoder,
- *     So if the NAL-encoder merges partitions, >>this is only possible to use the
- *     VLC structure of the H.26L bitstream<<, this bitaligned structure has to be
- *     broken up by the NAL-decoder. In this case the NAL-decoder is responsable to
- *     read the partitionlength information from the partition information file.
- *     Partitionlosses are signaled with a partition of zero length containing no
- *     syntax elements.
- *
  */
 /*!
  *  \file
  *     ldecod.c
  *  \brief
- *     TML decoder project main()
+ *     H.264/AVC reference decoder project main()
  *  \author
  *     Main contributors (see contributors.h for copyright, address and affiliation details)
  *     - Inge Lille-Langøy       <inge.lille-langoy@telenor.com>
@@ -64,6 +30,7 @@
  *     - Byeong-Moon Jeon        <jeonbm@lge.com>
  *     - Gabi Blaettermann       <blaetter@hhi.de>
  *     - Ye-Kui Wang             <wyk@ieee.org>
+ *     - Karsten Suehring        <suehring@hhi.de>
  *
  ***********************************************************************
  */
@@ -95,7 +62,7 @@
 #include "erc_api.h"
 
 #define JM          "7"
-#define VERSION     "7.2"
+#define VERSION     "7.3"
 
 #define LOGFILE     "log.dec"
 #define DATADECFILE "dataDec.txt"

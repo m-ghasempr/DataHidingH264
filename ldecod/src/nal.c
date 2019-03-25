@@ -82,11 +82,11 @@ int RBSPtoSODB(byte *streamBuffer, int last_byte_pos)
 * \brief
 *    Converts Encapsulated Byte Sequence Packets to RBSP
 * \param streamBuffer
-*         pointer to data stream
-*  \param end_byte_pos
-*         size of data stream
-*  \param begin_byte_pos
-*          Position after beginning 
+*    pointer to data stream
+* \param end_bytepos
+*    size of data stream
+* \param begin_bytepos
+*    Position after beginning 
 ************************************************************************/
 
 

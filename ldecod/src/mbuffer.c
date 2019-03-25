@@ -200,6 +200,8 @@ FrameStore* alloc_frame_store()
  * \brief
  *    Allocate memory for a stored picture. 
  *
+ * \param structure
+ *    picture structure
  * \param size_x
  *    horizontal luma size
  * \param size_y
@@ -945,21 +947,6 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
     }
   }
 
-  // set max size
-  listXsize[0] = min (listXsize[0], img->num_ref_idx_l0_active);
-  listXsize[1] = min (listXsize[1], img->num_ref_idx_l1_active);
-
-  
-  // set the unused list entries to NULL
-  for (i=listXsize[0]; i< (2*dpb.size) ; i++)
-  {
-    listX[0][i] = NULL;
-  }
-  for (i=listXsize[1]; i< (2*dpb.size) ; i++)
-  {
-    listX[1][i] = NULL;
-  }
-
   if ((listXsize[0] == listXsize[1]) && (listXsize[0] > 1))
   {
     // check if lists are identical, if yes swap first two elements of listX[1]
@@ -975,6 +962,21 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
       listX[1][0]=listX[1][1];
       listX[1][1]=tmp_s;
     }
+  }
+
+  // set max size
+  listXsize[0] = min (listXsize[0], img->num_ref_idx_l0_active);
+  listXsize[1] = min (listXsize[1], img->num_ref_idx_l1_active);
+
+  
+  // set the unused list entries to NULL
+  for (i=listXsize[0]; i< (2*dpb.size) ; i++)
+  {
+    listX[0][i] = NULL;
+  }
+  for (i=listXsize[1]; i< (2*dpb.size) ; i++)
+  {
+    listX[1][i] = NULL;
   }
 }
 
@@ -1923,8 +1925,10 @@ void store_picture_in_dpb(StorablePicture* p)
  *    Insert the picture into the DPB. A free DPB position is necessary
  *    for frames, .
  *
+ * \param fs
+ *    FrameStore into which the picture will be inserted
  * \param p
- *    Picture to be freed
+ *    StorablePicture to be inserted
  *
  ************************************************************************
  */

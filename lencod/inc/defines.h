@@ -121,8 +121,7 @@ typedef unsigned char byte;    //!< byte type definition
 #define IS_OLDINTRA(MB) ((MB)->mb_type==I4MB)
 #define IS_INTER(MB)    ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB)
 #define IS_INTERMV(MB)  ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB  && (MB)->mb_type!=0)
-#define IS_DIRECT(MB)   ((MB)->mb_type==0     && (img ->   type==B_SLICE || img ->type==BS_IMG))
-// #define IS_DIRECT(MB)   ((MB)->mb_type==0     && img ->   type==B_SLICE)
+#define IS_DIRECT(MB)   ((MB)->mb_type==0     && (img ->   type==B_SLICE))
 #define IS_COPY(MB)     ((MB)->mb_type==0     && (img ->type==P_SLICE||img ->type==SP_SLICE));
 #define IS_P8x8(MB)     ((MB)->mb_type==P8x8)
 
@@ -131,8 +130,6 @@ typedef unsigned char byte;    //!< byte type definition
 #define MIN_QP          0
 #define MAX_QP          51
 #define SHIFT_QP        12
-
-#define BS_IMG          4   //!< BS frame
 
 #define LOG2_MAX_FRAME_NUM_MINUS4   4           // POC200301 moved from defines.h
 #define LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4 4     // POC200301 newly added

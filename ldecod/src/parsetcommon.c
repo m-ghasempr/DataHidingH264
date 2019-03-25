@@ -21,9 +21,7 @@
 /*! 
  *************************************************************************************
  * \brief
- *    Allocates memory for a pps
- *
- * \param none
+ *    Allocates memory for a picture paramater set
  *
  * \return
  *    pointer to a pps
@@ -45,9 +43,7 @@ pic_parameter_set_rbsp_t *AllocPPS ()
 /*! 
  *************************************************************************************
  * \brief
- *    Allocates memory for am sps
- *
- * \param none
+ *    Allocates memory for am sequence paramater set
  *
  * \return
  *    pointer to a sps
@@ -67,12 +63,10 @@ seq_parameter_set_rbsp_t *AllocSPS ()
 /*! 
  *************************************************************************************
  * \brief
- *    Frees a pps
+ *    Frees a picture parameter set
  *
  * \param pps to be freed
- *
- * \return
- *    none
+ *   Picture parameter set to be freed
  *************************************************************************************
  */
  
@@ -89,10 +83,8 @@ seq_parameter_set_rbsp_t *AllocSPS ()
  * \brief
  *    Frees a sps
  *
- * \param sps to be freed
- *
- * \return
- *    none
+ * \param sps
+ *   Sequence parameter set to be freed
  *************************************************************************************
  */
  

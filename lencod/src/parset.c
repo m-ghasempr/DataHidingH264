@@ -38,77 +38,106 @@ static int GenerateVUISequenceParameters();
 /*! 
  *************************************************************************************
  * \brief
- *    int GenerateSeq_parameter_set_NALU ();
+ *    generates a sequence and picture parameter set and stores these in global
+ *    active_sps and active_pps
  *
  * \param 
- *    None.  Uses the global variables through FillParameterSetStructures()
+ *    None.
  *
  * \return
  *    A NALU containing the Sequence ParameterSet
  *
  *************************************************************************************
- */
- 
-NALU_t *GenerateSeq_parameter_set_NALU ()
+*/
+void GenerateParameterSets ()
 {
   seq_parameter_set_rbsp_t *sps = NULL; 
   pic_parameter_set_rbsp_t *pps = NULL;
-  NALU_t *n = AllocNALU(64000);
-  int RBSPlen = 0;
-  int NALUlen;
-  byte rbsp[MAXRBSPSIZE];
 
   sps = AllocSPS();
   pps = AllocPPS();
 
   FillParameterSetStructures (sps, pps);
-  RBSPlen = GenerateSeq_parameter_set_rbsp (sps, rbsp);
-  NALUlen = RBSPtoNALU (rbsp, n, RBSPlen, NALU_TYPE_SPS, NALU_PRIORITY_HIGHEST, 0, 1);
-  n->startcodeprefix_len = 4;
-  
-  FreeSPS (sps);
-  FreePPS (pps);
-
-  return n;
+	
+  active_sps = sps;
+  active_pps = pps;
 }
-  
 
 /*! 
- *************************************************************************************
- * \brief
- *    NALU_t *GeneratePic_parameter_set_NALU ();
- *
- * \param 
- *    None.  Uses the global variables through FillParameterSetStructures()
- *
- * \return
- *    A NALU containing the Picture Parameter Set
- *
- *************************************************************************************
- */
- 
-NALU_t *GeneratePic_parameter_set_NALU()
+*************************************************************************************
+* \brief
+*    frees global parameter sets active_sps and active_pps
+*
+* \param 
+*    None.
+*
+* \return
+*    A NALU containing the Sequence ParameterSet
+*
+*************************************************************************************
+*/
+void FreeParameterSets ()
 {
-  seq_parameter_set_rbsp_t *sps = NULL; 
-  pic_parameter_set_rbsp_t *pps = NULL;
+  FreeSPS (active_sps);
+  FreePPS (active_pps);
+}
+
+/*! 
+*************************************************************************************
+* \brief
+*    int GenerateSeq_parameter_set_NALU ();
+*
+* \param 
+*    None.  Uses the global variables through FillParameterSetStructures()
+*
+* \return
+*    A NALU containing the Sequence ParameterSet
+*
+*************************************************************************************
+*/
+
+NALU_t *GenerateSeq_parameter_set_NALU ()
+{
   NALU_t *n = AllocNALU(64000);
   int RBSPlen = 0;
   int NALUlen;
   byte rbsp[MAXRBSPSIZE];
-
-  sps = AllocSPS();
-  pps = AllocPPS();
-
-  FillParameterSetStructures (sps, pps);
-  RBSPlen = GeneratePic_parameter_set_rbsp (pps, rbsp);
-  NALUlen = RBSPtoNALU (rbsp, n, RBSPlen, NALU_TYPE_PPS, NALU_PRIORITY_HIGHEST, 0, 1);
+	
+  RBSPlen = GenerateSeq_parameter_set_rbsp (active_sps, rbsp);
+  NALUlen = RBSPtoNALU (rbsp, n, RBSPlen, NALU_TYPE_SPS, NALU_PRIORITY_HIGHEST, 0, 1);
   n->startcodeprefix_len = 4;
-  FreeSPS (sps);
-  FreePPS (pps);
-
+	
   return n;
 }
 
+
+/*! 
+*************************************************************************************
+* \brief
+*    NALU_t *GeneratePic_parameter_set_NALU ();
+*
+* \param 
+*    None.  Uses the global variables through FillParameterSetStructures()
+*
+* \return
+*    A NALU containing the Picture Parameter Set
+*
+*************************************************************************************
+*/
+
+NALU_t *GeneratePic_parameter_set_NALU()
+{
+  NALU_t *n = AllocNALU(64000);
+  int RBSPlen = 0;
+  int NALUlen;
+  byte rbsp[MAXRBSPSIZE];
+	
+  RBSPlen = GeneratePic_parameter_set_rbsp (active_pps, rbsp);
+  NALUlen = RBSPtoNALU (rbsp, n, RBSPlen, NALU_TYPE_PPS, NALU_PRIORITY_HIGHEST, 0, 1);
+  n->startcodeprefix_len = 4;
+	
+  return n;
+}
 
 /*!
  ************************************************************************
@@ -309,9 +338,6 @@ FMOTYPE6:
 #else
   pps->frame_cropping_flag = FALSE;
 #endif
-
-	active_sps = sps;
-  active_pps = pps;
 };
 
 

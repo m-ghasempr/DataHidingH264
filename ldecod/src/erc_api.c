@@ -83,6 +83,8 @@ ercVariables_t *ercOpen( void )
  *      Number of macroblocks in a frame
  * \param numOfSegments
  *    Estimated number of segments (memory reserved)
+ * \param picSizeX
+ *      Width of the frame in pixels.
  ************************************************************************
  */
 void ercReset( ercVariables_t *errorVar, int nOfMBs, int numOfSegments, int32 picSizeX )
@@ -273,8 +275,6 @@ void ercStopSegment( int currMBNum, int segment, u_int32 bitPos, ercVariables_t 
  * \brief
  *      Marks the current segment (the one which has the "currMBNum" MB in it)
  *      as lost: all the blocks of the MBs in the segment as corrupted.
- * \param currMBNum
- *      Selects the segment where this MB number is in.
  * \param picSizeX
  *      Width of the frame in pixels.
  * \param errorVar
@@ -313,8 +313,6 @@ void ercMarkCurrSegmentLost(int32 picSizeX, ercVariables_t *errorVar )
  * \brief
  *      Marks the current segment (the one which has the "currMBNum" MB in it)
  *      as OK: all the blocks of the MBs in the segment as OK.
- * \param currMBNum
- *      Selects the segment where this MB number is in.
  * \param picSizeX
  *      Width of the frame in pixels.
  * \param errorVar

@@ -161,7 +161,7 @@ void writeFieldModeInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 void writeMB_skip_flagInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
   int a,b,act_ctx;
-  int bframe   = (img->type==B_SLICE || img->type==BS_IMG);
+  int bframe   = (img->type==B_SLICE);
   MotionInfoContexts *ctx         = (img->currentSlice)->mot_ctx;
   Macroblock         *currMB      = &img->mb_data[img->current_mb_nr];
   int                curr_mb_type = se->value1;
@@ -220,7 +220,7 @@ void writeMB_typeInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
   int act_ctx = 0;
   int act_sym;
   int csym;
-  int bframe   = (img->type==B_SLICE || img->type==BS_IMG);
+  int bframe   = (img->type==B_SLICE);
   int mode_sym = 0;
   int mode16x16;
 
@@ -475,7 +475,7 @@ void writeB8_typeInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
   int act_ctx;
   int act_sym, csym;
-  int bframe=(img->type==B_SLICE || img->type==BS_IMG);
+  int bframe=(img->type==B_SLICE);
 
   MotionInfoContexts *ctx    = (img->currentSlice)->mot_ctx;
 

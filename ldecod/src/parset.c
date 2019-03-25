@@ -159,14 +159,12 @@ int InterpretPPS (DataPartition *p, pic_parameter_set_rbsp_t *pps)
     }
     else if (pps->slice_group_map_type == 6)
     {
-      if (pps->num_slice_groups_minus1+1 >= 4)
+      if (pps->num_slice_groups_minus1+1 >4)
         NumberBitsPerSliceGroupId = 3;
-      else if (pps->num_slice_groups_minus1+1 >= 2)
+      else if (pps->num_slice_groups_minus1+1 > 2)
         NumberBitsPerSliceGroupId = 2;
-      else if (pps->num_slice_groups_minus1+1 >= 1)
-        NumberBitsPerSliceGroupId = 1;
       else
-        NumberBitsPerSliceGroupId = 0;
+        NumberBitsPerSliceGroupId = 1;
       //! JVT-F078, exlicitly signal number of MBs in the map
       pps->num_slice_group_map_units_minus1      = ue_v ("PPS: num_slice_group_map_units_minus1"               , s);
       for (i=0; i<=pps->num_slice_group_map_units_minus1; i++)

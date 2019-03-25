@@ -20,7 +20,9 @@
 #include "parsetcommon.h"
 #include "nalu.h"
 
-// public interface
+void GenerateParameterSets ();
+void FreeParameterSets ();
+
 NALU_t *GenerateSeq_parameter_set_NALU ();
 NALU_t *GeneratePic_parameter_set_NALU ();
 

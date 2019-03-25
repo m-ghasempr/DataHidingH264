@@ -140,6 +140,9 @@ int se_v (char *tracestring, Bitstream *bitstream)
  *    ue_v, reads an u(v) syntax element, the length in bits is stored in 
  *    the global UsedBits variable
  *
+ * \param LenInBits
+ *    length of the syntax element
+ *
  * \param tracestring
  *    the string for the trace file
  *
@@ -448,12 +451,14 @@ int GetVLCSymbol_IntraMode (byte buffer[],int totbitoffset,int *info, int byteco
  * \brief
  *    test if bit buffer contains only stop bit
  *
- * \param byte buffer[]
- *    containing VLC-coded data bits
- * \param int totbitoffset
+ * \param buffer
+ *    buffer containing VLC-coded data bits
+ * \param totbitoffset
  *    bit offset from start of partition
- * \param int bytecont
+ * \param bytecount
  *    buffer length
+ * \return
+ *    true if more bits available
  ************************************************************************
  */
 int more_rbsp_data (byte buffer[],int totbitoffset,int bytecount)
@@ -516,34 +521,18 @@ int uvlc_startcode_follows(struct img_par *img, struct inp_par *inp, int dummy)
 /*!
  ************************************************************************
  * \brief
- *  Moves the read pointer of the partition forward by one symbol
+ *  read one exp-golomb VLC symbol
  *
- * \param byte buffer[]
+ * \param buffer
  *    containing VLC-coded data bits
- * \param int totbitoffset
+ * \param totbitoffset
  *    bit offset from start of partition
- * \param int type
- *    expected data type (Partiotion ID)
- * \return  int info, len
- *    Length and Value of the next symbol
- *
- * \note
- *    As in both nal_bits.c and nal_part.c all data of one partition, slice,
- *    picture was already read into a buffer, there is no need to read any data
- *    here again.
- * \par
- *    GetVLCInfo was extracted because there should be only one place in the
- *    source code that has knowledge about symbol extraction, regardless of
- *    the number of different NALs.
- * \par
- *    This function could (and should) be optimized considerably
- * \par
- *    If it is ever decided to have different VLC tables for different symbol
- *    types, then this would be the place for the implementation
- * \par
- *    An alternate VLC table is implemented based on exponential Golomb codes.
- *    The encoder must have a matching define selected.
- *  
+ * \param  info 
+ *    returns the value of the symbol
+ * \param bytecount
+ *    buffer length
+ * \return
+ *    bits read
  ************************************************************************
  */
 int GetVLCSymbol (byte buffer[],int totbitoffset,int *info, int bytecount)
@@ -1169,19 +1158,19 @@ int readSyntaxElement_Run(SyntaxElement *sym,  DataPartition *dP)
  * \brief
  *  Reads bits from the bitstream buffer
  *
- * \param byte buffer[]
+ * \param buffer
  *    containing VLC-coded data bits
- * \param int totbitoffset
+ * \param totbitoffset
  *    bit offset from start of partition
- * \param int bytecount
+ * \param info
+ *    returns value of the read bits
+ * \param bytecount
  *    total bytes in bitstream
- * \param int numbits
+ * \param numbits
  *    number of bits to read
  *
  ************************************************************************
  */
-
-
 int GetBits (byte buffer[],int totbitoffset,int *info, int bytecount, 
              int numbits)
 {
@@ -1222,13 +1211,13 @@ int GetBits (byte buffer[],int totbitoffset,int *info, int bytecount,
  * \brief
  *  Reads bits from the bitstream buffer
  *
- * \param byte buffer[]
- *    containing VLC-coded data bits
- * \param int totbitoffset
+ * \param buffer
+ *    buffer containing VLC-coded data bits
+ * \param totbitoffset
  *    bit offset from start of partition
- * \param int bytecount
+ * \param bytecount
  *    total bytes in bitstream
- * \param int numbits
+ * \param numbits
  *    number of bits to read
  *
  ************************************************************************
@@ -1280,18 +1269,6 @@ int peekSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct inp_p
   byte *buf = currStream->streamBuffer;
   int BitstreamLengthInBytes = currStream->bitstream_length;
 
-
-/*
-  sym->len =  GetVLCSymbol (buf, frame_bitoffset, &(sym->inf), BitstreamLengthInBytes);
-  if (sym->len == -1)
-    return -1;
-  frame_bitoffset += sym->len;
-  sym->mapping(sym->len,sym->inf,&(sym->value1),&(sym->value2));
-
-#if TRACE
-  tracebits(sym->tracestring, sym->len, sym->inf, sym->value1, sym->value2); //GB
-#endif
-*/
 
   sym->len =  GetVLCSymbol (buf, frame_bitoffset, &(sym->inf), BitstreamLengthInBytes);
   if (sym->len == -1)

@@ -573,6 +573,10 @@ void decoding_poc(struct img_par *img)
     {             //not first pix of IDRGOP
       img->FrameNumOffset = img->PreviousFrameNumOffset + img->MaxFrameNum;
     }
+    else 
+    {
+      img->FrameNumOffset = img->PreviousFrameNumOffset;
+    }
 
     // 2nd
     if(img->num_ref_frames_in_pic_order_cnt_cycle) 
@@ -637,7 +641,11 @@ void decoding_poc(struct img_par *img)
     else
     {
       if (img->frame_num<img->PreviousFrameNum)
-        img->FrameNumOffset += img->MaxFrameNum;
+        img->FrameNumOffset = img->PreviousFrameNumOffset + img->MaxFrameNum;
+      else 
+        img->FrameNumOffset = img->PreviousFrameNumOffset;
+
+
       img->AbsFrameNum = img->FrameNumOffset+img->frame_num;
       if(img->disposable_flag)
         img->ThisPOC = (2*img->AbsFrameNum - 1);
@@ -683,6 +691,7 @@ void post_poc(struct img_par *img)
   case 2: // POC MODE 2
     if (!img->disposable_flag)
       img->PreviousFrameNum=img->frame_num;
+    img->PreviousFrameNumOffset=img->FrameNumOffset;
     break;
 
 

@@ -323,10 +323,12 @@ void SetupFastFullPelSearch (int ref, int list)  // <--  reference frame paramet
   byte**  imgY_orig     = imgY_org;
   int     pix_y         = img->pix_y;
   
-  int apply_weights = ( (input->WeightedPrediction && (img->type == P_SLICE || img->type == SP_SLICE)) ||
-                        (input->WeightedBiprediction && (img->type == B_SLICE || img->type == BS_IMG)));
+  //int apply_weights = ( (input->WeightedPrediction && (img->type == P_SLICE || img->type == SP_SLICE)) ||
+    //                    (input->WeightedBiprediction && (img->type == B_SLICE || img->type == BS_IMG)));
+	int apply_weights = ( (input->WeightedPrediction && (img->type == P_SLICE || img->type == SP_SLICE)) ||
+                        (input->WeightedBiprediction && (img->type == B_SLICE)));
   if (apply_weights)
-    ref_pic       = img->type==B_SLICE? Refbuf11_w [ref+((mref==mref_fld)) +1] : Refbuf11_w[ref];
+    ref_pic       = img->type==B_SLICE? Refbuf11_w [ref+((enc_picture!=enc_frame_picture)) +1] : Refbuf11_w[ref];
   else
     ref_pic       = listX[list][ref]->imgY_11;
 
@@ -336,20 +338,24 @@ void SetupFastFullPelSearch (int ref, int list)  // <--  reference frame paramet
     if (apply_weights)
       ref_pic       = img->type==B_SLICE? Refbuf11_w [ref+(img->field_mode) +1] : Refbuf11_w[ref];
     else
-      ref_pic       = img->type==B_SLICE? Refbuf11 [ref+(img->field_mode) +1] : Refbuf11[ref];
-    
+			ref_pic       = img->type==B_SLICE? listX[LIST_0][ref+(img->field_mode) +1]->imgY_11 : listX[LIST_0][ref]->imgY_11;    
     block_sad     = BlockSAD[list][refindex][7];
     pix_y     = img->field_pix_y;
     if(img->top_field)
     {
-      ref_array     = ((img->type!=B_SLICE && img->type!=BS_IMG) ? refFrArr_top : ref>=0 ? fw_refFrArr_top : bw_refFrArr_top);
-      mv_array      = ((img->type!=B_SLICE && img->type!=BS_IMG) ? tmp_mv_top   : ref>=0 ? tmp_fwMV_top    : tmp_bwMV_top);
+      //ref_array     = ((img->type!=B_SLICE && img->type!=BS_IMG) ? refFrArr_top : ref>=0 ? fw_refFrArr_top : bw_refFrArr_top);
+      //mv_array      = ((img->type!=B_SLICE && img->type!=BS_IMG) ? tmp_mv_top   : ref>=0 ? tmp_fwMV_top    : tmp_bwMV_top);
+			ref_array     = ((img->type!=B_SLICE) ? refFrArr_top : ref>=0 ? fw_refFrArr_top : bw_refFrArr_top);
+      mv_array      = ((img->type!=B_SLICE) ? tmp_mv_top   : ref>=0 ? tmp_fwMV_top    : tmp_bwMV_top);
       imgY_orig   = imgY_org_top;
     }
     else
     {
-      ref_array     = ((img->type!=B_SLICE && img->type!=BS_IMG) ? refFrArr_bot : ref>=0 ? fw_refFrArr_bot : bw_refFrArr_bot);
-      mv_array      = ((img->type!=B_SLICE && img->type!=BS_IMG) ? tmp_mv_bot   : ref>=0 ? tmp_fwMV_bot    : tmp_bwMV_bot);
+      //ref_array     = ((img->type!=B_SLICE && img->type!=BS_IMG) ? refFrArr_bot : ref>=0 ? fw_refFrArr_bot : bw_refFrArr_bot);
+      //mv_array      = ((img->type!=B_SLICE && img->type!=BS_IMG) ? tmp_mv_bot   : ref>=0 ? tmp_fwMV_bot    : tmp_bwMV_bot);
+      ref_array     = ((img->type!=B_SLICE) ? refFrArr_bot : ref>=0 ? fw_refFrArr_bot : bw_refFrArr_bot);
+      mv_array      = ((img->type!=B_SLICE) ? tmp_mv_bot   : ref>=0 ? tmp_fwMV_bot    : tmp_bwMV_bot);
+
       imgY_orig   = imgY_org_bot;
     }
   }
@@ -692,7 +698,7 @@ Init_Motion_Search_Module ()
   int bits, i, imin, imax, k, l;
 
   int search_range               = input->search_range;
-  int number_of_reference_frames = img->buf_cycle;
+  int number_of_reference_frames = input->InterlaceCodingOption?2*img->buf_cycle:img->buf_cycle;
   int max_search_points          = (2*search_range+1)*(2*search_range+1);
   int max_ref_bits               = 1 + 2 * (int)floor(log(max(16,number_of_reference_frames+1)) / log(2) + 1e-10);
   int max_ref                    = (1<<((max_ref_bits>>1)+1))-1;
@@ -1135,7 +1141,8 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
   int   min_pos2        = (input->hadamard ? 0 : 1);
   int   max_pos2        = (input->hadamard ? max(1,search_pos2) : search_pos2);
   int apply_weights = ( (input->WeightedPrediction && (img->type == P_SLICE||img->type == SP_SLICE)) ||
-                        (input->WeightedBiprediction && (img->type == B_SLICE || img->type == BS_IMG)));
+                          (input->WeightedBiprediction && (img->type == B_SLICE)));                    
+		//(input->WeightedBiprediction && (img->type == B_SLICE || img->type == BS_IMG)));
 
   if (apply_weights)
     ref_pic = img->type==B_SLICE? mref_w [ref+1+incr] : mref_w [ref];
@@ -1372,18 +1379,25 @@ BlockMotionSearch (int       ref,           // <--  reference frame (0... or -1 
     block_y = mb_y >> 2;
     if(img->top_field)
     {
-      pred_mv   = ((img->type!=B_SLICE && img->type!=BS_IMG) ? img->mv_top  : ref>=0 ? img->p_fwMV_top : img->p_bwMV_top)[mb_x>>2][mb_y>>2][refframe][blocktype];
-      ref_array = ((img->type!=B_SLICE && img->type!=BS_IMG) ? refFrArr_top : ref>=0 ? fw_refFrArr_top : bw_refFrArr_top);
-      mv_array  = ((img->type!=B_SLICE && img->type!=BS_IMG) ? tmp_mv_top   : ref>=0 ? tmp_fwMV_top    : tmp_bwMV_top);
+      //pred_mv   = ((img->type!=B_SLICE && img->type!=BS_IMG) ? img->mv_top  : ref>=0 ? img->p_fwMV_top : img->p_bwMV_top)[mb_x>>2][mb_y>>2][refframe][blocktype];
+      //ref_array = ((img->type!=B_SLICE && img->type!=BS_IMG) ? refFrArr_top : ref>=0 ? fw_refFrArr_top : bw_refFrArr_top);
+      //mv_array  = ((img->type!=B_SLICE && img->type!=BS_IMG) ? tmp_mv_top   : ref>=0 ? tmp_fwMV_top    : tmp_bwMV_top);
+			pred_mv   = ((img->type!=B_SLICE) ? img->mv_top  : ref>=0 ? img->p_fwMV_top : img->p_bwMV_top)[mb_x>>2][mb_y>>2][refframe][blocktype];
+      ref_array = ((img->type!=B_SLICE) ? refFrArr_top : ref>=0 ? fw_refFrArr_top : bw_refFrArr_top);
+      mv_array  = ((img->type!=B_SLICE) ? tmp_mv_top   : ref>=0 ? tmp_fwMV_top    : tmp_bwMV_top);
       all_bmv   = img->all_bmv_top;
       all_mv    = (ref==-1 ? img->all_bmv_top    : img->all_mv_top);
       imgY_org_pic = imgY_org_top;
     }
     else
     {
-      pred_mv   = ((img->type!=B_SLICE && img->type!=BS_IMG) ? img->mv_bot   : ref>=0 ? img->p_fwMV_bot : img->p_bwMV_bot)[mb_x>>2][mb_y>>2][refframe][blocktype];
-      ref_array = ((img->type!=B_SLICE && img->type!=BS_IMG) ? refFrArr_bot  : ref>=0 ? fw_refFrArr_bot : bw_refFrArr_bot);
-      mv_array  = ((img->type!=B_SLICE && img->type!=BS_IMG) ? tmp_mv_bot    : ref>=0 ? tmp_fwMV_bot    : tmp_bwMV_bot);
+      //pred_mv   = ((img->type!=B_SLICE && img->type!=BS_IMG) ? img->mv_bot   : ref>=0 ? img->p_fwMV_bot : img->p_bwMV_bot)[mb_x>>2][mb_y>>2][refframe][blocktype];
+      //ref_array = ((img->type!=B_SLICE && img->type!=BS_IMG) ? refFrArr_bot  : ref>=0 ? fw_refFrArr_bot : bw_refFrArr_bot);
+      //mv_array  = ((img->type!=B_SLICE && img->type!=BS_IMG) ? tmp_mv_bot    : ref>=0 ? tmp_fwMV_bot    : tmp_bwMV_bot);
+			pred_mv   = ((img->type!=B_SLICE) ? img->mv_bot   : ref>=0 ? img->p_fwMV_bot : img->p_bwMV_bot)[mb_x>>2][mb_y>>2][refframe][blocktype];
+      ref_array = ((img->type!=B_SLICE) ? refFrArr_bot  : ref>=0 ? fw_refFrArr_bot : bw_refFrArr_bot);
+      mv_array  = ((img->type!=B_SLICE) ? tmp_mv_bot    : ref>=0 ? tmp_fwMV_bot    : tmp_bwMV_bot);
+
       all_bmv   = img->all_bmv_bot;
       all_mv    = (ref==-1      ? img->all_bmv_bot  : img->all_mv_bot);
       imgY_org_pic = imgY_org_bot;
@@ -1488,7 +1502,8 @@ BlockMotionSearch (int       ref,           // <--  reference frame (0... or -1 
       all_mv[block_x+i][block_y+j][refframe][blocktype][1] = mv_y;
     }
   }
-  if (img->type==BS_IMG)
+  //if (img->type==BS_IMG)
+	if ( img->type==B_SLICE && img->nal_reference_idc>0)
   {
     for (i=0; i < (bsx>>2); i++)
     for (j=0; j < (bsy>>2); j++)
@@ -1658,7 +1673,8 @@ ABIDPartitionCost (int   blocktype,
   }
 
 
-  if ( img->type==BS_IMG)
+  //if ( img->type==BS_IMG)
+	if ( img->type==B_SLICE && img->nal_reference_idc>0)
   {
     //
     //  Interpolation (1/2,1/2,0)
@@ -1710,7 +1726,8 @@ ABIDPartitionCost (int   blocktype,
 
     }
 
-    if ( img->type==BS_IMG)
+//    if ( img->type==BS_IMG)
+		if ( img->type==B_SLICE && img->nal_reference_idc>0)
     {
       *abp_type = 1;
       mcost = mcost0;
@@ -1727,7 +1744,8 @@ ABIDPartitionCost (int   blocktype,
     }
   }
 #if 0
-  if (input->explicit_B_prediction==1 && img->type==BS_IMG)
+//  if (input->explicit_B_prediction==1 && img->type==BS_IMG)
+	if (input->explicit_B_prediction==1 && img->type==B_SLICE && img->nal_reference_idc>0)
   {
     //
     //  Extrapolation (2,-1,0)
@@ -1872,10 +1890,10 @@ BBIDPartitionCost (int   blocktype,
   int   ref1, tmcost2, temp_bwref;
 #endif
 
-  adjust_ref  = (img->type==B_SLICE? (mref==mref_fld)? 2 : 1 : 0);
+  adjust_ref  = (img->type==B_SLICE? (enc_picture!=enc_frame_picture)? 2 : 1 : 0);
   adjust_ref  = min(adjust_ref, max_ref-1);
   
-  if(mref==mref_fld)
+  if(enc_picture!=enc_frame_picture)
   {
 //    max_ref = min (img->number-((mref==mref_fld)&&img->fld_type&&img->type==B_SLICE), img->buf_cycle);
 //    max_ref = min (2*img->nb_references, max(0,img->buf_cycle-(img->fld_type*2)));
@@ -1917,7 +1935,8 @@ BBIDPartitionCost (int   blocktype,
 
 
 #if !BIPRED_SIMPLE
-  if ((input->StoredBPictures) && img->type==BS_IMG)
+//  if ((input->StoredBPictures) && img->type==BS_IMG)
+	if (img->nal_reference_idc>0 && img->type==B_SLICE)
   {
     //
     //  Interpolation (1/2,1/2,0)
@@ -2087,7 +2106,8 @@ BBIDPartitionCost (int   blocktype,
 #else
   
   temp_fwref = *fw_ref;
-  if ((input->StoredBPictures) && img->type==BS_IMG)
+//  if ((input->StoredBPictures) && img->type==BS_IMG)
+	if (img->type==B_SLICE && img->nal_reference_idc>0)
   {
     //
     //  Interpolation (1/2,1/2,0)
@@ -2104,14 +2124,14 @@ BBIDPartitionCost (int   blocktype,
       if (tfw_ref == tbw_ref) continue;
 
       
-      delta_P = (mref==mref_fld)?(img->imgtr_next_P_fld - img->imgtr_last_P_fld):2*(img->imgtr_next_P_frm - img->imgtr_last_P_frm);
-      if((mref==mref_fld) && !img->fld_type)  // top field
+      delta_P = (enc_picture!=enc_frame_picture)?(img->imgtr_next_P_fld - img->imgtr_last_P_fld):2*(img->imgtr_next_P_frm - img->imgtr_last_P_frm);
+      if((enc_picture!=enc_frame_picture) && !img->fld_type)  // top field
       {
         TRp_f = delta_P*(tfw_ref/2+1)-(tfw_ref+1)%2;
         TRp_b = delta_P*(tbw_ref/2+1)-(tbw_ref+1)%2;
         
       }
-      else if((mref==mref_fld) && img->fld_type)  // bot field
+      else if((enc_picture!=enc_frame_picture) && img->fld_type)  // bot field
       {
         TRp_f = 1+delta_P*((tfw_ref+1)/2)-tfw_ref%2;
         TRp_b = 1+delta_P*((tbw_ref+1)/2)-tbw_ref%2;
@@ -2417,16 +2437,15 @@ PartitionMotionSearch (int    blocktype,
   int   ref, v, h, mcost, search_range, i, j;
   int   pic_block_x, pic_block_y;
   int   bframe    = (img->type==B_SLICE);
-  int   max_ref   = bframe? img->nb_references-1 : img->nb_references;
+  int   max_ref;
   int   parttype  = (blocktype<4?blocktype:4);
   int   step_h0   = (input->blc_size[ parttype][0]>>2);
   int   step_v0   = (input->blc_size[ parttype][1]>>2);
   int   step_h    = (input->blc_size[blocktype][0]>>2);
   int   step_v    = (input->blc_size[blocktype][1]>>2);
-  int   block_y   = img->block_y;
-  int   **bref_array, ***bwMV;
   int   list;
   int   numlists;
+	int   block_y;
 
   max_ref = img->num_ref_idx_l0_active;
 
@@ -2446,8 +2465,6 @@ PartitionMotionSearch (int    blocktype,
     max_ref=(list==0?img->num_ref_idx_l0_active:img->num_ref_idx_l1_active);
     for (ref=0; ref<max_ref; ref++)
     {
-      //refinx    = ref+1;
-      //refframe  = (ref<0?0:ref);
 #ifdef _ADDITIONAL_REFERENCE_FRAME_
       if ((ref<input->num_reference_frames) || (ref==input->add_ref_frame))
       {
@@ -2471,24 +2488,20 @@ PartitionMotionSearch (int    blocktype,
         {
           if(img->top_field)
           {
-            ref_array = ((img->type!=B_SLICE && img->type!=BS_IMG) ? refFrArr_top : ref<0 ? bw_refFrArr_top : fw_refFrArr_top);
-            mv_array  = ((img->type!=B_SLICE && img->type!=BS_IMG) ?   tmp_mv_top : ref<0 ?    tmp_bwMV_top :    tmp_fwMV_top);
-            if (img->type==BS_IMG)
-            {
-              bref_array = bw_refFrArr_top;
-              bwMV = tmp_bwMV_top;
-            }
+            //ref_array = ((img->type!=B_SLICE && img->type!=BS_IMG) ? refFrArr_top : ref<0 ? bw_refFrArr_top : fw_refFrArr_top);
+            //mv_array  = ((img->type!=B_SLICE && img->type!=BS_IMG) ?   tmp_mv_top : ref<0 ?    tmp_bwMV_top :    tmp_fwMV_top);
+						ref_array = ((img->type!=B_SLICE) ? refFrArr_top : ref<0 ? bw_refFrArr_top : fw_refFrArr_top);
+            mv_array  = ((img->type!=B_SLICE) ?   tmp_mv_top : ref<0 ?    tmp_bwMV_top :    tmp_fwMV_top);
+            //if (img->type==BS_IMG)
             all_mv    = (list<0 ? img->all_bmv_top : img->all_mv_top);
           }
           else
           {
-            ref_array = ((img->type!=B_SLICE && img->type!=BS_IMG) ? refFrArr_bot : ref<0 ? bw_refFrArr_bot : fw_refFrArr_bot);
-            mv_array  = ((img->type!=B_SLICE && img->type!=BS_IMG) ?   tmp_mv_bot : ref<0 ?    tmp_bwMV_bot :    tmp_fwMV_bot);
-            if (img->type==BS_IMG)
-            {
-              bref_array = bw_refFrArr_bot;
-              bwMV = tmp_bwMV_bot;
-            }
+            //ref_array = ((img->type!=B_SLICE && img->type!=BS_IMG) ? refFrArr_bot : ref<0 ? bw_refFrArr_bot : fw_refFrArr_bot);
+						ref_array = ((img->type!=B_SLICE) ? refFrArr_bot : ref<0 ? bw_refFrArr_bot : fw_refFrArr_bot);
+            //mv_array  = ((img->type!=B_SLICE && img->type!=BS_IMG) ?   tmp_mv_bot : ref<0 ?    tmp_bwMV_bot :    tmp_fwMV_bot);
+						mv_array  = ((img->type!=B_SLICE) ?   tmp_mv_bot : ref<0 ?    tmp_bwMV_bot :    tmp_fwMV_bot);
+            //if (img->type==BS_IMG)
             all_mv    = (list<0 ? img->all_bmv_bot : img->all_mv_bot);
           }
         }
@@ -2499,7 +2512,7 @@ PartitionMotionSearch (int    blocktype,
         //===== LOOP OVER BLOCKS =====
         for (v=by0[parttype][block8x8]; v<by0[parttype][block8x8]+step_v0; v+=step_v)
         {
-          pic_block_y = block_y + v;
+          pic_block_y = img->block_y + v;
           
           for (h=bx0[parttype][block8x8]; h<bx0[parttype][block8x8]+step_h0; h+=step_h)
           {
@@ -2582,9 +2595,9 @@ Get_Direct_Motion_Vectors ()
     }
 
   }
-  
+
+
   if (input->direct_type)  //spatial direct mode copy from decoder
-//   if(input->direct_type && !(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode))
   {
     
     int fw_rFrameL, fw_rFrameU, fw_rFrameUL, fw_rFrameUR;
@@ -2721,6 +2734,7 @@ Get_Direct_Motion_Vectors ()
 				if (fw_rFrame >=0)
 				{
 					if (!fw_rFrame  && !moving_block_dir[pic_block_y][pic_block_x]) 
+					//if (!fw_rFrame  && !listX[LIST_1][0]->
 					{
 						all_mvs [block_x][block_y][0][0][0] = 0;
 						all_mvs [block_x][block_y][0][0][1] = 0;            
@@ -2758,7 +2772,8 @@ Get_Direct_Motion_Vectors ()
 				else
 				{      
 					bwdir_refFrArr[pic_block_y][pic_block_x]=-1;
-					if (img->type==BS_IMG)
+//					if (img->type==BS_IMG)
+					if (img->type==B_SLICE && img->nal_reference_idc>0)
           {
 						all_bmvs [block_x][block_y][1][0][0] = 0;
 						all_bmvs [block_x][block_y][1][0][1] = 0;
@@ -2771,7 +2786,8 @@ Get_Direct_Motion_Vectors ()
 				
 				if (fw_rFrame < 0 && bw_rFrame < 0)
 				{
-					if (img->type==BS_IMG)
+//					if (img->type==BS_IMG)
+					if (img->type==B_SLICE && img->nal_reference_idc>0)
           {
             fwdir_refFrArr[pic_block_y][pic_block_x] = 0;
             bwdir_refFrArr[pic_block_y][pic_block_x] = 1;

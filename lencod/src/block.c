@@ -406,8 +406,6 @@ void intrapred_luma_16x16()
   int ib,ic,iaa;
 
   byte **imgY_pred = enc_picture->imgY;  // For Mb level field/frame coding tools -- default to frame pred
-  int pix_y = img->pix_y; // For MB level field/frame coding tools
-
   int mb_nr=img->current_mb_nr;
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
 
@@ -415,15 +413,6 @@ void intrapred_luma_16x16()
   PixelPos left[17];    //!< pixel positions p(-1, -1..15)
 
   int up_avail, left_avail, left_up_avail;
-  /*
-  if(img->constrained_intra_pred_flag)
-  {
-    if (mb_available_up   && (img->intra_block[mb_nr-mb_width][2]==0 || img->intra_block[mb_nr-mb_width][3]==0))
-      mb_available_up   = 0;
-    if (mb_available_left && (img->intra_block[mb_nr-       1][1]==0 || img->intra_block[mb_nr       -1][3]==0))
-      mb_available_left = 0;
-  }
-  */
 
   for (i=0;i<17;i++)
   {

@@ -2,14 +2,14 @@
 /*!
  ***********************************************************************
  *  \mainpage
- *     This is the H.26L encoder reference software. For detailed documentation
+ *     This is the H.264/AVC encoder reference software. For detailed documentation
  *     see the comments in each file.
  *
  *  \author
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 7.2
+ *     JM 7.3
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -19,18 +19,19 @@
  *  \file
  *     lencod.c
  *  \brief
- *     TML encoder project main
+ *     H.264/AVC reference encoder project main()
  *  \author
- *   Main contributors (see contributors.h for copyright, address and affiliation details)
- *   - Inge Lille-Langøy               <inge.lille-langoy@telenor.com>
- *   - Rickard Sjoberg                 <rickard.sjoberg@era.ericsson.se>
- *   - Stephan Wenger                  <stewe@cs.tu-berlin.de>
- *   - Jani Lainema                    <jani.lainema@nokia.com>
- *   - Byeong-Moon Jeon                <jeonbm@lge.com>
- *   - Yoon-Seong Soh                  <yunsung@lge.com>
- *   - Thomas Stockhammer              <stockhammer@ei.tum.de>
- *   - Detlev Marpe                    <marpe@hhi.de>
- *   - Guido Heising                   <heising@hhi.de>
+ *     Main contributors (see contributors.h for copyright, address and affiliation details)
+ *     - Inge Lille-Langøy               <inge.lille-langoy@telenor.com>
+ *     - Rickard Sjoberg                 <rickard.sjoberg@era.ericsson.se>
+ *     - Stephan Wenger                  <stewe@cs.tu-berlin.de>
+ *     - Jani Lainema                    <jani.lainema@nokia.com>
+ *     - Byeong-Moon Jeon                <jeonbm@lge.com>
+ *     - Yoon-Seong Soh                  <yunsung@lge.com>
+ *     - Thomas Stockhammer              <stockhammer@ei.tum.de>
+ *     - Detlev Marpe                    <marpe@hhi.de>
+ *     - Guido Heising                   <heising@hhi.de>
+ *     - Karsten Suehring                <suehring@hhi.de>
  *
  ***********************************************************************
  */
@@ -61,7 +62,7 @@
 #include "output.h"
 
 #define JM      "7"
-#define VERSION "7.2"
+#define VERSION "7.3"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
@@ -104,6 +105,7 @@ int main(int argc,char **argv)
   Configure (argc, argv);
   init_img();
   AllocNalPayloadBuffer();
+	GenerateParameterSets();
 
   frame_pic = malloc_picture();
   if (input->InterlaceCodingOption != FRAME_CODING)
@@ -277,6 +279,7 @@ int main(int argc,char **argv)
   free_img ();
   free_context_memory ();
   FreeNalPayloadBuffer();
+  FreeParameterSets();
   return 0;
 }
 
@@ -1272,12 +1275,7 @@ int init_global_buffers()
   if(input->InterlaceCodingOption >= MB_CODING)
     memory_size += get_mem2Dint(&field_mb, img->height/MB_BLOCK_SIZE, img->width/MB_BLOCK_SIZE);
 
-
   // allocate memory for encoding frame buffers: imgY, imgUV
-  // byte imgY[288][352];
-  // byte imgUV[2][144][176];
-  memory_size += get_mem2D(&imgY_frm, img->height, img->width);
-  memory_size += get_mem3D(&imgUV_frm, 2, img->height_cr, img->width_cr);
 
   // allocate memory for reference frame buffers: imgY_org, imgUV_org
   // byte imgY_org[288][352];
@@ -1323,19 +1321,6 @@ int init_global_buffers()
     memory_size += get_mem3Dint(&tmp_bwMV_bot, 2, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE+4);
   }
   }
-
-  // allocate memory for B frame coding: nextP_imgY, nextP_imgUV
-  // byte nextP_imgY[288][352];
-  // byte nextP_imgUV[2][144][176];
-  memory_size += get_mem2D(&nextP_imgY, img->height, img->width);
-  memory_size += get_mem3D(&nextP_imgUV, 2, img->height_cr, img->width_cr);
-
-  // allocate memory for multiple ref. frame buffers: mref, mcref
-  //byte mref[MAX_MULT_PRED][1152][1408];  */   /* 1/4 pix luma
-  //byte mcef[MAX_MULT_PRED][2][352][288]; */   /* pix chroma
-  // rows and cols for croma component mcef[ref][croma][4x][4y] are switched
-  // compared to luma mref[ref][4y][4x] for whatever reason
-  // number of reference frames increased by one for next P-frame
 
   if(input->successive_Bframe!=0 || input->StoredBPictures > 0)
   {
@@ -1454,8 +1439,6 @@ void free_global_buffers()
   free (last_P_no_fld);
 #endif
 
-  free_mem2D(imgY_frm);
-  free_mem3D(imgUV_frm,2);
   free_mem2D(imgY_org_frm);      // free ref frame buffers
   free_mem3D(imgUV_org_frm,2);
   free_mem3Dint(tmp_mv_frm,2);
@@ -1463,15 +1446,10 @@ void free_global_buffers()
 
   // free multiple ref frame buffers
   // number of reference frames increased by one for next P-frame
-  free(mref_frm);
+
   if (input->WeightedPrediction || input->WeightedBiprediction)
     free(mref_frm_w);
-  free(mcef_frm);
-
-  free_mem2D(nextP_imgY);    // free next frame buffers (for B frames)
-  free_mem3D(nextP_imgUV,2);
-
-  free (Refbuf11_frm);
+ 
   if (input->WeightedPrediction || input->WeightedBiprediction)
         free (Refbuf11_frm_w);
 
@@ -1554,10 +1532,8 @@ void free_global_buffers()
 
     // free multiple ref frame buffers
     // number of reference frames increased by one for next P-frame
-    free(mref_fld);
     if (input->WeightedPrediction || input->WeightedBiprediction)
       free(mref_fld_w);
-    free(mcef_fld);
 
     if(input->successive_Bframe!=0 || input->StoredBPictures > 0)
     {
@@ -1573,9 +1549,8 @@ void free_global_buffers()
       }
     } // end if B frame
 
-    free (Refbuf11_fld);
-        if ( input->WeightedPrediction || input->WeightedBiprediction)
-                free (Refbuf11_fld_w);
+    if ( input->WeightedPrediction || input->WeightedBiprediction)
+       free (Refbuf11_fld_w);
 
     free_mem3Dint(tmp_mv_top,2);
     free_mem3Dint(tmp_mv_bot,2);
@@ -1784,50 +1759,6 @@ void combine_field()
     memcpy(imgUV_com[0][i*2 + 1], enc_bottom_picture->imgUV[0][i], img->width_cr);
     memcpy(imgUV_com[1][i*2], enc_top_picture->imgUV[1][i], img->width_cr);
     memcpy(imgUV_com[1][i*2 + 1], enc_bottom_picture->imgUV[1][i], img->width_cr);
-  }
-}
-
-/*!
- ************************************************************************
- * \brief
- *    extract top field from a frame 
- ************************************************************************
- */
-void split_field_top()
-{
-  int i;
-
-  for (i=0; i<img->height; i++)
-  {
-    memcpy(enc_picture->imgY[i], imgY_frm[i*2], img->width); 
-  }
-
-  for (i=0; i<img->height_cr; i++)
-  {
-    memcpy(enc_picture->imgUV[0][i], imgUV_frm[0][i*2], img->width_cr);
-    memcpy(enc_picture->imgUV[1][i], imgUV_frm[1][i*2], img->width_cr);
-  }
-}
-
-/*!
- ************************************************************************
- * \brief
- *    extract bottom field from a frame 
- ************************************************************************
- */
-void split_field_bot()
-{
-  int i;
-
-  for (i=0; i<img->height; i++)
-  {
-    memcpy(enc_picture->imgY[i], imgY_frm[i*2 + 1], img->width);
-  }
-
-  for (i=0; i<img->height_cr; i++)
-  {
-    memcpy(enc_picture->imgUV[0][i], imgUV_frm[0][i*2 + 1], img->width_cr);
-    memcpy(enc_picture->imgUV[1][i], imgUV_frm[1][i*2 + 1], img->width_cr);
   }
 }
 

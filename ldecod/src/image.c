@@ -49,6 +49,7 @@
 #include "context_ini.h"
 #include "cabac.h"
 
+#include "vlc.h"
 
 #include "erc_api.h"
 extern objectBuffer_t *erc_object_list;
@@ -618,11 +619,18 @@ int read_new_slice()
   Slice *currSlice = img->currentSlice;
   Bitstream *currStream;
   int newframe;
+
+  int slice_id_a, slice_id_b, slice_id_c;
+  int redundant_pic_cnt_a, redundant_pic_cnt_b, redundant_pic_cnt_c;
+  long ftell_position, expected_slice_type;
+  
 //  int i;
-//  static count=0;
+  expected_slice_type = NALU_TYPE_DPA;
 
   while (1)
   {
+    ftell_position = ftell(bits);
+
     if (input->FileFormat == PAR_OF_ANNEXB)
       ret=GetAnnexbNALU (nalu);
     else
@@ -636,8 +644,15 @@ int read_new_slice()
     if (ret == 0)
     {
 //      printf ("read_new_slice: returning %s\n", "EOS");
-      FreeNALU(nalu);
-      return EOS;
+      if(expected_slice_type != NALU_TYPE_DPA)
+      {
+        /* oops... we found the next slice, go back! */
+	      fseek(bits, ftell_position, SEEK_SET);
+        FreeNALU(nalu);
+	      return current_header;
+      }
+      else
+        return EOS;
     }
 
     // Got a NALU
@@ -675,7 +690,7 @@ int read_new_slice()
         init_lists(img->type, img->currentSlice->structure);
         reorder_lists (img->type, img->currentSlice);
 
-/*        if (img->frame_num==1)
+/*        if (img->frame_num==1) // write a reference list
         {
           count ++;
           if (count==1)
@@ -750,21 +765,166 @@ int read_new_slice()
         //! else
         //!   use the DPA (and the DPB if present)
 
-        assert (0==1);
+        /* 
+            LC: inserting the code related to DP processing, mainly copying some of the parts
+	          related to NALU_TYPE_SLICE, NALU_TYPE_IDR.
+        */
+
+        if(expected_slice_type != NALU_TYPE_DPA)
+        {
+          /* oops... we found the next slice, go back! */
+          fseek(bits, ftell_position, SEEK_SET);
+          FreeNALU(nalu);
+          return current_header;
+        }
+
+        img->idr_flag          = (nalu->nal_unit_type == NALU_TYPE_IDR);
+        img->nal_reference_idc = nalu->nal_reference_idc;
+        img->disposable_flag   = (nalu->nal_reference_idc == NALU_PRIORITY_DISPOSABLE);
+        currSlice->dp_mode     = PAR_DP_3;
+        currSlice->max_part_nr = 3;
+        currSlice->ei_flag     = 0;
+        currStream             = currSlice->partArr[0].bitstream;
+        currStream->ei_flag    = 0;
+        currStream->frame_bitoffset = currStream->read_len = 0;
+        memcpy (currStream->streamBuffer, &nalu->buf[1], nalu->len-1);
+        currStream->code_len = currStream->bitstream_length = RBSPtoSODB(currStream->streamBuffer, nalu->len-1);
+        
+        BitsUsedByHeader     = FirstPartOfSliceHeader();
+        UseParameterSet (currSlice->pic_parameter_set_id);
+        BitsUsedByHeader    += RestOfSliceHeader ();
+        
+        FmoInit (active_pps, active_sps);
+        
+        init_lists(img->type, img->currentSlice->structure);
+        reorder_lists (img->type, img->currentSlice);
+        
+        if (img->MbaffFrameFlag)
+        {
+          init_mbaff_lists();
+        }
+
+        if (img->currentSlice->structure!=0)
+        {
+          img->height /=2 ;
+          img->height_cr /=2;
+        }
+	
+        // From here on, active_sps, active_pps and the slice header are valid
+        img->current_mb_nr = currSlice->start_mb_nr;
+
+        if (img->tr_old != img->ThisPOC)
+        {
+          newframe=1;
+          img->tr_old = img->ThisPOC;
+        }
+        else
+          newframe = 0;
+        if (newframe)
+          current_header = SOP;
+        else
+          current_header = SOS;
+
+        if(img->structure != img->structure_old)        
+          newframe |= 1;
+
+        img->structure_old = img->structure; 
+//! new stuff StW
+        if(newframe || g_new_frame)
+        {
+          current_header = SOP;
+          g_new_frame=0;
+        }
+        else
+          current_header = SOS;
+
+        /* 
+           LC:
+              Now I need to read the slice ID, which depends on the value of 
+              redundant_pic_cnt_present_flag (pag.49). 
+        */
+        
+        slice_id_a  = ue_v("NALU:SLICE_A slice_idr", currStream);
+        if (active_pps->redundant_pic_cnt_present_flag)
+          redundant_pic_cnt_a = ue_v("NALU:SLICE_A redudand_pic_cnt", currStream);
+        else
+          redundant_pic_cnt_a = 0;
+        
+        if (active_pps->entropy_coding_mode_flag)
+        {
+          int ByteStartPosition = currStream->frame_bitoffset/8;
+          if (currStream->frame_bitoffset%8 != 0) 
+          {
+            ByteStartPosition++;
+          }
+          arideco_start_decoding (&currSlice->partArr[0].de_cabac, currStream->streamBuffer, ByteStartPosition, &currStream->read_len, img->type);
+        }
+// printf ("read_new_slice: returning %s\n", current_header == SOP?"SOP":"SOS");
         break;
       case NALU_TYPE_DPB:
-        printf ("read_new_slice: Found unexpected NALU_TYPE_DPB, len %d\n", nalu->len);
-        printf ("ignoring... moving on with next NALU\n");
-        //! Note: one could do something smarter here, e.g. checking the Slice ID
-        //! in conjunction with redundant_pic_cnt to identify lost pictures
-        assert (0==1);
+        /* LC: inserting the code related to DP processing */
+
+        currStream             = currSlice->partArr[1].bitstream;
+        currStream->ei_flag    = 0;
+        currStream->frame_bitoffset = currStream->read_len = 0;
+        memcpy (currStream->streamBuffer, &nalu->buf[1], nalu->len-1);
+        currStream->code_len = currStream->bitstream_length = RBSPtoSODB(currStream->streamBuffer, nalu->len-1);
+
+        slice_id_b  = ue_v("NALU:SLICE_B slice_idr", currStream);
+        if (active_pps->redundant_pic_cnt_present_flag)
+          redundant_pic_cnt_b = ue_v("NALU:SLICE_B redudand_pic_cnt", currStream);
+        else
+          redundant_pic_cnt_b = 0;
+        
+        /*  LC: Initializing CABAC for the current data stream. */
+
+        if (active_pps->entropy_coding_mode_flag)
+        {
+          int ByteStartPosition = currStream->frame_bitoffset/8;
+          if (currStream->frame_bitoffset % 8 != 0) 
+            ByteStartPosition++;
+          
+          arideco_start_decoding (&currSlice->partArr[1].de_cabac, currStream->streamBuffer, 
+            ByteStartPosition, &currStream->read_len, img->type);
+          
+        }
+
+        /* LC: resilience code to be inserted */
+        /*         FreeNALU(nalu); */
+        /*         return current_header; */
+
         break;
       case NALU_TYPE_DPC:
-        printf ("read_new_slice: Found NALU_TYPE_DPC, len %d\n", nalu->len);
-        printf ("ignoring... moving on with next NALU\n");
-        //! Note: one could do something smarter here, e.g. checking the Slice ID
-        //! in conjunction with redundant_pic_cnt to identify lost pictures
-        assert (0==1);
+        /* LC: inserting the code related to DP processing */
+        currStream             = currSlice->partArr[2].bitstream;
+        currStream->ei_flag    = 0;
+        currStream->frame_bitoffset = currStream->read_len = 0;
+        memcpy (currStream->streamBuffer, &nalu->buf[1], nalu->len-1);
+        currStream->code_len = currStream->bitstream_length = RBSPtoSODB(currStream->streamBuffer, nalu->len-1);
+        
+        slice_id_c  = ue_v("NALU:SLICE_C slice_idr", currStream);
+        if (active_pps->redundant_pic_cnt_present_flag)
+          redundant_pic_cnt_c = ue_v("NALU:SLICE_C redudand_pic_cnt", currStream);
+        else
+          redundant_pic_cnt_c = 0;
+        
+        /* LC: Initializing CABAC for the current data stream. */
+
+        if (active_pps->entropy_coding_mode_flag)
+        {
+          int ByteStartPosition = currStream->frame_bitoffset/8;
+          if (currStream->frame_bitoffset % 8 != 0) 
+            ByteStartPosition++;
+          
+          arideco_start_decoding (&currSlice->partArr[2].de_cabac, currStream->streamBuffer, 
+            ByteStartPosition, &currStream->read_len, img->type);
+        }
+
+        /* LC: resilience code to be inserted */
+
+        FreeNALU(nalu);
+        return current_header;
+
         break;
       case NALU_TYPE_SEI:
         printf ("read_new_slice: Found NALU_TYPE_SEI, len %d\n", nalu->len);

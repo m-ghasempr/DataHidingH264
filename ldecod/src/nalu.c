@@ -26,7 +26,6 @@
  *    Converts a NALU to an RBSP
  *
  * \param 
- *    rbsp: byte buffer with the rbsp
  *    nalu: nalu structure to be filled
  *
  * \return
