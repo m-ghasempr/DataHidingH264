@@ -573,6 +573,7 @@ static int intra4x4_vert_left_pred(Macroblock *currMB,    //!< current macrobloc
 
   if (!block_available_up)
     printf ("warning: Intra_4x4_Vertical_Left prediction mode not allowed at mb %d\n", (int) currSlice->current_mb_nr);
+  else
   {
     imgpel PredPixel[10];
     imgpel PredPel[13];

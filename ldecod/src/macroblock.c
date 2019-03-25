@@ -62,11 +62,11 @@
 void dectracebitcnt(int count);
 
 
-extern void setup_read_macroblock         (Slice *currSlice);
-extern void set_read_CBP_and_coeffs_cabac (Slice *currSlice);
-extern void set_read_CBP_and_coeffs_cavlc (Slice *currSlice);
-extern void read_coeff_4x4_CAVLC          (Macroblock *currMB, int block_type, int i, int j, int levarr[16], int runarr[16], int *number_coefficients);
-extern void read_coeff_4x4_CAVLC_444      (Macroblock *currMB, int block_type, int i, int j, int levarr[16], int runarr[16], int *number_coefficients);
+extern void setup_read_macroblock              (Slice *currSlice);
+extern void set_read_CBP_and_coeffs_cabac      (Slice *currSlice);
+extern void set_read_CBP_and_coeffs_cavlc      (Slice *currSlice);
+extern void read_coeff_4x4_CAVLC               (Macroblock *currMB, int block_type, int i, int j, int levarr[16], int runarr[16], int *number_coefficients);
+extern void read_coeff_4x4_CAVLC_444           (Macroblock *currMB, int block_type, int i, int j, int levarr[16], int runarr[16], int *number_coefficients);
 
 static void read_motion_info_from_NAL_p_slice  (Macroblock *currMB);
 static void read_motion_info_from_NAL_b_slice  (Macroblock *currMB);
@@ -77,6 +77,8 @@ static int  decode_one_component_b_slice       (Macroblock *currMB, ColorPlane c
 static int  decode_one_component_sp_slice      (Macroblock *currMB, ColorPlane curr_plane, imgpel **currImg, StorablePicture *dec_picture);
 extern void update_direct_types                (Slice *currSlice);
 extern void set_intra_prediction_modes         (Slice *currSlice);
+extern void set_read_comp_coeff_cavlc          (Macroblock *currMB);
+extern void set_read_comp_coeff_cabac          (Macroblock *currMB);
 
 /*!
  ************************************************************************
@@ -192,6 +194,8 @@ void update_qp(Macroblock *currMB, int qp)
   currMB->qp_scaled[0] = qp + p_Vid->bitdepth_luma_qp_scale;
   set_chroma_qp(currMB);
   currMB->is_lossless = (Boolean) ((currMB->qp_scaled[0] == 0) && (p_Vid->lossless_qpprime_flag == 1));
+  set_read_comp_coeff_cavlc(currMB);
+  set_read_comp_coeff_cabac(currMB);
 }
 
 void read_delta_quant(SyntaxElement *currSE, DataPartition *dP, Macroblock *currMB, const byte *partMap, int type)

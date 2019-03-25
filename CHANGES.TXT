@@ -1,21 +1,25 @@
+Changes in Version JM 18.5 (since JM 18.4)
+------------------------------------------
+- fix uninitialized memory access for newly introduced level 5.2 which could result in low performance
+- fix crash in 4x4 intra prediction
+- fix qmatrix calculation at encoder
+- fix size of chroma_vector_adjustment array
+
 Changes in Version JM 18.4 (since JM 18.3)
 ------------------------------------------
 - turn HM like configuration option off by default
 - fixed for high bit depth and lossless
-
 
 Changes in Version JM 18.3 (since JM 18.2)
 ------------------------------------------
 - encoder: allow coding with the same GOP/reference picture settings like HM5 (BiL)
 - add HM-like example configurations (BiL)
 
-
 Changes in Version JM 18.2 (since JM 18.1)
 ------------------------------------------
 - encoder: fix MVC interlace encoder/decoder mismatch (AT/YHe/PeP)
 - encoder: reference picture list performance fixes (AT/YHe)
 - decoder: fix deblocking filter strength for SP frames (KS/AT)
-
 
 Changes in Version JM 18.1 (since JM 18.0)
 ------------------------------------------

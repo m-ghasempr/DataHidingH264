@@ -627,7 +627,7 @@ void CalculateQuant4x4Param(VideoParameters *p_Vid)
 
   if(no_q_matrix==TRUE)
   {
-    for(k_mod=0; k_mod<max_qp; k_mod++)
+    for(k_mod = 0; k_mod <= max_qp; k_mod++)
     {
       k = k_mod % 6;
       set_default_quant4x4(p_Quant->q_params_4x4[0][0][k_mod],  quant_coef[k], dequant_coef[k]);
@@ -640,7 +640,7 @@ void CalculateQuant4x4Param(VideoParameters *p_Vid)
   }
   else
   {
-    for(k_mod=0; k_mod<max_qp; k_mod++)
+    for(k_mod = 0; k_mod <= max_qp; k_mod++)
     {
       k = k_mod % 6;
       for(j=0; j<4; j++)
@@ -772,9 +772,9 @@ void CalculateQuant8x8Param(VideoParameters *p_Vid)
 
   if(no_q_matrix==TRUE)
   {
-    for(k = 0; k < max_qp; k++)
+    for(k = 0; k <= max_qp; k++)
     {
-      k_mod = k %6;
+      k_mod = k % 6;
       for(j=0; j<8; j++)
       {
         for(i=0; i<8; i++)
@@ -812,9 +812,9 @@ void CalculateQuant8x8Param(VideoParameters *p_Vid)
   }
   else
   {
-    for(k = 0; k < max_qp; k++)
+    for(k = 0; k <= max_qp; k++)
     {
-      k_mod = k %6;
+      k_mod = k % 6;
       for(j=0; j<8; j++)
       {
         for(i=0; i<8; i++)

@@ -35,7 +35,7 @@ static const unsigned int MaxMBPS[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 1485, 1485, 3
 // since the way values are specified
 // (i.e. mvlowbound = (levelmvlowbound + 1) and the way
 // Subpel ME is performed, subpel will always be within range.
-static const int LEVELVMVLIMIT[17][6] =
+static const int LEVELVMVLIMIT[18][6] =
 {
   {  -63,  63,  -128,  127,  -256,  255},
   {  -63,  63,  -128,  127,  -256,  255},
@@ -46,6 +46,7 @@ static const int LEVELVMVLIMIT[17][6] =
   { -255, 255,  -512,  511, -1024, 1023},
   { -255, 255,  -512,  511, -1024, 1023},
   { -255, 255,  -512,  511, -1024, 1023},
+  { -511, 511, -1024, 1023, -2048, 2047},
   { -511, 511, -1024, 1023, -2048, 2047},
   { -511, 511, -1024, 1023, -2048, 2047},
   { -511, 511, -1024, 1023, -2048, 2047},

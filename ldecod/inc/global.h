@@ -547,7 +547,7 @@ typedef struct slice
   int **siblock;
   byte **ipredmode;
   char  *intra_block;
-  char  chroma_vector_adjustment[6][16];
+  char  chroma_vector_adjustment[6][32];
   void (*read_CBP_and_coeffs_from_NAL) (Macroblock *currMB);
   int  (*decode_one_component     )    (Macroblock *currMB, ColorPlane curr_plane, imgpel **currImg, struct storable_picture *dec_picture);
   int  (*readSlice                )    (struct video_par *, struct inp_par *);  
