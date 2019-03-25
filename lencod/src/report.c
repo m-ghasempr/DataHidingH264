@@ -48,14 +48,11 @@ void   report_log_mode(InputParameters *params, StatParameters *stats, int64 bit
 void report_frame_statistic()
 {
   FILE *p_stat_frm = NULL;
-  static int64 last_mode_use [NUM_SLICE_TYPES][MAXMODE];
-  static int64 last_mode_use_transform[NUM_SLICE_TYPES][MAXMODE][2];
-  static int   last_b8_mode_0[NUM_SLICE_TYPES][2];
-  static int   last_mode_chroma_use[4];
   static int64 last_bit_ctr_n = 0;
   int i;
   char name[30];
   int bitcounter;
+  StatParameters *cur_stats = &enc_picture->stats;
 
 #ifndef WIN32
   time_t now;
@@ -143,80 +140,72 @@ void report_frame_statistic()
 
   //report modes
   //I-Modes
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[I_SLICE][I4MB ] - last_mode_use[I_SLICE][I4MB]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[I_SLICE][I8MB ] - last_mode_use[I_SLICE][I8MB]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[I_SLICE][I16MB] - last_mode_use[I_SLICE][I16MB]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[I_SLICE][I4MB ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[I_SLICE][I8MB ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[I_SLICE][I16MB]);
 
   //chroma intra mode
-  fprintf(p_stat_frm, " %5d|", stats->intra_chroma_mode[0] - last_mode_chroma_use[0]);
-  fprintf(p_stat_frm, " %5d|", stats->intra_chroma_mode[1] - last_mode_chroma_use[1]);
-  fprintf(p_stat_frm, " %5d|", stats->intra_chroma_mode[2] - last_mode_chroma_use[2]);
-  fprintf(p_stat_frm, " %5d|", stats->intra_chroma_mode[3] - last_mode_chroma_use[3]);
+  fprintf(p_stat_frm, " %5d|", cur_stats->intra_chroma_mode[0]);
+  fprintf(p_stat_frm, " %5d|", cur_stats->intra_chroma_mode[1]);
+  fprintf(p_stat_frm, " %5d|", cur_stats->intra_chroma_mode[2]);
+  fprintf(p_stat_frm, " %5d|", cur_stats->intra_chroma_mode[3]);
 
   //P-Modes
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[P_SLICE][I4MB ] - last_mode_use[P_SLICE][I4MB]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[P_SLICE][I8MB ] - last_mode_use[P_SLICE][I8MB]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[P_SLICE][I16MB] - last_mode_use[P_SLICE][I16MB]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[P_SLICE][0    ] - last_mode_use[P_SLICE][0   ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[P_SLICE][I4MB ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[P_SLICE][I8MB ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[P_SLICE][I16MB]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[P_SLICE][0    ]);
 
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[P_SLICE][1    ] - last_mode_use[P_SLICE][1   ]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[P_SLICE][2    ] - last_mode_use[P_SLICE][2   ]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[P_SLICE][3    ] - last_mode_use[P_SLICE][3   ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[P_SLICE][1    ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[P_SLICE][2    ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[P_SLICE][3    ]);
   
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use_transform[P_SLICE][1][0] - last_mode_use_transform[P_SLICE][1][0]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use_transform[P_SLICE][1][1] - last_mode_use_transform[P_SLICE][1][1]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use_transform[P_SLICE][2][0] - last_mode_use_transform[P_SLICE][2][0]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use_transform[P_SLICE][2][1] - last_mode_use_transform[P_SLICE][2][1]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use_transform[P_SLICE][3][0] - last_mode_use_transform[P_SLICE][3][0]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use_transform[P_SLICE][3][1] - last_mode_use_transform[P_SLICE][3][1]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use_transform[P_SLICE][1][0]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use_transform[P_SLICE][1][1]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use_transform[P_SLICE][2][0]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use_transform[P_SLICE][2][1]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use_transform[P_SLICE][3][0]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use_transform[P_SLICE][3][1]);
 
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[P_SLICE][P8x8 ] - last_mode_use[P_SLICE][P8x8]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[P_SLICE][4    ] - last_mode_use[P_SLICE][4   ]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use_transform[P_SLICE][4][0] - last_mode_use_transform[P_SLICE][4][0]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use_transform[P_SLICE][4][1] - last_mode_use_transform[P_SLICE][4][1]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[P_SLICE][5    ] - last_mode_use[P_SLICE][5   ]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[P_SLICE][6    ] - last_mode_use[P_SLICE][6   ]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[P_SLICE][7    ] - last_mode_use[P_SLICE][7   ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[P_SLICE][P8x8 ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[P_SLICE][4    ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use_transform[P_SLICE][4][0]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use_transform[P_SLICE][4][1]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[P_SLICE][5    ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[P_SLICE][6    ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[P_SLICE][7    ]);
 
   //B-Modes
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[B_SLICE][I4MB ] - last_mode_use[B_SLICE][I4MB]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[B_SLICE][I8MB ] - last_mode_use[B_SLICE][I8MB]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[B_SLICE][I16MB] - last_mode_use[B_SLICE][I16MB]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[B_SLICE][0    ] - last_mode_use[B_SLICE][0   ]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[B_SLICE][1    ] - last_mode_use[B_SLICE][1   ]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[B_SLICE][2    ] - last_mode_use[B_SLICE][2   ]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[B_SLICE][3    ] - last_mode_use[B_SLICE][3   ]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use_transform[B_SLICE][0][0] - last_mode_use_transform[B_SLICE][0][0]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use_transform[B_SLICE][0][1] - last_mode_use_transform[B_SLICE][0][1]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use_transform[B_SLICE][1][0] - last_mode_use_transform[B_SLICE][1][0]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use_transform[B_SLICE][1][1] - last_mode_use_transform[B_SLICE][1][1]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use_transform[B_SLICE][2][0] - last_mode_use_transform[B_SLICE][2][0]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use_transform[B_SLICE][2][1] - last_mode_use_transform[B_SLICE][2][1]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use_transform[B_SLICE][3][0] - last_mode_use_transform[B_SLICE][3][0]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use_transform[B_SLICE][3][1] - last_mode_use_transform[B_SLICE][3][1]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[B_SLICE][I4MB ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[B_SLICE][I8MB ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[B_SLICE][I16MB]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[B_SLICE][0    ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[B_SLICE][1    ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[B_SLICE][2    ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[B_SLICE][3    ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use_transform[B_SLICE][0][0]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use_transform[B_SLICE][0][1]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use_transform[B_SLICE][1][0]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use_transform[B_SLICE][1][1]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use_transform[B_SLICE][2][0]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use_transform[B_SLICE][2][1]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use_transform[B_SLICE][3][0]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use_transform[B_SLICE][3][1]);
 
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[B_SLICE][P8x8] - last_mode_use[B_SLICE][P8x8]);
-  fprintf(p_stat_frm, " %d|", (stats->b8_mode_0_use [B_SLICE][0]+stats->b8_mode_0_use [B_SLICE][1]) - (last_b8_mode_0[B_SLICE][0]+last_b8_mode_0[B_SLICE][1]));
-  fprintf(p_stat_frm, " %5d|", stats->b8_mode_0_use [B_SLICE][0] - last_b8_mode_0[B_SLICE][0]);
-  fprintf(p_stat_frm, " %5d|", stats->b8_mode_0_use [B_SLICE][1] - last_b8_mode_0[B_SLICE][1]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[B_SLICE][4   ] - last_mode_use[B_SLICE][4   ]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use_transform[B_SLICE][4][0] - last_mode_use_transform[B_SLICE][4][0]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use_transform[B_SLICE][4][1] - last_mode_use_transform[B_SLICE][4][1]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[B_SLICE][5   ] - last_mode_use[B_SLICE][5   ]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[B_SLICE][6   ] - last_mode_use[B_SLICE][6   ]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[B_SLICE][7   ] - last_mode_use[B_SLICE][7   ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[B_SLICE][P8x8]);
+  fprintf(p_stat_frm, " %d|", (cur_stats->b8_mode_0_use [B_SLICE][0] + cur_stats->b8_mode_0_use [B_SLICE][1]));
+  fprintf(p_stat_frm, " %5d|", cur_stats->b8_mode_0_use [B_SLICE][0]);
+  fprintf(p_stat_frm, " %5d|", cur_stats->b8_mode_0_use [B_SLICE][1]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[B_SLICE][4   ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use_transform[B_SLICE][4][0]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use_transform[B_SLICE][4][1]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[B_SLICE][5   ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[B_SLICE][6   ]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[B_SLICE][7   ]);
 
   fprintf(p_stat_frm, "\n");
 
   //save the last results
-  memcpy(last_mode_use[I_SLICE], stats->mode_use[I_SLICE], MAXMODE *  sizeof(int64));
-  memcpy(last_mode_use[P_SLICE], stats->mode_use[P_SLICE], MAXMODE *  sizeof(int64));
-  memcpy(last_mode_use[B_SLICE], stats->mode_use[B_SLICE], MAXMODE *  sizeof(int64));
-  memcpy(last_mode_use_transform[P_SLICE], stats->mode_use_transform[P_SLICE], 2 * MAXMODE * sizeof(int64));
-  memcpy(last_mode_use_transform[B_SLICE], stats->mode_use_transform[B_SLICE], 2 * MAXMODE * sizeof(int64));
-  memcpy(last_b8_mode_0[B_SLICE], stats->b8_mode_0_use[B_SLICE], 2 *  sizeof(int));
-  memcpy(last_mode_chroma_use, stats->intra_chroma_mode, 4 *  sizeof(int));
-
   frame_statistic_start = 0;
   fclose(p_stat_frm);
 }
@@ -353,10 +342,6 @@ void report_stats(InputParameters *params, StatParameters *stats, int64 bit_use[
   fprintf(p_stat,"\n ---------------------|----------------|---------------|");
   fprintf(p_stat,"\n");
 
-  // QUANT.
-  fprintf(p_stat,"\n Average quant        |");
-  fprintf(p_stat," %5d          |", iabs(params->qp0));
-  fprintf(p_stat," %5.2f         |", (float)stats->quant1/dmax(1.0,(float)stats->quant0));
   fprintf(p_stat,"\n ---------------------|----------------|---------------|---------------|");
   fprintf(p_stat,"\n     SNR              |        I       |       P       |       B       |");
   fprintf(p_stat,"\n ---------------------|----------------|---------------|---------------|");
@@ -366,6 +351,17 @@ void report_stats(InputParameters *params, StatParameters *stats, int64 bit_use[
     dist->metric[PSNR].avslice[I_SLICE][1], dist->metric[PSNR].avslice[P_SLICE][1], dist->metric[PSNR].avslice[B_SLICE][1]);
   fprintf(p_stat,"\n SNR V(dB)            |      %5.3f    |     %5.3f    |     %5.3f    |",
     dist->metric[PSNR].avslice[I_SLICE][2], dist->metric[PSNR].avslice[P_SLICE][2], dist->metric[PSNR].avslice[B_SLICE][2]);
+  fprintf(p_stat,"\n ---------------------|----------------|---------------|---------------|");  
+  fprintf(p_stat,"\n");
+
+  // QUANT.
+  fprintf(p_stat,"\n ---------------------|----------------|---------------|---------------|");
+  fprintf(p_stat,"\n     Ave Quant        |        I       |       P       |       B       |");
+  fprintf(p_stat,"\n ---------------------|----------------|---------------|---------------|");
+  fprintf(p_stat,"\n        QP            |      %5.3f    |     %5.3f    |     %5.3f    |",
+    (float)stats->quant[I_SLICE]/dmax(1.0,(float)stats->num_macroblocks[I_SLICE]),
+    (float)stats->quant[P_SLICE]/dmax(1.0,(float)stats->num_macroblocks[P_SLICE]),
+    (float)stats->quant[B_SLICE]/dmax(1.0,(float)stats->num_macroblocks[B_SLICE]));
   fprintf(p_stat,"\n ---------------------|----------------|---------------|---------------|");  
   fprintf(p_stat,"\n");
 
@@ -675,8 +671,8 @@ void report( ImageParameters *img, InputParameters *params, StatParameters *stat
     for(i=0; i < MAXMODE; i++)
       bit_use[j][1] += stats->bit_use_mode[j][i];
 
-    bit_use[j][1] += stats->bit_use_header[j];
     bit_use[j][1] += stats->bit_use_mb_type[j];
+    bit_use[j][1] += stats->bit_use_header[j];    
     bit_use[j][1] += stats->tmp_bit_use_cbp[j];
     bit_use[j][1] += stats->bit_use_coeffC[j];
     bit_use[j][1] += stats->bit_use_coeff[0][j];   
@@ -803,8 +799,11 @@ void report( ImageParameters *img, InputParameters *params, StatParameters *stat
 
   stats->bitrate= ((float) total_bits * frame_rate) / ((float) (stats->frame_counter));
   fprintf(stdout, " Bit rate (kbit/s)  @ %2.2f Hz     : %5.2f\n", frame_rate, stats->bitrate / 1000);
+  
+  for (i = 0; i < 5; i++)
+    stats->bit_ctr_emulationprevention += stats->bit_use_stuffingBits[i];
 
-  fprintf(stdout, " Bits to avoid Startcode Emulation : %d \n", stats->bit_ctr_emulationprevention);
+  fprintf(stdout, " Bits to avoid Startcode Emulation : %" FORMAT_OFF_T  " \n", stats->bit_ctr_emulationprevention);
   fprintf(stdout, " Bits for parameter sets           : %d \n\n", stats->bit_ctr_parametersets);
 
   switch (params->Verbose)

@@ -44,7 +44,7 @@
 int quant_4x4_around(int (*tblock)[16], int block_y, int block_x, int  qp,                 
                      int*  ACLevel, int*  ACRun, 
                      int **fadjust4x4, int **levelscale, int **invlevelscale, int **leveloffset,
-                     int *coeff_cost, const byte (*pos_scan)[2], const byte *c_cost)
+                     int *coeff_cost, const byte (*pos_scan)[2], const byte *c_cost, int is_cavlc)
 {
   static int i,j, coeff_ctr;
 
@@ -74,22 +74,22 @@ int quant_4x4_around(int (*tblock)[16], int block_y, int block_x, int  qp,
 
       if (level != 0)
       {
-        if (params->symbol_mode == CAVLC)
+        if (is_cavlc)
           level = imin(level, CAVLC_LEVEL_LIMIT);
 
         fadjust4x4[j][block_x + i] = rshift_rnd_sf((AdaptRndWeight * (scaled_coeff - (level << q_bits))), q_bits + 1);
 
         *coeff_cost += (level > 1) ? MAX_VALUE : c_cost[run];
 
-        level  = isignab(level, *m7);
-        *m7    = rshift_rnd_sf(((level * invlevelscale[j][i]) << qp_per), 4);
+        level   = isignab(level, *m7);
+        *m7     = rshift_rnd_sf(((level * invlevelscale[j][i]) << qp_per), 4);
         // inverse scale can be alternative performed as follows to ensure 16bit
         // arithmetic is satisfied.
         // *m7 = (qp_per<4) ? rshift_rnd_sf((level*invlevelscale[j][i]),4-qp_per) : (level*invlevelscale[j][i])<<(qp_per-4);
-        *ACL++ = level;
-        *ACR++ = run; 
+        *ACL++  = level;
+        *ACR++  = run; 
         // reset zero level counter
-        run    = 0;
+        run     = 0;
         nonzero = TRUE;        
       }
       else
@@ -114,7 +114,7 @@ int quant_4x4_around(int (*tblock)[16], int block_y, int block_x, int  qp,
 int quant_ac4x4_around(int (*tblock)[16], int block_y, int block_x, int qp,
                        int*  ACLevel, int*  ACRun, 
                        int **fadjust4x4, int **levelscale, int **invlevelscale, int **leveloffset,
-                       int *coeff_cost, const byte (*pos_scan)[2], const byte *c_cost, int type)
+                       int *coeff_cost, const byte (*pos_scan)[2], const byte *c_cost, int type, int is_cavlc)
 {
   static int i,j, coeff_ctr;
 
@@ -143,7 +143,7 @@ int quant_ac4x4_around(int (*tblock)[16], int block_y, int block_x, int qp,
 
       if (level != 0)
       {
-        if (params->symbol_mode == CAVLC)
+        if (is_cavlc)
           level = imin(level, CAVLC_LEVEL_LIMIT);
 
         fadjust4x4[j][block_x + i] = rshift_rnd_sf((AdaptRndWeight * (scaled_coeff - (level << q_bits))), (q_bits + 1));
@@ -155,10 +155,10 @@ int quant_ac4x4_around(int (*tblock)[16], int block_y, int block_x, int qp,
         // inverse scale can be alternative performed as follows to ensure 16bit
         // arithmetic is satisfied.
         // *m7 = (qp_per<4) ? rshift_rnd_sf((level*invlevelscale[j][i]),4-qp_per) : (level*invlevelscale[j][i])<<(qp_per-4);
-        *ACL++ = level;
-        *ACR++ = run; 
+        *ACL++  = level;
+        *ACR++  = run; 
         // reset zero level counter
-        run    = 0;
+        run     = 0;
         nonzero = TRUE;
       }
       else
@@ -192,7 +192,7 @@ int quant_ac4x4_around(int (*tblock)[16], int block_y, int block_x, int qp,
  ************************************************************************
  */
 int quant_dc4x4_around(int (*tblock)[4], int qp, int* DCLevel, int* DCRun, 
-                       int levelscale, int invlevelscale, int **leveloffset, const byte (*pos_scan)[2])
+                       int levelscale, int invlevelscale, int leveloffset, const byte (*pos_scan)[2], int is_calvc)
 {
   static int i,j, coeff_ctr;
 
@@ -214,31 +214,31 @@ int quant_dc4x4_around(int (*tblock)[4], int qp, int* DCLevel, int* DCRun,
     j = *p_scan++;  // vertical position
 
     m7 = &tblock[j][i];
-    
+
     if (*m7 != 0)
     {    
-    scaled_coeff = iabs (*m7) * levelscale;
-    level = (scaled_coeff + (leveloffset[0][0] << 1) ) >> q_bits;
+      scaled_coeff = iabs (*m7) * levelscale;
+      level = (scaled_coeff + (leveloffset << 1) ) >> q_bits;
 
-    if (level != 0)
-    {
-      if (params->symbol_mode == CAVLC)
-        level = imin(level, CAVLC_LEVEL_LIMIT);
-      level = isignab(level, *m7);
+      if (level != 0)
+      {
+        if (is_calvc)
+          level = imin(level, CAVLC_LEVEL_LIMIT);
 
-      *m7 = level;
-      *DCL++  = level;
-      *DCR++  = run;
-      // reset zero level counter
-      run     = 0;
-      nonzero = TRUE;
+        level   = isignab(level, *m7);
+        *m7     = level;
+        *DCL++  = level;
+        *DCR++  = run;
+        // reset zero level counter
+        run     = 0;
+        nonzero = TRUE;
+      }
+      else
+      {
+        run++;
+        *m7 = 0;
+      }
     }
-    else
-    {
-      run++;
-      *m7 = 0;
-    }
-  }
     else
     {
       run++;

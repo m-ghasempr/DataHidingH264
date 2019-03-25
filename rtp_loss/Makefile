@@ -29,7 +29,7 @@ endif
 
 LIBS=   -lm
 AFLAGS=  
-CFLAGS=  -ffloat-store
+CFLAGS=  -ffloat-store -fsigned-char
 FLAGS=  $(CFLAGS) -Wall -I$(INCDIR) -D __USE_LARGEFILE64 -D _FILE_OFFSET_BITS=64
 
 ifeq ($(DBG),1)

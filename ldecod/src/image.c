@@ -673,7 +673,7 @@ int read_new_slice(void)
         currSlice->dpB_NotPresent =1; 
         currSlice->dpC_NotPresent =1; 
 
-        img->idr_flag          = 0;
+        img->idr_flag          = FALSE;
         img->nal_reference_idc = nalu->nal_reference_idc;
         currSlice->dp_mode     = PAR_DP_3;
         currSlice->max_part_nr = 3;
@@ -929,8 +929,7 @@ void init_picture(ImageParameters *img, struct inp_par *inp)
 
   if (img->structure==FRAME ||img->structure==TOP_FIELD)
   {
-    ftime (&(img->tstruct_start));             // start time ms
-    time  ( &(img->ltime_start));              // start time s
+    gettime (&(img->start_time));             // start time
   }
 
   dec_picture = alloc_storable_picture ((PictureStructure) img->structure, img->width, img->height, img->width_cr, img->height_cr);
@@ -1254,10 +1253,9 @@ void exit_picture(void)
 
   if ((structure==FRAME)||structure==BOTTOM_FIELD)
   {
-    ftime (&(img->tstruct_end));              // start time ms
-    time  ( &(img->ltime_end));               // start time s
+    gettime (&(img->end_time));              // end time
 
-    tmp_time=(img->ltime_end * 1000 + img->tstruct_end.millitm) - (img->ltime_start * 1000 + img->tstruct_start.millitm);
+    tmp_time= timediff(&(img->start_time), &(img->end_time));
     tot_time=tot_time + tmp_time;
 
     sprintf(yuvFormat,"%s", yuv_types[chroma_format_idc]);
@@ -1404,7 +1402,7 @@ void init_old_slice(void)
 
   old_slice.nal_ref_idc = INT_MAX;
 
-  old_slice.idr_flag = 0;
+  old_slice.idr_flag = FALSE;
 
   old_slice.pic_oder_cnt_lsb          = UINT_MAX;
   old_slice.delta_pic_oder_cnt_bottom = INT_MAX;

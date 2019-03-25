@@ -272,7 +272,7 @@ void AssignQuantParam(pic_parameter_set_rbsp_t* pps, seq_parameter_set_rbsp_t* s
   if(!pps->pic_scaling_matrix_present_flag && !sps->seq_scaling_matrix_present_flag)
   {
     for(i=0; i<12; i++)
-      qmatrix[i] = (i<6) ? quant_org:quant8_org;
+      qmatrix[i] = (i < 6) ? quant_org : quant8_org;
   }
   else
   {

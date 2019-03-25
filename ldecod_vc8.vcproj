@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="Windows-1252"?>
 <VisualStudioProject
 	ProjectType="Visual C++"
-	Version="8.00"
+	Version="8,00"
 	Name="ldecod"
 	ProjectGUID="{5499B067-CF32-4141-A757-E0A29866994A}"
 	RootNamespace="ldecod"
@@ -347,6 +347,10 @@
 			</File>
 			<File
 				RelativePath=".\ldecod\src\vlc.c"
+				>
+			</File>
+			<File
+				RelativePath=".\ldecod\src\win32.c"
 				>
 			</File>
 		</Filter>

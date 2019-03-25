@@ -55,6 +55,7 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
   short       pslice      = (img->type==P_SLICE) || (img->type==SP_SLICE);
   short       intra       = (islice || (pslice && img->mb_y==img->mb_y_upd && img->mb_y_upd!=img->mb_y_intra));
   int         best8x8l0ref, best8x8l1ref; 
+  int         is_cavlc = (img->currentSlice->symbol_mode == CAVLC);
 
   int         prev_mb_nr  = FmoGetPreviousMBNr(img->current_mb_nr);
   Macroblock* prevMB      = (prev_mb_nr >= 0) ? &img->mb_data[prev_mb_nr]:NULL ;
@@ -104,7 +105,7 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
         best_mode = 0;
         currMB->c_ipred_mode=DC_PRED_8;
         min_rdcost = max_rdcost;
-        compute_mode_RD_cost(0, currMB, &enc_mb, &min_rdcost, &min_dcost, &min_rate, i16mode, bslice, &inter_skip);
+        compute_mode_RD_cost(0, currMB, &enc_mb, &min_rdcost, &min_dcost, &min_rate, i16mode, bslice, &inter_skip, is_cavlc);
       }
     }
 
@@ -194,7 +195,7 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
             }
             
             currMB->c_ipred_mode=DC_PRED_8;
-            compute_mode_RD_cost(mode, currMB, &enc_mb, &min_rdcost, &min_dcost, &min_rate, i16mode, bslice, &inter_skip);
+            compute_mode_RD_cost(mode, currMB, &enc_mb, &min_rdcost, &min_dcost, &min_rate, i16mode, bslice, &inter_skip, is_cavlc);
           } // for (ctr16x16=0, k=0; k<1; k++)
 
           if(pslice)
@@ -254,7 +255,7 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
         for (cost_direct=cbp8x8=cbp_blk8x8=cnt_nonz_8x8=0, block=0; block<4; block++)
         {
           submacroblock_mode_decision(&enc_mb, &tr8x8, currMB, cofAC8x8ts[0][block], cofAC8x8ts[1][block], cofAC8x8ts[2][block],
-            &have_direct, bslice, block, &cost_direct, &cost, &cost8x8_direct, 1);
+            &have_direct, bslice, block, &cost_direct, &cost, &cost8x8_direct, 1, is_cavlc);
           set_subblock8x8_info(b8x8info, P8x8, block, &tr8x8);
         }
 
@@ -279,7 +280,7 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
         for (cost_direct=cbp8x8=cbp_blk8x8=cnt_nonz_8x8=0, block=0; block<4; block++)
         {
           submacroblock_mode_decision(&enc_mb, &tr4x4, currMB, cofAC8x8[block], cofAC8x8CbCr[0][block], cofAC8x8CbCr[1][block],
-            &have_direct, bslice, block, &cost_direct, &cost, &cost8x8_direct, 0);
+            &have_direct, bslice, block, &cost_direct, &cost, &cost8x8_direct, 0, is_cavlc);
           set_subblock8x8_info(b8x8info, P8x8, block, &tr4x4);
         }
         //--- re-set coding state (as it was before 8x8 block coding) ---
@@ -414,7 +415,7 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
           }
 
           if (enc_mb.valid[mode])
-            compute_mode_RD_cost(mode, currMB, &enc_mb, &min_rdcost, &min_dcost, &min_rate, i16mode, bslice, &inter_skip);
+            compute_mode_RD_cost(mode, currMB, &enc_mb, &min_rdcost, &min_dcost, &min_rate, i16mode, bslice, &inter_skip, is_cavlc);
         }// for (ctr16x16=0, index=0; index<max_index; index++)
       }// for (currMB->c_ipred_mode=DC_PRED_8; currMB->c_ipred_mode<=max_chroma_pred_mode; currMB->c_ipred_mode++)
 
@@ -481,7 +482,7 @@ void encode_one_macroblock_highfast (Macroblock *currMB)
               }
 
               if (enc_mb.valid[mode])
-                compute_mode_RD_cost(mode, currMB, &enc_mb, &min_rdcost, &min_dcost, &min_rate, i16mode, bslice, &inter_skip);
+                compute_mode_RD_cost(mode, currMB, &enc_mb, &min_rdcost, &min_dcost, &min_rate, i16mode, bslice, &inter_skip, is_cavlc);
             } // for (index = 5; index < max_index; index++)
           }
         }

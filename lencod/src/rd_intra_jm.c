@@ -34,7 +34,7 @@
  *    Mode Decision for an 4x4 Intra block
  *************************************************************************************
  */
-int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int  b4,  double  lambda,  double*  min_cost, int cr_cbp[3])
+int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int  b4,  double  lambda,  double*  min_cost, int cr_cbp[3], int is_cavlc)
 {
   int    ipmode, best_ipmode = 0, i, j, y, dummy;
   int    c_nz, nonzero = 0;
@@ -139,7 +139,7 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int 
 #ifdef BEST_NZ_COEFF
       currMB->cbp_bits[0] = cbp_bits;
 #endif      
-      if ((rdcost = RDCost_for_4x4IntraBlocks (currMB, &c_nz, b8, b4, ipmode, lambda, mostProbableMode, c_nzCbCr)) < min_rdcost)
+      if ((rdcost = RDCost_for_4x4IntraBlocks (currMB, &c_nz, b8, b4, ipmode, lambda, mostProbableMode, c_nzCbCr, is_cavlc)) < min_rdcost)
       {
         //--- set coefficients ---
         memcpy(cofAC4x4[0],ACLevel, 18 * sizeof(int));
@@ -223,7 +223,7 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int 
           img->mb_ores[k][block_y+j][block_x+i]   = pImgOrg[k][img->pix_y+block_y+j][img->pix_x+block_x+i] - img->mpr_4x4[k][best_ipmode][j][i];
         }
       }
-      cr_cbp[k] = pDCT_4x4(currMB, k, block_x,block_y,&dummy,1);
+      cr_cbp[k] = pDCT_4x4(currMB, k, block_x,block_y,&dummy,1, is_cavlc);
     }
     select_plane(PLANE_Y);
   }
@@ -277,7 +277,7 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int 
  *    Mode Decision for an 4x4 Intra block
  *************************************************************************************
  */
-int Mode_Decision_for_4x4IntraBlocks_JM_Low (Macroblock *currMB, int  b8,  int  b4,  double  lambda,  double*  min_cost, int cr_cbp[3])
+int Mode_Decision_for_4x4IntraBlocks_JM_Low (Macroblock *currMB, int  b8,  int  b4,  double  lambda,  double*  min_cost, int cr_cbp[3], int is_cavlc)
 {
   int     ipmode, best_ipmode = 0, i, j, cost, dummy;
   int     nonzero = 0;
@@ -389,7 +389,7 @@ int Mode_Decision_for_4x4IntraBlocks_JM_Low (Macroblock *currMB, int  b8,  int  
   ipmode_DPCM=best_ipmode;  
 
   select_dct(img, currMB);
-  nonzero = cr_cbp[0] = pDCT_4x4 (currMB, PLANE_Y, block_x, block_y, &dummy, 1);
+  nonzero = cr_cbp[0] = pDCT_4x4 (currMB, PLANE_Y, block_x, block_y, &dummy, 1, is_cavlc);
 
   if (img->P444_joined)
   {
@@ -406,7 +406,7 @@ int Mode_Decision_for_4x4IntraBlocks_JM_Low (Macroblock *currMB, int  b8,  int  
         }
       }
 
-      cr_cbp[k] = pDCT_4x4(currMB, k, block_x,block_y,&dummy,1);
+      cr_cbp[k] = pDCT_4x4(currMB, k, block_x,block_y,&dummy,1, is_cavlc);
     }
     select_plane(PLANE_Y);
   }
@@ -420,7 +420,7 @@ int Mode_Decision_for_4x4IntraBlocks_JM_Low (Macroblock *currMB, int  b8,  int  
  *    Mode Decision for an 8x8 Intra block
  *************************************************************************************
  */
-int Mode_Decision_for_8x8IntraBlocks(Macroblock *currMB, int b8,double lambda,double *cost, int non_zero[3])
+int Mode_Decision_for_8x8IntraBlocks(Macroblock *currMB, int b8,double lambda,double *cost, int non_zero[3], int is_cavlc)
 {
   int  b4;
   double  cost4x4;
@@ -437,7 +437,7 @@ int Mode_Decision_for_8x8IntraBlocks(Macroblock *currMB, int b8,double lambda,do
 
   for (b4=0; b4<4; b4++)
   {
-    non_zero[0] |= Mode_Decision_for_4x4IntraBlocks (currMB, b8, b4, lambda, &cost4x4, CbCr_cbp);
+    non_zero[0] |= Mode_Decision_for_4x4IntraBlocks (currMB, b8, b4, lambda, &cost4x4, CbCr_cbp, is_cavlc);
     non_zero[1] |= CbCr_cbp[1];
     non_zero[2] |= CbCr_cbp[2];
     *cost += cost4x4;
@@ -455,7 +455,7 @@ int Mode_Decision_for_8x8IntraBlocks(Macroblock *currMB, int b8,double lambda,do
  *    4x4 Intra mode decision for an macroblock
  *************************************************************************************
  */
-int Mode_Decision_for_Intra4x4Macroblock (Macroblock *currMB, double lambda,  double* cost)
+int Mode_Decision_for_Intra4x4Macroblock (Macroblock *currMB, double lambda,  double* cost, int is_cavlc)
 {
   int  cbp=0, b8;
   double cost8x8;
@@ -465,7 +465,7 @@ int Mode_Decision_for_Intra4x4Macroblock (Macroblock *currMB, double lambda,  do
   
   for (*cost=0, b8=0; b8<4; b8++)
   {
-    if (Mode_Decision_for_8x8IntraBlocks (currMB, b8, lambda, &cost8x8, non_zero))
+    if (Mode_Decision_for_8x8IntraBlocks (currMB, b8, lambda, &cost8x8, non_zero, is_cavlc))
     {
       cbp |= (1<<b8);
     }
@@ -495,7 +495,7 @@ int Mode_Decision_for_Intra4x4Macroblock (Macroblock *currMB, double lambda,  do
 *    Intra 16x16 mode decision
 *************************************************************************************
 */
-void Intra16x16_Mode_Decision (Macroblock* currMB, int* i16mode)
+void Intra16x16_Mode_Decision (Macroblock* currMB, int* i16mode, int is_cavlc)
 {
   /* generate intra prediction samples for all 4 16x16 modes */
   intrapred_16x16 (currMB, PLANE_Y);
@@ -512,13 +512,13 @@ void Intra16x16_Mode_Decision (Macroblock* currMB, int* i16mode)
 
   find_sad_16x16 (currMB, i16mode);   /* get best new intra mode */
 
-  currMB->cbp = pDCT_16x16 (currMB, PLANE_Y, *i16mode);
+  currMB->cbp = pDCT_16x16 (currMB, PLANE_Y, *i16mode, is_cavlc);
   if (img->P444_joined)
   {
     select_plane(PLANE_U);
-    cmp_cbp[1] = pDCT_16x16 (currMB, PLANE_U, *i16mode);
+    cmp_cbp[1] = pDCT_16x16 (currMB, PLANE_U, *i16mode, is_cavlc);
     select_plane(PLANE_V);
-    cmp_cbp[2] = pDCT_16x16 (currMB, PLANE_V, *i16mode);
+    cmp_cbp[2] = pDCT_16x16 (currMB, PLANE_V, *i16mode, is_cavlc);
     select_plane(PLANE_Y);
     currMB->cbp |= cmp_cbp[1];
     currMB->cbp |= cmp_cbp[2];

@@ -31,6 +31,10 @@ static FILE *f = NULL;    // the output file
 int WriteAnnexbNALU (NALU_t *n)
 {
   int BitsWritten = 0;
+  int offset = 0;
+  int length = 4;
+  static const byte startcode[] = {0,0,0,1};
+  byte first_byte;
 
   assert (n != NULL);
   assert (n->forbidden_bit == 0);
@@ -38,19 +42,31 @@ int WriteAnnexbNALU (NALU_t *n)
   assert (n->startcodeprefix_len == 3 || n->startcodeprefix_len == 4);
 
 // printf ("WriteAnnexbNALU: writing %d bytes w/ startcode_len %d\n", n->len+1, n->startcodeprefix_len);
-  if (n->startcodeprefix_len > 3)
+  if (n->startcodeprefix_len < 4)
   {
-    putc (0, f);
-    BitsWritten =+ 8;
+    offset = 1;
+    length = 3;
   }
-  putc (0, f);
-  putc (0, f);
-  putc (1, f);
-  BitsWritten += 24;
 
-  n->buf[0] = (unsigned char) ((n->forbidden_bit << 7) | (n->nal_reference_idc << 5) | n->nal_unit_type);
+  if ( length != fwrite (startcode+offset, 1, length, f))
+  {
+    printf ("Fatal: cannot write %d bytes to bitstream file, exit (-1)\n", length);
+    exit (-1);
+  }
 
-// printf ("First Byte %x, nal_ref_idc %x, nal_unit_type %d\n", n->buf[0], n->nal_reference_idc, n->nal_unit_type);
+  BitsWritten = (length) << 3;
+
+  first_byte = (unsigned char) ((n->forbidden_bit << 7) | (n->nal_reference_idc << 5) | n->nal_unit_type);
+
+  if ( 1 != fwrite (&first_byte, 1, 1, f))
+  {
+    printf ("Fatal: cannot write %d bytes to bitstream file, exit (-1)\n", 1);
+    exit (-1);
+  }
+
+  BitsWritten += 8;
+
+// printf ("First Byte %x, nal_ref_idc %x, nal_unit_type %d\n", first_byte, n->nal_reference_idc, n->nal_unit_type);
 
   if (n->len != fwrite (n->buf, 1, n->len, f))
   {
@@ -62,7 +78,7 @@ int WriteAnnexbNALU (NALU_t *n)
   fflush (f);
 #if TRACE
   fprintf (p_trace, "\n\nAnnex B NALU w/ %s startcode, len %d, forbidden_bit %d, nal_reference_idc %d, nal_unit_type %d\n\n",
-    n->startcodeprefix_len == 4?"long":"short", n->len, n->forbidden_bit, n->nal_reference_idc, n->nal_unit_type);
+    n->startcodeprefix_len == 4?"long":"short", n->len + 1, n->forbidden_bit, n->nal_reference_idc, n->nal_unit_type);
   fflush (p_trace);
 #endif
   return BitsWritten;

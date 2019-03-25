@@ -350,13 +350,19 @@
 				RelativePath=".\lencod\src\rd_intra_jm.c">
 			</File>
 			<File
-				RelativePath=".\lencod\src\rdo_quant.c">
-			</File>
-			<File
 				RelativePath=".\lencod\src\rdopt.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\rdopt_coding_state.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\rdoq.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\rdoq_cabac.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\rdoq_cavlc.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\rdpicdecision.c">
@@ -390,6 +396,9 @@
 			</File>
 			<File
 				RelativePath=".\lencod\src\weighted_prediction.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\win32.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\wp_lms.c">
@@ -540,6 +549,9 @@
 				RelativePath=".\lencod\inc\mv-search.h">
 			</File>
 			<File
+				RelativePath=".\lencod\inc\nal.h">
+			</File>
+			<File
 				RelativePath=".\lencod\inc\nalu.h">
 			</File>
 			<File
@@ -582,13 +594,13 @@
 				RelativePath=".\lencod\inc\rd_intra_jm.h">
 			</File>
 			<File
-				RelativePath=".\lencod\inc\rdo_quant.h">
-			</File>
-			<File
 				RelativePath=".\lencod\inc\rdopt.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\rdopt_coding_state.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\rdoq.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\refbuf.h">

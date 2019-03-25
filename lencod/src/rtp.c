@@ -181,12 +181,14 @@ int WriteRTPPacket (RTPpacket_t *p, FILE *f)
 int WriteRTPNALU (NALU_t *n)
 {
   RTPpacket_t *p;
+  
+  byte first_byte;
 
   assert (f != NULL);
   assert (n != NULL);
   assert (n->len < 65000);
 
-  n->buf[0] = (byte)
+  first_byte = (byte)
     (n->forbidden_bit << 7      |
      n->nal_reference_idc << 5  |
      n->nal_unit_type );
@@ -213,8 +215,10 @@ int WriteRTPNALU (NALU_t *n)
   p->seq=CurrentRTPSequenceNumber++;
   p->timestamp=CurrentRTPTimestamp;
   p->ssrc=H264SSRC;
-  p->paylen = n->len;
-  memcpy (p->payload, n->buf, n->len);
+  p->paylen = 1 + n->len;
+
+  p->payload[0] = first_byte;
+  memcpy (p->payload+1, n->buf, n->len);
 
   // Generate complete RTP packet
   if (ComposeRTPPacket (p) < 0)

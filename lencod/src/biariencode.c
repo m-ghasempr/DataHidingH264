@@ -141,6 +141,18 @@ void propagate_carry(EncodingEnvironmentPtr eep)
 }
 
 /*!
+************************************************************************
+* \brief
+*    Initializes the EncodingEnvironment E and C values to zero
+************************************************************************
+*/
+void arienco_reset_EC(EncodingEnvironmentPtr eep)
+{
+  eep->E = 0;
+  eep->C = 0;
+}
+
+/*!
  ************************************************************************
  * \brief
  *    Initializes the EncodingEnvironment for the arithmetic coder
@@ -161,8 +173,6 @@ void arienco_start_encoding(EncodingEnvironmentPtr eep,
 
   Erange = HALF-2;
 
-  eep->E = 0;
-  eep->C = 0;
 }
 
 /*!
@@ -176,6 +186,19 @@ int arienco_bits_written(EncodingEnvironmentPtr eep)
   return (((*Ecodestrm_len) + Epbuf + 1) << 3) + (Echunks_outstanding * BITS_TO_LOAD) + BITS_TO_LOAD - Ebits_to_go;
 }
 
+
+
+/*!
+************************************************************************
+* \brief
+*    add slice bin number to picture bin counter
+*    should be only used when slice is terminated
+************************************************************************
+*/
+void set_pic_bin_count(EncodingEnvironmentPtr eep)
+{
+  pic_bin_count += eep->E*8 + eep->C; // no of processed bins
+}
 
 /*!
  ************************************************************************
@@ -191,7 +214,7 @@ void arienco_done_encoding(EncodingEnvironmentPtr eep)
   unsigned char mask;
   int* bitCount = img->mb_data[img->current_mb_nr].bitcounter;
 
-  pic_bin_count += eep->E*8 + eep->C; // no of processed bins
+  //pic_bin_count += eep->E*8 + eep->C; // no of processed bins
 
   if (remaining_bits <= 5) // one terminating byte 
   {

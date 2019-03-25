@@ -38,6 +38,7 @@
 #include "img_chroma.h"
 #include "img_distortion.h"
 #include "intrarefresh.h"
+#include "slice.h"
 #include "fmo.h"
 #include "sei.h"
 #include "memalloc.h"
@@ -51,9 +52,6 @@
 
 #include "q_matrix.h"
 #include "q_offsets.h"
-#include "quant4x4.h"
-#include "quant8x8.h"
-#include "quantChroma.h"
 #include "wp.h"
 #include "input.h"
 #include "image.h"
@@ -67,8 +65,8 @@ extern void DeblockFrame(ImageParameters *img, imgpel **, imgpel ***);
 static void code_a_picture(Picture *pic);
 static void field_picture(Picture *top, Picture *bottom);
 static void prepare_enc_frame_picture (StorablePicture **stored_pic);
-static int  writeout_picture(Picture *pic);
-static int  picture_structure_decision(Picture *frame, Picture *top, Picture *bot);
+static void writeout_picture(Picture *pic);
+static byte picture_structure_decision(Picture *frame, Picture *top, Picture *bot);
 static void distortion_fld (Picture *field_pic);
 static void field_mode_buffer (ImageParameters *img, InputParameters *params);
 static void frame_mode_buffer (ImageParameters *img, InputParameters *params);
@@ -78,7 +76,6 @@ static void put_buffer_frame(ImageParameters *img);
 static void put_buffer_top(ImageParameters *img);
 static void put_buffer_bot(ImageParameters *img);
 static void PaddAutoCropBorders (FrameFormat output, int img_size_x, int img_size_y, int img_size_x_cr, int img_size_y_cr);
-static void writeUnit(Bitstream* currStream, int partition);
 static void rdPictureCoding(void);
 
 #ifdef _ADAPT_LAST_GROUP_
@@ -270,6 +267,38 @@ static void code_a_picture(Picture *pic)
   if (img->MbaffFrameFlag)
     MbAffPostProc();
 }
+void update_global_stats(StatParameters *cur_stats)
+{  
+  int i, j, k;
+  for (i = 0; i < 4; i++)
+    stats->intra_chroma_mode[i]    += cur_stats->intra_chroma_mode[i];
+
+  for (i = 0; i < 5; i++)
+  {
+    stats->quant[i]                += cur_stats->quant[i];
+    stats->num_macroblocks[i]      += cur_stats->num_macroblocks[i];
+    stats->bit_use_mb_type [i]     += cur_stats->bit_use_mb_type[i];
+    stats->bit_use_header  [i]     += cur_stats->bit_use_header[i];
+    stats->tmp_bit_use_cbp [i]     += cur_stats->tmp_bit_use_cbp[i];
+    stats->bit_use_coeffC  [i]     += cur_stats->bit_use_coeffC[i];
+    stats->bit_use_coeff[0][i]     += cur_stats->bit_use_coeff[0][i];
+    stats->bit_use_coeff[1][i]     += cur_stats->bit_use_coeff[1][i]; 
+    stats->bit_use_coeff[2][i]     += cur_stats->bit_use_coeff[2][i]; 
+    stats->bit_use_delta_quant[i]  += cur_stats->bit_use_delta_quant[i];
+    stats->bit_use_stuffingBits[i] += cur_stats->bit_use_stuffingBits[i];
+
+    for (k = 0; k < 2; k++)
+      stats->b8_mode_0_use[i][k] += cur_stats->b8_mode_0_use[i][k];
+
+    for (j = 0; j < 15; j++)
+    {
+      stats->mode_use[i][j]     += cur_stats->mode_use[i][j];
+      stats->bit_use_mode[i][j] += cur_stats->bit_use_mode[i][j];
+      for (k = 0; k < 2; k++)
+        stats->mode_use_transform[i][j][k] += cur_stats->mode_use_transform[i][j][k];
+    }
+  }
+}
 
 void free_pictures(int stored_pic)
 {
@@ -302,10 +331,11 @@ int encode_one_frame (void)
   extern unsigned long total_frame_buffer;
 #endif
 
-  time_t ltime1, ltime2, tmp_time;
-  struct TIMEB tstruct1, tstruct2;
+  TIME_T start_time;
+  TIME_T end_time;
+  time_t  tmp_time;
 
-  me_time=0;
+  me_time = 0;
   img->rd_pass = 0;
 
   if( IS_INDEPENDENT(params) )
@@ -317,13 +347,12 @@ int encode_one_frame (void)
 
   for (i = 0; i < 6; i++)
     enc_frame_picture[i]  = NULL;
-  
-  ftime (&tstruct1);            // start time ms
-  time (&ltime1);               // start time s
+
+  gettime(&start_time);          // start time in ms
 
   //Rate control
-  img->write_macroblock = 0;
-/*
+  img->write_macroblock = FALSE;
+  /*
   //Shankar Regunathan (Oct 2002)
   //Prepare Panscanrect SEI payload
   UpdatePanScanRectInfo ();
@@ -333,7 +362,7 @@ int encode_one_frame (void)
   UpdateUser_data_registered_itu_t_t35 ();
   //Prepare RandomAccess SEI Payload
   UpdateRandomAccess ();
-*/
+  */
 
   if ((params->ResendPPS) && (img->frm_number !=0))
   {
@@ -342,7 +371,7 @@ int encode_one_frame (void)
   }
 
   put_buffer_frame (img);      // sets the pointers to the frame structures
-                            // (and not to one of the field structures)
+                               // (and not to one of the field structures)
   init_frame (img);
 
   ReadOneFrame (FrameNumberInFile, params->infile_header, &params->source, &params->output);
@@ -350,17 +379,12 @@ int encode_one_frame (void)
 
   // set parameters for direct mode and deblocking filter
   img->direct_spatial_mv_pred_flag = params->direct_spatial_mv_pred_flag;
-  
+
   img->DFDisableIdc                = params->DFDisableIdc[img->nal_reference_idc > 0][img->type];
   img->DFAlphaC0Offset             = params->DFAlpha     [img->nal_reference_idc > 0][img->type];
   img->DFBetaOffset                = params->DFBeta      [img->nal_reference_idc > 0][img->type];
 
   img->AdaptiveRounding            = params->AdaptiveRounding; 
-  // Initialize quantization functions based on rounding/quantization method
-  // Done here since we may wish to disable adaptive rounding on occasional intervals (even at a frame or gop level).
-  init_quant_4x4(params, img);
-  init_quant_8x8(params, img);
-  init_quant_Chroma(params, img);
 
   // Following code should consider optimal coding mode. Currently also does not support
   // multiple slices per frame.
@@ -395,7 +419,7 @@ int encode_one_frame (void)
 
     img->field_picture = 1;  // we encode fields
     field_picture (field_pic[0], field_pic[1]);
-    img->fld_flag = 1;
+    img->fld_flag = TRUE;
   }
   else
   {
@@ -403,10 +427,6 @@ int encode_one_frame (void)
     //Rate control
     if ( params->RCEnable && params->RCUpdateMode <= MAX_RC_MODE )
       generic_RC->FieldControl = 0;
-
-    // For frame coding, turn MB level field/frame coding flag on
-    if (params->MbInterlace)
-      mb_adaptive = 1;
 
     img->field_picture = 0; // we encode a frame
 
@@ -437,18 +457,14 @@ int encode_one_frame (void)
       // output the transformed and quantized coefficients (useful for switching SP frames)
       output_SP_coefficients();
     }
-    
-    // For field coding, turn MB level field/frame coding flag off
-    if (params->MbInterlace)
-      mb_adaptive = 0;
 
     if (params->PicInterlace == ADAPTIVE_CODING)
     {
       //Rate control
       if ( params->RCEnable && params->RCUpdateMode <= MAX_RC_MODE )
         generic_RC->FieldControl=1;
-      img->write_macroblock = 0;
-      img->bot_MB = 0;
+      img->write_macroblock = FALSE;
+      img->bot_MB = FALSE;
 
       img->field_picture = 1;  // we encode fields
       field_picture (field_pic[0], field_pic[1]);
@@ -470,18 +486,14 @@ int encode_one_frame (void)
         generic_RC->FieldFrame = !(img->fld_flag) ? 1 : 0;
     }
     else
-      img->fld_flag = 0;
-    
+      img->fld_flag = FALSE;
+
     img->SumFrameQP = tmpFrameQP;
   }
 
   stats->frame_counter++;
   stats->frame_ctr[img->type]++;
 
-  if (img->fld_flag)
-    stats->bit_ctr_emulationprevention += stats->em_prev_bits_fld;
-  else
-    stats->bit_ctr_emulationprevention += stats->em_prev_bits_frm;
 
   // Here, img->structure may be either FRAME or BOTTOM FIELD depending on whether AFF coding is used
   // The picture structure decision changes really only the fld_flag
@@ -495,23 +507,29 @@ int encode_one_frame (void)
   else                          //frame mode
   {
     frame_mode_buffer (img, params);
-  
+
     if (img->type==SP_SLICE && si_frame_indicator == 1)
     {
       writeout_picture (frame_pic_si);
       si_frame_indicator=0;
     }
     else
+    {
       writeout_picture (frame_pic[img->rd_pass]);
+    }
   }
 
   if (frame_pic_si)
+  {
     free_slice_list(frame_pic_si);
+  }
 
   for (i = 0; i < img->frm_iter; i++)
   {
     if (frame_pic[i])
+    {
       free_slice_list(frame_pic[i]);
+    }
   }
 
   if (field_pic)
@@ -528,9 +546,9 @@ int encode_one_frame (void)
   // in frame mode, the newly reconstructed frame has been inserted to the mem buffer
   // and it is time to prepare the spare picture SEI payload.
   if (params->InterlaceCodingOption == FRAME_CODING
-      && params->SparePictureOption && img->type != B_SLICE)
-    CalculateSparePicture ();
-*/
+  && params->SparePictureOption && img->type != B_SLICE)
+  CalculateSparePicture ();
+  */
 
   //Rate control
   if(params->RCEnable)
@@ -601,6 +619,8 @@ int encode_one_frame (void)
       free_storable_picture(enc_frame_picture[0]);
       free_storable_picture(enc_frame_picture[1]);
       free_storable_picture(enc_frame_picture[2]);
+      update_global_stats(&enc_field_picture[0]->stats);
+      update_global_stats(&enc_field_picture[1]->stats);
     }
     else
     {
@@ -627,6 +647,7 @@ int encode_one_frame (void)
         }
       }
       free_storable_picture(enc_field_picture[1]);
+      update_global_stats(&enc_frame_picture[img->rd_pass]->stats);
     }
   }
   else
@@ -634,12 +655,15 @@ int encode_one_frame (void)
     if (img->fld_flag)
     {
       store_picture_in_dpb(enc_field_picture[1]);
+      update_global_stats(&enc_field_picture[0]->stats);
+      update_global_stats(&enc_field_picture[1]->stats);
     }
     else
     {
       if ((params->redundant_pic_flag != 1) || (key_frame == 0))
       {
         store_picture_in_dpb (enc_frame_picture[img->rd_pass]);
+        update_global_stats(&enc_frame_picture[img->rd_pass]->stats);
         free_pictures(img->rd_pass);
       }
     }
@@ -668,11 +692,9 @@ int encode_one_frame (void)
     prev_frame_no = frame_no;
   }
 
-  time (&ltime2);               // end time sec
-  ftime (&tstruct2);            // end time ms
-
-  tmp_time = (ltime2 * 1000 + tstruct2.millitm) - (ltime1 * 1000 + tstruct1.millitm);
-  tot_time = tot_time + tmp_time;
+  gettime(&end_time);    // end time in ms
+  tmp_time  = timediff(&start_time, &end_time);
+  tot_time += tmp_time;
 
   if (stats->bit_ctr_parametersets_n!=0)
     ReportNALNonVLCBits(tmp_time, me_time);
@@ -693,22 +715,21 @@ int encode_one_frame (void)
       }
     }
 
+    stats->bit_counter[img->type] += stats->bit_ctr - stats->bit_ctr_n;
+
     switch (img->type)
     {
     case I_SLICE:
-      stats->bit_counter[I_SLICE] += stats->bit_ctr - stats->bit_ctr_n;
+    case SI_SLICE:
       ReportIntra(tmp_time,me_time);
       break;
     case SP_SLICE:
-      stats->bit_counter[P_SLICE] += stats->bit_ctr - stats->bit_ctr_n;
       ReportSP(tmp_time,me_time);
       break;
     case B_SLICE:
-      stats->bit_counter[B_SLICE] += stats->bit_ctr - stats->bit_ctr_n;
       ReportB(tmp_time,me_time);
       break;
     default:      // P
-      stats->bit_counter[P_SLICE] += stats->bit_ctr - stats->bit_ctr_n;
       ReportP(tmp_time,me_time);
     }
   }
@@ -759,34 +780,32 @@ int encode_one_frame (void)
  *
  ************************************************************************
  */
-static int writeout_picture(Picture *pic)
+static void writeout_picture(Picture *pic)
 {
-  Bitstream *currStream;
   int partition, slice;
-  Slice *currSlice;
+  Slice  *currSlice;
 
-  img->currentPicture=pic;
+  img->currentPicture = pic;
 
-  for (slice=0; slice<pic->no_slices; slice++)
+  // loop over all slices of the picture
+  for (slice=0; slice < pic->no_slices; slice++)
   {
     currSlice = pic->slices[slice];
-    img->current_mb_nr = currSlice->start_mb_nr;
-    for (partition=0; partition<currSlice->max_part_nr; partition++)
-    {
-      currStream = (currSlice->partArr[partition]).bitstream;
-      assert (currStream->bits_to_go == 8);    //! should always be the case, the
-                                               //! byte alignment is done in terminate_slice
 
+    // loop over the partitions
+    for (partition=0; partition < currSlice->max_part_nr; partition++)
+    {
       // write only if the partition has content
       if (currSlice->partArr[partition].bitstream->write_flag )
-        writeUnit (currStream,partition);
-    }           // partition loop
-  }           // slice loop
-  return 0;
+      {
+        stats->bit_ctr += WriteNALU (currSlice->partArr[partition].nal_unit);
+      }
+    }
+  }
 }
 
 
-void copy_params(void)
+void copy_params(StorablePicture *enc_picture, seq_parameter_set_rbsp_t *active_sps)
 {
   enc_picture->frame_mbs_only_flag = active_sps->frame_mbs_only_flag;
   enc_picture->frame_cropping_flag = active_sps->frame_cropping_flag;
@@ -794,17 +813,17 @@ void copy_params(void)
 
   if (active_sps->frame_cropping_flag)
   {
-    enc_picture->frame_cropping_rect_left_offset=active_sps->frame_cropping_rect_left_offset;
-    enc_picture->frame_cropping_rect_right_offset=active_sps->frame_cropping_rect_right_offset;
-    enc_picture->frame_cropping_rect_top_offset=active_sps->frame_cropping_rect_top_offset;
-    enc_picture->frame_cropping_rect_bottom_offset=active_sps->frame_cropping_rect_bottom_offset;
+    enc_picture->frame_cropping_rect_left_offset   = active_sps->frame_cropping_rect_left_offset;
+    enc_picture->frame_cropping_rect_right_offset  = active_sps->frame_cropping_rect_right_offset;
+    enc_picture->frame_cropping_rect_top_offset    = active_sps->frame_cropping_rect_top_offset;
+    enc_picture->frame_cropping_rect_bottom_offset = active_sps->frame_cropping_rect_bottom_offset;
   }
   else
   {
-    enc_picture->frame_cropping_rect_left_offset=0;
-    enc_picture->frame_cropping_rect_right_offset=0;
-    enc_picture->frame_cropping_rect_top_offset=0;
-    enc_picture->frame_cropping_rect_bottom_offset=0;
+    enc_picture->frame_cropping_rect_left_offset   = 0;
+    enc_picture->frame_cropping_rect_right_offset  = 0;
+    enc_picture->frame_cropping_rect_top_offset    = 0;
+    enc_picture->frame_cropping_rect_bottom_offset = 0;
   }
 }
 
@@ -832,7 +851,7 @@ static void prepare_enc_frame_picture (StorablePicture **stored_pic)
   getNeighbour               = img->MbaffFrameFlag ? getAffNeighbour : getNonAffNeighbour;
   enc_picture                = *stored_pic;
 
-  copy_params();
+  copy_params(enc_picture, active_sps);
 }
 
 static void calc_picture_bits(Picture *frame)
@@ -863,7 +882,8 @@ void frame_picture (Picture *frame, int rd_pass)
   img->structure = FRAME;
   img->PicSizeInMbs = img->FrameSizeInMbs;
   //set mv limits to frame type
-  update_mv_limits(img, 0);
+  update_mv_limits(img, FALSE);
+
 
   if( IS_INDEPENDENT(params) )
   {
@@ -878,10 +898,7 @@ void frame_picture (Picture *frame, int rd_pass)
   }
 
 
-  stats->em_prev_bits_frm = 0;
-  stats->em_prev_bits = &stats->em_prev_bits_frm;
-
-  img->fld_flag = 0;
+  img->fld_flag = FALSE;
   code_a_picture(frame);
 
   if( IS_INDEPENDENT(params) )
@@ -912,18 +929,16 @@ static void field_picture (Picture *top, Picture *bottom)
   int TopFieldBits;
   img->SumFrameQP = 0;
   //set mv limits to field type
-  update_mv_limits(img, 1);
+  update_mv_limits(img, TRUE);
 
   //Rate control
   old_pic_type = img->type;
 
-  stats->em_prev_bits_fld = 0;
-  stats->em_prev_bits = &stats->em_prev_bits_fld;
   img->number *= 2;
   img->buf_cycle *= 2;
   img->height    = (params->output.height + img->auto_crop_bottom) / 2;
   img->height_cr = img->height_cr_frame / 2;
-  img->fld_flag  = 1;
+  img->fld_flag  = TRUE;
   img->PicSizeInMbs = img->FrameSizeInMbs/2;
   // Top field
 
@@ -940,7 +955,7 @@ static void field_picture (Picture *top, Picture *bottom)
 
   img->structure = TOP_FIELD;
   enc_picture = enc_field_picture[0];
-  copy_params();
+  copy_params(enc_picture, active_sps);
 
   put_buffer_top (img);
   init_field (img);
@@ -948,14 +963,14 @@ static void field_picture (Picture *top, Picture *bottom)
     nextP_tr_fld--;
 
 
-  img->fld_flag = 1;
+  img->fld_flag = TRUE;
 
   //Rate control
   if(params->RCEnable && params->RCUpdateMode <= MAX_RC_MODE)
     rc_init_top_field();
 
   code_a_picture(field_pic[0]);
-  enc_picture->structure = (PictureStructure) 1;
+  enc_picture->structure = TOP_FIELD;
 
   store_picture_in_dpb(enc_field_picture[0]);
 
@@ -978,7 +993,7 @@ static void field_picture (Picture *top, Picture *bottom)
   img->ThisPOC = img->bottompoc;
   img->structure = BOTTOM_FIELD;
   enc_picture = enc_field_picture[1];
-  copy_params();
+  copy_params(enc_picture, active_sps);
   put_buffer_bot (img);
   img->number++;
 
@@ -990,13 +1005,13 @@ static void field_picture (Picture *top, Picture *bottom)
  if (img->type == I_SLICE && params->IntraBottom!=1)
    set_slice_type((params->BRefPictures == 2) ? B_SLICE : P_SLICE);
 
-  img->fld_flag = 1;
+  img->fld_flag = TRUE;
 
   //Rate control
   if(params->RCEnable && params->RCUpdateMode <= MAX_RC_MODE)
     rc_init_bottom_field( TopFieldBits );
 
-  enc_picture->structure = (PictureStructure) 2;
+  enc_picture->structure = BOTTOM_FIELD;
   code_a_picture(field_pic[1]);
 
   calc_picture_bits(bottom);
@@ -1006,6 +1021,34 @@ static void field_picture (Picture *top, Picture *bottom)
   distortion_fld (top);
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    form frame picture from two field pictures
+ ************************************************************************
+ */
+static void combine_field(void)
+{
+  int i, k;
+
+  for (i = 0; i < (img->height >> 1); i++)
+  {
+    memcpy(imgY_com[i*2],     enc_field_picture[0]->imgY[i], img->width*sizeof(imgpel));     // top field
+    memcpy(imgY_com[i*2 + 1], enc_field_picture[1]->imgY[i], img->width*sizeof(imgpel)); // bottom field
+  }
+
+  if (img->yuv_format != YUV400)
+  {
+    for (k = 0; k < 2; k++)
+    {
+      for (i = 0; i < (img->height_cr >> 1); i++)
+      {
+        memcpy(imgUV_com[k][i*2],     enc_field_picture[0]->imgUV[k][i], img->width_cr*sizeof(imgpel));
+        memcpy(imgUV_com[k][i*2 + 1], enc_field_picture[1]->imgUV[k][i], img->width_cr*sizeof(imgpel));
+      }
+    }
+  }
+}
 
 /*!
  ************************************************************************
@@ -1040,10 +1083,29 @@ static void distortion_fld (Picture *field_pic)
 /*!
  ************************************************************************
  * \brief
+ *    RD decision of frame and field coding
+ ************************************************************************
+ */
+static byte decide_fld_frame(float snr_frame_Y, float snr_field_Y, int bit_field, int bit_frame, double lambda_picture)
+{
+  double cost_frame, cost_field;
+
+  cost_frame = bit_frame * lambda_picture + snr_frame_Y;
+  cost_field = bit_field * lambda_picture + snr_field_Y;
+
+  if (cost_field > cost_frame)
+    return FALSE;
+  else
+    return TRUE;
+}
+
+/*!
+ ************************************************************************
+ * \brief
  *    Picture Structure Decision
  ************************************************************************
  */
-static int picture_structure_decision (Picture *frame, Picture *top, Picture *bot)
+static byte picture_structure_decision (Picture *frame, Picture *top, Picture *bot)
 {
   double lambda_picture;
   int bframe = (img->type == B_SLICE);
@@ -1149,7 +1211,7 @@ static void init_frame (ImageParameters *img)
   }
   else
   {
-    for(i=0;i< ((int) (img->FrameSizeInMbs));i++)
+    for(i = 0; i < ((int) (img->FrameSizeInMbs)); i++)
       img->mb_data[i].slice_nr = -1;
   }
 
@@ -1194,7 +1256,7 @@ static void init_frame (ImageParameters *img)
         {
           if ( (params->qp2start > 0) && ( ( (img->tr ) % (2*params->qp2start) ) >=params->qp2start ))
           {
-            img->qp = params->qpN2 - (params->qpN - params->qpsp);
+            img->qp   = params->qpN2 - (params->qpN - params->qpsp);
             img->qpsp = params->qpN2 - (params->qpN - params->qpsp_pred);
           }
           else
@@ -1737,6 +1799,8 @@ void copy_rdopt_data (Macroblock *currMB, int bot_block)
 
     if (!IS_INTRA(currMB))
     {
+      memset(currMB->bipred_me, 0, 4* sizeof(short));
+
       for (j = 0; j < 4; j++)
         for (i = 0; i < 4; i++)
         {
@@ -1821,7 +1885,7 @@ static void ReportIntra(time_t tmp_time, time_t me_time)
 {
   if (params->Verbose == 1)
   {
-    if (img->currentPicture->idr_flag == 1)
+    if (img->currentPicture->idr_flag == TRUE)
       printf ("%04d(IDR)%8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s    %d\n",
       frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n),
       img->AverageFrameQP, dist->metric[PSNR].value[0], dist->metric[PSNR].value[1], dist->metric[PSNR].value[2], (int)tmp_time, (int)me_time,
@@ -1837,7 +1901,7 @@ static void ReportIntra(time_t tmp_time, time_t me_time)
     int lambda = (int) img->lambda_me[I_SLICE][img->AverageFrameQP][0];
     if (params->Distortion[SSIM] == 1)
     {
-      if (img->currentPicture->idr_flag == 1)
+      if (img->currentPicture->idr_flag == TRUE)
         printf ("%04d(IDR)%8d %1d %2d %2d %7.3f %7.3f %7.3f %7.4f %7.4f %7.4f %9d %7d    %3s %5d   %2d %2d  %d   %d\n",
         frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n), 0,
         img->AverageFrameQP, lambda, dist->metric[PSNR].value[0], dist->metric[PSNR].value[1], dist->metric[PSNR].value[2], dist->metric[SSIM].value[0], dist->metric[SSIM].value[1], dist->metric[SSIM].value[2], (int)tmp_time, (int)me_time,
@@ -1851,7 +1915,7 @@ static void ReportIntra(time_t tmp_time, time_t me_time)
     }
     else
     {
-      if (img->currentPicture->idr_flag == 1)
+      if (img->currentPicture->idr_flag == TRUE)
         printf ("%04d(IDR)%8d %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d   %2d %2d  %d   %d\n",
         frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n), 0,
         img->AverageFrameQP, lambda, dist->metric[PSNR].value[0], dist->metric[PSNR].value[1], dist->metric[PSNR].value[2], (int)tmp_time, (int)me_time,
@@ -2137,77 +2201,6 @@ static void put_buffer_bot(ImageParameters *img)
 /*!
  ************************************************************************
  * \brief
- *    Writes a NAL unit of a partition or slice
- ************************************************************************
- */
-
-static void writeUnit(Bitstream* currStream, int partition)
-{
-  const int buffer_size = 500 + img->FrameSizeInMbs * (128 + 256 * img->bitdepth_luma + 512 * img->bitdepth_chroma);
-                                                          // KS: this is approx. max. allowed code picture size
-  NALU_t *nalu;
-  assert (currStream->bits_to_go == 8);
-  nalu = AllocNALU(buffer_size);
-  nalu->startcodeprefix_len = 1+ (img->current_mb_nr == 0 && partition == 0 ?ZEROBYTES_SHORTSTARTCODE+1:ZEROBYTES_SHORTSTARTCODE);
-//printf ("nalu->startcodeprefix_len %d\n", nalu->startcodeprefix_len);
-  nalu->len = currStream->byte_pos +1;            // add one for the first byte of the NALU
-//printf ("nalu->len %d\n", nalu->len);
-  memcpy (&nalu->buf[1], currStream->streamBuffer, nalu->len-1);
-  if (img->currentPicture->idr_flag)
-  {
-    nalu->nal_unit_type = NALU_TYPE_IDR;
-    nalu->nal_reference_idc = NALU_PRIORITY_HIGHEST;
-  }
-  else if (img->type == B_SLICE)
-  {
-    //different nal header for different partitions
-    if(params->partition_mode == 0)
-    {
-    nalu->nal_unit_type = NALU_TYPE_SLICE;
-    }
-    else
-    {
-      nalu->nal_unit_type = (NaluType) (NALU_TYPE_DPA +  partition);
-    }
-
-    if (img->nal_reference_idc !=0)
-    {
-      nalu->nal_reference_idc = NALU_PRIORITY_HIGH;
-    }
-    else
-    {
-      nalu->nal_reference_idc = NALU_PRIORITY_DISPOSABLE;
-    }
-  }
-  else   // non-b frame, non IDR slice
-  {
-    //different nal header for different partitions
-    if(params->partition_mode == 0)
-    {
-     nalu->nal_unit_type = NALU_TYPE_SLICE;
-    }
-    else
-    {
-     nalu->nal_unit_type = (NaluType) (NALU_TYPE_DPA +  partition);
-    }
-    if (img->nal_reference_idc !=0)
-    {
-      nalu->nal_reference_idc = NALU_PRIORITY_HIGH;
-    }
-    else
-    {
-      nalu->nal_reference_idc = NALU_PRIORITY_DISPOSABLE;
-    }
-  }
-  nalu->forbidden_bit = 0;
-  stats->bit_ctr += WriteNALU (nalu);
-
-  FreeNALU(nalu);
-}
-
-/*!
- ************************************************************************
- * \brief
  *    performs multi-pass encoding of same picture using different
  *    coding conditions
  ************************************************************************
@@ -2272,7 +2265,7 @@ static void rdPictureCoding(void)
   sec_pps = active_pps;
   second_qp = img->qp;
 
-  img->write_macroblock = 0;
+  img->write_macroblock = FALSE;
 
   if (skip_encode)
   {
@@ -2389,7 +2382,7 @@ static void rdPictureCoding(void)
       img->qp    = (rd_qp + 1);
   }
 
-  img->write_macroblock = 0;
+  img->write_macroblock = FALSE;
 
   if (skip_encode)
   {

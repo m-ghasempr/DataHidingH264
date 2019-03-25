@@ -22,6 +22,7 @@
 #include "parsetcommon.h"
 #include "ifunctions.h"
 #include "frame.h"
+#include "nalucommon.h"
 
 /***********************************************************************
  * T y p e    d e f i n i t i o n s    f o r    T M L
@@ -359,8 +360,8 @@ typedef struct syntaxelement
 //! Macroblock
 typedef struct macroblock
 {
-  int                 slice_nr;
-  int                 delta_qp;
+  short               slice_nr;
+  short               delta_qp;
   int                 qp;                         //!< QP luma  
   int                 qpc[2];                     //!< QP chroma
   int                 qp_scaled[MAX_PLANE];       //!< QP scaled for all comps.
@@ -373,9 +374,9 @@ typedef struct macroblock
   short               b8mode[4];
   short               b8pdir[4];
   int                 c_ipred_mode;      //!< chroma intra prediction mode
-  int                 IntraChromaPredModeFlag;
+  char                IntraChromaPredModeFlag;
 
-  int                 mb_field;
+  byte                mb_field;
   int                 is_field_mode;
   int                 list_offset;
 
@@ -440,8 +441,8 @@ typedef struct
 //! DataPartition
 typedef struct datapartition
 {
-
   Bitstream           *bitstream;
+  NALU_t              *nal_unit;
   EncodingEnvironment ee_cabac;
   EncodingEnvironment ee_recode;
 } DataPartition;
@@ -466,6 +467,8 @@ typedef struct
   int                 *abs_diff_pic_num_minus1_l1;
   int                 *long_term_pic_idx_l1;
   int                 field_ctx[3][2]; //GB
+
+  int                 symbol_mode;
 
   Boolean             (*slice_too_big)(int bits_slice); //!< for use of callback functions
 
@@ -508,11 +511,11 @@ typedef struct
 typedef struct
 {
   int   no_slices;
-  int   idr_flag;
-  int bits_per_picture;
+  int   bits_per_picture;
   Slice *slices[MAXSLICEPERPICTURE];
 
   DistMetric distortion;
+  byte  idr_flag;
 } Picture;
 
 Picture *p_frame_pic;
@@ -545,8 +548,7 @@ int dsr_new_search_range; //!<Dynamic Search Range.
 //////////////////////////////////////////////////////////////////////////
 // B pictures
 // motion vector : forward, backward, direct
-int  mb_adaptive;       //!< For MB level field/frame coding tools
-int  MBPairIsField;     //!< For MB level field/frame coding tools
+byte  MBPairIsField;     //!< For MB level field/frame coding tools
 
 
 //Weighted prediction
@@ -576,7 +578,7 @@ int intras;         //!< Counts the intra updates in each frame.
 
 int  frame_no, nextP_tr_fld, nextP_tr_frm;
 
-time_t  tot_time;
+int64 tot_time;
 
 #define ET_SIZE 300      //!< size of error text buffer
 char errortext[ET_SIZE]; //!< buffer for error message for exit with error()
@@ -976,6 +978,7 @@ typedef struct
   
 
   int UseRDOQuant;
+  int RDOQ_DC;
   int RDOQ_CR;
   int RDOQ_QP_Num;
   int RDOQ_CP_Mode;
@@ -1081,7 +1084,7 @@ typedef struct
 
   int tr;
   int fld_type;                        //!< top or bottom field
-  unsigned int fld_flag;
+  byte fld_flag;
   unsigned int rd_pass;
 
   // B pictures
@@ -1105,8 +1108,8 @@ typedef struct
   int num_ref_idx_l0_active;
   int num_ref_idx_l1_active;
 
-  int field_mode;     //!< For MB level field/frame -- field mode on flag
-  int top_field;      //!< For MB level field/frame -- top field flag
+  byte field_mode;     //!< For MB level field/frame -- field mode on flag
+  byte top_field;      //!< For MB level field/frame -- top field flag
   int mvscale[6][MAX_REFERENCE_PICTURES];
   int buf_cycle;
   int i16offset;
@@ -1173,8 +1176,8 @@ typedef struct
   int NumberofMBTextureBits;
   int NumberofMBHeaderBits;
   unsigned int BasicUnit;
-  int write_macroblock;
-  int bot_MB;
+  byte write_macroblock;
+  byte bot_MB;
   int write_mbaff_frame;
 
   int DeblockCall;
@@ -1287,7 +1290,7 @@ typedef struct
   int    qp;
   int    prev_qp;
   int    prev_dqp;
-  int    delta_qp;
+  short  delta_qp;
   int    prev_cbp;
   
   int64  cbp_blk;
@@ -1380,18 +1383,18 @@ int CbCr_predmode_8x8[4];
 void intrapred_4x4   (Macroblock *currMB, ColorPlane pl, int CurrPixX,int CurrPixY, int *left_available, int *up_available, int *all_available);
 void intrapred_16x16 (Macroblock *currMB, ColorPlane pl);
 // Transform function pointers
-int (*pDCT_4x4)      (Macroblock *currMB, ColorPlane pl, int block_x, int block_y, int *coeff_cost, int intra);
-int (*pDCT_16x16)    (Macroblock *currMB, ColorPlane pl, int);
+int (*pDCT_4x4)      (Macroblock *currMB, ColorPlane pl, int block_x, int block_y, int *coeff_cost, int intra, int is_cavlc);
+int (*pDCT_16x16)    (Macroblock *currMB, ColorPlane pl, int, int is_cavlc);
 int (*pDCT_8x8)      (Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int intra);
-int  (*dct_cr_4x4[2])   (Macroblock *currMB, int uv,int i11);
+int  (*dct_cr_4x4[2])(Macroblock *currMB, int uv,int i11, int is_cavlc);
 
 int  dct_8x8         (Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int intra);
 int  dct_8x8_cavlc   (Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int intra);
 int  dct_8x8_ls      (Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int intra);
 
 void copyblock_sp    (Macroblock *currMB, ColorPlane pl, int pos_mb1,int pos_mb2);
-int  dct_chroma_sp   (Macroblock *currMB, int uv,int i11);
-int  dct_chroma_sp2  (Macroblock *currMB, int uv,int i11);
+int  dct_chroma_sp   (Macroblock *currMB, int uv,int i11, int is_cavlc);
+int  dct_chroma_sp2  (Macroblock *currMB, int uv,int i11, int is_cavlc);
 
 
 int  distortion4x4(int*);
@@ -1430,13 +1433,6 @@ int  get_mem_DCcoeff  (int****);
 void free_mem_ACcoeff (int****);
 void free_mem_DCcoeff (int***);
 
-int  decide_fld_frame(float snr_frame_Y, float snr_field_Y, int bit_field, int bit_frame, double lambda_picture);
-void combine_field(void);
-
-int   encode_one_slice(int SLiceGroupId, Picture *pic, int TotalCodedMBs);   //! returns the number of MBs in the slice
-
-void free_slice_list(Picture *currPic);
-
 #if TRACE
 void  trace2out(SyntaxElement *se);
 void  trace2out_cabac(SyntaxElement *se);
@@ -1444,7 +1440,7 @@ void  trace2out_cabac(SyntaxElement *se);
 
 void error(char *text, int code);
 
-int  field_flag_inference(Macroblock  *currMB);
+byte  field_flag_inference(Macroblock  *currMB);
 void set_mbaff_parameters(Macroblock  *currMB);  // For MB AFF
 
 //============= restriction of reference frames based on the latest intra-refreshes==========
@@ -1463,12 +1459,6 @@ int CalculateFrameNumber(void);
 
 #define IMG_NUMBER (img->number - start_frame_no_in_this_IGOP)
 
-void AllocNalPayloadBuffer(void);
-void FreeNalPayloadBuffer(void);
-void SODBtoRBSP (Bitstream *currStream);
-int  RBSPtoEBSP (byte *streamBuffer, int begin_bytepos, int end_bytepos, int min_num_bytes);
-int  Bytes_After_Header;
-
 void encode_one_macroblock_low (Macroblock *currMB);
 void encode_one_macroblock_high (Macroblock *currMB);
 void encode_one_macroblock_highfast (Macroblock *currMB);
@@ -1483,9 +1473,6 @@ void select_dct   (ImageParameters *img, Macroblock *currMB);
 
 void store_coding_state_cs_cm(Macroblock *currMB);
 void reset_coding_state_cs_cm(Macroblock *currMB);
-
-int writeIPCMBytes   (Bitstream *currStream);
-int writePCMByteAlign(Bitstream *currStream);
 
 void set_slice_type(int slice_type);
 

@@ -26,15 +26,25 @@
 *
 ************************************************************************
 */
-void init_quant_Chroma(InputParameters *params, ImageParameters *img)
+void init_quant_Chroma(InputParameters *params, ImageParameters *img, Slice *currSlice)
 {
   if (params->UseRDOQuant == 1 && params->RDOQ_CR == 1)
   {
     quant_ac4x4cr = quant_ac4x4_trellis;
-    if (params->yuv_format == YUV422)
-      quant_dc_cr   = quant_dc4x2_trellis;
+    if ( currSlice->symbol_mode == CABAC )
+    {
+      if (params->yuv_format == YUV422)
+        quant_dc_cr   = quant_dc4x2_trellis;
+      else
+        quant_dc_cr   = quant_dc2x2_trellis;
+    }
     else
-      quant_dc_cr   = quant_dc2x2_trellis;
+    {
+      if (params->yuv_format == YUV422)
+        quant_dc_cr   = quant_dc4x2_normal;
+      else
+        quant_dc_cr   = quant_dc2x2_normal;
+    }
   }
   else if (params->UseRDOQuant == 1 || (!img->AdaptiveRounding))
   {

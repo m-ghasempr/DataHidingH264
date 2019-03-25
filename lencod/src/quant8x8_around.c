@@ -156,8 +156,7 @@ int quant_8x8cavlc_around(int (*tblock)[16], int block_y, int block_x, int  qp,
 
         if (level != 0)
         {
-          if (params->symbol_mode == CAVLC)
-            level = imin(level, CAVLC_LEVEL_LIMIT);
+          level = imin(level, CAVLC_LEVEL_LIMIT);
 
           fadjust8x8[j][block_x + i] = rshift_rnd_sf((AdaptRndWeight * (scaled_coeff - (level << q_bits))), (q_bits + 1));
 

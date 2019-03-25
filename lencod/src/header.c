@@ -57,7 +57,8 @@ int SliceHeader(void)
   Bitstream *bitstream = img->currentSlice->partArr[dP_nr].bitstream;
   Slice* currSlice = img->currentSlice;
   int len = 0;
-  unsigned int field_pic_flag = 0, bottom_field_flag = 0;
+  unsigned int field_pic_flag = 0; 
+  byte bottom_field_flag = FALSE;
 
   int num_bits_slice_group_change_cycle;
   float numtmp;
@@ -86,7 +87,7 @@ int SliceHeader(void)
     if (field_pic_flag)
     {
       //bottom_field_flag     u(1)
-      bottom_field_flag = (img->structure == BOTTOM_FIELD)?1:0;
+      bottom_field_flag = (img->structure == BOTTOM_FIELD);
       len += u_1("SH: bottom_field_flag" , bottom_field_flag ,bitstream);
     }
   }
@@ -175,7 +176,7 @@ int SliceHeader(void)
   if (img->nal_reference_idc)
     len += dec_ref_pic_marking(bitstream);
 
-  if(params->symbol_mode==CABAC && img->type!=I_SLICE /*&& img->type!=SI_IMG*/)
+  if(currSlice->symbol_mode==CABAC && img->type!=I_SLICE /*&& img->type!=SI_IMG*/)
   {
     len += ue_v("SH: cabac_init_idc", img->model_number, bitstream);
   }

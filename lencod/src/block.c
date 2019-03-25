@@ -541,7 +541,7 @@ void intrapred_16x16(Macroblock *currMB, ColorPlane pl)
  *    none
  ************************************************************************
  */
-int dct_16x16(Macroblock *currMB, ColorPlane pl, int new_intra_mode)
+int dct_16x16(Macroblock *currMB, ColorPlane pl, int new_intra_mode, int is_cavlc)
 {
   int i,j;
   int ii,jj;
@@ -604,7 +604,8 @@ int dct_16x16(Macroblock *currMB, ColorPlane pl, int new_intra_mode)
   // hadamard of DC coefficients
   hadamard4x4(M4, M4);
 
-  nonzero = quant_dc4x4(&M4[0], qp, DCLevel, DCRun, levelscale[0][0], invlevelscale[0][0], leveloffset, pos_scan);
+  nonzero = quant_dc4x4(&M4[0], qp, DCLevel, DCRun, levelscale[0][0], invlevelscale[0][0], leveloffset[0][0], pos_scan, is_cavlc);
+
 
   // inverse DC transform
   if (nonzero)
@@ -648,7 +649,7 @@ int dct_16x16(Macroblock *currMB, ColorPlane pl, int new_intra_mode)
 
       // Quantization process
       nonzero = quant_ac4x4(&M1[jpos], jpos, ipos, qp, ACLevel, ACRun, &fadjust4x4[jpos], 
-        levelscale, invlevelscale, leveloffset, &coeff_cost, pos_scan, COEFF_COST4x4[params->disthres], LUMA_16AC);
+        levelscale, invlevelscale, leveloffset, &coeff_cost, pos_scan, COEFF_COST4x4[params->disthres], LUMA_16AC, is_cavlc);
 
       if (nonzero)
         ac_coef = 15;
@@ -686,7 +687,7 @@ int dct_16x16(Macroblock *currMB, ColorPlane pl, int new_intra_mode)
  *    none
  ************************************************************************
  */
-int dct_16x16_ls(Macroblock *currMB, ColorPlane pl, int new_intra_mode)
+int dct_16x16_ls(Macroblock *currMB, ColorPlane pl, int new_intra_mode, int is_cavlc)
 {
   int i,j;
   int ii,jj;
@@ -737,7 +738,7 @@ int dct_16x16_ls(Macroblock *currMB, ColorPlane pl, int new_intra_mode)
 
     if (*m7 != 0)
     {
-      if (params->symbol_mode == CAVLC)
+      if (is_cavlc)
         *m7 = iClip3(-CAVLC_LEVEL_LIMIT, CAVLC_LEVEL_LIMIT, *m7);
 
       DCLevel[scan_pos  ] = *m7;
@@ -785,7 +786,7 @@ int dct_16x16_ls(Macroblock *currMB, ColorPlane pl, int new_intra_mode)
 
         if (*m7 != 0)
         {
-          if (params->symbol_mode == CAVLC)
+          if (is_cavlc)
             *m7 = iClip3(-CAVLC_LEVEL_LIMIT, CAVLC_LEVEL_LIMIT, *m7);
 
           ac_coef = 15;
@@ -844,7 +845,7 @@ int dct_16x16_ls(Macroblock *currMB, ColorPlane pl, int new_intra_mode)
 *    coeff_cost:      Coeff coding cost for thresholding consideration.\n
 ************************************************************************
 */
-int dct_4x4(Macroblock *currMB, ColorPlane pl, int block_x,int block_y, int *coeff_cost, int intra)
+int dct_4x4(Macroblock *currMB, ColorPlane pl, int block_x,int block_y, int *coeff_cost, int intra, int is_cavlc)
 {
   int j;
 
@@ -882,7 +883,7 @@ int dct_4x4(Macroblock *currMB, ColorPlane pl, int block_x,int block_y, int *coe
 
   // Quantization process
   nonzero = quant_4x4(&M1[block_y], block_y, block_x, qp, ACLevel, ACRun, fadjust4x4, 
-    levelscale, invlevelscale, leveloffset, coeff_cost, pos_scan, COEFF_COST4x4[params->disthres]);
+    levelscale, invlevelscale, leveloffset, coeff_cost, pos_scan, COEFF_COST4x4[params->disthres], is_cavlc);
 
   //  Decoded block moved to frame memory
   if (nonzero)
@@ -926,7 +927,7 @@ int dct_4x4(Macroblock *currMB, ColorPlane pl, int block_x,int block_y, int *coe
 *    coeff_cost:      Coeff coding cost for thresholding consideration.\n
 ************************************************************************
 */
-int dct_4x4_ls(Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *coeff_cost, int intra)
+int dct_4x4_ls(Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *coeff_cost, int intra, int is_cavlc)
 {
   int i,j, coeff_ctr;
   int run = -1;
@@ -971,7 +972,7 @@ int dct_4x4_ls(Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *c
 
     if (*m7 != 0)
     {
-      if (params->symbol_mode == CAVLC)
+      if (is_cavlc)
         *m7 = iClip3(-CAVLC_LEVEL_LIMIT, CAVLC_LEVEL_LIMIT, *m7);
 
       nonzero=TRUE;
@@ -1213,7 +1214,7 @@ static int Inv_Residual_DPCM_4x4_for_Intra16x16(int m7[4][4], int ipmode)
  *    cr_cbp: Updated chroma coded block pattern.
  ************************************************************************
  */
-int dct_chroma(Macroblock *currMB, int uv, int cr_cbp)
+int dct_chroma(Macroblock *currMB, int uv, int cr_cbp, int is_cavlc)
 {
   int i, j, n2, n1, coeff_ctr;
   static int m1[BLOCK_SIZE];
@@ -1272,7 +1273,7 @@ int dct_chroma(Macroblock *currMB, int uv, int cr_cbp)
     hadamard2x2(mb_rres, m1);
 
     // Quantization process of chroma 2X2 hadamard transformed DC coeffs.
-    DCzero = quant_dc_cr(&m1, cur_qp, DCLevel, DCRun, fadjust2x2, levelscale[0][0], invlevelscale[0][0], leveloffset, SCAN_YUV420);
+    DCzero = quant_dc_cr(&m1, cur_qp, DCLevel, DCRun, fadjust2x2, levelscale[0][0], invlevelscale[0][0], leveloffset, SCAN_YUV420, is_cavlc);
 
     if (DCzero) 
     {
@@ -1283,10 +1284,10 @@ int dct_chroma(Macroblock *currMB, int uv, int cr_cbp)
     //  Inverse transform of 2x2 DC levels
     ihadamard2x2(m1, m1);
 
-    mb_rres[0][0] = m1[0];
-    mb_rres[0][4] = m1[1];
-    mb_rres[4][0] = m1[2];
-    mb_rres[4][4] = m1[3];
+    mb_rres[0][0] = m1[0] >> 5;
+    mb_rres[0][4] = m1[1] >> 5;
+    mb_rres[4][0] = m1[2] >> 5;
+    mb_rres[4][4] = m1[3] >> 5;
   }
   else if (yuv == YUV422)
   {
@@ -1310,7 +1311,7 @@ int dct_chroma(Macroblock *currMB, int uv, int cr_cbp)
     hadamard4x2(M4, M4);
 
     // Quantization process of chroma transformed DC coeffs.
-    DCzero = quant_dc_cr(M4, cur_qp_dc, DCLevel, DCRun, fadjust4x2, levelscaleDC[0][0], invlevelscaleDC[0][0], leveloffsetDC, SCAN_YUV422);
+    DCzero = quant_dc_cr(M4, cur_qp_dc, DCLevel, DCRun, fadjust4x2, levelscaleDC[0][0], invlevelscaleDC[0][0], leveloffsetDC, SCAN_YUV422, is_cavlc);
 
     if (DCzero)
     {
@@ -1324,8 +1325,8 @@ int dct_chroma(Macroblock *currMB, int uv, int cr_cbp)
     // This code assumes sizeof(int) > 16. Therefore, no need to have conditional
     for (j = 0; j < 4; j++)
     {
-      mb_rres[j << 2 ][0] = M4[j][0];
-      mb_rres[j << 2 ][4] = M4[j][1];
+      mb_rres[j << 2 ][0] = rshift_rnd_sf(M4[j][0], 6);
+      mb_rres[j << 2 ][4] = rshift_rnd_sf(M4[j][1], 6);
     }
   }
 
@@ -1343,7 +1344,7 @@ int dct_chroma(Macroblock *currMB, int uv, int cr_cbp)
       img->subblock_x = subblk_offset_x[img->yuv_format - 1][b8][b4]>>2;
       // Quantization process
       nonzero[n2>>2][n1>>2] = quant_ac4x4cr(&mb_rres[n2], n2, n1, cur_qp, ACLevel, ACRun, &fadjust4x4[n2], 
-        levelscale, invlevelscale, leveloffset, &coeff_cost, pos_scan, c_cost, CHROMA_AC);
+        levelscale, invlevelscale, leveloffset, &coeff_cost, pos_scan, c_cost, CHROMA_AC, is_cavlc);
 
       if (nonzero[n2>>2][n1>>2])
       {
@@ -1439,7 +1440,7 @@ int dct_chroma(Macroblock *currMB, int uv, int cr_cbp)
  *    cr_cbp: Updated chroma coded block pattern.
  ************************************************************************
  */
-int dct_chroma_ls(Macroblock *currMB, int uv, int cr_cbp)
+int dct_chroma_ls(Macroblock *currMB, int uv, int cr_cbp, int is_cavlc)
 {
   int i,j,n2,n1,coeff_ctr,level ,scan_pos,run;
   static int m1[BLOCK_SIZE];
@@ -1490,7 +1491,7 @@ int dct_chroma_ls(Macroblock *currMB, int uv, int cr_cbp)
 
       if (level  != 0)
       {
-        if (params->symbol_mode == CAVLC)
+        if (is_cavlc)
           level = imin(level, CAVLC_LEVEL_LIMIT);
 
         currMB->cbp_blk |= 0xf0000 << (uv << 2) ;    // if one of the 2x2-DC levels is != 0 set the
@@ -1632,7 +1633,7 @@ int dct_chroma_ls(Macroblock *currMB, int uv, int cr_cbp)
  *
  ************************************************************************
  */
-int dct_4x4_sp(Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *coeff_cost, int intra)
+int dct_4x4_sp(Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *coeff_cost, int intra, int is_cavlc)
 {
   int i,j,coeff_ctr;
   int qp_const,ilev, level,scan_pos = 0,run = -1;
@@ -1812,7 +1813,7 @@ int dct_4x4_sp(Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *c
  *    cr_cbp: Updated chroma coded block pattern.
  ************************************************************************
  */
-int dct_chroma_sp(Macroblock *currMB, int uv,int cr_cbp)
+int dct_chroma_sp(Macroblock *currMB, int uv,int cr_cbp, int is_cavlc)
 {
   int i, j, n2, n1, coeff_ctr;
   static int m1[BLOCK_SIZE];
@@ -1870,7 +1871,7 @@ int dct_chroma_sp(Macroblock *currMB, int uv,int cr_cbp)
     hadamard2x2(mb_rres, m1);
 
     // Quantization process of chroma 2X2 hadamard transformed DC coeffs.
-    DCzero = quant_dc_cr(&m1, cur_qp, DCLevel, DCRun, fadjust2x2, levelscale[0][0], invlevelscale[0][0], leveloffset, pos_scan);
+    DCzero = quant_dc_cr(&m1, cur_qp, DCLevel, DCRun, fadjust2x2, levelscale[0][0], invlevelscale[0][0], leveloffset, pos_scan, is_cavlc);
 
     if (DCzero) 
     {
@@ -1908,7 +1909,7 @@ int dct_chroma_sp(Macroblock *currMB, int uv,int cr_cbp)
     hadamard4x2(M4, M4);
 
     // Quantization process of chroma transformed DC coeffs.
-    DCzero = quant_dc_cr(M4, cur_qp_dc, DCLevel, DCRun, fadjust4x2, levelscaleDC[0][0], invlevelscaleDC[0][0], leveloffsetDC, SCAN_YUV422);
+    DCzero = quant_dc_cr(M4, cur_qp_dc, DCLevel, DCRun, fadjust4x2, levelscaleDC[0][0], invlevelscaleDC[0][0], leveloffsetDC, SCAN_YUV422, is_cavlc);
 
     if (DCzero)
     {
@@ -1940,7 +1941,7 @@ int dct_chroma_sp(Macroblock *currMB, int uv,int cr_cbp)
 
       // Quantization process
       nonzero[n2>>2][n1>>2] = quant_ac4x4cr(&mb_rres[n2], n2, n1, cur_qp, ACLevel, ACRun, &fadjust4x4[n2], 
-        levelscale, invlevelscale, leveloffset, &coeff_cost, pos_scan, c_cost, CHROMA_AC);
+        levelscale, invlevelscale, leveloffset, &coeff_cost, pos_scan, c_cost, CHROMA_AC, is_cavlc);
 
       if (nonzero[n2>>2][n1>>2])
       {
@@ -2019,7 +2020,7 @@ int dct_chroma_sp(Macroblock *currMB, int uv,int cr_cbp)
   return cr_cbp;
 }
 
-int dct_chroma_sp_old(Macroblock *currMB, int uv,int cr_cbp)
+int dct_chroma_sp_old(Macroblock *currMB, int uv,int cr_cbp, int is_cavlc)
 {
   int i,j,ilev,n2,n1,coeff_ctr,c_err,level ,scan_pos,run;
   int m1[BLOCK_SIZE];
@@ -2057,7 +2058,7 @@ int dct_chroma_sp_old(Macroblock *currMB, int uv,int cr_cbp)
   int qp_rem_sp = qp_rem_matrix[qpChromaSP];
   int q_bits_sp = Q_BITS + qp_per_sp;
   int qp_const2 = (1<<q_bits_sp)/2;  //sp_pred
-
+  
   levelscale    = LevelScale4x4Comp   [uv + 1][intra][qp_rem];
   invlevelscale = InvLevelScale4x4Comp[uv + 1][intra][qp_rem];
   leveloffset   = LevelOffset4x4Comp  [uv + 1][intra][qpChroma];
@@ -2139,7 +2140,7 @@ int dct_chroma_sp_old(Macroblock *currMB, int uv,int cr_cbp)
 
     if (level  != 0)
     {
-      if (params->symbol_mode == CAVLC)
+      if (is_cavlc)
         level = imin(level, CAVLC_LEVEL_LIMIT);
       
       currMB->cbp_blk |= 0xf0000 << (uv << 2) ;  // if one of the 2x2-DC levels is != 0 the coded-bit
@@ -2360,57 +2361,6 @@ void copyblock_sp(Macroblock *currMB, ColorPlane pl, int block_x,int block_y)
   }
 }
 
-
-
-int writeIPCMBytes(Bitstream *currStream)
-{
-  int i,j, jj;
-  int len = 0, uv;
-  SyntaxElement   se;
-
-  for (j=0;j<16;j++)
-  {
-    jj = img->pix_y+j;
-    for (i=0;i<16;i++)
-    {
-      se.len = img->bitdepth_luma;
-      len   += se.len;
-      se.bitpattern = enc_picture->imgY[jj][img->pix_x+i];
-      writeSyntaxElement2Buf_Fixed(&se, currStream);
-    }
-  }
-
-  for (uv = 0; uv < 2; uv ++)
-  {
-    for (j=0;j<img->mb_cr_size_y;j++)
-    {
-      jj = img->pix_c_y+j;
-      for (i=0;i<img->mb_cr_size_x;i++)
-      {
-        se.len = img->bitdepth_chroma;
-        len += se.len;
-        se.bitpattern = enc_picture->imgUV[uv][jj][img->pix_c_x+i];
-        writeSyntaxElement2Buf_Fixed(&se, currStream);
-      }
-    }
-  }
-  return len;
-}
-
-int writePCMByteAlign(Bitstream *currStream)
-{
-  int len = 0;
-  if (currStream->bits_to_go < 8)
-  { // trailing bits to process
-    len = 8 - currStream->bits_to_go;
-    currStream->byte_buf = (currStream->byte_buf <<currStream->bits_to_go) | (0xff >> (8 - currStream->bits_to_go));
-    stats->bit_use_stuffingBits[img->type]+=currStream->bits_to_go;
-    currStream->streamBuffer[currStream->byte_pos++]=currStream->byte_buf;
-    currStream->bits_to_go = 8;
-  }
-  return len;
-}
-
 /*!
  ************************************************************************
  * \brief Eric Setton
@@ -2433,7 +2383,7 @@ int writePCMByteAlign(Bitstream *currStream)
  ************************************************************************
  */
 
-int dct_4x4_sp2(Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *coeff_cost, int intra)
+int dct_4x4_sp2(Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *coeff_cost, int intra, int is_cavlc)
 {
   int i,j,ilev,coeff_ctr;
   int qp_const,level,scan_pos = 0,run = -1;
@@ -2553,7 +2503,7 @@ int dct_4x4_sp2(Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *
  *
  ************************************************************************
  */
-int dct_chroma_sp2(Macroblock *currMB, int uv,int cr_cbp)
+int dct_chroma_sp2(Macroblock *currMB, int uv,int cr_cbp, int is_cavlc)
 {
   int i,j,ilev,n2,n1,coeff_ctr,c_err,level ,scan_pos = 0,run = -1;
   int m1[BLOCK_SIZE];
@@ -2750,7 +2700,7 @@ void select_dct(ImageParameters *img, Macroblock *currMB)
       {
         pDCT_4x4   = dct_4x4;
         pDCT_16x16 = dct_16x16;
-        if (params->symbol_mode == CAVLC)
+        if (img->currentSlice->symbol_mode == CAVLC)
           pDCT_8x8   = dct_8x8_cavlc;
         else
           pDCT_8x8   = dct_8x8;
@@ -2771,7 +2721,7 @@ void select_dct(ImageParameters *img, Macroblock *currMB)
     {
       pDCT_4x4   = dct_4x4;
       pDCT_16x16 = dct_16x16;
-      if (params->symbol_mode == CAVLC)
+      if (img->currentSlice->symbol_mode == CAVLC)
         pDCT_8x8   = dct_8x8_cavlc;
       else
         pDCT_8x8   = dct_8x8;
@@ -2784,7 +2734,7 @@ void select_dct(ImageParameters *img, Macroblock *currMB)
   {
     pDCT_4x4 = dct_4x4_sp;
     pDCT_16x16 = dct_16x16;
-    if (params->symbol_mode == CAVLC)
+    if (img->currentSlice->symbol_mode == CAVLC)
       pDCT_8x8   = dct_8x8_cavlc;
     else
       pDCT_8x8   = dct_8x8;
@@ -2796,7 +2746,7 @@ void select_dct(ImageParameters *img, Macroblock *currMB)
   {
     pDCT_4x4 = dct_4x4_sp2;
     pDCT_16x16 = dct_16x16;
-    if (params->symbol_mode == CAVLC)
+    if (img->currentSlice->symbol_mode == CAVLC)
       pDCT_8x8   = dct_8x8_cavlc;
     else
       pDCT_8x8   = dct_8x8;

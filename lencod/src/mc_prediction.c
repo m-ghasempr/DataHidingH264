@@ -641,13 +641,14 @@ void ChromaPrediction4x4 ( Macroblock* currMB, // <-- Current Macroblock
   int uv_comp = uv + 1;
   imgpel (*mb_pred)[16] = img->mb_pred[uv_comp];
   int     list_offset = currMB->list_offset;
-
+  
   int  apply_weights = ( (active_pps->weighted_pred_flag && (img->type == P_SLICE || img->type == SP_SLICE)) ||
     (active_pps->weighted_bipred_idc && (img->type == B_SLICE)));
 
   if (bipred_me && l0_ref_idx == 0 && l1_ref_idx == 0 && p_dir == 2 && is_bipred_enabled(l0_mode)  && is_bipred_enabled(l1_mode) )
     mv_array = img->bipred_mv[bipred_me - 1]; 
   //===== INTRA PREDICTION =====
+  
   if (p_dir==-1)
   {
     IntraChromaPrediction4x4 (currMB, uv_comp, block_x, block_y);

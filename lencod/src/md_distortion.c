@@ -25,6 +25,8 @@
 #include "me_umhex.h"
 #include "me_umhexsmp.h"
 #include "macroblock.h"
+#include "mv-search.h"
+
 
 int64 compute_SSE(imgpel **imgRef, imgpel **imgSrc, int xRef, int xSrc, int ySize, int xSize)
 {

@@ -147,7 +147,7 @@ void InterpretSEIMessage(byte* msg, int size, ImageParameters *img)
       interpret_full_frame_snapshot_info( msg+offset, payload_size, img );
       break;
     case  SEI_PROGRESSIVE_REFINEMENT_SEGMENT_START:
-      interpret_progressive_refinement_end_info( msg+offset, payload_size, img );
+      interpret_progressive_refinement_start_info( msg+offset, payload_size, img );
       break;
     case  SEI_PROGRESSIVE_REFINEMENT_SEGMENT_END:
       interpret_progressive_refinement_end_info( msg+offset, payload_size, img );
@@ -1062,14 +1062,21 @@ void interpret_dec_ref_pic_marking_repetition_info( byte* payload, int size, Ima
  */
 void interpret_full_frame_freeze_info( byte* payload, int size, ImageParameters *img )
 {
+  int full_frame_freeze_repetition_period;
+  Bitstream* buf;
+
+  buf = malloc(sizeof(Bitstream));
+  buf->bitstream_length = size;
+  buf->streamBuffer = payload;
+  buf->frame_bitoffset = 0;
+
+  full_frame_freeze_repetition_period  = ue_v(    "SEI: full_frame_freeze_repetition_period"   , buf);
+
 #ifdef PRINT_FULL_FRAME_FREEZE_INFO
-  printf("Full-frame freeze SEI message\n");
-  if (size)
-  {
-    printf("payload size of this message should be zero, but is %d bytes.\n", size);
-  }
+  printf("full_frame_freeze_repetition_period = %d\n", full_frame_freeze_repetition_period);
 #endif
 
+  free (buf);
 #ifdef PRINT_FULL_FRAME_FREEZE_INFO
 #undef PRINT_FULL_FRAME_FREEZE_INFO
 #endif

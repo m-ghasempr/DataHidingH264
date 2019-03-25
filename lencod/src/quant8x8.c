@@ -28,8 +28,9 @@
 *
 ************************************************************************
 */
-void init_quant_8x8(InputParameters *params, ImageParameters *img)
+void init_quant_8x8(InputParameters *params, ImageParameters *img, Slice *currSlice)
 {
+  // We may wish to have all these parameters switched at the slice level for speed up.
   if (params->UseRDOQuant == 1)
   {
     quant_8x8 = quant_8x8_trellis;

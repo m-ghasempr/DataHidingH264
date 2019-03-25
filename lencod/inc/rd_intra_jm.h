@@ -17,7 +17,7 @@
 #ifndef _RD_INTRA_JM_H_
 #define _RD_INTRA_JM_H_
 
-void Intra16x16_Mode_Decision (Macroblock* currMB, int* i16mode);
+void Intra16x16_Mode_Decision (Macroblock* currMB, int* i16mode, int is_cavlc);
 
 #endif
 

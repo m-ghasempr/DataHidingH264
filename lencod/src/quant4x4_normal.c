@@ -43,7 +43,7 @@
 int quant_4x4_normal(int (*tblock)[16], int block_y, int block_x, int  qp,
                      int*  ACLevel, int*  ACRun, 
                      int **fadjust4x4, int **levelscale, int **invlevelscale, int **leveloffset,
-                     int *coeff_cost, const byte (*pos_scan)[2], const byte *c_cost)
+                     int *coeff_cost, const byte (*pos_scan)[2], const byte *c_cost, int is_cavlc)
 {
   static int i,j, coeff_ctr;
 
@@ -51,7 +51,7 @@ int quant_4x4_normal(int (*tblock)[16], int block_y, int block_x, int  qp,
   static int scaled_coeff;
 
   int   level, run = 0;
-  int   nonzero = FALSE;  
+  int   nonzero = FALSE;
   int   qp_per = qp_per_matrix[qp];
   int   q_bits = Q_BITS + qp_per;
   const byte *p_scan = &pos_scan[0][0];
@@ -73,7 +73,7 @@ int quant_4x4_normal(int (*tblock)[16], int block_y, int block_x, int  qp,
 
       if (level != 0)
       {
-        if (params->symbol_mode == CAVLC)
+        if (is_cavlc)
           level = imin(level, CAVLC_LEVEL_LIMIT);
 
         *coeff_cost += (level > 1) ? MAX_VALUE : c_cost[run];
@@ -98,7 +98,7 @@ int quant_4x4_normal(int (*tblock)[16], int block_y, int block_x, int  qp,
     else
     {
       run++;
-    }          
+    } 
   }
 
   *ACL = 0;
@@ -109,7 +109,7 @@ int quant_4x4_normal(int (*tblock)[16], int block_y, int block_x, int  qp,
 int quant_ac4x4_normal(int (*tblock)[16], int block_y, int block_x, int qp,                 
                        int*  ACLevel, int*  ACRun, 
                        int **fadjust4x4, int **levelscale, int **invlevelscale, int **leveloffset,
-                       int *coeff_cost, const byte (*pos_scan)[2], const byte *c_cost, int type)
+                       int *coeff_cost, const byte (*pos_scan)[2], const byte *c_cost, int type, int is_cavlc)
 {
   static int i,j, coeff_ctr;
 
@@ -138,7 +138,7 @@ int quant_ac4x4_normal(int (*tblock)[16], int block_y, int block_x, int qp,
 
       if (level != 0)
       {
-        if (params->symbol_mode == CAVLC)
+        if (is_cavlc)
           level = imin(level, CAVLC_LEVEL_LIMIT);
 
         *coeff_cost += (level > 1) ? MAX_VALUE : c_cost[run];
@@ -170,7 +170,7 @@ int quant_ac4x4_normal(int (*tblock)[16], int block_y, int block_x, int qp,
 
   return nonzero;
 }
-
+ 
 /*!
  ************************************************************************
  * \brief
@@ -183,7 +183,7 @@ int quant_ac4x4_normal(int (*tblock)[16], int block_y, int block_x, int qp,
  ************************************************************************
  */
 int quant_dc4x4_normal(int (*tblock)[4], int qp, int* DCLevel, int* DCRun, 
-                       int levelscale, int invlevelscale, int **leveloffset, const byte (*pos_scan)[2])
+                       int levelscale, int invlevelscale, int leveloffset, const byte (*pos_scan)[2], int is_calvc)
 {
   static int i,j, coeff_ctr;
 
@@ -207,15 +207,14 @@ int quant_dc4x4_normal(int (*tblock)[4], int qp, int* DCLevel, int* DCRun,
     m7 = &tblock[j][i];
 
     if (*m7 != 0)
-    {
+    {    
       scaled_coeff = iabs (*m7) * levelscale;
-      level = (scaled_coeff + (leveloffset[0][0] << 1) ) >> q_bits;
+      level = (scaled_coeff + (leveloffset << 1) ) >> q_bits;
 
       if (level != 0)
       {
-        if (params->symbol_mode == CAVLC)
+        if (is_calvc)
           level = imin(level, CAVLC_LEVEL_LIMIT);
-
         level = isignab(level, *m7);
 
         *m7     = level;
@@ -241,5 +240,3 @@ int quant_dc4x4_normal(int (*tblock)[4], int qp, int* DCLevel, int* DCRun,
 
   return nonzero;
 }
-
- 

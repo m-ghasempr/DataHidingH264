@@ -1599,7 +1599,7 @@ static void read_ipred_modes(ImageParameters *img, Macroblock *currMB)
   int mostProbableIntraPredMode;
   int upIntraPredMode;
   int leftIntraPredMode;
-  int IntraChromaPredModeFlag = IS_INTRA(currMB);
+  char IntraChromaPredModeFlag = IS_INTRA(currMB);
   int bs_x, bs_y;
   int ii,jj;
   

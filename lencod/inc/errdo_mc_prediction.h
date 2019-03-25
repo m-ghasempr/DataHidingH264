@@ -1,6 +1,6 @@
 /*!
  *************************************************************************************
- * \file errd_mc_prediction.h
+ * \file errdo_mc_prediction.h
  *
  * \brief
  *    definitions for motion compensated prediction

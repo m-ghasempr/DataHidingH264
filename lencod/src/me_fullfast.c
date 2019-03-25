@@ -26,12 +26,11 @@
 #include "me_distortion.h"
 #include "me_fullsearch.h"
 #include "conformance.h"
+#include "mv-search.h"
 
 // Define External Global Parameters
-extern int *mvbits;
 extern short*   spiral_search_x;
 extern short*   spiral_search_y;
-extern int *byte_abs;
 
 /*****
  *****  static variables for fast integer motion estimation

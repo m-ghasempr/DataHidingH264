@@ -14,6 +14,7 @@
 
 #include "global.h"
 #include "nalu.h"
+#include "nal.h"
 
 /*!
  *************************************************************************************
@@ -54,19 +55,8 @@ int RBSPtoNALU (unsigned char *rbsp, NALU_t *nalu, int rbsp_size, int nal_unit_t
   nalu->forbidden_bit       = 0;  
   nalu->nal_reference_idc   = (NalRefIdc) nal_reference_idc;
   nalu->nal_unit_type       = (NaluType) nal_unit_type;    
-  nalu->buf[0]              =
-    nalu->forbidden_bit << 7      |
-    nalu->nal_reference_idc << 5  |
-    nalu->nal_unit_type;
 
-  memcpy (&nalu->buf[1], rbsp, rbsp_size);
-// printf ("First Byte %x\n", nalu->buf[0]);
-// printf ("RBSPtoNALU: Before: NALU len %d\t RBSP %x %x %x %x\n", rbsp_size, (unsigned) nalu->buf[1], (unsigned) nalu->buf[2], (unsigned) nalu->buf[3], (unsigned) nalu->buf[4]);
-
-  len = 1 + RBSPtoEBSP (&nalu->buf[1], 0, rbsp_size, min_num_bytes);
-
-// printf ("RBSPtoNALU: After : NALU len %d\t EBSP %x %x %x %x\n", rbsp_size, (unsigned) nalu->buf[1], (unsigned) nalu->buf[2], (unsigned) nalu->buf[3], (unsigned) nalu->buf[4]);
-// printf ("len %d\n\n", len);
+  len = RBSPtoEBSP (nalu->buf, rbsp, rbsp_size);
   nalu->len = len;
 
   return len;

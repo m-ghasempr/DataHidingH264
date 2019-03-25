@@ -15,7 +15,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 14.1 (FRExt)
+ *     JM 14.2 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -61,7 +61,7 @@
 #include "quant.h"
 
 #define JM          "14 (FRExt)"
-#define VERSION     "14.1"
+#define VERSION     "14.2"
 #define EXT_VERSION "(FRExt)"
 
 #define LOGFILE     "log.dec"
@@ -862,7 +862,7 @@ void malloc_slice(struct inp_par *inp, ImageParameters *img)
     snprintf(errortext, ET_SIZE, "Memory allocation for Slice datastruct in NAL-mode %d failed", inp->FileFormat);
     error(errortext,100);
   }
-//  img->currentSlice->rmpni_buffer=NULL;
+  //  img->currentSlice->rmpni_buffer=NULL;
   //! you don't know whether we do CABAC hre, hence initialize CABAC anyway
   // if (inp->symbol_mode == CABAC)
   if (1)
@@ -891,7 +891,7 @@ void free_slice(ImageParameters *img)
   Slice *currSlice = img->currentSlice;
 
   FreePartition (currSlice->partArr, 3);
-//      if (inp->symbol_mode == CABAC)
+  // if (inp->symbol_mode == CABAC)
   if (1)
   {
     // delete all context models

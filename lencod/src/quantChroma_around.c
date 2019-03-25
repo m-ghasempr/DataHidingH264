@@ -36,7 +36,7 @@
  */
 int quant_dc2x2_around(int (*tblock)[4], int qp, int* DCLevel, int* DCRun, 
                        int **fadjust, int levelscale, int invlevelscale, int **leveloffset,
-                       const byte (*pos_scan)[2])
+                       const byte (*pos_scan)[2], int is_cavlc)
 {
   static int coeff_ctr;
 
@@ -65,16 +65,17 @@ int quant_dc2x2_around(int (*tblock)[4], int qp, int* DCLevel, int* DCRun,
 
       if (level  != 0)
       {
-        if (params->symbol_mode == CAVLC)
+        if (is_cavlc)
           level = imin(level, CAVLC_LEVEL_LIMIT);
 
         level = isignab(level, *m7);
 
-        *m7++ = ((level * invlevelscale) << qp_per) >> 5;
+        *m7++ = ((level * invlevelscale) << qp_per);
 
-        *DCL++ = level;
-        *DCR++ = run;
-        run    = 0;
+        *DCL++  = level;
+        *DCR++  = run;
+        // reset zero level counter
+        run     = 0;
         nonzero = TRUE;
       }
       else
@@ -108,7 +109,7 @@ int quant_dc2x2_around(int (*tblock)[4], int qp, int* DCLevel, int* DCRun,
  */
 int quant_dc4x2_around(int (*tblock)[4], int qp, int* DCLevel, int* DCRun, 
                        int **fadjust, int levelscale, int invlevelscale, int **leveloffset,
-                       const byte (*pos_scan)[2])
+                       const byte (*pos_scan)[2], int is_cavlc)
 {
   static int i,j, coeff_ctr;
 
@@ -138,16 +139,16 @@ int quant_dc4x2_around(int (*tblock)[4], int qp, int* DCLevel, int* DCRun,
 
       if (level  != 0)
       {
-        if (params->symbol_mode == CAVLC)
+        if (is_cavlc)
           level = imin(level, CAVLC_LEVEL_LIMIT);
         level = isignab(level, *m7);
 
-        *m7 = rshift_rnd_sf(((level * invlevelscale) << qp_per), 6);
+        *m7 = ((level * invlevelscale) << qp_per);
 
-        *DCL++ = level;
-        *DCR++ = run;
+        *DCL++  = level;
+        *DCR++  = run;
         // reset zero level counter
-        run    = 0;
+        run     = 0;
         nonzero = TRUE;
       }
       else

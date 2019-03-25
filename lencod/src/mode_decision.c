@@ -25,7 +25,7 @@
 #include "me_umhex.h"
 #include "me_umhexsmp.h"
 #include "macroblock.h"
-#include "rdo_quant.h"
+#include "rdoq.h"
 #include "errdo.h"
 
 
@@ -313,7 +313,8 @@ void compute_mode_RD_cost(int mode,
                           double *min_rate,
                           int i16mode,
                           short bslice,
-                          short *inter_skip)
+                          short *inter_skip,
+                          int   is_cavlc)
 {
   //--- transform size ---
   currMB->luma_transform_size_8x8_flag = params->Transform8x8Mode==2
@@ -332,7 +333,7 @@ void compute_mode_RD_cost(int mode,
   {
     while(1)
     {
-      if (RDCost_for_macroblocks (currMB, enc_mb->lambda_md, mode, min_rdcost, min_dcost, min_rate, i16mode))
+      if (RDCost_for_macroblocks (currMB, enc_mb->lambda_md, mode, min_rdcost, min_dcost, min_rate, i16mode, is_cavlc))
       {
         //Rate control
         if (params->RCEnable)
@@ -397,7 +398,7 @@ void compute_mode_RD_cost(int mode,
     {
       img->NoResidueDirect = 1;
 
-      if (RDCost_for_macroblocks (currMB, enc_mb->lambda_md, mode, min_rdcost, min_dcost, min_rate, i16mode))
+      if (RDCost_for_macroblocks (currMB, enc_mb->lambda_md, mode, min_rdcost, min_dcost, min_rate, i16mode, is_cavlc))
       {
         //Rate control
         if (params->RCEnable)
@@ -428,7 +429,8 @@ void submacroblock_mode_decision(RD_PARAMS *enc_mb,
                                  int *cost_direct,
                                  int *cost,
                                  int *cost8x8_direct,
-                                 int transform8x8)
+                                 int transform8x8,
+                                 int is_cavlc)
 {
   int64 curr_cbp_blk;
   double min_rdcost, rdcost = 0.0;
@@ -629,7 +631,7 @@ void submacroblock_mode_decision(RD_PARAMS *enc_mb,
       {
         //--- get and check rate-distortion cost ---
         rdcost = RDCost_for_8x8blocks (currMB, &cnt_nonz, &curr_cbp_blk, enc_mb->lambda_md,
-          block, mode, best_pdir, best_ref[LIST_0], best_ref[LIST_1], bipred_me);
+          block, mode, best_pdir, best_ref[LIST_0], best_ref[LIST_1], bipred_me, is_cavlc);
       }
       else
       {
@@ -780,7 +782,7 @@ void submacroblock_mode_decision(RD_PARAMS *enc_mb,
     currMB->bipred_me[block] = dataTr->part8x8bipred[block];
     best_cnt_nonz = LumaResidualCoding8x8 (currMB, &dummy, &curr_cbp_blk, block, pdir,
       (pdir == 0 || pdir == 2 ? mode : 0), (pdir == 1 || pdir == 2 ? mode : 0), 
-      dataTr->part8x8l0ref[block], dataTr->part8x8l1ref[block]);
+      dataTr->part8x8l0ref[block], dataTr->part8x8l1ref[block], is_cavlc);
 
     if (img->P444_joined)
       best_cnt_nonz += coeff_cost_cr[1] + coeff_cost_cr[2];
@@ -877,7 +879,7 @@ void submacroblock_mode_decision(RD_PARAMS *enc_mb,
   else
   {
     //======= save motion data for 8x8 partition for transform size 8x8 ========
-    StoreNewMotionVectorsBlock8x8(0, block, dataTr->part8x8mode[block], dataTr->part8x8l0ref[block], dataTr->part8x8l1ref[block], dataTr->part8x8pdir[block], bslice);
+    StoreNewMotionVectorsBlock8x8(0, block, dataTr->part8x8mode[block], dataTr->part8x8l0ref[block], dataTr->part8x8l1ref[block], dataTr->part8x8pdir[block], dataTr->part8x8bipred[block], bslice);
   }
   //===== set motion vectors and reference frames (prediction) =====
   SetRefAndMotionVectors (currMB, block, dataTr->part8x8mode[block], dataTr->part8x8pdir[block], dataTr->part8x8l0ref[block], dataTr->part8x8l1ref[block], dataTr->part8x8bipred[block]);
@@ -1001,7 +1003,7 @@ int iminarray ( int arr[], int size, int *minind )
 int is_bipred_enabled(int mode) 
 {
   int enabled = 0;
-  mode = mode == P8x8 ? 4: mode;
+  mode = (mode == P8x8) ? 4: mode;
   if (params->BiPredMotionEstimation)
   {
     if (mode > 0 && mode < 5)

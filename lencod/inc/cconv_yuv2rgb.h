@@ -21,6 +21,8 @@
 
 void init_YUVtoRGB(void);
 void YUVtoRGB(ImageStructure *YUV, ImageStructure *RGB);
+int  create_RGB_memory(ImageParameters *img);
+void delete_RGB_memory(void);
 
 #endif
 

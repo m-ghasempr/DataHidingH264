@@ -23,10 +23,10 @@
 #include "memalloc.h"
 #include "mb_access.h"
 #include "refbuf.h"
-
+#include "mv-search.h"
 #include "me_distortion.h"
 
-extern unsigned int *byte_abs;
+
 
 // Define Global Parameters
 // Luma

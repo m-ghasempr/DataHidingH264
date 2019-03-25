@@ -369,7 +369,7 @@ void alloc_pic_motion(PicMotionParams *motion, int size_y, int size_x)
   get_mem4Dshort (&(motion->mv),         2, size_y, size_x, 2);
   get_mem3D      ((byte****)(&(motion->ref_idx)),    2, size_y , size_x);
 
-  motion->mb_field = calloc (size_y * size_x, sizeof(int));
+  motion->mb_field = calloc (size_y * size_x, sizeof(byte));
   if (motion->mb_field == NULL)
     no_mem_exit("alloc_storable_picture: motion->mb_field");
 

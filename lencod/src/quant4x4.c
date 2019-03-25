@@ -24,13 +24,28 @@
 *
 ************************************************************************
 */
-void init_quant_4x4(InputParameters *params, ImageParameters *img)
+void init_quant_4x4(InputParameters *params, ImageParameters *img, Slice *currSlice)
 {
   if (params->UseRDOQuant == 1)
   {
     quant_4x4     = quant_4x4_trellis;
-    quant_dc4x4   = quant_dc4x4_trellis;
+    if (params->RDOQ_DC == 1)
+      quant_dc4x4 = quant_dc4x4_trellis;
+    else
+      quant_dc4x4 = quant_dc4x4_normal;
     quant_ac4x4   = quant_ac4x4_trellis;
+    if (currSlice->symbol_mode == CAVLC)
+    {
+      rdoq_4x4   = rdoq_4x4_CAVLC;
+      rdoq_dc    = rdoq_dc_CAVLC;
+      rdoq_ac4x4 = rdoq_ac4x4_CAVLC;
+    }
+    else
+    {
+      rdoq_4x4   = rdoq_4x4_CABAC;
+      rdoq_dc    = rdoq_dc_CABAC;
+      rdoq_ac4x4 = rdoq_ac4x4_CABAC;
+    }
   }
   else if (img->AdaptiveRounding)
   {

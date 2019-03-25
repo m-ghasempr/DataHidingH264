@@ -13,6 +13,7 @@
  */
 #include "contributors.h"
 #include "global.h"
+#include "memalloc.h"
 #include "img_distortion.h"
 
 #define YUV2RGB_YOFFSET
@@ -36,6 +37,35 @@ static const float K4 = 1.772f;
 static int wk0, wk1, wk2, wk3, wk4;
 
 ImageStructure imgRGB_src, imgRGB_ref;
+
+int create_RGB_memory(ImageParameters *img)
+{
+  int memory_size = 0;
+  int j;
+  for( j = 0; j < 3; j++ )
+  {
+    memory_size += get_mem2Dpel (&imgRGB_src.data[j], img->height, img->width);
+  }
+  for( j = 0; j < 3; j++ )
+  {
+    memory_size += get_mem2Dpel (&imgRGB_ref.data[j], img->height, img->width);
+  }
+  
+  return memory_size;
+}
+
+void delete_RGB_memory(void)
+{
+  int i;
+  for( i = 0; i < 3; i++ )
+  {
+    free_mem2Dpel(imgRGB_src.data[i]);
+  }
+  for( i = 0; i < 3; i++ )
+  {
+    free_mem2Dpel(imgRGB_ref.data[i]);
+  }
+}
 
 void init_YUVtoRGB(void)
 { 

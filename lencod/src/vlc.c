@@ -75,7 +75,7 @@ int ue_v (char *tracestring, int value, Bitstream *bitstream)
   sym->value1 = value;
   sym->value2 = 0;
 
-  assert (bitstream->streamBuffer != NULL);
+  //assert (bitstream->streamBuffer != NULL);
 
   ue_linfo(sym->value1,sym->value2,&(sym->len),&(sym->inf));
   symbol2uvlc(sym);
@@ -120,7 +120,7 @@ int se_v (char *tracestring, int value, Bitstream *bitstream)
   sym->value1 = value;
   sym->value2 = 0;
 
-  assert (bitstream->streamBuffer != NULL);
+  //assert (bitstream->streamBuffer != NULL);
 
   se_linfo(sym->value1,sym->value2,&(sym->len),&(sym->inf));
   symbol2uvlc(sym);
@@ -165,10 +165,10 @@ Boolean u_1 (char *tracestring, int value, Bitstream *bitstream)
   SyntaxElement symbol, *sym=&symbol;
 
   sym->bitpattern = value;
-  sym->len = 1;
   sym->value1 = value;
+  sym->len = 1;
 
-  assert (bitstream->streamBuffer != NULL);
+  //assert (bitstream->streamBuffer != NULL);
 
   writeUVLC2buffer(sym, bitstream);
 
@@ -212,10 +212,10 @@ int u_v (int n, char *tracestring, int value, Bitstream *bitstream)
   SyntaxElement symbol, *sym=&symbol;
 
   sym->bitpattern = value;
-  sym->len = n;
   sym->value1 = value;
+  sym->len = n;  
 
-  assert (bitstream->streamBuffer != NULL);
+  //assert (bitstream->streamBuffer != NULL);
 
   writeUVLC2buffer(sym, bitstream);
 
@@ -244,9 +244,7 @@ int u_v (int n, char *tracestring, int value, Bitstream *bitstream)
  */
 void ue_linfo(int ue, int dummy, int *len,int *info)
 {
-  int i,nn;
-
-  nn=(ue+1)>>1;
+  int i, nn =(ue+1)>>1;
 
   for (i=0; i < 33 && nn != 0; i++)
   {
@@ -277,7 +275,7 @@ void se_linfo(int se, int dummy, int *len,int *info)
   int n = iabs(se) << 1;   //  n+1 is the number in the code table.  Based on this we find length and info
   int nn = (n >> 1);
   int i;
-  for (i=0; i < 33 && nn != 0; i++)
+  for (i = 0; i < 33 && nn != 0; i++)
   {
     nn >>= 1;
   }
@@ -296,10 +294,7 @@ void se_linfo(int se, int dummy, int *len,int *info)
  */
 void cbp_linfo_intra(int cbp, int dummy, int *len,int *info)
 {
-  if ((img->yuv_format==0)||(img->yuv_format==3))
-    ue_linfo(NCBP[0][cbp][0], dummy, len, info);
-  else
-    ue_linfo(NCBP[1][cbp][0], dummy, len, info);
+  ue_linfo(NCBP[((img->yuv_format!=0)&&(img->yuv_format!=3))][cbp][0], dummy, len, info);
 }
 
 
@@ -313,10 +308,7 @@ void cbp_linfo_intra(int cbp, int dummy, int *len,int *info)
  */
 void cbp_linfo_inter(int cbp, int dummy, int *len,int *info)
 {
-  if ((img->yuv_format==0)||(img->yuv_format==3))
-    ue_linfo(NCBP[0][cbp][1], dummy, len, info);
-  else
-    ue_linfo(NCBP[1][cbp][1], dummy, len, info);
+  ue_linfo(NCBP[((img->yuv_format!=0)&&(img->yuv_format!=3))][cbp][1], dummy, len, info);
 }
 
 
@@ -405,7 +397,7 @@ void levrun_linfo_inter(int level,int run,int *len,int *info)
     {29, 0, 0, 0, 0, 0, 0, 0, 0, 0},
   };
 
-  int levabs,i,n,sign,nn;
+  static int levabs,i,n,sign,nn;
 
   if (level == 0)           //  check for EOB
   {
@@ -445,8 +437,9 @@ void levrun_linfo_inter(int level,int run,int *len,int *info)
 int symbol2uvlc(SyntaxElement *sym)
 {
   int suffix_len = sym->len >> 1;
-  assert (suffix_len<32);
-  sym->bitpattern = (1<<suffix_len)|(sym->inf & ((1<<suffix_len) - 1));
+  //assert (suffix_len < 32);
+  suffix_len = (1 << suffix_len);
+  sym->bitpattern = suffix_len | (sym->inf & (suffix_len - 1));
   return 0;
 }
 
@@ -500,7 +493,7 @@ void writeSE_SVLC(SyntaxElement *se, DataPartition *dp)
 *    generates UVLC code and passes the codeword to the buffer
 ************************************************************************
 */
-void writeCBP_VLC(Macroblock* currMB, SyntaxElement *se, DataPartition *dp)
+void writeCBP_VLC (Macroblock* currMB, SyntaxElement *se, DataPartition *dp)
 {
   if (IS_OLDINTRA (currMB) || currMB->mb_type == SI4MB ||  currMB->mb_type == I8MB)
   {
@@ -1182,56 +1175,49 @@ int writeSyntaxElement_Run(SyntaxElement *se, DataPartition *dp)
  */
 int writeSyntaxElement_Level_VLC1(SyntaxElement *se, DataPartition *dp, int profile_idc)
 {
-  int level = se->value1;
+  int level  = se->value1;
+  int sign   = (level < 0 ? 1 : 0);
   int levabs = iabs(level);
-  int sign = (level < 0 ? 1 : 0);
 
   if (levabs < 8)
   {
     se->len = levabs * 2 + sign - 1;
     se->inf = 1;
   }
-  else if (levabs < 16) //8+8)
+  else if (levabs < 16) 
   {
     // escape code1
-    //se->len = 14 + 1 + 4;
     se->len = 19;
-    se->inf = (1 << 4) | ((levabs - 8) << 1) | sign;
+    se->inf = 16 | ((levabs << 1) - 16) | sign;
   }
   else
   {
-    int iLength = 28, numPrefix = 15;
-    int iCodeword, addbit, offset;
-    int levabsm16 = levabs - 16;
+    int iMask = 4096, numPrefix = 0;
+    int levabsm16 = levabs + 2032;
 
     // escape code2
-    if ((levabsm16) >= 2048)
+    if ((levabsm16) >= 4096)
     {
       numPrefix++;
-      while ((levabsm16) >= (1<<(numPrefix-3)) - 4096)
+      while ((levabsm16) >= (4096 << numPrefix))
       {
         numPrefix++;
       }
     }
-
-    addbit   = numPrefix - 15;
-    iLength += (addbit << 1);
-    offset   = (2048 << addbit) - 2048;
-
-    iCodeword = (1 << (12+addbit))|((levabsm16) << 1)|sign;
+   
+    iMask <<= numPrefix;
+    se->inf = iMask | ((levabsm16 << 1) - iMask) | sign;
 
     /* Assert to make sure that the code fits in the VLC */
     /* make sure that we are in High Profile to represent level_prefix > 15 */
-    if (numPrefix > 15 && !IS_FREXT_PROFILE( profile_idc ))
+    if (numPrefix > 0 && !IS_FREXT_PROFILE( profile_idc ))
     {
       //error( "level_prefix must be <= 15 except in High Profile\n",  1000 );
       se->len = 0x0000FFFF; // This can be some other big number
-      se->inf = iCodeword;
       return (se->len);
     }
     
-    se->len = iLength;
-    se->inf = iCodeword;
+    se->len = 28 + (numPrefix << 1);
   }
 
 
@@ -1259,61 +1245,49 @@ int writeSyntaxElement_Level_VLC1(SyntaxElement *se, DataPartition *dp, int prof
  */
 int writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *dp, int profile_idc)
 {  
-  int iCodeword;
-  int iLength;
-
-  int level = se->value1;
-  int sign = (level < 0 ? 1 : 0);
+  int level  = se->value1;
+  int sign   = (level < 0 ? 1 : 0);
   int levabs = iabs(level) - 1;  
 
   int shift = vlc - 1;        
-  int escape = (15<<shift);
+  int escape = (15 << shift);
 
   if (levabs < escape)
   {
-    int sufmask = ~((0xffffffff)<<shift);
-    int suffix = (levabs)&sufmask;
-    int numPrefix = (levabs)>>shift;
+    int sufmask   = ~((0xffffffff) << shift);
+    int suffix    = (levabs) & sufmask;
 
-    iLength = numPrefix + vlc + 1;
-    iCodeword = (1<<(shift+1))|(suffix<<1)|sign;
+    se->len = ((levabs) >> shift) + 1 + vlc;
+    se->inf = (2 << shift) | (suffix << 1) | sign;
   }
   else
   {
-    int addbit, offset;
-    int levabsesc = levabs - escape;
-    int numPrefix = 15;
+    int iMask = 4096;
+    int levabsesc = levabs - escape + 2048;
+    int numPrefix = 0;
 
-    iLength = 28;    
-
-    if ((levabsesc) >= 2048)
+    if ((levabsesc) >= 4096)
     {
       numPrefix++;
-      while ((levabsesc) >= (1<<(numPrefix-3)) - 4096)
+      while ((levabsesc) >= (4096 << numPrefix))
       {
         numPrefix++;
       }
     }
 
-    addbit  = numPrefix - 15;
-
-    iLength += (addbit<<1);
-    offset = (2048 << addbit) - 2048;
-
-    iCodeword = (1 << (12 + addbit)) | ((levabsesc - offset) << 1) | sign;
+    iMask <<= numPrefix;
+    se->inf = iMask | ((levabsesc << 1) - iMask) | sign;
 
     /* Assert to make sure that the code fits in the VLC */
     /* make sure that we are in High Profile to represent level_prefix > 15 */
-    if (numPrefix > 15 &&  !IS_FREXT_PROFILE( profile_idc ))
+    if (numPrefix > 0 &&  !IS_FREXT_PROFILE( profile_idc ))
     {
       //error( "level_prefix must be <= 15 except in High Profile\n",  1000 );
       se->len = 0x0000FFFF; // This can be some other big number
-      se->inf = iCodeword;
       return (se->len);
     }
+    se->len = 28 + (numPrefix << 1);
   }
-  se->len = iLength;
-  se->inf = iCodeword;
 
   symbol2vlc(se);
 
@@ -1411,13 +1385,13 @@ void trace2out_cabac(SyntaxElement *sym)
  *
  ************************************************************************
  */
-void writeVlcByteAlign(Bitstream* currStream)
+void writeVlcByteAlign(Bitstream* currStream, StatParameters *cur_stats)
 {
   if (currStream->bits_to_go < 8)
   { // trailing bits to process
     currStream->byte_buf = (currStream->byte_buf << currStream->bits_to_go) | (0xff >> (8 - currStream->bits_to_go));
-    stats->bit_use_stuffingBits[img->type] += currStream->bits_to_go;
     currStream->streamBuffer[currStream->byte_pos++] = currStream->byte_buf;
+    cur_stats->bit_use_stuffingBits[img->type] += currStream->bits_to_go;    
     currStream->bits_to_go = 8;
   }
 }

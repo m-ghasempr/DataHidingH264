@@ -23,6 +23,7 @@
 
 #include "global.h"
 #include "header.h"
+#include "nal.h"
 #include "rtp.h"
 #include "fmo.h"
 #include "vlc.h"
@@ -37,13 +38,13 @@
 #include "me_epzs.h"
 #include "wp.h"
 #include "slice.h"
-
+#include "rdoq.h"
+#include "wp_mcprec.h"
 #include "q_offsets.h"
 #include "conformance.h"
-
-#include "rdo_quant.h"
-#include "wp_mcprec.h"
-
+#include "quant4x4.h"
+#include "quant8x8.h"
+#include "quantChroma.h"
 
 // Local declarations
 static Slice *malloc_slice();
@@ -69,10 +70,8 @@ const int QP2QUANT[40]=
  *    init_ref_pic_list_reordering initializations should go here
  ************************************************************************
  */
-void init_ref_pic_list_reordering()
+void init_ref_pic_list_reordering(Slice* currSlice)
 {
-  Slice* currSlice = img->currentSlice;
-
   currSlice->ref_pic_list_reordering_flag_l0 = 0;
   currSlice->ref_pic_list_reordering_flag_l1 = 0;
 }
@@ -91,10 +90,9 @@ void init_ref_pic_list_reordering()
  *      slice, sets img->currSlice
  ************************************************************************
 */
-int start_slice()
+static int start_slice(Slice *currSlice, StatParameters *cur_stats)
 {
   EncodingEnvironmentPtr eep;
-  Slice *currSlice = img->currentSlice;
   Bitstream *currStream;
   int header_len = 0;
   int i;
@@ -119,13 +117,14 @@ int start_slice()
       header_len += Partition_BC_Header(i);
 
     //! Initialize CABAC
-    if (params->symbol_mode == CABAC)
+    if (currSlice->symbol_mode == CABAC)
     {
       eep = &((currSlice->partArr[i]).ee_cabac);
       if (currStream->bits_to_go != 8)
         header_len+=currStream->bits_to_go;
-      writeVlcByteAlign(currStream);
+      writeVlcByteAlign(currStream, cur_stats);
       arienco_start_encoding(eep, currStream->streamBuffer, &(currStream->byte_pos));
+      arienco_reset_EC(eep);
     }
     else
     {
@@ -133,11 +132,70 @@ int start_slice()
       CAVLC_init();
     }
   }
-  if(params->symbol_mode == CABAC)
+
+  if(currSlice->symbol_mode == CABAC)
   {
     init_contexts();
   }
   return header_len;
+}
+
+/*!
+************************************************************************
+* \brief
+*    This creates a NAL unit structures for all data partition of the slice
+*
+************************************************************************
+*/
+void create_slice_nalus(Slice *currSlice)
+{
+  // KS: this is approx. max. allowed code picture size
+  const int buffer_size = 500 + img->FrameSizeInMbs * (128 + 256 * img->bitdepth_luma + 512 * img->bitdepth_chroma);
+  
+  int part;
+  NALU_t *nalu;
+
+  for (part=0; part< currSlice->max_part_nr; part++)
+  {
+    if (currSlice->partArr[part].bitstream->write_flag)
+    {
+      nalu = AllocNALU(buffer_size);
+      currSlice->partArr[part].nal_unit = nalu;
+      nalu->startcodeprefix_len = 1+ (currSlice->start_mb_nr == 0 && part == 0 ?ZEROBYTES_SHORTSTARTCODE+1:ZEROBYTES_SHORTSTARTCODE);
+      nalu->forbidden_bit = 0;
+
+      if (img->currentPicture->idr_flag)
+      {
+        nalu->nal_unit_type = NALU_TYPE_IDR;
+        nalu->nal_reference_idc = NALU_PRIORITY_HIGHEST;
+      }
+      else
+      {
+        //different nal header for different partitions
+        if(params->partition_mode == 0)
+        {
+          nalu->nal_unit_type = NALU_TYPE_SLICE;
+        }
+        else
+        {
+          nalu->nal_unit_type = (NaluType) (NALU_TYPE_DPA +  part);
+        }
+
+        if (img->nal_reference_idc !=0)
+        {
+          nalu->nal_reference_idc = NALU_PRIORITY_HIGH;
+        }
+        else
+        {
+          nalu->nal_reference_idc = NALU_PRIORITY_DISPOSABLE;
+        }
+      }
+    }
+    else
+    {
+      currSlice->partArr[part].nal_unit = NULL;
+    }
+  }
 }
 
 /*!
@@ -151,70 +209,62 @@ int start_slice()
  *
  ************************************************************************
  */
-int terminate_slice(int lastslice)
+static int terminate_slice(Slice *currSlice, int lastslice, StatParameters *cur_stats )
 {
-  static int MbWidthC  [4]= { 0, 8, 8,  16};
-  static int MbHeightC [4]= { 0, 8, 16, 16};
-
-  int bytes_written;
   Bitstream *currStream;
-  Slice *currSlice = img->currentSlice;
+  NALU_t    *currNalu;
   EncodingEnvironmentPtr eep;
-  int i;
-  int byte_pos_before_startcode_emu_prevention;
-  int min_num_bytes=0;
-  int stuffing_bytes=0;
-  int RawMbBits;
-  int tmp_stuffingbits=img->mb_data[img->current_mb_nr].bitcounter[BITS_STUFFING];
+  int part;
+  int tmp_stuffingbits = img->mb_data[img->current_mb_nr].bitcounter[BITS_STUFFING];
 
-  if (params->symbol_mode == CABAC)
+  if (currSlice->symbol_mode == CABAC)
     write_terminating_bit (1);      // only once, not for all partitions
 
-  for (i=0; i<currSlice->max_part_nr; i++)
+  create_slice_nalus(currSlice);
+
+  for (part=0; part<currSlice->max_part_nr; part++)
   {
-    currStream = (currSlice->partArr[i]).bitstream;
-    if (params->symbol_mode == CAVLC)
+    currStream = (currSlice->partArr[part]).bitstream;
+    currNalu   = (currSlice->partArr[part]).nal_unit;
+    if (currStream->write_flag)
     {
-      SODBtoRBSP(currStream);
-      byte_pos_before_startcode_emu_prevention = currStream->byte_pos;
-      currStream->byte_pos = RBSPtoEBSP(currStream->streamBuffer, 0 , currStream->byte_pos, 0);
-      *(stats->em_prev_bits) += (currStream->byte_pos - byte_pos_before_startcode_emu_prevention) * 8;
-    }
-    else     // CABAC
-    {
-      eep = &((currSlice->partArr[i]).ee_cabac);
-      // terminate the arithmetic code
-      arienco_done_encoding(eep);
-      currStream->bits_to_go = eep->Ebits_to_go;
-      currStream->byte_buf = 0;
-      bytes_written = currStream->byte_pos;
-      img->bytes_in_picture += currStream->byte_pos;
-
-      byte_pos_before_startcode_emu_prevention= currStream->byte_pos;
-      if (lastslice && i==((currSlice->max_part_nr-1)))
+      if (currSlice->symbol_mode == CAVLC)
       {
-        RawMbBits = 256 * img->bitdepth_luma + 2 * MbWidthC[active_sps->chroma_format_idc] * MbHeightC[active_sps->chroma_format_idc] * img->bitdepth_chroma;
-        min_num_bytes = ((96 * get_pic_bin_count()) - (RawMbBits * (int)img->PicSizeInMbs *3) + 1023) / 1024;
-        if (min_num_bytes>img->bytes_in_picture)
-        {
-          stuffing_bytes = min_num_bytes - img->bytes_in_picture;
-          printf ("CABAC stuffing bytes = %6d (according to Clause 7.4.2.10)\n", 3*((stuffing_bytes+2)/3));
-        }
+        SODBtoRBSP(currStream);
+        currNalu->len = RBSPtoEBSP(currNalu->buf, currStream->streamBuffer, currStream->byte_pos);
       }
+      else     // CABAC
+      {
+        eep = &((currSlice->partArr[part]).ee_cabac);
+        // terminate the arithmetic code
+        arienco_done_encoding(eep);
+        set_pic_bin_count(eep);
 
-      currStream->byte_pos = RBSPtoEBSP(currStream->streamBuffer, 0, currStream->byte_pos, currStream->byte_pos + stuffing_bytes);
-      *(stats->em_prev_bits) += (currStream->byte_pos - byte_pos_before_startcode_emu_prevention) * 8;
-    }           // CABAC
+        currStream->bits_to_go = eep->Ebits_to_go;
+        currStream->byte_buf = 0;
+
+        currNalu->len = RBSPtoEBSP(currNalu->buf, currStream->streamBuffer, currStream->byte_pos);
+
+        // NumBytesInNALunit is: payload length + 1 byte header
+        img->bytes_in_picture += currNalu->len + 1;
+
+        if (lastslice && (part==(currSlice->max_part_nr-1)))
+        {
+          addCabacZeroWords(currNalu, cur_stats);
+        }
+      }           // CABAC
+    }
   }           // partition loop
-  if( params->symbol_mode == CABAC )
+  if( currSlice->symbol_mode == CABAC )
   {
     store_contexts();
   }
 
-  stats->bit_use_stuffingBits[img->type] += img->mb_data[img->current_mb_nr].bitcounter[BITS_STUFFING] - tmp_stuffingbits;
+  cur_stats->bit_use_stuffingBits[img->type] += img->mb_data[img->current_mb_nr].bitcounter[BITS_STUFFING] - tmp_stuffingbits;
 
   if (img->type != I_SLICE && img->type != SI_SLICE)
     free_ref_pic_list_reordering_buffer (currSlice);
+
   return 0;
 }
 
@@ -236,6 +286,8 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
   Macroblock* currMB      = NULL;
   int CurrentMbAddr;
   double FrameRDCost = DBL_MAX, FieldRDCost = DBL_MAX;
+  StatParameters *cur_stats = &enc_picture->stats;
+  Slice *currSlice = NULL;
 
   Motion_Selected = 0;
 
@@ -249,19 +301,24 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
   CurrentMbAddr = FmoGetFirstMacroblockInSlice (SliceGroupId);
   // printf ("\n\nEncode_one_slice: PictureID %d SliceGroupId %d  SliceID %d  FirstMB %d \n", img->tr, SliceGroupId, img->current_slice_nr, CurrentMbInScanOrder);
 
-  init_slice (CurrentMbAddr);
-  Bytes_After_Header = img->currentSlice->partArr[0].bitstream->byte_pos;
+  init_slice (&currSlice, CurrentMbAddr);
+  // Initialize quantization functions based on rounding/quantization method
+  // Done here since we may wish to disable adaptive rounding on occasional intervals (even at a frame or gop level).
+  init_quant_4x4(params, img, currSlice);
+  init_quant_8x8(params, img, currSlice);
+  init_quant_Chroma(params, img, currSlice);
+
 
   SetLagrangianMultipliers();
 
-  if (params->symbol_mode==CABAC)
+  if (currSlice->symbol_mode == CABAC)
   {
     SetCtxModelNumber ();
   }
 
   img->checkref = (params->rdopt && params->RestrictRef && (img->type==P_SLICE || img->type==SP_SLICE));
 
-  len = start_slice ();
+  len = start_slice (currSlice, cur_stats);
 
   // Rate control
   if (params->RCEnable)
@@ -270,7 +327,7 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
 
   // Update statistics
   stats->bit_slice += len;
-  stats->bit_use_header[img->type] += len;
+  cur_stats->bit_use_header[img->type] += len;
 
   while (end_of_slice == FALSE) // loop over macroblocks
   {
@@ -293,7 +350,7 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
       else
         rdopt = &rddata_top_frame_mb;   // store data in top frame MB
 
-      start_macroblock (&currMB, CurrentMbAddr, FALSE);
+      start_macroblock (currSlice,  &currMB, CurrentMbAddr, FALSE);
 
       if(params->UseRDOQuant)
       {
@@ -306,11 +363,11 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
         write_one_macroblock (currMB, 1, prev_recode_mb);    
       }
 
-      terminate_macroblock (currMB, &end_of_slice, &recode_macroblock);
+      terminate_macroblock (currSlice, currMB, &end_of_slice, &recode_macroblock);
       prev_recode_mb = recode_macroblock;
       //       printf ("encode_one_slice: mb %d,  slice %d,   bitbuf bytepos %d EOS %d\n",
       //       img->current_mb_nr, img->current_slice_nr,
-      //       img->currentSlice->partArr[0].bitstream->byte_pos, end_of_slice);
+      //       currSlice->partArr[0].bitstream->byte_pos, end_of_slice);
 
       if (recode_macroblock == FALSE)       // The final processing of the macroblock has been done
       {
@@ -368,21 +425,21 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
       //!   2. would it be an option to allocate Bitstreams with zero data in them (or copy the
       //!      already generated bitstream) for the "test coding"?
 
-      img->write_macroblock = 0;
+      img->write_macroblock = FALSE;
       if (params->MbInterlace == ADAPTIVE_CODING || params->MbInterlace == FRAME_MB_PAIR_CODING)
       {
         //================ code MB pair as frame MB ================
         //----------------------------------------------------------
         recode_macroblock = FALSE;
         //set mv limits to frame type
-        update_mv_limits(img, 0);
+        update_mv_limits(img, FALSE);
 
-        img->field_mode = 0;  // MB coded as frame
-        img->top_field = 0;   // Set top field to 0
+        img->field_mode = FALSE;  // MB coded as frame
+        img->top_field  = FALSE;   // Set top field to 0
 
         //Rate control
-        img->write_macroblock = 0;
-        img->bot_MB = 0;
+        img->write_macroblock = FALSE;
+        img->bot_MB = FALSE;
 
         // save RC state only when it is going to change
         if ( params->RCEnable && params->RCUpdateMode <= MAX_RC_MODE )
@@ -394,22 +451,24 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
             rc_copy_generic( generic_RC_init, generic_RC ); // save initial RC status
         }
 
-        start_macroblock (&currMB, CurrentMbAddr, FALSE);
+        start_macroblock (currSlice, &currMB, CurrentMbAddr, FALSE);
 
         rdopt = &rddata_top_frame_mb; // store data in top frame MB
+        img->masterQP = img->qp;
         encode_one_macroblock (currMB);   // code the MB as frame
 
         FrameRDCost = rdopt->min_rdcost;
         //***   Top MB coded as frame MB ***//
 
         //Rate control
-        img->bot_MB = 1; //for Rate control
+        img->bot_MB = TRUE; //for Rate control
 
         // go to the bottom MB in the MB pair
-        img->field_mode = 0;  // MB coded as frame  //GB
+        img->field_mode = FALSE;  // MB coded as frame  //GB
 
-        start_macroblock (&currMB, CurrentMbAddr + 1, FALSE);
+        start_macroblock (currSlice, &currMB, CurrentMbAddr + 1, FALSE);
         rdopt = &rddata_bot_frame_mb; // store data in top frame MB
+        img->masterQP = img->qp;
         encode_one_macroblock (currMB);         // code the MB as frame
 
         if ( params->RCEnable && params->RCUpdateMode <= MAX_RC_MODE )
@@ -429,14 +488,14 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
       if ((params->MbInterlace == ADAPTIVE_CODING) || (params->MbInterlace == FIELD_CODING))
       {
         //Rate control
-        img->bot_MB = 0;
+        img->bot_MB = FALSE;
         //set mv limits to field type
-        update_mv_limits(img, 1);
+        update_mv_limits(img, TRUE);
 
         //=========== start coding the MB pair as a field MB pair =============
         //---------------------------------------------------------------------
-        img->field_mode = 1;  // MB coded as field
-        img->top_field = 1;   // Set top field to 1
+        img->field_mode = TRUE;  // MB coded as field
+        img->top_field = TRUE;   // Set top field to 1
         img->buf_cycle <<= 1;
         params->num_ref_frames <<= 1;
         img->num_ref_idx_l0_active <<= 1;
@@ -452,20 +511,22 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
             rc_copy_generic( generic_RC, generic_RC_init ); // reset RC stats
         }
 
-        start_macroblock (&currMB, CurrentMbAddr, TRUE);
+        start_macroblock (currSlice, &currMB, CurrentMbAddr, TRUE);
 
         rdopt = &rddata_top_field_mb; // store data in top frame MB
         //        TopFieldIsSkipped = 0;        // set the top field MB skipped flag to 0
+        img->masterQP = img->qp;
         encode_one_macroblock (currMB);         // code the MB as field
 
         FieldRDCost = rdopt->min_rdcost;
         //***   Top MB coded as field MB ***//
         //Rate control
-        img->bot_MB = 1;//for Rate control
+        img->bot_MB = TRUE;//for Rate control
 
-        img->top_field = 0;   // Set top field to 0
-        start_macroblock (&currMB, CurrentMbAddr+1, TRUE);
+        img->top_field = FALSE;   // Set top field to 0
+        start_macroblock (currSlice, &currMB, CurrentMbAddr+1, TRUE);
         rdopt = &rddata_bot_field_mb; // store data in top frame MB
+        img->masterQP = img->qp;
         encode_one_macroblock (currMB);         // code the MB as field
 
         FieldRDCost += rdopt->min_rdcost;
@@ -479,8 +540,8 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
       //-----------------------------------------------------------
       if ( ((params->MbInterlace == ADAPTIVE_CODING) && (FrameRDCost < FieldRDCost)) || params->MbInterlace == FRAME_MB_PAIR_CODING )
       {
-        img->field_mode = 0;
-        MBPairIsField = 0;
+        img->field_mode = FALSE;
+        MBPairIsField = FALSE;
         if ( params->MbInterlace != FRAME_MB_PAIR_CODING )
         {
           img->buf_cycle >>= 1;
@@ -504,32 +565,34 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
       }
       else
       {
-        img->field_mode = 1;
-        MBPairIsField = 1;
+        img->field_mode = TRUE;
+        MBPairIsField = TRUE;
       }
 
       //Rate control
-      img->write_macroblock = 1;//Rate control
+      img->write_macroblock = TRUE;//Rate control
 
       if (MBPairIsField)
-        img->top_field = 1;
+        img->top_field = TRUE;
       else
-        img->top_field = 0;
+        img->top_field = FALSE;
 
       //Rate control
-      img->bot_MB = 0;// for Rate control
+      img->bot_MB = FALSE;// for Rate control
 
       // go back to the Top MB in the MB pair
-      start_macroblock (&currMB, CurrentMbAddr, img->field_mode);
+      start_macroblock (currSlice, &currMB, CurrentMbAddr, img->field_mode);
 
       rdopt =  img->field_mode ? &rddata_top_field_mb : &rddata_top_frame_mb;
       copy_rdopt_data (currMB, 0);  // copy the MB data for Top MB from the temp buffers
       write_one_macroblock (currMB, 1, prev_recode_mb);     // write the Top MB data to the bitstream
-      terminate_macroblock (currMB, &end_of_slice, &recode_macroblock);     // done coding the Top MB
+      terminate_macroblock (currSlice, currMB, &end_of_slice, &recode_macroblock);     // done coding the Top MB
       prev_recode_mb = recode_macroblock;
 
       if (recode_macroblock == FALSE)       // The final processing of the macroblock has been done
       {
+        img->SumFrameQP += currMB->qp;
+
         CurrentMbAddr = FmoGetNextMBNr (CurrentMbAddr);
         if (CurrentMbAddr == -1)   // end of slice
         {
@@ -539,19 +602,21 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
         proceed2nextMacroblock (currMB);
 
         //Rate control
-        img->bot_MB = 1;//for Rate control
+        img->bot_MB = TRUE;//for Rate control
         // go to the Bottom MB in the MB pair
-        img->top_field = 0;
-        start_macroblock (&currMB, CurrentMbAddr, img->field_mode);
+        img->top_field = FALSE;
+        start_macroblock (currSlice, &currMB, CurrentMbAddr, img->field_mode);
 
         rdopt = img->field_mode ? &rddata_bot_field_mb : &rddata_bot_frame_mb;
         copy_rdopt_data (currMB, 1);  // copy the MB data for Bottom MB from the temp buffers
 
         write_one_macroblock (currMB, 0, prev_recode_mb);     // write the Bottom MB data to the bitstream
-        terminate_macroblock (currMB, &end_of_slice, &recode_macroblock);     // done coding the Top MB
+        terminate_macroblock (currSlice, currMB, &end_of_slice, &recode_macroblock);     // done coding the Top MB
         prev_recode_mb = recode_macroblock;
         if (recode_macroblock == FALSE)       // The final processing of the macroblock has been done
         {
+          img->SumFrameQP += currMB->qp;
+
           CurrentMbAddr = FmoGetNextMBNr (CurrentMbAddr);
           if (CurrentMbAddr == -1)   // end of slice
           {
@@ -595,7 +660,7 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
         img->num_ref_idx_l0_active >>= 1;
       }
 
-      img->field_mode = img->top_field = 0; // reset to frame mode
+      img->field_mode = img->top_field = FALSE; // reset to frame mode
 
       if ( !end_of_slice )
       {
@@ -607,7 +672,7 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
     }
   }
 
-  terminate_slice ( (NumberOfCodedMBs+TotalCodedMBs >= (int)img->PicSizeInMbs) );
+  terminate_slice (currSlice, (NumberOfCodedMBs + TotalCodedMBs >= (int)img->PicSizeInMbs), cur_stats );
   return NumberOfCodedMBs;
 }
 
@@ -624,13 +689,12 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
  *      slice, sets img->currSlice
  ************************************************************************
  */
-void init_slice (int start_mb_addr)
+void init_slice (Slice **currSlice, int start_mb_addr)
 {
   int i,j;
   Picture *currPic = img->currentPicture;
   DataPartition *dataPart;
   Bitstream *currStream;
-  Slice *currSlice;
   int active_ref_lists = (img->MbaffFrameFlag) ? 6 : 2;
 
   img->current_mb_nr = start_mb_addr;
@@ -643,18 +707,18 @@ void init_slice (int start_mb_addr)
     error ("Too many slices per picture, increase MAXSLICEPERPICTURE in global.h.", -1);
 
   currPic->slices[currPic->no_slices-1] = malloc_slice();
-  currSlice = currPic->slices[currPic->no_slices-1];
+  *currSlice = currPic->slices[currPic->no_slices-1];
 
-  img->currentSlice = currSlice;
+  img->currentSlice = *currSlice;
 
-  currSlice->picture_id    = img->tr % 256;
-  currSlice->qp            = img->qp;
-  currSlice->start_mb_nr   = start_mb_addr;
-  currSlice->slice_too_big = dummy_slice_too_big;
+  (*currSlice)->picture_id    = img->tr % 256;
+  (*currSlice)->qp            = img->qp;
+  (*currSlice)->start_mb_nr   = start_mb_addr;
+  (*currSlice)->slice_too_big = dummy_slice_too_big;
 
-  for (i = 0; i < currSlice->max_part_nr; i++)
+  for (i = 0; i < (*currSlice)->max_part_nr; i++)
   {
-    dataPart = &(currSlice->partArr[i]);
+    dataPart = &(*currSlice)->partArr[i];
 
     currStream = dataPart->bitstream;
     currStream->bits_to_go = 8;
@@ -744,13 +808,13 @@ void init_slice (int start_mb_addr)
     }
   }
 
-  init_ref_pic_list_reordering();
+  init_ref_pic_list_reordering(*currSlice);
  
   // reference list reordering 
   if ( (img->type == P_SLICE || img->type == B_SLICE) && 
     params->WPMCPrecision && pWPX->curr_wp_rd_pass->algorithm != WP_REGULAR )
   {
-    wpxReorderLists( img, currSlice );
+    wpxReorderLists( img, *currSlice );
   }
   else
   {
@@ -759,34 +823,34 @@ void init_slice (int start_mb_addr)
     {
       int i, num_ref;
 
-      alloc_ref_pic_list_reordering_buffer(currSlice);
+      alloc_ref_pic_list_reordering_buffer(*currSlice);
 
       for (i = 0; i < img->num_ref_idx_l0_active + 1; i++)
       {
-        currSlice->reordering_of_pic_nums_idc_l0[i] = 3;
-        currSlice->abs_diff_pic_num_minus1_l0[i] = 0;
-        currSlice->long_term_pic_idx_l0[i] = 0;
+        (*currSlice)->reordering_of_pic_nums_idc_l0[i] = 3;
+        (*currSlice)->abs_diff_pic_num_minus1_l0[i] = 0;
+        (*currSlice)->long_term_pic_idx_l0[i] = 0;
       }
 
       num_ref = img->num_ref_idx_l0_active;
       if ( img->structure == FRAME )
-      poc_ref_pic_reorder_frame(listX[LIST_0], num_ref,
-        currSlice->reordering_of_pic_nums_idc_l0,
-        currSlice->abs_diff_pic_num_minus1_l0,
-        currSlice->long_term_pic_idx_l0, LIST_0);
+        poc_ref_pic_reorder_frame(listX[LIST_0], num_ref,
+        (*currSlice)->reordering_of_pic_nums_idc_l0,
+        (*currSlice)->abs_diff_pic_num_minus1_l0,
+        (*currSlice)->long_term_pic_idx_l0, LIST_0);
       else
       {
         poc_ref_pic_reorder_field(listX[LIST_0], num_ref,
-          currSlice->reordering_of_pic_nums_idc_l0,
-          currSlice->abs_diff_pic_num_minus1_l0,
-          currSlice->long_term_pic_idx_l0, LIST_0);
+          (*currSlice)->reordering_of_pic_nums_idc_l0,
+          (*currSlice)->abs_diff_pic_num_minus1_l0,
+          (*currSlice)->long_term_pic_idx_l0, LIST_0);
       }
       //reference picture reordering
       reorder_ref_pic_list(listX[LIST_0], &listXsize[LIST_0],
         img->num_ref_idx_l0_active - 1,
-        currSlice->reordering_of_pic_nums_idc_l0,
-        currSlice->abs_diff_pic_num_minus1_l0,
-        currSlice->long_term_pic_idx_l0);
+        (*currSlice)->reordering_of_pic_nums_idc_l0,
+        (*currSlice)->abs_diff_pic_num_minus1_l0,
+        (*currSlice)->long_term_pic_idx_l0);
     }
   }
 
@@ -824,7 +888,7 @@ void init_slice (int start_mb_addr)
   if (img->type != I_SLICE && params->SearchMode == EPZS)
     EPZSSliceInit(params, img, EPZSCo_located, listX);
 
-  if (params->symbol_mode == CAVLC)
+  if ((*currSlice)->symbol_mode == CAVLC)
   {
     writeMB_typeInfo       = writeSE_UVLC;
     writeIntraPredMode     = writeIntraPredMode_CAVLC;
@@ -894,6 +958,8 @@ void init_slice (int start_mb_addr)
       }
     }
   }
+  if (params->UseRDOQuant)
+    init_rdoq_slice(img->type, (*currSlice)->symbol_mode);
 }
 
 
@@ -933,12 +999,19 @@ static Slice *malloc_slice()
   // KS: this is approx. max. allowed code picture size
   if ((slice = (Slice *) calloc(1, sizeof(Slice))) == NULL) no_mem_exit ("malloc_slice: slice structure");
 
-  if (params->symbol_mode == CABAC)
-    {
-      // create all context models
-      slice->mot_ctx = create_contexts_MotionInfo();
-      slice->tex_ctx = create_contexts_TextureInfo();
-    }
+  slice->symbol_mode  = params->symbol_mode;
+  cs_mb->symbol_mode  = params->symbol_mode;
+  cs_b8->symbol_mode  = params->symbol_mode;
+  cs_cm->symbol_mode  = params->symbol_mode;
+  cs_ib8->symbol_mode = params->symbol_mode;
+  cs_ib4->symbol_mode = params->symbol_mode;
+
+  if (slice->symbol_mode == CABAC)
+  {
+    // create all context models
+    slice->mot_ctx = create_contexts_MotionInfo();
+    slice->tex_ctx = create_contexts_TextureInfo();
+  }
 
   slice->max_part_nr = params->partition_mode==0?1:3;
 
@@ -975,6 +1048,42 @@ static Slice *malloc_slice()
 /*!
  ************************************************************************
  * \brief
+ *    This function frees nal units
+ *
+ ************************************************************************
+ */
+static void free_nal_unit(Picture *pic)
+{
+  int partition, slice;
+  Slice  *currSlice;
+
+  // loop over all slices of the picture
+  for (slice=0; slice < pic->no_slices; slice++)
+  {
+    currSlice = pic->slices[slice];
+
+    // loop over the partitions
+    if (currSlice != NULL)
+    {
+      for (partition=0; partition < currSlice->max_part_nr; partition++)
+      {
+        // free only if the partition has content
+        if (currSlice->partArr[partition].bitstream->write_flag )
+        {
+          if (currSlice->partArr[partition].nal_unit != NULL)
+          {
+            FreeNALU(currSlice->partArr[partition].nal_unit);
+            currSlice->partArr[partition].nal_unit = NULL;
+          }
+        }
+      }
+    }
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
  *    Memory frees of all Slice structures and of its dependent
  *    data structures
  * \par Input:
@@ -984,6 +1093,8 @@ static Slice *malloc_slice()
 void free_slice_list(Picture *currPic)
 {
   int i;
+
+  free_nal_unit(currPic);
 
   for (i = 0; i < currPic->no_slices; i++)
   {
@@ -1024,7 +1135,8 @@ static void free_slice(Slice *slice)
     }
     if (slice->partArr != NULL)
       free(slice->partArr);
-    if (params->symbol_mode == CABAC)
+    
+    if (slice->symbol_mode == CABAC)
     {
       delete_contexts_MotionInfo(slice->mot_ctx);
       delete_contexts_TextureInfo(slice->tex_ctx);

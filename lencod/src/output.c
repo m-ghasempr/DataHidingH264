@@ -436,30 +436,31 @@ void write_stored_frame( FrameStore *fs,int p_out)
  */
 void direct_output(StorablePicture *p, int p_out)
 {
-  if (p->structure==FRAME)
+  switch ( p->structure )
   {
+  case FRAME:
     // we have a frame (or complementary field pair)
     // so output it directly
     flush_direct_output(p_out);
     write_picture (p, p_out, FRAME);
     free_storable_picture(p);
     return;
-  }
-
-  if (p->structure == TOP_FIELD)
-  {
+    break;
+  case TOP_FIELD:
     if (out_buffer->is_used &1)
       flush_direct_output(p_out);
     out_buffer->top_field = p;
     out_buffer->is_used |= 1;
-  }
-
-  if (p->structure == BOTTOM_FIELD)
-  {
+    break;
+  case BOTTOM_FIELD:
     if (out_buffer->is_used &2)
       flush_direct_output(p_out);
     out_buffer->bottom_field = p;
     out_buffer->is_used |= 2;
+    break;
+  default:
+    printf("invalid picture type\n");
+    break;
   }
 
   if (out_buffer->is_used == 3)

@@ -31,8 +31,7 @@
 #include "symbol.h"
 #include "mc_prediction.h"
 #include "quant8x8.h"
-
-#include "rdo_quant.h"
+#include "rdoq.h"
 #include "q_matrix.h"
 #include "q_offsets.h"
 
@@ -1462,7 +1461,7 @@ double RDCost_for_8x8IntraBlocks(Macroblock *currMB, int *nonzero, int b8, int i
 
   //===== RATE for LUMINANCE COEFFICIENTS =====
 
-  if (params->symbol_mode == CAVLC)
+  if (currSlice->symbol_mode == CAVLC)
   {      
     if (img->P444_joined)
     {
@@ -1654,6 +1653,7 @@ int dct_8x8_ls(Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int i
   int scan_poss[4] = { 0 }, runs[4] = { -1, -1, -1, -1 };
   int MCcoeff = 0;
   int *m7;
+  int is_cavlc = (img->currentSlice->symbol_mode == CAVLC);
 
   const byte (*pos_scan)[2] = currMB->is_field_mode ? FIELD_SCAN8x8 : SNGL_SCAN8x8;
 
@@ -1674,7 +1674,7 @@ int dct_8x8_ls(Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int i
 
     run++;
 
-    if (currMB->luma_transform_size_8x8_flag && params->symbol_mode == CAVLC)
+    if (currMB->luma_transform_size_8x8_flag && is_cavlc)
     {
       MCcoeff = (coeff_ctr & 3);
       runs[MCcoeff]++;
@@ -1691,7 +1691,7 @@ int dct_8x8_ls(Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int i
     {
       nonzero = TRUE;
 
-      if (currMB->luma_transform_size_8x8_flag && params->symbol_mode == CAVLC)
+      if (currMB->luma_transform_size_8x8_flag && is_cavlc)
       {
         *m7 = iClip3(-CAVLC_LEVEL_LIMIT, CAVLC_LEVEL_LIMIT, *m7);
         *coeff_cost += MAX_VALUE;
@@ -1711,7 +1711,7 @@ int dct_8x8_ls(Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int i
     }
   }
 
-  if (!currMB->luma_transform_size_8x8_flag || params->symbol_mode != CAVLC)
+  if (!currMB->luma_transform_size_8x8_flag || !is_cavlc)
     ACLevel[scan_pos] = 0;
   else
   {

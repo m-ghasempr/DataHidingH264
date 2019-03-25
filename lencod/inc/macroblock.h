@@ -19,16 +19,16 @@
 #define _MACROBLOCK_H_
 
 void  proceed2nextMacroblock(Macroblock* currMB);
-void  start_macroblock(Macroblock** currMB, int mb_addr, int mb_field);
+void  start_macroblock(Slice *currSlice, Macroblock** currMB, int mb_addr, byte mb_field);
 void  reset_macroblock(Macroblock *currMB, int prev_mb);
-void  terminate_macroblock(Macroblock* currMB, Boolean *end_of_slice, Boolean *recode_macroblock);
+void  terminate_macroblock(Slice *currSlice, Macroblock* currMB, Boolean *end_of_slice, Boolean *recode_macroblock);
 
 void  write_one_macroblock(Macroblock* currMB, int eos_bit, Boolean prev_recode_mb);
 
-int  LumaResidualCoding8x8 (Macroblock* currMB, int*, int64*, int, short, int, int, short, short);
-void LumaResidualCoding (Macroblock *currMB);
+int  LumaResidualCoding8x8 (Macroblock* currMB, int*, int64*, int, short, int, int, short, short, int);
+void LumaResidualCoding (Macroblock *currMB, int is_cavlc);
 
-void ChromaResidualCoding (Macroblock *currMB);
+void ChromaResidualCoding (Macroblock *currMB, int is_cavlc);
 
 void IntraChromaPrediction (Macroblock *currMB, int*, int*, int*);
 void IntraChromaRDDecision (Macroblock *currMB, RD_PARAMS);
@@ -61,7 +61,9 @@ void SetLagrangianMultipliersOn();
 void SetLagrangianMultipliersOff();
 void (*SetLagrangianMultipliers)();
 
-void  init_slice(int start_mb_addr);
+int   predict_nnz(Macroblock *currMB, int block_type, int i,int j);
+int   predict_nnz_chroma(Macroblock *currMB, int i,int j);
+
 
 #endif
 

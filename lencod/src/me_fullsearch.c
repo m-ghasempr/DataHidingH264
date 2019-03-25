@@ -26,9 +26,9 @@
 
 #include "me_distortion.h"
 #include "me_fullsearch.h"
+#include "mv-search.h"
 
 // Define Global Parameters
-extern int *mvbits;
 extern short*  spiral_search_x;
 extern short*  spiral_search_y;
 extern short*  spiral_hpel_search_x;

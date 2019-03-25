@@ -48,7 +48,8 @@
 #include "me_fullsearch.h"
 #include "me_umhex.h"
 #include "me_umhexsmp.h"
-#include "rdo_quant.h"
+#include "rdoq.h"
+
 
 // Statistics, temporary
 int     max_mvd;
@@ -96,8 +97,8 @@ extern const short block_type_shift_factor[8];
  */
 void init_ME_engine(int SearchMode)
 {
-   switch (SearchMode)
-   {
+  switch (SearchMode)
+  {
    case EPZS:
      IntPelME       = EPZSPelBlockMotionSearch;
      BiPredME       = EPZSBiPredBlockMotionSearch;
@@ -657,8 +658,8 @@ int BPredPartitionCost (Macroblock *currMB,
 
   short   ***all_mv_l0 = img->bipred_mv[list][LIST_0][ref_l0][blocktype]; 
   short   ***all_mv_l1 = img->bipred_mv[list][LIST_1][ref_l1][blocktype]; 
-  short   ***p_mv_l0 = img->pred_mv[LIST_0][ref_l0][blocktype];
-  short   ***p_mv_l1 = img->pred_mv[LIST_1][ref_l1][blocktype];
+  short   ***p_mv_l0   = img->pred_mv[LIST_0][ref_l0][blocktype];
+  short   ***p_mv_l1   = img->pred_mv[LIST_1][ref_l1][blocktype];
   imgpel  (*mb_pred)[16] = img->mb_pred[0];
 
   // List0 
@@ -756,10 +757,10 @@ BlockMotionSearch (Macroblock *currMB,      //!< Current Macroblock
   int *prevSad = (params->SearchMode == EPZS)? EPZSDistortion[list + list_offset][blocktype - 1]: NULL;
 
 #if GET_METIME
-  static struct TIMEB tstruct1;
-  static struct TIMEB tstruct2;
+  static TIME_T me_time_start;
+  static TIME_T me_time_end;
   time_t me_tmp_time;
-  ftime( &tstruct1 );    // start time ms
+  gettime( &me_time_start );    // start time ms
 #endif
   PrepareMEParams(apply_weights, params->ChromaMEEnable, list + list_offset, ref);
 
@@ -909,8 +910,8 @@ BlockMotionSearch (Macroblock *currMB,      //!< Current Macroblock
   }
 
 #if GET_METIME
-  ftime(&tstruct2);   // end time ms
-  me_tmp_time=(tstruct2.time - tstruct1.time) * 1000 + (tstruct2.millitm - tstruct1.millitm);
+  gettime(&me_time_end);   // end time ms
+  me_tmp_time = timediff (&me_time_start, &me_time_end);
   me_tot_time += me_tmp_time;
   me_time += me_tmp_time;
 #endif
@@ -936,120 +937,120 @@ int BiPredBlockMotionSearch(Macroblock *currMB,      //!< Current Macroblock
                    int       apply_bi_weights, //!< apply bipred weights
                    int*      lambda_factor)   //!< lagrangian parameter for determining motion cost
 {
-    int         iteration_no, i, j;
-    short       bipred_type = list ? 0 : 1;
-    short****** bipred_mv = img->bipred_mv[bipred_type];
-    int         min_mcostbi = INT_MAX;
-    short       bimv[2] = {0, 0}, tempmv[2] = {0, 0};
-    short*      pred_mv1 = NULL;
-    short*      pred_mv2 = NULL;
-    short*      bi_mv1 = NULL, *bi_mv2 = NULL;
-    short       iterlist=list;
-    short       pred_mv_bi[2];
-    int         block_x   = (mb_x>>2);
-    int         block_y   = (mb_y>>2);
-    int         bsx       = params->blc_size[blocktype][0];
-    int         bsy       = params->blc_size[blocktype][1];
-    int         pic_pix_x = img->opix_x + mb_x;
-    int         pic_pix_y = img->opix_y + mb_y;
-    int         list_offset = ((img->MbaffFrameFlag) && (currMB->mb_field)) ? img->current_mb_nr % 2 ? 4 : 2 : 0;
+  int         iteration_no, i, j;
+  short       bipred_type = list ? 0 : 1;
+  short****** bipred_mv = img->bipred_mv[bipred_type];
+  int         min_mcostbi = INT_MAX;
+  short       bimv[2] = {0, 0}, tempmv[2] = {0, 0};
+  short*      pred_mv1 = NULL;
+  short*      pred_mv2 = NULL;
+  short*      bi_mv1 = NULL, *bi_mv2 = NULL;
+  short       iterlist=list;
+  short       pred_mv_bi[2];
+  int         block_x   = (mb_x>>2);
+  int         block_y   = (mb_y>>2);
+  int         bsx       = params->blc_size[blocktype][0];
+  int         bsy       = params->blc_size[blocktype][1];
+  int         pic_pix_x = img->opix_x + mb_x;
+  int         pic_pix_y = img->opix_y + mb_y;
+  int         list_offset = ((img->MbaffFrameFlag) && (currMB->mb_field)) ? img->current_mb_nr % 2 ? 4 : 2 : 0;
 
-    if (params->SearchMode == UM_HEX)
+  if (params->SearchMode == UM_HEX)
+  {
+    bipred_flag = 1;
+    UMHEXSetMotionVectorPredictor(currMB, pred_mv_bi, enc_picture->motion.ref_idx[list ^ 1], enc_picture->motion.mv[(list == LIST_0? LIST_1: LIST_0)], 0, (list == LIST_0? LIST_1: LIST_0), mb_x, mb_y, bsx, bsy, &search_range);
+  }
+  else
+    SetMotionVectorPredictor     (currMB, pred_mv_bi, enc_picture->motion.ref_idx[list ^ 1], enc_picture->motion.mv[(list == LIST_0? LIST_1: LIST_0)], 0, (list == LIST_0? LIST_1: LIST_0), mb_x, mb_y, bsx, bsy);
+
+  if ((params->SearchMode != EPZS) || (params->EPZSSubPelGrid == 0))
+  {
+    mv[0] = (mv[0] + 2) >> 2;
+    mv[1] = (mv[1] + 2) >> 2;
+    bimv[0] = (pred_mv_bi[0] + 2)>>2;
+    bimv[1] = (pred_mv_bi[1] + 2)>>2;
+  }
+  else
+  {
+    bimv[0] = pred_mv_bi[0];
+    bimv[1] = pred_mv_bi[1];
+  }
+
+  //Bi-predictive motion Refinements
+  for (iteration_no = 0; iteration_no <= params->BiPredMERefinements; iteration_no++)
+  {
+    if (iteration_no & 0x01)
     {
-      bipred_flag = 1;
-      UMHEXSetMotionVectorPredictor(currMB, pred_mv_bi, enc_picture->motion.ref_idx[list ^ 1], enc_picture->motion.mv[(list == LIST_0? LIST_1: LIST_0)], 0, (list == LIST_0? LIST_1: LIST_0), mb_x, mb_y, bsx, bsy, &search_range);
+      pred_mv1  = pred_mv;
+      pred_mv2  = pred_mv_bi;
+      bi_mv1    = mv;
+      bi_mv2    = bimv;
+      iterlist  = list;
     }
     else
-      SetMotionVectorPredictor     (currMB, pred_mv_bi, enc_picture->motion.ref_idx[list ^ 1], enc_picture->motion.mv[(list == LIST_0? LIST_1: LIST_0)], 0, (list == LIST_0? LIST_1: LIST_0), mb_x, mb_y, bsx, bsy);
-
-    if ((params->SearchMode != EPZS) || (params->EPZSSubPelGrid == 0))
     {
-      mv[0] = (mv[0] + 2) >> 2;
-      mv[1] = (mv[1] + 2) >> 2;
-      bimv[0] = (pred_mv_bi[0] + 2)>>2;
-      bimv[1] = (pred_mv_bi[1] + 2)>>2;
-    }
-    else
-    {
-      bimv[0] = pred_mv_bi[0];
-      bimv[1] = pred_mv_bi[1];
+      pred_mv1  = pred_mv_bi;
+      pred_mv2  = pred_mv;
+      bi_mv1    = bimv;
+      bi_mv2    = mv;
+      iterlist = list ^ 1;
     }
 
-    //Bi-predictive motion Refinements
-    for (iteration_no = 0; iteration_no <= params->BiPredMERefinements; iteration_no++)
+    tempmv[0] = bi_mv1[0];
+    tempmv[1] = bi_mv1[1];
+
+    PrepareBiPredMEParams(apply_bi_weights, ChromaMEEnable, iterlist, list_offset, ref);
+    // Get bipred mvs for list iterlist given previously computed mvs from other list
+    min_mcostbi = BiPredME (currMB, orig_pic, ref, iterlist, list_offset, enc_picture->motion.ref_idx, enc_picture->motion.mv,
+      pic_pix_x, pic_pix_y, blocktype, pred_mv1, pred_mv2, bi_mv1, bi_mv2,
+      (params->BiPredMESearchRange <<(params->EPZSGrid))>>iteration_no, min_mcostbi, iteration_no, lambda_factor[F_PEL], apply_bi_weights);
+
+    if (iteration_no > 0 && (tempmv[0] == bi_mv1[0]) && (tempmv[1] == bi_mv1[1]))
     {
-      if (iteration_no & 0x01)
-      {
-        pred_mv1  = pred_mv;
-        pred_mv2  = pred_mv_bi;
-        bi_mv1    = mv;
-        bi_mv2    = bimv;
-        iterlist  = list;
-      }
-      else
-      {
-        pred_mv1  = pred_mv_bi;
-        pred_mv2  = pred_mv;
-        bi_mv1    = bimv;
-        bi_mv2    = mv;
-        iterlist = list ^ 1;
-      }
+      break;
+    }
+  }
 
-      tempmv[0] = bi_mv1[0];
-      tempmv[1] = bi_mv1[1];
+  if ((params->SearchMode != EPZS) || (params->EPZSSubPelGrid == 0))
+  {
+    bi_mv2[0] = (bi_mv2[0] << 2);
+    bi_mv2[1] = (bi_mv2[1] << 2);
+    bi_mv1[0] = (bi_mv1[0] << 2);
+    bi_mv1[1] = (bi_mv1[1] << 2);
+  }
 
+  if (!params->DisableSubpelME)
+  {
+    if (params->BiPredMESubPel)
+    {
+      min_mcostbi = INT_MAX;
       PrepareBiPredMEParams(apply_bi_weights, ChromaMEEnable, iterlist, list_offset, ref);
-      // Get bipred mvs for list iterlist given previously computed mvs from other list
-      min_mcostbi = BiPredME (currMB, orig_pic, ref, iterlist, list_offset, enc_picture->motion.ref_idx, enc_picture->motion.mv,
-        pic_pix_x, pic_pix_y, blocktype, pred_mv1, pred_mv2, bi_mv1, bi_mv2,
-        (params->BiPredMESearchRange <<(params->EPZSGrid))>>iteration_no, min_mcostbi, iteration_no, lambda_factor[F_PEL], apply_bi_weights);
 
-      if (iteration_no > 0 && (tempmv[0] == bi_mv1[0]) && (tempmv[1] == bi_mv1[1]))
-      {
-        break;
-      }
+      min_mcostbi =  SubPelBiPredME (orig_pic, ref, iterlist, pic_pix_x, pic_pix_y, blocktype,
+        pred_mv1, pred_mv2, bi_mv1, bi_mv2, 9, 9, min_mcostbi, lambda_factor, apply_bi_weights);
     }
 
-    if ((params->SearchMode != EPZS) || (params->EPZSSubPelGrid == 0))
+    if (params->BiPredMESubPel==2)
     {
-      bi_mv2[0] = (bi_mv2[0] << 2);
-      bi_mv2[1] = (bi_mv2[1] << 2);
-      bi_mv1[0] = (bi_mv1[0] << 2);
-      bi_mv1[1] = (bi_mv1[1] << 2);
-    }
+      min_mcostbi = INT_MAX;
+      PrepareBiPredMEParams(apply_bi_weights, ChromaMEEnable, iterlist ^ 1, list_offset, ref);
 
-    if (!params->DisableSubpelME)
+      min_mcostbi =  SubPelBiPredME (orig_pic, ref, iterlist ^ 1, pic_pix_x, pic_pix_y, blocktype,
+        pred_mv2, pred_mv1, bi_mv2, bi_mv1, 9, 9, min_mcostbi, lambda_factor, apply_bi_weights);
+    }
+  }
+
+  for (j=block_y; j < block_y + (bsy>>2); j++)
+  {
+    for (i=block_x ; i < block_x + (bsx>>2); i++)
     {
-      if (params->BiPredMESubPel)
-      {
-        min_mcostbi = INT_MAX;
-        PrepareBiPredMEParams(apply_bi_weights, ChromaMEEnable, iterlist, list_offset, ref);
-
-        min_mcostbi =  SubPelBiPredME (orig_pic, ref, iterlist, pic_pix_x, pic_pix_y, blocktype,
-          pred_mv1, pred_mv2, bi_mv1, bi_mv2, 9, 9, min_mcostbi, lambda_factor, apply_bi_weights);
-      }
-
-      if (params->BiPredMESubPel==2)
-      {
-        min_mcostbi = INT_MAX;
-        PrepareBiPredMEParams(apply_bi_weights, ChromaMEEnable, iterlist ^ 1, list_offset, ref);
-
-        min_mcostbi =  SubPelBiPredME (orig_pic, ref, iterlist ^ 1, pic_pix_x, pic_pix_y, blocktype,
-          pred_mv2, pred_mv1, bi_mv2, bi_mv1, 9, 9, min_mcostbi, lambda_factor, apply_bi_weights);
-      }
+      bipred_mv[iterlist    ][ref][blocktype][j][i][0] = bi_mv1[0];
+      bipred_mv[iterlist    ][ref][blocktype][j][i][1] = bi_mv1[1];
+      bipred_mv[iterlist ^ 1][ref][blocktype][j][i][0] = bi_mv2[0];
+      bipred_mv[iterlist ^ 1][ref][blocktype][j][i][1] = bi_mv2[1];
     }
-
-    for (j=block_y; j < block_y + (bsy>>2); j++)
-    {
-      for (i=block_x ; i < block_x + (bsx>>2); i++)
-      {
-        bipred_mv[iterlist    ][0][blocktype][j][i][0] = bi_mv1[0];
-        bipred_mv[iterlist    ][0][blocktype][j][i][1] = bi_mv1[1];
-        bipred_mv[iterlist ^ 1][0][blocktype][j][i][0] = bi_mv2[0];
-        bipred_mv[iterlist ^ 1][0][blocktype][j][i][1] = bi_mv2[1];
-      }
-    }
-    return min_mcostbi;
+  }
+  return min_mcostbi;
 }
 
 /*!
@@ -1397,7 +1398,7 @@ PartitionMotionSearch (Macroblock *currMB,
   int   v, h, mcost, search_range, i, j;
   int   pic_block_x, pic_block_y;
   int   bslice    = (img->type==B_SLICE);
-  int   parttype  = (blocktype<4?blocktype:4);
+  int   parttype  = (blocktype < 4 ? blocktype : 4);
   int   step_h0   = (params->part_size[ parttype][0]);
   int   step_v0   = (params->part_size[ parttype][1]);
   int   step_h    = (params->part_size[blocktype][0]);

@@ -23,6 +23,7 @@
 #include "image.h"
 #include "nalucommon.h"
 
+extern void init_stats (StatParameters *stats);
 static void insert_picture_in_dpb(FrameStore* fs, StorablePicture* p);
 static void output_one_frame_from_dpb(void);
 static int  is_used_for_reference(FrameStore* fs);
@@ -222,23 +223,23 @@ void init_dpb(void)
   if (NULL==dpb.fs_ltref)
     no_mem_exit("init_dpb: dpb->fs_ltref");
 
-  for (i=0; i<dpb.size; i++)
+  for (i = 0; i < dpb.size; i++)
   {
     dpb.fs[i]       = alloc_frame_store();
     dpb.fs_ref[i]   = NULL;
     dpb.fs_ltref[i] = NULL;
   }
 
-  for (i=0; i<6; i++)
+  for (i = 0; i < 6; i++)
   {
     listX[i] = calloc(MAX_LIST_SIZE, sizeof (StorablePicture*)); // +1 for reordering
     if (NULL==listX[i])
       no_mem_exit("init_dpb: listX[i]");
   }
 
-  for (j=0;j<6;j++)
+  for (j = 0; j < 6; j++)
   {
-    for (i=0; i<MAX_LIST_SIZE; i++)
+    for (i = 0; i < MAX_LIST_SIZE; i++)
     {
       listX[j][i] = NULL;
     }
@@ -330,7 +331,7 @@ void alloc_pic_motion(PicMotionParams *motion, int size_y, int size_x)
   get_mem4Dshort (&(motion->mv),         2, size_y, size_x, 2);
   get_mem3D      ((byte****)(&(motion->ref_idx)),    2, size_y , size_x);
 
-  motion->mb_field = calloc (size_y * size_x, sizeof(int));
+  motion->mb_field = calloc (size_y * size_x, sizeof(byte));
   if (motion->mb_field == NULL)
     no_mem_exit("alloc_storable_picture: motion->mb_field");
 
@@ -395,6 +396,7 @@ StorablePicture* alloc_storable_picture(PictureStructure structure, int size_x, 
     {
       no_mem_exit("mbuffer.c: p_dec_img[0]");
     }
+
     if (img->yuv_format != YUV400)
     {
       get_mem4Dpel(&(s->dec_imgUV), ndec, 2, size_y_cr, size_x_cr);
@@ -426,6 +428,7 @@ StorablePicture* alloc_storable_picture(PictureStructure structure, int size_x, 
   get_mem2Dpel (&(s->imgY), size_y, size_x);
   s->p_img[0] = s->imgY;
   s->p_curr_img = s->p_img[0];
+
   if (img->yuv_format != YUV400)
   {
     get_mem3Dpel (&(s->imgUV), 2, size_y_cr, size_x_cr);
@@ -479,6 +482,7 @@ StorablePicture* alloc_storable_picture(PictureStructure structure, int size_x, 
   s->coded_frame    = 0;
   s->MbaffFrameFlag = 0;
 
+  init_stats(&s->stats);
   return s;
 }
 

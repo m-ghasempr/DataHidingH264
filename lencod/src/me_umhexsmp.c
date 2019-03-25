@@ -30,9 +30,8 @@
 #include "me_umhexsmp.h"
 #include "refbuf.h"
 #include "me_distortion.h"
+#include "mv-search.h"
 
-extern  int *byte_abs;
-extern  int *mvbits;
 
 static const short Diamond_X[4]      = {-1, 1, 0, 0};
 static const short Diamond_Y[4]      = { 0, 0,-1, 1};

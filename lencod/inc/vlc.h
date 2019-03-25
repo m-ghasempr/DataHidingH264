@@ -13,6 +13,8 @@
 #ifndef _VLC_H_
 #define _VLC_H_
 
+#include "enc_statistics.h"
+
 Boolean u_1  (char *tracestring, int value, Bitstream *bitstream);
 int se_v (char *tracestring, int value, Bitstream *bitstream);
 int ue_v (char *tracestring, int value, Bitstream *bitstream);
@@ -28,11 +30,11 @@ void writeSE_Flag                 (SyntaxElement *se, DataPartition *dp);
 void writeSE_invFlag              (SyntaxElement *se, DataPartition *dp);
 void writeSE_Dummy                (SyntaxElement *se, DataPartition *dp);
 
-void writeCBP_VLC                 (Macroblock* currMB, SyntaxElement *se, DataPartition *dp);
-void writeIntraPredMode_CAVLC     (SyntaxElement *se, DataPartition *dp);
+void  writeCBP_VLC                (Macroblock* currMB, SyntaxElement *se, DataPartition *dp);
+void  writeIntraPredMode_CAVLC    (SyntaxElement *se, DataPartition *dp);
 int   writeSyntaxElement2Buf_UVLC (SyntaxElement *se, Bitstream* this_streamBuffer );
 void  writeUVLC2buffer            (SyntaxElement *se, Bitstream *currStream);
-void writeVlcByteAlign            (Bitstream* currStream);
+void  writeVlcByteAlign           (Bitstream* currStream, StatParameters *cur_stats);
 int   writeSyntaxElement2Buf_Fixed(SyntaxElement *se, Bitstream* this_streamBuffer );
 int   symbol2uvlc                 (SyntaxElement *se);
 void  ue_linfo       (int n, int dummy, int *len,int *info);

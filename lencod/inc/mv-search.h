@@ -16,6 +16,10 @@
 #ifndef _MV_SEARCH_H_
 #define _MV_SEARCH_H_
 
+extern int* mvbits;
+
+extern int *byte_abs;
+
 extern int (*BiPredME)      (Macroblock *, imgpel *, short, int, int, char  ***, short  ****,
                        int, int, int, short[2], short[2], short[2], short[2], int, int, int, int, int);
 

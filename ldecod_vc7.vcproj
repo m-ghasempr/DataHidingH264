@@ -251,6 +251,9 @@
 			<File
 				RelativePath=".\ldecod\src\vlc.c">
 			</File>
+			<File
+				RelativePath=".\ldecod\src\win32.c">
+			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"

@@ -144,7 +144,7 @@ void find_distortion (void)
 
 void select_img(ImageStructure *imgSRC, ImageStructure *imgREF)
 {
-  if (img->fld_flag != 0)
+  if (img->fld_flag != FALSE)
   {
     imgSRC->format = params->output;
     imgREF->format = params->output;

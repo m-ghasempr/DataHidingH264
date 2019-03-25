@@ -19,6 +19,7 @@
 #include "global.h"
 
 #include "contributors.h"
+#include "nal.h"
 #include "mbuffer.h"
 #include "parset.h"
 #include "vlc.h"
@@ -1045,7 +1046,7 @@ int GenerateSEImessage_rbsp (int id, byte *rbsp)
     char uuid_message[9] = "RandomMSG"; // This is supposed to be Random
     unsigned int i, message_size = strlen(params->SEIMessageText);
     struct TIMEB tstruct;
-    ftime( &tstruct);    // start time ms
+    ftime( &tstruct);    // start time
 
     if (message_size == 0)
     {
@@ -1172,7 +1173,7 @@ void GenerateVUIParameters(seq_parameter_set_rbsp_t *sps)
   {
     nal_hrd->bit_rate_value_minus1[SchedSelIdx]    = (unsigned int) iVui->nal_bit_rate_value_minus1;
     nal_hrd->cpb_size_value_minus1[SchedSelIdx]    = (unsigned int) iVui->nal_cpb_size_value_minus1;
-    nal_hrd->cbr_flag[SchedSelIdx]             = (unsigned int) iVui->nal_vbr_cbr_flag;
+    nal_hrd->cbr_flag[SchedSelIdx]                 = (unsigned int) iVui->nal_vbr_cbr_flag;
   }
   nal_hrd->initial_cpb_removal_delay_length_minus1 = (unsigned int) iVui->nal_initial_cpb_removal_delay_length_minus1;
   nal_hrd->cpb_removal_delay_length_minus1         = (unsigned int) iVui->nal_cpb_removal_delay_length_minus1;
@@ -1188,7 +1189,7 @@ void GenerateVUIParameters(seq_parameter_set_rbsp_t *sps)
   {
     vcl_hrd->bit_rate_value_minus1[SchedSelIdx]    = (unsigned int) iVui->vcl_bit_rate_value_minus1;
     vcl_hrd->cpb_size_value_minus1[SchedSelIdx]    = (unsigned int) iVui->vcl_cpb_size_value_minus1;
-    vcl_hrd->cbr_flag[SchedSelIdx]             = (unsigned int) iVui->vcl_vbr_cbr_flag;
+    vcl_hrd->cbr_flag[SchedSelIdx]                 = (unsigned int) iVui->vcl_vbr_cbr_flag;
   }
   vcl_hrd->initial_cpb_removal_delay_length_minus1 = (unsigned int) iVui->vcl_initial_cpb_removal_delay_length_minus1;
   vcl_hrd->cpb_removal_delay_length_minus1         = (unsigned int) iVui->vcl_cpb_removal_delay_length_minus1;

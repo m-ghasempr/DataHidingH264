@@ -333,8 +333,8 @@ typedef struct macroblock
   int           qpc[2];                //!< QP chroma
   int           qp_scaled[MAX_PLANE];  //!< QP scaled for all comps.
 
-  int           slice_nr;
-  int           delta_quant;          //!< for rate control
+  short         slice_nr;
+  short         delta_quant;          //!< for rate control
 
   struct macroblock   *mb_available_up;   //!< pointer to neighboring MB (CABAC)
   struct macroblock   *mb_available_left; //!< pointer to neighboring MB (CABAC)
@@ -359,7 +359,7 @@ typedef struct macroblock
   int           DFBetaOffset;
 
   int           c_ipred_mode;       //!< chroma intra prediction mode
-  int           mb_field;
+  byte          mb_field;
 
   int           skip_flag;
 
@@ -526,7 +526,7 @@ typedef struct img_par
            int framepoc;    //poc of this frame // POC200301
   unsigned int frame_num;   //frame_num for this frame
   unsigned int field_pic_flag;
-  unsigned int bottom_field_flag;
+  byte         bottom_field_flag;
 
   //the following is for slice header syntax elements of poc
   // for poc mode 0.
@@ -615,10 +615,8 @@ typedef struct img_par
   int psnr_number;
 
   // Timing related variables
-  struct TIMEB tstruct_start;
-  struct TIMEB tstruct_end;
-  time_t ltime_start;               
-  time_t ltime_end;                 
+  TIME_T start_time;
+  TIME_T end_time;
 
   // picture error concealment
   int last_ref_pic_poc;
@@ -696,16 +694,16 @@ typedef struct pix_pos
 
 typedef struct old_slice_par
 {
-   unsigned field_pic_flag;
-   unsigned bottom_field_flag;
+   unsigned field_pic_flag;   
    unsigned frame_num;
    int nal_ref_idc;
    unsigned pic_oder_cnt_lsb;
    int delta_pic_oder_cnt_bottom;
    int delta_pic_order_cnt[2];
-   int idr_flag;
+   byte idr_flag;
    int idr_pic_id;
    int pps_id;
+   byte bottom_field_flag;
 } OldSliceParams;
 
 extern OldSliceParams old_slice;

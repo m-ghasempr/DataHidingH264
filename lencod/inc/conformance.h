@@ -26,7 +26,7 @@ extern const int LEVELMVLIMIT[17][6];
 void ProfileCheck(void);
 void LevelCheck(void);
 
-void update_mv_limits(ImageParameters *img, int is_field);
+void update_mv_limits(ImageParameters *img, byte is_field);
 void clip_mv_range(ImageParameters *img, int search_range, short mv[2], int res);
 int out_of_bounds_mvs(ImageParameters *img, short mv[2], int res);
 

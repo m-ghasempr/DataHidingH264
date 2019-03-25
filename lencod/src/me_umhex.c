@@ -33,11 +33,12 @@
 #include "image.h"
 #include "enc_statistics.h"
 #include "me_distortion.h"
+#include "mv-search.h"
 
 #define Q_BITS          15
 #define MIN_IMG_WIDTH   176
 extern  int*   byte_abs;
-extern  int*   mvbits;
+
 extern  short*   spiral_search_x;
 extern  short*   spiral_search_y;
 

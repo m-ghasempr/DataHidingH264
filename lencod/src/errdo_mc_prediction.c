@@ -1,6 +1,6 @@
 /*!
  *************************************************************************************
- * \file decoder_mc_prediction.c
+ * \file errdo_mc_prediction.c
  *
  * \brief
  *    Functions for motion compensated prediction

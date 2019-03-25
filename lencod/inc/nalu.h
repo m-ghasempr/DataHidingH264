@@ -2,9 +2,9 @@
 /*!
  **************************************************************************************
  * \file
- *    parset.h
+ *    nalu.h
  * \brief
- *    Picture and Sequence Parameter Sets, encoder operations
+ *    Common NALU support functions
  *
  * \date 25 November 2002
  * \author

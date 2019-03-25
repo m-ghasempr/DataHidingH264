@@ -32,7 +32,7 @@ endif
 
 LIBS=   -lm
 AFLAGS= 
-CFLAGS=  -std=gnu99 -pedantic -ffloat-store -fno-strict-aliasing
+CFLAGS=  -std=gnu99 -pedantic -ffloat-store -fno-strict-aliasing -fsigned-char
 FLAGS=  $(CFLAGS) -Wall -I$(INCDIR) -I$(ADDINCDIR) -D __USE_LARGEFILE64 -D _FILE_OFFSET_BITS=64
 
 ifeq ($(DBG),1)

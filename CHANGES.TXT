@@ -1,14 +1,26 @@
+Changes in Version JM 14.2 (since JM 14.1)
+------------------------------------------
+- encoder: fix cabac_zero_word calculation (KS)
+- encoder: bipredictive ME bug fixes (EM/AT)
+- encoder: MBAFF qp bug fix (AT)
+- encoder: Statistics collection rewrite (AT)
+- encoder: RDOQ CAVLC support & improvements (PC/YY/MK/LL/AT)
+- encoder: fix range of DFDisable* parameters (KS)
+- decoder: Fix copy and paste error in sei.c (KS)
+- decoder: Fix syntax of full frame freeze SEI message (KS)
+- encoder/decoder: convert time measurement system calls to be more consistent and don't use "obsolete" functions (KS)
+
 Changes in Version JM 14.1 (since JM 14.0)
 ------------------------------------------
 - encoder: fixes in lossless coding (KHH)
 - encoder: Improved MC precision using Reordering & Weighed Prediction (AL, AT)
 - encoder: Weighted Prediction Extensions (AT, AL)
 - encoder: MS-SSIM distortion computation (PeP)
-- encoder: Rewrite of Error Resilient RDO (PeP, AT)
-- encoder: SSIM distortion computation (ZHL, WK, AT)
-- encoder: RGB color space distortion computation (WK, AT)
-- encoder: Distortion/Statistics functionality cleanups (AT, WK)
-- encoder: RDOQ and Quantization cleanups (LL, AT)
+- encoder: Rewrite of Error Resilient RDO (PeP/AT)
+- encoder: SSIM distortion computation (ZHL/WK/AT)
+- encoder: RGB color space distortion computation (WK/AT)
+- encoder: Distortion/Statistics functionality cleanups (AT/WK)
+- encoder: RDOQ and Quantization cleanups (LL/AT)
 - encoder: RC cleanups (AT)
 - encoder: Adaptive Rounding Support for Low Complexity RDO (EM)
 - encoder: Multipass RD coding bug fix for PicAFF (AL)
@@ -26,7 +38,7 @@ Changes in Version JM 14.0 (since JM 13.2)
 - encoder: Bipredictive ME bug fixes (AT)
 - encoder: Intra mode decision reorganization (LL/AT)
 - encoder: Quantization/transform process reorganization (AT)
-- encoder: Trellis based quantization (VCEG-AH21) (LL/AT)
+- encoder: Trellis based quantization (VCEG-AH21) (PC/YY/MK/LL/AT)
 - encoder: WP Cleanups (AT)
 - encoder: Lossless Coding Cleanups / Bug fixes (AT)
 - encoder: Profile/Level Conformance code cleanups (AT)
@@ -1323,12 +1335,14 @@ LP      Luca Pezzoni            luca.pezzoni@st.com
 MA      Mauricio Alvarez        alvarez@ac.upc.edu
 MB      Marcus Barkowsky        Marcus.Barkowsky@nt.e-technik.uni-erlangen.de
 MG      Michael Gallant         mgallant@videolocus.com
+MK      Marta Karczewicz        martak@qualcomm.com
 ML      Maxim Lobasso           lobasso@hotmail.com
 MN      Mike Nilsson            mike.nilsson@bt.com
 MT      Mario Trentini          mario_trentini@realmagic.fr
 MW      Mathias Wien            wien@ient.rwth-aachen.de
 MWa     Michael Walter          eiMichaelWalter@web.de
 OD      Olivier Deygas          olivier.deygas@st.com
+PC      Peison Cheng            peisongc@qualcomm.com
 PeP     Peshala Pahalawatta     Peshala.Pahalawatta@dolby.com
 PK      Petr Kadlec             Kadlec@FTW.at
 PL      Peter List              Peter.List@t-systems.de
@@ -1389,6 +1403,7 @@ YK      Yoshihiro Kikuchi       yoshihiro.kikuchi@toshiba.co.jp
 YL      Yann Lemaguet           yann.lemaguet@philips.com
 YW      Ye-Kui Wang             ye-kui.wang@nokia.com
 YX      Yanjun Xu               yxu@sarnoff.com
+YY      Yan Ye                  yye@qualcomm.com
 ZH      Zhou Heng               zhou_heng@yahoo.com
 ZHL     Zhen Li                 zhen.li@dolby.com
 ZL      Li Zhang                zhangli@jdl.ac.cn

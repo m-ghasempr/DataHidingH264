@@ -21,6 +21,7 @@
 # include <io.h>
 # include <sys/types.h>
 # include <sys/stat.h>
+# include <windows.h>
 # define strcasecmp strcmpi
 
 # define  snprintf _snprintf
@@ -31,7 +32,7 @@
 # define  lseek    _lseeki64
 # define  fsync    _commit
 # define  tell     _telli64
-# define  TIMEB    _timeb
+# define  TIME_T    LARGE_INTEGER
 # define  ftime    _ftime
 # define  OPENFLAGS_WRITE _O_WRONLY|_O_CREAT|_O_BINARY|_O_TRUNC
 # define  OPEN_PERMISSIONS _S_IREAD | _S_IWRITE
@@ -39,8 +40,11 @@
 # define  inline   _inline
 #else
 # include <unistd.h>
+#include <sys/time.h>
+#include <time.h>
+
 # define  tell(fd) lseek(fd, 0, SEEK_CUR)
-# define  TIMEB    timeb
+# define  TIME_T   struct timeval
 # define  OPENFLAGS_WRITE O_WRONLY|O_CREAT|O_TRUNC
 # define  OPENFLAGS_READ  O_RDONLY
 # define  OPEN_PERMISSIONS S_IRUSR | S_IWUSR
@@ -65,5 +69,8 @@ typedef long long int64;
 #  define INT64_MIN        (-9223372036854775807LL - 1LL)
 # endif
 #endif
+
+void   gettime(TIME_T* time);
+time_t timediff(TIME_T* start, TIME_T* end);
 
 #endif

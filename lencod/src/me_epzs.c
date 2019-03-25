@@ -26,11 +26,9 @@
 
 #include "me_distortion.h"
 #include "me_epzs.h"
+#include "mv-search.h"
 
 #define EPZSREF 1
-
-extern int *mvbits;
-extern int *byte_abs;
 
 // Define Global Parameters
 static const short blk_parent[8] = {1, 1, 1, 1, 2, 4, 4, 5}; //!< {skip, 16x16, 16x8, 8x16, 8x8, 8x4, 4x8, 4x4}
@@ -104,19 +102,21 @@ EPZSStructure *window_predictor, *window_predictor_extended;
 EPZSStructure *sdiamond,*square,*ediamond,*ldiamond, *sbdiamond, *pmvfast;
 EPZSColocParams *EPZSCo_located;
 
+// Functions
+
 /*!
 *************************************************************************************
 * \brief
 *    Determine stop criterion for EPZS
 *************************************************************************************
 */
-static int EPZSDetermineStopCriterion(int* prevSad, PixelPos *block_a, PixelPos *block_b, PixelPos *block_c, int pic_pix_x2, int blocktype, int blocksize_x)
+static int EPZSDetermineStopCriterion(int* prevSad, PixelPos *block_a, PixelPos *block_b, PixelPos *block_c, int pic_pix_x2, int blocktype, int blockshape_x)
 {
   int sadA, sadB, sadC, stopCriterion;
 
-  sadA = block_a->available ? prevSad[pic_pix_x2 - blocksize_x] : INT_MAX;
+  sadA = block_a->available ? prevSad[pic_pix_x2 - blockshape_x] : INT_MAX;
   sadB = block_b->available ? prevSad[pic_pix_x2] : INT_MAX;
-  sadC = block_c->available ? prevSad[pic_pix_x2 + blocksize_x] : INT_MAX;
+  sadC = block_c->available ? prevSad[pic_pix_x2 + blockshape_x] : INT_MAX;
 
   stopCriterion = imin(sadA,imin(sadB,sadC));
   stopCriterion = imax(stopCriterion,minthres[blocktype]);
@@ -126,7 +126,6 @@ static int EPZSDetermineStopCriterion(int* prevSad, PixelPos *block_a, PixelPos 
   return stopCriterion;
 }
 
-// Functions
 /*!
 ************************************************************************
 * \brief
@@ -431,7 +430,8 @@ int EPZSInit (InputParameters *params, ImageParameters *img)
 
   //memory_size += get_offset_mem2Dshort(&EPZSMap, searcharray, searcharray, (searcharray>>1), (searcharray>>1));
   memory_size += get_mem3Dint (&EPZSDistortion, 6, 7, img->width/BLOCK_SIZE);
-  memory_size += get_mem3Dint (&EPZSBiDistortion, 6, 7, img->width/BLOCK_SIZE);
+  if (params->BiPredMotionEstimation)
+    memory_size += get_mem3Dint (&EPZSBiDistortion, 6, 7, img->width/BLOCK_SIZE);
   memory_size += get_mem2Dshort (&EPZSMap, searcharray, searcharray );
 
   if (params->EPZSSpatialMem)
@@ -511,7 +511,8 @@ void EPZSDelete (InputParameters *params)
   //free_offset_mem2Dshort(EPZSMap, searcharray, (searcharray>>1), (searcharray>>1));
   free_mem2Dshort(EPZSMap);
   free_mem3Dint  (EPZSDistortion);
-  free_mem3Dint  (EPZSBiDistortion);
+  if (params->BiPredMotionEstimation)
+    free_mem3Dint  (EPZSBiDistortion);
   freeEPZSpattern(window_predictor_extended);
   freeEPZSpattern(window_predictor);
   freeEPZSpattern(predictor);
@@ -2059,23 +2060,26 @@ EPZSBiPredBlockMotionSearch (Macroblock *currMB,   // <--  Current Macroblock
 {
   StorablePicture *ref_picture1 = listX[list       + list_offset][ref];
   StorablePicture *ref_picture2 = listX[(list ^ 1) + list_offset][0];
-  short blocksize_y   = params->blc_size[blocktype][1];        // vertical block size
-  short blocksize_x   = params->blc_size[blocktype][0];        // horizontal block size
+  short blocksize_y  = params->blc_size[blocktype][1];        // vertical block size
+  short blocksize_x  = params->blc_size[blocktype][0];        // horizontal block size
+  short blockshape_x = (blocksize_x >> 2);  // horizontal block size in 4-pel units
+//  short blockshape_y = (blocksize_y >> 2);  // vertical block size in 4-pel units
+
   short mb_x = pic_pix_x - img->opix_x;
   short mb_y = pic_pix_y - img->opix_y;
   short pic_pix_x2 = pic_pix_x >> 2;
   //short pic_pix_y2 = pic_pix_y >> 2;
-  
-  int stopCriterion = medthres[blocktype];
-  int mapCenter_x = search_range - mv[0];
-  int mapCenter_y = search_range - mv[1];
-  int second_mcost = INT_MAX;
-  int *prevSad = EPZSBiDistortion[list + list_offset][blocktype - 1]; 
+
+  int   stopCriterion = medthres[blocktype];
+  int   mapCenter_x = search_range - mv[0];
+  int   mapCenter_y = search_range - mv[1];
+  int   second_mcost = INT_MAX;
+  int   *prevSad = EPZSBiDistortion[list + list_offset][blocktype - 1];
   short invalid_refs = 0;
-  byte checkMedian = FALSE;
+  byte  checkMedian = FALSE;
   EPZSStructure *searchPatternF = searchPattern;
 
-  static MotionVector center1, center2, tmp, tmp2, cand, pred1, pred2;
+  static MotionVector center1, center2, tmp, tmp2, cand, cand1, cand2, pred1, pred2;
   pred1.mv_x   = (pic_pix_x << 2) + pred_mv1[0]; // predicted position x (in sub-pel units)
   pred1.mv_y   = (pic_pix_y << 2) + pred_mv1[1]; // predicted position y (in sub-pel units)
   pred2.mv_x   = (pic_pix_x << 2) + pred_mv2[0]; // predicted position x (in sub-pel units)
@@ -2084,12 +2088,19 @@ EPZSBiPredBlockMotionSearch (Macroblock *currMB,   // <--  Current Macroblock
   center1.mv_y = (pic_pix_y << (params->EPZSGrid))+ mv[1];
   center2.mv_x = (pic_pix_x << (params->EPZSGrid))+ static_mv[0];
   center2.mv_y = (pic_pix_y << (params->EPZSGrid))+ static_mv[1];
+  cand1.mv_x   = center1.mv_x << mv_rescale;
+  cand1.mv_y   = center1.mv_y << mv_rescale;
+  cand2.mv_x   = center2.mv_x << mv_rescale;
+  cand2.mv_y   = center2.mv_y << mv_rescale;
+
 
   tmp.mv_x = mv[0];
   tmp.mv_y = mv[1];
   tmp2.mv_x = 0;
   tmp2.mv_y = 0;
   EPZSBlkCount ++;
+  if (EPZSBlkCount == 0)
+    EPZSBlkCount ++;
 
   ref_pic1_sub.luma = ref_picture1->p_curr_img_sub;
   ref_pic2_sub.luma = ref_picture2->p_curr_img_sub;
@@ -2117,12 +2128,12 @@ EPZSBiPredBlockMotionSearch (Macroblock *currMB,   // <--  Current Macroblock
     width_pad_cr  = ref_picture1->size_x_cr_pad;
     height_pad_cr = ref_picture1->size_y_cr_pad;
   }
+
   pic_pix_x = (pic_pix_x << (params->EPZSGrid));
   pic_pix_y = (pic_pix_y << (params->EPZSGrid));
 
   //===== set function for getting reference picture lines from reference 1 =====
-  if ( (center1.mv_x > search_range) && (center1.mv_x < ((img_width  - blocksize_x) << (params->EPZSGrid)) - search_range)
-    && (center1.mv_y > search_range) && (center1.mv_y < ((img_height - blocksize_y) << (params->EPZSGrid)) - search_range))
+  if ((cand1.mv_x >= 0) && (cand1.mv_x < img_width  - blocksize_x) &&(cand.mv_y >= 0) && (cand1.mv_y < img_height - blocksize_y))
   {
     bipred1_access_method = FAST_ACCESS;
   }
@@ -2132,8 +2143,7 @@ EPZSBiPredBlockMotionSearch (Macroblock *currMB,   // <--  Current Macroblock
   }
 
   //===== set function for getting reference picture lines from reference 2 =====
-  if ( (center2.mv_x > search_range) && (center2.mv_x < ((img_width  - blocksize_x) << (params->EPZSGrid)) - search_range)
-    && (center2.mv_y > search_range) && (center2.mv_y < ((img_height - blocksize_y) << (params->EPZSGrid)) - search_range))
+  if ((cand2.mv_x >= 0) && (cand2.mv_x < img_width  - blocksize_x) &&(cand.mv_y >= 0) && (cand2.mv_y < img_height - blocksize_y))
   {
     bipred2_access_method = FAST_ACCESS;
   }
@@ -2149,19 +2159,24 @@ EPZSBiPredBlockMotionSearch (Macroblock *currMB,   // <--  Current Macroblock
   EPZSMap[search_range][search_range] = EPZSBlkCount;
 
   //--- initialize motion cost (cost for motion vector) and check ---
-  min_mcost  = MV_COST_SMP (lambda_factor, (center1.mv_x << mv_rescale), (center1.mv_y << mv_rescale), pred1.mv_x, pred1.mv_y);
-  min_mcost += MV_COST_SMP (lambda_factor, (center2.mv_x << mv_rescale), (center2.mv_y << mv_rescale), pred2.mv_x, pred2.mv_y);
+  min_mcost  = MV_COST_SMP (lambda_factor, cand1.mv_x, cand1.mv_y, pred1.mv_x, pred1.mv_y);
+  min_mcost += MV_COST_SMP (lambda_factor, cand2.mv_x, cand2.mv_y, pred2.mv_x, pred2.mv_y);
 
   //--- add residual cost to motion cost ---
   min_mcost += computeBiPred(cur_pic, blocksize_y, blocksize_x, INT_MAX,
-    (center1.mv_x << mv_rescale) + IMG_PAD_SIZE_TIMES4,
-    (center1.mv_y << mv_rescale) + IMG_PAD_SIZE_TIMES4,
-    (center2.mv_x << mv_rescale) + IMG_PAD_SIZE_TIMES4,
-    (center2.mv_y << mv_rescale) + IMG_PAD_SIZE_TIMES4);
+    cand1.mv_x + IMG_PAD_SIZE_TIMES4,
+    cand1.mv_y + IMG_PAD_SIZE_TIMES4,
+    cand2.mv_x + IMG_PAD_SIZE_TIMES4,
+    cand2.mv_y + IMG_PAD_SIZE_TIMES4);
 
   //! If medthres satisfied, then terminate, otherwise generate Predictors
   if (min_mcost > stopCriterion)
   {
+    int mb_available_right   = (img->mb_x < (img_width  >> 4) - 1);
+    int mb_available_below   = (img->mb_y < (img_height >> 4) - 1);
+
+    int block_available_right;
+    int block_available_below;
     int prednum = 5;
     int patternStop = 0, pointNumber = 0, checkPts, nextLast = 0;
     int totalCheckPts = 0, motionDirection = 0;
@@ -2178,21 +2193,35 @@ EPZSBiPredBlockMotionSearch (Macroblock *currMB,   // <--  Current Macroblock
 
     if (mb_y > 0)
     {
-      if (mb_x < 8)  // first column of 8x8 blocks
+      if (mb_x < 8)   // first column of 8x8 blocks
       {
-        if (mb_y==8)
+        if (mb_y == 8)
         {
+          block_available_right = (blocksize_x != MB_BLOCK_SIZE) || mb_available_right;
           if (blocksize_x == MB_BLOCK_SIZE)
-            block_c.available  = 0;
+            block_c.available = 0;
         }
-        else if (mb_x+blocksize_x == 8)
+        else
+        {
+          block_available_right = (mb_x + blocksize_x != 8) || mb_available_right;
+          if (mb_x + blocksize_x == 8)
+            block_c.available = 0;
+        }
+      }
+      else
+      {
+        block_available_right = (mb_x + blocksize_x != MB_BLOCK_SIZE) || mb_available_right;
+        if (mb_x + blocksize_x == MB_BLOCK_SIZE)
           block_c.available = 0;
       }
-      else if (mb_x+blocksize_x == MB_BLOCK_SIZE)
-        block_c.available = 0;
     }
-       
-    stopCriterion = EPZSDetermineStopCriterion(prevSad, &block_a, &block_b, &block_c, pic_pix_x2, blocktype, blocksize_x);
+    else
+    {
+      block_available_right = (mb_x + blocksize_x != MB_BLOCK_SIZE) || mb_available_right;
+    }
+    block_available_below = (mb_y + blocksize_y != MB_BLOCK_SIZE) || (mb_available_below);
+
+    stopCriterion = EPZSDetermineStopCriterion(prevSad, &block_a, &block_b, &block_c, pic_pix_x2, blocktype, blockshape_x);
     // stopCriterion = (11 * medthres[blocktype]) >> 3;
 
 
@@ -2223,15 +2252,14 @@ EPZSBiPredBlockMotionSearch (Macroblock *currMB,   // <--  Current Macroblock
 
       //--- set motion cost (cost for motion vector) and check ---
       mcost  = MV_COST_SMP (lambda_factor, cand.mv_x, cand.mv_y, pred1.mv_x, pred1.mv_y);
-      mcost += MV_COST_SMP (lambda_factor, (center2.mv_x << mv_rescale), (center2.mv_y<<mv_rescale), pred2.mv_x, pred2.mv_y);
+      mcost += MV_COST_SMP (lambda_factor, cand2.mv_x, cand2.mv_y, pred2.mv_x, pred2.mv_y);
 
       if (mcost >= second_mcost) continue;
 
-      mcost += computeBiPred(cur_pic,
-        blocksize_y, blocksize_x, second_mcost - mcost,
-        cand.mv_x + IMG_PAD_SIZE_TIMES4, cand.mv_y + IMG_PAD_SIZE_TIMES4,
-        (center2.mv_x << mv_rescale) + IMG_PAD_SIZE_TIMES4,
-        (center2.mv_y << mv_rescale) + IMG_PAD_SIZE_TIMES4);
+      mcost += computeBiPred(cur_pic, blocksize_y, blocksize_x, 
+        second_mcost - mcost,
+        cand.mv_x + IMG_PAD_SIZE_TIMES4 , cand.mv_y + IMG_PAD_SIZE_TIMES4,
+        cand2.mv_x + IMG_PAD_SIZE_TIMES4, cand2.mv_y + IMG_PAD_SIZE_TIMES4);
 
       //--- check if motion cost is less than minimum cost ---
       if (mcost < min_mcost)
@@ -2251,8 +2279,10 @@ EPZSBiPredBlockMotionSearch (Macroblock *currMB,   // <--  Current Macroblock
       }
     }
 
-    //! Refine using EPZS pattern if needed.
-    //! Note that we are using a simplistic threshold computation.
+    //! Refine using EPZS pattern if needed
+    //! Note that we are using a conservative threshold method. Threshold
+    //! could be tested after checking only a certain number of predictors
+    //! instead of the full set. Code could be easily modified for this task.
     if (min_mcost > stopCriterion)
     {
       //! Adapt pattern based on different conditions.
@@ -2302,15 +2332,15 @@ EPZSBiPredBlockMotionSearch (Macroblock *currMB,   // <--  Current Macroblock
               }
 
               mcost  = MV_COST_SMP (lambda_factor, cand.mv_x, cand.mv_y, pred2.mv_x, pred2.mv_y);
-              mcost += MV_COST_SMP (lambda_factor, (center2.mv_x << mv_rescale), (center2.mv_y << mv_rescale), pred2.mv_x, pred2.mv_y);              
+              mcost += MV_COST_SMP (lambda_factor, cand2.mv_x, cand2.mv_y, pred2.mv_x, pred2.mv_y);              
 
               if (mcost < min_mcost)
               {
                 mcost += computeBiPred(cur_pic,
                   blocksize_y, blocksize_x, min_mcost - mcost,
                   cand.mv_x + IMG_PAD_SIZE_TIMES4, cand.mv_y + IMG_PAD_SIZE_TIMES4,
-                  (center2.mv_x << mv_rescale) + IMG_PAD_SIZE_TIMES4,
-                  (center2.mv_y << mv_rescale) + IMG_PAD_SIZE_TIMES4);
+                  cand2.mv_x + IMG_PAD_SIZE_TIMES4,
+                  cand2.mv_y + IMG_PAD_SIZE_TIMES4);
 
                 if (mcost < min_mcost)
                 {
@@ -2346,8 +2376,9 @@ EPZSBiPredBlockMotionSearch (Macroblock *currMB,   // <--  Current Macroblock
         while (patternStop != 1);
 
         //! Check Second best predictor with EPZS pattern
-
-        conditionEPZS = (checkMedian == TRUE) && (blocktype < 5) && (min_mcost > stopCriterion) && (params->EPZSDual > 0);
+        conditionEPZS = (checkMedian == TRUE)
+          && (blocktype < 5) 
+          && (min_mcost > stopCriterion) && (params->EPZSDual > 0);
 
         if (!conditionEPZS) break;
 
@@ -2377,12 +2408,13 @@ EPZSBiPredBlockMotionSearch (Macroblock *currMB,   // <--  Current Macroblock
   {
     prevSad[pic_pix_x2] = min_mcost;
   }
-  
+
   mv[0] = tmp.mv_x;
   mv[1] = tmp.mv_y;
-  
-return min_mcost;
+
+  return min_mcost;
 }
+
 
 /*!
 ***********************************************************************

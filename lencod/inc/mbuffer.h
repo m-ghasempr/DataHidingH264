@@ -15,6 +15,9 @@
 #ifndef _MBUFFER_H_
 #define _MBUFFER_H_
 
+#include "global.h"
+#include "enc_statistics.h"
+
 #define MAX_LIST_SIZE 33
 
 typedef struct picture_stats
@@ -103,9 +106,9 @@ typedef struct storable_picture
   int         frame_cropping_rect_top_offset;
   int         frame_cropping_rect_bottom_offset;
 
-
   PictureStats p_stats;
-  
+  StatParameters stats;
+
 } StorablePicture;
 
 //! definition of motion parameters

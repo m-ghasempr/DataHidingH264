@@ -149,7 +149,7 @@ int RestOfSliceHeader(void)
     else
     {
       img->structure = FRAME;
-      img->bottom_field_flag=0;
+      img->bottom_field_flag = FALSE;
     }
   }
 
@@ -157,9 +157,12 @@ int RestOfSliceHeader(void)
 
   img->MbaffFrameFlag=(active_sps->mb_adaptive_frame_field_flag && (img->field_pic_flag==0));
 
-  if (img->structure == FRAME       ) assert (img->field_pic_flag == 0);
-  if (img->structure == TOP_FIELD   ) assert (img->field_pic_flag == 1 && img->bottom_field_flag == 0);
-  if (img->structure == BOTTOM_FIELD) assert (img->field_pic_flag == 1 && img->bottom_field_flag == 1);
+  if (img->structure == FRAME       ) 
+    assert (img->field_pic_flag == 0);
+  if (img->structure == TOP_FIELD   ) 
+    assert (img->field_pic_flag == 1 && (img->bottom_field_flag == FALSE));
+  if (img->structure == BOTTOM_FIELD) 
+    assert (img->field_pic_flag == 1 && (img->bottom_field_flag == TRUE ));
 
   if (img->idr_flag)
   {
@@ -639,7 +642,7 @@ void decode_poc(ImageParameters *img)
       img->bottompoc = img->toppoc + img->delta_pic_order_cnt_bottom;
       img->ThisPOC = img->framepoc = (img->toppoc < img->bottompoc)? img->toppoc : img->bottompoc; // POC200301
     }
-    else if (img->bottom_field_flag==0)
+    else if (img->bottom_field_flag == FALSE)
     {  //top field
       img->ThisPOC= img->toppoc = img->PicOrderCntMsb + img->pic_order_cnt_lsb;
     }
@@ -721,7 +724,7 @@ void decode_poc(ImageParameters *img)
       img->bottompoc = img->toppoc + active_sps->offset_for_top_to_bottom_field + img->delta_pic_order_cnt[1];
       img->ThisPOC = img->framepoc = (img->toppoc < img->bottompoc)? img->toppoc : img->bottompoc; // POC200301
     }
-    else if (img->bottom_field_flag==0)
+    else if (img->bottom_field_flag == FALSE)
     {  //top field
       img->ThisPOC = img->toppoc = img->ExpectedPicOrderCnt + img->delta_pic_order_cnt[0];
     }
@@ -766,7 +769,7 @@ void decode_poc(ImageParameters *img)
 
       if (img->field_pic_flag==0)
         img->toppoc = img->bottompoc = img->framepoc = img->ThisPOC;
-      else if (img->bottom_field_flag==0)
+      else if (img->bottom_field_flag == FALSE)
          img->toppoc = img->framepoc = img->ThisPOC;
       else img->bottompoc = img->framepoc = img->ThisPOC;
     }
@@ -831,7 +834,7 @@ int picture_order(ImageParameters *img)
 {
   if (img->field_pic_flag==0) // is a frame
     return img->framepoc;
-  else if (img->bottom_field_flag==0) // top field
+  else if (img->bottom_field_flag == FALSE) // top field
     return img->toppoc;
   else // bottom field
     return img->bottompoc;

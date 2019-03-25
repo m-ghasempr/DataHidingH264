@@ -50,8 +50,8 @@ extern int      cnt_nonz8_8x8ts;
 extern double mb16x16_cost;
 extern double lambda_mf_factor;
 
-int (*Mode_Decision_for_4x4IntraBlocks) (Macroblock *currMB, int  b8,  int  b4,  double  lambda,  double*  min_cost, int cr_cbp[3]);
-double RDCost_for_4x4IntraBlocks (Macroblock *currMB, int* nonzero, int b8, int b4, int ipmode, double lambda, int mostProbableMode, int c_nzCbCr[3]);
+int (*Mode_Decision_for_4x4IntraBlocks) (Macroblock *currMB, int  b8,  int  b4,  double  lambda,  double*  min_cost, int cr_cbp[3], int is_cavlc);
+double RDCost_for_4x4IntraBlocks (Macroblock *currMB, int* nonzero, int b8, int b4, int ipmode, double lambda, int mostProbableMode, int c_nzCbCr[3], int is_cavlc);
 int valid_intra_mode(int ipmode);
 void compute_comp_cost(imgpel **cur_img, imgpel prd_img[16][16], int pic_opix_x, int *cost);
 void generate_pred_error(imgpel **cur_img, imgpel prd_img[16][16], imgpel cur_prd[16][16], 
@@ -60,7 +60,7 @@ extern void SetMotionVectorPredictor (Macroblock *currMB, short  pmv[2], char   
                          short  ***tmp_mv, short  ref_frame,
                          int    list,      int mb_x, int mb_y, 
                          int    blockshape_x, int blockshape_y);
-extern void UpdateMotionVectorPredictor(Macroblock* currMB);
+extern void UpdateMotionVectorPredictor(Macroblock* currMB, int mb_type) ;
                          
 //============= rate-distortion optimization ===================
 void  clear_rdopt (InputParameters *params);

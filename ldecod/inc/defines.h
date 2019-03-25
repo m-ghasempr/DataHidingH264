@@ -24,8 +24,8 @@
 # define TRACE           0      //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
 #endif
 
-// Dump DPB for debug purposes
-#define DUMP_DPB        0
+
+#define DUMP_DPB                  0    //!< Dump DPB info for debug purposes
 #define PAIR_FIELDS_IN_OUTPUT     0    //!< Pair field pictures for output purposes
 #define IMGTYPE                   1    //!< Define imgpel size type. 0 implies byte (cannot handle >8 bit depths) and 1 implies unsigned short
 #define ENABLE_HIGH444_CTX        1    //!< Enables field context types for CABAC. If disabled, results in speedup for progressive content.

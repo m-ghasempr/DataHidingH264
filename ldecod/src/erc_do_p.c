@@ -1102,7 +1102,7 @@ static void copy_to_conceal(StorablePicture *src, StorablePicture *dst, ImagePar
 
   dst->slice_type = src->slice_type = img->conceal_slice_type;
 
-  dst->idr_flag = 0; //since we do not want to clears the ref list
+  dst->idr_flag = FALSE; //since we do not want to clears the ref list
 
   dst->no_output_of_prior_pics_flag = src->no_output_of_prior_pics_flag;
   dst->long_term_reference_flag = src->long_term_reference_flag;
@@ -1304,7 +1304,7 @@ void conceal_lost_frames(ImageParameters *img)
     if(img->IDR_concealment_flag == 1)
     {
       picture->slice_type = I_SLICE;
-      picture->idr_flag = 1;
+      picture->idr_flag = TRUE;
       flush_dpb();
       picture->top_poc= 0;
       picture->bottom_poc=picture->top_poc;

@@ -86,6 +86,12 @@
 
 */
 
+#ifdef WIN32
+#include <Winsock2.h>
+#else
+#include <netinet/in.h>
+#endif
+
 #include "contributors.h"
 #include "global.h"
 #include "errorconcealment.h"
@@ -93,12 +99,6 @@
 #include "fmo.h"
 #include "sei.h"
 #include "memalloc.h"
-
-#ifdef WIN32
-#include <Winsock2.h>
-#else
-#include <netinet/in.h>
-#endif
 
 FILE *bits;
 

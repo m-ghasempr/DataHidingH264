@@ -23,8 +23,10 @@
 // CABAC
 int get_pic_bin_count(void);
 void reset_pic_bin_count(void);
+void set_pic_bin_count(EncodingEnvironmentPtr eep);
 
 void arienco_start_encoding(EncodingEnvironmentPtr eep, unsigned char *code_buffer, int *code_len);
+void arienco_reset_EC(EncodingEnvironmentPtr eep);
 int  arienco_bits_written(EncodingEnvironmentPtr eep);
 void arienco_done_encoding(EncodingEnvironmentPtr eep);
 void biari_init_context (BiContextTypePtr ctx, const int* ini);

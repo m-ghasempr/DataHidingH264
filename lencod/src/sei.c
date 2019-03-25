@@ -2242,7 +2242,7 @@ void FinalizePicTiming()
   if ( active_sps->vui_seq_parameters.pic_struct_present_flag )
   {
     int NumClockTS = 0, i;
-    int bottom_field_flag = (img->structure == BOTTOM_FIELD) ? 1 : 0;
+    int bottom_field_flag = (img->structure == BOTTOM_FIELD);
 
     u_v( 4, "SEI: pic_struct", seiPicTiming.pic_struct, bitstream);
     // interpret pic_struct
@@ -2251,40 +2251,40 @@ void FinalizePicTiming()
     case 0:
     default:
       // frame
-      assert( img->fld_flag == 0 );
+      assert( img->fld_flag == FALSE );
       NumClockTS = 1;
       break;
     case 1:
       // top field
-      assert( img->fld_flag == 1 && bottom_field_flag == 0 );
+      assert( (img->fld_flag == TRUE) && (bottom_field_flag == FALSE) );
       NumClockTS = 1;
       break;
     case 2:
       // bottom field
-      assert( img->fld_flag == 1 && bottom_field_flag == 1 );
+      assert( (img->fld_flag == TRUE) && (bottom_field_flag == TRUE) );
       NumClockTS = 1;
       break;
     case 3:
       // top field, bottom field, in that order
     case 4:
       // bottom field, top field, in that order
-      assert( img->fld_flag == 0 );
+      assert( img->fld_flag == FALSE );
       NumClockTS = 2;
       break;
     case 5:
       // top field, bottom field, top field repeated, in that order
     case 6:
       // bottom field, top field, bottom field repeated, in that order
-      assert( img->fld_flag == 0 );
+      assert( img->fld_flag == FALSE );
       NumClockTS = 3;
     case 7:
       // frame doubling
-      assert( img->fld_flag == 0 && active_sps->vui_seq_parameters.fixed_frame_rate_flag == 1 );
+      assert( (img->fld_flag == FALSE) && active_sps->vui_seq_parameters.fixed_frame_rate_flag == 1 );
       NumClockTS = 2;
       break;
     case 8:
       // frame tripling
-      assert( img->fld_flag == 0 && active_sps->vui_seq_parameters.fixed_frame_rate_flag == 1 );
+      assert( (img->fld_flag == FALSE) && active_sps->vui_seq_parameters.fixed_frame_rate_flag == 1 );
       NumClockTS = 3;
       break;
     }

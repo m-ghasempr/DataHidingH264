@@ -18,6 +18,7 @@
 #include "contributors.h"
 #include "global.h"
 #include "enc_statistics.h"
+#include "cabac.h"
 
  /*!
  ************************************************************************
@@ -31,8 +32,6 @@
  *
  ************************************************************************
 */
-
-static byte *NAL_Payload_buffer;
 
 void SODBtoRBSP(Bitstream *currStream)
 {
@@ -49,94 +48,90 @@ void SODBtoRBSP(Bitstream *currStream)
 /*!
 ************************************************************************
 *  \brief
-*     This function converts a RBSP payload to an EBSP payload
+*     This function add emulation_prevention_three_byte for all occurrences
+*     of the following byte sequences in the stream
+*       0x000000  -> 0x00000300
+*       0x000001  -> 0x00000301
+*       0x000002  -> 0x00000302
+*       0x000003  -> 0x00000303
 *
-*  \param streamBuffer
-*       pointer to data bits
-*  \param begin_bytepos
-*            The byte position after start-code, after which stuffing to
-*            prevent start-code emulation begins.
-*  \param end_bytepos
-*           Size of streamBuffer in bytes.
-*  \param min_num_bytes
-*           Minimum number of bytes in payload. Should be 0 for VLC entropy
-*           coding mode. Determines number of stuffed words for CABAC mode.
+*  \param NaluBuffer
+*            pointer to target buffer
+*  \param rbsp
+*            pointer to source buffer
+*  \param rbsp_size
+*           Size of source
 *  \return
-*           Size of streamBuffer after stuffing.
-*  \note
-*      NAL_Payload_buffer is used as temporary buffer to store data.
-*
+*           Size target buffer after emulation prevention.
 *
 ************************************************************************
 */
 
-int RBSPtoEBSP(byte *streamBuffer, int begin_bytepos, int end_bytepos, int min_num_bytes)
+int RBSPtoEBSP(byte *NaluBuffer, unsigned char *rbsp, int rbsp_size)
 {
+  int j     = 0;
+  int count = 0;
+  int i;
 
-  int i, j, count;
-
-  memcpy(&NAL_Payload_buffer[begin_bytepos],&streamBuffer[begin_bytepos], (end_bytepos - begin_bytepos) * sizeof(unsigned char));
-
-  count = 0;
-  j = begin_bytepos;
-  for(i = begin_bytepos; i < end_bytepos; i++)
+  for(i = 0; i < rbsp_size; i++)
   {
-    if(count == ZEROBYTES_SHORTSTARTCODE && !(NAL_Payload_buffer[i] & 0xFC))
+    if(count == ZEROBYTES_SHORTSTARTCODE && !(rbsp[i] & 0xFC))
     {
-      streamBuffer[j] = 0x03;
+      NaluBuffer[j] = 0x03;
       j++;
       count = 0;
     }
-    streamBuffer[j] = NAL_Payload_buffer[i];
-    if(NAL_Payload_buffer[i] == 0x00)
+    NaluBuffer[j] = rbsp[i];
+    if(rbsp[i] == 0x00)
       count++;
     else
       count = 0;
     j++;
   }
-
-  for (i = 0; i< (min_num_bytes - end_bytepos); i+=3 )
-  {
-    streamBuffer[j]   = 0x00; // CABAC zero word
-    streamBuffer[j+1] = 0x00;
-    streamBuffer[j+2] = 0x03;
-    j += 3;
-    stats->bit_use_stuffingBits[img->type]+=24;
-  }
   return j;
 }
 
- /*!
- ************************************************************************
- * \brief
- *    Initializes NAL module (allocates NAL_Payload_buffer)
- ************************************************************************
+/*!
+************************************************************************
+*  \brief
+*     This function adds cabac_zero_word syntax elements at the end of the
+*     NAL unit to
+*
+*  \param nalu
+*            target NAL unit
+*  \return
+*           number of added bytes
+*
+************************************************************************
 */
-
-void AllocNalPayloadBuffer()
+int addCabacZeroWords(NALU_t *nalu, StatParameters *cur_stats)
 {
-  const int buffer_size = ((params->output.width + img->auto_crop_right) * (params->output.height + img->auto_crop_bottom) * 5); // AH 190202: There can be data expansion with
-                                                          // low QP values. So, we make sure that buffer
-                                                          // does not overflow. 4 is probably safe multiplier.
-  FreeNalPayloadBuffer();
+  const static int MbWidthC  [4]= { 0, 8, 8,  16};
+  const static int MbHeightC [4]= { 0, 8, 16, 16};
 
-  NAL_Payload_buffer = (byte *) calloc(buffer_size, sizeof(byte));
-  assert (NAL_Payload_buffer != NULL);
-}
+  int stuffing_bytes = 0;
+  int i = 0;
 
+  byte *buf = &nalu->buf[nalu->len];
 
- /*!
- ************************************************************************
- * \brief
- *   Finits NAL module (frees NAL_Payload_buffer)
- ************************************************************************
-*/
+  int RawMbBits = 256 * img->bitdepth_luma + 2 * MbWidthC[active_sps->chroma_format_idc] * MbHeightC[active_sps->chroma_format_idc] * img->bitdepth_chroma;
+  int min_num_bytes = ((96 * get_pic_bin_count()) - (RawMbBits * (int)img->PicSizeInMbs *3) + 1023) / 1024;
 
-void FreeNalPayloadBuffer()
-{
-  if(NAL_Payload_buffer)
+  if (min_num_bytes > img->bytes_in_picture)
   {
-    free(NAL_Payload_buffer);
-    NAL_Payload_buffer=NULL;
-  }
+    stuffing_bytes = min_num_bytes - img->bytes_in_picture;
+    printf ("Inserting %d/%d cabac_zero_word syntax elements/bytes (Clause 7.4.2.10)\n", ((stuffing_bytes + 2)/3), stuffing_bytes);  
+
+    for (i = 0; i < stuffing_bytes; i+=3 )
+    {
+      *buf++ = 0x00; // CABAC zero word
+      *buf++ = 0x00;
+      *buf++ = 0x03;
+    }
+    cur_stats->bit_use_stuffingBits[img->type] += (i<<3);
+    nalu->len += i;
+  }  
+
+  return i;
 }
+

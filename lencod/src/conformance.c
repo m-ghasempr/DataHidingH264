@@ -310,7 +310,7 @@ void LevelCheck(void)
  *    Update Motion Vector Limits
  ***********************************************************************
  */
-void update_mv_limits(ImageParameters *img, int is_field)
+void update_mv_limits(ImageParameters *img, byte is_field)
 {
   memcpy(img->MaxVmvR, LEVELMVLIMIT[img->LevelIndex], 6 * sizeof(int));
   if (is_field)

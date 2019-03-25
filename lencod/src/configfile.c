@@ -249,7 +249,7 @@ static void updateOutFormat(InputParameters *params)
  */
 void Configure (int ac, char *av[])
 {
-  char *content;
+  char *content = NULL;
   int CLcount, ContentLen, NumberParams;
   char *filename=DEFAULTCONFIGFILENAME;
 
@@ -308,7 +308,8 @@ void Configure (int ac, char *av[])
       printf ("\n");
       free (content);
       CLcount += 2;
-    } else
+    } 
+    else
     {
       if (0 == strncmp (av[CLcount], "-p", 2))  // A config change?
       {

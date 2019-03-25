@@ -44,13 +44,36 @@ extern int ChromaMEEnable;
 extern int HadamardSAD4x4(int* diff);
 extern int HadamardSAD8x8(int* diff);
 
-extern int computeSAD(imgpel* , int, int, int, int, int);
+extern int computeSAD     (imgpel* , int, int, int, int, int);
+extern int computeSAD4x4  (imgpel* , int, int, int, int, int);
+extern int computeSAD4x8  (imgpel* , int, int, int, int, int);
+extern int computeSAD8x4  (imgpel* , int, int, int, int, int);
+extern int computeSAD8x8  (imgpel* , int, int, int, int, int);
+extern int computeSAD8x16 (imgpel* , int, int, int, int, int);
+extern int computeSAD16x8 (imgpel* , int, int, int, int, int);
+extern int computeSAD16x16(imgpel* , int, int, int, int, int);
+
+extern int computeBiPredSAD1     (imgpel* , int, int, int, int, int, int, int);
+extern int computeBiPred4x4SAD1  (imgpel* , int, int, int, int, int, int, int);
+extern int computeBiPred4x8SAD1  (imgpel* , int, int, int, int, int, int, int);
+extern int computeBiPred8x4SAD1  (imgpel* , int, int, int, int, int, int, int);
+extern int computeBiPred8x8SAD1  (imgpel* , int, int, int, int, int, int, int);
+extern int computeBiPred8x16SAD1 (imgpel* , int, int, int, int, int, int, int);
+extern int computeBiPred16x8SAD1 (imgpel* , int, int, int, int, int, int, int);
+extern int computeBiPred16x16SAD1(imgpel* , int, int, int, int, int, int, int);
+
+
+extern int computeBiPredSATD1     (imgpel* , int, int, int, int, int, int, int);
+extern int computeBiPred8x8SATD1  (imgpel* , int, int, int, int, int, int, int);
+extern int computeBiPred8x16SATD1 (imgpel* , int, int, int, int, int, int, int);
+extern int computeBiPred16x8SATD1 (imgpel* , int, int, int, int, int, int, int);
+extern int computeBiPred16x16SATD1(imgpel* , int, int, int, int, int, int, int);
+
 extern int computeSADWP(imgpel* , int, int, int, int, int);
-extern int computeBiPredSAD1(imgpel* , int, int, int, int, int, int, int);
 extern int computeBiPredSAD2(imgpel* , int, int, int, int, int, int, int);
 extern int computeSATD(imgpel* , int, int, int, int, int);
 extern int computeSATDWP(imgpel* , int, int, int, int, int);
-extern int computeBiPredSATD1(imgpel* , int, int, int, int, int, int, int);
+
 extern int computeBiPredSATD2(imgpel* , int, int, int, int, int, int, int);
 extern int computeSSE(imgpel* , int, int, int, int, int);
 extern int computeSSEWP(imgpel* , int, int, int, int, int);

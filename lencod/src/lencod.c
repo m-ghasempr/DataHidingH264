@@ -14,7 +14,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 14.1 (FRExt)
+ *     JM 14.2 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -56,6 +56,7 @@
 #include "filehandle.h"
 #include "image.h"
 #include "input.h"
+#include "slice.h"
 #include "intrarefresh.h"
 #include "leaky_bucket.h"
 #include "memalloc.h"
@@ -68,7 +69,7 @@
 #include "q_offsets.h"
 #include "ratectl.h"
 #include "report.h"
-#include "rdo_quant.h"
+#include "rdoq.h"
 #include "errdo.h"
 #include "rdopt.h"
 #include "wp_mcprec.h"
@@ -92,9 +93,6 @@ extern ColocatedParams *Co_located_JV[MAX_PLANE];  //!< Co_located to be used du
 extern double *mb16x16_cost_frame;
 extern int FrameNumberInFile;
 
-extern ImageStructure imgRGB_src, imgRGB_ref; // RGB Distortion Metric
-
-
 extern void Init_Motion_Search_Module (void);
 extern void Clear_Motion_Search_Module (void);
 
@@ -108,14 +106,14 @@ void free_mem_mv (short******);
 static void init_img( ImageParameters *img, InputParameters *params);
 static void init_poc(void);
 
-void init_stats (StatParameters *stats, DistortionParams *dist)
+void init_stats (StatParameters *stats)
 {
+  memset(stats, 0, sizeof(StatParameters));
   stats->successive_Bframe = params->successive_Bframe;
-  stats->frame_counter = 0;  
-  memset(stats->frame_ctr,   0, NUM_SLICE_TYPES * sizeof(int));
-  memset(stats->bit_counter, 0, NUM_SLICE_TYPES * sizeof(int64));
+}
 
-  // Distortion
+void init_dstats (DistortionParams *dist)
+{
   dist->frame_ctr = 0;
   memset(dist->metric, 0, TOTAL_DIST_TYPES * sizeof(DistMetric));
 }
@@ -210,8 +208,6 @@ int main(int argc,char **argv)
   Init_QMatrix();
   Init_QOffsetMatrix();
 
-  AllocNalPayloadBuffer();
-
   init_poc();
   GenerateParameterSets();
   SetLevelIndices();
@@ -243,7 +239,8 @@ int main(int argc,char **argv)
   dpb.init_done = 0;
   init_dpb();
   init_out_buffer();
-  init_stats(stats, dist);
+  init_stats (stats);
+  init_dstats(dist);
 
   enc_picture = NULL;
 
@@ -435,7 +432,6 @@ void free_encoder_memory(ImageParameters *img)
   // free image mem
   free_img ();
   free_context_memory ();
-  FreeNalPayloadBuffer();
   FreeParameterSets();
 }
 
@@ -848,9 +844,7 @@ static void init_img( ImageParameters *img, InputParameters *params)
   img->ChromaArrayType = params->separate_colour_plane_flag ? 0 : params->yuv_format;
 
   if (params->RDPictureDecision)
-  {
     img->frm_iter = 3;
-  }
   else
     img->frm_iter = 1;
 }
@@ -1043,7 +1037,7 @@ int init_orig_buffers(void)
   if (!active_sps->frame_mbs_only_flag)
   {
     // allocate memory for field reference frame buffers
-    init_top_bot_planes(img_org_frm[0], img->height, img->width, &img_org_top[0], &img_org_bot[0]);
+    memory_size += init_top_bot_planes(img_org_frm[0], img->height, img->width, &img_org_top[0], &img_org_bot[0]);
 
     if (img->yuv_format != YUV400)
     {
@@ -1221,11 +1215,7 @@ int init_global_buffers(void)
   // the appropriate file instead of here.
   if(params->DistortionYUVtoRGB)
   {
-    for( j = 0; j < 3; j++ )
-    {
-      memory_size += get_mem2Dpel (&imgRGB_src.data[j], img->height, img->width);
-      memory_size += get_mem2Dpel (&imgRGB_ref.data[j], img->height, img->width);
-    }
+    memory_size += create_RGB_memory(img);
   }
 
   pWPX = NULL;
@@ -1468,12 +1458,8 @@ void free_global_buffers(void)
   // These should not be globals but instead only be visible through that code.
   if(params->DistortionYUVtoRGB)
   {
-    for( i = 0; i < 3; i++ )
-    {
-      free_mem2Dpel(imgRGB_src.data[i]);
-      free_mem2Dpel(imgRGB_ref.data[i]);
-    }
-  }  
+    delete_RGB_memory();
+  }
 }
 
 /*!
@@ -1600,52 +1586,6 @@ void free_mem_DCcoeff (int*** cofDC)
 }
 
 
-/*!
- ************************************************************************
- * \brief
- *    form frame picture from two field pictures
- ************************************************************************
- */
-void combine_field(void)
-{
-  int i;
-
-  for (i = 0; i < (img->height >> 1); i++)
-  {
-    memcpy(imgY_com[i*2],     enc_field_picture[0]->imgY[i], img->width*sizeof(imgpel));     // top field
-    memcpy(imgY_com[i*2 + 1], enc_field_picture[1]->imgY[i], img->width*sizeof(imgpel)); // bottom field
-  }
-
-  if (img->yuv_format != YUV400)
-  {
-    for (i = 0; i < (img->height_cr >> 1); i++)
-    {
-      memcpy(imgUV_com[0][i*2],     enc_field_picture[0]->imgUV[0][i], img->width_cr*sizeof(imgpel));
-      memcpy(imgUV_com[0][i*2 + 1], enc_field_picture[1]->imgUV[0][i], img->width_cr*sizeof(imgpel));
-      memcpy(imgUV_com[1][i*2],     enc_field_picture[0]->imgUV[1][i], img->width_cr*sizeof(imgpel));
-      memcpy(imgUV_com[1][i*2 + 1], enc_field_picture[1]->imgUV[1][i], img->width_cr*sizeof(imgpel));
-    }
-  }
-}
-
-/*!
- ************************************************************************
- * \brief
- *    RD decision of frame and field coding
- ************************************************************************
- */
-int decide_fld_frame(float snr_frame_Y, float snr_field_Y, int bit_field, int bit_frame, double lambda_picture)
-{
-  double cost_frame, cost_field;
-
-  cost_frame = bit_frame * lambda_picture + snr_frame_Y;
-  cost_field = bit_field * lambda_picture + snr_field_Y;
-
-  if (cost_field > cost_frame)
-    return 0;
-  else
-    return 1;
-}
 
 /*!
  ************************************************************************

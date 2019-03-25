@@ -21,7 +21,9 @@
 #include "q_matrix.h"
 #include "quant4x4.h"
 #include "quantChroma.h"
-#include "rdo_quant.h"
+#include "rdoq.h"
+
+void rdoq_dc_cr(int (*tblock)[4], int qp_per, int qp_rem, int levelscale, int **leveloffset, const byte (*pos_scan)[2], int levelTrellis[16], int type);
 
 /*!
  ************************************************************************
@@ -36,9 +38,9 @@
  */
 int quant_dc2x2_trellis(int (*tblock)[4], int qp, int* DCLevel, int* DCRun, 
                        int **fadjust, int levelscale, int invlevelscale, int **leveloffset,
-                       const byte (*pos_scan)[2])
+                       const byte (*pos_scan)[2], int is_cavlc)
 {
-  static int i,j, coeff_ctr;
+  static int coeff_ctr;
 
   static int *m7;
 
@@ -46,33 +48,33 @@ int quant_dc2x2_trellis(int (*tblock)[4], int qp, int* DCLevel, int* DCRun,
   int   nonzero = FALSE;  
   int   qp_per = qp_per_matrix[qp];
   int   qp_rem = qp_rem_matrix[qp]; 
-  const byte *p_scan = &pos_scan[0][0];
+  //const byte *p_scan = &pos_scan[0][0];
   int*  DCL = &DCLevel[0];
   int*  DCR = &DCRun[0];
 
   static int levelTrellis[16];
 
-  rdoq_dc(tblock,qp_per,qp_rem, levelscale, leveloffset,pos_scan, levelTrellis, CHROMA_DC);
+  rdoq_dc_cr(tblock,qp_per,qp_rem, levelscale, leveloffset,pos_scan, levelTrellis, CHROMA_DC);
 
+  m7 = *tblock;
+
+  // Quantization
   for (coeff_ctr=0; coeff_ctr < 4; coeff_ctr++)
   {
-    j = *p_scan++;  // note that in this part, coefficients were previously transposed from 2x4 to 4x2.
-    i = *p_scan++;  
-
-    m7 = &tblock[j][i];
-
-    if (*m7 != 0)
+    // we need to update leveloffset to a 4x1 array that would contain offset info for 
+    // every 2x2 DC position
+    if (*m7)
     {
       level = levelTrellis[coeff_ctr];
 
       if (level  != 0)
       {
-        if (params->symbol_mode == CAVLC)
+        if (is_cavlc)
           level = imin(level, CAVLC_LEVEL_LIMIT);
 
         level = isignab(level, *m7);
 
-        *m7 = ((level * invlevelscale) << qp_per) >> 5;
+        *m7++ = ((level * invlevelscale) << qp_per);
 
         *DCL++  = level;
         *DCR++  = run;
@@ -83,12 +85,13 @@ int quant_dc2x2_trellis(int (*tblock)[4], int qp, int* DCLevel, int* DCRun,
       else
       {
         run++;
-        *m7 = 0;
+        *m7++ = 0;
       }
     }
     else
     {
       run++;
+      m7++;
     }
   }
 
@@ -110,7 +113,7 @@ int quant_dc2x2_trellis(int (*tblock)[4], int qp, int* DCLevel, int* DCRun,
  */
 int quant_dc4x2_trellis(int (*tblock)[4], int qp, int* DCLevel, int* DCRun, 
                        int **fadjust, int levelscale, int invlevelscale, int **leveloffset,
-                       const byte (*pos_scan)[2])
+                       const byte (*pos_scan)[2], int is_cavlc)
 {
   static int i,j, coeff_ctr;
 
@@ -126,7 +129,7 @@ int quant_dc4x2_trellis(int (*tblock)[4], int qp, int* DCLevel, int* DCRun,
 
   static int levelTrellis[16];
 
-  rdoq_dc(tblock,qp_per,qp_rem, levelscale, leveloffset,pos_scan, levelTrellis, CHROMA_DC_2x4);
+  rdoq_dc_cr(tblock,qp_per,qp_rem, levelscale, leveloffset,pos_scan, levelTrellis, CHROMA_DC_2x4);
 
   for (coeff_ctr=0; coeff_ctr < 4; coeff_ctr++)
   {
@@ -141,11 +144,11 @@ int quant_dc4x2_trellis(int (*tblock)[4], int qp, int* DCLevel, int* DCRun,
 
       if (level  != 0)
       {
-        if (params->symbol_mode == CAVLC)
+        if (is_cavlc)
           level = imin(level, CAVLC_LEVEL_LIMIT);
         level = isignab(level, *m7);
 
-        *m7 = rshift_rnd_sf(((level * invlevelscale) << qp_per), 6);
+        *m7 = ((level * invlevelscale) << qp_per);
 
         *DCL++  = level;
         *DCR++  = run;
@@ -169,5 +172,38 @@ int quant_dc4x2_trellis(int (*tblock)[4], int qp, int* DCLevel, int* DCRun,
 
   return nonzero;
 }
+
+/*!
+************************************************************************
+* \brief
+*    Rate distortion optimized Quantization process for 
+*    all coefficients in a chroma DC block
+*
+************************************************************************
+*/
+void rdoq_dc_cr(int (*tblock)[4], int qp_per, int qp_rem, int levelscale, int **leveloffset, const byte (*pos_scan)[2], int levelTrellis[], int type)
+{
+  const byte *p_scan = &pos_scan[0][0];
+  levelDataStruct levelData[16];
+  double  lambda_md = 0;
+  int kStart=0, kStop=0, noCoeff = 0, estBits;
+  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+
+  if ((img->type==B_SLICE) && img->nal_reference_idc)
+  {
+    lambda_md = img->lambda_md[5][img->masterQP];  
+  }
+  else
+  {
+    lambda_md = img->lambda_md[img->type][img->masterQP]; 
+  }
+
+  noCoeff = init_trellis_data_DC_cr(tblock, qp_per, qp_rem, levelscale, leveloffset, p_scan, currMB, &levelData[0], &kStart, &kStop, type);
+  estBits = est_write_and_store_CBP_block_bit(currMB, type);
+  est_writeRunLevel_CABAC(levelData, levelTrellis, type, lambda_md, kStart, kStop, noCoeff, estBits);
+}
+
+
+
 
 

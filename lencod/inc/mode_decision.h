@@ -48,7 +48,7 @@ extern void   RestoreMV8x8(int);
 extern void   store_macroblock_parameters (Macroblock *currMB, int);
 extern void   SetModesAndRefframeForBlocks (Macroblock *currMB, int);
 extern void   SetRefAndMotionVectors (Macroblock *currMB, int, int, int, int, int, short);
-extern void   StoreNewMotionVectorsBlock8x8(int, int, int, int, int, int, int);
+extern void   StoreNewMotionVectorsBlock8x8(int, int, int, int, int, int, int, int);
 extern void   assign_enc_picture_params(int, char, int, int, int, int, int, short);
 extern void   set_subblock8x8_info(Block8x8Info*, int, int, RD_8x8DATA*);
 extern void   set_block8x8_info(Block8x8Info*, int, int, char[2], char, short);
@@ -60,22 +60,22 @@ extern void   SetCoeffAndReconstruction8x8 (Macroblock*);
 extern int    GetBestTransformP8x8(void);
 extern int    I16Offset (int, int);
 extern int    CheckReliabilityOfRef (int, int, int, int);
-extern int    Mode_Decision_for_Intra4x4Macroblock (Macroblock *currMB, double, double*);
-extern int    RDCost_for_macroblocks (Macroblock  *currMB, double, int, double*, double*, double*, int);
-extern double RDCost_for_8x8blocks (Macroblock  *currMB, int*, int64*, double, int, int, short, short, short, short);
+extern int    Mode_Decision_for_Intra4x4Macroblock (Macroblock *currMB, double, double*, int is_cavlc);
+extern int    RDCost_for_macroblocks (Macroblock  *currMB, double, int, double*, double*, double*, int, int);
+extern double RDCost_for_8x8blocks (Macroblock  *currMB, int*, int64*, double, int, int, short, short, short, short, int);
 extern double *mb16x16_cost_frame;
 
 extern const int  b8_mode_table[6];
 extern const int  mb_mode_table[9];
 
 void rc_store_diff(int cpix_x, int cpix_y, imgpel prediction[16][16]);
-void submacroblock_mode_decision(RD_PARAMS *, RD_8x8DATA *, Macroblock *,int ***, int ***, int ***, int *, short, int, int *, int *, int *, int);
+void submacroblock_mode_decision(RD_PARAMS *, RD_8x8DATA *, Macroblock *,int ***, int ***, int ***, int *, short, int, int *, int *, int *, int, int);
 void init_enc_mb_params(Macroblock* currMB, RD_PARAMS *enc_mb, int intra, int bslice);
 void list_prediction_cost(Macroblock *currMB, int list, int block, int mode, RD_PARAMS *enc_mb, int bmcost[5], char best_ref[2]);
 void determine_prediction_list(int, int [5], char [2], char *, int *, short *);
 void compute_mode_RD_cost(int mode, Macroblock *currMB, RD_PARAMS *enc_mb,
                                double *min_rdcost, double *min_dcost, double *min_rate,
-                               int i16mode, short bslice, short *inter_skip);
+                               int i16mode, short bslice, short *inter_skip, int is_cavlc);
 
 int iminarray ( int arr[], int size, int *minind ); 
 
