@@ -169,7 +169,10 @@ void GetStrength(byte Strength[4],struct img_par *img,Macroblock* MbP,Macroblock
   int    **fw_refFrArr = img->fw_refFrArr;
   int    **bw_refFrArr = img->bw_refFrArr;
 
-  *((int*)Strength) = ININT_STRENGTH[edge] ;                     // Start with Strength=3. or Strength=4 for Mb-edge
+  if (img->structure==FRAME)
+    *((int*)Strength) = ININT_STRENGTH[edge] ;                     // Start with Strength=3. or Strength=4 for Mb-edge
+  else
+    *((int*)Strength) = ININT_STRENGTH[3] ;                        //  Strength=3. for fields
 
   if(img->mb_frame_field_flag)
   {

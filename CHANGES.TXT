@@ -1,3 +1,10 @@
+Changes for Version JM 6.1d to JM 6.1c
+--------------------------------------
+Bug fixes
+* deblocking filter strength for fields (KS)
+* reference frame flag (HS)
+* SP fix (SX)
+
 Changes for Version JM 6.1c to JM 6.1b
 --------------------------------------
 New features
@@ -628,6 +635,7 @@ RS      Rickard Sjoberg         Rickard.Sjoberg@era.ericsson.se
 RaS     Raghavan Subramaniyan   Raghavan.S@motorola.com
 SR      Shankar Regunathan      shanre@microsoft.com
 SW      Stephan Wenger          stewe@cs.tu-berlin.de
+SX      Sun Xiaoyan             sunxiaoyan@msrchina.research.microsoft.com
 TH      Till Hallbach           halbach@tele.ntnu.no
 TO      Tobias Oelbaum          drehvial@gmx.net
 TS      Teruhiko Suzuki         teruhiko@av.crl.sony.co.jp

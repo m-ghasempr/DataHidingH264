@@ -2156,6 +2156,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
             {
               currSE.len = 1;
               readSyntaxElement_FLC(&currSE, dP->bitstream);
+              currSE.value1 = 1 - currSE.value1;
             }
             else
             {

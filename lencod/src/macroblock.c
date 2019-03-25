@@ -2491,7 +2491,7 @@ writeReferenceFrame (int  mode,
   {
     if( flag_mode )
     {
-      currSE->bitpattern = currSE->value1;
+      currSE->bitpattern = 1 - currSE->value1;
       currSE->len = 1;
       writeSyntaxElement2Buf_Fixed(currSE, dataPart->bitstream);
     }

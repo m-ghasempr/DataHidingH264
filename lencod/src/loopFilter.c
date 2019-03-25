@@ -167,7 +167,10 @@ void GetStrength(byte Strength[4],Macroblock* MbP,Macroblock* MbQ,int dir,int ed
   int    blkP, blkQ, idx ;
   int    blk_x2, blk_y2, blk_x, blk_y ;
 
-  *((int*)Strength) = ININT_STRENGTH[edge] ;               // Assume INTRA -> Strength=3. (or Strength=4 for Mb-edge)
+  if (img->field_picture == 0)
+    *((int*)Strength) = ININT_STRENGTH[edge] ;               // Assume INTRA -> Strength=3. (or Strength=4 for Mb-edge)
+  else
+    *((int*)Strength) = ININT_STRENGTH[3] ;                  // Assume INTRA -> Strength=3. (for fields)
 
   for( idx=0 ; idx<4 ; idx++ )
   {                                                                                     // if not intra or SP-frame

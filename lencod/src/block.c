@@ -1848,7 +1848,7 @@ int dct_chroma_sp(int uv,int cr_cbp)
           ACRun  [scan_pos] = run;
           ++scan_pos;
           run=-1;
-          ilev=((sign(level,c_err)*dequant_coef[qp_rem_sp][i][j]*A[i][j]<< qp_per) >>6);
+          ilev=((sign(level,c_err)*dequant_coef[qp_rem][i][j]*A[i][j]<< qp_per) >>6);
         }
         ilev+=predicted_chroma_block[n1+i][n2+j];
         img->m7[n1+i][n2+j] = sign((abs(ilev) * quant_coef[qp_rem_sp][i][j] + qp_const2) >> q_bits_sp,ilev) * dequant_coef[qp_rem_sp][i][j] << qp_per_sp;
