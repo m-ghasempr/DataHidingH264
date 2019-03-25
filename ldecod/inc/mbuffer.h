@@ -62,6 +62,7 @@ typedef struct
 
   unsigned int layerNumber;  //<! to tell which layer this frame belongs to.
   unsigned int subSequenceIdentifier;  //<! to tell which subsequence this frame belongs to.
+  int parity;
 } Frame;
 
 /* the whole frame buffer structure containing both long and short term frames */

@@ -1336,8 +1336,11 @@ void init_bottom(struct img_par *img, struct inp_par *inp)
   }
 #endif
 */
+
+  img->structure = TOP_FIELD;	//for set parity
   if(img->type==I_SLICE || img->type == P_SLICE || img->type == SP_SLICE || img->type == SI_SLICE || !img->disposable_flag)
     copy2fb(img);       // trying to match exit_frame() in frame mode
+  img->structure = BOTTOM_FIELD; //for set parity
 
   if (!img->mb_frame_field_flag)
   {
@@ -1448,6 +1451,7 @@ void frame_postprocessing(struct img_par *img, struct inp_par *inp)
   mcef = mcef_fld;
   imgY = imgY_top;
   imgUV = imgUV_top;
+  img->structure = TOP_FIELD;//for set parity
   if (img->type == I_SLICE || img->type == P_SLICE || img->type == SP_SLICE || img->type == SI_SLICE || !img->disposable_flag)  // I or P pictures
   {
     split_field_top(img);
@@ -1457,6 +1461,7 @@ void frame_postprocessing(struct img_par *img, struct inp_par *inp)
   img->number++;
   imgY = imgY_bot;
   imgUV = imgUV_bot;
+  img->structure = BOTTOM_FIELD;//for set parity
   if (img->type == I_SLICE || img->type == P_SLICE || img->type == SP_SLICE || img->type == SI_SLICE || !img->disposable_flag)  // I or P pictures
   {
     split_field_bot(img);
@@ -1468,6 +1473,7 @@ void frame_postprocessing(struct img_par *img, struct inp_par *inp)
   mcef = mcef_frm;
   imgY = imgY_frm;
   imgUV = imgUV_frm;
+  img->structure = FRAME;
   
   img->height *= 2;
   img->height_cr *= 2;

@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 6.1b
+ *     JM 6.1c
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -91,7 +91,7 @@
 #include "image.h"
 
 #define JM      "6"
-#define VERSION "6.1b"
+#define VERSION "6.1c"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
@@ -1669,6 +1669,7 @@ void free_global_buffers()
     if (input->WeightedPrediction || input->WeightedBiprediction)
       free(mref_fld_w);
     free(mcef_fld);
+	free(parity_fld);
 
     if(input->successive_Bframe!=0 || input->StoredBPictures > 0)
     {

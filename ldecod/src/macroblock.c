@@ -2992,6 +2992,10 @@ int predict_nnz(struct img_par *img, int i,int j)
     pred_nnz+=Top_block;
     cnt++;
   }
+
+  if (cnt==2) 
+    pred_nnz++;
+
   if (cnt)
     pred_nnz/=cnt; 
     return pred_nnz;
@@ -3039,6 +3043,10 @@ int predict_nnz_chroma(struct img_par *img, int i,int j)
     pred_nnz+=Top_block;
     cnt++;
   }
+  
+  if (cnt==2) 
+    pred_nnz++;
+
   if (cnt)
     pred_nnz/=cnt; 
     return pred_nnz;
@@ -3942,6 +3950,13 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
 
   int fwd_refframe_offset,bwd_refframe_offset;
   int direct_pdir;
+  for(k = 0; k < fb->long_used + fb->short_used; k++){
+    chroma_vector_adjustment[k] = 0;
+    if(img->structure == TOP_FIELD && img->structure != parity_fld[k])
+        chroma_vector_adjustment[k] = -2;
+    if(img->structure == BOTTOM_FIELD && img->structure != parity_fld[k])
+        chroma_vector_adjustment[k] = 2;
+  }
 
   if (img->mb_frame_field_flag)
   {
@@ -4828,6 +4843,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
 
               i1=(img->pix_c_x+ii+ioff)*f1+mv_array[if1+4][jf][0];
               j1=(img->pix_c_y+jj+joff)*f1+mv_array[if1+4][jf][1];
+              j1 += chroma_vector_adjustment[refframe];
 
               ii0=max (0, min (i1/f1, img->width_cr-1));
               jj0=max (0, min (j1/f1, img->height_cr-1));
@@ -4984,6 +5000,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                 {
                   i1=(img->pix_c_x+ii+ioff)*f1+fw_mv_array[ifx+4][jf][0];
                   j1=(img->pix_c_y+jj+joff)*f1+fw_mv_array[ifx+4][jf][1];
+                  j1 += chroma_vector_adjustment[fw_refframe];
                   
                   ii0=max (0, min (i1/f1, img->width_cr-1));
                   jj0=max (0, min (j1/f1, img->height_cr-1));
@@ -5004,6 +5021,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                 {
                   i1=(img->pix_c_x+ii+ioff)*f1+bw_mv_array[ifx+4][jf][0];
                   j1=(img->pix_c_y+jj+joff)*f1+bw_mv_array[ifx+4][jf][1];
+                  j1 += chroma_vector_adjustment[bw_refframe];
                 
                   ii0=max (0, min (i1/f1, img->width_cr-1));
                   jj0=max (0, min (j1/f1, img->height_cr-1));
@@ -5026,6 +5044,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
               {
                 i1=(img->pix_c_x+ii+ioff)*f1+fw_mv_array[ifx+4][jf][0];
                 j1=(img->pix_c_y+jj+joff)*f1+fw_mv_array[ifx+4][jf][1];
+                j1 += chroma_vector_adjustment[fw_refframe];
                 
                 ii0=max (0, min (i1/f1, img->width_cr-1));
                 jj0=max (0, min (j1/f1, img->height_cr-1));
@@ -5442,6 +5461,19 @@ int decode_super_macroblock(struct img_par *img,struct inp_par *inp)
   int  ***fw_mv = img->fw_mv;
   int  ***bw_mv = img->bw_mv;
   int  **moving_block_dir = moving_block; 
+  if(img->mb_field == 1){
+    for(k = 0; k < fld->long_used + fld->short_used; k++){
+      chroma_vector_adjustment[k] = 0;
+      if(((img->current_mb_nr%2)+1) != parity_fld[k]){
+         if((img->current_mb_nr)%2 == 0) chroma_vector_adjustment[k] = -2;
+         else chroma_vector_adjustment[k] = 2;
+      }
+    }
+  }
+  else{
+    for(k = 0; k < frm->long_used + frm->short_used; k++)
+      chroma_vector_adjustment[k] = 0;
+  }
 
 
   if (img->mb_frame_field_flag)
@@ -6242,6 +6274,7 @@ int decode_super_macroblock(struct img_par *img,struct inp_par *inp)
 
               i1=(img->pix_c_x+ii+ioff)*f1+mv_array[if1+4][jf][0];
               j1=(img_pix_c_y+jj+joff)*f1+mv_array[if1+4][jf][1];
+              j1 += chroma_vector_adjustment[refframe];
 
               ii0=max (0, min (i1/f1, img->width_cr-1));
               jj0=max (0, min (j1/f1, img_height_cr-1));
@@ -6362,6 +6395,7 @@ int decode_super_macroblock(struct img_par *img,struct inp_par *inp)
                 {
                   i1=(img->pix_c_x+ii+ioff)*f1+fw_mv_array[ifx+4][jf][0];
                   j1=(img_pix_c_y+jj+joff)*f1+fw_mv_array[ifx+4][jf][1];
+                  j1 += chroma_vector_adjustment[fw_refframe];
                   
                   ii0=max (0, min (i1/f1, img->width_cr-1));
                   jj0=max (0, min (j1/f1, img_height_cr-1));
@@ -6382,6 +6416,7 @@ int decode_super_macroblock(struct img_par *img,struct inp_par *inp)
                 {
                   i1=(img->pix_c_x+ii+ioff)*f1+bw_mv_array[ifx+4][jf][0];
                   j1=(img_pix_c_y+jj+joff)*f1+bw_mv_array[ifx+4][jf][1];
+                  j1 += chroma_vector_adjustment[bw_refframe];
                   
                   ii0=max (0, min (i1/f1, img->width_cr-1));
                   jj0=max (0, min (j1/f1, img_height_cr-1));
@@ -6404,6 +6439,7 @@ int decode_super_macroblock(struct img_par *img,struct inp_par *inp)
               {
                 i1=(img->pix_c_x+ii+ioff)*f1+fw_mv_array[ifx+4][jf][0];
                 j1=(img_pix_c_y+jj+joff)*f1+fw_mv_array[ifx+4][jf][1];
+                j1 += chroma_vector_adjustment[fw_refframe];
                 
                 ii0=max (0, min (i1/f1, img->width_cr-1));
                 jj0=max (0, min (j1/f1, img_height_cr-1));
@@ -6422,6 +6458,7 @@ int decode_super_macroblock(struct img_par *img,struct inp_par *inp)
                 
                 i1=(img->pix_c_x+ii+ioff)*f1+bw_mv_array[ifx+4][jf][0];
                 j1=(img_pix_c_y+jj+joff)*f1+bw_mv_array[ifx+4][jf][1];
+                j1 += chroma_vector_adjustment[bw_refframe];
                 
                 ii0=max (0, min (i1/f1, img->width_cr-1));
                 jj0=max (0, min (j1/f1, img_height_cr-1));

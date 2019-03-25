@@ -116,6 +116,8 @@ byte ***mref_fld;                               //!< 1/1 pix luma for direct int
 byte ****mcef_fld;     
 byte nextP_tr_frm, nextP_tr_fld;
 int  **field_mb;
+int  *parity_fld;
+int  *chroma_vector_adjustment;
 
 // For MB level frame/field coding
 int  TopFieldForSkip_Y[16][16];

@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 6.1b
+ *     JM 6.1c
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -124,7 +124,7 @@
 #include "erc_api.h"
 
 #define JM          "6"
-#define VERSION     "6.1b"
+#define VERSION     "6.1c"
 
 #define LOGFILE     "log.dec"
 #define DATADECFILE "dataDec.txt"
@@ -903,6 +903,8 @@ void free_global_buffers(struct inp_par *inp, struct img_par *img)
 
   free (mref_fld);
   free (mcef_fld);
+  free (parity_fld);
+  free (chroma_vector_adjustment);
 
   free_mem2Dint(refFrArr_frm);
   free_mem2Dint(refFrArr_top);

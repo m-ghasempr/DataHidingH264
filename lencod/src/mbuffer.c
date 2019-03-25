@@ -547,6 +547,12 @@ void alloc_mref(ImageParameters *img)
 
     if ((mcef_fld = (byte****)calloc(fld->short_size+fld->long_size,sizeof(byte***))) == NULL)
       no_mem_exit("alloc_mref: mcef_fld");
+
+    if (parity_fld) 
+      free (parity_fld);
+
+	if((parity_fld = (int *)calloc(fld->short_size+fld->long_size, sizeof(int))) == NULL)
+      no_mem_exit("alloc_mref: parity_fld");
   }
 
 
@@ -586,6 +592,7 @@ void init_mref()
     if (input->WeightedPrediction || input->WeightedBiprediction)
       mref_w[j]=fb->picbuf_short[i]->mref_w;
     mcef[j]=fb->picbuf_short[i]->mcef;
+    if(mref==mref_fld) parity_fld[j] = fb->picbuf_short[i]->parity;
   }
   for (i=0;i<fb->long_used;i++,j++)
   {
@@ -593,6 +600,7 @@ void init_mref()
     if (input->WeightedPrediction || input->WeightedBiprediction)
       mref_w[j]=fb->picbuf_long[i]->mref_w;
     mcef[j]=fb->picbuf_long[i]->mcef;
+    if(mref==mref_fld) parity_fld[j] = fb->picbuf_long[i]->parity;
   }
 
   // set all other mref pointers to NULL !KS!
@@ -602,6 +610,7 @@ void init_mref()
     if (input->WeightedPrediction || input->WeightedBiprediction)
       mref_w[j]=NULL;
     mcef[j]=NULL;
+    if(mref==mref_fld) parity_fld[j] = -1;
   }
   
 }
@@ -742,6 +751,7 @@ void reorder_mref(ImageParameters *img)
       mref_w[i]=fr[i]->mref_w;
       Refbuf11_w[i]=fr[i]->Refbuf11_w;
     }
+    if(mref==mref_fld) parity_fld[i] = fr[i]->parity;
   }
 
   // free temporary memory
@@ -872,6 +882,7 @@ void add_frame(ImageParameters *img)
   fb->picbuf_short[0]->picID=img->pn;
   fb->picbuf_short[0]->frame_num_256=img->number % 256;   // Tian Dong (Sept 2002)
   fb->picbuf_short[0]->lt_picID=-1;
+  if(mref==mref_fld) fb->picbuf_short[0]->parity = img->fld_type;//0:Top Field / 1:Bottom Field
 
   // indicate which layer and sub-seq current ref frame comes from.
 //  fb->picbuf_short[0]->layer_no=currPictureInfo.refFromLayerNumber;

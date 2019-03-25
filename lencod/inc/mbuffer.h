@@ -63,6 +63,7 @@ typedef struct
   int layer_no;           //<! Tian: to save which layer and sub seq the short-term reference 
   int sub_seq_no;         //<! frames comes from. JVT-B042  June 01, 2002
   int frame_num_256;      //<! Tian: store the (img->number % 256), for spare picture sei info
+  int parity;
 } Frame;
 
 typedef struct

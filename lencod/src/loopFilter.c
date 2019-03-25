@@ -134,14 +134,14 @@ void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int mb_y, int m
       if( edge || EdgeCondition )
       {
         MbP = (edge)? MbQ : ((dir)? (MbQ -(img->width>>4))  : (MbQ-1) ) ;       // MbP = Mb of the remote 4x4 block
-        QP = (MbP->qp + MbQ->qp) >> 1 ;                                   // Average QP of the two blocks
+        QP = (MbP->qp + MbQ->qp + 1) >> 1 ;                                   // Average QP of the two blocks
         GetStrength( Strength, MbP, MbQ, dir, edge, mb_y<<2, mb_x<<2);           //Strength for 4 pairs of blks in 1 stripe
         if( *((int*)Strength) )  // && (QP>= 8) )                    // only if one of the 4 Strength bytes is != 0
         {
           EdgeLoop( SrcY + (edge<<2)* ((dir)? img->width:1 ), Strength, QP, MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width, 0 );
           if( (imgUV != NULL) && !(edge & 1) )
           {
-            QPC  = (QP_SCALE_CR[MbP->qp] + QP_SCALE_CR[MbQ->qp]) >> 1;
+            QPC  = (QP_SCALE_CR[MbP->qp] + QP_SCALE_CR[MbQ->qp] + 1) >> 1;
             EdgeLoop( SrcU +  (edge<<1) * ((dir)? img->width_cr:1 ), Strength, QPC, MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width_cr, 1 ) ; 
             EdgeLoop( SrcV +  (edge<<1) * ((dir)? img->width_cr:1 ), Strength, QPC, MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width_cr, 1 ) ; 
           }
@@ -296,9 +296,9 @@ void EdgeLoop(byte* SrcPtr,byte Strength[4],int QP,
             if( !Chro )
               {
               if( ap )
-                SrcPtr[-inc2] += IClip( -C0,  C0, ( L2 + (RL0 >> 1) - (L1<<1)) >> 1 ) ;
+                SrcPtr[-inc2] += IClip( -C0,  C0, ( L2 + ((RL0+1) >> 1) - (L1<<1)) >> 1 ) ;
               if( aq  )
-                SrcPtr[  inc] += IClip( -C0,  C0, ( R2 + (RL0 >> 1) - (R1<<1)) >> 1 ) ;
+                SrcPtr[  inc] += IClip( -C0,  C0, ( R2 + ((RL0+1) >> 1) - (R1<<1)) >> 1 ) ;
               } ;
             } ;
           } ; 

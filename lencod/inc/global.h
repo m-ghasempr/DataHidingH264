@@ -525,6 +525,7 @@ int    **refFrArr_top;           //!< Array for reference frames of each block
 int    **refFrArr_bot;           //!< Array for reference frames of each block
 // int    **refFrArr_top_save;      //!< For MB level field/frame coding tools
 // int    **refFrArr_bot_save;      //!< For MB level field/frame coding tools
+int *parity_fld;
 
 
 // global picture format dependend buffers, mem allocation in image.c (field picture)

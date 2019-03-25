@@ -481,6 +481,17 @@ void alloc_mref(ImageParameters *img)
   if((mcef_fld = (byte****)calloc(fld->short_size+fld->long_size,sizeof(byte***))) == NULL)
     no_mem_exit("alloc_mref: mcef_fld");
 
+  if (parity_fld) 
+    free (parity_fld);
+
+  if((parity_fld = (int *)calloc(fld->short_size+fld->long_size, sizeof(int))) == NULL)
+    no_mem_exit("alloc_mref: mref_fld");
+
+  if (chroma_vector_adjustment) 
+    free (chroma_vector_adjustment);
+
+  if((chroma_vector_adjustment = (int *)calloc(fld->short_size+fld->long_size, sizeof(int))) == NULL)
+    no_mem_exit("alloc_mref: mref_fld");
 }
 
 /*!
@@ -520,11 +531,13 @@ void init_mref(ImageParameters *img)
   {
     mref_fld[j]=fld->picbuf_short[i]->mref;
     mcef_fld[j]=fld->picbuf_short[i]->mcef;
+	parity_fld[j] = fld->picbuf_short[i]->parity;
   }
   for (i=0;i<fld->long_size;i++,j++)
   {
     mref_fld[j]=fld->picbuf_long[i]->mref;
     mcef_fld[j]=fld->picbuf_long[i]->mcef;
+	parity_fld[j] = fld->picbuf_long[i]->parity;
   }
 
 }
@@ -671,6 +684,7 @@ void reorder_mref(ImageParameters *img)
   {
     mref[i]=fr[i]->mref;
     mcef[i]=fr[i]->mcef;
+	if(mref == mref_fld) parity_fld[i] = fr[i]->parity;
   }
 
   // free temporary memory
@@ -742,6 +756,7 @@ void copy2fb(ImageParameters *img)
   fb->picbuf_short[0]->picID=img->pn;
   fb->picbuf_short[0]->lt_picID=-1;
   fb->picbuf_short[0]->valid=1;     // Tian Dong: This is a normal reference frame.
+  if(fb == fld) fb->picbuf_short[0]->parity = img->structure;
 
   (fb->short_used)++;
   if (fb->short_used>fb->short_size)

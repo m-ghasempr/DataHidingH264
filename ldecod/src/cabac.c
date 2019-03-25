@@ -522,7 +522,7 @@ void readMB_typeInfoFromBuffer_CABAC( SyntaxElement *se,
     else // 16x16 Intra
     {
       mode_sym = biari_decode_final(dep_dp);
-      if( mode_sym==25 )
+      if( mode_sym==1 )
       {
         curr_mb_type = 25;
       }

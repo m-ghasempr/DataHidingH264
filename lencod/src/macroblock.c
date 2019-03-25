@@ -1275,24 +1275,29 @@ OneComponentChromaPrediction4x4 (int*     mpred,      //  --> array to store pre
   int     s1        = 3;
   int     img_pic_c_y = img->pix_c_y;
   int   scale   = 1;
+  int chroma_shift = 0;
+  int parity_of_mb;
+  int field_mode;
 
-  incr      = (ref==-1 ? (!img->fld_type&&mref==mref_fld): direct_mode ? (!img->fld_type&&mref==mref_fld) : (mref==mref_fld)) ;
+  field_mode = (input->InterlaceCodingOption >= MB_CODING && mb_adaptive)?img->field_mode:(mref==mref_fld);
+  parity_of_mb = (input->InterlaceCodingOption >= MB_CODING && mb_adaptive)?(1- img->top_field):img->fld_type;
+  incr      = (ref==-1 ? (!parity_of_mb&&field_mode): direct_mode ? (!parity_of_mb&&field_mode) : field_mode) ;
   
-  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
-  {
-    incr  = (ref == -1 ? (img->top_field&&img->field_mode):(direct_mode ? (img->top_field&&img->field_mode):(img->field_mode)));
+  if(img->type==B_IMG) ref += 1+incr;
+  refimage  = mcef [ref][uv];
+  if(field_mode && parity_fld[ref] != parity_of_mb) chroma_shift = parity_of_mb? 2 : -2;
+  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode){
     scale = 2;
     img_pic_c_y = img->field_pix_c_y;
   }
   
-  refimage  = img->type==B_IMG? mcef [ref+1+incr][uv] : mcef [ref][uv];
-
   for (j=pix_c_y; j<je; j++)
   for (i=pix_c_x; i<ie; i++)
   {
     mvb  = mv [(i-img->pix_c_x)>>1][(j-img_pic_c_y)>>1][refframe][blocktype];
     ii   = (i<<s1) + mvb[0];
     jj   = (j<<s1) + mvb[1];
+    jj   += chroma_shift;
 
     ii0  = max (0, min (img->width_cr -1, ii>>s1     ));
     jj0  = max (0, min (img->height_cr/scale-1, jj>>s1     ));    // For MB level field/frame -- scale chroma height by 2
@@ -3278,6 +3283,8 @@ int predict_nnz(int i,int j)
     cnt++;
   }
 
+  if (cnt==2) 
+    pred_nnz++;
 
   if (cnt)
     pred_nnz/=cnt; 
@@ -3338,6 +3345,9 @@ int predict_nnz_chroma(int i,int j)
     pred_nnz+=Top_block;
     cnt++;
   }
+
+  if (cnt==2) 
+    pred_nnz++;
 
   if (cnt)
     pred_nnz/=cnt; 
