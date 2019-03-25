@@ -51,12 +51,12 @@
 #include <malloc.h>
 #include <string.h>
  
+#include "global.h"
 #include "contributors.h"
 #include "parsetcommon.h"
 #include "nalu.h"
 #include "parset.h"
 #include "fmo.h"
-#include "global.h"
 #include "vlc.h"
 
 // Local helpers
@@ -232,7 +232,7 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
   sps->num_ref_frames = IdentifyNumRefFrames();
 
   //required_frame_num_update_behaviour_flag hardcoded to zero
-  sps->required_frame_num_update_behaviour_flag = FALSE;    // double check
+  sps->gaps_in_frame_num_value_allowed_flag = FALSE;    // double check
 
   sps->frame_mbs_only_flag = (input->InterlaceCodingOption == FRAME_CODING);
 
@@ -253,7 +253,7 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
 
   pps->seq_parameter_set_id = 0;
   pps->pic_parameter_set_id = 0;
-  pps->entropy_coding_mode = (input->symbol_mode==UVLC?0:1);
+  pps->entropy_coding_mode_flag = (input->symbol_mode==UVLC?0:1);
 
   // JVT-Fxxx (by Stephan Wenger, make this flag unconditional
   pps->pic_order_present_flag = img->pic_order_present_flag;
@@ -310,8 +310,8 @@ FMOTYPE6:
     }
 // End FMO stuff
 
-  pps->num_ref_idx_l0_active_minus1 = img->num_ref_pic_active_fwd_minus1;   // check this
-  pps->num_ref_idx_l1_active_minus1 = img->num_ref_pic_active_bwd_minus1;   // check this
+  pps->num_ref_idx_l0_active_minus1 = img->num_ref_idx_l0_active-1;   // check this
+  pps->num_ref_idx_l1_active_minus1 = img->num_ref_idx_l1_active-1;   // check this
   
   pps->weighted_pred_flag = input->WeightedPrediction;
   pps->weighted_bipred_idc = input->WeightedBiprediction;
@@ -321,7 +321,7 @@ FMOTYPE6:
 
   pps->chroma_qp_index_offset = 0;      // double check: is this chroma fidelity thing already implemented???
 
-  pps->deblocking_filter_parameters_present_flag = input->LFSendParameters;
+  pps->deblocking_filter_control_present_flag = input->LFSendParameters;
   pps->constrained_intra_pred_flag = input->UseConstrainedIntraPred;
   
   pps->redundant_pic_cnt_present_flag = 0;
@@ -388,7 +388,7 @@ int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, char *rbsp)
       len+=se_v ("SPS: offset_for_ref_frame",                  sps->offset_for_ref_frame[i],                      partition);
   }
   len+=ue_v ("SPS: num_ref_frames",                          sps->num_ref_frames,                            partition);
-  len+=u_1  ("SPS: required_frame_num_update_behaviour_flag",sps->required_frame_num_update_behaviour_flag,  partition);
+  len+=u_1  ("SPS: gaps_in_frame_num_value_allowed_flag",    sps->gaps_in_frame_num_value_allowed_flag,      partition);
   len+=ue_v ("SPS: pic_width_in_mbs_minus1",                 sps->pic_width_in_mbs_minus1,                   partition);
   len+=ue_v ("SPS: pic_height_in_map_units_minus1",          sps->pic_height_in_map_units_minus1,            partition);
   len+=u_1  ("SPS: frame_mbs_only_flag",                     sps->frame_mbs_only_flag,                       partition);
@@ -397,6 +397,16 @@ int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, char *rbsp)
     len+=u_1  ("SPS: mb_adaptive_frame_field_flag",            sps->mb_adaptive_frame_field_flag,              partition);
   }
   len+=u_1  ("SPS: direct_8x8_inference_flag",               sps->direct_8x8_inference_flag,                 partition);
+#ifdef G50SPS
+  len+=u_1  ("SPS: frame_cropping_flag",                      sps->frame_cropping_flag,                       partition);
+  if (sps->frame_cropping_flag)
+  {
+    len+=ue_v ("SPS: frame_cropping_rect_left_offset",          sps->frame_cropping_rect_left_offset,           partition);
+    len+=ue_v ("SPS: frame_cropping_rect_right_offset",         sps->frame_cropping_rect_right_offset,          partition);
+    len+=ue_v ("SPS: frame_cropping_rect_top_offset",           sps->frame_cropping_rect_top_offset,            partition);
+    len+=ue_v ("SPS: frame_cropping_rect_bottom_offset",        sps->frame_cropping_rect_bottom_offset,         partition);
+  }
+#endif
   len+=u_1  ("SPS: vui_parameters_present_flag",             sps->vui_parameters_present_flag,               partition);
   if (sps->vui_parameters_present_flag)
     len+=GenerateVUISequenceParameters();    // currently a dummy, asserting
@@ -450,7 +460,7 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, char *rbsp)
 
   len+=ue_v ("PPS: pic_parameter_set_id",                    pps->pic_parameter_set_id,                      partition);
   len+=ue_v ("PPS: seq_parameter_set_id",                    pps->seq_parameter_set_id,                      partition);
-  len+=u_1  ("PPS: entropy_coding_mode",                     pps->entropy_coding_mode,                       partition);
+  len+=u_1  ("PPS: entropy_coding_mode_flag",                pps->entropy_coding_mode_flag,                  partition);
   len+=u_1  ("PPS: pic_order_present_flag",                  pps->pic_order_present_flag,                    partition);
   len+=ue_v ("PPS: num_slice_groups_minus1",                 pps->num_slice_groups_minus1,                   partition);
 
@@ -459,11 +469,12 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, char *rbsp)
   {
     len+=ue_v ("PPS: slice_group_map_type",                 pps->slice_group_map_type,                   partition);
     if (pps->slice_group_map_type == 0)
-      for (i=0; i<pps->num_slice_groups_minus1; i++)
+      for (i=0; i<=pps->num_slice_groups_minus1; i++)
         len+=ue_v ("PPS: run_length_minus1[i]",                           pps->run_length_minus1[i],                             partition);
     else if (pps->slice_group_map_type==2)
       for (i=0; i<pps->num_slice_groups_minus1; i++)
       {
+
         len+=ue_v ("PPS: top_left[i]",                          pps->top_left[i],                           partition);
         len+=ue_v ("PPS: bottom_right[i]",                      pps->bottom_right[i],                       partition);
       }
@@ -499,9 +510,10 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, char *rbsp)
   len+=se_v ("PPS: pic_init_qp_minus26",                      pps->pic_init_qp_minus26,                       partition);
   len+=se_v ("PPS: pic_init_qs_minus26",                      pps->pic_init_qs_minus26,                       partition);
   len+=se_v ("PPS: chroma_qp_index_offset",                   pps->chroma_qp_index_offset,                    partition);
-  len+=u_1  ("PPS: deblocking_filter_parameters_present_flag",pps->deblocking_filter_parameters_present_flag, partition);
+  len+=u_1  ("PPS: deblocking_filter_control_present_flag",   pps->deblocking_filter_control_present_flag,    partition);
   len+=u_1  ("PPS: constrained_intra_pred_flag",              pps->constrained_intra_pred_flag,               partition);
   len+=u_1  ("PPS: redundant_pic_cnt_present_flag",           pps->redundant_pic_cnt_present_flag,            partition);
+#ifndef G50SPS
   len+=u_1  ("PPS: frame_cropping_flag",                      pps->frame_cropping_flag,                       partition);
   if (pps->frame_cropping_flag)
   {
@@ -510,7 +522,7 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, char *rbsp)
     len+=ue_v ("PPS: frame_cropping_rect_top_offset",           pps->frame_cropping_rect_top_offset,            partition);
     len+=ue_v ("PPS: frame_cropping_rect_bottom_offset",        pps->frame_cropping_rect_bottom_offset,         partition);
   }
-
+#endif
   SODBtoRBSP(partition->bitstream);     // copies the last couple of bits into the byte buffer
   
   LenInBytes=partition->bitstream->byte_pos;
@@ -581,7 +593,7 @@ int IdentifyLevel()
  *    Number of reference frame buffers used
  *
  * \note
- *    This function currently maps to input->no_multpred.  With all this interlace
+ *    This function currently maps to input->num_reference_frames.  With all this interlace
  *    stuff this may or may not be correct.  If you determine a problem with the
  *    memory management for Interlace, then this could be one possible problem.
  *    However, so far no problem have been determined by my limited testing of
@@ -591,7 +603,7 @@ int IdentifyLevel()
 
 int IdentifyNumRefFrames()
 {
-  return input->no_multpred;
+  return input->num_reference_frames;
 }
 
 

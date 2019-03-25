@@ -336,7 +336,7 @@ int FmoGetLastMBInSliceGroup (int SliceGroup)
  * \brief
  *    FReturns SliceGroupID for a given MB
  *
- * \par mb
+ * \param mb
  *    Macroblock number (in scan order)
  ************************************************************************
  */
@@ -407,10 +407,9 @@ static void FmoGenerateType0MapUnitMap (pic_parameter_set_rbsp_t* pps, seq_param
 static void FmoGenerateType1MapUnitMap (pic_parameter_set_rbsp_t* pps, seq_parameter_set_rbsp_t* sps, unsigned PicSizeInMapUnits )
 {
   unsigned i;
-  unsigned PicWidthInMbs = (sps->pic_width_in_mbs_minus1 +1);
   for( i = 0; i < PicSizeInMapUnits; i++ )
   {
-    MapUnitToSliceGroupMap[i] = ((i%PicWidthInMbs)+(((i/PicWidthInMbs)*(pps->num_slice_groups_minus1+1))/2))
+    MapUnitToSliceGroupMap[i] = ((i%img->PicWidthInMbs)+(((i/img->PicWidthInMbs)*(pps->num_slice_groups_minus1+1))/2))
 		                            %(pps->num_slice_groups_minus1+1);
   }
 }
@@ -427,20 +426,19 @@ static void FmoGenerateType2MapUnitMap (pic_parameter_set_rbsp_t* pps, seq_param
   int iGroup;
   unsigned i, x, y;
   unsigned yTopLeft, xTopLeft, yBottomRight, xBottomRight;
-  unsigned PicWidthInMbs = (sps->pic_width_in_mbs_minus1 +1);
 
   for( i = 0; i < PicSizeInMapUnits; i++ )
     MapUnitToSliceGroupMap[ i ] = pps->num_slice_groups_minus1;
 
   for( iGroup = pps->num_slice_groups_minus1 - 1 ; iGroup >= 0; iGroup-- ) 
   {
-    yTopLeft = pps->top_left[ iGroup ] / PicWidthInMbs;
-    xTopLeft = pps->top_left[ iGroup ] % PicWidthInMbs;
-    yBottomRight = pps->bottom_right[ iGroup ] / PicWidthInMbs;
-    xBottomRight = pps->bottom_right[ iGroup ] % PicWidthInMbs;
+    yTopLeft = pps->top_left[ iGroup ] / img->PicWidthInMbs;
+    xTopLeft = pps->top_left[ iGroup ] % img->PicWidthInMbs;
+    yBottomRight = pps->bottom_right[ iGroup ] / img->PicWidthInMbs;
+    xBottomRight = pps->bottom_right[ iGroup ] % img->PicWidthInMbs;
     for( y = yTopLeft; y <= yBottomRight; y++ )
       for( x = xTopLeft; x <= xBottomRight; x++ )
-        MapUnitToSliceGroupMap[ y * PicWidthInMbs + x ] = iGroup;
+        MapUnitToSliceGroupMap[ y * img->PicWidthInMbs + x ] = iGroup;
  }
 }
 
@@ -455,8 +453,6 @@ static void FmoGenerateType2MapUnitMap (pic_parameter_set_rbsp_t* pps, seq_param
 static void FmoGenerateType3MapUnitMap (pic_parameter_set_rbsp_t* pps, seq_parameter_set_rbsp_t* sps, unsigned PicSizeInMapUnits )
 {
   unsigned i, k, x, y;
-  unsigned PicWidthInMbs = (sps->pic_width_in_mbs_minus1 +1);
-  unsigned PicHeightInMapUnits = (sps->pic_height_in_map_units_minus1 +1);
   unsigned leftBound, topBound, rightBound, bottomBound, xDir, yDir;
   unsigned mapUnitVacant;
 
@@ -465,8 +461,8 @@ static void FmoGenerateType3MapUnitMap (pic_parameter_set_rbsp_t* pps, seq_param
   for( i = 0; i < PicSizeInMapUnits; i++ )
     MapUnitToSliceGroupMap[ i ] = 2;
 
-  x = ( PicWidthInMbs - pps->slice_group_change_direction_flag ) / 2;
-  y = ( PicHeightInMapUnits - pps->slice_group_change_direction_flag ) / 2;
+  x = ( img->PicWidthInMbs - pps->slice_group_change_direction_flag ) / 2;
+  y = ( img->PicHeightInMapUnits - pps->slice_group_change_direction_flag ) / 2;
 
   leftBound   = x;
   topBound    = y;
@@ -478,9 +474,9 @@ static void FmoGenerateType3MapUnitMap (pic_parameter_set_rbsp_t* pps, seq_param
 
   for( k = 0; k < PicSizeInMapUnits; k += mapUnitVacant ) 
   {
-    mapUnitVacant = ( MapUnitToSliceGroupMap[ y * PicWidthInMbs + x ]  ==  2 );
+    mapUnitVacant = ( MapUnitToSliceGroupMap[ y * img->PicWidthInMbs + x ]  ==  2 );
     if( mapUnitVacant )
-       MapUnitToSliceGroupMap[ y * PicWidthInMbs + x ] = ( k >= mapUnitsInSliceGroup0 );
+       MapUnitToSliceGroupMap[ y * img->PicWidthInMbs + x ] = ( k >= mapUnitsInSliceGroup0 );
 
     if( xDir  ==  -1  &&  x  ==  leftBound ) 
     {
@@ -492,7 +488,7 @@ static void FmoGenerateType3MapUnitMap (pic_parameter_set_rbsp_t* pps, seq_param
     else 
       if( xDir  ==  1  &&  x  ==  rightBound ) 
       {
-        rightBound = min( rightBound + 1, PicWidthInMbs - 1 );
+        rightBound = min( rightBound + 1, img->PicWidthInMbs - 1 );
         x = rightBound;
         xDir = 0;
         yDir = 1 - 2 * pps->slice_group_change_direction_flag;
@@ -508,7 +504,7 @@ static void FmoGenerateType3MapUnitMap (pic_parameter_set_rbsp_t* pps, seq_param
         else 
           if( yDir  ==  1  &&  y  ==  bottomBound ) 
           {
-            bottomBound = min( bottomBound + 1, PicHeightInMapUnits - 1 );
+            bottomBound = min( bottomBound + 1, img->PicHeightInMapUnits - 1 );
             y = bottomBound;
             xDir = 2 * pps->slice_group_change_direction_flag - 1;
             yDir = 0;
@@ -558,16 +554,14 @@ static void FmoGenerateType5MapUnitMap (pic_parameter_set_rbsp_t* pps, seq_param
   unsigned mapUnitsInSliceGroup0 = min((pps->slice_group_change_rate_minus1 + 1) * img->slice_group_change_cycle, PicSizeInMapUnits);
   unsigned sizeOfUpperLeftGroup = pps->slice_group_change_direction_flag ? ( PicSizeInMapUnits - mapUnitsInSliceGroup0 ) : mapUnitsInSliceGroup0;
 
-  unsigned PicWidthInMbs = (sps->pic_width_in_mbs_minus1 +1);
-  unsigned PicHeightInMapUnits = (sps->pic_height_in_map_units_minus1 +1);
   unsigned i,j, k = 0;
 
-  for( j = 0; j < PicWidthInMbs; j++ )
-    for( i = 0; i < PicHeightInMapUnits; i++ )
+  for( j = 0; j < img->PicWidthInMbs; j++ )
+    for( i = 0; i < img->PicHeightInMapUnits; i++ )
         if( k++ < sizeOfUpperLeftGroup )
-            MapUnitToSliceGroupMap[ i * PicWidthInMbs + j ] = 1 - pps->slice_group_change_direction_flag;
+            MapUnitToSliceGroupMap[ i * img->PicWidthInMbs + j ] = 1 - pps->slice_group_change_direction_flag;
         else
-            MapUnitToSliceGroupMap[ i * PicWidthInMbs + j ] = pps->slice_group_change_direction_flag;
+            MapUnitToSliceGroupMap[ i * img->PicWidthInMbs + j ] = pps->slice_group_change_direction_flag;
 
 }
 

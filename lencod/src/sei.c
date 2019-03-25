@@ -136,7 +136,7 @@ void CloseSEIMessages()
 
 Boolean HaveAggregationSEI()
 {
-  if (sei_message[AGGREGATION_SEI].available && img->type != B_IMG) 
+  if (sei_message[AGGREGATION_SEI].available && img->type != B_SLICE) 
     return TRUE;
   if (seiHasSubseqInfo)
     return TRUE;
@@ -383,6 +383,7 @@ void CloseSparePicture()
  */
 void CalculateSparePicture()
 {
+  /*
   int i, j, tmp, i0, j0, m;
   byte **map_sp;
   int delta_spare_frame_num;
@@ -408,7 +409,7 @@ void CalculateSparePicture()
 
   // basic check
   if (fb->picbuf_short[0]->used==0 || fb->picbuf_short[1]->used==0)
-  { /*
+  { 
 #ifdef WRITE_MAP_IMAGE
     fp = fopen( map_file_name, "wb" );
     assert( fp != NULL );
@@ -422,7 +423,7 @@ void CalculateSparePicture()
         for (j=0; j < img->width/2; j++)
           fputc(128, fp);
     fclose( fp );
-#endif*/
+#endif
     seiHasSparePicture = FALSE;
     return;
   }
@@ -543,6 +544,7 @@ void CalculateSparePicture()
   fclose( fp );
 #undef WRITE_MAP_IMAGE
 #endif
+  */
 }
 
 /*!
@@ -849,7 +851,7 @@ void InitSubseqInfo(int currLayer)
  */
 void UpdateSubseqInfo(int currLayer)
 {
-  if (img->type != B_IMG)
+  if (img->type != B_SLICE)
   {
     seiSubseqInfo[currLayer].stored_frame_cnt ++;
     seiSubseqInfo[currLayer].stored_frame_cnt = seiSubseqInfo[currLayer].stored_frame_cnt % MAX_FN;
@@ -1620,7 +1622,7 @@ void ClearRandomAccess()
 void UpdateRandomAccess()
 {
 
-  if(img->type == INTRA_IMG)
+  if(img->type == I_SLICE)
   {
     seiRandomAccess.recovery_point_flag = 0;
     seiRandomAccess.exact_match_flag = 1;

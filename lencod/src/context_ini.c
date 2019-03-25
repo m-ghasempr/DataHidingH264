@@ -93,8 +93,7 @@ double probability[128] =
 
 
 
-void
-create_context_memory ()
+void create_context_memory ()
 {
   int i, j, k;
   int num_mb    = (img->width*img->height)>>8; // number of macroblocks for frame
@@ -159,8 +158,7 @@ create_context_memory ()
 
 
 
-void
-free_context_memory ()
+void free_context_memory ()
 {
   int i, k;
 
@@ -188,7 +186,7 @@ free_context_memory ()
   for (i=0; i<ii; i++) \
   for (j=0; j<jj; j++) \
   { \
-    if      (img->type==INTRA_IMG)  biari_init_context (&(ctx[i][j]), &(tab ## _I[num][i][j][0])); \
+    if      (img->type==I_SLICE)  biari_init_context (&(ctx[i][j]), &(tab ## _I[num][i][j][0])); \
     else                            biari_init_context (&(ctx[i][j]), &(tab ## _P[num][i][j][0])); \
   } \
 }
@@ -196,21 +194,20 @@ free_context_memory ()
 { \
   for (j=0; j<jj; j++) \
   { \
-    if      (img->type==INTRA_IMG)  biari_init_context (&(ctx[j]), &(tab ## _I[num][0][j][0])); \
+    if      (img->type==I_SLICE)  biari_init_context (&(ctx[j]), &(tab ## _I[num][0][j][0])); \
     else                            biari_init_context (&(ctx[j]), &(tab ## _P[num][0][j][0])); \
   } \
 }
 
 
 
-void
-SetCtxModelNumber ()
+void SetCtxModelNumber ()
 {
   int frame_field = img->field_picture;
   int img_type    = img->type;
   int ctx_number  = img->currentSlice->start_mb_nr / num_mb_per_slice;
 
-  if(img->type==INTRA_IMG)
+  if(img->type==I_SLICE)
   {
     img->model_number=DEFAULT_CTX_MODEL;
     return;
@@ -237,10 +234,7 @@ SetCtxModelNumber ()
 
 
 
-
-
-void
-init_contexts ()
+void init_contexts ()
 {
   MotionInfoContexts*  mc = img->currentSlice->mot_ctx;
   TextureInfoContexts* tc = img->currentSlice->tex_ctx;
@@ -271,8 +265,7 @@ init_contexts ()
 
 
 
-double
-XRate (BiContextTypePtr ctx, const int* model)
+double XRate (BiContextTypePtr ctx, const int* model)
 {
   int     ctx_state, mod_state;
   double  weight, xr = 0.0;
@@ -295,7 +288,7 @@ XRate (BiContextTypePtr ctx, const int* model)
   for (i=0; i<ii; i++) \
   for (j=0; j<jj; j++) \
   { \
-    if      (img->type==INTRA_IMG)  xr += XRate (&(ctx[i][j]), &(tab ## _I[num][i][j][0])); \
+    if      (img->type==I_SLICE)  xr += XRate (&(ctx[i][j]), &(tab ## _I[num][i][j][0])); \
     else                            xr += XRate (&(ctx[i][j]), &(tab ## _P[num][i][j][0])); \
   } \
 }
@@ -303,17 +296,16 @@ XRate (BiContextTypePtr ctx, const int* model)
 { \
   for (j=0; j<jj; j++) \
   { \
-    if      (img->type==INTRA_IMG)  xr += XRate (&(ctx[j]), &(tab ## _I[num][0][j][0])); \
+    if      (img->type==I_SLICE)  xr += XRate (&(ctx[j]), &(tab ## _I[num][0][j][0])); \
     else                            xr += XRate (&(ctx[j]), &(tab ## _P[num][0][j][0])); \
   } \
 }
 
 
-void
-GetCtxModelNumber (int* mnumber, MotionInfoContexts* mc, TextureInfoContexts* tc)
+void GetCtxModelNumber (int* mnumber, MotionInfoContexts* mc, TextureInfoContexts* tc)
 {
   int     model, j, i;
-  int     num_models = (img->type==INTRA_IMG ? NUM_CTX_MODELS_I : NUM_CTX_MODELS_P);
+  int     num_models = (img->type==I_SLICE ? NUM_CTX_MODELS_I : NUM_CTX_MODELS_P);
   double  xr, min_xr = 1e30;
 
   for (model=0; model<num_models; model++)
@@ -354,8 +346,7 @@ GetCtxModelNumber (int* mnumber, MotionInfoContexts* mc, TextureInfoContexts* tc
 
 
 
-void
-store_contexts ()
+void store_contexts ()
 {
   int frame_field = img->field_picture;
   int img_type    = img->type;
@@ -373,8 +364,7 @@ store_contexts ()
 }
 
 
-void
-update_field_frame_contexts (int field)
+void update_field_frame_contexts (int field)
 {
   int i, j;
 

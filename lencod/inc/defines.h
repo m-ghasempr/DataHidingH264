@@ -51,10 +51,12 @@
 #define _DEFINES_H_
 
 
-#define TRACE           0   //!< 0:Trace off 1:Trace on
+#define TRACE           1   //!< 0:Trace off 1:Trace on
+
+typedef unsigned char byte;    //!< byte type definition
 
 // APJ: Added the following define
-#define PROFILE_IDC     66
+#define PROFILE_IDC     88
 #define LEVEL_IDC       21
 
 // CAVLC
@@ -133,17 +135,17 @@
 #define  REF_COST(f,ref)              (WEIGHTED_COST(f,refbits[(ref)]))
 
 #define  BWD_IDX(ref)                 (((ref)<2)? 1-(ref): (ref))
-#define  REF_COST_FWD(f,ref)          (WEIGHTED_COST(f,((img->num_ref_pic_active_fwd_minus1==0)? 0:refbits[(ref)])))
-#define  REF_COST_BWD(f,ref)          (WEIGHTED_COST(f,((img->num_ref_pic_active_bwd_minus1==0)? 0:BWD_IDX(refbits[ref]))))
+#define  REF_COST_FWD(f,ref)          (WEIGHTED_COST(f,((img->num_ref_idx_l0_active==1)? 0:refbits[(ref)])))
+#define  REF_COST_BWD(f,ref)          (WEIGHTED_COST(f,((img->num_ref_idx_l1_active==1)? 0:BWD_IDX(refbits[ref]))))
 
 #define IS_INTRA(MB)    ((MB)->mb_type==I4MB  || (MB)->mb_type==I16MB)
 #define IS_NEWINTRA(MB) ((MB)->mb_type==I16MB)
 #define IS_OLDINTRA(MB) ((MB)->mb_type==I4MB)
 #define IS_INTER(MB)    ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB)
 #define IS_INTERMV(MB)  ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB  && (MB)->mb_type!=0)
-#define IS_DIRECT(MB)   ((MB)->mb_type==0     && (img ->   type==B_IMG || img ->type==BS_IMG))
-// #define IS_DIRECT(MB)   ((MB)->mb_type==0     && img ->   type==B_IMG)
-#define IS_COPY(MB)     ((MB)->mb_type==0     && img ->   type==INTER_IMG);
+#define IS_DIRECT(MB)   ((MB)->mb_type==0     && (img ->   type==B_SLICE || img ->type==BS_IMG))
+// #define IS_DIRECT(MB)   ((MB)->mb_type==0     && img ->   type==B_SLICE)
+#define IS_COPY(MB)     ((MB)->mb_type==0     && (img ->type==P_SLICE||img ->type==SP_SLICE));
 #define IS_P8x8(MB)     ((MB)->mb_type==P8x8)
 
 // Quantization parameter range
@@ -152,14 +154,10 @@
 #define MAX_QP          51
 #define SHIFT_QP        12
 
-// Picture types
-#define INTRA_IMG       0   //!< I frame
-#define INTER_IMG       1   //!< P frame
-#define B_IMG           2   //!< B frame
-#define SP_IMG          3   //!< SP frame
-
 #define BS_IMG          4   //!< BS frame
 
+#define LOG2_MAX_FRAME_NUM_MINUS4   4           // POC200301 moved from defines.h
+#define LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4 4     // POC200301 newly added
 
 // Direct Mode types
 #define DIR_TEMPORAL    0   //!< Temporal Direct Mode

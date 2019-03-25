@@ -163,7 +163,7 @@ int RestOfSliceHeader()
 
   currSlice->structure = img->structure;
 
-  img->mb_frame_field_flag=(active_sps->mb_adaptive_frame_field_flag && (img->field_pic_flag==0));
+  img->MbaffFrameFlag=(active_sps->mb_adaptive_frame_field_flag && (img->field_pic_flag==0));
 
   if (img->structure == 0) assert (img->field_pic_flag == 0);
   if (img->structure == 1) assert (img->field_pic_flag == 1 && img->bottom_field_flag == 0);
@@ -199,19 +199,19 @@ int RestOfSliceHeader()
     img->direct_type = u_1 ("SH: direct_spatial_mv_pred_flag", currStream);
   }
 
-  img->num_ref_pic_active_fwd = active_pps->num_ref_idx_l0_active_minus1 + 1;
-  img->num_ref_pic_active_bwd = active_pps->num_ref_idx_l1_active_minus1 + 1;
+  img->num_ref_idx_l0_active = active_pps->num_ref_idx_l0_active_minus1 + 1;
+  img->num_ref_idx_l1_active = active_pps->num_ref_idx_l1_active_minus1 + 1;
 
   if(img->type==P_SLICE || img->type == SP_SLICE || img->type==B_SLICE)
   {
     val = u_1 ("SH: num_ref_idx_override_flag", currStream);
     if (val)
     {
-      img->num_ref_pic_active_fwd = 1 + ue_v ("SH: num_ref_pic_active_fwd_minus1", currStream);
+      img->num_ref_idx_l0_active = 1 + ue_v ("SH: num_ref_idx_l0_active_minus1", currStream);
       
       if(img->type==B_SLICE)
       {
-        img->num_ref_pic_active_bwd = 1 + ue_v ("SH: num_ref_pic_active_bwd_minus1", currStream);
+        img->num_ref_idx_l1_active = 1 + ue_v ("SH: num_ref_idx_l1_active_minus1", currStream);
       }
     }
   }
@@ -227,9 +227,10 @@ int RestOfSliceHeader()
     pred_weight_table();
   }
 
-  dec_ref_pic_marking(currStream);
+  if (img->nal_reference_idc)
+    dec_ref_pic_marking(currStream);
 
-  if (active_pps->entropy_coding_mode && img->type!=I_SLICE && img->type!=SI_SLICE)
+  if (active_pps->entropy_coding_mode_flag && img->type!=I_SLICE && img->type!=SI_SLICE)
   {
     img->model_number = ue_v("SH: cabac_init_idc", currStream);
   }
@@ -251,16 +252,23 @@ int RestOfSliceHeader()
     img->qpsp = 26 + active_pps->pic_init_qs_minus26 + val;
   }
 
-  if (active_pps->deblocking_filter_parameters_present_flag)
+  if (active_pps->deblocking_filter_control_present_flag)
   {
     currSlice->LFDisableIdc = ue_v ("SH: disable_deblocking_filter_idc", currStream);
 
     if (currSlice->LFDisableIdc!=1)
     {
       currSlice->LFAlphaC0Offset = 2 * se_v("SH: slice_alpha_c0_offset_div2", currStream);
-
       currSlice->LFBetaOffset = 2 * se_v("SH: slice_beta_offset_div2", currStream);
     }
+    else
+    {
+      currSlice->LFAlphaC0Offset = currSlice->LFBetaOffset = 0;
+    }
+  }
+  else 
+  {
+    currSlice->LFDisableIdc = currSlice->LFAlphaC0Offset = currSlice->LFBetaOffset = 0;
   }
 
   if (active_pps->num_slice_groups_minus1>0 && active_pps->slice_group_map_type>=3 &&
@@ -275,49 +283,15 @@ int RestOfSliceHeader()
 
     img->slice_group_change_cycle = u_v (len, "SH: slice_group_change_cycle", currStream);
   }
-  // 5. Finally, read Reference Picture ID (same as TR here).  Note that this is an
-  // optional field that is not present if the input parameters do not indicate
-  // multiframe prediction ??
-
-  // Ok, the above comment is nonsense.  There is no way how a decoder could
-  // know that we use multiple reference frames (except probably through a
-  // sequence header).  Hence, it's now an if (1) -- PHRefPicID is always present
-
-  // Of course, the decoder can know. It is indicated by the previously decoded
-  // parameter "PHPictureType". So, I changed the if-statement again to be
-  // compatible with the encoder.
-
-  // WYK: Oct. 16, 2001. Now I use this for the reference frame ID (non-B frame ID). 
-  // Thus, we can know how many  non-B frames are lost, and then we can adjust 
-  // the reference frame buffers correctly.
-/*  if (1)
-  {
-    sym.type = SE_HEADER;                 // This will be true for all symbols generated here
-    // refPicID, variable length
-    sym.mapping = linfo;               // change to unsigned integer
-    SYMTRACESTRING("SH RefPicID");
-    readSyntaxElement_UVLC (&sym,img,input,partition);
-    if (img->refPicID != sym.value1)
-    {
-      img->refPicID_old = img->refPicID;
-      img->refPicID = sym.value1;
-    }
-    UsedBits += sym.len;
-  }
-*/
   img->PicHeightInMbs = img->FrameHeightInMbs / ( 1 + img->field_pic_flag );
   img->PicSizeInMbs   = img->PicWidthInMbs * img->PicHeightInMbs;
   img->FrameSizeInMbs = img->PicWidthInMbs * img->FrameHeightInMbs;
-
-  img->buf_cycle = input->buf_cycle+1;
-  img->pn=(((img->structure==BOTTOM_FIELD) ? (img->number/2):img->number)%img->buf_cycle);
-
-  img->max_mb_nr = 2*(img->width * img->height) / (MB_BLOCK_SIZE * MB_BLOCK_SIZE);
 
   //calculate pocs  POC200301
   decoding_poc(img);
   //note  UsedBits is probably inaccurate
 //  dumppoc (img);
+
   return UsedBits;
 }
 
@@ -360,7 +334,7 @@ static void ref_pic_list_reordering()
           }
         }
         i++;
-        // assert (i>img->num_ref_pic_active_fwd);
+        // assert (i>img->num_ref_idx_l0_active);
       } while (val != 3);
     }
   }
@@ -387,7 +361,7 @@ static void ref_pic_list_reordering()
           }
         }
         i++;
-        // assert (i>img->num_ref_pic_active_bwd);
+        // assert (i>img->num_ref_idx_l1_active);
       } while (val != 3);
     }
   }
@@ -408,15 +382,15 @@ static void pred_weight_table()
   int luma_weight_flag_l0, luma_weight_flag_l1, chroma_weight_flag_l0, chroma_weight_flag_l1;
   int i,j;
 
-  img->luma_log_weight_denom = ue_v ("SH: luma_log_weight_denom", currStream);
-  img->wp_round_luma = 1<<(img->luma_log_weight_denom - 1);
+  img->luma_log2_weight_denom = ue_v ("SH: luma_log2_weight_denom", currStream);
+  img->wp_round_luma = 1<<(img->luma_log2_weight_denom - 1);
   
-  img->chroma_log_weight_denom = ue_v ("SH: chroma_log_weight_denom", currStream);
-  img->wp_round_chroma = 1<<(img->chroma_log_weight_denom - 1);
+  img->chroma_log2_weight_denom = ue_v ("SH: chroma_log2_weight_denom", currStream);
+  img->wp_round_chroma = 1<<(img->chroma_log2_weight_denom - 1);
 
   reset_wp_params(img);
 
-  for (i=0; i<img->num_ref_pic_active_fwd; i++)
+  for (i=0; i<img->num_ref_idx_l0_active; i++)
   {
     luma_weight_flag_l0 = u_1("SH: luma_weight_flag_l0", currStream);
     
@@ -427,7 +401,7 @@ static void pred_weight_table()
     }
     else
     {
-      img->wp_weight[0][i][0] = 1<<img->luma_log_weight_denom;
+      img->wp_weight[0][i][0] = 1<<img->luma_log2_weight_denom;
       img->wp_offset[0][i][0] = 0;
     }
     
@@ -442,14 +416,14 @@ static void pred_weight_table()
       }
       else
       {
-        img->wp_weight[0][i][j] = 1<<img->luma_log_weight_denom;
+        img->wp_weight[0][i][j] = 1<<img->luma_log2_weight_denom;
         img->wp_offset[0][i][j] = 0;
       }
     }
   }
   if ((img->type == B_SLICE) && img->weighted_bipred_idc == 1)
   {
-    for (i=0; i<img->num_ref_pic_active_bwd; i++)
+    for (i=0; i<img->num_ref_idx_l1_active; i++)
     {
       luma_weight_flag_l1 = u_1("SH: luma_weight_flag_l1", currStream);
       
@@ -460,7 +434,7 @@ static void pred_weight_table()
       }
       else
       {
-        img->wp_weight[1][i][0] = 1<<img->luma_log_weight_denom;
+        img->wp_weight[1][i][0] = 1<<img->luma_log2_weight_denom;
         img->wp_offset[1][i][0] = 0;
       }
       
@@ -475,7 +449,7 @@ static void pred_weight_table()
         }
         else
         {
-          img->wp_weight[1][i][j] = 1<<img->luma_log_weight_denom;
+          img->wp_weight[1][i][j] = 1<<img->luma_log2_weight_denom;
           img->wp_offset[1][i][j] = 0;
         }
       }
@@ -494,15 +468,15 @@ void dec_ref_pic_marking(Bitstream *currStream)
 {
   int val;
 
-  MMCObuffer_t *tmp_mmco,*tmp_mmco2;
+  DecRefPicMarking_t *tmp_drpm,*tmp_drpm2;
 
   // free old buffer content
-  while (img->mmco_buffer)
+  while (img->dec_ref_pic_marking_buffer)
   { 
-    tmp_mmco=img->mmco_buffer;
+    tmp_drpm=img->dec_ref_pic_marking_buffer;
 
-    img->mmco_buffer=tmp_mmco->Next;
-    free (tmp_mmco);
+    img->dec_ref_pic_marking_buffer=tmp_drpm->Next;
+    free (tmp_drpm);
   } 
 
   if (img->idr_flag)
@@ -518,34 +492,39 @@ void dec_ref_pic_marking(Bitstream *currStream)
       // read Memory Management Control Operation 
       do
       {
-        tmp_mmco=(MMCObuffer_t*)calloc (1,sizeof (MMCObuffer_t));
-        tmp_mmco->Next=NULL;
+        tmp_drpm=(DecRefPicMarking_t*)calloc (1,sizeof (DecRefPicMarking_t));
+        tmp_drpm->Next=NULL;
         
-        val = tmp_mmco->MMCO = ue_v("SH: memory_management_control_operation", currStream);
+        val = tmp_drpm->memory_management_control_operation = ue_v("SH: memory_management_control_operation", currStream);
 
         if ((val==1)||(val==3)) 
         {
-          tmp_mmco->DPN = 1 + ue_v("SH: difference_of_pic_nums_minus1", currStream);
+          tmp_drpm->difference_of_pic_nums_minus1 = ue_v("SH: difference_of_pic_nums_minus1", currStream);
         }
-        if ((val==2)||(val==3)||(val==6))
+        if (val==2)
         {
-          tmp_mmco->LPIN = ue_v("SH: long_term_pic_idx", currStream);
+          tmp_drpm->long_term_pic_num = ue_v("SH: long_term_pic_num", currStream);
+        }
+          
+        if ((val==3)||(val==6))
+        {
+          tmp_drpm->long_term_frame_idx = ue_v("SH: long_term_frame_idx", currStream);
         }
         if (val==4)
         {
-          tmp_mmco->MLIP1 = ue_v("SH: max_long_term_pic_idx_plus1", currStream);
+          tmp_drpm->max_long_term_frame_idx_plus1 = ue_v("SH: max_long_term_pic_idx_plus1", currStream);
         }
         
-        // add MMCO to list
-        if (img->mmco_buffer==NULL) 
+        // add command
+        if (img->dec_ref_pic_marking_buffer==NULL) 
         {
-          img->mmco_buffer=tmp_mmco;
+          img->dec_ref_pic_marking_buffer=tmp_drpm;
         }
         else
         {
-          tmp_mmco2=img->mmco_buffer;
-          while (tmp_mmco2->Next!=NULL) tmp_mmco2=tmp_mmco2->Next;
-          tmp_mmco2->Next=tmp_mmco;
+          tmp_drpm2=img->dec_ref_pic_marking_buffer;
+          while (tmp_drpm2->Next!=NULL) tmp_drpm2=tmp_drpm2->Next;
+          tmp_drpm2->Next=tmp_drpm;
         }
         
       }while (val != 0);
@@ -672,7 +651,7 @@ void decoding_poc(struct img_par *img)
     {  //top field 
       img->ThisPOC = img->toppoc = img->ExpectedPicOrderCnt + img->delta_pic_order_cnt[0];
       img->bottompoc = 0;
-      if(img->PreviousPOC!=img->ThisPOC  &&  img->FirstFieldType==img->bottom_field_flag)
+      if((img->PreviousPOC!=img->ThisPOC)  &&  (img->FirstFieldType==img->bottom_field_flag))
       {           //new frame detected
         if(img->disposable_flag)
           push_poc(img->toppoc,0,NONREFFRAME);
@@ -750,8 +729,13 @@ void decoding_poc(struct img_par *img)
   }
   else
   {           //frame pix  -  use toppoc/2
-    img->tr_frm = img->ThisPOC/2;
-    currSlice->picture_id = img->tr = img->toppoc/2;
+    img->tr_frm = (img->ThisPOC/2) ;
+    
+    currSlice->picture_id = (img->toppoc/2);
+    if (!active_sps->frame_mbs_only_flag && !img->MbaffFrameFlag)
+      img->tr = (img->toppoc);
+    else
+      img->tr = (img->toppoc/2);
   }
             //moved from above for stuff that still uses img->tr
             //soon to be obsolete

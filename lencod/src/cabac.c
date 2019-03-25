@@ -153,21 +153,21 @@ int writeSyntaxElement_CABAC(SyntaxElement *se, DataPartition *this_dataPart)
  *    mode info of a given MB  in the case of mb-based frame/field decision
  ***************************************************************************
  */
-void writeFieldModeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
+void writeFieldModeInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
   int a,b,act_ctx;
   MotionInfoContexts *ctx         = (img->currentSlice)->mot_ctx;
   Macroblock         *currMB      = &img->mb_data[img->current_mb_nr];
   int                mb_field = se->value1;
   
-  if (currMB->field_available[0] == NULL)
-    b = 0;
+  if (currMB->mbAvailA)
+    a = img->mb_data[currMB->mbAddrA].mb_field;
   else
-    b = currMB->field_available[0]->mb_field;
-  if (currMB->field_available[1] == NULL)
     a = 0;
+  if (currMB->mbAvailB)
+    b = img->mb_data[currMB->mbAddrB].mb_field;
   else
-    a = currMB->field_available[1]->mb_field;
+    b=0;
 
   act_ctx = a + b;
 
@@ -187,24 +187,25 @@ void writeFieldModeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr e
  *    This function is used to arithmetically encode the mb_skip_flag.
  ***************************************************************************
  */
-void writeMB_skip_flagInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
+void writeMB_skip_flagInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
   int a,b,act_ctx;
-  int bframe   = (img->type==B_IMG || img->type==BS_IMG);
+  int bframe   = (img->type==B_SLICE || img->type==BS_IMG);
   MotionInfoContexts *ctx         = (img->currentSlice)->mot_ctx;
   Macroblock         *currMB      = &img->mb_data[img->current_mb_nr];
   int                curr_mb_type = se->value1;
 
   if (bframe)
   {
-    if (currMB->mb_available[0][1] == NULL)
+    if (currMB->mb_available_up == NULL)
       b = 0;
     else
-      b = (currMB->mb_available[0][1]->mb_type==0 && currMB->mb_available[0][1]->cbp==0 ? 0 : 1);
-    if (currMB->mb_available[1][0] == NULL)
+      b = (currMB->mb_available_up->mb_type==0 && currMB->mb_available_up->cbp==0 ? 0 : 1);
+    if (currMB->mb_available_left == NULL)
       a = 0;
     else
-      a = (currMB->mb_available[1][0]->mb_type==0 && currMB->mb_available[1][0]->cbp==0 ? 0 : 1);
+      a = (currMB->mb_available_left->mb_type==0 && currMB->mb_available_left->cbp==0 ? 0 : 1);
+    
     act_ctx = 7 + a + b;
 
     if (se->value1==0 && se->value2==0) // DIRECT mode, no coefficients
@@ -214,14 +215,14 @@ void writeMB_skip_flagInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPt
   }
   else
   {
-    if (currMB->mb_available[0][1] == NULL)
+    if (currMB->mb_available_up == NULL)
       b = 0;
     else
-      b = (( (currMB->mb_available[0][1])->mb_type != 0) ? 1 : 0 );
-    if (currMB->mb_available[1][0] == NULL)
+      b = (( (currMB->mb_available_up)->mb_type != 0) ? 1 : 0 );
+    if (currMB->mb_available_left == NULL)
       a = 0;
     else
-      a = (( (currMB->mb_available[1][0])->mb_type != 0) ? 1 : 0 );
+      a = (( (currMB->mb_available_left)->mb_type != 0) ? 1 : 0 );
 
     act_ctx = a + b;
 
@@ -242,13 +243,13 @@ void writeMB_skip_flagInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPt
  ***************************************************************************
  */
 
-void writeMB_typeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
+void writeMB_typeInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
   int a, b;
   int act_ctx = 0;
   int act_sym;
   int csym;
-  int bframe   = (img->type==B_IMG || img->type==BS_IMG);
+  int bframe   = (img->type==B_SLICE || img->type==BS_IMG);
   int mode_sym = 0;
   int mode16x16;
 
@@ -257,16 +258,16 @@ void writeMB_typeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep
   Macroblock         *currMB      = &img->mb_data[img->current_mb_nr];
   int                curr_mb_type = se->value1;
 
-  if(img->type == INTRA_IMG)  // INTRA-frame
+  if(img->type == I_SLICE)  // INTRA-frame
   {
-    if (currMB->mb_available[0][1] == NULL)
+    if (currMB->mb_available_up == NULL)
       b = 0;
     else 
-      b = (( (currMB->mb_available[0][1])->mb_type != I4MB) ? 1 : 0 );
-    if (currMB->mb_available[1][0] == NULL)
+      b = (( currMB->mb_available_up->mb_type != I4MB) ? 1 : 0 );
+    if (currMB->mb_available_left == NULL)
       a = 0;
     else 
-      a = (( (currMB->mb_available[1][0])->mb_type != I4MB) ? 1 : 0 );
+      a = (( currMB->mb_available_left->mb_type != I4MB) ? 1 : 0 );
 
     act_ctx     = a + b;
     act_sym     = curr_mb_type;
@@ -326,14 +327,14 @@ void writeMB_typeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep
     
     if (bframe)
     {
-      if (currMB->mb_available[0][1] == NULL)
+      if (currMB->mb_available_up == NULL)
         b = 0;
       else
-        b = (( (currMB->mb_available[0][1])->mb_type != 0) ? 1 : 0 );
-      if (currMB->mb_available[1][0] == NULL)
+        b = (( currMB->mb_available_up->mb_type != 0) ? 1 : 0 );
+      if (currMB->mb_available_left == NULL)
         a = 0;
       else
-        a = (( (currMB->mb_available[1][0])->mb_type != 0) ? 1 : 0 );
+        a = (( currMB->mb_available_left->mb_type != 0) ? 1 : 0 );
       act_ctx = a + b;
       se->context = act_ctx; // store context
     }
@@ -383,7 +384,7 @@ void writeMB_typeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep
         biari_encode_symbol (eep_dp, 1, &ctx->mb_type_contexts[1][7]);
         break;
       default:
-        printf ("Unsupported MB-MODE in writeMB_typeInfo2Buffer_CABAC!\n");
+        printf ("Unsupported MB-MODE in writeMB_typeInfo_CABAC!\n");
         exit (1);
       }
     }
@@ -499,11 +500,11 @@ void writeMB_typeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep
  *    type info
  ***************************************************************************
  */
-void writeB8_typeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
+void writeB8_typeInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
   int act_ctx;
   int act_sym, csym;
-  int bframe=(img->type==B_IMG || img->type==BS_IMG);
+  int bframe=(img->type==B_SLICE || img->type==BS_IMG);
 
   MotionInfoContexts *ctx    = (img->currentSlice)->mot_ctx;
 
@@ -596,7 +597,7 @@ void writeB8_typeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep
  *    intra prediction modes of a given MB.
  ****************************************************************************
  */
-void writeIntraPredMode2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
+void writeIntraPredMode_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
   TextureInfoContexts *ctx = img->currentSlice->tex_ctx;
 
@@ -620,7 +621,7 @@ void writeIntraPredMode2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr e
  *    parameter of a given MB.
  ****************************************************************************
  */
-void writeRefFrame2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
+void writeRefFrame_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
   MotionInfoContexts  *ctx    = img->currentSlice->mot_ctx;
   Macroblock          *currMB = &img->mb_data[img->current_mb_nr];
@@ -629,28 +630,28 @@ void writeRefFrame2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp
   int   a, b;
   int   act_ctx;
   int   act_sym;
-  int** refframe_array = ((img->type==B_IMG || img->type==BS_IMG)? fw_refFrArr : refFrArr);
+  int** refframe_array = ((img->type==B_SLICE || img->type==BS_IMG)? fw_refFrArr : refFrArr);
   int   block_y        = img->block_y;
 
   if( input->InterlaceCodingOption >= MB_CODING && mb_adaptive )
   {
     if( !img->field_mode )
     {
-      refframe_array = ((img->type==B_IMG || img->type==BS_IMG) ? fw_refFrArr_frm : refFrArr_frm);
+      refframe_array = ((img->type==B_SLICE || img->type==BS_IMG) ? fw_refFrArr_frm : refFrArr_frm);
     }
     else if ( !img->top_field )
     {
-      refframe_array = ((img->type==B_IMG || img->type==BS_IMG) ? fw_refFrArr_bot : refFrArr_bot);
+      refframe_array = ((img->type==B_SLICE || img->type==BS_IMG) ? fw_refFrArr_bot : refFrArr_bot);
       block_y        = ( img->block_y - 4 ) / 2;
     }
     else
     {
-      refframe_array = ((img->type==B_IMG || img->type==BS_IMG) ? fw_refFrArr_top : refFrArr_top);
+      refframe_array = ((img->type==B_SLICE || img->type==BS_IMG) ? fw_refFrArr_top : refFrArr_top);
       block_y        = img->block_y / 2;
     }
   }
 
-	if ((img->subblock_y == 0) && ((currMB->mb_available[0][1] == NULL) || (IS_DIRECT(currMB->mb_available[0][1]))))
+	if ((img->subblock_y == 0) && ((currMB->mb_available_up == NULL) || (IS_DIRECT(currMB->mb_available_up))))
 		b = 0;
   else
 	{
@@ -663,7 +664,7 @@ void writeRefFrame2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp
 			b = (refframe_array[block_y+img->subblock_y-1][img->block_x+img->subblock_x] > 0 ? 1 : 0);
 	}
 
-	if ((img->subblock_x == 0) && ((currMB->mb_available[1][0] == NULL) || (IS_DIRECT(currMB->mb_available[1][0]))))
+	if ((img->subblock_x == 0) && ((currMB->mb_available_left == NULL) || (IS_DIRECT(currMB->mb_available_left))))
     a = 0;
   else 
 	{
@@ -701,7 +702,7 @@ void writeRefFrame2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp
  *    parameter of a given MB.
  ****************************************************************************
  */
-void writeBwdRefFrame2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
+void writeBwdRefFrame_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
   MotionInfoContexts  *ctx    = img->currentSlice->mot_ctx;
   Macroblock          *currMB = &img->mb_data[img->current_mb_nr];
@@ -710,7 +711,7 @@ void writeBwdRefFrame2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep
   int   a, b;
   int   act_ctx;
   int   act_sym;
-  int** refframe_array = ((img->type==B_IMG || img->type==BS_IMG)? bw_refFrArr : refFrArr);
+  int** refframe_array = ((img->type==B_SLICE || img->type==BS_IMG)? bw_refFrArr : refFrArr);
   int   block_y        = img->block_y;
 
 
@@ -718,20 +719,20 @@ void writeBwdRefFrame2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep
   {
     if( !img->field_mode )
     {
-      refframe_array = ((img->type==B_IMG || img->type==BS_IMG) ? bw_refFrArr_frm : refFrArr_frm);
+      refframe_array = ((img->type==B_SLICE || img->type==BS_IMG) ? bw_refFrArr_frm : refFrArr_frm);
     }
     else if ( !img->top_field )
     {
-      refframe_array = ((img->type==B_IMG || img->type==BS_IMG) ? bw_refFrArr_bot : refFrArr_bot);
+      refframe_array = ((img->type==B_SLICE || img->type==BS_IMG) ? bw_refFrArr_bot : refFrArr_bot);
       block_y        = ( img->block_y - 4 ) / 2;
     }
     else
     {
-      refframe_array = ((img->type==B_IMG || img->type==BS_IMG) ? bw_refFrArr_top : refFrArr_top);
+      refframe_array = ((img->type==B_SLICE || img->type==BS_IMG) ? bw_refFrArr_top : refFrArr_top);
       block_y        = img->block_y / 2;
     }
   }
-	if ((img->subblock_y == 0) && ((currMB->mb_available[0][1] == NULL) || (IS_DIRECT(currMB->mb_available[0][1]))))
+	if ((img->subblock_y == 0) && ((currMB->mb_available_up == NULL) || (IS_DIRECT(currMB->mb_available_up))))
 		b = 0;
 	else
 	{
@@ -744,7 +745,7 @@ void writeBwdRefFrame2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep
 			b = (BWD_IDX(refframe_array[block_y+img->subblock_y-1][img->block_x+img->subblock_x]) > 0 ? 1 : 0);
 	}
 
-	if ((img->subblock_x == 0) && ((currMB->mb_available[1][0] == NULL) || (IS_DIRECT(currMB->mb_available[1][0]))))
+	if ((img->subblock_x == 0) && ((currMB->mb_available_up == NULL) || (IS_DIRECT(currMB->mb_available_left))))
 		a = 0;
   else 
 	{
@@ -783,7 +784,7 @@ void writeBwdRefFrame2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep
  *    vector data of a given MB.
  ****************************************************************************
  */
-void writeMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
+void writeMVD_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
   int i = img->subblock_x;
   int j = img->subblock_y;
@@ -800,16 +801,16 @@ void writeMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 
   if (j==0)
   {
-    if (currMB->mb_available[0][1] == NULL)
+    if (currMB->mb_available_up == NULL)
       b = 0;
     else 
 		{
-      b = absm((currMB->mb_available[0][1])->mvd[0][BLOCK_SIZE-1][i][k]);
+      b = absm((currMB->mb_available_up)->mvd[0][BLOCK_SIZE-1][i][k]);
 			if	( input->InterlaceCodingOption >= MB_CODING && mb_adaptive && (k==1))
 			{
-				if ((currMB->mb_field==0) && (currMB->mb_available[0][1]->mb_field==1))
+				if ((currMB->mb_field==0) && (currMB->mb_available_up->mb_field==1))
 					b *= 2;
-				else if ((currMB->mb_field==1) && (currMB->mb_available[0][1]->mb_field==0))
+				else if ((currMB->mb_field==1) && (currMB->mb_available_up->mb_field==0))
 					b /= 2;
 			}
 		}
@@ -819,16 +820,16 @@ void writeMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
           
   if (i==0)
   {
-    if (currMB->mb_available[1][0] == NULL)
+    if (currMB->mb_available_left == NULL)
       a = 0;
     else 
 		{
-			a = absm((currMB->mb_available[1][0])->mvd[0][j][BLOCK_SIZE-1][k]);
+			a = absm((currMB->mb_available_left)->mvd[0][j][BLOCK_SIZE-1][k]);
 			if	( input->InterlaceCodingOption >= MB_CODING && mb_adaptive && (k==1))
 			{
-				if ((currMB->mb_field==0) && (currMB->mb_available[1][0]->mb_field==1))
+				if ((currMB->mb_field==0) && (currMB->mb_available_left->mb_field==1))
 					a *= 2;
-				else if ((currMB->mb_field==1) && (currMB->mb_available[1][0]->mb_field==0))
+				else if ((currMB->mb_field==1) && (currMB->mb_available_left->mb_field==0))
 					a /= 2;
 			}
 		}
@@ -888,10 +889,10 @@ void writeDquant_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
   act_sym += sign;
   act_sym --;
 
-  if (currMB->mb_available[1][0] == NULL)
+  if (currMB->mb_available_left == NULL)
     act_ctx = 0;
   else
-    act_ctx = ( ((currMB->mb_available[1][0])->delta_qp != 0) ? 1 : 0);
+    act_ctx = ( ((currMB->mb_available_left)->delta_qp != 0) ? 1 : 0);
 
   if (act_sym==0)
   {
@@ -913,7 +914,7 @@ void writeDquant_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
  *    vector data of a B-frame MB.
  ****************************************************************************
  */
-void writeBiMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
+void writeBiMVD_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
   int i = img->subblock_x;
   int j = img->subblock_y;
@@ -931,16 +932,16 @@ void writeBiMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 
   if (j==0)
   {
-    if (currMB->mb_available[0][1] == NULL)
+    if (currMB->mb_available_up == NULL)
       b = 0;
     else
 		{
-      b = absm((currMB->mb_available[0][1])->mvd[backward][BLOCK_SIZE-1][i][k]);
+      b = absm((currMB->mb_available_up)->mvd[backward][BLOCK_SIZE-1][i][k]);
 			if	( input->InterlaceCodingOption >= MB_CODING && mb_adaptive && (k==1))
 			{
-				if ((currMB->mb_field==0) && (currMB->mb_available[0][1]->mb_field==1))
+				if ((currMB->mb_field==0) && (currMB->mb_available_up->mb_field==1))
 					b *= 2;
-				else if ((currMB->mb_field==1) && (currMB->mb_available[0][1]->mb_field==0))
+				else if ((currMB->mb_field==1) && (currMB->mb_available_up->mb_field==0))
 					b /= 2;
 			}
 		}
@@ -950,16 +951,16 @@ void writeBiMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 
   if (i==0)
   {
-    if (currMB->mb_available[1][0] == NULL)
+    if (currMB->mb_available_left == NULL)
       a = 0;
     else
 		{
-			a = absm((currMB->mb_available[1][0])->mvd[backward][j][BLOCK_SIZE-1][k]);
+			a = absm((currMB->mb_available_left)->mvd[backward][j][BLOCK_SIZE-1][k]);
 			if	( input->InterlaceCodingOption >= MB_CODING && mb_adaptive && (k==1))
 			{
-				if ((currMB->mb_field==0) && (currMB->mb_available[1][0]->mb_field==1))
+				if ((currMB->mb_field==0) && (currMB->mb_available_left->mb_field==1))
 					a *= 2;
-				else if ((currMB->mb_field==1) && (currMB->mb_available[1][0]->mb_field==0))
+				else if ((currMB->mb_field==1) && (currMB->mb_available_left->mb_field==0))
 					a /= 2;
 			}
 		}
@@ -1002,18 +1003,18 @@ void writeBiMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
  *    intra prediction mode of an 8x8 block
  ****************************************************************************
  */
-void writeCIPredMode2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
+void writeCIPredMode_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
   TextureInfoContexts *ctx     = img->currentSlice->tex_ctx;
   Macroblock          *currMB  = &img->mb_data[img->current_mb_nr];
   int                 act_ctx,a,b;
   int                 act_sym  = se->value1;
 
-  if (currMB->mb_available[0][1] == NULL) b = 0;
-  else  b = ( ((currMB->mb_available[0][1])->c_ipred_mode != 0) ? 1 : 0);
+  if (currMB->mb_available_up == NULL) b = 0;
+  else  b = ( ((currMB->mb_available_up)->c_ipred_mode != 0) ? 1 : 0);
 
-  if (currMB->mb_available[1][0] == NULL) a = 0;
-  else  a = ( ((currMB->mb_available[1][0])->c_ipred_mode != 0) ? 1 : 0);
+  if (currMB->mb_available_left == NULL) a = 0;
+  else  a = ( ((currMB->mb_available_left)->c_ipred_mode != 0) ? 1 : 0);
 
   act_ctx = a+b;
 
@@ -1040,19 +1041,19 @@ void writeCBP_BIT_CABAC (int b8, int bit, int cbp, Macroblock* currMB, int inter
   //===== GET CONTEXT FOR CBP-BIT =====
   if (b8/2 == 0) // upper block is in upper macroblock
   {
-    if (currMB->mb_available[0][1] == NULL)
+    if (currMB->mb_available_up == NULL)
       b = 0;
     else
-      b = ((currMB->mb_available[0][1]->cbp & (1<<(b8+2))) == 0 ? 1 : 0);
+      b = ((currMB->mb_available_up->cbp & (1<<(b8+2))) == 0 ? 1 : 0);
   }
   else
     b   = ((cbp & (1<<(b8-2))) == 0 ? 1: 0);
   if (b8%2 == 0) // left block is in left macroblock
   {
-    if (currMB->mb_available[1][0] == NULL)
+    if (currMB->mb_available_left == NULL)
       a = 0;
     else
-      a = ((currMB->mb_available[1][0]->cbp & (1<<(b8+1))) == 0 ? 1 : 0);
+      a = ((currMB->mb_available_left->cbp & (1<<(b8+1))) == 0 ? 1 : 0);
   }
   else
     a   = ((cbp & (1<<(b8-1))) == 0 ? 1: 0);
@@ -1070,7 +1071,7 @@ void writeCBP_BIT_CABAC (int b8, int bit, int cbp, Macroblock* currMB, int inter
  *    block pattern of a macroblock
  ****************************************************************************
  */
-void writeCBP2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
+void writeCBP_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
   TextureInfoContexts *ctx = img->currentSlice->tex_ctx;
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
@@ -1094,12 +1095,12 @@ void writeCBP2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 
   // coding of chroma part
   b = 0;
-  if (currMB->mb_available[0][1] != NULL)
-    b = ((currMB->mb_available[0][1])->cbp > 15) ? 1 : 0;
+  if (currMB->mb_available_up != NULL)
+    b = ((currMB->mb_available_up)->cbp > 15) ? 1 : 0;
 
   a = 0;
-  if (currMB->mb_available[1][0] != NULL)
-    a = ((currMB->mb_available[1][0])->cbp > 15) ? 1 : 0;
+  if (currMB->mb_available_left != NULL)
+    a = ((currMB->mb_available_left)->cbp > 15) ? 1 : 0;
 
   curr_cbp_ctx = a+2*b;
   cbp_bit = (cbp > 15 ) ? 1 : 0;
@@ -1108,14 +1109,14 @@ void writeCBP2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
   if (cbp > 15)
   {
     b = 0;
-    if (currMB->mb_available[0][1] != NULL)
-      if ((currMB->mb_available[0][1])->cbp > 15)
-        b = (( ((currMB->mb_available[0][1])->cbp >> 4) == 2) ? 1 : 0);
+    if (currMB->mb_available_up != NULL)
+      if ((currMB->mb_available_up)->cbp > 15)
+        b = (( ((currMB->mb_available_up)->cbp >> 4) == 2) ? 1 : 0);
 
     a = 0;
-    if (currMB->mb_available[1][0] != NULL)
-      if ((currMB->mb_available[1][0])->cbp > 15)
-        a = (( ((currMB->mb_available[1][0])->cbp >> 4) == 2) ? 1 : 0);
+    if (currMB->mb_available_left != NULL)
+      if ((currMB->mb_available_left)->cbp > 15)
+        a = (( ((currMB->mb_available_left)->cbp >> 4) == 2) ? 1 : 0);
 
     curr_cbp_ctx = a+2*b;
     cbp_bit = ((cbp>>4) == 2) ? 1 : 0;
@@ -1194,9 +1195,9 @@ void write_and_store_CBP_block_bit (Macroblock* currMB, EncodingEnvironmentPtr e
     //--- get bits from neighbouring blocks ---
     if (j==0)
     {
-      if (currMB->mb_available[0][1])
+      if (currMB->mb_available_up)
       {
-        upper_bit = BIT_SET(currMB->mb_available[0][1]->cbp_bits,bit+ystep_back);
+        upper_bit = BIT_SET(currMB->mb_available_up->cbp_bits,bit+ystep_back);
       }
     }
     else
@@ -1205,9 +1206,9 @@ void write_and_store_CBP_block_bit (Macroblock* currMB, EncodingEnvironmentPtr e
     }
     if (i==0)
     {
-      if (currMB->mb_available[1][0])
+      if (currMB->mb_available_left)
       {
-        left_bit = BIT_SET(currMB->mb_available[1][0]->cbp_bits,bit+xstep_back);
+        left_bit = BIT_SET(currMB->mb_available_left->cbp_bits,bit+xstep_back);
       }
     }
     else
@@ -1289,7 +1290,7 @@ void write_significance_map (Macroblock* currMB, EncodingEnvironmentPtr eep_dp, 
   {
     sig   = (coeff[k]!=0 ? 1 : 0);
 
-    if (img->pstruct)
+    if (img->structure)
       biari_encode_symbol  (eep_dp, sig,  map_ctx+pos2ctx_map_int [type][k]);
     else
       biari_encode_symbol  (eep_dp, sig,  map_ctx+pos2ctx_map     [type][k]);
@@ -1360,7 +1361,7 @@ void write_significant_coefficients (Macroblock* currMB, EncodingEnvironmentPtr 
  *    Write Block-Transform Coefficients
  ****************************************************************************
  */
-void writeRunLevel2Buffer_CABAC (SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
+void writeRunLevel_CABAC (SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
   static int  coeff[64];
   static int  coeff_ctr = 0;

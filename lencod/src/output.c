@@ -126,7 +126,6 @@ void clear_picture(StorablePicture *p)
     memset(p->imgUV[0][i], 128 ,p->size_x_cr);
   for(i=0;i<p->size_y_cr;i++)
     memset(p->imgUV[1][i], 128 ,p->size_x_cr);
-  fflush(p_out);
 }
 
 /*!
@@ -237,8 +236,6 @@ void direct_output(StorablePicture *p, FILE *p_out)
     // so output it directly
     flush_direct_output(p_out);
     write_picture (p, p_out);
-    if (p_ref)
-      find_snr(snr, p, p_ref);
     free_storable_picture(p);
     return;
   }
@@ -264,8 +261,6 @@ void direct_output(StorablePicture *p, FILE *p_out)
     // we have both fields, so output them
     dpb_combine_field(out_buffer);
     write_picture (out_buffer->frame, p_out);
-    if (p_ref)
-      find_snr(snr, out_buffer->frame, p_ref);
     free_storable_picture(out_buffer->frame);
     out_buffer->frame = NULL;
     free_storable_picture(out_buffer->top_field);

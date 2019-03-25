@@ -51,6 +51,8 @@
 #include <math.h>
 
 #include "block.h"
+#include "image.h"
+#include "mb_access.h"
 
 
 #define Q_BITS          15
@@ -119,107 +121,82 @@ int intrapred(
   int img_y,img_x;
   int PredPel[13];  // array of predictor pels
 
-  int block_available_up;
-  int block_available_up_right;
-  int block_available_left;
-  int block_available_up_left; // new
+  byte **imgY = dec_picture->imgY;
 
-  byte predmode = img->ipredmode[img_block_x+1][img_block_y+1];
+  PixelPos pix_a[4];
+  PixelPos pix_b, pix_c, pix_d;
+
+  int block_available_up;
+  int block_available_left;
+  int block_available_up_left;
+  int block_available_up_right;
+
+  int mb_nr=img->current_mb_nr;
+
+  byte predmode = img->ipredmode[img_block_x][img_block_y];
 
   img_x=img_block_x*4;
   img_y=img_block_y*4;
-  if (img->mb_field)
-  {
-  if (img->current_mb_nr%2)
-  {
-    predmode = img->ipredmode_bot[img_block_x+1][img_block_y+1];
 
-    block_available_up        = (img->ipredmode_bot[img_block_x+1][img_block_y] >=0);
-    block_available_up_right  = (img->ipredmode_bot[img_x/BLOCK_SIZE+2][img_y/BLOCK_SIZE] >=0); // ???
-    block_available_left      = (img->ipredmode_bot[img_block_x][img_block_y+1] >=0);
-    block_available_up_left   = (img->ipredmode_bot[img_block_x][img_block_y] >=0);
+  for (i=0;i<4;i++)
+  {
+    getNeighbour(mb_nr, ioff -1 , joff +i , 1, &pix_a[i]);
+  }
+  
+  
+  getNeighbour(mb_nr, ioff    , joff -1 , 1, &pix_b);
+  getNeighbour(mb_nr, ioff +4 , joff -1 , 1, &pix_c);
+  getNeighbour(mb_nr, ioff -1 , joff -1 , 1, &pix_d);
 
-    if(img->mb_frame_field_flag && img_x%MB_BLOCK_SIZE == 12 && img_y%MB_BLOCK_SIZE )
-      block_available_up_right = 0;
+  pix_c.available = pix_c.available && !(((ioff==4)||(ioff==12)) && ((joff==4)||(joff==12)));
+
+  if (img->constrained_intra_pred_flag)
+  {
+    block_available_left     = pix_a[0].available ? img->intra_block[pix_a[0].mb_addr] : 0;
+    block_available_up       = pix_b.available ? img->intra_block [pix_b.mb_addr] : 0;
+    block_available_up_right = pix_c.available ? img->intra_block [pix_c.mb_addr] : 0;
+    block_available_up_left  = pix_d.available ? img->intra_block [pix_d.mb_addr] : 0;
   }
   else
   {
-    predmode = img->ipredmode_top[img_block_x+1][img_block_y+1];
-
-    block_available_up        = (img->ipredmode_top[img_block_x+1][img_block_y] >=0);
-    block_available_up_right  = (img->ipredmode_top[img_x/BLOCK_SIZE+2][img_y/BLOCK_SIZE] >=0); // ???
-    block_available_left      = (img->ipredmode_top[img_block_x][img_block_y+1] >=0);
-    block_available_up_left   = (img->ipredmode_top[img_block_x][img_block_y] >=0);
-
-    if(img->mb_frame_field_flag && img_x%MB_BLOCK_SIZE == 12 && img_y%MB_BLOCK_SIZE )
-      block_available_up_right = 0;
-  }
-  }
-  else
-  {
-    block_available_up        = (img->ipredmode[img_block_x+1][img_block_y] >=0);              /// can use frm
-    block_available_up_right  = (img->ipredmode[img_x/BLOCK_SIZE+2][img_y/BLOCK_SIZE] >=0); // ???  /// can use frm
-    block_available_left      = (img->ipredmode[img_block_x][img_block_y+1] >=0);            /// can use frm
-    block_available_up_left   = (img->ipredmode[img_block_x][img_block_y] >=0);
-
-    if(img->mb_frame_field_flag && img_x%MB_BLOCK_SIZE == 12 && img_y%(2*MB_BLOCK_SIZE) )
-      block_available_up_right = 0;
-  }
-  if( img_x+4 == img->width )
-  {
-    block_available_up_right = 0;
-  }
-
-/*
-  if(img_x%MB_BLOCK_SIZE == 12 && img->mb_frame_field_flag)
-    block_available_up_right = 0;
-    */
-
-  i = (img_x & 15);
-  j = (img_y & 15);
-  if (block_available_up_right)
-  {
-    if ((i == 4  && j == 4) ||
-        (i == 12 && j == 4) ||
-        (i == 12 && j == 8) ||
-        (i == 4  && j == 12) ||
-        (i == 12 && j == 12))
-    {
-      block_available_up_right = 0;
-    }
+    block_available_left     = pix_a[0].available;
+    block_available_up       = pix_b.available;
+    block_available_up_right = pix_c.available;
+    block_available_up_left  = pix_d.available;
   }
 
   // form predictor pels
   if (block_available_up)
   {
-    P_A = imgY[img_y-1][img_x+0];
-    P_B = imgY[img_y-1][img_x+1];
-    P_C = imgY[img_y-1][img_x+2];
-    P_D = imgY[img_y-1][img_x+3];
+    P_A = imgY[pix_b.pos_y][pix_b.pos_x+0];
+    P_B = imgY[pix_b.pos_y][pix_b.pos_x+1];
+    P_C = imgY[pix_b.pos_y][pix_b.pos_x+2];
+    P_D = imgY[pix_b.pos_y][pix_b.pos_x+3];
 
-    if (block_available_up_right)
-    {
-      P_E = imgY[img_y-1][img_x+4];
-      P_F = imgY[img_y-1][img_x+5];
-      P_G = imgY[img_y-1][img_x+6];
-      P_H = imgY[img_y-1][img_x+7];
-    }
-    else
-    {
-      P_E = P_F = P_G = P_H = P_D;
-    }
   }
   else
   {
-    P_A = P_B = P_C = P_D = P_E = P_F = P_G = P_H = 128;
+    P_A = P_B = P_C = P_D = 128;
+  }
+
+  if (block_available_up_right)
+  {
+    P_E = imgY[pix_c.pos_y][pix_c.pos_x+0];
+    P_F = imgY[pix_c.pos_y][pix_c.pos_x+1];
+    P_G = imgY[pix_c.pos_y][pix_c.pos_x+2];
+    P_H = imgY[pix_c.pos_y][pix_c.pos_x+3];
+  }
+  else
+  {
+    P_E = P_F = P_G = P_H = P_D;
   }
 
   if (block_available_left)
   {
-    P_I = imgY[img_y+0][img_x-1];
-    P_J = imgY[img_y+1][img_x-1];
-    P_K = imgY[img_y+2][img_x-1];
-    P_L = imgY[img_y+3][img_x-1];
+    P_I = imgY[pix_a[0].pos_y][pix_a[0].pos_x];
+    P_J = imgY[pix_a[1].pos_y][pix_a[1].pos_x];
+    P_K = imgY[pix_a[2].pos_y][pix_a[2].pos_x];
+    P_L = imgY[pix_a[3].pos_y][pix_a[3].pos_x];
   }
   else
   {
@@ -228,7 +205,7 @@ int intrapred(
 
   if (block_available_up_left)
   {
-    P_X = imgY[img_y-1][img_x-1];
+    P_X = imgY[pix_d.pos_y][pix_d.pos_x];
   }
   else
   {
@@ -275,13 +252,13 @@ int intrapred(
   case VERT_PRED:                       /* vertical prediction from block above */
     for(j=0;j<BLOCK_SIZE;j++)
       for(i=0;i<BLOCK_SIZE;i++)
-        img->mpr[i+ioff][j+joff]=imgY[img_y-1][img_x+i];/* store predicted 4x4 block */
+        img->mpr[i+ioff][j+joff]=imgY[pix_b.pos_y][pix_b.pos_x+i];/* store predicted 4x4 block */
     break;
 
   case HOR_PRED:                        /* horisontal prediction from left block */
     for(j=0;j<BLOCK_SIZE;j++)
       for(i=0;i<BLOCK_SIZE;i++)
-        img->mpr[i+ioff][j+joff]=imgY[img_y+j][img_x-1]; /* store predicted 4x4 block */
+        img->mpr[i+ioff][j+joff]=imgY[pix_a[j].pos_y][pix_a[j].pos_x]; /* store predicted 4x4 block */
     break;
 
   case DIAG_DOWN_RIGHT_PRED:
@@ -424,24 +401,16 @@ int intrapred_luma_16x16(struct img_par *img, //!< image parameters
   int ih,iv;
   int ib,ic,iaa;
 
-  int mb_width = img->width/16;
-  //int mb_nr_frame = img->mb_y*mb_width+img->mb_x;
-  int mb_nr = img->map_mb_nr;// GB img->current_mb_nr;
-  int mb_available_up = (img->mb_y == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
-  int mb_available_left = (img->mb_x == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-1].slice_nr);
-  int field_y = img->pix_y;   // For MB level frame/field coding
-  if (img->mb_field)
-  {
-    field_y /= 2;
-    mb_available_up = (img->mb_y/2 == 0) ? 0 : 1;
+  byte **imgY=dec_picture->imgY;
 
-  if (img->current_mb_nr%2) // bottom field
-  {
-    field_y -= BLOCK_SIZE*2;
-      mb_available_up = ((img->mb_y-1)/2 == 0) ? 0 : 1;
-  }
-  }
+  int mb_nr=img->current_mb_nr;
+  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
 
+  PixelPos up;          //!< pixel position p(0,-1)
+  PixelPos left[17];    //!< pixel positions p(-1, -1..15)
+
+  int up_avail, left_avail, left_up_avail;
+  /*
   if(img->constrained_intra_pred_flag)
   {
     if (mb_available_up   && (img->intra_block[mb_nr-mb_width][2]==0 || img->intra_block[mb_nr-mb_width][3]==0))
@@ -449,39 +418,64 @@ int intrapred_luma_16x16(struct img_par *img, //!< image parameters
     if (mb_available_left && (img->intra_block[mb_nr-       1][1]==0 || img->intra_block[mb_nr       -1][3]==0))
       mb_available_left = 0;
   }
-
+  */
   s1=s2=0;
+
+  for (i=0;i<17;i++)
+  {
+    getNeighbour(mb_nr, -1 ,  i-1 , 1, &left[i]);
+  }
+  
+  getNeighbour(mb_nr, 0     ,  -1 , 1, &up);
+
+  if (!img->constrained_intra_pred_flag)
+  {
+    up_avail   = up.available;
+    left_avail = left[1].available;
+    left_up_avail = left[0].available;
+  }
+  else
+  {
+    up_avail      = up.available ? img->intra_block[up.mb_addr] : 0;
+    for (i=1, left_avail=1; i<17;i++)
+      left_avail  &= left[i].available ? img->intra_block[left[i].mb_addr]: 0;
+    left_up_avail = left[0].available ? img->intra_block[left[0].mb_addr]: 0;
+  }
 
   switch (predmode)
   {
   case VERT_PRED_16:                       // vertical prediction from block above
+    if (!up_avail)
+      error ("invalid 16x16 intra pred Mode VERT_PRED_16",500);
     for(j=0;j<MB_BLOCK_SIZE;j++)
       for(i=0;i<MB_BLOCK_SIZE;i++)
-        img->mpr[i][j]=imgY[field_y-1][img->pix_x+i];// store predicted 16x16 block
+        img->mpr[i][j]=imgY[up.pos_y][up.pos_x+i];// store predicted 16x16 block
     break;
 
   case HOR_PRED_16:                        // horisontal prediction from left block
+    if (!left_avail)
+      error ("invalid 16x16 intra pred Mode VERT_PRED_16",500);
     for(j=0;j<MB_BLOCK_SIZE;j++)
       for(i=0;i<MB_BLOCK_SIZE;i++)
-        img->mpr[i][j]=imgY[field_y+j][img->pix_x-1]; // store predicted 16x16 block
+        img->mpr[i][j]=imgY[left[j+1].pos_y][left[j+1].pos_x]; // store predicted 16x16 block
     break;
 
   case DC_PRED_16:                         // DC prediction
     s1=s2=0;
     for (i=0; i < MB_BLOCK_SIZE; i++)
     {
-      if (mb_available_up)
-        s1 += imgY[field_y-1][img->pix_x+i];    // sum hor pix
-      if (mb_available_left)
-        s2 += imgY[field_y+i][img->pix_x-1];    // sum vert pix
+      if (up_avail)
+        s1 += imgY[up.pos_y][up.pos_x+i];    // sum hor pix
+      if (left_avail)
+        s2 += imgY[left[i+1].pos_y][left[i+1].pos_x];    // sum vert pix
     }
-    if (mb_available_up && mb_available_left)
-      s0=(s1+s2+16)/(2*MB_BLOCK_SIZE);       // no edge
-    if (!mb_available_up && mb_available_left)
-      s0=(s2+8)/MB_BLOCK_SIZE;              // upper edge
-    if (mb_available_up && !mb_available_left)
-      s0=(s1+8)/MB_BLOCK_SIZE;              // left edge
-    if (!mb_available_up && !mb_available_left)
+    if (up_avail && left_avail)
+      s0=(s1+s2+16)>>5;       // no edge
+    if (!up_avail && left_avail)
+      s0=(s2+8)>>4;              // upper edge
+    if (up_avail && !left_avail)
+      s0=(s1+8)>>4;              // left edge
+    if (!up_avail && !left_avail)
       s0=128;                            // top left corner, nothing to predict from
     for(i=0;i<MB_BLOCK_SIZE;i++)
       for(j=0;j<MB_BLOCK_SIZE;j++)
@@ -490,35 +484,203 @@ int intrapred_luma_16x16(struct img_par *img, //!< image parameters
       }
     break;
   case PLANE_16:// 16 bit integer plan pred
+    if (!up_avail || !left_up_avail  || !left_avail)
+      error ("invalid 16x16 intra pred Mode PLANE_16",500);
+
     ih=0;
     iv=0;
     for (i=1;i<9;i++)
     {
-      ih += i*(imgY[field_y-1][img->pix_x+7+i] - imgY[field_y-1][img->pix_x+7-i]);
-      iv += i*(imgY[field_y+7+i][img->pix_x-1] - imgY[field_y+7-i][img->pix_x-1]);
+      if (i<8)
+        ih += i*(imgY[up.pos_y][up.pos_x+7+i] - imgY[up.pos_y][up.pos_x+7-i]);
+      else
+        ih += i*(imgY[up.pos_y][up.pos_x+7+i] - imgY[left[0].pos_y][left[0].pos_x]);
+
+      iv += i*(imgY[left[8+i].pos_y][left[8+i].pos_x] - imgY[left[8-i].pos_y][left[8-i].pos_x]);
     }
     ib=(5*ih+32)>>6;
     ic=(5*iv+32)>>6;
 
-    iaa=16*(imgY[field_y-1][img->pix_x+15]+imgY[field_y+15][img->pix_x-1]);
+    iaa=16*(imgY[up.pos_y][up.pos_x+15]+imgY[left[16].pos_y][left[16].pos_x]);
     for (j=0;j< MB_BLOCK_SIZE;j++)
     {
       for (i=0;i< MB_BLOCK_SIZE;i++)
       {
-        img->mpr[i][j]=max(0,min((iaa+(i-7)*ib +(j-7)*ic + 16)/32,255));
+        img->mpr[i][j]=max(0,min((iaa+(i-7)*ib +(j-7)*ic + 16)>>5,255));
       }
     }// store plane prediction
     break;
 
   default:
     {                                    // indication of fault in bitstream,exit
-      printf("Error: illegal prediction mode input: %d\n",predmode);
+      printf("illegal 16x16 intra prediction mode input: %d\n",predmode);
       return SEARCH_SYNC;
     }
   }
 
   return DECODING_OK;
 }
+
+
+void intrapred_chroma(struct img_par *img, int uv)
+{
+  int i,j, ii, jj, ioff, joff;
+
+  byte ***imgUV = dec_picture->imgUV;
+  
+  int js0=0;
+  int js1=0;
+  int js2=0;
+  int js3=0;
+
+  int js[2][2];
+
+  int pred;
+  int ih, iv, ib, ic, iaa;
+
+  int mb_nr=img->current_mb_nr;
+  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+
+  PixelPos up;       //!< pixel position p(0,-1)
+  PixelPos left[9];  //!< pixel positions p(-1, -1..8)
+
+  int up_avail, left_avail, left_up_avail;
+
+  for (i=0;i<9;i++)
+  {
+    getNeighbour(mb_nr, -1 ,  i-1 , 0, &left[i]);
+  }
+  
+  getNeighbour(mb_nr, 0     ,  -1 , 0, &up);
+
+  if (!img->constrained_intra_pred_flag)
+  {
+    up_avail   = up.available;
+    left_avail = left[1].available;
+    left_up_avail = left[0].available;
+  }
+  else
+  {
+    up_avail      = up.available ? img->intra_block[up.mb_addr] : 0;
+    for (i=1, left_avail=1; i<9;i++)
+      left_avail  &= left[i].available ? img->intra_block[left[i].mb_addr]: 0;
+    left_up_avail = left[0].available ? img->intra_block[left[0].mb_addr]: 0;
+  }
+
+  if (currMB->c_ipred_mode == DC_PRED_8)
+  {
+    for(i=0;i<4;i++)
+    {
+      if(up_avail)
+      {
+        js0=js0+imgUV[uv][up.pos_y][up.pos_x+i];
+        js1=js1+imgUV[uv][up.pos_y][up.pos_x+i+4];
+      }
+      if(left_avail)
+      {
+        js2=js2+imgUV[uv][left[1+i].pos_y][left[1+i].pos_x];
+        js3=js3+imgUV[uv][left[1+i+4].pos_y][left[1+i+4].pos_x];
+      }
+    }
+    if(up_avail && left_avail)
+    {
+      js[0][0]=(js0+js2+4)/8;
+      js[1][0]=(js1+2)/4;
+      js[0][1]=(js3+2)/4;
+      js[1][1]=(js1+js3+4)/8;
+    }
+    if(up_avail && !left_avail)
+    {
+      js[0][0]=(js0+2)/4;
+      js[1][0]=(js1+2)/4;
+      js[0][1]=(js0+2)/4;
+      js[1][1]=(js1+2)/4;
+    }
+    if(left_avail && !up_avail)
+    {
+      js[0][0]=(js2+2)/4;
+      js[1][0]=(js2+2)/4;
+      js[0][1]=(js3+2)/4;
+      js[1][1]=(js3+2)/4;
+    }
+    if(!up_avail && !left_avail)
+    {
+      js[0][0]=128;
+      js[1][0]=128;
+      js[0][1]=128;
+      js[1][1]=128;
+    }
+  }
+  
+  for (j=0;j<2;j++)
+  {
+    joff=j*4;
+
+    for(i=0;i<2;i++)
+    {
+      ioff=i*4;
+      
+      switch (currMB->c_ipred_mode)
+      {
+      case DC_PRED_8:
+        for (ii=0; ii<4; ii++)
+          for (jj=0; jj<4; jj++)
+          {
+            img->mpr[ii+ioff][jj+joff]=js[i][j];
+          }
+        break;
+      case HOR_PRED_8:
+        if (!left_avail)
+          error("unexpected HOR_PRED_8 chroma intra prediction mode",-1);
+
+        for (jj=0; jj<4; jj++)
+        {
+          pred = imgUV[uv][left[1+jj+joff].pos_y][left[1+jj+joff].pos_x];
+          for (ii=0; ii<4; ii++)
+            img->mpr[ii+ioff][jj+joff]=pred;
+        }
+        break;
+      case VERT_PRED_8:
+        if (!up_avail)
+          error("unexpected VERT_PRED_8 chroma intra prediction mode",-1);
+
+        for (ii=0; ii<4; ii++)
+        {
+          pred = imgUV[uv][up.pos_y][up.pos_x+ii+ioff];
+          for (jj=0; jj<4; jj++)
+            img->mpr[ii+ioff][jj+joff]=pred;
+        }
+        break;
+      case PLANE_8:
+        if (!left_up_avail || !left_avail || !up_avail)
+          error("unexpected PLANE_8 chroma intra prediction mode",-1);
+
+        ih=iv=0;
+
+        for (ii=1;ii<5;ii++)
+        {
+          if (ii<4)
+            ih += ii*(imgUV[uv][up.pos_y][up.pos_x+3+ii] - imgUV[uv][up.pos_y][up.pos_x+3-ii]);
+          else
+            ih += ii*(imgUV[uv][up.pos_y][up.pos_x+3+ii] - imgUV[uv][left[0].pos_y][left[0].pos_x]);
+            
+          iv += ii*(imgUV[uv][left[4+ii].pos_y][left[4+ii].pos_x] - imgUV[uv][left[4-ii].pos_y][left[4-ii].pos_x]);
+        }
+        ib=(17*ih+16)>>5;
+        ic=(17*iv+16)>>5;
+        iaa=16*(imgUV[uv][up.pos_y][up.pos_x+7]+imgUV[uv][left[8].pos_y][left[8].pos_x]);
+        for (ii=0; ii<4; ii++)
+          for (jj=0; jj<4; jj++)
+            img->mpr[ii+ioff][jj+joff]=max(0,min(255,(iaa+(ii+ioff-3)*ib +(jj+joff-3)*ic + 16)>>5));
+          break;
+      default:
+        error("illegal chroma intra prediction mode", 600);
+        break;
+      }
+    }
+  }
+}
+
 
 /*!
  ***********************************************************************
@@ -569,8 +731,8 @@ void itrans(struct img_par *img, //!< image parameters
     for (j=0;j<2;j++)
     {
       j1=3-j;
-      img->m7[i][j] =mmax(0,mmin(255,(m6[j]+m6[j1]+(img->mpr[i+ioff][j+joff] <<DQ_BITS)+DQ_ROUND)>>DQ_BITS));
-      img->m7[i][j1]=mmax(0,mmin(255,(m6[j]-m6[j1]+(img->mpr[i+ioff][j1+joff]<<DQ_BITS)+DQ_ROUND)>>DQ_BITS));
+      img->m7[i][j] =max(0,min(255,(m6[j]+m6[j1]+(img->mpr[i+ioff][j+joff] <<DQ_BITS)+DQ_ROUND)>>DQ_BITS));
+      img->m7[i][j1]=max(0,min(255,(m6[j]-m6[j1]+(img->mpr[i+ioff][j1+joff]<<DQ_BITS)+DQ_ROUND)>>DQ_BITS));
     }
   }
 
@@ -733,8 +895,8 @@ void itrans_sp(struct img_par *img,  //!< image parameters
     for (j=0;j<2;j++)
     {
       j1=3-j;
-      img->m7[i][j] =mmax(0,mmin(255,(m6[j]+m6[j1]+DQ_ROUND)>>DQ_BITS));
-      img->m7[i][j1]=mmax(0,mmin(255,(m6[j]-m6[j1]+DQ_ROUND)>>DQ_BITS));
+      img->m7[i][j] =max(0,min(255,(m6[j]+m6[j1]+DQ_ROUND)>>DQ_BITS));
+      img->m7[i][j1]=max(0,min(255,(m6[j]-m6[j1]+DQ_ROUND)>>DQ_BITS));
     }
   }
 }
@@ -842,8 +1004,8 @@ void copyblock_sp(struct img_par *img,int block_x,int block_y)
     for (j=0;j<2;j++)
     {
       j1=3-j;
-      img->m7[i][j] =mmax(0,mmin(255,(m6[j]+m6[j1]+DQ_ROUND)>>DQ_BITS));
-      img->m7[i][j1]=mmax(0,mmin(255,(m6[j]-m6[j1]+DQ_ROUND)>>DQ_BITS));
+      img->m7[i][j] =max(0,min(255,(m6[j]+m6[j1]+DQ_ROUND)>>DQ_BITS));
+      img->m7[i][j1]=max(0,min(255,(m6[j]-m6[j1]+DQ_ROUND)>>DQ_BITS));
     }
   }
 
@@ -851,7 +1013,7 @@ void copyblock_sp(struct img_par *img,int block_x,int block_y)
 
   for (j=0; j < BLOCK_SIZE; j++)
     for (i=0; i < BLOCK_SIZE; i++)
-      imgY[img->pix_y+block_y+j][img->pix_x+block_x+i]=img->m7[i][j];
+      dec_picture->imgY[img->pix_y+block_y+j][img->pix_x+block_x+i]=img->m7[i][j];
 
 }
 

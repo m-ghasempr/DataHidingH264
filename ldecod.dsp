@@ -91,10 +91,6 @@ SOURCE=.\ldecod\src\annexb.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\ldecod\src\b_frame.c
-# End Source File
-# Begin Source File
-
 SOURCE=.\ldecod\src\biaridecod.c
 # End Source File
 # Begin Source File
@@ -159,6 +155,10 @@ SOURCE=.\ldecod\src\macroblock.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\lcommon\src\mb_access.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\ldecod\src\mbuffer.c
 # End Source File
 # Begin Source File
@@ -212,10 +212,6 @@ SOURCE=.\ldecod\src\vlc.c
 # Begin Source File
 
 SOURCE=.\ldecod\inc\annexb.h
-# End Source File
-# Begin Source File
-
-SOURCE=.\ldecod\inc\b_frame.h
 # End Source File
 # Begin Source File
 
@@ -291,6 +287,10 @@ SOURCE=.\ldecod\inc\macroblock.h
 # End Source File
 # Begin Source File
 
+SOURCE=.\lcommon\inc\mb_access.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\ldecod\inc\mbuffer.h
 # End Source File
 # Begin Source File
@@ -304,6 +304,10 @@ SOURCE=.\ldecod\inc\nalu.h
 # Begin Source File
 
 SOURCE=.\lcommon\inc\nalucommon.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ldecod\inc\output.h
 # End Source File
 # Begin Source File
 

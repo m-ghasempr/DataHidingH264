@@ -52,6 +52,7 @@
 
 #include "global.h"
 #include "refbuf.h"
+#include "image.h"
 
 /*! 
  *************************************************************************************
@@ -67,7 +68,7 @@
 void decode_one_b8block (int decoder, int mbmode, int b8block, int b8mode, int b8ref)
 {
   int i,j,block_y,block_x,bx,by;
-  int ref_inx = (IMG_NUMBER-1)%img->no_multpred;
+  int ref_inx = (IMG_NUMBER-1)%img->num_reference_frames;
 
   int mv[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE];
   int resY_tmp[MB_BLOCK_SIZE][MB_BLOCK_SIZE];
@@ -75,17 +76,17 @@ void decode_one_b8block (int decoder, int mbmode, int b8block, int b8mode, int b
   int i0 = (b8block%2)<<3,   i1 = i0+8,   bx0 = i0>>2,   bx1 = bx0+2;
   int j0 = (b8block/2)<<3,   j1 = j0+8,   by0 = j0>>2,   by1 = by0+2;
 
-  if (img->type==INTRA_IMG)
+  if (img->type==I_SLICE)
   {
     for(i=i0;i<i1;i++)
     for(j=j0;j<j1;j++)
     {
-      decs->decY[decoder][img->pix_y+j][img->pix_x+i]=imgY[img->pix_y+j][img->pix_x+i];
+      decs->decY[decoder][img->pix_y+j][img->pix_x+i]=enc_picture->imgY[img->pix_y+j][img->pix_x+i];
     }
   }
   else
   {
-    if (mbmode==0 && (img->type==INTER_IMG || img->type==BS_IMG))
+    if (mbmode==0 && (img->type==P_SLICE || img->type==BS_IMG))
     {
       for(i=i0;i<i1;i++)
       for(j=j0;j<j1;j++)
@@ -126,15 +127,15 @@ void decode_one_b8block (int decoder, int mbmode, int b8block, int b8mode, int b
     }
 
     // Decode Luminance
-    if ((b8mode>=1 && b8mode<=7) || (mbmode==0 && (img->type==INTER_IMG || img->type==BS_IMG)))
+    if ((b8mode>=1 && b8mode<=7) || (mbmode==0 && (img->type==P_SLICE || img->type==BS_IMG)))
     {
       for (by=by0; by<by1; by++)
       for (bx=bx0; bx<bx1; bx++)
       {
         block_x = img->block_x+bx;
         block_y = img->block_y+by;
-        if (img->type == B_IMG && mref == mref_fld)
-          ref_inx = (IMG_NUMBER-b8ref-2)%img->no_multpred;
+        if (img->type == B_SLICE && mref == mref_fld)
+          ref_inx = (IMG_NUMBER-b8ref-2)%img->num_reference_frames;
 
         Get_Reference_Block (decs->decref[decoder][ref_inx],
                              block_y, block_x,
@@ -148,7 +149,7 @@ void decode_one_b8block (int decoder, int mbmode, int b8block, int b8mode, int b
           if (decs->RefBlock[j][i] != UMVPelY_14 (mref[ref_inx],
                                                   (block_y*4+j)*4+mv[1][by][bx],
                                                   (block_x*4+i)*4+mv[0][by][bx]))
-          ref_inx = (img->number-ref-1)%img->no_multpred;
+          ref_inx = (img->number-ref-1)%img->num_reference_frames;
           */
           decs->decY[decoder][block_y*4+j][block_x*4+i] = resY_tmp[by*4+j][bx*4+i] + decs->RefBlock[j][i];
         }
@@ -160,7 +161,7 @@ void decode_one_b8block (int decoder, int mbmode, int b8block, int b8mode, int b
       for(i=i0;i<i1;i++)
       for(j=j0;j<j1;j++)
       {
-        decs->decY[decoder][img->pix_y+j][img->pix_x+i] = imgY[img->pix_y+j][img->pix_x+i];
+        decs->decY[decoder][img->pix_y+j][img->pix_x+i] = enc_picture->imgY[img->pix_y+j][img->pix_x+i];
       }
     }
   }
@@ -436,7 +437,7 @@ void compute_residue_b8block (int b8block, int i16mode) // if not INTRA16x16 it 
     for (i=i0; i<i1; i++)
     for (j=j0; j<j1; j++)
     {
-      decs->resY[j][i] = imgY[img->pix_y+j][img->pix_x+i] - img->mprr_2[i16mode][j][i];
+      decs->resY[j][i] = enc_picture->imgY[img->pix_y+j][img->pix_x+i] - img->mprr_2[i16mode][j][i];
     }
   }
   else
@@ -444,7 +445,7 @@ void compute_residue_b8block (int b8block, int i16mode) // if not INTRA16x16 it 
     for (i=i0; i<i1; i++)
     for (j=j0; j<j1; j++)
     {
-      decs->resY[j][i] = imgY[img->pix_y+j][img->pix_x+i] - img->mpr[i][j];
+      decs->resY[j][i] = enc_picture->imgY[img->pix_y+j][img->pix_x+i] - img->mpr[i][j];
     }
   }
 }
@@ -542,18 +543,18 @@ void Error_Concealment(byte **inY, byte **s_map, byte ***refY)
 void Conceal_Error(byte **inY, int mb_y, int mb_x, byte ***refY, byte **s_map)
 {
   int i,j,block_x, block_y;
-  int ref_inx = (IMG_NUMBER-1)%img->no_multpred;
+  int ref_inx = (IMG_NUMBER-1)%img->num_reference_frames;
   int pos_y = mb_y*MB_BLOCK_SIZE, pos_x = mb_x*MB_BLOCK_SIZE;
   int mv[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE];
   int resY[MB_BLOCK_SIZE][MB_BLOCK_SIZE];
 
-  int copy  = (decs->dec_mb_mode[mb_x][mb_y]==0 && (img->type==INTER_IMG || img->type==BS_IMG));
-  int inter = (((decs->dec_mb_mode[mb_x][mb_y]>=1 && decs->dec_mb_mode[mb_x][mb_y]<=3) || decs->dec_mb_mode[mb_x][mb_y]==P8x8) && (img->type==INTER_IMG || img->type==BS_IMG));
+  int copy  = (decs->dec_mb_mode[mb_x][mb_y]==0 && (img->type==P_SLICE || img->type==BS_IMG));
+  int inter = (((decs->dec_mb_mode[mb_x][mb_y]>=1 && decs->dec_mb_mode[mb_x][mb_y]<=3) || decs->dec_mb_mode[mb_x][mb_y]==P8x8) && (img->type==P_SLICE || img->type==BS_IMG));
   
   switch(s_map[mb_y][mb_x])
   {
   case 1: //! whole slice lost (at least partition A lost)
-    if (img->type!=INTRA_IMG)
+    if (img->type!=I_SLICE)
     {
       for (j=0;j<MB_BLOCK_SIZE;j++)
         for (i=0;i<MB_BLOCK_SIZE;i++)
@@ -580,7 +581,7 @@ void Conceal_Error(byte **inY, int mb_y, int mb_x, byte ***refY, byte **s_map)
         resY[j][i]=0;
     
     //! not first frame
-    if (img->type!=INTRA_IMG)
+    if (img->type!=I_SLICE)
     {
       //! if copy mb
       if (copy)
@@ -622,7 +623,7 @@ void Conceal_Error(byte **inY, int mb_y, int mb_x, byte ***refY, byte **s_map)
     }
     break;
   case 3: //! Partition C lost
-    if(img->type!=INTRA_IMG)
+    if(img->type!=I_SLICE)
     {
       //! Copy motion vectors 
       for (block_y=0; block_y<BLOCK_MULTIPLE; block_y++)
@@ -663,7 +664,7 @@ void Conceal_Error(byte **inY, int mb_y, int mb_x, byte ***refY, byte **s_map)
     }
     break;
   case 2: //! Partition B lost
-    if(img->type!=INTRA_IMG)
+    if(img->type!=I_SLICE)
     {
       if(!inter)
       {

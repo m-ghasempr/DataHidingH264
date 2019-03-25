@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 6.1e
+ *     JM 6.2
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -120,11 +120,13 @@
 #include "leaky_bucket.h"
 #include "fmo.h"
 #include "annexb.h"
+#include "output.h"
+#include "cabac.h"
 
 #include "erc_api.h"
 
 #define JM          "6"
-#define VERSION     "6.1e"
+#define VERSION     "6.2"
 
 #define LOGFILE     "log.dec"
 #define DATADECFILE "dataDec.txt"
@@ -142,6 +144,8 @@ extern ercVariables_t *erc_errorVar;
 // the local override through the formal parameter mechanism
 
 extern FILE* bits;
+extern StorablePicture* dec_picture;
+
 struct inp_par    *input;       //!< input parameters from input configuration file
 struct snr_par    *snr;         //!< statistics
 struct img_par    *img;         //!< image parameters
@@ -165,9 +169,8 @@ int main(int argc, char **argv)
     snprintf(errortext, ET_SIZE, "Usage: %s <config.dat> \n\t<config.dat> defines decoder parameters",argv[0]);
     error(errortext, 300);
   }
-//  isBigEndian = testEndian();
-  init_conf(input, argv[1]);
 
+  init_conf(input, argv[1]);
   
   switch (input->FileFormat)
   {
@@ -185,13 +188,17 @@ int main(int argc, char **argv)
   malloc_slice(input,img);
 
   init(img);
+
+  dec_picture = NULL;
+  init_dpb(input);
+  init_out_buffer();
+
   img->number=0;
   img->type = I_SLICE;
   img->tr_old = -1; // WYK: Oct. 8, 2001, for detection of a new frame
-  img->refPicID = -1; // WYK: for detection of a new non-B frame
   img->imgtr_last_P = 0;
   img->imgtr_next_P = 0;
-  img->mmco_buffer=NULL;
+  img->dec_ref_pic_marking_buffer = NULL;
   img->last_decoded_pic_id = -1; // JVT-D101
 
   // B pictures
@@ -203,18 +210,17 @@ int main(int argc, char **argv)
   while (decode_one_frame(img, input, snr) != EOS)
     ;
 
-  // B PICTURE : save the last P picture
-  write_prev_Pframe(img, p_out);
-
   report(input, img, snr);
   free_slice(input,img);
   FmoFinit();
-  free_frame_buffers(input, img);
   free_global_buffers(input, img);
+
+  flush_dpb();
 
   CloseBitstreamFile();
 
   fclose(p_out);
+//  fclose(p_out2);
   if (p_ref)
     fclose(p_ref);
 #if TRACE
@@ -222,6 +228,9 @@ int main(int argc, char **argv)
 #endif
 
   ercClose(erc_errorVar);
+
+  free_dpb();
+  uninit_out_buffer();
 
   free (input);
   free (snr);
@@ -327,11 +336,11 @@ void init_conf(struct inp_par *inp,
 
 
   // Frame buffer size
-  fscanf(fd,"%d,",&inp->buf_cycle);   // may be overwritten in case of RTP NAL
+  fscanf(fd,"%d,",&inp->dpb_size);   // may be overwritten in case of RTP NAL
   fscanf(fd,"%*[^\n]");
-  if (inp->buf_cycle < 1)
+  if (inp->dpb_size < 1)
   {
-    snprintf(errortext, ET_SIZE, "Frame Buffer Size is %d. It has to be at least 1",inp->buf_cycle);
+    snprintf(errortext, ET_SIZE, "Decoded Picture Buffer Size is %d. It has to be at least 1",inp->dpb_size);
     error(errortext,1);
   }
 
@@ -362,17 +371,6 @@ void init_conf(struct inp_par *inp,
   fscanf(fd,"%*[^\n]");
 #endif
 
-
-  // Loop Filter parameters flag
-  fscanf(fd,"%d,",&inp->LFParametersFlag);   // 0: No Params  1: Read Filter Params, may be overwritten in case of RTP NAL
-  fscanf(fd,"%*[^\n]");
-  if(inp->LFParametersFlag != 0 && inp->LFParametersFlag != 1)
-  {
-    snprintf(errortext, ET_SIZE, "Unsupported value=%d on loop filter parameters flag",inp->LFParametersFlag);
-    error(errortext,1);
-  }
-
-
   fclose (fd);
 
 
@@ -390,6 +388,11 @@ void init_conf(struct inp_par *inp,
     snprintf(errortext, ET_SIZE, "Error open file %s ",inp->outfile);
     error(errortext,500);
   }
+/*  if ((p_out2=fopen("out.yuv","wb"))==0)
+  {
+    snprintf(errortext, ET_SIZE, "Error open file %s ",inp->outfile);
+    error(errortext,500);
+  }*/
 
   fprintf(stdout,"--------------------------------------------------------------------------\n");
   fprintf(stdout," Decoder config file                    : %s \n",config_filename);
@@ -654,7 +657,7 @@ void malloc_slice(struct inp_par *inp, struct img_par *img)
     snprintf(errortext, ET_SIZE, "Memory allocation for Slice datastruct in NAL-mode %d failed", inp->FileFormat);
     error(errortext,100);
   }
-  img->currentSlice->rmpni_buffer=NULL;
+//  img->currentSlice->rmpni_buffer=NULL;
   //! you don't know whether we do CABAC hre, hence initialize CABAC anyway
   // if (inp->symbol_mode == CABAC)
   if (1)
@@ -711,52 +714,13 @@ void free_slice(struct inp_par *inp, struct img_par *img)
  */
 int init_global_buffers(struct inp_par *inp, struct img_par *img)
 {
-  int i,j;
-
   int memory_size=0;
-#ifdef _ADAPT_LAST_GROUP_
-  extern int *last_P_no_frm;
-  extern int *last_P_no_fld;
-#endif
-
-  img->buf_cycle = inp->buf_cycle+1;
-
-  img->buf_cycle *= 2;
 
   if (img->structure != FRAME)
   {
     img->height *= 2;         // set height to frame (twice of field) for normal variables
     img->height_cr *= 2;      // set height to frame (twice of field) for normal variables
   }
-
-#ifdef _ADAPT_LAST_GROUP_
-  if ((last_P_no_frm = (int*)malloc(2*img->buf_cycle*sizeof(int))) == NULL)
-    no_mem_exit("get_mem4global_buffers: last_P_no_frm");
-  if ((last_P_no_fld = (int*)malloc(2*img->buf_cycle*sizeof(int))) == NULL)
-    no_mem_exit("get_mem4global_buffers: last_P_no_fld");
-#endif
-
-  // allocate memory for encoding frame buffers: imgY, imgUV
-  // byte imgY[288][352];
-  // byte imgUV[2][144][176];
-  memory_size += get_mem2D(&imgY_frm, img->height, img->width);    // processing memory in frame mode
-  memory_size += get_mem3D(&imgUV_frm, 2, img->height_cr, img->width_cr); // processing memory in frame mode
-
-  memory_size += get_mem2D(&imgY_top, img->height/2, img->width);    // processing memory in field mode
-  memory_size += get_mem3D(&imgUV_top, 2, img->height_cr/2, img->width_cr);  // processing memory in field mode
-
-  memory_size += get_mem2D(&imgY_bot, img->height/2, img->width);    // processing memory in field mode
-  memory_size += get_mem3D(&imgUV_bot, 2, img->height_cr/2, img->width_cr);  // processing memory in field mode
-
-  // allocate memory for multiple ref. frame buffers: mref, mcref
-  // rows and cols for croma component mcef[ref][croma][4x][4y] are switched
-  // compared to luma mref[ref][4y][4x] for whatever reason
-  // number of reference frames increased by one for next P-frame
-  alloc_mref(img);
-  
-  // allocate memory for imgY_prev
-  memory_size += get_mem2D(&imgY_prev, img->height, img->width);
-  memory_size += get_mem3D(&imgUV_prev, 2, img->height_cr, img->width_cr);
 
   // allocate memory for reference frames of each block: refFrArr
   // int  refFrArr[72][88];
@@ -778,77 +742,20 @@ int init_global_buffers(struct inp_par *inp, struct img_par *img)
   // allocate memory in structure img
   if(((img->mb_data) = (Macroblock *) calloc((img->width/MB_BLOCK_SIZE) * (img->height/MB_BLOCK_SIZE),sizeof(Macroblock))) == NULL)
     no_mem_exit("init_global_buffers: img->mb_data");
-//  if(img->UseConstrainedIntraPred)
-  if (1)      // Always alloc the memory -- we don't know what the parset will tell us later
-  {
-    if(((img->intra_block) = (int**)calloc((j=(img->width/MB_BLOCK_SIZE) * (img->height/MB_BLOCK_SIZE)),sizeof(int))) == NULL)
-      no_mem_exit("init_global_buffers: img->intra_block");
-    for (i=0; i<j; i++)
-    {
-      if ((img->intra_block[i] = (int*)calloc(4, sizeof(int))) == NULL)
-        no_mem_exit ("init_global_buffers: img->intra_block");
-    }
-  }
-  // img => int mv[92][72][3]
-  memory_size += get_mem3Dint(&(img->mv_frm),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
-  memory_size += get_mem3Dint(&(img->mv_top),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
-  memory_size += get_mem3Dint(&(img->mv_bot),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
-  // img => int ipredmode[90][74]
-  memory_size += get_mem2Dint(&(img->ipredmode),img->width/BLOCK_SIZE +2 , img->height/BLOCK_SIZE +2);
-  // int dfMV[92][72][3];
-  memory_size += get_mem3Dint(&(img->dfMV),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
-  // int dbMV[92][72][3];
-  memory_size += get_mem3Dint(&(img->dbMV),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
-  // int fw_refFrArr[72][88];
-  memory_size += get_mem2Dint(&(img->fw_refFrArr_frm),img->height/BLOCK_SIZE,img->width/BLOCK_SIZE);
-  // int bw_refFrArr[72][88];
-  memory_size += get_mem2Dint(&(img->bw_refFrArr_frm),img->height/BLOCK_SIZE,img->width/BLOCK_SIZE);
-  // int fw_mv[92][72][3];
-  memory_size += get_mem3Dint(&(img->fw_mv),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
-  // int bw_mv[92][72][3];
-  memory_size += get_mem3Dint(&(img->bw_mv),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
 
-  // int fw_refFrArr[72][88];
-  memory_size += get_mem2Dint(&(img->fw_refFrArr_top),img->height/BLOCK_SIZE,img->width/BLOCK_SIZE);
-  // int bw_refFrArr[72][88];
-  memory_size += get_mem2Dint(&(img->bw_refFrArr_top),img->height/BLOCK_SIZE,img->width/BLOCK_SIZE);
-  // int fw_refFrArr[72][88];
-  memory_size += get_mem2Dint(&(img->fw_refFrArr_bot),img->height/BLOCK_SIZE,img->width/BLOCK_SIZE);
-  // int bw_refFrArr[72][88];
-  memory_size += get_mem2Dint(&(img->bw_refFrArr_bot),img->height/BLOCK_SIZE,img->width/BLOCK_SIZE);
+  if(((img->intra_block) = (int*)calloc((img->width/MB_BLOCK_SIZE) * (img->height/MB_BLOCK_SIZE),sizeof(int))) == NULL)
+    no_mem_exit("init_global_buffers: img->intra_block");
 
-  memory_size += get_mem2Dint(&(img->ipredmode_frm),img->width/BLOCK_SIZE +2 , img->height/BLOCK_SIZE +2);
-  memory_size += get_mem2Dint(&(img->ipredmode_top),img->width/BLOCK_SIZE +2 , (img->height /2)/BLOCK_SIZE +2);
-  memory_size += get_mem2Dint(&(img->ipredmode_bot),img->width/BLOCK_SIZE +2 , (img->height /2)/BLOCK_SIZE +2);
-
-  memory_size += get_mem3Dint(&(img->fw_mv_frm),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
-  memory_size += get_mem3Dint(&(img->fw_mv_top),img->width/BLOCK_SIZE +4, (img->height/2)/BLOCK_SIZE,3);
-  memory_size += get_mem3Dint(&(img->fw_mv_bot),img->width/BLOCK_SIZE +4, (img->height/2)/BLOCK_SIZE,3);
-
-  memory_size += get_mem3Dint(&(img->bw_mv_frm),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
-  memory_size += get_mem3Dint(&(img->bw_mv_top),img->width/BLOCK_SIZE +4, (img->height/2)/BLOCK_SIZE,3);
-  memory_size += get_mem3Dint(&(img->bw_mv_bot),img->width/BLOCK_SIZE +4, (img->height/2)/BLOCK_SIZE,3);
-
-  memory_size += get_mem3Dint(&(img->dfMV_top),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
-  memory_size += get_mem3Dint(&(img->dbMV_top),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
-
-  memory_size += get_mem3Dint(&(img->dfMV_bot),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
-  memory_size += get_mem3Dint(&(img->dbMV_bot),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
+  memory_size += get_mem2Dint(&(img->ipredmode),img->width/BLOCK_SIZE , img->height/BLOCK_SIZE);
 
   memory_size += get_mem2Dint(&(img->field_anchor),img->height/BLOCK_SIZE,img->width/BLOCK_SIZE);
-  memory_size += get_mem2Dint(&(field_mb), img->height/MB_BLOCK_SIZE, img->width/MB_BLOCK_SIZE);
 
   memory_size += get_mem3Dint(&(img->wp_weight), 2, MAX_REFERENCE_PICTURES, 3);
   memory_size += get_mem3Dint(&(img->wp_offset), 2, MAX_REFERENCE_PICTURES, 3);
   memory_size += get_mem4Dint(&(img->wbp_weight), 2, MAX_REFERENCE_PICTURES, MAX_REFERENCE_PICTURES, 3);
 
   // CAVLC mem
-  if((img->nz_coeff = (int****)calloc(img->width/MB_BLOCK_SIZE,sizeof(int***))) == NULL)
-    no_mem_exit("get_mem4global_buffers: nzcoeff");
-  for(j=0;j<img->width/MB_BLOCK_SIZE;j++)
-  {
-    memory_size += get_mem3Dint(&(img->nz_coeff[j]), img->height/MB_BLOCK_SIZE, 4, 6);
-  }
+  memory_size += get_mem3Dint(&(img->nz_coeff), img->FrameSizeInMbs, 4, 6);
 
   memory_size += get_mem2Dint(&(img->siblock),img->width/MB_BLOCK_SIZE  , img->height/MB_BLOCK_SIZE);
 
@@ -858,8 +765,6 @@ int init_global_buffers(struct inp_par *inp, struct img_par *img)
     img->height_cr /= 2;   // reset height for normal variables
   }
   
-  img->buf_cycle = inp->buf_cycle+1;
-
   return (memory_size);
 }
 
@@ -880,31 +785,12 @@ int init_global_buffers(struct inp_par *inp, struct img_par *img)
  */
 void free_global_buffers(struct inp_par *inp, struct img_par *img)
 {
-  int  i,j;
-#ifdef _ADAPT_LAST_GROUP_
-  extern int *last_P_no_frm;
-  extern int *last_P_no_fld;
-  free (last_P_no_frm);
-  free (last_P_no_fld);
-#endif
-
-  free_mem2D(imgY_frm);
-  free_mem2D(imgY_top);
-  free_mem2D(imgY_bot);
-  free_mem3D(imgUV_frm,2);
-  free_mem3D(imgUV_top,2);
-  free_mem3D(imgUV_bot,2);
-  free_mem2D(imgY_prev);
-  free_mem3D(imgUV_prev,2);
-
   // free multiple ref frame buffers
   free (mref_frm);
   free (mcef_frm);
 
   free (mref_fld);
   free (mcef_fld);
-  free (parity_fld);
-  free (chroma_vector_adjustment);
 
   free_mem2Dint(refFrArr_frm);
   free_mem2Dint(refFrArr_top);
@@ -916,69 +802,20 @@ void free_global_buffers(struct inp_par *inp, struct img_par *img)
 
   free_mem2D (imgY_ref);
   free_mem3D (imgUV_ref,2);
-//  free_mem2D (imgY_tmp);
-//  free_mem3D (imgUV_tmp,2);
 
   // CAVLC free mem
-  for(j=0;j<img->width/MB_BLOCK_SIZE;j++)
-  {
-    free_mem3Dint(img->nz_coeff[j], img->height/MB_BLOCK_SIZE);
-  }
-  if (img->nz_coeff !=NULL) free(img->nz_coeff );
+  free_mem3Dint(img->nz_coeff, img->FrameSizeInMbs);
+
   free_mem2Dint(img->siblock);
 
   // free mem, allocated for structure img
   if (img->mb_data       != NULL) free(img->mb_data);
 
-//  if(img->UseConstrainedIntraPred)
-  if (1)    // uncnonditionally allocated since introdiuction of par sets
-  {
-    j = (img->width/16)*(img->height/16);
-    for (i=0; i<j; i++)
-    {
-      free (img->intra_block[i]);
-    }
-    free (img->intra_block);
-  }
-  free_mem3Dint(img->mv_frm,img->width/BLOCK_SIZE + 4);
-  free_mem3Dint(img->mv_top,img->width/BLOCK_SIZE + 4);
-  free_mem3Dint(img->mv_bot,img->width/BLOCK_SIZE + 4);
+  free (img->intra_block);
 
   free_mem2Dint (img->ipredmode);
 
-  free_mem3Dint(img->dfMV,img->width/BLOCK_SIZE + 4);
-  free_mem3Dint(img->dbMV,img->width/BLOCK_SIZE + 4);
-
-  free_mem2Dint(img->fw_refFrArr_frm);
-  free_mem2Dint(img->bw_refFrArr_frm);
-  free_mem2Dint(img->fw_refFrArr_top);
-  free_mem2Dint(img->bw_refFrArr_top);
-  free_mem2Dint(img->fw_refFrArr_bot);
-  free_mem2Dint(img->bw_refFrArr_bot);
-
-  free_mem3Dint(img->fw_mv,img->width/BLOCK_SIZE + 4);
-  free_mem3Dint(img->bw_mv,img->width/BLOCK_SIZE + 4);
-
-  free_mem2Dint (img->ipredmode_frm);
-  free_mem2Dint (img->ipredmode_top);
-  free_mem2Dint (img->ipredmode_bot);
-
-  free_mem3Dint(img->fw_mv_frm,img->width/BLOCK_SIZE + 4);
-  free_mem3Dint(img->fw_mv_top,img->width/BLOCK_SIZE + 4);
-  free_mem3Dint(img->fw_mv_bot,img->width/BLOCK_SIZE + 4);
-
-  free_mem3Dint(img->bw_mv_frm,img->width/BLOCK_SIZE + 4);
-  free_mem3Dint(img->bw_mv_top,img->width/BLOCK_SIZE + 4);
-  free_mem3Dint(img->bw_mv_bot,img->width/BLOCK_SIZE + 4);
-
-  free_mem3Dint(img->dfMV_top,img->width/BLOCK_SIZE + 4);
-  free_mem3Dint(img->dbMV_top,img->width/BLOCK_SIZE + 4);
-
-  free_mem3Dint(img->dfMV_bot,img->width/BLOCK_SIZE + 4);
-  free_mem3Dint(img->dbMV_bot,img->width/BLOCK_SIZE + 4);
-
   free_mem2Dint(img->field_anchor);
-  free_mem2Dint(field_mb);
 
   free_mem3Dint(img->wp_weight, 2);
   free_mem3Dint(img->wp_offset, 2);

@@ -151,6 +151,10 @@ SOURCE=.\lencod\src\macroblock.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\lcommon\src\mb_access.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\src\mbuffer.c
 # End Source File
 # Begin Source File
@@ -172,6 +176,10 @@ SOURCE=.\lencod\src\nalu.c
 # Begin Source File
 
 SOURCE=.\lcommon\src\nalucommon.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\output.c
 # End Source File
 # Begin Source File
 
@@ -287,6 +295,10 @@ SOURCE=.\lencod\inc\macroblock.h
 # End Source File
 # Begin Source File
 
+SOURCE=.\lcommon\inc\mb_access.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\inc\mbuffer.h
 # End Source File
 # Begin Source File
@@ -304,6 +316,10 @@ SOURCE=.\lencod\inc\nalu.h
 # Begin Source File
 
 SOURCE=.\lcommon\inc\nalucommon.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\inc\output.h
 # End Source File
 # Begin Source File
 

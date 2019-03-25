@@ -95,19 +95,19 @@ int SliceHeader()
   if (input->InterlaceCodingOption != FRAME_CODING) // same condition as for sps->frame_mbs_only_flag!
   {
     // field_pic_flag    u(1)
-    field_pic_flag = (img->pstruct ==TOP_FIELD || img->pstruct ==BOTTOM_FIELD)?1:0;
+    field_pic_flag = (img->structure ==TOP_FIELD || img->structure ==BOTTOM_FIELD)?1:0;
     assert( field_pic_flag == img->fld_flag );
     len += u_1("SH: field_pic_flag", field_pic_flag, partition);
 
     if (field_pic_flag)
     {
       //bottom_field_flag     u(1)
-      bottom_field_flag = (img->pstruct == BOTTOM_FIELD)?1:0;
+      bottom_field_flag = (img->structure == BOTTOM_FIELD)?1:0;
       len += u_1("SH: bottom_field_flag" , bottom_field_flag ,partition);
     }
   }
 
-  if (img->idr_flag)
+  if (img->currentPicture->idr_flag)
   {
     // idr_pic_id
     // hard coded to zero because we don't have proper IDR handling at the moment
@@ -123,9 +123,9 @@ int SliceHeader()
     }
     else
     {
-      if (!field_pic_flag || img->pstruct == TOP_FIELD)
+      if (!field_pic_flag || img->structure == TOP_FIELD)
         img->pic_order_cnt_lsb = (img->toppoc & ~((((unsigned int)(-1)) << (LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4+4))) );
-      else if ( img->pstruct == BOTTOM_FIELD )
+      else if ( img->structure == BOTTOM_FIELD )
         img->pic_order_cnt_lsb = (img->bottompoc & ~((((unsigned int)(-1)) << (LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4+4))) );
     }
 
@@ -156,37 +156,37 @@ int SliceHeader()
   }
 
   // Direct Mode Type selection for B pictures
-  if (img->type==B_IMG || img->type==BS_IMG)
+  if (img->type==B_SLICE || img->type==BS_IMG)
   {
     len +=  u_1 ("SH: direct_spatial_mv_pred_flag", input->direct_type, partition);
   }
 
-  if ((img->type == INTER_IMG) || (img->type == B_IMG) || (img->type == BS_IMG) || (img->type==INTER_IMG && img->types==SP_IMG))
+  if ((img->type == P_SLICE) || (img->type == B_SLICE) || (img->type == BS_IMG) || (img->type==SP_SLICE))
   {
     // num_ref_idx_active_override_flag here always 1
     len +=  u_1 ("SH: num_ref_idx_active_override_flag", 1, partition);
     
     if (1) // if (num_ref_idx_active_override_flag)
     {
-      len += ue_v ("SH: num_ref_pic_active_fwd_minus1", img->num_ref_pic_active_fwd_minus1, partition);
-      if (img->type==B_IMG || img->type==BS_IMG)
+      len += ue_v ("SH: num_ref_idx_l0_active_minus1", img->num_ref_idx_l0_active-1, partition);
+      if (img->type==B_SLICE || img->type==BS_IMG)
       {
-        len += ue_v ("SH: num_ref_pic_active_bwd_minus1", img->num_ref_pic_active_bwd_minus1, partition);
+        len += ue_v ("SH: num_ref_idx_l1_active_minus1", img->num_ref_idx_l1_active-1, partition);
       }
     }
 
   }
   len += ref_pic_list_reordering();
 
-  if ((img->type == INTER_IMG && input->WeightedPrediction) || 
-     ((img->type == B_IMG || img->type == BS_IMG) && input->WeightedBiprediction == 1))
+  if (((img->type == P_SLICE || img->type == SP_SLICE) && input->WeightedPrediction) || 
+     ((img->type == B_SLICE || img->type == BS_IMG) && input->WeightedBiprediction == 1))
   {
     len += pred_weight_table();
   }
 
   len += dec_ref_pic_marking();
 
-  if(input->symbol_mode==CABAC && img->type!=INTRA_IMG /*&& img->type!=SI_IMG*/)
+  if(input->symbol_mode==CABAC && img->type!=I_SLICE /*&& img->type!=SI_IMG*/)
   {
     len += ue_v("SH: cabac_init_idc", img->model_number, partition);
   }
@@ -194,9 +194,9 @@ int SliceHeader()
   // we transmit zero in the pps, so here the real QP
   len += se_v("SH: slice_qp_delta", (img->qp - 26), partition);
 
-  if (img->types==SP_IMG )
+  if (img->type==SP_SLICE /*|| img->type==SI_SLICE*/)
   {
-    if (img->types==SP_IMG && img->type!=INTRA_IMG) // Switch Flag only for SP pictures
+    if (img->type==SP_SLICE) // Switch Flag only for SP pictures
     {
       len += u_1 ("SH: sp_for_switch_flag", 0, partition);   // 1 for switching SP, 0 for normal SP
     }
@@ -239,7 +239,7 @@ static int ref_pic_list_reordering()
 
   int i, len=0;
 
-  if ((img->type!=INTRA_IMG) /*&&(img->type!=SI_IMG)*/ )
+  if ((img->type!=I_SLICE) /*&&(img->type!=SI_IMG)*/ )
   {
     len += u_1 ("SH: ref_pic_list_reordering_flag_l0", currSlice->ref_pic_list_reordering_flag_l0, partition);
     if (currSlice->ref_pic_list_reordering_flag_l0)
@@ -265,7 +265,7 @@ static int ref_pic_list_reordering()
     }
   }
 
-  if (img->type==B_IMG)
+  if (img->type==B_SLICE)
   {
     len += u_1 ("SH: ref_pic_list_reordering_flag_l1", currSlice->ref_pic_list_reordering_flag_l1, partition);
     if (currSlice->ref_pic_list_reordering_flag_l1)
@@ -291,8 +291,6 @@ static int ref_pic_list_reordering()
     }
   }
 
-  reorder_mref(img);
-  
   return len;
 }
 
@@ -308,46 +306,50 @@ static int dec_ref_pic_marking()
   int dP_nr = assignSE2partition[input->partition_mode][SE_HEADER];
   DataPartition *partition = &((img->currentSlice)->partArr[dP_nr]);
 
-  MMCObuffer_t *tmp_mmco;
+  DecRefPicMarking_t *tmp_drpm;
 
   int val, len=0;
 
-  if (img->idr_flag)
+  if (img->currentPicture->idr_flag)
   {
     len += u_1("SH: no_output_of_prior_pics_flag", img->no_output_of_prior_pics_flag, partition);
     len += u_1("SH: long_term_reference_flag", img->long_term_reference_flag, partition);
   }
   else
   {
-    img->adaptive_ref_pic_buffering_flag = (img->mmco_buffer!=NULL);
+    img->adaptive_ref_pic_buffering_flag = (img->dec_ref_pic_marking_buffer!=NULL);
 
     len += u_1("SH: adaptive_ref_pic_buffering_flag", img->adaptive_ref_pic_buffering_flag, partition);
 
     if (img->adaptive_ref_pic_buffering_flag)
     {
-      tmp_mmco = img->mmco_buffer;
+      tmp_drpm = img->dec_ref_pic_marking_buffer;
       // write Memory Management Control Operation 
       do
       {
-        if (tmp_mmco==NULL) error ("Error encoding MMCO commands", 500);
+        if (tmp_drpm==NULL) error ("Error encoding MMCO commands", 500);
         
-        val = tmp_mmco->MMCO;
+        val = tmp_drpm->memory_management_control_operation;
         len += ue_v("SH: memory_management_control_operation", val, partition);
 
         if ((val==1)||(val==3)) 
         {
-          len += 1 + ue_v("SH: difference_of_pic_nums_minus1", tmp_mmco->DPN, partition);
+          len += 1 + ue_v("SH: difference_of_pic_nums_minus1", tmp_drpm->difference_of_pic_nums_minus1, partition);
         }
-        if ((val==2)||(val==3)||(val==6))
+        if (val==2)
         {
-          len+= ue_v("SH: long_term_pic_idx", tmp_mmco->LPIN, partition);
+          len+= ue_v("SH: long_term_pic_num", tmp_drpm->long_term_pic_num, partition);
+        }
+        if ((val==3)||(val==6))
+        {
+          len+= ue_v("SH: long_term_frame_idx", tmp_drpm->long_term_frame_idx, partition);
         }
         if (val==4)
         {
-          len += ue_v("SH: max_long_term_pic_idx_plus1", tmp_mmco->MLIP1, partition);
+          len += ue_v("SH: max_long_term_pic_idx_plus1", tmp_drpm->max_long_term_frame_idx_plus1, partition);
         }
         
-        tmp_mmco=tmp_mmco->Next;
+        tmp_drpm=tmp_drpm->Next;
         
       } while (val != 0);
       
@@ -374,7 +376,7 @@ static int pred_weight_table()
   
   len += ue_v("SH: chroma_log_weight_denom", chroma_log_weight_denom, partition);
 
-  for (i=0; i<= img->num_ref_pic_active_fwd_minus1; i++)
+  for (i=0; i< img->num_ref_idx_l0_active; i++)
   {
 	  if ( (wp_weight[0][i][0] != 1<<luma_log_weight_denom) || (wp_offset[0][i][0] != 0) )
     {
@@ -406,9 +408,9 @@ static int pred_weight_table()
     }
   }
 
-  if (img->type == B_IMG || img->type == BS_IMG)
+  if (img->type == B_SLICE || img->type == BS_IMG)
   {
-    for (i=0; i<= img->num_ref_pic_active_bwd_minus1; i++)
+    for (i=0; i< img->num_ref_idx_l1_active; i++)
     {
       if ( (wp_weight[1][i][0] != 1<<luma_log_weight_denom) || (wp_offset[1][i][0] != 0) )
       {
@@ -471,25 +473,19 @@ int get_picture_type()
   // that the whole picture has the same slice type
   int same_slicetype_for_whole_frame = 5;
 
-  // !KS: picture type needs cleanup
-  if(img->types == SP_IMG )
-  {
-    return 3 + same_slicetype_for_whole_frame;
-  }
-
   switch (img->type)
   {
-  case INTRA_IMG:
+  case I_SLICE:
     return 2 + same_slicetype_for_whole_frame;
     break;
-  case INTER_IMG:
+  case P_SLICE:
     return 0 + same_slicetype_for_whole_frame;
     break;
-  case B_IMG:
+  case B_SLICE:
   case BS_IMG:
     return 1 + same_slicetype_for_whole_frame;
     break;
-  case SP_IMG:
+  case SP_SLICE:
     return 3 + same_slicetype_for_whole_frame;
     break;
   default:

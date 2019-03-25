@@ -56,9 +56,9 @@
  *    Filepointer
  * \return
  *    unsigned long double word
- * \para SideEffects
+ * \par SideEffects
  *     None.
- *  \para Notes
+ *  \par Notes
  *     File should be opened to read in binary format.
  * \author
  *    Shankar Regunathan                   shanre@microsoft.com
@@ -85,9 +85,9 @@ unsigned long GetBigDoubleWord(FILE *fp)
  *    Structure which contains decoder leaky bucket parameters.   
  * \return
  *    None
- * \para SideEffects
+ * \par SideEffects
  *     None.
- * \para Notes
+ * \par Notes
  *     Failure if LeakyBucketParam file is missing or if it does not have
  *     the correct number of entries.
  * \author

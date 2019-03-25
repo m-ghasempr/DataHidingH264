@@ -55,6 +55,9 @@
 #include "refbuf.h"
 #include "intrarefresh.h"
 #include "vlc.h"
+#include "mbuffer.h"
+#include "image.h"
+#include "mb_access.h"
 
 extern       int  QP2QUANT  [40];
 
@@ -145,7 +148,7 @@ void init_rdopt ()
 void UpdatePixelMap()
 {
   int mx,my,y,x,i,j;
-  if (img->type==INTRA_IMG)
+  if (img->type==I_SLICE)
   {
     for (y=0; y<img->height; y++)
     for (x=0; x<img->width; x++)
@@ -168,7 +171,7 @@ void UpdatePixelMap()
       else
       {
         for (y=my*8; y<j; y++)
-        for (x=mx*8; x<i; x++)  pixel_map[y][x] = min(pixel_map[y][x]+1, input->no_multpred+1);
+        for (x=mx*8; x<i; x++)  pixel_map[y][x] = min(pixel_map[y][x]+1, input->num_reference_frames+1);
       }
     }
   }
@@ -347,8 +350,8 @@ double RDCost_for_4x4IntraBlocks (int*    nonzero,
   int     pic_pix_y   = img->pix_y+block_y;
   int     frame_pic_pix_y = pic_pix_y;
   int     pic_block_y = pic_pix_y/4;
-  int     **ipredmodes = img->ipredmode;
   byte    **imgY_orig  = imgY_org;
+  byte    **imgY       = enc_picture->imgY;
 
   Slice          *currSlice    =  img->currentSlice;
   Macroblock     *currMB       = &img->mb_data[img->current_mb_nr];
@@ -360,7 +363,6 @@ double RDCost_for_4x4IntraBlocks (int*    nonzero,
   {
     pic_pix_y   = img->field_pix_y + block_y;
     pic_block_y = pic_pix_y/4;
-    ipredmodes  = img->top_field ? img->ipredmode_top:img->ipredmode_bot;
     imgY_orig   = img->top_field ? imgY_org_top : imgY_org_bot;
   }
 
@@ -381,10 +383,10 @@ double RDCost_for_4x4IntraBlocks (int*    nonzero,
   currSE->type    = SE_INTRAPREDMODE;
 
   //--- set function pointer ----
-  if (input->symbol_mode != UVLC)    currSE->writing = writeIntraPredMode2Buffer_CABAC;
+  if (input->symbol_mode != UVLC)    currSE->writing = writeIntraPredMode_CABAC;
 
   //--- choose data partition ---
-  if (img->type!=B_IMG && img->type!=BS_IMG)   dataPart = &(currSlice->partArr[partMap[SE_INTRAPREDMODE]]);
+  if (img->type!=B_SLICE && img->type!=BS_IMG)   dataPart = &(currSlice->partArr[partMap[SE_INTRAPREDMODE]]);
   else                                         dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
 
   //--- encode and update rate ---
@@ -427,50 +429,40 @@ int Mode_Decision_for_4x4IntraBlocks (int  b8,  int  b4,  double  lambda,  int* 
   int     pic_block_x = pic_pix_x/4;
   int     pic_block_y = pic_pix_y/4;
   double  min_rdcost  = 1e30;
-  int   **ipredmodes = img->ipredmode;
   byte    **imgY_orig  = imgY_org;
+
+  int left_available, up_available, all_available;
 
   int     upMode;
   int     leftMode;
   int     mostProbableMode;
 
-  int left_available, up_available, all_available;
+  PixelPos left_block;
+  PixelPos top_block;
 
-  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
+  getLuma4x4Neighbour(img->current_mb_nr, block_x/4, block_y/4, -1,  0, &left_block);
+  getLuma4x4Neighbour(img->current_mb_nr, block_x/4, block_y/4,  0, -1, &top_block);
+
+
+  if(img->MbaffFrameFlag)
   {
-    pic_pix_y   = img->field_pix_y+block_y;
-    pic_block_y = pic_pix_y/4;
-    ipredmodes  = (img->top_field ? img->ipredmode_top:img->ipredmode_bot);
     imgY_orig   = (img->top_field ? imgY_org_top:imgY_org_bot);
   }
 
-  if( mb_adaptive && img->field_mode && img->top_field && pic_block_y>0 && pic_block_y%4==0 && img->field_anchor[2*pic_block_y-1][pic_block_x] == 0 ) // BUG FIX (above is FRAME)
-  {
-    upMode = img->ipredmode[pic_block_x+1][2*pic_block_y];
-  }
-  else
-  {
-    upMode = ipredmodes[pic_block_x+1][pic_block_y  ];
-  }
-  //upMode           = ipredmodes[pic_block_x+1][pic_block_y  ];
-  leftMode         = ipredmodes[pic_block_x  ][pic_block_y+1];
-  mostProbableMode = (upMode < 0 || leftMode < 0) ? DC_PRED : upMode < leftMode ? upMode : leftMode;
+  upMode            = top_block.available ? img->ipredmode[top_block.pos_x ][top_block.pos_y ] : -1;
+  leftMode          = left_block.available ? img->ipredmode[left_block.pos_x][left_block.pos_y] : -1;
+  
+  mostProbableMode  = (upMode < 0 || leftMode < 0) ? DC_PRED : upMode < leftMode ? upMode : leftMode;
+
   *min_cost = (1<<20);
 
 
   //===== INTRA PREDICTION FOR 4x4 BLOCK =====
-  intrapred_luma (pic_pix_x, pic_pix_y);
-
-  left_available  = (ipredmodes[pic_block_x][pic_block_y+1] >= 0 ? 1 : 0);
-  up_available    = (ipredmodes[pic_block_x+1][pic_block_y] >= 0 ? 1 : 0);
-  all_available   = (left_available && up_available && ipredmodes[pic_block_x][pic_block_y] >= 0 ? 1 : 0);
+  intrapred_luma (pic_pix_x, pic_pix_y, &left_available, &up_available, &all_available);
 
   //===== LOOP OVER ALL 4x4 INTRA PREDICTION MODES =====
   for (ipmode=0; ipmode<NO_INTRA_PMODE; ipmode++)
-  {/*
-    if ((ipmode==DC_PRED || ipmode==HOR_PRED  || ipredmodes[pic_block_x+1][pic_block_y] >= 0) &&
-        (ipmode==DC_PRED || ipmode==VERT_PRED || ipredmodes[pic_block_x][pic_block_y+1] >= 0)  )
-        */
+  {
     if( (ipmode==DC_PRED) ||
         ((ipmode==VERT_PRED||ipmode==VERT_LEFT_PRED||ipmode==DIAG_DOWN_LEFT_PRED) && up_available ) ||
         ((ipmode==HOR_PRED||ipmode==HOR_UP_PRED) && left_available ) ||
@@ -512,7 +504,7 @@ int Mode_Decision_for_4x4IntraBlocks (int  b8,  int  b4,  double  lambda,  int* 
 
           //--- set reconstruction ---
           for (y=0; y<4; y++)
-          for (x=0; x<4; x++)  rec4x4[y][x] = imgY[frame_pic_pix_y+y][pic_pix_x+x];
+          for (x=0; x<4; x++)  rec4x4[y][x] = enc_picture->imgY[frame_pic_pix_y+y][pic_pix_x+x];
 
           //--- flag if dct-coefficients must be coded ---
           nonzero = c_nz;
@@ -527,7 +519,7 @@ int Mode_Decision_for_4x4IntraBlocks (int  b8,  int  b4,  double  lambda,  int* 
   }
 
   //===== set intra mode prediction =====
-  ipredmodes[pic_block_x+1][pic_block_y+1] = best_ipmode;
+  img->ipredmode[pic_block_x][pic_block_y] = best_ipmode;
   img->mb_data[img->current_mb_nr].intra_pred_modes[4*b8+b4] = mostProbableMode == best_ipmode ? -1 : best_ipmode < mostProbableMode ? best_ipmode : best_ipmode-1;
 
   if (!input->rdopt)
@@ -540,7 +532,7 @@ int Mode_Decision_for_4x4IntraBlocks (int  b8,  int  b4,  double  lambda,  int* 
         img->m7[i][j]                   = imgY_orig[pic_pix_y+j][pic_pix_x+i] - img->mprr[best_ipmode][j][i];
       }
     nonzero = dct_luma (block_x, block_y, &dummy, 1);
-    if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
+/*    if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
     {
       for (y=0; y<4; y++)
         for (x=0; x<4; x++)
@@ -550,7 +542,7 @@ int Mode_Decision_for_4x4IntraBlocks (int  b8,  int  b4,  double  lambda,  int* 
           else
             imgY_bot[pic_pix_y +y][pic_pix_x+x] = imgY[frame_pic_pix_y+y][pic_pix_x+x];
         }
-    }
+    }*/
   }
   else
   {
@@ -562,8 +554,9 @@ int Mode_Decision_for_4x4IntraBlocks (int  b8,  int  b4,  double  lambda,  int* 
     for (y=0; y<4; y++)
     for (x=0; x<4; x++)
     {
-      imgY[frame_pic_pix_y+y][pic_pix_x+x] = rec4x4[y][x];
+      enc_picture->imgY[frame_pic_pix_y+y][pic_pix_x+x] = rec4x4[y][x];
       img->mpr[block_x+x][block_y+y] = img->mprr[best_ipmode][y][x];
+      /*
       if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
       {
         if(img->top_field)
@@ -571,6 +564,7 @@ int Mode_Decision_for_4x4IntraBlocks (int  b8,  int  b4,  double  lambda,  int* 
         else
           imgY_bot[pic_pix_y +y][pic_pix_x+x] = rec4x4[y][x];
       }
+      */
     }
   }
 
@@ -651,7 +645,7 @@ double RDCost_for_8x8blocks (int*    cnt_nonz,   // --> number of nonzero coeffi
   int  pay     = 8*(block/2);
   int  i0      = pax/4;
   int  j0      = pay/4;
-  int  bframe  = (img->type==B_IMG || img->type==BS_IMG);
+  int  bframe  = (img->type==B_SLICE || img->type==BS_IMG);
   int  direct  = (bframe && mode==0);
   int  b8value = B8Mode2Value (mode, pdir);
 
@@ -703,7 +697,7 @@ double RDCost_for_8x8blocks (int*    cnt_nonz,   // --> number of nonzero coeffi
   }
 
   //===== get residue =====
-  if (input->rdopt==2 && img->type!=B_IMG)
+  if (input->rdopt==2 && img->type!=B_SLICE)
   {
     // We need the reconstructed prediction residue for the simulated decoders.
     compute_residue_b8block (block, -1);
@@ -712,7 +706,7 @@ double RDCost_for_8x8blocks (int*    cnt_nonz,   // --> number of nonzero coeffi
   //=====
   //=====   GET DISTORTION
   //=====
-  if (input->rdopt==2 && img->type!=B_IMG)
+  if (input->rdopt==2 && img->type!=B_SLICE)
   {
     for (k=0; k<input->NoOfDecoders ;k++)
     {
@@ -730,7 +724,7 @@ double RDCost_for_8x8blocks (int*    cnt_nonz,   // --> number of nonzero coeffi
     for (j=pay; j<pay+8; j++)
     for (i=img->pix_x+pax; i<img->pix_x+pax+8; i++)
     {
-      distortion += img->quad [imgY_original[pix_y+j][i] - imgY[img->pix_y+j][i]];
+      distortion += img->quad [imgY_original[pix_y+j][i] - enc_picture->imgY[img->pix_y+j][i]];
     }
   }
 
@@ -746,9 +740,9 @@ double RDCost_for_8x8blocks (int*    cnt_nonz,   // --> number of nonzero coeffi
   else
   {
     currSE->value1  = b8value;
-    currSE->writing = writeB8_typeInfo2Buffer_CABAC;
+    currSE->writing = writeB8_typeInfo_CABAC;
     currSE->type    = SE_MBTYPE;
-    if (img->type==B_IMG && img->type!=BS_IMG)   dataPart = &(currSlice->partArr[partMap[currSE->type]]);
+    if (img->type==B_SLICE && img->type!=BS_IMG)   dataPart = &(currSlice->partArr[partMap[currSE->type]]);
     else                                         dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
     dataPart->writeSyntaxElement (currSE, dataPart);
     rate += currSE->len;
@@ -759,7 +753,7 @@ double RDCost_for_8x8blocks (int*    cnt_nonz,   // --> number of nonzero coeffi
   //----- motion information -----
   if (!direct)
   {
-    if ((input->no_multpred>1 || input->add_ref_frame>0) && (pdir==0 || pdir==2))
+    if ((input->num_reference_frames>1 || input->add_ref_frame>0) && (pdir==0 || pdir==2))
       rate  += writeReferenceFrame (mode, i0, j0, 1, ref);
     if(input->StoredBPictures > 0)
     {
@@ -828,7 +822,7 @@ void SetModesAndRefframeForBlocks (int mode)
 {
   int i,j,k,l;
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
-  int  bframe  = (img->type==B_IMG || img->type==BS_IMG);
+  int  bframe  = (img->type==B_SLICE || img->type==BS_IMG);
   int  **abp_type_arr = abp_type_FrArr;
   int    **fwrefarr = fw_refFrArr;
   int    **bwrefarr = bw_refFrArr;
@@ -1051,7 +1045,6 @@ void SetCoeffAndReconstruction8x8 (Macroblock* currMB)
   if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
   {
     block_y   = img->field_block_y;
-    ipredmodes  = img->top_field ? img->ipredmode_top:img->ipredmode_bot;
   }
 
   //--- restore coefficients ---
@@ -1061,24 +1054,24 @@ void SetCoeffAndReconstruction8x8 (Macroblock* currMB)
   for (i=0; i<65; i++)
     img->cofAC[block][k][j][i] = cofAC8x8[block][k][j][i];
 
-  if (cnt_nonz_8x8<=5 && img->types!=SP_IMG)
+  if (cnt_nonz_8x8<=5 && img->type!=SP_SLICE)
   {
     currMB->cbp     = 0;
     currMB->cbp_blk = 0;
     for (j=0; j<16; j++)
-    for (i=0; i<16; i++)  imgY[img->pix_y+j][img->pix_x+i] = mpr8x8[j][i];
+    for (i=0; i<16; i++)  enc_picture->imgY[img->pix_y+j][img->pix_x+i] = mpr8x8[j][i];
   }
   else
   {
     currMB->cbp     = cbp8x8;
     currMB->cbp_blk = cbp_blk8x8;
     for (j=0; j<16; j++)
-    for (i=0; i<16; i++)  imgY[img->pix_y+j][img->pix_x+i] = rec_mbY8x8[j][i];
+    for (i=0; i<16; i++)  enc_picture->imgY[img->pix_y+j][img->pix_x+i] = rec_mbY8x8[j][i];
   }
 
   //===== restore intra prediction modes for 8x8+ macroblock mode =====
-  for (k=0, j=block_y+1; j<block_y+5; j++)
-  for (     i=img->block_x+1; i<img->block_x+5; i++, k++)
+  for (k=0, j=block_y; j<block_y+4; j++)
+  for (     i=img->block_x; i<img->block_x+4; i++, k++)
   {
     ipredmodes    [i][j] = b8_ipredmode       [k];
     currMB->intra_pred_modes[k] = b8_intra_pred_modes[k];
@@ -1347,9 +1340,9 @@ int RDCost_for_macroblocks (double   lambda,      // <-- lagrange multiplier
   int         i16mode, rate=0, distortion=0;
   double      rdcost;
   Macroblock  *currMB   = &img->mb_data[img->current_mb_nr];
-  int         bframe    = (img->type==B_IMG || img->type==BS_IMG);
+  int         bframe    = (img->type==B_SLICE || img->type==BS_IMG);
   int         tmp_cc;
-  int         use_of_cc =  (img->type!=INTRA_IMG &&  input->symbol_mode!=CABAC);
+  int         use_of_cc =  (img->type!=I_SLICE &&  input->symbol_mode!=CABAC);
   int         cc_rate, dummy;
   byte        **imgY_orig = imgY_org;
   byte        ***imgUV_orig = imgUV_org;
@@ -1390,7 +1383,7 @@ int RDCost_for_macroblocks (double   lambda,      // <-- lagrange multiplier
     Intra16x16_Mode_Decision  (currMB, &i16mode);
   }
 
-  if (input->rdopt==2 && img->type!=B_IMG)
+  if (input->rdopt==2 && img->type!=B_SLICE)
   {
     // We need the reconstructed prediction residue for the simulated decoders.
     compute_residue_mb (mode==I16MB?i16mode:-1);
@@ -1406,7 +1399,7 @@ int RDCost_for_macroblocks (double   lambda,      // <-- lagrange multiplier
   //=====   GET DISTORTION
   //=====
   // LUMA
-  if (input->rdopt==2 && img->type!=B_IMG)
+  if (input->rdopt==2 && img->type!=B_SLICE)
   {
     for (k=0; k<input->NoOfDecoders ;k++)
     {
@@ -1424,7 +1417,7 @@ int RDCost_for_macroblocks (double   lambda,      // <-- lagrange multiplier
     for (j=0; j<16; j++)
     for (i=img->pix_x; i<img->pix_x+16; i++)
     {
-      distortion += img->quad [imgY_orig[j+pix_y][i] - imgY[img->pix_y+j][i]];
+      distortion += img->quad [imgY_orig[j+pix_y][i] - enc_picture->imgY[img->pix_y+j][i]];
     }
   }
 
@@ -1432,8 +1425,8 @@ int RDCost_for_macroblocks (double   lambda,      // <-- lagrange multiplier
   for (j=0; j<8; j++)
   for (i=img->pix_c_x; i<img->pix_c_x+8; i++)
   {
-    distortion += img->quad [imgUV_orig[0][j+pix_c_y][i] - imgUV[0][img->pix_c_y+j][i]];
-    distortion += img->quad [imgUV_orig[1][j+pix_c_y][i] - imgUV[1][img->pix_c_y+j][i]];
+    distortion += img->quad [imgUV_orig[0][j+pix_c_y][i] - enc_picture->imgUV[0][img->pix_c_y+j][i]];
+    distortion += img->quad [imgUV_orig[1][j+pix_c_y][i] - enc_picture->imgUV[1][img->pix_c_y+j][i]];
   }
 
 
@@ -1524,8 +1517,8 @@ void store_macroblock_parameters (int mode)
 {
   int  i, j, k, ****i4p, ***i3p;
   Macroblock *currMB  = &img->mb_data[img->current_mb_nr];
-  int        bframe   = (img->type==B_IMG || img->type==BS_IMG);
-  int        **frefar = ((img->type==B_IMG || img->type==BS_IMG)? fw_refFrArr : refFrArr);
+  int        bframe   = (img->type==B_SLICE || img->type==BS_IMG);
+  int        **frefar = ((img->type==B_SLICE || img->type==BS_IMG)? fw_refFrArr : refFrArr);
   int        **abp_type_arr = abp_type_FrArr;
   int        **brefar = bw_refFrArr;
   int    block_y  = img->block_y;
@@ -1539,13 +1532,13 @@ void store_macroblock_parameters (int mode)
     pix_c_y = img->field_pix_c_y;
     if(img->top_field)
     {
-      frefar = ((img->type==B_IMG || img->type==BS_IMG) ? fw_refFrArr_top : refFrArr_top);
+      frefar = ((img->type==B_SLICE || img->type==BS_IMG) ? fw_refFrArr_top : refFrArr_top);
       abp_type_arr = abp_type_FrArr_top;
       brefar = bw_refFrArr_top;
     }
     else
     {
-      frefar = ((img->type==B_IMG || img->type==BS_IMG) ? fw_refFrArr_bot : refFrArr_bot);
+      frefar = ((img->type==B_SLICE || img->type==BS_IMG) ? fw_refFrArr_bot : refFrArr_bot);
       abp_type_arr = abp_type_FrArr_bot;
       brefar = bw_refFrArr_bot;
     }
@@ -1566,18 +1559,18 @@ void store_macroblock_parameters (int mode)
   for (j=0; j<16; j++)
   for (i=0; i<16; i++)
   {
-    rec_mbY[j][i] = imgY[img->pix_y+j][img->pix_x+i];
+    rec_mbY[j][i] = enc_picture->imgY[img->pix_y+j][img->pix_x+i];
   }
   for (j=0; j<8; j++)
   for (i=0; i<8; i++)
   {
-    rec_mbU[j][i] = imgUV[0][img->pix_c_y+j][img->pix_c_x+i];
-    rec_mbV[j][i] = imgUV[1][img->pix_c_y+j][img->pix_c_x+i];
+    rec_mbU[j][i] = enc_picture->imgUV[0][img->pix_c_y+j][img->pix_c_x+i];
+    rec_mbV[j][i] = enc_picture->imgUV[1][img->pix_c_y+j][img->pix_c_x+i];
   }
 
 
   //--- store results of decoders ---
-  if (input->rdopt==2 && img->type!=B_IMG)
+  if (input->rdopt==2 && img->type!=B_SLICE)
   {
     for (k=0; k<input->NoOfDecoders; k++)
     {
@@ -1642,27 +1635,28 @@ void set_stored_macroblock_parameters ()
   int  i, j, k, ****i4p, ***i3p,l;
   Macroblock  *currMB  = &img->mb_data[img->current_mb_nr];
   int         mode     = best_mode;
-  int         bframe   = (img->type==B_IMG || img->type==BS_IMG);
-  int         **frefar = ((img->type==B_IMG || img->type==BS_IMG)? fw_refFrArr : refFrArr);
+  int         bframe   = (img->type==B_SLICE || img->type==BS_IMG);
+  int         **frefar = ((img->type==B_SLICE || img->type==BS_IMG)? fw_refFrArr : refFrArr);
   int         **abp_type_arr = abp_type_FrArr;
   int         **brefar = bw_refFrArr;
   int     **ipredmodes = img->ipredmode;
   int     block_y = img->block_y; 
+  
+  byte    **imgY=enc_picture->imgY;
+  byte    ***imgUV=enc_picture->imgUV;
 
   if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
   {
     block_y = img->field_block_y;
     if(img->top_field)
     {
-      ipredmodes = img->ipredmode_top;
-      frefar = (img->type==B_IMG || img->type==BS_IMG) ? fw_refFrArr_top : refFrArr_top;
+      frefar = (img->type==B_SLICE || img->type==BS_IMG) ? fw_refFrArr_top : refFrArr_top;
       abp_type_arr = abp_type_FrArr_top;
       brefar = bw_refFrArr_top;
     }
     else
     {
-      ipredmodes = img->ipredmode_bot;
-      frefar = (img->type==B_IMG || img->type==BS_IMG) ? fw_refFrArr_bot : refFrArr_bot;
+      frefar = (img->type==B_SLICE || img->type==BS_IMG) ? fw_refFrArr_bot : refFrArr_bot;
       abp_type_arr = abp_type_FrArr_bot;
       brefar = bw_refFrArr_bot;
 
@@ -1729,7 +1723,7 @@ void set_stored_macroblock_parameters ()
       rdopt->b8pdir[i]  = b8pdir[i];                  
     }
   }
-  if (input->rdopt==2 && img->type!=B_IMG)
+  if (input->rdopt==2 && img->type!=B_SLICE)
   {
     //! save the MB Mode of every macroblock
     decs->dec_mb_mode[img->mb_x][img->mb_y] = mode;
@@ -1767,8 +1761,8 @@ void set_stored_macroblock_parameters ()
   img->i16offset = best_i16offset;
   if (mode==P8x8)
   {
-    for (k=0, j=block_y+1; j<block_y+5; j++)
-    for (     i=img->block_x+1; i<img->block_x+5; i++, k++)
+    for (k=0, j=block_y; j<block_y+4; j++)
+    for (     i=img->block_x; i<img->block_x+4; i++, k++)
     {
       ipredmodes    [i][j] = b8_ipredmode       [k];
       currMB->intra_pred_modes[k] = b8_intra_pred_modes[k];
@@ -1776,8 +1770,8 @@ void set_stored_macroblock_parameters ()
   }
   else if (mode!=I4MB)
   {
-    for (k=0, j=block_y+1; j<block_y+5; j++)
-      for (     i=img->block_x+1; i<img->block_x+5; i++, k++)
+    for (k=0, j=block_y; j<block_y+4; j++)
+      for (     i=img->block_x; i<img->block_x+4; i++, k++)
       {
         ipredmodes    [i][j] = DC_PRED;
         currMB->intra_pred_modes[k] = DC_PRED;
@@ -1786,8 +1780,8 @@ void set_stored_macroblock_parameters ()
 
   if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive)
   {
-    for (k=0, j=block_y+1; j<block_y+5; j++)
-      for (     i=img->block_x+1; i<img->block_x+5; i++, k++)
+    for (k=0, j=block_y; j<block_y+4; j++)
+      for (     i=img->block_x; i<img->block_x+4; i++, k++)
       {
         rdopt->ipredmode[i][j] = ipredmodes[i][j];
         rdopt->intra_pred_modes[k] = currMB->intra_pred_modes[k];
@@ -1811,7 +1805,7 @@ void set_stored_macroblock_parameters ()
 void SetRefAndMotionVectors (int block, int mode, int ref, int pdir, int abp_type)
 {
   int i, j;
-  int     bframe  = (img->type==B_IMG || img->type==BS_IMG);
+  int     bframe  = (img->type==B_SLICE || img->type==BS_IMG);
   int**   abp_type_arr = abp_type_FrArr;
   int     pmode   = (mode==1||mode==2||mode==3?mode:4);
   int     j0      = ((block/2)<<1);
@@ -1994,22 +1988,22 @@ void encode_one_macroblock ()
   int         cost, min_cost, cost8x8, cost_direct=0, have_direct=0, i16mode;
   int         intra1;
 
-  int         intra       = ((img->type==INTER_IMG && img->mb_y==img->mb_y_upd && img->mb_y_upd!=img->mb_y_intra) || img->type==INTRA_IMG);
-  int         spframe     = (img->type==INTER_IMG && img->types==SP_IMG);
-  int         siframe     = (img->type==INTRA_IMG && img->types==SP_IMG);
-  int         bframe      = (img->type==B_IMG || img->type==BS_IMG);
-  int         write_ref   = (input->no_multpred>1 || input->add_ref_frame>0);
-  int         runs        = (input->RestrictRef==1 && input->rdopt==2 && (img->type==INTER_IMG || img->type==BS_IMG) ? 2 : 1);
-  int         max_ref     = img->nb_references;
-  // Tian Dong. PLUS1. Add the following line:
-  int         adjust_ref;
-  int         checkref    = (input->rdopt && input->RestrictRef && img->type==INTER_IMG);
+  int         intra       = (((img->type==P_SLICE||img->type==SP_SLICE) && img->mb_y==img->mb_y_upd && img->mb_y_upd!=img->mb_y_intra) || img->type==I_SLICE);
+  int         spframe     = (img->type==SP_SLICE);
+  int         siframe     = (img->type==SI_SLICE);
+  int         bframe      = (img->type==B_SLICE);
+  int         write_ref   = (input->num_reference_frames>1 || input->add_ref_frame>0);
+  int         runs        = (input->RestrictRef==1 && input->rdopt==2 && (img->type==P_SLICE || img->type==SP_SLICE || img->type==BS_IMG) ? 2 : 1);
+  
+  int         max_ref     = listXsize[0];
+
+  int         checkref    = (input->rdopt && input->RestrictRef && (img->type==P_SLICE || img->type==SP_SLICE));
   Macroblock* currMB      = &img->mb_data[img->current_mb_nr];
 
   int     **ipredmodes = img->ipredmode;
   int     block_y   = img->block_y;
-  int         best_bw_ref;
-  int         best_abp_type;
+  int     best_bw_ref;
+  int     best_abp_type;
   int     ***tmpmvs = tmp_mv;
   int     *****allmvs = img->all_mv;
   int     **refar     = refFrArr;
@@ -2020,21 +2014,12 @@ void encode_one_macroblock ()
   
   intra |= RandomIntra (img->current_mb_nr);    // Forced Pseudo-Random Intra
 
-  adjust_ref  = (img->type==B_IMG? (mref==mref_fld)? 2 : 1 : 0);
-  adjust_ref  = min(adjust_ref, max_ref-1);
-  
-  if(mref==mref_fld)
+  if(img->MbaffFrameFlag)
   {
-    max_ref = min (img->number-((mref==mref_fld)&&img->fld_type&&img->type==B_IMG), img->buf_cycle);
-    adjust_ref = 0;
-  }
+    if (img->fld_flag)
+      max_ref = listXsize[2];
 
-  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
-  {
     block_y   = img->field_block_y;
-    ipredmodes  = img->top_field ? img->ipredmode_top:img->ipredmode_bot;
-    max_ref   = min(2*img->number, img->buf_cycle);
-    adjust_ref  = 0;
     if(img->top_field)
     {
       tmpmvs = tmp_mv_top;
@@ -2051,7 +2036,8 @@ void encode_one_macroblock ()
 
   //===== SET VALID MODES =====
   valid[I4MB]   = 1;
-  valid[I16MB]  = 1;
+  valid[I16MB]  = 0;
+//  valid[I16MB]  = 1;
 
   // HS: I'm not sure when the Intra Mode on 8x8 basis should be unvalid
   //     Is it o.k. for data partitioning? (where the syntax elements have to written to?)
@@ -2072,9 +2058,9 @@ void encode_one_macroblock ()
     qp            = (double)img->qp - SHIFT_QP;
 //    lambda_mode   = 0.85 * pow (2, qp/3.0) * (bframe? 4.0:spframe?max(1.4,min(3.0,(qp / 12.0))):1.0);  // ????? WHY FACTOR 4 FOR SP-FRAME ?????
     if (input->successive_Bframe>0)
-      lambda_mode   = 0.68 * pow (2, qp/3.0) * (img->type==B_IMG? max(2.00,min(4.00,(qp / 6.0))):spframe?max(1.4,min(3.0,(qp / 12.0))):1.0);  
+      lambda_mode   = 0.68 * pow (2, qp/3.0) * (img->type==B_SLICE? max(2.00,min(4.00,(qp / 6.0))):spframe?max(1.4,min(3.0,(qp / 12.0))):1.0);  
     else
-      lambda_mode   = 0.85 * pow (2, qp/3.0) * (img->type==B_IMG? 4.0:spframe?max(1.4,min(3.0,(qp / 12.0))):1.0);  
+      lambda_mode   = 0.85 * pow (2, qp/3.0) * (img->type==B_SLICE? 4.0:spframe?max(1.4,min(3.0,(qp / 12.0))):1.0);  
     lambda_motion = sqrt (lambda_mode);
   }
   else
@@ -2161,7 +2147,7 @@ void encode_one_macroblock ()
                     best_bw_ref = 1;
                   }
                 }
-                else if (img->type==B_IMG)
+                else if (img->type==B_SLICE)
                 {
                   best_bw_ref = 0;
                 }
@@ -2177,7 +2163,7 @@ void encode_one_macroblock ()
                 PartitionMotionSearch (mode, block, lambda_motion);
 
                 //--- get cost and reference frame for forward prediction ---
-                for (fw_mcost=max_mcost, ref=0; ref<max_ref-adjust_ref; ref++) // Tian Dong. PLUS1. -adjust_ref. June 06, 2002
+                for (fw_mcost=max_mcost, ref=0; ref<max_ref; ref++) // Tian Dong. PLUS1. -adjust_ref. June 06, 2002
                 {
                   if (!checkref || ref==0 || CheckReliabilityOfRef (block, ref, mode))
                   {
@@ -2309,7 +2295,7 @@ void encode_one_macroblock ()
                   for (j=j0; j<j0+8; j++)
                   for (i=i0; i<i0+8; i++)
                   {
-                    rec_mbY8x8[j][i] = imgY[img->pix_y+j][img->pix_x+i];
+                    rec_mbY8x8[j][i] = enc_picture->imgY[img->pix_y+j][img->pix_x+i];
                     mpr8x8    [j][i] = img->mpr[i][j];
                   }
                 }
@@ -2348,7 +2334,7 @@ void encode_one_macroblock ()
             for (j=j0; j<j0+8; j++)
             for (i=i0; i<i0+8; i++)
             {
-              rec_mbY8x8[j][i] = imgY[img->pix_y+j][img->pix_x+i];
+              rec_mbY8x8[j][i] = enc_picture->imgY[img->pix_y+j][img->pix_x+i];
               mpr8x8    [j][i] = img->mpr[i][j];
             }
           }
@@ -2362,8 +2348,8 @@ void encode_one_macroblock ()
           
           mode=best8x8mode[block];
           //===== reset intra prediction modes (needed for prediction, must be stored after 8x8 mode dec.) =====
-          j0 = block_y+1+2*(block/2);
-          i0 = img->block_x+1+2*(block%2);
+          j0 = block_y+2*(block/2);
+          i0 = img->block_x+2*(block%2);
           for (j=j0; j<j0+2; j++)
             for (i=i0; i<i0+2; i++) 
               ipredmodes[i][j]         = DC_PRED;
@@ -2379,7 +2365,8 @@ void encode_one_macroblock ()
             j0   = 8*(block/2);
             i0   = 8*(block%2);
             for (j=j0; j<j0+8; j++)
-            for (i=i0; i<i0+8; i++)  imgY[img->pix_y+j][img->pix_x+i] = rec_mbY8x8[j][i];
+            for (i=i0; i<i0+8; i++)  enc_picture->imgY[img->pix_y+j][img->pix_x+i] = rec_mbY8x8[j][i];
+            /*
             if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
             {
               if(img->top_field)
@@ -2392,7 +2379,7 @@ void encode_one_macroblock ()
                 for (j=j0; j<j0+8; j++)
                 for (i=i0; i<i0+8; i++)  imgY_bot[img->field_pix_y+j][img->pix_x+i] = rec_mbY8x8[j][i];
               }
-            }
+            }*/
           } // if (block<3)
 
           //===== set the coding state after current block =====
@@ -2400,8 +2387,8 @@ void encode_one_macroblock ()
         } // for (cbp8x8=cbp_blk8x8=cnt_nonz_8x8=0, block=0; block<4; block++)
 
         //===== store intra prediction modes for 8x8+ macroblock mode =====
-        for (k=0, j=block_y+1; j<block_y+5; j++)
-        for (     i=img->block_x+1; i<img->block_x+5; i++, k++)
+        for (k=0, j=block_y; j<block_y+4; j++)
+        for (     i=img->block_x; i<img->block_x+4; i++, k++)
         {
           b8_ipredmode       [k] = ipredmodes    [i][j];
           b8_intra_pred_modes[k] = currMB->intra_pred_modes[k];
@@ -2431,7 +2418,7 @@ void encode_one_macroblock ()
             i = (block==1 && mode==3 ? 2 : 0);
 
             //--- get cost and reference frame for forward prediction ---
-            for (fw_mcost=max_mcost, ref=0; ref<max_ref-adjust_ref; ref++)   // Tian Dong. PLUS1. -adjust_ref. June 06, 2002
+            for (fw_mcost=max_mcost, ref=0; ref<max_ref; ref++)
             {
               if (!checkref || ref==0 || CheckReliabilityOfRef (block, ref, mode))
               {
@@ -2548,10 +2535,10 @@ void encode_one_macroblock ()
       } // for (mode=3; mode>0; mode--)
 
       // Find a motion vector for the Skip mode
-      if(img->type == INTER_IMG)
+      if((img->type == P_SLICE)||(img->type == SP_SLICE))
         FindSkipModeMotionVector ();
     }
-    else // if (img->type!=INTRA_IMG)
+    else // if (img->type!=I_SLICE)
     {
       min_cost = (1<<20);
     }
@@ -2583,7 +2570,7 @@ void encode_one_macroblock ()
           mode = mb_mode_table[index];
 
           //--- for INTER16x16 check all prediction directions ---
-          if (mode==1 && img->type==B_IMG)
+          if (mode==1 && img->type==B_SLICE)
           {
             best8x8pdir[1][0] = best8x8pdir[1][1] = best8x8pdir[1][2] = best8x8pdir[1][3] = ctr16x16;
             if (ctr16x16 < 2) index--;
@@ -2671,8 +2658,8 @@ void encode_one_macroblock ()
     {
       if (best_mode!=I4MB)
       {
-        for (k=0, j=block_y+1; j<block_y+5; j++)
-        for (     i=img->block_x+1; i<img->block_x+5; i++, k++)
+        for (k=0, j=block_y; j<block_y+4; j++)
+        for (     i=img->block_x; i<img->block_x+4; i++, k++)
         {
           ipredmodes    [i][j] = DC_PRED;
           currMB->intra_pred_modes[k] = DC_PRED;
@@ -2695,7 +2682,7 @@ void encode_one_macroblock ()
     SetMotionVectorsMB (currMB, bframe);
 
     //===== check for SKIP mode =====
-    if (img->type==INTER_IMG && best_mode==1 && currMB->cbp==0 &&
+    if ((img->type==P_SLICE || img->type==SP_SLICE) && best_mode==1 && currMB->cbp==0 &&
         refFrArr [block_y][img->block_x  ]==0 &&
         tmpmvs[0][block_y][img->block_x+4]==allmvs[0][0][0][0][0] &&
         tmpmvs[1][block_y][img->block_x+4]==allmvs[0][0][0][0][1]               )
@@ -2721,18 +2708,18 @@ void encode_one_macroblock ()
       rdopt->min_rdcost = min_cost;
     
     
-    if(img->field_mode && img->top_field && (img->type != B_IMG && img->type != BS_IMG) && best_mode == 0)
+    if(img->field_mode && img->top_field && (img->type != B_SLICE && img->type != BS_IMG) && best_mode == 0)
       TopFieldIsSkipped=1;  //set top field MB skipped to 1 for skipped top field MBs
-    else if(img->field_mode && img->top_field && (img->type == B_IMG || img->type == BS_IMG) && best_mode == 0)
+    else if(img->field_mode && img->top_field && (img->type == B_SLICE || img->type == BS_IMG) && best_mode == 0)
       TopFieldIsSkipped = currMB->cbp ? 0:1;  // direct mode may or may not be skipped
     
-    if(!img->field_mode && (img->type != B_IMG && img->type != BS_IMG) && best_mode == 0 && !img->mb_y%2)
+    if(!img->field_mode && (img->type != B_SLICE && img->type != BS_IMG) && best_mode == 0 && !img->mb_y%2)
       TopFrameIsSkipped=1;  
-    else if(!img->field_mode && (img->type == B_IMG || img->type == BS_IMG) && best_mode == 0 && !img->mb_y%2)
+    else if(!img->field_mode && (img->type == B_SLICE || img->type == BS_IMG) && best_mode == 0 && !img->mb_y%2)
       TopFrameIsSkipped = currMB->cbp ? 0:1;  // direct mode may or may not be skipped
     
     if(!input->rdopt && img->field_mode && !img->top_field && TopFieldIsSkipped)
-      if(img->type == B_IMG  && (best_mode == 0 && currMB->cbp == 0 && input->symbol_mode!=CABAC) )
+      if(img->type == B_SLICE  && (best_mode == 0 && currMB->cbp == 0 && input->symbol_mode!=CABAC) )
         rdopt->min_rdcost = 1e30;  // don't allow coding of an MB pair as skip in field mode
   }
 /*
@@ -2744,7 +2731,7 @@ void encode_one_macroblock ()
 
   //===== init and update number of intra macroblocks =====
   if (img->current_mb_nr==0)                      intras=0;
-  if ((img->type==INTER_IMG || img->type==BS_IMG) && IS_INTRA(currMB))   intras++;
+  if ((img->type==P_SLICE || img->type==SP_SLICE || img->type==BS_IMG) && IS_INTRA(currMB))   intras++;
 
   //===== Decide if this MB will restrict the reference frames =====
   if (input->RestrictRef==1)
@@ -2779,8 +2766,8 @@ void set_mbaff_parameters()
   int  i, j, k, l;
   Macroblock  *currMB  = &img->mb_data[img->current_mb_nr];
   int         mode     = best_mode;
-  int         bframe   = (img->type==B_IMG);
-  int         **frefar = (img->type==B_IMG ? fw_refFrArr : refFrArr);
+  int         bframe   = (img->type==B_SLICE);
+  int         **frefar = (img->type==B_SLICE ? fw_refFrArr : refFrArr);
   int         **brefar = bw_refFrArr;
   int     **ipredmodes = img->ipredmode;
   int     block_y = img->block_y; 
@@ -2790,14 +2777,12 @@ void set_mbaff_parameters()
     block_y = img->field_block_y;
     if(img->top_field)
     {
-      ipredmodes = img->ipredmode_top;
-      frefar = (img->type == B_IMG) ? fw_refFrArr_top : refFrArr_top;
+      frefar = (img->type == B_SLICE) ? fw_refFrArr_top : refFrArr_top;
       brefar = bw_refFrArr_top;
     }
     else
     {
-      ipredmodes = img->ipredmode_bot;
-      frefar = (img->type == B_IMG) ? fw_refFrArr_bot : refFrArr_bot;
+      frefar = (img->type == B_SLICE) ? fw_refFrArr_bot : refFrArr_bot;
       brefar = bw_refFrArr_bot;
 
     }
@@ -2806,13 +2791,13 @@ void set_mbaff_parameters()
   //===== reconstruction values =====
   for (j=0; j<16; j++)
   for (i=0; i<16; i++)
-    rdopt->rec_mbY[j][i]       = imgY[img->pix_y+j][img->pix_x+i]; 
+    rdopt->rec_mbY[j][i]       = enc_picture->imgY[img->pix_y+j][img->pix_x+i]; 
 
   for (j=0; j<8; j++)
   for (i=0; i<8; i++)
   {
-    rdopt->rec_mbU[j][i]           = imgUV[0][img->pix_c_y+j][img->pix_c_x+i];   
-    rdopt->rec_mbV[j][i]           = imgUV[1][img->pix_c_y+j][img->pix_c_x+i];    
+    rdopt->rec_mbU[j][i]           = enc_picture->imgUV[0][img->pix_c_y+j][img->pix_c_x+i];   
+    rdopt->rec_mbV[j][i]           = enc_picture->imgUV[1][img->pix_c_y+j][img->pix_c_x+i];    
   }
 
   //===== coefficients and cbp =====
@@ -2871,12 +2856,11 @@ void set_mbaff_parameters()
 
   if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive)
   {
-    for (k=0, j=block_y+1; j<block_y+5; j++)
-    for (     i=img->block_x+1; i<img->block_x+5; i++, k++)
-  {
-      rdopt->ipredmode[i][j] = ipredmodes[i][j];
-    rdopt->intra_pred_modes[k] = currMB->intra_pred_modes[k];
-  }
-
+    for (k=0, j=block_y; j<block_y+4; j++)
+      for (     i=img->block_x; i<img->block_x+4; i++, k++)
+      {
+        rdopt->ipredmode[i][j] = ipredmodes[i][j];
+        rdopt->intra_pred_modes[k] = currMB->intra_pred_modes[k];
+      }
   }
 }

@@ -445,8 +445,8 @@ static void PatchInp ()
     error (errortext, 400);
   }
 */
-  // consistency check no_multpred
-  if (input->no_multpred<1) input->no_multpred=1;
+  // consistency check num_reference_frames
+  if (input->num_reference_frames<1) input->num_reference_frames=1;
 
 
   // consistency check size information
@@ -592,9 +592,9 @@ static void PatchInp ()
   // Tian Dong: May 31, 2002
   // The number of frames in one sub-seq in enhanced layer should not exceed
   // the number of reference frame number.
-  if ( input->NumFramesInELSubSeq >= input->no_multpred || input->NumFramesInELSubSeq < 0 )
+  if ( input->NumFramesInELSubSeq >= input->num_reference_frames || input->NumFramesInELSubSeq < 0 )
   {
-    snprintf(errortext, ET_SIZE, "NumFramesInELSubSeq (%d) is out of range [0,%d).", input->NumFramesInELSubSeq, input->no_multpred);
+    snprintf(errortext, ET_SIZE, "NumFramesInELSubSeq (%d) is out of range [0,%d).", input->NumFramesInELSubSeq, input->num_reference_frames);
     error (errortext, 500);
   }
   // Tian Dong: Enhanced GOP is not supported in bitstream mode. September, 2002

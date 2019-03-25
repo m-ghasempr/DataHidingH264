@@ -78,8 +78,6 @@ seq_parameter_set_rbsp_t *active_sps;
 
 // global picture format dependend buffers, mem allocation in decod.c ******************
 int  **refFrArr;                                //!< Array for reference frames of each block
-byte **imgY;                                    //!< array for the decoded luma component
-byte ***imgUV;                                  //!< array for the chroma component
 
 int   **moving_block;           //<! stationary block buffer
 int   **moving_block_frm;       //<! stationary block buffer - frame
@@ -87,13 +85,10 @@ int   **moving_block_top;       //<! stationary block buffer - field
 int   **moving_block_bot;       //<! stationary block buffer - field
 
 
-// B pictures
-byte **imgY_prev;
-byte ***imgUV_prev;
-
 byte **imgY_ref;                                //!< reference frame find snr
 byte ***imgUV_ref;
 
+int  ReMapRef[20];
 // B pictures
 int  Bframe_ctr;
 byte prevP_tr, nextP_tr, P_interval;
@@ -102,12 +97,6 @@ int  frame_no;
 int  **refFrArr_frm;
 int  **refFrArr_top;
 int  **refFrArr_bot;
-byte **imgY_frm;
-byte **imgY_top;
-byte **imgY_bot;
-byte ***imgUV_frm;
-byte ***imgUV_top;
-byte ***imgUV_bot;
 
 byte ***mref_frm;                               //!< 1/1 pix luma for direct interpolation
 byte ****mcef_frm;                              //!< pix chroma
@@ -115,9 +104,6 @@ byte ****mcef_frm;                              //!< pix chroma
 byte ***mref_fld;                               //!< 1/1 pix luma for direct interpolation
 byte ****mcef_fld;     
 byte nextP_tr_frm, nextP_tr_fld;
-int  **field_mb;
-int  *parity_fld;
-int  *chroma_vector_adjustment;
 
 // For MB level frame/field coding
 int  TopFieldForSkip_Y[16][16];
@@ -215,7 +201,8 @@ typedef enum {
   FRAME,
   TOP_FIELD,
   BOTTOM_FIELD
-} PictureType;           //!< New enum for field processing
+} PictureStructure;           //!< New enum for field processing
+
 
 typedef enum {
   P_SLICE = 0,
@@ -312,23 +299,16 @@ struct img_par;
 struct inp_par;
 struct stat_par;
 
-/*! Buffer structure for RMPNI commands */
-typedef struct RMPNIbuffer_s
+/*! Buffer structure for decoded referenc picture marking commands */
+typedef struct DecRefPicMarking_s
 {
-  int RMPNI;
-  int Data;
-  struct RMPNIbuffer_s *Next;
-} RMPNIbuffer_t;
-
-/*! Buffer structure for MMCO commands */
-typedef struct MMCObuffer_s
-{
-  int MMCO;
-  int DPN;
-  int LPIN;
-  int MLIP1;
-  struct MMCObuffer_s *Next;
-} MMCObuffer_t;
+  int memory_management_control_operation;
+  int difference_of_pic_nums_minus1;
+  int long_term_pic_num;
+  int long_term_frame_idx;
+  int max_long_term_frame_idx_plus1;
+  struct DecRefPicMarking_s *Next;
+} DecRefPicMarking_t;
 
 //! Syntaxelement
 typedef struct syntaxelement
@@ -360,10 +340,9 @@ typedef struct macroblock
   int           qp;
   int           slice_nr;
   int           delta_quant;          //!< for rate control
-  struct macroblock   *mb_available[3][3]; /*!< pointer to neighboring MBs in a 3x3 window of current MB, which is located at [1][1]
-                                                NULL pointer identifies neighboring MBs which are unavailable */
   
-  struct macroblock   *field_available[2];
+  struct macroblock   *mb_available_up;   //!< pointer to neighboring MB (CABAC)
+  struct macroblock   *mb_available_left; //!< pointer to neighboring MB (CABAC)
 
   // some storage of macroblock syntax elements for global access
   int           mb_type;
@@ -376,12 +355,16 @@ typedef struct macroblock
   int           b8pdir[4];
   int           ei_flag;
 
-  int           lf_disable;
-  int           lf_alpha_c0_offset;
-  int           lf_beta_offset;
+  int           LFDisableIdc;
+  int           LFAlphaC0Offset;
+  int           LFBetaOffset;
 
   int           c_ipred_mode;       //!< chroma intra prediction mode
   int           mb_field;
+
+  int mbAddrA, mbAddrB, mbAddrC, mbAddrD;
+  int mbAvailA, mbAvailB, mbAvailC, mbAvailD;
+
 } Macroblock;
 
 //! Bitstream
@@ -418,20 +401,16 @@ typedef struct
   int                 picture_id;    //!< MUST be set by NAL even in case ei_flag == 1
   int                 qp;
   int                 picture_type;  //!< picture type
-  int                 structure;     //!< Identify picture structure type
+  PictureStructure    structure;     //!< Identify picture structure type
   int                 start_mb_nr;   //!< MUST be set by NAL even in case of ei_flag == 1
   int                 max_part_nr;
   int                 dp_mode;       //!< data partioning mode
   int                 next_header;
-  int                 next_eiflag;
 //  int                 last_mb_nr;    //!< only valid when entropy coding == CABAC
   DataPartition       *partArr;      //!< array of partitions
   MotionInfoContexts  *mot_ctx;      //!< pointer to struct of context models for use in CABAC
   TextureInfoContexts *tex_ctx;      //!< pointer to struct of context models for use in CABAC
   
-  // !KS: RMPNI buffer should be retired. just do some sore simple stuff
-  RMPNIbuffer_t        *rmpni_buffer; //!< stores the slice temporary buffer remapping commands
-
   int                 ref_pic_list_reordering_flag_l0;
   int                 *remapping_of_pic_nums_idc_l0;
   int                 *abs_diff_pic_num_minus1_l0;
@@ -457,17 +436,12 @@ typedef struct
 typedef struct img_par
 {
   int number;                                 //<! frame number
-  int pn;                                     //<! short term picture number
-  int current_mb_nr; // bitstream order
+  unsigned current_mb_nr; // bitstream order
   unsigned num_dec_mb;
-  int map_mb_nr;  //related to mb_data
-  int max_mb_nr;
   int current_slice_nr;
-  int **intra_block;
+  int *intra_block;
   int tr;                                     //<! temporal reference, 8 bit, wrapps at 255
   int tr_old;                                     //<! old temporal reference, for detection of a new frame, added by WYK
-  int refPicID;                         //<! temporal reference for reference frames (non-B frames), 4 bit, wrapps at 15, added by WYK
-  int refPicID_old;                  //<! to detect how many reference frames are lost, added by WYK
   int qp;                                     //<! quant for the current frame
   int qpsp;                                   //<! quant for SP-picture predicted frame
   int sp_switch;                              //<! 1 for switching sp, 0 for normal sp
@@ -487,7 +461,6 @@ typedef struct img_par
   int pix_c_x;
 
   int allrefzero;
-  int ***mv;                                  //<! [92][72][3]
   int mpr[16][16];                            //<! predicted block
 
   int m7[16][16];                             //<! final 4x4 block. Extended to 16x16 for ABT
@@ -496,26 +469,9 @@ typedef struct img_par
   int **ipredmode;                            //<! prediction type [90][74]
   int quad[256];
   int constrained_intra_pred_flag;            //<! if 1, prediction only from other Intra MBs
-  int ****nz_coeff;
+  int ***nz_coeff;
   int **siblock;
   int cod_counter;                            //<! Current count of number of skipped macroblocks in a row
-
-  int ***dfMV;                                //<! [92][72][3];
-  int ***dbMV;                                //<! [92][72][3];
-  int **fw_refFrArr;                          //<! [72][88];
-  int **bw_refFrArr;                          //<! [72][88];
- 
-
-  int ***mv_top;
-  int ***mv_bot;
-  int ***mv_frm;
-  int **fw_refFrArr_frm;                          //<! [72][88];
-  int **bw_refFrArr_frm;                          //<! [72][88];
-  int **fw_refFrArr_top;                          //<! [72][88];
-  int **bw_refFrArr_top;                          //<! [72][88];
-  int **fw_refFrArr_bot;                          //<! [72][88];
-  int **bw_refFrArr_bot;                          //<! [72][88];
-
 
   int structure;                               //<! Identify picture structure type
   int structure_old;                           //<! temp fix for multi slice per picture
@@ -526,8 +482,6 @@ typedef struct img_par
   int tr_fld;
 
   // B pictures
-  int ***fw_mv;                                //<! [92][72][3];
-  int ***bw_mv;                                //<! [92][72][3];
   Slice       *currentSlice;                   //<! pointer to current Slice data struct
   Macroblock          *mb_data;                //<! array containing all MBs of a whole frame
   int subblock_x;
@@ -535,42 +489,18 @@ typedef struct img_par
   int is_intra_block;
   int is_v_block;
 
-  int buf_cycle;
-
   // For MB level frame/field coding
-  int mb_frame_field_flag;
-  int mb_field;
-  int **ipredmode_frm;
-  int **ipredmode_top;
-  int **ipredmode_bot;
-  int ***fw_mv_frm;
-  int ***fw_mv_top;
-  int ***fw_mv_bot;
-  int ***bw_mv_frm;
-  int ***bw_mv_top;
-  int ***bw_mv_bot;
-  int ***dfMV_top;                                //<! [92][72][3];
-  int ***dbMV_top;                                //<! [92][72][3];
-  int ***dfMV_bot;                                //<! [92][72][3];
-  int ***dbMV_bot;                                //<! [92][72][3];
+  int MbaffFrameFlag;
+
   int **field_anchor;
 
-  MMCObuffer_t *mmco_buffer;                    //<! stores the memory management control operations
+  DecRefPicMarking_t *dec_ref_pic_marking_buffer;                    //<! stores the memory management control operations
 
   int disposable_flag;                          //!< flag for disposable frame, 1:disposable
-  int num_ref_pic_active_fwd;                   //!< number of forward reference
-  int num_ref_pic_active_bwd;                   //!< number of backward reference
+  int num_ref_idx_l0_active;             //!< number of forward reference
+  int num_ref_idx_l1_active;             //!< number of backward reference
 
-  // JVT-D095, JVT-D097
-  int num_slice_groups_minus1; 
-  int mb_allocation_map_type; 
-  int top_left_mb; 
-  int bottom_right_mb; 
-  int slice_group_change_direction; 
-  int slice_group_change_rate_minus1; 
   int slice_group_change_cycle;
-  // End JVT-D095, JVT-D097
-
   // JVT-D101
   int redundant_slice_flag; 
   int redundant_pic_cnt; 
@@ -618,16 +548,16 @@ typedef struct img_par
   unsigned int AbsFrameNum;
     signed int ExpectedPicOrderCnt, PicOrderCntCycleCnt, FrameNumInPicOrderCntCycle;
   unsigned int PreviousFrameNum, FrameNumOffset, ExpectedDeltaPerPicOrderCntCycle;
-  unsigned int Previousfield_pic_flag,Previousbottom_field_flag,Previousnal_reference_idc;
-  unsigned int Previousdelta_pic_order_cnt[2], PreviousPOC, ThisPOC, FirstFieldType;
+  unsigned int Previousfield_pic_flag,Previousbottom_field_flag,Previousnal_reference_idc,FirstFieldType;
+           int Previousdelta_pic_order_cnt[2], PreviousPOC, ThisPOC;
   // /////////////////////////
 
 
   //weighted prediction
   unsigned int weighted_pred_flag;
   unsigned int weighted_bipred_idc;
-  unsigned int luma_log_weight_denom;
-  unsigned int chroma_log_weight_denom;
+  unsigned int luma_log2_weight_denom;
+  unsigned int chroma_log2_weight_denom;
   int ***wp_weight;  // weight in [list][index][component] order
   int ***wp_offset;  // offset in [list][index][component] order
   int ****wbp_weight; //weight in [list][fw_index][bw_index][component] order
@@ -635,13 +565,13 @@ typedef struct img_par
   int wp_round_chroma;
   unsigned int apply_weights;
 
-  //the following should probably go in picture parameters
   unsigned int pic_order_present_flag;
   
-  //the following are sent in the slice header
-//  int delta_pic_order_cnt[2];
   int idr_flag;
+  int nal_reference_idc;                       //!< nal_reference_idc from NAL unit
+
   int idr_pic_id;
+
   int MaxFrameNum;
 
   unsigned PicWidthInMbs;
@@ -660,7 +590,7 @@ typedef struct img_par
 } ImageParameters;
 
 extern ImageParameters *img;
-
+extern struct snr_par  *snr;
 // signal to noice ratio parameters
 struct snr_par
 {
@@ -683,28 +613,35 @@ struct inp_par
   char infile[100];                       //<! Telenor H.26L input
   char outfile[100];                      //<! Decoded YUV 4:2:0 output
   char reffile[100];                      //<! Optional YUV 4:2:0 reference file for SNR measurement
-//  int symbol_mode;                        //<! Specifies the mode the symbols are mapped on bits
   int FileFormat;                         //<! File format of the Input file, PAR_OF_ANNEXB or PAR_OF_RTP
-//  int partition_mode;                     //<! Specifies the mode of data partitioning
-  int buf_cycle;                          //<! Frame buffer size
+  int dpb_size;                          //<! Frame buffer size
+
 #ifdef _LEAKYBUCKET_
   unsigned long R_decoder;                //<! Decoder Rate in HRD Model
   unsigned long B_decoder;                //<! Decoder Buffer size in HRD model
   unsigned long F_decoder;                //<! Decoder Inital buffer fullness in HRD model
   char LeakyBucketParamFile[100];         //<! LeakyBucketParamFile
 #endif
-  int LFParametersFlag;                   //<! Specifies that loop filter parameters are included in bitstream
 
 };
 
 extern struct inp_par *input;
 
+typedef struct pix_pos
+{
+  int available;
+  int mb_addr;
+  int x;
+  int y;
+  int pos_x;
+  int pos_y;
+} PixelPos;
 
 // files
 FILE *p_out;                    //<! pointer to output YUV file
+//FILE *p_out2;                    //<! pointer to debug output YUV file
 FILE *p_ref;                    //<! pointer to input original reference YUV file file
 FILE *p_log;                    //<! SNR file
-FILE *p_datpart;                //<! file to write bitlength and id of all partitions
 
 #if TRACE
 FILE *p_trace;
@@ -713,7 +650,6 @@ FILE *p_trace;
 // prototypes
 void init_conf(struct inp_par *inp, char *config_filename);
 void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr);
-void find_snr(struct snr_par *snr,struct img_par *img, FILE *p_ref);
 void init(struct img_par *img);
 
 void init_poc();
@@ -728,27 +664,16 @@ void init_frame(struct img_par *img, struct inp_par *inp);
 void exit_frame(struct img_par *img, struct inp_par *inp);
 void DeblockFrame(struct img_par *img, byte **imgY, byte ***imgUV ) ;
 
-void write_frame(struct img_par *img, FILE *p_out);
-void write_prev_Pframe(struct img_par *img,FILE *p_out);// B pictures
-void copy_Pframe(struct img_par *img);// B pictures
-
-
 int  read_new_slice();
 void decode_one_slice(struct img_par *img,struct inp_par *inp);
 
 void start_macroblock(struct img_par *img,struct inp_par *inp, int CurrentMBInScanOrder);
-void init_macroblock_Bframe(struct img_par *img);// B pictures
 int  read_one_macroblock(struct img_par *img,struct inp_par *inp);
 void read_ipred_modes(struct img_par *img,struct inp_par *inp);
-int  read_one_macroblock_Bframe(struct img_par *img,struct inp_par *inp);// B pictures
 int  decode_one_macroblock(struct img_par *img,struct inp_par *inp);
-int  decode_one_macroblock_Bframe(struct img_par *img);// B pictures
 int  exit_macroblock(struct img_par *img,struct inp_par *inp, int eos_bit);
 
 void readMotionInfoFromNAL (struct img_par *img,struct inp_par *inp);
-
-void readMotionInfoFromNAL_Bframe(struct img_par *img,struct inp_par *inp);// B pictures
-void readMotionInfoFromNAL_Pframe(struct img_par *img,struct inp_par *inp);
 void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp);
 
 void copyblock_sp(struct img_par *img,int block_x,int block_y);
@@ -758,14 +683,8 @@ void itrans_sp(struct img_par *img,int ioff,int joff,int i0,int j0);
 int  intrapred(struct img_par *img,int ioff,int joff,int i4,int j4);
 void itrans_2(struct img_par *img);
 int  intrapred_luma_16x16(struct img_par *img,int predmode);
+void intrapred_chroma(struct img_par *img, int uv);
 int  sign(int a , int b);
-
-
-// Direct interpolation
-void get_block(int ref_frame,int x_pos, int y_pos, struct img_par *img, int block[BLOCK_SIZE][BLOCK_SIZE]);
-void get_quarterpel_block(int ref_frame,int x_pos, int y_pos, struct img_par *img, int block[BLOCK_SIZE][BLOCK_SIZE]);
-
-// int   inter_intra(struct img_par *img);
 
 // SLICE function pointers
 int  (*nal_startcode_follows) ();
@@ -778,57 +697,12 @@ void free_Partition(Bitstream *currStream);
 // ErrorConcealment
 void reset_ec_flags();
 
-// CABAC
-void arideco_start_decoding(DecodingEnvironmentPtr eep, unsigned char *code_buffer, int firstbyte, int *code_len, int slice_type);
-int  arideco_bits_read(DecodingEnvironmentPtr dep);
-void arideco_done_decoding(DecodingEnvironmentPtr dep);
-void biari_init_context (struct img_par *img, BiContextTypePtr ctx, const int* ini);
-void rescale_cum_freq(BiContextTypePtr bi_ct);
-unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi_ct );
-unsigned int biari_decode_symbol_eq_prob(DecodingEnvironmentPtr dep);
-unsigned int biari_decode_final(DecodingEnvironmentPtr dep);
-MotionInfoContexts* create_contexts_MotionInfo(void);
-TextureInfoContexts* create_contexts_TextureInfo(void);
-void init_contexts_MotionInfo(struct img_par *img, MotionInfoContexts *enco_ctx);
-void init_contexts_TextureInfo(struct img_par *img, TextureInfoContexts *enco_ctx);
-void delete_contexts_MotionInfo(MotionInfoContexts *enco_ctx);
-void delete_contexts_TextureInfo(TextureInfoContexts *enco_ctx);
-
-
-void readMB_typeInfoFromBuffer_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
-void readB8_typeInfoFromBuffer_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
-void readIntraPredModeFromBuffer_CABAC(SyntaxElement *se, struct inp_par *inp,struct img_par *img, DecodingEnvironmentPtr dep_dp);
-void readRefFrameFromBuffer_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
-void readBwdRefFrameFromBuffer_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
-void readMVDFromBuffer_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
-void readCBPFromBuffer_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
-void readRunLevelFromBuffer_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img,  DecodingEnvironmentPtr dep_dp);
-
-void readMVD2Buffer_CABAC(SyntaxElement *se,  struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
-void readBiMVD2Buffer_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp);
-void readBiDirBlkSize2Buffer_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp);
-
-int  readSyntaxElement_CABAC(SyntaxElement *se, struct img_par *img, struct inp_par *inp, DataPartition *this_dataPart);
-void readDquant_FromBuffer_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp);
-void readCIPredMode_FromBuffer_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp);
-
-void readMB_skip_flagInfoFromBuffer_CABAC( SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
-void readFieldModeInfoFromBuffer_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp); 
-void setMapMB_nr (struct img_par *img); 
-int  check_next_mb_and_get_field_mode_CABAC(SyntaxElement *se,struct img_par *img,struct inp_par *inp,DataPartition  *act_dp);
-void CheckAvailabilityOfNeighbors(struct img_par *img);
-void CheckAvailabilityOfNeighborsForAff(struct img_par *img);
-
-
 void error(char *text, int code);
 
 // dynamic mem allocation
 int  init_global_buffers(struct inp_par *inp, struct img_par *img);
 void free_global_buffers(struct inp_par *inp, struct img_par *img);
 
-void split_field_top(struct img_par *img);
-void split_field_bot(struct img_par *img);
-void combine_field(struct img_par *img);
 void frame_postprocessing(struct img_par *img, struct inp_par *inp);
 void field_postprocessing(struct img_par *img, struct inp_par *inp);
 int  bottom_field_picture(struct img_par *img,struct inp_par *inp);
@@ -836,7 +710,6 @@ void init_top(struct img_par *img, struct inp_par *inp);
 void init_bottom(struct img_par *img, struct inp_par *inp);
 void decode_frame_slice(struct img_par *img,struct inp_par *inp, int current_header);
 void decode_field_slice(struct img_par *img,struct inp_par *inp, int current_header);
-void store_field_MV(struct img_par *img);
 
 #define PAYLOAD_TYPE_IDERP 8
 int RBSPtoSODB(byte *streamBuffer, int last_byte_pos);
@@ -847,7 +720,6 @@ void init_super_macroblock(struct img_par *img,struct inp_par *inp);
 void exit_super_macroblock(struct img_par *img,struct inp_par *inp);
 int  decode_super_macroblock(struct img_par *img,struct inp_par *inp);
 void decode_one_Copy_topMB(struct img_par *img,struct inp_par *inp);
-void copy_stored_B_motion_info(struct img_par *img);
 
 void SetOneRefMV(struct img_par* img);
 int peekSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct inp_par *inp, struct datapartition *dP);

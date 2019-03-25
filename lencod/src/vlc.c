@@ -57,7 +57,7 @@
 #if TRACE
 #define SYMTRACESTRING(s) strncpy(sym.tracestring,s,TRACESTRING_SIZE)
 #else
-#define SYMTRACESTRING(s) // to nothing
+#define SYMTRACESTRING(s) // do nothing
 #endif
 
 

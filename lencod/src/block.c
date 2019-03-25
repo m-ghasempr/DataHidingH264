@@ -60,6 +60,8 @@
 #include "block.h"
 #include "refbuf.h"
 #include "vlc.h"
+#include "mb_access.h"
+#include "image.h"
 
 
 #define Q_BITS          15
@@ -134,100 +136,92 @@ static const int A[4][4] = {
  *      none
  ************************************************************************
  */
-void intrapred_luma(int img_x,int img_y)
+void intrapred_luma(int img_x,int img_y, int *left_available, int *up_available, int *all_available)
 {
   int i,j;
   int s0;
   int PredPel[13];  // array of predictor pels
-  byte **imgY_pred = imgY;  // For MB level frame/field coding tools -- set default to imgY
+  byte **imgY = enc_picture->imgY;  // For MB level frame/field coding tools -- set default to imgY
 
-  int block_available_up        = (img->ipredmode[img_x/BLOCK_SIZE+1][img_y/BLOCK_SIZE] >=0);
-  int block_available_up_right  = (img->ipredmode[img_x/BLOCK_SIZE+2][img_y/BLOCK_SIZE] >=0);
-  int block_available_left      = (img->ipredmode[img_x/BLOCK_SIZE][img_y/BLOCK_SIZE+1] >=0);
-  int block_available_up_left   = (img->ipredmode[img_x/BLOCK_SIZE][img_y/BLOCK_SIZE] >=0);
+  int ioff = (img_x & 15);
+  int joff = (img_y & 15);
+  int mb_nr=img->current_mb_nr;
 
-  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
+  PixelPos pix_a[4];
+  PixelPos pix_b, pix_c, pix_d;
+
+  int block_available_up;
+  int block_available_left;
+  int block_available_up_left;
+  int block_available_up_right;
+
+  for (i=0;i<4;i++)
   {
-    imgY_pred     = img->top_field ? imgY_top:imgY_bot;
-    if(img->top_field)
-    {
-      block_available_up        = (img->ipredmode_top[img_x/BLOCK_SIZE+1][img_y/BLOCK_SIZE] >=0);
-      block_available_up_right  = (img->ipredmode_top[img_x/BLOCK_SIZE+2][img_y/BLOCK_SIZE] >=0);
-      block_available_left      = (img->ipredmode_top[img_x/BLOCK_SIZE][img_y/BLOCK_SIZE+1] >=0);
-      block_available_up_left   = (img->ipredmode_top[img_x/BLOCK_SIZE][img_y/BLOCK_SIZE] >=0);
-    }
-    else
-    {
-      block_available_up        = (img->ipredmode_bot[img_x/BLOCK_SIZE+1][img_y/BLOCK_SIZE] >=0);
-      block_available_up_right  = (img->ipredmode_bot[img_x/BLOCK_SIZE+2][img_y/BLOCK_SIZE] >=0);
-      block_available_left      = (img->ipredmode_bot[img_x/BLOCK_SIZE][img_y/BLOCK_SIZE+1] >=0);
-      block_available_up_left   = (img->ipredmode_bot[img_x/BLOCK_SIZE][img_y/BLOCK_SIZE] >=0);
-    }
+    getNeighbour(mb_nr, ioff -1 , joff +i , 1, &pix_a[i]);
   }
   
-  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive)
-  {
-    if(img->field_mode)
-    {
-      if(img_x%MB_BLOCK_SIZE == 12 && img_y%MB_BLOCK_SIZE )
-        block_available_up_right = 0; // for MB pairs some blocks will not have block available up right  
-    }
-    else
-    {
-      if(img_x%MB_BLOCK_SIZE == 12 && img_y%(2*MB_BLOCK_SIZE) )
-        block_available_up_right = 0; // for MB pairs some blocks will not have block available up right  
-    }
+  
+  getNeighbour(mb_nr, ioff    , joff -1 , 1, &pix_b);
+  getNeighbour(mb_nr, ioff +4 , joff -1 , 1, &pix_c);
+  getNeighbour(mb_nr, ioff -1 , joff -1 , 1, &pix_d);
 
-    /*
-    if(img_x%MB_BLOCK_SIZE == 12)   
-      block_available_up_right = 0; // for MB pairs some blocks will not have block available up right  
-      */
-  }
-  i = (img_x & 15);
-  j = (img_y & 15);
-  if (block_available_up_right)
-  {
-    if ((i == 4  && j == 4) ||
-        (i == 12 && j == 4) ||
-        (i == 12 && j == 8) ||
-        (i == 4  && j == 12) ||
-        (i == 12 && j == 12))
-    {
-      block_available_up_right = 0;
-    }
-  }
+  pix_c.available = pix_c.available && !(((ioff==4)||(ioff==12)) && ((joff==4)||(joff==12)));
 
-  // form predictor pels
-  if (block_available_up)
+  if (input->UseConstrainedIntraPred)
   {
-    P_A = imgY_pred[img_y-1][img_x+0];
-    P_B = imgY_pred[img_y-1][img_x+1];
-    P_C = imgY_pred[img_y-1][img_x+2];
-    P_D = imgY_pred[img_y-1][img_x+3];
-
-    if (block_available_up_right)
-    {
-      P_E = imgY_pred[img_y-1][img_x+4];
-      P_F = imgY_pred[img_y-1][img_x+5];
-      P_G = imgY_pred[img_y-1][img_x+6];
-      P_H = imgY_pred[img_y-1][img_x+7];
-    }
-    else
-    {
-      P_E = P_F = P_G = P_H = P_D;
-    }
+    block_available_left     = pix_a[0].available ? img->intra_block[pix_a[0].mb_addr] : 0;
+    block_available_up       = pix_b.available ? img->intra_block [pix_b.mb_addr] : 0;
+    block_available_up_right = pix_c.available ? img->intra_block [pix_c.mb_addr] : 0;
+    block_available_up_left  = pix_d.available ? img->intra_block [pix_d.mb_addr] : 0;
   }
   else
   {
-    P_A = P_B = P_C = P_D = P_E = P_F = P_G = P_H = 128;
+    block_available_left     = pix_a[0].available;
+    block_available_up       = pix_b.available;
+    block_available_up_right = pix_c.available;
+    block_available_up_left  = pix_d.available;
+  }
+
+  *left_available = block_available_left;
+  *up_available   = block_available_up;
+  *all_available  = block_available_up && block_available_left && block_available_up_left;
+
+  i = (img_x & 15);
+  j = (img_y & 15);
+
+  // form predictor pels
+  // form predictor pels
+  if (block_available_up)
+  {
+    P_A = imgY[pix_b.pos_y][pix_b.pos_x+0];
+    P_B = imgY[pix_b.pos_y][pix_b.pos_x+1];
+    P_C = imgY[pix_b.pos_y][pix_b.pos_x+2];
+    P_D = imgY[pix_b.pos_y][pix_b.pos_x+3];
+
+  }
+  else
+  {
+    P_A = P_B = P_C = P_D = 128;
+  }
+
+  if (block_available_up_right)
+  {
+    P_E = imgY[pix_c.pos_y][pix_c.pos_x+0];
+    P_F = imgY[pix_c.pos_y][pix_c.pos_x+1];
+    P_G = imgY[pix_c.pos_y][pix_c.pos_x+2];
+    P_H = imgY[pix_c.pos_y][pix_c.pos_x+3];
+  }
+  else
+  {
+    P_E = P_F = P_G = P_H = P_D;
   }
 
   if (block_available_left)
   {
-    P_I = imgY_pred[img_y+0][img_x-1];
-    P_J = imgY_pred[img_y+1][img_x-1];
-    P_K = imgY_pred[img_y+2][img_x-1];
-    P_L = imgY_pred[img_y+3][img_x-1];
+    P_I = imgY[pix_a[0].pos_y][pix_a[0].pos_x];
+    P_J = imgY[pix_a[1].pos_y][pix_a[1].pos_x];
+    P_K = imgY[pix_a[2].pos_y][pix_a[2].pos_x];
+    P_L = imgY[pix_a[3].pos_y][pix_a[3].pos_x];
   }
   else
   {
@@ -236,7 +230,7 @@ void intrapred_luma(int img_x,int img_y)
 
   if (block_available_up_left)
   {
-    P_X = imgY_pred[img_y-1][img_x-1];
+    P_X = imgY[pix_d.pos_y][pix_d.pos_x];
   }
   else
   {
@@ -440,7 +434,7 @@ void intrapred_luma_16x16()
 
   int ih,iv;
   int ib,ic,iaa;
-  byte **imgY_pred = imgY;  // For Mb level field/frame coding tools -- default to frame pred
+  byte **imgY_pred = enc_picture->imgY;  // For Mb level field/frame coding tools -- default to frame pred
   int pix_y = img->pix_y; // For MB level field/frame coding tools
 
 
@@ -452,12 +446,14 @@ void intrapred_luma_16x16()
 
   if(input->UseConstrainedIntraPred)
   {
+    /*
     if (mb_available_up   && (img->intra_block[mb_nr-mb_width][2]==0 || img->intra_block[mb_nr-mb_width][3]==0))
       mb_available_up   = 0;
     if (mb_available_left && (img->intra_block[mb_nr-       1][1]==0 || img->intra_block[mb_nr       -1][3]==0))
       mb_available_left = 0;
     if (mb_available_up_left && (img->intra_block[mb_nr-mb_width-1][3]==0))
       mb_available_left = 0;
+      */
   }
 
   if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
@@ -467,13 +463,11 @@ void intrapred_luma_16x16()
       mb_available_up = (img->mb_y/2 == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
       mb_available_up_left = (img->mb_y/2 == 0 || img->mb_x==0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr);
       pix_y   = img->field_pix_y; // set pix_y to field pix_y
-      imgY_pred = imgY_top; // set the prediction image to top field
     }
     else
     {
       mb_available_up = ((img->mb_y-1)/2 == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
       mb_available_up_left = ((img->mb_y-1)/2 == 0 || img->mb_x==0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr);
-      imgY_pred = imgY_bot;
       pix_y   = img->field_pix_y; // set pix_y to field pix_y
     }
   }
@@ -841,7 +835,7 @@ int dct_luma_16x16(int new_intra_mode)
 
   for (j=0;j<16;j++)
     for (i=0;i<16;i++)
-      imgY[img->pix_y+j][img->pix_x+i]=(byte)min(255,max(0,(M1[i][j]+(img->mprr_2[new_intra_mode][j][i]<<DQ_BITS)+DQ_ROUND)>>DQ_BITS));
+      enc_picture->imgY[img->pix_y+j][img->pix_x+i]=(byte)min(255,max(0,(M1[i][j]+(img->mprr_2[new_intra_mode][j][i]<<DQ_BITS)+DQ_ROUND)>>DQ_BITS));
 
     return ac_coef;
 }
@@ -882,7 +876,7 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int old_intra_mode)
   qp_rem    = (img->qp-MIN_QP)%6;
   q_bits    = Q_BITS+qp_per;
 
-  if (img->type == INTRA_IMG)
+  if (img->type == I_SLICE)
     qp_const=(1<<q_bits)/3;    // intra
   else
     qp_const=(1<<q_bits)/6;    // inter
@@ -902,7 +896,7 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int old_intra_mode)
     img->m7[3][j]=m5[3]-m5[2]*2;
   }
 
-  //  Vertival transform
+  //  Vertical transform
   for (i=0; i < BLOCK_SIZE; i++)
   {
     for (j=0; j < 2; j++)
@@ -1008,7 +1002,7 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int old_intra_mode)
 
   for (j=0; j < BLOCK_SIZE; j++)
     for (i=0; i < BLOCK_SIZE; i++)
-      imgY[img->pix_y+block_y+j][img->pix_x+block_x+i]=img->m7[i][j];
+      enc_picture->imgY[img->pix_y+block_y+j][img->pix_x+block_x+i]=img->m7[i][j];
 
 
   return nonzero;
@@ -1054,7 +1048,7 @@ int dct_chroma(int uv,int cr_cbp)
   qp_rem    = QP_SCALE_CR[img->qp-MIN_QP]%6;
   q_bits    = Q_BITS+qp_per;
 
-  if (img->type == INTRA_IMG)
+  if (img->type == I_SLICE)
     qp_const=(1<<q_bits)/3;    // intra
   else
     qp_const=(1<<q_bits)/6;    // inter
@@ -1278,7 +1272,7 @@ int dct_chroma(int uv,int cr_cbp)
   //  Decoded block moved to memory
   for (j=0; j < BLOCK_SIZE*2; j++)
     for (i=0; i < BLOCK_SIZE*2; i++)
-      imgUV[uv][img->pix_c_y+j][img->pix_c_x+i]= img->m7[i][j];
+      enc_picture->imgUV[uv][img->pix_c_y+j][img->pix_c_x+i]= img->m7[i][j];
 
   return cr_cbp;
 }
@@ -1538,7 +1532,7 @@ int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
 
   for (j=0; j < BLOCK_SIZE; j++)
   for (i=0; i < BLOCK_SIZE; i++)
-    imgY[img->pix_y+block_y+j][img->pix_x+block_x+i]=img->m7[i][j];
+    enc_picture->imgY[img->pix_y+block_y+j][img->pix_x+block_x+i]=img->m7[i][j];
 
   return nonzero;
 }
@@ -1913,7 +1907,7 @@ int dct_chroma_sp(int uv,int cr_cbp)
   for (j=0; j < BLOCK_SIZE*2; j++)
     for (i=0; i < BLOCK_SIZE*2; i++)
     {
-      imgUV[uv][img->pix_c_y+j][img->pix_c_x+i]= img->m7[i][j];
+      enc_picture->imgUV[uv][img->pix_c_y+j][img->pix_c_x+i]= img->m7[i][j];
     }
 
   return cr_cbp;
@@ -2032,5 +2026,5 @@ void copyblock_sp(int block_x,int block_y)
 
   for (j=0; j < BLOCK_SIZE; j++)
     for (i=0; i < BLOCK_SIZE; i++)
-      imgY[img->pix_y+block_y+j][img->pix_x+block_x+i]=img->m7[i][j];
+      enc_picture->imgY[img->pix_y+block_y+j][img->pix_x+block_x+i]=img->m7[i][j];
 }

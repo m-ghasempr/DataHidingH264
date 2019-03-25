@@ -512,7 +512,7 @@ void PrepareAggregationSEIMessage()
   Boolean has_aggregation_sei_message = FALSE;
   // prepare the sei message here
   // write the spare picture sei payload to the aggregation sei message
-  if (seiHasSparePicture && img->type != B_IMG)
+  if (seiHasSparePicture && img->type != B_SLICE)
   {
     FinalizeSpareMBMap();
     assert(seiSparePicturePayload.data->byte_pos == seiSparePicturePayload.payloadSize);

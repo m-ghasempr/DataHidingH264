@@ -1,30 +1,22 @@
-Changes for Version JM 5.0d to JM 5.0c
---------------------------------------
+Changes for JM 6.2
+------------------
 
-added POC - changes delimited by #ifdef USEPOC
-reference pictures need their pocs stored somewhere??
+The decoder should be nearly in JVT-G50 (final draft) state. 
 
+Known problems:
+  - the old Parameter Set syntax is used by default. Enable
+    #define G50_SPS
+    in defines.h for the new syntax
+  - the transform/inverse transform has not been reversed
+  - the direct modes seem to have some mismatches (compared with the
+    HHI implementation) for MB AFF (Alexis Tourapis is working on that)
+  - PCM macroblock mode not supported
+  - deblocking filter is not aligned to the text
+  - reference picture reordering / mmco hasn't got much testing
 
-specifically, image parameters now available both at encoder and decoder are
+The encoder in this version is completely broken. I started merging some
+code from the decoder, but currently don't have the time to finish that.
 
-img->frame_num
-img->toppoc   	//poc of topfield  and frame
-img->bottompoc  //poc of bottom field
+If you're interested in encoder work, please contact me.
 
-encoder uses toppocs  0,2,4,6,8,...
-
-
-if InterlaceCodingOption = 0 (ie, frame coding) then bottompoc = toppoc
-otherwise bottompoc = toppoc+1
-
-
-decoder is not yet fully compliant, but it does handle the output of the encoder.
-
-sequence parameters and picture parameters are sent in the slice header.  
-This will change once the high level syntax is in place.
-
-Things yet to be removed from the slice header include...
-tr
-pstruct
-image size
-etc.
+Karsten

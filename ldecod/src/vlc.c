@@ -304,7 +304,7 @@ void linfo_levrun_inter(int len, int info, int *level, int *irun)
   int inf;
   if (len<=9)
   {
-    l2=mmax(0,len/2-1);
+    l2=max(0,len/2-1);
     inf=info/2;
     *level=NTAB1[l2][inf][0];
     *irun=NTAB1[l2][inf][1];
@@ -338,7 +338,7 @@ void linfo_levrun_c2x2(int len, int info, int *level, int *irun)
 
   if (len<=5)
   {
-    l2=mmax(0,len/2-1);
+    l2=max(0,len/2-1);
     inf=info/2;
     *level=NTAB3[l2][inf][0];
     *irun=NTAB3[l2][inf][1];

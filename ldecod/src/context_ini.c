@@ -53,6 +53,7 @@
 
 #include "defines.h"
 #include "global.h"
+#include "biaridecod.h"
 
 #include "ctx_tables.h"
 

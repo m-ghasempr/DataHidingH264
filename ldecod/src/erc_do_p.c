@@ -51,6 +51,7 @@
 #include "global.h"
 #include "memalloc.h"
 #include "erc_do.h"
+#include "image.h"
 
 extern int erc_mvperMB;
 struct img_par *erc_img;
@@ -293,15 +294,15 @@ static void copyBetweenFrames (frame *recfr,
     for (k = xmin; k < xmin + regionSize; k++)
     {
       location = j * picSizeX + k; 
-      recfr->yptr[location] = imgY[j][k];
+      recfr->yptr[location] = dec_picture->imgY[j][k];
     }
      
     for (j = ymin / 2; j < (ymin + regionSize) / 2; j++)
       for (k = xmin / 2; k < (xmin + regionSize) / 2; k++)
       {
         location = j * picSizeX / 2 + k;
-        recfr->uptr[location] = imgUV[0][j][k];
-        recfr->vptr[location] = imgUV[1][j][k];
+        recfr->uptr[location] = dec_picture->imgUV[0][j][k];
+        recfr->vptr[location] = dec_picture->imgUV[1][j][k];
       }                                
 }
 
@@ -591,7 +592,7 @@ static void buildPredRegionYUV(struct img_par *img, int32 *mv, int x, int y, byt
       vec1_x = i4*4*mv_mul + mv[0];
       vec1_y = j4*4*mv_mul + mv[1];
 
-      get_block(ref_frame,vec1_x,vec1_y,img,tmp_block);
+      get_block(ref_frame, listX[0], vec1_x,vec1_y,img,tmp_block);
 
       for(ii=0;ii<BLOCK_SIZE;ii++)
         for(jj=0;jj<MB_BLOCK_SIZE/BLOCK_SIZE;jj++)
@@ -638,10 +639,10 @@ static void buildPredRegionYUV(struct img_par *img, int32 *mv, int x, int y, byt
             jf1=(j1 & f2);
             if0=f1-if1;
             jf0=f1-jf1;
-            img->mpr[ii+ioff][jj+joff]=(if0*jf0*mcef[ref_frame][uv][jj0][ii0]+
-              if1*jf0*mcef[ref_frame][uv][jj0][ii1]+
-              if0*jf1*mcef[ref_frame][uv][jj1][ii0]+
-              if1*jf1*mcef[ref_frame][uv][jj1][ii1]+f4)/f3;
+            img->mpr[ii+ioff][jj+joff]=(if0*jf0*listX[0][ref_frame]->imgUV[uv][jj0][ii0]+
+              if1*jf0*listX[0][ref_frame]->imgUV[uv][jj0][ii1]+
+              if0*jf1*listX[0][ref_frame]->imgUV[uv][jj1][ii0]+
+              if1*jf1*listX[0][ref_frame]->imgUV[uv][jj1][ii1]+f4)/f3;
 
           }
         }
@@ -696,7 +697,7 @@ static void copyPredMB (int currYBlockNum, byte *predMB, frame *recfr,
     {
       locationPred = j * picSizeX + k;
       locationTmp = (j-ymin) * 16 + (k-xmin);
-      imgY[j][k] = predMB[locationTmp];
+      dec_picture->imgY[j][k] = predMB[locationTmp];
     }
   }
   
@@ -706,11 +707,11 @@ static void copyPredMB (int currYBlockNum, byte *predMB, frame *recfr,
     {
       locationPred = j * picSizeX / 2 + k;
       locationTmp = (j-(ymin>>1)) * 8 + (k-(xmin>>1)) + 256;
-      imgUV[0][j][k] = predMB[locationTmp];
+      dec_picture->imgUV[0][j][k] = predMB[locationTmp];
       
       locationTmp += 64;
       
-      imgUV[1][j][k] = predMB[locationTmp];
+      dec_picture->imgUV[1][j][k] = predMB[locationTmp];
     }
   }
 }

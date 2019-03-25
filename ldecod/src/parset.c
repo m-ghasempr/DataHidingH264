@@ -48,12 +48,13 @@
 #include <assert.h>
 #include <string.h>
 
+#include "global.h"
 #include "parsetcommon.h"
 #include "parset.h"
 #include "nalu.h"
-#include "global.h"
 #include "memalloc.h"
 #include "fmo.h"
+#include "cabac.h"
 #include "vlc.h"
 
 #if TRACE
@@ -72,6 +73,9 @@ pic_parameter_set_rbsp_t PicParSet[MAXPPS];
 int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
 {
   unsigned i;
+#ifdef G50_SPS
+  int reserved_zero;
+#endif
   Bitstream *s = p->bitstream;
 
   assert (p != NULL);
@@ -82,14 +86,27 @@ int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
   UsedBits = 0;
 
   sps->profile_idc                            = u_v  (8, "SPS: profile_idc"                           , s);
+
+#ifdef G50_SPS
+  sps->constrained_set0_flag                  = u_1  (   "SPS: constrained_set0_flag"                 , s);
+  sps->constrained_set1_flag                  = u_1  (   "SPS: constrained_set1_flag"                 , s);
+  sps->constrained_set2_flag                  = u_1  (   "SPS: constrained_set2_flag"                 , s);
+  reserved_zero                               = u_v  (5, "SPS: reserved_zero_5bits"                   , s);
+  assert (reserved_zero==0);
+#endif
+
   sps->level_idc                              = u_v  (8, "SPS: level_idc"                             , s);
+  
+#ifndef G50_SPS
   sps->more_than_one_slice_group_allowed_flag = u_1  ("SPS: more_than_one_slice_group_allowed_flag"   , s);
   sps->arbitrary_slice_order_allowed_flag     = u_1  ("SPS: arbitrary_slice_order_allowed_flag"       , s);
   sps->redundant_slices_allowed_flag          = u_1  ("SPS: redundant_slices_allowed_flag"            , s);
+#endif
+
   sps->seq_parameter_set_id                   = ue_v ("SPS: seq_parameter_set_id"                     , s);
   sps->log2_max_frame_num_minus4              = ue_v ("SPS: log2_max_frame_num_minus4"                , s);
   sps->pic_order_cnt_type                     = ue_v ("SPS: pic_order_count_type"                     , s);
-  // POC200301
+
   if (sps->pic_order_cnt_type == 0)
     sps->log2_max_pic_order_cnt_lsb_minus4 = ue_v ("SPS: log2_max_pic_order_cnt_lsb_minus4"           , s);
   else if (sps->pic_order_cnt_type == 1)
@@ -102,7 +119,7 @@ int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
       sps->offset_for_ref_frame[i]               = se_v ("SPS: offset_for_ref_frame[i]"              , s);
   }
   sps->num_ref_frames                        = ue_v ("SPS: num_ref_frames"                         , s);
-  sps->required_frame_num_update_behaviour_flag = u_1 ("SPS: required_frame_num_update_behaviour_flag", s);
+  sps->gaps_in_frame_num_value_allowed_flag  = u_1  ("SPS: gaps_in_frame_num_value_allowed_flag"   , s);
   sps->pic_width_in_mbs_minus1               = ue_v ("SPS: pic_width_in_mbs_minus1"                , s);
   sps->pic_height_in_map_units_minus1        = ue_v ("SPS: pic_height_in_map_units_minus1"         , s);
   sps->frame_mbs_only_flag                   = u_1  ("SPS: frame_mbs_only_flag"                    , s);
@@ -110,8 +127,19 @@ int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
   {
     sps->mb_adaptive_frame_field_flag          = u_1  ("SPS: mb_adaptive_frame_field_flag"           , s);
   }
-  sps->direct_8x8_inference_flag             = u_1  ("SPS: direct_8x8_inference_flag"       , s);
-  sps->vui_parameters_present_flag           = u_1  ("SPS: vui_parameters_present_flag"             , s);
+  sps->direct_8x8_inference_flag             = u_1  ("SPS: direct_8x8_inference_flag"              , s);
+#ifdef G50_SPS
+  sps->frame_cropping_flag                   = u_1  ("SPS: frame_cropping_flag"                , s);
+
+  if (sps->frame_cropping_flag)
+  {
+    sps->frame_cropping_rect_left_offset      = ue_v ("SPS: frame_cropping_rect_left_offset"           , s);
+    sps->frame_cropping_rect_right_offset     = ue_v ("SPS: frame_cropping_rect_right_offset"          , s);
+    sps->frame_cropping_rect_top_offset       = ue_v ("SPS: frame_cropping_rect_top_offset"            , s);
+    sps->frame_cropping_rect_bottom_offset    = ue_v ("SPS: frame_cropping_rect_bottom_offset"         , s);
+  }
+#endif
+  sps->vui_parameters_present_flag           = u_1  ("SPS: vui_parameters_present_flag"            , s);
   if (sps->vui_parameters_present_flag)
   {
     printf ("VUI sequence parameters present but not supported, ignored, proceeding to next NALU\n");
@@ -136,7 +164,7 @@ int InterpretPPS (DataPartition *p, pic_parameter_set_rbsp_t *pps)
 
   pps->pic_parameter_set_id                  = ue_v ("PPS: pic_parameter_set_id"                   , s);
   pps->seq_parameter_set_id                  = ue_v ("PPS: seq_parameter_set_id"                   , s);
-  pps->entropy_coding_mode                   = u_1  ("PPS: entropy_coding_mode"                    , s);
+  pps->entropy_coding_mode_flag              = u_1  ("PPS: entropy_coding_mode_flag"               , s);
 
   //! Note: as per JVT-F078 the following bit is unconditional.  If F078 is not accepted, then
   //! one has to fetch the correct SPS to check whether the bit is present (hopefully there is
@@ -198,9 +226,11 @@ int InterpretPPS (DataPartition *p, pic_parameter_set_rbsp_t *pps)
   pps->pic_init_qp_minus26                   = se_v ("PPS: pic_init_qp_minus26"                    , s);
   pps->pic_init_qs_minus26                   = se_v ("PPS: pic_init_qs_minus26"                    , s);
   pps->chroma_qp_index_offset                = se_v ("PPS: chroma_qp_index_offset"                 , s);
-  pps->deblocking_filter_parameters_present_flag = u_1 ("PPS: deblocking_filter_parameters_present_flag", s);
+  pps->deblocking_filter_control_present_flag = u_1 ("PPS: deblocking_filter_control_present_flag" , s);
   pps->constrained_intra_pred_flag           = u_1  ("PPS: constrained_intra_pred_flag"            , s);
   pps->redundant_pic_cnt_present_flag        = u_1  ("PPS: redundant_pic_cnt_present_flag"         , s);
+
+#ifndef G50_SPS
   pps->frame_cropping_flag                   = u_1  ("PPS: frame_cropping_flag"                , s);
 
   if (pps->frame_cropping_flag)
@@ -210,6 +240,8 @@ int InterpretPPS (DataPartition *p, pic_parameter_set_rbsp_t *pps)
     pps->frame_cropping_rect_top_offset       = ue_v ("PPS: frame_cropping_rect_top_offset"            , s);
     pps->frame_cropping_rect_bottom_offset    = ue_v ("PPS: frame_cropping_rect_bottom_offset"         , s);
   }
+#endif
+
   pps->Valid = TRUE;
   return UsedBits;
 }
@@ -389,25 +421,20 @@ void UseParameterSet (int PicParsetId)
 
 
   // currSlice->dp_mode is set by read_new_slice (NALU first byte available there)
-  switch (pps->entropy_coding_mode)
+  if (pps->entropy_coding_mode_flag == UVLC)
   {
-  case UVLC:
     nal_startcode_follows = uvlc_startcode_follows;
     for (i=0; i<3; i++)
     {
       img->currentSlice->partArr[i].readSyntaxElement = readSyntaxElement_UVLC;
     }
-    break;
-  case CABAC:
+  }
+  else
+  {
     nal_startcode_follows = cabac_startcode_follows;
     for (i=0; i<3; i++)
     {
       img->currentSlice->partArr[i].readSyntaxElement = readSyntaxElement_CABAC;
     }
-    break;
-  default:
-    printf ("Unknown PPS:entropy_coding_mode %d\n", pps->entropy_coding_mode);
-    assert (0==1);
   }
-
 }

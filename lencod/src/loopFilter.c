@@ -93,7 +93,9 @@ void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int blk_y, int 
 void DeblockFrame(ImageParameters *img, byte **imgY, byte ***imgUV)
 {
   int       mb_x, mb_y ;
-  
+
+  return;
+
   for( mb_y=0 ; mb_y<(img->height>>4) ; mb_y++ )
     for( mb_x=0 ; mb_x<(img->width>>4) ; mb_x++ )
       DeblockMb( img, imgY, imgUV, mb_y, mb_x ) ;
@@ -179,7 +181,7 @@ void GetStrength(byte Strength[4],Macroblock* MbP,Macroblock* MbQ,int dir,int ed
     blk_y  = block_y + (blkQ >> 2) ;
     blk_x  = block_x + (blkQ  & 3)+4 ;
 
-      if(    !(MbP->mb_type==I4MB || MbP->mb_type==I16MB)  && (img->types != SP_IMG)
+      if(    !(MbP->mb_type==I4MB || MbP->mb_type==I16MB)  && (img->type != SP_SLICE)
           && !(MbQ->mb_type==I4MB || MbQ->mb_type==I16MB) )
       {
         if( ((MbQ->cbp_blk &  (1 << blkQ )) != 0) || ((MbP->cbp_blk &  (1 << blkP)) != 0) )
@@ -188,7 +190,7 @@ void GetStrength(byte Strength[4],Macroblock* MbP,Macroblock* MbQ,int dir,int ed
         {                                                     // if no coefs, but vector difference >= 1 set Strength=1 
         blk_y  = block_y + (blkQ >> 2) ;   blk_y2 = blk_y -  dir ;
         blk_x  = block_x + (blkQ  & 3)+4 ; blk_x2 = blk_x - !dir ;
-          if( img->type == B_IMG || img->type == BS_IMG )
+          if( img->type == B_SLICE || img->type == BS_IMG )
           {
             Strength[idx] = (abs( tmp_fwMV[0][blk_y][blk_x] - tmp_fwMV[0][blk_y2][blk_x2]) >= 4) |
                             (abs( tmp_fwMV[1][blk_y][blk_x] - tmp_fwMV[1][blk_y2][blk_x2]) >= 4) |
@@ -299,9 +301,9 @@ void EdgeLoop(byte* SrcPtr,byte Strength[4],int QP,
             if( !Chro )
               {
               if( ap )
-                SrcPtr[-inc2] += IClip( -C0,  C0, ( L2 + ((RL0+1) >> 1) - (L1<<1)) >> 1 ) ;
+                SrcPtr[-inc2] += IClip( -C0,  C0, ( L2 + ((RL0 +1) >> 1) - (L1<<1)) >> 1 ) ;
               if( aq  )
-                SrcPtr[  inc] += IClip( -C0,  C0, ( R2 + ((RL0+1) >> 1) - (R1<<1)) >> 1 ) ;
+                SrcPtr[  inc] += IClip( -C0,  C0, ( R2 + ((RL0 +1) >> 1) - (R1<<1)) >> 1 ) ;
               } ;
             } ;
           } ; 

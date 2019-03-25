@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 6.1e
+ *     JM 6.2
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -89,9 +89,10 @@
 #include "sei.h"
 #include "parset.h"
 #include "image.h"
+#include "output.h"
 
 #define JM      "6"
-#define VERSION "6.1e"
+#define VERSION "6.2"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
@@ -128,17 +129,17 @@ void Clear_Motion_Search_Module ();
 
 int main(int argc,char **argv)
 {
-  int image_type;
   int num_ref_pic_bak;
   
-  p_dec = p_dec_u = p_dec_v = p_stat = p_log = p_datpart = p_trace = NULL;
+  p_dec = p_stat = p_log = p_trace = NULL;
 
-
-//  isBigEndian = testEndian();
+  printf("Sorry, encoding is broken in this release (JM 6.2).\n\n");
+  exit(1);
 
   Configure (argc, argv);
   init_img();
   AllocNalPayloadBuffer();
+
 
   frame_pic = malloc_picture();
   if (input->InterlaceCodingOption != FRAME_CODING)
@@ -148,8 +149,11 @@ int main(int argc,char **argv)
   }
   init_rdopt ();
 
-  // allocate memory for frame buffers
-  init_frame_buffers(input,img);
+  init_dpb(input);
+  init_out_buffer();
+
+  enc_picture = enc_frame_picture = enc_top_picture = enc_bottom_picture = NULL;
+
   init_global_buffers();
   create_context_memory ();
 
@@ -159,9 +163,6 @@ int main(int argc,char **argv)
 
   // B pictures
   Bframe_ctr=0;
-  img->refPicID=-1;  //WYK: Oct. 16, 2001
-  img->refPicID_frm = -1;
-  img->refPicID_fld = -1;
   tot_time=0;                 // time for total encoding session
 
 #ifdef _ADAPT_LAST_GROUP_
@@ -171,16 +172,15 @@ int main(int argc,char **argv)
 #endif
 
   PatchInputNoFrames();
-  img->pn = -1;    // Tian
   init_poc();
 
   // Write sequence header (with parameter sets)
   stat->bit_slice = start_sequence();
   start_frame_no_in_this_IGOP = 0;
+
   for (img->number=0; img->number < input->no_frames; img->number++)
   {
-    img->disposable_flag = FALSE;
-    img->pn = (img->pn+1) % (img->buf_cycle+1); 
+    img->nal_reference_idc = 1;
 
     //much of this can go in init_frame() or init_field()?
     //poc for this frame or field
@@ -189,11 +189,11 @@ int main(int argc,char **argv)
       img->bottompoc = img->toppoc;     //progressive
     else 
       img->bottompoc = img->toppoc+1;   //hard coded
+
     push_poc(img->toppoc, img->bottompoc, REFFRAME);               //push poc values into array
     
     //frame_num for this frame
     img->frame_num = IMG_NUMBER % (1 << (LOG2_MAX_FRAME_NUM_MINUS4 + 4));
-    img->idr_flag = !IMG_NUMBER;            //for 2nd field, idr is reset in SliceHeader() //5.0f
     
     //the following is sent in the slice header
     img->delta_pic_order_cnt[0]=0;
@@ -216,26 +216,10 @@ int main(int argc,char **argv)
       
     }
 #endif
+    img->framepoc = min (img->toppoc, img->bottompoc);
 
-    image_type = img->type;
-    
-    img->num_ref_pic_active_fwd_minus1 = max(0,img->nb_references - 1);
-    num_ref_pic_bak          = img->num_ref_pic_active_fwd_minus1;
-    if (input->StoredBPictures > 0)
-    {
-      if (input->InterlaceCodingOption>=MB_CODING)
-      {
-        img->num_ref_pic_active_bwd_minus1 = 1;
-      }
-      else
-      {
-        img->num_ref_pic_active_bwd_minus1 = 1;
-      }
-    }
-    else
-    {
-      img->num_ref_pic_active_bwd_minus1 = 0;
-    }
+    img->num_ref_idx_l0_active = max(1,img->nb_references);
+    num_ref_pic_bak            = img->num_ref_idx_l0_active-1;
   
     // which layer the image belonged to?
     if ( IMG_NUMBER % (input->NumFramesInELSubSeq+1) == 0 )
@@ -243,21 +227,16 @@ int main(int argc,char **argv)
     else
       img->layer = 1;
 
-
-
     encode_one_frame(); // encode one I- or P-frame
 
 
     img->nb_references += 1;
-    img->nb_references = min(img->nb_references, img->buf_cycle +1); // Tian Dong. PLUS1, +1, June 7, 2002
-    img->nb_references = min(img->nb_references, fb->short_used+fb->long_used);// Tian Dong. June 7, 2002
+    img->nb_references = min(img->nb_references, img->buf_cycle); // Tian Dong. PLUS1, +1, June 7, 2002
 
     if ((input->successive_Bframe != 0) && (IMG_NUMBER > 0)) // B-frame(s) to encode
     {
-      img->type = B_IMG;            // set image type to B-frame
-      img->num_ref_pic_active_bwd_minus1 = 0;
-
-      img->types= INTER_IMG;
+      img->type = B_SLICE;            // set image type to B-frame
+      img->num_ref_idx_l1_active = 1;
 
       if (input->NumFramesInELSubSeq == 0) 
         img->layer = 0;
@@ -266,12 +245,12 @@ int main(int argc,char **argv)
 
       img->frame_num++;                 //increment frame_num once for B-frames
       img->frame_num %= (1 << (LOG2_MAX_FRAME_NUM_MINUS4 + 4));
-      img->idr_flag=0;                                        //B-frames cannot be idr  //5.0f
-      img->disposable_flag = TRUE;      // These B frames are disposable (are the non-disposable B frames implemented???)
+
+      img->nal_reference_idc = (input->StoredBPictures != 0);
 
       for(img->b_frame_to_code=1; img->b_frame_to_code<=input->successive_Bframe; img->b_frame_to_code++)
       {
-        img->num_ref_pic_active_fwd_minus1 = num_ref_pic_bak;       // coding field pictures would have changed this, so reset
+        img->num_ref_idx_l0_active = num_ref_pic_bak+1;       // coding field pictures would have changed this, so reset
 
         //! somewhere here the disposable flag was set -- B frames are always disposable in this encoder.
         //! This happens now in slice.c, terminate_slice, where the nal_reference_idc is set up
@@ -297,6 +276,8 @@ int main(int argc,char **argv)
   // terminate sequence
   terminate_sequence();
 
+  flush_dpb();
+
   fclose(p_in);
   if (p_dec)
     fclose(p_dec);
@@ -318,16 +299,15 @@ int main(int argc,char **argv)
   // report everything
   report();
 
-
-
   free_picture (frame_pic);
   if (top_pic)
     free_picture (top_pic);
   if (bottom_pic)
     free_picture (bottom_pic);
 
-  // free allocated memory for frame buffers
-  free_frame_buffers(input,img);
+  free_dpb();
+  uninit_out_buffer();
+
   free_global_buffers();
 
   // free image mem
@@ -350,7 +330,7 @@ void init_poc()
   int i;
 
   if(input->no_frames > (1<<15))error("too many frames",-998);
-  if(input->no_multpred >= MAX_NO_POC_FRAMES)error("NumberReferenceFrames too large",-999);
+  if(input->num_reference_frames >= MAX_NO_POC_FRAMES)error("NumberReferenceFrames too large",-999);
   for(i=0; i<MAX_NO_POC_FRAMES; i++){toprefpoc[i] = bottomrefpoc[i] = 1<<29;}            //init with large 
 
   //the following should probably go in sequence parameters
@@ -447,13 +427,14 @@ void CAVLC_init()
  */
 void init_img()
 {
-  int i,j,size_x,size_y;
+  int i,j;
 
-  img->no_multpred=input->no_multpred;
+  img->num_reference_frames=input->num_reference_frames;
+  
 #ifdef _ADDITIONAL_REFERENCE_FRAME_
-  img->buf_cycle = max (input->no_multpred, input->add_ref_frame+1);
+  img->buf_cycle = max (input->num_reference_frames, input->add_ref_frame+1);
 #else
-  img->buf_cycle = input->no_multpred;
+  img->buf_cycle = input->num_reference_frames;
 #endif
 
   img->lindex=0;
@@ -532,7 +513,7 @@ void init_img()
   if ((img->quad = (int*)calloc (511, sizeof(int))) == NULL)
     no_mem_exit ("init_img: img->quad");
   img->quad+=255;
-  for (i=0; i < 256; ++i) // fix from TML1 / TML2 sw, truncation removed
+  for (i=0; i < 256; ++i)
   {
     img->quad[i]=img->quad[-i]=i*i;
   }
@@ -541,30 +522,28 @@ void init_img()
   img->height   = input->img_height;
   img->width_cr = input->img_width/2;
   img->height_cr= input->img_height/2;
+  
+  img->PicWidthInMbs    = input->img_width/MB_BLOCK_SIZE;
+  img->FrameHeightInMbs = input->img_height/MB_BLOCK_SIZE;
+  img->FrameSizeInMbs   = img->PicWidthInMbs * img->FrameHeightInMbs;
+  if (input->InterlaceCodingOption)
+    img->PicHeightInMapUnits = img->FrameHeightInMbs/2;
+  else
+    img->PicHeightInMapUnits = img->FrameHeightInMbs;
 
-  if(((img->mb_data) = (Macroblock *) calloc((img->width/MB_BLOCK_SIZE) * (img->height/MB_BLOCK_SIZE),sizeof(Macroblock))) == NULL)
+  if(((img->mb_data) = (Macroblock *) calloc(img->FrameSizeInMbs,sizeof(Macroblock))) == NULL)
     no_mem_exit("init_img: img->mb_data");
 
   if(input->UseConstrainedIntraPred)
   {
-    if(((img->intra_block) = (int**)calloc((j=(img->width/MB_BLOCK_SIZE) * (img->height/MB_BLOCK_SIZE)),sizeof(int))) == NULL)
+    if(((img->intra_block) = (int*)calloc(img->FrameSizeInMbs,sizeof(int))) == NULL)
       no_mem_exit("init_img: img->intra_block");
-    for (i=0; i<j; i++)
-    {
-      if ((img->intra_block[i] = (int*)calloc(4, sizeof(int))) == NULL)
-        no_mem_exit ("init_img: img->intra_block");
-    }
   }
 
-  // allocate memory for intra pred mode buffer for each block: img->ipredmode
-  // int  img->ipredmode[90][74];
-  size_x=img->width/BLOCK_SIZE+3;
-  size_y=img->height/BLOCK_SIZE+3;
-  get_mem2Dint(&(img->ipredmode), img->width/BLOCK_SIZE+3, img->height/BLOCK_SIZE+3);        //need two extra rows at right and bottom
+  get_mem2Dint(&(img->ipredmode), img->width/BLOCK_SIZE, img->height/BLOCK_SIZE);        //need two extra rows at right and bottom
+
   if(input->InterlaceCodingOption >= MB_CODING) 
   {
-    get_mem2Dint(&(img->ipredmode_top), img->width/BLOCK_SIZE+3, img->height/BLOCK_SIZE+3);
-    get_mem2Dint(&(img->ipredmode_bot), img->width/BLOCK_SIZE+3, img->height/BLOCK_SIZE+3);
     get_mem2Dint(&(rddata_top_frame_mb.ipredmode), img->width/BLOCK_SIZE+3, img->height/BLOCK_SIZE+3);
     get_mem2Dint(&(rddata_bot_frame_mb.ipredmode), img->width/BLOCK_SIZE+3, img->height/BLOCK_SIZE+3);
     get_mem2Dint(&(rddata_top_field_mb.ipredmode), img->width/BLOCK_SIZE+3, img->height/BLOCK_SIZE+3);
@@ -580,45 +559,11 @@ void init_img()
 
   CAVLC_init();
 
-  // Prediction mode is set to -1 outside the frame, indicating that no prediction can be made from this part
-  for (i=0; i < img->width/BLOCK_SIZE+1; i++)
-  {
-    // img->ipredmode[i][0]=-1;
-    // img->ipredmode[i][size_y-2]=-1;
-    // img->ipredmode[i][size_y-1]=-1;
-    img->ipredmode[i+1][0]=-1;
-    img->ipredmode[i+1][img->height/BLOCK_SIZE+1]=-1;
-  }
-  for (j=0; j < img->height/BLOCK_SIZE+1; j++)
-  {
-    // img->ipredmode[0][j]=-1;
-    // img->ipredmode[size_x-2][j]=-1;
-    // img->ipredmode[size_x-1][j]=-1;
-    img->ipredmode[0][j+1]=-1;
-    img->ipredmode[img->width/BLOCK_SIZE+1][j+1]=-1;
-  }
-  img->ipredmode[0][0]=-1;
-
-  if(input->InterlaceCodingOption >= MB_CODING)
-  {
-    for (i=0; i < img->width/BLOCK_SIZE+1; i++)
+  for (i=0; i < img->width/BLOCK_SIZE; i++)
+    for (j=0; j < img->height/BLOCK_SIZE; j++)
     {
-    img->ipredmode_top[i+1][0]=-1;
-    img->ipredmode_top[i+1][img->height/BLOCK_SIZE+1]=-1;
-    img->ipredmode_bot[i+1][0]=-1;
-    img->ipredmode_bot[i+1][img->height/BLOCK_SIZE+1]=-1;
-
+      img->ipredmode[i][j]=-1;
     }
-    for (j=0; j < img->height/BLOCK_SIZE+1; j++)
-    {
-    img->ipredmode_top[0][j+1]=-1;
-    img->ipredmode_top[img->width/BLOCK_SIZE+1][j+1]=-1;
-    img->ipredmode_bot[0][j+1]=-1;
-    img->ipredmode_bot[img->width/BLOCK_SIZE+1][j+1]=-1;
-    }
-    img->ipredmode_top[0][0]=-1;
-    img->ipredmode_bot[0][0]=-1;
-  }
 
   img->mb_y_upd=0;
 
@@ -641,8 +586,6 @@ void init_img()
     input->LFAlphaC0Offset = 0;
     input->LFBetaOffset = 0;
   }
-
-
 }
 
 /*!
@@ -815,18 +758,18 @@ void report()
 
 
 #ifdef _ADDITIONAL_REFERENCE_FRAME_
-  if (input->add_ref_frame >= input->no_multpred)
+  if (input->add_ref_frame >= input->num_reference_frames)
   {
-      fprintf(stdout,   " No of ref. frames used in P pred  : %d (+ no. %d)\n",input->no_multpred,input->add_ref_frame);
+      fprintf(stdout,   " No of ref. frames used in P pred  : %d (+ no. %d)\n",input->num_reference_frames,input->add_ref_frame);
       if(input->successive_Bframe != 0)
-        fprintf(stdout,   " No of ref. frames used in B pred  : %d (+ no. %d)\n",input->no_multpred,input->add_ref_frame);
+        fprintf(stdout,   " No of ref. frames used in B pred  : %d (+ no. %d)\n",input->num_reference_frames,input->add_ref_frame);
   }
   else
 #endif
   {
-    fprintf(stdout,   " No of ref. frames used in P pred  : %d\n",input->no_multpred);
+    fprintf(stdout,   " No of ref. frames used in P pred  : %d\n",input->num_reference_frames);
     if(input->successive_Bframe != 0)
-      fprintf(stdout,   " No of ref. frames used in B pred  : %d\n",input->no_multpred);
+      fprintf(stdout,   " No of ref. frames used in B pred  : %d\n",input->num_reference_frames);
   }
   fprintf(stdout,   " Total encoding time for the seq.  : %.3f sec \n",tot_time*0.001);
 
@@ -995,18 +938,18 @@ void report()
   fprintf(p_stat,  " Search range                 : %d\n",input->search_range);
 
 #ifdef _ADDITIONAL_REFERENCE_FRAME_
-  if (input->add_ref_frame >= input->no_multpred)
+  if (input->add_ref_frame >= input->num_reference_frames)
     {
-      fprintf(p_stat,   " No of frame used in P pred   : %d (+ no. %d)\n",input->no_multpred,input->add_ref_frame);
+      fprintf(p_stat,   " No of frame used in P pred   : %d (+ no. %d)\n",input->num_reference_frames,input->add_ref_frame);
       if(input->successive_Bframe != 0)
-        fprintf(p_stat, " No of frame used in B pred   : %d (+ no. %d)\n",input->no_multpred,input->add_ref_frame);
+        fprintf(p_stat, " No of frame used in B pred   : %d (+ no. %d)\n",input->num_reference_frames,input->add_ref_frame);
     }
   else
 #endif
   {
-    fprintf(p_stat,   " No of frame used in P pred   : %d\n",input->no_multpred);
+    fprintf(p_stat,   " No of frame used in P pred   : %d\n",input->num_reference_frames);
     if(input->successive_Bframe != 0)
-      fprintf(p_stat, " No of frame used in B pred   : %d\n",input->no_multpred);
+      fprintf(p_stat, " No of frame used in B pred   : %d\n",input->num_reference_frames);
   }
   if (input->symbol_mode == UVLC)
     fprintf(p_stat,   " Entropy coding method        : CAVLC\n");
@@ -1231,7 +1174,7 @@ void report()
 
   fprintf(p_log,"   %2d   |",input->search_range );
 
-  fprintf(p_log," %2d  |",input->no_multpred);
+  fprintf(p_log," %2d  |",input->num_reference_frames);
 
   fprintf(p_log," %2d  |",img->framerate/(input->jumpd+1));
 
@@ -1431,10 +1374,6 @@ int init_global_buffers()
   // compared to luma mref[ref][4y][4x] for whatever reason
   // number of reference frames increased by one for next P-frame
 
-  alloc_mref(img);
-
-  alloc_Refbuf (img);
-
   if(input->successive_Bframe!=0 || input->StoredBPictures > 0)
   {
     // allocate memory for temp B-frame motion vector buffer: tmp_fwMV, tmp_bwMV, dfMV, dbMV
@@ -1478,10 +1417,6 @@ int init_global_buffers()
     // byte imgUV[2][144][176];
     memory_size += get_mem2D(&imgY_com, img->height, img->width);
     memory_size += get_mem3D(&imgUV_com, 2, img->height/2, img->width_cr);
-    memory_size += get_mem2D(&imgY_top, height_field, img->width);
-    memory_size += get_mem3D(&imgUV_top, 2, height_field/2, img->width_cr);
-    memory_size += get_mem2D(&imgY_bot, height_field, img->width);
-    memory_size += get_mem3D(&imgUV_bot, 2, height_field/2, img->width_cr);
 
     // allocate memory for reference frame buffers: imgY_org, imgUV_org
     // byte imgY_org[288][352];
@@ -1607,11 +1542,6 @@ void free_global_buffers()
 
   if(input->UseConstrainedIntraPred)
   {
-    j=(img->width/16)*(img->height/16);
-    for (i=0; i<j; i++)
-    {
-      free (img->intra_block[i]);
-    }
     free (img->intra_block);
   }
 
@@ -1654,12 +1584,8 @@ void free_global_buffers()
   {
     free_mem2D(imgY_com);
     free_mem3D(imgUV_com,2);
-    free_mem2D(imgY_top);
-    free_mem3D(imgUV_top,2);
     free_mem2D(imgY_org_top);      // free ref frame buffers
     free_mem3D(imgUV_org_top,2);
-    free_mem2D(imgY_bot);
-    free_mem3D(imgUV_bot,2);
     free_mem2D(imgY_org_bot);      // free ref frame buffers
     free_mem3D(imgUV_org_bot,2);
 
@@ -1669,7 +1595,6 @@ void free_global_buffers()
     if (input->WeightedPrediction || input->WeightedBiprediction)
       free(mref_fld_w);
     free(mcef_fld);
-	free(parity_fld);
 
     if(input->successive_Bframe!=0 || input->StoredBPictures > 0)
     {
@@ -1886,16 +1811,16 @@ void combine_field()
 
   for (i=0; i<img->height / 2; i++)
   {
-    memcpy(imgY_com[i*2], imgY_top[i], img->width);     // top field
-    memcpy(imgY_com[i*2 + 1], imgY_bot[i], img->width); // bottom field
+    memcpy(imgY_com[i*2], enc_top_picture->imgY[i], img->width);     // top field
+    memcpy(imgY_com[i*2 + 1], enc_bottom_picture->imgY[i], img->width); // bottom field
   }
 
   for (i=0; i<img->height_cr / 2; i++)
   {
-    memcpy(imgUV_com[0][i*2], imgUV_top[0][i], img->width_cr);
-    memcpy(imgUV_com[0][i*2 + 1], imgUV_bot[0][i], img->width_cr);
-    memcpy(imgUV_com[1][i*2], imgUV_top[1][i], img->width_cr);
-    memcpy(imgUV_com[1][i*2 + 1], imgUV_bot[1][i], img->width_cr);
+    memcpy(imgUV_com[0][i*2], enc_top_picture->imgUV[0][i], img->width_cr);
+    memcpy(imgUV_com[0][i*2 + 1], enc_bottom_picture->imgUV[0][i], img->width_cr);
+    memcpy(imgUV_com[1][i*2], enc_top_picture->imgUV[1][i], img->width_cr);
+    memcpy(imgUV_com[1][i*2 + 1], enc_bottom_picture->imgUV[1][i], img->width_cr);
   }
 }
 
@@ -1911,13 +1836,13 @@ void split_field_top()
 
   for (i=0; i<img->height; i++)
   {
-    memcpy(imgY[i], imgY_frm[i*2], img->width); 
+    memcpy(enc_picture->imgY[i], imgY_frm[i*2], img->width); 
   }
 
   for (i=0; i<img->height_cr; i++)
   {
-    memcpy(imgUV[0][i], imgUV_frm[0][i*2], img->width_cr);
-    memcpy(imgUV[1][i], imgUV_frm[1][i*2], img->width_cr);
+    memcpy(enc_picture->imgUV[0][i], imgUV_frm[0][i*2], img->width_cr);
+    memcpy(enc_picture->imgUV[1][i], imgUV_frm[1][i*2], img->width_cr);
   }
 }
 
@@ -1933,13 +1858,13 @@ void split_field_bot()
 
   for (i=0; i<img->height; i++)
   {
-    memcpy(imgY[i], imgY_frm[i*2 + 1], img->width);
+    memcpy(enc_picture->imgY[i], imgY_frm[i*2 + 1], img->width);
   }
 
   for (i=0; i<img->height_cr; i++)
   {
-    memcpy(imgUV[0][i], imgUV_frm[0][i*2 + 1], img->width_cr);
-    memcpy(imgUV[1][i], imgUV_frm[1][i*2 + 1], img->width_cr);
+    memcpy(enc_picture->imgUV[0][i], imgUV_frm[0][i*2 + 1], img->width_cr);
+    memcpy(enc_picture->imgUV[1][i], imgUV_frm[1][i*2 + 1], img->width_cr);
   }
 }
 
@@ -1978,49 +1903,44 @@ void process_2nd_IGOP()
   In2ndIGOP = TRUE;
 
 //  img->number = -1;
-  img->pn = -1;
   start_frame_no_in_this_IGOP = input->no_frames;
   start_tr_in_this_IGOP = (input->no_frames-1)*(input->jumpd+1) +1;
   input->no_frames = input->no_frames + input->NumFrameIn2ndIGOP;
 
-  reset_buffers();
+/*  reset_buffers();
 
   frm->picbuf_short[0]->used=0;
   frm->picbuf_short[0]->picID=-1;
   frm->picbuf_short[0]->lt_picID=-1;
-  frm->short_used = 0;
+  frm->short_used = 0; */
   img->nb_references = 0;
 }
+
 
 /*!
  ************************************************************************
  * \brief
- *    SetImgType
+ *    Set the image type for I,P and SP pictures (not B!)
  ************************************************************************
  */
-
 void SetImgType()
 {
   if (input->intra_period == 0)
   {
     if (IMG_NUMBER == 0)
     {
-      img->type = INTRA_IMG;        // set image type for first image to I-frame
+      img->type = I_SLICE;        // set image type for first image to I-frame
     }
     else
     {
-      img->type = INTER_IMG;        // P-frame
-      if(input->StoredBPictures > 0 && img->number > 1)
-      {
-        img->type = BS_IMG;
-      }
-      else if (input->sp_periodicity)
+      img->type = P_SLICE;        // P-frame
+
+      if (input->sp_periodicity)
       {
         if ((IMG_NUMBER % input->sp_periodicity) ==0)
         {
-          img->types=SP_IMG;
+          img->type=SP_SLICE;
         }
-        else img->types=INTER_IMG;
       }
     }
   }
@@ -2028,31 +1948,17 @@ void SetImgType()
   {
     if ((IMG_NUMBER%input->intra_period) == 0)
     {
-      img->type = INTRA_IMG;
+      img->type = I_SLICE;
     }
     else
     {
-      img->type = INTER_IMG;        // P-frame
-      if(input->StoredBPictures > 0 && img->number > 1)
-      {
-        img->type = BS_IMG;
-      }
-      else if (input->sp_periodicity)
+      img->type = P_SLICE;        // P-frame
+      if (input->sp_periodicity)
       {
         if ((IMG_NUMBER % input->sp_periodicity) ==0)
-            img->types=SP_IMG;
-        else img->types=INTER_IMG;
+            img->type=SP_SLICE;
       }
     }
-  }
-
-  if (frm->short_size==frm->short_used)
-  {
-    frm->picbuf_short[frm->short_size-1]->used = 0;
-    frm->picbuf_short[frm->short_size-1]->picID = -1;
-    frm->picbuf_short[frm->short_size-1]->lt_picID = -1;
-    frm->short_used--;
-    img->nb_references--;
   }
 }
 
@@ -2063,10 +1969,8 @@ void SetImgType()
  *    poc_distance()
  ************************************************************************
  */
-
 int poc_distance( int refa, int refb)
 {
-
   return toprefpoc[refb + 1] - toprefpoc[refa + 1];
 }
  

@@ -131,7 +131,7 @@ typedef struct
   Boolean   Valid;                  // indicates the parameter set is valid
   unsigned  pic_parameter_set_id;                             // ue(v)
   unsigned  seq_parameter_set_id;                             // ue(v)
-  Boolean   entropy_coding_mode;                              // u(1)
+  Boolean   entropy_coding_mode_flag;                         // u(1)
   // if( pic_order_cnt_type < 2 )  in the sequence parameter set
   Boolean      pic_order_present_flag;                           // u(1)
   unsigned  num_slice_groups_minus1;                          // ue(v)
@@ -154,15 +154,17 @@ typedef struct
   int       pic_init_qp_minus26;                              // se(v)
   int       pic_init_qs_minus26;                              // se(v)
   int       chroma_qp_index_offset;                           // se(v)
-  Boolean   deblocking_filter_parameters_present_flag;        // u(1)
+  Boolean   deblocking_filter_control_present_flag;           // u(1)
   Boolean   constrained_intra_pred_flag;                      // u(1)
   Boolean   redundant_pic_cnt_present_flag;                   // u(1)
   Boolean   vui_pic_parameters_flag;                          // u(1)
+#ifndef G50_SPS
   Boolean   frame_cropping_flag;                              // u(1)
     unsigned  frame_cropping_rect_left_offset;                // ue(v)
     unsigned  frame_cropping_rect_right_offset;               // ue(v)
     unsigned  frame_cropping_rect_top_offset;                 // ue(v)
     unsigned  frame_cropping_rect_bottom_offset;              // ue(v)
+#endif
 } pic_parameter_set_rbsp_t;
 
 
@@ -172,10 +174,17 @@ typedef struct
   Boolean   Valid;                  // indicates the parameter set is valid
 
   unsigned  profile_idc;                                      // u(8)
+#ifdef G50_SPS
+  Boolean   constrained_set0_flag;                            // u(1)
+  Boolean   constrained_set1_flag;                            // u(1)
+  Boolean   constrained_set2_flag;                            // u(1)
+#endif
   unsigned  level_idc;                                        // u(8)
+#ifndef G50_SPS
   Boolean   more_than_one_slice_group_allowed_flag;           // u(1)
   Boolean   arbitrary_slice_order_allowed_flag;               // u(1)
   Boolean   redundant_slices_allowed_flag;                    // u(1)
+#endif
   unsigned  seq_parameter_set_id;                             // ue(v)
   unsigned  log2_max_frame_num_minus4;                        // ue(v)
   unsigned pic_order_cnt_type;
@@ -189,13 +198,20 @@ typedef struct
     // for( i = 0; i < num_ref_frames_in_pic_order_cnt_cycle; i++ )
       int   offset_for_ref_frame[MAXnum_ref_frames_in_pic_order_cnt_cycle];   // se(v)
   unsigned  num_ref_frames;                                   // ue(v)
-  Boolean   required_frame_num_update_behaviour_flag;         // u(1)
-  unsigned  pic_width_in_mbs_minus1;                        // ue(v)
-  unsigned  pic_height_in_map_units_minus1;                       // ue(v)
+  Boolean   gaps_in_frame_num_value_allowed_flag;             // u(1)
+  unsigned  pic_width_in_mbs_minus1;                          // ue(v)
+  unsigned  pic_height_in_map_units_minus1;                   // ue(v)
   Boolean   frame_mbs_only_flag;                              // u(1)
   // if( !frame_mbs_only_flag ) 
     Boolean   mb_adaptive_frame_field_flag;                   // u(1)
   Boolean   direct_8x8_inference_flag;                        // u(1)
+#ifdef G50_SPS
+  Boolean   frame_cropping_flag;                              // u(1)
+    unsigned  frame_cropping_rect_left_offset;                // ue(v)
+    unsigned  frame_cropping_rect_right_offset;               // ue(v)
+    unsigned  frame_cropping_rect_top_offset;                 // ue(v)
+    unsigned  frame_cropping_rect_bottom_offset;              // ue(v)
+#endif
   Boolean   vui_parameters_present_flag;                      // u(1)
     vui_seq_parameters_t vui_seq_parameters;                  // vui_seq_parameters_t
 } seq_parameter_set_rbsp_t;

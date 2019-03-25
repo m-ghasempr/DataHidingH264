@@ -947,12 +947,10 @@ void interpret_dec_ref_pic_marking_repetition_info( byte* payload, int size, Ima
 {
   int original_idr_flag, original_frame_num;
 
-  MMCObuffer_t *old_mmco;
-  int old_idr_flag , old_no_output_of_prior_pics_flag, old_long_term_reference_flag , old_adaptive_ref_pic_buffering_flag;
+  DecRefPicMarking_t *tmp_drpm;
 
-#ifdef PRINT_DEC_REF_PIC_MARKING
-  MMCObuffer_t *tmp_mmco;
-#endif
+  DecRefPicMarking_t *old_drpm;
+  int old_idr_flag , old_no_output_of_prior_pics_flag, old_long_term_reference_flag , old_adaptive_ref_pic_buffering_flag;
 
 
   Bitstream* buf;
@@ -974,7 +972,7 @@ void interpret_dec_ref_pic_marking_repetition_info( byte* payload, int size, Ima
 #endif
 
   // we need to save everything that is probably overwritten in dec_ref_pic_marking()
-  old_mmco = img->mmco_buffer;
+  old_drpm = img->dec_ref_pic_marking_buffer;
   old_idr_flag = img->idr_flag;
 
   old_no_output_of_prior_pics_flag = img->no_output_of_prior_pics_flag;
@@ -983,7 +981,7 @@ void interpret_dec_ref_pic_marking_repetition_info( byte* payload, int size, Ima
 
   // set new initial values
   img->idr_flag = original_idr_flag;
-  img->mmco_buffer = NULL;
+  img->dec_ref_pic_marking_buffer = NULL;
 
   dec_ref_pic_marking(buf);
 
@@ -999,39 +997,48 @@ void interpret_dec_ref_pic_marking_repetition_info( byte* payload, int size, Ima
     printf("adaptive_ref_pic_buffering_flag  = %d\n", img->adaptive_ref_pic_buffering_flag);
     if (img->adaptive_ref_pic_buffering_flag)
     {
-      tmp_mmco=img->mmco_buffer;
-      while (tmp_mmco != NULL)
+      tmp_drpm=img->dec_ref_pic_marking_buffer;
+      while (tmp_drpm != NULL)
       {
-        printf("memory_management_control_operation  = %d\n", tmp_mmco->MMCO);
+        printf("memory_management_control_operation  = %d\n", tmp_drpm->memory_management_control_operation);
         
-        if ((tmp_mmco->MMCO==1)||(tmp_mmco->MMCO==3)) 
+        if ((tmp_drpm->memory_management_control_operation==1)||(tmp_drpm->memory_management_control_operation==3)) 
         {
-          printf("difference_of_pic_nums_minus1        = %d\n", tmp_mmco->DPN-1);
+          printf("difference_of_pic_nums_minus1        = %d\n", tmp_drpm->difference_of_pic_nums_minus1);
         }
-        if ((tmp_mmco->MMCO==2)||(tmp_mmco->MMCO==3)||(tmp_mmco->MMCO==6))
+        if (tmp_drpm->memory_management_control_operation==2)
         {
-          printf("long_term_pic_idx                    = %d\n", tmp_mmco->LPIN);
+          printf("long_term_pic_num                    = %d\n", tmp_drpm->long_term_pic_num);
         }
-        if (tmp_mmco->MMCO==4)
+        if ((tmp_drpm->memory_management_control_operation==3)||(tmp_drpm->memory_management_control_operation==6))
         {
-          printf("max_long_term_pic_idx_plus1          = %d\n", tmp_mmco->MLIP1);
+          printf("long_term_frame_idx                  = %d\n", tmp_drpm->long_term_frame_idx);
         }
-        tmp_mmco = tmp_mmco->Next;
+        if (tmp_drpm->memory_management_control_operation==4)
+        {
+          printf("max_long_term_pic_idx_plus1          = %d\n", tmp_drpm->max_long_term_frame_idx_plus1);
+        }
+        tmp_drpm = tmp_drpm->Next;
       }
       
     }
   }
 #endif
 
+  while (img->dec_ref_pic_marking_buffer)
+  {
+    tmp_drpm = img->dec_ref_pic_marking_buffer->Next;
+    free (tmp_drpm);
+  }
+
   // restore old values in img
-  img->mmco_buffer = old_mmco;
+  img->dec_ref_pic_marking_buffer = old_drpm;
   img->idr_flag = old_idr_flag;
   img->no_output_of_prior_pics_flag = old_no_output_of_prior_pics_flag;
   img->long_term_reference_flag = old_long_term_reference_flag;
   img->adaptive_ref_pic_buffering_flag = old_adaptive_ref_pic_buffering_flag;
   
-  // free old buffer content
-  while (img->mmco_buffer)
+   
   free (buf);
 #ifdef PRINT_DEC_REF_PIC_MARKING
 #undef PRINT_DEC_REF_PIC_MARKING

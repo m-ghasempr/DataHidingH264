@@ -49,10 +49,21 @@
 #ifndef _DEFINES_H_
 #define _DEFINES_H_
 
-#define  MAX_NO_POC_FRAMES  10  //size of poc ref array = max no ref frames+1
-#define  MAX_LENGTH_POC_CYCLE   10              //max no in type 1 poc cycle
-#define NONREFFRAME 0           // used with push_poc
-#define REFFRAME 1
+// #define G50_SPS
+
+#if defined _DEBUG
+#define TRACE           1                   //!< 0:Trace off 1:Trace on
+#else
+#define TRACE           0                   //!< 0:Trace off 1:Trace on
+#endif
+
+#define MAX_NO_POC_FRAMES      10   //size of poc ref array = max no ref frames+1
+#define MAX_LENGTH_POC_CYCLE   10   //max no in type 1 poc cycle
+#define NONREFFRAME             0  // used with push_poc
+#define REFFRAME                1
+
+#define LIST_0 0
+#define LIST_1 1
 
 // CAVLC
 #define LUMA              0
@@ -75,20 +86,12 @@
 #define NUM_BLOCK_TYPES 8
 
 
-#define _ADAPT_LAST_GROUP_
-
-#define MAX_INFO_WORD  300000               //!< for one frame
 #define MAX_CODED_FRAME_SIZE 800000         //!< bytes for one frame
-#define MAXIMUM_UVLC_CODEWORD_PER_HEADER 20 //!< UVLC codewords per combined picture/slice header maximum
-#if defined _DEBUG
-#define TRACE           1                   //!< 0:Trace off 1:Trace on
-#else
-#define TRACE           0                   //!< 0:Trace off 1:Trace on
-#endif
-#define _LEAKYBUCKET_
+
+// #define _LEAKYBUCKET_
 
 #define absm(A) ((A)<(0) ? (-(A)):(A))      //!< abs macro, faster than procedure
-#define MAX_VALUE       999999              //!< used for start value for some variables
+
 #define Clip1(a)            ((a)>255?255:((a)<0?0:(a)))
 #define Clip3(min,max,val) (((val)<(min))?(min):(((val)>(max))?(max):(val)))
 
@@ -104,8 +107,8 @@
 #define IS_OLDINTRA(MB) ((MB)->mb_type==I4MB)
 #define IS_INTER(MB)    ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB)
 #define IS_INTERMV(MB)  ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB       && (MB)->mb_type!=0)
-#define IS_DIRECT(MB)   ((MB)->mb_type==0     && (img->   type==    B_SLICE ))
-#define IS_COPY(MB)     ((MB)->mb_type==0     && (img->   type==P_SLICE || img->type==SP_SLICE))
+#define IS_DIRECT(MB)   ((MB)->mb_type==0     && (img->type==B_SLICE ))
+#define IS_COPY(MB)     ((MB)->mb_type==0     && (img->type==P_SLICE || img->type==SP_SLICE))
 #define IS_P8x8(MB)     ((MB)->mb_type==P8x8)
 
 
@@ -142,28 +145,13 @@
 #define VERT_PRED_8     2
 #define PLANE_8         3
 
-// QCIF format
-#define IMG_WIDTH       176
-#define IMG_HEIGHT      144
-#define IMG_WIDTH_CR    88
-#define IMG_HEIGHT_CR   72
-
-#define INIT_FRAME_RATE 30
 #define EOS             1                       //!< End Of Sequence
 #define SOP             2                       //!< Start Of Picture
 #define SOS             3                       //!< Start Of Slice
 
-#define EOS_MASK        0x01                    //!< mask for end of sequence (bit 1)
-#define ICIF_MASK       0x02                    //!< mask for image format (bit 2)
-#define QP_MASK         0x7C                    //!< mask for quant.parameter (bit 3->7)
-#define TR_MASK         0x7f80                  //!< mask for temporal referance (bit 8->15)
-
 #define DECODING_OK     0
 #define SEARCH_SYNC     1
 #define PICTURE_DECODED 2
-
-#define MIN_PIX_VAL     0                       //!< lowest legal values for 8 bit sample
-#define MAX_PIX_VAL     255                     //!< highest legal values for 8 bit sample
 
 #define MAX_REFERENCE_PICTURES 15
 
@@ -171,9 +159,6 @@
 #define max(a, b)      ((a) > (b) ? (a) : (b))  //!< Macro returning max value
 #define min(a, b)      ((a) < (b) ? (a) : (b))  //!< Macro returning min value
 #endif
-#define mmax(a, b)      ((a) > (b) ? (a) : (b)) //!< Macro returning max value
-#define mmin(a, b)      ((a) < (b) ? (a) : (b)) //!< Macro returning min value
-#define clamp(a,b,c) ( (a)<(b) ? (b) : ((a)>(c)?(c):(a)) )    //!< clamp a to the range of [b;c]
 
 
 #define MVPRED_MEDIAN   0
@@ -186,21 +171,6 @@
 //#define DECODE_MB_BFRAME 2
 
 #define BLOCK_MULTIPLE      (MB_BLOCK_SIZE/BLOCK_SIZE)
-
-#define MAX_SYMBOLS_PER_MB  1200  //!< Maximum number of different syntax elements for one MB
-
-#define MAX_PART_NR     3        /*!< Maximum number of different data partitions.
-                                      Some reasonable number which should reflect
-                                      what is currently defined in the SE2Partition
-                                      map (elements.h) */
-
-// Interim File Format: define the following macro to identify which version is 
-//                      used in the implementation
-
-#define WORKING_DRAFT_MAJOR_NO 0    // inidicate the working draft version number
-#define WORKING_DRAFT_MINOR_NO 4
-#define INTERIM_FILE_MAJOR_NO 0     // indicate interim file format version number
-#define INTERIM_FILE_MINOR_NO 1
 
 //Start code and Emulation Prevention need this to be defined in identical manner at encoder and decoder
 #define ZEROBYTES_SHORTSTARTCODE 2 //indicates the number of zero bytes in the short start-code prefix

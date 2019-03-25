@@ -52,30 +52,31 @@
 
 #include "global.h"
 
-
-/***********************************************************************
- * L O C A L L Y   D E F I N E D   F U N C T I O N   P R O T O T Y P E S
- ***********************************************************************
- */
-
-
-
-unsigned int unary_bin_decode(DecodingEnvironmentPtr dep_dp,
-                              BiContextTypePtr ctx,
-                              int ctx_offset);
+MotionInfoContexts* create_contexts_MotionInfo(void);
+TextureInfoContexts* create_contexts_TextureInfo(void);
+void init_contexts_MotionInfo(struct img_par *img, MotionInfoContexts *enco_ctx);
+void init_contexts_TextureInfo(struct img_par *img, TextureInfoContexts *enco_ctx);
+void delete_contexts_MotionInfo(MotionInfoContexts *enco_ctx);
+void delete_contexts_TextureInfo(TextureInfoContexts *enco_ctx);
 
 
-unsigned int unary_bin_max_decode(DecodingEnvironmentPtr dep_dp,
-                                  BiContextTypePtr ctx,
-                                  int ctx_offset,
-                                  unsigned int max_symbol);
+void readMB_typeInfo_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
+void readB8_typeInfo_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
+void readIntraPredMode_CABAC(SyntaxElement *se, struct inp_par *inp,struct img_par *img, DecodingEnvironmentPtr dep_dp);
+void readRefFrame_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
+void readMVD_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
+void readCBP_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
+void readRunLevel_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img,  DecodingEnvironmentPtr dep_dp);
+void readDquant_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp);
+void readCIPredMode_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp);
+void readMB_skip_flagInfo_CABAC( SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
+void readFieldModeInfo_CABAC(SyntaxElement *se,struct inp_par *inp,struct img_par *img,DecodingEnvironmentPtr dep_dp); 
 
-unsigned int unary_exp_golomb_level_decode( DecodingEnvironmentPtr dep_dp,
-                                            BiContextTypePtr ctx);
+int  readSyntaxElement_CABAC(SyntaxElement *se, struct img_par *img, struct inp_par *inp, DataPartition *this_dataPart);
 
-unsigned int unary_exp_golomb_mv_decode(DecodingEnvironmentPtr dep_dp,
-                                        BiContextTypePtr ctx,
-                                        unsigned int max_bin);
+int  check_next_mb_and_get_field_mode_CABAC(SyntaxElement *se,struct img_par *img,struct inp_par *inp,DataPartition  *act_dp);
+void CheckAvailabilityOfNeighborsCABAC();
+
 
 #endif  // _CABAC_H_
 

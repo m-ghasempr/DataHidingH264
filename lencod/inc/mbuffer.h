@@ -43,70 +43,107 @@
  *      - Karsten Sühring          <suehring@hhi.de>
  ***********************************************************************
  */
-#ifndef _BUFFER_H_
-#define _BUFFER_H_
-
+#ifndef _MBUFFER_H_
+#define _MBUFFER_H_
 
 #include "global.h"
 
-typedef struct 
+//! definition a picture (field or frame)
+typedef struct storable_picture
 {
-  int   used;
-  int   picID;
-  int   lt_picID;
-  byte  **mref;
-  byte  **mref_w;
-  byte  ***mcef;
-  pel_t *Refbuf11;
-  pel_t *Refbuf11_w;
-  int  islong;            //<! field is needed for reordering
-  int layer_no;           //<! Tian: to save which layer and sub seq the short-term reference 
-  int sub_seq_no;         //<! frames comes from. JVT-B042  June 01, 2002
-  int frame_num_256;      //<! Tian: store the (img->number % 256), for spare picture sei info
-  int parity;
-} Frame;
+  PictureStructure structure;
 
-typedef struct
+  int         poc;
+
+  int         pic_num;
+  int         long_term_pic_num;
+  int         long_term_frame_idx;
+
+  int         is_long_term;
+  int         used_for_reference;
+
+  int         size_x, size_y, size_x_cr, size_y_cr;
+  int         chroma_vector_adjustment;
+  int         coded_frame;
+  int         mb_adaptive_frame_field_flag;
+
+  byte **     imgY;          //!< Y picture component
+  byte **     imgY_qpel;       //!< Y picture component upsampled (Quarter pel)
+  byte ***    imgUV;         //!< U and V picture components
+
+  byte *      mb_field;      //!< field macroblock indicator
+
+  int  ***    ref_idx;       //<! reference picture   [list][mb_nr][subblock_x][subblock_y]
+                             //   [list][mb_nr][subblock_x][subblock_y]
+  int  ****   mv;            //<! motion vector       [list][mb_nr][subblock_x][subblock_y]
+  
+  struct storable_picture *top_field;     // for mb aff, if frame for referencing the top field
+  struct storable_picture *bottom_field;  // for mb aff, if frame for referencing the bottom field
+  struct storable_picture *frame;         // for mb aff, if field for referencing the combined frame
+
+} StorablePicture;
+
+//! Frame Stores for Decoded Picture Buffer
+typedef struct frame_store
 {
-  Frame **picbuf_short;
-  Frame **picbuf_long;
-  int   short_size;
-  int   long_size;
-  int   short_used;
-  int   long_used;
-  int   num_short_used;   //<! Tian: to save the number of short-term reference 
-                          //<! frames can be used for prediction. JVT-B042  June 01, 2002
-} FrameBuffer;
+  int       is_used;                //<! 0=empty; 1=top; 2=bottom; 3=both fields (or frame)
+  int       is_reference;           //<! 0=not used for ref; 1=top used; 2=bottom used; 3=both fields (or frame) used
+  int       is_long_term;           //<! 0=not used for ref; 1=top used; 2=bottom used; 3=both fields (or frame) used
 
-FrameBuffer *fb;
-FrameBuffer *fld;
-FrameBuffer *frm;
+  int       is_non_existent;
 
-byte ***mref;                                   //<! these are pointer arrays to the actual structures
-byte ****mcef;                                  //<! these are pointer arrays to the actual structures
+  unsigned  frame_num;
+  unsigned  frame_num_wrap;
+  int       long_term_frame_idx;
+  int       is_output;
+  int       poc;
 
-void init_frame_buffers(InputParameters *inp, ImageParameters *img);
-void free_frame_buffers(InputParameters *inp, ImageParameters *img);
+  StorablePicture *frame;
+  StorablePicture *top_field;
+  StorablePicture *bottom_field;
 
-void init_long_term_buffer(int size, ImageParameters *img);
+} FrameStore;
 
-void assign_long_term_id(int shortID, int longID, ImageParameters *img);
 
-void remove_long_term(int longID);
-void remove_short_term(int shortID);
+//! Decoded Picture Buffer
+typedef struct decoded_picture_buffer
+{
+  FrameStore  **fs;
+  FrameStore  **fs_ref;
+  FrameStore  **fs_ltref;
+  unsigned      size;
+  unsigned      used_size;
+  unsigned      ref_frames_in_buffer;
+  unsigned      ltref_frames_in_buffer;
+  int           last_output_poc;
+  int           max_long_term_pic_idx;
+} DecodedPictureBuffer;
 
-void alloc_mref(ImageParameters *img);
-void init_mref();
-void reorder_mref(ImageParameters *img);
 
-void alloc_Refbuf (ImageParameters *img);
-void init_Refbuf(ImageParameters *img);
+extern DecodedPictureBuffer dpb;
+extern StorablePicture **listX[6];
+extern int listXsize[6];
 
-void add_frame(ImageParameters *img);
-void reset_buffers();
+void             init_dpb(InputParameters *inp);
+void             free_dpb();
+FrameStore*      alloc_frame_store();
+void             free_frame_store(FrameStore* f);
+StorablePicture* alloc_storable_picture(PictureStructure type, int size_x, int size_y, int size_x_cr, int size_y_cr);
+void             free_storable_picture(StorablePicture* p);
+void             store_picture_in_dpb(StorablePicture* p);
+void             flush_dpb();
 
-void alloc_ref_pic_list_reordering_buffer(Slice *currSlice);
-void free_ref_pic_list_reordering_buffer(Slice *currSlice);
+void             dpb_split_field(FrameStore *fs);
+void             dpb_combine_field(FrameStore *fs);
+
+void             init_lists(int currSliceType, PictureStructure currPicStructure);
+void             reorder_ref_pic_list(StorablePicture **list, int *list_size, 
+                                      int num_ref_idx_lX_active_minus1, int *remapping_of_pic_nums_idc, 
+                                      int *abs_diff_pic_num_minus1, int *long_term_pic_idx);
+
+void             init_mbaff_lists();
+void             alloc_ref_pic_list_reordering_buffer(Slice *currSlice);
+void             free_ref_pic_list_reordering_buffer(Slice *currSlice);
 
 #endif
 

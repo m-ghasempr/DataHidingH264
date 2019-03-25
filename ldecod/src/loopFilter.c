@@ -53,6 +53,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include "global.h"
+#include "image.h"
+#include "mb_access.h"
+
 extern const byte QP_SCALE_CR[52] ;
 
 /*********************************************************************************************************/
@@ -83,23 +86,28 @@ void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int mb_y, int m
 /*!
  *****************************************************************************************
  * \brief
- *    The main MB-filtering function
+ *    Filter all macroblocks in order of increasing macroblock address.
  *****************************************************************************************
  */
 void DeblockFrame(ImageParameters *img, byte **imgY, byte ***imgUV)
 {
+  unsigned i;
   int mb_x, mb_y ;
-  
-  for( mb_y=0 ; mb_y<(img->height>>4) ; mb_y++ )
-    for( mb_x=0 ; mb_x<(img->width>>4) ; mb_x++ )
-      DeblockMb( img, imgY, imgUV, mb_y, mb_x ) ;
+
+  return;
+
+  for (i=0; i<img->PicSizeInMbs; i++)
+  {
+    get_mb_block_pos(i, &mb_x, &mb_y);
+    DeblockMb( img, imgY, imgUV, mb_y, mb_x ) ;
+  }
 } 
 
 
-  /*!
+/*!
  *****************************************************************************************
  * \brief
- *    Deblocks one macroblock
+ *    Deblocking filter for one macroblock.
  *****************************************************************************************
  */
 
@@ -111,24 +119,36 @@ void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int mb_y, int m
   Macroblock    *MbP, *MbQ ; 
   int           sizey;
   int           QPC;
+
+  int           filterLeftMbEdgeFlag  = (mb_x != 0);
+  int           filterTopMbEdgeFlag   = (mb_y != 0);
+  int           fieldModeMbFlag;
   
   SrcY = imgY    [mb_y<<4] + (mb_x<<4) ;                                                      // pointers to source
   SrcU = imgUV[0][mb_y<<3] + (mb_x<<3) ;
   SrcV = imgUV[1][mb_y<<3] + (mb_x<<3) ;
 
-  MbQ  = &img->mb_data[mb_y*(img->width>>4) + mb_x] ;                                                 // current Mb
+  MbQ  = &img->mb_data[mb_y*img->PicWidthInMbs + mb_x] ;                                                 // current Mb
 
-  // This could also be handled as a filter offset of -51 
-  if (MbQ->lf_disable) return;
+  fieldModeMbFlag       = img->field_pic_flag || (img->MbaffFrameFlag && MbQ->mb_field);
+
+  // return, if filter is disabled
+  if (MbQ->LFDisableIdc==1) return;
+
+  if (MbQ->LFDisableIdc==2)
+  {
+    // don't filter at slice boundaries
+    filterLeftMbEdgeFlag = MbQ->mbAvailA;
+    filterTopMbEdgeFlag  = MbQ->mbAvailB;;
+  }
 
   for( dir=0 ; dir<2 ; dir++ )                                             // vertical edges, than horicontal edges
   {
-    EdgeCondition = (dir && mb_y) || (!dir && mb_x)  ;                    // can not filter beyond frame boundaries
+    EdgeCondition = (dir && filterTopMbEdgeFlag) || (!dir && filterLeftMbEdgeFlag); // can not filter beyond picture boundaries
     for( edge=0 ; edge<4 ; edge++ )                                            // first 4 vertical strips of 16 pel
     {                                                                                         // then  4 horicontal
       if( edge || EdgeCondition )
       {
-        
         sizey = mb_y%2 ? 1:2*img->width/MB_BLOCK_SIZE-1;
         MbP = (edge)? MbQ : ((dir)? (MbQ -(img->width>>4))  : (MbQ-1) ) ;       // MbP = Mb of the remote 4x4 block
 
@@ -136,12 +156,12 @@ void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int mb_y, int m
         GetStrength(Strength,img,MbP,MbQ,dir,edge,mb_y<<2,mb_x<<2); // Strength for 4 blks in 1 stripe
         if( *((int*)Strength) )                      // only if one of the 4 Strength bytes is != 0
         {
-          EdgeLoop( SrcY + (edge<<2)* ((dir)? img->width:1 ), Strength, QP, MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width, 0) ; 
+          EdgeLoop( SrcY + (edge<<2)* ((dir)? img->width:1 ), Strength, QP, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, img->width, 0) ; 
           if( (imgUV != NULL) && !(edge & 1) )
           {
             QPC  = (QP_SCALE_CR[MbP->qp] + QP_SCALE_CR[MbQ->qp] + 1) >> 1;
-            EdgeLoop( SrcU +  (edge<<1) * ((dir)? img->width_cr:1 ), Strength, QPC, MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width_cr, 1 ) ; 
-            EdgeLoop( SrcV +  (edge<<1) * ((dir)? img->width_cr:1 ), Strength, QPC, MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width_cr, 1 ) ; 
+            EdgeLoop( SrcU +  (edge<<1) * ((dir)? img->width_cr:1 ), Strength, QPC, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, img->width_cr, 1 ) ; 
+            EdgeLoop( SrcV +  (edge<<1) * ((dir)? img->width_cr:1 ), Strength, QPC, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, img->width_cr, 1 ) ; 
           }
         }
       }
@@ -164,23 +184,15 @@ void GetStrength(byte Strength[4],struct img_par *img,Macroblock* MbP,Macroblock
 {
   int    blkP, blkQ, idx ;
   int    blk_x, blk_x2, blk_y, blk_y2 ;
-  int    ***fw_mv = img->fw_mv;
-  int    ***bw_mv = img->bw_mv;
-  int    **fw_refFrArr = img->fw_refFrArr;
-  int    **bw_refFrArr = img->bw_refFrArr;
+  int    ***list0_mv = dec_picture->mv[LIST_0];
+  int    ***list1_mv = dec_picture->mv[LIST_1];
+  int    **list0_refIdxArr = dec_picture->ref_idx[LIST_0];
+  int    **list1_refIdxArr = dec_picture->ref_idx[LIST_1];
 
   if (img->structure==FRAME)
     *((int*)Strength) = ININT_STRENGTH[edge] ;                     // Start with Strength=3. or Strength=4 for Mb-edge
   else
     *((int*)Strength) = ININT_STRENGTH[3] ;                        //  Strength=3. for fields
-
-  if(img->mb_frame_field_flag)
-  {
-    fw_mv = img->fw_mv_frm;
-    bw_mv = img->bw_mv_frm;
-    fw_refFrArr = img->fw_refFrArr_frm;
-    bw_refFrArr = img->bw_refFrArr_frm;
-  }
 
 
   for( idx=0 ; idx<4 ; idx++ )
@@ -198,21 +210,21 @@ void GetStrength(byte Strength[4],struct img_par *img,Macroblock* MbP,Macroblock
       else
       {                                                     // if no coefs, but vector difference >= 1 set Strength=1 
         blk_y  = block_y + (blkQ >> 2) ;   blk_y2 = blk_y -  dir ;
-        blk_x  = block_x + (blkQ  & 3)+4 ; blk_x2 = blk_x - !dir ;
+        blk_x  = block_x + (blkQ  & 3) ;   blk_x2 = blk_x - !dir ;
 
         if( (img->type == B_SLICE) )
         {
-          Strength[idx] =  (abs( fw_mv[blk_x][blk_y][0] - fw_mv[blk_x2][blk_y2][0]) >= 4) |
-                           (abs( fw_mv[blk_x][blk_y][1] - fw_mv[blk_x2][blk_y2][1]) >= 4) |
-                           (abs( bw_mv[blk_x][blk_y][0] - bw_mv[blk_x2][blk_y2][0]) >= 4) |
-                           (abs( bw_mv[blk_x][blk_y][1] - bw_mv[blk_x2][blk_y2][1]) >= 4) |
-                           (fw_refFrArr[blk_y][blk_x-4]   !=   fw_refFrArr[blk_y2][blk_x2-4] )|
-                           (bw_refFrArr[blk_y][blk_x-4]   !=   bw_refFrArr[blk_y2][blk_x2-4] );
+          Strength[idx] =  (abs( list0_mv[blk_x][blk_y][0] - list0_mv[blk_x2][blk_y2][0]) >= 4) |
+                           (abs( list0_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= 4) |
+                           (abs( list1_mv[blk_x][blk_y][0] - list1_mv[blk_x2][blk_y2][0]) >= 4) |
+                           (abs( list1_mv[blk_x][blk_y][1] - list1_mv[blk_x2][blk_y2][1]) >= 4) |
+                           (list0_refIdxArr[blk_x][blk_y]   !=   list0_refIdxArr[blk_x2][blk_y2] )|
+                           (list1_refIdxArr[blk_x][blk_y]   !=   list1_refIdxArr[blk_x2][blk_y2] );
         }
         else
-          Strength[idx] =    (abs( img->mv[blk_x][blk_y][0] - img->mv[blk_x2][blk_y2][0]) >= 4 ) |
-                             (abs( img->mv[blk_x][blk_y][1] - img->mv[blk_x2][blk_y2][1]) >= 4 ) |
-                             (refFrArr[blk_y][blk_x-4]   !=   refFrArr[blk_y2][blk_x2-4] );
+          Strength[idx] =    (abs( list0_mv[blk_x][blk_y][0] - list0_mv[blk_x2][blk_y2][0]) >= 4 ) |
+                             (abs( list0_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= 4 ) |
+                             (list1_refIdxArr[blk_x][blk_y]   !=   list1_refIdxArr[blk_x2][blk_y2] );
       }
     }
   }
@@ -312,9 +324,9 @@ void EdgeLoop(byte* SrcPtr,byte Strength[4],int QP,
             if( !yuv )
             {
               if( ap )
-                SrcPtr[-inc2] += IClip( -C0,  C0, ( L2 + ((RL0+1) >> 1) - (L1<<1)) >> 1 ) ;
+                SrcPtr[-inc2] += IClip( -C0,  C0, ( L2 + ((RL0 + 1) >> 1) - (L1<<1)) >> 1 ) ;
               if( aq  )
-                SrcPtr[  inc] += IClip( -C0,  C0, ( R2 + ((RL0+1) >> 1) - (R1<<1)) >> 1 ) ;
+                SrcPtr[  inc] += IClip( -C0,  C0, ( R2 + ((RL0 + 1) >> 1) - (R1<<1)) >> 1 ) ;
             } ;
           } ;
         } ; 

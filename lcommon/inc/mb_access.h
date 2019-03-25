@@ -32,33 +32,30 @@
 
 /*!
  *************************************************************************************
- * \file b_frame.h
+ * \file mb_access.h
  *
  * \brief
- *    Header file for B picture coding
+ *    Functions for macroblock neighborhoods
  *
  * \author
- *    Main contributor and Contact Information
- *    - Byeong-Moon Jeon      <jeonbm@lge.com>                                      \n
- *      LG Electronics Inc., Digital Media Research Lab.                            \n
- *      16 Woomyeon-Dong, Seocho-Gu, Seoul, 137-724, Korea
+ *     Main contributors (see contributors.h for copyright, address and affiliation details)
+ *     - Karsten Sühring          <suehring@hhi.de>
  *************************************************************************************
  */
-#ifndef _B_FRAME_H_
-#define _B_FRAME_H_
+
+#ifndef _MB_ACCESS_H_
+#define _MB_ACCESS_H_
+
+void CheckAvailabilityOfNeighbors();
+
+void getNeighbour(int curr_mb_nr, int xN, int yN, int luma, PixelPos *pix);
+void getLuma4x4Neighbour (int curr_mb_nr, int block_x, int block_y, int rel_x, int rel_y, PixelPos *pix);
+void getChroma4x4Neighbour (int curr_mb_nr, int block_x, int block_y, int rel_x, int rel_y, PixelPos *pix);
+
+int  mb_is_available(int mbAddr, int currMbAddr);
+void get_mb_pos (int mb_addr, int *x, int*y);
+void get_mb_block_pos (int mb_addr, int *x, int*y);
 
 
-int **fw_refFrArr, ** bw_refFrArr;
 
-// For MB level frame/field coding
-
-int ***dfMV;  // [92][72][2]
-int ***dbMV;  // [92][72][2]
-
-int ***dfMV_top;  // [92][72][2]
-int ***dbMV_top;  // [92][72][2]
-
-int ***dfMV_bot;  // [92][72][2]
-int ***dbMV_bot;  // [92][72][2]
 #endif
-

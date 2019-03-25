@@ -66,7 +66,7 @@ Mapping Map[] = {
     {"FrameSkip",                &configinput.jumpd,                   0},
     {"UseHadamard",              &configinput.hadamard,                0},
     {"SearchRange",              &configinput.search_range,            0},
-    {"NumberReferenceFrames",    &configinput.no_multpred,             0},
+    {"NumberReferenceFrames",    &configinput.num_reference_frames,             0},
     {"SourceWidth",              &configinput.img_width,               0},
     {"SourceHeight",             &configinput.img_height,              0},
     {"MbLineIntraUpdate",        &configinput.intra_upd,               0},

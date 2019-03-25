@@ -74,7 +74,6 @@
  ***********************************************************************
  */
 
-typedef unsigned char byte;    //!< byte type definition
 #define pel_t byte
 
 //! Data Partitioning Modes
@@ -171,8 +170,15 @@ typedef enum {
   FRAME,
   TOP_FIELD,
   BOTTOM_FIELD
-} PictureType;           //!< New enum for field processing
+} PictureStructure;           //!< New enum for field processing
 
+typedef enum {
+  P_SLICE = 0,
+  B_SLICE,
+  I_SLICE,
+  SP_SLICE,
+  SI_SLICE
+} SliceType;
 
 /***********************************************************************
  * D a t a    t y p e s   f o r  C A B A C
@@ -267,11 +273,15 @@ typedef struct
 
 //*********************** end of data type definition for CABAC *******************
 
-
-/***********************************************************************
- * N e w   D a t a    t y p e s   f o r    T M L
- ***********************************************************************
- */
+typedef struct pix_pos
+{
+  int available;
+  int mb_addr;
+  int x;
+  int y;
+  int pos_x;
+  int pos_y;
+} PixelPos;
 
 /*! Buffer structure for RMPNI commands */
 typedef struct RMPNIbuffer_s
@@ -281,14 +291,16 @@ typedef struct RMPNIbuffer_s
   struct RMPNIbuffer_s *Next;
 } RMPNIbuffer_t;
 
-typedef struct MMCObuffer_s
+/*! Buffer structure for decoded referenc picture marking commands */
+typedef struct DecRefPicMarking_s
 {
-  int MMCO;
-  int DPN;
-  int LPIN;
-  int MLIP1;
-  struct MMCObuffer_s *Next;
-} MMCObuffer_t;
+  int memory_management_control_operation;
+  int difference_of_pic_nums_minus1;
+  int long_term_pic_num;
+  int long_term_frame_idx;
+  int max_long_term_frame_idx_plus1;
+  struct DecRefPicMarking_s *Next;
+} DecRefPicMarking_t;
 
 //! Syntaxelement
 typedef struct syntaxelement
@@ -322,10 +334,10 @@ typedef struct macroblock
   int                 delta_qp;
   int                 qp ;
   int                 bitcounter[MAX_BITCOUNTER_MB];
-  struct macroblock   *mb_available[3][3];        /*!< pointer to neighboring MBs in a 3x3 window of current MB, which is located at [1][1] \n
-                                                       NULL pointer identifies neighboring MBs which are unavailable */
-  struct macroblock   *field_available[2];
-  // some storage of macroblock syntax elements for global access
+
+  struct macroblock   *mb_available_up;   //!< pointer to neighboring MB (CABAC)
+  struct macroblock   *mb_available_left; //!< pointer to neighboring MB (CABAC)
+
   int                 mb_type;
   int                 mvd[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE][2];          //!< indices correspond to [forw,backw][block_y][block_x][x,y]
   int                 intra_pred_modes[BLOCK_MULTIPLE*BLOCK_MULTIPLE];
@@ -341,7 +353,12 @@ typedef struct macroblock
 
   int                 c_ipred_mode;      //!< chroma intra prediction mode
   int                 IntraChromaPredModeFlag;
-        int                                                                     mb_field;
+  
+  int                 mb_field;
+
+  int mbAddrA, mbAddrB, mbAddrC, mbAddrD;
+  int mbAvailA, mbAvailB, mbAvailC, mbAvailD;
+
 } Macroblock;
 
 
@@ -363,10 +380,6 @@ typedef struct
   byte            *streamBuffer;      //!< actual buffer for written bytes
   int             write_flag;         //!< Bitstream contains data and needs to be written
 
-//  int             tmp_byte_pos;       //!< temp storage for position in bitstream
-
-//  int             last_startcode;     //!< location of last valid startcode
-
 } Bitstream;
 
 //! DataPartition
@@ -374,9 +387,6 @@ typedef struct datapartition
 {
 
   Bitstream           *bitstream;
-//  Bitstream           *bitstream_frm;   //!< frame stream buffer
-//  Bitstream           *bitstream_topfld;   //!< field stream buffer
-//  Bitstream           *bitstream_botfld;   //!< field stream buffer
   EncodingEnvironment ee_cabac;
 
   int                 (*writeSyntaxElement)(SyntaxElement *, struct datapartition *);
@@ -412,7 +422,6 @@ typedef struct
 
   Boolean             (*slice_too_big)(int bits_slice); //!< for use of callback functions
 
-  int                 write_is_real;//GB
   int                 field_ctx[3][2]; //GB
 
 } Slice;
@@ -422,6 +431,7 @@ typedef struct
 typedef struct 
 {
   int   no_slices;
+  int   idr_flag;
   Slice *slices[MAXSLICEPERPICTURE];
   int bits_per_picture;
   float distortion_y;
@@ -448,20 +458,14 @@ typedef struct
 } Sourceframe;
 
 // global picture format dependend buffers, mem allocation in image.c
-byte   **imgY_frm;               //!< Encoded luma images
-byte  ***imgUV_frm;              //!< Encoded croma images
 byte   **imgY_org_frm;           //!< Reference luma image
 byte  ***imgUV_org_frm;          //!< Reference croma image
 int   ***tmp_mv_frm;             //!< motion vector buffer
 int    **refFrArr_frm;           //!< Array for reference frames of each block
 
-byte   **imgY;               //!< Encoded luma images
-byte  ***imgUV;              //!< Encoded croma images
 byte   **imgY_org;           //!< Reference luma image
 byte  ***imgUV_org;          //!< Reference croma image
 //int    **refFrArr;           //!< Array for reference frames of each block
-byte   **imgY_pf;            //!< Post filter luma image
-byte  ***imgUV_pf;           //!< Post filter croma image
 byte  ***mref;               //!< 1/4 pix luma
 byte  ***mref_w;               //!< 1/4 pix luma for weighted prediction ME
 byte ****mcef;               //!< pix chroma
@@ -513,10 +517,6 @@ byte   **imgY_org_top;
 byte  ***imgUV_org_top;
 byte   **imgY_org_bot;
 byte  ***imgUV_org_bot;
-byte   **imgY_top;               //!< Encoded luma images
-byte  ***imgUV_top;              //!< Encoded croma images
-byte   **imgY_bot;               //!< Encoded luma images
-byte  ***imgUV_bot;              //!< Encoded croma images
 byte   **imgY_com;               //!< Encoded luma images
 byte  ***imgUV_com;              //!< Encoded croma images
 pel_t **Refbuf11_fld;            //!< 1/1th pel (full pel) reference frame buffer
@@ -525,7 +525,6 @@ int    **refFrArr_top;           //!< Array for reference frames of each block
 int    **refFrArr_bot;           //!< Array for reference frames of each block
 // int    **refFrArr_top_save;      //!< For MB level field/frame coding tools
 // int    **refFrArr_bot_save;      //!< For MB level field/frame coding tools
-int *parity_fld;
 
 
 // global picture format dependend buffers, mem allocation in image.c (field picture)
@@ -629,8 +628,7 @@ typedef struct
   int search_range;             /*!< search range - integer pel search and 16x16 blocks.  The search window is
                                      generally around the predicted vector. Max vector is 2xmcrange.  For 8x8
                                      and 4x4 block sizes the search range is 1/2 of that for 16x16 blocks.       */
-  int no_multpred;              /*!< 1: prediction from the last frame only. 2: prediction from the last or
-                                     second last frame etc.  Maximum 5 frames                                    */
+  int num_reference_frames;     /*!< number of reference frames to be used*/
   int img_width;                //!< GH: if CUSTOM image format is chosen, use this size
   int img_height;               //!< GH: width and height must be a multiple of 16 pels
   int yuv_format;               //!< GH: YUV format (0=4:0:0, 1=4:2:0, 2=4:2:2, 3=4:4:4,currently only 4:2:0 is supported)
@@ -754,12 +752,8 @@ typedef struct
   int total_number_mb;
   int current_slice_nr;
   int type;
-  int pstruct;                 //!< picture structure
-  int types;                   /*!< This is for SP-Pictures, since all the syntax elements for SP-Pictures
-                                    are the same as P-pictures, we keep the img->type as P_IMG but indicate
-                                    SP-Pictures by img->types */
-  int no_multpred;             /*!< 1: prediction from the last frame only.
-                                    2: prediction from the last or second last frame etc. */
+  int structure;               //!< picture structure
+  int num_reference_frames;    //!< number of reference frames to be used
   int qp;                      //!< quant for the current frame
   int qpsp;                    //!< quant for the prediction frame of SP-frame
   int framerate;
@@ -767,18 +761,18 @@ typedef struct
   int width_cr;                //!< Number of pels chroma
   int height;                  //!< Number of lines
   int height_cr;               //!< Number of lines  chroma
-  int mb_y;                    //!< current MB vertical
   int mb_x;                    //!< current MB horizontal
+  int mb_y;                    //!< current MB vertical
   int mb_x_save;               //!< horizontal position of the last written MB
   int mb_y_save;               //!< vertical position of the last written MB
-  int block_y;                 //!< current block vertical
   int block_x;                 //!< current block horizontal
-  int subblock_y;              //!< current subblock vertical
+  int block_y;                 //!< current block vertical
   int subblock_x;              //!< current subblock horizontal
+  int subblock_y;              //!< current subblock vertical
   int is_intra_block;
   int is_v_block;
-  int pix_y;                   //!< current pixel vertical
   int pix_x;                   //!< current pixel horizontal
+  int pix_y;                   //!< current pixel vertical
   int mb_y_upd;
   int mb_y_intra;              //!< which GOB to intra code
   int pix_c_y;                 //!< current pixel chroma vertical
@@ -807,12 +801,9 @@ typedef struct
   SyntaxElement   MB_SyntaxElements[MAX_SYMBOLS_PER_MB];    //!< temporal storage for all chosen syntax elements of one MB
 
   int *quad;               //!< Array containing square values,used for snr computation  */                                         /* Values are limited to 5000 for pixel differences over 70 (sqr(5000)).
-  int **intra_block;
+  int *intra_block;
 
   int tr;
-  int refPicID;                        //!< temporal reference for reference frames (non-B frames)
-  int refPicID_fld;
-  int refPicID_frm; 
   int fld_type;                        //!< top or bottom field
   unsigned int fld_flag;                                
   int direct_intraP_ref[4][4];
@@ -837,8 +828,8 @@ typedef struct
   int***** abp_all_dmv;        //!< replaces local all_dmv for forward interpolative prediction
   int***** abp_all_dmv_top;
   int***** abp_all_dmv_bot;
-  int num_ref_pic_active_fwd_minus1;
-  int num_ref_pic_active_bwd_minus1;
+  int num_ref_idx_l0_active;
+  int num_ref_idx_l1_active;
 
 
   int field_mb_y;   // Macroblock number of a field MB
@@ -855,8 +846,6 @@ typedef struct
   int *****all_mv_bot;    //!< For MB level field/frame coding tools
   int *****all_bmv_top;   //!< For MB level field/frame coding tools
   int *****all_bmv_bot;   //!< For MB level field/frame coding tools
-  int **ipredmode_top;    //!< For MB level field/frame coding tools
-  int **ipredmode_bot;    //!< For MB level field/frame coding tools
 //  int update_stats;     //!< For MB level field/frame -- update stats flag
   int field_mode;     //!< For MB level field/frame -- field mode on flag
   int top_field;      //!< For MB level field/frame -- top field flag
@@ -869,6 +858,8 @@ typedef struct
   int NoResidueDirect;
 
   int redundant_pic_cnt; // JVT-D101
+
+  int MbaffFrameFlag;    //!< indicates frame with mb aff coding
 
   int **field_anchor;
 
@@ -893,28 +884,33 @@ typedef struct
            int delta_pic_order_cnt[2];
 
 
-
-
   // POC200301
   unsigned int field_picture;
-    signed int toppoc;      //poc for this frame or field
-    signed int bottompoc;   //for completeness - poc of bottom field of a frame (always = poc+1)
-  unsigned int frame_num;   //frame_num for this frame
+    signed int toppoc;      //!< poc for this frame or field
+    signed int bottompoc;   //!< for completeness - poc of bottom field of a frame (always = poc+1)
+    signed int framepoc;    //!< min (toppoc, bottompoc)
+    signed int ThisPOC;     //!< current picture POC
+  unsigned int frame_num;   //!< frame_num for this frame
   
+  unsigned PicWidthInMbs;
+  unsigned PicHeightInMapUnits;
+  unsigned FrameHeightInMbs;
+  unsigned PicHeightInMbs;
+  unsigned PicSizeInMbs;
+  unsigned FrameSizeInMbs;
 
   //the following should probably go in picture parameters
   unsigned int pic_order_present_flag; // ????????
 
   //the following are sent in the slice header
 //  int delta_pic_order_cnt[2];
-  int idr_flag;
-  int disposable_flag;
-  
+  int nal_reference_idc;
+
   int adaptive_ref_pic_buffering_flag;
   int no_output_of_prior_pics_flag;
   int long_term_reference_flag;
 
-  MMCObuffer_t *mmco_buffer;
+  DecRefPicMarking_t *dec_ref_pic_marking_buffer;
 
   int model_number;
 
@@ -998,11 +994,10 @@ extern StatParameters *stat;
 extern SNRParameters *snr;
 
 // files
-FILE *p_dec,*p_dec_u,*p_dec_v;   //!< internal decoded image for debugging
+FILE *p_dec;                     //!< internal decoded image for debugging
 FILE *p_stat;                    //!< status file for the last encoding session
 FILE *p_log;                     //!< SNR file
 FILE *p_in;                      //!< YUV
-FILE *p_datpart;                 //!< file to write bitlength and id of all partitions
 FILE *p_trace;                   //!< Trace file
 
 
@@ -1012,7 +1007,7 @@ FILE *p_trace;                   //!< Trace file
  */
 
 
-void intrapred_luma(int CurrPixX,int CurrPixY);
+void intrapred_luma(int CurrPixX,int CurrPixY, int *left_available, int *up_available, int *all_available);
 void init();
 int  find_sad(int hadamard, int m7[16][16]);
 int  dct_luma(int pos_mb1,int pos_mb2,int *cnt_nonz,int);
@@ -1027,7 +1022,6 @@ void intrapred_luma_16x16();
 int  find_sad_16x16(int *intra_mode);
 
 int dct_luma_16x16(int);
-void copy_mref();
 
 void init_poc();
 void push_poc(unsigned int topvalue, unsigned int bottomvalue, unsigned int ref_frame_ind );
@@ -1147,22 +1141,22 @@ void delete_contexts_MotionInfo(MotionInfoContexts *enco_ctx);
 void delete_contexts_TextureInfo(TextureInfoContexts *enco_ctx);
 void writeHeaderToBuffer();
 int  writeSyntaxElement_CABAC(SyntaxElement *se, DataPartition *this_dataPart);
-void writeMB_typeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
-void writeB8_typeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
-void writeIntraPredMode2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeMB_typeInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeIntraPredMode_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeB8_typeInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeRefFrame2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
-void writeBwdRefFrame2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
-void writeMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
-void writeCBP2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeRefFrame_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeBwdRefFrame_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeMVD_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeCBP_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeDquant_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
-void writeRunLevel2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
-void writeBiDirBlkSize2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
-void writeBiMVD2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
-void writeCIPredMode2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeRunLevel_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeBiDirBlkSize_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeBiMVD_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeCIPredMode_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void print_ctx_TextureInfo(TextureInfoContexts *enco_ctx);
-void writeMB_skip_flagInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
-void writeFieldModeInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp); //GB
-void CheckAvailabilityOfNeighborsForAff(); //
+void writeMB_skip_flagInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeFieldModeInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp); //GB
 
 
 void error(char *text, int code);
