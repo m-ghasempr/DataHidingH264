@@ -92,7 +92,7 @@ const int estErr8x8[6][8][8]={
 };
 
 void rdoq_8x8(int (*tblock)[16], int block_y, int block_x,int qp_per, int qp_rem, 
-              int **levelscale, int **leveloffset, const byte (*pos_scan)[2], int levelTrellis[64]);
+              int **levelscale, int **leveloffset, const byte *p_scan, int levelTrellis[64]);
 /*!
  ************************************************************************
  * \brief
@@ -123,7 +123,7 @@ int quant_8x8_trellis(int (*tblock)[16], int block_y, int block_x, int  qp,
 
   int levelTrellis[64];
 
-  rdoq_8x8(tblock,block_y,block_x,qp_per,qp_rem,levelscale,leveloffset,pos_scan, levelTrellis);
+  rdoq_8x8(tblock,block_y,block_x,qp_per,qp_rem,levelscale,leveloffset,p_scan,levelTrellis);
 
   // Quantization
   for (coeff_ctr = 0; coeff_ctr < 64; coeff_ctr++)
@@ -132,34 +132,37 @@ int quant_8x8_trellis(int (*tblock)[16], int block_y, int block_x, int  qp,
     j = *p_scan++;  // vertical position
 
     m7 = &tblock[j][block_x + i];
-    /*
-    scaled_coeff = iabs (*m7) * levelscale[j][i];
-    level = (scaled_coeff + leveloffset[j][i]) >> q_bits;
-    */
-    level = levelTrellis[coeff_ctr];
+    if (*m7 != 0)
+    {    
+      /*
+      scaled_coeff = iabs (*m7) * levelscale[j][i];
+      level = (scaled_coeff + leveloffset[j][i]) >> q_bits;
+      */
+      level = levelTrellis[coeff_ctr];
 
-    if (level != 0)
-    {
+      if (level != 0)
+      {
+        nonzero = TRUE;
 
-      if (params->symbol_mode == CAVLC && img->qp < 10)
-        level = imin(level, CAVLC_LEVEL_LIMIT);
+        *coeff_cost += (level > 1) ? MAX_VALUE : c_cost[run];
 
-      nonzero = TRUE;
-
-      *coeff_cost += (level > 1) ? MAX_VALUE : c_cost[run];
-
-      level  = isignab(level, *m7);
-      *m7    = rshift_rnd_sf(((level * invlevelscale[j][i]) << qp_per), 6);
-      *ACL++ = level;
-      *ACR++ = run; 
-      // reset zero level counter
-      run    = 0;
+        level  = isignab(level, *m7);
+        *m7    = rshift_rnd_sf(((level * invlevelscale[j][i]) << qp_per), 6);
+        *ACL++ = level;
+        *ACR++ = run; 
+        // reset zero level counter
+        run    = 0;
+      }
+      else
+      {
+        run++;
+        *m7 = 0;
+      }      
     }
     else
     {
       run++;
-      *m7 = 0;
-    }      
+    }
   }
 
   *ACL = 0;
@@ -212,27 +215,36 @@ int quant_8x8cavlc_trellis(int (*tblock)[16], int block_y, int block_x, int  qp,
       j = *p_scan++;  // vertical position
 
       m7 = &tblock[j][block_x + i];
-      scaled_coeff = iabs (*m7) * levelscale[j][i];
-      level = (scaled_coeff + leveloffset[j][i]) >> q_bits;
-
-      if (level != 0)
+      if (*m7 != 0)
       {
-        nonzero=TRUE;
+        scaled_coeff = iabs (*m7) * levelscale[j][i];
+        level = (scaled_coeff + leveloffset[j][i]) >> q_bits;
 
-        *coeff_cost += (level > 1) ? MAX_VALUE : c_cost[runs[k]];
+        if (level != 0)
+        {
+          level = imin(level, CAVLC_LEVEL_LIMIT);
 
-        level  = isignab(level, *m7);
-        *m7    = rshift_rnd_sf(((level * invlevelscale[j][i]) << qp_per), 6);
+          nonzero=TRUE;
 
-        *(ACL[k])++ = level;
-        *(ACR[k])++ = runs[k];
-        // reset zero level counter
-        runs[k] = 0;
+          *coeff_cost += (level > 1) ? MAX_VALUE : c_cost[runs[k]];
+
+          level  = isignab(level, *m7);
+          *m7    = rshift_rnd_sf(((level * invlevelscale[j][i]) << qp_per), 6);
+
+          *(ACL[k])++ = level;
+          *(ACR[k])++ = runs[k];
+          // reset zero level counter
+          runs[k] = 0;
+        }
+        else
+        {        
+          runs[k]++;
+          *m7 = 0;      
+        }
       }
       else
-      {        
+      {
         runs[k]++;
-        *m7 = 0;      
       }
     }
   }
@@ -252,21 +264,13 @@ int quant_8x8cavlc_trellis(int (*tblock)[16], int block_y, int block_x, int  qp,
 ************************************************************************
 */
 void rdoq_8x8(int (*tblock)[16], int block_y, int block_x,int qp_per, int qp_rem, 
-              int **levelscale, int **leveloffset, const byte (*pos_scan)[2], int levelTrellis[64])
+              int **levelscale, int **leveloffset, const byte *p_scan, int levelTrellis[64])
 {
-  static int i,j, coeff_ctr;
-
-  static int *m7;
-
-  int level;
-
-  int q_bits = Q_BITS_8 + qp_per;
-
-  int m4[8][8], ii;
   levelDataStruct levelData[64];
-  double  lambda_md=0, normFact=pow(2,(2 * Q_BITS_8 + 9));
-  double err;
-  int lowerInt, kStart=0, kStop=0, noCoeff = 0;
+  double  lambda_md=0;
+  int kStart=0, kStop=0, noCoeff = 0;
+  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  int type = LUMA_8x8;
 
   if ((img->type==B_SLICE) && img->nal_reference_idc)
   {
@@ -277,61 +281,7 @@ void rdoq_8x8(int (*tblock)[16], int block_y, int block_x,int qp_per, int qp_rem
     lambda_md = img->lambda_md[img->type][img->masterQP]; 
   }
 
-  for (coeff_ctr = 0; coeff_ctr < 64; coeff_ctr++)
-  {
-    i = pos_scan[coeff_ctr][0];
-    j = pos_scan[coeff_ctr][1];
-
-    m7 = &tblock[j][block_x];
-    m4[j][i] = m7[i];
-  } 
-
-  for (coeff_ctr=0; coeff_ctr < 64; coeff_ctr++)
-  {
-    i=pos_scan[coeff_ctr][0];
-    j=pos_scan[coeff_ctr][1];
-
-    levelData[coeff_ctr].levelDouble = iabs(m4[j][i] * levelscale[i][j]);
-    level=(levelData[coeff_ctr].levelDouble>>q_bits);
-
-    lowerInt=(((int)levelData[coeff_ctr].levelDouble-(level<<q_bits))<(1<<(q_bits-1)))? 1 : 0;
-
-    levelData[coeff_ctr].level[0]=0;
-    if (level==0 && lowerInt==1)
-    {
-      levelData[coeff_ctr].noLevels=1;
-    }
-    else if (level==0 && lowerInt==0)
-    {
-      levelData[coeff_ctr].level[1] = level+1;
-      levelData[coeff_ctr].noLevels=2;
-      kStop=coeff_ctr;
-      noCoeff++;
-    }
-    else if (level>0 && lowerInt==1)
-    {
-      levelData[coeff_ctr].level[1] = level;
-      levelData[coeff_ctr].noLevels=2;
-      kStop=coeff_ctr;
-      noCoeff++;
-    }
-    else
-    {
-      levelData[coeff_ctr].level[1] = level;
-      levelData[coeff_ctr].level[2] = level+1;
-      levelData[coeff_ctr].noLevels=3;
-      kStop=coeff_ctr;
-      kStart=coeff_ctr;
-      noCoeff++;
-    }
-
-    for (ii=0; ii<levelData[coeff_ctr].noLevels; ii++)
-    {
-      err=(double)(levelData[coeff_ctr].level[ii]<<q_bits)-(double)levelData[coeff_ctr].levelDouble;
-      levelData[coeff_ctr].errLevel[ii] = (err * err * (double) estErr8x8[qp_rem][i][j]) / normFact; 
-    }
-  }
-
+  noCoeff = init_trellis_data(tblock, block_x, qp_per, qp_rem, levelscale, leveloffset, p_scan, currMB, levelData, &kStart, &kStop, type);
   est_writeRunLevel_CABAC(levelData, levelTrellis, LUMA_8x8, lambda_md, kStart, kStop, noCoeff, 0);
 }
 

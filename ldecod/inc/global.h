@@ -66,20 +66,6 @@ int  g_nFrame;
 int  TopFieldForSkip_Y[16][16];
 int  TopFieldForSkip_UV[2][16][16];
 
-int  InvLevelScale4x4Luma_Intra[6][4][4];
-int  InvLevelScale4x4Chroma_Intra[2][6][4][4];
-
-int  InvLevelScale4x4Luma_Inter[6][4][4];
-int  InvLevelScale4x4Chroma_Inter[2][6][4][4];
-
-int  InvLevelScale8x8Luma_Intra[6][8][8];
-int  InvLevelScale8x8Chroma_Intra[2][6][8][8];
-
-int  InvLevelScale8x8Luma_Inter[6][8][8];
-int  InvLevelScale8x8Chroma_Inter[2][6][8][8];
-
-int  *qmatrix[12];
-
 #define ET_SIZE 300      //!< size of error text buffer
 char errortext[ET_SIZE]; //!< buffer for error message for exit with error()
 
@@ -140,17 +126,17 @@ typedef enum
 
 typedef enum
 {
-  BITS_HEADER,
-  BITS_TOTAL_MB,
-  BITS_MB_MODE,
-  BITS_INTER_MB,
-  BITS_CBP_MB,
-  BITS_COEFF_Y_MB,
-  BITS_COEFF_UV_MB,
-  BITS_COEFF_CB_MB,  
-  BITS_COEFF_CR_MB,
-  BITS_DELTA_QUANT_MB,
-  MAX_BITCOUNTER_MB
+  BITS_HEADER         = 0,
+  BITS_TOTAL_MB       = 1,
+  BITS_MB_MODE        = 2,
+  BITS_INTER_MB       = 3,
+  BITS_CBP_MB         = 4,
+  BITS_COEFF_Y_MB     = 5,
+  BITS_COEFF_CB_MB    = 6,  
+  BITS_COEFF_CR_MB    = 7,
+  BITS_DELTA_QUANT_MB = 8,
+  BITS_STUFFING       = 9,
+  MAX_BITCOUNTER_MB   = 10
 } BitCountType;
 
 typedef enum 
@@ -343,8 +329,9 @@ typedef struct syntaxelement
 //! Macroblock
 typedef struct macroblock
 {
-  int           qp;                  //!< QP luma
-  int           qpc[2];              //!< QP chroma
+  int           qp;                    //!< QP luma
+  int           qpc[2];                //!< QP chroma
+  int           qp_scaled[MAX_PLANE];  //!< QP scaled for all comps.
 
   int           slice_nr;
   int           delta_quant;          //!< for rate control
@@ -417,6 +404,8 @@ typedef struct
   int                 ei_flag;       //!< 0 if the partArr[0] contains valid information
   int                 qp;
   int                 slice_qp_delta;
+  int                 qs;
+  int                 slice_qs_delta;
   int                 picture_type;  //!< picture type
   PictureStructure    structure;     //!< Identify picture structure type
   int                 start_mb_nr;   //!< MUST be set by NAL even in case of ei_flag == 1
@@ -484,20 +473,20 @@ typedef struct img_par
   
   int mvscale[6][MAX_REFERENCE_PICTURES];
 
-  imgpel mpr[MAX_PLANE][16][16];     //!< predicted block
-  int    m7 [MAX_PLANE][16][16];     //!< residual macroblock
+  imgpel mb_pred[MAX_PLANE][16][16];     //!< predicted block
+  int    mb_rres[MAX_PLANE][16][16];     //!< residual macroblock
   int    cof[MAX_PLANE][16][16];     //!< transformed coefficients 
+  int    fcf[MAX_PLANE][16][16];     //!< transformed coefficients 
   
   int cofu[16];
   byte **ipredmode;                  //!< prediction type [90][74]
-  int ***nz_coeff;
+  int ****nz_coeff;
   int **siblock;
   int cod_counter;                   //!< Current count of number of skipped macroblocks in a row
 
   int newframe;
 
   int structure;                     //!< Identify picture structure type
-  int pstruct_next_P;
 
   // B pictures
   Slice      *currentSlice;          //!< pointer to current Slice data struct
@@ -603,8 +592,6 @@ typedef struct img_par
   int bitdepth_luma_qp_scale;
   int bitdepth_chroma_qp_scale;
   unsigned int dc_pred_value_comp[MAX_PLANE]; //!< component value for DC prediction (depends on component pel bit depth)
-  int max_imgpel_value;                       //!< max value that one luma picture element (pixel) can take (depends on pic_unit_bitdepth)
-  int max_imgpel_value_uv;                    //!< max value that one chroma picture element (pixel) can take (depends on pic_unit_bitdepth)
   int max_imgpel_value_comp[MAX_PLANE];       //!< max value that one picture element (pixel) can take (depends on pic_unit_bitdepth)
   int Transform8x8Mode;
   int profile_idc;
@@ -620,20 +607,18 @@ typedef struct img_par
   int mb_size[3][2];                         //!< component macroblock dimensions
   int mb_size_blk[3][2];                     //!< component macroblock dimensions 
   int mb_size_shift[3][2];
+  
+  int max_vmv_r;                             //!< maximum vertical motion vector range in luma quarter frame pixel units for the current level_idc
+  int max_mb_vmv_r;                          //!< maximum vertical motion vector range in luma quarter pixel units for the current level_idc
 
   int idr_psnr_number;
   int psnr_number;
 
-  time_t ltime_start;               // for time measurement
-  time_t ltime_end;                 // for time measurement
-
-#ifdef WIN32
-  struct _timeb tstruct_start;
-  struct _timeb tstruct_end;
-#else
-  struct timeb tstruct_start;
-  struct timeb tstruct_end;
-#endif
+  // Timing related variables
+  struct TIMEB tstruct_start;
+  struct TIMEB tstruct_end;
+  time_t ltime_start;               
+  time_t ltime_end;                 
 
   // picture error concealment
   int last_ref_pic_poc;
@@ -653,7 +638,6 @@ typedef struct img_par
   int recovery_poc;
 
   int  separate_colour_plane_flag;
-
 } ImageParameters;
 
 extern ImageParameters *img;
@@ -696,7 +680,6 @@ struct inp_par
   int conceal_mode;
   int ref_poc_gap;
   int poc_gap;
-
 };
 
 extern struct inp_par *params;
@@ -760,36 +743,27 @@ void init_picture(ImageParameters *img, struct inp_par *inp);
 void exit_picture(void);
 
 int  read_new_slice(void);
-void decode_one_slice(ImageParameters *img,struct inp_par *inp);
+void decode_one_slice(ImageParameters *img, struct inp_par *inp);
 
-void start_macroblock(Macroblock **currMB, ImageParameters *img);
-void read_one_macroblock(Macroblock *currMB, ImageParameters *img);
-void read_ipred_modes(Macroblock *currMB, ImageParameters *img);
-int  decode_one_macroblock(Macroblock *currMB, ImageParameters *img);
-Boolean  exit_macroblock(ImageParameters *img,int eos_bit);
-void decode_ipcm_mb(Macroblock *currMB, ImageParameters *img);
+void start_macroblock     (ImageParameters *img, Macroblock **currMB);
+void read_one_macroblock  (ImageParameters *img, Macroblock *currMB);
+Boolean  exit_macroblock  (ImageParameters *img, int eos_bit);
+void concealIPCMcoeffs    (ImageParameters *img);
 
-
-void readMotionInfoFromNAL (Macroblock *currMB, ImageParameters *img);
-void readCBPandCoeffsFromNAL(Macroblock *currMB, ImageParameters *img);
-void concealIPCMcoeffs(ImageParameters *img);
-void readIPCMcoeffsFromNAL(ImageParameters *img, struct datapartition *dP);
-void SetMotionVectorPredictor (Macroblock *currMB, ImageParameters  *img, short pmv[2], char ref_frame, byte list, 
+void SetMotionVectorPredictor (ImageParameters  *img, Macroblock *currMB, short pmv[2], char ref_frame, byte list, 
                                char ***refPic, short ****tmp_mv, 
                                int mb_x, int mb_y, int blockshape_x, int blockshape_y);
 
-void readLumaCoeff8x8_CABAC (Macroblock *currMB, ColorPlane pl, ImageParameters *img, int b8);
 
-void copyblock_sp(ImageParameters *img,int block_x,int block_y);
-int  intrapred_luma_16x16(Macroblock *currMB, ColorPlane pl, ImageParameters *img,int predmode);
-void intrapred_chroma(Macroblock *currMB, ImageParameters *img, int uv);
+int  intrapred_luma_16x16(ImageParameters *img, Macroblock *currMB, ColorPlane pl, int predmode);
+void intrapred_chroma    (ImageParameters *img, Macroblock *currMB, int uv);
 
 // SLICE function pointers
-int  (*nal_startcode_follows) (ImageParameters*, int );
+int  (*nal_startcode_follows) (Slice*, int );
 
 // NAL functions TML/CABAC bitstream
-int  uvlc_startcode_follows(ImageParameters *img, int dummy);
-int  cabac_startcode_follows(ImageParameters *img, int eos_bit);
+int  uvlc_startcode_follows(Slice *currSlice, int dummy);
+int  cabac_startcode_follows(Slice *currSlice, int eos_bit);
 void free_Partition(Bitstream *currStream);
 
 // ErrorConcealment
@@ -827,11 +801,6 @@ void readIPCM_CABAC(struct datapartition *dP);
 unsigned CeilLog2( unsigned uiVal);
 unsigned CeilLog2_sf( unsigned uiVal);
 
-// For Q-matrix
-void AssignQuantParam(pic_parameter_set_rbsp_t* pps, seq_parameter_set_rbsp_t* sps);
-void CalculateQuantParam(void);
-void CalculateQuant8Param(void);
-
 //For residual DPCM
 int ipmode_DPCM;
 
@@ -839,12 +808,6 @@ int ipmode_DPCM;
 void change_plane_JV( int nplane );
 void make_frame_picture_JV(void);
 
-// Interpret MB mode
-void (*interpret_mb_mode)(Macroblock *currMB);
-void interpret_mb_mode_P(Macroblock *currMB);
-void interpret_mb_mode_B(Macroblock *currMB);
-void interpret_mb_mode_I(Macroblock *currMB);
-void interpret_mb_mode_SI(Macroblock *currMB);
 #endif
 
 

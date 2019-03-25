@@ -21,6 +21,7 @@
 
 #include "global.h"
 #include "input.h"
+#include "report.h"
 
 unsigned char *buf;
  
@@ -501,7 +502,7 @@ void ReadOneFrame (int FrameNoInFile, int HeaderSize, FrameFormat *source, Frame
 
     if (read(p_in, buf, (int) framesize_in_bytes) != (int) framesize_in_bytes)
     {
-      printf ("ReadOneFrame: cannot read %d bytes from input file, unexpected EOF?, exiting", (int) framesize_in_bytes);
+      printf ("ReadOneFrame: cannot read %d bytes from input file, unexpected EOF, exiting...\n", (int) framesize_in_bytes);
       report_stats_on_error();
     }
 

@@ -15,6 +15,7 @@
 #include "contributors.h"
 
 #include "global.h"
+#include "enc_statistics.h"
 
 #include "rtp.h"
 #include "annexb.h"

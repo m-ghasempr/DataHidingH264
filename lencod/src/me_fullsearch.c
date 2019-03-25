@@ -161,6 +161,7 @@ FullPelBlockMotionBiPred (Macroblock *currMB,      // <--  current Macroblock
                           short     static_mv[2],       // <--> in: search center (x|y) 
                           int       search_range,  // <--  1-d search range in pel units
                           int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
+                          int       iteration_no,  // <--  bi pred iteration number
                           int       lambda_factor, // <--  lagrangian parameter for determining motion cost
                           int       apply_weights  // <--  perform weight based ME
                           ) 

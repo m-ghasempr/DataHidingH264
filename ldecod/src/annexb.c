@@ -44,7 +44,7 @@ int NALUCount=0;
  ************************************************************************
  */
 
-int GetAnnexbNALU (NALU_t *nalu)
+int GetAnnexbNALU (FILE *bitstream, NALU_t *nalu)
 {
   int info2, info3, pos = 0;
   int StartCodeFound, rewind;
@@ -53,9 +53,9 @@ int GetAnnexbNALU (NALU_t *nalu)
 
   if ((Buf = (unsigned char*)calloc (nalu->max_size , sizeof(char))) == NULL) no_mem_exit("GetAnnexbNALU: Buf");
 
-  while(!feof(bits) && (Buf[pos++]= (unsigned char) fgetc(bits))==0);
+  while(!feof(bitstream) && (Buf[pos++]= (unsigned char) fgetc(bitstream))==0);
 
-  if(feof(bits))
+  if(feof(bitstream))
   {
     if(pos==0)
     {
@@ -111,7 +111,7 @@ int GetAnnexbNALU (NALU_t *nalu)
 
   while (!StartCodeFound)
   {
-    if (feof (bits))
+    if (feof (bitstream))
     {
       //Count the trailing_zero_8bits
       while(Buf[pos-2-TrailingZero8Bits]==0)
@@ -133,7 +133,7 @@ int GetAnnexbNALU (NALU_t *nalu)
       free(Buf);
       return pos-1;
     }
-    Buf[pos++] = (unsigned char) fgetc (bits);
+    Buf[pos++] = (unsigned char) fgetc (bitstream);
     info3 = FindStartCode(&Buf[pos-4], 3);
     if(info3 != 1)
       info2 = FindStartCode(&Buf[pos-3], 2);
@@ -160,7 +160,7 @@ int GetAnnexbNALU (NALU_t *nalu)
     return -1;
   }
 
-  if (0 != fseek (bits, rewind, SEEK_CUR))
+  if (0 != fseek (bitstream, rewind, SEEK_CUR))
   {
     snprintf (errortext, ET_SIZE, "GetAnnexbNALU: Cannot fseek %d in the bit stream file", rewind);
     free(Buf);

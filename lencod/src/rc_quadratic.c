@@ -604,9 +604,12 @@ void rc_init_pict(rc_quadratic *prc, int fieldpic,int topfield,int targetcomputa
       /* update the total number of bits if the bandwidth is changed*/
       if(prc->PrevBitRate != prc->bit_rate)
         generic_RC->RemainingBits +=(int) floor((prc->bit_rate-prc->PrevBitRate) * (prc->Np + prc->Nb) / prc->frame_rate+0.5);
-      if((prc->NumberofCodedPFrame==1)&&(generic_RC->NumberofCodedBFrame==1))
+      if(generic_RC->NumberofCodedBFrame == 1)
       {
-        prc->AveWp = prc->Wp;
+        if(prc->NumberofCodedPFrame == 1)
+        {
+          prc->AveWp = prc->Wp;
+        }
         prc->AveWb = prc->Wb;
       }
       else if(generic_RC->NumberofCodedBFrame > 1)
@@ -680,9 +683,6 @@ void rc_init_pict(rc_quadratic *prc, int fieldpic,int topfield,int targetcomputa
         }
       }
       prc->Target = (int)(mult * prc->Target);
-
-      /* reserve some bits for smoothing */
-      prc->Target = (int)((1.0 - 0.0 * params->successive_Bframe) * prc->Target);
 
       /* HRD consideration */
       if ( params->RCUpdateMode != RC_MODE_3 || img->type == P_SLICE )
@@ -2458,9 +2458,9 @@ void updateModelQPFrame( rc_quadratic *prc, int m_Bits )
  *    rate control at the MB level
  *************************************************************************************
 */
-void rc_handle_mb( int prev_mb, Macroblock *currMB, Slice *curr_slice )
+int rc_handle_mb( int prev_mb, Macroblock *currMB, Slice *curr_slice )
 {
-  int  dq;
+  int  mb_qp = img->qp;
   Macroblock *prevMB = NULL;
 
   if (prev_mb > -1)
@@ -2468,154 +2468,66 @@ void rc_handle_mb( int prev_mb, Macroblock *currMB, Slice *curr_slice )
     prevMB = &img->mb_data[prev_mb];
 
     if ( params->MbInterlace == ADAPTIVE_CODING && !img->bot_MB && currMB->mb_field )
-      currMB->qp = img->qp = prevMB->qp;
-    currMB->prev_qp = prevMB->qp;
+      mb_qp = prevMB->qp;
+  }
 
-    currMB->prev_dqp = (prevMB->slice_nr == img->current_slice_nr) ? prevMB->delta_qp : 0;
-  }
-  else
-  {
-    currMB->prev_qp  = curr_slice->qp;
-    currMB->prev_dqp = 0;
-  }
   // frame layer rate control
-  if (params->basicunit == img->FrameSizeInMbs)
-  {
-     currMB->qp       = img->qp;
-     currMB->delta_qp = currMB->qp - currMB->prev_qp;    
-  }
-  else   // basic unit layer rate control
+  if (params->basicunit != img->FrameSizeInMbs)
   {
     // each I or B frame has only one QP
     if ( ((img->type == I_SLICE || img->type == B_SLICE) && params->RCUpdateMode != RC_MODE_1 ) || !(img->number) )
     {
-     currMB->qp       = img->qp;
-     currMB->delta_qp = currMB->qp - currMB->prev_qp;    
+      return mb_qp;
     }
     else if ( img->type == P_SLICE || params->RCUpdateMode == RC_MODE_1 )
     {
       if (!img->write_macroblock) //write macroblock
       {
-        if (prev_mb < 0) //first macroblock (of slice)
-        {
-          // Initialize delta qp change from last macroblock. Feature may be used for future rate control
-          currMB->qp       = img->qp;
-          currMB->delta_qp = currMB->qp - currMB->prev_qp;    
-          delta_qp_mbaff[currMB->mb_field][img->bot_MB] = currMB->delta_qp;
-          qp_mbaff      [currMB->mb_field][img->bot_MB] = currMB->qp;
-        }
-        else
+        if (prev_mb > -1) 
         {      
           if (!((params->MbInterlace) && img->bot_MB)) //top macroblock
           {
-            prevMB = &img->mb_data[prev_mb];
-            if (prevMB->prev_cbp == 1)
+            if (prevMB->prev_cbp != 1)
             {
-              currMB->qp       = img->qp;
-              currMB->delta_qp = currMB->qp - prevMB->qp; 
-            }
-            else
-            {
-              currMB->qp = img->qp = prevMB->prev_qp;
-              currMB->delta_qp = currMB->qp - prevMB->qp;
-            }
-            delta_qp_mbaff[currMB->mb_field][img->bot_MB] = currMB->delta_qp;
-            qp_mbaff      [currMB->mb_field][img->bot_MB] = currMB->qp;
-          }
-          else //bottom macroblock
-          {
-            // Initialize delta qp change from last macroblock. Feature may be used for future rate control
-            currMB->qp       = img->qp;
-            currMB->delta_qp = currMB->qp - currMB->prev_qp;    
-          }
-        }
-      }
-      else
-      {
-        if (!img->bot_MB) //write top macroblock
-        {
-          if (img->write_mbaff_frame)
-          {
-            currMB->delta_qp = delta_qp_mbaff[0][img->bot_MB];
-            currMB->qp = img->qp =   qp_mbaff[0][img->bot_MB];
-          }
-          else
-          {
-            if (prev_mb < 0) //first macroblock (of slice)
-            {
-              // Initialize delta qp change from last macroblock. Feature may be used for future rate control
-              currMB->qp       = img->qp;
-              currMB->delta_qp = currMB->qp - currMB->prev_qp;    
-              delta_qp_mbaff[currMB->mb_field][img->bot_MB] = currMB->delta_qp;
-              qp_mbaff      [currMB->mb_field][img->bot_MB] = currMB->qp;
-            }
-            else
-            {
-              currMB->delta_qp = delta_qp_mbaff[1][img->bot_MB];
-              currMB->qp = img->qp =   qp_mbaff[1][img->bot_MB];
+              mb_qp = prevMB->prev_qp;
             }
           }
-        }
-        else //write bottom macroblock
-        {
-            currMB->qp       = img->qp;
-            currMB->delta_qp = currMB->qp - currMB->prev_qp;    
         }
       }
 
       // compute the quantization parameter for each basic unit of P frame
-      
+
       if (!img->write_macroblock)
       {
-
         if(!((params->MbInterlace) && img->bot_MB))
         {
           if(params->RCUpdateMode <= MAX_RC_MODE && (img->NumberofCodedMacroBlocks > 0) && (img->NumberofCodedMacroBlocks % img->BasicUnit == 0))
           {
+            updateRCModel(quadratic_RC);
             // frame coding
             if(active_sps->frame_mbs_only_flag)
             {
-              updateRCModel(quadratic_RC);
-              img->BasicUnitQP=updateQP(quadratic_RC, generic_RC->TopFieldFlag);
+              img->BasicUnitQP = updateQP(quadratic_RC, generic_RC->TopFieldFlag);
+
             }
             // picture adaptive field/frame coding
-            else if((params->PicInterlace!=FRAME_CODING)&&(!params->MbInterlace)&&(generic_RC->NoGranularFieldRC==0))
+            else if(params->MbInterlace || ((params->PicInterlace!=FRAME_CODING) && (generic_RC->NoGranularFieldRC==0)))
             {
-              updateRCModel(quadratic_RC);
-              img->BasicUnitQP = updateQP(quadratic_RC, generic_RC->TopFieldFlag);
-            }
-            // mb adaptive f/f coding, field coding
-            else if((params->MbInterlace))
-            {
-              updateRCModel(quadratic_RC);
               img->BasicUnitQP = updateQP(quadratic_RC, generic_RC->TopFieldFlag);
             }
           }
 
           if(img->current_mb_nr==0)
-            img->BasicUnitQP=img->qp;
-          currMB->predict_qp = iClip3(currMB->qp - img->min_qp_delta, currMB->qp + img->max_qp_delta, img->BasicUnitQP);
+            img->BasicUnitQP = mb_qp;
 
-          dq = currMB->delta_qp + currMB->predict_qp - currMB->qp;          
-          dq = iClip3(-img->min_qp_delta, img->max_qp_delta, dq);
-          currMB->predict_error = dq - currMB->delta_qp;
-          img->qp   += currMB->predict_error; 
-          currMB->qp =  img->qp;
-          currMB->delta_qp = dq;          
 
-          if (params->MbInterlace)
-          {
-            delta_qp_mbaff[currMB->mb_field][img->bot_MB] = currMB->delta_qp;
-            qp_mbaff      [currMB->mb_field][img->bot_MB] = currMB->qp;
-          }          
+          mb_qp = img->BasicUnitQP;
+          mb_qp = iClip3(-img->bitdepth_luma_qp_scale, 51, mb_qp);
         }
-        else
-          currMB->prev_qp = img->qp;
       }
     }
   }
-
-  update_qp(currMB);
+  return mb_qp;
 }
 
 /*!
@@ -2730,15 +2642,15 @@ void rc_free_memory( void )
 void rc_update_mb_stats( Macroblock *currMB, int *bitCount )
 {
   // Rate control
-  img->NumberofMBHeaderBits= bitCount[BITS_MB_MODE] + bitCount[BITS_INTER_MB]
-                           + bitCount[BITS_CBP_MB ] + bitCount[BITS_DELTA_QUANT_MB];
-  img->NumberofMBTextureBits= bitCount[BITS_COEFF_Y_MB]+ bitCount[BITS_COEFF_UV_MB];
+  img->NumberofMBHeaderBits = bitCount[BITS_MB_MODE] + bitCount[BITS_INTER_MB]
+                            + bitCount[BITS_CBP_MB ] + bitCount[BITS_DELTA_QUANT_MB];
+  img->NumberofMBTextureBits = bitCount[BITS_COEFF_Y_MB]+ bitCount[BITS_COEFF_UV_MB];
 
   switch (params->RCUpdateMode)
   {
   case RC_MODE_0:  case RC_MODE_1:  case RC_MODE_2:  case RC_MODE_3:
-    generic_RC->NumberofTextureBits +=img->NumberofMBTextureBits;
-    generic_RC->NumberofHeaderBits +=img->NumberofMBHeaderBits;
+    generic_RC->NumberofTextureBits += img->NumberofMBTextureBits;
+    generic_RC->NumberofHeaderBits  += img->NumberofMBHeaderBits;
     // basic unit layer rate control
     if(img->BasicUnit < img->FrameSizeInMbs)
     {

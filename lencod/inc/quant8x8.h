@@ -15,7 +15,7 @@
 #ifndef _QUANT8x8_H_
 #define _QUANT8x8_H_
 
-void init_quant_8x8(ImageParameters *img);
+void init_quant_8x8(InputParameters *params, ImageParameters *img);
 
 int quant_8x8_normal(int (*tblock)[16], int block_y, int block_x, int qp, 
                      int*  ACLevel, int*  ACRun, 

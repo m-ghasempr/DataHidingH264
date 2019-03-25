@@ -21,7 +21,8 @@
 
 extern FILE *bits;
 
-int GetAnnexbNALU (NALU_t *nalu);
+//int GetAnnexbNALU (NALU_t *nalu);
+int read_next_nalu(FILE *bitstream, NALU_t *nalu);
 int NALUtoRBSP (NALU_t *nalu);
 
 #endif

@@ -17,12 +17,6 @@
 #ifndef _RDO_H_
 #define _RDO_H_
 
-extern int   **bestInterFAdjust4x4, **bestIntraFAdjust4x4;
-extern int   **bestInterFAdjust8x8, **bestIntraFAdjust8x8;
-extern int   ***bestInterFAdjust4x4Cr, ***bestIntraFAdjust4x4Cr;
-extern int   ***bestInterFAdjust8x8Cr, ***bestIntraFAdjust8x8Cr;
-extern int   **fadjust8x8, **fadjust4x4, ***fadjust4x4Cr, ***fadjust8x8Cr;
-
 extern int   ****cofAC, ****cofAC8x8;        // [8x8block][4x4block][level/run][scan_pos]
 extern int   ***cofDC;                       // [yuv][level/run][scan_pos]
 extern int   **cofAC4x4, ****cofAC4x4intern; // [level/run][scan_pos]
@@ -30,17 +24,11 @@ extern int   cbp, cbp8x8, cnt_nonz_8x8;
 extern int   cbp_blk8x8;
 extern char  l0_refframe[4][4], l1_refframe[4][4];
 extern short b8mode[4], b8pdir[4];
-extern short best8x8mode [4];                // [block]
-extern char  best8x8pdir  [MAXMODE][4];       // [mode][block]
-extern char  best8x8l0ref [MAXMODE][4];       // [mode][block]
-extern char  best8x8l1ref [MAXMODE][4];       // [mode][block]
-extern char  best8x8ref[2][MAXMODE][4];       // [mode][block]
 
 //CSptr cs_mb, cs_b8, cs_cm, cs_ib8, cs_ib4;
 extern int   best_c_imode;
 extern int   best_i16offset;
 extern short best_mode;
-extern short  bi_pred_me;
 
 //mixed transform sizes definitions
 extern int   luma_transform_size_8x8_flag;
@@ -68,10 +56,15 @@ int valid_intra_mode(int ipmode);
 void compute_comp_cost(imgpel **cur_img, imgpel prd_img[16][16], int pic_opix_x, int *cost);
 void generate_pred_error(imgpel **cur_img, imgpel prd_img[16][16], imgpel cur_prd[16][16], 
                          int m7[16][16], int pic_opix_x, int block_x);
-
-
-void store_adaptive_rounding (int block_y, int block_x);
-void update_adaptive_rounding(int block_y, int block_x);
+extern void SetMotionVectorPredictor (Macroblock *currMB, short  pmv[2], char   **refPic,
+                         short  ***tmp_mv, short  ref_frame,
+                         int    list,      int mb_x, int mb_y, 
+                         int    blockshape_x, int blockshape_y);
+extern void UpdateMotionVectorPredictor(Macroblock* currMB);
+                         
+//============= rate-distortion optimization ===================
+void  clear_rdopt (InputParameters *params);
+void  init_rdopt  (InputParameters *params);
 
 #endif
 

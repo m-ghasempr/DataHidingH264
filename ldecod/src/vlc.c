@@ -26,12 +26,30 @@
 #define SYMTRACESTRING(s) // do nothing
 #endif
 
-extern void tracebits(const char *trace_str,  int len,  int info,int value1);
+void tracebits(const char *trace_str,  int len,  int info,int value1);
+
 
 
 int UsedBits;      // for internal statistics, is adjusted by se_v, ue_v, u_1
 
 // Note that all NA values are filled with 0
+
+//! gives CBP value from codeword number, both for intra and inter
+static const unsigned char NCBP[2][48][2]=
+{
+  {  // 0      1        2       3       4       5       6       7       8       9      10      11
+    {15, 0},{ 0, 1},{ 7, 2},{11, 4},{13, 8},{14, 3},{ 3, 5},{ 5,10},{10,12},{12,15},{ 1, 7},{ 2,11},
+    { 4,13},{ 8,14},{ 6, 6},{ 9, 9},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},
+    { 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},
+    { 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0}
+  },
+  {
+    {47, 0},{31,16},{15, 1},{ 0, 2},{23, 4},{27, 8},{29,32},{30, 3},{ 7, 5},{11,10},{13,12},{14,15},
+    {39,47},{43, 7},{45,11},{46,13},{16,14},{ 3, 6},{ 5, 9},{10,31},{12,35},{19,37},{21,42},{26,44},
+    {28,33},{35,34},{37,36},{42,40},{44,39},{ 1,43},{ 2,45},{ 4,46},{ 8,17},{17,18},{18,20},{20,24},
+    {24,19},{ 6,21},{ 9,26},{22,28},{25,23},{32,27},{33,29},{34,30},{36,22},{40,25},{38,38},{41,41}
+  }
+};
 
 //! for the linfo_levrun_inter routine
 const byte NTAB1[4][8][2] =
@@ -275,7 +293,6 @@ void linfo_se(int len,  int info, int *value1, int *dummy)
  */
 void linfo_cbp_intra(int len,int info,int *cbp, int *dummy)
 {
-  extern const byte NCBP[2][48][2];
   int cbp_idx;
 
   linfo_ue(len, info, &cbp_idx, dummy);
@@ -296,7 +313,6 @@ void linfo_cbp_intra(int len,int info,int *cbp, int *dummy)
  */
 void linfo_cbp_inter(int len,int info,int *cbp, int *dummy)
 {
-  extern const byte NCBP[2][48][2];
   int cbp_idx;
 
   linfo_ue(len, info, &cbp_idx, dummy);
@@ -530,10 +546,10 @@ int more_rbsp_data (byte buffer[],int totbitoffset,int bytecount)
  *    Check if there are symbols for the next MB
  ************************************************************************
  */
-int uvlc_startcode_follows(ImageParameters *img, int dummy)
+int uvlc_startcode_follows(Slice *currSlice, int dummy)
 {
-  int dp_Nr = assignSE2partition[img->currentSlice->dp_mode][SE_MBTYPE];
-  DataPartition *dP = &(img->currentSlice->partArr[dp_Nr]);
+  int dp_Nr = assignSE2partition[currSlice->dp_mode][SE_MBTYPE];
+  DataPartition *dP = &(currSlice->partArr[dp_Nr]);
   Bitstream   *currStream = dP->bitstream;
   byte *buf  = currStream->streamBuffer;
 

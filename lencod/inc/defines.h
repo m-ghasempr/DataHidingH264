@@ -6,8 +6,11 @@
  *    Header file containing some useful global definitions
  *
  * \author
- *    Detlev Marpe
- *    Copyright (C) 2000 HEINRICH HERTZ INSTITUTE All Rights Reserved.
+ *    Main contributors (see contributors.h for copyright, address and affiliation details)
+ *     - Detlev Marpe
+ *     - Karsten Sühring                 <suehring@hhi.de> 
+ *     - Alexis Michael Tourapis         <alexismt@ieee.org> 
+ *   
  *
  * \date
  *    21. March 2001
@@ -23,6 +26,10 @@
 #else
 #define TRACE               0       //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
 #endif
+
+#define JM                  "14 (FRExt)"
+#define VERSION             "14.1"
+#define EXT_VERSION         "(FRExt)"
 
 #define GET_METIME          1       //!< Enables or disables ME computation time
 #define DUMP_DPB            0       //!< Dump DPB for debug purposes
@@ -47,7 +54,7 @@
 #define FREXT_Hi444     244      //!< YUV 4:4:4/14 "High 4:4:4"
 #define FREXT_CAVLC444   44      //!< YUV 4:4:4/14 "CAVLC 4:4:4"
 
-#define ZEROSNR 1
+#define ZEROSNR           1
 
 // CAVLC
 enum {
@@ -170,6 +177,7 @@ enum {
 #define BLOCK_SIZE_8x8         8
 #define MB_BLOCK_SIZE         16
 #define MB_PIXELS            256 //(MB_BLOCK_SIZE * MB_BLOCK_SIZE)
+#define MB_PIXELS_SHIFT        8 // log2(MB_BLOCK_SIZE * MB_BLOCK_SIZE)
 #define MB_BLOCK_SHIFT         4
 #define BLOCK_MULTIPLE         4  //(MB_BLOCK_SIZE/BLOCK_SIZE)
 #define MB_BLOCK_PARTITIONS   16  //(BLOCK_MULTIPLE * BLOCK_MULTIPLE)

@@ -188,7 +188,7 @@ int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
     sps->mb_adaptive_frame_field_flag        = u_1  ("SPS: mb_adaptive_frame_field_flag"           , s);
   }
   sps->direct_8x8_inference_flag             = u_1  ("SPS: direct_8x8_inference_flag"              , s);
-  sps->frame_cropping_flag                   = u_1  ("SPS: frame_cropping_flag"                , s);
+  sps->frame_cropping_flag                   = u_1  ("SPS: frame_cropping_flag"                    , s);
 
   if (sps->frame_cropping_flag)
   {
@@ -197,7 +197,7 @@ int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
     sps->frame_cropping_rect_top_offset       = ue_v ("SPS: frame_cropping_rect_top_offset"            , s);
     sps->frame_cropping_rect_bottom_offset    = ue_v ("SPS: frame_cropping_rect_bottom_offset"         , s);
   }
-  sps->vui_parameters_present_flag           = (Boolean) u_1  ("SPS: vui_parameters_present_flag"            , s);
+  sps->vui_parameters_present_flag           = (Boolean) u_1  ("SPS: vui_parameters_present_flag"      , s);
 
   InitVUI(sps);
   ReadVUI(p, sps);
@@ -580,6 +580,24 @@ void activate_sps (seq_parameter_set_rbsp_t *sps)
     img->bitdepth_chroma = 0;
     img->width_cr        = 0;
     img->height_cr       = 0;
+
+    // maximum vertical motion vector range in luma quarter pixel units
+    if (active_sps->level_idc <= 10)
+    {
+      img->max_vmv_r = 64 * 4;
+    }
+    else if (active_sps->level_idc <= 20)
+    {
+      img->max_vmv_r = 128 * 4;
+    }
+    else if (active_sps->level_idc <= 30)
+    {
+      img->max_vmv_r = 256 * 4;
+    }
+    else
+    {
+      img->max_vmv_r = 512 * 4; // 512 pixels in quarter pixels
+    }
 
     // Fidelity Range Extensions stuff (part 1)
     img->bitdepth_luma       = sps->bit_depth_luma_minus8 + 8;

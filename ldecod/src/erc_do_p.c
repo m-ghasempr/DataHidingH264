@@ -595,7 +595,7 @@ static void buildPredRegionYUV(ImageParameters *img, int *mv, int x, int y, imgp
 
       for(ii=0;ii<BLOCK_SIZE;ii++)
         for(jj=0;jj<MB_BLOCK_SIZE/BLOCK_SIZE;jj++)
-          img->mpr[LumaComp][jj+joff][ii+ioff]=tmp_block[jj][ii];
+          img->mb_pred[LumaComp][jj+joff][ii+ioff]=tmp_block[jj][ii];
     }
   }
 
@@ -604,7 +604,7 @@ static void buildPredRegionYUV(ImageParameters *img, int *mv, int x, int y, imgp
   {
     for (i = 0; i < 16; i++)
     {
-      pMB[j*16+i] = img->mpr[LumaComp][j][i];
+      pMB[j*16+i] = img->mb_pred[LumaComp][j][i];
     }
   }
   pMB += 256;
@@ -652,7 +652,7 @@ static void buildPredRegionYUV(ImageParameters *img, int *mv, int x, int y, imgp
               if0=f1_x-if1;
               jf0=f1_y-jf1;
 
-              img->mpr[uv + 1][jj+joff][ii+ioff]=(if0*jf0*listX[0][ref_frame]->imgUV[uv][jj0][ii0]+
+              img->mb_pred[uv + 1][jj+joff][ii+ioff]=(if0*jf0*listX[0][ref_frame]->imgUV[uv][jj0][ii0]+
                                           if1*jf0*listX[0][ref_frame]->imgUV[uv][jj0][ii1]+
                                           if0*jf1*listX[0][ref_frame]->imgUV[uv][jj1][ii0]+
                                           if1*jf1*listX[0][ref_frame]->imgUV[uv][jj1][ii1]+f4)/f3;
@@ -665,7 +665,7 @@ static void buildPredRegionYUV(ImageParameters *img, int *mv, int x, int y, imgp
       {
         for (i = 0; i < 8; i++)
         {
-          pMB[j*8+i] = img->mpr[uv + 1][j][i];
+          pMB[j*8+i] = img->mb_pred[uv + 1][j][i];
         }
       }
       pMB += 64;
@@ -883,14 +883,14 @@ static void buildPredblockRegionYUV(ImageParameters *img, int *mv,
 
   for(jj=0;jj<MB_BLOCK_SIZE/BLOCK_SIZE;jj++)
     for(ii=0;ii<BLOCK_SIZE;ii++)
-      img->mpr[LumaComp][jj][ii]=tmp_block[jj][ii];
+      img->mb_pred[LumaComp][jj][ii]=tmp_block[jj][ii];
 
 
   for (j = 0; j < 4; j++)
   {
     for (i = 0; i < 4; i++)
     {
-      pMB[j*4+i] = img->mpr[LumaComp][j][i];
+      pMB[j*4+i] = img->mb_pred[LumaComp][j][i];
     }
   }
   pMB += 16;
@@ -934,7 +934,7 @@ static void buildPredblockRegionYUV(ImageParameters *img, int *mv,
           if0=f1_x-if1;
           jf0=f1_y-jf1;
 
-          img->mpr[uv + 1][jj][ii]=(if0*jf0*listX[list][ref_frame]->imgUV[uv][jj0][ii0]+
+          img->mb_pred[uv + 1][jj][ii]=(if0*jf0*listX[list][ref_frame]->imgUV[uv][jj0][ii0]+
             if1*jf0*listX[list][ref_frame]->imgUV[uv][jj0][ii1]+
             if0*jf1*listX[list][ref_frame]->imgUV[uv][jj1][ii0]+
             if1*jf1*listX[list][ref_frame]->imgUV[uv][jj1][ii1]+f4)/f3;
@@ -945,7 +945,7 @@ static void buildPredblockRegionYUV(ImageParameters *img, int *mv,
       {
         for (i = 0; i < 2; i++)
         {
-          pMB[j*2+i] = img->mpr[uv + 1][j][i];
+          pMB[j*2+i] = img->mb_pred[uv + 1][j][i];
         }
       }
       pMB += 4;
@@ -1159,25 +1159,24 @@ static void copy_to_conceal(StorablePicture *src, StorablePicture *dst, ImagePar
 
     for(i=0;i<mb_height*4;i++)
     {
-      mm = i*BLOCK_SIZE;
+      mm = i * BLOCK_SIZE;
       for(j=0;j<mb_width*4;j++)
       {
-        nn = j*BLOCK_SIZE;
+        nn = j * BLOCK_SIZE;
 
-        mv[0] = src->mv[LIST_0][i][j][0] / scale;
-        mv[1] = src->mv[LIST_0][i][j][1] / scale;
-        mv[2] = src->ref_idx[LIST_0][i][j];
-
+        mv[0] = src->motion.mv[LIST_0][i][j][0] / scale;
+        mv[1] = src->motion.mv[LIST_0][i][j][1] / scale;
+        mv[2] = src->motion.ref_idx[LIST_0][i][j];
 
         if(mv[2]<0)
           mv[2]=0;
 
-        dst->mv[LIST_0][i][j][0] = mv[0];
-        dst->mv[LIST_0][i][j][1] = mv[1];
-        dst->ref_idx[LIST_0][i][j] = mv[2];
+        dst->motion.mv[LIST_0][i][j][0] = mv[0];
+        dst->motion.mv[LIST_0][i][j][1] = mv[1];
+        dst->motion.ref_idx[LIST_0][i][j] = mv[2];
 
-        x = (j)*multiplier;
-        y = (i)*multiplier;
+        x = (j) * multiplier;
+        y = (i) * multiplier;
 
         if ((mm%16==0) && (nn%16==0))
           img->current_mb_nr++;

@@ -189,8 +189,7 @@ ClearFastFullIntegerSearch ()
  *    (have to be called in start_macroblock())
  ***********************************************************************
  */
-void
-ResetFastFullIntegerSearch ()
+void ResetFastFullIntegerSearch ()
 {
   int list;
   for (list=0; list<2; list++)
@@ -326,6 +325,7 @@ void SetupFastFullPelSearch (Macroblock *currMb, short ref, int list)  // <--  r
   if (ChromaMEEnable)
   {
     imgpel *auxptr;
+    int   uv;
     int   bsx_c = BLOCK_SIZE >> (chroma_shift_x - 2);
     int   bsy_c = BLOCK_SIZE >> (chroma_shift_y - 2);
     int   pic_pix_x_c = img->opix_x >> (chroma_shift_x - 2);
@@ -333,9 +333,9 @@ void SetupFastFullPelSearch (Macroblock *currMb, short ref, int list)  // <--  r
 
     // copy the original cmp1 and cmp2 data to the orig_pic matrix
     // This seems to be wrong.
-    for (k=0; k<2; k++)
+    for (uv = 1; uv < 3; uv++)
     {
-      srcptr = auxptr = orig_pels + (256 << k);
+      srcptr = auxptr = orig_pels + (256 << (uv - 1));
       for ( pixel_y = 0, i = 0; i < (BLOCK_SIZE >> (chroma_shift_y - 2)); i++, pixel_y += bsy_c )
       {
         for ( pixel_x = 0, k = 0; k < (BLOCK_SIZE >> (chroma_shift_x - 2)); k++, pixel_x += bsx_c )
@@ -343,7 +343,7 @@ void SetupFastFullPelSearch (Macroblock *currMb, short ref, int list)  // <--  r
           srcptr = auxptr;
           for (j = 0; j < bsy_c; j++)
           {
-            memcpy( srcptr, &imgUV_org[k][pic_pix_y_c + pixel_y + j][pic_pix_x_c + pixel_x], bsx_c * sizeof(imgpel));
+            memcpy( srcptr, &pImgOrg[uv][pic_pix_y_c + pixel_y + j][pic_pix_x_c + pixel_x], bsx_c * sizeof(imgpel));
             srcptr += bsx_c;
           }
           auxptr += MB_BLOCK_SIZE;
@@ -389,7 +389,7 @@ void SetupFastFullPelSearch (Macroblock *currMb, short ref, int list)  // <--  r
   height_pad    = ref_picture->size_y_pad;
 
   //===== get search center: predictor of 16x16 block =====
-  SetMotionVectorPredictor (currMB, pmv, enc_picture->ref_idx[list], enc_picture->mv[list], ref, list, 0, 0, 16, 16);
+  SetMotionVectorPredictor (currMB, pmv, enc_picture->motion.ref_idx[list], enc_picture->motion.mv[list], ref, list, 0, 0, 16, 16);
 
   mv[0] = pmv[0] / 4;
   mv[1] = pmv[1] / 4;
@@ -543,7 +543,7 @@ void SetupFastFullPelSearch (Macroblock *currMB, short ref, int list)  // <--  r
   }
 
   //===== get search center: predictor of 16x16 block =====
-  SetMotionVectorPredictor (currMB, pmv, enc_picture->ref_idx[list], enc_picture->mv[list], ref, list, 0, 0, 16, 16);
+  SetMotionVectorPredictor (currMB, pmv, enc_picture->motion.ref_idx[list], enc_picture->motion.mv[list], ref, list, 0, 0, 16, 16);
 
   search_center_x[list][ref] = pmv[0] / 4;
   search_center_y[list][ref] = pmv[1] / 4;
@@ -573,11 +573,11 @@ void SetupFastFullPelSearch (Macroblock *currMB, short ref, int list)  // <--  r
   }
   if ( ChromaMEEnable)
   {
-    for (k = 0; k < 2; k++)
+    for (k = 1; k < 3; k++)
     {
       for   (y = img->opix_c_y; y < img->opix_c_y + img->mb_cr_size_y; y++)
       {
-        memcpy(srcptr, &imgUV_org[k][y][img->opix_c_x], img->mb_cr_size_x * sizeof(imgpel));
+        memcpy(srcptr, &pImgOrg[k][y][img->opix_c_x], img->mb_cr_size_x * sizeof(imgpel));
         srcptr += img->mb_cr_size_x;
       }
     }

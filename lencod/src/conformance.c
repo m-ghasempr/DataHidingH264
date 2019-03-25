@@ -199,11 +199,6 @@ void ProfileCheck(void)
       snprintf(errortext, ET_SIZE, "CABAC is not allowed in Extended profile (ProfileIDC = 88).");
       error (errortext, 500);
     }
-    if ((params->PicInterlace) ||(params->MbInterlace))
-    {
-      snprintf(errortext, ET_SIZE, "Interlace tools are not allowed in Extended profile (ProfileIDC = 88).");
-      error (errortext, 500);
-    }
   }
 
   //FRExt

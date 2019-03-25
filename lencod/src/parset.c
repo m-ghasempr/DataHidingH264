@@ -101,7 +101,6 @@ void GenerateParameterSets (void)
     else
       GeneratePictureParameterSet( PicParSet[0], sps, 0, params->WeightedPrediction, params->WeightedBiprediction,
                                    params->chroma_qp_index_offset, 0);
-
   }
 
   active_sps = sps;
@@ -250,7 +249,7 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps, //!< Sequence 
   }
 
   // Parameter Set ID hard coded to zero
-  sps->seq_parameter_set_id = 0;
+  sps->seq_parameter_set_id = SPS_id;
 
   // Fidelity Range Extensions stuff
   sps->bit_depth_luma_minus8   = params->output.bit_depth[0] - 8;

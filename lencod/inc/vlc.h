@@ -21,22 +21,22 @@ int u_v  (int n, char *tracestring, int value, Bitstream *bitstream);
 void levrun_linfo_c2x2(int level,int run,int *len,int *info);
 void levrun_linfo_inter(int level,int run,int *len,int *info);
 
-void writeSE_Fix    (SyntaxElement *se, Bitstream *bitstream);
-void writeSE_UVLC   (SyntaxElement *se, DataPartition *dp);
-void writeSE_SVLC   (SyntaxElement *se, DataPartition *dp);
-void writeSE_Flag   (SyntaxElement *se, DataPartition *dp);
-void writeSE_invFlag(SyntaxElement *se, DataPartition *dp);
-void writeSE_Dummy  (SyntaxElement *se, DataPartition *dp);
+void writeSE_Fix                  (SyntaxElement *se, Bitstream *bitstream);
+void writeSE_UVLC                 (SyntaxElement *se, DataPartition *dp);
+void writeSE_SVLC                 (SyntaxElement *se, DataPartition *dp);
+void writeSE_Flag                 (SyntaxElement *se, DataPartition *dp);
+void writeSE_invFlag              (SyntaxElement *se, DataPartition *dp);
+void writeSE_Dummy                (SyntaxElement *se, DataPartition *dp);
 
-void writeCBP_VLC   (Macroblock* currMB, SyntaxElement *se, DataPartition *dp);
-void writeIntraPredMode_CAVLC(SyntaxElement *se, DataPartition *dp);
-
-int   writeSyntaxElement2Buf_UVLC(SyntaxElement *se, Bitstream* this_streamBuffer );
-void  writeUVLC2buffer(SyntaxElement *se, Bitstream *currStream);
+void writeCBP_VLC                 (Macroblock* currMB, SyntaxElement *se, DataPartition *dp);
+void writeIntraPredMode_CAVLC     (SyntaxElement *se, DataPartition *dp);
+int   writeSyntaxElement2Buf_UVLC (SyntaxElement *se, Bitstream* this_streamBuffer );
+void  writeUVLC2buffer            (SyntaxElement *se, Bitstream *currStream);
+void writeVlcByteAlign            (Bitstream* currStream);
 int   writeSyntaxElement2Buf_Fixed(SyntaxElement *se, Bitstream* this_streamBuffer );
-int   symbol2uvlc(SyntaxElement *se);
-void  ue_linfo(int n, int dummy, int *len,int *info);
-void  se_linfo(int mvd, int dummy, int *len,int *info);
+int   symbol2uvlc                 (SyntaxElement *se);
+void  ue_linfo       (int n, int dummy, int *len,int *info);
+void  se_linfo       (int mvd, int dummy, int *len,int *info);
 void  cbp_linfo_intra(int cbp, int dummy, int *len,int *info);
 void  cbp_linfo_inter(int cbp, int dummy, int *len,int *info);
 

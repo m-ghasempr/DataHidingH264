@@ -21,6 +21,7 @@
   #define static
   #define inline
 #endif
+#include <math.h>
 
 static inline int imin(int a, int b)
 {
@@ -141,10 +142,28 @@ static inline int RSD(int x)
  return ((x&2)?(x|1):(x&(~1)));
 }
 
+static inline int power2(int x) 
+{
+  return 1 << (x);
+}
+
 static inline int float2int (float x)
 {
   return (int)((x < 0) ? (x - 0.5f) : (x + 0.5f));
 }
+
+#if ZEROSNR
+static inline float psnr(int max_sample_sq, int samples, float sse_distortion ) 
+{
+  return (float) (10.0 * log10(max_sample_sq * (double) ((double) samples / (sse_distortion == 0.0 ? 1.0 : sse_distortion))));
+}
+#else
+static inline float psnr(int max_sample_sq, int samples, float sse_distortion ) 
+{
+  return (float) (sse_distortion == 0.0 ? 0.0 : (10.0 * log10(max_sample_sq * (double) ((double) samples / sse_distortion))));
+}
+#endif
+
 
 # if !defined(WIN32) && (__STDC_VERSION__ < 199901L)
   #undef static

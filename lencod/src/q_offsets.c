@@ -159,7 +159,7 @@ static const short Offset8_inter_default[64] = {
 void allocate_QOffsets ()
 {
   int max_bitdepth = imax(params->output.bit_depth[0], params->output.bit_depth[1]);
-  int max_qp = (3 + 6*(max_bitdepth) - MIN_QP);
+  int max_qp = (3 + 6*(max_bitdepth));
 
   get_mem5Dint(&LevelOffset4x4Comp, 3, 2, max_qp + 1, 4, 4);
   get_mem5Dint(&LevelOffset8x8Comp, 3, 2, max_qp + 1, 8, 8);
@@ -428,8 +428,8 @@ void Init_QOffsetMatrix ()
 void InitOffsetParam ()
 {
   int i, k;
-  int max_qp_luma = (4 + 6*(params->output.bit_depth[0]) - MIN_QP);
-  int max_qp_cr   = (4 + 6*(params->output.bit_depth[1]) - MIN_QP);
+  int max_qp_luma = (4 + 6*(params->output.bit_depth[0]));
+  int max_qp_cr   = (4 + 6*(params->output.bit_depth[1]));
 
   for (i = 0; i < (params->AdaptRoundingFixed ? 1 : imax(max_qp_luma, max_qp_cr)); i++)
   {
@@ -496,7 +496,7 @@ void CalculateOffsetParam ()
   int img_type = (img->type == SI_SLICE ? I_SLICE : (img->type == SP_SLICE ? P_SLICE : img->type));
 
   int max_qp_scale = imax(img->bitdepth_luma_qp_scale, img->bitdepth_chroma_qp_scale);
-  int max_qp = 51 + max_qp_scale - MIN_QP;
+  int max_qp = 51 + max_qp_scale;
 
   AdaptRndWeight = params->AdaptRndWFactor[img->nal_reference_idc != 0][img_type];
   AdaptRndCrWeight = params->AdaptRndCrWFactor[img->nal_reference_idc != 0][img_type];
@@ -630,7 +630,7 @@ void CalculateOffset8Param ()
   int q_bits, qp;
 
   int max_qp_scale = imax(img->bitdepth_luma_qp_scale, img->bitdepth_chroma_qp_scale);
-  int max_qp = 51 + max_qp_scale - MIN_QP;
+  int max_qp = 51 + max_qp_scale;
 
   if (img->type == I_SLICE || img->type == SI_SLICE )
   {

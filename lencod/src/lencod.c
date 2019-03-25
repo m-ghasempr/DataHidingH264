@@ -14,7 +14,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 14.0 (FRExt)
+ *     JM 14.1 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -49,40 +49,33 @@
 #include <sys/timeb.h>
 #include "global.h"
 
+#include "cconv_yuv2rgb.h"
 #include "configfile.h"
-#include "leaky_bucket.h"
-#include "memalloc.h"
-#include "intrarefresh.h"
-#include "fmo.h"
-#include "sei.h"
-#include "parset.h"
+#include "context_ini.h"
+#include "explicit_gop.h"
+#include "filehandle.h"
 #include "image.h"
 #include "input.h"
-#include "output.h"
-
+#include "intrarefresh.h"
+#include "leaky_bucket.h"
+#include "memalloc.h"
 #include "me_epzs.h"
 #include "me_umhex.h"
 #include "me_umhexsmp.h"
-
-#include "ratectl.h"
-#include "explicit_gop.h"
-#include "context_ini.h"
-
+#include "output.h"
+#include "parset.h"
 #include "q_matrix.h"
 #include "q_offsets.h"
+#include "ratectl.h"
+#include "report.h"
 #include "rdo_quant.h"
+#include "errdo.h"
+#include "rdopt.h"
+#include "wp_mcprec.h"
 
-#define JM      "14 (FRExt)"
-#define VERSION "14.0"
-#define EXT_VERSION "(FRExt)"
-
-InputParameters inputs,      *params = &inputs;
-ImageParameters images,      *img   = &images;
-StatParameters  statistics,  *stats = &statistics;
-SNRParameters   snrs,        *snr   = &snrs;
-Decoders decoders, *decs=&decoders;
-
-static void information_init(void);
+InputParameters  inputs, *params = &inputs;
+ImageParameters  images, *img    = &images;
+Decoders       decoders, *decs   = &decoders;
 
 #ifdef _ADAPT_LAST_GROUP_
 int initial_Bframes = 0;
@@ -98,36 +91,33 @@ extern ColocatedParams *Co_located;
 extern ColocatedParams *Co_located_JV[MAX_PLANE];  //!< Co_located to be used during 4:4:4 independent mode encoding
 extern double *mb16x16_cost_frame;
 extern int FrameNumberInFile;
-static char DistortionType[3][20] = {"SAD", "SSE", "Hadamard SAD"};
 
-void Init_Motion_Search_Module (void);
-void Clear_Motion_Search_Module (void);
-void report_frame_statistic(void);
+extern ImageStructure imgRGB_src, imgRGB_ref; // RGB Distortion Metric
+
+
+extern void Init_Motion_Search_Module (void);
+extern void Clear_Motion_Search_Module (void);
+
+static void SetImgType(void);
 void SetLevelIndices(void);
 void chroma_mc_setup(void);
+int  get_mem_mv  (short*******);
+int  get_mem_bipred_mv (short********);
+void free_mem_bipred_mv (short*******);
+void free_mem_mv (short******);
+static void init_img( ImageParameters *img, InputParameters *params);
+static void init_poc(void);
 
-void init_stats (void)
+void init_stats (StatParameters *stats, DistortionParams *dist)
 {
   stats->successive_Bframe = params->successive_Bframe;
-  stats->bit_ctr_I = 0;
-  stats->bit_ctr_P = 0;
-  stats->bit_ctr_B = 0;
-  snr->snr_y = 0.0;
-  snr->snr_u = 0.0;
-  snr->snr_v = 0.0;
-  snr->snr_y1 = 0.0;
-  snr->snr_u1 = 0.0;
-  snr->snr_v1 = 0.0;
-  snr->snr_ya = 0.0;
-  snr->snr_ua = 0.0;
-  snr->snr_va = 0.0;
-  snr->sse_y  = 0.0;
-  snr->sse_u  = 0.0;
-  snr->sse_v  = 0.0;
-  snr->msse_y = 0.0;
-  snr->msse_u = 0.0;
-  snr->msse_v = 0.0;
-  snr->frame_ctr = 0;
+  stats->frame_counter = 0;  
+  memset(stats->frame_ctr,   0, NUM_SLICE_TYPES * sizeof(int));
+  memset(stats->bit_counter, 0, NUM_SLICE_TYPES * sizeof(int64));
+
+  // Distortion
+  dist->frame_ctr = 0;
+  memset(dist->metric, 0, TOTAL_DIST_TYPES * sizeof(DistMetric));
 }
 
 /*!
@@ -144,6 +134,7 @@ void init_frame_params()
   {
     if (!params->adaptive_idr_period && ( img->frm_number - img->lastIDRnumber ) % params->idr_period == 0 )
       img->nal_reference_idc = NALU_PRIORITY_HIGHEST;
+
     if (params->adaptive_idr_period == 1 && ( img->frm_number - imax(img->lastIntraNumber, img->lastIDRnumber) ) % params->idr_period == 0 )
       img->nal_reference_idc = NALU_PRIORITY_HIGHEST;
     else
@@ -205,13 +196,12 @@ void init_frame_params()
  */
 int main(int argc,char **argv)
 {
-  int nplane;
   int primary_disp = 0;
   giRDOpt_B8OnlyFlag = 0;
 
   p_dec = p_in = -1;
 
-  p_stat = p_log = p_trace = NULL;
+  p_log = p_trace = NULL;
 
   frame_statistic_start = 1;
 
@@ -226,9 +216,15 @@ int main(int argc,char **argv)
   GenerateParameterSets();
   SetLevelIndices();
 
-  init_img();
+  init_img(img, params);
 
-  init_rdopt ();
+  init_rdopt(params);
+
+  if (params->rdopt == 3)
+  {
+    init_error_conceal(params->ErrorConcealment); 
+  }
+
 #ifdef _LEAKYBUCKET_
   Bit_Buffer = malloc((params->no_frames * (params->successive_Bframe + 1) + 1) * sizeof(long));
 #endif
@@ -247,28 +243,30 @@ int main(int argc,char **argv)
   dpb.init_done = 0;
   init_dpb();
   init_out_buffer();
-  init_stats();
+  init_stats(stats, dist);
 
   enc_picture = NULL;
 
   init_global_buffers();
 
+  if ( params->WPMCPrecision )
+  {
+    wpxInitWPXPasses(params);
+  }
+
   create_context_memory ();
   Init_Motion_Search_Module ();
-  information_init();
+  information_init(img, params, stats);
+
+  if(params->DistortionYUVtoRGB)
+    init_YUVtoRGB();
 
   //Rate control
   if (params->RCEnable)
     rc_init_sequence();
 
-  if (params->SearchMode == UM_HEX)
-    UMHEX_DefineThreshold();
-
-  // Init frame type counter. Only supports single slice per frame.
-  memset(frame_ctr, 0, 5 * sizeof(int));
-
   img->last_valid_reference = 0;
-  tot_time=0;                 // time for total encoding session
+  tot_time = 0;                 // time for total encoding session
 
 #ifdef _ADAPT_LAST_GROUP_
   if (params->last_frame > 0)
@@ -283,7 +281,6 @@ int main(int argc,char **argv)
   stats->bit_slice = start_sequence();
   stats->bit_ctr_parametersets += stats->bit_ctr_parametersets_n;
   start_frame_no_in_this_IGOP = 0;
-
 
   if (params->UseRDOQuant)
     precalculate_unary_exp_golomb_level();
@@ -316,9 +313,9 @@ int main(int argc,char **argv)
     }
 
 #ifdef _ADAPT_LAST_GROUP_
-    if (params->successive_Bframe && params->last_frame && IMG_NUMBER+1 == params->no_frames)
+    if (params->successive_Bframe && params->last_frame && (IMG_NUMBER + 1) == params->no_frames)
     {
-      int bi = (int)((float)(params->jumpd+1)/(params->successive_Bframe + 1.0) + 0.499999);
+      int bi = (int)((float)(params->jumpd + 1)/(params->successive_Bframe + 1.0) + 0.499999);
 
       params->successive_Bframe = ((params->last_frame - (img->frm_number - 1)*(params->jumpd + 1)) / bi) - 1;
 
@@ -363,16 +360,11 @@ int main(int argc,char **argv)
     if (img->nal_reference_idc == 0)
     {
       primary_disp ++;
-      //img->frame_num -= 1;
-      //img->frame_num %= max_frame_num;
     }
 
     if (img->currentPicture->idr_flag)
     {
       img->idr_gop_number = 0;
-      //start_frame_no_in_this_IGOP = img->frm_number;
-      //start_tr_in_this_IGOP = img->toppoc;
-      // start_tr_in_this_IGOP = (img->frm_number - 1 ) * (params->jumpd + 1) +1;
     }
     else
       img->idr_gop_number ++;
@@ -380,74 +372,15 @@ int main(int argc,char **argv)
     encode_enhancement_layer();    
   }
   // terminate sequence
-  terminate_sequence();
-
-  flush_dpb();
-
-  close(p_in);
-  if (-1 != p_dec)
-    close(p_dec);
-  if (p_trace)
-    fclose(p_trace);
-
-  Clear_Motion_Search_Module ();
-
-  RandomIntraUninit();
-  FmoUninit();
-
-  if (params->HierarchicalCoding)
-    clear_gop_structure ();
-
-  // free structure for rd-opt. mode decision
-  clear_rdopt ();
-
-#ifdef _LEAKYBUCKET_
-  calc_buffer();
-#endif
-
-  // report everything
-  report();
-
-#ifdef _LEAKYBUCKET_
-  if (Bit_Buffer)
-  free(Bit_Buffer);
-#endif
-
-  free_dpb();
-  if( IS_INDEPENDENT(params) )
-  {
-    for( nplane=0; nplane<MAX_PLANE; nplane++ )
-    {
-      free_colocated(Co_located_JV[nplane]);
-    }
-  }
-  else
-  {
-    free_colocated(Co_located);
-  }
-  uninit_out_buffer();
-
-  free_global_buffers();
-
-  // free image mem
-  free_img ();
-  free_context_memory ();
-  FreeNalPayloadBuffer();
-  FreeParameterSets();
+  free_encoder_memory(img);
 
   return 0;
 }
-/*!
- ***********************************************************************
- * \brief
- *    Terminates and reports statistics on error.
- *
- ***********************************************************************
- */
-void report_stats_on_error(void)
+
+
+void free_encoder_memory(ImageParameters *img)
 {
   int nplane;
-  params->no_frames = img->frm_number;
   terminate_sequence();
 
   flush_dpb();
@@ -455,7 +388,6 @@ void report_stats_on_error(void)
   close(p_in);
   if (-1 != p_dec)
     close(p_dec);
-
   if (p_trace)
     fclose(p_trace);
 
@@ -468,19 +400,22 @@ void report_stats_on_error(void)
     clear_gop_structure ();
 
   // free structure for rd-opt. mode decision
-  clear_rdopt ();
+  clear_rdopt (params);
 
 #ifdef _LEAKYBUCKET_
   calc_buffer();
 #endif
 
-  if (params->ReportFrameStats)
-    report_frame_statistic();
-
   // report everything
-  report();
+  report(img, params, stats);
+
+#ifdef _LEAKYBUCKET_
+  if (Bit_Buffer)
+    free(Bit_Buffer);
+#endif
 
   free_dpb();
+
   if( IS_INDEPENDENT(params) )
   {
     for( nplane=0; nplane<MAX_PLANE; nplane++ )
@@ -492,6 +427,7 @@ void report_stats_on_error(void)
   {
     free_colocated(Co_located);
   }
+
   uninit_out_buffer();
 
   free_global_buffers();
@@ -501,7 +437,6 @@ void report_stats_on_error(void)
   free_context_memory ();
   FreeNalPayloadBuffer();
   FreeParameterSets();
-  exit (-1);
 }
 
 /*!
@@ -523,27 +458,24 @@ void init_poc()
 
   if (params->BRefPictures == 1)
   {
-    img->offset_for_non_ref_pic  =   0;
-    img->offset_for_ref_frame[0] =   2;
+    img->offset_for_non_ref_pic  =  0;
+    img->offset_for_ref_frame[0] =  2;
   }
   else
   {
-    img->offset_for_non_ref_pic  =  -2*(params->successive_Bframe);
-    img->offset_for_ref_frame[0] =   2*(params->successive_Bframe+1);
+    img->offset_for_non_ref_pic  = -2*(params->successive_Bframe);
+    img->offset_for_ref_frame[0] =  2*(params->successive_Bframe + 1);
   }
 
   if ((params->PicInterlace==FRAME_CODING) && (params->MbInterlace==FRAME_CODING))
-    img->offset_for_top_to_bottom_field=0;
-  else
-    img->offset_for_top_to_bottom_field=1;
-
-  if ((params->PicInterlace==FRAME_CODING) && (params->MbInterlace==FRAME_CODING))
   {
+    img->offset_for_top_to_bottom_field = 0;
     img->pic_order_present_flag = FALSE;
     img->delta_pic_order_cnt_bottom = 0;
   }
   else
   {
+    img->offset_for_top_to_bottom_field = 1;
     img->pic_order_present_flag = TRUE;
     img->delta_pic_order_cnt_bottom = 1;
   }
@@ -583,7 +515,7 @@ void CAVLC_init(void)
  *    Image Parameters ImageParameters *img
  ***********************************************************************
  */
-void init_img()
+static void init_img( ImageParameters *img, InputParameters *params)
 {
   int i, j;
   int byte_abs_range;
@@ -602,10 +534,10 @@ void init_img()
   img->bitdepth_luma_qp_scale   = 3 *  img->bitdepth_lambda_scale;
   img->dc_pred_value_comp[0]    =  1<<(img->bitdepth_luma - 1);
   img->max_imgpel_value_comp[0] = (1<<img->bitdepth_luma) - 1;
+  img->max_imgpel_value_comp_sq[0] = img->max_imgpel_value_comp[0] * img->max_imgpel_value_comp[0];
 
-  img->dc_pred_value            =  img->dc_pred_value_comp[0]; // set defaults
+  img->dc_pred_value            = img->dc_pred_value_comp[0]; // set defaults
   img->max_imgpel_value         = img->max_imgpel_value_comp[0];
-
   img->mb_size[0][0]            = img->mb_size[0][1] = MB_BLOCK_SIZE;
 
   // Initialization for RC QP parameters (could be placed in ratectl.c)
@@ -613,8 +545,8 @@ void init_img()
   img->RCMaxQP                = params->RCMaxQP[P_SLICE];
 
   // Set current residue & prediction array pointers
-  img->curr_res = img->m7[0];
-  img->curr_prd = img->mpr[0];
+  img->curr_res = img->mb_rres[0];
+  img->curr_prd = img->mb_pred[0];
 
   if (img->yuv_format != YUV400)
   {
@@ -624,8 +556,11 @@ void init_img()
     img->dc_pred_value_comp[2]    = img->dc_pred_value_comp[1];
     img->max_imgpel_value_comp[1] = (1<<img->bitdepth_chroma) - 1;
     img->max_imgpel_value_comp[2] = img->max_imgpel_value_comp[1];
+    img->max_imgpel_value_comp_sq[1] = img->max_imgpel_value_comp[1] * img->max_imgpel_value_comp[1];
+    img->max_imgpel_value_comp_sq[2] = img->max_imgpel_value_comp[2] * img->max_imgpel_value_comp[2];
     img->num_blk8x8_uv            = (1<<img->yuv_format)&(~(0x1));
     img->num_cdc_coeff            = img->num_blk8x8_uv << 1;
+
     img->mb_size[1][0] = img->mb_size[2][0] = img->mb_cr_size_x = (img->yuv_format == YUV420 || img->yuv_format == YUV422) ? 8 : 16;
     img->mb_size[1][1] = img->mb_size[2][1] = img->mb_cr_size_y = (img->yuv_format == YUV444 || img->yuv_format == YUV422) ? 16 : 8;
 
@@ -640,6 +575,8 @@ void init_img()
     img->bitdepth_scale[1]   = 0;
     img->max_imgpel_value_comp[1] = 0;
     img->max_imgpel_value_comp[2] = img->max_imgpel_value_comp[1];
+    img->max_imgpel_value_comp_sq[1] = img->max_imgpel_value_comp[1] * img->max_imgpel_value_comp[1];
+    img->max_imgpel_value_comp_sq[2] = img->max_imgpel_value_comp[2] * img->max_imgpel_value_comp[2];
     img->num_blk8x8_uv       = 0;
     img->num_cdc_coeff       = 0;
     img->mb_size[1][0] = img->mb_size[2][0] = img->mb_cr_size_x = 0;
@@ -651,7 +588,7 @@ void init_img()
     img->chroma_qp_offset[0] = 0;
     img->chroma_qp_offset[1] = 0;
   }  
- 
+
   //img->pic_unit_size_on_disk = (imax(img->bitdepth_luma , img->bitdepth_chroma) > 8) ? 16 : 8;
   img->pic_unit_size_on_disk = (imax(params->source.bit_depth[0], params->source.bit_depth[1]) > 8) ? 16 : 8;
   img->out_unit_size_on_disk = (imax(params->output.bit_depth[0], params->output.bit_depth[1]) > 8) ? 16 : 8;
@@ -688,8 +625,7 @@ void init_img()
 
     if (params->BiPredMotionEstimation)
     {
-      get_mem_mv (&(img->bipred_mv1));
-      get_mem_mv (&(img->bipred_mv2));
+      get_mem_bipred_mv(&(img->bipred_mv)); 
     }
   }
 
@@ -751,7 +687,7 @@ void init_img()
 
     get_mem_ACcoeff (&(rddata_trellis_best.cofAC));
     get_mem_DCcoeff (&(rddata_trellis_best.cofDC));
-    
+
     if (!params->IntraProfile)
     {          
       get_mem_mv (&(rddata_trellis_curr.pred_mv));
@@ -768,7 +704,7 @@ void init_img()
     }
   }
 
-  byte_abs_range = (imax(img->max_imgpel_value_comp[0],img->max_imgpel_value_comp[1]) + 1) * 2;
+  byte_abs_range = (imax(img->max_imgpel_value_comp[0], img->max_imgpel_value_comp[1]) + 1) * 2;
 
   if ((img->quad = (int*)calloc (byte_abs_range, sizeof(int))) == NULL)
     no_mem_exit ("init_img: img->quad");
@@ -788,7 +724,7 @@ void init_img()
 
   if (img->yuv_format != YUV400)
   {
-    img->width_cr = img->width  * mb_width_cr[img->yuv_format]  / 16;
+    img->width_cr = img->width  * mb_width_cr [img->yuv_format] / 16;
     img->height_cr= img->height * mb_height_cr[img->yuv_format] / 16;
   }
   else
@@ -796,20 +732,24 @@ void init_img()
     img->width_cr = 0;
     img->height_cr= 0;
   }
+
   img->height_cr_frame = img->height_cr;
 
   img->size = img->width * img->height;
   img->size_cr = img->width_cr * img->height_cr;
 
-  img->PicWidthInMbs    = img->width/MB_BLOCK_SIZE;
-  img->FrameHeightInMbs = img->height/MB_BLOCK_SIZE;
+  img->PicWidthInMbs    = img->width  / MB_BLOCK_SIZE;
+  img->FrameHeightInMbs = img->height / MB_BLOCK_SIZE;
   img->FrameSizeInMbs   = img->PicWidthInMbs * img->FrameHeightInMbs;
 
   img->PicHeightInMapUnits = ( active_sps->frame_mbs_only_flag ? img->FrameHeightInMbs : img->FrameHeightInMbs/2 );
+  
+  if ((img->b8x8info = (Block8x8Info *) calloc(1, sizeof(Block8x8Info))) == NULL)
+     no_mem_exit("init_img: img->block8x8info");
 
   if( IS_INDEPENDENT(params) )
   {
-    for( i=0; i<MAX_PLANE; i++ ){
+    for( i = 0; i < MAX_PLANE; i++ ){
       if ((img->mb_data_JV[i] = (Macroblock *) calloc(img->FrameSizeInMbs,sizeof(Macroblock))) == NULL)
         no_mem_exit("init_img: img->mb_data_JV");
     }
@@ -836,7 +776,7 @@ void init_img()
   }
   get_mem2D((byte***)&(img->ipredmode), img->height_blk, img->width_blk);        //need two extra rows at right and bottom
   get_mem2D((byte***)&(img->ipredmode8x8), img->height_blk, img->width_blk);     // help storage for ipredmode 8x8, inserted by YV
-  memset(&(img->ipredmode[0][0]), -1, img->height_blk * img->width_blk *sizeof(char));
+  memset(&(img->ipredmode[0][0])   , -1, img->height_blk * img->width_blk *sizeof(char));
   memset(&(img->ipredmode8x8[0][0]), -1, img->height_blk * img->width_blk *sizeof(char));
 
   get_mem2D((byte***)&(rddata_top_frame_mb.ipredmode), img->height_blk, img->width_blk);
@@ -849,20 +789,20 @@ void init_img()
     get_mem2D((byte***)&(rddata_top_field_mb.ipredmode), img->height_blk, img->width_blk);
     get_mem2D((byte***)&(rddata_bot_field_mb.ipredmode), img->height_blk, img->width_blk);
   }
+
   // CAVLC mem
   get_mem3Dint(&(img->nz_coeff), img->FrameSizeInMbs, 4, 4+img->num_blk8x8_uv);
-
-
-  get_mem2Ddb_offset(&(img->lambda_md), 10, 52 + img->bitdepth_luma_qp_scale,img->bitdepth_luma_qp_scale);
-  get_mem3Ddb_offset (&(img->lambda_me), 10, 52 + img->bitdepth_luma_qp_scale, 3, img->bitdepth_luma_qp_scale);
-  get_mem3Dint_offset(&(img->lambda_mf), 10, 52 + img->bitdepth_luma_qp_scale, 3, img->bitdepth_luma_qp_scale);
+  CAVLC_init();
+  
+  get_mem2Dolm     (&(img->lambda), 10, 52 + img->bitdepth_luma_qp_scale, img->bitdepth_luma_qp_scale);
+  get_mem2Dodouble (&(img->lambda_md), 10, 52 + img->bitdepth_luma_qp_scale, img->bitdepth_luma_qp_scale);
+  get_mem3Dodouble (&(img->lambda_me), 10, 52 + img->bitdepth_luma_qp_scale, 3, img->bitdepth_luma_qp_scale);
+  get_mem3Doint    (&(img->lambda_mf), 10, 52 + img->bitdepth_luma_qp_scale, 3, img->bitdepth_luma_qp_scale);
 
   if (params->CtxAdptLagrangeMult == 1)
   {
-    get_mem2Ddb_offset(&(img->lambda_mf_factor), 10, 52 + img->bitdepth_luma_qp_scale, img->bitdepth_luma_qp_scale);
+    get_mem2Dodouble(&(img->lambda_mf_factor), 10, 52 + img->bitdepth_luma_qp_scale, img->bitdepth_luma_qp_scale);
   }
-
-  CAVLC_init();
 
   img->b_frame_to_code = 0;
   img->GopLevels = (params->successive_Bframe) ? 1 : 0;
@@ -870,13 +810,14 @@ void init_img()
 
   RandomIntraInit (img->PicWidthInMbs, img->FrameHeightInMbs, params->RandomIntraMBRefresh);
 
-  InitSEIMessages();  // Tian Dong (Sept 2002)
+  InitSEIMessages(); 
 
   initInput(&params->source, &params->output);
 
   // Allocate I/O Frame memory
   if (AllocateFrameMemory(img, params->source.size))
     no_mem_exit("AllocateFrameMemory: buf");
+
   // Initialize filtering parameters. If sending parameters, the offsets are
   // multiplied by 2 since inputs are taken in "div 2" format.
   // If not sending parameters, all fields are cleared
@@ -884,7 +825,7 @@ void init_img()
   {
     for (j = 0; j < 2; j++)
     {
-      for (i = 0; i < 5; i++)
+      for (i = 0; i < NUM_SLICE_TYPES; i++)
       {
         params->DFAlpha[j][i] <<= 1;
         params->DFBeta [j][i] <<= 1;
@@ -895,23 +836,16 @@ void init_img()
   {
     for (j = 0; j < 2; j++)
     {
-      for (i = 0; i < 5; i++)
+      for (i = 0; i < NUM_SLICE_TYPES; i++)
       {
         params->DFDisableIdc[j][i] = 0;
-        params->DFAlpha[j][i] = 0;
-        params->DFBeta[j][i] = 0;
+        params->DFAlpha     [j][i] = 0;
+        params->DFBeta      [j][i] = 0;
       }
     }
   }
 
-  if( params->separate_colour_plane_flag )
-  {
-    img->ChromaArrayType = 0;
-  }
-  else
-  {
-    img->ChromaArrayType = params->yuv_format;
-  }
+  img->ChromaArrayType = params->separate_colour_plane_flag ? 0 : params->yuv_format;
 
   if (params->RDPictureDecision)
   {
@@ -943,8 +877,7 @@ void free_img ()
 
     if (params->BiPredMotionEstimation)
     {
-      free_mem_mv (img->bipred_mv1);
-      free_mem_mv (img->bipred_mv2);
+      free_mem_bipred_mv (img->bipred_mv);
     }
   }
 
@@ -1027,9 +960,9 @@ void free_img ()
 
   if (params->MbInterlace)
   {
-    free_mem2D((byte**)rddata_bot_frame_mb.ipredmode);
-    free_mem2D((byte**)rddata_top_field_mb.ipredmode);
-    free_mem2D((byte**)rddata_bot_field_mb.ipredmode);
+    free_mem2D((byte**) rddata_bot_frame_mb.ipredmode);
+    free_mem2D((byte**) rddata_top_field_mb.ipredmode);
+    free_mem2D((byte**) rddata_bot_field_mb.ipredmode);
   }
 }
 
@@ -1072,956 +1005,6 @@ void free_picture(Picture *pic)
 }
 
 
-/*!
- ************************************************************************
- * \brief
- *    Reports frame statistical data to a stats file
- ************************************************************************
- */
-void report_frame_statistic()
-{
-  FILE *p_stat_frm = NULL;
-  static int64 last_mode_use[NUM_PIC_TYPE][MAXMODE];
-  static int   last_b8_mode_0[NUM_PIC_TYPE][2];
-  static int   last_mode_chroma_use[4];
-  static int64 last_bit_ctr_n = 0;
-  int i;
-  char name[30];
-  int bitcounter;
-
-#ifndef WIN32
-  time_t now;
-  struct tm *l_time;
-  char string[1000];
-#else
-  char timebuf[128];
-#endif
-
-
-  // write to log file
-  if ((p_stat_frm = fopen("stat_frame.dat", "r")) == 0)            // check if file exists
-  {
-    if ((p_stat_frm = fopen("stat_frame.dat", "a")) == NULL)       // append new statistic at the end
-    {
-      snprintf(errortext, ET_SIZE, "Error open file %s  \n", "stat_frame.dat.dat");
-      error(errortext, 500);
-    }
-    else                                            // Create header for new log file
-    {
-      fprintf(p_stat_frm, " --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
-      fprintf(p_stat_frm, "|            Encoder statistics. This file is generated during first encoding session, new sessions will be appended                                                                                                                                                                                                                                                                                                                                                              |\n");
-      fprintf(p_stat_frm, " --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
-    }
-  }
-  else
-  {
-    fclose (p_stat_frm);
-    if ((p_stat_frm = fopen("stat_frame.dat", "a")) == NULL)       // File exists, just open for appending
-    {
-      snprintf(errortext, ET_SIZE, "Error open file %s  \n", "stat_frame.dat.dat");
-      error(errortext, 500);
-    }
-  }
-
-  if (frame_statistic_start)
-  {
-    fprintf(p_stat_frm, "|     ver     | Date  | Time  |    Sequence                  |Frm | QP |P/MbInt|   Bits   |  SNRY  |  SNRU  |  SNRV  |  I4  |  I8  | I16  | IC0  | IC1  | IC2  | IC3  | PI4  | PI8  | PI16 |  P0  |  P1  |  P2  |  P3  | P1*8*| P1*4*| P2*8*| P2*4*| P3*8*| P3*4*|  P8  | P8:4 | P4*8*| P4*4*| P8:5 | P8:6 | P8:7 | BI4  | BI8  | BI16 |  B0  |  B1  |  B2  |  B3  | B0*8*| B0*4*| B1*8*| B1*4*| B2*8*| B2*4*| B3*8*| B3*4*|  B8  | B8:0 |B80*8*|B80*4*| B8:4 | B4*8*| B4*4*| B8:5 | B8:6 | B8:7 |\n");
-    fprintf(p_stat_frm, " ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ \n");
-  }
-
-  //report
-  fprintf(p_stat_frm, "|%4s/%s", VERSION, EXT_VERSION);
-
-#ifdef WIN32
-  _strdate( timebuf );
-  fprintf(p_stat_frm, "| %1.5s |", timebuf);
-
-  _strtime( timebuf);
-  fprintf(p_stat_frm, " % 1.5s |", timebuf);
-#else
-  now = time ((time_t *) NULL); // Get the system time and put it into 'now' as 'calender time'
-  time (&now);
-  l_time = localtime (&now);
-  strftime (string, sizeof string, "%d-%b-%Y", l_time);
-  fprintf(p_stat_frm, "| %1.5s |", string );
-
-  strftime (string, sizeof string, "%H:%M:%S", l_time);
-  fprintf(p_stat_frm, " %1.5s |", string);
-#endif
-
-  for (i=0;i<30;i++)
-    name[i]=params->infile[i + imax(0,(int) (strlen(params->infile)- 30))]; // write last part of path, max 30 chars
-
-  fprintf(p_stat_frm, "%30.30s|", name);
-
-  fprintf(p_stat_frm, "%3d |", frame_no);
-
-  fprintf(p_stat_frm, "%3d |", img->qp);
-
-  fprintf(p_stat_frm, "  %d/%d  |", params->PicInterlace, params->MbInterlace);
-
-
-  if (img->frm_number == 0 && img->frame_num == 0)
-  {
-    bitcounter = (int) stats->bit_ctr_I;
-  }
-  else
-  {
-    bitcounter = (int) (stats->bit_ctr_n - last_bit_ctr_n);
-    last_bit_ctr_n = stats->bit_ctr_n;
-  }
-
-  //report bitrate
-  fprintf(p_stat_frm, " %9d|", bitcounter);
-
-  //report snr's
-  fprintf(p_stat_frm, " %2.4f| %2.4f| %2.4f|", snr->snr_y, snr->snr_u, snr->snr_v);
-
-  //report modes
-  //I-Modes
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[I_SLICE][I4MB] - last_mode_use[I_SLICE][I4MB]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[I_SLICE][I8MB] - last_mode_use[I_SLICE][I8MB]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[I_SLICE][I16MB] - last_mode_use[I_SLICE][I16MB]);
-
-  //chroma intra mode
-  fprintf(p_stat_frm, " %5d|", stats->intra_chroma_mode[0] - last_mode_chroma_use[0]);
-  fprintf(p_stat_frm, " %5d|", stats->intra_chroma_mode[1] - last_mode_chroma_use[1]);
-  fprintf(p_stat_frm, " %5d|", stats->intra_chroma_mode[2] - last_mode_chroma_use[2]);
-  fprintf(p_stat_frm, " %5d|", stats->intra_chroma_mode[3] - last_mode_chroma_use[3]);
-
-  //P-Modes
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[P_SLICE][I4MB] - last_mode_use[P_SLICE][I4MB]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[P_SLICE][I8MB] - last_mode_use[P_SLICE][I8MB]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[P_SLICE][I16MB] - last_mode_use[P_SLICE][I16MB]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[P_SLICE][0   ] - last_mode_use[P_SLICE][0   ]);
-
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[P_SLICE][1   ] - last_mode_use[P_SLICE][1   ]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[P_SLICE][2   ] - last_mode_use[P_SLICE][2   ]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[P_SLICE][3   ] - last_mode_use[P_SLICE][3   ]);
-  fprintf(p_stat_frm, " %5d|", stats->mode_use_transform[1][0][1]);
-  fprintf(p_stat_frm, " %5d|", stats->mode_use_transform[0][0][1]);
-  fprintf(p_stat_frm, " %5d|", stats->mode_use_transform[1][0][2]);
-  fprintf(p_stat_frm, " %5d|", stats->mode_use_transform[0][0][2]);
-  fprintf(p_stat_frm, " %5d|", stats->mode_use_transform[1][0][3]);
-  fprintf(p_stat_frm, " %5d|", stats->mode_use_transform[0][0][3]);
-
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[P_SLICE][P8x8] - last_mode_use[P_SLICE][P8x8]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[P_SLICE][4   ] - last_mode_use[P_SLICE][4   ]);
-  fprintf(p_stat_frm, " %5d|", stats->mode_use_transform[1][0][4]);
-  fprintf(p_stat_frm, " %5d|", stats->mode_use_transform[0][0][4]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[P_SLICE][5   ] - last_mode_use[P_SLICE][5   ]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[P_SLICE][6   ] - last_mode_use[P_SLICE][6   ]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[P_SLICE][7   ] - last_mode_use[P_SLICE][7   ]);
-
-  //B-Modes
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[B_SLICE][I4MB] - last_mode_use[B_SLICE][I4MB]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[B_SLICE][I8MB] - last_mode_use[B_SLICE][I8MB]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[B_SLICE][I16MB] - last_mode_use[B_SLICE][I16MB]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[B_SLICE][0   ] - last_mode_use[B_SLICE][0   ]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[B_SLICE][1   ] - last_mode_use[B_SLICE][1   ]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[B_SLICE][2   ] - last_mode_use[B_SLICE][2   ]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[B_SLICE][3   ] - last_mode_use[B_SLICE][3   ]);
-  fprintf(p_stat_frm, " %5d|", stats->mode_use_transform[1][1][0]);
-  fprintf(p_stat_frm, " %5d|", stats->mode_use_transform[0][1][0]);
-  fprintf(p_stat_frm, " %5d|", stats->mode_use_transform[1][1][1]);
-  fprintf(p_stat_frm, " %5d|", stats->mode_use_transform[0][1][1]);
-  fprintf(p_stat_frm, " %5d|", stats->mode_use_transform[1][1][2]);
-  fprintf(p_stat_frm, " %5d|", stats->mode_use_transform[0][1][2]);
-  fprintf(p_stat_frm, " %5d|", stats->mode_use_transform[1][1][3]);
-  fprintf(p_stat_frm, " %5d|", stats->mode_use_transform[0][1][3]);
-
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[B_SLICE][P8x8] - last_mode_use[B_SLICE][P8x8]);
-  fprintf(p_stat_frm, " %d|", (stats->b8_mode_0_use [B_SLICE][0]+stats->b8_mode_0_use [B_SLICE][1]) - (last_b8_mode_0[B_SLICE][0]+last_b8_mode_0[B_SLICE][1]));
-  fprintf(p_stat_frm, " %5d|", stats->b8_mode_0_use [B_SLICE][1] - last_b8_mode_0[B_SLICE][1]);
-  fprintf(p_stat_frm, " %5d|", stats->b8_mode_0_use [B_SLICE][0] - last_b8_mode_0[B_SLICE][0]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[B_SLICE][4   ] - last_mode_use[B_SLICE][4   ]);
-  fprintf(p_stat_frm, " %5d|", stats->mode_use_transform[1][1][4]);
-  fprintf(p_stat_frm, " %5d|", stats->mode_use_transform[0][1][4]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[B_SLICE][5   ] - last_mode_use[B_SLICE][5   ]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[B_SLICE][6   ] - last_mode_use[B_SLICE][6   ]);
-  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", stats->mode_use[B_SLICE][7   ] - last_mode_use[B_SLICE][7   ]);
-
-  fprintf(p_stat_frm, "\n");
-
-  //save the last results
-  memcpy(last_mode_use[I_SLICE], stats->mode_use[I_SLICE], MAXMODE *  sizeof(int64));
-  memcpy(last_mode_use[P_SLICE], stats->mode_use[P_SLICE], MAXMODE *  sizeof(int64));
-  memcpy(last_mode_use[B_SLICE], stats->mode_use[B_SLICE], MAXMODE *  sizeof(int64));
-  memset(stats->mode_use_transform[1], 0, 2 * MAXMODE *  sizeof(int));
-  memset(stats->mode_use_transform[0], 0, 2 * MAXMODE *  sizeof(int));
-  memcpy(last_b8_mode_0[B_SLICE], stats->b8_mode_0_use[B_SLICE], 2 *  sizeof(int));
-  memcpy(last_mode_chroma_use, stats->intra_chroma_mode, 4 *  sizeof(int));
-
-  frame_statistic_start = 0;
-  fclose(p_stat_frm);
-}
-
-
-/*!
- ************************************************************************
- * \brief
- *    Reports the gathered information to appropriate outputs
- * \par Input:
- *    struct inp_par *inp,                                            \n
- *    ImageParameters *img,                                            \n
- *    struct stat_par *stats,                                          \n
- *    struct stat_par *stats                                           \n
- *
- * \par Output:
- *    None
- ************************************************************************
- */
-void report()
-{
-  int64 bit_use[NUM_PIC_TYPE][2] ;
-  int i,j;
-  char name[40];
-  int64 total_bits;
-  float frame_rate;
-  double mean_motion_info_bit_use[2] = {0.0};
-
-#ifndef WIN32
-  time_t now;
-  struct tm *l_time;
-  char string[1000];
-#else
-  char timebuf[128];
-#endif
-  bit_use[I_SLICE][0] = frame_ctr[I_SLICE];
-  bit_use[P_SLICE][0] = imax(frame_ctr[P_SLICE] + frame_ctr[SP_SLICE],1);
-  bit_use[B_SLICE][0] = frame_ctr[B_SLICE];
-
-  //  Accumulate bit usage for inter and intra frames
-  for (j=0; j < NUM_PIC_TYPE; j++)
-  {
-    bit_use[j][1] = 0;
-  }
-
-  for (j=0; j < NUM_PIC_TYPE; j++)
-  {
-    for(i=0; i < MAXMODE; i++)
-      bit_use[j][1] += stats->bit_use_mode[j][i];
-
-    bit_use[j][1] += stats->bit_use_header[j];
-    bit_use[j][1] += stats->bit_use_mb_type[j];
-    bit_use[j][1] += stats->tmp_bit_use_cbp[j];
-    bit_use[j][1] += stats->bit_use_coeffC[j];
-    bit_use[j][1] += stats->bit_use_coeff[0][j];   
-    bit_use[j][1] += stats->bit_use_coeff[1][j]; 
-    bit_use[j][1] += stats->bit_use_coeff[2][j]; 
-    bit_use[j][1] += stats->bit_use_delta_quant[j];
-    bit_use[j][1] += stats->bit_use_stuffingBits[j];
-  }
-
-  frame_rate = (img->framerate *(float)(stats->successive_Bframe + 1)) / (float) (params->jumpd+1);
-
-  //! Currently adding NVB bits on P rate. Maybe additional stats info should be created instead and added in log file
-  stats->bitrate_I = (stats->bit_ctr_I)*(frame_rate)/(float) (params->no_frames + frame_ctr[B_SLICE]);
-  stats->bitrate_P = (stats->bit_ctr_P)*(frame_rate)/(float) (params->no_frames + frame_ctr[B_SLICE]);
-  stats->bitrate_B = (stats->bit_ctr_B)*(frame_rate)/(float) (params->no_frames + frame_ctr[B_SLICE]);
-
-  switch (params->Verbose)
-  {
-  case 0:
-  case 1:
-  default:
-    fprintf(stdout,"------------------ Average data all frames  -----------------------------------\n\n");
-    break;
-  case 2:
-    fprintf(stdout,"------------------------------------  Average data all frames  ---------------------------------\n\n");
-    break;
-  }
-
-  if (params->Verbose != 0)
-  {
-    int  impix    = params->output.size_cmp[0];
-    int  impix_cr = params->output.size_cmp[1];
-    unsigned int max_pix_value_sqd = img->max_imgpel_value_comp[0] * img->max_imgpel_value_comp[0];
-    unsigned int max_pix_value_sqd_uv = img->max_imgpel_value_comp[1] * img->max_imgpel_value_comp[1];
-    float csnr_y = (float) (10 * log10 (max_pix_value_sqd *
-      (double)((double) impix / (snr->msse_y == 0.0? 1.0 : snr->msse_y))));
-    float csnr_u = (float) (10 * log10 (max_pix_value_sqd_uv *
-      (double)((double) impix_cr / (snr->msse_u == 0.0? 1.0 : snr->msse_u))));
-    float csnr_v = (float) (10 * log10 (max_pix_value_sqd_uv *
-      (double)((double) impix_cr / (snr->msse_v == 0.0? 1.0 : snr->msse_v))));
-    fprintf(stdout,  " Total encoding time for the seq.  : %.3f sec (%.2f fps)\n", tot_time*0.001, 1000.0*(params->no_frames + frame_ctr[B_SLICE])/tot_time);
-    fprintf(stdout,  " Total ME time for sequence        : %.3f sec \n\n", me_tot_time*0.001);
-
-    fprintf(stdout," PSNR Y(dB)                        : %5.2f\n", snr->snr_ya);
-    fprintf(stdout," PSNR U(dB)                        : %5.2f\n", snr->snr_ua);
-    fprintf(stdout," PSNR V(dB)                        : %5.2f\n", snr->snr_va);
-    fprintf(stdout," cSNR Y(dB)                        : %5.2f (%5.2f)\n", csnr_y,snr->msse_y/impix);
-    fprintf(stdout," cSNR U(dB)                        : %5.2f (%5.2f)\n", csnr_u,snr->msse_u/impix_cr);
-    fprintf(stdout," cSNR V(dB)                        : %5.2f (%5.2f)\n\n", csnr_v,snr->msse_v/impix_cr);
-  }
-  else
-    fprintf(stdout,  " Total encoding time for the seq.  : %.3f sec (%.2f fps)\n\n", tot_time*0.001, 1000.0*(params->no_frames + frame_ctr[B_SLICE])/tot_time);
-
-  if (frame_ctr[B_SLICE] != 0)
-  {
-    fprintf(stdout, " Total bits                        : %" FORMAT_OFF_T  " (I %" FORMAT_OFF_T  ", P %" FORMAT_OFF_T  ", B %" FORMAT_OFF_T  " NVB %d) \n",
-      total_bits=stats->bit_ctr_P + stats->bit_ctr_I + stats->bit_ctr_B + stats->bit_ctr_parametersets,
-      stats->bit_ctr_I, stats->bit_ctr_P, stats->bit_ctr_B, stats->bit_ctr_parametersets);
-
-    frame_rate = (img->framerate *(float)(stats->successive_Bframe + 1)) / (float) (params->jumpd+1);
-    //    stats->bitrate= ((float) total_bits * frame_rate)/((float) (params->no_frames + frame_ctr[B_SLICE]));
-    stats->bitrate= ((float) total_bits * frame_rate) / ((float)(frame_ctr[I_SLICE] + frame_ctr[P_SLICE] + frame_ctr[B_SLICE]));
-
-    fprintf(stdout, " Bit rate (kbit/s)  @ %2.2f Hz     : %5.2f\n", frame_rate, stats->bitrate/1000);
-
-  }
-  else if (params->sp_periodicity == 0)
-  {
-    fprintf(stdout, " Total bits                        : %" FORMAT_OFF_T  " (I %" FORMAT_OFF_T  ", P %" FORMAT_OFF_T  ", NVB %d) \n",
-      total_bits=stats->bit_ctr_P + stats->bit_ctr_I + stats->bit_ctr_parametersets, stats->bit_ctr_I, stats->bit_ctr_P, stats->bit_ctr_parametersets);
-
-
-    frame_rate = img->framerate / ( (float) (params->jumpd + 1) );
-    stats->bitrate= ((float) total_bits * frame_rate) / ((float) params->no_frames );
-
-    fprintf(stdout, " Bit rate (kbit/s)  @ %2.2f Hz     : %5.2f\n", frame_rate, stats->bitrate/1000);
-  }
-  else
-  {
-    fprintf(stdout, " Total bits                        : %" FORMAT_OFF_T  " (I %" FORMAT_OFF_T  ", P %" FORMAT_OFF_T  ", NVB %d) \n",
-      total_bits=stats->bit_ctr_P + stats->bit_ctr_I + stats->bit_ctr_parametersets, stats->bit_ctr_I, stats->bit_ctr_P, stats->bit_ctr_parametersets);
-
-
-    frame_rate = img->framerate / ( (float) (params->jumpd + 1) );
-    stats->bitrate= ((float) total_bits * frame_rate)/((float) params->no_frames );
-
-    fprintf(stdout, " Bit rate (kbit/s)  @ %2.2f Hz     : %5.2f\n", frame_rate, stats->bitrate/1000);
-  }
-
-  fprintf(stdout, " Bits to avoid Startcode Emulation : %d \n", stats->bit_ctr_emulationprevention);
-  fprintf(stdout, " Bits for parameter sets           : %d \n\n", stats->bit_ctr_parametersets);
-
-  switch (params->Verbose)
-  {
-  case 0:
-  case 1:
-  default:
-    fprintf(stdout,"-------------------------------------------------------------------------------\n");
-    break;
-  case 2:
-    fprintf(stdout,"------------------------------------------------------------------------------------------------\n");
-    break;
-  }  
-  fprintf(stdout,"Exit JM %s encoder ver %s ", JM, VERSION);
-  fprintf(stdout,"\n");
-
-  // status file
-  if (strlen(params->StatsFile) == 0)
-    strcpy (params->StatsFile,"stats.dat");
-
-  if ((p_stat = fopen(params->StatsFile, "wt")) == 0)
-  {
-    snprintf(errortext, ET_SIZE, "Error open file %s", params->StatsFile);
-    error(errortext, 500);
-  }
-
-  fprintf(p_stat," -------------------------------------------------------------- \n");
-  fprintf(p_stat,"  This file contains statistics for the last encoded sequence   \n");
-  fprintf(p_stat," -------------------------------------------------------------- \n");
-  fprintf(p_stat,   " Sequence                     : %s\n", params->infile);
-  fprintf(p_stat,   " No.of coded pictures         : %4d\n", params->no_frames+frame_ctr[B_SLICE]);
-  fprintf(p_stat,   " Freq. for encoded bitstream  : %4.0f\n", frame_rate);
-
-  fprintf(p_stat,   " I Slice Bitrate(kb/s)        : %6.2f\n", stats->bitrate_I/1000);
-  fprintf(p_stat,   " P Slice Bitrate(kb/s)        : %6.2f\n", stats->bitrate_P/1000);
-  // B pictures
-  if (stats->successive_Bframe != 0)
-    fprintf(p_stat,   " B Slice Bitrate(kb/s)        : %6.2f\n", stats->bitrate_B/1000);
-  fprintf(p_stat,   " Total Bitrate(kb/s)          : %6.2f\n", stats->bitrate/1000);
-
-  for (i = 0; i < 3; i++)
-  {
-    fprintf(p_stat," ME Metric for Refinement Level %1d : %s\n", i, DistortionType[params->MEErrorMetric[i]]);
-  }
-  fprintf(p_stat," Mode Decision Metric             : %s\n", DistortionType[params->ModeDecisionMetric]);
-
-  switch ( params->ChromaMEEnable )
-  {
-  case 1:
-    fprintf(p_stat," Motion Estimation for components : YCbCr\n");
-    break;
-  default:
-    fprintf(p_stat," Motion Estimation for components : Y\n");
-    break;
-  }
-
-  fprintf(p_stat,  " Image format                 : %dx%d\n", params->output.width, params->output.height);
-
-  if (params->intra_upd)
-    fprintf(p_stat," Error robustness             : On\n");
-  else
-    fprintf(p_stat," Error robustness             : Off\n");
-
-  fprintf(p_stat,  " Search range                 : %d\n", params->search_range);
-
-  fprintf(p_stat,   " Total number of references   : %d\n", params->num_ref_frames);
-  fprintf(p_stat,   " References for P slices      : %d\n", params->P_List0_refs ? params->P_List0_refs : params->num_ref_frames);
-  if (stats->successive_Bframe != 0)
-  {
-    fprintf(p_stat, " List0 refs for B slices      : %d\n", params->B_List0_refs ? params->B_List0_refs : params->num_ref_frames);
-    fprintf(p_stat, " List1 refs for B slices      : %d\n", params->B_List1_refs ? params->B_List1_refs : params->num_ref_frames);
-  }
-
-  if (params->symbol_mode == CAVLC)
-    fprintf(p_stat,   " Entropy coding method        : CAVLC\n");
-  else
-    fprintf(p_stat,   " Entropy coding method        : CABAC\n");
-
-  fprintf(p_stat,   " Profile/Level IDC            : (%d,%d)\n", params->ProfileIDC, params->LevelIDC);
-  if (params->MbInterlace)
-    fprintf(p_stat, " MB Field Coding : On \n");
-
-  if (params->SearchMode == EPZS)
-    EPZSOutputStats(p_stat, 1);
-
-  if (params->full_search == 2)
-    fprintf(p_stat," Search range restrictions    : none\n");
-  else if (params->full_search == 1)
-    fprintf(p_stat," Search range restrictions    : older reference frames\n");
-  else
-    fprintf(p_stat," Search range restrictions    : smaller blocks and older reference frames\n");
-
-  if (params->rdopt)
-    fprintf(p_stat," RD-optimized mode decision   : used\n");
-  else
-    fprintf(p_stat," RD-optimized mode decision   : not used\n");
-
-  fprintf(p_stat," ---------------------|----------------|---------------|\n");
-  fprintf(p_stat,"     Item             |     Intra      |   All frames  |\n");
-  fprintf(p_stat," ---------------------|----------------|---------------|\n");
-  fprintf(p_stat," SNR Y(dB)            |");
-  fprintf(p_stat," %5.2f          |", snr->snr_y1);
-  fprintf(p_stat," %5.2f         |\n", snr->snr_ya);
-  fprintf(p_stat," SNR U/V (dB)         |");
-  fprintf(p_stat," %5.2f/%5.2f    |", snr->snr_u1, snr->snr_v1);
-  fprintf(p_stat," %5.2f/%5.2f   |\n", snr->snr_ua, snr->snr_va);
-
-  // QUANT.
-  fprintf(p_stat," Average quant        |");
-  fprintf(p_stat," %5d          |", iabs(params->qp0));
-  fprintf(p_stat," %5.2f         |\n", (float)stats->quant1/dmax(1.0,(float)stats->quant0));
-
-  fprintf(p_stat,"\n ---------------------|----------------|---------------|---------------|\n");
-  fprintf(p_stat,"     SNR              |        I       |       P       |       B       |\n");
-  fprintf(p_stat," ---------------------|----------------|---------------|---------------|\n");
-  fprintf(p_stat," SNR Y(dB)            |      %5.3f    |     %5.3f    |     %5.3f    |\n",
-    snr->snr_yt[I_SLICE], snr->snr_yt[P_SLICE], snr->snr_yt[B_SLICE]);
-  fprintf(p_stat," SNR U(dB)            |      %5.3f    |     %5.3f    |     %5.3f    |\n",
-    snr->snr_ut[I_SLICE], snr->snr_ut[P_SLICE], snr->snr_ut[B_SLICE]);
-  fprintf(p_stat," SNR V(dB)            |      %5.3f    |     %5.3f    |     %5.3f    |\n",
-    snr->snr_vt[I_SLICE], snr->snr_vt[P_SLICE], snr->snr_vt[B_SLICE]);
-
-
-  // MODE
-  fprintf(p_stat,"\n ---------------------|----------------|\n");
-  fprintf(p_stat,"   Intra              |   Mode used    |\n");
-  fprintf(p_stat," ---------------------|----------------|\n");
-
-  fprintf(p_stat," Mode 0  intra 4x4    |  %5" FORMAT_OFF_T  "         |\n", stats->mode_use[I_SLICE][I4MB ]);
-  fprintf(p_stat," Mode 1  intra 8x8    |  %5" FORMAT_OFF_T  "         |\n", stats->mode_use[I_SLICE][I8MB ]);
-  fprintf(p_stat," Mode 2+ intra 16x16  |  %5" FORMAT_OFF_T  "         |\n", stats->mode_use[I_SLICE][I16MB]);
-  fprintf(p_stat," Mode    intra IPCM   |  %5" FORMAT_OFF_T  "         |\n", stats->mode_use[I_SLICE][IPCM ]);
-
-  fprintf(p_stat,"\n ---------------------|----------------|-----------------|\n");
-  fprintf(p_stat,"   Inter              |   Mode used    | MotionInfo bits |\n");
-  fprintf(p_stat," ---------------------|----------------|-----------------|");
-  fprintf(p_stat,"\n Mode  0  (copy)      |  %5" FORMAT_OFF_T  "         |    %8.2f     |", stats->mode_use[P_SLICE][0   ], (double)stats->bit_use_mode[P_SLICE][0   ]/(double)bit_use[P_SLICE][0]);
-  fprintf(p_stat,"\n Mode  1  (16x16)     |  %5" FORMAT_OFF_T  "         |    %8.2f     |", stats->mode_use[P_SLICE][1   ], (double)stats->bit_use_mode[P_SLICE][1   ]/(double)bit_use[P_SLICE][0]);
-  fprintf(p_stat,"\n Mode  2  (16x8)      |  %5" FORMAT_OFF_T  "         |    %8.2f     |", stats->mode_use[P_SLICE][2   ], (double)stats->bit_use_mode[P_SLICE][2   ]/(double)bit_use[P_SLICE][0]);
-  fprintf(p_stat,"\n Mode  3  (8x16)      |  %5" FORMAT_OFF_T  "         |    %8.2f     |", stats->mode_use[P_SLICE][3   ], (double)stats->bit_use_mode[P_SLICE][3   ]/(double)bit_use[P_SLICE][0]);
-  fprintf(p_stat,"\n Mode  4  (8x8)       |  %5" FORMAT_OFF_T  "         |    %8.2f     |", stats->mode_use[P_SLICE][P8x8], (double)stats->bit_use_mode[P_SLICE][P8x8]/(double)bit_use[P_SLICE][0]);
-  fprintf(p_stat,"\n Mode  5  intra 4x4   |  %5" FORMAT_OFF_T  "         |-----------------|", stats->mode_use[P_SLICE][I4MB]);
-  fprintf(p_stat,"\n Mode  6  intra 8x8   |  %5" FORMAT_OFF_T  "         |", stats->mode_use[P_SLICE][I8MB]);
-  fprintf(p_stat,"\n Mode  7+ intra 16x16 |  %5" FORMAT_OFF_T  "         |", stats->mode_use[P_SLICE][I16MB]);
-  fprintf(p_stat,"\n Mode     intra IPCM  |  %5" FORMAT_OFF_T  "         |", stats->mode_use[P_SLICE][IPCM ]);
-  mean_motion_info_bit_use[0] = (double)(stats->bit_use_mode[P_SLICE][0] + stats->bit_use_mode[P_SLICE][1] + stats->bit_use_mode[P_SLICE][2]
-  + stats->bit_use_mode[P_SLICE][3] + stats->bit_use_mode[P_SLICE][P8x8])/(double) bit_use[P_SLICE][0];
-
-  // B pictures
-  if ((stats->successive_Bframe!=0) && (frame_ctr[B_SLICE]!=0))
-  {
-
-    fprintf(p_stat,"\n\n ---------------------|----------------|-----------------|\n");
-    fprintf(p_stat,"   B frame            |   Mode used    | MotionInfo bits |\n");
-    fprintf(p_stat," ---------------------|----------------|-----------------|");
-    fprintf(p_stat,"\n Mode  0  (copy)      |  %5" FORMAT_OFF_T  "         |    %8.2f     |", stats->mode_use[B_SLICE][0   ], (double)stats->bit_use_mode[B_SLICE][0   ]/(double)frame_ctr[B_SLICE]);
-    fprintf(p_stat,"\n Mode  1  (16x16)     |  %5" FORMAT_OFF_T  "         |    %8.2f     |", stats->mode_use[B_SLICE][1   ], (double)stats->bit_use_mode[B_SLICE][1   ]/(double)frame_ctr[B_SLICE]);
-    fprintf(p_stat,"\n Mode  2  (16x8)      |  %5" FORMAT_OFF_T  "         |    %8.2f     |", stats->mode_use[B_SLICE][2   ], (double)stats->bit_use_mode[B_SLICE][2   ]/(double)frame_ctr[B_SLICE]);
-    fprintf(p_stat,"\n Mode  3  (8x16)      |  %5" FORMAT_OFF_T  "         |    %8.2f     |", stats->mode_use[B_SLICE][3   ], (double)stats->bit_use_mode[B_SLICE][3   ]/(double)frame_ctr[B_SLICE]);
-    fprintf(p_stat,"\n Mode  4  (8x8)       |  %5" FORMAT_OFF_T  "         |    %8.2f     |", stats->mode_use[B_SLICE][P8x8], (double)stats->bit_use_mode[B_SLICE][P8x8]/(double)frame_ctr[B_SLICE]);
-    fprintf(p_stat,"\n Mode  5  intra 4x4   |  %5" FORMAT_OFF_T  "         |-----------------|", stats->mode_use[B_SLICE][I4MB]);
-    fprintf(p_stat,"\n Mode  6  intra 8x8   |  %5" FORMAT_OFF_T  "         |", stats->mode_use[B_SLICE][I8MB]);
-    fprintf(p_stat,"\n Mode  7+ intra 16x16 |  %5" FORMAT_OFF_T  "         |", stats->mode_use[B_SLICE][I16MB]);
-    fprintf(p_stat,"\n Mode     intra IPCM  |  %5" FORMAT_OFF_T  "         |", stats->mode_use[B_SLICE][IPCM ]);
-    mean_motion_info_bit_use[1] = (double)(stats->bit_use_mode[B_SLICE][0] + stats->bit_use_mode[B_SLICE][1] + stats->bit_use_mode[B_SLICE][2]
-    + stats->bit_use_mode[B_SLICE][3] + stats->bit_use_mode[B_SLICE][P8x8])/(double) frame_ctr[B_SLICE];
-  }
-
-  fprintf(p_stat,"\n\n ---------------------|----------------|----------------|----------------|\n");
-  fprintf(p_stat,"  Bit usage:          |      Intra     |      Inter     |    B frame     |\n");
-  fprintf(p_stat," ---------------------|----------------|----------------|----------------|\n");
-
-  fprintf(p_stat," Header               |");
-  fprintf(p_stat," %10.2f     |", (float) stats->bit_use_header[I_SLICE]/bit_use[I_SLICE][0]);
-  fprintf(p_stat," %10.2f     |", (float) stats->bit_use_header[P_SLICE]/bit_use[P_SLICE][0]);
-  if ((stats->successive_Bframe != 0) && (frame_ctr[B_SLICE] != 0))
-    fprintf(p_stat," %10.2f     |", (float) stats->bit_use_header[B_SLICE]/frame_ctr[B_SLICE]);
-  else fprintf(p_stat," %10.2f     |", 0.);
-  fprintf(p_stat,"\n");
-
-  fprintf(p_stat," Mode                 |");
-  fprintf(p_stat," %10.2f     |", (float)stats->bit_use_mb_type[I_SLICE]/bit_use[I_SLICE][0]);
-  fprintf(p_stat," %10.2f     |", (float)stats->bit_use_mb_type[P_SLICE]/bit_use[P_SLICE][0]);
-  if ((stats->successive_Bframe != 0) && (frame_ctr[B_SLICE] != 0))
-    fprintf(p_stat," %10.2f     |", (float)stats->bit_use_mb_type[B_SLICE]/frame_ctr[B_SLICE]);
-  else fprintf(p_stat," %10.2f     |", 0.);
-  fprintf(p_stat,"\n");
-
-  fprintf(p_stat," Motion Info          |");
-  fprintf(p_stat,"        ./.     |");
-  fprintf(p_stat," %10.2f     |", mean_motion_info_bit_use[0]);
-  if ((stats->successive_Bframe != 0) && (frame_ctr[B_SLICE] != 0))
-    fprintf(p_stat," %10.2f     |", mean_motion_info_bit_use[1]);
-  else fprintf(p_stat," %10.2f     |", 0.);
-  fprintf(p_stat,"\n");
-
-  fprintf(p_stat," CBP Y/C              |");
-  fprintf(p_stat," %10.2f     |", (float)stats->tmp_bit_use_cbp[I_SLICE]/bit_use[I_SLICE][0]);
-  fprintf(p_stat," %10.2f     |", (float)stats->tmp_bit_use_cbp[P_SLICE]/bit_use[P_SLICE][0]);
-  if ((stats->successive_Bframe != 0) && (bit_use[B_SLICE][0] != 0))
-    fprintf(p_stat," %10.2f     |", (float)stats->tmp_bit_use_cbp[B_SLICE]/bit_use[B_SLICE][0]);
-  else fprintf(p_stat," %10.2f     |", 0.);
-  fprintf(p_stat,"\n");
-
-  if (stats->successive_Bframe != 0 && frame_ctr[B_SLICE] != 0)
-    fprintf(p_stat," Coeffs. Y            | %10.2f     | %10.2f     | %10.2f     |\n",
-    (float)stats->bit_use_coeff[0][I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_coeff[0][P_SLICE]/bit_use[P_SLICE][0], (float)stats->bit_use_coeff[0][B_SLICE]/frame_ctr[B_SLICE]);
-  else
-    fprintf(p_stat," Coeffs. Y            | %10.2f     | %10.2f     | %10.2f     |\n",
-    (float)stats->bit_use_coeff[0][I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_coeff[0][P_SLICE]/(float)bit_use[P_SLICE][0], 0.);
-
-  if ((stats->successive_Bframe != 0) && (frame_ctr[B_SLICE] != 0))
-    fprintf(p_stat," Coeffs. C            | %10.2f     | %10.2f     | %10.2f     |\n",
-    (float)stats->bit_use_coeffC[I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_coeffC[P_SLICE]/bit_use[P_SLICE][0], (float)stats->bit_use_coeffC[B_SLICE]/frame_ctr[B_SLICE]);
-  else
-    fprintf(p_stat," Coeffs. C            | %10.2f     | %10.2f     | %10.2f     |\n",
-    (float)stats->bit_use_coeffC[I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_coeffC[P_SLICE]/bit_use[P_SLICE][0], 0.);
-  if(img->P444_joined) 
-  {
-    if(stats->successive_Bframe!=0 && frame_ctr[B_SLICE]!=0)
-      fprintf(p_stat," Coeffs. CB           | %10.2f     | %10.2f     | %10.2f     |\n",
-      (float)stats->bit_use_coeff[1][I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_coeff[1][P_SLICE]/bit_use[P_SLICE][0], (float)stats->bit_use_coeff[1][B_SLICE]/frame_ctr[B_SLICE]);
-    else
-      fprintf(p_stat," Coeffs. CB           | %10.2f     | %10.2f     | %10.2f     |\n",
-      (float)stats->bit_use_coeff[1][I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_coeff[1][P_SLICE]/bit_use[P_SLICE][0], 0.);
-
-    if(stats->successive_Bframe!=0 && frame_ctr[B_SLICE]!=0)
-      fprintf(p_stat," Coeffs. CR           | %10.2f     | %10.2f     | %10.2f     |\n",
-      (float)stats->bit_use_coeff[2][I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_coeff[2][P_SLICE]/bit_use[P_SLICE][0], (float)stats->bit_use_coeff[2][B_SLICE]/frame_ctr[B_SLICE]);
-    else
-      fprintf(p_stat," Coeffs. CR           | %10.2f     | %10.2f     | %10.2f     |\n",
-      (float)stats->bit_use_coeff[2][I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_coeff[2][P_SLICE]/bit_use[P_SLICE][0], 0.);
-  }
-
-  if ((stats->successive_Bframe != 0) && (frame_ctr[B_SLICE] != 0))
-    fprintf(p_stat," Delta quant          | %10.2f     | %10.2f     | %10.2f     |\n",
-    (float)stats->bit_use_delta_quant[I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_delta_quant[P_SLICE]/bit_use[P_SLICE][0], (float)stats->bit_use_delta_quant[B_SLICE]/frame_ctr[B_SLICE]);
-  else
-    fprintf(p_stat," Delta quant          | %10.2f     | %10.2f     | %10.2f     |\n",
-    (float)stats->bit_use_delta_quant[I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_delta_quant[P_SLICE]/bit_use[P_SLICE][0], 0.);
-
-  if ((stats->successive_Bframe != 0) && (frame_ctr[B_SLICE] != 0))
-    fprintf(p_stat," Stuffing Bits        | %10.2f     | %10.2f     | %10.2f     |\n",
-    (float)stats->bit_use_stuffingBits[I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_stuffingBits[P_SLICE]/bit_use[P_SLICE][0], (float)stats->bit_use_stuffingBits[B_SLICE]/frame_ctr[B_SLICE]);
-  else
-    fprintf(p_stat," Stuffing Bits        | %10.2f     | %10.2f     | %10.2f     |\n",
-    (float)stats->bit_use_stuffingBits[I_SLICE]/bit_use[I_SLICE][0], (float)stats->bit_use_stuffingBits[P_SLICE]/bit_use[P_SLICE][0], 0.);
-
-
-
-  fprintf(p_stat," ---------------------|----------------|----------------|----------------|\n");
-
-  fprintf(p_stat," average bits/frame   |");
-
-  fprintf(p_stat," %10.2f     |", (float) bit_use[I_SLICE][1]/(float) bit_use[I_SLICE][0] );
-  fprintf(p_stat," %10.2f     |", (float) bit_use[P_SLICE][1]/(float) bit_use[P_SLICE][0] );
-
-  if(stats->successive_Bframe!=0 && frame_ctr[B_SLICE]!=0)
-    fprintf(p_stat," %10.2f     |", (float) bit_use[B_SLICE][1]/ (float) frame_ctr[B_SLICE] );
-  else fprintf(p_stat," %10.2f     |", 0.);
-
-  fprintf(p_stat,"\n");
-  fprintf(p_stat," ---------------------|----------------|----------------|----------------|\n");
-
-  fclose(p_stat);
-
-  // write to log file
-  if ((p_log = fopen("log.dat", "r")) == 0)         // check if file exists
-  {
-    if ((p_log = fopen("log.dat", "a")) == NULL)    // append new statistic at the end
-    {
-      snprintf(errortext, ET_SIZE, "Error open file %s  \n", "log.dat");
-      error(errortext, 500);
-    }
-    else                                            // Create header for new log file
-    {
-      fprintf(p_log," ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ \n");
-      fprintf(p_log,"|                          Encoder statistics. This file is generated during first encoding session, new sessions will be appended                                                                                                                                                                                 |\n");
-      fprintf(p_log," ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ \n");
-      fprintf(p_log,"|     ver     | Date  | Time  |               Sequence                 | #Img |P/MbInt| QPI| QPP| QPB| Format  |Iperiod| #B | FMES | Hdmd | S.R |#Ref | Freq |Coding|RD-opt|Intra upd|8x8Tr| SNRY 1| SNRU 1| SNRV 1| SNRY N| SNRU N| SNRV N|#Bitr I|#Bitr P|#Bitr B|#Bitr IPB|     Total Time   |      Me Time     |\n");
-      fprintf(p_log," ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ \n");
-
-    }
-  }
-  else
-  {
-    fclose (p_log);
-    if ((p_log = fopen("log.dat", "a")) == NULL)         // File exists, just open for appending
-    {
-      snprintf(errortext, ET_SIZE, "Error open file %s  \n", "log.dat");
-      error(errortext, 500);
-    }
-  }
-  fprintf(p_log,"|%5s/%-5s", VERSION, EXT_VERSION);
-
-#ifdef WIN32
-  _strdate( timebuf );
-  fprintf(p_log,"| %1.5s |", timebuf );
-
-  _strtime( timebuf);
-  fprintf(p_log," % 1.5s |", timebuf);
-#else
-  now = time ((time_t *) NULL); // Get the system time and put it into 'now' as 'calender time'
-  time (&now);
-  l_time = localtime (&now);
-  strftime (string, sizeof string, "%d-%b-%Y", l_time);
-  fprintf(p_log,"| %1.5s |", string );
-
-  strftime (string, sizeof string, "%H:%M:%S", l_time);
-  fprintf(p_log," %1.5s |", string );
-#endif
-
-  for (i=0; i < 40; i++)
-    name[i] = params->infile[i + imax(0, ((int) strlen(params->infile)) - 40)]; // write last part of path, max 40 chars
-  fprintf(p_log,"%40.40s|",name);
-
-  fprintf(p_log,"%5d |  %d/%d  |", params->no_frames, params->PicInterlace, params->MbInterlace);
-  fprintf(p_log," %-3d| %-3d| %-3d|", params->qp0, params->qpN, params->qpB);
-
-  fprintf(p_log,"%4dx%-4d|", params->output.width, params->output.height);
-  fprintf(p_log,"  %3d  |%3d |", params->intra_period, stats->successive_Bframe);
-
-
-  switch( params->SearchMode ) 
-  {
-    case UM_HEX:
-      fprintf(p_log,"  HEX |");
-      break;
-    case UM_HEX_SIMPLE:
-      fprintf(p_log," SHEX |");
-      break;
-    case EPZS:
-      fprintf(p_log," EPZS |");
-      break;
-    case FAST_FULL_SEARCH:
-      fprintf(p_log,"  FFS |");
-      break;
-    default:
-      fprintf(p_log,"  FS  |");
-      break;
-  }
-
-  fprintf(p_log,"  %1d%1d%1d |", params->MEErrorMetric[F_PEL], params->MEErrorMetric[H_PEL], params->MEErrorMetric[Q_PEL]);
-
-  fprintf(p_log," %3d | %2d  |", params->search_range, params->num_ref_frames );
-
-  fprintf(p_log," %5.2f|", (img->framerate *(float) (stats->successive_Bframe + 1)) / (float)(params->jumpd + 1));
-
-  if (params->symbol_mode == CAVLC)
-    fprintf(p_log," CAVLC|");
-  else
-    fprintf(p_log," CABAC|");
-
-  fprintf(p_log,"   %d  |", params->rdopt);
-
-  if (params->intra_upd == 1)
-    fprintf(p_log,"   ON    |");
-  else
-    fprintf(p_log,"   OFF   |");
-
-  fprintf(p_log,"  %d  |", params->Transform8x8Mode);
-
-  fprintf(p_log,"%7.3f|%7.3f|%7.3f|", snr->snr_y1,snr->snr_u1,snr->snr_v1);
-  fprintf(p_log,"%7.3f|%7.3f|%7.3f|", snr->snr_ya,snr->snr_ua,snr->snr_va);
-  /*
-  fprintf(p_log,"%-5.3f|%-5.3f|%-5.3f|", snr->snr_yt[I_SLICE], snr->snr_ut[I_SLICE], snr->snr_vt[I_SLICE]);
-  fprintf(p_log,"%-5.3f|%-5.3f|%-5.3f|", snr->snr_yt[P_SLICE], snr->snr_ut[P_SLICE], snr->snr_vt[P_SLICE]);
-  fprintf(p_log,"%-5.3f|%-5.3f|%-5.3f|", snr->snr_yt[B_SLICE], snr->snr_ut[B_SLICE], snr->snr_vt[B_SLICE]);
-  */
-  fprintf(p_log,"%7.0f|%7.0f|%7.0f|%9.0f|", stats->bitrate_I,stats->bitrate_P,stats->bitrate_B, stats->bitrate);
-
-  fprintf(p_log,"   %12d   |   %12d   |", (int)tot_time,(int)me_tot_time);
-
-
-  fprintf(p_log,"\n");
-
-  fclose(p_log);
-
-  p_log = fopen("data.txt", "a");
-
-  if ((stats->successive_Bframe != 0) && (frame_ctr[B_SLICE] != 0)) // B picture used
-  {
-    fprintf(p_log, "%3d %2d %2d %2.2f %2.2f %2.2f %5" FORMAT_OFF_T  " "
-      "%2.2f %2.2f %2.2f %5d "
-      "%2.2f %2.2f %2.2f %5" FORMAT_OFF_T  " %5" FORMAT_OFF_T  " %.3f\n",
-      params->no_frames, params->qp0, params->qpN,
-      snr->snr_y1,
-      snr->snr_u1,
-      snr->snr_v1,
-      stats->bit_ctr_I,
-      0.0,
-      0.0,
-      0.0,
-      0,
-      snr->snr_ya,
-      snr->snr_ua,
-      snr->snr_va,
-      (stats->bit_ctr_I+stats->bit_ctr)/(params->no_frames+frame_ctr[B_SLICE]),
-      stats->bit_ctr_B/frame_ctr[B_SLICE],
-      (double)0.001*tot_time/(params->no_frames+frame_ctr[B_SLICE]));
-  }
-  else
-  {
-    if (params->no_frames != 0)
-      fprintf(p_log, "%3d %2d %2d %2.2f %2.2f %2.2f %5" FORMAT_OFF_T  " "
-      "%2.2f %2.2f %2.2f %5d "
-      "%2.2f %2.2f %2.2f %5" FORMAT_OFF_T  " %5d %.3f\n",
-      params->no_frames, params->qp0, params->qpN,
-      snr->snr_y1,
-      snr->snr_u1,
-      snr->snr_v1,
-      stats->bit_ctr_I,
-      0.0,
-      0.0,
-      0.0,
-      0,
-      snr->snr_ya,
-      snr->snr_ua,
-      snr->snr_va,
-      (stats->bit_ctr_I+stats->bit_ctr)/params->no_frames,
-      0,
-      (double)0.001*tot_time/params->no_frames);
-  }
-
-  fclose(p_log);
-
-  if (params->ReportFrameStats)
-  {
-    if ((p_log = fopen("stat_frame.dat", "a")) == NULL)       // append new statistic at the end
-    {
-      snprintf(errortext, ET_SIZE, "Error open file %s  \n", "stat_frame.dat.dat");
-      //    error(errortext, 500);
-    }
-    else
-    {
-      fprintf(p_log," --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
-      fclose(p_log);
-    }
-  }
-}
-
-
-/*!
- ************************************************************************
- * \brief
- *    Prints the header of the protocol.
- * \par Input:
- *    struct inp_par *inp
- * \par Output:
- *    none
- ************************************************************************
- */
-void information_init(void)
-{
-  int i;
-  static char yuv_types[4][10] = {"YUV 4:0:0", "YUV 4:2:0", "YUV 4:2:2", "YUV 4:4:4"};
-  switch (params->Verbose)
-  {
-  case 0:
-  case 1:
-  default:
-    printf("------------------------------- JM %4.4s %7.7s -------------------------------\n", VERSION, EXT_VERSION);
-    break;
-  case 2:
-    printf("--------------------------------------- JM %4.4s %7.7s ----------------------------------------\n", VERSION, EXT_VERSION);
-    break;
-  }
-
-  fprintf(stdout,  " Input YUV file                    : %s \n", params->infile);
-  fprintf(stdout,  " Output H.264 bitstream            : %s \n", params->outfile);
-  if (p_dec != -1)
-    fprintf(stdout,  " Output YUV file                   : %s \n", params->ReconFile);
-  fprintf(stdout,  " YUV Format                        : %s \n", &yuv_types[img->yuv_format][0]);//img->yuv_format==YUV422?"YUV 4:2:2":(img->yuv_format==YUV444)?"YUV 4:4:4":"YUV 4:2:0");
-  fprintf(stdout,  " Frames to be encoded I-P/B        : %d/%d\n", params->no_frames, (params->successive_Bframe*(params->no_frames-1)));
-  if (params->Verbose != 0)
-  {
-    fprintf(stdout,  " Freq. for encoded bitstream       : %1.0f\n", img->framerate/(float)(params->jumpd+1));
-    fprintf(stdout,  " PicInterlace / MbInterlace        : %d/%d\n", params->PicInterlace, params->MbInterlace);
-    fprintf(stdout,  " Transform8x8Mode                  : %d\n", params->Transform8x8Mode);
-
-    for (i=0; i<3; i++)
-    {
-      fprintf(stdout," ME Metric for Refinement Level %1d  : %s\n", i, DistortionType[params->MEErrorMetric[i]]);
-    }
-    fprintf(stdout,  " Mode Decision Metric              : %s\n", DistortionType[params->ModeDecisionMetric]);
-
-    switch ( params->ChromaMEEnable )
-    {
-    case 1:
-      fprintf(stdout," Motion Estimation for components  : YCbCr\n");
-      break;
-    default:
-      fprintf(stdout," Motion Estimation for components  : Y\n");
-      break;
-    }
-
-    fprintf(stdout,  " Image format                      : %dx%d (%dx%d)\n", params->output.width, params->output.height, img->width,img->height);
-
-    if (params->intra_upd)
-      fprintf(stdout," Error robustness                  : On\n");
-    else
-      fprintf(stdout," Error robustness                  : Off\n");
-    fprintf(stdout,  " Search range                      : %d\n", params->search_range);
-
-    fprintf(stdout,  " Total number of references        : %d\n", params->num_ref_frames);
-    fprintf(stdout,  " References for P slices           : %d\n", params->P_List0_refs? params->P_List0_refs:params->num_ref_frames);
-    if (stats->successive_Bframe != 0)
-    {
-      fprintf(stdout," List0 references for B slices     : %d\n", params->B_List0_refs? params->B_List0_refs:params->num_ref_frames);
-      fprintf(stdout," List1 references for B slices     : %d\n", params->B_List1_refs? params->B_List1_refs:params->num_ref_frames);
-    }
-
-    // B pictures
-    fprintf(stdout,  " Sequence type                     :");
-
-    if (stats->successive_Bframe > 0 && params->HierarchicalCoding)
-    {
-      fprintf(stdout, " Hierarchy (QP: I %d, P %d, B %d) \n",
-        params->qp0, params->qpN, params->qpB);
-    }
-    else if (stats->successive_Bframe > 0)
-    {
-      char seqtype[80];
-      int i,j;
-
-      strcpy (seqtype,"I");
-
-      for (j=0; j < 2; j++)
-      {
-        for (i=0; i < stats->successive_Bframe; i++)
-        {
-          if (params->BRefPictures)
-            strncat(seqtype,"-RB", imax(0, (int) (79-strlen(seqtype))));
-          else
-            strncat(seqtype,"-B", imax(0, (int) (79-strlen(seqtype))));
-        }
-        strncat(seqtype,"-P", imax(0, (int) (79-strlen(seqtype))));
-      }
-      if (params->BRefPictures)
-        fprintf(stdout, " %s (QP: I %d, P %d, RB %d) \n", seqtype, params->qp0, params->qpN, iClip3(0, 51, params->qpB + params->qpBRSOffset));
-      else
-        fprintf(stdout, " %s (QP: I %d, P %d, B %d) \n", seqtype, params->qp0, params->qpN, params->qpB);
-    }
-    else if (stats->successive_Bframe == 0 && params->sp_periodicity == 0) fprintf(stdout, " IPPP (QP: I %d, P %d) \n", params->qp0, params->qpN);
-
-    else fprintf(stdout, " I-P-P-SP-P (QP: I %d, P %d, SP (%d, %d)) \n",  params->qp0, params->qpN, params->qpsp, params->qpsp_pred);
-
-    // report on entropy coding  method
-    if (params->symbol_mode == CAVLC)
-      fprintf(stdout," Entropy coding method             : CAVLC\n");
-    else
-      fprintf(stdout," Entropy coding method             : CABAC\n");
-
-    fprintf(stdout,  " Profile/Level IDC                 : (%d,%d)\n", params->ProfileIDC, params->LevelIDC);
-
-    if (params->SearchMode == UM_HEX)
-      fprintf(stdout,  " Motion Estimation Scheme          : HEX\n");
-    else if (params->SearchMode == UM_HEX_SIMPLE)
-      fprintf(stdout,  " Motion Estimation Scheme          : SHEX\n");
-    else if (params->SearchMode == EPZS)
-    {
-      fprintf(stdout,  " Motion Estimation Scheme          : EPZS\n");
-      EPZSOutputStats(stdout, 0);
-    }
-    else if (params->SearchMode == FAST_FULL_SEARCH)
-      fprintf(stdout,  " Motion Estimation Scheme          : Fast Full Search\n");
-    else
-      fprintf(stdout,  " Motion Estimation Scheme          : Full Search\n");
-
-    if (params->full_search == 2)
-      fprintf(stdout," Search range restrictions         : none\n");
-    else if (params->full_search == 1)
-      fprintf(stdout," Search range restrictions         : older reference frames\n");
-    else
-      fprintf(stdout," Search range restrictions         : smaller blocks and older reference frames\n");
-
-    if (params->rdopt)
-      fprintf(stdout," RD-optimized mode decision        : used\n");
-    else
-      fprintf(stdout," RD-optimized mode decision        : not used\n");
-
-    switch(params->partition_mode)
-    {
-    case PAR_DP_1:
-      fprintf(stdout," Data Partitioning Mode            : 1 partition \n");
-      break;
-    case PAR_DP_3:
-      fprintf(stdout," Data Partitioning Mode            : 3 partitions \n");
-      break;
-    default:
-      fprintf(stdout," Data Partitioning Mode            : not supported\n");
-      break;
-    }
-
-    switch(params->of_mode)
-    {
-    case PAR_OF_ANNEXB:
-      fprintf(stdout," Output File Format                : H.264/AVC Annex B Byte Stream Format \n");
-      break;
-    case PAR_OF_RTP:
-      fprintf(stdout," Output File Format                : RTP Packet File Format \n");
-      break;
-    default:
-      fprintf(stdout," Output File Format                : not supported\n");
-      break;
-    }
-  }
-
-
-  switch (params->Verbose)
-  {
-  case 0:
-  default:
-    printf("-------------------------------------------------------------------------------\n");
-    printf("\nEncoding. Please Wait.\n\n");
-    break;    
-  case 1:
-    printf("-------------------------------------------------------------------------------\n");
-    printf("  Frame  Bit/pic    QP   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld Ref  \n");
-    printf("-------------------------------------------------------------------------------\n");
-    break;
-  case 2:
-    printf("------------------------------------------------------------------------------------------------\n");
-    printf("  Frame  Bit/pic WP QP QL   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
-    printf("------------------------------------------------------------------------------------------------\n");
-    break;
-  }
-}
 
 /*!
  ************************************************************************
@@ -2034,46 +1017,41 @@ int init_orig_buffers(void)
   int memory_size = 0;
   int nplane;
 
-  // allocate memory for reference frame buffers: imgY_org_frm, imgUV_org_frm
+  // allocate memory for reference frame buffers: img_org_frm
   if( IS_INDEPENDENT(params) )
   {
     for( nplane=0; nplane<MAX_PLANE; nplane++ )
     {
-      memory_size += get_mem2Dpel(&imgY_org_frm_JV[nplane], img->height, img->width);
+      memory_size += get_mem2Dpel(&img_org_frm[nplane], img->height, img->width);
     }
   }
   else
   {
-    memory_size += get_mem2Dpel(&imgY_org_frm, img->height, img->width);
+    memory_size += get_mem2Dpel(&img_org_frm[0], img->height, img->width);
+    if (img->yuv_format != YUV400)
+    {
+      int i, j, k;
+      memory_size += get_mem2Dpel(&img_org_frm[1], img->height_cr, img->width_cr);
+      memory_size += get_mem2Dpel(&img_org_frm[2], img->height_cr, img->width_cr);
+      for (k = 1; k < 3; k++)
+        for (j = 0; j < img->height_cr; j++)
+          for (i = 0; i < img->width_cr; i++)
+            img_org_frm[k][j][i] = 128;
+    }
   }
-
-  if (img->yuv_format != YUV400)
-  {
-    int i, j, k;
-    memory_size += get_mem3Dpel(&imgUV_org_frm, 2, img->height_cr, img->width_cr);
-    for (k = 0; k < 2; k++)
-      for (j = 0; j < img->height_cr; j++)
-        for (i = 0; i < img->width_cr; i++)
-          imgUV_org_frm[k][j][i] = 128;
-  }
-
 
   if (!active_sps->frame_mbs_only_flag)
   {
-    // allocate memory for reference frame buffers: imgY_org, imgUV_org
-    init_top_bot_planes(imgY_org_frm, img->height, img->width, &imgY_org_top, &imgY_org_bot);
+    // allocate memory for field reference frame buffers
+    init_top_bot_planes(img_org_frm[0], img->height, img->width, &img_org_top[0], &img_org_bot[0]);
 
     if (img->yuv_format != YUV400)
     {
-      if ((imgUV_org_top = (imgpel***)calloc(2, sizeof(imgpel**))) == NULL)
-        no_mem_exit("init_global_buffers: imgUV_org_top");
-      if ((imgUV_org_bot = (imgpel***)calloc(2, sizeof(imgpel**))) == NULL)
-        no_mem_exit("init_global_buffers: imgUV_org_bot");
 
       memory_size += 4*(sizeof(imgpel**));
 
-      memory_size += init_top_bot_planes(imgUV_org_frm[0], img->height_cr, img->width_cr, &(imgUV_org_top[0]), &(imgUV_org_bot[0]));
-      memory_size += init_top_bot_planes(imgUV_org_frm[1], img->height_cr, img->width_cr, &(imgUV_org_top[1]), &(imgUV_org_bot[1]));
+      memory_size += init_top_bot_planes(img_org_frm[1], img->height_cr, img->width_cr, &(img_org_top[1]), &(img_org_bot[1]));
+      memory_size += init_top_bot_planes(img_org_frm[2], img->height_cr, img->width_cr, &(img_org_top[2]), &(img_org_bot[2]));
     }
   }
   return memory_size;
@@ -2175,18 +1153,10 @@ int init_global_buffers(void)
 
   if (params->rdopt == 3)
   {
-    memory_size += get_mem2Dint(&decs->resY, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    if ((decs->decref = (imgpel****) calloc(params->NoOfDecoders, sizeof(imgpel***))) == NULL)
-      no_mem_exit("init_global_buffers: decref");
-    for (j = 0; j < params->NoOfDecoders; j++)
-    {
-      memory_size += get_mem3Dpel(&decs->decref[j], img->max_num_references+1, img->height, img->width);
-    }
-    memory_size += get_mem2Dpel(&decs->RefBlock, BLOCK_SIZE, BLOCK_SIZE);
-    memory_size += get_mem3Dpel(&decs->decY, params->NoOfDecoders, img->height, img->width);
-    memory_size += get_mem3Dpel(&decs->decY_best, params->NoOfDecoders, img->height, img->width);
-    memory_size += get_mem2D(&decs->status_map,  img->FrameHeightInMbs, img->PicWidthInMbs);
-    memory_size += get_mem2D(&decs->dec_mb_mode, img->FrameHeightInMbs, img->PicWidthInMbs);
+    decs->dec_mbY = NULL;
+    decs->dec_mbY8x8 = NULL;
+    memory_size += get_mem3Dpel(&decs->dec_mbY, params->NoOfDecoders, 16, 16);
+    memory_size += get_mem3Dpel(&decs->dec_mbY8x8, params->NoOfDecoders, 16, 16);
   }
   if (params->RestrictRef)
   {
@@ -2217,7 +1187,7 @@ int init_global_buffers(void)
       memory_size += smpUMHEX_get_mem();
     }
     else if (params->SearchMode == EPZS)
-      memory_size += EPZSInit();
+      memory_size += EPZSInit(params, img);
   }
 
   if (params->RCEnable)
@@ -2245,6 +1215,25 @@ int init_global_buffers(void)
   img_cr_padded_size_x2   = (img_cr_padded_size_x << 1);
   img_cr_padded_size_x4   = (img_cr_padded_size_x << 2);
   img_cr_padded_size_x_m8 = (img_cr_padded_size_x - 8);
+
+  // RGB images for distortion calculation
+  // Recommended to do this allocation (and de-allocation) in 
+  // the appropriate file instead of here.
+  if(params->DistortionYUVtoRGB)
+  {
+    for( j = 0; j < 3; j++ )
+    {
+      memory_size += get_mem2Dpel (&imgRGB_src.data[j], img->height, img->width);
+      memory_size += get_mem2Dpel (&imgRGB_ref.data[j], img->height, img->width);
+    }
+  }
+
+  pWPX = NULL;
+  if ( params->WPMCPrecision )
+  {
+    wpxInitWPXObject();
+  }
+
   return memory_size;
 }
 
@@ -2262,28 +1251,27 @@ void free_orig_planes(void)
     int nplane;
     for( nplane=0; nplane<MAX_PLANE; nplane++ )
     {
-      free_mem2Dpel(imgY_org_frm_JV[nplane]);      // free ref frame buffers
+      free_mem2Dpel(img_org_frm[nplane]);      // free ref frame buffers
     }
   }
   else
   {
-    free_mem2Dpel(imgY_org_frm);      // free ref frame buffers
+    free_mem2Dpel(img_org_frm[0]);      // free ref frame buffers
+    if (img->yuv_format != YUV400)
+    {
+      free_mem2Dpel(img_org_frm[1]);
+      free_mem2Dpel(img_org_frm[2]);
+    }
   }
-
-  if (img->yuv_format != YUV400)
-    free_mem3Dpel(imgUV_org_frm);
-
 
   if (!active_sps->frame_mbs_only_flag)
   {
-    free_top_bot_planes(imgY_org_top, imgY_org_bot);
+    free_top_bot_planes(img_org_top[0], img_org_bot[0]);
 
     if (img->yuv_format != YUV400)
     {
-      free_top_bot_planes(imgUV_org_top[0], imgUV_org_bot[0]);
-      free_top_bot_planes(imgUV_org_top[1], imgUV_org_bot[1]);
-      free (imgUV_org_top);
-      free (imgUV_org_bot);
+      free_top_bot_planes(img_org_top[1], img_org_bot[1]);
+      free_top_bot_planes(img_org_top[2], img_org_bot[2]);
     }
   }
 }
@@ -2353,6 +1341,11 @@ void free_global_buffers(void)
   free_QMatrix();
   free_QOffsets();
 
+  if ( params->WPMCPrecision )
+  {
+    wpxFreeWPXObject();
+  }
+
   if (params->WeightedPrediction || params->WeightedBiprediction || params->GenerateMultiplePPS)
   {
     free_mem3Dint(wp_weight );
@@ -2376,7 +1369,8 @@ void free_global_buffers(void)
   // free intra pred mode buffer for blocks
   free_mem2D((byte**)img->ipredmode);
   free_mem2D((byte**)img->ipredmode8x8);
-  
+  free(img->b8x8info);
+
   if( IS_INDEPENDENT(params) )
   {
     for( i=0; i<MAX_PLANE; i++ ){
@@ -2404,37 +1398,16 @@ void free_global_buffers(void)
 
   if (params->rdopt == 3)
   {
-    free(decs->resY[0]);
-    free(decs->resY);
-
-    free(decs->RefBlock[0]);
-    free(decs->RefBlock);
-
-    for (j=0; j < params->NoOfDecoders; j++)
+    if (decs->dec_mbY)
     {
-      free(decs->decY[j][0]);
-      free(decs->decY[j]);
-
-      free(decs->decY_best[j][0]);
-      free(decs->decY_best[j]);
-
-      for (i=0; i < img->max_num_references+1; i++)
-      {
-        free(decs->decref[j][i][0]);
-        free(decs->decref[j][i]);
-      }
-      free(decs->decref[j]);
+       free_mem3Dpel(decs->dec_mbY);
     }
-    free(decs->decY);
-    free(decs->decY_best);
-    free(decs->decref);
-
-    free(decs->status_map[0]);
-    free(decs->status_map);
-
-    free(decs->dec_mb_mode[0]);
-    free(decs->dec_mb_mode);
+    if (decs->dec_mbY8x8)
+    {	
+       free_mem3Dpel(decs->dec_mbY8x8);
+    }
   }
+
   if (params->RestrictRef)
   {
     free(pixel_map[0]);
@@ -2454,13 +1427,14 @@ void free_global_buffers(void)
 
   free_mem3Dint(img->nz_coeff);
 
-  free_mem2Ddb_offset (img->lambda_md, img->bitdepth_luma_qp_scale);
-  free_mem3Ddb_offset (img->lambda_me, 10, 52 + img->bitdepth_luma_qp_scale, img->bitdepth_luma_qp_scale);
-  free_mem3Dint_offset(img->lambda_mf, 10, 52 + img->bitdepth_luma_qp_scale, img->bitdepth_luma_qp_scale);
+  free_mem2Dolm     (img->lambda, img->bitdepth_luma_qp_scale);
+  free_mem2Dodouble (img->lambda_md, img->bitdepth_luma_qp_scale);
+  free_mem3Dodouble (img->lambda_me, 10, 52 + img->bitdepth_luma_qp_scale, img->bitdepth_luma_qp_scale);
+  free_mem3Doint    (img->lambda_mf, 10, 52 + img->bitdepth_luma_qp_scale, img->bitdepth_luma_qp_scale);
 
   if (params->CtxAdptLagrangeMult == 1)
   {
-    free_mem2Ddb_offset(img->lambda_mf_factor, img->bitdepth_luma_qp_scale);
+    free_mem2Dodouble(img->lambda_mf_factor, img->bitdepth_luma_qp_scale);
   }
 
   if (!params->IntraProfile)
@@ -2475,7 +1449,7 @@ void free_global_buffers(void)
     }
     else if (params->SearchMode == EPZS)
     {
-      EPZSDelete();
+      EPZSDelete(params);
     }
   }
 
@@ -2489,6 +1463,17 @@ void free_global_buffers(void)
     free_mem2Dpel(imgUV_tmp[0]);
     free_mem2Dpel(imgUV_tmp[1]);
   }
+
+  // Again process should be moved into cconv_yuv2rgb.c file for cleanliness
+  // These should not be globals but instead only be visible through that code.
+  if(params->DistortionYUVtoRGB)
+  {
+    for( i = 0; i < 3; i++ )
+    {
+      free_mem2Dpel(imgRGB_src.data[i]);
+      free_mem2Dpel(imgRGB_ref.data[i]);
+    }
+  }  
 }
 
 /*!
@@ -2512,6 +1497,27 @@ int get_mem_mv (short ******* mv)
 /*!
  ************************************************************************
  * \brief
+ *    Allocate memory for bipredictive mv 
+ * \par Input:
+ *    Image Parameters ImageParameters *img                             \n
+ *    int****** mv
+ * \return memory size in bytes
+ ************************************************************************
+ */
+int get_mem_bipred_mv (short******** bipred_mv) 
+{
+  if(((*bipred_mv) = (short*******)calloc(2, sizeof(short******))) == NULL)
+    no_mem_exit("get_mem_bipred_mv: bipred_mv");
+  
+  get_mem6Dshort(*bipred_mv, 2 * 2, img->max_num_references, 9, 4, 4, 2);
+  (*bipred_mv)[1] =  (*bipred_mv)[0] + 2;
+  
+  return 2 * 2 * img->max_num_references * 9 * 4 * 4 * 2 * sizeof(short);
+}
+
+/*!
+ ************************************************************************
+ * \brief
  *    Free memory from mv
  * \par Input:
  *    int****** mv
@@ -2522,6 +1528,27 @@ void free_mem_mv (short****** mv)
   free_mem6Dshort(mv);
 }
 
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Free memory from mv
+ * \par Input:
+ *    int****** mv
+ ************************************************************************
+ */
+void free_mem_bipred_mv (short******* bipred_mv) 
+{
+  if (bipred_mv)
+  {
+    free_mem6Dshort(*bipred_mv);
+    free (bipred_mv);
+  }
+  else
+  {
+    error ("free_mem_bipred_mv: trying to free unused memory",100);
+  }
+}
 
 /*!
  ************************************************************************
@@ -2626,7 +1653,7 @@ int decide_fld_frame(float snr_frame_Y, float snr_field_Y, int bit_field, int bi
  *    Set the image type for I,P and SP pictures (not B!)
  ************************************************************************
  */
-void SetImgType(void)
+static void SetImgType(void)
 {
   int intra_refresh = (params->intra_period == 0) ? (IMG_NUMBER == 0) : (( ( img->frm_number - img->lastIntraNumber) % params->intra_period ) == 0);
   int idr_refresh;

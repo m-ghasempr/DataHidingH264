@@ -41,7 +41,7 @@ int assignSE2partition_DP[SE_MAX_ELEMENTS] =
 static int ref_pic_list_reordering(Bitstream *bitstream);
 static int dec_ref_pic_marking    (Bitstream *bitstream);
 static int pred_weight_table      (Bitstream *bitstream);
-
+static int get_picture_type(void);
 /*!
  ********************************************************************************************
  * \brief
@@ -67,7 +67,7 @@ int SliceHeader(void)
   else
     len  = ue_v("SH: first_mb_in_slice", img->current_mb_nr,   bitstream);
 
-  len += ue_v("SH: slice_type",        get_picture_type (),   bitstream);
+  len += ue_v("SH: slice_type", get_picture_type (),   bitstream);
 
   len += ue_v("SH: pic_parameter_set_id" , active_pps->pic_parameter_set_id ,bitstream);
 
@@ -198,14 +198,13 @@ int SliceHeader(void)
     if (img->DFDisableIdc!=1)
     {
       len += se_v ("SH: slice_alpha_c0_offset_div2", img->DFAlphaC0Offset / 2, bitstream);
-
-      len += se_v ("SH: slice_beta_offset_div2", img->DFBetaOffset / 2, bitstream);
+      len += se_v ("SH: slice_beta_offset_div2    ", img->DFBetaOffset / 2, bitstream);
     }
   }
 
 
-  if ( active_pps->num_slice_groups_minus1>0 &&
-    active_pps->slice_group_map_type>=3 && active_pps->slice_group_map_type<=5)
+  if ( active_pps->num_slice_groups_minus1 > 0 &&
+    active_pps->slice_group_map_type >= 3 && active_pps->slice_group_map_type <= 5)
   {
     numtmp=img->PicHeightInMapUnits*img->PicWidthInMbs/(float)(active_pps->slice_group_change_rate_minus1+1)+1;
     num_bits_slice_group_change_cycle = (int)ceil(log(numtmp)/log(2));
@@ -477,7 +476,7 @@ static int pred_weight_table(Bitstream *bitstream)
  *    symbol value for picture type
  ************************************************************************
  */
-int get_picture_type()
+static int get_picture_type()
 {
   // set this value to zero for transmission without signaling
   // that the whole picture has the same slice type

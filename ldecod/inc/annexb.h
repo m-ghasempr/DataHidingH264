@@ -18,7 +18,7 @@ extern int IsFirstByteStreamNALU;
 extern int LastAccessUnitExists;
 extern int NALUCount;
 
-int  GetAnnexbNALU (NALU_t *nalu);
+int  GetAnnexbNALU (FILE *bitstream, NALU_t *nalu);
 void OpenBitstreamFile (char *fn);
 void CloseBitstreamFile(void);
 void CheckZeroByteNonVCL(NALU_t *nalu);

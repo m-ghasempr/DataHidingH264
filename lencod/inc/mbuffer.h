@@ -24,6 +24,18 @@ typedef struct picture_stats
 } PictureStats;
 
 
+//! definition of pic motion parameters
+typedef struct pic_motion_params
+{
+  int64 ***   ref_pic_id;    //!< reference picture identifier [list][subblock_y][subblock_x]
+  int64 ***   ref_id;        //!< reference picture identifier [list][subblock_y][subblock_x]
+  short ****  mv;            //!< motion vector       [list][subblock_x][subblock_y][component]
+  char  ***   ref_idx;       //!< reference picture   [list][subblock_y][subblock_x]
+  byte *      mb_field;      //!< field macroblock indicator
+  byte **     field_frame;   //!< indicates if co_located is field or frame.
+
+} PicMotionParams;
+
 //! definition a picture (field or frame)
 typedef struct storable_picture
 {
@@ -58,28 +70,26 @@ typedef struct storable_picture
 
   imgpel **   imgY;          //!< Y picture component
   imgpel **** imgY_sub;      //!< Y picture component upsampled (Quarter pel)
-  imgpel *****imgUV_sub;     //!< UV picture component upsampled (Quarter/One-Eighth pel)
   imgpel ***  imgUV;         //!< U and V picture components
+  imgpel *****imgUV_sub;     //!< UV picture component upsampled (Quarter/One-Eighth pel)
+
+  //Multiple Decoder Buffers (used if rdopt==3)
+  imgpel ***  dec_imgY;       //!< Decoded Y component in multiple hypothetical decoders
+  imgpel **** dec_imgUV;      //!< Decoded U and V components in multiple hypothetical decoders
+  imgpel ***  p_dec_img[MAX_PLANE];      //!< pointer array for accessing decoded pictures in hypothetical decoders
+
+  byte   ***  mb_error_map;    //!< Map of macroblock errors in hypothetical decoders.
 
   imgpel **   p_img[MAX_PLANE];          //!< pointer array for accessing imgY/imgUV[]
   imgpel **** p_img_sub[MAX_PLANE];      //!< pointer array for storing top address of imgY_sub/imgUV_sub[]
   imgpel **   p_curr_img;                //!< current int-pel ref. picture area to be used for motion estimation
   imgpel **** p_curr_img_sub;            //!< current sub-pel ref. picture area to be used for motion estimation
 
-  byte *      mb_field;      //!< field macroblock indicator
+  PicMotionParams2 ***mv_info;    //!< Motion info
+  PicMotionParams  motion;    //!< Motion info
+  PicMotionParams JVmotion[MAX_PLANE];    //!< Motion info for 4:4:4 independent coding
 
-  char  ***   ref_idx;       //!< reference picture   [list][subblock_y][subblock_x]
-
-  int64 ***   ref_pic_id;    //!< reference picture identifier [list][subblock_y][subblock_x]
-                             //   (not  simply index)
-
-  int64 ***   ref_id;        //!< reference picture identifier [list][subblock_y][subblock_x]
-                             //   (not  simply index)
-
-  short ****  mv;            //!< motion vector       [list][subblock_x][subblock_y][component]
-
-  byte **     moving_block;
-  byte **     field_frame;         //!< indicates if co_located is field or frame.
+  int colour_plane_id;                     //!< colour_plane_id to be used for 4:4:4 independent mode encoding
 
   struct storable_picture *top_field;     // for mb aff, if frame for referencing the top field
   struct storable_picture *bottom_field;  // for mb aff, if frame for referencing the bottom field
@@ -93,46 +103,30 @@ typedef struct storable_picture
   int         frame_cropping_rect_top_offset;
   int         frame_cropping_rect_bottom_offset;
 
-  char  ***   ref_idx_JV[MAX_PLANE];       //!< ref_idx to be used for 4:4:4 independent mode encoding
-  int64 ***   ref_pic_id_JV[MAX_PLANE];    //!< ref_pic_id to be used for 4:4:4 independent mode encoding
-  int64 ***   ref_id_JV[MAX_PLANE];        //!< ref_id to be used for 4:4:4 independent mode encoding
-  short ****  mv_JV[MAX_PLANE];            //!< mv to be used for 4:4:4 independent mode encoding
-  int colour_plane_id;                     //!< colour_plane_id to be used for 4:4:4 independent mode encoding
 
   PictureStats p_stats;
   
 } StorablePicture;
 
+//! definition of motion parameters
+typedef struct motion_params
+{
+  int64 ***   ref_pic_id;    //!< reference picture identifier [list][subblock_y][subblock_x]
+  short ****  mv;            //!< motion vector       [list][subblock_x][subblock_y][component]
+  char  ***   ref_idx;       //!< reference picture   [list][subblock_y][subblock_x]
+  byte **     moving_block;
+} MotionParams;
 
 //! definition a picture (field or frame)
 typedef struct colocated_params
 {
   int         mb_adaptive_frame_field_flag;
   int         size_x, size_y;
-
-  int64       ref_pic_num[6][MAX_LIST_SIZE];
-
-  char  ***   ref_idx;       //!< reference picture   [list][subblock_y][subblock_x]
-  int64 ***   ref_pic_id;    //!< reference picture identifier [list][subblock_y][subblock_x]
-  short ****  mv;            //!< motion vector       [list][subblock_x][subblock_y][component]
-  byte **     moving_block;
-
-  // Top field params
-  int64       top_ref_pic_num[6][MAX_LIST_SIZE];
-  char  ***   top_ref_idx;       //!< reference picture   [list][subblock_y][subblock_x]
-  int64 ***   top_ref_pic_id;    //!< reference picture identifier [list][subblock_y][subblock_x]
-  short ****  top_mv;            //!< motion vector       [list][subblock_x][subblock_y][component]
-  byte **     top_moving_block;
-
-  // Bottom field params
-  int64       bottom_ref_pic_num[6][MAX_LIST_SIZE];
-  char  ***   bottom_ref_idx;       //!< reference picture   [list][subblock_y][subblock_x]
-  int64 ***   bottom_ref_pic_id;    //!< reference picture identifier [list][subblock_y][subblock_x]
-  short ****  bottom_mv;            //!< motion vector       [list][subblock_x][subblock_y][component]
-  byte **     bottom_moving_block;
-
   byte        is_long_term;
-  byte **     field_frame;         //!< indicates if co_located is field or frame.
+
+  MotionParams frame;
+  MotionParams top;
+  MotionParams bottom;
 
 } ColocatedParams;
 

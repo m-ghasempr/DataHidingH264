@@ -285,12 +285,12 @@ void GetStrengthNormal(byte Strength[MB_BLOCK_SIZE], ImageParameters *img, int M
 
     if (!ANY_INTRA)
     {
-      list0_refPicIdArr = p->ref_pic_id[LIST_0];
-      list1_refPicIdArr = p->ref_pic_id[LIST_1];
-      list0_mv = p->mv[LIST_0];
-      list1_mv = p->mv[LIST_1];
-      list0_refIdxArr = p->ref_idx[LIST_0];
-      list1_refIdxArr = p->ref_idx[LIST_1];
+      list0_refPicIdArr = p->motion.ref_pic_id[LIST_0];
+      list1_refPicIdArr = p->motion.ref_pic_id[LIST_1];
+      list0_mv = p->motion.mv[LIST_0];
+      list1_mv = p->motion.mv[LIST_1];
+      list0_refIdxArr = p->motion.ref_idx[LIST_0];
+      list1_refIdxArr = p->motion.ref_idx[LIST_1];
 
       get_mb_block_pos (MbQAddr, &mb_x, &mb_y);
       mb_x <<= 2;
@@ -420,12 +420,12 @@ void GetStrengthMBAff(byte Strength[16], ImageParameters *img, int MbQAddr, int 
   int dir_m1 = (1 - dir);
 
   MbQ = &(img->mb_data[MbQAddr]);
-  list0_mv = p->mv[LIST_0];
-  list1_mv = p->mv[LIST_1];
-  list0_refIdxArr = p->ref_idx[LIST_0];
-  list1_refIdxArr = p->ref_idx[LIST_1];
-  list0_refPicIdArr = p->ref_pic_id[LIST_0];
-  list1_refPicIdArr = p->ref_pic_id[LIST_1];
+  list0_mv = p->motion.mv[LIST_0];
+  list1_mv = p->motion.mv[LIST_1];
+  list0_refIdxArr = p->motion.ref_idx[LIST_0];
+  list1_refIdxArr = p->motion.ref_idx[LIST_1];
+  list0_refPicIdArr = p->motion.ref_pic_id[LIST_0];
+  list1_refPicIdArr = p->motion.ref_pic_id[LIST_1];
 
   for( idx=0 ; idx<16 ; idx++ )
   {
@@ -821,7 +821,7 @@ void EdgeLoopChromaNormal(imgpel** Img, byte Strength[16],ImageParameters *img, 
   static int      QP;
   
   int      bitdepth_scale = img->bitdepth_scale[IS_CHROMA];
-  int      max_imgpel_value_uv = img->max_imgpel_value_uv;
+  int      max_imgpel_value = img->max_imgpel_value_comp[uv + 1];
 
   int xQ = dir ? 0 : edge - 1;
   int yQ = dir ? (edge < 16 ? edge - 1: 0) : 0;
@@ -893,8 +893,8 @@ void EdgeLoopChromaNormal(imgpel** Img, byte Strength[16],ImageParameters *img, 
             tc0  = ClipTab[ Strng ] * bitdepth_scale + 1;
             dif = iClip3( -tc0, tc0, ( ((R0 - L0) << 2) + (L1 - R1) + 4) >> 3 );
 
-            *SrcPtrP = (imgpel) iClip1 ( max_imgpel_value_uv, L0 + dif) ;
-            *SrcPtrQ = (imgpel) iClip1 ( max_imgpel_value_uv, R0 - dif) ;
+            *SrcPtrP = (imgpel) iClip1 ( max_imgpel_value, L0 + dif) ;
+            *SrcPtrQ = (imgpel) iClip1 ( max_imgpel_value, R0 - dif) ;
           }
         }
       }
@@ -926,6 +926,7 @@ void EdgeLoopChromaMBAff(imgpel** Img, byte Strength[16],ImageParameters *img, i
   PixelPos pixP, pixQ;
   int      dir_m1 = 1 - dir;
   int      bitdepth_scale = img->bitdepth_scale[IS_CHROMA];
+  int      max_imgpel_value = img->max_imgpel_value_comp[uv + 1];
 
   MbQ = &(img->mb_data[MbQAddr]);
   for( pel = 0 ; pel < PelNum ; pel++ )
@@ -977,8 +978,8 @@ void EdgeLoopChromaMBAff(imgpel** Img, byte Strength[16],ImageParameters *img, i
               tc0  = (C0 + 1);
               dif = iClip3( -tc0, tc0, ( ((R0 - L0) << 2) + (L1 - R1) + 4) >> 3 );
 
-              SrcPtrP[0] = (imgpel) iClip1 ( img->max_imgpel_value_uv, L0 + dif );
-              SrcPtrQ[0] = (imgpel) iClip1 ( img->max_imgpel_value_uv, R0 - dif );
+              SrcPtrP[0] = (imgpel) iClip1 ( max_imgpel_value, L0 + dif );
+              SrcPtrQ[0] = (imgpel) iClip1 ( max_imgpel_value, R0 - dif );
             }
           }
         }

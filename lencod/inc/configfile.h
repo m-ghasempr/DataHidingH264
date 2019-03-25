@@ -71,7 +71,7 @@ Mapping Map[] = {
     {"ResendPPS",                &configinput.ResendPPS,                    0,   0.0,                       1,  0.0,              1.0              },
     {"SourceWidth",              &configinput.source.width,                 0,   176.0,                     2, 16.0,              0.0              },
     {"SourceHeight",             &configinput.source.height,                0,   144.0,                     2, 16.0,              0.0              },
-    {"SourceResize",             &configinput.src_resize,                   0,     0.0,                     1,  0.0,              1.0              },
+    {"SourceResize",             &configinput.src_resize,                   0,   0.0,                       1,  0.0,              1.0              },
     {"OutputWidth",              &configinput.output.width,                 0,   176.0,                     2, 16.0,              0.0              },
     {"OutputHeight",             &configinput.output.height,                0,   144.0,                     2, 16.0,              0.0              },
     {"MbLineIntraUpdate",        &configinput.intra_upd,                    0,   0.0,                       1,  0.0,              1.0              },
@@ -128,7 +128,7 @@ Mapping Map[] = {
     {"Intra4x4DirDisable",       &configinput.Intra4x4DirDisable,           0,   0.0,                       1,  0.0,              1.0              },
     {"Intra16x16ParDisable",     &configinput.Intra16x16ParDisable,         0,   0.0,                       1,  0.0,              1.0              },
     {"Intra16x16PlaneDisable",   &configinput.Intra16x16PlaneDisable,       0,   0.0,                       1,  0.0,              1.0              },
-    {"EnableIPCM",               &configinput.EnableIPCM,                   0,   1.0,                       1,  0.0,              1.0              },
+    {"EnableIPCM",               &configinput.EnableIPCM,                   0,   0.0,                       1,  0.0,              1.0              },
     {"ChromaIntraDisable",       &configinput.ChromaIntraDisable,           0,   0.0,                       1,  0.0,              1.0              },
     // For future use
     {"FastMDEnable",             &configinput.FastMDEnable,                 0,   0.0,                       1,  0.0,              0.0              },           
@@ -149,6 +149,10 @@ Mapping Map[] = {
     {"ChangeQPStart",            &configinput.qp2start,                     0,   0.0,                       2,  0.0,              0.0              },
 #endif
     {"RDOptimization",           &configinput.rdopt,                        0,   0.0,                       1,  0.0,              3.0              },
+    {"DistortionSSIM",           &configinput.Distortion[SSIM],             0,   0.0,                       1,  0.0,              1.0              },
+    {"DistortionMS_SSIM",        &configinput.Distortion[MS_SSIM],          0,   0.0,                       1,  0.0,              1.0              },
+    {"SSIMOverlapSize",          &configinput.SSIMOverlapSize,              0,   1.0,                       2,  1.0,              1.0              },
+    {"DistortionYUVtoRGB",       &configinput.DistortionYUVtoRGB,           0,   0.0,                       1,  0.0,              1.0              },
     {"CtxAdptLagrangeMult",      &configinput.CtxAdptLagrangeMult,          0,   0.0,                       1,  0.0,              1.0              },
     {"FastCrIntraDecision",      &configinput.FastCrIntraDecision,          0,   0.0,                       1,  0.0,              1.0              },
     {"DisableThresholding",      &configinput.disthres,                     0,   0.0,                       1,  0.0,              1.0              },
@@ -157,6 +161,7 @@ Mapping Map[] = {
     {"LossRateB",                &configinput.LossRateB,                    0,   0.0,                       2,  0.0,              0.0              },
     {"LossRateC",                &configinput.LossRateC,                    0,   0.0,                       2,  0.0,              0.0              },
     {"NumberOfDecoders",         &configinput.NoOfDecoders,                 0,   0.0,                       2,  0.0,              0.0              },
+    {"ErrorConcealment",         &configinput.ErrorConcealment,             0,   0.0,                       2,  0.0,              0.0              },
     {"RestrictRefFrames",        &configinput.RestrictRef ,                 0,   0.0,                       1,  0.0,              1.0              },
 #ifdef _LEAKYBUCKET_
     {"NumberofLeakyBuckets",     &configinput.NumberLeakyBuckets,           0,   2.0,                       1,  2.0,              255.0            },
@@ -168,10 +173,13 @@ Mapping Map[] = {
 
     {"IntraBottom",              &configinput.IntraBottom,                  0,   0.0,                       1,  0.0,              1.0              },
 
-    {"NumberFramesInEnhancementLayerSubSequence", &configinput.NumFramesInELSubSeq, 0,   0.0,               2,  0.0,              0.0              },
+    {"NumFramesInELayerSubSeq",  &configinput.NumFramesInELSubSeq,          0,   0.0,                       2,  0.0,              0.0              },
     {"RandomIntraMBRefresh",     &configinput.RandomIntraMBRefresh,         0,   0.0,                       2,  0.0,              0.0              },
     {"WeightedPrediction",       &configinput.WeightedPrediction,           0,   0.0,                       1,  0.0,              1.0              },
     {"WeightedBiprediction",     &configinput.WeightedBiprediction,         0,   0.0,                       1,  0.0,              2.0              },
+    {"WPMethod",                 &configinput.WPMethod,                     0,   0.0,                       1,  0.0,              1.0              }, 
+    {"ChromaWeightSupport",      &configinput.ChromaWeightSupport,          0,   0.0,                       1,  0.0,              1.0              },    
+    {"EnhancedBWeightSupport",   &configinput.EnhancedBWeightSupport,       0,   0.0,                       1,  0.0,              1.0              },    
     {"UseWeightedReferenceME",   &configinput.UseWeightedReferenceME,       0,   0.0,                       1,  0.0,              1.0              },
     {"RDPictureDecision",        &configinput.RDPictureDecision,            0,   0.0,                       1,  0.0,              1.0              },
     {"RDPictureIntra",           &configinput.RDPictureIntra,               0,   0.0,                       1,  0.0,              1.0              },
@@ -189,6 +197,11 @@ Mapping Map[] = {
 
     //Bipredicting Motion Estimation parameters
     {"BiPredMotionEstimation",   &configinput.BiPredMotionEstimation,       0,   0.0,                       1,  0.0,              1.0              },
+    {"BiPredSearch16x16",        &configinput.BiPredSearch[0],              0,   1.0,                       1,  0.0,              1.0              },
+    {"BiPredSearch16x8",         &configinput.BiPredSearch[1],              0,   0.0,                       1,  0.0,              1.0              },
+    {"BiPredSearch8x16",         &configinput.BiPredSearch[2],              0,   0.0,                       1,  0.0,              1.0              },
+    {"BiPredSearch8x8",          &configinput.BiPredSearch[3],              0,   0.0,                       1,  0.0,              1.0              },
+    
     {"BiPredMERefinements",      &configinput.BiPredMERefinements,          0,   0.0,                       1,  0.0,              5.0              },
     {"BiPredMESearchRange",      &configinput.BiPredMESearchRange,          0,   8.0,                       2,  0.0,              0.0              },
     {"BiPredMESubPel",           &configinput.BiPredMESubPel,               0,   1.0,                       1,  0.0,              2.0              },
@@ -256,12 +269,13 @@ Mapping Map[] = {
     {"MEDistortionHPel",         &configinput.MEErrorMetric[H_PEL],         0,   0.0,                       1,  0.0,              3.0              },
     {"MEDistortionQPel",         &configinput.MEErrorMetric[Q_PEL],         0,   0.0,                       1,  0.0,              3.0              },
     {"MDDistortion",             &configinput.ModeDecisionMetric,           0,   2.0,                       1,  0.0,              2.0              },
+    {"SkipDeBlockNonRef",        &configinput.SkipDeBlockNonRef,            0,   0.0,                       1,  0.0,              1.0              },
 
     // Rate Control
     {"RateControlEnable",        &configinput.RCEnable,                     0,   0.0,                       1,  0.0,              1.0              },
     {"Bitrate",                  &configinput.bit_rate,                     0,   0.0,                       2,  0.0,              0.0              },
     {"InitialQP",                &configinput.SeinitialQP,                  0,   0.0,                       3,  (double) MIN_QP,  (double) MAX_QP  },
-    {"BasicUnit",                &configinput.basicunit,                    0,   1.0,                       2,  1.0,              0.0              },
+    {"BasicUnit",                &configinput.basicunit,                    0,   0.0,                       2,  0.0,              0.0              },
     {"ChannelType",              &configinput.channel_type,                 0,   0.0,                       1,  0.0,              1.0              },
     {"RCUpdateMode",             &configinput.RCUpdateMode,                 0,   0.0,                       1,  0.0,              4.0              },
     {"RCISliceBitRatio",         &configinput.RCISliceBitRatio,             2,   1.0,                       1,  0.0,              20.0             },
@@ -307,7 +321,7 @@ Mapping Map[] = {
 // New Input bit-depth entries
     {"SourceBitDepthLuma",       &configinput.source.bit_depth[0],          0,   8.0,                       1,  8.0,             14.0              },
     {"SourceBitDepthChroma",     &configinput.source.bit_depth[1],          0,   8.0,                       1,  8.0,             14.0              },
-    {"SourceBitDepthRescale",    &configinput.src_BitDepthRescale,          0,   1.0,                       1,  0.0,              1.0              },
+    {"SourceBitDepthRescale",    &configinput.src_BitDepthRescale,          0,   0.0,                       1,  0.0,              1.0              },
 // Old variables replaced from BitDepthLuma and BitDepthChroma. Considered only if SourceBitDepthRescale is 1.
     {"OutputBitDepthLuma",       &configinput.output.bit_depth[0],          0,   8.0,                       1,  8.0,             14.0              },
     {"OutputBitDepthChroma",     &configinput.output.bit_depth[1],          0,   8.0,                       1,  8.0,             14.0              },
@@ -323,6 +337,7 @@ Mapping Map[] = {
 
     // Explicit Lambda Parameters for RDO
     {"UseExplicitLambdaParams",  &configinput.UseExplicitLambdaParams,      0,   0.0,                       1,  0.0,              3.0              },
+    {"UpdateLambdaChromaME",     &configinput.UpdateLambdaChromaME,         0,   0.0,                       1,  0.0,              3.0              },    
     {"FixedLambdaPSlice",        &configinput.FixedLambda[0],               2,   0.1,                       2,  0.0,              0.0              },
     {"FixedLambdaBSlice",        &configinput.FixedLambda[1],               2,   0.1,                       2,  0.0,              0.0              },
     {"FixedLambdaISlice",        &configinput.FixedLambda[2],               2,   0.1,                       2,  0.0,              0.0              },
@@ -378,6 +393,7 @@ Mapping Map[] = {
     {"EPZSFixedPredictors",      &configinput.EPZSFixed,                    0,   2.0,                       1,  0.0,              2.0              },
     {"EPZSTemporal",             &configinput.EPZSTemporal,                 0,   1.0,                       1,  0.0,              1.0              },
     {"EPZSSpatialMem",           &configinput.EPZSSpatialMem,               0,   1.0,                       1,  0.0,              1.0              },
+    {"EPZSBlockType",            &configinput.EPZSBlockType,                0,   1.0,                       1,  0.0,              1.0              },
     {"EPZSMinThresScale",        &configinput.EPZSMinThresScale,            0,   0.0,                       0,  0.0,              0.0              },
     {"EPZSMaxThresScale",        &configinput.EPZSMaxThresScale,            0,   2.0,                       0,  0.0,              0.0              },
     {"EPZSMedThresScale",        &configinput.EPZSMedThresScale,            0,   1.0,                       0,  0.0,              0.0              },
@@ -394,7 +410,9 @@ Mapping Map[] = {
     {"WeightY",                  &configinput.WeightY,                      2,   1.00,                      1,  0.0,              4.0              },
     {"WeightCb",                 &configinput.WeightCb,                     2,   1.00,                      1,  0.0,              4.0              },
     {"WeightCr",                 &configinput.WeightCr,                     2,   1.00,                      1,  0.0,              4.0              },
-
+    {"WPMCPrecision",            &configinput.WPMCPrecision,                0,   0.0,                       1,  0.0,              2.0              },
+    {"WPMCPrecFullRef",          &configinput.WPMCPrecFullRef,              0,   0.0,                       1,  0.0,              1.0              },
+    {"WPMCPrecBSlice",           &configinput.WPMCPrecBSlice,               0,   1.0,                       1,  0.0,              2.0              },
 
     // Trellis based quantization
     {"UseRDOQuant",              &configinput.UseRDOQuant,                  0,   0.0,                       1,  0.0,              1.0              },

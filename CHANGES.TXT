@@ -1,3 +1,26 @@
+Changes in Version JM 14.1 (since JM 14.0)
+------------------------------------------
+- encoder: fixes in lossless coding (KHH)
+- encoder: Improved MC precision using Reordering & Weighed Prediction (AL, AT)
+- encoder: Weighted Prediction Extensions (AT, AL)
+- encoder: MS-SSIM distortion computation (PeP)
+- encoder: Rewrite of Error Resilient RDO (PeP, AT)
+- encoder: SSIM distortion computation (ZHL, WK, AT)
+- encoder: RGB color space distortion computation (WK, AT)
+- encoder: Distortion/Statistics functionality cleanups (AT, WK)
+- encoder: RDOQ and Quantization cleanups (LL, AT)
+- encoder: RC cleanups (AT)
+- encoder: Adaptive Rounding Support for Low Complexity RDO (EM)
+- encoder: Multipass RD coding bug fix for PicAFF (AL)
+- decoder: Motion vector limit checking (LlL)
+- encoder/decoder: Various code optimizations (AT)
+- encoder/decoder: Various cleanups /reorganizations (AT)
+- decoder: SP/SI slice decoder fixes (AT)
+- encoder: fix 4:0:0 encoder bit depth initialization (KS)
+- encoder: use SPS id parameter in GenerateSequenceParameterSet (KS)
+- encoder: fix number of bits calculation for pic aff with slices/DP (CS)
+
+
 Changes in Version JM 14.0 (since JM 13.2)
 ------------------------------------------
 - encoder: Bipredictive ME bug fixes (AT)
@@ -958,7 +981,7 @@ Changes for Version JM 4.0c to JM 4.0b
 New features
 * New Macroblock modes for SP-frames [JVT-B055] (RK)
   Note: some problems related to decoding of SI-frames
-  are reported and have to be fixed
+	are reported and have to be fixed
  
 
 
@@ -1262,6 +1285,7 @@ DK      Dimitris Kontopodis     dkonto@eikon.tum.de
 DM      Detlev Marpe            marpe@hhi.de
 DT      Dong Tian               tian@cs.tut.fi
 DW      Dong Wang               Dong.Wang@bristol.ac.uk
+EM      Ehsan Maani             emaan@dolby.com
 ES      Eric Setton             esetton@stanford.edu
 FB      Frank Bossen            bossen@docomolabs-usa.com
 GB      Gabi Blaetterman        blaetter@hhi.de
@@ -1287,10 +1311,12 @@ JX      Jian Feng Xu            fenax@video.mdc.tsinghua.edu.cn
 JXi     Jun Xin                 jxin@merl.com
 JZ      Jun Zhang               j_zhang1999@yahoo.com
 KL      Karl Lillevold          Karll@real.com
+KHH     Ki-Hun Han              khhan@dms.sejong.ac.kr
 KP      Krit Panusopone         KPanusopone@gi.com
 KSa     Kazushi Sato            kazushi@av.crl.sony.co.jp
 LK      Louis Kerofsky          lkerofsky@sharplabs.com
 LL      Limin Liu               lliu@dolby.com
+LlL     Loïc Le Loarer          loic_leloarer@sdesigns.eu
 LW      Limin Wang              liwang@gi.com
 LWi     Lowell Winger           lwinger@videolocus.com
 LP      Luca Pezzoni            luca.pezzoni@st.com
@@ -1303,6 +1329,7 @@ MT      Mario Trentini          mario_trentini@realmagic.fr
 MW      Mathias Wien            wien@ient.rwth-aachen.de
 MWa     Michael Walter          eiMichaelWalter@web.de
 OD      Olivier Deygas          olivier.deygas@st.com
+PeP     Peshala Pahalawatta     Peshala.Pahalawatta@dolby.com
 PK      Petr Kadlec             Kadlec@FTW.at
 PL      Peter List              Peter.List@t-systems.de
 PN      Pavel Novotny           pnovotny@lsil.com
@@ -1348,7 +1375,7 @@ VG      Valeri George           valeri.george@hhi.fraunhofer.de
 VV      Viktor Varsa            viktor.varsa@nokia.com
 WC      Woong Il Choi           creata@ece.skku.ac.kr
 WF      Wenfang Fu              fwf@video.mdc.tsinghua.edu.cn
-WK      Woo-Shik Kim            wskim@sait.samsung.co.kr
+WK      Woo-Shik Kim            wooshik.kim@usc.edu
 WZ      Weimin Zeng             wzeng@wischip.com
 XI      Xin                     xin@apple.com
 XS      Xiaoyan Sun             sunxiaoyan@msrchina.research.microsoft.com   
@@ -1356,13 +1383,14 @@ XX      Xiaozhong Xu            xxz@video.mdc.tsinghua.edu.cn
 XY      Xiaoquan Yi             xyi@scu.edu
 YC      Yi-Jen Chiu             yi-jen.chiu@intel.com
 YD      Yunyang Dai             ydai@dolby.com
-YDh     Yves Dhondt              yves.dhondt@ugent.be
+YDh     Yves Dhondt             yves.dhondt@ugent.be
 YH      Yu-Wen Huang            YW_Huang@mtk.com.tw
 YK      Yoshihiro Kikuchi       yoshihiro.kikuchi@toshiba.co.jp
 YL      Yann Lemaguet           yann.lemaguet@philips.com
 YW      Ye-Kui Wang             ye-kui.wang@nokia.com
 YX      Yanjun Xu               yxu@sarnoff.com
 ZH      Zhou Heng               zhou_heng@yahoo.com
+ZHL     Zhen Li                 zhen.li@dolby.com
 ZL      Li Zhang                zhangli@jdl.ac.cn
 ZX      Z. Xue                  jon_xz@yahoo.com
 ZY      Zheng Yanzhao           yzzheng@singnet.com

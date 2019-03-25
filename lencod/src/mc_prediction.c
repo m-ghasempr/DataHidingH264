@@ -146,7 +146,8 @@ void LumaPrediction ( Macroblock* currMB,//!< Current Macroblock
                      int   l0_mode,     //!< list0 prediction mode (1-7, 0=DIRECT if l1_mode=0)
                      int   l1_mode,     //!< list1 prediction mode (1-7, 0=DIRECT if l0_mode=0)
                      short l0_ref_idx,  //!< reference frame for list0 prediction (-1: Intra4x4 pred. with l0_mode)
-                     short l1_ref_idx   //!< reference frame for list1 prediction 
+                     short l1_ref_idx,   //!< reference frame for list1 prediction 
+                     short bipred_me     //!< use bi prediction mv (0=no bipred, 1 = use set 1, 2 = use set 2)
                      )
 {
   int  i, j;
@@ -160,13 +161,13 @@ void LumaPrediction ( Macroblock* currMB,//!< Current Macroblock
   imgpel* l1pred    = l1_pred;  
   short****** mv_array = img->all_mv;
   short   *curr_mv = NULL;
-  imgpel (*curr_mpr)[16] = img->mpr[0];
+  imgpel (*mb_pred)[16] = img->mb_pred[0];
 
   int  apply_weights = ( (active_pps->weighted_pred_flag  && (img->type== P_SLICE || img->type == SP_SLICE)) ||
     (active_pps->weighted_bipred_idc && (img->type== B_SLICE)));
 
-  if (currMB->bi_pred_me && l0_ref_idx == 0 && l1_ref_idx == 0 && p_dir == 2 && l0_mode==1 && l1_mode==1)
-    mv_array = currMB->bi_pred_me == 1? img->bipred_mv1 : img->bipred_mv2;
+  if (bipred_me && l0_ref_idx == 0 && l1_ref_idx == 0 && p_dir == 2 && is_bipred_enabled(l0_mode) && is_bipred_enabled(l1_mode))
+    mv_array = img->bipred_mv[bipred_me - 1]; 
 
   switch (p_dir)
   {
@@ -199,7 +200,7 @@ void LumaPrediction ( Macroblock* currMB,//!< Current Macroblock
       int weight_denom = luma_log_weight_denom + 1;
       for   (j=block_y; j<block_y4; j++)
         for (i=block_x; i<block_x4; i++)  
-          curr_mpr[j][i] = iClip1( img->max_imgpel_value, 
+          mb_pred[j][i] = iClip1( img->max_imgpel_value, 
           ((wbp0 * *l0pred++ + wbp1 * *l1pred++ + wp_round) >> (weight_denom)) + offset); 
     }
     else if (p_dir==0)
@@ -208,7 +209,7 @@ void LumaPrediction ( Macroblock* currMB,//!< Current Macroblock
       int offset = wp_offset[0][l0_ref_idx][0];
       for   (j=block_y; j<block_y4; j++)
         for (i=block_x; i<block_x4; i++)
-          curr_mpr[j][i] = iClip1( img->max_imgpel_value, 
+          mb_pred[j][i] = iClip1( img->max_imgpel_value, 
           ((wp * *l0pred++  + wp_luma_round) >> luma_log_weight_denom) + offset);
     }
     else // (p_dir==1)
@@ -217,7 +218,7 @@ void LumaPrediction ( Macroblock* currMB,//!< Current Macroblock
       int offset = wp_offset[1][l1_ref_idx][0];
       for   (j=block_y; j<block_y4; j++)
         for (i=block_x; i<block_x4; i++)
-          curr_mpr[j][i] = iClip1( img->max_imgpel_value, 
+          mb_pred[j][i] = iClip1( img->max_imgpel_value, 
           ((wp * *l1pred++  + wp_luma_round) >> luma_log_weight_denom) + offset );
     }
   }
@@ -227,13 +228,13 @@ void LumaPrediction ( Macroblock* currMB,//!< Current Macroblock
     {
       for   (j=block_y; j<block_y4; j++)
         for (i=block_x; i<block_x4; i++)
-          curr_mpr[j][i] = (*l0pred++ + *l1pred++ + 1) >> 1;
+          mb_pred[j][i] = (*l0pred++ + *l1pred++ + 1) >> 1;
     }
     else if (p_dir==0)
     {
       for (j=block_y; j<block_y4; j++)
       {
-        memcpy(&(curr_mpr[j][block_x]), l0pred, block_size_x * sizeof(imgpel));
+        memcpy(&(mb_pred[j][block_x]), l0pred, block_size_x * sizeof(imgpel));
         l0pred += block_size_x;
       }
     }
@@ -241,7 +242,7 @@ void LumaPrediction ( Macroblock* currMB,//!< Current Macroblock
     {
       for (j=block_y; j<block_y4; j++)
       {
-        memcpy(&(curr_mpr[j][block_x]), l1pred, block_size_x * sizeof(imgpel));
+        memcpy(&(mb_pred[j][block_x]), l1pred, block_size_x * sizeof(imgpel));
         l1pred += block_size_x;
       }
     }
@@ -278,10 +279,10 @@ void LumaPredictionBi ( Macroblock* currMB, //!< Current Macroblock
 
   int  apply_weights = ( (active_pps->weighted_pred_flag && (img->type == P_SLICE || img->type == SP_SLICE)) ||
     (active_pps->weighted_bipred_idc && (img->type == B_SLICE)));  
-  short   ******mv_array = list ? img->bipred_mv1 : img->bipred_mv2;
+  short   ******mv_array = img->bipred_mv[list]; 
   short   *mv_arrayl0 = mv_array[LIST_0][l0_ref_idx][l0_mode][by][bx];
   short   *mv_arrayl1 = mv_array[LIST_1][l1_ref_idx][l1_mode][by][bx];
-  imgpel (*curr_mpr)[16] = img->mpr[0];
+  imgpel (*mb_pred)[16] = img->mb_pred[0];
 
   OneComponentLumaPrediction (l0_pred, pic_opix_x + mv_arrayl0[0], pic_opix_y + mv_arrayl0[1], block_size_x, block_size_y, listX[0+currMB->list_offset][l0_ref_idx]);
   OneComponentLumaPrediction (l1_pred, pic_opix_x + mv_arrayl1[0], pic_opix_y + mv_arrayl1[1], block_size_x, block_size_y, listX[1+currMB->list_offset][l1_ref_idx]);
@@ -296,14 +297,14 @@ void LumaPredictionBi ( Macroblock* currMB, //!< Current Macroblock
 
     for   (j=block_y; j<block_y4; j++)
       for (i=block_x; i<block_x4; i++)
-        curr_mpr[j][i] = iClip1( img->max_imgpel_value,
+        mb_pred[j][i] = iClip1( img->max_imgpel_value,
         ((wbp0 * *l0pred++ + wbp1 * *l1pred++ + wp_round) >> weight_denom) + offset);
   }
   else
   {
     for   (j=block_y; j<block_y4; j++)
       for (i=block_x; i<block_x4; i++)
-        curr_mpr[j][i] = (*l0pred++ + *l1pred++ + 1) >> 1;
+        mb_pred[j][i] = (*l0pred++ + *l1pred++ + 1) >> 1;
   }
 }
 
@@ -477,12 +478,12 @@ void IntraChromaPrediction4x4 (Macroblock* currMB, //! <-- Current Macroblock
                                int  block_y)       //! <-- relative vertical   block coordinate of 4x4 block
 {
   int j;
-  imgpel (*curr_mpr)[16]       = img->mpr[ uv ];
+  imgpel (*mb_pred)[16]       = img->mb_pred[ uv ];
   imgpel (*curr_mpr_16x16)[16] = img->mpr_16x16[uv][currMB->c_ipred_mode];
 
   //===== prediction =====
   for (j=block_y; j<block_y + BLOCK_SIZE; j++)
-    memcpy(&curr_mpr[j][block_x],&curr_mpr_16x16[j][block_x], BLOCK_SIZE * sizeof(imgpel));
+    memcpy(&mb_pred[j][block_x],&curr_mpr_16x16[j][block_x], BLOCK_SIZE * sizeof(imgpel));
 }
 
 /*!
@@ -501,7 +502,9 @@ void ChromaPrediction ( Macroblock* currMB, // <-- Current Macroblock
                        int   l0_mode,       // <-- list0  prediction mode (1-7, 0=DIRECT if l1_mode=0)
                        int   l1_mode,       // <-- list1 prediction mode (1-7, 0=DIRECT if l0_mode=0)
                        short l0_ref_idx,    // <-- reference frame for list0 prediction (if (<0) -> intra prediction)
-                       short l1_ref_idx)    // <-- reference frame for list1 prediction 
+                       short l1_ref_idx,    // <-- reference frame for list1 prediction 
+                       short bipred_me      // <-- use bi prediction mv (0=no bipred, 1 = use set 1, 2 = use set 2)
+                       )    
 {
   int  i, j;
   int  block_x4     = block_x + block_size_x;
@@ -515,13 +518,13 @@ void ChromaPrediction ( Macroblock* currMB, // <-- Current Macroblock
   short****** mv_array = img->all_mv;    
   int max_imgpel_value_uv = img->max_imgpel_value_comp[1];
   int uv_comp = uv + 1;
-  imgpel (*curr_mpr)[16] = img->mpr[ uv_comp];
+  imgpel (*mb_pred)[16] = img->mb_pred[ uv_comp];
 
   int  apply_weights = ( (active_pps->weighted_pred_flag && (img->type == P_SLICE || img->type == SP_SLICE)) ||
     (active_pps->weighted_bipred_idc && (img->type == B_SLICE)));
 
-  if (currMB->bi_pred_me && l0_ref_idx == 0 && l1_ref_idx == 0 && p_dir == 2 && l0_mode==1 && l1_mode==1)
-    mv_array = currMB->bi_pred_me == 1? img->bipred_mv1 : img->bipred_mv2;
+  if (bipred_me && l0_ref_idx == 0 && l1_ref_idx == 0 && p_dir == 2 && is_bipred_enabled(l0_mode)  && is_bipred_enabled(l1_mode))
+    mv_array = img->bipred_mv[bipred_me - 1]; 
 
   //===== INTRA PREDICTION =====
   if (p_dir==-1)
@@ -560,7 +563,7 @@ void ChromaPrediction ( Macroblock* currMB, // <-- Current Macroblock
 
       for   (j=block_y; j<block_y4; j++)
         for (i=block_x; i<block_x4; i++)
-          curr_mpr[j][i] =  iClip1( max_imgpel_value_uv,
+          mb_pred[j][i] =  iClip1( max_imgpel_value_uv,
           ((wbp0 * *l0pred++ + wbp1 * *l1pred++ + wp_round) >> (weight_denom)) + (offset) );
     }
     else if (p_dir==0)
@@ -569,7 +572,7 @@ void ChromaPrediction ( Macroblock* currMB, // <-- Current Macroblock
       int offset = wp_offset[0][l0_ref_idx][uv_comp];
       for   (j=block_y; j<block_y4; j++)
         for (i=block_x; i<block_x4; i++)
-          curr_mpr[j][i] = iClip1( max_imgpel_value_uv, (( wp * *l0pred++ + wp_chroma_round) >> chroma_log_weight_denom) +  offset);
+          mb_pred[j][i] = iClip1( max_imgpel_value_uv, (( wp * *l0pred++ + wp_chroma_round) >> chroma_log_weight_denom) +  offset);
     }
     else // (p_dir==1)
     {
@@ -578,7 +581,7 @@ void ChromaPrediction ( Macroblock* currMB, // <-- Current Macroblock
 
       for   (j=block_y; j<block_y4; j++)
         for (i=block_x; i<block_x4; i++)
-          curr_mpr[j][i] = iClip1( max_imgpel_value_uv, ((wp * *l1pred++ + wp_chroma_round) >> chroma_log_weight_denom) + offset);
+          mb_pred[j][i] = iClip1( max_imgpel_value_uv, ((wp * *l1pred++ + wp_chroma_round) >> chroma_log_weight_denom) + offset);
     }
   }
   else
@@ -587,13 +590,13 @@ void ChromaPrediction ( Macroblock* currMB, // <-- Current Macroblock
     {
       for   (j=block_y; j<block_y4; j++)
         for (i=block_x; i<block_x4; i++)
-          curr_mpr[j][i] = (*l0pred++ + *l1pred++ + 1) >> 1;
+          mb_pred[j][i] = (*l0pred++ + *l1pred++ + 1) >> 1;
     }
     else if (p_dir==0)
     {
       for (j=block_y; j<block_y4; j++)
       {
-        memcpy(&(curr_mpr[j][block_x]), l0pred, block_size_x * sizeof(imgpel));
+        memcpy(&(mb_pred[j][block_x]), l0pred, block_size_x * sizeof(imgpel));
         l0pred += block_size_x;
       }
     }
@@ -601,7 +604,7 @@ void ChromaPrediction ( Macroblock* currMB, // <-- Current Macroblock
     {
       for (j=block_y; j<block_y4; j++)
       {
-        memcpy(&(curr_mpr[j][block_x]), l1pred, block_size_x * sizeof(imgpel));
+        memcpy(&(mb_pred[j][block_x]), l1pred, block_size_x * sizeof(imgpel));
         l1pred += block_size_x;
       }
     }
@@ -624,7 +627,9 @@ void ChromaPrediction4x4 ( Macroblock* currMB, // <-- Current Macroblock
                            int   l0_mode,      // <-- list0  prediction mode (1-7, 0=DIRECT if l1_mode=0)
                            int   l1_mode,      // <-- list1 prediction mode (1-7, 0=DIRECT if l0_mode=0)
                            short l0_ref_idx,   // <-- reference frame for list0 prediction (if (<0) -> intra prediction)
-                           short l1_ref_idx)   // <-- reference frame for list1 prediction 
+                           short l1_ref_idx,   // <-- reference frame for list1 prediction 
+                           short bipred_me     // <-- use bi prediction mv (0=no bipred, 1 = use set 1, 2 = use set 2)
+                           )   
 {
   int  i, j;
   int  block_x4  = block_x + BLOCK_SIZE;
@@ -634,14 +639,14 @@ void ChromaPrediction4x4 ( Macroblock* currMB, // <-- Current Macroblock
   short****** mv_array = img->all_mv;
   int max_imgpel_value_uv = img->max_imgpel_value_comp[1];
   int uv_comp = uv + 1;
-  imgpel (*curr_mpr)[16] = img->mpr[uv_comp];
+  imgpel (*mb_pred)[16] = img->mb_pred[uv_comp];
   int     list_offset = currMB->list_offset;
 
   int  apply_weights = ( (active_pps->weighted_pred_flag && (img->type == P_SLICE || img->type == SP_SLICE)) ||
     (active_pps->weighted_bipred_idc && (img->type == B_SLICE)));
 
-  if (currMB->bi_pred_me && l0_ref_idx == 0 && l1_ref_idx == 0 && p_dir == 2 && l0_mode==1 && l1_mode==1)
-    mv_array = currMB->bi_pred_me == 1? img->bipred_mv1 : img->bipred_mv2 ;
+  if (bipred_me && l0_ref_idx == 0 && l1_ref_idx == 0 && p_dir == 2 && is_bipred_enabled(l0_mode)  && is_bipred_enabled(l1_mode) )
+    mv_array = img->bipred_mv[bipred_me - 1]; 
   //===== INTRA PREDICTION =====
   if (p_dir==-1)
   {
@@ -678,7 +683,7 @@ void ChromaPrediction4x4 ( Macroblock* currMB, // <-- Current Macroblock
 
       for (j=block_y; j<block_y4; j++)
         for (i=block_x; i<block_x4; i++)
-          curr_mpr[j][i] =  iClip1( max_imgpel_value_uv,
+          mb_pred[j][i] =  iClip1( max_imgpel_value_uv,
           ((wbp0 * *l0pred++ + wbp1 * *l1pred++ + wp_round) >> (weight_denom)) + (offset) );
     }
     else if (p_dir==0)
@@ -687,7 +692,7 @@ void ChromaPrediction4x4 ( Macroblock* currMB, // <-- Current Macroblock
       int offset = wp_offset[0][l0_ref_idx][uv_comp];
       for (j=block_y; j<block_y4; j++)
         for (i=block_x; i<block_x4; i++)
-          curr_mpr[j][i] = iClip1( max_imgpel_value_uv, (( wp * *l0pred++ + wp_chroma_round) >> chroma_log_weight_denom) +  offset);
+          mb_pred[j][i] = iClip1( max_imgpel_value_uv, (( wp * *l0pred++ + wp_chroma_round) >> chroma_log_weight_denom) +  offset);
     }
     else // (p_dir==1)
     {
@@ -696,7 +701,7 @@ void ChromaPrediction4x4 ( Macroblock* currMB, // <-- Current Macroblock
 
       for (j=block_y; j<block_y4; j++)
         for (i=block_x; i<block_x4; i++)
-          curr_mpr[j][i] = iClip1( max_imgpel_value_uv, ((wp * *l1pred++ + wp_chroma_round) >> chroma_log_weight_denom) + offset);
+          mb_pred[j][i] = iClip1( max_imgpel_value_uv, ((wp * *l1pred++ + wp_chroma_round) >> chroma_log_weight_denom) + offset);
     }
   }
   else
@@ -705,13 +710,13 @@ void ChromaPrediction4x4 ( Macroblock* currMB, // <-- Current Macroblock
     {
       for (j=block_y; j<block_y4; j++)
         for (i=block_x; i<block_x4; i++)
-          curr_mpr[j][i] = (*l0pred++ + *l1pred++ + 1) >> 1;
+          mb_pred[j][i] = (*l0pred++ + *l1pred++ + 1) >> 1;
     }
     else if (p_dir==0)
     {
       for (j=block_y; j<block_y4; j++)
       {
-        memcpy(&(curr_mpr[j][block_x]), l0pred, BLOCK_SIZE * sizeof(imgpel));
+        memcpy(&(mb_pred[j][block_x]), l0pred, BLOCK_SIZE * sizeof(imgpel));
         l0pred += BLOCK_SIZE;
       }
     }
@@ -719,7 +724,7 @@ void ChromaPrediction4x4 ( Macroblock* currMB, // <-- Current Macroblock
     {
       for (j=block_y; j<block_y4; j++)
       {
-        memcpy(&(curr_mpr[j][block_x]), l1pred, BLOCK_SIZE * sizeof(imgpel));
+        memcpy(&(mb_pred[j][block_x]), l1pred, BLOCK_SIZE * sizeof(imgpel));
         l1pred += BLOCK_SIZE;
       }
     }
@@ -940,6 +945,15 @@ void IntraChromaPrediction (Macroblock *currMB, int *mb_up, int *mb_left, int*mb
     {
       getNeighbour(currMB, 0 , i, img->mb_size[IS_CHROMA], &left[i]);
     }
+
+    if ( img->MbaffFrameFlag && img->field_mode )
+    {
+      for (i=0;i<cr_MB_y;i++)
+      {
+        left[i].pos_y = left[i].pos_y >> 1;
+      }
+    }
+
     for (mode=DC_PRED_8; mode<=PLANE_8; mode++)
     {
       if ((img->type != I_SLICE || !params->IntraDisableInterOnly) && params->ChromaIntraDisable == 1 && mode!=DC_PRED_8)
@@ -951,10 +965,10 @@ void IntraChromaPrediction (Macroblock *currMB, int *mb_up, int *mb_left, int*mb
         continue;
 
       cost = 0;
-      for (uv=0; uv<2; uv++)
+      for (uv = 1; uv < 3; uv++)
       {
-        image = imgUV_org[uv];
-        curr_mpr_16x16 = img->mpr_16x16[uv + 1];
+        image = pImgOrg[uv];
+        curr_mpr_16x16 = img->mpr_16x16[uv];
         for (block_y=0; block_y<cr_MB_y; block_y+=4)
           for (block_x = 0; block_x < cr_MB_x; block_x += 4)
           {

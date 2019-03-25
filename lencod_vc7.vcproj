@@ -13,7 +13,7 @@
 	<Configurations>
 		<Configuration
 			Name="Debug|Win32"
-			OutputDirectory=".\lencod/Debug_vc7"
+			OutputDirectory=".\..\bin"
 			IntermediateDirectory=".\lencod/Debug_vc7"
 			ConfigurationType="1"
 			UseOfMFC="0"
@@ -75,7 +75,7 @@
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory=".\lencod\Release_vc7"
+			OutputDirectory=".\..\bin"
 			IntermediateDirectory=".\lencod\Release_vc7"
 			ConfigurationType="1"
 			UseOfMFC="0"
@@ -158,6 +158,9 @@
 				RelativePath=".\lencod\src\cabac.c">
 			</File>
 			<File
+				RelativePath=".\lencod\src\cconv_yuv2rgb.c">
+			</File>
+			<File
 				RelativePath=".\lencod\src\configfile.c">
 			</File>
 			<File
@@ -167,7 +170,10 @@
 				RelativePath=".\lencod\src\context_ini.c">
 			</File>
 			<File
-				RelativePath=".\lencod\src\decoder.c">
+				RelativePath=".\lencod\src\errdo.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\errdo_mc_prediction.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\explicit_gop.c">
@@ -186,6 +192,18 @@
 			</File>
 			<File
 				RelativePath=".\lencod\src\img_chroma.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\img_dist_ms_ssim.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\img_dist_snr.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\img_dist_ssim.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\img_distortion.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\img_luma.c">
@@ -278,6 +296,9 @@
 				RelativePath=".\lencod\src\parsetcommon.c">
 			</File>
 			<File
+				RelativePath=".\lencod\src\q_around.c">
+			</File>
+			<File
 				RelativePath=".\lencod\src\q_matrix.c">
 			</File>
 			<File
@@ -308,6 +329,18 @@
 				RelativePath=".\lencod\src\quant8x8_trellis.c">
 			</File>
 			<File
+				RelativePath=".\lencod\src\quantChroma.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\quantChroma_around.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\quantChroma_normal.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\quantChroma_trellis.c">
+			</File>
+			<File
 				RelativePath=".\lencod\src\ratectl.c">
 			</File>
 			<File
@@ -330,6 +363,9 @@
 			</File>
 			<File
 				RelativePath=".\lencod\src\refbuf.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\report.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\rtp.c">
@@ -355,6 +391,12 @@
 			<File
 				RelativePath=".\lencod\src\weighted_prediction.c">
 			</File>
+			<File
+				RelativePath=".\lencod\src\wp_lms.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\wp_mcprec.c">
+			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"
@@ -370,6 +412,9 @@
 			</File>
 			<File
 				RelativePath=".\lencod\inc\cabac.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\cconv_yuv2rgb.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\configfile.h">
@@ -393,7 +438,19 @@
 				RelativePath=".\lencod\inc\elements.h">
 			</File>
 			<File
+				RelativePath=".\lencod\inc\enc_statistics.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\errdo.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\errdo_mc_prediction.h">
+			</File>
+			<File
 				RelativePath=".\lencod\inc\explicit_gop.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\filehandle.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\fmo.h">
@@ -415,6 +472,21 @@
 			</File>
 			<File
 				RelativePath=".\lencod\inc\img_chroma.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\img_dist_ms_ssim.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\img_dist_snr.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\img_dist_ssim.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\img_dist_wpsnr.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\img_distortion.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\img_luma.h">
@@ -483,6 +555,9 @@
 				RelativePath=".\lencod\inc\parsetcommon.h">
 			</File>
 			<File
+				RelativePath=".\lencod\inc\q_around.h">
+			</File>
+			<File
 				RelativePath=".\lencod\inc\q_matrix.h">
 			</File>
 			<File
@@ -493,6 +568,9 @@
 			</File>
 			<File
 				RelativePath=".\lencod\inc\quant8x8.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\quantChroma.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\ratectl.h">
@@ -516,10 +594,16 @@
 				RelativePath=".\lencod\inc\refbuf.h">
 			</File>
 			<File
+				RelativePath=".\lencod\inc\report.h">
+			</File>
+			<File
 				RelativePath=".\lencod\inc\rtp.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\sei.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\slice.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\symbol.h">
@@ -531,6 +615,9 @@
 				RelativePath=".\lencod\inc\transform8x8.h">
 			</File>
 			<File
+				RelativePath=".\lencod\inc\transform_wavelet.h">
+			</File>
+			<File
 				RelativePath=".\lencod\inc\vlc.h">
 			</File>
 			<File
@@ -538,6 +625,12 @@
 			</File>
 			<File
 				RelativePath=".\lencod\inc\wp.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\wp_lms.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\wp_mcprec.h">
 			</File>
 		</Filter>
 		<File

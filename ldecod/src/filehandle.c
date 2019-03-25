@@ -38,6 +38,17 @@ void error(char *text, int code)
 static int bitcounter = 0;
 
 /*!
+************************************************************************
+* \brief
+*    decrement trace bitcounter (used for special case in mb aff)
+************************************************************************
+*/
+void dectracebitcnt(int count)
+{
+  bitcounter -= count;
+}
+
+/*!
  ************************************************************************
  * \brief
  *    Tracing bitpatterns for symbols

@@ -39,7 +39,8 @@ const int entropyBits[128]=
   151031, 153495, 155959, 158423, 160887, 163351, 165814, 168278, 
   170742, 173207, 175669, 178134, 180598, 183061, 185525, 187989
 };
-
+extern const int estErr4x4[6][4][4];
+extern const int estErr8x8[6][8][8]; 
 extern const int maxpos       [];
 extern const int type2ctx_bcbp[];
 extern const int type2ctx_map [];
@@ -289,6 +290,37 @@ int biari_state(EncodingEnvironmentPtr eep, signed short symbol, BiContextTypePt
   return(ctx_state);
 }
 
+/*!
+************************************************************************
+* \brief
+*    Rate distortion optimized Quantization process for 
+*    all coefficients in a DC block (luma, chroma)
+*
+************************************************************************
+*/
+void rdoq_dc(int (*tblock)[4], int qp_per, int qp_rem, int levelscale, int **leveloffset, const byte (*pos_scan)[2], int levelTrellis[], int type)
+{
+  const byte *p_scan = &pos_scan[0][0];
+  levelDataStruct levelData[16];
+  double  lambda_md = 0;
+  int kStart=0, kStop=0, noCoeff = 0, estBits;
+  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+
+  if ((img->type==B_SLICE) && img->nal_reference_idc)
+  {
+    lambda_md = img->lambda_md[5][img->masterQP];  
+  }
+  else
+  {
+    lambda_md = img->lambda_md[img->type][img->masterQP]; 
+  }
+
+  noCoeff = init_trellis_data_DC(tblock, qp_per, qp_rem, levelscale, leveloffset, p_scan, currMB, levelData, &kStart, &kStop, type);
+  estBits = est_write_and_store_CBP_block_bit(currMB, type);
+  est_writeRunLevel_CABAC(levelData, levelTrellis, type, lambda_md, kStart, kStop, noCoeff, estBits);
+}
+
+
 
 /*!
 ****************************************************************************
@@ -296,61 +328,300 @@ int biari_state(EncodingEnvironmentPtr eep, signed short symbol, BiContextTypePt
 *    estimate CABAC CBP bits
 ****************************************************************************
 */
-int est_write_and_store_CBP_block_bit(Macroblock* currMB, int type, int block_y, int block_x) // marta - CBP
+int init_trellis_data(int (*tblock)[16], int block_x, int qp_per, int qp_rem, int **levelscale, int **leveloffset, const byte *p_scan, Macroblock *currMB,  
+                      levelDataStruct levelData[], int* kStart, int* kStop, int type)
+{
+  int noCoeff = 0;
+  int i, j, coeff_ctr, end_coeff_ctr = ( (type == LUMA_8x8) ? 64 : ( (type == LUMA_4x4 || type == CHROMA_AC) ? 16 : 15 ) );
+  static int *m7;
+  int q_bits;
+  double err, normFact;
+  int level, lowerInt, k;
+
+  if (type == LUMA_8x8)
+  {
+    q_bits = Q_BITS_8 + qp_per;
+    normFact = pow(2,(2 * Q_BITS_8 + 9));
+  }
+  else
+  {
+    q_bits = Q_BITS + qp_per; 
+    normFact = pow(2,(2 * DQ_BITS + 19)); 
+  }
+
+  for (coeff_ctr = 0; coeff_ctr < end_coeff_ctr; coeff_ctr++)
+  {
+    i = *p_scan++;  // horizontal position
+    j = *p_scan++;  // vertical position
+    m7 = &tblock[j][block_x + i];
+
+    levelData[coeff_ctr].levelDouble = iabs(*m7 * levelscale[i][j]);
+    level = (levelData[coeff_ctr].levelDouble >> q_bits);
+
+    lowerInt=( ((int)levelData[coeff_ctr].levelDouble - (level<<q_bits)) < ( 1 << (q_bits - 1) ) )? 1 : 0;
+    levelData[coeff_ctr].level[0] = 0;
+
+    if (level == 0 && lowerInt == 1)
+    {
+      levelData[coeff_ctr].noLevels = 1;
+    }
+    else if (level == 0 && lowerInt == 0)
+    {
+      levelData[coeff_ctr].level[1] = level + 1;
+      levelData[coeff_ctr].noLevels = 2;
+      *kStop = coeff_ctr;
+      noCoeff++;
+    }
+    else if (level > 0 && lowerInt == 1)
+    {
+      levelData[coeff_ctr].level[1] = level;
+      levelData[coeff_ctr].noLevels = 2;
+      *kStop = coeff_ctr;
+      noCoeff++;
+    }
+    else
+    {
+      levelData[coeff_ctr].level[1] = level;
+      levelData[coeff_ctr].level[2] = level + 1;
+      levelData[coeff_ctr].noLevels = 3;
+      *kStop = coeff_ctr;
+      *kStart = coeff_ctr;
+      noCoeff++;
+    }
+
+    for (k = 0; k < levelData[coeff_ctr].noLevels; k++)
+    {
+      err = (double)(levelData[coeff_ctr].level[k]<<q_bits)-(double)levelData[coeff_ctr].levelDouble;
+      if (type == LUMA_8x8)
+        levelData[coeff_ctr].errLevel[k] = (err*err*(double)estErr8x8[qp_rem][i][j])/normFact; 
+      else
+        levelData[coeff_ctr].errLevel[k] = (err*err*(double)estErr4x4[qp_rem][i][j])/normFact; 
+    }
+  }
+  return (noCoeff);
+}
+
+
+/*!
+****************************************************************************
+* \brief
+*    estimate CABAC CBP bits for Luma DC
+****************************************************************************
+*/
+int init_trellis_data_DC(int (*tblock)[4], int qp_per, int qp_rem, 
+                         int levelscale, int **leveloffset, const byte *p_scan, Macroblock *currMB,  
+                         levelDataStruct levelData[], int* kStart, int* kStop, int type)
+{
+  int noCoeff = 0;
+  int i, j, coeff_ctr, end_coeff_ctr;
+  static int *m7;
+  int q_bits;
+  double err, normFact;
+  int level, lowerInt, k;
+
+  end_coeff_ctr = ( (type == LUMA_16DC || type == CB_16DC || type == CB_16DC || type == CHROMA_DC_4x4) ? 16 : ( (type == CHROMA_DC) ? 4 : 8 ) );
+  q_bits = Q_BITS + qp_per + 1; 
+  normFact = pow(2,(2 * DQ_BITS + 19)); 
+
+  for (coeff_ctr = 0; coeff_ctr < end_coeff_ctr; coeff_ctr++)
+  {
+    if (type == LUMA_16DC)
+    {
+      i = *p_scan++;  // horizontal position
+      j = *p_scan++;  // vertical position
+    }
+    else
+    {
+      j = *p_scan++;  // horizontal position
+      i = *p_scan++;  // vertical position
+    }
+    m7 = &tblock[j][i];
+
+    levelData[coeff_ctr].levelDouble = iabs(*m7 * levelscale);
+    level = (levelData[coeff_ctr].levelDouble >> q_bits);
+
+    lowerInt=( ((int)levelData[coeff_ctr].levelDouble - (level<<q_bits)) < ( 1 << (q_bits - 1) ) )? 1 : 0;
+    levelData[coeff_ctr].level[0] = 0;
+    if (level == 0 && lowerInt == 1)
+    {
+      levelData[coeff_ctr].noLevels = 1;
+    }
+    else if (level == 0 && lowerInt == 0)
+    {
+      levelData[coeff_ctr].level[1] = level + 1;
+      levelData[coeff_ctr].noLevels = 2;
+      *kStop = coeff_ctr;
+      noCoeff++;
+    }
+    else if (level > 0 && lowerInt == 1)
+    {
+      levelData[coeff_ctr].level[1] = level;
+      levelData[coeff_ctr].noLevels = 2;
+      *kStop = coeff_ctr;
+      noCoeff++;
+    }
+    else
+    {
+      levelData[coeff_ctr].level[1] = level;
+      levelData[coeff_ctr].level[2] = level + 1;
+      levelData[coeff_ctr].noLevels = 3;
+      *kStop = coeff_ctr;
+      *kStart = coeff_ctr;
+      noCoeff++;
+    }
+
+    for (k = 0; k < levelData[coeff_ctr].noLevels; k++)
+    {
+      err = (double)(levelData[coeff_ctr].level[k]<<q_bits)-(double)levelData[coeff_ctr].levelDouble;
+      levelData[coeff_ctr].errLevel[k] = (err*err*(double)estErr4x4[qp_rem][0][0])/normFact; 
+    }
+  }
+  return (noCoeff);
+}
+
+
+/*!
+****************************************************************************
+* \brief
+*    estimate CABAC CBP bits
+****************************************************************************
+*/
+/*!
+****************************************************************************
+* \brief
+*    estimate CABAC CBP bits
+****************************************************************************
+*/
+int est_write_and_store_CBP_block_bit(Macroblock* currMB, int type) 
 {
 #define BIT_SET(x,n)  ((int)(((x)&((int64)1<<(n)))>>(n)))
 
-  int bit, default_bit = (IS_INTRA(currMB) ? 1 : 0);
+  int y_ac        = (type==LUMA_16AC || type==LUMA_8x8 || type==LUMA_8x4 || type==LUMA_4x8 || type==LUMA_4x4
+    || type==CB_16AC || type==CB_8x8 || type==CB_8x4 || type==CB_4x8 || type==CB_4x4
+    || type==CR_16AC || type==CR_8x8 || type==CR_8x4 || type==CR_4x8 || type==CR_4x4);
+  int y_dc        = (type==LUMA_16DC || type==CB_16DC || type==CR_16DC); 
+  int u_ac        = (type==CHROMA_AC && !img->is_v_block);
+  int v_ac        = (type==CHROMA_AC &&  img->is_v_block);
+  int chroma_dc   = (type==CHROMA_DC || type==CHROMA_DC_2x4 || type==CHROMA_DC_4x4);
+  int u_dc        = (chroma_dc && !img->is_v_block);
+  int v_dc        = (chroma_dc &&  img->is_v_block);
+  int j           = ((y_ac || u_ac || v_ac ? img->subblock_y : 0) << 2);
+  int i           =  (y_ac || u_ac || v_ac ? img->subblock_x : 0);
+  int bit;
+  int default_bit =  (IS_INTRA(currMB) ? 1 : 0);
   int upper_bit   = default_bit;
   int left_bit    = default_bit;
-  int ctx, estBits;
+  int ctx, estBits = 0;
 
   int bit_pos_a   = 0;
   int bit_pos_b   = 0;
-  int *mb_size = img->mb_size[IS_LUMA];
 
-  if (type!=LUMA_8x8)
+  PixelPos block_a, block_b;
+
+  if (y_ac || y_dc)
   {
-    PixelPos block_a, block_b;
+    get4x4Neighbour(currMB, (i << 2) - 1, j   , img->mb_size[IS_LUMA], &block_a);
+    get4x4Neighbour(currMB, (i << 2),     j -1, img->mb_size[IS_LUMA], &block_b);
+    if (y_ac)
+    {
+      if (block_a.available)
+        bit_pos_a = 4*block_a.y + block_a.x;
+      if (block_b.available)
+        bit_pos_b = 4*block_b.y + block_b.x;
+    }
+  }
+  else
+  {
+    get4x4Neighbour(currMB, (i << 2) - 1, j    , img->mb_size[IS_CHROMA], &block_a);
+    get4x4Neighbour(currMB, (i << 2),     j - 1, img->mb_size[IS_CHROMA], &block_b);
+    if (u_ac||v_ac)
+    {
+      if (block_a.available)
+        bit_pos_a = (block_a.y << 2) + block_a.x;
+      if (block_b.available)
+        bit_pos_b = (block_b.y << 2) + block_b.x;
+    }
+  }
 
-    get4x4Neighbour (currMB, block_x - 1 , block_y    , mb_size, &block_a);    
-    get4x4Neighbour (currMB, block_x     , block_y - 1, mb_size, &block_b);    
+  bit = (y_dc ? 0 : y_ac ? 1 : u_dc ? 17 : v_dc ? 18 : u_ac ? 19 : 35);
 
-    if (block_a.available)
-      bit_pos_a = 4*block_a.y + block_a.x;
-    if (block_b.available)
-      bit_pos_b = 4*block_b.y + block_b.x;
+  if (enc_picture->chroma_format_idc!=YUV444 || IS_INDEPENDENT(params))
+  {
+    if (type!=LUMA_8x8)
+    {
+      if (block_b.available)
+      {
+        if(img->mb_data[block_b.mb_addr].mb_type==IPCM)
+          upper_bit=1;
+        else
+          upper_bit = BIT_SET(img->mb_data[block_b.mb_addr].cbp_bits[0],bit+bit_pos_b);
+      }
 
-    bit = 1; // 4x4: bit=1
+      if (block_a.available)
+      {
+        if(img->mb_data[block_a.mb_addr].mb_type==IPCM)
+          left_bit=1;
+        else
+          left_bit = BIT_SET(img->mb_data[block_a.mb_addr].cbp_bits[0],bit+bit_pos_a);
+      }
 
+      ctx = 2*upper_bit+left_bit;
+      //===== encode symbol =====
+      estBits=estBitsCabac[type].blockCbpBits[ctx][0]-estBitsCabac[type].blockCbpBits[ctx][1];
+    }
+  }
+  else 
+  {
     if (block_b.available)
     {
-      if(img->mb_data[block_b.mb_addr].mb_type==IPCM)
+      if(img->mb_data[block_b.mb_addr].mb_type == IPCM)
         upper_bit=1;
       else
-        upper_bit = BIT_SET(img->mb_data[block_b.mb_addr].cbp_bits[0],bit+bit_pos_b);
+      {
+        if(type==LUMA_8x8)
+          upper_bit = BIT_SET(img->mb_data[block_b.mb_addr].cbp_bits_8x8[0], bit + bit_pos_b);
+        else if (type==CB_8x8)
+          upper_bit = BIT_SET(img->mb_data[block_b.mb_addr].cbp_bits_8x8[1], bit + bit_pos_b);
+        else if (type==CR_8x8)
+          upper_bit = BIT_SET(img->mb_data[block_b.mb_addr].cbp_bits_8x8[2], bit + bit_pos_b);
+        else if ((type==CB_4x4)||(type==CB_4x8)||(type==CB_8x4)||(type==CB_16AC)||(type==CB_16DC))
+          upper_bit = BIT_SET(img->mb_data[block_b.mb_addr].cbp_bits[1], bit + bit_pos_b);
+        else if ((type==CR_4x4)||(type==CR_4x8)||(type==CR_8x4)||(type==CR_16AC)||(type==CR_16DC))
+          upper_bit = BIT_SET(img->mb_data[block_b.mb_addr].cbp_bits[2], bit + bit_pos_b);
+        else
+          upper_bit = BIT_SET(img->mb_data[block_b.mb_addr].cbp_bits[0], bit + bit_pos_b);
+      }
     }
-
 
     if (block_a.available)
     {
       if(img->mb_data[block_a.mb_addr].mb_type==IPCM)
-        left_bit=1;
+        left_bit = 1;
       else
-        left_bit = BIT_SET(img->mb_data[block_a.mb_addr].cbp_bits[0],bit+bit_pos_a);
+      {
+        if(type==LUMA_8x8)
+          left_bit = BIT_SET(img->mb_data[block_a.mb_addr].cbp_bits_8x8[0],bit + bit_pos_a);
+        else if (type==CB_8x8)
+          left_bit = BIT_SET(img->mb_data[block_a.mb_addr].cbp_bits_8x8[1],bit + bit_pos_a);
+        else if (type==CR_8x8)
+          left_bit = BIT_SET(img->mb_data[block_a.mb_addr].cbp_bits_8x8[2],bit + bit_pos_a);
+        else if ((type==CB_4x4)||(type==CB_4x8)||(type==CB_8x4)||(type==CB_16AC)||(type==CB_16DC))
+          left_bit = BIT_SET(img->mb_data[block_a.mb_addr].cbp_bits[1],bit + bit_pos_a);
+        else if ((type==CR_4x4)||(type==CR_4x8)||(type==CR_8x4)||(type==CR_16AC)||(type==CR_16DC))
+          left_bit = BIT_SET(img->mb_data[block_a.mb_addr].cbp_bits[2],bit + bit_pos_a);
+        else
+          left_bit = BIT_SET(img->mb_data[block_a.mb_addr].cbp_bits[0],bit + bit_pos_a);
+      }
     }
 
     ctx = 2*upper_bit+left_bit;
+
     //===== encode symbol =====
     estBits=estBitsCabac[type].blockCbpBits[ctx][0]-estBitsCabac[type].blockCbpBits[ctx][1];
   }
-  else
-  {
-    estBits=0;
-  }
+
   return(estBits);
 }
-
 /*!
 ****************************************************************************
 * \brief
@@ -361,7 +632,7 @@ void est_writeRunLevel_CABAC(levelDataStruct levelData[], int levelTabMin[], int
                              int noCoeff, int estCBP)
 {
   int   k, i;
-  int estBits;
+  int   estBits;
   double lagr, lagrMin=0, lagrTabMin, lagrTab;
   int   c1 = 1, c2 = 0, c1Tab[3], c2Tab[3];
   int   iBest, levelTab[64];
@@ -369,25 +640,24 @@ void est_writeRunLevel_CABAC(levelDataStruct levelData[], int levelTabMin[], int
   double   lagrAcc, lagrLastMin=0, lagrLast;
   int      kBest=0, kStart, first;
 
-  maxK=maxpos[type];
-  for (k=0; k<=maxK; k++)
+  maxK = maxpos[type];
+  for (k = 0; k <= maxK; k++)
   {
-    levelTabMin[k]=0;
+    levelTabMin[k] = 0;
   }
 
-  if (noCoeff>0)
+  if (noCoeff > 0)
   {
-    if (noCoeff>1)
+    if (noCoeff > 1)
     {
-      kStart=kInit; kBest=0; first=1; 
-
-      lagrAcc=0; 
-      for (k=kStart; k<=kStop; k++)
+      kStart = kInit; kBest = 0; first = 1; 
+      lagrAcc = 0; 
+      for (k = kStart; k <= kStop; k++)
       {
-        lagrAcc+=levelData[k].errLevel[0];
+        lagrAcc += levelData[k].errLevel[0];
       }
 
-      if (levelData[kStart].noLevels>2)
+      if (levelData[kStart].noLevels > 2)
       { 
         lagrAcc-=levelData[kStart].errLevel[0];
         lagrLastMin=lambda*(estBitsCabac[type].lastBits[pos2ctx_last[type][kStart]][1]-estBitsCabac[type].lastBits[pos2ctx_last[type][kStart]][0])+lagrAcc;
@@ -397,32 +667,30 @@ void est_writeRunLevel_CABAC(levelDataStruct levelData[], int levelTabMin[], int
         first=0;
       }
 
-      for (k=kStart; k<=kStop; k++)
+      for (k = kStart; k <= kStop; k++)
       {
         lagrMin=levelData[k].errLevel[0]+lambda*estBitsCabac[type].significantBits[pos2ctx_map[type][k]][0];
 
-        lagrAcc-=levelData[k].errLevel[0];
+        lagrAcc -= levelData[k].errLevel[0];
         if (levelData[k].noLevels>1)
         { 
-          estBits=SIGN_BITS+estBitsCabac[type].significantBits[pos2ctx_map[type][k]][1]+
+          estBits = SIGN_BITS+estBitsCabac[type].significantBits[pos2ctx_map[type][k]][1]+
             estBitsCabac[type].greaterOneBits[0][4][0];
 
-          lagrLast=levelData[k].errLevel[1]+lambda*(estBits+estBitsCabac[type].lastBits[pos2ctx_last[type][k]][1])+lagrAcc;
-          lagr=levelData[k].errLevel[1]+lambda*(estBits+estBitsCabac[type].lastBits[pos2ctx_last[type][k]][0]);
+          lagrLast = levelData[k].errLevel[1]+lambda*(estBits+estBitsCabac[type].lastBits[pos2ctx_last[type][k]][1])+lagrAcc;
+          lagr = levelData[k].errLevel[1]+lambda*(estBits+estBitsCabac[type].lastBits[pos2ctx_last[type][k]][0]);
 
           lagrMin=(lagr<lagrMin)?lagr:lagrMin;
 
-          if (lagrLast<lagrLastMin || first==1)
+          if (lagrLast < lagrLastMin || first==1)
           {
-            kBest=k;
-            first=0;
-            lagrLastMin=lagrLast;
+            kBest = k;
+            first = 0;
+            lagrLastMin = lagrLast;
           }
-
         }
         lagrAcc+=lagrMin;
       }
-
       kStart=kBest;
     }
     else
@@ -430,52 +698,52 @@ void est_writeRunLevel_CABAC(levelDataStruct levelData[], int levelTabMin[], int
       kStart=kStop;
     }
 
-    lagrTabMin=0;
-    for (k=0; k<=kStart; k++)
+    lagrTabMin = 0;
+    for (k = 0; k <= kStart; k++)
     {
-      lagrTabMin+=levelData[k].errLevel[0];
+      lagrTabMin += levelData[k].errLevel[0];
     }
     // Initial Lagrangian calculation
     lagrTab=0;
 
     //////////////////////////
 
-    lagrTabMin+=(lambda*estCBP);
-    iBest=0; first=1;
-    for (k=kStart; k>=0; k--)
+    lagrTabMin += (lambda*estCBP);
+    iBest = 0; first = 1;
+    for (k = kStart; k >= 0; k--)
     {
-      last=(k==kStart);
+      last = (k == kStart);
       if (!last)
       {
         lagrMin=levelData[k].errLevel[0]+lambda*estBitsCabac[type].significantBits[pos2ctx_map[type][k]][0];
-        iBest=0;
-        first=0;
+        iBest = 0;
+        first = 0;
       }
 
-      for (i=1; i < levelData[k].noLevels; i++)
+      for (i = 1; i < levelData[k].noLevels; i++)
       {
-        estBits=SIGN_BITS+estBitsCabac[type].significantBits[pos2ctx_map[type][k]][1];
-        estBits+=estBitsCabac[type].lastBits[pos2ctx_last[type][k]][last];
+        estBits = SIGN_BITS + estBitsCabac[type].significantBits[pos2ctx_map[type][k]][1];
+        estBits += estBitsCabac[type].lastBits[pos2ctx_last[type][k]][last];
 
         // greater than 1
-        greater_one = (levelData[k].level[i]>1);
+        greater_one = (levelData[k].level[i] > 1);
 
         c1Tab[i]=c1;   c2Tab[i]=c2;
 
-        ctx = imin(c1Tab[i],4);  
-        estBits+=estBitsCabac[type].greaterOneBits[0][ctx][greater_one];
+        ctx = imin(c1Tab[i], 4);  
+        estBits += estBitsCabac[type].greaterOneBits[0][ctx][greater_one];
 
         // magnitude if greater than 1
         if (greater_one)
         {
           ctx = imin(c2Tab[i], max_c2[type]);
-          if ((levelData[k].level[i]-2)<MAX_PREC_COEFF)
+          if ( (levelData[k].level[i] - 2) < MAX_PREC_COEFF)
           {
-            estBits+=precalcUnaryLevelTab[estBitsCabac[type].greaterOneState[ctx]][levelData[k].level[i]-2];
+            estBits += precalcUnaryLevelTab[estBitsCabac[type].greaterOneState[ctx]][levelData[k].level[i] - 2];
           }
           else
           {
-            estBits+=est_unary_exp_golomb_level_encode(levelData[k].level[i]-2, ctx, type);
+            estBits += est_unary_exp_golomb_level_encode(levelData[k].level[i] - 2, ctx, type);
           }
 
           c1Tab[i] = 0;
@@ -486,12 +754,12 @@ void est_writeRunLevel_CABAC(levelDataStruct levelData[], int levelTabMin[], int
           c1Tab[i]++;
         }
 
-        lagr=levelData[k].errLevel[i]+lambda*estBits;
+        lagr = levelData[k].errLevel[i] + lambda*estBits;
         if (lagr<lagrMin || first==1)
         {
-          iBest=i;
+          iBest = i;
           lagrMin=lagr;
-          first=0;
+          first = 0;
         }
       }
 
@@ -500,16 +768,16 @@ void est_writeRunLevel_CABAC(levelDataStruct levelData[], int levelTabMin[], int
         c1=c1Tab[iBest]; c2=c2Tab[iBest];
       }
 
-      levelTab[k]=levelData[k].level[iBest];
+      levelTab[k] = levelData[k].level[iBest];
       lagrTab+=lagrMin;
     }
     ///////////////////////////////////
 
-    if (lagrTab<lagrTabMin)
+    if (lagrTab < lagrTabMin)
     {
-      for (k=0; k<=kStart; k++)
+      for (k = 0; k <= kStart; k++)
       {
-        levelTabMin[k]=levelTab[k];
+        levelTabMin[k] = levelTab[k];
       }
     }
   }
@@ -575,6 +843,8 @@ void trellis_mp(Macroblock *currMB, int CurrentMbAddr, Boolean prev_recode_mb)
   estRunLevel_CABAC(currMB, LUMA_16AC);
   if (params->Transform8x8Mode)
     estRunLevel_CABAC(currMB, LUMA_8x8);
+  if (params->yuv_format != YUV400)
+    estRunLevel_CABAC(currMB, CHROMA_AC);
 
   qp_left   = (currMB->mb_available_left) ? currMB->mb_available_left->qp : img->masterQP;
   qp_up     = (currMB->mb_available_up)   ? currMB->mb_available_up->qp   : img->masterQP;
@@ -611,20 +881,17 @@ void trellis_mp(Macroblock *currMB, int CurrentMbAddr, Boolean prev_recode_mb)
 #endif
     if (img->current_mb_nr ==0 && deltaQP != 0)
       continue;
-    
+
     reset_macroblock(currMB, prev_mb);
     currMB->qp       = img->qp;
     currMB->delta_qp = currMB->qp - currMB->prev_qp;
-    update_qp (currMB);    
-    
-    delta_qp_mbaff[currMB->mb_field][img->bot_MB] = currMB->delta_qp;
-    qp_mbaff      [currMB->mb_field][img->bot_MB] = currMB->qp;
+    update_qp (img, currMB);    
 
     encode_one_macroblock (currMB);
 
     if ( rddata_trellis_curr.min_rdcost < rddata_trellis_best.min_rdcost)
       copy_rddata_trellis(&rddata_trellis_best,rdopt);
-    
+
     if (params->RDOQ_CP_MV)
       Motion_Selected = 1;
 
@@ -632,6 +899,8 @@ void trellis_mp(Macroblock *currMB, int CurrentMbAddr, Boolean prev_recode_mb)
     if ((params->RDOQ_Fast) && (img->qp - rddata_trellis_best.qp > 1))
       break;
     if ((params->RDOQ_Fast) && (rddata_trellis_curr.cbp == 0) && (rddata_trellis_curr.mb_type != 0))
+      break;
+    if ((params->RDOQ_Fast) && (rddata_trellis_best.mb_type == 0) && (rddata_trellis_best.cbp == 0))
       break;
 #endif
   }
@@ -652,6 +921,8 @@ void trellis_sp(Macroblock *currMB, int CurrentMbAddr, Boolean prev_recode_mb)
   estRunLevel_CABAC(currMB, LUMA_16AC);
   if (params->Transform8x8Mode)
     estRunLevel_CABAC(currMB, LUMA_8x8);
+  if (params->yuv_format != YUV400)
+    estRunLevel_CABAC(currMB, CHROMA_AC);
 
   encode_one_macroblock (currMB);
   write_one_macroblock (currMB, 1, prev_recode_mb);    
@@ -721,7 +992,7 @@ void copy_rddata_trellis (RD_DATA *dest, RD_DATA *src)
   dest->delta_qp = src->delta_qp;
   dest->prev_cbp = src->prev_cbp;
   dest->cbp_blk = src->cbp_blk;
-  dest->bi_pred_me = src->bi_pred_me;
+ 
 
   if (img->type != I_SLICE)
   {
@@ -768,8 +1039,8 @@ void updateMV_mp(int *m_cost, short ref, int list, int h, int v, int blocktype, 
       memcpy(img->all_mv[list][ref][blocktype][v+j][h+i], all_mv, 2 * sizeof(short));
   }
 
-  SetMotionVectorPredictor (currMB, pred_mv, enc_picture->ref_idx[list], enc_picture->mv[list], ref, list, h<<2, v<<2, bsx, bsy);
-  
+  SetMotionVectorPredictor (currMB, pred_mv, enc_picture->motion.ref_idx[list], enc_picture->motion.mv[list], ref, list, h<<2, v<<2, bsx, bsy);
+
   if ( (tmp_pred_mv[0] != pred_mv[0]) || (tmp_pred_mv[1] != pred_mv[1]) )
   {
     *m_cost -= MV_COST_SMP (lambda_factor[H_PEL], all_mv[0], all_mv[1], tmp_pred_mv[0], tmp_pred_mv[1]);

@@ -4,7 +4,7 @@
  * \file refbuf.c
  *
  * \brief
- *    Declarations of teh reference frame buffer types and functions
+ *    Declarations of the reference frame buffer types and functions
  ************************************************************************
  */
 

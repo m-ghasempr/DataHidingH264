@@ -152,12 +152,32 @@ static void getNumberOfFrames (void)
 /*!
  ************************************************************************
  * \brief
+ *    Updates images max values
+ *
+ ************************************************************************
+ */
+static void updateMaxValue(FrameFormat *format)
+{
+  format->max_value[0] = (1 << format->bit_depth[0]) - 1;
+  format->max_value_sq[0] = format->max_value[0] * format->max_value[0];
+  format->max_value[1] = (1 << format->bit_depth[1]) - 1;
+  format->max_value_sq[1] = format->max_value[1] * format->max_value[1];
+  format->max_value[2] = (1 << format->bit_depth[2]) - 1;
+  format->max_value_sq[2] = format->max_value[2] * format->max_value[2];
+}
+
+/*!
+ ************************************************************************
+ * \brief
  *    Update output format parameters (resolution & bit-depth) given input
  *
  ************************************************************************
  */
 static void updateOutFormat(InputParameters *params)
 {
+
+  params->output.yuv_format = params->yuv_format;
+  params->source.yuv_format = params->yuv_format;
 
   if (params->src_resize == 0)
   {
@@ -167,8 +187,8 @@ static void updateOutFormat(InputParameters *params)
 
   if (params->yuv_format == YUV400) // reset bitdepth of chroma for 400 content
   {
-    params->source.bit_depth[1] = 0;
-    params->output.bit_depth[1] = 0;
+    params->source.bit_depth[1] = 8;
+    params->output.bit_depth[1] = 8;
     params->source.width_cr  = 0;
     params->source.height_cr = 0;
     params->output.width_cr  = 0;
@@ -177,22 +197,28 @@ static void updateOutFormat(InputParameters *params)
   else
   {
     params->source.width_cr  = (params->source.width  * mb_width_cr [params->yuv_format]) >> 4;
-    params->source.height_cr = (params->source.height * mb_width_cr [params->yuv_format]) >> 4;    
+    params->source.height_cr = (params->source.height * mb_height_cr[params->yuv_format]) >> 4;
     params->output.width_cr  = (params->output.width  * mb_width_cr [params->yuv_format]) >> 4;
     params->output.height_cr = (params->output.height * mb_height_cr[params->yuv_format]) >> 4;
   }
 
   // source size
-  params->source.size_cmp[0] = params->source.width * params->source.height;
+  params->source.size_cmp[0] = params->source.width    * params->source.height;
   params->source.size_cmp[1] = params->source.width_cr * params->source.height_cr;
   params->source.size_cmp[2] = params->source.size_cmp[1];
-  params->source.size = params->source.size_cmp[0] + params->source.size_cmp[1] + params->source.size_cmp[2];
+  params->source.size        = params->source.size_cmp[0] + params->source.size_cmp[1] + params->source.size_cmp[2];
+  params->source.mb_width    = params->source.width  / MB_BLOCK_SIZE;
+  params->source.mb_height   = params->source.height / MB_BLOCK_SIZE;
+
 
   // output size (excluding padding)
   params->output.size_cmp[0] = params->output.width * params->source.height;
   params->output.size_cmp[1] = params->output.width_cr * params->source.height_cr;
   params->output.size_cmp[2] = params->output.size_cmp[1];
-  params->source.size = params->output.size_cmp[0] + params->output.size_cmp[1] + params->output.size_cmp[2];
+  params->output.size        = params->output.size_cmp[0] + params->output.size_cmp[1] + params->output.size_cmp[2];
+  params->output.mb_width    = params->output.width  / MB_BLOCK_SIZE;
+  params->output.mb_height   = params->output.height / MB_BLOCK_SIZE;
+
 
   // both chroma components have the same bitdepth
   params->source.bit_depth[2] = params->source.bit_depth[1];
@@ -205,6 +231,9 @@ static void updateOutFormat(InputParameters *params)
     params->output.bit_depth[1] = params->source.bit_depth[1];
     params->output.bit_depth[2] = params->source.bit_depth[2];
   }
+  
+  updateMaxValue(&params->source);
+  updateMaxValue(&params->output);
 }
 
 
@@ -367,7 +396,7 @@ char *GetConfigFileContent (char *Filename)
   }
 
   FileSize = ftell (f);
-  if (FileSize < 0 || FileSize > 60000)
+  if (FileSize < 0 || FileSize > 100000)
   {
     snprintf (errortext, ET_SIZE, "Unreasonable Filesize %ld reported by ftell for configuration file %s.", FileSize, Filename);
     return NULL;
@@ -1064,44 +1093,50 @@ static void PatchInp (void)
     read_slice_group_info();
   }
 
-  if (params->ReferenceReorder && (params->PicInterlace || params->MbInterlace))
+  if (params->WPMCPrecision && (params->RDPictureDecision != 1 || params->GenerateMultiplePPS != 1) )
   {
-    snprintf(errortext, ET_SIZE, "ReferenceReorder Not supported with Interlace encoding methods\n");
+    snprintf(errortext, ET_SIZE, "WPMCPrecision requires both RDPictureDecision=1 and GenerateMultiplePPS=1.\n");
+    error (errortext, 400);
+  }
+  if (params->WPMCPrecision && params->WPMCPrecFullRef && params->num_ref_frames < 16 )
+  {
+    params->num_ref_frames++;
+    if ( params->P_List0_refs )
+      params->P_List0_refs++;
+    else
+      params->P_List0_refs = params->num_ref_frames;
+    if ( params->B_List0_refs )
+      params->B_List0_refs++;
+    else
+      params->B_List0_refs = params->num_ref_frames;
+    if ( params->B_List1_refs )
+      params->B_List1_refs++;
+    else
+      params->B_List1_refs = params->num_ref_frames;
+  }
+  else if ( params->WPMCPrecision && params->WPMCPrecFullRef )
+  {
+    snprintf(errortext, ET_SIZE, "WPMCPrecFullRef requires NumberReferenceFrames < 16.\n");
     error (errortext, 400);
   }
 
-  if (params->PocMemoryManagement && (params->PicInterlace || params->MbInterlace))
+  if (params->ReferenceReorder && params->MbInterlace )
   {
-    snprintf(errortext, ET_SIZE, "PocMemoryManagement not supported with Interlace encoding methods\n");
+    snprintf(errortext, ET_SIZE, "ReferenceReorder not supported with MBAFF\n");
     error (errortext, 400);
   }
 
-  // frame/field consistency check
-  if (params->PicInterlace != FRAME_CODING && params->PicInterlace != ADAPTIVE_CODING && params->PicInterlace != FIELD_CODING)
+  if (params->PocMemoryManagement && params->MbInterlace )
   {
-    snprintf (errortext, ET_SIZE, "Unsupported PicInterlace=%d, use frame based coding=0 or field based coding=1 or adaptive=2",params->PicInterlace);
+    snprintf(errortext, ET_SIZE, "PocMemoryManagement not supported with MBAFF\n");
     error (errortext, 400);
   }
-
-  // frame/field consistency check
-  if (params->MbInterlace != FRAME_CODING && params->MbInterlace != ADAPTIVE_CODING && params->MbInterlace != FIELD_CODING && params->MbInterlace != FRAME_MB_PAIR_CODING)
-  {
-    snprintf (errortext, ET_SIZE, "Unsupported MbInterlace=%d, use frame based coding=0 or field based coding=1 or adaptive=2 or frame MB pair only=3",params->MbInterlace);
-    error (errortext, 400);
-  }
-
 
   if ((!params->rdopt)&&(params->MbInterlace))
   {
     snprintf(errortext, ET_SIZE, "MB AFF is not compatible with non-rd-optimized coding.");
     error (errortext, 500);
   }
-
-  /*if (params->rdopt>2)
-  {
-    snprintf(errortext, ET_SIZE, "RDOptimization=3 mode has been deactivated do to diverging of real and simulated decoders.");
-    error (errortext, 500);
-  }*/
 
   // check RDoptimization mode and profile. FMD does not support Frex Profiles.
   if (params->rdopt==2 && ( params->ProfileIDC>=FREXT_HP || params->ProfileIDC==FREXT_CAVLC444 ))
@@ -1167,35 +1202,35 @@ static void PatchInp (void)
   // Rate control
   if(params->RCEnable)
   {
+    if (params->basicunit == 0)
+      params->basicunit = (params->output.height + img->auto_crop_bottom)*(params->output.width + img->auto_crop_right)/256;
+
     if ( ((params->output.height + img->auto_crop_bottom)*(params->output.width + img->auto_crop_right)/256) % params->basicunit != 0)
     {
       snprintf(errortext, ET_SIZE, "Frame size in macroblocks must be a multiple of BasicUnit.");
       error (errortext, 500);
     }
-    // input basicunit represents the number of BUs in a frame
-    // internal basicunit is the number of MBs in a BU
-    params->basicunit = ((params->output.height + img->auto_crop_bottom)*(params->output.width + img->auto_crop_right)/256) / params->basicunit;
 
-    if ( params->RCEnable && params->RCUpdateMode == RC_MODE_1 && 
+    if ( params->RCUpdateMode == RC_MODE_1 && 
       !( (params->intra_period == 1 || params->idr_period == 1 || params->BRefPictures == 2 ) && !params->successive_Bframe ) )
     {
       snprintf(errortext, ET_SIZE, "Use RCUpdateMode = 1 only for all intra or all B-slice coding.");
       error (errortext, 500);
     }
 
-    if ( params->RCEnable && params->BRefPictures == 2 && params->intra_period == 0 && params->RCUpdateMode != RC_MODE_1 )
+    if ( params->BRefPictures == 2 && params->intra_period == 0 && params->RCUpdateMode != RC_MODE_1 )
     {
       snprintf(errortext, ET_SIZE, "Use RCUpdateMode = 1 for all B-slice coding.");
       error (errortext, 500);
     }
 
-    if ( params->RCEnable && params->HierarchicalCoding && params->RCUpdateMode != RC_MODE_2 && params->RCUpdateMode != RC_MODE_3 )
+    if ( params->HierarchicalCoding && params->RCUpdateMode != RC_MODE_2 && params->RCUpdateMode != RC_MODE_3 )
     {
       snprintf(errortext, ET_SIZE, "Use RCUpdateMode = 2 or 3 for hierarchical B-picture coding.");
       error (errortext, 500);
     }
 
-    if ( params->RCEnable && (params->RCUpdateMode != RC_MODE_1) && (params->intra_period == 1) )
+    if ( (params->RCUpdateMode != RC_MODE_1) && (params->intra_period == 1) )
     {
       snprintf(errortext, ET_SIZE, "Use RCUpdateMode = 1 for all intra coding.");
       error (errortext, 500);
@@ -1278,24 +1313,18 @@ static void PatchInp (void)
     params->ChromaMEEnable = 0;
   }
 
-  if ( (0 == params->ChromaMCBuffer) && (( params->yuv_format ==  YUV444) && (!params->separate_colour_plane_flag)) )
+  if ( (params->ChromaMCBuffer == 0) && (( params->yuv_format ==  YUV444) && (!params->separate_colour_plane_flag)) )
   {
     fprintf(stderr, "Warning: Enabling ChromaMCBuffer for YUV444 combined color coding.\n");
     params->ChromaMCBuffer = 1;
   }
 
-  if (params->EnableOpenGOP && params->PicInterlace)
-  {
-    snprintf(errortext, ET_SIZE, "Open GOP currently not supported for Field coded pictures.");
-    error (errortext, 500);
-  }
 
   if (params->EnableOpenGOP)
     params->ReferenceReorder = 1;
 
-
   if (params->SearchMode != EPZS)
-      params->EPZSSubPelGrid = 0;
+    params->EPZSSubPelGrid = 0;
 
   params->EPZSGrid = params->EPZSSubPelGrid << 1;
 
@@ -1362,6 +1391,9 @@ static void PatchInp (void)
     {
       printf("RDO Quantization currently not supported with MBAFF. Option disabled.\n");
       params->UseRDOQuant = 0;
+      params->RDOQ_QP_Num = 1;
+      params->RDOQ_CP_MV = 0;
+      params->RDOQ_CP_Mode = 0;
     }
     else
     {

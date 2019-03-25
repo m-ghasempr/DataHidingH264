@@ -292,12 +292,12 @@ void GetStrengthNormal(byte Strength[MB_BLOCK_SIZE],ImageParameters *img,int MbQ
 
     if (!ANY_INTRA)
     {
-      list0_refPicIdArr = enc_picture->ref_pic_id[LIST_0];
-      list1_refPicIdArr = enc_picture->ref_pic_id[LIST_1];
-      list0_mv = enc_picture->mv[LIST_0];
-      list1_mv = enc_picture->mv[LIST_1];
-      list0_refIdxArr = enc_picture->ref_idx[LIST_0];
-      list1_refIdxArr = enc_picture->ref_idx[LIST_1];
+      list0_refPicIdArr = enc_picture->motion.ref_pic_id[LIST_0];
+      list1_refPicIdArr = enc_picture->motion.ref_pic_id[LIST_1];
+      list0_mv = enc_picture->motion.mv[LIST_0];
+      list1_mv = enc_picture->motion.mv[LIST_1];
+      list0_refIdxArr = enc_picture->motion.ref_idx[LIST_0];
+      list1_refIdxArr = enc_picture->motion.ref_idx[LIST_1];
  
       get_mb_block_pos (MbQAddr, &mb_x, &mb_y);
       mb_x <<= 2;
@@ -413,12 +413,12 @@ void GetStrengthMBAff(byte Strength[16],ImageParameters *img,int MbQAddr,int dir
   int *mb_size = img->mb_size[IS_LUMA];
 
   MbQ = &(img->mb_data[MbQAddr]);
-  list0_mv = enc_picture->mv[LIST_0];
-  list1_mv = enc_picture->mv[LIST_1];
-  list0_refIdxArr = enc_picture->ref_idx[LIST_0];
-  list1_refIdxArr = enc_picture->ref_idx[LIST_1];
-  list0_refPicIdArr = enc_picture->ref_pic_id[LIST_0];
-  list1_refPicIdArr = enc_picture->ref_pic_id[LIST_1];
+  list0_mv = enc_picture->motion.mv[LIST_0];
+  list1_mv = enc_picture->motion.mv[LIST_1];
+  list0_refIdxArr = enc_picture->motion.ref_idx[LIST_0];
+  list1_refIdxArr = enc_picture->motion.ref_idx[LIST_1];
+  list0_refPicIdArr = enc_picture->motion.ref_pic_id[LIST_0];
+  list1_refPicIdArr = enc_picture->motion.ref_pic_id[LIST_1];
  
   for( idx=0 ; idx<16 ; idx++ )
   {

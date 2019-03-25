@@ -15,28 +15,18 @@
  **************************************************************************
  */
 
-#include <math.h>
 #include <limits.h>
 
 #include "global.h"
 
-#include "rdopt_coding_state.h"
-#include "memalloc.h"
-#include "mb_access.h"
-#include "elements.h"
-#include "intrarefresh.h"
 #include "image.h"
-#include "transform8x8.h"
-#include "cabac.h"
-#include "vlc.h"
-#include "ratectl.h"            // head file for rate control
-#include "mode_decision.h"
 #include "macroblock.h"
-#include "symbol.h"
-#include "q_offsets.h"
+#include "mb_access.h"
+#include "rdopt_coding_state.h"
+#include "mode_decision.h"
 #include "rdopt.h"
 #include "rd_intra_jm.h"
-
+#include "q_around.h"
 
 /*!
  *************************************************************************************
@@ -46,10 +36,10 @@
  */
 int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int  b4,  double  lambda,  double*  min_cost, int cr_cbp[3])
 {
-  int     ipmode, best_ipmode = 0, i, j, y, dummy;
-  int     c_nz, nonzero = 0;
-  int*    ACLevel = img->cofAC[b8][b4][0];
-  int*    ACRun   = img->cofAC[b8][b4][1];
+  int    ipmode, best_ipmode = 0, i, j, y, dummy;
+  int    c_nz, nonzero = 0;
+  int*   ACLevel = img->cofAC[b8][b4][0];
+  int*   ACRun   = img->cofAC[b8][b4][1];
   int    c_nzCbCr[3]= {999,999, 999};
   static imgpel  rec4x4[4][4];
   static imgpel  rec4x4CbCr[2][4][4];
@@ -66,7 +56,7 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int 
   int    pic_block_y = pic_pix_y >> 2;
   double min_rdcost  = 1e30;
 
-  int left_available, up_available, all_available;  
+  int left_available, up_available, all_available;
 
   char   upMode;
   char   leftMode;
@@ -131,15 +121,15 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int 
     if( available_mode)
     {
       // get prediction and prediction error
-      generate_pred_error(&pCurImg[pic_opix_y], img->mpr_4x4[0][ipmode], &img->mpr[0][block_y], &img->m7[0][block_y], pic_opix_x, block_x);     
+      generate_pred_error(&pCurImg[pic_opix_y], img->mpr_4x4[0][ipmode], &img->mb_pred[0][block_y], &img->mb_ores[0][block_y], pic_opix_x, block_x);     
 
       if (img->yuv_format == YUV444)
       {
-        ipmode_DPCM=ipmode;
+        ipmode_DPCM = ipmode;
         if (!IS_INDEPENDENT(params)) 
         {
-          generate_pred_error(&imgUV_org[0][pic_opix_y], img->mpr_4x4[1][ipmode], &img->mpr[1][block_y], &img->m7[1][block_y], pic_opix_x, block_x);
-          generate_pred_error(&imgUV_org[1][pic_opix_y], img->mpr_4x4[2][ipmode], &img->mpr[2][block_y], &img->m7[2][block_y], pic_opix_x, block_x);     
+          generate_pred_error(&pImgOrg[1][pic_opix_y], img->mpr_4x4[1][ipmode], &img->mb_pred[1][block_y], &img->mb_ores[1][block_y], pic_opix_x, block_x);
+          generate_pred_error(&pImgOrg[2][pic_opix_y], img->mpr_4x4[2][ipmode], &img->mb_pred[2][block_y], &img->mb_ores[2][block_y], pic_opix_x, block_x);     
         }
       }
 
@@ -153,7 +143,7 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int 
       {
         //--- set coefficients ---
         memcpy(cofAC4x4[0],ACLevel, 18 * sizeof(int));
-        memcpy(cofAC4x4[1],ACRun, 18 * sizeof(int));
+        memcpy(cofAC4x4[1],ACRun,   18 * sizeof(int));
 
         //--- set reconstruction ---
         for (y=0; y<4; y++)
@@ -200,7 +190,7 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int 
         //store_coding_state (currMB, cs_ib4);
         if (img->AdaptiveRounding)
         {
-          store_adaptive_rounding (block_y, block_x);
+          store_adaptive_rounding (img, block_y, block_x);
         }
 
       }
@@ -229,8 +219,8 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int 
       {
         for (i=0; i<4; i++)
         {
-          img->mpr[k][block_y+j][block_x+i]  = img->mpr_4x4[k][best_ipmode][j][i];
-          img->m7[k][block_y+j][block_x+i]   = pImgOrg[k][img->pix_y+block_y+j][img->pix_x+block_x+i] - img->mpr_4x4[k][best_ipmode][j][i];
+          img->mb_pred[k][block_y+j][block_x+i]  = img->mpr_4x4[k][best_ipmode][j][i];
+          img->mb_ores[k][block_y+j][block_x+i]   = pImgOrg[k][img->pix_y+block_y+j][img->pix_x+block_x+i] - img->mpr_4x4[k][best_ipmode][j][i];
         }
       }
       cr_cbp[k] = pDCT_4x4(currMB, k, block_x,block_y,&dummy,1);
@@ -245,7 +235,7 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int 
   for (y=0; y<BLOCK_SIZE; y++)
   {
     memcpy (&enc_picture->imgY[pic_pix_y + y][pic_pix_x],rec4x4[y],    BLOCK_SIZE * sizeof(imgpel));
-    memcpy (&img->mpr[0][block_y + y][block_x],img->mpr_4x4[0][best_ipmode][y], BLOCK_SIZE * sizeof(imgpel));
+    memcpy (&img->mb_pred[0][block_y + y][block_x],img->mpr_4x4[0][best_ipmode][y], BLOCK_SIZE * sizeof(imgpel));
   }
 
   // SP/SI reconstuction
@@ -253,7 +243,7 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int 
   {
     for (y=0; y<BLOCK_SIZE; y++)
     {
-      memcpy (&lrec[pic_pix_y+y][pic_pix_x],lrec4x4[y], BLOCK_SIZE * sizeof(int));//restore coefficients when encoding primary SP frame
+      memcpy (&lrec[pic_pix_y+y][pic_pix_x], lrec4x4[y], BLOCK_SIZE * sizeof(int));//restore coefficients when encoding primary SP frame
     }
   }
   if (img->P444_joined) 
@@ -267,14 +257,14 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int 
       for (y=0; y<BLOCK_SIZE; y++)
       {
         memcpy(&enc_picture->imgUV[uv][pic_pix_y+y][pic_pix_x],rec4x4CbCr[uv][y], BLOCK_SIZE * sizeof(imgpel));
-        memcpy(&img->mpr[uv + 1][block_y+y][block_x], img->mpr_4x4[uv + 1][best_ipmode][y], BLOCK_SIZE * sizeof(imgpel));
+        memcpy(&img->mb_pred[uv + 1][block_y+y][block_x], img->mpr_4x4[uv + 1][best_ipmode][y], BLOCK_SIZE * sizeof(imgpel));
       } 
     }
   }
 
   if (img->AdaptiveRounding)
   {
-    update_adaptive_rounding(block_y, block_x);
+    update_adaptive_rounding(img, block_y, block_x);
   }
 
 
@@ -371,8 +361,8 @@ int Mode_Decision_for_4x4IntraBlocks_JM_Low (Macroblock *currMB, int  b8,  int  
 
       if (img->P444_joined)
       {
-        compute_comp_cost(&imgUV_org[0][pic_opix_y], img->mpr_4x4[1][ipmode], pic_opix_x, &cost);
-        compute_comp_cost(&imgUV_org[1][pic_opix_y], img->mpr_4x4[2][ipmode], pic_opix_x, &cost);
+        compute_comp_cost(&pImgOrg[1][pic_opix_y], img->mpr_4x4[1][ipmode], pic_opix_x, &cost);
+        compute_comp_cost(&pImgOrg[2][pic_opix_y], img->mpr_4x4[2][ipmode], pic_opix_x, &cost);
       }
       
       if (cost < *min_cost)
@@ -394,11 +384,11 @@ int Mode_Decision_for_4x4IntraBlocks_JM_Low (Macroblock *currMB, int  b8,  int  
     (char) (mostProbableMode == best_ipmode ? -1 : (best_ipmode < mostProbableMode ? best_ipmode : best_ipmode-1));
 
   // get prediction and prediction error
-  generate_pred_error(&pCurImg[pic_opix_y], img->mpr_4x4[0][best_ipmode], &img->mpr[0][block_y], &img->m7[0][block_y], pic_opix_x, block_x);
+  generate_pred_error(&pCurImg[pic_opix_y], img->mpr_4x4[0][best_ipmode], &img->mb_pred[0][block_y], &img->mb_ores[0][block_y], pic_opix_x, block_x);
 
   ipmode_DPCM=best_ipmode;  
 
-  select_dct(currMB);
+  select_dct(img, currMB);
   nonzero = cr_cbp[0] = pDCT_4x4 (currMB, PLANE_Y, block_x, block_y, &dummy, 1);
 
   if (img->P444_joined)
@@ -411,8 +401,8 @@ int Mode_Decision_for_4x4IntraBlocks_JM_Low (Macroblock *currMB, int  b8,  int  
       {
         for (i=0; i<4; i++)
         {
-          img->mpr[k][block_y+j][block_x+i]  = img->mpr_4x4[k][best_ipmode][j][i];    
-          img->m7[k][block_y+j][block_x+i]   = pImgOrg[k][pic_opix_y+j][pic_opix_x+i] - img->mpr_4x4[k][best_ipmode][j][i]; 
+          img->mb_pred[k][block_y+j][block_x+i] = img->mpr_4x4[k][best_ipmode][j][i];    
+          img->mb_ores[k][block_y+j][block_x+i] = pImgOrg[k][pic_opix_y+j][pic_opix_x+i] - img->mpr_4x4[k][best_ipmode][j][i]; 
         }
       }
 
@@ -509,6 +499,7 @@ void Intra16x16_Mode_Decision (Macroblock* currMB, int* i16mode)
 {
   /* generate intra prediction samples for all 4 16x16 modes */
   intrapred_16x16 (currMB, PLANE_Y);
+  
   if (img->P444_joined)
   {
     select_plane(PLANE_U);

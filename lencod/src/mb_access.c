@@ -133,8 +133,8 @@ void get_mb_pos (int mb_addr, int mb_size[2], int *x, int*y)
  *    input x position
  * \param yN
  *    input y position
- * \param is_chroma
- *    0 if luma coding, 1 for chroma
+ * \param mb_size
+ *    Macroblock size in pixel (according to luma or chroma MB access)
  * \param pix
  *    returns position informations
  ************************************************************************
@@ -194,8 +194,8 @@ void getNonAffNeighbour(Macroblock *currMb, int xN, int yN, int mb_size[2], Pixe
  *    input x position
  * \param yN
  *    input y position
- * \param is_chroma
- *    0 if luma coding, 1 for chroma
+ * \param mb_size
+ *    Macroblock size in pixel (according to luma or chroma MB access)
  * \param pix
  *    returns position informations
  ************************************************************************
@@ -540,6 +540,8 @@ void getAffNeighbour(Macroblock *currMb, int xN, int yN, int mb_size[2], PixelPo
  *    input x block position
  * \param block_y
  *    input y block position
+ * \param mb_size
+ *    Macroblock size in pixel (according to luma or chroma MB access)
  * \param pix
  *    returns position informations
  ************************************************************************

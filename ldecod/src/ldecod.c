@@ -15,7 +15,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 14.0 (FRExt)
+ *     JM 14.1 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -58,9 +58,10 @@
 #include "parset.h"
 #include "sei.h"
 #include "erc_api.h"
+#include "quant.h"
 
 #define JM          "14 (FRExt)"
-#define VERSION     "14.0"
+#define VERSION     "14.1"
 #define EXT_VERSION "(FRExt)"
 
 #define LOGFILE     "log.dec"
@@ -341,7 +342,7 @@ int main(int argc, char **argv)
   img->dec_ref_pic_marking_buffer = NULL;
 
   // B pictures
-  Bframe_ctr=snr->frame_ctr=0;
+  Bframe_ctr = snr->frame_ctr = 0;
 
   // time for total decoding session
   tot_time = 0;
@@ -349,7 +350,7 @@ int main(int argc, char **argv)
   // reference flag initialization
   for(i=0;i<17;i++)
   {
-    ref_flag[i]=1;
+    ref_flag[i] = 1;
   }
 
   while (decode_one_frame(img, params, snr) != EOS)
@@ -434,14 +435,13 @@ void init(ImageParameters *img)  //!< image parameters
 void init_frext(ImageParameters *img)  //!< image parameters
 {
   //pel bitdepth init
-  img->bitdepth_luma_qp_scale   = 6*(img->bitdepth_luma   - 8);
+  img->bitdepth_luma_qp_scale   = 6 * (img->bitdepth_luma - 8);
   if(img->bitdepth_luma > img->bitdepth_chroma || active_sps->chroma_format_idc == YUV400)
     img->pic_unit_bitsize_on_disk = (img->bitdepth_luma > 8)? 16:8;
   else
     img->pic_unit_bitsize_on_disk = (img->bitdepth_chroma > 8)? 16:8;
-  img->dc_pred_value_comp[0] = 1<<(img->bitdepth_luma - 1);
-  img->max_imgpel_value = (1<<img->bitdepth_luma) - 1;
-  img->max_imgpel_value_comp[0] = img->max_imgpel_value;
+  img->dc_pred_value_comp[0]    = 1<<(img->bitdepth_luma - 1);
+  img->max_imgpel_value_comp[0] = (1<<img->bitdepth_luma) - 1;
   img->mb_size[0][0] = img->mb_size[0][1] = MB_BLOCK_SIZE;
 
   if (active_sps->chroma_format_idc != YUV400)
@@ -450,7 +450,8 @@ void init_frext(ImageParameters *img)  //!< image parameters
     img->bitdepth_chroma_qp_scale = 6 * (img->bitdepth_chroma - 8);
     img->dc_pred_value_comp[1]    = (1 << (img->bitdepth_chroma - 1));
     img->dc_pred_value_comp[2]    = img->dc_pred_value_comp[1];
-    img->max_imgpel_value_uv      = (1 << img->bitdepth_chroma) - 1;
+    img->max_imgpel_value_comp[1] = (1 << img->bitdepth_chroma) - 1;
+    img->max_imgpel_value_comp[2] = (1 << img->bitdepth_chroma) - 1;
     img->num_blk8x8_uv = (1 << active_sps->chroma_format_idc) & (~(0x1));
     img->num_uv_blocks = (img->num_blk8x8_uv >> 1);
     img->num_cdc_coeff = (img->num_blk8x8_uv << 1);
@@ -460,15 +461,14 @@ void init_frext(ImageParameters *img)  //!< image parameters
   else
   {
     img->bitdepth_chroma_qp_scale = 0;
-    img->max_imgpel_value_uv      = 0;
+    img->max_imgpel_value_comp[1] = 0;
+    img->max_imgpel_value_comp[2] = 0;
     img->num_blk8x8_uv = 0;
     img->num_uv_blocks = 0;
     img->num_cdc_coeff = 0;
     img->mb_size[1][0] = img->mb_size[2][0] = img->mb_cr_size_x  = 0;
     img->mb_size[1][1] = img->mb_size[2][1] = img->mb_cr_size_y  = 0;
   }
-  img->max_imgpel_value_comp[1] = img->max_imgpel_value_uv;
-  img->max_imgpel_value_comp[2] = img->max_imgpel_value_uv;
   img->mb_size_blk[0][0] = img->mb_size_blk[0][1] = img->mb_size[0][0] >> 2;
   img->mb_size_blk[1][0] = img->mb_size_blk[2][0] = img->mb_size[1][0] >> 2;
   img->mb_size_blk[1][1] = img->mb_size_blk[2][1] = img->mb_size[1][1] >> 2;
@@ -476,6 +476,8 @@ void init_frext(ImageParameters *img)  //!< image parameters
   img->mb_size_shift[0][0] = img->mb_size_shift[0][1] = CeilLog2_sf (img->mb_size[0][0]);
   img->mb_size_shift[1][0] = img->mb_size_shift[2][0] = CeilLog2_sf (img->mb_size[1][0]);
   img->mb_size_shift[1][1] = img->mb_size_shift[2][1] = CeilLog2_sf (img->mb_size[1][1]);
+
+  init_qp_process(img);
 }
 
 
@@ -967,7 +969,7 @@ int init_global_buffers(void)
   memory_size += get_mem4Dint(&(img->wbp_weight), 6, MAX_REFERENCE_PICTURES, MAX_REFERENCE_PICTURES, 3);
 
   // CAVLC mem
-  memory_size += get_mem3Dint(&(img->nz_coeff), img->FrameSizeInMbs, 4, 4 + img->num_blk8x8_uv);
+  memory_size += get_mem4Dint(&(img->nz_coeff), img->FrameSizeInMbs, 3, BLOCK_SIZE, BLOCK_SIZE);
 
   memory_size += get_mem2Dint(&(img->siblock), img->FrameHeightInMbs, img->PicWidthInMbs);
 
@@ -1000,7 +1002,7 @@ void free_global_buffers(void)
     free_mem3Dpel (imgUV_ref);
 
   // CAVLC free mem
-  free_mem3Dint(img->nz_coeff);
+  free_mem4Dint(img->nz_coeff);
 
   free_mem2Dint(img->siblock);
 

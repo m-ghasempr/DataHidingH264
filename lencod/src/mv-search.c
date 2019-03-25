@@ -70,7 +70,7 @@ int (*IntPelME)       (Macroblock *, imgpel *, short, int, int, char ***, short 
                        int, int, int, short[2], short[2], int, int, int, int);
 
 int (*BiPredME)       (Macroblock *, imgpel *, short, int, int, char  ***, short  ****,
-                       int, int, int, short[2], short[2], short[2], short[2], int, int, int, int);
+                       int, int, int, short[2], short[2], short[2], short[2], int, int, int, int, int);
 
 int (*SubPelBiPredME) (imgpel* orig_pic, short ref, int list, int pic_pix_x, int pic_pix_y,
                        int blocktype, short pred_mv1[2], short pred_mv2[2], short mv1[2], short mv2[2], 
@@ -80,6 +80,10 @@ int (*SubPelME)       (imgpel* orig_pic, short ref, int list, int list_offset, i
                        int search_pos2, int search_pos4, int min_mcost, int* lambda_factor, int apply_weights);
 
 
+int BlockMotionSearch (Macroblock *currMB, short,int,int,int,int,int, int*);
+int BiPredBlockMotionSearch(Macroblock *currMB, short[2], short*, short, int, int, int, int , int, int, int*);
+
+int GetSkipCostMB     (Macroblock *currMB);
 
 extern ColocatedParams *Co_located;
 extern const short block_type_shift_factor[8];
@@ -246,18 +250,18 @@ void SetMotionVectorPredictor (Macroblock *currMB,
   {
     if (mb_x < 8)  // first column of 8x8 blocks
     {
-      if (mb_y==8)
+      if (mb_y == 8 )
       {
         if (blockshape_x == 16)      block_c.available  = 0;
       }
-      else
+      else if (mb_x+blockshape_x == 8)
       {
-        if (mb_x+blockshape_x == 8)  block_c.available = 0;
+          block_c.available = 0;
       }
     }
-    else
+    else if (mb_x+blockshape_x == 16)
     {
-      if (mb_x+blockshape_x == 16)   block_c.available = 0;
+      block_c.available = 0;
     }
   }
 
@@ -311,9 +315,12 @@ void SetMotionVectorPredictor (Macroblock *currMB,
   /* Prediction if only one of the neighbors uses the reference frame
   *  we are checking
   */
-  if(rFrameL == ref_frame && rFrameU != ref_frame && rFrameUR != ref_frame)       mvPredType = MVPRED_L;
-  else if(rFrameL != ref_frame && rFrameU == ref_frame && rFrameUR != ref_frame)  mvPredType = MVPRED_U;
-  else if(rFrameL != ref_frame && rFrameU != ref_frame && rFrameUR == ref_frame)  mvPredType = MVPRED_UR;
+  if(rFrameL == ref_frame && rFrameU != ref_frame && rFrameUR != ref_frame)       
+    mvPredType = MVPRED_L;
+  else if(rFrameL != ref_frame && rFrameU == ref_frame && rFrameUR != ref_frame)  
+    mvPredType = MVPRED_U;
+  else if(rFrameL != ref_frame && rFrameU != ref_frame && rFrameUR == ref_frame)  
+    mvPredType = MVPRED_UR;
   // Directional predictions
   if(blockshape_x == 8 && blockshape_y == 16)
   {
@@ -419,8 +426,7 @@ void SetMotionVectorPredictor (Macroblock *currMB,
 *    Initialize the motion search
 ************************************************************************
 */
-void
-Init_Motion_Search_Module ()
+void Init_Motion_Search_Module (void)
 {
   int bits, i_min, i_max, k;
   int i, l;
@@ -567,9 +573,11 @@ Init_Motion_Search_Module ()
       InitializeFastFullIntegerSearch ();
 
     init_ME_engine(params->SearchMode);
+
+    if (params->SearchMode == UM_HEX)
+      UMHEX_DefineThreshold();
   }
 }
-
 
 /*!
  ************************************************************************
@@ -598,6 +606,20 @@ Clear_Motion_Search_Module ()
 
   if ((params->SearchMode == FAST_FULL_SEARCH) && (!params->IntraProfile) )
     ClearFastFullIntegerSearch ();
+}
+
+static inline int mv_bits_cost(short ***all_mv, short ***p_mv, int by, int bx, int step_v0, int step_v, int step_h0, int step_h, int mvd_bits)
+{
+  int v, h;
+  for (v=by; v<by + step_v0; v+=step_v)
+  {
+    for (h=bx; h<bx + step_h0; h+=step_h)
+    {
+      mvd_bits += mvbits[ all_mv[v][h][0] - p_mv[v][h][0] ];
+      mvd_bits += mvbits[ all_mv[v][h][1] - p_mv[v][h][1] ];
+    }
+  }
+  return mvd_bits;
 }
 
 /*!
@@ -633,29 +655,16 @@ int BPredPartitionCost (Macroblock *currMB,
   int   by0_part = by0[parttype][block8x8];
   int   bx0_part = bx0[parttype][block8x8];
 
-  short   ***all_mv_l0 = list ? img->bipred_mv1[LIST_0][ref_l0][blocktype] : img->bipred_mv2[LIST_0][ref_l0][blocktype];
-  short   ***all_mv_l1 = list ? img->bipred_mv1[LIST_1][ref_l1][blocktype] : img->bipred_mv2[LIST_1][ref_l1][blocktype];
+  short   ***all_mv_l0 = img->bipred_mv[list][LIST_0][ref_l0][blocktype]; 
+  short   ***all_mv_l1 = img->bipred_mv[list][LIST_1][ref_l1][blocktype]; 
   short   ***p_mv_l0 = img->pred_mv[LIST_0][ref_l0][blocktype];
   short   ***p_mv_l1 = img->pred_mv[LIST_1][ref_l1][blocktype];
-  imgpel  (*curr_mpr)[16] = img->mpr[0];
+  imgpel  (*mb_pred)[16] = img->mb_pred[0];
 
-  for (v = by0_part; v < by0_part + step_v0; v += step_v)
-  {
-    for (h = bx0_part; h < bx0_part + step_h0; h += step_h)
-    {
-      mvd_bits += mvbits[ all_mv_l0[v][h][0] - p_mv_l0[v][h][0] ];
-      mvd_bits += mvbits[ all_mv_l0[v][h][1] - p_mv_l0[v][h][1] ];
-    }
-  }
-
-  for (v = by0_part; v < by0_part + step_v0; v += step_v)
-  {
-    for (h = bx0_part; h < bx0_part + step_h0; h += step_h)
-    {
-      mvd_bits += mvbits[ all_mv_l1[v][h][0] - p_mv_l1[v][h][0] ];
-      mvd_bits += mvbits[ all_mv_l1[v][h][1] - p_mv_l1[v][h][1] ];
-    }
-  }
+  // List0 
+  mvd_bits = mv_bits_cost(all_mv_l0, p_mv_l0, by0_part, bx0_part, step_v0, step_v, step_h0, step_h, mvd_bits);
+  // List1
+  mvd_bits = mv_bits_cost(all_mv_l1, p_mv_l1, by0_part, bx0_part, step_v0, step_v, step_h0, step_h, mvd_bits);
 
   mcost = WEIGHTED_COST (lambda_factor, mvd_bits);
 
@@ -673,7 +682,7 @@ int BPredPartitionCost (Macroblock *currMB,
       {
         for (i = 0; i < 4; i++)
           diff64[k++] = curr_blk[byy+j][bxx+i] =
-          pCurImg[pic_pix_y+j][pic_pix_x+i] - curr_mpr[j+block_y][i+block_x];
+          pCurImg[pic_pix_y+j][pic_pix_x+i] - mb_pred[j+block_y][i+block_x];
       }
 
       if ((!params->Transform8x8Mode) || (blocktype>4))
@@ -767,12 +776,12 @@ BlockMotionSearch (Macroblock *currMB,      //!< Current Macroblock
   if ( ChromaMEEnable )
   {
     // copy the original cmp1 and cmp2 data to the orig_pic matrix
-    for ( i = 0; i<=1; i++)
+    for ( i = 1; i<=2; i++)
     {
-      orig_pic_tmp = orig_pic + (256 << i);
+      orig_pic_tmp = orig_pic + (256 << (i - 1));
       for (j = pic_pix_y_c; j < pic_pix_y_c + bsy_c; j++)
       {
-        memcpy(orig_pic_tmp, &(imgUV_org[i][j][pic_pix_x_c]), bsx_c * sizeof(imgpel));
+        memcpy(orig_pic_tmp, &(pImgOrg[i][j][pic_pix_x_c]), bsx_c * sizeof(imgpel));
         orig_pic_tmp += bsx_c;
       }
     }
@@ -796,9 +805,10 @@ BlockMotionSearch (Macroblock *currMB,      //!< Current Macroblock
   //===========================================
 
   if (params->SearchMode == UM_HEX)
-    UMHEXSetMotionVectorPredictor(currMB, pred_mv, enc_picture->ref_idx[list], enc_picture->mv[list], ref, list, mb_x, mb_y, bsx, bsy, &search_range);
+    UMHEXSetMotionVectorPredictor(currMB, pred_mv, enc_picture->motion.ref_idx[list], enc_picture->motion.mv[list], ref, list, mb_x, mb_y, bsx, bsy, &search_range);
   else
-    SetMotionVectorPredictor (currMB, pred_mv, enc_picture->ref_idx[list], enc_picture->mv[list], ref, list, mb_x, mb_y, bsx, bsy);
+    SetMotionVectorPredictor (currMB, pred_mv, enc_picture->motion.ref_idx[list], enc_picture->motion.mv[list], ref, list, mb_x, mb_y, bsx, bsy);
+
 
   //==================================
   //=====   INTEGER-PEL SEARCH   =====
@@ -825,8 +835,8 @@ BlockMotionSearch (Macroblock *currMB,      //!< Current Macroblock
   clip_mv_range(img, search_range, mv, params->EPZSGrid);
 
   //--- perform motion search ---
-  min_mcost = IntPelME (currMB, orig_pic, ref, list, list_offset,
-    enc_picture->ref_idx, enc_picture->mv, pic_pix_x, pic_pix_y, blocktype,
+    min_mcost = IntPelME (currMB, orig_pic, ref, list, list_offset,
+    enc_picture->motion.ref_idx, enc_picture->motion.mv, pic_pix_x, pic_pix_y, blocktype,
     pred_mv, mv, search_range<<(params->EPZSGrid), min_mcost, lambda_factor[F_PEL], apply_weights);
 
   //===== convert search center to quarter-pel units =====
@@ -892,25 +902,65 @@ BlockMotionSearch (Macroblock *currMB,      //!< Current Macroblock
   }
 
 
-  // Bipred ME consideration. This needs to go in a separate function, and at some point support smaller partitions
-  if (img->type==B_SLICE && params->BiPredMotionEstimation != 0 && (blocktype == 1) && (ref==0))
+  // Bipred ME consideration: returns minimum bipred cost
+  if (img->type == B_SLICE && is_bipred_enabled(blocktype) && (ref == 0)) 
   {
-    short   ******bipred_mv = list ? img->bipred_mv1 : img->bipred_mv2;
-    int     min_mcostbi = max_value;
-    short   bimv[2] = {0, 0}, tempmv[2] = {0, 0};
-    short   *pred_mv1 = NULL;
-    short   *pred_mv2 = NULL;
-    short   *bi_mv1 = NULL, *bi_mv2 = NULL;
-    short   iterlist=list;
-    short   pred_mv_bi[2];
+    BiPredBlockMotionSearch(currMB, mv, pred_mv, ref, list, mb_x, mb_y, blocktype, search_range, apply_bi_weights, lambda_factor);
+  }
+
+#if GET_METIME
+  ftime(&tstruct2);   // end time ms
+  me_tmp_time=(tstruct2.time - tstruct1.time) * 1000 + (tstruct2.millitm - tstruct1.millitm);
+  me_tot_time += me_tmp_time;
+  me_time += me_tmp_time;
+#endif
+  return min_mcost;
+}
+
+
+/*!
+ ***********************************************************************
+ * \brief
+ *    Block bi-prediction motion search
+ ***********************************************************************
+ */
+int BiPredBlockMotionSearch(Macroblock *currMB,      //!< Current Macroblock
+                   short     mv[2],           //!< current list motion vector
+                   short*    pred_mv,         //!< current list motion vector predictor
+                   short     ref,             //!< reference idx
+                   int       list,            //!< reference picture list
+                   int       mb_x,            //!< x-coordinate inside macroblock
+                   int       mb_y,            //!< y-coordinate inside macroblock
+                   int       blocktype,       //!< block type (1-16x16 ... 7-4x4)
+                   int       search_range,    //!< 1-d search range for integer-position search
+                   int       apply_bi_weights, //!< apply bipred weights
+                   int*      lambda_factor)   //!< lagrangian parameter for determining motion cost
+{
+    int         iteration_no, i, j;
+    short       bipred_type = list ? 0 : 1;
+    short****** bipred_mv = img->bipred_mv[bipred_type];
+    int         min_mcostbi = INT_MAX;
+    short       bimv[2] = {0, 0}, tempmv[2] = {0, 0};
+    short*      pred_mv1 = NULL;
+    short*      pred_mv2 = NULL;
+    short*      bi_mv1 = NULL, *bi_mv2 = NULL;
+    short       iterlist=list;
+    short       pred_mv_bi[2];
+    int         block_x   = (mb_x>>2);
+    int         block_y   = (mb_y>>2);
+    int         bsx       = params->blc_size[blocktype][0];
+    int         bsy       = params->blc_size[blocktype][1];
+    int         pic_pix_x = img->opix_x + mb_x;
+    int         pic_pix_y = img->opix_y + mb_y;
+    int         list_offset = ((img->MbaffFrameFlag) && (currMB->mb_field)) ? img->current_mb_nr % 2 ? 4 : 2 : 0;
 
     if (params->SearchMode == UM_HEX)
     {
       bipred_flag = 1;
-      UMHEXSetMotionVectorPredictor(currMB, pred_mv_bi, enc_picture->ref_idx[list ^ 1], enc_picture->mv[(list == LIST_0? LIST_1: LIST_0)], 0, (list == LIST_0? LIST_1: LIST_0), mb_x, mb_y, bsx, bsy, &search_range);
+      UMHEXSetMotionVectorPredictor(currMB, pred_mv_bi, enc_picture->motion.ref_idx[list ^ 1], enc_picture->motion.mv[(list == LIST_0? LIST_1: LIST_0)], 0, (list == LIST_0? LIST_1: LIST_0), mb_x, mb_y, bsx, bsy, &search_range);
     }
     else
-      SetMotionVectorPredictor     (currMB, pred_mv_bi, enc_picture->ref_idx[list ^ 1], enc_picture->mv[(list == LIST_0? LIST_1: LIST_0)], 0, (list == LIST_0? LIST_1: LIST_0), mb_x, mb_y, bsx, bsy);
+      SetMotionVectorPredictor     (currMB, pred_mv_bi, enc_picture->motion.ref_idx[list ^ 1], enc_picture->motion.mv[(list == LIST_0? LIST_1: LIST_0)], 0, (list == LIST_0? LIST_1: LIST_0), mb_x, mb_y, bsx, bsy);
 
     if ((params->SearchMode != EPZS) || (params->EPZSSubPelGrid == 0))
     {
@@ -926,9 +976,9 @@ BlockMotionSearch (Macroblock *currMB,      //!< Current Macroblock
     }
 
     //Bi-predictive motion Refinements
-    for (i=0; i <= params->BiPredMERefinements; i++)
+    for (iteration_no = 0; iteration_no <= params->BiPredMERefinements; iteration_no++)
     {
-      if (i & 0x01)
+      if (iteration_no & 0x01)
       {
         pred_mv1  = pred_mv;
         pred_mv2  = pred_mv_bi;
@@ -950,11 +1000,11 @@ BlockMotionSearch (Macroblock *currMB,      //!< Current Macroblock
 
       PrepareBiPredMEParams(apply_bi_weights, ChromaMEEnable, iterlist, list_offset, ref);
       // Get bipred mvs for list iterlist given previously computed mvs from other list
-      min_mcostbi = BiPredME (currMB, orig_pic, ref, iterlist, list_offset, enc_picture->ref_idx, enc_picture->mv,
+      min_mcostbi = BiPredME (currMB, orig_pic, ref, iterlist, list_offset, enc_picture->motion.ref_idx, enc_picture->motion.mv,
         pic_pix_x, pic_pix_y, blocktype, pred_mv1, pred_mv2, bi_mv1, bi_mv2,
-        (params->BiPredMESearchRange <<(params->EPZSGrid))>>i, min_mcostbi, lambda_factor[F_PEL], apply_bi_weights);
+        (params->BiPredMESearchRange <<(params->EPZSGrid))>>iteration_no, min_mcostbi, iteration_no, lambda_factor[F_PEL], apply_bi_weights);
 
-      if (i > 0 && (tempmv[0] == bi_mv1[0]) && (tempmv[1] == bi_mv1[1]))
+      if (iteration_no > 0 && (tempmv[0] == bi_mv1[0]) && (tempmv[1] == bi_mv1[1]))
       {
         break;
       }
@@ -972,7 +1022,7 @@ BlockMotionSearch (Macroblock *currMB,      //!< Current Macroblock
     {
       if (params->BiPredMESubPel)
       {
-        min_mcostbi = max_value;
+        min_mcostbi = INT_MAX;
         PrepareBiPredMEParams(apply_bi_weights, ChromaMEEnable, iterlist, list_offset, ref);
 
         min_mcostbi =  SubPelBiPredME (orig_pic, ref, iterlist, pic_pix_x, pic_pix_y, blocktype,
@@ -981,7 +1031,7 @@ BlockMotionSearch (Macroblock *currMB,      //!< Current Macroblock
 
       if (params->BiPredMESubPel==2)
       {
-        min_mcostbi = max_value;
+        min_mcostbi = INT_MAX;
         PrepareBiPredMEParams(apply_bi_weights, ChromaMEEnable, iterlist ^ 1, list_offset, ref);
 
         min_mcostbi =  SubPelBiPredME (orig_pic, ref, iterlist ^ 1, pic_pix_x, pic_pix_y, blocktype,
@@ -999,29 +1049,7 @@ BlockMotionSearch (Macroblock *currMB,      //!< Current Macroblock
         bipred_mv[iterlist ^ 1][0][blocktype][j][i][1] = bi_mv2[1];
       }
     }
-  }
-
-#if GET_METIME
-  ftime(&tstruct2);   // end time ms
-  me_tmp_time=(tstruct2.time - tstruct1.time) * 1000 + (tstruct2.millitm - tstruct1.millitm);
-  me_tot_time += me_tmp_time;
-  me_time += me_tmp_time;
-#endif
-  return min_mcost;
-}
-
-int mv_bits_cost(short ***all_mv, short ***p_mv, int by, int bx, int step_v0, int step_v, int step_h0, int step_h, int mvd_bits)
-{
-  int v, h;
-  for (v=by; v<by + step_v0; v+=step_v)
-  {
-    for (h=bx; h<bx + step_h0; h+=step_h)
-    {
-      mvd_bits += mvbits[ all_mv[v][h][0] - p_mv[v][h][0] ];
-      mvd_bits += mvbits[ all_mv[v][h][1] - p_mv[v][h][1] ];
-    }
-  }
-  return mvd_bits;
+    return min_mcostbi;
 }
 
 /*!
@@ -1058,29 +1086,15 @@ int BIDPartitionCost (Macroblock *currMB,
   short   ***   p_mv_l1 = img->pred_mv[LIST_1][(int) cur_ref[LIST_1]][blocktype];
   short   *** all_mv_l0 = img->all_mv [LIST_0][(int) cur_ref[LIST_0]][blocktype];
   short   *** all_mv_l1 = img->all_mv [LIST_1][(int) cur_ref[LIST_1]][blocktype];
-
-  imgpel  (*curr_mpr)[16] = img->mpr[0];
+  short bipred_me =  0; //no bipred for this case 
+  imgpel  (*mb_pred)[16] = img->mb_pred[0];
 
   //----- cost for motion vector bits -----
   // Should write a separate, small function to do this processing
   // List0 
-  for (v=by; v<by + step_v0; v+=step_v)
-  {
-    for (h=bx; h<bx + step_h0; h+=step_h)
-    {
-      mvd_bits += mvbits[ all_mv_l0[v][h][0] - p_mv_l0[v][h][0] ];
-      mvd_bits += mvbits[ all_mv_l0[v][h][1] - p_mv_l0[v][h][1] ];
-    }
-  }
+  mvd_bits = mv_bits_cost(all_mv_l0, p_mv_l0, by, bx, step_v0, step_v, step_h0, step_h, mvd_bits);
   // List1
-  for (v=by; v<by + step_v0; v+=step_v)
-  {
-    for (h=bx; h<bx + step_h0; h+=step_h)
-    {
-      mvd_bits += mvbits[ all_mv_l1[v][h][0] - p_mv_l1[v][h][0] ];
-      mvd_bits += mvbits[ all_mv_l1[v][h][1] - p_mv_l1[v][h][1] ];
-    }
-  }
+  mvd_bits = mv_bits_cost(all_mv_l1, p_mv_l1, by, bx, step_v0, step_v, step_h0, step_h, mvd_bits);
 
   mcost = WEIGHTED_COST (lambda_factor, mvd_bits);
 
@@ -1091,13 +1105,13 @@ int BIDPartitionCost (Macroblock *currMB,
     for (bxx=0, h=bx; h<bx + step_h0; bxx+=4, h++)
     {
       pic_pix_x = img->opix_x + (block_x = (h<<2));
-      LumaPrediction (currMB, block_x, block_y, 4, 4, 2, blocktype, blocktype, (short) cur_ref[0], (short) cur_ref[1]);
+      LumaPrediction (currMB, block_x, block_y, 4, 4, 2, blocktype, blocktype, (short) cur_ref[0], (short) cur_ref[1], bipred_me);
 
       for (k=j=0; j<4; j++)
       {
         for (  i=0; i<4; i++)
           diff64[k++] = curr_blk[byy+j][bxx+i] =
-          pCurImg[pic_pix_y+j][pic_pix_x+i] - curr_mpr[j+block_y][i+block_x];
+          pCurImg[pic_pix_y+j][pic_pix_x+i] - mb_pred[j+block_y][i+block_x];
       }
       if ((!params->Transform8x8Mode) || (blocktype>4))
         mcost += distortion4x4 (diff64);
@@ -1107,6 +1121,7 @@ int BIDPartitionCost (Macroblock *currMB,
   if (params->Transform8x8Mode && (blocktype<=4))  // tchen 4-29-04
   {
     for (byy=0; byy < params->blc_size[parttype][1]; byy+=bsy)
+    {
       for (bxx=0; bxx<params->blc_size[parttype][0]; bxx+=bsx)
       {
         for (k=0, j=byy;j<byy + 8;j++, k += 8)
@@ -1114,6 +1129,7 @@ int BIDPartitionCost (Macroblock *currMB,
 
         mcost += distortion8x8(diff64);
       }
+    }
   }
   return mcost;
 }
@@ -1132,35 +1148,37 @@ int GetSkipCostMB (Macroblock *currMB)
   int curr_diff[8][8];
   int mb_x, mb_y;
   int block;
-  imgpel  (*curr_mpr)[16] = img->mpr[0];
+  imgpel  (*mb_pred)[16] = img->mb_pred[0];
 
   for(block = 0;block < 4;block++)
   {
     mb_y    = (block >>   1)<<3;
     mb_x    = (block & 0x01)<<3;
-    for (block_y=mb_y; block_y<mb_y+8; block_y+=4)
+    for (block_y = mb_y; block_y < mb_y+8; block_y += 4)
     {
       pic_pix_y = img->opix_y + block_y;
-      for (block_x=mb_x; block_x<mb_x+8; block_x+=4)
+      for (block_x = mb_x; block_x < mb_x + 8; block_x += 4)
       {
         pic_pix_x = img->opix_x + block_x;
 
         //===== prediction of 4x4 block =====
-        LumaPrediction (currMB, block_x, block_y, 4, 4, 0, 0, 0, 0, 0);
+        LumaPrediction (currMB, block_x, block_y, 4, 4, 0, 0, 0, 0, 0, 0);
 
         //===== get displaced frame difference ======
-        for (k=j=0; j<4; j++)
-          for (i=0; i<4; i++, k++)
+        for (k = j = 0; j < 4; j++)
+        {
+          for (i = 0; i < 4; i++, k++)
           {
-            diff[k] = curr_diff[block_y-mb_y+j][block_x-mb_x+i] = pCurImg[pic_pix_y+j][pic_pix_x+i] - curr_mpr[j+block_y][i+block_x];
+            diff[k] = curr_diff[block_y-mb_y+j][block_x-mb_x+i] = pCurImg[pic_pix_y+j][pic_pix_x+i] - mb_pred[j+block_y][i+block_x];
           }
+        }
 
-          if(!((params->rdopt==0) && (params->Transform8x8Mode)))
-            cost += distortion4x4 (diff);
+        if(!((params->rdopt==0) && (params->Transform8x8Mode)))
+          cost += distortion4x4 (diff);
       }
     }
 
-    if((params->rdopt==0)&&(params->Transform8x8Mode))
+    if((params->rdopt == 0) && (params->Transform8x8Mode))
     {
       for(k=j=0; j<8; j++, k+=8)
         memcpy(&diff64[k], &(curr_diff[j]), 8 * sizeof(int));
@@ -1191,7 +1209,7 @@ void FindSkipModeMotionVector (Macroblock *currMB)
   int      a_ref_idx = 0;
   int      b_mv_y = 0;
   int      b_ref_idx = 0;
-  short    ***mv = enc_picture->mv[LIST_0];
+  short    ***mv = enc_picture->motion.mv[LIST_0];
   int *mb_size = img->mb_size[IS_LUMA];
 
 
@@ -1201,7 +1219,7 @@ void FindSkipModeMotionVector (Macroblock *currMB)
   if (mb_a.available)
   {
     a_mv_y    = mv[mb_a.pos_y][mb_a.pos_x][1];
-    a_ref_idx = enc_picture->ref_idx[LIST_0][mb_a.pos_y][mb_a.pos_x];
+    a_ref_idx = enc_picture->motion.ref_idx[LIST_0][mb_a.pos_y][mb_a.pos_x];
 
     if (currMB->mb_field && !img->mb_data[mb_a.mb_addr].mb_field)
     {
@@ -1218,7 +1236,7 @@ void FindSkipModeMotionVector (Macroblock *currMB)
   if (mb_b.available)
   {
     b_mv_y    = mv[mb_b.pos_y][mb_b.pos_x][1];
-    b_ref_idx = enc_picture->ref_idx[LIST_0][mb_b.pos_y][mb_b.pos_x];
+    b_ref_idx = enc_picture->motion.ref_idx[LIST_0][mb_b.pos_y][mb_b.pos_x];
 
     if (currMB->mb_field && !img->mb_data[mb_b.mb_addr].mb_field)
     {
@@ -1241,7 +1259,7 @@ void FindSkipModeMotionVector (Macroblock *currMB)
   }
   else
   {
-    SetMotionVectorPredictor (currMB, pmv, enc_picture->ref_idx[LIST_0], mv, 0, LIST_0, 0, 0, 16, 16);
+    SetMotionVectorPredictor (currMB, pmv, enc_picture->motion.ref_idx[LIST_0], mv, 0, LIST_0, 0, 0, 16, 16);
     for (bx = 0;bx < 4;bx++)
     {
       memcpy(all_mv [0][bx], pmv, 2* sizeof(short));
@@ -1265,7 +1283,8 @@ int GetDirectCost8x8 (Macroblock *currMB, int block, int *cost8x8)
   int cost  = 0;
   int mb_y  = (block/2)<<3;
   int mb_x  = (block%2)<<3;
-  imgpel  (*curr_mpr)[16] = img->mpr[0];
+  short bipred_me  = 0;
+  imgpel  (*mb_pred)[16] = img->mb_pred[0];
 
   for (block_y=mb_y; block_y<mb_y+8; block_y+=4)
   {
@@ -1286,21 +1305,21 @@ int GetDirectCost8x8 (Macroblock *currMB, int block, int *cost8x8)
       LumaPrediction (currMB, block_x, block_y, 4, 4,
         direct_pdir[pic_pix_y>>2][pic_pix_x>>2], 0, 0,
         direct_ref_idx[LIST_0][pic_pix_y>>2][pic_pix_x>>2],
-        direct_ref_idx[LIST_1][pic_pix_y>>2][pic_pix_x>>2]);
+        direct_ref_idx[LIST_1][pic_pix_y>>2][pic_pix_x>>2], bipred_me);
 
       //===== get displaced frame difference ======
       for (k=j=0; j<4; j++)
         for (i=0; i<4; i++, k++)
         {
           diff[k] = curr_diff[block_y-mb_y+j][block_x-mb_x+i] =
-            pCurImg[pic_pix_y+j][pic_pix_x+i] - curr_mpr[j+block_y][i+block_x];
+            pCurImg[pic_pix_y+j][pic_pix_x+i] - mb_pred[j+block_y][i+block_x];
         }
 
         cost += distortion4x4 (diff);
     }
   }
 
-  if((params->rdopt==0)&&(params->Transform8x8Mode))
+  if((params->rdopt == 0) && (params->Transform8x8Mode))
   {
     k=0;
     for(j=0; j<8; j++, k+=8)
@@ -1405,8 +1424,8 @@ PartitionMotionSearch (Macroblock *currMB,
         search_range = params->search_range / ((imin(ref,1)+1) * imin(2,blocktype));
 
       //----- set arrays -----
-      ref_array = enc_picture->ref_idx[list];
-      mv_array  = enc_picture->mv[list];
+      ref_array = enc_picture->motion.ref_idx[list];
+      mv_array  = enc_picture->motion.mv[list];
 
       //----- init motion cost -----
       //motion_cost[blocktype][list][ref][block8x8] = 0;
@@ -1421,7 +1440,7 @@ PartitionMotionSearch (Macroblock *currMB,
         for (h=bx; h<bx+step_h0; h+=step_h)
         {
           all_mv = img->all_mv[list][ref][blocktype][v][h];
-          pic_block_x = img->block_x + h;          
+          pic_block_x = img->block_x + h;
 
           //--- motion search for block ---          
           if (Motion_Selected != 1)
@@ -1471,36 +1490,24 @@ void Get_Direct_Motion_Vectors (Macroblock *currMB)
   int refList;
   int ref_idx;
 
-  byte  **   moving_block;
-  short ****   co_located_mv;
-  char  ***    co_located_ref_idx;
-  int64 ***    co_located_ref_id;
-  char  **     ref_pic_l0 = enc_picture->ref_idx[LIST_0];
-  char  **     ref_pic_l1 = enc_picture->ref_idx[LIST_1];
+  MotionParams *colocated;
+  char  **     ref_pic_l0 = enc_picture->motion.ref_idx[LIST_0];
+  char  **     ref_pic_l1 = enc_picture->motion.ref_idx[LIST_1];
 
   if (currMB->list_offset)
   {
     if(img->current_mb_nr%2)
     {
-      moving_block = Co_located->bottom_moving_block;
-      co_located_mv = Co_located->bottom_mv;
-      co_located_ref_idx = Co_located->bottom_ref_idx;
-      co_located_ref_id = Co_located->bottom_ref_pic_id;
+      colocated = &Co_located->bottom;
     }
     else
     {
-      moving_block = Co_located->top_moving_block;
-      co_located_mv = Co_located->top_mv;
-      co_located_ref_idx = Co_located->top_ref_idx;
-      co_located_ref_id = Co_located->top_ref_pic_id;
+      colocated = &Co_located->top;
     }
   }
   else
   {
-    moving_block = Co_located->moving_block;
-    co_located_mv = Co_located->mv;
-    co_located_ref_idx = Co_located->ref_idx;
-    co_located_ref_id = Co_located->ref_pic_id;
+    colocated = &Co_located->frame;
   }
 
   if (img->direct_spatial_mv_pred_flag)  //spatial direct mode copy from decoder
@@ -1626,10 +1633,10 @@ void Get_Direct_Motion_Vectors (Macroblock *currMB)
     l1_refX = (l1_refX >= 0 && l1_refC >= 0) ? imin(l1_refX,l1_refC): imax(l1_refX,l1_refC);
 
     if (l0_refX >=0)
-      SetMotionVectorPredictor (currMB, pmvfw, enc_picture->ref_idx[LIST_0], enc_picture->mv[LIST_0], l0_refX, LIST_0, 0, 0, 16, 16);
+      SetMotionVectorPredictor (currMB, pmvfw, enc_picture->motion.ref_idx[LIST_0], enc_picture->motion.mv[LIST_0], l0_refX, LIST_0, 0, 0, 16, 16);
 
     if (l1_refX >=0)
-      SetMotionVectorPredictor (currMB, pmvbw, enc_picture->ref_idx[LIST_1], enc_picture->mv[LIST_1], l1_refX, LIST_1, 0, 0, 16, 16);
+      SetMotionVectorPredictor (currMB, pmvbw, enc_picture->motion.ref_idx[LIST_1], enc_picture->motion.mv[LIST_1], l1_refX, LIST_1, 0, 0, 16, 16);
 
     for (block_y=0; block_y<4; block_y++)
     {
@@ -1645,7 +1652,7 @@ void Get_Direct_Motion_Vectors (Macroblock *currMB)
 
         if (l0_refX >=0)
         {
-          if (!l0_refX  && !moving_block[opic_block_y][opic_block_x])
+          if (!l0_refX  && !colocated->moving_block[opic_block_y][opic_block_x])
           {
             memset(all_mvs[LIST_0][0][0][block_y][block_x], 0, 2 * sizeof(short));
             direct_ref_idx[LIST_0][pic_block_y][pic_block_x]=0;
@@ -1664,7 +1671,7 @@ void Get_Direct_Motion_Vectors (Macroblock *currMB)
 
         if (l1_refX >=0)
         {
-          if(l1_refX==0 && !moving_block[opic_block_y][opic_block_x])
+          if(l1_refX==0 && !colocated->moving_block[opic_block_y][opic_block_x])
           {
             memset(all_mvs[LIST_1][0][0][block_y][block_x], 0, 2 * sizeof(short));
             direct_ref_idx[LIST_1][pic_block_y][pic_block_x]= (char)l1_refX;
@@ -1748,8 +1755,8 @@ void Get_Direct_Motion_Vectors (Macroblock *currMB)
         opic_block_x = (img->opix_x>>2) + block_x;
         all_mvs = img->all_mv;
 
-        refList = (co_located_ref_idx[LIST_0][opic_block_y][opic_block_x]== -1 ? LIST_1 : LIST_0);
-        ref_idx = co_located_ref_idx[refList][opic_block_y][opic_block_x];
+        refList = (colocated->ref_idx[LIST_0][opic_block_y][opic_block_x]== -1 ? LIST_1 : LIST_0);
+        ref_idx = colocated->ref_idx[refList][opic_block_y][opic_block_x];
 
         // next P is intra mode
         if (ref_idx==-1)
@@ -1768,7 +1775,7 @@ void Get_Direct_Motion_Vectors (Macroblock *currMB)
 
           for (iref=0;iref<imin(img->num_ref_idx_l0_active,listXsize[LIST_0+currMB->list_offset]);iref++)
           {
-            if (refpic[iref]==co_located_ref_id[refList ][opic_block_y][opic_block_x])
+            if (refpic[iref]==colocated->ref_pic_id[refList ][opic_block_y][opic_block_x])
             {
               mapped_idx=iref;
               break;
@@ -1786,18 +1793,18 @@ void Get_Direct_Motion_Vectors (Macroblock *currMB)
             if (mv_scale==9999)
             {
               // forward
-              memcpy(all_mvs[LIST_0][0][0][block_y][block_x], co_located_mv[refList][opic_block_y][opic_block_x], 2* sizeof(short));
+              memcpy(all_mvs[LIST_0][0][0][block_y][block_x], colocated->mv[refList][opic_block_y][opic_block_x], 2* sizeof(short));
               // backward
               memset(all_mvs[LIST_1][0][0][block_y][block_x], 0, 2* sizeof(short));
             }
             else
             {
               // forward
-              all_mvs[LIST_0][mapped_idx][0][block_y][block_x][0] = (mv_scale * co_located_mv[refList][opic_block_y][opic_block_x][0] + 128) >> 8;
-              all_mvs[LIST_0][mapped_idx][0][block_y][block_x][1] = (mv_scale * co_located_mv[refList][opic_block_y][opic_block_x][1] + 128) >> 8;
+              all_mvs[LIST_0][mapped_idx][0][block_y][block_x][0] = (mv_scale * colocated->mv[refList][opic_block_y][opic_block_x][0] + 128) >> 8;
+              all_mvs[LIST_0][mapped_idx][0][block_y][block_x][1] = (mv_scale * colocated->mv[refList][opic_block_y][opic_block_x][1] + 128) >> 8;
               // backward
-              all_mvs[LIST_1][         0][0][block_y][block_x][0] = ((mv_scale - 256)* co_located_mv[refList][opic_block_y][opic_block_x][0] + 128) >> 8;
-              all_mvs[LIST_1][         0][0][block_y][block_x][1] = ((mv_scale - 256)* co_located_mv[refList][opic_block_y][opic_block_x][1] + 128) >> 8;
+              all_mvs[LIST_1][         0][0][block_y][block_x][0] = ((mv_scale - 256)* colocated->mv[refList][opic_block_y][opic_block_x][0] + 128) >> 8;
+              all_mvs[LIST_1][         0][0][block_y][block_x][1] = ((mv_scale - 256)* colocated->mv[refList][opic_block_y][opic_block_x][1] + 128) >> 8;
             }
 
             // Test Level Limits if satisfied.
@@ -1842,4 +1849,3 @@ void Get_Direct_Motion_Vectors (Macroblock *currMB)
     }
   }
 }
-

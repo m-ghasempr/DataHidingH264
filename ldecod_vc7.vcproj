@@ -234,6 +234,9 @@
 				RelativePath=".\ldecod\src\parsetcommon.c">
 			</File>
 			<File
+				RelativePath=".\ldecod\src\quant.c">
+			</File>
+			<File
 				RelativePath=".\ldecod\src\rtp.c">
 			</File>
 			<File
@@ -295,6 +298,9 @@
 				RelativePath=".\ldecod\inc\fmo.h">
 			</File>
 			<File
+				RelativePath=".\lencod\inc\frame.h">
+			</File>
+			<File
 				RelativePath=".\ldecod\inc\global.h">
 			</File>
 			<File
@@ -341,6 +347,9 @@
 			</File>
 			<File
 				RelativePath=".\ldecod\inc\parsetcommon.h">
+			</File>
+			<File
+				RelativePath=".\ldecod\inc\quant.h">
 			</File>
 			<File
 				RelativePath=".\ldecod\inc\rtp.h">

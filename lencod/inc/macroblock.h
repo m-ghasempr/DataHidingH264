@@ -41,7 +41,7 @@ int  writeMBLayer (Macroblock *currMB, int rdopt, int *coeff_rate);
 void write_terminating_bit (short bit);
 
 int  writeReferenceFrame  (Macroblock *currMB, int mode, int i, int j, int fwd_flag, int  ref);
-int  writeMotionVector8x8 (Macroblock *currMB, int  i0, int  j0, int  i1, int  j1, int  refframe, int  list_idx, int  mv_mode);
+int  writeMotionVector8x8 (Macroblock *currMB, int  i0, int  j0, int  i1, int  j1, int  refframe, int  list_idx, int  mv_mode, short bipred_me);
 
 int  writeCoeff4x4_CABAC (Macroblock *currMB, ColorPlane, int, int, int);
 int  writeCoeff8x8_CABAC (Macroblock* currMB, ColorPlane, int, int);
@@ -57,7 +57,10 @@ int distortion_hadamard(imgpel **img_org, imgpel pred_img[16][16]);
 double (*find_sad_16x16) (Macroblock *currMB, int *intra_mode);
 double find_sad_16x16_JM (Macroblock *currMB, int *intra_mode);
 
-void SetLagrangianMultipliers();
+void SetLagrangianMultipliersOn();
+void SetLagrangianMultipliersOff();
+void (*SetLagrangianMultipliers)();
+
 void  init_slice(int start_mb_addr);
 
 #endif

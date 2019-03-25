@@ -102,7 +102,7 @@
 
 FILE *bits;
 
-int RTPReadPacket (RTPpacket_t *p, FILE *bits);
+int RTPReadPacket (RTPpacket_t *p, FILE *bitstream);
 
 /*!
  ************************************************************************
@@ -149,7 +149,7 @@ void CloseRTPFile(void)
  ************************************************************************
  */
 
-int GetRTPNALU (NALU_t *nalu)
+int GetRTPNALU (FILE *bitstream, NALU_t *nalu)
 {
   static unsigned short first_call = 1;  //!< triggers sequence number initialization on first call
   static unsigned short old_seq = 0;     //!< store the last RTP sequence number for loss detection
@@ -164,7 +164,7 @@ int GetRTPNALU (NALU_t *nalu)
   if ((p->payload=malloc (MAXRTPPACKETSIZE))== NULL)
     no_mem_exit ("GetRTPNALU-3");
 
-  ret = RTPReadPacket (p, bits);
+  ret = RTPReadPacket (p, bitstream);
   nalu->forbidden_bit = 1;
   nalu->len = 0;
 
@@ -344,7 +344,7 @@ void DumpRTPHeader (RTPpacket_t *p)
  *    Stephan Wenger, stewe@cs.tu-berlin.de
  *****************************************************************************/
 
-int RTPReadPacket (RTPpacket_t *p, FILE *bits)
+int RTPReadPacket (RTPpacket_t *p, FILE *bitstream)
 {
   int Filepos, intime;
 
@@ -352,22 +352,22 @@ int RTPReadPacket (RTPpacket_t *p, FILE *bits)
   assert (p->packet != NULL);
   assert (p->payload != NULL);
 
-  Filepos = ftell (bits);
-  if (4 != fread (&p->packlen,1, 4, bits))
+  Filepos = ftell (bitstream);
+  if (4 != fread (&p->packlen,1, 4, bitstream))
   {
     return 0;
   }
 
-  if (4 != fread (&intime, 1, 4, bits))
+  if (4 != fread (&intime, 1, 4, bitstream))
   {
-    fseek (bits, Filepos, SEEK_SET);
+    fseek (bitstream, Filepos, SEEK_SET);
     printf ("RTPReadPacket: File corruption, could not read Timestamp, exit\n");
     exit (-1);
   }
 
   assert (p->packlen < MAXRTPPACKETSIZE);
 
-  if (p->packlen != fread (p->packet, 1, p->packlen, bits))
+  if (p->packlen != fread (p->packet, 1, p->packlen, bitstream))
   {
     printf ("RTPReadPacket: File corruption, could not read %d bytes\n", (int) p->packlen);
     exit (-1);    // EOF inidication

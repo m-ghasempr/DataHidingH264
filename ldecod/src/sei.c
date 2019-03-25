@@ -407,7 +407,7 @@ void interpret_spare_pic( byte* payload, int size, ImageParameters *img )
       for (i=0; i < img->height/16; i++)
         for (j=0; j < img->width/16; j++)
         {
-          tmp=map[kk][i][j]==0? img->max_imgpel_value : 0;
+          tmp=map[kk][i][j]==0? img->max_imgpel_value_comp[0] : 0;
           for (i0=0; i0<16; i0++)
             for (j0=0; j0<16; j0++)
               Y[i*16+i0][j*16+j0]=tmp;

@@ -31,6 +31,7 @@
 #include "refbuf.h"
 #include "mb_access.h"
 #include "image.h"
+#include "enc_statistics.h"
 #include "me_distortion.h"
 
 #define Q_BITS          15
@@ -63,15 +64,7 @@ static int Median_Pred_Thd_MB[8];
 static int Big_Hexagon_Thd_MB[8];
 static int Multi_Ref_Thd_MB[8];
 
-
-static const int quant_coef[6][4][4] = {
-  {{13107, 8066,13107, 8066},{ 8066, 5243, 8066, 5243},{13107, 8066,13107, 8066},{ 8066, 5243, 8066, 5243}},
-  {{11916, 7490,11916, 7490},{ 7490, 4660, 7490, 4660},{11916, 7490,11916, 7490},{ 7490, 4660, 7490, 4660}},
-  {{10082, 6554,10082, 6554},{ 6554, 4194, 6554, 4194},{10082, 6554,10082, 6554},{ 6554, 4194, 6554, 4194}},
-  {{ 9362, 5825, 9362, 5825},{ 5825, 3647, 5825, 3647},{ 9362, 5825, 9362, 5825},{ 5825, 3647, 5825, 3647}},
-  {{ 8192, 5243, 8192, 5243},{ 5243, 3355, 5243, 3355},{ 8192, 5243, 8192, 5243},{ 5243, 3355, 5243, 3355}},
-  {{ 7282, 4559, 7282, 4559},{ 4559, 2893, 4559, 2893},{ 7282, 4559, 7282, 4559},{ 4559, 2893, 4559, 2893}}
-};
+extern const int quant_coef[6][4][4];
 
 
 void UMHEX_DefineThreshold()
@@ -115,8 +108,8 @@ void UMHEX_DefineThreshold()
 
 void UMHEX_DefineThresholdMB()
 {
-  int gb_qp_per    = (params->qpN-MIN_QP)/6;
-  int gb_qp_rem    = (params->qpN-MIN_QP)%6;
+  int gb_qp_per    = (params->qpN)/6;
+  int gb_qp_rem    = (params->qpN)%6;
 
   int gb_q_bits    = Q_BITS+gb_qp_per;
   int gb_qp_const,Thresh4x4;
@@ -833,7 +826,7 @@ void UMHEX_setup(short ref, int list, int block_y, int block_x, int blocktype, s
   int temp_blocktype = 0;
   int indication_blocktype[8]={0,0,1,1,2,4,4,5};
   N_Bframe = params->successive_Bframe;
-  n_Bframe =(N_Bframe) ? (frame_ctr[B_SLICE]%(N_Bframe+1)): 0;
+  n_Bframe =(N_Bframe) ? (stats->frame_ctr[B_SLICE]%(N_Bframe+1)): 0;
 
 
   /**************************** MV prediction **********************/
@@ -961,6 +954,7 @@ UMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  current
                                         short     s_mv[2],       // <--> in: search center (x|y) / out: motion vector (x|y) - in pel units
                                         int       search_range,  // <--  1-d search range in pel units
                                         int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
+                                        int       iteration_no,  // <--  bi pred iteration number
                                         int       lambda_factor, // <--  lagrangian parameter for determining motion cost
                                         int       apply_weights
                                         )
@@ -1132,9 +1126,9 @@ UMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  current
   {
     int  N_Bframe=0;
     int  n_Bframe=0;
-    short****** bipred_mv = list ? img->bipred_mv1 : img->bipred_mv2;
+    short****** bipred_mv = img->bipred_mv[list];
     N_Bframe = params->successive_Bframe;
-    n_Bframe = frame_ctr[B_SLICE]%(N_Bframe+1);
+    n_Bframe = stats->frame_ctr[B_SLICE]%(N_Bframe+1);
 
 
     /**************************** MV prediction **********************/

@@ -58,40 +58,45 @@ int quant_8x8_around(int (*tblock)[16], int block_y, int block_x, int  qp,
   int*  ACL = &ACLevel[0];
   int*  ACR = &ACRun[0];
 
-// Quantization
+  // Quantization
   for (coeff_ctr = 0; coeff_ctr < 64; coeff_ctr++)
   {
     i = *p_scan++;  // horizontal position
     j = *p_scan++;  // vertical position
 
     m7 = &tblock[j][block_x + i];
-    scaled_coeff = iabs (*m7) * levelscale[j][i];
-    level = (scaled_coeff + leveloffset[j][i]) >> q_bits;
-
-    if (level != 0)
+    if (*m7 != 0)
     {
-      if (params->symbol_mode == CAVLC && img->qp < 10)
-        level = imin(level, CAVLC_LEVEL_LIMIT);
+      scaled_coeff = iabs (*m7) * levelscale[j][i];
+      level = (scaled_coeff + leveloffset[j][i]) >> q_bits;
 
-      fadjust8x8[j][block_x + i] = rshift_rnd_sf((AdaptRndWeight * (scaled_coeff - (level << q_bits))), (q_bits + 1));
+      if (level != 0)
+      {
+        fadjust8x8[j][block_x + i] = rshift_rnd_sf((AdaptRndWeight * (scaled_coeff - (level << q_bits))), (q_bits + 1));
 
-      nonzero = TRUE;
+        nonzero = TRUE;
 
-      *coeff_cost += (level > 1) ? MAX_VALUE : c_cost[run];
+        *coeff_cost += (level > 1) ? MAX_VALUE : c_cost[run];
 
-      level  = isignab(level, *m7);
-      *m7    = rshift_rnd_sf(((level * invlevelscale[j][i]) << qp_per), 6);
-      *ACL++ = level;
-      *ACR++ = run; 
-      // reset zero level counter
-      run    = 0;
+        level  = isignab(level, *m7);
+        *m7    = rshift_rnd_sf(((level * invlevelscale[j][i]) << qp_per), 6);
+        *ACL++ = level;
+        *ACR++ = run; 
+        // reset zero level counter
+        run    = 0;
+      }
+      else
+      {
+        fadjust8x8[j][block_x + i] = 0;
+        run++;
+        *m7 = 0;
+      }
     }
     else
     {
       fadjust8x8[j][block_x + i] = 0;
       run++;
-      *m7 = 0;
-    }      
+    }
   }
 
   *ACL = 0;
@@ -144,33 +149,41 @@ int quant_8x8cavlc_around(int (*tblock)[16], int block_y, int block_x, int  qp,
       j = *p_scan++;  // vertical position
 
       m7 = &tblock[j][block_x + i];
-      scaled_coeff = iabs (*m7) * levelscale[j][i];
-      level = (scaled_coeff + leveloffset[j][i]) >> q_bits;
-
-      if (level != 0)
+      if (*m7 != 0)
       {
-        if (params->symbol_mode == CAVLC && img->qp < 10)
-          level = imin(level, CAVLC_LEVEL_LIMIT);
+        scaled_coeff = iabs (*m7) * levelscale[j][i];
+        level = (scaled_coeff + leveloffset[j][i]) >> q_bits;
 
-        fadjust8x8[j][block_x + i] = rshift_rnd_sf((AdaptRndWeight * (scaled_coeff - (level << q_bits))), (q_bits + 1));
+        if (level != 0)
+        {
+          if (params->symbol_mode == CAVLC)
+            level = imin(level, CAVLC_LEVEL_LIMIT);
 
-        nonzero=TRUE;
+          fadjust8x8[j][block_x + i] = rshift_rnd_sf((AdaptRndWeight * (scaled_coeff - (level << q_bits))), (q_bits + 1));
 
-        *coeff_cost += (level > 1) ? MAX_VALUE : c_cost[runs[k]];
+          nonzero=TRUE;
 
-        level  = isignab(level, *m7);
-        *m7    = rshift_rnd_sf(((level * invlevelscale[j][i]) << qp_per), 6);
+          *coeff_cost += (level > 1) ? MAX_VALUE : c_cost[runs[k]];
 
-        *(ACL[k])++ = level;
-        *(ACR[k])++ = runs[k];
-        // reset zero level counter
-        runs[k] = 0;
+          level  = isignab(level, *m7);
+          *m7    = rshift_rnd_sf(((level * invlevelscale[j][i]) << qp_per), 6);
+
+          *(ACL[k])++ = level;
+          *(ACR[k])++ = runs[k];
+          // reset zero level counter
+          runs[k] = 0;
+        }
+        else
+        {
+          fadjust8x8[j][block_x + i] = 0;
+          runs[k]++;
+          *m7 = 0;      
+        }
       }
       else
       {
         fadjust8x8[j][block_x + i] = 0;
         runs[k]++;
-        *m7 = 0;      
       }
     }
   }

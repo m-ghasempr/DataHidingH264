@@ -51,7 +51,7 @@ int quant_8x8_normal(int (*tblock)[16], int block_y, int block_x, int  qp,
   static int scaled_coeff;
 
   int   level, run = 0;
-  int   nonzero = FALSE;  
+  int   nonzero = FALSE;
   int   qp_per = qp_per_matrix[qp];
   int   q_bits = Q_BITS_8 + qp_per;
   const byte *p_scan = &pos_scan[0][0];
@@ -65,34 +65,40 @@ int quant_8x8_normal(int (*tblock)[16], int block_y, int block_x, int  qp,
     j = *p_scan++;  // vertical position
 
     m7 = &tblock[j][block_x + i];
-    scaled_coeff = iabs (*m7) * levelscale[j][i];
-    level = (scaled_coeff + leveloffset[j][i]) >> q_bits;
-
-    if (level != 0)
+    if (*m7 != 0)
     {
-      nonzero = TRUE;
+      scaled_coeff = iabs (*m7) * levelscale[j][i];
+      level = (scaled_coeff + leveloffset[j][i]) >> q_bits;
 
-      *coeff_cost += (level > 1) ? MAX_VALUE : c_cost[run];
+      if (level != 0)
+      {
+        nonzero = TRUE;
 
-      level  = isignab(level, *m7);
-      *m7    = rshift_rnd_sf(((level * invlevelscale[j][i]) << qp_per), 6);
-      *ACL++ = level;
-      *ACR++ = run; 
-      // reset zero level counter
-      run    = 0;
+        *coeff_cost += (level > 1) ? MAX_VALUE : c_cost[run];
+
+        level  = isignab(level, *m7);
+        *m7    = rshift_rnd_sf(((level * invlevelscale[j][i]) << qp_per), 6);
+        *ACL++ = level;
+        *ACR++ = run; 
+        // reset zero level counter
+        run    = 0;
+      }
+      else
+      {
+        run++;
+        *m7 = 0;
+      }
     }
     else
     {
       run++;
-      *m7 = 0;
-    }      
+    }
   }
 
   *ACL = 0;
 
   return nonzero;
 }
-
 
 /*!
  ************************************************************************
@@ -139,6 +145,8 @@ int quant_8x8cavlc_normal(int (*tblock)[16], int block_y, int block_x, int  qp,
       j = *p_scan++;  // vertical position
 
       m7 = &tblock[j][block_x + i];
+      if (*m7 != 0)
+      {
       scaled_coeff = iabs (*m7) * levelscale[j][i];
       level = (scaled_coeff + leveloffset[j][i]) >> q_bits;
 
@@ -160,8 +168,13 @@ int quant_8x8cavlc_normal(int (*tblock)[16], int block_y, int block_x, int  qp,
       }
       else
       {        
+          runs[k]++;
+          *m7 = 0;      
+        }
+      }
+      else
+      {
         runs[k]++;
-        *m7 = 0;      
       }
     }
   }
@@ -171,3 +184,4 @@ int quant_8x8cavlc_normal(int (*tblock)[16], int block_y, int block_x, int  qp,
 
   return nonzero;
 }
+

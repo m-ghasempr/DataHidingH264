@@ -28,7 +28,7 @@
 *
 ************************************************************************
 */
-void init_quant_8x8(ImageParameters *img)
+void init_quant_8x8(InputParameters *params, ImageParameters *img)
 {
   if (params->UseRDOQuant == 1)
   {

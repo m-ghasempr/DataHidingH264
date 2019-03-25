@@ -27,14 +27,13 @@ typedef struct
 {
   int         mb_adaptive_frame_field_flag;
   int         size_x, size_y;
-
+  
   // Frame
-  short ****  mv;            //!< motion vector       [list][subblock_x][subblock_y][component]
+  MotionVector ***frame;  //!< motion vector       [list][subblock_x][subblock_y]
   // Top field
-  short ****  top_mv;        //!< motion vector       [list][subblock_x][subblock_y][component]
-  // Bottom field params
-  short ****  bottom_mv;     //!< motion vector       [list][subblock_x][subblock_y][component]
-
+  MotionVector ***top;    //!< motion vector       [list][subblock_x][subblock_y]
+  // Bottom field
+  MotionVector ***bot;    //!< motion vector       [list][subblock_x][subblock_y]
 } EPZSColocParams;
 
 typedef struct
@@ -67,16 +66,16 @@ typedef enum
 extern EPZSColocParams *EPZSCo_located;
 extern int ***EPZSDistortion;  //!< Array for storing SAD Values
 
-extern int  EPZSInit(void);
-extern void EPZSDelete (void);
-extern void EPZSOutputStats(FILE *stat,short stats_file);
-extern void EPZSSliceInit(EPZSColocParams* p, StorablePicture **listX[6]);
+extern int  EPZSInit        (InputParameters *params, ImageParameters *img);
+extern void EPZSDelete      (InputParameters *params);
+extern void EPZSOutputStats (InputParameters *params, FILE * stat, short stats_file);
+extern void EPZSSliceInit   (InputParameters *params, ImageParameters *img, EPZSColocParams* p, StorablePicture **listX[6]);
 extern int  EPZSPelBlockMotionSearch (Macroblock *, imgpel *, short, int, int, char ***, short ****,
                                      int, int, int, short[2], short[2], int, int, int, int);
 
 extern int  EPZSBiPredBlockMotionSearch (Macroblock *, imgpel *, short, int, int, char  ***, short  ****,
                                         int, int, int, short[2], short[2],
-                                        short[2], short[2], int, int, int, int);
+                                        short[2], short[2], int, int, int, int, int);
 
 extern int EPZSSubPelBlockMotionSearch (imgpel *, short, int, int, int, int, int, short[2],
                                         short[2], int, int, int, int*, int);

@@ -44,6 +44,7 @@
 #include "output.h"
 #include "mb_access.h"
 #include "memalloc.h"
+#include "macroblock.h"
 
 #include "loopfilter.h"
 
@@ -51,6 +52,7 @@
 #include "context_ini.h"
 #include "cabac.h"
 #include "vlc.h"
+#include "quant.h"
 
 #include "errorconcealment.h"
 #include "erc_api.h"
@@ -74,28 +76,6 @@ StorablePicture *dec_picture_JV[MAX_PLANE];  //!< dec_picture to be used during 
 
 OldSliceParams old_slice;
 
-void set_interpret_mb_mode(int slice_type)
-{
-  switch (slice_type)
-  {
-  case P_SLICE: case SP_SLICE:
-    interpret_mb_mode = interpret_mb_mode_P;
-    break;
-  case B_SLICE:
-    interpret_mb_mode = interpret_mb_mode_B;
-    break;
-  case I_SLICE: 
-    interpret_mb_mode = interpret_mb_mode_I;
-    break;
-  case SI_SLICE: 
-    interpret_mb_mode = interpret_mb_mode_SI;
-    break;
-  default:
-    printf("Unsupported slice type\n");
-    break;
-  }
-}
-
 void MbAffPostProc(void)
 {
   imgpel temp[32][16];
@@ -106,7 +86,7 @@ void MbAffPostProc(void)
   int i, y, x0, y0, uv;
   for (i=0; i<(int)dec_picture->PicSizeInMbs; i+=2)
   {
-    if (dec_picture->mb_field[i])
+    if (dec_picture->motion.mb_field[i])
     {
       get_mb_pos(i, img->mb_size[IS_LUMA], &x0, &y0);
       for (y=0; y<(2*MB_BLOCK_SIZE);y++)
@@ -148,7 +128,7 @@ void MbAffPostProc(void)
  ***********************************************************************
  */
 
-int decode_one_frame(ImageParameters *img,struct inp_par *inp, struct snr_par *snr)
+int decode_one_frame(ImageParameters *img, struct inp_par *inp, struct snr_par *snr)
 {
   int current_header;
   Slice *currSlice = img->currentSlice;
@@ -359,7 +339,7 @@ void find_snr(
   int comp_size_x[3], comp_size_y[3];
   int64 framesize_in_bytes;
 
-  unsigned int max_pix_value_sqd[3] = {iabs2(img->max_imgpel_value),  iabs2(img->max_imgpel_value_uv), iabs2(img->max_imgpel_value_uv)};
+  unsigned int max_pix_value_sqd[3] = {iabs2(img->max_imgpel_value_comp[0]),  iabs2(img->max_imgpel_value_comp[1]), iabs2(img->max_imgpel_value_comp[2])};
 
   Boolean rgb_output = (Boolean) (active_sps->vui_seq_parameters.matrix_coefficients==0);
   unsigned char *buf;
@@ -447,22 +427,16 @@ void find_snr(
       }
     }
 
-#if ZEROSNR
-    diff_comp[k] = imax(diff_comp[k], 1);
-#endif
     // Collecting SNR statistics
-    if (diff_comp[k]  != 0)
-      snr->snr[k]=(float)(10*log10(max_pix_value_sqd[k]*(double)((double)(comp_size_x[k])*(comp_size_y[k]) / diff_comp[k])));   
-    else
-      snr->snr[k]=0.0;
+    snr->snr[k] = psnr( max_pix_value_sqd[k], comp_size_x[k] * comp_size_y[k], (float) diff_comp[k]);   
 
     if (img->number == 0) // first
     {
-      snr->snra[k]=snr->snr1[k]=snr->snr[k];                                                        // keep luma snr for first frame
+      snr->snra[k] = snr->snr[k];                                                        // keep luma snr for first frame
     }
     else
     {
-      snr->snra[k]=(float)(snr->snra[k]*(snr->frame_ctr)+snr->snr[k])/(snr->frame_ctr + 1); // average snr chroma for all frames
+      snr->snra[k] = (float)(snr->snra[k]*(snr->frame_ctr)+snr->snr[k])/(snr->frame_ctr + 1); // average snr chroma for all frames
     }
   }
 
@@ -471,14 +445,12 @@ void find_snr(
 
   free (buf);
 
-
   // picture error concealment
   if(p->concealed_pic)
   {
       fprintf(stdout,"%04d(P)  %8d %5d %5d %7.4f %7.4f %7.4f  %s %5d\n",
           frame_no, p->frame_poc, p->pic_num, p->qp,
           snr->snr[0], snr->snr[1], snr->snr[2], yuv_types[p->chroma_format_idc], 0);
-
   }
 }
 
@@ -579,50 +551,6 @@ void set_ref_pic_num(void)
   }
 }
 
-/*!
-************************************************************************
-* \brief
-*    Read the next NAL unit (with error handling)
-************************************************************************
-*/
-int read_next_nalu(NALU_t *nalu)
-{
-  int ret;
-
-  if (params->FileFormat == PAR_OF_ANNEXB)
-    ret = GetAnnexbNALU (nalu);
-  else
-    ret = GetRTPNALU (nalu);
-
-  if (ret < 0)
-  {
-    snprintf (errortext, ET_SIZE, "Error while getting the NALU in file format %s, exit\n", params->FileFormat==PAR_OF_ANNEXB?"Annex B":"RTP");
-    error (errortext, 601);
-  }
-  if (ret == 0)
-  {
-    FreeNALU(nalu);
-    return 0;
-  }
-
-  //In some cases, zero_byte shall be present. If current NALU is a VCL NALU, we can't tell
-  //whether it is the first VCL NALU at this point, so only non-VCL NAL unit is checked here.
-  CheckZeroByteNonVCL(nalu);
-
-  ret = NALUtoRBSP(nalu);
-
-  if (ret < 0)
-    error ("Invalid startcode emulation prevention found.", 602);
-
-
-  // Got a NALU
-  if (nalu->forbidden_bit)
-  {
-    error ("Found NALU with forbidden_bit set, bit error?", 603);
-  }
-
-  return nalu->len;
-}
 
 /*!
  ************************************************************************
@@ -641,12 +569,12 @@ int read_new_slice(void)
   int slice_id_a, slice_id_b, slice_id_c;
   int redundant_pic_cnt_b, redundant_pic_cnt_c;
   long ftell_position;
-
+  
   while (1)
   {
     ftell_position = ftell(bits);
 
-    if (0 == read_next_nalu(nalu))
+    if (0 == read_next_nalu(bits, nalu))
       return EOS;
 
     switch (nalu->nal_unit_type)
@@ -796,7 +724,7 @@ int read_new_slice(void)
         // continue with reading next DP
         ftell_position = ftell(bits);
 
-        if (0 == read_next_nalu(nalu))
+        if (0 == read_next_nalu(bits, nalu))
           return current_header;
         
         if ( NALU_TYPE_DPB == nalu->nal_unit_type)
@@ -829,7 +757,7 @@ int read_new_slice(void)
             // we're finished with DP_B, so let's continue with next DP
             ftell_position = ftell(bits);
 
-            if (0 == read_next_nalu(nalu))
+            if (0 == read_next_nalu(bits, nalu))
               return current_header;
           }
         }
@@ -927,7 +855,7 @@ int read_new_slice(void)
  */
 void init_picture(ImageParameters *img, struct inp_par *inp)
 {
-  int i,k,l;
+  int i,j,k,l;
   Slice *currSlice = img->currentSlice;
   int nplane;
 
@@ -943,8 +871,8 @@ void init_picture(ImageParameters *img, struct inp_par *inp)
     img->recovery_frame_num = img->frame_num;
 
   if (img->recovery_point == 0 &&
-      img->frame_num != img->pre_frame_num &&
-      img->frame_num != (img->pre_frame_num + 1) % img->MaxFrameNum)
+    img->frame_num != img->pre_frame_num &&
+    img->frame_num != (img->pre_frame_num + 1) % img->MaxFrameNum)
   {
     if (active_sps->gaps_in_frame_num_value_allowed_flag == 0)
     {
@@ -985,13 +913,13 @@ void init_picture(ImageParameters *img, struct inp_par *inp)
     img->pre_frame_num = img->frame_num;
   }
 
-  //img->num_dec_mb = 0;
+  img->num_dec_mb = 0;
 
   //calculate POC
   decode_poc(img);
 
   if (img->recovery_frame_num == img->frame_num &&
-      img->recovery_poc == 0x7fffffff)
+    img->recovery_poc == 0x7fffffff)
     img->recovery_poc = img->framepoc;
 
   if(img->nal_reference_idc)
@@ -1009,8 +937,8 @@ void init_picture(ImageParameters *img, struct inp_par *inp)
   dec_picture->top_poc=img->toppoc;
   dec_picture->bottom_poc=img->bottompoc;
   dec_picture->frame_poc=img->framepoc;
-  dec_picture->qp=img->qp;
-  dec_picture->slice_qp_delta=currSlice->slice_qp_delta;
+  dec_picture->qp = img->qp;
+  dec_picture->slice_qp_delta = currSlice->slice_qp_delta;
   dec_picture->chroma_qp_offset[0] = active_pps->chroma_qp_index_offset;
   dec_picture->chroma_qp_offset[1] = active_pps->second_chroma_qp_index_offset;
 
@@ -1052,10 +980,14 @@ void init_picture(ImageParameters *img, struct inp_par *inp)
   }
 
   // CAVLC init
-  for (i=0;i < (int)img->PicSizeInMbs; i++)
-    for (k=0;k<4;k++)
-      for (l=0;l<(4 + img->num_blk8x8_uv);l++)
-        img->nz_coeff[i][k][l]=-1;  // CAVLC
+  if (active_pps->entropy_coding_mode_flag == UVLC)
+  {
+    for (i=0;i < (int)img->PicSizeInMbs; i++)    
+      for (j = 0; j < 3; j++)
+        for (l = 0; l < 4; l++)
+          for (k = 0; k < 4;k++)
+            img->nz_coeff[i][j][l][k]=-1;  // CAVLC
+  }
 
   if(active_pps->constrained_intra_pred_flag)
   {
@@ -1173,7 +1105,7 @@ void exit_picture(void)
   unsigned int i;
   int structure, frame_poc, slice_type, refpic, qp, pic_num, chroma_format_idc, is_idr;
 
-  static char cslice_type[8];  
+  static char cslice_type[9];  
 
   time_t tmp_time;                   // time used by decoding the last frame
   char   yuvFormat[10];
@@ -1295,9 +1227,11 @@ void exit_picture(void)
       else if(refpic) // stored B pictures
         strcpy(cslice_type," B ");
       else // B pictures
-        strcpy(cslice_type," b ");    
+        strcpy(cslice_type," b ");
       if (structure==FRAME)
+      {
         strncat(cslice_type,")       ",8-strlen(cslice_type));
+      }
     }
     else if (structure==BOTTOM_FIELD)
     {
@@ -1395,18 +1329,18 @@ void ercWriteMBMODEandMV(Macroblock *currMB, ImageParameters *img,struct inp_par
         jj              = 4*mby + (i >> 1  )*2;
         if (currMB->b8mode[i]>=5 && currMB->b8mode[i]<=7)  // SMALL BLOCKS
         {
-          pRegion->mv[0]  = (dec_picture->mv[LIST_0][jj][ii][0] + dec_picture->mv[LIST_0][jj][ii+1][0] + dec_picture->mv[LIST_0][jj+1][ii][0] + dec_picture->mv[LIST_0][jj+1][ii+1][0] + 2)/4;
-          pRegion->mv[1]  = (dec_picture->mv[LIST_0][jj][ii][1] + dec_picture->mv[LIST_0][jj][ii+1][1] + dec_picture->mv[LIST_0][jj+1][ii][1] + dec_picture->mv[LIST_0][jj+1][ii+1][1] + 2)/4;
+          pRegion->mv[0]  = (dec_picture->motion.mv[LIST_0][jj][ii][0] + dec_picture->motion.mv[LIST_0][jj][ii+1][0] + dec_picture->motion.mv[LIST_0][jj+1][ii][0] + dec_picture->motion.mv[LIST_0][jj+1][ii+1][0] + 2)/4;
+          pRegion->mv[1]  = (dec_picture->motion.mv[LIST_0][jj][ii][1] + dec_picture->motion.mv[LIST_0][jj][ii+1][1] + dec_picture->motion.mv[LIST_0][jj+1][ii][1] + dec_picture->motion.mv[LIST_0][jj+1][ii+1][1] + 2)/4;
         }
         else // 16x16, 16x8, 8x16, 8x8
         {
-          pRegion->mv[0]  = dec_picture->mv[LIST_0][jj][ii][0];
-          pRegion->mv[1]  = dec_picture->mv[LIST_0][jj][ii][1];
-//          pRegion->mv[0]  = dec_picture->mv[LIST_0][4*mby+(i/2)*2][4*mbx+(i%2)*2+BLOCK_SIZE][0];
-//          pRegion->mv[1]  = dec_picture->mv[LIST_0][4*mby+(i/2)*2][4*mbx+(i%2)*2+BLOCK_SIZE][1];
+          pRegion->mv[0]  = dec_picture->motion.mv[LIST_0][jj][ii][0];
+          pRegion->mv[1]  = dec_picture->motion.mv[LIST_0][jj][ii][1];
+//          pRegion->mv[0]  = dec_picture->motion.mv[LIST_0][4*mby+(i/2)*2][4*mbx+(i%2)*2+BLOCK_SIZE][0];
+//          pRegion->mv[1]  = dec_picture->motion.mv[LIST_0][4*mby+(i/2)*2][4*mbx+(i%2)*2+BLOCK_SIZE][1];
         }
         erc_mvperMB      += iabs(pRegion->mv[0]) + iabs(pRegion->mv[1]);
-        pRegion->mv[2]    = dec_picture->ref_idx[LIST_0][jj][ii];
+        pRegion->mv[2]    = dec_picture->motion.ref_idx[LIST_0][jj][ii];
       }
     }
   }
@@ -1427,24 +1361,24 @@ void ercWriteMBMODEandMV(Macroblock *currMB, ImageParameters *img,struct inp_par
       }
       else
       {
-        int idx = (dec_picture->ref_idx[0][jj][ii]<0)?1:0;
+        int idx = (dec_picture->motion.ref_idx[0][jj][ii]<0)?1:0;
 //        int idx = (currMB->b8mode[i]==0 && currMB->b8pdir[i]==2 ? LIST_0 : currMB->b8pdir[i]==1 ? LIST_1 : LIST_0);
 //        int idx = currMB->b8pdir[i]==0 ? LIST_0 : LIST_1;
-        mv                = dec_picture->mv[idx];
+        mv                = dec_picture->motion.mv[idx];
         pRegion->mv[0]    = (mv[jj][ii][0] + mv[jj][ii+1][0] + mv[jj+1][ii][0] + mv[jj+1][ii+1][0] + 2)/4;
         pRegion->mv[1]    = (mv[jj][ii][1] + mv[jj][ii+1][1] + mv[jj+1][ii][1] + mv[jj+1][ii+1][1] + 2)/4;
         erc_mvperMB      += iabs(pRegion->mv[0]) + iabs(pRegion->mv[1]);
 
-        pRegion->mv[2]  = (dec_picture->ref_idx[idx][jj][ii]);
+        pRegion->mv[2]  = (dec_picture->motion.ref_idx[idx][jj][ii]);
 /*
         if (currMB->b8pdir[i]==0 || (currMB->b8pdir[i]==2 && currMB->b8mode[i]!=0)) // forward or bidirect
         {
-          pRegion->mv[2]  = (dec_picture->ref_idx[LIST_0][jj][ii]);
+          pRegion->mv[2]  = (dec_picture->motion.ref_idx[LIST_0][jj][ii]);
           ///???? is it right, not only "img->fw_refFrArr[jj][ii-4]"
         }
         else
         {
-          pRegion->mv[2]  = (dec_picture->ref_idx[LIST_1][jj][ii]);
+          pRegion->mv[2]  = (dec_picture->motion.ref_idx[LIST_1][jj][ii]);
 //          pRegion->mv[2]  = 0;
         }
         */
@@ -1613,12 +1547,12 @@ void decode_one_slice(ImageParameters *img,struct inp_par *inp)
 #endif
 
     // Initializes the current macroblock
-    start_macroblock(&currMB, img);
+    start_macroblock(img, &currMB);
     // Get the syntax elements from the NAL
-    read_one_macroblock(currMB, img);
-    decode_one_macroblock(currMB, img);
+    read_one_macroblock(img, currMB);
+    decode_one_macroblock(img, currMB, dec_picture);
 
-    if(img->MbaffFrameFlag && dec_picture->mb_field[img->current_mb_nr])
+    if(img->MbaffFrameFlag && dec_picture->motion.mb_field[img->current_mb_nr])
     {
       img->num_ref_idx_l0_active >>= 1;
       img->num_ref_idx_l1_active >>= 1;

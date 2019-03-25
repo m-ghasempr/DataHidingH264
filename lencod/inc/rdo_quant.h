@@ -51,7 +51,14 @@ void est_significant_coefficients (Macroblock* currMB, EncodingEnvironmentPtr ee
 int biari_no_bits(EncodingEnvironmentPtr eep, signed short symbol, BiContextTypePtr bi_ct );
 int biari_state(EncodingEnvironmentPtr eep, signed short symbol, BiContextTypePtr bi_ct );
 
-int est_write_and_store_CBP_block_bit(Macroblock* currMB, int type, int block_y, int block_x);
+void rdoq_dc(int (*tblock)[4], int qp_per, int qp_rem, int levelscale, int **leveloffset, const byte (*pos_scan)[2], int levelTrellis[16], int type);
+int init_trellis_data   (int (*tblock)[16], int block_x, int qp_per, int qp_rem, 
+                         int **levelscale, int **leveloffset, const byte *p_scan, Macroblock *currMB,  
+                         levelDataStruct levelData[], int* kStart, int* kStop, int type);
+int init_trellis_data_DC(int (*tblock)[4], int qp_per, int qp_rem, 
+                         int levelscale, int **leveloffset, const byte *p_scan, Macroblock *currMB,  
+                         levelDataStruct levelData[], int* kStart, int* kStop, int type);
+int est_write_and_store_CBP_block_bit(Macroblock* currMB, int type);
 void est_writeRunLevel_CABAC(levelDataStruct levelData[], int levelTabMin[], int type, double lambda, int kStart, 
                              int kStop, int noCoeff, int estCBP);
 int est_unary_exp_golomb_level_encode(unsigned int symbol, int ctx, int type);
@@ -59,6 +66,7 @@ int est_unary_exp_golomb_level_encode(unsigned int symbol, int ctx, int type);
 void RDOQ_update_mode(RD_PARAMS *enc_mb, int bslice);
 void copy_rddata_trellis (RD_DATA *dest, RD_DATA *src);
 void updateMV_mp(int *m_cost, short ref, int list, int h, int v, int blocktype, int *lambda_factor, int block8x8);
+void trellis_coding(Macroblock *currMB, int CurrentMbAddr, Boolean prev_recode_mb);
 
 #endif  // _RDO_QUANT_H_
 

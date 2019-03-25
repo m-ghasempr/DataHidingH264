@@ -53,8 +53,6 @@ typedef struct {
 
 // macroblock activity
 int    diffy[16][16];
-int    qp_mbaff[2][2],       qp_mbaff[2][2];
-int    delta_qp_mbaff[2][2], delta_qp_mbaff[2][2];
 
 // generic functions
 int    Qstep2QP          ( double Qstep );

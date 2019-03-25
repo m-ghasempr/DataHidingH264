@@ -19,6 +19,7 @@
 #include <math.h>
 
 #include "global.h"
+#include "enc_statistics.h"
 #include "vlc.h"
 
 #if TRACE
@@ -750,7 +751,6 @@ int symbol2vlc(SyntaxElement *sym)
  */
 int writeSyntaxElement_VLC(SyntaxElement *se, DataPartition *dp)
 {
-
   se->inf = se->value1;
   se->len = se->value2;
   symbol2vlc(se);
@@ -1331,15 +1331,15 @@ int writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *dp,
 }
 
 
+#if TRACE
+int bitcounter = 0;
+
 /*!
  ************************************************************************
  * \brief
  *    Write out a trace string on the trace file
  ************************************************************************
  */
-#if TRACE
-int bitcounter = 0;
-
 void trace2out(SyntaxElement *sym)
 {
   static
@@ -1415,9 +1415,9 @@ void writeVlcByteAlign(Bitstream* currStream)
 {
   if (currStream->bits_to_go < 8)
   { // trailing bits to process
-    currStream->byte_buf = (currStream->byte_buf <<currStream->bits_to_go) | (0xff >> (8 - currStream->bits_to_go));
-    stats->bit_use_stuffingBits[img->type]+=currStream->bits_to_go;
-    currStream->streamBuffer[currStream->byte_pos++]=currStream->byte_buf;
+    currStream->byte_buf = (currStream->byte_buf << currStream->bits_to_go) | (0xff >> (8 - currStream->bits_to_go));
+    stats->bit_use_stuffingBits[img->type] += currStream->bits_to_go;
+    currStream->streamBuffer[currStream->byte_pos++] = currStream->byte_buf;
     currStream->bits_to_go = 8;
   }
 }

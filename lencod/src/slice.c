@@ -32,23 +32,26 @@
 #include "macroblock.h"
 #include "symbol.h"
 #include "context_ini.h"
+#include "enc_statistics.h"
 #include "ratectl.h"
 #include "me_epzs.h"
 #include "wp.h"
+#include "slice.h"
 
 #include "q_offsets.h"
 #include "conformance.h"
 
 #include "rdo_quant.h"
+#include "wp_mcprec.h"
+
 
 // Local declarations
 static Slice *malloc_slice();
 static void  free_slice(Slice *slice);
-
 static void  set_ref_pic_num();
+
 extern ColocatedParams *Co_located;
 extern StorablePicture **listX[6];
-void poc_ref_pic_reorder(StorablePicture **list, unsigned num_ref_idx_lX_active, int *reordering_of_pic_nums_idc, int *abs_diff_pic_num_minus1, int *long_term_pic_idx, int list_no);
 
 //! convert from H.263 QP to H.264 quant given by: quant=pow(2,QP/6)
 const int QP2QUANT[40]=
@@ -136,8 +139,6 @@ int start_slice()
   }
   return header_len;
 }
-
-
 
 /*!
  ************************************************************************
@@ -300,6 +301,7 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
       }
       else
       {
+        img->masterQP = img->qp;
         encode_one_macroblock (currMB);
         write_one_macroblock (currMB, 1, prev_recode_mb);    
       }
@@ -645,9 +647,9 @@ void init_slice (int start_mb_addr)
 
   img->currentSlice = currSlice;
 
-  currSlice->picture_id = img->tr % 256;
-  currSlice->qp = img->qp;
-  currSlice->start_mb_nr = start_mb_addr;
+  currSlice->picture_id    = img->tr % 256;
+  currSlice->qp            = img->qp;
+  currSlice->start_mb_nr   = start_mb_addr;
   currSlice->slice_too_big = dummy_slice_too_big;
 
   for (i = 0; i < currSlice->max_part_nr; i++)
@@ -700,11 +702,25 @@ void init_slice (int start_mb_addr)
   img->num_ref_idx_l0_active = listXsize[0];
   img->num_ref_idx_l1_active = listXsize[1];
 
-  //Perform memory management based on poc distances
-  //if (img->nal_reference_idc  && params->HierarchicalCoding && params->PocMemoryManagement && dpb.ref_frames_in_buffer==active_sps->num_ref_frames)
-  if (img->nal_reference_idc  && params->PocMemoryManagement && dpb.ref_frames_in_buffer==active_sps->num_ref_frames)
+  if ( params->WPMCPrecision && params->WPMCPrecFullRef )
   {
-    poc_based_ref_management(img->frame_num);
+    wpxAdaptRefNum(img);
+  }
+
+  //Perform memory management based on poc distances  
+
+  if (img->nal_reference_idc && params->PocMemoryManagement)
+  {
+    if (img->structure == FRAME && dpb.ref_frames_in_buffer==active_sps->num_ref_frames)
+    {
+      poc_based_ref_management_frame_pic(img->frame_num);
+    }
+    else if (img->structure == TOP_FIELD && dpb.ref_frames_in_buffer==active_sps->num_ref_frames)
+    {
+      poc_based_ref_management_field_pic((img->frame_num << 1) + 1);      
+    }
+    else if (img->structure == BOTTOM_FIELD)
+      poc_based_ref_management_field_pic((img->frame_num << 1) + 1);
   }
 
   if (params->EnableOpenGOP)
@@ -730,32 +746,48 @@ void init_slice (int start_mb_addr)
 
   init_ref_pic_list_reordering();
  
-  // Perform reordering based on poc distances for HierarchicalCoding
-  if ( img->type == P_SLICE && params->ReferenceReorder)
+  // reference list reordering 
+  if ( (img->type == P_SLICE || img->type == B_SLICE) && 
+    params->WPMCPrecision && pWPX->curr_wp_rd_pass->algorithm != WP_REGULAR )
   {
-    int i, num_ref;
-
-    alloc_ref_pic_list_reordering_buffer(currSlice);
-
-    for (i = 0; i < img->num_ref_idx_l0_active + 1; i++)
+    wpxReorderLists( img, currSlice );
+  }
+  else
+  {
+    // Perform reordering based on poc distances for HierarchicalCoding
+    if ( img->type == P_SLICE && params->ReferenceReorder)
     {
-      currSlice->reordering_of_pic_nums_idc_l0[i] = 3;
-      currSlice->abs_diff_pic_num_minus1_l0[i] = 0;
-      currSlice->long_term_pic_idx_l0[i] = 0;
+      int i, num_ref;
+
+      alloc_ref_pic_list_reordering_buffer(currSlice);
+
+      for (i = 0; i < img->num_ref_idx_l0_active + 1; i++)
+      {
+        currSlice->reordering_of_pic_nums_idc_l0[i] = 3;
+        currSlice->abs_diff_pic_num_minus1_l0[i] = 0;
+        currSlice->long_term_pic_idx_l0[i] = 0;
+      }
+
+      num_ref = img->num_ref_idx_l0_active;
+      if ( img->structure == FRAME )
+      poc_ref_pic_reorder_frame(listX[LIST_0], num_ref,
+        currSlice->reordering_of_pic_nums_idc_l0,
+        currSlice->abs_diff_pic_num_minus1_l0,
+        currSlice->long_term_pic_idx_l0, LIST_0);
+      else
+      {
+        poc_ref_pic_reorder_field(listX[LIST_0], num_ref,
+          currSlice->reordering_of_pic_nums_idc_l0,
+          currSlice->abs_diff_pic_num_minus1_l0,
+          currSlice->long_term_pic_idx_l0, LIST_0);
+      }
+      //reference picture reordering
+      reorder_ref_pic_list(listX[LIST_0], &listXsize[LIST_0],
+        img->num_ref_idx_l0_active - 1,
+        currSlice->reordering_of_pic_nums_idc_l0,
+        currSlice->abs_diff_pic_num_minus1_l0,
+        currSlice->long_term_pic_idx_l0);
     }
-
-    num_ref = img->num_ref_idx_l0_active;
-
-    poc_ref_pic_reorder(listX[LIST_0], num_ref,
-      currSlice->reordering_of_pic_nums_idc_l0,
-      currSlice->abs_diff_pic_num_minus1_l0,
-      currSlice->long_term_pic_idx_l0, LIST_0);
-    // reference picture reordering
-    reorder_ref_pic_list(listX[LIST_0], &listXsize[LIST_0],
-      img->num_ref_idx_l0_active - 1,
-      currSlice->reordering_of_pic_nums_idc_l0,
-      currSlice->abs_diff_pic_num_minus1_l0,
-      currSlice->long_term_pic_idx_l0);
   }
 
   //if (img->MbaffFrameFlag)
@@ -769,10 +801,10 @@ void init_slice (int start_mb_addr)
     if (img->type==P_SLICE || img->type==SP_SLICE)
     {
       int wp_type = (params->GenerateMultiplePPS && params->RDPictureDecision) && (enc_picture != enc_frame_picture[1]);
-      EstimateWPPSlice (wp_type);
+      EstimateWPPSlice (img, params, wp_type);
     }
     else
-       EstimateWPBSlice ();
+      EstimateWPBSlice (img, params);
   }
 
   set_ref_pic_num();
@@ -790,7 +822,7 @@ void init_slice (int start_mb_addr)
   }
 
   if (img->type != I_SLICE && params->SearchMode == EPZS)
-    EPZSSliceInit(EPZSCo_located, listX);
+    EPZSSliceInit(params, img, EPZSCo_located, listX);
 
   if (params->symbol_mode == CAVLC)
   {
@@ -802,19 +834,20 @@ void init_slice (int start_mb_addr)
       switch (listXsize[i])
       {
       case 0:
-        writeRefFrame[i]     = NULL;
+        writeRefFrame[i]   = NULL;
         break;
       case 1:
-        writeRefFrame[i]     = writeSE_Dummy;
+        writeRefFrame[i]   = writeSE_Dummy;
         break;
       case 2:
-        writeRefFrame[i]     = writeSE_invFlag;
+        writeRefFrame[i]   = writeSE_invFlag;
         break;
       default:
-        writeRefFrame[i]     = writeSE_UVLC;
+        writeRefFrame[i]   = writeSE_UVLC;
         break;
       }
     }
+
     writeMVD               = writeSE_SVLC;
     writeCBP               = writeCBP_VLC;
     writeDquant            = writeSE_SVLC;
@@ -832,12 +865,12 @@ void init_slice (int start_mb_addr)
       switch (listXsize[i])
       {
       case 0:
-        writeRefFrame[i]     = NULL;
+        writeRefFrame[i]   = NULL;
       case 1:
-        writeRefFrame[i]     = writeSE_Dummy;
+        writeRefFrame[i]   = writeSE_Dummy;
         break;
       default:
-        writeRefFrame[i]     = writeRefFrame_CABAC;
+        writeRefFrame[i]   = writeRefFrame_CABAC;
       }
     }
     writeMVD               = writeMVD_CABAC;
@@ -1001,7 +1034,7 @@ static void free_slice(Slice *slice)
   }
 }
 
-void set_ref_pic_num()
+static void set_ref_pic_num()
 {
   int i,j;
   StorablePicture *this_ref;
@@ -1020,7 +1053,7 @@ void set_ref_pic_num()
   for (i=0;i<listXsize[LIST_1];i++)
   {
     this_ref = listX[LIST_1][i];
-    enc_picture->ref_pic_num        [LIST_1][i] = this_ref->poc  *2 + ((this_ref->structure==BOTTOM_FIELD)?1:0);
+    enc_picture->ref_pic_num        [LIST_1][i] = this_ref->poc * 2 + ((this_ref->structure==BOTTOM_FIELD)?1:0);
     enc_picture->frm_ref_pic_num    [LIST_1][i] = this_ref->frame_poc * 2;
     enc_picture->top_ref_pic_num    [LIST_1][i] = this_ref->top_poc * 2;
     enc_picture->bottom_ref_pic_num [LIST_1][i] = this_ref->bottom_poc * 2 + 1;
@@ -1046,9 +1079,9 @@ void set_ref_pic_num()
 *    decide reference picture reordering, Frame only
 ************************************************************************
 */
-void poc_ref_pic_reorder(StorablePicture **list, unsigned num_ref_idx_lX_active, int *reordering_of_pic_nums_idc, int *abs_diff_pic_num_minus1, int *long_term_pic_idx, int list_no)
+void poc_ref_pic_reorder_frame(StorablePicture **list, unsigned num_ref_idx_lX_active, int *reordering_of_pic_nums_idc, int *abs_diff_pic_num_minus1, int *long_term_pic_idx, int list_no)
 {
-  unsigned i,j,k;
+  unsigned int i,j,k;
 
   int currPicNum, picNumLXPred;
 
@@ -1062,17 +1095,10 @@ void poc_ref_pic_reorder(StorablePicture **list, unsigned num_ref_idx_lX_active,
 
   int abs_poc_dist;
   int maxPicNum;
+  unsigned int numRefs;
 
-  if (img->structure==FRAME)
-  {
-    maxPicNum  = max_frame_num;
-    currPicNum = img->frame_num;
-  }
-  else
-  {
-    maxPicNum  = 2 * max_frame_num;
-    currPicNum = 2 * img->frame_num + 1;
-  }
+  maxPicNum  = max_frame_num;
+  currPicNum = img->frame_num;
 
   picNumLXPred = currPicNum;
 
@@ -1086,8 +1112,10 @@ void poc_ref_pic_reorder(StorablePicture **list, unsigned num_ref_idx_lX_active,
   // to a potential reordering list. For each one of these
   // references compute the poc distance compared to current
   // frame.
+  numRefs = dpb.ref_frames_in_buffer;
   for (i=0; i<dpb.ref_frames_in_buffer; i++)
   {
+    poc_diff[i] = 0xFFFF;
     re_order[i] = dpb.fs_ref[i]->frame->pic_num;
 
     if (dpb.fs_ref[i]->is_used==3 && (dpb.fs_ref[i]->frame->used_for_reference)&&(!dpb.fs_ref[i]->frame->is_long_term))
@@ -1106,9 +1134,9 @@ void poc_ref_pic_reorder(StorablePicture **list, unsigned num_ref_idx_lX_active,
   }
 
   // now sort these references based on poc (temporal) distance
-  for (i=0; i< dpb.ref_frames_in_buffer-1; i++)
+  for (i = 0; i< numRefs - 1; i++)
   {
-    for (j=i+1; j< dpb.ref_frames_in_buffer; j++)
+    for (j = i + 1; j < numRefs; j++)
     {
       if (poc_diff[i]>poc_diff[j] || (poc_diff[i] == poc_diff[j] && list_sign[j] > list_sign[i]))
       {
@@ -1123,6 +1151,16 @@ void poc_ref_pic_reorder(StorablePicture **list, unsigned num_ref_idx_lX_active,
         list_sign[i] = list_sign[j];
         list_sign[j] = tmp_value ;
       }
+    }
+  }
+  // populate list with selections from the pre-analysis stage
+  if ( params->WPMCPrecision 
+    && pWPX->curr_wp_rd_pass->algorithm != WP_REGULAR
+    && pWPX->num_wp_ref_list[list_no] )
+  {
+    for (i=0; i<num_ref_idx_lX_active; i++)
+    {
+      re_order[i] = pWPX->wp_ref_list[list_no][i].PicNum;
     }
   }
 
@@ -1203,118 +1241,311 @@ void poc_ref_pic_reorder(StorablePicture **list, unsigned num_ref_idx_lX_active,
   }
 }
 
-
-
-void SetLagrangianMultipliers()
+/*!
+************************************************************************
+* \brief
+*    decide reference picture reordering, Field only
+************************************************************************
+*/
+void poc_ref_pic_reorder_field(StorablePicture **list, unsigned num_ref_idx_lX_active, int *reordering_of_pic_nums_idc, int *abs_diff_pic_num_minus1, int *long_term_pic_idx, int list_no)
 {
-  int qp, j, k;
-  double qp_temp;
-  double lambda_scale = 1.0 - dClip3(0.0,0.5,0.05 * (double) params->jumpd);;
+  unsigned int i,j,k;
 
-  if (params->rdopt) // RDOPT on computation of Lagrangian multipliers
+  int currPicNum, picNumLXPred;
+
+  int default_order[32];
+  int re_order[32];
+  int tmp_reorder[32];
+  int list_sign[32];  
+  int poc_diff[32];
+  int fld_type[32];
+
+  int reorder_stop, no_reorder;
+  int tmp_value, diff;
+
+  int abs_poc_dist;
+  int maxPicNum;
+  unsigned int numRefs;
+
+  int field_used[2] = {1, 2};
+  int fld, idx, num_flds;
+
+  unsigned int top_idx = 0;
+  unsigned int bot_idx = 0;
+  unsigned int list_size = 0;
+
+  StorablePicture *pField[2]; // 0: TOP_FIELD, 1: BOTTOM_FIELD
+  FrameStore      *pFrameStore; 
+
+  maxPicNum  = 2 * max_frame_num;
+  currPicNum = 2 * img->frame_num + 1;
+
+  picNumLXPred = currPicNum;
+
+  // First assign default list order.
+  for (i=0; i<num_ref_idx_lX_active; i++)
   {
-    for (j = 0; j < 5; j++)
+    default_order[i] = list[i]->pic_num;
+  }
+
+  // Now access all references in buffer and assign them
+  // to a potential reordering list. For each one of these
+  // references compute the poc distance compared to current
+  // frame.  
+  // look for eligible fields
+  idx = 0;
+
+  for (i=0; i<dpb.ref_frames_in_buffer; i++)
+  {
+    pFrameStore = dpb.fs_ref[i];
+    pField[0]   = pFrameStore->top_field;
+    pField[1]   = pFrameStore->bottom_field;
+    num_flds    = (img->structure == BOTTOM_FIELD && (enc_picture->poc == (pField[0]->poc + 1) ) ) ? 1 : 2;
+
+    poc_diff[2*i    ] = 0xFFFF;
+    poc_diff[2*i + 1] = 0xFFFF;
+
+    for ( fld = 0; fld < num_flds; fld++ )
     {
-      for (qp = -img->bitdepth_luma_qp_scale; qp < 52; qp++)
+      if ( (pFrameStore->is_used & field_used[fld]) && pField[fld]->used_for_reference && !(pField[fld]->is_long_term) )
       {
-        qp_temp = (double)qp + img->bitdepth_luma_qp_scale - SHIFT_QP;
+        abs_poc_dist = iabs(pField[fld]->poc - enc_picture->poc) ;
+        poc_diff[idx] = abs_poc_dist;
+        re_order[idx] = pField[fld]->pic_num;
+        fld_type[idx] = fld + 1;
 
-        if (params->UseExplicitLambdaParams == 1) // consideration of explicit lambda weights.
+        if (list_no == LIST_0)
         {
-          img->lambda_md[j][qp] = params->LambdaWeight[j] * pow (2, qp_temp/3.0);
-          // Scale lambda due to hadamard qpel only consideration
-          img->lambda_md[j][qp] = ( (params->MEErrorMetric[H_PEL] == ERROR_SATD && params->MEErrorMetric[Q_PEL] == ERROR_SATD) ? 1.00 : 0.95) * img->lambda_md[j][qp];
-
-          for (k = F_PEL; k <= Q_PEL; k++)
-          {
-            img->lambda_me[j][qp][k] = params->MEErrorMetric[k] == ERROR_SSE ? img->lambda_md[j][qp] : sqrt(img->lambda_md[j][qp]);
-            img->lambda_mf[j][qp][k] = LAMBDA_FACTOR (img->lambda_me[j][qp][k]);
-          }
-
-          if (j == B_SLICE)
-          {
-            img->lambda_md[5][qp] = params->LambdaWeight[5] * pow (2, qp_temp/3.0);
-            img->lambda_md[5][qp] = ((params->MEErrorMetric[H_PEL] == ERROR_SATD && params->MEErrorMetric[Q_PEL] == ERROR_SATD) ? 1.00 : 0.95) * img->lambda_md[5][qp];
-
-            for (k = F_PEL; k <= Q_PEL; k++)
-            {
-              img->lambda_me[5][qp][k] = params->MEErrorMetric[k] == ERROR_SSE ? img->lambda_md[5][qp] : sqrt(img->lambda_md[5][qp]);
-              img->lambda_mf[5][qp][k] = LAMBDA_FACTOR (img->lambda_me[5][qp][k]);
-            }
-          }
-        }
-        else if (params->UseExplicitLambdaParams == 2) // consideration of fixed lambda values.
-        {
-          img->lambda_md[j][qp] = params->FixedLambda[j];
-          // Scale lambda due to hadamard qpel only consideration
-          img->lambda_md[j][qp] = ( (params->MEErrorMetric[H_PEL] == ERROR_SATD && params->MEErrorMetric[Q_PEL] == ERROR_SATD) ? 1.00 : 0.95) * img->lambda_md[j][qp];
-
-          for (k = F_PEL; k <= Q_PEL; k++)
-          {
-            img->lambda_me[j][qp][k] = params->MEErrorMetric[k] == ERROR_SSE ? img->lambda_md[j][qp] : sqrt(img->lambda_md[j][qp]);
-            img->lambda_mf[j][qp][k] = LAMBDA_FACTOR (img->lambda_me[j][qp][k]);
-          }
-
-          if (j == B_SLICE)
-          {
-            img->lambda_md[5][qp] = params->FixedLambda[5];
-            img->lambda_md[5][qp] = ((params->MEErrorMetric[H_PEL] == ERROR_SATD && params->MEErrorMetric[Q_PEL] == ERROR_SATD) ? 1.00 : 0.95) * img->lambda_md[5][qp];
-
-            for (k = F_PEL; k <= Q_PEL; k++)
-            {
-              img->lambda_me[5][qp][k] = params->MEErrorMetric[k] == ERROR_SSE ? img->lambda_md[5][qp] : sqrt(img->lambda_md[5][qp]);
-              img->lambda_mf[5][qp][k] = LAMBDA_FACTOR (img->lambda_me[5][qp][k]);
-            }
-          }
+          list_sign[idx] = (enc_picture->poc < pField[fld]->poc) ? +1 : -1;
         }
         else
         {
-          if (params->successive_Bframe>0)
-            img->lambda_md[j][qp] = 0.68 * pow (2, qp_temp/3.0)
-            * (j == B_SLICE ? dClip3(2.00,4.00,(qp_temp / 6.0)) : (j == SP_SLICE) ? dClip3(1.4,3.0,(qp_temp / 12.0)) : 1.0);
-          else
-            img->lambda_md[j][qp] = 0.85 * pow (2, qp_temp/3.0)
-            * ( (j == B_SLICE) ? 4.0 : (j == SP_SLICE) ? dClip3(1.4,3.0,(qp_temp / 12.0)) : 1.0);
-          // Scale lambda due to hadamard qpel only consideration
-          img->lambda_md[j][qp] = ((params->MEErrorMetric[H_PEL] == ERROR_SATD && params->MEErrorMetric[Q_PEL] == ERROR_SATD) ? 1.00 : 0.95) * img->lambda_md[j][qp];
-          img->lambda_md[j][qp] = (j == B_SLICE && params->BRefPictures == 2 && img->b_frame_to_code == 0 ? 0.50 : 1.00) * img->lambda_md[j][qp];
+          list_sign[idx] = (enc_picture->poc > pField[fld]->poc) ? +1 : -1;
+        }
+        idx++;
+      }
+    }
+  }
+  numRefs = idx;
 
-          if (j == B_SLICE)
+  // now sort these references based on poc (temporal) distance
+  for (i=0; i < numRefs-1; i++)
+  {
+    for (j = (i + 1); j < numRefs; j++)
+    {
+      if (poc_diff[i] > poc_diff[j] || (poc_diff[i] == poc_diff[j] && list_sign[j] > list_sign[i]))
+      {
+        // poc_diff
+        tmp_value   = poc_diff[i];
+        poc_diff[i] = poc_diff[j];
+        poc_diff[j] = tmp_value;
+        // re_order (PicNum)
+        tmp_value   = re_order[i];
+        re_order[i] = re_order[j];
+        re_order[j] = tmp_value;
+        // list_sign
+        tmp_value    = list_sign[i];
+        list_sign[i] = list_sign[j];
+        list_sign[j] = tmp_value;
+        // fld_type
+        tmp_value   = fld_type[i];
+        fld_type[i] = fld_type[j];
+        fld_type[j] = tmp_value ;
+      }
+    }
+  }
+
+  if (img->structure == TOP_FIELD)
+  {
+    while ((top_idx < numRefs)||(bot_idx < numRefs))
+    {
+      for ( ; top_idx < numRefs; top_idx++)
+      {
+        if ( fld_type[top_idx] == TOP_FIELD )
+        {
+          tmp_reorder[list_size] = re_order[top_idx];
+          list_size++;
+          top_idx++;
+          break;
+        }
+      }
+      for ( ; bot_idx < numRefs; bot_idx++)
+      {
+        if ( fld_type[bot_idx] == BOTTOM_FIELD )
+        {
+          tmp_reorder[list_size] = re_order[bot_idx];
+          list_size++;
+          bot_idx++;
+          break;
+        }
+      }
+    }
+  }
+  if (img->structure == BOTTOM_FIELD)
+  {
+    while ((top_idx < numRefs)||(bot_idx < numRefs))
+    {
+      for ( ; bot_idx < numRefs; bot_idx++)
+      {
+        if ( fld_type[bot_idx] == BOTTOM_FIELD )
+        {
+          tmp_reorder[list_size] = re_order[bot_idx];
+          list_size++;
+          bot_idx++;
+          break;
+        }
+      }
+      for ( ; top_idx < numRefs; top_idx++)
+      {
+        if ( fld_type[top_idx] == TOP_FIELD )
+        {
+          tmp_reorder[list_size] = re_order[top_idx];
+          list_size++;
+          top_idx++;
+          break;
+        }
+      }
+    }
+  }
+
+  // copy to final matrix
+  list_size = imin( list_size, 32 );
+  for ( i = 0; i < list_size; i++ )
+  {
+    re_order[i] = tmp_reorder[i];
+  }
+
+  // Check versus default list to see if any
+  // change has happened
+  no_reorder = 1;
+  for (i=0; i<num_ref_idx_lX_active; i++)
+  {
+    if (default_order[i] != re_order[i])
+    {
+      no_reorder = 0;
+    }
+  }
+
+  // If different, then signal reordering
+  if (no_reorder == 0)
+  {
+    for (i=0; i<num_ref_idx_lX_active; i++)
+    {
+      diff = re_order[i] - picNumLXPred;
+      if (diff <= 0)
+      {
+        reordering_of_pic_nums_idc[i] = 0;
+        abs_diff_pic_num_minus1[i] = iabs(diff)-1;
+        if (abs_diff_pic_num_minus1[i] < 0)
+          abs_diff_pic_num_minus1[i] = maxPicNum -1;
+      }
+      else
+      {
+        reordering_of_pic_nums_idc[i] = 1;
+        abs_diff_pic_num_minus1[i] = iabs(diff)-1;
+      }
+      picNumLXPred = re_order[i];
+
+      tmp_reorder[i] = re_order[i];
+
+      k = i;
+      for (j = i; j < num_ref_idx_lX_active; j++)
+      {
+        if (default_order[j] != re_order[i])
+        {
+          ++k;
+          tmp_reorder[k] = default_order[j];
+        }
+      }
+      reorder_stop = 1;
+      for(j=i+1; j<num_ref_idx_lX_active; j++)
+      {
+        if (tmp_reorder[j] != re_order[j])
+        {
+          reorder_stop = 0;
+          break;
+        }
+      }
+
+      if (reorder_stop==1)
+      {
+        ++i;
+        break;
+      }
+
+      memcpy ( default_order, tmp_reorder, num_ref_idx_lX_active * sizeof(int));
+    }
+    reordering_of_pic_nums_idc[i] = 3;
+
+    memcpy ( default_order, tmp_reorder, num_ref_idx_lX_active * sizeof(int));
+
+    if (list_no==0)
+    {
+      img->currentSlice->ref_pic_list_reordering_flag_l0 = 1;
+    }
+    else
+    {
+      img->currentSlice->ref_pic_list_reordering_flag_l1 = 1;
+    }
+  }
+}
+
+void UpdateMELambda(ImageParameters *img)
+{
+  int j, k, qp;
+  if (params->UpdateLambdaChromaME)
+  {
+    for (j = 0; j < 6; j++)
+    {
+      for (qp = -img->bitdepth_luma_qp_scale; qp < 52; qp++)
+      { 
+        for (k = 0; k < 3; k++)
+        {
+          if ((params->MEErrorMetric[k] == ERROR_SAD) && (params->ChromaMEEnable))
           {
-            img->lambda_md[5][qp] = img->lambda_md[j][qp];
-
-            if (params->HierarchicalCoding == 2)
-              img->lambda_md[5][qp] *= (1.0 - dmin(0.4,0.2 * (double) gop_structure[img->b_frame_to_code-1].hierarchy_layer)) ;
-            else
-              img->lambda_md[5][qp] *= 0.80;
-
-            img->lambda_md[5][qp] *= lambda_scale;
-
-            for (k = F_PEL; k <= Q_PEL; k++)
+            switch(params->yuv_format)
             {
-              img->lambda_me[5][qp][k] = params->MEErrorMetric[k] == ERROR_SSE ? img->lambda_md[5][qp] : sqrt(img->lambda_md[5][qp]);
-              img->lambda_mf[5][qp][k] = LAMBDA_FACTOR (img->lambda_me[5][qp][k]);
+            case YUV420:
+              img->lambda_mf[j][qp][k] = (3 * img->lambda_mf[j][qp][k] + 1) >> 1;
+              img->lambda_me[j][qp][k] *= 1.5;
+              break;
+            case YUV422:
+              img->lambda_mf[j][qp][k] *= 2;
+              img->lambda_me[j][qp][k] *= 2.0;
+              break;
+            case YUV444:
+              img->lambda_mf[j][qp][k] *= 3;
+              img->lambda_me[j][qp][k] *= 3.0;
+              break;
+            default:
+              break;
             }
-          }
-          else
-            img->lambda_md[j][qp] *= lambda_scale;
-
-          for (k = F_PEL; k <= Q_PEL; k++)
-          {
-            img->lambda_me[j][qp][k] = params->MEErrorMetric[k] == ERROR_SSE ? img->lambda_md[j][qp] : sqrt(img->lambda_md[j][qp]);
-            img->lambda_mf[j][qp][k] = LAMBDA_FACTOR (img->lambda_me[j][qp][k]);
-          }
-
-          if (params->CtxAdptLagrangeMult == 1)
-          {
-            int lambda_qp = (qp >= 32 && !params->RCEnable) ? imax(0, qp - 4) : imax(0, qp - 6);
-            img->lambda_mf_factor[j][qp] = log (img->lambda_me[j][lambda_qp][Q_PEL] + 1.0) / log (2.0);
           }
         }
       }
     }
   }
-  else // RDOPT off computation of Lagrangian multipliers
+}
+
+void SetLambda(int j, int qp, double lambda_scale)
+{
+  int k;
+  img->lambda_md[j][qp] *= lambda_scale;
+
+  for (k = F_PEL; k <= Q_PEL; k++)
+  {
+    img->lambda_me[j][qp][k] =  (params->MEErrorMetric[k] == ERROR_SSE) ? img->lambda_md[j][qp] : sqrt(img->lambda_md[j][qp]);
+    img->lambda_mf[j][qp][k] = LAMBDA_FACTOR (img->lambda_me[j][qp][k]);
+  }
+}
+
+void SetLagrangianMultipliersOn()
+{
+  int qp, j;
+  double qp_temp;
+  double lambda_scale = 1.0 - dClip3(0.0,0.5,0.05 * (double) params->jumpd);;
+
+  if (params->UseExplicitLambdaParams == 1) // consideration of explicit lambda weights.
   {
     for (j = 0; j < 6; j++)
     {
@@ -1322,32 +1553,110 @@ void SetLagrangianMultipliers()
       {
         qp_temp = (double)qp + img->bitdepth_luma_qp_scale - SHIFT_QP;
 
-        if (params->UseExplicitLambdaParams == 1) // consideration of explicit lambda weights.
+        img->lambda_md[j][qp] = params->LambdaWeight[j] * pow (2, qp_temp/3.0);
+        SetLambda(j, qp, ((params->MEErrorMetric[H_PEL] == ERROR_SATD && params->MEErrorMetric[Q_PEL] == ERROR_SATD) ? 1.00 : 0.95));
+      }
+    }
+  }
+  else if (params->UseExplicitLambdaParams == 2) // consideration of fixed lambda values.
+  {
+    for (j = 0; j < 6; j++)
+    {
+      for (qp = -img->bitdepth_luma_qp_scale; qp < 52; qp++)
+      {
+        qp_temp = (double)qp + img->bitdepth_luma_qp_scale - SHIFT_QP;
+
+        img->lambda_md[j][qp] = params->FixedLambda[j];
+        SetLambda(j, qp, ((params->MEErrorMetric[H_PEL] == ERROR_SATD && params->MEErrorMetric[Q_PEL] == ERROR_SATD) ? 1.00 : 0.95));
+      }
+    }
+  }
+  else
+  {
+    for (j = 0; j < 5; j++)
+    {
+      for (qp = -img->bitdepth_luma_qp_scale; qp < 52; qp++)
+      {
+        qp_temp = (double)qp + img->bitdepth_luma_qp_scale - SHIFT_QP;
+
+        if (params->successive_Bframe > 0)
+          img->lambda_md[j][qp] = 0.68 * pow (2, qp_temp/3.0)
+          * (j == B_SLICE && img->b_frame_to_code != 0 ? dClip3(2.00, 4.00, (qp_temp / 6.0)) : (j == SP_SLICE) ? dClip3(1.4,3.0,(qp_temp / 12.0)) : 1.0);
+        else
+          img->lambda_md[j][qp] = 0.85 * pow (2, qp_temp/3.0) * ((j == SP_SLICE) ? dClip3(1.4, 3.0,(qp_temp / 12.0)) : 1.0);
+
+        // Scale lambda due to hadamard qpel only consideration
+        img->lambda_md[j][qp] = ((params->MEErrorMetric[H_PEL] == ERROR_SATD && params->MEErrorMetric[Q_PEL] == ERROR_SATD) ? 1.00 : 0.95) * img->lambda_md[j][qp];
+        //img->lambda_md[j][qp] = (j == B_SLICE && params->BRefPictures == 2 && img->b_frame_to_code == 0 ? 0.50 : 1.00) * img->lambda_md[j][qp];
+
+        if (j == B_SLICE)
         {
-          img->lambda_md[j][qp] = sqrt(params->LambdaWeight[j] * pow (2, qp_temp/3.0));
-        }
-        else if (params->UseExplicitLambdaParams == 2) // consideration of explicit lambda
-        {
-          img->lambda_md[j][qp] = sqrt(params->FixedLambda[j]);
+          img->lambda_md[5][qp] = img->lambda_md[j][qp];
+
+          if (img->b_frame_to_code != 0)
+          {
+            if (params->HierarchicalCoding == 2)
+              img->lambda_md[5][qp] *= (1.0 - dmin(0.4, 0.2 * (double) gop_structure[img->b_frame_to_code-1].hierarchy_layer));
+            else
+              img->lambda_md[5][qp] *= 0.80;
+
+          }
+          SetLambda(5, qp, lambda_scale);
         }
         else
-        { 
-          img->lambda_md[j][qp] = QP2QUANT[imax(0,qp - SHIFT_QP)];
-        }
-        for (k = F_PEL; k <= Q_PEL; k++)
-        {
-          img->lambda_me[j][qp][k]  = img->lambda_md[j][qp];
-          img->lambda_me[j][qp][k] *= params->MEErrorMetric[k] == ERROR_SSE ? img->lambda_me[j][qp][k] : 1;
-          img->lambda_mf[j][qp][k]  = LAMBDA_FACTOR (img->lambda_me[j][qp][k]);
-        }
+          img->lambda_md[j][qp] *= lambda_scale;
+
+        SetLambda(j, qp, 1.0);
 
         if (params->CtxAdptLagrangeMult == 1)
         {
-          int lambda_qp = (qp >= 32 && !params->RCEnable) ? imax(0, qp-4) : imax(0, qp-6);
+          int lambda_qp = (qp >= 32 && !params->RCEnable) ? imax(0, qp - 4) : imax(0, qp - 6);
           img->lambda_mf_factor[j][qp] = log (img->lambda_me[j][lambda_qp][Q_PEL] + 1.0) / log (2.0);
         }
       }
     }
   }
+
+  UpdateMELambda(img);
 }
 
+
+void SetLagrangianMultipliersOff()
+{
+  int qp, j, k;
+  double qp_temp;
+
+  for (j = 0; j < 6; j++)
+  {
+    for (qp = -img->bitdepth_luma_qp_scale; qp < 52; qp++)
+    {
+      qp_temp = (double)qp + img->bitdepth_luma_qp_scale - SHIFT_QP;
+
+      switch (params->UseExplicitLambdaParams)
+      {
+      case 1:  // explicit lambda weights
+        img->lambda_md[j][qp] = sqrt(params->LambdaWeight[j] * pow (2, qp_temp/3.0));
+        break;
+      case 2: // explicit lambda
+        img->lambda_md[j][qp] = sqrt(params->FixedLambda[j]);
+        break;
+      default:
+        img->lambda_md[j][qp] = QP2QUANT[imax(0,qp - SHIFT_QP)];
+        break;
+      }
+
+      for (k = F_PEL; k <= Q_PEL; k++)
+      {
+        img->lambda_me[j][qp][k]  = (params->MEErrorMetric[k] == ERROR_SSE) ? (img->lambda_md[j][qp] * img->lambda_md[j][qp]) : img->lambda_md[j][qp];
+        img->lambda_mf[j][qp][k]  = LAMBDA_FACTOR (img->lambda_me[j][qp][k]);
+      }
+
+      if (params->CtxAdptLagrangeMult == 1)
+      {
+        int lambda_qp = (qp >= 32 && !params->RCEnable) ? imax(0, qp-4) : imax(0, qp-6);
+        img->lambda_mf_factor[j][qp] = log (img->lambda_me[j][lambda_qp][Q_PEL] + 1.0) / log (2.0);
+      }
+    }
+  }
+  UpdateMELambda(img);
+}

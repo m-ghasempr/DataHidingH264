@@ -57,7 +57,7 @@ void update_qp_cbp(Macroblock *currMB, short best_mode)
     currMB->delta_qp = 0;
     currMB->qp       = currMB->prev_qp;
     img->qp          = currMB->qp;
-    update_qp(currMB);    
+    update_qp(img, currMB);    
 
   }
 
@@ -67,9 +67,6 @@ void update_qp_cbp(Macroblock *currMB, short best_mode)
     rdopt->qp        = currMB->qp;
     rdopt->delta_qp  = currMB->delta_qp;
     rdopt->prev_cbp  = currMB->prev_cbp;
-
-    delta_qp_mbaff[currMB->mb_field][img->bot_MB] = currMB->delta_qp;
-    qp_mbaff      [currMB->mb_field][img->bot_MB] = currMB->qp;
   }  
 }
 
@@ -404,7 +401,7 @@ void update_qp_cbp_tmp(Macroblock *currMB, int cbp, int best_mode)
     currMB->delta_qp  = 0;
     currMB->qp        = currMB->prev_qp;
     img->qp           = currMB->qp;
-    update_qp(currMB);        
+    update_qp(img, currMB);        
   }
 }
 

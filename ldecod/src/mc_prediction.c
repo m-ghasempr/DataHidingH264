@@ -18,10 +18,9 @@
 #include "mc_prediction.h"
 #include "mbuffer.h"
 #include "mb_access.h"
+#include "macroblock.h"
 
 extern StorablePicture *no_reference_picture;
-extern const unsigned char subblk_offset_y[3][8][4];
-extern const unsigned char subblk_offset_x[3][8][4];
 
 imgpel tmp_block_l0[MB_BLOCK_SIZE][MB_BLOCK_SIZE];     //!< l0 prediction
 imgpel tmp_block_l1[MB_BLOCK_SIZE][MB_BLOCK_SIZE];     //!< l1 prediction
@@ -33,7 +32,7 @@ static const int COEF[6] = { 1, -5, 20, 20, -5, 1 };
  *    block single list prediction
  ************************************************************************
  */
-static inline void mc_prediction(imgpel curr_mpr[MB_BLOCK_SIZE][MB_BLOCK_SIZE],
+static inline void mc_prediction(imgpel mb_pred[MB_BLOCK_SIZE][MB_BLOCK_SIZE],
                     int ver_block_size, 
                     int hor_block_size,
                     int ioff,
@@ -43,13 +42,13 @@ static inline void mc_prediction(imgpel curr_mpr[MB_BLOCK_SIZE][MB_BLOCK_SIZE],
 
   if (hor_block_size == MB_BLOCK_SIZE)
   {
-    memcpy(&(curr_mpr[0][ioff]), &(block[0][0]), hor_block_size * ver_block_size * sizeof(imgpel));
+    memcpy(&(mb_pred[0][ioff]), &(block[0][0]), hor_block_size * ver_block_size * sizeof(imgpel));
   }
   else
   {
     for(jj = 0; jj < ver_block_size; jj++)
     {
-      memcpy(&(curr_mpr[jj][ioff]), &(block[jj][0]), hor_block_size * sizeof(imgpel));
+      memcpy(&(mb_pred[jj][ioff]), &(block[jj][0]), hor_block_size * sizeof(imgpel));
     }
   }
 }
@@ -60,7 +59,7 @@ static inline void mc_prediction(imgpel curr_mpr[MB_BLOCK_SIZE][MB_BLOCK_SIZE],
  *    block single list weighted prediction
  ************************************************************************
  */
-static inline void weighted_mc_prediction(imgpel curr_mpr[MB_BLOCK_SIZE][MB_BLOCK_SIZE],
+static inline void weighted_mc_prediction(imgpel mb_pred[MB_BLOCK_SIZE][MB_BLOCK_SIZE],
                             int ver_block_size, 
                             int hor_block_size,
                             int ioff,
@@ -75,7 +74,7 @@ static inline void weighted_mc_prediction(imgpel curr_mpr[MB_BLOCK_SIZE][MB_BLOC
   
   for(jj=0;jj<ver_block_size;jj++)
   {
-    mpr = &curr_mpr[jj][ioff];
+    mpr = &mb_pred[jj][ioff];
     b0 = block[jj];
     for(ii=0;ii<hor_block_size;ii++)
       *(mpr++) = (imgpel) iClip1(color_clip, (rshift_rnd((wp_scale * *(b0++)), weight_denom)  + wp_offset ));
@@ -89,7 +88,7 @@ static inline void weighted_mc_prediction(imgpel curr_mpr[MB_BLOCK_SIZE][MB_BLOC
  *    block biprediction
  ************************************************************************
  */
-static inline void bi_prediction(imgpel curr_mpr[MB_BLOCK_SIZE][MB_BLOCK_SIZE],  
+static inline void bi_prediction(imgpel mb_pred[MB_BLOCK_SIZE][MB_BLOCK_SIZE],  
                                  imgpel block_l0[MB_BLOCK_SIZE][MB_BLOCK_SIZE], 
                                  imgpel block_l1[MB_BLOCK_SIZE][MB_BLOCK_SIZE],
                                  int ver_block_size, 
@@ -101,7 +100,7 @@ static inline void bi_prediction(imgpel curr_mpr[MB_BLOCK_SIZE][MB_BLOCK_SIZE],
 
   for(jj = 0;jj < ver_block_size;jj++)
   {
-    mpr = &curr_mpr[jj][ioff];
+    mpr = &mb_pred[jj][ioff];
     b0 = block_l0[jj];
     b1 = block_l1[jj];
     for(ii = 0; ii < hor_block_size;ii++)
@@ -115,7 +114,7 @@ static inline void bi_prediction(imgpel curr_mpr[MB_BLOCK_SIZE][MB_BLOCK_SIZE],
  *    block weighted biprediction
  ************************************************************************
  */
-static inline void weighted_bi_prediction(imgpel curr_mpr[MB_BLOCK_SIZE][MB_BLOCK_SIZE], 
+static inline void weighted_bi_prediction(imgpel mb_pred[MB_BLOCK_SIZE][MB_BLOCK_SIZE], 
                                           imgpel block_l0[MB_BLOCK_SIZE][MB_BLOCK_SIZE], 
                                           imgpel block_l1[MB_BLOCK_SIZE][MB_BLOCK_SIZE],
                                           int ver_block_size, 
@@ -132,7 +131,7 @@ static inline void weighted_bi_prediction(imgpel curr_mpr[MB_BLOCK_SIZE][MB_BLOC
   
   for(jj = 0; jj < ver_block_size; jj++)
   {
-    mpr = &curr_mpr[jj][ioff];    
+    mpr = &mb_pred[jj][ioff];    
     b0  = block_l0[jj];
     b1  = block_l1[jj];
 
@@ -163,9 +162,10 @@ void get_block_luma(ColorPlane pl, StorablePicture *curr_ref, int x_pos, int y_p
   int i, j, jj;
   int shift_x  = dec_picture->size_x;
   int maxold_x = dec_picture->size_x_m1;
-  int maxold_y = (dec_picture->mb_field[img->current_mb_nr]) ? (dec_picture->size_y >> 1) - 1 : dec_picture->size_y_m1;
+  int maxold_y = (dec_picture->motion.mb_field[img->current_mb_nr]) ? (dec_picture->size_y >> 1) - 1 : dec_picture->size_y_m1;
   int result;
   int pres_x;
+  int max_imgpel_value = img->max_imgpel_value_comp[pl];
 
 
   if (curr_ref == no_reference_picture && img->framepoc < img->recovery_poc)
@@ -237,7 +237,7 @@ void get_block_luma(ColorPlane pl, StorablePicture *curr_ref, int x_pos, int y_p
                     + (*(p1++) + *(p4++)) * COEF[1]
                     + (*(p2++) + *(p3++)) * COEF[2];
 
-            *orig_line++ = (imgpel) iClip1(img->max_imgpel_value, ((result + 16)>>5));
+            *orig_line++ = (imgpel) iClip1(max_imgpel_value, ((result + 16)>>5));
           }
         }
 
@@ -273,7 +273,7 @@ void get_block_luma(ColorPlane pl, StorablePicture *curr_ref, int x_pos, int y_p
                     + (*(p1++) + *(p4++)) * COEF[1]
                     + (*(p2++) + *(p3++)) * COEF[2];
 
-            *orig_line++ = (imgpel) iClip1(img->max_imgpel_value, ((result + 16)>>5));
+            *orig_line++ = (imgpel) iClip1(max_imgpel_value, ((result + 16)>>5));
           }
           p0 = p1 - hor_block_size;
         }
@@ -331,7 +331,7 @@ void get_block_luma(ColorPlane pl, StorablePicture *curr_ref, int x_pos, int y_p
                     + (*x1++ + *x4++) * COEF[1]
                     + (*x2++ + *x3++) * COEF[2];
 
-            *(orig_line++) = (imgpel) iClip1(img->max_imgpel_value, ((result+512)>>10));
+            *(orig_line++) = (imgpel) iClip1(max_imgpel_value, ((result+512)>>10));
           }
         }
 
@@ -344,7 +344,7 @@ void get_block_luma(ColorPlane pl, StorablePicture *curr_ref, int x_pos, int y_p
             orig_line = block[j];
             for (i = 0; i < hor_block_size; i++)
             {
-              *orig_line = (imgpel) ((*orig_line + iClip1(img->max_imgpel_value, ((*(tmp_line++) + 16) >> 5)) + 1 )>> 1);
+              *orig_line = (imgpel) ((*orig_line + iClip1(max_imgpel_value, ((*(tmp_line++) + 16) >> 5)) + 1 )>> 1);
               orig_line++;
             }
           }
@@ -387,7 +387,7 @@ void get_block_luma(ColorPlane pl, StorablePicture *curr_ref, int x_pos, int y_p
                     + (*(x1++) + *(x4++)) * COEF[1]
                     + (*(x2++) + *(x3++)) * COEF[2];
 
-            *(orig_line++) = (imgpel) iClip1(img->max_imgpel_value, ((result + 512)>>10));
+            *(orig_line++) = (imgpel) iClip1(max_imgpel_value, ((result + 512)>>10));
           }
         }
 
@@ -399,7 +399,7 @@ void get_block_luma(ColorPlane pl, StorablePicture *curr_ref, int x_pos, int y_p
             orig_line = block[j];
             for (i = 0; i < hor_block_size; i++)
             {
-              *orig_line = (imgpel) ((*orig_line + iClip1(img->max_imgpel_value, ((*(tmp_line++) + 16)>>5))+1)>>1);
+              *orig_line = (imgpel) ((*orig_line + iClip1(max_imgpel_value, ((*(tmp_line++) + 16)>>5))+1)>>1);
               orig_line ++;
             }
           }
@@ -426,7 +426,7 @@ void get_block_luma(ColorPlane pl, StorablePicture *curr_ref, int x_pos, int y_p
                     + (*(p1++) + *(p4++)) * COEF[1]
                     + (*(p2++) + *(p3++)) * COEF[2];
 
-            *(orig_line++) = (imgpel) iClip1(img->max_imgpel_value, ((result + 16)>>5));
+            *(orig_line++) = (imgpel) iClip1(max_imgpel_value, ((result + 16)>>5));
           }
         }
 
@@ -446,7 +446,7 @@ void get_block_luma(ColorPlane pl, StorablePicture *curr_ref, int x_pos, int y_p
                     + (*(p1++) + *(p4++)) * COEF[1]
                     + (*(p2++) + *(p3++)) * COEF[2];
 
-            *orig_line = (imgpel) ((*orig_line + iClip1(img->max_imgpel_value, ((result + 16) >> 5)) + 1) >> 1);
+            *orig_line = (imgpel) ((*orig_line + iClip1(max_imgpel_value, ((result + 16) >> 5)) + 1) >> 1);
             orig_line++;
           }
           p0 = p1 - hor_block_size ;
@@ -492,7 +492,7 @@ void get_block_luma(ColorPlane pl, StorablePicture *curr_ref, int x_pos, int y_p
             result += (cur_lineY[ipos_m1] + cur_lineY[ipos_p2]) * COEF[1];
             result += (cur_lineY[ipos   ] + cur_lineY[ipos_p1]) * COEF[2];
 
-            block[j][i] = (imgpel) iClip1(img->max_imgpel_value, ((result + 16)>>5));
+            block[j][i] = (imgpel) iClip1(max_imgpel_value, ((result + 16)>>5));
           }
         }
 
@@ -532,7 +532,7 @@ void get_block_luma(ColorPlane pl, StorablePicture *curr_ref, int x_pos, int y_p
             result  = (p0[pres_x] + p5[pres_x]) * COEF[0];
             result += (p1[pres_x] + p4[pres_x]) * COEF[1];
             result += (p2[pres_x] + p3[pres_x]) * COEF[2];
-            *(orig_line++) = (imgpel) iClip1(img->max_imgpel_value, ((result+16)>>5));
+            *(orig_line++) = (imgpel) iClip1(max_imgpel_value, ((result+16)>>5));
           }
         }
 
@@ -589,7 +589,7 @@ void get_block_luma(ColorPlane pl, StorablePicture *curr_ref, int x_pos, int y_p
                     + (*x1++ + *x4++) * COEF[1]
                     + (*x2++ + *x3++) * COEF[2];
 
-            *(orig_line++) = (imgpel) iClip1(img->max_imgpel_value, ((result+512)>>10));
+            *(orig_line++) = (imgpel) iClip1(max_imgpel_value, ((result+512)>>10));
           }
         }
 
@@ -601,7 +601,7 @@ void get_block_luma(ColorPlane pl, StorablePicture *curr_ref, int x_pos, int y_p
             orig_line = block[j];
             for (i = 0; i < hor_block_size; i++)
             {
-              *orig_line = (imgpel) ((*orig_line + iClip1(img->max_imgpel_value, ((*(tmp_line++) + 16) >> 5)) + 1 )>>1);
+              *orig_line = (imgpel) ((*orig_line + iClip1(max_imgpel_value, ((*(tmp_line++) + 16) >> 5)) + 1 )>>1);
               orig_line++;
             }
           }
@@ -649,7 +649,7 @@ void get_block_luma(ColorPlane pl, StorablePicture *curr_ref, int x_pos, int y_p
                     + (*(x1++) + *(x4++)) * COEF[1]
                     + (*(x2++) + *(x3++)) * COEF[2];
 
-            *(orig_line++) = (imgpel) iClip1(img->max_imgpel_value, ((result + 512)>>10));
+            *(orig_line++) = (imgpel) iClip1(max_imgpel_value, ((result + 512)>>10));
           }
         }
 
@@ -661,7 +661,7 @@ void get_block_luma(ColorPlane pl, StorablePicture *curr_ref, int x_pos, int y_p
             orig_line = block[j];            
             for (i = 0; i < hor_block_size; i++)
             {
-              *orig_line = (imgpel) ((*orig_line + iClip1(img->max_imgpel_value, ((*(tmp_line++) + 16)>>5)) + 1)>> 1);
+              *orig_line = (imgpel) ((*orig_line + iClip1(max_imgpel_value, ((*(tmp_line++) + 16)>>5)) + 1)>> 1);
               orig_line++;
             }
           }
@@ -688,7 +688,7 @@ void get_block_luma(ColorPlane pl, StorablePicture *curr_ref, int x_pos, int y_p
             result += (cur_lineY[ipos_m1] + cur_lineY[ipos_p2]) * COEF[1];
             result += (cur_lineY[ipos   ] + cur_lineY[ipos_p1]) * COEF[2];
 
-            block[j][i] = (imgpel) iClip1(img->max_imgpel_value, ((result+16)>>5));
+            block[j][i] = (imgpel) iClip1(max_imgpel_value, ((result+16)>>5));
           }
         }
 
@@ -714,7 +714,7 @@ void get_block_luma(ColorPlane pl, StorablePicture *curr_ref, int x_pos, int y_p
             result += (p1[pres_x] + p4[pres_x]) * COEF[1];
             result += (p2[pres_x] + p3[pres_x]) * COEF[2];
 
-            *orig_line = (imgpel) ((*orig_line + iClip1(img->max_imgpel_value, ((result+16)>>5)) + 1 ) >> 1);
+            *orig_line = (imgpel) ((*orig_line + iClip1(max_imgpel_value, ((result+16)>>5)) + 1 ) >> 1);
             orig_line++;
           }
         }      
@@ -743,13 +743,14 @@ void get_block_chroma(int uv, StorablePicture *curr_ref, int x_pos, int y_pos, i
 
   int i, j;
   int maxold_x = dec_picture->size_x_cr_m1;
-  int maxold_y = (dec_picture->mb_field[img->current_mb_nr]) ? (dec_picture->size_y_cr >> 1) - 1 : dec_picture->size_y_cr_m1;
+  int maxold_y = (dec_picture->motion.mb_field[img->current_mb_nr]) ? (dec_picture->size_y_cr >> 1) - 1 : dec_picture->size_y_cr_m1;
   int result;
   
   static imgpel **cur_img, *blk_line;
   static imgpel *cur_line, *cur_line_p1;
   int tmp_pos;
   static int ipos, ipos_p1;
+  int    max_imgpel_value = img->max_imgpel_value_comp[uv + 1];
 
 
   if (curr_ref == no_reference_picture && img->framepoc < img->recovery_poc)
@@ -788,7 +789,7 @@ void get_block_chroma(int uv, StorablePicture *curr_ref, int x_pos, int y_pos, i
         for (i = 0; i < hor_block_size; i++)
         {
           result = (w00 * *cur_line++ + w01 * *cur_line_p1++);
-          *(blk_line++) = (imgpel) iClip1(img->max_imgpel_value_uv, rshift_rnd_sf(result, total_scale));
+          *(blk_line++) = (imgpel) iClip1(max_imgpel_value, rshift_rnd_sf(result, total_scale));
         }
       }
     }
@@ -803,7 +804,7 @@ void get_block_chroma(int uv, StorablePicture *curr_ref, int x_pos, int y_pos, i
         for (i = 0; i < hor_block_size; i++)
         {
           result = (w00 * *cur_line++ + w10 * *cur_line_p1++);
-          *(blk_line++) = (imgpel) iClip1(img->max_imgpel_value_uv, rshift_rnd_sf(result, total_scale));
+          *(blk_line++) = (imgpel) iClip1(max_imgpel_value, rshift_rnd_sf(result, total_scale));
         }
       }
     }
@@ -819,7 +820,7 @@ void get_block_chroma(int uv, StorablePicture *curr_ref, int x_pos, int y_pos, i
         {
           result  = (w00 * *(cur_line++) + w01 * *(cur_line_p1++));
           result += (w10 * *(cur_line  ) + w11 * *(cur_line_p1  ));
-          *(blk_line++) = (imgpel) iClip1(img->max_imgpel_value_uv, rshift_rnd_sf(result, total_scale));
+          *(blk_line++) = (imgpel) iClip1(max_imgpel_value, rshift_rnd_sf(result, total_scale));
         }
       }
     }
@@ -852,7 +853,7 @@ void get_block_chroma(int uv, StorablePicture *curr_ref, int x_pos, int y_pos, i
           ipos    = iClip3(0, maxold_x, tmp_pos++);
 
           result = (w00 * cur_line[ipos] + w01 * cur_line_p1[ipos]);
-          *(blk_line++) = (imgpel) iClip1(img->max_imgpel_value_uv, rshift_rnd_sf(result, total_scale));
+          *(blk_line++) = (imgpel) iClip1(max_imgpel_value, rshift_rnd_sf(result, total_scale));
         }
       }      
     }
@@ -870,7 +871,7 @@ void get_block_chroma(int uv, StorablePicture *curr_ref, int x_pos, int y_pos, i
           ipos_p1 = iClip3(0, maxold_x, tmp_pos  );
 
           result = (w00 * cur_line[ipos   ] + w10 * cur_line[ipos_p1]);
-          *(blk_line++) = (imgpel)iClip1(img->max_imgpel_value_uv, rshift_rnd_sf(result, total_scale));
+          *(blk_line++) = (imgpel)iClip1(max_imgpel_value, rshift_rnd_sf(result, total_scale));
         }
       }      
     }
@@ -893,7 +894,7 @@ void get_block_chroma(int uv, StorablePicture *curr_ref, int x_pos, int y_pos, i
             w10 * cur_line   [ipos_p1] +
             w01 * cur_line_p1[ipos   ] +
             w11 * cur_line_p1[ipos_p1]);
-          *(blk_line++) = (imgpel) iClip1(img->max_imgpel_value_uv, rshift_rnd_sf(result, total_scale));
+          *(blk_line++) = (imgpel) iClip1(max_imgpel_value, rshift_rnd_sf(result, total_scale));
         }
       }      
     }
@@ -907,7 +908,7 @@ void intra_cr_decoding(Macroblock *currMB, int yuv, ImageParameters *img, int sm
   int (*m7UV)[16], *m7;
   int uv;
   int b8,b4;
-  int ioff, joff, ii, jj, i, j;
+  int ioff, joff, ii, jj;
 
   for(uv = 0; uv < 2; uv++)
   {
@@ -915,8 +916,8 @@ void intra_cr_decoding(Macroblock *currMB, int yuv, ImageParameters *img, int sm
     itrans_4x4 = (!lossless_qpprime) ? itrans4x4 : itrans4x4_ls;
 
     curUV = dec_picture->imgUV[uv];
-    m7UV = img->m7[uv+1];
-    intrapred_chroma(currMB, img, uv);
+    m7UV  = img->mb_rres[uv+1];
+    intrapred_chroma(img, currMB, uv);
 
     if (!smb && (currMB->cbp >> 4))
     {
@@ -927,7 +928,7 @@ void intra_cr_decoding(Macroblock *currMB, int yuv, ImageParameters *img, int sm
           joff = subblk_offset_y[yuv][b8][b4];          
           ioff = subblk_offset_x[yuv][b8][b4];          
 
-          itrans_4x4((ColorPlane) (uv + 1), img, ioff, joff);
+          itrans_4x4(img, (ColorPlane) (uv + 1), ioff, joff);
 
           for(jj=joff; jj<joff + 4;jj++)
           {
@@ -952,7 +953,7 @@ void intra_cr_decoding(Macroblock *currMB, int yuv, ImageParameters *img, int sm
           ioff = subblk_offset_x[yuv][b8][b4];          
 
           for(jj = joff; jj < 4 + joff;jj++)
-            memcpy(&(curUV[img->pix_c_y + jj][img->pix_c_x + ioff]), &(img->mpr[uv + 1][jj][ioff]), BLOCK_SIZE * sizeof(imgpel));
+            memcpy(&(curUV[img->pix_c_y + jj][img->pix_c_x + ioff]), &(img->mb_pred[uv + 1][jj][ioff]), BLOCK_SIZE * sizeof(imgpel));
         }
       }
     }
@@ -960,18 +961,16 @@ void intra_cr_decoding(Macroblock *currMB, int yuv, ImageParameters *img, int sm
     {
       itrans_sp_cr(img, uv);
 
-      for (j = 0; j < 2; j++)
+      for (joff  = 0; joff < 8; joff += 4)
       {
-        joff = j * 4;
-        for(i = 0; i < 2;i++)
-        {
-          ioff = i * 4;          
-          itrans_4x4((ColorPlane) (uv + 1), img, ioff, joff);
+        for(ioff = 0; ioff < 8;ioff+=4)
+        {          
+          itrans_4x4(img, (ColorPlane) (uv + 1), ioff, joff);
 
           for(jj = joff; jj < joff + 4; jj++)
             for(ii = ioff; ii < ioff + 4; ii++)
             {
-              curUV[img->pix_c_y+jj][ii + img->pix_c_x] = (imgpel) img->m7[uv+1][jj][ii];
+              curUV[img->pix_c_y+jj][ii + img->pix_c_x] = (imgpel) img->mb_rres[uv+1][jj][ii];
             }
         }
       }
@@ -993,101 +992,101 @@ void prepare_direct_params(Macroblock *currMB, StorablePicture *dec_picture, Ima
 
   if (!img->MbaffFrameFlag)
   {
-    l0_rFrameL  = (char) (mb_left.available    ? dec_picture->ref_idx[LIST_0][mb_left.pos_y][mb_left.pos_x]       : -1);
-    l0_rFrameU  = (char) (mb_up.available      ? dec_picture->ref_idx[LIST_0][mb_up.pos_y][mb_up.pos_x]           : -1);
-    l0_rFrameUL = (char) (mb_upleft.available  ? dec_picture->ref_idx[LIST_0][mb_upleft.pos_y][mb_upleft.pos_x]   : -1);
-    l0_rFrameUR = (char) (mb_upright.available ? dec_picture->ref_idx[LIST_0][mb_upright.pos_y][mb_upright.pos_x] : l0_rFrameUL);
+    l0_rFrameL  = (char) (mb_left.available    ? dec_picture->motion.ref_idx[LIST_0][mb_left.pos_y][mb_left.pos_x]       : -1);
+    l0_rFrameU  = (char) (mb_up.available      ? dec_picture->motion.ref_idx[LIST_0][mb_up.pos_y][mb_up.pos_x]           : -1);
+    l0_rFrameUL = (char) (mb_upleft.available  ? dec_picture->motion.ref_idx[LIST_0][mb_upleft.pos_y][mb_upleft.pos_x]   : -1);
+    l0_rFrameUR = (char) (mb_upright.available ? dec_picture->motion.ref_idx[LIST_0][mb_upright.pos_y][mb_upright.pos_x] : l0_rFrameUL);
 
-    l1_rFrameL  = (char) (mb_left.available     ? dec_picture->ref_idx[LIST_1][mb_left.pos_y][mb_left.pos_x]      : -1);
-    l1_rFrameU  = (char) (mb_up.available       ? dec_picture->ref_idx[LIST_1][mb_up.pos_y][mb_up.pos_x]          : -1);
-    l1_rFrameUL = (char) (mb_upleft.available  ? dec_picture->ref_idx[LIST_1][mb_upleft.pos_y][mb_upleft.pos_x]   : -1);
-    l1_rFrameUR = (char) (mb_upright.available ? dec_picture->ref_idx[LIST_1][mb_upright.pos_y][mb_upright.pos_x] : l1_rFrameUL);
+    l1_rFrameL  = (char) (mb_left.available     ? dec_picture->motion.ref_idx[LIST_1][mb_left.pos_y][mb_left.pos_x]      : -1);
+    l1_rFrameU  = (char) (mb_up.available       ? dec_picture->motion.ref_idx[LIST_1][mb_up.pos_y][mb_up.pos_x]          : -1);
+    l1_rFrameUL = (char) (mb_upleft.available  ? dec_picture->motion.ref_idx[LIST_1][mb_upleft.pos_y][mb_upleft.pos_x]   : -1);
+    l1_rFrameUR = (char) (mb_upright.available ? dec_picture->motion.ref_idx[LIST_1][mb_upright.pos_y][mb_upright.pos_x] : l1_rFrameUL);
   }
   else
   {
     if (currMB->mb_field)
     {
       l0_rFrameL = (char) (mb_left.available 
-        ? img->mb_data[mb_left.mb_addr].mb_field  || dec_picture->ref_idx[LIST_0][mb_left.pos_y][mb_left.pos_x] < 0
-        ? dec_picture->ref_idx[LIST_0][mb_left.pos_y][mb_left.pos_x] 
-        : dec_picture->ref_idx[LIST_0][mb_left.pos_y][mb_left.pos_x] * 2: -1);
+        ? img->mb_data[mb_left.mb_addr].mb_field  || dec_picture->motion.ref_idx[LIST_0][mb_left.pos_y][mb_left.pos_x] < 0
+        ? dec_picture->motion.ref_idx[LIST_0][mb_left.pos_y][mb_left.pos_x] 
+        : dec_picture->motion.ref_idx[LIST_0][mb_left.pos_y][mb_left.pos_x] * 2: -1);
 
       l0_rFrameU = (char) (mb_up.available 
-        ? img->mb_data[mb_up.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_up.pos_y][mb_up.pos_x] < 0
-        ? dec_picture->ref_idx[LIST_0][mb_up.pos_y][mb_up.pos_x] 
-        : dec_picture->ref_idx[LIST_0][mb_up.pos_y][mb_up.pos_x] * 2: -1);
+        ? img->mb_data[mb_up.mb_addr].mb_field || dec_picture->motion.ref_idx[LIST_0][mb_up.pos_y][mb_up.pos_x] < 0
+        ? dec_picture->motion.ref_idx[LIST_0][mb_up.pos_y][mb_up.pos_x] 
+        : dec_picture->motion.ref_idx[LIST_0][mb_up.pos_y][mb_up.pos_x] * 2: -1);
 
        l0_rFrameUL = (char) (mb_upleft.available 
-         ? img->mb_data[mb_upleft.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_upleft.pos_y][mb_upleft.pos_x] < 0
-         ? dec_picture->ref_idx[LIST_0][mb_upleft.pos_y][mb_upleft.pos_x] 
-         : dec_picture->ref_idx[LIST_0][mb_upleft.pos_y][mb_upleft.pos_x] *2: -1);
+         ? img->mb_data[mb_upleft.mb_addr].mb_field || dec_picture->motion.ref_idx[LIST_0][mb_upleft.pos_y][mb_upleft.pos_x] < 0
+         ? dec_picture->motion.ref_idx[LIST_0][mb_upleft.pos_y][mb_upleft.pos_x] 
+         : dec_picture->motion.ref_idx[LIST_0][mb_upleft.pos_y][mb_upleft.pos_x] *2: -1);
 
        l0_rFrameUR = (char) (mb_upright.available 
-         ? img->mb_data[mb_upright.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_upright.pos_y][mb_upright.pos_x] < 0 
-         ? dec_picture->ref_idx[LIST_0][mb_upright.pos_y][mb_upright.pos_x] 
-         : dec_picture->ref_idx[LIST_0][mb_upright.pos_y][mb_upright.pos_x] * 2: l0_rFrameUL);
+         ? img->mb_data[mb_upright.mb_addr].mb_field || dec_picture->motion.ref_idx[LIST_0][mb_upright.pos_y][mb_upright.pos_x] < 0 
+         ? dec_picture->motion.ref_idx[LIST_0][mb_upright.pos_y][mb_upright.pos_x] 
+         : dec_picture->motion.ref_idx[LIST_0][mb_upright.pos_y][mb_upright.pos_x] * 2: l0_rFrameUL);
 
        l1_rFrameL = (char) (mb_left.available 
-         ? img->mb_data[mb_left.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_left.pos_y][mb_left.pos_x]  < 0 
-         ? dec_picture->ref_idx[LIST_1][mb_left.pos_y][mb_left.pos_x] 
-         : dec_picture->ref_idx[LIST_1][mb_left.pos_y][mb_left.pos_x] * 2: -1);
+         ? img->mb_data[mb_left.mb_addr].mb_field || dec_picture->motion.ref_idx[LIST_1][mb_left.pos_y][mb_left.pos_x]  < 0 
+         ? dec_picture->motion.ref_idx[LIST_1][mb_left.pos_y][mb_left.pos_x] 
+         : dec_picture->motion.ref_idx[LIST_1][mb_left.pos_y][mb_left.pos_x] * 2: -1);
 
        l1_rFrameU = (char) (mb_up.available 
-         ? img->mb_data[mb_up.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_up.pos_y][mb_up.pos_x]  < 0 
-         ? dec_picture->ref_idx[LIST_1][mb_up.pos_y][mb_up.pos_x] 
-         : dec_picture->ref_idx[LIST_1][mb_up.pos_y][mb_up.pos_x] * 2: -1);
+         ? img->mb_data[mb_up.mb_addr].mb_field || dec_picture->motion.ref_idx[LIST_1][mb_up.pos_y][mb_up.pos_x]  < 0 
+         ? dec_picture->motion.ref_idx[LIST_1][mb_up.pos_y][mb_up.pos_x] 
+         : dec_picture->motion.ref_idx[LIST_1][mb_up.pos_y][mb_up.pos_x] * 2: -1);
 
        l1_rFrameUL = (char) (mb_upleft.available 
-         ? img->mb_data[mb_upleft.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_upleft.pos_y][mb_upleft.pos_x]  < 0 
-         ? dec_picture->ref_idx[LIST_1][mb_upleft.pos_y][mb_upleft.pos_x] 
-         : dec_picture->ref_idx[LIST_1][mb_upleft.pos_y][mb_upleft.pos_x] *2 : -1);
+         ? img->mb_data[mb_upleft.mb_addr].mb_field || dec_picture->motion.ref_idx[LIST_1][mb_upleft.pos_y][mb_upleft.pos_x]  < 0 
+         ? dec_picture->motion.ref_idx[LIST_1][mb_upleft.pos_y][mb_upleft.pos_x] 
+         : dec_picture->motion.ref_idx[LIST_1][mb_upleft.pos_y][mb_upleft.pos_x] *2 : -1);
 
        l1_rFrameUR = (char) (mb_upright.available 
-         ? img->mb_data[mb_upright.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_upright.pos_y][mb_upright.pos_x] < 0
-         ? dec_picture->ref_idx[LIST_1][mb_upright.pos_y][mb_upright.pos_x] 
-         : dec_picture->ref_idx[LIST_1][mb_upright.pos_y][mb_upright.pos_x] * 2: l1_rFrameUL);
+         ? img->mb_data[mb_upright.mb_addr].mb_field || dec_picture->motion.ref_idx[LIST_1][mb_upright.pos_y][mb_upright.pos_x] < 0
+         ? dec_picture->motion.ref_idx[LIST_1][mb_upright.pos_y][mb_upright.pos_x] 
+         : dec_picture->motion.ref_idx[LIST_1][mb_upright.pos_y][mb_upright.pos_x] * 2: l1_rFrameUL);
     }
     else
     {
       l0_rFrameL = (char) (mb_left.available 
-        ? img->mb_data[mb_left.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_left.pos_y][mb_left.pos_x]  < 0 
-        ? dec_picture->ref_idx[LIST_0][mb_left.pos_y][mb_left.pos_x] >> 1 
-        : dec_picture->ref_idx[LIST_0][mb_left.pos_y][mb_left.pos_x]: -1);
+        ? img->mb_data[mb_left.mb_addr].mb_field || dec_picture->motion.ref_idx[LIST_0][mb_left.pos_y][mb_left.pos_x]  < 0 
+        ? dec_picture->motion.ref_idx[LIST_0][mb_left.pos_y][mb_left.pos_x] >> 1 
+        : dec_picture->motion.ref_idx[LIST_0][mb_left.pos_y][mb_left.pos_x]: -1);
 
       l0_rFrameU = (char) (mb_up.available 
-        ? img->mb_data[mb_up.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_up.pos_y][mb_up.pos_x] < 0 
-        ? dec_picture->ref_idx[LIST_0][mb_up.pos_y][mb_up.pos_x] >> 1 
-        : dec_picture->ref_idx[LIST_0][mb_up.pos_y][mb_up.pos_x] : -1);
+        ? img->mb_data[mb_up.mb_addr].mb_field || dec_picture->motion.ref_idx[LIST_0][mb_up.pos_y][mb_up.pos_x] < 0 
+        ? dec_picture->motion.ref_idx[LIST_0][mb_up.pos_y][mb_up.pos_x] >> 1 
+        : dec_picture->motion.ref_idx[LIST_0][mb_up.pos_y][mb_up.pos_x] : -1);
 
       l0_rFrameUL = (char) (mb_upleft.available 
-        ? img->mb_data[mb_upleft.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_upleft.pos_y][mb_upleft.pos_x] < 0 
-        ? dec_picture->ref_idx[LIST_0][mb_upleft.pos_y][mb_upleft.pos_x]>> 1 
-        : dec_picture->ref_idx[LIST_0][mb_upleft.pos_y][mb_upleft.pos_x] : -1);
+        ? img->mb_data[mb_upleft.mb_addr].mb_field || dec_picture->motion.ref_idx[LIST_0][mb_upleft.pos_y][mb_upleft.pos_x] < 0 
+        ? dec_picture->motion.ref_idx[LIST_0][mb_upleft.pos_y][mb_upleft.pos_x]>> 1 
+        : dec_picture->motion.ref_idx[LIST_0][mb_upleft.pos_y][mb_upleft.pos_x] : -1);
 
       l0_rFrameUR = (char) (mb_upright.available 
-        ? img->mb_data[mb_upright.mb_addr].mb_field || dec_picture->ref_idx[LIST_0][mb_upright.pos_y][mb_upright.pos_x] < 0 
-        ? dec_picture->ref_idx[LIST_0][mb_upright.pos_y][mb_upright.pos_x] >> 1 
-        : dec_picture->ref_idx[LIST_0][mb_upright.pos_y][mb_upright.pos_x] : l0_rFrameUL);
+        ? img->mb_data[mb_upright.mb_addr].mb_field || dec_picture->motion.ref_idx[LIST_0][mb_upright.pos_y][mb_upright.pos_x] < 0 
+        ? dec_picture->motion.ref_idx[LIST_0][mb_upright.pos_y][mb_upright.pos_x] >> 1 
+        : dec_picture->motion.ref_idx[LIST_0][mb_upright.pos_y][mb_upright.pos_x] : l0_rFrameUL);
 
       l1_rFrameL = (char) (mb_left.available 
-        ? img->mb_data[mb_left.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_left.pos_y][mb_left.pos_x] < 0 
-        ? dec_picture->ref_idx[LIST_1][mb_left.pos_y][mb_left.pos_x] >> 1 
-        : dec_picture->ref_idx[LIST_1][mb_left.pos_y][mb_left.pos_x] : -1);
+        ? img->mb_data[mb_left.mb_addr].mb_field || dec_picture->motion.ref_idx[LIST_1][mb_left.pos_y][mb_left.pos_x] < 0 
+        ? dec_picture->motion.ref_idx[LIST_1][mb_left.pos_y][mb_left.pos_x] >> 1 
+        : dec_picture->motion.ref_idx[LIST_1][mb_left.pos_y][mb_left.pos_x] : -1);
 
       l1_rFrameU = (char) (mb_up.available 
-        ? img->mb_data[mb_up.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_up.pos_y][mb_up.pos_x] < 0 
-        ? dec_picture->ref_idx[LIST_1][mb_up.pos_y][mb_up.pos_x] >> 1 
-        : dec_picture->ref_idx[LIST_1][mb_up.pos_y][mb_up.pos_x] : -1);
+        ? img->mb_data[mb_up.mb_addr].mb_field || dec_picture->motion.ref_idx[LIST_1][mb_up.pos_y][mb_up.pos_x] < 0 
+        ? dec_picture->motion.ref_idx[LIST_1][mb_up.pos_y][mb_up.pos_x] >> 1 
+        : dec_picture->motion.ref_idx[LIST_1][mb_up.pos_y][mb_up.pos_x] : -1);
 
       l1_rFrameUL = (char) (mb_upleft.available 
-        ? img->mb_data[mb_upleft.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_upleft.pos_y][mb_upleft.pos_x] < 0 
-        ? dec_picture->ref_idx[LIST_1][mb_upleft.pos_y][mb_upleft.pos_x] >> 1 
-        : dec_picture->ref_idx[LIST_1][mb_upleft.pos_y][mb_upleft.pos_x] : -1);
+        ? img->mb_data[mb_upleft.mb_addr].mb_field || dec_picture->motion.ref_idx[LIST_1][mb_upleft.pos_y][mb_upleft.pos_x] < 0 
+        ? dec_picture->motion.ref_idx[LIST_1][mb_upleft.pos_y][mb_upleft.pos_x] >> 1 
+        : dec_picture->motion.ref_idx[LIST_1][mb_upleft.pos_y][mb_upleft.pos_x] : -1);
 
       l1_rFrameUR = (char) (mb_upright.available 
-        ? img->mb_data[mb_upright.mb_addr].mb_field || dec_picture->ref_idx[LIST_1][mb_upright.pos_y][mb_upright.pos_x] < 0 
-        ? dec_picture->ref_idx[LIST_1][mb_upright.pos_y][mb_upright.pos_x] >> 1
-        : dec_picture->ref_idx[LIST_1][mb_upright.pos_y][mb_upright.pos_x] : l1_rFrameUL);
+        ? img->mb_data[mb_upright.mb_addr].mb_field || dec_picture->motion.ref_idx[LIST_1][mb_upright.pos_y][mb_upright.pos_x] < 0 
+        ? dec_picture->motion.ref_idx[LIST_1][mb_upright.pos_y][mb_upright.pos_x] >> 1
+        : dec_picture->motion.ref_idx[LIST_1][mb_upright.pos_y][mb_upright.pos_x] : l1_rFrameUL);
     }
   }
 
@@ -1098,10 +1097,25 @@ void prepare_direct_params(Macroblock *currMB, StorablePicture *dec_picture, Ima
   *l1_rFrame = (char) ((*l1_rFrame >= 0 && l1_rFrameUR >= 0) ? imin(*l1_rFrame,l1_rFrameUR): imax(*l1_rFrame,l1_rFrameUR));
 
   if (*l0_rFrame >=0)
-    SetMotionVectorPredictor (currMB, img, pmvl0, *l0_rFrame, LIST_0, dec_picture->ref_idx, dec_picture->mv, 0, 0, 16, 16);
+    SetMotionVectorPredictor (img, currMB, pmvl0, *l0_rFrame, LIST_0, dec_picture->motion.ref_idx, dec_picture->motion.mv, 0, 0, 16, 16);
 
   if (*l1_rFrame >=0)
-    SetMotionVectorPredictor (currMB, img, pmvl1, *l1_rFrame, LIST_1, dec_picture->ref_idx, dec_picture->mv, 0, 0, 16, 16);
+    SetMotionVectorPredictor (img, currMB, pmvl1, *l1_rFrame, LIST_1, dec_picture->motion.ref_idx, dec_picture->motion.mv, 0, 0, 16, 16);
+}
+
+void check_motion_vector_range(ImageParameters *img, short mv_x, short mv_y)
+{
+  if (mv_x > 8191 || mv_x < -8192)
+  {
+    fprintf(stderr,"ERROR! Horizontal motion vector %d is out of allowed range {-8192, 8191} in picture %d, macroblock %d\n", mv_x, img->number, img->current_mb_nr);
+    error("invalid stream: too big horizontal motion vector", 500);
+  }
+
+  if (mv_y > (img->max_mb_vmv_r - 1) || mv_y < (-img->max_mb_vmv_r))
+  {
+    fprintf(stderr,"ERROR! Vertical motion vector %d is out of allowed range {%d, %d} in picture %d, macroblock %d\n", mv_y, (-img->max_mb_vmv_r), (img->max_mb_vmv_r - 1), img->number, img->current_mb_nr);
+    error("invalid stream: too big vertical motion vector", 500);
+  }
 }
 
 void perform_mc(ColorPlane pl, StorablePicture *dec_picture, ImageParameters *img, int pred_dir, int i, int j, int list_offset, int block_size_x, int block_size_y, int curr_mb_field)
@@ -1110,6 +1124,7 @@ void perform_mc(ColorPlane pl, StorablePicture *dec_picture, ImageParameters *im
   static int vec1_y_cr = 0, vec2_y_cr = 0;
   static int alpha_l0, alpha_l1, wp_offset;
   static const int mv_mul = 16; // 4 * 4
+  int        max_imgpel_value = img->max_imgpel_value_comp[pl];
   
   int i4   = img->block_x + i;
   int j4   = img->block_y + j;
@@ -1121,10 +1136,12 @@ void perform_mc(ColorPlane pl, StorablePicture *dec_picture, ImageParameters *im
   if (pred_dir != 2)
   {
     //===== Single List Prediction =====
-    short       ref_idx = dec_picture->ref_idx[pred_dir][j4][i4];
+    short       ref_idx = dec_picture->motion.ref_idx[pred_dir][j4][i4];
     short       ref_idx_wp = ref_idx;
-    short      ***mv_array = dec_picture->mv[pred_dir];
+    short      ***mv_array = dec_picture->motion.mv[pred_dir];
     StorablePicture **list = listX[list_offset + pred_dir];
+
+    check_motion_vector_range(img, mv_array[j4][i4][0], mv_array[j4][i4][1]);
 
     vec1_x = i4 * mv_mul + mv_array[j4][i4][0];
     vec1_y = (img->block_y_aff + j) * mv_mul + mv_array[j4][i4][1];
@@ -1142,11 +1159,11 @@ void perform_mc(ColorPlane pl, StorablePicture *dec_picture, ImageParameters *im
       alpha_l0  = img->wp_weight[pred_dir][ref_idx_wp][0];
       wp_offset = img->wp_offset[pred_dir][ref_idx_wp][0];
 
-      weighted_mc_prediction(&img->mpr[pl][joff], block_size_y, block_size_x, ioff, tmp_block_l0, alpha_l0, wp_offset, img->luma_log2_weight_denom, img->max_imgpel_value);
+      weighted_mc_prediction(&img->mb_pred[pl][joff], block_size_y, block_size_x, ioff, tmp_block_l0, alpha_l0, wp_offset, img->luma_log2_weight_denom, max_imgpel_value);
     }
     else
     {
-      mc_prediction(&img->mpr[pl][joff], block_size_y, block_size_x, ioff, tmp_block_l0); 
+      mc_prediction(&img->mb_pred[pl][joff], block_size_y, block_size_x, ioff, tmp_block_l0); 
     }
 
     if ((dec_picture->chroma_format_idc != YUV400) && (dec_picture->chroma_format_idc != YUV444) ) 
@@ -1169,11 +1186,11 @@ void perform_mc(ColorPlane pl, StorablePicture *dec_picture, ImageParameters *im
           alpha_l0  = img->wp_weight[pred_dir][ref_idx_wp][uv + 1];
           wp_offset = img->wp_offset[pred_dir][ref_idx_wp][uv + 1];
 
-          weighted_mc_prediction(&img->mpr[uv + 1][joff_cr], block_size_y_cr, block_size_x_cr, ioff_cr, tmp_block_l0, alpha_l0, wp_offset, img->chroma_log2_weight_denom, img->max_imgpel_value_uv);
+          weighted_mc_prediction(&img->mb_pred[uv + 1][joff_cr], block_size_y_cr, block_size_x_cr, ioff_cr, tmp_block_l0, alpha_l0, wp_offset, img->chroma_log2_weight_denom, img->max_imgpel_value_comp[uv + 1]);
         }
         else
         {
-          mc_prediction(&img->mpr[uv + 1][joff_cr], block_size_y_cr, block_size_x_cr, ioff_cr, tmp_block_l0);
+          mc_prediction(&img->mb_pred[uv + 1][joff_cr], block_size_y_cr, block_size_x_cr, ioff_cr, tmp_block_l0);
         }
       }
     }
@@ -1181,14 +1198,16 @@ void perform_mc(ColorPlane pl, StorablePicture *dec_picture, ImageParameters *im
   else
   {
     //===== BI-PREDICTION =====
-    short ***l0_mv_array = dec_picture->mv[LIST_0];
-    short ***l1_mv_array = dec_picture->mv[LIST_1];
+    short ***l0_mv_array = dec_picture->motion.mv[LIST_0];
+    short ***l1_mv_array = dec_picture->motion.mv[LIST_1];
 
-    short l0_refframe = dec_picture->ref_idx[LIST_0][j4][i4];
-    short l1_refframe = dec_picture->ref_idx[LIST_1][j4][i4];
+    short l0_refframe = dec_picture->motion.ref_idx[LIST_0][j4][i4];
+    short l1_refframe = dec_picture->motion.ref_idx[LIST_1][j4][i4];
     short l0_ref_idx  = l0_refframe;
     short l1_ref_idx  = l1_refframe;
 
+    check_motion_vector_range(img, l0_mv_array[j4][i4][0], l0_mv_array[j4][i4][1]);
+    check_motion_vector_range(img, l1_mv_array[j4][i4][0], l1_mv_array[j4][i4][1]);
     vec1_x = i4 * mv_mul + l0_mv_array[j4][i4][0];
     vec2_x = i4 * mv_mul + l1_mv_array[j4][i4][0];
 
@@ -1215,11 +1234,11 @@ void perform_mc(ColorPlane pl, StorablePicture *dec_picture, ImageParameters *im
       alpha_l1  =   img->wbp_weight[LIST_1 + wt_list_offset][l0_ref_idx][l1_ref_idx][0];
       wp_offset = ((img->wp_offset [LIST_0 + wt_list_offset][l0_ref_idx][0] + img->wp_offset[LIST_1 + wt_list_offset][l1_ref_idx][0] + 1) >>1);
 
-      weighted_bi_prediction(&img->mpr[pl][joff], tmp_block_l0, tmp_block_l1, block_size_y, block_size_x, ioff, alpha_l0, alpha_l1, wp_offset, (img->luma_log2_weight_denom + 1), img->max_imgpel_value);
+      weighted_bi_prediction(&img->mb_pred[pl][joff], tmp_block_l0, tmp_block_l1, block_size_y, block_size_x, ioff, alpha_l0, alpha_l1, wp_offset, (img->luma_log2_weight_denom + 1), max_imgpel_value);
     }
     else
     { 
-      bi_prediction(&img->mpr[pl][joff], tmp_block_l0, tmp_block_l1, block_size_y, block_size_x, ioff); 
+      bi_prediction(&img->mb_pred[pl][joff], tmp_block_l0, tmp_block_l1, block_size_y, block_size_x, ioff); 
     }
 
     if ((dec_picture->chroma_format_idc != YUV400) && (dec_picture->chroma_format_idc != YUV444) ) 
@@ -1247,11 +1266,11 @@ void perform_mc(ColorPlane pl, StorablePicture *dec_picture, ImageParameters *im
           alpha_l1  =   img->wbp_weight[LIST_1 + wt_list_offset][l0_ref_idx][l1_ref_idx][uv + 1];
           wp_offset = ((img->wp_offset [LIST_0 + wt_list_offset][l0_ref_idx][uv + 1] + img->wp_offset[LIST_1 + wt_list_offset][l1_ref_idx][uv + 1] + 1) >>1);
 
-          weighted_bi_prediction(&img->mpr[uv+1][joff_cr], tmp_block_l0, tmp_block_l1, block_size_y_cr, block_size_x_cr, ioff_cr, alpha_l0, alpha_l1, wp_offset, (img->chroma_log2_weight_denom + 1), img->max_imgpel_value_uv);
+          weighted_bi_prediction(&img->mb_pred[uv+1][joff_cr], tmp_block_l0, tmp_block_l1, block_size_y_cr, block_size_x_cr, ioff_cr, alpha_l0, alpha_l1, wp_offset, (img->chroma_log2_weight_denom + 1), img->max_imgpel_value_comp[uv + 1]);
         }
         else
         {
-          bi_prediction(&img->mpr[uv + 1][joff_cr], tmp_block_l0, tmp_block_l1, block_size_y_cr, block_size_x_cr, ioff_cr);
+          bi_prediction(&img->mb_pred[uv + 1][joff_cr], tmp_block_l0, tmp_block_l1, block_size_y_cr, block_size_x_cr, ioff_cr);
         }
       }
     }      

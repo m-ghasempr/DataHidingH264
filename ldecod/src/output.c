@@ -28,11 +28,11 @@ int recovery_flag = 0;
 
 extern int non_conforming_stream;
 
-void write_out_picture(StorablePicture *p, int p_out);
-void (*img2buf)     (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom);
-void img2buf_byte   (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom);
-void img2buf_normal (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom);
-void img2buf_endian (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom);
+static void write_out_picture(StorablePicture *p, int p_out);
+static void (*img2buf)     (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom);
+static void img2buf_byte   (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom);
+static void img2buf_normal (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom);
+static void img2buf_endian (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom);
 
 /*!
  ************************************************************************
@@ -64,7 +64,7 @@ int testEndian(void)
  *
  ************************************************************************
  */
-void initOutput(int symbol_size_in_bytes)
+static void initOutput(int symbol_size_in_bytes)
 {
   if (( sizeof(char) == sizeof (imgpel)) && ( sizeof(char) == symbol_size_in_bytes))
   {
@@ -103,7 +103,7 @@ void initOutput(int symbol_size_in_bytes)
  *    pixels to crop from bottom
  ************************************************************************
  */
-void img2buf_normal (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom)
+static void img2buf_normal (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom)
 {
   int i,j;
 
@@ -171,7 +171,7 @@ void img2buf_normal (imgpel** imgX, unsigned char* buf, int size_x, int size_y, 
  *    pixels to crop from bottom
  ************************************************************************
  */
-void img2buf_byte (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom)
+static void img2buf_byte (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom)
 {
   int i;
 
@@ -211,7 +211,7 @@ void img2buf_byte (imgpel** imgX, unsigned char* buf, int size_x, int size_y, in
  *    pixels to crop from bottom
  ************************************************************************
  */
-void img2buf_endian (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom)
+static void img2buf_endian (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom)
 {
   int i,j;
   static unsigned char  ui8;
@@ -445,7 +445,7 @@ void write_picture(StorablePicture *p, int p_out, int real_structure)
 *    Output file
 ************************************************************************
 */
-void write_out_picture(StorablePicture *p, int p_out)
+static void write_out_picture(StorablePicture *p, int p_out)
 {
   static int SubWidthC  [4]= { 1, 2, 2, 1};
   static int SubHeightC [4]= { 1, 2, 1, 1};

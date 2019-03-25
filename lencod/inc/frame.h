@@ -21,9 +21,13 @@ typedef struct
   int height;                        //!< luma component frame height    
   int height_cr;                     //!< chroma component frame width
   int width_cr;                      //!< chroma component frame height
+  int mb_width;                      //!< luma component frame width
+  int mb_height;                     //!< luma component frame height    
   int size_cmp[3];                   //!< component sizes  
   int size;                          //!< total image size
   int bit_depth[3];                  //!< component bit depth  
+  int max_value[3];                  //!< component max value
+  int max_value_sq[3];                  //!< component max value squared
 } FrameFormat;
 
 #endif

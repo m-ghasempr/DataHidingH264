@@ -4,6 +4,7 @@
 	Version="8.00"
 	Name="ldecod"
 	ProjectGUID="{5499B067-CF32-4141-A757-E0A29866994A}"
+	RootNamespace="ldecod"
 	>
 	<Platforms>
 		<Platform
@@ -325,6 +326,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\ldecod\src\quant.c"
+				>
+			</File>
+			<File
 				RelativePath=".\ldecod\src\rtp.c"
 				>
 			</File>
@@ -467,6 +472,10 @@
 			</File>
 			<File
 				RelativePath=".\ldecod\inc\parsetcommon.h"
+				>
+			</File>
+			<File
+				RelativePath=".\ldecod\inc\quant.h"
 				>
 			</File>
 			<File

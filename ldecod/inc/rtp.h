@@ -40,7 +40,7 @@ typedef struct
 
 void DumpRTPHeader (RTPpacket_t *p);
 
-int  GetRTPNALU (NALU_t *nalu);
+int  GetRTPNALU (FILE *bitstream, NALU_t *nalu);
 void OpenRTPFile (char *fn);
 void CloseRTPFile(void);
 

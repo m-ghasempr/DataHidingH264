@@ -239,7 +239,7 @@ double XRate (BiContextTypePtr ctx, const int* model)
 {
   int     ctx_state, mod_state;
   double  weight, xr = 0.0;
-  int     qp = imax(0,img->qp);
+  int     qp = imax(0, img->qp);
 
   weight    = dmin (1.0, (double)ctx->count/(double)RELIABLE_COUNT);
 

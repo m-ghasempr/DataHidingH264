@@ -1,7 +1,7 @@
 
 /*!
  ************************************************************************
- * \file comformance.h
+ * \file conformance.h
  *
  * \brief
  *   Level & Profile Related definitions  

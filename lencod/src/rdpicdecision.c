@@ -46,19 +46,16 @@ int picture_coding_decision (Picture *picture1, Picture *picture2, int qp)
   double lambda_picture;
   int spframe = (img->type == SP_SLICE);
   int bframe = (img->type == B_SLICE);
-  double snr_picture1, snr_picture2;
-  int bit_picture1, bit_picture2;
+  double sse_picture1, sse_picture2;
 
   if (params->successive_Bframe)
     lambda_picture = (qp < 20 ? 0.55 : 0.68) * pow (2, (qp - SHIFT_QP) / 3.0) * (bframe || spframe ? 2 : 1);
   else
     lambda_picture = (qp < 20 ? 0.55 : 0.68) * pow (2, (qp - SHIFT_QP) / 3.0);
 
-  snr_picture1 = picture1->distortion_y + picture1->distortion_u + picture1->distortion_v;
-  snr_picture2 = picture2->distortion_y + picture2->distortion_u + picture2->distortion_v;
-  bit_picture2 = picture2->bits_per_picture;
-  bit_picture1 = picture1->bits_per_picture;
-  
-  return rd_pic_decision(snr_picture1, snr_picture2, bit_picture1, bit_picture2, lambda_picture);
+  sse_picture1 = picture1->distortion.value[0] + picture1->distortion.value[1] + picture1->distortion.value[2];
+  sse_picture2 = picture2->distortion.value[0] + picture2->distortion.value[1] + picture2->distortion.value[2];
+ 
+  return rd_pic_decision(sse_picture1, sse_picture2, picture1->bits_per_picture, picture2->bits_per_picture, lambda_picture);
 }
 
