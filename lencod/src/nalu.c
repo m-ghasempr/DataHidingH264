@@ -71,6 +71,7 @@ int RBSPtoNALU (unsigned char *rbsp, NALU_t *nalu, int rbsp_size, int nal_unit_t
     nalu->svc_extension_flag = 0;
 #endif
 
+  
   len = RBSPtoEBSP (nalu->buf, rbsp, rbsp_size);
   nalu->len = len;
 
@@ -87,7 +88,7 @@ int RBSPtoNALU (unsigned char *rbsp, NALU_t *nalu, int rbsp_size, int nal_unit_t
 int Write_AUD_NALU( VideoParameters *p_Vid )
 {  
   int     RBSPlen = 0;
-  int     NALUlen, len;
+  int     len;
   byte    rbsp[MAXRBSPSIZE];
   NALU_t *nalu = AllocNALU( MAXNALUSIZE );
 
@@ -108,7 +109,7 @@ int Write_AUD_NALU( VideoParameters *p_Vid )
   rbsp[0] |= (1 << 4);
 
   // write RBSP into NALU
-  NALUlen = RBSPtoNALU( rbsp, nalu, RBSPlen, NALU_TYPE_AUD, NALU_PRIORITY_DISPOSABLE, 1 );
+  RBSPtoNALU( rbsp, nalu, RBSPlen, NALU_TYPE_AUD, NALU_PRIORITY_DISPOSABLE, 1 );
   // write NALU into bitstream
   len     = p_Vid->WriteNALU( p_Vid, nalu, p_Vid->f_out );
 
@@ -127,7 +128,7 @@ int Write_AUD_NALU( VideoParameters *p_Vid )
 int Write_Filler_Data_NALU( VideoParameters *p_Vid, int num_bytes )
 {  
   int     RBSPlen = num_bytes - 1;
-  int     NALUlen, len, bytes_written = 0;
+  int     len, bytes_written = 0;
   byte    rbsp[MAXRBSPSIZE];
   byte    filler_byte = (byte)0xFF;
   byte    trailing_byte = (byte)0x80;
@@ -149,9 +150,9 @@ int Write_Filler_Data_NALU( VideoParameters *p_Vid, int num_bytes )
   assert( num_bytes == (bytes_written + 1) );  
 
   // write RBSP into NALU
-  NALUlen = RBSPtoNALU( rbsp, nalu, RBSPlen, NALU_TYPE_FILL, NALU_PRIORITY_DISPOSABLE, 1 );
+  RBSPtoNALU( rbsp, nalu, RBSPlen, NALU_TYPE_FILL, NALU_PRIORITY_DISPOSABLE, 1 );
   // write NALU into bitstream
-  len     = p_Vid->WriteNALU( p_Vid, nalu, p_Vid->f_out );
+  len = p_Vid->WriteNALU( p_Vid, nalu, p_Vid->f_out );
   p_Vid->bytes_in_picture += (nalu->len + 1);
 
   FreeNALU( nalu );

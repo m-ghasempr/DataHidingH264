@@ -78,16 +78,6 @@ static int  decode_one_component_sp_slice      (Macroblock *currMB, ColorPlane c
 extern void update_direct_types                (Slice *currSlice);
 extern void set_intra_prediction_modes         (Slice *currSlice);
 
-static inline void reset_mv_info(PicMotionParams *mv_info)
-{
-  mv_info->ref_pic[LIST_0] = NULL;
-  mv_info->ref_pic[LIST_1] = NULL;
-  mv_info->mv[LIST_0] = zero_mv;
-  mv_info->mv[LIST_1] = zero_mv;
-  mv_info->ref_idx[LIST_0] = -1;
-  mv_info->ref_idx[LIST_1] = -1;
-}
-
 /*!
  ************************************************************************
  * \brief
@@ -180,6 +170,7 @@ void set_chroma_qp(Macroblock* currMB)
   VideoParameters *p_Vid = currMB->p_Vid;
   StorablePicture *dec_picture = currMB->p_Slice->dec_picture;
   int i;
+
   for (i=0; i<2; ++i)
   {
     currMB->qpc[i] = iClip3 ( -p_Vid->bitdepth_chroma_qp_scale, 51, currMB->qp + dec_picture->chroma_qp_offset[i] );
@@ -224,7 +215,12 @@ void read_delta_quant(SyntaxElement *currSE, DataPartition *dP, Macroblock *curr
   dP->readSyntaxElement(currMB, currSE, dP);
   currMB->delta_quant = (short) currSE->value1;
   if ((currMB->delta_quant < -(26 + p_Vid->bitdepth_luma_qp_scale/2)) || (currMB->delta_quant > (25 + p_Vid->bitdepth_luma_qp_scale/2)))
-    error ("mb_qp_delta is out of range", 500);
+  {
+      printf("mb_qp_delta is out of range (%d)\n", currMB->delta_quant);
+    currMB->delta_quant = iClip3(-(26 + p_Vid->bitdepth_luma_qp_scale/2), (25 + p_Vid->bitdepth_luma_qp_scale/2), currMB->delta_quant);
+
+    //error ("mb_qp_delta is out of range", 500);
+  }
 
   currSlice->qp = ((currSlice->qp + currMB->delta_quant + 52 + 2*p_Vid->bitdepth_luma_qp_scale)%(52+p_Vid->bitdepth_luma_qp_scale)) - p_Vid->bitdepth_luma_qp_scale;
   update_qp(currMB, currSlice->qp);
@@ -943,9 +939,7 @@ void setup_slice_methods(Slice *currSlice)
     currSlice->interpret_mb_mode         = interpret_mb_mode_B;
     currSlice->read_motion_info_from_NAL = read_motion_info_from_NAL_b_slice;
     currSlice->decode_one_component      = decode_one_component_b_slice;
-
     update_direct_types(currSlice);
-
 #if (MVC_EXTENSION_ENABLE)
     currSlice->init_lists                = currSlice->view_id ? init_lists_b_slice_mvc : init_lists_b_slice;
 #else
@@ -1407,7 +1401,7 @@ int decode_one_macroblock(Macroblock *currMB, StorablePicture *dec_picture)
   VideoParameters *p_Vid = currMB->p_Vid;  
 
   // macroblock decoding **************************************************
-  if (currSlice->is_not_independent)  
+  if (currSlice->chroma444_not_separate)  
   {
     if (!currMB->is_intra_block)
     {
@@ -1475,7 +1469,7 @@ void make_frame_picture_JV(VideoParameters *p_Vid)
   int nsize;
   p_Vid->dec_picture = p_Vid->dec_picture_JV[0];
   //copy;
-  if(p_Vid->dec_picture->used_for_reference && p_Vid->dec_picture->slice_type != I_SLICE && p_Vid->dec_picture->slice_type!=SI_SLICE) 
+  if(p_Vid->dec_picture->used_for_reference) 
   {
     nsize = (p_Vid->dec_picture->size_y/BLOCK_SIZE)*(p_Vid->dec_picture->size_x/BLOCK_SIZE)*sizeof(PicMotionParams);
     memcpy( &(p_Vid->dec_picture->JVmv_info[PLANE_Y][0][0]), &(p_Vid->dec_picture_JV[PLANE_Y]->mv_info[0][0]), nsize);

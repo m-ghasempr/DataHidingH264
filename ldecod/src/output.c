@@ -469,10 +469,6 @@ static void write_out_picture(VideoParameters *p_Vid, StorablePicture *p, int p_
   static const int SubWidthC  [4]= { 1, 2, 2, 1};
   static const int SubHeightC [4]= { 1, 2, 1, 1};
 
-#if (MVC_EXTENSION_ENABLE)
-  int iViewIdx = imax(0, p->view_id);
-#endif
-
   int crop_left, crop_right, crop_top, crop_bottom;
   int symbol_size_in_bytes = ((p_Vid->pic_unit_bitsize_on_disk+7) >> 3);
   int rgb_output =  p_Vid->p_EncodePar[p->layer_id]->rgb_output; //(p_Vid->active_sps->vui_seq_parameters.matrix_coefficients==0);
@@ -519,19 +515,6 @@ static void write_out_picture(VideoParameters *p_Vid, StorablePicture *p, int p_
   iFrameSize = (iLumaSizeX * iLumaSizeY + 2 * (iChromaSizeX * iChromaSizeY)) * symbol_size_in_bytes; //iLumaSize*iPicSizeTab[p->chroma_format_idc]/2;
 
   //printf ("write frame size: %dx%d\n", p->size_x-crop_left-crop_right,p->size_y-crop_top-crop_bottom );
-
-#if (MVC_EXTENSION_ENABLE)
-  // This kind of processing should actually be happening outside write_out_picture.
-  // Instead, p_out should be set wherever it is set correctly
-  if (p->view_id >= 0 && p_Inp->DecodeAllLayers == 1)
-  {    
-    p_out = p_Vid->p_out_mvc[iViewIdx];
-  }
-  else
-  { //Normal AVC
-    p_out = p_Vid->p_out_mvc[0];
-  }
-#endif
 
   // We need to further cleanup this function
   if (p_out == -1)
@@ -597,7 +580,7 @@ static void write_out_picture(VideoParameters *p_Vid, StorablePicture *p, int p_
 
   buf = (pDecPic->bValid==1)? pDecPic->pY: pDecPic->pY+iLumaSizeX*symbol_size_in_bytes;
 
-  p_Vid->img2buf (p->outY, buf, p->size_x, p->size_y, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom, pDecPic->iYBufStride);
+  p_Vid->img2buf (p->imgY, buf, p->size_x, p->size_y, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom, pDecPic->iYBufStride);
   if(p_out >=0)
   {
     ret = write(p_out, buf, (p->size_y-crop_bottom-crop_top)*(p->size_x-crop_right-crop_left)*symbol_size_in_bytes);
@@ -614,7 +597,7 @@ static void write_out_picture(VideoParameters *p_Vid, StorablePicture *p, int p_
     crop_top    = ( 2 - p->frame_mbs_only_flag ) * p->frame_crop_top_offset;
     crop_bottom = ( 2 - p->frame_mbs_only_flag ) * p->frame_crop_bottom_offset;
     buf = (pDecPic->bValid==1)? pDecPic->pU : pDecPic->pU + iChromaSizeX*symbol_size_in_bytes;
-    p_Vid->img2buf (p->outUV[0], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom, pDecPic->iUVBufStride);
+    p_Vid->img2buf (p->imgUV[0], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom, pDecPic->iUVBufStride);
     if(p_out >= 0)
     {
       ret = write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)* symbol_size_in_bytes);
@@ -627,7 +610,7 @@ static void write_out_picture(VideoParameters *p_Vid, StorablePicture *p, int p_
     if (!rgb_output)
     {
       buf = (pDecPic->bValid==1)? pDecPic->pV : pDecPic->pV + iChromaSizeX*symbol_size_in_bytes;
-      p_Vid->img2buf (p->outUV[1], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom, pDecPic->iUVBufStride);
+      p_Vid->img2buf (p->imgUV[1], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom, pDecPic->iUVBufStride);
 
       if(p_out >= 0)
       {
@@ -895,7 +878,7 @@ void direct_output(VideoParameters *p_Vid, StorablePicture *p, int p_out)
   if (p->structure == TOP_FIELD)
   {
     if (p_Vid->out_buffer->is_used &1)
-      flush_direct_output(p_Vid, p_Vid->p_out);
+      flush_direct_output(p_Vid, p_out);
     p_Vid->out_buffer->top_field = p;
     p_Vid->out_buffer->is_used |= 1;
   }
@@ -903,7 +886,7 @@ void direct_output(VideoParameters *p_Vid, StorablePicture *p, int p_out)
   if (p->structure == BOTTOM_FIELD)
   {
     if (p_Vid->out_buffer->is_used &2)
-      flush_direct_output(p_Vid, p_Vid->p_out);
+      flush_direct_output(p_Vid, p_out);
     p_Vid->out_buffer->bottom_field = p;
     p_Vid->out_buffer->is_used |= 2;
   }
@@ -915,7 +898,7 @@ void direct_output(VideoParameters *p_Vid, StorablePicture *p, int p_out)
 #if (MVC_EXTENSION_ENABLE)
     p_Vid->out_buffer->frame->view_id = p_Vid->out_buffer->view_id;
 #endif
-    write_picture (p_Vid, p_Vid->out_buffer->frame, p_Vid->p_out, FRAME);
+    write_picture (p_Vid, p_Vid->out_buffer->frame, p_out, FRAME);
 
     calculate_frame_no(p_Vid, p);
     if (-1 != p_Vid->p_ref && !p_Inp->silent)

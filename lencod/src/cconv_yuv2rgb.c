@@ -136,6 +136,7 @@ void YUVtoRGB(VideoParameters *p_Vid, ImageStructure *YUV, ImageStructure *RGB)
   RGB->format = format;  // copy format information from YUV to RGB
   RGB->format.yuv_format  = YUV444;
   RGB->format.color_model = CM_RGB;
+  RGB->format.pixel_format = BGR;
   RGB->format.height[1]   = format.height[0];
   RGB->format.width[1]    = format.width[0];
   for (i = 1; i < 3; i++)

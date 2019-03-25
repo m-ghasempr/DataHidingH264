@@ -453,6 +453,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lencod\src\get_block_otf.c"
+				>
+			</File>
+			<File
 				RelativePath=".\lencod\src\header.c"
 				>
 			</File>
@@ -577,7 +581,15 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lcommon\src\mbuffer_common.c"
+				>
+			</File>
+			<File
 				RelativePath=".\lencod\src\mc_prediction.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\mc_prediction_otf.c"
 				>
 			</File>
 			<File
@@ -609,6 +621,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lencod\src\me_distortion_otf.c"
+				>
+			</File>
+			<File
 				RelativePath=".\lencod\src\me_epzs.c"
 				>
 			</File>
@@ -626,6 +642,10 @@
 			</File>
 			<File
 				RelativePath=".\lencod\src\me_fullfast.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\me_fullfast_otf.c"
 				>
 			</File>
 			<File
@@ -958,6 +978,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lencod\inc\get_block_otf.h"
+				>
+			</File>
+			<File
 				RelativePath=".\lencod\inc\global.h"
 				>
 			</File>
@@ -1086,7 +1110,15 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lcommon\inc\mbuffer_common.h"
+				>
+			</File>
+			<File
 				RelativePath=".\lencod\inc\mc_prediction.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\inc\mc_prediction_otf.h"
 				>
 			</File>
 			<File
@@ -1099,6 +1131,10 @@
 			</File>
 			<File
 				RelativePath=".\lencod\inc\me_distortion.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\inc\me_distortion_otf.h"
 				>
 			</File>
 			<File
@@ -1115,6 +1151,10 @@
 			</File>
 			<File
 				RelativePath=".\lencod\inc\me_fullfast.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\inc\me_fullfast_otf.h"
 				>
 			</File>
 			<File
@@ -1259,6 +1299,10 @@
 			</File>
 			<File
 				RelativePath=".\lencod\inc\refbuf.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\inc\refbuf_otf.h"
 				>
 			</File>
 			<File

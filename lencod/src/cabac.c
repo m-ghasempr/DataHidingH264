@@ -433,9 +433,9 @@ void writeMB_Pskip_flagInfo_CABAC(Macroblock *currMB, SyntaxElement *se, DataPar
   int act_ctx = a + b;
 
   if (curr_mb_type==0) // SKIP
-    biari_encode_symbol(eep_dp, 1,&ctx->mb_type_contexts[1][act_ctx]);
+    biari_encode_symbol(eep_dp, 1, &ctx->mb_type_contexts[1][act_ctx]);
   else
-    biari_encode_symbol(eep_dp, 0,&ctx->mb_type_contexts[1][act_ctx]);
+    biari_encode_symbol(eep_dp, 0, &ctx->mb_type_contexts[1][act_ctx]);
 
   currMB->skip_flag = (curr_mb_type==0) ? 1 : 0;
 
@@ -1567,7 +1567,10 @@ void write_and_store_CBP_block_bit_444 (Macroblock* currMB, EncodingEnvironmentP
   {
     if (block_b.available)
     {
-      if(mb_data[block_b.mb_addr].mb_type == IPCM)
+      if((type==LUMA_8x8 || type==CB_8x8 || type==CR_8x8) &&
+         !mb_data[block_b.mb_addr].luma_transform_size_8x8_flag)
+      {}
+      else if(mb_data[block_b.mb_addr].mb_type == IPCM)
         upper_bit=1;
       else
       {
@@ -1588,7 +1591,10 @@ void write_and_store_CBP_block_bit_444 (Macroblock* currMB, EncodingEnvironmentP
 
     if (block_a.available)
     {
-      if(mb_data[block_a.mb_addr].mb_type==IPCM)
+      if((type==LUMA_8x8 || type==CB_8x8 || type==CR_8x8) &&
+         !mb_data[block_a.mb_addr].luma_transform_size_8x8_flag)
+      {}
+      else if(mb_data[block_a.mb_addr].mb_type==IPCM)
         left_bit = 1;
       else
       {

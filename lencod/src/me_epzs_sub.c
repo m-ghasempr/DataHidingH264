@@ -27,12 +27,12 @@
 ***********************************************************************
 */
 distblk                                                   //  ==> minimum motion cost after search
-EPZSSubPelBlockMotionSearch (Macroblock *currMB,      // <--  current Macroblock
-                             MotionVector *pred,      // <--  motion vector predictor in sub-pel units
-                             MEBlock *mv_block,       // <--  motion vector information
-                             distblk     min_mcost,     // <--  minimum motion cost (cost for center or huge value)
-                             int*      lambda         // <--  lagrangian parameter for determining motion cost
-                             )
+EPZS_sub_pel_motion_estimation ( Macroblock *currMB,      // <--  current Macroblock
+                                 MotionVector *pred,      // <--  motion vector predictor in sub-pel units
+                                 MEBlock  *mv_block,      // <--  motion vector information
+                                 distblk   min_mcost,     // <--  minimum motion cost (cost for center or huge value)
+                                 int*      lambda         // <--  lagrangian parameter for determining motion cost
+                                )
 {
   VideoParameters *p_Vid = currMB->p_Vid;
   Slice *currSlice = currMB->p_Slice;
@@ -145,7 +145,7 @@ EPZSSubPelBlockMotionSearch (Macroblock *currMB,      // <--  current Macroblock
     best_pos = 0;
   }
   lambda_factor = lambda[Q_PEL];      
-
+  
   //===== loop over search positions =====
   for (pos = p_Vid->start_me_refinement_qp; pos < end_pos; ++pos)
   {    
@@ -220,7 +220,7 @@ EPZSSubPelBlockMotionSearch (Macroblock *currMB,      // <--  current Macroblock
 ***********************************************************************
 */
 distblk                                               //  ==> minimum motion cost after search
-EPZSSubPelBlockSearchBiPred (Macroblock *currMB,      // <--  current Macroblock
+EPZS_sub_pel_bipred_motion_estimation (Macroblock *currMB,      // <--  current Macroblock
                              MEBlock *mv_block,       // <--  motion vector information
                              int       list,          // <--  reference picture list
                              MotionVector *pred1,     // <--  motion vector predictor in sub-pel units

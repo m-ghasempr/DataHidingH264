@@ -58,11 +58,11 @@ static void GetStrengthVer(byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int ed
   if ((currSlice->slice_type==SP_SLICE)||(currSlice->slice_type==SI_SLICE) )
   {
     // Set strength to either 3 or 4 regardless of pixel position
-    StrValue = (edge == 0 && (((p_Vid->structure==FRAME)) || ((p_Vid->structure != FRAME)))) ? 4 : 3;
+    StrValue = (edge == 0) ? 4 : 3;
     memset(Strength, (byte) StrValue, MB_BLOCK_SIZE * sizeof(byte));
   }
   else
-  {        
+  {       
     if (!(MbQ->mb_type==I4MB||MbQ->mb_type==I8MB||MbQ->mb_type==I16MB||MbQ->mb_type==IPCM))
     {
       PixelPos pixMB;
@@ -154,15 +154,15 @@ static void GetStrengthVer(byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int ed
       }
       else
       {
-        // Start with Strength=3. or Strength=4 for Mb-edge
-        StrValue = (edge == 0 && ((((p_Vid->structure==FRAME))) || ((p_Vid->structure != FRAME)))) ? 4 : 3;
+        // Start with Strength=3 or Strength=4 for Mb-edge
+        StrValue = (edge == 0) ? 4 : 3;
         memset(Strength, (byte) StrValue, MB_BLOCK_SIZE * sizeof(byte));
       }      
     }
     else
     {
       // Start with Strength=3. or Strength=4 for Mb-edge
-      StrValue = (edge == 0 && ((((p_Vid->structure==FRAME))) || ((p_Vid->structure != FRAME)))) ? 4 : 3;
+      StrValue = (edge == 0) ? 4 : 3;
       memset(Strength, (byte) StrValue, MB_BLOCK_SIZE * sizeof(byte));
     }      
   }
@@ -183,7 +183,7 @@ static void GetStrengthHor(byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int ed
   if ((currSlice->slice_type==SP_SLICE)||(currSlice->slice_type==SI_SLICE) )
   {
     // Set strength to either 3 or 4 regardless of pixel position
-    StrValue = (edge == 0 && (((p_Vid->structure==FRAME)))) ? 4 : 3;
+    StrValue = (edge == 0 && (p_Vid->structure == FRAME)) ? 4 : 3;
     memset(Strength, (byte) StrValue, MB_BLOCK_SIZE * sizeof(byte));
   }
   else

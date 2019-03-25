@@ -49,22 +49,22 @@ extern int  get_mem3D(byte ****array3D, int dim0, int dim1, int dim2);
 extern int  get_mem4D(byte *****array4D, int dim0, int dim1, int dim2, int dim3);
 
 extern int** new_mem2Dint(int dim0, int dim1);
-extern int  get_mem2Dint(int ***array2D, int rows, int columns);
+extern int  get_mem2Dint(int ***array2D, int dim0, int dim1);
 extern int  get_mem2Dint_pad(int ***array2D, int dim0, int dim1, int iPadY, int iPadX);
-extern int  get_mem2Dint64(int64 ***array2D, int rows, int columns);
-extern int  get_mem3Dint(int ****array3D, int frames, int rows, int columns);
-extern int  get_mem3Dint64(int64 ****array3D, int frames, int rows, int columns);
-extern int  get_mem4Dint(int *****array4D, int idx, int frames, int rows, int columns );
-extern int  get_mem4Dint64(int64 *****array4D, int idx, int frames, int rows, int columns );
-extern int  get_mem5Dint(int ******array5D, int refs, int blocktype, int rows, int columns, int component);
+extern int  get_mem2Dint64(int64 ***array2D, int dim0, int dim1);
+extern int  get_mem3Dint(int ****array3D, int dim0, int dim1, int dim2);
+extern int  get_mem3Dint64(int64 ****array3D, int dim0, int dim1, int dim2);
+extern int  get_mem4Dint(int *****array4D, int dim0, int dim1, int dim2, int dim3);
+extern int  get_mem4Dint64(int64 *****array4D, int dim0, int dim1, int dim2, int dim3);
+extern int  get_mem5Dint(int ******array5D, int dim0, int dim1, int dim2, int dim3, int dim4);
 
 extern uint16** new_mem2Duint16(int dim0, int dim1);
 extern int get_mem2Duint16(uint16 ***array2D, int dim0, int dim1);
 extern int get_mem3Duint16(uint16 ****array3D,int dim0, int dim1, int dim2);
 
-extern int  get_mem2Ddistblk(distblk ***array2D, int rows, int columns);
-extern int  get_mem3Ddistblk(distblk ****array3D, int frames, int rows, int columns);
-extern int  get_mem4Ddistblk(distblk *****array4D, int idx, int frames, int rows, int columns );
+extern int  get_mem2Ddistblk(distblk ***array2D, int dim0, int dim1);
+extern int  get_mem3Ddistblk(distblk ****array3D, int dim0, int dim1, int dim2);
+extern int  get_mem4Ddistblk(distblk *****array4D, int dim0, int dim1, int dim2, int dim3);
 
 extern int  get_mem2Dshort(short ***array2D, int dim0, int dim1);
 extern int  get_mem3Dshort(short ****array3D, int dim0, int dim1, int dim2);
@@ -73,27 +73,24 @@ extern int  get_mem5Dshort(short ******array5D, int dim0, int dim1, int dim2, in
 extern int  get_mem6Dshort(short *******array6D, int dim0, int dim1, int dim2, int dim3, int dim4, int dim5);
 extern int  get_mem7Dshort(short ********array7D, int dim0, int dim1, int dim2, int dim3, int dim4, int dim5, int dim6);
 
-extern int  get_mem1Dpel(imgpel **array2D, int rows);
-extern int  get_mem2Dpel(imgpel ***array2D, int rows, int columns);
+extern int  get_mem1Dpel(imgpel **array2D, int dim0);
+extern int  get_mem2Dpel(imgpel ***array2D, int dim0, int dim1);
 extern int  get_mem2Dpel_pad(imgpel ***array2D, int dim0, int dim1, int iPadY, int iPadX);
 
-extern int  get_mem3Dpel(imgpel ****array3D, int frames, int rows, int columns);
+extern int  get_mem3Dpel    (imgpel ****array3D, int dim0, int dim1, int dim2);
 extern int  get_mem3Dpel_pad(imgpel ****array3D, int dim0, int dim1, int dim2, int iPadY, int iPadX);
-extern int  get_mem3Dpel_pad_sep(imgpel ****array3D, int dim0, int dim1, int dim2, int iPadY, int iPadX);
-extern int  get_mem4Dpel(imgpel *****array4D, int sub_x, int sub_y, int rows, int columns);
-extern int  get_mem4Dpel_pad(imgpel *****array4D, int sub_x, int sub_y, int rows, int columns, int iPadY, int iPadX);
-extern int  get_mem4Dpel_pad_sep(imgpel *****array4D, int dim0, int dim1, int dim2, int dim3, int iPadY, int iPadX);
-extern int  get_mem5Dpel(imgpel ******array5D, int dims, int sub_x, int sub_y, int rows, int columns);
-extern int  get_mem5Dpel_pad(imgpel ******array5D, int dims, int sub_x, int sub_y, int rows, int columns, int iPadY, int iPadX);
-extern int  get_mem5Dpel_pad_sep(imgpel ******array5D, int dim0, int dim1, int dim2, int dim3, int dim4, int iPadY, int iPadX);
-extern int  get_mem2Ddouble (double ***array2D, int rows, int columns);
+extern int  get_mem4Dpel    (imgpel *****array4D, int dim0, int dim1, int dim2, int dim3);
+extern int  get_mem4Dpel_pad(imgpel *****array4D, int dim0, int dim1, int dim2, int dim3, int iPadY, int iPadX);
+extern int  get_mem5Dpel    (imgpel ******array5D, int dim0, int dim1, int dim2, int dim3, int dim4);
+extern int  get_mem5Dpel_pad(imgpel ******array5D, int dim0, int dim1, int dim2, int dim3, int dim4, int iPadY, int iPadX);
+extern int  get_mem2Ddouble (double ***array2D, int dim0, int dim1);
 
 extern int  get_mem1Dodouble(double **array1D, int dim0, int offset);
-extern int  get_mem2Dodouble(double ***array2D, int rows, int columns, int offset);
-extern int  get_mem3Dodouble(double ****array2D, int rows, int columns, int pels, int offset);
+extern int  get_mem2Dodouble(double ***array2D, int dim0, int dim1, int offset);
+extern int  get_mem3Dodouble(double ****array2D, int dim0, int dim1, int dim2, int offset);
 
-extern int  get_mem2Doint (int ***array2D, int rows, int columns, int offset);
-extern int  get_mem3Doint (int ****array3D, int rows, int columns, int pels, int offset);
+extern int  get_mem2Doint (int ***array2D, int dim0, int dim1, int offset);
+extern int  get_mem3Doint (int ****array3D, int dim0, int dim1, int dim2, int offset);
 
 extern int  get_mem2Dwp (WPParams ***array2D, int dim0, int dim1);
 
@@ -155,20 +152,17 @@ extern void free_mem5Dshort(short   *****array5D);
 extern void free_mem6Dshort(short  ******array6D);
 extern void free_mem7Dshort(short *******array7D);
 
-extern void free_mem1Dpel   (imgpel     *array1D);
-extern void free_mem2Dpel   (imgpel    **array2D);
+extern void free_mem1Dpel    (imgpel     *array1D);
+extern void free_mem2Dpel    (imgpel    **array2D);
 extern void free_mem2Dpel_pad(imgpel **array2D, int iPadY, int iPadX);
-extern void free_mem3Dpel   (imgpel   ***array3D);
-extern void free_mem3Dpel_pad(imgpel ***array3D, int iPadY, int iPadX);
-extern void free_mem3Dpel_pad_sep(imgpel ***array3D, int iDim12, int iPadY, int iPadX);
-extern void free_mem4Dpel   (imgpel  ****array4D);
-extern void free_mem4Dpel_pad(imgpel  ****array4D, int iPadY, int iPadX);
-extern void free_mem4Dpel_pad_sep(imgpel  ****array4D, int iFrames, int iPadY, int iPadX);
-extern void free_mem5Dpel   (imgpel *****array5D);
-extern void free_mem5Dpel_pad(imgpel *****array5D, int iPadY, int iPadX);
-extern void free_mem5Dpel_pad_sep(imgpel *****array5D, int iFrames, int iPadY, int iPadX);
-extern void free_mem2Ddouble(double **array2D);
-extern void free_mem3Ddouble(double ***array3D);
+extern void free_mem3Dpel    (imgpel   ***array3D);
+extern void free_mem3Dpel_pad(imgpel ***array3D, int iDim12, int iPadY, int iPadX);
+extern void free_mem4Dpel    (imgpel  ****array4D);
+extern void free_mem4Dpel_pad(imgpel  ****array4D, int iFrames, int iPadY, int iPadX);
+extern void free_mem5Dpel    (imgpel *****array5D);
+extern void free_mem5Dpel_pad(imgpel *****array5D, int iFrames, int iPadY, int iPadX);
+extern void free_mem2Ddouble (double **array2D);
+extern void free_mem3Ddouble (double ***array3D);
 
 extern void free_mem1Dodouble(double  *array1D, int offset);
 extern void free_mem2Dodouble(double **array2D, int offset);

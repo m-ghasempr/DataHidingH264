@@ -45,7 +45,7 @@
  *    function creating arrays for fast integer motion estimation
  ***********************************************************************
  */
-void InitializeFastFullIntegerSearch (VideoParameters *p_Vid, InputParameters *p_Inp)
+void initialize_fast_full_search (VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   int  i, j, k, list;
   int  search_range = p_Inp->SearchMode[0] == FAST_FULL_SEARCH ? p_Inp->search_range[0] : p_Inp->search_range[1];
@@ -53,59 +53,59 @@ void InitializeFastFullIntegerSearch (VideoParameters *p_Vid, InputParameters *p
   MEFullFast *p_me_ffast = NULL;
    
    if ((p_Vid->p_ffast_me = calloc (1, sizeof (MEFullFast))) == NULL) 
-    no_mem_exit ("InitializeFastFullIntegerSearch: p_Vid->p_ffast_me");
+    no_mem_exit ("initialize_fast_full_search: p_Vid->p_ffast_me");
    p_me_ffast = p_Vid->p_ffast_me;
 
   if ((p_me_ffast->BlockSAD = (distpel*****)malloc (2 * sizeof(distpel****))) == NULL)
-    no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->BlockSAD");
+    no_mem_exit ("initialize_fast_full_search: p_me_ffast->BlockSAD");
 
   for (list=0; list<2;list++)
   {
     if ((p_me_ffast->BlockSAD[list] = (distpel****)malloc ((p_Vid->max_num_references) * sizeof(distpel***))) == NULL)
-      no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->BlockSAD");
+      no_mem_exit ("initialize_fast_full_search: p_me_ffast->BlockSAD");
     for (i = 0; i < p_Vid->max_num_references; i++)
     {
       if ((p_me_ffast->BlockSAD[list][i] = (distpel***)malloc (8 * sizeof(distpel**))) == NULL)
-        no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->BlockSAD");
+        no_mem_exit ("initialize_fast_full_search: p_me_ffast->BlockSAD");
       for (j = 1; j < 8; j++)
       {
         if ((p_me_ffast->BlockSAD[list][i][j] = (distpel**)malloc (16 * sizeof(distpel*))) == NULL)
-          no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->BlockSAD");
+          no_mem_exit ("initialize_fast_full_search: p_me_ffast->BlockSAD");
         for (k = 0; k < 16; k++)
         {
           if ((p_me_ffast->BlockSAD[list][i][j][k] = (distpel*)malloc (max_pos * sizeof(distpel))) == NULL)
-            no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->BlockSAD");
+            no_mem_exit ("initialize_fast_full_search: p_me_ffast->BlockSAD");
         }
       }
     }
   }
 
   if ((p_me_ffast->search_setup_done = (int**)malloc (2*sizeof(int*)))==NULL)
-    no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->search_setup_done");
+    no_mem_exit ("initialize_fast_full_search: p_me_ffast->search_setup_done");
   if ((p_me_ffast->search_center = (MotionVector**) malloc (2 * sizeof(MotionVector*)))==NULL)
-    no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->search_center");
+    no_mem_exit ("initialize_fast_full_search: p_me_ffast->search_center");
   if ((p_me_ffast->search_center_padded = (MotionVector**) malloc (2 * sizeof(MotionVector*)))==NULL)
-    no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->search_center_padded");
+    no_mem_exit ("initialize_fast_full_search: p_me_ffast->search_center_padded");
 
   if ((p_me_ffast->pos_00 = (int**)malloc (2*sizeof(int*)))==NULL)
-    no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->pos_00");
+    no_mem_exit ("initialize_fast_full_search: p_me_ffast->pos_00");
   if ((p_me_ffast->max_search_range = (int**)malloc (2*sizeof(int*)))==NULL)
-    no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->max_search_range");
+    no_mem_exit ("initialize_fast_full_search: p_me_ffast->max_search_range");
 
   for (list=0; list<2; list++)
   {
     if ((p_me_ffast->search_setup_done[list] = (int*)malloc ((p_Vid->max_num_references)*sizeof(int)))==NULL)
-      no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->search_setup_done");
+      no_mem_exit ("initialize_fast_full_search: p_me_ffast->search_setup_done");
     if ((p_me_ffast->search_center[list] = (MotionVector*) malloc ((p_Vid->max_num_references) * sizeof(MotionVector)))==NULL)
-      no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->search_center");
+      no_mem_exit ("initialize_fast_full_search: p_me_ffast->search_center");
     if ((p_me_ffast->search_center_padded[list] = (MotionVector*) malloc ((p_Vid->max_num_references) * sizeof(MotionVector)))==NULL)
-      no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->search_center_padded");
+      no_mem_exit ("initialize_fast_full_search: p_me_ffast->search_center_padded");
 
 
     if ((p_me_ffast->pos_00[list] = (int*)malloc ((p_Vid->max_num_references)*sizeof(int)))==NULL)
-      no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->pos_00");
+      no_mem_exit ("initialize_fast_full_search: p_me_ffast->pos_00");
     if ((p_me_ffast->max_search_range[list] = (int*)malloc ((p_Vid->max_num_references)*sizeof(int)))==NULL)
-      no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->max_search_range");
+      no_mem_exit ("initialize_fast_full_search: p_me_ffast->max_search_range");
   }
 
   // assign max search ranges for reference frames
@@ -132,7 +132,7 @@ void InitializeFastFullIntegerSearch (VideoParameters *p_Vid, InputParameters *p
  ***********************************************************************
  */
 void
-ClearFastFullIntegerSearch (VideoParameters *p_Vid)
+clear_fast_full_search (VideoParameters *p_Vid)
 {
   int  i, j, k, list;
   MEFullFast *p_me_ffast = p_Vid->p_ffast_me;
@@ -180,7 +180,7 @@ ClearFastFullIntegerSearch (VideoParameters *p_Vid)
  *    (have to be called in start_macroblock())
  ***********************************************************************
  */
-void ResetFastFullIntegerSearch (VideoParameters *p_Vid)
+void reset_fast_full_search (VideoParameters *p_Vid)
 {
   int list;
   for (list=0; list<2; list++)
@@ -193,7 +193,7 @@ void ResetFastFullIntegerSearch (VideoParameters *p_Vid)
  ***********************************************************************
  */
 void
-SetupLargerBlocks (MEFullFast *p_ffast_me, int list, int refindex, int max_pos)
+update_full_search_large_blocks (MEFullFast *p_ffast_me, int list, int refindex, int max_pos)
 {
 #define ADD_UP_BLOCKS()   _o=*_bo; _i=*_bi; _j=*_bj; for(pos=0;pos<max_pos;pos++) _o[pos] = _i[pos] + _j[pos];
 #define INCREMENT(inc)    _bo+=inc; _bi+=inc; _bj+=inc;
@@ -266,7 +266,7 @@ SetupLargerBlocks (MEFullFast *p_ffast_me, int list, int refindex, int max_pos)
  *    Setup the fast search for an macroblock
  ***********************************************************************
  */
-void SetupFastFullPelSearch (Macroblock *currMB, MEBlock *mv_block, int list)  // <--  reference frame parameter, list0 or 1
+void setup_fast_full_search (Macroblock *currMB, MEBlock *mv_block, int list)  // <--  reference frame parameter, list0 or 1
 {
   Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currSlice->p_Vid;
@@ -601,7 +601,7 @@ void SetupFastFullPelSearch (Macroblock *currMB, MEBlock *mv_block, int list)  /
   }
 
   //===== combine SAD's for larger block types =====
-  SetupLargerBlocks (p_Vid->p_ffast_me, list, ref, max_pos);
+  update_full_search_large_blocks (p_Vid->p_ffast_me, list, ref, max_pos);
 
   //===== set flag marking that search setup have been done =====
   p_Vid->p_ffast_me->search_setup_done[list][ref] = 1;
@@ -614,13 +614,13 @@ void SetupFastFullPelSearch (Macroblock *currMB, MEBlock *mv_block, int list)  /
  *    Fast Full pixel block motion search
  ***********************************************************************
  */
-distblk                                                     //  ==> minimum motion cost after search
-FastFullPelBlockMotionSearch (Macroblock   *currMB,       // <--  current Macroblock
-                              MotionVector *pred_mv,     // <--  motion vector predictor (x) in sub-pel units
-                              MEBlock      *mv_block,
-                              distblk         min_mcost,      // <--  minimum motion cost (cost for center or huge value)
-                              int           lambda_factor  // <--  lagrangian parameter for determining motion cost
-                              )
+distblk                                                          //  ==> minimum motion cost after search
+fast_full_search_motion_estimation (Macroblock   *currMB,        // <--  current Macroblock
+                                    MotionVector *pred_mv,       // <--  motion vector predictor (x) in sub-pel units
+                                    MEBlock      *mv_block,      // <--  motion estimation parameters
+                                    distblk       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
+                                    int           lambda_factor  // <--  lagrangian parameter for determining motion cost
+                                    )
 {
   VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
@@ -643,9 +643,8 @@ FastFullPelBlockMotionSearch (Macroblock   *currMB,       // <--  current Macrob
   //===== set up fast full integer search if needed / set search center =====
   if (!p_Vid->p_ffast_me->search_setup_done[list][ref])
   {
-    SetupFastFullPelSearch (currMB, mv_block, list);
+    currMB->p_SetupFastFullPelSearch (currMB, mv_block, list);
   }
-
 
   //===== cost for (0,0)-vector: it is done before, because MVCost can be negative =====
   if (!p_Inp->rdopt && GetMaxMVD(&cand, pred_mv)<max_mvd)

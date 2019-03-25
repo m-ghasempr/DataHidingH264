@@ -58,7 +58,7 @@ int read_next_nalu(VideoParameters *p_Vid, NALU_t *nalu)
   {
   default:
   case PAR_OF_ANNEXB:
-    ret = GetAnnexbNALU(p_Vid, nalu, p_Vid->annex_b);
+    ret = get_annex_b_NALU(p_Vid, nalu, p_Vid->annex_b);
     break;
   case PAR_OF_RTP:
     ret = GetRTPNALU(p_Vid, nalu, p_Vid->BitStreamFile);

@@ -92,6 +92,7 @@ int RBSPtoEBSP(byte *NaluBuffer, unsigned char *rbsp, int rbsp_size)
       count = 0;
     j++;
   }
+
   return j;
 }
 
@@ -135,7 +136,7 @@ int addCabacZeroWords(VideoParameters *p_Vid, NALU_t *nalu, StatParameters *cur_
       *buf++ = 0x00;
       *buf++ = 0x03;
     }
-    cur_stats->bit_use_stuffingBits[p_Vid->type] += (i<<3);
+    cur_stats->bit_use_stuffing_bits[p_Vid->type] += (i<<3);
     nalu->len += i;
   }  
 

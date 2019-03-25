@@ -16,6 +16,50 @@
 #include "global.h"
 #include "slice.h"
 
+static void SetLambda(VideoParameters *p_Vid, int j, int qp, double lambda_scale)
+{
+  InputParameters *p_Inp = p_Vid->p_Inp;
+  int k;
+  p_Vid->lambda_md[j][qp] *= lambda_scale;
+
+  for (k = F_PEL; k <= Q_PEL; k++)
+  {
+    //p_Vid->lambda_me[j][qp][k] =  (p_Inp->MEErrorMetric[k] == ERROR_SSE) ? p_Vid->lambda_md[j][qp] : sqrt(p_Vid->lambda_md[j][qp]);
+    //p_Vid->lambda_me[j][qp][k] =  sqrt(p_Vid->lambda_md[j][qp]);
+    p_Vid->lambda_me[j][qp][k] =  (p_Inp->MEErrorMetric[k] == ERROR_SSE && p_Inp->MESoftenSSEMetric == 0) ? p_Vid->lambda_md[j][qp] : sqrt(p_Vid->lambda_md[j][qp]);
+    p_Vid->lambda_mf[j][qp][k] = LAMBDA_FACTOR (p_Vid->lambda_me[j][qp][k]);
+  }
+}
+
+static void CalcMaxLamdaMD(VideoParameters *p_Vid, double *p_lambda_md)
+{
+  double max_lambda_md;
+  int iBits;
+
+  if(p_Vid->p_Inp->ProfileIDC >= FREXT_HP)
+    iBits=128;  //Spec. Page 306
+  else
+    iBits=80;
+
+  if(p_Vid->yuv_format == YUV420)
+    iBits += 3072; //(256+128)*8;
+  else if(p_Vid->yuv_format == YUV422)
+    iBits += 4096; //(256+256)*8;
+  else if(p_Vid->yuv_format == YUV444)
+    iBits += 6144; //(256*3)*8;
+  else if(p_Vid->yuv_format == YUV400)
+    iBits += 2048; //256*8;
+
+  max_lambda_md =  floor(((double)DISTBLK_MAX)/iBits/(1<<LAMBDA_ACCURACY_BITS));
+#if JCOST_OVERFLOWCHECK
+  {
+    distblk cost = weight_cost(LAMBDA_FACTOR(max_lambda_md), iBits);
+    assert(cost>=0 && cost<=DISTBLK_MAX);
+  }
+#endif
+  *p_lambda_md = max_lambda_md;  
+}
+
 static void ClipLambda(double *p_lambda_max, double *p_lambda)
 {
   if(*p_lambda > *p_lambda_max)

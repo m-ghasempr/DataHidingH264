@@ -144,7 +144,7 @@ void CloseRTPFile(int *p_BitStreamFile)
  *    by NALUtoRBSP.
  *
  * \return
- *     4 in case of ok (for compatibility with GetAnnexbNALU)
+ *     4 in case of ok (for compatibility with get_annex_b_NALU)
  *     0 if there is nothing any more to read (EOF)
  *    -1 in case of any error
  *

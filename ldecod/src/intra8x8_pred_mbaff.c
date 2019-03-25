@@ -504,7 +504,6 @@ static inline int intra8x8_hor_pred_mbaff(Macroblock *currMB,    //!< current ma
   int block_available_up;
   int block_available_left;
   int block_available_up_left;
-  int block_available_up_right;
 
 #if (IMGTYPE != 0)
   int ipos0 = ioff    , ipos1 = ioff + 1, ipos2 = ioff + 2, ipos3 = ioff + 3;
@@ -530,14 +529,12 @@ static inline int intra8x8_hor_pred_mbaff(Macroblock *currMB,    //!< current ma
     for (i=0, block_available_left=1; i<8;i++)
       block_available_left  &= pix_a[i].available ? currSlice->intra_block[pix_a[i].mb_addr]: 0;
     block_available_up       = pix_b.available ? currSlice->intra_block [pix_b.mb_addr] : 0;
-    block_available_up_right = pix_c.available ? currSlice->intra_block [pix_c.mb_addr] : 0;
     block_available_up_left  = pix_d.available ? currSlice->intra_block [pix_d.mb_addr] : 0;
   }
   else
   {
     block_available_left     = pix_a[0].available;
     block_available_up       = pix_b.available;
-    block_available_up_right = pix_c.available;
     block_available_up_left  = pix_d.available;
   }
 

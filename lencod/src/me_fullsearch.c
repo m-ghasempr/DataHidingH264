@@ -36,12 +36,12 @@
  ***********************************************************************
  */
 distblk                                                //  ==> minimum motion cost after search
-FullPelBlockMotionSearch (Macroblock   *currMB ,       // <--  current Macroblock
-                          MotionVector *pred_mv,       // <--  motion vector predictor in sub-pel units
-                          MEBlock      *mv_block,      // <--  motion estimation structure
-                          distblk       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
-                          int           lambda_factor  // <--  lagrangian parameter for determining motion cost
-                          )
+full_search_motion_estimation (Macroblock   *currMB ,       // <--  current Macroblock
+                               MotionVector *pred_mv,       // <--  motion vector predictor in sub-pel units
+                               MEBlock      *mv_block,      // <--  motion estimation structure
+                               distblk       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
+                               int           lambda_factor  // <--  lagrangian parameter for determining motion cost
+                              )
 {
   VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
@@ -59,8 +59,8 @@ FullPelBlockMotionSearch (Macroblock   *currMB ,       // <--  current Macrobloc
 
   MotionVector *mv    = &mv_block->mv[(short) mv_block->list];
   int   check_for_00  = (mv_block->blocktype==1 && !p_Inp->rdopt && currSlice->slice_type!=B_SLICE && ref==0);
-  center.mv_x      = mv_block->pos_x_padded + mv->mv_x;                        // center position x (in pel units)
-  center.mv_y      = mv_block->pos_y_padded + mv->mv_y;                        // center position y (in pel units)
+  center.mv_x      = mv_block->pos_x_padded + mv->mv_x;                        // center position x (in sub-pel units)
+  center.mv_y      = mv_block->pos_y_padded + mv->mv_y;                        // center position y (in sub-pel units)
   pred.mv_x        = mv_block->pos_x_padded + pred_mv->mv_x;       // predicted position x (in sub-pel units)
   pred.mv_y        = mv_block->pos_y_padded + pred_mv->mv_y;       // predicted position y (in sub-pel units)
   
@@ -68,7 +68,7 @@ FullPelBlockMotionSearch (Macroblock   *currMB ,       // <--  current Macrobloc
   //===== loop over all search positions =====
   for (pos=0; pos<max_pos; pos++)
   {
-    //--- set candidate position (absolute position in pel units) ---
+    //--- set candidate position (absolute position in sub-pel units) ---
     cand.mv_x = center.mv_x + p_Vid->spiral_qpel_search[pos].mv_x;
     cand.mv_y = center.mv_y + p_Vid->spiral_qpel_search[pos].mv_y;
 
@@ -109,14 +109,14 @@ FullPelBlockMotionSearch (Macroblock   *currMB ,       // <--  current Macrobloc
  ***********************************************************************
  */
 distblk                                            //  ==> minimum motion cost after search
-FullPelBlockMotionBiPred (Macroblock *currMB,      // <--  current Macroblock
+full_search_bipred_motion_estimation (Macroblock *currMB,      // <--  current Macroblock
                           int       list,          // <--  reference list
                           MotionVector *pred_mv1,  // <--  motion vector predictor from first list (x|y) in sub-pel units
                           MotionVector *pred_mv2,  // <--  motion vector predictor from second list (x|y) in sub-pel units
-                          MotionVector *mv1,       // <--> in: search center (x|y) / out: motion vector (x|y) - in pel units
+                          MotionVector *mv1,       // <--> in: search center (x|y) / out: motion vector (x|y) - in sub-pel units
                           MotionVector *mv2,       // <--> in: search center (x|y) 
                           MEBlock *mv_block,       // <--  motion vector information
-                          int       search_range,  // <--  1-d search range in pel units
+                          int       search_range,  // <--  1-d search range in sub-pel units
                           distblk     min_mcost,   // <--  minimum motion cost (cost for center or huge value)
                           int       lambda_factor  // <--  lagrangian parameter for determining motion cost
                           ) 
@@ -137,16 +137,16 @@ FullPelBlockMotionBiPred (Macroblock *currMB,      // <--  current Macroblock
   pred1.mv_y   = mv_block->pos_y_padded + pred_mv1->mv_y; // predicted position y (in sub-pel units)
   pred2.mv_x   = mv_block->pos_x_padded + pred_mv2->mv_x; // predicted position x (in sub-pel units)
   pred2.mv_y   = mv_block->pos_y_padded + pred_mv2->mv_y; // predicted position y (in sub-pel units)
-  center1.mv_x = mv_block->pos_x_padded + mv1->mv_x;              // center position x (in pel units)
-  center1.mv_y = mv_block->pos_y_padded + mv1->mv_y;              // center position y (in pel units)
-  center2.mv_x = mv_block->pos_x_padded + mv2->mv_x;       // center position x of static mv (in pel units)
-  center2.mv_y = mv_block->pos_y_padded + mv2->mv_y;       // center position y of static mv (in pel units)
+  center1.mv_x = mv_block->pos_x_padded + mv1->mv_x;              // center position x (in sub-pel units)
+  center1.mv_y = mv_block->pos_y_padded + mv1->mv_y;              // center position y (in sub-pel units)
+  center2.mv_x = mv_block->pos_x_padded + mv2->mv_x;       // center position x of static mv (in sub-pel units)
+  center2.mv_y = mv_block->pos_y_padded + mv2->mv_y;       // center position y of static mv (in sub-pel units)
 
 
   //===== loop over all search positions =====
   for (pos=0; pos<max_pos; pos++)
   {
-    //--- set candidate position (absolute position in pel units) ---
+    //--- set candidate position (absolute position in sub-pel units) ---
     cand.mv_x = center1.mv_x + p_Vid->spiral_qpel_search[pos].mv_x;
     cand.mv_y = center1.mv_y + p_Vid->spiral_qpel_search[pos].mv_y;
 
@@ -182,13 +182,13 @@ FullPelBlockMotionBiPred (Macroblock *currMB,      // <--  current Macroblock
  *    Sub pixel block motion search
  ***********************************************************************
  */
-distblk                                             //  ==> minimum motion cost after search
-SubPelBlockMotionSearch (Macroblock   *currMB,      // <--  Current Macroblock
-                         MotionVector *pred,        // <--  motion vector predictor in sub-pel units
-                         MEBlock      *mv_block,    // <--  motion estimation structure
-                         distblk       min_mcost,   // <--  minimum motion cost (cost for center or huge value)
-                         int*          lambda       // <--  lagrangian parameter for determining motion cost                         
-                         )
+distblk                                               //  ==> minimum motion cost after search
+sub_pel_motion_estimation (Macroblock   *currMB,      // <--  Current Macroblock
+                           MotionVector *pred,        // <--  motion vector predictor in sub-pel units
+                           MEBlock      *mv_block,    // <--  motion estimation structure
+                           distblk       min_mcost,   // <--  minimum motion cost (cost for center or huge value)
+                           int*          lambda       // <--  lagrangian parameter for determining motion cost                         
+                           )
 {
   Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currMB->p_Vid;
@@ -288,6 +288,7 @@ SubPelBlockMotionSearch (Macroblock   *currMB,      // <--  Current Macroblock
   return min_mcost;
 }
 
+
 /*!
 ***********************************************************************
 * \brief
@@ -295,13 +296,13 @@ SubPelBlockMotionSearch (Macroblock   *currMB,      // <--  Current Macroblock
 ***********************************************************************
 */
 distblk                                           //  ==> minimum motion cost after search
-SubPelBlockSearchBiPred (Macroblock   *currMB,    // <--  current Macroblock
+sub_pel_bipred_motion_estimation (Macroblock   *currMB,    // <--  current Macroblock
                          MEBlock      *mv_block,  // <--  motion vector information
                          int           list,      // <--  reference picture list
                          MotionVector *pred_mv1,  // <--  motion vector predictor (x) in sub-pel units
                          MotionVector *pred_mv2,  // <--  motion vector predictor (x) in sub-pel units
-                         MotionVector *mv1,       // <--> in: search center (x) / out: motion vector (x) - in pel units
-                         MotionVector *mv2,       // <--> in: search center (x) / out: motion vector (x) - in pel units
+                         MotionVector *mv1,       // <--> in: search center (x) / out: motion vector (x) - in sub-pel units
+                         MotionVector *mv2,       // <--> in: search center (x) / out: motion vector (x) - in sub-pel units
                          distblk       min_mcost, // <--  minimum motion cost (cost for center or huge value)
                          int*          lambda     // <--  lagrangian parameter for determining motion cost
                          )
@@ -387,6 +388,139 @@ SubPelBlockSearchBiPred (Macroblock   *currMB,    // <--  current Macroblock
       best_pos  = pos;
     }
 
+  }
+
+  if (best_pos)
+  {
+    add_mvs(mv1, &p_Vid->spiral_search[best_pos]);
+  }
+
+  //===== return minimum motion cost =====
+  return min_mcost;
+}
+
+/*!
+ ***********************************************************************
+ * \brief
+ *    Brute Force Sub pixel block motion search
+ ***********************************************************************
+ */
+distblk                                                  //  ==> minimum motion cost after search
+full_sub_pel_motion_estimation (Macroblock   *currMB,      // <--  Current Macroblock
+                              MotionVector *pred,        // <--  motion vector predictor in sub-pel units
+                              MEBlock      *mv_block,    // <--  motion estimation structure
+                              distblk       min_mcost,   // <--  minimum motion cost (cost for center or huge value)
+                              int*          lambda       // <--  lagrangian parameter for determining motion cost                         
+                              )
+{
+  Slice *currSlice = currMB->p_Slice;
+  VideoParameters *p_Vid = currMB->p_Vid;
+  InputParameters *p_Inp = currMB->p_Inp;
+  distblk mcost;
+  int   pos, best_pos;
+
+  MotionVector cand;
+  int list = mv_block->list;
+  int cur_list = list + currMB->list_offset;
+  short ref = mv_block->ref_idx;
+  StorablePicture *ref_picture = currSlice->listX[cur_list][ref];
+
+  MotionVector *mv  = &mv_block->mv[list];
+
+  int   check_position0 = (!p_Inp->rdopt && currSlice->slice_type != B_SLICE && ref==0 && mv_block->blocktype==1 && mv->mv_x == 0 && mv->mv_y ==0);
+
+  MotionVector cmv;
+
+  int lambda_factor = lambda[Q_PEL];
+
+  //===== loop over all search positions =====
+  for (best_pos = 0, pos = 0; pos < 81; pos++)
+  {
+    cand.mv_x = mv->mv_x + p_Vid->spiral_search[pos].mv_x;   
+    cand.mv_y = mv->mv_y + p_Vid->spiral_search[pos].mv_y;
+
+    //----- set motion vector cost -----
+    mcost = mv_cost (p_Vid, lambda_factor, &cand, pred);
+
+    if (mcost >= min_mcost) continue;
+
+    cmv = pad_MVs(cand, mv_block);
+    mcost += mv_block->computePredQPel( ref_picture, mv_block, min_mcost - mcost, &cmv);
+
+    if (pos == 0 && check_position0)
+    {
+      mcost -= weighted_cost (lambda_factor, 16);
+    }
+
+    if (mcost < min_mcost)
+    {
+      min_mcost = mcost;
+      best_pos  = pos;
+    }
+  }
+
+  if (best_pos)
+  {
+    add_mvs(mv, &p_Vid->spiral_search[best_pos]);
+  }
+
+  //===== return minimum motion cost =====
+  return min_mcost;
+}
+
+/*!
+***********************************************************************
+* \brief
+*    Brute Force Bipred Sub pixel block motion search
+***********************************************************************
+*/
+distblk                                           //  ==> minimum motion cost after search
+full_sub_pel_bipred_motion_estimation (Macroblock   *currMB,    // <--  current Macroblock
+                         MEBlock      *mv_block,  // <--  motion vector information
+                         int           list,      // <--  reference picture list
+                         MotionVector *pred_mv1,  // <--  motion vector predictor (x) in sub-pel units
+                         MotionVector *pred_mv2,  // <--  motion vector predictor (x) in sub-pel units
+                         MotionVector *mv1,       // <--> in: search center (x) / out: motion vector (x) - in pel units
+                         MotionVector *mv2,       // <--> in: search center (x) / out: motion vector (x) - in pel units
+                         distblk       min_mcost, // <--  minimum motion cost (cost for center or huge value)
+                         int*          lambda     // <--  lagrangian parameter for determining motion cost
+                         )
+{
+  VideoParameters *p_Vid = currMB->p_Vid;
+  Slice *currSlice = currMB->p_Slice; 
+  int   list_offset   = p_Vid->mb_data[currMB->mbAddrX].list_offset;
+  distblk mcost;
+  int   pos, best_pos;
+  MotionVector cand;
+
+  MotionVector cmv, smv = pad_MVs(*mv2, mv_block);
+  short ref = mv_block->ref_idx;
+
+  StorablePicture *ref_picture1 = currSlice->listX[list       + list_offset][ref];
+  StorablePicture *ref_picture2 = currSlice->listX[(list ^ 1) + list_offset][0];
+
+  int lambda_factor = lambda[Q_PEL];
+
+  //===== loop over search positions =====
+  for (best_pos = 0, pos = 0; pos < 81; pos++)
+  {
+    cand.mv_x = mv1->mv_x + p_Vid->spiral_search[pos].mv_x;    // quarter-pel units
+    cand.mv_y = mv1->mv_y + p_Vid->spiral_search[pos].mv_y;    // quarter-pel units
+
+    //----- set motion vector cost -----
+    mcost  = mv_cost (p_Vid, lambda_factor, &cand, pred_mv1);
+    mcost += mv_cost (p_Vid, lambda_factor,   mv2, pred_mv2);
+
+    if (mcost >= min_mcost) continue;
+
+    cmv = pad_MVs(cand, mv_block);
+    mcost += mv_block->computeBiPredQPel(ref_picture1, ref_picture2, mv_block, min_mcost - mcost, &cmv, &smv);
+
+    if (mcost < min_mcost)
+    {
+      min_mcost = mcost;
+      best_pos  = pos;
+    }
   }
 
   if (best_pos)

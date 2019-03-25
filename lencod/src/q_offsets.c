@@ -382,7 +382,7 @@ void ParseQOffsetMatrix (QuantParameters *p_Quant, char *buf, int bufsize)
  *    Initialise Q offset matrix values.
  ***********************************************************************
  */
-void Init_QOffsetMatrix (VideoParameters *p_Vid)
+void init_qoffset (VideoParameters *p_Vid)
 {
   char *content;
   InputParameters *p_Inp = p_Vid->p_Inp;

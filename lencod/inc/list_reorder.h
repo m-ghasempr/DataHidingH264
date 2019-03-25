@@ -29,10 +29,11 @@ extern void wp_mcprec_reorder_lists     ( Slice *currSlice );
 
 extern void poc_ref_pic_reorder_frame_default( Slice *currSlice, unsigned num_ref_idx_lX_active, int list_no );
 extern void poc_ref_pic_reorder_field        ( Slice *currSlice, unsigned num_ref_idx_lX_active, int list_no );
+extern void poc_ref_pic_reorder_field_enh    ( Slice *currSlice, unsigned num_ref_idx_lX_active, int list_no );
 
 extern void tlyr_ref_pic_reorder_frame_default( Slice *currSlice, unsigned num_ref_idx_lX_active, int list_no );
-#if (MVC_EXTENSION_ENABLE)
 extern void reorder_against_default_ref_pic_lists( Slice *currSlice, int cur_list );
-#endif
+extern void poc_ref_pic_reorder_frame_enh( Slice *currSlice, unsigned num_ref_idx_lX_active, int list_no );
+extern void set_default_ref_pic_lists( Slice *currSlice );
 
 #endif

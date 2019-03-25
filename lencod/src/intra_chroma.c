@@ -392,11 +392,7 @@ void rdo_low_intra_chroma_decision_mbaff(Macroblock *currMB, int mb_available_up
   imgpel ***curr_mpr_16x16 = NULL;
 
 
-#if defined(_MSC_VER) || defined(__INTEL_COMPILER) // ICC
-  __declspec(align(16)) short diff  [16];
-#else // GC
-  short diff  [16] __attribute__ ((aligned (16)));
-#endif
+  short diff  [16];
   short *p_diff;
   distblk  cost, min_cost = DISTBLK_MAX;
   int      mode;
@@ -475,11 +471,7 @@ void rdo_low_intra_chroma_decision(Macroblock *currMB, int mb_available_up, int 
   imgpel  **image = NULL;
   imgpel ***curr_mpr_16x16 = NULL;
 
-#if defined(_MSC_VER) || defined(__INTEL_COMPILER) // ICC
-  __declspec(align(16)) short diff  [16];
-#else // GC
-  short diff  [16] __attribute__ ((aligned (16)));
-#endif
+  short diff  [16];
 
   distblk  cost, min_cost = DISTBLK_MAX;
   int      mode;

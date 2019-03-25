@@ -83,9 +83,9 @@ int SliceHeader(Slice* currSlice)
     len += write_u_v( 2, "SH: colour_plane_id", p_Vid->colour_plane_id, bitstream );
 
 #if (MVC_EXTENSION_ENABLE)
-  if(p_Vid->num_of_layers==2)
-    len += write_u_v (p_Vid->log2_max_frame_num_minus4 + 4,"SH: frame_num", p_Vid->frame_num/2, bitstream);
-  else
+  //if(p_Vid->num_of_layers==2)
+  //  len += write_u_v (p_Vid->log2_max_frame_num_minus4 + 4,"SH: frame_num", p_Vid->frame_num/2, bitstream);
+  //else
     len += write_u_v (p_Vid->log2_max_frame_num_minus4 + 4,"SH: frame_num", p_Vid->frame_num, bitstream);
 #else
   len += write_u_v (p_Vid->log2_max_frame_num_minus4 + 4,"SH: frame_num", p_Vid->frame_num, bitstream);
@@ -163,12 +163,12 @@ int SliceHeader(Slice* currSlice)
     int override_flag;
     if ((currSlice->slice_type == P_SLICE) || (currSlice->slice_type == SP_SLICE))
     {
-      override_flag = (currSlice->num_ref_idx_active[LIST_0] != (active_pps->num_ref_idx_l0_active_minus1 +1)) ? 1 : 0;
+      override_flag = (currSlice->num_ref_idx_active[LIST_0] != (active_pps->num_ref_idx_l0_default_active_minus1 +1)) ? 1 : 0;
     }
     else
     {
-      override_flag = ((currSlice->num_ref_idx_active[LIST_0] != (active_pps->num_ref_idx_l0_active_minus1 +1))
-                      || (currSlice->num_ref_idx_active[LIST_1] != (active_pps->num_ref_idx_l1_active_minus1 +1))) ? 1 : 0;
+      override_flag = ((currSlice->num_ref_idx_active[LIST_0] != (active_pps->num_ref_idx_l0_default_active_minus1 +1))
+                      || (currSlice->num_ref_idx_active[LIST_1] != (active_pps->num_ref_idx_l1_default_active_minus1 +1))) ? 1 : 0;
     }
 
     len +=  write_u_1 ("SH: num_ref_idx_active_override_flag", override_flag, bitstream);
@@ -183,8 +183,10 @@ int SliceHeader(Slice* currSlice)
     }
 
   }
+  
+  // add reference list modification info if needed
 #if (MVC_EXTENSION_ENABLE)
-  if(p_Vid->num_of_layers==2 && p_Vid->MVCInterViewReorder && p_Vid->view_id==1)
+  if(currSlice->layer_id > 0)
     len += mvc_ref_pic_list_reordering(currSlice, bitstream);
   else
 #endif
@@ -268,59 +270,38 @@ int SliceHeader(Slice* currSlice)
  *    number of bits used
  ********************************************************************************************
 */
-static int ref_pic_list_reordering(Slice *currSlice, Bitstream *bitstream)
+int ref_pic_list_reordering(Slice *currSlice, Bitstream *bitstream)
 {
+  int list; 
   int i, len=0;
-  if ( currSlice->slice_type != I_SLICE && currSlice->slice_type != SI_SLICE )
-  {
-    len += write_u_1 ("SH: ref_pic_list_reordering_flag_l0", currSlice->ref_pic_list_reordering_flag[LIST_0], bitstream);
-    if (currSlice->ref_pic_list_reordering_flag[LIST_0])
-    {
-      i=-1;
-      do
-      {
-        i++;
-        len += write_ue_v ("SH: reordering_of_pic_nums_idc", currSlice->reordering_of_pic_nums_idc[LIST_0][i], bitstream);
-        if (currSlice->reordering_of_pic_nums_idc[LIST_0][i]==0 ||
-          currSlice->reordering_of_pic_nums_idc[LIST_0][i]==1)
-        {
-          len += write_ue_v ("SH: abs_diff_pic_num_minus1_l0", currSlice->abs_diff_pic_num_minus1[LIST_0][i], bitstream);
-        }
-        else
-        {
-          if (currSlice->reordering_of_pic_nums_idc[LIST_0][i]==2)
-          {
-            len += write_ue_v ("SH: long_term_pic_idx_l0", currSlice->long_term_pic_idx[LIST_0][i], bitstream);
-          }
-        }
 
-      } while (currSlice->reordering_of_pic_nums_idc[LIST_0][i] != 3);
-    }
-  }
-
-  if (currSlice->slice_type == B_SLICE)
+  for(list = LIST_0; list <= LIST_1; list++)
   {
-    len += write_u_1 ("SH: ref_pic_list_reordering_flag_l1", currSlice->ref_pic_list_reordering_flag[LIST_1], bitstream);
-    if (currSlice->ref_pic_list_reordering_flag[LIST_1])
+    if(currSlice->num_ref_idx_active[list]==0)
+      continue;
+
+    reorder_against_default_ref_pic_lists(currSlice, list);
+
+    if (currSlice->slice_type!=I_SLICE && currSlice->slice_type!=SI_SLICE)
     {
-      i=-1;
-      do
+      len += write_u_1 ("SH: ref_pic_list_reordering_flag", currSlice->ref_pic_list_reordering_flag[list], bitstream);
+      if (currSlice->ref_pic_list_reordering_flag[list])
       {
-        i++;
-        len += write_ue_v ("SH: remapping_of_pic_num_idc", currSlice->reordering_of_pic_nums_idc[LIST_1][i], bitstream);
-        if (currSlice->reordering_of_pic_nums_idc[LIST_1][i]==0 ||
-          currSlice->reordering_of_pic_nums_idc[LIST_1][i]==1)
+        i=-1;
+        do
         {
-          len += write_ue_v ("SH: abs_diff_pic_num_minus1_l1", currSlice->abs_diff_pic_num_minus1[LIST_1][i], bitstream);
-        }
-        else
-        {
-          if (currSlice->reordering_of_pic_nums_idc[LIST_1][i]==2)
+          i++;
+          len += write_ue_v ("SH: modification_of_pic_nums_idc", currSlice->modification_of_pic_nums_idc[list][i], bitstream);
+          if (currSlice->modification_of_pic_nums_idc[list][i] == 0 || currSlice->modification_of_pic_nums_idc[list][i] == 1)
           {
-            len += write_ue_v ("SH: long_term_pic_idx_l1", currSlice->long_term_pic_idx[LIST_1][i], bitstream);
+            len += write_ue_v ("SH: abs_diff_pic_num_minus1", currSlice->abs_diff_pic_num_minus1[list][i], bitstream);
           }
-        }
-      } while (currSlice->reordering_of_pic_nums_idc[LIST_1][i] != 3);
+          else if (currSlice->modification_of_pic_nums_idc[list][i] == 2)
+          {
+            len += write_ue_v ("SH: long_term_pic_idx", currSlice->long_term_pic_idx[list][i], bitstream);
+          }
+        } while (currSlice->modification_of_pic_nums_idc[list][i] != 3);
+      }
     }
   }
 
@@ -341,54 +322,40 @@ static int ref_pic_list_reordering(Slice *currSlice, Bitstream *bitstream)
 
 static int mvc_ref_pic_list_reordering(Slice *currSlice, Bitstream *bitstream)
 {
+  int list; 
   int i, len=0;
 
-  if(currSlice->num_ref_idx_active[LIST_0]!=0)
+  for(list = LIST_0; list <= LIST_1; list++)
   {
-    int interview_ref;
+    if(currSlice->num_ref_idx_active[list]==0)
+      continue;
 
-    for(i = 0; i < currSlice->listXsize[LIST_0]; i++)
-    {
-      if(currSlice->listX[LIST_0][i]->view_id == 0)
-        break; 
-    }
-    interview_ref = i; 
-
-    currSlice->ref_pic_list_reordering_flag[LIST_0] = 1;
-    currSlice->ref_pic_list_reordering_flag[LIST_1] = 0;
-    if(interview_ref == 0)
-    {
-      currSlice->ref_pic_list_reordering_flag[LIST_0] = 1;
-      currSlice->reordering_of_pic_nums_idc[LIST_0][0] = 5;
-      currSlice->reordering_of_pic_nums_idc[LIST_0][1] = 3;
-      currSlice->abs_diff_pic_num_minus1[LIST_0][0] = 0;
-    }
-    else
-    {
-      reorder_against_default_ref_pic_lists(currSlice, LIST_0);
-    }
+    reorder_against_default_ref_pic_lists(currSlice, list);
 
     if (currSlice->slice_type!=I_SLICE && currSlice->slice_type!=SI_SLICE)
     {
-//      currSlice->ref_pic_list_reordering_flag[LIST_0] = 1;
-      len += write_u_1 ("SH: ref_pic_list_reordering_flag_l0", currSlice->ref_pic_list_reordering_flag[LIST_0], bitstream);
-      if (currSlice->ref_pic_list_reordering_flag[LIST_0])
+      len += write_u_1 ("SH: ref_pic_list_reordering_flag", currSlice->ref_pic_list_reordering_flag[list], bitstream);
+      if (currSlice->ref_pic_list_reordering_flag[list])
       {
         i=-1;
         do
         {
           i++;
-          len += write_ue_v ("SH: reordering_of_pic_nums_idc", currSlice->reordering_of_pic_nums_idc[LIST_0][i], bitstream);
-          if (currSlice->reordering_of_pic_nums_idc[LIST_0][i]!=3)
+          len += write_ue_v ("SH: modification_of_pic_nums_idc", currSlice->modification_of_pic_nums_idc[list][i], bitstream);
+          if (currSlice->modification_of_pic_nums_idc[list][i] == 0 || currSlice->modification_of_pic_nums_idc[list][i] == 1)
           {
-            len += write_ue_v ("SH: abs_diff_pic_num_minus1_l0", currSlice->abs_diff_pic_num_minus1[LIST_0][i], bitstream);
+            len += write_ue_v ("SH: abs_diff_pic_num_minus1", currSlice->abs_diff_pic_num_minus1[list][i], bitstream);
           }
-        } while (currSlice->reordering_of_pic_nums_idc[LIST_0][i] != 3);
+          else if (currSlice->modification_of_pic_nums_idc[list][i] == 2)
+          {
+            len += write_ue_v ("SH: long_term_pic_idx", currSlice->long_term_pic_idx[list][i], bitstream);
+          }
+          else if (currSlice->modification_of_pic_nums_idc[list][i] == 4 || currSlice->modification_of_pic_nums_idc[list][i] == 5)
+          {
+            len += write_ue_v ("SH: abs_diff_view_idx_minus1", currSlice->abs_diff_view_idx_minus1[list][i], bitstream);
+          }
+        } while (currSlice->modification_of_pic_nums_idc[list][i] != 3);
       }
-    }
-    if (currSlice->slice_type==B_SLICE)
-    {
-      len += write_u_1 ("SH: ref_pic_list_reordering_flag_l1", currSlice->ref_pic_list_reordering_flag[LIST_1], bitstream);
     }
   }
 

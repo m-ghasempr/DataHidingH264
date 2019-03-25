@@ -695,7 +695,7 @@ void submacroblock_mode_decision_low(Macroblock *currMB,
   PicMotionParams **motion = p_Vid->enc_picture->mv_info;
 
   int64 curr_cbp_blk;
-  double min_rdcost, rdcost = 0.0;
+  //double rdcost = 0.0;
   int j0, i0;
   int i, j;
   int index;
@@ -749,7 +749,7 @@ void submacroblock_mode_decision_low(Macroblock *currMB,
   currSlice->store_coding_state (currMB, currSlice->p_RDO->cs_cm);
 
   //=====  LOOP OVER POSSIBLE CODING MODES FOR 8x8 SUB-PARTITION  =====
-  for (min_cost8x8 = DISTBLK_MAX, min_rdcost = 1e20, index = (currSlice->slice_type == B_SLICE ? 0 : 1); index < maxindex; index++)
+  for (min_cost8x8 = DISTBLK_MAX, index = (currSlice->slice_type == B_SLICE ? 0 : 1); index < maxindex; index++)
   {
     mode = b8_mode_table[index];
     best.mode = (char) mode;
@@ -903,7 +903,6 @@ void submacroblock_mode_decision_low(Macroblock *currMB,
       if (*cost < min_cost8x8)
       {
         min_cost8x8             = *cost;
-        min_rdcost               = rdcost;
         
         dataTr->part[block] = best;
         currMB->b8x8[block].mode = (char) mode;

@@ -25,8 +25,8 @@
 #include "q_matrix.h"
 
 // Local helpers
-static int IdentifyProfile(InputParameters *p_Inp);
-static int IdentifyLevel(InputParameters *p_Inp);
+static int identify_profile(InputParameters *p_Inp);
+static int identify_level(InputParameters *p_Inp);
 static int GenerateVUI_parameters_rbsp(seq_parameter_set_rbsp_t *sps, Bitstream *bitstream);
 
 static const byte ZZ_SCAN[16]  =
@@ -53,7 +53,7 @@ static const byte ZZ_SCAN8[64] =
  *
  *************************************************************************************
 */
-void GenerateParameterSets (VideoParameters *p_Vid)
+void generate_parameter_sets (VideoParameters *p_Vid)
 {
   InputParameters *p_Inp = p_Vid->p_Inp;
   int i;
@@ -79,7 +79,6 @@ void GenerateParameterSets (VideoParameters *p_Vid)
       GeneratePictureParameterSet( p_Vid->PicParSet[0], sps, p_Vid, p_Inp, 0, 0, 0, p_Inp->cb_qp_index_offset, p_Inp->cr_qp_index_offset);
       GeneratePictureParameterSet( p_Vid->PicParSet[1], sps, p_Vid, p_Inp, 1, 1, 1, p_Inp->cb_qp_index_offset, p_Inp->cr_qp_index_offset);
       GeneratePictureParameterSet( p_Vid->PicParSet[2], sps, p_Vid, p_Inp, 2, 1, 2, p_Inp->cb_qp_index_offset, p_Inp->cr_qp_index_offset);
-
     }
     else
     {
@@ -110,7 +109,6 @@ void GenerateParameterSets (VideoParameters *p_Vid)
   }
   else
     p_Vid->sps[1] = NULL; 
-
 }
 
 /*!
@@ -162,8 +160,7 @@ void FreeParameterSets (VideoParameters *p_Vid)
 NALU_t *GenerateSeq_parameter_set_NALU (VideoParameters *p_Vid)
 {
   NALU_t *n = AllocNALU(MAXNALUSIZE);
-  int RBSPlen = 0;
-  int NALUlen;
+  int RBSPlen = 0;  
   byte rbsp[MAXRBSPSIZE];
 
 #if (MVC_EXTENSION_ENABLE)
@@ -171,7 +168,7 @@ NALU_t *GenerateSeq_parameter_set_NALU (VideoParameters *p_Vid)
 #else
   RBSPlen = GenerateSeq_parameter_set_rbsp (p_Vid, p_Vid->active_sps, rbsp);
 #endif
-  NALUlen = RBSPtoNALU (rbsp, n, RBSPlen, NALU_TYPE_SPS, NALU_PRIORITY_HIGHEST, 1);
+  RBSPtoNALU (rbsp, n, RBSPlen, NALU_TYPE_SPS, NALU_PRIORITY_HIGHEST, 1);
   n->startcodeprefix_len = 4;
 
   return n;
@@ -198,11 +195,10 @@ NALU_t *GenerateSubsetSeq_parameter_set_NALU (VideoParameters *p_Vid)
 {
   NALU_t *n = AllocNALU(MAXNALUSIZE);
   int RBSPlen = 0;
-  int NALUlen;
   byte rbsp[MAXRBSPSIZE];
 
   RBSPlen = GenerateSeq_parameter_set_rbsp (p_Vid, p_Vid->sps[1]/*p_Vid->active_sps*/, rbsp, 1);
-  NALUlen = RBSPtoNALU (rbsp, n, RBSPlen, NALU_TYPE_SUB_SPS, NALU_PRIORITY_HIGHEST, 1);
+  RBSPtoNALU (rbsp, n, RBSPlen, NALU_TYPE_SUB_SPS, NALU_PRIORITY_HIGHEST, 1);
   n->startcodeprefix_len = 4;
 
   return n;
@@ -228,11 +224,10 @@ NALU_t *GeneratePic_parameter_set_NALU(VideoParameters *p_Vid, int PPS_id)
 {
   NALU_t *n = AllocNALU(MAXNALUSIZE);
   int RBSPlen = 0;
-  int NALUlen;
   byte rbsp[MAXRBSPSIZE];
 
   RBSPlen = GeneratePic_parameter_set_rbsp (p_Vid, p_Vid->PicParSet[PPS_id], rbsp);
-  NALUlen = RBSPtoNALU (rbsp, n, RBSPlen, NALU_TYPE_PPS, NALU_PRIORITY_HIGHEST, 1);
+  RBSPtoNALU (rbsp, n, RBSPlen, NALU_TYPE_PPS, NALU_PRIORITY_HIGHEST, 1);
   n->startcodeprefix_len = 4;
 
   return n;
@@ -270,14 +265,14 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps,  //!< Sequence
   unsigned n_ScalingList;
   InputParameters *p_Inp = p_Vid->p_Inp;
 
-  int frext_profile = ((IdentifyProfile(p_Inp)==FREXT_HP) ||
-                      (IdentifyProfile(p_Inp)==FREXT_Hi10P) ||
-                      (IdentifyProfile(p_Inp)==FREXT_Hi422) ||
-                      (IdentifyProfile(p_Inp)==FREXT_Hi444) ||
-                      (IdentifyProfile(p_Inp)==FREXT_CAVLC444)
+  int frext_profile = ((identify_profile(p_Inp)==FREXT_HP) ||
+                      (identify_profile(p_Inp)==FREXT_Hi10P) ||
+                      (identify_profile(p_Inp)==FREXT_Hi422) ||
+                      (identify_profile(p_Inp)==FREXT_Hi444) ||
+                      (identify_profile(p_Inp)==FREXT_CAVLC444)
 #if (MVC_EXTENSION_ENABLE)
-                      || (IdentifyProfile(p_Inp)==MULTIVIEW_HIGH)
-                      || (IdentifyProfile(p_Inp)==STEREO_HIGH)
+                      || (identify_profile(p_Inp)==MULTIVIEW_HIGH)
+                      || (identify_profile(p_Inp)==STEREO_HIGH)
 #endif
                       );
   // *************************************************************************
@@ -285,9 +280,9 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps,  //!< Sequence
   // *************************************************************************
   assert (sps != NULL);
   // Profile and Level should be calculated using the info from the config
-  // file.  Calculation is hidden in IndetifyProfile() and IdentifyLevel()
-  sps->profile_idc = IdentifyProfile(p_Inp);
-  sps->level_idc = IdentifyLevel(p_Inp);
+  // file.  Calculation is hidden in identify_profile() and identify_level()
+  sps->profile_idc = identify_profile(p_Inp);
+  sps->level_idc = identify_level(p_Inp);
 
   // needs to be set according to profile
   sps->constrained_set0_flag = FALSE;
@@ -436,19 +431,20 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Pa
                                   int cb_qp_index_offset,        //!< value of cb_qp_index_offset
                                   int cr_qp_index_offset         //!< value of cr_qp_index_offset
                                   )
+
 {
   unsigned i;
   unsigned n_ScalingList;
   unsigned FrameSizeInMapUnits = 0;
 
-  int frext_profile = ((IdentifyProfile(p_Inp)==FREXT_HP) ||
-                      (IdentifyProfile(p_Inp)==FREXT_Hi10P) ||
-                      (IdentifyProfile(p_Inp)==FREXT_Hi422) ||
-                      (IdentifyProfile(p_Inp)==FREXT_Hi444) ||
-                      (IdentifyProfile(p_Inp)==FREXT_CAVLC444)
+  int frext_profile = ((identify_profile(p_Inp)==FREXT_HP) ||
+                      (identify_profile(p_Inp)==FREXT_Hi10P) ||
+                      (identify_profile(p_Inp)==FREXT_Hi422) ||
+                      (identify_profile(p_Inp)==FREXT_Hi444) ||
+                      (identify_profile(p_Inp)==FREXT_CAVLC444)
 #if (MVC_EXTENSION_ENABLE)
-                      || (IdentifyProfile(p_Inp)==MULTIVIEW_HIGH)
-                      || (IdentifyProfile(p_Inp)==STEREO_HIGH)
+                      || (identify_profile(p_Inp)==MULTIVIEW_HIGH)
+                      || (identify_profile(p_Inp)==STEREO_HIGH)
 #endif
                       );
 
@@ -549,8 +545,8 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Pa
   }
 // End FMO stuff
 
-  pps->num_ref_idx_l0_active_minus1 = sps->frame_mbs_only_flag ? (sps->num_ref_frames - 1) : (2 * sps->num_ref_frames - 1) ;   // set defaults
-  pps->num_ref_idx_l1_active_minus1 = sps->frame_mbs_only_flag ? (sps->num_ref_frames - 1) : (2 * sps->num_ref_frames - 1) ;   // set defaults
+  pps->num_ref_idx_l0_default_active_minus1 = sps->frame_mbs_only_flag ? (sps->num_ref_frames - 1) : (2 * sps->num_ref_frames - 1) ;   // set defaults
+  pps->num_ref_idx_l1_default_active_minus1 = sps->frame_mbs_only_flag ? (sps->num_ref_frames - 1) : (2 * sps->num_ref_frames - 1) ;   // set defaults
 
   pps->weighted_pred_flag  = (byte) WeightedPrediction;
   pps->weighted_bipred_idc = (byte) WeightedBiprediction;
@@ -561,8 +557,8 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Pa
   pps->chroma_qp_index_offset = cb_qp_index_offset;
   if (frext_profile)
   {
-    pps->cb_qp_index_offset     = cb_qp_index_offset;
-    pps->cr_qp_index_offset     = cr_qp_index_offset;
+    pps->cb_qp_index_offset   = cb_qp_index_offset;
+    pps->cr_qp_index_offset   = cr_qp_index_offset;
   }
   else
     pps->cb_qp_index_offset = pps->cr_qp_index_offset = pps->chroma_qp_index_offset;
@@ -815,32 +811,32 @@ int GenerateSeq_parameter_set_rbsp (VideoParameters *p_Vid, seq_parameter_set_rb
 
     len+=write_u_1  ("SPS: mvc_vui_parameters_present_flag",                    sps->vui_parameters_present_flag,           bitstream);
     {
-      len+=write_ue_v ("SPS: vui_mvc_num_ops_minus1",                           0,           bitstream);
-      len+=write_u_v  (3, "SPS: vui_mvc_temporal_id[ 0 ]",                      0,           bitstream);
-      len+=write_ue_v ("SPS: vui_mvc_num_target_output_views_minus1[ 0 ]",      0,           bitstream);
-      len+=write_ue_v ("SPS: vui_mvc_view_id[ 0 ][ 0 ]",                        0,           bitstream);
-      len+=write_u_1  ("SPS: vui_mvc_timing_info_present_flag[ 0 ]",            sps->vui_parameters_present_flag,               bitstream);
       if(sps->vui_parameters_present_flag)
       {
-        len+=write_u_v (32,"SPS: vui_mvc_num_units_in_tick[ 0 ]",               sps->vui_seq_parameters.num_units_in_tick,      bitstream);
-        len+=write_u_v (32,"SPS: vui_mvc_time_scale[ 0 ]",                      sps->vui_seq_parameters.time_scale,             bitstream);
-        len+=write_u_1 ("SPS: vui_mvc_fixed_frame_rate_flag[ 0 ]",              sps->vui_seq_parameters.fixed_frame_rate_flag,  bitstream);
+        len+=write_ue_v (    "SPS: vui_mvc_num_ops_minus1",                           0,                                                        bitstream);
+        len+=write_u_v  ( 3, "SPS: vui_mvc_temporal_id[ 0 ]",                         0,                                                        bitstream);
+        len+=write_ue_v (    "SPS: vui_mvc_num_target_output_views_minus1[ 0 ]",      0,                                                        bitstream);
+        len+=write_ue_v (    "SPS: vui_mvc_view_id[ 0 ][ 0 ]",                        0,                                                        bitstream);
+        len+=write_u_1  (    "SPS: vui_mvc_timing_info_present_flag[ 0 ]",            sps->vui_parameters_present_flag,                         bitstream);
+        len+=write_u_v  (32, "SPS: vui_mvc_num_units_in_tick[ 0 ]",                   sps->vui_seq_parameters.num_units_in_tick,                bitstream);
+        len+=write_u_v  (32, "SPS: vui_mvc_time_scale[ 0 ]",                          sps->vui_seq_parameters.time_scale,                       bitstream);
+        len+=write_u_1  (    "SPS: vui_mvc_fixed_frame_rate_flag[ 0 ]",               sps->vui_seq_parameters.fixed_frame_rate_flag,            bitstream);
+        len+=write_u_1  (    "SPS: vui_mvc_nal_hrd_parameters_present_flag[ 0 ]",     sps->vui_seq_parameters.nal_hrd_parameters_present_flag,  bitstream);
+        if(sps->vui_seq_parameters.nal_hrd_parameters_present_flag)
+        {
+          len += WriteHRDParameters(sps, bitstream);
+        }
+        len+=write_u_1 ("SPS: vui_mvc_vcl_hrd_parameters_present_flag[ 0 ]",      sps->vui_seq_parameters.vcl_hrd_parameters_present_flag,           bitstream);
+        if ( sps->vui_seq_parameters.vcl_hrd_parameters_present_flag )
+        {
+          len += WriteHRDParameters(sps, bitstream);
+        }
+        if ( sps->vui_seq_parameters.nal_hrd_parameters_present_flag || sps->vui_seq_parameters.vcl_hrd_parameters_present_flag )
+        {
+          len+=write_u_1 ("SPS: vui_mvc_low_delay_hrd_flag[ 0 ]",                 sps->vui_seq_parameters.low_delay_hrd_flag,                        bitstream );
+        }
+        len+=write_u_1 ("SPS: vui_mvc_pic_struct_present_flag[ 0 ]",              sps->vui_seq_parameters.pic_struct_present_flag,                   bitstream);
       }
-      len+=write_u_1  ("SPS: vui_mvc_nal_hrd_parameters_present_flag[ 0 ]",     sps->vui_seq_parameters.nal_hrd_parameters_present_flag,           bitstream);
-      if(sps->vui_seq_parameters.nal_hrd_parameters_present_flag)
-      {
-        len += WriteHRDParameters(sps, bitstream);
-      }
-      len+=write_u_1 ("SPS: vui_mvc_vcl_hrd_parameters_present_flag[ 0 ]",      sps->vui_seq_parameters.vcl_hrd_parameters_present_flag,           bitstream);
-      if ( sps->vui_seq_parameters.vcl_hrd_parameters_present_flag )
-      {
-        len += WriteHRDParameters(sps, bitstream);
-      }
-      if ( sps->vui_seq_parameters.nal_hrd_parameters_present_flag || sps->vui_seq_parameters.vcl_hrd_parameters_present_flag )
-      {
-        len+=write_u_1 ("SPS: vui_mvc_low_delay_hrd_flag[ 0 ]",                 sps->vui_seq_parameters.low_delay_hrd_flag,                        bitstream );
-      }
-      len+=write_u_1 ("SPS: vui_mvc_pic_struct_present_flag[ 0 ]",              sps->vui_seq_parameters.pic_struct_present_flag,                   bitstream);
     }
 
     len+=write_u_1 ("SPS: additional_extension2_flag",                          0,           bitstream);
@@ -883,9 +879,7 @@ int GeneratePic_parameter_set_rbsp (VideoParameters *p_Vid, pic_parameter_set_rb
   InputParameters *p_Inp = p_Vid->p_Inp;
   Bitstream *bitstream;
   int len = 0, LenInBytes;
-  unsigned i;
-  unsigned n_ScalingList;
-  unsigned NumberBitsPerSliceGroupId;
+  unsigned i;  
   int profile_idc;
 
   assert (rbsp != NULL);
@@ -898,100 +892,99 @@ int GeneratePic_parameter_set_rbsp (VideoParameters *p_Vid, pic_parameter_set_rb
 
   pps->bottom_field_pic_order_in_frame_present_flag = p_Vid->bottom_field_pic_order_in_frame_present_flag;
 
-  {
-  len+=write_ue_v ("PPS: pic_parameter_set_id",                    pps->pic_parameter_set_id,                      bitstream);
-  len+=write_ue_v ("PPS: seq_parameter_set_id",                    pps->seq_parameter_set_id,                      bitstream);
-  }
-  len+=write_u_1  ("PPS: entropy_coding_mode_flag",                pps->entropy_coding_mode_flag,                  bitstream);
-  len+=write_u_1  ("PPS: bottom_field_pic_order_in_frame_present_flag", pps->bottom_field_pic_order_in_frame_present_flag,                    bitstream);
-  len+=write_ue_v ("PPS: num_slice_groups_minus1",                 pps->num_slice_groups_minus1,                   bitstream);
+  len += write_ue_v ("PPS: pic_parameter_set_id",                    pps->pic_parameter_set_id,                      bitstream);
+  len += write_ue_v ("PPS: seq_parameter_set_id",                    pps->seq_parameter_set_id,                      bitstream);
+  len += write_u_1  ("PPS: entropy_coding_mode_flag",                pps->entropy_coding_mode_flag,                  bitstream);
+  len += write_u_1  ("PPS: bottom_field_pic_order_in_frame_present_flag", pps->bottom_field_pic_order_in_frame_present_flag,                    bitstream);
+  len += write_ue_v ("PPS: num_slice_groups_minus1",                 pps->num_slice_groups_minus1,                   bitstream);
 
   // FMO stuff
   if(pps->num_slice_groups_minus1 > 0 )
   {
-    len+=write_ue_v ("PPS: slice_group_map_type",                 pps->slice_group_map_type,                   bitstream);
+    len += write_ue_v ("PPS: slice_group_map_type",                 pps->slice_group_map_type,                   bitstream);
     if (pps->slice_group_map_type == 0)
       for (i=0; i<=pps->num_slice_groups_minus1; i++)
-        len+=write_ue_v ("PPS: run_length_minus1[i]",                           pps->run_length_minus1[i],                             bitstream);
+        len += write_ue_v ("PPS: run_length_minus1[i]",                           pps->run_length_minus1[i],                             bitstream);
     else if (pps->slice_group_map_type==2)
+    {
       for (i=0; i<pps->num_slice_groups_minus1; i++)
       {
-
-        len+=write_ue_v ("PPS: top_left[i]",                          pps->top_left[i],                           bitstream);
-        len+=write_ue_v ("PPS: bottom_right[i]",                      pps->bottom_right[i],                       bitstream);
+        len += write_ue_v ("PPS: top_left[i]",                          pps->top_left[i],                           bitstream);
+        len += write_ue_v ("PPS: bottom_right[i]",                      pps->bottom_right[i],                       bitstream);
       }
+    }
     else if (pps->slice_group_map_type == 3 ||
-             pps->slice_group_map_type == 4 ||
-             pps->slice_group_map_type == 5)
+      pps->slice_group_map_type == 4 ||
+      pps->slice_group_map_type == 5)
     {
-      len+=write_u_1  ("PPS: slice_group_change_direction_flag",         pps->slice_group_change_direction_flag,         bitstream);
-      len+=write_ue_v ("PPS: slice_group_change_rate_minus1",            pps->slice_group_change_rate_minus1,            bitstream);
+      len += write_u_1  ("PPS: slice_group_change_direction_flag",         pps->slice_group_change_direction_flag,         bitstream);
+      len += write_ue_v ("PPS: slice_group_change_rate_minus1",            pps->slice_group_change_rate_minus1,            bitstream);
     }
     else if (pps->slice_group_map_type == 6)
     {
+      unsigned NumberBitsPerSliceGroupId = 0;
+
       if (pps->num_slice_groups_minus1>=4)
         NumberBitsPerSliceGroupId=3;
       else if (pps->num_slice_groups_minus1>=2)
         NumberBitsPerSliceGroupId=2;
       else if (pps->num_slice_groups_minus1>=1)
         NumberBitsPerSliceGroupId=1;
-      else
-        NumberBitsPerSliceGroupId=0;
 
-      len+=write_ue_v ("PPS: pic_size_in_map_units_minus1",                       pps->pic_size_in_map_units_minus1,             bitstream);
-      for(i=0; i<=pps->pic_size_in_map_units_minus1; i++)
-        len+= write_u_v  (NumberBitsPerSliceGroupId, "PPS: >slice_group_id[i]",   pps->slice_group_id[i],                        bitstream);
+      len += write_ue_v ("PPS: pic_size_in_map_units_minus1",                       pps->pic_size_in_map_units_minus1,             bitstream);
+      for(i = 0; i <= pps->pic_size_in_map_units_minus1; i++)
+        len += write_u_v  (NumberBitsPerSliceGroupId, "PPS: >slice_group_id[i]",   pps->slice_group_id[i],                        bitstream);
     }
   }
   // End of FMO stuff
 
-  len+=write_ue_v ("PPS: num_ref_idx_l0_active_minus1",             pps->num_ref_idx_l0_active_minus1,              bitstream);
-  len+=write_ue_v ("PPS: num_ref_idx_l1_active_minus1",             pps->num_ref_idx_l1_active_minus1,              bitstream);
-  len+=write_u_1  ("PPS: weighted_pred_flag",                       pps->weighted_pred_flag,                        bitstream);
-  len+=write_u_v  (2, "PPS: weighted_bipred_idc",                   pps->weighted_bipred_idc,                       bitstream);
-  len+=write_se_v ("PPS: pic_init_qp_minus26",                      pps->pic_init_qp_minus26,                       bitstream);
-  len+=write_se_v ("PPS: pic_init_qs_minus26",                      pps->pic_init_qs_minus26,                       bitstream);
+  len += write_ue_v ("PPS: num_ref_idx_l0_default_active_minus1",     pps->num_ref_idx_l0_default_active_minus1,      bitstream);
+  len += write_ue_v ("PPS: num_ref_idx_l1_default_active_minus1",     pps->num_ref_idx_l1_default_active_minus1,      bitstream);
+  len += write_u_1  ("PPS: weighted_pred_flag",                       pps->weighted_pred_flag,                        bitstream);
+  len += write_u_v  (2, "PPS: weighted_bipred_idc",                   pps->weighted_bipred_idc,                       bitstream);
+  len += write_se_v ("PPS: pic_init_qp_minus26",                      pps->pic_init_qp_minus26,                       bitstream);
+  len += write_se_v ("PPS: pic_init_qs_minus26",                      pps->pic_init_qs_minus26,                       bitstream);
 
-  profile_idc = IdentifyProfile(p_Inp);
+  profile_idc = identify_profile(p_Inp);
   if( is_FREXT_profile(profile_idc) )
-    len+=write_se_v ("PPS: chroma_qp_index_offset",                 pps->cb_qp_index_offset,                        bitstream);
+    len += write_se_v ("PPS: chroma_qp_index_offset",                 pps->cb_qp_index_offset,                        bitstream);
   else
-    len+=write_se_v ("PPS: chroma_qp_index_offset",                 pps->chroma_qp_index_offset,                    bitstream);
+    len += write_se_v ("PPS: chroma_qp_index_offset",                 pps->chroma_qp_index_offset,                    bitstream);
 
-  len+=write_u_1  ("PPS: deblocking_filter_control_present_flag",   pps->deblocking_filter_control_present_flag,    bitstream);
-  len+=write_u_1  ("PPS: constrained_intra_pred_flag",              pps->constrained_intra_pred_flag,               bitstream);
-  len+=write_u_1  ("PPS: redundant_pic_cnt_present_flag",           pps->redundant_pic_cnt_present_flag,            bitstream);
+  len += write_u_1  ("PPS: deblocking_filter_control_present_flag",   pps->deblocking_filter_control_present_flag,    bitstream);
+  len += write_u_1  ("PPS: constrained_intra_pred_flag",              pps->constrained_intra_pred_flag,               bitstream);
+  len += write_u_1  ("PPS: redundant_pic_cnt_present_flag",           pps->redundant_pic_cnt_present_flag,            bitstream);
 
   // Fidelity Range Extensions stuff
   if( is_FREXT_profile(profile_idc) )
   {
-    len+=write_u_1  ("PPS: transform_8x8_mode_flag",                pps->transform_8x8_mode_flag,                   bitstream);
-
-    len+=write_u_1  ("PPS: pic_scaling_matrix_present_flag",        pps->pic_scaling_matrix_present_flag,           bitstream);
+    len += write_u_1  ("PPS: transform_8x8_mode_flag",                pps->transform_8x8_mode_flag,                   bitstream);
+    len += write_u_1  ("PPS: pic_scaling_matrix_present_flag",        pps->pic_scaling_matrix_present_flag,           bitstream);
 
     if(pps->pic_scaling_matrix_present_flag)
     {
       ScaleParameters *p_QScale = p_Vid->p_QScale;
-      n_ScalingList = 6 + ((p_Vid->active_sps->chroma_format_idc != 3) ? 2 : 6) * pps->transform_8x8_mode_flag;
+      unsigned n_ScalingList = 6 + ((p_Vid->active_sps->chroma_format_idc != 3) ? 2 : 6) * pps->transform_8x8_mode_flag;
+
       for(i=0; i<n_ScalingList; i++)  // SS-70226
       {
-        len+=write_u_1  ("PPS: pic_scaling_list_present_flag",      pps->pic_scaling_list_present_flag[i],          bitstream);
+        len += write_u_1  ("PPS: pic_scaling_list_present_flag",      pps->pic_scaling_list_present_flag[i],          bitstream);
 
         if(pps->pic_scaling_list_present_flag[i])
         {
-          if(i<6)
-            len+=Scaling_List(p_QScale->ScalingList4x4input[i], p_QScale->ScalingList4x4[i], 16, &p_QScale->UseDefaultScalingMatrix4x4Flag[i], bitstream);
+          if(i < 6)
+            len += Scaling_List(p_QScale->ScalingList4x4input[i], p_QScale->ScalingList4x4[i], 16, &p_QScale->UseDefaultScalingMatrix4x4Flag[i], bitstream);
           else
-            len+=Scaling_List(p_QScale->ScalingList8x8input[i-6], p_QScale->ScalingList8x8[i-6], 64, &p_QScale->UseDefaultScalingMatrix8x8Flag[i-6], bitstream);
+            len += Scaling_List(p_QScale->ScalingList8x8input[i-6], p_QScale->ScalingList8x8[i-6], 64, &p_QScale->UseDefaultScalingMatrix8x8Flag[i-6], bitstream);
         }
       }
     }
-    len+=write_se_v ("PPS: second_chroma_qp_index_offset",          pps->cr_qp_index_offset,                        bitstream);
+    len += write_se_v ("PPS: second_chroma_qp_index_offset",          pps->cr_qp_index_offset,                        bitstream);
   }
 
   SODBtoRBSP(bitstream);     // copies the last couple of bits into the byte buffer
 
-  LenInBytes=bitstream->byte_pos;
+  LenInBytes = bitstream->byte_pos;
 
   // Get rid of the helper structures
   free (bitstream);
@@ -1019,7 +1012,7 @@ int GeneratePic_parameter_set_rbsp (VideoParameters *p_Vid, pic_parameter_set_rb
  *
  *************************************************************************************
  */
-int IdentifyProfile(InputParameters *p_Inp)
+int identify_profile(InputParameters *p_Inp)
 {
   return p_Inp->ProfileIDC;
 }
@@ -1037,7 +1030,7 @@ int IdentifyProfile(InputParameters *p_Inp)
  *    the config file parameters (primarily the picture size)
  *************************************************************************************
  */
-int IdentifyLevel(InputParameters *p_Inp)
+int identify_level(InputParameters *p_Inp)
 {
   return p_Inp->LevelIDC;
 }
@@ -1151,11 +1144,10 @@ NALU_t *GenerateSEImessage_NALU(InputParameters *p_Inp)
 {
   NALU_t *n = AllocNALU(MAXNALUSIZE);
   int RBSPlen = 0;
-  int NALUlen;
   byte rbsp[MAXRBSPSIZE];
 
   RBSPlen = GenerateSEImessage_rbsp (p_Inp, NORMAL_SEI, rbsp);
-  NALUlen = RBSPtoNALU (rbsp, n, RBSPlen, NALU_TYPE_SEI, NALU_PRIORITY_DISPOSABLE, 1);
+  RBSPtoNALU (rbsp, n, RBSPlen, NALU_TYPE_SEI, NALU_PRIORITY_DISPOSABLE, 1);
   n->startcodeprefix_len = 4;
 
   return n;

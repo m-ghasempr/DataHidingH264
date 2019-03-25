@@ -935,21 +935,6 @@ int get_mem3Dpel_pad(imgpel ****array3D, int dim0, int dim1, int dim2, int iPadY
   if(((*array3D) = (imgpel***)mem_malloc(dim0*sizeof(imgpel**))) == NULL)
     no_mem_exit("get_mem3Dpel_pad: array3D");
 
-  mem_size += get_mem2Dpel_pad(*array3D, dim0*dim1+2*(dim0-1)*iPadY, dim2, iPadY, iPadX);
-
-  for(i = 1; i < dim0; i++)
-    (*array3D)[i] = (*array3D)[i - 1] + (dim1+2*iPadY);
-  
-  return mem_size;
-}
-
-int get_mem3Dpel_pad_sep(imgpel ****array3D, int dim0, int dim1, int dim2, int iPadY, int iPadX)
-{
-  int i, mem_size = dim0 * sizeof(imgpel**);
-
-  if(((*array3D) = (imgpel***)mem_malloc(dim0*sizeof(imgpel**))) == NULL)
-    no_mem_exit("get_mem3Dpel_pad_sep: array3D");
-
   for(i = 0; i < dim0; i++)
     mem_size += get_mem2Dpel_pad((*array3D)+i, dim1, dim2, iPadY, iPadX);
   
@@ -981,6 +966,7 @@ int get_mem4Dpel(imgpel *****array4D, int dim0, int dim1, int dim2, int dim3)
   return mem_size;
 }
 
+
 int get_mem4Dpel_pad(imgpel *****array4D, int dim0, int dim1, int dim2, int dim3, int iPadY, int iPadX)
 {  
   int  i, mem_size = dim0 * sizeof(imgpel***);
@@ -989,21 +975,6 @@ int get_mem4Dpel_pad(imgpel *****array4D, int dim0, int dim1, int dim2, int dim3
     no_mem_exit("get_mem4Dpel_pad: array4D");
 
   mem_size += get_mem3Dpel_pad(*array4D, dim0 * dim1, dim2, dim3, iPadY, iPadX);
-
-  for(i = 1; i < dim0; i++)
-    (*array4D)[i] = (*array4D)[i - 1] + dim1;
-
-  return mem_size;
-}
-
-int get_mem4Dpel_pad_sep(imgpel *****array4D, int dim0, int dim1, int dim2, int dim3, int iPadY, int iPadX)
-{  
-  int  i, mem_size = dim0 * sizeof(imgpel***);
-
-  if(((*array4D) = (imgpel****)mem_malloc(dim0 * sizeof(imgpel***))) == NULL)
-    no_mem_exit("get_mem4Dpel_pad_sep: array4D");
-
-  mem_size += get_mem3Dpel_pad_sep(*array4D, dim0 * dim1, dim2, dim3, iPadY, iPadX);
 
   for(i = 1; i < dim0; i++)
     (*array4D)[i] = (*array4D)[i - 1] + dim1;
@@ -1043,21 +1014,6 @@ int get_mem5Dpel_pad(imgpel ******array5D, int dim0, int dim1, int dim2, int dim
     no_mem_exit("get_mem5Dpel_pad: array5D");
 
   mem_size += get_mem4Dpel_pad(*array5D, dim0 * dim1, dim2, dim3, dim4, iPadY, iPadX);
-
-  for(i = 1; i < dim0; i++)
-    (*array5D)[i] = (*array5D)[i - 1] + dim1;
-
-  return mem_size;
-}
-
-int get_mem5Dpel_pad_sep(imgpel ******array5D, int dim0, int dim1, int dim2, int dim3, int dim4, int iPadY, int iPadX)
-{
-  int  i, mem_size = dim0 * sizeof(imgpel****);
-
-  if(((*array5D) = (imgpel*****)mem_malloc(dim0 * sizeof(imgpel****))) == NULL)
-    no_mem_exit("get_mem5Dpel_pad_sep: array5D");
-
-  mem_size += get_mem4Dpel_pad_sep(*array5D, dim0 * dim1, dim2, dim3, dim4, iPadY, iPadX);
 
   for(i = 1; i < dim0; i++)
     (*array5D)[i] = (*array5D)[i - 1] + dim1;
@@ -1147,21 +1103,7 @@ void free_mem3Dpel(imgpel ***array3D)
   }
 }
 
-void free_mem3Dpel_pad(imgpel ***array3D, int iPadY, int iPadX)
-{
-  if (array3D)
-  {
-    if(*array3D)
-      free_mem2Dpel_pad(*array3D, iPadY, iPadX);
-    mem_free (array3D);
-  }
-  else
-  {
-    error ("free_mem3Dpel_pad: trying to free unused memory",100);
-  }
-}
-
-void free_mem3Dpel_pad_sep(imgpel ***array3D, int iDim12, int iPadY, int iPadX)
+void free_mem3Dpel_pad(imgpel ***array3D, int iDim12, int iPadY, int iPadX)
 {
   if (array3D)
   {
@@ -1176,7 +1118,7 @@ void free_mem3Dpel_pad_sep(imgpel ***array3D, int iDim12, int iPadY, int iPadX)
   }
   else
   {
-    error ("free_mem3Dpel_pad_sep: trying to free unused memory",100);
+    error ("free_mem3Dpel_pad: trying to free unused memory",100);
   }
   
 }
@@ -1200,29 +1142,17 @@ void free_mem4Dpel(imgpel ****array4D)
     error ("free_mem4Dpel: trying to free unused memory",100);
   }
 }
-void free_mem4Dpel_pad(imgpel  ****array4D, int iPadY, int iPadX)
+
+void free_mem4Dpel_pad(imgpel  ****array4D, int iFrames, int iPadY, int iPadX)
 {
   if (array4D)
   {
-    free_mem3Dpel_pad(*array4D, iPadY, iPadX);
+    free_mem3Dpel_pad(*array4D, iFrames, iPadY, iPadX);
     mem_free (array4D);
   }
   else
   {
     error ("free_mem4Dpel_pad: trying to free unused memory",100);
-  }
-}
-
-void free_mem4Dpel_pad_sep(imgpel  ****array4D, int iFrames, int iPadY, int iPadX)
-{
-  if (array4D)
-  {
-    free_mem3Dpel_pad_sep(*array4D, iFrames, iPadY, iPadX);
-    mem_free (array4D);
-  }
-  else
-  {
-    error ("free_mem4Dpel_pad_sep: trying to free unused memory",100);
   }
 }
 
@@ -1246,29 +1176,16 @@ void free_mem5Dpel(imgpel *****array5D)
   }
 }
 
-void free_mem5Dpel_pad(imgpel *****array5D, int iPadY, int iPadX)
+void free_mem5Dpel_pad(imgpel *****array5D, int iFrames, int iPadY, int iPadX)
 {
   if (array5D)
   {
-    free_mem4Dpel_pad(*array5D, iPadY, iPadX);
-    mem_free (array5D);
-  }
-  else
-  {
-    error ("free_mem5Dpel_pad: trying to free unused memory",100);
-  }
-}
-
-void free_mem5Dpel_pad_sep(imgpel *****array5D, int iFrames, int iPadY, int iPadX)
-{
-  if (array5D)
-  {
-    free_mem4Dpel_pad_sep(*array5D, iFrames, iPadY, iPadX);
+    free_mem4Dpel_pad(*array5D, iFrames, iPadY, iPadX);
     mem_free(array5D);
   }
   else
   {
-    error ("free_mem5Dpel_pad_sep: trying to free unused memory",100);
+    error ("free_mem5Dpel_pad: trying to free unused memory",100);
   }
 }
 

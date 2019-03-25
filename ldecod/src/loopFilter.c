@@ -271,7 +271,7 @@ static void DeblockMb(VideoParameters *p_Vid, StorablePicture *p, int MbQAddr)
           if (filterNon8x8LumaEdgesFlag[edge])
           {
             p_Vid->EdgeLoopLumaVer( PLANE_Y, imgY, Strength, MbQ, edge << 2);
-            if(currSlice->is_not_independent)
+            if(currSlice->chroma444_not_separate)
             {
               p_Vid->EdgeLoopLumaVer(PLANE_U, imgUV[0], Strength, MbQ, edge << 2);
               p_Vid->EdgeLoopLumaVer(PLANE_V, imgUV[1], Strength, MbQ, edge << 2);
@@ -317,7 +317,7 @@ static void DeblockMb(VideoParameters *p_Vid, StorablePicture *p, int MbQAddr)
           if (filterNon8x8LumaEdgesFlag[edge])
           {
             p_Vid->EdgeLoopLumaHor( PLANE_Y, imgY, Strength, MbQ, edge << 2, p) ;
-            if(currSlice->is_not_independent)
+            if(currSlice->chroma444_not_separate)
             {
               p_Vid->EdgeLoopLumaHor(PLANE_U, imgUV[0], Strength, MbQ, edge << 2, p);
               p_Vid->EdgeLoopLumaHor(PLANE_V, imgUV[1], Strength, MbQ, edge << 2, p);
@@ -347,7 +347,7 @@ static void DeblockMb(VideoParameters *p_Vid, StorablePicture *p, int MbQAddr)
             {
 
               p_Vid->EdgeLoopLumaHor(PLANE_Y, imgY, Strength, MbQ, MB_BLOCK_SIZE, p) ;
-              if(currSlice->is_not_independent)
+              if(currSlice->chroma444_not_separate)
               {
                 p_Vid->EdgeLoopLumaHor(PLANE_U, imgUV[0], Strength, MbQ, MB_BLOCK_SIZE, p) ;
                 p_Vid->EdgeLoopLumaHor(PLANE_V, imgUV[1], Strength, MbQ, MB_BLOCK_SIZE, p) ;
@@ -559,7 +559,7 @@ static void perform_db(VideoParameters *p_Vid, StorablePicture *p, int MbQAddr)
           if (filterNon8x8LumaEdgesFlag[edge])
           {
             p_Vid->EdgeLoopLumaVer( PLANE_Y, imgY, Strength, MbQ, edge << 2);
-            if(currSlice->is_not_independent)
+            if(currSlice->chroma444_not_separate)
             {
               p_Vid->EdgeLoopLumaVer(PLANE_U, imgUV[0], Strength, MbQ, edge << 2);
               p_Vid->EdgeLoopLumaVer(PLANE_V, imgUV[1], Strength, MbQ, edge << 2);
@@ -604,7 +604,7 @@ static void perform_db(VideoParameters *p_Vid, StorablePicture *p, int MbQAddr)
           if (filterNon8x8LumaEdgesFlag[edge])
           {
             p_Vid->EdgeLoopLumaHor( PLANE_Y, imgY, Strength, MbQ, edge << 2, p) ;
-            if(currSlice->is_not_independent)
+            if(currSlice->chroma444_not_separate)
             {
               p_Vid->EdgeLoopLumaHor(PLANE_U, imgUV[0], Strength, MbQ, edge << 2, p);
               p_Vid->EdgeLoopLumaHor(PLANE_V, imgUV[1], Strength, MbQ, edge << 2, p);
@@ -634,7 +634,7 @@ static void perform_db(VideoParameters *p_Vid, StorablePicture *p, int MbQAddr)
             {
 
               p_Vid->EdgeLoopLumaHor(PLANE_Y, imgY, Strength, MbQ, MB_BLOCK_SIZE, p) ;
-              if(currSlice->is_not_independent)
+              if(currSlice->chroma444_not_separate)
               {
                 p_Vid->EdgeLoopLumaHor(PLANE_U, imgUV[0], Strength, MbQ, MB_BLOCK_SIZE, p) ;
                 p_Vid->EdgeLoopLumaHor(PLANE_V, imgUV[1], Strength, MbQ, MB_BLOCK_SIZE, p) ;

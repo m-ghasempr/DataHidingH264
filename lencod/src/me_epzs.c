@@ -51,7 +51,7 @@ static inline void set_integer_mv(MotionVector *mv)
 ***********************************************************************
 */
 distblk                                            //  ==> minimum motion cost after search
-EPZSPelBlockMotionSearch (Macroblock * currMB,     // <--  current Macroblock
+EPZS_motion_estimation (Macroblock * currMB,     // <--  current Macroblock
                           MotionVector * pred_mv,  // <--  motion vector predictor in sub-pel units
                           MEBlock * mv_block,      // <--  motion vector information
                           distblk min_mcost,       // <--  minimum motion cost (cost for center or huge value)
@@ -161,11 +161,11 @@ EPZSPelBlockMotionSearch (Macroblock * currMB,     // <--  current Macroblock
     //! Add Spatial Predictors in predictor list.
     //! Scheme adds zero, left, top-left, top, top-right. Note that top-left adds very little
     //! in terms of performance and could be removed with little penalty if any.
-    invalid_refs = EPZSSpatialPredictors (p_EPZS, mv_block, 
+    invalid_refs = EPZS_spatial_predictors (p_EPZS, mv_block, 
       list, currMB->list_offset, ref, motion);
 
     if (p_Inp->EPZSSpatialMem)
-      EPZSSpatialMemPredictors (p_EPZS, mv_block, cur_list, &prednum, ref_picture->size_x >> 2);
+      EPZS_spatial_memory_predictors (p_EPZS, mv_block, cur_list, &prednum, ref_picture->size_x >> 2);
 
 #if (MVC_EXTENSION_ENABLE)
     if ( p_Inp->EPZSTemporal[currSlice->view_id] && blocktype < 5 ) 
@@ -174,7 +174,7 @@ EPZSPelBlockMotionSearch (Macroblock * currMB,     // <--  current Macroblock
     if (p_Inp->EPZSTemporal && blocktype < 5)
 #endif
     {
-      EPZSTemporalPredictors (currMB, ref_picture, p_EPZS, mv_block, &prednum, stopCriterion, min_mcost);
+      EPZS_temporal_predictors (currMB, ref_picture, p_EPZS, mv_block, &prednum, stopCriterion, min_mcost);
     }
 
     //! Window Size Based Predictors
@@ -190,7 +190,8 @@ EPZSPelBlockMotionSearch (Macroblock * currMB,     // <--  current Macroblock
     //conditionEPZS = ((ref == 0) && (blocktype < 5) && (min_mcost > stopCriterion)
     //&& (p_Inp->EPZSFixed > 1 || (p_Inp->EPZSFixed && currSlice->slice_type == P_SLICE)));
     //conditionEPZS = ((min_mcost > stopCriterion) && ((ref < 2 && blocktype < 4)
-    conditionEPZS = ((min_mcost > 3 * stopCriterion) && ((ref < 2 && blocktype < 4) || (ref < 1 && blocktype == 4)
+    conditionEPZS = (p_Inp->EPZSFixed == 3 && (currMB->mb_x == 0 || currMB->mb_y == 0))
+      || ((min_mcost > 3 * stopCriterion) && ((ref < 2 && blocktype < 4) || (ref < 1 && blocktype == 4)
       || ((currSlice->structure != FRAME || currMB->list_offset)
       && ref < 3))
       && (p_Inp->EPZSFixed > 1 || (p_Inp->EPZSFixed && currSlice->slice_type == P_SLICE)));
@@ -413,7 +414,7 @@ EPZSPelBlockMotionSearch (Macroblock * currMB,     // <--  current Macroblock
 ***********************************************************************
 */
 distblk                                                 //  ==> minimum motion cost after search
-EPZSPelBlockMotionSearchSubMB (Macroblock * currMB,     // <--  current Macroblock
+EPZS_subMB_motion_estimation  (Macroblock * currMB,     // <--  current Macroblock
                                MotionVector * pred_mv,  // <--  motion vector predictor in sub-pel units
                                MEBlock * mv_block,      // <--  motion vector information
                                distblk min_mcost,       // <--  minimum motion cost (cost for center or huge value)
@@ -522,10 +523,10 @@ EPZSPelBlockMotionSearchSubMB (Macroblock * currMB,     // <--  current Macroblo
     //! Add Spatial Predictors in predictor list.
     //! Scheme adds zero, left, top-left, top, top-right. Note that top-left adds very little
     //! in terms of performance and could be removed with little penalty if any.
-    EPZSSpatialPredictors (p_EPZS, mv_block/*->block*/, list, currMB->list_offset, ref, motion);
+    EPZS_spatial_predictors (p_EPZS, mv_block/*->block*/, list, currMB->list_offset, ref, motion);
 
     if (p_Inp->EPZSSpatialMem)
-      EPZSSpatialMemPredictors (p_EPZS, mv_block, cur_list, &prednum, ref_picture->size_x >> 2);
+      EPZS_spatial_memory_predictors (p_EPZS, mv_block, cur_list, &prednum, ref_picture->size_x >> 2);
 
     //! Blocktype/Reference dependent predictors.
     //! Since already mvs for other blocktypes/references have been computed, we can reuse
@@ -752,17 +753,17 @@ EPZSPelBlockMotionSearchSubMB (Macroblock * currMB,     // <--  current Macroblo
 *    minimum motion cost after search
 ***********************************************************************
 */
-distblk                                               //  ==> minimum motion cost after search
-EPZSBiPredBlockMotionSearch (Macroblock * currMB,     // <--  Current Macroblock
-                             int list,                // <--  reference list
-                             MotionVector * pred_mv1, // <--  motion vector predictor in sub-pel units
-                             MotionVector * pred_mv2, // <--  motion vector predictor in sub-pel units
-                             MotionVector * mv1,      // <--> in: search center (x|y) / out: motion vector (x|y) - in pel units
-                             MotionVector * mv2,      // <--> in: search center (x|y) 
-                             MEBlock * mv_block,      // <--  motion vector information
-                             int search_range,        // <--  1-d search range in pel units
-                             distblk min_mcost,       // <--  minimum motion cost (cost for center or huge value)
-                             int lambda_factor        // <--  lagrangian parameter for determining motion cost
+distblk                                                 //  ==> minimum motion cost after search
+EPZS_bipred_motion_estimation (Macroblock * currMB,     // <--  Current Macroblock
+                               int list,                // <--  reference list
+                               MotionVector * pred_mv1, // <--  motion vector predictor in sub-pel units
+                               MotionVector * pred_mv2, // <--  motion vector predictor in sub-pel units
+                               MotionVector * mv1,      // <--> in: search center (x|y) / out: motion vector (x|y) - in pel units
+                               MotionVector * mv2,      // <--> in: search center (x|y) 
+                               MEBlock * mv_block,      // <--  motion vector information
+                               int search_range,        // <--  1-d search range in pel units
+                               distblk min_mcost,       // <--  minimum motion cost (cost for center or huge value)
+                               int lambda_factor        // <--  lagrangian parameter for determining motion cost
                              )
 {
   Slice *currSlice = currMB->p_Slice;
@@ -827,7 +828,7 @@ EPZSBiPredBlockMotionSearch (Macroblock * currMB,     // <--  Current Macroblock
     //! Add Spatial Predictors in predictor list.
     //! Scheme adds zero, left, top-left, top, top-right. Note that top-left adds very little
     //! in terms of performance and could be removed with little penalty if any.
-    EPZSSpatialPredictors (p_EPZS, mv_block/*->block*/, list, currMB->list_offset, ref, motion);
+    EPZS_spatial_predictors (p_EPZS, mv_block/*->block*/, list, currMB->list_offset, ref, motion);
 
     //! Check all predictors
     for (pos = 0; pos < prednum; ++pos)

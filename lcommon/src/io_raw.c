@@ -68,6 +68,19 @@ static inline int ReadData (int vfile, int framesize_in_bytes, unsigned char *bu
 }
 #endif
 
+static inline int ReadDataV210 (int vfile, int framesize_in_bytes, unsigned char *buf)
+{
+  if (read(vfile, buf, (int) framesize_in_bytes) != (int) framesize_in_bytes)
+  {
+    printf ("read_one_frame: cannot read %d bytes from input file, unexpected EOF!\n", (int) framesize_in_bytes);
+    return 0;
+  }
+  else
+  {
+    return 1;
+  }
+}
+
 
 /*!
  ************************************************************************
@@ -91,12 +104,13 @@ int ReadFrameConcatenated (InputParameters *p_Inp, VideoDataFile *input_file, in
 {
   int file_read = 0;
   int vfile = input_file->f_num;
+  Boolean is_v210 = (input_file->is_interleaved && source->pixel_format == V210);
   unsigned int symbol_size_in_bytes = source->pic_unit_size_shift3;
 
-  const int bytes_y = source->size_cmp[0] * symbol_size_in_bytes;
+  const int bytes_y  = source->size_cmp[0] * symbol_size_in_bytes;
   const int bytes_uv = source->size_cmp[1] * symbol_size_in_bytes;
 
-  const int64 framesize_in_bytes = bytes_y + 2*bytes_uv;
+  const int64 framesize_in_bytes = (is_v210 == TRUE) ? 16 * (source->size_cmp[0] / 6) : bytes_y + 2 * bytes_uv;
   
   // Let us seek directly to the current frame
   if (lseek (vfile, HeaderSize + framesize_in_bytes * (FrameNoInFile + p_Inp->start_frame), SEEK_SET) == -1)
@@ -104,19 +118,27 @@ int ReadFrameConcatenated (InputParameters *p_Inp, VideoDataFile *input_file, in
     snprintf(errortext, ET_SIZE, "read_one_frame: cannot advance file pointer in input file beyond frame %d\n", p_Inp->start_frame + FrameNoInFile);
     error (errortext,-1);
   }
+
   // Here we are at the correct position for the source frame in the file.  
   // Now read it.
   if ((source->pic_unit_size_on_disk & 0x07) == 0)
   {
+    if (is_v210 == TRUE)
+    {
+      file_read = ReadDataV210(vfile, (int) framesize_in_bytes, buf);
+    }
+    else 
+    {
 #if FAST_READ
-    file_read = ReadData (vfile, source, buf);
+      file_read = ReadData (vfile, source, buf);
 #else
-    file_read = ReadData (vfile, (int) framesize_in_bytes, buf);
+      file_read = ReadData (vfile, (int) framesize_in_bytes, buf);
 #endif
+    }
   }
   else
   {
-    printf ("read_one_frame (NOT IMPLEMENTED): pic unit size on disk must be divided by 8");
+    printf ("read_one_frame (NOT IMPLEMENTED): pic unit size on disk must be divisible by 8");
     exit (-1);
   }
   return file_read;

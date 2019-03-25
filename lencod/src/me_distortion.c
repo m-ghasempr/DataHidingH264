@@ -758,7 +758,7 @@ distblk computeSATD(StorablePicture *ref1,
   imgpel *src_tmp = mv_block->orig_pic[0];
   short *d, diff[MB_PIXELS];
   imgpel *src_line, *ref_line;
-
+  
   if ( !mv_block->test8x8 )
   { // 4x4 TRANSFORM
     src_size_x = blocksize_x - BLOCK_SIZE;
@@ -796,7 +796,7 @@ distblk computeSATD(StorablePicture *ref1,
       for (x=0; x<blocksize_x; x += BLOCK_SIZE_8x8 )
       {
         d = diff;
-        ref_line  = UMVLine4X (ref1, y, cand->mv_x + (x<<2));
+        ref_line = UMVLine4X (ref1, y, cand->mv_x + (x<<2));
         src_line = src_tmp + x;
         for (y4 = 0; y4 < BLOCK_SIZE_8x8; y4++ )
         {
@@ -898,7 +898,7 @@ distblk computeSATDWP(StorablePicture *ref1,
       for (x=0; x<blocksize_x; x += BLOCK_SIZE_8x8 )
       {
         d = diff;
-        ref_line  = UMVLine4X (ref1, y, cand->mv_x + (x<<2));
+        ref_line = UMVLine4X (ref1, y, cand->mv_x + (x<<2));
         src_line = src_tmp + x;
         for (y4 = 0; y4 < BLOCK_SIZE_8x8; y4++ )
         {
@@ -1203,7 +1203,7 @@ distblk computeSSE(StorablePicture *ref1,
 
   imgpel *src_line = mv_block->orig_pic[0];
   imgpel *ref_line = UMVLine4X (ref1, cand->mv_y, cand->mv_x);
-
+  
   for (y=0; y<blocksize_y; y++)
   {
     for (x = 0; x < blocksize_x; x+=4)

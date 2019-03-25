@@ -201,8 +201,8 @@ int pps_is_equal(pic_parameter_set_rbsp_t *pps1, pic_parameter_set_rbsp_t *pps2)
       }
   }
 
-  equal &= (pps1->num_ref_idx_l0_active_minus1 == pps2->num_ref_idx_l0_active_minus1);
-  equal &= (pps1->num_ref_idx_l1_active_minus1 == pps2->num_ref_idx_l1_active_minus1);
+  equal &= (pps1->num_ref_idx_l0_default_active_minus1 == pps2->num_ref_idx_l0_default_active_minus1);
+  equal &= (pps1->num_ref_idx_l1_default_active_minus1 == pps2->num_ref_idx_l1_default_active_minus1);
   equal &= (pps1->weighted_pred_flag == pps2->weighted_pred_flag);
   equal &= (pps1->weighted_bipred_idc == pps2->weighted_bipred_idc);
   equal &= (pps1->pic_init_qp_minus26 == pps2->pic_init_qp_minus26);

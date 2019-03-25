@@ -129,7 +129,7 @@ void intra_pred_chroma_mbaff(Macroblock *currMB)
       PixelPos up;        //!< pixel position  p(0,-1)
       PixelPos left[17];  //!< pixel positions p(-1, -1..16)
 
-      int up_avail, left_avail[2], left_up_avail;
+      int up_avail, left_avail[2];
 
       int cr_MB_y = p_Vid->mb_cr_size_y;
       int cr_MB_y2 = (cr_MB_y >> 1);
@@ -142,7 +142,6 @@ void intra_pred_chroma_mbaff(Macroblock *currMB)
       {
         up_avail      = up.available;
         left_avail[0] = left_avail[1] = left[1].available;
-        left_up_avail = left[0].available;
       }
       else
       {
@@ -153,7 +152,6 @@ void intra_pred_chroma_mbaff(Macroblock *currMB)
         for (i = cr_MB_y2, left_avail[1] = 1; i<cr_MB_y;++i)
           left_avail[1]  &= left[i + 1].available ? currSlice->intra_block[left[i + 1].mb_addr]: 0;
 
-        left_up_avail = left[0].available ? currSlice->intra_block[left[0].mb_addr]: 0;
       }
       // DC prediction
       // Note that unlike what is stated in many presentations and papers, this mode does not operate
@@ -211,7 +209,7 @@ void intra_pred_chroma_mbaff(Macroblock *currMB)
     {
       PixelPos left[17];  //!< pixel positions p(-1, -1..16)
 
-      int left_avail[2], left_up_avail;
+      int left_avail[2];
 
       int cr_MB_x = p_Vid->mb_cr_size_x;
       int cr_MB_y = p_Vid->mb_cr_size_y;
@@ -223,7 +221,6 @@ void intra_pred_chroma_mbaff(Macroblock *currMB)
       if (!p_Vid->active_pps->constrained_intra_pred_flag)
       {
         left_avail[0] = left_avail[1] = left[1].available;
-        left_up_avail = left[0].available;
       }
       else
       {
@@ -232,8 +229,6 @@ void intra_pred_chroma_mbaff(Macroblock *currMB)
 
         for (i = cr_MB_y2, left_avail[1] = 1; i<cr_MB_y;++i)
           left_avail[1]  &= left[i + 1].available ? currSlice->intra_block[left[i + 1].mb_addr]: 0;
-
-        left_up_avail = left[0].available ? currSlice->intra_block[left[0].mb_addr]: 0;
       }
       // Horizontal Prediction
       if (!left_avail[0] || !left_avail[1])

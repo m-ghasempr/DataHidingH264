@@ -59,6 +59,9 @@ static distblk compute_sse4x4_cost (VideoParameters *p_Vid, imgpel **cur_img, im
 static distblk compute_satd4x4_cost(VideoParameters *p_Vid, imgpel **cur_img, imgpel **prd_img, int pic_opix_x, distblk min_cost);
 static distblk compute_comp4x4_cost(VideoParameters *p_Vid, imgpel **cur_img, imgpel **prd_img, int pic_opix_x, distblk min_cost);
 
+static distblk rdcost_for_4x4_intra_blocks     (Macroblock *currMB, int* nonzero, int b8, int b4, int ipmode, int lambda, int mostProbableMode, distblk min_rdcost);
+static distblk rdcost_for_4x4_intra_blocks_444 (Macroblock *currMB, int* nonzero, int b8, int b4, int ipmode, int lambda, int mostProbableMode, distblk min_rdcost);
+
 static inline void copy_motion_vectors_MB (Slice *currSlice, RD_DATA *rdopt)
 {
   memcpy(&currSlice->all_mv [LIST_0][0][0][0][0], &rdopt->all_mv [LIST_0][0][0][0][0], 288 * currSlice->max_num_references * sizeof(MotionVector));  
@@ -514,7 +517,7 @@ int CheckReliabilityOfRef (Macroblock *currMB, int block, int list_idx, int ref,
  *    R-D Cost for an 4x4 Intra block
  *************************************************************************************
  */
-distblk rdcost_for_4x4_intra_blocks (Macroblock *currMB,
+static distblk rdcost_for_4x4_intra_blocks (Macroblock *currMB,
                                        int*        nonzero,
                                        int         b8,
                                        int         b4,
@@ -588,17 +591,17 @@ distblk rdcost_for_4x4_intra_blocks (Macroblock *currMB,
 /*!
  *************************************************************************************
  * \brief
- *    R-D Cost for an 4x4 Intra block
+ *    R-D Cost for an 4x4 Intra block (for 4:4:4 formats)
  *************************************************************************************
  */
-distblk rdcost_for_4x4_intra_blocks_444 (Macroblock *currMB,
-                                       int*        nonzero,
-                                       int         b8,
-                                       int         b4,
-                                       int         ipmode,
-                                       int         lambda,
-                                       int         mostProbableMode,
-                                       distblk     min_rdcost)
+static distblk rdcost_for_4x4_intra_blocks_444 (Macroblock *currMB,
+                                                int*        nonzero,
+                                                int         b8,
+                                                int         b4,
+                                                int         ipmode,
+                                                int         lambda,
+                                                int         mostProbableMode,
+                                                distblk     min_rdcost)
 {
   Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currMB->p_Vid;
@@ -2878,18 +2881,14 @@ static void set_stored_macroblock_parameters_sp (Macroblock *currMB)
  */
 void set_ref_and_motion_vectors_P_slice (Macroblock *currMB, PicMotionParams **motion, Info8x8 *part, int block)
 {
-  Slice *currSlice = currMB->p_Slice;
-
   int mode = part->mode;
-  int     j = 0, i;
-  int     pmode   = (mode==1||mode==2||mode==3 ? mode : 4);
-  int     part_size_x = part_size[pmode][0];
-  int     part_size_y = part_size[pmode][1];
-  int     j0      = ((block >> 1)<<1);
-  int     i0      = ((block & 0x01)<<1);
-  int     i1      = i0 + part_size_x;
-  int     j1      = j0 + part_size_y;
-  int     block_x, block_y;
+  int j = 0, i;
+  int pmode   = (mode==1||mode==2||mode==3 ? mode : 4);
+  int j0      = ((block >> 1)<<1);
+  int i0      = ((block & 0x01)<<1);
+  int i1      = i0 + part_size[pmode][0];
+  int j1      = j0 + part_size[pmode][1];  
+  PicMotionParams *mv = NULL;
 
   if (part->pdir < 0)
   {
@@ -2897,28 +2896,31 @@ void set_ref_and_motion_vectors_P_slice (Macroblock *currMB, PicMotionParams **m
     {
       for (i = currMB->block_x + i0; i < currMB->block_x + i1; i++)
       {
-        motion[j][i].ref_pic[LIST_0] = NULL;
-        motion[j][i].ref_pic[LIST_1] = NULL;
-        motion[j][i].mv     [LIST_0] = zero_mv;
-        motion[j][i].mv     [LIST_1] = zero_mv;
-        motion[j][i].ref_idx[LIST_0] = -1;
-        motion[j][i].ref_idx[LIST_1] = -1;
+        mv = &motion[j][i];
+        mv->ref_pic[LIST_0] = NULL;
+        mv->ref_pic[LIST_1] = NULL;
+        mv->mv     [LIST_0] = zero_mv;
+        mv->mv     [LIST_1] = zero_mv;
+        mv->ref_idx[LIST_0] = -1;
+        mv->ref_idx[LIST_1] = -1;
       }
     }
     return;
   }
   else
   {
+    Slice *currSlice = currMB->p_Slice;
+    int block_y;
     int fwref = part->ref[LIST_0];
     for (j = j0; j < j1; j++)
     {
       block_y = currMB->block_y + j;
       for (i = i0; i < i1; i++)
       {
-        block_x = currMB->block_x + i;
-        motion[block_y][block_x].ref_pic[LIST_0] = currSlice->listX[LIST_0+currMB->list_offset][fwref];;
-        motion[block_y][block_x].mv     [LIST_0] = currSlice->all_mv[LIST_0][fwref][mode][j][i];
-        motion[block_y][block_x].ref_idx[LIST_0] = (char) fwref;
+        mv = &motion[block_y][currMB->block_x + i];
+        mv->ref_pic[LIST_0] = currSlice->listX[LIST_0+currMB->list_offset][fwref];;
+        mv->mv     [LIST_0] = currSlice->all_mv[LIST_0][fwref][mode][j][i];
+        mv->ref_idx[LIST_0] = (char) fwref;
       }
     }
     return;
@@ -2934,18 +2936,14 @@ void set_ref_and_motion_vectors_P_slice (Macroblock *currMB, PicMotionParams **m
  */
 static void set_ref_and_motion_vectors_B_slice (Macroblock *currMB, PicMotionParams **motion, Info8x8 *part, int block)
 {
-  Slice *currSlice = currMB->p_Slice;
-  VideoParameters *p_Vid = currMB->p_Vid;
-
   int mode = part->mode;
-  int     i, j=0;
-  int     pmode   = (mode==1||mode==2||mode==3 ? mode : 4);
-  int     part_size_x = part_size[pmode][0];
-  int     part_size_y = part_size[pmode][1];
-  int     j0      = ((block >> 1)<<1);
-  int     i0      = ((block & 0x01)<<1);
-  int     i1      = i0 + part_size_x;
-  int     j1      = j0 + part_size_y;
+  int i, j=0;
+  int pmode   = (mode==1||mode==2||mode==3 ? mode : 4);
+  int j0      = ((block >> 1)<<1);
+  int i0      = ((block & 0x01)<<1);
+  int i1      = i0 + part_size[pmode][0];
+  int j1      = j0 + part_size[pmode][1];
+  PicMotionParams *mv = NULL;
 
   if (part->pdir < 0)
   {
@@ -2953,19 +2951,23 @@ static void set_ref_and_motion_vectors_B_slice (Macroblock *currMB, PicMotionPar
     {
       for (i = currMB->block_x + i0; i < currMB->block_x + i1; i++)
       {
-        motion[j][i].ref_pic[LIST_0] = NULL;
-        motion[j][i].ref_pic[LIST_1] = NULL;
-        motion[j][i].mv     [LIST_0] = zero_mv;
-        motion[j][i].mv     [LIST_1] = zero_mv;
-        motion[j][i].ref_idx[LIST_0] = -1;
-        motion[j][i].ref_idx[LIST_1] = -1;
+        mv = &motion[j][i];
+        mv->ref_pic[LIST_0] = NULL;
+        mv->ref_pic[LIST_1] = NULL;
+        mv->mv     [LIST_0] = zero_mv;
+        mv->mv     [LIST_1] = zero_mv;
+        mv->ref_idx[LIST_0] = -1;
+        mv->ref_idx[LIST_1] = -1;
       }
     }
     return;
   }
   else
   {
-    int     block_x, block_y;
+    Slice *currSlice = currMB->p_Slice;
+    VideoParameters *p_Vid = currMB->p_Vid;
+
+    int block_x, block_y;
 
     if ((part->pdir == 0 || part->pdir == 2))
     {
@@ -3465,66 +3467,6 @@ void store_8x8_motion_vectors_b_slice(Slice *currSlice, int dir, int block8x8, I
   }
 }
 
-/*!
- ************************************************************************
- * \brief
- *    Makes the decision if 8x8 tranform will be used (for RD-off)
- ************************************************************************
- */
-int GetBestTransformP8x8(Macroblock *currMB)
-{ 
-  if(currMB->p_Inp->Transform8x8Mode == 2) //always use the 8x8 transform
-    return 1;
-  else
-  {
-    VideoParameters *p_Vid = currMB->p_Vid;  
-    RDOPTStructure  *p_RDO = currMB->p_Slice->p_RDO;
-
-    short diff16[4][16];
-    short diff64[64];
-    int     pic_pix_y, pic_pix_x, i, j;
-    int     mb_y, mb_x, block8x8;
-    distblk cost8x8=0, cost4x4=0;
-
-    for (block8x8 = 0; block8x8 < 4; block8x8++)
-    {
-      short *tmp64 = diff64;
-      short *tmp16[4]; //{diff16[0], diff16[1], diff16[2], diff16[3]};
-      short source_pel, index;
-
-      tmp16[0] = diff16[0];
-      tmp16[1] = diff16[1];
-      tmp16[2] = diff16[2];
-      tmp16[3] = diff16[3];
-
-      mb_y = (block8x8 >> 1) << 3;
-      mb_x = (block8x8 & 0x01) << 3;
-
-      //===== loop over 8x8 blocks =====
-      pic_pix_y = currMB->opix_y;
-      pic_pix_x = currMB->pix_x;
-      //===== get displaced frame difference ======
-      for (j = mb_y; j < 8 + mb_y; j++)
-      {
-        for (i = mb_x; i < 8 + mb_x; i++)
-        {
-          index = (short) (2 * ((j - mb_y)> 3) + ((i - mb_x)> 3));
-          source_pel = p_Vid->pCurImg[pic_pix_y + j][pic_pix_x + i];
-          *(tmp16[index])++ = (short) (source_pel - p_RDO->tr4x4->mpr8x8[j][i]);
-          *tmp64++          = (short) (source_pel - p_RDO->tr8x8->mpr8x8[j][i]);
-        }
-      }
-
-      cost4x4 += p_Vid->distortion4x4 (diff16[0], DISTBLK_MAX);
-      cost4x4 += p_Vid->distortion4x4 (diff16[1], DISTBLK_MAX);
-      cost4x4 += p_Vid->distortion4x4 (diff16[2], DISTBLK_MAX);
-      cost4x4 += p_Vid->distortion4x4 (diff16[3], DISTBLK_MAX);
-      cost8x8 += p_Vid->distortion8x8 (diff64   , DISTBLK_MAX);
-    }
-
-    return (cost8x8 < cost4x4);
-  }
-}
 
 /*!
 ************************************************************************

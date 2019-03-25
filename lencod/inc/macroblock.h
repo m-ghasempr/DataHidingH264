@@ -76,29 +76,29 @@ extern void  write_macroblock (Macroblock* currMB, int eos_bit);
 
 extern int  reset_block(Macroblock* currMB, int *cbp, int64 *cbp_blk, int block8x8);
 
-extern int  luma_residual_coding_16x16     (Macroblock* currMB, int, int[2]);
-extern int  luma_residual_coding_8x8       (Macroblock* currMB, int*, int64*, int, short, int[2], char *);
-extern void luma_residual_coding           (Macroblock *currMB);
-extern void luma_residual_coding_sp        (Macroblock *currMB);
-extern void chroma_residual_coding         (Macroblock *currMB);
-extern void chroma_residual_coding_sp      (Macroblock *currMB);
-extern void chroma_residual_coding_si      (Macroblock *currMB);
-extern void intra_chroma_RD_decision       (Macroblock *currMB, RD_PARAMS *);
-extern void intra_chroma_RD_decision_mbaff (Macroblock *currMB, RD_PARAMS *);
+extern int  luma_residual_coding_16x16     (Macroblock *, int, int[2]);
+extern int  luma_residual_coding_8x8       (Macroblock *, int*, int64*, int, short, int[2], char *);
+extern void luma_residual_coding           (Macroblock *);
+extern void luma_residual_coding_sp        (Macroblock *);
+extern void chroma_residual_coding         (Macroblock *);
+extern void chroma_residual_coding_sp      (Macroblock *);
+extern void chroma_residual_coding_si      (Macroblock *);
+extern void intra_chroma_RD_decision       (Macroblock *, RD_PARAMS *);
+extern void intra_chroma_RD_decision_mbaff (Macroblock *, RD_PARAMS *);
 
-extern byte TransformDecision     (Macroblock *currMB, int, distblk*);
-extern int  B8Mode2Value          (Slice *currSlice, short b8mode, short b8pdir);
+extern byte transform_decision             (Macroblock *, int, distblk*);
+extern int  B8Mode2Value                   (Slice *, short, short);
 
-extern int  writeMBLayerPSlice    (Macroblock *currMB, int rdopt, int *coeff_rate);
-extern int  writeMBLayerBSlice    (Macroblock *currMB, int rdopt, int *coeff_rate);
-extern int  writeMBLayerISlice    (Macroblock *currMB, int rdopt, int *coeff_rate);
+extern int  write_p_slice_MB_layer         (Macroblock *, int , int *);
+extern int  write_b_slice_MB_layer         (Macroblock *, int , int *);
+extern int  write_i_slice_MB_layer         (Macroblock *, int , int *);
 
 extern void write_terminating_bit (Slice* currSlice, int bit);
 
 extern int writeMotionInfo2NAL (Macroblock* currMB);
-extern int  write_pslice_motion_info_to_NAL (Macroblock* currMB);
-extern int  write_bslice_motion_info_to_NAL (Macroblock* currMB);
-extern int  write_pslice_motion_info_to_NAL (Macroblock* currMB);
+extern int  write_p_slice_motion_info_to_NAL (Macroblock* currMB);
+extern int  write_b_slice_motion_info_to_NAL  (Macroblock* currMB);
+extern int  write_p_slice_motion_info_to_NAL (Macroblock* currMB);
 extern int  writeReferenceFrame   (Macroblock *currMB, int i, int j, int list_idx, int  ref);
 extern int  writeMotionVector8x8  (Macroblock *currMB, int  i0, int  j0, int  i1, int  j1, int  refframe, int  list_idx, int  mv_mode, short bipred_me);
 

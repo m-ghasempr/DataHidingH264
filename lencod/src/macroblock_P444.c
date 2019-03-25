@@ -39,7 +39,8 @@ int luma_residual_coding_p444_16x16 (Macroblock* currMB,  //!< Current Macrobloc
   int   *cbp     = &(currMB->cbp);
   int64 *cbp_blk = &(currMB->cbp_blk);
   Slice *currSlice = currMB->p_Slice;
-  VideoParameters *p_Vid = currMB->p_Vid;  
+  VideoParameters *p_Vid = currMB->p_Vid;
+  DecodedPictureBuffer *p_Dpb = p_Vid->p_Dpb_layer[p_Vid->dpb_layer_id];
   int    i, j, nonzero = 0, cbp_blk_mask;
   int    coeff_cost = 0;
   int    mb_y       = (block8x8 >> 1) << 3;
@@ -55,7 +56,7 @@ int luma_residual_coding_p444_16x16 (Macroblock* currMB,  //!< Current Macrobloc
   //memset( currSlice->cofAC[block8x8][0][0], 0, 4 * 2 * 65 * sizeof(int));
 
   //===== luma prediction ======
-  luma_prediction (currMB, mb_x, mb_y, 8, 8, p_dir, list_mode, ref_idx, bipred_me); 
+  p_Dpb->pf_luma_prediction (currMB, mb_x, mb_y, 8, 8, p_dir, list_mode, ref_idx, bipred_me); 
 
   //===== compute prediction residual ======            
   compute_residue (&p_Vid->pCurImg[currMB->opix_y + mb_y], &currSlice->mb_pred[0][mb_y], &currSlice->mb_ores[0][mb_y], mb_x, currMB->pix_x + mb_x, 8, 8);
@@ -63,7 +64,7 @@ int luma_residual_coding_p444_16x16 (Macroblock* currMB,  //!< Current Macrobloc
   for (uv = PLANE_U; uv <= PLANE_V; ++uv)
   {
     select_plane(p_Vid, uv);
-    chroma_prediction (currMB, uv - 1, mb_x, mb_y, 8, 8, p_dir, list_mode[0], list_mode[1], ref_idx[0], ref_idx[1], bipred_me);
+    p_Dpb->pf_chroma_prediction (currMB, uv - 1, mb_x, mb_y, 8, 8, p_dir, list_mode[0], list_mode[1], ref_idx[0], ref_idx[1], bipred_me);
 
     //===== compute prediction residual ======            
     compute_residue(&p_Vid->pImgOrg[uv][currMB->opix_y + mb_y], &currSlice->mb_pred[uv][mb_y], &currSlice->mb_ores[uv][mb_y], mb_x, currMB->pix_x + mb_x, 8, 8);
@@ -203,7 +204,8 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
                                    char  *ref_idx)     //!< reference pictures for each list
 {
   Slice *currSlice = currMB->p_Slice;
-  VideoParameters *p_Vid = currSlice->p_Vid;  
+  VideoParameters *p_Vid = currSlice->p_Vid;
+  DecodedPictureBuffer *p_Dpb = p_Vid->p_Dpb_layer[p_Vid->dpb_layer_id];
   int    block_y, block_x, pic_pix_x, nonzero = 0, cbp_blk_mask;
   int    coeff_cost = 0;
   int    mb_y       = (block8x8 >> 1) << 3;
@@ -223,7 +225,7 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
   {
     if (((p_dir == 0 || p_dir == 2 )&& list_mode[0] < 5) || ((p_dir == 1 || p_dir == 2 ) && list_mode[1] < 5))
     {
-      luma_prediction (currMB, mb_x, mb_y, 8, 8, p_dir, list_mode, ref_idx, bipred_me); 
+      p_Dpb->pf_luma_prediction (currMB, mb_x, mb_y, 8, 8, p_dir, list_mode, ref_idx, bipred_me); 
 
       //===== compute prediction residual ======            
       compute_residue (&p_Vid->pCurImg[currMB->opix_y + mb_y], &currSlice->mb_pred[0][mb_y], &currSlice->mb_ores[0][mb_y], mb_x, currMB->pix_x + mb_x, 8, 8);
@@ -239,7 +241,7 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
         //===== prediction of 4x4 block =====
         if (!(((p_dir == 0 || p_dir == 2 )&& list_mode[0] < 5) || ((p_dir == 1 || p_dir == 2 ) && list_mode[1] < 5)))
         {
-          luma_prediction (currMB, block_x, block_y, 4, 4, p_dir, list_mode, ref_idx, bipred_me);
+          p_Dpb->pf_luma_prediction (currMB, block_x, block_y, 4, 4, p_dir, list_mode, ref_idx, bipred_me);
 
           //===== compute prediction residual ======            
           compute_residue(&p_Vid->pCurImg[currMB->opix_y + block_y], &currSlice->mb_pred[0][block_y], &currSlice->mb_ores[0][block_y], block_x, pic_pix_x, 4, 4);
@@ -248,7 +250,7 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
         for (uv = PLANE_U; uv <= PLANE_V; ++uv)
         {
           select_plane(p_Vid, uv);
-          chroma_prediction (currMB, uv - 1, block_x, block_y, 4, 4, p_dir, list_mode[0], list_mode[1], ref_idx[0], ref_idx[1], bipred_me);
+          p_Dpb->pf_chroma_prediction (currMB, uv - 1, block_x, block_y, 4, 4, p_dir, list_mode[0], list_mode[1], ref_idx[0], ref_idx[1], bipred_me);
 
           //===== compute prediction residual ======            
           compute_residue(&p_Vid->pImgOrg[uv][currMB->opix_y + block_y], &currSlice->mb_pred[uv][block_y], &currSlice->mb_ores[uv][block_y], block_x, pic_pix_x, 4, 4);
@@ -299,7 +301,7 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
     cbp_blk_mask = (block_x>>2) + block_y;
 
     //===== prediction of 4x4 block =====
-    luma_prediction (currMB, block_x, block_y, 8, 8, p_dir, list_mode, ref_idx, bipred_me);
+    p_Dpb->pf_luma_prediction (currMB, block_x, block_y, 8, 8, p_dir, list_mode, ref_idx, bipred_me);
 
     //===== compute prediction residual ======            
     compute_residue (&p_Vid->pCurImg[currMB->opix_y + block_y], &currSlice->mb_pred[0][block_y], &currSlice->mb_ores[0][block_y], block_x, pic_pix_x, 8, 8);
@@ -307,7 +309,7 @@ int luma_residual_coding_p444_8x8 (Macroblock* currMB,  //!< Current Macroblock 
     for (uv = PLANE_U; uv <= PLANE_V; ++uv)
     {
       select_plane(p_Vid, (ColorPlane) uv);
-      chroma_prediction (currMB, uv - 1, block_x, block_y, 8, 8, p_dir, list_mode[0], list_mode[1], ref_idx[0], ref_idx[1], bipred_me);
+      p_Dpb->pf_chroma_prediction (currMB, uv - 1, block_x, block_y, 8, 8, p_dir, list_mode[0], list_mode[1], ref_idx[0], ref_idx[1], bipred_me);
 
       //===== compute prediction residual ======            
       compute_residue (&p_Vid->pImgOrg[uv][currMB->opix_y + block_y], &currSlice->mb_pred[uv][block_y], &currSlice->mb_ores[uv][block_y], block_x, pic_pix_x, 8, 8);

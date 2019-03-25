@@ -1,3 +1,13 @@
+Changes in Version JM 18.1 (since JM 18.0)
+------------------------------------------
+- encoder/decoder: Direct Mode updates (YHe/KS)
+- encoder/decoder: MVC (Stereo High Profile) Interlace Bug fixes (PeP/YHe)
+- encoder: Coding structure updates and bug fixes (AL/AT)
+- encoder: On the Fly Interpolation for ME/MC (JlT/AL/AT)
+- encoder/decoder: Architecture and various software cleanups and naming conventions (KS/AT)
+- encoder/decoder: DPB code updates  (AT/PeP)
+- decoder: Predictive High 444 bug fixes (KS/AT/JjC/JGG)
+
 Changes in Version JM 18.0 (since JM 17.2)
 ------------------------------------------
 - MVC decoded picture buffer separation (YHe/AT)
@@ -1431,8 +1441,11 @@ JA      James Au                james@ubvideo.com
 JaB     James Bassett           jbas021@aucklanduni.ac.nz
 JB      Jill Boyce              BoyceJ@tce.com
 JC      John Cox                jc@sj.co.uk
+JGG     Jason Garret-Glaser     jason@x264.com
+JjC     Jianjun Chen            cjj730@hotmail.com
 JK      Jeong Kwon Kim          kjk@mcubeworks.com
 JL      Jani Lainema            Jani.Lainema@nokia.com
+JlT     Julien Le Tanou         jletanou@gmail.com
 JS      Joonho Song             jhsong@varovision.com
 JSa     Jose Sanches            jose.sanches@st.com
 JX      Jian Feng Xu            fenax@video.mdc.tsinghua.edu.cn

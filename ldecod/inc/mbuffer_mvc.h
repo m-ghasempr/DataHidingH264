@@ -22,7 +22,6 @@
 
 #if (MVC_EXTENSION_ENABLE)
 extern void reorder_lists_mvc     (Slice * currSlice, int currPOC);
-extern void init_lists_mvc        (Slice *currSlice);
 extern void init_lists_p_slice_mvc(Slice *currSlice);
 extern void init_lists_b_slice_mvc(Slice *currSlice);
 extern void init_lists_i_slice_mvc(Slice *currSlice);

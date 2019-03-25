@@ -203,8 +203,8 @@ void UMHEX_free_mem(VideoParameters *p_Vid, InputParameters *p_Inp)
 * int       pic_pix_y,    // <--  absolute y-coordinate of regarded AxB block
 * int       blocktype,    // <--  block type (1-16x16 ... 7-4x4)
 * int       pred_mv[2],   // <--  motion vector predictor (x|y) in sub-pel units
-* MotionVector   *mv,        //  --> motion vector (x|y) - in pel units
-* int       search_range, // <--  1-d search range in pel units
+* MotionVector   *mv,        //  --> motion vector (x|y) - in sub-pel units
+* int       search_range, // <--  1-d search range in sub-pel units
 * int       min_mcost,    // <--  minimum motion cost (cost for center or huge value)
 * int       lambda_factor // <--  lagrangian parameter for determining motion cost
 * \par
@@ -263,8 +263,8 @@ UMHEXIntegerPelBlockMotionSearch  (Macroblock *currMB,     // <--  current Macro
   short pic_pix_y = mv_block->pos_y_padded;
   pred.mv_x   = pic_pix_x + pred_mv->mv_x;       // predicted position x (in sub-pel units)
   pred.mv_y   = pic_pix_y + pred_mv->mv_y;       // predicted position y (in sub-pel units)
-  center.mv_x = pic_pix_x + mv->mv_x;            // center position x (in pel units)
-  center.mv_y = pic_pix_y + mv->mv_y;            // center position y (in pel units)
+  center.mv_x = pic_pix_x + mv->mv_x;            // center position x (in sub-pel units)
+  center.mv_y = pic_pix_y + mv->mv_y;            // center position y (in sub-pel units)
 
 
 
@@ -628,7 +628,7 @@ UMHEXSubPelBlockME (Macroblock *currMB,        // <-- Current Macroblock
   }
   else
   {
-    min_mcost =  SubPelBlockMotionSearch (currMB, pred_mv, mv_block, min_mcost, lambda);
+    min_mcost =  sub_pel_motion_estimation (currMB, pred_mv, mv_block, min_mcost, lambda);
   }
 
   return min_mcost;
@@ -834,10 +834,10 @@ UMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  current
                                         int       list,          // <--  current reference list
                                         MotionVector *pred_mv1,  // <--  motion vector predictor (x|y) in sub-pel units
                                         MotionVector *pred_mv2,  // <--  motion vector predictor (x|y) in sub-pel units
-                                        MotionVector  *mv1,      // <--> in: search center (x|y) / out: motion vector (x|y) - in pel units
+                                        MotionVector  *mv1,      // <--> in: search center (x|y) / out: motion vector (x|y) - in sub-pel units
                                         MotionVector *mv2,       // <--> in: search center (x|y) 
                                         MEBlock *mv_block,       // <--  motion vector information
-                                        int       search_range,  // <--  1-d search range in pel units
+                                        int       search_range,  // <--  1-d search range in sub-pel units
                                         distblk       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
                                         int       lambda_factor  // <--  lagrangian parameter for determining motion cost
                                         )

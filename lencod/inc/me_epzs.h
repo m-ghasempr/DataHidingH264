@@ -42,12 +42,11 @@ static const MotionVector search_point_hp[10] = {{0,0},{-2,0}, {0,2}, {2,0},  {0
 static const MotionVector search_point_qp[10] = {{0,0},{-1,0}, {0,1}, {1,0},  {0,-1}, {-1,1},  {1,1},  {1,-1}, {-1,-1}, {-1,1}};
 
 // Functions
-extern distblk EPZSPelBlockMotionSearch      (Macroblock *, MotionVector *, MEBlock *, distblk, int);
-extern distblk EPZSPelBlockMotionSearchSubMB (Macroblock *, MotionVector *, MEBlock *, distblk, int);
-extern distblk EPZSSubPelBlockMotionSearch   (Macroblock *, MotionVector *, MEBlock *mv_block, distblk, int*);
-extern distblk EPZSSubPelBlockSearchBiPred   (Macroblock *,  MEBlock *mv_block, int list, 
-                                         MotionVector *pred_mv1, MotionVector *pred_mv2, MotionVector *mv1, MotionVector *mv2, distblk min_mcost, int *lambda_factor);
-extern distblk EPZSBiPredBlockMotionSearch   (Macroblock *, int, MotionVector *, MotionVector *, MotionVector *, MotionVector *, MEBlock *,  int, distblk, int);
+extern distblk EPZS_motion_estimation                (Macroblock *, MotionVector *, MEBlock *, distblk, int);
+extern distblk EPZS_subMB_motion_estimation          (Macroblock *, MotionVector *, MEBlock *, distblk, int);
+extern distblk EPZS_sub_pel_motion_estimation        (Macroblock *, MotionVector *, MEBlock *, distblk, int*);
+extern distblk EPZS_sub_pel_bipred_motion_estimation (Macroblock *, MEBlock *, int list, MotionVector *, MotionVector *, MotionVector *, MotionVector *, distblk, int *);
+extern distblk EPZS_bipred_motion_estimation         (Macroblock *, int, MotionVector *, MotionVector *, MotionVector *, MotionVector *, MEBlock *,  int, distblk, int);
 
 
 #endif

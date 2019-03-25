@@ -100,7 +100,7 @@ static void get_strength_ver(Macroblock *MbQ, int edge, int mvlimit, StorablePic
   if ((currSlice->slice_type==SP_SLICE)||(currSlice->slice_type==SI_SLICE) )
   {
     // Set strength to either 3 or 4 regardless of pixel position
-    StrValue = (edge == 0) ? 4 : 3;    
+    StrValue = (edge == 0) ? 4 : 3;
     memset(Strength, (byte) StrValue, BLOCK_SIZE * sizeof(byte));
   }
   else
@@ -1419,7 +1419,7 @@ static void perform_db_normal(VideoParameters *p_Vid, StorablePicture *p, int Mb
   }
   else
   {
-    if(MbQ->p_Slice->is_not_independent)
+    if(MbQ->p_Slice->chroma444_not_separate)
       perform_db_dep_normal(MbQ, p);
     else
       perform_db_ind_normal(MbQ, p);

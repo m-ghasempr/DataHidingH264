@@ -34,6 +34,66 @@
 #include "mc_prediction.h"
 #include "rd_intra_jm.h"
 
+/*!
+ ************************************************************************
+ * \brief
+ *    RDOff decision between 4x4 and 8x8 transform
+ ************************************************************************
+ */
+static int get_best_transform_8x8(Macroblock *currMB)
+{ 
+  if(currMB->p_Inp->Transform8x8Mode == 2) //always use the 8x8 transform
+    return 1;
+  else
+  {
+    VideoParameters *p_Vid = currMB->p_Vid;  
+    RDOPTStructure  *p_RDO = currMB->p_Slice->p_RDO;
+
+    short diff16[4][16];
+    short diff64[64];
+    int     pic_pix_y, pic_pix_x, i, j;
+    int     mb_y, mb_x, block8x8;
+    distblk cost8x8=0, cost4x4=0;
+
+    for (block8x8 = 0; block8x8 < 4; block8x8++)
+    {
+      short *tmp64 = diff64;
+      short *tmp16[4]; //{diff16[0], diff16[1], diff16[2], diff16[3]};
+      short source_pel, index;
+
+      tmp16[0] = diff16[0];
+      tmp16[1] = diff16[1];
+      tmp16[2] = diff16[2];
+      tmp16[3] = diff16[3];
+
+      mb_y = (block8x8 >> 1) << 3;
+      mb_x = (block8x8 & 0x01) << 3;
+
+      //===== loop over 8x8 blocks =====
+      pic_pix_y = currMB->opix_y;
+      pic_pix_x = currMB->pix_x;
+      //===== get displaced frame difference ======
+      for (j = mb_y; j < 8 + mb_y; j++)
+      {
+        for (i = mb_x; i < 8 + mb_x; i++)
+        {
+          index = (short) (2 * ((j - mb_y)> 3) + ((i - mb_x)> 3));
+          source_pel = p_Vid->pCurImg[pic_pix_y + j][pic_pix_x + i];
+          *(tmp16[index])++ = (short) (source_pel - p_RDO->tr4x4->mpr8x8[j][i]);
+          *tmp64++          = (short) (source_pel - p_RDO->tr8x8->mpr8x8[j][i]);
+        }
+      }
+
+      cost4x4 += p_Vid->distortion4x4 (diff16[0], DISTBLK_MAX);
+      cost4x4 += p_Vid->distortion4x4 (diff16[1], DISTBLK_MAX);
+      cost4x4 += p_Vid->distortion4x4 (diff16[2], DISTBLK_MAX);
+      cost4x4 += p_Vid->distortion4x4 (diff16[3], DISTBLK_MAX);
+      cost8x8 += p_Vid->distortion8x8 (diff64   , DISTBLK_MAX);
+    }
+
+    return (cost8x8 < cost4x4);
+  }
+}
 
 /*!
 *************************************************************************************
@@ -185,7 +245,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
         if (p_Inp->Transform8x8Mode) //for inter rd-off, set 8x8 to do 8x8 transform
         {
           currSlice->set_modes_and_refs_for_blocks(currMB, (short) mode);
-          currMB->luma_transform_size_8x8_flag = (byte) TransformDecision(currMB, -1, &cost);
+          currMB->luma_transform_size_8x8_flag = (byte) transform_decision(currMB, -1, &cost);
         }
 
         if (cost < min_cost)
@@ -272,7 +332,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
           }
           else
           {
-            if (GetBestTransformP8x8(currMB) == 0)
+            if (get_best_transform_8x8(currMB) == 0)
             {
               min_cost = p_RDO->tr4x4->mb_p8x8_cost;
               currMB->luma_transform_size_8x8_flag = FALSE;

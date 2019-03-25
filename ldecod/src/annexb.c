@@ -138,12 +138,12 @@ static inline int FindStartCode (unsigned char *Buf, int zeros_in_startcode)
  *  \note Side-effect: Returns length of start-code in bytes.
  *
  * \note
- *   GetAnnexbNALU expects start codes at byte aligned positions in the file
+ *   get_annex_b_NALU expects start codes at byte aligned positions in the file
  *
  ************************************************************************
  */
 
-int GetAnnexbNALU (VideoParameters *p_Vid, NALU_t *nalu, ANNEXB_t *annex_b)
+int get_annex_b_NALU (VideoParameters *p_Vid, NALU_t *nalu, ANNEXB_t *annex_b)
 {
   int i;
   int info2 = 0, info3 = 0, pos = 0;
@@ -178,14 +178,14 @@ int GetAnnexbNALU (VideoParameters *p_Vid, NALU_t *nalu, ANNEXB_t *annex_b)
     }
     else
     {
-      printf( "GetAnnexbNALU can't read start code\n");
+      printf( "get_annex_b_NALU can't read start code\n");
       return -1;
     }
   }  
 
   if(*(pBuf - 1) != 1 || pos < 3)
   {
-    printf ("GetAnnexbNALU: no Start Code at the beginning of the NALU, return -1\n");
+    printf ("get_annex_b_NALU: no Start Code at the beginning of the NALU, return -1\n");
     return -1;
   }
 
@@ -204,7 +204,7 @@ int GetAnnexbNALU (VideoParameters *p_Vid, NALU_t *nalu, ANNEXB_t *annex_b)
   //of the previous byte stream NAL unit.
   if(!annex_b->IsFirstByteStreamNALU && LeadingZero8BitsCount > 0)
   {
-    printf ("GetAnnexbNALU: The leading_zero_8bits syntax can only be present in the first byte stream NAL unit, return -1\n");
+    printf ("get_annex_b_NALU: The leading_zero_8bits syntax can only be present in the first byte stream NAL unit, return -1\n");
     return -1;
   }
 
@@ -226,7 +226,7 @@ int GetAnnexbNALU (VideoParameters *p_Vid, NALU_t *nalu, ANNEXB_t *annex_b)
       nalu->nal_unit_type     = (NaluType) ((*(nalu->buf)) & 0x1f);
       annex_b->nextstartcodebytes = 0;
 
-      // printf ("GetAnnexbNALU, eof case: pos %d nalu->len %d, nalu->reference_idc %d, nal_unit_type %d \n", pos, nalu->len, nalu->nal_reference_idc, nalu->nal_unit_type);
+      // printf ("get_annex_b_NALU, eof case: pos %d nalu->len %d, nalu->reference_idc %d, nal_unit_type %d \n", pos, nalu->len, nalu->nal_reference_idc, nalu->nal_unit_type);
 
 #if TRACE
       fprintf (p_Dec->p_trace, "\n\nLast NALU in File\n\n");
@@ -282,7 +282,7 @@ int GetAnnexbNALU (VideoParameters *p_Vid, NALU_t *nalu, ANNEXB_t *annex_b)
   nalu->lost_packets = 0;
 
   
-  //printf ("GetAnnexbNALU, regular case: pos %d nalu->len %d, nalu->reference_idc %d, nal_unit_type %d \n", pos, nalu->len, nalu->nal_reference_idc, nalu->nal_unit_type);
+  //printf ("get_annex_b_NALU, regular case: pos %d nalu->len %d, nalu->reference_idc %d, nal_unit_type %d \n", pos, nalu->len, nalu->nal_reference_idc, nalu->nal_unit_type);
 #if TRACE
   fprintf (p_Dec->p_trace, "\n\nAnnex B NALU w/ %s startcode, len %d, forbidden_bit %d, nal_reference_idc %d, nal_unit_type %d\n\n",
     nalu->startcodeprefix_len == 4?"long":"short", nalu->len, nalu->forbidden_bit, nalu->nal_reference_idc, nalu->nal_unit_type);
@@ -303,11 +303,11 @@ int GetAnnexbNALU (VideoParameters *p_Vid, NALU_t *nalu, ANNEXB_t *annex_b)
  *    none
  ************************************************************************
  */
-void OpenAnnexBFile (char *fn, ANNEXB_t *annex_b)
+void open_annex_b (char *fn, ANNEXB_t *annex_b)
 {
   if (NULL != annex_b->iobuffer)
   {
-    error ("OpenAnnexBFile: tried to open Annex B file twice",500);
+    error ("open_annex_b: tried to open Annex B file twice",500);
   }
   if ((annex_b->BitStreamFile = open(fn, OPENFLAGS_READ)) == -1)
   {
@@ -319,7 +319,7 @@ void OpenAnnexBFile (char *fn, ANNEXB_t *annex_b)
   annex_b->iobuffer = malloc (annex_b->iIOBufferSize);
   if (NULL == annex_b->iobuffer)
   {
-    error ("OpenAnnexBFile: cannot allocate IO buffer",500);
+    error ("open_annex_b: cannot allocate IO buffer",500);
   }
   annex_b->is_eof = FALSE;
   getChunk(annex_b);
@@ -332,7 +332,7 @@ void OpenAnnexBFile (char *fn, ANNEXB_t *annex_b)
  *    Closes the bit stream file
  ************************************************************************
  */
-void CloseAnnexBFile(ANNEXB_t *annex_b)
+void close_annex_b(ANNEXB_t *annex_b)
 {
   if (annex_b->BitStreamFile != -1)
   {
@@ -344,7 +344,7 @@ void CloseAnnexBFile(ANNEXB_t *annex_b)
 }
 
 
-void ResetAnnexB(ANNEXB_t *annex_b)
+void reset_annex_b(ANNEXB_t *annex_b)
 {
   annex_b->is_eof = FALSE;
   annex_b->bytesinbuffer = 0;

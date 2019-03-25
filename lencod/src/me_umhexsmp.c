@@ -60,7 +60,7 @@ if((iabs(cand.mv_x - center.mv_x)>>2) <= search_range &&                        
 
 #define SEARCH_ONE_PIXEL_BIPRED                                                                 \
 if ((iabs(cand.mv_x - center2.mv_x)>>2) <= search_range                                              \
-&& (iabs(cand.mv_y - center2.mv_x)>>2) <= search_range)                                              \
+&& (iabs(cand.mv_y - center2.mv_y)>>2) <= search_range)                                              \
 {                                                                                               \
   mcost  = mv_cost (p_Vid, lambda_factor, &center1, &pred1);                                    \
   mcost += mv_cost (p_Vid, lambda_factor, &cand, &pred2);                                       \
@@ -173,8 +173,8 @@ smpUMHEXIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  current Ma
   pic_pix_y   = mv_block->pos_y_padded;
   pred.mv_x   = pic_pix_x + pred_mv->mv_x;       // predicted position x (in sub-pel units)
   pred.mv_y   = pic_pix_y + pred_mv->mv_y;       // predicted position y (in sub-pel units)
-  center.mv_x = pic_pix_x + mv->mv_x;            // center position x (in pel units)
-  center.mv_y = pic_pix_y + mv->mv_y;            // center position y (in pel units)
+  center.mv_x = pic_pix_x + mv->mv_x;            // center position x (in sub-pel units)
+  center.mv_y = pic_pix_y + mv->mv_y;            // center position y (in sub-pel units)
 
 
   //check the center median predictor
@@ -668,10 +668,10 @@ smpUMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  curr
                                            int       list,          // <--  Current reference list
                                            MotionVector *pred_mv1,  // <--  motion vector predictor (x|y) in sub-pel units
                                            MotionVector *pred_mv2,  // <--  motion vector predictor (x|y) in sub-pel units
-                                           MotionVector *mv1,       // <--> in: search center (x|y) / out: motion vector (x|y) - in pel units
+                                           MotionVector *mv1,       // <--> in: search center (x|y) / out: motion vector (x|y) - in sub-pel units
                                            MotionVector *mv2,       // <--> in: search center (x|y) 
                                            MEBlock *mv_block,       // <--  motion vector information
-                                           int       search_range,  // <--  1-d search range in pel units
+                                           int       search_range,  // <--  1-d search range in sub-pel units
                                            distblk     min_mcost,     // <--  minimum motion cost (cost for center or huge value)
                                            int       lambda_factor  // <--  lagrangian parameter for determining motion cost
                                            )
@@ -700,10 +700,10 @@ smpUMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  curr
   pred2.mv_x       = mv_block->pos_x_padded + pred_mv2->mv_x;  // predicted position x (in sub-pel units)
   pred2.mv_y       = mv_block->pos_y_padded + pred_mv2->mv_y;  // predicted position y (in sub-pel units)
   
-  center2.mv_x     = mv_block->pos_x_padded + mv1->mv_x;            // center position x (in pel units)
-  center2.mv_y     = mv_block->pos_y_padded + mv1->mv_y;                   // center position y (in pel units)
-  center1.mv_x     = mv_block->pos_x_padded + mv2->mv_x;            // mvx of second pred (in pel units)
-  center1.mv_y     = mv_block->pos_y_padded + mv2->mv_y;            // mvy of second pred (in pel units)
+  center2.mv_x     = mv_block->pos_x_padded + mv1->mv_x;            // center position x (in sub-pel units)
+  center2.mv_y     = mv_block->pos_y_padded + mv1->mv_y;                   // center position y (in sub-pel units)
+  center1.mv_x     = mv_block->pos_x_padded + mv2->mv_x;            // mvx of second pred (in sub-pel units)
+  center1.mv_y     = mv_block->pos_y_padded + mv2->mv_y;            // mvy of second pred (in sub-pel units)
 
   //check the center median predictor
   best = cand = center2;

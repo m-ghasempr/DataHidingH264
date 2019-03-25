@@ -382,6 +382,8 @@ int mb_pred_b_d8x8temporal(Macroblock *currMB, ColorPlane curr_plane, imgpel **c
       j6   = currMB->block_y_aff + j;
       mv_info = &dec_picture->mv_info[j4][i4];
       colocated = &list1[0]->mv_info[RSD(j6)][RSD(i4)];
+      if(currMB->p_Vid->separate_colour_plane_flag && currMB->p_Vid->yuv_format==YUV444)
+        colocated = &list1[0]->JVmv_info[currMB->p_Slice->colour_plane_id][RSD(j6)][RSD(i4)];
       if(currSlice->mb_aff_frame_flag /*&& (!p_Vid->active_sps->frame_mbs_only_flag || p_Vid->active_sps->direct_8x8_inference_flag)*/)
       {
         assert(p_Vid->active_sps->direct_8x8_inference_flag);
@@ -390,44 +392,44 @@ int mb_pred_b_d8x8temporal(Macroblock *currMB, ColorPlane curr_plane, imgpel **c
         {
           if (iabs(dec_picture->poc - currSlice->listX[LIST_1+4][0]->poc)> iabs(dec_picture->poc -currSlice->listX[LIST_1+2][0]->poc) )
           {
-             colocated = p_Vid->active_sps->direct_8x8_inference_flag ? 
+            colocated = p_Vid->active_sps->direct_8x8_inference_flag ? 
               &currSlice->listX[LIST_1+2][0]->mv_info[RSD(j6)>>1][RSD(i4)] : &currSlice->listX[LIST_1+2][0]->mv_info[j6>>1][i4];
           }
           else
           {
-             colocated = p_Vid->active_sps->direct_8x8_inference_flag ? 
+            colocated = p_Vid->active_sps->direct_8x8_inference_flag ? 
               &currSlice->listX[LIST_1+4][0]->mv_info[RSD(j6)>>1][RSD(i4)] : &currSlice->listX[LIST_1+4][0]->mv_info[j6>>1][i4];
           }
         }
       }
       else if(/*!currSlice->mb_aff_frame_flag &&*/ !p_Vid->active_sps->frame_mbs_only_flag && 
-              (!currSlice->field_pic_flag && currSlice->listX[LIST_1][0]->iCodingType!=FRAME_CODING))
+        (!currSlice->field_pic_flag && currSlice->listX[LIST_1][0]->iCodingType!=FRAME_CODING))
       {
-          if (iabs(dec_picture->poc - list1[0]->bottom_field->poc)> iabs(dec_picture->poc -list1[0]->top_field->poc) )
-          {
-             colocated = p_Vid->active_sps->direct_8x8_inference_flag ? 
-                         &list1[0]->top_field->mv_info[RSD(j6)>>1][RSD(i4)] : &list1[0]->top_field->mv_info[j6>>1][i4];
-          }
-          else
-          {
-             colocated = p_Vid->active_sps->direct_8x8_inference_flag ? 
-                         &list1[0]->bottom_field->mv_info[RSD(j6)>>1][RSD(i4)] : &list1[0]->bottom_field->mv_info[j6>>1][i4];
-          }
+        if (iabs(dec_picture->poc - list1[0]->bottom_field->poc)> iabs(dec_picture->poc -list1[0]->top_field->poc) )
+        {
+          colocated = p_Vid->active_sps->direct_8x8_inference_flag ? 
+            &list1[0]->top_field->mv_info[RSD(j6)>>1][RSD(i4)] : &list1[0]->top_field->mv_info[j6>>1][i4];
+        }
+        else
+        {
+          colocated = p_Vid->active_sps->direct_8x8_inference_flag ? 
+            &list1[0]->bottom_field->mv_info[RSD(j6)>>1][RSD(i4)] : &list1[0]->bottom_field->mv_info[j6>>1][i4];
+        }
       }
       else if(!p_Vid->active_sps->frame_mbs_only_flag && currSlice->field_pic_flag && currSlice->structure!=list1[0]->structure && list1[0]->coded_frame)
       {
-          if (currSlice->structure == TOP_FIELD)
-          {
-             colocated = p_Vid->active_sps->direct_8x8_inference_flag ? 
-                         &list1[0]->frame->top_field->mv_info[RSD(j6)][RSD(i4)] : &list1[0]->frame->top_field->mv_info[j6][i4];
-          }
-          else
-          {
-             colocated = p_Vid->active_sps->direct_8x8_inference_flag ? 
-                         &list1[0]->frame->bottom_field->mv_info[RSD(j6)][RSD(i4)] : &list1[0]->frame->bottom_field->mv_info[j6][i4];
-          }
+        if (currSlice->structure == TOP_FIELD)
+        {
+          colocated = p_Vid->active_sps->direct_8x8_inference_flag ? 
+            &list1[0]->frame->top_field->mv_info[RSD(j6)][RSD(i4)] : &list1[0]->frame->top_field->mv_info[j6][i4];
+        }
+        else
+        {
+          colocated = p_Vid->active_sps->direct_8x8_inference_flag ? 
+            &list1[0]->frame->bottom_field->mv_info[RSD(j6)][RSD(i4)] : &list1[0]->frame->bottom_field->mv_info[j6][i4];
+        }
       }
-      
+
 
       assert (pred_dir<=2);
 
@@ -447,18 +449,25 @@ int mb_pred_b_d8x8temporal(Macroblock *currMB, ColorPlane curr_plane, imgpel **c
         int mapped_idx=0;
         int iref;
         if( (currSlice->mb_aff_frame_flag && ( (currMB->mb_field && colocated->ref_pic[refList]->structure==FRAME) || 
-                                               (!currMB->mb_field && colocated->ref_pic[refList]->structure!=FRAME))) ||
-            (!currSlice->mb_aff_frame_flag && ((currSlice->field_pic_flag==0 && colocated->ref_pic[refList]->structure!=FRAME)
-             ||(currSlice->field_pic_flag==1 && colocated->ref_pic[refList]->structure==FRAME))) )
+          (!currMB->mb_field && colocated->ref_pic[refList]->structure!=FRAME))) ||
+          (!currSlice->mb_aff_frame_flag && ((currSlice->field_pic_flag==0 && colocated->ref_pic[refList]->structure!=FRAME)
+          ||(currSlice->field_pic_flag==1 && colocated->ref_pic[refList]->structure==FRAME))) )
         {
           for (iref = 0; iref < imin(currSlice->num_ref_idx_active[LIST_0], currSlice->listXsize[LIST_0 + list_offset]);iref++)
           {
             if(currSlice->listX[LIST_0 + list_offset][iref]->top_field == colocated->ref_pic[refList] || 
-               currSlice->listX[LIST_0 + list_offset][iref]->bottom_field == colocated->ref_pic[refList] ||
-               currSlice->listX[LIST_0 + list_offset][iref]->frame == colocated->ref_pic[refList])
+              currSlice->listX[LIST_0 + list_offset][iref]->bottom_field == colocated->ref_pic[refList] ||
+              currSlice->listX[LIST_0 + list_offset][iref]->frame == colocated->ref_pic[refList])
             {
-              mapped_idx = iref;            
-              break;
+              if ((currSlice->field_pic_flag==1) && (currSlice->listX[LIST_0 + list_offset][iref]->structure != currSlice->structure))
+              {
+                mapped_idx=INVALIDINDEX;
+              }
+              else
+              {
+                mapped_idx = iref;            
+                break;
+              }
             }
             else //! invalid index. Default to zero even though this case should not happen
             {
@@ -487,10 +496,10 @@ int mb_pred_b_d8x8temporal(Macroblock *currMB, ColorPlane curr_plane, imgpel **c
           int mv_scale = currSlice->mvscale[LIST_0 + list_offset][mapped_idx];
           int mv_y = colocated->mv[refList].mv_y; 
           if((currSlice->mb_aff_frame_flag && !currMB->mb_field && colocated->ref_pic[refList]->structure!=FRAME) ||
-             (!currSlice->mb_aff_frame_flag && currSlice->field_pic_flag==0 && colocated->ref_pic[refList]->structure!=FRAME) )
+            (!currSlice->mb_aff_frame_flag && currSlice->field_pic_flag==0 && colocated->ref_pic[refList]->structure!=FRAME) )
             mv_y *= 2;
           else if((currSlice->mb_aff_frame_flag && currMB->mb_field && colocated->ref_pic[refList]->structure==FRAME) ||
-                  (!currSlice->mb_aff_frame_flag && currSlice->field_pic_flag==1 && colocated->ref_pic[refList]->structure==FRAME) )
+            (!currSlice->mb_aff_frame_flag && currSlice->field_pic_flag==1 && colocated->ref_pic[refList]->structure==FRAME) )
             mv_y /= 2;
 
           //! In such case, an array is needed for each different reference.
@@ -582,7 +591,8 @@ int mb_pred_b_d4x4temporal(Macroblock *currMB, ColorPlane curr_plane, imgpel **c
       int j6   = currMB->block_y_aff + j;
       PicMotionParams *mv_info = &dec_picture->mv_info[j4][i4];
       PicMotionParams *colocated = &list1[0]->mv_info[j6][i4];
-
+      if(currMB->p_Vid->separate_colour_plane_flag && currMB->p_Vid->yuv_format==YUV444)
+        colocated = &list1[0]->JVmv_info[currMB->p_Slice->colour_plane_id][RSD(j6)][RSD(i4)];
       assert (pred_dir<=2);
 
       refList = (colocated->ref_idx[LIST_0]== -1 ? LIST_1 : LIST_0);

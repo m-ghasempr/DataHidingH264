@@ -14,27 +14,31 @@
  *      - Yuwen He                 <yhe@dolby.com>
  ***********************************************************************
  */
-#ifndef _MBUFFER_H_
-#define _MBUFFER_H_
+#ifndef _MBUFFERENC_H_
+#define _MBUFFERENC_H_
 
 #include "global.h"
 #include "enc_statistics.h"
 
 #define MAX_LIST_SIZE 33
 
-typedef struct picture_stats
+typedef struct frame_store FrameStore;
+typedef struct distortion_estimation Dist_Estm;
+typedef struct picture_stats PictureStats;
+typedef struct pic_motion_params_old PicMotionParamsOld;
+
+struct picture_stats
 {
   double dsum[3];
   double dvar[3];
-} PictureStats;
+};
 
-typedef struct distortion_estimation Dist_Estm;
 
 //! definition of pic motion parameters
-typedef struct pic_motion_params_old
+struct pic_motion_params_old
 {
   byte *      mb_field;      //!< field macroblock indicator
-} PicMotionParamsOld;
+};
 
 
 //! definition of pic motion parameters
@@ -127,32 +131,14 @@ typedef struct storable_picture
   int         inter_view_flag[2];
   int         anchor_pic_flag[2];
 #endif
+
   int  bInterpolated;
   int  ref_pic_na[6];
+  int  otf_flag;
+  //int  separate_colour_plane_flag;
 } StorablePicture;
 
 typedef StorablePicture *StorablePicturePtr;
-
-//! definition of motion parameters
-typedef struct motion_params
-{
-  int64 ***   ref_pic_id;    //!< reference picture identifier [list][subblock_y][subblock_x]
-  MotionVector ***mv;            //!< motion vector       [list][subblock_x][subblock_y][component]
-  char  ***   ref_idx;       //!< reference picture   [list][subblock_y][subblock_x]
-  byte **     moving_block;
-} MotionParams;
-
-//! definition a picture (field or frame)
-typedef struct colocated_params
-{
-  int         mb_adaptive_frame_field_flag;
-  int         size_x, size_y;
-  byte        is_long_term;
-
-  struct motion_params frame;
-  struct motion_params top;
-  struct motion_params bottom;
-} ColocatedParams;
 
 //! Frame Stores for Decoded Picture Buffer
 struct frame_store
@@ -174,6 +160,8 @@ struct frame_store
   StorablePicture *top_field;
   StorablePicture *bottom_field;
 
+  Boolean   is_inter_layer;
+
 #if (MVC_EXTENSION_ENABLE)
   int       view_id;
   int       inter_view_flag[2];
@@ -181,7 +169,6 @@ struct frame_store
 #endif
 };
 
-typedef struct frame_store FrameStore;
 
 
 //! Decoded Picture Buffer
@@ -211,7 +198,27 @@ typedef struct decoded_picture_buffer
   unsigned      used_size_il;
 
   FrameFormat   storage_format;
-  }DecodedPictureBuffer;
+
+  void (*pf_luma_prediction)    ( Macroblock* currMB, int, int, int, int, int, int[2], char *, short );
+  void (*pf_luma_prediction_bi)    ( Macroblock* currMB, int, int, int, int, int, int, short, short, int );
+  void (*pf_chroma_prediction)     ( Macroblock* currMB, int, int, int, int, int, int, int, int, short, short, short );
+  void (*pf_get_block_luma)        ( struct video_par *, imgpel*, int*, int, int, int, int, struct storable_picture*, int );
+  void (*pf_get_block_chroma[2])   ( struct video_par *, imgpel*, int*, int, int, int, int, struct storable_picture*, int );
+  void (*pf_OneComponentChromaPrediction4x4_regenerate)(Macroblock *currMB, imgpel* , int , int , MotionVector ** , StorablePicture *listX, int );
+  void (*pf_OneComponentChromaPrediction4x4_retrieve) (Macroblock *currMB, imgpel* , int , int , MotionVector ** , StorablePicture *listX, int );
+  distblk (*pf_computeSAD)         (StorablePicture *ref1, MEBlock*, distblk, MotionVector *);
+  distblk (*pf_computeSADWP)     (StorablePicture *ref1, MEBlock*, distblk, MotionVector *);
+  distblk (*pf_computeSATD)      (StorablePicture *ref1, MEBlock*, distblk, MotionVector *);
+  distblk (*pf_computeSATDWP)    (StorablePicture *ref1, MEBlock*, distblk, MotionVector *);
+  distblk (*pf_computeBiPredSAD1)(StorablePicture *ref1, StorablePicture *ref2, MEBlock*, distblk, MotionVector *, MotionVector *);
+  distblk (*pf_computeBiPredSAD2)(StorablePicture *ref1, StorablePicture *ref2, MEBlock*, distblk, MotionVector *, MotionVector *);
+  distblk (*pf_computeBiPredSATD1)  (StorablePicture *ref1, StorablePicture *ref2, MEBlock*, distblk, MotionVector *, MotionVector *);
+  distblk (*pf_computeBiPredSATD2)  (StorablePicture *ref1, StorablePicture *ref2, MEBlock*, distblk, MotionVector *, MotionVector *);
+  distblk (*pf_computeSSE)       (StorablePicture *ref1, MEBlock*, distblk, MotionVector *);
+  distblk (*pf_computeSSEWP)     (StorablePicture *ref1, MEBlock*, distblk, MotionVector *);
+  distblk (*pf_computeBiPredSSE1)    (StorablePicture *ref1, StorablePicture *ref2, MEBlock*, distblk, MotionVector *, MotionVector *);
+  distblk (*pf_computeBiPredSSE2)    (StorablePicture *ref1, StorablePicture *ref2, MEBlock*, distblk, MotionVector *, MotionVector *);
+}DecodedPictureBuffer;
 
 extern void             init_dpb                  (VideoParameters *p_Vid, DecodedPictureBuffer *dpb);
 extern void             free_dpb                  (DecodedPictureBuffer *p_Dpb);
@@ -234,14 +241,14 @@ extern void             init_mbaff_lists          (Slice *currSlice);
 extern void             alloc_ref_pic_list_reordering_buffer (Slice *currSlice);
 extern void             free_ref_pic_list_reordering_buffer  (Slice *currSlice);
 extern void             fill_frame_num_gap        (VideoParameters *p_Vid, FrameFormat *output);
-extern ColocatedParams* alloc_colocated           (int size_x, int size_y,int mb_adaptive_frame_field_flag);
-extern void             free_colocated            (ColocatedParams* p);
 extern void             compute_colocated         (Slice *currSlice, StorablePicture **listX[6]);
 extern void             reorder_short_term(Slice *currSlice, DecodedPictureBuffer *p_Dpb, int cur_list, int picNumLX, int *refIdxLX);
 
+extern void unmark_for_reference(FrameStore* fs);
+extern void unmark_for_long_term_reference(FrameStore* fs);
+extern void remove_frame_from_dpb(DecodedPictureBuffer *p_Dpb, int pos);
+
 #if (MVC_EXTENSION_ENABLE)
-void update_ref_list(DecodedPictureBuffer *p_Dpb);
-void update_ltref_list(DecodedPictureBuffer *p_Dpb);
 void check_num_ref(DecodedPictureBuffer *p_Dpb);
 extern void replace_top_proc_pic_with_frame(DecodedPictureBuffer *p_Dpb, StorablePicture* p);
 extern void store_proc_picture_in_dpb(DecodedPictureBuffer *p_Dpb, StorablePicture* p, FrameFormat *output);

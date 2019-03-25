@@ -15,7 +15,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 18.0 (FRExt)
+ *     JM 18.1 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -68,6 +68,7 @@
 #include "input.h"
 #include "output.h"
 #include "h264decoder.h"
+#include "dec_statistics.h"
 
 #define LOGFILE     "log.dec"
 #define DATADECFILE "dataDec.txt"
@@ -166,6 +167,7 @@ static void alloc_video_params( VideoParameters **p_Vid)
   (*p_Vid)->nalu = AllocNALU(MAX_CODED_FRAME_SIZE);
   (*p_Vid)->pDecOuputPic = (DecodedPicList *)calloc(1, sizeof(DecodedPicList));
   (*p_Vid)->pNextPPS = AllocPPS();
+  (*p_Vid)->first_sps = TRUE;
 }
 
 
@@ -289,6 +291,12 @@ static void free_img( VideoParameters *p_Vid)
       p_Vid->pNextPPS = NULL;
     }
 
+    // clear decoder statistics
+#if ENABLE_DEC_STATS
+    delete_dec_stats(p_Vid->dec_stats);
+    free (p_Vid->dec_stats);
+#endif
+
     free (p_Vid);
     p_Vid = NULL;
   }
@@ -387,6 +395,12 @@ static void init(VideoParameters *p_Vid)  //!< video parameters
   p_Vid->bDeblockEnable = 0x3;
   p_Vid->last_dec_view_id = -1;
   p_Vid->last_dec_layer_id = -1;
+
+#if ENABLE_DEC_STATS
+  if ((p_Vid->dec_stats = (DecStatParameters *) malloc (sizeof (DecStatParameters)))== NULL)
+    no_mem_exit ("init: p_Vid->dec_stats");
+  init_dec_stats(p_Vid->dec_stats);
+#endif
 }
 
 /*!
@@ -1194,7 +1208,7 @@ int OpenDecoder(InputParameters *p_Inp)
   default:
   case PAR_OF_ANNEXB:
     malloc_annex_b(pDecoder->p_Vid, &pDecoder->p_Vid->annex_b);
-    OpenAnnexBFile(pDecoder->p_Inp->infile, pDecoder->p_Vid->annex_b);
+    open_annex_b(pDecoder->p_Inp->infile, pDecoder->p_Vid->annex_b);
     break;
   case PAR_OF_RTP:
     OpenRTPFile(pDecoder->p_Inp->infile, &pDecoder->p_Vid->BitStreamFile);
@@ -1272,7 +1286,7 @@ int FinitDecoder(DecodedPicList **ppDecPicList)
 #endif
   if (pDecoder->p_Inp->FileFormat == PAR_OF_ANNEXB)
   {
-    ResetAnnexB(pDecoder->p_Vid->annex_b); 
+    reset_annex_b(pDecoder->p_Vid->annex_b); 
   }
   pDecoder->p_Vid->newframe = 0;
   pDecoder->p_Vid->previous_frame_num = 0;
@@ -1297,7 +1311,7 @@ int CloseDecoder()
   {
   default:
   case PAR_OF_ANNEXB:
-    CloseAnnexBFile(pDecoder->p_Vid->annex_b);
+    close_annex_b(pDecoder->p_Vid->annex_b);
     break;
   case PAR_OF_RTP:
     CloseRTPFile(&pDecoder->p_Vid->BitStreamFile);
@@ -1413,7 +1427,7 @@ void set_global_coding_par(VideoParameters *p_Vid, CodingParameters *cps)
     p_Vid->bitdepth_chroma = cps->bitdepth_chroma;
     p_Vid->bitdepth_scale[1] = cps->bitdepth_scale[1];
 
-    p_Vid->MaxFrameNum = cps->MaxFrameNum;
+    p_Vid->max_frame_num = cps->max_frame_num;
     p_Vid->PicWidthInMbs = cps->PicWidthInMbs;
     p_Vid->PicHeightInMapUnits = cps->PicHeightInMapUnits;
     p_Vid->FrameHeightInMbs = cps->FrameHeightInMbs;

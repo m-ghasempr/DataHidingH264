@@ -179,7 +179,7 @@ unsigned int getMaxCPB (unsigned int levelIdc)
  *    Check Profile conformance
  ***********************************************************************
  */
-void ProfileCheck(InputParameters *p_Inp)
+void profile_check(InputParameters *p_Inp)
 {
   if((p_Inp->ProfileIDC != BASELINE ) &&
      (p_Inp->ProfileIDC != MAIN ) &&
@@ -367,7 +367,7 @@ void ProfileCheck(InputParameters *p_Inp)
  *    Check if Level constraints are satisfied
  ***********************************************************************
  */
-void LevelCheck(VideoParameters *p_Vid, InputParameters *p_Inp)
+void level_check(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   unsigned int PicSizeInMbs = ( (p_Inp->output.width[0] + p_Vid->auto_crop_right) * (p_Inp->output.height[0] + p_Vid->auto_crop_bottom) ) >> 8;
   unsigned int MBProcessingRate = (unsigned int) (PicSizeInMbs * p_Inp->output.frame_rate + 0.5);

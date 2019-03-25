@@ -1357,8 +1357,8 @@ static int read_and_store_CBP_block_bit_444 (Macroblock              *currMB,
   TextureInfoContexts *tex_ctx = currSlice->tex_ctx;
   Macroblock *mb_data = currSlice->mb_data;
   int y_ac        = (type==LUMA_16AC || type==LUMA_8x8 || type==LUMA_8x4 || type==LUMA_4x8 || type==LUMA_4x4
-    || type==CB_16AC || type==CB_8x8 || type==CB_8x4 || type==CB_4x8 || type==CB_4x4
-    || type==CR_16AC || type==CR_8x8 || type==CR_8x4 || type==CR_4x8 || type==CR_4x4);
+                    || type==CB_16AC || type==CB_8x8 || type==CB_8x4 || type==CB_4x8 || type==CB_4x4
+                    || type==CR_16AC || type==CR_8x8 || type==CR_8x4 || type==CR_4x8 || type==CR_4x4);
   int y_dc        = (type==LUMA_16DC || type==CB_16DC || type==CR_16DC); 
   int u_ac        = (type==CHROMA_AC && !currMB->is_v_block);
   int v_ac        = (type==CHROMA_AC &&  currMB->is_v_block);
@@ -1461,10 +1461,14 @@ static int read_and_store_CBP_block_bit_444 (Macroblock              *currMB,
       cbp_bit = biari_decode_symbol (dep_dp, tex_ctx->bcbp_contexts[type2ctx_bcbp[type]] + ctx);
     }
   }
-  else {
+  else 
+  {
     if (block_b.available)
     {
-      if(mb_data[block_b.mb_addr].mb_type==IPCM)
+      if((type==LUMA_8x8 || type==CB_8x8 || type==CR_8x8) &&
+         !mb_data[block_b.mb_addr].luma_transform_size_8x8_flag)
+      {}
+      else if(mb_data[block_b.mb_addr].mb_type==IPCM)
         upper_bit=1;
       else
       {
@@ -1486,7 +1490,10 @@ static int read_and_store_CBP_block_bit_444 (Macroblock              *currMB,
     
     if (block_a.available)
     {
-      if(mb_data[block_a.mb_addr].mb_type==IPCM)
+      if((type==LUMA_8x8 || type==CB_8x8 || type==CR_8x8) &&
+         !mb_data[block_a.mb_addr].luma_transform_size_8x8_flag)
+      {}
+      else if(mb_data[block_a.mb_addr].mb_type==IPCM)
         left_bit=1;
       else
       {

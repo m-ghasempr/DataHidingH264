@@ -25,7 +25,7 @@ struct scaling_list {
   short UseDefaultScalingMatrix8x8Flag[6];
 };
 
-extern void Init_QMatrix (VideoParameters *p_Vid, InputParameters *p_Inp);
+extern void init_qmatrix (VideoParameters *p_Vid, InputParameters *p_Inp);
 extern void CalculateQuant4x4Param (VideoParameters *p_Vid);
 extern void CalculateQuant8x8Param (VideoParameters *p_Vid);
 extern void free_QMatrix(QuantParameters *p_Quant);

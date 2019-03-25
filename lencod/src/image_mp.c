@@ -231,14 +231,17 @@ void frame_picture_mp_p_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
         }
       }
 
-      free_slice(dummy_slice);
       rd_pass++;
+      //free_slice(dummy_slice);
+
       if(rd_pass >= p_Inp->RDPictureMaxPassPSlice)
       {
         frame_picture_mp_exit(p_Vid, &coding_info);
+        free_slice(dummy_slice);
         return;
       }
     }
+    free_slice(dummy_slice);
   }
 
 
@@ -591,7 +594,8 @@ void frame_picture_mp_b_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
   {
     // frame QP pass
     p_Vid->active_pps = best_method == EXP_WP ? p_Vid->PicParSet[1]:best_method==IMP_WP?p_Vid->PicParSet[2]:p_Vid->PicParSet[0];
-    p_Vid->qp = (p_Vid->nal_reference_idc==0 ? rd_qp + 1 : rd_qp - 1);
+    //p_Vid->qp = (p_Vid->nal_reference_idc==0 ? rd_qp + 1 : rd_qp - 1);
+    p_Vid->qp = (p_Vid->nal_reference_idc==0 ? rd_qp + 1 : rd_qp );
     p_Vid->qp = iClip3( p_Vid->RCMinQP, p_Vid->RCMaxQP, p_Vid->qp );
     if ( p_Inp->RCEnable )
     {

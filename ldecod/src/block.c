@@ -357,9 +357,9 @@ void itrans_2(Macroblock *currMB,    //!< current macroblock
   VideoParameters *p_Vid = currMB->p_Vid;
   int j;
 
-  int transform_pl = (p_Vid->separate_colour_plane_flag != 0) ? PLANE_Y /*p_Vid->colour_plane_id*/ : pl;
+  int transform_pl = (p_Vid->separate_colour_plane_flag != 0) ? PLANE_Y : pl;
   int **cof = currSlice->cof[transform_pl];
-  int qp_scaled = currMB->qp_scaled[pl];
+  int qp_scaled = currMB->qp_scaled[transform_pl];
 
   int qp_per = p_Vid->qp_per_matrix[ qp_scaled ];
   int qp_rem = p_Vid->qp_rem_matrix[ qp_scaled ];      

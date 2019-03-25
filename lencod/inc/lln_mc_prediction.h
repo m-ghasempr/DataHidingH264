@@ -22,8 +22,8 @@
 #include "mbuffer.h"
 
 
-extern void get_block_luma  (Macroblock *currMB, int decoder, ColorPlane pl, StorablePicture *dec_picture, StorablePicture *list, int x_pos, int y_pos, int ver_block_size, int hor_block_size, imgpel block[MB_BLOCK_SIZE][MB_BLOCK_SIZE]);
-extern void get_block_chroma(Macroblock *currMb, int decoder, int uv, StorablePicture *dec_picture, StorablePicture *list, int x_pos, int y_pos, int hor_block_size, int ver_block_size, imgpel block[MB_BLOCK_SIZE][MB_BLOCK_SIZE]);
+extern void get_block_luma  (Macroblock *currMB, int decoder, ColorPlane pl, StorablePicture *dec_picture, StorablePicture *list, int x_pos, int y_pos, int block_size_y, int block_size_x, imgpel block[MB_BLOCK_SIZE][MB_BLOCK_SIZE]);
+extern void get_block_chroma(Macroblock *currMb, int decoder, int uv, StorablePicture *dec_picture, StorablePicture *list, int x_pos, int y_pos, int block_size_x, int block_size_y, imgpel block[MB_BLOCK_SIZE][MB_BLOCK_SIZE]);
 
 //extern void intra_cr_decoding(Macroblock *currMB, int yuv, int smb);
 //extern void prepare_direct_params(Macroblock *currMB, StorablePicture *dec_picture, MotionVector *pmvl0, MotionVector *pmvl1,char *l0_rFrame, char *l1_rFrame);

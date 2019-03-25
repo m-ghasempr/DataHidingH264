@@ -44,7 +44,7 @@ static int intra16x16_dc_pred_mbaff(Macroblock *currMB, ColorPlane pl)
   PixelPos b;          //!< pixel position p(0,-1)
   PixelPos left[17];    //!< pixel positions p(-1, -1..15)
 
-  int up_avail, left_avail, left_up_avail;
+  int up_avail, left_avail;
 
   s1=s2=0;
 
@@ -58,14 +58,12 @@ static int intra16x16_dc_pred_mbaff(Macroblock *currMB, ColorPlane pl)
   {
     up_avail      = b.available;
     left_avail    = left[1].available;
-    left_up_avail = left[0].available;
   }
   else
   {
     up_avail      = b.available ? currSlice->intra_block[b.mb_addr] : 0;
     for (i = 1, left_avail = 1; i < 17; ++i)
       left_avail  &= left[i].available ? currSlice->intra_block[left[i].mb_addr]: 0;
-    left_up_avail = left[0].available ? currSlice->intra_block[left[0].mb_addr]: 0;
   }
 
   for (i = 0; i < MB_BLOCK_SIZE; ++i)
@@ -176,7 +174,7 @@ static int intra16x16_hor_pred_mbaff(Macroblock *currMB, ColorPlane pl)
 
   PixelPos left[17];    //!< pixel positions p(-1, -1..15)
 
-  int left_avail, left_up_avail;
+  int left_avail;
 
   for (i=0;i<17;++i)
   {
@@ -186,13 +184,11 @@ static int intra16x16_hor_pred_mbaff(Macroblock *currMB, ColorPlane pl)
   if (!p_Vid->active_pps->constrained_intra_pred_flag)
   {
     left_avail    = left[1].available;
-    left_up_avail = left[0].available;
   }
   else
   {
     for (i = 1, left_avail = 1; i < 17; ++i)
       left_avail  &= left[i].available ? currSlice->intra_block[left[i].mb_addr]: 0;
-    left_up_avail = left[0].available ? currSlice->intra_block[left[0].mb_addr]: 0;
   }
 
   if (!left_avail)

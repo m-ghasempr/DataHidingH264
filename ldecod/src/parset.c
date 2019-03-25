@@ -188,6 +188,7 @@ int InterpretSPS (VideoParameters *p_Vid, DataPartition *p, seq_parameter_set_rb
   {
     sps->mb_adaptive_frame_field_flag        = read_u_1  ("SPS: mb_adaptive_frame_field_flag"           , s, &p_Dec->UsedBits);
   }
+  //printf("interlace flags %d %d\n", sps->frame_mbs_only_flag, sps->mb_adaptive_frame_field_flag);
   sps->direct_8x8_inference_flag             = read_u_1  ("SPS: direct_8x8_inference_flag"              , s, &p_Dec->UsedBits);
   sps->frame_cropping_flag                   = read_u_1  ("SPS: frame_cropping_flag"                    , s, &p_Dec->UsedBits);
 
@@ -409,7 +410,7 @@ int InterpretPPS (VideoParameters *p_Vid, DataPartition *p, pic_parameter_set_rb
   //! no consistency problem :-(
   //! The current encoder code handles this in the same way.  When you change this, don't forget
   //! the encoder!  StW, 12/8/02
-  pps->bottom_field_pic_order_in_frame_present_flag                = read_u_1  ("PPS: bottom_field_pic_order_in_frame_present_flag"                 , s, &p_Dec->UsedBits);
+  pps->bottom_field_pic_order_in_frame_present_flag = read_u_1  ("PPS: bottom_field_pic_order_in_frame_present_flag"                 , s, &p_Dec->UsedBits);
 
   pps->num_slice_groups_minus1               = read_ue_v ("PPS: num_slice_groups_minus1"                , s, &p_Dec->UsedBits);
 
@@ -456,8 +457,8 @@ int InterpretPPS (VideoParameters *p_Vid, DataPartition *p, pic_parameter_set_rb
 
   // End of FMO stuff
 
-  pps->num_ref_idx_l0_active_minus1          = read_ue_v ("PPS: num_ref_idx_l0_active_minus1"           , s, &p_Dec->UsedBits);
-  pps->num_ref_idx_l1_active_minus1          = read_ue_v ("PPS: num_ref_idx_l1_active_minus1"           , s, &p_Dec->UsedBits);
+  pps->num_ref_idx_l0_default_active_minus1  = read_ue_v ("PPS: num_ref_idx_l0_default_active_minus1"   , s, &p_Dec->UsedBits);
+  pps->num_ref_idx_l1_default_active_minus1  = read_ue_v ("PPS: num_ref_idx_l1_default_active_minus1"   , s, &p_Dec->UsedBits);
   pps->weighted_pred_flag                    = read_u_1  ("PPS: weighted_pred_flag"                     , s, &p_Dec->UsedBits);
   pps->weighted_bipred_idc                   = read_u_v  ( 2, "PPS: weighted_bipred_idc"                , s, &p_Dec->UsedBits);
   pps->pic_init_qp_minus26                   = read_se_v ("PPS: pic_init_qp_minus26"                    , s, &p_Dec->UsedBits);
@@ -472,7 +473,7 @@ int InterpretPPS (VideoParameters *p_Vid, DataPartition *p, pic_parameter_set_rb
   if(more_rbsp_data(s->streamBuffer, s->frame_bitoffset,s->bitstream_length)) // more_data_in_rbsp()
   {
     //Fidelity Range Extensions Stuff
-    pps->transform_8x8_mode_flag           = read_u_1  ("PPS: transform_8x8_mode_flag"                , s, &p_Dec->UsedBits);
+    pps->transform_8x8_mode_flag           =  read_u_1  ("PPS: transform_8x8_mode_flag"                , s, &p_Dec->UsedBits);
     pps->pic_scaling_matrix_present_flag   =  read_u_1  ("PPS: pic_scaling_matrix_present_flag"        , s, &p_Dec->UsedBits);
 
     if(pps->pic_scaling_matrix_present_flag)
@@ -567,6 +568,7 @@ void ProcessSPS (VideoParameters *p_Vid, NALU_t *nalu)
   dp->bitstream->code_len = dp->bitstream->bitstream_length = RBSPtoSODB (dp->bitstream->streamBuffer, nalu->len-1);
   dp->bitstream->ei_flag = 0;
   dp->bitstream->read_len = dp->bitstream->frame_bitoffset = 0;
+
   InterpretSPS (p_Vid, dp, sps);
 #if (MVC_EXTENSION_ENABLE)
   get_max_dec_frame_buf_size(sps);
@@ -818,6 +820,31 @@ void reset_format_info(seq_parameter_set_rbsp_t *sps, VideoParameters *p_Vid, Fr
 
   updateMaxValue(source);
   updateMaxValue(output);
+
+  if (p_Vid->first_sps == TRUE) {
+    p_Vid->first_sps = FALSE;
+    if(!p_Inp->bDisplayDecParams) {
+      fprintf(stdout,"Image Format : %dx%d (%dx%d)\n", source->width[0], source->height[0], p_Vid->width, p_Vid->height);
+      if (p_Vid->yuv_format == YUV400)
+        fprintf(stdout,"Color Format : 4:0:0 ");
+      else if (p_Vid->yuv_format == YUV420)
+        fprintf(stdout,"Color Format : 4:2:0 ");
+      else if (p_Vid->yuv_format == YUV422)
+        fprintf(stdout,"Color Format : 4:2:2 ");
+      else
+        fprintf(stdout,"Color Format : 4:4:4 ");
+
+      fprintf(stdout,"(%d:%d:%d)\n", source->bit_depth[0], source->bit_depth[1], source->bit_depth[2]);
+      fprintf(stdout,"--------------------------------------------------------------------------\n");
+    }
+    if (!p_Inp->silent)
+    {
+      fprintf(stdout,"POC must = frame# or field# for SNRs to be correct\n");
+      fprintf(stdout,"--------------------------------------------------------------------------\n");
+      fprintf(stdout,"  Frame          POC  Pic#   QP    SnrY     SnrU     SnrV   Y:U:V Time(ms)\n");
+      fprintf(stdout,"--------------------------------------------------------------------------\n");
+    }
+  }
 }
 
 static void setup_layer_info(VideoParameters *p_Vid, seq_parameter_set_rbsp_t *sps, LayerParameters *p_Lps)
@@ -863,7 +890,7 @@ static void set_coding_par(seq_parameter_set_rbsp_t *sps, CodingParameters *cps)
     cps->bitdepth_scale[1] = 1 << sps->bit_depth_chroma_minus8;
   }
 
-  cps->MaxFrameNum = 1<<(sps->log2_max_frame_num_minus4+4);
+  cps->max_frame_num = 1<<(sps->log2_max_frame_num_minus4+4);
   cps->PicWidthInMbs = (sps->pic_width_in_mbs_minus1 +1);
   cps->PicHeightInMapUnits = (sps->pic_height_in_map_units_minus1 +1);
   cps->FrameHeightInMbs = ( 2 - sps->frame_mbs_only_flag ) * cps->PicHeightInMapUnits;
@@ -881,7 +908,7 @@ static void set_coding_par(seq_parameter_set_rbsp_t *sps, CodingParameters *cps)
   }
 
   cps->width = cps->PicWidthInMbs * MB_BLOCK_SIZE;
-  cps->height = cps->FrameHeightInMbs * MB_BLOCK_SIZE;
+  cps->height = cps->FrameHeightInMbs * MB_BLOCK_SIZE;  
 
   cps->iLumaPadX = MCBUF_LUMA_PAD_X;
   cps->iLumaPadY = MCBUF_LUMA_PAD_Y;

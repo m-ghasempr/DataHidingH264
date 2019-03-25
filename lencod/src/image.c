@@ -370,17 +370,17 @@ void update_global_stats(InputParameters *p_Inp, StatParameters *gl_stats, StatP
 
     for (i = 0; i < 5; i++)
     {
-      gl_stats->quant[i]                += cur_stats->quant[i];
-      gl_stats->num_macroblocks[i]      += cur_stats->num_macroblocks[i];
-      gl_stats->bit_use_mb_type [i]     += cur_stats->bit_use_mb_type[i];
-      gl_stats->bit_use_header  [i]     += cur_stats->bit_use_header[i];
-      gl_stats->tmp_bit_use_cbp [i]     += cur_stats->tmp_bit_use_cbp[i];
-      gl_stats->bit_use_coeffC  [i]     += cur_stats->bit_use_coeffC[i];
-      gl_stats->bit_use_coeff[0][i]     += cur_stats->bit_use_coeff[0][i];
-      gl_stats->bit_use_coeff[1][i]     += cur_stats->bit_use_coeff[1][i]; 
-      gl_stats->bit_use_coeff[2][i]     += cur_stats->bit_use_coeff[2][i]; 
-      gl_stats->bit_use_delta_quant[i]  += cur_stats->bit_use_delta_quant[i];
-      gl_stats->bit_use_stuffingBits[i] += cur_stats->bit_use_stuffingBits[i];
+      gl_stats->quant[i]                 += cur_stats->quant[i];
+      gl_stats->num_macroblocks[i]       += cur_stats->num_macroblocks[i];
+      gl_stats->bit_use_mb_type [i]      += cur_stats->bit_use_mb_type[i];
+      gl_stats->bit_use_header  [i]      += cur_stats->bit_use_header[i];
+      gl_stats->tmp_bit_use_cbp [i]      += cur_stats->tmp_bit_use_cbp[i];
+      gl_stats->bit_use_coeffC  [i]      += cur_stats->bit_use_coeffC[i];
+      gl_stats->bit_use_coeff[0][i]      += cur_stats->bit_use_coeff[0][i];
+      gl_stats->bit_use_coeff[1][i]      += cur_stats->bit_use_coeff[1][i]; 
+      gl_stats->bit_use_coeff[2][i]      += cur_stats->bit_use_coeff[2][i]; 
+      gl_stats->bit_use_delta_quant[i]   += cur_stats->bit_use_delta_quant[i];
+      gl_stats->bit_use_stuffing_bits[i] += cur_stats->bit_use_stuffing_bits[i];
 
       for (k = 0; k < 2; k++)
         gl_stats->b8_mode_0_use[i][k] += cur_stats->b8_mode_0_use[i][k];
@@ -772,9 +772,7 @@ void perform_encode_frame(VideoParameters *p_Vid)
   int num_ref_idx_l0 = 0;
   int num_ref_idx_l1 = 0;
 
-#if (MVC_EXTENSION_ENABLE)
   int frame_type;
-#endif
 
   //Rate control
   if ( p_Inp->RCEnable && p_Inp->RCUpdateMode <= MAX_RC_MODE )
@@ -831,17 +829,24 @@ void perform_encode_frame(VideoParameters *p_Vid)
   if (p_Inp->PicInterlace == ADAPTIVE_CODING)
 #endif
   {
+    DecRefPicMarking_t *tmp_drpm;
 
     if ( p_Inp->RCEnable && p_Inp->RCUpdateMode <= MAX_RC_MODE )
       p_Vid->p_rc_gen->FieldControl=1;
     p_Vid->write_macroblock = FALSE;
     p_Vid->bot_MB = FALSE;
 
-#if (MVC_EXTENSION_ENABLE)
     frame_type = p_Vid->type;
-#endif
 
     p_Vid->field_picture = 1;  // we encode fields
+   
+    //Free frame based dec_ref_pic_marking_buffer
+    while (p_Vid->dec_ref_pic_marking_buffer)
+    {
+      tmp_drpm = p_Vid->dec_ref_pic_marking_buffer;
+      p_Vid->dec_ref_pic_marking_buffer = tmp_drpm->Next;
+      free(tmp_drpm);
+    }
 
 #if (MVC_EXTENSION_ENABLE)
     field_picture (p_Vid, p_Vid->field_pic_ptr[0], p_Vid->field_pic_ptr[1]);
@@ -878,12 +883,11 @@ void perform_encode_frame(VideoParameters *p_Vid)
       num_ref_idx_l0 = p_Vid->num_ref_idx_l0_active;
       num_ref_idx_l1 = p_Vid->num_ref_idx_l1_active;
     }
-#if (MVC_EXTENSION_ENABLE)
-    if ( p_Inp->num_of_views==2 && p_Vid->fld_flag==0 )
+    
+    if ( p_Vid->fld_flag==0 )
     {
       p_Vid->type = (short) frame_type;
     }
-#endif
 
     update_field_frame_contexts (p_Vid, p_Vid->fld_flag);
 
@@ -978,24 +982,12 @@ void store_coded_picture(DecodedPictureBuffer *p_Dpb)
       if (p_Vid->rd_pass==2)
       {
         replace_top_pic_with_frame(p_Dpb, p_Vid->enc_frame_picture[2], &p_Inp->output);
-#if (MVC_EXTENSION_ENABLE)
-        if ( is_MVC_profile(profile_idc) )
-        {
-          replace_top_proc_pic_with_frame(p_Vid->p_Dpb_layer[1], p_Vid->enc_frame_picture[2]);
-        }
-#endif
         free_storable_picture     (p_Vid, p_Vid->enc_frame_picture[0]);
         free_storable_picture     (p_Vid, p_Vid->enc_frame_picture[1]);
       }
       else if (p_Vid->rd_pass==1)
       {
         replace_top_pic_with_frame(p_Dpb, p_Vid->enc_frame_picture[1], &p_Inp->output);
-#if (MVC_EXTENSION_ENABLE)
-        if ( is_MVC_profile(profile_idc) )
-        {
-          replace_top_proc_pic_with_frame(p_Vid->p_Dpb_layer[1], p_Vid->enc_frame_picture[1]);
-        }
-#endif
         free_storable_picture     (p_Vid, p_Vid->enc_frame_picture[0]);
         free_storable_picture     (p_Vid, p_Vid->enc_frame_picture[2]);
       }
@@ -1004,12 +996,6 @@ void store_coded_picture(DecodedPictureBuffer *p_Dpb)
         if(p_Inp->redundant_pic_flag==0 || (p_Vid->key_frame==0))
         {
           replace_top_pic_with_frame(p_Dpb, p_Vid->enc_frame_picture[0], &p_Inp->output);
-#if (MVC_EXTENSION_ENABLE)
-          if ( is_MVC_profile(profile_idc) )
-          {
-            replace_top_proc_pic_with_frame(p_Vid->p_Dpb_layer[1], p_Vid->enc_frame_picture[0]);
-          }
-#endif
           free_storable_picture     (p_Vid, p_Vid->enc_frame_picture[1]);
           free_storable_picture     (p_Vid, p_Vid->enc_frame_picture[2]);
         }
@@ -1541,6 +1527,7 @@ void copy_params(VideoParameters *p_Vid, StorablePicture *enc_picture, seq_param
   enc_picture->chroma_mask_mv_y    = p_Vid->chroma_mask_mv_y;
   enc_picture->chroma_shift_y      = p_Vid->chroma_shift_y;
   enc_picture->chroma_shift_x      = p_Vid->chroma_shift_x;
+  enc_picture->otf_flag            = p_Vid->p_Inp->OnTheFlyFractMCP;
 
   if (active_sps->frame_cropping_flag)
   {
@@ -1684,6 +1671,7 @@ static void field_picture (VideoParameters *p_Vid, Picture *top, Picture *bottom
   p_Vid->enc_field_picture[0]              = alloc_storable_picture (p_Vid, (PictureStructure) p_Vid->structure, p_Vid->width, p_Vid->height, p_Vid->width_cr, p_Vid->height_cr);
   p_Vid->enc_field_picture[0]->poc         = p_Vid->toppoc;
   p_Vid->enc_field_picture[0]->frame_poc   = p_Vid->toppoc;
+  /*Potentially buggy to not divide by num_of_layers */
   p_Vid->enc_field_picture[0]->pic_num     = p_Vid->frame_num;
   p_Vid->enc_field_picture[0]->frame_num   = p_Vid->frame_num;
   p_Vid->enc_field_picture[0]->coded_frame = 0;
@@ -2154,6 +2142,7 @@ void UnifiedOneForthPix ( VideoParameters *p_Vid, StorablePicture *s)
   // derive the subpixel images for first component
   // No need to interpolate if intra only encoding
   //if (p_Inp->intra_period != 1)
+  if ( (!p_Inp->OnTheFlyFractMCP) || (p_Inp->OnTheFlyFractMCP==OTF_L1) ) // JLT : on-the-fly
   {
     getSubImagesLuma ( p_Vid, s );
     // and the sub-images for U and V
@@ -2179,8 +2168,17 @@ void UnifiedOneForthPix ( VideoParameters *p_Vid, StorablePicture *s)
         s->p_curr_img = p_curr_img;
       }
       else
+      {
         getSubImagesChroma( p_Vid, s );
+      }
     }
+  }
+  else
+  {
+    // perform  padding ( copying borders) that is implicitly done above if p_Inp->OnTheFlyFractMCP=0
+    OtfCompatibility_copyWithPadding( s->imgY, s->imgY, s->size_x, s->size_y, IMG_PAD_SIZE_X, IMG_PAD_SIZE_Y ) ;
+    OtfCompatibility_copyWithPadding( s->imgUV[0], s->imgUV[0], s->size_x_cr, s->size_y_cr, p_Vid->pad_size_uv_x,p_Vid->pad_size_uv_y ) ;
+    OtfCompatibility_copyWithPadding( s->imgUV[1], s->imgUV[1], s->size_x_cr, s->size_y_cr, p_Vid->pad_size_uv_x, p_Vid->pad_size_uv_y ) ;
   }
 }
 
@@ -2196,21 +2194,23 @@ void UnifiedOneForthPix ( VideoParameters *p_Vid, StorablePicture *s)
  ************************************************************************/
 void UnifiedOneForthPix_JV (VideoParameters *p_Vid, int nplane, StorablePicture *s)
 {
-  //int ypadded_size = s->size_y_padded;
-  //int xpadded_size = s->size_x_padded;
+  InputParameters *p_Inp = p_Vid->p_Inp;
 
   if( nplane == 0 )
   {
-  if(s->bInterpolated)
-    return;
-  s->bInterpolated = 1;
+    if(s->bInterpolated)
+      return;
+    s->bInterpolated = 1;
     s->p_img[0] = s->imgY;
     s->p_img[1] = s->imgUV[0];
     s->p_img[2] = s->imgUV[1];
 
-    s->p_img_sub[0] = s->imgY_sub;
-    s->p_img_sub[1] = s->imgUV_sub[0];
-    s->p_img_sub[2] = s->imgUV_sub[1];
+    if ( (!p_Inp->OnTheFlyFractMCP) || (p_Inp->OnTheFlyFractMCP==OTF_L1) ) // JLT : on-the-fly
+    {
+      s->p_img_sub[0] = s->imgY_sub;
+      s->p_img_sub[1] = s->imgUV_sub[0];
+      s->p_img_sub[2] = s->imgUV_sub[1];
+    }
   }
 
   // derive the subpixel images for first component
@@ -2218,7 +2218,15 @@ void UnifiedOneForthPix_JV (VideoParameters *p_Vid, int nplane, StorablePicture 
   s->p_curr_img = s->p_img[nplane];
   s->p_curr_img_sub = s->p_img_sub[nplane];
 
-  getSubImagesLuma ( p_Vid, s );
+  if( (!p_Inp->OnTheFlyFractMCP) || (p_Inp->OnTheFlyFractMCP==OTF_L1) )
+  {
+    getSubImagesLuma ( p_Vid, s );
+  }
+  else
+  {
+    // perform  padding ( copying borders) that is implicitly done above if p_Inp->OnTheFlyFractMCP=0
+     OtfCompatibility_copyWithPadding( s->p_img[nplane], s->p_img[nplane], s->size_x, s->size_y, IMG_PAD_SIZE_X, IMG_PAD_SIZE_Y ) ;
+  }
 }
 
   /*!
@@ -2333,7 +2341,7 @@ static void ReportVerbose(VideoParameters *p_Vid, char *pic_type, int cur_bits, 
     }
     else if ( p_Vid->fld_flag && p_Vid->view_id == 1 )
     {
-      printf ("%05d(%3s)  %1d  %8d %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+      printf ("%05d(%3s)  %1d  %8d %1d %2d %4d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
         p_Vid->prev_cs.frm_no_in_file, p_Vid->prev_cs.pic_type, p_Vid->prev_cs.view_id,
         (int)(p_Vid->p_Stats->bit_ctr_v[0] - p_Vid->p_Stats->bit_ctr_n_v[0]) + (int)(p_Vid->p_Stats->bit_ctr_filler_data_v[0] - p_Vid->p_Stats->bit_ctr_filler_data_n_v[0]),
         p_Vid->prev_cs.wp_method, p_Vid->prev_cs.AverageFrameQP, p_Vid->prev_cs.lambda, 
@@ -2341,7 +2349,7 @@ static void ReportVerbose(VideoParameters *p_Vid, char *pic_type, int cur_bits, 
         p_Vid->prev_cs.tmp_time, (int) p_Vid->prev_cs.me_time,
         p_Vid->prev_cs.fld_flag ? "FLD" : "FRM", p_Vid->prev_cs.intras, p_Vid->prev_cs.direct_mode,
         p_Vid->prev_cs.num_ref_idx_l0_active, p_Vid->prev_cs.num_ref_idx_l1_active, p_Vid->prev_cs.rd_pass, p_Vid->prev_cs.nal_reference_idc);
-      printf ("%05d(%3s)  %1d  %8d %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+      printf ("%05d(%3s)  %1d  %8d %1d %2d %4d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
         p_Vid->frm_no_in_file, pic_type, p_Vid->view_id, 
         (int)(p_Vid->p_Stats->bit_ctr_v[1] - p_Vid->p_Stats->bit_ctr_n_v[1]) + (int)(p_Vid->p_Stats->bit_ctr_filler_data_v[1] - p_Vid->p_Stats->bit_ctr_filler_data_n_v[1]), wp_method,
         p_Vid->AverageFrameQP, lambda, 
@@ -2352,7 +2360,7 @@ static void ReportVerbose(VideoParameters *p_Vid, char *pic_type, int cur_bits, 
     }
     else
     {
-      printf ("%05d(%3s)  %1d  %8d %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+      printf ("%05d(%3s)  %1d  %8d %1d %2d %4d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
         p_Vid->frm_no_in_file, pic_type, p_Vid->view_id, cur_bits, wp_method,
         p_Vid->AverageFrameQP, lambda, 
         mPSNR->value[0], mPSNR->value[1], mPSNR->value[2],     
@@ -2364,7 +2372,7 @@ static void ReportVerbose(VideoParameters *p_Vid, char *pic_type, int cur_bits, 
   else
 #endif
   {
-  printf ("%05d(%3s)%8d %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+  printf ("%05d(%3s)%8d %1d %2d %4d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
     p_Vid->frm_no_in_file, pic_type, cur_bits, wp_method,
     p_Vid->AverageFrameQP, lambda, 
     mPSNR->value[0], mPSNR->value[1], mPSNR->value[2],     
@@ -2405,7 +2413,7 @@ static void ReportVerboseNVB(VideoParameters *p_Vid, char *pic_type, int cur_bit
     }
     else if ( p_Vid->fld_flag && p_Vid->view_id == 1 )
     {
-      printf ("%05d(%3s)  %1d  %8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+      printf ("%05d(%3s)  %1d  %8d %3d  %1d %2d %4d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
         p_Vid->prev_cs.frm_no_in_file, p_Vid->prev_cs.pic_type, p_Vid->prev_cs.view_id,
         (int)(p_Vid->p_Stats->bit_ctr_v[0] - p_Vid->p_Stats->bit_ctr_n_v[0]) 
         + (int)(p_Vid->p_Stats->bit_ctr_filler_data_v[0] - p_Vid->p_Stats->bit_ctr_filler_data_n_v[0]) + p_Vid->p_Stats->bit_ctr_parametersets_n_v[0],
@@ -2414,7 +2422,7 @@ static void ReportVerboseNVB(VideoParameters *p_Vid, char *pic_type, int cur_bit
         p_Vid->prev_cs.tmp_time, (int) p_Vid->prev_cs.me_time,
         p_Vid->prev_cs.fld_flag ? "FLD" : "FRM", p_Vid->prev_cs.intras, p_Vid->prev_cs.direct_mode,
         p_Vid->prev_cs.num_ref_idx_l0_active, p_Vid->prev_cs.num_ref_idx_l1_active, p_Vid->prev_cs.rd_pass, p_Vid->prev_cs.nal_reference_idc);
-      printf ("%05d(%3s)  %1d  %8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+      printf ("%05d(%3s)  %1d  %8d %3d  %1d %2d %4d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
         p_Vid->frm_no_in_file, pic_type, p_Vid->view_id, 
         (int)(p_Vid->p_Stats->bit_ctr_v[1] - p_Vid->p_Stats->bit_ctr_n_v[1]) 
         + (int)(p_Vid->p_Stats->bit_ctr_filler_data_v[1] - p_Vid->p_Stats->bit_ctr_filler_data_n_v[1]) + p_Vid->p_Stats->bit_ctr_parametersets_n_v[1], 
@@ -2427,7 +2435,7 @@ static void ReportVerboseNVB(VideoParameters *p_Vid, char *pic_type, int cur_bit
     }
     else
     {
-      printf ("%05d(%3s)  %1d  %8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d  %d\n",
+      printf ("%05d(%3s)  %1d  %8d %3d  %1d %2d %4d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d  %d\n",
         p_Vid->frm_no_in_file, pic_type, p_Vid->view_id, cur_bits, nvb_bits, wp_method,
         p_Vid->AverageFrameQP, lambda, 
         mPSNR->value[0], mPSNR->value[1], mPSNR->value[2],     
@@ -2439,7 +2447,7 @@ static void ReportVerboseNVB(VideoParameters *p_Vid, char *pic_type, int cur_bit
   else
 #endif
   {
-    printf ("%05d(%3s)%8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+    printf ("%05d(%3s)%8d %3d  %1d %2d %4d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
       p_Vid->frm_no_in_file, pic_type, cur_bits, nvb_bits, wp_method,
       p_Vid->AverageFrameQP, lambda, 
       mPSNR->value[0], mPSNR->value[1], mPSNR->value[2],     
@@ -2481,7 +2489,7 @@ static void ReportVerboseFDN(VideoParameters *p_Vid, char *pic_type, int cur_bit
     }
     else if ( p_Vid->fld_flag && p_Vid->view_id == 1 )
     {
-      printf ("%05d(%3s)  %1d  %8d %8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+      printf ("%05d(%3s)  %1d  %8d %8d %3d  %1d %2d %4d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
         p_Vid->prev_cs.frm_no_in_file, p_Vid->prev_cs.pic_type, p_Vid->prev_cs.view_id,
         (int)(p_Vid->p_Stats->bit_ctr_v[0] - p_Vid->p_Stats->bit_ctr_n_v[0]) 
         + (int)(p_Vid->p_Stats->bit_ctr_filler_data_v[0] - p_Vid->p_Stats->bit_ctr_filler_data_n_v[0]) + p_Vid->p_Stats->bit_ctr_parametersets_n_v[0], 
@@ -2492,7 +2500,7 @@ static void ReportVerboseFDN(VideoParameters *p_Vid, char *pic_type, int cur_bit
         p_Vid->prev_cs.tmp_time, (int) p_Vid->prev_cs.me_time,
         p_Vid->prev_cs.fld_flag ? "FLD" : "FRM", p_Vid->prev_cs.intras, p_Vid->prev_cs.direct_mode,
         p_Vid->prev_cs.num_ref_idx_l0_active, p_Vid->prev_cs.num_ref_idx_l1_active, p_Vid->prev_cs.rd_pass, p_Vid->prev_cs.nal_reference_idc);
-      printf ("%05d(%3s)  %1d  %8d %8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+      printf ("%05d(%3s)  %1d  %8d %8d %3d  %1d %2d %4d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
         p_Vid->frm_no_in_file, pic_type, p_Vid->view_id, 
         (int)(p_Vid->p_Stats->bit_ctr_v[1] - p_Vid->p_Stats->bit_ctr_n_v[1]) 
         + (int)(p_Vid->p_Stats->bit_ctr_filler_data_v[1] - p_Vid->p_Stats->bit_ctr_filler_data_n_v[1]) + p_Vid->p_Stats->bit_ctr_parametersets_n_v[1], 
@@ -2507,7 +2515,7 @@ static void ReportVerboseFDN(VideoParameters *p_Vid, char *pic_type, int cur_bit
     }
     else
     {
-      printf ("%05d(%3s)  %1d  %8d %8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+      printf ("%05d(%3s)  %1d  %8d %8d %3d  %1d %2d %4d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
         p_Vid->frm_no_in_file, pic_type, p_Vid->view_id, cur_bits, fdn_bits, nvb_bits, wp_method,
         p_Vid->AverageFrameQP, lambda, 
         mPSNR->value[0], mPSNR->value[1], mPSNR->value[2],     
@@ -2519,7 +2527,7 @@ static void ReportVerboseFDN(VideoParameters *p_Vid, char *pic_type, int cur_bit
   else
 #endif
   {
-  printf ("%05d(%3s)%8d %8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+  printf ("%05d(%3s)%8d %8d %3d  %1d %2d %4d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
     p_Vid->frm_no_in_file, pic_type, cur_bits, fdn_bits, nvb_bits, wp_method,
     p_Vid->AverageFrameQP, lambda, 
     mPSNR->value[0], mPSNR->value[1], mPSNR->value[2],     
@@ -2534,7 +2542,7 @@ static void ReportVerboseSSIM(VideoParameters *p_Vid, char *pic_type, int cur_bi
 #if (MVC_EXTENSION_ENABLE)
   if ( p_Vid->p_Inp->num_of_views == 2 )
   {
-    printf ("%05d(%3s)  %1d  %8d %1d %2d %2d %7.3f %7.3f %7.3f %7.4f %7.4f %7.4f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+    printf ("%05d(%3s)  %1d  %8d %1d %2d %4d %7.3f %7.3f %7.3f %7.4f %7.4f %7.4f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
       p_Vid->frm_no_in_file, pic_type, p_Vid->view_id, cur_bits, wp_method,
       p_Vid->AverageFrameQP, lambda, 
       mPSNR->value[0], mPSNR->value[1], mPSNR->value[2], 
@@ -2546,7 +2554,7 @@ static void ReportVerboseSSIM(VideoParameters *p_Vid, char *pic_type, int cur_bi
   else
 #endif
   {
-  printf ("%05d(%3s)%8d %1d %2d %2d %7.3f %7.3f %7.3f %7.4f %7.4f %7.4f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+  printf ("%05d(%3s)%8d %1d %2d %4d %7.3f %7.3f %7.3f %7.4f %7.4f %7.4f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
     p_Vid->frm_no_in_file, pic_type, cur_bits, wp_method,
     p_Vid->AverageFrameQP, lambda, 
     mPSNR->value[0], mPSNR->value[1], mPSNR->value[2], 
@@ -2562,7 +2570,7 @@ static void ReportVerboseNVBSSIM(VideoParameters *p_Vid, char *pic_type, int cur
 #if (MVC_EXTENSION_ENABLE)
   if ( p_Vid->p_Inp->num_of_views == 2 )
   {
-    printf ("%05d(%3s)  %1d  %8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %7.4f %7.4f %7.4f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+    printf ("%05d(%3s)  %1d  %8d %3d  %1d %2d %4d %7.3f %7.3f %7.3f %7.4f %7.4f %7.4f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
       p_Vid->frm_no_in_file, pic_type, p_Vid->view_id, cur_bits, nvb_bits, wp_method,
       p_Vid->AverageFrameQP, lambda, 
       mPSNR->value[0], mPSNR->value[1], mPSNR->value[2], 
@@ -2574,7 +2582,7 @@ static void ReportVerboseNVBSSIM(VideoParameters *p_Vid, char *pic_type, int cur
   else
 #endif
   {
-  printf ("%05d(%3s)%8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %7.4f %7.4f %7.4f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+  printf ("%05d(%3s)%8d %3d  %1d %2d %4d %7.3f %7.3f %7.3f %7.4f %7.4f %7.4f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
     p_Vid->frm_no_in_file, pic_type, cur_bits, nvb_bits, wp_method,
     p_Vid->AverageFrameQP, lambda, 
     mPSNR->value[0], mPSNR->value[1], mPSNR->value[2], 
@@ -2590,7 +2598,7 @@ static void ReportVerboseFDNSSIM(VideoParameters *p_Vid, char *pic_type, int cur
 #if (MVC_EXTENSION_ENABLE)
   if ( p_Vid->p_Inp->num_of_views == 2 )
   {
-    printf ("%05d(%3s)  %1d  %8d %8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %7.4f %7.4f %7.4f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+    printf ("%05d(%3s)  %1d  %8d %8d %3d  %1d %2d %4d %7.3f %7.3f %7.3f %7.4f %7.4f %7.4f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
       p_Vid->frm_no_in_file, pic_type, p_Vid->view_id, cur_bits, fdn_bits, nvb_bits, wp_method,
       p_Vid->AverageFrameQP, lambda, 
       mPSNR->value[0], mPSNR->value[1], mPSNR->value[2], 
@@ -2602,7 +2610,7 @@ static void ReportVerboseFDNSSIM(VideoParameters *p_Vid, char *pic_type, int cur
   else
 #endif
   {
-  printf ("%05d(%3s)%8d %8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %7.4f %7.4f %7.4f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+  printf ("%05d(%3s)%8d %8d %3d  %1d %2d %4d %7.3f %7.3f %7.3f %7.4f %7.4f %7.4f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
     p_Vid->frm_no_in_file, pic_type, cur_bits, fdn_bits, nvb_bits, wp_method,
     p_Vid->AverageFrameQP, lambda, 
     mPSNR->value[0], mPSNR->value[1], mPSNR->value[2], 
@@ -2648,7 +2656,7 @@ static void ReportFirstframe(VideoParameters *p_Vid, int64 tmp_time)
   }
   else if (p_Inp->Verbose == 2)
   {
-    int lambda = (int) p_Vid->lambda_me[I_SLICE][p_Vid->AverageFrameQP][0];
+    int lambda = (int) p_Vid->lambda_me[I_SLICE][p_Vid->masterQP][F_PEL];
     if (p_Inp->Distortion[SSIM] == 1)
       ReportVerboseSSIM(p_Vid, "IDR", cur_bits, 0, lambda, &p_Vid->p_Dist->metric[PSNR], &p_Vid->p_Dist->metric[SSIM], (int) tmp_time, 0);
     else
@@ -2656,7 +2664,7 @@ static void ReportFirstframe(VideoParameters *p_Vid, int64 tmp_time)
   }
   else if (p_Inp->Verbose == 3)
   {
-    int lambda = (int) p_Vid->lambda_me[I_SLICE][p_Vid->AverageFrameQP][0];
+    int lambda = (int) p_Vid->lambda_me[I_SLICE][p_Vid->masterQP][F_PEL];
     if (p_Inp->Distortion[SSIM] == 1)
       ReportVerboseNVBSSIM(p_Vid, "IDR", cur_bits + stats->bit_ctr_parametersets_n, stats->bit_ctr_parametersets_n, 0, lambda, &p_Vid->p_Dist->metric[PSNR], &p_Vid->p_Dist->metric[SSIM], (int) tmp_time, 0);
     else
@@ -2664,7 +2672,7 @@ static void ReportFirstframe(VideoParameters *p_Vid, int64 tmp_time)
   }
   else if (p_Inp->Verbose == 4)
   {
-    int lambda = (int) p_Vid->lambda_me[I_SLICE][p_Vid->AverageFrameQP][0];
+    int lambda = (int) p_Vid->lambda_me[I_SLICE][p_Vid->masterQP][F_PEL];
     if (p_Inp->Distortion[SSIM] == 1)
       ReportVerboseFDNSSIM(p_Vid, "IDR", cur_bits + stats->bit_ctr_parametersets_n, (int)(stats->bit_ctr_filler_data - stats->bit_ctr_filler_data_n), stats->bit_ctr_parametersets_n, 0, lambda, &p_Vid->p_Dist->metric[PSNR], &p_Vid->p_Dist->metric[SSIM], (int) tmp_time, 0);
     else
@@ -2712,7 +2720,7 @@ static void ReportI(VideoParameters *p_Vid, int64 tmp_time)
   }
   else if (p_Inp->Verbose == 2)
   {
-    int lambda = (int) p_Vid->lambda_me[I_SLICE][p_Vid->AverageFrameQP][0];
+    int lambda = (int) p_Vid->lambda_me[I_SLICE][p_Vid->masterQP][F_PEL];
     if (p_Inp->Distortion[SSIM] == 1)
     {
       ReportVerboseSSIM(p_Vid, pic_type, cur_bits, 0, lambda, &p_Vid->p_Dist->metric[PSNR], &p_Vid->p_Dist->metric[SSIM], (int) tmp_time, 0);
@@ -2724,7 +2732,7 @@ static void ReportI(VideoParameters *p_Vid, int64 tmp_time)
   }
   else if (p_Inp->Verbose == 3)
   {
-    int lambda = (int) p_Vid->lambda_me[I_SLICE][p_Vid->AverageFrameQP][0];
+    int lambda = (int) p_Vid->lambda_me[I_SLICE][p_Vid->masterQP][F_PEL];
     if (p_Inp->Distortion[SSIM] == 1)
     {
       ReportVerboseNVBSSIM(p_Vid, pic_type, cur_bits + stats->bit_ctr_parametersets_n, stats->bit_ctr_parametersets_n, 0, lambda, &p_Vid->p_Dist->metric[PSNR], &p_Vid->p_Dist->metric[SSIM], (int) tmp_time, 0);
@@ -2736,7 +2744,7 @@ static void ReportI(VideoParameters *p_Vid, int64 tmp_time)
   }
   else if (p_Inp->Verbose == 4)
   {
-    int lambda = (int) p_Vid->lambda_me[I_SLICE][p_Vid->AverageFrameQP][0];
+    int lambda = (int) p_Vid->lambda_me[I_SLICE][p_Vid->masterQP][F_PEL];
     if (p_Inp->Distortion[SSIM] == 1)
     {
       ReportVerboseFDNSSIM(p_Vid, pic_type, cur_bits + stats->bit_ctr_parametersets_n, (int)(stats->bit_ctr_filler_data - stats->bit_ctr_filler_data_n), stats->bit_ctr_parametersets_n, 0, lambda, &p_Vid->p_Dist->metric[PSNR], &p_Vid->p_Dist->metric[SSIM], (int) tmp_time, 0);
@@ -2762,7 +2770,7 @@ static void ReportB(VideoParameters *p_Vid, int64 tmp_time)
   }
   else if (p_Inp->Verbose == 2)
   {
-    int lambda = (int) p_Vid->lambda_me[/*p_Vid->nal_reference_idc ? 5 :*/ B_SLICE][p_Vid->AverageFrameQP][0];    
+    int lambda = (int) p_Vid->lambda_me[B_SLICE][p_Vid->masterQP][F_PEL];    
     if (p_Inp->Distortion[SSIM] == 1)
       ReportVerboseSSIM(p_Vid, " B ", cur_bits, p_Vid->active_pps->weighted_bipred_idc, lambda, &p_Vid->p_Dist->metric[PSNR], &p_Vid->p_Dist->metric[SSIM], (int) tmp_time, p_Vid->direct_spatial_mv_pred_flag);
     else
@@ -2770,7 +2778,7 @@ static void ReportB(VideoParameters *p_Vid, int64 tmp_time)
   }
   else if (p_Inp->Verbose == 3)
   {
-    int lambda = (int) p_Vid->lambda_me[/*p_Vid->nal_reference_idc ? 5 :*/ B_SLICE][p_Vid->AverageFrameQP][0];    
+    int lambda = (int) p_Vid->lambda_me[B_SLICE][p_Vid->masterQP][F_PEL];    
     if (p_Inp->Distortion[SSIM] == 1)
       ReportVerboseNVBSSIM(p_Vid, " B ", cur_bits + stats->bit_ctr_parametersets_n, stats->bit_ctr_parametersets_n, p_Vid->active_pps->weighted_bipred_idc, lambda, &p_Vid->p_Dist->metric[PSNR], &p_Vid->p_Dist->metric[SSIM], (int) tmp_time, p_Vid->direct_spatial_mv_pred_flag);
     else
@@ -2778,7 +2786,7 @@ static void ReportB(VideoParameters *p_Vid, int64 tmp_time)
   }
   else if (p_Inp->Verbose == 4)
   {
-    int lambda = (int) p_Vid->lambda_me[/*p_Vid->nal_reference_idc ? 5 :*/ B_SLICE][p_Vid->AverageFrameQP][0];    
+    int lambda = (int) p_Vid->lambda_me[B_SLICE][p_Vid->masterQP][F_PEL];    
     if (p_Inp->Distortion[SSIM] == 1)
       ReportVerboseFDNSSIM(p_Vid, " B ", cur_bits + stats->bit_ctr_parametersets_n, (int)(stats->bit_ctr_filler_data - stats->bit_ctr_filler_data_n), stats->bit_ctr_parametersets_n, p_Vid->active_pps->weighted_bipred_idc, lambda, &p_Vid->p_Dist->metric[PSNR], &p_Vid->p_Dist->metric[SSIM], (int) tmp_time, p_Vid->direct_spatial_mv_pred_flag);
     else
@@ -2808,7 +2816,7 @@ static void ReportP(VideoParameters *p_Vid, int64 tmp_time)
   }
   else if (p_Inp->Verbose == 2)
   {
-    int lambda = (int) p_Vid->lambda_me[P_SLICE][p_Vid->AverageFrameQP][0];    
+    int lambda = (int) p_Vid->lambda_me[P_SLICE][p_Vid->masterQP][F_PEL];    
     if (p_Inp->Distortion[SSIM] == 1)
       ReportVerboseSSIM(p_Vid, pic_type, cur_bits, p_Vid->active_pps->weighted_pred_flag, lambda, &p_Vid->p_Dist->metric[PSNR], &p_Vid->p_Dist->metric[SSIM], (int) tmp_time, 0);
     else
@@ -2816,7 +2824,7 @@ static void ReportP(VideoParameters *p_Vid, int64 tmp_time)
   }
   else if (p_Inp->Verbose == 3)
   {
-    int lambda = (int) p_Vid->lambda_me[P_SLICE][p_Vid->AverageFrameQP][0];    
+    int lambda = (int) p_Vid->lambda_me[P_SLICE][p_Vid->masterQP][F_PEL];        
     if (p_Inp->Distortion[SSIM] == 1)
       ReportVerboseNVBSSIM(p_Vid, pic_type, cur_bits + stats->bit_ctr_parametersets_n, stats->bit_ctr_parametersets_n, p_Vid->active_pps->weighted_pred_flag, lambda, &p_Vid->p_Dist->metric[PSNR], &p_Vid->p_Dist->metric[SSIM], (int) tmp_time, 0);
     else
@@ -2824,7 +2832,7 @@ static void ReportP(VideoParameters *p_Vid, int64 tmp_time)
   }
   else if (p_Inp->Verbose == 4)
   {
-    int lambda = (int) p_Vid->lambda_me[P_SLICE][p_Vid->AverageFrameQP][0];    
+    int lambda = (int) p_Vid->lambda_me[P_SLICE][p_Vid->masterQP][F_PEL];    
     if (p_Inp->Distortion[SSIM] == 1)
       ReportVerboseFDNSSIM(p_Vid, pic_type, cur_bits + stats->bit_ctr_parametersets_n, (int)(stats->bit_ctr_filler_data - stats->bit_ctr_filler_data_n), stats->bit_ctr_parametersets_n, p_Vid->active_pps->weighted_pred_flag, lambda, &p_Vid->p_Dist->metric[PSNR], &p_Vid->p_Dist->metric[SSIM], (int) tmp_time, 0);
     else
@@ -3198,6 +3206,55 @@ void write_non_vcl_nalu_bot_fld( VideoParameters *p_Vid )
 
   // update seq NVB counter
   p_Vid->p_Stats->bit_ctr_parametersets   += (p_Vid->p_Stats->bit_ctr_parametersets_n - init_param_set_bits);
+}
+
+void OtfCompatibility_copyWithPadding ( imgpel **dstImg, imgpel **srcImg, int size_x, int size_y, int padding_x, int padding_y )
+{
+  int i, j;
+  int size_x_minus1 = size_x - 1;
+
+  imgpel *wBufSrc, *wBufDst;
+
+  // Copy top line
+  wBufDst = &( dstImg[-padding_y][-padding_x] ); 
+  wBufSrc = srcImg[0];
+  // left IMG_PAD_SIZE
+  for (i = 0; i < padding_x; ++i)
+    *(wBufDst++) = wBufSrc[0];
+  // center 0-(size_x)
+  memcpy(wBufDst, wBufSrc, size_x * sizeof(imgpel));
+  wBufDst += size_x;
+  // right IMG_PAD_SIZE
+  for (i = 0; i < padding_x; ++i)
+    *(wBufDst++) = wBufSrc[size_x_minus1];
+
+  // Now copy remaining pad lines
+  for (j = -padding_y+1; j < 0; ++j)
+  {
+    memcpy(dstImg[j]-padding_x, dstImg[j - 1]-padding_x, (size_x+2*padding_x) * sizeof(imgpel));
+  }
+
+  for (j = 0; j < size_y; ++j)
+  {    
+    wBufDst = &( dstImg[j][-padding_x] ); // 4:4:4 independent mode
+    wBufSrc = srcImg[j];
+    // left IMG_PAD_SIZE
+    for (i = 0; i < padding_x; ++i)
+      *(wBufDst++) = wBufSrc[0];
+    // center 0-(size_x)
+    //memcpy(wBufDst, wBufSrc, size_x * sizeof(imgpel));
+    wBufDst += size_x;
+    // right IMG_PAD_SIZE
+    for (i = 0; i < padding_x; ++i)
+      *(wBufDst++) = wBufSrc[size_x_minus1];
+  }
+
+  // Replicate bottom pad lines
+  for (j = size_y; j < size_y+padding_y; ++j)
+  {    
+    memcpy(dstImg[j]-padding_x, dstImg[j - 1]-padding_x, (size_x+2*padding_x) * sizeof(imgpel));
+  }
+
 }
 
 #if (MVC_EXTENSION_ENABLE)

@@ -536,7 +536,7 @@ void free_QMatrix (QuantParameters *p_Quant)
  *    Initialise Q matrix values.
  ***********************************************************************
  */
-void Init_QMatrix (VideoParameters *p_Vid, InputParameters *p_Inp)
+void init_qmatrix (VideoParameters *p_Vid, InputParameters *p_Inp)
 {
   QuantParameters *p_Quant = p_Vid->p_Quant;
   ScaleParameters *p_QScale = p_Vid->p_QScale;

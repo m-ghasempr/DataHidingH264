@@ -17,7 +17,6 @@
 #ifndef _PRED_STRUCT_TYPES_H_
 #define _PRED_STRUCT_TYPES_H_
 
-
 // default coding structures
 // these are utilized to compress the current sequence when they are not pre-defined
 // sizes are 1 to 4 frames: if a length 4 structure does not *fit* then we try a length 3, 2, or 1 structure. 
@@ -30,6 +29,13 @@
 
 // non idr atoms
 // idr atoms (for intra_delay)
+
+typedef enum
+{
+  POP_IDR = 1,
+  POP_INTRA = 2,
+  POP_SP = 3
+} SliceTypeToPop;
 
 // prediction frame structure
 typedef struct pred_struct_frm
@@ -95,21 +101,13 @@ typedef struct frame_struct
   PredStructAtom *p_atom; // pointer to the prediction structure type to which this frame belongs
 } FrameUnitStruct;        // here "frame" is as in the real thing: the displayed frame; not as "frame" in "frame picture" in H.264
 
-// random access unit structure
-typedef struct gop_struct
-{
-  int num_frames;
-  int closed_gop;
-  FrameUnitStruct **pp_frm;
-} GOPStructure;
-
 // sequence structure
 typedef struct seq_struct
 {
   int num_frames;
-  int num_idr_gops;
   int num_prds;
   int num_gops;
+  int num_intra_gops;
 
   // frame indices based on *coding* order
   int last_random_access_frame;
@@ -128,6 +126,7 @@ typedef struct seq_struct
   int pop_start_frame; // frame index (in coding order) from which frame structure population commences
 
   int max_num_slices;
+  int pop_flag;
 
 #if (MVC_EXTENSION_ENABLE)
   int num_frames_mvc;
@@ -135,10 +134,10 @@ typedef struct seq_struct
 #endif
 
   FrameUnitStruct *p_frm;  
-  GOPStructure   *p_idr_gop;
-  PredStructAtom *p_prd; // regular prediction structure
-  PredStructAtom *p_gop;
 
+  PredStructAtom *p_prd; // regular prediction structure
+  PredStructAtom *p_gop; // IDR GOPs
+  PredStructAtom *p_intra_gop; // Intra GOPs
 } SeqStructure;
 
 #endif

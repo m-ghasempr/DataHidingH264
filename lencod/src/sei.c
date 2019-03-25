@@ -2105,7 +2105,6 @@ int Write_SEI_NALU(VideoParameters *p_Vid, int len)
 {  
   NALU_t *nalu = NULL;
   int RBSPlen = 0;
-  int NALUlen;
   byte *rbsp;
 
   if (HaveAggregationSEI(p_Vid))
@@ -2115,7 +2114,7 @@ int Write_SEI_NALU(VideoParameters *p_Vid, int len)
     nalu = AllocNALU(MAXNALUSIZE);
     rbsp = p_SEI->sei_message[AGGREGATION_SEI].data;
     RBSPlen = p_SEI->sei_message[AGGREGATION_SEI].payloadSize;
-    NALUlen = RBSPtoNALU (rbsp, nalu, RBSPlen, NALU_TYPE_SEI, NALU_PRIORITY_DISPOSABLE, 1);
+    RBSPtoNALU (rbsp, nalu, RBSPlen, NALU_TYPE_SEI, NALU_PRIORITY_DISPOSABLE, 1);
     nalu->startcodeprefix_len = 4;
 
     len += p_Vid->WriteNALU (p_Vid, nalu, p_Vid->f_out);

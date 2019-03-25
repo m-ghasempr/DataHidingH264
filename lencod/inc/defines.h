@@ -28,13 +28,13 @@
 #endif
 
 #define JM                  "18 (FRExt)"
-#define VERSION             "18.0"
+#define VERSION             "18.1"
 #define EXT_VERSION         "(FRExt)"
 
 #define GET_METIME                1    //!< Enables or disables ME computation time
 #define DUMP_DPB                  0    //!< Dump DPB info for debug purposes
 #define PRINTREFLIST              0    //!< Print ref list info for debug purposes
-#define IMGTYPE                   1    //!< Define imgpel size type. 0 implies byte (cannot handle >8 bit depths) and 1 implies unsigned short
+#define IMGTYPE                   0    //!< Define imgpel size type. 0 implies byte (cannot handle >8 bit depths) and 1 implies unsigned short
 #define ENABLE_FIELD_CTX          1    //!< Enables field context types for CABAC. If disabled, results in speedup for progressive content.
 #define ENABLE_HIGH444_CTX        1    //!< Enables High 444 context types for CABAC. If disabled, results in speedup of non High444 profile encodings.
 #define DEBUG_BITDEPTH            0    //!< Ensures that > 8 bit content have no values that would result in out of range results
@@ -104,9 +104,7 @@ enum {
 //#define IMG_PAD_SIZE           20 //!< Number of pixels padded around the reference frame (>=4)
 //#define IMG_PAD_SIZE_TIMES4    80 //!< Number of pixels padded around the reference frame in subpel units(>=16)
 #define IMG_PAD_SIZE_X         32 //!< Number of pixels padded around the reference frame (>=4)
-#define IMG_PAD_SIZE_Y         18  //!< Number of pixels padded around the reference frame (>=4)
-#define IMG_PAD_SIZE_X_TIMES4  128 //!< Number of pixels padded around the reference frame in subpel units(>=16)
-#define IMG_PAD_SIZE_Y_TIMES4  72 //!< Number of pixels padded around the reference frame in subpel units(>=16)
+#define IMG_PAD_SIZE_Y         20 //!< Number of pixels padded around the reference frame (>=4)
 
 #define MAX_VALUE       999999   //!< used for start value for some variables
 #define INVALIDINDEX  (-135792468)
@@ -219,6 +217,17 @@ enum {
   CR_4x4        =  21
 } CABACBlockTypes;
 
+// Color components
+enum {
+  Y_COMP = 0,    // Y Component
+  U_COMP = 1,    // U Component
+  V_COMP = 2,    // V Component
+  R_COMP = 3,    // R Component
+  G_COMP = 4,    // G Component
+  B_COMP = 5,    // B Component
+  T_COMP = 6
+} ColorComponent;
+
 
 #define IS_INTRA(MB)    ((MB)->mb_type==SI4MB || (MB)->mb_type==I4MB || (MB)->mb_type==I16MB || (MB)->mb_type==I8MB || (MB)->mb_type==IPCM)
 
@@ -318,6 +327,19 @@ enum {
 #define NUM_LAST_CTX  15
 #define NUM_ONE_CTX    5
 #define NUM_ABS_CTX    5
+
+enum // JLT : on-the-fly levels/modes
+{
+  OTF_L0 = 0, // Disable, interpolate & store all positions
+  OTF_L1 = 1, // Store full pel & interpolated 1/2 pel positions; 1/4 pel positions interpolate on-the-fly
+  OTF_L2 = 2  // Store only full pell positions; 1/2 & 1/4 pel positions interpolate on-the-fly  
+} OTFMode;
+
+enum
+{
+  OTF_ME = 0,
+  OTF_MC = 1
+} OTFFunction;
 
 #if IMGTYPE
 #if JM_MEM_DISTORTION

@@ -1441,7 +1441,7 @@ void writeVlcByteAlign(VideoParameters *p_Vid, Bitstream* currStream, StatParame
   { // trailing bits to process
     currStream->byte_buf = (byte) ((currStream->byte_buf << currStream->bits_to_go) | (0xff >> (8 - currStream->bits_to_go)));
     currStream->streamBuffer[currStream->byte_pos++] = currStream->byte_buf;
-    cur_stats->bit_use_stuffingBits[p_Vid->type] += currStream->bits_to_go;    
+    cur_stats->bit_use_stuffing_bits[p_Vid->type] += currStream->bits_to_go;    
     currStream->bits_to_go = 8;
   }
 }

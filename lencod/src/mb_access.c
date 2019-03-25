@@ -446,7 +446,7 @@ void getAffNeighbour(Macroblock *currMB, int xN, int yN, int mb_size[2], PixelPo
               if(!p_Vid->mb_data[currMB->mbAddrB].mb_field)
               {
                 (pix->mb_addr)++;
-                 yM = 2* yN;
+                 yM = 2 * yN;
               }
               else
               {

@@ -959,7 +959,7 @@ int residual_transform_quant_chroma_4x4(Macroblock *currMB, int uv, int cr_cbp)
   int DCzero = FALSE;
   int nonzero[4][4] = {{FALSE}};
   int nonezero = FALSE;
-  int empty_block = TRUE;
+  //int empty_block = TRUE;
   Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currSlice->p_Vid;
   QuantParameters *p_Quant = p_Vid->p_Quant;
@@ -991,7 +991,7 @@ int residual_transform_quant_chroma_4x4(Macroblock *currMB, int uv, int cr_cbp)
   quant_methods.type     = CHROMA_AC;
   if (currMB->mb_type == P8x8 && currMB->luma_transform_size_8x8_flag)
   {
-    //P8x8, treansform 8x8 chroma adjustments must be stored in a different array to avoid conflict with tranform 4x4
+    //P8x8, transform 8x8 chroma adjustments must be stored in a different array to avoid conflict with transform 4x4
     quant_methods.fadjust = p_Vid->AdaptiveRounding ? p_Vid->ARCofAdj4x4[uv + 1][4] : NULL;
   }
   else
@@ -1020,7 +1020,7 @@ int residual_transform_quant_chroma_4x4(Macroblock *currMB, int uv, int cr_cbp)
       else
       {
         forward4x4(mb_ores, mb_rres, n2, n1);
-        empty_block = FALSE;
+        //empty_block = FALSE;
       }
     }
   }
@@ -1110,7 +1110,7 @@ int residual_transform_quant_chroma_4x4(Macroblock *currMB, int uv, int cr_cbp)
       {
         if (currMB->mb_type == P8x8 && currMB->luma_transform_size_8x8_flag)
         {
-          //P8x8, treansform 8x8 chroma adjustments must be stored in a different array to avoid conflict with tranform 4x4
+          //P8x8, transform 8x8 chroma adjustments must be stored in a different array to avoid conflict with transform 4x4
           quant_methods.fadjust = &p_Vid->ARCofAdj4x4[uv + 1][4][n2];
         }
         else
@@ -1329,7 +1329,7 @@ int residual_transform_quant_chroma_4x4_ls(Macroblock *currMB, int uv, int cr_cb
 
   if (currMB->mb_type == P8x8 && currMB->luma_transform_size_8x8_flag)
   {
-    //P8x8, treansform 8x8 chroma adjustments must be stored in a different array to avoid conflict with tranform 4x4
+    //P8x8, transform 8x8 chroma adjustments must be stored in a different array to avoid conflict with transform 4x4
     fadjust4x4    = p_Vid->AdaptiveRounding ? p_Vid->ARCofAdj4x4[uv + 1][4] : NULL;
   }
   else
@@ -1558,19 +1558,19 @@ int residual_transform_quant_luma_4x4_sp(Macroblock *currMB, ColorPlane pl, int 
   LevelQuantParams **q_params_4x4 = p_Quant->q_params_4x4[pl][intra][qp]; 
   LevelQuantParams **quant_params_sp = p_Quant->q_params_4x4[pl][intra][qp_sp]; 
 
-  QuantMethods quant_methods;
-  quant_methods.ACLevel = currSlice->cofAC[b8][b4][0];
-  quant_methods.ACRun   = currSlice->cofAC[b8][b4][1];
+  //QuantMethods quant_methods;
+  //quant_methods.ACLevel = currSlice->cofAC[b8][b4][0];
+  //quant_methods.ACRun   = currSlice->cofAC[b8][b4][1];
   
-  quant_methods.block_x    = block_x;
-  quant_methods.block_y    = block_y;
-  quant_methods.qp         = qp;
+  //quant_methods.block_x    = block_x;
+  //quant_methods.block_y    = block_y;
+  //quant_methods.qp         = qp;
 
-  quant_methods.q_params   = p_Quant->q_params_4x4[pl][intra][qp]; 
-  quant_methods.fadjust    = p_Vid->AdaptiveRounding ? (&p_Vid->ARCofAdj4x4[pl][currMB->ar_mode][block_y]) : NULL;
-  quant_methods.coeff_cost = coeff_cost; 
-  quant_methods.pos_scan   = currMB->is_field_mode ? FIELD_SCAN : SNGL_SCAN;    
-  quant_methods.c_cost     = COEFF_COST4x4[currSlice->disthres];
+  //quant_methods.q_params   = p_Quant->q_params_4x4[pl][intra][qp]; 
+  //quant_methods.fadjust    = p_Vid->AdaptiveRounding ? (&p_Vid->ARCofAdj4x4[pl][currMB->ar_mode][block_y]) : NULL;
+  //quant_methods.coeff_cost = coeff_cost; 
+  //quant_methods.pos_scan   = currMB->is_field_mode ? FIELD_SCAN : SNGL_SCAN;    
+  //quant_methods.c_cost     = COEFF_COST4x4[currSlice->disthres];
     
   qp_const  = (1<<q_bits)/6;    // inter
   qp_const2 = (1<<q_bits_sp)>>1;  //sp_pred
@@ -2088,7 +2088,7 @@ void copyblock_sp(Macroblock *currMB, ColorPlane pl, int block_x,int block_y)
 int residual_transform_quant_luma_4x4_sp2(Macroblock *currMB, ColorPlane pl, int block_x,int block_y,int *coeff_cost, int intra)
 {
   int i,j,ilev,coeff_ctr;
-  int qp_const,level,scan_pos = 0,run = -1;
+  int level,scan_pos = 0,run = -1;
   int nonzero = FALSE;
 
   Slice *currSlice = currMB->p_Slice;
@@ -2109,11 +2109,11 @@ int residual_transform_quant_luma_4x4_sp2(Macroblock *currMB, ColorPlane pl, int
 
   int level1;
 
-  int   qp    = (currMB->qpsp); // should double check spec why these are equal
+  //int   qp    = (currMB->qpsp); // should double check spec why these are equal
   int   qp_sp = (currMB->qpsp);
 
-  int qp_per    = p_Quant->qp_per_matrix[qp];
-  int q_bits    = Q_BITS + qp_per;
+  //int qp_per    = p_Quant->qp_per_matrix[qp];
+  //int q_bits    = Q_BITS + qp_per;
   int qp_per_sp = p_Quant->qp_per_matrix[qp_sp];
   int q_bits_sp = Q_BITS + qp_per_sp;
 
@@ -2124,7 +2124,7 @@ int residual_transform_quant_luma_4x4_sp2(Macroblock *currMB, ColorPlane pl, int
   quant_methods.ACLevel = currSlice->cofAC[b8][b4][0];
   quant_methods.ACRun   = currSlice->cofAC[b8][b4][1];
 
-  qp_const=(1<<q_bits)/6;    // inter
+  //qp_const=(1<<q_bits)/6;    // inter
   qp_const2=(1<<q_bits_sp)>>1;  //sp_pred
 
   for (j=0; j< BLOCK_SIZE; ++j)
@@ -2414,11 +2414,11 @@ void select_transform(Macroblock *currMB)
         currMB->residual_transform_quant_chroma_4x4[1] = residual_transform_quant_chroma_4x4;
       }
 
-      if (currMB->qp_scaled[1] == 0)
+      if (currMB->qp_scaled[PLANE_U] == 0)
       {
         currMB->residual_transform_quant_chroma_4x4[0] = residual_transform_quant_chroma_4x4_ls;
       }
-      if (currMB->qp_scaled[2] == 0)
+      if (currMB->qp_scaled[PLANE_V] == 0)
       {
         currMB->residual_transform_quant_chroma_4x4[1] = residual_transform_quant_chroma_4x4_ls;
       }

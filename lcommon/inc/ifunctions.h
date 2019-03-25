@@ -353,6 +353,13 @@ static inline void free_pointer(void *pointer)
   }
 }
 
+static inline void i32_swap(int x, int y) 
+{
+  int temp = x;
+  x = y;
+  y = temp;
+}
+
 # if !(defined(WIN32) || defined(WIN64)) && (__STDC_VERSION__ < 199901L)
   #undef static
   #undef inline

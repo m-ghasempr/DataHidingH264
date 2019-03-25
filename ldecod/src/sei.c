@@ -1666,8 +1666,8 @@ void interpret_picture_timing_info( byte* payload, int size, VideoParameters *p_
 {
   seq_parameter_set_rbsp_t *active_sps = p_Vid->active_sps;
 
-  int cpb_removal_delay, dpb_output_delay, picture_structure_present_flag, picture_structure;
-  int clock_time_stamp_flag;
+  int cpb_removal_delay, dpb_output_delay, pic_struct_present_flag, pic_struct;
+  int clock_timestamp_flag;
   int ct_type, nuit_field_based_flag, counting_type, full_timestamp_flag, discontinuity_flag, cnt_dropped_flag, nframes;
   int seconds_value, minutes_value, hours_value, seconds_flag, minutes_flag, hours_flag, time_offset;
   int NumClockTs = 0;
@@ -1733,20 +1733,20 @@ void interpret_picture_timing_info( byte* payload, int size, VideoParameters *p_
 
   if (!active_sps->vui_parameters_present_flag)
   {
-    picture_structure_present_flag = 0;
+    pic_struct_present_flag = 0;
   }
   else
   {
-    picture_structure_present_flag  =  active_sps->vui_seq_parameters.pic_struct_present_flag;
+    pic_struct_present_flag  =  active_sps->vui_seq_parameters.pic_struct_present_flag;
   }
 
-  if (picture_structure_present_flag)
+  if (pic_struct_present_flag)
   {
-    picture_structure = read_u_v(4, "SEI: pic_struct" , buf, &p_Dec->UsedBits);
+    pic_struct = read_u_v(4, "SEI: pic_struct" , buf, &p_Dec->UsedBits);
 #ifdef PRINT_PICTURE_TIMING_INFO
-    printf("picture_structure = %d\n",picture_structure);
+    printf("pic_struct = %d\n",pic_struct);
 #endif
-    switch (picture_structure)
+    switch (pic_struct)
     {
     case 0:
     case 1:
@@ -1764,15 +1764,15 @@ void interpret_picture_timing_info( byte* payload, int size, VideoParameters *p_
       NumClockTs = 3;
       break;
     default:
-      error("reserved picture_structure used (can't determine NumClockTs)", 500);
+      error("reserved pic_struct used (can't determine NumClockTs)", 500);
     }
     for (i=0; i<NumClockTs; i++)
     {
-      clock_time_stamp_flag = read_u_1("SEI: clock_time_stamp_flag"  , buf, &p_Dec->UsedBits);
+      clock_timestamp_flag = read_u_1("SEI: clock_timestamp_flag"  , buf, &p_Dec->UsedBits);
 #ifdef PRINT_PICTURE_TIMING_INFO
-      printf("clock_time_stamp_flag = %d\n",clock_time_stamp_flag);
+      printf("clock_timestamp_flag = %d\n",clock_timestamp_flag);
 #endif
-      if (clock_time_stamp_flag)
+      if (clock_timestamp_flag)
       {
         ct_type               = read_u_v(2, "SEI: ct_type"               , buf, &p_Dec->UsedBits);
         nuit_field_based_flag = read_u_1(   "SEI: nuit_field_based_flag" , buf, &p_Dec->UsedBits);

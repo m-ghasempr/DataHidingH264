@@ -270,9 +270,11 @@ Mapping Map[] = {
     {"DisplayEncParams",         &cfgparams.DisplayEncParams,             0,   0.0,                       1,  0.0,              1.0,                             },
     {"Verbose",                  &cfgparams.Verbose,                      0,   1.0,                       1,  0.0,              4.0,                             },
     {"SkipGlobalStats",          &cfgparams.skip_gl_stats,                0,   0.0,                       1,  0.0,              1.0,                             },
+    {"OnTheFlyFractMCP",         &cfgparams.OnTheFlyFractMCP,             0,   0.0,                       1,  0.0,              3.0,                             },
     {"ChromaMCBuffer",           &cfgparams.ChromaMCBuffer,               0,   0.0,                       1,  0.0,              1.0,                             },
     {"ChromaMEEnable",           &cfgparams.ChromaMEEnable,               0,   0.0,                       1,  0.0,              2.0,                             },
-    {"ChromaMEWeight",           &cfgparams.ChromaMEWeight,               0,   1.0,                       2,  1.0,              0.0,                             },
+    {"ChromaMEWeight",           &cfgparams.ChromaMEWeight,               0,   1.0,                       2,  1.0,              0.0,                             },    
+    {"MESoftenSSEMetric",        &cfgparams.MESoftenSSEMetric,            0,   0.0,                       1,  0.0,              1.0,                             },
     {"MEDistortionFPel",         &cfgparams.MEErrorMetric[F_PEL],         0,   0.0,                       1,  0.0,              3.0,                             },
     {"MEDistortionHPel",         &cfgparams.MEErrorMetric[H_PEL],         0,   0.0,                       1,  0.0,              3.0,                             },
     {"MEDistortionQPel",         &cfgparams.MEErrorMetric[Q_PEL],         0,   2.0,                       1,  0.0,              3.0,                             },
@@ -335,7 +337,8 @@ Mapping Map[] = {
     {"OutputBitDepthChroma",     &cfgparams.output.bit_depth[1],          0,   8.0,                       1,  8.0,             14.0,                             },
 
     {"YUVFormat",                &cfgparams.yuv_format,                   0,   1.0,                       1,  0.0,              3.0,                             },
-    {"RGBInput",                 &cfgparams.source.color_model,               0,   0.0,                       1,  0.0,              1.0,                             },
+    {"RGBInput",                 &cfgparams.source.color_model,           0,   0.0,                       1,  0.0,              1.0,                             },
+    {"PixelFormat",              &cfgparams.source.pixel_format,          0,   0.0,                       1,  0.0,              4.0,                             },
     {"Interleaved",              &cfgparams.input_file1.is_interleaved ,  0,   0.0,                       1,  0.0,              1.0,                             },    
     {"StandardRange",            &cfgparams.stdRange,                     0,   0.0,                       1,  0.0,              1.0,                             },
     {"VideoCode",                &cfgparams.videoCode,                    0,   1.0,                       1,  0.0,              8.0,                             },
@@ -408,7 +411,7 @@ Mapping Map[] = {
     // Parameters for EPZS control
     {"EPZSPattern",              &cfgparams.EPZSPattern,                  0,   2.0,                       1,  0.0,              5.0,                             },
     {"EPZSDualRefinement",       &cfgparams.EPZSDual,                     0,   3.0,                       1,  0.0,              6.0,                             },
-    {"EPZSFixedPredictors",      &cfgparams.EPZSFixed,                    0,   2.0,                       1,  0.0,              2.0,                             },
+    {"EPZSFixedPredictors",      &cfgparams.EPZSFixed,                    0,   3.0,                       1,  0.0,              3.0,                             },
 #if (MVC_EXTENSION_ENABLE)
     {"EPZSTemporal",             &cfgparams.EPZSTemporal[0],              0,   1.0,                       1,  0.0,              1.0,                             },
 #else
@@ -427,11 +430,11 @@ Mapping Map[] = {
     {"EPZSMedThresScale",        &cfgparams.EPZSMedThresScale,            0,   1.0,                       0,  0.0,              0.0,                             },
     {"EPZSSubPelThresScale",     &cfgparams.EPZSSubPelThresScale,         0,   2.0,                       0,  0.0,              0.0,                             },
 #endif
-    {"EPZSSubPelME",             &cfgparams.EPZSSubPelME,                 0,   1.0,                       1,  0.0,              1.0,                             },
-    {"EPZSSubPelMEBiPred",       &cfgparams.EPZSSubPelMEBiPred,           0,   1.0,                       1,  0.0,              1.0,                             },
+    {"EPZSSubPelME",             &cfgparams.EPZSSubPelME,                 0,   1.0,                       1,  0.0,              2.0,                             },
+    {"EPZSSubPelMEBiPred",       &cfgparams.EPZSSubPelMEBiPred,           0,   1.0,                       1,  0.0,              2.0,                             },
     {"EPZSSubPelGrid",           &cfgparams.EPZSSubPelGrid,               0,   0.0,                       1,  0.0,              1.0,                             },
-    {"EPZSSubPelThresScale",     &cfgparams.EPZSSubPelThresScale,         0,   2.0,                       0,  0.0,              0.0,                             },
-
+    {"EPZSSubPelThresScale",     &cfgparams.EPZSSubPelThresScale,         0,   1.0,                       0,  0.0,              0.0,                             },
+    {"DisableMEPrediction",      &cfgparams.DisableMEPrediction,          0,   0.0,                       1,  0.0,              1.0,                             },    
     // Tone mapping SEI cfg file
     {"ToneMappingSEIPresentFlag",&cfgparams.ToneMappingSEIPresentFlag,    0,   0.0,                       1,  0.0,              1.0,                             },
     {"ToneMappingFile",          &cfgparams.ToneMappingFile,              1,   0.0,                       0,  0.0,              0.0,             FILE_NAME_SIZE, },
@@ -528,9 +531,9 @@ Mapping MapView1[] = {
   {"MVCEnableInterViewFlag",  &cfgparams.enable_inter_view_flag,               0,   1.0,                       1,  0.0,              1.0,                             },
   {"SepViewInterSearch",      &cfgparams.SepViewInterSearch,                   0,   0.0,                       1,  0.0,              1.0,                             },
   {"NoResidueRDO",            &cfgparams.View1NoResidueRDO,                    0,   1.0,                       1,  0.0,              1.0,                             },
-  {"PList0Refs",              &cfgparams.P_List0_refs[1],                      0,   0.0,                       1,  0.0,             16.0,                             },
-  {"BList0Refs",              &cfgparams.B_List0_refs[1],                      0,   0.0,                       1,  0.0,             16.0,                             },
-  {"BList1Refs",              &cfgparams.B_List1_refs[1],                      0,   1.0,                       1,  0.0,             16.0,                             },
+  {"PList0References",        &cfgparams.P_List0_refs[1],                      0,   0.0,                       1,  0.0,             16.0,                             },
+  {"BList0References",        &cfgparams.B_List0_refs[1],                      0,   0.0,                       1,  0.0,             16.0,                             },
+  {"BList1References",        &cfgparams.B_List1_refs[1],                      0,   1.0,                       1,  0.0,             16.0,                             },
   {"LambdaMultiplier",        &cfgparams.enh_layer_lambda_multiplier,          2,   1.0,                       2,  0.0,              0.0,                             },
   {"MELambdaMultiplier",      &cfgparams.enh_layer_me_lambda_multiplier,       2,   1.0,                       2,  0.0,              0.0,                             },
   {"PSliceSkip",              &cfgparams.InterSearch[1][0][0],                 0,   1.0,                       1,  0.0,              1.0,                             },

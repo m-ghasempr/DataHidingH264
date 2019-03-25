@@ -66,14 +66,6 @@ static void Configure(InputParameters *p_Inp, int ac, char *av[])
     fprintf(stdout,"--------------------------------------------------------------------------\n");
   #endif
   }
-
-  if (!p_Inp->silent)
-  {
-    fprintf(stdout,"POC must = frame# or field# for SNRs to be correct\n");
-    fprintf(stdout,"--------------------------------------------------------------------------\n");
-    fprintf(stdout,"  Frame          POC  Pic#   QP    SnrY     SnrU     SnrV   Y:U:V Time(ms)\n");
-    fprintf(stdout,"--------------------------------------------------------------------------\n");
-  }
   
 }
 

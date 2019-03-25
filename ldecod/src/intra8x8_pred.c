@@ -492,12 +492,11 @@ static inline int intra8x8_hor_pred(Macroblock *currMB,    //!< current macroblo
   imgpel **imgY = (pl) ? currSlice->dec_picture->imgUV[pl - 1] : currSlice->dec_picture->imgY; // For MB level frame/field coding tools -- set default to imgY
 
   PixelPos pix_a;
-  PixelPos pix_b, pix_c, pix_d;
+  PixelPos pix_b, pix_d;
 
   int block_available_up;
   int block_available_left;
   int block_available_up_left;
-  int block_available_up_right;
 
 #if (IMGTYPE != 0)
   int ipos0 = ioff    , ipos1 = ioff + 1, ipos2 = ioff + 2, ipos3 = ioff + 3;
@@ -509,23 +508,18 @@ static inline int intra8x8_hor_pred(Macroblock *currMB,    //!< current macroblo
 
   getNonAffNeighbour(currMB, ioff - 1, joff    , mb_size, &pix_a);
   getNonAffNeighbour(currMB, ioff    , joff - 1, mb_size, &pix_b);
-  getNonAffNeighbour(currMB, ioff + 8, joff - 1, mb_size, &pix_c);
   getNonAffNeighbour(currMB, ioff - 1, joff - 1, mb_size, &pix_d);
-
-  pix_c.available = pix_c.available &&!(ioff == 8 && joff == 8);
 
   if (p_Vid->active_pps->constrained_intra_pred_flag)
   {
     block_available_left     = pix_a.available ? currSlice->intra_block [pix_a.mb_addr]: 0;
     block_available_up       = pix_b.available ? currSlice->intra_block [pix_b.mb_addr] : 0;
-    block_available_up_right = pix_c.available ? currSlice->intra_block [pix_c.mb_addr] : 0;
     block_available_up_left  = pix_d.available ? currSlice->intra_block [pix_d.mb_addr] : 0;
   }
   else
   {
     block_available_left     = pix_a.available;
     block_available_up       = pix_b.available;
-    block_available_up_right = pix_c.available;
     block_available_up_left  = pix_d.available;
   }
 

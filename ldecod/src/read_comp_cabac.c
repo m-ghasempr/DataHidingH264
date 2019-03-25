@@ -293,9 +293,9 @@ static void readCompCoeff8x8_CABAC (Macroblock *currMB, SyntaxElement *currSE, C
     // select scan type
     const byte (*pos_scan8x8) = ((p_Vid->structure == FRAME) && (!currMB->mb_field)) ? SNGL_SCAN8x8[0] : FIELD_SCAN8x8[0];
 
-    int qp_per = p_Vid->qp_per_matrix[ currMB->qp_scaled[transform_pl/*pl*/] ];
-    int qp_rem = p_Vid->qp_rem_matrix[ currMB->qp_scaled[transform_pl/*pl*/] ];
-
+    int qp_per = p_Vid->qp_per_matrix[ currMB->qp_scaled[pl] ];
+    int qp_rem = p_Vid->qp_rem_matrix[ currMB->qp_scaled[pl] ];
+    
     int (*InvLevelScale8x8)[8] = (currMB->is_intra_block == TRUE) ? currSlice->InvLevelScale8x8_Intra[transform_pl][qp_rem] : currSlice->InvLevelScale8x8_Inter[transform_pl][qp_rem];
 
     // === set offset in current macroblock ===
@@ -1108,8 +1108,8 @@ static void read_CBP_and_coeffs_from_NAL_CABAC_400(Macroblock *currMB)
 
   update_qp(currMB, currSlice->qp);
 
-  qp_per = p_Vid->qp_per_matrix[ currMB->qp_scaled[currSlice->colour_plane_id] ];
-  qp_rem = p_Vid->qp_rem_matrix[ currMB->qp_scaled[currSlice->colour_plane_id] ];
+  qp_per = p_Vid->qp_per_matrix[ currMB->qp_scaled[PLANE_Y] ];
+  qp_rem = p_Vid->qp_rem_matrix[ currMB->qp_scaled[PLANE_Y] ];
 
   //======= Other Modes & CABAC ========
   //------------------------------------          
@@ -1891,14 +1891,32 @@ static void read_CBP_and_coeffs_from_NAL_CABAC_422(Macroblock *currMB)
 
 void set_read_CBP_and_coeffs_cabac(Slice *currSlice)
 {
-  if ( currSlice->p_Vid->active_sps->chroma_format_idc==YUV444 && (currSlice->p_Vid->separate_colour_plane_flag == 0) ) 
-    currSlice->read_CBP_and_coeffs_from_NAL = read_CBP_and_coeffs_from_NAL_CABAC_444;
-  else if (currSlice->p_Vid->active_sps->chroma_format_idc == YUV422)
+  switch (currSlice->p_Vid->active_sps->chroma_format_idc)
+  {
+  case YUV444:
+    if (currSlice->p_Vid->separate_colour_plane_flag == 0)
+    {
+      currSlice->read_CBP_and_coeffs_from_NAL = read_CBP_and_coeffs_from_NAL_CABAC_444;
+    }
+    else
+    {
+      currSlice->read_CBP_and_coeffs_from_NAL = read_CBP_and_coeffs_from_NAL_CABAC_400;
+    }
+    break;
+  case YUV422:
     currSlice->read_CBP_and_coeffs_from_NAL = read_CBP_and_coeffs_from_NAL_CABAC_422;
-  else if (currSlice->p_Vid->active_sps->chroma_format_idc == YUV400)
-    currSlice->read_CBP_and_coeffs_from_NAL = read_CBP_and_coeffs_from_NAL_CABAC_400;
-  else
+    break;
+  case YUV420:
     currSlice->read_CBP_and_coeffs_from_NAL = read_CBP_and_coeffs_from_NAL_CABAC_420;
+    break;
+  case YUV400:
+    currSlice->read_CBP_and_coeffs_from_NAL = read_CBP_and_coeffs_from_NAL_CABAC_400;
+    break;
+  default:
+    assert (1);
+    currSlice->read_CBP_and_coeffs_from_NAL = NULL;
+    break;
+  }
 }
 
 

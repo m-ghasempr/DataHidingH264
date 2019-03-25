@@ -168,7 +168,7 @@ void EstimateWPBSliceAlg2(Slice *currSlice)
 
   int index;
   int comp;
-  double dc_org = 0.0;
+  //double dc_org = 0.0;
   double dc_org_UV[2] = { 0.0 };
   double dc_ref_UV[6][MAX_REFERENCE_PICTURES][2] = { {{0.0}} };
 
@@ -260,7 +260,7 @@ void EstimateWPBSliceAlg2(Slice *currSlice)
   }
   else
   {
-    dc_org = ComputeImgSum(p_Vid->pCurImg, p_Vid->height, p_Vid->width);
+    //dc_org = ComputeImgSum(p_Vid->pCurImg, p_Vid->height, p_Vid->width);
 
     if (p_Inp->ChromaWeightSupport == 1)
     {

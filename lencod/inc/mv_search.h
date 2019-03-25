@@ -29,8 +29,8 @@ extern void set_access_method(int *access_method, MotionVector *blk, int min_x, 
 extern void PrepareMEParams      (Slice *currSlice, MEBlock *mv_block, int ChromaMEEnable, int list, int ref);
 extern void PrepareBiPredMEParams(Slice *currSlice, MEBlock *mv_block, int ChromaMEEnable, int list, int list_offset, int ref);
 
-extern void Init_Motion_Search_Module  (VideoParameters *p_Vid, InputParameters *p_Inp);
-extern void Clear_Motion_Search_Module (VideoParameters *p_Vid, InputParameters *p_Inp);
+extern void init_motion_search_module  (VideoParameters *p_Vid, InputParameters *p_Inp);
+extern void clear_motion_search_module (VideoParameters *p_Vid, InputParameters *p_Inp);
 
 extern void  PartitionMotionSearch    (Macroblock *currMB, int, int, int*);
 extern void  SubPartitionMotionSearch (Macroblock *currMB, int, int, int*);

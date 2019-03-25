@@ -214,17 +214,17 @@ int RestOfSliceHeader(Slice *currSlice)
     currSlice->direct_spatial_mv_pred_flag = read_u_1 ("SH: direct_spatial_mv_pred_flag", currStream, &p_Dec->UsedBits);
   }
 
-  currSlice->num_ref_idx_active[LIST_0] = p_Vid->active_pps->num_ref_idx_l0_active_minus1 + 1;
-  currSlice->num_ref_idx_active[LIST_1] = p_Vid->active_pps->num_ref_idx_l1_active_minus1 + 1;
+  currSlice->num_ref_idx_active[LIST_0] = p_Vid->active_pps->num_ref_idx_l0_default_active_minus1 + 1;
+  currSlice->num_ref_idx_active[LIST_1] = p_Vid->active_pps->num_ref_idx_l1_default_active_minus1 + 1;
 
-  if(p_Vid->type==P_SLICE || p_Vid->type == SP_SLICE || p_Vid->type==B_SLICE)
+  if(currSlice->slice_type == P_SLICE || currSlice->slice_type == SP_SLICE || currSlice->slice_type == B_SLICE)
   {
     val = read_u_1 ("SH: num_ref_idx_override_flag", currStream, &p_Dec->UsedBits);
     if (val)
     {
       currSlice->num_ref_idx_active[LIST_0] = 1 + read_ue_v ("SH: num_ref_idx_l0_active_minus1", currStream, &p_Dec->UsedBits);
 
-      if(p_Vid->type==B_SLICE)
+      if(currSlice->slice_type == B_SLICE)
       {
         currSlice->num_ref_idx_active[LIST_1] = 1 + read_ue_v ("SH: num_ref_idx_l1_active_minus1", currStream, &p_Dec->UsedBits);
       }
@@ -249,8 +249,8 @@ int RestOfSliceHeader(Slice *currSlice)
     : (currSlice->slice_type == B_SLICE && p_Vid->active_pps->weighted_bipred_idc == 1));
   currSlice->weighted_bipred_idc = (unsigned short) (currSlice->slice_type == B_SLICE && p_Vid->active_pps->weighted_bipred_idc > 0);
 
-  if ((p_Vid->active_pps->weighted_pred_flag&&(p_Vid->type==P_SLICE|| p_Vid->type == SP_SLICE))||
-      (p_Vid->active_pps->weighted_bipred_idc==1 && (p_Vid->type==B_SLICE)))
+  if ((p_Vid->active_pps->weighted_pred_flag&&(currSlice->slice_type == P_SLICE|| currSlice->slice_type == SP_SLICE))||
+      (p_Vid->active_pps->weighted_bipred_idc==1 && (currSlice->slice_type == B_SLICE)))
   {
     pred_weight_table(currSlice);
   }
@@ -258,7 +258,7 @@ int RestOfSliceHeader(Slice *currSlice)
   if (currSlice->nal_reference_idc)
     dec_ref_pic_marking(p_Vid, currStream, currSlice);
 
-  if (p_Vid->active_pps->entropy_coding_mode_flag && p_Vid->type!=I_SLICE && p_Vid->type!=SI_SLICE)
+  if (p_Vid->active_pps->entropy_coding_mode_flag && currSlice->slice_type != I_SLICE && currSlice->slice_type != SI_SLICE)
   {
     currSlice->model_number = read_ue_v("SH: cabac_init_idc", currStream, &p_Dec->UsedBits);
   }
@@ -274,9 +274,9 @@ int RestOfSliceHeader(Slice *currSlice)
   if ((currSlice->qp < -p_Vid->bitdepth_luma_qp_scale) || (currSlice->qp > 51))
     error ("slice_qp_delta makes slice_qp_y out of range", 500);
 
-  if(p_Vid->type==SP_SLICE || p_Vid->type == SI_SLICE)
+  if(currSlice->slice_type == SP_SLICE || currSlice->slice_type == SI_SLICE)
   {
-    if(p_Vid->type==SP_SLICE)
+    if(currSlice->slice_type==SP_SLICE)
     {
       currSlice->sp_switch = read_u_1 ("SH: sp_for_switch_flag", currStream, &p_Dec->UsedBits);
     }
@@ -362,7 +362,7 @@ int RestOfSliceHeader(Slice *currSlice)
  */
 static void ref_pic_list_reordering(Slice *currSlice)
 {
-  VideoParameters *p_Vid = currSlice->p_Vid;
+  //VideoParameters *p_Vid = currSlice->p_Vid;
   byte dP_nr = assignSE2partition[currSlice->dp_mode][SE_HEADER];
   DataPartition *partition = &(currSlice->partArr[dP_nr]);
   Bitstream *currStream = partition->bitstream;
@@ -370,7 +370,7 @@ static void ref_pic_list_reordering(Slice *currSlice)
 
   alloc_ref_pic_list_reordering_buffer(currSlice);
 
-  if (p_Vid->type!=I_SLICE && p_Vid->type!=SI_SLICE)
+  if (currSlice->slice_type != I_SLICE && currSlice->slice_type != SI_SLICE)
   {
     val = currSlice->ref_pic_list_reordering_flag[LIST_0] = read_u_1 ("SH: ref_pic_list_reordering_flag_l0", currStream, &p_Dec->UsedBits);
 
@@ -379,7 +379,7 @@ static void ref_pic_list_reordering(Slice *currSlice)
       i=0;
       do
       {
-        val = currSlice->reordering_of_pic_nums_idc[LIST_0][i] = read_ue_v("SH: reordering_of_pic_nums_idc_l0", currStream, &p_Dec->UsedBits);
+        val = currSlice->modification_of_pic_nums_idc[LIST_0][i] = read_ue_v("SH: modification_of_pic_nums_idc_l0", currStream, &p_Dec->UsedBits);
         if (val==0 || val==1)
         {
           currSlice->abs_diff_pic_num_minus1[LIST_0][i] = read_ue_v("SH: abs_diff_pic_num_minus1_l0", currStream, &p_Dec->UsedBits);
@@ -397,7 +397,7 @@ static void ref_pic_list_reordering(Slice *currSlice)
     }
   }
 
-  if (p_Vid->type==B_SLICE)
+  if (currSlice->slice_type == B_SLICE)
   {
     val = currSlice->ref_pic_list_reordering_flag[LIST_1] = read_u_1 ("SH: ref_pic_list_reordering_flag_l1", currStream, &p_Dec->UsedBits);
 
@@ -406,7 +406,7 @@ static void ref_pic_list_reordering(Slice *currSlice)
       i=0;
       do
       {
-        val = currSlice->reordering_of_pic_nums_idc[LIST_1][i] = read_ue_v("SH: reordering_of_pic_nums_idc_l1", currStream, &p_Dec->UsedBits);
+        val = currSlice->modification_of_pic_nums_idc[LIST_1][i] = read_ue_v("SH: modification_of_pic_nums_idc_l1", currStream, &p_Dec->UsedBits);
         if (val==0 || val==1)
         {
           currSlice->abs_diff_pic_num_minus1[LIST_1][i] = read_ue_v("SH: abs_diff_pic_num_minus1_l1", currStream, &p_Dec->UsedBits);
@@ -425,7 +425,7 @@ static void ref_pic_list_reordering(Slice *currSlice)
   }
 
   // set reference index of redundant slices.
-  if(currSlice->redundant_pic_cnt && (p_Vid->type != I_SLICE) )
+  if(currSlice->redundant_pic_cnt && (currSlice->slice_type != I_SLICE) )
   {
     currSlice->redundant_slice_ref_idx = currSlice->abs_diff_pic_num_minus1[LIST_0][0] + 1;
   }
@@ -440,7 +440,7 @@ static void ref_pic_list_reordering(Slice *currSlice)
 #if (MVC_EXTENSION_ENABLE)
 static void ref_pic_list_mvc_modification(Slice *currSlice)
 {
-  VideoParameters *p_Vid = currSlice->p_Vid;
+  //VideoParameters *p_Vid = currSlice->p_Vid;
   byte dP_nr = assignSE2partition[currSlice->dp_mode][SE_HEADER];
   DataPartition *partition = &(currSlice->partArr[dP_nr]);
   Bitstream *currStream = partition->bitstream;
@@ -448,7 +448,7 @@ static void ref_pic_list_mvc_modification(Slice *currSlice)
 
   alloc_ref_pic_list_reordering_buffer(currSlice);
 
-  if ((p_Vid->type % 5) != I_SLICE && (p_Vid->type % 5) != SI_SLICE)
+  if ((currSlice->slice_type % 5) != I_SLICE && (currSlice->slice_type % 5) != SI_SLICE)
   {
     val = currSlice->ref_pic_list_reordering_flag[LIST_0] = read_u_1 ("SH: ref_pic_list_modification_flag_l0", currStream, &p_Dec->UsedBits);
 
@@ -457,7 +457,7 @@ static void ref_pic_list_mvc_modification(Slice *currSlice)
       i=0;
       do
       {
-        val = currSlice->reordering_of_pic_nums_idc[LIST_0][i] = read_ue_v("SH: modification_of_pic_nums_idc_l0", currStream, &p_Dec->UsedBits);
+        val = currSlice->modification_of_pic_nums_idc[LIST_0][i] = read_ue_v("SH: modification_of_pic_nums_idc_l0", currStream, &p_Dec->UsedBits);
         if (val==0 || val==1)
         {
           currSlice->abs_diff_pic_num_minus1[LIST_0][i] = read_ue_v("SH: abs_diff_pic_num_minus1_l0", currStream, &p_Dec->UsedBits);
@@ -479,7 +479,7 @@ static void ref_pic_list_mvc_modification(Slice *currSlice)
     }
   }
 
-  if ((p_Vid->type % 5) == B_SLICE)
+  if ((currSlice->slice_type % 5) == B_SLICE)
   {
     val = currSlice->ref_pic_list_reordering_flag[LIST_1] = read_u_1 ("SH: ref_pic_list_reordering_flag_l1", currStream, &p_Dec->UsedBits);
 
@@ -488,7 +488,7 @@ static void ref_pic_list_mvc_modification(Slice *currSlice)
       i=0;
       do
       {
-        val = currSlice->reordering_of_pic_nums_idc[LIST_1][i] = read_ue_v("SH: modification_of_pic_nums_idc_l1", currStream, &p_Dec->UsedBits);
+        val = currSlice->modification_of_pic_nums_idc[LIST_1][i] = read_ue_v("SH: modification_of_pic_nums_idc_l1", currStream, &p_Dec->UsedBits);
         if (val==0 || val==1)
         {
           currSlice->abs_diff_pic_num_minus1[LIST_1][i] = read_ue_v("SH: abs_diff_pic_num_minus1_l1", currStream, &p_Dec->UsedBits);
@@ -511,7 +511,7 @@ static void ref_pic_list_mvc_modification(Slice *currSlice)
   }
 
   // set reference index of redundant slices.
-  if(currSlice->redundant_pic_cnt && (p_Vid->type != I_SLICE) )
+  if(currSlice->redundant_pic_cnt && (currSlice->slice_type != I_SLICE) )
   {
     currSlice->redundant_slice_ref_idx = currSlice->abs_diff_pic_num_minus1[LIST_0][0] + 1;
   }
@@ -567,14 +567,14 @@ static void pred_weight_table(Slice *currSlice)
 
     if (luma_weight_flag_l0)
     {
-      currSlice->wp_weight[0][i][0] = read_se_v ("SH: luma_weight_l0", currStream, &p_Dec->UsedBits);
-      currSlice->wp_offset[0][i][0] = read_se_v ("SH: luma_offset_l0", currStream, &p_Dec->UsedBits);
-      currSlice->wp_offset[0][i][0] = currSlice->wp_offset[0][i][0]<<(p_Vid->bitdepth_luma - 8);
+      currSlice->wp_weight[LIST_0][i][0] = read_se_v ("SH: luma_weight_l0", currStream, &p_Dec->UsedBits);
+      currSlice->wp_offset[LIST_0][i][0] = read_se_v ("SH: luma_offset_l0", currStream, &p_Dec->UsedBits);
+      currSlice->wp_offset[LIST_0][i][0] = currSlice->wp_offset[LIST_0][i][0]<<(p_Vid->bitdepth_luma - 8);
     }
     else
     {
-      currSlice->wp_weight[0][i][0] = 1 << currSlice->luma_log2_weight_denom;
-      currSlice->wp_offset[0][i][0] = 0;
+      currSlice->wp_weight[LIST_0][i][0] = 1 << currSlice->luma_log2_weight_denom;
+      currSlice->wp_offset[LIST_0][i][0] = 0;
     }
 
     if (active_sps->chroma_format_idc != 0)
@@ -585,19 +585,19 @@ static void pred_weight_table(Slice *currSlice)
       {
         if (chroma_weight_flag_l0)
         {
-          currSlice->wp_weight[0][i][j] = read_se_v("SH: chroma_weight_l0", currStream, &p_Dec->UsedBits);
-          currSlice->wp_offset[0][i][j] = read_se_v("SH: chroma_offset_l0", currStream, &p_Dec->UsedBits);
-          currSlice->wp_offset[0][i][j] = currSlice->wp_offset[0][i][j]<<(p_Vid->bitdepth_chroma-8);
+          currSlice->wp_weight[LIST_0][i][j] = read_se_v("SH: chroma_weight_l0", currStream, &p_Dec->UsedBits);
+          currSlice->wp_offset[LIST_0][i][j] = read_se_v("SH: chroma_offset_l0", currStream, &p_Dec->UsedBits);
+          currSlice->wp_offset[LIST_0][i][j] = currSlice->wp_offset[LIST_0][i][j]<<(p_Vid->bitdepth_chroma-8);
         }
         else
         {
-          currSlice->wp_weight[0][i][j] = 1<<currSlice->chroma_log2_weight_denom;
-          currSlice->wp_offset[0][i][j] = 0;
+          currSlice->wp_weight[LIST_0][i][j] = 1<<currSlice->chroma_log2_weight_denom;
+          currSlice->wp_offset[LIST_0][i][j] = 0;
         }
       }
     }
   }
-  if ((p_Vid->type == B_SLICE) && p_Vid->active_pps->weighted_bipred_idc == 1)
+  if ((currSlice->slice_type == B_SLICE) && p_Vid->active_pps->weighted_bipred_idc == 1)
   {
     for (i=0; i<currSlice->num_ref_idx_active[LIST_1]; i++)
     {
@@ -605,14 +605,14 @@ static void pred_weight_table(Slice *currSlice)
 
       if (luma_weight_flag_l1)
       {
-        currSlice->wp_weight[1][i][0] = read_se_v ("SH: luma_weight_l1", currStream, &p_Dec->UsedBits);
-        currSlice->wp_offset[1][i][0] = read_se_v ("SH: luma_offset_l1", currStream, &p_Dec->UsedBits);
-        currSlice->wp_offset[1][i][0] = currSlice->wp_offset[1][i][0]<<(p_Vid->bitdepth_luma-8);
+        currSlice->wp_weight[LIST_1][i][0] = read_se_v ("SH: luma_weight_l1", currStream, &p_Dec->UsedBits);
+        currSlice->wp_offset[LIST_1][i][0] = read_se_v ("SH: luma_offset_l1", currStream, &p_Dec->UsedBits);
+        currSlice->wp_offset[LIST_1][i][0] = currSlice->wp_offset[LIST_1][i][0]<<(p_Vid->bitdepth_luma-8);
       }
       else
       {
-        currSlice->wp_weight[1][i][0] = 1<<currSlice->luma_log2_weight_denom;
-        currSlice->wp_offset[1][i][0] = 0;
+        currSlice->wp_weight[LIST_1][i][0] = 1<<currSlice->luma_log2_weight_denom;
+        currSlice->wp_offset[LIST_1][i][0] = 0;
       }
 
       if (active_sps->chroma_format_idc != 0)
@@ -623,14 +623,14 @@ static void pred_weight_table(Slice *currSlice)
         {
           if (chroma_weight_flag_l1)
           {
-            currSlice->wp_weight[1][i][j] = read_se_v("SH: chroma_weight_l1", currStream, &p_Dec->UsedBits);
-            currSlice->wp_offset[1][i][j] = read_se_v("SH: chroma_offset_l1", currStream, &p_Dec->UsedBits);
-            currSlice->wp_offset[1][i][j] = currSlice->wp_offset[1][i][j]<<(p_Vid->bitdepth_chroma-8);
+            currSlice->wp_weight[LIST_1][i][j] = read_se_v("SH: chroma_weight_l1", currStream, &p_Dec->UsedBits);
+            currSlice->wp_offset[LIST_1][i][j] = read_se_v("SH: chroma_offset_l1", currStream, &p_Dec->UsedBits);
+            currSlice->wp_offset[LIST_1][i][j] = currSlice->wp_offset[LIST_1][i][j]<<(p_Vid->bitdepth_chroma-8);
           }
           else
           {
-            currSlice->wp_weight[1][i][j] = 1<<currSlice->chroma_log2_weight_denom;
-            currSlice->wp_offset[1][i][j] = 0;
+            currSlice->wp_weight[LIST_1][i][j] = 1<<currSlice->chroma_log2_weight_denom;
+            currSlice->wp_offset[LIST_1][i][j] = 0;
           }
         }
       }
@@ -820,7 +820,7 @@ void decode_poc(VideoParameters *p_Vid, Slice *pSlice)
       }
       if (pSlice->frame_num<p_Vid->PreviousFrameNum)
       {             //not first pix of IDRGOP
-        p_Vid->FrameNumOffset = p_Vid->PreviousFrameNumOffset + p_Vid->MaxFrameNum;
+        p_Vid->FrameNumOffset = p_Vid->PreviousFrameNumOffset + p_Vid->max_frame_num;
       }
       else
       {
@@ -895,7 +895,7 @@ void decode_poc(VideoParameters *p_Vid, Slice *pSlice)
         p_Vid->PreviousFrameNumOffset = 0;
       }
       if (pSlice->frame_num<p_Vid->PreviousFrameNum)
-        p_Vid->FrameNumOffset = p_Vid->PreviousFrameNumOffset + p_Vid->MaxFrameNum;
+        p_Vid->FrameNumOffset = p_Vid->PreviousFrameNumOffset + p_Vid->max_frame_num;
       else
         p_Vid->FrameNumOffset = p_Vid->PreviousFrameNumOffset;
 
@@ -959,7 +959,7 @@ int dumppoc(VideoParameters *p_Vid)
   printf ("delta_pic_order_cnt[0]                %d\n", (int) p_Vid->ppSliceList[0]->delta_pic_order_cnt[0]);
   printf ("delta_pic_order_cnt[1]                %d\n", (int) p_Vid->ppSliceList[0]->delta_pic_order_cnt[1]);
   printf ("idr_flag                              %d\n", (int) p_Vid->ppSliceList[0]->idr_flag);
-  printf ("MaxFrameNum                           %d\n", (int) p_Vid->MaxFrameNum);
+  printf ("max_frame_num                         %d\n", (int) p_Vid->max_frame_num);
 
   return 0;
 }

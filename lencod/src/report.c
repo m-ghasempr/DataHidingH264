@@ -467,9 +467,9 @@ void report_stats(VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters
   fprintf(p_stat," %10.2f     |", (float) p_Stats->bit_use_delta_quant[B_SLICE] / bit_use[B_SLICE][0]);
 
   fprintf(p_stat,"\n Stuffing Bits        |");
-  fprintf(p_stat," %10.2f     |", (float) p_Stats->bit_use_stuffingBits[I_SLICE] / bit_use[I_SLICE][0]);
-  fprintf(p_stat," %10.2f     |", (float) p_Stats->bit_use_stuffingBits[P_SLICE] / bit_use[P_SLICE][0]);   
-  fprintf(p_stat," %10.2f     |", (float) p_Stats->bit_use_stuffingBits[B_SLICE] / bit_use[B_SLICE][0]);
+  fprintf(p_stat," %10.2f     |", (float) p_Stats->bit_use_stuffing_bits[I_SLICE] / bit_use[I_SLICE][0]);
+  fprintf(p_stat," %10.2f     |", (float) p_Stats->bit_use_stuffing_bits[P_SLICE] / bit_use[P_SLICE][0]);   
+  fprintf(p_stat," %10.2f     |", (float) p_Stats->bit_use_stuffing_bits[B_SLICE] / bit_use[B_SLICE][0]);
 
   fprintf(p_stat,"\n ---------------------|----------------|----------------|----------------|");
   fprintf(p_stat,"\n average bits/frame   |");
@@ -739,7 +739,7 @@ void report( VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *p_S
     bit_use[j][1] += p_Stats->bit_use_coeff[1][j]; 
     bit_use[j][1] += p_Stats->bit_use_coeff[2][j]; 
     bit_use[j][1] += p_Stats->bit_use_delta_quant[j];
-    bit_use[j][1] += p_Stats->bit_use_stuffingBits[j];
+    bit_use[j][1] += p_Stats->bit_use_stuffing_bits[j];
   }
 
   //! Currently adding NVB bits on P rate. Maybe additional p_Stats info should be created instead and added in log file  
@@ -967,19 +967,19 @@ void report( VideoParameters *p_Vid, InputParameters *p_Inp, StatParameters *p_S
   
   for (i = 0; i < 5; i++)
   {
-    p_Stats->bit_ctr_emulationprevention += p_Stats->bit_use_stuffingBits[i];
+    p_Stats->bit_ctr_emulation_prevention += p_Stats->bit_use_stuffing_bits[i];
   }
 #if (MVC_EXTENSION_ENABLE)
   if ( p_Vid->num_of_layers == 2 )
   {
     for (i = 0; i < 5; i++)
     {
-      p_Stats->bit_ctr_emulationprevention_v[p_Vid->dpb_layer_id] += p_Stats->bit_use_stuffingBits[i];
+      p_Stats->bit_ctr_emulationprevention_v[p_Vid->dpb_layer_id] += p_Stats->bit_use_stuffing_bits[i];
     }
   }
 #endif
 
-  fprintf(stdout, " Bits to avoid Startcode Emulation : %" FORMAT_OFF_T  " \n", p_Stats->bit_ctr_emulationprevention);
+  fprintf(stdout, " Bits to avoid Startcode Emulation : %" FORMAT_OFF_T  " \n", p_Stats->bit_ctr_emulation_prevention);
   fprintf(stdout, " Bits for parameter sets           : %d \n", p_Stats->bit_ctr_parametersets);
   fprintf(stdout, " Bits for filler data              : %" FORMAT_OFF_T  " \n\n", p_Stats->bit_ctr_filler_data);
 
@@ -1081,6 +1081,11 @@ void information_init ( VideoParameters *p_Vid, InputParameters *p_Inp, StatPara
       fprintf(stdout," ME Metric for Refinement Level %1d  : %s\n", i, DistortionType[p_Inp->MEErrorMetric[i]]);
     }
     fprintf(stdout,  " Mode Decision Metric              : %s\n", DistortionType[p_Inp->ModeDecisionMetric]);
+
+    if( p_Inp->OnTheFlyFractMCP )
+    {
+      fprintf(stdout," On-the-fly interpolation mode     : OTF_L%d\n", p_Inp->OnTheFlyFractMCP );
+    }
 
     switch ( p_Inp->ChromaMEEnable )
     {
@@ -1267,15 +1272,15 @@ void information_init ( VideoParameters *p_Vid, InputParameters *p_Inp, StatPara
     {
       if (p_Inp->Distortion[SSIM] == 1)
       {
-        printf("--------------------------------------------------------------------------------------------------------------------------------\n");
-        printf("Frame     View Bit/pic WP QP QL   SnrY    SnrU    SnrV   SsimY   SsimU   SsimV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
-        printf("--------------------------------------------------------------------------------------------------------------------------------\n");
+        printf("----------------------------------------------------------------------------------------------------------------------------------\n");
+        printf("Frame     View Bit/pic WP QP   QL   SnrY    SnrU    SnrV   SsimY   SsimU   SsimV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
+        printf("----------------------------------------------------------------------------------------------------------------------------------\n");
       }
       else
       {
-        printf("--------------------------------------------------------------------------------------------------------\n");
-        printf("Frame     View Bit/pic WP QP QL   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
-        printf("--------------------------------------------------------------------------------------------------------\n");
+        printf("---------------------------------------------------------------------------------------------------------\n");
+        printf("Frame     View Bit/pic WP QP   QL   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
+        printf("---------------------------------------------------------------------------------------------------------\n");
       }
     }
     else
@@ -1283,15 +1288,15 @@ void information_init ( VideoParameters *p_Vid, InputParameters *p_Inp, StatPara
     {
     if (p_Inp->Distortion[SSIM] == 1)
     {
-      printf("-------------------------------------------------------------------------------------------------------------------------\n");
-      printf("Frame     Bit/pic WP QP QL   SnrY    SnrU    SnrV   SsimY   SsimU   SsimV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
-      printf("-------------------------------------------------------------------------------------------------------------------------\n");
+      printf("---------------------------------------------------------------------------------------------------------------------------\n");
+      printf("Frame     Bit/pic WP QP   QL   SnrY    SnrU    SnrV   SsimY   SsimU   SsimV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
+      printf("---------------------------------------------------------------------------------------------------------------------------\n");
     }
     else
     {
-      printf("-------------------------------------------------------------------------------------------------\n");
-      printf("Frame     Bit/pic WP QP QL   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
-      printf("-------------------------------------------------------------------------------------------------\n");
+      printf("---------------------------------------------------------------------------------------------------\n");
+      printf("Frame     Bit/pic WP QP   QL   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
+      printf("---------------------------------------------------------------------------------------------------\n");
     }
     }
     break;
@@ -1301,15 +1306,15 @@ void information_init ( VideoParameters *p_Vid, InputParameters *p_Inp, StatPara
     {
       if (p_Inp->Distortion[SSIM] == 1)
       {
-        printf("-------------------------------------------------------------------------------------------------------------------------------------\n");
-        printf("Frame      View Bit/pic NVB WP QP QL   SnrY    SnrU    SnrV   SsimY   SsimU   SsimV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
-        printf("-------------------------------------------------------------------------------------------------------------------------------------\n");
+        printf("---------------------------------------------------------------------------------------------------------------------------------------\n");
+        printf("Frame      View Bit/pic NVB WP QP   QL   SnrY    SnrU    SnrV   SsimY   SsimU   SsimV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
+        printf("---------------------------------------------------------------------------------------------------------------------------------------\n");
       }
       else
       {
-        printf("-------------------------------------------------------------------------------------------------------------\n");
-        printf("Frame      View Bit/pic NVB WP QP QL   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
-        printf("-------------------------------------------------------------------------------------------------------------\n");
+        printf("---------------------------------------------------------------------------------------------------------------\n");
+        printf("Frame      View Bit/pic NVB WP QP   QL   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
+        printf("---------------------------------------------------------------------------------------------------------------\n");
       }
     }
     else
@@ -1317,15 +1322,15 @@ void information_init ( VideoParameters *p_Vid, InputParameters *p_Inp, StatPara
     {
     if (p_Inp->Distortion[SSIM] == 1)
     {
-      printf("------------------------------------------------------------------------------------------------------------------------------\n");
-      printf("Frame      Bit/pic NVB WP QP QL   SnrY    SnrU    SnrV   SsimY   SsimU   SsimV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
-      printf("------------------------------------------------------------------------------------------------------------------------------\n");
+      printf("--------------------------------------------------------------------------------------------------------------------------------\n");
+      printf("Frame      Bit/pic NVB WP QP   QL   SnrY    SnrU    SnrV   SsimY   SsimU   SsimV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
+      printf("--------------------------------------------------------------------------------------------------------------------------------\n");
     }
     else
     {
-      printf("------------------------------------------------------------------------------------------------------\n");
-      printf("Frame      Bit/pic NVB WP QP QL   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
-      printf("------------------------------------------------------------------------------------------------------\n");
+      printf("--------------------------------------------------------------------------------------------------------\n");
+      printf("Frame      Bit/pic NVB WP QP   QL   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
+      printf("--------------------------------------------------------------------------------------------------------\n");
     }
     }
     break;
@@ -1335,15 +1340,15 @@ void information_init ( VideoParameters *p_Vid, InputParameters *p_Inp, StatPara
     {
       if (p_Inp->Distortion[SSIM] == 1)
       {
-        printf("-----------------------------------------------------------------------------------------------------------------------------------------------\n");
-        printf("Frame     View Bit/pic   Filler NVB  WP QP QL   SnrY    SnrU    SnrV   SsimY   SsimU   SsimV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
-        printf("-----------------------------------------------------------------------------------------------------------------------------------------------\n");
+        printf("-------------------------------------------------------------------------------------------------------------------------------------------------\n");
+        printf("Frame     View Bit/pic   Filler NVB  WP QP   QL   SnrY    SnrU    SnrV   SsimY   SsimU   SsimV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
+        printf("-------------------------------------------------------------------------------------------------------------------------------------------------\n");
       }
       else
       {
-        printf("-----------------------------------------------------------------------------------------------------------------------\n");
-        printf("Frame     View Bit/pic   Filler NVB  WP QP QL   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
-        printf("-----------------------------------------------------------------------------------------------------------------------\n");
+        printf("-------------------------------------------------------------------------------------------------------------------------\n");
+        printf("Frame     View Bit/pic   Filler NVB  WP QP   QL   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
+        printf("-------------------------------------------------------------------------------------------------------------------------\n");
       }
     }
     else
@@ -1351,15 +1356,15 @@ void information_init ( VideoParameters *p_Vid, InputParameters *p_Inp, StatPara
     {
     if (p_Inp->Distortion[SSIM] == 1)
     {
-      printf("----------------------------------------------------------------------------------------------------------------------------------------\n");
-      printf("Frame      Bit/pic   Filler NVB  WP QP QL   SnrY    SnrU    SnrV   SsimY   SsimU   SsimV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
-      printf("----------------------------------------------------------------------------------------------------------------------------------------\n");
+      printf("------------------------------------------------------------------------------------------------------------------------------------------\n");
+      printf("Frame      Bit/pic   Filler NVB  WP QP   QL   SnrY    SnrU    SnrV   SsimY   SsimU   SsimV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
+      printf("------------------------------------------------------------------------------------------------------------------------------------------\n");
     }
     else
     {
-      printf("----------------------------------------------------------------------------------------------------------------\n");
-      printf("Frame      Bit/pic   Filler NVB  WP QP QL   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
-      printf("----------------------------------------------------------------------------------------------------------------\n");
+      printf("------------------------------------------------------------------------------------------------------------------\n");
+      printf("Frame      Bit/pic   Filler NVB  WP QP   QL   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
+      printf("------------------------------------------------------------------------------------------------------------------\n");
     }
     }
     break;

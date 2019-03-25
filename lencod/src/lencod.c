@@ -14,7 +14,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 18.0 (FRExt)
+ *     JM 18.1 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -64,6 +64,7 @@
 #include "intrarefresh.h"
 #include "leaky_bucket.h"
 #include "mc_prediction.h"
+#include "mc_prediction_otf.h"
 #include "memalloc.h"
 #include "me_epzs_common.h"
 #include "me_epzs_int.h"
@@ -88,6 +89,7 @@
 #include "img_chroma.h"
 #include "mc_prediction.h"
 #include "me_distortion.h"
+#include "me_distortion_otf.h"
 #include "md_distortion.h"
 #include "mode_decision.h"
 #include "transform8x8.h"
@@ -97,6 +99,7 @@
 //#include "resize.h"
 #include "md_common.h"
 #include "macroblock.h"
+#include "get_block_otf.h"
 
 #include "wp.h"
 
@@ -111,7 +114,7 @@ static const int mb_height_cr[4]= {0, 8,16,16};
 
 EncoderParams   *p_Enc = NULL;
 
-static void SetLevelIndices     (VideoParameters *p_Vid);
+static void set_level_indices   (VideoParameters *p_Vid);
 static void chroma_mc_setup     (VideoParameters *p_Vid);
 static void init_img            (VideoParameters *p_Vid);
 static void init_encoder        (VideoParameters *p_Vid, InputParameters *p_Inp);
@@ -293,10 +296,80 @@ static unsigned CeilLog2( unsigned uiVal)
   return uiRet;
 }
 
-void SetDpbLayerId(VideoParameters *p_Vid, int idx)
+void set_dpb_layer_id(VideoParameters *p_Vid, int idx)
 {
   assert(idx>=0 && idx<2);
   p_Vid->dpb_layer_id = idx;
+}
+
+void setup_dpb_layer(DecodedPictureBuffer *p_Dpb, VideoParameters *p_Vid, InputParameters *p_Inp)
+{
+  // on-the-fly interpolation init
+  switch ( p_Inp->OnTheFlyFractMCP )
+  {
+  case OTF_L1:
+    p_Dpb->pf_computeSAD = computeSAD_otf;
+    p_Dpb->pf_computeSADWP = computeSADWP_otf;
+    p_Dpb->pf_computeSATD = computeSATD_otf;
+    p_Dpb->pf_computeSATDWP = computeSATDWP_otf;
+    p_Dpb->pf_computeBiPredSAD1 = computeBiPredSAD1_otf;
+    p_Dpb->pf_computeBiPredSAD2 = computeBiPredSAD2_otf;
+    p_Dpb->pf_computeBiPredSATD1 = computeBiPredSATD1_otf;
+    p_Dpb->pf_computeBiPredSATD2 = computeBiPredSATD2_otf;
+    p_Dpb->pf_computeSSE = computeSSE_otf;
+    p_Dpb->pf_computeSSEWP = computeSSEWP_otf;
+    p_Dpb->pf_computeBiPredSSE1 = computeBiPredSSE1_otf;
+    p_Dpb->pf_computeBiPredSSE2 = computeBiPredSSE2_otf;
+    p_Dpb->pf_luma_prediction         = luma_prediction_otf ;
+    p_Dpb->pf_luma_prediction_bi      = luma_prediction_bi_otf ;
+    p_Dpb->pf_chroma_prediction       = chroma_prediction_otf ;
+    p_Dpb->pf_get_block_luma          = get_block_luma_otf_L1 ;
+    p_Dpb->pf_get_block_chroma[OTF_ME] = (p_Vid->P444_joined) ? ( get_block_luma_otf_L1 ) : ( me_get_block_chroma_otf_L1 ) ;
+    p_Dpb->pf_get_block_chroma[OTF_MC] = (p_Vid->P444_joined) ? ( get_block_luma_otf_L1 ) : ( mc_get_block_chroma_otf_L1 ) ;
+    p_Dpb->pf_OneComponentChromaPrediction4x4_regenerate = OneComponentChromaPrediction4x4_regenerate;
+    p_Dpb->pf_OneComponentChromaPrediction4x4_retrieve   = OneComponentChromaPrediction4x4_regenerate;
+    break;
+  case OTF_L2:
+    p_Dpb->pf_computeSAD = computeSAD_otf;
+    p_Dpb->pf_computeSADWP = computeSADWP_otf;
+    p_Dpb->pf_computeSATD = computeSATD_otf;
+    p_Dpb->pf_computeSATDWP = computeSATDWP_otf;
+    p_Dpb->pf_computeBiPredSAD1 = computeBiPredSAD1_otf;
+    p_Dpb->pf_computeBiPredSAD2 = computeBiPredSAD2_otf;
+    p_Dpb->pf_computeBiPredSATD1 = computeBiPredSATD1_otf;
+    p_Dpb->pf_computeBiPredSATD2 = computeBiPredSATD2_otf;
+    p_Dpb->pf_computeSSE = computeSSE_otf;
+    p_Dpb->pf_computeSSEWP = computeSSEWP_otf;
+    p_Dpb->pf_computeBiPredSSE1 = computeBiPredSSE1_otf;
+    p_Dpb->pf_computeBiPredSSE2 = computeBiPredSSE2_otf;
+    p_Dpb->pf_luma_prediction         = luma_prediction_otf ;
+    p_Dpb->pf_luma_prediction_bi      = luma_prediction_bi_otf ;
+    p_Dpb->pf_chroma_prediction       = chroma_prediction_otf ;
+    p_Dpb->pf_get_block_luma          = get_block_luma_otf_L2 ;
+    p_Dpb->pf_get_block_chroma[OTF_ME] = p_Dpb->pf_get_block_chroma[OTF_MC] = (p_Vid->P444_joined) ? ( get_block_luma_otf_L2 ) : ( get_block_chroma_otf_L2 ) ;
+    p_Dpb->pf_OneComponentChromaPrediction4x4_regenerate = OneComponentChromaPrediction4x4_regenerate;
+    p_Dpb->pf_OneComponentChromaPrediction4x4_retrieve   = OneComponentChromaPrediction4x4_regenerate;
+    break;
+  default: //  otf not used
+    p_Dpb->pf_computeSAD = computeSAD;
+    p_Dpb->pf_computeSADWP = computeSADWP;
+    p_Dpb->pf_computeSATD = computeSATD;
+    p_Dpb->pf_computeSATDWP = computeSATDWP;
+    p_Dpb->pf_computeBiPredSAD1 = computeBiPredSAD1;
+    p_Dpb->pf_computeBiPredSAD2 = computeBiPredSAD2;
+    p_Dpb->pf_computeBiPredSATD1 = computeBiPredSATD1;
+    p_Dpb->pf_computeBiPredSATD2 = computeBiPredSATD2;
+    p_Dpb->pf_computeSSE = computeSSE;
+    p_Dpb->pf_computeSSEWP = computeSSEWP;
+    p_Dpb->pf_computeBiPredSSE1 = computeBiPredSSE1;
+    p_Dpb->pf_computeBiPredSSE2 = computeBiPredSSE2;
+    p_Dpb->pf_luma_prediction    = luma_prediction;
+    p_Dpb->pf_luma_prediction_bi = luma_prediction_bi;
+    p_Dpb->pf_chroma_prediction  = chroma_prediction;
+    p_Dpb->pf_OneComponentChromaPrediction4x4_regenerate = OneComponentChromaPrediction4x4_regenerate;
+    p_Dpb->pf_OneComponentChromaPrediction4x4_retrieve   = OneComponentChromaPrediction4x4_retrieve;
+    break;
+  }
 }
 
 static void set_storage_format(VideoParameters *p_Vid, FrameFormat *p_src, FrameFormat *p_dst)
@@ -320,6 +393,7 @@ static void set_storage_format(VideoParameters *p_Vid, FrameFormat *p_src, Frame
  */
 static void init_encoder(VideoParameters *p_Vid, InputParameters *p_Inp)
 {
+  int i;
   p_Vid->p_Inp = p_Inp;
   p_Vid->giRDOpt_B8OnlyFlag = FALSE;
   p_Vid->p_log = NULL;
@@ -383,7 +457,7 @@ static void init_encoder(VideoParameters *p_Vid, InputParameters *p_Inp)
     {
       error ("even number of lines required for interlaced coding", 500);
     }
-    
+
     if ((p_Inp->output.height[0] & 0x1F) != 0)
     {
       p_Vid->auto_crop_bottom = 32 - (p_Inp->output.height[0] & 0x1F);
@@ -434,7 +508,7 @@ static void init_encoder(VideoParameters *p_Vid, InputParameters *p_Inp)
     }
   }
 
-  LevelCheck(p_Vid, p_Inp);
+  level_check(p_Vid, p_Inp);
 
   // Open Files
   OpenFiles(&p_Inp->input_file1);
@@ -445,7 +519,7 @@ static void init_encoder(VideoParameters *p_Vid, InputParameters *p_Inp)
   }
   p_Vid->prev_view_is_anchor = 0;
   p_Vid->view_id = 0;  // initialise view_id
-  SetDpbLayerId(p_Vid, p_Vid->view_id);
+  set_dpb_layer_id(p_Vid, p_Vid->view_id);
 #endif
 
   //init dpb storage formage;
@@ -460,13 +534,13 @@ static void init_encoder(VideoParameters *p_Vid, InputParameters *p_Inp)
   }
   //end;
 
-  Init_QMatrix(p_Vid, p_Inp);
-  Init_QOffsetMatrix(p_Vid);
+  init_qmatrix(p_Vid, p_Inp);
+  init_qoffset(p_Vid);
 
   init_poc(p_Vid);
-  GenerateParameterSets(p_Vid);
+  generate_parameter_sets(p_Vid);
   generate_encode_parameters(p_Vid);
-  SetLevelIndices(p_Vid);
+  set_level_indices(p_Vid);
 
   init_img  (p_Vid);
 
@@ -481,9 +555,7 @@ static void init_encoder(VideoParameters *p_Vid, InputParameters *p_Inp)
   p_Vid->initial_Bframes = 0;
 #if (MVC_EXTENSION_ENABLE)
   if(p_Vid->num_of_layers == 2)
-  {
     p_Vid->Bit_Buffer = (long *)malloc(((p_Inp->no_frames << 1) + 1) * sizeof(long));
-  }
   else
     p_Vid->Bit_Buffer = (long *)malloc((p_Inp->no_frames + 1) * sizeof(long));
 #else
@@ -499,17 +571,17 @@ static void init_encoder(VideoParameters *p_Vid, InputParameters *p_Inp)
     init_gop_structure(p_Vid, p_Inp);
     interpret_gop_structure(p_Vid, p_Inp);
   }
+
+  // Initialize dpb for each layer
+  for(i=0; i<MAX_NUM_DPB_LAYERS; i++)
   {
-    int i;
-    for(i=0; i<MAX_NUM_DPB_LAYERS; i++)
-    {
-      p_Vid->p_Dpb_layer[i]->init_done = 0;
-    }
-    for(i=0; i<imin(p_Vid->num_of_layers, MAX_NUM_DPB_LAYERS); i++)
-    {
-      init_dpb(p_Vid, p_Vid->p_Dpb_layer[i]);
-    }
+    p_Vid->p_Dpb_layer[i]->init_done = 0;
   }
+  for(i=0; i<imin(p_Vid->num_of_layers, MAX_NUM_DPB_LAYERS); i++)
+  {
+    init_dpb(p_Vid, p_Vid->p_Dpb_layer[i]);
+  }
+
   init_out_buffer(p_Vid);
   init_stats (p_Inp, p_Vid->p_Stats);
   init_dstats(p_Vid->p_Dist);
@@ -528,13 +600,10 @@ static void init_encoder(VideoParameters *p_Vid, InputParameters *p_Inp)
 
   init_global_buffers(p_Vid, p_Inp);
 
-
   if ( p_Inp->WPMCPrecision )
-  {
     wpxInitWPXPasses(p_Vid, p_Inp);
-  }
 
-  Init_Motion_Search_Module (p_Vid, p_Inp);
+  init_motion_search_module (p_Vid, p_Inp);
   information_init(p_Vid, p_Inp, p_Vid->p_Stats);
 
   if(p_Inp->DistortionYUVtoRGB)
@@ -576,15 +645,15 @@ static void init_encoder(VideoParameters *p_Vid, InputParameters *p_Inp)
   if (p_Inp->ExplicitSeqCoding)
     OpenExplicitSeqFile(p_Vid, p_Inp);
 
-  if ( p_Inp->ChromaMCBuffer )
-    p_Vid->OneComponentChromaPrediction4x4 = OneComponentChromaPrediction4x4_retrieve;
-  else
-    p_Vid->OneComponentChromaPrediction4x4 = OneComponentChromaPrediction4x4_regenerate;
-
   p_Vid->searchRange.min_x = -p_Inp->search_range[0] << 2;
   p_Vid->searchRange.max_x =  p_Inp->search_range[0] << 2;
   p_Vid->searchRange.min_y = -p_Inp->search_range[0] << 2;
   p_Vid->searchRange.max_y =  p_Inp->search_range[0] << 2;
+
+  for ( i = 0; i < p_Vid->num_of_layers; i++ )
+  {
+    setup_dpb_layer(p_Vid->p_Dpb_layer[i], p_Vid, p_Inp);
+  }
 }
 
 void setup_coding_layer(VideoParameters *p_Vid)
@@ -593,9 +662,18 @@ void setup_coding_layer(VideoParameters *p_Vid)
   int i;
   int dpb_layer_id = p_Vid->dpb_layer_id;
   InputParameters *p_Inp = p_Vid->p_Inp;
+  DecodedPictureBuffer *p_Dpb = p_Vid->p_Dpb_layer[dpb_layer_id];
 
   p_Vid->active_sps = p_Vid->sps[dpb_layer_id];
   p_Vid->p_CurrEncodePar = p_Vid->p_EncodePar[dpb_layer_id];
+
+  if (p_Vid->p_CurrEncodePar->last_ref_idc == 1)
+  {      
+    p_Vid->p_CurrEncodePar->frame_num++;
+    p_Vid->p_CurrEncodePar->frame_num %= p_Vid->max_frame_num;
+  }
+  p_Vid->frame_num = p_Vid->p_CurrEncodePar->frame_num;
+
   //set bitdepth info;
   if(p_Vid->num_of_layers >1)
   {
@@ -690,9 +768,9 @@ void setup_coding_layer(VideoParameters *p_Vid)
     p_Vid->imgUV_tmp[1] = p_Vid->imgUV_tmp_buf[dpb_layer_id][1];
   }
   if ( p_Inp->ChromaMCBuffer )
-    p_Vid->OneComponentChromaPrediction4x4 = OneComponentChromaPrediction4x4_retrieve;
+    p_Vid->OneComponentChromaPrediction4x4 = p_Dpb->pf_OneComponentChromaPrediction4x4_retrieve;
   else
-    p_Vid->OneComponentChromaPrediction4x4 = OneComponentChromaPrediction4x4_regenerate;
+    p_Vid->OneComponentChromaPrediction4x4 = p_Dpb->pf_OneComponentChromaPrediction4x4_regenerate;
   
   select_distortion(p_Vid, p_Inp);
   // Setup Distortion Metrics depending on refinement level
@@ -701,23 +779,23 @@ void setup_coding_layer(VideoParameters *p_Vid)
     switch(p_Inp->MEErrorMetric[i])
     {
     case ERROR_SAD:
-      p_Vid->computeUniPred[i] = computeSAD;
-      p_Vid->computeUniPred[i + 3] = computeSADWP;
-      p_Vid->computeBiPred1[i] = computeBiPredSAD1;
-      p_Vid->computeBiPred2[i] = computeBiPredSAD2;
+      p_Vid->computeUniPred[i] = p_Dpb->pf_computeSAD;
+      p_Vid->computeUniPred[i + 3] = p_Dpb->pf_computeSADWP;
+      p_Vid->computeBiPred1[i] = p_Dpb->pf_computeBiPredSAD1;
+      p_Vid->computeBiPred2[i] = p_Dpb->pf_computeBiPredSAD2;
       break;
     case ERROR_SSE:
-      p_Vid->computeUniPred[i] = computeSSE;
-      p_Vid->computeUniPred[i + 3] = computeSSEWP;
-      p_Vid->computeBiPred1[i] = computeBiPredSSE1;
-      p_Vid->computeBiPred2[i] = computeBiPredSSE2;
+      p_Vid->computeUniPred[i] = p_Dpb->pf_computeSSE;
+      p_Vid->computeUniPred[i + 3] = p_Dpb->pf_computeSSEWP;
+      p_Vid->computeBiPred1[i] = p_Dpb->pf_computeBiPredSSE1;
+      p_Vid->computeBiPred2[i] = p_Dpb->pf_computeBiPredSSE2;
       break;
     case ERROR_SATD :
     default:
-      p_Vid->computeUniPred[i] = computeSATD;
-      p_Vid->computeUniPred[i + 3] = computeSATDWP;
-      p_Vid->computeBiPred1[i] = computeBiPredSATD1;
-      p_Vid->computeBiPred2[i] = computeBiPredSATD2;
+      p_Vid->computeUniPred[i] = p_Dpb->pf_computeSATD;
+      p_Vid->computeUniPred[i + 3] = p_Dpb->pf_computeSATDWP;
+      p_Vid->computeBiPred1[i] = p_Dpb->pf_computeBiPredSATD1;
+      p_Vid->computeBiPred2[i] = p_Dpb->pf_computeBiPredSATD2;
       break;
     }
   }
@@ -734,6 +812,7 @@ static void prepare_frame_params(VideoParameters *p_Vid, InputParameters *p_Inp,
 {
   SeqStructure *p_seq_struct = p_Vid->p_pred;
   FrameUnitStruct *p_cur_frm = p_Vid->p_curr_frm_struct;
+  int i;
 
   setup_coding_layer(p_Vid);
 
@@ -770,7 +849,15 @@ static void prepare_frame_params(VideoParameters *p_Vid, InputParameters *p_Inp,
     get_poc_type_zero( p_Vid, p_Inp, p_cur_frm );
     break;
   }
-  p_Vid->frame_num = ( p_cur_frm->idr_flag == 1 ) ? 0 : p_Vid->frame_num;
+
+  if (p_cur_frm->idr_flag == 1)
+  {
+    for (i = 0; i < p_Vid->num_of_layers; i++)
+    {
+      p_Vid->p_EncodePar[i]->frame_num = 0;
+    }
+    p_Vid->frame_num = 0;
+  }
   
   //Rate control
   if (p_Inp->RCEnable && p_Vid->type == I_SLICE)
@@ -829,26 +916,13 @@ static void encode_sequence(VideoParameters *p_Vid, InputParameters *p_Inp)
           populate_frm_struct_mvc( p_Vid, p_Inp, p_seq_struct, start, end );
         }
       }
-    }
-    else
-#endif
-    {
-      // determine whether to populate additional frames in the prediction structure
-      if ( curr_frame_to_code >= p_Vid->p_pred->pop_start_frame )
-      {
-        populate_frm_struct( p_Vid, p_Inp, p_seq_struct, p_Inp->FrmStructBufferLength, frames_to_code );
-      }
-    }
 
-    p_Vid->curr_frm_idx = curr_frame_to_code;
-    p_Vid->p_curr_frm_struct = p_frm + ( p_Vid->curr_frm_idx % frm_struct_buffer ); // pointer to current frame structure
-    p_Vid->number = curr_frame_to_code;
+      p_Vid->curr_frm_idx = curr_frame_to_code;
+      p_Vid->p_curr_frm_struct = p_frm + ( p_Vid->curr_frm_idx % frm_struct_buffer ); // pointer to current frame structure
+      p_Vid->number = curr_frame_to_code;
 
-#if (MVC_EXTENSION_ENABLE)
-    if(p_Inp->num_of_views==2)
-    {
       p_Vid->view_id = p_Vid->p_curr_frm_struct->view_id;
-      SetDpbLayerId(p_Vid, p_Vid->view_id);
+      set_dpb_layer_id(p_Vid, p_Vid->view_id);
       if ( p_Vid->view_id == 1 )
       {
         p_Vid->curr_frm_idx = p_Vid->number = (curr_frame_to_code - 1) >> 1;
@@ -867,7 +941,19 @@ static void encode_sequence(VideoParameters *p_Vid, InputParameters *p_Inp)
         p_Inp->RCEnable = tmp_rate_control_enable;
       }
     }
+    else
 #endif
+    {
+      // determine whether to populate additional frames in the prediction structure
+      if ( curr_frame_to_code >= p_Vid->p_pred->pop_start_frame )
+      {
+        populate_frm_struct( p_Vid, p_Inp, p_seq_struct, p_Inp->FrmStructBufferLength, frames_to_code );
+      }
+    p_Vid->curr_frm_idx = curr_frame_to_code;
+    p_Vid->p_curr_frm_struct = p_frm + ( p_Vid->curr_frm_idx % frm_struct_buffer ); // pointer to current frame structure
+    p_Vid->number = curr_frame_to_code;
+
+    }
 
     if ( p_Vid->p_curr_frm_struct->frame_no >= p_Inp->no_frames )
     {
@@ -875,20 +961,7 @@ static void encode_sequence(VideoParameters *p_Vid, InputParameters *p_Inp)
     }
 
     // Update frame_num counter
-    frame_num_bak = p_Vid->frame_num;
-    if (p_Vid->last_ref_idc == 1)
-    {      
-      p_Vid->frame_num++;
-
-#if (MVC_EXTENSION_ENABLE)
-      if ( p_Vid->num_of_layers == 2 )
-      {
-        p_Vid->frame_num %= (p_Vid->max_frame_num << 1);
-      }
-      else
-#endif
-      p_Vid->frame_num %= p_Vid->max_frame_num;
-    }
+    frame_num_bak = p_Vid->p_EncodePar[p_Vid->dpb_layer_id]->frame_num;
 
     prepare_frame_params(p_Vid, p_Inp, curr_frame_to_code);
 
@@ -902,11 +975,11 @@ static void encode_sequence(VideoParameters *p_Vid, InputParameters *p_Inp)
     frame_coded = encode_one_frame(p_Vid, p_Inp); // encode one frame;
     if ( !frame_coded )
     {
-      p_Vid->frame_num = frame_num_bak;
+      p_Vid->frame_num = p_Vid->p_CurrEncodePar->frame_num = frame_num_bak;
       continue;
     }
 
-    p_Vid->last_ref_idc = p_Vid->nal_reference_idc ? 1 : 0;
+    p_Vid->p_CurrEncodePar->last_ref_idc = p_Vid->nal_reference_idc ? 1 : 0;
 
     // if key frame is encoded, encode one redundant frame
     if (p_Inp->redundant_pic_flag && p_Vid->key_frame)
@@ -914,9 +987,21 @@ static void encode_sequence(VideoParameters *p_Vid, InputParameters *p_Inp)
       encode_one_redundant_frame(p_Vid, p_Inp);
     }
 
-    if (p_Vid->type == I_SLICE && p_Inp->EnableOpenGOP && p_Vid->p_curr_frm_struct->random_access)
+    if (p_Inp->EnableOpenGOP && p_Vid->p_curr_frm_struct->random_access)
     {
-      p_Vid->last_valid_reference = p_Vid->ThisPOC;
+      if (p_Inp->PicInterlace)
+      {
+        if (p_Vid->p_curr_frm_struct->p_top_fld_pic->p_Slice[0].type == I_SLICE && p_Vid->p_curr_frm_struct->random_access) //Currently encoder always codes top field as I
+        {
+          p_Vid->last_valid_reference = p_Vid->ThisPOC & (~( (signed int)1 ));
+          //printf("last valid ref: %d", p_Vid->last_valid_reference);
+        }
+      }
+      else if (p_Vid->type == I_SLICE)
+      {
+        p_Vid->last_valid_reference = p_Vid->ThisPOC;
+        //printf("last valid ref: %d", p_Vid->last_valid_reference);
+      }
     }
 
     if (p_Inp->ReportFrameStats)
@@ -966,7 +1051,7 @@ void free_encoder_memory(VideoParameters *p_Vid, InputParameters *p_Inp)
   if (p_Enc->p_trace)
     fclose(p_Enc->p_trace);
 
-  Clear_Motion_Search_Module (p_Vid, p_Inp);
+  clear_motion_search_module (p_Vid, p_Inp);
 
   RandomIntraUninit(p_Vid);
   FmoUninit(p_Vid);
@@ -1103,11 +1188,6 @@ static void init_img( VideoParameters *p_Vid)
   p_Vid->max_num_references = p_Vid->active_sps->frame_mbs_only_flag ? p_Vid->active_sps->num_ref_frames : 2 * p_Vid->active_sps->num_ref_frames;
 
 #if (MVC_EXTENSION_ENABLE)
-  if(p_Vid->num_of_layers == 2) //if(p_Inp->num_of_views==2)//? Yuwen: not sure it should use num_of_layers or not;
-  {
-    //p_Vid->num_ref_frames <<= 1;
-    p_Vid->max_num_references <<= 1;
-  }
   p_Vid->sec_view_force_fld = 0;
 #endif
 
@@ -1711,7 +1791,10 @@ static int init_global_buffers(VideoParameters *p_Vid, InputParameters *p_Inp)
     p_Vid->imgUV_tmp[1] = p_Vid->imgUV_tmp_buf[0][1];
   }
 
-  memory_size += get_mem2Dint_pad (&p_Vid->imgY_sub_tmp, p_Vid->height, p_Vid->width, IMG_PAD_SIZE_Y, IMG_PAD_SIZE_X);
+  if( !(p_Inp->OnTheFlyFractMCP) || (p_Inp->OnTheFlyFractMCP==OTF_L1) ) // JLT : on-the-fly compatibility
+  {
+    memory_size += get_mem2Dint_pad (&p_Vid->imgY_sub_tmp, p_Vid->height, p_Vid->width, IMG_PAD_SIZE_Y, IMG_PAD_SIZE_X);
+  }
 
   //if ( p_Inp->ChromaMCBuffer )
     chroma_mc_setup(p_Vid);
@@ -2119,7 +2202,7 @@ void free_mem_DCcoeff (int*** cofDC)
  *    current level_idc
  ************************************************************************
  */
-static void SetLevelIndices(VideoParameters *p_Vid)
+static void set_level_indices(VideoParameters *p_Vid)
 {
   switch(p_Vid->active_sps->level_idc)
   {

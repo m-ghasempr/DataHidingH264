@@ -39,7 +39,8 @@ typedef int   intptr_t;
 # include <omp.h>
 #endif
 
-# define strcasecmp _strcmpi
+# define  strcasecmp _strcmpi
+# define  strncasecmp _strnicmp
 
 # define  snprintf _snprintf
 # define  open     _open

@@ -25,6 +25,8 @@
 #include "me_distortion.h"
 #include "me_epzs.h"
 #include "me_epzs_common.h"
+#include "me_epzs_int.h"
+#include "me_fullsearch.h"
 #include "mv_search.h"
 
 static const short BLOCK_PARENT[8] = { 1, 1, 1, 1, 2, 4, 4, 5 };  //!< {skip, 16x16, 16x8, 8x16, 8x8, 8x4, 4x8, 4x4}
@@ -36,7 +38,7 @@ static const int MAX_THRES_BASE[8] = { 0, 768, 384, 384, 192, 96, 96, 48 };
 static const char EPZS_PATTERN[6][20] = { "Diamond", "Square", "Extended Diamond", "Large Diamond", "SBP Large Diamond", "PMVFAST" };
 static const char EPZS_DUAL_PATTERN[7][20] =
 { "Disabled", "Diamond", "Square", "Extended Diamond", "Large Diamond", "SBP Large Diamond", "PMVFAST" };
-static const char EPZS_FIXED_PREDICTORS[3][20] = { "Disabled", "All P", "All P + B" };
+static const char EPZS_FIXED_PREDICTORS[4][20] = { "Disabled", "All P", "All P + B", "Aggressive" };
 static const char EPZS_OTHER_PREDICTORS[2][20] = { "Disabled", "Enabled" };
 static const char EPZS_SUBPEL_METHOD[3][20]    = { "Full", "Basic", "Enhanced" };
 
@@ -138,6 +140,30 @@ assignEPZSpattern (EPZSStructure * pattern, int type, int stopSearch, int nextLa
   pattern->stopSearch = stopSearch;
   pattern->nextLast = nextLast;
   pattern->nextpattern = nextpattern;
+}
+
+/*!
+************************************************************************
+* \brief
+*    Setup EPZS ME engine
+************************************************************************
+*/
+void EPZS_setup_engine(Macroblock *currMB, InputParameters *p_Inp)
+{
+  currMB->IntPelME = (p_Inp->EPZSSubPelGrid) ? EPZS_integer_motion_estimation : EPZS_motion_estimation;
+  currMB->BiPredME = (p_Inp->EPZSSubPelGrid) ? EPZS_integer_bipred_motion_estimation : EPZS_bipred_motion_estimation;
+  if (p_Inp->EPZSSubPelME == 1)
+    currMB->SubPelME = EPZS_sub_pel_motion_estimation;
+  else if (p_Inp->EPZSSubPelME == 2)
+    currMB->SubPelME = full_sub_pel_motion_estimation;
+  else
+    currMB->SubPelME = sub_pel_motion_estimation;
+  if (p_Inp->EPZSSubPelMEBiPred == 1)
+    currMB->SubPelBiPredME = EPZS_sub_pel_bipred_motion_estimation;
+  else if (p_Inp->EPZSSubPelMEBiPred == 2)
+    currMB->SubPelBiPredME = full_sub_pel_bipred_motion_estimation;
+  else
+    currMB->SubPelBiPredME = sub_pel_bipred_motion_estimation;
 }
 
 /*!
@@ -1247,7 +1273,7 @@ EPZSBlockTypePredictorsMB (Slice * currSlice, MEBlock * mv_block, SPoint * point
 ***********************************************************************
 */
 short
-EPZSSpatialPredictors (EPZSParameters * p_EPZS, MEBlock *mv_block, int list, int list_offset, short ref, struct pic_motion_params **mv_info)
+EPZS_spatial_predictors (EPZSParameters * p_EPZS, MEBlock *mv_block, int list, int list_offset, short ref, struct pic_motion_params **mv_info)
 {
   PixelPos * block = mv_block->block;
   short refA = 0, refB = 0, refC = 0, refD = 0;
@@ -1499,7 +1525,7 @@ EPZSSpatialPredictors (EPZSParameters * p_EPZS, MEBlock *mv_block, int list, int
 ***********************************************************************
 */
 void
-EPZSTemporalPredictors (Macroblock *currMB,                 //! <-- Currrent Macroblock
+EPZS_temporal_predictors (Macroblock *currMB,                 //! <-- Current Macroblock
                         StorablePicture *ref_picture,       //! <-- Current reference picture
                         EPZSParameters * p_EPZS,            //! <-- EPZS structure
                         MEBlock *mv_block,                  //! <-- motion estimation information block
@@ -1646,7 +1672,7 @@ EPZSWindowPredictors (MotionVector * mv, EPZSStructure * predictor, int *prednum
 ***********************************************************************
 */
 void
-EPZSSpatialMemPredictors (EPZSParameters * p_EPZS,  //!< EPZS Parameters
+EPZS_spatial_memory_predictors (EPZSParameters * p_EPZS,  //!< EPZS Parameters
                           MEBlock * mv_block, //!< Motion estimation structure
                           int list, //!< Current list
                           int *prednum, //!< predictor position
@@ -1825,10 +1851,10 @@ EPZSOutputStats (InputParameters * p_Inp, FILE * stat, short stats_file)
     }
     else
     {
-      fprintf (stat, " EPZS Threshold Multipliers   : (%d %d %d)\n", p_Inp->EPZSMedThresScale[0], p_Inp->EPZSMinThresScale[0], p_Inp->EPZSMaxThresScale[0]);
+      fprintf (stat, " EPZS Threshold Multipliers        : (%d %d %d)\n", p_Inp->EPZSMedThresScale[0], p_Inp->EPZSMinThresScale[0], p_Inp->EPZSMaxThresScale[0]);
     }
 #else
-    fprintf (stat, " EPZS Threshold Multipliers   : (%d %d %d)\n", p_Inp->EPZSMedThresScale, p_Inp->EPZSMinThresScale, p_Inp->EPZSMaxThresScale);
+    fprintf (stat, " EPZS Threshold Multipliers        : (%d %d %d)\n", p_Inp->EPZSMedThresScale, p_Inp->EPZSMinThresScale, p_Inp->EPZSMaxThresScale);
 #endif
     fprintf (stat, " EPZS Subpel ME                    : %s\n", EPZS_SUBPEL_METHOD[p_Inp->EPZSSubPelME]);
     fprintf (stat, " EPZS Subpel ME BiPred             : %s\n", EPZS_SUBPEL_METHOD[p_Inp->EPZSSubPelMEBiPred]);

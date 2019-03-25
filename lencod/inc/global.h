@@ -46,36 +46,46 @@ struct coding_state;
 struct pic_motion_params_old;
 struct pic_motion_params;
 
-typedef struct image_structure
+typedef struct image_structure ImageStructure;
+typedef struct info_8x8 Info8x8;
+typedef struct search_window SearchWindow;
+typedef struct block_pos BlockPos;
+typedef struct bit_counter BitCounter;
+typedef struct encoding_environment EncodingEnvironment;
+typedef EncodingEnvironment *EncodingEnvironmentPtr;
+typedef struct bi_context_type BiContextType;
+typedef BiContextType *BiContextTypePtr;
+
+struct image_structure
 {  
   FrameFormat format;      //!< ImageStructure format Information
   imgpel **data[3];        //!< ImageStructure pixel data
-} ImageStructure;
+};
 
 //! block 8x8 temporary RD info
-typedef struct info_8x8
+struct info_8x8
 {
    char   mode;
    char   pdir;
    char   ref[2];
    char   bipred;
-} Info8x8;
+};
 
-typedef struct search_window {
+struct search_window {
   int    min_x;
   int    max_x;
   int    min_y;
   int    max_y;
-} SearchWindow;
+};
 
-typedef struct
+struct block_pos
 {
   short x;
   short y;
-} BlockPos;
+};
 
 //! bit counter for a macroblock. Note that it seems safe to change all to unsigned short for 16x16 MBs. May be an issue if MB > 32x32
-typedef struct bit_counter
+struct bit_counter
 {
   int mb_total;
   unsigned short mb_mode;
@@ -87,10 +97,10 @@ typedef struct bit_counter
   int mb_cb_coeff;
   int mb_cr_coeff;  
   int mb_stuffing;
-} BitCounter;
+};
 
 //! struct to characterize the state of the arithmetic coding engine
-typedef struct
+struct encoding_environment
 {
   struct video_par *p_Vid;
   unsigned int  Elow, Erange;
@@ -102,19 +112,16 @@ typedef struct
   int           *Ecodestrm_len;
   int           C;
   int           E;
-} EncodingEnvironment;
-
-typedef EncodingEnvironment *EncodingEnvironmentPtr;
+};
 
 //! struct for context management
-typedef struct
+struct bi_context_type
 {
   unsigned long  count;
   byte state; //uint16 state;         // index into state-table CP
   unsigned char  MPS;           // Least Probable Symbol 0/1 CP  
-} BiContextType;
+};
 
-typedef BiContextType *BiContextTypePtr;
 
 
 /**********************************************************************
@@ -455,10 +462,11 @@ typedef struct macroblock_enc
   distblk (*SubPelME)       (struct macroblock_enc *currMB, 
     MotionVector *pred_mv, struct me_block *mv_block, distblk min_mcost, int* lambda_factor);
   distblk (*BiPredME)       (struct macroblock_enc *currMB, int, MotionVector *, MotionVector *, MotionVector *, MotionVector *, struct me_block *, int, distblk, int);
-  int (*residual_transform_quant_luma_4x4)      (struct macroblock_enc *currMB, ColorPlane pl, int block_x, int block_y, int *coeff_cost, int intra);
-  int (*residual_transform_quant_luma_16x16)    (struct macroblock_enc *currMB, ColorPlane pl);
-  int (*residual_transform_quant_luma_8x8)      (struct macroblock_enc *currMB, ColorPlane pl, int b8, int *coeff_cost, int intra);
+  int  (*residual_transform_quant_luma_4x4)      (struct macroblock_enc *currMB, ColorPlane pl, int block_x, int block_y, int *coeff_cost, int intra);
+  int  (*residual_transform_quant_luma_16x16)    (struct macroblock_enc *currMB, ColorPlane pl);
+  int  (*residual_transform_quant_luma_8x8)      (struct macroblock_enc *currMB, ColorPlane pl, int b8, int *coeff_cost, int intra);
   int  (*residual_transform_quant_chroma_4x4[2])(struct macroblock_enc *currMB, int uv,int i11);
+  void (*p_SetupFastFullPelSearch) (struct macroblock_enc *, MEBlock *, int ) ;
 
   void (*cbp_linfo_intra)(int cbp, int dummy, int *len,int *info);
   void (*cbp_linfo_inter)(int cbp, int dummy, int *len,int *info);    
@@ -529,9 +537,8 @@ typedef struct rd_data
   Info8x8 block;
   Info8x8 b8x8[4];
   
-  // These need to be changed to MotionVector parameters
   MotionVector   *****all_mv;         //!< all modes motion vectors
-  MotionVector ******bipred_mv;       //!<Biprediction MVs  
+  MotionVector ******bipred_mv;       //!< Bipredictive motion vectors
 
   char    intra_pred_modes[16];
   char    intra_pred_modes8x8[16];
@@ -549,6 +556,7 @@ typedef struct slice
 
   struct decoded_picture_buffer *p_Dpb;
 
+  int                 layer_id;
   int                 picture_id;
   int                 qp;
   int                 qs;
@@ -559,7 +567,7 @@ typedef struct slice
   signed int          ThisPOC;      //!< current picture POC
   short               slice_nr;
   int                 model_number;
-  char                colour_plane_id;   //!< colour plane id for 4:4:4 profile
+  int                 colour_plane_id;   //!< colour plane id for 4:4:4 profile
   int                 lossless_qpprime_flag;
   int                 P444_joined;
   int                 disthres;
@@ -572,7 +580,7 @@ typedef struct slice
 
   char                num_ref_idx_active[2];
   int                 ref_pic_list_reordering_flag[2];
-  int                 *reordering_of_pic_nums_idc[2];
+  int                 *modification_of_pic_nums_idc[2];
   int                 *abs_diff_pic_num_minus1[2];
   int                 *long_term_pic_idx[2];
 #if (MVC_EXTENSION_ENABLE)
@@ -710,7 +718,6 @@ typedef struct slice
   int  pos;
 
   int default_pic_num[2][MAX_REFERENCE_PICTURES];
-  int default_view_id[2][MAX_REFERENCE_PICTURES];
 
   // Function pointers  
   int     (*mode_decision_for_I16x16_MB)        (Macroblock *currMB, int lambda);
@@ -771,6 +778,7 @@ typedef struct slice
 
   // List initialization / reordering
   void (*init_lists               ) (struct slice *currSlice);
+  void (*reorder_lists            ) (struct slice *currSlice);
   void (*poc_ref_pic_reorder_frame) (struct slice *currSlice, unsigned num_ref_idx_lX_active, int list_no );
    
 
@@ -917,6 +925,12 @@ typedef struct coding_par
   unsigned int PicHeightInMapUnits;
   unsigned int FrameHeightInMbs;
   unsigned int FrameSizeInMbs;
+
+  unsigned int frame_num;
+  unsigned int prevFrameNum;
+  unsigned int FrameNumOffset;
+  unsigned int prevFrameNumOffset;
+  int last_ref_idc;
 
   //uint32 dc_pred_value;                 //!< DC prediction value for current component
   //short max_imgpel_value;              //!< max value that one picture element (pixel) can take (depends on pic_unit_bitdepth)

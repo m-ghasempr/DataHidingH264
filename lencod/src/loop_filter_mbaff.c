@@ -78,16 +78,12 @@ static void get_strength_ver_MBAff(byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ
 
     if (p_Vid->type==SP_SLICE || p_Vid->type==SI_SLICE)
     {
-      Strength[idx] = (edge == 0 && (((!p_Vid->mb_aff_frame_flag && (p_Vid->structure==FRAME)) ||
-        (p_Vid->mb_aff_frame_flag && !MbP->mb_field && !MbQ->mb_field)) ||
-        ((p_Vid->mb_aff_frame_flag || (p_Vid->structure != FRAME))))) ? 4 : 3;
+      Strength[idx] = (edge == 0) ? 4 : 3;
     }
     else
     {
       // Start with Strength=3. or Strength=4 for Mb-edge
-      Strength[idx] = (edge == 0 && (((!p_Vid->mb_aff_frame_flag && (p_Vid->structure==FRAME)) ||
-        (p_Vid->mb_aff_frame_flag && !MbP->mb_field && !MbQ->mb_field)) ||
-        ((p_Vid->mb_aff_frame_flag || (p_Vid->structure!=FRAME))))) ? 4 : 3;
+      Strength[idx] = (edge == 0) ? 4 : 3;
 
       if(  !(MbP->mb_type==I4MB || MbP->mb_type==I16MB || MbP->mb_type==I8MB || MbP->mb_type==IPCM)
         && !(MbQ->mb_type==I4MB || MbQ->mb_type==I16MB || MbQ->mb_type==I8MB || MbQ->mb_type==IPCM) )
@@ -114,10 +110,10 @@ static void get_strength_ver_MBAff(byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ
               PicMotionParams *mv_info_p = &mv_info[blk_y ][blk_x ];
               PicMotionParams *mv_info_q = &mv_info[blk_y2][blk_x2];
 
-            StorablePicturePtr ref_p0 = mv_info_p->ref_idx[LIST_0] == -1 ? NULL : mv_info_p->ref_pic[LIST_0];
-            StorablePicturePtr ref_q0 = mv_info_q->ref_idx[LIST_0] == -1 ? NULL : mv_info_q->ref_pic[LIST_0];
-            StorablePicturePtr ref_p1 = mv_info_p->ref_idx[LIST_1] == -1 ? NULL : mv_info_p->ref_pic[LIST_1];
-            StorablePicturePtr ref_q1 = mv_info_q->ref_idx[LIST_1] == -1 ? NULL : mv_info_q->ref_pic[LIST_1];
+              StorablePicturePtr ref_p0 = mv_info_p->ref_idx[LIST_0] == -1 ? NULL : mv_info_p->ref_pic[LIST_0];
+              StorablePicturePtr ref_q0 = mv_info_q->ref_idx[LIST_0] == -1 ? NULL : mv_info_q->ref_pic[LIST_0];
+              StorablePicturePtr ref_p1 = mv_info_p->ref_idx[LIST_1] == -1 ? NULL : mv_info_p->ref_pic[LIST_1];
+              StorablePicturePtr ref_q1 = mv_info_q->ref_idx[LIST_1] == -1 ? NULL : mv_info_q->ref_pic[LIST_1];
 
               if ( ((ref_p0==ref_q0) && (ref_p1==ref_q1)) ||
                 ((ref_p0==ref_q1) && (ref_p1==ref_q0)))
@@ -370,7 +366,7 @@ static void edge_loop_luma_ver_MBAff(ColorPlane pl, imgpel** Img, byte Strength[
               }
               else
               {
-                SrcPtrP[     0     ] = (imgpel) (((L1 << 1) + L0 + R1 + 2) >> 2) ;
+                SrcPtrP[ 0 ] = (imgpel) (((L1 << 1) + L0 + R1 + 2) >> 2) ;
               }
 
               if (aq)

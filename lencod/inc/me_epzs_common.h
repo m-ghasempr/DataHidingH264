@@ -23,8 +23,8 @@
 // Structure definitions
 typedef struct
 {
-  int         mb_adaptive_frame_field_flag;
-  int         size_x, size_y;
+  int mb_adaptive_frame_field_flag;
+  int size_x, size_y;
 
   // Frame
   MotionVector ***frame;  //!< motion vector       [list][subblock_x][subblock_y]
@@ -93,18 +93,18 @@ typedef struct epzs_params {
   // Window predictors
   EPZSStructure *window_predictor;
   EPZSStructure *window_predictor_ext;
-  // Colocated helper
+  // Co-located helper
   EPZSColocParams *p_colocated;
 } EPZSParameters;
 
 
 extern void    EPZSBlockTypePredictorsMB (Slice *currSlice, MEBlock *mv_block, SPoint *point, int *prednum);
-extern short   EPZSSpatialPredictors     (EPZSParameters *p_EPZS, MEBlock *mv_block /*PixelPos *block*/, int list, int list_offset, short ref, struct pic_motion_params **mv_info);
-extern void    EPZSTemporalPredictors    (Macroblock *currMB, StorablePicture *ref_picture, EPZSParameters *p_EPZS, MEBlock *mv_block, int *prednum, distblk stopCriterion, distblk min_mcost);
+extern short   EPZS_spatial_predictors     (EPZSParameters *p_EPZS, MEBlock *mv_block, int list, int list_offset, short ref, struct pic_motion_params **mv_info);
+extern void    EPZS_temporal_predictors    (Macroblock *currMB, StorablePicture *ref_picture, EPZSParameters *p_EPZS, MEBlock *mv_block, int *prednum, distblk stopCriterion, distblk min_mcost);
 extern distblk EPZSDetermineStopCriterion(EPZSParameters *p_EPZS, distblk* prevSad, MEBlock *mv_block ,distblk lambda_dist);
 extern void    EPZSBlockTypePredictors   (Slice *currSlice, MEBlock *mv_block, SPoint *point, int *prednum);
 extern void    EPZSWindowPredictors      (MotionVector *mv, EPZSStructure *predictor, int *prednum, EPZSStructure *windowPred);
-extern void    EPZSSpatialMemPredictors  (EPZSParameters *p_EPZS, MEBlock *mv_block, int list, int *prednum, int img_width);
+extern void    EPZS_spatial_memory_predictors  (EPZSParameters *p_EPZS, MEBlock *mv_block, int list, int *prednum, int img_width);
 
 extern void  EPZSDelete                (VideoParameters *p_Vid);
 extern void  EPZSStructDelete          (Slice *currSlice);
@@ -112,7 +112,7 @@ extern void  EPZSSliceInit             (Slice *currSlice);
 extern int   EPZSInit                  (VideoParameters *p_Vid);
 extern int   EPZSStructInit            (Slice *currSlice);
 extern void  EPZSOutputStats           (InputParameters *p_Inp, FILE * stat, short stats_file);
-
+extern void  EPZS_setup_engine         (Macroblock *, InputParameters *);
 /*!
 ***********************************************************************
 * \brief

@@ -371,11 +371,11 @@ typedef struct slice
   int idr_pic_id;
   int nal_reference_idc;                       //!< nal_reference_idc from NAL unit
   int Transform8x8Mode;
-  Boolean is_not_independent;
+  Boolean chroma444_not_separate;              //!< indicates chroma 4:4:4 coding with separate_colour_plane_flag equal to zero
 
-  int toppoc;      //poc for this top field // POC200301
+  int toppoc;      //poc for this top field
   int bottompoc;   //poc of bottom field of frame
-  int framepoc;    //poc of this frame // POC200301
+  int framepoc;    //poc of this frame
 
   //the following is for slice header syntax elements of poc
   // for poc mode 0.
@@ -461,7 +461,7 @@ typedef struct slice
   int mvscale[6][MAX_REFERENCE_PICTURES];
 
   int                 ref_pic_list_reordering_flag[2];
-  int                 *reordering_of_pic_nums_idc[2];
+  int                 *modification_of_pic_nums_idc[2];
   int                 *abs_diff_pic_num_minus1[2];
   int                 *long_term_pic_idx[2];
 
@@ -625,7 +625,7 @@ typedef struct coding_par
   int max_vmv_r;                             //!< maximum vertical motion vector range in luma quarter frame pixel units for the current level_idc
   int separate_colour_plane_flag;
   int ChromaArrayType;
-  int MaxFrameNum;
+  int max_frame_num;
   unsigned int PicWidthInMbs;
   unsigned int PicHeightInMapUnits;
   unsigned int FrameHeightInMbs;
@@ -776,6 +776,7 @@ typedef struct video_par
   int IDR_concealment_flag;
   int conceal_slice_type;
 
+  Boolean first_sps;
   // random access point decoding
   int recovery_point;
   int recovery_point_found;
@@ -937,7 +938,7 @@ typedef struct video_par
   int shiftpel_x;
   int shiftpel_y;
   int total_scale;
-  int MaxFrameNum;
+  int max_frame_num;
 
   unsigned int PicWidthInMbs;
   unsigned int PicHeightInMapUnits;
@@ -948,6 +949,7 @@ typedef struct video_par
   //int max_mb_vmv_r;                        //!< maximum vertical motion vector range in luma quarter pixel units for the current level_idc
 /******************* end deprecative variables; ***************************************/
 
+  struct dec_stat_parameters *dec_stats;
 } VideoParameters;
 
 

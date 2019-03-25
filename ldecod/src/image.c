@@ -55,6 +55,7 @@
 
 #include "errorconcealment.h"
 #include "erc_api.h"
+#include "mbuffer_common.h"
 #include "mbuffer_mvc.h"
 #include "fast_memory.h"
 
@@ -67,34 +68,6 @@ static inline void reset_mbs(Macroblock *currMB)
   currMB->slice_nr = -1; 
   currMB->ei_flag  =  1;
   currMB->dpl_flag =  0;
-}
-
-static inline void reset_mv_info(PicMotionParams *mv_info)
-{
-  mv_info->ref_pic[LIST_0] = NULL;
-  mv_info->ref_pic[LIST_1] = NULL;
-  mv_info->mv[LIST_0] = zero_mv;
-  mv_info->mv[LIST_1] = zero_mv;
-  mv_info->ref_idx[LIST_0] = -1;
-  mv_info->ref_idx[LIST_1] = -1;
-}
-
-/*!
- ************************************************************************
- * \brief
- *    init macroblock I and P frames
- ************************************************************************
- */
-void init_all_macroblocks(StorablePicture *dec_picture)
-{
-  int j;
-  PicMotionParams *mv_info = dec_picture->mv_info[0];
-
-  // reset vectors and pred. modes
-  for(j = 0; j < ((dec_picture->size_x * dec_picture->size_y) >> 4); ++j)
-  {                        
-    reset_mv_info(mv_info++);
-  }
 }
 
 static void setup_buffers(VideoParameters *p_Vid, int layer_id)
@@ -209,6 +182,10 @@ static void init_picture(VideoParameters *p_Vid, Slice *currSlice, InputParamete
   seq_parameter_set_rbsp_t *active_sps = p_Vid->active_sps;
   DecodedPictureBuffer *p_Dpb = currSlice->p_Dpb;
 
+  p_Vid->PicHeightInMbs = p_Vid->FrameHeightInMbs / ( 1 + currSlice->field_pic_flag );
+  p_Vid->PicSizeInMbs   = p_Vid->PicWidthInMbs * p_Vid->PicHeightInMbs;
+  p_Vid->FrameSizeInMbs = p_Vid->PicWidthInMbs * p_Vid->FrameHeightInMbs;
+
   p_Vid->bFrameInit = 1;
   if (p_Vid->dec_picture) // && p_Vid->num_dec_mb == p_Vid->PicSizeInMbs)
   {
@@ -220,21 +197,21 @@ static void init_picture(VideoParameters *p_Vid, Slice *currSlice, InputParamete
   setup_buffers(p_Vid, currSlice->layer_id);
 
   if (p_Vid->recovery_point)
-    p_Vid->recovery_frame_num = (currSlice->frame_num + p_Vid->recovery_frame_cnt) % p_Vid->MaxFrameNum;
+    p_Vid->recovery_frame_num = (currSlice->frame_num + p_Vid->recovery_frame_cnt) % p_Vid->max_frame_num;
 
   if (currSlice->idr_flag)
     p_Vid->recovery_frame_num = currSlice->frame_num;
 
   if (p_Vid->recovery_point == 0 &&
     currSlice->frame_num != p_Vid->pre_frame_num &&
-    currSlice->frame_num != (p_Vid->pre_frame_num + 1) % p_Vid->MaxFrameNum)
+    currSlice->frame_num != (p_Vid->pre_frame_num + 1) % p_Vid->max_frame_num)
   {
     if (active_sps->gaps_in_frame_num_value_allowed_flag == 0)
     {
       // picture error concealment
       if(p_Inp->conceal_mode !=0)
       {
-        if((currSlice->frame_num) < ((p_Vid->pre_frame_num + 1) % p_Vid->MaxFrameNum))
+        if((currSlice->frame_num) < ((p_Vid->pre_frame_num + 1) % p_Vid->max_frame_num))
         {
           /* Conceal lost IDR frames and any frames immediately
              following the IDR. Use frame copy for these since
@@ -702,10 +679,9 @@ void init_slice(VideoParameters *p_Vid, Slice *currSlice)
   p_Vid->active_sps = currSlice->active_sps;
   p_Vid->active_pps = currSlice->active_pps;
 
+  currSlice->init_lists (currSlice);
+
 #if (MVC_EXTENSION_ENABLE)
-
-  currSlice->init_lists(currSlice);
-
   if (currSlice->svc_extension_flag == 0 || currSlice->svc_extension_flag == 1)
     reorder_lists_mvc (currSlice, currSlice->ThisPOC);
   else
@@ -722,8 +698,6 @@ void init_slice(VideoParameters *p_Vid, Slice *currSlice)
     currSlice->fs_listinterview1 = NULL;
   }
 #else
-  //update_pic_num(currSlice);
-  currSlice->init_lists (currSlice);
   reorder_lists (currSlice);
 #endif
 
@@ -1278,13 +1252,14 @@ void reorder_lists(Slice *currSlice)
     if (p_Vid->no_reference_picture == currSlice->listX[0][currSlice->num_ref_idx_active[LIST_0] - 1])
     {
       if (p_Vid->non_conforming_stream)
-        printf("RefPicList0[ num_ref_idx_l0_active_minus1 ] is equal to 'no reference picture'\n");
+        printf("RefPicList0[ %d ] is equal to 'no reference picture'\n", currSlice->num_ref_idx_active[LIST_0] - 1);
       else
         error("RefPicList0[ num_ref_idx_l0_active_minus1 ] is equal to 'no reference picture', invalid bitstream",500);
     }
     // that's a definition
     currSlice->listXsize[0] = (char) currSlice->num_ref_idx_active[LIST_0];
   }
+
   if (currSlice->slice_type == B_SLICE)
   {
     if (currSlice->ref_pic_list_reordering_flag[LIST_1])
@@ -1294,7 +1269,7 @@ void reorder_lists(Slice *currSlice)
     if (p_Vid->no_reference_picture == currSlice->listX[1][currSlice->num_ref_idx_active[LIST_1]-1])
     {
       if (p_Vid->non_conforming_stream)
-        printf("RefPicList1[ num_ref_idx_l1_active_minus1 ] is equal to 'no reference picture'\n");
+        printf("RefPicList1[ %d ] is equal to 'no reference picture'\n", currSlice->num_ref_idx_active[LIST_1] - 1);
       else
         error("RefPicList1[ num_ref_idx_l1_active_minus1 ] is equal to 'no reference picture', invalid bitstream",500);
     }
@@ -1315,7 +1290,7 @@ void reorder_lists(Slice *currSlice)
       if(currSlice->listXsize[0]>0)
       {
         printf("\n");
-        printf(" ** (CurViewID:%d) %s Ref Pic List 0 ****\n", currSlice->view_id, currSlice->structure==FRAME ? "FRM":(currSlice->structure==TOP_FIELD ? "TOP":"BOT"));
+        printf(" ** (FinalViewID:%d) %s Ref Pic List 0 ****\n", currSlice->view_id, currSlice->structure==FRAME ? "FRM":(currSlice->structure==TOP_FIELD ? "TOP":"BOT"));
         for(i=0; i<(unsigned int)(currSlice->listXsize[0]); i++)  //ref list 0
         {
           printf("   %2d -> POC: %4d PicNum: %4d ViewID: %d\n", i, currSlice->listX[0][i]->poc, currSlice->listX[0][i]->pic_num, currSlice->listX[0][i]->view_id);
@@ -1337,7 +1312,7 @@ void reorder_lists(Slice *currSlice)
         printf("\n");
       if(currSlice->listXsize[0]>0)
       {
-        printf(" ** (CurViewID:%d) %s Ref Pic List 0 ****\n", currSlice->view_id, currSlice->structure==FRAME ? "FRM":(currSlice->structure==TOP_FIELD ? "TOP":"BOT"));
+        printf(" ** (FinalViewID:%d) %s Ref Pic List 0 ****\n", currSlice->view_id, currSlice->structure==FRAME ? "FRM":(currSlice->structure==TOP_FIELD ? "TOP":"BOT"));
         for(i=0; i<(unsigned int)(currSlice->listXsize[0]); i++)  //ref list 0
         {
           printf("   %2d -> POC: %4d PicNum: %4d ViewID: %d\n", i, currSlice->listX[0][i]->poc, currSlice->listX[0][i]->pic_num, currSlice->listX[0][i]->view_id);
@@ -1345,7 +1320,7 @@ void reorder_lists(Slice *currSlice)
       }
       if(currSlice->listXsize[1]>0)
       {
-        printf(" ** (CurViewID:%d) %s Ref Pic List 1 ****\n", currSlice->view_id, currSlice->structure==FRAME ? "FRM":(currSlice->structure==TOP_FIELD ? "TOP":"BOT"));
+        printf(" ** (FinalViewID:%d) %s Ref Pic List 1 ****\n", currSlice->view_id, currSlice->structure==FRAME ? "FRM":(currSlice->structure==TOP_FIELD ? "TOP":"BOT"));
         for(i=0; i<(unsigned int)(currSlice->listXsize[1]); i++)  //ref list 1
         {
           printf("   %2d -> POC: %4d PicNum: %4d ViewID: %d\n", i, currSlice->listX[1][i]->poc, currSlice->listX[1][i]->pic_num, currSlice->listX[1][i]->view_id);
@@ -1376,7 +1351,6 @@ int read_new_slice(Slice *currSlice)
   Bitstream *currStream = NULL;
 
   int slice_id_a, slice_id_b, slice_id_c;
-  int redundant_pic_cnt_b, redundant_pic_cnt_c;  
 
   for (;;)
   {
@@ -1530,7 +1504,7 @@ process_nalu:
       currSlice->active_sps = p_Vid->active_sps;
       currSlice->active_pps = p_Vid->active_pps;
       currSlice->Transform8x8Mode = p_Vid->active_pps->transform_8x8_mode_flag;
-      currSlice->is_not_independent = (p_Vid->active_sps->chroma_format_idc==YUV444)&&((p_Vid->separate_colour_plane_flag == 0));
+      currSlice->chroma444_not_separate = (p_Vid->active_sps->chroma_format_idc==YUV444)&&((p_Vid->separate_colour_plane_flag == 0));
 
       BitsUsedByHeader += RestOfSliceHeader (currSlice);
 #if (MVC_EXTENSION_ENABLE)
@@ -1611,7 +1585,7 @@ process_nalu:
       currSlice->active_sps = p_Vid->active_sps;
       currSlice->active_pps = p_Vid->active_pps;
       currSlice->Transform8x8Mode = p_Vid->active_pps->transform_8x8_mode_flag;
-      currSlice->is_not_independent = (p_Vid->active_sps->chroma_format_idc==YUV444)&&((p_Vid->separate_colour_plane_flag == 0));
+      currSlice->chroma444_not_separate = (p_Vid->active_sps->chroma_format_idc==YUV444)&&((p_Vid->separate_colour_plane_flag == 0));
 
       BitsUsedByHeader += RestOfSliceHeader (currSlice);
       currSlice->p_Dpb = p_Vid->p_Dpb_layer[currSlice->view_id];
@@ -1674,9 +1648,7 @@ process_nalu:
         else
         {
           if (p_Vid->active_pps->redundant_pic_cnt_present_flag)
-            redundant_pic_cnt_b = read_ue_v("NALU: DP_B redudant_pic_cnt", currStream, &p_Dec->UsedBits);
-          else
-            redundant_pic_cnt_b = 0;
+            read_ue_v("NALU: DP_B redundant_pic_cnt", currStream, &p_Dec->UsedBits);
 
           // we're finished with DP_B, so let's continue with next DP
           if (0 == read_next_nalu(p_Vid, nalu))
@@ -1709,9 +1681,7 @@ process_nalu:
         }
 
         if (p_Vid->active_pps->redundant_pic_cnt_present_flag)
-          redundant_pic_cnt_c = read_ue_v("NALU:SLICE_C redudand_pic_cnt", currStream, &p_Dec->UsedBits);
-        else
-          redundant_pic_cnt_c = 0;
+          read_ue_v("NALU:SLICE_C redudand_pic_cnt", currStream, &p_Dec->UsedBits);
       }
       else
       {
@@ -1767,8 +1737,8 @@ process_nalu:
     case NALU_TYPE_FILL:
       if (p_Inp->silent == FALSE)
       {
-        printf ("read_new_slice: Found NALU_TYPE_FILL, len %d\n", (int) nalu->len);
-        printf ("Skipping these filling bits, proceeding w/ next NALU\n");
+        //printf ("read_new_slice: Found NALU_TYPE_FILL, len %d\n", (int) nalu->len);
+        //printf ("Skipping these filling bits, proceeding w/ next NALU\n");
       }
       break;
 #if (MVC_EXTENSION_ENABLE)
@@ -1899,10 +1869,12 @@ void exit_picture(VideoParameters *p_Vid, StorablePicture **dec_picture)
   InputParameters *p_Inp = p_Vid->p_Inp;
   SNRParameters   *snr   = p_Vid->snr;
   char yuv_types[4][6]= {"4:0:0","4:2:0","4:2:2","4:4:4"};
+#if (DISABLE_ERC == 0)
   int ercStartMB;
   int ercSegment;
   frame recfr;
-  int structure, frame_poc, slice_type, refpic, qp, pic_num, chroma_format_idc, is_idr, top_poc, bottom_poc;
+#endif
+  int structure, frame_poc, slice_type, refpic, qp, pic_num, chroma_format_idc, is_idr;
 
   int64 tmp_time;                   // time used by decoding the last frame
   char   yuvFormat[10];
@@ -1913,6 +1885,7 @@ void exit_picture(VideoParameters *p_Vid, StorablePicture **dec_picture)
     return;
   }
 
+#if (DISABLE_ERC == 0)
   recfr.p_Vid = p_Vid;
   recfr.yptr = &(*dec_picture)->imgY[0][0];
   if ((*dec_picture)->chroma_format_idc != YUV400)
@@ -1926,7 +1899,6 @@ void exit_picture(VideoParameters *p_Vid, StorablePicture **dec_picture)
   ercSegment = 0;
 
   //! mark the start of the first segment
-#if (DISABLE_ERC == 0)
   if (!(*dec_picture)->mb_aff_frame_flag)
   {
     int i;
@@ -2013,9 +1985,7 @@ void exit_picture(VideoParameters *p_Vid, StorablePicture **dec_picture)
 #endif
   structure  = (*dec_picture)->structure;
   slice_type = (*dec_picture)->slice_type;
-  frame_poc  = (*dec_picture)->frame_poc;
-  top_poc    = (*dec_picture)->top_poc;
-  bottom_poc = (*dec_picture)->bottom_poc;
+  frame_poc  = (*dec_picture)->frame_poc;  
   refpic     = (*dec_picture)->used_for_reference;
   qp         = (*dec_picture)->qp;
   pic_num    = (*dec_picture)->pic_num;

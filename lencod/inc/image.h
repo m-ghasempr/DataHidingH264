@@ -53,6 +53,7 @@ extern void    frame_picture_mp_exit ( VideoParameters *p_Vid, CodingInfo *codin
 extern void GenerateImagePyramid(VideoParameters *p_Vid, int size_x, int size_y, imgpel ***p_hme_int_img, int offset_x, int offset_y);
 extern void OutputImage(char *pcPrefix, int iFrameNo, int iLevel, imgpel **pImg, int iWidth, int iHeight, int iXOffset, int iYOffset);
 extern void copy_params(VideoParameters *p_Vid, StorablePicture *enc_picture, seq_parameter_set_rbsp_t *active_sps);
+extern void OtfCompatibility_copyWithPadding ( imgpel **dstImg, imgpel **srcImg, int size_x, int size_y, int padding_x, int padding_y ); // JLT
 
 #endif
 

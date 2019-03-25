@@ -15,13 +15,13 @@
 
 
 
-// In the JVT syntax, frequently flags are used that indicate the presence of
+// In the MPEG-4 AVC/H.264 syntax, frequently flags are used that indicate the presence of
 // certain pieces of information in the NALU.  Here, these flags are also
 // present.  In the encoder, those bits indicate that the values signaled to
 // be present are meaningful and that this part of the syntax should be
 // written to the NALU.  In the decoder, the flag indicates that information
 // was received from the decoded NALU and should be used henceforth.
-// The structure names were chosen as indicated in the JVT syntax
+// The structure names were chosen as indicated in the MPEG-4 AVC/H.264 syntax
 
 #ifndef _PARSETCOMMON_H_
 #define _PARSETCOMMON_H_
@@ -122,8 +122,8 @@ typedef struct
   unsigned int pic_size_in_map_units_minus1;             // ue(v)
   byte      *slice_group_id;                              // complete MBAmap u(v)
 
-  int num_ref_idx_l0_active_minus1;                     // ue(v)
-  int num_ref_idx_l1_active_minus1;                     // ue(v)
+  int num_ref_idx_l0_default_active_minus1;                     // ue(v)
+  int num_ref_idx_l1_default_active_minus1;                     // ue(v)
   Boolean   weighted_pred_flag;                               // u(1)
   unsigned int  weighted_bipred_idc;                              // u(2)
   int       pic_init_qp_minus26;                              // se(v)

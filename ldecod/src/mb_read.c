@@ -486,11 +486,12 @@ static inline void reset_mv_info(PicMotionParams *mv_info, int slice_no)
   mv_info->slice_no = slice_no;
 }
 
-static inline void reset_mv_info_list(PicMotionParams *mv_info, int list)
+static inline void reset_mv_info_list(PicMotionParams *mv_info, int list, int slice_no)
 {
   mv_info->ref_pic[list] = NULL;
   mv_info->mv[list] = zero_mv;
   mv_info->ref_idx[list] = -1;
+  mv_info->slice_no = slice_no;
 }
 
 /*!
@@ -503,15 +504,15 @@ static void init_macroblock_basic(Macroblock *currMB)
 {
   int j, i;
   PicMotionParams **mv_info = &currMB->p_Slice->dec_picture->mv_info[currMB->block_y]; //&p_Vid->dec_picture->mv_info[currMB->block_y];
-
+  int slice_no =  currMB->p_Slice->current_slice_nr;
   // reset vectors and pred. modes
   for(j = 0; j < BLOCK_SIZE; ++j)
   {                        
     i = currMB->block_x;
-    reset_mv_info_list(*mv_info + (i++), LIST_1);
-    reset_mv_info_list(*mv_info + (i++), LIST_1);
-    reset_mv_info_list(*mv_info + (i++), LIST_1);
-    reset_mv_info_list(*(mv_info++) + i, LIST_1);
+    reset_mv_info_list(*mv_info + (i++), LIST_1, slice_no);
+    reset_mv_info_list(*mv_info + (i++), LIST_1, slice_no);
+    reset_mv_info_list(*mv_info + (i++), LIST_1, slice_no);
+    reset_mv_info_list(*(mv_info++) + i, LIST_1, slice_no);
   }
 }
 
@@ -523,8 +524,20 @@ static void init_macroblock_basic(Macroblock *currMB)
  */
 static void init_macroblock_direct(Macroblock *currMB)
 {
+  int slice_no = currMB->p_Slice->current_slice_nr;
+  PicMotionParams **mv_info = &currMB->p_Slice->dec_picture->mv_info[currMB->block_y]; 
+  int i, j;
+
   set_read_comp_coeff_cabac(currMB);
   set_read_comp_coeff_cavlc(currMB);
+  i = currMB->block_x;
+  for(j = 0; j < BLOCK_SIZE; ++j)
+  {                        
+    (*mv_info+i)->slice_no = slice_no;
+    (*mv_info+i+1)->slice_no = slice_no;
+    (*mv_info+i+2)->slice_no = slice_no;
+    (*(mv_info++)+i+3)->slice_no = slice_no;
+  }
 }
 
 
@@ -2144,6 +2157,9 @@ static void read_one_macroblock_b_slice_cabac(Macroblock *currMB)
       currSlice->intra_block[mb_nr] = 0;
     }
 
+    //--- init macroblock data ---
+    init_macroblock_direct(currMB);
+
     if (currSlice->cod_counter >= 0)
     {
       currSlice->is_reset_coeff = TRUE;
@@ -2152,9 +2168,6 @@ static void read_one_macroblock_b_slice_cabac(Macroblock *currMB)
     }
     else
     {
-      //--- init macroblock data ---
-      init_macroblock_direct(currMB);
-
       // read CBP and Coeffs  ***************************************************************
       currSlice->read_CBP_and_coeffs_from_NAL (currMB);
     }      

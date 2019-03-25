@@ -35,7 +35,7 @@
  *    Weighted BiPrediction
  ************************************************************************
  */
-static inline void MCWeightedBiPrediction(imgpel** mb_pred, imgpel* l0pred, imgpel *l1pred, 
+static inline void weighted_bi_prediction(imgpel** mb_pred, imgpel* l0pred, imgpel *l1pred, 
                                           int block_size_y, int block_x, int block_size_x,
                                           int max_imgpel_value,
                                           short wbp0, short wbp1, short offset, short wp_round, short weight_denom)
@@ -57,7 +57,7 @@ static inline void MCWeightedBiPrediction(imgpel** mb_pred, imgpel* l0pred, imgp
  *    Weighted Prediction
  ************************************************************************
  */
-static inline void MCWeightedPrediction(imgpel** mb_pred, imgpel* lpred, 
+static inline void weighted_mc_prediction(imgpel** mb_pred, imgpel* lpred, 
                                         int block_size_y, int block_x, int block_size_x,
                                         int max_imgpel_value,
                                         short wp, short offset, short wp_round, short weight_denom)
@@ -79,7 +79,7 @@ static inline void MCWeightedPrediction(imgpel** mb_pred, imgpel* lpred,
  *    BiPrediction
  ************************************************************************
  */
-static inline void MCBiPrediction(imgpel** mb_pred, imgpel* l0pred, imgpel *l1pred, 
+static inline void bi_prediction(imgpel** mb_pred, imgpel* l0pred, imgpel *l1pred, 
                                   int block_size_y, int block_x, int block_size_x)
 {
   int i, j;
@@ -98,7 +98,7 @@ static inline void MCBiPrediction(imgpel** mb_pred, imgpel* l0pred, imgpel *l1pr
  *    BiPrediction
  ************************************************************************
  */
-static inline void MCPrediction(imgpel** mb_pred, imgpel* lpred, int block_size_y, int block_x, int block_size_x)
+static inline void mc_prediction(imgpel** mb_pred, imgpel* lpred, int block_size_y, int block_x, int block_size_x)
 {
   int j;
   for (j = 0; j < block_size_y; j++)
@@ -173,18 +173,18 @@ void luma_prediction (Macroblock* currMB, //!< Current Macroblock
   switch (p_dir)
   {
   case 0:
-    curr_mv = &mv_array[LIST_0][(short) ref_idx[0]][list_mode[0]][by][bx];
-    OneComponentLumaPrediction (p_Vid, l0_pred, pic_opix_x + curr_mv->mv_x, pic_opix_y + curr_mv->mv_y, block_size_x, block_size_y, currSlice->listX[LIST_0 + currMB->list_offset][(short) ref_idx[0]]);
+    curr_mv = &mv_array[LIST_0][(short) ref_idx[LIST_0]][list_mode[LIST_0]][by][bx];
+    OneComponentLumaPrediction (p_Vid, l0_pred, pic_opix_x + curr_mv->mv_x, pic_opix_y + curr_mv->mv_y, block_size_x, block_size_y, currSlice->listX[LIST_0 + currMB->list_offset][(short) ref_idx[LIST_0]]);
     break;
   case 1:
-    curr_mv = &mv_array[LIST_1][(short) ref_idx[1]][list_mode[1]][by][bx];
-    OneComponentLumaPrediction (p_Vid, l1_pred, pic_opix_x + curr_mv->mv_x, pic_opix_y + curr_mv->mv_y, block_size_x, block_size_y, currSlice->listX[LIST_1 + currMB->list_offset][(short)ref_idx[1]]);
+    curr_mv = &mv_array[LIST_1][(short) ref_idx[LIST_1]][list_mode[LIST_1]][by][bx];
+    OneComponentLumaPrediction (p_Vid, l1_pred, pic_opix_x + curr_mv->mv_x, pic_opix_y + curr_mv->mv_y, block_size_x, block_size_y, currSlice->listX[LIST_1 + currMB->list_offset][(short)ref_idx[LIST_1]]);
     break;
   case 2:
-    curr_mv = &mv_array[LIST_0][(short) ref_idx[0]][list_mode[0]][by][bx];
-    OneComponentLumaPrediction (p_Vid, l0_pred, pic_opix_x + curr_mv->mv_x, pic_opix_y + curr_mv->mv_y, block_size_x, block_size_y, currSlice->listX[LIST_0 + currMB->list_offset][(short)ref_idx[0]]);
-    curr_mv = &mv_array[LIST_1][(short) ref_idx[1]][list_mode[1]][by][bx];
-    OneComponentLumaPrediction (p_Vid, l1_pred, pic_opix_x + curr_mv->mv_x, pic_opix_y + curr_mv->mv_y, block_size_x, block_size_y, currSlice->listX[LIST_1 + currMB->list_offset][(short)ref_idx[1]]);
+    curr_mv = &mv_array[LIST_0][(short) ref_idx[LIST_0]][list_mode[LIST_0]][by][bx];
+    OneComponentLumaPrediction (p_Vid, l0_pred, pic_opix_x + curr_mv->mv_x, pic_opix_y + curr_mv->mv_y, block_size_x, block_size_y, currSlice->listX[LIST_0 + currMB->list_offset][(short)ref_idx[LIST_0]]);
+    curr_mv = &mv_array[LIST_1][(short) ref_idx[LIST_1]][list_mode[LIST_1]][by][bx];
+    OneComponentLumaPrediction (p_Vid, l1_pred, pic_opix_x + curr_mv->mv_x, pic_opix_y + curr_mv->mv_y, block_size_x, block_size_y, currSlice->listX[LIST_1 + currMB->list_offset][(short)ref_idx[LIST_1]]);
     break;
   default:
     break;
@@ -194,7 +194,7 @@ void luma_prediction (Macroblock* currMB, //!< Current Macroblock
   {
     if (p_dir==2)
     {
-      MCWeightedBiPrediction(&mb_pred[block_y], l0_pred, l1_pred, block_size_y, block_x, block_size_x, 
+      weighted_bi_prediction(&mb_pred[block_y], l0_pred, l1_pred, block_size_y, block_x, block_size_x, 
         p_Vid->max_imgpel_value,
         currSlice->wbp_weight[0][(short)ref_idx[0]][(short)ref_idx[1]][0], currSlice->wbp_weight[1][(short)ref_idx[0]][(short)ref_idx[1]][0],
         (currSlice->wp_offset[0][(short)ref_idx[0]][0] + currSlice->wp_offset[1][(short)ref_idx[1]][0] + 1)>>1, 
@@ -202,13 +202,13 @@ void luma_prediction (Macroblock* currMB, //!< Current Macroblock
     }
     else if (p_dir==0)
     {
-      MCWeightedPrediction(&mb_pred[block_y], l0_pred, block_size_y, block_x, block_size_x,
+      weighted_mc_prediction(&mb_pred[block_y], l0_pred, block_size_y, block_x, block_size_x,
         p_Vid->max_imgpel_value,
         currSlice->wp_weight[0][(short)ref_idx[0]][0], currSlice->wp_offset[0][(short)ref_idx[0]][0], currSlice->wp_luma_round, currSlice->luma_log_weight_denom);
     }
     else // (p_dir==1)
     {
-      MCWeightedPrediction(&mb_pred[block_y], l1_pred, block_size_y, block_x, block_size_x,
+      weighted_mc_prediction(&mb_pred[block_y], l1_pred, block_size_y, block_x, block_size_x,
         p_Vid->max_imgpel_value,
         currSlice->wp_weight[1][(short)ref_idx[1]][0], currSlice->wp_offset[1][(short)ref_idx[1]][0], currSlice->wp_luma_round, currSlice->luma_log_weight_denom);
     }
@@ -217,15 +217,15 @@ void luma_prediction (Macroblock* currMB, //!< Current Macroblock
   {
     if (p_dir==2)
     {
-      MCBiPrediction(&mb_pred[block_y], l0_pred, l1_pred, block_size_y, block_x, block_size_x);    
+      bi_prediction(&mb_pred[block_y], l0_pred, l1_pred, block_size_y, block_x, block_size_x);    
     }
     else if (p_dir==0)
     {
-      MCPrediction(&mb_pred[block_y], l0_pred, block_size_y, block_x, block_size_x);
+      mc_prediction(&mb_pred[block_y], l0_pred, block_size_y, block_x, block_size_x);
     }
     else // (p_dir==1)
     {
-      MCPrediction(&mb_pred[block_y], l1_pred, block_size_y, block_x, block_size_x);
+      mc_prediction(&mb_pred[block_y], l1_pred, block_size_y, block_x, block_size_x);
     }
   }
 }
@@ -270,7 +270,7 @@ void luma_prediction_bi (Macroblock* currMB, //!< Current Macroblock
 
   if (apply_weights)
   {
-    MCWeightedBiPrediction(&mb_pred[block_y], l0_pred, l1_pred, block_size_y, block_x, block_size_x, 
+    weighted_bi_prediction(&mb_pred[block_y], l0_pred, l1_pred, block_size_y, block_x, block_size_x, 
       p_Vid->max_imgpel_value,
       currSlice->wbp_weight[0][l0_ref_idx][l1_ref_idx][0], currSlice->wbp_weight[1][l0_ref_idx][l1_ref_idx][0],
       (currSlice->wp_offset[0][l0_ref_idx][0] + currSlice->wp_offset[1][l1_ref_idx][0] + 1)>>1, 
@@ -278,7 +278,7 @@ void luma_prediction_bi (Macroblock* currMB, //!< Current Macroblock
   }
   else
   {
-    MCBiPrediction(&mb_pred[block_y], l0_pred, l1_pred, block_size_y, block_x, block_size_x);
+    bi_prediction(&mb_pred[block_y], l0_pred, l1_pred, block_size_y, block_x, block_size_x);
   }
 }
 
@@ -521,7 +521,7 @@ void chroma_prediction (Macroblock* currMB, // <-- Current Macroblock
   {
     if (p_dir==2)
     {
-      MCWeightedBiPrediction(&mb_pred[block_y], l0_pred, l1_pred, block_size_y, block_x, block_size_x, 
+      weighted_bi_prediction(&mb_pred[block_y], l0_pred, l1_pred, block_size_y, block_x, block_size_x, 
       p_Vid->max_pel_value_comp[1],
         currSlice->wbp_weight[0][l0_ref_idx][l1_ref_idx][uv_comp], currSlice->wbp_weight[1][l0_ref_idx][l1_ref_idx][uv_comp],
         (currSlice->wp_offset[0][l0_ref_idx][uv_comp] + currSlice->wp_offset[1][l1_ref_idx][uv_comp] + 1)>>1, 
@@ -529,13 +529,13 @@ void chroma_prediction (Macroblock* currMB, // <-- Current Macroblock
     }
     else if (p_dir==0)
     {
-      MCWeightedPrediction(&mb_pred[block_y], l0_pred, block_size_y, block_x, block_size_x,
+      weighted_mc_prediction(&mb_pred[block_y], l0_pred, block_size_y, block_x, block_size_x,
       p_Vid->max_pel_value_comp[1],
         currSlice->wp_weight[0][l0_ref_idx][uv_comp], currSlice->wp_offset[0][l0_ref_idx][uv_comp], currSlice->wp_chroma_round, currSlice->chroma_log_weight_denom );
     }
     else // (p_dir==1)
     {
-      MCWeightedPrediction(&mb_pred[block_y], l1_pred, block_size_y, block_x, block_size_x,
+      weighted_mc_prediction(&mb_pred[block_y], l1_pred, block_size_y, block_x, block_size_x,
       p_Vid->max_pel_value_comp[1],
         currSlice->wp_weight[1][l1_ref_idx][uv_comp], currSlice->wp_offset[1][l1_ref_idx][uv_comp], currSlice->wp_chroma_round, currSlice->chroma_log_weight_denom );
     }
@@ -544,15 +544,15 @@ void chroma_prediction (Macroblock* currMB, // <-- Current Macroblock
   {
     if (p_dir==2)
     {
-      MCBiPrediction(&mb_pred[block_y], l0_pred, l1_pred, block_size_y, block_x, block_size_x);
+      bi_prediction(&mb_pred[block_y], l0_pred, l1_pred, block_size_y, block_x, block_size_x);
     }
     else if (p_dir==0)
     {
-      MCPrediction(&mb_pred[block_y], l0_pred, block_size_y, block_x, block_size_x);
+      mc_prediction(&mb_pred[block_y], l0_pred, block_size_y, block_x, block_size_x);
     }
     else // (p_dir==1)
     {
-      MCPrediction(&mb_pred[block_y], l1_pred, block_size_y, block_x, block_size_x);
+      mc_prediction(&mb_pred[block_y], l1_pred, block_size_y, block_x, block_size_x);
     }
   }
 }
@@ -614,7 +614,7 @@ void chroma_prediction_4x4 (Macroblock* currMB,  // <-- Current Macroblock
   {
     if (p_dir==2)
     {
-      MCWeightedBiPrediction(&mb_pred[block_y], l0_pred, l1_pred, BLOCK_SIZE, block_x, BLOCK_SIZE, 
+      weighted_bi_prediction(&mb_pred[block_y], l0_pred, l1_pred, BLOCK_SIZE, block_x, BLOCK_SIZE, 
         p_Vid->max_pel_value_comp[1],
         currSlice->wbp_weight[0][l0_ref_idx][l1_ref_idx][uv_comp], currSlice->wbp_weight[1][l0_ref_idx][l1_ref_idx][uv_comp],
         (currSlice->wp_offset[0][l0_ref_idx][uv_comp] + currSlice->wp_offset[1][l1_ref_idx][uv_comp] + 1)>>1, 
@@ -623,13 +623,13 @@ void chroma_prediction_4x4 (Macroblock* currMB,  // <-- Current Macroblock
     }
     else if (p_dir==0)
     {
-      MCWeightedPrediction(&mb_pred[block_y], l0_pred, BLOCK_SIZE, block_x, BLOCK_SIZE,
+      weighted_mc_prediction(&mb_pred[block_y], l0_pred, BLOCK_SIZE, block_x, BLOCK_SIZE,
       p_Vid->max_pel_value_comp[1],
         currSlice->wp_weight[0][l0_ref_idx][uv_comp], currSlice->wp_offset[0][l0_ref_idx][uv_comp], currSlice->wp_chroma_round, currSlice->chroma_log_weight_denom );
     }
     else // (p_dir==1)
     {
-      MCWeightedPrediction(&mb_pred[block_y], l1_pred, BLOCK_SIZE, block_x, BLOCK_SIZE,
+      weighted_mc_prediction(&mb_pred[block_y], l1_pred, BLOCK_SIZE, block_x, BLOCK_SIZE,
       p_Vid->max_pel_value_comp[1],
         currSlice->wp_weight[1][l1_ref_idx][uv_comp], currSlice->wp_offset[1][l1_ref_idx][uv_comp], currSlice->wp_chroma_round, currSlice->chroma_log_weight_denom );
     }
@@ -638,15 +638,15 @@ void chroma_prediction_4x4 (Macroblock* currMB,  // <-- Current Macroblock
   {
     if (p_dir==2)
     {
-      MCBiPrediction(&mb_pred[block_y], l0_pred, l1_pred, BLOCK_SIZE, block_x, BLOCK_SIZE);
+      bi_prediction(&mb_pred[block_y], l0_pred, l1_pred, BLOCK_SIZE, block_x, BLOCK_SIZE);
     }
     else if (p_dir==0)
     {
-      MCPrediction(&mb_pred[block_y], l0_pred, BLOCK_SIZE, block_x, BLOCK_SIZE);
+      mc_prediction(&mb_pred[block_y], l0_pred, BLOCK_SIZE, block_x, BLOCK_SIZE);
     }
     else // (p_dir==1)
     {
-      MCPrediction(&mb_pred[block_y], l1_pred, BLOCK_SIZE, block_x, BLOCK_SIZE);
+      mc_prediction(&mb_pred[block_y], l1_pred, BLOCK_SIZE, block_x, BLOCK_SIZE);
     }
   }
 }

@@ -86,16 +86,14 @@ static void intrapred_chroma_dc(Macroblock *currMB)
   };
 
   PixelPos up;        //!< pixel position  p(0,-1)
-  PixelPos up_left;
   PixelPos left;      //!< pixel positions p(-1, -1..16)
-  int up_avail, left_avail, left_up_avail;
+  int up_avail, left_avail;
   imgpel **imgUV0 = dec_picture->imgUV[0];
   imgpel **imgUV1 = dec_picture->imgUV[1];
   imgpel **mb_pred0 = currSlice->mb_pred[0 + 1];
   imgpel **mb_pred1 = currSlice->mb_pred[1 + 1];
 
 
-  getNonAffNeighbour(currMB, -1, -1, p_Vid->mb_size[IS_CHROMA], &up_left);
   getNonAffNeighbour(currMB, -1,  0, p_Vid->mb_size[IS_CHROMA], &left);
   getNonAffNeighbour(currMB,  0, -1, p_Vid->mb_size[IS_CHROMA], &up);
 
@@ -103,13 +101,11 @@ static void intrapred_chroma_dc(Macroblock *currMB)
   {
     up_avail      = up.available;
     left_avail    = left.available;
-    left_up_avail = up_left.available;
   }
   else 
   {
     up_avail = up.available ? currSlice->intra_block[up.mb_addr] : 0;
     left_avail = left.available ? currSlice->intra_block[left.mb_addr]: 0;
-    left_up_avail = up_left.available ? currSlice->intra_block[up_left.mb_addr]: 0;
   }
 
   // DC prediction

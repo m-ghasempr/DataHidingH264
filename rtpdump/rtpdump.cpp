@@ -13,7 +13,6 @@
 
 
 int main(int argc, char* argv[])
-
 {
   unsigned int bufsize, pacno=0, temp32;
   unsigned short temp16;
@@ -37,6 +36,7 @@ int main(int argc, char* argv[])
   {
     if (4 != fread (&bufsize, 1, 4, f))
       return 0;
+
     if (4 != fread (&intime, 1, 4, f))
     {
       printf ("Panic, cannot read timestamp, old software version file?\n");
@@ -51,6 +51,7 @@ int main(int argc, char* argv[])
 
     for (i=0; i< 25; i++)
       printf ("%02x ", buf[i]);
+
     printf ("\n");
     printf ("Version (V): %d\n", (buf[0] >> 6) & 0x03);
     printf ("Padding (P): %d\n", (buf[0] >> 5) & 0x01);

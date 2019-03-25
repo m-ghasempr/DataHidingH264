@@ -121,7 +121,7 @@ void init_enc_mb_params(Macroblock* currMB, RD_PARAMS *enc_mb, int intra)
 
   int l,k;
 
-  enc_mb->curr_mb_field = (short) ((currSlice->mb_aff_frame_flag)&&(currMB->mb_field));
+  enc_mb->curr_mb_field = (short) ((currSlice->mb_aff_frame_flag) && (currMB->mb_field));
 
   // Set valid modes  
   enc_mb->valid[I8MB]  = (short) ((!p_Inp->DisableIntraInInter[p_Vid->view_id] || intra )?   p_Inp->Transform8x8Mode : 0);
@@ -129,7 +129,7 @@ void init_enc_mb_params(Macroblock* currMB, RD_PARAMS *enc_mb, int intra)
   enc_mb->valid[I4MB]  = (short) ((!p_Inp->DisableIntra4x4  ) ? enc_mb->valid[I4MB] : 0);
   enc_mb->valid[I16MB] = (short) ((!p_Inp->DisableIntraInInter[p_Vid->view_id] || intra )? 1 : 0);
   enc_mb->valid[I16MB] = (short) ((!p_Inp->DisableIntra16x16) ? enc_mb->valid[I16MB] : 0);
-  enc_mb->valid[IPCM]  = (short) ((!p_Inp->DisableIntraInInter[p_Vid->view_id] || intra )? (p_Inp->EnableIPCM>0? 1:0) : 0);
+  enc_mb->valid[IPCM]  = (short) ((!p_Inp->DisableIntraInInter[p_Vid->view_id] || intra )? (p_Inp->EnableIPCM > 0 ? 1:0) : 0);
   enc_mb->valid[SI4MB] = 0;
   //enc_mb->valid[SI4MB] = (short) (currSlice->slice_type == SI_SLICE);
   //enc_mb->valid[SI4MB] = (short) ( p_Inp->DisableIntra4x4 ? 0 : enc_mb->valid[SI4MB]);
@@ -648,7 +648,7 @@ int is_bipred_enabled(VideoParameters *p_Vid, int mode)
 /*!
  *************************************************************************************
  * \brief
- *    Decides whether to perform tranform 8x8 for this mode
+ *    Decides whether to perform transform 8x8 for this mode
  *************************************************************************************
  */
 int transform_termination_control(Macroblock* currMB, int mode) 

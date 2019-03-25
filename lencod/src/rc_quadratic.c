@@ -311,7 +311,7 @@ void rc_init_seq(VideoParameters *p_Vid, InputParameters *p_Inp, RCQuadratic *p_
 */
 void rc_init_GOP(VideoParameters *p_Vid, InputParameters *p_Inp, RCQuadratic *p_quad, RCGeneric *p_gen, int np, int nb)
 {
-  int OverBits;
+  //int OverBits;
   int GOPDquant;
   int64 AllocatedBits;
 
@@ -413,7 +413,7 @@ void rc_init_GOP(VideoParameters *p_Vid, InputParameters *p_Inp, RCQuadratic *p_
   /* check if the last GOP over uses its budget. If yes, the initial QP of the I frame in
   the coming  GOP will be increased.*/
 
-  OverBits=-(int)(p_gen->RemainingBits);
+  //OverBits=-(int)(p_gen->RemainingBits);
 
   /*initialize the lower bound and the upper bound for the target bits of each frame, HRD consideration*/
   p_quad->LowerBound  = (int)(p_gen->RemainingBits + p_quad->bit_rate / p_quad->frame_rate);

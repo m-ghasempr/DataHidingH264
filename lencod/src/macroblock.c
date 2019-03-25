@@ -166,14 +166,14 @@ void next_macroblock(Macroblock *currMB)
     printf("Warning!!! Number of bits (%d) of macroblock_layer() data seems to exceed defined limit (%d).\n", mbBits->mb_total,p_Vid->max_bitCount);
 
   // Update the statistics
-  cur_stats->bit_use_mb_type[slice_type]      += mbBits->mb_mode;
-  cur_stats->tmp_bit_use_cbp[slice_type]      += mbBits->mb_cbp;
-  cur_stats->bit_use_coeffC[slice_type]       += mbBits->mb_uv_coeff;
-  cur_stats->bit_use_coeff[0][slice_type]     += mbBits->mb_y_coeff;
-  cur_stats->bit_use_coeff[1][slice_type]     += mbBits->mb_cb_coeff;
-  cur_stats->bit_use_coeff[2][slice_type]     += mbBits->mb_cr_coeff;
-  cur_stats->bit_use_delta_quant[slice_type]  += mbBits->mb_delta_quant;
-  cur_stats->bit_use_stuffingBits[slice_type] += mbBits->mb_stuffing;
+  cur_stats->bit_use_mb_type[slice_type]       += mbBits->mb_mode;
+  cur_stats->tmp_bit_use_cbp[slice_type]       += mbBits->mb_cbp;
+  cur_stats->bit_use_coeffC[slice_type]        += mbBits->mb_uv_coeff;
+  cur_stats->bit_use_coeff[0][slice_type]      += mbBits->mb_y_coeff;
+  cur_stats->bit_use_coeff[1][slice_type]      += mbBits->mb_cb_coeff;
+  cur_stats->bit_use_coeff[2][slice_type]      += mbBits->mb_cr_coeff;
+  cur_stats->bit_use_delta_quant[slice_type]   += mbBits->mb_delta_quant;
+  cur_stats->bit_use_stuffing_bits[slice_type] += mbBits->mb_stuffing;
 
   if (IS_INTRA(currMB))
   {
@@ -225,7 +225,7 @@ static void set_chroma_qp(Macroblock* currMB)
   VideoParameters *p_Vid = currMB->p_Vid;
   Slice *currSlice = currMB->p_Slice;
   int i;
-  for (i = 0; i < 2; ++i)
+  for (i = 0; i <= 1; ++i)
   {
     currMB->qpc[i] = (short) iClip3 ( -currSlice->bitdepth_chroma_qp_scale, 51, currMB->qp + p_Vid->chroma_qp_offset[i] );
     currMB->qpc[i] = (short) (currMB->qpc[i] < 0 ? currMB->qpc[i] : QP_SCALE_CR[currMB->qpc[i]]);
@@ -241,7 +241,7 @@ static void set_chroma_qp(Macroblock* currMB)
 */
 void update_qp(Macroblock *currMB)
 {
-  currMB->qp_scaled[0] = (short) (currMB->qp + currMB->p_Slice->bitdepth_luma_qp_scale);
+  currMB->qp_scaled[PLANE_Y] = (short) (currMB->qp + currMB->p_Slice->bitdepth_luma_qp_scale);
   set_chroma_qp(currMB);
 
   select_transform(currMB);
@@ -430,8 +430,8 @@ void start_macroblock(Slice *currSlice, Macroblock **currMB, int mb_addr, Boolea
   else
   {
     mb_qp = p_Vid->qp;
-
   }
+
   last_coded_mb = *currMB;   // save the address of the last coded MB
   
   if ((*currMB)->mbAddrX == 0)
@@ -491,7 +491,7 @@ void start_macroblock(Slice *currSlice, Macroblock **currMB, int mb_addr, Boolea
   reset_macroblock(*currMB);
 
   if ((p_Inp->SearchMode[p_Vid->view_id] == FAST_FULL_SEARCH) && (!p_Inp->IntraProfile))
-    ResetFastFullIntegerSearch (p_Vid);
+    reset_fast_full_search (p_Vid);
 
   // disable writing of trace file
 #if TRACE
@@ -862,7 +862,7 @@ int luma_residual_coding_16x16 (Macroblock* currMB,  //!< Current Macroblock to 
   if(!currMB->luma_transform_size_8x8_flag)
   {
     //===== forward transform, Quantization, inverse Quantization, inverse transform, Reconstruction =====
-    if (!skipped && ( (currSlice->NoResidueDirect != 1) || (currMB->qp_scaled[0] == 0 && p_Vid->active_sps->lossless_qpprime_flag == 1) ))
+    if (!skipped && ( (currSlice->NoResidueDirect != 1) || (currMB->qp_scaled[PLANE_Y] == 0 && p_Vid->active_sps->lossless_qpprime_flag == 1) ))
     {
       int block_y, block_x;
 
@@ -899,7 +899,7 @@ int luma_residual_coding_16x16 (Macroblock* currMB,  //!< Current Macroblock to 
   }
 
   if (currSlice->NoResidueDirect != 1 && !skipped && coeff_cost <= _LUMA_COEFF_COST_ &&
-  ((currMB->qp_scaled[0])!=0 || p_Vid->active_sps->lossless_qpprime_flag==0))
+  ((currMB->qp_scaled[PLANE_Y])!=0 || p_Vid->active_sps->lossless_qpprime_flag==0))
   {
     coeff_cost  = reset_block(currMB, cbp, cbp_blk, block8x8);
   }
@@ -925,7 +925,8 @@ int luma_residual_coding_8x8 (Macroblock* currMB,  //!< Current Macroblock to be
                            char  *ref_idx)     //!< reference pictures for each list
 {
   Slice *currSlice = currMB->p_Slice;
-  VideoParameters *p_Vid = currSlice->p_Vid;  
+  VideoParameters *p_Vid = currSlice->p_Vid;
+  DecodedPictureBuffer *p_Dpb = p_Vid->p_Dpb_layer[p_Vid->dpb_layer_id];
   int    block_y, block_x, pic_pix_x, nonzero = 0, cbp_blk_mask;
   int    coeff_cost = 0;
   int    mb_y       = (block8x8 >> 1) << 3;
@@ -945,7 +946,7 @@ int luma_residual_coding_8x8 (Macroblock* currMB,  //!< Current Macroblock to be
     int    bxx, byy;                   // indexing curr_blk
     if (!direct_inference && (((p_dir == 0 || p_dir == 2 )&& list_mode[0] < 5) || ((p_dir == 1 || p_dir == 2 ) && list_mode[1] < 5)))
     {
-      luma_prediction (currMB, mb_x, mb_y, 8, 8, p_dir, list_mode, ref_idx, bipred_me); 
+      p_Dpb->pf_luma_prediction (currMB, mb_x, mb_y, 8, 8, p_dir, list_mode, ref_idx, bipred_me); 
 
       //===== compute prediction residual ======            
       compute_residue (&p_Vid->pCurImg[currMB->opix_y + mb_y], &currSlice->mb_pred[0][mb_y], &currSlice->mb_ores[0][mb_y], mb_x, currMB->pix_x + mb_x, 8, 8);
@@ -961,14 +962,14 @@ int luma_residual_coding_8x8 (Macroblock* currMB,  //!< Current Macroblock to be
         //===== prediction of 4x4 block =====
         if (direct_inference || !(((p_dir == 0 || p_dir == 2 )&& list_mode[0] < 5) || ((p_dir == 1 || p_dir == 2 ) && list_mode[1] < 5)))
         {
-          luma_prediction (currMB, block_x, block_y, 4, 4, p_dir, list_mode, ref_idx, bipred_me);
+          p_Dpb->pf_luma_prediction (currMB, block_x, block_y, 4, 4, p_dir, list_mode, ref_idx, bipred_me);
 
           //===== compute prediction residual ======            
           compute_residue(&p_Vid->pCurImg[currMB->opix_y + block_y], &currSlice->mb_pred[0][block_y], &currSlice->mb_ores[0][block_y], block_x, pic_pix_x, 4, 4);
         }
 
         //===== forward transform, Quantization, inverse Quantization, inverse transform, Reconstruction =====
-        if (!skipped && ( (currSlice->NoResidueDirect != 1) || (currMB->qp_scaled[0] == 0 && p_Vid->active_sps->lossless_qpprime_flag == 1) ))
+        if (!skipped && ( (currSlice->NoResidueDirect != 1) || (currMB->qp_scaled[PLANE_Y] == 0 && p_Vid->active_sps->lossless_qpprime_flag == 1) ))
         {
           //===== forward transform, Quantization, inverse Quantization, inverse transform, Reconstruction =====
           nonzero = currMB->residual_transform_quant_luma_4x4 (currMB, PLANE_Y, block_x, block_y, &coeff_cost, 0);
@@ -991,7 +992,7 @@ int luma_residual_coding_8x8 (Macroblock* currMB,  //!< Current Macroblock to be
     cbp_blk_mask = (block_x>>2) + block_y;
 
     //===== prediction of 4x4 block =====
-    luma_prediction (currMB, block_x, block_y, 8, 8, p_dir, list_mode, ref_idx, bipred_me);
+    p_Dpb->pf_luma_prediction (currMB, block_x, block_y, 8, 8, p_dir, list_mode, ref_idx, bipred_me);
 
     //===== compute prediction residual ======            
     compute_residue (&p_Vid->pCurImg[currMB->opix_y + block_y], &currSlice->mb_pred[0][block_y], &currSlice->mb_ores[0][block_y], block_x, pic_pix_x, 8, 8);
@@ -1010,7 +1011,7 @@ int luma_residual_coding_8x8 (Macroblock* currMB,  //!< Current Macroblock to be
   }
 
   if (currSlice->NoResidueDirect != 1 && !skipped && coeff_cost <= _LUMA_COEFF_COST_ &&
-  ((currMB->qp_scaled[0])!=0 || p_Vid->active_sps->lossless_qpprime_flag==0))
+  ((currMB->qp_scaled[PLANE_Y])!=0 || p_Vid->active_sps->lossless_qpprime_flag==0))
   {
     coeff_cost  = reset_block(currMB, cbp, cbp_blk, block8x8);
   }
@@ -1182,6 +1183,7 @@ void luma_residual_coding (Macroblock *currMB)
 {
   Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currMB->p_Vid;
+  DecodedPictureBuffer *p_Dpb = p_Vid->p_Dpb_layer[p_Vid->dpb_layer_id];
 
   int block8x8;
   int list_mode[2];
@@ -1204,7 +1206,7 @@ void luma_residual_coding (Macroblock *currMB)
     }
 
     //===== luma prediction ======
-    luma_prediction (currMB, 0, 0, 16, 16, p_dir, list_mode, list_ref_idx, currMB->b8x8[0].bipred); 
+    p_Dpb->pf_luma_prediction (currMB, 0, 0, 16, 16, p_dir, list_mode, list_ref_idx, currMB->b8x8[0].bipred); 
 
     //===== compute prediction residual ======
     // We should not need to compute this for skip mode, but currently computed for "debugging" purposes
@@ -1222,7 +1224,7 @@ void luma_residual_coding (Macroblock *currMB)
         currSlice->set_modes_and_reframe (currMB, block8x8, &p_dir, list_mode, list_ref_idx);
       }
       //===== luma prediction ======
-      luma_prediction (currMB, 0, 0, MB_BLOCK_SIZE, MB_BLOCK_SIZE, p_dir, list_mode, list_ref_idx, currMB->b8x8[0].bipred); 
+      p_Dpb->pf_luma_prediction (currMB, 0, 0, MB_BLOCK_SIZE, MB_BLOCK_SIZE, p_dir, list_mode, list_ref_idx, currMB->b8x8[0].bipred); 
 
       //===== compute prediction residual ======      
       compute_residue (&p_Vid->pCurImg[currMB->opix_y], *currSlice->mb_pred, *currSlice->mb_ores, 0, currMB->pix_x, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
@@ -1243,7 +1245,7 @@ void luma_residual_coding (Macroblock *currMB)
     }
 
     // reset information (coefficient thresholding)
-    if (sum_cnt_nonz <= _LUMA_MB_COEFF_COST_ && ((currMB->qp_scaled[0])!=0 || p_Vid->active_sps->lossless_qpprime_flag == 0))
+    if (sum_cnt_nonz <= _LUMA_MB_COEFF_COST_ && ((currMB->qp_scaled[PLANE_Y])!=0 || p_Vid->active_sps->lossless_qpprime_flag == 0))
     {
       currMB->cbp     &= 0xfffff0 ;
       currMB->cbp_blk &= 0xff0000 ;
@@ -1265,6 +1267,7 @@ void luma_residual_coding_sp (Macroblock *currMB)
 {
   Slice *currSlice = currMB->p_Slice;
   VideoParameters *p_Vid = currMB->p_Vid;
+  DecodedPictureBuffer *p_Dpb = p_Vid->p_Dpb_layer[p_Vid->dpb_layer_id];
 
   int i, j, block8x8, b8_x, b8_y;
   int list_mode[2];
@@ -1288,7 +1291,7 @@ void luma_residual_coding_sp (Macroblock *currMB)
     }
 
     //===== luma prediction ======
-    luma_prediction (currMB, 0, 0, 16, 16, p_dir, list_mode, list_ref_idx, currMB->b8x8[0].bipred); 
+    p_Dpb->pf_luma_prediction (currMB, 0, 0, 16, 16, p_dir, list_mode, list_ref_idx, currMB->b8x8[0].bipred); 
 
     //===== compute prediction residual ======
     // We should not need to compute this for skip mode, but currently computed for "debugging" purposes
@@ -1315,7 +1318,7 @@ void luma_residual_coding_sp (Macroblock *currMB)
   // reset information (coefficient thresholding)
 
   if ((is_skip || 
-    (sum_cnt_nonz <= _LUMA_MB_COEFF_COST_ && ((currMB->qp_scaled[0])!=0 || p_Vid->active_sps->lossless_qpprime_flag == 0))))// modif ES added last set of conditions
+    (sum_cnt_nonz <= _LUMA_MB_COEFF_COST_ && ((currMB->qp_scaled[PLANE_Y])!=0 || p_Vid->active_sps->lossless_qpprime_flag == 0))))// modif ES added last set of conditions
   {
     currMB->cbp     &= 0xfffff0 ;
     currMB->cbp_blk &= 0xff0000 ;
@@ -1338,10 +1341,10 @@ void luma_residual_coding_sp (Macroblock *currMB)
 /*!
  ************************************************************************
  * \brief
- *    Makes the decision if 8x8 tranform will be used (for RD-off)
+ *    RDOff decision between 4x4 and 8x8 transform
  ************************************************************************
  */
-byte TransformDecision (Macroblock *currMB, int block_check, distblk *cost)
+byte transform_decision (Macroblock *currMB, int block_check, distblk *cost)
 {
   if(currMB->p_Inp->Transform8x8Mode == 2) //always allow 8x8 transform
   {
@@ -1351,6 +1354,7 @@ byte TransformDecision (Macroblock *currMB, int block_check, distblk *cost)
   {
     VideoParameters *p_Vid = currMB->p_Vid;
     Slice *currSlice = currMB->p_Slice;
+    DecodedPictureBuffer *p_Dpb = p_Vid->p_Dpb_layer[p_Vid->dpb_layer_id];
     int pic_pix_y, pic_pix_x, i, j;
     int    mb_y, mb_x, block8x8;  
     int    list_mode[2];
@@ -1391,7 +1395,7 @@ byte TransformDecision (Macroblock *currMB, int block_check, distblk *cost)
       mb_x = (block8x8 & 0x01) << 3;
 
       //===== prediction of 8x8 block =====
-      luma_prediction (currMB, mb_x, mb_y, 8, 8, p_dir, list_mode, list_ref_idx, bipred_me);
+      p_Dpb->pf_luma_prediction (currMB, mb_x, mb_y, 8, 8, p_dir, list_mode, list_ref_idx, bipred_me);
 
       //===== loop over 8x8 blocks =====
       pic_pix_y = currMB->opix_y;
@@ -1800,7 +1804,7 @@ static int writeIntra4x4Modes(Macroblock *currMB)
     rate += se.len;
   }
 
-  mbBits->mb_y_coeff += rate;
+  mbBits->mb_mode += rate;
 
   return rate;
 }
@@ -1846,7 +1850,7 @@ static int writeIntra8x8Modes(Macroblock *currMB)
 
     rate += se.len;
   }
-  mbBits->mb_y_coeff += rate;
+  mbBits->mb_mode += rate;
 
   return rate;
 }
@@ -2006,7 +2010,7 @@ static int writeIPCMData(Macroblock *currMB, DataPartition*  dataPart)
 *    bitrate of Luma and Chroma coeff
 ************************************************************************
 */
-int writeMBLayerBSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
+int write_b_slice_MB_layer (Macroblock *currMB, int rdopt, int *coeff_rate)
 {
   VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
@@ -2291,7 +2295,7 @@ int writeMBLayerBSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
 *    bitrate of Luma and Chroma coeff
 ************************************************************************
 */
-int writeMBLayerPSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
+int write_p_slice_MB_layer (Macroblock *currMB, int rdopt, int *coeff_rate)
 {
   VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
@@ -2565,7 +2569,7 @@ int writeMBLayerPSlice (Macroblock *currMB, int rdopt, int *coeff_rate)
 }
 
 
-int writeMBLayerISlice (Macroblock *currMB, int rdopt, int *coeff_rate)
+int write_i_slice_MB_layer (Macroblock *currMB, int rdopt, int *coeff_rate)
 {
   VideoParameters *p_Vid = currMB->p_Vid;
   InputParameters *p_Inp = currMB->p_Inp;
@@ -3035,7 +3039,7 @@ int writeMotionVector8x8 (Macroblock *currMB,
  *    Writes motion info (b slice)
  ************************************************************************
  */
-int write_bslice_motion_info_to_NAL (Macroblock* currMB)
+int write_b_slice_motion_info_to_NAL (Macroblock* currMB)
 {
   int   no_bits         = 0;
   //=== If multiple ref. frames, write reference frame for the MB ===
@@ -3121,7 +3125,7 @@ int write_bslice_motion_info_to_NAL (Macroblock* currMB)
  *    Writes motion info (p slice)
  ************************************************************************
  */
-int write_pslice_motion_info_to_NAL (Macroblock* currMB)
+int write_p_slice_motion_info_to_NAL (Macroblock* currMB)
 {
   int   no_bits         = 0;
   //=== If multiple ref. frames, write reference frame for the MB ===
@@ -4800,7 +4804,7 @@ void make_frame_picture_JV(VideoParameters *p_Vid)
   p_Vid->enc_frame_picture[0] = p_Vid->enc_frame_picture_JV[0];
 
   //copy;
-  if(p_Vid->currentSlice->nal_reference_idc && p_Vid->currentSlice->slice_type != I_SLICE && p_Vid->currentSlice->slice_type!=SI_SLICE) 
+  if(p_Vid->currentSlice->nal_reference_idc) 
   {
     nsize = (p_Vid->enc_frame_picture_JV[0]->size_y/BLOCK_SIZE)*(p_Vid->enc_frame_picture_JV[0]->size_x/BLOCK_SIZE)*sizeof(PicMotionParams);
     memcpy( &(p_Vid->enc_frame_picture[0]->JVmv_info[PLANE_Y][0][0]), &(p_Vid->enc_frame_picture_JV[PLANE_Y]->mv_info[0][0]), nsize);

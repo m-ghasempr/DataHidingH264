@@ -351,24 +351,49 @@ void getSubImagesChroma( VideoParameters *p_Vid, StorablePicture *s )
   size_x_minus1 = s->size_x_cr - 1;
   size_y_minus1 = s->size_y_cr - 1;
 
-  if ( p_Vid->yuv_format == YUV420 ) 
+  if( p_Vid->p_Inp->OnTheFlyFractMCP == OTF_L1 ) // JLT : on-the-fly mode
   {
-    subimages_x = 8;
-    subimages_y = 8;
-    mul_x = mul_y = 1;
+    if ( p_Vid->yuv_format == YUV420 ) 
+    {
+      subimages_x = 4;
+      subimages_y = 4;
+      mul_x = mul_y = 2;
+    }
+    else if ( p_Vid->yuv_format == YUV422 ) 
+    {
+      subimages_x = 4;
+      subimages_y = 2;
+      mul_y = 4;
+      mul_x = 2;
+    }
+    else 
+    { // YUV444
+      subimages_x = 2;
+      subimages_y = 2;
+      mul_x = mul_y = 4;
+    }
   }
-  else if ( p_Vid->yuv_format == YUV422 ) 
+  else
   {
-    subimages_x = 8;
-    subimages_y = 4;
-    mul_y = 2;
-    mul_x = 1;
-  }
-  else 
-  { // YUV444
-    subimages_x = 4;
-    subimages_y = 4;
-    mul_x = mul_y = 2;
+    if ( p_Vid->yuv_format == YUV420 ) 
+    {
+      subimages_x = 8;
+      subimages_y = 8;
+      mul_x = mul_y = 1;
+    }
+    else if ( p_Vid->yuv_format == YUV422 ) 
+    {
+      subimages_x = 8;
+      subimages_y = 4;
+      mul_y = 2;
+      mul_x = 1;
+    }
+    else 
+    { // YUV444
+      subimages_x = 4;
+      subimages_y = 4;
+      mul_x = mul_y = 2;
+    }
   }
 
   // U or V

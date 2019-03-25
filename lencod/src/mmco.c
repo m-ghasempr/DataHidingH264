@@ -98,11 +98,7 @@ void poc_based_ref_management_frame_pic(DecodedPictureBuffer *p_Dpb, int current
   tmp_drpm2->Next=tmp_drpm;
 
   tmp_drpm2->memory_management_control_operation = 1;
-
-  if ( p_Vid->num_of_layers == 1 )
-    tmp_drpm2->difference_of_pic_nums_minus1 = current_pic_num - pic_num - 1;
-  else
-    tmp_drpm2->difference_of_pic_nums_minus1 = (current_pic_num - pic_num)/2 - 1;
+  tmp_drpm2->difference_of_pic_nums_minus1 = current_pic_num - pic_num - 1;
 
   p_Vid->dec_ref_pic_marking_buffer = tmp_drpm2;
 }

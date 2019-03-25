@@ -100,7 +100,7 @@ char *GetConfigFileContent (char *Filename)
 
   if (FileSize < 0 || FileSize > 150000)
   {
-    snprintf (errortext, ET_SIZE, "Unreasonable Filesize %ld reported by ftell for configuration file %s.", FileSize, Filename);
+    snprintf (errortext, ET_SIZE, "\nUnreasonable Filesize %ld reported by ftell for configuration file %s.", FileSize, Filename);
     return NULL;
   }
   if (0 != fseek (f, 0, SEEK_SET))

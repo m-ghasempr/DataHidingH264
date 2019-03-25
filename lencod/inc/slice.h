@@ -40,8 +40,6 @@ extern void init_slice             ( VideoParameters *p_Vid, Slice **currSlice, 
 extern void init_slice_lite        ( VideoParameters *p_Vid, Slice **currSlice, int start_mb_addr );
 extern void free_slice_list        ( Picture *currPic );
 
-extern void SetLambda(VideoParameters *p_Vid, int j, int qp, double lambda_scale);
-extern void CalcMaxLamdaMD(VideoParameters *p_Vid, double *p_lambda_md);
 extern void SetLagrangianMultipliersOn (Slice *currSlice);
 extern void SetLagrangianMultipliersOff(Slice *currSlice);
 extern void  free_slice                (Slice *currSlice);

@@ -1068,6 +1068,7 @@ int ReadTIFFImage (InputParameters *p_Inp, VideoDataFile *input_file, int FrameN
   {
     if (RGB_YUV_initialize( &rgb_yuv, (VideoCode) p_Inp->videoCode, p_Inp->stdRange, 65535))
       goto Error;
+
     RGB_YUV_rgb_to_yuv( &rgb_yuv, img, img+1, img+2, width, height, 3, img, img+1, img+2, 3);
     switch (source->yuv_format) 
     {

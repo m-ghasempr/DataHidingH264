@@ -65,7 +65,7 @@ static void getSubImageInteger( StorablePicture *s, imgpel **dstImg, imgpel **sr
 
   for (j = 1; j < s->size_y; j++)
   {    
-    wBufDst = &( dstImg[j][-IMG_PAD_SIZE_X] ); // 4:4:4 independent mode
+    wBufDst = &( dstImg[j][-IMG_PAD_SIZE_X] ); 
     wBufSrc = srcImg[j];
     // left IMG_PAD_SIZE
     for (i = 0; i < IMG_PAD_SIZE_X; i++)
@@ -113,7 +113,7 @@ static void getSubImageInteger_s( StorablePicture *s, imgpel **dstImg, imgpel **
 
   for (j = 1; j < s->size_y; ++j)
   {    
-    wBufDst = &( dstImg[j][-IMG_PAD_SIZE_X] ); // 4:4:4 independent mode
+    wBufDst = &( dstImg[j][-IMG_PAD_SIZE_X] ); 
     wBufSrc = srcImg[j];
     // left IMG_PAD_SIZE
     for (i = 0; i < IMG_PAD_SIZE_X; ++i)
@@ -163,8 +163,8 @@ static void getHorSubImageSixTap( VideoParameters *p_Vid, StorablePicture *s, im
 
   for (jpad = -IMG_PAD_SIZE_Y; jpad < ypadded_size-IMG_PAD_SIZE_Y; jpad++)
   {
-    wBufSrc = srcImg[jpad]-IMG_PAD_SIZE_X;     // 4:4:4 independent mode
-    wBufDst = dstImg[jpad]-IMG_PAD_SIZE_X;     // 4:4:4 independent mode
+    wBufSrc = srcImg[jpad]-IMG_PAD_SIZE_X; 
+    wBufDst = dstImg[jpad]-IMG_PAD_SIZE_X; 
     iBufDst = p_Vid->imgY_sub_tmp[jpad]-IMG_PAD_SIZE_X;
 
     srcImgA = &wBufSrc[0];
@@ -447,9 +447,9 @@ static void getSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel **s
 
   for (jpad = -IMG_PAD_SIZE_Y; jpad < ypadded_size-IMG_PAD_SIZE_Y; jpad++)
   {
-    wBufSrcL = srcImgL[jpad]-IMG_PAD_SIZE_X; // 4:4:4 independent mode
-    wBufSrcR = srcImgR[jpad]-IMG_PAD_SIZE_X; // 4:4:4 independent mode
-    wBufDst  = dstImg[jpad]-IMG_PAD_SIZE_X;  // 4:4:4 independent mode
+    wBufSrcL = srcImgL[jpad]-IMG_PAD_SIZE_X; 
+    wBufSrcR = srcImgR[jpad]-IMG_PAD_SIZE_X; 
+    wBufDst  = dstImg[jpad]-IMG_PAD_SIZE_X;  
 
     for (ipad = 0; ipad < xpadded_size; ipad++)
     {
@@ -484,9 +484,9 @@ static void getHorSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel 
 
   for (jpad = -IMG_PAD_SIZE_Y; jpad < ypadded_size-IMG_PAD_SIZE_Y; jpad++)
   {
-    wBufSrcL = srcImgL[jpad]-IMG_PAD_SIZE_X; // 4:4:4 independent mode
-    wBufSrcR = &srcImgR[jpad][1-IMG_PAD_SIZE_X]; // 4:4:4 independent mode
-    wBufDst  = dstImg[jpad]-IMG_PAD_SIZE_X;     // 4:4:4 independent mode
+    wBufSrcL = srcImgL[jpad]-IMG_PAD_SIZE_X; 
+    wBufSrcR = &srcImgR[jpad][1-IMG_PAD_SIZE_X]; 
+    wBufDst  = dstImg[jpad]-IMG_PAD_SIZE_X;     
 
     // left padded area + center
     for (ipad = 0; ipad < xpadded_size; ipad++)
@@ -525,9 +525,9 @@ static void getVerSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel 
   // top
   for (jpad = -IMG_PAD_SIZE_Y; jpad < ypadded_size-IMG_PAD_SIZE_Y; jpad++)
   {
-    wBufSrcT = srcImgT[jpad]-IMG_PAD_SIZE_X;           // 4:4:4 independent mode
-    wBufDst  = dstImg[jpad]-IMG_PAD_SIZE_X;            // 4:4:4 independent mode
-    wBufSrcB = srcImgB[jpad + 1]-IMG_PAD_SIZE_X;  // 4:4:4 independent mode
+    wBufSrcT = srcImgT[jpad]-IMG_PAD_SIZE_X;           
+    wBufDst  = dstImg[jpad]-IMG_PAD_SIZE_X;            
+    wBufSrcB = srcImgB[jpad + 1]-IMG_PAD_SIZE_X;  
 
     for (ipad = 0; ipad < xpadded_size; ipad++)
     {
@@ -535,9 +535,9 @@ static void getVerSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel 
     }
   }
   // bottom
-  wBufSrcT = srcImgT[ypadded_size-IMG_PAD_SIZE_Y]-IMG_PAD_SIZE_X;           // 4:4:4 independent mode
-  wBufDst  = dstImg[ypadded_size-IMG_PAD_SIZE_Y]-IMG_PAD_SIZE_X;            // 4:4:4 independent mode
-  wBufSrcB = srcImgB[ypadded_size-IMG_PAD_SIZE_Y]-IMG_PAD_SIZE_X;           // 4:4:4 independent mode
+  wBufSrcT = srcImgT[ypadded_size-IMG_PAD_SIZE_Y]-IMG_PAD_SIZE_X;           
+  wBufDst  = dstImg[ypadded_size-IMG_PAD_SIZE_Y]-IMG_PAD_SIZE_X;            
+  wBufSrcB = srcImgB[ypadded_size-IMG_PAD_SIZE_Y]-IMG_PAD_SIZE_X;           
 
   for (ipad = 0; ipad < xpadded_size; ipad++)
   {
@@ -571,9 +571,9 @@ static void getDiagSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel
 
   for (jpad = -IMG_PAD_SIZE_Y; jpad < maxy; jpad++)
   {
-    wBufSrcL = srcImgT[jpad + 1]-IMG_PAD_SIZE_X; // 4:4:4 independent mode
-    wBufSrcR = &srcImgB[jpad][1-IMG_PAD_SIZE_X]; // 4:4:4 independent mode
-    wBufDst  = dstImg[jpad]-IMG_PAD_SIZE_X;      // 4:4:4 independent mode
+    wBufSrcL = srcImgT[jpad + 1]-IMG_PAD_SIZE_X; 
+    wBufSrcR = &srcImgB[jpad][1-IMG_PAD_SIZE_X]; 
+    wBufDst  = dstImg[jpad]-IMG_PAD_SIZE_X;      
 
     for (ipad = -IMG_PAD_SIZE_X; ipad < maxx; ipad++)
     {
@@ -583,9 +583,9 @@ static void getDiagSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel
     *wBufDst++ = (imgpel) rshift_rnd_sf(*wBufSrcL++ +  wBufSrcR[-1], 1);
   }
 
-  wBufSrcL = srcImgT[maxy]-IMG_PAD_SIZE_X;     // 4:4:4 independent mode
-  wBufSrcR = &srcImgB[maxy][1-IMG_PAD_SIZE_X]; // 4:4:4 independent mode
-  wBufDst = dstImg[maxy]-IMG_PAD_SIZE_X;       // 4:4:4 independent mode
+  wBufSrcL = srcImgT[maxy]-IMG_PAD_SIZE_X;     
+  wBufSrcR = &srcImgB[maxy][1-IMG_PAD_SIZE_X]; 
+  wBufDst = dstImg[maxy]-IMG_PAD_SIZE_X;       
 
   for (ipad = -IMG_PAD_SIZE_X; ipad < maxx; ipad++)
   {
@@ -611,6 +611,7 @@ static void getDiagSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel
 void getSubImagesLuma( VideoParameters *p_Vid, StorablePicture *s )
 {
   imgpel ****cImgSub   = s->p_curr_img_sub;
+  int        otf_shift = ( p_Vid->p_Inp->OnTheFlyFractMCP == OTF_L1 ) ? (1) : (0) ;
 
   //  0  1  2  3
   //  4  5  6  7
@@ -634,43 +635,46 @@ void getSubImagesLuma( VideoParameters *p_Vid, StorablePicture *s )
 
   // sub-image 2 [0][2]
   // HOR interpolate (six-tap) sub-image [0][0]
-  getHorSubImageSixTap( p_Vid, s, cImgSub[0][2], cImgSub[0][0] );
+  getHorSubImageSixTap( p_Vid, s, cImgSub[0][2>>otf_shift], cImgSub[0][0] );
 
   // sub-image 8 [2][0]
   // VER interpolate (six-tap) sub-image [0][0]
-  getVerSubImageSixTap( p_Vid, s, cImgSub[2][0], cImgSub[0][0]);
+  getVerSubImageSixTap( p_Vid, s, cImgSub[2>>otf_shift][0], cImgSub[0][0]);
 
   // sub-image 10 [2][2]
   // VER interpolate (six-tap) sub-image [0][2]
-  getVerSubImageSixTapTmp( p_Vid, s, cImgSub[2][2]);
+  getVerSubImageSixTapTmp( p_Vid, s, cImgSub[2>>otf_shift][2>>otf_shift]);
 
-  //// QUARTER-PEL POSITIONS: BI-LINEAR INTERPOLATION ////
+  if( !p_Vid->p_Inp->OnTheFlyFractMCP )
+  {
+    //// QUARTER-PEL POSITIONS: BI-LINEAR INTERPOLATION ////
 
-  // sub-image 1 [0][1]
-  getSubImageBiLinear    ( s, cImgSub[0][1], cImgSub[0][0], cImgSub[0][2]);
-  // sub-image 4 [1][0]
-  getSubImageBiLinear    ( s, cImgSub[1][0], cImgSub[0][0], cImgSub[2][0]);
-  // sub-image 5 [1][1]
-  getSubImageBiLinear    ( s, cImgSub[1][1], cImgSub[0][2], cImgSub[2][0]);
-  // sub-image 6 [1][2]
-  getSubImageBiLinear    ( s, cImgSub[1][2], cImgSub[0][2], cImgSub[2][2]);
-  // sub-image 9 [2][1]
-  getSubImageBiLinear    ( s, cImgSub[2][1], cImgSub[2][0], cImgSub[2][2]);
+    // sub-image 1 [0][1]
+    getSubImageBiLinear    ( s, cImgSub[0][1], cImgSub[0][0], cImgSub[0][2]);
+    // sub-image 4 [1][0]
+    getSubImageBiLinear    ( s, cImgSub[1][0], cImgSub[0][0], cImgSub[2][0]);
+    // sub-image 5 [1][1]
+    getSubImageBiLinear    ( s, cImgSub[1][1], cImgSub[0][2], cImgSub[2][0]);
+    // sub-image 6 [1][2]
+    getSubImageBiLinear    ( s, cImgSub[1][2], cImgSub[0][2], cImgSub[2][2]);
+    // sub-image 9 [2][1]
+    getSubImageBiLinear    ( s, cImgSub[2][1], cImgSub[2][0], cImgSub[2][2]);
 
-  // sub-image 3  [0][3]
-  getHorSubImageBiLinear ( s, cImgSub[0][3], cImgSub[0][2], cImgSub[0][0]);
-  // sub-image 7  [1][3]
-  getHorSubImageBiLinear ( s, cImgSub[1][3], cImgSub[0][2], cImgSub[2][0]);
-  // sub-image 11 [2][3]
-  getHorSubImageBiLinear ( s, cImgSub[2][3], cImgSub[2][2], cImgSub[2][0]);
+    // sub-image 3  [0][3]
+    getHorSubImageBiLinear ( s, cImgSub[0][3], cImgSub[0][2], cImgSub[0][0]);
+    // sub-image 7  [1][3]
+    getHorSubImageBiLinear ( s, cImgSub[1][3], cImgSub[0][2], cImgSub[2][0]);
+    // sub-image 11 [2][3]
+    getHorSubImageBiLinear ( s, cImgSub[2][3], cImgSub[2][2], cImgSub[2][0]);
 
-  // sub-image 12 [3][0]
-  getVerSubImageBiLinear ( s, cImgSub[3][0], cImgSub[2][0], cImgSub[0][0]);
-  // sub-image 13 [3][1]
-  getVerSubImageBiLinear ( s, cImgSub[3][1], cImgSub[2][0], cImgSub[0][2]);
-  // sub-image 14 [3][2]
-  getVerSubImageBiLinear ( s, cImgSub[3][2], cImgSub[2][2], cImgSub[0][2]);
+    // sub-image 12 [3][0]
+    getVerSubImageBiLinear ( s, cImgSub[3][0], cImgSub[2][0], cImgSub[0][0]);
+    // sub-image 13 [3][1]
+    getVerSubImageBiLinear ( s, cImgSub[3][1], cImgSub[2][0], cImgSub[0][2]);
+    // sub-image 14 [3][2]
+    getVerSubImageBiLinear ( s, cImgSub[3][2], cImgSub[2][2], cImgSub[0][2]);
 
-  // sub-image 15 [3][3]
-  getDiagSubImageBiLinear( s, cImgSub[3][3], cImgSub[0][2], cImgSub[2][0]);
+    // sub-image 15 [3][3]
+    getDiagSubImageBiLinear( s, cImgSub[3][3], cImgSub[0][2], cImgSub[2][0]);
+  }
 }

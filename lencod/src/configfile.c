@@ -290,6 +290,7 @@ static void updateOutFormat(InputParameters *p_Inp)
 
   output->frame_rate = source->frame_rate / (p_Inp->frame_skip + 1);
   output->color_model = source->color_model;
+  output->pixel_format = source->pixel_format;
 
   updateMaxValue(source);
   updateMaxValue(output);
@@ -381,7 +382,7 @@ void Configure (VideoParameters *p_Vid, InputParameters *p_Inp, int ac, char *av
       JMHelpExit();
     }
 
-    if (0 == strncmp (av[CLcount], "-f", 2) || 0 == strncmp (av[CLcount], "-F", 2))  // A file parameter?
+    if (0 == strncasecmp (av[CLcount], "-f", 2))  // A file parameter?
     {
       content = GetConfigFileContent (av[CLcount+1]);
       if (NULL==content)
@@ -394,7 +395,7 @@ void Configure (VideoParameters *p_Vid, InputParameters *p_Inp, int ac, char *av
     } 
     else
     {
-      if (0 == strncmp (av[CLcount], "-p", 2) || 0 == strncmp (av[CLcount], "-P", 2))  // A config change?
+      if (0 == strncasecmp (av[CLcount], "-p", 2))  // A config change?
       {
         // Collect all data until next parameter (starting with -<x> (x is any character)),
         // put it into content, and parse content.
@@ -449,7 +450,7 @@ void Configure (VideoParameters *p_Vid, InputParameters *p_Inp, int ac, char *av
 #if (MVC_EXTENSION_ENABLE)
   if (p_Inp->num_of_views > 1)
   {
-    printf ("Parsing Configfile %s", p_Inp->View1ConfigName );
+    printf ("Parsing Second View Configfile %s", p_Inp->View1ConfigName );
     content = GetConfigFileContent ( p_Inp->View1ConfigName );
     if (NULL==content)
       error (errortext, 300);
@@ -800,6 +801,7 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
     error (errortext, 500);
   }
 #endif
+
 #if (!ENABLE_HIGH444_CTX)
   if ( p_Inp->ProfileIDC == 244 && p_Inp->symbol_mode )
   {
@@ -817,6 +819,39 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
     snprintf(errortext, ET_SIZE, " IntraDelay cannot be larger than or equal to IDRPeriod.");
     error (errortext, 500);
   }
+
+  // some contraints for IntraPeriod, IDRPeriod, EnableIDRGOP, and NumberBFrames
+  if ( p_Inp->idr_period > 0 && (p_Inp->NumberBFrames + 1 + p_Inp->intra_delay) > p_Inp->idr_period )
+  {
+    snprintf(errortext, ET_SIZE, " Setting NumberBFrames = IDRPeriod - 1 - IntraDelay.");
+    p_Inp->NumberBFrames = p_Inp->idr_period - 1 - p_Inp->intra_delay;
+    if ( p_Inp->NumberBFrames < 0 )
+    {
+      p_Inp->NumberBFrames = p_Inp->idr_period - 1;
+      p_Inp->intra_delay = 0;
+    }
+    if ( p_Inp->HierarchicalCoding )
+    {
+      p_Inp->HierarchicalCoding = 2;
+    }
+  }
+  if ( p_Inp->intra_period > 0 && (p_Inp->NumberBFrames + 1 + p_Inp->intra_delay) > p_Inp->intra_period )
+  {
+    snprintf(errortext, ET_SIZE, " Setting NumberBFrames = IntraPeriod - 1 - IntraDelay.");
+    p_Inp->NumberBFrames = p_Inp->intra_period - 1 - p_Inp->intra_delay;
+    if ( p_Inp->NumberBFrames < 0 )
+    {
+      p_Inp->NumberBFrames = p_Inp->intra_period - 1;
+      p_Inp->intra_delay = 0;
+    }
+    if ( p_Inp->HierarchicalCoding )
+    {
+      p_Inp->HierarchicalCoding = 2;
+    }
+  }
+  // Added to avoid encoding problems with List 0 being empty
+  if (p_Inp->intra_delay && p_Inp->NumberBFrames > 0 && p_Inp->EnableOpenGOP)
+    p_Inp->PocMemoryManagement = 1;
 
   // Let us set up p_Inp->jumpd from frame_skip and NumberBFrames
   p_Inp->jumpd = (p_Inp->NumberBFrames + 1) * (p_Inp->frame_skip + 1) - 1;
@@ -845,6 +880,27 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
   {      
     snprintf(errortext, ET_SIZE, "Not enough frames to encode (%d)", p_Inp->no_frames);
     error (errortext, 500);
+  }
+  
+  // Check IntraProfile settings
+  if (p_Inp->IntraProfile)
+  {
+    if(p_Inp->NumberBFrames)
+    {
+      snprintf(errortext, ET_SIZE, "Use of B slices not supported with Intra Profiles. Set NumberBFrames to 0.");
+      error (errortext, 400);
+    }
+
+    if (p_Inp->PocMemoryManagement)
+    {
+      printf("Warning: PocMemoryManagement not supported for Intra Profiles. Process Disabled.\n");
+      p_Inp->PocMemoryManagement = 0;
+    }
+    if (p_Inp->ReferenceReorder)
+    {
+      printf("Warning: ReferenceReorder not supported for Intra Profiles. Process Disabled.\n");
+      p_Inp->ReferenceReorder = 0;
+    }    
   }
 
   // Direct Mode consistency check
@@ -995,9 +1051,9 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
 
   if ( is_MVC_profile(p_Inp->ProfileIDC) )
   {
-    if (p_Inp->ReferenceReorder)
+    if (p_Inp->ReferenceReorder > 1)
     {
-      snprintf(errortext, ET_SIZE, "ReferenceReorder>0 is not supported with the Multiview (118) or Stereo High (128) profiles and is therefore disabled. \n");
+      snprintf(errortext, ET_SIZE, "ReferenceReorder > 1 is not supported with the Multiview (118) or Stereo High (128) profiles and is therefore disabled. \n");
       p_Inp->ReferenceReorder = 0;
     }
     if ( (p_Inp->PocMemoryManagement) && (p_Inp->PicInterlace > 0) )
@@ -1074,6 +1130,11 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
     snprintf(errortext, ET_SIZE, "Weighted prediction coding is not supported for MB AFF currently.");
     error (errortext, 500);
   }
+  if( (p_Inp->WeightedPrediction > 0 || p_Inp->WeightedBiprediction > 0) && (p_Inp->yuv_format==3))
+  {
+    snprintf(errortext, ET_SIZE, "Weighted prediction coding is not supported for 4:4:4 encoding.");
+    error (errortext, 500);
+  }
   if ( p_Inp->NumFramesInELSubSeq > 0 && p_Inp->WeightedPrediction > 0)
   {
     snprintf(errortext, ET_SIZE, "Enhanced GOP is not supported in weighted prediction coding mode yet.");
@@ -1083,7 +1144,6 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
   // Rate control
   if(p_Inp->RCEnable)
   {
-
     if ( p_Inp->RCUpdateMode == RC_MODE_1 && 
       !( (p_Inp->intra_period == 1 || p_Inp->idr_period == 1 || p_Inp->BRefPictures == 2 ) && !p_Inp->NumberBFrames ) )
     {
@@ -1264,11 +1324,6 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
       snprintf(errortext, ET_SIZE, "ProfileIDC must be 118, 128, 134, or 135 to use MVCInterViewReorder=1.");
       error (errortext, 500);
     }
-    if(p_Inp->ReferenceReorder!=0)
-    {
-      snprintf(errortext, ET_SIZE, "ReferenceReorder=1 is not supported with MVCInterViewReorder=1.");
-      error (errortext, 500);
-    }
   }
 #endif
 
@@ -1330,8 +1385,7 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
     p_Inp->FastIntraChroma = 0;
   }
 
-
-
+  // Init RDOQuant
   if (p_Inp->UseRDOQuant == 1)
   {
     if (p_Inp->rdopt == 0)
@@ -1371,10 +1425,7 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
     printf("Warning: Weighted Prediction may not function correctly for multiple slices\n"); 
   }
 
-
-
-  ProfileCheck(p_Inp);
-
+  profile_check(p_Inp);
 
   if(!p_Inp->RDPictureDecision)
   {

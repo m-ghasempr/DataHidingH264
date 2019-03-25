@@ -21,7 +21,7 @@
 #include "nalu.h"
 #include "sei.h"
 
-extern void GenerateParameterSets (VideoParameters *p_Vid);
+extern void generate_parameter_sets (VideoParameters *p_Vid);
 extern void FreeParameterSets     (VideoParameters *p_Vid);
 
 extern NALU_t *GenerateSeq_parameter_set_NALU (VideoParameters *p_Vid);

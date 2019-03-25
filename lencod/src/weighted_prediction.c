@@ -563,8 +563,8 @@ int TestWPPSliceAlg0(Slice *currSlice, int select_offset)
   int list_offset   = ((p_Vid->mb_aff_frame_flag)&&(p_Vid->mb_data[p_Vid->current_mb_nr].mb_field))? (p_Vid->current_mb_nr & 0x01) ? 4 : 2 : 0;
   short weight[2][MAX_REFERENCE_PICTURES][3];
   short offset[2][MAX_REFERENCE_PICTURES][3];
-  short wp_weight[6][MAX_REFERENCE_PICTURES][3];
-  short wp_offset[6][MAX_REFERENCE_PICTURES][3];
+  //short wp_weight[6][MAX_REFERENCE_PICTURES][3];
+  //short wp_offset[6][MAX_REFERENCE_PICTURES][3];
   int clist;
   int perform_wp = 0;
   imgpel **tmpPtr;
@@ -583,8 +583,8 @@ int TestWPPSliceAlg0(Slice *currSlice, int select_offset)
       for (n = 0; n < 3; n++)
       {
         weight[i][j][n] = default_weight[n];
-        wp_weight[i][j][n] = default_weight[n];
-        wp_offset[i][j][n] = 0;
+        //wp_weight[i][j][n] = default_weight[n];
+        //wp_offset[i][j][n] = 0;
         offset[i][j][n] = 0;
       }
     }
@@ -724,7 +724,7 @@ int TestWPBSliceAlg0(Slice *currSlice, int select_method)
   short im_weight[6][MAX_REFERENCE_PICTURES][MAX_REFERENCE_PICTURES][3];
   short wp_weight[6][MAX_REFERENCE_PICTURES][3];
   short wp_offset[6][MAX_REFERENCE_PICTURES][3];
-  short wbp_weight[6][MAX_REFERENCE_PICTURES][MAX_REFERENCE_PICTURES][3];
+  //short wbp_weight[6][MAX_REFERENCE_PICTURES][MAX_REFERENCE_PICTURES][3];
 
   int clist;
   short wf_weight, wf_offset;
@@ -757,28 +757,18 @@ int TestWPBSliceAlg0(Slice *currSlice, int select_method)
   {
     ComputeImplicitWeights(currSlice, default_weight, im_weight);
 
+    perform_wp = 0;
     for (i = 0; i < currSlice->listXsize[LIST_0]; i++)
     {
       for (j = 0; j < currSlice->listXsize[LIST_1]; j++)
       {
-        for (comp = 0; comp < 3; comp++)
+        if (im_weight[1][i][j][0] != default_weight[0] || im_weight[1][i][j][0] != default_weight[0])
         {
-          wbp_weight[1][i][j][comp] = im_weight[1][i][j][comp] ;
-          wbp_weight[0][i][j][comp] = im_weight[0][i][j][comp];
+          perform_wp = 1;
+          break;
         }
       }
-    }
-
-    for (clist=0; clist<2 + list_offset; clist++)
-    {
-      for (index = 0; index < currSlice->listXsize[clist]; index++)
-      {
-        for (comp = 0; comp < 3; comp++)
-        {
-          wp_weight[clist][index][comp] = default_weight[comp];
-          wp_offset[clist][index][comp] = 0;
-        }
-      }
+      if (perform_wp == 1) break;
     }
   }
   else
@@ -864,26 +854,9 @@ int TestWPBSliceAlg0(Slice *currSlice, int select_method)
         }
       }
     }
-
-    for (i = 0; i < currSlice->listXsize[LIST_0]; i++)
-    {
-      for (j = 0; j < currSlice->listXsize[LIST_1]; j++)
-      {
-        for (comp = 0; comp < 3; comp++)
-        {
-          wbp_weight[0][i][j][comp] = wp_weight[0][i][comp];
-          wbp_weight[1][i][j][comp] = wp_weight[1][j][comp];
-        }
-#if DEBUG_WP
-        printf ("bpw weight[%d][%d] = %d  , %d (%d %d %d) (%d %d) (%d %d)\n", i, j, p_Vid->currentSlice->wbp_weight[0][i][j][0], p_Vid->currentSlice->wbp_weight[1][i][j][0],
-        p_Vid->enc_picture->poc,currSlice->listX[LIST_0][i]->poc, currSlice->listX[LIST_1][j]->poc,
-        DistScaleFactor ,tx,tx,tx);
-#endif
-      }
-    }
   }
 
-  if (select_method == 0) //! implicit mode
+  if (select_method == 0) //! explicit mode
   {
     int active_refs[2];
 

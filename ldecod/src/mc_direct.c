@@ -140,8 +140,15 @@ static void update_direct_mv_info_temporal(Macroblock *currMB)
                     currSlice->listX[LIST_0 + list_offset][iref]->bottom_field == colocated->ref_pic[refList] ||
                     currSlice->listX[LIST_0 + list_offset][iref]->frame == colocated->ref_pic[refList] ) 
                   {
-                    mapped_idx=iref;
-                    break;
+                    if ((currSlice->field_pic_flag==1) && (currSlice->listX[LIST_0 + list_offset][iref]->structure != currSlice->structure))
+                    {
+                      mapped_idx=INVALIDINDEX;
+                    }
+                    else
+                    {
+                      mapped_idx = iref;            
+                      break;
+                    }
                   }
                   else //! invalid index. Default to zero even though this case should not happen
                     mapped_idx=INVALIDINDEX;

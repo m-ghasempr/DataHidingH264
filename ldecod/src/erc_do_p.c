@@ -337,7 +337,7 @@ static int concealByTrial(frame *recfr, imgpel *predMB,
       fInterNeighborExists, numIntraNeighbours,
       fZeroMotionChecked, predSplitted = 0,
       threshold = ERC_BLOCK_OK,
-      minDist, currDist, i, k, bestDir;
+      minDist, currDist, i, k;
   int regionSize;
   objectBuffer_t *currRegion;
   int mvBest[3] = {0, 0, 0}, mvPred[3] = {0, 0, 0}, *mvptr;
@@ -460,7 +460,6 @@ static int concealByTrial(frame *recfr, imgpel *predMB,
               {
 
                 minDist = currDist;
-                bestDir = i;
 
                 for (k=0;k<3;k++)
                   mvBest[k] = mvPred[k];
@@ -547,7 +546,6 @@ static void buildPredRegionYUV(VideoParameters *p_Vid, int *mv, int x, int y, im
 {
   imgpel **tmp_block;
   int i=0, j=0, ii=0, jj=0,i1=0,j1=0,j4=0,i4=0;
-  int jf=0;
   int uv;
   int vec1_x=0,vec1_y=0;
   int ioff,joff;
@@ -558,7 +556,7 @@ static void buildPredRegionYUV(VideoParameters *p_Vid, int *mv, int x, int y, im
   int mv_mul;
 
   //FRExt
-  int f1_x, f1_y, f2_x, f2_y, f3, f4, ifx;
+  int f1_x, f1_y, f2_x, f2_y, f3, f4;
   int b8, b4;
   int yuv = dec_picture->chroma_format_idc - 1;
 
@@ -644,11 +642,8 @@ static void buildPredRegionYUV(VideoParameters *p_Vid, int *mv, int x, int y, im
 
           for(jj=0;jj<4;jj++)
           {
-            jf=(j4+jj)/(p_Vid->mb_cr_size_y/4);     // jf  = Subblock_y-coordinate
             for(ii=0;ii<4;ii++)
             {
-              ifx=(i4+ii)/(p_Vid->mb_cr_size_x/4);  // ifx = Subblock_x-coordinate
-
               i1=(i4+ii)*f1_x + mv[0];
               j1=(j4+jj)*f1_y + mv[1];
 
@@ -711,7 +706,7 @@ static void copyPredMB (int currYBlockNum, imgpel *predMB, frame *recfr,
   VideoParameters *p_Vid = recfr->p_Vid;
   StorablePicture *dec_picture = p_Vid->dec_picture;
   int j, k, xmin, ymin, xmax, ymax;
-  int locationTmp, locationPred;
+  int locationTmp;
   int uv_x = uv_div[0][dec_picture->chroma_format_idc];
   int uv_y = uv_div[1][dec_picture->chroma_format_idc];
 
@@ -724,7 +719,6 @@ static void copyPredMB (int currYBlockNum, imgpel *predMB, frame *recfr,
   {
     for (k = xmin; k <= xmax; k++)
     {
-      locationPred = j * picSizeX + k;
       locationTmp = (j-ymin) * 16 + (k-xmin);
       dec_picture->imgY[j][k] = predMB[locationTmp];
     }
@@ -736,7 +730,6 @@ static void copyPredMB (int currYBlockNum, imgpel *predMB, frame *recfr,
     {
       for (k = (xmin>>uv_x); k <= (xmax>>uv_x); k++)
       {
-        locationPred = ((j * picSizeX) >> uv_x) + k;
         locationTmp = (j-(ymin>>uv_y)) * p_Vid->mb_cr_size_x + (k-(xmin>>1)) + 256;
         dec_picture->imgUV[0][j][k] = predMB[locationTmp];
 
@@ -863,7 +856,6 @@ static void buildPredblockRegionYUV(VideoParameters *p_Vid, int *mv,
 {
   imgpel **tmp_block;
   int i=0,j=0,ii=0,jj=0,i1=0,j1=0,j4=0,i4=0;
-  int jf=0;
   int uv;
   int vec1_x=0,vec1_y=0;
   int ioff,joff;
@@ -875,7 +867,7 @@ static void buildPredblockRegionYUV(VideoParameters *p_Vid, int *mv,
   int mv_mul;
 
   //FRExt
-  int f1_x, f1_y, f2_x, f2_y, f3, f4, ifx;
+  int f1_x, f1_y, f2_x, f2_y, f3, f4;
   int yuv = dec_picture->chroma_format_idc - 1;
 
   int ref_frame = mv[2];
@@ -940,11 +932,8 @@ static void buildPredblockRegionYUV(VideoParameters *p_Vid, int *mv,
 
       for(jj=0;jj<2;jj++)
       {
-        jf=(j4+jj)/(p_Vid->mb_cr_size_y/4);     // jf  = Subblock_y-coordinate
         for(ii=0;ii<2;ii++)
         {
-          ifx=(i4+ii)/(p_Vid->mb_cr_size_x/4);  // ifx = Subblock_x-coordinate
-
           i1=(i4+ii)*f1_x + mv[0];
           j1=(j4+jj)*f1_y + mv[1];
 
@@ -1315,7 +1304,7 @@ void conceal_lost_frames(DecodedPictureBuffer *p_Dpb, Slice *pSlice)
     p_Vid->earlier_missing_poc = 0;
   }
   else
-    UnusedShortTermFrameNum = (p_Vid->pre_frame_num + 1) % p_Vid->MaxFrameNum;
+    UnusedShortTermFrameNum = (p_Vid->pre_frame_num + 1) % p_Vid->max_frame_num;
 
   CurrFrameNum = pSlice->frame_num;
 
@@ -1361,7 +1350,7 @@ void conceal_lost_frames(DecodedPictureBuffer *p_Dpb, Slice *pSlice)
     picture=NULL;
 
     p_Vid->pre_frame_num = UnusedShortTermFrameNum;
-    UnusedShortTermFrameNum = (UnusedShortTermFrameNum + 1) % p_Vid->MaxFrameNum;
+    UnusedShortTermFrameNum = (UnusedShortTermFrameNum + 1) % p_Vid->max_frame_num;
 
     // update reference flags and set current flag.
     for(i=16;i>0;i--)
@@ -1397,7 +1386,7 @@ void update_ref_list_for_concealment(DecodedPictureBuffer *p_Dpb)
     }
   }
 
-  p_Dpb->ref_frames_in_buffer = p_Vid->active_pps->num_ref_idx_l0_active_minus1;
+  p_Dpb->ref_frames_in_buffer = p_Vid->active_pps->num_ref_idx_l0_default_active_minus1;
 }
 
 /*!
@@ -1416,7 +1405,7 @@ void init_lists_for_non_reference_loss(DecodedPictureBuffer *p_Dpb, int currSlic
 
   unsigned i;
   int j;
-  int MaxFrameNum = 1 << (active_sps->log2_max_frame_num_minus4 + 4);
+  int max_frame_num = 1 << (active_sps->log2_max_frame_num_minus4 + 4);
   int diff;
 
   int list0idx = 0;
@@ -1431,7 +1420,7 @@ void init_lists_for_non_reference_loss(DecodedPictureBuffer *p_Dpb, int currSlic
       if(p_Dpb->fs[i]->concealment_reference == 1)
       {
         if(p_Dpb->fs[i]->frame_num > p_Vid->frame_to_conceal)
-          p_Dpb->fs_ref[i]->frame_num_wrap = p_Dpb->fs[i]->frame_num - MaxFrameNum;
+          p_Dpb->fs_ref[i]->frame_num_wrap = p_Dpb->fs[i]->frame_num - max_frame_num;
         else
           p_Dpb->fs_ref[i]->frame_num_wrap = p_Dpb->fs[i]->frame_num;
         p_Dpb->fs_ref[i]->frame->pic_num = p_Dpb->fs_ref[i]->frame_num_wrap;

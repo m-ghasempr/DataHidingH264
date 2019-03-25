@@ -581,6 +581,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lcommon\src\mbuffer_common.c"
+				>
+			</File>
+			<File
 				RelativePath=".\ldecod\src\mbuffer_mvc.c"
 				>
 			</File>
@@ -847,6 +851,10 @@
 			</File>
 			<File
 				RelativePath=".\ldecod\inc\mbuffer.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lcommon\inc\mbuffer_common.h"
 				>
 			</File>
 			<File

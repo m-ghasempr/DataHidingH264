@@ -30,7 +30,7 @@
 #endif
 
 #define JM                  "18 (FRExt)"
-#define VERSION             "18.0"
+#define VERSION             "18.1"
 #define EXT_VERSION         "(FRExt)"
 
 #define DUMP_DPB                  0    //!< Dump DPB info for debug purposes
@@ -47,6 +47,7 @@
 #define SIMULCAST_ENABLE          0    //!< to test the decoder
 
 #define MVC_EXTENSION_ENABLE      1    //!< enable support for the Multiview High Profile
+#define ENABLE_DEC_STATS          0    //!< enable decoder statistics collection
 
 #define MVC_INIT_VIEW_ID          -1
 #define MAX_VIEW_NUM              1024   
@@ -225,6 +226,17 @@ typedef enum {
   VERT_PRED_8   =  2,
   PLANE_8       =  3
 } I8x8PredModes;
+
+// Color components
+enum {
+  Y_COMP = 0,    // Y Component
+  U_COMP = 1,    // U Component
+  V_COMP = 2,    // V Component
+  R_COMP = 3,    // R Component
+  G_COMP = 4,    // G Component
+  B_COMP = 5,    // B Component
+  T_COMP = 6
+} ColorComponent;
 
 enum {
   EOS = 1,    //!< End Of Sequence

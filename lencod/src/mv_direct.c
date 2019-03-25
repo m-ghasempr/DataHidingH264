@@ -66,7 +66,10 @@ void Get_Direct_MV_Temporal (Macroblock *currMB)
       all_mvs = currSlice->all_mv;
       if (p_Vid->active_sps->direct_8x8_inference_flag)
       {
-        colocated = list1[0]->mv_info[RSD(opic_block_y)][RSD(opic_block_x)];
+        if(currMB->p_Inp->separate_colour_plane_flag && currMB->p_Vid->yuv_format==YUV444)
+          colocated = list1[0]->JVmv_info[currMB->p_Slice->colour_plane_id][RSD(opic_block_y)][RSD(opic_block_x)];
+        else
+          colocated = list1[0]->mv_info[RSD(opic_block_y)][RSD(opic_block_x)];
         if(currSlice->mb_aff_frame_flag && currMB->mb_field && currSlice->listX[LIST_1][0]->coded_frame)
         {
           int iPosBlkY;
@@ -82,7 +85,12 @@ void Get_Direct_MV_Temporal (Macroblock *currMB)
         }        
       }
       else
-        colocated = list1[0]->mv_info[opic_block_y][opic_block_x];
+      {
+        if(currMB->p_Inp->separate_colour_plane_flag && currMB->p_Vid->yuv_format==YUV444)
+          colocated = list1[0]->JVmv_info[currMB->p_Slice->colour_plane_id][opic_block_y][opic_block_x];
+        else
+          colocated = list1[0]->mv_info[opic_block_y][opic_block_x];
+      }
       if(currSlice->mb_aff_frame_flag)
       {
         if(!currMB->mb_field && ((currSlice->listX[LIST_1][0]->coded_frame && currSlice->listX[LIST_1][0]->motion.mb_field[currMB->mbAddrX]) ||
@@ -90,8 +98,20 @@ void Get_Direct_MV_Temporal (Macroblock *currMB)
         {
           if (iabs(p_Vid->enc_picture->poc - currSlice->listX[LIST_1+4][0]->poc)> iabs(p_Vid->enc_picture->poc -currSlice->listX[LIST_1+2][0]->poc) )
           {
-            colocated = p_Vid->active_sps->direct_8x8_inference_flag ? 
-              currSlice->listX[LIST_1+2][0]->mv_info[RSD(opic_block_y)>>1][RSD(opic_block_x)] : currSlice->listX[LIST_1+2][0]->mv_info[(opic_block_y)>>1][opic_block_x];
+            if ( p_Vid->active_sps->direct_8x8_inference_flag)
+            {
+              if(currMB->p_Inp->separate_colour_plane_flag && currMB->p_Vid->yuv_format==YUV444)
+                colocated = currSlice->listX[LIST_1+2][0]->JVmv_info[currMB->p_Slice->colour_plane_id][RSD(opic_block_y)>>1][RSD(opic_block_x)];
+              else
+                colocated = currSlice->listX[LIST_1+2][0]->mv_info[RSD(opic_block_y)>>1][RSD(opic_block_x)];
+            }
+            else
+            { 
+              if(currMB->p_Inp->separate_colour_plane_flag && currMB->p_Vid->yuv_format==YUV444)
+                colocated = currSlice->listX[LIST_1+2][0]->JVmv_info[currMB->p_Slice->colour_plane_id][(opic_block_y)>>1][(opic_block_x)];
+              else
+                colocated = currSlice->listX[LIST_1+2][0]->mv_info[(opic_block_y)>>1][opic_block_x];
+            }
             if(currSlice->listX[LIST_1][0]->coded_frame)
             {
               int iPosBlkY = (RSD(opic_block_y)>>3)*8 + ((RSD(opic_block_y)>>1) & 0x03);
@@ -103,8 +123,21 @@ void Get_Direct_MV_Temporal (Macroblock *currMB)
           }
           else
           {
-            colocated = p_Vid->active_sps->direct_8x8_inference_flag ? 
-              currSlice->listX[LIST_1+4][0]->mv_info[RSD(opic_block_y)>>1][RSD(opic_block_x)] : currSlice->listX[LIST_1+4][0]->mv_info[(opic_block_y)>>1][opic_block_x];
+            if (p_Vid->active_sps->direct_8x8_inference_flag )
+            {
+              if(currMB->p_Inp->separate_colour_plane_flag && currMB->p_Vid->yuv_format==YUV444)
+                colocated = currSlice->listX[LIST_1+4][0]->JVmv_info[currMB->p_Slice->colour_plane_id][RSD(opic_block_y)>>1][RSD(opic_block_x)];
+              else
+                colocated = currSlice->listX[LIST_1+4][0]->mv_info[RSD(opic_block_y)>>1][RSD(opic_block_x)];
+
+            }
+            else
+            {
+              if(currMB->p_Inp->separate_colour_plane_flag && currMB->p_Vid->yuv_format==YUV444)
+                colocated = currSlice->listX[LIST_1+4][0]->JVmv_info[currMB->p_Slice->colour_plane_id][(opic_block_y)>>1][opic_block_x];
+              else
+                colocated = currSlice->listX[LIST_1+4][0]->mv_info[(opic_block_y)>>1][opic_block_x];
+            }
             if(currSlice->listX[LIST_1][0]->coded_frame)
             {
               int iPosBlkY = (RSD(opic_block_y)>>3)*8 + ((RSD(opic_block_y)>>1) & 0x03)+4;
@@ -186,8 +219,15 @@ void Get_Direct_MV_Temporal (Macroblock *currMB)
               currSlice->listX[LIST_0 + list_offset][iref]->bottom_field == colocated.ref_pic[refList] ||
               currSlice->listX[LIST_0 + list_offset][iref]->frame == colocated.ref_pic[refList] ) 
             {
-              mapped_idx=iref;
-              break;
+              if ((p_Vid->field_picture==1) && (currSlice->listX[LIST_0 + list_offset][iref]->structure != currSlice->structure))
+              {
+                mapped_idx=INVALIDINDEX;
+              }
+              else
+              {
+                mapped_idx = iref;            
+                break;
+              }
             }
             else //! invalid index. Default to zero even though this case should not happen
               mapped_idx=INVALIDINDEX;

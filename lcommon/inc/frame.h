@@ -27,10 +27,22 @@ typedef enum {
   YUV444     =  3      //!< 4:4:4
 } ColorFormat;
 
+typedef enum {
+  PF_UNKNOWN = -1,     //!< Unknown color ordering
+  UYVY       =  0,     //!< UYVY
+  YUY2       =  1,     //!< YUY2
+  YUYV       =  1,     //!< YUYV
+  YVYU       =  2,     //!< YVYU
+  BGR        =  3,     //!< BGR
+  V210       =  4      //!< Video Clarity 422 format (10 bits)
+} PixelFormat;
+
+
 typedef struct frame_format
 {  
   ColorFormat yuv_format;                    //!< YUV format (0=4:0:0, 1=4:2:0, 2=4:2:2, 3=4:4:4)
   ColorModel  color_model;                   //!< 4:4:4 format (0: YUV, 1: RGB, 2: XYZ)
+  PixelFormat pixel_format;                  //!< pixel format support for certain interleaved yuv sources
   double      frame_rate;                    //!< frame rate
   int         width[3];                      //!< component frame width
   int         height[3];                     //!< component frame height    

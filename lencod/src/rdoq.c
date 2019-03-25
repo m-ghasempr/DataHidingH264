@@ -234,8 +234,8 @@ void trellis_mp(Macroblock *currMB)
   InputParameters *p_Inp = currMB->p_Inp;
 
   int masterQP = 0, deltaQP;
-  int qp_left, qp_up;
 #if RDOQ_BASE
+  int qp_left, qp_up;
   const int deltaQPTabB[] = {0,  1, -1,  2, 3, -2, 4,  5, -3};
   const int deltaQPTabP[] = {0, -1,  1, -2, 2, -3, 3, -4,  4};
   int   qp_anchor;
@@ -266,9 +266,9 @@ void trellis_mp(Macroblock *currMB)
     }
   }
 
+#if RDOQ_BASE
   qp_left   = (currMB->mb_left) ? currMB->mb_left->qp : p_Vid->masterQP;
   qp_up     = (currMB->mb_up)   ? currMB->mb_up->qp   : p_Vid->masterQP;
-#if RDOQ_BASE
   qp_anchor = (qp_left + qp_up + 1)>>1;
 #endif
 
@@ -364,8 +364,6 @@ void trellis_sp(Macroblock *currMB)
 
   currSlice->encode_one_macroblock (currMB);
   end_encode_one_macroblock(currMB);
-
-
 
   write_macroblock (currMB, 1);    
 }

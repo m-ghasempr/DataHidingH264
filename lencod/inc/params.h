@@ -246,10 +246,13 @@ struct inp_par_enc
 
   int RandomIntraMBRefresh;     //!< Number of pseudo-random intra-MBs per picture
 
+  int OnTheFlyFractMCP;         //!< On the fly interpolation mode
+
   // Chroma interpolation and buffering
   int ChromaMCBuffer;
   int ChromaMEEnable;
   int ChromaMEWeight;
+  int MESoftenSSEMetric;
   int MEErrorMetric[3];
   int ModeDecisionMetric;
   int SkipDeBlockNonRef;
@@ -338,6 +341,7 @@ struct inp_par_enc
   int EPZSMedThresScale;
   int EPZSSubPelThresScale;
 #endif
+  int DisableMEPrediction;
   int EPZSSubPelGrid;
   int EPZSSubPelME;
   int EPZSSubPelMEBiPred;
