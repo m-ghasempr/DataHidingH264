@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 9.1 (FRExt)
+ *     JM 9.2 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -66,7 +66,7 @@
 #include "explicit_gop.h"
 
 #define JM      "9 (FRExt)"
-#define VERSION "9.1"
+#define VERSION "9.2"
 #define EXT_VERSION "(FRExt)"
 
 InputParameters inputs,      *input = &inputs;

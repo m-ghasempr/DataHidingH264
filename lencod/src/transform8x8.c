@@ -32,15 +32,12 @@
 
 int   cofAC8x8_chroma[2][4][2][18];
 
-#define Q_BITS_8        16
-#define DQ_BITS_8       6 
-#define DQ_ROUND_8      (1<<(DQ_BITS_8-1))
 
 #define max(a, b) (((a) > (b)) ? (a) : (b))
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 
 
-static const int quant_coef8[6][8][8] = 
+const int quant_coef8[6][8][8] = 
 {
   { 
     {13107, 12222,  16777,  12222,  13107,  12222,  16777,  12222},
@@ -105,7 +102,7 @@ static const int quant_coef8[6][8][8] =
 };
 
 
-static const int dequant_coef8[6][8][8] = 
+const int dequant_coef8[6][8][8] = 
 {
   {
     {20,  19, 25, 19, 20, 19, 25, 19},
@@ -1449,133 +1446,6 @@ double RDCost_for_8x8IntraBlocks(int *nonzero, int b8, int ipmode, double lambda
     return (double)rate;
   else
     return rdcost;
-}
-
-/*!
- ************************************************************************
- * \brief
- *    Calculate the quantisation and inverse quantisation parameters
- *
- ************************************************************************
- */
-void CalculateQuant8Param()
-{
-  int i, j, k, temp;
-  int present[2];
-  int no_q_matrix=FALSE;
-
-  if(!active_sps->seq_scaling_matrix_present_flag && !active_pps->pic_scaling_matrix_present_flag) //set to default matrix
-    no_q_matrix=TRUE;
-  else
-  {
-    memset(present, 0, sizeof(int)*2);
-
-    if(active_sps->seq_scaling_matrix_present_flag)
-      for(i=0; i<2; i++)
-        present[i] = active_sps->seq_scaling_list_present_flag[i+6];
-
-    if(active_pps->pic_scaling_matrix_present_flag)
-      for(i=0; i<2; i++)
-        present[i] |= active_pps->pic_scaling_list_present_flag[i+6];
-  }
-
-  if(no_q_matrix==TRUE)
-  {
-    for(k=0; k<6; k++)
-      for(j=0; j<8; j++)
-        for(i=0; i<8; i++)
-        {
-          LevelScale8x8Luma_Intra[k][j][i]         = quant_coef8[k][j][i];
-          InvLevelScale8x8Luma_Intra[k][j][i]      = dequant_coef8[k][j][i]<<4;
-
-          LevelScale8x8Luma_Inter[k][j][i]         = quant_coef8[k][j][i];
-          InvLevelScale8x8Luma_Inter[k][j][i]      = dequant_coef8[k][j][i]<<4;
-        }
-  }
-  else
-  {
-    for(k=0; k<6; k++)
-      for(j=0; j<8; j++)
-        for(i=0; i<8; i++)
-        {
-          temp = (i<<3)+j;
-          if((!present[0]) || UseDefaultScalingMatrix8x8Flag[0])
-          {
-            LevelScale8x8Luma_Intra[k][j][i]    = (quant_coef8[k][j][i]<<4)/Quant8_intra_default[temp];
-            InvLevelScale8x8Luma_Intra[k][j][i] = dequant_coef8[k][j][i]*Quant8_intra_default[temp];
-          }
-          else
-          {
-            LevelScale8x8Luma_Intra[k][j][i]    = (quant_coef8[k][j][i]<<4)/ScalingList8x8[0][temp];
-            InvLevelScale8x8Luma_Intra[k][j][i] = dequant_coef8[k][j][i]*ScalingList8x8[0][temp];
-          }
-
-          if((!present[1]) || UseDefaultScalingMatrix8x8Flag[1])
-          {
-            LevelScale8x8Luma_Inter[k][j][i]    = (quant_coef8[k][j][i]<<4)/Quant8_inter_default[temp];
-            InvLevelScale8x8Luma_Inter[k][j][i] = dequant_coef8[k][j][i]*Quant8_inter_default[temp];
-          }
-          else
-          {
-            LevelScale8x8Luma_Inter[k][j][i]    = (quant_coef8[k][j][i]<<4)/ScalingList8x8[1][temp];
-            InvLevelScale8x8Luma_Inter[k][j][i] = dequant_coef8[k][j][i]*ScalingList8x8[1][temp];
-          }
-        }
-  }
-}
-
-/*!
- ************************************************************************
- * \brief
- *    Calculate the quantisation offset parameters
- *
- ************************************************************************
- */
-void CalculateOffset8Param()
-{
-
-  int i, j, k, temp;
-   int q_bits;
-   
-   if(input->OffsetMatrixPresentFlag)
-   {
-     for(k=0; k<13; k++)
-     {
-       q_bits = Q_BITS_8 + k;
-       for(j=0; j<8; j++)
-       {
-         for(i=0; i<8; i++)
-         {           
-           temp = (i<<3)+j;
-           if (img->type == I_SLICE)
-             LevelOffset8x8Luma_Intra[k][j][i] = ((1<<q_bits) * OffsetList8x8input[0][temp] + 512)>>10;
-           else
-             LevelOffset8x8Luma_Intra[k][j][i] = ((1<<q_bits) * OffsetList8x8input[1][temp] + 512)>>10;
-
-           LevelOffset8x8Luma_Inter[k][j][i] = ((1<<q_bits) * OffsetList8x8input[2][temp] + 512)>>10;
-         }
-       }
-     }
-   }
-   else
-   {
-     for(k=0; k<13; k++)
-     {
-       q_bits = Q_BITS_8 + k;
-       for(j=0; j<8; j++)
-       {
-         for(i=0; i<8; i++)
-         {
-           temp = (i<<3)+j;
-           if (img->type == I_SLICE)
-             LevelOffset8x8Luma_Intra[k][j][i] = ((1<<q_bits) * Offset8_intra_default_intra[temp] + 512)>>10;
-           else
-             LevelOffset8x8Luma_Intra[k][j][i] = ((1<<q_bits) * Offset8_intra_default_inter[temp] + 512)>>10;
-           LevelOffset8x8Luma_Inter[k][j][i] = ((1<<q_bits) * Offset8_inter_default[temp] + 512)>>10;
-         }
-       }
-     }
-   }
 }
 
 

@@ -1130,10 +1130,6 @@ int clip1a(int a);
 void DeblockFrame(ImageParameters *img, imgpel **, imgpel ***) ;
 void  MarkAllMacroblockModes(ImageParameters *img, imgpel **, imgpel ***);
 
-void CalculateQuantParam();
-void CalculateQuant8Param();
-void CalculateOffsetParam();
-void CalculateOffset8Param();
 int  TransformDecision(int, int*);
 int  SATD8X8(int*, int);
 

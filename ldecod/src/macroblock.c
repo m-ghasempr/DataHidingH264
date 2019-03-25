@@ -1074,7 +1074,7 @@ void readIPCMcoeffsFromNAL(struct img_par *img, struct inp_par *inp, struct data
 
   if((dP->bitstream->frame_bitoffset)%8!=0)
   {
-
+    TRACE_STRING("pcm_alignment_zero_bit");
     currSE.len=8-(dP->bitstream->frame_bitoffset)%8;
     readSyntaxElement_FLC(&currSE, dP->bitstream);
   

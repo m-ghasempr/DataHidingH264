@@ -1,3 +1,11 @@
+Changes for Version JM 9.2 to JM 9.1
+------------------------------------
+- encoder: fix possible integer overflow in quantization offsets (SN/AT)
+- encoder: fix I_PCM trace (SN)
+- encoder: restructure code (KS)
+- unixprep.sh: also convert config files (KS)
+
+
 Changes for Version JM 9.1 to JM 9.0
 ------------------------------------
 - encoder: RCT: Enabling inter mode selection (WK)

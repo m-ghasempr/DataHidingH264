@@ -188,5 +188,13 @@ typedef unsigned char byte;    //!< byte type definition
 #define ZEROBYTES_SHORTSTARTCODE 2 //indicates the number of zero bytes in the short start-code prefix
 #define BIPRED_SIMPLE 1
 
+#define Q_BITS          15
+#define DQ_BITS         6
+#define DQ_ROUND        (1<<(DQ_BITS-1))
+
+#define Q_BITS_8        16
+#define DQ_BITS_8       6 
+#define DQ_ROUND_8      (1<<(DQ_BITS_8-1))
+
 #endif
 
