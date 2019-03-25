@@ -20,24 +20,35 @@
 #ifndef _CABAC_H_
 #define _CABAC_H_
 
-// CABAC
-int get_pic_bin_count(void);
-void reset_pic_bin_count(void);
-void set_pic_bin_count(EncodingEnvironmentPtr eep);
+extern const byte maxpos       [];
+extern const byte c1isdc       [];
+extern const byte type2ctx_bcbp[];
+extern const byte type2ctx_map [];
+extern const byte type2ctx_last[];
+extern const byte type2ctx_one [];
+extern const byte type2ctx_abs [];
+extern const byte max_c2       [];
 
-void arienco_start_encoding(EncodingEnvironmentPtr eep, unsigned char *code_buffer, int *code_len);
-void arienco_reset_EC(EncodingEnvironmentPtr eep);
-int  arienco_bits_written(EncodingEnvironmentPtr eep);
-void arienco_done_encoding(EncodingEnvironmentPtr eep);
-void biari_init_context (BiContextTypePtr ctx, const int* ini);
-void rescale_cum_freq(BiContextTypePtr bi_ct);
-void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiContextTypePtr bi_ct );
-void biari_encode_symbol_eq_prob(EncodingEnvironmentPtr eep, signed short symbol);
-void biari_encode_symbol_final(EncodingEnvironmentPtr eep, signed short symbol);
+extern const byte  pos2ctx_map8x8  [];
+extern const byte  pos2ctx_map8x4  [];
+extern const byte  pos2ctx_map4x4  [];
+extern const byte  pos2ctx_map2x4c [];
+extern const byte  pos2ctx_map4x4c [];
+extern const byte* pos2ctx_map     [];
+extern const byte  pos2ctx_map8x8i [];
+extern const byte  pos2ctx_map8x4i [];
+extern const byte  pos2ctx_map4x8i [];
+extern const byte* pos2ctx_map_int [];
+extern const byte  pos2ctx_last8x8 [];
+extern const byte  pos2ctx_last8x4 [];
+extern const byte  pos2ctx_last4x4 [];
+extern const byte  pos2ctx_last2x4c[];
+extern const byte  pos2ctx_last4x4c[];
+extern const byte* pos2ctx_last    [];
+
+// CABAC
 MotionInfoContexts* create_contexts_MotionInfo(void);
 TextureInfoContexts* create_contexts_TextureInfo(void);
-void init_contexts_MotionInfo (MotionInfoContexts  *enco_ctx);
-void init_contexts_TextureInfo(TextureInfoContexts *enco_ctx);
 void delete_contexts_MotionInfo(MotionInfoContexts *enco_ctx);
 void delete_contexts_TextureInfo(TextureInfoContexts *enco_ctx);
 void writeHeaderToBuffer(void);

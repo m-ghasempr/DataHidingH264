@@ -43,11 +43,6 @@ static int  **pos_00;             //!< position of (0,0) vector
 static distpel  *****BlockSAD;        //!< SAD for all blocksize, ref. frames and motion vectors
 static int  **max_search_range;
 
-extern void SetMotionVectorPredictor (Macroblock *currMB, short  pmv[2], char   **refPic,
-                                      short  ***tmp_mv, short  ref_frame,
-                                      int    list,      int mb_x, int mb_y, 
-                                      int    blockshape_x, int blockshape_y);
-
 // Functions
 /*!
  ***********************************************************************
@@ -277,7 +272,8 @@ SetupLargerBlocks (int list, int refindex, int max_pos)
 #if GEN_ME
 void SetupFastFullPelSearch (Macroblock *currMb, short ref, int list)  // <--  reference frame parameter, list0 or 1
 {
-  short   pmv[2], mv[2];
+  short   pmv[2];
+  MotionVector mv;
   static imgpel   orig_pels[768];
 
   imgpel  *srcptr = orig_pels;
@@ -353,7 +349,6 @@ void SetupFastFullPelSearch (Macroblock *currMb, short ref, int list)  // <--  r
 
 
   ref_picture     = listX[list+list_offset][ref];
-  ref_access_method = FAST_ACCESS;
 
   //===== Use weighted Reference for ME ====
   ref_pic_sub.luma = ref_picture->p_curr_img_sub;
@@ -388,22 +383,23 @@ void SetupFastFullPelSearch (Macroblock *currMb, short ref, int list)  // <--  r
   height_pad    = ref_picture->size_y_pad;
 
   //===== get search center: predictor of 16x16 block =====
-  SetMotionVectorPredictor (currMB, pmv, enc_picture->motion.ref_idx[list], enc_picture->motion.mv[list], ref, list, 0, 0, 16, 16);
+  get_neighbors(currMB, &block_a, &block_b, &block_c, &block_d, 0, 0, 16);
+  GetMotionVectorPredictor (currMB, &block_a, &block_b, &block_c, pmv, enc_picture->motion.ref_idx[list], enc_picture->motion.mv[list], ref, 0, 0, 16, 16);
 
-  mv[0] = pmv[0] / 4;
-  mv[1] = pmv[1] / 4;
+  mv.mv_x = pmv[0] / 4;
+  mv.mv_y = pmv[1] / 4;
 
   if (!params->rdopt)
   {
     //--- correct center so that (0,0) vector is inside ---
-    mv[0] = iClip3(-search_range, search_range, mv[0]);
-    mv[1] = iClip3(-search_range, search_range, mv[1]);
+    mv.mv_x = iClip3(-search_range, search_range, mv.mv_x);
+    mv.mv_y = iClip3(-search_range, search_range, mv.mv_y);
   }
 
-  clip_mv_range(img, search_range, mv, F_PEL);
+  clip_mv_range(img, search_range, &mv, F_PEL);
 
-  search_center_x[list][ref] = mv[0] + img->opix_x;
-  search_center_y[list][ref] = mv[1] + img->opix_y;
+  search_center_x[list][ref] = mv.mv_x + img->opix_x;
+  search_center_y[list][ref] = mv.mv_y + img->opix_y;
 
   offset_x = search_center_x[list][ref];
   offset_y = search_center_y[list][ref];
@@ -446,19 +442,6 @@ void SetupFastFullPelSearch (Macroblock *currMb, short ref, int list)  // <--  r
     abs_y4 = (abs_y + IMG_PAD_SIZE) << 2;
     abs_x4 = (abs_x + IMG_PAD_SIZE) << 2;
 
-    if (range_partly_outside)
-    {
-      if (abs_y >= 0 && abs_y <= max_height &&
-        abs_x >= 0 && abs_x <= max_width    )
-      {
-        ref_access_method = FAST_ACCESS;
-      }
-      else
-      {
-        ref_access_method = UMV_ACCESS;
-      }
-    }
-
     srcptr = orig_pels;
     bindex = 0;
     for (blky = 0; blky < 4; blky++)
@@ -494,6 +477,7 @@ void SetupFastFullPelSearch (Macroblock *currMB, short ref, int list)  // <--  r
   int     LineSadBlk0, LineSadBlk1, LineSadBlk2, LineSadBlk3;
   int     max_width, max_height;
   int     img_width, img_height;
+  static PixelPos block_a, block_b, block_c, block_d;  // neighbor blocks
 
   StorablePicture *ref_picture;
   distpel**   block_sad = BlockSAD[list][ref][7];
@@ -507,7 +491,6 @@ void SetupFastFullPelSearch (Macroblock *currMB, short ref, int list)  // <--  r
   int *dist_method = params->MEErrorMetric[0] ? img->quad : byte_abs;
 
   ref_picture     = listX[list+list_offset][ref];
-  ref_access_method = FAST_ACCESS;
 
   ref_pic_sub.luma = ref_picture->p_curr_img_sub;
 
@@ -542,7 +525,8 @@ void SetupFastFullPelSearch (Macroblock *currMB, short ref, int list)  // <--  r
   }
 
   //===== get search center: predictor of 16x16 block =====
-  SetMotionVectorPredictor (currMB, pmv, enc_picture->motion.ref_idx[list], enc_picture->motion.mv[list], ref, list, 0, 0, 16, 16);
+  get_neighbors(currMB, &block_a, &block_b, &block_c, &block_d, 0, 0, 16);
+  GetMotionVectorPredictor (currMB, &block_a, &block_b, &block_c, pmv, enc_picture->motion.ref_idx[list], enc_picture->motion.mv[list], ref, 0, 0, 16, 16);
 
   search_center_x[list][ref] = pmv[0] / 4;
   search_center_y[list][ref] = pmv[1] / 4;
@@ -554,8 +538,8 @@ void SetupFastFullPelSearch (Macroblock *currMB, short ref, int list)  // <--  r
     search_center_y[list][ref] = iClip3(-search_range, search_range, search_center_y[list][ref]);
   }
 
-  search_center_x[list][ref] = iClip3(-2047 + search_range, 2047 - search_range, search_center_x[list][ref]);
-  search_center_y[list][ref] = iClip3(LEVELMVLIMIT[img->LevelIndex][0] + search_range, LEVELMVLIMIT[img->LevelIndex][1]  - search_range, search_center_y[list][ref]);
+  search_center_x[list][ref] = iClip3(img->MaxHmvR[0] + search_range, img->MaxHmvR[1] - search_range, search_center_x[list][ref]);
+  search_center_y[list][ref] = iClip3(img->MaxVmvR[0] + search_range, img->MaxVmvR[1] - search_range, search_center_y[list][ref]);
 
   search_center_x[list][ref] += img->opix_x;
   search_center_y[list][ref] += img->opix_y;
@@ -619,25 +603,12 @@ void SetupFastFullPelSearch (Macroblock *currMB, short ref, int list)  // <--  r
     abs_y4 = (abs_y + IMG_PAD_SIZE) << 2;
     abs_x4 = (abs_x + IMG_PAD_SIZE) << 2;
 
-    if (range_partly_outside)
-    {
-      if (abs_y >= 0 && abs_y <= max_height&&
-        abs_x >= 0 && abs_x <= max_width  )
-      {
-        ref_access_method = FAST_ACCESS;
-      }
-      else
-      {
-        ref_access_method = UMV_ACCESS;
-      }
-    }
-
     if (apply_weights)
     {
       srcptr = orig_pels;
       bindex = 0;
 
-      refptr = get_line[ref_access_method] (ref_pic_sub.luma, abs_y4, abs_x4);
+      refptr = UMVLine4X (ref_pic_sub.luma, abs_y4, abs_x4);
 
       for (blky = 0; blky < 4; blky++)
       {
@@ -692,7 +663,7 @@ void SetupFastFullPelSearch (Macroblock *currMB, short ref, int list)  // <--  r
         {
           bindex = 0;
 
-          refptr = get_crline[ref_access_method] (ref_pic_sub.crcb[k], abs_y4, abs_x4);
+          refptr = UMVLine8X_chroma (ref_pic_sub.crcb[k], abs_y4, abs_x4);
           for (blky = 0; blky < 4; blky++)
           {
             LineSadBlk0 = LineSadBlk1 = LineSadBlk2 = LineSadBlk3 = 0;
@@ -735,7 +706,7 @@ void SetupFastFullPelSearch (Macroblock *currMB, short ref, int list)  // <--  r
       srcptr = orig_pels;
       bindex = 0;
 
-      refptr = get_line[ref_access_method] (ref_pic_sub.luma, abs_y4, abs_x4);
+      refptr = UMVLine4X (ref_pic_sub.luma, abs_y4, abs_x4);
 
       for (blky = 0; blky < 4; blky++)
       {
@@ -774,7 +745,7 @@ void SetupFastFullPelSearch (Macroblock *currMB, short ref, int list)  // <--  r
         {
           bindex = 0;
 
-          refptr = get_crline[ref_access_method] (ref_pic_sub.crcb[k], abs_y4, abs_x4);
+          refptr = UMVLine8X_chroma (ref_pic_sub.crcb[k], abs_y4, abs_x4);
           for (blky = 0; blky < 4; blky++)
           {
             LineSadBlk0 = LineSadBlk1 = LineSadBlk2 = LineSadBlk3 = 0;
@@ -829,14 +800,13 @@ FastFullPelBlockMotionSearch (Macroblock *currMB,       // <--  current Macroblo
                               imgpel*   orig_pic,       // <--  not used
                               short     ref,            // <--  reference frame (0... or -1 (backward))
                               int       list,
-                              int       list_offset,    // <--  MBAFF list offset
                               char   ***refPic,         // <--  reference array
                               short ****tmp_mv,         // <--  mv array
                               int       pic_pix_x,      // <--  absolute x-coordinate of regarded AxB block
                               int       pic_pix_y,      // <--  absolute y-coordinate of regarded AxB block
                               int       blocktype,      // <--  block type (1-16x16 ... 7-4x4)
-                              short     pred_mv[2],     // <--  motion vector predictor (x) in sub-pel units
-                              short     mv[2],          // <--> in: search center (x) / out: motion vector (x) - in pel units
+                              MotionVector *pred_mv,     // <--  motion vector predictor (x) in sub-pel units
+                              MotionVector *mv,          // <--> in: search center (x) / out: motion vector (x) - in pel units
                               int       search_range,   // <--  1-d search range in pel units
                               int       min_mcost,      // <--  minimum motion cost (cost for center or huge value)
                               int       lambda_factor,  // <--  lagrangian parameter for determining motion cost
@@ -864,7 +834,7 @@ FastFullPelBlockMotionSearch (Macroblock *currMB,       // <--  current Macroblo
   //===== cost for (0,0)-vector: it is done before, because MVCost can be negative =====
   if (!params->rdopt)
   {
-    mcost = block_sad[pos_00[list][ref]] + MV_COST_SMP (lambda_factor, 0, 0, pred_mv[0], pred_mv[1]);
+    mcost = block_sad[pos_00[list][ref]] + MV_COST_SMP (lambda_factor, 0, 0, pred_mv->mv_x, pred_mv->mv_y);
 
     if (mcost < min_mcost)
     {
@@ -883,7 +853,7 @@ FastFullPelBlockMotionSearch (Macroblock *currMB,       // <--  current Macroblo
       cand_x = (offset_x + spiral_search_x[pos])<<2;
       cand_y = (offset_y + spiral_search_y[pos])<<2;
       mcost  = *block_sad;
-      mcost += MV_COST_SMP (lambda_factor, cand_x, cand_y, pred_mv[0], pred_mv[1]);
+      mcost += MV_COST_SMP (lambda_factor, cand_x, cand_y, pred_mv->mv_x, pred_mv->mv_y);
 
       //--- check motion cost ---
       if (mcost < min_mcost)
@@ -895,8 +865,8 @@ FastFullPelBlockMotionSearch (Macroblock *currMB,       // <--  current Macroblo
   }
 
   //===== set best motion vector and return minimum motion cost =====
-  mv[0] = offset_x + spiral_search_x[best_pos];
-  mv[1] = offset_y + spiral_search_y[best_pos];
+  mv->mv_x = offset_x + spiral_search_x[best_pos];
+  mv->mv_y = offset_y + spiral_search_y[best_pos];
   return min_mcost;
 }
 

@@ -40,7 +40,7 @@
  *
  ************************************************************************
  */
-int quant_4x4_normal(int (*tblock)[16], int block_y, int block_x, int  qp,
+int quant_4x4_normal(int **tblock, int block_y, int block_x, int  qp,
                      int*  ACLevel, int*  ACRun, 
                      int **fadjust4x4, int **levelscale, int **invlevelscale, int **leveloffset,
                      int *coeff_cost, const byte (*pos_scan)[2], const byte *c_cost, int is_cavlc)
@@ -106,7 +106,7 @@ int quant_4x4_normal(int (*tblock)[16], int block_y, int block_x, int  qp,
   return nonzero;
 }
 
-int quant_ac4x4_normal(int (*tblock)[16], int block_y, int block_x, int qp,                 
+int quant_ac4x4_normal(int **tblock, int block_y, int block_x, int qp,                 
                        int*  ACLevel, int*  ACRun, 
                        int **fadjust4x4, int **levelscale, int **invlevelscale, int **leveloffset,
                        int *coeff_cost, const byte (*pos_scan)[2], const byte *c_cost, int type, int is_cavlc)
@@ -182,7 +182,7 @@ int quant_ac4x4_normal(int (*tblock)[16], int block_y, int block_x, int qp,
  *
  ************************************************************************
  */
-int quant_dc4x4_normal(int (*tblock)[4], int qp, int* DCLevel, int* DCRun, 
+int quant_dc4x4_normal(int **tblock, int qp, int* DCLevel, int* DCRun, 
                        int levelscale, int invlevelscale, int leveloffset, const byte (*pos_scan)[2], int is_calvc)
 {
   static int i,j, coeff_ctr;

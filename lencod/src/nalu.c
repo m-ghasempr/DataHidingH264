@@ -62,4 +62,42 @@ int RBSPtoNALU (unsigned char *rbsp, NALU_t *nalu, int rbsp_size, int nal_unit_t
   return len;
 }
 
+/*!
+ ************************************************************************
+ *  \brief
+ *     write AUD NALU
+ ************************************************************************
+ */
 
+int Write_AUD_NALU( void )
+{  
+  int     RBSPlen = 0;
+  int     NALUlen, len;
+  byte    rbsp[MAXRBSPSIZE];
+  NALU_t *nalu = AllocNALU( 64000 );
+
+  switch( img->type )
+  {
+  case I_SLICE:
+    img->primary_pic_type = 0;
+    break;
+  case P_SLICE:
+    img->primary_pic_type = 1;
+    break;
+  case B_SLICE:
+    img->primary_pic_type = 2;
+    break;
+  }
+  RBSPlen = 1;
+  rbsp[0] = img->primary_pic_type << 5;
+  rbsp[0] |= (1 << 4);
+
+  // write RBSP into NALU
+  NALUlen = RBSPtoNALU( rbsp, nalu, RBSPlen, NALU_TYPE_AUD, NALU_PRIORITY_HIGHEST, 0, 1 );
+  // write NALU into bitstream
+  len     = WriteNALU( nalu );
+
+  FreeNALU( nalu );
+
+  return len;
+}

@@ -14,7 +14,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 14.2 (FRExt)
+ *     JM 15.0 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -53,9 +53,11 @@
 #include "configfile.h"
 #include "context_ini.h"
 #include "explicit_gop.h"
+#include "explicit_seq.h"
 #include "filehandle.h"
 #include "image.h"
 #include "input.h"
+#include "img_io.h"
 #include "slice.h"
 #include "intrarefresh.h"
 #include "leaky_bucket.h"
@@ -73,43 +75,42 @@
 #include "errdo.h"
 #include "rdopt.h"
 #include "wp_mcprec.h"
+#include "mv-search.h"
 
-InputParameters  inputs, *params = &inputs;
-ImageParameters  images, *img    = &images;
-Decoders       decoders, *decs   = &decoders;
+InputParameters  *params = NULL;
+ImageParameters  *img = NULL;
 
-#ifdef _ADAPT_LAST_GROUP_
-int initial_Bframes = 0;
-#endif
 
-Boolean In2ndIGOP = FALSE;
-int    start_frame_no_in_this_IGOP = 0;
-int    start_tr_in_this_IGOP = 0;
-int    FirstFrameIn2ndIGOP=0;
-int    cabac_encoding = 0;
+int initial_Bframes;
+
+int    cabac_encoding;
 int    frame_statistic_start;
 extern ColocatedParams *Co_located;
 extern ColocatedParams *Co_located_JV[MAX_PLANE];  //!< Co_located to be used during 4:4:4 independent mode encoding
 extern double *mb16x16_cost_frame;
-extern int FrameNumberInFile;
 
-extern void Init_Motion_Search_Module (void);
-extern void Clear_Motion_Search_Module (void);
+extern int  allocate_block_mem(void);
+extern void free_block_mem(void);
+extern int allocate_mb_mem(void);
+extern void free_mb_mem(void);
 
-static void SetImgType(void);
-void SetLevelIndices(void);
-void chroma_mc_setup(void);
-int  get_mem_mv  (short*******);
-int  get_mem_bipred_mv (short********);
-void free_mem_bipred_mv (short*******);
-void free_mem_mv (short******);
+static void SetLevelIndices(void);
+static void chroma_mc_setup(void);
+static int  get_mem_mv  (short*******);
+static int  get_mem_bipred_mv (short********);
+static void free_mem_bipred_mv (short*******);
+static void free_mem_mv (short******);
 static void init_img( ImageParameters *img, InputParameters *params);
 static void init_poc(void);
+
+static void init_encoder(ImageParameters *img);
+static void encode_sequence(ImageParameters *img);
+
 
 void init_stats (StatParameters *stats)
 {
   memset(stats, 0, sizeof(StatParameters));
-  stats->successive_Bframe = params->successive_Bframe;
+  stats->NumberBFrames = params->NumberBFrames;
 }
 
 void init_dstats (DistortionParams *dist)
@@ -124,36 +125,36 @@ void init_dstats (DistortionParams *dist)
  *    Initialize encoding parameters.
  ***********************************************************************
  */
-void init_frame_params()
+static void init_frame_params(ImageParameters *p_img)
 {
   int base_mul = 0;
 
   if (params->idr_period)
   {
-    if (!params->adaptive_idr_period && ( img->frm_number - img->lastIDRnumber ) % params->idr_period == 0 )
-      img->nal_reference_idc = NALU_PRIORITY_HIGHEST;
+    if (!params->adaptive_idr_period && ( p_img->frm_number - p_img->lastIDRnumber ) % params->idr_period == 0 )
+      p_img->nal_reference_idc = NALU_PRIORITY_HIGHEST;
 
-    if (params->adaptive_idr_period == 1 && ( img->frm_number - imax(img->lastIntraNumber, img->lastIDRnumber) ) % params->idr_period == 0 )
-      img->nal_reference_idc = NALU_PRIORITY_HIGHEST;
+    if (params->adaptive_idr_period == 1 && ( p_img->frm_number - imax(p_img->lastIntraNumber, p_img->lastIDRnumber) ) % params->idr_period == 0 )
+      p_img->nal_reference_idc = NALU_PRIORITY_HIGHEST;
     else
-      img->nal_reference_idc = (params->DisposableP) ? (img->frm_number + 1)% 2 : NALU_PRIORITY_LOW;
+      p_img->nal_reference_idc = (params->DisposableP) ? (p_img->frm_number + 1)% 2 : NALU_PRIORITY_LOW;
   }
   else
-    img->nal_reference_idc = (img->frm_number && params->DisposableP) ? (img->frm_number + 1)% 2 : NALU_PRIORITY_LOW;
+    p_img->nal_reference_idc = (p_img->frm_number && params->DisposableP) ? (p_img->frm_number + 1)% 2 : NALU_PRIORITY_LOW;
 
   //much of this can go in init_frame() or init_field()?
   //poc for this frame or field
   if (params->idr_period)
   {
     if (!params->adaptive_idr_period)
-      base_mul = ( img->frm_number - img->lastIDRnumber ) % params->idr_period;
+      base_mul = ( p_img->frm_number - p_img->lastIDRnumber ) % params->idr_period;
     else if (params->adaptive_idr_period == 1)
-      base_mul = (( img->frm_number - imax(img->lastIntraNumber, img->lastIDRnumber) ) % params->idr_period == 0) ? 0 : ( img->frm_number - img->lastIDRnumber );
+      base_mul = (( p_img->frm_number - imax(p_img->lastIntraNumber, p_img->lastIDRnumber) ) % params->idr_period == 0) ? 0 : ( p_img->frm_number - p_img->lastIDRnumber );
   }
   else 
-    base_mul = ( img->frm_number - img->lastIDRnumber );
+    base_mul = ( p_img->frm_number - p_img->lastIDRnumber );
 
-  if ((img->frm_number - img->lastIDRnumber) <= params->intra_delay)
+  if ((p_img->frm_number - p_img->lastIDRnumber) <= params->intra_delay)
   {    
     base_mul = -base_mul;
   }
@@ -162,23 +163,64 @@ void init_frame_params()
     base_mul -= ( base_mul ? params->intra_delay :  0);    
   }
 
-  img->toppoc = base_mul * (2 * (params->jumpd + 1));
+  p_img->toppoc = base_mul * (2 * p_img->base_dist);
 
   if ((params->PicInterlace==FRAME_CODING) && (params->MbInterlace==FRAME_CODING))
-    img->bottompoc = img->toppoc;     //progressive
+    p_img->bottompoc = p_img->toppoc;     //progressive
   else
-    img->bottompoc = img->toppoc + 1;   //hard coded
+    p_img->bottompoc = p_img->toppoc + 1;   //hard coded
 
-  img->framepoc = imin (img->toppoc, img->bottompoc);
+  p_img->framepoc = imin (p_img->toppoc, p_img->bottompoc);
 
   //the following is sent in the slice header
-  img->delta_pic_order_cnt[0] = 0;
+  p_img->delta_pic_order_cnt[0] = 0;
 
-  if ((params->BRefPictures == 1) && (img->frm_number))
+  if ((params->BRefPictures == 1) && (p_img->frm_number))
   {
-    img->delta_pic_order_cnt[0] = +2 * params->successive_Bframe;
+    p_img->delta_pic_order_cnt[0] = 2 * params->NumberBFrames;
   }  
+
+  if (params->NumberBFrames && params->last_frame && ((p_img->gop_number) + 1) == params->no_frm_base)
+  {
+    int bi = (int)((float)p_img->base_dist / (initial_Bframes + 1.0) + 0.499999);
+    int new_bframes = ((params->last_frame - (p_img->frm_number - 1) * p_img->base_dist) / bi) - 1;
+
+    //about to code the last ref frame, adjust delta poc
+    p_img->delta_pic_order_cnt[0]= -2*(initial_Bframes - new_bframes);
+    p_img->toppoc    += p_img->delta_pic_order_cnt[0];
+    p_img->bottompoc += p_img->delta_pic_order_cnt[0];
+    p_img->framepoc   = imin (p_img->toppoc, p_img->bottompoc);
+  }
+
+  //frame_num for this frame
+  if (params->idr_period && ((!params->adaptive_idr_period && ( p_img->frm_number - p_img->lastIDRnumber ) % params->idr_period == 0)
+    || (params->adaptive_idr_period == 1 && ( p_img->frm_number - imax(p_img->lastIntraNumber, p_img->lastIDRnumber) ) % params->idr_period == 0)) )
+  {
+    p_img->frame_num = 0;
+  }
 }
+
+/*!
+ ***********************************************************************
+ * \brief
+ *    Allocate the Image structure
+ * \par  Output:
+ *    Image Parameters ImageParameters *img
+ ***********************************************************************
+ */
+static void alloc_img( ImageParameters **p_img)
+{
+  if ((*p_img = (ImageParameters *) calloc(1, sizeof(ImageParameters)))==NULL) 
+    no_mem_exit("alloc_img: p_img");
+
+  get_mem3Dint(&((*p_img)->mb_rres),   MAX_PLANE, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
+  get_mem3Dint(&((*p_img)->mb_ores),   MAX_PLANE, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
+  get_mem4Dpel(&((*p_img)->mpr_4x4),   MAX_PLANE, 9, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
+  get_mem4Dpel(&((*p_img)->mpr_8x8),   MAX_PLANE, 9, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
+  get_mem4Dpel(&((*p_img)->mpr_16x16), MAX_PLANE, 5, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
+  get_mem3Dpel(&((*p_img)->mb_pred),   MAX_PLANE, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
+}
+
 
 /*!
  ***********************************************************************
@@ -192,18 +234,55 @@ void init_frame_params()
  *    exit code
  ***********************************************************************
  */
-int main(int argc,char **argv)
+int main(int argc, char **argv)
+{ 
+  p_dec = -1;
+
+  alloc_img( &img);
+  allocate_block_mem();
+  allocate_mb_mem();  
+
+  params = (InputParameters *) malloc(sizeof(InputParameters));
+
+  Configure (argc, argv);
+
+  // init encoder
+  init_encoder(img);
+
+  // encode sequence
+  encode_sequence(img);
+
+  // terminate sequence
+  free_mb_mem();
+  free_block_mem();
+  free_encoder_memory(img);
+
+  if ( params != NULL )
+    free( params );
+
+  return 0;
+}
+
+
+/*!
+ ***********************************************************************
+ * \brief
+ *    Initialize encoder
+ ***********************************************************************
+ */
+
+static void init_encoder(ImageParameters *img)
 {
-  int primary_disp = 0;
   giRDOpt_B8OnlyFlag = 0;
 
-  p_dec = p_in = -1;
+  p_log = NULL;
 
-  p_log = p_trace = NULL;
+  cabac_encoding = 0;
 
   frame_statistic_start = 1;
 
-  Configure (argc, argv);
+  // Open Files
+  OpenFiles(&params->input_file1);
 
   Init_QMatrix();
   Init_QOffsetMatrix();
@@ -213,8 +292,8 @@ int main(int argc,char **argv)
   SetLevelIndices();
 
   init_img(img, params);
-
   init_rdopt(params);
+
 
   if (params->rdopt == 3)
   {
@@ -222,18 +301,20 @@ int main(int argc,char **argv)
   }
 
 #ifdef _LEAKYBUCKET_
-  Bit_Buffer = malloc((params->no_frames * (params->successive_Bframe + 1) + 1) * sizeof(long));
+  initial_Bframes = 0;
+  Bit_Buffer = (long *)malloc((params->no_frames + 1) * sizeof(long));
+  total_frame_buffer = 0;
 #endif
 
   // Prepare hierarchical coding structures. 
   // Code could be extended in the future to allow structure adaptation.
   if (params->HierarchicalCoding)
   {
-    init_gop_structure();
-    if (params->successive_Bframe && params->HierarchicalCoding == 3)
+    init_gop_structure(params);
+    if (params->NumberBFrames && params->HierarchicalCoding == 3)
       interpret_gop_structure();
     else
-      create_hierarchy();
+      create_hierarchy(params);
   }
 
   dpb.init_done = 0;
@@ -265,71 +346,247 @@ int main(int argc,char **argv)
   img->last_valid_reference = 0;
   tot_time = 0;                 // time for total encoding session
 
-#ifdef _ADAPT_LAST_GROUP_
-  if (params->last_frame > 0)
-    params->no_frames = 1 + (params->last_frame + params->jumpd) / (params->jumpd + 1);
-  initial_Bframes = params->successive_Bframe;
-#endif
+  initial_Bframes = params->NumberBFrames;
 
   PatchInputNoFrames();
 
+  img->type = I_SLICE;
   // Write sequence header (with parameter sets)
   stats->bit_ctr_parametersets = 0;
   stats->bit_slice = start_sequence();
-  stats->bit_ctr_parametersets += stats->bit_ctr_parametersets_n;
-  start_frame_no_in_this_IGOP = 0;
 
   if (params->UseRDOQuant)
     precalculate_unary_exp_golomb_level();
 
-  for (img->number=0; img->number < params->no_frames; img->number++)
-  {
-    img->frm_number = img->number;    
-    FrameNumberInFile = CalculateFrameNumber();
-    SetImgType();
-    init_frame_params();
+   if (params->ExplicitSeqCoding)
+     OpenExplicitSeqFile(params);
+}
 
-    if (img->last_ref_idc)
+/*!
+ ***********************************************************************
+ * \brief
+ *    Determine coding level a frame belongs to
+ ***********************************************************************
+ */
+static int determine_coding_level(ImageParameters *p_img, InputParameters *pparams, int curr_frame)
+{
+  int coding_level = 0;  
+
+  if (curr_frame - p_img->last_idr_number == 0)
+    return coding_level;
+  else
+    coding_level  = (curr_frame - p_img->last_idr_number - 1) % (1 + pparams->NumberBFrames);
+  
+  return coding_level;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Set the image type for I,P and SP pictures (not B!)
+ ************************************************************************
+ */
+static void SetImgType(ImageParameters *img, int gop_frame_num)
+{
+  if (gop_frame_num == 0)
+  {
+    int intra_refresh = (params->intra_period == 0) ? (img->gop_number == 0) : (( ( img->frm_number - img->lastIntraNumber) % params->intra_period ) == 0);
+    int idr_refresh;
+
+    if ( params->idr_period && !params->adaptive_idr_period )
+      idr_refresh = (( ( img->frm_number - img->lastIDRnumber  ) % params->idr_period   ) == 0);
+    else if ( params->idr_period && params->adaptive_idr_period == 1 )
+      idr_refresh = (( ( img->frm_number - imax(img->lastIntraNumber, img->lastIDRnumber)  ) % params->idr_period   ) == 0);
+    else
+      idr_refresh = (img->gop_number == 0);
+
+    if (intra_refresh || idr_refresh)
     {
-      img->frame_num++;                 //increment frame_num once for B-frames
+      set_slice_type( img, I_SLICE );        // set image type for first image to I-frame
+    }
+    else
+    {
+      set_slice_type(img, (params->sp_periodicity && ((img->gop_number % params->sp_periodicity) == 0))
+        ? SP_SLICE  : ((params->BRefPictures == 2) ? B_SLICE : P_SLICE) );
+    }
+  }
+  else
+  {
+    if (params->HierarchicalCoding)
+      set_slice_type( img, gop_structure[gop_frame_num - 1].slice_type);
+    else
+      set_slice_type( img, ( params->PReplaceBSlice ) ? P_SLICE : B_SLICE);
+  }
+}
+
+static void set_poc(ImageParameters *img, double frame_to_code)
+{
+  img->toppoc = (int) (img->frame_interval * frame_to_code);
+  if (img->gop_number && (img->gop_number <= params->intra_delay))
+  {
+    if(params->idr_period && ((!params->adaptive_idr_period && ( img->frm_number - img->lastIDRnumber ) % params->idr_period == 0)
+      || (params->adaptive_idr_period == 1 && ( img->frm_number - imax(img->lastIntraNumber, img->lastIDRnumber) ) % params->idr_period == 0)) )
+      img->toppoc = img->toppoc;
+    else
+    {
+      img->toppoc += (-img->frm_number + img->lastIDRnumber) * img->base_dist;
+      img->toppoc *= 2;
+    }
+  }
+  else
+  {
+    if(params->idr_period && !params->adaptive_idr_period)
+      img->toppoc += ((( img->frm_number - img->lastIDRnumber - params->intra_delay) % params->idr_period ) - 1) * img->base_dist;
+    else
+      img->toppoc += (( img->frm_number - img->lastIDRnumber - params->intra_delay - 1 ) * img->base_dist);
+    img->toppoc *= 2;
+  }
+}
+
+/*!
+************************************************************************
+* \brief
+*    Prepare first coding layer.
+************************************************************************
+*/
+static void prepare_first_layer(ImageParameters *p_img, int curr_frame_to_code)
+{
+  p_img->number ++;
+  p_img->gop_number = (p_img->number - p_img->start_frame_no);
+  p_img->frm_number = p_img->number;
+
+  p_img->frm_no_in_file = CalculateFrameNumber(p_img);
+
+  if (params->last_frame != 0 && (params->last_frame == p_img->frm_no_in_file) && params->HierarchicalCoding)
+  { 
+    int numberBFrames = params->NumberBFrames;
+    params->HierarchicalCoding = imin( 2, params->HierarchicalCoding);    
+    params->NumberBFrames = params->no_frames - curr_frame_to_code - 1;    
+
+    clear_gop_structure();
+    init_gop_structure(params);
+    create_hierarchy(params);
+
+    params->NumberBFrames = numberBFrames;
+  }
+  SetImgType(p_img, 0);
+
+  init_frame_params(p_img);
+
+  //Rate control
+  if (params->RCEnable && p_img->type == I_SLICE)
+    rc_init_gop_params();
+
+  // which layer does the image belong to?
+  p_img->layer = (p_img->gop_number % (params->NumFramesInELSubSeq + 1)) ? 0 : 1;
+}
+
+/*!
+************************************************************************
+* \brief
+*    Prepare second coding layer.
+************************************************************************
+*/
+static void prepare_second_layer(ImageParameters *p_img, int enh_frame_to_code)
+{
+  p_img->layer = (params->NumFramesInELSubSeq == 0) ? 0 : 1;      
+  SetImgType(p_img, enh_frame_to_code);
+
+  if ((p_img->gop_number > 0) && (params->EnableIDRGOP == 0 || p_img->idr_gop_number)) // B-frame(s) to encode
+  {
+    if (params->HierarchicalCoding)
+    {
+      p_img->nal_reference_idc = gop_structure[enh_frame_to_code - 1].reference_idc;
+      set_poc(p_img, (double)(1 + gop_structure[enh_frame_to_code - 1].display_no));
+
+      if (p_img->gop_number && (p_img->gop_number <= params->intra_delay))
+      {
+        if (enh_frame_to_code == 1)
+          p_img->delta_pic_order_cnt[0] = p_img->toppoc - 2*(p_img->start_tr_gop  + (params->intra_delay - p_img->gop_number)*(p_img->base_dist));
+        else
+          p_img->delta_pic_order_cnt[0] = p_img->toppoc - 2*(p_img->start_tr_gop  + (params->intra_delay - p_img->gop_number)*(p_img->base_dist) 
+          + (int) (2.0 * p_img->frame_interval * (double) (1 + gop_structure[enh_frame_to_code - 2].display_no)));
+      }
+      else
+      {
+        if (enh_frame_to_code == 1)
+          p_img->delta_pic_order_cnt[0] = p_img->toppoc - 2*(p_img->start_tr_gop  + (p_img->frm_number - p_img->lastIDRnumber)*(p_img->base_dist));
+        else
+          p_img->delta_pic_order_cnt[0] = p_img->toppoc - 2*(p_img->start_tr_gop  + (p_img->frm_number - p_img->lastIDRnumber - 1)*(p_img->base_dist) 
+          + (int) (2.0 * p_img->frame_interval * (double) (1+ gop_structure[enh_frame_to_code - 2].display_no)));
+        }
+    }
+    else
+    {
+      p_img->nal_reference_idc = (params->BRefPictures == 1 ) ? NALU_PRIORITY_LOW : NALU_PRIORITY_DISPOSABLE;
+      set_poc(p_img, (double)enh_frame_to_code);
+
+      //the following is sent in the slice header
+      if (params->BRefPictures != 1)
+      {
+        p_img->delta_pic_order_cnt[0]= 2 * (enh_frame_to_code - 1);
+      }
+      else
+      {
+        p_img->delta_pic_order_cnt[0]= -2;
+      }
+    }
+
+    p_img->delta_pic_order_cnt[1]= 0;
+
+    if ((params->PicInterlace==FRAME_CODING)&&(params->MbInterlace==FRAME_CODING))
+      p_img->bottompoc = p_img->toppoc;
+    else
+      p_img->bottompoc = p_img->toppoc + 1;
+
+    p_img->framepoc = imin (p_img->toppoc, p_img->bottompoc);
+    p_img->frm_no_in_file = CalculateFrameNumber(p_img);
+  }
+}
+
+/*!
+ ***********************************************************************
+ * \brief
+ *    Encode a sequence
+ ***********************************************************************
+ */
+static void encode_sequence(ImageParameters *img)
+{
+  int HierarchicalCoding = params->HierarchicalCoding;
+  int NumberBFrames = params->NumberBFrames;
+  int jumpd = params->jumpd;
+  int curr_frame_to_code = 0;
+  int enh_frame_to_code = 0;
+
+  for (curr_frame_to_code = 0; curr_frame_to_code < params->no_frames; curr_frame_to_code++)
+  {     
+    // Update frame_num counter
+    if (img->last_ref_idc == 1)
+    {
+      img->frame_num++;
       img->frame_num %= max_frame_num;
     }
-
-    //frame_num for this frame
-    if (params->idr_period && ((!params->adaptive_idr_period && ( img->frm_number - img->lastIDRnumber ) % params->idr_period == 0)
-      || (params->adaptive_idr_period == 1 && ( img->frm_number - imax(img->lastIntraNumber, img->lastIDRnumber) ) % params->idr_period == 0)) )
+   
+    // Read explicit sequence coding information
+    if (params->ExplicitSeqCoding)
     {
-      img->frame_num = 0;
-      primary_disp   = 0;   
+      ExpFrameInfo *info = &expSeq->info[curr_frame_to_code % expSeq->no_frames];
+      ReadExplicitSeqFile(expSeq, curr_frame_to_code);
+      ExplicitUpdateImgParams(info, img);
+      img->b_frame_to_code = 0;
     }
-
-    if (params->ResendSPS == 1 && img->type == I_SLICE && img->frm_number != 0)
+    else
     {
-      stats->bit_slice = rewrite_paramsets();
-      stats->bit_ctr_parametersets += stats->bit_ctr_parametersets_n;
+      enh_frame_to_code = determine_coding_level(img, params, curr_frame_to_code);
+      img->b_frame_to_code = enh_frame_to_code;
+
+      if (enh_frame_to_code == 0) 
+        prepare_first_layer(img, curr_frame_to_code);
+      else 
+      {
+        prepare_second_layer(img, enh_frame_to_code);
+      }
     }
-
-#ifdef _ADAPT_LAST_GROUP_
-    if (params->successive_Bframe && params->last_frame && (IMG_NUMBER + 1) == params->no_frames)
-    {
-      int bi = (int)((float)(params->jumpd + 1)/(params->successive_Bframe + 1.0) + 0.499999);
-
-      params->successive_Bframe = ((params->last_frame - (img->frm_number - 1)*(params->jumpd + 1)) / bi) - 1;
-
-      //about to code the last ref frame, adjust delta poc
-      img->delta_pic_order_cnt[0]= -2*(initial_Bframes - params->successive_Bframe);
-      img->toppoc    += img->delta_pic_order_cnt[0];
-      img->bottompoc += img->delta_pic_order_cnt[0];
-      img->framepoc   = imin (img->toppoc, img->bottompoc);
-    }
-#endif
-
-    //Rate control
-    if (params->RCEnable && img->type == I_SLICE)
-      rc_init_gop_params();
-
-    // which layer does the image belong to?
-    img->layer = (IMG_NUMBER % (params->NumFramesInELSubSeq + 1)) ? 0 : 1;
 
     // redundant frame initialization and allocation
     if (params->redundant_pic_flag)
@@ -338,7 +595,7 @@ int main(int argc,char **argv)
       Set_redundant_frame();
     }
 
-    encode_one_frame(); // encode one I- or P-frame
+    encode_one_frame(img); // encode one frame;
 
     img->last_ref_idc = img->nal_reference_idc ? 1 : 0;
 
@@ -351,14 +608,6 @@ int main(int argc,char **argv)
     if (img->type == I_SLICE && params->EnableOpenGOP)
       img->last_valid_reference = img->ThisPOC;
 
-    if (params->ReportFrameStats)
-      report_frame_statistic();
-
-    if (img->nal_reference_idc == 0)
-    {
-      primary_disp ++;
-    }
-
     if (img->currentPicture->idr_flag)
     {
       img->idr_gop_number = 0;
@@ -366,14 +615,22 @@ int main(int argc,char **argv)
     else
       img->idr_gop_number ++;
 
-    encode_enhancement_layer();    
+    if (params->ReportFrameStats)
+      report_frame_statistic();
   }
-  // terminate sequence
-  free_encoder_memory(img);
 
-  return 0;
+  params->HierarchicalCoding = HierarchicalCoding;
+  params->NumberBFrames      = NumberBFrames;
+  params->jumpd = jumpd;
 }
 
+
+/*!
+ ***********************************************************************
+ * \brief
+ *    Free memory allocated for the encoder
+ ***********************************************************************
+ */
 
 void free_encoder_memory(ImageParameters *img)
 {
@@ -382,7 +639,8 @@ void free_encoder_memory(ImageParameters *img)
 
   flush_dpb();
 
-  close(p_in);
+  CloseFiles(&params->input_file1);
+
   if (-1 != p_dec)
     close(p_dec);
   if (p_trace)
@@ -407,8 +665,11 @@ void free_encoder_memory(ImageParameters *img)
   report(img, params, stats);
 
 #ifdef _LEAKYBUCKET_
-  if (Bit_Buffer)
+  if (Bit_Buffer != NULL)
+  {
     free(Bit_Buffer);
+    Bit_Buffer = NULL;
+  }
 #endif
 
   free_dpb();
@@ -433,6 +694,8 @@ void free_encoder_memory(ImageParameters *img)
   free_img ();
   free_context_memory ();
   FreeParameterSets();
+   if (params->ExplicitSeqCoding)
+     CloseExplicitSeqFile();
 }
 
 /*!
@@ -459,8 +722,8 @@ void init_poc()
   }
   else
   {
-    img->offset_for_non_ref_pic  = -2*(params->successive_Bframe);
-    img->offset_for_ref_frame[0] =  2*(params->successive_Bframe + 1);
+    img->offset_for_non_ref_pic  = -2*(params->NumberBFrames);
+    img->offset_for_ref_frame[0] =  2*(params->NumberBFrames + 1);
   }
 
   if ((params->PicInterlace==FRAME_CODING) && (params->MbInterlace==FRAME_CODING))
@@ -478,6 +741,43 @@ void init_poc()
 }
 
 
+static inline int alloc_rddata(ImageParameters *img, RD_DATA *rd_data)
+{
+  int alloc_size = 0;
+
+  alloc_size += get_mem2Dpel(&(rd_data->rec_mbY), MB_BLOCK_SIZE, MB_BLOCK_SIZE);
+  alloc_size += get_mem3Dpel(&(rd_data->rec_mb_cr), 2, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
+
+  alloc_size += get_mem_ACcoeff (&(rd_data->cofAC));
+  alloc_size += get_mem_DCcoeff (&(rd_data->cofDC));  
+
+  if (!params->IntraProfile)
+  {          
+    alloc_size += get_mem_mv (&(rd_data->all_mv));
+  }
+  
+  alloc_size += get_mem2D((byte***)&(rd_data->ipredmode), img->height_blk, img->width_blk);
+  alloc_size += get_mem3D((byte****)&(rd_data->refar), 2, 4, 4);
+
+  return alloc_size;
+}
+
+static inline void free_rddata(RD_DATA *rd_data)
+{
+  free_mem3D((byte***) rd_data->refar);
+  free_mem2D((byte**) rd_data->ipredmode);
+
+  if (!params->IntraProfile)
+  {          
+    free_mem_mv (rd_data->all_mv);
+  }
+  free_mem_DCcoeff (rd_data->cofDC);
+  free_mem_ACcoeff (rd_data->cofAC);  
+
+  free_mem3Dpel(rd_data->rec_mb_cr);
+  free_mem2Dpel(rd_data->rec_mbY);
+}
+
 /*!
  ***********************************************************************
  * \brief
@@ -492,12 +792,7 @@ void init_poc()
  */
 void CAVLC_init(void)
 {
-  unsigned int i, k, l;
-
-  for (i = 0; i < img->PicSizeInMbs; i++)
-    for (k = 0; k < 4; k++)
-      for (l = 0; l < (4 + (unsigned int)img->num_blk8x8_uv); l++)
-        img->nz_coeff[i][k][l] = 0;
+  memset(&img->nz_coeff[0][0][0], 0, img->PicSizeInMbs * 4 * (4 + img->num_blk8x8_uv)* sizeof(int));
 }
 
 
@@ -519,8 +814,14 @@ static void init_img( ImageParameters *img, InputParameters *params)
   static int mb_width_cr[4] = {0,8, 8,16};
   static int mb_height_cr[4]= {0,8,16,16};
 
+  img->number         = -1;
+  img->start_frame_no = 0;
+  img->gop_number     = (img->number - img->start_frame_no);
+  img->start_tr_gop   = 0;
+
+  img->last_idr_number = 0;
   // Color format
-  img->yuv_format = params->yuv_format;
+  img->yuv_format  = params->output.yuv_format;
   img->P444_joined = (img->yuv_format == YUV444 && !IS_INDEPENDENT(params));  
 
   //pel bitdepth init
@@ -543,6 +844,10 @@ static void init_img( ImageParameters *img, InputParameters *params)
   // Set current residue & prediction array pointers
   img->curr_res = img->mb_rres[0];
   img->curr_prd = img->mb_pred[0];
+  if (active_sps->profile_idc == 66 || active_sps->profile_idc == 77 || active_sps->profile_idc == 88)
+    img->min_IPCM_value = 1;  // See Annex A for restriction in pcm sample values for pre FRExt profiles
+  else
+    img->min_IPCM_value = 0;
 
   if (img->yuv_format != YUV400)
   {
@@ -599,7 +904,7 @@ static void init_img( ImageParameters *img, InputParameters *params)
   img->max_num_references   = active_sps->frame_mbs_only_flag ? active_sps->num_ref_frames : 2 * active_sps->num_ref_frames;
 
   img->buf_cycle = params->num_ref_frames;
-  img->base_dist = params->jumpd;  
+  img->base_dist = params->jumpd + 1;  
 
   // Intra/IDR related parameters
   img->lastIntraNumber = 0;
@@ -611,12 +916,11 @@ static void init_img( ImageParameters *img, InputParameters *params)
   img->rewind_frame    = 0;
 
   img->DeblockCall     = 0;
-  img->framerate       = (float) params->FrameRate;   // The basic frame rate (of the original sequence)
+  img->framerate       = (float) params->output.frame_rate;   // The basic frame rate (of the original sequence)
 
   // Allocate proper memory space for different parameters (i.e. MVs, coefficients, etc)
   if (!params->IntraProfile)
   {
-    get_mem_mv (&(img->pred_mv));
     get_mem_mv (&(img->all_mv));
 
     if (params->BiPredMotionEstimation)
@@ -630,73 +934,15 @@ static void init_img( ImageParameters *img, InputParameters *params)
 
   if (params->AdaptiveRounding)
   {
-    get_mem3Dint(&(img->fadjust4x4), 4, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-    get_mem3Dint(&(img->fadjust8x8), 3, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-
     if (img->yuv_format != 0)
     {
-      get_mem4Dint(&(img->fadjust4x4Cr), 2, 4, img->mb_cr_size_y, img->mb_cr_size_x);
-      get_mem4Dint(&(img->fadjust8x8Cr), 2, 3, img->mb_cr_size_y, img->mb_cr_size_x);
-    }
-  }
-
-  if(params->MbInterlace)
-  {
-    if (!params->IntraProfile)
+      get_mem4Dint(&(img->ARCofAdj4x4), 3, MAXMODE, MB_BLOCK_SIZE, MB_BLOCK_SIZE); //all modes
+      get_mem4Dint(&(img->ARCofAdj8x8), img->P444_joined ? 3 : 1, MAXMODE, MB_BLOCK_SIZE, MB_BLOCK_SIZE); //modes 0, 1, 2, 3, P8x8
+    }     
+    else
     {
-      get_mem_mv (&(rddata_top_frame_mb.pred_mv));
-      get_mem_mv (&(rddata_top_frame_mb.all_mv));
-
-      get_mem_mv (&(rddata_bot_frame_mb.pred_mv));
-      get_mem_mv (&(rddata_bot_frame_mb.all_mv));
-    }
-
-    get_mem_ACcoeff (&(rddata_top_frame_mb.cofAC));
-    get_mem_DCcoeff (&(rddata_top_frame_mb.cofDC));
-
-    get_mem_ACcoeff (&(rddata_bot_frame_mb.cofAC));
-    get_mem_DCcoeff (&(rddata_bot_frame_mb.cofDC));
-
-    if ( params->MbInterlace != FRAME_MB_PAIR_CODING )
-    {
-      if (!params->IntraProfile)
-      {      
-        get_mem_mv (&(rddata_top_field_mb.pred_mv));
-        get_mem_mv (&(rddata_top_field_mb.all_mv));
-
-        get_mem_mv (&(rddata_bot_field_mb.pred_mv));
-        get_mem_mv (&(rddata_bot_field_mb.all_mv));
-      }
-
-      get_mem_ACcoeff (&(rddata_top_field_mb.cofAC));
-      get_mem_DCcoeff (&(rddata_top_field_mb.cofDC));
-
-      get_mem_ACcoeff (&(rddata_bot_field_mb.cofAC));
-      get_mem_DCcoeff (&(rddata_bot_field_mb.cofDC));
-    }
-  }
-
-  if (params->UseRDOQuant && params->RDOQ_QP_Num > 1)
-  {
-    get_mem_ACcoeff (&(rddata_trellis_curr.cofAC));
-    get_mem_DCcoeff (&(rddata_trellis_curr.cofDC));
-
-    get_mem_ACcoeff (&(rddata_trellis_best.cofAC));
-    get_mem_DCcoeff (&(rddata_trellis_best.cofDC));
-
-    if (!params->IntraProfile)
-    {          
-      get_mem_mv (&(rddata_trellis_curr.pred_mv));
-      get_mem_mv (&(rddata_trellis_curr.all_mv));
-      get_mem_mv (&(rddata_trellis_best.pred_mv));
-      get_mem_mv (&(rddata_trellis_best.all_mv));
-
-      if (params->Transform8x8Mode && params->RDOQ_CP_MV)
-      {
-        get_mem5Dshort(&tmp_mv8, 2, img->max_num_references, 4, 4, 2);
-        get_mem5Dshort(&tmp_pmv8, 2, img->max_num_references, 4, 4, 2);
-        get_mem3Dint  (&motion_cost8, 2, img->max_num_references, 4);
-      }
+      get_mem4Dint(&(img->ARCofAdj4x4), 1, MAXMODE, MB_BLOCK_SIZE, MB_BLOCK_SIZE); //all modes
+      get_mem4Dint(&(img->ARCofAdj8x8), 1, MAXMODE, MB_BLOCK_SIZE, MB_BLOCK_SIZE); //modes 0, 1, 2, 3, P8x8
     }
   }
 
@@ -739,7 +985,33 @@ static void init_img( ImageParameters *img, InputParameters *params)
   img->FrameSizeInMbs   = img->PicWidthInMbs * img->FrameHeightInMbs;
 
   img->PicHeightInMapUnits = ( active_sps->frame_mbs_only_flag ? img->FrameHeightInMbs : img->FrameHeightInMbs/2 );
-  
+
+  if(params->MbInterlace)
+  {
+    alloc_rddata(img, &rddata_top_frame_mb);
+    alloc_rddata(img, &rddata_bot_frame_mb);
+    if ( params->MbInterlace != FRAME_MB_PAIR_CODING )
+    {
+      alloc_rddata(img, &rddata_top_field_mb);
+      alloc_rddata(img, &rddata_bot_field_mb);
+    }
+  }
+
+  if (params->UseRDOQuant && params->RDOQ_QP_Num > 1)
+  {
+    alloc_rddata(img, &rddata_trellis_curr);
+    alloc_rddata(img, &rddata_trellis_best);
+
+    if (!params->IntraProfile)
+    {          
+      if (params->Transform8x8Mode && params->RDOQ_CP_MV)
+      {
+        get_mem5Dshort(&tmp_mv8, 2, img->max_num_references, 4, 4, 2);
+        get_mem3Dint  (&motion_cost8, 2, img->max_num_references, 4);
+      }
+    }
+  }
+
   if ((img->b8x8info = (Block8x8Info *) calloc(1, sizeof(Block8x8Info))) == NULL)
      no_mem_exit("init_img: img->block8x8info");
 
@@ -775,9 +1047,6 @@ static void init_img( ImageParameters *img, InputParameters *params)
   memset(&(img->ipredmode[0][0])   , -1, img->height_blk * img->width_blk *sizeof(char));
   memset(&(img->ipredmode8x8[0][0]), -1, img->height_blk * img->width_blk *sizeof(char));
 
-  get_mem2D((byte***)&(rddata_top_frame_mb.ipredmode), img->height_blk, img->width_blk);
-  get_mem2D((byte***)&(rddata_trellis_curr.ipredmode), img->height_blk, img->width_blk);
-  get_mem2D((byte***)&(rddata_trellis_best.ipredmode), img->height_blk, img->width_blk);
 
   if (params->MbInterlace)
   {
@@ -788,7 +1057,6 @@ static void init_img( ImageParameters *img, InputParameters *params)
 
   // CAVLC mem
   get_mem3Dint(&(img->nz_coeff), img->FrameSizeInMbs, 4, 4+img->num_blk8x8_uv);
-  CAVLC_init();
   
   get_mem2Dolm     (&(img->lambda), 10, 52 + img->bitdepth_luma_qp_scale, img->bitdepth_luma_qp_scale);
   get_mem2Dodouble (&(img->lambda_md), 10, 52 + img->bitdepth_luma_qp_scale, img->bitdepth_luma_qp_scale);
@@ -801,7 +1069,7 @@ static void init_img( ImageParameters *img, InputParameters *params)
   }
 
   img->b_frame_to_code = 0;
-  img->GopLevels = (params->successive_Bframe) ? 1 : 0;
+  img->GopLevels = (params->NumberBFrames) ? 1 : 0;
   img->mb_y_upd=0;
 
   RandomIntraInit (img->PicWidthInMbs, img->FrameHeightInMbs, params->RandomIntraMBRefresh);
@@ -811,8 +1079,7 @@ static void init_img( ImageParameters *img, InputParameters *params)
   initInput(&params->source, &params->output);
 
   // Allocate I/O Frame memory
-  if (AllocateFrameMemory(img, params->source.size))
-    no_mem_exit("AllocateFrameMemory: buf");
+  AllocateFrameMemory(img, params, params->source.size);
 
   // Initialize filtering parameters. If sending parameters, the offsets are
   // multiplied by 2 since inputs are taken in "div 2" format.
@@ -841,12 +1108,15 @@ static void init_img( ImageParameters *img, InputParameters *params)
     }
   }
 
-  img->ChromaArrayType = params->separate_colour_plane_flag ? 0 : params->yuv_format;
+  img->ChromaArrayType = params->separate_colour_plane_flag ? 0 : params->output.yuv_format;
+  img->colour_plane_id = 0;
 
   if (params->RDPictureDecision)
     img->frm_iter = 3;
   else
     img->frm_iter = 1;
+
+  img->frame_interval = (double) (params->frame_skip + 1);
 }
 
 
@@ -866,7 +1136,6 @@ void free_img ()
   CloseSEIMessages(); 
   if (!params->IntraProfile)
   {
-    free_mem_mv (img->pred_mv);
     free_mem_mv (img->all_mv);
 
     if (params->BiPredMotionEstimation)
@@ -880,84 +1149,47 @@ void free_img ()
 
   if (params->AdaptiveRounding)
   {
-    free_mem3Dint(img->fadjust4x4);
-    free_mem3Dint(img->fadjust8x8);
-    if (img->yuv_format != 0)
-    {
-      free_mem4Dint(img->fadjust4x4Cr);
-      free_mem4Dint(img->fadjust8x8Cr);
-    }
+    free_mem4Dint(img->ARCofAdj4x4);
+    free_mem4Dint(img->ARCofAdj8x8);
   }
 
 
   if (params->MbInterlace)
   {
-    if (!params->IntraProfile)
-    {    
-      free_mem_mv (rddata_top_frame_mb.pred_mv);
-      free_mem_mv (rddata_top_frame_mb.all_mv);
-
-      free_mem_mv (rddata_bot_frame_mb.pred_mv);
-      free_mem_mv (rddata_bot_frame_mb.all_mv);
-    }
-
-    free_mem_ACcoeff (rddata_top_frame_mb.cofAC);
-    free_mem_DCcoeff (rddata_top_frame_mb.cofDC);
-
-    free_mem_ACcoeff (rddata_bot_frame_mb.cofAC);
-    free_mem_DCcoeff (rddata_bot_frame_mb.cofDC);
+    free_rddata(&rddata_top_frame_mb);
+    free_rddata(&rddata_bot_frame_mb);
 
     if ( params->MbInterlace != FRAME_MB_PAIR_CODING )
     {
-      if (!params->IntraProfile)
-      {
-        free_mem_mv (rddata_top_field_mb.pred_mv);
-        free_mem_mv (rddata_top_field_mb.all_mv);
-
-        free_mem_mv (rddata_bot_field_mb.pred_mv);
-        free_mem_mv (rddata_bot_field_mb.all_mv);
-      }
-
-      free_mem_ACcoeff (rddata_top_field_mb.cofAC);
-      free_mem_DCcoeff (rddata_top_field_mb.cofDC);
-
-      free_mem_ACcoeff (rddata_bot_field_mb.cofAC);
-      free_mem_DCcoeff (rddata_bot_field_mb.cofDC);
+      free_rddata(&rddata_top_field_mb);
+      free_rddata(&rddata_bot_field_mb);
     }
   }
 
   if (params->UseRDOQuant && params->RDOQ_QP_Num > 1)
   {
-    free_mem_ACcoeff (rddata_trellis_curr.cofAC);
-    free_mem_DCcoeff (rddata_trellis_curr.cofDC);
-    free_mem_ACcoeff (rddata_trellis_best.cofAC);
-    free_mem_DCcoeff (rddata_trellis_best.cofDC);
+    free_rddata(&rddata_trellis_curr);
+    free_rddata(&rddata_trellis_best);
 
     if (!params->IntraProfile)
     {    
-      free_mem_mv (rddata_trellis_curr.pred_mv);
-      free_mem_mv (rddata_trellis_curr.all_mv);
-
-      free_mem_mv (rddata_trellis_best.pred_mv);
-      free_mem_mv (rddata_trellis_best.all_mv);
-
       if (params->Transform8x8Mode && params->RDOQ_CP_MV)
       {
         free_mem5Dshort(tmp_mv8);
-        free_mem5Dshort(tmp_pmv8);
         free_mem3Dint(motion_cost8);
       }
     }
   }
 
   free (img->quad - (imax(img->max_imgpel_value_comp[0],img->max_imgpel_value_comp[1]) + 1));
-
-  if (params->MbInterlace)
-  {
-    free_mem2D((byte**) rddata_bot_frame_mb.ipredmode);
-    free_mem2D((byte**) rddata_top_field_mb.ipredmode);
-    free_mem2D((byte**) rddata_bot_field_mb.ipredmode);
-  }
+  
+  free_mem3Dpel(img->mb_pred  );
+  free_mem4Dpel(img->mpr_16x16);
+  free_mem4Dpel(img->mpr_8x8  );
+  free_mem4Dpel(img->mpr_4x4  );
+  free_mem3Dint(img->mb_ores  );
+  free_mem3Dint(img->mb_rres  );
+  free (img);
 }
 
 
@@ -970,7 +1202,6 @@ void free_img ()
  *    Pointer to a Picture
  ************************************************************************
  */
-
 Picture *malloc_picture()
 {
   Picture *pic;
@@ -987,8 +1218,6 @@ Picture *malloc_picture()
  *    pic: POinter to a Picture to be freed
  ************************************************************************
  */
-
-
 void free_picture(Picture *pic)
 {
   if (pic != NULL)
@@ -999,53 +1228,73 @@ void free_picture(Picture *pic)
 }
 
 
-
 /*!
  ************************************************************************
  * \brief
  *    memory allocation for original picture buffers
  ************************************************************************
  */
-int init_orig_buffers(void)
+int init_orig_buffers(ImageData *imgData)
 {
   int memory_size = 0;
   int nplane;
 
-  // allocate memory for reference frame buffers: img_org_frm
+  // allocate memory for reference frame buffers: imgData->frm_data
   if( IS_INDEPENDENT(params) )
   {
     for( nplane=0; nplane<MAX_PLANE; nplane++ )
     {
-      memory_size += get_mem2Dpel(&img_org_frm[nplane], img->height, img->width);
+      imgData->format = params->output;
+      imgData->format.width = img->width;
+      imgData->format.height = img->height;
+      imgData->format.width_cr = img->width_cr;
+      imgData->format.height_cr = img->height_cr;
+      memory_size += get_mem2Dpel(&(imgData->frm_data[nplane]), img->height, img->width);
     }
   }
   else
   {
-    memory_size += get_mem2Dpel(&img_org_frm[0], img->height, img->width);
+    //imgData->format = params->input_file1.format;
+    imgData->format           = params->output;
+    imgData->format.width     = img->width;    
+    imgData->format.height    = img->height;
+    imgData->format.width_cr  = img->width_cr;
+    imgData->format.height_cr = img->height_cr;
+    memory_size += get_mem2Dpel(&(imgData->frm_data[0]), img->height, img->width);
+    
     if (img->yuv_format != YUV400)
     {
       int i, j, k;
-      memory_size += get_mem2Dpel(&img_org_frm[1], img->height_cr, img->width_cr);
-      memory_size += get_mem2Dpel(&img_org_frm[2], img->height_cr, img->width_cr);
-      for (k = 1; k < 3; k++)
-        for (j = 0; j < img->height_cr; j++)
-          for (i = 0; i < img->width_cr; i++)
-            img_org_frm[k][j][i] = 128;
+      memory_size += get_mem2Dpel(&(imgData->frm_data[1]), img->height_cr, img->width_cr);
+      memory_size += get_mem2Dpel(&(imgData->frm_data[2]), img->height_cr, img->width_cr);
+
+      if (sizeof(imgpel) == sizeof(unsigned char))
+      {
+        for (k = 1; k < 3; k++)
+          memset(&(imgData->frm_data[k][0][0]), 128, img->height_cr * img->width_cr * sizeof(imgpel));
+      }
+      else
+      {
+        for (k = 1; k < 3; k++)
+          for (j = 0; j < img->height_cr; j++)
+            for (i = 0; i < img->width_cr; i++)
+              imgData->frm_data[k][j][i] = 128;
+      }
     }
   }
 
   if (!active_sps->frame_mbs_only_flag)
   {
     // allocate memory for field reference frame buffers
-    memory_size += init_top_bot_planes(img_org_frm[0], img->height, img->width, &img_org_top[0], &img_org_bot[0]);
+    memory_size += init_top_bot_planes(imgData->frm_data[0], img->height, img->width, &(imgData->top_data[0]), &(imgData->bot_data[0]));
 
     if (img->yuv_format != YUV400)
     {
 
       memory_size += 4*(sizeof(imgpel**));
 
-      memory_size += init_top_bot_planes(img_org_frm[1], img->height_cr, img->width_cr, &(img_org_top[1]), &(img_org_bot[1]));
-      memory_size += init_top_bot_planes(img_org_frm[2], img->height_cr, img->width_cr, &(img_org_top[2]), &(img_org_bot[2]));
+      memory_size += init_top_bot_planes(imgData->frm_data[1], img->height_cr, img->width_cr, &(imgData->top_data[1]), &(imgData->bot_data[1]));
+      memory_size += init_top_bot_planes(imgData->frm_data[2], img->height_cr, img->width_cr, &(imgData->top_data[2]), &(imgData->bot_data[2]));
     }
   }
   return memory_size;
@@ -1066,18 +1315,6 @@ int init_orig_buffers(void)
 int init_global_buffers(void)
 {
   int j, memory_size=0;
-#ifdef _ADAPT_LAST_GROUP_
-  extern int *last_P_no_frm;
-  extern int *last_P_no_fld;
-
-//  if ((last_P_no_frm = (int*)malloc(2*img->max_num_references*sizeof(int))) == NULL)
-  if ((last_P_no_frm = (int*)malloc(32*sizeof(int))) == NULL)
-    no_mem_exit("init_global_buffers: last_P_no");
-  if (!active_sps->frame_mbs_only_flag)
-//    if ((last_P_no_fld = (int*)malloc(4*img->max_num_references*sizeof(int))) == NULL)
-    if ((last_P_no_fld = (int*)malloc(64*sizeof(int))) == NULL)
-      no_mem_exit("init_global_buffers: last_P_no");
-#endif
 
   if ((enc_frame_picture = (StorablePicture**)malloc(6 * sizeof(StorablePicture*))) == NULL)
     no_mem_exit("init_global_buffers: *enc_frame_picture");
@@ -1118,8 +1355,10 @@ int init_global_buffers(void)
       field_pic[j] = malloc_picture();
   }
 
-  memory_size += init_orig_buffers();
-
+  // Init memory data for input & encoded images
+  memory_size += init_orig_buffers(&imgData);
+  memory_size += init_orig_buffers(&imgData1);
+  
   memory_size += get_mem2Dint(&PicPos, img->FrameSizeInMbs + 1, 2);
 
   for (j = 0; j < (int) img->FrameSizeInMbs + 1; j++)
@@ -1139,19 +1378,17 @@ int init_global_buffers(void)
 
   // allocate memory for reference frames of each block: refFrArr
 
-  if ((params->successive_Bframe != 0) || (params->BRefPictures > 0) || (params->ProfileIDC != 66))
+  if ((params->NumberBFrames != 0) || (params->BRefPictures > 0) || (params->ProfileIDC != 66))
   {
-    memory_size += get_mem3D((byte ****)(void*)(&direct_ref_idx), 2, img->height_blk, img->width_blk);
-    memory_size += get_mem2D((byte ***)(void*)&direct_pdir, img->height_blk, img->width_blk);
+    memory_size += get_mem3D((byte ****)(void*)&direct_ref_idx, 2, img->height_blk, img->width_blk);
+    memory_size += get_mem2D((byte ***) (void*)&direct_pdir      , img->height_blk, img->width_blk);
   }
 
   if (params->rdopt == 3)
   {
-    decs->dec_mbY = NULL;
-    decs->dec_mbY8x8 = NULL;
-    memory_size += get_mem3Dpel(&decs->dec_mbY, params->NoOfDecoders, 16, 16);
-    memory_size += get_mem3Dpel(&decs->dec_mbY8x8, params->NoOfDecoders, 16, 16);
+    memory_size += allocate_errdo_mem(params);
   }
+
   if (params->RestrictRef)
   {
     memory_size += get_mem2D(&pixel_map,   img->height,   img->width);
@@ -1234,34 +1471,35 @@ int init_global_buffers(void)
  *    Free allocated memory of original picture buffers
  ************************************************************************
  */
-void free_orig_planes(void)
+void free_orig_planes(ImageData *imgData)
 {
   if( IS_INDEPENDENT(params) )
   {
     int nplane;
     for( nplane=0; nplane<MAX_PLANE; nplane++ )
     {
-      free_mem2Dpel(img_org_frm[nplane]);      // free ref frame buffers
+      free_mem2Dpel(imgData->frm_data[nplane]);      // free ref frame buffers
     }
   }
   else
   {
-    free_mem2Dpel(img_org_frm[0]);      // free ref frame buffers
+    free_mem2Dpel(imgData->frm_data[0]);      // free ref frame buffers
+    
     if (img->yuv_format != YUV400)
     {
-      free_mem2Dpel(img_org_frm[1]);
-      free_mem2Dpel(img_org_frm[2]);
+      free_mem2Dpel(imgData->frm_data[1]);
+      free_mem2Dpel(imgData->frm_data[2]);
     }
   }
 
   if (!active_sps->frame_mbs_only_flag)
   {
-    free_top_bot_planes(img_org_top[0], img_org_bot[0]);
+    free_top_bot_planes(imgData->top_data[0], imgData->bot_data[0]);
 
     if (img->yuv_format != YUV400)
     {
-      free_top_bot_planes(img_org_top[1], img_org_bot[1]);
-      free_top_bot_planes(img_org_top[2], img_org_bot[2]);
+      free_top_bot_planes(imgData->top_data[1], imgData->bot_data[1]);
+      free_top_bot_planes(imgData->top_data[2], imgData->bot_data[2]);
     }
   }
 }
@@ -1283,13 +1521,6 @@ void free_orig_planes(void)
 void free_global_buffers(void)
 {
   int  i,j;
-
-#ifdef _ADAPT_LAST_GROUP_
-  extern int *last_P_no_frm;
-  extern int *last_P_no_fld;
-  free (last_P_no_frm);
-  free (last_P_no_fld);
-#endif
 
   if (enc_frame_picture)
     free (enc_frame_picture);
@@ -1324,7 +1555,9 @@ void free_global_buffers(void)
     free_mem3Dint (lrec_uv);
   }
 
-  free_orig_planes();
+  free_orig_planes(&imgData);
+  free_orig_planes(&imgData1);
+
   // free lookup memory which helps avoid divides with PicWidthInMbs
   free_mem2Dint(PicPos);
   // Free Qmatrices and offsets
@@ -1343,7 +1576,7 @@ void free_global_buffers(void)
     free_mem4Dint(wbp_weight);
   }
 
-  if ((stats->successive_Bframe != 0) || (params->BRefPictures > 0)||(params->ProfileIDC != 66))
+  if ((stats->NumberBFrames != 0) || (params->BRefPictures > 0)||(params->ProfileIDC != 66))
   {
     free_mem3D((byte ***)direct_ref_idx);
     free_mem2D((byte **) direct_pdir);
@@ -1372,10 +1605,6 @@ void free_global_buffers(void)
     free(img->mb_data);
   }
 
-  free_mem2D((byte**)rddata_top_frame_mb.ipredmode);
-  free_mem2D((byte**)rddata_trellis_curr.ipredmode);
-  free_mem2D((byte**)rddata_trellis_best.ipredmode);
-
   if(params->UseConstrainedIntraPred)
   {
     free (img->intra_block);
@@ -1388,14 +1617,7 @@ void free_global_buffers(void)
 
   if (params->rdopt == 3)
   {
-    if (decs->dec_mbY)
-    {
-       free_mem3Dpel(decs->dec_mbY);
-    }
-    if (decs->dec_mbY8x8)
-    {	
-       free_mem3Dpel(decs->dec_mbY8x8);
-    }
+    free_errdo_mem();
   }
 
   if (params->RestrictRef)
@@ -1409,6 +1631,7 @@ void free_global_buffers(void)
   if (!active_sps->frame_mbs_only_flag)
   {
     free_mem2Dpel(imgY_com);
+    
     if (img->yuv_format != YUV400)
     {
       free_mem3Dpel(imgUV_com);
@@ -1472,7 +1695,7 @@ void free_global_buffers(void)
  * \return memory size in bytes
  ************************************************************************
  */
-int get_mem_mv (short ******* mv)
+static int get_mem_mv (short ******* mv)
 {
   // LIST, reference, block_type, block_y, block_x, component
   get_mem6Dshort(mv, 2, img->max_num_references, 9, 4, 4, 2);
@@ -1490,13 +1713,9 @@ int get_mem_mv (short ******* mv)
  * \return memory size in bytes
  ************************************************************************
  */
-int get_mem_bipred_mv (short******** bipred_mv) 
+static int get_mem_bipred_mv (short******** bipred_mv) 
 {
-  if(((*bipred_mv) = (short*******)calloc(2, sizeof(short******))) == NULL)
-    no_mem_exit("get_mem_bipred_mv: bipred_mv");
-  
-  get_mem6Dshort(*bipred_mv, 2 * 2, img->max_num_references, 9, 4, 4, 2);
-  (*bipred_mv)[1] =  (*bipred_mv)[0] + 2;
+  get_mem7Dshort(bipred_mv, 2, 2, img->max_num_references, 9, 4, 4, 2);
   
   return 2 * 2 * img->max_num_references * 9 * 4 * 4 * 2 * sizeof(short);
 }
@@ -1509,7 +1728,7 @@ int get_mem_bipred_mv (short******** bipred_mv)
  *    int****** mv
  ************************************************************************
  */
-void free_mem_mv (short****** mv)
+static void free_mem_mv (short****** mv)
 {
   free_mem6Dshort(mv);
 }
@@ -1523,17 +1742,9 @@ void free_mem_mv (short****** mv)
  *    int****** mv
  ************************************************************************
  */
-void free_mem_bipred_mv (short******* bipred_mv) 
+static void free_mem_bipred_mv (short******* bipred_mv) 
 {
-  if (bipred_mv)
-  {
-    free_mem6Dshort(*bipred_mv);
-    free (bipred_mv);
-  }
-  else
-  {
-    error ("free_mem_bipred_mv: trying to free unused memory",100);
-  }
+  free_mem7Dshort(bipred_mv);
 }
 
 /*!
@@ -1544,10 +1755,22 @@ void free_mem_bipred_mv (short******* bipred_mv)
  */
 int get_mem_ACcoeff (int***** cofAC)
 {
-  int num_blk8x8 = 4 + img->num_blk8x8_uv;
+  int num_blk8x8 = BLOCK_SIZE + img->num_blk8x8_uv;
   
-  get_mem4Dint(cofAC, num_blk8x8, 4, 2, 65);
-  return num_blk8x8*4*2*65*sizeof(int);// 18->65 for ABT
+  get_mem4Dint(cofAC, num_blk8x8, BLOCK_SIZE, 2, 65);
+  return num_blk8x8 * BLOCK_SIZE * 2 * 65 * sizeof(int);// 18->65 for ABT
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Allocate memory for AC coefficients
+ ************************************************************************
+ */
+int get_mem_ACcoeff_new (int****** cofAC, int chroma)
+{ 
+  get_mem5Dint(cofAC, chroma, BLOCK_SIZE, BLOCK_SIZE, 2, 65);
+  return chroma * BLOCK_SIZE * BLOCK_SIZE * 2 * 65 * sizeof(int);// 18->65 for ABT
 }
 
 /*!
@@ -1577,43 +1800,23 @@ void free_mem_ACcoeff (int**** cofAC)
 /*!
  ************************************************************************
  * \brief
+ *    Free memory of AC coefficients
+ ************************************************************************
+ */
+void free_mem_ACcoeff_new (int***** cofAC)
+{
+  free_mem5Dint(cofAC);
+}
+
+/*!
+ ************************************************************************
+ * \brief
  *    Free memory of DC coefficients
  ************************************************************************
  */
 void free_mem_DCcoeff (int*** cofDC)
 {
   free_mem3Dint(cofDC);
-}
-
-
-
-/*!
- ************************************************************************
- * \brief
- *    Set the image type for I,P and SP pictures (not B!)
- ************************************************************************
- */
-static void SetImgType(void)
-{
-  int intra_refresh = (params->intra_period == 0) ? (IMG_NUMBER == 0) : (( ( img->frm_number - img->lastIntraNumber) % params->intra_period ) == 0);
-  int idr_refresh;
-
-  if ( params->idr_period && !params->adaptive_idr_period )
-    idr_refresh = (( ( img->frm_number - img->lastIDRnumber  ) % params->idr_period   ) == 0);
-  else if ( params->idr_period && params->adaptive_idr_period == 1 )
-    idr_refresh = (( ( img->frm_number - imax(img->lastIntraNumber, img->lastIDRnumber)  ) % params->idr_period   ) == 0);
-  else
-    idr_refresh = (IMG_NUMBER == 0);
-
-  if (intra_refresh || idr_refresh)
-  {
-    set_slice_type( I_SLICE );        // set image type for first image to I-frame
-  }
-  else
-  {
-    set_slice_type((params->sp_periodicity && ((IMG_NUMBER % params->sp_periodicity) == 0))
-      ? SP_SLICE  : ((params->BRefPictures == 2) ? B_SLICE : P_SLICE) );
-  }
 }
 
 /*!
@@ -1623,7 +1826,7 @@ static void SetImgType(void)
  *    current level_idc
  ************************************************************************
  */
-void SetLevelIndices(void)
+static void SetLevelIndices(void)
 {
   switch(active_sps->level_idc)
   {
@@ -1698,7 +1901,7 @@ void Init_redundant_frame()
 {
   if (params->redundant_pic_flag)
   {
-    if (params->successive_Bframe)
+    if (params->NumberBFrames)
     {
       error("B frame not supported when redundant picture used!", 100);
     }
@@ -1815,10 +2018,10 @@ void encode_one_redundant_frame()
 
   if (img->type == I_SLICE)
   {
-    set_slice_type( P_SLICE );
+    set_slice_type( img, P_SLICE );
   }
 
-  encode_one_frame();
+  encode_one_frame(img);
 }
 
 /*!
@@ -1827,7 +2030,7 @@ void encode_one_redundant_frame()
  *    Setup Chroma MC Variables
  ************************************************************************
  */
-void chroma_mc_setup(void)
+static void chroma_mc_setup(void)
 {
   // initialize global variables used for chroma interpolation and buffering
   if ( img->yuv_format == YUV420 )

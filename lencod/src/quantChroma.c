@@ -31,25 +31,29 @@ void init_quant_Chroma(InputParameters *params, ImageParameters *img, Slice *cur
   if (params->UseRDOQuant == 1 && params->RDOQ_CR == 1)
   {
     quant_ac4x4cr = quant_ac4x4_trellis;
-    if ( currSlice->symbol_mode == CABAC )
+    if (params->RDOQ_DC_CR)
     {
-      if (params->yuv_format == YUV422)
-        quant_dc_cr   = quant_dc4x2_trellis;
+      if (img->yuv_format == YUV422)
+        quant_dc_cr = quant_dc4x2_trellis;
       else
-        quant_dc_cr   = quant_dc2x2_trellis;
+        quant_dc_cr = quant_dc2x2_trellis;
     }
     else
     {
-      if (params->yuv_format == YUV422)
+      if (img->yuv_format == YUV422)
         quant_dc_cr   = quant_dc4x2_normal;
       else
         quant_dc_cr   = quant_dc2x2_normal;
     }
+    if (currSlice->symbol_mode == CABAC)
+      rdoq_dc_cr = rdoq_dc_cr_CABAC;
+    else
+      rdoq_dc_cr = rdoq_dc_cr_CAVLC;
   }
   else if (params->UseRDOQuant == 1 || (!img->AdaptiveRounding))
   {
     quant_ac4x4cr = quant_ac4x4_normal;
-    if (params->yuv_format == YUV422)
+    if (img->yuv_format == YUV422)
       quant_dc_cr   = quant_dc4x2_normal;
     else
       quant_dc_cr   = quant_dc2x2_normal;
@@ -57,7 +61,7 @@ void init_quant_Chroma(InputParameters *params, ImageParameters *img, Slice *cur
   else
   {
     quant_ac4x4cr = quant_ac4x4_around;
-    if (params->yuv_format == YUV422)
+    if (img->yuv_format == YUV422)
       quant_dc_cr   = quant_dc4x2_around;
     else
       quant_dc_cr   = quant_dc2x2_around;

@@ -13,6 +13,7 @@
  */
 
 #include "global.h"
+#include "image.h"
 #include "parsetcommon.h"
 #include "parset.h"
 #include "nalu.h"
@@ -98,13 +99,13 @@ int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
 
   sps->profile_idc                            = u_v  (8, "SPS: profile_idc"                           , s);
 
-  if ((sps->profile_idc!=66 ) &&
-      (sps->profile_idc!=77 ) &&
-      (sps->profile_idc!=88 ) &&
-      (sps->profile_idc!=FREXT_HP    ) &&
-      (sps->profile_idc!=FREXT_Hi10P ) &&
-      (sps->profile_idc!=FREXT_Hi422 ) &&
-      (sps->profile_idc!=FREXT_Hi444 ) &&
+  if ((sps->profile_idc!=BASELINE       ) &&
+      (sps->profile_idc!=MAIN           ) &&
+      (sps->profile_idc!=EXTENDED       ) &&
+      (sps->profile_idc!=FREXT_HP       ) &&
+      (sps->profile_idc!=FREXT_Hi10P    ) &&
+      (sps->profile_idc!=FREXT_Hi422    ) &&
+      (sps->profile_idc!=FREXT_Hi444    ) &&
       (sps->profile_idc!=FREXT_CAVLC444 ))
   {
     return UsedBits;
@@ -507,7 +508,7 @@ void ProcessSPS (NALU_t *nalu)
           if (dec_picture)
           {
             // this may only happen on slice loss
-            exit_picture();
+            exit_picture(&dec_picture);
           }
           active_sps=NULL;
         }
@@ -515,7 +516,7 @@ void ProcessSPS (NALU_t *nalu)
     }
     // SPSConsistencyCheck (pps);
     MakeSPSavailable (sps->seq_parameter_set_id, sps);
-    img->profile_idc = sps->profile_idc; //ADD-VG
+    img->profile_idc = sps->profile_idc;
     img->separate_colour_plane_flag = sps->separate_colour_plane_flag;
     if( img->separate_colour_plane_flag )
     {
@@ -554,7 +555,7 @@ void ProcessPPS (NALU_t *nalu)
         if (dec_picture)
         {
           // this may only happen on slice loss
-          exit_picture();
+          exit_picture(&dec_picture);
         }
         active_pps = NULL;
       }
@@ -573,7 +574,7 @@ void activate_sps (seq_parameter_set_rbsp_t *sps)
     if (dec_picture)
     {
       // this may only happen on slice loss
-      exit_picture();
+      exit_picture(&dec_picture);
     }
     active_sps = sps;
 
@@ -637,8 +638,10 @@ void activate_sps (seq_parameter_set_rbsp_t *sps)
     }
 
     img->width_cr_m1 = img->width_cr - 1;
+    
     init_frext(img);
     init_global_buffers();
+
     if (!img->no_output_of_prior_pics_flag)
     {
       flush_dpb();
@@ -676,7 +679,7 @@ void activate_pps(pic_parameter_set_rbsp_t *pps)
     if (dec_picture)
     {
       // this may only happen on slice loss
-      exit_picture();
+      exit_picture(&dec_picture);
     }
 
     active_pps = pps;

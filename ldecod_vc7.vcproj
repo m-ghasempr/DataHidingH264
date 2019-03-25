@@ -216,9 +216,6 @@
 				RelativePath=".\ldecod\src\nal.c">
 			</File>
 			<File
-				RelativePath=".\ldecod\src\nal_part.c">
-			</File>
-			<File
 				RelativePath=".\ldecod\src\nalu.c">
 			</File>
 			<File

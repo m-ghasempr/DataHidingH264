@@ -41,7 +41,7 @@
  *
  ************************************************************************
  */
-int quant_4x4_around(int (*tblock)[16], int block_y, int block_x, int  qp,                 
+int quant_4x4_around(int **tblock, int block_y, int block_x, int  qp,                 
                      int*  ACLevel, int*  ACRun, 
                      int **fadjust4x4, int **levelscale, int **invlevelscale, int **leveloffset,
                      int *coeff_cost, const byte (*pos_scan)[2], const byte *c_cost, int is_cavlc)
@@ -58,6 +58,7 @@ int quant_4x4_around(int (*tblock)[16], int block_y, int block_x, int  qp,
   const byte *p_scan = &pos_scan[0][0];
   int*  ACL = &ACLevel[0];
   int*  ACR = &ACRun[0];
+  int*  padjust4x4;
 
   // Quantization
   for (coeff_ctr = 0; coeff_ctr < 16; coeff_ctr++)
@@ -65,6 +66,7 @@ int quant_4x4_around(int (*tblock)[16], int block_y, int block_x, int  qp,
     i = *p_scan++;  // horizontal position
     j = *p_scan++;  // vertical position
 
+    padjust4x4 = &fadjust4x4[j][block_x + i];
     m7 = &tblock[j][block_x + i];
 
     if (*m7 != 0)
@@ -77,7 +79,7 @@ int quant_4x4_around(int (*tblock)[16], int block_y, int block_x, int  qp,
         if (is_cavlc)
           level = imin(level, CAVLC_LEVEL_LIMIT);
 
-        fadjust4x4[j][block_x + i] = rshift_rnd_sf((AdaptRndWeight * (scaled_coeff - (level << q_bits))), q_bits + 1);
+        *padjust4x4 = rshift_rnd_sf((AdaptRndWeight * (scaled_coeff - (level << q_bits))), q_bits + 1);
 
         *coeff_cost += (level > 1) ? MAX_VALUE : c_cost[run];
 
@@ -94,14 +96,14 @@ int quant_4x4_around(int (*tblock)[16], int block_y, int block_x, int  qp,
       }
       else
       {
-        fadjust4x4[j][block_x + i] = 0;
-        run++;
+        *padjust4x4 = 0;
         *m7 = 0;
+        run++;
       } 
     }
     else
     {
-      fadjust4x4[j][block_x + i] = 0;
+      *padjust4x4 = 0;
       run++;
     } 
   }
@@ -111,7 +113,7 @@ int quant_4x4_around(int (*tblock)[16], int block_y, int block_x, int  qp,
   return nonzero;
 }
 
-int quant_ac4x4_around(int (*tblock)[16], int block_y, int block_x, int qp,
+int quant_ac4x4_around(int **tblock, int block_y, int block_x, int qp,
                        int*  ACLevel, int*  ACRun, 
                        int **fadjust4x4, int **levelscale, int **invlevelscale, int **leveloffset,
                        int *coeff_cost, const byte (*pos_scan)[2], const byte *c_cost, int type, int is_cavlc)
@@ -128,6 +130,7 @@ int quant_ac4x4_around(int (*tblock)[16], int block_y, int block_x, int qp,
   const byte *p_scan = &pos_scan[1][0];
   int*  ACL = &ACLevel[0];
   int*  ACR = &ACRun[0];
+  int*  padjust4x4;
 
   // Quantization
   for (coeff_ctr = 1; coeff_ctr < 16; coeff_ctr++)
@@ -135,6 +138,7 @@ int quant_ac4x4_around(int (*tblock)[16], int block_y, int block_x, int qp,
     i = *p_scan++;  // horizontal position
     j = *p_scan++;  // vertical position
 
+    padjust4x4 = &fadjust4x4[j][block_x + i];
     m7 = &tblock[j][block_x + i];
     if (*m7 != 0)
     {
@@ -146,7 +150,7 @@ int quant_ac4x4_around(int (*tblock)[16], int block_y, int block_x, int qp,
         if (is_cavlc)
           level = imin(level, CAVLC_LEVEL_LIMIT);
 
-        fadjust4x4[j][block_x + i] = rshift_rnd_sf((AdaptRndWeight * (scaled_coeff - (level << q_bits))), (q_bits + 1));
+        *padjust4x4 = rshift_rnd_sf((AdaptRndWeight * (scaled_coeff - (level << q_bits))), (q_bits + 1));
 
         *coeff_cost += (level > 1) ? MAX_VALUE : c_cost[run];
 
@@ -163,14 +167,14 @@ int quant_ac4x4_around(int (*tblock)[16], int block_y, int block_x, int qp,
       }
       else
       {
-        fadjust4x4[j][block_x + i] = 0;
-        run++;
+        *padjust4x4 = 0;
         *m7 = 0;
+        run++;        
       }
     }
     else
     {
-      fadjust4x4[j][block_x + i] = 0;
+      *padjust4x4 = 0;
       run++;
     }          
   }
@@ -191,7 +195,7 @@ int quant_ac4x4_around(int (*tblock)[16], int block_y, int block_x, int qp,
  *
  ************************************************************************
  */
-int quant_dc4x4_around(int (*tblock)[4], int qp, int* DCLevel, int* DCRun, 
+int quant_dc4x4_around(int **tblock, int qp, int* DCLevel, int* DCRun, 
                        int levelscale, int invlevelscale, int leveloffset, const byte (*pos_scan)[2], int is_calvc)
 {
   static int i,j, coeff_ctr;

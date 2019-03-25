@@ -15,6 +15,7 @@
 
 #include <time.h>
 #include <sys/timeb.h>
+#include <limits.h>
 
 #include "global.h"
 
@@ -69,7 +70,6 @@ void GenerateParameterSets (void)
   {
     PicParSet[i] = NULL;
   }
-
 
   GenerateSequenceParameterSet(sps, 0);
 
@@ -255,7 +255,7 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps, //!< Sequence 
   // Fidelity Range Extensions stuff
   sps->bit_depth_luma_minus8   = params->output.bit_depth[0] - 8;
   sps->bit_depth_chroma_minus8 = params->output.bit_depth[1] - 8;
-  img->lossless_qpprime_flag = params->lossless_qpprime_y_zero_flag & 
+  img->lossless_qpprime_flag = params->LosslessCoding & 
       (sps->profile_idc==FREXT_Hi444 || sps->profile_idc==FREXT_CAVLC444);
 
   //! POC stuff:
@@ -295,9 +295,8 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps, //!< Sequence 
   sps->direct_8x8_inference_flag = (Boolean) params->directInferenceFlag;
 
   // Sequence VUI not implemented, signalled as not present
-  sps->vui_parameters_present_flag = (Boolean) ((params->rgb_input_flag && params->yuv_format==3) || params->EnableVUISupport);
-
-  sps->chroma_format_idc = params->yuv_format;
+  sps->vui_parameters_present_flag = (Boolean) ((params->rgb_input_flag != CM_YUV && params->output.yuv_format == YUV444) || params->EnableVUISupport);
+  sps->chroma_format_idc = params->output.yuv_format;
   sps->separate_colour_plane_flag = ( sps->chroma_format_idc == YUV444 ) ? params->separate_colour_plane_flag : 0;
 
   if ( sps->vui_parameters_present_flag )
@@ -640,7 +639,7 @@ int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, byte *rbsp)
   // Fidelity Range Extensions stuff
   if( IS_FREXT_PROFILE(sps->profile_idc) )
   {
-    len+=ue_v ("SPS: chroma_format_idc",                        sps->chroma_format_idc,                          bitstream);
+    len+=ue_v ("SPS: chroma_format_idc",                        sps->chroma_format_idc,                          bitstream);    
     if(img->yuv_format == YUV444)
       len+=u_1  ("SPS: separate_colour_plane_flag",             sps->separate_colour_plane_flag,                 bitstream);
     len+=ue_v ("SPS: bit_depth_luma_minus8",                    sps->bit_depth_luma_minus8,                      bitstream);
@@ -1208,7 +1207,7 @@ void GenerateVUIParameters(seq_parameter_set_rbsp_t *sps)
   vui->max_dec_frame_buffering                 = (unsigned int) iVui->max_dec_frame_buffering;
   
   // special case to signal the RGB format
-  if(params->rgb_input_flag && params->yuv_format==3)
+  if(params->rgb_input_flag != CM_YUV && params->output.yuv_format == YUV444)
   {
     printf   ("VUI: writing Sequence Parameter VUI to signal RGB format\n");
 

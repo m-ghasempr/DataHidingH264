@@ -126,15 +126,9 @@ const int estErr8x8[6][8][8]={
   }
 };
 
-extern int *mvbits;
-
 double norm_factor_4x4;
 double norm_factor_8x8;
 
-extern void SetMotionVectorPredictor (Macroblock *currMB, short  pmv[2], char   **refPic,
-                                      short  ***tmp_mv, short  ref_frame,
-                                      int    list,      int mb_x, int mb_y, 
-                                      int    blockshape_x, int blockshape_y);
 
 /*!
 ****************************************************************************
@@ -155,12 +149,92 @@ void init_rdoq_slice(int slice_type, int symbol_mode)
 *    Initialize levelData for Chroma DC
 ****************************************************************************
 */
-int init_trellis_data_DC_cr(int (*tblock)[4], int qp_per, int qp_rem, 
-                         int levelscale, int **leveloffset, const byte *p_scan, Macroblock *currMB,  
-                         levelDataStruct *dataLevel, int* kStart, int* kStop, int type)
+int init_trellis_data_DC_cr_CAVLC(int **tblock, int qp_per, int qp_rem, 
+                         int levelscale, int leveloffset, const byte *p_scan, Macroblock *currMB,  
+                         levelDataStruct *dataLevel)
+{
+  int i, j, coeff_ctr, end_coeff_ctr = img->num_cdc_coeff;
+  static int *m7;
+  int q_bits = Q_BITS + qp_per + 1; 
+  int q_offset = ( 1 << (q_bits - 1) );
+  double err; 
+  int level, lowerInt, k;
+  double estErr = (double) estErr4x4[qp_rem][0][0] / norm_factor_4x4; // note that we could also use int64
+
+  for (coeff_ctr = 0; coeff_ctr < end_coeff_ctr; coeff_ctr++)
+  {
+    j = *p_scan++;  // horizontal position
+    i = *p_scan++;  // vertical position
+
+    m7 = &tblock[j][i];
+    if (*m7 == 0)
+    {
+      dataLevel->levelDouble = 0;
+      dataLevel->level[0] = 0;
+      dataLevel->noLevels = 1;
+      err = 0.0;
+      dataLevel->errLevel[0] = 0.0;
+      dataLevel->pre_level = 0;
+      dataLevel->sign = 0;
+    }
+    else
+    {
+      dataLevel->levelDouble = iabs(*m7 * levelscale);
+      level = (dataLevel->levelDouble >> q_bits);
+
+      lowerInt=( ((int)dataLevel->levelDouble - (level << q_bits)) < q_offset )? 1 : 0;
+      dataLevel->level[0] = 0;
+      if (level == 0 && lowerInt == 1)
+      {
+        dataLevel->noLevels = 1;
+      }
+      else if (level == 0 && lowerInt == 0)
+      {
+        dataLevel->level[1] = level + 1;
+        dataLevel->noLevels = 2;
+      }
+      else if (level > 0 && lowerInt == 1)
+      {
+        dataLevel->level[1] = level;
+        dataLevel->noLevels = 2;
+      }
+      else
+      {
+        dataLevel->level[1] = level;
+        dataLevel->level[2] = level + 1;
+        dataLevel->noLevels = 3;
+      }
+
+      for (k = 0; k < dataLevel->noLevels; k++)
+      {
+        err = (double)(dataLevel->level[k] << q_bits) - (double)dataLevel->levelDouble;
+        dataLevel->errLevel[k] = (err * err * estErr); 
+      }
+
+      if(dataLevel->noLevels == 1)
+        dataLevel->pre_level = 0;
+      else
+        dataLevel->pre_level = (iabs (*m7) * levelscale + leveloffset) >> q_bits;
+      dataLevel->sign = isign(*m7);
+    }
+    dataLevel++;
+  }
+  return 0;
+}
+
+
+/*!
+****************************************************************************
+* \brief
+*    Initialize levelData for Chroma DC
+****************************************************************************
+*/
+int init_trellis_data_DC_cr_CABAC(int **tblock, int qp_per, int qp_rem, 
+                         int levelscale, int leveloffset, const byte *p_scan, Macroblock *currMB,  
+                         levelDataStruct *dataLevel, int* kStart, int* kStop)
 {
   int noCoeff = 0;
-  int i, j, coeff_ctr, end_coeff_ctr = ( (type == CHROMA_DC) ? 4 : 8 );
+  int i, j, coeff_ctr, end_coeff_ctr = img->num_cdc_coeff;
   static int *m7;
   int q_bits = Q_BITS + qp_per + 1; 
   int q_offset = ( 1 << (q_bits - 1) );
@@ -228,7 +302,7 @@ int init_trellis_data_DC_cr(int (*tblock)[4], int qp_per, int qp_rem,
   return (noCoeff);
 }
 
-void trellis_mp(Macroblock *currMB, int CurrentMbAddr, Boolean prev_recode_mb)
+void trellis_mp(Slice *currSlice, Macroblock *currMB, int CurrentMbAddr, Boolean prev_recode_mb)
 {
   int masterQP = 0, deltaQP;
   int qp_left, qp_up;
@@ -247,18 +321,18 @@ void trellis_mp(Macroblock *currMB, int CurrentMbAddr, Boolean prev_recode_mb)
 
   if (params->symbol_mode == CABAC)
   {
-    estRunLevel_CABAC(currMB, LUMA_4x4); 
-    estRunLevel_CABAC(currMB, LUMA_16AC);
-    estRunLevel_CABAC(currMB, LUMA_16DC);
+    estRunLevel_CABAC(currSlice, currMB, LUMA_4x4); 
+    estRunLevel_CABAC(currSlice, currMB, LUMA_16AC);
+    estRunLevel_CABAC(currSlice, currMB, LUMA_16DC);
     if (params->Transform8x8Mode)
-      estRunLevel_CABAC(currMB, LUMA_8x8);
-    if (params->yuv_format != YUV400)
+      estRunLevel_CABAC(currSlice, currMB, LUMA_8x8);
+    if (img->yuv_format != YUV400)
     {
-      estRunLevel_CABAC(currMB, CHROMA_AC);
-      if (params->yuv_format == YUV420)
-        estRunLevel_CABAC(currMB, CHROMA_DC);
+      estRunLevel_CABAC(currSlice, currMB, CHROMA_AC);
+      if (img->yuv_format == YUV420)
+        estRunLevel_CABAC(currSlice, currMB, CHROMA_DC);
       else
-        estRunLevel_CABAC(currMB, CHROMA_DC_2x4);
+        estRunLevel_CABAC(currSlice, currMB, CHROMA_DC_2x4);
     }
   }
 
@@ -302,7 +376,7 @@ void trellis_mp(Macroblock *currMB, int CurrentMbAddr, Boolean prev_recode_mb)
     currMB->delta_qp = currMB->qp - currMB->prev_qp;
     update_qp (img, currMB);
 
-    encode_one_macroblock (currMB);
+    encode_one_macroblock (currSlice, currMB);
 
     if ( rddata_trellis_curr.min_rdcost < rddata_trellis_best.min_rdcost)
       copy_rddata_trellis(&rddata_trellis_best, rdopt);
@@ -327,47 +401,47 @@ void trellis_mp(Macroblock *currMB, int CurrentMbAddr, Boolean prev_recode_mb)
   rdopt = &rddata_trellis_best;
 
   copy_rdopt_data (currMB, FALSE);  // copy the MB data for Top MB from the temp buffers
-  write_one_macroblock (currMB, 1, prev_recode_mb);
+  write_one_macroblock (currSlice, currMB, 1, prev_recode_mb);
   img->qp = masterQP;
 }
 
-void trellis_sp(Macroblock *currMB, int CurrentMbAddr, Boolean prev_recode_mb)
+void trellis_sp(Slice *currSlice, Macroblock *currMB, int CurrentMbAddr, Boolean prev_recode_mb)
 {
   img->masterQP = img->qp;
 
   if (params->symbol_mode == CABAC)
   {
-    estRunLevel_CABAC(currMB, LUMA_4x4); 
-    estRunLevel_CABAC(currMB, LUMA_16AC);
+    estRunLevel_CABAC(currSlice, currMB, LUMA_4x4); 
+    estRunLevel_CABAC(currSlice, currMB, LUMA_16AC);
     
-    estRunLevel_CABAC(currMB, LUMA_16DC);
+    estRunLevel_CABAC(currSlice, currMB, LUMA_16DC);
     if (params->Transform8x8Mode)
-      estRunLevel_CABAC(currMB, LUMA_8x8);
+      estRunLevel_CABAC(currSlice, currMB, LUMA_8x8);
 
-    if (params->yuv_format != YUV400)
+    if (img->yuv_format != YUV400)
     {
-      estRunLevel_CABAC(currMB, CHROMA_AC);
+      estRunLevel_CABAC(currSlice, currMB, CHROMA_AC);
 
-      if (params->yuv_format == YUV420)
-        estRunLevel_CABAC(currMB, CHROMA_DC);
+      if (img->yuv_format == YUV420)
+        estRunLevel_CABAC(currSlice, currMB, CHROMA_DC);
       else
-        estRunLevel_CABAC(currMB, CHROMA_DC_2x4);
+        estRunLevel_CABAC(currSlice, currMB, CHROMA_DC_2x4);
     }
   }
 
-  encode_one_macroblock (currMB);
-  write_one_macroblock (currMB, 1, prev_recode_mb);    
+  encode_one_macroblock (currSlice, currMB);
+  write_one_macroblock (currSlice, currMB, 1, prev_recode_mb);    
 }
 
-void trellis_coding(Macroblock *currMB, int CurrentMbAddr, Boolean prev_recode_mb)
+void trellis_coding(Slice *currSlice, Macroblock *currMB, int CurrentMbAddr, Boolean prev_recode_mb)
 {
   if (params->RDOQ_QP_Num > 1)
   {
-    trellis_mp(currMB, CurrentMbAddr, prev_recode_mb);   
+    trellis_mp(currSlice, currMB, CurrentMbAddr, prev_recode_mb);   
   }
   else
   {
-    trellis_sp(currMB, CurrentMbAddr, prev_recode_mb);   
+    trellis_sp(currSlice, currMB, CurrentMbAddr, prev_recode_mb);   
   }
 }
 
@@ -429,13 +503,13 @@ void copy_rddata_trellis (RD_DATA *dest, RD_DATA *src)
   {
     // note that this is not copying the bipred mvs!!!
     memcpy(&dest->all_mv [0][0][0][0][0][0], &src->all_mv [0][0][0][0][0][0], 2 * img->max_num_references * 9 * 4 * 4 * 2 * sizeof(short));
-    memcpy(&dest->pred_mv[0][0][0][0][0][0], &src->pred_mv[0][0][0][0][0][0], 2 * img->max_num_references * 9 * 4 * 4 * 2 * sizeof(short));
   }
 
   memcpy(dest->intra_pred_modes,src->intra_pred_modes, MB_BLOCK_PARTITIONS * sizeof(char));
   memcpy(dest->intra_pred_modes8x8,src->intra_pred_modes8x8, MB_BLOCK_PARTITIONS * sizeof(char));
   for(j = img->block_y; j < img->block_y + BLOCK_MULTIPLE; j++)
     memcpy(&dest->ipredmode[j][img->block_x],&src->ipredmode[j][img->block_x], BLOCK_MULTIPLE * sizeof(char));
+
   memcpy(&dest->refar[LIST_0][0][0], &src->refar[LIST_0][0][0], 2 * BLOCK_MULTIPLE * BLOCK_MULTIPLE * sizeof(char));
 }                            
 
@@ -444,24 +518,18 @@ void updateMV_mp(int *m_cost, short ref, int list, int h, int v, int blocktype, 
   int       i, j;
   int       bsx       = params->blc_size[blocktype][0];
   int       bsy       = params->blc_size[blocktype][1];
-  short     tmp_pred_mv[2];
-  short*    pred_mv = img->pred_mv[list][ref][blocktype][v][h];
   short     all_mv[2];
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
   if ( (params->Transform8x8Mode == 1) && (blocktype == 4) && currMB->luma_transform_size_8x8_flag)
   {
     all_mv[0] = tmp_mv8[list][ref][v][h][0];
     all_mv[1] = tmp_mv8[list][ref][v][h][1];
-    tmp_pred_mv[0] = tmp_pmv8[list][ref][v][h][0];
-    tmp_pred_mv[1] = tmp_pmv8[list][ref][v][h][1];
     *m_cost   = motion_cost8[list][ref][block8x8];
   }
   else
   {
     all_mv[0] = rddata_trellis_best.all_mv[list][ref][blocktype][v][h][0];
     all_mv[1] = rddata_trellis_best.all_mv[list][ref][blocktype][v][h][1];
-    tmp_pred_mv[0] = rddata_trellis_best.pred_mv[list][ref][blocktype][v][h][0];
-    tmp_pred_mv[1] = rddata_trellis_best.pred_mv[list][ref][blocktype][v][h][1];
   }
 
   for (j = 0; j < (bsy>>2); j++)
@@ -470,13 +538,13 @@ void updateMV_mp(int *m_cost, short ref, int list, int h, int v, int blocktype, 
       memcpy(img->all_mv[list][ref][blocktype][v+j][h+i], all_mv, 2 * sizeof(short));
   }
 
-  SetMotionVectorPredictor (currMB, pred_mv, enc_picture->motion.ref_idx[list], enc_picture->motion.mv[list], ref, list, h<<2, v<<2, bsx, bsy);
-
+/*
   if ( (tmp_pred_mv[0] != pred_mv[0]) || (tmp_pred_mv[1] != pred_mv[1]) )
   {
     *m_cost -= MV_COST_SMP (lambda_factor[H_PEL], all_mv[0], all_mv[1], tmp_pred_mv[0], tmp_pred_mv[1]);
     *m_cost += MV_COST_SMP (lambda_factor[H_PEL], all_mv[0], all_mv[1], pred_mv[0], pred_mv[1]);
   }
+  */
 }
 
 

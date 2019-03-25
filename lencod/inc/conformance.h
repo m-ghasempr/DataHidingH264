@@ -15,20 +15,16 @@
 #ifndef _CONFORMANCE_H_
 #define _CONFORMANCE_H_
 
-// Vertical MV Limits (integer/halfpel/quarterpel)
-// Currently only Integer Pel restrictions are used,
-// since the way values are specified
-// (i.e. mvlowbound = (levelmvlowbound + 1) and the way
-// Subpel ME is performed, subpel will always be within range.
-
-extern const int LEVELMVLIMIT[17][6];
-
 void ProfileCheck(void);
 void LevelCheck(void);
 
 void update_mv_limits(ImageParameters *img, byte is_field);
-void clip_mv_range(ImageParameters *img, int search_range, short mv[2], int res);
-int out_of_bounds_mvs(ImageParameters *img, short mv[2], int res);
+void clip_mv_range(ImageParameters *img, int search_range, MotionVector *mv, int res);
+int  out_of_bounds_mvs(ImageParameters *img, short mv[2]);
+void test_clip_mvs(ImageParameters *img, short mv[2], Boolean write_mb);
+
+int InvalidWeightsForBiPrediction(Block8x8Info* b8x8info, int mode);
+int InvalidMotionVectors(Block8x8Info* b8x8info, int mode);
 
 #endif
 

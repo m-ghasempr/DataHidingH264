@@ -155,7 +155,7 @@ void EstimateWPPSliceAlg1(ImageParameters *img, InputParameters *params, int sel
             offset[clist][n][1] = (offset[clist][n][1] + ((img->bitdepth_chroma - 8)>>1))>>(img->bitdepth_chroma-8);
             offset[clist][n][1] = iClip3( -128, 127, offset[clist][n][1]);
             offset[clist][n][1] = offset[clist][n][1]<<(img->bitdepth_chroma - 8);
-            
+
             weight[clist][n][1] = default_weight[1];
 
             offset[clist][n][2] = (int) ((dc_org_UV[1] - dc_ref_UV[n][1])/(img->size_cr)+0.5);

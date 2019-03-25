@@ -24,5 +24,6 @@ int RBSPtoNALU (unsigned char *rbsp, NALU_t *nalu, int rbsp_size, int nal_unit_t
 
 int (*WriteNALU)(NALU_t *n);     //! Hides the write function in Annex B or RTP
 
+int Write_AUD_NALU( void );
 
 #endif

@@ -32,35 +32,35 @@
 static void generateChroma00( int size_x_minus1, int size_y_minus1, imgpel **wImgDst, imgpel **imgUV)
 {
   int i, j;
-  int jpad;
+  int jpad = 0;
   static imgpel *wBufDst;
   static imgpel *wBufSrc0;
 
+  wBufDst  = wImgDst[jpad++];
+  wBufSrc0 = imgUV[0];
 
-  for (j = -img_pad_size_uv_y, jpad = 0; j < 0; j++, jpad++)
+  for (i = -img_pad_size_uv_x; i < 0; i++)
   {
-
-    wBufDst = &( wImgDst[jpad][0]);
-    wBufSrc0 = imgUV[0];
-
-    for (i = -img_pad_size_uv_x; i < 0; i++)
-    {
-      *(wBufDst++) = *wBufSrc0;
-    }
-
-    memcpy(wBufDst, wBufSrc0, size_x_minus1 * sizeof(imgpel));
-    wBufDst  += size_x_minus1;
-    wBufSrc0 += size_x_minus1;
-
-    for (i = 0; i < img_pad_size_uv_x; i++)
-    {
-      *(wBufDst++) = *wBufSrc0;
-    }
+    *(wBufDst++) = *wBufSrc0;
   }
 
-  for (j = 0; j < size_y_minus1; j++, jpad++)
+  memcpy(wBufDst, wBufSrc0, size_x_minus1 * sizeof(imgpel));
+  wBufDst  += size_x_minus1;
+  wBufSrc0 += size_x_minus1;
+
+  for (i = 0; i < img_pad_size_uv_x; i++)
   {
-    wBufDst = &( wImgDst[jpad][0] );
+    *(wBufDst++) = *wBufSrc0;
+  }
+
+  for (j = -img_pad_size_uv_y; j < -1; j++, jpad++)
+  {
+    memcpy(wImgDst[jpad], wImgDst[jpad - 1], (2 * img_pad_size_uv_x + size_x_minus1) * sizeof(imgpel));
+  }
+
+  for (j = 0; j < size_y_minus1; j++)
+  {
+    wBufDst  = wImgDst[jpad++];
     wBufSrc0 = imgUV[j    ];
 
     for (i = -img_pad_size_uv_x; i < 0; i++)
@@ -77,25 +77,27 @@ static void generateChroma00( int size_x_minus1, int size_y_minus1, imgpel **wIm
       *(wBufDst++) = *wBufSrc0;
     }
   }
+  
+  wBufDst  = wImgDst[jpad++];
+  wBufSrc0 = imgUV[size_y_minus1];
 
-  for (j = 0; j < img_pad_size_uv_y; j++, jpad++)
+  for (i = -img_pad_size_uv_x; i < 0; i++)
   {
-    wBufDst = &( wImgDst[jpad][0] );
-    wBufSrc0 = imgUV[size_y_minus1];
+    *(wBufDst++) = *wBufSrc0;
+  }
 
-    for (i = -img_pad_size_uv_x; i < 0; i++)
-    {
-      *(wBufDst++) = *wBufSrc0;
-    }
+  memcpy(wBufDst, wBufSrc0, size_x_minus1 * sizeof(imgpel));
+  wBufDst  += size_x_minus1;
+  wBufSrc0 += size_x_minus1;
 
-    memcpy(wBufDst, wBufSrc0, size_x_minus1 * sizeof(imgpel));
-    wBufDst  += size_x_minus1;
-    wBufSrc0 += size_x_minus1;
+  for (i = 0; i < img_pad_size_uv_x; i++)
+  {
+    *(wBufDst++) = *wBufSrc0;
+  }
 
-    for (i = 0; i < img_pad_size_uv_x; i++)
-    {
-      *(wBufDst++) = *wBufSrc0;
-    }
+  for (j = 1; j < img_pad_size_uv_y; j++, jpad++)
+  {
+    memcpy(wImgDst[jpad], wImgDst[jpad - 1], (2 * img_pad_size_uv_x + size_x_minus1) * sizeof(imgpel));
   }
 }
 
@@ -108,38 +110,39 @@ static void generateChroma00( int size_x_minus1, int size_y_minus1, imgpel **wIm
 static void generateChroma01( int size_x_minus1, int size_y_minus1, int weight00, int weight01, imgpel **wImgDst, imgpel **imgUV)
 {
   int i, j;
-  int jpad;
+  int jpad = 0;
   int cur_value;
   static imgpel *wBufDst;
   static imgpel *wBufSrc0;
 
+  wBufDst  = wImgDst[jpad++];
+  wBufSrc0 = imgUV[0];
 
-  for (j = -img_pad_size_uv_y, jpad = 0; j < 0; j++, jpad++)
+  for (i = -img_pad_size_uv_x; i < 0; i++)
   {
-    wBufDst  = wImgDst[jpad];
-    wBufSrc0 = imgUV[0];
-
-    for (i = -img_pad_size_uv_x; i < 0; i++)
-    {
-      *(wBufDst++) = *wBufSrc0;
-    }
-
-    for (i = 0; i < size_x_minus1; i++)
-    {
-      cur_value  = weight00 * (*wBufSrc0++);
-      cur_value += weight01 * (*wBufSrc0  );
-      *(wBufDst++) = (imgpel) rshift_rnd_sf(cur_value, 6);
-    }
-
-    for (i = 0; i < img_pad_size_uv_x; i++)
-    {
-      *(wBufDst++) = *wBufSrc0;
-    }
+    *(wBufDst++) = *wBufSrc0;
   }
 
-  for (j = 0; j < size_y_minus1; j++, jpad++)
+  for (i = 0; i < size_x_minus1; i++)
   {
-    wBufDst  = wImgDst[jpad];
+    cur_value  = weight00 * (*wBufSrc0++);
+    cur_value += weight01 * (*wBufSrc0  );
+    *(wBufDst++) = (imgpel) rshift_rnd_sf(cur_value, 6);
+  }
+
+  for (i = 0; i < img_pad_size_uv_x; i++)
+  {
+    *(wBufDst++) = *wBufSrc0;
+  }
+
+  for (j = -img_pad_size_uv_y; j < -1; j++, jpad++)
+  {
+    memcpy(wImgDst[jpad], wImgDst[jpad - 1], (2 * img_pad_size_uv_x + size_x_minus1) * sizeof(imgpel));
+  }
+
+  for (j = 0; j < size_y_minus1; j++)
+  {
+    wBufDst  = wImgDst[jpad++];
     wBufSrc0 = imgUV[j    ];
 
     for (i = -img_pad_size_uv_x; i < 0; i++)
@@ -160,27 +163,29 @@ static void generateChroma01( int size_x_minus1, int size_y_minus1, int weight00
     }
   }
 
-  for (j = 0; j < img_pad_size_uv_y; j++, jpad++)
+  wBufDst  = wImgDst[jpad++];
+  wBufSrc0 = imgUV[size_y_minus1];
+
+  for (i = -img_pad_size_uv_x; i < 0; i++)
   {
-    wBufDst  = wImgDst[jpad];
-    wBufSrc0 = imgUV[size_y_minus1];
+    *(wBufDst++) = *wBufSrc0;
+  }
 
-    for (i = -img_pad_size_uv_x; i < 0; i++)
-    {
-      *(wBufDst++) = *wBufSrc0;
-    }
+  for (i = 0; i < size_x_minus1; i++)
+  {
+    cur_value  = weight00 * (*wBufSrc0++);
+    cur_value += weight01 * (*wBufSrc0  );
+    *(wBufDst++) = (imgpel) rshift_rnd_sf(cur_value, 6);
+  }
 
-    for (i = 0; i < size_x_minus1; i++)
-    {
-      cur_value  = weight00 * (*wBufSrc0++);
-      cur_value += weight01 * (*wBufSrc0  );
-      *(wBufDst++) = (imgpel) rshift_rnd_sf(cur_value, 6);
-    }
+  for (i = 0; i < img_pad_size_uv_x; i++)
+  {
+    *(wBufDst++) = *wBufSrc0;
+  }
 
-    for (i = 0; i < img_pad_size_uv_x; i++)
-    {
-      *(wBufDst++) = *wBufSrc0;
-    }
+  for (j = 1; j < img_pad_size_uv_y; j++, jpad++)
+  {
+    memcpy(wImgDst[jpad], wImgDst[jpad - 1], (2 * img_pad_size_uv_x + size_x_minus1) * sizeof(imgpel));
   }
 }
 
@@ -193,35 +198,37 @@ static void generateChroma01( int size_x_minus1, int size_y_minus1, int weight00
 static void generateChroma10( int size_x_minus1, int size_y_minus1, int weight00, int weight10, imgpel **wImgDst, imgpel **imgUV)
 {
   int i, j;
-  int jpad;
+  int jpad = 0;
   int cur_value;
   static imgpel *wBufDst;
   static imgpel *wBufSrc0, *wBufSrc1;
 
+  wBufDst = wImgDst[jpad++];
+  wBufSrc0 = imgUV[0];
 
-  for (j = -img_pad_size_uv_y, jpad = 0; j < 0; j++, jpad++)
+
+  for (i = -img_pad_size_uv_x; i < 0; i++)
   {
-    wBufDst = &( wImgDst[jpad][0] );
-    wBufSrc0 = imgUV[0];
-
-    for (i = -img_pad_size_uv_x; i < 0; i++)
-    {
-      *(wBufDst++) = *wBufSrc0;
-    }
-
-    memcpy(wBufDst, wBufSrc0, size_x_minus1 * sizeof(imgpel));
-    wBufDst  += size_x_minus1;
-    wBufSrc0 += size_x_minus1;
-
-    for (i = 0; i < img_pad_size_uv_x; i++)
-    {
-      *(wBufDst++) = *wBufSrc0;
-    }
+    *(wBufDst++) = *wBufSrc0;
   }
 
-  for (j = 0; j < size_y_minus1; j++, jpad++)
+  memcpy(wBufDst, wBufSrc0, size_x_minus1 * sizeof(imgpel));
+  wBufDst  += size_x_minus1;
+  wBufSrc0 += size_x_minus1;
+
+  for (i = 0; i < img_pad_size_uv_x; i++)
   {
-    wBufDst = &( wImgDst[jpad][0] );
+    *(wBufDst++) = *wBufSrc0;
+  }
+
+  for (j = -img_pad_size_uv_y; j < -1; j++, jpad++)
+  {
+    memcpy(wImgDst[jpad], wImgDst[jpad - 1], (2 * img_pad_size_uv_x + size_x_minus1) * sizeof(imgpel));
+  }
+
+  for (j = 0; j < size_y_minus1; j++)
+  {
+    wBufDst = wImgDst[jpad++];
     wBufSrc0 = imgUV[j    ];
     wBufSrc1 = imgUV[j + 1];
 
@@ -244,24 +251,26 @@ static void generateChroma10( int size_x_minus1, int size_y_minus1, int weight00
     }
   }
 
-  for (j = 0; j < img_pad_size_uv_y; j++, jpad++)
+  wBufDst = wImgDst[jpad++];
+  wBufSrc0 = imgUV[size_y_minus1];
+
+  for (i = -img_pad_size_uv_x; i < 0; i++)
   {
-    wBufDst = &( wImgDst[jpad][0] );
-    wBufSrc0 = imgUV[size_y_minus1];
+    *(wBufDst++) = *wBufSrc0;
+  }
 
-    for (i = -img_pad_size_uv_x; i < 0; i++)
-    {
-      *(wBufDst++) = *wBufSrc0;
-    }
+  memcpy(wBufDst, wBufSrc0, size_x_minus1 * sizeof(imgpel));
+  wBufDst  += size_x_minus1;
+  wBufSrc0 += size_x_minus1;
 
-    memcpy(wBufDst, wBufSrc0, size_x_minus1 * sizeof(imgpel));
-    wBufDst  += size_x_minus1;
-    wBufSrc0 += size_x_minus1;
+  for (i = 0; i < img_pad_size_uv_x; i++)
+  {
+    *(wBufDst++) = *wBufSrc0;
+  }
 
-    for (i = 0; i < img_pad_size_uv_x; i++)
-    {
-      *(wBufDst++) = *wBufSrc0;
-    }
+  for (j = 1; j < img_pad_size_uv_y; j++, jpad++)
+  {
+    memcpy(wImgDst[jpad], wImgDst[jpad - 1], (2 * img_pad_size_uv_x + size_x_minus1) * sizeof(imgpel));
   }
 }
 
@@ -274,7 +283,7 @@ static void generateChroma10( int size_x_minus1, int size_y_minus1, int weight00
 static void generateChromaXX( int size_x_minus1, int size_y_minus1, int weight00, int weight01, int weight10, int weight11, imgpel **wImgDst, imgpel **imgUV)
 {
   int i, j;
-  int jpad;
+  int jpad = 0;
   int cur_value;
   static imgpel *wBufDst;
   static imgpel *wBufSrc0, *wBufSrc1;
@@ -283,33 +292,34 @@ static void generateChromaXX( int size_x_minus1, int size_y_minus1, int weight00
   int weight0010 = weight00 + weight10;
   int weight0111 = weight01 + weight11;
 
+  wBufDst = wImgDst[jpad++];
+  wBufSrc0 = imgUV[0];
 
-  for (j = -img_pad_size_uv_y, jpad = 0; j < 0; j++, jpad++)
+  for (i = -img_pad_size_uv_x; i < 0; i++)
   {
-    wBufDst = &( wImgDst[jpad][0] );
-    wBufSrc0 = imgUV[0];
-
-    for (i = -img_pad_size_uv_x; i < 0; i++)
-    {
-      *(wBufDst++) = *wBufSrc0;
-    }
-
-    for (i = 0; i < size_x_minus1; i++)
-    {
-      cur_value  = weight0010 * (*wBufSrc0++);
-      cur_value += weight0111 * (*wBufSrc0  );
-      *(wBufDst++) = (imgpel) rshift_rnd_sf(cur_value, 6);
-    }
-
-    for (i = 0; i < img_pad_size_uv_x; i++)
-    {
-      *(wBufDst++) = *wBufSrc0;
-    }
+    *(wBufDst++) = *wBufSrc0;
   }
 
-  for (j = 0; j < size_y_minus1; j++, jpad++)
+  for (i = 0; i < size_x_minus1; i++)
   {
-    wBufDst = &( wImgDst[jpad][0] );
+    cur_value  = weight0010 * (*wBufSrc0++);
+    cur_value += weight0111 * (*wBufSrc0  );
+    *(wBufDst++) = (imgpel) rshift_rnd_sf(cur_value, 6);
+  }
+
+  for (i = 0; i < img_pad_size_uv_x; i++)
+  {
+    *(wBufDst++) = *wBufSrc0;
+  }
+
+  for (j = -img_pad_size_uv_y; j < -1; j++, jpad++)
+  {
+    memcpy(wImgDst[jpad], wImgDst[jpad - 1], (2 * img_pad_size_uv_x + size_x_minus1) * sizeof(imgpel));
+  }
+
+  for (j = 0; j < size_y_minus1; j++)
+  {
+    wBufDst = wImgDst[jpad++];
     wBufSrc0 = imgUV[j    ];
     wBufSrc1 = imgUV[j + 1];
 
@@ -333,9 +343,7 @@ static void generateChromaXX( int size_x_minus1, int size_y_minus1, int weight00
     }
   }
 
-  for (j = 0; j < img_pad_size_uv_y; j++, jpad++)
-  {
-    wBufDst = &( wImgDst[jpad][0] );
+    wBufDst =  wImgDst[jpad++];
     wBufSrc0 = imgUV[size_y_minus1];
 
     for (i = -img_pad_size_uv_x; i < 0; i++)
@@ -354,6 +362,10 @@ static void generateChromaXX( int size_x_minus1, int size_y_minus1, int weight00
     {
       *(wBufDst++) = *wBufSrc0;
     }
+  
+  for (j = 1; j < img_pad_size_uv_y; j++, jpad++)
+  {
+    memcpy(wImgDst[jpad], wImgDst[jpad - 1], (2 * img_pad_size_uv_x + size_x_minus1) * sizeof(imgpel));
   }
 }
 
@@ -379,8 +391,6 @@ void getSubImagesChroma( StorablePicture *s )
   // multiplier factor for index to account for UV sampling ratios
   int mul_x, mul_y;
   int mm, kk;
-
-  imgpel **wImgDst;  
 
   size_x_minus1 = s->size_x_cr - 1;
   size_y_minus1 = s->size_y_cr - 1;
@@ -418,25 +428,24 @@ void getSubImagesChroma( StorablePicture *s )
         weight01 = m * l;
         weight00 = mm - weight01;
         weight11 = k * l;
-        weight10 = kk - weight11; 
-        wImgDst = s->imgUV_sub[uv][suby][subx];
+        weight10 = kk - weight11;         
 
         // Lets break things into cases
         if (weight01 == 0 && weight10 == 0 && weight11 == 0) // integer
         {
-          generateChroma00( size_x_minus1, size_y_minus1, wImgDst, s->imgUV[uv]);
+          generateChroma00( size_x_minus1, size_y_minus1, s->imgUV_sub[uv][suby][subx], s->imgUV[uv]);
         }
         else if (weight10 == 0 && weight11 == 0) // horizontal
         {
-          generateChroma01( size_x_minus1, size_y_minus1, weight00, weight01, wImgDst, s->imgUV[uv]);
+          generateChroma01( size_x_minus1, size_y_minus1, weight00, weight01, s->imgUV_sub[uv][suby][subx], s->imgUV[uv]);
         }
         else if (weight01 == 0 && weight11 == 0) // vertical
         {
-          generateChroma10( size_x_minus1, size_y_minus1, weight00, weight10, wImgDst, s->imgUV[uv]);
+          generateChroma10( size_x_minus1, size_y_minus1, weight00, weight10, s->imgUV_sub[uv][suby][subx], s->imgUV[uv]);
         }
         else //diagonal
         {
-          generateChromaXX( size_x_minus1, size_y_minus1, weight00, weight01, weight10, weight11, wImgDst, s->imgUV[uv]);
+          generateChromaXX( size_x_minus1, size_y_minus1, weight00, weight01, weight10, weight11, s->imgUV_sub[uv][suby][subx], s->imgUV[uv]);
         }          
       }
     }

@@ -29,7 +29,8 @@ extern void get_block_chroma(int decoder, int uv, StorablePicture *dec_picture, 
 //extern void intra_cr_decoding(Macroblock *currMB, int yuv, ImageParameters *img, int smb);
 //extern void prepare_direct_params(Macroblock *currMB, StorablePicture *dec_picture, ImageParameters *img, short pmvl0[2], short pmvl1[2],char *l0_rFrame, char *l1_rFrame);
 
-extern void perform_mc(int decoder, ColorPlane pl, StorablePicture *dec_picture, ImageParameters *img, int pred_dir, int l0_mode, int l1_mode, int i, int j, int list_offset, int block_size_x, int block_size_y, int curr_mb_field);
-extern void perform_mc_concealment(int decoder, ColorPlane pl, StorablePicture *dec_picture, ImageParameters *img, int pred_dir, int i, int j, int block_size_x, int block_size_y);
+extern void perform_mc(int decoder, ColorPlane pl, StorablePicture *dec_picture, ImageParameters *img, Macroblock *currMB, int pred_dir, int l0_mode, int l1_mode, char*** ref_idx, int i, int j, int block_size_x, int block_size_y, short bipred_me);
+extern void perform_mc_concealment(int decoder, ColorPlane pl, StorablePicture *dec_picture, ImageParameters *img, Macroblock* currMB, int pred_dir, int l0_mode, int l1_mode, char*** ref_idx_buf, int i, int j, int block_size_x, int block_size_y);
+
 #endif
 

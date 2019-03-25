@@ -39,7 +39,6 @@ int assignSE2partition_DP[SE_MAX_ELEMENTS] =
   {  0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 0, 0, 0 } ;
 
 static int ref_pic_list_reordering(Bitstream *bitstream);
-static int dec_ref_pic_marking    (Bitstream *bitstream);
 static int pred_weight_table      (Bitstream *bitstream);
 static int get_picture_type(void);
 /*!
@@ -51,11 +50,10 @@ static int get_picture_type(void);
  *    number of bits used
  ********************************************************************************************
 */
-int SliceHeader(void)
+int SliceHeader(Slice* currSlice)
 {
   int dP_nr = assignSE2partition[params->partition_mode][SE_HEADER];
-  Bitstream *bitstream = img->currentSlice->partArr[dP_nr].bitstream;
-  Slice* currSlice = img->currentSlice;
+  Bitstream *bitstream = currSlice->partArr[dP_nr].bitstream;   
   int len = 0;
   unsigned int field_pic_flag = 0; 
   byte bottom_field_flag = FALSE;
@@ -174,7 +172,14 @@ int SliceHeader(void)
   }
 
   if (img->nal_reference_idc)
-    len += dec_ref_pic_marking(bitstream);
+  {
+    img->adaptive_ref_pic_buffering_flag = (img->dec_ref_pic_marking_buffer != NULL);
+    len += dec_ref_pic_marking(bitstream, 
+      img->dec_ref_pic_marking_buffer, 
+      img->currentPicture->idr_flag, 
+      img->no_output_of_prior_pics_flag, 
+      img->long_term_reference_flag );
+  }
 
   if(currSlice->symbol_mode==CABAC && img->type!=I_SLICE /*&& img->type!=SI_IMG*/)
   {
@@ -322,26 +327,27 @@ static int ref_pic_list_reordering(Bitstream *bitstream)
  *    number of bits used
  ************************************************************************
  */
-static int dec_ref_pic_marking(Bitstream *bitstream)
+int dec_ref_pic_marking(Bitstream *bitstream, DecRefPicMarking_t *p_drpm, int idr_flag, int no_output_of_prior_pics_flag, int long_term_reference_flag )
 {
   DecRefPicMarking_t *tmp_drpm;
 
   int val, len=0;
+  int adaptive_ref_pic_buffering_flag;
 
-  if (img->currentPicture->idr_flag)
+  if (idr_flag)
   {
-    len += u_1("SH: no_output_of_prior_pics_flag", img->no_output_of_prior_pics_flag, bitstream);
-    len += u_1("SH: long_term_reference_flag", img->long_term_reference_flag, bitstream);
+    len += u_1("SH: no_output_of_prior_pics_flag", no_output_of_prior_pics_flag, bitstream);
+    len += u_1("SH: long_term_reference_flag", long_term_reference_flag, bitstream);
   }
   else
   {
-    img->adaptive_ref_pic_buffering_flag = (img->dec_ref_pic_marking_buffer!=NULL);
+    adaptive_ref_pic_buffering_flag = (p_drpm != NULL);
 
-    len += u_1("SH: adaptive_ref_pic_buffering_flag", img->adaptive_ref_pic_buffering_flag, bitstream);
+    len += u_1("SH: adaptive_ref_pic_buffering_flag", adaptive_ref_pic_buffering_flag, bitstream);
 
-    if (img->adaptive_ref_pic_buffering_flag)
+    if (adaptive_ref_pic_buffering_flag)
     {
-      tmp_drpm = img->dec_ref_pic_marking_buffer;
+      tmp_drpm = p_drpm;
       // write Memory Management Control Operation
       do
       {

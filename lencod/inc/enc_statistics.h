@@ -21,17 +21,17 @@ typedef struct
 {
   float bitr;                        //!< bit rate for current frame, used only for output til terminal
   float bitrate;                     //!< average bit rate for the sequence except first frame
-  int64 bit_ctr;                     //!< counter for bit usage
-  int64 bit_ctr_n;                   //!< bit usage for the current frame
-  int64 bit_ctr_emulationprevention; //!< stored bits needed to prevent start code emulation
-  int   bit_slice;                   //!< number of bits in current slice
-  int   stored_bit_slice;            //!< keep number of bits in current slice (to restore status in case of MB re-encoding)  
-  int   b8_mode_0_use     [NUM_SLICE_TYPES][2];
-  int64 mode_use_transform[NUM_SLICE_TYPES][MAXMODE][2];
-  int   intra_chroma_mode[4];
+  int64  bit_ctr;                     //!< counter for bit usage
+  int64  bit_ctr_n;                   //!< bit usage for the current frame
+  int64  bit_ctr_emulationprevention; //!< stored bits needed to prevent start code emulation
+  int    bit_slice;                   //!< number of bits in current slice
+  int    stored_bit_slice;            //!< keep number of bits in current slice (to restore status in case of MB re-encoding)  
+  int    b8_mode_0_use     [NUM_SLICE_TYPES][2];
+  int64  mode_use_transform[NUM_SLICE_TYPES][MAXMODE][2];
+  int64  intra_chroma_mode[4];
 
   // B pictures
-  int     successive_Bframe;
+  int     NumberBFrames;
 
   int     frame_counter;
   int64   quant               [NUM_SLICE_TYPES];
@@ -54,6 +54,7 @@ typedef struct
 } StatParameters;
 
 extern StatParameters *stats;
+extern StatParameters statistics;
 
 #endif
 

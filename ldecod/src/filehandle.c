@@ -61,12 +61,10 @@ void tracebits(
     int info,               //!< infoword of syntax element
     int value1)
 {
-
   int i, chars;
   // int outint = 1;
 
-
-  if(len>=34)
+  if(len>=64)
   {
     snprintf(errortext, ET_SIZE, "Length argument to put too long for trace to work");
     error (errortext, 600);
@@ -109,7 +107,6 @@ void tracebits(
   bitcounter += len;
 
   fflush (p_trace);
-
 }
 
 /*!
@@ -127,7 +124,7 @@ void tracebits2(
   int i, chars;
   // int outint = 1;
 
-  if(len>=45)
+  if(len>=64)
   {
     snprintf(errortext, ET_SIZE, "Length argument to put too long for trace to work");
     error (errortext, 600);
@@ -135,28 +132,32 @@ void tracebits2(
 
   putc('@', p_trace);
   chars = fprintf(p_trace, "%i", bitcounter);
+
   while(chars++ < 5)
     putc(' ',p_trace);
+
   chars += fprintf(p_trace, " %s", trace_str);
+
   while(chars++ < 55)
     putc(' ',p_trace);
 
   // Align bitpattern
-  if(len<15)
-    for(i=0 ; i<15-len ; i++)
+  if(len < 15)
+  {
+    for(i = 0; i < 15 - len; i++)
       fputc(' ', p_trace);
-
+  }
 
   bitcounter += len;
   while (len >= 32)
   {
-    for(i=0 ; i<8 ; i++)
+    for(i = 0; i < 8; i++)
     {
       fputc('0', p_trace);
     }
     len -= 8;
-
   }
+
   // Print bitpattern
   for(i=0 ; i<len ; i++)
   {

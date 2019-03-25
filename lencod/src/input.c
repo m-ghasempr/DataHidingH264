@@ -22,13 +22,17 @@
 #include "global.h"
 #include "input.h"
 #include "report.h"
+#include "img_io.h"
 
-unsigned char *buf;
+
+unsigned char *buf = NULL;
+unsigned char *ibuf = NULL;
  
 void buf2img_basic    ( imgpel** imgX, unsigned char* buf, int size_x, int size_y, int o_size_x, int o_size_y, int symbol_size_in_bytes, int bitshift);
 void buf2img_endian   ( imgpel** imgX, unsigned char* buf, int size_x, int size_y, int o_size_x, int o_size_y, int symbol_size_in_bytes, int bitshift);
 void buf2img_bitshift ( imgpel** imgX, unsigned char* buf, int size_x, int size_y, int o_size_x, int o_size_y, int symbol_size_in_bytes, int bitshift);
 void (*buf2img)       ( imgpel** imgX, unsigned char* buf, int size_x, int size_y, int o_size_x, int o_size_y, int symbol_size_in_bytes, int bitshift);
+void fillPlane ( imgpel** imgX, int nVal, int size_x, int size_y);
 
 /*!
  ************************************************************************
@@ -94,6 +98,129 @@ static void MaskMSBs (imgpel** imgX, int mask, int width, int height)
   }
 }
 #endif
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Fill plane with constant value
+ ************************************************************************
+ */
+void fillPlane ( imgpel** imgX,                 //!< Pointer to image plane
+                int nVal,                       //!< Fill value (currently 0 <= nVal < 256)
+                int size_x,                     //!< horizontal size of picture
+                int size_y                      //!< vertical size of picture
+                )
+{
+  int j, i;
+
+  if (sizeof(imgpel) == sizeof(char))
+  {
+    memset(&imgX[0][0], nVal, size_y * size_x);
+  }
+  else
+  {
+    for (j = 0; j < size_y; j++) 
+    {
+      for (i = 0; i < size_x; i++) 
+      {
+        imgX[j][i] = nVal;
+      }
+    }
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Deinterleave file read buffer to source picture structure
+ ************************************************************************
+ */
+static void deinterleave ( unsigned char** input,       //!< input buffer
+                           unsigned char** output,      //!< output buffer
+                           FrameFormat *source,
+                           int symbol_size_in_bytes
+                          )
+{
+  // original buffer
+  unsigned char *icmp0 = *input;
+  // final buffer
+  unsigned char *ocmp0 = *output;
+
+  unsigned char *ocmp1 = ocmp0 + symbol_size_in_bytes * source->size_cmp[0];
+  unsigned char *ocmp2 = ocmp1 + symbol_size_in_bytes * source->size_cmp[1];
+
+  int i;
+  
+  if (source->yuv_format == YUV420) // UYYVYY 
+  {
+    for (i = 0; i < source->size_cmp[1]; i++)
+    {
+      memcpy(ocmp1, icmp0, symbol_size_in_bytes);
+      ocmp1 += symbol_size_in_bytes;
+      icmp0 += symbol_size_in_bytes;
+      memcpy(ocmp0, icmp0, 2 * symbol_size_in_bytes);
+      ocmp0 += 2 * symbol_size_in_bytes;
+      icmp0 += 2 * symbol_size_in_bytes;
+      memcpy(ocmp2, icmp0, symbol_size_in_bytes);
+      ocmp2 += symbol_size_in_bytes;
+      icmp0 += symbol_size_in_bytes;
+      memcpy(ocmp0, icmp0, 2 * symbol_size_in_bytes);
+      ocmp0 += 2 * symbol_size_in_bytes;
+      icmp0 += 2 * symbol_size_in_bytes;
+    }
+
+    // flip buffers
+    icmp0  = *input;
+    *input  = *output;
+    *output = icmp0;
+  }
+  if (source->yuv_format == YUV422) // YUYV/YUY2. We should also maybe add UYVY given it's popularity
+  {
+    for (i = 0; i < source->size_cmp[1]; i++)
+    {
+      // Y
+      memcpy(ocmp0, icmp0, symbol_size_in_bytes);
+      ocmp0 += symbol_size_in_bytes;
+      icmp0 += symbol_size_in_bytes;
+      // U
+      memcpy(ocmp1, icmp0, symbol_size_in_bytes);
+      ocmp1 += symbol_size_in_bytes;
+      icmp0 += symbol_size_in_bytes;
+      // Y
+      memcpy(ocmp0, icmp0, symbol_size_in_bytes);
+      ocmp0 += symbol_size_in_bytes;
+      icmp0 += symbol_size_in_bytes;
+      // V
+      memcpy(ocmp2, icmp0, symbol_size_in_bytes);
+      ocmp2 += symbol_size_in_bytes;
+      icmp0 += symbol_size_in_bytes;
+    }
+
+    // flip buffers
+    icmp0  = *input;
+    *input  = *output;
+    *output = icmp0;
+  }
+  else if (source->yuv_format == YUV444)
+  {
+    for (i = 0; i < source->size_cmp[0]; i++)
+    {
+      memcpy(ocmp0, icmp0, symbol_size_in_bytes);
+      ocmp0 += symbol_size_in_bytes;
+      icmp0 += symbol_size_in_bytes;
+      memcpy(ocmp1, icmp0, symbol_size_in_bytes);
+      ocmp1 += symbol_size_in_bytes;
+      icmp0 += symbol_size_in_bytes;
+      memcpy(ocmp2, icmp0, symbol_size_in_bytes);
+      ocmp2 += symbol_size_in_bytes;
+      icmp0 += symbol_size_in_bytes;
+    }
+    // flip buffers
+    icmp0  = *input;
+    *input  = *output;
+    *output = icmp0;
+  }
+}
 
 /*!
  ************************************************************************
@@ -420,12 +547,15 @@ void buf2img_endian ( imgpel** imgX,          //!< Pointer to image plane
  *
  ************************************************************************
  */
-int AllocateFrameMemory (ImageParameters *img, int size)
+void AllocateFrameMemory (ImageParameters *img, InputParameters *params, int size)
 {
   if (NULL == (buf = malloc (size * (img->pic_unit_size_on_disk >> 3))))
-    return (1);
-  else
-    return (0);
+    no_mem_exit("AllocateFrameMemory: buf");
+  if (params->input_file1.is_interleaved)
+  {
+    if (NULL == (ibuf = malloc (size * (img->pic_unit_size_on_disk >> 3))))
+      no_mem_exit("AllocateFrameMemory: ibuf");
+  }
 }
 
 /*!
@@ -437,8 +567,10 @@ int AllocateFrameMemory (ImageParameters *img, int size)
  */
 void DeleteFrameMemory (void)
 {
-  if (buf)
+  if (buf != NULL)
     free (buf);
+  if (ibuf != NULL)
+    free (ibuf);
 }
 
 /*!
@@ -456,91 +588,70 @@ void DeleteFrameMemory (void)
  *    output file (for encoding) information
  ************************************************************************
  */
-void ReadOneFrame (int FrameNoInFile, int HeaderSize, FrameFormat *source, FrameFormat *output)
+void ReadOneFrame (VideoDataFile *input_file, int FrameNoInFile, int HeaderSize, FrameFormat *source, FrameFormat *output, imgpel **pImage[3])
 {
-  unsigned int symbol_size_in_bytes = img->pic_unit_size_on_disk/8;
+  unsigned int symbol_size_in_bytes = img->pic_unit_size_on_disk >> 3;
 
   const int imgsize_y = source->width * source->height;
   const int imgsize_uv = source->width_cr * source->height_cr;
 
   const int bytes_y = imgsize_y * symbol_size_in_bytes;
   const int bytes_uv = imgsize_uv * symbol_size_in_bytes;
-  int bit_scale;
+  int bit_scale;  
 
-  const int64 framesize_in_bytes = bytes_y + 2*bytes_uv;
+  Boolean rgb_input = (Boolean) (params->rgb_input_flag == CM_RGB && params->source.yuv_format == YUV444);
 
-  Boolean rgb_input = (Boolean) (params->rgb_input_flag==1 && params->yuv_format==3);
-
-  assert (p_in != -1);
-
-  // skip Header
-  if (lseek (p_in, HeaderSize, SEEK_SET) != HeaderSize)
-  {
-    error ("ReadOneFrame: cannot fseek to (Header size) in p_in", -1);
-  }
-
-  // skip starting frames
-  if (lseek (p_in, framesize_in_bytes * params->start_frame, SEEK_CUR) == -1)
-  {
-    snprintf(errortext, ET_SIZE, "ReadOneFrame: cannot advance file pointer in p_in beyond frame %d\n", params->start_frame);
-    error (errortext,-1);
-  }
-
-  // seek to current frame
-  if (lseek (p_in, framesize_in_bytes * (FrameNoInFile), SEEK_CUR) == -1)
-  {
-    snprintf(errortext, ET_SIZE, "ReadOneFrame: cannot advance file pointer in p_in beyond frame %d\n", params->start_frame + FrameNoInFile);
-    error (errortext,-1);
-  }
-
-  // Here we are at the correct position for the source frame in the file.  
-  // Now read it.
-  if (img->pic_unit_size_on_disk%8 == 0)
-  {
-//    if(rgb_input)
-//      lseek (p_in, framesize_in_bytes / 3, SEEK_CUR);
-
-    if (read(p_in, buf, (int) framesize_in_bytes) != (int) framesize_in_bytes)
-    {
-      printf ("ReadOneFrame: cannot read %d bytes from input file, unexpected EOF, exiting...\n", (int) framesize_in_bytes);
-      report_stats_on_error();
-    }
-
-    bit_scale = source->bit_depth[0] - output->bit_depth[0];
-
-    if(rgb_input)
-      buf2img(pImgOrg[0], buf + bytes_y, source->width, source->height, output->width, output->height, symbol_size_in_bytes, bit_scale);
+  if (input_file->is_concatenated == 0)
+  {    
+    if (input_file->vdtype == VIDEO_TIFF)
+      ReadTIFFImage     (input_file, FrameNoInFile, source, buf);
     else
-      buf2img(pImgOrg[0], buf, source->width, source->height, output->width, output->height, symbol_size_in_bytes, bit_scale);
-
-#if (DEBUG_BITDEPTH)
-    MaskMSBs(pImgOrg[0], ((1 << output->bit_depth[0]) - 1), output->width, output->height);
-#endif
-
-    if (img->yuv_format != YUV400)
-    {
-      bit_scale = source->bit_depth[1] - output->bit_depth[1];
-      if(rgb_input)
-      buf2img(pImgOrg[1], buf + bytes_y + bytes_uv, source->width_cr, source->height_cr, output->width_cr, output->height_cr, symbol_size_in_bytes, bit_scale);
-      else
-      buf2img(pImgOrg[1], buf + bytes_y, source->width_cr, source->height_cr, output->width_cr, output->height_cr, symbol_size_in_bytes, bit_scale);
-
-      bit_scale = source->bit_depth[2] - output->bit_depth[2];
-      if(rgb_input)
-      buf2img(pImgOrg[2], buf, source->width_cr, source->height_cr, output->width_cr, output->height_cr, symbol_size_in_bytes, bit_scale);
-      else
-      buf2img(pImgOrg[2], buf + bytes_y + bytes_uv, source->width_cr, source->height_cr, output->width_cr, output->height_cr, symbol_size_in_bytes, bit_scale);
-
-#if (DEBUG_BITDEPTH)
-      MaskMSBs(pImgOrg[1], ((1 << output->bit_depth[1]) - 1), output->width_cr, output->height_cr);
-      MaskMSBs(pImgOrg[2], ((1 << output->bit_depth[2]) - 1), output->width_cr, output->height_cr);
-#endif
-    }
+      ReadFrameSeparate (input_file, FrameNoInFile, HeaderSize, source, buf);
   }
   else
   {
-    printf ("ReadOneFrame (NOT IMPLEMENTED): pic unit size on disk must be divided by 8");
-    exit (-1);
+    ReadFrameConcatenated (input_file, FrameNoInFile, HeaderSize, source, buf);
+  }
+
+  // Deinterleave input source
+  if (input_file->is_interleaved)
+  {
+    deinterleave ( &buf, &ibuf, source, symbol_size_in_bytes);
+  }
+
+  bit_scale = source->bit_depth[0] - output->bit_depth[0];  
+
+  if(rgb_input)
+    buf2img(pImage[0], buf + bytes_y, source->width, source->height, output->width, output->height, symbol_size_in_bytes, bit_scale);
+  else
+    buf2img(pImage[0], buf, source->width, source->height, output->width, output->height, symbol_size_in_bytes, bit_scale);
+
+#if (DEBUG_BITDEPTH)
+  MaskMSBs(pImage[0], ((1 << output->bit_depth[0]) - 1), output->width, output->height);
+#endif
+
+  if (img->yuv_format != YUV400)
+  {
+    bit_scale = source->bit_depth[1] - output->bit_depth[1];
+#if (ALLOW_GRAYSCALE)
+    if (!params->grayscale) 
+#endif
+    {
+      if(rgb_input)
+        buf2img(pImage[1], buf + bytes_y + bytes_uv, source->width_cr, source->height_cr, output->width_cr, output->height_cr, symbol_size_in_bytes, bit_scale);
+      else 
+        buf2img(pImage[1], buf + bytes_y, source->width_cr, source->height_cr, output->width_cr, output->height_cr, symbol_size_in_bytes, bit_scale);
+
+      bit_scale = source->bit_depth[2] - output->bit_depth[2];
+      if(rgb_input)
+        buf2img(pImage[2], buf, source->width_cr, source->height_cr, output->width_cr, output->height_cr, symbol_size_in_bytes, bit_scale);
+      else
+        buf2img(pImage[2], buf + bytes_y + bytes_uv, source->width_cr, source->height_cr, output->width_cr, output->height_cr, symbol_size_in_bytes, bit_scale);
+    }
+#if (DEBUG_BITDEPTH)
+    MaskMSBs(pImage[1], ((1 << output->bit_depth[1]) - 1), output->width_cr, output->height_cr);
+    MaskMSBs(pImage[2], ((1 << output->bit_depth[2]) - 1), output->width_cr, output->height_cr);
+#endif
   }
 }
 

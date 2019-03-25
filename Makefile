@@ -11,8 +11,11 @@ SUBDIRS := lencod ldecod rtpdump rtp_loss
 DBG?= 0
 ### include M32 optimization : 1=yes, 0=no
 M32?= 0
+### include M32 optimization : 1=yes, 0=no
+STC?= 0
 
 export DBG
+export STC 
 export M32
 
 .PHONY: default all distclean clean tags depend $(SUBDIRS)
@@ -25,14 +28,16 @@ $(SUBDIRS):
 	$(MAKE) -C $@
 
 clean depend:
-	for i in $(SUBDIRS); do make -C $$i $@; done
+	@echo "Cleaning dependencies"
+	@for i in $(SUBDIRS); do make -C $$i $@; done
 
 tags:
 	@echo "update tag table at top directory"
-	ctags -R .
-	for i in $(SUBDIRS); do make -C $$i $@; done
+	@ctags -R .
+	@for i in $(SUBDIRS); do make -C $$i $@; done
 
 distclean: clean
-	rm -f tags
-	for i in $(SUBDIRS); do make -C $$i $@; done
+	@echo "Cleaning all"
+	@rm -f tags
+	@for i in $(SUBDIRS); do make -C $$i $@; done
 

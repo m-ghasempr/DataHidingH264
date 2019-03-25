@@ -117,14 +117,13 @@ UMHEXIntegerPelBlockMotionSearch  (Macroblock *currMB,     // <--  current Macro
                                   imgpel   *orig_pic,      // <--  not used
                                   short     ref,           // <--  reference frame (0... or -1 (backward))
                                   int       list,          // <--  reference picture list
-                                  int       list_offset,   // <--  MBAFF list offset
                                   char   ***refPic,        // <--  reference array
                                   short ****tmp_mv,        // <--  mv array
                                   int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
                                   int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
                                   int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
-                                  short     pred_mv[2],    // <--  motion vector predictor (x) in sub-pel units
-                                  short     mv[2],         //  --> motion vector (x) - in pel units
+                                  MotionVector *pred,      // <--  motion vector predictor (x) in sub-pel units
+                                  MotionVector   *mv,      //  --> motion vector (x) - in pel units
                                   int       search_range,  // <--  1-d search range in pel units
                                   int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
                                   int       lambda_factor, // <--  lagrangian parameter for determining motion cost
@@ -140,8 +139,8 @@ UMHEXSubPelBlockMotionSearch (
                              int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
                              int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
                              int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
-                             short     pred_mv[2],    // <--  motion vector predictor (x) in sub-pel units
-                             short     mv[2],         // <--> in: search center (x) / out: motion vector (x) - in pel units
+                             MotionVector *pred,      // <--  motion vector predictor (x) in sub-pel units
+                             MotionVector  *mv,       // <--> in: search center (x) / out: motion vector (x) - in pel units
                              int       search_pos2,   // <--  search positions for    half-pel search  (default: 9)
                              int       search_pos4,   // <--  search positions for quarter-pel search  (default: 9)
                              int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
@@ -157,8 +156,8 @@ extern int UMHEXSubPelBlockME ( //  ==> minimum motion cost after search
                              int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
                              int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
                              int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
-                             short     pred_mv[2],    // <--  motion vector predictor (x) in sub-pel units
-                             short     mv[2],         // <--> in: search center (x) / out: motion vector (x) - in pel units
+                             MotionVector *pred,      // <--  motion vector predictor (x) in sub-pel units
+                             MotionVector  *mv,       // <--> in: search center (x) / out: motion vector (x) - in pel units
                              int       search_pos2,   // <--  search positions for    half-pel search  (default: 9)
                              int       search_pos4,   // <--  search positions for quarter-pel search  (default: 9)
                              int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
@@ -175,8 +174,8 @@ SubPelBlockMotionSearch (imgpel*   orig_pic,       // <--  original pixel values
                          int       pic_pix_x,      // <--  absolute x-coordinate of regarded AxB block
                          int       pic_pix_y,      // <--  absolute y-coordinate of regarded AxB block
                          int       blocktype,      // <--  block type (1-16x16 ... 7-4x4)
-                         short     pred_mv[2],     // <--  motion vector predictor in sub-pel units
-                         short     mv[2],          // <--> in: search center  / out: motion vector - in pel units
+                         MotionVector *pred,     // <--  motion vector predictor in sub-pel units
+                         MotionVector *mv,          // <--> in: search center  / out: motion vector - in pel units
                          int       search_pos2,    // <--  search positions for    half-pel search  (default: 9)
                          int       search_pos4,    // <--  search positions for quarter-pel search  (default: 9)
                          int       min_mcost,      // <--  minimum motion cost (cost for center or huge value)
@@ -188,16 +187,15 @@ UMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB, // <--  current Macr
                                        imgpel*   orig_pic,      // <--  original pixel values for the AxB block
                                        short     ref,           // <--  reference frame (0... or -1 (backward))
                                        int       list,          // <--  Current reference list
-                                       int       list_offset,   // <--  MBAFF list offset
                                        char   ***refPic,        // <--  reference array
                                        short ****tmp_mv,        // <--  mv array
                                        int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
                                        int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
                                        int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
-                                       short     pred_mv1[2],   // <--  motion vector predictor (x|y) in sub-pel units
-                                       short     pred_mv2[2],   // <--  motion vector predictor (x|y) in sub-pel units
-                                       short     mv[2],         // <--> in: search center (x) / out: motion vector (x) - in pel units
-                                       short     s_mv[2],       // <--> in: search center (x) / out: motion vector (x) - in pel units
+                                       MotionVector *pred1,   // <--  motion vector predictor (x|y) in sub-pel units
+                                       MotionVector *pred2,   // <--  motion vector predictor (x|y) in sub-pel units
+                                       MotionVector   *mv1,         // <--> in: search center (x) / out: motion vector (x) - in pel units
+                                       MotionVector   *mv2,       // <--> in: search center (x) / out: motion vector (x) - in pel units
                                        int       search_range,  // <--  1-d search range in pel units
                                        int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
                                        int       iteration_no,  // <--  bi pred iteration number
@@ -206,7 +204,6 @@ UMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB, // <--  current Macr
                                        );
 
 void UMHEXSetMotionVectorPredictor (Macroblock *currMB, short pmv[2], char **refPic, short ***tmp_mv,
-                                    short  ref_frame, int list, int mb_x, int mb_y,
-                                    int blockshape_x, int blockshape_y, int *search_range);
+                                    short  ref_frame, int list, int mb_x, int mb_y, int bl_x, int bl_y, int *search_range);
 
 #endif

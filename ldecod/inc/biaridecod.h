@@ -29,7 +29,7 @@
 void arideco_start_decoding(DecodingEnvironmentPtr eep, unsigned char *code_buffer, int firstbyte, int *code_len);
 int  arideco_bits_read(DecodingEnvironmentPtr dep);
 void arideco_done_decoding(DecodingEnvironmentPtr dep);
-void biari_init_context (ImageParameters *img, BiContextTypePtr ctx, const int* ini);
+void biari_init_context (int qp, BiContextTypePtr ctx, const char* ini);
 void rescale_cum_freq(BiContextTypePtr bi_ct);
 unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi_ct );
 unsigned int biari_decode_symbol_eq_prob(DecodingEnvironmentPtr dep);

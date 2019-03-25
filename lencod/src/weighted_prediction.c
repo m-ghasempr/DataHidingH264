@@ -24,23 +24,33 @@
 *    Initialize weighting parameter functions
 ************************************************************************
 */
-void InitWP(InputParameters *params)
+void InitWP(ImageParameters *img, InputParameters *params)
 {
-  switch ( params->WPMethod )
+  if (params->WPIterMC && img->nal_reference_idc)
   {
-  default:
-  case 0:
-    EstimateWPPSlice = EstimateWPPSliceAlg0;
-    EstimateWPBSlice = EstimateWPBSliceAlg0;
-    TestWPPSlice = TestWPPSliceAlg0;
-    TestWPBSlice = TestWPBSliceAlg0;
-    break;
-  case 1:
-    EstimateWPPSlice = EstimateWPPSliceAlg1;
-    EstimateWPBSlice = EstimateWPBSliceAlg1;
-    TestWPPSlice = TestWPPSliceAlg1;
-    TestWPBSlice = TestWPBSliceAlg1;
-    break;
+    EstimateWPPSlice = EstimateWPPSliceAlg2;
+    EstimateWPBSlice = EstimateWPBSliceAlg2;
+    TestWPPSlice = TestWPPSliceAlg2;
+    TestWPBSlice = TestWPBSliceAlg2;
+  }
+  else
+  {
+    switch ( params->WPMethod )
+    {
+    default:
+    case 0:
+      EstimateWPPSlice = EstimateWPPSliceAlg0;
+      EstimateWPBSlice = EstimateWPBSliceAlg0;
+      TestWPPSlice = TestWPPSliceAlg0;
+      TestWPBSlice = TestWPBSliceAlg0;
+      break;
+    case 1:
+      EstimateWPPSlice = EstimateWPPSliceAlg1;
+      EstimateWPBSlice = EstimateWPBSliceAlg1;
+      TestWPPSlice = TestWPPSliceAlg1;
+      TestWPBSlice = TestWPBSliceAlg1;
+      break;
+    }
   }
 }
 

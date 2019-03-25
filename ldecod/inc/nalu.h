@@ -19,10 +19,20 @@
 
 #include "nalucommon.h"
 
-extern FILE *bits;
+typedef struct sBitsFile
+{
+  void (*OpenBitsFile)    (char *filename);
+  void (*CloseBitsFile)   (void);
+  int  (*GetNALU)         (NALU_t *nalu);
+} BitsFile;
 
-//int GetAnnexbNALU (NALU_t *nalu);
-int read_next_nalu(FILE *bitstream, NALU_t *nalu);
-int NALUtoRBSP (NALU_t *nalu);
+extern BitsFile bitsfile;
+
+extern void initBitsFile (int filemode);
+
+extern void CheckZeroByteNonVCL(NALU_t *nalu);
+extern void CheckZeroByteVCL(NALU_t *nalu);
+
+extern int read_next_nalu(NALU_t *nalu);
 
 #endif

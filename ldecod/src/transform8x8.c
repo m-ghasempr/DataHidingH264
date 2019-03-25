@@ -115,7 +115,7 @@ int intrapred8x8(ImageParameters *img,  //!< image parameters
   int ipos0 = ioff    , ipos1 = ioff + 1, ipos2 = ioff + 2, ipos3 = ioff + 3;
   int ipos4 = ioff + 4, ipos5 = ioff + 5, ipos6 = ioff + 6, ipos7 = ioff + 7;
   int jpos, ipos;
-  imgpel *pred_pels, (*mpr)[16] = img->mb_pred[pl];
+  imgpel *pred_pels, **mpr = img->mb_pred[pl];
   int *mb_size = img->mb_size[IS_LUMA];
 
   byte predmode = img->ipredmode[img_block_y][img_block_x];
@@ -784,18 +784,18 @@ void itrans8x8(ImageParameters *img, //!< image parameters
                int joff)            //!<
 {
   int i,j;
-  Boolean lossless_qpprime = (Boolean) (currMB->qp_scaled[pl] == 0 && img->lossless_qpprime_flag==1);
 
-  imgpel (*mpr)[16] = img->mb_pred[pl];
-  int    (*m7)[16]  = img->mb_rres[pl];
+  imgpel **mpr    = img->mb_pred[pl];
+  imgpel **mb_rec = img->mb_rec[pl];
+  int    **m7     = img->mb_rres[pl];
   int     max_imgpel_value = img->max_imgpel_value_comp[pl];
 
-  if(lossless_qpprime)
+  if (currMB->is_lossless == TRUE)
   {
     for( j = joff; j < joff + 8; j++)
     {
       for( i = ioff; i < ioff + 8; i++)
-        m7[j][i] = iClip1(max_imgpel_value, (m7[j][i] + (long)mpr[j][i])); 
+        mb_rec[j][i] = (imgpel) iClip1(max_imgpel_value, (m7[j][i] + (long)mpr[j][i])); 
     }
   }
   else
@@ -804,7 +804,7 @@ void itrans8x8(ImageParameters *img, //!< image parameters
     for( j = joff; j < joff + 8; j++)
     {
       for( i = ioff; i < ioff + 8; i++)
-        m7[j][i] = iClip1(max_imgpel_value, rshift_rnd_sf((m7[j][i] + ((long)mpr[j][i] << DQ_BITS_8)), DQ_BITS_8)); 
+        mb_rec[j][i] = (imgpel) iClip1(max_imgpel_value, rshift_rnd_sf((m7[j][i] + ((long)mpr[j][i] << DQ_BITS_8)), DQ_BITS_8)); 
     }
   }
 }

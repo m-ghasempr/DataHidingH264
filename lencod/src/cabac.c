@@ -1,4 +1,3 @@
-
 /*!
  *************************************************************************************
  * \file cabac.c
@@ -15,6 +14,7 @@
 #include "global.h"
 
 #include "cabac.h"
+#include "biariencode.h"
 #include "image.h"
 #include "mb_access.h"
 
@@ -24,31 +24,149 @@
   #define CABAC_TRACE
 #endif
 
+
+/***********************************************************************
+                   Constant declarations
+***********************************************************************
+*/
+
+const byte maxpos       [] = {15, 14, 63, 31, 31, 15,  3, 14,  7, 15, 15, 14, 63, 31, 31, 15, 15, 14, 63, 31, 31, 15};
+const byte c1isdc       [] = { 1,  0,  1,  1,  1,  1,  1,  0,  1,  1,  1,  0,  1,  1,  1,  1,  1,  0,  1,  1,  1,  1};
+
+const byte type2ctx_bcbp[] = { 0,  1,  2,  3,  3,  4,  5,  6,  5,  5, 10, 11, 12, 13, 13, 14, 16, 17, 18, 19, 19, 20};
+const byte type2ctx_map [] = { 0,  1,  2,  3,  4,  5,  6,  7,  6,  6, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21}; // 8
+const byte type2ctx_last[] = { 0,  1,  2,  3,  4,  5,  6,  7,  6,  6, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21}; // 8
+const byte type2ctx_one [] = { 0,  1,  2,  3,  3,  4,  5,  6,  5,  5, 10, 11, 12, 13, 13, 14, 16, 17, 18, 19, 19, 20}; // 7
+const byte type2ctx_abs [] = { 0,  1,  2,  3,  3,  4,  5,  6,  5,  5, 10, 11, 12, 13, 13, 14, 16, 17, 18, 19, 19, 20}; // 7
+const byte max_c2       [] = { 4,  4,  4,  4,  4,  4,  3,  4,  3,  3,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4}; // 9
+
+//===== position -> ctx for MAP =====
+//--- zig-zag scan ----
+const byte  pos2ctx_map8x8 [] = {
+  0,  1,  2,  3,  4,  5,  5,  4,  4,  3,  3,  4,  4,  4,  5,  5,
+  4,  4,  4,  4,  3,  3,  6,  7,  7,  7,  8,  9, 10,  9,  8,  7,
+  7,  6, 11, 12, 13, 11,  6,  7,  8,  9, 14, 10,  9,  8,  6, 11,
+  12, 13, 11,  6,  9, 14, 10,  9, 11, 12, 13, 11 ,14, 10, 12, 14
+}; // 15 CTX
+
+const byte  pos2ctx_map8x4 [] = {
+  0,  1,  2,  3,  4,  5,  7,  8,  9, 10, 11,  9,  8,  6,  7,  8,
+  9, 10, 11,  9,  8,  6, 12,  8,  9, 10, 11,  9, 13, 13, 14, 14
+}; // 15 CTX
+
+const byte  pos2ctx_map4x4 [] = {
+  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 14
+}; // 15 CTX
+
+const byte  pos2ctx_map2x4c[] = {
+  0,  0,  1,  1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2
+}; // 15 CTX
+
+const byte  pos2ctx_map4x4c[] = {
+  0,  0,  0,  0,  1,  1,  1,  1,  2,  2,  2,  2,  2,  2,  2,  2
+}; // 15 CTX
+
+const byte* pos2ctx_map    [] = {
+  pos2ctx_map4x4, pos2ctx_map4x4, pos2ctx_map8x8, pos2ctx_map8x4,
+  pos2ctx_map8x4, pos2ctx_map4x4, pos2ctx_map4x4, pos2ctx_map4x4,
+  pos2ctx_map2x4c, pos2ctx_map4x4c, 
+  pos2ctx_map4x4, pos2ctx_map4x4, pos2ctx_map8x8,pos2ctx_map8x4,
+  pos2ctx_map8x4, pos2ctx_map4x4,  //Cb component
+  pos2ctx_map4x4, pos2ctx_map4x4, pos2ctx_map8x8,pos2ctx_map8x4,
+  pos2ctx_map8x4,pos2ctx_map4x4  //Cr component
+};
+
+//--- interlace scan ----
+//Taken from ABT
+const byte  pos2ctx_map8x8i[] = {
+  0,  1,  1,  2,  2,  3,  3,  4,  5,  6,  7,  7,  7,  8,  4,  5,
+  6,  9, 10, 10,  8, 11, 12, 11,  9,  9, 10, 10,  8, 11, 12, 11,
+  9,  9, 10, 10,  8, 11, 12, 11,  9,  9, 10, 10,  8, 13, 13,  9,
+  9, 10, 10,  8, 13, 13,  9,  9, 10, 10, 14, 14, 14, 14, 14, 14
+}; // 15 CTX
+
+const byte  pos2ctx_map8x4i[] = { 
+  0,  1,  2,  3,  4,  5,  6,  3,  4,  5,  6,  3,  4,  7,  6,  8,
+  9,  7,  6,  8,  9, 10, 11, 12, 12, 10, 11, 13, 13, 14, 14, 14
+}; // 15 CTX
+
+const byte  pos2ctx_map4x8i[] = {
+  0,  1,  1,  1,  2,  3,  3,  4,  4,  4,  5,  6,  2,  7,  7,  8,
+  8,  8,  5,  6,  9, 10, 10, 11, 11, 11, 12, 13, 13, 14, 14, 14
+}; // 15 CTX
+
+const byte* pos2ctx_map_int[] = {
+  pos2ctx_map4x4, pos2ctx_map4x4, pos2ctx_map8x8i,pos2ctx_map8x4i,
+  pos2ctx_map4x8i,pos2ctx_map4x4, pos2ctx_map4x4, pos2ctx_map4x4,
+  pos2ctx_map2x4c, pos2ctx_map4x4c,
+  //444_TEMP_NOTE: the followings are addded for the 4:4:4 common mode};
+  pos2ctx_map4x4, pos2ctx_map4x4, pos2ctx_map8x8i,pos2ctx_map8x4i,
+  pos2ctx_map8x4i,pos2ctx_map4x4, //Cb component
+  pos2ctx_map4x4, pos2ctx_map4x4, pos2ctx_map8x8i,pos2ctx_map8x4i,
+  pos2ctx_map8x4i,pos2ctx_map4x4  //Cr component}
+};  
+
+
+//===== position -> ctx for LAST =====
+const byte  pos2ctx_last8x8 [] = {
+  0,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,
+  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,
+  3,  3,  3,  3,  3,  3,  3,  3,  4,  4,  4,  4,  4,  4,  4,  4,
+  5,  5,  5,  5,  6,  6,  6,  6,  7,  7,  7,  7,  8,  8,  8,  8
+}; //  9 CTX
+
+const byte  pos2ctx_last8x4 [] = {
+  0,  1,  1,  1,  1,  1,  1,  1,  2,  2,  2,  2,  2,  2,  2,  2,
+  3,  3,  3,  3,  4,  4,  4,  4,  5,  5,  6,  6,  7,  7,  8,  8
+}; //  9 CTX
+
+const byte  pos2ctx_last4x4 [] = {
+  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15
+}; // 15 CTX
+
+const byte  pos2ctx_last2x4c[] = {
+  0,  0,  1,  1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2
+}; // 15 CTX
+
+const byte  pos2ctx_last4x4c[] = { 
+  0,  0,  0,  0,  1,  1,  1,  1,  2,  2,  2,  2,  2,  2,  2,  2
+}; // 15 CTX
+
+const byte* pos2ctx_last    [] = {
+  pos2ctx_last4x4, pos2ctx_last4x4, pos2ctx_last8x8, pos2ctx_last8x4,
+  pos2ctx_last8x4, pos2ctx_last4x4, pos2ctx_last4x4, pos2ctx_last4x4,
+  pos2ctx_last2x4c, pos2ctx_last4x4c,
+  pos2ctx_last4x4, pos2ctx_last4x4, pos2ctx_last8x8,pos2ctx_last8x4,
+  pos2ctx_last8x4, pos2ctx_last4x4,  //Cb component
+  pos2ctx_last4x4, pos2ctx_last4x4, pos2ctx_last8x8,pos2ctx_last8x4,
+  pos2ctx_last8x4, pos2ctx_last4x4 //Cr component
+};
+
 /***********************************************************************
  * L O C A L L Y   D E F I N E D   F U N C T I O N   P R O T O T Y P E S
  ***********************************************************************
  */
 
 
-void unary_bin_encode(EncodingEnvironmentPtr eep_frame,
-                      unsigned int symbol,
-                      BiContextTypePtr ctx,
-                      int ctx_offset);
+static void unary_bin_encode(EncodingEnvironmentPtr eep_frame,
+                             unsigned int symbol,
+                             BiContextTypePtr ctx,
+                             int ctx_offset);
 
-void unary_bin_max_encode(EncodingEnvironmentPtr eep_frame,
-                          unsigned int symbol,
-                          BiContextTypePtr ctx,
-                          int ctx_offset,
-                          unsigned int max_symbol);
+static void unary_bin_max_encode(EncodingEnvironmentPtr eep_frame,
+                                 unsigned int symbol,
+                                 BiContextTypePtr ctx,
+                                 int ctx_offset,
+                                 unsigned int max_symbol);
 
-void unary_exp_golomb_level_encode( EncodingEnvironmentPtr eep_dp,
-                                    unsigned int symbol,
-                                    BiContextTypePtr ctx);
+static void unary_exp_golomb_level_encode( EncodingEnvironmentPtr eep_dp,
+                                          unsigned int symbol,
+                                          BiContextTypePtr ctx);
 
-void unary_exp_golomb_mv_encode(EncodingEnvironmentPtr eep_dp,
-                                unsigned int symbol,
-                                BiContextTypePtr ctx,
-                                unsigned int max_bin);
+static void unary_exp_golomb_mv_encode(EncodingEnvironmentPtr eep_dp,
+                                       unsigned int symbol,
+                                       BiContextTypePtr ctx,
+                                       unsigned int max_bin);
 
 
 
@@ -158,16 +276,17 @@ void writeFieldModeInfo_CABAC(SyntaxElement *se, DataPartition *dp)
 {
   EncodingEnvironmentPtr eep_dp = &(dp->ee_cabac);
   int curr_len = arienco_bits_written(eep_dp);
-  MotionInfoContexts *ctx     = (img->currentSlice)->mot_ctx;
   Macroblock         *currMB  = &img->mb_data[img->current_mb_nr];
-  int                mb_field = se->value1;
-
   int a = currMB->mbAvailA ? img->mb_data[currMB->mbAddrA].mb_field : 0;
   int b = currMB->mbAvailB ? img->mb_data[currMB->mbAddrB].mb_field : 0;
 
   int act_ctx = a + b;
-
-  biari_encode_symbol(eep_dp, (signed short) (mb_field != 0),&ctx->mb_aff_contexts[act_ctx]);
+#if ENABLE_FIELD_CTX
+  MotionInfoContexts *ctx     = (img->currentSlice)->mot_ctx;
+  int                mb_field = se->value1;
+  
+  biari_encode_symbol(eep_dp, (signed short) (mb_field != 0), &ctx->mb_aff_contexts[act_ctx]);
+#endif
 
   se->context = act_ctx;
 
@@ -269,7 +388,6 @@ void writeMB_typeInfo_CABAC(SyntaxElement *se, DataPartition *dp)
   int bframe   = (img->type==B_SLICE);
   int mode_sym = 0;
   int mode16x16;
-
 
   MotionInfoContexts *ctx         = (img->currentSlice)->mot_ctx;
   Macroblock         *currMB      = &img->mb_data[img->current_mb_nr];
@@ -656,34 +774,38 @@ void writeRefFrame_CABAC(SyntaxElement *se, DataPartition *dp)
   get4x4Neighbour(currMB, (img->subblock_x << 2) - 1, (img->subblock_y << 2)    , mb_size, &block_a);
   get4x4Neighbour(currMB, (img->subblock_x << 2),     (img->subblock_y << 2) - 1, mb_size, &block_b);
 
-  b8a=((block_a.x >> 1) & 0x01)+2*((block_a.y >> 1) & 0x01);
-  b8b=((block_b.x >> 1) & 0x01)+2*((block_b.y >> 1) & 0x01);
-
-
   if (!block_b.available)
     b=0;
-  //else if (IS_DIRECT(&img->mb_data[block_b.mb_addr]) || (img->mb_data[block_b.mb_addr].b8mode[b8b]==0 && bslice))
-  else if ((IS_DIRECT(&img->mb_data[block_b.mb_addr]) && !giRDOpt_B8OnlyFlag) || (img->mb_data[block_b.mb_addr].b8mode[b8b]==0 && bslice))
-    b=0;
-  else
+  else 
   {
-    if (img->MbaffFrameFlag && (currMB->mb_field == 0) && (img->mb_data[block_b.mb_addr].mb_field == 1))
-      b = (refframe_array[block_b.pos_y][block_b.pos_x] > 1 ? 1 : 0);
+    b8b=((block_b.x >> 1) & 0x01)+2*((block_b.y >> 1) & 0x01);
+    // if (IS_DIRECT(&img->mb_data[block_b.mb_addr]) || (img->mb_data[block_b.mb_addr].b8mode[b8b]==0 && bslice))
+    if ((IS_DIRECT(&img->mb_data[block_b.mb_addr]) && !giRDOpt_B8OnlyFlag) || (img->mb_data[block_b.mb_addr].b8mode[b8b]==0 && bslice))
+      b=0;
     else
-      b = (refframe_array[block_b.pos_y][block_b.pos_x] > 0 ? 1 : 0);
+    {
+      if (img->MbaffFrameFlag && (currMB->mb_field == 0) && (img->mb_data[block_b.mb_addr].mb_field == 1))
+        b = (refframe_array[block_b.pos_y][block_b.pos_x] > 1 ? 1 : 0);
+      else
+        b = (refframe_array[block_b.pos_y][block_b.pos_x] > 0 ? 1 : 0);
+    }
   }
 
   if (!block_a.available)
     a=0;
-  // else if (IS_DIRECT(&img->mb_data[block_a.mb_addr]) || (img->mb_data[block_a.mb_addr].b8mode[b8a]==0 && bslice))
-  else if ((IS_DIRECT(&img->mb_data[block_a.mb_addr]) && !giRDOpt_B8OnlyFlag) || (img->mb_data[block_a.mb_addr].b8mode[b8a]==0 && bslice))
-    a=0;
-  else
+  else 
   {
-    if (img->MbaffFrameFlag && (currMB->mb_field == 0) && (img->mb_data[block_a.mb_addr].mb_field == 1))
-      a = (refframe_array[block_a.pos_y][block_a.pos_x] > 1 ? 1 : 0);
+    b8a=((block_a.x >> 1) & 0x01)+2*((block_a.y >> 1) & 0x01);
+    // if (IS_DIRECT(&img->mb_data[block_a.mb_addr]) || (img->mb_data[block_a.mb_addr].b8mode[b8a]==0 && bslice))
+    if ((IS_DIRECT(&img->mb_data[block_a.mb_addr]) && !giRDOpt_B8OnlyFlag) || (img->mb_data[block_a.mb_addr].b8mode[b8a]==0 && bslice))
+      a=0;
     else
-      a = (refframe_array[block_a.pos_y][block_a.pos_x] > 0 ? 1 : 0);
+    {
+      if (img->MbaffFrameFlag && (currMB->mb_field == 0) && (img->mb_data[block_a.mb_addr].mb_field == 1))
+        a = (refframe_array[block_a.pos_y][block_a.pos_x] > 1 ? 1 : 0);
+      else
+        a = (refframe_array[block_a.pos_y][block_a.pos_x] > 0 ? 1 : 0);
+    }
   }
 
   act_ctx     = a + 2*b;
@@ -865,7 +987,7 @@ void writeCIPredMode_CABAC(SyntaxElement *se, DataPartition *dp)
   else
   {
     biari_encode_symbol(eep_dp, 1, ctx->cipr_contexts + act_ctx );
-    unary_bin_max_encode(eep_dp,(unsigned int) (act_sym-1),ctx->cipr_contexts+3,0,2);
+    unary_bin_max_encode(eep_dp,(unsigned int) (act_sym-1),ctx->cipr_contexts + 3,0,2);
   }
 
   dp->bitstream->write_flag = 1;
@@ -987,16 +1109,6 @@ void writeCBP_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartition *dp)
   CABAC_TRACE;
 }
 
-const int maxpos       [] = {15, 14, 63, 31, 31, 15,  3, 14,  7, 15, 15, 14, 63, 31, 31, 15, 15, 14, 63, 31, 31, 15};
-const int c1isdc       [] = { 1,  0,  1,  1,  1,  1,  1,  0,  1,  1,  1,  0,  1,  1,  1,  1,  1,  0,  1,  1,  1,  1};
-
-const int type2ctx_bcbp[] = { 0,  1,  2,  3,  3,  4,  5,  6,  5,  5, 10, 11, 12, 13, 13, 14, 16, 17, 18, 19, 19, 20};
-const int type2ctx_map [] = { 0,  1,  2,  3,  4,  5,  6,  7,  6,  6, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21}; // 8
-const int type2ctx_last[] = { 0,  1,  2,  3,  4,  5,  6,  7,  6,  6, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21}; // 8
-const int type2ctx_one [] = { 0,  1,  2,  3,  3,  4,  5,  6,  5,  5, 10, 11, 12, 13, 13, 14, 16, 17, 18, 19, 19, 20}; // 7
-const int type2ctx_abs [] = { 0,  1,  2,  3,  3,  4,  5,  6,  5,  5, 10, 11, 12, 13, 13, 14, 16, 17, 18, 19, 19, 20}; // 7
-const int max_c2       [] = { 4,  4,  4,  4,  4,  4,  3,  4,  3,  3,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4}; // 9
-
 /*!
  ****************************************************************************
  * \brief
@@ -1005,7 +1117,6 @@ const int max_c2       [] = { 4,  4,  4,  4,  4,  4,  3,  4,  3,  3,  4,  4,  4,
  */
 void write_and_store_CBP_block_bit (Macroblock* currMB, EncodingEnvironmentPtr eep_dp, int type, int cbp_bit, TextureInfoContexts*  tex_ctx)
 {
-#define BIT_SET(x,n)  ((int)(((x)&((int64)1<<(n)))>>(n)))
 
   int y_ac        = (type==LUMA_16AC || type==LUMA_8x8 || type==LUMA_8x4 || type==LUMA_4x8 || type==LUMA_4x4
                      || type==CB_16AC || type==CB_8x8 || type==CB_8x4 || type==CB_4x8 || type==CB_4x4
@@ -1126,7 +1237,7 @@ void write_and_store_CBP_block_bit (Macroblock* currMB, EncodingEnvironmentPtr e
         if(img->mb_data[block_b.mb_addr].mb_type==IPCM)
           upper_bit = 1;
         else
-          upper_bit = BIT_SET(img->mb_data[block_b.mb_addr].cbp_bits[0],bit+bit_pos_b);
+          upper_bit = get_bit(img->mb_data[block_b.mb_addr].cbp_bits[0],bit+bit_pos_b);
       }
 
 
@@ -1135,7 +1246,7 @@ void write_and_store_CBP_block_bit (Macroblock* currMB, EncodingEnvironmentPtr e
         if(img->mb_data[block_a.mb_addr].mb_type == IPCM)
           left_bit = 1;
         else
-          left_bit = BIT_SET(img->mb_data[block_a.mb_addr].cbp_bits[0], bit + bit_pos_a);
+          left_bit = get_bit(img->mb_data[block_a.mb_addr].cbp_bits[0], bit + bit_pos_a);
       }
 
       ctx = 2 * upper_bit + left_bit;
@@ -1153,7 +1264,7 @@ void write_and_store_CBP_block_bit (Macroblock* currMB, EncodingEnvironmentPtr e
         if(img->mb_data[block_b.mb_addr].mb_type==IPCM)
           upper_bit = 1;
         else
-          upper_bit = BIT_SET(img->mb_data[block_b.mb_addr].cbp_bits[0],bit+bit_pos_b);
+          upper_bit = get_bit(img->mb_data[block_b.mb_addr].cbp_bits[0],bit+bit_pos_b);
       }
 
 
@@ -1162,7 +1273,7 @@ void write_and_store_CBP_block_bit (Macroblock* currMB, EncodingEnvironmentPtr e
         if(img->mb_data[block_a.mb_addr].mb_type == IPCM)
           left_bit = 1;
         else
-          left_bit = BIT_SET(img->mb_data[block_a.mb_addr].cbp_bits[0], bit + bit_pos_a);
+          left_bit = get_bit(img->mb_data[block_a.mb_addr].cbp_bits[0], bit + bit_pos_a);
       }
 
       ctx = 2 * upper_bit + left_bit;
@@ -1180,17 +1291,17 @@ void write_and_store_CBP_block_bit (Macroblock* currMB, EncodingEnvironmentPtr e
       else
       {
         if(type==LUMA_8x8)
-          upper_bit = BIT_SET(img->mb_data[block_b.mb_addr].cbp_bits_8x8[0], bit + bit_pos_b);
+          upper_bit = get_bit(img->mb_data[block_b.mb_addr].cbp_bits_8x8[0], bit + bit_pos_b);
         else if (type==CB_8x8)
-          upper_bit = BIT_SET(img->mb_data[block_b.mb_addr].cbp_bits_8x8[1], bit + bit_pos_b);
+          upper_bit = get_bit(img->mb_data[block_b.mb_addr].cbp_bits_8x8[1], bit + bit_pos_b);
         else if (type==CR_8x8)
-          upper_bit = BIT_SET(img->mb_data[block_b.mb_addr].cbp_bits_8x8[2], bit + bit_pos_b);
+          upper_bit = get_bit(img->mb_data[block_b.mb_addr].cbp_bits_8x8[2], bit + bit_pos_b);
         else if ((type==CB_4x4)||(type==CB_4x8)||(type==CB_8x4)||(type==CB_16AC)||(type==CB_16DC))
-          upper_bit = BIT_SET(img->mb_data[block_b.mb_addr].cbp_bits[1], bit + bit_pos_b);
+          upper_bit = get_bit(img->mb_data[block_b.mb_addr].cbp_bits[1], bit + bit_pos_b);
         else if ((type==CR_4x4)||(type==CR_4x8)||(type==CR_8x4)||(type==CR_16AC)||(type==CR_16DC))
-          upper_bit = BIT_SET(img->mb_data[block_b.mb_addr].cbp_bits[2], bit + bit_pos_b);
+          upper_bit = get_bit(img->mb_data[block_b.mb_addr].cbp_bits[2], bit + bit_pos_b);
         else
-          upper_bit = BIT_SET(img->mb_data[block_b.mb_addr].cbp_bits[0], bit + bit_pos_b);
+          upper_bit = get_bit(img->mb_data[block_b.mb_addr].cbp_bits[0], bit + bit_pos_b);
       }
     }
 
@@ -1201,17 +1312,17 @@ void write_and_store_CBP_block_bit (Macroblock* currMB, EncodingEnvironmentPtr e
       else
       {
         if(type==LUMA_8x8)
-          left_bit = BIT_SET(img->mb_data[block_a.mb_addr].cbp_bits_8x8[0],bit + bit_pos_a);
+          left_bit = get_bit(img->mb_data[block_a.mb_addr].cbp_bits_8x8[0],bit + bit_pos_a);
         else if (type==CB_8x8)
-          left_bit = BIT_SET(img->mb_data[block_a.mb_addr].cbp_bits_8x8[1],bit + bit_pos_a);
+          left_bit = get_bit(img->mb_data[block_a.mb_addr].cbp_bits_8x8[1],bit + bit_pos_a);
         else if (type==CR_8x8)
-          left_bit = BIT_SET(img->mb_data[block_a.mb_addr].cbp_bits_8x8[2],bit + bit_pos_a);
+          left_bit = get_bit(img->mb_data[block_a.mb_addr].cbp_bits_8x8[2],bit + bit_pos_a);
         else if ((type==CB_4x4)||(type==CB_4x8)||(type==CB_8x4)||(type==CB_16AC)||(type==CB_16DC))
-          left_bit = BIT_SET(img->mb_data[block_a.mb_addr].cbp_bits[1],bit + bit_pos_a);
+          left_bit = get_bit(img->mb_data[block_a.mb_addr].cbp_bits[1],bit + bit_pos_a);
         else if ((type==CR_4x4)||(type==CR_4x8)||(type==CR_8x4)||(type==CR_16AC)||(type==CR_16DC))
-          left_bit = BIT_SET(img->mb_data[block_a.mb_addr].cbp_bits[2],bit + bit_pos_a);
+          left_bit = get_bit(img->mb_data[block_a.mb_addr].cbp_bits[2],bit + bit_pos_a);
         else
-          left_bit = BIT_SET(img->mb_data[block_a.mb_addr].cbp_bits[0],bit + bit_pos_a);
+          left_bit = get_bit(img->mb_data[block_a.mb_addr].cbp_bits[0],bit + bit_pos_a);
       }
     }
 
@@ -1223,70 +1334,6 @@ void write_and_store_CBP_block_bit (Macroblock* currMB, EncodingEnvironmentPtr e
 }
 
 
-
-
-//===== position -> ctx for MAP =====
-//--- zig-zag scan ----
-const int  pos2ctx_map8x8 [] = { 0,  1,  2,  3,  4,  5,  5,  4,  4,  3,  3,  4,  4,  4,  5,  5,
-                                        4,  4,  4,  4,  3,  3,  6,  7,  7,  7,  8,  9, 10,  9,  8,  7,
-                                        7,  6, 11, 12, 13, 11,  6,  7,  8,  9, 14, 10,  9,  8,  6, 11,
-                                       12, 13, 11,  6,  9, 14, 10,  9, 11, 12, 13, 11 ,14, 10, 12, 14}; // 15 CTX
-const int  pos2ctx_map8x4 [] = { 0,  1,  2,  3,  4,  5,  7,  8,  9, 10, 11,  9,  8,  6,  7,  8,
-                                        9, 10, 11,  9,  8,  6, 12,  8,  9, 10, 11,  9, 13, 13, 14, 14}; // 15 CTX
-const int  pos2ctx_map4x4 [] = { 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 14}; // 15 CTX
-const int  pos2ctx_map2x4c[] = { 0,  0,  1,  1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2}; // 15 CTX
-const int  pos2ctx_map4x4c[] = { 0,  0,  0,  0,  1,  1,  1,  1,  2,  2,  2,  2,  2,  2,  2,  2}; // 15 CTX
-const int* pos2ctx_map    [] = {pos2ctx_map4x4, pos2ctx_map4x4, pos2ctx_map8x8, pos2ctx_map8x4,
-                                       pos2ctx_map8x4, pos2ctx_map4x4, pos2ctx_map4x4, pos2ctx_map4x4,
-                                       pos2ctx_map2x4c, pos2ctx_map4x4c, 
-
-                                       pos2ctx_map4x4, pos2ctx_map4x4, pos2ctx_map8x8,pos2ctx_map8x4,
-                                       pos2ctx_map8x4, pos2ctx_map4x4,  //Cb component
-                                       pos2ctx_map4x4, pos2ctx_map4x4, pos2ctx_map8x8,pos2ctx_map8x4,
-                                       pos2ctx_map8x4,pos2ctx_map4x4};  //Cr component
-
-//--- interlace scan ----
-//Taken from ABT
-static const int  pos2ctx_map8x8i[] = { 0,  1,  1,  2,  2,  3,  3,  4,  5,  6,  7,  7,  7,  8,  4,  5,
-                                        6,  9, 10, 10,  8, 11, 12, 11,  9,  9, 10, 10,  8, 11, 12, 11,
-                                        9,  9, 10, 10,  8, 11, 12, 11,  9,  9, 10, 10,  8, 13, 13,  9,
-                                        9, 10, 10,  8, 13, 13,  9,  9, 10, 10, 14, 14, 14, 14, 14, 14}; // 15 CTX
-
-static const int  pos2ctx_map8x4i[] = { 0,  1,  2,  3,  4,  5,  6,  3,  4,  5,  6,  3,  4,  7,  6,  8,
-                                        9,  7,  6,  8,  9, 10, 11, 12, 12, 10, 11, 13, 13, 14, 14, 14}; // 15 CTX
-static const int  pos2ctx_map4x8i[] = { 0,  1,  1,  1,  2,  3,  3,  4,  4,  4,  5,  6,  2,  7,  7,  8,
-                                        8,  8,  5,  6,  9, 10, 10, 11, 11, 11, 12, 13, 13, 14, 14, 14}; // 15 CTX
-static const int* pos2ctx_map_int[] = {pos2ctx_map4x4, pos2ctx_map4x4, pos2ctx_map8x8i,pos2ctx_map8x4i,
-                                       pos2ctx_map4x8i,pos2ctx_map4x4, pos2ctx_map4x4, pos2ctx_map4x4,
-                                       pos2ctx_map2x4c, pos2ctx_map4x4c,
-//444_TEMP_NOTE: the followings are addded for the 4:4:4 common mode};
-                                        pos2ctx_map4x4, pos2ctx_map4x4, pos2ctx_map8x8i,pos2ctx_map8x4i,
-                                        pos2ctx_map8x4i,pos2ctx_map4x4, //Cb component
-                                        pos2ctx_map4x4, pos2ctx_map4x4, pos2ctx_map8x8i,pos2ctx_map8x4i,
-                                        pos2ctx_map8x4i,pos2ctx_map4x4};  //Cr component}
-
-
-//===== position -> ctx for LAST =====
-const int  pos2ctx_last8x8 [] = { 0,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,
-                                         2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,
-                                         3,  3,  3,  3,  3,  3,  3,  3,  4,  4,  4,  4,  4,  4,  4,  4,
-                                         5,  5,  5,  5,  6,  6,  6,  6,  7,  7,  7,  7,  8,  8,  8,  8}; //  9 CTX
-const int  pos2ctx_last8x4 [] = { 0,  1,  1,  1,  1,  1,  1,  1,  2,  2,  2,  2,  2,  2,  2,  2,
-                                         3,  3,  3,  3,  4,  4,  4,  4,  5,  5,  6,  6,  7,  7,  8,  8}; //  9 CTX
-const int  pos2ctx_last4x4 [] = { 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15}; // 15 CTX
-const int  pos2ctx_last2x4c[] = { 0,  0,  1,  1,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2}; // 15 CTX
-const int  pos2ctx_last4x4c[] = { 0,  0,  0,  0,  1,  1,  1,  1,  2,  2,  2,  2,  2,  2,  2,  2}; // 15 CTX
-const int* pos2ctx_last    [] = {pos2ctx_last4x4, pos2ctx_last4x4, pos2ctx_last8x8, pos2ctx_last8x4,
-                                        pos2ctx_last8x4, pos2ctx_last4x4, pos2ctx_last4x4, pos2ctx_last4x4,
-                                        pos2ctx_last2x4c, pos2ctx_last4x4c,
-                                        pos2ctx_last4x4, pos2ctx_last4x4, pos2ctx_last8x8,pos2ctx_last8x4,
-                                        pos2ctx_last8x4, pos2ctx_last4x4,  //Cb component
-                                        pos2ctx_last4x4, pos2ctx_last4x4, pos2ctx_last8x8,pos2ctx_last8x4,
-                                        pos2ctx_last8x4, pos2ctx_last4x4}; //Cr component
-
-
-
-
 /*!
 ****************************************************************************
 * \brief
@@ -1295,8 +1342,8 @@ const int* pos2ctx_last    [] = {pos2ctx_last4x4, pos2ctx_last4x4, pos2ctx_last8
 */
 void write_significance_map (Macroblock* currMB, EncodingEnvironmentPtr eep_dp, int type, int coeff[], int coeff_ctr, TextureInfoContexts*  tex_ctx)
 {
-  int   k;
-  unsigned short sig, last;
+  static int   k;
+  static unsigned short sig, last;
   int   k0 = 0;
   int   k1 = maxpos[type];
 
@@ -1307,45 +1354,25 @@ void write_significance_map (Macroblock* currMB, EncodingEnvironmentPtr eep_dp, 
 #endif
   BiContextTypePtr  map_ctx   = tex_ctx->map_contexts [fld][type2ctx_map [type]];
   BiContextTypePtr  last_ctx  = tex_ctx->last_contexts[fld][type2ctx_last[type]];
-
+  const byte *pos2ctxmap  = fld ? pos2ctx_map_int [type] : pos2ctx_map  [type];
+  const byte *pos2ctxlast = pos2ctx_last[type];
 
   if (!c1isdc[type])
   {
     k0++; k1++; coeff--;
   }
 
-  if (!fld)
+  for (k=k0; k<k1; k++) // if last coeff is reached, it has to be significant
   {
-    for (k=k0; k<k1; k++) // if last coeff is reached, it has to be significant
+    sig   = (coeff[k] != 0);
+    biari_encode_symbol  (eep_dp, sig,  map_ctx + pos2ctxmap[k]);
+    if (sig)
     {
-      sig   = (coeff[k] != 0);
-      biari_encode_symbol  (eep_dp, sig,  map_ctx + pos2ctx_map  [type][k]);
-      if (sig)
-      {
-        last = (--coeff_ctr == 0);
+      last = (--coeff_ctr == 0);
 
-        biari_encode_symbol(eep_dp, last, last_ctx + pos2ctx_last[type][k]);
-        if (last) 
-          return;
-      }
-    }
-    return;
-  }
-  else
-  {
-    for (k=k0; k<k1; k++) // if last coeff is reached, it has to be significant
-    {
-      sig   = (coeff[k] != 0);
-
-      biari_encode_symbol  (eep_dp, sig,  map_ctx + pos2ctx_map_int [type][k]);
-      if (sig)
-      {
-        last = (--coeff_ctr == 0);
-
-        biari_encode_symbol(eep_dp, last, last_ctx + pos2ctx_last[type][k]);
-        if (last) 
-          return;
-      }
+      biari_encode_symbol(eep_dp, last, last_ctx + pos2ctxlast[k]);
+      if (last) 
+        return;
     }
   }
 }
@@ -1359,15 +1386,15 @@ void write_significance_map (Macroblock* currMB, EncodingEnvironmentPtr eep_dp, 
  */
 void write_significant_coefficients (Macroblock* currMB, EncodingEnvironmentPtr eep_dp, int type, int coeff[], TextureInfoContexts*  tex_ctx)
 {
-  int   i;
+  BiContextType *one_contexts = tex_ctx->one_contexts[type2ctx_one[type]];
+  BiContextType *abs_contexts = tex_ctx->abs_contexts[type2ctx_abs[type]];  
   int   absLevel;
   int   ctx;
   short sign;
   short greater_one;
   int   c1 = 1;
   int   c2 = 0;
-  BiContextType *one_contexts = tex_ctx->one_contexts[type2ctx_one[type]];
-  BiContextType *abs_contexts = tex_ctx->abs_contexts[type2ctx_abs[type]];
+  int   i;
 
   for (i=maxpos[type]; i>=0; i--)
   {
@@ -1462,14 +1489,13 @@ void writeRunLevel_CABAC (Macroblock* currMB, SyntaxElement *se, DataPartition *
  *    Unary binarization and encoding of a symbol by using
  *    one or two distinct models for the first two and all
  *    remaining bins
-*
-************************************************************************/
-void unary_bin_encode(EncodingEnvironmentPtr eep_dp,
+ *
+ ************************************************************************/
+static void unary_bin_encode(EncodingEnvironmentPtr eep_dp,
                       unsigned int symbol,
                       BiContextTypePtr ctx,
                       int ctx_offset)
-{
-  
+{  
   if (symbol==0)
   {
     biari_encode_symbol(eep_dp, 0, ctx );
@@ -1494,7 +1520,7 @@ void unary_bin_encode(EncodingEnvironmentPtr eep_dp,
  *    (finite symbol alphabet)
  ************************************************************************
  */
-void unary_bin_max_encode(EncodingEnvironmentPtr eep_dp,
+static void unary_bin_max_encode(EncodingEnvironmentPtr eep_dp,
                           unsigned int symbol,
                           BiContextTypePtr ctx,
                           int ctx_offset,
@@ -1517,7 +1543,6 @@ void unary_bin_max_encode(EncodingEnvironmentPtr eep_dp,
       biari_encode_symbol(eep_dp, 0, ctx);
   }
 }
-
 
 
 /*!
@@ -1554,7 +1579,7 @@ void exp_golomb_encode_eq_prob( EncodingEnvironmentPtr eep_dp,
  *    Exp-Golomb for Level Encoding
 *
 ************************************************************************/
-void unary_exp_golomb_level_encode( EncodingEnvironmentPtr eep_dp,
+static void unary_exp_golomb_level_encode( EncodingEnvironmentPtr eep_dp,
                                     unsigned int symbol,
                                     BiContextTypePtr ctx)
 {
@@ -1565,20 +1590,18 @@ void unary_exp_golomb_level_encode( EncodingEnvironmentPtr eep_dp,
   }
   else
   {
-    unsigned int exp_start = 13; // 15-2 : 0,1 level decision always sent
     unsigned int l=symbol;
     unsigned int k = 1;
 
     biari_encode_symbol(eep_dp, 1, ctx );
-    while (((--l)>0) && (++k <= exp_start))
+    while (((--l)>0) && (++k <= 13))
       biari_encode_symbol(eep_dp, 1, ctx);
-    if (symbol < exp_start) 
+    if (symbol < 13) 
       biari_encode_symbol(eep_dp, 0, ctx);
     else 
-      exp_golomb_encode_eq_prob(eep_dp,symbol - exp_start, 0);
+      exp_golomb_encode_eq_prob(eep_dp,symbol - 13, 0);
   }
 }
-
 
 
 /*!
@@ -1587,7 +1610,7 @@ void unary_exp_golomb_level_encode( EncodingEnvironmentPtr eep_dp,
  *    Exp-Golomb for MV Encoding
 *
 ************************************************************************/
-void unary_exp_golomb_mv_encode(EncodingEnvironmentPtr eep_dp,
+static void unary_exp_golomb_mv_encode(EncodingEnvironmentPtr eep_dp,
                                 unsigned int symbol,
                                 BiContextTypePtr ctx,
                                 unsigned int max_bin)
@@ -1599,12 +1622,11 @@ void unary_exp_golomb_mv_encode(EncodingEnvironmentPtr eep_dp,
   }
   else
   {
-    unsigned int bin=1;
-    unsigned int exp_start = 8; // 9-1 : 0 mvd decision always sent
+    unsigned int bin = 1;
     unsigned int l = symbol, k = 1;
     biari_encode_symbol(eep_dp, 1, ctx++ );
-    
-    while (((--l)>0) && (++k <= exp_start))
+
+    while (((--l)>0) && (++k <= 8))
     {
       biari_encode_symbol(eep_dp, 1, ctx  );
       if ((++bin) == 2) 
@@ -1612,10 +1634,10 @@ void unary_exp_golomb_mv_encode(EncodingEnvironmentPtr eep_dp,
       if (bin == max_bin) 
         ctx++;
     }
-    if (symbol < exp_start) 
+    if (symbol < 8) 
       biari_encode_symbol(eep_dp, 0, ctx);
     else 
-      exp_golomb_encode_eq_prob(eep_dp, symbol - exp_start, 3);
+      exp_golomb_encode_eq_prob(eep_dp, symbol - 8, 3);
   }
 }
 

@@ -28,16 +28,10 @@
 #include "quant8x8.h"
 #include "rdoq.h"
 
-
-extern const byte SNGL_SCAN[16][2]; // need to revisit
-extern const byte FIELD_SCAN[16][2]; 
-extern const byte FIELD_SCAN8x8[64][2];
-extern const byte SNGL_SCAN8x8[64][2];
-
-void rdoq_8x8_CABAC(int (*tblock)[16], int block_y, int block_x, int qp_per, int qp_rem, 
+void rdoq_8x8_CABAC(int **tblock, int block_y, int block_x, int qp_per, int qp_rem, 
                     int **levelscale, int **leveloffset, const byte *p_scan, int levelTrellis[64]);
 
-void rdoq_8x8_CAVLC(int (*tblock)[16], int block_y, int block_x, int qp_per, int qp_rem, 
+void rdoq_8x8_CAVLC(int **tblock, int block_y, int block_x, int qp_per, int qp_rem, 
                     int **levelscale, int **leveloffset, const byte *p_scan, int levelTrellis[4][16]);
 
 /*!
@@ -51,7 +45,7 @@ void rdoq_8x8_CAVLC(int (*tblock)[16], int block_y, int block_x, int qp_per, int
  *
  ************************************************************************
  */
-int quant_8x8_trellis(int (*tblock)[16], int block_y, int block_x, int  qp,                
+int quant_8x8_trellis(int **tblock, int block_y, int block_x, int  qp,                
                       int*  ACLevel, int*  ACRun, 
                       int **fadjust8x8, int **levelscale, int **invlevelscale, int **leveloffset,
                       int *coeff_cost, const byte (*pos_scan)[2], const byte *c_cost)
@@ -125,7 +119,7 @@ int quant_8x8_trellis(int (*tblock)[16], int block_y, int block_x, int  qp,
  *
  ************************************************************************
  */
-int quant_8x8cavlc_trellis(int (*tblock)[16], int block_y, int block_x, int  qp, int***  cofAC, 
+int quant_8x8cavlc_trellis(int **tblock, int block_y, int block_x, int  qp, int***  cofAC, 
                            int **fadjust8x8, int **levelscale, int **invlevelscale, int **leveloffset,
                            int *coeff_cost, const byte (*pos_scan)[2], const byte *c_cost)
 {
@@ -205,7 +199,7 @@ int quant_8x8cavlc_trellis(int (*tblock)[16], int block_y, int block_x, int  qp,
 *
 ************************************************************************
 */
-void rdoq_8x8_CABAC(int (*tblock)[16], int block_y, int block_x,int qp_per, int qp_rem, 
+void rdoq_8x8_CABAC(int **tblock, int block_y, int block_x,int qp_per, int qp_rem, 
               int **levelscale, int **leveloffset, const byte *p_scan, int levelTrellis[64])
 {
   levelDataStruct levelData[64];
@@ -234,7 +228,7 @@ void rdoq_8x8_CABAC(int (*tblock)[16], int block_y, int block_x,int qp_per, int 
 *
 ************************************************************************
 */
-void rdoq_8x8_CAVLC(int (*tblock)[16], int block_y, int block_x, int qp_per, int qp_rem,
+void rdoq_8x8_CAVLC(int **tblock, int block_y, int block_x, int qp_per, int qp_rem,
                     int **levelscale, int **leveloffset, const byte *p_scan, int levelTrellis[4][16])
 {
   int k;

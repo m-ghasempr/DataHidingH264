@@ -18,18 +18,6 @@
 #ifndef _ME_DISTORTION_H_
 #define _ME_DISTORTION_H_
 
-extern imgpel *(*get_line[2]) (imgpel****, int, int);
-extern imgpel *(*get_line1[2]) (imgpel****, int, int);
-extern imgpel *(*get_line2[2]) (imgpel****, int, int);
-
-extern imgpel *(*get_crline[2]) (imgpel****, int, int);
-extern imgpel *(*get_crline1[2]) (imgpel****, int, int);
-extern imgpel *(*get_crline2[2]) (imgpel****, int, int);
-
-extern int ref_access_method;
-extern int bipred1_access_method;
-extern int bipred2_access_method;
-
 extern SubImageContainer ref_pic_sub;
 extern SubImageContainer ref_pic1_sub;
 extern SubImageContainer ref_pic2_sub;
@@ -62,7 +50,6 @@ extern int computeBiPred8x16SAD1 (imgpel* , int, int, int, int, int, int, int);
 extern int computeBiPred16x8SAD1 (imgpel* , int, int, int, int, int, int, int);
 extern int computeBiPred16x16SAD1(imgpel* , int, int, int, int, int, int, int);
 
-
 extern int computeBiPredSATD1     (imgpel* , int, int, int, int, int, int, int);
 extern int computeBiPred8x8SATD1  (imgpel* , int, int, int, int, int, int, int);
 extern int computeBiPred8x16SATD1 (imgpel* , int, int, int, int, int, int, int);
@@ -71,7 +58,15 @@ extern int computeBiPred16x16SATD1(imgpel* , int, int, int, int, int, int, int);
 
 extern int computeSADWP(imgpel* , int, int, int, int, int);
 extern int computeBiPredSAD2(imgpel* , int, int, int, int, int, int, int);
-extern int computeSATD(imgpel* , int, int, int, int, int);
+
+extern int computeSATD        (imgpel* , int, int, int, int, int);
+extern int computeSAT4x4D     (imgpel* , int, int, int, int, int);
+extern int computeSAT8x8D     (imgpel* , int, int, int, int, int);
+extern int computeSAT8x8D16x8 (imgpel* , int, int, int, int, int);
+extern int computeSAT4x4D16x8 (imgpel* , int, int, int, int, int);
+extern int computeSAT8x8D16x16(imgpel* , int, int, int, int, int);
+extern int computeSAT4x4D16x16(imgpel* , int, int, int, int, int);
+
 extern int computeSATDWP(imgpel* , int, int, int, int, int);
 
 extern int computeBiPredSATD2(imgpel* , int, int, int, int, int, int, int);

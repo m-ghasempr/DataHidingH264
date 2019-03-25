@@ -57,7 +57,7 @@ void rc_alloc_quadratic( rc_quadratic **prc )
   lprc->Wp = 0.0;
   lprc->Wb = 0.0;
   lprc->AveWb = 0.0;
-  lprc->PAveFrameQP   = params->qp0;
+  lprc->PAveFrameQP   = params->qp[0][I_SLICE];
   lprc->m_Qc          = lprc->PAveFrameQP;
   lprc->FieldQPBuffer = lprc->PAveFrameQP;
   lprc->FrameQPBuffer = lprc->PAveFrameQP;
@@ -198,7 +198,7 @@ void rc_init_seq(rc_quadratic *prc)
   prc->Xb=0;
 
   prc->bit_rate = (float) params->bit_rate;
-  prc->frame_rate = (img->framerate *(float)(params->successive_Bframe + 1)) / (float) (params->jumpd + 1);
+  prc->frame_rate = img->framerate;
   prc->PrevBitRate = prc->bit_rate;
 
   /*compute the total number of MBs in a frame*/
@@ -222,7 +222,7 @@ void rc_init_seq(rc_quadratic *prc)
   /*remaining # of bits in GOP */
   generic_RC->RemainingBits = 0;
   /*control parameter */
-  if(params->successive_Bframe>0)
+  if(params->NumberBFrames>0)
   {
     prc->GAMMAP=0.25;
     prc->BETAP=0.9;
@@ -319,16 +319,16 @@ void rc_init_GOP(rc_quadratic *prc, int np, int nb)
     {
       int sum = 0, tmp, level, levels = 0, num_frames[RC_MAX_TEMPORAL_LEVELS];
       float numer, denom;
-      int gop = params->successive_Bframe + 1;
+      int gop = params->NumberBFrames + 1;
       memset( num_frames, 0, RC_MAX_TEMPORAL_LEVELS * sizeof(int) );
       // are there any B frames?
-      if ( params->successive_Bframe )
+      if ( params->NumberBFrames )
       {
         if ( params->HierarchicalCoding == 1 ) // two layers: even/odd
         {
           levels = 2;
-          num_frames[0] = params->successive_Bframe >> 1;
-          num_frames[1] = (params->successive_Bframe - num_frames[0]) >= 0 ? (params->successive_Bframe - num_frames[0]) : 0;
+          num_frames[0] = params->NumberBFrames >> 1;
+          num_frames[1] = (params->NumberBFrames - num_frames[0]) >= 0 ? (params->NumberBFrames - num_frames[0]) : 0;
         }
         else if ( params->HierarchicalCoding == 2 ) // binary hierarchical structure
         {
@@ -360,7 +360,7 @@ void rc_init_GOP(rc_quadratic *prc, int np, int nb)
         else // all frames of the same priority - level
         {
           levels = 1;
-          num_frames[0] = params->successive_Bframe;
+          num_frames[0] = params->NumberBFrames;
         }
         generic_RC->temporal_levels = levels;      
       }
@@ -373,7 +373,7 @@ void rc_init_GOP(rc_quadratic *prc, int np, int nb)
         generic_RC->temporal_levels = 0;
       }
       // calculate allocated bits for each type of frame
-      numer = (float)(( (!params->intra_period ? 1 : params->intra_period) * gop) * ((double)params->bit_rate / params->FrameRate));
+      numer = (float)(( (!params->intra_period ? 1 : params->intra_period) * gop) * ((double)params->bit_rate / params->source.frame_rate));
       denom = 0.0F;
 
       for ( level = 0; level < levels; level++ )
@@ -397,8 +397,8 @@ void rc_init_GOP(rc_quadratic *prc, int np, int nb)
         generic_RC->RCBSliceBits[level] = (int)floor(params->RCBSliceBitRatio[level] * generic_RC->RCPSliceBits + 0.5);
       }
 
-      generic_RC->NISlice = (params->intra_period) ? ((params->no_frames - 1) / params->intra_period) : 0;
-      generic_RC->NPSlice = params->no_frames - 1 - generic_RC->NISlice;
+      generic_RC->NISlice = (params->intra_period) ? ((params->no_frm_base - 1) / params->intra_period) : 0;
+      generic_RC->NPSlice = params->no_frm_base - 1 - generic_RC->NISlice;
     }
     break;
   default:
@@ -592,11 +592,11 @@ void rc_init_pict(rc_quadratic *prc, int fieldpic,int topfield,int targetcomputa
         prc->AveWp = (prc->Wp + 7 * prc->AveWp) / 8;
 
       // compute the average complexity of B frames
-      if(params->successive_Bframe>0)
+      if(params->NumberBFrames>0)
       {
         // compute the target buffer level
-        prc->TargetBufferLevel += (prc->AveWp * (params->successive_Bframe + 1)*prc->bit_rate\
-          /(prc->frame_rate*(prc->AveWp+prc->AveWb*params->successive_Bframe))-prc->bit_rate/prc->frame_rate);
+        prc->TargetBufferLevel += (prc->AveWp * (params->NumberBFrames + 1)*prc->bit_rate\
+          /(prc->frame_rate*(prc->AveWp+prc->AveWb*params->NumberBFrames))-prc->bit_rate/prc->frame_rate);
       }
     }
     else if ( img->type == B_SLICE )
@@ -934,6 +934,13 @@ void updateRCModel (rc_quadratic *prc)
             prc->PAveHeaderBits3 * prc->NumberofBasicUnit)/prc->TotalNumberofBasicUnit+0.5);
         }
       }
+      
+      if ((prc->NumberofBasicUnit >= prc->TotalNumberofBasicUnit) || (prc->NumberofBasicUnit<0))
+      {
+        fprintf(stderr, "Write into invalid memory in updateRCModel at frame %d, prc->NumberofBasicUnit %d\n", 
+          img->framepoc, prc->NumberofBasicUnit);
+      }
+
       /*update the record of MADs for reference*/
       if(((params->PicInterlace == ADAPTIVE_CODING) || (params->MbInterlace)) && (generic_RC->FieldControl == 1))
         prc->FCBUCFMAD[prc->TotalNumberofBasicUnit-1-prc->NumberofBasicUnit]=prc->CurrentFrameMAD;
@@ -1284,7 +1291,7 @@ int updateQPRC0(rc_quadratic *prc, int topfield)
       }
       else if(img->type == B_SLICE)
       {
-        if(params->successive_Bframe==1)
+        if(params->NumberBFrames==1)
         {
           if((params->PicInterlace==ADAPTIVE_CODING)||(params->MbInterlace))
             updateQPInterlace( prc );
@@ -1296,9 +1303,9 @@ int updateQPRC0(rc_quadratic *prc, int topfield)
         }
         else
         {
-          BFrameNumber = (prc->NumberofBFrames + 1) % params->successive_Bframe;
+          BFrameNumber = (prc->NumberofBFrames + 1) % params->NumberBFrames;
           if(BFrameNumber==0)
-            BFrameNumber = params->successive_Bframe;
+            BFrameNumber = params->NumberBFrames;
 
           /*adaptive field/frame coding*/
           if(BFrameNumber==1)
@@ -1307,22 +1314,22 @@ int updateQPRC0(rc_quadratic *prc, int topfield)
               updateQPInterlace( prc );
           }
 
-          if((prc->CurrLastQP-prc->PrevLastQP)<=(-2*params->successive_Bframe-3))
+          if((prc->CurrLastQP-prc->PrevLastQP)<=(-2*params->NumberBFrames-3))
             StepSize=-3;
-          else  if((prc->CurrLastQP-prc->PrevLastQP)==(-2*params->successive_Bframe-2))
+          else  if((prc->CurrLastQP-prc->PrevLastQP)==(-2*params->NumberBFrames-2))
             StepSize=-2;
-          else if((prc->CurrLastQP-prc->PrevLastQP)==(-2*params->successive_Bframe-1))
+          else if((prc->CurrLastQP-prc->PrevLastQP)==(-2*params->NumberBFrames-1))
             StepSize=-1;
-          else if((prc->CurrLastQP-prc->PrevLastQP)==(-2*params->successive_Bframe))
+          else if((prc->CurrLastQP-prc->PrevLastQP)==(-2*params->NumberBFrames))
             StepSize=0;
-          else if((prc->CurrLastQP-prc->PrevLastQP)==(-2*params->successive_Bframe+1))
+          else if((prc->CurrLastQP-prc->PrevLastQP)==(-2*params->NumberBFrames+1))
             StepSize=1;
           else
             StepSize=2;
 
           prc->m_Qc  = prc->PrevLastQP + StepSize;
           prc->m_Qc += iClip3( -2 * (BFrameNumber - 1), 2*(BFrameNumber-1),
-            (BFrameNumber-1)*(prc->CurrLastQP-prc->PrevLastQP)/(params->successive_Bframe-1));
+            (BFrameNumber-1)*(prc->CurrLastQP-prc->PrevLastQP)/(params->NumberBFrames-1));
           prc->m_Qc  = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // Clipping
         }
         return prc->m_Qc;
@@ -1399,7 +1406,7 @@ int updateQPRC0(rc_quadratic *prc, int topfield)
       /*top field of B frame*/
       if((topfield)||(generic_RC->FieldControl==0))
       {
-        if(params->successive_Bframe==1)
+        if(params->NumberBFrames==1)
         {
           /*adaptive field/frame coding*/
           if((params->PicInterlace==ADAPTIVE_CODING)||(params->MbInterlace))
@@ -1413,9 +1420,9 @@ int updateQPRC0(rc_quadratic *prc, int topfield)
         }
         else
         {
-          BFrameNumber=(prc->NumberofBFrames+1)%params->successive_Bframe;
+          BFrameNumber=(prc->NumberofBFrames+1)%params->NumberBFrames;
           if(BFrameNumber==0)
-            BFrameNumber=params->successive_Bframe;
+            BFrameNumber=params->NumberBFrames;
 
           /*adaptive field/frame coding*/
           if(BFrameNumber==1)
@@ -1424,21 +1431,21 @@ int updateQPRC0(rc_quadratic *prc, int topfield)
               updateQPInterlace( prc );
           }
 
-          if((prc->CurrLastQP-prc->PrevLastQP)<=(-2*params->successive_Bframe-3))
+          if((prc->CurrLastQP-prc->PrevLastQP)<=(-2*params->NumberBFrames-3))
             StepSize=-3;
-          else  if((prc->CurrLastQP-prc->PrevLastQP)==(-2*params->successive_Bframe-2))
+          else  if((prc->CurrLastQP-prc->PrevLastQP)==(-2*params->NumberBFrames-2))
             StepSize=-2;
-          else if((prc->CurrLastQP-prc->PrevLastQP)==(-2*params->successive_Bframe-1))
+          else if((prc->CurrLastQP-prc->PrevLastQP)==(-2*params->NumberBFrames-1))
             StepSize=-1;
-          else if((prc->CurrLastQP-prc->PrevLastQP)==(-2*params->successive_Bframe))
+          else if((prc->CurrLastQP-prc->PrevLastQP)==(-2*params->NumberBFrames))
             StepSize=0;//0
-          else if((prc->CurrLastQP-prc->PrevLastQP)==(-2*params->successive_Bframe+1))
+          else if((prc->CurrLastQP-prc->PrevLastQP)==(-2*params->NumberBFrames+1))
             StepSize=1;//1
           else
             StepSize=2;//2
           prc->m_Qc=prc->PrevLastQP+StepSize;
           prc->m_Qc +=
-            iClip3( -2*(BFrameNumber-1), 2*(BFrameNumber-1), (BFrameNumber-1)*(prc->CurrLastQP-prc->PrevLastQP)/(params->successive_Bframe-1) );
+            iClip3( -2*(BFrameNumber-1), 2*(BFrameNumber-1), (BFrameNumber-1)*(prc->CurrLastQP-prc->PrevLastQP)/(params->NumberBFrames-1) );
           prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // Clipping
         }
         return prc->m_Qc;
@@ -2458,7 +2465,7 @@ void updateModelQPFrame( rc_quadratic *prc, int m_Bits )
  *    rate control at the MB level
  *************************************************************************************
 */
-int rc_handle_mb( int prev_mb, Macroblock *currMB, Slice *curr_slice )
+int rc_handle_mb( int prev_mb, Macroblock *currMB, Slice *currSlice )
 {
   int  mb_qp = img->qp;
   Macroblock *prevMB = NULL;

@@ -395,7 +395,7 @@ void wpxReorderLists( ImageParameters *img, Slice *currSlice )
   // LIST_0
   num_ref = img->num_ref_idx_l0_active;
 
-  poc_ref_pic_reorder_frame(listX[LIST_0], num_ref,
+  poc_ref_pic_reorder_frame(currSlice, listX[LIST_0], num_ref,
     currSlice->reordering_of_pic_nums_idc_l0,
     currSlice->abs_diff_pic_num_minus1_l0,
     currSlice->long_term_pic_idx_l0, LIST_0);
@@ -411,7 +411,7 @@ void wpxReorderLists( ImageParameters *img, Slice *currSlice )
     // LIST_1
     num_ref = img->num_ref_idx_l1_active;
 
-    poc_ref_pic_reorder_frame(listX[LIST_1], num_ref,
+    poc_ref_pic_reorder_frame(currSlice, listX[LIST_1], num_ref,
       currSlice->reordering_of_pic_nums_idc_l1,
       currSlice->abs_diff_pic_num_minus1_l1,
       currSlice->long_term_pic_idx_l1, LIST_1);

@@ -157,7 +157,7 @@ void updatePparams    (rc_quadratic *prc, int complexity );
 void updateBparams    (rc_quadratic *prc, int complexity );
 
 // external generic functions
-int  rc_handle_mb         ( int prev_mb, Macroblock *currMB, Slice *curr_slice );
+int  rc_handle_mb         ( int prev_mb, Macroblock *currMB, Slice *currSlice );
 void rc_init_top_field    ( void );
 void rc_init_bottom_field ( int TopFieldBits );
 void rc_init_frame_rdpic  ( float rateRatio );

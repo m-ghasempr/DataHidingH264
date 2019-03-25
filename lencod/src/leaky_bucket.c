@@ -17,10 +17,6 @@
 
 #ifdef _LEAKYBUCKET_
 
-//long Bit_Buffer[20000];
-unsigned long total_frame_buffer = 0;
-
-
 /*!
  ***********************************************************************
  * \brief
@@ -220,11 +216,10 @@ void calc_buffer()
       break;
     case 0:
     default:
-      fprintf(stdout,"-------------------------------------------------------------------------------\n");
-      printf("\nEncoding. Please Wait.\n\n");
+      fprintf(stdout,"\n-------------------------------------------------------------------------------\n");
       break;
   }
-  printf(" Total Frames:  %ld (%d) \n", total_frame_buffer, params->no_frames);
+  printf(" Total Frames:  %ld (%d) \n", total_frame_buffer, params->no_frm_base);
   NumberLeakyBuckets = (unsigned long) params->NumberLeakyBuckets;
   buffer_frame = calloc(total_frame_buffer+1, sizeof(long));
   if(!buffer_frame)
@@ -251,9 +246,9 @@ void calc_buffer()
     for(iBucket=0; iBucket < NumberLeakyBuckets; iBucket++)
     {
       if(iBucket == 0)
-        Rmin[iBucket] = (unsigned long)((float) AvgRate * img->framerate)/(params->jumpd+1); /* convert bits/frame to bits/second */
+        Rmin[iBucket] = (unsigned long)((float) AvgRate * img->framerate); /* convert bits/frame to bits/second */
       else
-        Rmin[iBucket] = (unsigned long) ((float) Rmin[iBucket-1] + (AvgRate/4) * (img->framerate) / (params->jumpd+1));
+        Rmin[iBucket] = (unsigned long) ((float) Rmin[iBucket-1] + (AvgRate/4) * (img->framerate));
     }
   }
   Sort(NumberLeakyBuckets, Rmin);
@@ -261,7 +256,7 @@ void calc_buffer()
   maxBuffer = AvgRate * 20; /* any initialization is good. */
   for(iBucket=0; iBucket< NumberLeakyBuckets; iBucket++)
   {
-    iChannelRate = (long) (Rmin[iBucket] * (params->jumpd+1)/(img->framerate)); /* converts bits/second to bits/frame */
+    iChannelRate = (long) (Rmin[iBucket] / (img->framerate)); /* converts bits/second to bits/frame */
     /* To calculate initial buffer size */
     InitFullness = maxBuffer; /* set Initial Fullness to be buffer size */
     buffer_frame[0] = InitFullness;

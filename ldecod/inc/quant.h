@@ -40,6 +40,7 @@ extern int *qp_rem_matrix;
 // exported functions
 // quantization initialization
 void init_qp_process(ImageParameters *img);
+void free_qp_matrices(void);
 
 // For Q-matrix
 void AssignQuantParam(pic_parameter_set_rbsp_t* pps, seq_parameter_set_rbsp_t* sps);

@@ -21,33 +21,35 @@
 
 #include "global.h"
 
-MotionInfoContexts* create_contexts_MotionInfo(void);
-TextureInfoContexts* create_contexts_TextureInfo(void);
-void init_contexts_MotionInfo(ImageParameters *img, MotionInfoContexts *enco_ctx);
-void init_contexts_TextureInfo(ImageParameters *img, TextureInfoContexts *enco_ctx);
-void delete_contexts_MotionInfo(MotionInfoContexts *enco_ctx);
-void delete_contexts_TextureInfo(TextureInfoContexts *enco_ctx);
+extern MotionInfoContexts*  create_contexts_MotionInfo(void);
+extern TextureInfoContexts* create_contexts_TextureInfo(void);
+extern void delete_contexts_MotionInfo(MotionInfoContexts *enco_ctx);
+extern void delete_contexts_TextureInfo(TextureInfoContexts *enco_ctx);
 
-void cabac_new_slice(void);
+extern void cabac_new_slice(void);
 
-void readMB_typeInfo_CABAC(SyntaxElement *se, ImageParameters *img, DecodingEnvironmentPtr dep_dp);
-void readB8_typeInfo_CABAC(SyntaxElement *se, ImageParameters *img, DecodingEnvironmentPtr dep_dp);
-void readIntraPredMode_CABAC(SyntaxElement *se, ImageParameters *img, DecodingEnvironmentPtr dep_dp);
-void readRefFrame_CABAC(SyntaxElement *se, ImageParameters *img, DecodingEnvironmentPtr dep_dp);
-void readMVD_CABAC(SyntaxElement *se, ImageParameters *img, DecodingEnvironmentPtr dep_dp);
-void readCBP_CABAC(SyntaxElement *se, ImageParameters *img, DecodingEnvironmentPtr dep_dp);
-void readRunLevel_CABAC(SyntaxElement *se, ImageParameters *img,  DecodingEnvironmentPtr dep_dp);
-void readDquant_CABAC(SyntaxElement *se,ImageParameters *img,DecodingEnvironmentPtr dep_dp);
-void readCIPredMode_CABAC(SyntaxElement *se,ImageParameters *img,DecodingEnvironmentPtr dep_dp);
-void readMB_skip_flagInfo_CABAC( SyntaxElement *se, ImageParameters *img, DecodingEnvironmentPtr dep_dp);
-void readFieldModeInfo_CABAC(SyntaxElement *se, ImageParameters *img,DecodingEnvironmentPtr dep_dp);
+extern void readMB_typeInfo_CABAC           (Macroblock *currMB, SyntaxElement *se, ImageParameters *img, DecodingEnvironmentPtr dep_dp);
+extern void readB8_typeInfo_CABAC           (Macroblock *currMB, SyntaxElement *se, ImageParameters *img, DecodingEnvironmentPtr dep_dp);
+extern void readIntraPredMode_CABAC         (Macroblock *currMB, SyntaxElement *se, ImageParameters *img, DecodingEnvironmentPtr dep_dp);
+extern void readRefFrame_CABAC              (Macroblock *currMB, SyntaxElement *se, ImageParameters *img, DecodingEnvironmentPtr dep_dp);
+extern void readMVD_CABAC                   (Macroblock *currMB, SyntaxElement *se, ImageParameters *img, DecodingEnvironmentPtr dep_dp);
+extern void readCBP_CABAC                   (Macroblock *currMB, SyntaxElement *se, ImageParameters *img, DecodingEnvironmentPtr dep_dp);
+extern void readRunLevel_CABAC              (Macroblock *currMB, SyntaxElement *se, ImageParameters *img, DecodingEnvironmentPtr dep_dp);
+extern void readDquant_CABAC                (Macroblock *currMB, SyntaxElement *se, ImageParameters *img, DecodingEnvironmentPtr dep_dp);
+extern void readCIPredMode_CABAC            (Macroblock *currMB, SyntaxElement *se, ImageParameters *img, DecodingEnvironmentPtr dep_dp);
+extern void readMB_skip_flagInfo_CABAC      (Macroblock *currMB, SyntaxElement *se, ImageParameters *img, DecodingEnvironmentPtr dep_dp);
+extern void readFieldModeInfo_CABAC         (Macroblock *currMB, SyntaxElement *se, ImageParameters *img, DecodingEnvironmentPtr dep_dp);
+extern void readMB_transform_size_flag_CABAC(Macroblock *currMB, SyntaxElement *se, ImageParameters *img, DecodingEnvironmentPtr dep_dp);
 
-void readMB_transform_size_flag_CABAC( SyntaxElement *se, ImageParameters *img, DecodingEnvironmentPtr dep_dp);
+extern void readIPCM_CABAC(struct datapartition *dP);
 
-int  readSyntaxElement_CABAC(SyntaxElement *se, ImageParameters *img, DataPartition *this_dataPart);
+extern int  cabac_startcode_follows(Slice *currSlice, int eos_bit);
 
-int  check_next_mb_and_get_field_mode_CABAC(SyntaxElement *se,ImageParameters *img,DataPartition  *act_dp);
-void CheckAvailabilityOfNeighborsCABAC(Macroblock *currMB);
+extern int  readSyntaxElement_CABAC         (SyntaxElement *se, ImageParameters *img, DataPartition *this_dataPart);
+
+extern int check_next_mb_and_get_field_mode_CABAC( SyntaxElement *se, ImageParameters *img, DataPartition  *act_dp);
+
+extern void CheckAvailabilityOfNeighborsCABAC(Macroblock *currMB);
 
 
 #endif  // _CABAC_H_

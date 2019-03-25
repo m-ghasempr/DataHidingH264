@@ -388,5 +388,27 @@ void ClosePicTiming();
 void UpdatePicTiming();
 void FinalizePicTiming();
 
+//! Picture timing Information
+typedef struct
+{
+  Boolean original_idr_flag;
+  int original_frame_num;
+  Boolean original_field_pic_flag;
+  Boolean original_bottom_field_flag;
+  DecRefPicMarking_t *dec_ref_pic_marking_buffer_saved;
+
+  Bitstream *data;
+  int payloadSize;
+} drpm_repetition_information_struct;
+extern Boolean seiHasDRPMRepetition_info;
+drpm_repetition_information_struct seiDRPMRepetition;
+
+void InitDRPMRepetition();
+void ClearDRPMRepetition();
+void CloseDRPMRepetition();
+void UpdateDRPMRepetition();
+void FinalizeDRPMRepetition();
+void free_drpm_buffer( DecRefPicMarking_t *pDRPM );
+
 // end of temp additions
 #endif

@@ -56,14 +56,13 @@ smpUMHEXIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  current Ma
                                      imgpel   *orig_pic,      // <--  not used
                                      short     ref,           // <--  reference frame (0... or -1 (backward))
                                      int       list,          // <--  reference picture list
-                                     int       list_offset,   // <--  MBAFF list offset
                                      char   ***refPic,        // <--  reference array
                                      short ****tmp_mv,        // <--  mv array
                                      int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
                                      int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
                                      int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
-                                     short     pred_mv[2],    // <--  motion vector predictor (x|y) in sub-pel units
-                                     short     mv[2],         //  --> motion vector (x|y) - in pel units
+                                     MotionVector *pred_mv,    // <--  motion vector predictor (x|y) in sub-pel units
+                                     MotionVector *mv,         //  --> motion vector (x|y) - in pel units
                                      int       search_range,  // <--  1-d search range in pel units
                                      int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
                                      int       lambda_factor, // <--  lagrangian parameter for determining motion cost
@@ -79,8 +78,8 @@ smpUMHEXSubPelBlockMotionSearch  (
                int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
                int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
                int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
-               short     pred_mv[2],    // <--  motion vector predictor (x|y) in sub-pel units
-               short     mv[2],         // <--> in: search center (x|y) / out: motion vector (x|y) - in pel units
+               MotionVector *pred,    // <--  motion vector predictor (x|y) in sub-pel units
+               MotionVector *mv,         // <--> in: search center (x|y) / out: motion vector (x|y) - in pel units
                int       search_pos2,   // <--  search positions for    half-pel search  (default: 9)
                int       search_pos4,   // <--  search positions for quarter-pel search  (default: 9)
                int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
@@ -96,8 +95,8 @@ smpUMHEXFullSubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original p
                          int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
                          int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
                          int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
-                         short     pred_mv[2],    // <--  motion vector predictor (x|y) in sub-pel units
-                         short     mv[2],         // <--> in: search center (x|y) / out: motion vector (x|y) - in pel units
+                         MotionVector *pred_mv,    // <--  motion vector predictor (x|y) in sub-pel units
+                         MotionVector *mv,         // <--> in: search center (x|y) / out: motion vector (x|y) - in pel units
                          int       search_pos2,   // <--  search positions for    half-pel search  (default: 9)
                          int       search_pos4,   // <--  search positions for quarter-pel search  (default: 9)
                          int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
@@ -109,16 +108,15 @@ smpUMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  curr
                                            imgpel* cur_pic,         // <--  original pixel values for the AxB block
                                            short     ref,           // <--  reference frame (0... or -1 (backward))
                                            int       list,          // <--  Current reference list
-                                           int       list_offset,   // <--  MBAFF list offset
                                            char   ***refPic,        // <--  reference array
                                            short ****tmp_mv,        // <--  mv array
                                            int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
                                            int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
                                            int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
-                                           short     pred_mv1[2],   // <--  motion vector predictor (x|y) in sub-pel units
-                                           short     pred_mv2[2],   // <--  motion vector predictor (x|y) in sub-pel units
-                                           short     mv[2],         // <--> in: search center (x|y) / out: motion vector (x|y) - in pel units
-                                           short     s_mv[2],       // <--> in: search center (x|y) / out: motion vector (x|y) - in pel units
+                                           MotionVector *pred_mv1,   // <--  motion vector predictor (x|y) in sub-pel units
+                                           MotionVector *pred_mv2,   // <--  motion vector predictor (x|y) in sub-pel units
+                                           MotionVector *mv1,         // <--> in: search center (x|y) / out: motion vector (x|y) - in pel units
+                                           MotionVector *mv2,       // <--> in: search center (x|y) / out: motion vector (x|y) - in pel units
                                            int       search_range,  // <--  1-d search range in pel units
                                            int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
                                            int       iteration_no,  // <--  bi pred iteration number
@@ -135,8 +133,8 @@ smpUMHEXSubPelBlockME (imgpel*   orig_pic,      // <--  original pixel values fo
                     int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
                     int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
                     int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
-                    short     pred_mv[2],    // <--  motion vector predictor (x|y) in sub-pel units
-                    short     mv[2],         // <--> in: search center (x|y) / out: motion vector (x|y) - in sub-pel units
+                    MotionVector *pred_mv,    // <--  motion vector predictor (x|y) in sub-pel units
+                    MotionVector *mv,         // <--> in: search center (x|y) / out: motion vector (x|y) - in sub-pel units
                     int       search_pos2,   // <--  search positions for    half-pel search  (default: 9)
                     int       search_pos4,   // <--  search positions for quarter-pel search  (default: 9)
                     int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)

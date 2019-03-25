@@ -19,7 +19,7 @@
 
 static int tmp[64];
 
-void forward4x4(int (*block)[16], int (*tblock)[16], int pos_y, int pos_x)
+void forward4x4(int **block, int **tblock, int pos_y, int pos_x)
 {
   int i, ii;  
   int *pTmp = tmp, *pblock;
@@ -69,7 +69,7 @@ void forward4x4(int (*block)[16], int (*tblock)[16], int pos_y, int pos_x)
 }
 
 
-void inverse4x4(int (*tblock)[16], int (*block)[16], int pos_y, int pos_x)
+void inverse4x4(int **tblock, int **block, int pos_y, int pos_x)
 {
   int i, ii;  
   int *pTmp = tmp, *pblock;
@@ -119,7 +119,7 @@ void inverse4x4(int (*tblock)[16], int (*block)[16], int pos_y, int pos_x)
 }
 
 
-void hadamard4x4(int (*block)[4], int (*tblock)[4])
+void hadamard4x4(int **block, int **tblock)
 {
   int i;
   int *pTmp = tmp, *pblock;
@@ -168,7 +168,7 @@ void hadamard4x4(int (*block)[4], int (*tblock)[4])
 }
 
 
-void ihadamard4x4(int (*tblock)[4], int (*block)[4])
+void ihadamard4x4(int **tblock, int **block)
 {
   int i;  
   int *pTmp = tmp, *pblock;
@@ -216,7 +216,7 @@ void ihadamard4x4(int (*tblock)[4], int (*block)[4])
   }
 }
 
-void hadamard4x2(int (*block)[4], int (*tblock)[4])
+void hadamard4x2(int **block, int **tblock)
 {
   int i;
   int *pTmp = tmp;
@@ -255,7 +255,7 @@ void hadamard4x2(int (*block)[4], int (*tblock)[4])
   }
 }
 
-void ihadamard4x2(int (*tblock)[4], int (*block)[4])
+void ihadamard4x2(int **tblock, int **block)
 {
   int i;  
   int *pTmp = tmp;
@@ -296,7 +296,7 @@ void ihadamard4x2(int (*tblock)[4], int (*block)[4])
 }
 
 //following functions perform 8 additions, 8 assignments. Should be a bit faster
-void hadamard2x2(int (*block)[16], int tblock[4])
+void hadamard2x2(int **block, int tblock[4])
 {
   static int p0,p1,p2,p3;
 
@@ -327,7 +327,7 @@ void ihadamard2x2(int tblock[4], int block[4])
 }
 
 /*
-void hadamard2x2(int (*block)[16], int tblock[4])
+void hadamard2x2(int **block, int tblock[4])
 {
   //12 additions, 4 assignments
     tblock[0] = (block[0][0] + block[0][4] + block[4][0] + block[4][4]);
@@ -347,7 +347,7 @@ void ihadamard2x2(int tblock[4], int block[4])
 */
 
 
-void forward8x8(int (*block)[16], int (*tblock)[16], int pos_y, int pos_x)
+void forward8x8(int **block, int **tblock, int pos_y, int pos_x)
 {
   int i, ii;  
   int *pTmp = tmp, *pblock;
@@ -443,7 +443,7 @@ void forward8x8(int (*block)[16], int (*tblock)[16], int pos_y, int pos_x)
   }
 }
 
-void inverse8x8(int (*tblock)[16], int (*block)[16], int pos_y, int pos_x)
+void inverse8x8(int **tblock, int **block, int pos_y, int pos_x)
 {
   int i, ii;
   int *pTmp = tmp, *pblock;

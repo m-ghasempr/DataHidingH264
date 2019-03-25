@@ -29,7 +29,7 @@ void OneComponentChromaPrediction4x4_retrieve   (imgpel* , int , int , short*** 
 void IntraChromaPrediction ( Macroblock *currMB, int*, int*, int*);
 void IntraChromaRDDecision ( Macroblock *currMB, RD_PARAMS);
 
-void ComputeResidue    (imgpel **curImg, imgpel mb_pred[MB_BLOCK_SIZE][MB_BLOCK_SIZE], int img_m7[MB_BLOCK_SIZE][MB_BLOCK_SIZE], int mb_y, int mb_x, int opix_y, int opix_x, int width, int height);
-void SampleReconstruct (imgpel **curImg, imgpel mb_pred[MB_BLOCK_SIZE][MB_BLOCK_SIZE], int img_m7[MB_BLOCK_SIZE][MB_BLOCK_SIZE], int mb_y, int mb_x, int opix_y, int opix_x, int width, int height, int max_imgpel_value, int dq_bits);
+void ComputeResidue    (imgpel **curImg, imgpel **mb_pred, int **mb_rres, int mb_y, int mb_x, int opix_y, int opix_x, int width, int height);
+void SampleReconstruct (imgpel **curImg, imgpel **mb_pred, int **mb_rres, int mb_y, int mb_x, int opix_y, int opix_x, int width, int height, int max_imgpel_value, int dq_bits);
 #endif
 

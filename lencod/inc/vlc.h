@@ -54,5 +54,7 @@ int   writeSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *se, DataPar
 int   writeSyntaxElement_Level_VLC1(SyntaxElement *se, DataPartition *this_dataPart, int profile_idc);
 int   writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *this_dataPart, int profile_idc);
 
+void reset_mb_nz_coeff(int mb_number); 
+
 #endif
 

@@ -40,7 +40,7 @@
  *
  ************************************************************************
  */
-int quant_8x8_around(int (*tblock)[16], int block_y, int block_x, int  qp,                 
+int quant_8x8_around(int **tblock, int block_y, int block_x, int  qp,                 
                      int*  ACLevel, int*  ACRun, 
                      int **fadjust8x8, int **levelscale, int **invlevelscale, int **leveloffset,
                      int *coeff_cost, const byte (*pos_scan)[2], const byte *c_cost)
@@ -57,13 +57,15 @@ int quant_8x8_around(int (*tblock)[16], int block_y, int block_x, int  qp,
   const byte *p_scan = &pos_scan[0][0];
   int*  ACL = &ACLevel[0];
   int*  ACR = &ACRun[0];
+  int*  padjust8x8;
 
   // Quantization
   for (coeff_ctr = 0; coeff_ctr < 64; coeff_ctr++)
   {
     i = *p_scan++;  // horizontal position
     j = *p_scan++;  // vertical position
-
+    
+    padjust8x8 = &fadjust8x8[j][block_x + i];
     m7 = &tblock[j][block_x + i];
     if (*m7 != 0)
     {
@@ -72,7 +74,7 @@ int quant_8x8_around(int (*tblock)[16], int block_y, int block_x, int  qp,
 
       if (level != 0)
       {
-        fadjust8x8[j][block_x + i] = rshift_rnd_sf((AdaptRndWeight * (scaled_coeff - (level << q_bits))), (q_bits + 1));
+        *padjust8x8 = rshift_rnd_sf((AdaptRndWeight * (scaled_coeff - (level << q_bits))), (q_bits + 1));
 
         nonzero = TRUE;
 
@@ -87,14 +89,14 @@ int quant_8x8_around(int (*tblock)[16], int block_y, int block_x, int  qp,
       }
       else
       {
-        fadjust8x8[j][block_x + i] = 0;
+        *padjust8x8 = 0;
         run++;
         *m7 = 0;
       }
     }
     else
     {
-      fadjust8x8[j][block_x + i] = 0;
+      *padjust8x8 = 0;
       run++;
     }
   }
@@ -116,7 +118,7 @@ int quant_8x8_around(int (*tblock)[16], int block_y, int block_x, int  qp,
  *
  ************************************************************************
  */
-int quant_8x8cavlc_around(int (*tblock)[16], int block_y, int block_x, int  qp,                 
+int quant_8x8cavlc_around(int **tblock, int block_y, int block_x, int  qp,                 
                           int***  cofAC, 
                           int **fadjust8x8, int **levelscale, int **invlevelscale, int **leveloffset,
                           int *coeff_cost, const byte (*pos_scan)[2], const byte *c_cost)
@@ -133,6 +135,7 @@ int quant_8x8cavlc_around(int (*tblock)[16], int block_y, int block_x, int  qp,
   const byte *p_scan = &pos_scan[0][0];
   int*  ACL[4];  
   int*  ACR[4];
+  int*  padjust8x8;
 
   for (k = 0; k < 4; k++)
   {
@@ -148,6 +151,7 @@ int quant_8x8cavlc_around(int (*tblock)[16], int block_y, int block_x, int  qp,
       i = *p_scan++;  // horizontal position
       j = *p_scan++;  // vertical position
 
+      padjust8x8 = &fadjust8x8[j][block_x + i];
       m7 = &tblock[j][block_x + i];
       if (*m7 != 0)
       {
@@ -158,7 +162,7 @@ int quant_8x8cavlc_around(int (*tblock)[16], int block_y, int block_x, int  qp,
         {
           level = imin(level, CAVLC_LEVEL_LIMIT);
 
-          fadjust8x8[j][block_x + i] = rshift_rnd_sf((AdaptRndWeight * (scaled_coeff - (level << q_bits))), (q_bits + 1));
+          *padjust8x8 = rshift_rnd_sf((AdaptRndWeight * (scaled_coeff - (level << q_bits))), (q_bits + 1));
 
           nonzero=TRUE;
 
@@ -174,14 +178,14 @@ int quant_8x8cavlc_around(int (*tblock)[16], int block_y, int block_x, int  qp,
         }
         else
         {
-          fadjust8x8[j][block_x + i] = 0;
+          *padjust8x8 = 0;
+          *m7 = 0;    
           runs[k]++;
-          *m7 = 0;      
         }
       }
       else
       {
-        fadjust8x8[j][block_x + i] = 0;
+        *padjust8x8 = 0;
         runs[k]++;
       }
     }

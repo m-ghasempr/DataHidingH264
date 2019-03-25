@@ -26,12 +26,12 @@
 #include "me_umhexsmp.h"
 #include "macroblock.h"
 #include "q_around.h"
-
+#include "vlc.h"
+#include "md_common.h"
+#include "rdopt.h"
 
 //==== MODULE PARAMETERS ====
-static imgpel temp_imgY[16][16]; // to temp store the Y data for 8x8 transform
-static imgpel temp_imgU[16][16];
-static imgpel temp_imgV[16][16];
+static imgpel temp_img[3][16][16]; // to temp store the Y data for 8x8 transform
 
 
 /*!
@@ -40,7 +40,7 @@ static imgpel temp_imgV[16][16];
 *    Mode Decision for a macroblock
 *************************************************************************************
 */
-void encode_one_macroblock_low (Macroblock *currMB)
+void encode_one_macroblock_low (Slice *currSlice, Macroblock *currMB)
 {
 
   int         block, mode, i=0, j, k, dummy;
@@ -67,13 +67,17 @@ void encode_one_macroblock_low (Macroblock *currMB)
   char   **ipredmodes = img->ipredmode;
   short   *allmvs = params->IntraProfile ? NULL: img->all_mv[0][0][0][0][0];
   int     ****i4p;  //for non-RD-opt. mode
-  imgpel  (*mb_pred)[16] = img->mb_pred[0];
+  imgpel  **mb_pred = img->mb_pred[0];
   int    is_cavlc = (img->currentSlice->symbol_mode == CAVLC);
 
   int tmp_8x8_flag, tmp_no_mbpart;
   // Fast Mode Decision
   short bipred_me, inter_skip = 0;
 
+  if (params->AdaptiveRounding)
+  {
+    reset_adaptive_rounding();
+  }
 
   if(params->SearchMode == UM_HEX)
   {
@@ -82,6 +86,10 @@ void encode_one_macroblock_low (Macroblock *currMB)
   else if (params->SearchMode == UM_HEX_SIMPLE)
   {
     smpUMHEX_decide_intrabk_SAD();
+  }
+  if (img->MbaffFrameFlag)
+  {
+    reset_mb_nz_coeff(img->current_mb_nr);
   }
 
   intra |= RandomIntra (img->current_mb_nr);    // Forced Pseudo-Random Intra
@@ -94,7 +102,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
 
   //=====   S T O R E   C O D I N G   S T A T E   =====
   //---------------------------------------------------
-  store_coding_state (currMB, cs_cm);
+  store_coding_state (currSlice, currMB, cs_cm);
 
   if (!intra)
   {
@@ -160,13 +168,13 @@ void encode_one_macroblock_low (Macroblock *currMB)
             cost      += bmcost[LIST_0];
           }
 
-          assign_enc_picture_params(mode, best_pdir, block, enc_mb.list_offset[LIST_0], best_ref[LIST_0], best_ref[LIST_1], bslice, bipred_me);          
+          assign_enc_picture_params(mode, best_pdir, 2 * block, enc_mb.list_offset[LIST_0], best_ref[LIST_0], best_ref[LIST_1], bslice, bipred_me);          
           //----- set reference frame and direction parameters -----
           set_block8x8_info(b8x8info, mode, block, best_ref, best_pdir, bipred_me);
 
           //--- set reference frames and motion vectors ---
           if (mode>1 && block==0)
-            SetRefAndMotionVectors (currMB, block, mode, best_pdir, best_ref[LIST_0], best_ref[LIST_1], bipred_me);
+            SetRefAndMotionVectors (&enc_picture->motion, currMB, block, mode, best_pdir, best_ref[LIST_0], best_ref[LIST_1], bipred_me);
         } // for (block=0; block<(mode==1?1:2); block++)
 
         currMB->luma_transform_size_8x8_flag = 0;
@@ -197,7 +205,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
       tr8x8.mb_p8x8_cost = INT_MAX;
       tr4x4.mb_p8x8_cost = INT_MAX;
       //===== store coding state of macroblock =====
-      store_coding_state (currMB, cs_mb);
+      store_coding_state (currSlice, currMB, cs_mb);
 
       currMB->all_blk_8x8 = -1;
 
@@ -210,7 +218,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
         //=====  LOOP OVER 8x8 SUB-PARTITIONS  (Motion Estimation & Mode Decision) =====
         for (cost_direct=cbp8x8=cbp_blk8x8=cnt_nonz_8x8=0, block = 0; block < 4; block++)
         {
-          submacroblock_mode_decision(&enc_mb, &tr8x8, currMB, cofAC8x8ts[0][block], cofAC8x8ts[1][block], cofAC8x8ts[2][block],
+          submacroblock_mode_decision_low(currSlice, &enc_mb, &tr8x8, currMB, cofAC8x8ts[0][block], cofAC8x8ts[1][block], cofAC8x8ts[2][block],
             &have_direct, bslice, block, &cost_direct, &cost, &cost8x8_direct, 1, is_cavlc);
           set_subblock8x8_info(b8x8info, P8x8, block, &tr8x8);
         }
@@ -222,7 +230,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
         currMB->luma_transform_size_8x8_flag = 0; //switch to 4x4 transform size
 
         //--- re-set coding state (as it was before 8x8 block coding) ---
-        //reset_coding_state (currMB, cs_mb);
+        //reset_coding_state (currSlice, currMB, cs_mb);
       }// if (params->Transform8x8Mode)
 
 
@@ -235,16 +243,16 @@ void encode_one_macroblock_low (Macroblock *currMB)
         //=====  LOOP OVER 8x8 SUB-PARTITIONS  (Motion Estimation & Mode Decision) =====
         for (cost_direct=cbp8x8=cbp_blk8x8=cnt_nonz_8x8=0, block=0; block<4; block++)
         {
-          submacroblock_mode_decision(&enc_mb, &tr4x4, currMB, cofAC8x8[block], cofAC8x8CbCr[0][block], cofAC8x8CbCr[1][block],
+          submacroblock_mode_decision_low(currSlice, &enc_mb, &tr4x4, currMB, cofAC8x8[block], cofAC8x8CbCr[0][block], cofAC8x8CbCr[1][block],
             &have_direct, bslice, block, &cost_direct, &cost, &cost8x8_direct, 0, is_cavlc);
           set_subblock8x8_info(b8x8info, P8x8, block, &tr4x4);
         }
         //--- re-set coding state (as it was before 8x8 block coding) ---
-        // reset_coding_state (currMB, cs_mb);
+        // reset_coding_state (currSlice, currMB, cs_mb);
       }// if (params->Transform8x8Mode != 2)
 
       //--- re-set coding state (as it was before 8x8 block coding) ---
-      reset_coding_state (currMB, cs_mb);
+      reset_coding_state (currSlice, currMB, cs_mb);
 
 
       // This is not enabled yet since mpr has reverse order.
@@ -255,10 +263,10 @@ void encode_one_macroblock_low (Macroblock *currMB)
       if (tr4x4.mb_p8x8_cost < min_cost || tr8x8.mb_p8x8_cost < min_cost)
       {
         best_mode = P8x8;
-
+/*
         if (img->AdaptiveRounding)
           store_adaptive_rounding_parameters_luma (currMB, best_mode);		
-
+*/
         if (params->Transform8x8Mode == 2)
         {
           min_cost = tr8x8.mb_p8x8_cost;
@@ -312,6 +320,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
     min_cost = INT_MAX;
   }
 
+  
   //========= C H O O S E   B E S T   M A C R O B L O C K   M O D E =========
   //-------------------------------------------------------------------------
   tmp_8x8_flag = currMB->luma_transform_size_8x8_flag;  //save 8x8_flag
@@ -385,8 +394,8 @@ void encode_one_macroblock_low (Macroblock *currMB)
   {
     currMB->luma_transform_size_8x8_flag = 1; // at this point cost will ALWAYS be less than min_cost
 
-    currMB->mb_type = I8MB;
-    temp_cpb = Mode_Decision_for_new_Intra8x8Macroblock (currMB, enc_mb.lambda_md, &rd_cost);
+    currMB->mb_type = currMB->ar_mode = I8MB;
+    temp_cpb = Mode_Decision_for_Intra8x8Macroblock (currSlice, currMB, enc_mb.lambda_md, &rd_cost);
 
 
     if (rd_cost <= min_rd_cost) //HYU_NOTE. bug fix. 08/15/07
@@ -409,15 +418,15 @@ void encode_one_macroblock_low (Macroblock *currMB)
 
       for(j=0; j<MB_BLOCK_SIZE; j++)
       {
-        memcpy(temp_imgY[j], &enc_picture->imgY[img->pix_y + j][img->pix_x], MB_BLOCK_SIZE * sizeof (imgpel));
+        memcpy(temp_img[0][j], &enc_picture->imgY[img->pix_y + j][img->pix_x], MB_BLOCK_SIZE * sizeof (imgpel));
       }
 
       if (img->P444_joined)
       {
         for(j=0; j<MB_BLOCK_SIZE; j++)
         {
-          memcpy(temp_imgU[j], &enc_picture->imgUV[0][img->pix_y + j][img->pix_x], MB_BLOCK_SIZE * sizeof (imgpel));
-          memcpy(temp_imgV[j], &enc_picture->imgUV[1][img->pix_y + j][img->pix_x], MB_BLOCK_SIZE * sizeof (imgpel));
+          memcpy(temp_img[1][j], &enc_picture->imgUV[0][img->pix_y + j][img->pix_x], MB_BLOCK_SIZE * sizeof (imgpel));
+          memcpy(temp_img[2][j], &enc_picture->imgUV[1][img->pix_y + j][img->pix_x], MB_BLOCK_SIZE * sizeof (imgpel));
         }
       }
 
@@ -447,8 +456,8 @@ void encode_one_macroblock_low (Macroblock *currMB)
   if (enc_mb.valid[I4MB]) // check INTRA4x4
   {
     currMB->luma_transform_size_8x8_flag = 0;
-    currMB->mb_type = I4MB;
-    temp_cpb = Mode_Decision_for_Intra4x4Macroblock (currMB, enc_mb.lambda_md, &rd_cost, is_cavlc);
+    currMB->mb_type = currMB->ar_mode = I4MB;
+    temp_cpb = Mode_Decision_for_Intra4x4Macroblock (currSlice, currMB, enc_mb.lambda_md, &rd_cost, is_cavlc);
 
     if (rd_cost <= min_rd_cost) 
     {
@@ -461,9 +470,10 @@ void encode_one_macroblock_low (Macroblock *currMB)
       min_rd_cost  = rd_cost; 
       best_mode = I4MB;
       tmp_8x8_flag = currMB->luma_transform_size_8x8_flag;
-
+/*
       if (img->AdaptiveRounding)
         store_adaptive_rounding_parameters_luma (currMB, best_mode);
+        */
     }
     else
     {
@@ -493,13 +503,6 @@ void encode_one_macroblock_low (Macroblock *currMB)
       intrapred_16x16 (currMB, PLANE_V);
       select_plane(PLANE_Y);
     }
-    switch(params->FastIntra16x16)
-    {
-    case 0:
-    default:
-      find_sad_16x16 = find_sad_16x16_JM;
-      break;
-    }
 
     rd_cost = find_sad_16x16 (currMB, &i16mode);
 
@@ -512,9 +515,6 @@ void encode_one_macroblock_low (Macroblock *currMB)
       best_mode   = I16MB;      
       min_rd_cost  = rd_cost; 
       currMB->cbp = pDCT_16x16 (currMB, PLANE_Y, i16mode, is_cavlc);
-
-      if (img->AdaptiveRounding)
-        store_adaptive_rounding_parameters_luma (currMB, best_mode);
 
       if (img->P444_joined)
       {
@@ -569,14 +569,14 @@ void encode_one_macroblock_low (Macroblock *currMB)
         //--- restore reconstruction for 8x8 transform ---
         for(j=0; j<MB_BLOCK_SIZE; j++)
         {
-          memcpy(&enc_picture->imgY[img->pix_y + j][img->pix_x],temp_imgY[j], MB_BLOCK_SIZE * sizeof(imgpel));
+          memcpy(&enc_picture->imgY[img->pix_y + j][img->pix_x],temp_img[0][j], MB_BLOCK_SIZE * sizeof(imgpel));
         }
         if (img->P444_joined)
         {
           for(j=0; j<MB_BLOCK_SIZE; j++)
           {
-            memcpy(&enc_picture->imgUV[0][img->pix_y + j][img->pix_x],temp_imgU[j], MB_BLOCK_SIZE * sizeof(imgpel)); 
-            memcpy(&enc_picture->imgUV[1][img->pix_y + j][img->pix_x],temp_imgV[j], MB_BLOCK_SIZE * sizeof(imgpel));
+            memcpy(&enc_picture->imgUV[0][img->pix_y + j][img->pix_x],temp_img[1][j], MB_BLOCK_SIZE * sizeof(imgpel)); 
+            memcpy(&enc_picture->imgUV[1][img->pix_y + j][img->pix_x],temp_img[2][j], MB_BLOCK_SIZE * sizeof(imgpel));
           }
         }
       }
@@ -586,15 +586,13 @@ void encode_one_macroblock_low (Macroblock *currMB)
         memset(currMB->intra_pred_modes,DC_PRED, MB_BLOCK_PARTITIONS * sizeof(char));
         for(j = img->block_y; j < img->block_y + BLOCK_MULTIPLE; j++)
           memset(&ipredmodes[j][img->block_x],DC_PRED, BLOCK_MULTIPLE * sizeof(char));
+        currMB->ar_mode = best_mode;
 
         if (best_mode!=I16MB)
         {
           if((best_mode>=1) && (best_mode<=3))
             currMB->luma_transform_size_8x8_flag = best_transform_flag;
           LumaResidualCoding (currMB, is_cavlc);
-
-          if (img->AdaptiveRounding)
-            store_adaptive_rounding_parameters_luma (currMB, best_mode);
 
           if (img->P444_joined)
           {
@@ -611,7 +609,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
       }
     }
     //check luma cbp for transform size flag
-    if (((currMB->cbp&15) == 0) && !(IS_OLDINTRA(currMB) || currMB->mb_type == I8MB))
+    if (((currMB->cbp&15) == 0) && currMB->mb_type != I4MB && currMB->mb_type != I8MB)
       currMB->luma_transform_size_8x8_flag = 0;
 
     // precompute all chroma intra prediction modes
@@ -624,15 +622,12 @@ void encode_one_macroblock_low (Macroblock *currMB)
     if ((img->yuv_format != YUV400) && (img->yuv_format != YUV444))
       ChromaResidualCoding (currMB, is_cavlc);
 
-    if (img->AdaptiveRounding)
-      store_adaptive_rounding_parameters_chroma (currMB, best_mode);
-
     if (best_mode==I16MB)
     {
       img->i16offset = I16Offset  (currMB->cbp, i16mode);
     }
 
-    SetMotionVectorsMB (currMB, bslice);
+    SetMotionVectorsMB (img, &enc_picture->motion, currMB);
 
     //===== check for SKIP mode =====
     if(img->P444_joined)

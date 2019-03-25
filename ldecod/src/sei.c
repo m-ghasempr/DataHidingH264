@@ -948,6 +948,7 @@ void interpret_recovery_point_info( byte* payload, int size, ImageParameters *im
 void interpret_dec_ref_pic_marking_repetition_info( byte* payload, int size, ImageParameters *img )
 {
   int original_idr_flag, original_frame_num;
+  int original_field_pic_flag, original_bottom_field_flag;
 
   DecRefPicMarking_t *tmp_drpm;
 
@@ -967,10 +968,27 @@ void interpret_dec_ref_pic_marking_repetition_info( byte* payload, int size, Ima
   original_idr_flag     = u_1 (    "SEI: original_idr_flag"    , buf);
   original_frame_num    = ue_v(    "SEI: original_frame_num"   , buf);
 
+  if ( !active_sps->frame_mbs_only_flag )
+  {
+    original_field_pic_flag = u_1 ( "SEI: original_field_pic_flag", buf);
+    if ( original_field_pic_flag )
+    {
+      original_bottom_field_flag = u_1 ( "SEI: original_bottom_field_flag", buf);
+    }
+  }
+
 #ifdef PRINT_DEC_REF_PIC_MARKING
   printf("Decoded Picture Buffer Management Repetition SEI message\n");
   printf("original_idr_flag       = %d\n", original_idr_flag);
   printf("original_frame_num      = %d\n", original_frame_num);
+  if ( active_sps->frame_mbs_only_flag )
+  {
+    printf("original_field_pic_flag = %d\n", original_field_pic_flag);
+    if ( original_field_pic_flag )
+    {
+      printf("original_bottom_field_flag = %d\n", original_bottom_field_flag);
+    }
+  }
 #endif
 
   // we need to save everything that is probably overwritten in dec_ref_pic_marking()

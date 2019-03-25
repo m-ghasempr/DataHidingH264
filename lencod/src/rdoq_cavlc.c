@@ -19,12 +19,10 @@
 #include "mb_access.h"
 #include "ratectl.h"
 #include "rdoq.h"
+#include "block.h"
 
 extern const int estErr4x4[6][4][4];
 extern const int estErr8x8[6][8][8];
-
-extern const byte SNGL_SCAN[16][2]; // need to revisit
-extern const byte FIELD_SCAN[16][2]; 
 
 /*!
 ************************************************************************
@@ -484,7 +482,7 @@ void est_RunLevel_CAVLC(levelDataStruct *levelData, int *levelTrellis, int block
 *    Initialize levelData 
 ****************************************************************************
 */
-void init_trellis_data_4x4_CAVLC(int (*tblock)[16], int block_x, int qp_per, int qp_rem, int **levelscale, int **leveloffset, 
+void init_trellis_data_4x4_CAVLC(int **tblock, int block_x, int qp_per, int qp_rem, int **levelscale, int **leveloffset, 
                                  const byte *p_scan, Macroblock *currMB, levelDataStruct *dataLevel, int type)
 {
   int i, j, coeff_ctr; 
@@ -566,7 +564,7 @@ void init_trellis_data_4x4_CAVLC(int (*tblock)[16], int block_x, int qp_per, int
 *    Initialize levelData for Luma DC
 ****************************************************************************
 */
-void init_trellis_data_DC_CAVLC(int (*tblock)[4], int qp_per, int qp_rem, 
+void init_trellis_data_DC_CAVLC(int **tblock, int qp_per, int qp_rem, 
                          int levelscale, int leveloffset, const byte *p_scan, Macroblock *currMB,  
                          levelDataStruct *dataLevel, int type)
 {
@@ -644,7 +642,7 @@ void init_trellis_data_DC_CAVLC(int (*tblock)[4], int qp_per, int qp_rem,
 *    Initialize levelData 
 ****************************************************************************
 */
-void init_trellis_data_8x8_CAVLC(int (*tblock)[16], int block_x, int qp_per, int qp_rem, int **levelscale, int **leveloffset, 
+void init_trellis_data_8x8_CAVLC(int **tblock, int block_x, int qp_per, int qp_rem, int **levelscale, int **leveloffset, 
                                  const byte *p_scan, Macroblock *currMB, levelDataStruct levelData[4][16])
 {
   int i, j, block, coeff_ctr;

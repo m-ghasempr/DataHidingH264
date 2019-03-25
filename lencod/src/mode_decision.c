@@ -27,13 +27,12 @@
 #include "macroblock.h"
 #include "rdoq.h"
 #include "errdo.h"
-
+#include "q_around.h"
 
 //==== MODULE PARAMETERS ====
-const int  b8_mode_table[6]  = {0, 4, 5, 6, 7};         // DO NOT CHANGE ORDER !!!
+const int  b8_mode_table[6]  = {0, 4, 5, 6, 7};                             // DO NOT CHANGE ORDER !!!
 const int  mb_mode_table[9]  = {0, 1, 2, 3, P8x8, I16MB, I4MB, I8MB, IPCM}; // DO NOT CHANGE ORDER !!!
-
-//double *mb16x16_cost_frame;
+extern int luma_transform_size_8x8_flag;
 
 /*!
 *************************************************************************************
@@ -294,8 +293,8 @@ void determine_prediction_list(int mode, int bmcost[5], char best_ref[2], char *
   {
     *best_pdir = 2;    
     *bipred_me = bestlist - 2;
-    best_ref[LIST_1] = 0;
     best_ref[LIST_0] = 0;
+    best_ref[LIST_1] = 0;
   }
 }
 
@@ -305,9 +304,10 @@ void determine_prediction_list(int mode, int bmcost[5], char best_ref[2], char *
 *    RD decision process
 *************************************************************************************
 */
-void compute_mode_RD_cost(int mode,
+void compute_mode_RD_cost(Slice *currSlice,
                           Macroblock *currMB,
                           RD_PARAMS *enc_mb,
+                          int mode,
                           double *min_rdcost,
                           double *min_dcost,
                           double *min_rate,
@@ -316,14 +316,17 @@ void compute_mode_RD_cost(int mode,
                           short *inter_skip,
                           int   is_cavlc)
 {
+   int terminate_16x16, terminate_trans, ctr16x16 = 0;
   //--- transform size ---
   currMB->luma_transform_size_8x8_flag = params->Transform8x8Mode==2
     ?  (mode >= 1 && mode <= 3)
     || (mode == 0 && bslice && active_sps->direct_8x8_inference_flag)
     || ((mode == P8x8) && (enc_mb->valid[4]))
     :  0;
-  //store_coding_state (currMB, cs_cm); // RD
+
+  //store_coding_state (currSlice, currMB, cs_cm); // RD
   SetModesAndRefframeForBlocks (currMB, mode);
+  memset( img->cofAC[0][0][0], 0, 4 * 4 * 2 * 65 * sizeof(int));
 
   // Encode with coefficients
   img->NoResidueDirect = 0;
@@ -331,81 +334,62 @@ void compute_mode_RD_cost(int mode,
   if ((params->FastCrIntraDecision )
     || (currMB->c_ipred_mode == DC_PRED_8 || (IS_INTRA(currMB) )))
   {
-    while(1)
+    do
     {
-      if (RDCost_for_macroblocks (currMB, enc_mb->lambda_md, mode, min_rdcost, min_dcost, min_rate, i16mode, is_cavlc))
+      terminate_16x16 = bslice_16x16_termination_control(img->b8x8info, &ctr16x16, mode, bslice);
+      do
       {
-        //Rate control
-        if (params->RCEnable)
+        if (RDCost_for_macroblocks (currSlice, currMB, enc_mb->lambda_md, mode, min_rdcost, min_dcost, min_rate, i16mode, is_cavlc))
         {
-          if(mode == P8x8)
-            rc_store_diff(img->opix_x, img->opix_y, currMB->luma_transform_size_8x8_flag == 1 ? tr8x8.mpr8x8 : tr4x4.mpr8x8);
-          else
-            rc_store_diff(img->opix_x, img->opix_y, pred);
-        }
+          //Rate control
+  
+          if (params->RCEnable)
+          {
+            if(mode == P8x8)
+              rc_store_diff(img->opix_x, img->opix_y, currMB->luma_transform_size_8x8_flag == 1 ? tr8x8.mpr8x8 : tr4x4.mpr8x8);
+            else
+              rc_store_diff(img->opix_x, img->opix_y, pred);
+          }
 
-        store_macroblock_parameters (currMB, mode);
+          store_macroblock_parameters (currMB, mode);
 
-        if(params->rdopt == 2 && mode == 0 && params->EarlySkipEnable)
-        {
-          // check transform quantized coeff.
-          if(currMB->cbp == 0)
-            *inter_skip = 1;
+          if(params->rdopt == 2 && mode == 0 && params->EarlySkipEnable)
+          {
+            // check transform quantized coeff.
+            if(currMB->cbp == 0)
+              *inter_skip = 1;
+          }
         }
-      }
-
-      // Go through transform modes.
-      // Note that if currMB->cbp is 0 one could choose to skip 8x8 mode
-      // although this could be due to deadzoning decisions.
-      //if (params->Transform8x8Mode==1 && currMB->cbp!=0)
-      if (params->Transform8x8Mode==1)
-      {
-        //=========== try mb_types 1,2,3 with 8x8 transform ===========
-        if ((mode >= 1 && mode <= 3) && currMB->luma_transform_size_8x8_flag == 0)
-        {
-          //try with 8x8 transform size
-          currMB->luma_transform_size_8x8_flag = 1;
-          continue;
-        }
-        //=========== try DIRECT-MODE with 8x8 transform ===========
-        else if (mode == 0 && bslice && active_sps->direct_8x8_inference_flag && currMB->luma_transform_size_8x8_flag == 0)
-        {
-          //try with 8x8 transform size
-          currMB->luma_transform_size_8x8_flag = 1;
-          continue;
-        }
-        //=========== try mb_type P8x8 for mode 4 with 4x4/8x8 transform ===========
-        else if ((mode == P8x8) && (enc_mb->valid[4]) && (currMB->luma_transform_size_8x8_flag == 0))
-        {
-          currMB->luma_transform_size_8x8_flag = 1; //check 8x8 partition for transform size 8x8
-          continue;
-        }
-        else
-        {
-          currMB->luma_transform_size_8x8_flag = 0;
-          break;
-        }
-      }
-      else
-        break;
-    }
+        terminate_trans = transform_termination_control(currMB, mode, bslice);
+      }while (!terminate_trans);
+    }while (!terminate_16x16);
 
     // Encode with no coefficients. Currently only for direct. This could be extended to all other modes as in example.
     //if (mode < P8x8 && (*inter_skip == 0) && enc_mb->valid[mode] && currMB->cbp && (currMB->cbp&15) != 15 && !params->nobskip)
-    if ( bslice && mode == 0 && (*inter_skip == 0) && enc_mb->valid[mode] 
+    if (bslice && mode == 0 && (*inter_skip == 0) && enc_mb->valid[mode] 
     && currMB->cbp && (currMB->cbp&15) != 15 && !params->nobskip
     && !(currMB->qp_scaled[0] == 0 && img->lossless_qpprime_flag==1) )
     {
       img->NoResidueDirect = 1;
-
-      if (RDCost_for_macroblocks (currMB, enc_mb->lambda_md, mode, min_rdcost, min_dcost, min_rate, i16mode, is_cavlc))
+      
+      if (RDCost_for_macroblocks (currSlice, currMB, enc_mb->lambda_md, mode, min_rdcost, min_dcost, min_rate, i16mode, is_cavlc))
       {
         //Rate control
         if (params->RCEnable)
           rc_store_diff(img->opix_x,img->opix_y,pred);
-
+        if (img->AdaptiveRounding)
+          reset_adaptive_rounding_direct();
         store_macroblock_parameters (currMB, mode);
       }
+    }
+    
+    //modes 0 and 1 of a B frame 
+    if (img->AdaptiveRounding && bslice && mode <= 1)
+    { 
+      if (luma_transform_size_8x8_flag)
+        update_adaptive_rounding_16x16( img, img->ARCofAdj8x8, mode);
+      else
+        update_adaptive_rounding_16x16( img, img->ARCofAdj4x4, mode);
     }
   }
 }
@@ -417,7 +401,8 @@ void compute_mode_RD_cost(int mode,
 *    Mode Decision for an 8x8 sub-macroblock
 *************************************************************************************
 */
-void submacroblock_mode_decision(RD_PARAMS *enc_mb,
+void submacroblock_mode_decision(Slice *currSlice, 
+                                 RD_PARAMS *enc_mb,
                                  RD_8x8DATA *dataTr,
                                  Macroblock *currMB,
                                  int ***cofACtr,
@@ -438,26 +423,21 @@ void submacroblock_mode_decision(RD_PARAMS *enc_mb,
   int i,j, k;
   int min_cost8x8, index;
   int mode;
-  int direct4x4_tmp, direct8x8_tmp;
   int bmcost[5] = {INT_MAX};
   int cnt_nonz = 0;
-  int dummy;
   int best_cnt_nonz = 0;
   int maxindex =  (transform8x8) ? 2 : 5;
   int block_x, block_y;
   int lambda_mf[3];
-  static int fadjust[16][16], fadjustCr[2][16][16];
-  int ***fadjustTransform = transform8x8? img->fadjust8x8 : img->fadjust4x4;
-  int ****fadjustTransformCr   = (params->AdaptRndChroma || (img->P444_joined )) 
-    ? (transform8x8 ? img->fadjust8x8Cr : img->fadjust4x4Cr): NULL;
-  int lumaAdjustIndex   = transform8x8 ? 2 : 3;
-  int chromaAdjustIndex = transform8x8 ? 0 : 2;
-  short pdir, bipred_me = 0;
-
+  
+  int ****fadjust = transform8x8? img->ARCofAdj8x8 : img->ARCofAdj4x4;
+  short bipred_me = 0;
 
   char best_pdir = 0;
   char best_ref[2] = {0, -1};
-  imgpel  (*mb_pred)[16] = img->mb_pred[0];
+  imgpel  **mb_pred = img->mb_pred[0];
+  Boolean valid_8x8 = FALSE;
+  Boolean stored_state_8x8 = FALSE;
 
 #ifdef BEST_NZ_COEFF
   int best_nz_coeff[2][2];
@@ -481,64 +461,444 @@ void submacroblock_mode_decision(RD_PARAMS *enc_mb,
     currMB->luma_transform_size_8x8_flag = 1; //switch to transform size 8x8
 
   //--- store coding state before coding ---
-  store_coding_state (currMB, cs_cm);
+  store_coding_state (currSlice, currMB, cs_cm);
 
   //=====  LOOP OVER POSSIBLE CODING MODES FOR 8x8 SUB-PARTITION  =====
   for (min_cost8x8 = INT_MAX, min_rdcost = 1e20, index = (bslice?0:1); index < maxindex; index++)
   {
     mode = b8_mode_table[index];
     *cost = 0;
-    if (enc_mb->valid[mode] && (transform8x8 == 0 || mode != 0 || (mode == 0 && active_sps->direct_8x8_inference_flag)))
+
+    if (enc_mb->valid[mode] && (!(transform8x8 == 1 && mode > 4)) && (transform8x8 == 0 || mode != 0 || (mode == 0 && active_sps->direct_8x8_inference_flag)))
     {
+      if (transform8x8)
+      {
+        currMB->valid_8x8 = TRUE;
+      }
+
+      valid_8x8 = TRUE;
+      curr_cbp_blk = 0;
+
+      if (mode==0)  //--- Direct8x8 Mode ---
+      {        
+        block_x = img->block_x + (block & 0x01)*2;
+        block_y = img->block_y + (block & 0x02);
+        best_ref[LIST_0] = direct_ref_idx[LIST_0][block_y][block_x];
+        best_ref[LIST_1] = direct_ref_idx[LIST_1][block_y][block_x];
+        best_pdir        = direct_pdir[block_y][block_x];
+      } // if (mode==0)
+      else
+      {
+        int64 ref_pic_num;
+        char b_ref;
+
+        //======= motion estimation for all reference frames ========
+        //-----------------------------------------------------------
+        memcpy(lambda_mf, enc_mb->lambda_mf, 3 * sizeof(int));
+        if (params->CtxAdptLagrangeMult == 1)
+        {
+          lambda_mf[F_PEL] = (int)(lambda_mf[F_PEL] * lambda_mf_factor);
+          lambda_mf[H_PEL] = (int)(lambda_mf[H_PEL] * lambda_mf_factor);
+          lambda_mf[Q_PEL] = (int)(lambda_mf[Q_PEL] * lambda_mf_factor);
+        }
+
+        PartitionMotionSearch (currMB, mode, block, lambda_mf);
+
+        //--- get cost and reference frame for LIST 0 prediction ---
+        bmcost[LIST_0] = INT_MAX;
+        list_prediction_cost(currMB, LIST_0, block, mode, enc_mb, bmcost, best_ref);
+
+        //store LIST 0 reference index for every block
+        block_x = img->block_x + (block & 0x01)*2;
+        block_y = img->block_y + (block & 0x02);
+        b_ref = best_ref[LIST_0];
+        ref_pic_num = enc_picture->ref_pic_num[enc_mb->list_offset[LIST_0]][(short) b_ref];
+
+        for (j = block_y; j< block_y + 2; j++)
+        {
+          memset(&enc_picture->motion.ref_idx [LIST_0][j][block_x], b_ref, 2 * sizeof(char));
+        }
+
+        for (j = block_y; j< block_y + 2; j++)
+        {
+          for (i = block_x; i < block_x + 2; i++)
+          {
+            enc_picture->motion.ref_pic_id[LIST_0][j][i] = ref_pic_num;
+          }
+        }
+
+        for (j = 0; j< 2; j++)
+        {
+          memcpy(enc_picture->motion.mv[LIST_0][block_y + j][block_x], img->all_mv[LIST_0][(short) b_ref][mode][j1 + j][i1], 4 * sizeof(short));
+        }
+
+
+        if (bslice)
+        {
+          //--- get cost and reference frame for LIST 1 prediction ---
+          bmcost[LIST_1] = INT_MAX;
+          bmcost[BI_PRED] = INT_MAX;
+          list_prediction_cost(currMB, LIST_1, block, mode, enc_mb, bmcost, best_ref);
+
+          // Compute bipredictive cost between best list 0 and best list 1 references
+          list_prediction_cost(currMB, BI_PRED, block, mode, enc_mb, bmcost, best_ref);
+
+          // currently Bi prediction ME is only supported for modes 1, 2, 3 and only for ref 0 and only for ref 0
+          if (is_bipred_enabled(mode))
+          {
+            list_prediction_cost(currMB, BI_PRED_L0, block, mode, enc_mb, bmcost, 0);
+            list_prediction_cost(currMB, BI_PRED_L1, block, mode, enc_mb, bmcost, 0);
+          }
+          else
+          {
+            bmcost[BI_PRED_L0] = INT_MAX;
+            bmcost[BI_PRED_L1] = INT_MAX;
+          }
+
+          //--- get prediction direction ----
+          determine_prediction_list(mode, bmcost, best_ref, &best_pdir, cost, &bipred_me);
+
+          //store backward reference index for every block
+          for (k = LIST_0; k <= LIST_1; k++)
+          {
+            for (j = block_y; j< block_y + 2; j++)
+            {
+              memset(&enc_picture->motion.ref_idx[k][j][block_x], best_ref[k], 2 * sizeof(char));
+            }
+            if (bipred_me)
+            {              
+              for (j = 0; j< 2; j++)
+              {
+                memcpy(enc_picture->motion.mv[k][block_y + j][block_x], img->bipred_mv[bipred_me - 1][k][(short) best_ref[k]][mode][j1 + j][i1], 4 * sizeof(short));
+              }
+            }
+            else
+            {
+              for (j = 0; j< 2; j++)
+              {
+                memcpy(enc_picture->motion.mv[k][block_y + j][block_x], img->all_mv[k][(short) best_ref[k]][mode][j1 + j][i1], 4 * sizeof(short));
+              }
+            }
+          }
+        } // if (bslice)
+        else
+        {
+          best_pdir = 0;
+          *cost     = bmcost[LIST_0];
+        }
+      } // if (mode!=0)
+
+      //--- get and check rate-distortion cost ---
+      rdcost = RDCost_for_8x8blocks (currSlice, currMB, &cnt_nonz, &curr_cbp_blk, enc_mb->lambda_md,
+        block, mode, best_pdir, best_ref[LIST_0], best_ref[LIST_1], bipred_me, is_cavlc);
+
+      //--- set variables if best mode has changed ---
+      if (rdcost < min_rdcost)
+      {
+        min_cost8x8                  = *cost;
+        min_rdcost                   = rdcost;
+        dataTr->part8x8mode  [block] = mode;
+        dataTr->part8x8pdir  [block] = best_pdir;
+        dataTr->part8x8l0ref [block] = best_ref[LIST_0];
+        dataTr->part8x8l1ref [block] = best_ref[LIST_1];
+        dataTr->part8x8bipred[block] = bipred_me;
+
+        currMB->b8mode[block] = mode;
+
+#ifdef BEST_NZ_COEFF
+        if (cnt_nonz)
+        {
+          for(i = 0; i <= 1; i++)
+          {
+            best_nz_coeff[i][0]= img->nz_coeff[img->current_mb_nr][i1 + i][j1    ];
+            best_nz_coeff[i][1]= img->nz_coeff[img->current_mb_nr][i1 + i][j1 + 1];
+          }
+        }
+        else
+        {
+          for(i = 0; i <= 1; i++)
+          {
+            best_nz_coeff[i][0]= 0;
+            best_nz_coeff[i][1]= 0;
+          }
+        }
+#endif
+
+        //--- store number of nonzero coefficients ---
+        best_cnt_nonz  = cnt_nonz;
+
+        //--- store block cbp ---
+        cbp_blk8x8 &= (~(0x33 << (((block>>1)<<3)+((block & 0x01)<<1)))); // delete bits for block
+        cbp_blk8x8 |= curr_cbp_blk;
+
+        //--- store coefficients ---
+        memcpy(&cofACtr[0][0][0],&img->cofAC[block][0][0][0], 4 * 2 * 65 * sizeof(int));
+
+        if( img->P444_joined ) 
+        {
+          //--- store coefficients ---
+          memcpy(&cofACCbCrtr1[0][0][0],&img->cofAC[block + 4][0][0][0], 4 * 2 * 65 * sizeof(int));
+          memcpy(&cofACCbCrtr2[0][0][0],&img->cofAC[block + 8][0][0][0], 4 * 2 * 65 * sizeof(int));
+        }
+
+        //--- store reconstruction and prediction ---
+        for (j = j0; j < j0 + BLOCK_SIZE_8x8; j++)
+        {
+          memcpy(&dataTr->rec_mbY8x8[j][i0],&enc_picture->imgY[img->pix_y + j][img->pix_x + i0], BLOCK_SIZE_8x8 * sizeof(imgpel));
+          memcpy(&dataTr->mpr8x8[j][i0],&mb_pred[j][i0], BLOCK_SIZE_8x8 * sizeof(imgpel));
+        }
+
+        if (params->rdopt == 3)
+        {
+          errdo_store_best_block(decs->dec_mbY_best8x8[transform8x8], enc_picture->p_dec_img[0], i0, j0, img->pix_x + i0, img->pix_y, BLOCK_SIZE_8x8);
+          errdo_store_best_block(decs->dec_mb_pred_best8x8[transform8x8], decs->dec_mb_pred, i0, j0, i0, 0, BLOCK_SIZE_8x8); 
+        }
+
+        if(img->type==SP_SLICE && (!si_frame_indicator))
+        {
+          for (j = j0; j < j0 + BLOCK_SIZE_8x8; j++)
+          {
+            memcpy(&dataTr->lrec[j][i0],&lrec[img->pix_y + j][img->pix_x + i0], BLOCK_SIZE_8x8 * sizeof(int));
+          }
+        }
+
+        if(img->P444_joined) 
+        {
+          for (j=j0; j<j0+8; j++)    
+          {
+            memcpy(&dataTr->rec_mb8x8_cr[0][j][i0],&enc_picture->imgUV[0][img->pix_y + j][img->pix_x + i0], BLOCK_SIZE_8x8 * sizeof(imgpel));
+            memcpy(&dataTr->rec_mb8x8_cr[1][j][i0],&enc_picture->imgUV[1][img->pix_y + j][img->pix_x + i0], BLOCK_SIZE_8x8 * sizeof(imgpel));
+            memcpy(&dataTr->mpr8x8CbCr[0][j][i0],&img->mb_pred[1][j][i0], BLOCK_SIZE_8x8 * sizeof(imgpel));
+            memcpy(&dataTr->mpr8x8CbCr[1][j][i0],&img->mb_pred[2][j][i0], BLOCK_SIZE_8x8 * sizeof(imgpel));
+          }
+        }
+
+
+        //--- store best 8x8 coding state ---
+        if (block < 3)
+        {
+          store_coding_state (currSlice, currMB, cs_b8);
+          stored_state_8x8 = TRUE;
+        }
+      } // if (rdcost <= min_rdcost)
+
+      //--- re-set coding state as it was before coding with current mode was performed ---
+      reset_coding_state (currSlice, currMB, cs_cm);
+    } // if ((enc_mb->valid[mode] && (transform8x8 == 0 || mode != 0 || (mode == 0 && active_sps->direct_8x8_inference_flag)))
+  } // for (min_rdcost=1e30, index=(bslice?0:1); index<6; index++)
+
+  if (valid_8x8 == TRUE)
+  {
+#ifdef BEST_NZ_COEFF
+    for(i = 0; i <= 1; i++)  
+    {
+      for(j = 0; j <= 1; j++)
+        img->nz_coeff[img->current_mb_nr][i1 + i][j1 + j] = best_nz_coeff[i][j];
+    }
+#endif
+
+    if (!transform8x8)
+    {
+      if (min_cost8x8 != INT_MAX)
+        dataTr->mb_p8x8_cost += min_cost8x8;
+      else
+        dataTr->mb_p8x8_cost = INT_MAX;
+    }
+    
+    //----- set cbp and count of nonzero coefficients ---
+    if (best_cnt_nonz)
+    {
+      cbp8x8       |= (1 << block);
+      cnt_nonz_8x8 += best_cnt_nonz;
+    }
+
+    if (!transform8x8)
+    {
+      if (block < 3)
+      {
+        //===== re-set reconstructed block =====
+        j0   = 8*(block >> 1);
+        i0   = 8*(block & 0x01);
+        for (j = j0; j < j0 + BLOCK_SIZE_8x8; j++)
+        {
+          memcpy(&enc_picture->imgY[img->pix_y + j][img->pix_x], dataTr->rec_mbY8x8[j], BLOCK_SIZE_8x8 * sizeof(imgpel));
+        }
+
+        if (params->rdopt == 3)
+        {
+          errdo_get_best_block(img, enc_picture->p_dec_img[0], decs->dec_mbY_best8x8[transform8x8], j0, BLOCK_SIZE_8x8);
+        }
+
+        if(img->type==SP_SLICE &&(!si_frame_indicator))
+        {
+          for (j = j0; j < j0 + BLOCK_SIZE_8x8; j++)
+          {
+            memcpy(&lrec[img->pix_y + j][img->pix_x], dataTr->lrec[j],2*BLOCK_SIZE*sizeof(imgpel)); // reset the coefficients for SP slice
+          }
+        }
+
+        if(img->P444_joined) 
+        {
+          for (k=0; k<2; k++)
+          {
+            for (j = j0; j < j0 + BLOCK_SIZE_8x8; j++)
+            {
+              memcpy(&enc_picture->imgUV[k][img->pix_y + j][img->pix_x], dataTr->rec_mb8x8_cr[k][j], BLOCK_SIZE_8x8 * sizeof(imgpel));
+            }
+          }
+        }
+      } // if (block<3)
+    }
+    else
+    {
+      //======= save motion data for 8x8 partition for transform size 8x8 ========    
+      StoreNewMotionVectorsBlock8x8(0, block, dataTr->part8x8mode[block], dataTr->part8x8l0ref[block], dataTr->part8x8l1ref[block], dataTr->part8x8pdir[block], dataTr->part8x8bipred[block], bslice);
+    }
+
+    //===== set motion vectors and reference frames (prediction) =====
+    SetRefAndMotionVectors (&enc_picture->motion, currMB, block, dataTr->part8x8mode[block], dataTr->part8x8pdir[block], dataTr->part8x8l0ref[block], dataTr->part8x8l1ref[block], dataTr->part8x8bipred[block]);
+
+    //===== set the coding state after current block =====
+    //if (transform8x8 == 0 || block < 3)
+    if (stored_state_8x8 == TRUE)
+      reset_coding_state (currSlice, currMB, cs_b8);
+    else
+    {
+      update_adaptive_rounding_8x8(dataTr, fadjust);
+    }
+  }
+}
+
+/*!
+*************************************************************************************
+* \brief
+*    Low Complexity Mode Decision for an 8x8 sub-macroblock
+*************************************************************************************
+*/
+void submacroblock_mode_decision_low(Slice *currSlice,
+                                     RD_PARAMS *enc_mb,
+                                     RD_8x8DATA *dataTr,
+                                     Macroblock *currMB,
+                                     int ***cofACtr,
+                                     int ***cofACCbCrtr1, 
+                                     int ***cofACCbCrtr2,
+                                     int *have_direct,
+                                     short bslice,
+                                     int block,
+                                     int *cost_direct,
+                                     int *cost,
+                                     int *cost8x8_direct,
+                                     int transform8x8,
+                                     int is_cavlc)
+{
+  int64 curr_cbp_blk;
+  double min_rdcost, rdcost = 0.0;
+  int j0, i0, j1, i1;
+  int i,j, k;
+  int min_cost8x8, index;
+  int mode;
+  int direct4x4_tmp, direct8x8_tmp;
+  int bmcost[5] = {INT_MAX};
+  int cnt_nonz = 0;
+  int dummy;
+  int best_cnt_nonz = 0;
+  int maxindex =  (transform8x8) ? 2 : 5;
+  int block_x, block_y;
+  int lambda_mf[3];
+
+  int ****fadjust = transform8x8? img->ARCofAdj8x8 : img->ARCofAdj4x4;
+  short pdir, bipred_me = 0;
+
+  char best_pdir = 0;
+  char best_ref[2] = {0, -1};
+  imgpel  **mb_pred = img->mb_pred[0];
+  Boolean valid_8x8 = FALSE;
+  Boolean stored_state_8x8 = FALSE;
+
+#ifdef BEST_NZ_COEFF
+  int best_nz_coeff[2][2];
+#endif
+
+  //--- set coordinates ---
+  j0 = ((block>>1)<<3);
+  j1 = (j0>>2);
+  i0 = ((block&0x01)<<3);
+  i1 = (i0>>2);
+
+#ifdef BEST_NZ_COEFF
+  for(j = 0; j <= 1; j++)
+  {
+    for(i = 0; i <= 1; i++)
+      best_nz_coeff[i][j] = img->nz_coeff[img->current_mb_nr][i1 + i][j1 + j] = 0;
+  }
+#endif
+
+  if (transform8x8)
+    currMB->luma_transform_size_8x8_flag = 1; //switch to transform size 8x8
+
+  //--- store coding state before coding ---
+  store_coding_state (currSlice, currMB, cs_cm);
+
+  //=====  LOOP OVER POSSIBLE CODING MODES FOR 8x8 SUB-PARTITION  =====
+  for (min_cost8x8 = INT_MAX, min_rdcost = 1e20, index = (bslice?0:1); index < maxindex; index++)
+  {
+    mode = b8_mode_table[index];
+    *cost = 0;
+
+    if (enc_mb->valid[mode] && (!(transform8x8 == 1 && mode > 4)) && (transform8x8 == 0 || mode != 0 || (mode == 0 && active_sps->direct_8x8_inference_flag)))
+    {
+      if (transform8x8)
+      {
+        currMB->valid_8x8 = TRUE;
+      }
+
+      valid_8x8 = TRUE;
       curr_cbp_blk = 0;
 
       if (mode==0)
       {
-        //--- Direct Mode ---
-        if (!params->rdopt )
+        //--- Direct Mode ---       
+        direct4x4_tmp = 0;
+        direct8x8_tmp = 0;
+        direct4x4_tmp = GetDirectCost8x8 ( currMB, block, &direct8x8_tmp);
+
+        if ((direct4x4_tmp==INT_MAX)||(*cost_direct==INT_MAX))
         {
-          direct4x4_tmp = 0;
-          direct8x8_tmp = 0;
-          direct4x4_tmp = GetDirectCost8x8 ( currMB, block, &direct8x8_tmp);
-
-          if ((direct4x4_tmp==INT_MAX)||(*cost_direct==INT_MAX))
-          {
-            *cost_direct = INT_MAX;
-            if (transform8x8)
-              *cost8x8_direct = INT_MAX;
-          }
-          else
-          {
-            *cost_direct += direct4x4_tmp;
-            if (transform8x8)
-              *cost8x8_direct += direct8x8_tmp;
-          }
-          (*have_direct) ++;
-
+          *cost_direct = INT_MAX;
           if (transform8x8)
+            *cost8x8_direct = INT_MAX;
+        }
+        else
+        {
+          *cost_direct += direct4x4_tmp;
+          if (transform8x8)
+            *cost8x8_direct += direct8x8_tmp;
+        }
+        (*have_direct) ++;
+
+        if (transform8x8)
+        {
+          switch(params->Transform8x8Mode)
           {
-            switch(params->Transform8x8Mode)
-            {
-            case 1: // Mixture of 8x8 & 4x4 transform
-              if((direct8x8_tmp < direct4x4_tmp) || !(enc_mb->valid[5] && enc_mb->valid[6] && enc_mb->valid[7]))
-                *cost = direct8x8_tmp;
-              else
-                *cost = direct4x4_tmp;
-              break;
-            case 2: // 8x8 Transform only
+          case 1: // Mixture of 8x8 & 4x4 transform
+            if((direct8x8_tmp < direct4x4_tmp) || !(enc_mb->valid[5] && enc_mb->valid[6] && enc_mb->valid[7]))
               *cost = direct8x8_tmp;
-              break;
-            default: // 4x4 Transform only
+            else
               *cost = direct4x4_tmp;
-              break;
-            }
-            if (params->Transform8x8Mode==2)
-              *cost = INT_MAX;
-          }
-          else
-          {
+            break;
+          case 2: // 8x8 Transform only
+            *cost = direct8x8_tmp;
+            break;
+          default: // 4x4 Transform only
             *cost = direct4x4_tmp;
+            break;
           }
+          if (params->Transform8x8Mode==2)
+            *cost = INT_MAX;
+        }
+        else
+        {
+          *cost = direct4x4_tmp;
         }
 
         block_x = img->block_x + (block & 0x01)*2;
@@ -551,6 +911,7 @@ void submacroblock_mode_decision(RD_PARAMS *enc_mb,
       {
         int64 ref_pic_num;
         char b_ref;
+
         //======= motion estimation for all reference frames ========
         //-----------------------------------------------------------
         memcpy(lambda_mf, enc_mb->lambda_mf, 3 * sizeof(int));
@@ -595,7 +956,7 @@ void submacroblock_mode_decision(RD_PARAMS *enc_mb,
 
           // Compute bipredictive cost between best list 0 and best list 1 references
           list_prediction_cost(currMB, BI_PRED, block, mode, enc_mb, bmcost, best_ref);
-          
+
           // currently Bi prediction ME is only supported for modes 1, 2, 3 and only for ref 0 and only for ref 0
           if (is_bipred_enabled(mode))
           {
@@ -610,7 +971,7 @@ void submacroblock_mode_decision(RD_PARAMS *enc_mb,
 
           //--- get prediction direction ----
           determine_prediction_list(mode, bmcost, best_ref, &best_pdir, cost, &bipred_me);
-        
+
           //store backward reference index for every block
           for (k = LIST_0; k <= LIST_1; k++)
           {
@@ -627,21 +988,12 @@ void submacroblock_mode_decision(RD_PARAMS *enc_mb,
         }
       } // if (mode!=0)
 
-      if (params->rdopt)
-      {
-        //--- get and check rate-distortion cost ---
-        rdcost = RDCost_for_8x8blocks (currMB, &cnt_nonz, &curr_cbp_blk, enc_mb->lambda_md,
-          block, mode, best_pdir, best_ref[LIST_0], best_ref[LIST_1], bipred_me, is_cavlc);
-      }
-      else
-      {
-        if (*cost!=INT_MAX)
-          *cost += (REF_COST (enc_mb->lambda_mf[Q_PEL], B8Mode2Value (mode, best_pdir),
-          enc_mb->list_offset[(best_pdir < 1 ? LIST_0 : LIST_1)]) - 1);
-      }
+      if (*cost!=INT_MAX)
+        *cost += (REF_COST (enc_mb->lambda_mf[Q_PEL], B8Mode2Value (mode, best_pdir),
+        enc_mb->list_offset[(best_pdir < 1 ? LIST_0 : LIST_1)]) - 1);
 
       //--- set variables if best mode has changed ---
-      if ( ( params->rdopt && rdcost < min_rdcost) || (!params->rdopt && *cost < min_cost8x8))
+      if (*cost < min_cost8x8)
       {
         min_cost8x8                  = *cost;
         min_rdcost                   = rdcost;
@@ -656,119 +1008,62 @@ void submacroblock_mode_decision(RD_PARAMS *enc_mb,
 #ifdef BEST_NZ_COEFF
         if (cnt_nonz)
         {
-          for(i = 0; i <= 1; i++)
-          {
-            for(j = 0; j <= 1; j++)  
-              best_nz_coeff[i][j]= img->nz_coeff[img->current_mb_nr][i1 + i][j1 + j];
-          }
+          best_nz_coeff[0][0]= img->nz_coeff[img->current_mb_nr][i1    ][j1    ];
+          best_nz_coeff[0][1]= img->nz_coeff[img->current_mb_nr][i1    ][j1 + 1];
+          best_nz_coeff[1][0]= img->nz_coeff[img->current_mb_nr][i1 + 1][j1    ];
+          best_nz_coeff[1][1]= img->nz_coeff[img->current_mb_nr][i1 + 1][j1 + 1];
         }
         else
         {
-          for(i = 0; i <= 1; i++)
-          {
-            best_nz_coeff[i][0]= 0;
-            best_nz_coeff[i][1]= 0;
-          }
+          best_nz_coeff[0][0]= 0;
+          best_nz_coeff[0][1]= 0;
+          best_nz_coeff[1][0]= 0;
+          best_nz_coeff[1][1]= 0;
         }
 #endif
 
         //--- store number of nonzero coefficients ---
-        best_cnt_nonz  = cnt_nonz;
+        best_cnt_nonz  = cnt_nonz;                
 
-        if (params->rdopt)
-        {
-          //--- store block cbp ---
-          cbp_blk8x8 &= (~(0x33 << (((block>>1)<<3)+((block & 0x01)<<1)))); // delete bits for block
-          cbp_blk8x8 |= curr_cbp_blk;
-
-          //--- store coefficients ---
-          memcpy(&cofACtr[0][0][0],&img->cofAC[block][0][0][0], 4 * 2 * 65 * sizeof(int));
-
-          if( img->P444_joined ) 
-          {
-            //--- store coefficients ---
-            memcpy(&cofACCbCrtr1[0][0][0],&img->cofAC[block + 4][0][0][0], 4 * 2 * 65 * sizeof(int));
-            memcpy(&cofACCbCrtr2[0][0][0],&img->cofAC[block + 8][0][0][0], 4 * 2 * 65 * sizeof(int));
-          }
-          
-          //--- store reconstruction and prediction ---
-          for (j=j0; j<j0 + BLOCK_SIZE_8x8; j++)
-          {
-            memcpy(&dataTr->rec_mbY8x8[j][i0],&enc_picture->imgY[img->pix_y + j][img->pix_x + i0], BLOCK_SIZE_8x8 * sizeof(imgpel));
-            memcpy(&dataTr->mpr8x8[j][i0],&mb_pred[j][i0], BLOCK_SIZE_8x8 * sizeof(imgpel));
-          }
-
-          if (params->rdopt == 3)
-          {
-            errdo_store_best_block(img, decs->dec_mbY8x8, enc_picture->p_dec_img[0], i0, j0, BLOCK_SIZE_8x8);  //Store best 8x8 block for each hypothetical decoder
-          }
-
-          if(img->type==SP_SLICE && (!si_frame_indicator))
-          {
-            for (j=j0; j<j0 + BLOCK_SIZE_8x8; j++)
-            {
-              memcpy(&dataTr->lrec[j][i0],&lrec[img->pix_y + j][img->pix_x + i0], BLOCK_SIZE_8x8 * sizeof(int));
-            }
-          }
- 
-          if(img->P444_joined) 
-          {
-            for (j=j0; j<j0+8; j++)    
-            {
-              memcpy(&dataTr->rec_mb8x8_cr[0][j][i0],&enc_picture->imgUV[0][img->pix_y + j][img->pix_x + i0], BLOCK_SIZE_8x8 * sizeof(imgpel));
-              memcpy(&dataTr->rec_mb8x8_cr[1][j][i0],&enc_picture->imgUV[1][img->pix_y + j][img->pix_x + i0], BLOCK_SIZE_8x8 * sizeof(imgpel));
-              memcpy(&dataTr->mpr8x8CbCr[0][j][i0],&img->mb_pred[1][j][i0], BLOCK_SIZE_8x8 * sizeof(imgpel));
-              memcpy(&dataTr->mpr8x8CbCr[1][j][i0],&img->mb_pred[2][j][i0], BLOCK_SIZE_8x8 * sizeof(imgpel));
-            }
-          }
-          
-        }
-        if (img->AdaptiveRounding)
-        {
-          for (j=j0; j<j0+8; j++)
-          {
-            memcpy(&fadjust[j][i0], &fadjustTransform[0][j][i0], 8 * sizeof(int));
-          }
-
-          if (params->AdaptRndChroma || (img->P444_joined))
-          {
-            int j0_cr = (j0 * img->mb_cr_size_y) / MB_BLOCK_SIZE;
-            int i0_cr = (i0 * img->mb_cr_size_x) / MB_BLOCK_SIZE;
-            for (k = 0; k < 2; k++)
-            {
-              for (j=j0_cr; j < j0_cr + (img->mb_cr_size_y >> 1); j++)
-              {
-                memcpy(&fadjustCr[k][j][i0_cr], &fadjustTransformCr[k][0][j][i0_cr], (img->mb_cr_size_x >> 1) * sizeof(int));
-              }
-            }
-          }
-        }
         //--- store best 8x8 coding state ---
         if (block < 3)
-          store_coding_state (currMB, cs_b8);
+        {
+          store_coding_state (currSlice, currMB, cs_b8);
+          stored_state_8x8 = TRUE;
+        }
       } // if (rdcost <= min_rdcost)
 
       //--- re-set coding state as it was before coding with current mode was performed ---
-      reset_coding_state (currMB, cs_cm);
+      reset_coding_state (currSlice, currMB, cs_cm);
     } // if ((enc_mb->valid[mode] && (transform8x8 == 0 || mode != 0 || (mode == 0 && active_sps->direct_8x8_inference_flag)))
   } // for (min_rdcost=1e30, index=(bslice?0:1); index<6; index++)
 
-#ifdef BEST_NZ_COEFF
-  for(i = 0; i <= 1; i++)  
+  if (valid_8x8 == TRUE)
   {
-    for(j = 0; j <= 1; j++)
-      img->nz_coeff[img->current_mb_nr][i1 + i][j1 + j] = best_nz_coeff[i][j];
-  }
+#ifdef BEST_NZ_COEFF
+    for(i = 0; i <= 1; i++)  
+    {
+      for(j = 0; j <= 1; j++)
+        img->nz_coeff[img->current_mb_nr][i1 + i][j1 + j] = best_nz_coeff[i][j];
+    }
 #endif
 
-  if (!transform8x8)
-    dataTr->mb_p8x8_cost += min_cost8x8;
+    if (!transform8x8)
+    {
+      if (min_cost8x8 != INT_MAX)
+        dataTr->mb_p8x8_cost += min_cost8x8;
+      else
+        dataTr->mb_p8x8_cost = INT_MAX;
+    }
 
-  if (!params->rdopt)
-  {
+
     if (transform8x8)
     {
-      dataTr->mb_p8x8_cost += min_cost8x8;
+      if (min_cost8x8 != INT_MAX)
+        dataTr->mb_p8x8_cost += min_cost8x8;
+      else
+        dataTr->mb_p8x8_cost = INT_MAX;
+
       mode = dataTr->part8x8mode[block];
       pdir = dataTr->part8x8pdir[block];
     }
@@ -780,6 +1075,7 @@ void submacroblock_mode_decision(RD_PARAMS *enc_mb,
 
     curr_cbp_blk  = 0;
     currMB->bipred_me[block] = dataTr->part8x8bipred[block];
+    currMB->ar_mode = (mode != 0)? mode: P8x8;
     best_cnt_nonz = LumaResidualCoding8x8 (currMB, &dummy, &curr_cbp_blk, block, pdir,
       (pdir == 0 || pdir == 2 ? mode : 0), (pdir == 1 || pdir == 2 ? mode : 0), 
       dataTr->part8x8l0ref[block], dataTr->part8x8l1ref[block], is_cavlc);
@@ -830,87 +1126,66 @@ void submacroblock_mode_decision(RD_PARAMS *enc_mb,
         memcpy(&dataTr->mpr8x8CbCr[1][j][i0], &img->mb_pred[2][j][i0], BLOCK_SIZE_8x8 * sizeof (imgpel));
       }
     }   
-  }
 
-  //----- set cbp and count of nonzero coefficients ---
-  if (best_cnt_nonz)
-  {
-    cbp8x8       |= (1 << block);
-    cnt_nonz_8x8 += best_cnt_nonz;
-  }
 
-  if (!transform8x8)
-  {
-    if (block<3)
+    //----- set cbp and count of nonzero coefficients ---
+    if (best_cnt_nonz)
     {
-      //===== re-set reconstructed block =====
-      j0   = 8*(block >> 1);
-      i0   = 8*(block & 0x01);
-      for (j = j0; j < j0 + BLOCK_SIZE_8x8; j++)
-      {
-        memcpy(&enc_picture->imgY[img->pix_y + j][img->pix_x], dataTr->rec_mbY8x8[j], BLOCK_SIZE_8x8 * sizeof(imgpel));
-      }
+      cbp8x8       |= (1 << block);
+      cnt_nonz_8x8 += best_cnt_nonz;
+    }
 
-      if (params->rdopt == 3)
+    if (!transform8x8)
+    {
+      if (block < 3)
       {
-        errdo_get_best_block(img, enc_picture->p_dec_img[0], decs->dec_mbY8x8, j0, BLOCK_SIZE_8x8);
-      }
-
-      if(img->type==SP_SLICE &&(!si_frame_indicator))
-      {
+        //===== re-set reconstructed block =====
+        j0   = 8*(block >> 1);
+        i0   = 8*(block & 0x01);
         for (j = j0; j < j0 + BLOCK_SIZE_8x8; j++)
         {
-          memcpy(&lrec[img->pix_y + j][img->pix_x], dataTr->lrec[j],2*BLOCK_SIZE*sizeof(imgpel)); // reset the coefficients for SP slice
+          memcpy(&enc_picture->imgY[img->pix_y + j][img->pix_x], dataTr->rec_mbY8x8[j], BLOCK_SIZE_8x8 * sizeof(imgpel));
         }
-      }
 
-      if(img->P444_joined) 
-      {
-        for (k=0; k<2; k++)
+        if(img->type==SP_SLICE &&(!si_frame_indicator))
         {
           for (j = j0; j < j0 + BLOCK_SIZE_8x8; j++)
           {
-            memcpy(&enc_picture->imgUV[k][img->pix_y + j][img->pix_x], dataTr->rec_mb8x8_cr[k][j], BLOCK_SIZE_8x8 * sizeof(imgpel));
+            memcpy(&lrec[img->pix_y + j][img->pix_x], dataTr->lrec[j],2*BLOCK_SIZE*sizeof(imgpel)); // reset the coefficients for SP slice
           }
         }
-      }
-    } // if (block<3)
-  }
-  else
-  {
-    //======= save motion data for 8x8 partition for transform size 8x8 ========
-    StoreNewMotionVectorsBlock8x8(0, block, dataTr->part8x8mode[block], dataTr->part8x8l0ref[block], dataTr->part8x8l1ref[block], dataTr->part8x8pdir[block], dataTr->part8x8bipred[block], bslice);
-  }
-  //===== set motion vectors and reference frames (prediction) =====
-  SetRefAndMotionVectors (currMB, block, dataTr->part8x8mode[block], dataTr->part8x8pdir[block], dataTr->part8x8l0ref[block], dataTr->part8x8l1ref[block], dataTr->part8x8bipred[block]);
 
-  //===== set the coding state after current block =====
-  //if (transform8x8 == 0 || block < 3)
-  if (block < 3)
-    reset_coding_state (currMB, cs_b8);
-
-  if (img->AdaptiveRounding)
-  {
-    for (j=j0; j < j0 + BLOCK_SIZE_8x8; j++)
+        if(img->P444_joined) 
+        {
+          for (k=0; k<2; k++)
+          {
+            for (j = j0; j < j0 + BLOCK_SIZE_8x8; j++)
+            {
+              memcpy(&enc_picture->imgUV[k][img->pix_y + j][img->pix_x], dataTr->rec_mb8x8_cr[k][j], BLOCK_SIZE_8x8 * sizeof(imgpel));
+            }
+          }
+        }
+      } // if (block<3)
+    }
+    else
     {
-      memcpy(&fadjustTransform  [lumaAdjustIndex][j][i0], &fadjust[j][i0], BLOCK_SIZE_8x8 * sizeof(int));
+      //======= save motion data for 8x8 partition for transform size 8x8 ========    
+      StoreNewMotionVectorsBlock8x8(0, block, dataTr->part8x8mode[block], dataTr->part8x8l0ref[block], dataTr->part8x8l1ref[block], dataTr->part8x8pdir[block], dataTr->part8x8bipred[block], bslice);
     }
 
-    if (params->AdaptRndChroma || (img->P444_joined))
+    //===== set motion vectors and reference frames (prediction) =====
+    SetRefAndMotionVectors (&enc_picture->motion, currMB, block, dataTr->part8x8mode[block], dataTr->part8x8pdir[block], dataTr->part8x8l0ref[block], dataTr->part8x8l1ref[block], dataTr->part8x8bipred[block]);
+
+    //===== set the coding state after current block =====
+    //if (transform8x8 == 0 || block < 3)
+    if (stored_state_8x8 == TRUE)
+      reset_coding_state (currSlice, currMB, cs_b8);
+    else
     {
-      int j0_cr = (j0 * img->mb_cr_size_y) >> MB_BLOCK_SHIFT;
-      int i0_cr = (i0 * img->mb_cr_size_x) >> MB_BLOCK_SHIFT;
-      for (k = 0; k < 2; k++)
-      {
-        for (j=j0_cr; j<j0_cr+(img->mb_cr_size_y >> 1); j++)
-        {
-          memcpy(&fadjustTransformCr[k][chromaAdjustIndex][j][i0_cr], &fadjustCr[k][j][i0_cr], (img->mb_cr_size_x >> 1) * sizeof(int));
-        }
-      }
+      update_adaptive_rounding_8x8(dataTr, fadjust);
     }
   }
 }
-
 
 /*!
 *************************************************************************************
@@ -1004,6 +1279,7 @@ int is_bipred_enabled(int mode)
 {
   int enabled = 0;
   mode = (mode == P8x8) ? 4: mode;
+
   if (params->BiPredMotionEstimation)
   {
     if (mode > 0 && mode < 5)
@@ -1026,45 +1302,88 @@ int is_bipred_enabled(int mode)
 /*!
  *************************************************************************************
  * \brief
+ *    Decides whether to perform tranform 8x8 for this mode
+ *************************************************************************************
+ */
+int transform_termination_control(Macroblock* currMB, int mode, int bslice) 
+{
+  // Go through transform modes.
+  // Note that if currMB->cbp is 0 one could choose to skip 8x8 mode
+  // although this could be due to deadzoning decisions.
+  //if (params->Transform8x8Mode==1 && currMB->cbp!=0)
+  if (params->Transform8x8Mode == 1)
+  {
+    //=========== try the 8x8 transform with mb_types 16x16,16x8, 8x16, 8x8, and DIRECT 16x16 ===========
+    if (currMB->luma_transform_size_8x8_flag == 0 && 
+      ((mode >= 1 && mode <= 3) || (bslice && mode == 0 && active_sps->direct_8x8_inference_flag) || (mode == P8x8)))
+    {
+      //try with 8x8 transform size
+      currMB->luma_transform_size_8x8_flag = 1;
+      return 0;
+    }
+    else
+    {
+      currMB->luma_transform_size_8x8_flag = 0;
+      return 1;
+    }
+  }
+  else
+  {
+    return 1;
+  }
+}
+
+/*!
+ *************************************************************************************
+ * \brief
  *    Update prediction direction for mode P16x16 to check all prediction directions
  *************************************************************************************
  */
-void update_prediction_for_mode16x16(Block8x8Info *b8x8info, int ctr16x16, int *index)
-{
+int bslice_16x16_termination_control(Block8x8Info *b8x8info, int *ctr16x16, int mode, int bslice)
+{  
   char pdir = 0;
   short i, bipred_me = 0;
-  switch (ctr16x16)
+  int lastcheck = 1;
+  //--- for INTER16x16 in BSLICEs check all prediction directions ---
+  if (mode == 1 && bslice)
   {
-    case 0:
-      *index = *index - 1;
-      break;
-    case 1:
-      pdir = 1;
-      *index = *index - 1;
-      break;
-    case 2:
-      pdir = 2;
-      if (params->BiPredMotionEstimation)
-      {
-        *index = *index - 1;
-      }
-      break;
-    case 3:
-      pdir = 2;
-      bipred_me = 1;
-      *index = *index - 1;
-      break;
-    case 4:
-      pdir = 2;
-      bipred_me = 2;
-      break;
-    default:
-      error("invalid 'ctr16x16' value", -1);
-      break;
+    switch (*ctr16x16)
+    {
+      case 0:
+        pdir = 0;
+        lastcheck = 0;
+        break;
+      case 1:
+        pdir = 1;
+        lastcheck = 0;
+        break;
+      case 2:
+        pdir = 2;
+        if (params->BiPredMotionEstimation)
+        {
+          lastcheck = 0;
+        }
+        break;
+      case 3:
+        pdir = 2;
+        bipred_me = 1;
+        lastcheck = 0;
+        break;
+      case 4:
+        pdir = 2;
+        bipred_me = 2;
+        break;
+      default:
+        error("invalid 'ctr16x16' value", -1);
+        break;
+    }
+    for (i = 0; i< 4; i++)
+    {
+      b8x8info->bipred8x8me[1][i] = bipred_me;
+      b8x8info->best8x8pdir[1][i] = pdir;
+    }
+    (*ctr16x16)++;
   }
-  for (i = 0; i< 4; i++)
-  {
-    b8x8info->bipred8x8me[1][i] = bipred_me;
-    b8x8info->best8x8pdir[1][i] = pdir;
-  }
+  return lastcheck;
 }
+

@@ -25,9 +25,9 @@ typedef struct
 
 void accumulate_avslice(DistMetric metric[3], int slice_type, int frames);
 void accumulate_average(DistMetric metric[3], int frames);
-void find_distortion(void);
-void select_img(ImageStructure *imgSRC, ImageStructure *imgREF);
-void compute_distortion(void);
+void find_distortion(ImageData *imgData);
+void select_img(ImageStructure *imgSRC, ImageStructure *imgREF, ImageData *imgData);
+void compute_distortion(ImageData *imgData);
 
 #endif
 

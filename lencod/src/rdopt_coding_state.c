@@ -95,11 +95,10 @@ CSptr create_coding_state ()
  *    store coding state (for rd-optimized mode decision)
  ************************************************************************
  */
-void store_coding_state (Macroblock *currMB, CSptr cs)
+void store_coding_state (Slice *currSlice, Macroblock *currMB, CSptr cs)
 {
   int  i;
-  int  i_last = img->currentPicture->idr_flag? 1:cs->no_part;
-  Slice *currSlice = img->currentSlice;
+  int  i_last = img->currentPicture->idr_flag? 1:cs->no_part;  
 
   if (!params->rdopt)  return;
 
@@ -143,11 +142,10 @@ void store_coding_state (Macroblock *currMB, CSptr cs)
  *    restore coding state (for rd-optimized mode decision)
  ************************************************************************
  */
-void reset_coding_state (Macroblock *currMB, CSptr cs)
+void reset_coding_state (Slice *currSlice, Macroblock *currMB, CSptr cs)
 {
   int  i;
-  int  i_last = img->currentPicture->idr_flag? 1:cs->no_part;
-  Slice *currSlice = img->currentSlice;
+  int  i_last = img->currentPicture->idr_flag? 1:cs->no_part;   
 
   if (!params->rdopt)  return;
 

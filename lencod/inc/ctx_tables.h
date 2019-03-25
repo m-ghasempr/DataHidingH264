@@ -23,7 +23,7 @@
 #define NUM_CTX_MODELS_P     3
 
 
-static const int INIT_MB_TYPE_I[1][3][11][2] =
+static const char INIT_MB_TYPE_I[1][3][11][2] =
 {
   //----- model 0 -----
   {
@@ -32,7 +32,7 @@ static const int INIT_MB_TYPE_I[1][3][11][2] =
     {  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED }
   }
 };
-static const int INIT_MB_TYPE_P[3][3][11][2] =
+static const char INIT_MB_TYPE_P[3][3][11][2] =
 {
   //----- model 0 -----
   {
@@ -54,11 +54,7 @@ static const int INIT_MB_TYPE_P[3][3][11][2] =
   }
 };
 
-
-
-
-
-static const int INIT_B8_TYPE_I[1][2][9][2] =
+static const char INIT_B8_TYPE_I[1][2][9][2] =
 {
   //----- model 0 -----
   {
@@ -66,7 +62,8 @@ static const int INIT_B8_TYPE_I[1][2][9][2] =
     {  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED }
   }
 };
-static const int INIT_B8_TYPE_P[3][2][9][2] =
+
+static const char INIT_B8_TYPE_P[3][2][9][2] =
 {
   //----- model 0 -----
   {
@@ -85,11 +82,7 @@ static const int INIT_B8_TYPE_P[3][2][9][2] =
   }
 };
 
-
-
-
-
-static const int INIT_MV_RES_I[1][2][10][2] =
+static const char INIT_MV_RES_I[1][2][10][2] =
 {
   //----- model 0 -----
   {
@@ -97,7 +90,8 @@ static const int INIT_MV_RES_I[1][2][10][2] =
     {  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED }
   }
 };
-static const int INIT_MV_RES_P[3][2][10][2] =
+
+static const char INIT_MV_RES_P[3][2][10][2] =
 {
   //----- model 0 -----
   {
@@ -116,11 +110,7 @@ static const int INIT_MV_RES_P[3][2][10][2] =
   }
 };
 
-
-
-
-
-static const int INIT_REF_NO_I[1][2][6][2] =
+static const char INIT_REF_NO_I[1][2][6][2] =
 {
   //----- model 0 -----
   {
@@ -128,7 +118,8 @@ static const int INIT_REF_NO_I[1][2][6][2] =
     {  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED ,  CTX_UNUSED }
   }
 };
-static const int INIT_REF_NO_P[3][2][6][2] =
+
+static const char INIT_REF_NO_P[3][2][6][2] =
 {
   //----- model 0 -----
   {
@@ -148,7 +139,7 @@ static const int INIT_REF_NO_P[3][2][6][2] =
 };
 
 
-static const int INIT_TRANSFORM_SIZE_I[1][1][3][2]=
+static const char INIT_TRANSFORM_SIZE_I[1][1][3][2]=
 {
   //----- model 0 -----
   {
@@ -157,7 +148,7 @@ static const int INIT_TRANSFORM_SIZE_I[1][1][3][2]=
   }
 };
 
-static const int INIT_TRANSFORM_SIZE_P[3][1][3][2]=
+static const char INIT_TRANSFORM_SIZE_P[3][1][3][2]=
 {
   //----- model 0 -----
   {
@@ -176,14 +167,14 @@ static const int INIT_TRANSFORM_SIZE_P[3][1][3][2]=
   }
 };
 
-static const int INIT_DELTA_QP_I[1][1][4][2]=
+static const char INIT_DELTA_QP_I[1][1][4][2]=
 {
   //----- model 0 -----
   {
     { {   0,  41} , {   0,  63} , {   0,  63} , {   0,  63} },
   }
 };
-static const int INIT_DELTA_QP_P[3][1][4][2]=
+static const char INIT_DELTA_QP_P[3][1][4][2]=
 {
   //----- model 0 -----
   {
@@ -199,18 +190,14 @@ static const int INIT_DELTA_QP_P[3][1][4][2]=
   }
 };
 
-
-
-
-
-static const int INIT_MB_AFF_I[1][1][4][2] =
+static const char INIT_MB_AFF_I[1][1][4][2] =
 {
   //----- model 0 -----
   {
     { {   0,  11} , {   1,  55} , {   0,  69} ,  CTX_UNUSED }
   }
 };
-static const int INIT_MB_AFF_P[3][1][4][2] =
+static const char INIT_MB_AFF_P[3][1][4][2] =
 {
   //----- model 0 -----
   {
@@ -226,18 +213,15 @@ static const int INIT_MB_AFF_P[3][1][4][2] =
   }
 };
 
-
-
-
-
-static const int INIT_IPR_I[1][1][2][2] =
+static const char INIT_IPR_I[1][1][2][2] =
 {
   //----- model 0 -----
   {
     { { 13,  41} , {   3,  62} }
   }
 };
-static const int INIT_IPR_P[3][1][2][2] =
+
+static const char INIT_IPR_P[3][1][2][2] =
 {
   //----- model 0 -----
   {
@@ -253,18 +237,15 @@ static const int INIT_IPR_P[3][1][2][2] =
   }
 };
 
-
-
-
-
-static const int INIT_CIPR_I[1][1][4][2] =
+static const char INIT_CIPR_I[1][1][4][2] =
 {
   //----- model 0 -----
   {
     { {  -9,  83} , {   4,  86} , {   0,  97} , {  -7,  72} }
   }
 };
-static const int INIT_CIPR_P[3][1][4][2] =
+
+static const char INIT_CIPR_P[3][1][4][2] =
 {
   //----- model 0 -----
   {
@@ -280,12 +261,7 @@ static const int INIT_CIPR_P[3][1][4][2] =
   }
 };
 
-
-
-
-
-
-static const int INIT_CBP_I[1][3][4][2] =
+static const char INIT_CBP_I[1][3][4][2] =
 {
   //----- model 0 -----
   {
@@ -294,7 +270,8 @@ static const int INIT_CBP_I[1][3][4][2] =
     { { -18,  95} , { -27, 127} , { -21, 114} , { -30, 127} }
   }
 };
-static const int INIT_CBP_P[3][3][4][2] =
+
+static const char INIT_CBP_P[3][3][4][2] =
 {
   //----- model 0 -----
   {
@@ -316,11 +293,7 @@ static const int INIT_CBP_P[3][3][4][2] =
   }
 };
 
-
-
-
-
-static const int INIT_BCBP_I[1][22][4][2] = 
+static const char INIT_BCBP_I[1][22][4][2] = 
 {
   //----- model 0 -----
   {
@@ -351,7 +324,7 @@ static const int INIT_BCBP_I[1][22][4][2] =
   }
 };
 
-static const int INIT_BCBP_P[3][22][4][2] =
+static const char INIT_BCBP_P[3][22][4][2] =
 {
   //----- model 0 -----
   {
@@ -436,7 +409,7 @@ static const int INIT_BCBP_P[3][22][4][2] =
   }
 };
 
-static const int INIT_MAP_I[1][22][15][2] = 
+static const char INIT_MAP_I[1][22][15][2] = 
 {
   //----- model 0 -----
   {
@@ -467,7 +440,7 @@ static const int INIT_MAP_I[1][22][15][2] =
   }
 };
 
-static const int INIT_MAP_P[3][22][15][2] =
+static const char INIT_MAP_P[3][22][15][2] =
 {
   //----- model 0 -----
   {
@@ -552,7 +525,7 @@ static const int INIT_MAP_P[3][22][15][2] =
   }
 };
 
-static const int INIT_LAST_I[1][22][15][2] = 
+static const char INIT_LAST_I[1][22][15][2] = 
 {
   //----- model 0 -----
   {
@@ -583,7 +556,7 @@ static const int INIT_LAST_I[1][22][15][2] =
   }
 };
 
-static const int INIT_LAST_P[3][22][15][2] =
+static const char INIT_LAST_P[3][22][15][2] =
 {
   //----- model 0 -----
   {
@@ -668,7 +641,7 @@ static const int INIT_LAST_P[3][22][15][2] =
   }
 };
 
-static const int INIT_ONE_I[1][22][5][2] = 
+static const char INIT_ONE_I[1][22][5][2] = 
 {
   //----- model 0 -----
   {
@@ -699,7 +672,7 @@ static const int INIT_ONE_I[1][22][5][2] =
   }
 };
 
-static const int INIT_ONE_P[3][22][5][2] =
+static const char INIT_ONE_P[3][22][5][2] =
 {
   //----- model 0 -----
   {
@@ -784,7 +757,7 @@ static const int INIT_ONE_P[3][22][5][2] =
   }
 };
 
-static const int INIT_ABS_I[1][22][5][2] = 
+static const char INIT_ABS_I[1][22][5][2] = 
 {
   //----- model 0 -----
   {
@@ -815,7 +788,7 @@ static const int INIT_ABS_I[1][22][5][2] =
   }
 };
 
-static const int INIT_ABS_P[3][22][5][2] =
+static const char INIT_ABS_P[3][22][5][2] =
 {
   //----- model 0 -----
   {
@@ -903,7 +876,7 @@ static const int INIT_ABS_P[3][22][5][2] =
 
 
 #if ENABLE_FIELD_CTX
-static const int INIT_FLD_MAP_I[1][8][15][2] =
+static const char INIT_FLD_MAP_I[1][8][15][2] =
 {
   //----- model 0 -----
   {
@@ -918,7 +891,8 @@ static const int INIT_FLD_MAP_I[1][8][15][2] =
     {  CTX_UNUSED , {   0,  76} , {  -5,  74} , {   0,  70} , { -11,  75} , {   1,  68} , {   0,  65} , { -14,  73} , {   3,  62} , {   4,  62} , {  -1,  68} , { -13,  75} , {  11,  55} , {   5,  64} , {  12,  70} }
   }
 };
-static const int INIT_FLD_MAP_P[3][8][15][2] =
+
+static const char INIT_FLD_MAP_P[3][8][15][2] =
 {
   //----- model 0 -----
   {
@@ -958,7 +932,7 @@ static const int INIT_FLD_MAP_P[3][8][15][2] =
   }
 };
 
-static const int INIT_FLD_LAST_I[1][8][15][2] =
+static const char INIT_FLD_LAST_I[1][8][15][2] =
 {
   //----- model 0 -----
   {
@@ -973,7 +947,8 @@ static const int INIT_FLD_LAST_I[1][8][15][2] =
     {  CTX_UNUSED , {  31,  -7} , {  35, -15} , {  34,  -3} , {  34,   3} , {  36,  -1} , {  34,   5} , {  32,  11} , {  35,   5} , {  34,  12} , {  39,  11} , {  30,  29} , {  34,  26} , {  29,  39} , {  19,  66} }
   }
 };
-static const int INIT_FLD_LAST_P[3][8][15][2] =
+
+static const char INIT_FLD_LAST_P[3][8][15][2] =
 {
   //----- model 0 -----
   {

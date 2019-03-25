@@ -88,7 +88,7 @@ typedef struct storable_picture
   imgpel **   p_curr_img;                //!< current int-pel ref. picture area to be used for motion estimation
   imgpel **** p_curr_img_sub;            //!< current sub-pel ref. picture area to be used for motion estimation
 
-  PicMotionParams2 ***mv_info;    //!< Motion info
+  //PicMotionParams2 ***mv_info;    //!< Motion info
   PicMotionParams  motion;    //!< Motion info
   PicMotionParams JVmotion[MAX_PLANE];    //!< Motion info for 4:4:4 independent coding
 
@@ -108,6 +108,8 @@ typedef struct storable_picture
 
   PictureStats p_stats;
   StatParameters stats;
+
+  int         type;
 
 } StorablePicture;
 

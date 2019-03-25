@@ -326,10 +326,19 @@ FrameStore* alloc_frame_store(void)
 
 void alloc_pic_motion(PicMotionParams *motion, int size_y, int size_x)
 {
-  get_mem3Dint64 (&(motion->ref_pic_id), 6, size_y, size_x);
-  get_mem3Dint64 (&(motion->ref_id),     6, size_y, size_x);
+  if (active_sps->frame_mbs_only_flag)
+  {
+    get_mem3Dint64 (&(motion->ref_pic_id), 2, size_y, size_x);
+    get_mem3Dint64 (&(motion->ref_id),     2, size_y, size_x);
+  }
+  else
+  {
+    get_mem3Dint64 (&(motion->ref_pic_id), 6, size_y, size_x);
+    get_mem3Dint64 (&(motion->ref_id),     6, size_y, size_x);
+  }
+
   get_mem4Dshort (&(motion->mv),         2, size_y, size_x, 2);
-  get_mem3D      ((byte****)(&(motion->ref_idx)),    2, size_y , size_x);
+  get_mem3D((byte****)(&(motion->ref_idx)), 2, size_y, size_x);
 
   motion->mb_field = calloc (size_y * size_x, sizeof(byte));
   if (motion->mb_field == NULL)
@@ -438,10 +447,12 @@ StorablePicture* alloc_storable_picture(PictureStructure structure, int size_x, 
     
   s->p_curr_img_sub = s->p_img_sub[0];
 
+  /*
   if (params->MbInterlace)
     get_mem3Dmp    (&s->mv_info, size_y, size_x, 6);
   else
     get_mem3Dmp    (&s->mv_info, size_y, size_x, 2);
+    */
 
   alloc_pic_motion(&s->motion, size_y / BLOCK_SIZE, size_x / BLOCK_SIZE);
 
@@ -521,7 +532,6 @@ void free_frame_store(FrameStore* f)
 
 void free_pic_motion(PicMotionParams *motion)
 {
-
   if (motion->ref_pic_id)
   {
     free_mem3Dint64 (motion->ref_pic_id);
@@ -574,7 +584,7 @@ void free_storable_picture(StorablePicture* p)
   int nplane;
   if (p)
   {
-    free_mem3Dmp (p->mv_info);
+    //free_mem3Dmp (p->mv_info);
     free_pic_motion(&p->motion);
 
     if( IS_INDEPENDENT(params) )
@@ -730,7 +740,7 @@ static void unmark_for_reference(FrameStore* fs)
       free_mem5Dpel (fs->top_field->imgUV_sub);
       fs->top_field->imgUV_sub = NULL;
     }
-
+    
     free_pic_motion(&fs->top_field->motion);
   }
   if (fs->bottom_field)
@@ -2389,6 +2399,7 @@ void store_picture_in_dpb(StorablePicture* p)
   assert (p!=NULL);
 
   p->used_for_reference = (img->nal_reference_idc != NALU_PRIORITY_DISPOSABLE);
+  p->type = img->type;
 
   img->last_has_mmco_5=0;
   img->last_pic_bottom_field = (img->structure == BOTTOM_FIELD);
@@ -2470,7 +2481,6 @@ void store_picture_in_dpb(StorablePicture* p)
 
   }
   // store at end of buffer
-//  printf ("store frame/field at pos %d\n",dpb.used_size);
   insert_picture_in_dpb(dpb.fs[dpb.used_size],p);
 
   if (p->structure != FRAME)
@@ -2513,6 +2523,7 @@ void replace_top_pic_with_frame(StorablePicture* p)
   assert (p->structure==FRAME);
 
   p->used_for_reference = (img->nal_reference_idc != NALU_PRIORITY_DISPOSABLE);
+  p->type = img->type;
   // upsample a reference picture
   if (p->used_for_reference)
   {
@@ -2809,7 +2820,7 @@ static int is_long_term_reference(FrameStore* fs)
  ************************************************************************
  */
 static void remove_frame_from_dpb(int pos)
-{
+{  
   FrameStore* fs = dpb.fs[pos];
   FrameStore* tmp;
   unsigned i;
@@ -2927,8 +2938,7 @@ static void output_one_frame_from_dpb(void)
   }
 
   // call the output function
-//  printf ("output frame with frame_num #%d, poc %d (dpb. dpb.size=%d, dpb.used_size=%d)\n", dpb.fs[pos]->frame_num, dpb.fs[pos]->frame->poc, dpb.size, dpb.used_size);
-
+  //  printf ("output frame with frame_num #%d, poc %d (dpb. dpb.size=%d, dpb.used_size=%d)\n", dpb.fs[pos]->frame_num, dpb.fs[pos]->frame->poc, dpb.size, dpb.used_size);
   write_stored_frame(dpb.fs[pos], p_dec);
 
   // if redundant picture in use, output POC may be not in ascending order
@@ -3007,7 +3017,7 @@ void gen_field_ref_ids(StorablePicture *p)
  */
 void dpb_split_field(FrameStore *fs)
 {
-  int i, j, ii, jj, jj4;
+  int i, j, k, ii, jj, jj4;
   int idiv,jdiv;
   int currentmb;
   int dummylist0,dummylist1;
@@ -3023,23 +3033,16 @@ void dpb_split_field(FrameStore *fs)
     for (i=0; i<fs->frame->size_y/2; i++)
     {
       memcpy(fs->top_field->imgY[i], fs->frame->imgY[i*2], fs->frame->size_x*sizeof(imgpel));
-    }
-
-    for (i=0; i<fs->frame->size_y_cr/2; i++)
-    {
-      memcpy(fs->top_field->imgUV[0][i], fs->frame->imgUV[0][i*2], fs->frame->size_x_cr*sizeof(imgpel));
-      memcpy(fs->top_field->imgUV[1][i], fs->frame->imgUV[1][i*2], fs->frame->size_x_cr*sizeof(imgpel));
-    }
-
-    for (i=0; i<fs->frame->size_y/2; i++)
-    {
       memcpy(fs->bottom_field->imgY[i], fs->frame->imgY[i*2 + 1], fs->frame->size_x*sizeof(imgpel));
     }
 
-    for (i=0; i<fs->frame->size_y_cr/2; i++)
+    for (k = 0; k < 2; k++)
     {
-      memcpy(fs->bottom_field->imgUV[0][i], fs->frame->imgUV[0][i*2 + 1], fs->frame->size_x_cr*sizeof(imgpel));
-      memcpy(fs->bottom_field->imgUV[1][i], fs->frame->imgUV[1][i*2 + 1], fs->frame->size_x_cr*sizeof(imgpel));
+      for (i=0; i<fs->frame->size_y_cr/2; i++)
+      {
+        memcpy(fs->top_field->imgUV[k][i], fs->frame->imgUV[k][i*2], fs->frame->size_x_cr*sizeof(imgpel));
+        memcpy(fs->bottom_field->imgUV[k][i], fs->frame->imgUV[k][i*2 + 1], fs->frame->size_x_cr*sizeof(imgpel));
+      }
     }
 
     if( IS_INDEPENDENT(params) )
@@ -3103,33 +3106,49 @@ void dpb_split_field(FrameStore *fs)
     fs->frame->bottom_field=NULL;
   }
 
-  for (j=0 ; j<fs->frame->size_y/4 ; j++)
+  if (!fs->frame->MbaffFrameFlag)
   {
-    jdiv=j/4;
-    for (i=0 ; i<fs->frame->size_x/4 ; i++)
+    for (j=0 ; j<fs->frame->size_y/4 ; j++)
     {
-      idiv=i/4;
-      currentmb = twosz16*(jdiv/2)+ (idiv)*2 + (jdiv%2);
-
-      if (fs->frame->MbaffFrameFlag  && fs->frame->motion.mb_field[currentmb])
-      {
-        int list_offset = currentmb%2? 4: 2;
-        dummylist0 = fs->frame->motion.ref_idx[LIST_0][j][i];
-        dummylist1 = fs->frame->motion.ref_idx[LIST_1][j][i];
-        //! association with id already known for fields.
-        fs->frame->motion.ref_id[LIST_0 + list_offset][j][i] = (dummylist0>=0)? fs->frame->ref_pic_num[LIST_0 + list_offset][dummylist0] : 0;
-        fs->frame->motion.ref_id[LIST_1 + list_offset][j][i] = (dummylist1>=0)? fs->frame->ref_pic_num[LIST_1 + list_offset][dummylist1] : 0;
-        //! need to make association with frames
-        fs->frame->motion.ref_id[LIST_0][j][i] = (dummylist0>=0)? fs->frame->frm_ref_pic_num[LIST_0 + list_offset][dummylist0] : 0;
-        fs->frame->motion.ref_id[LIST_1][j][i] = (dummylist1>=0)? fs->frame->frm_ref_pic_num[LIST_1 + list_offset][dummylist1] : 0;
-
-      }
-      else
+      for (i=0 ; i<fs->frame->size_x/4 ; i++)
       {
         dummylist0 = fs->frame->motion.ref_idx[LIST_0][j][i];
         dummylist1 = fs->frame->motion.ref_idx[LIST_1][j][i];
         fs->frame->motion.ref_id[LIST_0][j][i] = (dummylist0>=0)? fs->frame->ref_pic_num[LIST_0][dummylist0] : -1;
         fs->frame->motion.ref_id[LIST_1][j][i] = (dummylist1>=0)? fs->frame->ref_pic_num[LIST_1][dummylist1] : -1;
+      }
+    }
+  }
+  else
+  {
+    for (j=0 ; j<fs->frame->size_y/4 ; j++)
+    {
+      jdiv=j/4;
+      for (i=0 ; i<fs->frame->size_x/4 ; i++)
+      {
+        idiv=i/4;
+        currentmb = twosz16*(jdiv/2)+ (idiv)*2 + (jdiv%2);
+
+        if (fs->frame->motion.mb_field[currentmb])
+        {
+          int list_offset = currentmb%2? 4: 2;
+          dummylist0 = fs->frame->motion.ref_idx[LIST_0][j][i];
+          dummylist1 = fs->frame->motion.ref_idx[LIST_1][j][i];
+          //! association with id already known for fields.
+          fs->frame->motion.ref_id[LIST_0 + list_offset][j][i] = (dummylist0>=0)? fs->frame->ref_pic_num[LIST_0 + list_offset][dummylist0] : 0;
+          fs->frame->motion.ref_id[LIST_1 + list_offset][j][i] = (dummylist1>=0)? fs->frame->ref_pic_num[LIST_1 + list_offset][dummylist1] : 0;
+          //! need to make association with frames
+          fs->frame->motion.ref_id[LIST_0][j][i] = (dummylist0>=0)? fs->frame->frm_ref_pic_num[LIST_0 + list_offset][dummylist0] : 0;
+          fs->frame->motion.ref_id[LIST_1][j][i] = (dummylist1>=0)? fs->frame->frm_ref_pic_num[LIST_1 + list_offset][dummylist1] : 0;
+
+        }
+        else
+        {
+          dummylist0 = fs->frame->motion.ref_idx[LIST_0][j][i];
+          dummylist1 = fs->frame->motion.ref_idx[LIST_1][j][i];
+          fs->frame->motion.ref_id[LIST_0][j][i] = (dummylist0>=0)? fs->frame->ref_pic_num[LIST_0][dummylist0] : -1;
+          fs->frame->motion.ref_id[LIST_1][j][i] = (dummylist1>=0)? fs->frame->ref_pic_num[LIST_1][dummylist1] : -1;
+        }
       }
     }
   }
@@ -3243,7 +3262,7 @@ void dpb_split_field(FrameStore *fs)
  */
 void dpb_combine_field_yuv(FrameStore *fs)
 {
-  int i;
+  int i, j;
 
   fs->frame = alloc_storable_picture(FRAME, fs->top_field->size_x, fs->top_field->size_y*2, fs->top_field->size_x_cr, fs->top_field->size_y_cr*2);
 
@@ -3253,12 +3272,13 @@ void dpb_combine_field_yuv(FrameStore *fs)
     memcpy(fs->frame->imgY[i*2 + 1], fs->bottom_field->imgY[i], fs->bottom_field->size_x*sizeof(imgpel)); // bottom field
   }
 
-  for (i=0; i<fs->top_field->size_y_cr; i++)
+  for (j = 0; j < 2; j++)
   {
-    memcpy(fs->frame->imgUV[0][i*2],     fs->top_field->imgUV[0][i],    fs->top_field->size_x_cr*sizeof(imgpel));
-    memcpy(fs->frame->imgUV[0][i*2 + 1], fs->bottom_field->imgUV[0][i], fs->bottom_field->size_x_cr*sizeof(imgpel));
-    memcpy(fs->frame->imgUV[1][i*2],     fs->top_field->imgUV[1][i],    fs->top_field->size_x_cr*sizeof(imgpel));
-    memcpy(fs->frame->imgUV[1][i*2 + 1], fs->bottom_field->imgUV[1][i], fs->bottom_field->size_x_cr*sizeof(imgpel));
+    for (i=0; i<fs->top_field->size_y_cr; i++)
+    {
+      memcpy(fs->frame->imgUV[j][i*2],     fs->top_field->imgUV[j][i],    fs->top_field->size_x_cr*sizeof(imgpel));
+      memcpy(fs->frame->imgUV[j][i*2 + 1], fs->bottom_field->imgUV[j][i], fs->bottom_field->size_x_cr*sizeof(imgpel));
+    }
   }
 
   fs->poc=fs->frame->poc =fs->frame->frame_poc = imin (fs->top_field->poc, fs->bottom_field->poc);
@@ -4404,15 +4424,18 @@ void compute_colocated_JV(ColocatedParams* p, StorablePicture **listX[6])
  */
 void copy_storable_param_JV( int nplane, StorablePicture *d, StorablePicture *s )
 {
+  int md_size = (img->height / BLOCK_SIZE) * (img->width / BLOCK_SIZE);
+  int ref_size = active_sps->frame_mbs_only_flag ? 2 * md_size : 6 * md_size;
+
   // copy ref_idx
-  memcpy( d->JVmotion[nplane].ref_idx[0][0], s->motion.ref_idx[0][0], 2 * (img->height/BLOCK_SIZE) * (img->width/BLOCK_SIZE) * sizeof(byte) );
+  memcpy( d->JVmotion[nplane].ref_idx[0][0], s->motion.ref_idx[0][0], 2 * md_size * sizeof(byte) );
 
   // copy ref_pic_id
-  memcpy( d->JVmotion[nplane].ref_pic_id[0][0], s->motion.ref_pic_id[0][0], 6 * (img->height/BLOCK_SIZE) * (img->width/BLOCK_SIZE) * sizeof(int64) );
+  memcpy( d->JVmotion[nplane].ref_pic_id[0][0], s->motion.ref_pic_id[0][0], ref_size * sizeof(int64) );
 
   // copy motion.ref_id
-  memcpy( d->JVmotion[nplane].ref_id[0][0], s->motion.ref_id[0][0], 6 * (img->width/BLOCK_SIZE) * (img->height/BLOCK_SIZE) * sizeof(int64));
+  memcpy( d->JVmotion[nplane].ref_id[0][0], s->motion.ref_id[0][0], ref_size * sizeof(int64));
 
   // copy mv
-  memcpy( d->JVmotion[nplane].mv[0][0][0], s->motion.mv[0][0][0], 2 * img->height/BLOCK_SIZE * img->width/BLOCK_SIZE * sizeof(short)*2 );
+  memcpy( d->JVmotion[nplane].mv[0][0][0], s->motion.mv[0][0][0], 2 * md_size * 2 * sizeof(short) );
 }

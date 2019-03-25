@@ -30,6 +30,8 @@ void linfo_cbp_inter(int len,int info,int *cbp, int *dummy);
 void linfo_levrun_inter(int len,int info,int *level,int *irun);
 void linfo_levrun_c2x2(int len,int info,int *level,int *irun);
 
+int  uvlc_startcode_follows(Slice *currSlice, int dummy);
+
 int  readSyntaxElement_VLC (SyntaxElement *sym, Bitstream *currStream);
 int  readSyntaxElement_UVLC(SyntaxElement *sym, ImageParameters *img, struct datapartition *dp);
 int  readSyntaxElement_Intra4x4PredictionMode(SyntaxElement *sym, ImageParameters *img, Bitstream   *currStream);
@@ -46,10 +48,9 @@ int readSyntaxElement_Level_VLCN                  (SyntaxElement *sym, int vlc, 
 int readSyntaxElement_TotalZeros                  (SyntaxElement *sym, Bitstream *currStream);
 int readSyntaxElement_TotalZerosChromaDC          (SyntaxElement *sym, Bitstream *currStream);
 int readSyntaxElement_Run                         (SyntaxElement *sym, Bitstream *currStream);
-int GetBits (byte buffer[],int totbitoffset,int *info, int bytecount,
+int GetBits (byte buffer[],int totbitoffset,int *info, int bitcount,
              int numbits);
-int ShowBits (byte buffer[],int totbitoffset,int bytecount, int numbits);
-int ShowBitsThres (byte *curbyte,int totbitoffset,int bytecount, int numbits, int code);
+int ShowBits (byte buffer[],int totbitoffset,int bitcount, int numbits);
 
 int more_rbsp_data (byte buffer[],int totbitoffset,int bytecount);
 

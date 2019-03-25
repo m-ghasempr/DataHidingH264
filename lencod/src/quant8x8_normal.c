@@ -40,7 +40,7 @@
  *
  ************************************************************************
  */
-int quant_8x8_normal(int (*tblock)[16], int block_y, int block_x, int  qp,
+int quant_8x8_normal(int **tblock, int block_y, int block_x, int  qp,
                      int*  ACLevel, int*  ACRun, 
                      int **fadjust8x8, int **levelscale, int **invlevelscale, int **leveloffset,
                      int *coeff_cost, const byte (*pos_scan)[2], const byte *c_cost)
@@ -112,7 +112,7 @@ int quant_8x8_normal(int (*tblock)[16], int block_y, int block_x, int  qp,
  *
  ************************************************************************
  */
-int quant_8x8cavlc_normal(int (*tblock)[16], int block_y, int block_x, int  qp,                 
+int quant_8x8cavlc_normal(int **tblock, int block_y, int block_x, int  qp,                 
                    int***  cofAC, 
                    int **fadjust8x8, int **levelscale, int **invlevelscale, int **leveloffset,
                    int *coeff_cost, const byte (*pos_scan)[2], const byte *c_cost)

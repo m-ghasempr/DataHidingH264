@@ -333,7 +333,7 @@ void ParseQOffsetMatrix (char *buf, int bufsize)
     if (0 > (MapIdx = CheckOffsetParameterName (items[i + cnt], &type)))
     {
       snprintf (errortext, ET_SIZE,
-        " Parsing error in config file: Parameter Name '%s' not recognized.",
+        " Parsing error in quantization offset config file: Parameter Name '%s' not recognized.",
         items[i + cnt]);
       error (errortext, 300);
     }
@@ -341,7 +341,7 @@ void ParseQOffsetMatrix (char *buf, int bufsize)
     if (strcmp ("=", items[i + cnt]))
     {
       snprintf (errortext, ET_SIZE,
-        " Parsing error in config file: '=' expected as the second token in each item.");
+        " Parsing error in quantization offset config file: '=' expected as the second token in each item.");
       error (errortext, 300);
     }
     cnt++;
@@ -364,7 +364,7 @@ void ParseQOffsetMatrix (char *buf, int bufsize)
       if (1 != sscanf (items[i + cnt + j], "%d", &IntContent))
       {
         snprintf (errortext, ET_SIZE,
-          " Parsing error: Expected numerical value for Parameter of %s, found '%s'.",
+          " Parsing error in quantization offset file: Expected numerical value for Parameter of %s, found '%s'.",
           items[i], items[i + cnt + j]);
         error (errortext, 300);
       }

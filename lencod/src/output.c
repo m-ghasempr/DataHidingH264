@@ -176,9 +176,11 @@ void write_out_picture(StorablePicture *p, int p_out)
   int SubWidthC  [4]= { 1, 2, 2, 1};
   int SubHeightC [4]= { 1, 2, 1, 1};
 
+  int ret;
+
   int crop_left, crop_right, crop_top, crop_bottom;
   int symbol_size_in_bytes = img->out_unit_size_on_disk/8;
-  Boolean rgb_output = (Boolean) (params->rgb_input_flag != 0 && params->yuv_format==3);
+  Boolean rgb_output = (Boolean) (params->rgb_input_flag != CM_YUV && params->output.yuv_format == YUV444);
   unsigned char *buf;
 
   if (p->non_existing)
@@ -215,7 +217,11 @@ void write_out_picture(StorablePicture *p, int p_out)
     crop_bottom = ( 2 - p->frame_mbs_only_flag ) * p->frame_cropping_rect_bottom_offset;
 
     img2buf (p->imgUV[1], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
-    write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes);
+    ret = write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes);
+    if (ret != ((p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes))
+    {
+      error ("write_out_picture: error writing to RGB output file.", 500);
+    }
 
     if (p->frame_cropping_flag)
     {
@@ -231,9 +237,13 @@ void write_out_picture(StorablePicture *p, int p_out)
   }
 
   img2buf (p->imgY, buf, p->size_x, p->size_y, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
-  write(p_out, buf, (p->size_y-crop_bottom-crop_top)*(p->size_x-crop_right-crop_left)*symbol_size_in_bytes);
+  ret = write(p_out, buf, (p->size_y-crop_bottom-crop_top)*(p->size_x-crop_right-crop_left)*symbol_size_in_bytes);
+  if (ret != ((p->size_y-crop_bottom-crop_top)*(p->size_x-crop_right-crop_left)*symbol_size_in_bytes))
+  {
+    error ("write_out_picture: error writing to YUV output file.", 500);
+  }
 
-  if (p->chroma_format_idc!=YUV400)
+  if (p->chroma_format_idc != YUV400)
   {
     crop_left   = p->frame_cropping_rect_left_offset;
     crop_right  = p->frame_cropping_rect_right_offset;
@@ -241,12 +251,20 @@ void write_out_picture(StorablePicture *p, int p_out)
     crop_bottom = ( 2 - p->frame_mbs_only_flag ) * p->frame_cropping_rect_bottom_offset;
 
     img2buf (p->imgUV[0], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
-    write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)* symbol_size_in_bytes);
+    ret = write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)* symbol_size_in_bytes);
+    if (ret != ((p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)* symbol_size_in_bytes))
+    {
+      error ("write_out_picture: error writing to YUV output file.", 500);
+    }
 
     if (!rgb_output)
     {
       img2buf (p->imgUV[1], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
-      write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes);
+      ret = write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes);
+      if (ret != ((p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes))
+      {
+        error ("write_out_picture: error writing to YUV output file.", 500);
+      }
     }
   }
 

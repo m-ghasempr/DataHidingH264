@@ -20,7 +20,8 @@
 #include "global.h"
 
 #include "ctx_tables.h"
-#include "cabac.h"
+#include "biariencode.h"
+#include "memalloc.h"
 
 #define DEFAULT_CTX_MODEL   0
 #define RELIABLE_COUNT      32.0
@@ -60,86 +61,30 @@ double probability[128] =
 
 void create_context_memory (void)
 {
-  int i, j, k;
+  int k;
   int num_mb  = img->FrameSizeInMbs; // number of macroblocks for frame
   double log2 = log(2.0);
 
   num_mb_per_slice  = (params->slice_mode == 1 ? params->slice_argument : num_mb);
   number_of_slices  = (num_mb + num_mb_per_slice - 1) / num_mb_per_slice;
-
-  if ((initialized  = (int***) malloc (3 * sizeof(int**))) == NULL)
-  {
-    no_mem_exit ("create_context_memory: initialized");
-  }
-  if ((model_number = (int***) malloc (3 * sizeof(int**))) == NULL)
-  {
-    no_mem_exit ("create_context_memory: model_number");
-  }
-
-  for (k=0; k<3; k++)
-  {
-    if ((initialized[k] = (int**) malloc (FRAME_TYPES * sizeof(int*))) == NULL)
-    {
-      no_mem_exit ("create_context_memory: initialized");
-    }
-    if ((model_number[k]= (int**) malloc (FRAME_TYPES * sizeof(int*))) == NULL)
-    {
-      no_mem_exit ("create_context_memory: model_number");
-    }
-
-    for (i=0; i<FRAME_TYPES; i++)
-    {
-      if ((initialized[k][i] = (int*) malloc (number_of_slices * sizeof(int))) == NULL)
-      {
-        no_mem_exit ("create_context_memory: initialized");
-      }
-      if ((model_number[k][i]= (int*) malloc (number_of_slices * sizeof(int))) == NULL)
-      {
-        no_mem_exit ("create_context_memory: model_number");
-      }
-    }
-  }
-
+  get_mem3Dint(&initialized, 3, FRAME_TYPES, number_of_slices);
   //===== set all context sets as "uninitialized" =====
-  for (k=0; k<3; k++)
-  {
-    for (i=0; i<FRAME_TYPES; i++)
-    {
-      for (j=0; j<number_of_slices; j++)
-      {
-        initialized[k][i][j] = 0;
-      }
-    }
-  }
+  memset(&initialized[0][0][0], 0, 3 * FRAME_TYPES * number_of_slices * sizeof(int));
+  get_mem3Dint(&model_number, 3, FRAME_TYPES, number_of_slices);
 
   //----- init tables -----
   for( k=0; k<64; k++ )
   {
     probability[k] = 1.0 - probability[127-k];
-    entropy    [k] = log (probability[    k]) / log2;
-    entropy[127-k] = log (probability[127-k]) / log2;
+    entropy    [k] = log (probability[      k]) / log2;
+    entropy[127-k] = log (probability[127 - k]) / log2;
   }
 }
 
-
-
-
 void free_context_memory (void)
 {
-  int i, k;
-
-  for (k=0; k<3; k++)
-  {
-    for (i=0; i<FRAME_TYPES; i++)
-    {
-      free (initialized [k][i]);
-      free (model_number[k][i]);
-    }
-    free (initialized [k]);
-    free (model_number[k]);
-  }
-  free (initialized);
-  free (model_number);
+  free_mem3Dint(initialized);
+  free_mem3Dint(model_number);
 }
 
 
@@ -216,7 +161,9 @@ void init_contexts (void)
   BIARI_CTX_INIT2 (2, NUM_MV_RES_CTX,    mc->mv_res_contexts,      INIT_MV_RES,     img->model_number);
   BIARI_CTX_INIT2 (2, NUM_REF_NO_CTX,    mc->ref_no_contexts,      INIT_REF_NO,     img->model_number);
   BIARI_CTX_INIT1 (   NUM_DELTA_QP_CTX,  mc->delta_qp_contexts,    INIT_DELTA_QP,   img->model_number);
+#if ENABLE_FIELD_CTX
   BIARI_CTX_INIT1 (   NUM_MB_AFF_CTX,    mc->mb_aff_contexts,      INIT_MB_AFF,     img->model_number);
+#endif
   BIARI_CTX_INIT1 (   NUM_TRANSFORM_SIZE_CTX,  mc->transform_size_contexts,    INIT_TRANSFORM_SIZE,   img->model_number);
 
   //--- texture coding contexts ---
@@ -235,7 +182,7 @@ void init_contexts (void)
 }
 
 
-double XRate (BiContextTypePtr ctx, const int* model)
+double XRate (BiContextTypePtr ctx, const char* model)
 {
   int     ctx_state, mod_state;
   double  weight, xr = 0.0;
@@ -299,7 +246,9 @@ void GetCtxModelNumber (int* mnumber, MotionInfoContexts* mc, TextureInfoContext
     ADD_XRATE2 (2, NUM_MV_RES_CTX,    mc->mv_res_contexts,      INIT_MV_RES,    model);
     ADD_XRATE2 (2, NUM_REF_NO_CTX,    mc->ref_no_contexts,      INIT_REF_NO,    model);
     ADD_XRATE1 (   NUM_DELTA_QP_CTX,  mc->delta_qp_contexts,    INIT_DELTA_QP,  model);
+#if ENABLE_FIELD_CTX
     ADD_XRATE1 (   NUM_MB_AFF_CTX,    mc->mb_aff_contexts,      INIT_MB_AFF,    model);
+#endif
     ADD_XRATE1 (   NUM_TRANSFORM_SIZE_CTX,  mc->transform_size_contexts, INIT_TRANSFORM_SIZE,  model);
 
     //--- texture coding contexts ---

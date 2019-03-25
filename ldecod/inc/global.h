@@ -30,22 +30,14 @@
 #include <stdarg.h>
 #include <string.h>
 #include <assert.h>
-
 #include <time.h>
 #include <sys/timeb.h>
+
 #include "win32.h"
 #include "defines.h"
 #include "ifunctions.h"
 #include "parsetcommon.h"
 
-#define FILE_NAME_SIZE 255
-
-typedef unsigned char  byte;                     //!<  8 bit unsigned
-#if (IMGTYPE == 1)
-  typedef unsigned short imgpel;                 //!<  Pixel type definition (16 bit for FRExt)
-#else
-  typedef unsigned char  imgpel;                 //!<  Pixel type definition (8 bit without FRExt)
-#endif
 
 pic_parameter_set_rbsp_t *active_pps;
 seq_parameter_set_rbsp_t *active_sps;
@@ -70,9 +62,18 @@ int  TopFieldForSkip_UV[2][16][16];
 char errortext[ET_SIZE]; //!< buffer for error message for exit with error()
 
 /***********************************************************************
- * T y p e    d e f i n i t i o n s    f o r    T M L
+ * T y p e    d e f i n i t i o n s    f o r    J M
  ***********************************************************************
  */
+
+//! Color formats
+typedef enum {
+  YUV_UNKNOWN = -1,     //!< Unknown color format
+  YUV400      =  0,     //!< Monochrome
+  YUV420      =  1,     //!< 4:2:0
+  YUV422      =  2,     //!< 4:2:2
+  YUV444      =  3,     //!< 4:4:4
+} ColorFormat;
 
 //! Data Partitioning Modes
 typedef enum
@@ -146,7 +147,6 @@ typedef enum
   FIXED_RATE,
   CALL_BACK
 } SliceMode;
-
 
 typedef enum 
 {
@@ -248,7 +248,7 @@ typedef BiContextType *BiContextTypePtr;
 
 typedef struct
 {
-  BiContextType mb_type_contexts [4][NUM_MB_TYPE_CTX];
+  BiContextType mb_type_contexts [3][NUM_MB_TYPE_CTX];
   BiContextType b8_type_contexts [2][NUM_B8_TYPE_CTX];
   BiContextType mv_res_contexts  [2][NUM_MV_RES_CTX];
   BiContextType ref_no_contexts  [2][NUM_REF_NO_CTX];
@@ -302,36 +302,13 @@ typedef struct DecRefPicMarking_s
   struct DecRefPicMarking_s *Next;
 } DecRefPicMarking_t;
 
-//! Syntaxelement
-typedef struct syntaxelement
-{
-  int           type;                  //!< type of syntax element for data part.
-  int           value1;                //!< numerical value of syntax element
-  int           value2;                //!< for blocked symbols, e.g. run/level
-  int           len;                   //!< length of code
-  int           inf;                   //!< info part of UVLC code
-  unsigned int  bitpattern;            //!< UVLC bitpattern
-  int           context;               //!< CABAC context
-  int           k;                     //!< CABAC context for coeff_count,uv
-
-#if TRACE
-  #define       TRACESTRING_SIZE 100           //!< size of trace string
-  char          tracestring[TRACESTRING_SIZE]; //!< trace string
-#endif
-
-  //! for mapping of UVLC to syntaxElement
-  void    (*mapping)(int len, int info, int *value1, int *value2);
-  //! used for CABAC: refers to actual coding method of each individual syntax element type
-  void  (*reading)(struct syntaxelement *, struct img_par *img, DecodingEnvironmentPtr);
-
-} SyntaxElement;
-
 //! Macroblock
 typedef struct macroblock
 {
   int           qp;                    //!< QP luma
   int           qpc[2];                //!< QP chroma
   int           qp_scaled[MAX_PLANE];  //!< QP scaled for all comps.
+  Boolean       is_lossless;
 
   short         slice_nr;
   short         delta_quant;          //!< for rate control
@@ -343,8 +320,7 @@ typedef struct macroblock
   int           mb_type;
   short         mvd[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE][2];      //!< indices correspond to [forw,backw][block_y][block_x][x,y]
   int           cbp;
-  int64         cbp_blk ;
-  int64         cbp_blk_CbCr[2]; 
+  int64         cbp_blk     [3];
   int64         cbp_bits    [3];
   int64         cbp_bits_8x8[3];
 
@@ -370,6 +346,31 @@ typedef struct macroblock
   int           luma_transform_size_8x8_flag;
   int           NoMbPartLessThan8x8Flag;
 } Macroblock;
+
+//! Syntaxelement
+typedef struct syntaxelement
+{
+  int           type;                  //!< type of syntax element for data part.
+  int           value1;                //!< numerical value of syntax element
+  int           value2;                //!< for blocked symbols, e.g. run/level
+  int           len;                   //!< length of code
+  int           inf;                   //!< info part of UVLC code
+  unsigned int  bitpattern;            //!< UVLC bitpattern
+  int           context;               //!< CABAC context
+  int           k;                     //!< CABAC context for coeff_count,uv
+
+#if TRACE
+  #define       TRACESTRING_SIZE 100           //!< size of trace string
+  char          tracestring[TRACESTRING_SIZE]; //!< trace string
+#endif
+
+  //! for mapping of UVLC to syntaxElement
+  void    (*mapping)(int len, int info, int *value1, int *value2);
+  //! used for CABAC: refers to actual coding method of each individual syntax element type
+  void  (*reading)(Macroblock *currMB, struct syntaxelement *, struct img_par *img, DecodingEnvironmentPtr);
+
+} SyntaxElement;
+
 
 //! Bitstream
 typedef struct
@@ -472,15 +473,15 @@ typedef struct img_par
   int allrefzero;
   
   int mvscale[6][MAX_REFERENCE_PICTURES];
-
-  imgpel mb_pred[MAX_PLANE][16][16];     //!< predicted block
-  int    mb_rres[MAX_PLANE][16][16];     //!< residual macroblock
-  int    cof[MAX_PLANE][16][16];     //!< transformed coefficients 
-  int    fcf[MAX_PLANE][16][16];     //!< transformed coefficients 
+  imgpel ***mb_pred;
+  imgpel ***mb_rec;
+  int    ***mb_rres;
+  int    ***cof;
+  int    ***fcf;
   
   int cofu[16];
   byte **ipredmode;                  //!< prediction type [90][74]
-  int ****nz_coeff;
+  byte ****nz_coeff;
   int **siblock;
   int cod_counter;                   //!< Current count of number of skipped macroblocks in a row
 
@@ -652,7 +653,7 @@ struct snr_par
   float msse[3];                                //!< Average component SSE 
 };
 
-time_t tot_time;
+int64 tot_time;
 
 // input parameters from configuration file
 struct inp_par
@@ -709,11 +710,10 @@ typedef struct old_slice_par
 extern OldSliceParams old_slice;
 
 // files
-int p_out;                    //!< file descriptor to output YUV file
-//FILE *p_out2;                    //!< pointer to debug output YUV file
-int p_ref;                    //!< pointer to input original reference YUV file file
+int p_out;                       //!< file descriptor to output YUV file
+int p_ref;                       //!< pointer to input original reference YUV file file
 
-FILE *p_log;                    //!< SNR file
+FILE *p_log;                     //!< SNR file
 
 #if TRACE
 FILE *p_trace;
@@ -726,7 +726,6 @@ int ref_flag[17];                //!< 0: i-th previous frame is incorrect
 int Is_primary_correct;          //!< if primary frame is correct, 0: incorrect
 int Is_redundant_correct;        //!< if redundant frame is correct, 0:incorrect
 int redundant_slice_ref_idx;     //!< reference index of redundant slice
-void Error_tracking(void);
 
 // prototypes
 void init_conf(struct inp_par *inp, char *config_filename);
@@ -736,67 +735,28 @@ void init(ImageParameters *img);
 void malloc_slice(struct inp_par *inp, ImageParameters *img);
 void free_slice(ImageParameters *img);
 
-int  decode_one_frame(ImageParameters *img,struct inp_par *inp, struct snr_par *snr);
-void init_picture(ImageParameters *img, struct inp_par *inp);
-void exit_picture(void);
-
-int  read_new_slice(void);
-void decode_one_slice(ImageParameters *img, struct inp_par *inp);
-
-void start_macroblock     (ImageParameters *img, Macroblock **currMB);
-void read_one_macroblock  (ImageParameters *img, Macroblock *currMB);
-Boolean  exit_macroblock  (ImageParameters *img, int eos_bit);
-void concealIPCMcoeffs    (ImageParameters *img);
-
-void SetMotionVectorPredictor (ImageParameters  *img, Macroblock *currMB, short pmv[2], char ref_frame, byte list, 
-                               char ***refPic, short ****tmp_mv, 
-                               int mb_x, int mb_y, int blockshape_x, int blockshape_y);
-
-
-int  intrapred_luma_16x16(ImageParameters *img, Macroblock *currMB, ColorPlane pl, int predmode);
-void intrapred_chroma    (ImageParameters *img, Macroblock *currMB, int uv);
-
 // SLICE function pointers
 int  (*nal_startcode_follows) (Slice*, int );
-
-// NAL functions TML/CABAC bitstream
-int  uvlc_startcode_follows(Slice *currSlice, int dummy);
-int  cabac_startcode_follows(Slice *currSlice, int eos_bit);
-void free_Partition(Bitstream *currStream);
 
 // ErrorConcealment
 void reset_ec_flags(void);
 
 void error(char *text, int code);
-int  is_new_picture(void);
-void init_old_slice(void);
 
 // dynamic mem allocation
 int  init_global_buffers(void);
 void free_global_buffers(void);
 
-void frame_postprocessing(ImageParameters *img);
-void field_postprocessing(ImageParameters *img);
-void decode_slice(ImageParameters *img,struct inp_par *inp, int current_header);
-
 int RBSPtoSODB(byte *streamBuffer, int last_byte_pos);
 int EBSPtoRBSP(byte *streamBuffer, int end_bytepos, int begin_bytepos);
-
-int peekSyntaxElement_UVLC(SyntaxElement *sym, ImageParameters *img, struct datapartition *dP);
-
-void fill_wp_params(ImageParameters *img);
-
-void reset_wp_params(ImageParameters *img);
 
 void FreePartition (DataPartition *dp, int n);
 DataPartition *AllocPartition(int n);
 
+void tracebits(const char *trace_str,  int len,  int info,int value1);
 void tracebits2(const char *trace_str, int len, int info);
 
-void init_decoding_engine_IPCM(ImageParameters *img);
-void readIPCM_CABAC(struct datapartition *dP);
-
-unsigned CeilLog2( unsigned uiVal);
+unsigned CeilLog2   ( unsigned uiVal);
 unsigned CeilLog2_sf( unsigned uiVal);
 
 //For residual DPCM

@@ -23,7 +23,6 @@
 #include "image.h"
 #include "mb_access.h"
 #include "elements.h"
-#include "cabac.h"
 #include "vlc.h"
 #include "transform8x8.h"
 #include "transform.h"
@@ -34,12 +33,12 @@
 #include "rdoq.h"
 #include "q_matrix.h"
 #include "q_offsets.h"
+#include "rdopt.h"
 
-int   cofAC8x8_chroma[2][4][2][18];
 static int diff64[64];
+extern imgpel ***rec8x8;
 
 //! single scan pattern
-//static const byte SNGL_SCAN8x8[64][2] = {
 const byte SNGL_SCAN8x8[64][2] = {
   {0,0}, {1,0}, {0,1}, {0,2}, {1,1}, {2,0}, {3,0}, {2,1},
   {1,2}, {0,3}, {0,4}, {1,3}, {2,2}, {3,1}, {4,0}, {5,0},
@@ -53,7 +52,6 @@ const byte SNGL_SCAN8x8[64][2] = {
 
 
 //! field scan pattern
-//static const byte FIELD_SCAN8x8[64][2] = {   // 8x8
 const byte FIELD_SCAN8x8[64][2] = {   // 8x8
   {0,0}, {0,1}, {0,2}, {1,0}, {1,1}, {0,3}, {0,4}, {1,2},
   {2,0}, {1,3}, {0,5}, {0,6}, {0,7}, {1,4}, {2,1}, {3,0},
@@ -83,6 +81,48 @@ static int **levelscale = NULL, **leveloffset = NULL;
 static int **invlevelscale = NULL;
 static int **fadjust8x8 = NULL;
 
+// Predictor array index definitions
+#define P_Z (PredPel[0])
+#define P_A (PredPel[1])
+#define P_B (PredPel[2])
+#define P_C (PredPel[3])
+#define P_D (PredPel[4])
+#define P_E (PredPel[5])
+#define P_F (PredPel[6])
+#define P_G (PredPel[7])
+#define P_H (PredPel[8])
+#define P_I (PredPel[9])
+#define P_J (PredPel[10])
+#define P_K (PredPel[11])
+#define P_L (PredPel[12])
+#define P_M (PredPel[13])
+#define P_N (PredPel[14])
+#define P_O (PredPel[15])
+#define P_P (PredPel[16])
+#define P_Q (PredPel[17])
+#define P_R (PredPel[18])
+#define P_S (PredPel[19])
+#define P_T (PredPel[20])
+#define P_U (PredPel[21])
+#define P_V (PredPel[22])
+#define P_W (PredPel[23])
+#define P_X (PredPel[24])
+
+
+/*!
+ *************************************************************************************
+ * \brief
+ *    copy data in 8x8 iblock to oblock
+ *************************************************************************************
+ */
+void copy_8x8block(imgpel **oblock, imgpel **iblock, int o_xoffset, int i_xoffset)
+{
+  int y;
+  for (y = 0; y < BLOCK_SIZE_8x8; y++)
+  {
+    memcpy(&oblock[y][o_xoffset],&iblock[y][i_xoffset], BLOCK_SIZE_8x8 * sizeof(imgpel));
+  }
+}
 
 /*!
 ************************************************************************
@@ -94,7 +134,7 @@ static int **fadjust8x8 = NULL;
 ************************************************************************
 */
 //For residual DPCM
-int Residual_DPCM_8x8(int ipmode, int ores[16][16], int rres[16][16],int block_y, int block_x)
+int Residual_DPCM_8x8(int ipmode, int **ores, int **rres,int block_y, int block_x)
 {
   int i,j;
   int temp[8][8];
@@ -139,7 +179,7 @@ int Residual_DPCM_8x8(int ipmode, int ores[16][16], int rres[16][16],int block_y
 ************************************************************************
 */
 //For residual DPCM
-int Inv_Residual_DPCM_8x8(int m7[16][16], int block_y, int block_x)  
+int Inv_Residual_DPCM_8x8(int **m7, int block_y, int block_x)  
 {
   int i;
   int temp[8][8];
@@ -202,7 +242,7 @@ int Inv_Residual_DPCM_8x8(int m7[16][16], int block_y, int block_x)
  *************************************************************************************
  */
 
-int Mode_Decision_for_new_Intra8x8Macroblock (Macroblock *currMB, double lambda, double *min_cost)
+int Mode_Decision_for_Intra8x8Macroblock (Slice *currSlice, Macroblock *currMB, double lambda, double *min_cost)
 {
   int cur_cbp = 0, b8;
   double cost8x8;
@@ -210,22 +250,30 @@ int Mode_Decision_for_new_Intra8x8Macroblock (Macroblock *currMB, double lambda,
 
   *min_cost = (int)floor(6.0 * lambda + 0.4999);
 
-  cmp_cbp[1] = cmp_cbp[2] = 0;
-  if (params->rdopt == 0)
-    Mode_Decision_for_new_8x8IntraBlocks = Mode_Decision_for_new_8x8IntraBlocks_JM_Low;
-  else
-    Mode_Decision_for_new_8x8IntraBlocks = Mode_Decision_for_new_8x8IntraBlocks_JM_High;
-  for (b8=0; b8<4; b8++)
+  if (img->P444_joined == 0)
   {
-    if (Mode_Decision_for_new_8x8IntraBlocks (currMB, b8, lambda, &cost8x8, cr_cbp))
+    for (b8=0; b8<4; b8++)
     {
-      cur_cbp |= (1<<b8);
+      if (Mode_Decision_for_8x8IntraBlocks (currSlice, currMB, b8, lambda, &cost8x8, cr_cbp))
+      {
+        cur_cbp |= (1<<b8);
+      }
+      *min_cost += cost8x8;      
     }
-    *min_cost += cost8x8;
+  }
+  else
+  { 
+    int k;
+    cmp_cbp[1] = cmp_cbp[2] = 0;
 
-    if (img->P444_joined)
+    for (b8=0; b8<4; b8++)
     {
-      int k;
+      if (Mode_Decision_for_8x8IntraBlocks (currSlice, currMB, b8, lambda, &cost8x8, cr_cbp))
+      {
+        cur_cbp |= (1<<b8);
+      }
+      *min_cost += cost8x8;
+
       for (k = 1; k < 3; k++)
       {
         if (cr_cbp[k])
@@ -234,7 +282,7 @@ int Mode_Decision_for_new_Intra8x8Macroblock (Macroblock *currMB, double lambda,
           cur_cbp |= cmp_cbp[k];
           cmp_cbp[k] = cur_cbp;
         }
-      }
+      }      
     }
   }
 
@@ -248,7 +296,7 @@ int Mode_Decision_for_new_Intra8x8Macroblock (Macroblock *currMB, double lambda,
  *************************************************************************************
  */
 
-int Mode_Decision_for_new_8x8IntraBlocks_JM_Low (Macroblock *currMB, int b8, double lambda, double *min_cost, int cr_cbp[3])
+int Mode_Decision_for_8x8IntraBlocks_JM_Low (Slice *currSlice, Macroblock *currMB, int b8, double lambda, double *min_cost, int cr_cbp[3])
 {
   int     ipmode, best_ipmode = 0, i, j, dummy;
   double  cost;
@@ -264,8 +312,8 @@ int Mode_Decision_for_new_8x8IntraBlocks_JM_Low (Macroblock *currMB, int b8, dou
   imgpel    *img_org, *img_prd;
   int       *residual;
   int left_available, up_available, all_available;
-  int    (*mb_ores)[16] = img->mb_ores[0]; 
-  imgpel (*mb_pred)[16] = img->mb_pred[0];
+  int    **mb_ores = img->mb_ores[0]; 
+  imgpel **mb_pred = img->mb_pred[0];
   int *mb_size = img->mb_size[IS_LUMA];
 
   char   upMode;
@@ -397,11 +445,10 @@ int Mode_Decision_for_new_8x8IntraBlocks_JM_Low (Macroblock *currMB, int b8, dou
 *************************************************************************************
 */
 
-int Mode_Decision_for_new_8x8IntraBlocks_JM_High (Macroblock *currMB, int b8, double lambda, double *min_cost, int cr_cbp[3])
+int Mode_Decision_for_8x8IntraBlocks_JM_High (Slice *currSlice, Macroblock *currMB, int b8, double lambda, double *min_cost, int cr_cbp[3])
 {
-  int     ipmode, best_ipmode = 0, i, j, k, y, dummy;
-  int     c_nz, nonzero = 0;
-  static  imgpel  rec8x8[3][8][8];
+  int     ipmode, best_ipmode = 0, i, j, k, dummy;
+  int     c_nz, nonzero = 0;  
   double  rdcost = 0.0;
   int     block_x     = (b8 & 0x01) << 3;
   int     block_y     = (b8 >> 1) << 3;
@@ -415,21 +462,17 @@ int Mode_Decision_for_new_8x8IntraBlocks_JM_High (Macroblock *currMB, int b8, do
   imgpel    *img_org, *img_prd;
   int       *residual;
   extern  int ****cofAC8x8;
-  static int fadjust8x8[2][16][16];
-  static int fadjust8x8Cr[2][2][16][16];
-  extern  int ****cofAC8x8CbCr[2];
   int uv, c_nzCbCr[3];
   int left_available, up_available, all_available;
-  int    (*mb_ores)[16] = img->mb_ores[0]; 
-  imgpel (*mb_pred)[16] = img->mb_pred[0];
+  int    **mb_ores = img->mb_ores[0]; 
+  imgpel **mb_pred = img->mb_pred[0];
   int *mb_size = img->mb_size[IS_LUMA];
 
   char   upMode;
   char   leftMode;
   int    mostProbableMode;
 
-  PixelPos left_block;
-  PixelPos top_block;
+  PixelPos left_block, top_block;
 
   get4x4Neighbour(currMB, block_x - 1, block_y    , mb_size, &left_block);
   get4x4Neighbour(currMB, block_x,     block_y - 1, mb_size, &top_block );
@@ -444,6 +487,7 @@ int Mode_Decision_for_new_8x8IntraBlocks_JM_High (Macroblock *currMB, int b8, do
     upMode    =  top_block.available ? img->ipredmode8x8[top_block.pos_y ][top_block.pos_x ] : -1;
   else
     upMode    =  top_block.available ? img->ipredmode   [top_block.pos_y ][top_block.pos_x ] : -1;
+  
   if(b8 & 0x01)
     leftMode  = left_block.available ? img->ipredmode8x8[left_block.pos_y][left_block.pos_x] : -1;
   else
@@ -487,6 +531,7 @@ int Mode_Decision_for_new_8x8IntraBlocks_JM_High (Macroblock *currMB, int b8, do
           *residual++ = *img_org++ - *img_prd++;
         }
       }
+
       if(img->P444_joined) 
       {
         for (k = PLANE_U; k <= PLANE_V; k++)
@@ -497,7 +542,7 @@ int Mode_Decision_for_new_8x8IntraBlocks_JM_High (Macroblock *currMB, int b8, do
             for (i=0; i<8; i++)
             {
               img->mb_ores[k][block_y+j][block_x+i] = (int) (pImgOrg[k][pic_opix_y+j][pic_opix_x+i] - img->mpr_8x8[k][ipmode][j][i]);
-              img->mb_ores[k][block_y+j][block_x+i] = img->mb_ores[k][block_y+j][block_x+i]; // line is temporary until we fix code to use img->mb_ores
+              //img->mb_ores[k][block_y+j][block_x+i] = img->mb_ores[k][block_y+j][block_x+i]; // line is temporary until we fix code to use img->mb_ores
             }
           }
         }
@@ -506,31 +551,29 @@ int Mode_Decision_for_new_8x8IntraBlocks_JM_High (Macroblock *currMB, int b8, do
       ipmode_DPCM=ipmode;
 
       //===== store the coding state =====
-      // store_coding_state_cs_cm(currMB);
+      // store_coding_state_cs_cm(currSlice, currMB);
       // get and check rate-distortion cost
 
-      if ((rdcost = RDCost_for_8x8IntraBlocks (currMB, &c_nz, b8, ipmode, lambda, min_rdcost, mostProbableMode, c_nzCbCr)) < min_rdcost)
+      if ((rdcost = RDCost_for_8x8IntraBlocks (currSlice, currMB, &c_nz, b8, ipmode, lambda, min_rdcost, mostProbableMode, c_nzCbCr)) < min_rdcost)
       {
         //--- set coefficients ---
        memcpy(cofAC8x8[b8][0][0],img->cofAC[b8][0][0], 4 * 2 * 65 * sizeof(int));
 
         //--- set reconstruction ---
-        for (y=0; y<8; y++)
-        {
-          memcpy(rec8x8[0][y],&enc_picture->imgY[pic_pix_y+y][pic_pix_x], 8 * sizeof(imgpel));
-        }
+
+       copy_8x8block(rec8x8[PLANE_Y], &enc_picture->imgY[pic_pix_y], 0, pic_pix_x);
 
         if (img->AdaptiveRounding)
         {
           for (j=block_y; j<block_y + 8; j++)
-            memcpy(&fadjust8x8[1][j][block_x],&img->fadjust8x8[1][j][block_x], 8 * sizeof(int));
+            memcpy(&img->ARCofAdj8x8[0][DUMMY][j][block_x],&img->ARCofAdj8x8[0][I8MB][j][block_x], 8 * sizeof(int));
 
           if (img->P444_joined)
           {
             for (j=block_y; j<block_y + 8; j++)
             {
-              memcpy(&fadjust8x8Cr[0][1][j][block_x],&img->fadjust8x8Cr[0][1][j][block_x], 8 * sizeof(int));
-              memcpy(&fadjust8x8Cr[1][1][j][block_x],&img->fadjust8x8Cr[1][1][j][block_x], 8 * sizeof(int));
+              memcpy(&img->ARCofAdj8x8[1][DUMMY][j][block_x],&img->ARCofAdj8x8[1][I8MB][j][block_x], 8 * sizeof(int));
+              memcpy(&img->ARCofAdj8x8[2][DUMMY][j][block_x],&img->ARCofAdj8x8[2][I8MB][j][block_x], 8 * sizeof(int));
             }
           }            
         }
@@ -544,10 +587,7 @@ int Mode_Decision_for_new_8x8IntraBlocks_JM_High (Macroblock *currMB, int b8, do
 
             cr_cbp[uv + 1] = c_nzCbCr[uv + 1];
             //--- set reconstruction ---
-            for (y=0; y<8; y++)
-            {
-              memcpy(rec8x8[uv + 1][y],&enc_picture->imgUV[uv][pic_pix_y+y][pic_pix_x], 8 * sizeof(imgpel));
-            }
+            copy_8x8block(rec8x8[uv + 1], &enc_picture->imgUV[uv][pic_pix_y], 0, pic_pix_x);
           }
         }
 
@@ -559,7 +599,7 @@ int Mode_Decision_for_new_8x8IntraBlocks_JM_High (Macroblock *currMB, int b8, do
         min_rdcost  = rdcost;
         best_ipmode = ipmode;
       }
-      reset_coding_state_cs_cm(currMB);
+      reset_coding_state_cs_cm(currSlice, currMB);
     }
   }
 
@@ -574,7 +614,7 @@ int Mode_Decision_for_new_8x8IntraBlocks_JM_High (Macroblock *currMB, int b8, do
     for (k = PLANE_U; k <= PLANE_V; k++)
     {
       cr_cbp[k] = 0; 
-      select_plane(k);
+      select_plane(k);                  
       for (j=0; j<8; j++)
       {
         for (i=0; i<8; i++)
@@ -605,37 +645,32 @@ int Mode_Decision_for_new_8x8IntraBlocks_JM_High (Macroblock *currMB, int b8, do
   if (img->AdaptiveRounding)
   {
     for (j=block_y; j< block_y + 8; j++)
-      memcpy(&img->fadjust8x8[1][j][block_x], &fadjust8x8[1][j][block_x], 8 * sizeof(int));
+      memcpy(&img->ARCofAdj8x8[0][I8MB][j][block_x], &img->ARCofAdj8x8[0][DUMMY][j][block_x], 8 * sizeof(int));
     if (img->P444_joined)
     {
       for (j=0; j<8; j++)
       {
-        memcpy(&img->fadjust8x8Cr[0][1][block_y+j][block_x], &fadjust8x8Cr[0][1][block_y+j][block_x], 8 * sizeof(int));
-        memcpy(&img->fadjust8x8Cr[1][1][block_y+j][block_x], &fadjust8x8Cr[1][1][block_y+j][block_x], 8 * sizeof(int));
+        memcpy(&img->ARCofAdj8x8[1][I8MB][block_y + j][block_x], &img->ARCofAdj8x8[1][DUMMY][block_y + j][block_x], 8 * sizeof(int));
+        memcpy(&img->ARCofAdj8x8[2][I8MB][block_y + j][block_x], &img->ARCofAdj8x8[2][DUMMY][block_y + j][block_x], 8 * sizeof(int));
       }
     }
   }
 
   //===== restore reconstruction and prediction (needed if single coeffs are removed) =====
-  for (y=0; y<8; y++)
-  {
-    memcpy(&enc_picture->imgY[pic_pix_y + y][pic_pix_x], rec8x8[0][y], 8 * sizeof(imgpel));
-    memcpy(&mb_pred[block_y + y][block_x], img->mpr_8x8[0][best_ipmode][y], 8 * sizeof(imgpel));
-  }
+  copy_8x8block(&enc_picture->imgY[pic_pix_y], rec8x8[0], pic_pix_x, 0);
+  copy_8x8block(&mb_pred[block_y], img->mpr_8x8[0][best_ipmode], block_x, 0);
+
   if (img->P444_joined)
   {
     //===== restore coefficients =====
     memcpy(img->cofAC[4+b8+4*0][0][0], cofAC8x8CbCr[0][b8][0][0], 4 * 2 * 65 * sizeof(int));
     memcpy(img->cofAC[4+b8+4*1][0][0], cofAC8x8CbCr[1][b8][0][0], 4 * 2 * 65 * sizeof(int));
 
-        //===== restore reconstruction and prediction (needed if single coeffs are removed) =====
-    for (y=0; y<8; y++) 
-    {
-      memcpy(&enc_picture->imgUV[0][pic_pix_y+y][pic_pix_x], rec8x8[1][y], 8 * sizeof(imgpel));
-      memcpy(&enc_picture->imgUV[1][pic_pix_y+y][pic_pix_x], rec8x8[2][y], 8 * sizeof(imgpel));
-      memcpy(&img->mb_pred[1][block_y+y][block_x], img->mpr_8x8[1][best_ipmode][y], 8 * sizeof(imgpel));
-      memcpy(&img->mb_pred[2][block_y+y][block_x], img->mpr_8x8[2][best_ipmode][y], 8 * sizeof(imgpel));
-    }
+    //===== restore reconstruction and prediction (needed if single coeffs are removed) =====
+    copy_8x8block(&enc_picture->imgUV[0][pic_pix_y], rec8x8[1], pic_pix_x, 0);
+    copy_8x8block(&enc_picture->imgUV[1][pic_pix_y], rec8x8[2], pic_pix_x, 0);
+    copy_8x8block(&img->mb_pred[1][block_y], img->mpr_8x8[1][best_ipmode], block_x, 0);
+    copy_8x8block(&img->mb_pred[2][block_y], img->mpr_8x8[2][best_ipmode], block_x, 0);
   }
 
   return nonzero;
@@ -655,33 +690,6 @@ int Mode_Decision_for_new_8x8IntraBlocks_JM_High (Macroblock *currMB, int b8, do
 //  W  a7 b7 c7 d7 e7 f7 g7 h7
 //  X  a8 b8 c8 d8 e8 f8 g8 h8
 
-
-// Predictor array index definitions
-#define P_Z (PredPel[0])
-#define P_A (PredPel[1])
-#define P_B (PredPel[2])
-#define P_C (PredPel[3])
-#define P_D (PredPel[4])
-#define P_E (PredPel[5])
-#define P_F (PredPel[6])
-#define P_G (PredPel[7])
-#define P_H (PredPel[8])
-#define P_I (PredPel[9])
-#define P_J (PredPel[10])
-#define P_K (PredPel[11])
-#define P_L (PredPel[12])
-#define P_M (PredPel[13])
-#define P_N (PredPel[14])
-#define P_O (PredPel[15])
-#define P_P (PredPel[16])
-#define P_Q (PredPel[17])
-#define P_R (PredPel[18])
-#define P_S (PredPel[19])
-#define P_T (PredPel[20])
-#define P_U (PredPel[21])
-#define P_V (PredPel[22])
-#define P_W (PredPel[23])
-#define P_X (PredPel[24])
 
 /*!
  ************************************************************************
@@ -706,8 +714,8 @@ void intrapred_8x8(Macroblock *currMB, ColorPlane pl, int img_x,int img_y, int *
   static imgpel PredPel[25];  // array of predictor pels
   imgpel **img_enc = enc_picture->p_curr_img;
   imgpel *img_pel;
-  static imgpel (*cur_pred)[16];
-  imgpel (*curr_mpr_8x8)[16][16]  = img->mpr_8x8[pl];
+  static imgpel **cur_pred;
+  imgpel ***curr_mpr_8x8  = img->mpr_8x8[pl];
   unsigned int dc_pred_value = img->dc_pred_value;
   int *mb_size = img->mb_size[IS_LUMA];
 
@@ -754,10 +762,6 @@ void intrapred_8x8(Macroblock *currMB, ColorPlane pl, int img_x,int img_y, int *
   *up_available   = block_available_up;
   *all_available  = block_available_up && block_available_left && block_available_up_left;
 
-  i = (img_x & 15);
-  j = (img_y & 15);
-
-  // form predictor pels
   // form predictor pels
   if (block_available_up)
   {
@@ -851,47 +855,44 @@ void intrapred_8x8(Macroblock *currMB, ColorPlane pl, int img_x,int img_y, int *
 
   // store DC prediction
   cur_pred = curr_mpr_8x8[DC_PRED];
-  for (j=0; j < BLOCK_SIZE_8x8; j++)
+  // First line
+  for (i=0; i < BLOCK_SIZE_8x8; i++)
   {
-    for (i=0; i < BLOCK_SIZE_8x8; i++)
-    {
-      cur_pred[j][i] = (imgpel) s0;
-    }
+    cur_pred[0][i] = (imgpel) s0;
+  }
+  // remaining lines
+  for (j=0; j < BLOCK_SIZE_8x8 - 1; j++)
+  {
+    memcpy (cur_pred[j + 1], cur_pred[j], BLOCK_SIZE_8x8 * sizeof(imgpel));
   }
 
 
   ///////////////////////////////
   // make horiz and vert prediction
   ///////////////////////////////
+
   cur_pred = curr_mpr_8x8[VERT_PRED];
-  for (i=0; i < BLOCK_SIZE_8x8; i++)
+  if(block_available_up)
   {
-    cur_pred[0][i] =
-    cur_pred[1][i] =
-    cur_pred[2][i] =
-    cur_pred[3][i] =
-    cur_pred[4][i] =
-    cur_pred[5][i] =
-    cur_pred[6][i] =
-    cur_pred[7][i] = (imgpel)(&P_A)[i];
+    for (j=0; j < BLOCK_SIZE_8x8; j++)
+      memcpy(cur_pred[j], &P_A, BLOCK_SIZE_8x8 * sizeof(imgpel));
   }
-  if(!block_available_up)
-    cur_pred[0][0]=-1;
 
   cur_pred = curr_mpr_8x8[HOR_PRED];
-  for (i=0; i < BLOCK_SIZE_8x8; i++)
+  if(block_available_left)
   {
-    cur_pred[i][0]  =
-    cur_pred[i][1]  =
-    cur_pred[i][2]  =
-    cur_pred[i][3]  =
-    cur_pred[i][4]  =
-    cur_pred[i][5]  =
-    cur_pred[i][6]  =
-    cur_pred[i][7]  = (imgpel) (&P_Q)[i];
+    for (i=0; i < BLOCK_SIZE_8x8; i++)
+    {
+      cur_pred[i][0]  =
+        cur_pred[i][1]  =
+        cur_pred[i][2]  =
+        cur_pred[i][3]  =
+        cur_pred[i][4]  =
+        cur_pred[i][5]  =
+        cur_pred[i][6]  =
+        cur_pred[i][7]  = (imgpel) (&P_Q)[i];
+    }
   }
-  if(!block_available_left)
-    cur_pred[0][0]=-1;
 
   ///////////////////////////////////
   // make diagonal down left prediction
@@ -1390,10 +1391,10 @@ void LowPassForIntra8x8Pred(imgpel *PredPel, int block_up_left, int block_up, in
  *************************************************************************************
  */
 
-double RDCost_for_8x8IntraBlocks(Macroblock *currMB, int *nonzero, int b8, int ipmode, double lambda, double min_rdcost, int mostProbableMode, int c_nzCbCr[3])
+double RDCost_for_8x8IntraBlocks(Slice *currSlice, Macroblock *currMB, int *nonzero, int b8, int ipmode, double lambda, double min_rdcost, int mostProbableMode, int c_nzCbCr[3])
 {
   double  rdcost = 0.0;
-  int     dummy;
+  int     dummy = 0;
   int     rate;
   int64   distortion  = 0;
   int     block_x     = (b8 & 0x01) << 3;
@@ -1402,95 +1403,106 @@ double RDCost_for_8x8IntraBlocks(Macroblock *currMB, int *nonzero, int b8, int i
   int     pic_pix_y   = img->pix_y + block_y;
   int     pic_opix_y  = img->opix_y + block_y;
 
-  Slice          *currSlice =  img->currentSlice;
   SyntaxElement  se;
   const int      *partMap   = assignSE2partition[params->partition_mode];
   DataPartition  *dataPart;
 
-  //===== perform DCT, Q, IQ, IDCT, Reconstruction =====
-  dummy = 0;
+  if(img->P444_joined == 0) 
+  {
+    //===== perform DCT, Q, IQ, IDCT, Reconstruction =====
+    *nonzero = pDCT_8x8 (currMB, PLANE_Y, b8, &dummy, 1);
 
-  *nonzero = pDCT_8x8 (currMB, PLANE_Y, b8, &dummy, 1);
+    //===== get distortion (SSD) of 8x8 block =====
+    distortion += compute_SSE(&pCurImg[pic_opix_y], &enc_picture->imgY[pic_pix_y], pic_pix_x, pic_pix_x, 8, 8);
 
-  //===== get distortion (SSD) of 8x8 block =====
-  distortion += compute_SSE(&pCurImg[pic_opix_y], &enc_picture->imgY[pic_pix_y], pic_pix_x, pic_pix_x, 8, 8);
+    ipmode_DPCM = NO_INTRA_PMODE;  
 
-  if(img->P444_joined) 
+    //===== RATE for INTRA PREDICTION MODE  (SYMBOL MODE MUST BE SET TO CAVLC) =====
+    se.value1 = (mostProbableMode == ipmode) ? -1 : ipmode < mostProbableMode ? ipmode : ipmode-1;
+
+    //--- set position and type ---
+    se.context = b8;
+    se.type    = SE_INTRAPREDMODE;
+
+    //--- choose data partition ---
+    if (img->type!=B_SLICE)
+      dataPart = &(currSlice->partArr[partMap[SE_INTRAPREDMODE]]);
+    else
+      dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+
+    //--- encode and update rate ---
+    writeIntraPredMode (&se, dataPart);
+
+    rate = se.len;
+
+    //===== RATE for LUMINANCE COEFFICIENTS =====
+
+    if (currSlice->symbol_mode == CAVLC)
+    {      
+      rate  += writeCoeff4x4_CAVLC (currSlice, currMB, LUMA, b8, 0, 0);
+      rate  += writeCoeff4x4_CAVLC (currSlice, currMB, LUMA, b8, 1, 0);
+      rate  += writeCoeff4x4_CAVLC (currSlice, currMB, LUMA, b8, 2, 0);
+      rate  += writeCoeff4x4_CAVLC (currSlice, currMB, LUMA, b8, 3, 0);
+    }
+    else
+    {
+      rate  += writeCoeff8x8_CABAC (currSlice, currMB, PLANE_Y, b8, 1);
+    }
+  }
+  else
   {
     ColorPlane k;
+    //===== perform DCT, Q, IQ, IDCT, Reconstruction =====
+    *nonzero = pDCT_8x8 (currMB, PLANE_Y, b8, &dummy, 1);
+
+    //===== get distortion (SSD) of 8x8 block =====
+    distortion += compute_SSE(&pCurImg[pic_opix_y], &enc_picture->imgY[pic_pix_y], pic_pix_x, pic_pix_x, 8, 8);
 
     for (k = PLANE_U; k <= PLANE_V; k++)
     {
       select_plane(k);
-      /*    for (j=0; j<8; j++)   //KHHan, I think these line are not necessary
-      {
-      for (i=0; i<8; i++)
-      {         
-      img->mb_pred[k][block_y+j][block_x+i]  = img->mpr_8x8[k][ipmode][j][i];
-      img->mb_ores[k][j][i] = pImgOrg[k][img->pix_y+block_y+j][img->pix_x+block_x+i] - img->mpr_8x8[k][ipmode][j][i];
-      }
-      }*/
       c_nzCbCr[k ]= pDCT_8x8(currMB, k, b8, &dummy,1);
       distortion += compute_SSE(&pImgOrg[k][pic_opix_y], &enc_picture->p_curr_img[pic_pix_y], pic_pix_x, pic_pix_x, 8, 8);
     }
-	  ipmode_DPCM = NO_INTRA_PMODE;
+    ipmode_DPCM = NO_INTRA_PMODE;
     select_plane(PLANE_Y);
-  }
-  else if( img->yuv_format==YUV444 && IS_INDEPENDENT(params) )  //For residual DPCM
-  {
-    ipmode_DPCM = NO_INTRA_PMODE;  
-  }
 
-  //===== RATE for INTRA PREDICTION MODE  (SYMBOL MODE MUST BE SET TO CAVLC) =====
-  se.value1 = (mostProbableMode == ipmode) ? -1 : ipmode < mostProbableMode ? ipmode : ipmode-1;
+    //===== RATE for INTRA PREDICTION MODE  (SYMBOL MODE MUST BE SET TO CAVLC) =====
+    se.value1 = (mostProbableMode == ipmode) ? -1 : ipmode < mostProbableMode ? ipmode : ipmode-1;
 
-  //--- set position and type ---
-  se.context = b8;
-  se.type    = SE_INTRAPREDMODE;
+    //--- set position and type ---
+    se.context = b8;
+    se.type    = SE_INTRAPREDMODE;
 
-  //--- choose data partition ---
-  if (img->type!=B_SLICE)
-    dataPart = &(currSlice->partArr[partMap[SE_INTRAPREDMODE]]);
-  else
-    dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+    //--- choose data partition ---
+    if (img->type!=B_SLICE)
+      dataPart = &(currSlice->partArr[partMap[SE_INTRAPREDMODE]]);
+    else
+      dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
 
-  //--- encode and update rate ---
-  writeIntraPredMode (&se, dataPart);
+    //--- encode and update rate ---
+    writeIntraPredMode (&se, dataPart);
+    rate = se.len;
 
-  rate = se.len;
+    //===== RATE for LUMINANCE COEFFICIENTS =====
 
-  //===== RATE for LUMINANCE COEFFICIENTS =====
-
-  if (currSlice->symbol_mode == CAVLC)
-  {      
-    if (img->P444_joined)
-    {
+    if (currSlice->symbol_mode == CAVLC)
+    {      
       int b4;
       for(b4=0; b4<4; b4++)
       {
-        rate  += writeCoeff4x4_CAVLC (currMB, LUMA, b8, b4, 0);
-        rate  += writeCoeff4x4_CAVLC (currMB, CB, b8, b4, 0);
-        rate  += writeCoeff4x4_CAVLC (currMB, CR, b8, b4, 0);
+        rate  += writeCoeff4x4_CAVLC (currSlice, currMB, LUMA, b8, b4, 0);
+        rate  += writeCoeff4x4_CAVLC (currSlice, currMB, CB, b8, b4, 0);
+        rate  += writeCoeff4x4_CAVLC (currSlice, currMB, CR, b8, b4, 0);
       }
     }
     else
     {
-      rate  += writeCoeff4x4_CAVLC (currMB, LUMA, b8, 0, 0);
-      rate  += writeCoeff4x4_CAVLC (currMB, LUMA, b8, 1, 0);
-      rate  += writeCoeff4x4_CAVLC (currMB, LUMA, b8, 2, 0);
-      rate  += writeCoeff4x4_CAVLC (currMB, LUMA, b8, 3, 0);
+      rate  += writeCoeff8x8_CABAC (currSlice, currMB, PLANE_Y, b8, 1);
+      rate  += writeCoeff8x8_CABAC (currSlice, currMB, PLANE_U, b8, 1);
+      rate  += writeCoeff8x8_CABAC (currSlice, currMB, PLANE_V, b8, 1);
     }
   }
-  else
-  {
-    rate  += writeCoeff8x8_CABAC (currMB, PLANE_Y, b8, 1);
-    if(img->P444_joined)
-    {
-      rate  += writeCoeff8x8_CABAC (currMB, PLANE_U, b8, 1);
-      rate  += writeCoeff8x8_CABAC (currMB, PLANE_V, b8, 1);
-    }
-  }
-
   rdcost = (double)distortion + lambda*(double)rate;
 
   return rdcost;
@@ -1513,8 +1525,6 @@ double RDCost_for_8x8IntraBlocks(Macroblock *currMB, int *nonzero, int b8, int i
  */
 int dct_8x8(Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int intra)
 {
-  int j;
-
   int nonzero = FALSE; 
 
   int block_x = 8*(b8 & 0x01);
@@ -1523,9 +1533,9 @@ int dct_8x8(Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int intr
   int*  ACLevel = img->cofAC[pl_off][0][0];
   int*  ACRun   = img->cofAC[pl_off][0][1];  
   imgpel **img_enc       = enc_picture->p_curr_img;
-  imgpel (*mb_pred)[MB_BLOCK_SIZE] = img->mb_pred[pl];
-  int    (*mb_ores)[MB_BLOCK_SIZE] = img->mb_ores[pl];
-  int    (*mb_rres)[MB_BLOCK_SIZE] = img->mb_rres[pl];
+  imgpel **mb_pred = img->mb_pred[pl];
+  int    **mb_ores = img->mb_ores[pl];
+  int    **mb_rres = img->mb_rres[pl];
 
   int max_imgpel_value   = img->max_imgpel_value;
   int qp = currMB->qp_scaled[pl];
@@ -1533,11 +1543,12 @@ int dct_8x8(Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int intr
 
   int qp_rem = qp_rem_matrix[qp];
 
+
   levelscale    = LevelScale8x8Comp   [pl][intra][qp_rem];
   invlevelscale = InvLevelScale8x8Comp[pl][intra][qp_rem];
   leveloffset   = LevelOffset8x8Comp  [pl][intra][qp];
 
-  fadjust8x8 = img->AdaptiveRounding ? (pl ? &img->fadjust8x8Cr[pl-1][intra][block_y] : &img->fadjust8x8[intra][block_y]) :NULL;
+  fadjust8x8 = img->AdaptiveRounding ? (&img->ARCofAdj8x8[pl][currMB->ar_mode][block_y]) :NULL;
 
   // Forward 8x8 transform
   forward8x8(mb_ores, mb_rres, block_y, block_x);
@@ -1555,11 +1566,8 @@ int dct_8x8(Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int intr
     SampleReconstruct (img_enc, mb_pred, mb_rres, block_y, block_x, img->pix_y, img->pix_x + block_x, BLOCK_SIZE_8x8, BLOCK_SIZE_8x8, max_imgpel_value, DQ_BITS_8);
   }
   else // if (nonzero) => No transformed residual. Just use prediction.
-  {      
-    for( j=block_y; j< block_y + BLOCK_SIZE_8x8; j++)
-    {
-      memcpy(&(img_enc[img->pix_y + j][img->pix_x + block_x]),&(mb_pred[j][block_x]), BLOCK_SIZE_8x8 * sizeof(imgpel));
-    }
+  {
+    copy_8x8block(&img_enc[img->pix_y + block_y], &mb_pred[block_y], img->pix_x + block_x, block_x);
   }  
 
   //  Decoded block moved to frame memory
@@ -1583,16 +1591,15 @@ int dct_8x8(Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int intr
  */
 int dct_8x8_cavlc(Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int intra)
 {
-  int j;
   int nonzero = FALSE; 
 
   int block_x = 8*(b8 & 0x01);
   int block_y = 8*(b8 >> 1);
   int pl_off = b8+ (pl<<2);
   imgpel **img_enc = enc_picture->p_curr_img;
-  imgpel (*mb_pred)[MB_BLOCK_SIZE] = img->mb_pred[pl];  
-  int    (*mb_ores)[MB_BLOCK_SIZE] = img->mb_ores[pl];   
-  int    (*mb_rres)[MB_BLOCK_SIZE] = img->mb_rres[pl];   
+  imgpel **mb_pred = img->mb_pred[pl];  
+  int    **mb_ores = img->mb_ores[pl];   
+  int    **mb_rres = img->mb_rres[pl];   
 
   int max_imgpel_value   = img->max_imgpel_value;
 
@@ -1605,7 +1612,7 @@ int dct_8x8_cavlc(Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, in
   invlevelscale = InvLevelScale8x8Comp[pl][intra][qp_rem];
   leveloffset   = LevelOffset8x8Comp  [pl][intra][qp];
 
-  fadjust8x8 = img->AdaptiveRounding ? (pl ? &img->fadjust8x8Cr[pl-1][intra][block_y] : &img->fadjust8x8[intra][block_y]) :NULL;
+  fadjust8x8 = img->AdaptiveRounding ? (&img->ARCofAdj8x8[pl][currMB->ar_mode][block_y]) :NULL;
 
   // Forward 8x8 transform
   forward8x8(mb_ores, mb_rres, block_y, block_x);
@@ -1623,11 +1630,8 @@ int dct_8x8_cavlc(Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, in
     SampleReconstruct (img_enc, mb_pred, mb_rres, block_y, block_x, img->pix_y, img->pix_x + block_x, BLOCK_SIZE_8x8, BLOCK_SIZE_8x8, max_imgpel_value, DQ_BITS_8);
   }
   else // if (nonzero) => No transformed residual. Just use prediction.
-  {      
-    for( j=block_y; j< block_y + BLOCK_SIZE_8x8; j++)
-    {
-      memcpy(&(img_enc[img->pix_y + j][img->pix_x + block_x]),&(mb_pred[j][block_x]), BLOCK_SIZE_8x8 * sizeof(imgpel));
-    }
+  {
+    copy_8x8block(&img_enc[img->pix_y + block_y], &mb_pred[block_y], img->pix_x + block_x, block_x);
   }  
 
   //  Decoded block moved to frame memory
@@ -1646,9 +1650,9 @@ int dct_8x8_ls(Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int i
   int*  ACLevel = img->cofAC[pl_off][0][0];
   int*  ACRun   = img->cofAC[pl_off][0][1];  
   imgpel **img_enc       = enc_picture->p_curr_img;
-  imgpel (*mb_pred)[MB_BLOCK_SIZE] = img->mb_pred[pl];
-  int    (*mb_ores)[MB_BLOCK_SIZE] = img->mb_ores[pl];
-  int    (*mb_rres)[MB_BLOCK_SIZE] = img->mb_rres[pl];
+  imgpel **mb_pred = img->mb_pred[pl];
+  int    **mb_ores = img->mb_ores[pl];
+  int    **mb_rres = img->mb_rres[pl];
 
   int scan_poss[4] = { 0 }, runs[4] = { -1, -1, -1, -1 };
   int MCcoeff = 0;
@@ -1657,8 +1661,8 @@ int dct_8x8_ls(Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int i
 
   const byte (*pos_scan)[2] = currMB->is_field_mode ? FIELD_SCAN8x8 : SNGL_SCAN8x8;
 
-  int **fadjust8x8 = img->AdaptiveRounding ? (pl ? &img->fadjust8x8Cr[pl-1][intra][block_y] : &img->fadjust8x8[intra][block_y]) :NULL;
-
+  int **fadjust8x8 = img->AdaptiveRounding ? (&img->ARCofAdj8x8[pl][currMB->ar_mode][block_y]) :NULL;
+  
   runs[0]=runs[1]=runs[2]=runs[3]=-1;
   scan_poss[0] = scan_poss[1] = scan_poss[2] = scan_poss[3] = 0;
 
@@ -1728,7 +1732,7 @@ int dct_8x8_ls(Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int i
   {            
     for( i=block_x; i< block_x + BLOCK_SIZE_8x8; i++)
     {
-      mb_rres[j][i] += mb_pred[j][i];
+      mb_rres[j][i] += (int) mb_pred[j][i];
       img_enc[img->pix_y + j][img->pix_x + i]= (imgpel) mb_rres[j][i];
     }
   }  
@@ -1752,7 +1756,7 @@ int dct_8x8_ls(Macroblock *currMB, ColorPlane pl, int b8, int *coeff_cost, int i
 *     distortion for an 8x8 Intra block 
 *************************************************************************************
 */
-void compute_comp_cost8x8(imgpel **cur_img, imgpel mpr8x8[16][16], int pic_opix_x, double *cost)
+void compute_comp_cost8x8(imgpel **cur_img, imgpel **mpr8x8, int pic_opix_x, double *cost)
 {
   int i, j;
   int *diff = &diff64[0];

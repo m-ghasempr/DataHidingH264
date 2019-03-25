@@ -24,7 +24,12 @@ void gettime(TIME_T* time)
   QueryPerformanceCounter(time);
 }
 
-time_t timediff(TIME_T* start, TIME_T* end)
+int64 timediff(TIME_T* start, TIME_T* end)
+{
+  return (int64)((end->QuadPart - start->QuadPart));
+}
+
+int64 timenorm(int64  cur_time)
 {
   static int first = 1;
 
@@ -33,7 +38,8 @@ time_t timediff(TIME_T* start, TIME_T* end)
     QueryPerformanceFrequency(&freq);
     first = 0;
   }
-  return (time_t)((end->QuadPart - start->QuadPart)* 1000 /(freq.QuadPart));
+
+  return (int64)(cur_time * 1000 /(freq.QuadPart));
 }
 
 #else
@@ -45,12 +51,17 @@ void gettime(TIME_T* time)
   gettimeofday(time, &tz);
 }
 
-time_t timediff(TIME_T* start, TIME_T* end)
+int64 timediff(TIME_T* start, TIME_T* end)
 {
-  time_t t1, t2;
+  int t1, t2;
 
-  t1 =  start->tv_sec * 1000 + (start->tv_usec/1000);
-  t2 =  end->tv_sec  * 1000 + (end->tv_usec/1000);
-  return t2-t1;
+  t1 =  end->tv_sec  - start->tv_sec;
+  t2 =  end->tv_usec - start->tv_usec;
+  return (int64) t2 + (int64) t1 * (int64) 1000000;
+}
+
+int64 timenorm(int64 cur_time)
+{
+  return (int64)(cur_time / (int64) 1000);
 }
 #endif

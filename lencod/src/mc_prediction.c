@@ -18,7 +18,6 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <limits.h>
-#include <memory.h>
 #include <math.h>
 
 #include "global.h"
@@ -34,73 +33,6 @@ static imgpel l0_pred[MB_PIXELS];
 static imgpel l1_pred[MB_PIXELS];
 
 
-static const unsigned char subblk_offset_x[3][8][4] =
-{
-  { 
-    {0, 4, 0, 4},
-    {0, 4, 0, 4},
-    {0, 0, 0, 0},
-    {0, 0, 0, 0},
-    {0, 0, 0, 0},
-    {0, 0, 0, 0},
-    {0, 0, 0, 0},
-    {0, 0, 0, 0}, 
-  },
-  { 
-    {0, 4, 0, 4},
-    {0, 4, 0, 4},
-    {0, 4, 0, 4},
-    {0, 4, 0, 4},
-    {0, 0, 0, 0},
-    {0, 0, 0, 0},
-    {0, 0, 0, 0},
-    {0, 0, 0, 0}, 
-  },
-  { 
-    {0, 4, 0, 4},
-    {8,12, 8,12},
-    {0, 4, 0, 4},
-    {8,12, 8,12},
-    {0, 4, 0, 4},
-    {8,12, 8,12},
-    {0, 4, 0, 4},
-    {8,12, 8,12}  
-  }
-};
-
-static const unsigned char subblk_offset_y[3][8][4] =
-{
-  { 
-    {0, 0, 4, 4},
-    {0, 0, 4, 4},
-    {0, 0, 0, 0},
-    {0, 0, 0, 0},
-    {0, 0, 0, 0},
-    {0, 0, 0, 0},
-    {0, 0, 0, 0},
-    {0, 0, 0, 0}, 
-  },
-  { 
-    {0, 0, 4, 4},
-    {8, 8,12,12},
-    {0, 0, 4, 4},
-    {8, 8,12,12},
-    {0, 0, 0, 0},
-    {0, 0, 0, 0},
-    {0, 0, 0, 0},
-    {0, 0, 0, 0},
-  },
-  {
-    {0, 0, 4, 4},
-    {0, 0, 4, 4},
-    {8, 8,12,12},
-    {8, 8,12,12},
-    {0, 0, 4, 4},
-    {0, 0, 4, 4},
-    {8, 8,12,12},
-    {8, 8,12,12} 
-  }
-};
 
 /*!
  ************************************************************************
@@ -161,7 +93,7 @@ void LumaPrediction ( Macroblock* currMB,//!< Current Macroblock
   imgpel* l1pred    = l1_pred;  
   short****** mv_array = img->all_mv;
   short   *curr_mv = NULL;
-  imgpel (*mb_pred)[16] = img->mb_pred[0];
+  imgpel **mb_pred = img->mb_pred[0];
 
   int  apply_weights = ( (active_pps->weighted_pred_flag  && (img->type== P_SLICE || img->type == SP_SLICE)) ||
     (active_pps->weighted_bipred_idc && (img->type== B_SLICE)));
@@ -282,7 +214,7 @@ void LumaPredictionBi ( Macroblock* currMB, //!< Current Macroblock
   short   ******mv_array = img->bipred_mv[list]; 
   short   *mv_arrayl0 = mv_array[LIST_0][l0_ref_idx][l0_mode][by][bx];
   short   *mv_arrayl1 = mv_array[LIST_1][l1_ref_idx][l1_mode][by][bx];
-  imgpel (*mb_pred)[16] = img->mb_pred[0];
+  imgpel **mb_pred = img->mb_pred[0];
 
   OneComponentLumaPrediction (l0_pred, pic_opix_x + mv_arrayl0[0], pic_opix_y + mv_arrayl0[1], block_size_x, block_size_y, listX[0+currMB->list_offset][l0_ref_idx]);
   OneComponentLumaPrediction (l1_pred, pic_opix_x + mv_arrayl1[0], pic_opix_y + mv_arrayl1[1], block_size_x, block_size_y, listX[1+currMB->list_offset][l1_ref_idx]);
@@ -478,8 +410,8 @@ void IntraChromaPrediction4x4 (Macroblock* currMB, //! <-- Current Macroblock
                                int  block_y)       //! <-- relative vertical   block coordinate of 4x4 block
 {
   int j;
-  imgpel (*mb_pred)[16]       = img->mb_pred[ uv ];
-  imgpel (*curr_mpr_16x16)[16] = img->mpr_16x16[uv][currMB->c_ipred_mode];
+  imgpel **mb_pred        = img->mb_pred[ uv ];
+  imgpel **curr_mpr_16x16 = img->mpr_16x16[uv][currMB->c_ipred_mode];
 
   //===== prediction =====
   for (j=block_y; j<block_y + BLOCK_SIZE; j++)
@@ -518,7 +450,7 @@ void ChromaPrediction ( Macroblock* currMB, // <-- Current Macroblock
   short****** mv_array = img->all_mv;    
   int max_imgpel_value_uv = img->max_imgpel_value_comp[1];
   int uv_comp = uv + 1;
-  imgpel (*mb_pred)[16] = img->mb_pred[ uv_comp];
+  imgpel **mb_pred = img->mb_pred[ uv_comp];
 
   int  apply_weights = ( (active_pps->weighted_pred_flag && (img->type == P_SLICE || img->type == SP_SLICE)) ||
     (active_pps->weighted_bipred_idc && (img->type == B_SLICE)));
@@ -639,7 +571,7 @@ void ChromaPrediction4x4 ( Macroblock* currMB, // <-- Current Macroblock
   short****** mv_array = img->all_mv;
   int max_imgpel_value_uv = img->max_imgpel_value_comp[1];
   int uv_comp = uv + 1;
-  imgpel (*mb_pred)[16] = img->mb_pred[uv_comp];
+  imgpel **mb_pred = img->mb_pred[uv_comp];
   int     list_offset = currMB->list_offset;
   
   int  apply_weights = ( (active_pps->weighted_pred_flag && (img->type == P_SLICE || img->type == SP_SLICE)) ||
@@ -761,8 +693,8 @@ void IntraChromaPrediction (Macroblock *currMB, int *mb_up, int *mb_left, int*mb
   PixelPos left[17];  //!< pixel positions p(-1, -1..15)
   int      cr_MB_x = img->mb_cr_size_x;
   int      cr_MB_y = img->mb_cr_size_y;
-  static imgpel (*cur_pred)[16];
-  static imgpel (*curr_mpr_16x16)[16][16];
+  static imgpel **cur_pred;
+  static imgpel ***curr_mpr_16x16;
   static imgpel *hline;
   static imgpel *img_org, *img_prd;
 
@@ -815,15 +747,15 @@ void IntraChromaPrediction (Macroblock *currMB, int *mb_up, int *mb_left, int*mb
     // DC prediction
     for(b8=0; b8<img->num_blk8x8_uv >> 1;b8++)
     {
-      for (b4=0; b4<4; b4++)
+      for (b4 = 0; b4 < 4; b4++)
       {
         block_y = subblk_offset_y[yuv][b8][b4];
         block_x = subblk_offset_x[yuv][b8][b4];
         blk_x = block_x;
         blk_y = block_y + 1;
 
-        s=dc_pred_value_chroma;
-        s0=s1=s2=s3=0;
+        s = dc_pred_value_chroma;
+        s0 = s1 = s2 = s3 = 0;
 
         //===== get prediction value =====
         switch (block_pos[yuv][b8][b4])
@@ -993,7 +925,7 @@ void IntraChromaPrediction (Macroblock *currMB, int *mb_up, int *mb_left, int*mb
   }
 }
 
-void ComputeResidue (imgpel **curImg, imgpel mpr[16][16], int img_m7[16][16], int mb_y, int mb_x, int opix_y, int opix_x, int width, int height)
+void ComputeResidue (imgpel **curImg, imgpel **mpr, int **mb_rres, int mb_y, int mb_x, int opix_y, int opix_x, int width, int height)
 {
   static imgpel *imgOrg, *imgPred;
   static int    *m7;
@@ -1003,7 +935,7 @@ void ComputeResidue (imgpel **curImg, imgpel mpr[16][16], int img_m7[16][16], in
   {
     imgOrg = &curImg[opix_y + j][opix_x];    
     imgPred = &mpr[j][mb_x];
-    m7 = &img_m7[j][mb_x]; 
+    m7 = &mb_rres[j][mb_x]; 
     for (i = 0; i < width; i++)
     {
       *m7++ = *imgOrg++ - *imgPred++;
@@ -1011,7 +943,7 @@ void ComputeResidue (imgpel **curImg, imgpel mpr[16][16], int img_m7[16][16], in
   }
 }
 
-void SampleReconstruct (imgpel **curImg, imgpel mpr[16][16], int img_m7[16][16], int mb_y, int mb_x, int opix_y, int opix_x, int width, int height, int max_imgpel_value, int dq_bits)
+void SampleReconstruct (imgpel **curImg, imgpel **mpr, int **mb_rres, int mb_y, int mb_x, int opix_y, int opix_x, int width, int height, int max_imgpel_value, int dq_bits)
 {
   static imgpel *imgOrg, *imgPred;
   static int    *m7;
@@ -1021,7 +953,7 @@ void SampleReconstruct (imgpel **curImg, imgpel mpr[16][16], int img_m7[16][16],
   {
     imgOrg = &curImg[opix_y + j][opix_x];
     imgPred = &mpr[j][mb_x];
-    m7 = &img_m7[j][mb_x]; 
+    m7 = &mb_rres[j][mb_x]; 
     for (i=0;i<width;i++)
       *imgOrg++ = iClip1( max_imgpel_value, rshift_rnd_sf(*m7++, dq_bits) + *imgPred++);
   }

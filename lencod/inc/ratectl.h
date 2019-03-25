@@ -18,6 +18,7 @@
 #ifndef _RATE_CTL_H_
 #define _RATE_CTL_H_
 
+#include "global.h"
 #include "rc_quadratic.h"
 
 /* generic rate control variables */
@@ -52,7 +53,7 @@ typedef struct {
 } rc_generic;
 
 // macroblock activity
-int    diffy[16][16];
+extern int diffy[16][16];
 
 // generic functions
 int    Qstep2QP          ( double Qstep );
@@ -60,8 +61,6 @@ double QP2Qstep          ( int QP );
 int    ComputeMBMAD      ( void );
 double ComputeFrameMAD   ( void );
 void   rc_store_mad      (Macroblock *currMB);
-void   update_qp_cbp     (Macroblock *currMB, short best_mode);
-void   update_qp_cbp_tmp (Macroblock *currMB, int cbp, int best_mode);
 
 // rate control functions
 // init/copy

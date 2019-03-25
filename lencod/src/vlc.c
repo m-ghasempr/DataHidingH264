@@ -29,7 +29,7 @@
 #endif
 
 //! gives codeword number from CBP value, both for intra and inter
-static const unsigned char NCBP[2][48][2]=
+static const byte NCBP[2][48][2]=
 {
   {  // 0      1        2       3       4       5       6       7       8       9      10      11
     { 1, 0},{10, 1},{11, 2},{ 6, 5},{12, 3},{ 7, 6},{14,14},{ 2,10},{13, 4},{15,15},{ 8, 7},{ 3,11},
@@ -326,12 +326,12 @@ void cbp_linfo_inter(int cbp, int dummy, int *len,int *info)
  */
 void levrun_linfo_c2x2(int level,int run,int *len,int *info)
 {
-  static const int NTAB[2][2]=
+  static const byte NTAB[2][2]=
   {
     {1,5},
     {3,0}
   };
-  static const int LEVRUN[4]=
+  static const byte LEVRUN[4]=
   {
     2,1,0,0
   };
@@ -495,7 +495,7 @@ void writeSE_SVLC(SyntaxElement *se, DataPartition *dp)
 */
 void writeCBP_VLC (Macroblock* currMB, SyntaxElement *se, DataPartition *dp)
 {
-  if (IS_OLDINTRA (currMB) || currMB->mb_type == SI4MB ||  currMB->mb_type == I8MB)
+  if (currMB->mb_type == I4MB || currMB->mb_type == SI4MB ||  currMB->mb_type == I8MB)
   {
     cbp_linfo_intra (se->value1,se->value2,&(se->len),&(se->inf));
   }
@@ -587,28 +587,60 @@ int writeSyntaxElement2Buf_UVLC(SyntaxElement *se, Bitstream* this_streamBuffer 
 void  writeUVLC2buffer(SyntaxElement *se, Bitstream *currStream)
 {
   unsigned int mask = 1 << (se->len - 1);
-  int i;  
-  //byte *streamBuffer = &currStream->streamBuffer[currStream->byte_pos];
-  //assert ((se->len-1) < 32);
+  int i;
 
   // Add the new bits to the bitstream.
   // Write out a byte if it is full
-  for (i = 0; i < se->len; i++)
+  if ( se->len < 33 )
   {
-    currStream->byte_buf <<= 1;
-    
-    if (se->bitpattern & mask)
-      currStream->byte_buf |= 1;
-
-    mask >>= 1;
-    
-    if ((--currStream->bits_to_go) == 0)
+    for (i = 0; i < se->len; i++)
     {
-      currStream->bits_to_go = 8;      
-      currStream->streamBuffer[currStream->byte_pos++] = currStream->byte_buf;
-      //currStream->byte_pos++;
-      //*(streamBuffer++) = currStream->byte_buf;
-      currStream->byte_buf = 0;      
+      currStream->byte_buf <<= 1;
+
+      if (se->bitpattern & mask)
+        currStream->byte_buf |= 1;
+
+      mask >>= 1;
+
+      if ((--currStream->bits_to_go) == 0)
+      {
+        currStream->bits_to_go = 8;      
+        currStream->streamBuffer[currStream->byte_pos++] = currStream->byte_buf;
+        currStream->byte_buf = 0;      
+      }
+    }
+  }
+  else
+  {
+    // zeros
+    for (i = 0; i < (se->len - 32); i++)
+    {
+      currStream->byte_buf <<= 1;
+
+      if ((--currStream->bits_to_go) == 0)
+      {
+        currStream->bits_to_go = 8;      
+        currStream->streamBuffer[currStream->byte_pos++] = currStream->byte_buf;
+        currStream->byte_buf = 0;      
+      }
+    }
+    // actual info
+    mask = 1 << 31;
+    for (i = 0; i < 32; i++)
+    {
+      currStream->byte_buf <<= 1;
+
+      if (se->bitpattern & mask)
+        currStream->byte_buf |= 1;
+
+      mask >>= 1;
+
+      if ((--currStream->bits_to_go) == 0)
+      {
+        currStream->bits_to_go = 8;      
+        currStream->streamBuffer[currStream->byte_pos++] = currStream->byte_buf;
+        currStream->byte_buf = 0;      
+      }
     }
   }
 }
@@ -771,7 +803,7 @@ int writeSyntaxElement_VLC(SyntaxElement *se, DataPartition *dp)
 
 int writeSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *se, DataPartition *dp)
 {
-  static const int lentab[3][4][17] =
+  static const byte lentab[3][4][17] =
   {
     {   // 0702
       { 1, 6, 8, 9,10,11,13,13,13,14,14,15,15,16,16,16,16},
@@ -794,7 +826,7 @@ int writeSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *se, DataPartition *dp
 
   };
 
-  static const int codtab[3][4][17] =
+  static const byte codtab[3][4][17] =
   {
     {
       { 1, 5, 7, 7, 7, 7,15,11, 8,15,11,15,11,15,11, 7,4},
@@ -869,7 +901,7 @@ int writeSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *se, DataPartition *dp
  */
 int writeSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *se, DataPartition *dp)
 {
-  static const int lentab[3][4][17] =
+  static const byte lentab[3][4][17] =
   {
     //YUV420
    {{ 2, 6, 6, 6, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -888,7 +920,7 @@ int writeSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *se, DataParti
     { 0, 0, 0, 5, 6, 7, 8, 9,10,11,13,14,14,15,15,16,16}}
   };
 
-  static const int codtab[3][4][17] =
+  static const byte codtab[3][4][17] =
   {
     //YUV420
    {{ 1, 7, 4, 3, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -945,7 +977,7 @@ int writeSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *se, DataParti
  */
 int writeSyntaxElement_TotalZeros(SyntaxElement *se, DataPartition *dp)
 {
-  static const int lentab[TOTRUN_NUM][16] =
+  static const byte lentab[TOTRUN_NUM][16] =
   {
     { 1,3,3,4,4,5,5,6,6,7,7,8,8,9,9,9},
     { 3,3,3,3,3,4,4,4,4,5,5,6,6,6,6},
@@ -964,7 +996,7 @@ int writeSyntaxElement_TotalZeros(SyntaxElement *se, DataPartition *dp)
     { 1,1},
   };
 
-  static const int codtab[TOTRUN_NUM][16] =
+  static const byte codtab[TOTRUN_NUM][16] =
   {
     {1,3,2,3,2,3,2,3,2,3,2,3,2,3,2,1},
     {7,6,5,4,3,5,4,3,2,3,2,3,2,1,0},
@@ -1018,7 +1050,7 @@ int writeSyntaxElement_TotalZeros(SyntaxElement *se, DataPartition *dp)
  */
 int writeSyntaxElement_TotalZerosChromaDC(SyntaxElement *se, DataPartition *dp)
 {
-  static const int lentab[3][TOTRUN_NUM][16] =
+  static const byte lentab[3][TOTRUN_NUM][16] =
   {
     //YUV420
    {{ 1,2,3,3},
@@ -1050,7 +1082,7 @@ int writeSyntaxElement_TotalZerosChromaDC(SyntaxElement *se, DataPartition *dp)
     { 1,1}}
   };
 
-  static const int codtab[3][TOTRUN_NUM][16] =
+  static const byte codtab[3][TOTRUN_NUM][16] =
   {
     //YUV420
    {{ 1,1,1,0},
@@ -1118,7 +1150,7 @@ int writeSyntaxElement_TotalZerosChromaDC(SyntaxElement *se, DataPartition *dp)
  */
 int writeSyntaxElement_Run(SyntaxElement *se, DataPartition *dp)
 {
-  static const int lentab[TOTRUN_NUM][16] =
+  static const byte lentab[TOTRUN_NUM][16] =
   {
     {1,1},
     {1,2,2},
@@ -1129,7 +1161,7 @@ int writeSyntaxElement_Run(SyntaxElement *se, DataPartition *dp)
     {3,3,3,3,3,3,3,4,5,6,7,8,9,10,11},
   };
 
-  static const int codtab[TOTRUN_NUM][16] =
+  static const byte codtab[TOTRUN_NUM][16] =
   {
     {1,0},
     {1,1,0},
@@ -1219,7 +1251,6 @@ int writeSyntaxElement_Level_VLC1(SyntaxElement *se, DataPartition *dp, int prof
     
     se->len = 28 + (numPrefix << 1);
   }
-
 
   symbol2vlc(se);
 
@@ -1394,5 +1425,15 @@ void writeVlcByteAlign(Bitstream* currStream, StatParameters *cur_stats)
     cur_stats->bit_use_stuffingBits[img->type] += currStream->bits_to_go;    
     currStream->bits_to_go = 8;
   }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Resets the nz_coeff params for a macroblock
+ ************************************************************************/
+void reset_mb_nz_coeff(int mb_number)
+{
+   memset(&img->nz_coeff [mb_number][0][0], 0, BLOCK_SIZE * (BLOCK_SIZE + img->num_blk8x8_uv) * sizeof(int));
 }
 

@@ -53,6 +53,11 @@ static inline int64 i64max(int64 a, int64 b)
   return ((a) > (b)) ? (a) : (b);
 }
 
+static inline int sabs(short x)
+{
+  return ((x) < 0) ? -(x) : (x);
+}
+
 static inline int iabs(int x)
 {
   return ((x) < 0) ? -(x) : (x);
@@ -96,6 +101,11 @@ static inline int isignab(int a, int b)
 static inline int rshift_rnd(int x, int a)
 {
   return (a > 0) ? ((x + (1 << (a-1) )) >> a) : (x << (-a));
+}
+
+static inline int rshift_rnd_sign(int x, int a)
+{
+  return (x > 0) ? ( ( x + (1 << (a-1)) ) >> a ) : (-( ( iabs(x) + (1 << (a-1)) ) >> a ));
 }
 
 static inline unsigned int rshift_rnd_us(unsigned int x, unsigned int a)
@@ -150,6 +160,11 @@ static inline int power2(int x)
 static inline int float2int (float x)
 {
   return (int)((x < 0) ? (x - 0.5f) : (x + 0.5f));
+}
+
+static inline int get_bit(int64 x,int n)
+{
+  return (int)(((x >> n) & 1));
 }
 
 #if ZEROSNR

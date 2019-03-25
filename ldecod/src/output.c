@@ -139,10 +139,17 @@ static void img2buf_normal (imgpel** imgX, unsigned char* buf, int size_x, int s
   }
   else
   {
-    imgpel *cur_pixel = &(imgX[0][0]);;
-    for(i = 0; i < size_y * size_x; i++)
-    {          
-      *(buf++)=(char) *(cur_pixel++);
+    if (sizeof(imgpel) == sizeof(char))
+    {
+      memcpy(buf, &(imgX[0][0]), size_y * size_x * sizeof(imgpel));
+    }
+    else
+    {
+      imgpel *cur_pixel = &(imgX[0][0]);
+      for(i = 0; i < size_y * size_x; i++)
+      {          
+        *(buf++)=(char) *(cur_pixel++);
+      }
     }
   }
 }
@@ -455,6 +462,8 @@ static void write_out_picture(StorablePicture *p, int p_out)
   Boolean rgb_output = (Boolean) (active_sps->vui_seq_parameters.matrix_coefficients==0);
   unsigned char *buf;
 
+  int ret;
+
   if (p->non_existing)
     return;
 
@@ -499,8 +508,12 @@ static void write_out_picture(StorablePicture *p, int p_out)
     crop_top    = ( 2 - p->frame_mbs_only_flag ) * p->frame_cropping_rect_top_offset;
     crop_bottom = ( 2 - p->frame_mbs_only_flag ) * p->frame_cropping_rect_bottom_offset;
 
-    img2buf_normal (p->imgUV[1], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
-    write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes);
+    img2buf (p->imgUV[1], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
+    ret = write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes);
+    if (ret != ((p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes))
+    {
+      error ("write_out_picture: error writing to RGB file", 500);
+    }
 
     if (p->frame_cropping_flag)
     {
@@ -515,8 +528,12 @@ static void write_out_picture(StorablePicture *p, int p_out)
     }
   }
 
-  img2buf_normal (p->imgY, buf, p->size_x, p->size_y, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
-  write(p_out, buf, (p->size_y-crop_bottom-crop_top)*(p->size_x-crop_right-crop_left)*symbol_size_in_bytes);
+  img2buf (p->imgY, buf, p->size_x, p->size_y, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
+  ret = write(p_out, buf, (p->size_y-crop_bottom-crop_top)*(p->size_x-crop_right-crop_left)*symbol_size_in_bytes);
+  if (ret != ((p->size_y-crop_bottom-crop_top)*(p->size_x-crop_right-crop_left)*symbol_size_in_bytes))
+  {
+    error ("write_out_picture: error writing to YUV file", 500);
+  }
 
   if (p->chroma_format_idc!=YUV400)
   {
@@ -525,13 +542,20 @@ static void write_out_picture(StorablePicture *p, int p_out)
     crop_top    = ( 2 - p->frame_mbs_only_flag ) * p->frame_cropping_rect_top_offset;
     crop_bottom = ( 2 - p->frame_mbs_only_flag ) * p->frame_cropping_rect_bottom_offset;
 
-    img2buf_normal (p->imgUV[0], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
-    write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)* symbol_size_in_bytes);
-
+    img2buf (p->imgUV[0], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
+    ret = write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)* symbol_size_in_bytes);
+    if (ret != ((p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)* symbol_size_in_bytes))
+    {
+      error ("write_out_picture: error writing to YUV file", 500);
+    }
     if (!rgb_output)
     {
-      img2buf_normal (p->imgUV[1], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
-      write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes);
+      img2buf (p->imgUV[1], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
+      ret = write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes);
+      if (ret != ((p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes))
+      {
+        error ("write_out_picture: error writing to YUV file", 500);
+      }
     }
   }
   else
@@ -547,10 +571,18 @@ static void write_out_picture(StorablePicture *p, int p_out)
           p->imgUV[0][j][i]=cr_val;
 
       // fake out U=V=128 to make a YUV 4:2:0 stream
-      img2buf_normal (p->imgUV[0], buf, p->size_x/2, p->size_y/2, symbol_size_in_bytes, crop_left/2, crop_right/2, crop_top/2, crop_bottom/2);
+      img2buf (p->imgUV[0], buf, p->size_x/2, p->size_y/2, symbol_size_in_bytes, crop_left/2, crop_right/2, crop_top/2, crop_bottom/2);
 
-      write(p_out, buf, symbol_size_in_bytes * (p->size_y-crop_bottom-crop_top)/2 * (p->size_x-crop_right-crop_left)/2 );
-      write(p_out, buf, symbol_size_in_bytes * (p->size_y-crop_bottom-crop_top)/2 * (p->size_x-crop_right-crop_left)/2 );
+      ret = write(p_out, buf, symbol_size_in_bytes * (p->size_y-crop_bottom-crop_top)/2 * (p->size_x-crop_right-crop_left)/2 );
+      if (ret != (symbol_size_in_bytes * (p->size_y-crop_bottom-crop_top)/2 * (p->size_x-crop_right-crop_left)/2))
+      {
+        error ("write_out_picture: error writing to YUV file", 500);
+      }
+      ret = write(p_out, buf, symbol_size_in_bytes * (p->size_y-crop_bottom-crop_top)/2 * (p->size_x-crop_right-crop_left)/2 );
+      if (ret != (symbol_size_in_bytes * (p->size_y-crop_bottom-crop_top)/2 * (p->size_x-crop_right-crop_left)/2))
+      {
+        error ("write_out_picture: error writing to YUV file", 500);
+      }
 
       free_mem3Dpel(p->imgUV);
       p->imgUV=NULL;
@@ -747,8 +779,8 @@ void direct_output(StorablePicture *p, int p_out)
     flush_direct_output(p_out);
     write_picture (p, p_out, FRAME);
     calculate_frame_no(p);
-    if (-1!=p_ref && !params->silent)
-      find_snr(snr, p, p_ref);
+    if (-1 != p_ref && !params->silent)
+      find_snr(snr, p, &p_ref);
     free_storable_picture(p);
     return;
   }
@@ -777,7 +809,7 @@ void direct_output(StorablePicture *p, int p_out)
 
     calculate_frame_no(p);
     if (-1!=p_ref && !params->silent)
-      find_snr(snr, out_buffer->frame, p_ref);
+      find_snr(snr, out_buffer->frame, &p_ref);
     free_storable_picture(out_buffer->frame);
     out_buffer->frame = NULL;
     free_storable_picture(out_buffer->top_field);

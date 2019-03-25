@@ -28,11 +28,12 @@ extern CSptr cs_mb, cs_b8, cs_cm, cs_ib8, cs_ib4;
 
 pic_parameter_set_rbsp_t *PicParSet[MAXPPS];
 
-void poc_ref_pic_reorder_frame( StorablePicture **list, unsigned num_ref_idx_lX_active, int *reordering_of_pic_nums_idc, int *abs_diff_pic_num_minus1, int *long_term_pic_idx, int list_no );
-void poc_ref_pic_reorder_field( StorablePicture **list, unsigned num_ref_idx_lX_active, int *reordering_of_pic_nums_idc, int *abs_diff_pic_num_minus1, int *long_term_pic_idx, int list_no );
+void poc_ref_pic_reorder_frame( Slice *currSlice, StorablePicture **list, unsigned num_ref_idx_lX_active, int *reordering_of_pic_nums_idc, int *abs_diff_pic_num_minus1, int *long_term_pic_idx, int list_no );
+void poc_ref_pic_reorder_field( Slice *currSlice, StorablePicture **list, unsigned num_ref_idx_lX_active, int *reordering_of_pic_nums_idc, int *abs_diff_pic_num_minus1, int *long_term_pic_idx, int list_no );
 
 void init_ref_pic_list_reordering( Slice *currSlice );
-int  encode_one_slice ( int SliceGroupId, Picture *pic, int TotalCodedMBs );
+int  encode_one_slice       ( int SliceGroupId, Picture *pic, int TotalCodedMBs );
+int  encode_one_slice_MBAFF ( int SliceGroupId, Picture *pic, int TotalCodedMBs );
 void init_slice       ( Slice **currSlice, int start_mb_addr );
 void free_slice_list  ( Picture *currPic );
 

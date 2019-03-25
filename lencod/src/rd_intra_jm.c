@@ -34,17 +34,15 @@
  *    Mode Decision for an 4x4 Intra block
  *************************************************************************************
  */
-int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int  b4,  double  lambda,  double*  min_cost, int cr_cbp[3], int is_cavlc)
+int Mode_Decision_for_4x4IntraBlocks_JM_High (Slice *currSlice, Macroblock *currMB, int  b8,  int  b4,  double  lambda,  double*  min_cost, int cr_cbp[3], int is_cavlc)
 {
   int    ipmode, best_ipmode = 0, i, j, y, dummy;
   int    c_nz, nonzero = 0;
   int*   ACLevel = img->cofAC[b8][b4][0];
   int*   ACRun   = img->cofAC[b8][b4][1];
   int    c_nzCbCr[3]= {999,999, 999};
-  static imgpel  rec4x4[4][4];
-  static imgpel  rec4x4CbCr[2][4][4];
   int    uv;
-
+  
   double rdcost;
   int    block_x     = ((b8 & 0x01) << 3) + ((b4 & 0x01) << 2);
   int    block_y     = ((b8 >> 1) << 3)  + ((b4 >> 1) << 2);
@@ -58,14 +56,12 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int 
 
   int left_available, up_available, all_available;
 
-  char   upMode;
-  char   leftMode;
+  char   upMode, leftMode;
   int    mostProbableMode;
 
-  PixelPos left_block;
-  PixelPos top_block;
+  PixelPos left_block, top_block;
 
-  int  lrec4x4[4][4];
+  static int  lrec4x4[4][4];
 
 #ifdef BEST_NZ_COEFF
   int best_nz_coeff = 0;
@@ -74,7 +70,7 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int 
   static int64 cbp_bits;
 
   if (b8==0 && b4==0)
-    cbp_bits = 0;
+    cbp_bits = 0;  
 #endif
 
   get4x4Neighbour(currMB, block_x - 1, block_y    , img->mb_size[IS_LUMA], &left_block);
@@ -134,22 +130,19 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int 
       }
 
       //===== store the coding state =====
-      //store_coding_state (currMB, cs_cm);
+      //store_coding_state (currSlice, currMB, cs_cm);
       // get and check rate-distortion cost
 #ifdef BEST_NZ_COEFF
       currMB->cbp_bits[0] = cbp_bits;
 #endif      
-      if ((rdcost = RDCost_for_4x4IntraBlocks (currMB, &c_nz, b8, b4, ipmode, lambda, mostProbableMode, c_nzCbCr, is_cavlc)) < min_rdcost)
+      if ((rdcost = RDCost_for_4x4IntraBlocks (currSlice, currMB, &c_nz, b8, b4, ipmode, lambda, mostProbableMode, c_nzCbCr, is_cavlc)) < min_rdcost)
       {
         //--- set coefficients ---
         memcpy(cofAC4x4[0],ACLevel, 18 * sizeof(int));
         memcpy(cofAC4x4[1],ACRun,   18 * sizeof(int));
 
         //--- set reconstruction ---
-        for (y=0; y<4; y++)
-        {
-          memcpy(rec4x4[y],&enc_picture->imgY[pic_pix_y+y][pic_pix_x], BLOCK_SIZE * sizeof(imgpel));
-        }
+        copy_4x4block(rec4x4[PLANE_Y], &enc_picture->imgY[pic_pix_y], 0, pic_pix_x);
 
         // SP/SI reconstruction
         if(img->type==SP_SLICE &&(!si_frame_indicator && !sp2_frame_indicator))
@@ -170,10 +163,7 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int 
             cr_cbp[uv + 1] = c_nzCbCr[uv + 1];
 
             //--- set reconstruction ---
-            for (y=0; y<4; y++)
-            {
-              memcpy(rec4x4CbCr[uv][y],&enc_picture->imgUV[uv][pic_pix_y+y][pic_pix_x], BLOCK_SIZE * sizeof(imgpel));
-            } 
+            copy_4x4block(rec4x4CbCr[uv], &enc_picture->imgUV[uv][pic_pix_y], 0, pic_pix_x);
           }
         }
         //--- flag if dct-coefficients must be coded ---
@@ -187,23 +177,23 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int 
         best_nz_coeff = img->nz_coeff [img->current_mb_nr][block_x4][block_y4];
         best_coded_block_flag = (int)((currMB->cbp_bits[0] >> bit_pos)&(int64)(1));
 #endif
-        //store_coding_state (currMB, cs_ib4);
+        //store_coding_state (currSlice, currMB, cs_ib4);
         if (img->AdaptiveRounding)
         {
-          store_adaptive_rounding (img, block_y, block_x);
+          store_adaptive_rounding_4x4 (img, img->ARCofAdj4x4, I4MB, block_y, block_x);
         }
 
       }
-#ifndef RESET_STATE
-      reset_coding_state (currMB, cs_cm);
-#endif      
+      reset_coding_state (currSlice, currMB, cs_cm);
     }
   }
+
 #ifdef BEST_NZ_COEFF
   img->nz_coeff [img->current_mb_nr][block_x4][block_y4] = best_nz_coeff;
   cbp_bits &= (~(int64)(1<<bit_pos));
   cbp_bits |= (int64)(best_coded_block_flag<<bit_pos);
 #endif
+  
   //===== set intra mode prediction =====
   img->ipredmode[pic_block_y][pic_block_x] = (char) best_ipmode;
   currMB->intra_pred_modes[4*b8+b4] =
@@ -215,11 +205,12 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int 
     for (k = PLANE_U; k <= PLANE_V; k++)
     {
       select_plane(k);
+
+      copy_4x4block(&img->mb_pred[k][block_y], img->mpr_4x4[k][best_ipmode], block_x, 0);
       for (j=0; j<4; j++)
       {
         for (i=0; i<4; i++)
         {
-          img->mb_pred[k][block_y+j][block_x+i]  = img->mpr_4x4[k][best_ipmode][j][i];
           img->mb_ores[k][block_y+j][block_x+i]   = pImgOrg[k][img->pix_y+block_y+j][img->pix_x+block_x+i] - img->mpr_4x4[k][best_ipmode][j][i];
         }
       }
@@ -227,16 +218,14 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int 
     }
     select_plane(PLANE_Y);
   }
+
   //===== restore coefficients =====
   memcpy (ACLevel,cofAC4x4[0], 18 * sizeof(int));
   memcpy (ACRun,cofAC4x4[1], 18 * sizeof(int));
 
   //===== restore reconstruction and prediction (needed if single coeffs are removed) =====
-  for (y=0; y<BLOCK_SIZE; y++)
-  {
-    memcpy (&enc_picture->imgY[pic_pix_y + y][pic_pix_x],rec4x4[y],    BLOCK_SIZE * sizeof(imgpel));
-    memcpy (&img->mb_pred[0][block_y + y][block_x],img->mpr_4x4[0][best_ipmode][y], BLOCK_SIZE * sizeof(imgpel));
-  }
+  copy_4x4block(&enc_picture->imgY[pic_pix_y], rec4x4[PLANE_Y], pic_pix_x, 0);
+  copy_4x4block(&img->mb_pred[0][block_y], img->mpr_4x4[0][best_ipmode], block_x, 0);
 
   // SP/SI reconstuction
   if(img->type==SP_SLICE &&(!si_frame_indicator && !sp2_frame_indicator))
@@ -254,17 +243,14 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int 
       memcpy(img->cofAC[b8+4+uv*4][b4][0], cofAC4x4CbCr[uv][0], 18 * sizeof(int));
       memcpy(img->cofAC[b8+4+uv*4][b4][1], cofAC4x4CbCr[uv][1], 18 * sizeof(int));
       //===== restore reconstruction and prediction (needed if single coeffs are removed) =====
-      for (y=0; y<BLOCK_SIZE; y++)
-      {
-        memcpy(&enc_picture->imgUV[uv][pic_pix_y+y][pic_pix_x],rec4x4CbCr[uv][y], BLOCK_SIZE * sizeof(imgpel));
-        memcpy(&img->mb_pred[uv + 1][block_y+y][block_x], img->mpr_4x4[uv + 1][best_ipmode][y], BLOCK_SIZE * sizeof(imgpel));
-      } 
+      copy_4x4block(&enc_picture->imgUV[uv][pic_pix_y], rec4x4CbCr[uv], pic_pix_x, 0);
+      copy_4x4block(&img->mb_pred[uv + 1][block_y], img->mpr_4x4[uv + 1][best_ipmode], block_x, 0);
     }
   }
 
   if (img->AdaptiveRounding)
   {
-    update_adaptive_rounding(img, block_y, block_x);
+    update_adaptive_rounding_4x4 (img,img->ARCofAdj4x4, I4MB, block_y, block_x);
   }
 
 
@@ -277,7 +263,7 @@ int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int 
  *    Mode Decision for an 4x4 Intra block
  *************************************************************************************
  */
-int Mode_Decision_for_4x4IntraBlocks_JM_Low (Macroblock *currMB, int  b8,  int  b4,  double  lambda,  double*  min_cost, int cr_cbp[3], int is_cavlc)
+int Mode_Decision_for_4x4IntraBlocks_JM_Low (Slice *currSlice, Macroblock *currMB, int  b8,  int  b4,  double  lambda,  double*  min_cost, int cr_cbp[3], int is_cavlc)
 {
   int     ipmode, best_ipmode = 0, i, j, cost, dummy;
   int     nonzero = 0;
@@ -401,8 +387,8 @@ int Mode_Decision_for_4x4IntraBlocks_JM_Low (Macroblock *currMB, int  b8,  int  
       {
         for (i=0; i<4; i++)
         {
-          img->mb_pred[k][block_y+j][block_x+i] = img->mpr_4x4[k][best_ipmode][j][i];    
-          img->mb_ores[k][block_y+j][block_x+i] = pImgOrg[k][pic_opix_y+j][pic_opix_x+i] - img->mpr_4x4[k][best_ipmode][j][i]; 
+          img->mb_pred[k][block_y + j][block_x+i] = img->mpr_4x4[k][best_ipmode][j][i];    
+          img->mb_ores[k][block_y + j][block_x+i] = pImgOrg[k][pic_opix_y+j][pic_opix_x+i] - img->mpr_4x4[k][best_ipmode][j][i]; 
         }
       }
 
@@ -420,7 +406,7 @@ int Mode_Decision_for_4x4IntraBlocks_JM_Low (Macroblock *currMB, int  b8,  int  
  *    Mode Decision for an 8x8 Intra block
  *************************************************************************************
  */
-int Mode_Decision_for_8x8IntraBlocks(Macroblock *currMB, int b8,double lambda,double *cost, int non_zero[3], int is_cavlc)
+int Mode_Decision_for_IntraSubMBlocks(Slice *currSlice, Macroblock *currMB, int b8,double lambda,double *cost, int non_zero[3], int is_cavlc)
 {
   int  b4;
   double  cost4x4;
@@ -430,21 +416,14 @@ int Mode_Decision_for_8x8IntraBlocks(Macroblock *currMB, int b8,double lambda,do
 
   *cost = (int)floor(6.0 * lambda + 0.4999);
 
-  if (params->rdopt == 0)
-    Mode_Decision_for_4x4IntraBlocks = Mode_Decision_for_4x4IntraBlocks_JM_Low;
-  else
-    Mode_Decision_for_4x4IntraBlocks = Mode_Decision_for_4x4IntraBlocks_JM_High;   
-
   for (b4=0; b4<4; b4++)
   {
-    non_zero[0] |= Mode_Decision_for_4x4IntraBlocks (currMB, b8, b4, lambda, &cost4x4, CbCr_cbp, is_cavlc);
+    non_zero[0] |= Mode_Decision_for_4x4IntraBlocks (currSlice, currMB, b8, b4, lambda, &cost4x4, CbCr_cbp, is_cavlc);
     non_zero[1] |= CbCr_cbp[1];
     non_zero[2] |= CbCr_cbp[2];
     *cost += cost4x4;
   }
-#ifdef RESET_STATE
-  //reset_coding_state (currMB, cs_cm);
-#endif
+  //reset_coding_state (currSlice, currMB, cs_cm);
 
   return non_zero[0];
 }
@@ -455,7 +434,7 @@ int Mode_Decision_for_8x8IntraBlocks(Macroblock *currMB, int b8,double lambda,do
  *    4x4 Intra mode decision for an macroblock
  *************************************************************************************
  */
-int Mode_Decision_for_Intra4x4Macroblock (Macroblock *currMB, double lambda,  double* cost, int is_cavlc)
+int Mode_Decision_for_Intra4x4Macroblock (Slice *currSlice, Macroblock *currMB, double lambda,  double* cost, int is_cavlc)
 {
   int  cbp=0, b8;
   double cost8x8;
@@ -465,7 +444,7 @@ int Mode_Decision_for_Intra4x4Macroblock (Macroblock *currMB, double lambda,  do
   
   for (*cost=0, b8=0; b8<4; b8++)
   {
-    if (Mode_Decision_for_8x8IntraBlocks (currMB, b8, lambda, &cost8x8, non_zero, is_cavlc))
+    if (Mode_Decision_for_IntraSubMBlocks (currSlice, currMB, b8, lambda, &cost8x8, non_zero, is_cavlc))
     {
       cbp |= (1<<b8);
     }
@@ -497,31 +476,33 @@ int Mode_Decision_for_Intra4x4Macroblock (Macroblock *currMB, double lambda,  do
 */
 void Intra16x16_Mode_Decision (Macroblock* currMB, int* i16mode, int is_cavlc)
 {
-  /* generate intra prediction samples for all 4 16x16 modes */
-  intrapred_16x16 (currMB, PLANE_Y);
-  
-  if (img->P444_joined)
+  if (!img->P444_joined)
   {
+    /* generate intra prediction samples for all 4 16x16 modes */
+    intrapred_16x16 (currMB, PLANE_Y);
+    find_sad_16x16 (currMB, i16mode);   /* get best new intra mode */
+    currMB->cbp = pDCT_16x16 (currMB, PLANE_Y, *i16mode, is_cavlc);    
+  }
+  else
+  {
+    /* generate intra prediction samples for all 4 16x16 modes */
+    intrapred_16x16 (currMB, PLANE_Y);
     select_plane(PLANE_U);
     intrapred_16x16 (currMB, PLANE_U);
     select_plane(PLANE_V);
     intrapred_16x16 (currMB, PLANE_V);
     select_plane(PLANE_Y);
-  }
-  find_sad_16x16 = find_sad_16x16_JM;
 
-  find_sad_16x16 (currMB, i16mode);   /* get best new intra mode */
+    find_sad_16x16 (currMB, i16mode);   /* get best new intra mode */
 
-  currMB->cbp = pDCT_16x16 (currMB, PLANE_Y, *i16mode, is_cavlc);
-  if (img->P444_joined)
-  {
+    currMB->cbp = pDCT_16x16 (currMB, PLANE_Y, *i16mode, is_cavlc);
     select_plane(PLANE_U);
     cmp_cbp[1] = pDCT_16x16 (currMB, PLANE_U, *i16mode, is_cavlc);
     select_plane(PLANE_V);
     cmp_cbp[2] = pDCT_16x16 (currMB, PLANE_V, *i16mode, is_cavlc);
     select_plane(PLANE_Y);
-    currMB->cbp |= cmp_cbp[1];
-    currMB->cbp |= cmp_cbp[2];
+
+    currMB->cbp |= (cmp_cbp[1] | cmp_cbp[2]);
     cmp_cbp[1] = currMB->cbp;
     cmp_cbp[2] = currMB->cbp;
   }

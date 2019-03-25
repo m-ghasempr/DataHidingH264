@@ -42,6 +42,7 @@
 # define  OPEN_PERMISSIONS _S_IREAD | _S_IWRITE
 # define  OPENFLAGS_READ  _O_RDONLY|_O_BINARY
 # define  inline   _inline
+# define  forceinline __forceinline
 #else
 # include <unistd.h>
 #include <sys/time.h>
@@ -59,6 +60,7 @@
 # else
 #  define inline /* nothing */
 # endif
+# define  forceinline inline
 #endif
 
 #if defined(WIN32) && !defined(__GNUC__)
@@ -76,6 +78,7 @@ typedef long long int64;
 #endif
 
 void   gettime(TIME_T* time);
-time_t timediff(TIME_T* start, TIME_T* end);
+int64 timediff(TIME_T* start, TIME_T* end);
+int64 timenorm(int64 cur_time);
 
 #endif

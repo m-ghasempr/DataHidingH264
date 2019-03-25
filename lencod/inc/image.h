@@ -24,15 +24,16 @@ extern StorablePicture **enc_frame_picture;
 extern StorablePicture **enc_field_picture;
 extern StorablePicture *enc_frame_picture_JV[MAX_PLANE];  //!< enc_frame to be used during 4:4:4 independent mode encoding
 
-int  encode_one_frame (void);
+int     encode_one_frame (ImageParameters *img);
 Boolean dummy_slice_too_big(int bits_slice);
-void copy_rdopt_data (Macroblock *currMB, int field_type);       // For MB level field/frame coding tools
+void    copy_rdopt_data (Macroblock *currMB, int field_type);       // For MB level field/frame coding tools
 
-void UnifiedOneForthPix (StorablePicture *s);
+void    UnifiedOneForthPix (StorablePicture *s);
 // For 4:4:4 independent mode
-void UnifiedOneForthPix_JV (int nplane, StorablePicture *s);
-void frame_picture (Picture *frame, int rd_pass);
-
+void    UnifiedOneForthPix_JV (int nplane, StorablePicture *s);
+void    frame_picture (Picture *frame, ImageData *imgData, int rd_pass);
+int     get_idr_flag( void );
+void    write_non_vcl_nalu( void );
 
 #endif
 

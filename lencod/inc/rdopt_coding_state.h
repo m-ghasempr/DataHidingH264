@@ -45,8 +45,8 @@ typedef CSobj* CSptr;
 void  delete_coding_state  (CSptr);  //!< delete structure
 CSptr create_coding_state  (void);       //!< create structure
 
-void  store_coding_state   (Macroblock *currMB, CSptr);  //!< store parameters
-void  reset_coding_state   (Macroblock *currMB, CSptr);  //!< restore parameters
+void  store_coding_state   (Slice *currSlice, Macroblock *currMB, CSptr);  //!< store parameters
+void  reset_coding_state   (Slice *currSlice, Macroblock *currMB, CSptr);  //!< restore parameters
 
 
 #endif

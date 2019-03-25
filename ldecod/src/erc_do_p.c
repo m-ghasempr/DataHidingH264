@@ -24,6 +24,7 @@
 #include "erc_do.h"
 #include "image.h"
 #include "mc_prediction.h"
+#include "macroblock.h"
 
 extern int erc_mvperMB;
 ImageParameters *erc_img;
@@ -53,8 +54,6 @@ static void CopyImgData(imgpel **inputY, imgpel ***inputUV, imgpel **outputY, im
 static void copyPredMB (int currYBlockNum, imgpel *predMB, frame *recfr,
                         int picSizeX, int regionSize);
 
-extern const unsigned char subblk_offset_y[3][8][4];
-extern const unsigned char subblk_offset_x[3][8][4];
 static int uv_div[2][4] = {{0, 1, 1, 0}, {0, 1, 0, 0}}; //[x/y][yuv_format]
 
 /*!
@@ -549,7 +548,7 @@ static int concealByTrial(frame *recfr, imgpel *predMB,
 */
 static void buildPredRegionYUV(ImageParameters *img, int *mv, int x, int y, imgpel *predMB)
 {
-  static imgpel tmp_block[MB_BLOCK_SIZE][MB_BLOCK_SIZE];
+  static imgpel **tmp_block;
   int i=0, j=0, ii=0, jj=0,i1=0,j1=0,j4=0,i4=0;
   int jf=0;
   int uv;
@@ -566,6 +565,9 @@ static void buildPredRegionYUV(ImageParameters *img, int *mv, int x, int y, imgp
   int yuv = dec_picture->chroma_format_idc - 1;
 
   int ref_frame = imax (mv[2], 0); // !!KS: quick fix, we sometimes seem to get negative ref_pic here, so restrict to zero and above
+
+  // This should be allocated only once. 
+  get_mem2Dpel(&tmp_block, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
 
   /* Update coordinates of the current concealed macroblock */
   img->mb_x = x/MB_BLOCK_SIZE;
@@ -653,9 +655,9 @@ static void buildPredRegionYUV(ImageParameters *img, int *mv, int x, int y, imgp
               jf0=f1_y-jf1;
 
               img->mb_pred[uv + 1][jj+joff][ii+ioff]=(if0*jf0*listX[0][ref_frame]->imgUV[uv][jj0][ii0]+
-                                          if1*jf0*listX[0][ref_frame]->imgUV[uv][jj0][ii1]+
-                                          if0*jf1*listX[0][ref_frame]->imgUV[uv][jj1][ii0]+
-                                          if1*jf1*listX[0][ref_frame]->imgUV[uv][jj1][ii1]+f4)/f3;
+                if1*jf0*listX[0][ref_frame]->imgUV[uv][jj0][ii1]+
+                if0*jf1*listX[0][ref_frame]->imgUV[uv][jj1][ii0]+
+                if1*jf1*listX[0][ref_frame]->imgUV[uv][jj1][ii1]+f4)/f3;
             }
           }
         }
@@ -672,6 +674,8 @@ static void buildPredRegionYUV(ImageParameters *img, int *mv, int x, int y, imgp
 
     }
   }
+  // We should allocate this memory only once.
+  free_mem2Dpel(tmp_block); 
 }
 /*!
  ************************************************************************
@@ -847,7 +851,7 @@ static int edgeDistortion (int predBlocks[], int currYBlockNum, imgpel *predMB,
 static void buildPredblockRegionYUV(ImageParameters *img, int *mv,
                                     int x, int y, imgpel *predMB, int list)
 {
-  static imgpel tmp_block[MB_BLOCK_SIZE][MB_BLOCK_SIZE];
+  static imgpel **tmp_block;
   int i=0,j=0,ii=0,jj=0,i1=0,j1=0,j4=0,i4=0;
   int jf=0;
   int uv;
@@ -863,6 +867,8 @@ static void buildPredblockRegionYUV(ImageParameters *img, int *mv,
   int yuv = dec_picture->chroma_format_idc - 1;
 
   int ref_frame = mv[2];
+
+  get_mem2Dpel(&tmp_block, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
 
   /* Update coordinates of the current concealed macroblock */
 
@@ -952,6 +958,7 @@ static void buildPredblockRegionYUV(ImageParameters *img, int *mv,
 
     }
   }
+  free_mem2Dpel(tmp_block);
 }
 
 /*!

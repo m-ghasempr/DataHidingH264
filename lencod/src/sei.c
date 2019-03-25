@@ -7,6 +7,7 @@
  *     implementation of SEI related functions
  *  \author(s)
  *      - Dong Tian                             <tian@cs.tut.fi>
+ *      - Athanasios Leontaris                  <aleon@dolby.com>  
  *
  ************************************************************************
  */
@@ -17,6 +18,7 @@
 #include "mbuffer.h"
 #include "sei.h"
 #include "vlc.h"
+#include "header.h"
 
 Boolean seiHasTemporal_reference=FALSE;
 Boolean seiHasClock_timestamp=FALSE;
@@ -28,17 +30,15 @@ Boolean seiHasUser_data_unregistered=FALSE;
 Boolean seiHasRecoveryPoint_info=FALSE;
 Boolean seiHasRef_pic_buffer_management_repetition=FALSE;
 Boolean seiHasSpare_picture=FALSE;
-
 Boolean seiHasBuffering_period=FALSE;
 Boolean seiHasPicTiming_info=FALSE;
-
 Boolean seiHasSceneInformation=FALSE;
-
 Boolean seiHasSubseq_information=FALSE;
 Boolean seiHasSubseq_layer_characteristics=FALSE;
 Boolean seiHasSubseq_characteristics=FALSE;
 Boolean seiHasTone_mapping=FALSE;
 Boolean seiHasPostFilterHints_info=FALSE;
+Boolean seiHasDRPMRepetition_info=FALSE;
 //#define PRINT_TONE_MAPPING
 
 /*
@@ -66,10 +66,12 @@ void InitSEIMessages()
 
   // init sei messages
   seiSparePicturePayload.data = NULL;
-  InitSparePicture();
-  InitSubseqChar();
+  InitSparePicture();  
   if (params->NumFramesInELSubSeq != 0)
+  {
     InitSubseqLayerInfo();
+    InitSubseqChar();
+  }
   InitSceneInformation();
   // init panscanrect sei message
   InitPanScanRectInfo();
@@ -87,6 +89,8 @@ void InitSEIMessages()
   InitBufferingPeriod();
   // init PicTiming
   InitPicTiming();
+  // init DRPM Repetition
+  InitDRPMRepetition();
 }
 
 void CloseSEIMessages()
@@ -107,6 +111,7 @@ void CloseSEIMessages()
   ClosePostFilterHints();
   CloseBufferingPeriod();
   ClosePicTiming();
+  CloseDRPMRepetition();
 
   for (i=0; i<MAX_LAYER_NUMBER; i++)
   {
@@ -142,6 +147,8 @@ Boolean HaveAggregationSEI()
   if (seiHasBuffering_period)
     return TRUE;
   if (seiHasPicTiming_info)
+    return TRUE;
+  if (seiHasDRPMRepetition_info)
     return TRUE;
 
   return FALSE;
@@ -845,15 +852,15 @@ void UpdateSubseqInfo(int currLayer)
 
   if ( currLayer == 0 )
   {
-    if ( img->number == params->no_frames - 1 )
+    if ( img->number == params->no_frm_base - 1 )
       seiSubseqInfo[currLayer].last_picture_flag = 1;
     else
       seiSubseqInfo[currLayer].last_picture_flag = 0;
   }
   if ( currLayer == 1 )
   {
-    if ( ((IMG_NUMBER%(params->NumFramesInELSubSeq + 1) == 0) && (params->successive_Bframe != 0) && (IMG_NUMBER>0)) || // there are B frames
-      ((IMG_NUMBER%(params->NumFramesInELSubSeq + 1) == params->NumFramesInELSubSeq) && (params->successive_Bframe==0))  // there are no B frames
+    if ( ((img->gop_number % (params->NumFramesInELSubSeq + 1) == 0) && (params->NumberBFrames != 0) && (img->gop_number > 0)) || // there are B frames
+      ((img->gop_number % (params->NumFramesInELSubSeq + 1) == params->NumFramesInELSubSeq) && (params->NumberBFrames==0))  // there are no B frames
       )
       seiSubseqInfo[currLayer].last_picture_flag = 1;
     else
@@ -1596,18 +1603,19 @@ void ClearRandomAccess()
   seiRecoveryPoint.recovery_frame_cnt = 0;
   seiRecoveryPoint.broken_link_flag = 0;
   seiRecoveryPoint.exact_match_flag = 0;
+  seiRecoveryPoint.changing_slice_group_idc = 0;
 
   seiHasRecoveryPoint_info = FALSE;
 }
 
 void UpdateRandomAccess()
 {
-
   if(img->type == I_SLICE)
   {
     seiRecoveryPoint.recovery_frame_cnt = 0;
     seiRecoveryPoint.exact_match_flag = 1;
     seiRecoveryPoint.broken_link_flag = 0;
+    seiRecoveryPoint.changing_slice_group_idc = 0;
     seiHasRecoveryPoint_info = TRUE;
   }
   else
@@ -1675,6 +1683,7 @@ tone_mapping_struct seiToneMapping;
 int ParseToneMappingConfigFile(tone_mapping_struct* pSeiToneMapping)
 {
   int i;
+  int ret;
   FILE* fp;
   char buf[1024];
   unsigned int tmp;
@@ -1691,81 +1700,119 @@ int ParseToneMappingConfigFile(tone_mapping_struct* pSeiToneMapping)
   //read the tone mapping config file
   while (fscanf(fp, "%s", buf)!=EOF) 
   {
+    ret = 1;
     if (strcmp(buf, "tone_map_id")==0) 
     {
-      fscanf(fp, " = %ud\n", &(pSeiToneMapping->tone_map_id));
+      ret = fscanf(fp, " = %ud\n", &(pSeiToneMapping->tone_map_id));
     }
     else if (strcmp(buf, "tone_map_cancel_flag")==0) 
     {
-      fscanf(fp, " = %ud\n", &tmp);
+      ret = fscanf(fp, " = %ud\n", &tmp);
       pSeiToneMapping->tone_map_cancel_flag = tmp ? 1 : 0;
     }
     else if (strcmp(buf, "tone_map_repetition_period")==0) 
     {
-      fscanf(fp, " = %ud\n", &(pSeiToneMapping->tone_map_repetition_period));
+      ret = fscanf(fp, " = %ud\n", &(pSeiToneMapping->tone_map_repetition_period));
     }
     else if (strcmp(buf, "coded_data_bit_depth")==0) 
     {
-      fscanf(fp, " = %ud\n", &tmp);
+      ret = fscanf(fp, " = %ud\n", &tmp);
       pSeiToneMapping->coded_data_bit_depth = (unsigned char) tmp;
     }
     else if (strcmp(buf, "sei_bit_depth")==0) 
     {
-      fscanf(fp, " = %ud\n", &tmp);
+      ret = fscanf(fp, " = %ud\n", &tmp);
       pSeiToneMapping->sei_bit_depth =  (unsigned char) tmp;
     }
     else if (strcmp(buf, "model_id")==0) 
     {
-      fscanf(fp, " = %ud\n", &(pSeiToneMapping->model_id));
+      ret = fscanf(fp, " = %ud\n", &(pSeiToneMapping->model_id));
     }
     //else if (model_id ==0) 
     else if (strcmp(buf, "min_value")==0) 
     {
-      fscanf(fp, " = %d\n", &(pSeiToneMapping->min_value));
+      ret = fscanf(fp, " = %d\n", &(pSeiToneMapping->min_value));
     }
     else if (strcmp(buf, "max_value")==0) 
     {
-      fscanf(fp, " = %d\n", &(pSeiToneMapping->max_value));
+      ret = fscanf(fp, " = %d\n", &(pSeiToneMapping->max_value));
     }
     //(model_id == 1)
     else if (strcmp(buf, "sigmoid_midpoint")==0) 
     {
-      fscanf(fp, " = %d\n", &(pSeiToneMapping->sigmoid_midpoint));
+      ret = fscanf(fp, " = %d\n", &(pSeiToneMapping->sigmoid_midpoint));
     }
     else if (strcmp(buf, "sigmoid_width")==0) 
     {
-      fscanf(fp, " = %d\n", &(pSeiToneMapping->sigmoid_width));
+      ret = fscanf(fp, " = %d\n", &(pSeiToneMapping->sigmoid_width));
     }
     // (model_id == 2) 
     else if (strcmp(buf, "start_of_coded_interval")==0) 
     {
       int max_output_num = 1<<(pSeiToneMapping->sei_bit_depth);
-      fscanf(fp, " = ");
+      ret = fscanf(fp, " = ");
+      if (ret!=0)
+      {
+        error ("ParseToneMappingConfigFile: error parsing tone mapping config file",500);
+      }
       for (i=0; i < max_output_num; i++)
-        fscanf(fp, "%d\n", &(pSeiToneMapping->start_of_coded_interval[i]));
+      {
+        ret = fscanf(fp, "%d\n", &(pSeiToneMapping->start_of_coded_interval[i]));
+        if (ret!=1)
+        {
+          error ("ParseToneMappingConfigFile: error parsing tone mapping config file",500);
+        }
+      }
     }
     //(model_id == 3)
     else if (strcmp(buf, "num_pivots")==0) 
     {
-      fscanf(fp, " = %d\n", &(pSeiToneMapping->num_pivots));
+      ret = fscanf(fp, " = %d\n", &(pSeiToneMapping->num_pivots));
     }
 
     else if (strcmp(buf, "coded_pivot_value")==0) 
     {
-      fscanf(fp, " = ");
+      ret = fscanf(fp, " = ");
+      if (ret!=0)
+      {
+        error ("ParseToneMappingConfigFile: error parsing tone mapping config file",500);
+      }
       for (i=0; i < pSeiToneMapping->num_pivots; i++)
-        fscanf(fp, "%d\n", &(pSeiToneMapping->coded_pivot_value[i]));
+      {
+        ret = fscanf(fp, "%d\n", &(pSeiToneMapping->coded_pivot_value[i]));
+        if (ret!=1)
+        {
+          error ("ParseToneMappingConfigFile: error parsing tone mapping config file",500);
+        }
+      }
     }
     else if (strcmp(buf, "sei_pivot_value")==0) 
     {
-      fscanf(fp, " = ");
+      ret = fscanf(fp, " = ");
+      if (ret!=0)
+      {
+        error ("ParseToneMappingConfigFile: error parsing tone mapping config file",500);
+      }
       for (i=0; i < pSeiToneMapping->num_pivots; i++)
-        fscanf(fp, "%d\n", &(pSeiToneMapping->sei_pivot_value[i]));
+      {
+        ret = fscanf(fp, "%d\n", &(pSeiToneMapping->sei_pivot_value[i]));
+        if (ret!=1)
+        {
+          error ("ParseToneMappingConfigFile: error parsing tone mapping config file",500);
+        }
+      }
     }
     else
     {
       // read till the line end 
-      fgets(buf, sizeof(buf), fp);
+      if (NULL == fgets(buf, sizeof(buf), fp))
+      {
+        error ("ParseToneMappingConfigFile: error parsing tone mapping config file",500);
+      }
+    }
+    if (ret!=1)
+    {
+      error ("ParseToneMappingConfigFile: error parsing tone mapping config file",500);
     }
   }
 
@@ -2053,8 +2100,6 @@ int Write_SEI_NALU(int len)
  *  \functions on buffering period SEI message
  *  \brief
  *      Based on final Recommendation
- *  \author
- *      Athanasios Leontaris                 <aleon@dolby.com>
  **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  */
 void InitBufferingPeriod()
@@ -2159,13 +2204,10 @@ void CloseBufferingPeriod()
 }
 
 /*
- **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
- *  \functions on picture timing SEI message
- *  \brief
- *      Based on final Recommendation
- *  \author
- *      Athanasios Leontaris                 <aleon@dolby.com>
- **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ ************************************************************************
+ * \brief
+ *    Initialize Picture Timing SEI data 
+ ************************************************************************
  */
 void InitPicTiming()
 {
@@ -2180,6 +2222,12 @@ void InitPicTiming()
   ClearPicTiming();
 }
 
+/*
+ ************************************************************************
+ * \brief
+ *    Clear Picture Timing SEI data
+ ************************************************************************
+ */
 void ClearPicTiming()
 {
   memset( seiPicTiming.data->streamBuffer, 0, MAXRTPPAYLOADLEN);
@@ -2212,11 +2260,23 @@ void ClearPicTiming()
   seiHasPicTiming_info = FALSE;
 }
 
+/*
+ ************************************************************************
+ * \brief
+ *    Update Picture Timing SEI data
+ ************************************************************************
+ */
 void UpdatePicTiming()
 {
   seiHasPicTiming_info = FALSE;
 }
 
+/*
+ ************************************************************************
+ * \brief
+ *    Finalize Picture Timing SEI data
+ ************************************************************************
+ */
 void FinalizePicTiming()
 {
   Bitstream *bitstream = seiPicTiming.data;
@@ -2348,6 +2408,12 @@ void FinalizePicTiming()
   seiPicTiming.payloadSize = bitstream->byte_pos;
 }
 
+/*
+ ************************************************************************
+ * \brief
+ *    Close Picture Timing SEI data
+ ************************************************************************
+ */
 void ClosePicTiming()
 {
   if (seiPicTiming.data)
@@ -2357,4 +2423,290 @@ void ClosePicTiming()
   }
   seiPicTiming.data = NULL;
 }
+
+/*
+ ************************************************************************
+ * \brief
+ *    Initialize dec_ref_pic_marking Repetition SEI data 
+ ************************************************************************
+ */
+void InitDRPMRepetition()
+{
+  seiDRPMRepetition.data = malloc( sizeof(Bitstream) );
+  if( seiDRPMRepetition.data == NULL ) 
+    no_mem_exit("InitDRPMRepetition: seiDRPMRepetition.data");
+
+  seiDRPMRepetition.data->streamBuffer = malloc(MAXRTPPAYLOADLEN);
+  if( seiDRPMRepetition.data->streamBuffer == NULL ) 
+    no_mem_exit("InitDRPMRepetition: seiDRPMRepetition.data->streamBuffer");
+
+  ClearDRPMRepetition();
+}
+
+/*
+ ************************************************************************
+ * \brief
+ *    Clear dec_ref_pic_marking Repetition SEI data
+ ************************************************************************
+ */
+void ClearDRPMRepetition()
+{
+  memset( seiDRPMRepetition.data->streamBuffer, 0, MAXRTPPAYLOADLEN);
+
+  seiDRPMRepetition.data->bits_to_go = 8;
+  seiDRPMRepetition.data->byte_pos   = 0;
+  seiDRPMRepetition.data->byte_buf   = 0;
+  seiDRPMRepetition.payloadSize      = 0;
+
+  seiDRPMRepetition.original_bottom_field_flag = FALSE;
+  seiDRPMRepetition.original_field_pic_flag    = FALSE;
+  seiDRPMRepetition.original_frame_num         = 0;
+  seiDRPMRepetition.original_idr_flag          = FALSE;
+  if ( seiDRPMRepetition.dec_ref_pic_marking_buffer_saved != NULL )
+  {
+    free_drpm_buffer( seiDRPMRepetition.dec_ref_pic_marking_buffer_saved );
+    seiDRPMRepetition.dec_ref_pic_marking_buffer_saved = NULL;
+  }
+
+  seiHasDRPMRepetition_info = FALSE;
+}
+
+/*
+ ************************************************************************
+ * \brief
+ *    Update dec_ref_pic_marking Repetition data
+ ************************************************************************
+ */
+void UpdateDRPMRepetition()
+{
+  if ( seiDRPMRepetition.dec_ref_pic_marking_buffer_saved != NULL )
+  {
+    seiHasDRPMRepetition_info = TRUE;
+  }
+  else
+  {
+    seiHasDRPMRepetition_info = FALSE;
+  }
+}
+
+/*
+ ************************************************************************
+ * \brief
+ *    Finalize dec_ref_pic_marking Repetition SEI data
+ ************************************************************************
+ */
+void FinalizeDRPMRepetition()
+{
+  Bitstream *bitstream = seiDRPMRepetition.data;
+
+  // SEI message bits
+  u_1( "SEI: original_idr_flag", seiDRPMRepetition.original_idr_flag, bitstream);
+  ue_v( "SEI: original_frame_num", seiDRPMRepetition.original_frame_num, bitstream);
+  if ( !active_sps->frame_mbs_only_flag )
+  {
+    u_1( "SEI: original_field_pic_flag", seiDRPMRepetition.original_field_pic_flag, bitstream);
+    if ( seiDRPMRepetition.original_field_pic_flag )
+    {
+      u_1( "SEI: original_bottom_field_flag", seiDRPMRepetition.original_bottom_field_flag, bitstream);
+    }
+  }
+  // now repeat dec_ref_pic_marking_buffer info
+  dec_ref_pic_marking( bitstream, 
+    seiDRPMRepetition.dec_ref_pic_marking_buffer_saved, 
+    seiDRPMRepetition.original_idr_flag, 0, 0);
+
+  // make sure the payload is byte aligned, stuff bits are 10..0
+  if ( bitstream->bits_to_go != 8 )
+  {
+    (bitstream->byte_buf) <<= 1;
+    bitstream->byte_buf |= 1;
+    bitstream->bits_to_go--;
+    if ( bitstream->bits_to_go != 0 )
+      (bitstream->byte_buf) <<= (bitstream->bits_to_go);
+    bitstream->bits_to_go = 8;
+    bitstream->streamBuffer[bitstream->byte_pos++]=bitstream->byte_buf;
+    bitstream->byte_buf = 0;
+  }
+  seiDRPMRepetition.payloadSize = bitstream->byte_pos;
+}
+
+/*
+ ************************************************************************
+ * \brief
+ *    Close dec_ref_pic_marking Repetition SEI data
+ ************************************************************************
+ */
+void CloseDRPMRepetition()
+{
+  if (seiDRPMRepetition.data)
+  {
+    free(seiDRPMRepetition.data->streamBuffer);
+    free(seiDRPMRepetition.data);
+  }
+  seiDRPMRepetition.data = NULL;
+  if ( seiDRPMRepetition.dec_ref_pic_marking_buffer_saved != NULL )
+  {
+    free_drpm_buffer( seiDRPMRepetition.dec_ref_pic_marking_buffer_saved );
+    seiDRPMRepetition.dec_ref_pic_marking_buffer_saved = NULL;
+  }
+}
+
+/*!
+ *****************************************************************************
+ * \brief
+ *    Prepare the aggregation sei message.
+ *
+ * \date
+ *    September 10, 2002
+ *
+ * \author
+ *    Dong Tian   tian@cs.tut.fi
+ *****************************************************************************/
+void PrepareAggregationSEIMessage(void)
+{
+  Boolean has_aggregation_sei_message = FALSE;
+
+  clear_sei_message(AGGREGATION_SEI);
+
+  // prepare the sei message here
+  // write the spare picture sei payload to the aggregation sei message
+  if (seiHasSparePicture && img->type != B_SLICE)
+  {
+    FinalizeSpareMBMap();
+    assert(seiSparePicturePayload.data->byte_pos == seiSparePicturePayload.payloadSize);
+    write_sei_message(AGGREGATION_SEI, seiSparePicturePayload.data->streamBuffer, seiSparePicturePayload.payloadSize, SEI_SPARE_PIC);
+    has_aggregation_sei_message = TRUE;
+  }
+  // write the sub sequence information sei paylaod to the aggregation sei message
+  if (seiHasSubseqInfo)
+  {
+    FinalizeSubseqInfo(img->layer);
+    write_sei_message(AGGREGATION_SEI, seiSubseqInfo[img->layer].data->streamBuffer, seiSubseqInfo[img->layer].payloadSize, SEI_SUB_SEQ_INFO);
+    ClearSubseqInfoPayload(img->layer);
+    has_aggregation_sei_message = TRUE;
+  }
+  // write the sub sequence layer information sei paylaod to the aggregation sei message
+  if (seiHasSubseqLayerInfo && img->number == 0)
+  {
+    FinalizeSubseqLayerInfo();
+    write_sei_message(AGGREGATION_SEI, seiSubseqLayerInfo.data, seiSubseqLayerInfo.payloadSize, SEI_SUB_SEQ_LAYER_CHARACTERISTICS);
+    seiHasSubseqLayerInfo = FALSE;
+    has_aggregation_sei_message = TRUE;
+  }
+  // write the sub sequence characteristics payload to the aggregation sei message
+  if (seiHasSubseqChar)
+  {
+    FinalizeSubseqChar();
+    write_sei_message(AGGREGATION_SEI, seiSubseqChar.data->streamBuffer, seiSubseqChar.payloadSize, SEI_SUB_SEQ_CHARACTERISTICS);
+    ClearSubseqCharPayload();
+    has_aggregation_sei_message = TRUE;
+  }
+  // write the pan scan rectangle info sei playload to the aggregation sei message
+  if (seiHasPanScanRectInfo)
+  {
+    FinalizePanScanRectInfo();
+    write_sei_message(AGGREGATION_SEI, seiPanScanRectInfo.data->streamBuffer, seiPanScanRectInfo.payloadSize, SEI_PAN_SCAN_RECT);
+    ClearPanScanRectInfoPayload();
+    has_aggregation_sei_message = TRUE;
+  }
+  // write the arbitrary (unregistered) info sei playload to the aggregation sei message
+  if (seiHasUser_data_unregistered_info)
+  {
+    FinalizeUser_data_unregistered();
+    write_sei_message(AGGREGATION_SEI, seiUser_data_unregistered.data->streamBuffer, seiUser_data_unregistered.payloadSize, SEI_USER_DATA_UNREGISTERED);
+    ClearUser_data_unregistered();
+    has_aggregation_sei_message = TRUE;
+  }
+  // write the arbitrary (unregistered) info sei playload to the aggregation sei message
+  if (seiHasUser_data_registered_itu_t_t35_info)
+  {
+    FinalizeUser_data_registered_itu_t_t35();
+    write_sei_message(AGGREGATION_SEI, seiUser_data_registered_itu_t_t35.data->streamBuffer, seiUser_data_registered_itu_t_t35.payloadSize, SEI_USER_DATA_REGISTERED_ITU_T_T35);
+    ClearUser_data_registered_itu_t_t35();
+    has_aggregation_sei_message = TRUE;
+  }  
+  // more aggregation sei payload is written here...
+
+  // write the scene information SEI payload
+  if (seiHasSceneInformation)
+  {
+    FinalizeSceneInformation();
+    write_sei_message(AGGREGATION_SEI, seiSceneInformation.data->streamBuffer, seiSceneInformation.payloadSize, SEI_SCENE_INFO);
+    has_aggregation_sei_message = TRUE;
+  }
+
+  if (seiHasTone_mapping)
+  {
+    FinalizeToneMapping();
+    write_sei_message(AGGREGATION_SEI, seiToneMapping.data->streamBuffer, seiToneMapping.payloadSize, SEI_TONE_MAPPING);
+    ClearToneMapping();
+    has_aggregation_sei_message = TRUE;
+  }
+
+  if (seiHasPostFilterHints_info)
+  {
+    FinalizePostFilterHints();
+    write_sei_message(AGGREGATION_SEI, seiPostFilterHints.data->streamBuffer, seiPostFilterHints.payloadSize, SEI_POST_FILTER_HINTS);
+    has_aggregation_sei_message = TRUE;
+  }
+
+  if (seiHasBuffering_period)
+  {
+    FinalizeBufferingPeriod();
+    write_sei_message(AGGREGATION_SEI, seiBufferingPeriod.data->streamBuffer, seiBufferingPeriod.payloadSize, SEI_BUFFERING_PERIOD);
+    has_aggregation_sei_message = TRUE;
+  }
+
+  if (seiHasPicTiming_info)
+  {
+    FinalizePicTiming();
+    write_sei_message(AGGREGATION_SEI, seiPicTiming.data->streamBuffer, seiPicTiming.payloadSize, SEI_PIC_TIMING);
+    has_aggregation_sei_message = TRUE;
+  }
+
+  if (seiHasRecoveryPoint_info)
+  {
+    FinalizeRandomAccess();
+    write_sei_message(AGGREGATION_SEI, seiRecoveryPoint.data->streamBuffer, seiRecoveryPoint.payloadSize, SEI_RECOVERY_POINT);
+    ClearRandomAccess();
+    has_aggregation_sei_message = TRUE;
+  }
+
+  if (seiHasDRPMRepetition_info)
+  {
+    FinalizeDRPMRepetition();
+    write_sei_message(AGGREGATION_SEI, seiDRPMRepetition.data->streamBuffer, seiDRPMRepetition.payloadSize, SEI_DEC_REF_PIC_MARKING_REPETITION);
+    has_aggregation_sei_message = TRUE;
+    ClearDRPMRepetition(); // to reset the drpm buffer into NULL
+  }
+
+  // after all the sei payload is written
+  if (has_aggregation_sei_message)
+  {
+    finalize_sei_message(AGGREGATION_SEI);
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Free dec_ref_pic_marking_bufffer structure
+ ************************************************************************
+ */
+void free_drpm_buffer( DecRefPicMarking_t *pDRPM )
+{
+  DecRefPicMarking_t *pTmp = pDRPM, *pPrev;
+
+  if (pTmp == NULL)
+    return;
+
+  while( pTmp->Next != NULL )
+  {
+    pPrev = pTmp;
+    pTmp = pTmp->Next;
+    free( pPrev );
+  }
+  free( pTmp );
+}
+
 

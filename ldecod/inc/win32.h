@@ -15,14 +15,17 @@
 #define _WIN32_H_
 
 # include <fcntl.h>
+# include <stdlib.h>
 # include <stdio.h>
+# include <string.h>
+# include <assert.h>
 
 #if defined(WIN32)
 # include <io.h>
 # include <sys/types.h>
 # include <sys/stat.h>
 # include <windows.h>
-# define strcasecmp strcmpi
+# define strcasecmp _strcmpi
 
 # define  snprintf _snprintf
 # define  open     _open
@@ -32,6 +35,7 @@
 # define  lseek    _lseeki64
 # define  fsync    _commit
 # define  tell     _telli64
+# define  TIMEB    _timeb
 # define  TIME_T    LARGE_INTEGER
 # define  ftime    _ftime
 # define  OPENFLAGS_WRITE _O_WRONLY|_O_CREAT|_O_BINARY|_O_TRUNC
@@ -43,8 +47,9 @@
 #include <sys/time.h>
 #include <time.h>
 
-# define  tell(fd) lseek(fd, 0, SEEK_CUR)
+# define  TIMEB    timeb
 # define  TIME_T   struct timeval
+# define  tell(fd) lseek(fd, 0, SEEK_CUR)
 # define  OPENFLAGS_WRITE O_WRONLY|O_CREAT|O_TRUNC
 # define  OPENFLAGS_READ  O_RDONLY
 # define  OPEN_PERMISSIONS S_IRUSR | S_IWUSR
@@ -71,6 +76,7 @@ typedef long long int64;
 #endif
 
 void   gettime(TIME_T* time);
-time_t timediff(TIME_T* start, TIME_T* end);
+int64 timediff(TIME_T* start, TIME_T* end);
+int64 timenorm(int64 cur_time);
 
 #endif

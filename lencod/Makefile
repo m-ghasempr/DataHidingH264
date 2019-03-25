@@ -11,8 +11,12 @@ NAME=   lencod
 
 ### include debug information: 1=yes, 0=no
 DBG?= 0
-### include MMX optimization : 1=yes, 0=no
+### Generate 32 bit executable : 1=yes, 0=no
 M32?= 0
+### include O level optimization : 0-3
+OPT?= 3
+### Static Compilation
+STC?= 1
 
 DEPEND= dependencies
 
@@ -30,17 +34,29 @@ else
 CC=     $(shell which gcc) 
 endif
 
-LIBS=   -lm
+ifeq ($(STC),1)
+ifeq ($(DBG),1)  ### Do not use static compilation for Debug mode
+STC=0
+STATIC=
+else
+STATIC= -static
+endif
+else
+STATIC= 
+endif
+
+LIBS=   -lm $(STATIC)
 AFLAGS=  
-CFLAGS=  -std=gnu99 -pedantic -ffloat-store -fno-strict-aliasing -fsigned-char
+CFLAGS=  -std=gnu99 -pedantic -ffloat-store -fno-strict-aliasing -fsigned-char $(STATIC)
 FLAGS=  $(CFLAGS) -Wall -I$(INCDIR) -I$(ADDINCDIR) -D __USE_LARGEFILE64 -D _FILE_OFFSET_BITS=64
 
+OPT_FLAG = -O$(OPT)
 ifeq ($(DBG),1)
 SUFFIX= .dbg
 FLAGS+= -g
 else
 SUFFIX=
-FLAGS+= -O3
+FLAGS+= $(OPT_FLAG)
 endif
 
 OBJSUF= .o$(SUFFIX)
@@ -60,6 +76,13 @@ ifeq ($(M32),1)
 endif
 ifeq ($(DBG),1)
 	@echo 'Compiling with Debug support...'
+	@echo 'Note static compilation not supported in this mode.'
+endif
+ifeq ($(STC),1)
+	@echo 'Compiling with -static support...'
+endif
+ifeq ($(MMX),1)
+	@echo 'Compiling with MMX support...'
 endif
 
 clean:

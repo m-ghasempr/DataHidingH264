@@ -138,15 +138,15 @@ void YUVtoRGB(ImageStructure *YUV, ImageStructure *RGB)
   }
   // Setting RGB FrameFormat
   RGB->format = format;  // copy format information from YUV to RGB
-  RGB->format.yuv_format = 3;
-  RGB->format.rgb_format = 1;
-  RGB->format.height_cr = format.height;
-  RGB->format.width_cr = format.width;
+  RGB->format.yuv_format  = YUV444;
+  RGB->format.color_model = CM_RGB;
+  RGB->format.height_cr   = format.height;
+  RGB->format.width_cr    = format.width;
   for (i = 1; i < 3; i++)
   {
-    RGB->format.size_cmp[i] = format.size_cmp[0];
-    RGB->format.bit_depth[i] = format.bit_depth[0];
-    RGB->format.max_value[i] = max_value;
+    RGB->format.size_cmp[i]     = format.size_cmp[0];
+    RGB->format.bit_depth[i]    = format.bit_depth[0];
+    RGB->format.max_value[i]    = max_value;
     RGB->format.max_value_sq[i] = format.max_value_sq[0];
   }
 }

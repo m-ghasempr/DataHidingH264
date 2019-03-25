@@ -29,7 +29,7 @@
  * \par
  * \<ParameterName\> are the predefined names for Parameters and are case sensitive.
  *   See configfile.h for the definition of those names and their mapping to
- *   configinput->values.
+ *   cfgparams->values.
  * \par
  * \<ParameterValue\> are either integers [0..9]* or strings.
  *   Integers must fit into the wordlengths, signed values are generally assumed.
@@ -64,6 +64,9 @@
 #include "configfile.h"
 #include "fmo.h"
 #include "conformance.h"
+#include "mc_prediction.h"
+#include "mv-search.h"
+#include "img_io.h"
 
 char *GetConfigFileContent (char *Filename);
 static void ParseContent (char *buf, int bufsize);
@@ -121,13 +124,13 @@ void JMHelpExit (void)
  *
  ************************************************************************
  */
-int64 getVideoFileSize(void)
+int64 getVideoFileSize(int video_file)
 {
    int64 fsize;   
 
-   lseek(p_in, 0, SEEK_END); 
-   fsize = tell((int) p_in); 
-   lseek(p_in, 0, SEEK_SET); 
+   lseek(video_file, 0, SEEK_END); 
+   fsize = tell((int) video_file); 
+   lseek(video_file, 0, SEEK_SET); 
 
    return fsize;
 }
@@ -139,14 +142,14 @@ int64 getVideoFileSize(void)
  *
  ************************************************************************
  */
-static void getNumberOfFrames (void)
+static void getNumberOfFrames (VideoDataFile *input_file)
 {
-  int64 fsize = getVideoFileSize();
-  int64 isize = (int64) params->output.size;
-  int maxBitDepth = imax(params->output.bit_depth[0], params->output.bit_depth[1]);
+  int64 fsize = getVideoFileSize(input_file->f_num);
+  int64 isize = (int64) params->source.size;
+  int maxBitDepth = imax(params->source.bit_depth[0], params->source.bit_depth[1]);
 
   isize <<= (maxBitDepth > 8)? 1: 0;
-  params->no_frames = (int) (((fsize - params->infile_header)/ isize) - params->start_frame - 1) / (1 + params->jumpd) + 1;
+  params->no_frames   = (int) (((fsize - params->infile_header)/ isize) - params->start_frame);
 }
 
 /*!
@@ -175,65 +178,68 @@ static void updateMaxValue(FrameFormat *format)
  */
 static void updateOutFormat(InputParameters *params)
 {
-
-  params->output.yuv_format = params->yuv_format;
-  params->source.yuv_format = params->yuv_format;
+  FrameFormat *output = &params->output;
+  FrameFormat *source = &params->source;
+  output->yuv_format  = (ColorFormat) params->yuv_format;
+  source->yuv_format  = (ColorFormat) params->yuv_format;
 
   if (params->src_resize == 0)
   {
-    params->output.width = params->source.width;
-    params->output.height = params->source.height;
+    output->width  = source->width;
+    output->height = source->height;
   }
 
   if (params->yuv_format == YUV400) // reset bitdepth of chroma for 400 content
   {
-    params->source.bit_depth[1] = 8;
-    params->output.bit_depth[1] = 8;
-    params->source.width_cr  = 0;
-    params->source.height_cr = 0;
-    params->output.width_cr  = 0;
-    params->output.height_cr = 0;
+    source->bit_depth[1] = 8;
+    output->bit_depth[1] = 8;
+    source->width_cr  = 0;
+    source->height_cr = 0;
+    output->width_cr  = 0;
+    output->height_cr = 0;
   }
   else
   {
-    params->source.width_cr  = (params->source.width  * mb_width_cr [params->yuv_format]) >> 4;
-    params->source.height_cr = (params->source.height * mb_height_cr[params->yuv_format]) >> 4;
-    params->output.width_cr  = (params->output.width  * mb_width_cr [params->yuv_format]) >> 4;
-    params->output.height_cr = (params->output.height * mb_height_cr[params->yuv_format]) >> 4;
+    source->width_cr  = (source->width  * mb_width_cr [output->yuv_format]) >> 4;
+    source->height_cr = (source->height * mb_height_cr[output->yuv_format]) >> 4;
+    output->width_cr  = (output->width  * mb_width_cr [output->yuv_format]) >> 4;
+    output->height_cr = (output->height * mb_height_cr[output->yuv_format]) >> 4;
   }
 
   // source size
-  params->source.size_cmp[0] = params->source.width    * params->source.height;
-  params->source.size_cmp[1] = params->source.width_cr * params->source.height_cr;
-  params->source.size_cmp[2] = params->source.size_cmp[1];
-  params->source.size        = params->source.size_cmp[0] + params->source.size_cmp[1] + params->source.size_cmp[2];
-  params->source.mb_width    = params->source.width  / MB_BLOCK_SIZE;
-  params->source.mb_height   = params->source.height / MB_BLOCK_SIZE;
+  source->size_cmp[0] = source->width * source->height;
+  source->size_cmp[1] = source->width_cr * source->height_cr;
+  source->size_cmp[2] = source->size_cmp[1];
+  source->size        = source->size_cmp[0] + source->size_cmp[1] + source->size_cmp[2];
+  source->mb_width    = source->width  / MB_BLOCK_SIZE;
+  source->mb_height   = source->height / MB_BLOCK_SIZE;
 
 
   // output size (excluding padding)
-  params->output.size_cmp[0] = params->output.width * params->source.height;
-  params->output.size_cmp[1] = params->output.width_cr * params->source.height_cr;
-  params->output.size_cmp[2] = params->output.size_cmp[1];
-  params->output.size        = params->output.size_cmp[0] + params->output.size_cmp[1] + params->output.size_cmp[2];
-  params->output.mb_width    = params->output.width  / MB_BLOCK_SIZE;
-  params->output.mb_height   = params->output.height / MB_BLOCK_SIZE;
+  output->size_cmp[0] = output->width * output->height;
+  output->size_cmp[1] = output->width_cr * output->height_cr;
+  output->size_cmp[2] = output->size_cmp[1];
+  output->size        = output->size_cmp[0] + output->size_cmp[1] + output->size_cmp[2];
+  output->mb_width    = output->width  / MB_BLOCK_SIZE;
+  output->mb_height   = output->height / MB_BLOCK_SIZE;
 
 
   // both chroma components have the same bitdepth
-  params->source.bit_depth[2] = params->source.bit_depth[1];
-  params->output.bit_depth[2] = params->output.bit_depth[1];
+  source->bit_depth[2] = source->bit_depth[1];
+  output->bit_depth[2] = output->bit_depth[1];
   
   // if no bitdepth rescale ensure bitdepth is same
   if (params->src_BitDepthRescale == 0) 
   {    
-    params->output.bit_depth[0] = params->source.bit_depth[0];
-    params->output.bit_depth[1] = params->source.bit_depth[1];
-    params->output.bit_depth[2] = params->source.bit_depth[2];
+    output->bit_depth[0] = source->bit_depth[0];
+    output->bit_depth[1] = source->bit_depth[1];
+    output->bit_depth[2] = source->bit_depth[2];
   }
   
+  output->frame_rate = source->frame_rate / (params->frame_skip + 1);
+
   updateMaxValue(&params->source);
-  updateMaxValue(&params->output);
+  updateMaxValue(output);
 }
 
 
@@ -253,7 +259,7 @@ void Configure (int ac, char *av[])
   int CLcount, ContentLen, NumberParams;
   char *filename=DEFAULTCONFIGFILENAME;
 
-  memset (&configinput, 0, sizeof (InputParameters));
+  memset (&cfgparams, 0, sizeof (InputParameters));
   //Set default parameters.
   printf ("Setting Default Parameters...\n");
   InitEncoderParams();
@@ -298,7 +304,7 @@ void Configure (int ac, char *av[])
       JMHelpExit();
     }
 
-    if (0 == strncmp (av[CLcount], "-f", 2))  // A file parameter?
+    if (0 == strncmp (av[CLcount], "-f", 2) || 0 == strncmp (av[CLcount], "-F", 2))  // A file parameter?
     {
       content = GetConfigFileContent (av[CLcount+1]);
       if (NULL==content)
@@ -311,7 +317,7 @@ void Configure (int ac, char *av[])
     } 
     else
     {
-      if (0 == strncmp (av[CLcount], "-p", 2))  // A config change?
+      if (0 == strncmp (av[CLcount], "-p", 2) || 0 == strncmp (av[CLcount], "-P", 2))  // A config change?
       {
         // Collect all data until next parameter (starting with -<x> (x is any character)),
         // put it into content, and parse content.
@@ -341,14 +347,15 @@ void Configure (int ac, char *av[])
             if (*source == '=')  // The Parser expects whitespace before and after '='
             {
               *destin++=' '; *destin++='='; *destin++=' ';  // Hence make sure we add it
-            } else
+            } 
+            else
               *destin++=*source;
             source++;
           }
           *destin = '\0';
           CLcount++;
         }
-        printf ("Parsing command line string '%s'", content);
+        printf ("Parsing command line string '%s'\n", content);
         ParseContent (content, strlen(content));
         free (content);
         printf ("\n");
@@ -362,6 +369,9 @@ void Configure (int ac, char *av[])
   }
   printf ("\n");
   PatchInp();
+
+  memcpy (&cfgparams, params, sizeof (InputParameters));
+
   if (params->DisplayEncParams)
     DisplayEncoderParams();
 }
@@ -438,7 +448,7 @@ char *GetConfigFileContent (char *Filename)
 void ParseContent (char *buf, int bufsize)
 {
 
-  char *items[MAX_ITEMS_TO_PARSE];
+  char *items[MAX_ITEMS_TO_PARSE] = {NULL};
   int MapIdx;
   int item = 0;
   int InString = 0, InItem = 0;
@@ -534,7 +544,10 @@ void ParseContent (char *buf, int bufsize)
         printf (".");
         break;
       case 1:
-        strncpy ((char *) Map[MapIdx].Place, items [i+2], FILE_NAME_SIZE);
+        if (items[i + 2] == NULL)
+          memset((char *) Map[MapIdx].Place, 0, Map[MapIdx].char_size);
+        else
+          strncpy ((char *) Map[MapIdx].Place, items [i+2], Map[MapIdx].char_size);
         printf (".");
         break;
       case 2:           // Numerical double
@@ -550,7 +563,7 @@ void ParseContent (char *buf, int bufsize)
         error ("Unknown value type in the map definition of configfile.h",-1);
     }
   }
-  memcpy (params, &configinput, sizeof (InputParameters));
+  memcpy (params, &cfgparams, sizeof (InputParameters));
 }
 
 /*!
@@ -660,6 +673,7 @@ static int TestEncoderParams(int bitdepth_qp_scale[3])
         int cur_qp = * (int *) (Map[i].Place);
         int min_qp = (int) (Map[i].min_limit - bitdepth_qp_scale[0]);
         int max_qp = (int) Map[i].max_limit;
+        
         if (( cur_qp < min_qp ) || ( cur_qp > max_qp ))
         {
           snprintf(errortext, ET_SIZE, "Error in input parameter %s. Check configuration file. Value should be in [%d, %d] range.", Map[i].TokenName, min_qp, max_qp );
@@ -768,14 +782,15 @@ void read_slice_group_info()
     // each line contains one 'run_length_minus1' value
     for(i=0;i<=params->num_slice_groups_minus1;i++)
     {
-      ret = fscanf(sgfile,"%d",(params->run_length_minus1+i));
-      fscanf(sgfile,"%*[^\n]");
+      ret  = fscanf(sgfile,"%d",(params->run_length_minus1+i));
       if ( 1!=ret )
       {
         fclose(sgfile);
         snprintf(errortext, ET_SIZE, "Error while reading slice group config file (line %d)", i+1);
         error (errortext, 500);
       }
+      // scan remaining line
+      ret = fscanf(sgfile,"%*[^\n]");
     }
     break;
 
@@ -797,21 +812,23 @@ void read_slice_group_info()
     for(i=0;i<params->num_slice_groups_minus1;i++)
     {
       ret = fscanf(sgfile,"%d",(params->top_left+i));
-      fscanf(sgfile,"%*[^\n]");
       if ( 1!=ret )
       {
         fclose(sgfile);
         snprintf(errortext, ET_SIZE, "Error while reading slice group config file (line %d)", 2*i +1);
         error (errortext, 500);
       }
+      // scan remaining line
+      ret = fscanf(sgfile,"%*[^\n]");
       ret = fscanf(sgfile,"%d",(params->bottom_right+i));
-      fscanf(sgfile,"%*[^\n]");
       if ( 1!=ret )
       {
         fclose(sgfile);
         snprintf(errortext, ET_SIZE, "Error while reading slice group config file (line %d)", 2*i + 2);
         error (errortext, 500);
       }
+      // scan remaining line
+      ret = fscanf(sgfile,"%*[^\n]");
     }
     break;
 
@@ -850,7 +867,8 @@ void read_slice_group_info()
           snprintf(errortext, ET_SIZE, "Error while reading slice group config file: slice_group_id not allowed (line %d)", i + 1);
           error (errortext, 500);
         }
-        fscanf(sgfile,"%*[^\n]");
+        // scan remaining line
+        ret = fscanf(sgfile,"%*[^\n]");
       }
     }
     break;
@@ -863,6 +881,52 @@ void read_slice_group_info()
 
   // close file again
   fclose(sgfile);
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Compute frame numbering related parameters
+ * \notes
+ *    The set variables seem to now be primarily useful only for 
+ *    RC purposes. Can we ommit them completely? The use of 
+ *    lastframe can also be modified as to ommit this parameter.
+ *    To be done at a future date.
+ *    
+ ************************************************************************
+ */
+static void compute_frameno_params(InputParameters *params)
+{
+  params->last_frame = 0;
+  if (params->idr_period && params->EnableIDRGOP)
+  {
+    if (params->idr_period == 1)
+    {
+      params->no_frm_base = params->no_frames;
+    }
+    else
+    {
+      int gop_size        = (params->idr_period - 1) * (params->NumberBFrames + 1) + 1;
+      int idr_gops        = params->no_frames /gop_size;
+      int rem_frames      = params->no_frames - idr_gops * gop_size;
+      int last_b_groups   = ((rem_frames > 0) + (rem_frames + params->NumberBFrames - 1)/ (params->NumberBFrames + 1));
+      int last_frame      = (rem_frames) - last_b_groups * (params->NumberBFrames + 1);
+      params->no_frm_base = idr_gops * params->idr_period + last_b_groups;
+
+      if (last_frame)
+        params->last_frame = (params->no_frames - 1) * (params->frame_skip + 1);
+    } 
+  }
+  else
+  {
+    params->no_frm_base = (int) (params->no_frames + params->NumberBFrames) / (1 + params->NumberBFrames);
+
+    if ((params->no_frm_base - 1)* (1 + params->NumberBFrames) + 1 < params->no_frames)
+      params->last_frame = (params->no_frames - 1) * (params->frame_skip + 1);
+
+    if (params->last_frame > 0)
+      params->no_frm_base = 1 + (params->last_frame + params->NumberBFrames) / (params->NumberBFrames + 1);
+  }
 }
 
 /*!
@@ -892,8 +956,25 @@ static void PatchInp (void)
 
   TestEncoderParams(bitdepth_qp_scale);
 
-  if (params->FrameRate == 0.0)
-    params->FrameRate = INIT_FRAME_RATE;
+  if (params->source.frame_rate == 0.0)
+    params->source.frame_rate = (double) INIT_FRAME_RATE;
+
+  ParseVideoType(&params->input_file1);
+  ParseFrameNoFormatFromString (&params->input_file1);
+
+  // Read resolution from file name
+  if (params->source.width == 0 || params->source.height == 0)
+  {
+    if (ParseSizeFromString (&params->input_file1, &(params->source.width), &(params->source.height), &(params->source.frame_rate)) == 0)
+    {
+      snprintf(errortext, ET_SIZE, "File name does not contain resolution information.");    
+      error (errortext, 500);
+    }
+  }
+
+  // Currently to simplify things, lets copy everything (overwrites yuv_format)
+  params->input_file1.format = params->source;
+
 
   // Set block sizes
 
@@ -948,14 +1029,43 @@ static void PatchInp (void)
     error (errortext, 500);
   }
 
-  storedBplus1 = (params->BRefPictures ) ? params->successive_Bframe + 1: 1;
+  // Let us set up params->jumpd from frame_skip and NumberBFrames
+  params->jumpd = (params->NumberBFrames + 1) * (params->frame_skip + 1) - 1;
+
+
+  updateOutFormat(params);
+
+  if (params->no_frames == -1)
+  {
+    OpenFiles(&params->input_file1);
+    getNumberOfFrames(&params->input_file1);
+    CloseFiles(&params->input_file1);
+  }
+
+  // Update intra period internally given the number of intermediate frames.
+  // This allows Intra period parameters to have similar scemantics as FramesToBeEncoded.  
+  if (params->NumberBFrames)
+  {
+    params->intra_period = (params->intra_period) / (params->NumberBFrames + 1);
+    if (params->EnableIDRGOP == 1)
+      params->idr_period = (params->idr_period + params->NumberBFrames) / (params->NumberBFrames + 1);
+    else
+      params->idr_period = (params->idr_period) / (params->NumberBFrames + 1);
+  }
+
+  // These seem to be now only (or primarily) useful for RC purposes. 
+  // It would be nice to modify all RC implementations to use only params->no_frames and ignore this if possible
+  compute_frameno_params(params);
+
+  storedBplus1 = (params->BRefPictures ) ? params->NumberBFrames + 1: 1;
   
   if (params->Log2MaxFNumMinus4 == -1)
   {    
-    log2_max_frame_num_minus4 = iClip3(0,12, (int) (CeilLog2(params->no_frames * storedBplus1) - 4));    
+    log2_max_frame_num_minus4 = iClip3(0,12, (int) (CeilLog2(params->no_frm_base * storedBplus1) - 4));    
   }
   else  
     log2_max_frame_num_minus4 = params->Log2MaxFNumMinus4;
+
   max_frame_num = 1 << (log2_max_frame_num_minus4 + 4);
 
   if (log2_max_frame_num_minus4 == 0 && params->num_ref_frames == 16)
@@ -966,23 +1076,23 @@ static void PatchInp (void)
 
   // set proper log2_max_pic_order_cnt_lsb_minus4.
   if (params->Log2MaxPOCLsbMinus4 == - 1)
-    log2_max_pic_order_cnt_lsb_minus4 = iClip3(0,12, (int) (CeilLog2( 2*params->no_frames * (params->jumpd + 1)) - 4));
+    log2_max_pic_order_cnt_lsb_minus4 = iClip3(0,12, (int) (CeilLog2( 2 * params->no_frm_base * (params->jumpd + 1)) - 4));
   else
     log2_max_pic_order_cnt_lsb_minus4 = params->Log2MaxPOCLsbMinus4;
+
   max_pic_order_cnt_lsb = 1 << (log2_max_pic_order_cnt_lsb_minus4 + 4);
 
   if (((1<<(log2_max_pic_order_cnt_lsb_minus4 + 3)) < params->jumpd * 4) && params->Log2MaxPOCLsbMinus4 != -1)
     error("log2_max_pic_order_cnt_lsb_minus4 might not be sufficient for encoding. Increase value.",400);
 
-  // B picture consistency check
-  if(params->successive_Bframe > params->jumpd)
-  {
-    snprintf(errortext, ET_SIZE, "Number of B-frames %d can not exceed the number of frames skipped", params->successive_Bframe);
-    error (errortext, 400);
+  if (params->no_frames < 1)
+  {      
+    snprintf(errortext, ET_SIZE, "Not enough frames to encode (%d)", params->no_frames);
+    error (errortext, 500);
   }
 
   // Direct Mode consistency check
-  if(params->successive_Bframe && params->direct_spatial_mv_pred_flag != DIR_SPATIAL && params->direct_spatial_mv_pred_flag != DIR_TEMPORAL)
+  if(params->NumberBFrames && params->direct_spatial_mv_pred_flag != DIR_SPATIAL && params->direct_spatial_mv_pred_flag != DIR_TEMPORAL)
   {
     snprintf(errortext, ET_SIZE, "Unsupported direct mode=%d, use TEMPORAL=0 or SPATIAL=1", params->direct_spatial_mv_pred_flag);
     error (errortext, 400);
@@ -994,27 +1104,6 @@ static void PatchInp (void)
       printf("\nWarning: DirectInferenceFlag set to 1 due to interlace coding.");
     params->directInferenceFlag = 1;
   }
-
-  // Open Files
-  if ((p_in=open(params->infile, OPENFLAGS_READ))==-1)
-  {
-    snprintf(errortext, ET_SIZE, "Input file %s does not exist",params->infile);
-    error (errortext, 500);
-  }
-
-  updateOutFormat(params);
-
-  if (params->no_frames == -1)
-  {
-    getNumberOfFrames();
-  }
-
-  if (params->no_frames < 1)
-  {      
-    snprintf(errortext, ET_SIZE, "Not enough frames to encode (%d)", params->no_frames);
-    error (errortext, 500);
-  }
-
 
   if (strlen (params->ReconFile) > 0 && (p_dec=open(params->ReconFile, OPENFLAGS_WRITE, OPEN_PERMISSIONS))==-1)
   {
@@ -1213,7 +1302,7 @@ static void PatchInp (void)
     }
 
     if ( params->RCUpdateMode == RC_MODE_1 && 
-      !( (params->intra_period == 1 || params->idr_period == 1 || params->BRefPictures == 2 ) && !params->successive_Bframe ) )
+      !( (params->intra_period == 1 || params->idr_period == 1 || params->BRefPictures == 2 ) && !params->NumberBFrames ) )
     {
       snprintf(errortext, ET_SIZE, "Use RCUpdateMode = 1 only for all intra or all B-slice coding.");
       error (errortext, 500);
@@ -1238,12 +1327,12 @@ static void PatchInp (void)
     }
   }
 
-  if ((params->successive_Bframe)&&(params->BRefPictures)&&(params->idr_period)&&(params->pic_order_cnt_type!=0))
+  if ((params->NumberBFrames)&&(params->BRefPictures)&&(params->idr_period)&&(params->pic_order_cnt_type!=0))
   {
     error("Stored B pictures combined with IDR pictures only supported in Picture Order Count type 0\n",-1000);
   }
 
-  if( !params->direct_spatial_mv_pred_flag && params->num_ref_frames<2 && params->successive_Bframe >0)
+  if( !params->direct_spatial_mv_pred_flag && params->num_ref_frames<2 && params->NumberBFrames >0)
     error("temporal direct needs at least 2 ref frames\n",-1000);
 
   if (params->rdopt == 0)
@@ -1295,10 +1384,22 @@ static void PatchInp (void)
     error (errortext, 500);
   }
 
-  if (params->successive_Bframe && ((params->BiPredMotionEstimation) && (params->search_range < params->BiPredMESearchRange)))
+  if (params->NumberBFrames && ((params->BiPredMotionEstimation) && (params->search_range < params->BiPredMESearchRange)))
   {
     snprintf(errortext, ET_SIZE, "\nBiPredMESearchRange must be smaller or equal SearchRange.");
     error (errortext, 500);
+  }
+
+  if (params->BiPredMotionEstimation)
+  {
+    params->BiPredMotionEstimation = 0;
+    for (i = 0 ; i < 4; i++)
+      params->BiPredMotionEstimation |= params->BiPredSearch[i];
+  }
+  else
+  {
+    for (i = 0 ; i < 4; i++)
+      params->BiPredSearch[i] = 0;
   }
 
   // check consistency
@@ -1310,13 +1411,13 @@ static void PatchInp (void)
 
   if ( params->ChromaMEEnable && params->yuv_format ==  YUV400) 
   {
-    fprintf(stderr, "Warning: ChromaMEEnable cannot be used with YUV400 color format, disabling ChromaMEEnable.\n");
+    fprintf(stderr, "Warning: ChromaMEEnable cannot be used with monochrome color format, disabling ChromaMEEnable.\n");
     params->ChromaMEEnable = 0;
   }
 
   if ( (params->ChromaMCBuffer == 0) && (( params->yuv_format ==  YUV444) && (!params->separate_colour_plane_flag)) )
   {
-    fprintf(stderr, "Warning: Enabling ChromaMCBuffer for YUV444 combined color coding.\n");
+    fprintf(stderr, "Warning: Enabling ChromaMCBuffer for 4:4:4 combined color coding.\n");
     params->ChromaMCBuffer = 1;
   }
 
@@ -1341,7 +1442,7 @@ static void PatchInp (void)
       snprintf(errortext, ET_SIZE, "Redundant pictures cannot be used with RDPictureDecision.");
       error (errortext, 500);
     }
-    if (params->successive_Bframe)
+    if (params->NumberBFrames)
     {
       snprintf(errortext, ET_SIZE, "Redundant pictures cannot be used with B frames.");
       error (errortext, 500);
@@ -1358,13 +1459,13 @@ static void PatchInp (void)
     }
   }
 
-  if (params->num_ref_frames == 1 && params->successive_Bframe)
+  if (params->num_ref_frames == 1 && params->NumberBFrames)
   {
     fprintf( stderr, "\nWarning: B slices used but only one reference allocated within reference buffer.\n");
     fprintf( stderr, "         Performance may be considerably compromised! \n");
     fprintf( stderr, "         2 or more references recommended for use with B slices.\n");
   }
-  if ((params->HierarchicalCoding || params->BRefPictures) && params->successive_Bframe)
+  if ((params->HierarchicalCoding || params->BRefPictures) && params->NumberBFrames)
   {
     fprintf( stderr, "\nWarning: Hierarchical coding or Referenced B slices used.\n");
     fprintf( stderr, "         Make sure that you have allocated enough references\n");
@@ -1416,14 +1517,24 @@ static void PatchInp (void)
 
   ProfileCheck();
   LevelCheck();
+
+  if ( params->ChromaMCBuffer )
+    OneComponentChromaPrediction4x4 = OneComponentChromaPrediction4x4_retrieve;
+  else
+    OneComponentChromaPrediction4x4 = OneComponentChromaPrediction4x4_regenerate;
+
+  searchrange.min_x = -params->search_range;
+  searchrange.max_x =  params->search_range;
+  searchrange.min_y = -params->search_range;
+  searchrange.max_y =  params->search_range;
 }
 
 void PatchInputNoFrames(void)
 {
   // Tian Dong: May 31, 2002
   // If the frames are grouped into two layers, "FramesToBeEncoded" in the config file
-  // will give the number of frames which are in the base layer. Here we let params->no_frames
+  // will give the number of frames which are in the base layer. Here we let params->no_frm_base
   // be the total frame numbers.
-  params->no_frames = 1 + (params->no_frames - 1) * (params->NumFramesInELSubSeq + 1);
+  params->no_frm_base = 1 + (params->no_frm_base - 1) * (params->NumFramesInELSubSeq + 1);
 }
 

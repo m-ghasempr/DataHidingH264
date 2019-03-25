@@ -18,7 +18,7 @@
 #include "contributors.h"
 #include "global.h"
 #include "enc_statistics.h"
-#include "cabac.h"
+#include "biariencode.h"
 
  /*!
  ************************************************************************

@@ -45,10 +45,11 @@
 #include "nalu.h"
 #include "ratectl.h"
 #include "mb_access.h"
-#include "cabac.h"
 #include "context_ini.h"
+#include "biariencode.h"
 #include "enc_statistics.h"
 #include "conformance.h"
+#include "report.h"
 
 #include "q_matrix.h"
 #include "q_offsets.h"
@@ -56,6 +57,7 @@
 #include "input.h"
 #include "image.h"
 #include "errdo.h"
+#include "img_process.h"
 
 
 extern pic_parameter_set_rbsp_t *PicParSet[MAXPPS];
@@ -67,30 +69,23 @@ static void field_picture(Picture *top, Picture *bottom);
 static void prepare_enc_frame_picture (StorablePicture **stored_pic);
 static void writeout_picture(Picture *pic);
 static byte picture_structure_decision(Picture *frame, Picture *top, Picture *bot);
-static void distortion_fld (Picture *field_pic);
+static void distortion_fld (Picture *field_pic, ImageData *imgData);
+
 static void field_mode_buffer (ImageParameters *img, InputParameters *params);
 static void frame_mode_buffer (ImageParameters *img, InputParameters *params);
 static void init_frame(ImageParameters *img);
 static void init_field(ImageParameters *img);
 static void put_buffer_frame(ImageParameters *img);
-static void put_buffer_top(ImageParameters *img);
-static void put_buffer_bot(ImageParameters *img);
-static void PaddAutoCropBorders (FrameFormat output, int img_size_x, int img_size_y, int img_size_x_cr, int img_size_y_cr);
+static void put_buffer_top  (ImageParameters *img);
+static void put_buffer_bot  (ImageParameters *img);
+static void PaddAutoCropBorders (FrameFormat output, int img_size_x, int img_size_y, int img_size_x_cr, int img_size_y_cr, imgpel **pImage[3]);
 static void rdPictureCoding(void);
 
-#ifdef _ADAPT_LAST_GROUP_
-int *last_P_no;
-int *last_P_no_frm;
-int *last_P_no_fld;
-#endif
-int FrameNumberInFile;
-
-static void ReportFirstframe(time_t tmp_time, time_t me_time);
-static void ReportIntra(time_t tmp_time, time_t me_time);
-static void ReportSP(time_t tmp_time, time_t me_time);
-static void ReportP(time_t tmp_time, time_t me_time);
-static void ReportB(time_t tmp_time, time_t me_time);
-static void ReportNALNonVLCBits(time_t tmp_time, time_t me_time);
+static void ReportFirstframe(int64 tmp_time, int64 me_time);
+static void ReportIntra(int64 tmp_time, int64 me_time);
+static void ReportP(int64 tmp_time, int64 me_time);
+static void ReportB(int64 tmp_time, int64 me_time);
+static void ReportNALNonVLCBits(int64 tmp_time, int64 me_time);
 
 StorablePicture *enc_picture;
 StorablePicture **enc_frame_picture;
@@ -165,11 +160,11 @@ void MbAffPostProc(void)
  *
  ************************************************************************
  */
-void set_slice_type(int slice_type)
+void set_slice_type(ImageParameters *p_img, int slice_type)
 {
-  img->type = slice_type;            // set slice type
-  img->RCMinQP = params->RCMinQP[img->type];
-  img->RCMaxQP = params->RCMaxQP[img->type];
+  p_img->type = slice_type;            // set slice type
+  p_img->RCMinQP = params->RCMinQP[p_img->type];
+  p_img->RCMaxQP = params->RCMaxQP[p_img->type];
 }
 
 void code_a_plane(ImageParameters *img, Picture *pic)
@@ -200,7 +195,10 @@ void code_a_plane(ImageParameters *img, Picture *pic)
     while (!FmoSliceGroupCompletelyCoded (SliceGroup))
     {
       // Encode the current slice
-      NumberOfCodedMBs += encode_one_slice (SliceGroup, pic, NumberOfCodedMBs);
+      if (!img->MbaffFrameFlag)
+        NumberOfCodedMBs += encode_one_slice (SliceGroup, pic, NumberOfCodedMBs);
+      else
+        NumberOfCodedMBs += encode_one_slice_MBAFF (SliceGroup, pic, NumberOfCodedMBs);
       FmoSetLastMacroblockInSlice (img->current_mb_nr);
       // Proceed to next slice
       img->current_slice_nr++;
@@ -228,20 +226,14 @@ void code_a_plane(ImageParameters *img, Picture *pic)
 static void code_a_picture(Picture *pic)
 {
   int pl;
-  int idr_refresh;
-
-  // currently this code only supports fixed enhancement layer distance
-  if ( params->idr_period && !params->adaptive_idr_period )
-    idr_refresh = (( ( img->frm_number - img->lastIDRnumber ) % params->idr_period ) == 0);
-  else if ( params->idr_period && params->adaptive_idr_period == 1 )
-    idr_refresh = (( ( img->frm_number - imax(img->lastIntraNumber, img->lastIDRnumber) ) % params->idr_period ) == 0);
-  else
-    idr_refresh = (img->frm_number == 0);
 
   img->currentPicture = pic;
+  img->currentPicture->idr_flag = get_idr_flag();
 
-  img->currentPicture->idr_flag = ((!IMG_NUMBER) && (!(img->structure==BOTTOM_FIELD)))
-    || (idr_refresh && (img->type == I_SLICE || img->type==SI_SLICE)&& (!(img->structure==BOTTOM_FIELD)));
+  if (img->currentPicture->idr_flag && params->EnableIDRGOP && img->frm_number)
+  {
+    img->last_idr_number = img->frm_no_in_file;
+  }
 
   pic->no_slices = 0;
 
@@ -267,39 +259,89 @@ static void code_a_picture(Picture *pic)
   if (img->MbaffFrameFlag)
     MbAffPostProc();
 }
-void update_global_stats(StatParameters *cur_stats)
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Determine whether picture is coded as IDR
+ ************************************************************************
+ */
+int get_idr_flag( void )
+{
+  int idr_flag;
+  int idr_refresh;
+
+  // currently this code only supports fixed enhancement layer distance
+  if ( params->idr_period && !params->adaptive_idr_period )
+  {
+    idr_refresh = (( ( img->frm_number - img->lastIDRnumber ) % params->idr_period ) == 0);
+  }
+  else if ( params->idr_period && params->adaptive_idr_period == 1 )
+  {
+    idr_refresh = (( ( img->frm_number - imax(img->lastIntraNumber, img->lastIDRnumber) ) % params->idr_period ) == 0);
+  }
+  else
+  {
+    idr_refresh = (img->frm_number == 0);
+  }
+
+  idr_flag = ((!img->gop_number) && (!(img->structure==BOTTOM_FIELD)))
+    || (idr_refresh && (img->type == I_SLICE || img->type==SI_SLICE)&& (!(img->structure==BOTTOM_FIELD)));
+
+  return idr_flag;
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Update global stats
+ ************************************************************************
+ */
+void update_global_stats(StatParameters *gl_stats, StatParameters *cur_stats)
 {  
   int i, j, k;
-  for (i = 0; i < 4; i++)
-    stats->intra_chroma_mode[i]    += cur_stats->intra_chroma_mode[i];
-
-  for (i = 0; i < 5; i++)
+  
+  if (params->skip_gl_stats == 0)
   {
-    stats->quant[i]                += cur_stats->quant[i];
-    stats->num_macroblocks[i]      += cur_stats->num_macroblocks[i];
-    stats->bit_use_mb_type [i]     += cur_stats->bit_use_mb_type[i];
-    stats->bit_use_header  [i]     += cur_stats->bit_use_header[i];
-    stats->tmp_bit_use_cbp [i]     += cur_stats->tmp_bit_use_cbp[i];
-    stats->bit_use_coeffC  [i]     += cur_stats->bit_use_coeffC[i];
-    stats->bit_use_coeff[0][i]     += cur_stats->bit_use_coeff[0][i];
-    stats->bit_use_coeff[1][i]     += cur_stats->bit_use_coeff[1][i]; 
-    stats->bit_use_coeff[2][i]     += cur_stats->bit_use_coeff[2][i]; 
-    stats->bit_use_delta_quant[i]  += cur_stats->bit_use_delta_quant[i];
-    stats->bit_use_stuffingBits[i] += cur_stats->bit_use_stuffingBits[i];
-
-    for (k = 0; k < 2; k++)
-      stats->b8_mode_0_use[i][k] += cur_stats->b8_mode_0_use[i][k];
-
-    for (j = 0; j < 15; j++)
+    for (i = 0; i < 4; i++)
     {
-      stats->mode_use[i][j]     += cur_stats->mode_use[i][j];
-      stats->bit_use_mode[i][j] += cur_stats->bit_use_mode[i][j];
+      gl_stats->intra_chroma_mode[i]    += cur_stats->intra_chroma_mode[i];
+    }
+
+    for (i = 0; i < 5; i++)
+    {
+      gl_stats->quant[i]                += cur_stats->quant[i];
+      gl_stats->num_macroblocks[i]      += cur_stats->num_macroblocks[i];
+      gl_stats->bit_use_mb_type [i]     += cur_stats->bit_use_mb_type[i];
+      gl_stats->bit_use_header  [i]     += cur_stats->bit_use_header[i];
+      gl_stats->tmp_bit_use_cbp [i]     += cur_stats->tmp_bit_use_cbp[i];
+      gl_stats->bit_use_coeffC  [i]     += cur_stats->bit_use_coeffC[i];
+      gl_stats->bit_use_coeff[0][i]     += cur_stats->bit_use_coeff[0][i];
+      gl_stats->bit_use_coeff[1][i]     += cur_stats->bit_use_coeff[1][i]; 
+      gl_stats->bit_use_coeff[2][i]     += cur_stats->bit_use_coeff[2][i]; 
+      gl_stats->bit_use_delta_quant[i]  += cur_stats->bit_use_delta_quant[i];
+      gl_stats->bit_use_stuffingBits[i] += cur_stats->bit_use_stuffingBits[i];
+
       for (k = 0; k < 2; k++)
-        stats->mode_use_transform[i][j][k] += cur_stats->mode_use_transform[i][j][k];
+        gl_stats->b8_mode_0_use[i][k] += cur_stats->b8_mode_0_use[i][k];
+
+      for (j = 0; j < 15; j++)
+      {
+        gl_stats->mode_use[i][j]     += cur_stats->mode_use[i][j];
+        gl_stats->bit_use_mode[i][j] += cur_stats->bit_use_mode[i][j];
+        for (k = 0; k < 2; k++)
+          gl_stats->mode_use_transform[i][j][k] += cur_stats->mode_use_transform[i][j][k];
+      }
     }
   }
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    Free storable pictures
+ ************************************************************************
+ */
 void free_pictures(int stored_pic)
 {
   int i;
@@ -316,7 +358,7 @@ void free_pictures(int stored_pic)
  *    Encodes one frame
  ************************************************************************
  */
-int encode_one_frame (void)
+int encode_one_frame (ImageParameters *img)
 {
   static int prev_frame_no = 0; // POC200301
   static int consecutive_non_reference_pictures = 0; // POC200301
@@ -333,7 +375,7 @@ int encode_one_frame (void)
 
   TIME_T start_time;
   TIME_T end_time;
-  time_t  tmp_time;
+  int64  tmp_time;
 
   me_time = 0;
   img->rd_pass = 0;
@@ -364,18 +406,20 @@ int encode_one_frame (void)
   UpdateRandomAccess ();
   */
 
-  if ((params->ResendPPS) && (img->frm_number !=0))
-  {
-    stats->bit_ctr_parametersets_n = write_PPS(0, 0);
-    stats->bit_ctr_parametersets  += stats->bit_ctr_parametersets_n;
-  }
 
   put_buffer_frame (img);      // sets the pointers to the frame structures
                                // (and not to one of the field structures)
   init_frame (img);
 
-  ReadOneFrame (FrameNumberInFile, params->infile_header, &params->source, &params->output);
-  PaddAutoCropBorders (params->output, img->width, img->height, img->width_cr, img->height_cr);
+  if(params->WPIterMC)
+    img->frameOffsetAvail = 0;
+
+  ReadOneFrame (&params->input_file1, img->frm_no_in_file, params->infile_header, &params->source, &params->output, imgData1.frm_data); 
+  PaddAutoCropBorders (params->output, img->width, img->height, img->width_cr, img->height_cr, imgData1.frm_data);
+
+  ProcessImage( params );
+
+
 
   // set parameters for direct mode and deblocking filter
   img->direct_spatial_mv_pred_flag = params->direct_spatial_mv_pred_flag;
@@ -432,12 +476,15 @@ int encode_one_frame (void)
 
     //Rate control
     if(params->RCEnable)
-      rc_init_frame(FrameNumberInFile);
+      rc_init_frame(img->frm_no_in_file);
 
     if (params->GenerateMultiplePPS)
       active_pps = PicParSet[0];
 
-    frame_picture (frame_pic[0], 0);
+    frame_picture (frame_pic[0], &imgData, 0);
+
+    if(params->WPIterMC)
+      img->frameOffsetAvail = 1; 
 
     if ((params->RDPictureIntra || img->type!=I_SLICE) && params->RDPictureDecision)
     {
@@ -450,7 +497,7 @@ int encode_one_frame (void)
     {
       // once the picture has been encoded as a primary SP frame encode as an SI frame
       si_frame_indicator=1;
-      frame_picture (frame_pic_si, 0);
+      frame_picture (frame_pic_si, &imgData, 0);
     }
     if ((img->type == SP_SLICE) && (params->sp_output_indicator))
     {
@@ -501,6 +548,7 @@ int encode_one_frame (void)
   if (img->fld_flag)            // field mode (use field when fld_flag=1 only)
   {
     field_mode_buffer (img, params);
+    write_non_vcl_nalu();
     writeout_picture (field_pic[0]);
     writeout_picture (field_pic[1]);
   }
@@ -510,11 +558,13 @@ int encode_one_frame (void)
 
     if (img->type==SP_SLICE && si_frame_indicator == 1)
     {
+      write_non_vcl_nalu();      
       writeout_picture (frame_pic_si);
       si_frame_indicator=0;
     }
     else
     {
+      write_non_vcl_nalu();
       writeout_picture (frame_pic[img->rd_pass]);
     }
   }
@@ -570,7 +620,7 @@ int encode_one_frame (void)
       UpdatePixelMap ();
   }
 
-  compute_distortion();
+  compute_distortion(&imgData);
 
   // redundant pictures: save reconstruction to calculate SNR and replace reference picture
 
@@ -609,21 +659,21 @@ int encode_one_frame (void)
     }
   }
 
- 
   if (params->PicInterlace == ADAPTIVE_CODING)
   {
     if (img->fld_flag)
-    {
+    {      
+      update_global_stats(&statistics, &enc_field_picture[0]->stats);
+      update_global_stats(&statistics, &enc_field_picture[1]->stats);
       // store bottom field
       store_picture_in_dpb(enc_field_picture[1]);
       free_storable_picture(enc_frame_picture[0]);
       free_storable_picture(enc_frame_picture[1]);
       free_storable_picture(enc_frame_picture[2]);
-      update_global_stats(&enc_field_picture[0]->stats);
-      update_global_stats(&enc_field_picture[1]->stats);
     }
     else
     {
+      update_global_stats(&statistics, &enc_frame_picture[img->rd_pass]->stats);
       // replace top with frame
       if (img->rd_pass==2)
       {
@@ -646,24 +696,23 @@ int encode_one_frame (void)
           free_storable_picture(enc_frame_picture[2]);
         }
       }
-      free_storable_picture(enc_field_picture[1]);
-      update_global_stats(&enc_frame_picture[img->rd_pass]->stats);
+      free_storable_picture(enc_field_picture[1]);      
     }
   }
   else
   {
     if (img->fld_flag)
     {
+      update_global_stats(&statistics, &enc_field_picture[0]->stats);
+      update_global_stats(&statistics, &enc_field_picture[1]->stats);
       store_picture_in_dpb(enc_field_picture[1]);
-      update_global_stats(&enc_field_picture[0]->stats);
-      update_global_stats(&enc_field_picture[1]->stats);
     }
     else
-    {
+    {      
       if ((params->redundant_pic_flag != 1) || (key_frame == 0))
       {
+        update_global_stats(&statistics, &enc_frame_picture[img->rd_pass]->stats);
         store_picture_in_dpb (enc_frame_picture[img->rd_pass]);
-        update_global_stats(&enc_frame_picture[img->rd_pass]->stats);
         free_pictures(img->rd_pass);
       }
     }
@@ -676,7 +725,7 @@ int encode_one_frame (void)
 
 #ifdef _LEAKYBUCKET_
   // Store bits used for this frame and increment counter of no. of coded frames
-  Bit_Buffer[total_frame_buffer] = (int) (stats->bit_ctr - stats->bit_ctr_n);
+  Bit_Buffer[total_frame_buffer] = (long) (stats->bit_ctr - stats->bit_ctr_n);
   total_frame_buffer++;
 #endif
 
@@ -687,16 +736,18 @@ int encode_one_frame (void)
     if (!img->nal_reference_idc) consecutive_non_reference_pictures++;
     else consecutive_non_reference_pictures = 0;
 
-    if (frame_no < prev_frame_no || consecutive_non_reference_pictures>1)
+    if (img->frame_no < prev_frame_no || consecutive_non_reference_pictures>1)
       error("POC type 2 cannot be applied for the coding pattern where the encoding /decoding order of pictures are different from the output order.\n", -1);
-    prev_frame_no = frame_no;
+    prev_frame_no = img->frame_no;
   }
 
   gettime(&end_time);    // end time in ms
   tmp_time  = timediff(&start_time, &end_time);
   tot_time += tmp_time;
+  tmp_time  = timenorm(tmp_time);
+  me_time   = timenorm(me_time);
 
-  if (stats->bit_ctr_parametersets_n!=0)
+  if (stats->bit_ctr_parametersets_n!=0 && params->Verbose != 3)
     ReportNALNonVLCBits(tmp_time, me_time);
 
   if (img->frm_number == 0)
@@ -723,9 +774,6 @@ int encode_one_frame (void)
     case SI_SLICE:
       ReportIntra(tmp_time,me_time);
       break;
-    case SP_SLICE:
-      ReportSP(tmp_time,me_time);
-      break;
     case B_SLICE:
       ReportB(tmp_time,me_time);
       break;
@@ -739,7 +787,7 @@ int encode_one_frame (void)
     //for (i = 0; i <= (img->number & 0x0F); i++)
     //printf(".");
     //printf("                              \r");
-    printf("Completed Encoding Frame %05d.\r",frame_no);
+    printf("Completed Encoding Frame %05d.\r", img->frame_no);
   }
   // Flush output statistics
   fflush(stdout);
@@ -747,17 +795,18 @@ int encode_one_frame (void)
   //Rate control
   if(params->RCEnable)
     rc_update_picture_ptr( bits );
+
   stats->bit_ctr_n = stats->bit_ctr;
 
   stats->bit_ctr_parametersets_n = 0;
 
   if ( img->type == I_SLICE && img->nal_reference_idc)
   {
-    //img->lastINTRA = frame_no;
+    //img->lastINTRA = img->frame_no;
     // Lets also handle the possibility of backward GOPs and hierarchical structures 
     if ( !(img->b_frame_to_code) )
     {
-      img->lastINTRA       = imax(img->lastINTRA, frame_no);
+      img->lastINTRA       = imax(img->lastINTRA, img->frame_no);
       img->lastIntraNumber = img->frm_number;
     }
     if ( img->currentPicture->idr_flag )
@@ -766,7 +815,7 @@ int encode_one_frame (void)
     }
   }
 
-  return ((IMG_NUMBER == 0)? 0 : 1);
+  return ((img->gop_number == 0)? 0 : 1);
 }
 
 
@@ -875,7 +924,7 @@ static void calc_picture_bits(Picture *frame)
  *    Encodes a frame picture
  ************************************************************************
  */
-void frame_picture (Picture *frame, int rd_pass)
+void frame_picture (Picture *frame, ImageData *imgData, int rd_pass)
 {
   int nplane;
   img->SumFrameQP = 0;
@@ -910,7 +959,7 @@ void frame_picture (Picture *frame, int rd_pass)
 
   if (img->structure==FRAME)
   {
-    find_distortion ();
+    find_distortion (imgData);
     frame->distortion = dist->metric[SSE];
   }
 }
@@ -935,6 +984,7 @@ static void field_picture (Picture *top, Picture *bottom)
   old_pic_type = img->type;
 
   img->number *= 2;
+  img->gop_number = (img->number - img->start_frame_no);
   img->buf_cycle *= 2;
   img->height    = (params->output.height + img->auto_crop_bottom) / 2;
   img->height_cr = img->height_cr_frame / 2;
@@ -959,9 +1009,6 @@ static void field_picture (Picture *top, Picture *bottom)
 
   put_buffer_top (img);
   init_field (img);
-  if (img->type == B_SLICE)       //all I- and P-frames
-    nextP_tr_fld--;
-
 
   img->fld_flag = TRUE;
 
@@ -996,14 +1043,12 @@ static void field_picture (Picture *top, Picture *bottom)
   copy_params(enc_picture, active_sps);
   put_buffer_bot (img);
   img->number++;
+  img->gop_number = (img->number - img->start_frame_no);
 
   init_field (img);
 
-  if (img->type == B_SLICE)       //all I- and P-frames
-    nextP_tr_fld++;             //check once coding B field
-
  if (img->type == I_SLICE && params->IntraBottom!=1)
-   set_slice_type((params->BRefPictures == 2) ? B_SLICE : P_SLICE);
+   set_slice_type(img, (params->BRefPictures == 2) ? B_SLICE : P_SLICE);
 
   img->fld_flag = TRUE;
 
@@ -1018,7 +1063,7 @@ static void field_picture (Picture *top, Picture *bottom)
 
   // the distortion for a field coded frame (consisting of top and bottom field)
   // lives in the top->distortion variables, the bottom-> are dummies
-  distortion_fld (top);
+  distortion_fld (top, &imgData);
 }
 
 /*!
@@ -1056,26 +1101,27 @@ static void combine_field(void)
  *    Distortion Field
  ************************************************************************
  */
-static void distortion_fld (Picture *field_pic)
+static void distortion_fld (Picture *field_pic, ImageData *imgData)
 {
 
   img->number /= 2;
+  img->gop_number = (img->number - img->start_frame_no);
   img->buf_cycle /= 2;
   img->height    = (params->output.height + img->auto_crop_bottom);
   img->height_cr = img->height_cr_frame;
 
   combine_field ();
 
-  pCurImg   = img_org_frm[0];
-  pImgOrg[0] = img_org_frm[0];
+  pCurImg   = imgData->frm_data[0];
+  pImgOrg[0] = imgData->frm_data[0];
 
-  if (params->yuv_format != YUV400)
+  if (params->output.yuv_format != YUV400)
   {
-    pImgOrg[1] = img_org_frm[1];
-    pImgOrg[2] = img_org_frm[2];
+    pImgOrg[1] = imgData->frm_data[1];
+    pImgOrg[2] = imgData->frm_data[2];
   }
 
-  find_distortion ();   // find snr from original frame picture
+  find_distortion (imgData);   // find snr from original frame picture
   field_pic->distortion = dist->metric[SSE];
 }
 
@@ -1151,13 +1197,16 @@ static void frame_mode_buffer (ImageParameters *img, InputParameters *params)
     img->height = img->height / 2;
     img->height_cr = img->height_cr / 2;
     img->number *= 2;
+    img->gop_number = (img->number - img->start_frame_no);
 
     put_buffer_top (img);
 
     img->number++;
+    img->gop_number = (img->number - img->start_frame_no);
     put_buffer_bot (img);
 
     img->number /= 2;         // reset the img->number to field
+    img->gop_number = (img->number - img->start_frame_no);
     img->height = (params->output.height + img->auto_crop_bottom);
     img->height_cr = img->height_cr_frame;
 
@@ -1187,9 +1236,6 @@ static void init_dec_ref_pic_marking_buffer(void)
 static void init_frame (ImageParameters *img)
 {
   int i, j;
-  int prevP_no, nextP_no;
-
-  last_P_no = last_P_no_frm;
 
   img->current_mb_nr = 0;
   img->current_slice_nr = 0;
@@ -1217,52 +1263,39 @@ static void init_frame (ImageParameters *img)
 
   if (img->b_frame_to_code == 0)
   {
-    img->tr = start_tr_in_this_IGOP + IMG_NUMBER * (params->jumpd + 1);
-
-#ifdef _ADAPT_LAST_GROUP_
-    if (params->last_frame && img->frm_number + 1 == params->no_frames)
-      img->tr = params->last_frame;
-#endif
-
-    if (IMG_NUMBER != 0 && params->successive_Bframe != 0)     // B pictures to encode
-      nextP_tr_frm = img->tr;
- 
     //Rate control
     if(!params->RCEnable)                  // without using rate control
     {
       if (img->type == I_SLICE)
       {
-#ifdef _CHANGE_QP_
         //QP oscillation for secondary SP frames
-        if ((params->qp2start > 0 && img->tr >= params->qp2start && params->sp2_frame_indicator==0)||
-          ( (params->qp2start > 0) && ( ( (img->tr ) % (2*params->qp2start) ) >=params->qp2start ) && (params->sp2_frame_indicator==1)))
-          img->qp = params->qp02;
+        if ((params->qp2start > 0 && img->frame_no >= params->qp2start && params->sp2_frame_indicator==0)||
+          ( (params->qp2start > 0) && ( ( (img->frame_no ) % (2*params->qp2start) ) >=params->qp2start ) && (params->sp2_frame_indicator==1)))
+          img->qp = params->qp[1][I_SLICE];
         else
-#endif
-          img->qp = params->qp0;   // set quant. parameter for I-frame
+          img->qp = params->qp[0][I_SLICE];   // set quant. parameter for I-frame
+
       }
       else
       {
-#ifdef _CHANGE_QP_
         //QP oscillation for secondary SP frames
-        if ((params->qp2start > 0 && img->tr >= params->qp2start && params->sp2_frame_indicator==0)||
-          ( (params->qp2start > 0) && ( ( (img->tr ) % (2*params->qp2start) ) >=params->qp2start ) && (params->sp2_frame_indicator==1)))
-          img->qp = params->qpN2 + (img->nal_reference_idc ? 0 : params->DispPQPOffset);
+        if ((params->qp2start > 0 && img->frame_no >= params->qp2start && params->sp2_frame_indicator==0)||
+          ( (params->qp2start > 0) && ( ( (img->frame_no ) % (2*params->qp2start) ) >=params->qp2start ) && (params->sp2_frame_indicator==1)))
+          img->qp = params->qp[1][P_SLICE] + (img->nal_reference_idc ? 0 : params->DispPQPOffset);
         else
-#endif
-          img->qp = params->qpN + (img->nal_reference_idc ? 0 : params->DispPQPOffset);
+          img->qp = params->qp[0][P_SLICE] + (img->nal_reference_idc ? 0 : params->DispPQPOffset);
 
         if (img->type == SP_SLICE)
         {
-          if ( (params->qp2start > 0) && ( ( (img->tr ) % (2*params->qp2start) ) >=params->qp2start ))
+          if ( (params->qp2start > 0) && ( ( (img->frame_no ) % (2*params->qp2start) ) >=params->qp2start ))
           {
-            img->qp   = params->qpN2 - (params->qpN - params->qpsp);
-            img->qpsp = params->qpN2 - (params->qpN - params->qpsp_pred);
+            img->qp   = params->qp[1][SP_SLICE];
+            img->qpsp = params->qpsp[1];
           }
           else
           {
-            img->qp = params->qpsp;
-            img->qpsp = params->qpsp_pred;
+            img->qp   = params->qp[0][SP_SLICE];
+            img->qpsp = params->qpsp[0];
           }
         }
       }
@@ -1277,93 +1310,46 @@ static void init_frame (ImageParameters *img)
   }
   else
   {
-    img->p_interval = params->jumpd + 1;
-    prevP_no = start_tr_in_this_IGOP + (IMG_NUMBER - 1) * img->p_interval;
-    nextP_no = start_tr_in_this_IGOP + (IMG_NUMBER) * img->p_interval;
-
-#ifdef _ADAPT_LAST_GROUP_
-    last_P_no[0] = prevP_no;
-    for (i = 1; i < img->buf_cycle; i++)
-      last_P_no[i] = last_P_no[i - 1] - img->p_interval;
-
-    if (params->last_frame && img->frm_number + 1 == params->no_frames)
-    {
-      nextP_no = params->last_frame;
-      img->p_interval = nextP_no - prevP_no;
-    }
-#endif
-
-    img->b_interval =
-      ((double) (params->jumpd + 1) / (params->successive_Bframe + 1.0) );
-
-    if (params->HierarchicalCoding == 3)
-      img->b_interval = 1.0;
-
-    if (params->HierarchicalCoding)
-      img->tr = prevP_no + (int) (img->b_interval  * (double) (1 + gop_structure[img->b_frame_to_code - 1].display_no));      // from prev_P
-    else
-      img->tr = prevP_no + (int) (img->b_interval * (double) img->b_frame_to_code);      // from prev_P
-
-
-    if (img->tr >= nextP_no)
-      img->tr = nextP_no - 1;
     //Rate control
     if(!params->RCEnable && params->HierarchicalCoding == 0)                  // without using rate control
     {
-#ifdef _CHANGE_QP_
       //QP oscillation for secondary SP frames
-      if ((params->qp2start > 0 && img->tr >= params->qp2start && params->sp2_frame_indicator==0)||
-        ( (params->qp2start > 0) && ( ( (img->tr ) % (2*params->qp2start) ) >=params->qp2start ) && (params->sp2_frame_indicator==1)))
+      if ((params->qp2start > 0 && img->frame_no >= params->qp2start && params->sp2_frame_indicator==0)||
+        ( (params->qp2start > 0) && ( ( (img->frame_no ) % (2*params->qp2start) ) >=params->qp2start ) && (params->sp2_frame_indicator==1)))
       {
-        img->qp = params->qpB2;
+        img->qp = params->qp[1][B_SLICE];
       }
       else
-#endif
       {
-        img->qp = params->qpB;
+        img->qp = params->qp[0][B_SLICE];
       }
 
       if (img->nal_reference_idc)
       {
-#ifdef _CHANGE_QP_
         //QP oscillation for secondary SP frames
-        if ((params->qp2start > 0 && img->tr >= params->qp2start && params->sp2_frame_indicator==0)||
-          ( (params->qp2start > 0) && ( ( (img->tr ) % (2*params->qp2start) ) >=params->qp2start ) && (params->sp2_frame_indicator==1)))
+        if ((params->qp2start > 0 && img->frame_no >= params->qp2start && params->sp2_frame_indicator==0)||
+          ( (params->qp2start > 0) && ( ( (img->frame_no ) % (2*params->qp2start) ) >=params->qp2start ) && (params->sp2_frame_indicator==1)))
         {
-          img->qp = iClip3(-img->bitdepth_luma_qp_scale,51,params->qpB2 + params->qpBRS2Offset);
+          img->qp = iClip3(-img->bitdepth_luma_qp_scale,51,params->qp[1][B_SLICE] + params->qpBRSOffset[1]);
         }
         else
-#endif
         {
-          img->qp = iClip3(-img->bitdepth_luma_qp_scale,51,params->qpB + params->qpBRSOffset);
+          img->qp = iClip3(-img->bitdepth_luma_qp_scale, 51, params->qp[0][B_SLICE] + params->qpBRSOffset[0]);
         }
       }
     }
     else if (!params->RCEnable && params->HierarchicalCoding !=0)
     {
-      // Note that _CHANGE_QP_ does not anymore work for gop_structure. Needs to be fixed
+      // Note that _CHANGE_QP_ does not work anymore for gop_structure. Needs to be fixed
       img->qp =  gop_structure[img->b_frame_to_code - 1].slice_qp;
     }
   }
-
-  UpdateSubseqInfo (img->layer);        // Tian Dong (Sept 2002)
-  UpdateSceneInformation (FALSE, 0, 0, -1); // JVT-D099, scene information SEI, nothing included by default
-
-  //! Commented out by StW, needs fixing in SEI.h to keep the trace file clean
-  //  PrepareAggregationSEIMessage ();
-
-  // write tone mapping SEI message
-  if (params->ToneMappingSEIPresentFlag)
-  {
-    UpdateToneMapping();
-  }
-  PrepareAggregationSEIMessage ();
-  Write_SEI_NALU(0);
 
   img->no_output_of_prior_pics_flag = 0;
   img->long_term_reference_flag = 0;
 
   init_dec_ref_pic_marking_buffer();
+  
 }
 
 /*!
@@ -1374,18 +1360,14 @@ static void init_frame (ImageParameters *img)
  */
 static void init_field (ImageParameters *img)
 {
-  int i;
-  int prevP_no, nextP_no;
-
-  last_P_no = last_P_no_fld;
-
   img->current_mb_nr = 0;
   img->current_slice_nr = 0;
   stats->bit_slice = 0;
 
   params->jumpd *= 2;
-  params->successive_Bframe *= 2;
+  params->NumberBFrames *= 2;
   img->number /= 2;
+  img->gop_number = (img->number - img->start_frame_no);
   img->buf_cycle /= 2;
 
   img->mb_y = img->mb_x = 0;
@@ -1394,50 +1376,38 @@ static void init_field (ImageParameters *img)
 
   if (!img->b_frame_to_code)
   {
-    img->tr = img->number * (params->jumpd + 2) + img->fld_type;
-
-#ifdef _ADAPT_LAST_GROUP_
-    if (params->last_frame && img->number + 1 == params->no_frames)
-      img->tr = params->last_frame;
-#endif
-    if (img->number != 0 && params->successive_Bframe != 0)    // B pictures to encode
-      nextP_tr_fld = img->tr;
-
       //Rate control
     if(!params->RCEnable)                  // without using rate control
     {
       if (img->type == I_SLICE)
       {
-#ifdef _CHANGE_QP_
         //QP oscillation for secondary SP frames
-        if ((params->qp2start > 0 && img->tr >= params->qp2start && params->sp2_frame_indicator==0)||
-          ( (params->qp2start > 0) && ( ( (img->tr ) % (2*params->qp2start) ) >=params->qp2start ) && (params->sp2_frame_indicator==1)))
-          img->qp = params->qp02;
+        if ((params->qp2start > 0 && img->frame_no >= params->qp2start && params->sp2_frame_indicator==0)||
+          ( (params->qp2start > 0) && ( ( (img->frame_no ) % (2*params->qp2start) ) >=params->qp2start ) && (params->sp2_frame_indicator==1)))
+          img->qp = params->qp[1][I_SLICE];
         else
-#endif
-          img->qp = params->qp0;   // set quant. parameter for I-frame
+          img->qp = params->qp[0][I_SLICE];   // set quant. parameter for I-frame
       }
       else
       {
-#ifdef _CHANGE_QP_
         //QP oscillation for secondary SP frames
-        if ((params->qp2start > 0 && img->tr >= params->qp2start && params->sp2_frame_indicator==0)||
-          ( (params->qp2start > 0) && ( ( (img->tr ) % (2*params->qp2start) ) >=params->qp2start ) && (params->sp2_frame_indicator==1)))
-          img->qp = params->qpN2 + (img->nal_reference_idc ? 0 : params->DispPQPOffset);
+        if ((params->qp2start > 0 && img->frame_no >= params->qp2start && params->sp2_frame_indicator==0)||
+          ( (params->qp2start > 0) && ( ( (img->frame_no ) % (2*params->qp2start) ) >=params->qp2start ) && (params->sp2_frame_indicator==1)))
+          img->qp = params->qp[1][P_SLICE] + (img->nal_reference_idc ? 0 : params->DispPQPOffset);
         else
-#endif
-          img->qp = params->qpN + (img->nal_reference_idc ? 0 : params->DispPQPOffset);
+          img->qp = params->qp[0][P_SLICE] + (img->nal_reference_idc ? 0 : params->DispPQPOffset);
+
         if (img->type == SP_SLICE)
         {
-          if ( (params->qp2start > 0) && ( ( (img->tr ) % (2*params->qp2start) ) >=params->qp2start ))
+          if ( (params->qp2start > 0) && ( ( (img->frame_no ) % (2*params->qp2start) ) >=params->qp2start ))
           {
-            img->qp = params->qpN2-(params->qpN-params->qpsp);
-            img->qpsp = params->qpN2-(params->qpN-params->qpsp_pred);
+            img->qp = params->qp[1][SP_SLICE];
+            img->qpsp = params->qpsp[1];
           }
           else
           {
-            img->qp = params->qpsp;
-            img->qpsp = params->qpsp_pred;
+            img->qp = params->qp[0][SP_SLICE];
+            img->qpsp = params->qpsp[0];
           }
         }
       }
@@ -1452,79 +1422,27 @@ static void init_field (ImageParameters *img)
   }
   else
   {
-    img->p_interval = params->jumpd + 2;
-    prevP_no = (img->number - 1) * img->p_interval + img->fld_type;
-    nextP_no = img->number * img->p_interval + img->fld_type;
-
-#ifdef _ADAPT_LAST_GROUP_
-    if (!img->fld_type)       // top field
-    {
-      last_P_no[0] = prevP_no + 1;
-      last_P_no[1] = prevP_no;
-      for (i = 1; i <= img->buf_cycle; i++)
-      {
-        last_P_no[2 * i] = last_P_no[2 * i - 2] - img->p_interval;
-        last_P_no[2 * i + 1] = last_P_no[2 * i - 1] - img->p_interval;
-      }
-    }
-    else                      // bottom field
-    {
-      last_P_no[0] = nextP_no - 1;
-      last_P_no[1] = prevP_no;
-      for (i = 1; i <= img->buf_cycle; i++)
-      {
-        last_P_no[2 * i] = last_P_no[2 * i - 2] - img->p_interval;
-        last_P_no[2 * i + 1] = last_P_no[2 * i - 1] - img->p_interval;
-      }
-    }
-
-    if (params->last_frame && img->number + 1 == params->no_frames)
-    {
-      nextP_no = params->last_frame;
-      img->p_interval = nextP_no - prevP_no;
-    }
-#endif
-
-    img->b_interval =
-      ((double) (params->jumpd + 1) / (params->successive_Bframe + 1.0) );
-
-    if (params->HierarchicalCoding == 3)
-      img->b_interval = 1.0;
-
-    if (params->HierarchicalCoding)
-      img->tr = prevP_no + (int) ((img->b_interval + 1.0) * (double) (1 + gop_structure[img->b_frame_to_code - 1].display_no));      // from prev_P
-    else
-      img->tr = prevP_no + (int) ((img->b_interval + 1.0) * (double) img->b_frame_to_code);      // from prev_P
-
-
-    if (img->tr >= nextP_no)
-      img->tr = nextP_no - 1; // ?????
     //Rate control
     if(!params->RCEnable && params->HierarchicalCoding == 0)                  // without using rate control
     {
-#ifdef _CHANGE_QP_
       //QP oscillation for secondary SP frames
-      if ((params->qp2start > 0 && img->tr >= params->qp2start && params->sp2_frame_indicator==0)||
-        ( (params->qp2start > 0) && ( ( (img->tr ) % (2*params->qp2start) ) >=params->qp2start ) && (params->sp2_frame_indicator==1)))
+      if ((params->qp2start > 0 && img->frame_no >= params->qp2start && params->sp2_frame_indicator==0)||
+        ( (params->qp2start > 0) && ( ( (img->frame_no ) % (2*params->qp2start) ) >=params->qp2start ) && (params->sp2_frame_indicator==1)))
       {
-        img->qp = params->qpB2;
+        img->qp = params->qp[1][B_SLICE];
       }
       else
-#endif
-        img->qp = params->qpB;
+        img->qp = params->qp[0][B_SLICE];
       if (img->nal_reference_idc)
       {
-
-#ifdef _CHANGE_QP_
         //QP oscillation for secondary SP frames
-        if ((params->qp2start > 0 && img->tr >= params->qp2start && params->sp2_frame_indicator==0)||
-          ( (params->qp2start > 0) && ( ( (img->tr ) % (2*params->qp2start) ) >=params->qp2start ) && (params->sp2_frame_indicator==1)))
+        if ((params->qp2start > 0 && img->frame_no >= params->qp2start && params->sp2_frame_indicator==0)||
+          ( (params->qp2start > 0) && ( ( (img->frame_no ) % (2*params->qp2start) ) >=params->qp2start ) && (params->sp2_frame_indicator==1)))
         {
-          img->qp = iClip3(-img->bitdepth_luma_qp_scale,51,params->qpB2 + params->qpBRS2Offset);
+          img->qp = iClip3(-img->bitdepth_luma_qp_scale,51,params->qp[1][B_SLICE] + params->qpBRSOffset[1]);
         }
         else
-#endif
-          img->qp = iClip3(-img->bitdepth_luma_qp_scale,51,params->qpB + params->qpBRSOffset);
+          img->qp = iClip3(-img->bitdepth_luma_qp_scale,51,params->qp[0][B_SLICE] + params->qpBRSOffset[0]);
 
       }
     }
@@ -1534,9 +1452,10 @@ static void init_field (ImageParameters *img)
     }
   }
   params->jumpd /= 2;
-  params->successive_Bframe /= 2;
+  params->NumberBFrames /= 2;
   img->buf_cycle *= 2;
   img->number = 2 * img->number + img->fld_type;
+  img->gop_number = (img->number - img->start_frame_no);
 }
 
 
@@ -1604,24 +1523,28 @@ void UnifiedOneForthPix (StorablePicture *s)
   s->p_curr_img_sub = s->imgY_sub;
 
   // derive the subpixel images for first component
-  getSubImagesLuma ( s );
-
-  // and the sub-images for U and V
-  if ( (img->yuv_format != YUV400) && (params->ChromaMCBuffer) )
+  // No need to interpolate if intra only encoding
+  if (params->intra_period != 1)
   {
-    if (img->P444_joined)
+    getSubImagesLuma ( s );
+
+    // and the sub-images for U and V
+    if ( (img->yuv_format != YUV400) && (params->ChromaMCBuffer) )
     {
-      //U
-      select_plane(PLANE_U);
-      getSubImagesLuma (s);
-      //V
-      select_plane(PLANE_V);
-      getSubImagesLuma (s);
-      //Y
-      select_plane(PLANE_Y);
+      if (img->P444_joined)
+      {
+        //U
+        select_plane(PLANE_U);
+        getSubImagesLuma (s);
+        //V
+        select_plane(PLANE_V);
+        getSubImagesLuma (s);
+        //Y
+        select_plane(PLANE_Y);
+      }
+      else
+        getSubImagesChroma( s );
     }
-    else
-      getSubImagesChroma( s );
   }
 }
 
@@ -1692,7 +1615,6 @@ Boolean dummy_slice_too_big (int bits_slice)
 static inline void copy_motion_vectors_MB (ImageParameters *img, RD_DATA *rdopt)
 {
   memcpy(&img->all_mv [LIST_0][0][0][0][0][0], &rdopt->all_mv [LIST_0][0][0][0][0][0], 2 * img->max_num_references * 9 * 4 * 4 * 2 * sizeof(short));  
-  memcpy(&img->pred_mv[LIST_0][0][0][0][0][0], &rdopt->pred_mv[LIST_0][0][0][0][0][0], 2 * img->max_num_references * 9 * 4 * 4 * 2 * sizeof(short));
 }
 
 
@@ -1846,185 +1768,191 @@ void copy_rdopt_data (Macroblock *currMB, int bot_block)
 } // end of copy_rdopt_data
 
 
-static void ReportNALNonVLCBits(time_t tmp_time, time_t me_time)
+static void ReportNALNonVLCBits(int64 tmp_time, int64 me_time)
 {
   //! Need to add type (i.e. SPS, PPS, SEI etc).
   if (params->Verbose != 0)
-  printf ("%04d(NVB)%8d \n", frame_no, stats->bit_ctr_parametersets_n);
+    printf ("%05d(NVB)%8d \n", img->frame_no, stats->bit_ctr_parametersets_n);
 }
 
-static void ReportFirstframe(time_t tmp_time, time_t me_time)
+
+static void ReportSimple(ImageParameters *cur_img, char *pic_type, int cur_bits, DistMetric *metric, int tmp_time, int me_time)
+{
+  printf ("%05d(%3s)%8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s    %d\n",
+    cur_img->frame_no, pic_type, cur_bits, 
+    cur_img->AverageFrameQP,
+    metric->value[0], metric->value[1], metric->value[2], 
+    tmp_time, me_time,
+    cur_img->fld_flag ? "FLD" : "FRM", 
+    cur_img->nal_reference_idc);
+}
+
+static void ReportVerbose(ImageParameters *cur_img, char *pic_type, int cur_bits, int wp_method, int lambda, DistMetric *mPSNR, int tmp_time, int me_time, int direct_mode)
+{
+  printf ("%05d(%3s)%8d %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+    cur_img->frame_no, pic_type, cur_bits, wp_method,
+    cur_img->AverageFrameQP, lambda, 
+    mPSNR->value[0], mPSNR->value[1], mPSNR->value[2],     
+    tmp_time, me_time,
+    cur_img->fld_flag ? "FLD" : "FRM", intras, direct_mode,
+    cur_img->num_ref_idx_l0_active, cur_img->num_ref_idx_l1_active, cur_img->rd_pass, cur_img->nal_reference_idc);
+}
+
+static void ReportVerboseNVB(ImageParameters *cur_img, char *pic_type, int cur_bits, int nvb_bits, int wp_method, int lambda, DistMetric *mPSNR, int tmp_time, int me_time, int direct_mode)
+{
+  printf ("%05d(%3s)%8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+    cur_img->frame_no, pic_type, cur_bits, nvb_bits, wp_method,
+    cur_img->AverageFrameQP, lambda, 
+    mPSNR->value[0], mPSNR->value[1], mPSNR->value[2],     
+    tmp_time, me_time,
+    cur_img->fld_flag ? "FLD" : "FRM", intras, direct_mode,
+    cur_img->num_ref_idx_l0_active, cur_img->num_ref_idx_l1_active, cur_img->rd_pass, cur_img->nal_reference_idc);
+}
+
+static void ReportVerboseSSIM(ImageParameters *cur_img, char *pic_type, int cur_bits, int wp_method, int lambda, DistMetric *mPSNR, DistMetric *mSSIM,int tmp_time, int me_time, int direct_mode)
+{
+  printf ("%05d(%3s)%8d %1d %2d %2d %7.3f %7.3f %7.3f %7.4f %7.4f %7.4f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+    cur_img->frame_no, pic_type, cur_bits, wp_method,
+    cur_img->AverageFrameQP, lambda, 
+    mPSNR->value[0], mPSNR->value[1], mPSNR->value[2], 
+    mSSIM->value[0], mSSIM->value[1], mSSIM->value[2], 
+    tmp_time, me_time,
+    img->fld_flag ? "FLD" : "FRM", intras, direct_mode,
+    img->num_ref_idx_l0_active, img->num_ref_idx_l1_active,img->rd_pass, img->nal_reference_idc);
+}
+
+static void ReportVerboseNVBSSIM(ImageParameters *cur_img, char *pic_type, int cur_bits, int nvb_bits, int wp_method, int lambda, DistMetric *mPSNR, DistMetric *mSSIM,int tmp_time, int me_time, int direct_mode)
+{
+  printf ("%05d(%3s)%8d %3d  %1d %2d %2d %7.3f %7.3f %7.3f %7.4f %7.4f %7.4f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
+    cur_img->frame_no, pic_type, cur_bits, nvb_bits, wp_method,
+    cur_img->AverageFrameQP, lambda, 
+    mPSNR->value[0], mPSNR->value[1], mPSNR->value[2], 
+    mSSIM->value[0], mSSIM->value[1], mSSIM->value[2], 
+    tmp_time, me_time,
+    img->fld_flag ? "FLD" : "FRM", intras, direct_mode,
+    img->num_ref_idx_l0_active, img->num_ref_idx_l1_active,img->rd_pass, img->nal_reference_idc);
+}
+
+static void ReportFirstframe(int64 tmp_time, int64 me_time)
 {
   if (params->Verbose == 1)
   {
-    printf ("%04d(IDR)%8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s    %d\n",
-      frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n),
-      img->AverageFrameQP, dist->metric[PSNR].value[0], dist->metric[PSNR].value[1], dist->metric[PSNR].value[2], (int)tmp_time, (int)me_time,
-      img->fld_flag ? "FLD" : "FRM", img->nal_reference_idc);
+    ReportSimple(img, "IDR", (int) (stats->bit_ctr - stats->bit_ctr_n), &dist->metric[PSNR], (int) tmp_time, (int) me_time);
   }
   else if (params->Verbose == 2)
   {
     int lambda = (int) img->lambda_me[I_SLICE][img->AverageFrameQP][0];
     if (params->Distortion[SSIM] == 1)
-      printf ("%04d(IDR)%8d %1d %2d %2d %7.3f %7.3f %7.3f %7.4f %7.4f %7.4f %9d %7d    %3s %5d   %2d %2d  %d   %d\n",
-      frame_no,(int) (stats->bit_ctr - stats->bit_ctr_n),0,
-      img->AverageFrameQP, lambda, dist->metric[PSNR].value[0], dist->metric[PSNR].value[1], dist->metric[PSNR].value[2], dist->metric[SSIM].value[0], dist->metric[SSIM].value[1], dist->metric[SSIM].value[2], (int)tmp_time, (int)me_time,
-      img->fld_flag ? "FLD" : "FRM", intras, img->num_ref_idx_l0_active, img->num_ref_idx_l1_active,img->rd_pass, img->nal_reference_idc);
+      ReportVerboseSSIM(img, "IDR", (int) (stats->bit_ctr - stats->bit_ctr_n), 0, lambda, &dist->metric[PSNR], &dist->metric[SSIM], (int) tmp_time, (int) me_time, 0);
     else
-      printf ("%04d(IDR)%8d %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d   %2d %2d  %d   %d\n",
-      frame_no,(int) (stats->bit_ctr - stats->bit_ctr_n),0,
-      img->AverageFrameQP, lambda, dist->metric[PSNR].value[0], dist->metric[PSNR].value[1], dist->metric[PSNR].value[2], (int)tmp_time, (int)me_time,
-      img->fld_flag ? "FLD" : "FRM", intras, img->num_ref_idx_l0_active, img->num_ref_idx_l1_active,img->rd_pass, img->nal_reference_idc);
+      ReportVerbose(img, "IDR", (int) (stats->bit_ctr - stats->bit_ctr_n), 0, lambda, &dist->metric[PSNR], (int) tmp_time, (int) me_time, 0);
+  }
+  else if (params->Verbose == 3)
+  {
+    int lambda = (int) img->lambda_me[I_SLICE][img->AverageFrameQP][0];
+    if (params->Distortion[SSIM] == 1)
+      ReportVerboseNVBSSIM(img, "IDR", (int) (stats->bit_ctr - stats->bit_ctr_n) + stats->bit_ctr_parametersets_n, stats->bit_ctr_parametersets_n, 0, lambda, &dist->metric[PSNR], &dist->metric[SSIM], (int) tmp_time, (int) me_time, 0);
+    else
+      ReportVerboseNVB(img, "IDR", (int) (stats->bit_ctr - stats->bit_ctr_n) + stats->bit_ctr_parametersets_n, stats->bit_ctr_parametersets_n, 0, lambda, &dist->metric[PSNR], (int) tmp_time, (int) me_time, 0);
   }
 
   stats->bit_counter[I_SLICE] = stats->bit_ctr;
   stats->bit_ctr = 0;
 }
 
-static void ReportIntra(time_t tmp_time, time_t me_time)
+static void ReportIntra(int64 tmp_time, int64 me_time)
 {
+  char pic_type[4];
+
+  if (img->currentPicture->idr_flag == TRUE)
+    strcpy(pic_type,"IDR");
+  else
+    strcpy(pic_type," I ");
+
   if (params->Verbose == 1)
   {
-    if (img->currentPicture->idr_flag == TRUE)
-      printf ("%04d(IDR)%8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s    %d\n",
-      frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n),
-      img->AverageFrameQP, dist->metric[PSNR].value[0], dist->metric[PSNR].value[1], dist->metric[PSNR].value[2], (int)tmp_time, (int)me_time,
-      img->fld_flag ? "FLD" : "FRM", img->nal_reference_idc);
-    else
-      printf ("%04d(I)  %8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s    %d\n",
-      frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n),
-      img->AverageFrameQP, dist->metric[PSNR].value[0], dist->metric[PSNR].value[1], dist->metric[PSNR].value[2], (int)tmp_time, (int)me_time,
-      img->fld_flag ? "FLD" : "FRM", img->nal_reference_idc);
+    ReportSimple(img, pic_type, (int) (stats->bit_ctr - stats->bit_ctr_n), &dist->metric[PSNR], (int) tmp_time, (int) me_time);
   }
   else if (params->Verbose == 2)
   {
     int lambda = (int) img->lambda_me[I_SLICE][img->AverageFrameQP][0];
     if (params->Distortion[SSIM] == 1)
     {
-      if (img->currentPicture->idr_flag == TRUE)
-        printf ("%04d(IDR)%8d %1d %2d %2d %7.3f %7.3f %7.3f %7.4f %7.4f %7.4f %9d %7d    %3s %5d   %2d %2d  %d   %d\n",
-        frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n), 0,
-        img->AverageFrameQP, lambda, dist->metric[PSNR].value[0], dist->metric[PSNR].value[1], dist->metric[PSNR].value[2], dist->metric[SSIM].value[0], dist->metric[SSIM].value[1], dist->metric[SSIM].value[2], (int)tmp_time, (int)me_time,
-        img->fld_flag ? "FLD" : "FRM", intras, 
-        img->num_ref_idx_l0_active, img->num_ref_idx_l1_active,img->rd_pass, img->nal_reference_idc);
-      else
-        printf ("%04d(I)  %8d %1d %2d %2d %7.3f %7.3f %7.3f %7.4f %7.4f %7.4f %9d %7d    %3s %5d   %2d %2d  %d   %d\n",
-        frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n), 0,
-        img->AverageFrameQP, lambda, dist->metric[PSNR].value[0], dist->metric[PSNR].value[1], dist->metric[PSNR].value[2], dist->metric[SSIM].value[0], dist->metric[SSIM].value[1], dist->metric[SSIM].value[2], (int)tmp_time, (int)me_time,
-        img->fld_flag ? "FLD" : "FRM", intras, img->num_ref_idx_l0_active, img->num_ref_idx_l1_active,img->rd_pass, img->nal_reference_idc);
+      ReportVerboseSSIM(img, pic_type, (int) (stats->bit_ctr - stats->bit_ctr_n), 0, lambda, &dist->metric[PSNR], &dist->metric[SSIM], (int) tmp_time, (int) me_time, 0);
     }
     else
     {
-      if (img->currentPicture->idr_flag == TRUE)
-        printf ("%04d(IDR)%8d %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d   %2d %2d  %d   %d\n",
-        frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n), 0,
-        img->AverageFrameQP, lambda, dist->metric[PSNR].value[0], dist->metric[PSNR].value[1], dist->metric[PSNR].value[2], (int)tmp_time, (int)me_time,
-        img->fld_flag ? "FLD" : "FRM", intras, 
-        img->num_ref_idx_l0_active, img->num_ref_idx_l1_active,img->rd_pass, img->nal_reference_idc);
-      else
-        printf ("%04d(I)  %8d %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d   %2d %2d  %d   %d\n",
-        frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n), 0,
-        img->AverageFrameQP, lambda, dist->metric[PSNR].value[0], dist->metric[PSNR].value[1], dist->metric[PSNR].value[2], (int)tmp_time, (int)me_time,
-        img->fld_flag ? "FLD" : "FRM", intras, img->num_ref_idx_l0_active, img->num_ref_idx_l1_active,img->rd_pass, img->nal_reference_idc);
+      ReportVerbose(img, pic_type, (int) (stats->bit_ctr - stats->bit_ctr_n), 0, lambda, &dist->metric[PSNR], (int) tmp_time, (int) me_time, 0);
+    }
+  }
+  else if (params->Verbose == 3)
+  {
+    int lambda = (int) img->lambda_me[I_SLICE][img->AverageFrameQP][0];
+    if (params->Distortion[SSIM] == 1)
+    {
+      ReportVerboseNVBSSIM(img, pic_type, (int) (stats->bit_ctr - stats->bit_ctr_n) + stats->bit_ctr_parametersets_n, stats->bit_ctr_parametersets_n, 0, lambda, &dist->metric[PSNR], &dist->metric[SSIM], (int) tmp_time, (int) me_time, 0);
+    }
+    else
+    {
+      ReportVerboseNVB(img, pic_type, (int) (stats->bit_ctr - stats->bit_ctr_n) + stats->bit_ctr_parametersets_n, stats->bit_ctr_parametersets_n, 0, lambda, &dist->metric[PSNR], (int) tmp_time, (int) me_time, 0);
     }
   }
 }
 
-static void ReportSP(time_t tmp_time, time_t me_time)
+static void ReportB(int64 tmp_time, int64 me_time)
 {
   if (params->Verbose == 1)
   {
-    printf ("%04d(SP) %8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s    %d\n",
-      frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n),
-      img->AverageFrameQP, dist->metric[PSNR].value[0], dist->metric[PSNR].value[1], dist->metric[PSNR].value[2], (int)tmp_time, (int)me_time,
-      img->fld_flag ? "FLD" : "FRM", img->nal_reference_idc);
-  }
-  else if (params->Verbose == 2)
-  {
-    int lambda = (int) img->lambda_me[SP_SLICE][img->AverageFrameQP][0];    
-    if (params->Distortion[SSIM] == 1)
-      printf ("%04d(SP) %8d %1d %2d %2d %7.3f %7.3f %7.3f %7.4f %7.4f %7.4f %9d %7d    %3s %5d   %2d %2d  %d   %d\n",
-      frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n), active_pps->weighted_pred_flag,
-      img->AverageFrameQP, lambda, dist->metric[PSNR].value[0], dist->metric[PSNR].value[1], dist->metric[PSNR].value[2], dist->metric[SSIM].value[0], dist->metric[SSIM].value[1], dist->metric[SSIM].value[2], (int)tmp_time, (int)me_time,
-      img->fld_flag ? "FLD" : "FRM", intras, img->num_ref_idx_l0_active, img->num_ref_idx_l1_active,img->rd_pass, img->nal_reference_idc);
-    else
-      printf ("%04d(SP) %8d %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d   %2d %2d  %d   %d\n",
-      frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n), active_pps->weighted_pred_flag,
-      img->AverageFrameQP, lambda, dist->metric[PSNR].value[0], dist->metric[PSNR].value[1], dist->metric[PSNR].value[2], (int)tmp_time, (int)me_time,
-      img->fld_flag ? "FLD" : "FRM", intras, img->num_ref_idx_l0_active, img->num_ref_idx_l1_active,img->rd_pass, img->nal_reference_idc);
-  }
-}
-
-static void ReportB(time_t tmp_time, time_t me_time)
-{
-  if (params->Verbose == 1)
-  {
-    printf ("%04d(B)  %8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s    %d\n",
-      frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n),
-      img->AverageFrameQP, dist->metric[PSNR].value[0], dist->metric[PSNR].value[1], dist->metric[PSNR].value[2], (int)tmp_time, (int)me_time,
-      img->fld_flag ? "FLD" : "FRM", img->nal_reference_idc);
+    ReportSimple(img, " B ", (int) (stats->bit_ctr - stats->bit_ctr_n), &dist->metric[PSNR], (int) tmp_time, (int) me_time);
   }
   else if (params->Verbose == 2)
   {
     int lambda = (int) img->lambda_me[img->nal_reference_idc ? 5 : B_SLICE][img->AverageFrameQP][0];    
     if (params->Distortion[SSIM] == 1)
-      printf ("%04d(B)  %8d %1d %2d %2d %7.3f %7.3f %7.3f %7.4f %7.4f %7.4f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
-      frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n), active_pps->weighted_bipred_idc,
-      img->AverageFrameQP, lambda, dist->metric[PSNR].value[0], dist->metric[PSNR].value[1], dist->metric[PSNR].value[2], dist->metric[SSIM].value[0], dist->metric[SSIM].value[1], dist->metric[SSIM].value[2], (int)tmp_time, (int)me_time,
-      img->fld_flag ? "FLD" : "FRM", intras, img->direct_spatial_mv_pred_flag, img->num_ref_idx_l0_active, img->num_ref_idx_l1_active, img->rd_pass, img->nal_reference_idc);
+      ReportVerboseSSIM(img, " B ", (int) (stats->bit_ctr - stats->bit_ctr_n), active_pps->weighted_bipred_idc, lambda, &dist->metric[PSNR], &dist->metric[SSIM], (int) tmp_time, (int) me_time, img->direct_spatial_mv_pred_flag);
     else
-      printf ("%04d(B)  %8d %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
-      frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n), active_pps->weighted_bipred_idc,
-      img->AverageFrameQP, lambda, dist->metric[PSNR].value[0], dist->metric[PSNR].value[1], dist->metric[PSNR].value[2], (int)tmp_time, (int)me_time,
-      img->fld_flag ? "FLD" : "FRM", intras, img->direct_spatial_mv_pred_flag, img->num_ref_idx_l0_active, img->num_ref_idx_l1_active, img->rd_pass, img->nal_reference_idc);
+      ReportVerbose(img, " B ", (int) (stats->bit_ctr - stats->bit_ctr_n), active_pps->weighted_bipred_idc, lambda, &dist->metric[PSNR], (int) tmp_time, (int) me_time, img->direct_spatial_mv_pred_flag);
   }
-
-
+  else if (params->Verbose == 3)
+  {
+    int lambda = (int) img->lambda_me[img->nal_reference_idc ? 5 : B_SLICE][img->AverageFrameQP][0];    
+    if (params->Distortion[SSIM] == 1)
+      ReportVerboseNVBSSIM(img, " B ", (int) (stats->bit_ctr - stats->bit_ctr_n) + stats->bit_ctr_parametersets_n, stats->bit_ctr_parametersets_n, active_pps->weighted_bipred_idc, lambda, &dist->metric[PSNR], &dist->metric[SSIM], (int) tmp_time, (int) me_time, img->direct_spatial_mv_pred_flag);
+    else
+      ReportVerboseNVB(img, " B ", (int) (stats->bit_ctr - stats->bit_ctr_n) + stats->bit_ctr_parametersets_n, stats->bit_ctr_parametersets_n, active_pps->weighted_bipred_idc, lambda, &dist->metric[PSNR], (int) tmp_time, (int) me_time, img->direct_spatial_mv_pred_flag);
+  }
 }
 
-
-static void ReportP(time_t tmp_time, time_t me_time)
+static void ReportP(int64 tmp_time, int64 me_time)
 {
+  char pic_type[4];
+
+  if (img->type == SP_SLICE)
+    strcpy(pic_type,"SP ");
+  else if ((params->redundant_pic_flag == 0) || !redundant_coding )
+    strcpy(pic_type," P ");
+  else
+    strcpy(pic_type," R ");
+
   if (params->Verbose == 1)
   {
-    if(params->redundant_pic_flag==0)
-    {
-      printf ("%04d(P)  %8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s    %d\n",
-        frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n),
-        img->AverageFrameQP, dist->metric[PSNR].value[0], dist->metric[PSNR].value[1], dist->metric[PSNR].value[2], (int)tmp_time, (int)me_time,
-        img->fld_flag ? "FLD" : "FRM", img->nal_reference_idc);
-    }
-    else
-    {
-      if(!redundant_coding)
-      {
-        printf ("%04d(P)  %8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s    %d\n",
-          frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n),
-          img->AverageFrameQP, dist->metric[PSNR].value[0], dist->metric[PSNR].value[1], dist->metric[PSNR].value[2], (int)tmp_time, (int)me_time,
-          img->fld_flag ? "FLD" : "FRM", img->nal_reference_idc);
-      }
-      else
-      { // report a redundant picture.
-        printf ("    (R)  %8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s    %d\n",
-          (int) (stats->bit_ctr - stats->bit_ctr_n),
-          img->AverageFrameQP, dist->metric[PSNR].value[0], dist->metric[PSNR].value[1], dist->metric[PSNR].value[2], (int)tmp_time, (int)me_time,
-          img->fld_flag ? "FLD" : "FRM", img->nal_reference_idc);
-      }
-    }
+    ReportSimple(img, pic_type, (int) (stats->bit_ctr - stats->bit_ctr_n), &dist->metric[PSNR], (int) tmp_time, (int) me_time);
   }
   else if (params->Verbose == 2)
   {
     int lambda = (int) img->lambda_me[P_SLICE][img->AverageFrameQP][0];    
     if (params->Distortion[SSIM] == 1)
-      printf ("%04d(P)  %8d %1d %2d %2d %7.3f %7.3f %7.3f %7.4f %7.4f %7.4f %9d %7d    %3s %5d   %2d %2d  %d   %d\n",
-      frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n), active_pps->weighted_pred_flag,
-      img->AverageFrameQP, lambda, dist->metric[PSNR].value[0], dist->metric[PSNR].value[1], dist->metric[PSNR].value[2], dist->metric[SSIM].value[0], dist->metric[SSIM].value[1], dist->metric[SSIM].value[2], (int)tmp_time, (int)me_time,
-      img->fld_flag ? "FLD" : "FRM", intras, img->num_ref_idx_l0_active, img->num_ref_idx_l1_active, img->rd_pass, img->nal_reference_idc);
+      ReportVerboseSSIM(img, pic_type, (int) (stats->bit_ctr - stats->bit_ctr_n), active_pps->weighted_pred_flag, lambda, &dist->metric[PSNR], &dist->metric[SSIM], (int) tmp_time, (int) me_time, 0);
     else
-      printf ("%04d(P)  %8d %1d %2d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d   %2d %2d  %d   %d\n",
-      frame_no, (int) (stats->bit_ctr - stats->bit_ctr_n), active_pps->weighted_pred_flag,
-      img->AverageFrameQP, lambda, dist->metric[PSNR].value[0], dist->metric[PSNR].value[1], dist->metric[PSNR].value[2], (int)tmp_time, (int)me_time,
-      img->fld_flag ? "FLD" : "FRM", intras, img->num_ref_idx_l0_active, img->num_ref_idx_l1_active, img->rd_pass, img->nal_reference_idc);
+      ReportVerbose(img, pic_type, (int) (stats->bit_ctr - stats->bit_ctr_n), active_pps->weighted_pred_flag, lambda, &dist->metric[PSNR], (int) tmp_time, (int) me_time, 0);
+  }
+  else if (params->Verbose == 3)
+  {
+    int lambda = (int) img->lambda_me[P_SLICE][img->AverageFrameQP][0];    
+    if (params->Distortion[SSIM] == 1)
+      ReportVerboseNVBSSIM(img, pic_type, (int) (stats->bit_ctr - stats->bit_ctr_n) + stats->bit_ctr_parametersets_n, stats->bit_ctr_parametersets_n, active_pps->weighted_pred_flag, lambda, &dist->metric[PSNR], &dist->metric[SSIM], (int) tmp_time, (int) me_time, 0);
+    else
+      ReportVerboseNVB(img, pic_type, (int) (stats->bit_ctr - stats->bit_ctr_n) + stats->bit_ctr_parametersets_n, stats->bit_ctr_parametersets_n, active_pps->weighted_pred_flag, lambda, &dist->metric[PSNR], (int) tmp_time, (int) me_time, 0);
   }
 }
 
@@ -2046,7 +1974,7 @@ static void ReportP(time_t tmp_time, time_t me_time)
  *    code image vertical size (chroma)
  ************************************************************************
  */
-static void PaddAutoCropBorders (FrameFormat output, int img_size_x, int img_size_y, int img_size_x_cr, int img_size_y_cr)
+static void PaddAutoCropBorders (FrameFormat output, int img_size_x, int img_size_y, int img_size_x_cr, int img_size_y_cr, imgpel **pImage[3])
 {
   int x, y;
 
@@ -2055,12 +1983,12 @@ static void PaddAutoCropBorders (FrameFormat output, int img_size_x, int img_siz
   if (output.width < img_size_x)
     for (y=0; y < output.height; y++)
       for (x = output.width; x < img_size_x; x++)
-        pImgOrg[0] [y][x] = pImgOrg[0][y][x-1];
+        pImage[0] [y][x] = pImage[0][y][x-1];
 
   //padding bottom border
   if (output.height < img_size_y)
     for (y = output.height; y<img_size_y; y++)
-      memcpy(pImgOrg[0][y], pImgOrg[0][y - 1], img_size_x * sizeof(imgpel));
+      memcpy(pImage[0][y], pImage[0][y - 1], img_size_x * sizeof(imgpel));
 
   // Chroma or all other components
   if (img->yuv_format != YUV400)
@@ -2073,12 +2001,12 @@ static void PaddAutoCropBorders (FrameFormat output, int img_size_x, int img_siz
       if (output.width_cr < img_size_x_cr)
         for (y=0; y < output.height_cr; y++)
           for (x = output.width_cr; x < img_size_x_cr; x++)
-            pImgOrg [k][y][x] = pImgOrg[k][y][x-1];
+            pImage [k][y][x] = pImage[k][y][x-1];
 
       //padding bottom border
       if (output.height_cr < img_size_y_cr)
-        for (y = output.height_cr; y<img_size_y_cr; y++)
-          memcpy(pImgOrg[k][y], pImgOrg[k][y - 1], img_size_x_cr * sizeof(imgpel));
+        for (y = output.height_cr; y < img_size_y_cr; y++)
+          memcpy(pImage[k][y], pImage[k][y - 1], img_size_x_cr * sizeof(imgpel));
     }
   }
 }
@@ -2096,52 +2024,55 @@ static void PaddAutoCropBorders (FrameFormat output, int img_size_x, int img_siz
  *    global variable frame_no updated -- dunno, for what this one is necessary
  ************************************************************************
  */
-int CalculateFrameNumber(void)
+int CalculateFrameNumber(ImageParameters *p_img)
 {
-  int frm_sign = (IMG_NUMBER && (IMG_NUMBER <= params->intra_delay)) ? -1 : 1;
-  int delay    = (IMG_NUMBER <= params->intra_delay) ? params->intra_delay : 0;
+  int frm_sign = (p_img->gop_number && (p_img->gop_number <= params->intra_delay)) ? -1 : 1;
+  int delay    = (p_img->gop_number <= params->intra_delay) ? params->intra_delay : 0;
   
-  if (img->b_frame_to_code)
+  if (p_img->b_frame_to_code)
   {
-    if ((IMG_NUMBER && (IMG_NUMBER <= params->intra_delay)))
+    if ((p_img->gop_number && (p_img->gop_number <= params->intra_delay)))
     {
       if (params->HierarchicalCoding)
-        frame_no = start_tr_in_this_IGOP + (params->intra_delay - IMG_NUMBER) * (params->jumpd + 1) + (int) (img->b_interval * (double) (1 + gop_structure[img->b_frame_to_code - 1].display_no));
+        p_img->frame_no = p_img->start_tr_gop + (params->intra_delay - p_img->gop_number) * p_img->base_dist 
+        +  (int) (p_img->frame_interval * (double) (1 + gop_structure[p_img->b_frame_to_code - 1].display_no));
       else
-        frame_no = start_tr_in_this_IGOP + (params->intra_delay - IMG_NUMBER) * (params->jumpd + 1) + (int) (img->b_interval * (double) img->b_frame_to_code);
+        p_img->frame_no = p_img->start_tr_gop + (params->intra_delay - p_img->gop_number) * p_img->base_dist 
+        + (int) (p_img->frame_interval * (double) p_img->b_frame_to_code);
     }
     else
     {
       if (params->HierarchicalCoding)
-        frame_no = start_tr_in_this_IGOP + (IMG_NUMBER - 1) * (params->jumpd + 1) + (int) (img->b_interval * (double) (1 + gop_structure[img->b_frame_to_code - 1].display_no));
+        p_img->frame_no = p_img->start_tr_gop + (p_img->gop_number - 1) * p_img->base_dist 
+        + (int) (p_img->frame_interval * (double) (1 + gop_structure[p_img->b_frame_to_code - 1].display_no));
       else
-        frame_no = start_tr_in_this_IGOP + (IMG_NUMBER - 1) * (params->jumpd + 1) + (int) (img->b_interval * (double) img->b_frame_to_code);
+        p_img->frame_no = p_img->start_tr_gop + (p_img->gop_number - 1) * p_img->base_dist 
+        + (int) (p_img->frame_interval * (double) p_img->b_frame_to_code);
     }
-    //printf("frame_no %d %d %d\n",frame_no,IMG_NUMBER - 1,(frm_sign * (IMG_NUMBER - 1) + params->intra_delay));
+    //printf("frame_no %d %d %d\n",p_img->frame_no,p_img->gop_number - 1,(frm_sign * (p_img->gop_number - 1) + params->intra_delay));
   }
   else
   {
-    if (params->idr_period && params->EnableIDRGOP && img->frm_number && ((!params->adaptive_idr_period && (img->frm_number - img->lastIDRnumber ) % params->idr_period == 0)
-      || (params->adaptive_idr_period == 1 && (img->frm_number - imax(img->lastIntraNumber, img->lastIDRnumber) ) % params->idr_period == 0)) )
+    if (params->idr_period && params->EnableIDRGOP && p_img->frm_number && 
+      ((!params->adaptive_idr_period && (p_img->frm_number - p_img->lastIDRnumber ) % params->idr_period == 0)
+      || (params->adaptive_idr_period == 1 && (p_img->frm_number - imax(p_img->lastIntraNumber, p_img->lastIDRnumber) ) % params->idr_period == 0)) )
     {
       delay = params->intra_delay;
-      img->rewind_frame += params->jumpd;
-      start_frame_no_in_this_IGOP = img->frm_number;
-      start_tr_in_this_IGOP = (img->frm_number) * (params->jumpd + 1) - img->rewind_frame;      
+      p_img->rewind_frame += params->NumberBFrames;
+      p_img->start_frame_no = p_img->frm_number;
+      p_img->gop_number = (p_img->number - p_img->start_frame_no);
+      p_img->start_tr_gop = (p_img->frm_number) * p_img->base_dist - p_img->rewind_frame;
     }
 
-    frame_no = start_tr_in_this_IGOP + (frm_sign * IMG_NUMBER + delay) * (params->jumpd + 1);     
-#ifdef _ADAPT_LAST_GROUP_
-    if (params->last_frame && (img->frm_number + 1) == params->no_frames)
-      frame_no = params->last_frame;
-#endif
+    p_img->frame_no = p_img->start_tr_gop + (frm_sign * p_img->gop_number + delay) * p_img->base_dist;
+
+    if (p_img->frame_no > params->last_frame)
+      p_img->frame_no = imin(p_img->frame_no, (params->no_frames - 1) * (params->frame_skip + 1));
+    //printf("%d %d %d %d %d\n", p_img->frame_no, p_img->start_tr_gop, p_img->gop_number, delay, params->last_frame);
   }
 
-  return frame_no;
+  return p_img->frame_no;
 }
-
-
-
 
 /*!
  ************************************************************************
@@ -2149,14 +2080,15 @@ int CalculateFrameNumber(void)
  *    point to frame coding variables
  ************************************************************************
  */
-static void put_buffer_frame(ImageParameters *img)
+static void put_buffer_frame(ImageParameters *p_img)
 {
-  pCurImg    = img_org_frm[0];
-  pImgOrg[0] = img_org_frm[0];    
-  if (img->yuv_format != YUV400)
+  pCurImg    = imgData.frm_data[0];
+  pImgOrg[0] = imgData.frm_data[0];    
+  
+  if (p_img->yuv_format != YUV400)
   {
-    pImgOrg[1] = img_org_frm[1];
-    pImgOrg[2] = img_org_frm[2];
+    pImgOrg[1] = imgData.frm_data[1];
+    pImgOrg[2] = imgData.frm_data[2];
   }
 }
 
@@ -2166,16 +2098,17 @@ static void put_buffer_frame(ImageParameters *img)
  *    point to top field coding variables
  ************************************************************************
  */
-static void put_buffer_top(ImageParameters *img)
+static void put_buffer_top(ImageParameters *p_img)
 {
-  img->fld_type = 0;
+  p_img->fld_type = 0;
 
-  pCurImg    = img_org_top[0];
-  pImgOrg[0] = img_org_top[0];
-  if (img->yuv_format != YUV400)
+  pCurImg    = imgData.top_data[0];
+  pImgOrg[0] = imgData.top_data[0];
+  
+  if (p_img->yuv_format != YUV400)
   {
-    pImgOrg[1] = img_org_top[1];
-    pImgOrg[2] = img_org_top[2];
+    pImgOrg[1] = imgData.top_data[1];
+    pImgOrg[2] = imgData.top_data[2];
   }
 }
 
@@ -2185,16 +2118,17 @@ static void put_buffer_top(ImageParameters *img)
  *    point to bottom field coding variables
  ************************************************************************
  */
-static void put_buffer_bot(ImageParameters *img)
+static void put_buffer_bot(ImageParameters *p_img)
 {
-  img->fld_type = 1;
+  p_img->fld_type = 1;
 
-  pCurImg    = img_org_bot[0];  
-  pImgOrg[0] = img_org_bot[0];
-  if (img->yuv_format != YUV400)
+  pCurImg    = imgData.bot_data[0];  
+  pImgOrg[0] = imgData.bot_data[0];
+  
+  if (p_img->yuv_format != YUV400)
   {
-    pImgOrg[1] = img_org_bot[1];
-    pImgOrg[2] = img_org_bot[2];
+    pImgOrg[1] = imgData.bot_data[1];
+    pImgOrg[2] = imgData.bot_data[2];
   }
 }
 
@@ -2278,7 +2212,7 @@ static void rdPictureCoding(void)
       rc_init_frame_rdpic( rateRatio );
 
     img->qp = iClip3( img->RCMinQP, img->RCMaxQP, img->qp );
-    frame_picture (frame_pic[1],1);
+    frame_picture (frame_pic[1], &imgData, 1);
     img->rd_pass=picture_coding_decision(frame_pic[0], frame_pic[1], rd_qp);
   }
 
@@ -2314,6 +2248,7 @@ static void rdPictureCoding(void)
 
   if ( params->WPMCPrecision )
     pWPX->curr_wp_rd_pass = pWPX->wp_rd_passes + 2;
+  
   if (img->type != I_SLICE )
   {
     skip_encode = 0;
@@ -2321,14 +2256,14 @@ static void rdPictureCoding(void)
 
     if (img->type == P_SLICE && (intras * 100 )/img->FrameSizeInMbs >=75)
     {
-      set_slice_type( I_SLICE );
+      set_slice_type(img,  I_SLICE );
       active_pps = PicParSet[0];
     }
     else if (img->type==P_SLICE)
     {
       if (params->GenerateMultiplePPS)
       {
-        if ((params->RDPSliceWeightOnly != 2) && (TestWPPSlice(img, params, 0) == 1))
+        if ((params->RDPSliceWeightOnly != 2) && (TestWPPSlice(img, params, 1) == 1))
         {
           active_pps = PicParSet[1];
           if ( params->WPMCPrecision )
@@ -2338,7 +2273,7 @@ static void rdPictureCoding(void)
           active_pps = PicParSet[1];
         else if (params->RDPSliceBTest && active_sps->profile_idc != 66)
         {
-          set_slice_type( B_SLICE );
+          set_slice_type(img,  B_SLICE );
           active_pps = PicParSet[0];
         }
         else
@@ -2395,7 +2330,7 @@ static void rdPictureCoding(void)
       rc_init_frame_rdpic( rateRatio );
 
     img->qp = iClip3( img->RCMinQP, img->RCMaxQP, img->qp );
-    frame_picture (frame_pic[2],2);
+    frame_picture (frame_pic[2], &imgData, 2);
 
     if (img->rd_pass==0)
       img->rd_pass  = 2 * picture_coding_decision(frame_pic[0], frame_pic[2], rd_qp);
@@ -2413,7 +2348,7 @@ static void rdPictureCoding(void)
   if (img->rd_pass==0)
   {
     enc_picture = enc_frame_picture[0];
-    set_slice_type( prevtype );
+    set_slice_type( img, prevtype );
     active_pps  = PicParSet[0];
     img->qp     = rd_qp;
     intras      = previntras;
@@ -2421,7 +2356,7 @@ static void rdPictureCoding(void)
   else if (img->rd_pass==1)
   {
     enc_picture = enc_frame_picture[1];
-    set_slice_type( prevtype );
+    set_slice_type( img, prevtype );
     active_pps  = sec_pps;
     img->qp     = second_qp;
     intras      = previntras;
@@ -2441,6 +2376,7 @@ void output_SP_coefficients()
 {
   int i,k;
   FILE *SP_coeff_file;
+  int ret;
   if(number_sp2_frames==0)
   {
     if ((SP_coeff_file = fopen(params->sp_output_filename,"wb")) == NULL)
@@ -2461,13 +2397,22 @@ void output_SP_coefficients()
 
   for(i=0;i<img->height;i++)
   {
-    fwrite(lrec[i],sizeof(int),img->width,SP_coeff_file);
+    ret = fwrite(lrec[i],sizeof(int),img->width,SP_coeff_file);
+    if (ret != img->width)
+    {
+      error ("cannot write to SP output file", -1);
+    }
   }
+
   for(k=0;k<2;k++)
   {
     for(i=0;i<img->height_cr;i++)
     {
-      fwrite(lrec_uv[k][i],sizeof(int),img->width_cr,SP_coeff_file);
+      ret = fwrite(lrec_uv[k][i],sizeof(int),img->width_cr,SP_coeff_file);
+      if (ret != img->width_cr)
+      {
+        error ("cannot write to SP output file", -1);
+      }
     }
   }
   fclose(SP_coeff_file);
@@ -2484,7 +2429,7 @@ void read_SP_coefficients()
   int i,k;
   FILE *SP_coeff_file;
 
-  if ( (params->qp2start > 0) && ( ( (img->tr ) % (2*params->qp2start) ) >=params->qp2start ))
+  if ( (params->qp2start > 0) && ( ( (img->frame_no ) % (2*params->qp2start) ) >=params->qp2start ))
   {
     if ((SP_coeff_file = fopen(params->sp2_input_filename1,"rb")) == NULL)
     {
@@ -2547,5 +2492,82 @@ void select_plane(ColorPlane color_plane)
   img->dc_pred_value          = img->dc_pred_value_comp[color_plane];
   img->curr_res               = img->mb_rres [color_plane];
   img->curr_prd               = img->mb_pred [color_plane];
+}
+
+/*!
+*************************************************************************************
+* Brief
+*     Is this picture the first access unit in this GOP?
+*************************************************************************************
+*/
+static int is_gop_first_unit( void )
+{
+  return ( get_idr_flag() || ( img->type == I_SLICE && params->EnableOpenGOP ) );
+}
+
+/*!
+*************************************************************************************
+* Brief
+*     AUD, SPS, PPS, and SEI messages
+*************************************************************************************
+*/
+void write_non_vcl_nalu( void )
+{
+  // SPS + PPS
+  if (params->ResendSPS == 3 && is_gop_first_unit() && img->number)
+  {
+    stats->bit_slice = rewrite_paramsets();
+  }
+
+  if (params->ResendSPS == 2 && get_idr_flag() && img->number)
+  {
+    stats->bit_slice = rewrite_paramsets();
+  }
+  if (params->ResendSPS == 1 && img->type == I_SLICE && img->frm_number != 0)
+  {
+    stats->bit_slice = rewrite_paramsets();
+  }
+  // PPS
+  if ( params->ResendPPS && img->frm_number != 0
+    && (img->type != I_SLICE || params->ResendSPS != 1) 
+    && (!(params->ResendSPS == 2 && get_idr_flag()))
+    && (!(params->ResendPPS == 3 && is_gop_first_unit())) )
+  {
+    // Access Unit Delimiter NALU
+    if ( params->SendAUD )
+    {
+      stats->bit_ctr_parametersets_n = Write_AUD_NALU();
+      stats->bit_ctr_parametersets_n += write_PPS(0, 0);
+    }
+    else
+    {
+      stats->bit_ctr_parametersets_n = write_PPS(0, 0);
+    }
+  }
+  // Access Unit Delimiter NALU
+  if ( params->SendAUD
+    && (img->type != I_SLICE || params->ResendSPS != 1) 
+    && (!(params->ResendSPS == 2 && get_idr_flag()))
+    && (!(params->ResendPPS == 3 && is_gop_first_unit())) )
+  {
+    stats->bit_ctr_parametersets_n += Write_AUD_NALU();
+  }
+
+  UpdateSubseqInfo (img->layer);        // Tian Dong (Sept 2002)
+  UpdateSceneInformation (FALSE, 0, 0, -1); // JVT-D099, scene information SEI, nothing included by default
+
+  //! Commented out by StW, needs fixing in SEI.h to keep the trace file clean
+  //  PrepareAggregationSEIMessage ();
+
+  // write tone mapping SEI message
+  if (params->ToneMappingSEIPresentFlag)
+  {
+    UpdateToneMapping();
+  }
+
+  PrepareAggregationSEIMessage();
+  stats->bit_ctr_parametersets_n += Write_SEI_NALU(0);
+  // update seq NVB counter
+  stats->bit_ctr_parametersets   += stats->bit_ctr_parametersets_n;
 }
 

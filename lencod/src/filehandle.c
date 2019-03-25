@@ -88,6 +88,12 @@ int start_sequence(void)
       return 1;
   }
 
+  // Access Unit Delimiter NALU
+  if ( params->SendAUD )
+  {
+    len += Write_AUD_NALU();
+  }
+
   //! As a sequence header, here we write both sequence and picture
   //! parameter sets.  As soon as IDR is implemented, this should go to the
   //! IDR part, as both parsets have to be transmitted as part of an IDR.
@@ -127,6 +133,12 @@ int rewrite_paramsets(void)
 {
   int i,len=0, total_pps = (params->GenerateMultiplePPS) ? 3 : 1;
   NALU_t *nalu;
+
+  // Access Unit Delimiter NALU
+  if ( params->SendAUD )
+  {
+    len += Write_AUD_NALU();
+  }
 
   //! As a sequence header, here we write both sequence and picture
   //! parameter sets.  As soon as IDR is implemented, this should go to the

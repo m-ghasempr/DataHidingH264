@@ -28,8 +28,9 @@ int  get_mem3Dmv(MotionVector ****array3D, int dim0, int dim1, int dim2);
 int  get_mem4Dmv(MotionVector *****array4D, int dim0, int dim1, int dim2, int dim3);
 int  get_mem5Dmv(MotionVector ******array5D, int dim0, int dim1, int dim2, int dim3, int dim4);
 
-int  get_mem2D(byte ***array2D, int rows, int columns);
-int  get_mem3D(byte ****array2D, int frames, int rows, int columns);
+int  get_mem2D(byte ***array2D, int dim0, int dim1);
+int  get_mem3D(byte ****array3D, int dim0, int dim1, int dim2);
+int  get_mem4D(byte *****array4D, int dim0, int dim1, int dim2, int dim3);
 
 int  get_mem2Dint(int ***array2D, int rows, int columns);
 int  get_mem3Dint(int ****array3D, int frames, int rows, int columns);
@@ -74,7 +75,9 @@ void free_mem4Dmv   (MotionVector  ****array2D);
 void free_mem5Dmv   (MotionVector *****array2D);
 
 void free_mem2D     (byte      **array2D);
-void free_mem3D     (byte     ***array2D);
+void free_mem3D     (byte     ***array3D);
+void free_mem4D     (byte    ****array4D);
+
 
 void free_mem2Dint  (int       **array2D);
 void free_mem3Dint  (int      ***array3D);
@@ -95,7 +98,6 @@ void free_mem2Dpel  (imgpel    **array2D);
 void free_mem3Dpel  (imgpel   ***array3D);
 void free_mem4Dpel  (imgpel  ****array4D);
 void free_mem5Dpel  (imgpel *****array5D);
-
 void free_mem2Ddouble(double **array2D);
 
 void free_mem2Dodouble(double **array2D, int offset);

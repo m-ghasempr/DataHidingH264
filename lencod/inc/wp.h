@@ -19,10 +19,11 @@
 
 #include "wp_lms.h"
 #include "wp_mcprec.h"
+#include "wp_mciter.h"
 
 #define DEBUG_WP  0
 
-void InitWP(InputParameters *params);
+void InitWP              (ImageParameters *img, InputParameters *params);
 void (*EstimateWPBSlice) (ImageParameters *img, InputParameters *params);
 void (*EstimateWPPSlice) (ImageParameters *img, InputParameters *params, int offset);
 int  (*TestWPPSlice)     (ImageParameters *img, InputParameters *params, int offset);

@@ -34,8 +34,8 @@
  *
  ************************************************************************
  */
-int quant_dc2x2_around(int (*tblock)[4], int qp, int* DCLevel, int* DCRun, 
-                       int **fadjust, int levelscale, int invlevelscale, int **leveloffset,
+int quant_dc2x2_around(int **tblock, int qp, int* DCLevel, int* DCRun, 
+                       int **fadjust, int levelscale, int invlevelscale, int leveloffset,
                        const byte (*pos_scan)[2], int is_cavlc)
 {
   static int coeff_ctr;
@@ -61,7 +61,7 @@ int quant_dc2x2_around(int (*tblock)[4], int qp, int* DCLevel, int* DCRun,
     if (*m7)
     {
       scaled_coeff = iabs (*m7) * levelscale;
-      level = (scaled_coeff + (leveloffset[0][0] << 1) ) >> q_bits;
+      level = (scaled_coeff + (leveloffset << 1) ) >> q_bits;
 
       if (level  != 0)
       {
@@ -107,8 +107,8 @@ int quant_dc2x2_around(int (*tblock)[4], int qp, int* DCLevel, int* DCRun,
  *
  ************************************************************************
  */
-int quant_dc4x2_around(int (*tblock)[4], int qp, int* DCLevel, int* DCRun, 
-                       int **fadjust, int levelscale, int invlevelscale, int **leveloffset,
+int quant_dc4x2_around(int **tblock, int qp, int* DCLevel, int* DCRun, 
+                       int **fadjust, int levelscale, int invlevelscale, int leveloffset,
                        const byte (*pos_scan)[2], int is_cavlc)
 {
   static int i,j, coeff_ctr;
@@ -135,7 +135,7 @@ int quant_dc4x2_around(int (*tblock)[4], int qp, int* DCLevel, int* DCRun,
     if (*m7 != 0)
     {
       scaled_coeff = iabs (*m7) * levelscale;
-      level = (scaled_coeff + (leveloffset[0][0] << 1) ) >> q_bits;
+      level = (scaled_coeff + (leveloffset << 1) ) >> q_bits;
 
       if (level  != 0)
       {

@@ -371,13 +371,13 @@ void ParseMatrix (char *buf, int bufsize)
     cnt=0;
     if (0 > (MapIdx = CheckParameterName (items[i+cnt], &type)))
     {
-      snprintf (errortext, ET_SIZE, " Parsing error in config file: Parameter Name '%s' not recognized.", items[i+cnt]);
+      snprintf (errortext, ET_SIZE, " Parsing error in quantization matrix config file: Parameter Name '%s' not recognized.", items[i+cnt]);
       error (errortext, 300);
     }
     cnt++;
     if (strcmp ("=", items[i+cnt]))
     {
-      snprintf (errortext, ET_SIZE, " Parsing error in config file: '=' expected as the second token in each item.");
+      snprintf (errortext, ET_SIZE, " Parsing error in quantization matrix config file: '=' expected as the second token in each item.");
       error (errortext, 300);
     }
     cnt++;
@@ -399,7 +399,7 @@ void ParseMatrix (char *buf, int bufsize)
     {
       if (1 != sscanf (items[i+cnt+j], "%d", &IntContent))
       {
-        snprintf (errortext, ET_SIZE, " Parsing error: Expected numerical value for Parameter of %s, found '%s'.", items[i], items[i+cnt+j]);
+        snprintf (errortext, ET_SIZE, " Parsing error in quantization matrix file: Expected numerical value for Parameter of %s, found '%s'.", items[i], items[i+cnt+j]);
         error (errortext, 300);
       }
 
@@ -508,9 +508,9 @@ void allocate_QMatrix (void)
   int i;
 
   if ((qp_per_matrix = (int*)malloc((MAX_QP + 1 +  bitdepth_qp_scale)*sizeof(int))) == NULL)
-    no_mem_exit("init_global_buffers: qp_per_matrix");
+    no_mem_exit("allocate_QMatrix: qp_per_matrix");
   if ((qp_rem_matrix = (int*)malloc((MAX_QP + 1 +  bitdepth_qp_scale)*sizeof(int))) == NULL)
-    no_mem_exit("init_global_buffers: qp_per_matrix");
+    no_mem_exit("allocate_QMatrix: qp_per_matrix");
 
   for (i = 0; i < MAX_QP + bitdepth_qp_scale + 1; i++)
   {

@@ -1,4 +1,3 @@
-
 /*!
  *************************************************************************************
  * \file biaridecod.c
@@ -23,19 +22,13 @@
 #include "memalloc.h"
 #include "biaridecod.h"
 
-#define Dcodestrm       (dep->Dcodestrm)
-#define Dcodestrm_len   (dep->Dcodestrm_len)
 
-#define B_BITS    10  // Number of bits to represent the whole coding interval
-#define HALF      (1 << (B_BITS-1))
-#define QUARTER   (1 << (B_BITS-2))
-
-#define Dvalue          (dep->Dvalue)
-#define DbitsLeft       (dep->DbitsLeft)
-#define Drange          (dep->Drange)
+#define B_BITS    10      // Number of bits to represent the whole coding interval
+#define HALF      0x0200  //(1 << (B_BITS-1))
+#define QUARTER   0x0100  //(1 << (B_BITS-2))
 
 /* Range table for  LPS */
-const byte rLPS_table_64x4[64][4]=
+static const byte rLPS_table_64x4[64][4]=
 {
   { 128, 176, 208, 240},
   { 128, 167, 197, 227},
@@ -104,7 +97,7 @@ const byte rLPS_table_64x4[64][4]=
 };
 
 
-const byte AC_next_state_MPS_64[64] =    
+static const byte AC_next_state_MPS_64[64] =    
 {
   1,2,3,4,5,6,7,8,9,10,
   11,12,13,14,15,16,17,18,19,20,
@@ -116,7 +109,7 @@ const byte AC_next_state_MPS_64[64] =
 };
 
 
-const byte AC_next_state_LPS_64[64] =    
+static const byte AC_next_state_LPS_64[64] =    
 {
   0, 0, 1, 2, 2, 4, 4, 5, 6, 7,
   8, 9, 9,11,11,12,13,13,15,15,
@@ -127,14 +120,11 @@ const byte AC_next_state_LPS_64[64] =
   37,38,38,63
 };
 
+static const byte renorm_table_32[32]={6,5,4,4,3,3,3,3,2,2,2,2,2,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
 
-const byte renorm_table_32[32]={6,5,4,4,3,3,3,3,2,2,2,2,2,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
-
+#if TRACE
 extern int symbolCount;
-
-int binCount = 0;
-
-
+#endif
 
 /************************************************************************
  ************************************************************************
@@ -186,9 +176,9 @@ void arideco_delete_decoding_environment(DecodingEnvironmentPtr dep)
  */
 void arideco_done_decoding(DecodingEnvironmentPtr dep)
 {
-  (*Dcodestrm_len)++;
+  (*dep->Dcodestrm_len)++;
 #if(TRACE==2)
-  fprintf(p_trace, "done_decoding: %d\n", *Dcodestrm_len);
+  fprintf(p_trace, "done_decoding: %d\n", *dep->Dcodestrm_len);
 #endif
 }
 
@@ -201,9 +191,9 @@ void arideco_done_decoding(DecodingEnvironmentPtr dep)
 unsigned int getbyte(DecodingEnvironmentPtr dep)
 {     
 #if(TRACE==2)
-  fprintf(p_trace, "get_byte: %d\n", (*Dcodestrm_len));
+  fprintf(p_trace, "get_byte: %d\n", (*dep->Dcodestrm_len));
 #endif
-  return Dcodestrm[(*Dcodestrm_len)++];
+  return dep->Dcodestrm[(*dep->Dcodestrm_len)++];
 }
 
 /*!
@@ -214,13 +204,13 @@ unsigned int getbyte(DecodingEnvironmentPtr dep)
  */
 unsigned int getword(DecodingEnvironmentPtr dep)
 {
-  int d = *Dcodestrm_len;
+  int d = *dep->Dcodestrm_len;
 #if(TRACE==2)
   fprintf(p_trace, "get_byte: %d\n", d);
-  fprintf(p_trace, "get_byte: %d\n", d+1);
+  fprintf(p_trace, "get_byte: %d\n", d + 1);
 #endif
-  *Dcodestrm_len = d+2;
-  return ((Dcodestrm[d]<<8) | Dcodestrm[d+1]);
+  *dep->Dcodestrm_len += 2;
+  return ((dep->Dcodestrm[d]<<8) | dep->Dcodestrm[d+1]);
 }
 /*!
  ************************************************************************
@@ -232,19 +222,18 @@ void arideco_start_decoding(DecodingEnvironmentPtr dep, unsigned char *code_buff
                             int firstbyte, int *code_len)
 {
 
-  Dcodestrm      =    code_buffer;
-  Dcodestrm_len  = code_len;
-  *Dcodestrm_len = firstbyte;
+  dep->Dcodestrm      = code_buffer;
+  dep->Dcodestrm_len  = code_len;
+  *dep->Dcodestrm_len = firstbyte;
 
-  Dvalue = getbyte(dep);
-  Dvalue = (Dvalue<<16) | getword(dep); // lookahead of 2 bytes: always make sure that bitstream buffer
+  dep->Dvalue = getbyte(dep);
+  dep->Dvalue = (dep->Dvalue << 16) | getword(dep); // lookahead of 2 bytes: always make sure that bitstream buffer
                                         // contains 2 more bytes than actual bitstream
-  DbitsLeft = 15;
-
-  Drange = HALF-2;
+  dep->DbitsLeft = 15;
+  dep->Drange = HALF-2;
 
 #if (2==TRACE)
-  fprintf(p_trace, "value: %d firstbyte: %d code_len: %d\n", Dvalue>>DbitsLeft, firstbyte, *code_len);
+  fprintf(p_trace, "value: %d firstbyte: %d code_len: %d\n", dep->Dvalue >> dep->DbitsLeft, firstbyte, *code_len);
 #endif
 }
 
@@ -257,8 +246,7 @@ void arideco_start_decoding(DecodingEnvironmentPtr dep, unsigned char *code_buff
  */
 int arideco_bits_read(DecodingEnvironmentPtr dep)
 { 
-  int tmp;
-  tmp = ((*Dcodestrm_len) << 3)  - DbitsLeft;
+  int tmp = ((*dep->Dcodestrm_len) << 3) - dep->DbitsLeft;
 
 #if (2==TRACE)
   fprintf(p_trace, "tmp: %d\n", tmp);
@@ -278,30 +266,30 @@ int arideco_bits_read(DecodingEnvironmentPtr dep)
 unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi_ct )
 {
   register unsigned int state = bi_ct->state;
-  register unsigned int bit = bi_ct->MPS;
-  register unsigned int value = Dvalue;
-  register unsigned int range = Drange;
-  register int renorm =1;
+  register unsigned int bit   = bi_ct->MPS;
+  register unsigned int value = dep->Dvalue;
+  register unsigned int range = dep->Drange;
+  register int renorm = 1;
   register unsigned int rLPS  = rLPS_table_64x4[state][(range>>6) & 0x03];
 
   range -= rLPS;
 
-  if(value < (range<<DbitsLeft))   //MPS
+  if(value < (range << dep->DbitsLeft))   //MPS
   {
     bi_ct->state = AC_next_state_MPS_64[state]; // next state 
 
     if( range >= QUARTER )
     {
-      Drange = range;
-      return(bit);
+      dep->Drange = range;
+      return (bit);
     }
     else 
-      range<<=1;
+      range <<= 1;
 
   }
   else         // LPS 
   {
-    value -= (range<<DbitsLeft);
+    value -= (range << dep->DbitsLeft);
     bit ^= 0x01;
 
     if (!state)          // switch meaning of MPS if necessary 
@@ -311,20 +299,19 @@ unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi
 
     renorm = renorm_table_32[(rLPS>>3) & 0x1F]; 
     range = (rLPS << renorm);
-
   }
 
-  Drange = range;
-  DbitsLeft -= renorm;
-  if( DbitsLeft > 0 )
+  dep->Drange = range;
+  dep->DbitsLeft -= renorm;
+  if( dep->DbitsLeft > 0 )
   { 
-    Dvalue=value;
+    dep->Dvalue = value;
     return(bit);
   } 
 
-  Dvalue = (value << 16) | getword(dep);    // lookahead of 2 bytes: always make sure that bitstream buffer
-                                            // contains 2 more bytes than actual bitstream
-  DbitsLeft += 16;
+  dep->Dvalue = (value << 16) | getword(dep);    // lookahead of 2 bytes: always make sure that bitstream buffer
+                                                 // contains 2 more bytes than actual bitstream
+  dep->DbitsLeft += 16;
 
   return(bit);
 }
@@ -341,24 +328,24 @@ unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi
 unsigned int biari_decode_symbol_eq_prob(DecodingEnvironmentPtr dep)
 {
   register int tmp_value;
-  register int value = Dvalue;
+  register int value = dep->Dvalue;
 
-  if(--DbitsLeft == 0)  
+  if(--(dep->DbitsLeft) == 0)  
   {
     value = (value << 16) | getword( dep );  // lookahead of 2 bytes: always make sure that bitstream buffer
                                              // contains 2 more bytes than actual bitstream
-    DbitsLeft = 16;
+    dep->DbitsLeft = 16;
   }
-  tmp_value  = value - (Drange << DbitsLeft);
+  tmp_value  = value - (dep->Drange << dep->DbitsLeft);
 
   if (tmp_value < 0)
   {
-    Dvalue = value;
+    dep->Dvalue = value;
     return 0;
   }
   else
   {
-    Dvalue = tmp_value;
+    dep->Dvalue = tmp_value;
     return 1;
   }
 }
@@ -373,27 +360,27 @@ unsigned int biari_decode_symbol_eq_prob(DecodingEnvironmentPtr dep)
  */
 unsigned int biari_decode_final(DecodingEnvironmentPtr dep)
 {
-  register unsigned int range  = Drange - 2;
-  register int value  = Dvalue;
-  value -= (range<<DbitsLeft);
+  register unsigned int range  = dep->Drange - 2;
+  register int value  = dep->Dvalue;
+  value -= (range << dep->DbitsLeft);
 
   if (value < 0) 
   {
     if( range >= QUARTER )
     {
-      Drange = range;
+      dep->Drange = range;
       return 0;
     }
     else 
     {   
-      Drange = (range<<1);
-      if( --DbitsLeft > 0 )
+      dep->Drange = (range << 1);
+      if( --(dep->DbitsLeft) > 0 )
         return 0;
       else
       {
-        Dvalue = (Dvalue << 16) | getword( dep ); // lookahead of 2 bytes: always make sure that bitstream buffer
-                                                  // contains 2 more bytes than actual bitstream
-        DbitsLeft = 16;
+        dep->Dvalue = (dep->Dvalue << 16) | getword( dep ); // lookahead of 2 bytes: always make sure that bitstream buffer
+                                                            // contains 2 more bytes than actual bitstream
+        dep->DbitsLeft = 16;
         return 0;
       }
     }
@@ -410,20 +397,20 @@ unsigned int biari_decode_final(DecodingEnvironmentPtr dep)
  *    Initializes a given context with some pre-defined probability state
  ************************************************************************
  */
-void biari_init_context (ImageParameters *img, BiContextTypePtr ctx, const int* ini)
+void biari_init_context (int qp, BiContextTypePtr ctx, const char* ini)
 {
-  int pstate = ((ini[0]* imax(0,img->qp) )>>4) + ini[1];
+  int pstate = ((ini[0]* qp )>>4) + ini[1];
   pstate = iClip3(1, 126, pstate);
 
   if ( pstate >= 64 )
   {
-    ctx->state  = (unsigned short) (pstate - 64);
-    ctx->MPS    = 1;
+    ctx->state = (unsigned short) (pstate - 64);
+    ctx->MPS   = 1;
   }
   else
   {
-    ctx->state  = (unsigned short) (63 - pstate);
-    ctx->MPS    = 0;
+    ctx->state = (unsigned short) (63 - pstate);
+    ctx->MPS   = 0;
   }
 }
 

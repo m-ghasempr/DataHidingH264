@@ -179,6 +179,9 @@
 				RelativePath=".\lencod\src\explicit_gop.c">
 			</File>
 			<File
+				RelativePath=".\lencod\src\explicit_seq.c">
+			</File>
+			<File
 				RelativePath=".\lencod\src\filehandle.c">
 			</File>
 			<File
@@ -206,13 +209,25 @@
 				RelativePath=".\lencod\src\img_distortion.c">
 			</File>
 			<File
+				RelativePath=".\lencod\src\img_io.c">
+			</File>
+			<File
 				RelativePath=".\lencod\src\img_luma.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\img_process.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\input.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\intrarefresh.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\io_raw.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\io_tiff.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\leaky_bucket.c">
@@ -234,6 +249,9 @@
 			</File>
 			<File
 				RelativePath=".\lencod\src\mc_prediction.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\md_common.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\md_distortion.c">
@@ -404,6 +422,9 @@
 				RelativePath=".\lencod\src\wp_lms.c">
 			</File>
 			<File
+				RelativePath=".\lencod\src\wp_mciter.c">
+			</File>
+			<File
 				RelativePath=".\lencod\src\wp_mcprec.c">
 			</File>
 		</Filter>
@@ -459,6 +480,9 @@
 				RelativePath=".\lencod\inc\explicit_gop.h">
 			</File>
 			<File
+				RelativePath=".\lencod\inc\explicit_seq.h">
+			</File>
+			<File
 				RelativePath=".\lencod\inc\filehandle.h">
 			</File>
 			<File
@@ -498,13 +522,31 @@
 				RelativePath=".\lencod\inc\img_distortion.h">
 			</File>
 			<File
+				RelativePath=".\lencod\inc\img_io.h">
+			</File>
+			<File
 				RelativePath=".\lencod\inc\img_luma.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\img_process.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\input.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\intrarefresh.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\io_image.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\io_raw.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\io_tiff.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\io_video.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\leaky_bucket.h">
@@ -520,6 +562,9 @@
 			</File>
 			<File
 				RelativePath=".\lencod\inc\mc_prediction.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\md_common.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\me_distortion.h">
@@ -640,6 +685,9 @@
 			</File>
 			<File
 				RelativePath=".\lencod\inc\wp_lms.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\wp_mciter.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\wp_mcprec.h">

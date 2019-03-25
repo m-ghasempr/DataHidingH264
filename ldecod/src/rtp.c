@@ -100,9 +100,9 @@
 #include "sei.h"
 #include "memalloc.h"
 
-FILE *bits;
+static int BitStreamFile;
 
-int RTPReadPacket (RTPpacket_t *p, FILE *bitstream);
+int RTPReadPacket (RTPpacket_t *p, int bitstream);
 
 /*!
  ************************************************************************
@@ -114,9 +114,9 @@ int RTPReadPacket (RTPpacket_t *p, FILE *bitstream);
  */
 void OpenRTPFile (char *fn)
 {
-  if (NULL == (bits=fopen(fn, "rb")))
+  if ((BitStreamFile = open(fn, OPENFLAGS_READ)) == -1)
   {
-    snprintf (errortext, ET_SIZE, "Cannot open RTP file '%s'", params->infile);
+    snprintf (errortext, ET_SIZE, "Cannot open RTP file '%s'", fn);
     error(errortext,500);
   }
 }
@@ -130,7 +130,11 @@ void OpenRTPFile (char *fn)
  */
 void CloseRTPFile(void)
 {
-  fclose (bits);
+  if (BitStreamFile != -1)
+  {
+    close(BitStreamFile);
+    BitStreamFile = - 1;
+  }
 }
 
 
@@ -149,7 +153,7 @@ void CloseRTPFile(void)
  ************************************************************************
  */
 
-int GetRTPNALU (FILE *bitstream, NALU_t *nalu)
+int GetRTPNALU (NALU_t *nalu)
 {
   static unsigned short first_call = 1;  //!< triggers sequence number initialization on first call
   static unsigned short old_seq = 0;     //!< store the last RTP sequence number for loss detection
@@ -164,7 +168,7 @@ int GetRTPNALU (FILE *bitstream, NALU_t *nalu)
   if ((p->payload=malloc (MAXRTPPACKETSIZE))== NULL)
     no_mem_exit ("GetRTPNALU-3");
 
-  ret = RTPReadPacket (p, bitstream);
+  ret = RTPReadPacket (p, BitStreamFile);
   nalu->forbidden_bit = 1;
   nalu->len = 0;
 
@@ -343,31 +347,30 @@ void DumpRTPHeader (RTPpacket_t *p)
  * \author
  *    Stephan Wenger, stewe@cs.tu-berlin.de
  *****************************************************************************/
-
-int RTPReadPacket (RTPpacket_t *p, FILE *bitstream)
+int RTPReadPacket (RTPpacket_t *p, int bitstream)
 {
-  int Filepos, intime;
+  int64 Filepos;
+  int intime;
 
   assert (p != NULL);
   assert (p->packet != NULL);
   assert (p->payload != NULL);
 
-  Filepos = ftell (bitstream);
-  if (4 != fread (&p->packlen,1, 4, bitstream))
+  Filepos = tell (bitstream);
+  if (4 != read (bitstream, &p->packlen, 4))
   {
     return 0;
   }
-
-  if (4 != fread (&intime, 1, 4, bitstream))
+  if (4 != read (bitstream, &intime, 4))
   {
-    fseek (bitstream, Filepos, SEEK_SET);
+    lseek (bitstream, Filepos, SEEK_SET);
     printf ("RTPReadPacket: File corruption, could not read Timestamp, exit\n");
     exit (-1);
   }
 
   assert (p->packlen < MAXRTPPACKETSIZE);
 
-  if (p->packlen != fread (p->packet, 1, p->packlen, bitstream))
+  if (p->packlen != read (bitstream, p->packet, p->packlen))
   {
     printf ("RTPReadPacket: File corruption, could not read %d bytes\n", (int) p->packlen);
     exit (-1);    // EOF inidication

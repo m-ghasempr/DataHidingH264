@@ -34,12 +34,11 @@
 #include "global.h"
 #include "image.h"
 #include "fmo.h"
+#include "annexb.h"
 #include "nalu.h"
 #include "parset.h"
 #include "header.h"
 
-#include "annexb.h"
-#include "rtp.h"
 #include "sei.h"
 #include "output.h"
 #include "mb_access.h"
@@ -63,8 +62,6 @@ extern frame erc_recfr;
 extern int erc_mvperMB;
 extern ImageParameters *erc_img;
 
-//extern FILE *p_out2;
-
 extern StorablePicture **listX[6];
 extern ColocatedParams *Co_located;
 
@@ -75,6 +72,242 @@ StorablePicture *dec_picture;
 StorablePicture *dec_picture_JV[MAX_PLANE];  //!< dec_picture to be used during 4:4:4 independent mode decoding
 
 OldSliceParams old_slice;
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Initializes the parameters for a new picture
+ ************************************************************************
+ */
+static void init_picture(ImageParameters *img, Slice *currSlice, struct inp_par *inp)
+{
+  int i;
+  int nplane;
+
+  if (dec_picture)
+  {
+    // this may only happen on slice loss
+    exit_picture(&dec_picture);
+  }
+  if (img->recovery_point)
+    img->recovery_frame_num = (img->frame_num + img->recovery_frame_cnt) % img->MaxFrameNum;
+
+  if (img->idr_flag)
+    img->recovery_frame_num = img->frame_num;
+
+  if (img->recovery_point == 0 &&
+    img->frame_num != img->pre_frame_num &&
+    img->frame_num != (img->pre_frame_num + 1) % img->MaxFrameNum)
+  {
+    if (active_sps->gaps_in_frame_num_value_allowed_flag == 0)
+    {
+      // picture error concealment
+      if(inp->conceal_mode !=0)
+      {
+        if((img->frame_num) < ((img->pre_frame_num + 1) % img->MaxFrameNum))
+        {
+          /* Conceal lost IDR frames and any frames immediately
+             following the IDR. Use frame copy for these since
+             lists cannot be formed correctly for motion copy*/
+          img->conceal_mode = 1;
+          img->IDR_concealment_flag = 1;
+          conceal_lost_frames(img);
+          //reset to original concealment mode for future drops
+          img->conceal_mode = inp->conceal_mode;
+        }
+        else
+        {
+          //reset to original concealment mode for future drops
+          img->conceal_mode = inp->conceal_mode;
+
+          img->IDR_concealment_flag = 0;
+          conceal_lost_frames(img);
+        }
+      }
+      else
+      {   /* Advanced Error Concealment would be called here to combat unintentional loss of pictures. */
+        error("An unintentional loss of pictures occurs! Exit\n", 100);
+      }
+    }
+    if(img->conceal_mode == 0)
+      fill_frame_num_gap(img);
+  }
+
+  if(img->nal_reference_idc)
+  {
+    img->pre_frame_num = img->frame_num;
+  }
+
+  img->num_dec_mb = 0;
+
+  //calculate POC
+  decode_poc(img);
+
+  if (img->recovery_frame_num == img->frame_num &&
+    img->recovery_poc == 0x7fffffff)
+    img->recovery_poc = img->framepoc;
+
+  if(img->nal_reference_idc)
+    img->last_ref_pic_poc = img->framepoc;
+
+  //  dumppoc (img);
+
+  if (img->structure==FRAME ||img->structure==TOP_FIELD)
+  {
+    gettime (&(img->start_time));             // start time
+  }
+
+  dec_picture = alloc_storable_picture ((PictureStructure) img->structure, img->width, img->height, img->width_cr, img->height_cr);
+  dec_picture->top_poc=img->toppoc;
+  dec_picture->bottom_poc=img->bottompoc;
+  dec_picture->frame_poc=img->framepoc;
+  dec_picture->qp = img->qp;
+  dec_picture->slice_qp_delta = currSlice->slice_qp_delta;
+  dec_picture->chroma_qp_offset[0] = active_pps->chroma_qp_index_offset;
+  dec_picture->chroma_qp_offset[1] = active_pps->second_chroma_qp_index_offset;
+
+  // reset all variables of the error concealment instance before decoding of every frame.
+  // here the third parameter should, if perfectly, be equal to the number of slices per frame.
+  // using little value is ok, the code will allocate more memory if the slice number is larger
+  ercReset(erc_errorVar, img->PicSizeInMbs, img->PicSizeInMbs, dec_picture->size_x);
+  erc_mvperMB = 0;
+
+  switch (img->structure )
+  {
+  case TOP_FIELD:
+    {
+      dec_picture->poc=img->toppoc;
+      img->number *= 2;
+      break;
+    }
+  case BOTTOM_FIELD:
+    {
+      dec_picture->poc=img->bottompoc;
+      img->number = img->number * 2 + 1;
+      break;
+    }
+  case FRAME:
+    {
+      dec_picture->poc=img->framepoc;
+      break;
+    }
+  default:
+    error("img->structure not initialized", 235);
+  }
+
+  img->current_slice_nr=0;
+
+  if (img->type > SI_SLICE)
+  {
+    set_ec_flag(SE_PTYPE);
+    img->type = P_SLICE;  // concealed element
+  }
+
+  // CAVLC init
+  if (active_pps->entropy_coding_mode_flag == UVLC)
+  {
+    memset(&img->nz_coeff[0][0][0][0], -1, img->PicSizeInMbs * 3 * 4 * 4 *sizeof(byte));
+  }
+
+  if(active_pps->constrained_intra_pred_flag)
+  {
+    for (i=0; i<(int)img->PicSizeInMbs; i++)
+    {
+      img->intra_block[i] = 1;
+    }
+  }
+
+  // Set the slice_nr member of each MB to -1, to ensure correct when packet loss occurs
+  // TO set Macroblock Map (mark all MBs as 'have to be concealed')
+  if( IS_INDEPENDENT(img) )
+  {
+    for( nplane=0; nplane<MAX_PLANE; nplane++ )
+    {      
+      for(i=0; i<(int)img->PicSizeInMbs; i++)
+      {
+        img->mb_data_JV[nplane][i].slice_nr = -1; 
+        img->mb_data_JV[nplane][i].ei_flag = 1;
+        img->mb_data_JV[nplane][i].dpl_flag = 0;
+      }
+    }
+  }
+  else
+  {
+    for(i=0; i<(int)img->PicSizeInMbs; i++)
+    {
+      img->mb_data[i].slice_nr = -1; 
+      img->mb_data[i].ei_flag = 1;
+      img->mb_data[i].dpl_flag = 0;
+    }
+  }
+
+  img->mb_y = img->mb_x = 0;
+  img->block_y_aff = img->block_y = img->pix_y = img->pix_c_y = 0; // define vertical positions
+  img->block_x = img->pix_x = img->pix_c_x = 0; // define horizontal positions
+
+  dec_picture->slice_type = img->type;
+  dec_picture->used_for_reference = (img->nal_reference_idc != 0);
+  dec_picture->idr_flag = img->idr_flag;
+  dec_picture->no_output_of_prior_pics_flag = img->no_output_of_prior_pics_flag;
+  dec_picture->long_term_reference_flag = img->long_term_reference_flag;
+  dec_picture->adaptive_ref_pic_buffering_flag = img->adaptive_ref_pic_buffering_flag;
+
+  dec_picture->dec_ref_pic_marking_buffer = img->dec_ref_pic_marking_buffer;
+  img->dec_ref_pic_marking_buffer = NULL;
+
+  dec_picture->MbaffFrameFlag = img->MbaffFrameFlag;
+  dec_picture->PicWidthInMbs = img->PicWidthInMbs;
+
+  get_mb_block_pos = dec_picture->MbaffFrameFlag ? get_mb_block_pos_mbaff : get_mb_block_pos_normal;
+  getNeighbour = dec_picture->MbaffFrameFlag ? getAffNeighbour : getNonAffNeighbour;
+
+  dec_picture->pic_num = img->frame_num;
+  dec_picture->frame_num = img->frame_num;
+
+  dec_picture->recovery_frame = (img->frame_num == img->recovery_frame_num);
+
+  dec_picture->coded_frame = (img->structure==FRAME);
+
+  dec_picture->chroma_format_idc = active_sps->chroma_format_idc;
+
+  dec_picture->frame_mbs_only_flag = active_sps->frame_mbs_only_flag;
+  dec_picture->frame_cropping_flag = active_sps->frame_cropping_flag;
+
+  if (dec_picture->frame_cropping_flag)
+  {
+    dec_picture->frame_cropping_rect_left_offset   = active_sps->frame_cropping_rect_left_offset;
+    dec_picture->frame_cropping_rect_right_offset  = active_sps->frame_cropping_rect_right_offset;
+    dec_picture->frame_cropping_rect_top_offset    = active_sps->frame_cropping_rect_top_offset;
+    dec_picture->frame_cropping_rect_bottom_offset = active_sps->frame_cropping_rect_bottom_offset;
+  }
+
+#if (ENABLE_OUTPUT_TONEMAPPING)
+  // store the necessary tone mapping sei into StorablePicture structure
+  dec_picture->seiHasTone_mapping = 0;
+  if (seiToneMapping.seiHasTone_mapping)
+  {
+    dec_picture->seiHasTone_mapping    = 1;
+    dec_picture->tone_mapping_model_id = seiToneMapping.model_id;
+    dec_picture->tonemapped_bit_depth  = seiToneMapping.sei_bit_depth;
+    dec_picture->tone_mapping_lut      = malloc(sizeof(int)*(1<<seiToneMapping.coded_data_bit_depth));
+    if (NULL == dec_picture->tone_mapping_lut)
+    {
+      no_mem_exit("init_picture: tone_mapping_lut");
+    }
+    memcpy(dec_picture->tone_mapping_lut, seiToneMapping.lut, sizeof(imgpel)*(1<<seiToneMapping.coded_data_bit_depth));
+    update_tone_mapping_sei();
+  }
+#endif
+
+  if( IS_INDEPENDENT(img) )
+  {
+    dec_picture_JV[0] = dec_picture;
+    dec_picture_JV[1] = alloc_storable_picture ((PictureStructure) img->structure, img->width, img->height, img->width_cr, img->height_cr);
+    copy_dec_picture_JV( dec_picture_JV[1], dec_picture_JV[0] );
+    dec_picture_JV[2] = alloc_storable_picture ((PictureStructure) img->structure, img->width, img->height, img->width_cr, img->height_cr);
+    copy_dec_picture_JV( dec_picture_JV[2], dec_picture_JV[0] );
+  }
+}
 
 void MbAffPostProc(void)
 {
@@ -120,6 +353,193 @@ void MbAffPostProc(void)
   }
 }
 
+static void fill_wp_params(ImageParameters *img)
+{
+  int i, j, k;
+  int comp;
+  int log_weight_denom;
+  int tb, td;
+  int bframe = (img->type==B_SLICE);
+  int tx,DistScaleFactor;
+
+  int max_l0_ref = img->num_ref_idx_l0_active;
+  int max_l1_ref = img->num_ref_idx_l1_active;
+
+  if (active_pps->weighted_bipred_idc == 2 && bframe)
+  {
+    img->luma_log2_weight_denom = 5;
+    img->chroma_log2_weight_denom = 5;
+    img->wp_round_luma = 16;
+    img->wp_round_chroma = 16;
+
+    for (i=0; i<MAX_REFERENCE_PICTURES; i++)
+    {
+      for (comp=0; comp<3; comp++)
+      {
+        log_weight_denom = (comp == 0) ? img->luma_log2_weight_denom : img->chroma_log2_weight_denom;
+        img->wp_weight[0][i][comp] = 1<<log_weight_denom;
+        img->wp_weight[1][i][comp] = 1<<log_weight_denom;
+        img->wp_offset[0][i][comp] = 0;
+        img->wp_offset[1][i][comp] = 0;
+      }
+    }
+  }
+
+  if (bframe)
+  {
+    for (i=0; i<max_l0_ref; i++)
+    {
+      for (j=0; j<max_l1_ref; j++)
+      {
+        for (comp = 0; comp<3; comp++)
+        {
+          log_weight_denom = (comp == 0) ? img->luma_log2_weight_denom : img->chroma_log2_weight_denom;
+          if (active_pps->weighted_bipred_idc == 1)
+          {
+            img->wbp_weight[0][i][j][comp] =  img->wp_weight[0][i][comp];
+            img->wbp_weight[1][i][j][comp] =  img->wp_weight[1][j][comp];
+          }
+          else if (active_pps->weighted_bipred_idc == 2)
+          {
+            td = iClip3(-128,127,listX[LIST_1][j]->poc - listX[LIST_0][i]->poc);
+            if (td == 0 || listX[LIST_1][j]->is_long_term || listX[LIST_0][i]->is_long_term)
+            {
+              img->wbp_weight[0][i][j][comp] = 32;
+              img->wbp_weight[1][i][j][comp] = 32;
+            }
+            else
+            {
+              tb = iClip3(-128,127,img->ThisPOC - listX[LIST_0][i]->poc);
+
+              tx = (16384 + iabs(td/2))/td;
+              DistScaleFactor = iClip3(-1024, 1023, (tx*tb + 32 )>>6);
+
+              img->wbp_weight[1][i][j][comp] = DistScaleFactor >> 2;
+              img->wbp_weight[0][i][j][comp] = 64 - img->wbp_weight[1][i][j][comp];
+              if (img->wbp_weight[1][i][j][comp] < -64 || img->wbp_weight[1][i][j][comp] > 128)
+              {
+                img->wbp_weight[0][i][j][comp] = 32;
+                img->wbp_weight[1][i][j][comp] = 32;
+                img->wp_offset[0][i][comp] = 0;
+                img->wp_offset[1][j][comp] = 0;
+              }
+            }
+          }
+        }
+      }
+   }
+ }
+
+  if (bframe && img->MbaffFrameFlag)
+  {
+    for (i=0; i<2*max_l0_ref; i++)
+    {
+      for (j=0; j<2*max_l1_ref; j++)
+      {
+        for (comp = 0; comp<3; comp++)
+        {
+          for (k=2; k<6; k+=2)
+          {
+            img->wp_offset[k+0][i][comp] = img->wp_offset[0][i>>1][comp];
+            img->wp_offset[k+1][j][comp] = img->wp_offset[1][j>>1][comp];
+
+            log_weight_denom = (comp == 0) ? img->luma_log2_weight_denom : img->chroma_log2_weight_denom;
+            if (active_pps->weighted_bipred_idc == 1)
+            {
+              img->wbp_weight[k+0][i][j][comp] =  img->wp_weight[0][i>>1][comp];
+              img->wbp_weight[k+1][i][j][comp] =  img->wp_weight[1][j>>1][comp];
+            }
+            else if (active_pps->weighted_bipred_idc == 2)
+            {
+              td = iClip3(-128,127,listX[k+LIST_1][j]->poc - listX[k+LIST_0][i]->poc);
+              if (td == 0 || listX[k+LIST_1][j]->is_long_term || listX[k+LIST_0][i]->is_long_term)
+              {
+                img->wbp_weight[k+0][i][j][comp] =   32;
+                img->wbp_weight[k+1][i][j][comp] =   32;
+              }
+              else
+              {
+                tb = iClip3(-128,127,((k==2)?img->toppoc:img->bottompoc) - listX[k+LIST_0][i]->poc);
+
+                tx = (16384 + iabs(td/2))/td;
+                DistScaleFactor = iClip3(-1024, 1023, (tx*tb + 32 )>>6);
+
+                img->wbp_weight[k+1][i][j][comp] = DistScaleFactor >> 2;
+                img->wbp_weight[k+0][i][j][comp] = 64 - img->wbp_weight[k+1][i][j][comp];
+                if (img->wbp_weight[k+1][i][j][comp] < -64 || img->wbp_weight[k+1][i][j][comp] > 128)
+                {
+                  img->wbp_weight[k+1][i][j][comp] = 32;
+                  img->wbp_weight[k+0][i][j][comp] = 32;
+                  img->wp_offset[k+0][i][comp] = 0;
+                  img->wp_offset[k+1][j][comp] = 0;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+static void decode_slice(ImageParameters *img, Slice *currSlice, struct inp_par *inp, int current_header)
+{
+  if (active_pps->entropy_coding_mode_flag)
+  {
+    init_contexts (img);
+    cabac_new_slice();
+  }
+
+  if ( (active_pps->weighted_bipred_idc > 0  && (img->type == B_SLICE)) || (active_pps->weighted_pred_flag && img->type !=I_SLICE))
+    fill_wp_params(img);
+
+  //printf("frame picture %d %d %d\n",img->structure,img->ThisPOC,img->direct_spatial_mv_pred_flag);
+
+  // decode main slice information
+  if ((current_header == SOP || current_header == SOS) && currSlice->ei_flag == 0)
+    decode_one_slice(img, currSlice, inp);
+
+  // setMB-Nr in case this slice was lost
+  // if(currSlice->ei_flag)
+  //   img->current_mb_nr = currSlice->last_mb_nr + 1;
+}
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Error tracking: if current frame is lost or any reference frame of
+ *                    current frame is lost, current frame is incorrect.
+ ************************************************************************
+ */
+static void Error_tracking(void)
+{
+  int i;
+
+  if(img->redundant_pic_cnt == 0)
+    {
+      Is_primary_correct = Is_redundant_correct = 1;
+    }
+
+  if(img->redundant_pic_cnt == 0 && img->type != I_SLICE)
+  {
+    for(i=0;i<img->num_ref_idx_l0_active;i++)
+    {
+      if(ref_flag[i] == 0)  // any reference of primary slice is incorrect
+      {
+        Is_primary_correct = 0; // primary slice is incorrect
+      }
+    }
+  }
+  else if(img->redundant_pic_cnt != 0 && img->type != I_SLICE)
+  {
+    if(ref_flag[redundant_slice_ref_idx] == 0)  // reference of redundant slice is incorrect
+    {
+      Is_redundant_correct = 0;  // redundant slice is incorrect
+    }
+  }
+}
+
 /*!
  ***********************************************************************
  * \brief
@@ -142,7 +562,7 @@ int decode_one_frame(ImageParameters *img, struct inp_par *inp, struct snr_par *
 
   while ((currSlice->next_header != EOS && currSlice->next_header != SOP))
   {
-    current_header = read_new_slice();
+    current_header = read_new_slice(img->currentSlice);
 
     // error tracking of primary and redundant slices.
     Error_tracking();
@@ -168,17 +588,17 @@ int decode_one_frame(ImageParameters *img, struct inp_par *inp, struct snr_par *
 
     if (current_header == EOS)
     {
-      exit_picture();
+      exit_picture(&dec_picture);
       return EOS;
     }
 
-    decode_slice(img, inp, current_header);
+    decode_slice(img, currSlice, inp, current_header);
 
     img->newframe = 0;
     img->current_slice_nr++;
   }
 
-  exit_picture();
+  exit_picture(&dec_picture);
 
   return (SOP);
 }
@@ -323,16 +743,16 @@ void calculate_frame_no(StorablePicture *p)
 *    the original sequence. Read inp->jumpd frames to reflect frame skipping.
 ************************************************************************
 */
-void find_snr(
-              struct snr_par  *snr,   //!< pointer to snr parameters
+void find_snr(struct snr_par  *snr,   //!< pointer to snr parameters
               StorablePicture *p,     //!< picture to be compared
-              int p_ref)              //!< open reference YUV file
+              int *p_ref)              //!< open reference YUV file
 {
   static const int SubWidthC  [4]= { 1, 2, 2, 1};
   static const int SubHeightC [4]= { 1, 2, 1, 1};
   int crop_left, crop_right, crop_top, crop_bottom;
 
   int i,j, k;
+  int ret;
   int64 diff_comp[3] = {0};
   int64  status;
   int symbol_size_in_bytes = img->pic_unit_bitsize_on_disk/8;
@@ -399,7 +819,7 @@ void find_snr(
     no_mem_exit("find_snr: buf");
   }
 
-  status = lseek (p_ref, framesize_in_bytes * frame_no, SEEK_SET);
+  status = lseek (*p_ref, framesize_in_bytes * frame_no, SEEK_SET);
   if (status == -1)
   {
     fprintf(stderr, "Error in seeking frame number: %d\n", frame_no);
@@ -408,15 +828,23 @@ void find_snr(
   }
 
   if(rgb_output)
-    lseek (p_ref, framesize_in_bytes/3, SEEK_CUR);
+    lseek (*p_ref, framesize_in_bytes/3, SEEK_CUR);
 
   for (k = 0; k < ((p->chroma_format_idc != YUV400) ? 3 : 1); k++)
   {
 
     if(rgb_output && k == 2)
-      lseek (p_ref, -framesize_in_bytes, SEEK_CUR);
+      lseek (*p_ref, -framesize_in_bytes, SEEK_CUR);
 
-    read(p_ref, buf, comp_size_x[k] * comp_size_y[k] * symbol_size_in_bytes);
+    ret = read(*p_ref, buf, comp_size_x[k] * comp_size_y[k] * symbol_size_in_bytes);
+    if (ret != comp_size_x[k] * comp_size_y[k] * symbol_size_in_bytes)
+    {
+      printf ("Warning: could not read from reconstructed file\n");
+      memset (buf, 0, comp_size_x[k] * comp_size_y[k] * symbol_size_in_bytes);
+      close(*p_ref);
+      *p_ref = -1;
+      break;
+    }
     buf2img(cur_ref[k], buf, comp_size_x[k], comp_size_y[k], symbol_size_in_bytes);
 
     for (j=0; j < comp_size_y[k]; ++j)
@@ -441,7 +869,7 @@ void find_snr(
   }
 
    if(rgb_output)
-     lseek (p_ref, framesize_in_bytes*2/3, SEEK_CUR);
+     lseek (*p_ref, framesize_in_bytes*2/3, SEEK_CUR);
 
   free (buf);
 
@@ -457,7 +885,6 @@ void find_snr(
 
 void reorder_lists(int currSliceType, Slice * currSlice)
 {
-
   if ((currSliceType != I_SLICE)&&(currSliceType != SI_SLICE))
   {
     if (currSlice->ref_pic_list_reordering_flag_l0)
@@ -558,24 +985,22 @@ void set_ref_pic_num(void)
  *    Reads new slice from bit_stream
  ************************************************************************
  */
-int read_new_slice(void)
+int read_new_slice(Slice *currSlice)
 {
   NALU_t *nalu = AllocNALU(MAX_CODED_FRAME_SIZE);
   int current_header = 0;
   int BitsUsedByHeader;
-  Slice *currSlice = img->currentSlice;
   Bitstream *currStream;
 
   int slice_id_a, slice_id_b, slice_id_c;
   int redundant_pic_cnt_b, redundant_pic_cnt_c;
-  long ftell_position;
   
   while (1)
   {
-    ftell_position = ftell(bits);
-
-    if (0 == read_next_nalu(bits, nalu))
+    if (0 == read_next_nalu(nalu))
       return EOS;
+
+process_nalu:
 
     switch (nalu->nal_unit_type)
     {
@@ -615,9 +1040,9 @@ int read_new_slice(void)
         // the parameter set ID of the SLice header.  Hence, read the pic_parameter_set_id
         // of the slice header first, then setup the active parameter sets, and then read
         // the rest of the slice header
-        BitsUsedByHeader = FirstPartOfSliceHeader();
+        BitsUsedByHeader = FirstPartOfSliceHeader(currSlice);
         UseParameterSet (currSlice->pic_parameter_set_id);
-        BitsUsedByHeader+= RestOfSliceHeader ();
+        BitsUsedByHeader+= RestOfSliceHeader (currSlice);
 
         FmoInit (active_pps, active_sps);
 
@@ -629,9 +1054,9 @@ int read_new_slice(void)
           dec_picture->slice_type=img->type;
         }
 
-        if(is_new_picture())
+        if(is_new_picture(dec_picture, currSlice, &old_slice))
         {
-          init_picture(img, params);
+          init_picture(img, currSlice, params);
 
           current_header = SOP;
           //check zero_byte if it is also the first NAL unit in the access unit
@@ -663,7 +1088,7 @@ int read_new_slice(void)
           }
           arideco_start_decoding (&currSlice->partArr[0].de_cabac, currStream->streamBuffer, ByteStartPosition, &currStream->read_len);
         }
-// printf ("read_new_slice: returning %s\n", current_header == SOP?"SOP":"SOS");
+        // printf ("read_new_slice: returning %s\n", current_header == SOP?"SOP":"SOS");
         FreeNALU(nalu);
         img->recovery_point = 0;
         return current_header;
@@ -684,15 +1109,15 @@ int read_new_slice(void)
         memcpy (currStream->streamBuffer, &nalu->buf[1], nalu->len-1);
         currStream->code_len = currStream->bitstream_length = RBSPtoSODB(currStream->streamBuffer, nalu->len-1);
 
-        BitsUsedByHeader     = FirstPartOfSliceHeader();
+        BitsUsedByHeader     = FirstPartOfSliceHeader(currSlice);
         UseParameterSet (currSlice->pic_parameter_set_id);
-        BitsUsedByHeader    += RestOfSliceHeader ();
+        BitsUsedByHeader    += RestOfSliceHeader (currSlice);
 
         FmoInit (active_pps, active_sps);
 
-        if(is_new_picture())
+        if(is_new_picture(dec_picture, currSlice, &old_slice))
         {
-          init_picture(img, params);
+          init_picture(img, currSlice, params);
           current_header = SOP;
           CheckZeroByteVCL(nalu);
         }
@@ -722,9 +1147,7 @@ int read_new_slice(void)
           error ("received data partition with CABAC, this is not allowed", 500);
 
         // continue with reading next DP
-        ftell_position = ftell(bits);
-
-        if (0 == read_next_nalu(bits, nalu))
+        if (0 == read_next_nalu(nalu))
           return current_header;
         
         if ( NALU_TYPE_DPB == nalu->nal_unit_type)
@@ -755,9 +1178,7 @@ int read_new_slice(void)
               redundant_pic_cnt_b = 0;
 
             // we're finished with DP_B, so let's continue with next DP
-            ftell_position = ftell(bits);
-
-            if (0 == read_next_nalu(bits, nalu))
+            if (0 == read_next_nalu(nalu))
               return current_header;
           }
         }
@@ -799,8 +1220,10 @@ int read_new_slice(void)
         // check if we read anything else than the expected partitions
         if ((nalu->nal_unit_type != NALU_TYPE_DPB) && (nalu->nal_unit_type != NALU_TYPE_DPC))
         {
-          // reset bitstream position and read again in next call
-          fseek(bits, ftell_position, SEEK_SET);
+          // we have a NALI that we can't process here, so restart processing
+          goto process_nalu;
+          // yes, "goto" should not be used, but it's really the best way here before we restructure the decoding loop
+          // (which should be taken care of anyway)
         }
 
         FreeNALU(nalu);
@@ -847,246 +1270,6 @@ int read_new_slice(void)
 }
 
 
-/*!
- ************************************************************************
- * \brief
- *    Initializes the parameters for a new picture
- ************************************************************************
- */
-void init_picture(ImageParameters *img, struct inp_par *inp)
-{
-  int i,j,k,l;
-  Slice *currSlice = img->currentSlice;
-  int nplane;
-
-  if (dec_picture)
-  {
-    // this may only happen on slice loss
-    exit_picture();
-  }
-  if (img->recovery_point)
-    img->recovery_frame_num = (img->frame_num + img->recovery_frame_cnt) % img->MaxFrameNum;
-
-  if (img->idr_flag)
-    img->recovery_frame_num = img->frame_num;
-
-  if (img->recovery_point == 0 &&
-    img->frame_num != img->pre_frame_num &&
-    img->frame_num != (img->pre_frame_num + 1) % img->MaxFrameNum)
-  {
-    if (active_sps->gaps_in_frame_num_value_allowed_flag == 0)
-    {
-      // picture error concealment
-      if(inp->conceal_mode !=0)
-      {
-        if((img->frame_num) < ((img->pre_frame_num + 1) % img->MaxFrameNum))
-        {
-          /* Conceal lost IDR frames and any frames immediately
-             following the IDR. Use frame copy for these since
-             lists cannot be formed correctly for motion copy*/
-          img->conceal_mode = 1;
-          img->IDR_concealment_flag = 1;
-          conceal_lost_frames(img);
-          //reset to original concealment mode for future drops
-          img->conceal_mode = inp->conceal_mode;
-        }
-        else
-        {
-          //reset to original concealment mode for future drops
-          img->conceal_mode = inp->conceal_mode;
-
-          img->IDR_concealment_flag = 0;
-          conceal_lost_frames(img);
-        }
-      }
-      else
-      {   /* Advanced Error Concealment would be called here to combat unintentional loss of pictures. */
-        error("An unintentional loss of pictures occurs! Exit\n", 100);
-      }
-    }
-    if(img->conceal_mode == 0)
-      fill_frame_num_gap(img);
-  }
-
-  if(img->nal_reference_idc)
-  {
-    img->pre_frame_num = img->frame_num;
-  }
-
-  img->num_dec_mb = 0;
-
-  //calculate POC
-  decode_poc(img);
-
-  if (img->recovery_frame_num == img->frame_num &&
-    img->recovery_poc == 0x7fffffff)
-    img->recovery_poc = img->framepoc;
-
-  if(img->nal_reference_idc)
-    img->last_ref_pic_poc = img->framepoc;
-
-  //  dumppoc (img);
-
-  if (img->structure==FRAME ||img->structure==TOP_FIELD)
-  {
-    gettime (&(img->start_time));             // start time
-  }
-
-  dec_picture = alloc_storable_picture ((PictureStructure) img->structure, img->width, img->height, img->width_cr, img->height_cr);
-  dec_picture->top_poc=img->toppoc;
-  dec_picture->bottom_poc=img->bottompoc;
-  dec_picture->frame_poc=img->framepoc;
-  dec_picture->qp = img->qp;
-  dec_picture->slice_qp_delta = currSlice->slice_qp_delta;
-  dec_picture->chroma_qp_offset[0] = active_pps->chroma_qp_index_offset;
-  dec_picture->chroma_qp_offset[1] = active_pps->second_chroma_qp_index_offset;
-
-  // reset all variables of the error concealment instance before decoding of every frame.
-  // here the third parameter should, if perfectly, be equal to the number of slices per frame.
-  // using little value is ok, the code will allocate more memory if the slice number is larger
-  ercReset(erc_errorVar, img->PicSizeInMbs, img->PicSizeInMbs, dec_picture->size_x);
-  erc_mvperMB = 0;
-
-  switch (img->structure )
-  {
-  case TOP_FIELD:
-    {
-      dec_picture->poc=img->toppoc;
-      img->number *= 2;
-      break;
-    }
-  case BOTTOM_FIELD:
-    {
-      dec_picture->poc=img->bottompoc;
-      img->number = img->number * 2 + 1;
-      break;
-    }
-  case FRAME:
-    {
-      dec_picture->poc=img->framepoc;
-      break;
-    }
-  default:
-    error("img->structure not initialized", 235);
-  }
-
-  img->current_slice_nr=0;
-
-  if (img->type > SI_SLICE)
-  {
-    set_ec_flag(SE_PTYPE);
-    img->type = P_SLICE;  // concealed element
-  }
-
-  // CAVLC init
-  if (active_pps->entropy_coding_mode_flag == UVLC)
-  {
-    for (i=0;i < (int)img->PicSizeInMbs; i++)    
-      for (j = 0; j < 3; j++)
-        for (l = 0; l < 4; l++)
-          for (k = 0; k < 4;k++)
-            img->nz_coeff[i][j][l][k]=-1;  // CAVLC
-  }
-
-  if(active_pps->constrained_intra_pred_flag)
-  {
-    for (i=0; i<(int)img->PicSizeInMbs; i++)
-    {
-      img->intra_block[i] = 1;
-    }
-  }
-
-  // Set the slice_nr member of each MB to -1, to ensure correct when packet loss occurs
-  // TO set Macroblock Map (mark all MBs as 'have to be concealed')
-  if( IS_INDEPENDENT(img) )
-  {
-    for( nplane=0; nplane<MAX_PLANE; nplane++ )
-    {      
-      for(i=0; i<(int)img->PicSizeInMbs; i++)
-      {
-        img->mb_data_JV[nplane][i].slice_nr = -1; 
-        img->mb_data_JV[nplane][i].ei_flag = 1;
-        img->mb_data_JV[nplane][i].dpl_flag = 0;
-      }
-    }
-  }
-  else
-  {
-    for(i=0; i<(int)img->PicSizeInMbs; i++)
-    {
-      img->mb_data[i].slice_nr = -1; 
-      img->mb_data[i].ei_flag = 1;
-      img->mb_data[i].dpl_flag = 0;
-    }
-  }
-
-  img->mb_y = img->mb_x = 0;
-  img->block_y_aff = img->block_y = img->pix_y = img->pix_c_y = 0; // define vertical positions
-  img->block_x = img->pix_x = img->pix_c_x = 0; // define horizontal positions
-
-  dec_picture->slice_type = img->type;
-  dec_picture->used_for_reference = (img->nal_reference_idc != 0);
-  dec_picture->idr_flag = img->idr_flag;
-  dec_picture->no_output_of_prior_pics_flag = img->no_output_of_prior_pics_flag;
-  dec_picture->long_term_reference_flag = img->long_term_reference_flag;
-  dec_picture->adaptive_ref_pic_buffering_flag = img->adaptive_ref_pic_buffering_flag;
-
-  dec_picture->dec_ref_pic_marking_buffer = img->dec_ref_pic_marking_buffer;
-  img->dec_ref_pic_marking_buffer = NULL;
-
-  dec_picture->MbaffFrameFlag = img->MbaffFrameFlag;
-  dec_picture->PicWidthInMbs = img->PicWidthInMbs;
-
-  get_mb_block_pos = dec_picture->MbaffFrameFlag ? get_mb_block_pos_mbaff : get_mb_block_pos_normal;
-  getNeighbour = dec_picture->MbaffFrameFlag ? getAffNeighbour : getNonAffNeighbour;
-
-  dec_picture->pic_num = img->frame_num;
-  dec_picture->frame_num = img->frame_num;
-
-  dec_picture->recovery_frame = (img->frame_num == img->recovery_frame_num);
-
-  dec_picture->coded_frame = (img->structure==FRAME);
-
-  dec_picture->chroma_format_idc = active_sps->chroma_format_idc;
-
-  dec_picture->frame_mbs_only_flag = active_sps->frame_mbs_only_flag;
-  dec_picture->frame_cropping_flag = active_sps->frame_cropping_flag;
-
-  if (dec_picture->frame_cropping_flag)
-  {
-    dec_picture->frame_cropping_rect_left_offset   = active_sps->frame_cropping_rect_left_offset;
-    dec_picture->frame_cropping_rect_right_offset  = active_sps->frame_cropping_rect_right_offset;
-    dec_picture->frame_cropping_rect_top_offset    = active_sps->frame_cropping_rect_top_offset;
-    dec_picture->frame_cropping_rect_bottom_offset = active_sps->frame_cropping_rect_bottom_offset;
-  }
-
-#if (ENABLE_OUTPUT_TONEMAPPING)
-  // store the necessary tone mapping sei into StorablePicture structure
-  dec_picture->seiHasTone_mapping = 0;
-  if (seiToneMapping.seiHasTone_mapping)
-  {
-    dec_picture->seiHasTone_mapping    = 1;
-    dec_picture->tone_mapping_model_id = seiToneMapping.model_id;
-    dec_picture->tonemapped_bit_depth  = seiToneMapping.sei_bit_depth;
-    dec_picture->tone_mapping_lut      = malloc(sizeof(int)*(1<<seiToneMapping.coded_data_bit_depth));
-    if (NULL == dec_picture->tone_mapping_lut)
-    {
-      no_mem_exit("init_picture: tone_mapping_lut");
-    }
-    memcpy(dec_picture->tone_mapping_lut, seiToneMapping.lut, sizeof(imgpel)*(1<<seiToneMapping.coded_data_bit_depth));
-    update_tone_mapping_sei();
-  }
-#endif
-
-  if( IS_INDEPENDENT(img) )
-  {
-    dec_picture_JV[0] = dec_picture;
-    dec_picture_JV[1] = alloc_storable_picture ((PictureStructure) img->structure, img->width, img->height, img->width_cr, img->height_cr);
-    copy_dec_picture_JV( dec_picture_JV[1], dec_picture_JV[0] );
-    dec_picture_JV[2] = alloc_storable_picture ((PictureStructure) img->structure, img->width, img->height, img->width_cr, img->height_cr);
-    copy_dec_picture_JV( dec_picture_JV[2], dec_picture_JV[0] );
-  }
-}
 
 /*!
  ************************************************************************
@@ -1095,7 +1278,7 @@ void init_picture(ImageParameters *img, struct inp_par *inp)
  *    into the DPB
  ************************************************************************
  */
-void exit_picture(void)
+void exit_picture(StorablePicture **dec_picture)
 {
   char yuv_types[4][6]= {"4:0:0","4:2:0","4:2:2","4:4:4"};
   int ercStartMB;
@@ -1106,12 +1289,12 @@ void exit_picture(void)
 
   static char cslice_type[9];  
 
-  time_t tmp_time;                   // time used by decoding the last frame
+  int64 tmp_time;                   // time used by decoding the last frame
   char   yuvFormat[10];
   int nplane;
 
   // return if the last picture has already been finished
-  if (dec_picture==NULL)
+  if (*dec_picture==NULL)
   {
     return;
   }
@@ -1123,24 +1306,24 @@ void exit_picture(void)
     for( nplane=0; nplane<MAX_PLANE; nplane++ )
     {
       change_plane_JV( nplane );
-      DeblockPicture( img, dec_picture );
+      DeblockPicture( img, *dec_picture );
     }
     img->colour_plane_id = colour_plane_id;
     make_frame_picture_JV();
   }
   else
   {
-    DeblockPicture( img, dec_picture );
+    DeblockPicture( img, *dec_picture );
   }
 
-  if (dec_picture->MbaffFrameFlag)
+  if ((*dec_picture)->MbaffFrameFlag)
     MbAffPostProc();
 
-  recfr.yptr = &dec_picture->imgY[0][0];
-  if (dec_picture->chroma_format_idc != YUV400)
+  recfr.yptr = &(*dec_picture)->imgY[0][0];
+  if ((*dec_picture)->chroma_format_idc != YUV400)
   {
-    recfr.uptr = &dec_picture->imgUV[0][0][0];
-    recfr.vptr = &dec_picture->imgUV[1][0][0];
+    recfr.uptr = &(*dec_picture)->imgUV[0][0][0];
+    recfr.vptr = &(*dec_picture)->imgUV[1][0][0];
   }
 
   //! this is always true at the beginning of a picture
@@ -1148,11 +1331,11 @@ void exit_picture(void)
   ercSegment = 0;
 
   //! mark the start of the first segment
-  if (!dec_picture->MbaffFrameFlag)
+  if (!(*dec_picture)->MbaffFrameFlag)
   {
     ercStartSegment(0, ercSegment, 0 , erc_errorVar);
     //! generate the segments according to the macroblock map
-    for(i = 1; i<dec_picture->PicSizeInMbs; i++)
+    for(i = 1; i<(*dec_picture)->PicSizeInMbs; i++)
     {
       if(img->mb_data[i].ei_flag != img->mb_data[i-1].ei_flag)
       {
@@ -1160,9 +1343,9 @@ void exit_picture(void)
 
         //! mark current segment as lost or OK
         if(img->mb_data[i-1].ei_flag)
-          ercMarkCurrSegmentLost(dec_picture->size_x, erc_errorVar);
+          ercMarkCurrSegmentLost((*dec_picture)->size_x, erc_errorVar);
         else
-          ercMarkCurrSegmentOK(dec_picture->size_x, erc_errorVar);
+          ercMarkCurrSegmentOK((*dec_picture)->size_x, erc_errorVar);
 
         ercSegment++;  //! next segment
         ercStartSegment(i, ercSegment, 0 , erc_errorVar); //! start new segment
@@ -1170,20 +1353,20 @@ void exit_picture(void)
       }
     }
     //! mark end of the last segment
-    ercStopSegment(dec_picture->PicSizeInMbs-1, ercSegment, 0, erc_errorVar);
+    ercStopSegment((*dec_picture)->PicSizeInMbs-1, ercSegment, 0, erc_errorVar);
     if(img->mb_data[i-1].ei_flag)
-      ercMarkCurrSegmentLost(dec_picture->size_x, erc_errorVar);
+      ercMarkCurrSegmentLost((*dec_picture)->size_x, erc_errorVar);
     else
-      ercMarkCurrSegmentOK(dec_picture->size_x, erc_errorVar);
+      ercMarkCurrSegmentOK((*dec_picture)->size_x, erc_errorVar);
 
     //! call the right error concealment function depending on the frame type.
-    erc_mvperMB /= dec_picture->PicSizeInMbs;
+    erc_mvperMB /= (*dec_picture)->PicSizeInMbs;
 
     erc_img = img;
-    if(dec_picture->slice_type == I_SLICE || dec_picture->slice_type == SI_SLICE) // I-frame
-      ercConcealIntraFrame(&recfr, dec_picture->size_x, dec_picture->size_y, erc_errorVar);
+    if((*dec_picture)->slice_type == I_SLICE || (*dec_picture)->slice_type == SI_SLICE) // I-frame
+      ercConcealIntraFrame(&recfr, (*dec_picture)->size_x, (*dec_picture)->size_y, erc_errorVar);
     else
-      ercConcealInterFrame(&recfr, erc_object_list, dec_picture->size_x, dec_picture->size_y, erc_errorVar, dec_picture->chroma_format_idc);
+      ercConcealInterFrame(&recfr, erc_object_list, (*dec_picture)->size_x, (*dec_picture)->size_y, erc_errorVar, (*dec_picture)->chroma_format_idc);
   }
 
   if (img->structure == FRAME)         // buffer mgt. for frame mode
@@ -1191,18 +1374,18 @@ void exit_picture(void)
   else
     field_postprocessing(img);   // reset all interlaced variables
 
-  structure  = dec_picture->structure;
-  slice_type = dec_picture->slice_type;
-  frame_poc  = dec_picture->frame_poc;
-  refpic     = dec_picture->used_for_reference;
-  qp         = dec_picture->qp;
-  pic_num    = dec_picture->pic_num;
-  is_idr     = dec_picture->idr_flag;
+  structure  = (*dec_picture)->structure;
+  slice_type = (*dec_picture)->slice_type;
+  frame_poc  = (*dec_picture)->frame_poc;
+  refpic     = (*dec_picture)->used_for_reference;
+  qp         = (*dec_picture)->qp;
+  pic_num    = (*dec_picture)->pic_num;
+  is_idr     = (*dec_picture)->idr_flag;
 
-  chroma_format_idc= dec_picture->chroma_format_idc;
+  chroma_format_idc = (*dec_picture)->chroma_format_idc;
 
-  store_picture_in_dpb(dec_picture);
-  dec_picture=NULL;
+  store_picture_in_dpb(*dec_picture);
+  *dec_picture=NULL;
 
   if (img->last_has_mmco_5)
   {
@@ -1255,8 +1438,9 @@ void exit_picture(void)
   {
     gettime (&(img->end_time));              // end time
 
-    tmp_time= timediff(&(img->start_time), &(img->end_time));
-    tot_time=tot_time + tmp_time;
+    tmp_time  = timediff(&(img->start_time), &(img->end_time));
+    tot_time += tmp_time;
+    tmp_time  = timenorm(tmp_time);
 
     sprintf(yuvFormat,"%s", yuv_types[chroma_format_idc]);
     
@@ -1264,7 +1448,7 @@ void exit_picture(void)
     {
       if (p_ref != -1)
         fprintf(stdout,"%05d(%s%5d %5d %5d %8.4f %8.4f %8.4f  %s %7d\n",
-        frame_no, cslice_type, frame_poc, pic_num, qp, snr->snr[0], snr->snr[1], snr->snr[2], yuvFormat, (int)tmp_time);
+        frame_no, cslice_type, frame_poc, pic_num, qp, snr->snr[0], snr->snr[1], snr->snr[2], yuvFormat, (int) tmp_time);
     else
         fprintf(stdout,"%05d(%s%5d %5d %5d                             %s %7d\n",
         frame_no, cslice_type, frame_poc, pic_num, qp, yuvFormat, (int)tmp_time);
@@ -1285,7 +1469,6 @@ void exit_picture(void)
 
   img->current_mb_nr = -4712;   // impossible value for debugging, StW
   img->current_slice_nr = 0;
-
 }
 
 /*!
@@ -1392,24 +1575,23 @@ void ercWriteMBMODEandMV(Macroblock *currMB, ImageParameters *img,struct inp_par
  *    NAL unit of a picture"
  ************************************************************************
  */
-void init_old_slice(void)
+void init_old_slice(OldSliceParams *p_old_slice)
 {
-  old_slice.field_pic_flag = 0;
+  p_old_slice->field_pic_flag = 0;
 
-  old_slice.pps_id = INT_MAX;
+  p_old_slice->pps_id = INT_MAX;
 
-  old_slice.frame_num = INT_MAX;
+  p_old_slice->frame_num = INT_MAX;
 
-  old_slice.nal_ref_idc = INT_MAX;
+  p_old_slice->nal_ref_idc = INT_MAX;
 
-  old_slice.idr_flag = FALSE;
+  p_old_slice->idr_flag = FALSE;
 
-  old_slice.pic_oder_cnt_lsb          = UINT_MAX;
-  old_slice.delta_pic_oder_cnt_bottom = INT_MAX;
+  p_old_slice->pic_oder_cnt_lsb          = UINT_MAX;
+  p_old_slice->delta_pic_oder_cnt_bottom = INT_MAX;
 
-  old_slice.delta_pic_order_cnt[0] = INT_MAX;
-  old_slice.delta_pic_order_cnt[1] = INT_MAX;
-
+  p_old_slice->delta_pic_order_cnt[0] = INT_MAX;
+  p_old_slice->delta_pic_order_cnt[1] = INT_MAX;
 }
 
 /*!
@@ -1419,38 +1601,38 @@ void init_old_slice(void)
  *    NAL unit of a picture"
  ************************************************************************
  */
-void exit_slice(void)
+void exit_slice(Slice *currSlice, OldSliceParams *p_old_slice)
 {
 
-  old_slice.pps_id = img->currentSlice->pic_parameter_set_id;
+  p_old_slice->pps_id = currSlice->pic_parameter_set_id;
 
-  old_slice.frame_num = img->frame_num;
+  p_old_slice->frame_num = img->frame_num;
 
-  old_slice.field_pic_flag = img->field_pic_flag;
+  p_old_slice->field_pic_flag = img->field_pic_flag;
 
   if(img->field_pic_flag)
   {
-    old_slice.bottom_field_flag = img->bottom_field_flag;
+    p_old_slice->bottom_field_flag = img->bottom_field_flag;
   }
 
-  old_slice.nal_ref_idc   = img->nal_reference_idc;
+  p_old_slice->nal_ref_idc   = img->nal_reference_idc;
 
-  old_slice.idr_flag = img->idr_flag;
+  p_old_slice->idr_flag = img->idr_flag;
   if (img->idr_flag)
   {
-    old_slice.idr_pic_id = img->idr_pic_id;
+    p_old_slice->idr_pic_id = img->idr_pic_id;
   }
 
   if (active_sps->pic_order_cnt_type == 0)
   {
-    old_slice.pic_oder_cnt_lsb          = img->pic_order_cnt_lsb;
-    old_slice.delta_pic_oder_cnt_bottom = img->delta_pic_order_cnt_bottom;
+    p_old_slice->pic_oder_cnt_lsb          = img->pic_order_cnt_lsb;
+    p_old_slice->delta_pic_oder_cnt_bottom = img->delta_pic_order_cnt_bottom;
   }
 
   if (active_sps->pic_order_cnt_type == 1)
   {
-    old_slice.delta_pic_order_cnt[0] = img->delta_pic_order_cnt[0];
-    old_slice.delta_pic_order_cnt[1] = img->delta_pic_order_cnt[1];
+    p_old_slice->delta_pic_order_cnt[0] = img->delta_pic_order_cnt[0];
+    p_old_slice->delta_pic_order_cnt[1] = img->delta_pic_order_cnt[1];
   }
 }
 
@@ -1460,135 +1642,47 @@ void exit_slice(void)
  *    detect if current slice is "first VCL NAL unit of a picture"
  ************************************************************************
  */
-int is_new_picture(void)
+int is_new_picture(StorablePicture *dec_picture, Slice *currSlice, OldSliceParams *p_old_slice)
 {
   int result=0;
 
   result |= (NULL==dec_picture);
 
-  result |= (old_slice.pps_id != img->currentSlice->pic_parameter_set_id);
+  result |= (p_old_slice->pps_id != currSlice->pic_parameter_set_id);
 
-  result |= (old_slice.frame_num != img->frame_num);
+  result |= (p_old_slice->frame_num != img->frame_num);
 
-  result |= (old_slice.field_pic_flag != img->field_pic_flag);
+  result |= (p_old_slice->field_pic_flag != img->field_pic_flag);
 
-  if(img->field_pic_flag && old_slice.field_pic_flag)
+  if(img->field_pic_flag && p_old_slice->field_pic_flag)
   {
-    result |= (old_slice.bottom_field_flag != img->bottom_field_flag);
+    result |= (p_old_slice->bottom_field_flag != img->bottom_field_flag);
   }
 
-  result |= (old_slice.nal_ref_idc != img->nal_reference_idc) && ((old_slice.nal_ref_idc == 0) || (img->nal_reference_idc == 0));
+  result |= (p_old_slice->nal_ref_idc != img->nal_reference_idc) && ((p_old_slice->nal_ref_idc == 0) || (img->nal_reference_idc == 0));
 
-  result |= ( old_slice.idr_flag != img->idr_flag);
+  result |= ( p_old_slice->idr_flag != img->idr_flag);
 
-  if (img->idr_flag && old_slice.idr_flag)
+  if (img->idr_flag && p_old_slice->idr_flag)
   {
-    result |= (old_slice.idr_pic_id != img->idr_pic_id);
+    result |= (p_old_slice->idr_pic_id != img->idr_pic_id);
   }
 
   if (active_sps->pic_order_cnt_type == 0)
   {
-    result |=  (old_slice.pic_oder_cnt_lsb          != img->pic_order_cnt_lsb);
-    result |=  (old_slice.delta_pic_oder_cnt_bottom != img->delta_pic_order_cnt_bottom);
+    result |= (p_old_slice->pic_oder_cnt_lsb          != img->pic_order_cnt_lsb);
+    result |= (p_old_slice->delta_pic_oder_cnt_bottom != img->delta_pic_order_cnt_bottom);
   }
 
   if (active_sps->pic_order_cnt_type == 1)
   {
-    result |= (old_slice.delta_pic_order_cnt[0] != img->delta_pic_order_cnt[0]);
-    result |= (old_slice.delta_pic_order_cnt[1] != img->delta_pic_order_cnt[1]);
+    result |= (p_old_slice->delta_pic_order_cnt[0] != img->delta_pic_order_cnt[0]);
+    result |= (p_old_slice->delta_pic_order_cnt[1] != img->delta_pic_order_cnt[1]);
   }
 
   return result;
 }
 
-
-/*!
- ************************************************************************
- * \brief
- *    decodes one slice
- ************************************************************************
- */
-void decode_one_slice(ImageParameters *img,struct inp_par *inp)
-{
-  Boolean end_of_slice = FALSE;
-  Macroblock *currMB = NULL;
-  img->cod_counter=-1;
-
-  set_interpret_mb_mode(img->type);
-
-  if( IS_INDEPENDENT(img) )
-  {
-    change_plane_JV( img->colour_plane_id );
-  }
-
-  set_ref_pic_num();
-
-  if (img->type == B_SLICE)
-  {
-    if( IS_INDEPENDENT(img) )
-    {
-      compute_colocated_JV(Co_located, listX);
-    }
-    else
-    {
-      compute_colocated(Co_located, listX);
-    }
-  }
-
-  //reset_ec_flags();
-
-  while (end_of_slice == FALSE) // loop over macroblocks
-  {
-
-#if TRACE
-  fprintf(p_trace,"\n*********** POC: %i (I/P) MB: %i Slice: %i Type %d **********\n", img->ThisPOC, img->current_mb_nr, img->current_slice_nr, img->type);
-#endif
-
-    // Initializes the current macroblock
-    start_macroblock(img, &currMB);
-    // Get the syntax elements from the NAL
-    read_one_macroblock(img, currMB);
-    decode_one_macroblock(img, currMB, dec_picture);
-
-    if(img->MbaffFrameFlag && dec_picture->motion.mb_field[img->current_mb_nr])
-    {
-      img->num_ref_idx_l0_active >>= 1;
-      img->num_ref_idx_l1_active >>= 1;
-    }
-
-    ercWriteMBMODEandMV(currMB, img,inp);
-
-    end_of_slice=exit_macroblock(img,(!img->MbaffFrameFlag||img->current_mb_nr%2));
-  }
-
-  exit_slice();
-  //reset_ec_flags();
-}
-
-
-void decode_slice(ImageParameters *img,struct inp_par *inp, int current_header)
-{
-  Slice *currSlice = img->currentSlice;
-
-  if (active_pps->entropy_coding_mode_flag)
-  {
-    init_contexts (img);
-    cabac_new_slice();
-  }
-
-  if ( (active_pps->weighted_bipred_idc > 0  && (img->type == B_SLICE)) || (active_pps->weighted_pred_flag && img->type !=I_SLICE))
-    fill_wp_params(img);
-
-  //printf("frame picture %d %d %d\n",img->structure,img->ThisPOC,img->direct_spatial_mv_pred_flag);
-
-  // decode main slice information
-  if ((current_header == SOP || current_header == SOS) && currSlice->ei_flag == 0)
-    decode_one_slice(img,inp);
-
-  // setMB-Nr in case this slice was lost
-  // if(currSlice->ei_flag)
-  //   img->current_mb_nr = currSlice->last_mb_nr + 1;
-}
 
 
 /*!
@@ -1613,188 +1707,6 @@ void field_postprocessing(ImageParameters *img)
 }
 
 
-
-void reset_wp_params(ImageParameters *img)
-{
-  int i,comp;
-  int log_weight_denom;
-
-  for (i=0; i<MAX_REFERENCE_PICTURES; i++)
-  {
-    for (comp=0; comp<3; comp++)
-    {
-      log_weight_denom = (comp == 0) ? img->luma_log2_weight_denom : img->chroma_log2_weight_denom;
-      img->wp_weight[0][i][comp] = 1 << log_weight_denom;
-      img->wp_weight[1][i][comp] = 1 << log_weight_denom;
-    }
-  }
-}
-
-
-void fill_wp_params(ImageParameters *img)
-{
-  int i, j, k;
-  int comp;
-  int log_weight_denom;
-  int tb, td;
-  int bframe = (img->type==B_SLICE);
-  int max_bwd_ref, max_fwd_ref;
-  int tx,DistScaleFactor;
-
-  max_fwd_ref = img->num_ref_idx_l0_active;
-  max_bwd_ref = img->num_ref_idx_l1_active;
-
-  if (active_pps->weighted_bipred_idc == 2 && bframe)
-  {
-    img->luma_log2_weight_denom = 5;
-    img->chroma_log2_weight_denom = 5;
-    img->wp_round_luma = 16;
-    img->wp_round_chroma = 16;
-
-    for (i=0; i<MAX_REFERENCE_PICTURES; i++)
-    {
-      for (comp=0; comp<3; comp++)
-      {
-        log_weight_denom = (comp == 0) ? img->luma_log2_weight_denom : img->chroma_log2_weight_denom;
-        img->wp_weight[0][i][comp] = 1<<log_weight_denom;
-        img->wp_weight[1][i][comp] = 1<<log_weight_denom;
-        img->wp_offset[0][i][comp] = 0;
-        img->wp_offset[1][i][comp] = 0;
-      }
-    }
-  }
-
-  if (bframe)
-  {
-    for (i=0; i<max_fwd_ref; i++)
-    {
-      for (j=0; j<max_bwd_ref; j++)
-      {
-        for (comp = 0; comp<3; comp++)
-        {
-          log_weight_denom = (comp == 0) ? img->luma_log2_weight_denom : img->chroma_log2_weight_denom;
-          if (active_pps->weighted_bipred_idc == 1)
-          {
-            img->wbp_weight[0][i][j][comp] =  img->wp_weight[0][i][comp];
-            img->wbp_weight[1][i][j][comp] =  img->wp_weight[1][j][comp];
-          }
-          else if (active_pps->weighted_bipred_idc == 2)
-          {
-            td = iClip3(-128,127,listX[LIST_1][j]->poc - listX[LIST_0][i]->poc);
-            if (td == 0 || listX[LIST_1][j]->is_long_term || listX[LIST_0][i]->is_long_term)
-            {
-              img->wbp_weight[0][i][j][comp] =   32;
-              img->wbp_weight[1][i][j][comp] =   32;
-            }
-            else
-            {
-              tb = iClip3(-128,127,img->ThisPOC - listX[LIST_0][i]->poc);
-
-              tx = (16384 + iabs(td/2))/td;
-              DistScaleFactor = iClip3(-1024, 1023, (tx*tb + 32 )>>6);
-
-              img->wbp_weight[1][i][j][comp] = DistScaleFactor >> 2;
-              img->wbp_weight[0][i][j][comp] = 64 - img->wbp_weight[1][i][j][comp];
-              if (img->wbp_weight[1][i][j][comp] < -64 || img->wbp_weight[1][i][j][comp] > 128)
-              {
-                img->wbp_weight[0][i][j][comp] = 32;
-                img->wbp_weight[1][i][j][comp] = 32;
-                img->wp_offset[0][i][comp] = 0;
-                img->wp_offset[1][j][comp] = 0;
-              }
-            }
-          }
-        }
-      }
-   }
- }
-
-  if (bframe && img->MbaffFrameFlag)
-  {
-    for (i=0; i<2*max_fwd_ref; i++)
-    {
-      for (j=0; j<2*max_bwd_ref; j++)
-      {
-        for (comp = 0; comp<3; comp++)
-        {
-          for (k=2; k<6; k+=2)
-          {
-            img->wp_offset[k+0][i][comp] = img->wp_offset[0][i>>1][comp];
-            img->wp_offset[k+1][j][comp] = img->wp_offset[1][j>>1][comp];
-
-            log_weight_denom = (comp == 0) ? img->luma_log2_weight_denom : img->chroma_log2_weight_denom;
-            if (active_pps->weighted_bipred_idc == 1)
-            {
-              img->wbp_weight[k+0][i][j][comp] =  img->wp_weight[0][i>>1][comp];
-              img->wbp_weight[k+1][i][j][comp] =  img->wp_weight[1][j>>1][comp];
-            }
-            else if (active_pps->weighted_bipred_idc == 2)
-            {
-              td = iClip3(-128,127,listX[k+LIST_1][j]->poc - listX[k+LIST_0][i]->poc);
-              if (td == 0 || listX[k+LIST_1][j]->is_long_term || listX[k+LIST_0][i]->is_long_term)
-              {
-                img->wbp_weight[k+0][i][j][comp] =   32;
-                img->wbp_weight[k+1][i][j][comp] =   32;
-              }
-              else
-              {
-                tb = iClip3(-128,127,((k==2)?img->toppoc:img->bottompoc) - listX[k+LIST_0][i]->poc);
-
-                tx = (16384 + iabs(td/2))/td;
-                DistScaleFactor = iClip3(-1024, 1023, (tx*tb + 32 )>>6);
-
-                img->wbp_weight[k+1][i][j][comp] = DistScaleFactor >> 2;
-                img->wbp_weight[k+0][i][j][comp] = 64 - img->wbp_weight[k+1][i][j][comp];
-                if (img->wbp_weight[k+1][i][j][comp] < -64 || img->wbp_weight[k+1][i][j][comp] > 128)
-                {
-                  img->wbp_weight[k+1][i][j][comp] = 32;
-                  img->wbp_weight[k+0][i][j][comp] = 32;
-                  img->wp_offset[k+0][i][comp] = 0;
-                  img->wp_offset[k+1][j][comp] = 0;
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-/*!
- ************************************************************************
- * \brief
- *    Error tracking: if current frame is lost or any reference frame of
- *                    current frame is lost, current frame is incorrect.
- ************************************************************************
- */
-void Error_tracking(void)
-{
-  int i;
-
-  if(img->redundant_pic_cnt == 0)
-    {
-      Is_primary_correct = Is_redundant_correct = 1;
-    }
-
-  if(img->redundant_pic_cnt == 0 && img->type != I_SLICE)
-  {
-    for(i=0;i<img->num_ref_idx_l0_active;i++)
-    {
-      if(ref_flag[i] == 0)  // any reference of primary slice is incorrect
-      {
-        Is_primary_correct = 0; // primary slice is incorrect
-      }
-    }
-  }
-  else if(img->redundant_pic_cnt != 0 && img->type != I_SLICE)
-  {
-    if(ref_flag[redundant_slice_ref_idx] == 0)  // reference of redundant slice is incorrect
-    {
-      Is_redundant_correct = 0;  // redundant slice is incorrect
-    }
-  }
-}
 
 /*!
  ************************************************************************
@@ -1860,3 +1772,66 @@ void copy_dec_picture_JV( StorablePicture *dst, StorablePicture *src )
 #endif
 }
 
+
+/*!
+ ************************************************************************
+ * \brief
+ *    decodes one slice
+ ************************************************************************
+ */
+void decode_one_slice(ImageParameters *img, Slice *currSlice, struct inp_par *inp)
+{
+  Boolean end_of_slice = FALSE;
+  Macroblock *currMB = NULL;
+  img->cod_counter=-1;
+
+  set_interpret_mb_mode(img->type);
+
+  if( IS_INDEPENDENT(img) )
+  {
+    change_plane_JV( img->colour_plane_id );
+  }
+
+  set_ref_pic_num();
+
+  if (img->type == B_SLICE)
+  {
+    if( IS_INDEPENDENT(img) )
+    {
+      compute_colocated_JV(Co_located, listX);
+    }
+    else
+    {
+      compute_colocated(Co_located, listX);
+    }
+  }
+
+  //reset_ec_flags();
+
+  while (end_of_slice == FALSE) // loop over macroblocks
+  {
+
+#if TRACE
+  fprintf(p_trace,"\n*********** POC: %i (I/P) MB: %i Slice: %i Type %d **********\n", img->ThisPOC, img->current_mb_nr, img->current_slice_nr, img->type);
+#endif
+
+    // Initializes the current macroblock
+    start_macroblock(img, &currMB);
+    // Get the syntax elements from the NAL
+    read_one_macroblock(img, currSlice, currMB);
+    decode_one_macroblock(img, currMB, dec_picture);
+
+    if(img->MbaffFrameFlag && dec_picture->motion.mb_field[img->current_mb_nr])
+    {
+      img->num_ref_idx_l0_active >>= 1;
+      img->num_ref_idx_l1_active >>= 1;
+    }
+
+    ercWriteMBMODEandMV(currMB, img,inp);
+
+    end_of_slice=exit_macroblock(img,(!img->MbaffFrameFlag||img->current_mb_nr%2));
+  }
+
+  exit_slice(currSlice, &old_slice);
+  //reset_ec_flags();
+}

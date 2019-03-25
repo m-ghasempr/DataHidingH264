@@ -14,15 +14,9 @@
 
 #include "nalucommon.h"
 
-extern int IsFirstByteStreamNALU;
-extern int LastAccessUnitExists;
-extern int NALUCount;
-
-int  GetAnnexbNALU (FILE *bitstream, NALU_t *nalu);
-void OpenBitstreamFile (char *fn);
-void CloseBitstreamFile(void);
-void CheckZeroByteNonVCL(NALU_t *nalu);
-void CheckZeroByteVCL(NALU_t *nalu);
+int  GetAnnexbNALU (NALU_t *nalu);
+void OpenAnnexBFile (char *fn);
+void CloseAnnexBFile(void);
 
 #endif
 

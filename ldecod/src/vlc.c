@@ -26,16 +26,12 @@
 #define SYMTRACESTRING(s) // do nothing
 #endif
 
-void tracebits(const char *trace_str,  int len,  int info,int value1);
-
-
-
 int UsedBits;      // for internal statistics, is adjusted by se_v, ue_v, u_1
 
 // Note that all NA values are filled with 0
 
 //! gives CBP value from codeword number, both for intra and inter
-static const unsigned char NCBP[2][48][2]=
+static const byte NCBP[2][48][2]=
 {
   {  // 0      1        2       3       4       5       6       7       8       9      10      11
     {15, 0},{ 0, 1},{ 7, 2},{11, 4},{13, 8},{14, 3},{ 3, 5},{ 5,10},{10,12},{12,15},{ 1, 7},{ 2,11},
@@ -105,7 +101,7 @@ int ue_v (char *tracestring, Bitstream *bitstream)
 {
   SyntaxElement symbol;
 
-  assert (bitstream->streamBuffer != NULL);
+  //assert (bitstream->streamBuffer != NULL);
   symbol.type = SE_HEADER;
   symbol.mapping = linfo_ue;   // Mapping rule
   SYMTRACESTRING(tracestring);
@@ -136,7 +132,7 @@ int se_v (char *tracestring, Bitstream *bitstream)
 {
   SyntaxElement symbol;
 
-  assert (bitstream->streamBuffer != NULL);
+  //assert (bitstream->streamBuffer != NULL);
   symbol.type = SE_HEADER;
   symbol.mapping = linfo_se;   // Mapping rule: signed integer
   SYMTRACESTRING(tracestring);
@@ -171,7 +167,7 @@ int u_v (int LenInBits, char*tracestring, Bitstream *bitstream)
   SyntaxElement symbol;
   symbol.inf = 0;
 
-  assert (bitstream->streamBuffer != NULL);
+  //assert (bitstream->streamBuffer != NULL);
   symbol.type = SE_HEADER;
   symbol.mapping = linfo_ue;   // Mapping rule
   symbol.len = LenInBits;
@@ -207,7 +203,7 @@ int i_v (int LenInBits, char*tracestring, Bitstream *bitstream)
 
   symbol.inf = 0;
 
-  assert (bitstream->streamBuffer != NULL);
+  //assert (bitstream->streamBuffer != NULL);
   symbol.type = SE_HEADER;
   symbol.mapping = linfo_ue;   // Mapping rule
   symbol.len = LenInBits;
@@ -258,7 +254,7 @@ Boolean u_1 (char *tracestring, Bitstream *bitstream)
  */
 void linfo_ue(int len, int info, int *value1, int *dummy)
 {
-  assert ((len >> 1) < 32);
+  //assert ((len >> 1) < 32);
   *value1 = (1 << (len >> 1)) + info - 1;
 }
 
@@ -275,7 +271,7 @@ void linfo_ue(int len, int info, int *value1, int *dummy)
 void linfo_se(int len,  int info, int *value1, int *dummy)
 {
   int n;
-  assert ((len >> 1) < 32);
+  //assert ((len >> 1) < 32);
   n = (1 << (len >> 1)) + info - 1;
   *value1 = (n + 1) >> 1;
   if((n & 0x01) == 0)                           // lsb is signed bit
@@ -332,14 +328,13 @@ void linfo_cbp_inter(int len,int info,int *cbp, int *dummy)
  */
 void linfo_levrun_inter(int len, int info, int *level, int *irun)
 {
-  int l2;
-  int inf;
-  assert (((len >> 1) - 5) < 32);
-  
+  //assert (((len >> 1) - 5) < 32);
+
   if (len <= 9)
   {
-    l2     = imax(0,(len >> 1)-1);
-    inf    = info >> 1;
+    int l2     = imax(0,(len >> 1)-1);
+    int inf    = info >> 1;
+
     *level = NTAB1[l2][inf][0];
     *irun  = NTAB1[l2][inf][1];
     if ((info & 0x01) == 1)
@@ -368,13 +363,10 @@ void linfo_levrun_inter(int len, int info, int *level, int *irun)
  */
 void linfo_levrun_c2x2(int len, int info, int *level, int *irun)
 {
-  int l2;
-  int inf;
-
   if (len<=5)
   {
-    l2     = imax(0, (len >> 1) - 1);
-    inf    = info >> 1;
+    int l2     = imax(0, (len >> 1) - 1);
+    int inf    = info >> 1;
     *level = NTAB3[l2][inf][0];
     *irun  = NTAB3[l2][inf][1];
     if ((info & 0x01) == 1)
@@ -387,6 +379,7 @@ void linfo_levrun_c2x2(int len, int info, int *level, int *irun)
     if ((info & 0x01) == 1)
       *level = -*level;
   }
+  
   if (len == 1) // EOB
     *level = 0;
 }
@@ -400,15 +393,13 @@ void linfo_levrun_c2x2(int len, int info, int *level, int *irun)
  */
 int readSyntaxElement_VLC(SyntaxElement *sym, Bitstream *currStream)
 {
-  int frame_bitoffset        = currStream->frame_bitoffset;
-  int BitstreamLengthInBytes = currStream->bitstream_length;
-  byte *buf                  = currStream->streamBuffer;
 
-  sym->len =  GetVLCSymbol (buf, frame_bitoffset, &(sym->inf), BitstreamLengthInBytes);
+  sym->len =  GetVLCSymbol (currStream->streamBuffer, currStream->frame_bitoffset, &(sym->inf), currStream->bitstream_length);
   if (sym->len == -1)
     return -1;
+
   currStream->frame_bitoffset += sym->len;
-  sym->mapping(sym->len,sym->inf,&(sym->value1),&(sym->value2));
+  sym->mapping(sym->len, sym->inf, &(sym->value1), &(sym->value2));
 
 #if TRACE
   tracebits(sym->tracestring, sym->len, sym->inf, sym->value1);
@@ -439,14 +430,12 @@ int readSyntaxElement_UVLC(SyntaxElement *sym, ImageParameters *img, struct data
  */
 int readSyntaxElement_Intra4x4PredictionMode(SyntaxElement *sym, ImageParameters *img, Bitstream   *currStream)
 {
-  int         *frame_bitoffset       = &currStream->frame_bitoffset;
-
-  sym->len = GetVLCSymbol_IntraMode (currStream->streamBuffer, *frame_bitoffset, &(sym->inf), currStream->bitstream_length);
+  sym->len = GetVLCSymbol_IntraMode (currStream->streamBuffer, currStream->frame_bitoffset, &(sym->inf), currStream->bitstream_length);
 
   if (sym->len == -1)
     return -1;
 
-  *frame_bitoffset += sym->len;
+  currStream->frame_bitoffset += sym->len;
   sym->value1       = (sym->len == 1) ? -1 : sym->inf;
 
 #if TRACE
@@ -458,42 +447,32 @@ int readSyntaxElement_Intra4x4PredictionMode(SyntaxElement *sym, ImageParameters
 
 int GetVLCSymbol_IntraMode (byte buffer[],int totbitoffset,int *info, int bytecount)
 {
-
-  register int inf;
-  long byteoffset = (totbitoffset >> 3);        // byte from start of buffer
+  int byteoffset = (totbitoffset >> 3);        // byte from start of buffer
   int bitoffset   = (7 - (totbitoffset & 0x07)); // bit from start of byte
   byte *cur_byte  = &(buffer[byteoffset]);
   int ctr_bit     = (*cur_byte & (0x01 << bitoffset));      // control bit for current bit posision
-  int bitcounter  = 1;
-  int len         = 0;
 
   //First bit
   if (ctr_bit)
   {
     *info = 0;
-    return bitcounter;
+    return 1;
+  }
+
+  if (byteoffset >= bytecount) 
+  {
+    return -1;
   }
   else
-    len = 3;
-
-  if (byteoffset + ((len + 7) >> 3) > bytecount)
-    return -1;
-
-  // make infoword
-  inf = 0;                          // shortest possible code is 1, then info is always 0    
-
-  while (len--)
   {
-    bitcounter++;
-    bitoffset --;
-    bitoffset &= 0x07;
-    cur_byte  += (bitoffset == 7);
-    inf <<= 1;
-    inf |= ((*cur_byte)>> (bitoffset)) & 0x01;
-  }
+    int inf = (*(cur_byte) << 8) + *(cur_byte + 1);
+    inf <<= (sizeof(byte) * 8) - bitoffset;
+    inf = inf & 0xFFFF;
+    inf >>= (sizeof(byte) * 8) * 2 - 3;
 
-  *info = inf;
-  return bitcounter;           // return absolute offset in bit from start of frame
+    *info = inf;
+    return 4;           // return absolute offset in bit from start of frame
+  } 
 }
 
 
@@ -520,7 +499,7 @@ int more_rbsp_data (byte buffer[],int totbitoffset,int bytecount)
   int ctr_bit     = 0;      // control bit for current bit posision
   int cnt         = 0;
 
-  assert (byteoffset<bytecount);
+  //assert (byteoffset<bytecount);
 
   // there is more until we're in the last byte
   if (byteoffset < (bytecount - 1)) return TRUE;
@@ -548,12 +527,11 @@ int more_rbsp_data (byte buffer[],int totbitoffset,int bytecount)
  */
 int uvlc_startcode_follows(Slice *currSlice, int dummy)
 {
-  int dp_Nr = assignSE2partition[currSlice->dp_mode][SE_MBTYPE];
-  DataPartition *dP = &(currSlice->partArr[dp_Nr]);
-  Bitstream   *currStream = dP->bitstream;
-  byte *buf  = currStream->streamBuffer;
+  byte            dp_Nr = assignSE2partition[currSlice->dp_mode][SE_MBTYPE];
+  DataPartition     *dP = &(currSlice->partArr[dp_Nr]);
+  Bitstream *currStream = dP->bitstream;
+  byte             *buf = currStream->streamBuffer;
 
-  //KS: new function test for End of Buffer
   return (!(more_rbsp_data(buf, currStream->frame_bitoffset,currStream->bitstream_length)));
 }
 
@@ -578,13 +556,11 @@ int uvlc_startcode_follows(Slice *currSlice, int dummy)
  */
 int GetVLCSymbol (byte buffer[],int totbitoffset,int *info, int bytecount)
 {
-
-  register int inf;
   long byteoffset = (totbitoffset >> 3);         // byte from start of buffer
   int  bitoffset  = (7 - (totbitoffset & 0x07)); // bit from start of byte
   int  bitcounter = 1;
   int  len        = 0;
-  byte *cur_byte = &(buffer[byteoffset]);
+  byte *cur_byte  = &(buffer[byteoffset]);
   int  ctr_bit    = ((*cur_byte) >> (bitoffset)) & 0x01;  // control bit for current bit posision
 
   while (ctr_bit == 0)
@@ -601,24 +577,63 @@ int GetVLCSymbol (byte buffer[],int totbitoffset,int *info, int bytecount)
   if (byteoffset + ((len + 7) >> 3) > bytecount)
     return -1;
 
-  // make infoword
-  inf = 0;                          // shortest possible code is 1, then info is always 0    
-
-  while (len--)
+  else
   {
-    bitoffset --;    
-    bitoffset &= 0x07;
-    cur_byte  += (bitoffset == 7);
-    bitcounter++;
-    inf <<= 1;    
-    inf |= ((*cur_byte) >> (bitoffset)) & 0x01;
-  }
+    // make infoword
+    int inf = 0;                          // shortest possible code is 1, then info is always 0    
 
-  *info = inf;
-  return bitcounter;           // return absolute offset in bit from start of frame
+    while (len--)
+    {
+      bitoffset --;    
+      bitoffset &= 0x07;
+      cur_byte  += (bitoffset == 7);
+      bitcounter++;
+      inf <<= 1;    
+      inf |= ((*cur_byte) >> (bitoffset)) & 0x01;
+    }
+
+    *info = inf;
+    return bitcounter;           // return absolute offset in bit from start of frame
+  }
 }
 
-extern void tracebits2(const char *trace_str,  int len,  int info) ;
+
+/*!
+ ************************************************************************
+ * \brief
+ *  Reads bits from the bitstream buffer (Threshold based)
+ *
+ * \param inf
+ *    bytes to extract numbits from with bitoffset already applied
+ * \param bytecount
+ *    total bytes in bitstream
+ * \param numbits
+ *    number of bits to read
+ * \param code
+ *    threshold parameter 
+ *
+ ************************************************************************
+ */
+
+//static inline int ShowBitsThres (int inf, int bitcount, int numbits)
+static inline int ShowBitsThres (int inf, int numbits)
+{
+  return ((inf) >> ((sizeof(byte) * 24) - (numbits)));
+  /*
+  if ((numbits + 7) > bitcount) 
+  {
+    return -1;
+  }
+  else 
+  {
+    //Worst case scenario is that we will need to traverse 3 bytes
+    inf >>= (sizeof(byte)*8)*3 - numbits;
+  }
+  
+  return inf; //Will be a small unsigned integer so will not need any conversion when returning as int
+  */
+}
+
 
 /*!
  ************************************************************************
@@ -629,39 +644,41 @@ extern void tracebits2(const char *trace_str,  int len,  int info) ;
 
 int code_from_bitstream_2d(SyntaxElement *sym,
                            Bitstream *currStream,
-                           const int *lentab,
-                           const int *codtab,
+                           const byte *lentab,
+                           const byte *codtab,
                            int tabwidth,
                            int tabheight,
                            int *code)
 {
-  int frame_bitoffset        = currStream->frame_bitoffset;
-  int BitstreamLengthInBytes = currStream->bitstream_length - (frame_bitoffset >> 3);
-  byte *buf                  = &currStream->streamBuffer[frame_bitoffset>>3];
-  int current_bit_pos        = 7 - (frame_bitoffset & 0x07);
-
   int i, j;
-  const int *len = &lentab[0], *cod = &codtab[0];
+  const byte *len = &lentab[0], *cod = &codtab[0];
 
+  int *frame_bitoffset = &currStream->frame_bitoffset;
+  byte *buf            = &currStream->streamBuffer[*frame_bitoffset >> 3];
+
+  //Apply bitoffset to three bytes (maximum that may be traversed by ShowBitsThres)
+  unsigned int inf = ((*buf) << 16) + (*(buf + 1) << 8) + *(buf + 2); //Even at the end of a stream we will still be pulling out of allocated memory as alloc is done by MAX_CODED_FRAME_SIZE
+  inf <<= (*frame_bitoffset & 0x07);                                  //Offset is constant so apply before extracting different numbers of bits
+  inf  &= 0xFFFFFF;                                                   //Arithmetic shift so wipe any sign which may be extended inside ShowBitsThres
+  
   // this VLC decoding method is not optimized for speed
   for (j = 0; j < tabheight; j++) 
   {
     for (i = 0; i < tabwidth; i++)
     {
-      //if ((*len == 0) || (ShowBits(buf, frame_bitoffset, BitstreamLengthInBytes, *len) != *cod))
-      if ((*len == 0) || (ShowBitsThres(buf, current_bit_pos, BitstreamLengthInBytes, *len, *cod) != *cod))
+      if ((*len == 0) || (ShowBitsThres(inf, (int) *len) != *cod))
       {
         len++;
         cod++;
       }
       else
       {
+        sym->len = *len;
+        *frame_bitoffset += *len; // move bitstream pointer
+        *code = *cod;             
         sym->value1 = i;
         sym->value2 = j;        
-        sym->len = *len;
-        currStream->frame_bitoffset += *len; // move bitstream pointer
-        *code = *cod;                        // found code and return
-        return 0;
+        return 0;                 // found code and return 
       }
     }
   }
@@ -677,11 +694,9 @@ int code_from_bitstream_2d(SyntaxElement *sym,
  */
 int readSyntaxElement_FLC(SyntaxElement *sym, Bitstream *currStream)
 {
-  int frame_bitoffset        = currStream->frame_bitoffset;
-  int BitstreamLengthInBytes = currStream->bitstream_length;
-  byte *buf                  = currStream->streamBuffer;
-
-  if ((GetBits(buf, frame_bitoffset, &(sym->inf), BitstreamLengthInBytes, sym->len)) < 0)
+  int BitstreamLengthInBits  = (currStream->bitstream_length << 3) + 7;
+  
+  if ((GetBits(currStream->streamBuffer, currStream->frame_bitoffset, &(sym->inf), BitstreamLengthInBits, sym->len)) < 0)
     return -1;
 
   sym->value1 = sym->inf;
@@ -709,9 +724,10 @@ int readSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *sym,
 {
   int frame_bitoffset        = currStream->frame_bitoffset;
   int BitstreamLengthInBytes = currStream->bitstream_length;
+  int BitstreamLengthInBits  = (BitstreamLengthInBytes << 3) + 7;
   byte *buf                  = currStream->streamBuffer;
 
-  static const int lentab[3][4][17] =
+  static const byte lentab[3][4][17] =
   {
     {   // 0702
       { 1, 6, 8, 9,10,11,13,13,13,14,14,15,15,16,16,16,16},
@@ -733,7 +749,7 @@ int readSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *sym,
     },
   };
 
-  static const int codtab[3][4][17] =
+  static const byte codtab[3][4][17] =
   {
     {
       { 1, 5, 7, 7, 7, 7,15,11, 8,15,11,15,11,15,11, 7,4},
@@ -763,7 +779,8 @@ int readSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *sym,
   if (vlcnum == 3)
   {
     // read 6 bit FLC
-    code = ShowBits(buf, frame_bitoffset, BitstreamLengthInBytes, 6);
+    //code = ShowBits(buf, frame_bitoffset, BitstreamLengthInBytes, 6);
+    code = ShowBits(buf, frame_bitoffset, BitstreamLengthInBits, 6);
     currStream->frame_bitoffset += 6;
     sym->value2 = (code & 3);
     sym->value1 = (code >> 2);
@@ -790,8 +807,7 @@ int readSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *sym,
   }
 
 #if TRACE
-  snprintf(sym->tracestring,
-    TRACESTRING_SIZE, "%s # c & tr.1s vlc=%d #c=%d #t1=%d",
+  snprintf(sym->tracestring, TRACESTRING_SIZE, "%s # c & tr.1s vlc=%d #c=%d #t1=%d",
            type, vlcnum, sym->value1, sym->value2);
   tracebits2(sym->tracestring, sym->len, code);
 #endif
@@ -808,45 +824,45 @@ int readSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *sym,
  */
 int readSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *sym,  Bitstream *currStream)
 {
-  static const int lentab[3][4][17] =
+  static const byte lentab[3][4][17] =
   {
     //YUV420
-   {{ 2, 6, 6, 6, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {{ 2, 6, 6, 6, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
     { 0, 1, 6, 7, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
     { 0, 0, 3, 7, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
     { 0, 0, 0, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
     //YUV422
-   {{ 1, 7, 7, 9, 9,10,11,12,13, 0, 0, 0, 0, 0, 0, 0, 0},
+    {{ 1, 7, 7, 9, 9,10,11,12,13, 0, 0, 0, 0, 0, 0, 0, 0},
     { 0, 2, 7, 7, 9,10,11,12,12, 0, 0, 0, 0, 0, 0, 0, 0},
     { 0, 0, 3, 7, 7, 9,10,11,12, 0, 0, 0, 0, 0, 0, 0, 0},
     { 0, 0, 0, 5, 6, 7, 7,10,11, 0, 0, 0, 0, 0, 0, 0, 0}},
     //YUV444
-   {{ 1, 6, 8, 9,10,11,13,13,13,14,14,15,15,16,16,16,16},
+    {{ 1, 6, 8, 9,10,11,13,13,13,14,14,15,15,16,16,16,16},
     { 0, 2, 6, 8, 9,10,11,13,13,14,14,15,15,15,16,16,16},
     { 0, 0, 3, 7, 8, 9,10,11,13,13,14,14,15,15,16,16,16},
     { 0, 0, 0, 5, 6, 7, 8, 9,10,11,13,14,14,15,15,16,16}}
   };
 
-  static const int codtab[3][4][17] =
+  static const byte codtab[3][4][17] =
   {
     //YUV420
-   {{ 1, 7, 4, 3, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {{ 1, 7, 4, 3, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
     { 0, 1, 6, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
     { 0, 0, 1, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
     { 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
     //YUV422
-   {{ 1,15,14, 7, 6, 7, 7, 7, 7, 0, 0, 0, 0, 0, 0, 0, 0},
+    {{ 1,15,14, 7, 6, 7, 7, 7, 7, 0, 0, 0, 0, 0, 0, 0, 0},
     { 0, 1,13,12, 5, 6, 6, 6, 5, 0, 0, 0, 0, 0, 0, 0, 0},
     { 0, 0, 1,11,10, 4, 5, 5, 4, 0, 0, 0, 0, 0, 0, 0, 0},
     { 0, 0, 0, 1, 1, 9, 8, 4, 4, 0, 0, 0, 0, 0, 0, 0, 0}},
     //YUV444
-   {{ 1, 5, 7, 7, 7, 7,15,11, 8,15,11,15,11,15,11, 7, 4},
+    {{ 1, 5, 7, 7, 7, 7,15,11, 8,15,11,15,11,15,11, 7, 4},
     { 0, 1, 4, 6, 6, 6, 6,14,10,14,10,14,10, 1,14,10, 6},
     { 0, 0, 1, 5, 5, 5, 5, 5,13, 9,13, 9,13, 9,13, 9, 5},
     { 0, 0, 0, 3, 3, 4, 4, 4, 4, 4,12,12, 8,12, 8,12, 8}}
 
   };
-   
+
   int code;
   int yuv = active_sps->chroma_format_idc - 1;
   int retval = code_from_bitstream_2d(sym, currStream, &lentab[yuv][0][0], &codtab[yuv][0][0], 17, 4, &code);
@@ -858,18 +874,14 @@ int readSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *sym,  Bitstrea
   }
 
 #if TRACE
-    snprintf(sym->tracestring,
-      TRACESTRING_SIZE, "ChrDC # c & tr.1s  #c=%d #t1=%d",
-              sym->value1, sym->value2);
-    tracebits2(sym->tracestring, sym->len, code);
+  snprintf(sym->tracestring, TRACESTRING_SIZE, "ChrDC # c & tr.1s  #c=%d #t1=%d",
+    sym->value1, sym->value2);
+  tracebits2(sym->tracestring, sym->len, code);
 
 #endif
 
   return retval;
 }
-
-
-
 
 /*!
  ************************************************************************
@@ -881,15 +893,12 @@ int readSyntaxElement_Level_VLC0(SyntaxElement *sym, Bitstream *currStream)
 {
   int frame_bitoffset        = currStream->frame_bitoffset;
   int BitstreamLengthInBytes = currStream->bitstream_length;
+  int BitstreamLengthInBits  = (BitstreamLengthInBytes << 3) + 7;
   byte *buf                  = currStream->streamBuffer;
-  int len = 0, sign=0, level=0, code = 1;
-  int offset, addbit;
+  int len = 1, sign = 0, level = 0, code = 1;
 
-  while (!ShowBits(buf, frame_bitoffset+len, BitstreamLengthInBytes, 1))
+  while (!ShowBits(buf, frame_bitoffset++, BitstreamLengthInBits, 1))
     len++;
-
-  len++;
-  frame_bitoffset += len;
 
   if (len < 15)
   {
@@ -900,7 +909,7 @@ int readSyntaxElement_Level_VLC0(SyntaxElement *sym, Bitstream *currStream)
   {
     // escape code
     code <<= 4;
-    code |= ShowBits(buf, frame_bitoffset, BitstreamLengthInBytes, 4);
+    code |= ShowBits(buf, frame_bitoffset, BitstreamLengthInBits, 4);
     len  += 4;
     frame_bitoffset += 4;
     sign = (code & 0x01);
@@ -909,14 +918,14 @@ int readSyntaxElement_Level_VLC0(SyntaxElement *sym, Bitstream *currStream)
   else if (len >= 16)
   {
     // escape code
-    addbit = (len - 16);
+    int addbit = (len - 16);
+    int offset = (2048 << addbit) - 2032;
     len   -= 4;
-    code   = ShowBits(buf, frame_bitoffset, BitstreamLengthInBytes, len);
+    code   = ShowBits(buf, frame_bitoffset, BitstreamLengthInBits, len);
     sign   = (code & 0x01);
     frame_bitoffset += len;    
-
-    offset = (2048 << addbit) - 2032;
     level = (code >> 1) + offset;
+
     code |= (1 << (len)); // for display purpose only
     len += addbit + 16;
  }
@@ -927,9 +936,9 @@ int readSyntaxElement_Level_VLC0(SyntaxElement *sym, Bitstream *currStream)
 #if TRACE
   tracebits2(sym->tracestring, sym->len, code);
 #endif
+
   currStream->frame_bitoffset = frame_bitoffset;
   return 0;
-
 }
 
 /*!
@@ -942,57 +951,52 @@ int readSyntaxElement_Level_VLCN(SyntaxElement *sym, int vlc, Bitstream *currStr
 {
   int frame_bitoffset        = currStream->frame_bitoffset;
   int BitstreamLengthInBytes = currStream->bitstream_length;
+  int BitstreamLengthInBits  = (BitstreamLengthInBytes << 3) + 7;
   byte *buf                  = currStream->streamBuffer;
 
   int levabs, sign;
-  int len = 0;
+  int len = 1;
   int code = 1, sb;
 
-  int numPrefix = 0;
   int shift = vlc - 1;
-  int escape = (15 << shift) + 1;
-  int addbit, offset;
 
   // read pre zeros
-  while (!ShowBits(buf, frame_bitoffset + numPrefix, BitstreamLengthInBytes, 1))
-    numPrefix++;
+  while (!ShowBits(buf, frame_bitoffset ++, BitstreamLengthInBits, 1))
+    len++;
 
+  frame_bitoffset -= len;
 
-  len = numPrefix + 1;
-
-  if (numPrefix < 15)
+  if (len < 16)
   {
-    levabs = (numPrefix << shift) + 1;
+    levabs = ((len - 1) << shift) + 1;
 
     // read (vlc-1) bits -> suffix
     if (shift)
     {
-      sb =  ShowBits(buf, frame_bitoffset + len, BitstreamLengthInBytes, shift);
+      sb =  ShowBits(buf, frame_bitoffset + len, BitstreamLengthInBits, shift);
       code = (code << (shift) )| sb;
       levabs += sb;
       len += (shift);
     }
 
     // read 1 bit -> sign
-    sign = ShowBits(buf, frame_bitoffset + len, BitstreamLengthInBytes, 1);
+    sign = ShowBits(buf, frame_bitoffset + len, BitstreamLengthInBits, 1);
     code = (code << 1)| sign;
     len ++;
   }
   else // escape
   {
-    addbit = numPrefix - 15;
+    int addbit = len - 5;
+    int offset = (1 << addbit) + (15 << shift) - 2047;
 
-    sb = ShowBits(buf, frame_bitoffset + len, BitstreamLengthInBytes, (11 + addbit));
-    code = (code << (11 + addbit) )| sb;
-
-    len   += (11 + addbit);
-
-    offset = (2048 << addbit) + escape - 2048;
+    sb = ShowBits(buf, frame_bitoffset + len, BitstreamLengthInBits, addbit);
+    code = (code << addbit ) | sb;
+    len   += addbit;
 
     levabs = sb + offset;
     
     // read 1 bit -> sign
-    sign = ShowBits(buf, frame_bitoffset + len, BitstreamLengthInBytes, 1);
+    sign = ShowBits(buf, frame_bitoffset + len, BitstreamLengthInBits, 1);
 
     code = (code << 1)| sign;
 
@@ -1002,7 +1006,7 @@ int readSyntaxElement_Level_VLCN(SyntaxElement *sym, int vlc, Bitstream *currStr
   sym->inf = (sign)? -levabs : levabs;
   sym->len = len;
 
-  currStream->frame_bitoffset = frame_bitoffset+len;
+  currStream->frame_bitoffset = frame_bitoffset + len;
 
 #if TRACE
   tracebits2(sym->tracestring, sym->len, code);
@@ -1019,7 +1023,7 @@ int readSyntaxElement_Level_VLCN(SyntaxElement *sym, int vlc, Bitstream *currStr
  */
 int readSyntaxElement_TotalZeros(SyntaxElement *sym,  Bitstream *currStream)
 {
-  static const int lentab[TOTRUN_NUM][16] =
+  static const byte lentab[TOTRUN_NUM][16] =
   {
 
     { 1,3,3,4,4,5,5,6,6,7,7,8,8,9,9,9},
@@ -1039,7 +1043,7 @@ int readSyntaxElement_TotalZeros(SyntaxElement *sym,  Bitstream *currStream)
     { 1,1},
   };
 
-  static const int codtab[TOTRUN_NUM][16] =
+  static const byte codtab[TOTRUN_NUM][16] =
   {
     {1,3,2,3,2,3,2,3,2,3,2,3,2,3,2,1},
     {7,6,5,4,3,5,4,3,2,3,2,3,2,1,0},
@@ -1057,6 +1061,7 @@ int readSyntaxElement_TotalZeros(SyntaxElement *sym,  Bitstream *currStream)
     {0,1,1},
     {0,1},
   };
+
   int code;
   int vlcnum = sym->value1;
   int retval = code_from_bitstream_2d(sym, currStream, &lentab[vlcnum][0], &codtab[vlcnum][0], 16, 1, &code);
@@ -1067,10 +1072,8 @@ int readSyntaxElement_TotalZeros(SyntaxElement *sym,  Bitstream *currStream)
     exit(-1);
   }
 
-
 #if TRACE
-    tracebits2(sym->tracestring, sym->len, code);
-
+  tracebits2(sym->tracestring, sym->len, code);
 #endif
 
   return retval;
@@ -1084,7 +1087,7 @@ int readSyntaxElement_TotalZeros(SyntaxElement *sym,  Bitstream *currStream)
  */
 int readSyntaxElement_TotalZerosChromaDC(SyntaxElement *sym,  Bitstream *currStream)
 {
-  static const int lentab[3][TOTRUN_NUM][16] =
+  static const byte lentab[3][TOTRUN_NUM][16] =
   {
     //YUV420
    {{ 1,2,3,3},
@@ -1116,7 +1119,7 @@ int readSyntaxElement_TotalZerosChromaDC(SyntaxElement *sym,  Bitstream *currStr
     { 1,1}}
   };
 
-  static const int codtab[3][TOTRUN_NUM][16] =
+  static const byte codtab[3][TOTRUN_NUM][16] =
   {
     //YUV420
    {{ 1,1,1,0},
@@ -1159,7 +1162,6 @@ int readSyntaxElement_TotalZerosChromaDC(SyntaxElement *sym,  Bitstream *currStr
     exit(-1);
   }
 
-
 #if TRACE
   tracebits2(sym->tracestring, sym->len, code);
 #endif
@@ -1176,7 +1178,7 @@ int readSyntaxElement_TotalZerosChromaDC(SyntaxElement *sym,  Bitstream *currStr
  */
 int readSyntaxElement_Run(SyntaxElement *sym, Bitstream *currStream)
 {
-  static const int lentab[TOTRUN_NUM][16] =
+  static const byte lentab[TOTRUN_NUM][16] =
   {
     {1,1},
     {1,2,2},
@@ -1187,7 +1189,7 @@ int readSyntaxElement_Run(SyntaxElement *sym, Bitstream *currStream)
     {3,3,3,3,3,3,3,4,5,6,7,8,9,10,11},
   };
 
-  static const int codtab[TOTRUN_NUM][16] =
+  static const byte codtab[TOTRUN_NUM][16] =
   {
     {1,0},
     {1,1,0},
@@ -1208,7 +1210,7 @@ int readSyntaxElement_Run(SyntaxElement *sym, Bitstream *currStream)
   }
 
 #if TRACE
-    tracebits2(sym->tracestring, sym->len, code);
+  tracebits2(sym->tracestring, sym->len, code);
 #endif
 
   return retval;
@@ -1233,36 +1235,38 @@ int readSyntaxElement_Run(SyntaxElement *sym, Bitstream *currStream)
  *
  ************************************************************************
  */
-int GetBits (byte buffer[],int totbitoffset,int *info, int bytecount,
+int GetBits (byte buffer[],int totbitoffset,int *info, int bitcount,
              int numbits)
 {
-  register int inf;
-  int  bitoffset  = (totbitoffset & 0x07); // bit from start of byte
-  long byteoffset = (totbitoffset >> 3);       // byte from start of buffer
-  int  bitcounter = numbits;
-  static byte *curbyte;
-
-  if ((byteoffset) + ((numbits + bitoffset)>> 3)  > bytecount)
-    return -1;
-
-  curbyte = &(buffer[byteoffset]);
-
-  bitoffset = 7 - bitoffset;
-
-  inf=0;
-
-  while (numbits--)
+  if ((totbitoffset + numbits ) > bitcount) 
   {
-    inf <<=1;    
-    inf |= ((*curbyte)>> (bitoffset--)) & 0x01;    
-    //curbyte   += (bitoffset >> 3) & 0x01;
-    curbyte   -= (bitoffset >> 3);
-    bitoffset &= 0x07;
-    //curbyte   += (bitoffset == 7);    
+    return -1;
   }
+  else
+  {
+    int bitoffset  = 7 - (totbitoffset & 0x07); // bit from start of byte
+    int byteoffset = (totbitoffset >> 3); // byte from start of buffer
+    int bitcounter = numbits;
+    byte *curbyte  = &(buffer[byteoffset]);
+    int inf = 0;
 
-  *info = inf;
-  return bitcounter;           // return absolute offset in bit from start of frame
+    while (numbits--)
+    {
+      inf <<=1;    
+      inf |= ((*curbyte)>> (bitoffset--)) & 0x01;    
+      if (bitoffset == -1 ) 
+      { //Move onto next byte to get all of numbits
+        curbyte++;
+        bitoffset = 7;
+      }
+      // Above conditional could also be avoided using the following:
+      // curbyte   -= (bitoffset >> 3);
+      // bitoffset &= 0x07;
+    }
+    *info = inf;
+
+    return bitcounter;           // return absolute offset in bit from start of frame
+  }
 }
 
 /*!
@@ -1282,126 +1286,31 @@ int GetBits (byte buffer[],int totbitoffset,int *info, int bytecount,
  ************************************************************************
  */
 
-int ShowBits (byte buffer[],int totbitoffset,int bytecount, int numbits)
+int ShowBits (byte buffer[],int totbitoffset,int bitcount, int numbits)
 {
-
-  register int inf;
-  int  bitoffset  = (totbitoffset & 0x07); // bit from start of byte
-  long byteoffset = (totbitoffset >> 3);       // byte from start of buffer
-  static byte *curbyte;
-  
-  if ((byteoffset) + ((numbits + bitoffset)>> 3)  > bytecount)
-    return -1;
-
-  curbyte = &(buffer[byteoffset]);
-
-  bitoffset = 7 - bitoffset;
-
-  inf=0;
-
-  while (numbits--)
+  if ((totbitoffset + numbits )  > bitcount) 
   {
-    inf <<=1;    
-    inf |= ((*curbyte)>> (bitoffset--)) & 0x01;
-    //curbyte   += (bitoffset >> 3) & 0x01;
-    curbyte   -= (bitoffset >> 3);
-    bitoffset &= 0x07;
-    //curbyte   += (bitoffset == 7);    
-  }
-
-  return inf;           // return absolute offset in bit from start of frame
-}
-
-
-/*!
- ************************************************************************
- * \brief
- *  Reads bits from the bitstream buffer (Threshold based)
- *
- * \param curbyte
- *    current byte position in buffer
- * \param bitoffset
- *    bit offset at current position
- * \param bytecount
- *    total bytes in bitstream
- * \param numbits
- *    number of bits to read
- * \param code
- *    threshold parameter 
- *
- ************************************************************************
- */
-
-int ShowBitsThres (byte *curbyte, int bitoffset, int bytecount, int numbits, int code)
-{
-  register int inf;  
-     
-  if (((numbits + 7)>> 3) > bytecount)
     return -1;
+  }
   else
   {
-    inf=0;
+    int bitoffset  = 7 - (totbitoffset & 0x07); // bit from start of byte
+    int byteoffset = (totbitoffset >> 3); // byte from start of buffer
+    byte *curbyte  = &(buffer[byteoffset]);
+    int inf        = 0;
 
-#if 0
     while (numbits--)
     {
-      inf <<=1;
+      inf <<=1;    
       inf |= ((*curbyte)>> (bitoffset--)) & 0x01;
-      if ( inf > code)
-      {
-        return -1;
-      }
 
-      //curbyte   += (bitoffset >> 3) & 0x01;
-      curbyte   -= (bitoffset >> 3);
-      bitoffset &= 0x07;
-      //curbyte   += (bitoffset == 7);    
-    }
-#else
-    while (numbits--)
-    {
-      inf <<=1;
-      inf |= ((*curbyte)>> (bitoffset--)) & 0x01;
-      if ( (inf << numbits) > code)
-      {
-        return -1;
+      if (bitoffset == -1 ) 
+      { //Move onto next byte to get all of numbits
+        curbyte++;
+        bitoffset = 7;
       }
-
-      //curbyte   += (bitoffset >> 3) & 0x01; // the mask does not seem to be needed since value can be 0 or -1 only.
-      curbyte   -= (bitoffset >> 3);
-      bitoffset &= 0x07;
-      //curbyte   += (bitoffset == 7);    
     }
-#endif
     return inf;           // return absolute offset in bit from start of frame
   }
 }
-
-/*!
- ************************************************************************
- * \brief
- *    peek at the next 2 UVLC codeword from UVLC-partition to determine
- *    if a skipped MB is field/frame
- ************************************************************************
- */
-int peekSyntaxElement_UVLC(SyntaxElement *sym, ImageParameters *img, struct datapartition *dP)
-{
-  Bitstream   *currStream    = dP->bitstream;
-  int frame_bitoffset        = currStream->frame_bitoffset;
-  int BitstreamLengthInBytes = currStream->bitstream_length;
-  byte *buf                  = currStream->streamBuffer;
-
-  sym->len =  GetVLCSymbol (buf, frame_bitoffset, &(sym->inf), BitstreamLengthInBytes);
-  if (sym->len == -1)
-    return -1;
-  frame_bitoffset += sym->len;
-  sym->mapping(sym->len, sym->inf, &(sym->value1), &(sym->value2));
-
-#if TRACE
-  tracebits(sym->tracestring, sym->len, sym->inf, sym->value1);
-#endif
-
-  return 1;
-}
-
 

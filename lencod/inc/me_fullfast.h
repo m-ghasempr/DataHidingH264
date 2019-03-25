@@ -18,8 +18,8 @@
 
 #ifndef _ME_FULLFAST_H_
 #define _ME_FULLFAST_H_
-int FastFullPelBlockMotionSearch (Macroblock *currMB, imgpel* orig_pic, short ref, int list, int list_offset, 
-                                  char ***refPic, short ****tmp_mv, int pic_pix_x, int pic_pix_y, int blocktype, short pred_mv[2], short mv[2],
+int FastFullPelBlockMotionSearch (Macroblock *currMB, imgpel* orig_pic, short ref, int list, 
+                                  char ***refPic, short ****tmp_mv, int pic_pix_x, int pic_pix_y, int blocktype, MotionVector *pred_mv, MotionVector *mv,
                               int search_range,  int min_mcost, int lambda_factor, int apply_weights);
 void InitializeFastFullIntegerSearch (void);
 void ResetFastFullIntegerSearch (void);

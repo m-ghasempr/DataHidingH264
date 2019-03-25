@@ -10,8 +10,8 @@
 #ifndef _HEADER_H_
 #define _HEADER_H_
 
-int FirstPartOfSliceHeader(void);
-int RestOfSliceHeader(void);
+int FirstPartOfSliceHeader(Slice *currSlice);
+int RestOfSliceHeader     (Slice *currSlice);
 
 void dec_ref_pic_marking(Bitstream *currStream);
 

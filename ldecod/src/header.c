@@ -29,8 +29,8 @@ extern StorablePicture *dec_picture;
 
 extern int UsedBits;
 
-static void ref_pic_list_reordering(void);
-static void pred_weight_table(void);
+static void ref_pic_list_reordering(Slice *currSlice);
+static void pred_weight_table(Slice *currSlice);
 
 
 /*!
@@ -73,10 +73,9 @@ unsigned CeilLog2_sf( unsigned uiVal)
  *    Length of the first part of the slice header (in bits)
  ************************************************************************
  */
-int FirstPartOfSliceHeader(void)
+int FirstPartOfSliceHeader(Slice *currSlice)
 {
-  Slice *currSlice = img->currentSlice;
-  int dP_nr = assignSE2partition[currSlice->dp_mode][SE_HEADER];
+  byte dP_nr = assignSE2partition[currSlice->dp_mode][SE_HEADER];
   DataPartition *partition = &(currSlice->partArr[dP_nr]);
   Bitstream *currStream = partition->bitstream;
   int tmp;
@@ -88,16 +87,16 @@ int FirstPartOfSliceHeader(void)
 
   tmp = ue_v ("SH: slice_type", currStream);
 
-  if (tmp>4) tmp -=5;
+  if (tmp > 4) tmp -= 5;
 
   img->type = currSlice->picture_type = (SliceType) tmp;
 
   currSlice->pic_parameter_set_id = ue_v ("SH: pic_parameter_set_id", currStream);
 
   if( img->separate_colour_plane_flag )
-  {
     img->colour_plane_id = u_v (2, "SH: colour_plane_id", currStream);
-  }
+  else
+    img->colour_plane_id = PLANE_Y;
 
   return UsedBits;
 }
@@ -110,10 +109,9 @@ int FirstPartOfSliceHeader(void)
  *    Length of the second part of the Slice header in bits
  ************************************************************************
  */
-int RestOfSliceHeader(void)
+int RestOfSliceHeader(Slice *currSlice)
 {
-  Slice *currSlice = img->currentSlice;
-  int dP_nr = assignSE2partition[currSlice->dp_mode][SE_HEADER];
+  byte dP_nr = assignSE2partition[currSlice->dp_mode][SE_HEADER];
   DataPartition *partition = &(currSlice->partArr[dP_nr]);
   Bitstream *currStream = partition->bitstream;
 
@@ -143,7 +141,6 @@ int RestOfSliceHeader(void)
     {
       // bottom_field_flag  u(1)
       img->bottom_field_flag = u_1("SH: bottom_field_flag", currStream);
-
       img->structure = img->bottom_field_flag ? BOTTOM_FIELD : TOP_FIELD;
     }
     else
@@ -223,7 +220,7 @@ int RestOfSliceHeader(void)
     img->num_ref_idx_l1_active = 0;
   }
 
-  ref_pic_list_reordering();
+  ref_pic_list_reordering(currSlice);
 
   img->apply_weights = ((active_pps->weighted_pred_flag && (currSlice->picture_type == P_SLICE || currSlice->picture_type == SP_SLICE) )
           || ((active_pps->weighted_bipred_idc > 0 ) && (currSlice->picture_type == B_SLICE)));
@@ -231,7 +228,7 @@ int RestOfSliceHeader(void)
   if ((active_pps->weighted_pred_flag&&(img->type==P_SLICE|| img->type == SP_SLICE))||
       (active_pps->weighted_bipred_idc==1 && (img->type==B_SLICE)))
   {
-    pred_weight_table();
+    pred_weight_table(currSlice);
   }
 
   if (img->nal_reference_idc)
@@ -332,10 +329,9 @@ int RestOfSliceHeader(void)
  *    read the reference picture reordering information
  ************************************************************************
  */
-static void ref_pic_list_reordering(void)
+static void ref_pic_list_reordering(Slice *currSlice)
 {
-  Slice *currSlice = img->currentSlice;
-  int dP_nr = assignSE2partition[currSlice->dp_mode][SE_HEADER];
+  byte dP_nr = assignSE2partition[currSlice->dp_mode][SE_HEADER];
   DataPartition *partition = &(currSlice->partArr[dP_nr]);
   Bitstream *currStream = partition->bitstream;
   int i, val;
@@ -403,16 +399,32 @@ static void ref_pic_list_reordering(void)
   }
 }
 
+
+static void reset_wp_params(ImageParameters *img)
+{
+  int i,comp;
+  int log_weight_denom;
+
+  for (i=0; i<MAX_REFERENCE_PICTURES; i++)
+  {
+    for (comp=0; comp<3; comp++)
+    {
+      log_weight_denom = (comp == 0) ? img->luma_log2_weight_denom : img->chroma_log2_weight_denom;
+      img->wp_weight[0][i][comp] = 1 << log_weight_denom;
+      img->wp_weight[1][i][comp] = 1 << log_weight_denom;
+    }
+  }
+}
+
 /*!
  ************************************************************************
  * \brief
  *    read the weighted prediction tables
  ************************************************************************
  */
-static void pred_weight_table(void)
+static void pred_weight_table(Slice *currSlice)
 {
-  Slice *currSlice = img->currentSlice;
-  int dP_nr = assignSE2partition[currSlice->dp_mode][SE_HEADER];
+  byte dP_nr = assignSE2partition[currSlice->dp_mode][SE_HEADER];
   DataPartition *partition = &(currSlice->partArr[dP_nr]);
   Bitstream *currStream = partition->bitstream;
   int luma_weight_flag_l0, luma_weight_flag_l1, chroma_weight_flag_l0, chroma_weight_flag_l1;

@@ -31,7 +31,6 @@
 #include "ratectl.h"
 #include "mb_access.h"
 #include "output.h"
-#include "cabac.h"
 #include "context_ini.h"
 #include "conformance.h"
 #include "enc_statistics.h"
@@ -96,7 +95,7 @@ void accumulate_avslice(DistMetric *metric, int slice_type, int frames)
  *    Find distortion for all three components
  ************************************************************************
  */
-void find_distortion (void)
+void find_distortion (ImageData *imgData)
 {
   int64 diff_cmp[3] = {0};
 
@@ -119,8 +118,8 @@ void find_distortion (void)
     {
       enc_picture = enc_frame_picture[0];     
     }
-    pCurImg   = img_org_frm[0];
-    pImgOrg[0] = img_org_frm[0];
+    pCurImg   = imgData->frm_data[0];
+    pImgOrg[0] = imgData->frm_data[0];
 
     // Luma.
     diff_cmp[0] += compute_SSE(pImgOrg[0], enc_picture->imgY, 0, 0, params->output.height, params->output.width);
@@ -128,8 +127,8 @@ void find_distortion (void)
     // Chroma.
     if (img->yuv_format != YUV400)
     {
-      pImgOrg[1] = img_org_frm[1];
-      pImgOrg[2] = img_org_frm[2]; 
+      pImgOrg[1] = imgData->frm_data[1];
+      pImgOrg[2] = imgData->frm_data[2]; 
 
       diff_cmp[1] += compute_SSE(pImgOrg[1], enc_picture->imgUV[0], 0, 0, params->output.height_cr, params->output.width_cr);
       diff_cmp[2] += compute_SSE(pImgOrg[2], enc_picture->imgUV[1], 0, 0, params->output.height_cr, params->output.width_cr);
@@ -142,7 +141,7 @@ void find_distortion (void)
   dist->metric[SSE].value[2] = (float) diff_cmp[2];
 }
 
-void select_img(ImageStructure *imgSRC, ImageStructure *imgREF)
+void select_img(ImageStructure *imgSRC, ImageStructure *imgREF, ImageData *imgData)
 {
   if (img->fld_flag != FALSE)
   {
@@ -165,7 +164,7 @@ void select_img(ImageStructure *imgSRC, ImageStructure *imgREF)
     imgSRC->format = params->output;
     imgREF->format = params->output;
 
-    imgREF->data[0] = img_org_frm[0];
+    imgREF->data[0] = imgData->frm_data[0];
 
     if ((params->PicInterlace == ADAPTIVE_CODING) || IS_INDEPENDENT(params))
     {
@@ -175,8 +174,8 @@ void select_img(ImageStructure *imgSRC, ImageStructure *imgREF)
 
     if (img->yuv_format != YUV400)
     {
-      imgREF->data[1] = img_org_frm[1];
-      imgREF->data[2] = img_org_frm[2];
+      imgREF->data[1] = imgData->frm_data[1];
+      imgREF->data[2] = imgData->frm_data[2];
 
       imgSRC->data[1] = enc_picture->imgUV[0];
       imgSRC->data[2] = enc_picture->imgUV[1];
@@ -184,11 +183,11 @@ void select_img(ImageStructure *imgSRC, ImageStructure *imgREF)
   }
 }
 
-void compute_distortion(void)
+void compute_distortion(ImageData *imgData)
 {
   if (params->Verbose != 0)
   {
-    select_img(&imgSRC, &imgREF);
+    select_img(&imgSRC, &imgREF, imgData);
 
     find_snr (&imgREF, &imgSRC, &dist->metric[SSE], &dist->metric[PSNR]);
     if (params->Distortion[SSIM] == 1)

@@ -114,10 +114,10 @@ void report_frame_statistic()
 #endif
 
   for (i=0;i<30;i++)
-    name[i]=params->infile[i + imax(0,(int) (strlen(params->infile)- 30))]; // write last part of path, max 30 chars
+    name[i]=params->input_file1.fname[i + imax(0,(int) (strlen(params->input_file1.fname)- 30))]; // write last part of path, max 30 chars
 
   fprintf(p_stat_frm, "%30.30s|", name);
-  fprintf(p_stat_frm, "%3d |", frame_no);
+  fprintf(p_stat_frm, "%3d |", img->frame_no);
   fprintf(p_stat_frm, "%3d |", img->qp);
   fprintf(p_stat_frm, "  %d/%d  |", params->PicInterlace, params->MbInterlace);
 
@@ -145,10 +145,10 @@ void report_frame_statistic()
   fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[I_SLICE][I16MB]);
 
   //chroma intra mode
-  fprintf(p_stat_frm, " %5d|", cur_stats->intra_chroma_mode[0]);
-  fprintf(p_stat_frm, " %5d|", cur_stats->intra_chroma_mode[1]);
-  fprintf(p_stat_frm, " %5d|", cur_stats->intra_chroma_mode[2]);
-  fprintf(p_stat_frm, " %5d|", cur_stats->intra_chroma_mode[3]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->intra_chroma_mode[0]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->intra_chroma_mode[1]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->intra_chroma_mode[2]);
+  fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->intra_chroma_mode[3]);
 
   //P-Modes
   fprintf(p_stat_frm, " %5" FORMAT_OFF_T  "|", cur_stats->mode_use[P_SLICE][I4MB ]);
@@ -239,13 +239,13 @@ double report_slice_pred_stats(FILE *p_stat, StatParameters *stats, int slice_ty
  */
 void report_stats_on_error(void)
 {
-  params->no_frames = img->frm_number;
+  params->no_frm_base = img->frm_number;
   free_encoder_memory(img);
   exit (-1);
 }
 
 
-void report_stats(InputParameters *params, StatParameters *stats, int64 bit_use[NUM_SLICE_TYPES][2], float frame_rate)
+void report_stats(InputParameters *params, StatParameters *stats, int64 bit_use[NUM_SLICE_TYPES][2])
 {
   FILE *p_stat;                    //!< status file for the last encoding session
   double mean_motion_info_bit_use[NUM_SLICE_TYPES] = {0.0};
@@ -263,14 +263,15 @@ void report_stats(InputParameters *params, StatParameters *stats, int64 bit_use[
   fprintf(p_stat," -------------------------------------------------------------- \n");
   fprintf(p_stat,"  This file contains statistics for the last encoded sequence   \n");
   fprintf(p_stat," -------------------------------------------------------------- \n");
-  fprintf(p_stat,   " Sequence                     : %s\n", params->infile);
-  fprintf(p_stat,   " No.of coded pictures         : %4d\n", stats->frame_counter);
-  fprintf(p_stat,   " Freq. for encoded bitstream  : %4.0f\n", frame_rate);
+  fprintf(p_stat,   " Sequence                     : %s\n", params->input_file1.fname);
 
-  fprintf(p_stat,   " I Slice Bitrate(kb/s)        : %6.2f\n", stats->bitrate_st[I_SLICE] / 1000);
-  fprintf(p_stat,   " P Slice Bitrate(kb/s)        : %6.2f\n", stats->bitrate_st[P_SLICE] / 1000);
-  fprintf(p_stat,   " B Slice Bitrate(kb/s)        : %6.2f\n", stats->bitrate_st[B_SLICE] / 1000);
-  fprintf(p_stat,   " Total Bitrate(kb/s)          : %6.2f\n", stats->bitrate / 1000);
+  fprintf(p_stat,   " No.of coded pictures         : %4d\n", stats->frame_counter);
+  fprintf(p_stat,   " Freq. for encoded bitstream  : %4.0f\n", params->output.frame_rate);
+
+  fprintf(p_stat,   " I Slice Bitrate(kb/s)        : %6.2f\n", stats->bitrate_st[I_SLICE] / 1000.0);
+  fprintf(p_stat,   " P Slice Bitrate(kb/s)        : %6.2f\n", stats->bitrate_st[P_SLICE] / 1000.0);
+  fprintf(p_stat,   " B Slice Bitrate(kb/s)        : %6.2f\n", stats->bitrate_st[B_SLICE] / 1000.0);
+  fprintf(p_stat,   " Total Bitrate(kb/s)          : %6.2f\n", stats->bitrate / 1000.0);
 
   for (i = 0; i < 3; i++)
   {
@@ -460,7 +461,7 @@ void report_stats(InputParameters *params, StatParameters *stats, int64 bit_use[
 }
 
 
-void report_log(InputParameters *params, StatParameters *stats, float frame_rate)
+void report_log(InputParameters *params, StatParameters *stats)
 {
   char name[40];
   int i;
@@ -518,14 +519,14 @@ void report_log(InputParameters *params, StatParameters *stats, float frame_rate
 #endif
 
   for (i=0; i < 40; i++)
-    name[i] = params->infile[i + imax(0, ((int) strlen(params->infile)) - 40)]; // write last part of path, max 40 chars
+    name[i] = params->input_file1.fname[i + imax(0, ((int) strlen(params->input_file1.fname)) - 40)]; // write last part of path, max 40 chars
   fprintf(p_log,"%40.40s|",name);
 
   fprintf(p_log,"%5d |  %d/%d  |", params->no_frames, params->PicInterlace, params->MbInterlace);
-  fprintf(p_log," %-3d| %-3d| %-3d|", params->qp0, params->qpN, params->qpB);
+  fprintf(p_log," %-3d| %-3d| %-3d|", params->qp[0][I_SLICE], params->qp[0][P_SLICE], params->qp[0][B_SLICE]);
 
   fprintf(p_log,"%4dx%-4d|", params->output.width, params->output.height);
-  fprintf(p_log,"  %3d  |%3d |", params->intra_period, stats->successive_Bframe);
+  fprintf(p_log,"  %3d  |%3d |", params->intra_period, stats->NumberBFrames);
 
 
   switch( params->SearchMode ) 
@@ -551,7 +552,7 @@ void report_log(InputParameters *params, StatParameters *stats, float frame_rate
 
   fprintf(p_log," %3d | %2d  |", params->search_range, params->num_ref_frames );
 
-  fprintf(p_log," %5.2f|", (img->framerate *(float) (stats->successive_Bframe + 1)) / (float)(params->jumpd + 1));
+  fprintf(p_log," %5.2f|", img->framerate);
 
   if (params->symbol_mode == CAVLC)
     fprintf(p_log," CAVLC|");
@@ -578,7 +579,6 @@ void report_log(InputParameters *params, StatParameters *stats, float frame_rate
   fprintf(p_log,"%-5.3f|%-5.3f|%-5.3f|", dist->metric[PSNR].avslice[B_SLICE][0], dist->metric[PSNR].avslice[B_SLICE][1], dist->metric[PSNR].avslice[B_SLICE][2]);
   */
   fprintf(p_log,"%7.0f|%7.0f|%7.0f|%9.0f|", stats->bitrate_st[I_SLICE],stats->bitrate_st[P_SLICE],stats->bitrate_st[B_SLICE], stats->bitrate);
-
   fprintf(p_log,"   %12d   |   %12d   |", (int)tot_time,(int)me_tot_time);
 
 
@@ -588,12 +588,12 @@ void report_log(InputParameters *params, StatParameters *stats, float frame_rate
 
   p_log = fopen("data.txt", "a");
 
-  if ((stats->successive_Bframe != 0) && (stats->frame_ctr[B_SLICE] != 0)) // B picture used
+  if ((stats->NumberBFrames != 0) && (stats->frame_ctr[B_SLICE] != 0)) // B picture used
   {
     fprintf(p_log, "%3d %2d %2d %2.2f %2.2f %2.2f %5" FORMAT_OFF_T  " "
       "%2.2f %2.2f %2.2f %5d "
       "%2.2f %2.2f %2.2f %5" FORMAT_OFF_T  " %5" FORMAT_OFF_T  " %.3f\n",
-      params->no_frames, params->qp0, params->qpN,
+      stats->frame_counter, params->qp[0][I_SLICE], params->qp[0][P_SLICE],
       dist->metric[PSNR].avslice[I_SLICE][0],
       dist->metric[PSNR].avslice[I_SLICE][1],
       dist->metric[PSNR].avslice[I_SLICE][2],
@@ -615,7 +615,7 @@ void report_log(InputParameters *params, StatParameters *stats, float frame_rate
       fprintf(p_log, "%3d %2d %2d %2.2f %2.2f %2.2f %5" FORMAT_OFF_T  " "
       "%2.2f %2.2f %2.2f %5d "
       "%2.2f %2.2f %2.2f %5" FORMAT_OFF_T  " %5d %.3f\n",
-      params->no_frames, params->qp0, params->qpN,
+      stats->frame_counter, params->qp[0][I_SLICE], params->qp[0][P_SLICE],
       dist->metric[PSNR].avslice[I_SLICE][0],
       dist->metric[PSNR].avslice[I_SLICE][1],
       dist->metric[PSNR].avslice[I_SLICE][2],
@@ -629,7 +629,7 @@ void report_log(InputParameters *params, StatParameters *stats, float frame_rate
       dist->metric[PSNR].average[2],
       (stats->bit_counter[I_SLICE] + stats->bit_ctr)/ stats->frame_counter,
       0,
-      (double)0.001*tot_time/params->no_frames);
+      (double)0.001 * tot_time / stats->frame_counter);
   }
 
   fclose(p_log);
@@ -653,12 +653,16 @@ void report( ImageParameters *img, InputParameters *params, StatParameters *stat
   int64 bit_use[NUM_SLICE_TYPES][2];
   int i,j;
   int64 total_bits;
-  float frame_rate;
 
   bit_use[ I_SLICE][0] = stats->frame_ctr[I_SLICE];
   bit_use[ P_SLICE][0] = imax(stats->frame_ctr[P_SLICE ] + stats->frame_ctr[SP_SLICE], 1);
   bit_use[ B_SLICE][0] = imax(stats->frame_ctr[B_SLICE ], 1);
   bit_use[SP_SLICE][0] = imax(stats->frame_ctr[SP_SLICE], 1);
+
+  // normalize time stats
+  tot_time    = timenorm(tot_time);
+  me_tot_time = timenorm(me_tot_time);
+
 
   //  Accumulate bit usage for inter and intra frames
   for (j=0; j < NUM_SLICE_TYPES; j++)
@@ -682,23 +686,24 @@ void report( ImageParameters *img, InputParameters *params, StatParameters *stat
     bit_use[j][1] += stats->bit_use_stuffingBits[j];
   }
 
-  frame_rate = (img->framerate *(float)(stats->successive_Bframe + 1)) / (float) (params->jumpd + 1);
-
   //! Currently adding NVB bits on P rate. Maybe additional stats info should be created instead and added in log file  
-  stats->bitrate_st[ I_SLICE] = (stats->bit_counter[ I_SLICE]) * (frame_rate) / (float) (stats->frame_counter);
-  stats->bitrate_st[ P_SLICE] = (stats->bit_counter[ P_SLICE]) * (frame_rate) / (float) (stats->frame_counter);
-  stats->bitrate_st[ B_SLICE] = (stats->bit_counter[ B_SLICE]) * (frame_rate) / (float) (stats->frame_counter);
-  stats->bitrate_st[SP_SLICE] = (stats->bit_counter[SP_SLICE]) * (frame_rate) / (float) (stats->frame_counter);
+  stats->bitrate_st[ I_SLICE] = (stats->bit_counter[ I_SLICE]) * (float) (params->output.frame_rate) / (float) (stats->frame_counter);
+  stats->bitrate_st[ P_SLICE] = (stats->bit_counter[ P_SLICE]) * (float) (params->output.frame_rate) / (float) (stats->frame_counter);
+  stats->bitrate_st[ B_SLICE] = (stats->bit_counter[ B_SLICE]) * (float) (params->output.frame_rate) / (float) (stats->frame_counter);
+  stats->bitrate_st[SP_SLICE] = (stats->bit_counter[SP_SLICE]) * (float) (params->output.frame_rate) / (float) (stats->frame_counter);
 
   switch (params->Verbose)
   {
   case 0:
-  case 1:
+  case 1:  
   default:
     fprintf(stdout,"------------------ Average data all frames  -----------------------------------\n\n");
     break;
   case 2:
     fprintf(stdout,"------------------------------------  Average data all frames  ---------------------------------\n\n");
+    break;
+  case 3:
+    fprintf(stdout,"---------------------------------------  Average data all frames  -------------------------------------\n\n");
     break;
   }
 
@@ -716,15 +721,15 @@ void report( ImageParameters *img, InputParameters *params, StatParameters *stat
     float csnr_u = psnr(img->max_imgpel_value_comp_sq[1], impix_cr, sse->average[1]);
     float csnr_v = psnr(img->max_imgpel_value_comp_sq[2], impix_cr, sse->average[2]);
 
-    fprintf(stdout,  " Total encoding time for the seq.  : %.3f sec (%.2f fps)\n", tot_time*0.001, 1000.0 * (stats->frame_counter) / tot_time);
-    fprintf(stdout,  " Total ME time for sequence        : %.3f sec \n\n", me_tot_time*0.001);
+    fprintf(stdout,  " Total encoding time for the seq.  : %7.3f sec (%3.2f fps)\n", (float) tot_time * 0.001, 1000.0 * (float) (stats->frame_counter) / (float)tot_time);
+    fprintf(stdout,  " Total ME time for sequence        : %7.3f sec \n\n", (float)me_tot_time * 0.001);
 
     fprintf(stdout," Y { PSNR (dB), cSNR (dB), MSE }   : { %5.2f, %5.2f, %5.2f }\n", 
-      snr->average[0], csnr_y, sse->average[0]/impix);
+      snr->average[0], csnr_y, sse->average[0]/(float)impix);
     fprintf(stdout," U { PSNR (dB), cSNR (dB), MSE }   : { %5.2f, %5.2f, %5.2f }\n",
-      snr->average[1], csnr_u, sse->average[1]/impix_cr);
+      snr->average[1], csnr_u, sse->average[1]/(float)impix_cr);
     fprintf(stdout," V { PSNR (dB), cSNR (dB), MSE }   : { %5.2f, %5.2f, %5.2f }\n",
-      snr->average[2], csnr_v, sse->average[2]/impix_cr);
+      snr->average[2], csnr_v, sse->average[2]/(float)impix_cr);
 
     if(params->DistortionYUVtoRGB == 1)
     {
@@ -733,11 +738,11 @@ void report( ImageParameters *img, InputParameters *params, StatParameters *stat
       float csnr_b = psnr(img->max_imgpel_value_comp_sq[2], impix, sse_rgb->average[2]);
 
       fprintf(stdout," R { PSNR (dB), cSNR (dB), MSE }   : { %5.2f, %5.2f, %5.2f }\n", 
-        snr_rgb->average[0], csnr_r, sse_rgb->average[0]/impix);
+        snr_rgb->average[0], csnr_r, sse_rgb->average[0] / (float) impix);
       fprintf(stdout," G { PSNR (dB), cSNR (dB), MSE }   : { %5.2f, %5.2f, %5.2f }\n",
-        snr_rgb->average[1], csnr_g, sse_rgb->average[1]/impix);
+        snr_rgb->average[1], csnr_g, sse_rgb->average[1] / (float) impix);
       fprintf(stdout," B { PSNR (dB), cSNR (dB), MSE }   : { %5.2f, %5.2f, %5.2f }\n",
-        snr_rgb->average[2], csnr_b, sse_rgb->average[2]/impix);
+        snr_rgb->average[2], csnr_b, sse_rgb->average[2] / (float) impix);
     }
 
     if (params->Distortion[SSIM] == 1)
@@ -773,7 +778,7 @@ void report( ImageParameters *img, InputParameters *params, StatParameters *stat
     fprintf(stdout,"\n");
   }
   else
-    fprintf(stdout,  " Total encoding time for the seq.  : %.3f sec (%.2f fps)\n\n", tot_time*0.001, 1000.0 * (stats->frame_counter) / tot_time);
+    fprintf(stdout,  " Total encoding time for the seq.  : %5.3f sec (%5.2f fps)\n\n", tot_time*0.001, 1000.0 * (stats->frame_counter) / tot_time);
 
   total_bits = stats->bit_ctr_parametersets;
   for (i = 0; i < NUM_SLICE_TYPES; i++)
@@ -795,10 +800,9 @@ void report( ImageParameters *img, InputParameters *params, StatParameters *stat
       total_bits, stats->bit_counter[I_SLICE], stats->bit_counter[P_SLICE], stats->bit_ctr_parametersets);
   }
 
-  frame_rate = (img->framerate *(float)(stats->successive_Bframe + 1)) / (float) (params->jumpd + 1);
 
-  stats->bitrate= ((float) total_bits * frame_rate) / ((float) (stats->frame_counter));
-  fprintf(stdout, " Bit rate (kbit/s)  @ %2.2f Hz     : %5.2f\n", frame_rate, stats->bitrate / 1000);
+  stats->bitrate= ((float) total_bits * (float) params->output.frame_rate) / ((float) (stats->frame_counter));
+  fprintf(stdout, " Bit rate (kbit/s)  @ %2.2f Hz     : %5.2f\n", params->output.frame_rate, stats->bitrate / 1000.0);
   
   for (i = 0; i < 5; i++)
     stats->bit_ctr_emulationprevention += stats->bit_use_stuffingBits[i];
@@ -813,18 +817,21 @@ void report( ImageParameters *img, InputParameters *params, StatParameters *stat
   default:
     fprintf(stdout,"-------------------------------------------------------------------------------\n");
     break;
-  case 2:
+  case 2:  
     fprintf(stdout,"------------------------------------------------------------------------------------------------\n");
+    break;
+  case 3:
+    fprintf(stdout,"-------------------------------------------------------------------------------------------------------\n");
     break;
   }  
   fprintf(stdout,"Exit JM %s encoder ver %s ", JM, VERSION);
   fprintf(stdout,"\n");
 
   // status file
-  report_stats(params, stats, bit_use, frame_rate);
+  report_stats(params, stats, bit_use);
 
   // write to log file
-  report_log(params, stats, frame_rate);
+  report_log(params, stats);
 
   if (params->ReportFrameStats)
   {
@@ -867,17 +874,20 @@ void information_init ( ImageParameters *img, InputParameters *params, StatParam
   case 2:
     printf("--------------------------------------- JM %4.4s %7.7s ----------------------------------------\n", VERSION, EXT_VERSION);
     break;
+  case 3:
+    printf("------------------------------------------ JM %4.4s %7.7s ------------------------------------------\n", VERSION, EXT_VERSION);
+    break;
   }
 
-  fprintf(stdout,  " Input YUV file                    : %s \n", params->infile);
+  fprintf(stdout,  " Input YUV file                    : %s \n", params->input_file1.fname);
   fprintf(stdout,  " Output H.264 bitstream            : %s \n", params->outfile);
   if (p_dec != -1)
     fprintf(stdout,  " Output YUV file                   : %s \n", params->ReconFile);
   fprintf(stdout,  " YUV Format                        : %s \n", &yuv_types[img->yuv_format][0]);//img->yuv_format==YUV422?"YUV 4:2:2":(img->yuv_format==YUV444)?"YUV 4:4:4":"YUV 4:2:0");
-  fprintf(stdout,  " Frames to be encoded I-P/B        : %d/%d\n", params->no_frames, (params->successive_Bframe*(params->no_frames-1)));
+  fprintf(stdout,  " Frames to be encoded I-P/B        : %d/%d\n", params->no_frm_base, (params->NumberBFrames * (params->no_frm_base - 1)));
   if (params->Verbose != 0)
   {
-    fprintf(stdout,  " Freq. for encoded bitstream       : %1.0f\n", img->framerate/(float)(params->jumpd+1));
+    fprintf(stdout,  " Freq. for encoded bitstream       : %3.2f\n", params->output.frame_rate);
     fprintf(stdout,  " PicInterlace / MbInterlace        : %d/%d\n", params->PicInterlace, params->MbInterlace);
     fprintf(stdout,  " Transform8x8Mode                  : %d\n", params->Transform8x8Mode);
 
@@ -907,17 +917,17 @@ void information_init ( ImageParameters *img, InputParameters *params, StatParam
 
     fprintf(stdout,  " Total number of references        : %d\n", params->num_ref_frames);
     fprintf(stdout,  " References for P slices           : %d\n", params->P_List0_refs ? params->P_List0_refs : params->num_ref_frames);
-    fprintf(stdout,  " List0 references for B slices     : %d\n", params->B_List0_refs ? params->B_List0_refs : params->num_ref_frames);
+    fprintf(stdout,  " References for B slices (L0, L1)  : %d\n", params->B_List0_refs ? params->B_List0_refs : params->num_ref_frames);
     fprintf(stdout,  " List1 references for B slices     : %d\n", params->B_List1_refs ? params->B_List1_refs : params->num_ref_frames);
 
     // Sequence Type
     fprintf(stdout,  " Sequence type                     :");
-    if (stats->successive_Bframe > 0 && params->HierarchicalCoding)
+    if (stats->NumberBFrames > 0 && params->HierarchicalCoding)
     {
       fprintf(stdout, " Hierarchy (QP: I %d, P %d, B %d) \n",
-        params->qp0, params->qpN, params->qpB);
+        params->qp[0][I_SLICE], params->qp[0][P_SLICE], params->qp[0][B_SLICE]);
     }
-    else if (stats->successive_Bframe > 0)
+    else if (stats->NumberBFrames > 0)
     {
       char seqtype[80];
       int i,j;
@@ -926,7 +936,7 @@ void information_init ( ImageParameters *img, InputParameters *params, StatParam
 
       for (j=0; j < 2; j++)
       {
-        for (i=0; i < stats->successive_Bframe; i++)
+        for (i=0; i < stats->NumberBFrames; i++)
         {
           if (params->BRefPictures)
             strncat(seqtype,"-RB", imax(0, (int) (79 - strlen(seqtype))));
@@ -936,14 +946,14 @@ void information_init ( ImageParameters *img, InputParameters *params, StatParam
         strncat(seqtype,"-P", imax(0, (int) (79 - strlen(seqtype))));
       }
       if (params->BRefPictures)
-        fprintf(stdout, " %s (QP: I %d, P %d, RB %d) \n", seqtype, params->qp0, params->qpN, iClip3(0, 51, params->qpB + params->qpBRSOffset));
+        fprintf(stdout, " %s (QP: I %d, P %d, RB %d) \n", seqtype, params->qp[0][I_SLICE], params->qp[0][P_SLICE], iClip3(0, 51, params->qp[0][B_SLICE] + params->qpBRSOffset[0]));
       else
-        fprintf(stdout, " %s (QP: I %d, P %d, B %d) \n", seqtype, params->qp0, params->qpN, params->qpB);
+        fprintf(stdout, " %s (QP: I %d, P %d, B %d) \n", seqtype, params->qp[0][I_SLICE], params->qp[0][P_SLICE], params->qp[0][B_SLICE]);
     }
-    else if (stats->successive_Bframe == 0 && params->sp_periodicity == 0) 
-      fprintf(stdout, " IPPP (QP: I %d, P %d) \n", params->qp0, params->qpN);
+    else if (stats->NumberBFrames == 0 && params->sp_periodicity == 0) 
+      fprintf(stdout, " IPPP (QP: I %d, P %d) \n", params->qp[0][I_SLICE], params->qp[0][P_SLICE]);
     else 
-      fprintf(stdout, " I-P-P-SP-P (QP: I %d, P %d, SP (%d, %d)) \n",  params->qp0, params->qpN, params->qpsp, params->qpsp_pred);
+      fprintf(stdout, " I-P-P-SP-P (QP: I %d, P %d, SP (%d, %d)) \n",  params->qp[0][I_SLICE], params->qp[0][P_SLICE], params->qp[0][SP_SLICE], params->qpsp[0]);
 
     // report on entropy coding  method
     if (params->symbol_mode == CAVLC)
@@ -1016,24 +1026,37 @@ void information_init ( ImageParameters *img, InputParameters *params, StatParam
     break;    
   case 1:
     printf("-------------------------------------------------------------------------------\n");
-    printf("  Frame  Bit/pic    QP   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld Ref  \n");
+    printf("Frame     Bit/pic    QP   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld Ref  \n");
     printf("-------------------------------------------------------------------------------\n");
     break;
   case 2:
     if (params->Distortion[SSIM] == 1)
     {
       printf("------------------------------------------------------------------------------------------------------------------------\n");
-      printf("  Frame  Bit/pic WP QP QL   SnrY    SnrU    SnrV   SsimY   SsimU   SsimV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
+      printf("Frame     Bit/pic WP QP QL   SnrY    SnrU    SnrV   SsimY   SsimU   SsimV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
       printf("------------------------------------------------------------------------------------------------------------------------\n");
     }
     else
     {
       printf("------------------------------------------------------------------------------------------------\n");
-      printf("  Frame  Bit/pic WP QP QL   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
+      printf("Frame     Bit/pic WP QP QL   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
       printf("------------------------------------------------------------------------------------------------\n");
     }
     break;
-   
+  case 3:
+    if (params->Distortion[SSIM] == 1)
+    {
+      printf("-----------------------------------------------------------------------------------------------------------------------------\n");
+      printf("Frame      Bit/pic NVB WP QP QL   SnrY    SnrU    SnrV   SsimY   SsimU   SsimV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
+      printf("-----------------------------------------------------------------------------------------------------------------------------\n");
+    }
+    else
+    {
+      printf("-----------------------------------------------------------------------------------------------------\n");
+      printf("Frame      Bit/pic NVB WP QP QL   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
+      printf("-----------------------------------------------------------------------------------------------------\n");
+    }
+    break;
   }
 }
 
@@ -1103,7 +1126,7 @@ void report_log_mode(InputParameters *params, StatParameters *stats, int64 bit_u
 #endif
 
   for (i=0;i<30;i++)
-    name[i]=params->infile[i + imax(0,(int) (strlen(params->infile)- 30))]; // write last part of path, max 30 chars
+    name[i]=params->input_file1.fname[i + imax(0,(int) (strlen(params->input_file1.fname)- 30))]; // write last part of path, max 30 chars
 
   fprintf(p_stat, "%30.30s|", name);
   fprintf(p_stat, "%3d |", img->qp);
@@ -1115,10 +1138,10 @@ void report_log_mode(InputParameters *params, StatParameters *stats, int64 bit_u
   fprintf(p_stat, " %5" FORMAT_OFF_T  "|", stats->mode_use[I_SLICE][I16MB]);
 
   //chroma intra mode
-  fprintf(p_stat, " %5d|", stats->intra_chroma_mode[0]);
-  fprintf(p_stat, " %5d|", stats->intra_chroma_mode[1]);
-  fprintf(p_stat, " %5d|", stats->intra_chroma_mode[2]);
-  fprintf(p_stat, " %5d|", stats->intra_chroma_mode[3]);
+  fprintf(p_stat, " %5" FORMAT_OFF_T  "|", stats->intra_chroma_mode[0]);
+  fprintf(p_stat, " %5" FORMAT_OFF_T  "|", stats->intra_chroma_mode[1]);
+  fprintf(p_stat, " %5" FORMAT_OFF_T  "|", stats->intra_chroma_mode[2]);
+  fprintf(p_stat, " %5" FORMAT_OFF_T  "|", stats->intra_chroma_mode[3]);
 
   //P-Modes
   fprintf(p_stat, " %5" FORMAT_OFF_T  "|", stats->mode_use[P_SLICE][I4MB ]);

@@ -1,3 +1,26 @@
+Changes in Version JM 15.0 (since JM 14.2)
+------------------------------------------
+- encoder: Various bug fixes relating to MBAFF and High 444P profile (EM)
+- encoder: Adaptive Rounding reorganization and bug fixes(EM)
+- encoder: Motion Estimation reorganization (AT)
+- encoder: Various bugfixes related to 8x8 transform and submacroblock partitions (AT)
+- encoder: Extension to support VLC codes > 32 bits (AL)
+- encoder: RC bug fixes (ASe)
+- encoder: SEI/AU support & cleanups (AL)
+- encoder: Various bug fixes and cleanups, including bipred ME (AT)
+- encoder: Weighted Prediction offset computation using Motion Compensation (PC, MK, YY)
+- encoder: support of explicit sequence information functionality (AT/KS)
+- encoder: support of separate & interleaved raw video files (AT)
+- encoder: don't allow GenerateMultiplePPS in baseline profile (KS)
+- encoder: encoder support of some ANNEX A level limits (AT/KS)
+- encoder/decoder: Lossless encoding bug fixes (AT)
+- encoder/decoder: memory alloc/free speedups (AT)
+- encoder/decoder: VLC speedups (JaB/AT)
+- encoder/decoder: don't access uninitialized memory in cabac.c (PL/KS)
+- encoder/decoder: various cleanups and bug fixes (KS/AT)
+- decoder: Support for 64 bit bitstream I/O (AT/KS)
+- decoder: Severe code reorganization and various bug fixes, some relating to High 444P (AT)
+
 Changes in Version JM 14.2 (since JM 14.1)
 ------------------------------------------
 - encoder: fix cabac_zero_word calculation (KS)
@@ -79,7 +102,6 @@ Changes in Version JM 13.1 (since JM 13.0)
 - encoder/decoder: further cleanups (AT/KS)
 
 
-
 Changes in Version JM 13.0 (since JM 12.4)
 ------------------------------------------
 Professional Profiles:
@@ -103,6 +125,7 @@ Professional Profiles:
 - encoder/decoder: 4:4:4 independent mode quantization matrix bug fix (SSe)
 - encoder: 4:4:4 independent config file update (SSe)
 
+
 Changes in Version JM 12.3 (since JM 12.2)
 ------------------------------------------
 Professional Profiles:
@@ -119,6 +142,7 @@ Professional Profiles:
 - encoder: top/bottom field slice type decoder output consideration (AT)
 - encoder: adjustments to frame_num consideration (AL/AT)
 - encoder: removal of secondGOP concept (AT)
+
 
 Changes in Version JM 12.2 (since JM 12.1)
 ------------------------------------------
@@ -151,7 +175,6 @@ Changes in Version JM 12.1 (since JM 12.0)
 
 Changes in Version JM 12.0 (since JM 11.0)
 ------------------------------------------
-
 - encoder: Context Adaptive Lagrange Multiplier [JVT-T046] (JZ)
 - encoder: Severe Rate Control reorganization and debugging. Support for interlace coding modes and hierarchical/multi-pass encoding (AL/AT)
 - encoder: Lagrangian Cleanups based on "layered" motion estimation (YD/AT)
@@ -218,7 +241,6 @@ Changes in Version JM 11.0 (since JM 10.2)
 - encoder/decoder: fix predict_nnz for constrained intra and data partitioning (SMy/KS)
 - encoder/decoder: fix cabac context initilization (DM)
 - encoder/decoder: fix various chroma bitdepth related issues (KS/YC)
-
 
 
 Changes in Version JM 10.2 (since JM 10.1)
@@ -1313,6 +1335,7 @@ IL      Inge Lille-Langoy       Inge.Lille-Langoy@telenor.com
 IM      Iole Moccagatta         imoccaga@lsil.com
 IP      Isabelle Perroux        isabelle.perroux@allegrodvt.com
 JA      James Au                james@ubvideo.com
+JaB     James Bassett           jbas021@aucklanduni.ac.nz
 JB      Jill Boyce              BoyceJ@tce.com
 JC      John Cox                jc@sj.co.uk
 JK      Jeong Kwon Kim          kjk@mcubeworks.com

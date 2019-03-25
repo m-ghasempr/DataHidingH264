@@ -33,246 +33,97 @@ static const int AdaptRndPos[4][5] =
   {   3,   4,   3,   3,   3}, // 8x8 Inter MB
 };
 
-ARoundOffset bestOffset;
-
 int   **fadjust8x8 = NULL, **fadjust4x4 = NULL, ***fadjust4x4Cr = NULL, ***fadjust8x8Cr = NULL;
 
-static void allocate_offset_memory(InputParameters *params, ARoundOffset *offset)
-{
-  get_mem2Dint(&offset->InterFAdjust4x4, 16, 16);
-  get_mem2Dint(&offset->IntraFAdjust4x4, 16, 16);
-  get_mem2Dint(&offset->InterFAdjust8x8, 16, 16);
-  get_mem2Dint(&offset->IntraFAdjust8x8, 16, 16);
 
-  if (params->yuv_format != 0 )
-  {
-    if  (params->yuv_format == YUV444)
-    {
-      get_mem3Dint(&offset->InterFAdjust8x8Cr, 2, 16, 16);
-      get_mem3Dint(&offset->IntraFAdjust8x8Cr, 2, 16, 16);
-    }
-    get_mem3Dint(&offset->InterFAdjust4x4Cr, 2, img->mb_cr_size_y, img->mb_cr_size_x);
-    get_mem3Dint(&offset->IntraFAdjust4x4Cr, 2, img->mb_cr_size_y, img->mb_cr_size_x);
-  }
-}
-
-static void free_offset_memory(InputParameters *params, ARoundOffset *offset)
-{
-  free_mem2Dint(offset->InterFAdjust4x4);
-  free_mem2Dint(offset->IntraFAdjust4x4);
-  free_mem2Dint(offset->InterFAdjust8x8);
-  free_mem2Dint(offset->IntraFAdjust8x8);
-
-  if (params->yuv_format != 0 )
-  {
-    if  (params->yuv_format == YUV444)
-    {
-      free_mem3Dint(offset->InterFAdjust8x8Cr);
-      free_mem3Dint(offset->IntraFAdjust8x8Cr);
-    }
-    free_mem3Dint(offset->InterFAdjust4x4Cr);
-    free_mem3Dint(offset->IntraFAdjust4x4Cr);
-  }
-}
-
-
-void setup_adaptive_rounding (InputParameters *params)
-{
-  allocate_offset_memory(params, &bestOffset);
-
-  get_mem2Dint(&fadjust8x8, 16, 16);
-  get_mem2Dint(&fadjust4x4, 16, 16);
-  if (params->yuv_format != 0 )
-  {
-    get_mem3Dint(&fadjust4x4Cr, 2, img->mb_cr_size_y, img->mb_cr_size_x);
-    get_mem3Dint(&fadjust8x8Cr, 2, img->mb_cr_size_y, img->mb_cr_size_x);
-  }
-}
-
-void clear_adaptive_rounding (InputParameters *params)
-{
-  free_offset_memory(params, &bestOffset);
-
-  free_mem2Dint(fadjust8x8);
-  free_mem2Dint(fadjust4x4);
-  if (params->yuv_format != 0)
-  {
-    free_mem3Dint(fadjust4x4Cr);
-    free_mem3Dint(fadjust8x8Cr);
-  }
-}
-
-void store_adaptive_rounding (ImageParameters *img, int block_y, int block_x)
+/*!
+************************************************************************
+* \brief
+*    copy data from to a temporary location
+************************************************************************
+*/
+void store_adaptive_rounding_4x4 (ImageParameters *img, int****ARCofAdj, int mode, int block_y, int block_x)
 {
   int j;
 
   for (j = block_y; j < block_y + 4; j++)
-    memcpy(&fadjust4x4[j][block_x],&img->fadjust4x4[1][j][block_x], BLOCK_SIZE * sizeof(int));
+    memcpy(&ARCofAdj[0][DUMMY][j][block_x], &ARCofAdj[0][mode][j][block_x], BLOCK_SIZE * sizeof(int));
 
   if (img->P444_joined)
   {
     for (j = block_y; j < block_y + 4; j++)
     {
-      memcpy(&fadjust4x4Cr[0][j][block_x],&img->fadjust4x4Cr[0][1][j][block_x], BLOCK_SIZE * sizeof(int));
+      memcpy(&ARCofAdj[1][DUMMY][j][block_x],&ARCofAdj[1][mode][j][block_x], BLOCK_SIZE * sizeof(int));
     }
     for (j = block_y; j < block_y + 4; j++)
     {
-      memcpy(&fadjust4x4Cr[1][j][block_x],&img->fadjust4x4Cr[1][1][j][block_x], BLOCK_SIZE * sizeof(int));
+      memcpy(&ARCofAdj[2][DUMMY][j][block_x],&ARCofAdj[2][mode][j][block_x], BLOCK_SIZE * sizeof(int));
     }
   }
 }
 
-void update_adaptive_rounding(ImageParameters *img, int block_y, int block_x)
+
+/*!
+************************************************************************
+* \brief
+*    copy data from a temporary location to the actual location
+************************************************************************
+*/
+void update_adaptive_rounding_4x4 (ImageParameters *img, int****ARCofAdj , int mode, int block_y, int block_x)
 {
   int j;
 
   for (j = block_y; j < block_y + BLOCK_SIZE; j++)
-    memcpy (&img->fadjust4x4[1][j][block_x],&fadjust4x4[j][block_x], BLOCK_SIZE * sizeof(int));
+    memcpy (&ARCofAdj[0][mode][j][block_x],&ARCofAdj[0][DUMMY][j][block_x], BLOCK_SIZE * sizeof(int));
 
   if (img->P444_joined)
   {
     for (j = 0; j < block_y + BLOCK_SIZE; j++)
     {
-      memcpy (&img->fadjust4x4Cr[0][1][j][block_x],&fadjust4x4Cr[0][j][block_x], BLOCK_SIZE * sizeof(int));
+      memcpy (&ARCofAdj[1][mode][j][block_x], &ARCofAdj[1][DUMMY][j][block_x], BLOCK_SIZE * sizeof(int));
     }
     for (j = 0; j < block_y + BLOCK_SIZE; j++)
     {
-      memcpy (&img->fadjust4x4Cr[1][1][j][block_x],&fadjust4x4Cr[1][j][block_x], BLOCK_SIZE * sizeof(int));
+      memcpy (&ARCofAdj[2][mode][j][block_x], &ARCofAdj[2][DUMMY][j][block_x], BLOCK_SIZE * sizeof(int));
     }
   }
 }
 
 /*!
- *************************************************************************************
- * \brief
- *    Store adaptive rounding luma parameters
- *************************************************************************************
- */
-
-void store_adaptive_rounding_parameters_luma (Macroblock *currMB, int mode)
+************************************************************************
+* \brief
+*    copy data from to a temporary location
+************************************************************************
+*/
+void store_adaptive_rounding_16x16 (ImageParameters *img, int****ARCofAdj, int mode)
 {
-   int is_inter = (mode != I4MB) && (mode != I16MB) && (mode != I8MB);
-
-  if (currMB->luma_transform_size_8x8_flag)
-  {
-    if ((mode == P8x8))
-      memcpy(&(bestOffset.InterFAdjust8x8[0][0]),&(img->fadjust8x8[2][0][0]), MB_PIXELS * sizeof(int));
-    else if (is_inter)
-      memcpy(&(bestOffset.InterFAdjust8x8[0][0]),&(img->fadjust8x8[0][0][0]), MB_PIXELS * sizeof(int));
-    else
-      memcpy(&(bestOffset.IntraFAdjust8x8[0][0]),&(img->fadjust8x8[1][0][0]), MB_PIXELS * sizeof(int));
-  }
-  else
-  {
-    if ((mode == P8x8))
-      memcpy(&(bestOffset.InterFAdjust4x4[0][0]),&(img->fadjust4x4[3][0][0]),MB_PIXELS * sizeof(int));
-    else if (is_inter)
-      memcpy(&(bestOffset.InterFAdjust4x4[0][0]),&(img->fadjust4x4[0][0][0]),MB_PIXELS * sizeof(int));
-    else
-      memcpy(&(bestOffset.IntraFAdjust4x4[0][0]),&(img->fadjust4x4[1 + mode == I16MB][0][0]),MB_PIXELS * sizeof(int));
-  }
+    memcpy(&ARCofAdj[0][DUMMY][0][0], &ARCofAdj[0][mode][0][0], MB_PIXELS * sizeof(int));
+    if (img->P444_joined)
+    {
+      memcpy(&ARCofAdj[1][DUMMY][0][0], &ARCofAdj[1][mode][0][0], MB_PIXELS * sizeof(int));
+      memcpy(&ARCofAdj[2][DUMMY][0][0], &ARCofAdj[2][mode][0][0], MB_PIXELS * sizeof(int));
+    }
 }
 
 
 /*!
- *************************************************************************************
- * \brief  
- *    Store adaptive rounding chroma parameters
- *************************************************************************************
- */
-void store_adaptive_rounding_parameters_chroma (Macroblock *currMB, int mode)
-{
-  int j;
-  int is_inter = (mode != I4MB)&&(mode != I16MB)&&(mode != I8MB);
-
+************************************************************************
+* \brief
+*    copy data from a temporary location to the actual location
+************************************************************************
+*/
+void update_adaptive_rounding_16x16(ImageParameters *img, int****ARCofAdj , int mode)
+{  
+  memcpy (&ARCofAdj[0][mode][0][0],&ARCofAdj[0][DUMMY][0][0], MB_PIXELS * sizeof(int));
   if (img->P444_joined)
   {
-    if (currMB->luma_transform_size_8x8_flag)
-    {
-      if ((mode == P8x8))
-      {
-        memcpy(&(bestOffset.InterFAdjust8x8Cr[0][0][0]),&(img->fadjust8x8Cr[0][2][0][0]), MB_PIXELS * sizeof(int));
-        memcpy(&(bestOffset.InterFAdjust8x8Cr[1][0][0]),&(img->fadjust8x8Cr[1][2][0][0]), MB_PIXELS * sizeof(int));
-      }
-      else if (is_inter)
-      {
-        memcpy(&(bestOffset.InterFAdjust8x8Cr[0][0][0]),&(img->fadjust8x8Cr[0][0][0][0]), MB_PIXELS * sizeof(int));
-        memcpy(&(bestOffset.InterFAdjust8x8Cr[1][0][0]),&(img->fadjust8x8Cr[1][0][0][0]), MB_PIXELS * sizeof(int));
-      }
-      else
-      {
-        memcpy(&(bestOffset.IntraFAdjust8x8Cr[0][0][0]),&(img->fadjust8x8Cr[0][1][0][0]), MB_PIXELS * sizeof(int));
-        memcpy(&(bestOffset.IntraFAdjust8x8Cr[1][0][0]),&(img->fadjust8x8Cr[1][1][0][0]), MB_PIXELS * sizeof(int));
-      }
-	}
-    else
-    {
-      if ((mode == P8x8))
-      {
-        memcpy(&(bestOffset.InterFAdjust4x4Cr[0][0][0]),&(img->fadjust4x4Cr[0][3][0][0]), MB_PIXELS * sizeof(int));
-        memcpy(&(bestOffset.InterFAdjust4x4Cr[1][0][0]),&(img->fadjust4x4Cr[1][3][0][0]), MB_PIXELS * sizeof(int));
-      }
-      else if (is_inter)
-      {
-        memcpy(&(bestOffset.InterFAdjust4x4Cr[0][0][0]),&(img->fadjust4x4Cr[0][0][0][0]), MB_PIXELS * sizeof(int));
-        memcpy(&(bestOffset.InterFAdjust4x4Cr[1][0][0]),&(img->fadjust4x4Cr[1][0][0][0]), MB_PIXELS * sizeof(int));
-      }
-      else
-      {
-        memcpy(&(bestOffset.IntraFAdjust4x4Cr[0][0][0]),&(img->fadjust4x4Cr[0][1 + mode == I16MB][0][0]), MB_PIXELS * sizeof(int));
-        memcpy(&(bestOffset.IntraFAdjust4x4Cr[1][0][0]),&(img->fadjust4x4Cr[1][1 + mode == I16MB][0][0]), MB_PIXELS * sizeof(int));
-      }
-    }
-  }
-
-  if ( (params->yuv_format == YUV420 || params->yuv_format == YUV422) && (params->AdaptRndChroma))  
-  {
-    if (currMB->luma_transform_size_8x8_flag && mode == P8x8)
-    {
-      for (j = 0; j < img->mb_cr_size_y; j++)
-      {
-        memcpy(bestOffset.InterFAdjust4x4Cr[0][j],img->fadjust8x8Cr[0][0][j],img->mb_cr_size_x * sizeof(int));
-        memcpy(bestOffset.InterFAdjust4x4Cr[1][j],img->fadjust8x8Cr[1][0][j],img->mb_cr_size_x * sizeof(int));
-      }
-    }
-    else if (mode == P8x8)
-    {
-      for (j = 0; j < img->mb_cr_size_y; j++)
-      {
-        memcpy(bestOffset.InterFAdjust4x4Cr[0][j],img->fadjust4x4Cr[0][2][j],img->mb_cr_size_x * sizeof(int));
-        memcpy(bestOffset.InterFAdjust4x4Cr[1][j],img->fadjust4x4Cr[1][2][j],img->mb_cr_size_x * sizeof(int));
-      }
-    }
-    else if (is_inter)
-    {
-      for (j = 0; j < img->mb_cr_size_y; j++)
-      {
-        memcpy(bestOffset.InterFAdjust4x4Cr[0][j],img->fadjust4x4Cr[0][0][j],img->mb_cr_size_x * sizeof(int));
-        memcpy(bestOffset.InterFAdjust4x4Cr[1][j],img->fadjust4x4Cr[1][0][j],img->mb_cr_size_x * sizeof(int));
-      }
-    }
-    else
-    {
-      for (j = 0; j < img->mb_cr_size_y; j++)
-      {
-        memcpy(bestOffset.IntraFAdjust4x4Cr[0][j],img->fadjust4x4Cr[0][1][j],img->mb_cr_size_x * sizeof(int));
-        memcpy(bestOffset.IntraFAdjust4x4Cr[1][j],img->fadjust4x4Cr[1][1][j],img->mb_cr_size_x * sizeof(int));
-      }
-    }
+    memcpy (&ARCofAdj[1][mode][0][0], &ARCofAdj[1][DUMMY][0][0], MB_PIXELS * sizeof(int));
+    memcpy (&ARCofAdj[2][mode][0][0], &ARCofAdj[2][DUMMY][0][0], MB_PIXELS * sizeof(int));
   }
 }
 
-/*!
- *************************************************************************************
- * \brief
- *    Store all adaptive rounding parameters
- *************************************************************************************
- */
-void store_adaptive_rounding_parameters (Macroblock *currMB, int mode)
-{
-  store_adaptive_rounding_parameters_luma (currMB, mode);
-  store_adaptive_rounding_parameters_chroma (currMB, mode);
-}
+
+
 
 /*!
 ************************************************************************
@@ -293,9 +144,9 @@ void update_offset_params(Macroblock *currMB, int mode, int luma_transform_size_
   int blk_shift = 2 + luma_transform_size_8x8_flag;
   short **offsetList = luma_transform_size_8x8_flag ? OffsetList8x8[cur_qp] : OffsetList4x4[cur_qp];
 
-  int **fAdjust = is_inter
-    ? (luma_transform_size_8x8_flag ? bestOffset.InterFAdjust8x8 : bestOffset.InterFAdjust4x4)
-    : (luma_transform_size_8x8_flag ? bestOffset.IntraFAdjust8x8 : bestOffset.IntraFAdjust4x4);
+  int **fAdjust = luma_transform_size_8x8_flag ? img->ARCofAdj8x8[0][mode] : img->ARCofAdj4x4[0][mode];
+  
+  if (mode == IPCM) return;
 
   if( (active_sps->chroma_format_idc == YUV444) && IS_INDEPENDENT(params) )
   {
@@ -304,7 +155,7 @@ void update_offset_params(Macroblock *currMB, int mode, int luma_transform_size_
     else  // 4x4
       luma_pos += img->colour_plane_id;
   }
-
+ 
   for (j=0; j < MB_BLOCK_SIZE; j++)
   {
     int j_pos = ((j & blk_mask)<<blk_shift);
@@ -318,14 +169,13 @@ void update_offset_params(Macroblock *currMB, int mode, int luma_transform_size_
 
   if(img->P444_joined)
   { 
-    int ***fAdjustCbCr = (int ***) (is_inter
-      ? (luma_transform_size_8x8_flag ? bestOffset.InterFAdjust8x8Cr : bestOffset.InterFAdjust4x4Cr)
-      : (luma_transform_size_8x8_flag ? bestOffset.IntraFAdjust8x8Cr : bestOffset.IntraFAdjust4x4Cr));
+    int **fAdjustCbCr;
     int uv;
 
     for(uv = 0; uv < 2; uv++)
     {
       luma_pos = AdaptRndPos[(is_inter<<1) + luma_transform_size_8x8_flag][img->type];
+      fAdjustCbCr = luma_transform_size_8x8_flag ? img->ARCofAdj8x8[uv + 1][mode] : img->ARCofAdj4x4[uv + 1][mode];
       if(luma_transform_size_8x8_flag )  // 8x8
         luma_pos += 5 * (uv+1);
       else  // 4x4
@@ -336,31 +186,101 @@ void update_offset_params(Macroblock *currMB, int mode, int luma_transform_size_
         for (i=0; i < MB_BLOCK_SIZE; i++)
         {
           temp = j_pos + (i & blk_mask);
-          offsetList[luma_pos][temp] += fAdjustCbCr[uv][j][i];
+          offsetList[luma_pos][temp] += fAdjustCbCr[j][i];
           offsetList[luma_pos][temp] = iClip3(0,offsetRange,offsetList[luma_pos][temp]);
         }
       }
     }
   }
 
-  if ((params->AdaptRndChroma) && (params->yuv_format == YUV420 || params->yuv_format == YUV422 ))
-  {
+  if ((params->AdaptRndChroma) && (img->yuv_format == YUV420 || img->yuv_format == YUV422 ))
+  {  
     int u_pos = AdaptRndCrPos[is_inter][img->type];
     int v_pos = u_pos + 1;
     int jpos;
 
-    int ***fAdjustCr = is_inter ? bestOffset.InterFAdjust4x4Cr : bestOffset.IntraFAdjust4x4Cr;
+    //int ***fAdjustCr = is_inter ? bestOffset.InterFAdjust4x4Cr : bestOffset.IntraFAdjust4x4Cr;
 
+    int **fAdjustCb = (luma_transform_size_8x8_flag && mode == P8x8 )? img->ARCofAdj4x4[1][4] : img->ARCofAdj4x4[1][mode];
+    int **fAdjustCr = (luma_transform_size_8x8_flag && mode == P8x8 )? img->ARCofAdj4x4[2][4] : img->ARCofAdj4x4[2][mode];
+
+  
     for (j = 0; j < img->mb_cr_size_y; j++)
     {
       jpos = ((j & 0x03)<<2);
       for (i = 0; i < img->mb_cr_size_x; i++)
       {
         temp = jpos + (i & 0x03);
-        OffsetList4x4[cur_qp][u_pos][temp] += fAdjustCr[0][j][i];
+        OffsetList4x4[cur_qp][u_pos][temp] += fAdjustCb[j][i];
         OffsetList4x4[cur_qp][u_pos][temp]  = iClip3(0,offsetRange,OffsetList4x4[cur_qp][u_pos][temp]);
-        OffsetList4x4[cur_qp][v_pos][temp] += fAdjustCr[1][j][i];
+        OffsetList4x4[cur_qp][v_pos][temp] += fAdjustCr[j][i];
         OffsetList4x4[cur_qp][v_pos][temp]  = iClip3(0,offsetRange,OffsetList4x4[cur_qp][v_pos][temp]);
+      }
+    }
+  }
+}
+
+
+/*!
+************************************************************************
+* \brief
+*    resets adaptive rounding params to zero
+************************************************************************
+*/
+void reset_adaptive_rounding()
+{
+  int maxplane;
+  maxplane = (img->yuv_format == YUV400)?  1 : 3;
+  memset(&img->ARCofAdj4x4[0][0][0][0], 0, maxplane * MAXMODE * MB_PIXELS * sizeof (int));
+  maxplane = (img->yuv_format == YUV400)?  1 : (img->P444_joined ? 3 : 1);
+  memset(&img->ARCofAdj8x8[0][0][0][0], 0, maxplane * MAXMODE * MB_PIXELS * sizeof (int));
+}
+
+/*!
+************************************************************************
+* \brief
+*    resets adaptive rounding params for the direct mode to zero
+************************************************************************
+*/
+void reset_adaptive_rounding_direct()
+{
+  int maxplane, pl;
+  maxplane = (img->yuv_format == YUV400)?  1 : 3;
+  for (pl = 0; pl < maxplane; pl++)
+    memset(&img->ARCofAdj4x4[pl][DUMMY][0][0], 0, MB_PIXELS * sizeof (int));
+
+  maxplane = (img->yuv_format == YUV400)?  1 : (img->P444_joined ? 3 : 1);
+  for (pl = 0; pl < maxplane; pl++)
+    memset(&img->ARCofAdj8x8[pl][DUMMY][0][0], 0, MB_PIXELS * sizeof (int));
+ 
+}
+
+/*!
+************************************************************************
+* \brief
+*    copy data from a temporary location to the actual location for mode P8x8
+************************************************************************
+*/
+void update_adaptive_rounding_8x8(RD_8x8DATA* dataTr, int**** ARCofAdj)
+{
+  int b8, pl, plane, j0, i0, j;
+
+  if (params->AdaptiveRounding)
+  {
+    plane = (img->P444_joined) ?  3 : 1;
+    for (pl = 0; pl < plane; pl++)
+    {
+      for (b8 = 0; b8 < 4; b8++)
+      {
+        j0   = 8*(b8 >> 1);
+        i0   = 8*(b8 & 0x01);
+        if (dataTr->part8x8mode[b8])
+        {
+          for (j = j0; j < j0 + BLOCK_SIZE_8x8; j++)
+          {
+            memcpy(&ARCofAdj[pl][P8x8][j][i0], &ARCofAdj[pl][dataTr->part8x8mode[b8]][j][i0], BLOCK_SIZE_8x8 * sizeof(int));
+          }
+        }
       }
     }
   }

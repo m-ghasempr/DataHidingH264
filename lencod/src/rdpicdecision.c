@@ -48,7 +48,7 @@ int picture_coding_decision (Picture *picture1, Picture *picture2, int qp)
   int bframe = (img->type == B_SLICE);
   double sse_picture1, sse_picture2;
 
-  if (params->successive_Bframe)
+  if (params->NumberBFrames)
     lambda_picture = (qp < 20 ? 0.55 : 0.68) * pow (2, (qp - SHIFT_QP) / 3.0) * (bframe || spframe ? 2 : 1);
   else
     lambda_picture = (qp < 20 ? 0.55 : 0.68) * pow (2, (qp - SHIFT_QP) / 3.0);

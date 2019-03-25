@@ -326,13 +326,6 @@ void CloseRTPFile (void)
   fclose(f);
 }
 
-
-
-
-
-
-
-
 #if 0
 /*!
  *****************************************************************************
@@ -453,131 +446,7 @@ Boolean isAggregationPacket(void)
   return FALSE;
 }
 #endif
-/*!
- *****************************************************************************
- * \brief
- *    Prepare the aggregation sei message.
- *
- * \date
- *    September 10, 2002
- *
- * \author
- *    Dong Tian   tian@cs.tut.fi
- *****************************************************************************/
-void PrepareAggregationSEIMessage(void)
-{
-  Boolean has_aggregation_sei_message = FALSE;
 
-  clear_sei_message(AGGREGATION_SEI);
-
-  // prepare the sei message here
-  // write the spare picture sei payload to the aggregation sei message
-  if (seiHasSparePicture && img->type != B_SLICE)
-  {
-    FinalizeSpareMBMap();
-    assert(seiSparePicturePayload.data->byte_pos == seiSparePicturePayload.payloadSize);
-    write_sei_message(AGGREGATION_SEI, seiSparePicturePayload.data->streamBuffer, seiSparePicturePayload.payloadSize, SEI_SPARE_PIC);
-    has_aggregation_sei_message = TRUE;
-  }
-  // write the sub sequence information sei paylaod to the aggregation sei message
-  if (seiHasSubseqInfo)
-  {
-    FinalizeSubseqInfo(img->layer);
-    write_sei_message(AGGREGATION_SEI, seiSubseqInfo[img->layer].data->streamBuffer, seiSubseqInfo[img->layer].payloadSize, SEI_SUB_SEQ_INFO);
-    ClearSubseqInfoPayload(img->layer);
-    has_aggregation_sei_message = TRUE;
-  }
-  // write the sub sequence layer information sei paylaod to the aggregation sei message
-  if (seiHasSubseqLayerInfo && img->number == 0)
-  {
-    FinalizeSubseqLayerInfo();
-    write_sei_message(AGGREGATION_SEI, seiSubseqLayerInfo.data, seiSubseqLayerInfo.payloadSize, SEI_SUB_SEQ_LAYER_CHARACTERISTICS);
-    seiHasSubseqLayerInfo = FALSE;
-    has_aggregation_sei_message = TRUE;
-  }
-  // write the sub sequence characteristics payload to the aggregation sei message
-  if (seiHasSubseqChar)
-  {
-    FinalizeSubseqChar();
-    write_sei_message(AGGREGATION_SEI, seiSubseqChar.data->streamBuffer, seiSubseqChar.payloadSize, SEI_SUB_SEQ_CHARACTERISTICS);
-    ClearSubseqCharPayload();
-    has_aggregation_sei_message = TRUE;
-  }
-  // write the pan scan rectangle info sei playload to the aggregation sei message
-  if (seiHasPanScanRectInfo)
-  {
-    FinalizePanScanRectInfo();
-    write_sei_message(AGGREGATION_SEI, seiPanScanRectInfo.data->streamBuffer, seiPanScanRectInfo.payloadSize, SEI_PAN_SCAN_RECT);
-    ClearPanScanRectInfoPayload();
-    has_aggregation_sei_message = TRUE;
-  }
-  // write the arbitrary (unregistered) info sei playload to the aggregation sei message
-  if (seiHasUser_data_unregistered_info)
-  {
-    FinalizeUser_data_unregistered();
-    write_sei_message(AGGREGATION_SEI, seiUser_data_unregistered.data->streamBuffer, seiUser_data_unregistered.payloadSize, SEI_USER_DATA_UNREGISTERED);
-    ClearUser_data_unregistered();
-    has_aggregation_sei_message = TRUE;
-  }
-  // write the arbitrary (unregistered) info sei playload to the aggregation sei message
-  if (seiHasUser_data_registered_itu_t_t35_info)
-  {
-    FinalizeUser_data_registered_itu_t_t35();
-    write_sei_message(AGGREGATION_SEI, seiUser_data_registered_itu_t_t35.data->streamBuffer, seiUser_data_registered_itu_t_t35.payloadSize, SEI_USER_DATA_REGISTERED_ITU_T_T35);
-    ClearUser_data_registered_itu_t_t35();
-    has_aggregation_sei_message = TRUE;
-  }
-  //write RandomAccess info sei payload to the aggregation sei message
-  if (seiHasRecoveryPoint_info)
-  {
-    FinalizeRandomAccess();
-    write_sei_message(AGGREGATION_SEI, seiRecoveryPoint.data->streamBuffer, seiRecoveryPoint.payloadSize, SEI_RECOVERY_POINT);
-    ClearRandomAccess();
-    has_aggregation_sei_message = TRUE;
-  }
-  // more aggregation sei payload is written here...
-
-  // write the scene information SEI payload
-  if (seiHasSceneInformation)
-  {
-    FinalizeSceneInformation();
-    write_sei_message(AGGREGATION_SEI, seiSceneInformation.data->streamBuffer, seiSceneInformation.payloadSize, SEI_SCENE_INFO);
-    has_aggregation_sei_message = TRUE;
-  }
-
-  if (seiHasTone_mapping)
-  {
-    FinalizeToneMapping();
-    write_sei_message(AGGREGATION_SEI, seiToneMapping.data->streamBuffer, seiToneMapping.payloadSize, SEI_TONE_MAPPING);
-    ClearToneMapping();
-    has_aggregation_sei_message = TRUE;
-  }
-
-  if (seiHasPostFilterHints_info)
-  {
-    FinalizePostFilterHints();
-    write_sei_message(AGGREGATION_SEI, seiPostFilterHints.data->streamBuffer, seiPostFilterHints.payloadSize, SEI_POST_FILTER_HINTS);
-    has_aggregation_sei_message = TRUE;
-  }
-
-  if (seiHasBuffering_period)
-  {
-    FinalizeBufferingPeriod();
-    write_sei_message(AGGREGATION_SEI, seiBufferingPeriod.data->streamBuffer, seiBufferingPeriod.payloadSize, SEI_BUFFERING_PERIOD);
-    has_aggregation_sei_message = TRUE;
-  }
-
-  if (seiHasPicTiming_info)
-  {
-    FinalizePicTiming();
-    write_sei_message(AGGREGATION_SEI, seiPicTiming.data->streamBuffer, seiPicTiming.payloadSize, SEI_PIC_TIMING);
-    has_aggregation_sei_message = TRUE;
-  }
-
-  // after all the sei payload is written
-  if (has_aggregation_sei_message)
-    finalize_sei_message(AGGREGATION_SEI);
-}
 #if 0
 /*!
  *****************************************************************************
@@ -598,7 +467,7 @@ void begin_sub_sequence_rtp(void)
     return;
 
   // begin to encode the base layer subseq
-  if ( IMG_NUMBER == 0 )
+  if ( img->gop_number == 0 )
   {
 //    printf("begin to encode the base layer subseq\n");
     InitSubseqInfo(0);
@@ -606,7 +475,7 @@ void begin_sub_sequence_rtp(void)
       UpdateSubseqChar();
   }
   // begin to encode the enhanced layer subseq
-  if ( IMG_NUMBER % (params->NumFramesInELSubSeq+1) == 1 )
+  if ( img->gop_number % (params->NumFramesInELSubSeq+1) == 1 )
   {
 //    printf("begin to encode the enhanced layer subseq\n");
     InitSubseqInfo(1);  // init the sub-sequence in the enhanced layer
@@ -631,7 +500,7 @@ void begin_sub_sequence_rtp(void)
 void end_sub_sequence_rtp(void)
 {
   // end of the base layer:
-  if ( img->number == params->no_frames - 1 )
+  if ( img->number == params->no_frm_base - 1 )
   {
     //    printf("end of encoding the base layer subseq\n");
     CloseSubseqInfo(0);
@@ -639,8 +508,8 @@ void end_sub_sequence_rtp(void)
   }
 
   // end of the enhanced layer:
-  if ( ((IMG_NUMBER%(params->NumFramesInELSubSeq+1)==0) && (params->successive_Bframe != 0) && (IMG_NUMBER>0)) || // there are B frames
-    ((IMG_NUMBER%(params->NumFramesInELSubSeq+1)==params->NumFramesInELSubSeq) && (params->successive_Bframe==0))   // there are no B frames
+  if ( ((img->gop_number % (params->NumFramesInELSubSeq+1)==0) && (params->NumberBFrames != 0) && (img->gop_number > 0)) || // there are B frames
+    ((img->gop_number % (params->NumFramesInELSubSeq+1)==params->NumFramesInELSubSeq) && (params->NumberBFrames==0))   // there are no B frames
     )
   {
     //    printf("end of encoding the enhanced layer subseq\n");

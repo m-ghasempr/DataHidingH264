@@ -240,16 +240,26 @@ void init_qp_process(ImageParameters *img)
   // and we may need to recreate these. Currently should only support same bitdepth
   if (qp_per_matrix == NULL)
     if ((qp_per_matrix = (int*)malloc((MAX_QP + 1 +  bitdepth_qp_scale)*sizeof(int))) == NULL)
-      no_mem_exit("init_global_buffers: qp_per_matrix");
+      no_mem_exit("init_qp_process: qp_per_matrix");
+
   if (qp_rem_matrix == NULL)
     if ((qp_rem_matrix = (int*)malloc((MAX_QP + 1 +  bitdepth_qp_scale)*sizeof(int))) == NULL)
-      no_mem_exit("init_global_buffers: qp_per_matrix");
+      no_mem_exit("init_qp_process: qp_per_matrix");
 
   for (i = 0; i < MAX_QP + bitdepth_qp_scale + 1; i++)
   {
     qp_per_matrix[i] = i / 6;
     qp_rem_matrix[i] = i % 6;
   }
+}
+
+void free_qp_matrices(void)
+{
+  if (qp_per_matrix != NULL)
+    free (qp_per_matrix);
+
+  if (qp_rem_matrix != NULL)
+    free (qp_rem_matrix);
 }
 
 /*!
