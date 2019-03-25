@@ -1505,9 +1505,9 @@ void IntraChromaPrediction8x8 (int *mb_up, int *mb_left, int*mb_up_left)
       case 0:  //===== TOP LEFT =====
         if      (mb_available_up)       for (i=0;i<4;i++)  s0 += image[up.pos_y][up.pos_x + i];
         if      (mb_available_left[0])  for (i=1;i<5;i++)  s2 += image[left[i].pos_y][left[i].pos_x];
-        if      (mb_available_up && mb_available_left)     s  = (s0+s2+4) >> 3;
+        if      (mb_available_up && mb_available_left[0])  s  = (s0+s2+4) >> 3;
         else if (mb_available_up)                          s  = (s0   +2) >> 2;
-        else if (mb_available_left)                        s  = (s2   +2) >> 2;
+        else if (mb_available_left[0])                     s  = (s2   +2) >> 2;
         break;
       case 1: //===== TOP RIGHT =====
         if      (mb_available_up)       for (i=4;i<8;i++)  s1 += image[up.pos_y][up.pos_x + i];

@@ -1,3 +1,9 @@
+Changes for Version JM 8.1a to JM 8.1
+-------------------------------------
+- encoder/decoder: fix bug in constrained intra prediction fix (KS)
+- encoder/decoder: fix version number typo (KS)
+
+
 Changes for Version JM 8.1 to JM 8.0
 ------------------------------------
 - decoder: fix I_PCM decoding for field macroblocks (AS)

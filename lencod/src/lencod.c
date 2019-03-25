@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 8.1
+ *     JM 8.1a
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -62,7 +62,7 @@
 #include "ratectl.h"
 
 #define JM      "8"
-#define VERSION "8.1
+#define VERSION "8.1a"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
