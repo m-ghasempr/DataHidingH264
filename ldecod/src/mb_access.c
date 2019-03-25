@@ -58,26 +58,26 @@ void CheckAvailabilityOfNeighbors()
   if (dec_picture->MbaffFrameFlag)
   {
     currMB->mbAddrA = 2 * (mb_nr/2 - 1);
-    currMB->mbAddrB = 2 * (mb_nr/2 - img->PicWidthInMbs);
-    currMB->mbAddrC = 2 * (mb_nr/2 - img->PicWidthInMbs + 1);
-    currMB->mbAddrD = 2 * (mb_nr/2 - img->PicWidthInMbs - 1);
+    currMB->mbAddrB = 2 * (mb_nr/2 - dec_picture->PicWidthInMbs);
+    currMB->mbAddrC = 2 * (mb_nr/2 - dec_picture->PicWidthInMbs + 1);
+    currMB->mbAddrD = 2 * (mb_nr/2 - dec_picture->PicWidthInMbs - 1);
     
-    currMB->mbAvailA = mb_is_available(currMB->mbAddrA, mb_nr) && ((mb_nr/2 % img->PicWidthInMbs)!=0);
+    currMB->mbAvailA = mb_is_available(currMB->mbAddrA, mb_nr) && ((mb_nr/2 % dec_picture->PicWidthInMbs)!=0);
     currMB->mbAvailB = mb_is_available(currMB->mbAddrB, mb_nr);
-    currMB->mbAvailC = mb_is_available(currMB->mbAddrC, mb_nr) && (((mb_nr/2 +1) % img->PicWidthInMbs)!=0);
-    currMB->mbAvailD = mb_is_available(currMB->mbAddrD, mb_nr) && ((mb_nr/2 % img->PicWidthInMbs)!=0);
+    currMB->mbAvailC = mb_is_available(currMB->mbAddrC, mb_nr) && (((mb_nr/2 +1) % dec_picture->PicWidthInMbs)!=0);
+    currMB->mbAvailD = mb_is_available(currMB->mbAddrD, mb_nr) && ((mb_nr/2 % dec_picture->PicWidthInMbs)!=0);
   }
   else
   {
     currMB->mbAddrA = mb_nr - 1;
-    currMB->mbAddrB = mb_nr - img->PicWidthInMbs;
-    currMB->mbAddrC = mb_nr - img->PicWidthInMbs + 1;
-    currMB->mbAddrD = mb_nr - img->PicWidthInMbs - 1;
+    currMB->mbAddrB = mb_nr - dec_picture->PicWidthInMbs;
+    currMB->mbAddrC = mb_nr - dec_picture->PicWidthInMbs + 1;
+    currMB->mbAddrD = mb_nr - dec_picture->PicWidthInMbs - 1;
 
-    currMB->mbAvailA = mb_is_available(currMB->mbAddrA, mb_nr) && ((mb_nr % img->PicWidthInMbs)!=0);
+    currMB->mbAvailA = mb_is_available(currMB->mbAddrA, mb_nr) && ((mb_nr % dec_picture->PicWidthInMbs)!=0);
     currMB->mbAvailB = mb_is_available(currMB->mbAddrB, mb_nr);
-    currMB->mbAvailC = mb_is_available(currMB->mbAddrC, mb_nr) && (((mb_nr+1) % img->PicWidthInMbs)!=0);
-    currMB->mbAvailD = mb_is_available(currMB->mbAddrD, mb_nr) && ((mb_nr % img->PicWidthInMbs)!=0);
+    currMB->mbAvailC = mb_is_available(currMB->mbAddrC, mb_nr) && (((mb_nr+1) % dec_picture->PicWidthInMbs)!=0);
+    currMB->mbAvailD = mb_is_available(currMB->mbAddrD, mb_nr) && ((mb_nr % dec_picture->PicWidthInMbs)!=0);
   }
 }
 
@@ -93,13 +93,13 @@ void get_mb_block_pos (int mb_addr, int *x, int*y)
 
   if (dec_picture->MbaffFrameFlag)
   {
-    *x = ((mb_addr/2) % img->PicWidthInMbs);
-    *y = ( ((mb_addr/2) / img->PicWidthInMbs)  * 2 + (mb_addr%2));
+    *x = ((mb_addr/2) % dec_picture->PicWidthInMbs);
+    *y = ( ((mb_addr/2) / dec_picture->PicWidthInMbs)  * 2 + (mb_addr%2));
   }
   else
   {
-    *x = (mb_addr % img->PicWidthInMbs);
-    *y = (mb_addr / img->PicWidthInMbs);
+    *x = (mb_addr % dec_picture->PicWidthInMbs);
+    *y = (mb_addr / dec_picture->PicWidthInMbs);
   }
 }
 

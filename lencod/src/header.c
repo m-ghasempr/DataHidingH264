@@ -66,8 +66,8 @@ int SliceHeader()
   len += ue_v("SH: pic_parameter_set_id" , active_pps->pic_parameter_set_id ,partition);
 
   // frame_num
-  if(input->no_frames >= 1<<(log2_max_frame_num_minus4+4))
-    error ("Too many frames.  Increase log2_max_frame_num_minus4",-999);  
+//  if(input->no_frames >= 1<<(log2_max_frame_num_minus4+4))
+//    error ("Too many frames.  Increase log2_max_frame_num_minus4",-999);  
 
   len += u_v (log2_max_frame_num_minus4 + 4,"SH: frame_num", img->frame_num, partition);
 
@@ -125,10 +125,6 @@ int SliceHeader()
     }
   }
 
-  // ist there any sense in the following assignments ???
-  toprefpoc[0]=toprefpoc[0];
-  bottomrefpoc[0]=bottomrefpoc[0];
-  
   // redundant slice info redundant_pic_cnt is missing here
   if (input->redundant_slice_flag)
   {

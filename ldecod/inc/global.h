@@ -414,7 +414,7 @@ typedef struct img_par
   int qp;                                     //!< quant for the current frame
   int qpsp;                                   //!< quant for SP-picture predicted frame
   int sp_switch;                              //!< 1 for switching sp, 0 for normal sp
-  int direct_type;                          //!< 1 for Spatial Direct, 0 for Temporal
+  int direct_type;                            //!< 1 for Spatial Direct, 0 for Temporal
   int type;                                   //!< image type INTER/INTRA
   int width;
   int height;
@@ -644,7 +644,7 @@ void free_slice(struct inp_par *inp, struct img_par *img);
 
 int  decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *snr);
 void init_picture(struct img_par *img, struct inp_par *inp);
-void exit_frame();
+void exit_picture();
 
 int  read_new_slice();
 void decode_one_slice(struct img_par *img,struct inp_par *inp);

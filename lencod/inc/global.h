@@ -434,10 +434,6 @@ Picture *bottom_pic;
 Picture *frame_pic;
 
 
-unsigned int toprefpoc[MAX_NO_POC_FRAMES];
-unsigned int bottomrefpoc[MAX_NO_POC_FRAMES];
-
-
 typedef struct
 {
   // Size info
@@ -575,7 +571,7 @@ typedef struct
   // B pictures
   int successive_Bframe;        //!< number of B frames that will be used
   int qpB;                      //!< QP of B frames
-  int direct_type;              //!< Direct Mode type to be used (1: Temporal, 0: Spatial)
+  int direct_type;              //!< Direct Mode type to be used (0: Temporal, 1: Spatial)
   int directInferenceFlag;      //!< Direct Inference Flag
 
   // SP Pictures
@@ -765,7 +761,7 @@ typedef struct
   int LFAlphaC0Offset;
   int LFBetaOffset;
 
-  int direct_type;              //!< Direct Mode type to be used (1: Temporal, 0: Spatial)
+  int direct_type;              //!< Direct Mode type to be used (0: Temporal, 1: Spatial)
 
   int num_ref_idx_l0_active;
   int num_ref_idx_l1_active;
@@ -976,7 +972,6 @@ int  find_sad_16x16(int *intra_mode);
 int dct_luma_16x16(int);
 
 void init_poc();
-void push_poc(unsigned int topvalue, unsigned int bottomvalue, unsigned int ref_frame_ind );
 
 void init_img();
 void report();
@@ -1148,8 +1143,6 @@ int rpc_bytes_to_go;
 int rpc_bits_to_go;
 void modify_redundant_pic_cnt(unsigned char *streamBuffer);
 // End JVT-D101
-
-int poc_distance( int refa, int refb);
 
 // Fast ME enable
 int BlockMotionSearch (int,int,int,int,int,int,double);

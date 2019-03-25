@@ -220,9 +220,11 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
   sps->delta_pic_order_always_zero_flag = img->delta_pic_order_always_zero_flag;
   sps->offset_for_non_ref_pic = img->offset_for_non_ref_pic;
   sps->offset_for_top_to_bottom_field = img->offset_for_top_to_bottom_field;
-  // This is the only one used, because num_ref_frames_in_pic_order_cnt_cycle 
-  // is hard coded to 1.  
-  sps->offset_for_ref_frame[0] = img->offset_for_ref_frame[0];
+
+  for (i=0; i<img->num_ref_frames_in_pic_order_cnt_cycle; i++)
+  {
+    sps->offset_for_ref_frame[i] = img->offset_for_ref_frame[i];
+  }
   // End of POC stuff
 
   // Number of Reference Frames

@@ -1432,6 +1432,8 @@ void set_stored_macroblock_parameters ()
 
       enc_picture->mv[LIST_0][img->block_x+i][img->block_y+j][0] =0;
       enc_picture->mv[LIST_0][img->block_x+i][img->block_y+j][1] = 0;
+      if(img->MbaffFrameFlag)
+        rdopt->refar[LIST_0][j][i] = -1;
     }
     else
     {
@@ -1440,6 +1442,8 @@ void set_stored_macroblock_parameters ()
 
       enc_picture->mv[LIST_0][img->block_x+i][img->block_y+j][0] = img->all_mv[i][j][LIST_0][frefframe[j][i]][currMB->b8mode[i/2+(j/2)*2]][0];
       enc_picture->mv[LIST_0][img->block_x+i][img->block_y+j][1] = img->all_mv[i][j][LIST_0][frefframe[j][i]][currMB->b8mode[i/2+(j/2)*2]][1];
+      if(img->MbaffFrameFlag)
+        rdopt->refar[LIST_0][j][i] = frefframe[j][i];
     }
 
     // forward prediction or intra
@@ -1449,10 +1453,10 @@ void set_stored_macroblock_parameters ()
       enc_picture->ref_pic_id [LIST_1][img->block_x+i][img->block_y+j] = -1;  
       enc_picture->mv[LIST_1][img->block_x+i][img->block_y+j][0] =0;
       enc_picture->mv[LIST_1][img->block_x+i][img->block_y+j][1] = 0;
+      if(img->MbaffFrameFlag)
+        rdopt->refar[LIST_1][j][i] = -1;
     }
     
-    if(img->MbaffFrameFlag)
-      rdopt->refar[LIST_0][j][i]            = frefframe[j][i];
   }
 
   if (bframe)
@@ -1468,6 +1472,8 @@ void set_stored_macroblock_parameters ()
           enc_picture->ref_pic_id [LIST_1][img->block_x+i][img->block_y+j] = -1;
           enc_picture->mv[LIST_1][img->block_x+i][img->block_y+j][0] = 0;
           enc_picture->mv[LIST_1][img->block_x+i][img->block_y+j][1] = 0;
+          if(img->MbaffFrameFlag)
+            rdopt->refar[LIST_1][j][i] = -1;
         }
         else
         {
@@ -1475,12 +1481,10 @@ void set_stored_macroblock_parameters ()
           enc_picture->ref_pic_id [LIST_1][img->block_x+i][img->block_y+j] = enc_picture->ref_pic_num[LIST_1 + list_offset][enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j]];
           enc_picture->mv[LIST_1][img->block_x+i][img->block_y+j][0] = img->all_mv[i][j][LIST_1][brefframe[j][i]][currMB->b8mode[i/2+(j/2)*2]][0];
           enc_picture->mv[LIST_1][img->block_x+i][img->block_y+j][1] = img->all_mv[i][j][LIST_1][brefframe[j][i]][currMB->b8mode[i/2+(j/2)*2]][1];
+          if(img->MbaffFrameFlag)
+            rdopt->refar[LIST_1][j][i] = brefframe[j][i];
         }
-    
-        if(img->MbaffFrameFlag)
-          rdopt->refar[LIST_1][j][i]            = brefframe[j][i];
-
-    }
+      }
   }
 
   //==== intra prediction modes ====
@@ -1857,7 +1861,7 @@ int field_flag_inference()
                {
                  best_pdir = 1;
                  cost += bw_mcost;
-                 best_bw_ref = 0;
+                 best_fw_ref = 0;
                }
                else
                {
@@ -2084,6 +2088,8 @@ int field_flag_inference()
                 if (!input->rdopt)
                 {
                   cost_direct += (cost = Get_Direct_Cost8x8 ( block, lambda_mode ));
+                  if (cost==1<<30)
+                    cost_direct = (1<<30);
                   have_direct ++;
                 }
                 best_fw_ref = direct_ref_idx[LIST_0][img->block_x+(block&1)*2][img->block_y+(block&2)];
@@ -2476,46 +2482,6 @@ int field_flag_inference()
       currMB->prev_cbp = 0;
     }
 
-    // Rate control
-    if(input->RCEnable)
-    {   
-      if(img->type==P_SLICE)
-      {
-        img->MADofMB[img->current_mb_nr] = calc_MAD();
-        
-        if(input->basicunit<img->Frame_Total_Number_MB)
-        {
-          img->TotalMADBasicUnit +=img->MADofMB[img->current_mb_nr];
-          
-          /* delta_qp is present only for non-skipped macroblocks*/
-          if ((cbp!=0 || best_mode==I16MB))
-            currMB->prev_cbp = 1;
-          else
-          {
-            img->qp -= currMB->delta_qp;
-            currMB->delta_qp = 0;
-            currMB->qp = img->qp;
-            currMB->prev_cbp = 0;
-          }
-          /* When MBAFF is used, delta_qp is only present for the first non-skipped macroblock of each 
-          macroblock pair*/
-          if (input->MbInterlace)
-          {
-            if(!currMB->mb_field)
-            {
-              DELTA_QP = currMB->delta_qp;
-              QP      = currMB->qp;
-            }
-            else
-            {
-              DELTA_QP2 = currMB->delta_qp;
-              QP2      = currMB->qp;
-            }
-          }       
-        }
-      }                        
-    }
-    
     set_stored_macroblock_parameters ();
   }
   else
@@ -2570,6 +2536,47 @@ int field_flag_inference()
       set_mbaff_parameters();
   }
   
+  // Rate control
+  if(input->RCEnable)
+  {   
+    if(img->type==P_SLICE)
+    {
+      img->MADofMB[img->current_mb_nr] = calc_MAD();
+      
+      if(input->basicunit<img->Frame_Total_Number_MB)
+      {
+        img->TotalMADBasicUnit +=img->MADofMB[img->current_mb_nr];
+        
+        /* delta_qp is present only for non-skipped macroblocks*/
+        if ((cbp!=0 || best_mode==I16MB))
+          currMB->prev_cbp = 1;
+        else
+        {
+          img->qp -= currMB->delta_qp;
+          currMB->delta_qp = 0;
+          currMB->qp = img->qp;
+          currMB->prev_cbp = 0;
+        }
+        /* When MBAFF is used, delta_qp is only present for the first non-skipped macroblock of each 
+        macroblock pair*/
+        if (input->MbInterlace)
+        {
+          if(!currMB->mb_field)
+          {
+            DELTA_QP = currMB->delta_qp;
+            QP      = currMB->qp;
+          }
+          else
+          {
+            DELTA_QP2 = currMB->delta_qp;
+            QP2      = currMB->qp;
+          }
+        }       
+      }
+    }
+  }
+  
+    
   if(input->rdopt)
     rdopt->min_rdcost = min_rdcost;
   else

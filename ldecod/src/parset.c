@@ -249,7 +249,7 @@ void ProcessSPS (NALU_t *nalu)
         if (dec_picture)
         {
           // this may only happen on slice loss
-          exit_frame();
+          exit_picture();
         }
         active_sps=NULL;
       }
@@ -286,7 +286,7 @@ void ProcessPPS (NALU_t *nalu)
         if (dec_picture)
         {
           // this may only happen on slice loss
-          exit_frame();
+          exit_picture();
         }
         active_pps = NULL;
       }
@@ -304,7 +304,7 @@ void activate_sps (seq_parameter_set_rbsp_t *sps)
     if (dec_picture)
     {
       // this may only happen on slice loss
-      exit_frame();
+      exit_picture();
     }
     active_sps = sps;
     
@@ -342,7 +342,7 @@ void activate_pps(pic_parameter_set_rbsp_t *pps)
     if (dec_picture)
     {
       // this may only happen on slice loss
-      exit_frame();
+      exit_picture();
     }
     active_pps = pps;
   }

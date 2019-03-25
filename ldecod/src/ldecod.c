@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 8.4
+ *     JM 8.5
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -62,7 +62,7 @@
 #include "erc_api.h"
 
 #define JM          "8"
-#define VERSION     "8.4"
+#define VERSION     "8.5"
 
 #define LOGFILE     "log.dec"
 #define DATADECFILE "dataDec.txt"
@@ -705,8 +705,8 @@ void free_global_buffers()
   free_mem2Dint(img->field_anchor);
 
   free_mem3Dint(img->wp_weight, 2);
-  free_mem3Dint(img->wp_offset, 2);
-  free_mem4Dint(img->wbp_weight, 2, MAX_REFERENCE_PICTURES);
+  free_mem3Dint(img->wp_offset, 6);
+  free_mem4Dint(img->wbp_weight, 6, MAX_REFERENCE_PICTURES);
 
   global_init_done = 0;
 

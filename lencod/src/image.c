@@ -672,6 +672,8 @@ void frame_picture (Picture *frame)
   enc_frame_picture->top_poc    = img->toppoc;
   enc_frame_picture->bottom_poc = img->bottompoc;
 
+  enc_frame_picture->frame_poc = img->framepoc;
+
   enc_frame_picture->pic_num = img->frame_num;
   enc_frame_picture->coded_frame = 1;
 
@@ -731,6 +733,7 @@ void field_picture (Picture *top, Picture *bottom)
 //  img->bottom_field_flag = 0;
   enc_top_picture  = alloc_storable_picture (img->structure, img->width, img->height, img->width_cr, img->height_cr);
   enc_top_picture->poc=img->toppoc;
+  enc_top_picture->frame_poc = img->toppoc;
   enc_top_picture->pic_num = img->frame_num;
   enc_top_picture->coded_frame = 1;
   enc_top_picture->MbaffFrameFlag = img->MbaffFrameFlag = FALSE;
@@ -776,6 +779,7 @@ void field_picture (Picture *top, Picture *bottom)
 //  img->bottom_field_flag = 0;
   enc_bottom_picture  = alloc_storable_picture (img->structure, img->width, img->height, img->width_cr, img->height_cr);
   enc_bottom_picture->poc=img->bottompoc;
+  enc_bottom_picture->frame_poc = img->bottompoc;
   enc_bottom_picture->pic_num = img->frame_num;
   enc_bottom_picture->coded_frame = 1;
   enc_bottom_picture->MbaffFrameFlag = img->MbaffFrameFlag = FALSE;

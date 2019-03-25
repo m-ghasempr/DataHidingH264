@@ -669,18 +669,18 @@ void set_ref_pic_num()
 
   for (i=0;i<listXsize[LIST_0];i++)
   {
-    enc_picture->ref_pic_num[LIST_0][i]=listX[LIST_0][i]->poc * 2 + ((listX[LIST_0][i]->structure==BOTTOM_FIELD)?1:0) ; 
-    enc_picture->frm_ref_pic_num[LIST_0][i]=listX[LIST_0][i]->frame_poc * 2; 
-    enc_picture->top_ref_pic_num[LIST_0][i]=listX[LIST_0][i]->top_poc * 2; 
-    enc_picture->bottom_ref_pic_num[LIST_0][i]=listX[LIST_0][i]->bottom_poc * 2 + 1; 
+    enc_picture->ref_pic_num        [LIST_0][i]=listX[LIST_0][i]->poc * 2 + ((listX[LIST_0][i]->structure==BOTTOM_FIELD)?1:0) ; 
+    enc_picture->frm_ref_pic_num    [LIST_0][i]=listX[LIST_0][i]->frame_poc * 2; 
+    enc_picture->top_ref_pic_num    [LIST_0][i]=listX[LIST_0][i]->top_poc * 2; 
+    enc_picture->bottom_ref_pic_num [LIST_0][i]=listX[LIST_0][i]->bottom_poc * 2 + 1; 
   }
 
   for (i=0;i<listXsize[LIST_1];i++)
   {
-    enc_picture->ref_pic_num[LIST_1][i]=listX[LIST_1][i]->poc  *2 + ((listX[LIST_1][i]->structure==BOTTOM_FIELD)?1:0);
-    enc_picture->frm_ref_pic_num[LIST_1][i]=listX[LIST_1][i]->frame_poc * 2; 
-    enc_picture->top_ref_pic_num[LIST_1][i]=listX[LIST_1][i]->top_poc * 2; 
-    enc_picture->bottom_ref_pic_num[LIST_1][i]=listX[LIST_1][i]->bottom_poc * 2 + 1; 
+    enc_picture->ref_pic_num        [LIST_1][i]=listX[LIST_1][i]->poc  *2 + ((listX[LIST_1][i]->structure==BOTTOM_FIELD)?1:0);
+    enc_picture->frm_ref_pic_num    [LIST_1][i]=listX[LIST_1][i]->frame_poc * 2; 
+    enc_picture->top_ref_pic_num    [LIST_1][i]=listX[LIST_1][i]->top_poc * 2; 
+    enc_picture->bottom_ref_pic_num [LIST_1][i]=listX[LIST_1][i]->bottom_poc * 2 + 1; 
   }
 
   if (img->structure==FRAME)

@@ -949,7 +949,7 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
         {
           if ((dpb.fs_ref[i]->frame->used_for_reference)&&(!dpb.fs_ref[i]->frame->is_long_term))
           {
-            if (img->framepoc >= dpb.fs_ref[i]->frame->poc)
+            if (img->framepoc > dpb.fs_ref[i]->frame->poc)
             {
               dpb.fs_ref[i]->frame->order_num=list0idx;
               listX[0][list0idx++] = dpb.fs_ref[i]->frame;
@@ -1658,11 +1658,13 @@ static void unmark_long_term_frame_for_reference_by_frame_idx(int long_term_fram
  *    the complementary field of the picture indicated by picNumX
  ************************************************************************
  */
-static void unmark_long_term_field_for_reference_by_frame_idx(PictureStructure structure, int long_term_frame_idx, int mark_current, unsigned curr_frame_num)
+static void unmark_long_term_field_for_reference_by_frame_idx(PictureStructure structure, int long_term_frame_idx, int mark_current, unsigned curr_frame_num, int curr_pic_num)
 {
   unsigned i;
 
   assert(structure!=FRAME);
+  if (curr_pic_num<0)
+    curr_pic_num+=(2*img->MaxFrameNum);
 
   for(i=0; i<dpb.ltref_frames_in_buffer; i++)
   {
@@ -1696,7 +1698,7 @@ static void unmark_long_term_field_for_reference_by_frame_idx(PictureStructure s
             }
             else
             {
-              if ((dpb.fs_ltref[i]->frame_num) != (curr_frame_num/2))
+              if ((dpb.fs_ltref[i]->frame_num) != (unsigned)(curr_pic_num/2))
               {
                 unmark_for_long_term_reference(dpb.fs_ltref[i]);
               }
@@ -1732,7 +1734,7 @@ static void unmark_long_term_field_for_reference_by_frame_idx(PictureStructure s
             }
             else
             {
-              if ((dpb.fs_ltref[i]->frame_num) != (curr_frame_num/2))
+              if ((dpb.fs_ltref[i]->frame_num) != (unsigned)(curr_pic_num/2))
               {
                 unmark_for_long_term_reference(dpb.fs_ltref[i]);
               }
@@ -1891,7 +1893,7 @@ static void mm_assign_long_term_frame_idx(StorablePicture* p, int difference_of_
       error ("field for long term marking not found",200);
     }
     
-    unmark_long_term_field_for_reference_by_frame_idx(structure, long_term_frame_idx, 0, picNumX);
+    unmark_long_term_field_for_reference_by_frame_idx(structure, long_term_frame_idx, 0, 0, picNumX);
   }
 
   mark_pic_long_term(p, long_term_frame_idx, picNumX);
@@ -1963,7 +1965,7 @@ static void mm_mark_current_picture_long_term(StorablePicture *p, int long_term_
   }
   else
   {
-    unmark_long_term_field_for_reference_by_frame_idx(p->structure, long_term_frame_idx, 1, p->pic_num);
+    unmark_long_term_field_for_reference_by_frame_idx(p->structure, long_term_frame_idx, 1, p->pic_num, 0);
   }
 
   p->is_long_term = 1;

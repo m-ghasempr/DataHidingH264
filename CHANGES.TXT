@@ -1,3 +1,16 @@
+Changes for Version JM 8.5 to JM 8.4
+------------------------------------
+- encoder: fix wrong direct mode selection for non-rd-optimized encoding (KS)
+- decoder: fix RPLR (KS)
+- encoder: fix rate-control for non-rd-optimized encoding (SM/KS)
+- encoder: fix POC mode 1 for stored B pictures (KS)
+- encoder: fix MB AFF encoder/decoder mismatch (KS)
+- encoder: fix list 1 reference index selection (SN)
+- encoder: fix IDR pictures and wrapping around frame_num (TK/KS)
+- encoder: fix log2_max_frame_num_minus4 and log2_max_pic_order_cnt_lsb_minus4 (AT)
+- encoder/decoder: align chroma sample interpolation to standard text (no real bug, only cleanup) (ZH/KS)
+
+
 Changes for Version JM 8.4 to JM 8.3
 ------------------------------------
 - encoder: fix encoder merge bug (AT)
@@ -869,11 +882,13 @@ RS      Rickard Sjoberg         Rickard.Sjoberg@era.ericsson.se
 RaS     Raghavan Subramaniyan   Raghavan.S@motorola.com
 RV      Rajesh Kumar S Venkata  v-rajesh.kumar@st.com
 SR      Shankar Regunathan      shanre@microsoft.com
+SM	Sebastian Manciulea	sebastian@splash.ro
+SN	Satoshi Nakagawa	nakagawa@okilab.net
 SW      Stephan Wenger          stewe@cs.tu-berlin.de
 SY      Steve Yao               steveyao@sandvideo.com
 TH      Till Hallbach           halbach@tele.ntnu.no
 THi	Tobias Hinz		hinz@hhi.de
-TK      Thomas Kunlin           thomas.kunlin@ief.u-psud.fr
+TK      Thomas Kunlin           thomas.kunlin@st.com
 TO      Tobias Oelbaum          drehvial@gmx.net
 TS      Teruhiko Suzuki         teruhiko@av.crl.sony.co.jp
 TSh     Tamar Shoham            Tamar.Shoham@comverse.com
@@ -889,6 +904,7 @@ YK      Yoshihiro Kikuchi       yoshihiro.kikuchi@toshiba.co.jp
 YL      Yann Lemaguet           yann.lemaguet@philips.com
 YW      Ye-Kui Wang             wyk@ieee.org
 XS      Xiaoyan Sun             sunxiaoyan@msrchina.research.microsoft.com      
-ZX      Z. Xue                  jon_xz@yahoo.com
+ZH	Zhou Heng		zhou_heng@yahoo.com
 ZL      Li Zhang                zhangli@jdl.ac.cn
+ZX      Z. Xue                  jon_xz@yahoo.com
 ZY      Zheng Yanzhao           yzzheng@singnet.com

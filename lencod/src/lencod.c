@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 8.4
+ *     JM 8.5
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -62,7 +62,7 @@
 #include "ratectl.h"
 
 #define JM      "8"
-#define VERSION "8.4"
+#define VERSION "8.5"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
@@ -164,27 +164,41 @@ int main(int argc,char **argv)
 
     //much of this can go in init_frame() or init_field()?
     //poc for this frame or field
-    img->toppoc = IMG_NUMBER*img->offset_for_ref_frame[0];
-    
+    img->toppoc = (input->intra_period && input->idr_enable ? IMG_NUMBER % input->intra_period : IMG_NUMBER) * (2*(input->successive_Bframe+1)); 
+
     if ((input->PicInterlace==FRAME_CODING)&&(input->MbInterlace==FRAME_CODING))
       img->bottompoc = img->toppoc;     //progressive
     else 
       img->bottompoc = img->toppoc+1;   //hard coded
 
-    push_poc(img->toppoc, img->bottompoc, REFFRAME);               //push poc values into array
     img->framepoc = min (img->toppoc, img->bottompoc);
-    
+
     //frame_num for this frame
-    if (input->StoredBPictures == 0 || input->successive_Bframe == 0 || img-> number < 2)
-      img->frame_num = IMG_NUMBER % (1 << (log2_max_frame_num_minus4 + 4));    
+    if (input->StoredBPictures == 0 || input->successive_Bframe == 0 || img->number < 2)
+      img->frame_num = (input->intra_period && input->idr_enable ? IMG_NUMBER % input->intra_period : IMG_NUMBER) % (1 << (log2_max_frame_num_minus4 + 4)); 
     else 
+    {
       img->frame_num ++;
-    
-    
+      if (input->intra_period && input->idr_enable)
+      {
+        if (0== (img->number % input->intra_period))
+        {
+          img->frame_num=0;
+        }
+      }
+      img->frame_num %= (1 << (log2_max_frame_num_minus4 + 4)); 
+    }
     
     //the following is sent in the slice header
     img->delta_pic_order_cnt[0]=0;
-    
+    if (input->StoredBPictures)
+    {
+      if (img->number)
+      {
+        img->delta_pic_order_cnt[0]=+2 * input->successive_Bframe;
+      }
+    }
+
     SetImgType();
 
 #ifdef _ADAPT_LAST_GROUP_
@@ -198,9 +212,6 @@ int main(int argc,char **argv)
       img->delta_pic_order_cnt[0]= -2*(initial_Bframes - input->successive_Bframe);
       img->toppoc += img->delta_pic_order_cnt[0];
       img->bottompoc += img->delta_pic_order_cnt[0];
-      toprefpoc[0] = img->toppoc;                             //fix array values too
-      bottomrefpoc[0] = img->bottompoc;
-      
     }
 #endif
 
@@ -290,17 +301,25 @@ int main(int argc,char **argv)
         //! somewhere here the disposable flag was set -- B frames are always disposable in this encoder.
         //! This happens now in slice.c, terminate_slice, where the nal_reference_idc is set up
         //poc for this B frame
-        img->toppoc = (IMG_NUMBER-1)*img->offset_for_ref_frame[0] + 2* img->b_frame_to_code;
+        img->toppoc = 2 + (input->intra_period && input->idr_enable ? (IMG_NUMBER% input->intra_period)-1 : IMG_NUMBER-1)*(2*(input->successive_Bframe+1)) + 2* (img->b_frame_to_code-1);
+  
         if ((input->PicInterlace==FRAME_CODING)&&(input->MbInterlace==FRAME_CODING))
           img->bottompoc = img->toppoc;     //progressive
         else 
           img->bottompoc = img->toppoc+1;
         
-        push_poc(img->toppoc,img->bottompoc, NONREFFRAME);      //push pocs for B frame
         img->framepoc = min (img->toppoc, img->bottompoc);
 
         //the following is sent in the slice header
-        img->delta_pic_order_cnt[0]= 2*(img->b_frame_to_code-1);
+        if (!input->StoredBPictures)
+        {
+          img->delta_pic_order_cnt[0]= 2*(img->b_frame_to_code-1);
+        }
+        else
+        {
+          img->delta_pic_order_cnt[0]= -2;
+        }
+
         img->delta_pic_order_cnt[1]= 0;   // POC200301
         
         encode_one_frame();  // encode one B-frame
@@ -417,25 +436,31 @@ void report_stats_on_error()
  */
 void init_poc()
 {
-  int i;
-
-  if(input->no_frames > (1<<15))error("too many frames",-998);
-  if(input->num_reference_frames >= MAX_NO_POC_FRAMES)error("NumberReferenceFrames too large",-999);
-  for(i=0; i<MAX_NO_POC_FRAMES; i++){toprefpoc[i] = bottomrefpoc[i] = 1<<29;}            //init with large 
+//  if(input->no_frames > (1<<15))error("too many frames",-998);
 
   //the following should probably go in sequence parameters
   // frame poc's increase by 2, field poc's by 1
 
-  img->pic_order_cnt_type=input->pic_order_cnt_type;        // POC200301
-  img->num_ref_frames_in_pic_order_cnt_cycle=1;
+  img->pic_order_cnt_type=input->pic_order_cnt_type;
+
   img->delta_pic_order_always_zero_flag=0;
-  img->offset_for_non_ref_pic =  -2*(input->successive_Bframe);
+  img->num_ref_frames_in_pic_order_cnt_cycle= 1;
+
+  if (input->StoredBPictures)
+  {
+    img->offset_for_non_ref_pic  =  0;
+    img->offset_for_ref_frame[0] =   2;
+  }
+  else
+  {
+    img->offset_for_non_ref_pic  =  -2*(input->successive_Bframe);
+    img->offset_for_ref_frame[0] =   2*(input->successive_Bframe+1);
+  }
 
   if ((input->PicInterlace==FRAME_CODING)&&(input->MbInterlace==FRAME_CODING))
     img->offset_for_top_to_bottom_field=0;
   else    
     img->offset_for_top_to_bottom_field=1;
-  img->offset_for_ref_frame[0] = 2*(input->successive_Bframe+1);
 
                                     //the following should probably go in picture parameters
 //  img->pic_order_present_flag=0;    //img->delta_pic_order_cnt[1] not sent
@@ -450,32 +475,6 @@ void init_poc()
     img->pic_order_present_flag=1;
     img->delta_pic_order_cnt_bottom = 1;
   }
-}
-
-/*!
- ***********************************************************************
- * \brief
- *    Pushes values onto the POC ref arrays  toprefpoc[] & bottomrefpoc[] 
- * 
- ***********************************************************************
- */
-void push_poc(unsigned int topvalue, unsigned int bottomvalue, unsigned int ref_frame_ind )
-{
-  int i;
-  static int current_is_ref = 0;                //indicates if current top value is for a ref frame
-
-         if(current_is_ref){
-                 for(i=MAX_NO_POC_FRAMES-1; i>0; i--){          //move all the data down by one
-                        toprefpoc[i] = toprefpoc[i-1] ; 
-                        bottomrefpoc[i] = bottomrefpoc[i-1] ;
-                 }
-         }      
-        
-        toprefpoc[0] = topvalue;                //put new data
-        bottomrefpoc[0] = bottomvalue;
-
-        current_is_ref = ref_frame_ind;         //new data type
-
 }
 
 
@@ -1812,15 +1811,4 @@ void SetImgType()
   }
 }
 
-
-/*!
- ************************************************************************
- * \brief
- *    poc_distance()
- ************************************************************************
- */
-int poc_distance( int refa, int refb)
-{
-  return toprefpoc[refb + 1] - toprefpoc[refa + 1];
-}
  

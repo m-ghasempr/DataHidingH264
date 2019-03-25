@@ -136,7 +136,7 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
 
     if (current_header == EOS)
     {
-      exit_frame();
+      exit_picture();
       return EOS;
     }
 
@@ -146,7 +146,7 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
     img->current_slice_nr++;
   }
 
-  exit_frame();
+  exit_picture();
 
   return (SOP);
 }
@@ -254,16 +254,9 @@ void find_snr(
 
   if (img->number == 0) // first
   {
-    snr->snr_y1=(float)(10*log10(65025*(float)(p->size_x)*(p->size_y)/(float)diff_y));       // keep luma snr for first frame
-    snr->snr_u1=(float)(10*log10(65025*(float)(p->size_x)*(p->size_y)/(float)(4*diff_u)));   // keep chroma snr for first frame
-    snr->snr_v1=(float)(10*log10(65025*(float)(p->size_x)*(p->size_y)/(float)(4*diff_v)));   // keep chroma snr for first frame
-    snr->snr_ya=snr->snr_y1;
-    snr->snr_ua=snr->snr_u1;
-    snr->snr_va=snr->snr_v1;
-
-//    snr->snr_ya=snr->snr_y1=snr->snr_y;                                                        // keep luma snr for first frame
-//    snr->snr_ya=snr->snr_u1=snr->snr_u;                                                        // keep chroma snr for first frame
-//    snr->snr_ya=snr->snr_v1=snr->snr_v;                                                        // keep chroma snr for first frame
+    snr->snr_ya=snr->snr_y1=snr->snr_y;                                                        // keep luma snr for first frame
+    snr->snr_ua=snr->snr_u1=snr->snr_u;                                                        // keep chroma snr for first frame
+    snr->snr_va=snr->snr_v1=snr->snr_v;                                                        // keep chroma snr for first frame
   
   }
   else
@@ -272,14 +265,6 @@ void find_snr(
     snr->snr_ua=(float)(snr->snr_ua*(img->number+Bframe_ctr)+snr->snr_u)/(img->number+Bframe_ctr+1); // average snr luma for all frames
     snr->snr_va=(float)(snr->snr_va*(img->number+Bframe_ctr)+snr->snr_v)/(img->number+Bframe_ctr+1); // average snr luma for all frames
   } 
-  /*
- else
-  {
-    snr->snr_ya=(float)(snr->snr_ya*(img->number - 1 + Bframe_ctr)+snr->snr_y)/(img->number+Bframe_ctr); // average snr luma for all frames
-    snr->snr_ua=(float)(snr->snr_ua*(img->number - 1 + Bframe_ctr)+snr->snr_u)/(img->number+Bframe_ctr); // average snr chroma for all frames
-    snr->snr_va=(float)(snr->snr_va*(img->number - 1 + Bframe_ctr)+snr->snr_v)/(img->number+Bframe_ctr); // average snr chromafor all frames
-  }
-  */
 }
 
 
@@ -300,9 +285,7 @@ void get_block(int ref_frame, StorablePicture **list, int x_pos, int y_pos, stru
   int pres_x;
   int pres_y; 
   int tmp_res[4][9];
-  static const int COEF[6] = {
-    1, -5, 20, 20, -5, 1
-  };
+  static const int COEF[6] = {    1, -5, 20, 20, -5, 1  };
 
   dx = x_pos&3;
   dy = y_pos&3;
@@ -838,7 +821,7 @@ void init_picture(struct img_par *img, struct inp_par *inp)
   if (dec_picture)
   {
     // this may only happen on slice loss
-    exit_frame();
+    exit_picture();
   }
 
   if (img->frame_num != img->pre_frame_num && img->frame_num != (img->pre_frame_num + 1) % img->MaxFrameNum) 
@@ -945,6 +928,7 @@ void init_picture(struct img_par *img, struct inp_par *inp)
   img->dec_ref_pic_marking_buffer = NULL;
 
   dec_picture->MbaffFrameFlag = img->MbaffFrameFlag;
+  dec_picture->PicWidthInMbs = img->PicWidthInMbs;
   dec_picture->pic_num = img->frame_num;
   dec_picture->frame_num = img->frame_num;
   dec_picture->coded_frame = (img->structure==FRAME);
@@ -965,10 +949,11 @@ void init_picture(struct img_par *img, struct inp_par *inp)
 /*!
  ************************************************************************
  * \brief
- *    exit a frame
+ *    finish decoding of a picture, conceal errors and store it 
+ *    into the DPB
  ************************************************************************
  */
-void exit_frame()
+void exit_picture()
 {
   int ercStartMB;
   int ercSegment;
@@ -978,23 +963,23 @@ void exit_frame()
 
   int tmp_time;                   // time used by decoding the last frame
 
-  // this should not happen, just to be sure....
+  // return if the last picture has already been finished
   if (dec_picture==NULL)
   {
     return;
   }
 
   //deblocking for frame or field
-  DeblockPicture( img, dec_picture ) ;
+  DeblockPicture( img, dec_picture );
+
   if (dec_picture->MbaffFrameFlag)
     MbAffPostProc();
-
 
   recfr.yptr = &dec_picture->imgY[0][0];
   recfr.uptr = &dec_picture->imgUV[0][0][0];
   recfr.vptr = &dec_picture->imgUV[1][0][0];
 
-  //! this is always true at the beginning of a frame
+  //! this is always true at the beginning of a picture
   ercStartMB = 0;
   ercSegment = 0;
 

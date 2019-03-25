@@ -618,10 +618,12 @@ static void PatchInp ()
   {
     int storedBplus1 = (input->StoredBPictures ) ? input->successive_Bframe + 1: 1;
 
-    log2_max_frame_num_minus4 = max( (int)(CeilLog2(input->no_frames * storedBplus1))-4, 0);
+    log2_max_frame_num_minus4 = max( (int)(CeilLog2(1+ input->no_frames *storedBplus1 ))-4, 0);
+  
+//    log2_max_frame_num_minus4 = 0;
   }
 
-  log2_max_pic_order_cnt_lsb_minus4 = max( (int)(CeilLog2(2*input->no_frames * (input->successive_Bframe + 1))) -4, 0);
+  log2_max_pic_order_cnt_lsb_minus4 = max( (int)(CeilLog2(1+2*input->no_frames * (input->successive_Bframe + 1))) -4, 0);
 
   if (input->partition_mode < 0 || input->partition_mode > 1)
   {
@@ -863,45 +865,12 @@ static void PatchInp ()
       error (errortext, 500);
     }
   }
-/*
-  switch (input->ProfileIDC)
-  {
-  case 66:
-  case 77:
-  case 88:
-    break;
-  default:
-    snprintf(errortext, ET_SIZE, "ProfileIDC (%d) is invalid.", input->ProfileIDC);
-    error (errortext, 500);
-    break;
-  }
 
-  switch (input->LevelIDC)
+  if ((input->successive_Bframe)&&(input->StoredBPictures)&&(input->idr_enable)&&(input->intra_period)&&(input->pic_order_cnt_type!=0))
   {
-  case 10:
-  case 11:
-  case 12:
-  case 13:
-  case 20:
-  case 21:
-  case 22:
-    break;
-  case 30:
-  case 31:
-  case 32:
-  case 40:
-  case 41:
-  case 42:
-  case 50:
-  case 51:
-    //input->directInferenceFlag = 1;
-    break;
-  default:
-    snprintf(errortext, ET_SIZE, "LevelIDC (%d) is invalid.", input->LevelIDC);
-    error (errortext, 500);
-    break;
+    error("Stored B pictures combined with IDR pictures only supported in Picture Order Count type 0\n",-1000);
   }
-*/
+  
   if( !input->direct_type && input->num_reference_frames<2 && input->successive_Bframe >0)
     error("temporal direct needs at least 2 ref frames\n",-1000);
 

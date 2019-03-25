@@ -39,11 +39,6 @@ typedef unsigned char byte;    //!< byte type definition
 #define TOTRUN_NUM    15
 #define RUNBEFORE_NUM  7
 
-#define  MAX_NO_POC_FRAMES  10  //size of poc ref array
-#define NONREFFRAME 0           // used with push_poc
-#define REFFRAME 1
-
-
 //--- block types for CABAC
 #define LUMA_16DC       0
 #define LUMA_16AC       1

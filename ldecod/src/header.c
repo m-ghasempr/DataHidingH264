@@ -787,3 +787,4 @@ int picture_order(struct img_par *img)
   else // bottom field
     return img->bottompoc;
 }
+

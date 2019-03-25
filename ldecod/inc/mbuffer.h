@@ -49,6 +49,7 @@ typedef struct storable_picture
   int         chroma_vector_adjustment;
   int         coded_frame;
   int         MbaffFrameFlag;
+  unsigned    PicWidthInMbs;
   unsigned    PicSizeInMbs;
 
   byte **     imgY;          //!< Y picture component

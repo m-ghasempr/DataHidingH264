@@ -1260,8 +1260,8 @@ OneComponentChromaPrediction4x4 (int*      mpred,      //!< array to store predi
 
     ii0  = max (0, min (img->width_cr -1, ii>>s1     ));
     jj0  = max (0, min (max_y_cr, jj>>s1     ));
-    ii1  = max (0, min (img->width_cr -1, (ii+f2)>>s1));
-    jj1  = max (0, min (max_y_cr, (jj+f2)>>s1));
+    ii1  = max (0, min (img->width_cr -1, (ii>>s1)+1));
+    jj1  = max (0, min (max_y_cr, (jj>>s1)+1));
 
     if1  = (ii&f2);  if0 = f1-if1;
     jf1  = (jj&f2);  jf0 = f1-jf1;
@@ -1269,7 +1269,7 @@ OneComponentChromaPrediction4x4 (int*      mpred,      //!< array to store predi
     *mpred++ = (if0 * jf0 * refimage[jj0][ii0] +
                 if1 * jf0 * refimage[jj0][ii1] +
                 if0 * jf1 * refimage[jj1][ii0] +
-                if1 * jf1 * refimage[jj1][ii1] + f4) / f3;
+                if1 * jf1 * refimage[jj1][ii1] + f4) >> 6;
   }
 }
 

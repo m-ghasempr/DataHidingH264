@@ -3710,7 +3710,6 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
           {
             int alpha_fw, alpha_bw;
             int wt_list_offset = (active_pps->weighted_bipred_idc==2)?list_offset:0;
-            int wo_shift = (active_pps->weighted_bipred_idc==2)?0:curr_mb_field;
 
             if (mv_mode==0 && img->direct_type==0 )bw_ref_idx=0;    //temporal direct 
 
@@ -3810,10 +3809,10 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                 
                 j1 += list[ref_idx]->chroma_vector_adjustment;
                 
-                ii0=max (0, min (i1/f1, img->width_cr-1));
-                jj0=max (0, min (j1/f1, max_y_cr));
-                ii1=max (0, min ((i1+f2)/f1, img->width_cr-1));
-                jj1=max (0, min ((j1+f2)/f1, max_y_cr));
+                ii0=max (0, min (i1>>3, img->width_cr-1));
+                jj0=max (0, min (j1>>3, max_y_cr));
+                ii1=max (0, min ((i1>>3)+1, img->width_cr-1));
+                jj1=max (0, min ((j1>>3)+1, max_y_cr));
                 
                 if1=(i1 & f2);
                 jf1=(j1 & f2);
@@ -3825,7 +3824,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                   pred = (if0*jf0*list[ref_idx]->imgUV[uv][jj0][ii0]+
                           if1*jf0*list[ref_idx]->imgUV[uv][jj0][ii1]+
                           if0*jf1*list[ref_idx]->imgUV[uv][jj1][ii0]+
-                          if1*jf1*list[ref_idx]->imgUV[uv][jj1][ii1]+f4)/f3;
+                          if1*jf1*list[ref_idx]->imgUV[uv][jj1][ii1]+f4)>>6;
                   if (((active_pps->weighted_pred_flag&&(img->type==P_SLICE|| img->type == SP_SLICE))||
                     (active_pps->weighted_bipred_idc==1 && (img->type==B_SLICE))) && curr_mb_field)
                   {
@@ -3839,7 +3838,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                   img->mpr[ii+ioff][jj+joff]=(if0*jf0*list[ref_idx]->imgUV[uv][jj0][ii0]+
                                               if1*jf0*list[ref_idx]->imgUV[uv][jj0][ii1]+
                                               if0*jf1*list[ref_idx]->imgUV[uv][jj1][ii0]+
-                                              if1*jf1*list[ref_idx]->imgUV[uv][jj1][ii1]+f4)/f3;
+                                              if1*jf1*list[ref_idx]->imgUV[uv][jj1][ii1]+f4)>>6;
                 }
               }
             }
@@ -3927,10 +3926,10 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                 
                     j1 += listX[0+list_offset][fw_refframe]->chroma_vector_adjustment;
                     
-                    ii0=max (0, min (i1/f1, img->width_cr-1));
-                    jj0=max (0, min (j1/f1, max_y_cr));
-                    ii1=max (0, min ((i1+f2)/f1, img->width_cr-1));
-                    jj1=max (0, min ((j1+f2)/f1, max_y_cr));
+                    ii0=max (0, min (i1>>3, img->width_cr-1));
+                    jj0=max (0, min (j1>>3, max_y_cr));
+                    ii1=max (0, min ((i1>>3)+1, img->width_cr-1));
+                    jj1=max (0, min ((j1>>3)+1, max_y_cr));
                     
                     if1=(i1 & f2);
                     jf1=(j1 & f2);
@@ -3940,7 +3939,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                     fw_pred=(if0*jf0*listX[0+list_offset][fw_refframe]->imgUV[uv][jj0][ii0]+
                              if1*jf0*listX[0+list_offset][fw_refframe]->imgUV[uv][jj0][ii1]+
                              if0*jf1*listX[0+list_offset][fw_refframe]->imgUV[uv][jj1][ii0]+
-                             if1*jf1*listX[0+list_offset][fw_refframe]->imgUV[uv][jj1][ii1]+f4)/f3;
+                             if1*jf1*listX[0+list_offset][fw_refframe]->imgUV[uv][jj1][ii1]+f4)>>6;
                   }
                   if (direct_pdir == 1 || direct_pdir == 2)
                   {
@@ -3959,10 +3958,10 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                     }
                     j1 += listX[1+list_offset][bw_refframe]->chroma_vector_adjustment;
                     
-                    ii0=max (0, min (i1/f1, img->width_cr-1));
-                    jj0=max (0, min (j1/f1, max_y_cr));
-                    ii1=max (0, min ((i1+f2)/f1, img->width_cr-1));
-                    jj1=max (0, min ((j1+f2)/f1, max_y_cr));
+                    ii0=max (0, min (i1>>3, img->width_cr-1));
+                    jj0=max (0, min (j1>>3, max_y_cr));
+                    ii1=max (0, min ((i1>>3)+1, img->width_cr-1));
+                    jj1=max (0, min ((j1>>3)+1, max_y_cr));
                     
                     if1=(i1 & f2);
                     jf1=(j1 & f2);
@@ -3972,7 +3971,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                     bw_pred=(if0*jf0*listX[1+list_offset][bw_refframe]->imgUV[uv][jj0][ii0]+
                              if1*jf0*listX[1+list_offset][bw_refframe]->imgUV[uv][jj0][ii1]+
                              if0*jf1*listX[1+list_offset][bw_refframe]->imgUV[uv][jj1][ii0]+
-                             if1*jf1*listX[1+list_offset][bw_refframe]->imgUV[uv][jj1][ii1]+f4)/f3;
+                             if1*jf1*listX[1+list_offset][bw_refframe]->imgUV[uv][jj1][ii1]+f4)>>6;
                   }
 
                 }
@@ -3994,10 +3993,10 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
 
                   j1 += listX[0+list_offset][fw_refframe]->chroma_vector_adjustment;
                   
-                  ii0=max (0, min (i1/f1, img->width_cr-1));
-                  jj0=max (0, min (j1/f1, max_y_cr));
-                  ii1=max (0, min ((i1+f2)/f1, img->width_cr-1));
-                  jj1=max (0, min ((j1+f2)/f1, max_y_cr));
+                  ii0=max (0, min (i1>>3, img->width_cr-1));
+                  jj0=max (0, min (j1>>3, max_y_cr));
+                  ii1=max (0, min ((i1>>3)+1, img->width_cr-1));
+                  jj1=max (0, min ((j1>>3)+1, max_y_cr));
                   
                   if1=(i1 & f2);
                   jf1=(j1 & f2);
@@ -4007,7 +4006,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                   fw_pred=(if0*jf0*listX[0+list_offset][fw_refframe]->imgUV[uv][jj0][ii0]+
                            if1*jf0*listX[0+list_offset][fw_refframe]->imgUV[uv][jj0][ii1]+
                            if0*jf1*listX[0+list_offset][fw_refframe]->imgUV[uv][jj1][ii0]+
-                           if1*jf1*listX[0+list_offset][fw_refframe]->imgUV[uv][jj1][ii1]+f4)/f3;
+                           if1*jf1*listX[0+list_offset][fw_refframe]->imgUV[uv][jj1][ii1]+f4)>>6;
                   
                   i1=(img->pix_c_x+ii+ioff)*f1+bw_mv_array[ifx][jf][0];
                   
@@ -4025,10 +4024,10 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
 
                   j1 += listX[1+list_offset][bw_refframe]->chroma_vector_adjustment;
 
-                  ii0=max (0, min (i1/f1, img->width_cr-1));
-                  jj0=max (0, min (j1/f1, max_y_cr));
-                  ii1=max (0, min ((i1+f2)/f1, img->width_cr-1));
-                  jj1=max (0, min ((j1+f2)/f1, max_y_cr));
+                  ii0=max (0, min (i1>>3, img->width_cr-1));
+                  jj0=max (0, min (j1>>3, max_y_cr));
+                  ii1=max (0, min ((i1>>3)+1, img->width_cr-1));
+                  jj1=max (0, min ((j1>>3)+1, max_y_cr));
                   
                   if1=(i1 & f2);
                   jf1=(j1 & f2);
@@ -4038,7 +4037,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                   bw_pred=(if0*jf0*listX[1+list_offset][bw_refframe]->imgUV[uv][jj0][ii0]+
                            if1*jf0*listX[1+list_offset][bw_refframe]->imgUV[uv][jj0][ii1]+
                            if0*jf1*listX[1+list_offset][bw_refframe]->imgUV[uv][jj1][ii0]+
-                           if1*jf1*listX[1+list_offset][bw_refframe]->imgUV[uv][jj1][ii1]+f4)/f3;
+                           if1*jf1*listX[1+list_offset][bw_refframe]->imgUV[uv][jj1][ii1]+f4)>>6;
                   
                 }
                 
@@ -4063,7 +4062,6 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                   {
                     
                     int wt_list_offset = (active_pps->weighted_bipred_idc==2)?list_offset:0;
-                    int wt_shift = (active_pps->weighted_bipred_idc==2)?0:curr_mb_field;
 
                     int alpha_fw = img->wbp_weight[0+wt_list_offset][fw_ref_idx][bw_ref_idx][uv+1];
                     int alpha_bw = img->wbp_weight[1+wt_list_offset][fw_ref_idx][bw_ref_idx][uv+1];
