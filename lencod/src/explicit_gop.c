@@ -28,40 +28,40 @@
 *    Generation of hierarchical GOP
 ************************************************************************
 */
-void create_hierarchy(InputParameters *pparams)
+void create_hierarchy(ImageParameters *p_Img, InputParameters *p_Inp)
 {
   int i, j;
-  int centerB = pparams->NumberBFrames/2;
+  int centerB = (p_Inp->NumberBFrames >> 1);
   GOP_DATA tmp;
 
-  if (pparams->HierarchicalCoding == 1)
+  if (p_Inp->HierarchicalCoding == 1)
   {
-    for (i=0;i<pparams->NumberBFrames;i++)
+    for (i=0;i<p_Inp->NumberBFrames;i++)
     {
       if (i < centerB)
       {
-        gop_structure[i].slice_type = ( pparams->PReplaceBSlice ) ? P_SLICE : B_SLICE;
-        gop_structure[i].display_no = i * 2 + 1;
-        gop_structure[i].hierarchy_layer = 1;
-        gop_structure[i].reference_idc = NALU_PRIORITY_LOW;
-        gop_structure[i].slice_qp = imax(0, (pparams->qp[0][B_SLICE] + (pparams->HierarchyLevelQPEnable ? -1: pparams->qpBRSOffset[0])));
+        p_Img->gop_structure[i].slice_type = ( p_Inp->PReplaceBSlice ) ? P_SLICE : B_SLICE;
+        p_Img->gop_structure[i].display_no = i * 2 + 1;
+        p_Img->gop_structure[i].hierarchy_layer = 1;
+        p_Img->gop_structure[i].reference_idc = NALU_PRIORITY_LOW;
+        p_Img->gop_structure[i].slice_qp = imax(0, (p_Inp->qp[0][B_SLICE] + (p_Inp->HierarchyLevelQPEnable ? -1: p_Inp->qpBRSOffset[0])));
 
       }
       else
       {
-        gop_structure[i].slice_type = ( pparams->PReplaceBSlice ) ? P_SLICE : B_SLICE;
-        gop_structure[i].display_no = (i - centerB) * 2;
-        gop_structure[i].hierarchy_layer = 0;
-        gop_structure[i].reference_idc = NALU_PRIORITY_DISPOSABLE;
-        gop_structure[i].slice_qp = pparams->qp[0][B_SLICE];
+        p_Img->gop_structure[i].slice_type = ( p_Inp->PReplaceBSlice ) ? P_SLICE : B_SLICE;
+        p_Img->gop_structure[i].display_no = (i - centerB) * 2;
+        p_Img->gop_structure[i].hierarchy_layer = 0;
+        p_Img->gop_structure[i].reference_idc = NALU_PRIORITY_DISPOSABLE;
+        p_Img->gop_structure[i].slice_qp = p_Inp->qp[0][B_SLICE];
       }
     }
-    img->GopLevels = 2;
+    p_Img->GopLevels = 2;
   }
   else
   {
     int GOPlevels = 1;
-    int Bframes = pparams->NumberBFrames;
+    int Bframes = p_Inp->NumberBFrames;
     int *curGOPLevelfrm,*curGOPLeveldist ;
     int curlevel = GOPlevels ;
     int i;
@@ -72,31 +72,31 @@ void create_hierarchy(InputParameters *pparams)
     }
 
     curlevel = GOPlevels;
-    img->GopLevels = GOPlevels;
+    p_Img->GopLevels = GOPlevels;
     if (NULL == (curGOPLevelfrm = (int*)malloc(GOPlevels * sizeof(int)))) no_mem_exit("create_hierarchy:curGOPLevelfrm");
     if (NULL == (curGOPLeveldist= (int*)malloc(GOPlevels * sizeof(int)))) no_mem_exit("create_hierarchy:curGOPLeveldist");
 
-    for (i=0; i <pparams->NumberBFrames; i++)
+    for (i=0; i <p_Inp->NumberBFrames; i++)
     {
-      gop_structure[i].display_no = i;
-      gop_structure[i].slice_type = ( pparams->PReplaceBSlice ) ? P_SLICE : B_SLICE;
-      gop_structure[i].hierarchy_layer = 0;
-      gop_structure[i].reference_idc = NALU_PRIORITY_DISPOSABLE;
-      gop_structure[i].slice_qp = pparams->qp[0][B_SLICE];
+      p_Img->gop_structure[i].display_no = i;
+      p_Img->gop_structure[i].slice_type = ( p_Inp->PReplaceBSlice ) ? P_SLICE : B_SLICE;
+      p_Img->gop_structure[i].hierarchy_layer = 0;
+      p_Img->gop_structure[i].reference_idc = NALU_PRIORITY_DISPOSABLE;
+      p_Img->gop_structure[i].slice_qp = p_Inp->qp[0][B_SLICE];
     }
 
     for (j = 1; j < GOPlevels; j++)
     {
       for (i = (1 << j) - 1; i < Bframes + 1 - (1 << j); i += (1 << j)) 
       {
-        gop_structure[i].hierarchy_layer  = j;
-        gop_structure[i].reference_idc  = NALU_PRIORITY_LOW;
-        gop_structure[i].slice_qp = imax(0, pparams->qp[0][B_SLICE] + (pparams->HierarchyLevelQPEnable ? -j: pparams->qpBRSOffset[0]));
+        p_Img->gop_structure[i].hierarchy_layer  = j;
+        p_Img->gop_structure[i].reference_idc  = NALU_PRIORITY_LOW;
+        p_Img->gop_structure[i].slice_qp = imax(0, p_Inp->qp[0][B_SLICE] + (p_Inp->HierarchyLevelQPEnable ? -j: p_Inp->qpBRSOffset[0]));
         //KHHan, for inter lossless code(referenced B picture)
-        //if(!pparams->lossless_qpprime_y_zero_flag)
-        //  gop_structure[i].slice_qp = imax(0, pparams->qp[0][B_SLICE] + (pparams->HierarchyLevelQPEnable ? -j: pparams->qpBRSOffset[0]));
+        //if(!p_Inp->lossless_qpprime_y_zero_flag)
+        //  p_Img->gop_structure[i].slice_qp = imax(0, p_Inp->qp[0][B_SLICE] + (p_Inp->HierarchyLevelQPEnable ? -j: p_Inp->qpBRSOffset[0]));
         //else
-        //  gop_structure[i].slice_qp = pparams->qp[0][B_SLICE];
+        //  p_Img->gop_structure[i].slice_qp = p_Inp->qp[0][B_SLICE];
       }
     }
 
@@ -104,11 +104,11 @@ void create_hierarchy(InputParameters *pparams)
     {
       j = i;
 
-      while (j > 0 && gop_structure[j].hierarchy_layer > gop_structure[j-1].hierarchy_layer)
+      while (j > 0 && p_Img->gop_structure[j].hierarchy_layer > p_Img->gop_structure[j-1].hierarchy_layer)
       {
-        tmp = gop_structure[j-1];
-        gop_structure[j-1] = gop_structure[j];
-        gop_structure[j] = tmp;
+        tmp = p_Img->gop_structure[j-1];
+        p_Img->gop_structure[j-1] = p_Img->gop_structure[j];
+        p_Img->gop_structure[j] = tmp;
         j--;
       }
     }
@@ -123,12 +123,12 @@ void create_hierarchy(InputParameters *pparams)
 *
 ************************************************************************
 */
-void init_gop_structure(InputParameters *pparams)
+void init_gop_structure(ImageParameters *p_Img, InputParameters *p_Inp)
 {
-  int max_gopsize = pparams->NumberBFrames;
+  int max_gopsize = p_Inp->NumberBFrames;
 
-  gop_structure = calloc(imax(10,max_gopsize), sizeof (GOP_DATA)); // +1 for reordering
-  if (NULL==gop_structure)
+  p_Img->gop_structure = calloc(imax(10,max_gopsize), sizeof (GOP_DATA)); // +1 for reordering
+  if (NULL==p_Img->gop_structure)
     no_mem_exit("init_gop_structure: gop_structure");
 }
 
@@ -139,10 +139,10 @@ void init_gop_structure(InputParameters *pparams)
 *    Clear GOP structure
 ************************************************************************
 */
-void clear_gop_structure(void)
+void clear_gop_structure(ImageParameters *p_Img)
 {
-  if (gop_structure)
-    free(gop_structure);
+  if (p_Img->gop_structure)
+    free(p_Img->gop_structure);
 }
 
 
@@ -152,9 +152,9 @@ void clear_gop_structure(void)
 *    Interpret GOP struct from input parameters
 ************************************************************************
 */
-void interpret_gop_structure()
+void interpret_gop_structure(ImageParameters *p_Img, InputParameters *p_Inp)
 {
-  int nLength = strlen(params->ExplicitHierarchyFormat);
+  int nLength = strlen(p_Inp->ExplicitHierarchyFormat);
   int i =0, k, dqp, display_no;
   int slice_read =0, order_read = 0, stored_read = 0, qp_read =0;
   int coded_frame = 0;
@@ -167,19 +167,19 @@ void interpret_gop_structure()
       //! First lets read slice type
       if (slice_read == 0)
       {
-        switch (params->ExplicitHierarchyFormat[i])
+        switch (p_Inp->ExplicitHierarchyFormat[i])
         {
         case 'P':
         case 'p':
-          gop_structure[coded_frame].slice_type=P_SLICE;
+          p_Img->gop_structure[coded_frame].slice_type = P_SLICE;
           break;
         case 'B':
         case 'b':
-          gop_structure[coded_frame].slice_type=B_SLICE;
+          p_Img->gop_structure[coded_frame].slice_type = B_SLICE;
           break;
         case 'I':
         case 'i':
-          gop_structure[coded_frame].slice_type=I_SLICE;
+          p_Img->gop_structure[coded_frame].slice_type = I_SLICE;
           break;
         default:
           snprintf(errortext, ET_SIZE, "Slice Type invalid in ExplicitHierarchyFormat param. Please check configuration file.");
@@ -193,19 +193,19 @@ void interpret_gop_structure()
         //! Next is Display Order
         if (order_read == 0)
         {
-          if (isdigit((int)(*(params->ExplicitHierarchyFormat+i))))
+          if (isdigit((int)(*(p_Inp->ExplicitHierarchyFormat+i))))
           {
-            sscanf(params->ExplicitHierarchyFormat+i,"%d",&display_no);
-            gop_structure[coded_frame].display_no = display_no;
+            sscanf(p_Inp->ExplicitHierarchyFormat+i,"%d",&display_no);
+            p_Img->gop_structure[coded_frame].display_no = display_no;
             order_read = 1;
-            if (display_no < 0 || display_no >= params->NumberBFrames)
+            if (display_no < 0 || display_no >= p_Inp->NumberBFrames)
             {
-              snprintf(errortext, ET_SIZE, "Invalid Frame Order value. Frame position needs to be in [0,%d] range.",params->NumberBFrames - 1);
+              snprintf(errortext, ET_SIZE, "Invalid Frame Order value. Frame position needs to be in [0,%d] range.",p_Inp->NumberBFrames - 1);
               error (errortext, 400);
             }
             for (k=0;k<coded_frame;k++)
             {
-              if (gop_structure[k].display_no == display_no)
+              if (p_Img->gop_structure[k].display_no == display_no)
               {
                 snprintf(errortext, ET_SIZE, "Frame Order value %d in frame %d already used for enhancement frame %d.",display_no,coded_frame,k);
                 error (errortext, 400);
@@ -220,20 +220,20 @@ void interpret_gop_structure()
         }
         else if (order_read == 1)
         {
-          if (stored_read == 0 && !(isdigit((int)(*(params->ExplicitHierarchyFormat+i)))))
+          if (stored_read == 0 && !(isdigit((int)(*(p_Inp->ExplicitHierarchyFormat+i)))))
           {
-            switch (params->ExplicitHierarchyFormat[i])
+            switch (p_Inp->ExplicitHierarchyFormat[i])
             {
             case 'E':
             case 'e':
-              gop_structure[coded_frame].reference_idc = NALU_PRIORITY_DISPOSABLE;
-              gop_structure[coded_frame].hierarchy_layer = 0;
+              p_Img->gop_structure[coded_frame].reference_idc = NALU_PRIORITY_DISPOSABLE;
+              p_Img->gop_structure[coded_frame].hierarchy_layer = 0;
               break;
             case 'R':
             case 'r':
-              gop_structure[coded_frame].reference_idc= NALU_PRIORITY_LOW;
-              gop_structure[coded_frame].hierarchy_layer = 1;
-              img->GopLevels = 2;
+              p_Img->gop_structure[coded_frame].reference_idc= NALU_PRIORITY_LOW;
+              p_Img->gop_structure[coded_frame].hierarchy_layer = 1;
+              p_Img->GopLevels = 2;
               break;
             default:
               snprintf(errortext, ET_SIZE, "Reference_IDC invalid in ExplicitHierarchyFormat param. Please check configuration file.");
@@ -244,12 +244,12 @@ void interpret_gop_structure()
           }
           else if (stored_read == 1 && qp_read == 0)
           {
-            if (isdigit((int)(*(params->ExplicitHierarchyFormat+i))))
+            if (isdigit((int)(*(p_Inp->ExplicitHierarchyFormat+i))))
             {
-              sscanf(params->ExplicitHierarchyFormat+i,"%d",&dqp);
+              sscanf(p_Inp->ExplicitHierarchyFormat+i,"%d",&dqp);
 
-              gop_structure[coded_frame].slice_qp = params->qp[0][ gop_structure[coded_frame].slice_type ];
-              gop_structure[coded_frame].slice_qp = iClip3(-img->bitdepth_luma_qp_scale, 51,gop_structure[coded_frame].slice_qp + dqp);
+              p_Img->gop_structure[coded_frame].slice_qp = p_Inp->qp[0][ p_Img->gop_structure[coded_frame].slice_type ];
+              p_Img->gop_structure[coded_frame].slice_qp = iClip3(-p_Img->bitdepth_luma_qp_scale, 51,p_Img->gop_structure[coded_frame].slice_qp + dqp);
               qp_read = 1;
             }
             else
@@ -258,7 +258,7 @@ void interpret_gop_structure()
               error (errortext, 400);
             }
           }
-          else if (stored_read == 1 && qp_read == 1 && !(isdigit((int)(*(params->ExplicitHierarchyFormat+i)))) && (i < nLength - 2))
+          else if (stored_read == 1 && qp_read == 1 && !(isdigit((int)(*(p_Inp->ExplicitHierarchyFormat+i)))) && (i < nLength - 3))
           {
             stored_read =0;
             qp_read=0;
@@ -266,7 +266,7 @@ void interpret_gop_structure()
             slice_read=0;
             i--;
             coded_frame ++;
-            if (coded_frame >= params->NumberBFrames )
+            if (coded_frame >= p_Inp->NumberBFrames )
             {
               snprintf(errortext, ET_SIZE, "Total number of frames in Enhancement GOP need to be fewer or equal to NumberBFrames parameter.");
               error (errortext, 400);
@@ -282,106 +282,6 @@ void interpret_gop_structure()
     error (errortext, 400);
   }
 
-  params->NumberBFrames = coded_frame + 1;
-}
-
-/*!
-************************************************************************
-* \brief
-*    POC-based reference management (FRAME)
-************************************************************************
-*/
-
-void poc_based_ref_management_frame_pic(int current_pic_num)
-{
-  unsigned i, pic_num = 0;
-
-  int min_poc=INT_MAX;
-  DecRefPicMarking_t *tmp_drpm,*tmp_drpm2;
-
-  if (img->dec_ref_pic_marking_buffer!=NULL)
-    return;
-
-  if ((dpb.ref_frames_in_buffer + dpb.ltref_frames_in_buffer)==0)
-    return;
-
-  for (i = 0; i < dpb.used_size; i++)
-  {
-    if (dpb.fs[i]->is_reference  && (!(dpb.fs[i]->is_long_term)) && dpb.fs[i]->poc < min_poc)
-    {
-      min_poc = dpb.fs[i]->frame->poc ;
-      pic_num = dpb.fs[i]->frame->pic_num;
-    }
-  }
-
-  if (NULL==(tmp_drpm=(DecRefPicMarking_t*)calloc (1,sizeof (DecRefPicMarking_t)))) 
-    no_mem_exit("poc_based_ref_management: tmp_drpm");
-  tmp_drpm->Next=NULL;
-
-  tmp_drpm->memory_management_control_operation = 0;
-
-  if (NULL==(tmp_drpm2=(DecRefPicMarking_t*)calloc (1,sizeof (DecRefPicMarking_t)))) 
-    no_mem_exit("poc_based_ref_management: tmp_drpm2");
-  tmp_drpm2->Next=tmp_drpm;
-
-  tmp_drpm2->memory_management_control_operation = 1;
-  tmp_drpm2->difference_of_pic_nums_minus1 = current_pic_num - pic_num - 1;
-  img->dec_ref_pic_marking_buffer = tmp_drpm2;
-}
-
-/*!
-************************************************************************
-* \brief
-*    POC-based reference management (FIELD)
-************************************************************************
-*/
-
-void poc_based_ref_management_field_pic(int current_pic_num)
-{
-  unsigned int i, pic_num1 = 0, pic_num2 = 0;
-
-  int min_poc=INT_MAX;
-  DecRefPicMarking_t *tmp_drpm,*tmp_drpm2, *tmp_drpm3;
-
-  if (img->dec_ref_pic_marking_buffer!=NULL)
-    return;
-
-  if ((dpb.ref_frames_in_buffer+dpb.ltref_frames_in_buffer)==0)
-    return;
-
-  if ( img->structure == TOP_FIELD )
-  {
-    for (i=0; i<dpb.used_size;i++)
-    {
-      if (dpb.fs[i]->is_reference && (!(dpb.fs[i]->is_long_term)) && dpb.fs[i]->poc < min_poc)
-      {      
-        min_poc  = dpb.fs[i]->poc;
-        pic_num1 = dpb.fs[i]->top_field->pic_num;
-        pic_num2 = dpb.fs[i]->bottom_field->pic_num;
-      }
-    }
-  }
-
-  if (NULL==(tmp_drpm=(DecRefPicMarking_t*)calloc (1,sizeof (DecRefPicMarking_t)))) no_mem_exit("poc_based_ref_management_field_pic: tmp_drpm");
-  tmp_drpm->Next=NULL;
-  tmp_drpm->memory_management_control_operation = 0;
-
-  if ( img->structure == BOTTOM_FIELD )
-  {
-    img->dec_ref_pic_marking_buffer = tmp_drpm;
-    return;
-  }
-
-  if (NULL==(tmp_drpm2=(DecRefPicMarking_t*)calloc (1,sizeof (DecRefPicMarking_t)))) no_mem_exit("poc_based_ref_management_field_pic: tmp_drpm2");
-  tmp_drpm2->Next=tmp_drpm;
-  tmp_drpm2->memory_management_control_operation = 1;
-  tmp_drpm2->difference_of_pic_nums_minus1 = current_pic_num - pic_num1 - 1;
-
-  if (NULL==(tmp_drpm3=(DecRefPicMarking_t*)calloc (1,sizeof (DecRefPicMarking_t)))) no_mem_exit("poc_based_ref_management_field_pic: tmp_drpm3");
-  tmp_drpm3->Next=tmp_drpm2;
-  tmp_drpm3->memory_management_control_operation = 1;
-  tmp_drpm3->difference_of_pic_nums_minus1 = current_pic_num - pic_num2 - 1;
-
-  img->dec_ref_pic_marking_buffer = tmp_drpm3;
+  p_Inp->NumberBFrames = coded_frame + 1;
 }
 

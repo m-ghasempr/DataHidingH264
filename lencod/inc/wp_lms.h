@@ -17,10 +17,10 @@
 #ifndef _WP_LMS_H_
 #define _WP_LMS_H_
 
-void EstimateWPPSliceAlg1(ImageParameters *img, InputParameters *params, int offset);
-void EstimateWPBSliceAlg1(ImageParameters *img, InputParameters *params);
-int  TestWPPSliceAlg1    (ImageParameters *img, InputParameters *input, int offset);
-int  TestWPBSliceAlg1    (ImageParameters *img, InputParameters *input, int method);
+extern void EstimateWPPSliceAlg1(Slice *currSlice, int offset);
+extern void EstimateWPBSliceAlg1(Slice *currSlice);
+extern int  TestWPPSliceAlg1    (ImageParameters *p_Img, InputParameters *input, int offset);
+extern int  TestWPBSliceAlg1    (ImageParameters *p_Img, InputParameters *input, int method);
 
 #endif
 

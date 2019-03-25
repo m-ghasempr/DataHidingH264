@@ -37,10 +37,10 @@
 #define MAX_SSIM_LEVELS 5
 
 //Computes the product of the contrast and structure componenents of the structural similarity metric.
-float compute_structural_components (imgpel **refImg, imgpel **encImg, int height, int width, int win_height, int win_width, int comp)
+float compute_structural_components (ImageParameters *p_Img, InputParameters *p_Inp, imgpel **refImg, imgpel **encImg, int height, int width, int win_height, int win_width, int comp)
 {
   static const float K2 = 0.03f;
-  static float max_pix_value_sqd;
+  float max_pix_value_sqd;
   float C2;
   float win_pixels = (float) (win_width * win_height);
 #ifdef UNBIASED_VARIANCE
@@ -53,9 +53,9 @@ float compute_structural_components (imgpel **refImg, imgpel **encImg, int heigh
   int imeanOrg, imeanEnc, ivarOrg, ivarEnc, icovOrgEnc;
   float cur_distortion = 0.0;
   int i, j, n, m, win_cnt = 0;
-  int overlapSize = params->SSIMOverlapSize;
+  int overlapSize = p_Inp->SSIMOverlapSize;
 
-  max_pix_value_sqd = (float) (img->max_imgpel_value_comp[comp] * img->max_imgpel_value_comp[comp]);
+  max_pix_value_sqd = (float) (p_Img->max_pel_value_comp[comp] * p_Img->max_pel_value_comp[comp]);
   C2 = K2 * K2 * max_pix_value_sqd;
 
   for (j = 0; j <= height - win_height; j += overlapSize)
@@ -103,19 +103,19 @@ float compute_structural_components (imgpel **refImg, imgpel **encImg, int heigh
   return cur_distortion;
 }
 
-float compute_luminance_component (imgpel **refImg, imgpel **encImg, int height, int width, int win_height, int win_width, int comp)
+float compute_luminance_component (ImageParameters *p_Img, InputParameters *p_Inp, imgpel **refImg, imgpel **encImg, int height, int width, int win_height, int win_width, int comp)
 {
   static const float K1 = 0.01f;
-  static float max_pix_value_sqd;
+  float max_pix_value_sqd;
   float C1;
   float win_pixels = (float) (win_width * win_height);
   float mb_ssim, meanOrg, meanEnc;
   int imeanOrg, imeanEnc;
   float cur_distortion = 0.0;
   int i, j, n, m, win_cnt = 0;
-  int overlapSize = params->SSIMOverlapSize;
+  int overlapSize = p_Inp->SSIMOverlapSize;
 
-  max_pix_value_sqd = (float) (img->max_imgpel_value_comp[comp] * img->max_imgpel_value_comp[comp]);
+  max_pix_value_sqd = (float) (p_Img->max_pel_value_comp[comp] * p_Img->max_pel_value_comp[comp]);
   C1 = K1 * K1 * max_pix_value_sqd;
 
   for (j = 0; j <= height - win_height; j += overlapSize)
@@ -276,7 +276,7 @@ void downsample(imgpel** src, imgpel** out, int height, int width)
   free_mem2Dint(dest);
 }
 
-float compute_ms_ssim(imgpel **refImg, imgpel **encImg, int height, int width, int win_height, int win_width, int comp)
+float compute_ms_ssim(ImageParameters *p_Img, InputParameters *p_Inp, imgpel **refImg, imgpel **encImg, int height, int width, int win_height, int win_width, int comp)
 {
   float structural[MAX_SSIM_LEVELS];
   float cur_distortion;
@@ -284,15 +284,15 @@ float compute_ms_ssim(imgpel **refImg, imgpel **encImg, int height, int width, i
   imgpel** dsRef;
   imgpel** dsEnc;
   int m;
-  static int max_ssim_levels_minus_one = MAX_SSIM_LEVELS - 1;
-  static float exponent[5] = {(float)MS_SSIM_BETA0, (float)MS_SSIM_BETA1, (float)MS_SSIM_BETA2, (float)MS_SSIM_BETA3, (float)MS_SSIM_BETA4};
+  static const int max_ssim_levels_minus_one = MAX_SSIM_LEVELS - 1;
+  static const float exponent[5] = {(float)MS_SSIM_BETA0, (float)MS_SSIM_BETA1, (float)MS_SSIM_BETA2, (float)MS_SSIM_BETA3, (float)MS_SSIM_BETA4};
 
   dsRef = NULL;
   dsEnc = NULL;
   get_mem2Dpel(&dsRef, height>>1, width>>1);
   get_mem2Dpel(&dsEnc, height>>1, width>>1);
 
-  structural[0] = compute_structural_components(refImg, encImg, height, width, win_height, win_width, comp);
+  structural[0] = compute_structural_components(p_Img, p_Inp, refImg, encImg, height, width, win_height, win_width, comp);
   cur_distortion = (float)pow(structural[0], exponent[0]);
 
   downsample(refImg, dsRef, height, width);
@@ -302,7 +302,7 @@ float compute_ms_ssim(imgpel **refImg, imgpel **encImg, int height, int width, i
   {
     height >>= 1;
     width >>= 1;
-    structural[m] = compute_structural_components(dsRef, dsEnc, height, width, imin(win_height,height), imin(win_width,width), comp);
+    structural[m] = compute_structural_components(p_Img, p_Inp, dsRef, dsEnc, height, width, imin(win_height,height), imin(win_width,width), comp);
     cur_distortion *= (float)pow(structural[m], exponent[m]);
     if (m < max_ssim_levels_minus_one)
     {
@@ -311,7 +311,7 @@ float compute_ms_ssim(imgpel **refImg, imgpel **encImg, int height, int width, i
     }
     else
     {
-      luminance = compute_luminance_component(dsRef, dsEnc, height, width, imin(win_height,height), imin(win_width,width), comp);
+      luminance = compute_luminance_component(p_Img, p_Inp, dsRef, dsEnc, height, width, imin(win_height,height), imin(win_width,width), comp);
       cur_distortion *= (float)pow(luminance, exponent[m]);
     }
   }
@@ -329,18 +329,21 @@ float compute_ms_ssim(imgpel **refImg, imgpel **encImg, int height, int width, i
  *    Find MS-SSIM for all three components
  ************************************************************************
  */
-void find_ms_ssim (ImageStructure *ref, ImageStructure *src, DistMetric *metricSSIM)
+void find_ms_ssim (ImageParameters *p_Img, InputParameters *p_Inp, ImageStructure *ref, ImageStructure *src, DistMetric *metricSSIM)
 {
+  DistortionParams *p_Dist = p_Img->p_Dist;
   FrameFormat *format = &ref->format;
 
-  metricSSIM->value[0] = compute_ms_ssim (ref->data[0], src->data[0], format->height, format->width, BLOCK_SIZE_8x8, BLOCK_SIZE_8x8, 0);
+  metricSSIM->value[0] = compute_ms_ssim (p_Img, p_Inp, ref->data[0], src->data[0], format->height, format->width, BLOCK_SIZE_8x8, BLOCK_SIZE_8x8, 0);
   // Chroma.
   if (format->yuv_format != YUV400)
   {     
-    metricSSIM->value[1]  = compute_ms_ssim (ref->data[1], src->data[1], format->height_cr, format->width_cr, img->mb_cr_size_y, img->mb_cr_size_x, 1);
-    metricSSIM->value[2]  = compute_ms_ssim (ref->data[2], src->data[2], format->height_cr, format->width_cr, img->mb_cr_size_y, img->mb_cr_size_x, 2);
+    metricSSIM->value[1]  = compute_ms_ssim (p_Img, p_Inp, ref->data[1], src->data[1], format->height_cr, format->width_cr, p_Img->mb_cr_size_y, p_Img->mb_cr_size_x, 1);
+    metricSSIM->value[2]  = compute_ms_ssim (p_Img, p_Inp, ref->data[2], src->data[2], format->height_cr, format->width_cr, p_Img->mb_cr_size_y, p_Img->mb_cr_size_x, 2);
   }
 
-  accumulate_average(metricSSIM,  dist->frame_ctr);
-  accumulate_avslice(metricSSIM,  img->type, stats->frame_ctr[img->type]);
+ {
+    accumulate_average(metricSSIM,  p_Dist->frame_ctr);
+    accumulate_avslice(metricSSIM,  p_Img->type, p_Img->p_Stats->frame_ctr[p_Img->type]);
+  }
 }

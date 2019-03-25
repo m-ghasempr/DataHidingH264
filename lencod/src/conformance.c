@@ -14,21 +14,28 @@
  */
 
 #include "global.h"
+#include "conformance.h"
 
 // Max Frame Size Limit
-// Level Limit             -  -  -  -  -  -  -  -  -  1b  10  11   12   13   -  -  -  -  -  -  20   21   22    -  -  -  -  -  -  -
-unsigned int  MaxFs [] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 99, 99, 396, 396, 396, 0, 0, 0, 0, 0, 0, 396, 792, 1620, 0, 0, 0, 0, 0, 0, 0,  
+// Level Limit                          -  -  -  -  -  -  -  -  -  1b  10  11   12   13   -  -  -  -  -  -  20   21   22    -  -  -  -  -  -  -
+static const unsigned int  MaxFs [] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 99, 99, 396, 396, 396, 0, 0, 0, 0, 0, 0, 396, 792, 1620, 0, 0, 0, 0, 0, 0, 0,  
 //                        30    31    32    -  -  -  -  -  -  -  40    41    42    -  -  -  -  -  -  -  50     51
                           1620, 3600, 5120, 0, 0, 0, 0, 0, 0, 0, 8192, 8192, 8704, 0, 0, 0, 0, 0, 0, 0, 22080, 36864 };
+static const unsigned int  MinCR [] = { 0, 0, 0, 0, 0, 0, 0, 0, 0,  2,  2,   2,   2,   2, 0, 0, 0, 0, 0, 0,   2,   2,   2, 0, 0, 0, 0, 0, 0, 0,  
+                             2,    4,    4, 0, 0, 0, 0, 0, 0, 0,    4,    2,    2, 0, 0, 0, 0, 0, 0, 0,     2,     2 };
+static const unsigned int  MaxBR [] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 64,128, 192, 384, 768, 0, 0, 0, 0, 0, 0,2000,4000,4000, 0, 0, 0, 0, 0, 0, 0,  
+                         10000,14000,20000, 0, 0, 0, 0, 0, 0, 0,20000,50000,50000, 0, 0, 0, 0, 0, 0, 0,135000,240000 };
+static const unsigned int  MaxCPB[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0,175,350, 500,1000,2000, 0, 0, 0, 0, 0, 0,2000,4000,4000, 0, 0, 0, 0, 0, 0, 0,  
+                         10000,14000,20000, 0, 0, 0, 0, 0, 0, 0,25000,62500,62500, 0, 0, 0, 0, 0, 0, 0,135000,240000 };
 // Max macroblock processing rate
-unsigned int MaxMBPS[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 1485, 1485, 3000, 6000, 11880, 0, 0, 0, 0, 0, 0, 11880, 19800, 20250, 0, 0, 0, 0, 0, 0, 0,  
-                          40500, 10800, 216000, 0, 0, 0, 0, 0, 0, 0, 245760, 245760, 522240, 0, 0, 0, 0, 0, 0, 0, 589824, 983040 };
+static const unsigned int MaxMBPS[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 1485, 1485, 3000, 6000, 11880, 0, 0, 0, 0, 0, 0, 11880, 19800, 20250, 0, 0, 0, 0, 0, 0, 0,  
+                          40500, 108000, 216000, 0, 0, 0, 0, 0, 0, 0, 245760, 245760, 522240, 0, 0, 0, 0, 0, 0, 0, 589824, 983040 };
 // Vertical MV Limits (integer/halfpel/quarterpel)
 // Currently only Integer Pel restrictions are used,
 // since the way values are specified
 // (i.e. mvlowbound = (levelmvlowbound + 1) and the way
 // Subpel ME is performed, subpel will always be within range.
-const int LEVELVMVLIMIT[17][6] =
+static const int LEVELVMVLIMIT[17][6] =
 {
   {  -63,  63,  -128,  127,  -256,  255},
   {  -63,  63,  -128,  127,  -256,  255},
@@ -57,7 +64,7 @@ const int LEVELHMVLIMIT[6] =  { -2047, 2047, -4096, 4095, -8192, 8191};
  *    Get maximum frame size (in MBs) supported given a level
  ***********************************************************************
  */
-unsigned getMaxFs (unsigned int levelIdc)
+unsigned int getMaxFs (unsigned int levelIdc)
 {
   unsigned int ret;
 
@@ -80,7 +87,7 @@ unsigned getMaxFs (unsigned int levelIdc)
  *    Get maximum processing rate (in MB/s) supported given a level
  ***********************************************************************
  */
-unsigned getMaxMBPS (unsigned int levelIdc)
+unsigned int getMaxMBPS (unsigned int levelIdc)
 {
   unsigned int ret;
 
@@ -100,87 +107,156 @@ unsigned getMaxMBPS (unsigned int levelIdc)
 /*!
  ***********************************************************************
  * \brief
+ *    Get minimum compression ratio supported given a level
+ ***********************************************************************
+ */
+unsigned int getMinCR (unsigned int levelIdc)
+{
+  unsigned int ret;
+
+  if ( (levelIdc < 9) || (levelIdc > 51))
+    error ("getMinCR: Unknown LevelIdc", 500);
+
+  // in Baseline, Main and Extended: Level 1b is specified with LevelIdc==11 and constrained_set3_flag == 1
+
+  ret = MinCR[levelIdc];
+
+  if ( 0 == ret )
+    error ("getMinCR: Unknown LevelIdc", 500);
+
+  return ret;
+}
+
+/*!
+ ***********************************************************************
+ * \brief
+ *    Get maximum bit rate (in bits/s) supported given a level
+ ***********************************************************************
+ */
+unsigned int getMaxBR (unsigned int levelIdc)
+{
+  unsigned int ret;
+
+  if ( (levelIdc < 9) || (levelIdc > 51))
+    error ("getMaxBR: Unknown LevelIdc", 500);
+
+  // in Baseline, Main and Extended: Level 1b is specified with LevelIdc==11 and constrained_set3_flag == 1
+
+  ret = MaxBR[levelIdc];
+
+  if ( 0 == ret )
+    error ("getMaxBR: Unknown LevelIdc", 500);
+
+  return ret;
+}
+
+/*!
+ ***********************************************************************
+ * \brief
+ *    Get maximum coded buffer size (in bits) supported given a level
+ ***********************************************************************
+ */
+unsigned int getMaxCPB (unsigned int levelIdc)
+{
+  unsigned int ret;
+
+  if ( (levelIdc < 9) || (levelIdc > 51))
+    error ("getMaxCPB: Unknown LevelIdc", 500);
+
+  // in Baseline, Main and Extended: Level 1b is specified with LevelIdc==11 and constrained_set3_flag == 1
+
+  ret = MaxCPB[levelIdc];
+
+  if ( 0 == ret )
+    error ("getMaxCPB: Unknown LevelIdc", 500);
+
+  return ret;
+}
+
+/*!
+ ***********************************************************************
+ * \brief
  *    Check Profile conformance
  ***********************************************************************
  */
-void ProfileCheck(void)
+void ProfileCheck(InputParameters *p_Inp)
 {
-  if((params->ProfileIDC != 66 ) &&
-     (params->ProfileIDC != 77 ) &&
-     (params->ProfileIDC != 88 ) &&
-     (params->ProfileIDC != FREXT_HP    ) &&
-     (params->ProfileIDC != FREXT_Hi10P ) &&
-     (params->ProfileIDC != FREXT_Hi422 ) &&
-     (params->ProfileIDC != FREXT_Hi444 ) &&
-     (params->ProfileIDC != FREXT_CAVLC444 ))
+  if((p_Inp->ProfileIDC != BASELINE ) &&
+     (p_Inp->ProfileIDC != MAIN ) &&
+     (p_Inp->ProfileIDC != EXTENDED ) &&
+     (p_Inp->ProfileIDC != FREXT_HP    ) &&
+     (p_Inp->ProfileIDC != FREXT_Hi10P ) &&
+     (p_Inp->ProfileIDC != FREXT_Hi422 ) &&
+     (p_Inp->ProfileIDC != FREXT_Hi444 ) &&
+     (p_Inp->ProfileIDC != FREXT_CAVLC444 ))
   {
     snprintf(errortext, ET_SIZE, "Profile must be in\n\n  66 (Baseline),\n  77 (Main),\n  88 (Extended),\n 100 (High),\n 110 (High 10 or High 10 Intra)\n"
       " 122 (High 4:2:2 or High 4:2:2 Intra),\n 244 (High 4:4:4 predictive or High 4:4:4 Intra),\n  44 (CAVLC 4:4:4 Intra)\n");
     error (errortext, 500);
   }
 
-  if ((params->partition_mode) && (params->symbol_mode==CABAC))
+  if ((p_Inp->partition_mode) && (p_Inp->symbol_mode==CABAC))
   {
     snprintf(errortext, ET_SIZE, "Data partitioning and CABAC is not supported in any profile.");
     error (errortext, 500);
   }
 
-  if (params->redundant_pic_flag)
+  if (p_Inp->redundant_pic_flag)
   {
-    if (params->ProfileIDC != 66)
+    if (p_Inp->ProfileIDC != BASELINE)
     {
       snprintf(errortext, ET_SIZE, "Redundant pictures are only allowed in Baseline profile (ProfileIDC = 66).");
       error (errortext, 500);
     }
   }
 
-  if ((params->partition_mode) && (params->ProfileIDC!=88))
+  if ((p_Inp->partition_mode) && (p_Inp->ProfileIDC!=EXTENDED))
   {
     snprintf(errortext, ET_SIZE, "Data partitioning is only allowed in Extended profile (ProfileIDC = 88).");
     error (errortext, 500);
   }
 
-  if (params->ChromaIntraDisable && params->FastCrIntraDecision)
+  if (p_Inp->ChromaIntraDisable && p_Inp->FastCrIntraDecision)
   {
     fprintf( stderr, "\n Warning: ChromaIntraDisable and FastCrIntraDecision cannot be combined together.\n Using only Chroma Intra DC mode.\n");
-    params->FastCrIntraDecision=0;
+    p_Inp->FastCrIntraDecision=0;
   }
   
-  if ((params->sp_periodicity) && (params->ProfileIDC != 88 ))
+  if ((p_Inp->sp_periodicity) && (p_Inp->ProfileIDC != EXTENDED ))
   {
     snprintf(errortext, ET_SIZE, "SP pictures are only allowed in Extended profile (ProfileIDC = 88).");
     error (errortext, 500);
   }
 
   // baseline
-  if (params->ProfileIDC == 66 )
+  if (p_Inp->ProfileIDC == BASELINE )
   {
-    if ((params->NumberBFrames || params->BRefPictures==2) && params->PReplaceBSlice == 0)
+    if ((p_Inp->NumberBFrames || p_Inp->BRefPictures==2) && p_Inp->PReplaceBSlice == 0)
     {
       snprintf(errortext, ET_SIZE, "B slices are not allowed in Baseline profile (ProfileIDC = 66).");
       error (errortext, 500);
     }
-    if (params->WeightedPrediction)
+    if (p_Inp->WeightedPrediction)
     {
       snprintf(errortext, ET_SIZE, "Weighted prediction is not allowed in Baseline profile (ProfileIDC = 66).");
       error (errortext, 500);
     }
-    if (params->WeightedBiprediction)
+    if (p_Inp->WeightedBiprediction)
     {
       snprintf(errortext, ET_SIZE, "Weighted prediction is not allowed in Baseline profile (ProfileIDC = 66).");
       error (errortext, 500);
     }
-    if (params->symbol_mode == CABAC)
+    if (p_Inp->symbol_mode == CABAC)
     {
       snprintf(errortext, ET_SIZE, "CABAC is not allowed in Baseline profile (ProfileIDC = 66).");
       error (errortext, 500);
     }
-    if ((params->PicInterlace) ||(params->MbInterlace))
+    if ((p_Inp->PicInterlace) ||(p_Inp->MbInterlace))
     {
       snprintf(errortext, ET_SIZE, "Interlace tools are not allowed in Baseline profile (ProfileIDC = 66).");
       error (errortext, 500);
     }
-    if (params->GenerateMultiplePPS != 0)
+    if (p_Inp->GenerateMultiplePPS != 0)
     {
       snprintf(errortext, ET_SIZE, "GenerateMultiplePPS is not supported for Baseline profile because it requires enabling Weighted prediction.\n");
       error (errortext, 400);
@@ -188,9 +264,9 @@ void ProfileCheck(void)
   }
 
   // main
-  if (params->ProfileIDC == 77 )
+  if (p_Inp->ProfileIDC == MAIN )
   {
-    if (params->num_slice_groups_minus1)
+    if (p_Inp->num_slice_groups_minus1)
     {
       snprintf(errortext, ET_SIZE, "num_slice_groups_minus1>0 (FMO) is not allowed in Main profile (ProfileIDC = 77).");
       error (errortext, 500);
@@ -198,15 +274,15 @@ void ProfileCheck(void)
   }
 
   // extended
-  if (params->ProfileIDC == 88 )
+  if (p_Inp->ProfileIDC == EXTENDED )
   {
-    if (!params->directInferenceFlag)
+    if (!p_Inp->directInferenceFlag)
     {
       snprintf(errortext, ET_SIZE, "direct_8x8_inference flag must be equal to 1 in Extended profile (ProfileIDC = 88).");
       error (errortext, 500);
     }
 
-    if (params->symbol_mode == CABAC)
+    if (p_Inp->symbol_mode == CABAC)
     {
       snprintf(errortext, ET_SIZE, "CABAC is not allowed in Extended profile (ProfileIDC = 88).");
       error (errortext, 500);
@@ -214,15 +290,15 @@ void ProfileCheck(void)
   }
 
   //FRExt
-  if ( params->separate_colour_plane_flag )
+  if ( p_Inp->separate_colour_plane_flag )
   {
-    if( params->yuv_format!=3 )
+    if( p_Inp->yuv_format!=3 )
     {
       fprintf( stderr, "\nWarning: SeparateColourPlane has only effect in 4:4:4 chroma mode (YUVFormat=3),\n         disabling SeparateColourPlane.");
-      params->separate_colour_plane_flag = 0;
+      p_Inp->separate_colour_plane_flag = 0;
     }
 
-    if ( params->ChromaMEEnable )
+    if ( p_Inp->ChromaMEEnable )
     {
       snprintf(errortext, ET_SIZE, "\nChromaMEEnable is not allowed when SeparateColourPlane is enabled.");
       error (errortext, 500);
@@ -230,46 +306,46 @@ void ProfileCheck(void)
   }
 
   // CAVLC 4:4:4 Intra
-  if ( params->ProfileIDC == FREXT_CAVLC444 )
+  if ( p_Inp->ProfileIDC == FREXT_CAVLC444 )
   {
-    if ( params->symbol_mode != CAVLC )
+    if ( p_Inp->symbol_mode != CAVLC )
     {
       snprintf(errortext, ET_SIZE, "\nCABAC is not allowed in CAVLC 4:4:4 Intra profile (ProfileIDC = 44).");
       error (errortext, 500);
     }
-    if ( !params->IntraProfile )
+    if ( !p_Inp->IntraProfile )
     {
       fprintf (stderr, "\nWarning: ProfileIDC equal to 44 implies an Intra only profile, setting IntraProfile = 1.");
-      params->IntraProfile = 1;
+      p_Inp->IntraProfile = 1;
     }
   }
 
   // Intra only profiles
-  if (params->IntraProfile && ( params->ProfileIDC<FREXT_HP && params->ProfileIDC!=FREXT_CAVLC444 ))
+  if (p_Inp->IntraProfile && ( p_Inp->ProfileIDC<FREXT_HP && p_Inp->ProfileIDC!=FREXT_CAVLC444 ))
   {
     snprintf(errortext, ET_SIZE, "\nIntraProfile is allowed only with ProfileIDC %d to %d.", FREXT_HP, FREXT_Hi444);
     error (errortext, 500);
   }
 
-  if (params->IntraProfile && !params->idr_period) 
+  if (p_Inp->IntraProfile && !p_Inp->idr_period) 
   {
     snprintf(errortext, ET_SIZE, "\nIntraProfile requires IDRPeriod >= 1.");
     error (errortext, 500);
   }
 
-  if (params->IntraProfile && params->intra_period != 1) 
+  if (p_Inp->IntraProfile && p_Inp->intra_period != 1) 
   {
     snprintf(errortext, ET_SIZE, "\nIntraProfile requires IntraPeriod equal 1.");
     error (errortext, 500);
   }
 
-  if (params->IntraProfile && params->num_ref_frames) 
+  if (p_Inp->IntraProfile && p_Inp->num_ref_frames) 
   {
     fprintf( stderr, "\nWarning: Setting NumberReferenceFrames to 0 in IntraProfile.");
-    params->num_ref_frames = 0;
+    p_Inp->num_ref_frames = 0;
   }
 
-  if (params->IntraProfile == 0 && params->num_ref_frames == 0) 
+  if (p_Inp->IntraProfile == 0 && p_Inp->num_ref_frames == 0) 
   {
     snprintf(errortext, ET_SIZE, "\nProfiles other than IntraProfile require NumberReferenceFrames > 0.");
     error (errortext, 500);
@@ -282,44 +358,51 @@ void ProfileCheck(void)
  *    Check if Level constraints are satisfied
  ***********************************************************************
  */
-void LevelCheck(void)
+void LevelCheck(ImageParameters *p_Img, InputParameters *p_Inp)
 {
-  unsigned int PicSizeInMbs = ( (params->output.width + img->auto_crop_right) * (params->output.height + img->auto_crop_bottom) ) >> 8;
-  unsigned int MBProcessingRate = (unsigned int) (PicSizeInMbs * params->output.frame_rate + 0.5);
+  unsigned int PicSizeInMbs = ( (p_Inp->output.width + p_Img->auto_crop_right) * (p_Inp->output.height + p_Img->auto_crop_bottom) ) >> 8;
+  unsigned int MBProcessingRate = (unsigned int) (PicSizeInMbs * p_Inp->output.frame_rate + 0.5);
 
-  if ( (params->LevelIDC>=30) && (params->directInferenceFlag==0))
+  if ( (p_Inp->LevelIDC>=30) && (p_Inp->directInferenceFlag==0))
   {
     fprintf( stderr, "\nWarning: LevelIDC 3.0 and above require direct_8x8_inference to be set to 1. Please check your settings.\n");
-    params->directInferenceFlag=1;
+    p_Inp->directInferenceFlag=1;
   }
-  if ( ((params->LevelIDC<21) || (params->LevelIDC>41)) && (params->PicInterlace > 0 || params->MbInterlace > 0) )
+  if ( ((p_Inp->LevelIDC<21) || (p_Inp->LevelIDC>41)) && (p_Inp->PicInterlace > 0 || p_Inp->MbInterlace > 0) )
   {
     snprintf(errortext, ET_SIZE, "\nInterlace modes only supported for LevelIDC in the range of 21 and 41. Please check your settings.\n");
     error (errortext, 500);
   }
 
-  if ( PicSizeInMbs > getMaxFs(params->LevelIDC) )
+  if ( PicSizeInMbs > getMaxFs(p_Inp->LevelIDC) )
   {
-    snprintf(errortext, ET_SIZE, "\nPicSizeInMbs exceeds maximum allowed size at specified LevelIdc %.1f\n", (float) params->LevelIDC / 10.0);
+    snprintf(errortext, ET_SIZE, "\nPicSizeInMbs exceeds maximum allowed size at specified LevelIdc %.1f\n", (float) p_Inp->LevelIDC / 10.0);
     error (errortext, 500);
   }
   
-  if (params->IntraProfile && (PicSizeInMbs > 1620) && params->slice_mode != 1) 
+  if (p_Inp->IntraProfile && (PicSizeInMbs > 1620) && p_Inp->slice_mode != 1) 
   {
     error ("\nIntraProfile with PicSizeInMbs > 1620 requires SliceMode equal 1.", 500);
   }
 
-  if (params->IntraProfile && (PicSizeInMbs > 1620) && ((unsigned int)params->slice_argument > (  getMaxFs(params->LevelIDC) >> 2 ) ) )
+  if (p_Inp->IntraProfile && (PicSizeInMbs > 1620) && ((unsigned int)p_Inp->slice_argument > (  getMaxFs(p_Inp->LevelIDC) >> 2 ) ) )
   {
     //when PicSizeInMbs is greater than 1620, the number of macroblocks in any coded slice shall not exceed MaxFS / 4
-    snprintf(errortext, ET_SIZE, "\nIntraProfile requires SliceArgument smaller or equal to 1/4 MaxFs at specified LevelIdc %d.", params->LevelIDC);
+    snprintf(errortext, ET_SIZE, "\nIntraProfile requires SliceArgument smaller or equal to 1/4 MaxFs at specified LevelIdc %d.", p_Inp->LevelIDC);
     error (errortext, 500);
   }
 
-  if ( MBProcessingRate > getMaxMBPS(params->LevelIDC) )
+  if ( MBProcessingRate > getMaxMBPS(p_Inp->LevelIDC) )
   {
     snprintf(errortext, ET_SIZE, "\nMB Processing Rate (%d) exceeds maximum allowed processing rate (%d) at specified LevelIdc %.1f\n", 
-      MBProcessingRate, getMaxMBPS(params->LevelIDC), (float) params->LevelIDC / 10.0);
+      MBProcessingRate, getMaxMBPS(p_Inp->LevelIDC), (float) p_Inp->LevelIDC / 10.0);
+    error (errortext, 500);
+  }
+
+  if ( p_Inp->bit_rate > (int)(1200 * getMaxBR(p_Inp->LevelIDC)) )
+  {
+    snprintf(errortext, ET_SIZE, "\nBit Rate (%d) exceeds maximum allowed bit rate (%d) at specified LevelIdc %.1f for NAL HRD\n", 
+      p_Inp->bit_rate, 1200 * getMaxBR(p_Inp->LevelIDC), (float) p_Inp->LevelIDC / 10.0);
     error (errortext, 500);
   }
 }
@@ -330,31 +413,31 @@ void LevelCheck(void)
  *    Update Motion Vector Limits
  ***********************************************************************
  */
-void update_mv_limits(ImageParameters *img, byte is_field)
+void update_mv_limits(ImageParameters *p_Img, InputParameters *p_Inp, byte is_field)
 {
-  memcpy(img->MaxVmvR, LEVELVMVLIMIT[img->LevelIndex], 6 * sizeof(int));
-  memcpy(img->MaxHmvR, LEVELHMVLIMIT, 6 * sizeof(int));
+  memcpy(p_Img->MaxVmvR, LEVELVMVLIMIT[p_Img->LevelIndex], 6 * sizeof(int));
+  memcpy(p_Img->MaxHmvR, LEVELHMVLIMIT, 6 * sizeof(int));
   if (is_field)
   {
     int i;
     for (i = 0; i < 6; i++)
-      img->MaxVmvR[i] = rshift_rnd(img->MaxVmvR[i], 1);
+      p_Img->MaxVmvR[i] = rshift_rnd(p_Img->MaxVmvR[i], 1);
   }
-  if (params->UseMVLimits)
+  if (p_Inp->UseMVLimits)
   {
-    img->MaxVmvR[0] = imax(img->MaxVmvR[0], -(params->SetMVYLimit));
-    img->MaxVmvR[1] = imin(img->MaxVmvR[1],  (params->SetMVYLimit));
-    img->MaxVmvR[2] = imax(img->MaxVmvR[2], -(params->SetMVYLimit << 1));
-    img->MaxVmvR[3] = imin(img->MaxVmvR[3],  (params->SetMVYLimit << 1));
-    img->MaxVmvR[4] = imax(img->MaxVmvR[4], -(params->SetMVYLimit << 2));
-    img->MaxVmvR[5] = imin(img->MaxVmvR[5],  (params->SetMVYLimit << 2));
+    p_Img->MaxVmvR[0] = imax(p_Img->MaxVmvR[0], -(p_Inp->SetMVYLimit));
+    p_Img->MaxVmvR[1] = imin(p_Img->MaxVmvR[1],  (p_Inp->SetMVYLimit));
+    p_Img->MaxVmvR[2] = imax(p_Img->MaxVmvR[2], -(p_Inp->SetMVYLimit << 1));
+    p_Img->MaxVmvR[3] = imin(p_Img->MaxVmvR[3],  (p_Inp->SetMVYLimit << 1));
+    p_Img->MaxVmvR[4] = imax(p_Img->MaxVmvR[4], -(p_Inp->SetMVYLimit << 2));
+    p_Img->MaxVmvR[5] = imin(p_Img->MaxVmvR[5],  (p_Inp->SetMVYLimit << 2));
 
-    img->MaxHmvR[0] = imax(img->MaxHmvR[0], -(params->SetMVXLimit));
-    img->MaxHmvR[1] = imin(img->MaxHmvR[1],  (params->SetMVXLimit));
-    img->MaxHmvR[2] = imax(img->MaxHmvR[2], -(params->SetMVXLimit << 1));
-    img->MaxHmvR[3] = imin(img->MaxHmvR[3],  (params->SetMVXLimit << 1));
-    img->MaxHmvR[4] = imax(img->MaxHmvR[4], -(params->SetMVXLimit << 2));
-    img->MaxHmvR[5] = imin(img->MaxHmvR[5],  (params->SetMVXLimit << 2));
+    p_Img->MaxHmvR[0] = imax(p_Img->MaxHmvR[0], -(p_Inp->SetMVXLimit));
+    p_Img->MaxHmvR[1] = imin(p_Img->MaxHmvR[1],  (p_Inp->SetMVXLimit));
+    p_Img->MaxHmvR[2] = imax(p_Img->MaxHmvR[2], -(p_Inp->SetMVXLimit << 1));
+    p_Img->MaxHmvR[3] = imin(p_Img->MaxHmvR[3],  (p_Inp->SetMVXLimit << 1));
+    p_Img->MaxHmvR[4] = imax(p_Img->MaxHmvR[4], -(p_Inp->SetMVXLimit << 2));
+    p_Img->MaxHmvR[5] = imin(p_Img->MaxHmvR[5],  (p_Inp->SetMVXLimit << 2));
   }
 }
 
@@ -365,13 +448,12 @@ void update_mv_limits(ImageParameters *img, byte is_field)
  *    Clip motion vector range given encoding level
  ***********************************************************************
  */
-void clip_mv_range(ImageParameters *img, int search_range, MotionVector *mv, int res)
+void clip_mv_range(ImageParameters *p_Img, int search_range, MotionVector *mv, int res)
 {
-  search_range <<= res;
   res <<= 1;
 
-  mv->mv_x = iClip3( img->MaxHmvR[0 + res] + search_range, img->MaxHmvR[1 + res] - search_range, mv->mv_x);
-  mv->mv_y = iClip3( img->MaxVmvR[0 + res] + search_range, img->MaxVmvR[1 + res] - search_range, mv->mv_y);
+  mv->mv_x = (short) iClip3( p_Img->MaxHmvR[0 + res] + search_range, p_Img->MaxHmvR[1 + res] - search_range, mv->mv_x);
+  mv->mv_y = (short) iClip3( p_Img->MaxVmvR[0 + res] + search_range, p_Img->MaxVmvR[1 + res] - search_range, mv->mv_y);
 }
 
 /*!
@@ -380,14 +462,14 @@ void clip_mv_range(ImageParameters *img, int search_range, MotionVector *mv, int
  *    Clip motion vector range given encoding level
  ***********************************************************************
  */
-void test_clip_mvs(ImageParameters *img, short mv[2], Boolean write_mb)
+void test_clip_mvs(ImageParameters *p_Img, short mv[2], Boolean write_mb)
 {
-  if ((mv[0] < img->MaxHmvR[4]) || (mv[0] > img->MaxHmvR[5]) || (mv[1] < img->MaxVmvR[4]) || (mv[1] > img->MaxVmvR[5]))
+  if ((mv[0] < p_Img->MaxHmvR[4]) || (mv[0] > p_Img->MaxHmvR[5]) || (mv[1] < p_Img->MaxVmvR[4]) || (mv[1] > p_Img->MaxVmvR[5]))
   {
     if (write_mb == TRUE)
-      printf("Warning MVs (%d %d) were out of range x(%d %d) y(%d %d). Clipping mvs before writing\n", mv[0], mv[1], img->MaxHmvR[4], img->MaxHmvR[5], img->MaxVmvR[4], img->MaxVmvR[5]);
-    mv[0] = iClip3( img->MaxHmvR[4], img->MaxHmvR[5], mv[0]);
-    mv[1] = iClip3( img->MaxVmvR[4], img->MaxVmvR[5], mv[1]);
+      printf("Warning MVs (%d %d) were out of range x(%d %d) y(%d %d). Clipping mvs before writing\n", mv[0], mv[1], p_Img->MaxHmvR[4], p_Img->MaxHmvR[5], p_Img->MaxVmvR[4], p_Img->MaxVmvR[5]);
+    mv[0] = (short) iClip3( p_Img->MaxHmvR[4], p_Img->MaxHmvR[5], mv[0]);
+    mv[1] = (short) iClip3( p_Img->MaxVmvR[4], p_Img->MaxVmvR[5], mv[1]);
   }
 }
   
@@ -397,26 +479,27 @@ void test_clip_mvs(ImageParameters *img, short mv[2], Boolean write_mb)
  *    Clip motion vector range given encoding level
  ***********************************************************************
  */
-int out_of_bounds_mvs(ImageParameters *img, short mv[2])
+int out_of_bounds_mvs(ImageParameters *p_Img, short mv[2])
 {
-  return ((mv[0] < img->MaxHmvR[4]) || (mv[0] > img->MaxHmvR[5]) || (mv[1] < img->MaxVmvR[4]) || (mv[1] > img->MaxVmvR[5]));
+  return ((mv[0] < p_Img->MaxHmvR[4]) || (mv[0] > p_Img->MaxHmvR[5]) || (mv[1] < p_Img->MaxVmvR[4]) || (mv[1] > p_Img->MaxVmvR[5]));
 }
 
-int InvalidWeightsForBiPrediction(Block8x8Info* b8x8info, int mode)
+int InvalidWeightsForBiPrediction(Slice *currSlice, Block8x8Info* b8x8info, int mode)
 {
+  seq_parameter_set_rbsp_t *active_sps = currSlice->active_sps;
   int cur_blk, cur_comp;
   int best8x8l0ref, best8x8l1ref;
   int weight_sum = 0;
   int invalid_mode = 0;
-  int *wbp0, *wbp1;
+  short *wbp0, *wbp1;
   for (cur_blk = 0; cur_blk < 4; cur_blk ++)
   {
-    if (b8x8info->best8x8pdir[mode][cur_blk] == 2)
+    if (b8x8info->best[mode][cur_blk].pdir == 2)
     { 
-      best8x8l0ref = (int) b8x8info->best8x8l0ref[mode][cur_blk];
-      best8x8l1ref = (int) b8x8info->best8x8l1ref[mode][cur_blk];
-      wbp0 = &wbp_weight[LIST_0][best8x8l0ref][best8x8l1ref][0];
-      wbp1 = &wbp_weight[LIST_1][best8x8l0ref][best8x8l1ref][0];
+      best8x8l0ref = (int) b8x8info->best[mode][cur_blk].ref[LIST_0];
+      best8x8l1ref = (int) b8x8info->best[mode][cur_blk].ref[LIST_1];
+      wbp0 = &currSlice->wbp_weight[LIST_0][best8x8l0ref][best8x8l1ref][0];
+      wbp1 = &currSlice->wbp_weight[LIST_1][best8x8l0ref][best8x8l1ref][0];
 
       for (cur_comp = 0; cur_comp < (active_sps->chroma_format_idc == YUV400 ? 1 : 3) ; cur_comp ++)
       {
@@ -435,7 +518,7 @@ int InvalidWeightsForBiPrediction(Block8x8Info* b8x8info, int mode)
   return invalid_mode;
 }
 
-int InvalidMotionVectors(Block8x8Info* b8x8info, int mode)
+int InvalidMotionVectors(ImageParameters *p_Img, Slice *currSlice, Block8x8Info* b8x8info, int mode)
 {
   int cur_blk;
   int l0ref, l1ref;
@@ -450,33 +533,33 @@ int InvalidMotionVectors(Block8x8Info* b8x8info, int mode)
   {
     i = (cur_blk & 0x01) << 1;
     j = (cur_blk >> 1) << 1;
-    switch (b8x8info->best8x8pdir[mode][cur_blk])
+    switch (b8x8info->best[mode][cur_blk].pdir)
     {
     case 0:
-      l0ref = (int) b8x8info->best8x8l0ref[mode][cur_blk];
-      if (out_of_bounds_mvs(img, img->all_mv [LIST_0][l0ref][mode][j][i]))
+      l0ref = (int) b8x8info->best[mode][cur_blk].ref[LIST_0];
+      if (out_of_bounds_mvs(p_Img, currSlice->all_mv [LIST_0][l0ref][mode][j][i]))
       {
         invalid_mode = 1;
         return invalid_mode;
       }
       break;
     case 1:
-      l1ref = (int) b8x8info->best8x8l1ref[mode][cur_blk];
-      if (out_of_bounds_mvs(img, img->all_mv [LIST_1][l1ref][mode][j][i]))
+      l1ref = (int) b8x8info->best[mode][cur_blk].ref[LIST_1];
+      if (out_of_bounds_mvs(p_Img, currSlice->all_mv [LIST_1][l1ref][mode][j][i]))
       {
         invalid_mode = 1;
         return invalid_mode;
       }
       break;
     case 2:
-      l0ref = (int) b8x8info->best8x8l0ref[mode][cur_blk];
-      l1ref = (int) b8x8info->best8x8l1ref[mode][cur_blk];
-      if (out_of_bounds_mvs(img, img->all_mv [LIST_0][l0ref][mode][j][i]))
+      l0ref = (int) b8x8info->best[mode][cur_blk].ref[LIST_0];
+      l1ref = (int) b8x8info->best[mode][cur_blk].ref[LIST_1];
+      if (out_of_bounds_mvs(p_Img, currSlice->all_mv [LIST_0][l0ref][mode][j][i]))
       {
         invalid_mode = 1;
         return invalid_mode;
       }
-      if (out_of_bounds_mvs(img, img->all_mv [LIST_1][l1ref][mode][j][i]))
+      if (out_of_bounds_mvs(p_Img, currSlice->all_mv [LIST_1][l1ref][mode][j][i]))
       {
         invalid_mode = 1;
         return invalid_mode;
@@ -490,17 +573,49 @@ int InvalidMotionVectors(Block8x8Info* b8x8info, int mode)
   return invalid_mode;
 }
 
-int CheckPredictionParams(pic_parameter_set_rbsp_t *active_pps, Block8x8Info *b8x8info, int mode, int bslice)
+Boolean CheckPredictionParams(Macroblock  *currMB, Block8x8Info *b8x8info, int mode)
 {
-  // check if weights are in valid range for biprediction.
-  if (bslice && active_pps->weighted_bipred_idc == 1 &&  mode < P8x8) 
+  Slice *currSlice = currMB->p_slice;
+  // check if all sub-macroblock partitions can be used with 8x8 transform
+  if (mode == P8x8 && currMB->luma_transform_size_8x8_flag == TRUE)
   {
-    if (InvalidWeightsForBiPrediction(b8x8info, mode))
-      return 0;
+    int i;
+
+    for (i = 0; i < 4; i++)
+    {
+      if (b8x8info->best[P8x8][i].mode != 4 &&  b8x8info->best[P8x8][i].mode != 0)
+      {
+        return FALSE;
+      }
+    }
   }
 
-  if (InvalidMotionVectors(b8x8info, mode))
-    return 0;
-  
-  return 1;
+  if (InvalidMotionVectors(currSlice->p_Img, currSlice, b8x8info, mode))
+    return FALSE;
+
+  if (currSlice->slice_type == B_SLICE)
+  {
+    // check if weights are in valid range for biprediction.
+    if (currSlice->weighted_prediction == 1 &&  mode < P8x8) 
+    {
+      if (InvalidWeightsForBiPrediction(currSlice, b8x8info, mode))
+        return FALSE;
+    }
+
+    // Check if direct mode can be utilized for this partition
+    if (mode==0)
+    {
+      int i, j;
+      for (j = currMB->block_y; j < currMB->block_y + 4;j++)
+      {
+        for (i = currMB->block_x; i < currMB->block_x + 4;i++)
+        {
+          if (currSlice->direct_pdir[j][i] < 0)  // direct_pdir should be moved and become part of p_Img parameters
+            return FALSE;
+        }
+      }
+    }
+  }
+
+  return TRUE;
 }

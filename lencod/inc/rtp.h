@@ -30,7 +30,7 @@ typedef struct
 {
   unsigned int v;          //!< Version, 2 bits, MUST be 0x2
   unsigned int p;          //!< Padding bit, Padding MUST NOT be used
-  unsigned int x;          //!< Extension, MUST be zero */
+  unsigned int x;          //!< Extension, MUST be zero
   unsigned int cc;         /*!< CSRC count, normally 0 in the absence
                                 of RTP mixers */
   unsigned int m;          //!< Marker bit
@@ -46,25 +46,24 @@ typedef struct
 } RTPpacket_t;
 
 #if 0
-int  ComposeRTPPacket (RTPpacket_t *p);
-int  DecomposeRTPpacket (RTPpacket_t *p);
-int  WriteRTPPacket (RTPpacket_t *p, FILE *f);
-void DumpRTPHeader (RTPpacket_t *p);
-void RTPUpdateTimestamp (int tr);
-int  RTPWriteBits (int Marker, int PacketType, void * bitstream,
+extern int  ComposeRTPPacket (RTPpacket_t *p);
+extern int  DecomposeRTPpacket (RTPpacket_t *p);
+extern int  WriteRTPPacket (RTPpacket_t *p, FILE *f);
+extern void DumpRTPHeader (RTPpacket_t *p);
+extern int  RTPWriteBits (int Marker, int PacketType, void * bitstream,
                    int BitStreamLenInByte, FILE *out);
 
-Boolean isAggregationPacket(void);
-int aggregationRTPWriteBits (int Marker, int PacketType, int subPacketType, void * bitstream, int BitStreamLenInByte, FILE *out);
+extern Boolean isAggregationPacket(ImageParameters *p_Img);
+extern int aggregationRTPWriteBits (int Marker, int PacketType, int subPacketType, void * bitstream, int BitStreamLenInByte, FILE *out);
 
-void begin_sub_sequence_rtp(void);
-void end_sub_sequence_rtp(void);
+extern void begin_sub_sequence_rtp(ImageParameters *p_Img, InputParameters *p_Inp);
+extern void end_sub_sequence_rtp  (ImageParameters *p_Img, InputParameters *p_Inp);
 #endif
 
-void RTPUpdateTimestamp (int tr);
-void OpenRTPFile (char *Filename);
-void CloseRTPFile (void);
-int WriteRTPNALU (NALU_t *n);
+extern void RTPUpdateTimestamp (ImageParameters *p_Img, int tr);
+extern void OpenRTPFile        (ImageParameters *p_Img, char *Filename);
+extern void CloseRTPFile       (ImageParameters *p_Img);
+extern int WriteRTPNALU        (ImageParameters *p_Img, NALU_t *n);
 
 
 

@@ -19,7 +19,7 @@
 #include "global.h"
 #include "mbuffer.h"
 
-extern int intrapred(ImageParameters *img, Macroblock *currMB, ColorPlane pl, int ioff, int joff, int img_block_x, int img_block_y);
+extern int intrapred(Macroblock *currMB, ColorPlane pl, int ioff, int joff, int img_block_x, int img_block_y);
 
 #endif
 

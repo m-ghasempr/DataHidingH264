@@ -137,7 +137,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				InlineFunctionExpansion="2"
-				AdditionalIncludeDirectories="lencod\inc"
+				AdditionalIncludeDirectories="lencod\inc;lcommon\inc"
 				PreprocessorDefinitions="WIN32;DEBUG;_CONSOLE;_CRT_SECURE_NO_DEPRECATE"
 				StringPooling="true"
 				RuntimeLibrary="0"
@@ -294,7 +294,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\src\img_io.c"
+				RelativePath=".\lcommon\src\img_io.c"
 				>
 			</File>
 			<File
@@ -302,11 +302,19 @@
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\src\img_process.c"
+				RelativePath=".\lcommon\src\img_process.c"
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\src\input.c"
+				RelativePath=".\lcommon\src\input.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\intra4x4.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\intra8x8.c"
 				>
 			</File>
 			<File
@@ -314,11 +322,11 @@
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\src\io_raw.c"
+				RelativePath=".\lcommon\src\io_raw.c"
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\src\io_tiff.c"
+				RelativePath=".\lcommon\src\io_tiff.c"
 				>
 			</File>
 			<File
@@ -330,11 +338,19 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lencod\src\list_reorder.c"
+				>
+			</File>
+			<File
 				RelativePath=".\lencod\src\loopFilter.c"
 				>
 			</File>
 			<File
 				RelativePath=".\lencod\src\macroblock.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\macroblock_P444.c"
 				>
 			</File>
 			<File
@@ -382,6 +398,18 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lencod\src\me_epzs_common.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\me_epzs_int.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\me_epzs_sub.c"
+				>
+			</File>
+			<File
 				RelativePath=".\lencod\src\me_fullfast.c"
 				>
 			</File>
@@ -398,7 +426,11 @@
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\src\memalloc.c"
+				RelativePath=".\lcommon\src\memalloc.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\mmco.c"
 				>
 			</File>
 			<File
@@ -406,7 +438,11 @@
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\src\mv-search.c"
+				RelativePath=".\lcommon\src\mv_prediction.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\mv_search.c"
 				>
 			</File>
 			<File
@@ -430,7 +466,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\src\parsetcommon.c"
+				RelativePath=".\lcommon\src\parsetcommon.c"
 				>
 			</File>
 			<File
@@ -506,6 +542,18 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lencod\src\rd_intra_jm444.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\rd_intra_jm_low.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\rd_pic_coding.c"
+				>
+			</File>
+			<File
 				RelativePath=".\lencod\src\rdopt.c"
 				>
 			</File>
@@ -530,10 +578,6 @@
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\src\refbuf.c"
-				>
-			</File>
-			<File
 				RelativePath=".\lencod\src\report.c"
 				>
 			</File>
@@ -554,11 +598,15 @@
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\src\transform.c"
+				RelativePath=".\lcommon\src\transform.c"
 				>
 			</File>
 			<File
 				RelativePath=".\lencod\src\transform8x8.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\transform8x8_H444.c"
 				>
 			</File>
 			<File
@@ -570,7 +618,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\src\win32.c"
+				RelativePath=".\lcommon\src\win32.c"
 				>
 			</File>
 			<File
@@ -627,7 +675,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\inc\ctx_tables.h"
+				RelativePath=".\lcommon\inc\ctx_tables.h"
 				>
 			</File>
 			<File
@@ -635,11 +683,15 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lcommon\inc\distortion.h"
+				>
+			</File>
+			<File
 				RelativePath=".\lencod\inc\elements.h"
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\inc\enc_statistics.h"
+				RelativePath=".\lcommon\inc\enc_statistics.h"
 				>
 			</File>
 			<File
@@ -667,7 +719,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\inc\frame.h"
+				RelativePath=".\lcommon\inc\frame.h"
 				>
 			</File>
 			<File
@@ -679,7 +731,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\inc\ifunctions.h"
+				RelativePath=".\lcommon\inc\ifunctions.h"
 				>
 			</File>
 			<File
@@ -707,7 +759,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\inc\img_io.h"
+				RelativePath=".\lcommon\inc\img_io.h"
 				>
 			</File>
 			<File
@@ -715,11 +767,19 @@
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\inc\img_process.h"
+				RelativePath=".\lcommon\inc\img_process.h"
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\inc\input.h"
+				RelativePath=".\lcommon\inc\input.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\inc\intra4x4.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\inc\intra8x8.h"
 				>
 			</File>
 			<File
@@ -727,19 +787,23 @@
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\inc\io_image.h"
+				RelativePath=".\lcommon\inc\io_image.h"
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\inc\io_raw.h"
+				RelativePath=".\lcommon\inc\io_raw.h"
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\inc\io_tiff.h"
+				RelativePath=".\lcommon\inc\io_tiff.h"
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\inc\io_video.h"
+				RelativePath=".\lcommon\inc\io_video.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lcommon\inc\lagrangian.h"
 				>
 			</File>
 			<File
@@ -747,11 +811,19 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lencod\inc\list_reorder.h"
+				>
+			</File>
+			<File
 				RelativePath=".\lencod\inc\macroblock.h"
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\inc\mb_access.h"
+				RelativePath=".\lencod\inc\macroblock_p444.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lcommon\inc\mb_access.h"
 				>
 			</File>
 			<File
@@ -767,11 +839,23 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lencod\inc\md_distortion.h"
+				>
+			</File>
+			<File
 				RelativePath=".\lencod\inc\me_distortion.h"
 				>
 			</File>
 			<File
 				RelativePath=".\lencod\inc\me_epzs.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\inc\me_epzs_common.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\inc\me_epzs_int.h"
 				>
 			</File>
 			<File
@@ -791,7 +875,11 @@
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\inc\memalloc.h"
+				RelativePath=".\lcommon\inc\memalloc.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\inc\mmco.h"
 				>
 			</File>
 			<File
@@ -799,7 +887,11 @@
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\inc\mv-search.h"
+				RelativePath=".\lcommon\inc\mv_prediction.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\inc\mv_search.h"
 				>
 			</File>
 			<File
@@ -811,11 +903,15 @@
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\inc\nalucommon.h"
+				RelativePath=".\lcommon\inc\nalucommon.h"
 				>
 			</File>
 			<File
 				RelativePath=".\lencod\inc\output.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lcommon\inc\params.h"
 				>
 			</File>
 			<File
@@ -847,6 +943,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lcommon\inc\quant_params.h"
+				>
+			</File>
+			<File
 				RelativePath=".\lencod\inc\quantChroma.h"
 				>
 			</File>
@@ -859,11 +959,15 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lencod\inc\rc_types.h"
+				>
+			</File>
+			<File
 				RelativePath=".\lencod\inc\rd_intra_jm.h"
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\inc\rdo_quant.h"
+				RelativePath=".\lencod\inc\rd_intra_jm444.h"
 				>
 			</File>
 			<File
@@ -883,7 +987,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\inc\report.h"
+				RelativePath=".\lcommon\inc\report.h"
 				>
 			</File>
 			<File
@@ -903,7 +1007,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\inc\transform.h"
+				RelativePath=".\lcommon\inc\transform.h"
 				>
 			</File>
 			<File
@@ -911,7 +1015,11 @@
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\inc\transform_wavelet.h"
+				RelativePath=".\lcommon\inc\typedefs.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lcommon\inc\types.h"
 				>
 			</File>
 			<File
@@ -919,7 +1027,11 @@
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\inc\win32.h"
+				RelativePath=".\lcommon\inc\vui_params.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lcommon\inc\win32.h"
 				>
 			</File>
 			<File

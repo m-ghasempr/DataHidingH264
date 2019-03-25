@@ -30,15 +30,16 @@
 #define REGMODE_INTRA_8x8        6
 
 //! YUV pixel domain image arrays for a video frame
-typedef struct
+typedef struct frame_s
 {
+  ImageParameters *p_Img;
   imgpel *yptr;
   imgpel *uptr;
   imgpel *vptr;
 } frame;
 
 //! region structure stores information about a region that is needed for concealment
-typedef struct
+typedef struct object_buffer
 {
   byte regionMode;  //!< region mode as above
   int xMin;         //!< X coordinate of the pixel position of the top-left corner of the region

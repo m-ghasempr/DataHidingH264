@@ -244,7 +244,7 @@ int u_v (int n, char *tracestring, int value, Bitstream *bitstream)
  */
 void ue_linfo(int ue, int dummy, int *len,int *info)
 {
-  int i, nn =(ue+1)>>1;
+  int i, nn =(ue + 1) >> 1;
 
   for (i=0; i < 33 && nn != 0; i++)
   {
@@ -292,9 +292,9 @@ void se_linfo(int se, int dummy, int *len,int *info)
  *    length and info
  ************************************************************************
  */
-void cbp_linfo_intra(int cbp, int dummy, int *len,int *info)
+void cbp_linfo_intra_other(int cbp, int dummy, int *len,int *info)
 {
-  ue_linfo(NCBP[((img->yuv_format!=0)&&(img->yuv_format!=3))][cbp][0], dummy, len, info);
+  ue_linfo(NCBP[0][cbp][0], dummy, len, info);
 }
 
 
@@ -306,11 +306,36 @@ void cbp_linfo_intra(int cbp, int dummy, int *len,int *info)
  *    length and info
  ************************************************************************
  */
-void cbp_linfo_inter(int cbp, int dummy, int *len,int *info)
+void cbp_linfo_intra_normal(int cbp, int dummy, int *len,int *info)
 {
-  ue_linfo(NCBP[((img->yuv_format!=0)&&(img->yuv_format!=3))][cbp][1], dummy, len, info);
+  ue_linfo(NCBP[1][cbp][0], dummy, len, info);
 }
 
+/*!
+ ************************************************************************
+ * \par Input:
+ *    Number in the code table
+ * \par Output:
+ *    length and info
+ ************************************************************************
+ */
+void cbp_linfo_inter_other(int cbp, int dummy, int *len,int *info)
+{
+  ue_linfo(NCBP[0][cbp][1], dummy, len, info);
+}
+
+/*!
+ ************************************************************************
+ * \par Input:
+ *    Number in the code table
+ * \par Output:
+ *    length and info
+ ************************************************************************
+ */
+void cbp_linfo_inter_normal(int cbp, int dummy, int *len,int *info)
+{
+  ue_linfo(NCBP[1][cbp][1], dummy, len, info);
+}
 
 /*!
  ************************************************************************
@@ -336,38 +361,26 @@ void levrun_linfo_c2x2(int level,int run,int *len,int *info)
     2,1,0,0
   };
 
-  int levabs,i,n,sign = 0,nn;
-
   if (level == 0) //  check if the coefficient sign EOB (level=0)
   {
     *len=1;
     return;
   }
-
-  if (level <= 0)
-  {
-    sign=1;
-  }
-
-  levabs = iabs(level);
-
-  if (levabs <= LEVRUN[run])
-  {
-    n = NTAB[levabs - 1][run] + 1;
-  }
   else
   {
-    n = (levabs - LEVRUN[run]) * 8 + run * 2;
-  }
+    int levabs = iabs(level);
+    int sign = level <= 0 ? 1 : 0;
+    int n = (levabs <= LEVRUN[run]) ? NTAB[levabs - 1][run] + 1 : (levabs - LEVRUN[run]) * 8 + run * 2;
+    int nn = n >> 1;
+    int i;
 
-  nn = n >> 1;
-
-  for (i=0; i < 16 && nn != 0; i++)
-  {
-    nn >>= 1;
+    for (i=0; i < 16 && nn != 0; i++)
+    {
+      nn >>= 1;
+    }
+    *len  = (i << 1) + 1;
+    *info = n - (1 << i) + sign;
   }
-  *len  = (i << 1) + 1;
-  *info = n - (1 << i) + sign;
 }
 
 
@@ -397,28 +410,29 @@ void levrun_linfo_inter(int level,int run,int *len,int *info)
     {29, 0, 0, 0, 0, 0, 0, 0, 0, 0},
   };
 
-  static int levabs,i,n,sign,nn;
-
   if (level == 0)           //  check for EOB
   {
     *len=1;
     return;
   }
-
-  sign   = (level <= 0) ? 1 : 0;
-  levabs = iabs(level);
-
-  n = (levabs <= LEVRUN[run]) ? NTAB[levabs - 1][run] + 1 : (levabs - LEVRUN[run]) * 32 + run * 2;
-
-  nn = n >> 1;
-
-  for (i=0; i < 16 && nn != 0; i++)
+  else
   {
-    nn >>= 1;
-  }
-  *len  = (i << 1) + 1;
-  *info = n - (1 << i) + sign;
 
+    int sign   = (level <= 0) ? 1 : 0;
+    int levabs = iabs(level);
+
+    int n = (levabs <= LEVRUN[run]) ? NTAB[levabs - 1][run] + 1 : (levabs - LEVRUN[run]) * 32 + run * 2;
+
+    int nn = n >> 1;
+    int i;
+
+    for (i=0; i < 16 && nn != 0; i++)
+    {
+      nn >>= 1;
+    }
+    *len  = (i << 1) + 1;
+    *info = n - (1 << i) + sign;
+  }
 }
 
 
@@ -433,7 +447,7 @@ void levrun_linfo_inter(int level,int run,int *len,int *info)
  *    Length : Total number of bits in the codeword
  ************************************************************************
  */
- // NOTE this function is called with sym->inf > (1<<(sym->len/2)).  The upper bits of inf are junk
+ // NOTE this function is called with sym->inf > (1<<(sym->len >> 1)).  The upper bits of inf are junk
 int symbol2uvlc(SyntaxElement *sym)
 {
   int suffix_len = sym->len >> 1;
@@ -497,11 +511,11 @@ void writeCBP_VLC (Macroblock* currMB, SyntaxElement *se, DataPartition *dp)
 {
   if (currMB->mb_type == I4MB || currMB->mb_type == SI4MB ||  currMB->mb_type == I8MB)
   {
-    cbp_linfo_intra (se->value1,se->value2,&(se->len),&(se->inf));
+    currMB->cbp_linfo_intra (se->value1, se->value2, &(se->len), &(se->inf));
   }
   else
   {
-    cbp_linfo_inter (se->value1,se->value2,&(se->len),&(se->inf));
+    currMB->cbp_linfo_inter (se->value1,se->value2,&(se->len),&(se->inf));
   }
   symbol2uvlc(se);
 
@@ -627,7 +641,7 @@ void  writeUVLC2buffer(SyntaxElement *se, Bitstream *currStream)
       }
     }
     // actual info
-    mask = 1 << 31;
+    mask = (unsigned int) 1 << 31;
     for (i = 0; i < 32; i++)
     {
       *byte_buf <<= 1;
@@ -901,7 +915,7 @@ int writeSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *se, DataPartition *dp
  *    write VLC for NumCoeff and TrailingOnes for Chroma DC
  ************************************************************************
  */
-int writeSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *se, DataPartition *dp)
+int writeSyntaxElement_NumCoeffTrailingOnesChromaDC(ImageParameters *p_Img, SyntaxElement *se, DataPartition *dp)
 {
   static const byte lentab[3][4][17] =
   {
@@ -940,8 +954,8 @@ int writeSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *se, DataParti
     { 0, 0, 1, 5, 5, 5, 5, 5,13, 9,13, 9,13, 9,13, 9, 5},
     { 0, 0, 0, 3, 3, 4, 4, 4, 4, 4,12,12, 8,12, 8,12, 8}}
 
-  };
-  int yuv = img->yuv_format - 1;
+  };  
+  int yuv = p_Img->yuv_format - 1;
 
   // se->value1 : numcoeff
   // se->value2 : numtrailingones
@@ -1050,7 +1064,7 @@ int writeSyntaxElement_TotalZeros(SyntaxElement *se, DataPartition *dp)
  *    write VLC for TotalZeros for Chroma DC
  ************************************************************************
  */
-int writeSyntaxElement_TotalZerosChromaDC(SyntaxElement *se, DataPartition *dp)
+int writeSyntaxElement_TotalZerosChromaDC(ImageParameters *p_Img, SyntaxElement *se, DataPartition *dp)
 {
   static const byte lentab[3][TOTRUN_NUM][16] =
   {
@@ -1116,7 +1130,7 @@ int writeSyntaxElement_TotalZerosChromaDC(SyntaxElement *se, DataPartition *dp)
     {0,1}}
   };
   int vlcnum = se->len;
-  int yuv = img->yuv_format - 1;  
+  int yuv = p_Img->yuv_format - 1;  
 
   // se->value1 : TotalZeros
   se->len = lentab[yuv][vlcnum][se->value1];
@@ -1349,25 +1363,24 @@ int bitcounter = 0;
  */
 void trace2out(SyntaxElement *sym)
 {
-  static
   int i, chars;
 
-  if (p_trace != NULL)
+  if (p_Enc->p_trace != NULL)
   {
-    putc('@', p_trace);
-    chars = fprintf(p_trace, "%i", bitcounter);
+    putc('@', p_Enc->p_trace);
+    chars = fprintf(p_Enc->p_trace, "%i", bitcounter);
     while(chars++ < 6)
-      putc(' ',p_trace);
+      putc(' ',p_Enc->p_trace);
 
-    chars += fprintf(p_trace, "%s", sym->tracestring);
+    chars += fprintf(p_Enc->p_trace, "%s", sym->tracestring);
     while(chars++ < 55)
-      putc(' ',p_trace);
+      putc(' ',p_Enc->p_trace);
 
     // align bit pattern
     if(sym->len<15)
     {
       for(i=0 ; i<15-sym->len ; i++)
-        fputc(' ', p_trace);
+        fputc(' ', p_Enc->p_trace);
     }
 
     // print bit pattern
@@ -1375,33 +1388,33 @@ void trace2out(SyntaxElement *sym)
     for(i=1 ; i<=sym->len ; i++)
     {
       if((sym->bitpattern >> (sym->len-i)) & 0x1)
-        fputc('1', p_trace);
+        fputc('1', p_Enc->p_trace);
       else
-        fputc('0', p_trace);
+        fputc('0', p_Enc->p_trace);
     }
-    fprintf(p_trace, " (%3d) \n",sym->value1);
+    fprintf(p_Enc->p_trace, " (%3d) \n",sym->value1);
   }
-  fflush (p_trace);
+  fflush (p_Enc->p_trace);
 }
 
 void trace2out_cabac(SyntaxElement *sym)
 {
   int chars;
 
-  if (p_trace != NULL)
+  if (p_Enc->p_trace != NULL)
   {
-    putc('@', p_trace);
-    chars = fprintf(p_trace, "%i", bitcounter);
+    putc('@', p_Enc->p_trace);
+    chars = fprintf(p_Enc->p_trace, "%i", bitcounter);
     while(chars++ < 6)
-      putc(' ',p_trace);
+      putc(' ',p_Enc->p_trace);
 
-    chars += fprintf(p_trace, "%s", sym->tracestring);
+    chars += fprintf(p_Enc->p_trace, "%s", sym->tracestring);
     while(chars++ < 70)
-      putc(' ',p_trace);
+      putc(' ',p_Enc->p_trace);
 
-    fprintf(p_trace, " (%3d) \n",sym->value1);
+    fprintf(p_Enc->p_trace, " (%3d) \n",sym->value1);
   }
-  fflush (p_trace);
+  fflush (p_Enc->p_trace);
   bitcounter += sym->len;
 }
 #endif
@@ -1413,6 +1426,8 @@ void trace2out_cabac(SyntaxElement *sym)
  *    puts the less than 8 bits in the byte buffer of the Bitstream into
  *    the streamBuffer.
  *
+ * \param p_Img
+ *    ImageParameters for current picture encoding
  * \param currStream
  *    the Bitstream the alignment should be established
  * \param cur_stats
@@ -1420,13 +1435,13 @@ void trace2out_cabac(SyntaxElement *sym)
  *
  ************************************************************************
  */
-void writeVlcByteAlign(Bitstream* currStream, StatParameters *cur_stats)
+void writeVlcByteAlign(ImageParameters *p_Img, Bitstream* currStream, StatParameters *cur_stats)
 {
   if (currStream->bits_to_go < 8)
   { // trailing bits to process
-    currStream->byte_buf = (currStream->byte_buf << currStream->bits_to_go) | (0xff >> (8 - currStream->bits_to_go));
+    currStream->byte_buf = (byte) ((currStream->byte_buf << currStream->bits_to_go) | (0xff >> (8 - currStream->bits_to_go)));
     currStream->streamBuffer[currStream->byte_pos++] = currStream->byte_buf;
-    cur_stats->bit_use_stuffingBits[img->type] += currStream->bits_to_go;    
+    cur_stats->bit_use_stuffingBits[p_Img->type] += currStream->bits_to_go;    
     currStream->bits_to_go = 8;
   }
 }
@@ -1434,10 +1449,25 @@ void writeVlcByteAlign(Bitstream* currStream, StatParameters *cur_stats)
 /*!
  ************************************************************************
  * \brief
- *    Resets the nz_coeff params for a macroblock
+ *    Resets the nz_coeff parameters for a macroblock
  ************************************************************************/
-void reset_mb_nz_coeff(int mb_number)
+void reset_mb_nz_coeff(ImageParameters *p_Img, int mb_number)
 {
-   memset(&img->nz_coeff [mb_number][0][0], 0, BLOCK_SIZE * (BLOCK_SIZE + img->num_blk8x8_uv) * sizeof(int));
+   memset(&p_Img->nz_coeff [mb_number][0][0], 0, BLOCK_SIZE * (BLOCK_SIZE + p_Img->num_blk8x8_uv) * sizeof(int));
 }
 
+
+void writeUVLC_CAVLC(Macroblock *currMB, SyntaxElement *se, DataPartition *dp)
+{
+  writeSE_UVLC(se, dp);
+}
+
+void writeSVLC_CAVLC(Macroblock *currMB, SyntaxElement *se, DataPartition *dp)
+{
+  writeSE_SVLC(se, dp);
+}
+
+void writeFlag_CAVLC(Macroblock *currMB, SyntaxElement *se, DataPartition *dp)
+{
+  writeSE_Flag(se, dp);
+}

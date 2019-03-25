@@ -16,7 +16,7 @@ M32?= 0
 ### include O level optimization : 0-3
 OPT?= 3
 ### Static Compilation
-STC?= 1
+STC?= 0
 
 DEPEND= dependencies
 

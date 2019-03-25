@@ -25,23 +25,10 @@
 
 #include "me_distortion.h"
 #include "me_fullsearch.h"
+#include "me_fullfast.h"
 #include "conformance.h"
-#include "mv-search.h"
+#include "mv_search.h"
 
-// Define External Global Parameters
-extern short*   spiral_search_x;
-extern short*   spiral_search_y;
-
-/*****
- *****  static variables for fast integer motion estimation
- *****
- */
-static int  **search_setup_done;  //!< flag if all block SAD's have been calculated yet
-static int  **search_center_x;    //!< absolute search center for fast full motion search
-static int  **search_center_y;    //!< absolute search center for fast full motion search
-static int  **pos_00;             //!< position of (0,0) vector
-static distpel  *****BlockSAD;        //!< SAD for all blocksize, ref. frames and motion vectors
-static int  **max_search_range;
 
 // Functions
 /*!
@@ -58,74 +45,82 @@ static int  **max_search_range;
  *    function creating arrays for fast integer motion estimation
  ***********************************************************************
  */
-void InitializeFastFullIntegerSearch (void)
+void InitializeFastFullIntegerSearch (ImageParameters *p_Img, InputParameters *p_Inp)
 {
   int  i, j, k, list;
-  int  search_range = params->search_range;
+  int  search_range = p_Inp->search_range;
   int  max_pos      = (2*search_range+1) * (2*search_range+1);
+  MEFullFast *p_me_ffast = NULL;
+   
+   if ((p_Img->p_ffast_me = calloc (1, sizeof (MEFullFast))) == NULL) 
+    no_mem_exit ("InitializeFastFullIntegerSearch: p_Img->p_ffast_me");
+   p_me_ffast = p_Img->p_ffast_me;
 
-  if ((BlockSAD = (distpel*****)malloc (2 * sizeof(distpel****))) == NULL)
-    no_mem_exit ("InitializeFastFullIntegerSearch: BlockSAD");
+  if ((p_me_ffast->BlockSAD = (distpel*****)malloc (2 * sizeof(distpel****))) == NULL)
+    no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->BlockSAD");
 
   for (list=0; list<2;list++)
   {
-    if ((BlockSAD[list] = (distpel****)malloc ((img->max_num_references) * sizeof(distpel***))) == NULL)
-      no_mem_exit ("InitializeFastFullIntegerSearch: BlockSAD");
-    for (i = 0; i < img->max_num_references; i++)
+    if ((p_me_ffast->BlockSAD[list] = (distpel****)malloc ((p_Img->max_num_references) * sizeof(distpel***))) == NULL)
+      no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->BlockSAD");
+    for (i = 0; i < p_Img->max_num_references; i++)
     {
-      if ((BlockSAD[list][i] = (distpel***)malloc (8 * sizeof(distpel**))) == NULL)
-        no_mem_exit ("InitializeFastFullIntegerSearch: BlockSAD");
+      if ((p_me_ffast->BlockSAD[list][i] = (distpel***)malloc (8 * sizeof(distpel**))) == NULL)
+        no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->BlockSAD");
       for (j = 1; j < 8; j++)
       {
-        if ((BlockSAD[list][i][j] = (distpel**)malloc (16 * sizeof(distpel*))) == NULL)
-          no_mem_exit ("InitializeFastFullIntegerSearch: BlockSAD");
+        if ((p_me_ffast->BlockSAD[list][i][j] = (distpel**)malloc (16 * sizeof(distpel*))) == NULL)
+          no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->BlockSAD");
         for (k = 0; k < 16; k++)
         {
-          if ((BlockSAD[list][i][j][k] = (distpel*)malloc (max_pos * sizeof(distpel))) == NULL)
-            no_mem_exit ("InitializeFastFullIntegerSearch: BlockSAD");
+          if ((p_me_ffast->BlockSAD[list][i][j][k] = (distpel*)malloc (max_pos * sizeof(distpel))) == NULL)
+            no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->BlockSAD");
         }
       }
     }
   }
 
-  if ((search_setup_done = (int**)malloc (2*sizeof(int*)))==NULL)
-    no_mem_exit ("InitializeFastFullIntegerSearch: search_setup_done");
-  if ((search_center_x = (int**)malloc (2*sizeof(int*)))==NULL)
-    no_mem_exit ("InitializeFastFullIntegerSearch: search_center_x");
-  if ((search_center_y = (int**)malloc (2*sizeof(int*)))==NULL)
-    no_mem_exit ("InitializeFastFullIntegerSearch: search_center_y");
-  if ((pos_00 = (int**)malloc (2*sizeof(int*)))==NULL)
-    no_mem_exit ("InitializeFastFullIntegerSearch: pos_00");
-  if ((max_search_range = (int**)malloc (2*sizeof(int*)))==NULL)
-    no_mem_exit ("InitializeFastFullIntegerSearch: max_search_range");
+  if ((p_me_ffast->search_setup_done = (int**)malloc (2*sizeof(int*)))==NULL)
+    no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->search_setup_done");
+  if ((p_me_ffast->search_center = (MotionVector**) malloc (2 * sizeof(MotionVector*)))==NULL)
+    no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->search_center");
+  if ((p_me_ffast->search_center_padded = (MotionVector**) malloc (2 * sizeof(MotionVector*)))==NULL)
+    no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->search_center_padded");
+
+  if ((p_me_ffast->pos_00 = (int**)malloc (2*sizeof(int*)))==NULL)
+    no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->pos_00");
+  if ((p_me_ffast->max_search_range = (int**)malloc (2*sizeof(int*)))==NULL)
+    no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->max_search_range");
 
   for (list=0; list<2; list++)
   {
-    if ((search_setup_done[list] = (int*)malloc ((img->max_num_references)*sizeof(int)))==NULL)
-      no_mem_exit ("InitializeFastFullIntegerSearch: search_setup_done");
-    if ((search_center_x[list] = (int*)malloc ((img->max_num_references)*sizeof(int)))==NULL)
-      no_mem_exit ("InitializeFastFullIntegerSearch: search_center_x");
-    if ((search_center_y[list] = (int*)malloc ((img->max_num_references)*sizeof(int)))==NULL)
-      no_mem_exit ("InitializeFastFullIntegerSearch: search_center_y");
-    if ((pos_00[list] = (int*)malloc ((img->max_num_references)*sizeof(int)))==NULL)
-      no_mem_exit ("InitializeFastFullIntegerSearch: pos_00");
-    if ((max_search_range[list] = (int*)malloc ((img->max_num_references)*sizeof(int)))==NULL)
-      no_mem_exit ("InitializeFastFullIntegerSearch: max_search_range");
+    if ((p_me_ffast->search_setup_done[list] = (int*)malloc ((p_Img->max_num_references)*sizeof(int)))==NULL)
+      no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->search_setup_done");
+    if ((p_me_ffast->search_center[list] = (MotionVector*) malloc ((p_Img->max_num_references) * sizeof(MotionVector)))==NULL)
+      no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->search_center");
+    if ((p_me_ffast->search_center_padded[list] = (MotionVector*) malloc ((p_Img->max_num_references) * sizeof(MotionVector)))==NULL)
+      no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->search_center_padded");
+
+
+    if ((p_me_ffast->pos_00[list] = (int*)malloc ((p_Img->max_num_references)*sizeof(int)))==NULL)
+      no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->pos_00");
+    if ((p_me_ffast->max_search_range[list] = (int*)malloc ((p_Img->max_num_references)*sizeof(int)))==NULL)
+      no_mem_exit ("InitializeFastFullIntegerSearch: p_me_ffast->max_search_range");
   }
 
   // assign max search ranges for reference frames
-  if (params->full_search == 2)
+  if (p_Inp->full_search == 2)
   {
     for (list=0;list<2;list++)
-      for (i=0; i<img->max_num_references; i++)
-        max_search_range[list][i] = search_range;
+      for (i=0; i<p_Img->max_num_references; i++)
+        p_me_ffast->max_search_range[list][i] = search_range;
   }
   else
   {
     for (list=0;list<2;list++)
     {
-      max_search_range[list][0] = search_range;
-      for (i=1; i< img->max_num_references; i++)  max_search_range[list][i] = search_range / 2;
+      p_me_ffast->max_search_range[list][0] = search_range;
+      for (i=1; i< p_Img->max_num_references; i++)  p_me_ffast->max_search_range[list][i] = search_range / 2;
     }
   }
 }
@@ -137,41 +132,43 @@ void InitializeFastFullIntegerSearch (void)
  ***********************************************************************
  */
 void
-ClearFastFullIntegerSearch ()
+ClearFastFullIntegerSearch (ImageParameters *p_Img)
 {
   int  i, j, k, list;
+  MEFullFast *p_me_ffast = p_Img->p_ffast_me;
 
   for (list=0; list<2; list++)
   {
-    for (i = 0; i < img->max_num_references; i++)
+    for (i = 0; i < p_Img->max_num_references; i++)
     {
       for (j = 1; j < 8; j++)
       {
         for (k = 0; k < 16; k++)
         {
-          free (BlockSAD[list][i][j][k]);
+          free (p_me_ffast->BlockSAD[list][i][j][k]);
         }
-        free (BlockSAD[list][i][j]);
+        free (p_me_ffast->BlockSAD[list][i][j]);
       }
-      free (BlockSAD[list][i]);
+      free (p_me_ffast->BlockSAD[list][i]);
     }
-    free (BlockSAD[list]);
+    free (p_me_ffast->BlockSAD[list]);
   }
-  free (BlockSAD);
+  free (p_me_ffast->BlockSAD);
 
   for (list=0; list<2; list++)
   {
-    free (search_setup_done[list]);
-    free (search_center_x[list]);
-    free (search_center_y[list]);
-    free (pos_00[list]);
-    free (max_search_range[list]);
+    free (p_me_ffast->search_setup_done[list]);
+    free (p_me_ffast->search_center_padded[list]);
+    free (p_me_ffast->search_center[list]);
+    free (p_me_ffast->pos_00[list]);
+    free (p_me_ffast->max_search_range[list]);
   }
-  free (search_setup_done);
-  free (search_center_x);
-  free (search_center_y);
-  free (pos_00);
-  free (max_search_range);
+  free (p_me_ffast->search_setup_done);
+  free (p_me_ffast->search_center_padded);
+  free (p_me_ffast->search_center);
+  free (p_me_ffast->pos_00);
+  free (p_me_ffast->max_search_range);
+  free (p_me_ffast);
 
 }
 
@@ -183,11 +180,11 @@ ClearFastFullIntegerSearch ()
  *    (have to be called in start_macroblock())
  ***********************************************************************
  */
-void ResetFastFullIntegerSearch ()
+void ResetFastFullIntegerSearch (ImageParameters *p_Img)
 {
   int list;
   for (list=0; list<2; list++)
-    memset(&search_setup_done [list][0], 0, img->max_num_references * sizeof(int));
+    memset(&p_Img->p_ffast_me->search_setup_done [list][0], 0, p_Img->max_num_references * sizeof(int));
 }
 /*!
  ***********************************************************************
@@ -196,14 +193,15 @@ void ResetFastFullIntegerSearch ()
  ***********************************************************************
  */
 void
-SetupLargerBlocks (int list, int refindex, int max_pos)
+SetupLargerBlocks (MEFullFast *p_ffast_me, int list, int refindex, int max_pos)
 {
 #define ADD_UP_BLOCKS()   _o=*_bo; _i=*_bi; _j=*_bj; for(pos=0;pos<max_pos;pos++) _o[pos] = _i[pos] + _j[pos];
 #define INCREMENT(inc)    _bo+=inc; _bi+=inc; _bj+=inc;
+  distpel  *****BlockSAD = p_ffast_me->BlockSAD;
 
   int       pos;
   distpel   **_bo, **_bi, **_bj;
-  register distpel *_o,   *_i,   *_j;
+  distpel *_o,   *_i,   *_j;
 
   //--- blocktype 6 ---
   _bo = BlockSAD[list][refindex][6];
@@ -268,347 +266,132 @@ SetupLargerBlocks (int list, int refindex, int max_pos)
  *    Setup the fast search for an macroblock
  ***********************************************************************
  */
-#define GEN_ME 0
-#if GEN_ME
-void SetupFastFullPelSearch (Macroblock *currMb, short ref, int list)  // <--  reference frame parameter, list0 or 1
+void SetupFastFullPelSearch (Macroblock *currMB, MEBlock *mv_block, int list)  // <--  reference frame parameter, list0 or 1
 {
+  Slice *currSlice = currMB->p_slice;
+  ImageParameters *p_Img = currSlice->p_Img;
+  InputParameters *p_Inp = currSlice->p_Inp;
+  PicMotionParams *motion = &p_Img->enc_picture->motion;
+  int (*dist_method) (int x) = p_Inp->MEErrorMetric[0] ? iabs2 : iabs;
+#if (JM_MEM_DISTORTION)
+  int*    imgpel_dist   = p_Inp->MEErrorMetric[0] ? p_Img->imgpel_quad : p_Img->imgpel_abs;
+#endif
   short   pmv[2];
-  MotionVector mv;
-  static imgpel   orig_pels[768];
-
-  imgpel  *srcptr = orig_pels;
-  int     offset_x, offset_y, range_partly_outside, ref_x, ref_y, pos, abs_x, abs_y, bindex, blky;
-  int     max_width, max_height;
-  int     img_width, img_height;
-
-  StorablePicture *ref_picture;
-  distpel**   block_sad = BlockSAD[list][ref][7];
-  int     search_range  = max_search_range[list][ref];
-  int     max_pos       = (2*search_range+1) * (2*search_range+1);
-
-  int     list_offset   = img->mb_data[img->current_mb_nr].list_offset;
-
-  int     apply_weights = ( (active_pps->weighted_pred_flag && (img->type == P_SLICE || img->type == SP_SLICE)) ||
-    (active_pps->weighted_bipred_idc && (img->type == B_SLICE))) && params->UseWeightedReferenceME;
-  int abs_y4, abs_x4;
-
-  int   i, j, k;
-  int   level_dist = F_PEL + apply_weights * 3;
-  int   pixel_x, pixel_y;
-
-
-  for ( j= img->opix_y; j < img->opix_y + MB_BLOCK_SIZE; j +=BLOCK_SIZE)
-  {
-    for (pixel_y = j; pixel_y < j + BLOCK_SIZE; pixel_y++)
-    {
-      memcpy( srcptr, &pCurImg[pixel_y][img->opix_x], BLOCK_SIZE * sizeof(imgpel));
-      memcpy( srcptr + 16, &pCurImg[pixel_y][img->opix_x + BLOCK_SIZE], BLOCK_SIZE * sizeof(imgpel));
-      memcpy( srcptr + 32, &pCurImg[pixel_y][img->opix_x + 2 * BLOCK_SIZE], BLOCK_SIZE * sizeof(imgpel));
-      memcpy( srcptr + 48, &pCurImg[pixel_y][img->opix_x + 3 * BLOCK_SIZE], BLOCK_SIZE * sizeof(imgpel));
-      srcptr += BLOCK_SIZE;
-    }
-    srcptr += 48;
-  }
-  // storage format is different from that of orig_pic
-  // for YUV 4:2:0 we have:
-  // YYYY
-  // YYYY
-  // U U
-  //
-  // V V
-  //
-  if (ChromaMEEnable)
-  {
-    imgpel *auxptr;
-    int   uv;
-    int   bsx_c = BLOCK_SIZE >> (chroma_shift_x - 2);
-    int   bsy_c = BLOCK_SIZE >> (chroma_shift_y - 2);
-    int   pic_pix_x_c = img->opix_x >> (chroma_shift_x - 2);
-    int   pic_pix_y_c = img->opix_y >> (chroma_shift_y - 2);
-
-    // copy the original cmp1 and cmp2 data to the orig_pic matrix
-    // This seems to be wrong.
-    for (uv = 1; uv < 3; uv++)
-    {
-      srcptr = auxptr = orig_pels + (256 << (uv - 1));
-      for ( pixel_y = 0, i = 0; i < (BLOCK_SIZE >> (chroma_shift_y - 2)); i++, pixel_y += bsy_c )
-      {
-        for ( pixel_x = 0, k = 0; k < (BLOCK_SIZE >> (chroma_shift_x - 2)); k++, pixel_x += bsx_c )
-        {
-          srcptr = auxptr;
-          for (j = 0; j < bsy_c; j++)
-          {
-            memcpy( srcptr, &pImgOrg[uv][pic_pix_y_c + pixel_y + j][pic_pix_x_c + pixel_x], bsx_c * sizeof(imgpel));
-            srcptr += bsx_c;
-          }
-          auxptr += MB_BLOCK_SIZE;
-        }
-      }
-    }
-  }
-
-
-  ref_picture     = listX[list+list_offset][ref];
-
-  //===== Use weighted Reference for ME ====
-  ref_pic_sub.luma = ref_picture->p_curr_img_sub;
-
-  if (apply_weights)
-  {
-    weight_luma = wp_weight[list + list_offset][ref][0];
-    offset_luma = wp_offset[list + list_offset][ref][0];
-  }
-
-  if ( ChromaMEEnable)
-  {
-    ref_pic_sub.crcb[0] = ref_picture->imgUV_sub[0];
-    ref_pic_sub.crcb[1] = ref_picture->imgUV_sub[1];
-    width_pad_cr  = ref_picture->size_x_cr_pad;
-    height_pad_cr = ref_picture->size_y_cr_pad;
-    if (apply_weights)
-    {
-      weight_cr[0] = wp_weight[list + list_offset][ref][1];
-      weight_cr[1] = wp_weight[list + list_offset][ref][2];
-      offset_cr[0] = wp_offset[list + list_offset][ref][1];
-      offset_cr[1] = wp_offset[list + list_offset][ref][2];
-    }
-  }
-
-  max_width     = ref_picture->size_x - 17;
-  max_height    = ref_picture->size_y - 17;
-
-  img_width     = ref_picture->size_x;
-  img_height    = ref_picture->size_y;
-  width_pad     = ref_picture->size_x_pad;
-  height_pad    = ref_picture->size_y_pad;
-
-  //===== get search center: predictor of 16x16 block =====
-  get_neighbors(currMB, &block_a, &block_b, &block_c, &block_d, 0, 0, 16);
-  GetMotionVectorPredictor (currMB, &block_a, &block_b, &block_c, pmv, enc_picture->motion.ref_idx[list], enc_picture->motion.mv[list], ref, 0, 0, 16, 16);
-
-  mv.mv_x = pmv[0] / 4;
-  mv.mv_y = pmv[1] / 4;
-
-  if (!params->rdopt)
-  {
-    //--- correct center so that (0,0) vector is inside ---
-    mv.mv_x = iClip3(-search_range, search_range, mv.mv_x);
-    mv.mv_y = iClip3(-search_range, search_range, mv.mv_y);
-  }
-
-  clip_mv_range(img, search_range, &mv, F_PEL);
-
-  search_center_x[list][ref] = mv.mv_x + img->opix_x;
-  search_center_y[list][ref] = mv.mv_y + img->opix_y;
-
-  offset_x = search_center_x[list][ref];
-  offset_y = search_center_y[list][ref];
-
-
-  //===== check if whole search range is inside image =====
-  if (offset_x >= search_range && offset_x <= max_width  - search_range &&
-    offset_y >= search_range && offset_y <= max_height - search_range   )
-  {
-    range_partly_outside = 0;
-  }
-  else
-  {
-    range_partly_outside = 1;
-  }
-
-  //===== determine position of (0,0)-vector =====
-  if (!params->rdopt)
-  {
-    ref_x = img->opix_x - offset_x;
-    ref_y = img->opix_y - offset_y;
-
-    for (pos = 0; pos < max_pos; pos++)
-    {
-      if (ref_x == spiral_search_x[pos] &&
-        ref_y == spiral_search_y[pos])
-      {
-        pos_00[list][ref] = pos;
-        break;
-      }
-    }
-  }
-
-  //===== loop over search range (spiral search): get blockwise SAD =====
-  for (pos = 0; pos < max_pos; pos++)
-  {
-    abs_y = offset_y + spiral_search_y[pos];
-    abs_x = offset_x + spiral_search_x[pos];
-
-    abs_y4 = (abs_y + IMG_PAD_SIZE) << 2;
-    abs_x4 = (abs_x + IMG_PAD_SIZE) << 2;
-
-    srcptr = orig_pels;
-    bindex = 0;
-    for (blky = 0; blky < 4; blky++)
-    {
-      block_sad[bindex++][pos] = computeUniPred[level_dist](srcptr, 4, 4, INT_MAX, abs_x4,      abs_y4);
-      srcptr += 16;
-      block_sad[bindex++][pos] = computeUniPred[level_dist](srcptr, 4, 4, INT_MAX, abs_x4 + 16, abs_y4);
-      srcptr += 16;
-      block_sad[bindex++][pos] = computeUniPred[level_dist](srcptr, 4, 4, INT_MAX, abs_x4 + 32, abs_y4);
-      srcptr += 16;
-      block_sad[bindex++][pos] = computeUniPred[level_dist](srcptr, 4, 4, INT_MAX, abs_x4 + 48, abs_y4);
-      srcptr += 16;
-      abs_y4 += 16;
-    }
-  }
-
-  //===== combine SAD's for larger block types =====
-  SetupLargerBlocks (list, ref, max_pos);
-
-  //===== set flag marking that search setup have been done =====
-  search_setup_done[list][ref] = 1;
-}
-
-#else
-void SetupFastFullPelSearch (Macroblock *currMB, short ref, int list)  // <--  reference frame parameter, list0 or 1
-{
-  short   pmv[2];
-  static imgpel orig_pels[768];
+  imgpel orig_pels[768];
   imgpel  *srcptr = orig_pels, *refptr;
   int     k, x, y;
-  int     abs_y4, abs_x4;
-  int     offset_x, offset_y, range_partly_outside, ref_x, ref_y, pos, abs_x, abs_y, bindex, blky;
-  int     LineSadBlk0, LineSadBlk1, LineSadBlk2, LineSadBlk3;
-  int     max_width, max_height;
-  int     img_width, img_height;
-  static PixelPos block_a, block_b, block_c, block_d;  // neighbor blocks
+  MotionVector cand, offset;
+  int     ref_x, ref_y, pos, bindex, blky;
+  int  LineSadBlk0, LineSadBlk1, LineSadBlk2, LineSadBlk3;
+  PixelPos block[4];  // neighbor blocks
+  MEFullFast *p_me_ffast = p_Img->p_ffast_me;
 
-  StorablePicture *ref_picture;
-  distpel**   block_sad = BlockSAD[list][ref][7];
-  int     search_range  = max_search_range[list][ref];
+
+  short ref = mv_block->ref_idx;
+  distpel**   block_sad = p_me_ffast->BlockSAD[list][ref][7];
+  int     search_range  = p_me_ffast->max_search_range[list][ref];
   int     max_pos       = (2*search_range+1) * (2*search_range+1);
 
-  int     list_offset   = img->mb_data[img->current_mb_nr].list_offset;
-  int     apply_weights = ( (active_pps->weighted_pred_flag && (img->type == P_SLICE || img->type == SP_SLICE)) ||
-    (active_pps->weighted_bipred_idc && (img->type == B_SLICE))) && params->UseWeightedReferenceME;
+  int     list_offset   = p_Img->mb_data[currMB->mbAddrX].list_offset;
+  int     apply_weights = ( (p_Img->active_pps->weighted_pred_flag && (currSlice->slice_type == P_SLICE || currSlice->slice_type == SP_SLICE)) ||
+    (p_Img->active_pps->weighted_bipred_idc && (currSlice->slice_type == B_SLICE))) && p_Inp->UseWeightedReferenceME;
   int     weighted_pel;
-  int *dist_method = params->MEErrorMetric[0] ? img->quad : byte_abs;
+  StorablePicture *ref_picture = p_Img->listX[list+list_offset][ref];
 
-  ref_picture     = listX[list+list_offset][ref];
-
-  ref_pic_sub.luma = ref_picture->p_curr_img_sub;
-
-  max_width     = ref_picture->size_x - 17;
-  max_height    = ref_picture->size_y - 17;
-
-  img_width     = ref_picture->size_x;
-  img_height    = ref_picture->size_y;
-  width_pad     = ref_picture->size_x_pad;
-  height_pad    = ref_picture->size_y_pad;
-
-  if (apply_weights)
-  {
-    weight_luma = wp_weight[list + list_offset][ref][0];
-    offset_luma = wp_offset[list + list_offset][ref][0];
-  }
-
-  if ( ChromaMEEnable)
-  {
-    ref_pic_sub.crcb[0] = ref_picture->imgUV_sub[0];
-    ref_pic_sub.crcb[1] = ref_picture->imgUV_sub[1];
-    width_pad_cr  = ref_picture->size_x_cr_pad;
-    height_pad_cr = ref_picture->size_y_cr_pad;
-
-    if (apply_weights)
-    {
-      weight_cr[0] = wp_weight[list + list_offset][ref][1];
-      weight_cr[1] = wp_weight[list + list_offset][ref][2];
-      offset_cr[0] = wp_offset[list + list_offset][ref][1];
-      offset_cr[1] = wp_offset[list + list_offset][ref][2];
-    }
-  }
+  int   wp_luma_round = 0;
+  short luma_log_weight_denom  = 5;
+  short chroma_log_weight_denom = 5;
+  int   wp_chroma_round = 0;
+  short weight_luma = mv_block->weight_luma, weight_cr[2];
+  short offset_luma = mv_block->offset_luma, offset_cr[2];
+  search_range <<= 2;  
 
   //===== get search center: predictor of 16x16 block =====
-  get_neighbors(currMB, &block_a, &block_b, &block_c, &block_d, 0, 0, 16);
-  GetMotionVectorPredictor (currMB, &block_a, &block_b, &block_c, pmv, enc_picture->motion.ref_idx[list], enc_picture->motion.mv[list], ref, 0, 0, 16, 16);
+  get_neighbors(currMB, block, 0, 0, 16);
+  currMB->GetMVPredictor (currMB, block, pmv, ref, motion->ref_idx[list], motion->mv[list], 0, 0, 16, 16);
 
-  search_center_x[list][ref] = pmv[0] / 4;
-  search_center_y[list][ref] = pmv[1] / 4;
-
-  if (!params->rdopt)
+#if (JM_INT_DIVIDE)
+  p_Img->p_ffast_me->search_center[list][ref].mv_x = ((pmv[0] + 2) >> 2) * 4;
+  p_Img->p_ffast_me->search_center[list][ref].mv_y = ((pmv[1] + 2) >> 2) * 4;
+#else
+  p_Img->p_ffast_me->search_center[list][ref].mv_x = (pmv[0] / 4) * 4;
+  p_Img->p_ffast_me->search_center[list][ref].mv_y = (pmv[1] / 4) * 4;
+#endif
+  if (!p_Inp->rdopt)
   {
     //--- correct center so that (0,0) vector is inside ---
-    search_center_x[list][ref] = iClip3(-search_range, search_range, search_center_x[list][ref]);
-    search_center_y[list][ref] = iClip3(-search_range, search_range, search_center_y[list][ref]);
+    p_Img->p_ffast_me->search_center[list][ref].mv_x = (short) iClip3(-search_range, search_range, p_Img->p_ffast_me->search_center[list][ref].mv_x);
+    p_Img->p_ffast_me->search_center[list][ref].mv_y = (short) iClip3(-search_range, search_range, p_Img->p_ffast_me->search_center[list][ref].mv_y);
   }
 
-  search_center_x[list][ref] = iClip3(img->MaxHmvR[0] + search_range, img->MaxHmvR[1] - search_range, search_center_x[list][ref]);
-  search_center_y[list][ref] = iClip3(img->MaxVmvR[0] + search_range, img->MaxVmvR[1] - search_range, search_center_y[list][ref]);
+  p_Img->p_ffast_me->search_center[list][ref].mv_x = (short) iClip3(p_Img->MaxHmvR[4] + search_range, p_Img->MaxHmvR[5] - search_range, p_Img->p_ffast_me->search_center[list][ref].mv_x);
+  p_Img->p_ffast_me->search_center[list][ref].mv_y = (short) iClip3(p_Img->MaxVmvR[4] + search_range, p_Img->MaxVmvR[5] - search_range, p_Img->p_ffast_me->search_center[list][ref].mv_y);
 
-  search_center_x[list][ref] += img->opix_x;
-  search_center_y[list][ref] += img->opix_y;
+  p_Img->p_ffast_me->search_center_padded[list][ref] = pad_MVs(p_Img->p_ffast_me->search_center[list][ref], mv_block);
 
-  offset_x = search_center_x[list][ref];
-  offset_y = search_center_y[list][ref];
-
-
+  offset = p_Img->p_ffast_me->search_center_padded[list][ref];
   //===== copy original block for fast access =====
-  for   (y = img->opix_y; y < img->opix_y+MB_BLOCK_SIZE; y++)
+  for   (y = currMB->opix_y; y < currMB->opix_y + MB_BLOCK_SIZE; y++)
   {
-    memcpy(srcptr, &pCurImg[y][img->opix_x], MB_BLOCK_SIZE * sizeof(imgpel));
+    memcpy(srcptr, &p_Img->pCurImg[y][currMB->pix_x], MB_BLOCK_SIZE * sizeof(imgpel));
     srcptr += MB_BLOCK_SIZE;
   }
-  if ( ChromaMEEnable)
+
+  if ( mv_block->ChromaMEEnable)
   {
     for (k = 1; k < 3; k++)
     {
-      for   (y = img->opix_c_y; y < img->opix_c_y + img->mb_cr_size_y; y++)
+      for   (y = currMB->opix_c_y; y < currMB->opix_c_y + p_Img->mb_cr_size_y; y++)
       {
-        memcpy(srcptr, &pImgOrg[k][y][img->opix_c_x], img->mb_cr_size_x * sizeof(imgpel));
-        srcptr += img->mb_cr_size_x;
+        memcpy(srcptr, &p_Img->pImgOrg[k][y][currMB->pix_c_x], p_Img->mb_cr_size_x * sizeof(imgpel));
+        srcptr += p_Img->mb_cr_size_x;
       }
     }
   }
 
-  //===== check if whole search range is inside image =====
-  if (offset_x >= search_range && offset_x <= max_width  - search_range &&
-    offset_y >= search_range && offset_y <= max_height - search_range   )
-  {
-    range_partly_outside = 0;
-  }
-  else
-  {
-    range_partly_outside = 1;
-  }
 
   //===== determine position of (0,0)-vector =====
-  if (!params->rdopt)
+  if (!p_Inp->rdopt)
   {
-    ref_x = img->opix_x - offset_x;
-    ref_y = img->opix_y - offset_y;
+    ref_x = mv_block->pos_x_padded - offset.mv_x;
+    ref_y = mv_block->pos_y_padded - offset.mv_y;
 
     for (pos = 0; pos < max_pos; pos++)
     {
-      if (ref_x == spiral_search_x[pos] &&
-        ref_y == spiral_search_y[pos])
+      if (ref_x == p_Img->spiral_qpel_search[pos].mv_x && ref_y == p_Img->spiral_qpel_search[pos].mv_y)
       {
-        pos_00[list][ref] = pos;
+        p_me_ffast->pos_00[list][ref] = pos;
         break;
       }
     }
   }
 
   //===== loop over search range (spiral search): get blockwise SAD =====
-  for (pos = 0; pos < max_pos; pos++)
+  if (apply_weights)
   {
-    abs_y = offset_y + spiral_search_y[pos];
-    abs_x = offset_x + spiral_search_x[pos];
+    weight_luma = currSlice->wp_weight[list + list_offset][ref][0];
+    offset_luma = currSlice->wp_offset[list + list_offset][ref][0];
+    wp_luma_round = currSlice->wp_luma_round;
+    luma_log_weight_denom = currSlice->luma_log_weight_denom;
+    chroma_log_weight_denom = currSlice->chroma_log_weight_denom;
+    wp_chroma_round = currSlice->wp_chroma_round;
 
-    abs_y4 = (abs_y + IMG_PAD_SIZE) << 2;
-    abs_x4 = (abs_x + IMG_PAD_SIZE) << 2;
-
-    if (apply_weights)
+    if (mv_block->ChromaMEEnable)
     {
+      weight_cr[0] = currSlice->wp_weight[list + list_offset][ref][1];
+      weight_cr[1] = currSlice->wp_weight[list + list_offset][ref][2];
+      offset_cr[0] = currSlice->wp_offset[list + list_offset][ref][1];
+      offset_cr[1] = currSlice->wp_offset[list + list_offset][ref][2];
+    }
+
+    for (pos = 0; pos < max_pos; pos++)
+    {
+      cand = add_MVs(offset, &p_Img->spiral_qpel_search[pos]);      
+
       srcptr = orig_pels;
       bindex = 0;
 
-      refptr = UMVLine4X (ref_pic_sub.luma, abs_y4, abs_x4, height_pad, width_pad);
+      refptr = UMVLine4X (ref_picture, cand.mv_y, cand.mv_x);
 
       for (blky = 0; blky < 4; blky++)
       {
@@ -616,97 +399,105 @@ void SetupFastFullPelSearch (Macroblock *currMB, short ref, int list)  // <--  r
 
         for (y = 0; y < 4; y++)
         {
-          weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
-          LineSadBlk0 += dist_method [weighted_pel - *srcptr++];
-          weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
-          LineSadBlk0 += dist_method [weighted_pel - *srcptr++];
-          weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
-          LineSadBlk0 += dist_method [weighted_pel - *srcptr++];
-          weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
-          LineSadBlk0 += dist_method [weighted_pel - *srcptr++];
-          weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
-          LineSadBlk1 += dist_method [weighted_pel - *srcptr++];
-          weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
-          LineSadBlk1 += dist_method [weighted_pel - *srcptr++];
-          weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
-          LineSadBlk1 += dist_method [weighted_pel - *srcptr++];
-          weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
-          LineSadBlk1 += dist_method [weighted_pel - *srcptr++];
-          weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
-          LineSadBlk2 += dist_method [weighted_pel - *srcptr++];
-          weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
-          LineSadBlk2 += dist_method [weighted_pel - *srcptr++];
-          weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
-          LineSadBlk2 += dist_method [weighted_pel - *srcptr++];
-          weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
-          LineSadBlk2 += dist_method [weighted_pel - *srcptr++];
-          weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
-          LineSadBlk3 += dist_method [weighted_pel - *srcptr++];
-          weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
-          LineSadBlk3 += dist_method [weighted_pel - *srcptr++];
-          weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
-          LineSadBlk3 += dist_method [weighted_pel - *srcptr++];
-          weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
-          LineSadBlk3 += dist_method [weighted_pel - *srcptr++];
-          refptr += img_padded_size_x - MB_BLOCK_SIZE;
+          weighted_pel = iClip1( p_Img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
+          LineSadBlk0 += dist_method (weighted_pel - *srcptr++);
+          weighted_pel = iClip1( p_Img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
+          LineSadBlk0 += dist_method (weighted_pel - *srcptr++);
+          weighted_pel = iClip1( p_Img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
+          LineSadBlk0 += dist_method (weighted_pel - *srcptr++);
+          weighted_pel = iClip1( p_Img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
+          LineSadBlk0 += dist_method (weighted_pel - *srcptr++);
+          weighted_pel = iClip1( p_Img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
+          LineSadBlk1 += dist_method (weighted_pel - *srcptr++);
+          weighted_pel = iClip1( p_Img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
+          LineSadBlk1 += dist_method (weighted_pel - *srcptr++);
+          weighted_pel = iClip1( p_Img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
+          LineSadBlk1 += dist_method (weighted_pel - *srcptr++);
+          weighted_pel = iClip1( p_Img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
+          LineSadBlk1 += dist_method (weighted_pel - *srcptr++);
+          weighted_pel = iClip1( p_Img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
+          LineSadBlk2 += dist_method (weighted_pel - *srcptr++);
+          weighted_pel = iClip1( p_Img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
+          LineSadBlk2 += dist_method (weighted_pel - *srcptr++);
+          weighted_pel = iClip1( p_Img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
+          LineSadBlk2 += dist_method (weighted_pel - *srcptr++);
+          weighted_pel = iClip1( p_Img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
+          LineSadBlk2 += dist_method (weighted_pel - *srcptr++);
+          weighted_pel = iClip1( p_Img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
+          LineSadBlk3 += dist_method (weighted_pel - *srcptr++);
+          weighted_pel = iClip1( p_Img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
+          LineSadBlk3 += dist_method (weighted_pel - *srcptr++);
+          weighted_pel = iClip1( p_Img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
+          LineSadBlk3 += dist_method (weighted_pel - *srcptr++);
+          weighted_pel = iClip1( p_Img->max_imgpel_value, ((weight_luma * *refptr++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
+          LineSadBlk3 += dist_method (weighted_pel - *srcptr++);
+          refptr += p_Img->padded_size_x - MB_BLOCK_SIZE;
         }
 
-        block_sad[bindex++][pos] = LineSadBlk0;
-        block_sad[bindex++][pos] = LineSadBlk1;
-        block_sad[bindex++][pos] = LineSadBlk2;
-        block_sad[bindex++][pos] = LineSadBlk3;
+        block_sad[bindex++][pos] = (distpel) LineSadBlk0;
+        block_sad[bindex++][pos] = (distpel) LineSadBlk1;
+        block_sad[bindex++][pos] = (distpel) LineSadBlk2;
+        block_sad[bindex++][pos] = (distpel) LineSadBlk3;
       }
-      if (ChromaMEEnable)
+      if (mv_block->ChromaMEEnable)
       {
-        int max_imgpel_value_uv = img->max_imgpel_value_comp[1];
+        int max_imgpel_value_uv = p_Img->max_pel_value_comp[1];
         for (k = 0; k < 2; k ++)
         {
           bindex = 0;
 
-          refptr = UMVLine8X_chroma (ref_pic_sub.crcb[k], abs_y4, abs_x4, height_pad_cr, width_pad_cr);
+          refptr = UMVLine8X_chroma (ref_picture, k+1, cand.mv_y, cand.mv_x);
           for (blky = 0; blky < 4; blky++)
           {
             LineSadBlk0 = LineSadBlk1 = LineSadBlk2 = LineSadBlk3 = 0;
 
-            for (y = 0; y < img->mb_cr_size_y; y+=BLOCK_SIZE)
+            for (y = 0; y < p_Img->mb_cr_size_y; y+=BLOCK_SIZE)
             {
-              for (x = 0; x < img->mb_cr_size_x; x += BLOCK_SIZE)
+              for (x = 0; x < p_Img->mb_cr_size_x; x += BLOCK_SIZE)
               {
                 weighted_pel = iClip1( max_imgpel_value_uv, ((weight_cr[k] * *refptr++  + wp_chroma_round) >> chroma_log_weight_denom) + offset_cr[k]);
-                LineSadBlk0 += dist_method [weighted_pel - *srcptr++];
+                LineSadBlk0 += dist_method (weighted_pel - *srcptr++);
               }
-              for (x = 0; x < img->mb_cr_size_x; x += BLOCK_SIZE)
+              for (x = 0; x < p_Img->mb_cr_size_x; x += BLOCK_SIZE)
               {
                 weighted_pel = iClip1( max_imgpel_value_uv, ((weight_cr[k] * *refptr++  + wp_chroma_round) >> chroma_log_weight_denom) + offset_cr[k]);
-                LineSadBlk1 += dist_method [weighted_pel - *srcptr++];
+                LineSadBlk1 += dist_method (weighted_pel - *srcptr++);
               }
-              for (x = 0; x < img->mb_cr_size_x; x += BLOCK_SIZE)
+              for (x = 0; x < p_Img->mb_cr_size_x; x += BLOCK_SIZE)
               {
                 weighted_pel = iClip1( max_imgpel_value_uv, ((weight_cr[k] * *refptr++  + wp_chroma_round) >> chroma_log_weight_denom) + offset_cr[k]);
-                LineSadBlk2 += dist_method [weighted_pel - *srcptr++];
+                LineSadBlk2 += dist_method (weighted_pel - *srcptr++);
               }
-              for (x = 0; x < img->mb_cr_size_x; x += BLOCK_SIZE)
+              for (x = 0; x < p_Img->mb_cr_size_x; x += BLOCK_SIZE)
               {
                 weighted_pel = iClip1( max_imgpel_value_uv, ((weight_cr[k] * *refptr++  + wp_chroma_round) >> chroma_log_weight_denom) + offset_cr[k]);
-                LineSadBlk3 += dist_method [weighted_pel - *srcptr++];
+                LineSadBlk3 += dist_method (weighted_pel - *srcptr++);
               }
-              refptr += img_cr_padded_size_x - img->mb_cr_size_x;
+              refptr += p_Img->cr_padded_size_x - p_Img->mb_cr_size_x;
             }
 
-            block_sad[bindex++][pos] += LineSadBlk0;
-            block_sad[bindex++][pos] += LineSadBlk1;
-            block_sad[bindex++][pos] += LineSadBlk2;
-            block_sad[bindex++][pos] += LineSadBlk3;
+            block_sad[bindex][pos] = block_sad[bindex][pos] + ((distpel) LineSadBlk0);
+            ++bindex;
+            block_sad[bindex][pos] = block_sad[bindex][pos] + ((distpel) LineSadBlk1);
+            ++bindex;
+            block_sad[bindex][pos] = block_sad[bindex][pos] + ((distpel) LineSadBlk2);
+            ++bindex;
+            block_sad[bindex][pos] = block_sad[bindex][pos] + ((distpel) LineSadBlk3);
+            ++bindex;
           }
         }
       }
     }
-    else
+  }
+  else
+  {
+    for (pos = 0; pos < max_pos; pos++)
     {
+      cand = add_MVs(offset, &p_Img->spiral_qpel_search[pos]);
       srcptr = orig_pels;
       bindex = 0;
 
-      refptr = UMVLine4X (ref_pic_sub.luma, abs_y4, abs_x4, height_pad, width_pad);
+      refptr = UMVLine4X (ref_picture, cand.mv_y, cand.mv_x);
 
       for (blky = 0; blky < 4; blky++)
       {
@@ -714,67 +505,98 @@ void SetupFastFullPelSearch (Macroblock *currMB, short ref, int list)  // <--  r
 
         for (y = 0; y < 4; y++)
         {
-          LineSadBlk0 += dist_method [*refptr++ - *srcptr++];
-          LineSadBlk0 += dist_method [*refptr++ - *srcptr++];
-          LineSadBlk0 += dist_method [*refptr++ - *srcptr++];
-          LineSadBlk0 += dist_method [*refptr++ - *srcptr++];
-          LineSadBlk1 += dist_method [*refptr++ - *srcptr++];
-          LineSadBlk1 += dist_method [*refptr++ - *srcptr++];
-          LineSadBlk1 += dist_method [*refptr++ - *srcptr++];
-          LineSadBlk1 += dist_method [*refptr++ - *srcptr++];
-          LineSadBlk2 += dist_method [*refptr++ - *srcptr++];
-          LineSadBlk2 += dist_method [*refptr++ - *srcptr++];
-          LineSadBlk2 += dist_method [*refptr++ - *srcptr++];
-          LineSadBlk2 += dist_method [*refptr++ - *srcptr++];
-          LineSadBlk3 += dist_method [*refptr++ - *srcptr++];
-          LineSadBlk3 += dist_method [*refptr++ - *srcptr++];
-          LineSadBlk3 += dist_method [*refptr++ - *srcptr++];
-          LineSadBlk3 += dist_method [*refptr++ - *srcptr++];
-          refptr += img_padded_size_x - MB_BLOCK_SIZE;
+#if (JM_MEM_DISTORTION)
+          // Distortion for first 4x4 block
+          LineSadBlk0 += imgpel_dist[ *refptr++ - *srcptr++ ];
+          LineSadBlk0 += imgpel_dist[ *refptr++ - *srcptr++ ];
+          LineSadBlk0 += imgpel_dist[ *refptr++ - *srcptr++ ];
+          LineSadBlk0 += imgpel_dist[ *refptr++ - *srcptr++ ];
+          // Distortion for second 4x4 block
+          LineSadBlk1 += imgpel_dist[ *refptr++ - *srcptr++ ];
+          LineSadBlk1 += imgpel_dist[ *refptr++ - *srcptr++ ];
+          LineSadBlk1 += imgpel_dist[ *refptr++ - *srcptr++ ];
+          LineSadBlk1 += imgpel_dist[ *refptr++ - *srcptr++ ];
+          // Distortion for third 4x4 block
+          LineSadBlk2 += imgpel_dist[ *refptr++ - *srcptr++ ];
+          LineSadBlk2 += imgpel_dist[ *refptr++ - *srcptr++ ];
+          LineSadBlk2 += imgpel_dist[ *refptr++ - *srcptr++ ];
+          LineSadBlk2 += imgpel_dist[ *refptr++ - *srcptr++ ];
+          // Distortion for fourth 4x4 block
+          LineSadBlk3 += imgpel_dist[ *refptr++ - *srcptr++ ];
+          LineSadBlk3 += imgpel_dist[ *refptr++ - *srcptr++ ];
+          LineSadBlk3 += imgpel_dist[ *refptr++ - *srcptr++ ];
+          LineSadBlk3 += imgpel_dist[ *refptr++ - *srcptr++ ];
+#else
+          // Distortion for first 4x4 block
+          LineSadBlk0 += dist_method (*refptr++ - *srcptr++);
+          LineSadBlk0 += dist_method (*refptr++ - *srcptr++);
+          LineSadBlk0 += dist_method (*refptr++ - *srcptr++);
+          LineSadBlk0 += dist_method (*refptr++ - *srcptr++);
+          // Distortion for second 4x4 block
+          LineSadBlk1 += dist_method (*refptr++ - *srcptr++);
+          LineSadBlk1 += dist_method (*refptr++ - *srcptr++);
+          LineSadBlk1 += dist_method (*refptr++ - *srcptr++);
+          LineSadBlk1 += dist_method (*refptr++ - *srcptr++);
+          // Distortion for third 4x4 block
+          LineSadBlk2 += dist_method (*refptr++ - *srcptr++);
+          LineSadBlk2 += dist_method (*refptr++ - *srcptr++);
+          LineSadBlk2 += dist_method (*refptr++ - *srcptr++);
+          LineSadBlk2 += dist_method (*refptr++ - *srcptr++);
+          // Distortion for fourth 4x4 block
+          LineSadBlk3 += dist_method (*refptr++ - *srcptr++);
+          LineSadBlk3 += dist_method (*refptr++ - *srcptr++);
+          LineSadBlk3 += dist_method (*refptr++ - *srcptr++);
+          LineSadBlk3 += dist_method (*refptr++ - *srcptr++);
+#endif
+
+          refptr += p_Img->padded_size_x - MB_BLOCK_SIZE;
         }
 
-        block_sad[bindex++][pos] = LineSadBlk0;
-        block_sad[bindex++][pos] = LineSadBlk1;
-        block_sad[bindex++][pos] = LineSadBlk2;
-        block_sad[bindex++][pos] = LineSadBlk3;
+        block_sad[bindex++][pos] = (distpel) LineSadBlk0;
+        block_sad[bindex++][pos] = (distpel) LineSadBlk1;
+        block_sad[bindex++][pos] = (distpel) LineSadBlk2;
+        block_sad[bindex++][pos] = (distpel) LineSadBlk3;
       }
 
-      if (ChromaMEEnable)
+      if (mv_block->ChromaMEEnable)
       {
         for (k = 0; k < 2; k ++)
         {
           bindex = 0;
 
-          refptr = UMVLine8X_chroma (ref_pic_sub.crcb[k], abs_y4, abs_x4, height_pad_cr, width_pad_cr);
+          refptr = UMVLine8X_chroma (ref_picture, k+1, cand.mv_y, cand.mv_x);
           for (blky = 0; blky < 4; blky++)
           {
             LineSadBlk0 = LineSadBlk1 = LineSadBlk2 = LineSadBlk3 = 0;
 
-            for (y = 0; y < img->mb_cr_size_y; y+=BLOCK_SIZE)
+            for (y = 0; y < p_Img->mb_cr_size_y; y+=BLOCK_SIZE)
             {
-              for (x = 0; x < img->mb_cr_size_x; x += BLOCK_SIZE)
+              for (x = 0; x < p_Img->mb_cr_size_x; x += BLOCK_SIZE)
               {
-                LineSadBlk0 += dist_method [*refptr++ - *srcptr++];
+                LineSadBlk0 += dist_method (*refptr++ - *srcptr++);
               }
-              for (x = 0; x < img->mb_cr_size_x; x += BLOCK_SIZE)
+              for (x = 0; x < p_Img->mb_cr_size_x; x += BLOCK_SIZE)
               {
-                LineSadBlk1 += dist_method [*refptr++ - *srcptr++];
+                LineSadBlk1 += dist_method (*refptr++ - *srcptr++);
               }
-              for (x = 0; x < img->mb_cr_size_x; x += BLOCK_SIZE)
+              for (x = 0; x < p_Img->mb_cr_size_x; x += BLOCK_SIZE)
               {
-                LineSadBlk2 += dist_method [*refptr++ - *srcptr++];
+                LineSadBlk2 += dist_method (*refptr++ - *srcptr++);
               }
-              for (x = 0; x < img->mb_cr_size_x; x += BLOCK_SIZE)
+              for (x = 0; x < p_Img->mb_cr_size_x; x += BLOCK_SIZE)
               {
-                LineSadBlk3 += dist_method [*refptr++ - *srcptr++];
+                LineSadBlk3 += dist_method (*refptr++ - *srcptr++);
               }
-              refptr += img_cr_padded_size_x - img->mb_cr_size_x;
+              refptr += p_Img->cr_padded_size_x - p_Img->mb_cr_size_x;
             }
-
-            block_sad[bindex++][pos] += LineSadBlk0;
-            block_sad[bindex++][pos] += LineSadBlk1;
-            block_sad[bindex++][pos] += LineSadBlk2;
-            block_sad[bindex++][pos] += LineSadBlk3;
+            block_sad[bindex][pos] = block_sad[bindex][pos] + ((distpel) LineSadBlk0);
+            ++bindex;
+            block_sad[bindex][pos] = block_sad[bindex][pos] + ((distpel) LineSadBlk1);
+            ++bindex;
+            block_sad[bindex][pos] = block_sad[bindex][pos] + ((distpel) LineSadBlk2);
+            ++bindex;
+            block_sad[bindex][pos] = block_sad[bindex][pos] + ((distpel) LineSadBlk3);
+            ++bindex;
           }
         }
       }
@@ -782,12 +604,12 @@ void SetupFastFullPelSearch (Macroblock *currMB, short ref, int list)  // <--  r
   }
 
   //===== combine SAD's for larger block types =====
-  SetupLargerBlocks (list, ref, max_pos);
+  SetupLargerBlocks (p_Img->p_ffast_me, list, ref, max_pos);
 
   //===== set flag marking that search setup have been done =====
-  search_setup_done[list][ref] = 1;
+  p_Img->p_ffast_me->search_setup_done[list][ref] = 1;
 }
-#endif
+
 
 /*!
  ***********************************************************************
@@ -796,64 +618,56 @@ void SetupFastFullPelSearch (Macroblock *currMB, short ref, int list)  // <--  r
  ***********************************************************************
  */
 int                                                     //  ==> minimum motion cost after search
-FastFullPelBlockMotionSearch (Macroblock *currMB,       // <--  current Macroblock
-                              imgpel*   orig_pic,       // <--  not used
-                              short     ref,            // <--  reference frame (0... or -1 (backward))
-                              int       list,
-                              char   ***refPic,         // <--  reference array
-                              short ****tmp_mv,         // <--  mv array
-                              int       pic_pix_x,      // <--  absolute x-coordinate of regarded AxB block
-                              int       pic_pix_y,      // <--  absolute y-coordinate of regarded AxB block
-                              int       blocktype,      // <--  block type (1-16x16 ... 7-4x4)
+FastFullPelBlockMotionSearch (Macroblock   *currMB,       // <--  current Macroblock
                               MotionVector *pred_mv,     // <--  motion vector predictor (x) in sub-pel units
-                              MotionVector *mv,          // <--> in: search center (x) / out: motion vector (x) - in pel units
-                              int       search_range,   // <--  1-d search range in pel units
-                              int       min_mcost,      // <--  minimum motion cost (cost for center or huge value)
-                              int       lambda_factor,  // <--  lagrangian parameter for determining motion cost
-                              int       apply_weights
+                              MEBlock      *mv_block,
+                              int           min_mcost,      // <--  minimum motion cost (cost for center or huge value)
+                              int           lambda_factor  // <--  lagrangian parameter for determining motion cost
                               )
 {
-  int   pos, offset_x, offset_y, cand_x, cand_y, mcost;
+  ImageParameters *p_Img = currMB->p_Img;
+  InputParameters *p_Inp = currMB->p_Inp;
+  MEFullFast *p_me_ffast = p_Img->p_ffast_me;
+
+  int   pos, mcost;  
+  int  search_range   = mv_block->searchRange.max_x >> 2;
   int   max_pos       = (2*search_range+1)*(2*search_range+1);              // number of search positions
   int   best_pos      = 0;                                                  // position with minimum motion cost
   int   block_index;                                                        // block index for indexing SAD array
   distpel*  block_sad;                                                          // pointer to SAD array
+  int   list = mv_block->list;
+  short ref  = mv_block->ref_idx;
+  MotionVector cand = {0, 0}, *offset = &p_Img->p_ffast_me->search_center[list][ref];
 
-  block_index   = (pic_pix_y-img->opix_y)+((pic_pix_x-img->opix_x)>>2); // block index for indexing SAD array
-  block_sad     = BlockSAD[list][ref][blocktype][block_index];         // pointer to SAD array
-
+  block_index = (mv_block->block_y << 2) + (mv_block->block_x); // block index for indexing SAD array
+  block_sad   = p_me_ffast->BlockSAD[list][ref][mv_block->blocktype][block_index];         // pointer to SAD array
+  
   //===== set up fast full integer search if needed / set search center =====
-  if (!search_setup_done[list][ref])
+  if (!p_Img->p_ffast_me->search_setup_done[list][ref])
   {
-    SetupFastFullPelSearch (currMB, ref, list);
+    SetupFastFullPelSearch (currMB, mv_block, list);
   }
 
-  offset_x = search_center_x[list][ref] - img->opix_x;
-  offset_y = search_center_y[list][ref] - img->opix_y;
 
   //===== cost for (0,0)-vector: it is done before, because MVCost can be negative =====
-  if (!params->rdopt)
+  if (!p_Inp->rdopt)
   {
-    mcost = block_sad[pos_00[list][ref]] + MV_COST_SMP (lambda_factor, 0, 0, pred_mv->mv_x, pred_mv->mv_y);
+    min_mcost = block_sad[p_me_ffast->pos_00[list][ref]] + mv_cost (p_Img, lambda_factor, &cand, pred_mv);
 
-    if (mcost < min_mcost)
-    {
-      min_mcost = mcost;
-      best_pos  = pos_00[list][ref];
-    }
+    best_pos = p_me_ffast->pos_00[list][ref];
   }
 
   //===== loop over all search positions =====
   for (pos=0; pos<max_pos; pos++, block_sad++)
   {
     //--- check residual cost ---
-    if (*block_sad < min_mcost)
+    if ((int) *block_sad < min_mcost)
     {
       //--- get motion vector cost ---
-      cand_x = (offset_x + spiral_search_x[pos])<<2;
-      cand_y = (offset_y + spiral_search_y[pos])<<2;
+      cand = add_MVs (p_Img->spiral_qpel_search[pos], offset);
+
       mcost  = *block_sad;
-      mcost += MV_COST_SMP (lambda_factor, cand_x, cand_y, pred_mv->mv_x, pred_mv->mv_y);
+      mcost += mv_cost (p_Img, lambda_factor, &cand, pred_mv);
 
       //--- check motion cost ---
       if (mcost < min_mcost)
@@ -865,8 +679,8 @@ FastFullPelBlockMotionSearch (Macroblock *currMB,       // <--  current Macroblo
   }
 
   //===== set best motion vector and return minimum motion cost =====
-  mv->mv_x = offset_x + spiral_search_x[best_pos];
-  mv->mv_y = offset_y + spiral_search_y[best_pos];
+  mv_block->mv[list] = add_MVs (p_Img->spiral_qpel_search[best_pos], offset);
+
   return min_mcost;
 }
 

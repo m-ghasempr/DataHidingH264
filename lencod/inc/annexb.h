@@ -1,4 +1,3 @@
-
 /*!
  **************************************************************************************
  * \file
@@ -18,8 +17,9 @@
 
 #include "nalucommon.h"
 
-int WriteAnnexbNALU (NALU_t *n);
-void CloseAnnexbFile();
-void OpenAnnexbFile (char *Filename);
+extern int WriteAnnexbNALU (ImageParameters *p_Img, NALU_t *n);
+extern void OpenAnnexbFile (ImageParameters *p_Img, char *fn);
+extern void CloseAnnexbFile(ImageParameters *p_Img);
+
 
 #endif //_ANNEXB_H_

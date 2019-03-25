@@ -16,9 +16,6 @@
 #include "report.h"
 #include "explicit_seq.h"
 
-FILE       *expSFile = NULL;
-ExpSeqInfo *expSeq   = NULL;
-
 /*!
 ************************************************************************
 * \brief
@@ -204,7 +201,7 @@ void ReadFrameData(FILE *expSeqFile, ExpSeqInfo *seq_info, int coding_index)
   // Set some defaults
   info->reference_idc = NALU_PRIORITY_HIGHEST;  
 
-  ReadTextField (expSFile, "{");  // Start bracket
+  ReadTextField (expSeqFile, "{");  // Start bracket
   do
   {
     // read one line of data
@@ -259,7 +256,7 @@ void ReadFrameData(FILE *expSeqFile, ExpSeqInfo *seq_info, int coding_index)
  *    Read one picture from explicit sequence information file
  ************************************************************************
  */
-void ReadExplicitSeqFile(ExpSeqInfo *seq_info, int coding_index)
+void ReadExplicitSeqFile(ExpSeqInfo *seq_info, FILE *expSFile, int coding_index)
 {
   int  frm_header = ReadTextField(expSFile, "Frame");
 
@@ -280,25 +277,25 @@ void ReadExplicitSeqFile(ExpSeqInfo *seq_info, int coding_index)
  *    Read one picture from explicit sequence information file
  ************************************************************************
  */
-void ExplicitUpdateImgParams(ExpFrameInfo *info, ImageParameters *p_img)
+void ExplicitUpdateImgParams(ExpFrameInfo *info, ImageParameters *p_Img, InputParameters *p_Inp)
 {
-  set_slice_type( p_img, info->slice_type );
-  p_img->frame_no  = info->seq_number;
-  p_img->nal_reference_idc = info->reference_idc;
+  set_slice_type( p_Img, p_Inp, info->slice_type );
+  p_Img->frame_no  = info->seq_number;
+  p_Img->nal_reference_idc = info->reference_idc;
 
-  p_img->toppoc    = 2 * p_img->frame_no;
-  p_img->bottompoc = p_img->toppoc + 1;
-  p_img->framepoc = imin (p_img->toppoc, p_img->bottompoc);
+  p_Img->toppoc    = 2 * p_Img->frame_no;
+  p_Img->bottompoc = p_Img->toppoc + 1;
+  p_Img->framepoc = imin (p_Img->toppoc, p_Img->bottompoc);
 
   //the following is sent in the slice header
-  p_img->delta_pic_order_cnt[0] = 0;
-  p_img->delta_pic_order_cnt[1] = 0;
+  p_Img->delta_pic_order_cnt[0] = 0;
+  p_Img->delta_pic_order_cnt[1] = 0;
 
-  p_img->number ++;
-  p_img->gop_number = (p_img->number - p_img->start_frame_no);
-  p_img->frm_number = p_img->number;
+  p_Img->number ++;
+  p_Img->gop_number = (p_Img->number - p_Img->start_frame_no);
+  p_Img->frm_number = p_Img->number;
 
-  p_img->frm_no_in_file = p_img->frame_no;
+  p_Img->frm_no_in_file = p_Img->frame_no;
 }
 
 /*!
@@ -307,29 +304,29 @@ void ExplicitUpdateImgParams(ExpFrameInfo *info, ImageParameters *p_img)
  *    Open explicit sequence information file
  ************************************************************************
  */
-void OpenExplicitSeqFile(InputParameters *pparams)
+void OpenExplicitSeqFile(ImageParameters *p_Img, InputParameters *p_Inp)
 {
   int frm_count = 0;
-  expSFile = fopen(pparams->ExplicitSeqFile, "r");
-  if (expSFile == NULL)
+  p_Img->expSFile = fopen(p_Inp->ExplicitSeqFile, "r");
+  if (p_Img->expSFile == NULL)
   {
     printf("ERROR while opening the explicit sequence information file.\n");
     report_stats_on_error();
   }  
   
-  if (ReadTextField(expSFile, "Sequence") == -1)
+  if (ReadTextField(p_Img->expSFile, "Sequence") == -1)
   {
     printf("Sequence info file is of invalid format. Terminating\n");
     report_stats_on_error();
   }
   else
   {
-    ReadIntField  (expSFile, "%s : %d", "FrameCount", &frm_count);
+    ReadIntField  (p_Img->expSFile, "%s : %d", "FrameCount", &frm_count);
     if (frm_count > 0)
     {
-      expSeq = (ExpSeqInfo *) malloc(sizeof(ExpSeqInfo));
-      expSeq->no_frames = frm_count;
-      expSeq->info = (ExpFrameInfo *) calloc(frm_count, sizeof(ExpFrameInfo));
+      p_Img->expSeq = (ExpSeqInfo *) malloc(sizeof(ExpSeqInfo));
+      p_Img->expSeq->no_frames = frm_count;
+      p_Img->expSeq->info = (ExpFrameInfo *) calloc(frm_count, sizeof(ExpFrameInfo));
     }
     else
     {
@@ -345,14 +342,14 @@ void OpenExplicitSeqFile(InputParameters *pparams)
 *    Close explicit sequence information file
 ************************************************************************
 */
-void CloseExplicitSeqFile(void)
+void CloseExplicitSeqFile(ImageParameters *p_Img)
 {
-  if (expSFile != NULL)
-    fclose(expSFile);
-  if (expSeq != NULL)
+  if (p_Img->expSFile != NULL)
+    fclose(p_Img->expSFile);
+  if (p_Img->expSeq != NULL)
   {
-    free(expSeq->info);
-    free(expSeq);
+    free(p_Img->expSeq->info);
+    free(p_Img->expSeq);
   }
 }
 

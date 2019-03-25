@@ -74,13 +74,13 @@
 
   Each Slice header contaions the information on which parameter set to be used.
   The function RTPSetImgInp() copies the information of the relevant parameter
-  set in the VCL's global variables img-> and inp->  IMPORTANT: any changes
-  in the semantics of the img-> and inp-> structure members must be represented
+  set in the VCL's global variables p_Img-> and p_Inp->  IMPORTANT: any changes
+  in the semantics of the p_Img-> and p_Inp-> structure members must be represented
   in this function as well!
 
   A note to the stream-buffer data structure: The stream buffer always contains
   only the contents of the partition in question, and not the slice/partition
-  header.  Decoding has to start at bitoffset 0 (UVLC) or bytreoffset 0 (CABAC).
+  header.  Decoding has to start at bitoffset 0 (CAVLC) or bytreoffset 0 (CABAC).
 
   The remaining functions should be self-explanatory.
 
@@ -100,8 +100,6 @@
 #include "sei.h"
 #include "memalloc.h"
 
-static int BitStreamFile;
-
 int RTPReadPacket (RTPpacket_t *p, int bitstream);
 
 /*!
@@ -112,9 +110,9 @@ int RTPReadPacket (RTPpacket_t *p, int bitstream);
  *    none
  ************************************************************************
  */
-void OpenRTPFile (char *fn)
+void OpenRTPFile (ImageParameters *p_Img, char *fn)
 {
-  if ((BitStreamFile = open(fn, OPENFLAGS_READ)) == -1)
+  if ((p_Img->BitStreamFile = open(fn, OPENFLAGS_READ)) == -1)
   {
     snprintf (errortext, ET_SIZE, "Cannot open RTP file '%s'", fn);
     error(errortext,500);
@@ -128,12 +126,12 @@ void OpenRTPFile (char *fn)
  *    Closes the bit stream file
  ************************************************************************
  */
-void CloseRTPFile(void)
+void CloseRTPFile(ImageParameters *p_Img)
 {
-  if (BitStreamFile != -1)
+  if (p_Img->BitStreamFile != -1)
   {
-    close(BitStreamFile);
-    BitStreamFile = - 1;
+    close(p_Img->BitStreamFile);
+    p_Img->BitStreamFile = - 1;
   }
 }
 
@@ -153,10 +151,10 @@ void CloseRTPFile(void)
  ************************************************************************
  */
 
-int GetRTPNALU (NALU_t *nalu)
+int GetRTPNALU (ImageParameters *p_Img, NALU_t *nalu)
 {
-  static unsigned short first_call = 1;  //!< triggers sequence number initialization on first call
-  static unsigned short old_seq = 0;     //!< store the last RTP sequence number for loss detection
+  static uint16 first_call = 1;  //!< triggers sequence number initialization on first call
+  static uint16 old_seq = 0;     //!< store the last RTP sequence number for loss detection
 
   RTPpacket_t *p;
   int ret;
@@ -168,7 +166,7 @@ int GetRTPNALU (NALU_t *nalu)
   if ((p->payload=malloc (MAXRTPPACKETSIZE))== NULL)
     no_mem_exit ("GetRTPNALU-3");
 
-  ret = RTPReadPacket (p, BitStreamFile);
+  ret = RTPReadPacket (p, p_Img->BitStreamFile);
   nalu->forbidden_bit = 1;
   nalu->len = 0;
 
@@ -177,10 +175,10 @@ int GetRTPNALU (NALU_t *nalu)
     if (first_call)
     {
       first_call = 0;
-      old_seq = (unsigned short) (p->seq - 1);
+      old_seq = (uint16) (p->seq - 1);
     }
 
-    nalu->lost_packets = (unsigned short) ( p->seq - (old_seq + 1) );
+    nalu->lost_packets = (uint16) ( p->seq - (old_seq + 1) );
     old_seq = p->seq;
 
     assert (p->paylen < nalu->max_size);
@@ -188,8 +186,8 @@ int GetRTPNALU (NALU_t *nalu)
     nalu->len = p->paylen;
     memcpy (nalu->buf, p->payload, p->paylen);
     nalu->forbidden_bit = (nalu->buf[0]>>7) & 1;
-    nalu->nal_reference_idc = (nalu->buf[0]>>5) & 3;
-    nalu->nal_unit_type = (nalu->buf[0]) & 0x1f;
+    nalu->nal_reference_idc = (NalRefIdc) ((nalu->buf[0]>>5) & 3);
+    nalu->nal_unit_type = (NaluType) ((nalu->buf[0]) & 0x1f);
     if (nalu->lost_packets)
     {
       printf ("Warning: RTP sequence number discontinuity detected\n");
@@ -258,7 +256,7 @@ int DecomposeRTPpacket (RTPpacket_t *p)
   p->pt = (p->packet[1] >> 0) & 0x7F;
 
   memcpy (&p->seq, &p->packet[2], 2);
-  p->seq = ntohs((unsigned short)p->seq);
+  p->seq = ntohs((uint16)p->seq);
 
   memcpy (&p->timestamp, &p->packet[4], 4);// change to shifts for unified byte sex
   p->timestamp = ntohl(p->timestamp);
@@ -370,7 +368,7 @@ int RTPReadPacket (RTPpacket_t *p, int bitstream)
 
   assert (p->packlen < MAXRTPPACKETSIZE);
 
-  if (p->packlen != read (bitstream, p->packet, p->packlen))
+  if (p->packlen != (unsigned int) read (bitstream, p->packet, p->packlen))
   {
     printf ("RTPReadPacket: File corruption, could not read %d bytes\n", (int) p->packlen);
     exit (-1);    // EOF inidication

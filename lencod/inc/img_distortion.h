@@ -17,17 +17,11 @@
 #ifndef _IMG_DISTORTION_H_
 #define _IMG_DISTORTION_H_
 
-typedef struct
-{  
-  FrameFormat format;      //!< ImageStructure format Information
-  imgpel **data[3];        //!< ImageStructure pixel data
-} ImageStructure;
-
-void accumulate_avslice(DistMetric metric[3], int slice_type, int frames);
-void accumulate_average(DistMetric metric[3], int frames);
-void find_distortion(ImageData *imgData);
-void select_img(ImageStructure *imgSRC, ImageStructure *imgREF, ImageData *imgData);
-void compute_distortion(ImageData *imgData);
+extern void accumulate_avslice(DistMetric metric[3], int slice_type, int frames);
+extern void accumulate_average(DistMetric metric[3], int frames);
+extern void find_distortion   (ImageParameters *p_Img, InputParameters *p_Inp, ImageData *imgData);
+extern void select_img        (ImageParameters *p_Img, InputParameters *p_Inp, ImageStructure *imgSRC, ImageStructure *imgREF, ImageData *imgData);
+extern void compute_distortion(ImageParameters *p_Img, InputParameters *p_Inp, ImageData *imgData);
 
 #endif
 

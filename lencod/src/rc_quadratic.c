@@ -34,17 +34,18 @@ static const float MINVALUE = 4.0F;
  *
  *************************************************************************************
  */
-void rc_alloc_quadratic( rc_quadratic **prc )
+void rc_alloc_quadratic( ImageParameters *p_Img, InputParameters *p_Inp, RCQuadratic **p_quad )
 {
-  int rcBufSize = img->FrameSizeInMbs / params->basicunit;
-  rc_quadratic *lprc;
+  int rcBufSize = p_Img->FrameSizeInMbs / p_Inp->basicunit;
 
-  (*prc) = (rc_quadratic *) malloc ( sizeof( rc_quadratic ) );
-  if (NULL==(*prc))
+  RCQuadratic *lprc;
+
+  (*p_quad) = (RCQuadratic *) malloc ( sizeof( RCQuadratic ) );
+  if (NULL==(*p_quad))
   {
-    no_mem_exit("init_global_buffers: (*prc)");
+    no_mem_exit("rc_alloc_quadratic: (*p_quad)");
   }
-  lprc = *prc;
+  lprc = *p_quad;
 
   lprc->PreviousFrameMAD = 1.0;
   lprc->CurrentFrameMAD = 1.0;
@@ -57,7 +58,7 @@ void rc_alloc_quadratic( rc_quadratic **prc )
   lprc->Wp = 0.0;
   lprc->Wb = 0.0;
   lprc->AveWb = 0.0;
-  lprc->PAveFrameQP   = params->qp[0][I_SLICE];
+  lprc->PAveFrameQP   = p_Inp->qp[0][I_SLICE] + p_Img->bitdepth_luma_qp_scale;
   lprc->m_Qc          = lprc->PAveFrameQP;
   lprc->FieldQPBuffer = lprc->PAveFrameQP;
   lprc->FrameQPBuffer = lprc->PAveFrameQP;
@@ -97,9 +98,9 @@ void rc_alloc_quadratic( rc_quadratic **prc )
  *
  *************************************************************************************
  */
-void rc_copy_quadratic( rc_quadratic *dst, rc_quadratic *src )
+void rc_copy_quadratic( ImageParameters *p_Img, InputParameters *p_Inp, RCQuadratic *dst, RCQuadratic *src )
 {
-  int rcBufSize = img->FrameSizeInMbs / params->basicunit;
+  int rcBufSize = p_Img->FrameSizeInMbs / p_Inp->basicunit;
   /* buffer original addresses for which memory has been allocated */
   double   *tmpBUPFMAD = dst->BUPFMAD;
   double   *tmpBUCFMAD = dst->BUCFMAD;
@@ -107,7 +108,7 @@ void rc_copy_quadratic( rc_quadratic *dst, rc_quadratic *src )
   double *tmpFCBUCFMAD = dst->FCBUCFMAD;
 
   /* copy object */
-  memcpy( (void *)dst, (void *)src, sizeof(rc_quadratic) );
+  memcpy( (void *)dst, (void *)src, sizeof(RCQuadratic) );
 
   /* restore original addresses */
   dst->BUPFMAD   = tmpBUPFMAD;
@@ -129,32 +130,32 @@ void rc_copy_quadratic( rc_quadratic *dst, rc_quadratic *src )
  *
  *************************************************************************************
 */
-void rc_free_quadratic(rc_quadratic **prc)
+void rc_free_quadratic(RCQuadratic **p_quad)
 {
-  if (NULL!=(*prc)->BUPFMAD)
+  if (NULL!=(*p_quad)->BUPFMAD)
   {
-    free ((*prc)->BUPFMAD);
-    (*prc)->BUPFMAD = NULL;
+    free ((*p_quad)->BUPFMAD);
+    (*p_quad)->BUPFMAD = NULL;
   }
-  if (NULL!=(*prc)->BUCFMAD)
+  if (NULL!=(*p_quad)->BUCFMAD)
   {
-    free ((*prc)->BUCFMAD);
-    (*prc)->BUCFMAD = NULL;
+    free ((*p_quad)->BUCFMAD);
+    (*p_quad)->BUCFMAD = NULL;
   }
-  if (NULL!=(*prc)->FCBUCFMAD)
+  if (NULL!=(*p_quad)->FCBUCFMAD)
   {
-    free ((*prc)->FCBUCFMAD);
-    (*prc)->FCBUCFMAD = NULL;
+    free ((*p_quad)->FCBUCFMAD);
+    (*p_quad)->FCBUCFMAD = NULL;
   }
-  if (NULL!=(*prc)->FCBUPFMAD)
+  if (NULL!=(*p_quad)->FCBUPFMAD)
   {
-    free ((*prc)->FCBUPFMAD);
-    (*prc)->FCBUPFMAD = NULL;
+    free ((*p_quad)->FCBUPFMAD);
+    (*p_quad)->FCBUPFMAD = NULL;
   }
-  if (NULL!=(*prc))
+  if (NULL!=(*p_quad))
   {
-    free ((*prc));
-    (*prc) = NULL;
+    free ((*p_quad));
+    (*p_quad) = NULL;
   }
 }
 
@@ -166,115 +167,115 @@ void rc_free_quadratic(rc_quadratic **prc)
  *
  *************************************************************************************
 */
-void rc_init_seq(rc_quadratic *prc)
+void rc_init_seq(ImageParameters *p_Img, InputParameters *p_Inp, RCQuadratic *p_quad, RCGeneric *p_gen)
 {
   double L1,L2,L3,bpp;
   int qp, i;
 
-  switch ( params->RCUpdateMode )
+  switch ( p_Inp->RCUpdateMode )
   {
   case RC_MODE_0:
-    updateQP = updateQPRC0;
+    p_Img->updateQP = updateQPRC0;
     break;
   case RC_MODE_1:
-    updateQP = updateQPRC1;
+    p_Img->updateQP = updateQPRC1;
     break;
   case RC_MODE_2:
-    updateQP = updateQPRC2;
+    p_Img->updateQP = updateQPRC2;
     break;
   case RC_MODE_3:
-    updateQP = updateQPRC3;
+    p_Img->updateQP = updateQPRC3;
     break;
   default:
-    updateQP = updateQPRC0;
+    p_Img->updateQP = updateQPRC0;
     break;
   }
   // set function pointers
-  rc_update_pict_frame_ptr = rc_update_pict_frame;
-  rc_update_picture_ptr    = rc_update_picture;
-  rc_init_pict_ptr         = rc_init_pict;
+  p_Img->rc_update_pict_frame_ptr = rc_update_pict_frame;
+  p_Img->rc_update_picture_ptr    = rc_update_picture;
+  p_Img->rc_init_pict_ptr         = rc_init_pict;
 
-  prc->Xp=0;
-  prc->Xb=0;
+  p_quad->Xp=0;
+  p_quad->Xb=0;
 
-  prc->bit_rate = (float) params->bit_rate;
-  prc->frame_rate = img->framerate;
-  prc->PrevBitRate = prc->bit_rate;
+  p_quad->bit_rate = (float) p_Inp->bit_rate;
+  p_quad->frame_rate = p_Img->framerate;
+  p_quad->PrevBitRate = p_quad->bit_rate;
 
   /*compute the total number of MBs in a frame*/
-  if(params->basicunit > img->FrameSizeInMbs)
-    params->basicunit = img->FrameSizeInMbs;
-  if(params->basicunit < img->FrameSizeInMbs)
-    prc->TotalNumberofBasicUnit = img->FrameSizeInMbs/params->basicunit;
+  if(p_Inp->basicunit > p_Img->FrameSizeInMbs)
+    p_Inp->basicunit = p_Img->FrameSizeInMbs;
+  if(p_Inp->basicunit < p_Img->FrameSizeInMbs)
+    p_quad->TotalNumberofBasicUnit = p_Img->FrameSizeInMbs/p_Inp->basicunit;
   else
-    prc->TotalNumberofBasicUnit = 1;
+    p_quad->TotalNumberofBasicUnit = 1;
 
   /*initialize the parameters of fluid flow traffic model*/
-  generic_RC->CurrentBufferFullness = 0;
-  prc->GOPTargetBufferLevel = (double) generic_RC->CurrentBufferFullness;
+  p_gen->CurrentBufferFullness = 0;
+  p_quad->GOPTargetBufferLevel = (double) p_gen->CurrentBufferFullness;
 
   /*initialize the previous window size*/
-  prc->m_windowSize    = 0;
-  prc->MADm_windowSize = 0;
-  generic_RC->NumberofCodedBFrame = 0;
-  prc->NumberofCodedPFrame = 0;
-  generic_RC->NumberofGOP         = 0;
+  p_quad->m_windowSize    = 0;
+  p_quad->MADm_windowSize = 0;
+  p_gen->NumberofCodedBFrame = 0;
+  p_quad->NumberofCodedPFrame = 0;
+  p_gen->NumberofGOP         = 0;
   /*remaining # of bits in GOP */
-  generic_RC->RemainingBits = 0;
+  p_gen->RemainingBits = 0;
   /*control parameter */
-  if(params->NumberBFrames>0)
+  if(p_Inp->NumberBFrames>0)
   {
-    prc->GAMMAP=0.25;
-    prc->BETAP=0.9;
+    p_quad->GAMMAP=0.25;
+    p_quad->BETAP=0.9;
   }
   else
   {
-    prc->GAMMAP=0.5;
-    prc->BETAP=0.5;
+    p_quad->GAMMAP=0.5;
+    p_quad->BETAP=0.5;
   }
 
   /*quadratic rate-distortion model*/
-  prc->PPreHeader=0;
+  p_quad->PPreHeader=0;
 
-  prc->Pm_X1 = prc->bit_rate * 1.0;
-  prc->Pm_X2 = 0.0;
+  p_quad->Pm_X1 = p_quad->bit_rate * 1.0;
+  p_quad->Pm_X2 = 0.0;
   /* linear prediction model for P picture*/
-  prc->PMADPictureC1 = 1.0;
-  prc->PMADPictureC2 = 0.0;
+  p_quad->PMADPictureC1 = 1.0;
+  p_quad->PMADPictureC2 = 0.0;
 
   // Initialize values
   for(i=0;i<21;i++)
   {
-    prc->Pm_rgQp[i] = 0;
-    prc->Pm_rgRp[i] = 0.0;
-    prc->PPictureMAD[i] = 0.0;
+    p_quad->Pm_rgQp[i] = 0;
+    p_quad->Pm_rgRp[i] = 0.0;
+    p_quad->PPictureMAD[i] = 0.0;
   }
 
   //Define the largest variation of quantization parameters
-  prc->PMaxQpChange = params->RCMaxQPChange;
+  p_quad->PMaxQpChange = p_Inp->RCMaxQPChange;
 
   /*basic unit layer rate control*/
-  prc->PAveHeaderBits1 = 0;
-  prc->PAveHeaderBits3 = 0;
-  prc->DDquant = (prc->TotalNumberofBasicUnit>=9 ? 1 : 2);
+  p_quad->PAveHeaderBits1 = 0;
+  p_quad->PAveHeaderBits3 = 0;
+  p_quad->DDquant = (p_quad->TotalNumberofBasicUnit>=9 ? 1 : 2);
 
-  prc->MBPerRow = img->PicWidthInMbs;
+  p_quad->MBPerRow = p_Img->PicWidthInMbs;
 
   /*adaptive field/frame coding*/
-  generic_RC->FieldControl=0;  
+  p_gen->FieldControl=0;  
 
-  if (params->SeinitialQP==0)
+  if (p_Inp->SeinitialQP==0)
   {
     /*compute the initial QP*/
-    bpp = 1.0*prc->bit_rate /(prc->frame_rate*img->size);
+    bpp = 1.0*p_quad->bit_rate /(p_quad->frame_rate*p_Img->size);
 
-    if (img->width == 176)
+    if (p_Img->width == 176)
     {
       L1 = 0.1;
       L2 = 0.3;
       L3 = 0.6;
     }
-    else if (img->width == 352)
+    else if (p_Img->width == 352)
     {
       L1 = 0.2;
       L2 = 0.6;
@@ -294,8 +295,11 @@ void rc_init_seq(rc_quadratic *prc)
       qp = 20;
     else
       qp = 10;
-    params->SeinitialQP = qp;
+    p_Inp->SeinitialQP = qp;
   }
+
+  // high bit-depth
+  p_quad->bitdepth_qp_scale = p_Img->bitdepth_luma_qp_scale;
 }
 
 /*!
@@ -305,7 +309,7 @@ void rc_init_seq(rc_quadratic *prc)
  *
  *************************************************************************************
 */
-void rc_init_GOP(rc_quadratic *prc, int np, int nb)
+void rc_init_GOP(ImageParameters *p_Img, InputParameters *p_Inp, RCQuadratic *p_quad, RCGeneric *p_gen, int np, int nb)
 {
   Boolean Overum=FALSE;
   int OverBits, OverDuantQp;
@@ -313,24 +317,24 @@ void rc_init_GOP(rc_quadratic *prc, int np, int nb)
   int64 AllocatedBits;
 
   // bit allocation for RC_MODE_3
-  switch( params->RCUpdateMode )
+  switch( p_Inp->RCUpdateMode )
   {
   case RC_MODE_3:
     {
       int sum = 0, tmp, level, levels = 0, num_frames[RC_MAX_TEMPORAL_LEVELS];
       float numer, denom;
-      int gop = params->NumberBFrames + 1;
+      int gop = p_Inp->NumberBFrames + 1;
       memset( num_frames, 0, RC_MAX_TEMPORAL_LEVELS * sizeof(int) );
       // are there any B frames?
-      if ( params->NumberBFrames )
+      if ( p_Inp->NumberBFrames )
       {
-        if ( params->HierarchicalCoding == 1 ) // two layers: even/odd
+        if ( p_Inp->HierarchicalCoding == 1 ) // two layers: even/odd
         {
           levels = 2;
-          num_frames[0] = params->NumberBFrames >> 1;
-          num_frames[1] = (params->NumberBFrames - num_frames[0]) >= 0 ? (params->NumberBFrames - num_frames[0]) : 0;
+          num_frames[0] = p_Inp->NumberBFrames >> 1;
+          num_frames[1] = (p_Inp->NumberBFrames - num_frames[0]) >= 0 ? (p_Inp->NumberBFrames - num_frames[0]) : 0;
         }
-        else if ( params->HierarchicalCoding == 2 ) // binary hierarchical structure
+        else if ( p_Inp->HierarchicalCoding == 2 ) // binary hierarchical structure
         {
           // check if gop is power of two
           tmp = gop;
@@ -352,7 +356,7 @@ void rc_init_GOP(rc_quadratic *prc, int np, int nb)
           }
           assert( levels >= 1 && levels <= RC_MAX_TEMPORAL_LEVELS );        
         }
-        else if ( params->HierarchicalCoding == 3 )
+        else if ( p_Inp->HierarchicalCoding == 3 )
         {
           fprintf(stderr, "\n RCUpdateMode=3 and HierarchicalCoding == 3 are currently not supported"); // This error message should be moved elsewhere and have proper memory deallocation
           exit(1);
@@ -360,45 +364,45 @@ void rc_init_GOP(rc_quadratic *prc, int np, int nb)
         else // all frames of the same priority - level
         {
           levels = 1;
-          num_frames[0] = params->NumberBFrames;
+          num_frames[0] = p_Inp->NumberBFrames;
         }
-        generic_RC->temporal_levels = levels;      
+        p_gen->temporal_levels = levels;      
       }
       else
       {
         for ( level = 0; level < RC_MAX_TEMPORAL_LEVELS; level++ )
         {
-          params->RCBSliceBitRatio[level] = 0.0F;
+          p_Inp->RCBSliceBitRatio[level] = 0.0F;
         }
-        generic_RC->temporal_levels = 0;
+        p_gen->temporal_levels = 0;
       }
       // calculate allocated bits for each type of frame
-      numer = (float)(( (!params->intra_period ? 1 : params->intra_period) * gop) * ((double)params->bit_rate / params->source.frame_rate));
+      numer = (float)(( (!p_Inp->intra_period ? 1 : p_Inp->intra_period) * gop) * ((double)p_Inp->bit_rate / p_Inp->source.frame_rate));
       denom = 0.0F;
 
       for ( level = 0; level < levels; level++ )
       {
-        denom += (float)(num_frames[level] * params->RCBSliceBitRatio[level]);
-        generic_RC->hierNb[level] = num_frames[level] * np;
+        denom += (float)(num_frames[level] * p_Inp->RCBSliceBitRatio[level]);
+        p_gen->hierNb[level] = num_frames[level] * np;
       }
       denom += 1.0F;
-      if ( params->intra_period >= 1 )
+      if ( p_Inp->intra_period >= 1 )
       {
-        denom *= (float)params->intra_period;
-        denom += (float)params->RCISliceBitRatio - 1.0F;
+        denom *= (float)p_Inp->intra_period;
+        denom += (float)p_Inp->RCISliceBitRatio - 1.0F;
       }
 
       // set bit targets for each type of frame
-      generic_RC->RCPSliceBits = (int) floor( numer / denom + 0.5F );
-      generic_RC->RCISliceBits = (params->intra_period) ? (int)(params->RCISliceBitRatio * generic_RC->RCPSliceBits + 0.5) : 0;
+      p_gen->RCPSliceBits = (int) floor( numer / denom + 0.5F );
+      p_gen->RCISliceBits = (p_Inp->intra_period) ? (int)(p_Inp->RCISliceBitRatio * p_gen->RCPSliceBits + 0.5) : 0;
 
       for ( level = 0; level < levels; level++ )
       {
-        generic_RC->RCBSliceBits[level] = (int)floor(params->RCBSliceBitRatio[level] * generic_RC->RCPSliceBits + 0.5);
+        p_gen->RCBSliceBits[level] = (int)floor(p_Inp->RCBSliceBitRatio[level] * p_gen->RCPSliceBits + 0.5);
       }
 
-      generic_RC->NISlice = (params->intra_period) ? ((params->no_frm_base - 1) / params->intra_period) : 0;
-      generic_RC->NPSlice = params->no_frm_base - 1 - generic_RC->NISlice;
+      p_gen->NISlice = (p_Inp->intra_period) ? ((p_Inp->no_frm_base - 1) / p_Inp->intra_period) : 0;
+      p_gen->NPSlice = p_Inp->no_frm_base - 1 - p_gen->NISlice;
     }
     break;
   default:
@@ -408,89 +412,89 @@ void rc_init_GOP(rc_quadratic *prc, int np, int nb)
   /* check if the last GOP over uses its budget. If yes, the initial QP of the I frame in
   the coming  GOP will be increased.*/
 
-  if(generic_RC->RemainingBits<0)
+  if(p_gen->RemainingBits<0)
     Overum=TRUE;
-  OverBits=-(int)(generic_RC->RemainingBits);
+  OverBits=-(int)(p_gen->RemainingBits);
 
   /*initialize the lower bound and the upper bound for the target bits of each frame, HRD consideration*/
-  prc->LowerBound  = (int)(generic_RC->RemainingBits + prc->bit_rate / prc->frame_rate);
-  prc->UpperBound1 = (int)(generic_RC->RemainingBits + (prc->bit_rate * 2.048));
+  p_quad->LowerBound  = (int)(p_gen->RemainingBits + p_quad->bit_rate / p_quad->frame_rate);
+  p_quad->UpperBound1 = (int)(p_gen->RemainingBits + (p_quad->bit_rate * 2.048));
 
   /*compute the total number of bits for the current GOP*/
-  AllocatedBits = (int64) floor((1 + np + nb) * prc->bit_rate / prc->frame_rate + 0.5);
-  generic_RC->RemainingBits += AllocatedBits;
-  prc->Np = np;
-  prc->Nb = nb;
+  AllocatedBits = (int64) floor((1 + np + nb) * p_quad->bit_rate / p_quad->frame_rate + 0.5);
+  p_gen->RemainingBits += AllocatedBits;
+  p_quad->Np = np;
+  p_quad->Nb = nb;
 
   OverDuantQp=(int)(8 * OverBits/AllocatedBits+0.5);
-  prc->GOPOverdue=FALSE;
+  p_quad->GOPOverdue=FALSE;
 
   /*field coding*/
-  //generic_RC->NoGranularFieldRC = ( params->PicInterlace || !params->MbInterlace || params->basicunit != img->FrameSizeInMbs );
-  if ( !params->PicInterlace && params->MbInterlace && params->basicunit == img->FrameSizeInMbs )
-    generic_RC->NoGranularFieldRC = 0;
+  //p_gen->NoGranularFieldRC = ( p_Inp->PicInterlace || !p_Inp->MbInterlace || p_Inp->basicunit != p_Img->FrameSizeInMbs );
+  if ( !p_Inp->PicInterlace && p_Inp->MbInterlace && p_Inp->basicunit == p_Img->FrameSizeInMbs )
+    p_gen->NoGranularFieldRC = 0;
   else
-    generic_RC->NoGranularFieldRC = 1;
+    p_gen->NoGranularFieldRC = 1;
 
   /*Compute InitialQp for each GOP*/
-  prc->TotalPFrame=np;
-  generic_RC->NumberofGOP++;
-  if(generic_RC->NumberofGOP==1)
+  p_quad->TotalPFrame=np;
+  p_gen->NumberofGOP++;
+  if(p_gen->NumberofGOP==1)
   {
-    prc->MyInitialQp = params->SeinitialQP;
-    prc->CurrLastQP = prc->MyInitialQp - 1; //recent change -0;
-    prc->QPLastGOP   = prc->MyInitialQp;
+    p_quad->MyInitialQp = p_Inp->SeinitialQP + p_quad->bitdepth_qp_scale;
+    p_quad->CurrLastQP = p_quad->MyInitialQp - 1; //recent change -0;
+    p_quad->QPLastGOP   = p_quad->MyInitialQp;
 
-    prc->PAveFrameQP   = prc->MyInitialQp;
-    prc->m_Qc          = prc->PAveFrameQP;
-    prc->FieldQPBuffer = prc->PAveFrameQP;
-    prc->FrameQPBuffer = prc->PAveFrameQP;
-    prc->PAverageQp    = prc->PAveFrameQP;
+    p_quad->PAveFrameQP   = p_quad->MyInitialQp;
+    p_quad->m_Qc          = p_quad->PAveFrameQP;
+    p_quad->FieldQPBuffer = p_quad->PAveFrameQP;
+    p_quad->FrameQPBuffer = p_quad->PAveFrameQP;
+    p_quad->PAverageQp    = p_quad->PAveFrameQP;
   }
   else
   {
     /*adaptive field/frame coding*/
-    if( params->PicInterlace == ADAPTIVE_CODING || params->MbInterlace )
+    if( p_Inp->PicInterlace == ADAPTIVE_CODING || p_Inp->MbInterlace )
     {
-      if (generic_RC->FieldFrame == 1)
+      if (p_gen->FieldFrame == 1)
       {
-        prc->TotalQpforPPicture += prc->FrameQPBuffer;
-        prc->QPLastPFrame = prc->FrameQPBuffer;
+        p_quad->TotalQpforPPicture += p_quad->FrameQPBuffer;
+        p_quad->QPLastPFrame = p_quad->FrameQPBuffer;
       }
       else
       {
-        prc->TotalQpforPPicture += prc->FieldQPBuffer;
-        prc->QPLastPFrame = prc->FieldQPBuffer;
+        p_quad->TotalQpforPPicture += p_quad->FieldQPBuffer;
+        p_quad->QPLastPFrame = p_quad->FieldQPBuffer;
       }
     }
     /*compute the average QP of P frames in the previous GOP*/
-    prc->PAverageQp=(int)(1.0 * prc->TotalQpforPPicture / prc->NumberofPPicture+0.5);
+    p_quad->PAverageQp=(int)(1.0 * p_quad->TotalQpforPPicture / p_quad->NumberofPPicture+0.5);
 
     GOPDquant=(int)((1.0*(np+nb+1)/15.0) + 0.5);
     if(GOPDquant>2)
       GOPDquant=2;
 
-    prc->PAverageQp -= GOPDquant;
+    p_quad->PAverageQp -= GOPDquant;
 
-    if (prc->PAverageQp > (prc->QPLastPFrame - 2))
-      prc->PAverageQp--;
+    if (p_quad->PAverageQp > (p_quad->QPLastPFrame - 2))
+      p_quad->PAverageQp--;
 
     // QP is constrained by QP of previous QP
-    prc->PAverageQp = iClip3(prc->QPLastGOP - 2, prc->QPLastGOP + 2, prc->PAverageQp);
+    p_quad->PAverageQp = iClip3(p_quad->QPLastGOP - 2, p_quad->QPLastGOP + 2, p_quad->PAverageQp);
     // Also clipped within range.
-    prc->PAverageQp = iClip3(img->RCMinQP,  img->RCMaxQP,  prc->PAverageQp);
+    p_quad->PAverageQp = iClip3(p_Img->RCMinQP + p_quad->bitdepth_qp_scale,  p_Img->RCMaxQP + p_quad->bitdepth_qp_scale,  p_quad->PAverageQp);
 
-    prc->MyInitialQp = prc->PAverageQp;
-    prc->Pm_Qp       = prc->PAverageQp;
-    prc->PAveFrameQP = prc->PAverageQp;
-    prc->QPLastGOP   = prc->MyInitialQp;
-    prc->PrevLastQP = prc->CurrLastQP;
-    prc->CurrLastQP = prc->MyInitialQp - 1;
+    p_quad->MyInitialQp = p_quad->PAverageQp;
+    p_quad->Pm_Qp       = p_quad->PAverageQp;
+    p_quad->PAveFrameQP = p_quad->PAverageQp;
+    p_quad->QPLastGOP   = p_quad->MyInitialQp;
+    p_quad->PrevLastQP = p_quad->CurrLastQP;
+    p_quad->CurrLastQP = p_quad->MyInitialQp - 1;
   }
 
-  prc->TotalQpforPPicture=0;
-  prc->NumberofPPicture=0;
-  prc->NumberofBFrames=0;
+  p_quad->TotalQpforPPicture=0;
+  p_quad->NumberofPPicture=0;
+  p_quad->NumberofBFrames=0;
 }
 
 
@@ -501,162 +505,162 @@ void rc_init_GOP(rc_quadratic *prc, int np, int nb)
  *
  *************************************************************************************
 */
-void rc_init_pict(rc_quadratic *prc, int fieldpic,int topfield,int targetcomputation, float mult)
+void rc_init_pict(ImageParameters *p_Img, InputParameters *p_Inp, RCQuadratic *p_quad, RCGeneric *p_gen, int fieldpic,int topfield,int targetcomputation, float mult)
 {
   int tmp_T;
 
   /* compute the total number of basic units in a frame */
-  if(params->MbInterlace)
-    prc->TotalNumberofBasicUnit = img->FrameSizeInMbs / img->BasicUnit;
+  if(p_Inp->MbInterlace)
+    p_quad->TotalNumberofBasicUnit = p_Img->FrameSizeInMbs / p_Img->BasicUnit;
   else
-    prc->TotalNumberofBasicUnit = img->FrameSizeInMbs / params->basicunit;
+    p_quad->TotalNumberofBasicUnit = p_Img->FrameSizeInMbs / p_Inp->basicunit;
 
-  img->NumberofCodedMacroBlocks = 0;
+  p_Img->NumberofCodedMacroBlocks = 0;
 
   /* Normally, the bandwidth for the VBR case is estimated by
      a congestion control algorithm. A bandwidth curve can be predefined if we only want to
      test the proposed algorithm */
-  if(params->channel_type==1)
+  if(p_Inp->channel_type==1)
   {
-    if(prc->NumberofCodedPFrame==58)
-      prc->bit_rate *= 1.5;
-    else if(prc->NumberofCodedPFrame==59)
-      prc->PrevBitRate = prc->bit_rate;
+    if(p_quad->NumberofCodedPFrame==58)
+      p_quad->bit_rate *= 1.5;
+    else if(p_quad->NumberofCodedPFrame==59)
+      p_quad->PrevBitRate = p_quad->bit_rate;
   }
 
   /* predefine a target buffer level for each frame */
   if((fieldpic||topfield) && targetcomputation)
   {
-    if ( img->type == P_SLICE || (params->RCUpdateMode == RC_MODE_1 && (img->number !=0)) )
+    if ( p_Img->type == P_SLICE || (p_Inp->RCUpdateMode == RC_MODE_1 && (p_Img->number !=0)) )
     {
       /* Since the available bandwidth may vary at any time, the total number of
       bits is updated picture by picture*/
-      if(prc->PrevBitRate!=prc->bit_rate)
-        generic_RC->RemainingBits +=(int) floor((prc->bit_rate-prc->PrevBitRate)*(prc->Np + prc->Nb)/prc->frame_rate+0.5);
+      if(p_quad->PrevBitRate!=p_quad->bit_rate)
+        p_gen->RemainingBits +=(int) floor((p_quad->bit_rate-p_quad->PrevBitRate)*(p_quad->Np + p_quad->Nb)/p_quad->frame_rate+0.5);
 
       /* predefine the  target buffer level for each picture.
       frame layer rate control */
-      if(img->BasicUnit == img->FrameSizeInMbs)
+      if(p_Img->BasicUnit == p_Img->FrameSizeInMbs)
       {
-        if(prc->NumberofPPicture==1)
+        if(p_quad->NumberofPPicture==1)
         {
-          prc->TargetBufferLevel = (double) generic_RC->CurrentBufferFullness;
-          prc->DeltaP = (generic_RC->CurrentBufferFullness - prc->GOPTargetBufferLevel) / (prc->TotalPFrame-1);
-          prc->TargetBufferLevel -= prc->DeltaP;
+          p_quad->TargetBufferLevel = (double) p_gen->CurrentBufferFullness;
+          p_quad->DeltaP = (p_gen->CurrentBufferFullness - p_quad->GOPTargetBufferLevel) / (p_quad->TotalPFrame-1);
+          p_quad->TargetBufferLevel -= p_quad->DeltaP;
         }
-        else if(prc->NumberofPPicture>1)
-          prc->TargetBufferLevel -= prc->DeltaP;
+        else if(p_quad->NumberofPPicture>1)
+          p_quad->TargetBufferLevel -= p_quad->DeltaP;
       }
       /* basic unit layer rate control */
       else
       {
-        if(prc->NumberofCodedPFrame>0)
+        if(p_quad->NumberofCodedPFrame>0)
         {
           /* adaptive frame/field coding */
-          if(((params->PicInterlace==ADAPTIVE_CODING)||(params->MbInterlace))&&(generic_RC->FieldControl==1))
-            memcpy((void *)prc->FCBUPFMAD,(void *)prc->FCBUCFMAD, prc->TotalNumberofBasicUnit * sizeof(double));
+          if(((p_Inp->PicInterlace==ADAPTIVE_CODING)||(p_Inp->MbInterlace))&&(p_gen->FieldControl==1))
+            memcpy((void *)p_quad->FCBUPFMAD,(void *)p_quad->FCBUCFMAD, p_quad->TotalNumberofBasicUnit * sizeof(double));
           else
-            memcpy((void *)prc->BUPFMAD,(void *)prc->BUCFMAD, prc->TotalNumberofBasicUnit * sizeof(double));
+            memcpy((void *)p_quad->BUPFMAD,(void *)p_quad->BUCFMAD, p_quad->TotalNumberofBasicUnit * sizeof(double));
         }
 
-        if(generic_RC->NumberofGOP==1)
+        if(p_gen->NumberofGOP==1)
         {
-          if(prc->NumberofPPicture==1)
+          if(p_quad->NumberofPPicture==1)
           {
-            prc->TargetBufferLevel = (double) generic_RC->CurrentBufferFullness;
-            prc->DeltaP = (generic_RC->CurrentBufferFullness - prc->GOPTargetBufferLevel)/(prc->TotalPFrame - 1);
-            prc->TargetBufferLevel -= prc->DeltaP;
+            p_quad->TargetBufferLevel = (double) p_gen->CurrentBufferFullness;
+            p_quad->DeltaP = (p_gen->CurrentBufferFullness - p_quad->GOPTargetBufferLevel)/(p_quad->TotalPFrame - 1);
+            p_quad->TargetBufferLevel -= p_quad->DeltaP;
           }
-          else if(prc->NumberofPPicture>1)
-            prc->TargetBufferLevel -= prc->DeltaP;
+          else if(p_quad->NumberofPPicture>1)
+            p_quad->TargetBufferLevel -= p_quad->DeltaP;
         }
-        else if(generic_RC->NumberofGOP>1)
+        else if(p_gen->NumberofGOP>1)
         {
-          if(prc->NumberofPPicture==0)
+          if(p_quad->NumberofPPicture==0)
           {
-            prc->TargetBufferLevel = (double) generic_RC->CurrentBufferFullness;
-            prc->DeltaP = (generic_RC->CurrentBufferFullness - prc->GOPTargetBufferLevel) / prc->TotalPFrame;
-            prc->TargetBufferLevel -= prc->DeltaP;
+            p_quad->TargetBufferLevel = (double) p_gen->CurrentBufferFullness;
+            p_quad->DeltaP = (p_gen->CurrentBufferFullness - p_quad->GOPTargetBufferLevel) / p_quad->TotalPFrame;
+            p_quad->TargetBufferLevel -= p_quad->DeltaP;
           }
-          else if(prc->NumberofPPicture>0)
-            prc->TargetBufferLevel -= prc->DeltaP;
+          else if(p_quad->NumberofPPicture>0)
+            p_quad->TargetBufferLevel -= p_quad->DeltaP;
         }
       }
 
-      if(prc->NumberofCodedPFrame==1)
-        prc->AveWp = prc->Wp;
+      if(p_quad->NumberofCodedPFrame==1)
+        p_quad->AveWp = p_quad->Wp;
 
-      if((prc->NumberofCodedPFrame<8)&&(prc->NumberofCodedPFrame>1))
-        prc->AveWp = (prc->AveWp + prc->Wp * (prc->NumberofCodedPFrame-1))/prc->NumberofCodedPFrame;
-      else if(prc->NumberofCodedPFrame>1)
-        prc->AveWp = (prc->Wp + 7 * prc->AveWp) / 8;
+      if((p_quad->NumberofCodedPFrame<8)&&(p_quad->NumberofCodedPFrame>1))
+        p_quad->AveWp = (p_quad->AveWp + p_quad->Wp * (p_quad->NumberofCodedPFrame-1))/p_quad->NumberofCodedPFrame;
+      else if(p_quad->NumberofCodedPFrame>1)
+        p_quad->AveWp = (p_quad->Wp + 7 * p_quad->AveWp) / 8;
 
       // compute the average complexity of B frames
-      if(params->NumberBFrames>0)
+      if(p_Inp->NumberBFrames>0)
       {
         // compute the target buffer level
-        prc->TargetBufferLevel += (prc->AveWp * (params->NumberBFrames + 1)*prc->bit_rate\
-          /(prc->frame_rate*(prc->AveWp+prc->AveWb*params->NumberBFrames))-prc->bit_rate/prc->frame_rate);
+        p_quad->TargetBufferLevel += (p_quad->AveWp * (p_Inp->NumberBFrames + 1)*p_quad->bit_rate\
+          /(p_quad->frame_rate*(p_quad->AveWp+p_quad->AveWb*p_Inp->NumberBFrames))-p_quad->bit_rate/p_quad->frame_rate);
       }
     }
-    else if ( img->type == B_SLICE )
+    else if ( p_Img->type == B_SLICE )
     {
       /* update the total number of bits if the bandwidth is changed*/
-      if(prc->PrevBitRate != prc->bit_rate)
-        generic_RC->RemainingBits +=(int) floor((prc->bit_rate-prc->PrevBitRate) * (prc->Np + prc->Nb) / prc->frame_rate+0.5);
-      if(generic_RC->NumberofCodedBFrame == 1)
+      if(p_quad->PrevBitRate != p_quad->bit_rate)
+        p_gen->RemainingBits +=(int) floor((p_quad->bit_rate-p_quad->PrevBitRate) * (p_quad->Np + p_quad->Nb) / p_quad->frame_rate+0.5);
+      if(p_gen->NumberofCodedBFrame == 1)
       {
-        if(prc->NumberofCodedPFrame == 1)
+        if(p_quad->NumberofCodedPFrame == 1)
         {
-          prc->AveWp = prc->Wp;
+          p_quad->AveWp = p_quad->Wp;
         }
-        prc->AveWb = prc->Wb;
+        p_quad->AveWb = p_quad->Wb;
       }
-      else if(generic_RC->NumberofCodedBFrame > 1)
+      else if(p_gen->NumberofCodedBFrame > 1)
       {
         //compute the average weight
-        if(generic_RC->NumberofCodedBFrame<8)
-          prc->AveWb = (prc->AveWb + prc->Wb*(generic_RC->NumberofCodedBFrame-1)) / generic_RC->NumberofCodedBFrame;
+        if(p_gen->NumberofCodedBFrame<8)
+          p_quad->AveWb = (p_quad->AveWb + p_quad->Wb*(p_gen->NumberofCodedBFrame-1)) / p_gen->NumberofCodedBFrame;
         else
-          prc->AveWb = (prc->Wb + 7 * prc->AveWb) / 8;
+          p_quad->AveWb = (p_quad->Wb + 7 * p_quad->AveWb) / 8;
       }
     }
     /* Compute the target bit for each frame */
-    if( img->type == P_SLICE || ( (img->number != 0) && (params->RCUpdateMode == RC_MODE_1 || params->RCUpdateMode == RC_MODE_3 ) ) )
+    if( p_Img->type == P_SLICE || ( (p_Img->number != 0) && (p_Inp->RCUpdateMode == RC_MODE_1 || p_Inp->RCUpdateMode == RC_MODE_3 ) ) )
     {
       /* frame layer rate control */
-      if(img->BasicUnit == img->FrameSizeInMbs || (params->RCUpdateMode == RC_MODE_3) )
+      if(p_Img->BasicUnit == p_Img->FrameSizeInMbs || (p_Inp->RCUpdateMode == RC_MODE_3) )
       {
-        if(prc->NumberofCodedPFrame>0)
+        if(p_quad->NumberofCodedPFrame>0)
         {
-          if (params->RCUpdateMode == RC_MODE_3)
+          if (p_Inp->RCUpdateMode == RC_MODE_3)
           {
-            int level_idx = (img->type == B_SLICE && params->HierarchicalCoding) ? (generic_RC->temporal_levels - 1 - gop_structure[img->b_frame_to_code-1].hierarchy_layer) : 0;
-            int bitrate = (img->type == B_SLICE) ? generic_RC->RCBSliceBits[ level_idx ]
-            : ( img->type == P_SLICE ? generic_RC->RCPSliceBits : generic_RC->RCISliceBits );
-            int level, denom = generic_RC->NISlice * generic_RC->RCISliceBits + generic_RC->NPSlice * generic_RC->RCPSliceBits;
-            if ( params->HierarchicalCoding )
+            int level_idx = (p_Img->type == B_SLICE && p_Inp->HierarchicalCoding) ? (p_gen->temporal_levels - 1 - p_Img->gop_structure[p_Img->b_frame_to_code-1].hierarchy_layer) : 0;
+            int bitrate = (p_Img->type == B_SLICE) ? p_gen->RCBSliceBits[ level_idx ]
+            : ( p_Img->type == P_SLICE ? p_gen->RCPSliceBits : p_gen->RCISliceBits );
+            int level, denom = p_gen->NISlice * p_gen->RCISliceBits + p_gen->NPSlice * p_gen->RCPSliceBits;
+            if ( p_Inp->HierarchicalCoding )
             {
-              for ( level = 0; level < generic_RC->temporal_levels; level++ )
-                denom += generic_RC->hierNb[ level ] * generic_RC->RCBSliceBits[ level ];
+              for ( level = 0; level < p_gen->temporal_levels; level++ )
+                denom += p_gen->hierNb[ level ] * p_gen->RCBSliceBits[ level ];
             }
             else
             {
-              denom += generic_RC->hierNb[0] * generic_RC->RCBSliceBits[0];
+              denom += p_gen->hierNb[0] * p_gen->RCBSliceBits[0];
             }
             // target due to remaining bits
-            prc->Target = (int) floor( (float)(1.0 * bitrate * generic_RC->RemainingBits) / (float)denom + 0.5F );
+            p_quad->Target = (int) floor( (float)(1.0 * bitrate * p_gen->RemainingBits) / (float)denom + 0.5F );
             // target given original taget rate and buffer considerations
-            tmp_T  = imax(0, (int) floor( (double)bitrate - prc->GAMMAP * (generic_RC->CurrentBufferFullness-prc->TargetBufferLevel) + 0.5) );
+            tmp_T  = imax(0, (int) floor( (double)bitrate - p_quad->GAMMAP * (p_gen->CurrentBufferFullness-p_quad->TargetBufferLevel) + 0.5) );
             // translate Target rate from B or I "domain" to P domain since the P RC model is going to be used to select the QP
             // for hierarchical coding adjust the target QP to account for different temporal levels
-            switch( img->type )
+            switch( p_Img->type )
             {
             case B_SLICE:
-              prc->Target = (int) floor( (float)prc->Target / params->RCBoverPRatio + 0.5F);
+              p_quad->Target = (int) floor( (float)p_quad->Target / p_Inp->RCBoverPRatio + 0.5F);
               break;
             case I_SLICE:
-              prc->Target = (int) floor( (float)prc->Target / (params->RCIoverPRatio * 4.0) + 0.5F); // 4x accounts for the fact that header bits reduce the percentage of texture
+              p_quad->Target = (int) floor( (float)p_quad->Target / (p_Inp->RCIoverPRatio * 4.0) + 0.5F); // 4x accounts for the fact that header bits reduce the percentage of texture
               break;
             case P_SLICE:
             default:
@@ -665,69 +669,69 @@ void rc_init_pict(rc_quadratic *prc, int fieldpic,int topfield,int targetcomputa
           }
           else
           {
-            prc->Target = (int) floor( prc->Wp * generic_RC->RemainingBits / (prc->Np * prc->Wp + prc->Nb * prc->Wb) + 0.5);
-            tmp_T  = imax(0, (int) floor(prc->bit_rate / prc->frame_rate - prc->GAMMAP * (generic_RC->CurrentBufferFullness-prc->TargetBufferLevel) + 0.5));
-            prc->Target = (int) floor(prc->BETAP * (prc->Target - tmp_T) + tmp_T + 0.5);
+            p_quad->Target = (int) floor( p_quad->Wp * p_gen->RemainingBits / (p_quad->Np * p_quad->Wp + p_quad->Nb * p_quad->Wb) + 0.5);
+            tmp_T  = imax(0, (int) floor(p_quad->bit_rate / p_quad->frame_rate - p_quad->GAMMAP * (p_gen->CurrentBufferFullness-p_quad->TargetBufferLevel) + 0.5));
+            p_quad->Target = (int) floor(p_quad->BETAP * (p_quad->Target - tmp_T) + tmp_T + 0.5);
           }
         }
       }
       /* basic unit layer rate control */
       else
       {
-        if(((generic_RC->NumberofGOP == 1)&&(prc->NumberofCodedPFrame>0))
-          || (generic_RC->NumberofGOP > 1))
+        if(((p_gen->NumberofGOP == 1)&&(p_quad->NumberofCodedPFrame>0))
+          || (p_gen->NumberofGOP > 1))
         {
-          prc->Target = (int) (floor( prc->Wp * generic_RC->RemainingBits / (prc->Np * prc->Wp + prc->Nb * prc->Wb) + 0.5));
-          tmp_T  = imax(0, (int) (floor(prc->bit_rate / prc->frame_rate - prc->GAMMAP * (generic_RC->CurrentBufferFullness-prc->TargetBufferLevel) + 0.5)));
-          prc->Target = (int) (floor(prc->BETAP * (prc->Target - tmp_T) + tmp_T + 0.5));
+          p_quad->Target = (int) (floor( p_quad->Wp * p_gen->RemainingBits / (p_quad->Np * p_quad->Wp + p_quad->Nb * p_quad->Wb) + 0.5));
+          tmp_T  = imax(0, (int) (floor(p_quad->bit_rate / p_quad->frame_rate - p_quad->GAMMAP * (p_gen->CurrentBufferFullness-p_quad->TargetBufferLevel) + 0.5)));
+          p_quad->Target = (int) (floor(p_quad->BETAP * (p_quad->Target - tmp_T) + tmp_T + 0.5));
         }
       }
-      prc->Target = (int)(mult * prc->Target);
+      p_quad->Target = (int)(mult * p_quad->Target);
 
       /* HRD consideration */
-      if ( params->RCUpdateMode != RC_MODE_3 || img->type == P_SLICE )
-        prc->Target = iClip3(prc->LowerBound, prc->UpperBound2, prc->Target);
-      if((topfield) || (fieldpic && ((params->PicInterlace==ADAPTIVE_CODING)||(params->MbInterlace))))
-        prc->TargetField=prc->Target;
+      if ( p_Inp->RCUpdateMode != RC_MODE_3 || p_Img->type == P_SLICE )
+        p_quad->Target = iClip3(p_quad->LowerBound, p_quad->UpperBound2, p_quad->Target);
+      if((topfield) || (fieldpic && ((p_Inp->PicInterlace==ADAPTIVE_CODING)||(p_Inp->MbInterlace))))
+        p_quad->TargetField=p_quad->Target;
     }
   }
 
   if(fieldpic || topfield)
   {
     /* frame layer rate control */
-    generic_RC->NumberofHeaderBits  = 0;
-    generic_RC->NumberofTextureBits = 0;
+    p_gen->NumberofHeaderBits  = 0;
+    p_gen->NumberofTextureBits = 0;
 
     /* basic unit layer rate control */
-    if(img->BasicUnit < img->FrameSizeInMbs)
+    if(p_Img->BasicUnit < p_Img->FrameSizeInMbs)
     {
-      prc->TotalFrameQP = 0;
-      generic_RC->NumberofBasicUnitHeaderBits  = 0;
-      generic_RC->NumberofBasicUnitTextureBits = 0;
-      generic_RC->TotalMADBasicUnit = 0;
-      if(generic_RC->FieldControl==0)
-        prc->NumberofBasicUnit = prc->TotalNumberofBasicUnit;
+      p_quad->TotalFrameQP = 0;
+      p_gen->NumberofBasicUnitHeaderBits  = 0;
+      p_gen->NumberofBasicUnitTextureBits = 0;
+      p_gen->TotalMADBasicUnit = 0;
+      if(p_gen->FieldControl==0)
+        p_quad->NumberofBasicUnit = p_quad->TotalNumberofBasicUnit;
       else
-        prc->NumberofBasicUnit = prc->TotalNumberofBasicUnit >> 1;
+        p_quad->NumberofBasicUnit = p_quad->TotalNumberofBasicUnit >> 1;
     }
   }
 
-  if( ( img->type==P_SLICE || (params->RCUpdateMode == RC_MODE_1 && (img->number != 0)) ) && img->BasicUnit < img->FrameSizeInMbs && generic_RC->FieldControl == 1 )
+  if( ( p_Img->type==P_SLICE || (p_Inp->RCUpdateMode == RC_MODE_1 && (p_Img->number != 0)) ) && p_Img->BasicUnit < p_Img->FrameSizeInMbs && p_gen->FieldControl == 1 )
   {
     /* top field at basic unit layer rate control */
     if(topfield)
     {
-      prc->bits_topfield=0;
-      prc->Target=(int)(prc->TargetField*0.6);
+      p_quad->bits_topfield=0;
+      p_quad->Target=(int)(p_quad->TargetField*0.6);
     }
     /* bottom field at basic unit layer rate control */
     else
     {
-      prc->Target=prc->TargetField-prc->bits_topfield;
-      generic_RC->NumberofBasicUnitHeaderBits=0;
-      generic_RC->NumberofBasicUnitTextureBits=0;
-      generic_RC->TotalMADBasicUnit=0;
-      prc->NumberofBasicUnit=prc->TotalNumberofBasicUnit >> 1;
+      p_quad->Target=p_quad->TargetField-p_quad->bits_topfield;
+      p_gen->NumberofBasicUnitHeaderBits=0;
+      p_gen->NumberofBasicUnitTextureBits=0;
+      p_gen->TotalMADBasicUnit=0;
+      p_quad->NumberofBasicUnit=p_quad->TotalNumberofBasicUnit >> 1;
     }
   }
 }
@@ -737,29 +741,37 @@ void rc_init_pict(rc_quadratic *prc, int fieldpic,int topfield,int targetcomputa
  * \brief
  *    update one picture after frame/field encoding
  *
+ * \param p_Img
+ *    Image encoding parameters for picture
+ * \param p_Inp
+ *    Input configuration parameters
+ * \param p_quad
+ *    quadratic model
+ * \param p_gen
+ *    generic rate control parameters 
  * \param nbits
  *    number of bits used for picture
  *
  *************************************************************************************
 */
-void rc_update_pict(rc_quadratic *prc, int nbits)
+void rc_update_pict(ImageParameters *p_Img, InputParameters *p_Inp, RCQuadratic *p_quad, RCGeneric *p_gen, int nbits)
 {
-  int delta_bits = (nbits - (int)floor(prc->bit_rate / prc->frame_rate + 0.5F) );
+  int delta_bits = (nbits - (int)floor(p_quad->bit_rate / p_quad->frame_rate + 0.5F) );
   // remaining # of bits in GOP
-  generic_RC->RemainingBits -= nbits; 
-  generic_RC->CurrentBufferFullness += delta_bits;
+  p_gen->RemainingBits -= nbits; 
+  p_gen->CurrentBufferFullness += delta_bits;
 
   // update the lower bound and the upper bound for the target bits of each frame, HRD consideration
-  prc->LowerBound  -= (int) delta_bits;
-  prc->UpperBound1 -= (int) delta_bits;
-  prc->UpperBound2  = (int)(OMEGA * prc->UpperBound1);
+  p_quad->LowerBound  -= (int) delta_bits;
+  p_quad->UpperBound1 -= (int) delta_bits;
+  p_quad->UpperBound2  = (int)(OMEGA * p_quad->UpperBound1);
 
   // update the parameters of quadratic R-D model
-  if( img->type==P_SLICE || (params->RCUpdateMode == RC_MODE_1 && img->frm_number) )
+  if( p_Img->type==P_SLICE || (p_Inp->RCUpdateMode == RC_MODE_1 && p_Img->frm_number) )
   {
-    updateRCModel(prc);
-    if ( params->RCUpdateMode == RC_MODE_3 )
-      prc->PreviousWholeFrameMAD = ComputeFrameMAD();
+    updateRCModel(p_Img, p_Inp, p_quad, p_gen);
+    if ( p_Inp->RCUpdateMode == RC_MODE_3 )
+      p_quad->PreviousWholeFrameMAD = ComputeFrameMAD(p_Img);
   }
 }
 
@@ -768,120 +780,131 @@ void rc_update_pict(rc_quadratic *prc, int nbits)
  * \brief
  *    update one picture after coding
  *
+ * \param p_Img
+ *    image parameters for current picture
+ * \param p_Inp
+ *    input parameters from configuration
  * \param bits
  *    number of bits used for picture
  *
  *************************************************************************************
 */
 
-void rc_update_picture( int bits )
+void rc_update_picture( ImageParameters *p_Img, InputParameters *p_Inp, int bits )
 {
-  rc_update_pict(quadratic_RC, bits);
+  rc_update_pict(p_Img, p_Inp, p_Img->p_rc_quad, p_Img->p_rc_gen, bits);
 }
 
-int updateComplexity( rc_quadratic *prc, Boolean is_updated, int nbits )
+int updateComplexity( ImageParameters *p_Img, RCQuadratic *p_quad, RCGeneric *p_gen, Boolean is_updated, int nbits )
 {
   double Avem_Qc;
 
   /* frame layer rate control */
-  if(img->BasicUnit == img->FrameSizeInMbs)
-    return ((int) floor(nbits * prc->m_Qc + 0.5));
+  if(p_Img->BasicUnit == p_Img->FrameSizeInMbs)
+    return ((int) floor(nbits * p_quad->m_Qc + 0.5));
   /* basic unit layer rate control */
   else
   {
     if( is_updated )
     {
-      if( generic_RC->NoGranularFieldRC == 0 || generic_RC->FieldControl == 0 )
+      if( p_gen->NoGranularFieldRC == 0 || p_gen->FieldControl == 0 )
       {
-        Avem_Qc = (double)prc->TotalFrameQP / (double)prc->TotalNumberofBasicUnit;
+        Avem_Qc = (double)p_quad->TotalFrameQP / (double)p_quad->TotalNumberofBasicUnit;
         return ((int)floor(nbits * Avem_Qc + 0.5));
       }
     }
-    else if( img->type == B_SLICE )
-      return ((int) floor(nbits * prc->m_Qc + 0.5));
+    else if( p_Img->type == B_SLICE )
+      return ((int) floor(nbits * p_quad->m_Qc + 0.5));
   }
   return 0;
 }
 
-void updatePparams( rc_quadratic *prc, int complexity )
+void updatePparams( RCQuadratic *p_quad, RCGeneric *p_gen, int complexity )
 {
-  prc->Xp = complexity;
-  prc->Np--;
-  prc->Wp = prc->Xp;
-  prc->Pm_Hp = generic_RC->NumberofHeaderBits;
-  prc->NumberofCodedPFrame++;
-  prc->NumberofPPicture++;
+  p_quad->Xp = complexity;
+  p_quad->Np--;
+  p_quad->Wp = p_quad->Xp;
+  p_quad->Pm_Hp = p_gen->NumberofHeaderBits;
+  p_quad->NumberofCodedPFrame++;
+  p_quad->NumberofPPicture++;
 }
 
-void updateBparams( rc_quadratic *prc, int complexity )
+void updateBparams( RCQuadratic *p_quad, RCGeneric *p_gen, int complexity )
 {
-  prc->Xb = complexity;
-  prc->Nb--;
-  prc->Wb = prc->Xb / THETA;     
-  prc->NumberofBFrames++;
-  generic_RC->NumberofCodedBFrame++;
+  p_quad->Xb = complexity;
+  p_quad->Nb--;
+  p_quad->Wb = p_quad->Xb / THETA;     
+  p_quad->NumberofBFrames++;
+  p_gen->NumberofCodedBFrame++;
 }
 
 /*! 
  *************************************************************************************
  * \brief
  *    update after frame encoding
- *
+ * \param p_Img
+ *    Image encoding parameters for picture
+ * \param p_Inp
+ *    Input configuration parameters
+ * \param p_quad
+ *    quadratic model
+ * \param p_gen
+ *    generic rate control parameters 
  * \param nbits
  *    number of bits used for frame
  *
  *************************************************************************************
 */
-void rc_update_pict_frame(rc_quadratic *prc, int nbits)
+void rc_update_pict_frame(ImageParameters *p_Img, InputParameters *p_Inp, RCQuadratic *p_quad, RCGeneric *p_gen, int nbits)
 {
   /* update the complexity weight of I, P, B frame */  
   int complexity = 0;
 
-  switch( params->RCUpdateMode )
+  switch( p_Inp->RCUpdateMode )
   {
   case RC_MODE_0:
   case RC_MODE_2:
   default:
-    complexity = updateComplexity( prc, (Boolean) (img->type == P_SLICE), nbits );
-    if ( img->type == P_SLICE )
+    complexity = updateComplexity( p_Img, p_quad, p_gen, (Boolean) (p_Img->type == P_SLICE), nbits );
+    if ( p_Img->type == P_SLICE )
     {
-      if( generic_RC->NoGranularFieldRC == 0 || generic_RC->FieldControl == 0 )
-        updatePparams( prc, complexity );
+      if( p_gen->NoGranularFieldRC == 0 || p_gen->FieldControl == 0 )
+        updatePparams( p_quad, p_gen, complexity );
       else
-        generic_RC->NoGranularFieldRC = 0;
+        p_gen->NoGranularFieldRC = 0;
     }
-    else if ( img->type == B_SLICE )
-      updateBparams( prc, complexity );
+    else if ( p_Img->type == B_SLICE )
+      updateBparams( p_quad, p_gen, complexity );
     break;
   case RC_MODE_1:
-    complexity = updateComplexity( prc, (Boolean) (img->number != 0), nbits );
-    if ( img->number != 0 )
+    complexity = updateComplexity( p_Img, p_quad, p_gen, (Boolean) (p_Img->number != 0), nbits );
+    if ( p_Img->number != 0 )
     {
-      if( generic_RC->NoGranularFieldRC == 0 || generic_RC->FieldControl == 0 )
-        updatePparams( prc, complexity );
+      if( p_gen->NoGranularFieldRC == 0 || p_gen->FieldControl == 0 )
+        updatePparams( p_quad, p_gen, complexity );
       else
-        generic_RC->NoGranularFieldRC = 0;
+        p_gen->NoGranularFieldRC = 0;
     }
     break;
   case RC_MODE_3:
-    complexity = updateComplexity( prc, (Boolean) (img->type == P_SLICE), nbits );
-    if (img->type == I_SLICE && (img->number != 0))
-      generic_RC->NISlice--;
+    complexity = updateComplexity( p_Img, p_quad, p_gen, (Boolean) (p_Img->type == P_SLICE), nbits );
+    if (p_Img->type == I_SLICE && (p_Img->number != 0))
+      p_gen->NISlice--;
 
-    if ( img->type == P_SLICE )
+    if ( p_Img->type == P_SLICE )
     {
-      if( generic_RC->NoGranularFieldRC == 0 || generic_RC->FieldControl == 0 )
+      if( p_gen->NoGranularFieldRC == 0 || p_gen->FieldControl == 0 )
       {
-        updatePparams( prc, complexity );
-        generic_RC->NPSlice--;
+        updatePparams( p_quad, p_gen, complexity );
+        p_gen->NPSlice--;
       }
       else
-        generic_RC->NoGranularFieldRC = 0;
+        p_gen->NoGranularFieldRC = 0;
     }
-    else if ( img->type == B_SLICE )
+    else if ( p_Img->type == B_SLICE )
     {
-      updateBparams( prc, complexity );
-      generic_RC->hierNb[ params->HierarchicalCoding ? (generic_RC->temporal_levels - 1 - gop_structure[img->b_frame_to_code-1].hierarchy_layer) : 0 ]--;
+      updateBparams( p_quad, p_gen, complexity );
+      p_gen->hierNb[ p_Inp->HierarchicalCoding ? (p_gen->temporal_levels - 1 - p_Img->gop_structure[p_Img->b_frame_to_code-1].hierarchy_layer) : 0 ]--;
     }
     break;
   }   
@@ -895,98 +918,98 @@ void rc_update_pict_frame(rc_quadratic *prc, int nbits)
  *
  *************************************************************************************
 */
-void updateRCModel (rc_quadratic *prc)
+void updateRCModel (ImageParameters *p_Img, InputParameters *p_Inp, RCQuadratic *p_quad, RCGeneric *p_gen)
 {
   int n_windowSize;
   int i;
   double std = 0.0, threshold;
-  int m_Nc = prc->NumberofCodedPFrame;
+  int m_Nc = p_quad->NumberofCodedPFrame;
   Boolean MADModelFlag = FALSE;
   static Boolean m_rgRejected[RC_MODEL_HISTORY];
   static double  error       [RC_MODEL_HISTORY];
 
-  if( img->type == P_SLICE || (params->RCUpdateMode == RC_MODE_1 && (img->number != 0)) )
+  if( p_Img->type == P_SLICE || (p_Inp->RCUpdateMode == RC_MODE_1 && (p_Img->number != 0)) )
   {
     /*frame layer rate control*/
-    if(img->BasicUnit == img->FrameSizeInMbs)
+    if(p_Img->BasicUnit == p_Img->FrameSizeInMbs)
     {
-      prc->CurrentFrameMAD = ComputeFrameMAD();
-      m_Nc=prc->NumberofCodedPFrame;
+      p_quad->CurrentFrameMAD = ComputeFrameMAD(p_Img);
+      m_Nc=p_quad->NumberofCodedPFrame;
     }
     /*basic unit layer rate control*/
     else
     {
       /*compute the MAD of the current basic unit*/
-      prc->CurrentFrameMAD = (double) ((generic_RC->TotalMADBasicUnit >> 8)/img->BasicUnit);
-      generic_RC->TotalMADBasicUnit=0;
+      p_quad->CurrentFrameMAD = (double) ((p_gen->TotalMADBasicUnit >> 8)/p_Img->BasicUnit);
+      p_gen->TotalMADBasicUnit=0;
 
       /* compute the average number of header bits*/
-      prc->CodedBasicUnit=prc->TotalNumberofBasicUnit-prc->NumberofBasicUnit;
-      if(prc->CodedBasicUnit > 0)
+      p_quad->CodedBasicUnit=p_quad->TotalNumberofBasicUnit-p_quad->NumberofBasicUnit;
+      if(p_quad->CodedBasicUnit > 0)
       {
-        prc->PAveHeaderBits1=(int)((double)(prc->PAveHeaderBits1*(prc->CodedBasicUnit-1)+
-          generic_RC->NumberofBasicUnitHeaderBits)/prc->CodedBasicUnit+0.5);
-        if(prc->PAveHeaderBits3 == 0)
-          prc->PAveHeaderBits2 = prc->PAveHeaderBits1;
+        p_quad->PAveHeaderBits1=(int)((double)(p_quad->PAveHeaderBits1*(p_quad->CodedBasicUnit-1)+
+          p_gen->NumberofBasicUnitHeaderBits)/p_quad->CodedBasicUnit+0.5);
+        if(p_quad->PAveHeaderBits3 == 0)
+          p_quad->PAveHeaderBits2 = p_quad->PAveHeaderBits1;
         else
         {
-          prc->PAveHeaderBits2 = (int)((double)(prc->PAveHeaderBits1 * prc->CodedBasicUnit+
-            prc->PAveHeaderBits3 * prc->NumberofBasicUnit)/prc->TotalNumberofBasicUnit+0.5);
+          p_quad->PAveHeaderBits2 = (int)((double)(p_quad->PAveHeaderBits1 * p_quad->CodedBasicUnit+
+            p_quad->PAveHeaderBits3 * p_quad->NumberofBasicUnit)/p_quad->TotalNumberofBasicUnit+0.5);
         }
       }
       
-      if ((prc->NumberofBasicUnit >= prc->TotalNumberofBasicUnit) || (prc->NumberofBasicUnit<0))
+      if ((p_quad->NumberofBasicUnit >= p_quad->TotalNumberofBasicUnit) || (p_quad->NumberofBasicUnit<0))
       {
-        fprintf(stderr, "Write into invalid memory in updateRCModel at frame %d, prc->NumberofBasicUnit %d\n", 
-          img->framepoc, prc->NumberofBasicUnit);
+        fprintf(stderr, "Write into invalid memory in updateRCModel at frame %d, p_quad->NumberofBasicUnit %d\n", 
+          p_Img->framepoc, p_quad->NumberofBasicUnit);
       }
 
       /*update the record of MADs for reference*/
-      if(((params->PicInterlace == ADAPTIVE_CODING) || (params->MbInterlace)) && (generic_RC->FieldControl == 1))
-        prc->FCBUCFMAD[prc->TotalNumberofBasicUnit-1-prc->NumberofBasicUnit]=prc->CurrentFrameMAD;
+      if(((p_Inp->PicInterlace == ADAPTIVE_CODING) || (p_Inp->MbInterlace)) && (p_gen->FieldControl == 1))
+        p_quad->FCBUCFMAD[p_quad->TotalNumberofBasicUnit-1-p_quad->NumberofBasicUnit]=p_quad->CurrentFrameMAD;
       else
-        prc->BUCFMAD[prc->TotalNumberofBasicUnit-1-prc->NumberofBasicUnit]=prc->CurrentFrameMAD;
+        p_quad->BUCFMAD[p_quad->TotalNumberofBasicUnit-1-p_quad->NumberofBasicUnit]=p_quad->CurrentFrameMAD;
 
-      if(prc->NumberofBasicUnit != 0)
-        m_Nc = prc->NumberofCodedPFrame * prc->TotalNumberofBasicUnit + prc->CodedBasicUnit;
+      if(p_quad->NumberofBasicUnit != 0)
+        m_Nc = p_quad->NumberofCodedPFrame * p_quad->TotalNumberofBasicUnit + p_quad->CodedBasicUnit;
       else
-        m_Nc = (prc->NumberofCodedPFrame-1) * prc->TotalNumberofBasicUnit + prc->CodedBasicUnit;
+        m_Nc = (p_quad->NumberofCodedPFrame-1) * p_quad->TotalNumberofBasicUnit + p_quad->CodedBasicUnit;
     }
 
     if(m_Nc > 1)
       MADModelFlag=TRUE;
 
-    prc->PPreHeader = generic_RC->NumberofHeaderBits;
+    p_quad->PPreHeader = p_gen->NumberofHeaderBits;
     for (i = (RC_MODEL_HISTORY-2); i > 0; i--)
     {// update the history
-      prc->Pm_rgQp[i] = prc->Pm_rgQp[i - 1];
-      prc->m_rgQp[i]  = prc->Pm_rgQp[i];
-      prc->Pm_rgRp[i] = prc->Pm_rgRp[i - 1];
-      prc->m_rgRp[i]  = prc->Pm_rgRp[i];
+      p_quad->Pm_rgQp[i] = p_quad->Pm_rgQp[i - 1];
+      p_quad->m_rgQp[i]  = p_quad->Pm_rgQp[i];
+      p_quad->Pm_rgRp[i] = p_quad->Pm_rgRp[i - 1];
+      p_quad->m_rgRp[i]  = p_quad->Pm_rgRp[i];
     }
-    prc->Pm_rgQp[0] = QP2Qstep(prc->m_Qc); //*1.0/prc->CurrentFrameMAD;
+    p_quad->Pm_rgQp[0] = QP2Qstep(p_quad->m_Qc); //*1.0/p_quad->CurrentFrameMAD;
     /*frame layer rate control*/
-    if(img->BasicUnit == img->FrameSizeInMbs)
-      prc->Pm_rgRp[0] = generic_RC->NumberofTextureBits*1.0/prc->CurrentFrameMAD;
+    if(p_Img->BasicUnit == p_Img->FrameSizeInMbs)
+      p_quad->Pm_rgRp[0] = p_gen->NumberofTextureBits*1.0/p_quad->CurrentFrameMAD;
     /*basic unit layer rate control*/
     else
-      prc->Pm_rgRp[0] = generic_RC->NumberofBasicUnitTextureBits*1.0/prc->CurrentFrameMAD;
+      p_quad->Pm_rgRp[0] = p_gen->NumberofBasicUnitTextureBits*1.0/p_quad->CurrentFrameMAD;
 
-    prc->m_rgQp[0] = prc->Pm_rgQp[0];
-    prc->m_rgRp[0] = prc->Pm_rgRp[0];
-    prc->m_X1 = prc->Pm_X1;
-    prc->m_X2 = prc->Pm_X2;
+    p_quad->m_rgQp[0] = p_quad->Pm_rgQp[0];
+    p_quad->m_rgRp[0] = p_quad->Pm_rgRp[0];
+    p_quad->m_X1 = p_quad->Pm_X1;
+    p_quad->m_X2 = p_quad->Pm_X2;
 
     /*compute the size of window*/
-    n_windowSize = (prc->CurrentFrameMAD>prc->PreviousFrameMAD)
-      ? (int)(prc->PreviousFrameMAD/prc->CurrentFrameMAD * (RC_MODEL_HISTORY-1) )
-      : (int)(prc->CurrentFrameMAD/prc->PreviousFrameMAD *(RC_MODEL_HISTORY-1));
+    n_windowSize = (p_quad->CurrentFrameMAD>p_quad->PreviousFrameMAD)
+      ? (int)(p_quad->PreviousFrameMAD/p_quad->CurrentFrameMAD * (RC_MODEL_HISTORY-1) )
+      : (int)(p_quad->CurrentFrameMAD/p_quad->PreviousFrameMAD *(RC_MODEL_HISTORY-1));
     n_windowSize=iClip3(1, m_Nc, n_windowSize);
-    n_windowSize=imin(n_windowSize,prc->m_windowSize+1);
+    n_windowSize=imin(n_windowSize,p_quad->m_windowSize+1);
     n_windowSize=imin(n_windowSize,(RC_MODEL_HISTORY-1));
 
     /*update the previous window size*/
-    prc->m_windowSize=n_windowSize;
+    p_quad->m_windowSize=n_windowSize;
 
     for (i = 0; i < (RC_MODEL_HISTORY-1); i++)
     {
@@ -994,14 +1017,14 @@ void updateRCModel (rc_quadratic *prc)
     }
 
     // initial RD model estimator
-    RCModelEstimator (prc, n_windowSize, m_rgRejected);
+    RCModelEstimator (p_Img, p_Inp, p_quad, n_windowSize, m_rgRejected);
 
-    n_windowSize = prc->m_windowSize;
+    n_windowSize = p_quad->m_windowSize;
     // remove outlier
 
     for (i = 0; i < (int) n_windowSize; i++)
     {
-      error[i] = prc->m_X1 / prc->m_rgQp[i] + prc->m_X2 / (prc->m_rgQp[i] * prc->m_rgQp[i]) - prc->m_rgRp[i];
+      error[i] = p_quad->m_X1 / p_quad->m_rgQp[i] + p_quad->m_X2 / (p_quad->m_rgQp[i] * p_quad->m_rgQp[i]) - p_quad->m_rgRp[i];
       std += error[i] * error[i];
     }
     threshold = (n_windowSize == 2) ? 0 : sqrt (std / n_windowSize);
@@ -1014,12 +1037,12 @@ void updateRCModel (rc_quadratic *prc)
     m_rgRejected[0] = FALSE;
 
     // second RD model estimator
-    RCModelEstimator (prc, n_windowSize, m_rgRejected);
+    RCModelEstimator (p_Img, p_Inp, p_quad, n_windowSize, m_rgRejected);
 
     if( MADModelFlag )
-      updateMADModel(prc);
-    else if( img->type == P_SLICE || (params->RCUpdateMode == RC_MODE_1 && (img->number != 0)) )
-      prc->PPictureMAD[0] = prc->CurrentFrameMAD;
+      updateMADModel(p_Img, p_Inp, p_quad, p_gen);
+    else if( p_Img->type == P_SLICE || (p_Inp->RCUpdateMode == RC_MODE_1 && (p_Img->number != 0)) )
+      p_quad->PPictureMAD[0] = p_quad->CurrentFrameMAD;
   }
 }
 
@@ -1030,7 +1053,7 @@ void updateRCModel (rc_quadratic *prc)
  *
  *************************************************************************************
 */
-void RCModelEstimator (rc_quadratic *prc, int n_windowSize, Boolean *m_rgRejected)
+void RCModelEstimator (ImageParameters *p_Img, InputParameters *p_Inp, RCQuadratic *p_quad, int n_windowSize, Boolean *m_rgRejected)
 {
   int n_realSize = n_windowSize;
   int i;
@@ -1046,19 +1069,19 @@ void RCModelEstimator (rc_quadratic *prc, int n_windowSize, Boolean *m_rgRejecte
   }
 
   // default RD model estimation results
-  prc->m_X1 = prc->m_X2 = 0.0;
+  p_quad->m_X1 = p_quad->m_X2 = 0.0;
 
   for (i = 0; i < n_windowSize; i++)
   {
     if (!m_rgRejected[i])
-      oneSampleQ = prc->m_rgQp[i];
+      oneSampleQ = p_quad->m_rgQp[i];
   }
   for (i = 0; i < n_windowSize; i++)
   {// if all non-rejected Q are the same, take 1st order model
-    if ((prc->m_rgQp[i] != oneSampleQ) && !m_rgRejected[i])
+    if ((p_quad->m_rgQp[i] != oneSampleQ) && !m_rgRejected[i])
       estimateX2 = TRUE;
     if (!m_rgRejected[i])
-      prc->m_X1 += (prc->m_rgQp[i] * prc->m_rgRp[i]) / n_realSize;
+      p_quad->m_X1 += (p_quad->m_rgQp[i] * p_quad->m_rgRp[i]) / n_realSize;
   }
 
   // take 2nd order model to estimate X1 and X2
@@ -1069,30 +1092,30 @@ void RCModelEstimator (rc_quadratic *prc, int n_windowSize, Boolean *m_rgRejecte
       if (!m_rgRejected[i])
       {
         a00  = a00 + 1.0;
-        a01 += 1.0 / prc->m_rgQp[i];
+        a01 += 1.0 / p_quad->m_rgQp[i];
         a10  = a01;
-        a11 += 1.0 / (prc->m_rgQp[i] * prc->m_rgQp[i]);
-        b0  += prc->m_rgQp[i] * prc->m_rgRp[i];
-        b1  += prc->m_rgRp[i];
+        a11 += 1.0 / (p_quad->m_rgQp[i] * p_quad->m_rgQp[i]);
+        b0  += p_quad->m_rgQp[i] * p_quad->m_rgRp[i];
+        b1  += p_quad->m_rgRp[i];
       }
     }
     // solve the equation of AX = B
     MatrixValue=a00*a11-a01*a10;
     if(fabs(MatrixValue) > 0.000001)
     {
-      prc->m_X1 = (b0 * a11 - b1 * a01) / MatrixValue;
-      prc->m_X2 = (b1 * a00 - b0 * a10) / MatrixValue;
+      p_quad->m_X1 = (b0 * a11 - b1 * a01) / MatrixValue;
+      p_quad->m_X2 = (b1 * a00 - b0 * a10) / MatrixValue;
     }
     else
     {
-      prc->m_X1 = b0 / a00;
-      prc->m_X2 = 0.0;
+      p_quad->m_X1 = b0 / a00;
+      p_quad->m_X2 = 0.0;
     }
   }
-  if( img->type == P_SLICE || (params->RCUpdateMode == RC_MODE_1 && (img->number != 0)) )
+  if( p_Img->type == P_SLICE || (p_Inp->RCUpdateMode == RC_MODE_1 && (p_Img->number != 0)) )
   {
-    prc->Pm_X1 = prc->m_X1;
-    prc->Pm_X2 = prc->m_X2;
+    p_quad->Pm_X1 = p_quad->m_X1;
+    p_quad->Pm_X2 = p_quad->m_X2;
   }
 }
 
@@ -1103,54 +1126,54 @@ void RCModelEstimator (rc_quadratic *prc, int n_windowSize, Boolean *m_rgRejecte
  *
  *************************************************************************************
 */
-void updateMADModel (rc_quadratic *prc)
+void updateMADModel (ImageParameters *p_Img, InputParameters *p_Inp, RCQuadratic *p_quad, RCGeneric *p_gen)
 {
   int    n_windowSize;
   int    i;
   double std = 0.0, threshold;
-  int    m_Nc = prc->NumberofCodedPFrame;
+  int    m_Nc = p_quad->NumberofCodedPFrame;
   static Boolean PictureRejected[RC_MODEL_HISTORY];
   static double  error          [RC_MODEL_HISTORY];
 
-  if(prc->NumberofCodedPFrame>0)
+  if(p_quad->NumberofCodedPFrame>0)
   {
-    //assert (img->type!=P_SLICE);
+    //assert (p_Img->type!=P_SLICE);
     /*frame layer rate control*/
-    if(img->BasicUnit == img->FrameSizeInMbs)
-      m_Nc = prc->NumberofCodedPFrame;
+    if(p_Img->BasicUnit == p_Img->FrameSizeInMbs)
+      m_Nc = p_quad->NumberofCodedPFrame;
     else // basic unit layer rate control
-      m_Nc=prc->NumberofCodedPFrame*prc->TotalNumberofBasicUnit+prc->CodedBasicUnit;
+      m_Nc=p_quad->NumberofCodedPFrame*p_quad->TotalNumberofBasicUnit+p_quad->CodedBasicUnit;
 
     for (i = (RC_MODEL_HISTORY-2); i > 0; i--)
     {// update the history
-      prc->PPictureMAD[i]  = prc->PPictureMAD[i - 1];
-      prc->PictureMAD[i]   = prc->PPictureMAD[i];
-      prc->ReferenceMAD[i] = prc->ReferenceMAD[i-1];
+      p_quad->PPictureMAD[i]  = p_quad->PPictureMAD[i - 1];
+      p_quad->PictureMAD[i]   = p_quad->PPictureMAD[i];
+      p_quad->ReferenceMAD[i] = p_quad->ReferenceMAD[i-1];
     }
-    prc->PPictureMAD[0] = prc->CurrentFrameMAD;
-    prc->PictureMAD[0]  = prc->PPictureMAD[0];
+    p_quad->PPictureMAD[0] = p_quad->CurrentFrameMAD;
+    p_quad->PictureMAD[0]  = p_quad->PPictureMAD[0];
 
-    if(img->BasicUnit == img->FrameSizeInMbs)
-      prc->ReferenceMAD[0]=prc->PictureMAD[1];
+    if(p_Img->BasicUnit == p_Img->FrameSizeInMbs)
+      p_quad->ReferenceMAD[0]=p_quad->PictureMAD[1];
     else
     {
-      if(((params->PicInterlace==ADAPTIVE_CODING)||(params->MbInterlace)) &&(generic_RC->FieldControl==1))
-        prc->ReferenceMAD[0]=prc->FCBUPFMAD[prc->TotalNumberofBasicUnit-1-prc->NumberofBasicUnit];
+      if(((p_Inp->PicInterlace==ADAPTIVE_CODING)||(p_Inp->MbInterlace)) &&(p_gen->FieldControl==1))
+        p_quad->ReferenceMAD[0]=p_quad->FCBUPFMAD[p_quad->TotalNumberofBasicUnit-1-p_quad->NumberofBasicUnit];
       else
-        prc->ReferenceMAD[0]=prc->BUPFMAD[prc->TotalNumberofBasicUnit-1-prc->NumberofBasicUnit];
+        p_quad->ReferenceMAD[0]=p_quad->BUPFMAD[p_quad->TotalNumberofBasicUnit-1-p_quad->NumberofBasicUnit];
     }
-    prc->MADPictureC1 = prc->PMADPictureC1;
-    prc->MADPictureC2 = prc->PMADPictureC2;
+    p_quad->MADPictureC1 = p_quad->PMADPictureC1;
+    p_quad->MADPictureC2 = p_quad->PMADPictureC2;
 
     /*compute the size of window*/
-    n_windowSize = (prc->CurrentFrameMAD > prc->PreviousFrameMAD)
-      ? (int) ((float)(RC_MODEL_HISTORY-1) * prc->PreviousFrameMAD / prc->CurrentFrameMAD)
-      : (int) ((float)(RC_MODEL_HISTORY-1) * prc->CurrentFrameMAD / prc->PreviousFrameMAD);
+    n_windowSize = (p_quad->CurrentFrameMAD > p_quad->PreviousFrameMAD)
+      ? (int) ((float)(RC_MODEL_HISTORY-1) * p_quad->PreviousFrameMAD / p_quad->CurrentFrameMAD)
+      : (int) ((float)(RC_MODEL_HISTORY-1) * p_quad->CurrentFrameMAD / p_quad->PreviousFrameMAD);
     n_windowSize = iClip3(1, (m_Nc-1), n_windowSize);
-    n_windowSize=imin(n_windowSize, imin(20, prc->MADm_windowSize + 1));
+    n_windowSize=imin(n_windowSize, imin(20, p_quad->MADm_windowSize + 1));
 
     /*update the previous window size*/
-    prc->MADm_windowSize=n_windowSize;
+    p_quad->MADm_windowSize=n_windowSize;
 
     for (i = 0; i < (RC_MODEL_HISTORY-1); i++)
     {
@@ -1158,16 +1181,16 @@ void updateMADModel (rc_quadratic *prc)
     }
 
     //update the MAD for the previous frame
-    if( img->type == P_SLICE || (params->RCUpdateMode == RC_MODE_1 && (img->number != 0)) )
-      prc->PreviousFrameMAD=prc->CurrentFrameMAD;
+    if( p_Img->type == P_SLICE || (p_Inp->RCUpdateMode == RC_MODE_1 && (p_Img->number != 0)) )
+      p_quad->PreviousFrameMAD=p_quad->CurrentFrameMAD;
 
     // initial MAD model estimator
-    MADModelEstimator (prc, n_windowSize, PictureRejected);
+    MADModelEstimator (p_Img, p_Inp, p_quad, n_windowSize, PictureRejected);
 
     // remove outlier
     for (i = 0; i < n_windowSize; i++)
     {
-      error[i] = prc->MADPictureC1 * prc->ReferenceMAD[i] + prc->MADPictureC2 - prc->PictureMAD[i];
+      error[i] = p_quad->MADPictureC1 * p_quad->ReferenceMAD[i] + p_quad->MADPictureC2 - p_quad->PictureMAD[i];
       std += (error[i] * error[i]);
     }
 
@@ -1181,7 +1204,7 @@ void updateMADModel (rc_quadratic *prc)
     PictureRejected[0] = FALSE;
 
     // second MAD model estimator
-    MADModelEstimator (prc, n_windowSize, PictureRejected);
+    MADModelEstimator (p_Img, p_Inp, p_quad, n_windowSize, PictureRejected);
   }
 }
 
@@ -1193,7 +1216,7 @@ void updateMADModel (rc_quadratic *prc)
  *
  *************************************************************************************
 */
-void MADModelEstimator (rc_quadratic *prc, int n_windowSize, Boolean *PictureRejected)
+void MADModelEstimator (ImageParameters *p_Img, InputParameters *p_Inp, RCQuadratic *p_quad, int n_windowSize, Boolean *PictureRejected)
 {
   int    n_realSize = n_windowSize;
   int    i;
@@ -1209,20 +1232,20 @@ void MADModelEstimator (rc_quadratic *prc, int n_windowSize, Boolean *PictureRej
   }
 
   // default MAD model estimation results
-  prc->MADPictureC1 = prc->MADPictureC2 = 0.0;
+  p_quad->MADPictureC1 = p_quad->MADPictureC2 = 0.0;
 
   for (i = 0; i < n_windowSize; i++)
   {
     if (!PictureRejected[i])
-      oneSampleQ = prc->PictureMAD[i];
+      oneSampleQ = p_quad->PictureMAD[i];
   }
 
   for (i = 0; i < n_windowSize; i++)
   {// if all non-rejected MAD are the same, take 1st order model
-    if ((prc->PictureMAD[i] != oneSampleQ) && !PictureRejected[i])
+    if ((p_quad->PictureMAD[i] != oneSampleQ) && !PictureRejected[i])
       estimateX2 = TRUE;
     if (!PictureRejected[i])
-      prc->MADPictureC1 += prc->PictureMAD[i] / (prc->ReferenceMAD[i]*n_realSize);
+      p_quad->MADPictureC1 += p_quad->PictureMAD[i] / (p_quad->ReferenceMAD[i]*n_realSize);
   }
 
   // take 2nd order model to estimate X1 and X2
@@ -1233,30 +1256,30 @@ void MADModelEstimator (rc_quadratic *prc, int n_windowSize, Boolean *PictureRej
       if (!PictureRejected[i])
       {
         a00  = a00 + 1.0;
-        a01 += prc->ReferenceMAD[i];
+        a01 += p_quad->ReferenceMAD[i];
         a10  = a01;
-        a11 += prc->ReferenceMAD[i] * prc->ReferenceMAD[i];
-        b0  += prc->PictureMAD[i];
-        b1  += prc->PictureMAD[i]   * prc->ReferenceMAD[i];
+        a11 += p_quad->ReferenceMAD[i] * p_quad->ReferenceMAD[i];
+        b0  += p_quad->PictureMAD[i];
+        b1  += p_quad->PictureMAD[i]   * p_quad->ReferenceMAD[i];
       }
     }
     // solve the equation of AX = B
     MatrixValue = a00 * a11 - a01 * a10;
     if(fabs(MatrixValue) > 0.000001)
     {
-      prc->MADPictureC2 = (b0 * a11 - b1 * a01) / MatrixValue;
-      prc->MADPictureC1 = (b1 * a00 - b0 * a10) / MatrixValue;
+      p_quad->MADPictureC2 = (b0 * a11 - b1 * a01) / MatrixValue;
+      p_quad->MADPictureC1 = (b1 * a00 - b0 * a10) / MatrixValue;
     }
     else
     {
-      prc->MADPictureC1 = b0/a01;
-      prc->MADPictureC2 = 0.0;
+      p_quad->MADPictureC1 = b0/a01;
+      p_quad->MADPictureC2 = 0.0;
     }
   }
-  if( img->type == P_SLICE || (params->RCUpdateMode == RC_MODE_1 && (img->number != 0)) )
+  if( p_Img->type == P_SLICE || (p_Inp->RCUpdateMode == RC_MODE_1 && (p_Img->number != 0)) )
   {
-    prc->PMADPictureC1 = prc->MADPictureC1;
-    prc->PMADPictureC2 = prc->MADPictureC2;
+    p_quad->PMADPictureC1 = p_quad->MADPictureC1;
+    p_quad->PMADPictureC2 = p_quad->MADPictureC2;
   }
 }
 
@@ -1267,7 +1290,7 @@ void MADModelEstimator (rc_quadratic *prc, int n_windowSize, Boolean *PictureRej
  *
  *************************************************************************************
 */
-int updateQPRC0(rc_quadratic *prc, int topfield)
+int updateQPRC0(ImageParameters *p_Img, InputParameters *p_Inp, RCQuadratic *p_quad, RCGeneric *p_gen, int topfield)
 {
   int m_Bits;
   int BFrameNumber;
@@ -1276,239 +1299,239 @@ int updateQPRC0(rc_quadratic *prc, int topfield)
   int MaxQpChange, m_Qp, m_Hp;
 
   /* frame layer rate control */
-  if( img->BasicUnit == img->FrameSizeInMbs )
+  if( p_Img->BasicUnit == p_Img->FrameSizeInMbs )
   {
     /* fixed quantization parameter is used to coded I frame, the first P frame and the first B frame
     the quantization parameter is adjusted according the available channel bandwidth and
     the type of video */
     /*top field*/
-    if((topfield) || (generic_RC->FieldControl==0))
+    if((topfield) || (p_gen->FieldControl==0))
     {
-      if (img->type==I_SLICE)
+      if (p_Img->type==I_SLICE)
       {
-        prc->m_Qc = prc->MyInitialQp;
-        return prc->m_Qc;
+        p_quad->m_Qc = p_quad->MyInitialQp;
+        return p_quad->m_Qc;
       }
-      else if(img->type == B_SLICE)
+      else if(p_Img->type == B_SLICE)
       {
-        if(params->NumberBFrames==1)
+        if(p_Inp->NumberBFrames==1)
         {
-          if((params->PicInterlace==ADAPTIVE_CODING)||(params->MbInterlace))
-            updateQPInterlace( prc );
+          if((p_Inp->PicInterlace==ADAPTIVE_CODING)||(p_Inp->MbInterlace))
+            updateQPInterlace( p_quad, p_gen );
 
-          prc->m_Qc = imin(prc->PrevLastQP, prc->CurrLastQP) + 2;
-          prc->m_Qc = imax(prc->m_Qc, imax(prc->PrevLastQP, prc->CurrLastQP));
-          prc->m_Qc = imax(prc->m_Qc, prc->CurrLastQP + 1);
-          prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // Clipping
+          p_quad->m_Qc = imin(p_quad->PrevLastQP, p_quad->CurrLastQP) + 2;
+          p_quad->m_Qc = imax(p_quad->m_Qc, imax(p_quad->PrevLastQP, p_quad->CurrLastQP));
+          p_quad->m_Qc = imax(p_quad->m_Qc, p_quad->CurrLastQP + 1);
+          p_quad->m_Qc = iClip3(p_Img->RCMinQP + p_quad->bitdepth_qp_scale, p_Img->RCMaxQP + p_quad->bitdepth_qp_scale, p_quad->m_Qc); // Clipping
         }
         else
         {
-          BFrameNumber = (prc->NumberofBFrames + 1) % params->NumberBFrames;
+          BFrameNumber = (p_quad->NumberofBFrames + 1) % p_Inp->NumberBFrames;
           if(BFrameNumber==0)
-            BFrameNumber = params->NumberBFrames;
+            BFrameNumber = p_Inp->NumberBFrames;
 
           /*adaptive field/frame coding*/
           if(BFrameNumber==1)
           {
-            if((params->PicInterlace==ADAPTIVE_CODING)||(params->MbInterlace))
-              updateQPInterlace( prc );
+            if((p_Inp->PicInterlace==ADAPTIVE_CODING)||(p_Inp->MbInterlace))
+              updateQPInterlace( p_quad, p_gen );
           }
 
-          if((prc->CurrLastQP-prc->PrevLastQP)<=(-2*params->NumberBFrames-3))
+          if((p_quad->CurrLastQP-p_quad->PrevLastQP)<=(-2*p_Inp->NumberBFrames-3))
             StepSize=-3;
-          else  if((prc->CurrLastQP-prc->PrevLastQP)==(-2*params->NumberBFrames-2))
+          else  if((p_quad->CurrLastQP-p_quad->PrevLastQP)==(-2*p_Inp->NumberBFrames-2))
             StepSize=-2;
-          else if((prc->CurrLastQP-prc->PrevLastQP)==(-2*params->NumberBFrames-1))
+          else if((p_quad->CurrLastQP-p_quad->PrevLastQP)==(-2*p_Inp->NumberBFrames-1))
             StepSize=-1;
-          else if((prc->CurrLastQP-prc->PrevLastQP)==(-2*params->NumberBFrames))
+          else if((p_quad->CurrLastQP-p_quad->PrevLastQP)==(-2*p_Inp->NumberBFrames))
             StepSize=0;
-          else if((prc->CurrLastQP-prc->PrevLastQP)==(-2*params->NumberBFrames+1))
+          else if((p_quad->CurrLastQP-p_quad->PrevLastQP)==(-2*p_Inp->NumberBFrames+1))
             StepSize=1;
           else
             StepSize=2;
 
-          prc->m_Qc  = prc->PrevLastQP + StepSize;
-          prc->m_Qc += iClip3( -2 * (BFrameNumber - 1), 2*(BFrameNumber-1),
-            (BFrameNumber-1)*(prc->CurrLastQP-prc->PrevLastQP)/(params->NumberBFrames-1));
-          prc->m_Qc  = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // Clipping
+          p_quad->m_Qc  = p_quad->PrevLastQP + StepSize;
+          p_quad->m_Qc += iClip3( -2 * (BFrameNumber - 1), 2*(BFrameNumber-1),
+            (BFrameNumber-1)*(p_quad->CurrLastQP-p_quad->PrevLastQP)/(p_Inp->NumberBFrames-1));
+          p_quad->m_Qc  = iClip3(p_Img->RCMinQP + p_quad->bitdepth_qp_scale, p_Img->RCMaxQP + p_quad->bitdepth_qp_scale, p_quad->m_Qc); // Clipping
         }
-        return prc->m_Qc;
+        return p_quad->m_Qc;
       }
-      else if( img->type == P_SLICE && prc->NumberofPPicture == 0 )
+      else if( p_Img->type == P_SLICE && p_quad->NumberofPPicture == 0 )
       {
-        prc->m_Qc=prc->MyInitialQp;
+        p_quad->m_Qc=p_quad->MyInitialQp;
 
-        if(generic_RC->FieldControl==0)
-          updateQPNonPicAFF( prc );
-        return prc->m_Qc;
+        if(p_gen->FieldControl==0)
+          updateQPNonPicAFF( p_Img->active_sps, p_quad );
+        return p_quad->m_Qc;
       }
       else
       {
         /*adaptive field/frame coding*/
-        if( ( params->PicInterlace == ADAPTIVE_CODING || params->MbInterlace ) && generic_RC->FieldControl == 0 )
-          updateQPInterlaceBU( prc );
+        if( ( p_Inp->PicInterlace == ADAPTIVE_CODING || p_Inp->MbInterlace ) && p_gen->FieldControl == 0 )
+          updateQPInterlaceBU( p_quad, p_gen );
 
-        prc->m_X1 = prc->Pm_X1;
-        prc->m_X2 = prc->Pm_X2;
-        prc->MADPictureC1 = prc->PMADPictureC1;
-        prc->MADPictureC2 = prc->PMADPictureC2;
-        prc->PreviousPictureMAD = prc->PPictureMAD[0];
+        p_quad->m_X1 = p_quad->Pm_X1;
+        p_quad->m_X2 = p_quad->Pm_X2;
+        p_quad->MADPictureC1 = p_quad->PMADPictureC1;
+        p_quad->MADPictureC2 = p_quad->PMADPictureC2;
+        p_quad->PreviousPictureMAD = p_quad->PPictureMAD[0];
 
-        MaxQpChange = prc->PMaxQpChange;
-        m_Qp = prc->Pm_Qp;
-        m_Hp = prc->PPreHeader;
+        MaxQpChange = p_quad->PMaxQpChange;
+        m_Qp = p_quad->Pm_Qp;
+        m_Hp = p_quad->PPreHeader;
 
         /* predict the MAD of current picture*/
-        prc->CurrentFrameMAD = prc->MADPictureC1*prc->PreviousPictureMAD + prc->MADPictureC2;
+        p_quad->CurrentFrameMAD = p_quad->MADPictureC1*p_quad->PreviousPictureMAD + p_quad->MADPictureC2;
 
         /*compute the number of bits for the texture*/
-        if(prc->Target < 0)
+        if(p_quad->Target < 0)
         {
-          prc->m_Qc=m_Qp+MaxQpChange;
-          prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // Clipping
+          p_quad->m_Qc=m_Qp+MaxQpChange;
+          p_quad->m_Qc = iClip3(p_Img->RCMinQP + p_quad->bitdepth_qp_scale, p_Img->RCMaxQP + p_quad->bitdepth_qp_scale, p_quad->m_Qc); // Clipping
         }
         else
         {
-          m_Bits = prc->Target-m_Hp;
-          m_Bits = imax(m_Bits, (int)(prc->bit_rate/(MINVALUE*prc->frame_rate)));
+          m_Bits = p_quad->Target-m_Hp;
+          m_Bits = imax(m_Bits, (int)(p_quad->bit_rate/(MINVALUE*p_quad->frame_rate)));
 
-          updateModelQPFrame( prc, m_Bits );
+          updateModelQPFrame( p_quad, m_Bits );
 
-          prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // clipping
-          prc->m_Qc = iClip3(m_Qp-MaxQpChange, m_Qp+MaxQpChange, prc->m_Qc); // control variation
+          p_quad->m_Qc = iClip3(p_Img->RCMinQP + p_quad->bitdepth_qp_scale, p_Img->RCMaxQP + p_quad->bitdepth_qp_scale, p_quad->m_Qc); // clipping
+          p_quad->m_Qc = iClip3(m_Qp-MaxQpChange, m_Qp+MaxQpChange, p_quad->m_Qc); // control variation
         }
 
-        if( generic_RC->FieldControl == 0 )
-          updateQPNonPicAFF( prc );
+        if( p_gen->FieldControl == 0 )
+          updateQPNonPicAFF( p_Img->active_sps, p_quad );
 
-        return prc->m_Qc;
+        return p_quad->m_Qc;
       }
     }
     /*bottom field*/
     else
     {
-      if( img->type == P_SLICE && generic_RC->NoGranularFieldRC == 0 )
-        updateBottomField( prc );
-      return prc->m_Qc;
+      if( p_Img->type == P_SLICE && p_gen->NoGranularFieldRC == 0 )
+        updateBottomField( p_Inp, p_quad );
+      return p_quad->m_Qc;
     }
   }
   /*basic unit layer rate control*/
   else
   {
     /*top field of I frame*/
-    if (img->type == I_SLICE)
+    if (p_Img->type == I_SLICE)
     {
-      prc->m_Qc = prc->MyInitialQp;
-      return prc->m_Qc;
+      p_quad->m_Qc = p_quad->MyInitialQp;
+      return p_quad->m_Qc;
     }
-    else if( img->type == B_SLICE )
+    else if( p_Img->type == B_SLICE )
     {
       /*top field of B frame*/
-      if((topfield)||(generic_RC->FieldControl==0))
+      if((topfield)||(p_gen->FieldControl==0))
       {
-        if(params->NumberBFrames==1)
+        if(p_Inp->NumberBFrames==1)
         {
           /*adaptive field/frame coding*/
-          if((params->PicInterlace==ADAPTIVE_CODING)||(params->MbInterlace))
-            updateQPInterlace( prc );
+          if((p_Inp->PicInterlace==ADAPTIVE_CODING)||(p_Inp->MbInterlace))
+            updateQPInterlace( p_quad, p_gen );
 
-          if(prc->PrevLastQP==prc->CurrLastQP)
-            prc->m_Qc=prc->PrevLastQP+2;
+          if(p_quad->PrevLastQP==p_quad->CurrLastQP)
+            p_quad->m_Qc=p_quad->PrevLastQP+2;
           else
-            prc->m_Qc=(prc->PrevLastQP+prc->CurrLastQP)/2+1;
-          prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // Clipping
+            p_quad->m_Qc = ((p_quad->PrevLastQP+p_quad->CurrLastQP) >> 1) + 1;
+          p_quad->m_Qc = iClip3(p_Img->RCMinQP + p_quad->bitdepth_qp_scale, p_Img->RCMaxQP + p_quad->bitdepth_qp_scale, p_quad->m_Qc); // Clipping
         }
         else
         {
-          BFrameNumber=(prc->NumberofBFrames+1)%params->NumberBFrames;
+          BFrameNumber=(p_quad->NumberofBFrames+1)%p_Inp->NumberBFrames;
           if(BFrameNumber==0)
-            BFrameNumber=params->NumberBFrames;
+            BFrameNumber=p_Inp->NumberBFrames;
 
           /*adaptive field/frame coding*/
           if(BFrameNumber==1)
           {
-            if((params->PicInterlace==ADAPTIVE_CODING)||(params->MbInterlace))
-              updateQPInterlace( prc );
+            if((p_Inp->PicInterlace==ADAPTIVE_CODING)||(p_Inp->MbInterlace))
+              updateQPInterlace( p_quad, p_gen );
           }
 
-          if((prc->CurrLastQP-prc->PrevLastQP)<=(-2*params->NumberBFrames-3))
+          if((p_quad->CurrLastQP-p_quad->PrevLastQP)<=(-2*p_Inp->NumberBFrames-3))
             StepSize=-3;
-          else  if((prc->CurrLastQP-prc->PrevLastQP)==(-2*params->NumberBFrames-2))
+          else  if((p_quad->CurrLastQP-p_quad->PrevLastQP)==(-2*p_Inp->NumberBFrames-2))
             StepSize=-2;
-          else if((prc->CurrLastQP-prc->PrevLastQP)==(-2*params->NumberBFrames-1))
+          else if((p_quad->CurrLastQP-p_quad->PrevLastQP)==(-2*p_Inp->NumberBFrames-1))
             StepSize=-1;
-          else if((prc->CurrLastQP-prc->PrevLastQP)==(-2*params->NumberBFrames))
+          else if((p_quad->CurrLastQP-p_quad->PrevLastQP)==(-2*p_Inp->NumberBFrames))
             StepSize=0;//0
-          else if((prc->CurrLastQP-prc->PrevLastQP)==(-2*params->NumberBFrames+1))
+          else if((p_quad->CurrLastQP-p_quad->PrevLastQP)==(-2*p_Inp->NumberBFrames+1))
             StepSize=1;//1
           else
             StepSize=2;//2
-          prc->m_Qc=prc->PrevLastQP+StepSize;
-          prc->m_Qc +=
-            iClip3( -2*(BFrameNumber-1), 2*(BFrameNumber-1), (BFrameNumber-1)*(prc->CurrLastQP-prc->PrevLastQP)/(params->NumberBFrames-1) );
-          prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // Clipping
+          p_quad->m_Qc=p_quad->PrevLastQP+StepSize;
+          p_quad->m_Qc +=
+            iClip3( -2*(BFrameNumber-1), 2*(BFrameNumber-1), (BFrameNumber-1)*(p_quad->CurrLastQP-p_quad->PrevLastQP)/(p_Inp->NumberBFrames-1) );
+          p_quad->m_Qc = iClip3(p_Img->RCMinQP + p_quad->bitdepth_qp_scale, p_Img->RCMaxQP + p_quad->bitdepth_qp_scale, p_quad->m_Qc); // Clipping
         }
-        return prc->m_Qc;
+        return p_quad->m_Qc;
       }
       /*bottom field of B frame*/
       else
       {
-        return prc->m_Qc;
+        return p_quad->m_Qc;
       }
     }
-    else if( img->type == P_SLICE )
+    else if( p_Img->type == P_SLICE )
     {
-      if( (generic_RC->NumberofGOP == 1) && (prc->NumberofPPicture == 0) )
+      if( (p_gen->NumberofGOP == 1) && (p_quad->NumberofPPicture == 0) )
       {
-        if((generic_RC->FieldControl==0)||((generic_RC->FieldControl==1) && (generic_RC->NoGranularFieldRC==0)))
-          return updateFirstP( prc, topfield );
+        if((p_gen->FieldControl==0)||((p_gen->FieldControl==1) && (p_gen->NoGranularFieldRC==0)))
+          return updateFirstP( p_Img, p_Inp, p_quad, p_gen, topfield );
       }
       else
       {
-        prc->m_X1=prc->Pm_X1;
-        prc->m_X2=prc->Pm_X2;
-        prc->MADPictureC1=prc->PMADPictureC1;
-        prc->MADPictureC2=prc->PMADPictureC2;
+        p_quad->m_X1=p_quad->Pm_X1;
+        p_quad->m_X2=p_quad->Pm_X2;
+        p_quad->MADPictureC1=p_quad->PMADPictureC1;
+        p_quad->MADPictureC2=p_quad->PMADPictureC2;
 
-        m_Qp=prc->Pm_Qp;
+        m_Qp=p_quad->Pm_Qp;
 
-        if(generic_RC->FieldControl==0)
-          SumofBasicUnit=prc->TotalNumberofBasicUnit;
+        if(p_gen->FieldControl==0)
+          SumofBasicUnit=p_quad->TotalNumberofBasicUnit;
         else
-          SumofBasicUnit=prc->TotalNumberofBasicUnit>>1;
+          SumofBasicUnit=p_quad->TotalNumberofBasicUnit>>1;
 
         /*the average QP of the previous frame is used to coded the first basic unit of the current frame or field*/
-        if(prc->NumberofBasicUnit==SumofBasicUnit)
-          return updateFirstBU( prc, topfield );
+        if(p_quad->NumberofBasicUnit==SumofBasicUnit)
+          return updateFirstBU( p_Img, p_Inp, p_quad, p_gen, topfield );
         else
         {
           /*compute the number of remaining bits*/
-          prc->Target -= (generic_RC->NumberofBasicUnitHeaderBits + generic_RC->NumberofBasicUnitTextureBits);
-          generic_RC->NumberofBasicUnitHeaderBits  = 0;
-          generic_RC->NumberofBasicUnitTextureBits = 0;
-          if(prc->Target<0)
-            return updateNegativeTarget( prc, topfield, m_Qp );
+          p_quad->Target -= (p_gen->NumberofBasicUnitHeaderBits + p_gen->NumberofBasicUnitTextureBits);
+          p_gen->NumberofBasicUnitHeaderBits  = 0;
+          p_gen->NumberofBasicUnitTextureBits = 0;
+          if(p_quad->Target<0)
+            return updateNegativeTarget( p_Img, p_Inp, p_quad, p_gen, topfield, m_Qp );
           else
           {
             /*predict the MAD of current picture*/
-            predictCurrPicMAD( prc );
+            predictCurrPicMAD( p_Inp, p_quad, p_gen );
 
             /*compute the total number of bits for the current basic unit*/
-            updateModelQPBU( prc, topfield, m_Qp );
+            updateModelQPBU( p_Img, p_Inp, p_quad, m_Qp );
 
-            prc->TotalFrameQP +=prc->m_Qc;
-            prc->Pm_Qp=prc->m_Qc;
-            prc->NumberofBasicUnit--;
-            if( prc->NumberofBasicUnit == 0 && img->type == P_SLICE )
-              updateLastBU( prc, topfield );
+            p_quad->TotalFrameQP +=p_quad->m_Qc;
+            p_quad->Pm_Qp=p_quad->m_Qc;
+            p_quad->NumberofBasicUnit--;
+            if( p_quad->NumberofBasicUnit == 0 && p_Img->type == P_SLICE )
+              updateLastBU( p_Img, p_Inp, p_quad, p_gen, topfield );
 
-            return prc->m_Qc;
+            return p_quad->m_Qc;
           }
         }
       }
     }
   }
-  return prc->m_Qc;
+  return p_quad->m_Qc;
 }
 
 /*!
@@ -1518,146 +1541,146 @@ int updateQPRC0(rc_quadratic *prc, int topfield)
  *
  *************************************************************************************
 */
-int updateQPRC1(rc_quadratic *prc, int topfield)
+int updateQPRC1(ImageParameters *p_Img, InputParameters *p_Inp, RCQuadratic *p_quad, RCGeneric *p_gen, int topfield)
 {
   int m_Bits;
   int SumofBasicUnit;
   int MaxQpChange, m_Qp, m_Hp;
 
   /* frame layer rate control */
-  if( img->BasicUnit == img->FrameSizeInMbs )
+  if( p_Img->BasicUnit == p_Img->FrameSizeInMbs )
   {
     /* fixed quantization parameter is used to coded I frame, the first P frame and the first B frame
     the quantization parameter is adjusted according the available channel bandwidth and
     the type of vide */
     /*top field*/
-    if((topfield) || (generic_RC->FieldControl==0))
+    if((topfield) || (p_gen->FieldControl==0))
     {
-      if (img->number == 0)
+      if (p_Img->number == 0)
       {
-        prc->m_Qc = prc->MyInitialQp;
-        return prc->m_Qc;
+        p_quad->m_Qc = p_quad->MyInitialQp;
+        return p_quad->m_Qc;
       }
-      else if( prc->NumberofPPicture == 0 && (img->number != 0))
+      else if( p_quad->NumberofPPicture == 0 && (p_Img->number != 0))
       {
-        prc->m_Qc=prc->MyInitialQp;
+        p_quad->m_Qc=p_quad->MyInitialQp;
 
-        if(generic_RC->FieldControl==0)
-          updateQPNonPicAFF( prc );
-        return prc->m_Qc;
+        if(p_gen->FieldControl==0)
+          updateQPNonPicAFF( p_Img->active_sps, p_quad );
+        return p_quad->m_Qc;
       }
       else
       {
         /*adaptive field/frame coding*/
-        if( ( params->PicInterlace == ADAPTIVE_CODING || params->MbInterlace ) && generic_RC->FieldControl == 0 )
-          updateQPInterlaceBU( prc );
+        if( ( p_Inp->PicInterlace == ADAPTIVE_CODING || p_Inp->MbInterlace ) && p_gen->FieldControl == 0 )
+          updateQPInterlaceBU( p_quad, p_gen );
 
-        prc->m_X1 = prc->Pm_X1;
-        prc->m_X2 = prc->Pm_X2;
-        prc->MADPictureC1 = prc->PMADPictureC1;
-        prc->MADPictureC2 = prc->PMADPictureC2;
-        prc->PreviousPictureMAD = prc->PPictureMAD[0];
+        p_quad->m_X1 = p_quad->Pm_X1;
+        p_quad->m_X2 = p_quad->Pm_X2;
+        p_quad->MADPictureC1 = p_quad->PMADPictureC1;
+        p_quad->MADPictureC2 = p_quad->PMADPictureC2;
+        p_quad->PreviousPictureMAD = p_quad->PPictureMAD[0];
 
-        MaxQpChange = prc->PMaxQpChange;
-        m_Qp = prc->Pm_Qp;
-        m_Hp = prc->PPreHeader;
+        MaxQpChange = p_quad->PMaxQpChange;
+        m_Qp = p_quad->Pm_Qp;
+        m_Hp = p_quad->PPreHeader;
 
         /* predict the MAD of current picture*/
-        prc->CurrentFrameMAD=prc->MADPictureC1*prc->PreviousPictureMAD + prc->MADPictureC2;
+        p_quad->CurrentFrameMAD=p_quad->MADPictureC1*p_quad->PreviousPictureMAD + p_quad->MADPictureC2;
 
         /*compute the number of bits for the texture*/
-        if(prc->Target < 0)
+        if(p_quad->Target < 0)
         {
-          prc->m_Qc=m_Qp+MaxQpChange;
-          prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // Clipping
+          p_quad->m_Qc=m_Qp+MaxQpChange;
+          p_quad->m_Qc = iClip3(p_Img->RCMinQP + p_quad->bitdepth_qp_scale, p_Img->RCMaxQP + p_quad->bitdepth_qp_scale, p_quad->m_Qc); // Clipping
         }
         else
         {
-          m_Bits = prc->Target-m_Hp;
-          m_Bits = imax(m_Bits, (int)(prc->bit_rate/(MINVALUE*prc->frame_rate)));
+          m_Bits = p_quad->Target-m_Hp;
+          m_Bits = imax(m_Bits, (int)(p_quad->bit_rate/(MINVALUE*p_quad->frame_rate)));
 
-          updateModelQPFrame( prc, m_Bits );
+          updateModelQPFrame( p_quad, m_Bits );
 
-          prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // clipping
-          prc->m_Qc = iClip3(m_Qp-MaxQpChange, m_Qp+MaxQpChange, prc->m_Qc); // control variation
+          p_quad->m_Qc = iClip3(p_Img->RCMinQP + p_quad->bitdepth_qp_scale, p_Img->RCMaxQP + p_quad->bitdepth_qp_scale, p_quad->m_Qc); // clipping
+          p_quad->m_Qc = iClip3(m_Qp-MaxQpChange, m_Qp+MaxQpChange, p_quad->m_Qc); // control variation
         }
 
-        if( generic_RC->FieldControl == 0 )
-          updateQPNonPicAFF( prc );
+        if( p_gen->FieldControl == 0 )
+          updateQPNonPicAFF( p_Img->active_sps, p_quad );
 
-        return prc->m_Qc;
+        return p_quad->m_Qc;
       }
     }
     /*bottom field*/
     else
     {
-      if( generic_RC->NoGranularFieldRC == 0 )
-        updateBottomField( prc );
-      return prc->m_Qc;
+      if( p_gen->NoGranularFieldRC == 0 )
+        updateBottomField( p_Inp, p_quad );
+      return p_quad->m_Qc;
     }
   }
   /*basic unit layer rate control*/
   else
   {
     /*top field of I frame*/
-    if (img->number == 0)
+    if (p_Img->number == 0)
     {
-      prc->m_Qc = prc->MyInitialQp;
-      return prc->m_Qc;
+      p_quad->m_Qc = p_quad->MyInitialQp;
+      return p_quad->m_Qc;
     }
     else
     {
-      if((generic_RC->NumberofGOP==1)&&(prc->NumberofPPicture==0))
+      if((p_gen->NumberofGOP==1)&&(p_quad->NumberofPPicture==0))
       {
-        if((generic_RC->FieldControl==0)||((generic_RC->FieldControl==1) && (generic_RC->NoGranularFieldRC==0)))
-          return updateFirstP( prc, topfield );
+        if((p_gen->FieldControl==0)||((p_gen->FieldControl==1) && (p_gen->NoGranularFieldRC==0)))
+          return updateFirstP( p_Img, p_Inp, p_quad, p_gen, topfield );
       }
       else
       {
-        prc->m_X1=prc->Pm_X1;
-        prc->m_X2=prc->Pm_X2;
-        prc->MADPictureC1=prc->PMADPictureC1;
-        prc->MADPictureC2=prc->PMADPictureC2;
+        p_quad->m_X1=p_quad->Pm_X1;
+        p_quad->m_X2=p_quad->Pm_X2;
+        p_quad->MADPictureC1=p_quad->PMADPictureC1;
+        p_quad->MADPictureC2=p_quad->PMADPictureC2;
 
-        m_Qp=prc->Pm_Qp;
+        m_Qp=p_quad->Pm_Qp;
 
-        if(generic_RC->FieldControl==0)
-          SumofBasicUnit=prc->TotalNumberofBasicUnit;
+        if(p_gen->FieldControl==0)
+          SumofBasicUnit=p_quad->TotalNumberofBasicUnit;
         else
-          SumofBasicUnit=prc->TotalNumberofBasicUnit>>1;
+          SumofBasicUnit=p_quad->TotalNumberofBasicUnit>>1;
 
         /*the average QP of the previous frame is used to coded the first basic unit of the current frame or field*/
-        if(prc->NumberofBasicUnit==SumofBasicUnit)
-          return updateFirstBU( prc, topfield );
+        if(p_quad->NumberofBasicUnit==SumofBasicUnit)
+          return updateFirstBU( p_Img, p_Inp, p_quad, p_gen, topfield );
         else
         {
           /*compute the number of remaining bits*/
-          prc->Target -= (generic_RC->NumberofBasicUnitHeaderBits + generic_RC->NumberofBasicUnitTextureBits);
-          generic_RC->NumberofBasicUnitHeaderBits  = 0;
-          generic_RC->NumberofBasicUnitTextureBits = 0;
-          if(prc->Target<0)
-            return updateNegativeTarget( prc, topfield, m_Qp );
+          p_quad->Target -= (p_gen->NumberofBasicUnitHeaderBits + p_gen->NumberofBasicUnitTextureBits);
+          p_gen->NumberofBasicUnitHeaderBits  = 0;
+          p_gen->NumberofBasicUnitTextureBits = 0;
+          if(p_quad->Target<0)
+            return updateNegativeTarget( p_Img, p_Inp, p_quad, p_gen, topfield, m_Qp );
           else
           {
             /*predict the MAD of current picture*/
-            predictCurrPicMAD( prc );
+            predictCurrPicMAD( p_Inp, p_quad, p_gen );
 
             /*compute the total number of bits for the current basic unit*/
-            updateModelQPBU( prc, topfield, m_Qp );
+            updateModelQPBU( p_Img, p_Inp, p_quad, m_Qp );
 
-            prc->TotalFrameQP +=prc->m_Qc;
-            prc->Pm_Qp=prc->m_Qc;
-            prc->NumberofBasicUnit--;
-            if((prc->NumberofBasicUnit==0) && (img->number != 0))
-              updateLastBU( prc, topfield );
+            p_quad->TotalFrameQP +=p_quad->m_Qc;
+            p_quad->Pm_Qp=p_quad->m_Qc;
+            p_quad->NumberofBasicUnit--;
+            if((p_quad->NumberofBasicUnit==0) && (p_Img->number != 0))
+              updateLastBU( p_Img, p_Inp, p_quad, p_gen, topfield );
 
-            return prc->m_Qc;
+            return p_quad->m_Qc;
           }
         }
       }
     }
   }
-  return prc->m_Qc;
+  return p_quad->m_Qc;
 }
 
 /*!
@@ -1667,209 +1690,209 @@ int updateQPRC1(rc_quadratic *prc, int topfield)
  *
  *************************************************************************************
 */
-int updateQPRC2(rc_quadratic *prc, int topfield)
+int updateQPRC2(ImageParameters *p_Img, InputParameters *p_Inp, RCQuadratic *p_quad, RCGeneric *p_gen, int topfield)
 {
   int m_Bits;
   int SumofBasicUnit;
   int MaxQpChange, m_Qp, m_Hp;
 
   /* frame layer rate control */
-  if( img->BasicUnit == img->FrameSizeInMbs )
+  if( p_Img->BasicUnit == p_Img->FrameSizeInMbs )
   {
     /* fixed quantization parameter is used to coded I frame, the first P frame and the first B frame
     the quantization parameter is adjusted according the available channel bandwidth and
     the type of vide */
     /*top field*/
-    if((topfield) || (generic_RC->FieldControl==0))
+    if((topfield) || (p_gen->FieldControl==0))
     {
-      if (img->number == 0)
+      if (p_Img->number == 0)
       {
-        prc->m_Qc = prc->MyInitialQp;
-        return prc->m_Qc;
+        p_quad->m_Qc = p_quad->MyInitialQp;
+        return p_quad->m_Qc;
       }
-      else if (img->type==I_SLICE)
+      else if (p_Img->type==I_SLICE)
       {
-        if((params->PicInterlace==ADAPTIVE_CODING)||(params->MbInterlace))
-          updateQPInterlace( prc );
+        if((p_Inp->PicInterlace==ADAPTIVE_CODING)||(p_Inp->MbInterlace))
+          updateQPInterlace( p_quad, p_gen );
 
-        prc->m_Qc = prc->CurrLastQP; // Set QP to average qp of last P frame
-        return prc->m_Qc;
+        p_quad->m_Qc = p_quad->CurrLastQP; // Set QP to average qp of last P frame
+        return p_quad->m_Qc;
       }
-      else if(img->type == B_SLICE)
+      else if(p_Img->type == B_SLICE)
       {
-        int prevQP = imax(prc->PrevLastQP, prc->CurrLastQP);
+        int prevQP = imax(p_quad->PrevLastQP, p_quad->CurrLastQP);
         // for more than one consecutive B frames the below call will overwrite the old anchor frame QP with the current value
         // it should be called once in the B-frame sequence....this should be modified for the BU < frame as well
-        if((params->PicInterlace==ADAPTIVE_CODING)||(params->MbInterlace))
-          updateQPInterlace( prc );
+        if((p_Inp->PicInterlace==ADAPTIVE_CODING)||(p_Inp->MbInterlace))
+          updateQPInterlace( p_quad, p_gen );
 
-        if (params->HierarchicalCoding)
+        if (p_Inp->HierarchicalCoding)
         {
-          if (img->b_frame_to_code == 0)
-            prc->m_Qc = prevQP;
+          if (p_Img->b_frame_to_code == 0)
+            p_quad->m_Qc = prevQP;
           else
-            prc->m_Qc = prevQP + img->GopLevels - gop_structure[img->b_frame_to_code-1].hierarchy_layer;
+            p_quad->m_Qc = prevQP + p_Img->GopLevels - p_Img->gop_structure[p_Img->b_frame_to_code-1].hierarchy_layer;
         }
         else
-          prc->m_Qc = prevQP + 2 - img->nal_reference_idc;
-        prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // Clipping
+          p_quad->m_Qc = prevQP + 2 - p_Img->nal_reference_idc;
+        p_quad->m_Qc = iClip3(p_Img->RCMinQP + p_quad->bitdepth_qp_scale, p_Img->RCMaxQP + p_quad->bitdepth_qp_scale, p_quad->m_Qc); // Clipping
 
-        return prc->m_Qc;
+        return p_quad->m_Qc;
       }
-      else if( img->type == P_SLICE && prc->NumberofPPicture == 0 )
+      else if( p_Img->type == P_SLICE && p_quad->NumberofPPicture == 0 )
       {
-        prc->m_Qc=prc->MyInitialQp;
+        p_quad->m_Qc=p_quad->MyInitialQp;
 
-        if(generic_RC->FieldControl==0)
-          updateQPNonPicAFF( prc );
-        return prc->m_Qc;
+        if(p_gen->FieldControl==0)
+          updateQPNonPicAFF( p_Img->active_sps, p_quad );
+        return p_quad->m_Qc;
       }
       else
       {
         /*adaptive field/frame coding*/
-        if( ( params->PicInterlace == ADAPTIVE_CODING || params->MbInterlace ) && generic_RC->FieldControl == 0 )
-          updateQPInterlaceBU( prc );
+        if( ( p_Inp->PicInterlace == ADAPTIVE_CODING || p_Inp->MbInterlace ) && p_gen->FieldControl == 0 )
+          updateQPInterlaceBU( p_quad, p_gen );
 
-        prc->m_X1 = prc->Pm_X1;
-        prc->m_X2 = prc->Pm_X2;
-        prc->MADPictureC1 = prc->PMADPictureC1;
-        prc->MADPictureC2 = prc->PMADPictureC2;
-        prc->PreviousPictureMAD = prc->PPictureMAD[0];
+        p_quad->m_X1 = p_quad->Pm_X1;
+        p_quad->m_X2 = p_quad->Pm_X2;
+        p_quad->MADPictureC1 = p_quad->PMADPictureC1;
+        p_quad->MADPictureC2 = p_quad->PMADPictureC2;
+        p_quad->PreviousPictureMAD = p_quad->PPictureMAD[0];
 
-        MaxQpChange = prc->PMaxQpChange;
-        m_Qp = prc->Pm_Qp;
-        m_Hp = prc->PPreHeader;
+        MaxQpChange = p_quad->PMaxQpChange;
+        m_Qp = p_quad->Pm_Qp;
+        m_Hp = p_quad->PPreHeader;
 
         /* predict the MAD of current picture*/
-        prc->CurrentFrameMAD=prc->MADPictureC1*prc->PreviousPictureMAD + prc->MADPictureC2;
+        p_quad->CurrentFrameMAD=p_quad->MADPictureC1*p_quad->PreviousPictureMAD + p_quad->MADPictureC2;
 
         /*compute the number of bits for the texture*/
-        if(prc->Target < 0)
+        if(p_quad->Target < 0)
         {
-          prc->m_Qc=m_Qp+MaxQpChange;
-          prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // Clipping
+          p_quad->m_Qc=m_Qp+MaxQpChange;
+          p_quad->m_Qc = iClip3(p_Img->RCMinQP + p_quad->bitdepth_qp_scale, p_Img->RCMaxQP + p_quad->bitdepth_qp_scale, p_quad->m_Qc); // Clipping
         }
         else
         {
-          m_Bits = prc->Target-m_Hp;
-          m_Bits = imax(m_Bits, (int)(prc->bit_rate/(MINVALUE*prc->frame_rate)));
+          m_Bits = p_quad->Target-m_Hp;
+          m_Bits = imax(m_Bits, (int)(p_quad->bit_rate/(MINVALUE*p_quad->frame_rate)));
 
-          updateModelQPFrame( prc, m_Bits );
+          updateModelQPFrame( p_quad, m_Bits );
 
-          prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // clipping
-          prc->m_Qc = iClip3(m_Qp-MaxQpChange, m_Qp+MaxQpChange, prc->m_Qc); // control variation
+          p_quad->m_Qc = iClip3(p_Img->RCMinQP + p_quad->bitdepth_qp_scale, p_Img->RCMaxQP + p_quad->bitdepth_qp_scale, p_quad->m_Qc); // clipping
+          p_quad->m_Qc = iClip3(m_Qp-MaxQpChange, m_Qp+MaxQpChange, p_quad->m_Qc); // control variation
         }
 
-        if( generic_RC->FieldControl == 0 )
-          updateQPNonPicAFF( prc );
+        if( p_gen->FieldControl == 0 )
+          updateQPNonPicAFF( p_Img->active_sps, p_quad );
 
-        return prc->m_Qc;
+        return p_quad->m_Qc;
       }
     }
     /*bottom field*/
     else
     {
-      if( img->type==P_SLICE && generic_RC->NoGranularFieldRC == 0 )
-        updateBottomField( prc );
-      return prc->m_Qc;
+      if( p_Img->type==P_SLICE && p_gen->NoGranularFieldRC == 0 )
+        updateBottomField( p_Inp, p_quad );
+      return p_quad->m_Qc;
     }
   }
   /*basic unit layer rate control*/
   else
   {
     /*top field of I frame*/
-    if (img->number == 0)
+    if (p_Img->number == 0)
     {
-      prc->m_Qc = prc->MyInitialQp;
-      return prc->m_Qc;
+      p_quad->m_Qc = p_quad->MyInitialQp;
+      return p_quad->m_Qc;
     }
-    else if (img->type==I_SLICE)
+    else if (p_Img->type==I_SLICE)
     {
       /*adaptive field/frame coding*/
-      if((params->PicInterlace==ADAPTIVE_CODING)||(params->MbInterlace))
-        updateQPInterlace( prc );
+      if((p_Inp->PicInterlace==ADAPTIVE_CODING)||(p_Inp->MbInterlace))
+        updateQPInterlace( p_quad, p_gen );
 
-      prc->m_Qc = prc->PrevLastQP; // Set QP to average qp of last P frame
-      prc->PrevLastQP = prc->CurrLastQP;
-      prc->CurrLastQP = prc->PrevLastQP;
-      prc->PAveFrameQP = prc->CurrLastQP;
+      p_quad->m_Qc = p_quad->PrevLastQP; // Set QP to average qp of last P frame
+      p_quad->PrevLastQP = p_quad->CurrLastQP;
+      p_quad->CurrLastQP = p_quad->PrevLastQP;
+      p_quad->PAveFrameQP = p_quad->CurrLastQP;
 
-      return prc->m_Qc;
+      return p_quad->m_Qc;
     }
-    else if(img->type == B_SLICE)
+    else if(p_Img->type == B_SLICE)
     {
-      int prevQP = imax(prc->PrevLastQP, prc->CurrLastQP);
-      if((params->PicInterlace==ADAPTIVE_CODING)||(params->MbInterlace))
-        updateQPInterlace( prc );
+      int prevQP = imax(p_quad->PrevLastQP, p_quad->CurrLastQP);
+      if((p_Inp->PicInterlace==ADAPTIVE_CODING)||(p_Inp->MbInterlace))
+        updateQPInterlace( p_quad, p_gen );
 
-      if (params->HierarchicalCoding)
+      if (p_Inp->HierarchicalCoding)
       {
 
-        if (img->b_frame_to_code == 0)
-          prc->m_Qc = prevQP;
+        if (p_Img->b_frame_to_code == 0)
+          p_quad->m_Qc = prevQP;
         else
-          prc->m_Qc = prevQP + img->GopLevels - gop_structure[img->b_frame_to_code-1].hierarchy_layer;
+          p_quad->m_Qc = prevQP + p_Img->GopLevels - p_Img->gop_structure[p_Img->b_frame_to_code-1].hierarchy_layer;
       }
       else
-        prc->m_Qc = prevQP + 2 - img->nal_reference_idc;
-      prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // Clipping
+        p_quad->m_Qc = prevQP + 2 - p_Img->nal_reference_idc;
+      p_quad->m_Qc = iClip3(p_Img->RCMinQP + p_quad->bitdepth_qp_scale, p_Img->RCMaxQP + p_quad->bitdepth_qp_scale, p_quad->m_Qc); // Clipping
 
-      return prc->m_Qc;
+      return p_quad->m_Qc;
 
     }
-    else if( img->type == P_SLICE )
+    else if( p_Img->type == P_SLICE )
     {
-      if((generic_RC->NumberofGOP==1)&&(prc->NumberofPPicture==0))
+      if((p_gen->NumberofGOP==1)&&(p_quad->NumberofPPicture==0))
       {
-        if((generic_RC->FieldControl==0)||((generic_RC->FieldControl==1) && (generic_RC->NoGranularFieldRC==0)))
-          return updateFirstP( prc, topfield );
+        if((p_gen->FieldControl==0)||((p_gen->FieldControl==1) && (p_gen->NoGranularFieldRC==0)))
+          return updateFirstP( p_Img, p_Inp, p_quad, p_gen, topfield );
       }
       else
       {
-        prc->m_X1=prc->Pm_X1;
-        prc->m_X2=prc->Pm_X2;
-        prc->MADPictureC1=prc->PMADPictureC1;
-        prc->MADPictureC2=prc->PMADPictureC2;
+        p_quad->m_X1=p_quad->Pm_X1;
+        p_quad->m_X2=p_quad->Pm_X2;
+        p_quad->MADPictureC1=p_quad->PMADPictureC1;
+        p_quad->MADPictureC2=p_quad->PMADPictureC2;
 
-        m_Qp=prc->Pm_Qp;
+        m_Qp=p_quad->Pm_Qp;
 
-        if(generic_RC->FieldControl==0)
-          SumofBasicUnit=prc->TotalNumberofBasicUnit;
+        if(p_gen->FieldControl==0)
+          SumofBasicUnit=p_quad->TotalNumberofBasicUnit;
         else
-          SumofBasicUnit=prc->TotalNumberofBasicUnit>>1;
+          SumofBasicUnit=p_quad->TotalNumberofBasicUnit>>1;
 
         /*the average QP of the previous frame is used to coded the first basic unit of the current frame or field*/
-        if(prc->NumberofBasicUnit==SumofBasicUnit)
-          return updateFirstBU( prc, topfield );
+        if(p_quad->NumberofBasicUnit==SumofBasicUnit)
+          return updateFirstBU( p_Img, p_Inp, p_quad, p_gen, topfield );
         else
         {
           /*compute the number of remaining bits*/
-          prc->Target -= (generic_RC->NumberofBasicUnitHeaderBits + generic_RC->NumberofBasicUnitTextureBits);
-          generic_RC->NumberofBasicUnitHeaderBits  = 0;
-          generic_RC->NumberofBasicUnitTextureBits = 0;
-          if(prc->Target<0)
-            return updateNegativeTarget( prc, topfield, m_Qp );
+          p_quad->Target -= (p_gen->NumberofBasicUnitHeaderBits + p_gen->NumberofBasicUnitTextureBits);
+          p_gen->NumberofBasicUnitHeaderBits  = 0;
+          p_gen->NumberofBasicUnitTextureBits = 0;
+          if(p_quad->Target<0)
+            return updateNegativeTarget( p_Img, p_Inp, p_quad, p_gen, topfield, m_Qp );
           else
           {
             /*predict the MAD of current picture*/
-            predictCurrPicMAD( prc );
+            predictCurrPicMAD( p_Inp, p_quad, p_gen );
 
             /*compute the total number of bits for the current basic unit*/
-            updateModelQPBU( prc, topfield, m_Qp );
+            updateModelQPBU( p_Img, p_Inp, p_quad, m_Qp );
 
-            prc->TotalFrameQP +=prc->m_Qc;
-            prc->Pm_Qp=prc->m_Qc;
-            prc->NumberofBasicUnit--;
-            if((prc->NumberofBasicUnit==0) && img->type == P_SLICE )
-              updateLastBU( prc, topfield );
+            p_quad->TotalFrameQP +=p_quad->m_Qc;
+            p_quad->Pm_Qp=p_quad->m_Qc;
+            p_quad->NumberofBasicUnit--;
+            if((p_quad->NumberofBasicUnit==0) && p_Img->type == P_SLICE )
+              updateLastBU( p_Img, p_Inp, p_quad, p_gen, topfield );
 
-            return prc->m_Qc;
+            return p_quad->m_Qc;
           }
         }
       }
     }
   }
-  return prc->m_Qc;
+  return p_quad->m_Qc;
 }
 
 /*!
@@ -1879,183 +1902,183 @@ int updateQPRC2(rc_quadratic *prc, int topfield)
  *
  *************************************************************************************
 */
-int updateQPRC3(rc_quadratic *prc, int topfield)
+int updateQPRC3(ImageParameters *p_Img, InputParameters *p_Inp, RCQuadratic *p_quad, RCGeneric *p_gen, int topfield)
 {
   int m_Bits;
   int SumofBasicUnit;
   int MaxQpChange, m_Qp, m_Hp;
 
   /* frame layer rate control */
-  if( img->BasicUnit == img->FrameSizeInMbs || img->type != P_SLICE )
+  if( p_Img->BasicUnit == p_Img->FrameSizeInMbs || p_Img->type != P_SLICE )
   {
     /* fixed quantization parameter is used to coded I frame, the first P frame and the first B frame
     the quantization parameter is adjusted according the available channel bandwidth and
     the type of video */
     /*top field*/
-    if((topfield) || (generic_RC->FieldControl==0))
+    if((topfield) || (p_gen->FieldControl==0))
     {
-      if (img->number == 0)
+      if (p_Img->number == 0)
       {
-        if((params->PicInterlace == ADAPTIVE_CODING) || (params->MbInterlace))
-          updateQPInterlace( prc );
-        prc->m_Qc = prc->MyInitialQp;
-        return prc->m_Qc;
+        if((p_Inp->PicInterlace == ADAPTIVE_CODING) || (p_Inp->MbInterlace))
+          updateQPInterlace( p_quad, p_gen );
+        p_quad->m_Qc = p_quad->MyInitialQp;
+        return p_quad->m_Qc;
       }
-      else if( img->type == P_SLICE && prc->NumberofPPicture == 0 )
+      else if( p_Img->type == P_SLICE && p_quad->NumberofPPicture == 0 )
       {
-        prc->m_Qc=prc->MyInitialQp;
+        p_quad->m_Qc=p_quad->MyInitialQp;
 
-        if(generic_RC->FieldControl==0)
-          updateQPNonPicAFF( prc );
-        return prc->m_Qc;
+        if(p_gen->FieldControl==0)
+          updateQPNonPicAFF( p_Img->active_sps, p_quad );
+        return p_quad->m_Qc;
       }
       else
       {
-        if( ( (img->type == B_SLICE && img->b_frame_to_code == 1) || img->type == I_SLICE) && ((params->PicInterlace == ADAPTIVE_CODING) || (params->MbInterlace)) )
-          updateQPInterlace( prc );
+        if( ( (p_Img->type == B_SLICE && p_Img->b_frame_to_code == 1) || p_Img->type == I_SLICE) && ((p_Inp->PicInterlace == ADAPTIVE_CODING) || (p_Inp->MbInterlace)) )
+          updateQPInterlace( p_quad, p_gen );
         /*adaptive field/frame coding*/
-        if( img->type == P_SLICE && ( params->PicInterlace == ADAPTIVE_CODING || params->MbInterlace ) && generic_RC->FieldControl == 0 )
-          updateQPInterlaceBU( prc );
+        if( p_Img->type == P_SLICE && ( p_Inp->PicInterlace == ADAPTIVE_CODING || p_Inp->MbInterlace ) && p_gen->FieldControl == 0 )
+          updateQPInterlaceBU( p_quad, p_gen );
 
-        prc->m_X1 = prc->Pm_X1;
-        prc->m_X2 = prc->Pm_X2;
-        prc->MADPictureC1 = prc->PMADPictureC1;
-        prc->MADPictureC2 = prc->PMADPictureC2;
-        prc->PreviousPictureMAD = prc->PPictureMAD[0];
+        p_quad->m_X1 = p_quad->Pm_X1;
+        p_quad->m_X2 = p_quad->Pm_X2;
+        p_quad->MADPictureC1 = p_quad->PMADPictureC1;
+        p_quad->MADPictureC2 = p_quad->PMADPictureC2;
+        p_quad->PreviousPictureMAD = p_quad->PPictureMAD[0];
 
-        MaxQpChange = prc->PMaxQpChange;
-        m_Qp = prc->Pm_Qp;
-        m_Hp = prc->PPreHeader;
+        MaxQpChange = p_quad->PMaxQpChange;
+        m_Qp = p_quad->Pm_Qp;
+        m_Hp = p_quad->PPreHeader;
 
-        if ( img->BasicUnit < img->FrameSizeInMbs && img->type != P_SLICE )
+        if ( p_Img->BasicUnit < p_Img->FrameSizeInMbs && p_Img->type != P_SLICE )
         {
           // when RC_MODE_3 is set and basic unit is smaller than a frame, note that:
           // the linear MAD model and the quadratic QP model operate on small units and not on a whole frame;
           // we therefore have to account for this
-          prc->PreviousPictureMAD = prc->PreviousWholeFrameMAD;
+          p_quad->PreviousPictureMAD = p_quad->PreviousWholeFrameMAD;
         }
-        if ( img->type == I_SLICE )
+        if ( p_Img->type == I_SLICE )
           m_Hp = 0; // it is usually a very small portion of the total I_SLICE bit budget
 
         /* predict the MAD of current picture*/
-        prc->CurrentFrameMAD=prc->MADPictureC1*prc->PreviousPictureMAD + prc->MADPictureC2;
+        p_quad->CurrentFrameMAD=p_quad->MADPictureC1*p_quad->PreviousPictureMAD + p_quad->MADPictureC2;
 
         /*compute the number of bits for the texture*/
-        if(prc->Target < 0)
+        if(p_quad->Target < 0)
         {
-          prc->m_Qc=m_Qp+MaxQpChange;
-          prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // Clipping
+          p_quad->m_Qc=m_Qp+MaxQpChange;
+          p_quad->m_Qc = iClip3(p_Img->RCMinQP + p_quad->bitdepth_qp_scale, p_Img->RCMaxQP + p_quad->bitdepth_qp_scale, p_quad->m_Qc); // Clipping
         }
         else
         {
-          if ( img->type != P_SLICE )
+          if ( p_Img->type != P_SLICE )
           {
-            if ( img->BasicUnit < img->FrameSizeInMbs )
-              m_Bits =(prc->Target-m_Hp)/prc->TotalNumberofBasicUnit;
+            if ( p_Img->BasicUnit < p_Img->FrameSizeInMbs )
+              m_Bits =(p_quad->Target-m_Hp)/p_quad->TotalNumberofBasicUnit;
             else
-              m_Bits =prc->Target-m_Hp;
+              m_Bits =p_quad->Target-m_Hp;
           }
           else {
-            m_Bits = prc->Target-m_Hp;
-            m_Bits = imax(m_Bits, (int)(prc->bit_rate/(MINVALUE*prc->frame_rate)));
+            m_Bits = p_quad->Target-m_Hp;
+            m_Bits = imax(m_Bits, (int)(p_quad->bit_rate/(MINVALUE*p_quad->frame_rate)));
           }          
-          updateModelQPFrame( prc, m_Bits );
+          updateModelQPFrame( p_quad, m_Bits );
 
-          prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // clipping
-          if ( img->type == P_SLICE )
-            prc->m_Qc = iClip3(m_Qp-MaxQpChange, m_Qp+MaxQpChange, prc->m_Qc); // control variation
+          p_quad->m_Qc = iClip3(p_Img->RCMinQP + p_quad->bitdepth_qp_scale, p_Img->RCMaxQP + p_quad->bitdepth_qp_scale, p_quad->m_Qc); // clipping
+          if ( p_Img->type == P_SLICE )
+            p_quad->m_Qc = iClip3(m_Qp-MaxQpChange, m_Qp+MaxQpChange, p_quad->m_Qc); // control variation
         }
 
-        if( img->type == P_SLICE && generic_RC->FieldControl == 0 )
-          updateQPNonPicAFF( prc );
+        if( p_Img->type == P_SLICE && p_gen->FieldControl == 0 )
+          updateQPNonPicAFF( p_Img->active_sps, p_quad );
 
-        if ( img->type == B_SLICE )
+        if ( p_Img->type == B_SLICE )
         {
           // hierarchical adjustment
-          int prevqp = ((prc->PrevLastQP+prc->CurrLastQP) >> 1) + 1;
-          if ( params->HierarchicalCoding && img->b_frame_to_code)
-            prc->m_Qc -= gop_structure[img->b_frame_to_code-1].hierarchy_layer;
+          int prevqp = ((p_quad->PrevLastQP+p_quad->CurrLastQP) >> 1) + 1;
+          if ( p_Inp->HierarchicalCoding && p_Img->b_frame_to_code)
+            p_quad->m_Qc -= p_Img->gop_structure[p_Img->b_frame_to_code-1].hierarchy_layer;
           // check bounds
-          prc->m_Qc = iClip3(prevqp - (params->HierarchicalCoding ? 0 : 5), prevqp + 5, prc->m_Qc); // control variation
-          prc->m_Qc = iClip3(img->RCMinQP, img->RCMaxQP, prc->m_Qc); // clipping
+          p_quad->m_Qc = iClip3(prevqp - (p_Inp->HierarchicalCoding ? 0 : 5), prevqp + 5, p_quad->m_Qc); // control variation
+          p_quad->m_Qc = iClip3(p_Img->RCMinQP + p_quad->bitdepth_qp_scale, p_Img->RCMaxQP + p_quad->bitdepth_qp_scale, p_quad->m_Qc); // clipping
         }
-        return prc->m_Qc;
+        return p_quad->m_Qc;
       }
     }
     /*bottom field*/
     else
     {
-      if( img->type==P_SLICE && generic_RC->NoGranularFieldRC == 0 )
-        updateBottomField( prc );
-      return prc->m_Qc;
+      if( p_Img->type==P_SLICE && p_gen->NoGranularFieldRC == 0 )
+        updateBottomField( p_Inp, p_quad );
+      return p_quad->m_Qc;
     }
   }
   /*basic unit layer rate control*/
   else
   {
     /*top field of I frame*/
-    if (img->number == 0)
+    if (p_Img->number == 0)
     {
-      if((params->PicInterlace == ADAPTIVE_CODING) || (params->MbInterlace))
-        updateQPInterlace( prc );
-      prc->m_Qc = prc->MyInitialQp;
-      return prc->m_Qc;
+      if((p_Inp->PicInterlace == ADAPTIVE_CODING) || (p_Inp->MbInterlace))
+        updateQPInterlace( p_quad, p_gen );
+      p_quad->m_Qc = p_quad->MyInitialQp;
+      return p_quad->m_Qc;
     }
-    else if( img->type == P_SLICE )
+    else if( p_Img->type == P_SLICE )
     {
-      if((generic_RC->NumberofGOP==1)&&(prc->NumberofPPicture==0))
+      if((p_gen->NumberofGOP==1)&&(p_quad->NumberofPPicture==0))
       {
-        if((generic_RC->FieldControl==0)||((generic_RC->FieldControl==1) && (generic_RC->NoGranularFieldRC==0)))
-          return updateFirstP( prc, topfield );
+        if((p_gen->FieldControl==0)||((p_gen->FieldControl==1) && (p_gen->NoGranularFieldRC==0)))
+          return updateFirstP( p_Img, p_Inp, p_quad, p_gen, topfield );
       }
       else
       {
-        if( ( (img->type == B_SLICE && img->b_frame_to_code == 1) || img->type == I_SLICE) && ((params->PicInterlace == ADAPTIVE_CODING) || (params->MbInterlace)) )
-          updateQPInterlace( prc );
-        prc->m_X1=prc->Pm_X1;
-        prc->m_X2=prc->Pm_X2;
-        prc->MADPictureC1=prc->PMADPictureC1;
-        prc->MADPictureC2=prc->PMADPictureC2;
+        if( ( (p_Img->type == B_SLICE && p_Img->b_frame_to_code == 1) || p_Img->type == I_SLICE) && ((p_Inp->PicInterlace == ADAPTIVE_CODING) || (p_Inp->MbInterlace)) )
+          updateQPInterlace( p_quad, p_gen );
+        p_quad->m_X1=p_quad->Pm_X1;
+        p_quad->m_X2=p_quad->Pm_X2;
+        p_quad->MADPictureC1=p_quad->PMADPictureC1;
+        p_quad->MADPictureC2=p_quad->PMADPictureC2;
 
-        m_Qp=prc->Pm_Qp;
+        m_Qp=p_quad->Pm_Qp;
 
-        if(generic_RC->FieldControl==0)
-          SumofBasicUnit=prc->TotalNumberofBasicUnit;
+        if(p_gen->FieldControl==0)
+          SumofBasicUnit=p_quad->TotalNumberofBasicUnit;
         else
-          SumofBasicUnit=prc->TotalNumberofBasicUnit>>1;
+          SumofBasicUnit=p_quad->TotalNumberofBasicUnit>>1;
 
         /*the average QP of the previous frame is used to coded the first basic unit of the current frame or field*/
-        if(prc->NumberofBasicUnit==SumofBasicUnit)
-          return updateFirstBU( prc, topfield );
+        if(p_quad->NumberofBasicUnit==SumofBasicUnit)
+          return updateFirstBU( p_Img, p_Inp, p_quad, p_gen, topfield );
         else
         {
           /*compute the number of remaining bits*/
-          prc->Target -= (generic_RC->NumberofBasicUnitHeaderBits + generic_RC->NumberofBasicUnitTextureBits);
-          generic_RC->NumberofBasicUnitHeaderBits  = 0;
-          generic_RC->NumberofBasicUnitTextureBits = 0;
-          if(prc->Target<0)
-            return updateNegativeTarget( prc, topfield, m_Qp );
+          p_quad->Target -= (p_gen->NumberofBasicUnitHeaderBits + p_gen->NumberofBasicUnitTextureBits);
+          p_gen->NumberofBasicUnitHeaderBits  = 0;
+          p_gen->NumberofBasicUnitTextureBits = 0;
+          if(p_quad->Target<0)
+            return updateNegativeTarget( p_Img, p_Inp, p_quad, p_gen, topfield, m_Qp );
           else
           {
             /*predict the MAD of current picture*/
-            predictCurrPicMAD( prc );
+            predictCurrPicMAD( p_Inp, p_quad, p_gen );
 
             /*compute the total number of bits for the current basic unit*/
-            updateModelQPBU( prc, topfield, m_Qp );
+            updateModelQPBU( p_Img, p_Inp, p_quad, m_Qp );
 
-            prc->TotalFrameQP +=prc->m_Qc;
-            prc->Pm_Qp=prc->m_Qc;
-            prc->NumberofBasicUnit--;
-            if((prc->NumberofBasicUnit==0) && img->type == P_SLICE )
-              updateLastBU( prc, topfield );
+            p_quad->TotalFrameQP +=p_quad->m_Qc;
+            p_quad->Pm_Qp=p_quad->m_Qc;
+            p_quad->NumberofBasicUnit--;
+            if((p_quad->NumberofBasicUnit==0) && p_Img->type == P_SLICE )
+              updateLastBU( p_Img, p_Inp, p_quad, p_gen, topfield );
 
-            return prc->m_Qc;
+            return p_quad->m_Qc;
           }
         }
       }
     }
   }
-  return prc->m_Qc;
+  return p_quad->m_Qc;
 }
 
 /*!
@@ -2065,21 +2088,21 @@ int updateQPRC3(rc_quadratic *prc, int topfield)
  *
  *************************************************************************************
 */
-void updateQPInterlace( rc_quadratic *prc )
+void updateQPInterlace( RCQuadratic *p_quad, RCGeneric *p_gen )
 {
-  if(generic_RC->FieldControl==0)
+  if(p_gen->FieldControl==0)
   {
     /*previous choice is frame coding*/
-    if(generic_RC->FieldFrame==1)
+    if(p_gen->FieldFrame==1)
     {
-      prc->PrevLastQP=prc->CurrLastQP;
-      prc->CurrLastQP=prc->FrameQPBuffer;
+      p_quad->PrevLastQP=p_quad->CurrLastQP;
+      p_quad->CurrLastQP=p_quad->FrameQPBuffer;
     }
     /*previous choice is field coding*/
     else
     {
-      prc->PrevLastQP=prc->CurrLastQP;
-      prc->CurrLastQP=prc->FieldQPBuffer;
+      p_quad->PrevLastQP=p_quad->CurrLastQP;
+      p_quad->CurrLastQP=p_quad->FieldQPBuffer;
     }
   }
 }
@@ -2091,18 +2114,18 @@ void updateQPInterlace( rc_quadratic *prc )
  *
  *************************************************************************************
 */
-void updateQPNonPicAFF( rc_quadratic *prc )
+void updateQPNonPicAFF( seq_parameter_set_rbsp_t *active_sps, RCQuadratic *p_quad )
 {
   if(active_sps->frame_mbs_only_flag)
   {
-    prc->TotalQpforPPicture +=prc->m_Qc;
-    prc->PrevLastQP=prc->CurrLastQP;
-    prc->CurrLastQP=prc->m_Qc;
-    prc->Pm_Qp=prc->m_Qc;
+    p_quad->TotalQpforPPicture +=p_quad->m_Qc;
+    p_quad->PrevLastQP=p_quad->CurrLastQP;
+    p_quad->CurrLastQP=p_quad->m_Qc;
+    p_quad->Pm_Qp=p_quad->m_Qc;
   }
   /*adaptive field/frame coding*/
   else
-    prc->FrameQPBuffer=prc->m_Qc;
+    p_quad->FrameQPBuffer=p_quad->m_Qc;
 }
 
 /*!
@@ -2111,19 +2134,19 @@ void updateQPNonPicAFF( rc_quadratic *prc )
  *    Update QP values for bottom filed in field coding
  *************************************************************************************
 */
-void updateBottomField( rc_quadratic *prc )
+void updateBottomField( InputParameters *p_Inp, RCQuadratic *p_quad )
 {
   /*field coding*/
-  if(params->PicInterlace==FIELD_CODING)
+  if(p_Inp->PicInterlace==FIELD_CODING)
   {
-    prc->TotalQpforPPicture +=prc->m_Qc;
-    prc->PrevLastQP=prc->CurrLastQP+1;
-    prc->CurrLastQP=prc->m_Qc;//+0 Recent change 13/1/2003
-    prc->Pm_Qp=prc->m_Qc;
+    p_quad->TotalQpforPPicture +=p_quad->m_Qc;
+    p_quad->PrevLastQP=p_quad->CurrLastQP+1;
+    p_quad->CurrLastQP=p_quad->m_Qc;//+0 Recent change 13/1/2003
+    p_quad->Pm_Qp=p_quad->m_Qc;
   }
   /*adaptive field/frame coding*/
   else
-    prc->FieldQPBuffer=prc->m_Qc;
+    p_quad->FieldQPBuffer=p_quad->m_Qc;
 }
 
 /*!
@@ -2132,43 +2155,44 @@ void updateBottomField( rc_quadratic *prc )
  *    update QP variables for P frames
  *************************************************************************************
 */
-int updateFirstP( rc_quadratic *prc, int topfield )
+int updateFirstP( ImageParameters *p_Img, InputParameters *p_Inp, RCQuadratic *p_quad, RCGeneric *p_gen, int topfield )
 {
+
   /*top field of the first P frame*/
-  prc->m_Qc=prc->MyInitialQp;
-  generic_RC->NumberofBasicUnitHeaderBits=0;
-  generic_RC->NumberofBasicUnitTextureBits=0;
-  prc->NumberofBasicUnit--;
+  p_quad->m_Qc=p_quad->MyInitialQp;
+  p_gen->NumberofBasicUnitHeaderBits=0;
+  p_gen->NumberofBasicUnitTextureBits=0;
+  p_quad->NumberofBasicUnit--;
   /*bottom field of the first P frame*/
-  if((!topfield)&&(prc->NumberofBasicUnit==0))
+  if((!topfield)&&(p_quad->NumberofBasicUnit==0))
   {
     /*frame coding or field coding*/
-    if((active_sps->frame_mbs_only_flag)||(params->PicInterlace==FIELD_CODING))
+    if((p_Img->active_sps->frame_mbs_only_flag)||(p_Inp->PicInterlace==FIELD_CODING))
     {
-      prc->TotalQpforPPicture +=prc->m_Qc;
-      prc->PrevLastQP=prc->CurrLastQP;
-      prc->CurrLastQP=prc->m_Qc;
-      prc->PAveFrameQP=prc->m_Qc;
-      prc->PAveHeaderBits3=prc->PAveHeaderBits2;
+      p_quad->TotalQpforPPicture +=p_quad->m_Qc;
+      p_quad->PrevLastQP=p_quad->CurrLastQP;
+      p_quad->CurrLastQP=p_quad->m_Qc;
+      p_quad->PAveFrameQP=p_quad->m_Qc;
+      p_quad->PAveHeaderBits3=p_quad->PAveHeaderBits2;
     }
     /*adaptive frame/field coding*/
-    else if((params->PicInterlace==ADAPTIVE_CODING)||(params->MbInterlace))
+    else if((p_Inp->PicInterlace==ADAPTIVE_CODING)||(p_Inp->MbInterlace))
     {
-      if(generic_RC->FieldControl==0)
+      if(p_gen->FieldControl==0)
       {
-        prc->FrameQPBuffer=prc->m_Qc;
-        prc->FrameAveHeaderBits=prc->PAveHeaderBits2;
+        p_quad->FrameQPBuffer=p_quad->m_Qc;
+        p_quad->FrameAveHeaderBits=p_quad->PAveHeaderBits2;
       }
       else
       {
-        prc->FieldQPBuffer=prc->m_Qc;
-        prc->FieldAveHeaderBits=prc->PAveHeaderBits2;
+        p_quad->FieldQPBuffer=p_quad->m_Qc;
+        p_quad->FieldAveHeaderBits=p_quad->PAveHeaderBits2;
       }
     }
   }
-  prc->Pm_Qp=prc->m_Qc;
-  prc->TotalFrameQP +=prc->m_Qc;
-  return prc->m_Qc;
+  p_quad->Pm_Qp=p_quad->m_Qc;
+  p_quad->TotalFrameQP +=p_quad->m_Qc;
+  return p_quad->m_Qc;
 }
 
 /*!
@@ -2177,80 +2201,80 @@ int updateFirstP( rc_quadratic *prc, int topfield )
  *    update QP when bit target is negative
  *************************************************************************************
 */
-int updateNegativeTarget( rc_quadratic *prc, int topfield, int m_Qp )
+int updateNegativeTarget( ImageParameters *p_Img, InputParameters *p_Inp, RCQuadratic *p_quad, RCGeneric *p_gen, int topfield, int m_Qp )
 {
   int PAverageQP;
 
-  if(prc->GOPOverdue==TRUE)
-    prc->m_Qc=m_Qp+2;
+  if(p_quad->GOPOverdue==TRUE)
+    p_quad->m_Qc=m_Qp+2;
   else
-    prc->m_Qc=m_Qp+prc->DDquant;//2
+    p_quad->m_Qc=m_Qp+p_quad->DDquant;//2
 
-  prc->m_Qc = imin(prc->m_Qc, img->RCMaxQP);  // clipping
-  if(params->basicunit>=prc->MBPerRow)
-    prc->m_Qc = imin(prc->m_Qc, prc->PAveFrameQP + 6);
+  p_quad->m_Qc = imin(p_quad->m_Qc, p_Img->RCMaxQP + p_quad->bitdepth_qp_scale);  // clipping
+  if(p_Inp->basicunit>=p_quad->MBPerRow)
+    p_quad->m_Qc = imin(p_quad->m_Qc, p_quad->PAveFrameQP + 6);
   else
-    prc->m_Qc = imin(prc->m_Qc, prc->PAveFrameQP + 3);
+    p_quad->m_Qc = imin(p_quad->m_Qc, p_quad->PAveFrameQP + 3);
 
-  prc->TotalFrameQP +=prc->m_Qc;
-  prc->NumberofBasicUnit--;
-  if(prc->NumberofBasicUnit==0)
+  p_quad->TotalFrameQP +=p_quad->m_Qc;
+  p_quad->NumberofBasicUnit--;
+  if(p_quad->NumberofBasicUnit==0)
   {
-    if((!topfield)||(generic_RC->FieldControl==0))
+    if((!topfield)||(p_gen->FieldControl==0))
     {
       /*frame coding or field coding*/
-      if((active_sps->frame_mbs_only_flag)||(params->PicInterlace==FIELD_CODING))
+      if((p_Img->active_sps->frame_mbs_only_flag)||(p_Inp->PicInterlace==FIELD_CODING))
       {
-        PAverageQP=(int)((double)prc->TotalFrameQP/(double)prc->TotalNumberofBasicUnit+0.5);
-        if (prc->NumberofPPicture == (params->intra_period - 2))
-          prc->QPLastPFrame = PAverageQP;
+        PAverageQP=(int)((double)p_quad->TotalFrameQP/(double)p_quad->TotalNumberofBasicUnit+0.5);
+        if (p_quad->NumberofPPicture == (p_Inp->intra_period - 2))
+          p_quad->QPLastPFrame = PAverageQP;
 
-        prc->TotalQpforPPicture +=PAverageQP;
-        if(prc->GOPOverdue==TRUE)
+        p_quad->TotalQpforPPicture +=PAverageQP;
+        if(p_quad->GOPOverdue==TRUE)
         {
-          prc->PrevLastQP=prc->CurrLastQP+1;
-          prc->CurrLastQP=PAverageQP;
+          p_quad->PrevLastQP=p_quad->CurrLastQP+1;
+          p_quad->CurrLastQP=PAverageQP;
         }
         else
         {
-          if((prc->NumberofPPicture==0)&&(generic_RC->NumberofGOP>1))
+          if((p_quad->NumberofPPicture==0)&&(p_gen->NumberofGOP>1))
           {
-            prc->PrevLastQP=prc->CurrLastQP;
-            prc->CurrLastQP=PAverageQP;
+            p_quad->PrevLastQP=p_quad->CurrLastQP;
+            p_quad->CurrLastQP=PAverageQP;
           }
-          else if(prc->NumberofPPicture>0)
+          else if(p_quad->NumberofPPicture>0)
           {
-            prc->PrevLastQP=prc->CurrLastQP+1;
-            prc->CurrLastQP=PAverageQP;
+            p_quad->PrevLastQP=p_quad->CurrLastQP+1;
+            p_quad->CurrLastQP=PAverageQP;
           }
         }
-        prc->PAveFrameQP=PAverageQP;
-        prc->PAveHeaderBits3=prc->PAveHeaderBits2;
+        p_quad->PAveFrameQP=PAverageQP;
+        p_quad->PAveHeaderBits3=p_quad->PAveHeaderBits2;
       }
       /*adaptive field/frame coding*/
-      else if((params->PicInterlace==ADAPTIVE_CODING)||(params->MbInterlace))
+      else if((p_Inp->PicInterlace==ADAPTIVE_CODING)||(p_Inp->MbInterlace))
       {
-        if(generic_RC->FieldControl==0)
+        if(p_gen->FieldControl==0)
         {
-          PAverageQP=(int)((double)prc->TotalFrameQP/(double)prc->TotalNumberofBasicUnit+0.5);
-          prc->FrameQPBuffer=PAverageQP;
-          prc->FrameAveHeaderBits=prc->PAveHeaderBits2;
+          PAverageQP=(int)((double)p_quad->TotalFrameQP/(double)p_quad->TotalNumberofBasicUnit+0.5);
+          p_quad->FrameQPBuffer=PAverageQP;
+          p_quad->FrameAveHeaderBits=p_quad->PAveHeaderBits2;
         }
         else
         {
-          PAverageQP=(int)((double)prc->TotalFrameQP/(double)prc->TotalNumberofBasicUnit+0.5);
-          prc->FieldQPBuffer=PAverageQP;
-          prc->FieldAveHeaderBits=prc->PAveHeaderBits2;
+          PAverageQP=(int)((double)p_quad->TotalFrameQP/(double)p_quad->TotalNumberofBasicUnit+0.5);
+          p_quad->FieldQPBuffer=PAverageQP;
+          p_quad->FieldAveHeaderBits=p_quad->PAveHeaderBits2;
         }
       }
     }
   }
-  if(prc->GOPOverdue==TRUE)
-    prc->Pm_Qp=prc->PAveFrameQP;
+  if(p_quad->GOPOverdue==TRUE)
+    p_quad->Pm_Qp=p_quad->PAveFrameQP;
   else
-    prc->Pm_Qp=prc->m_Qc;
+    p_quad->Pm_Qp=p_quad->m_Qc;
 
-  return prc->m_Qc;
+  return p_quad->m_Qc;
 }
 
 /*!
@@ -2259,47 +2283,47 @@ int updateNegativeTarget( rc_quadratic *prc, int topfield, int m_Qp )
  *    update QP for the first Basic Unit in the picture
  *************************************************************************************
 */
-int updateFirstBU( rc_quadratic *prc, int topfield )
+int updateFirstBU( ImageParameters *p_Img, InputParameters *p_Inp, RCQuadratic *p_quad, RCGeneric *p_gen, int topfield )
 {
   /*adaptive field/frame coding*/
-  if(((params->PicInterlace==ADAPTIVE_CODING)||(params->MbInterlace))&&(generic_RC->FieldControl==0))
+  if(((p_Inp->PicInterlace==ADAPTIVE_CODING)||(p_Inp->MbInterlace))&&(p_gen->FieldControl==0))
   {
     /*previous choice is frame coding*/
-    if(generic_RC->FieldFrame==1)
+    if(p_gen->FieldFrame==1)
     {
-      if(prc->NumberofPPicture>0)
-        prc->TotalQpforPPicture +=prc->FrameQPBuffer;
-      prc->PAveFrameQP=prc->FrameQPBuffer;
-      prc->PAveHeaderBits3=prc->FrameAveHeaderBits;
+      if(p_quad->NumberofPPicture>0)
+        p_quad->TotalQpforPPicture +=p_quad->FrameQPBuffer;
+      p_quad->PAveFrameQP=p_quad->FrameQPBuffer;
+      p_quad->PAveHeaderBits3=p_quad->FrameAveHeaderBits;
     }
     /*previous choice is field coding*/
     else
     {
-      if(prc->NumberofPPicture>0)
-        prc->TotalQpforPPicture +=prc->FieldQPBuffer;
-      prc->PAveFrameQP=prc->FieldQPBuffer;
-      prc->PAveHeaderBits3=prc->FieldAveHeaderBits;
+      if(p_quad->NumberofPPicture>0)
+        p_quad->TotalQpforPPicture +=p_quad->FieldQPBuffer;
+      p_quad->PAveFrameQP=p_quad->FieldQPBuffer;
+      p_quad->PAveHeaderBits3=p_quad->FieldAveHeaderBits;
     }
   }
 
-  if(prc->Target<=0)
+  if(p_quad->Target<=0)
   {
-    prc->m_Qc = prc->PAveFrameQP + 2;
-    if(prc->m_Qc > img->RCMaxQP)
-      prc->m_Qc = img->RCMaxQP;
+    p_quad->m_Qc = p_quad->PAveFrameQP + 2;
+    if(p_quad->m_Qc > (p_Img->RCMaxQP + p_quad->bitdepth_qp_scale))
+      p_quad->m_Qc = p_Img->RCMaxQP + p_quad->bitdepth_qp_scale;
 
-    if(topfield||(generic_RC->FieldControl==0))
-      prc->GOPOverdue=TRUE;
+    if(topfield||(p_gen->FieldControl==0))
+      p_quad->GOPOverdue=TRUE;
   }
   else
   {
-    prc->m_Qc=prc->PAveFrameQP;
+    p_quad->m_Qc=p_quad->PAveFrameQP;
   }
-  prc->TotalFrameQP +=prc->m_Qc;
-  prc->NumberofBasicUnit--;
-  prc->Pm_Qp = prc->PAveFrameQP;
+  p_quad->TotalFrameQP +=p_quad->m_Qc;
+  p_quad->NumberofBasicUnit--;
+  p_quad->Pm_Qp = p_quad->PAveFrameQP;
 
-  return prc->m_Qc;
+  return p_quad->m_Qc;
 }
 
 /*!
@@ -2308,38 +2332,38 @@ int updateFirstBU( rc_quadratic *prc, int topfield )
  *    update QP for the last Basic Unit in the picture
  *************************************************************************************
 */
-void updateLastBU( rc_quadratic *prc, int topfield )
+void updateLastBU( ImageParameters *p_Img, InputParameters *p_Inp, RCQuadratic *p_quad, RCGeneric *p_gen, int topfield )
 {
   int PAverageQP;
 
-  if((!topfield)||(generic_RC->FieldControl==0))
+  if((!topfield)||(p_gen->FieldControl==0))
   {
     /*frame coding or field coding*/
-    if((active_sps->frame_mbs_only_flag)||(params->PicInterlace==FIELD_CODING))
+    if((p_Img->active_sps->frame_mbs_only_flag)||(p_Inp->PicInterlace==FIELD_CODING))
     {
-      PAverageQP=(int)((double)prc->TotalFrameQP/(double) prc->TotalNumberofBasicUnit+0.5);
-      if (prc->NumberofPPicture == (params->intra_period - 2))
-        prc->QPLastPFrame = PAverageQP;
+      PAverageQP=(int)((double)p_quad->TotalFrameQP/(double) p_quad->TotalNumberofBasicUnit+0.5);
+      if (p_quad->NumberofPPicture == (p_Inp->intra_period - 2))
+        p_quad->QPLastPFrame = PAverageQP;
 
-      prc->TotalQpforPPicture +=PAverageQP;
-      prc->PrevLastQP=prc->CurrLastQP;
-      prc->CurrLastQP=PAverageQP;
-      prc->PAveFrameQP=PAverageQP;
-      prc->PAveHeaderBits3=prc->PAveHeaderBits2;
+      p_quad->TotalQpforPPicture +=PAverageQP;
+      p_quad->PrevLastQP=p_quad->CurrLastQP;
+      p_quad->CurrLastQP=PAverageQP;
+      p_quad->PAveFrameQP=PAverageQP;
+      p_quad->PAveHeaderBits3=p_quad->PAveHeaderBits2;
     }
-    else if((params->PicInterlace==ADAPTIVE_CODING)||(params->MbInterlace))
+    else if((p_Inp->PicInterlace==ADAPTIVE_CODING)||(p_Inp->MbInterlace))
     {
-      if(generic_RC->FieldControl==0)
+      if(p_gen->FieldControl==0)
       {
-        PAverageQP=(int)((double) prc->TotalFrameQP/(double)prc->TotalNumberofBasicUnit+0.5);
-        prc->FrameQPBuffer=PAverageQP;
-        prc->FrameAveHeaderBits=prc->PAveHeaderBits2;
+        PAverageQP=(int)((double) p_quad->TotalFrameQP/(double)p_quad->TotalNumberofBasicUnit+0.5);
+        p_quad->FrameQPBuffer=PAverageQP;
+        p_quad->FrameAveHeaderBits=p_quad->PAveHeaderBits2;
       }
       else
       {
-        PAverageQP=(int)((double) prc->TotalFrameQP/(double) prc->TotalNumberofBasicUnit+0.5);
-        prc->FieldQPBuffer=PAverageQP;
-        prc->FieldAveHeaderBits=prc->PAveHeaderBits2;
+        PAverageQP=(int)((double) p_quad->TotalFrameQP/(double) p_quad->TotalNumberofBasicUnit+0.5);
+        p_quad->FieldQPBuffer=PAverageQP;
+        p_quad->FieldAveHeaderBits=p_quad->PAveHeaderBits2;
       }
     }
   }
@@ -2351,27 +2375,27 @@ void updateLastBU( rc_quadratic *prc, int topfield )
  *    update current picture MAD
  *************************************************************************************
 */
-void predictCurrPicMAD( rc_quadratic *prc )
+void predictCurrPicMAD( InputParameters *p_Inp, RCQuadratic *p_quad, RCGeneric *p_gen )
 {
   int i;
-  if(((params->PicInterlace==ADAPTIVE_CODING)||(params->MbInterlace))&&(generic_RC->FieldControl==1))
+  if(((p_Inp->PicInterlace==ADAPTIVE_CODING)||(p_Inp->MbInterlace))&&(p_gen->FieldControl==1))
   {
-    prc->CurrentFrameMAD=prc->MADPictureC1*prc->FCBUPFMAD[prc->TotalNumberofBasicUnit-prc->NumberofBasicUnit]+prc->MADPictureC2;
-    prc->TotalBUMAD=0;
-    for(i=prc->TotalNumberofBasicUnit-1; i>=(prc->TotalNumberofBasicUnit-prc->NumberofBasicUnit);i--)
+    p_quad->CurrentFrameMAD=p_quad->MADPictureC1*p_quad->FCBUPFMAD[p_quad->TotalNumberofBasicUnit-p_quad->NumberofBasicUnit]+p_quad->MADPictureC2;
+    p_quad->TotalBUMAD=0;
+    for(i=p_quad->TotalNumberofBasicUnit-1; i>=(p_quad->TotalNumberofBasicUnit-p_quad->NumberofBasicUnit);i--)
     {
-      prc->CurrentBUMAD=prc->MADPictureC1*prc->FCBUPFMAD[i]+prc->MADPictureC2;
-      prc->TotalBUMAD +=prc->CurrentBUMAD*prc->CurrentBUMAD;
+      p_quad->CurrentBUMAD=p_quad->MADPictureC1*p_quad->FCBUPFMAD[i]+p_quad->MADPictureC2;
+      p_quad->TotalBUMAD +=p_quad->CurrentBUMAD*p_quad->CurrentBUMAD;
     }
   }
   else
   {
-    prc->CurrentFrameMAD=prc->MADPictureC1*prc->BUPFMAD[prc->TotalNumberofBasicUnit-prc->NumberofBasicUnit]+prc->MADPictureC2;
-    prc->TotalBUMAD=0;
-    for(i=prc->TotalNumberofBasicUnit-1; i>=(prc->TotalNumberofBasicUnit-prc->NumberofBasicUnit);i--)
+    p_quad->CurrentFrameMAD=p_quad->MADPictureC1*p_quad->BUPFMAD[p_quad->TotalNumberofBasicUnit-p_quad->NumberofBasicUnit]+p_quad->MADPictureC2;
+    p_quad->TotalBUMAD=0;
+    for(i=p_quad->TotalNumberofBasicUnit-1; i>=(p_quad->TotalNumberofBasicUnit-p_quad->NumberofBasicUnit);i--)
     {
-      prc->CurrentBUMAD=prc->MADPictureC1*prc->BUPFMAD[i]+prc->MADPictureC2;
-      prc->TotalBUMAD +=prc->CurrentBUMAD*prc->CurrentBUMAD;
+      p_quad->CurrentBUMAD=p_quad->MADPictureC1*p_quad->BUPFMAD[i]+p_quad->MADPictureC2;
+      p_quad->TotalBUMAD +=p_quad->CurrentBUMAD*p_quad->CurrentBUMAD;
     }
   }
 }
@@ -2382,39 +2406,39 @@ void predictCurrPicMAD( rc_quadratic *prc )
  *    update QP using the quadratic model for basic unit coding
  *************************************************************************************
 */
-void updateModelQPBU( rc_quadratic *prc, int topfield, int m_Qp )
+void updateModelQPBU( ImageParameters *p_Img, InputParameters *p_Inp, RCQuadratic *p_quad, int m_Qp )
 {
   double dtmp, m_Qstep;
   int m_Bits;
   /*compute the total number of bits for the current basic unit*/
-  m_Bits =(int)(prc->Target * prc->CurrentFrameMAD * prc->CurrentFrameMAD / prc->TotalBUMAD);
+  m_Bits =(int)(p_quad->Target * p_quad->CurrentFrameMAD * p_quad->CurrentFrameMAD / p_quad->TotalBUMAD);
   /*compute the number of texture bits*/
-  m_Bits -=prc->PAveHeaderBits2;
+  m_Bits -=p_quad->PAveHeaderBits2;
 
-  m_Bits=imax(m_Bits,(int)(prc->bit_rate/(MINVALUE*prc->frame_rate*prc->TotalNumberofBasicUnit)));
+  m_Bits=imax(m_Bits,(int)(p_quad->bit_rate/(MINVALUE*p_quad->frame_rate*p_quad->TotalNumberofBasicUnit)));
 
-  dtmp = prc->CurrentFrameMAD * prc->CurrentFrameMAD * prc->m_X1 * prc->m_X1 \
-    + 4 * prc->m_X2 * prc->CurrentFrameMAD * m_Bits;
-  if ((prc->m_X2 == 0.0) || (dtmp < 0) || ((sqrt (dtmp) - prc->m_X1 * prc->CurrentFrameMAD) <= 0.0))  // fall back 1st order mode
-    m_Qstep = (float)(prc->m_X1 * prc->CurrentFrameMAD / (double) m_Bits);
+  dtmp = p_quad->CurrentFrameMAD * p_quad->CurrentFrameMAD * p_quad->m_X1 * p_quad->m_X1 \
+    + 4 * p_quad->m_X2 * p_quad->CurrentFrameMAD * m_Bits;
+  if ((p_quad->m_X2 == 0.0) || (dtmp < 0) || ((sqrt (dtmp) - p_quad->m_X1 * p_quad->CurrentFrameMAD) <= 0.0))  // fall back 1st order mode
+    m_Qstep = (float)(p_quad->m_X1 * p_quad->CurrentFrameMAD / (double) m_Bits);
   else // 2nd order mode
-    m_Qstep = (float) ((2 * prc->m_X2 * prc->CurrentFrameMAD) / (sqrt (dtmp) - prc->m_X1 * prc->CurrentFrameMAD));
+    m_Qstep = (float) ((2 * p_quad->m_X2 * p_quad->CurrentFrameMAD) / (sqrt (dtmp) - p_quad->m_X1 * p_quad->CurrentFrameMAD));
 
-  prc->m_Qc = Qstep2QP(m_Qstep);
-  prc->m_Qc = imin(m_Qp+prc->DDquant,  prc->m_Qc); // control variation
+  p_quad->m_Qc = Qstep2QP(m_Qstep, p_quad->bitdepth_qp_scale);
+  p_quad->m_Qc = imin(m_Qp+p_quad->DDquant,  p_quad->m_Qc); // control variation
 
-  if(params->basicunit>=prc->MBPerRow)
-    prc->m_Qc = imin(prc->PAveFrameQP+6, prc->m_Qc);
+  if(p_Inp->basicunit>=p_quad->MBPerRow)
+    p_quad->m_Qc = imin(p_quad->PAveFrameQP+6, p_quad->m_Qc);
   else
-    prc->m_Qc = imin(prc->PAveFrameQP+3, prc->m_Qc);
+    p_quad->m_Qc = imin(p_quad->PAveFrameQP+3, p_quad->m_Qc);
 
-  prc->m_Qc = iClip3(m_Qp-prc->DDquant, img->RCMaxQP, prc->m_Qc); // clipping
-  if(params->basicunit>=prc->MBPerRow)
-    prc->m_Qc = imax(prc->PAveFrameQP-6, prc->m_Qc);
+  p_quad->m_Qc = iClip3(m_Qp-p_quad->DDquant, p_Img->RCMaxQP + p_quad->bitdepth_qp_scale, p_quad->m_Qc); // clipping
+  if(p_Inp->basicunit>=p_quad->MBPerRow)
+    p_quad->m_Qc = imax(p_quad->PAveFrameQP-6, p_quad->m_Qc);
   else
-    prc->m_Qc = imax(prc->PAveFrameQP-3, prc->m_Qc);
+    p_quad->m_Qc = imax(p_quad->PAveFrameQP-3, p_quad->m_Qc);
 
-  prc->m_Qc = imax(img->RCMinQP, prc->m_Qc);
+  p_quad->m_Qc = imax(p_Img->RCMinQP + p_quad->bitdepth_qp_scale, p_quad->m_Qc);
 }
 
 /*!
@@ -2423,19 +2447,19 @@ void updateModelQPBU( rc_quadratic *prc, int topfield, int m_Qp )
  *    update QP variables for interlaced pictures and basic unit coding
  *************************************************************************************
 */
-void updateQPInterlaceBU( rc_quadratic *prc )
+void updateQPInterlaceBU( RCQuadratic *p_quad, RCGeneric *p_gen )
 {
   /*previous choice is frame coding*/
-  if(generic_RC->FieldFrame==1)
+  if(p_gen->FieldFrame==1)
   {
-    prc->TotalQpforPPicture +=prc->FrameQPBuffer;
-    prc->Pm_Qp=prc->FrameQPBuffer;
+    p_quad->TotalQpforPPicture +=p_quad->FrameQPBuffer;
+    p_quad->Pm_Qp=p_quad->FrameQPBuffer;
   }
   /*previous choice is field coding*/
   else
   {
-    prc->TotalQpforPPicture +=prc->FieldQPBuffer;
-    prc->Pm_Qp=prc->FieldQPBuffer;
+    p_quad->TotalQpforPPicture +=p_quad->FieldQPBuffer;
+    p_quad->Pm_Qp=p_quad->FieldQPBuffer;
   }
 }
 
@@ -2445,18 +2469,18 @@ void updateQPInterlaceBU( rc_quadratic *prc )
  *    update QP with quadratic model
  *************************************************************************************
 */
-void updateModelQPFrame( rc_quadratic *prc, int m_Bits )
+void updateModelQPFrame( RCQuadratic *p_quad, int m_Bits )
 {
   double dtmp, m_Qstep;
 
-  dtmp = prc->CurrentFrameMAD * prc->m_X1 * prc->CurrentFrameMAD * prc->m_X1
-    + 4 * prc->m_X2 * prc->CurrentFrameMAD * m_Bits;
-  if ((prc->m_X2 == 0.0) || (dtmp < 0) || ((sqrt (dtmp) - prc->m_X1 * prc->CurrentFrameMAD) <= 0.0)) // fall back 1st order mode
-    m_Qstep = (float) (prc->m_X1 * prc->CurrentFrameMAD / (double) m_Bits);
+  dtmp = p_quad->CurrentFrameMAD * p_quad->m_X1 * p_quad->CurrentFrameMAD * p_quad->m_X1
+    + 4 * p_quad->m_X2 * p_quad->CurrentFrameMAD * m_Bits;
+  if ((p_quad->m_X2 == 0.0) || (dtmp < 0) || ((sqrt (dtmp) - p_quad->m_X1 * p_quad->CurrentFrameMAD) <= 0.0)) // fall back 1st order mode
+    m_Qstep = (float) (p_quad->m_X1 * p_quad->CurrentFrameMAD / (double) m_Bits);
   else // 2nd order mode
-    m_Qstep = (float) ((2 * prc->m_X2 * prc->CurrentFrameMAD) / (sqrt (dtmp) - prc->m_X1 * prc->CurrentFrameMAD));
+    m_Qstep = (float) ((2 * p_quad->m_X2 * p_quad->CurrentFrameMAD) / (sqrt (dtmp) - p_quad->m_X1 * p_quad->CurrentFrameMAD));
 
-  prc->m_Qc = Qstep2QP(m_Qstep);
+  p_quad->m_Qc = Qstep2QP(m_Qstep, p_quad->bitdepth_qp_scale);
 }
 
 /*!
@@ -2465,32 +2489,36 @@ void updateModelQPFrame( rc_quadratic *prc, int m_Bits )
  *    rate control at the MB level
  *************************************************************************************
 */
-int rc_handle_mb( int prev_mb, Macroblock *currMB, Slice *currSlice )
+int rc_handle_mb( Macroblock *currMB, int prev_mb )
 {
-  int  mb_qp = img->qp;
-  Macroblock  *prevMB = currMB->PrevMB; 
+  ImageParameters *p_Img = currMB->p_Img;
+  InputParameters *p_Inp = currMB->p_Inp;
+  Macroblock     *prevMB = currMB->PrevMB; 
+  int mb_qp = p_Img->qp;
+  RCGeneric   *p_gen   = p_Img->p_rc_gen;
+  RCQuadratic *p_quad = p_Img->p_rc_quad;
 
   if (prev_mb > -1)
   {
-    if ( params->MbInterlace == ADAPTIVE_CODING && !img->bot_MB && currMB->mb_field )
+    if ( p_Inp->MbInterlace == ADAPTIVE_CODING && !p_Img->bot_MB && currMB->mb_field )
       mb_qp = prevMB->qp;
   }
 
   // frame layer rate control
-  if (params->basicunit != img->FrameSizeInMbs)
+  if (p_Inp->basicunit != p_Img->FrameSizeInMbs)
   {
     // each I or B frame has only one QP
-    if ( ((img->type == I_SLICE || img->type == B_SLICE) && params->RCUpdateMode != RC_MODE_1 ) || !(img->number) )
+    if ( ((p_Img->type == I_SLICE || p_Img->type == B_SLICE) && p_Inp->RCUpdateMode != RC_MODE_1 ) || !(p_Img->number) )
     {
       return mb_qp;
     }
-    else if ( img->type == P_SLICE || params->RCUpdateMode == RC_MODE_1 )
+    else if ( p_Img->type == P_SLICE || p_Inp->RCUpdateMode == RC_MODE_1 )
     {
-      if (!img->write_macroblock) //write macroblock
+      if (!p_Img->write_macroblock) //write macroblock
       {
         if (prev_mb > -1) 
         {      
-          if (!((params->MbInterlace) && img->bot_MB)) //top macroblock
+          if (!((p_Inp->MbInterlace) && p_Img->bot_MB)) //top macroblock
           {
             if (prevMB->prev_cbp != 1)
             {
@@ -2502,32 +2530,32 @@ int rc_handle_mb( int prev_mb, Macroblock *currMB, Slice *currSlice )
 
       // compute the quantization parameter for each basic unit of P frame
 
-      if (!img->write_macroblock)
+      if (!p_Img->write_macroblock)
       {
-        if(!((params->MbInterlace) && img->bot_MB))
+        if(!((p_Inp->MbInterlace) && p_Img->bot_MB))
         {
-          if(params->RCUpdateMode <= MAX_RC_MODE && (img->NumberofCodedMacroBlocks > 0) && (img->NumberofCodedMacroBlocks % img->BasicUnit == 0))
+          if(p_Inp->RCUpdateMode <= MAX_RC_MODE && (p_Img->NumberofCodedMacroBlocks > 0) && (p_Img->NumberofCodedMacroBlocks % p_Img->BasicUnit == 0))
           {
-            updateRCModel(quadratic_RC);
+            updateRCModel(p_Img, p_Inp, p_quad, p_gen);
             // frame coding
-            if(active_sps->frame_mbs_only_flag)
+            if(p_Img->active_sps->frame_mbs_only_flag)
             {
-              img->BasicUnitQP = updateQP(quadratic_RC, generic_RC->TopFieldFlag);
+              p_Img->BasicUnitQP = p_Img->updateQP(p_Img, p_Inp, p_quad, p_gen, p_gen->TopFieldFlag) - p_quad->bitdepth_qp_scale;
 
             }
             // picture adaptive field/frame coding
-            else if(params->MbInterlace || ((params->PicInterlace!=FRAME_CODING) && (generic_RC->NoGranularFieldRC==0)))
+            else if(p_Inp->MbInterlace || ((p_Inp->PicInterlace!=FRAME_CODING) && (p_gen->NoGranularFieldRC==0)))
             {
-              img->BasicUnitQP = updateQP(quadratic_RC, generic_RC->TopFieldFlag);
+              p_Img->BasicUnitQP = p_Img->updateQP(p_Img, p_Inp, p_quad, p_gen, p_gen->TopFieldFlag) - p_quad->bitdepth_qp_scale;
             }
           }
 
-          if(img->current_mb_nr==0)
-            img->BasicUnitQP = mb_qp;
+          if(p_Img->current_mb_nr==0)
+            p_Img->BasicUnitQP = mb_qp;
 
 
-          mb_qp = img->BasicUnitQP;
-          mb_qp = iClip3(-img->bitdepth_luma_qp_scale, 51, mb_qp);
+          mb_qp = p_Img->BasicUnitQP;
+          mb_qp = iClip3(MIN_QP - p_Img->bitdepth_luma_qp_scale, MAX_QP, mb_qp);
         }
       }
     }
@@ -2541,12 +2569,15 @@ int rc_handle_mb( int prev_mb, Macroblock *currMB, Slice *currSlice )
  *    initialize rate control model for the top field
  *************************************************************************************
 */
-void rc_init_top_field ( void )
+void rc_init_top_field ( ImageParameters *p_Img, InputParameters *p_Inp )
 {
-  img->BasicUnit = params->basicunit;
-  generic_RC->TopFieldFlag = 1;
-  rc_init_pict_ptr(quadratic_RC, 0, 1, (params->PicInterlace == FIELD_CODING), 1.0F); 
-  img->qp = updateQP(quadratic_RC, 1);
+  RCGeneric   *p_gen   = p_Img->p_rc_gen;
+  RCQuadratic *p_quad = p_Img->p_rc_quad;
+
+  p_Img->BasicUnit = p_Inp->basicunit;
+  p_gen->TopFieldFlag = 1;
+  p_Img->rc_init_pict_ptr(p_Img, p_Inp, p_quad, p_gen, 0, 1, (p_Inp->PicInterlace == FIELD_CODING), 1.0F); 
+  p_Img->qp = p_Img->updateQP(p_Img, p_Inp, p_quad, p_gen, 1) - p_quad->bitdepth_qp_scale;
 }
 
 /*!
@@ -2555,12 +2586,15 @@ void rc_init_top_field ( void )
  *    initialize rate control model for the bottom field
  *************************************************************************************
 */
-void rc_init_bottom_field ( int TopFieldBits )
+void rc_init_bottom_field ( ImageParameters *p_Img, InputParameters *p_Inp, int TopFieldBits )
 {
-  quadratic_RC->bits_topfield = TopFieldBits;
-  generic_RC->TopFieldFlag = 0;
-  rc_init_pict_ptr(quadratic_RC, 0,0,0, 1.0F); 
-  img->qp  = updateQP(quadratic_RC, 0); 
+  RCGeneric   *p_gen   = p_Img->p_rc_gen;
+  RCQuadratic *p_quad = p_Img->p_rc_quad;
+
+  p_quad->bits_topfield = TopFieldBits;
+  p_gen->TopFieldFlag = 0;
+  p_Img->rc_init_pict_ptr(p_Img, p_Inp, p_quad, p_gen, 0,0,0, 1.0F); 
+  p_Img->qp = p_Img->updateQP(p_Img, p_Inp, p_quad, p_gen, 0) - p_quad->bitdepth_qp_scale; 
 }
 
 /*!
@@ -2569,16 +2603,21 @@ void rc_init_bottom_field ( int TopFieldBits )
  *    initialize rate control for RDPictureDecision
  *************************************************************************************
 */
-void rc_init_frame_rdpic( float rateRatio )
+void rc_init_frame_rdpic( ImageParameters *p_Img, InputParameters *p_Inp, float rateRatio )
 {
-  switch (params->RCUpdateMode)
+  RCGeneric *p_gen = p_Img->p_rc_gen;
+  RCGeneric *p_gen_init = p_Img->p_rc_gen_init;
+  RCQuadratic *p_quad = p_Img->p_rc_quad;
+  RCQuadratic *p_quad_init = p_Img->p_rc_quad_init;
+
+  switch (p_Inp->RCUpdateMode)
   {
   case RC_MODE_0:  case RC_MODE_1:  case RC_MODE_2:  case RC_MODE_3:
     // re-store the initial RC model
-    rc_copy_quadratic( quadratic_RC, quadratic_RC_init );
-    rc_copy_generic( generic_RC, generic_RC_init );
-    rc_init_pict_ptr(quadratic_RC, 1,0,1, rateRatio );
-    img->qp  = updateQP(quadratic_RC, 0);
+    rc_copy_quadratic( p_Img, p_Inp, p_quad, p_quad_init );
+    rc_copy_generic( p_Img, p_gen, p_gen_init );
+    p_Img->rc_init_pict_ptr(p_Img, p_Inp, p_quad, p_gen, 1, 0, 1, rateRatio );
+    p_Img->qp  = p_Img->updateQP(p_Img, p_Inp, p_quad, p_gen, 0) - p_quad->bitdepth_qp_scale;
     break;
   default:
     break;
@@ -2591,19 +2630,20 @@ void rc_init_frame_rdpic( float rateRatio )
  *    allocate rate control memory
  *************************************************************************************
 */
-void rc_allocate_memory( void )
+void rc_allocate_memory( ImageParameters *p_Img, InputParameters *p_Inp )
 {
-  switch (params->RCUpdateMode)
+  switch (p_Inp->RCUpdateMode)
   {
   case RC_MODE_0:  case RC_MODE_1:  case RC_MODE_2:  case RC_MODE_3:
-    rc_alloc_generic( &generic_RC );
-    rc_alloc_quadratic( &quadratic_RC );
-    if ( params->RDPictureDecision || params->MbInterlace == ADAPTIVE_CODING )
+    rc_alloc_generic( p_Img, &p_Img->p_rc_gen );
+    rc_alloc_quadratic( p_Img, p_Inp, &p_Img->p_rc_quad );
+
+    if ( p_Inp->RDPictureDecision || p_Inp->MbInterlace == ADAPTIVE_CODING )
     {
-      rc_alloc_generic( &generic_RC_init );
-      rc_alloc_quadratic( &quadratic_RC_init );
-      rc_alloc_generic( &generic_RC_best );
-      rc_alloc_quadratic( &quadratic_RC_best );
+      rc_alloc_generic( p_Img, &p_Img->p_rc_gen_init );
+      rc_alloc_quadratic( p_Img, p_Inp, &p_Img->p_rc_quad_init );
+      rc_alloc_generic( p_Img, &p_Img->p_rc_gen_best );
+      rc_alloc_quadratic( p_Img, p_Inp, &p_Img->p_rc_quad_best );
     }
     break;
   default:
@@ -2617,20 +2657,20 @@ void rc_allocate_memory( void )
  *    free rate control memory
  *************************************************************************************
 */
-void rc_free_memory( void )
+void rc_free_memory( ImageParameters *p_Img, InputParameters *p_Inp )
 {
-  switch (params->RCUpdateMode)
+  switch (p_Inp->RCUpdateMode)
   {
   case RC_MODE_0:  case RC_MODE_1:  case RC_MODE_2:  case RC_MODE_3:
-    rc_free_generic( &generic_RC );
-    rc_free_quadratic( &quadratic_RC );
+    rc_free_generic( &p_Img->p_rc_gen );
+    rc_free_quadratic( &p_Img->p_rc_quad );
 
-    if ( params->RDPictureDecision || params->MbInterlace == ADAPTIVE_CODING )
+    if ( p_Inp->RDPictureDecision || p_Inp->MbInterlace == ADAPTIVE_CODING )
     {
-      rc_free_generic( &generic_RC_init );
-      rc_free_quadratic( &quadratic_RC_init );
-      rc_free_generic( &generic_RC_best );
-      rc_free_quadratic( &quadratic_RC_best );
+      rc_free_generic( &p_Img->p_rc_gen_init );
+      rc_free_quadratic( &p_Img->p_rc_quad_init );
+      rc_free_generic( &p_Img->p_rc_gen_best );
+      rc_free_quadratic( &p_Img->p_rc_quad_best );
     }
     break;
   default:
@@ -2644,23 +2684,28 @@ void rc_free_memory( void )
  *    update coding statistics after MB coding
  *************************************************************************************
 */
-void rc_update_mb_stats( Macroblock *currMB, int *bitCount )
+void rc_update_mb_stats(Macroblock *currMB)
 {
-  // Rate control
-  img->NumberofMBHeaderBits = bitCount[BITS_MB_MODE] + bitCount[BITS_INTER_MB]
-                            + bitCount[BITS_CBP_MB ] + bitCount[BITS_DELTA_QUANT_MB];
-  img->NumberofMBTextureBits = bitCount[BITS_COEFF_Y_MB]+ bitCount[BITS_COEFF_UV_MB];
+  ImageParameters *p_Img = currMB->p_Img;
+  InputParameters *p_Inp = currMB->p_Inp; 
+  BitCounter *mbBits = &currMB->bits;
+  RCGeneric *p_gen = p_Img->p_rc_gen;
 
-  switch (params->RCUpdateMode)
+  // Rate control
+  p_Img->NumberofMBHeaderBits = mbBits->mb_mode + mbBits->mb_inter
+                            + mbBits->mb_cbp + mbBits->mb_delta_quant;
+  p_Img->NumberofMBTextureBits = mbBits->mb_y_coeff + mbBits->mb_uv_coeff;
+
+  switch (p_Inp->RCUpdateMode)
   {
   case RC_MODE_0:  case RC_MODE_1:  case RC_MODE_2:  case RC_MODE_3:
-    generic_RC->NumberofTextureBits += img->NumberofMBTextureBits;
-    generic_RC->NumberofHeaderBits  += img->NumberofMBHeaderBits;
+    p_gen->NumberofTextureBits += p_Img->NumberofMBTextureBits;
+    p_gen->NumberofHeaderBits  += p_Img->NumberofMBHeaderBits;
     // basic unit layer rate control
-    if(img->BasicUnit < img->FrameSizeInMbs)
+    if(p_Img->BasicUnit < p_Img->FrameSizeInMbs)
     {
-      generic_RC->NumberofBasicUnitHeaderBits  += img->NumberofMBHeaderBits;
-      generic_RC->NumberofBasicUnitTextureBits += img->NumberofMBTextureBits;
+      p_gen->NumberofBasicUnitHeaderBits  += p_Img->NumberofMBHeaderBits;
+      p_gen->NumberofBasicUnitTextureBits += p_Img->NumberofMBTextureBits;
     }
     break;
   default:
@@ -2674,13 +2719,13 @@ void rc_update_mb_stats( Macroblock *currMB, int *bitCount )
  *    save state of rate control model
  *************************************************************************************
 */
-void rc_save_state( void )
+void rc_save_state( ImageParameters *p_Img, InputParameters *p_Inp )
 {
-  switch (params->RCUpdateMode)
+  switch (p_Inp->RCUpdateMode)
   {
   case RC_MODE_0:  case RC_MODE_1:  case RC_MODE_2:  case RC_MODE_3:
-    rc_copy_quadratic( quadratic_RC_best, quadratic_RC );
-    rc_copy_generic( generic_RC_best, generic_RC );
+    rc_copy_quadratic( p_Img, p_Inp, p_Img->p_rc_quad_best, p_Img->p_rc_quad );
+    rc_copy_generic( p_Img, p_Img->p_rc_gen_best, p_Img->p_rc_gen );
     break;
   default:
     break;
@@ -2693,13 +2738,13 @@ void rc_save_state( void )
  *    restore state of rate control model
  *************************************************************************************
 */
-void rc_restore_state( void )
+void rc_restore_state( ImageParameters *p_Img, InputParameters *p_Inp )
 {
-  switch (params->RCUpdateMode)
+  switch (p_Inp->RCUpdateMode)
   {
   case RC_MODE_0:  case RC_MODE_1:  case RC_MODE_2:  case RC_MODE_3:
-    rc_copy_quadratic( quadratic_RC, quadratic_RC_best );
-    rc_copy_generic( generic_RC, generic_RC_best );
+    rc_copy_quadratic( p_Img, p_Inp, p_Img->p_rc_quad, p_Img->p_rc_quad_best );
+    rc_copy_generic( p_Img, p_Img->p_rc_gen, p_Img->p_rc_gen_best );
     break;
   default:
     break;

@@ -24,40 +24,43 @@
 *
 ************************************************************************
 */
-void init_quant_4x4(InputParameters *params, ImageParameters *img, Slice *currSlice)
+void init_quant_4x4(Slice *currSlice)
 {
-  if (params->UseRDOQuant == 1)
+  ImageParameters *p_Img = currSlice->p_Img;
+  InputParameters *p_Inp = currSlice->p_Inp;
+
+  if (currSlice->UseRDOQuant == 1)
   {
-    quant_4x4     = quant_4x4_trellis;
-    if (params->RDOQ_DC == 1)
-      quant_dc4x4 = quant_dc4x4_trellis;
+    currSlice->quant_4x4     = quant_4x4_trellis;
+    if (p_Inp->RDOQ_DC == 1)
+      currSlice->quant_dc4x4 = quant_dc4x4_trellis;
     else
-      quant_dc4x4 = quant_dc4x4_normal;
-    quant_ac4x4   = quant_ac4x4_trellis;
+      currSlice->quant_dc4x4 = quant_dc4x4_normal;
+    currSlice->quant_ac4x4   = quant_ac4x4_trellis;
     if (currSlice->symbol_mode == CAVLC)
     {
-      rdoq_4x4   = rdoq_4x4_CAVLC;
-      rdoq_dc    = rdoq_dc_CAVLC;
-      rdoq_ac4x4 = rdoq_ac4x4_CAVLC;
+      currSlice->rdoq_4x4   = rdoq_4x4_CAVLC;
+      currSlice->rdoq_dc    = rdoq_dc_CAVLC;
+      currSlice->rdoq_ac4x4 = rdoq_ac4x4_CAVLC;
     }
     else
     {
-      rdoq_4x4   = rdoq_4x4_CABAC;
-      rdoq_dc    = rdoq_dc_CABAC;
-      rdoq_ac4x4 = rdoq_ac4x4_CABAC;
+      currSlice->rdoq_4x4   = rdoq_4x4_CABAC;
+      currSlice->rdoq_dc    = rdoq_dc_CABAC;
+      currSlice->rdoq_ac4x4 = rdoq_ac4x4_CABAC;
     }
   }
-  else if (img->AdaptiveRounding)
+  else if (p_Img->AdaptiveRounding)
   {
-    quant_4x4     = quant_4x4_around;
-    quant_dc4x4   = quant_dc4x4_normal;
-    quant_ac4x4   = quant_ac4x4_around;
+    currSlice->quant_4x4     = quant_4x4_around;
+    currSlice->quant_dc4x4   = quant_dc4x4_normal;
+    currSlice->quant_ac4x4   = quant_ac4x4_around;
   }
   else
   {
-    quant_4x4   = quant_4x4_normal;
-    quant_dc4x4 = quant_dc4x4_normal;
-    quant_ac4x4 = quant_ac4x4_normal;
+    currSlice->quant_4x4   = quant_4x4_normal;
+    currSlice->quant_dc4x4 = quant_dc4x4_normal;
+    currSlice->quant_ac4x4 = quant_ac4x4_normal;
   }
 }
 

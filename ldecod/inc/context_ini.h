@@ -17,7 +17,7 @@
 #ifndef _CONTEXT_INI_
 #define _CONTEXT_INI_
 
-void  init_contexts  (ImageParameters* img);
+extern void  init_contexts  (Slice *currslice);
 
 #endif
 

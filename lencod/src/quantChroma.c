@@ -26,45 +26,48 @@
 *
 ************************************************************************
 */
-void init_quant_Chroma(InputParameters *params, ImageParameters *img, Slice *currSlice)
+void init_quant_Chroma(Slice *currSlice)
 {
-  if (params->UseRDOQuant == 1 && params->RDOQ_CR == 1)
+  ImageParameters *p_Img = currSlice->p_Img;
+  InputParameters *p_Inp = currSlice->p_Inp;
+
+  if (p_Inp->UseRDOQuant == 1 && p_Inp->RDOQ_CR == 1)
   {
-    quant_ac4x4cr = quant_ac4x4_trellis;
-    if (params->RDOQ_DC_CR)
+    currSlice->quant_ac4x4cr = quant_ac4x4_trellis;
+    if (p_Inp->RDOQ_DC_CR)
     {
-      if (img->yuv_format == YUV422)
-        quant_dc_cr = quant_dc4x2_trellis;
+      if (p_Img->yuv_format == YUV422)
+        currSlice->quant_dc_cr = quant_dc4x2_trellis;
       else
-        quant_dc_cr = quant_dc2x2_trellis;
+        currSlice->quant_dc_cr = quant_dc2x2_trellis;
     }
     else
     {
-      if (img->yuv_format == YUV422)
-        quant_dc_cr   = quant_dc4x2_normal;
+      if (p_Img->yuv_format == YUV422)
+        currSlice->quant_dc_cr   = quant_dc4x2_normal;
       else
-        quant_dc_cr   = quant_dc2x2_normal;
+        currSlice->quant_dc_cr   = quant_dc2x2_normal;
     }
     if (currSlice->symbol_mode == CABAC)
-      rdoq_dc_cr = rdoq_dc_cr_CABAC;
+      currSlice->rdoq_dc_cr = rdoq_dc_cr_CABAC;
     else
-      rdoq_dc_cr = rdoq_dc_cr_CAVLC;
+      currSlice->rdoq_dc_cr = rdoq_dc_cr_CAVLC;
   }
-  else if (params->UseRDOQuant == 1 || (!img->AdaptiveRounding))
+  else if (p_Inp->UseRDOQuant == 1 || (!(currSlice->p_Img)->AdaptiveRounding))
   {
-    quant_ac4x4cr = quant_ac4x4_normal;
-    if (img->yuv_format == YUV422)
-      quant_dc_cr   = quant_dc4x2_normal;
+    currSlice->quant_ac4x4cr = quant_ac4x4_normal;
+    if (p_Img->yuv_format == YUV422)
+      currSlice->quant_dc_cr   = quant_dc4x2_normal;
     else
-      quant_dc_cr   = quant_dc2x2_normal;
+      currSlice->quant_dc_cr   = quant_dc2x2_normal;
   }
   else
   {
-    quant_ac4x4cr = quant_ac4x4_around;
-    if (img->yuv_format == YUV422)
-      quant_dc_cr   = quant_dc4x2_around;
+    currSlice->quant_ac4x4cr = quant_ac4x4_around;
+    if (p_Img->yuv_format == YUV422)
+      currSlice->quant_dc_cr   = quant_dc4x2_around;
     else
-      quant_dc_cr   = quant_dc2x2_around;
+      currSlice->quant_dc_cr   = quant_dc2x2_around;
   }
 }
 

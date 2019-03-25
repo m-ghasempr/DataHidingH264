@@ -82,6 +82,7 @@ Mapping Map[] = {
     {"SliceMode",                &cfgparams.slice_mode,                   0,   0.0,                       1,  0.0,              3.0,                             },
     {"SliceArgument",            &cfgparams.slice_argument,               0,   1.0,                       2,  1.0,              1.0,                             },
     {"UseConstrainedIntraPred",  &cfgparams.UseConstrainedIntraPred,      0,   0.0,                       1,  0.0,              1.0,                             },
+    {"InputFile1",               &cfgparams.input_file1.fname,            1,   0.0,                       0,  0.0,              0.0,             FILE_NAME_SIZE, },
     {"InputFile",                &cfgparams.input_file1.fname,            1,   0.0,                       0,  0.0,              0.0,             FILE_NAME_SIZE, },
     {"InputHeaderLength",        &cfgparams.infile_header,                0,   0.0,                       2,  0.0,              1.0,                             },
     {"OutputFile",               &cfgparams.outfile,                      1,   0.0,                       0,  0.0,              0.0,             FILE_NAME_SIZE, },
@@ -89,8 +90,12 @@ Mapping Map[] = {
     {"TraceFile",                &cfgparams.TraceFile,                    1,   0.0,                       0,  0.0,              0.0,             FILE_NAME_SIZE, },
     {"StatsFile",                &cfgparams.StatsFile,                    1,   0.0,                       0,  0.0,              0.0,             FILE_NAME_SIZE, },
     {"DisposableP",              &cfgparams.DisposableP,                  0,   0.0,                       1,  0.0,              1.0,                             },
+    {"SetFirstAsLongTerm",       &cfgparams.SetFirstAsLongTerm,           0,   0.0,                       1,  0.0,              1.0,                             },
+    {"MultiSourceData",          &cfgparams.MultiSourceData,              0,   0.0,                       0,  0.0,              2.0,                             },
+    {"InputFile2",               &cfgparams.input_file2.fname,            1,   0.0,                       0,  0.0,              0.0,             FILE_NAME_SIZE, },
+    {"InputFile3",               &cfgparams.input_file3.fname,            1,   0.0,                       0,  0.0,              0.0,             FILE_NAME_SIZE, },
 
-    {"ProcessInput",             &cfgparams.ProcessInput,                 0,   0.0,                       1,  0.0,              2.0,                             },    
+    {"ProcessInput",             &cfgparams.ProcessInput,                 0,   0.0,                       1,  0.0,              4.0,                             },    
     {"DispPQPOffset",            &cfgparams.DispPQPOffset,                0,   0.0,                       0,-51.0,             51.0,                             },
     {"NumberBFrames",            &cfgparams.NumberBFrames,                0,   0.0,                       2,  0.0,              0.0,                             },
     {"PReplaceBSlice",           &cfgparams.PReplaceBSlice,               0,   0.0,                       1,  0.0,              1.0,                             },
@@ -162,6 +167,8 @@ Mapping Map[] = {
     {"ChangeQPBSRefOffset",      &cfgparams.qpBRSOffset[1],               0,   0.0,                       1,-51.0,             51.0,                             },
 
     {"RDOptimization",           &cfgparams.rdopt,                        0,   0.0,                       1,  0.0,              3.0,                             },
+    {"SubMBCodingState",         &cfgparams.subMBCodingState,             0,   2.0,                       1,  0.0,              2.0,                             },
+    {"I16RDOpt",                 &cfgparams.I16rdo,                       0,   0.0,                       1,  0.0,              1.0,                             },
     {"DistortionSSIM",           &cfgparams.Distortion[SSIM],             0,   0.0,                       1,  0.0,              1.0,                             },
     {"DistortionMS_SSIM",        &cfgparams.Distortion[MS_SSIM],          0,   0.0,                       1,  0.0,              1.0,                             },
     {"SSIMOverlapSize",          &cfgparams.SSIMOverlapSize,              0,   1.0,                       2,  1.0,              1.0,                             },
@@ -170,6 +177,7 @@ Mapping Map[] = {
     {"FastCrIntraDecision",      &cfgparams.FastCrIntraDecision,          0,   0.0,                       1,  0.0,              1.0,                             },
     {"DisableThresholding",      &cfgparams.disthres,                     0,   0.0,                       1,  0.0,              1.0,                             },
     {"DisableBSkipRDO",          &cfgparams.nobskip,                      0,   0.0,                       1,  0.0,              1.0,                             },
+    {"ForceTrueRateRDO",         &cfgparams.ForceTrueRateRDO,             0,   0.0,                       1,  0.0,              2.0,                             },    
     {"LossRateA",                &cfgparams.LossRateA,                    0,   0.0,                       2,  0.0,              0.0,                             },
     {"LossRateB",                &cfgparams.LossRateB,                    0,   0.0,                       2,  0.0,              0.0,                             },
     {"LossRateC",                &cfgparams.LossRateC,                    0,   0.0,                       2,  0.0,              0.0,                             },
@@ -208,7 +216,7 @@ Mapping Map[] = {
     {"ExplicitHierarchyFormat",  &cfgparams.ExplicitHierarchyFormat,      1,   0.0,                       0,  0.0,              0.0,             INPUT_TEXT_SIZE,},
     {"ExplicitSeqCoding",        &cfgparams.ExplicitSeqCoding,            0,   0.0,                       1,  0.0,              3.0,                             },
     {"ExplicitSeqFile",          &cfgparams.ExplicitSeqFile,              1,   0.0,                       0,  0.0,              0.0,             FILE_NAME_SIZE, },
-    {"ReferenceReorder",         &cfgparams.ReferenceReorder,             0,   0.0,                       1,  0.0,              1.0,                             },
+    {"ReferenceReorder",         &cfgparams.ReferenceReorder,             0,   0.0,                       1,  0.0,              3.0,                             },
     {"PocMemoryManagement",      &cfgparams.PocMemoryManagement,          0,   0.0,                       1,  0.0,              1.0,                             },
 
     {"DFParametersFlag",         &cfgparams.DFSendParameters,             0,   0.0,                       1,  0.0,              1.0,                             },
@@ -265,7 +273,7 @@ Mapping Map[] = {
 
     {"ReportFrameStats",         &cfgparams.ReportFrameStats,             0,   0.0,                       1,  0.0,              1.0,                             },
     {"DisplayEncParams",         &cfgparams.DisplayEncParams,             0,   0.0,                       1,  0.0,              1.0,                             },
-    {"Verbose",                  &cfgparams.Verbose,                      0,   1.0,                       1,  0.0,              3.0,                             },
+    {"Verbose",                  &cfgparams.Verbose,                      0,   1.0,                       1,  0.0,              4.0,                             },
     {"SkipGlobalStats",          &cfgparams.skip_gl_stats,                0,   0.0,                       1,  0.0,              1.0,                             },
     {"ChromaMCBuffer",           &cfgparams.ChromaMCBuffer,               0,   0.0,                       1,  0.0,              1.0,                             },
     {"ChromaMEEnable",           &cfgparams.ChromaMEEnable,               0,   0.0,                       1,  0.0,              2.0,                             },
@@ -332,7 +340,7 @@ Mapping Map[] = {
     {"OutputBitDepthChroma",     &cfgparams.output.bit_depth[1],          0,   8.0,                       1,  8.0,             14.0,                             },
 
     {"YUVFormat",                &cfgparams.yuv_format,                   0,   1.0,                       1,  0.0,              3.0,                             },
-    {"RGBInput",                 &cfgparams.rgb_input_flag,               0,   0.0,                       1,  0.0,              1.0,                             },
+    {"RGBInput",                 &cfgparams.source.color_model,               0,   0.0,                       1,  0.0,              1.0,                             },
     {"Interleaved",              &cfgparams.input_file1.is_interleaved ,  0,   0.0,                       1,  0.0,              1.0,                             },    
     {"CbQPOffset",               &cfgparams.cb_qp_index_offset,           0,   0.0,                       1,-51.0,             51.0,                             },
     {"CrQPOffset",               &cfgparams.cr_qp_index_offset,           0,   0.0,                       1,-51.0,             51.0,                             },
@@ -496,9 +504,8 @@ Mapping Map[] = {
 extern Mapping Map[];
 #endif
 
-
-void Configure (int ac, char *av[]);
-void PatchInputNoFrames(void);
+extern void Configure         (ImageParameters *p_Img, InputParameters *p_Inp, int ac, char *av[]);
+extern void PatchInputNoFrames(InputParameters *p_Inp);
 
 #endif
 

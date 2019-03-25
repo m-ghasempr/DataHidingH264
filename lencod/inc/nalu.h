@@ -19,11 +19,9 @@
 
 #include "nalucommon.h"
 
-int RBSPtoNALU (unsigned char *rbsp, NALU_t *nalu, int rbsp_size, int nal_unit_type, int nal_reference_idc,
-                int min_num_bytes, int UseAnnexbLongStartcode);
+extern int RBSPtoNALU (unsigned char *rbsp, NALU_t *nalu, int rbsp_size, int nal_unit_type, int nal_reference_idc, int UseAnnexbLongStartcode);
 
-int (*WriteNALU)(NALU_t *n);     //! Hides the write function in Annex B or RTP
-
-int Write_AUD_NALU( void );
+extern int Write_AUD_NALU( ImageParameters *p_Img );
+extern int Write_Filler_Data_NALU( ImageParameters *p_Img, int num_bytes );
 
 #endif

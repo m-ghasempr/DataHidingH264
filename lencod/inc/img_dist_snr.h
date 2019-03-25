@@ -18,7 +18,7 @@
 #define _IMG_DIST_SNR_H_
 #include "img_distortion.h"
 
-void find_snr(ImageStructure *imgREF, ImageStructure *imgSRC, DistMetric metricSSE[3], DistMetric metricPSNR[3]);
+extern void find_snr(ImageParameters *p_Img, InputParameters *p_Inp, ImageStructure *imgREF, ImageStructure *imgSRC, DistMetric metricSSE[3], DistMetric metricPSNR[3]);
 
 #endif
 

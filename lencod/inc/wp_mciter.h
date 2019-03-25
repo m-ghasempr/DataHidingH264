@@ -18,12 +18,12 @@
 #define _WP_MCITERM_H_
 
 
-void EstimateWPBSliceAlg2(ImageParameters *img, InputParameters *params);
-void EstimateWPPSliceAlg2(ImageParameters *img, InputParameters *params, int offset);
-int  TestWPPSliceAlg2    (ImageParameters *img, InputParameters *params, int offset);
-int  TestWPBSliceAlg2    (ImageParameters *img, InputParameters *params, int method);
+extern void EstimateWPBSliceAlg2(Slice *currSlice);
+extern void EstimateWPPSliceAlg2(Slice *currSlice, int offset);
+extern int  TestWPPSliceAlg2    (ImageParameters *p_Img, InputParameters *p_Inp, int offset);
+extern int  TestWPBSliceAlg2    (ImageParameters *p_Im, InputParameters *p_Inp, int method);
 
-void compute_offset();
+extern void compute_offset      (ImageParameters *p_Img);
 
 #endif
 

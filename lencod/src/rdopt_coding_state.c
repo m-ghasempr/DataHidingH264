@@ -19,13 +19,14 @@
 #include "rdopt_coding_state.h"
 #include "cabac.h"
 
+
 /*!
  ************************************************************************
  * \brief
  *    delete structure for storing coding state
  ************************************************************************
  */
-void delete_coding_state (CSptr cs)
+void delete_coding_state (CSobj *cs)
 {
   if (cs != NULL)
   {
@@ -50,17 +51,17 @@ void delete_coding_state (CSptr cs)
  *    create structure for storing coding state
  ************************************************************************
  */
-CSptr create_coding_state ()
+CSobj *create_coding_state (InputParameters *p_Inp)
 {
-  CSptr cs;
+  CSobj *cs;
 
   //=== coding state structure ===
-  if ((cs = (CSptr) calloc (1, sizeof(CSobj))) == NULL)
-    no_mem_exit("init_coding_state: cs");
+  if ((cs = (CSobj *) calloc (1, sizeof(CSobj))) == NULL)
+    no_mem_exit("init_coding_state: cs"); 
 
   //=== important variables of data partition array ===
-  cs->no_part = params->partition_mode==0?1:3;
-  if (params->symbol_mode == CABAC)
+  cs->no_part = p_Inp->partition_mode == 0 ? 1 : 3;
+  if (p_Inp->symbol_mode == CABAC)
   {
     if ((cs->encenv = (EncodingEnvironment*) calloc (cs->no_part, sizeof(EncodingEnvironment))) == NULL)
       no_mem_exit("init_coding_state: cs->encenv");
@@ -73,8 +74,7 @@ CSptr create_coding_state ()
     no_mem_exit("init_coding_state: cs->bitstream");
 
   //=== context for binary arithmetic coding ===
-  cs->symbol_mode = params->symbol_mode;
-  if (cs->symbol_mode == CABAC)
+  if (p_Inp->symbol_mode == CABAC)
   {
     cs->mot_ctx = create_contexts_MotionInfo ();
     cs->tex_ctx = create_contexts_TextureInfo();
@@ -88,51 +88,123 @@ CSptr create_coding_state ()
   return cs;
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    store coding state (for non rdo case. basically a dummy function)
+ ************************************************************************
+ */
+static void store_coding_state_nordo (Macroblock *currMB, CSobj *cs)
+{
+}
+
 
 /*!
  ************************************************************************
  * \brief
- *    store coding state (for rd-optimized mode decision)
+ *    store cavlc coding state (for rd-optimized mode decision)
  ************************************************************************
  */
-void store_coding_state (Slice *currSlice, Macroblock *currMB, CSptr cs)
+static void store_coding_state_cavlc (Macroblock *currMB, CSobj *cs)
 {
   int  i;
-  int  i_last = img->currentPicture->idr_flag? 1:cs->no_part;  
+  Slice *currSlice = currMB->p_slice;
+  int  i_last = currSlice->idr_flag? 1 : cs->no_part;  
 
-  if (!params->rdopt)  return;
-
-  if (cs->symbol_mode==CABAC)
+  //=== important variables of data partition array ===
+  for (i = 0; i < i_last; i++)
   {
-    //=== important variables of data partition array ===
-    //only one partition for IDR img
-    for (i = 0; i < i_last; i++)
-    {
-      cs->encenv[i] = currSlice->partArr[i].ee_cabac;
-      cs->bitstream[i] = *currSlice->partArr[i].bitstream;
-    }
+    cs->bitstream[i] = *currSlice->partArr[i].bitstream;
+  }
 
-    //=== contexts for binary arithmetic coding ===
-    *cs->mot_ctx = *currSlice->mot_ctx;
-    *cs->tex_ctx = *currSlice->tex_ctx;
-  }
-  else
-  {
-    //=== important variables of data partition array ===
-    for (i = 0; i < i_last; i++)
-    {
-      cs->bitstream[i] = *currSlice->partArr[i].bitstream;
-    }
-  }
   //=== syntax element number and bitcounters ===
-  memcpy (cs->bitcounter, currMB->bitcounter, MAX_BITCOUNTER_MB * sizeof(int));
+  cs->bits = currMB->bits;
 
   //=== elements of current macroblock ===
-  memcpy (cs->mvd, currMB->mvd, BLOCK_CONTEXT * sizeof(short));
+  if (currMB->mb_type <= P8x8)
+    memcpy (cs->mvd, currMB->mvd, BLOCK_CONTEXT * sizeof(short));
   memcpy (cs->cbp_bits, currMB->cbp_bits, 3 * sizeof(int64));
-  
-  if (img->P444_joined)
-  memcpy (cs->cbp_bits_8x8, currMB->cbp_bits_8x8, 3 * sizeof(int64));
+
+  if (currSlice->P444_joined)
+    memcpy (cs->cbp_bits_8x8, currMB->cbp_bits_8x8, 3 * sizeof(int64));
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    store cabac coding state (for rd-optimized mode decision)
+ ************************************************************************
+ */
+static void store_coding_state_cabac (Macroblock *currMB, CSobj *cs)
+{
+  int  i;
+  Slice *currSlice = currMB->p_slice;
+  int  i_last = currSlice->idr_flag? 1:cs->no_part;  
+  DataPartition *partArr = &currSlice->partArr[0];
+
+  //=== important variables of data partition array ===
+  //only one partition for an IDR picture
+  for (i = 0; i < i_last; i++)
+  {
+    cs->bitstream[i] = *partArr->bitstream;
+    cs->encenv[i]    = (partArr++)->ee_cabac;    
+  }
+
+  //=== contexts for binary arithmetic coding ===
+  *cs->mot_ctx = *currSlice->mot_ctx;
+  *cs->tex_ctx = *currSlice->tex_ctx;
+
+  //=== syntax element number and bitcounters ===
+  cs->bits = currMB->bits;
+
+  //=== elements of current macroblock ===
+  if (currMB->mb_type <= P8x8)
+    memcpy (cs->mvd, currMB->mvd, BLOCK_CONTEXT * sizeof(short));
+  memcpy (cs->cbp_bits, currMB->cbp_bits, 3 * sizeof(int64));
+
+  if (currSlice->P444_joined)
+    memcpy (cs->cbp_bits_8x8, currMB->cbp_bits_8x8, 3 * sizeof(int64));
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    restore coding state (for non rdo case. basically a dummy function)
+ ************************************************************************
+ */
+static void reset_coding_state_nordo (Macroblock *currMB, CSobj *cs)
+{
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    restore coding state (for rd-optimized mode decision)
+ ************************************************************************
+ */
+static void reset_coding_state_cavlc (Macroblock *currMB, CSobj *cs)
+{
+  int  i;
+  Slice *currSlice = currMB->p_slice;
+  int  i_last = currSlice->idr_flag? 1:cs->no_part;   
+
+  //=== important variables of data partition array ===
+  //only one partition for an IDR picture
+  for (i = 0; i < i_last; i++)
+  {
+    //--- parameters of encoding environments ---
+    *currSlice->partArr[i].bitstream = cs->bitstream[i];
+  }
+
+  //=== syntax element number and bit counters ===
+  currMB->bits = cs->bits;
+
+  //=== elements of current macroblock ===
+  if (currMB->mb_type <= P8x8)
+    memcpy (currMB->mvd, cs->mvd, BLOCK_CONTEXT * sizeof(short));
+  memcpy (currMB->cbp_bits, cs->cbp_bits, 3 * sizeof(int64));
+  if(currSlice->P444_joined)
+    memcpy (currMB->cbp_bits_8x8, cs->cbp_bits_8x8, 3 * sizeof(int64));
 }
 
 
@@ -142,47 +214,66 @@ void store_coding_state (Slice *currSlice, Macroblock *currMB, CSptr cs)
  *    restore coding state (for rd-optimized mode decision)
  ************************************************************************
  */
-void reset_coding_state (Slice *currSlice, Macroblock *currMB, CSptr cs)
+static void reset_coding_state_cabac (Macroblock *currMB, CSobj *cs)
 {
   int  i;
-  int  i_last = img->currentPicture->idr_flag? 1:cs->no_part;   
+  Slice *currSlice = currMB->p_slice;
+  int  i_last = currSlice->idr_flag? 1:cs->no_part;   
+  DataPartition *partArr = &currSlice->partArr[0];
 
-  if (!params->rdopt)  return;
-
-  if (cs->symbol_mode==CABAC)
+  //=== important variables of data partition array ===
+  //only one partition for an IDR picture
+  for (i = 0; i < i_last; i++)
   {
-    //=== important variables of data partition array ===
-    //only one partition for IDR img
-    for (i = 0; i < i_last; i++)
-    {
-      //--- parameters of encoding environments ---
-      currSlice->partArr[i].ee_cabac = cs->encenv[i];
-      *currSlice->partArr[i].bitstream = cs->bitstream[i];
-    }
+    //--- parameters of encoding environments ---
+    *partArr->bitstream   = cs->bitstream[i];
+    (partArr++)->ee_cabac = cs->encenv[i];
+  }
 
-    //=== contexts for binary arithmetic coding ===
-    *currSlice->mot_ctx = *cs->mot_ctx;
-    *currSlice->tex_ctx = *cs->tex_ctx;
-  }
-  else
-  {
-    //=== important variables of data partition array ===
-    //only one partition for IDR img
-    for (i = 0; i < i_last; i++)
-    {
-      //--- parameters of encoding environments ---
-      *currSlice->partArr[i].bitstream = cs->bitstream[i];
-    }
-  }
+  //=== contexts for binary arithmetic coding ===
+  *currSlice->mot_ctx = *cs->mot_ctx;
+  *currSlice->tex_ctx = *cs->tex_ctx;
 
   //=== syntax element number and bit counters ===
-  memcpy (currMB->bitcounter, cs->bitcounter, MAX_BITCOUNTER_MB * sizeof(int));
+  currMB->bits = cs->bits;
 
   //=== elements of current macroblock ===
-  memcpy (currMB->mvd, cs->mvd, BLOCK_CONTEXT * sizeof(short));
+  if (currMB->mb_type <= P8x8)
+    memcpy (currMB->mvd, cs->mvd, BLOCK_CONTEXT * sizeof(short));
+
   memcpy (currMB->cbp_bits, cs->cbp_bits, 3 * sizeof(int64));
-  if(img->P444_joined)
+
+  if(currSlice->P444_joined)
     memcpy (currMB->cbp_bits_8x8, cs->cbp_bits_8x8, 3 * sizeof(int64));
 }
 
 
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Select methods given entropy coding type
+ ************************************************************************
+ */
+void init_coding_state_methods(Slice *currSlice)
+{
+  if (currSlice->p_Inp->rdopt == 0)
+  {
+    currSlice->reset_coding_state = reset_coding_state_nordo;
+    currSlice->store_coding_state = store_coding_state_nordo;
+  }
+  else
+  {
+    if (currSlice->symbol_mode == CABAC)
+    {
+      currSlice->reset_coding_state = reset_coding_state_cabac;
+      currSlice->store_coding_state = store_coding_state_cabac;
+    }
+    else
+    {
+      currSlice->reset_coding_state = reset_coding_state_cavlc;
+      currSlice->store_coding_state = store_coding_state_cavlc;
+    }
+  }
+}

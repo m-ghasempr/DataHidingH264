@@ -13,14 +13,15 @@
 * \author
 *    Karsten Suehring   suehring@hhi.de
 **************************************************************************/
-
-extern void (*writeMB_typeInfo)      (SyntaxElement *se, DataPartition *dP);
-extern void (*writeIntraPredMode)    (SyntaxElement *se, DataPartition *dP);
-extern void (*writeB8_typeInfo)      (SyntaxElement *se, DataPartition *dP);
-extern void (*writeRefFrame[6])      (SyntaxElement *se, DataPartition *dP);
-extern void (*writeMVD)              (SyntaxElement *se, DataPartition *dP);
-extern void (*writeCBP)              (Macroblock* currMB, SyntaxElement *se, DataPartition *dP);
-extern void (*writeDquant)           (SyntaxElement *se, DataPartition *dP);
-extern void (*writeCIPredMode)       (SyntaxElement *se, DataPartition *dP);
-extern void (*writeFieldModeInfo)    (SyntaxElement *se, DataPartition *dP);
-extern void (*writeMB_transform_size)(SyntaxElement *se, DataPartition *dP);
+struct writeMB {
+  void (*writeMB_typeInfo)      (Macroblock *currMB, SyntaxElement *se, DataPartition *dP);
+  void (*writeIntraPredMode)    (SyntaxElement *se, DataPartition *dP);
+  void (*writeB8_typeInfo)      (SyntaxElement *se, DataPartition *dP);
+  void (*writeRefFrame[6])      (SyntaxElement *se, DataPartition *dP);
+  void (*writeMVD)              (Macroblock *currMB, SyntaxElement *se, DataPartition *dP);
+  void (*writeCBP)              (Macroblock* currMB, SyntaxElement *se, DataPartition *dP);
+  void (*writeDquant)           (Macroblock* currMB, SyntaxElement *se, DataPartition *dP);
+  void (*writeCIPredMode)       (Macroblock* currMB, SyntaxElement *se, DataPartition *dP);
+  void (*writeFieldModeInfo)    (Macroblock *currMB, SyntaxElement *se, DataPartition *dP);
+  void (*writeMB_transform_size)(Macroblock *currMB, SyntaxElement *se, DataPartition *dP);
+};

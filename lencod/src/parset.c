@@ -14,7 +14,6 @@
  */
 
 #include <time.h>
-#include <sys/timeb.h>
 #include <limits.h>
 
 #include "global.h"
@@ -27,17 +26,13 @@
 #include "q_matrix.h"
 
 // Local helpers
-static int IdentifyProfile(void);
-static int IdentifyLevel(void);
+static int IdentifyProfile(InputParameters *p_Inp);
+static int IdentifyLevel(InputParameters *p_Inp);
 static int GenerateVUI_parameters_rbsp(seq_parameter_set_rbsp_t *sps, Bitstream *bitstream);
 
-extern ColocatedParams *Co_located;
-extern ColocatedParams *Co_located_JV[MAX_PLANE];  //!< Co_located to be used during 4:4:4 independent mode encoding
-
-pic_parameter_set_rbsp_t *PicParSet[MAXPPS];
-
 static const byte ZZ_SCAN[16]  =
-{  0,  1,  4,  8,  5,  2,  3,  6,  9, 12, 13, 10,  7, 11, 14, 15
+{  
+  0,  1,  4,  8,  5,  2,  3,  6,  9, 12, 13, 10,  7, 11, 14, 15
 };
 
 static const byte ZZ_SCAN8[64] =
@@ -59,7 +54,7 @@ static const byte ZZ_SCAN8[64] =
  *
  *************************************************************************************
 */
-void GenerateParameterSets (void)
+void GenerateParameterSets (ImageParameters *p_Img, InputParameters *p_Inp)
 {
   int i;
   seq_parameter_set_rbsp_t *sps = NULL;
@@ -68,44 +63,44 @@ void GenerateParameterSets (void)
 
   for (i=0; i<MAXPPS; i++)
   {
-    PicParSet[i] = NULL;
+    p_Img->PicParSet[i] = NULL;
   }
 
-  GenerateSequenceParameterSet(sps, 0);
+  GenerateSequenceParameterSet(sps, p_Img, p_Inp, 0);
 
-  if (params->GenerateMultiplePPS)
+  if (p_Inp->GenerateMultiplePPS)
   {
-    PicParSet[0] = AllocPPS();
-    PicParSet[1] = AllocPPS();
-    PicParSet[2] = AllocPPS();
+    p_Img->PicParSet[0] = AllocPPS();
+    p_Img->PicParSet[1] = AllocPPS();
+    p_Img->PicParSet[2] = AllocPPS();
 
     if (IS_FREXT_PROFILE(sps->profile_idc))
     {
-      GeneratePictureParameterSet( PicParSet[0], sps, 0, 0, 0, params->cb_qp_index_offset, params->cr_qp_index_offset);
-      GeneratePictureParameterSet( PicParSet[1], sps, 1, 1, 1, params->cb_qp_index_offset, params->cr_qp_index_offset);
-      GeneratePictureParameterSet( PicParSet[2], sps, 2, 1, 2, params->cb_qp_index_offset, params->cr_qp_index_offset);
+      GeneratePictureParameterSet( p_Img->PicParSet[0], sps, p_Img, p_Inp, 0, 0, 0, p_Inp->cb_qp_index_offset, p_Inp->cr_qp_index_offset);
+      GeneratePictureParameterSet( p_Img->PicParSet[1], sps, p_Img, p_Inp, 1, 1, 1, p_Inp->cb_qp_index_offset, p_Inp->cr_qp_index_offset);
+      GeneratePictureParameterSet( p_Img->PicParSet[2], sps, p_Img, p_Inp, 2, 1, 2, p_Inp->cb_qp_index_offset, p_Inp->cr_qp_index_offset);
 
     }
     else
     {
-      GeneratePictureParameterSet( PicParSet[0], sps, 0, 0, 0, params->chroma_qp_index_offset, 0);
-      GeneratePictureParameterSet( PicParSet[1], sps, 1, 1, 1, params->chroma_qp_index_offset, 0);
-      GeneratePictureParameterSet( PicParSet[2], sps, 2, 1, 2, params->chroma_qp_index_offset, 0);
+      GeneratePictureParameterSet( p_Img->PicParSet[0], sps, p_Img, p_Inp, 0, 0, 0, p_Inp->chroma_qp_index_offset, 0);
+      GeneratePictureParameterSet( p_Img->PicParSet[1], sps, p_Img, p_Inp, 1, 1, 1, p_Inp->chroma_qp_index_offset, 0);
+      GeneratePictureParameterSet( p_Img->PicParSet[2], sps, p_Img, p_Inp, 2, 1, 2, p_Inp->chroma_qp_index_offset, 0);
     }
   }
   else
   {
-    PicParSet[0] = AllocPPS();
+    p_Img->PicParSet[0] = AllocPPS();
     if (IS_FREXT_PROFILE(sps->profile_idc))
-      GeneratePictureParameterSet( PicParSet[0], sps, 0, params->WeightedPrediction, params->WeightedBiprediction,
-                                   params->cb_qp_index_offset, params->cr_qp_index_offset);
+      GeneratePictureParameterSet( p_Img->PicParSet[0], sps, p_Img, p_Inp, 0, p_Inp->WeightedPrediction, p_Inp->WeightedBiprediction,
+                                   p_Inp->cb_qp_index_offset, p_Inp->cr_qp_index_offset);
     else
-      GeneratePictureParameterSet( PicParSet[0], sps, 0, params->WeightedPrediction, params->WeightedBiprediction,
-                                   params->chroma_qp_index_offset, 0);
+      GeneratePictureParameterSet( p_Img->PicParSet[0], sps, p_Img, p_Inp, 0, p_Inp->WeightedPrediction, p_Inp->WeightedBiprediction,
+                                   p_Inp->chroma_qp_index_offset, 0);
   }
 
-  active_sps = sps;
-  active_pps = PicParSet[0];
+  p_Img->active_sps = sps;
+  p_Img->active_pps = p_Img->PicParSet[0];
 }
 
 /*!
@@ -118,44 +113,45 @@ void GenerateParameterSets (void)
 *
 *************************************************************************************
 */
-void FreeParameterSets (void)
+void FreeParameterSets (ImageParameters *p_Img)
 {
   int i;
   for (i=0; i<MAXPPS; i++)
   {
-    if ( NULL != PicParSet[i])
+    if ( NULL != p_Img->PicParSet[i])
     {
-      FreePPS(PicParSet[i]);
-      PicParSet[i] = NULL;
+      FreePPS(p_Img->PicParSet[i]);
+      p_Img->PicParSet[i] = NULL;
     }
   }
-  FreeSPS (active_sps);
+  FreeSPS (p_Img->active_sps);
 }
 
 /*!
 *************************************************************************************
 * \brief
-*    int GenerateSeq_parameter_set_NALU (void);
+*    int GenerateSeq_parameter_set_NALU (ImageParameters *p_Img);
 *
 * \note
 *    Uses the global variables through GenerateSequenceParameterSet()
 *    and GeneratePictureParameterSet
-*
+* \param p_Img
+* ImageParameters structure
 * \return
 *    A NALU containing the Sequence ParameterSet
 *
 *************************************************************************************
 */
 
-NALU_t *GenerateSeq_parameter_set_NALU (void)
+NALU_t *GenerateSeq_parameter_set_NALU (ImageParameters *p_Img)
 {
-  NALU_t *n = AllocNALU(64000);
+  NALU_t *n = AllocNALU(MAXNALUSIZE);
   int RBSPlen = 0;
   int NALUlen;
   byte rbsp[MAXRBSPSIZE];
 
-  RBSPlen = GenerateSeq_parameter_set_rbsp (active_sps, rbsp);
-  NALUlen = RBSPtoNALU (rbsp, n, RBSPlen, NALU_TYPE_SPS, NALU_PRIORITY_HIGHEST, 0, 1);
+  RBSPlen = GenerateSeq_parameter_set_rbsp (p_Img, p_Img->active_sps, rbsp);
+  NALUlen = RBSPtoNALU (rbsp, n, RBSPlen, NALU_TYPE_SPS, NALU_PRIORITY_HIGHEST, 1);
   n->startcodeprefix_len = 4;
 
   return n;
@@ -165,7 +161,7 @@ NALU_t *GenerateSeq_parameter_set_NALU (void)
 /*!
 *************************************************************************************
 * \brief
-*    NALU_t *GeneratePic_parameter_set_NALU (int PPS_id);
+*    NALU_t *GeneratePic_parameter_set_NALU (ImageParameters *p_Img, InputParameters *p_Inp, int PPS_id);
 *
 * \note
 *    Uses the global variables through GenerateSequenceParameterSet()
@@ -177,15 +173,15 @@ NALU_t *GenerateSeq_parameter_set_NALU (void)
 *************************************************************************************
 */
 
-NALU_t *GeneratePic_parameter_set_NALU(int PPS_id)
+NALU_t *GeneratePic_parameter_set_NALU(ImageParameters *p_Img, InputParameters *p_Inp, int PPS_id)
 {
-  NALU_t *n = AllocNALU(64000);
+  NALU_t *n = AllocNALU(MAXNALUSIZE);
   int RBSPlen = 0;
   int NALUlen;
   byte rbsp[MAXRBSPSIZE];
 
-  RBSPlen = GeneratePic_parameter_set_rbsp (PicParSet[PPS_id], rbsp);
-  NALUlen = RBSPtoNALU (rbsp, n, RBSPlen, NALU_TYPE_PPS, NALU_PRIORITY_HIGHEST, 0, 1);
+  RBSPlen = GeneratePic_parameter_set_rbsp (p_Img, p_Inp, p_Img->PicParSet[PPS_id], rbsp);
+  NALUlen = RBSPtoNALU (rbsp, n, RBSPlen, NALU_TYPE_PPS, NALU_PRIORITY_HIGHEST, 1);
   n->startcodeprefix_len = 4;
 
   return n;
@@ -197,29 +193,39 @@ NALU_t *GeneratePic_parameter_set_NALU(int PPS_id)
  * \brief
  *    GenerateSequenceParameterSet: extracts info from global variables and
  *    generates sequence parameter set structure
+ * \param sps
+ *    Sequence Parameter Set to be filled
+ * \param p_Img
+ *    ImageParameters for encoding
+ * \param p_Inp
+ *    InputParameters 
+ * \param SPS_id
+ *    SPS ID
  *
  * \par
  *    Function reads all kinds of values from several global variables,
- *    including params-> and image-> and fills in the sps.  Many
+ *    including p_Inp-> and image-> and fills in the sps.  Many
  *    values are current hard-coded to defaults.
  *
  ************************************************************************
  */
 
-void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps, //!< Sequence Parameter Set to be filled
-                                   int SPS_id                     //!< SPS ID
-                                   )
+void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps,  //!< Sequence Parameter Set to be filled
+                                   ImageParameters *p_Img,         //!< ImageParameters for encoding
+                                   InputParameters *p_Inp,         //!< Input configuration parameters 
+                                   int SPS_id                      //!< SPS ID
+                                  )
 {
   unsigned i;
   unsigned n_ScalingList;
   int SubWidthC  [4]= { 1, 2, 2, 1};
   int SubHeightC [4]= { 1, 2, 1, 1};
 
-  int frext_profile = ((IdentifyProfile()==FREXT_HP) ||
-                      (IdentifyProfile()==FREXT_Hi10P) ||
-                      (IdentifyProfile()==FREXT_Hi422) ||
-                      (IdentifyProfile()==FREXT_Hi444) ||
-                      (IdentifyProfile()==FREXT_CAVLC444));
+  int frext_profile = ((IdentifyProfile(p_Inp)==FREXT_HP) ||
+                      (IdentifyProfile(p_Inp)==FREXT_Hi10P) ||
+                      (IdentifyProfile(p_Inp)==FREXT_Hi422) ||
+                      (IdentifyProfile(p_Inp)==FREXT_Hi444) ||
+                      (IdentifyProfile(p_Inp)==FREXT_CAVLC444));
 
   // *************************************************************************
   // Sequence Parameter Set
@@ -227,8 +233,8 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps, //!< Sequence 
   assert (sps != NULL);
   // Profile and Level should be calculated using the info from the config
   // file.  Calculation is hidden in IndetifyProfile() and IdentifyLevel()
-  sps->profile_idc = IdentifyProfile();
-  sps->level_idc = IdentifyLevel();
+  sps->profile_idc = IdentifyProfile(p_Inp);
+  sps->level_idc = IdentifyLevel(p_Inp);
 
   // needs to be set according to profile
   sps->constrained_set0_flag = FALSE;
@@ -240,7 +246,7 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps, //!< Sequence 
     sps->constrained_set3_flag = TRUE;
     sps->level_idc = 11;
   }
-  else if (frext_profile && params->IntraProfile)
+  else if (frext_profile && p_Inp->IntraProfile)
   {
     sps->constrained_set3_flag = TRUE;
   }
@@ -253,9 +259,9 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps, //!< Sequence 
   sps->seq_parameter_set_id = SPS_id;
 
   // Fidelity Range Extensions stuff
-  sps->bit_depth_luma_minus8   = params->output.bit_depth[0] - 8;
-  sps->bit_depth_chroma_minus8 = params->output.bit_depth[1] - 8;
-  img->lossless_qpprime_flag = params->LosslessCoding & 
+  sps->bit_depth_luma_minus8   = p_Inp->output.bit_depth[0] - 8;
+  sps->bit_depth_chroma_minus8 = p_Inp->output.bit_depth[1] - 8;
+  p_Img->lossless_qpprime_flag = p_Inp->LosslessCoding & 
       (sps->profile_idc==FREXT_Hi444 || sps->profile_idc==FREXT_CAVLC444);
 
   //! POC stuff:
@@ -263,84 +269,58 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps, //!< Sequence 
   //! the poc implementation covers only a subset of the poc functionality.
   //! Here, the same subset is implemented.  Changes in the POC stuff have
   //! also to be reflected here
-  sps->log2_max_frame_num_minus4 = log2_max_frame_num_minus4;
-  sps->log2_max_pic_order_cnt_lsb_minus4 = log2_max_pic_order_cnt_lsb_minus4;
+  sps->log2_max_frame_num_minus4 = p_Img->log2_max_frame_num_minus4;
+  sps->log2_max_pic_order_cnt_lsb_minus4 = p_Img->log2_max_pic_order_cnt_lsb_minus4;
 
-  sps->pic_order_cnt_type = params->pic_order_cnt_type;
-  sps->num_ref_frames_in_pic_order_cnt_cycle = img->num_ref_frames_in_pic_order_cnt_cycle;
-  sps->delta_pic_order_always_zero_flag = img->delta_pic_order_always_zero_flag;
-  sps->offset_for_non_ref_pic = img->offset_for_non_ref_pic;
-  sps->offset_for_top_to_bottom_field = img->offset_for_top_to_bottom_field;
+  sps->pic_order_cnt_type = p_Inp->pic_order_cnt_type;
+  sps->num_ref_frames_in_pic_order_cnt_cycle = p_Img->num_ref_frames_in_pic_order_cnt_cycle;
+  sps->delta_pic_order_always_zero_flag = p_Img->delta_pic_order_always_zero_flag;
+  sps->offset_for_non_ref_pic = p_Img->offset_for_non_ref_pic;
+  sps->offset_for_top_to_bottom_field = p_Img->offset_for_top_to_bottom_field;
 
-  for (i=0; i<img->num_ref_frames_in_pic_order_cnt_cycle; i++)
+  for (i=0; i<p_Img->num_ref_frames_in_pic_order_cnt_cycle; i++)
   {
-    sps->offset_for_ref_frame[i] = img->offset_for_ref_frame[i];
+    sps->offset_for_ref_frame[i] = p_Img->offset_for_ref_frame[i];
   }
   // End of POC stuff
 
   // Number of Reference Frames
-  sps->num_ref_frames = params->num_ref_frames;
+  sps->num_ref_frames = (unsigned char) p_Inp->num_ref_frames;
 
   //required_frame_num_update_behaviour_flag hardcoded to zero
   sps->gaps_in_frame_num_value_allowed_flag = FALSE;    // double check
 
-  sps->frame_mbs_only_flag = (Boolean) !(params->PicInterlace || params->MbInterlace);
+  sps->frame_mbs_only_flag = (Boolean) !(p_Inp->PicInterlace || p_Inp->MbInterlace);
 
   // Picture size, finally a simple one :-)
-  sps->pic_width_in_mbs_minus1        = (( params->output.width  + img->auto_crop_right)/16) -1;
-  sps->pic_height_in_map_units_minus1 = (((params->output.height + img->auto_crop_bottom)/16)/ (2 - sps->frame_mbs_only_flag)) - 1;
+  sps->pic_width_in_mbs_minus1        = (( p_Inp->output.width  + p_Img->auto_crop_right) >> 4) -1;
+  sps->pic_height_in_map_units_minus1 = (((p_Inp->output.height + p_Img->auto_crop_bottom) >> 4)/ (2 - sps->frame_mbs_only_flag)) - 1;
 
   // a couple of flags, simple
-  sps->mb_adaptive_frame_field_flag = (Boolean) (FRAME_CODING != params->MbInterlace);
-  sps->direct_8x8_inference_flag = (Boolean) params->directInferenceFlag;
+  sps->mb_adaptive_frame_field_flag = (Boolean) (FRAME_CODING != p_Inp->MbInterlace);
+  sps->direct_8x8_inference_flag = (Boolean) p_Inp->directInferenceFlag;
 
   // Sequence VUI not implemented, signalled as not present
-  sps->vui_parameters_present_flag = (Boolean) ((params->rgb_input_flag != CM_YUV && params->output.yuv_format == YUV444) || params->EnableVUISupport);
-  sps->chroma_format_idc = params->output.yuv_format;
-  sps->separate_colour_plane_flag = ( sps->chroma_format_idc == YUV444 ) ? params->separate_colour_plane_flag : 0;
+  sps->vui_parameters_present_flag = (Boolean) ((p_Inp->output.color_model != CM_YUV && p_Inp->output.yuv_format == YUV444) || p_Inp->EnableVUISupport);
+  sps->chroma_format_idc = p_Inp->output.yuv_format;
+  sps->separate_colour_plane_flag = ( sps->chroma_format_idc == YUV444 ) ? p_Inp->separate_colour_plane_flag : 0;
 
   if ( sps->vui_parameters_present_flag )
-    GenerateVUIParameters(sps);
-
-  // This should be moved somewhere else.
-  {
-    int PicWidthInMbs, PicHeightInMapUnits, FrameHeightInMbs;
-    int width, height;
-    int nplane;
-    PicWidthInMbs = (sps->pic_width_in_mbs_minus1 +1);
-    PicHeightInMapUnits = (sps->pic_height_in_map_units_minus1 +1);
-    FrameHeightInMbs = ( 2 - sps->frame_mbs_only_flag ) * PicHeightInMapUnits;
-
-    width = PicWidthInMbs * MB_BLOCK_SIZE;
-    height = FrameHeightInMbs * MB_BLOCK_SIZE;
-
-    if( IS_INDEPENDENT(params) )
-    {
-      for( nplane=0; nplane<MAX_PLANE; nplane++ )
-      {
-        Co_located_JV[nplane] = alloc_colocated (width, height,sps->mb_adaptive_frame_field_flag);           
-      }
-    }
-    else
-    {
-      Co_located = alloc_colocated (width, height,sps->mb_adaptive_frame_field_flag);
-    }
-  }
+    GenerateVUIParameters(sps, p_Inp);
 
   // Fidelity Range Extensions stuff
   if(frext_profile)
   {
-
-    sps->seq_scaling_matrix_present_flag = (Boolean) (params->ScalingMatrixPresentFlag&1);
+    sps->seq_scaling_matrix_present_flag = (Boolean) (p_Inp->ScalingMatrixPresentFlag&1);
     n_ScalingList = (sps->chroma_format_idc != YUV444) ? 8 : 12;
     for(i=0; i<n_ScalingList; i++)
     {
       if(i<6)
-        sps->seq_scaling_list_present_flag[i] = (params->ScalingListPresentFlag[i]&1);
+        sps->seq_scaling_list_present_flag[i] = (p_Inp->ScalingListPresentFlag[i]&1);
       else
       {
-        if(params->Transform8x8Mode)
-          sps->seq_scaling_list_present_flag[i] = (params->ScalingListPresentFlag[i]&1);
+        if(p_Inp->Transform8x8Mode)
+          sps->seq_scaling_list_present_flag[i] = (p_Inp->ScalingListPresentFlag[i]&1);
         else
           sps->seq_scaling_list_present_flag[i] = 0;
       }
@@ -357,18 +337,18 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps, //!< Sequence 
   }
 
 
-  if (img->auto_crop_right || img->auto_crop_bottom)
+  if (p_Img->auto_crop_right || p_Img->auto_crop_bottom)
   {
     sps->frame_cropping_flag = TRUE;
     sps->frame_cropping_rect_left_offset=0;
     sps->frame_cropping_rect_top_offset=0;
-    sps->frame_cropping_rect_right_offset=  (img->auto_crop_right / SubWidthC[sps->chroma_format_idc]);
-    sps->frame_cropping_rect_bottom_offset= (img->auto_crop_bottom / (SubHeightC[sps->chroma_format_idc] * (2 - sps->frame_mbs_only_flag)));
-    if (img->auto_crop_right % SubWidthC[sps->chroma_format_idc])
+    sps->frame_cropping_rect_right_offset=  (p_Img->auto_crop_right / SubWidthC[sps->chroma_format_idc]);
+    sps->frame_cropping_rect_bottom_offset= (p_Img->auto_crop_bottom / (SubHeightC[sps->chroma_format_idc] * (2 - sps->frame_mbs_only_flag)));
+    if (p_Img->auto_crop_right % SubWidthC[sps->chroma_format_idc])
     {
       error("automatic frame cropping (width) not possible",500);
     }
-    if (img->auto_crop_bottom % (SubHeightC[sps->chroma_format_idc] * (2 - sps->frame_mbs_only_flag)))
+    if (p_Img->auto_crop_bottom % (SubHeightC[sps->chroma_format_idc] * (2 - sps->frame_mbs_only_flag)))
     {
       error("automatic frame cropping (height) not possible",500);
     }
@@ -385,7 +365,6 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps, //!< Sequence 
  * \brief
  *    GeneratePictureParameterSet:
  *    Generates a Picture Parameter Set structure
- *
  * \par
  *    Regarding the QP
  *    The previous software versions coded the absolute QP only in the
@@ -394,9 +373,10 @@ void GenerateSequenceParameterSet( seq_parameter_set_rbsp_t *sps, //!< Sequence 
  *
  ************************************************************************
  */
-
 void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Parameter Set to be filled
                                   seq_parameter_set_rbsp_t *sps, //!< used Sequence Parameter Set
+                                  ImageParameters *p_Img,        //!< the image pointer
+                                  InputParameters *p_Inp,        //!< Input configuration parameters 
                                   int PPS_id,                    //!< PPS ID
                                   int WeightedPrediction,        //!< value of weighted_pred_flag
                                   int WeightedBiprediction,      //!< value of weighted_bipred_idc
@@ -407,11 +387,11 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Pa
   unsigned i;
   unsigned n_ScalingList;
 
-  int frext_profile = ((IdentifyProfile()==FREXT_HP) ||
-                      (IdentifyProfile()==FREXT_Hi10P) ||
-                      (IdentifyProfile()==FREXT_Hi422) ||
-                      (IdentifyProfile()==FREXT_Hi444) ||
-                      (IdentifyProfile()==FREXT_CAVLC444));
+  int frext_profile = ((IdentifyProfile(p_Inp)==FREXT_HP) ||
+                      (IdentifyProfile(p_Inp)==FREXT_Hi10P) ||
+                      (IdentifyProfile(p_Inp)==FREXT_Hi422) ||
+                      (IdentifyProfile(p_Inp)==FREXT_Hi444) ||
+                      (IdentifyProfile(p_Inp)==FREXT_CAVLC444));
 
   // *************************************************************************
   // Picture Parameter Set
@@ -419,22 +399,21 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Pa
 
   pps->seq_parameter_set_id = sps->seq_parameter_set_id;
   pps->pic_parameter_set_id = PPS_id;
-  pps->entropy_coding_mode_flag = (params->symbol_mode == CAVLC ? FALSE : TRUE);
-
+  pps->entropy_coding_mode_flag = (p_Inp->symbol_mode == CAVLC ? FALSE : TRUE);
   // Fidelity Range Extensions stuff
   if(frext_profile)
   {
-    pps->transform_8x8_mode_flag = (params->Transform8x8Mode ? TRUE:FALSE);
-    pps->pic_scaling_matrix_present_flag = (Boolean) ((params->ScalingMatrixPresentFlag&2)>>1);
+    pps->transform_8x8_mode_flag = (p_Inp->Transform8x8Mode ? TRUE:FALSE);
+    pps->pic_scaling_matrix_present_flag = (Boolean) ((p_Inp->ScalingMatrixPresentFlag&2)>>1);
     n_ScalingList = (sps->chroma_format_idc != YUV444) ? 8 : 12;
     for(i=0; i<n_ScalingList; i++)
     {
       if(i<6)
-        pps->pic_scaling_list_present_flag[i] = (params->ScalingListPresentFlag[i]&2)>>1;
+        pps->pic_scaling_list_present_flag[i] = (p_Inp->ScalingListPresentFlag[i]&2)>>1;
       else
       {
         if(pps->transform_8x8_mode_flag)
-          pps->pic_scaling_list_present_flag[i] = (params->ScalingListPresentFlag[i]&2)>>1;
+          pps->pic_scaling_list_present_flag[i] = (p_Inp->ScalingListPresentFlag[i]&2)>>1;
         else
           pps->pic_scaling_list_present_flag[i] = 0;
       }
@@ -449,15 +428,15 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Pa
       pps->pic_scaling_list_present_flag[i] = 0;
 
     pps->transform_8x8_mode_flag = FALSE;
-    params->Transform8x8Mode = 0;
+    p_Inp->Transform8x8Mode = 0;
   }
 
   // JVT-Fxxx (by Stephan Wenger, make this flag unconditional
-  pps->pic_order_present_flag = img->pic_order_present_flag;
+  pps->bottom_field_pic_order_in_frame_present_flag = p_Img->bottom_field_pic_order_in_frame_present_flag;
 
 
   // Begin FMO stuff
-  pps->num_slice_groups_minus1 = params->num_slice_groups_minus1;
+  pps->num_slice_groups_minus1 = p_Inp->num_slice_groups_minus1;
 
 
   //! Following set the parameter for different slice group types
@@ -466,13 +445,13 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Pa
      if ((pps->slice_group_id = calloc ((sps->pic_height_in_map_units_minus1+1)*(sps->pic_width_in_mbs_minus1+1), sizeof(byte))) == NULL)
        no_mem_exit ("GeneratePictureParameterSet: slice_group_id");
 
-    switch (params->slice_group_map_type)
+    switch (p_Inp->slice_group_map_type)
     {
     case 0:
       pps->slice_group_map_type = 0;
       for(i=0; i<=pps->num_slice_groups_minus1; i++)
       {
-        pps->run_length_minus1[i]=params->run_length_minus1[i];
+        pps->run_length_minus1[i]=p_Inp->run_length_minus1[i];
       }
       break;
     case 1:
@@ -483,25 +462,25 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Pa
       pps->slice_group_map_type = 2;
       for(i=0; i<pps->num_slice_groups_minus1; i++)
       {
-        pps->top_left[i] = params->top_left[i];
-        pps->bottom_right[i] = params->bottom_right[i];
+        pps->top_left[i] = p_Inp->top_left[i];
+        pps->bottom_right[i] = p_Inp->bottom_right[i];
       }
      break;
     case 3:
     case 4:
     case 5:
-      pps->slice_group_map_type = params->slice_group_map_type;
-      pps->slice_group_change_direction_flag = (Boolean) params->slice_group_change_direction_flag;
-      pps->slice_group_change_rate_minus1 = params->slice_group_change_rate_minus1;
+      pps->slice_group_map_type = p_Inp->slice_group_map_type;
+      pps->slice_group_change_direction_flag = (Boolean) p_Inp->slice_group_change_direction_flag;
+      pps->slice_group_change_rate_minus1 = p_Inp->slice_group_change_rate_minus1;
       break;
     case 6:
       pps->slice_group_map_type = 6;
       pps->pic_size_in_map_units_minus1 =
-        (((params->output.height + img->auto_crop_bottom)/MB_BLOCK_SIZE)/(2-sps->frame_mbs_only_flag))
-        *((params->output.width  + img->auto_crop_right)/MB_BLOCK_SIZE) -1;
+        (((p_Inp->output.height + p_Img->auto_crop_bottom)/MB_BLOCK_SIZE)/(2-sps->frame_mbs_only_flag))
+        *((p_Inp->output.width  + p_Img->auto_crop_right)/MB_BLOCK_SIZE) -1;
 
       for (i=0;i<=pps->pic_size_in_map_units_minus1; i++)
-        pps->slice_group_id[i] = params->slice_group_id[i];
+        pps->slice_group_id[i] = p_Inp->slice_group_id[i];
 
       break;
     default:
@@ -514,8 +493,8 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Pa
   pps->num_ref_idx_l0_active_minus1 = sps->frame_mbs_only_flag ? (sps->num_ref_frames-1) : (2 * sps->num_ref_frames - 1) ;   // set defaults
   pps->num_ref_idx_l1_active_minus1 = sps->frame_mbs_only_flag ? (sps->num_ref_frames-1) : (2 * sps->num_ref_frames - 1) ;   // set defaults
 
-  pps->weighted_pred_flag = (Boolean) WeightedPrediction;
-  pps->weighted_bipred_idc = WeightedBiprediction;
+  pps->weighted_pred_flag  = (byte) WeightedPrediction;
+  pps->weighted_bipred_idc = (byte) WeightedBiprediction;
 
   pps->pic_init_qp_minus26 = 0;         // hard coded to zero, QP lives in the slice header
   pps->pic_init_qs_minus26 = 0;
@@ -529,11 +508,11 @@ void GeneratePictureParameterSet( pic_parameter_set_rbsp_t *pps, //!< Picture Pa
   else
     pps->cb_qp_index_offset = pps->cr_qp_index_offset = pps->chroma_qp_index_offset;
 
-  pps->deblocking_filter_control_present_flag = (Boolean) params->DFSendParameters;
-  pps->constrained_intra_pred_flag = (Boolean) params->UseConstrainedIntraPred;
+  pps->deblocking_filter_control_present_flag = (Boolean) p_Inp->DFSendParameters;
+  pps->constrained_intra_pred_flag = (Boolean) p_Inp->UseConstrainedIntraPred;
 
   // if redundant slice is in use.
-  pps->redundant_pic_cnt_present_flag = (Boolean) params->redundant_pic_flag;
+  pps->redundant_pic_cnt_present_flag = (Boolean) p_Inp->redundant_pic_flag;
 }
 
 /*!
@@ -594,13 +573,14 @@ int Scaling_List(short *scalingListinput, short *scalingList, int sizeOfScalingL
 /*!
  *************************************************************************************
  * \brief
- *    int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, char *rbsp);
+ *    int GenerateSeq_parameter_set_rbsp (ImageParameters *p_Img, seq_parameter_set_rbsp_t *sps, char *rbsp);
  *
+ * \param p_Img
+ *    Image parameters structure
  * \param sps
  *    sequence parameter structure
  * \param rbsp
  *    buffer to be filled with the rbsp, size should be at least MAXIMUMPARSETRBSPSIZE
- *
  * \return
  *    size of the RBSP in bytes
  *
@@ -609,7 +589,7 @@ int Scaling_List(short *scalingListinput, short *scalingList, int sizeOfScalingL
  *    an exit (-1)
  *************************************************************************************
  */
-int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, byte *rbsp)
+int GenerateSeq_parameter_set_rbsp (ImageParameters *p_Img, seq_parameter_set_rbsp_t *sps, byte *rbsp)
 {
   Bitstream *bitstream;
   int len = 0, LenInBytes;
@@ -640,17 +620,18 @@ int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, byte *rbsp)
   if( IS_FREXT_PROFILE(sps->profile_idc) )
   {
     len+=ue_v ("SPS: chroma_format_idc",                        sps->chroma_format_idc,                          bitstream);    
-    if(img->yuv_format == YUV444)
+    if(p_Img->yuv_format == YUV444)
       len+=u_1  ("SPS: separate_colour_plane_flag",             sps->separate_colour_plane_flag,                 bitstream);
     len+=ue_v ("SPS: bit_depth_luma_minus8",                    sps->bit_depth_luma_minus8,                      bitstream);
     len+=ue_v ("SPS: bit_depth_chroma_minus8",                  sps->bit_depth_chroma_minus8,                    bitstream);
-    len+=u_1  ("SPS: lossless_qpprime_y_zero_flag",             img->lossless_qpprime_flag,                      bitstream);
+    len+=u_1  ("SPS: lossless_qpprime_y_zero_flag",             p_Img->lossless_qpprime_flag,                      bitstream);
     //other chroma info to be added in the future
 
     len+=u_1 ("SPS: seq_scaling_matrix_present_flag",           sps->seq_scaling_matrix_present_flag,            bitstream);
 
     if(sps->seq_scaling_matrix_present_flag)
     {
+      ScaleParameters *p_QScale = p_Img->p_QScale;
       n_ScalingList = (sps->chroma_format_idc != YUV444) ? 8 : 12;
       for(i=0; i<n_ScalingList; i++)
       {
@@ -658,9 +639,9 @@ int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, byte *rbsp)
         if(sps->seq_scaling_list_present_flag[i])
         {
           if(i<6)
-            len+=Scaling_List(ScalingList4x4input[i], ScalingList4x4[i], 16, &UseDefaultScalingMatrix4x4Flag[i], bitstream);
+            len+=Scaling_List(p_QScale->ScalingList4x4input[i], p_QScale->ScalingList4x4[i], 16, &p_QScale->UseDefaultScalingMatrix4x4Flag[i], bitstream);
           else
-            len+=Scaling_List(ScalingList8x8input[i-6], ScalingList8x8[i-6], 64, &UseDefaultScalingMatrix8x8Flag[i-6], bitstream);
+            len+=Scaling_List(p_QScale->ScalingList8x8input[i-6], p_QScale->ScalingList8x8[i-6], 64, &p_QScale->UseDefaultScalingMatrix8x8Flag[i-6], bitstream);
         }
       }
     }
@@ -718,8 +699,12 @@ int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, byte *rbsp)
 /*!
  ***********************************************************************************************
  * \brief
- *    int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *sps, char *rbsp);
+ *    int GeneratePic_parameter_set_rbsp (ImageParameters *p_Img, InputParameters *p_Inp, pic_parameter_set_rbsp_t *pps, char *rbsp);
  *
+ * \param p_Img
+ *    picture parameter structure
+ * \param p_Inp
+ *    InputParameters
  * \param pps
  *    picture parameter structure
  * \param rbsp
@@ -734,8 +719,9 @@ int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, byte *rbsp)
  ************************************************************************************************
  */
 
-int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, byte *rbsp)
+int GeneratePic_parameter_set_rbsp (ImageParameters *p_Img, InputParameters *p_Inp, pic_parameter_set_rbsp_t *pps, byte *rbsp)
 {
+  
   Bitstream *bitstream;
   int len = 0, LenInBytes;
   unsigned i;
@@ -751,12 +737,12 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, byte *rbsp)
   bitstream->streamBuffer = rbsp;
   bitstream->bits_to_go = 8;
 
-  pps->pic_order_present_flag = img->pic_order_present_flag;
+  pps->bottom_field_pic_order_in_frame_present_flag = p_Img->bottom_field_pic_order_in_frame_present_flag;
 
   len+=ue_v ("PPS: pic_parameter_set_id",                    pps->pic_parameter_set_id,                      bitstream);
   len+=ue_v ("PPS: seq_parameter_set_id",                    pps->seq_parameter_set_id,                      bitstream);
   len+=u_1  ("PPS: entropy_coding_mode_flag",                pps->entropy_coding_mode_flag,                  bitstream);
-  len+=u_1  ("PPS: pic_order_present_flag",                  pps->pic_order_present_flag,                    bitstream);
+  len+=u_1  ("PPS: bottom_field_pic_order_in_frame_present_flag", pps->bottom_field_pic_order_in_frame_present_flag,                    bitstream);
   len+=ue_v ("PPS: num_slice_groups_minus1",                 pps->num_slice_groups_minus1,                   bitstream);
 
   // FMO stuff
@@ -805,7 +791,7 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, byte *rbsp)
   len+=se_v ("PPS: pic_init_qp_minus26",                      pps->pic_init_qp_minus26,                       bitstream);
   len+=se_v ("PPS: pic_init_qs_minus26",                      pps->pic_init_qs_minus26,                       bitstream);
 
-  profile_idc = IdentifyProfile();
+  profile_idc = IdentifyProfile(p_Inp);
   if( IS_FREXT_PROFILE(profile_idc) )
     len+=se_v ("PPS: chroma_qp_index_offset",                 pps->cb_qp_index_offset,                        bitstream);
   else
@@ -824,7 +810,8 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, byte *rbsp)
 
     if(pps->pic_scaling_matrix_present_flag)
     {
-      n_ScalingList = 6 + ((active_sps->chroma_format_idc != 3) ? 2 : 6) * pps->transform_8x8_mode_flag;
+      ScaleParameters *p_QScale = p_Img->p_QScale;
+      n_ScalingList = 6 + ((p_Img->active_sps->chroma_format_idc != 3) ? 2 : 6) * pps->transform_8x8_mode_flag;
       for(i=0; i<n_ScalingList; i++)  // SS-70226
       {
         len+=u_1  ("PPS: pic_scaling_list_present_flag",      pps->pic_scaling_list_present_flag[i],          bitstream);
@@ -832,9 +819,9 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, byte *rbsp)
         if(pps->pic_scaling_list_present_flag[i])
         {
           if(i<6)
-            len+=Scaling_List(ScalingList4x4input[i], ScalingList4x4[i], 16, &UseDefaultScalingMatrix4x4Flag[i], bitstream);
+            len+=Scaling_List(p_QScale->ScalingList4x4input[i], p_QScale->ScalingList4x4[i], 16, &p_QScale->UseDefaultScalingMatrix4x4Flag[i], bitstream);
           else
-            len+=Scaling_List(ScalingList8x8input[i-6], ScalingList8x8[i-6], 64, &UseDefaultScalingMatrix8x8Flag[i-6], bitstream);
+            len+=Scaling_List(p_QScale->ScalingList8x8input[i-6], p_QScale->ScalingList8x8[i-6], 64, &p_QScale->UseDefaultScalingMatrix8x8Flag[i-6], bitstream);
         }
       }
     }
@@ -871,9 +858,9 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, byte *rbsp)
  *
  *************************************************************************************
  */
-int IdentifyProfile(void)
+int IdentifyProfile(InputParameters *p_Inp)
 {
-  return params->ProfileIDC;
+  return p_Inp->ProfileIDC;
 }
 
 /*!
@@ -889,9 +876,9 @@ int IdentifyProfile(void)
  *    the config file parameters (primarily the picture size)
  *************************************************************************************
  */
-int IdentifyLevel(void)
+int IdentifyLevel(InputParameters *p_Inp)
 {
-  return params->LevelIDC;
+  return p_Inp->LevelIDC;
 }
 
 
@@ -999,15 +986,15 @@ static int GenerateVUI_parameters_rbsp(seq_parameter_set_rbsp_t *sps, Bitstream 
  *
  *************************************************************************************
  */
-NALU_t *GenerateSEImessage_NALU()
+NALU_t *GenerateSEImessage_NALU(InputParameters *p_Inp)
 {
-  NALU_t *n = AllocNALU(64000);
+  NALU_t *n = AllocNALU(MAXNALUSIZE);
   int RBSPlen = 0;
   int NALUlen;
   byte rbsp[MAXRBSPSIZE];
 
-  RBSPlen = GenerateSEImessage_rbsp (NORMAL_SEI, rbsp);
-  NALUlen = RBSPtoNALU (rbsp, n, RBSPlen, NALU_TYPE_SEI, NALU_PRIORITY_DISPOSABLE, 0, 1);
+  RBSPlen = GenerateSEImessage_rbsp (p_Inp, NORMAL_SEI, rbsp);
+  NALUlen = RBSPtoNALU (rbsp, n, RBSPlen, NALU_TYPE_SEI, NALU_PRIORITY_DISPOSABLE, 1);
   n->startcodeprefix_len = 4;
 
   return n;
@@ -1026,7 +1013,7 @@ NALU_t *GenerateSEImessage_NALU()
  * \note
  *************************************************************************************
  */
-int GenerateSEImessage_rbsp (int id, byte *rbsp)
+int GenerateSEImessage_rbsp (InputParameters *p_Inp, int id, byte *rbsp)
 {
   Bitstream *bitstream;
 
@@ -1042,10 +1029,10 @@ int GenerateSEImessage_rbsp (int id, byte *rbsp)
 
   {
     char sei_message[500] = "";
-    char uuid_message[9] = "RandomMSG"; // This is supposed to be Random
-    unsigned int i, message_size = strlen(params->SEIMessageText);
-    struct TIMEB tstruct;
-    ftime( &tstruct);    // start time
+    char uuid_message[9] = "Random"; // This is supposed to be Random
+    unsigned int i, message_size = strlen(p_Inp->SEIMessageText);
+    TIME_T start_time;
+    gettime(&start_time);    // start time
 
     if (message_size == 0)
     {
@@ -1053,7 +1040,7 @@ int GenerateSEImessage_rbsp (int id, byte *rbsp)
       strncpy(sei_message,"Empty Message",message_size);
     }
     else
-      strncpy(sei_message,params->SEIMessageText,message_size);
+      strncpy(sei_message,p_Inp->SEIMessageText,message_size);
 
     len+=u_v (8,"SEI: last_payload_type_byte", 5, bitstream);
     message_size += 17;
@@ -1065,8 +1052,13 @@ int GenerateSEImessage_rbsp (int id, byte *rbsp)
     len+=u_v (8,"SEI: last_payload_size_byte",message_size, bitstream);
 
     // Lets randomize uuid based on time
-    len+=u_v (32,"SEI: uuid_iso_iec_11578",(int) tstruct.timezone, bitstream);
-    len+=u_v (32,"SEI: uuid_iso_iec_11578",(int) tstruct.time*1000+tstruct.millitm, bitstream);
+#ifdef _WIN32
+    len+=u_v (32,"SEI: uuid_iso_iec_11578",(int) start_time.HighPart, bitstream);
+    len+=u_v (32,"SEI: uuid_iso_iec_11578",(int) start_time.QuadPart, bitstream);
+#else
+    len+=u_v (32,"SEI: uuid_iso_iec_11578",(int) start_time.tv_sec, bitstream);
+    len+=u_v (32,"SEI: uuid_iso_iec_11578",(int) start_time.tv_usec, bitstream);
+#endif
     len+=u_v (32,"SEI: uuid_iso_iec_11578",(int) (uuid_message[0] << 24) + (uuid_message[1] << 16)  + (uuid_message[2] << 8) + (uuid_message[3] << 0), bitstream);
     len+=u_v (32,"SEI: uuid_iso_iec_11578",(int) (uuid_message[4] << 24) + (uuid_message[5] << 16)  + (uuid_message[6] << 8) + (uuid_message[7] << 0), bitstream);
     for (i = 0; i < strlen(sei_message); i++)
@@ -1124,7 +1116,7 @@ int WriteHRDParameters(seq_parameter_set_rbsp_t *sps, Bitstream *bitstream)
 /*!
  *************************************************************************************
  * \brief
- *    void GenerateVUIParameters(seq_parameter_set_rbsp_t *sps)
+ *    void GenerateVUIParameters(seq_parameter_set_rbsp_t *sps, InputParameters *p_Inp)
  *
  *
  * \return
@@ -1134,13 +1126,13 @@ int WriteHRDParameters(seq_parameter_set_rbsp_t *sps, Bitstream *bitstream)
  *************************************************************************************
  */
 
-void GenerateVUIParameters(seq_parameter_set_rbsp_t *sps)
+void GenerateVUIParameters(seq_parameter_set_rbsp_t *sps, InputParameters *p_Inp)
 {
   unsigned int          SchedSelIdx;
   hrd_parameters_t     *nal_hrd = &(sps->vui_seq_parameters.nal_hrd_parameters);
   hrd_parameters_t     *vcl_hrd = &(sps->vui_seq_parameters.vcl_hrd_parameters);
   vui_seq_parameters_t *vui     = &(sps->vui_seq_parameters);
-  VUIParameters *iVui = &params->VUI;
+  VUIParameters *iVui = &p_Inp->VUI;
 
   vui->aspect_ratio_info_present_flag      = (Boolean) iVui->aspect_ratio_info_present_flag;
   vui->aspect_ratio_idc                    = (unsigned int) iVui->aspect_ratio_idc;
@@ -1207,7 +1199,7 @@ void GenerateVUIParameters(seq_parameter_set_rbsp_t *sps)
   vui->max_dec_frame_buffering                 = (unsigned int) iVui->max_dec_frame_buffering;
   
   // special case to signal the RGB format
-  if(params->rgb_input_flag != CM_YUV && params->output.yuv_format == YUV444)
+  if (p_Inp->output.color_model != CM_YUV && p_Inp->output.yuv_format == YUV444)
   {
     printf   ("VUI: writing Sequence Parameter VUI to signal RGB format\n");
 

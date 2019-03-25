@@ -40,8 +40,10 @@ static inline double ComputeNormMean(imgpel **CurrentImage, double mean_value, i
 ************************************************************************
 */
 
-void EstimateWPPSliceAlg1(ImageParameters *img, InputParameters *params, int select_offset)
+void EstimateWPPSliceAlg1(Slice *currSlice, int select_offset)
 {
+  ImageParameters *p_Img = currSlice->p_Img;
+  InputParameters *p_Inp = currSlice->p_Inp;
   double dc_org = 0.0;
   double dc_org_UV[2] = {0.0};
   double dc_ref[MAX_REFERENCE_PICTURES] = { 0.0 };
@@ -52,116 +54,116 @@ void EstimateWPPSliceAlg1(ImageParameters *img, InputParameters *params, int sel
   double denom[MAX_REFERENCE_PICTURES] = {0.0};  
 
   int i, n, k;
-  int default_weight[3];
-  int list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? (img->current_mb_nr & 0x01) ? 4 : 2 : 0;
-  int weight[2][MAX_REFERENCE_PICTURES][3];
-  int offset[2][MAX_REFERENCE_PICTURES][3];
+  short default_weight[3];
+  int list_offset   = ((currSlice->MbaffFrameFlag)&&(p_Img->mb_data[p_Img->current_mb_nr].mb_field))? (p_Img->current_mb_nr & 0x01) ? 4 : 2 : 0;
+  short weight[2][MAX_REFERENCE_PICTURES][3];
+  short offset[2][MAX_REFERENCE_PICTURES][3];
   int clist;
 
   imgpel **tmpPtr;
 
-  luma_log_weight_denom   = 5;
-  chroma_log_weight_denom = 5;
+  currSlice->luma_log_weight_denom   = 5;
+  currSlice->chroma_log_weight_denom = 5;
 
-  wp_luma_round           = 1 << (luma_log_weight_denom - 1);
-  wp_chroma_round         = 1 << (chroma_log_weight_denom - 1);
-  default_weight[0]       = 1 << luma_log_weight_denom;
-  default_weight[1]       = default_weight[2] = 1 << chroma_log_weight_denom;
+  currSlice->wp_luma_round           = 1 << (currSlice->luma_log_weight_denom - 1);
+  currSlice->wp_chroma_round         = 1 << (currSlice->chroma_log_weight_denom - 1);
+  default_weight[0]       = 1 << currSlice->luma_log_weight_denom;
+  default_weight[1]       = default_weight[2] = 1 << currSlice->chroma_log_weight_denom;
   
-  dc_org = ComputeImgSum(pCurImg, img->height, img->width);
+  dc_org = ComputeImgSum(p_Img->pCurImg, p_Img->height, p_Img->width);
 
-  norm_org = dc_org / ((double) img->size);
-  numer = ComputeNormMean(pCurImg, norm_org, img->height, img->width);
+  norm_org = dc_org / ((double) p_Img->size);
+  numer = ComputeNormMean(p_Img->pCurImg, norm_org, p_Img->height, p_Img->width);
 
-  if (params->ChromaWeightSupport == 1)
+  if (p_Inp->ChromaWeightSupport == 1)
   {
     for (k = 0; k < 2; k++)
     {
-      dc_org_UV[k] = ComputeImgSum(pImgOrg[k + 1], img->height_cr, img->width_cr);
+      dc_org_UV[k] = ComputeImgSum(p_Img->pImgOrg[k + 1], p_Img->height_cr, p_Img->width_cr);
     } 
   }
 
   for (clist = 0; clist < 2 + list_offset; clist++)
   {
-    for (n = 0; n < listXsize[clist]; n++)
+    for (n = 0; n < p_Img->listXsize[clist]; n++)
     {
-      if ( wpxDetermineWP( params, img, clist, n ) )
+      if ( wpxDetermineWP( currSlice, clist, n ) )
       {
         /* set all values to defaults */
         for (i = 0; i < 3; i++)
         {
           weight[clist][n][i]    = default_weight[i];
-          wp_weight[clist][n][i] = default_weight[i];
-          wp_offset[clist][n][i] = 0;
+          currSlice->wp_weight[clist][n][i] = default_weight[i];
+          currSlice->wp_offset[clist][n][i] = 0;
           offset[clist][n][i]    = 0;
         }
 
         // Y
-        tmpPtr = listX[clist][n]->p_curr_img;      
-        dc_ref[n] = ComputeImgSum(tmpPtr, img->height, img->width);
+        tmpPtr = p_Img->listX[clist][n]->p_curr_img;      
+        dc_ref[n] = ComputeImgSum(tmpPtr, p_Img->height, p_Img->width);
 
-        norm_ref[n] = dc_ref[n] / ((double) img->size);
-        denom[n] = ComputeNormMean(tmpPtr, norm_ref[n], img->height, img->width);
+        norm_ref[n] = dc_ref[n] / ((double) p_Img->size);
+        denom[n] = ComputeNormMean(tmpPtr, norm_ref[n], p_Img->height, p_Img->width);
 
-        if (params->ChromaWeightSupport == 1)
+        if (p_Inp->ChromaWeightSupport == 1)
         {
           for (k = 0; k < 2; k++)
           {
             // UV
-            tmpPtr = listX[clist][n]->imgUV[k];
-            dc_ref_UV[n][k] = ComputeImgSum(tmpPtr, img->height_cr, img->width_cr);
+            tmpPtr = p_Img->listX[clist][n]->imgUV[k];
+            dc_ref_UV[n][k] = ComputeImgSum(tmpPtr, p_Img->height_cr, p_Img->width_cr);
           }        
         }
 
         if (select_offset == 0)
         {
           if (denom[n] != 0)
-            weight[clist][n][0] = (int) (default_weight[0] * numer / denom[n] + 0.5);
+            weight[clist][n][0] = (short) (default_weight[0] * numer / denom[n] + 0.5);
           else
             weight[clist][n][0] = default_weight[0];  // only used when reference picture is black
-          weight[clist][n][0] = iClip3(-128, 127, weight[clist][n][0]);
+          weight[clist][n][0] = sClip3(-128, 127, weight[clist][n][0]);
 
-          offset[clist][n][0] = (int) (norm_org - ((double) weight[clist][n][0] * norm_ref[n] / (double) default_weight[0]) + 0.5);
-          offset[clist][n][0] = (offset[clist][n][0]+((img->bitdepth_luma-8)>>1))>>(img->bitdepth_luma-8);
-          offset[clist][n][0] = iClip3( -128, 127, offset[clist][n][0]);
-          offset[clist][n][0] = offset[clist][n][0]<<(img->bitdepth_luma-8);
+          offset[clist][n][0] = (short) (norm_org - ((double) weight[clist][n][0] * norm_ref[n] / (double) default_weight[0]) + 0.5);
+          offset[clist][n][0] = (offset[clist][n][0]+((p_Img->bitdepth_luma-8)>>1))>>(p_Img->bitdepth_luma-8);
+          offset[clist][n][0] = sClip3( -128, 127, offset[clist][n][0]);
+          offset[clist][n][0] = offset[clist][n][0]<<(p_Img->bitdepth_luma-8);
 
-          if (params->ChromaWeightSupport == 1)
+          if (p_Inp->ChromaWeightSupport == 1)
           {
             if (dc_ref_UV[n][0] != 0)
-              weight[clist][n][1] = (int) (default_weight[1] * dc_org_UV[0] / dc_ref_UV[n][0] + 0.5);
+              weight[clist][n][1] = (short) (default_weight[1] * dc_org_UV[0] / dc_ref_UV[n][0] + 0.5);
             else
               weight[clist][n][1] = default_weight[1];  // only used when reference picture is black
-            weight[clist][n][1] = iClip3(-128, 127, weight[clist][n][1]);
+            weight[clist][n][1] = sClip3(-128, 127, weight[clist][n][1]);
 
             if (dc_ref_UV[n][1] != 0)
-              weight[clist][n][2] = (int) (default_weight[2] * dc_org_UV[1] / dc_ref_UV[n][1] + 0.5);
+              weight[clist][n][2] = (short) (default_weight[2] * dc_org_UV[1] / dc_ref_UV[n][1] + 0.5);
             else
               weight[clist][n][2] = default_weight[2];  // only used when reference picture is black
-            weight[clist][n][2] = iClip3(-64, 128, weight[clist][n][2]);
+            weight[clist][n][2] = sClip3(-128, 127, weight[clist][n][2]);
           }
         }
         else
         {
-          offset[clist][n][0] = (int) ((dc_org - dc_ref[n])/(img->size)+0.5);
-          offset[clist][n][0] = (offset[clist][n][0]+((img->bitdepth_luma-8)>>1))>>(img->bitdepth_luma-8);
-          offset[clist][n][0] = iClip3( -128, 127, offset[clist][n][0]);
-          offset[clist][n][0] = offset[clist][n][0]<<(img->bitdepth_luma-8);
+          offset[clist][n][0] = (short) ((dc_org - dc_ref[n])/(p_Img->size)+0.5);
+          offset[clist][n][0] = (offset[clist][n][0]+((p_Img->bitdepth_luma-8)>>1))>>(p_Img->bitdepth_luma-8);
+          offset[clist][n][0] = sClip3( -128, 127, offset[clist][n][0]);
+          offset[clist][n][0] = offset[clist][n][0]<<(p_Img->bitdepth_luma-8);
           weight[clist][n][0] = default_weight[0];
 
-          if (params->ChromaWeightSupport == 1)
+          if (p_Inp->ChromaWeightSupport == 1)
           {
-            offset[clist][n][1] = (int) ((dc_org_UV[0] - dc_ref_UV[n][0])/(img->size_cr)+0.5);
-            offset[clist][n][1] = (offset[clist][n][1] + ((img->bitdepth_chroma - 8)>>1))>>(img->bitdepth_chroma-8);
-            offset[clist][n][1] = iClip3( -128, 127, offset[clist][n][1]);
-            offset[clist][n][1] = offset[clist][n][1]<<(img->bitdepth_chroma - 8);
-
+            offset[clist][n][1] = (short) ((dc_org_UV[0] - dc_ref_UV[n][0])/(p_Img->size_cr)+0.5);
+            offset[clist][n][1] = (offset[clist][n][1] + ((p_Img->bitdepth_chroma - 8)>>1))>>(p_Img->bitdepth_chroma-8);
+            offset[clist][n][1] = sClip3( -128, 127, offset[clist][n][1]);
+            offset[clist][n][1] = offset[clist][n][1]<<(p_Img->bitdepth_chroma - 8);
+            
             weight[clist][n][1] = default_weight[1];
 
-            offset[clist][n][2] = (int) ((dc_org_UV[1] - dc_ref_UV[n][1])/(img->size_cr)+0.5);
-            offset[clist][n][2] = (offset[clist][n][2] + ((img->bitdepth_chroma - 8)>>1))>>(img->bitdepth_chroma-8);
-            offset[clist][n][2] = iClip3( -128, 127, offset[clist][n][2]);
-            offset[clist][n][2] = offset[clist][n][2]<<(img->bitdepth_chroma - 8);
+            offset[clist][n][2] = (short) ((dc_org_UV[1] - dc_ref_UV[n][1])/(p_Img->size_cr)+0.5);
+            offset[clist][n][2] = (offset[clist][n][2] + ((p_Img->bitdepth_chroma - 8)>>1))>>(p_Img->bitdepth_chroma-8);
+            offset[clist][n][2] = sClip3( -128, 127, offset[clist][n][2]);
+            offset[clist][n][2] = offset[clist][n][2]<<(p_Img->bitdepth_chroma - 8);
 
             weight[clist][n][2] = default_weight[2];
           }
@@ -169,8 +171,8 @@ void EstimateWPPSliceAlg1(ImageParameters *img, InputParameters *params, int sel
 
         for (i=0; i < 3; i ++)
         {
-          wp_weight[clist][n][i] = weight[clist][n][i];
-          wp_offset[clist][n][i] = offset[clist][n][i];
+          currSlice->wp_weight[clist][n][i] = weight[clist][n][i];
+          currSlice->wp_offset[clist][n][i] = offset[clist][n][i];
 #if DEBUG_WP
           printf("index %d component %d weight %d offset %d\n",n,i,weight[0][n][i],offset[0][n][i]);
 #endif
@@ -186,11 +188,13 @@ void EstimateWPPSliceAlg1(ImageParameters *img, InputParameters *params, int sel
 *    Estimates reference picture weighting factors for B slices
 ************************************************************************
 */
-void EstimateWPBSliceAlg1(ImageParameters *img, InputParameters *params)
+void EstimateWPBSliceAlg1(Slice *currSlice)
 {
+  ImageParameters *p_Img = currSlice->p_Img;
+  InputParameters *p_Inp = currSlice->p_Inp;
   int i, j, n;
 
-  int tx,DistScaleFactor;
+  short tx, tb, td, DistScaleFactor;
 
   int index;
   int comp;
@@ -204,41 +208,40 @@ void EstimateWPBSliceAlg1(ImageParameters *img, InputParameters *params)
   double denom[MAX_REFERENCE_PICTURES] = {0.0};
   int k;
 
-  int default_weight[3];
-  int list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? (img->current_mb_nr & 0x01) ? 4 : 2 : 0;
-  int weight[6][MAX_REFERENCE_PICTURES][3];
-  int offset[6][MAX_REFERENCE_PICTURES][3];
-  int im_weight[6][MAX_REFERENCE_PICTURES][MAX_REFERENCE_PICTURES][3];
+  short default_weight[3];
+  int list_offset   = ((currSlice->MbaffFrameFlag)&&(p_Img->mb_data[p_Img->current_mb_nr].mb_field))? (p_Img->current_mb_nr & 0x01) ? 4 : 2 : 0;
+  short weight[6][MAX_REFERENCE_PICTURES][3];
+  short offset[6][MAX_REFERENCE_PICTURES][3];
+  short im_weight[6][MAX_REFERENCE_PICTURES][MAX_REFERENCE_PICTURES][3];
   int clist;
-  int wf_weight, wf_offset;
+  short wf_weight, wf_offset;
   imgpel **tmpPtr;
 
-  if (active_pps->weighted_bipred_idc == 2) //! implicit mode. Values are fixed and it is important to show it here
+  if (p_Img->active_pps->weighted_bipred_idc == 2) //! implicit mode. Values are fixed and it is important to show it here
   {
-    luma_log_weight_denom = 5;
-    chroma_log_weight_denom = 5;
+    currSlice->luma_log_weight_denom = 5;
+    currSlice->chroma_log_weight_denom = 5;
   }
   else                                     //! explicit mode. Values can be changed for higher precision.
   {
-    luma_log_weight_denom = 5;
-    chroma_log_weight_denom = 5;
+    currSlice->luma_log_weight_denom = 5;
+    currSlice->chroma_log_weight_denom = 5;
   }
 
-  wp_luma_round     = 1 << (luma_log_weight_denom - 1);
-  wp_chroma_round   = 1 << (chroma_log_weight_denom - 1);
-  default_weight[0] = 1 << luma_log_weight_denom;
-  default_weight[1] = 1 << chroma_log_weight_denom;
-  default_weight[2] = 1 << chroma_log_weight_denom;
+  currSlice->wp_luma_round     = 1 << (currSlice->luma_log_weight_denom - 1);
+  currSlice->wp_chroma_round   = 1 << (currSlice->chroma_log_weight_denom - 1);
+  default_weight[0] = 1 << currSlice->luma_log_weight_denom;
+  default_weight[1] = 1 << currSlice->chroma_log_weight_denom;
+  default_weight[2] = 1 << currSlice->chroma_log_weight_denom;
 
-  if (active_pps->weighted_bipred_idc == 2) //! implicit mode
+  if (p_Img->active_pps->weighted_bipred_idc == 2) //! implicit mode
   {
-    for (i = 0; i < listXsize[LIST_0]; i++)
+    for (i = 0; i < p_Img->listXsize[LIST_0]; i++)
     {
-      for (j = 0; j < listXsize[LIST_1]; j++)
+      for (j = 0; j < p_Img->listXsize[LIST_1]; j++)
       {
-        int td, tb;
-        td = iClip3(-128, 127,(listX[LIST_1][j]->poc - listX[LIST_0][i]->poc));
-        tb = iClip3(-128, 127,(enc_picture->poc - listX[LIST_0][i]->poc));
+        td = (short) iClip3(-128, 127,(p_Img->listX[LIST_1][j]->poc - p_Img->listX[LIST_0][i]->poc));
+        tb = (short)iClip3(-128, 127,(p_Img->enc_picture->poc - p_Img->listX[LIST_0][i]->poc));
         for (comp = 0; comp < 3; comp++)
         {
           // implicit weights
@@ -249,8 +252,8 @@ void EstimateWPBSliceAlg1(ImageParameters *img, InputParameters *params)
           }
           else
           {
-            tx = (16384 + iabs(td/2))/td;
-            DistScaleFactor = iClip3(-1024, 1023, (tx*tb + 32 )>>6);
+            tx = (short) (16384 + iabs(td >> 1))/td;
+            DistScaleFactor = (short) iClip3(-1024, 1023, (tx*tb + 32 )>>6);
             im_weight[1][i][j][comp] = DistScaleFactor>>2;
             if (im_weight[1][i][j][comp] < -64 || im_weight[1][i][j][comp] >128)
               im_weight[1][i][j][comp] = default_weight[comp];
@@ -258,8 +261,8 @@ void EstimateWPBSliceAlg1(ImageParameters *img, InputParameters *params)
           }
         }
 #if DEBUG_WP
-        printf ("%d imp weight[%d][%d] = %d  , %d (%d %d %d) (%d %d) (%d %d)\n",enc_picture->poc, i, j,  im_weight[0][i][j][0], im_weight[1][i][j][0],
-        enc_picture->poc,listX[LIST_0][i]->poc, listX[LIST_1][j]->poc,
+        printf ("%d imp weight[%d][%d] = %d  , %d (%d %d %d) (%d %d) (%d %d)\n",p_Img->enc_picture->poc, i, j,  im_weight[0][i][j][0], im_weight[1][i][j][0],
+        p_Img->enc_picture->poc,p_Img->listX[LIST_0][i]->poc, p_Img->listX[LIST_1][j]->poc,
         DistScaleFactor ,tx,td,tb);
 #endif
       }
@@ -267,13 +270,13 @@ void EstimateWPBSliceAlg1(ImageParameters *img, InputParameters *params)
 
     for (k = 0; k < 2; k++)
     {
-      for (i = 0; i < listXsize[LIST_0]; i++)
+      for (i = 0; i < p_Img->listXsize[LIST_0]; i++)
       {
-        for (j = 0; j < listXsize[LIST_1]; j++)
+        for (j = 0; j < p_Img->listXsize[LIST_1]; j++)
         {
           for (comp = 0; comp < 3; comp++)
           {
-            wbp_weight[k][i][j][comp] = im_weight[k][i][j][comp];
+            currSlice->wbp_weight[k][i][j][comp] = im_weight[k][i][j][comp];
           }
         }
       }
@@ -281,79 +284,79 @@ void EstimateWPBSliceAlg1(ImageParameters *img, InputParameters *params)
 
     for (clist=0; clist<2 + list_offset; clist++)
     {
-      for (index = 0; index < listXsize[clist]; index++)
+      for (index = 0; index < p_Img->listXsize[clist]; index++)
       {
         for (comp = 0; comp < 3; comp++)
         {
-          wp_weight[clist][index][comp] = default_weight[comp];
-          wp_offset[clist][index][comp] = 0;
+          currSlice->wp_weight[clist][index][comp] = default_weight[comp];
+          currSlice->wp_offset[clist][index][comp] = 0;
         }
       }
     }
   }
   else // explicit WP mode (or no WP at all)
   {
-    dc_org = ComputeImgSum(pCurImg, img->height, img->width);
+    dc_org = ComputeImgSum(p_Img->pCurImg, p_Img->height, p_Img->width);
 
-    if (params->EnhancedBWeightSupport)
+    if (p_Inp->EnhancedBWeightSupport)
     {
-      norm_org = dc_org / ((double) img->size);
-      numer = ComputeNormMean(pCurImg, norm_org, img->height, img->width);
+      norm_org = dc_org / ((double) p_Img->size);
+      numer = ComputeNormMean(p_Img->pCurImg, norm_org, p_Img->height, p_Img->width);
     }
 
-    if (params->ChromaWeightSupport == 1)
+    if (p_Inp->ChromaWeightSupport == 1)
     {
       for (k = 0; k < 2; k++)
       {
-        dc_org_UV[k] = ComputeImgSum(pImgOrg[k + 1], img->height_cr, img->width_cr);
+        dc_org_UV[k] = ComputeImgSum(p_Img->pImgOrg[k + 1], p_Img->height_cr, p_Img->width_cr);
       } 
     }
 
     for (clist=0; clist<2 + list_offset; clist++)
     {
-      for (n = 0; n < listXsize[clist]; n++)
+      for (n = 0; n < p_Img->listXsize[clist]; n++)
       {
-        if ( wpxDetermineWP( params, img, clist, n ) )
+        if ( wpxDetermineWP( currSlice, clist, n ) )
         {
           /* set all values to defaults */
           for (i = 0; i < 3; i++)
           {
-            wp_weight[clist][n][i] = default_weight[i];
-            wp_offset[clist][n][i] = 0;
+            currSlice->wp_weight[clist][n][i] = default_weight[i];
+            currSlice->wp_offset[clist][n][i] = 0;
             offset   [clist][n][i] = 0;
             weight   [clist][n][i] = default_weight[i];
           }
           // To simplify these computations we may wish to perform these after a reference is 
           // stored in the reference buffer and attach them to the storedimage structure!!!
           // Y
-          tmpPtr = listX[clist][n]->p_curr_img;
-          dc_ref[clist][n] = ComputeImgSum(tmpPtr, img->height, img->width);
+          tmpPtr = p_Img->listX[clist][n]->p_curr_img;
+          dc_ref[clist][n] = ComputeImgSum(tmpPtr, p_Img->height, p_Img->width);
 
-          if (params->EnhancedBWeightSupport)
+          if (p_Inp->EnhancedBWeightSupport)
           {
-            norm_ref[n] = dc_ref[clist][n] / ((double) img->size);
-            denom[n] = ComputeNormMean(tmpPtr, norm_ref[n], img->height, img->width);
+            norm_ref[n] = dc_ref[clist][n] / ((double) p_Img->size);
+            denom[n] = ComputeNormMean(tmpPtr, norm_ref[n], p_Img->height, p_Img->width);
           }
-          if (params->EnhancedBWeightSupport)
+          if (p_Inp->EnhancedBWeightSupport)
           {
             if (denom[n] != 0)
-              wf_weight = (int) (default_weight[0] * numer / denom[n] + 0.5);
+              wf_weight = (short) (default_weight[0] * numer / denom[n] + 0.5);
             else
               wf_weight = default_weight[0];  // only used when reference picture is black
-            wf_weight = iClip3(-128, 127, wf_weight);
+            wf_weight = sClip3(-128, 127, wf_weight);
 
-            wf_offset = (int) (norm_org - ((double) wf_weight * norm_ref[n] / (double) default_weight[0]) + 0.5);
-            wf_offset = (wf_offset + ((img->bitdepth_luma - 8)>>1))>>(img->bitdepth_luma-8);
-            wf_offset = iClip3( -128, 127, wf_offset);
-            wf_offset = wf_offset <<(img->bitdepth_luma - 8);
+            wf_offset = (short) (norm_org - ((double) wf_weight * norm_ref[n] / (double) default_weight[0]) + 0.5);
+            wf_offset = (wf_offset + ((p_Img->bitdepth_luma - 8)>>1))>>(p_Img->bitdepth_luma-8);
+            wf_offset = sClip3( -128, 127, wf_offset);
+            wf_offset = wf_offset <<(p_Img->bitdepth_luma - 8);
           }
           else
           {
             if (dc_ref[clist][n] != 0.0)
-              wf_weight = (int) (default_weight[0] * dc_org / dc_ref[clist][n] + 0.5);
+              wf_weight = (short) (default_weight[0] * dc_org / dc_ref[clist][n] + 0.5);
             else
               wf_weight = default_weight[0];  // only used when reference picture is black
-            wf_weight = iClip3(-128, 127, wf_weight);
+            wf_weight = sClip3(-128, 127, wf_weight);
             wf_offset = 0;
           }
 
@@ -363,18 +366,18 @@ void EstimateWPBSliceAlg1(ImageParameters *img, InputParameters *params)
           offset[clist][n][0] = wf_offset;
 
           // UV
-          if (params->ChromaWeightSupport == 1)
+          if (p_Inp->ChromaWeightSupport == 1)
           {          
             for (k = 0; k < 2; k++)
             {        	
-              tmpPtr = listX[clist][n]->imgUV[k];
-              dc_ref_UV[clist][n][k] = ComputeImgSum(tmpPtr, img->height_cr, img->width_cr);
+              tmpPtr = p_Img->listX[clist][n]->imgUV[k];
+              dc_ref_UV[clist][n][k] = ComputeImgSum(tmpPtr, p_Img->height_cr, p_Img->width_cr);
 
               if (dc_ref_UV[clist][n][k] != 0.0)
-                wf_weight = (int) (default_weight[k + 1] * dc_org_UV[k] / dc_ref_UV[clist][n][k] + 0.5);
+                wf_weight = (short) (default_weight[k + 1] * dc_org_UV[k] / dc_ref_UV[clist][n][k] + 0.5);
               else
                 wf_weight = default_weight[k + 1];  // only used when reference picture is black
-              wf_weight = iClip3(-128, 127, wf_weight);
+              wf_weight = sClip3(-128, 127, wf_weight);
               wf_offset = 0;
 
               weight[clist][n][k + 1] = wf_weight;
@@ -391,40 +394,41 @@ void EstimateWPBSliceAlg1(ImageParameters *img, InputParameters *params)
 
           for (i = 0; i < 3; i++)
           {
-            wp_weight[clist][n][i] = weight[clist][n][i];
-            wp_offset[clist][n][i] = offset[clist][n][i];
+            currSlice->wp_weight[clist][n][i] = weight[clist][n][i];
+            currSlice->wp_offset[clist][n][i] = offset[clist][n][i];
 #if DEBUG_WP
-            printf("%d %d\n",wp_weight[clist][index][comp],wp_offset[clist][index][comp]);
+            printf("%d %d\n",currSlice->wp_weight[clist][n][i],currSlice->wp_offset[clist][n][i]);
 #endif
           }
         }
       }
     }
 
-    if (active_pps->weighted_bipred_idc != 1)
+    if (p_Img->active_pps->weighted_bipred_idc != 1)
     {
       for (clist=0; clist<2 + list_offset; clist++)
       {
-        for (index = 0; index < listXsize[clist]; index++)
+        for (index = 0; index < p_Img->listXsize[clist]; index++)
         {
-          memcpy(wp_weight[clist][index], default_weight, 3 * sizeof(int));
-          memset(wp_offset[clist][index], 0, 3 * sizeof(int));
+          memcpy(currSlice->wp_weight[clist][index], default_weight, 3 * sizeof(short));
+          memset(currSlice->wp_offset[clist][index], 0, 3 * sizeof(short));
         }
       }
     }
 
-    for (i = 0; i < listXsize[LIST_0]; i++)
+
+    for (i = 0; i < p_Img->listXsize[LIST_0]; i++)
     {
-      for (j = 0; j < listXsize[LIST_1]; j++)
+      for (j = 0; j < p_Img->listXsize[LIST_1]; j++)
       {
         for (comp = 0; comp < 3; comp++)
         {
-          wbp_weight[0][i][j][comp] = wp_weight[0][i][comp];
-          wbp_weight[1][i][j][comp] = wp_weight[1][j][comp];
+          currSlice->wbp_weight[0][i][j][comp] = currSlice->wp_weight[0][i][comp];
+          currSlice->wbp_weight[1][i][j][comp] = currSlice->wp_weight[1][j][comp];
         }
 #if DEBUG_WP
-        printf ("bpw weight[%d][%d] = %d  , %d (%d %d %d) (%d %d) (%d %d)\n", i, j, wbp_weight[0][i][j][0], wbp_weight[1][i][j][0],
-        enc_picture->poc,listX[LIST_0][i]->poc, listX[LIST_1][j]->poc,
+        printf ("bpw weight[%d][%d] = %d  , %d (%d %d %d) (%d %d) (%d %d)\n", i, j, currSlice->wbp_weight[0][i][j][0], currSlice->wbp_weight[1][i][j][0],
+        p_Img->enc_picture->poc,p_Img->listX[LIST_0][i]->poc, p_Img->listX[LIST_1][j]->poc,
         DistScaleFactor ,tx,tx,tx);
 #endif
       }
@@ -440,7 +444,7 @@ void EstimateWPBSliceAlg1(ImageParameters *img, InputParameters *params)
 ************************************************************************
 */
 
-int TestWPPSliceAlg1(ImageParameters *img, InputParameters *params, int select_offset)
+int TestWPPSliceAlg1(ImageParameters *p_Img, InputParameters *p_Inp, int select_offset)
 {
   int i, j, k, n;
 
@@ -455,26 +459,27 @@ int TestWPPSliceAlg1(ImageParameters *img, InputParameters *params, int select_o
   double numer = {0.0};
   double denom[MAX_REFERENCE_PICTURES] = {0.0};
 
-  int default_weight[3];
+  short default_weight[3];
 
-  int list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? (img->current_mb_nr & 0x01) ? 4 : 2 : 0;
-  int weight[2][MAX_REFERENCE_PICTURES][3];
-  int offset[2][MAX_REFERENCE_PICTURES][3];
+  int list_offset   = ((p_Img->MbaffFrameFlag)&&(p_Img->mb_data[p_Img->current_mb_nr].mb_field))? (p_Img->current_mb_nr & 0x01) ? 4 : 2 : 0;
+  short weight[2][MAX_REFERENCE_PICTURES][3];
+  short offset[2][MAX_REFERENCE_PICTURES][3];
+  short wp_weight[6][MAX_REFERENCE_PICTURES][3];
+  short wp_offset[6][MAX_REFERENCE_PICTURES][3];
   int clist;
   int perform_wp = 0;
   imgpel **tmpPtr;
 
-  luma_log_weight_denom =   5;
-  chroma_log_weight_denom = 5;
-  wp_luma_round     = 1 << (luma_log_weight_denom - 1);
-  wp_chroma_round   = 1 << (chroma_log_weight_denom - 1);
+  short luma_log_weight_denom   = 5;
+  short chroma_log_weight_denom = 5;
+  
   default_weight[0] = 1 << luma_log_weight_denom;
   default_weight[1] = default_weight[2] = 1 << chroma_log_weight_denom;
 
   /* set all values to defaults */
   for (i = 0; i < 2 + list_offset; i++)
   {
-    for (j = 0; j < listXsize[i]; j++)
+    for (j = 0; j < p_Img->listXsize[i]; j++)
     {
       for (n = 0; n < 3; n++)
       {
@@ -486,87 +491,87 @@ int TestWPPSliceAlg1(ImageParameters *img, InputParameters *params, int select_o
     }
   }
 
-  dc_org = ComputeImgSum(pCurImg, img->height, img->width);
+  dc_org = ComputeImgSum(p_Img->pCurImg, p_Img->height, p_Img->width);
 
-  norm_org = dc_org / ((double) img->size);
-  numer = ComputeNormMean(pCurImg, norm_org, img->height, img->width);
+  norm_org = dc_org / ((double) p_Img->size);
+  numer = ComputeNormMean(p_Img->pCurImg, norm_org, p_Img->height, p_Img->width);
 
-  if (params->ChromaWeightSupport == 1)
+  if (p_Inp->ChromaWeightSupport == 1)
   {
     for (k = 0; k < 2; k++)
     {
-      dc_org_UV[k] = ComputeImgSum(pImgOrg[k + 1], img->height_cr, img->width_cr);
+      dc_org_UV[k] = ComputeImgSum(p_Img->pImgOrg[k + 1], p_Img->height_cr, p_Img->width_cr);
     } 
   }
 
   for (clist = 0; clist < 2 + list_offset; clist++)
   {
-    for (n = 0; n < listXsize[clist]; n++)
+    for (n = 0; n < p_Img->listXsize[clist]; n++)
     {
-      tmpPtr = listX[clist][n]->p_curr_img;
-      dc_ref[n] = ComputeImgSum(tmpPtr, img->height, img->width);
+      tmpPtr = p_Img->listX[clist][n]->p_curr_img;
+      dc_ref[n] = ComputeImgSum(tmpPtr, p_Img->height, p_Img->width);
 
-      norm_ref[n] = dc_ref[n] / ((double) img->size);
-      denom[n] = ComputeNormMean(tmpPtr, norm_ref[n], img->height, img->width);
+      norm_ref[n] = dc_ref[n] / ((double) p_Img->size);
+      denom[n] = ComputeNormMean(tmpPtr, norm_ref[n], p_Img->height, p_Img->width);
 
-      if (params->ChromaWeightSupport == 1)
+      if (p_Inp->ChromaWeightSupport == 1)
       {
         for (k = 0; k < 2; k++)
         {
-          tmpPtr = listX[clist][n]->imgUV[k];
-          dc_ref_UV[n][k] = ComputeImgSum(tmpPtr, img->height_cr, img->width_cr);
+          tmpPtr = p_Img->listX[clist][n]->imgUV[k];
+          dc_ref_UV[n][k] = ComputeImgSum(tmpPtr, p_Img->height_cr, p_Img->width_cr);
         }        
       }
 
       if (select_offset == 0)
       {
         if (denom[n] != 0)
-          weight[clist][n][0] = (int) (default_weight[0] * numer / denom[n] + 0.5);
+          weight[clist][n][0] = (short) (default_weight[0] * numer / denom[n] + 0.5);
         else
           weight[clist][n][0] = default_weight[0];  // only used when reference picture is black
-        weight[clist][n][0] = iClip3(-128, 127, weight[clist][n][0]);
+        weight[clist][n][0] = sClip3(-128, 127, weight[clist][n][0]);
 
-        offset[clist][n][0] = (int) (norm_org - ((double) weight[clist][n][0] * norm_ref[n] / (double) default_weight[0]) + 0.5);
-        offset[clist][n][0] = (offset[clist][n][0]+((img->bitdepth_luma-8)>>1))>>(img->bitdepth_luma-8);
-        offset[clist][n][0] = iClip3( -128, 127, offset[clist][n][0]);
-        offset[clist][n][0] = offset[clist][n][0]<<(img->bitdepth_luma-8);       
+        offset[clist][n][0] = (short) (norm_org - ((double) weight[clist][n][0] * norm_ref[n] / (double) default_weight[0]) + 0.5);
+        offset[clist][n][0] = (offset[clist][n][0]+((p_Img->bitdepth_luma-8)>>1))>>(p_Img->bitdepth_luma-8);
+        offset[clist][n][0] = sClip3( -128, 127, offset[clist][n][0]);
+        offset[clist][n][0] = offset[clist][n][0]<<(p_Img->bitdepth_luma-8);       
 
-        if (params->ChromaWeightSupport == 1)
+        if (p_Inp->ChromaWeightSupport == 1)
         {
           if (dc_ref_UV[n][0] != 0)
-            weight[clist][n][1] = (int) (default_weight[1] * dc_org_UV[0] / dc_ref_UV[n][0] + 0.5);
+            weight[clist][n][1] = (short) (default_weight[1] * dc_org_UV[0] / dc_ref_UV[n][0] + 0.5);
           else
             weight[clist][n][1] = default_weight[1];  // only used when reference picture is black
-          weight[clist][n][1] = iClip3(-128, 127, weight[clist][n][1]);
+          weight[clist][n][1] = sClip3(-128, 127, weight[clist][n][1]);
 
           if (dc_ref_UV[n][1] != 0)
-            weight[clist][n][2] = (int) (default_weight[2] * dc_org_UV[1] / dc_ref_UV[n][1] + 0.5);
+            weight[clist][n][2] = (short) (default_weight[2] * dc_org_UV[1] / dc_ref_UV[n][1] + 0.5);
           else
             weight[clist][n][2] = default_weight[2];  // only used when reference picture is black
-          weight[clist][n][2] = iClip3(-64, 128, weight[clist][n][2]);
+          weight[clist][n][2] = sClip3(-128, 127, weight[clist][n][2]);
         }
       }
       else
       {
-        offset[clist][n][0] = (int) ((dc_org - dc_ref[n])/(img->size)+0.5);
-        offset[clist][n][0] = (offset[clist][n][0]+((img->bitdepth_luma-8)>>1))>>(img->bitdepth_luma-8);
-        offset[clist][n][0] = iClip3( -128, 127, offset[clist][n][0]);
-        offset[clist][n][0] = offset[clist][n][0]<<(img->bitdepth_luma-8);
+        offset[clist][n][0] = (short) ((dc_org - dc_ref[n])/(p_Img->size)+0.5);
+        offset[clist][n][0] = (offset[clist][n][0]+((p_Img->bitdepth_luma-8)>>1))>>(p_Img->bitdepth_luma-8);
+        offset[clist][n][0] = sClip3( -128, 127, offset[clist][n][0]);
+        offset[clist][n][0] = offset[clist][n][0]<<(p_Img->bitdepth_luma-8);
         weight[clist][n][0] = default_weight[0];
 
-        if (params->ChromaWeightSupport == 1)
+        if (p_Inp->ChromaWeightSupport == 1)
         {
-            offset[clist][n][1] = (int) ((dc_org_UV[0] - dc_ref_UV[n][0])/(img->size_cr)+0.5);
-            offset[clist][n][1] = (offset[clist][n][1] + ((img->bitdepth_chroma - 8)>>1))>>(img->bitdepth_chroma-8);
-            offset[clist][n][1] = iClip3( -128, 127, offset[clist][n][1]);
-            offset[clist][n][1] = offset[clist][n][1]<<(img->bitdepth_chroma - 8);
+            offset[clist][n][1] = (short) ((dc_org_UV[0] - dc_ref_UV[n][0])/(p_Img->size_cr)+0.5);
+            offset[clist][n][1] = (offset[clist][n][1] + ((p_Img->bitdepth_chroma - 8)>>1))>>(p_Img->bitdepth_chroma-8);
+            offset[clist][n][1] = sClip3( -128, 127, offset[clist][n][1]);
+            offset[clist][n][1] = offset[clist][n][1]<<(p_Img->bitdepth_chroma - 8);
             
             weight[clist][n][1] = default_weight[1];
 
-            offset[clist][n][2] = (int) ((dc_org_UV[1] - dc_ref_UV[n][1])/(img->size_cr)+0.5);
-            offset[clist][n][2] = (offset[clist][n][2] + ((img->bitdepth_chroma - 8)>>1))>>(img->bitdepth_chroma-8);
-            offset[clist][n][2] = iClip3( -128, 127, offset[clist][n][2]);
-            offset[clist][n][2] = offset[clist][n][2]<<(img->bitdepth_chroma - 8);
+            offset[clist][n][2] = (short) ((dc_org_UV[1] - dc_ref_UV[n][1])/(p_Img->size_cr)+0.5);
+            offset[clist][n][2] = (offset[clist][n][2] + ((p_Img->bitdepth_chroma - 8)>>1))>>(p_Img->bitdepth_chroma-8);
+            offset[clist][n][2] = sClip3( -128, 127, offset[clist][n][2]);
+            offset[clist][n][2] = offset[clist][n][2]<<(p_Img->bitdepth_chroma - 8);
 
             weight[clist][n][2] = default_weight[2];
         }
@@ -576,11 +581,11 @@ int TestWPPSliceAlg1(ImageParameters *img, InputParameters *params, int select_o
 
   for (clist=0; clist<2 + list_offset; clist++)
   {
-    for (index = 0; index < listXsize[clist]; index++)
+    for (index = 0; index < p_Img->listXsize[clist]; index++)
     {
       for (comp=0; comp < 3; comp ++)
       {
-        int offset_test = params->RDPSliceBTest && active_sps->profile_idc != 66
+        int offset_test = p_Inp->RDPSliceBTest && p_Img->active_sps->profile_idc != BASELINE
           ? iabs(offset[clist][index][comp]) > 2
           : offset[clist][index][comp] != 0;
 
@@ -605,11 +610,11 @@ int TestWPPSliceAlg1(ImageParameters *img, InputParameters *params, int select_o
 *    Tests B slice weighting prediction
 ************************************************************************
 */
-int TestWPBSliceAlg1(ImageParameters *img, InputParameters *params, int select_method)
+int TestWPBSliceAlg1(ImageParameters *p_Img, InputParameters *p_Inp, int select_method)
 {
   int i, j, k, n;
 
-  int tx,DistScaleFactor;
+  short tx, td, tb, DistScaleFactor;
 
   int index;
   int comp;
@@ -622,30 +627,24 @@ int TestWPBSliceAlg1(ImageParameters *img, InputParameters *params, int select_m
   double numer = {0.0};
   double denom[MAX_REFERENCE_PICTURES] = {0.0};
 
-  int default_weight[3];
+  short default_weight[3];
   // this needs to be fixed.
-  int list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? (img->current_mb_nr & 0x01) ? 4 : 2 : 0;
-  int weight[6][MAX_REFERENCE_PICTURES][3];
-  int offset[6][MAX_REFERENCE_PICTURES][3];
-  int im_weight[6][MAX_REFERENCE_PICTURES][MAX_REFERENCE_PICTURES][3];
+  int list_offset   = ((p_Img->MbaffFrameFlag)&&(p_Img->mb_data[p_Img->current_mb_nr].mb_field))? (p_Img->current_mb_nr & 0x01) ? 4 : 2 : 0;
+  short weight[6][MAX_REFERENCE_PICTURES][3];
+  short offset[6][MAX_REFERENCE_PICTURES][3];
+  short im_weight[6][MAX_REFERENCE_PICTURES][MAX_REFERENCE_PICTURES][3];
+  short wp_weight[6][MAX_REFERENCE_PICTURES][3];
+  short wp_offset[6][MAX_REFERENCE_PICTURES][3];
+  short wbp_weight[6][MAX_REFERENCE_PICTURES][MAX_REFERENCE_PICTURES][3];
+
   int clist;
-  int wf_weight, wf_offset;
+  short wf_weight, wf_offset;
   int perform_wp = 0;
   imgpel **tmpPtr;
 
-  if (select_method == 1) //! implicit mode
-  {
-    luma_log_weight_denom = 5;
-    chroma_log_weight_denom = 5;
-  }
-  else
-  {
-    luma_log_weight_denom = 5;
-    chroma_log_weight_denom = 5;
-  }
+  short luma_log_weight_denom   = 5;
+  short chroma_log_weight_denom = 5;
 
-  wp_luma_round     = 1 << (luma_log_weight_denom - 1);
-  wp_chroma_round   = 1 << (chroma_log_weight_denom - 1);
   default_weight[0] = 1 << luma_log_weight_denom;
   default_weight[1] = 1 << chroma_log_weight_denom;
   default_weight[2] = 1 << chroma_log_weight_denom;
@@ -653,7 +652,7 @@ int TestWPBSliceAlg1(ImageParameters *img, InputParameters *params, int select_m
   /* set all values to defaults */
   for (i = 0; i < 2 + list_offset; i++)
   {
-    for (j = 0; j < listXsize[i]; j++)
+    for (j = 0; j < p_Img->listXsize[i]; j++)
     {
       for (n = 0; n < 3; n++)
       {
@@ -665,13 +664,12 @@ int TestWPBSliceAlg1(ImageParameters *img, InputParameters *params, int select_m
     }
   }
 
-  for (i = 0; i < listXsize[LIST_0]; i++)
+  for (i = 0; i < p_Img->listXsize[LIST_0]; i++)
   {
-    for (j = 0; j < listXsize[LIST_1]; j++)
+    for (j = 0; j < p_Img->listXsize[LIST_1]; j++)
     {
-      int td, tb;
-      td = iClip3(-128, 127,(listX[LIST_1][j]->poc - listX[LIST_0][i]->poc));
-      tb = iClip3(-128, 127,(enc_picture->poc - listX[LIST_0][i]->poc));
+      td = (short) iClip3(-128, 127,(p_Img->listX[LIST_1][j]->poc - p_Img->listX[LIST_0][i]->poc));
+      tb = (short) iClip3(-128, 127,(p_Img->enc_picture->poc - p_Img->listX[LIST_0][i]->poc));
       for (comp = 0; comp < 3; comp++)
       {
         // implicit weights
@@ -682,8 +680,8 @@ int TestWPBSliceAlg1(ImageParameters *img, InputParameters *params, int select_m
         }
         else
         {
-          tx = (16384 + iabs(td/2))/td;
-          DistScaleFactor = iClip3(-1024, 1023, (tx*tb + 32 )>>6);
+          tx = (short) (16384 + iabs(td >> 1))/td;
+          DistScaleFactor = sClip3(-1024, 1023, (tx*tb + 32 )>>6);
           im_weight[1][i][j][comp] = DistScaleFactor >> 2;
           if (im_weight[1][i][j][comp] < -64 || im_weight[1][i][j][comp] >128)
             im_weight[1][i][j][comp] = default_weight[comp];
@@ -696,9 +694,9 @@ int TestWPBSliceAlg1(ImageParameters *img, InputParameters *params, int select_m
 
   if (select_method == 1) //! implicit mode
   {
-    for (i = 0; i < listXsize[LIST_0]; i++)
+    for (i = 0; i < p_Img->listXsize[LIST_0]; i++)
     {
-      for (j = 0; j < listXsize[LIST_1]; j++)
+      for (j = 0; j < p_Img->listXsize[LIST_1]; j++)
       {
         for (comp = 0; comp < 3; comp++)
         {
@@ -710,7 +708,7 @@ int TestWPBSliceAlg1(ImageParameters *img, InputParameters *params, int select_m
 
     for (clist=0; clist<2 + list_offset; clist++)
     {
-      for (index = 0; index < listXsize[clist]; index++)
+      for (index = 0; index < p_Img->listXsize[clist]; index++)
       {
         for (comp = 0; comp < 3; comp++)
         {
@@ -722,55 +720,55 @@ int TestWPBSliceAlg1(ImageParameters *img, InputParameters *params, int select_m
   }
   else
   {
-    dc_org = ComputeImgSum(pCurImg, img->height, img->width);
+    dc_org = ComputeImgSum(p_Img->pCurImg, p_Img->height, p_Img->width);
 
-    if (params->EnhancedBWeightSupport)
+    if (p_Inp->EnhancedBWeightSupport)
     {
-      norm_org = dc_org / ((double) img->size);
-      numer = ComputeNormMean(pCurImg, norm_org, img->height, img->width);
+      norm_org = dc_org / ((double) p_Img->size);
+      numer = ComputeNormMean(p_Img->pCurImg, norm_org, p_Img->height, p_Img->width);
     }
 
-    if (params->ChromaWeightSupport == 1)
+    if (p_Inp->ChromaWeightSupport == 1)
     {
       for (k = 0; k < 2; k++)
       {
-        dc_org_UV[k] = ComputeImgSum(pImgOrg[k + 1], img->height_cr, img->width_cr);
+        dc_org_UV[k] = ComputeImgSum(p_Img->pImgOrg[k + 1], p_Img->height_cr, p_Img->width_cr);
       } 
     }
 
     for (clist=0; clist<2 + list_offset; clist++)
     {
-      for (n = 0; n < listXsize[clist]; n++)
+      for (n = 0; n < p_Img->listXsize[clist]; n++)
       {
         // To simplify these computations we may wish to perform these after a reference is 
         // stored in the reference buffer and attach them to the storedimage structure!!!
         // Y
-        tmpPtr = listX[clist][n]->p_curr_img;
-        dc_ref[clist][n] = ComputeImgSum(tmpPtr, img->height, img->width);
+        tmpPtr = p_Img->listX[clist][n]->p_curr_img;
+        dc_ref[clist][n] = ComputeImgSum(tmpPtr, p_Img->height, p_Img->width);
 
-        if (params->EnhancedBWeightSupport)
+        if (p_Inp->EnhancedBWeightSupport)
         {
-          norm_ref[n] = dc_ref[clist][n] / ((double) img->size);
-          denom[n] = ComputeNormMean(tmpPtr, norm_ref[n], img->height, img->width);
+          norm_ref[n] = dc_ref[clist][n] / ((double) p_Img->size);
+          denom[n] = ComputeNormMean(tmpPtr, norm_ref[n], p_Img->height, p_Img->width);
 
           if (denom[n] != 0)
-            wf_weight = (int) (default_weight[0] * numer / denom[n] + 0.5);
+            wf_weight = (short) (default_weight[0] * numer / denom[n] + 0.5);
           else
             wf_weight = default_weight[0];  // only used when reference picture is black
-          wf_weight = iClip3(-128, 127, wf_weight);
+          wf_weight = sClip3(-128, 127, wf_weight);
 
-          wf_offset = (int) (norm_org - ((double) wf_weight * norm_ref[n] / (double) default_weight[0]) + 0.5);
-          wf_offset = (wf_offset  + ((img->bitdepth_luma-8)>>1))>>(img->bitdepth_luma-8);
-          wf_offset = iClip3( -128, 127, wf_offset);
-          wf_offset = wf_offset <<(img->bitdepth_luma - 8);
+          wf_offset = (short) (norm_org - ((double) wf_weight * norm_ref[n] / (double) default_weight[0]) + 0.5);
+          wf_offset = (wf_offset  + ((p_Img->bitdepth_luma-8)>>1))>>(p_Img->bitdepth_luma-8);
+          wf_offset = sClip3( -128, 127, wf_offset);
+          wf_offset = wf_offset <<(p_Img->bitdepth_luma - 8);
         }
         else
         {
           if (dc_ref[clist][n] != 0.0)
-            wf_weight = (int) (default_weight[0] * dc_org / dc_ref[clist][n] + 0.5);
+            wf_weight = (short) (default_weight[0] * dc_org / dc_ref[clist][n] + 0.5);
           else
             wf_weight = default_weight[0];  // only used when reference picture is black
-          wf_weight = iClip3(-128, 127, wf_weight);
+          wf_weight = sClip3(-128, 127, wf_weight);
           wf_offset = 0;
         }
 
@@ -778,18 +776,18 @@ int TestWPBSliceAlg1(ImageParameters *img, InputParameters *params, int select_m
         offset[clist][n][0] = wf_offset;
 
         // UV
-        if (params->ChromaWeightSupport == 1)
+        if (p_Inp->ChromaWeightSupport == 1)
         {          
           for (k = 0; k < 2; k++)
           {
-            tmpPtr = listX[clist][n]->imgUV[k];
-            dc_ref_UV[clist][n][k] = ComputeImgSum(tmpPtr, img->height_cr, img->width_cr);
+            tmpPtr = p_Img->listX[clist][n]->imgUV[k];
+            dc_ref_UV[clist][n][k] = ComputeImgSum(tmpPtr, p_Img->height_cr, p_Img->width_cr);
 
             if (dc_ref_UV[clist][n][k] != 0.0)
-              wf_weight = (int) (default_weight[k + 1] * dc_org_UV[k] / dc_ref_UV[clist][n][k] + 0.5);
+              wf_weight = (short) (default_weight[k + 1] * dc_org_UV[k] / dc_ref_UV[clist][n][k] + 0.5);
             else
               wf_weight = default_weight[k + 1];  // only used when reference picture is black
-            wf_weight = iClip3(-128, 127, wf_weight);
+            wf_weight = sClip3(-128, 127, wf_weight);
             wf_offset = 0;
 
             weight[clist][n][k + 1] = wf_weight;
@@ -810,10 +808,10 @@ int TestWPBSliceAlg1(ImageParameters *img, InputParameters *params, int select_m
     {
       for (clist=0; clist<2 + list_offset; clist++)
       {
-        for (index = 0; index < listXsize[clist]; index++)
+        for (index = 0; index < p_Img->listXsize[clist]; index++)
         {
-          memcpy(wp_weight[clist][index], weight[clist][index], 3 * sizeof(int));
-          memcpy(wp_offset[clist][index], offset[clist][index], 3 * sizeof(int));
+          memcpy(wp_weight[clist][index], weight[clist][index], 3 * sizeof(short));
+          memcpy(wp_offset[clist][index], offset[clist][index], 3 * sizeof(short));
         }
       }
     }
@@ -821,17 +819,17 @@ int TestWPBSliceAlg1(ImageParameters *img, InputParameters *params, int select_m
     {
       for (clist=0; clist<2 + list_offset; clist++)
       {
-        for (index = 0; index < listXsize[clist]; index++)
+        for (index = 0; index < p_Img->listXsize[clist]; index++)
         {
-          memcpy(wp_weight[clist][index], default_weight, 3 * sizeof(int));
-          memset(wp_offset[clist][index], 0, 3 * sizeof(int));
+          memcpy(wp_weight[clist][index], default_weight, 3 * sizeof(short));
+          memset(wp_offset[clist][index], 0, 3 * sizeof(short));
         }
       }
     }
 
-    for (i = 0; i < listXsize[LIST_0]; i++)
+    for (i = 0; i < p_Img->listXsize[LIST_0]; i++)
     {
-      for (j = 0; j < listXsize[LIST_1]; j++)
+      for (j = 0; j < p_Img->listXsize[LIST_1]; j++)
       {
         for (comp = 0; comp < 3; comp++)
         {
@@ -839,20 +837,20 @@ int TestWPBSliceAlg1(ImageParameters *img, InputParameters *params, int select_m
           wbp_weight[1][i][j][comp] = wp_weight[1][j][comp];
         }
 #if DEBUG_WP
-        printf ("bpw weight[%d][%d] = %d  , %d (%d %d %d) (%d %d) (%d %d)\n", i, j, wbp_weight[0][i][j][0], wbp_weight[1][i][j][0],
-        enc_picture->poc,listX[LIST_0][i]->poc, listX[LIST_1][j]->poc,
+        printf ("bpw weight[%d][%d] = %d  , %d (%d %d %d) (%d %d) (%d %d)\n", i, j, p_Img->currentSlice->wbp_weight[0][i][j][0], p_Img->currentSlice->wbp_weight[1][i][j][0],
+        p_Img->enc_picture->poc,p_Img->listX[LIST_0][i]->poc, p_Img->listX[LIST_1][j]->poc,
         DistScaleFactor ,tx,tx,tx);
 #endif
       }
     }
   }
 
-  if (select_method == 0) //! implicit mode
+  if (select_method == 0) //! explicit mode
   {
     int active_refs[2];
 
-    active_refs[0] = (params->B_List0_refs == 0 ? listXsize[0] : imin(params->B_List0_refs, listXsize[0]));
-    active_refs[1] = (params->B_List1_refs == 0 ? listXsize[1] : imin(params->B_List1_refs, listXsize[1]));
+    active_refs[0] = (p_Inp->B_List0_refs == 0 ? p_Img->listXsize[0] : imin(p_Inp->B_List0_refs, p_Img->listXsize[0]));
+    active_refs[1] = (p_Inp->B_List1_refs == 0 ? p_Img->listXsize[1] : imin(p_Inp->B_List1_refs, p_Img->listXsize[1]));
 
     for (clist=0; clist<2 + list_offset; clist++)
     {
@@ -873,5 +871,4 @@ int TestWPBSliceAlg1(ImageParameters *img, InputParameters *params, int select_m
   }
   return perform_wp;
 }
-
 

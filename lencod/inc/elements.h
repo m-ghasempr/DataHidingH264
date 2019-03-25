@@ -81,9 +81,9 @@ typedef enum {
 //} SE_type;
 
 
-extern int * assignSE2partition[2];
-extern int assignSE2partition_NoDP[SE_MAX_ELEMENTS];
-extern int assignSE2partition_DP[SE_MAX_ELEMENTS];
+extern const int * assignSE2partition[2];
+extern const int assignSE2partition_NoDP[SE_MAX_ELEMENTS];
+extern const int assignSE2partition_DP[SE_MAX_ELEMENTS];
 
 #endif
 

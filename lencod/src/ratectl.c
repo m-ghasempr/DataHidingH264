@@ -22,7 +22,6 @@
 #include "global.h"
 #include "ratectl.h"
 
-int diffy[16][16];
 
 /*!
  *************************************************************************************
@@ -32,11 +31,15 @@ int diffy[16][16];
  */
 void rc_store_mad(Macroblock *currMB)
 {
-  generic_RC->MADofMB[img->current_mb_nr] = ComputeMBMAD();
+  ImageParameters *p_Img = currMB->p_Img;
+  InputParameters *p_Inp = currMB->p_Inp;
+  RCGeneric *p_gen = p_Img->p_rc_gen;
 
-  if(params->basicunit < img->FrameSizeInMbs)
+  p_gen->MADofMB[currMB->mbAddrX] = ComputeMBMAD(currMB->p_slice->diffy);
+
+  if(p_Inp->basicunit < p_Img->FrameSizeInMbs)
   {
-    generic_RC->TotalMADBasicUnit += generic_RC->MADofMB[img->current_mb_nr];
+    p_gen->TotalMADBasicUnit += p_gen->MADofMB[currMB->mbAddrX];
   }  
 }
 
@@ -68,50 +71,49 @@ double QP2Qstep( int QP )
  *
  *************************************************************************************
 */
-int Qstep2QP( double Qstep )
+int Qstep2QP( double Qstep, int qp_offset )
 {
   int q_per = 0, q_rem = 0;
 
-  //  assert( Qstep >= QP2Qstep(0) && Qstep <= QP2Qstep(51) );
-  if( Qstep < QP2Qstep(0))
-    return 0;
-  else if (Qstep > QP2Qstep(51) )
-    return 51;
+  if( Qstep < QP2Qstep(MIN_QP))
+    return MIN_QP;
+  else if (Qstep > QP2Qstep(MAX_QP + qp_offset) )
+    return (MAX_QP + qp_offset);
 
   while( Qstep > QP2Qstep(5) )
   {
     Qstep /= 2.0;
-    q_per += 1;
+    q_per++;
   }
 
   if (Qstep <= 0.65625)
   {
-    Qstep = 0.625;
+    //Qstep = 0.625;
     q_rem = 0;
   }
   else if (Qstep <= 0.75)
   {
-    Qstep = 0.6875;
+    //Qstep = 0.6875;
     q_rem = 1;
   }
   else if (Qstep <= 0.84375)
   {
-    Qstep = 0.8125;
+    //Qstep = 0.8125;
     q_rem = 2;
   }
   else if (Qstep <= 0.9375)
   {
-    Qstep = 0.875;
+    //Qstep = 0.875;
     q_rem = 3;
   }
   else if (Qstep <= 1.0625)
   {
-    Qstep = 1.0;
+    //Qstep = 1.0;
     q_rem = 4;
   }
   else
   {
-    Qstep = 1.125;
+    //Qstep = 1.125;
     q_rem = 5;
   }
 
@@ -128,7 +130,7 @@ int Qstep2QP( double Qstep )
  *
  *************************************************************************************
 */
-int ComputeMBMAD()
+int ComputeMBMAD(int diffy[16][16])
 {
   int k, l, sum = 0;
 
@@ -146,13 +148,13 @@ int ComputeMBMAD()
  *
  *************************************************************************************
 */
-double ComputeFrameMAD()
+double ComputeFrameMAD(ImageParameters *p_Img)
 {
   int64 TotalMAD = 0;
   unsigned int i;
-  for(i = 0; i < img->FrameSizeInMbs; i++)
-    TotalMAD += generic_RC->MADofMB[i];
-  return (double)TotalMAD / (256.0 * (double)img->FrameSizeInMbs);
+  for(i = 0; i < p_Img->FrameSizeInMbs; i++)
+    TotalMAD += p_Img->p_rc_gen->MADofMB[i];
+  return (double)TotalMAD / (256.0 * (double)p_Img->FrameSizeInMbs);
 }
 
 
@@ -163,7 +165,7 @@ double ComputeFrameMAD()
  *
  *************************************************************************************
 */
-void rc_copy_generic( rc_generic *dst, rc_generic *src )
+void rc_copy_generic( ImageParameters *p_Img, RCGeneric *dst, RCGeneric *src )
 {
   /* buffer original addresses for which memory has been allocated */
   int *tmpMADofMB = dst->MADofMB;
@@ -171,13 +173,13 @@ void rc_copy_generic( rc_generic *dst, rc_generic *src )
   /* copy object */
 
   // This could be written as: *dst = *src;
-  memcpy( (void *)dst, (void *)src, sizeof(rc_generic) );
+  memcpy( (void *)dst, (void *)src, sizeof(RCGeneric) );
 
   /* restore original addresses */
   dst->MADofMB = tmpMADofMB;
 
   /* copy MADs */
-  memcpy( (void *)dst->MADofMB, (void *)src->MADofMB, img->FrameSizeInMbs * sizeof (int) );
+  memcpy( (void *)dst->MADofMB, (void *)src->MADofMB, p_Img->FrameSizeInMbs * sizeof (int) );
 }
 
 /*!
@@ -187,19 +189,19 @@ void rc_copy_generic( rc_generic *dst, rc_generic *src )
  *
  *************************************************************************************
  */
-void rc_alloc_generic( rc_generic **prc )
+void rc_alloc_generic( ImageParameters *p_Img, RCGeneric **p_quad )
 {
-  *prc = (rc_generic *) malloc ( sizeof( rc_generic ) );
-  if (NULL == *prc)
+  *p_quad = (RCGeneric *) malloc ( sizeof( RCGeneric ) );
+  if (NULL == *p_quad)
   {
-    no_mem_exit("init_global_buffers: rc_alloc_generic");
+    no_mem_exit("rc_alloc_generic: rc_alloc_generic");
   }
-  (*prc)->MADofMB = (int *) calloc (img->FrameSizeInMbs, sizeof (int));
-  if (NULL == (*prc)->MADofMB)
+  (*p_quad)->MADofMB = (int *) calloc (p_Img->FrameSizeInMbs, sizeof (int));
+  if (NULL == (*p_quad)->MADofMB)
   {
-    no_mem_exit("init_global_buffers: (*prc)->MADofMB");
+    no_mem_exit("rc_alloc_generic: (*p_quad)->MADofMB");
   }
-  (*prc)->FieldFrame = 1;
+  (*p_quad)->FieldFrame = 1;
 }
 
 
@@ -210,17 +212,17 @@ void rc_alloc_generic( rc_generic **prc )
  *
  *************************************************************************************
  */
-void rc_free_generic(rc_generic **prc)
+void rc_free_generic(RCGeneric **p_quad)
 {
-  if (NULL!=(*prc)->MADofMB)
+  if (NULL!=(*p_quad)->MADofMB)
   {
-    free ((*prc)->MADofMB);
-    (*prc)->MADofMB = NULL;
+    free ((*p_quad)->MADofMB);
+    (*p_quad)->MADofMB = NULL;
   }
-  if (NULL!=(*prc))
+  if (NULL!=(*p_quad))
   {
-    free ((*prc));
-    (*prc) = NULL;
+    free ((*p_quad));
+    (*p_quad) = NULL;
   }
 }
 
@@ -231,56 +233,58 @@ void rc_free_generic(rc_generic **prc)
  *
  *************************************************************************************
  */
-void rc_init_gop_params(void)
+void rc_init_gop_params(ImageParameters *p_Img, InputParameters *p_Inp)
 {
-  int np, nb; 
+  int np, nb;
+  RCQuadratic *p_quad = p_Img->p_rc_quad;
+  RCGeneric *p_gen = p_Img->p_rc_gen;
 
-  switch( params->RCUpdateMode )
+  switch( p_Inp->RCUpdateMode )
   {
   case RC_MODE_1: case RC_MODE_3: 
-    if ( !(img->number) )
+    if ( !(p_Img->number) )
     {
       /* number of P frames */
-      np = params->no_frm_base - 1;
+      np = p_Inp->no_frm_base - 1;
       /* number of B frames */
-      nb = np * params->NumberBFrames;
+      nb = np * p_Inp->NumberBFrames;
 
-      rc_init_GOP(quadratic_RC, np, nb);
+      rc_init_GOP(p_Img, p_Inp, p_quad, p_gen, np, nb);
     }
     break;
   case RC_MODE_0: case RC_MODE_2:
-    if (params->idr_period == 0)
+    if (p_Inp->idr_period == 0)
     {
-      if ( !(img->number) )
+      if ( !(p_Img->number) )
       {
         /* number of P frames */
-        np = params->no_frm_base - 1;
+        np = p_Inp->no_frm_base - 1;
         /* number of B frames */
-        nb = np * params->NumberBFrames;
-        rc_init_GOP(quadratic_RC, np, nb);
+        nb = np * p_Inp->NumberBFrames;
+        rc_init_GOP(p_Img, p_Inp, p_quad, p_gen, np, nb);
       }
     }
-    else if ( (!params->adaptive_idr_period && ( img->frm_number - img->lastIDRnumber ) % params->idr_period == 0)
-      || (params->adaptive_idr_period == 1 && ( img->frm_number - imax(img->lastIntraNumber, img->lastIDRnumber) ) % params->idr_period == 0) )  
+    else if ( (!p_Inp->adaptive_idr_period && ( p_Img->frm_number - p_Img->lastIDRnumber ) % p_Inp->idr_period == 0)
+      || (p_Inp->adaptive_idr_period == 1 && ( p_Img->frm_number - imax(p_Img->lastIntraNumber, p_Img->lastIDRnumber) ) % p_Inp->idr_period == 0) )  
     {
-      int M = params->NumberBFrames + 1;
-      int N = M * params->idr_period;      
-      int n = (img->number == 0) ? N - ( M - 1) : N;
+      int M = p_Inp->NumberBFrames + 1;
+      int N = M * p_Inp->idr_period;      
+      int n = (p_Img->number == 0) ? N - ( M - 1) : N;
 
       /* last GOP may contain less frames */
-      if ((img->number / params->idr_period) >= (params->no_frm_base / params->idr_period))
+      if ((p_Img->number / p_Inp->idr_period) >= (p_Inp->no_frm_base / p_Inp->idr_period))
       {
-        if (img->number != 0)
-          n = (params->no_frm_base - img->number) * (params->NumberBFrames + 1);
+        if (p_Img->number != 0)
+          n = (p_Inp->no_frm_base - p_Img->number) * (p_Inp->NumberBFrames + 1);
         else
-          n = params->no_frm_base  + (params->no_frm_base - 1) * params->NumberBFrames;
+          n = p_Inp->no_frm_base  + (p_Inp->no_frm_base - 1) * p_Inp->NumberBFrames;
       }
 
       /* number of P frames */
-      np = (img->number == 0) ? 1 + ((n - 2) / M) : (n - 1) / M; 
+      np = (p_Img->number == 0) ? 1 + ((n - 2) / M) : (n - 1) / M; 
       /* number of B frames */
       nb = n - np - 1;
-      rc_init_GOP(quadratic_RC, np, nb);
+      rc_init_GOP(p_Img, p_Inp, p_quad, p_gen, np, nb);
     }
     break;
   default:
@@ -296,29 +300,29 @@ void rc_init_gop_params(void)
  *************************************************************************************
  */
 
-void rc_init_frame(int FrameNumberInFile)
+void rc_init_frame(ImageParameters *p_Img, InputParameters *p_Inp)
 {
-  switch( params->RCUpdateMode )
+  switch( p_Inp->RCUpdateMode )
   {
   case RC_MODE_0:  case RC_MODE_1:  case RC_MODE_2:  case RC_MODE_3:
 
   // update the number of MBs in the basic unit for MBAFF coding
-  if( (params->MbInterlace) && (params->basicunit < img->FrameSizeInMbs) && (img->type == P_SLICE || (params->RCUpdateMode == RC_MODE_1 && img->number) ) )
-    img->BasicUnit = params->basicunit << 1;
+  if( (p_Inp->MbInterlace) && (p_Inp->basicunit < p_Img->FrameSizeInMbs) && (p_Img->type == P_SLICE || (p_Inp->RCUpdateMode == RC_MODE_1 && p_Img->number) ) )
+    p_Img->BasicUnit = p_Inp->basicunit << 1;
   else
-    img->BasicUnit = params->basicunit;
+    p_Img->BasicUnit = p_Inp->basicunit;
 
-    if ( params->RDPictureDecision )
+    if ( p_Inp->RDPictureDecision )
     {    
-      rc_copy_quadratic( quadratic_RC_init, quadratic_RC ); // store rate allocation quadratic...    
-      rc_copy_generic( generic_RC_init, generic_RC ); // ...and generic model
+      rc_copy_quadratic( p_Img, p_Inp, p_Img->p_rc_quad_init, p_Img->p_rc_quad ); // store rate allocation quadratic...    
+      rc_copy_generic( p_Img, p_Img->p_rc_gen_init, p_Img->p_rc_gen ); // ...and generic model
     }
-    rc_init_pict_ptr(quadratic_RC, 1,0,1, 1.0F);
+    p_Img->rc_init_pict_ptr(p_Img, p_Inp, p_Img->p_rc_quad, p_Img->p_rc_gen, 1,0,1, 1.0F);
 
-    if( active_sps->frame_mbs_only_flag)
-      generic_RC->TopFieldFlag=0;
+    if( p_Img->active_sps->frame_mbs_only_flag)
+      p_Img->p_rc_gen->TopFieldFlag=0;
 
-    img->qp = updateQP(quadratic_RC, 0);
+    p_Img->qp = p_Img->updateQP(p_Img, p_Inp, p_Img->p_rc_quad, p_Img->p_rc_gen, 0) - p_Img->p_rc_quad->bitdepth_qp_scale;
     break;
   default:
     break;
@@ -333,28 +337,28 @@ void rc_init_frame(int FrameNumberInFile)
  *************************************************************************************
  */
 
-void rc_init_sequence(void)
+void rc_init_sequence(ImageParameters *p_Img, InputParameters *p_Inp)
 {
-  switch( params->RCUpdateMode )
+  switch( p_Inp->RCUpdateMode )
   {
   case RC_MODE_0:  case RC_MODE_1:  case RC_MODE_2:  case RC_MODE_3:
-    rc_init_seq(quadratic_RC);
+    rc_init_seq(p_Img, p_Inp, p_Img->p_rc_quad, p_Img->p_rc_gen);
     break;
   default:
     break;
   }
 }
 
-void rc_store_slice_header_bits( int len )
+void rc_store_slice_header_bits( ImageParameters *p_Img, InputParameters *p_Inp, int len )
 {
-  switch (params->RCUpdateMode)
+  switch (p_Inp->RCUpdateMode)
   {
   case RC_MODE_0:  case RC_MODE_1:  case RC_MODE_2:  case RC_MODE_3:
-    generic_RC->NumberofHeaderBits +=len;
+    p_Img->p_rc_gen->NumberofHeaderBits +=len;
 
     // basic unit layer rate control
-    if(img->BasicUnit < img->FrameSizeInMbs)
-      generic_RC->NumberofBasicUnitHeaderBits +=len;
+    if(p_Img->BasicUnit < p_Img->FrameSizeInMbs)
+      p_Img->p_rc_gen->NumberofBasicUnitHeaderBits +=len;
     break;
   default:
     break;
@@ -368,16 +372,16 @@ void rc_store_slice_header_bits( int len )
 *    Update Rate Control Difference
 *************************************************************************************
 */
-void rc_store_diff(int cpix_x, int cpix_y, imgpel **prediction)
+void rc_store_diff(int diffy[16][16], imgpel **p_curImg, int cpix_x,imgpel **prediction)
 {
   int i, j;
   int *iDst;
-  imgpel *Src1, *Src2;
+  imgpel *Src1, *Src2;  
 
   for(j = 0; j < MB_BLOCK_SIZE; j++)
   {
     iDst = diffy[j];
-    Src1 = &pCurImg[cpix_y + j][cpix_x];
+    Src1 = &p_curImg[j][cpix_x];
     Src2 = prediction[j];
     for (i = 0; i < MB_BLOCK_SIZE; i++)
     {

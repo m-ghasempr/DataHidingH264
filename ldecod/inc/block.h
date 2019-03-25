@@ -21,33 +21,108 @@
 #include "global.h"
 #include "transform8x8.h"
 
-extern const byte QP_SCALE_CR[52] ;
+static const byte QP_SCALE_CR[52]=
+{
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,
+   12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,
+   28,29,29,30,31,32,32,33,34,34,35,35,36,36,37,37,
+   37,38,38,38,39,39,39,39
+
+};
+
 //! look up tables for FRExt_chroma support
-extern const unsigned char subblk_offset_x[3][8][4];
-extern const unsigned char subblk_offset_y[3][8][4];
+static const unsigned char subblk_offset_x[3][8][4] =
+{
+  {
+    {0, 4, 0, 4},
+    {0, 4, 0, 4},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0}, 
+  },
+  { 
+    {0, 4, 0, 4},
+    {0, 4, 0, 4},
+    {0, 4, 0, 4},
+    {0, 4, 0, 4},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0}, 
+  },
+  {
+    {0, 4, 0, 4},
+    {8,12, 8,12},
+    {0, 4, 0, 4},
+    {8,12, 8,12},
+    {0, 4, 0, 4},
+    {8,12, 8,12},
+    {0, 4, 0, 4},
+    {8,12, 8,12}  
+  }
+};
 
-extern void iMBtrans4x4(ImageParameters *img, Macroblock *currMB, ColorPlane pl, int smb);
-extern void iMBtrans8x8(ImageParameters *img, Macroblock *currMB, ColorPlane pl);
 
-extern void itrans_sp_cr(ImageParameters *img, int uv);
+static const unsigned char subblk_offset_y[3][8][4] =
+{
+  {
+    {0, 0, 4, 4},
+    {0, 0, 4, 4},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0}
+  },
+  { 
+    {0, 0, 4, 4},
+    {8, 8,12,12},
+    {0, 0, 4, 4},
+    {8, 8,12,12},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0}
+  },
+  { 
+    {0, 0, 4, 4},
+    {0, 0, 4, 4},
+    {8, 8,12,12},
+    {8, 8,12,12},
+    {0, 0, 4, 4},
+    {0, 0, 4, 4},
+    {8, 8,12,12},
+    {8, 8,12,12}
+  }
+};
 
-extern void intrapred_chroma      (ImageParameters *img, Macroblock *currMB, int uv);
+static const byte decode_block_scan[16] = {0, 1, 4, 5, 2, 3, 6, 7, 8, 9, 12, 13, 10, 11, 14, 15};
 
-void (*itrans_4x4)(ImageParameters *img, ColorPlane pl, int ioff, int joff);
-void (*itrans_8x8)(ImageParameters *img, Macroblock *currMB, ColorPlane pl, int ioff, int joff);
+extern void iMBtrans4x4(Macroblock *currMB, ColorPlane pl, int smb);
+extern void iMBtrans8x8(Macroblock *currMB, ColorPlane pl);
 
-extern void Inv_Residual_trans_4x4(ImageParameters *img, ColorPlane pl, int ioff, int joff);
-extern void Inv_Residual_trans_8x8(ImageParameters *img, Macroblock *currMB, ColorPlane pl, int ioff,int joff);
+extern void itrans_sp_cr(Macroblock *currMB, int uv);
 
-extern void itrans4x4   (ImageParameters *img, ColorPlane pl, int ioff, int joff);
-extern void itrans4x4_ls(ImageParameters *img, ColorPlane pl, int ioff, int joff);
-extern void itrans_sp   (ImageParameters *img, ColorPlane pl, int ioff, int joff);
-extern int  intrapred   (ImageParameters *img, Macroblock *currMB, ColorPlane pl, int ioff,int joff,int i4,int j4);
-extern void itrans_2    (ImageParameters *img, Macroblock *currMB, ColorPlane pl);
-extern void iTransform  (ImageParameters *img, Macroblock *currMB, ColorPlane pl, int need_4x4_transform, int smb);
+extern void intrapred_chroma      (Macroblock *currMB, int uv);
 
-extern int  allocate_block_mem(void);
-extern void free_block_mem(void);
+extern void Inv_Residual_trans_4x4(Macroblock *currMB, ColorPlane pl, int ioff, int joff);
+extern void Inv_Residual_trans_8x8(Macroblock *currMB, ColorPlane pl, int ioff,int joff);
+
+extern void itrans4x4   (Macroblock *currMB, ColorPlane pl, int ioff, int joff);
+extern void itrans4x4_ls(Macroblock *currMB, ColorPlane pl, int ioff, int joff);
+extern void itrans_sp   (Macroblock *currMB, ColorPlane pl, int ioff, int joff);
+extern int  intrapred   (Macroblock *currMB, ColorPlane pl, int ioff,int joff,int i4,int j4);
+extern void itrans_2    (Macroblock *currMB, ColorPlane pl);
+extern void iTransform  (Macroblock *currMB, ColorPlane pl, int need_4x4_transform, int smb);
+
+extern void copy_image_data       (imgpel  **imgBuf1, imgpel  **imgBuf2, int off1, int off2, int width, int height);
+extern void copy_image_data_16x16 (imgpel  **imgBuf1, imgpel  **imgBuf2, int off1, int off2);
+extern void copy_image_data_8x8   (imgpel  **imgBuf1, imgpel  **imgBuf2, int off1, int off2);
+extern void copy_image_data_4x4   (imgpel  **imgBuf1, imgpel  **imgBuf2, int off1, int off2);
 
 #endif
 

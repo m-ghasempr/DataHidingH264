@@ -18,11 +18,11 @@
 
 /* Leaky Bucket Parameter Optimization */
 #ifdef _LEAKYBUCKET_
-int get_LeakyBucketRate(unsigned long NumberLeakyBuckets, unsigned long *Rmin);
-void PutBigDoubleWord(unsigned long dw, FILE *fp);
-void write_buffer(unsigned long NumberLeakyBuckets, unsigned long Rmin[], unsigned long Bmin[], unsigned long Fmin[]);
-void Sort(unsigned long NumberLeakyBuckets, unsigned long *Rmin);
-void calc_buffer();
+extern int get_LeakyBucketRate(InputParameters *p_Inp, unsigned long NumberLeakyBuckets, unsigned long *Rmin);
+extern void PutBigDoubleWord  (unsigned long dw, FILE *fp);
+extern void write_buffer      (InputParameters *p_Inp, unsigned long NumberLeakyBuckets, unsigned long Rmin[], unsigned long Bmin[], unsigned long Fmin[]);
+extern void Sort              (unsigned long NumberLeakyBuckets, unsigned long *Rmin);
+extern void calc_buffer       (ImageParameters *p_Img, InputParameters *p_Inp);
 #endif
 
 #endif

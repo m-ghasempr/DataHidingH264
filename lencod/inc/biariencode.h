@@ -34,25 +34,25 @@
 #define B_BITS         10    // Number of bits to represent the whole coding interval
 #define BITS_TO_LOAD   16
 #define MAX_BITS       26          //(B_BITS + BITS_TO_LOAD)
+#define MASK_BITS      18          //(MAX_BITS - 8)
 #define ONE            0x04000000  //(1 << MAX_BITS)
 #define ONE_M1         0x03FFFFFF  //(ONE - 1)
-#define HALF           0x0200      //(1 << (B_BITS-1))
+#define HALF           0x01FE      //(1 << (B_BITS-1)) - 2
 #define QUARTER        0x0100      //(1 << (B_BITS-2))
 #define MIN_BITS_TO_GO 0
 #define B_LOAD_MASK    0xFFFF      // ((1<<BITS_TO_LOAD) - 1)
 
-int get_pic_bin_count(void);
-void reset_pic_bin_count(void);
-void set_pic_bin_count(EncodingEnvironmentPtr eep);
+extern int get_pic_bin_count(ImageParameters *p_Img);
+extern void reset_pic_bin_count(ImageParameters *p_Img);
+extern void set_pic_bin_count  (ImageParameters *p_Img, EncodingEnvironmentPtr eep);
 
-void arienco_start_encoding(EncodingEnvironmentPtr eep, unsigned char *code_buffer, int *code_len);
-void arienco_reset_EC(EncodingEnvironmentPtr eep);
-void arienco_done_encoding(EncodingEnvironmentPtr eep);
-void biari_init_context (BiContextTypePtr ctx, const char* ini);
-void rescale_cum_freq(BiContextTypePtr bi_ct);
-void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiContextTypePtr bi_ct );
-void biari_encode_symbol_eq_prob(EncodingEnvironmentPtr eep, signed short symbol);
-void biari_encode_symbol_final(EncodingEnvironmentPtr eep, signed short symbol);
+extern void arienco_start_encoding(EncodingEnvironmentPtr eep, unsigned char *code_buffer, int *code_len);
+extern void arienco_reset_EC      (EncodingEnvironmentPtr eep);
+extern void arienco_done_encoding (Macroblock *currMB, EncodingEnvironmentPtr eep);
+extern void biari_init_context    (int qp, BiContextTypePtr ctx, const char* ini);
+extern void biari_encode_symbol   (EncodingEnvironmentPtr eep, signed short symbol, BiContextTypePtr bi_ct );
+extern void biari_encode_symbol_eq_prob(EncodingEnvironmentPtr eep, signed short symbol);
+extern void biari_encode_symbol_final(EncodingEnvironmentPtr eep, signed short symbol);
 
 /*!
 ************************************************************************

@@ -13,6 +13,6 @@
 #include "global.h"
 #include "mbuffer.h"
 
-void DeblockPicture(ImageParameters *img, StorablePicture *p) ;
+extern void DeblockPicture(ImageParameters *p_Img, StorablePicture *p) ;
 
 #endif //_LOOPFILTER_H_

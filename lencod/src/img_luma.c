@@ -22,7 +22,7 @@
 #include "img_luma.h"
 #include "memalloc.h"
 
-const int ONE_FOURTH_TAP[2][3] =
+static const int ONE_FOURTH_TAP[2][3] =
 {
   {20, -5, 1},  // AVC Interpolation taps
   {20,-4, 0},   // Experimental - not valid
@@ -35,13 +35,16 @@ const int ONE_FOURTH_TAP[2][3] =
  *    sub-sampled at different spatial orientations;
  *    enables more efficient implementation
  *
+ * \param p_Img
+ *    pointer to ImageParameters structure
+ * \param p_Inp
+ *    pointer to InputParameters structure
  * \param s
  *    pointer to StorablePicture structure
  s************************************************************************
  */
-void getSubImagesLuma( StorablePicture *s )
+void getSubImagesLuma( ImageParameters *p_Img, InputParameters *p_Inp, StorablePicture *s )
 {
-  imgpel  **p_curr_img = s->p_curr_img;
   imgpel ****cImgSub   = s->p_curr_img_sub;
 
   //  0  1  2  3
@@ -53,21 +56,21 @@ void getSubImagesLuma( StorablePicture *s )
 
   // sub-image 0 [0][0]
   // simply copy the integer pels
-  getSubImageInteger( s, cImgSub[0][0], p_curr_img);
+  getSubImageInteger( s, cImgSub[0][0], s->p_curr_img);
 
   //// HALF-PEL POSITIONS: SIX-TAP FILTER ////
 
   // sub-image 2 [0][2]
   // HOR interpolate (six-tap) sub-image [0][0]
-  getHorSubImageSixTap( s, cImgSub[0][2], cImgSub[0][0] );
+  getHorSubImageSixTap( p_Img, s, cImgSub[0][2], cImgSub[0][0] );
 
   // sub-image 8 [2][0]
   // VER interpolate (six-tap) sub-image [0][0]
-  getVerSubImageSixTap( s, cImgSub[2][0], cImgSub[0][0]);
+  getVerSubImageSixTap( p_Img, s, cImgSub[2][0], cImgSub[0][0]);
 
   // sub-image 10 [2][2]
   // VER interpolate (six-tap) sub-image [0][2]
-  getVerSubImageSixTapTmp( s, cImgSub[2][2], cImgSub[0][2]);
+  getVerSubImageSixTapTmp( p_Img, s, cImgSub[2][2]);
 
   //// QUARTER-PEL POSITIONS: BI-LINEAR INTERPOLATION ////
 
@@ -119,7 +122,7 @@ void getSubImageInteger( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
   int i, j;
   int size_x_minus1 = s->size_x - 1;
 
-  static imgpel *wBufSrc, *wBufDst;
+  imgpel *wBufSrc, *wBufDst;
 
   // Copy top line
   wBufDst = &( dstImg[0][0] ); 
@@ -167,6 +170,8 @@ void getSubImageInteger( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
  * \brief
  *    Does _horizontal_ interpolation using the SIX TAP filters
  *
+ * \param p_Img
+ *    pointer to ImageParameters structure
  * \param s
  *    pointer to StorablePicture structure
  * \param dstImg
@@ -175,15 +180,15 @@ void getSubImageInteger( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
  *    source image
  ************************************************************************
  */
-void getHorSubImageSixTap( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
+void getHorSubImageSixTap( ImageParameters *p_Img, StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
 {
   int is, jpad, ipad;
   int ypadded_size = s->size_y_padded;
   int xpadded_size = s->size_x_padded;
 
-  static imgpel *wBufSrc, *wBufDst;
-  static imgpel *srcImgA, *srcImgB, *srcImgC, *srcImgD, *srcImgE, *srcImgF;
-  static int *iBufDst;
+  imgpel *wBufSrc, *wBufDst;
+  imgpel *srcImgA, *srcImgB, *srcImgC, *srcImgD, *srcImgE, *srcImgF;
+  int *iBufDst;
   const int tap0 = ONE_FOURTH_TAP[0][0];
   const int tap1 = ONE_FOURTH_TAP[0][1];
   const int tap2 = ONE_FOURTH_TAP[0][2];
@@ -192,7 +197,7 @@ void getHorSubImageSixTap( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
   {
     wBufSrc = srcImg[jpad];     // 4:4:4 independent mode
     wBufDst = dstImg[jpad];     // 4:4:4 independent mode
-    iBufDst = imgY_sub_tmp[jpad];
+    iBufDst = p_Img->imgY_sub_tmp[jpad];
 
     srcImgA = &wBufSrc[0];
     srcImgB = &wBufSrc[0];      
@@ -208,7 +213,7 @@ void getHorSubImageSixTap( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
       tap2 *  (*srcImgC   + *srcImgF++));
 
     *iBufDst++ =  is;
-    *wBufDst++ = (imgpel) iClip1 ( img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );      
+    *wBufDst++ = (imgpel) iClip1 ( p_Img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );      
 
     is =
       (tap0 * (*srcImgA++ + *srcImgD++) +
@@ -216,7 +221,7 @@ void getHorSubImageSixTap( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
       tap2 *  (*srcImgC   + *srcImgF++));
 
     *iBufDst++ =  is;
-    *wBufDst++ = (imgpel) iClip1 ( img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );      
+    *wBufDst++ = (imgpel) iClip1 ( p_Img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );      
 
     // center
     for (ipad = 2; ipad < xpadded_size - 4; ipad++)
@@ -227,7 +232,7 @@ void getHorSubImageSixTap( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
         tap2 *  (*srcImgC++ + *srcImgF++));
 
       *iBufDst++ =  is;
-      *wBufDst++ = (imgpel) iClip1 ( img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );      
+      *wBufDst++ = (imgpel) iClip1 ( p_Img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );      
     }
 
     is = (
@@ -236,7 +241,7 @@ void getHorSubImageSixTap( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
       tap2 * (*srcImgC++ + *srcImgF  ));
 
     *iBufDst++ =  is;
-    *wBufDst++ = (imgpel) iClip1 ( img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );      
+    *wBufDst++ = (imgpel) iClip1 ( p_Img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );      
 
     // right padded area
     is = (
@@ -245,7 +250,7 @@ void getHorSubImageSixTap( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
       tap2 * (*srcImgC++ + *srcImgF));
 
     *iBufDst++ =  is;
-    *wBufDst++ = (imgpel) iClip1 ( img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );      
+    *wBufDst++ = (imgpel) iClip1 ( p_Img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );      
 
     is = (
       tap0 * (*srcImgA++ + *srcImgD) +
@@ -253,7 +258,7 @@ void getHorSubImageSixTap( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
       tap2 * (*srcImgC++ + *srcImgF));
 
     *iBufDst++ =  is;
-    *wBufDst++ = (imgpel) iClip1 ( img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );      
+    *wBufDst++ = (imgpel) iClip1 ( p_Img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );      
 
     is = (
       tap0 * (*srcImgA + *srcImgD) +
@@ -261,7 +266,7 @@ void getHorSubImageSixTap( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
       tap2 * (*srcImgC + *srcImgF));
 
     *iBufDst =  is;
-    *wBufDst = (imgpel) iClip1 ( img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );      
+    *wBufDst = (imgpel) iClip1 ( p_Img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );      
 
   }
 }
@@ -272,6 +277,8 @@ void getHorSubImageSixTap( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
  * \brief
  *    Does _vertical_ interpolation using the SIX TAP filters
  *
+ * \param p_Img
+ *    pointer to ImageParameters structure
  * \param s
  *    pointer to StorablePicture structure
  * \param dstImg
@@ -280,15 +287,15 @@ void getHorSubImageSixTap( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
  *    pointer to source image
  ************************************************************************
  */
-void getVerSubImageSixTap( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
+void getVerSubImageSixTap( ImageParameters *p_Img, StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
 {
   int is, jpad, ipad;
   int ypadded_size = s->size_y_padded;
   int xpadded_size = s->size_x_padded;
   int maxy = ypadded_size - 1;
 
-  static imgpel *wxLineDst;
-  static imgpel *srcImgA, *srcImgB, *srcImgC, *srcImgD, *srcImgE, *srcImgF;
+  imgpel *wxLineDst;
+  imgpel *srcImgA, *srcImgB, *srcImgC, *srcImgD, *srcImgE, *srcImgF;
   const int tap0 = ONE_FOURTH_TAP[0][0];
   const int tap1 = ONE_FOURTH_TAP[0][1];
   const int tap2 = ONE_FOURTH_TAP[0][2];
@@ -311,7 +318,7 @@ void getVerSubImageSixTap( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
         tap1 *  (*srcImgB++ + *srcImgE++) +
         tap2 *  (*srcImgC++ + *srcImgF++));
 
-      wxLineDst[ipad] = (imgpel) iClip1 (img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );
+      wxLineDst[ipad] = (imgpel) iClip1 (p_Img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );
     }
   }
   // center
@@ -331,7 +338,7 @@ void getVerSubImageSixTap( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
         tap1 *  (*srcImgB++ + *srcImgE++) +
         tap2 *  (*srcImgC++ + *srcImgF++));
 
-      wxLineDst[ipad] = (imgpel) iClip1 ( img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );
+      wxLineDst[ipad] = (imgpel) iClip1 ( p_Img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );
     }
   }
 
@@ -352,7 +359,7 @@ void getVerSubImageSixTap( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
         tap1 *  (*srcImgB++ + *srcImgE++) +
         tap2 *  (*srcImgC++ + *srcImgF++));
 
-      wxLineDst[ipad] = (imgpel) iClip1 ( img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );
+      wxLineDst[ipad] = (imgpel) iClip1 ( p_Img->max_imgpel_value, rshift_rnd_sf( is, 5 ) );
     }
   }
 }
@@ -362,23 +369,23 @@ void getVerSubImageSixTap( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
  * \brief
  *    Does _vertical_ interpolation using the SIX TAP filters
  *
+ * \param p_Img
+ *    pointer to ImageParameters structure
  * \param s
  *    pointer to StorablePicture structure
  * \param dstImg
- *    pointer to target image
- * \param srcImg
  *    pointer to source image
  ************************************************************************
  */
-void getVerSubImageSixTapTmp( StorablePicture *s, imgpel **dstImg, imgpel **srcImg)
+void getVerSubImageSixTapTmp( ImageParameters *p_Img, StorablePicture *s, imgpel **dstImg)
 {
   int is, jpad, ipad;
   int ypadded_size = s->size_y_padded;
   int xpadded_size = s->size_x_padded;
   int maxy = ypadded_size - 1;
 
-  static imgpel *wxLineDst;
-  static int *srcImgA, *srcImgB, *srcImgC, *srcImgD, *srcImgE, *srcImgF;
+  imgpel *wxLineDst;
+  int *srcImgA, *srcImgB, *srcImgC, *srcImgD, *srcImgE, *srcImgF;
   const int tap0 = ONE_FOURTH_TAP[0][0];
   const int tap1 = ONE_FOURTH_TAP[0][1];
   const int tap2 = ONE_FOURTH_TAP[0][2];
@@ -387,12 +394,12 @@ void getVerSubImageSixTapTmp( StorablePicture *s, imgpel **dstImg, imgpel **srcI
   for (jpad = 0; jpad < 2; jpad++)
   {
     wxLineDst = dstImg[jpad];
-    srcImgA = imgY_sub_tmp[jpad ];
-    srcImgB = imgY_sub_tmp[0];      
-    srcImgC = imgY_sub_tmp[0];
-    srcImgD = imgY_sub_tmp[jpad + 1];
-    srcImgE = imgY_sub_tmp[jpad + 2];
-    srcImgF = imgY_sub_tmp[jpad + 3];
+    srcImgA = p_Img->imgY_sub_tmp[jpad ];
+    srcImgB = p_Img->imgY_sub_tmp[0];      
+    srcImgC = p_Img->imgY_sub_tmp[0];
+    srcImgD = p_Img->imgY_sub_tmp[jpad + 1];
+    srcImgE = p_Img->imgY_sub_tmp[jpad + 2];
+    srcImgF = p_Img->imgY_sub_tmp[jpad + 3];
 
     for (ipad = 0; ipad < xpadded_size; ipad++)
     {
@@ -401,7 +408,7 @@ void getVerSubImageSixTapTmp( StorablePicture *s, imgpel **dstImg, imgpel **srcI
         tap1 *  (*srcImgB++ + *srcImgE++) +
         tap2 *  (*srcImgC++ + *srcImgF++));
 
-      wxLineDst[ipad] = (imgpel) iClip1 ( img->max_imgpel_value, rshift_rnd_sf( is, 10 ) );
+      wxLineDst[ipad] = (imgpel) iClip1 ( p_Img->max_imgpel_value, rshift_rnd_sf( is, 10 ) );
     }
   }
 
@@ -409,12 +416,12 @@ void getVerSubImageSixTapTmp( StorablePicture *s, imgpel **dstImg, imgpel **srcI
   for (jpad = 2; jpad < ypadded_size - 3; jpad++)
   {
     wxLineDst = dstImg[jpad];
-    srcImgA = imgY_sub_tmp[jpad ];
-    srcImgB = imgY_sub_tmp[jpad - 1];      
-    srcImgC = imgY_sub_tmp[jpad - 2];
-    srcImgD = imgY_sub_tmp[jpad + 1];
-    srcImgE = imgY_sub_tmp[jpad + 2];
-    srcImgF = imgY_sub_tmp[jpad + 3];
+    srcImgA = p_Img->imgY_sub_tmp[jpad ];
+    srcImgB = p_Img->imgY_sub_tmp[jpad - 1];      
+    srcImgC = p_Img->imgY_sub_tmp[jpad - 2];
+    srcImgD = p_Img->imgY_sub_tmp[jpad + 1];
+    srcImgE = p_Img->imgY_sub_tmp[jpad + 2];
+    srcImgF = p_Img->imgY_sub_tmp[jpad + 3];
     for (ipad = 0; ipad < xpadded_size; ipad++)
     {
       is =
@@ -422,7 +429,7 @@ void getVerSubImageSixTapTmp( StorablePicture *s, imgpel **dstImg, imgpel **srcI
         tap1 *  (*srcImgB++ + *srcImgE++) +
         tap2 *  (*srcImgC++ + *srcImgF++));
 
-      wxLineDst[ipad] = (imgpel) iClip1 ( img->max_imgpel_value, rshift_rnd_sf( is, 10 ) );
+      wxLineDst[ipad] = (imgpel) iClip1 ( p_Img->max_imgpel_value, rshift_rnd_sf( is, 10 ) );
     }
   }
 
@@ -430,12 +437,12 @@ void getVerSubImageSixTapTmp( StorablePicture *s, imgpel **dstImg, imgpel **srcI
   for (jpad = ypadded_size - 3; jpad < ypadded_size; jpad++)
   {
     wxLineDst = dstImg[jpad];
-    srcImgA = imgY_sub_tmp[jpad ];
-    srcImgB = imgY_sub_tmp[jpad - 1];      
-    srcImgC = imgY_sub_tmp[jpad - 2];
-    srcImgD = imgY_sub_tmp[imin (maxy, jpad + 1)];
-    srcImgE = imgY_sub_tmp[maxy];
-    srcImgF = imgY_sub_tmp[maxy];
+    srcImgA = p_Img->imgY_sub_tmp[jpad ];
+    srcImgB = p_Img->imgY_sub_tmp[jpad - 1];      
+    srcImgC = p_Img->imgY_sub_tmp[jpad - 2];
+    srcImgD = p_Img->imgY_sub_tmp[imin (maxy, jpad + 1)];
+    srcImgE = p_Img->imgY_sub_tmp[maxy];
+    srcImgF = p_Img->imgY_sub_tmp[maxy];
     for (ipad = 0; ipad < xpadded_size; ipad++)
     {
       is =
@@ -443,7 +450,7 @@ void getVerSubImageSixTapTmp( StorablePicture *s, imgpel **dstImg, imgpel **srcI
         tap1 *  (*srcImgB++ + *srcImgE++) +
         tap2 *  (*srcImgC++ + *srcImgF++));
 
-      wxLineDst[ipad] = (imgpel) iClip1 ( img->max_imgpel_value, rshift_rnd_sf( is, 10 ) );
+      wxLineDst[ipad] = (imgpel) iClip1 ( p_Img->max_imgpel_value, rshift_rnd_sf( is, 10 ) );
     }
   }
 }
@@ -469,7 +476,7 @@ void getSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel **srcImgL,
   int ypadded_size = s->size_y_padded;
   int xpadded_size = s->size_x_padded;
 
-  static imgpel *wBufSrcL, *wBufSrcR, *wBufDst;
+  imgpel *wBufSrcL, *wBufSrcR, *wBufDst;
 
   for (jpad = 0; jpad < ypadded_size; jpad++)
   {
@@ -506,7 +513,7 @@ void getHorSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel **srcIm
   int ypadded_size = s->size_y_padded;
   int xpadded_size = s->size_x_padded - 1;
 
-  static imgpel *wBufSrcL, *wBufSrcR, *wBufDst;
+  imgpel *wBufSrcL, *wBufSrcR, *wBufDst;
 
   for (jpad = 0; jpad < ypadded_size; jpad++)
   {
@@ -546,7 +553,7 @@ void getVerSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel **srcIm
   int ypadded_size = s->size_y_padded - 1;
   int xpadded_size = s->size_x_padded;  
 
-  static imgpel *wBufSrcT, *wBufSrcB, *wBufDst;
+  imgpel *wBufSrcT, *wBufSrcB, *wBufDst;
 
   // top
   for (jpad = 0; jpad < ypadded_size; jpad++)
@@ -593,7 +600,7 @@ void getDiagSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel **srcI
   int maxx = s->size_x_padded - 1;
   int maxy = s->size_y_padded - 1;
 
-  static imgpel *wBufSrcL, *wBufSrcR, *wBufDst;
+  imgpel *wBufSrcL, *wBufSrcR, *wBufDst;
 
   for (jpad = 0; jpad < maxy; jpad++)
   {

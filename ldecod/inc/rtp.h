@@ -28,7 +28,7 @@ typedef struct
                                 of RTP mixers */
   unsigned int m;          //!< Marker bit
   unsigned int pt;         //!< 7 bits, Payload Type, dynamically established
-  unsigned short seq;      /*!< RTP sequence number, incremented by one for
+  uint16       seq;        /*!< RTP sequence number, incremented by one for
                                 each sent packet */
   unsigned int timestamp;  //!< timestamp, 27 MHz for H.264
   unsigned int ssrc;       //!< Synchronization Source, chosen randomly
@@ -39,8 +39,8 @@ typedef struct
 } RTPpacket_t;
 
 void DumpRTPHeader (RTPpacket_t *p);
-int  GetRTPNALU (NALU_t *nalu);
-void OpenRTPFile (char *fn);
-void CloseRTPFile(void);
+int  GetRTPNALU  (ImageParameters *p_Img, NALU_t *nalu);
+void OpenRTPFile (ImageParameters *p_Img, char *fn);
+void CloseRTPFile(ImageParameters *p_Img);
 
 #endif

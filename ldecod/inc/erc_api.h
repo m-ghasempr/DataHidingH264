@@ -111,10 +111,10 @@ typedef struct ercVariables_s
 * External function interface
 */
 
-void ercInit(int pic_sizex, int pic_sizey, int flag);
+void ercInit(ImageParameters *p_Img, int pic_sizex, int pic_sizey, int flag);
 ercVariables_t *ercOpen( void );
 void ercReset( ercVariables_t *errorVar, int nOfMBs, int numOfSegments, int picSizeX );
-void ercClose( ercVariables_t *errorVar );
+void ercClose( ImageParameters *p_Img, ercVariables_t *errorVar );
 void ercSetErrorConcealment( ercVariables_t *errorVar, int value );
 
 void ercStartSegment( int currMBNum, int segment, unsigned int bitPos, ercVariables_t *errorVar );
@@ -123,7 +123,7 @@ void ercMarkCurrSegmentLost(int picSizeX, ercVariables_t *errorVar );
 void ercMarkCurrSegmentOK(int picSizeX, ercVariables_t *errorVar );
 void ercMarkCurrMBConcealed( int currMBNum, int comp, int picSizeX, ercVariables_t *errorVar );
 
-int ercConcealIntraFrame( frame *recfr, int picSizeX, int picSizeY, ercVariables_t *errorVar );
+int ercConcealIntraFrame( ImageParameters *p_Img, frame *recfr, int picSizeX, int picSizeY, ercVariables_t *errorVar );
 int ercConcealInterFrame( frame *recfr, objectBuffer_t *object_list,
                           int picSizeX, int picSizeY, ercVariables_t *errorVar, int chroma_format_idc );
 
@@ -139,24 +139,20 @@ struct concealment_node {
     struct concealment_node *next;
 };
 
-struct concealment_node * init_node(StorablePicture* , int );
-void print_node( struct concealment_node * );
-void print_list( struct concealment_node * );
-void add_node( struct concealment_node * );
-void delete_node( struct concealment_node * );
-void init_lists_for_non_reference_loss(int , PictureStructure );
+extern struct concealment_node * init_node(StorablePicture* , int );
+extern void print_node( struct concealment_node * );
+extern void print_list( struct concealment_node * );
+extern void init_lists_for_non_reference_loss(ImageParameters *p_Img, int , PictureStructure );
 
-void conceal_non_ref_pics(int diff);
-void conceal_lost_frames(ImageParameters *img);
+extern void conceal_non_ref_pics(ImageParameters *p_Img, int diff);
+extern void conceal_lost_frames(ImageParameters *p_Img);
 
-void sliding_window_poc_management(StorablePicture *p);
+extern void sliding_window_poc_management(DecodedPictureBuffer *p_Dpb, StorablePicture *p);
 
-void write_lost_non_ref_pic(int poc, int p_out);
-void write_lost_ref_after_idr(int pos);
+extern void write_lost_non_ref_pic(ImageParameters *p_Img, int poc, int p_out);
+extern void write_lost_ref_after_idr(ImageParameters *p_Img, int pos);
 
-FrameStore *last_out_fs;
-int pocs_in_dpb[100];
-int comp(const void *, const void *);
+extern int comp(const void *, const void *);
 
 
 #endif

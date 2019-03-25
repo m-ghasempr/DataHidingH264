@@ -13,9 +13,9 @@
 #ifndef _ERRORCONCEALMENT_H_
 #define _ERRORCONCEALMENT_H_
 
-int set_ec_flag(int se);
-void reset_ec_flags(void);
-int get_concealed_element(SyntaxElement *sym);
+extern int set_ec_flag(ImageParameters *p_Img, int se);
+extern void reset_ec_flags(ImageParameters *p_Img);
+extern int get_concealed_element(ImageParameters *p_Img, SyntaxElement *sym);
 
 #endif
 

@@ -19,21 +19,15 @@
 
 #include "mbuffer.h"
 
-extern StorablePicture *enc_picture;
-extern StorablePicture **enc_frame_picture;
-extern StorablePicture **enc_field_picture;
-extern StorablePicture *enc_frame_picture_JV[MAX_PLANE];  //!< enc_frame to be used during 4:4:4 independent mode encoding
-
-int     encode_one_frame (ImageParameters *img);
-Boolean dummy_slice_too_big(int bits_slice);
-void    copy_rdopt_data (Macroblock *currMB, int field_type);       // For MB level field/frame coding tools
-
-void    UnifiedOneForthPix (StorablePicture *s);
+extern int     encode_one_frame      ( ImageParameters *p_Img, InputParameters *p_Inp);
+extern Boolean dummy_slice_too_big   ( int bits_slice);
+extern void    copy_rdopt_data       ( Macroblock *currMB);       // For MB level field/frame coding tools
+extern void    UnifiedOneForthPix    ( ImageParameters *p_Img, InputParameters *p_Inp, StorablePicture *s);
 // For 4:4:4 independent mode
-void    UnifiedOneForthPix_JV (int nplane, StorablePicture *s);
-void    frame_picture (Picture *frame, ImageData *imgData, int rd_pass);
-int     get_idr_flag( void );
-void    write_non_vcl_nalu( void );
+extern void    UnifiedOneForthPix_JV ( ImageParameters *p_Img, InputParameters *p_Inp, int nplane, StorablePicture *s);
+extern void    frame_picture         ( ImageParameters *p_Img, InputParameters *p_Inp, Picture *frame, ImageData *imgData, int rd_pass);
+extern byte    get_idr_flag          ( ImageParameters *p_Img, InputParameters *p_Inp );
+extern void    write_non_vcl_nalu    ( ImageParameters *p_Img, InputParameters *p_Inp );
 
 #endif
 

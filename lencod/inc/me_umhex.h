@@ -25,185 +25,130 @@
 
 #include "mbuffer.h"
 
+struct umhex_struct {
+  float AlphaFourth_1[8];
+  float AlphaFourth_2[8];
+  // for bipred mode
+  int pred_MV_ref_flag;
+  int BlockType_LUT[4][4];
+  int Median_Pred_Thd_MB[8];
+  int Big_Hexagon_Thd_MB[8];
+  int Multi_Ref_Thd_MB[8];
+
+  byte **McostState;                          //!< state for integer pel search
+  byte **SearchState;                         //!< state for fractional pel search
+
+  int ****fastme_ref_cost;                    //!< store SAD information needed for forward ref-frame prediction
+  int ***fastme_l0_cost;                      //!< store SAD information needed for forward median and uplayer prediction
+  int ***fastme_l1_cost;                      //!< store SAD information needed for backward median and uplayer prediction
+  int ***fastme_l0_cost_bipred;               //!< store SAD information for bipred mode
+  int ***fastme_l1_cost_bipred;               //!< store SAD information for bipred mode
+  int bipred_flag;                            //!< flag for bipred
+  int **fastme_best_cost;                     //!< for multi ref early termination threshold
+  int pred_SAD;                               //!<  SAD prediction in use.
+  int pred_MV_ref[2], pred_MV_uplayer[2];     //!< pred motion vector by space or temporal correlation,Median is provided
+
+  int UMHEX_blocktype;                        //!< blocktype for UMHEX SetMotionVectorPredictor
+  int predict_point[5][2];
+  int SAD_a,SAD_b,SAD_c,SAD_d;
+  int Threshold_DSR_MB[8];                    //!<  Threshold for usage of DSR. DSR refer to JVT-Q088
+  //for early termination
+  float  Bsize[8];
+
+  byte *flag_intra;
+  int  flag_intra_SAD;
+};
+
+typedef struct umhex_struct UMHexStruct;
+
 #define EARLY_TERMINATION                                                             \
-  if ((min_mcost-pred_SAD)<pred_SAD*betaFourth_2)                                     \
+  if ((min_mcost - p_UMHex->pred_SAD)<p_UMHex->pred_SAD * betaFourth_2)                                     \
   goto fourth_2_step;                                                                 \
-  else if((min_mcost-pred_SAD)<pred_SAD*betaFourth_1)                                 \
+  else if((min_mcost - p_UMHex->pred_SAD) < p_UMHex->pred_SAD * betaFourth_1)                                 \
   goto fourth_1_step;
 
 #define SEARCH_ONE_PIXEL                                                              \
-  if(iabs(cand_x - center_x) <=search_range && iabs(cand_y - center_y)<= search_range)\
+  if((iabs(cand.mv_x - center.mv_x)>>2) < search_range && (iabs(cand.mv_y - center.mv_y)>>2)< search_range)\
   {                                                                                   \
-    if(!McostState[cand_y-center_y+search_range][cand_x-center_x+search_range])       \
+    if(!p_UMHex->McostState[((cand.mv_y - center.mv_y) >> 2)+ search_range][((cand.mv_x-center.mv_x)>>2)+search_range])       \
     {                                                                                 \
-      mcost = MV_COST (lambda_factor, mvshift, cand_x, cand_y, pred_x, pred_y);       \
+      mcost = mv_cost (p_Img, lambda_factor, &cand, &pred);                           \
       if(mcost<min_mcost)                                                             \
       {                                                                               \
-        mcost += computeUniPred[dist_method](orig_pic,                                \
-        blocksize_y,blocksize_x, min_mcost - mcost,                                   \
-        (cand_x << 2) + IMG_PAD_SIZE_TIMES4, (cand_y << 2) + IMG_PAD_SIZE_TIMES4);    \
-        McostState[cand_y-center_y+search_range][cand_x-center_x+search_range] = 1;   \
+        mcost += mv_block->computePredFPel(ref_picture, mv_block,                     \
+        min_mcost - mcost, &cand);                                     \
+        p_UMHex->McostState[((cand.mv_y - center.mv_y) >> 2) + search_range][((cand.mv_x - center.mv_x) >> 2) + search_range] = 1;   \
         if (mcost < min_mcost)                                                        \
         {                                                                             \
-          best_x = cand_x;                                                            \
-          best_y = cand_y;                                                            \
+          best = cand;                                                                \
           min_mcost = mcost;                                                          \
         }                                                                             \
       }                                                                               \
     }                                                                                 \
    }
 
-#define SEARCH_ONE_PIXEL_BIPRED                                                       \
-if(iabs(cand_x - center2_x) <=search_range && iabs(cand_y - center2_y)<= search_range)\
-{                                                                                     \
-  if(!McostState[cand_y-center2_y+search_range][cand_x-center2_x+search_range])       \
-  {                                                                                   \
-    mcost  = MV_COST (lambda_factor, mvshift, center1_x, center1_y, pred_x1, pred_y1);\
-    mcost += MV_COST (lambda_factor, mvshift, cand_x, cand_y, pred_x2, pred_y2);      \
-  if(mcost<min_mcost)                                                                 \
-  {                                                                                   \
-      mcost  += computeBiPred(cur_pic, blocksize_y, blocksize_x,                      \
-      min_mcost - mcost,                                                              \
-      (center1_x << 2) + IMG_PAD_SIZE_TIMES4,                                         \
-      (center1_y << 2) + IMG_PAD_SIZE_TIMES4,                                         \
-      (cand_x << 2) + IMG_PAD_SIZE_TIMES4,                                            \
-      (cand_y << 2) + IMG_PAD_SIZE_TIMES4);                                           \
-      McostState[cand_y-center2_y+search_range][cand_x-center2_x+search_range] = 1;   \
-      if (mcost < min_mcost)                                                          \
-      {                                                                               \
-        best_x = cand_x;                                                              \
-        best_y = cand_y;                                                              \
-        min_mcost = mcost;                                                            \
-      }                                                                               \
-    }                                                                                   \
-  }                                                                                   \
-}
+#define SEARCH_ONE_PIXEL_BIPRED                                                                         \
+if((iabs(cand.mv_x - center2.mv_x) >> 2) < search_range && (iabs(cand.mv_y - center2.mv_y) >> 2) < search_range)     \
+{                                                                                                       \
+  if(!p_UMHex->McostState[((cand.mv_y - center2.mv_y) >> 2) + search_range][((cand.mv_x-center2.mv_x) >> 2)+search_range])         \
+  {                                                                                                     \
+    mcost  = mv_cost (p_Img, lambda_factor, &center1, &pred1);                                          \
+    mcost += mv_cost (p_Img, lambda_factor, &cand, &pred2);                                             \
+    if(mcost<min_mcost)                                                                                   \
+    {                                                                                                     \
+      mcost  += mv_block->computeBiPredFPel(ref_picture1, ref_picture2,                                 \
+      mv_block, min_mcost - mcost, &center1, &cand);                                                \
+      p_UMHex->McostState[((cand.mv_y - center2.mv_y) >> 2) + search_range][((cand.mv_x - center2.mv_x) >> 2) + search_range] = 1; \
+      if (mcost < min_mcost)                                                                            \
+      {                                                                                                 \
+        best = cand;                                                                                    \
+        min_mcost = mcost;                                                                              \
+      }                                                                                                 \
+    }                                                                                                   \
+  }                                                                                                     \
+}                                                                                                       \
 
-byte **McostState;                          //!< state for integer pel search
-byte **SearchState;                         //!< state for fractional pel search
 
-int ****fastme_ref_cost;                    //!< store SAD information needed for forward ref-frame prediction
-int ***fastme_l0_cost;                      //!< store SAD information needed for forward median and uplayer prediction
-int ***fastme_l1_cost;                      //!< store SAD information needed for backward median and uplayer prediction
-int ***fastme_l0_cost_bipred;               //!< store SAD information for bipred mode
-int ***fastme_l1_cost_bipred;               //!< store SAD information for bipred mode
-int bipred_flag;                            //!< flag for bipred
-int **fastme_best_cost;                     //!< for multi ref early termination threshold
-int pred_SAD;                               //!<  SAD prediction in use.
-int pred_MV_ref[2], pred_MV_uplayer[2];     //!< pred motion vector by space or temporal correlation,Median is provided
+extern void UMHEX_DefineThreshold  (ImageParameters *p_Img);
+extern void UMHEX_DefineThresholdMB(ImageParameters *p_Img, InputParameters *p_Inp);
+extern int  UMHEX_get_mem          (ImageParameters *p_Img, InputParameters *p_Inp);
+extern void UMHEX_free_mem         (ImageParameters *p_Img, InputParameters *p_Inp);
 
-int UMHEX_blocktype;                        //!< blocktype for UMHEX SetMotionVectorPredictor
-int predict_point[5][2];
-int SAD_a,SAD_b,SAD_c,SAD_d;
-int Threshold_DSR_MB[8];                    //!<  Threshold for usage of DSR. DSR refer to JVT-Q088
-//for early termination
-float  Bsize[8];
-float AlphaFourth_1[8];
-float AlphaFourth_2[8];
-byte *flag_intra;
-int  flag_intra_SAD;
+extern void UMHEX_decide_intrabk_SAD(Macroblock *currMB);
+extern void UMHEX_skip_intrabk_SAD  (Macroblock *currMB, int ref_max);
+extern void UMHEX_setup             (Macroblock *currMB, short ref, int list, int block_y, int block_x, int blocktype, short   ******all_mv);
 
-void UMHEX_DefineThreshold(void);
-void UMHEX_DefineThresholdMB(void);
-int  UMHEX_get_mem(void);
-void UMHEX_free_mem(void);
-
-void UMHEX_decide_intrabk_SAD(void);
-void UMHEX_skip_intrabk_SAD(int best_mode, int ref_max);
-void UMHEX_setup(short ref, int list, int block_y, int block_x, int blocktype, short   ******all_mv);
-
-int                                     //  ==> minimum motion cost after search
+extern int                                     //  ==> minimum motion cost after search
 UMHEXIntegerPelBlockMotionSearch  (Macroblock *currMB,     // <--  current Macroblock
-                                  imgpel   *orig_pic,      // <--  not used
-                                  short     ref,           // <--  reference frame (0... or -1 (backward))
-                                  int       list,          // <--  reference picture list
-                                  char   ***refPic,        // <--  reference array
-                                  short ****tmp_mv,        // <--  mv array
-                                  int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
-                                  int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
-                                  int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
                                   MotionVector *pred,      // <--  motion vector predictor (x) in sub-pel units
-                                  MotionVector   *mv,      //  --> motion vector (x) - in pel units
-                                  int       search_range,  // <--  1-d search range in pel units
+                                  MEBlock   *mv_block,
                                   int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
-                                  int       lambda_factor, // <--  lagrangian parameter for determining motion cost
-                                  int       apply_weights
+                                  int       lambda_factor  // <--  lagrangian parameter for determining motion cost
                                   );
 
-int                                                   //  ==> minimum motion cost after search
-UMHEXSubPelBlockMotionSearch (
-                             imgpel*   orig_pic,      // <--  original pixel values for the AxB block
-                             short       ref,         // <--  reference frame (0... or -1 (backward))
-                             int       list,          // <--  reference picture list
-                             int       list_offset,   // <--  MBAFF list offset
-                             int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
-                             int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
-                             int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
-                             MotionVector *pred,      // <--  motion vector predictor (x) in sub-pel units
-                             MotionVector  *mv,       // <--> in: search center (x) / out: motion vector (x) - in pel units
-                             int       search_pos2,   // <--  search positions for    half-pel search  (default: 9)
-                             int       search_pos4,   // <--  search positions for quarter-pel search  (default: 9)
-                             int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
-                             int       lambda_factor, // <--  lagrangian parameter for determining motion cost
-                             int       apply_weights
-                             );
+extern int UMHEXSubPelBlockMotionSearch (                         //  ==> minimum motion cost after search
+                                         Macroblock *currMB,     // <--  current Macroblock
+                                         MotionVector *pred_mv,    // < <--  motion vector predictor (x|y) in sub-pel units
+                                         MEBlock *mv_block,
+                                         int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
+                                         int       lambda_factor  // <--  lagrangian parameter for determining motion cost
+                                         );
 
 extern int UMHEXSubPelBlockME ( //  ==> minimum motion cost after search
-                             imgpel*   orig_pic,      // <--  original pixel values for the AxB block
-                             short       ref,         // <--  reference frame (0... or -1 (backward))
-                             int       list,          // <--  reference picture list
-                             int       list_offset,   // <--  MBAFF list offset
-                             int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
-                             int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
-                             int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
+                             Macroblock *currMB,      // <--  Current Macroblock
                              MotionVector *pred,      // <--  motion vector predictor (x) in sub-pel units
-                             MotionVector  *mv,       // <--> in: search center (x) / out: motion vector (x) - in pel units
-                             int       search_pos2,   // <--  search positions for    half-pel search  (default: 9)
-                             int       search_pos4,   // <--  search positions for quarter-pel search  (default: 9)
+                             MEBlock *mv_block, 
                              int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
-                             int*      lambda, // <--  lagrangian parameter for determining motion cost
-                             int       apply_weights
+                             int*      lambda         // <--  lagrangian parameter for determining motion cost
                              );
 
 
-extern int                                         //  ==> minimum motion cost after search
-SubPelBlockMotionSearch (imgpel*   orig_pic,       // <--  original pixel values for the AxB block
-                         short     ref,            // <--  reference frame (0... or -1 (backward))
-                         int       list,
-                         int       list_offset,   // <--  MBAFF list offset
-                         int       pic_pix_x,      // <--  absolute x-coordinate of regarded AxB block
-                         int       pic_pix_y,      // <--  absolute y-coordinate of regarded AxB block
-                         int       blocktype,      // <--  block type (1-16x16 ... 7-4x4)
-                         MotionVector *pred,     // <--  motion vector predictor in sub-pel units
-                         MotionVector *mv,          // <--> in: search center  / out: motion vector - in pel units
-                         int       search_pos2,    // <--  search positions for    half-pel search  (default: 9)
-                         int       search_pos4,    // <--  search positions for quarter-pel search  (default: 9)
-                         int       min_mcost,      // <--  minimum motion cost (cost for center or huge value)
-                         int       *lambda_factor, // <--  lagrangian parameter for determining motion cost
-                         int       apply_weights);
 
-int                                                //  ==> minimum motion cost after search
-UMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB, // <--  current Macroblock
-                                       imgpel*   orig_pic,      // <--  original pixel values for the AxB block
-                                       short     ref,           // <--  reference frame (0... or -1 (backward))
-                                       int       list,          // <--  Current reference list
-                                       char   ***refPic,        // <--  reference array
-                                       short ****tmp_mv,        // <--  mv array
-                                       int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
-                                       int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
-                                       int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
-                                       MotionVector *pred1,   // <--  motion vector predictor (x|y) in sub-pel units
-                                       MotionVector *pred2,   // <--  motion vector predictor (x|y) in sub-pel units
-                                       MotionVector   *mv1,         // <--> in: search center (x) / out: motion vector (x) - in pel units
-                                       MotionVector   *mv2,       // <--> in: search center (x) / out: motion vector (x) - in pel units
-                                       int       search_range,  // <--  1-d search range in pel units
-                                       int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
-                                       int       iteration_no,  // <--  bi pred iteration number
-                                       int       lambda_factor, // <--  lagrangian parameter for determining motion cost
-                                       int       apply_weights
-                                       );
+extern int UMHEXBipredIntegerPelBlockMotionSearch (Macroblock *, int, 
+                                       MotionVector *, MotionVector *, MotionVector *, MotionVector *, 
+                                       MEBlock *, int, int, int);
 
-void UMHEXSetMotionVectorPredictor (Macroblock *currMB, short pmv[2], char **refPic, short ***tmp_mv,
-                                    short  ref_frame, int list, int mb_x, int mb_y, int bl_x, int bl_y, int *search_range);
+extern void UMHEXSetMotionVectorPredictor (Macroblock *currMB, short pmv[2], char **refPic, short ***tmp_mv,
+                                    short  ref_frame, int list, int mb_x, int mb_y, int bl_x, int bl_y, MEBlock *mv_block);
 
 #endif

@@ -18,13 +18,13 @@
 #ifndef _IMG_LUMA_H_
 #define _IMG_LUMA_H_
 
-void getSubImagesLuma       ( StorablePicture *s );
-void getSubImageInteger     ( StorablePicture *s, imgpel **dstImg, imgpel **srcImg);
-void getHorSubImageSixTap   ( StorablePicture *s, imgpel **dst_imgY, imgpel **ref_imgY);
-void getVerSubImageSixTap   ( StorablePicture *s, imgpel **dst_imgY, imgpel **ref_imgY);
-void getVerSubImageSixTapTmp( StorablePicture *s, imgpel **dst_imgY, imgpel **ref_imgY);
-void getSubImageBiLinear    ( StorablePicture *s, imgpel **dstImg, imgpel **srcImgL, imgpel **srcImgR);
-void getHorSubImageBiLinear ( StorablePicture *s, imgpel **dstImg, imgpel **srcImgL, imgpel **srcImgR);
-void getVerSubImageBiLinear ( StorablePicture *s, imgpel **dstImg, imgpel **srcImgT, imgpel **srcImgB);
-void getDiagSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel **srcImgT, imgpel **srcImgB);
+extern void getSubImagesLuma       ( ImageParameters *p_Img, InputParameters *p_Inp, StorablePicture *s );
+extern void getSubImageInteger     ( StorablePicture *s, imgpel **dstImg, imgpel **srcImg);
+extern void getHorSubImageSixTap   ( ImageParameters *p_Img, StorablePicture *s, imgpel **dst_imgY, imgpel **ref_imgY);
+extern void getVerSubImageSixTap   ( ImageParameters *p_Img, StorablePicture *s, imgpel **dst_imgY, imgpel **ref_imgY);
+extern void getVerSubImageSixTapTmp( ImageParameters *p_Img, StorablePicture *s, imgpel **dst_imgY);
+extern void getSubImageBiLinear    ( StorablePicture *s, imgpel **dstImg, imgpel **srcImgL, imgpel **srcImgR);
+extern void getHorSubImageBiLinear ( StorablePicture *s, imgpel **dstImg, imgpel **srcImgL, imgpel **srcImgR);
+extern void getVerSubImageBiLinear ( StorablePicture *s, imgpel **dstImg, imgpel **srcImgT, imgpel **srcImgB);
+extern void getDiagSubImageBiLinear( StorablePicture *s, imgpel **dstImg, imgpel **srcImgT, imgpel **srcImgB);
 #endif // _IMG_LUMA_H_

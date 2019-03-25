@@ -11,12 +11,13 @@
 
 #include "global.h"
 #include "memalloc.h"
+#include "q_matrix.h"
 
 extern char *GetConfigFileContent (char *Filename, int error_type);
 
 #define MAX_ITEMS_TO_PARSE  1000
 
-const int quant_coef[6][4][4] = {
+static const int quant_coef[6][4][4] = {
   {{13107, 8066,13107, 8066},{ 8066, 5243, 8066, 5243},{13107, 8066,13107, 8066},{ 8066, 5243, 8066, 5243}},
   {{11916, 7490,11916, 7490},{ 7490, 4660, 7490, 4660},{11916, 7490,11916, 7490},{ 7490, 4660, 7490, 4660}},
   {{10082, 6554,10082, 6554},{ 6554, 4194, 6554, 4194},{10082, 6554,10082, 6554},{ 6554, 4194, 6554, 4194}},
@@ -34,7 +35,7 @@ const int dequant_coef[6][4][4] = {
   {{18, 23, 18, 23},{ 23, 29, 23, 29},{18, 23, 18, 23},{ 23, 29, 23, 29}}
 };
 
-const int quant_coef8[6][8][8] =
+static const int quant_coef8[6][8][8] =
 {
   {
     {13107, 12222,  16777,  12222,  13107,  12222,  16777,  12222},
@@ -100,7 +101,7 @@ const int quant_coef8[6][8][8] =
 
 
 
-const int dequant_coef8[6][8][8] =
+static const int dequant_coef8[6][8][8] =
 {
   {
     {20,  19, 25, 19, 20, 19, 25, 19},
@@ -188,22 +189,6 @@ static const char MatrixType8x8[6][20] =
   "INTER8X8_CHROMAV"   // only for 4:4:4
 };
 
-int *****LevelScale4x4Comp;
-int *****LevelScale8x8Comp;
-
-int *****InvLevelScale4x4Comp;
-int *****InvLevelScale8x8Comp;
-
-short ScalingList4x4input[6][16];
-short ScalingList8x8input[6][64];
-short ScalingList4x4[6][16];
-short ScalingList8x8[6][64];
-
-short UseDefaultScalingMatrix4x4Flag[6];
-short UseDefaultScalingMatrix8x8Flag[6];
-
-int *qp_per_matrix;
-int *qp_rem_matrix;
 
 static const short Quant_intra_default[16] =
 {
@@ -289,15 +274,18 @@ int CheckParameterName (char *s, int *type)
  ***********************************************************************
  * \brief
  *    Parse the Q matrix values read from cfg file.
+ * \param p_Img
+ *    current image parameters
  * \param buf
  *    buffer to be parsed
  * \param bufsize
  *    buffer size of buffer
  ***********************************************************************
  */
-void ParseMatrix (char *buf, int bufsize)
+void ParseMatrix (ImageParameters *p_Img, char *buf, int bufsize)
 {
-  char *items[MAX_ITEMS_TO_PARSE];
+  ScaleParameters *p_QScale = p_Img->p_QScale;
+  char *items[MAX_ITEMS_TO_PARSE] = {NULL};
   int MapIdx;
   int item = 0;
   int InString = 0, InItem = 0;
@@ -385,13 +373,13 @@ void ParseMatrix (char *buf, int bufsize)
     if (!type) //4x4 Matrix
     {
       range = 16;
-      ScalingList = ScalingList4x4input[MapIdx];
+      ScalingList = p_QScale->ScalingList4x4input[MapIdx];
       matrix4x4_check[MapIdx] = 1; //to indicate matrix found in cfg file
     }
     else //8x8 matrix
     {
       range = 64;
-      ScalingList = ScalingList8x8input[MapIdx];
+      ScalingList = p_QScale->ScalingList8x8input[MapIdx];
       matrix8x8_check[MapIdx] = 1; //to indicate matrix found in cfg file
     }
 
@@ -417,16 +405,17 @@ void ParseMatrix (char *buf, int bufsize)
  *    whole matrix will be patch with default value 16.
  ***********************************************************************
  */
-void PatchMatrix(void)
+void PatchMatrix(ImageParameters *p_Img, InputParameters *p_Inp)
 {
+  ScaleParameters *p_QScale = p_Img->p_QScale;
   short *ScalingList;
   int i, cnt, fail;
 
   for(i=0; i<6; i++)
   {
-    if(params->ScalingListPresentFlag[i])
+    if(p_Inp->ScalingListPresentFlag[i])
     {
-      ScalingList=ScalingList4x4input[i];
+      ScalingList = p_QScale->ScalingList4x4input[i];
       if(matrix4x4_check[i])
       {
         fail=0;
@@ -459,9 +448,9 @@ void PatchMatrix(void)
       }
     }
 
-    if(params->ScalingListPresentFlag[i+6])
+    if(p_Inp->ScalingListPresentFlag[i+6])
     {
-      ScalingList=ScalingList8x8input[i];
+      ScalingList = p_QScale->ScalingList8x8input[i];
       if(matrix8x8_check[i])
       {
         fail=0;
@@ -502,27 +491,27 @@ void PatchMatrix(void)
  *    Allocate Q matrix arrays
  ***********************************************************************
  */
-void allocate_QMatrix (void)
+void allocate_QMatrix (QuantParameters *p_Quant, InputParameters *p_Inp)
 {
-  int bitdepth_qp_scale = 6*(params->output.bit_depth[0] - 8);
+  int max_bitdepth = imax(p_Inp->output.bit_depth[0], p_Inp->output.bit_depth[1]);
+  int max_qp = (3 + 6*(max_bitdepth));
+
+  int bitdepth_qp_scale = 6*(p_Inp->output.bit_depth[0] - 8);
   int i;
 
-  if ((qp_per_matrix = (int*)malloc((MAX_QP + 1 +  bitdepth_qp_scale)*sizeof(int))) == NULL)
-    no_mem_exit("allocate_QMatrix: qp_per_matrix");
-  if ((qp_rem_matrix = (int*)malloc((MAX_QP + 1 +  bitdepth_qp_scale)*sizeof(int))) == NULL)
-    no_mem_exit("allocate_QMatrix: qp_per_matrix");
+  get_mem5Dquant(&p_Quant->q_params_4x4, 3, 2, max_qp + 1, 4, 4);
+  get_mem5Dquant(&p_Quant->q_params_8x8, 3, 2, max_qp + 1, 8, 8);
+
+  if ((p_Quant->qp_per_matrix = (int*)malloc((MAX_QP + 1 +  bitdepth_qp_scale)*sizeof(int))) == NULL)
+    no_mem_exit("allocate_QMatrix: p_Quant->qp_per_matrix");
+  if ((p_Quant->qp_rem_matrix = (int*)malloc((MAX_QP + 1 +  bitdepth_qp_scale)*sizeof(int))) == NULL)
+    no_mem_exit("allocate_QMatrix: p_Quant->qp_per_matrix");
 
   for (i = 0; i < MAX_QP + bitdepth_qp_scale + 1; i++)
   {
-    qp_per_matrix[i] = i / 6;
-    qp_rem_matrix[i] = i % 6;
+    p_Quant->qp_per_matrix[i] = i / 6;
+    p_Quant->qp_rem_matrix[i] = i % 6;
   }
-
-  get_mem5Dint(&LevelScale4x4Comp,    3, 2, 6, 4, 4);
-  get_mem5Dint(&LevelScale8x8Comp,    3, 2, 6, 8, 8);
-
-  get_mem5Dint(&InvLevelScale4x4Comp, 3, 2, 6, 4, 4);
-  get_mem5Dint(&InvLevelScale8x8Comp, 3, 2, 6, 8, 8);
 }
 
 /*!
@@ -531,16 +520,13 @@ void allocate_QMatrix (void)
  *    Free Q matrix arrays
  ***********************************************************************
  */
-void free_QMatrix ()
+void free_QMatrix (QuantParameters *p_Quant)
 {
-  free(qp_rem_matrix);
-  free(qp_per_matrix);
+  free_mem5Dquant(p_Quant->q_params_4x4);
+  free_mem5Dquant(p_Quant->q_params_8x8);
 
-  free_mem5Dint(LevelScale4x4Comp);
-  free_mem5Dint(LevelScale8x8Comp);
-
-  free_mem5Dint(InvLevelScale4x4Comp);
-  free_mem5Dint(InvLevelScale8x8Comp);
+  free(p_Quant->qp_rem_matrix);
+  free(p_Quant->qp_per_matrix);
 }
 
 
@@ -550,27 +536,28 @@ void free_QMatrix ()
  *    Initialise Q matrix values.
  ***********************************************************************
  */
-void Init_QMatrix (void)
+void Init_QMatrix (ImageParameters *p_Img, InputParameters *p_Inp)
 {
+  QuantParameters *p_Quant = p_Img->p_Quant;
+  ScaleParameters *p_QScale = p_Img->p_QScale;
   char *content;
 
+  allocate_QMatrix (p_Quant, p_Inp);
 
-  allocate_QMatrix ();
-
-  if(params->ScalingMatrixPresentFlag)
+  if(p_Inp->ScalingMatrixPresentFlag)
   {
-    printf ("Parsing QMatrix file %s ", params->QmatrixFile);
-    content = GetConfigFileContent(params->QmatrixFile, 0);
+    printf ("Parsing QMatrix file %s ", p_Inp->QmatrixFile);
+    content = GetConfigFileContent(p_Inp->QmatrixFile, 0);
     if(content!='\0')
-      ParseMatrix(content, strlen (content));
+      ParseMatrix(p_Img, content, strlen (content));
     else
       printf("\nError: %s\nProceeding with default values for all matrices.", errortext);
 
-    PatchMatrix();
+    PatchMatrix(p_Img, p_Inp);
     printf("\n");
 
-    memset(UseDefaultScalingMatrix4x4Flag, 0, 6 * sizeof(short));
-    memset(UseDefaultScalingMatrix8x8Flag, 0, 6 * sizeof(short));
+    memset(p_QScale->UseDefaultScalingMatrix4x4Flag, 0, 6 * sizeof(short));
+    memset(p_QScale->UseDefaultScalingMatrix8x8Flag, 0, 6 * sizeof(short));
 
     free(content);
   }
@@ -588,11 +575,22 @@ void Init_QMatrix (void)
  *    none
  ************************************************************************
  */
-void CalculateQuantParam(void)
+void CalculateQuant4x4Param(ImageParameters *p_Img)
 {
+  QuantParameters *p_Quant  = p_Img->p_Quant;
+  ScaleParameters *p_QScale = p_Img->p_QScale;
+
+  pic_parameter_set_rbsp_t *active_pps = p_Img->active_pps;
+  seq_parameter_set_rbsp_t *active_sps = p_Img->active_sps;
+
   int i, j, k, temp;
+  int k_mod;
   int present[6];
   int no_q_matrix=FALSE;
+
+  int max_bitdepth = imax(p_Img->bitdepth_luma, p_Img->bitdepth_chroma);
+  int max_qp = (3 + 6*(max_bitdepth));
+
 
   if(!active_sps->seq_scaling_matrix_present_flag && !active_pps->pic_scaling_matrix_present_flag) //set to no q-matrix
     no_q_matrix=TRUE;
@@ -616,103 +614,109 @@ void CalculateQuantParam(void)
 
   if(no_q_matrix==TRUE)
   {
-    for(k=0; k<6; k++)
+    for(k_mod=0; k_mod<max_qp; k_mod++)
+    {
+      k = k_mod % 6;
       for(j=0; j<4; j++)
+      {
         for(i=0; i<4; i++)
         {
-          LevelScale4x4Comp[0][1][k][j][i]    = quant_coef[k][j][i];
-          InvLevelScale4x4Comp[0][1][k][j][i] = dequant_coef[k][j][i]<<4;
+          p_Quant->q_params_4x4[0][1][k_mod][j][i].ScaleComp    = quant_coef[k][j][i];
+          p_Quant->q_params_4x4[0][1][k_mod][j][i].InvScaleComp = dequant_coef[k][j][i]<<4;
 
-          LevelScale4x4Comp[1][1][k][j][i]    = quant_coef[k][j][i];
-          InvLevelScale4x4Comp[1][1][k][j][i] = dequant_coef[k][j][i]<<4;
+          p_Quant->q_params_4x4[1][1][k_mod][j][i].ScaleComp    = quant_coef[k][j][i];
+          p_Quant->q_params_4x4[1][1][k_mod][j][i].InvScaleComp = dequant_coef[k][j][i]<<4;
 
-          LevelScale4x4Comp[2][1][k][j][i]    = quant_coef[k][j][i];
-          InvLevelScale4x4Comp[2][1][k][j][i] = dequant_coef[k][j][i]<<4;
+          p_Quant->q_params_4x4[2][1][k_mod][j][i].ScaleComp    = quant_coef[k][j][i];
+          p_Quant->q_params_4x4[2][1][k_mod][j][i].InvScaleComp = dequant_coef[k][j][i]<<4;
 
           // Inter
-          LevelScale4x4Comp[0][0][k][j][i]    = quant_coef[k][j][i];
-          InvLevelScale4x4Comp[0][0][k][j][i] = dequant_coef[k][j][i]<<4;
+          p_Quant->q_params_4x4[0][0][k_mod][j][i].ScaleComp    = quant_coef[k][j][i];
+          p_Quant->q_params_4x4[0][0][k_mod][j][i].InvScaleComp = dequant_coef[k][j][i]<<4;
 
-          LevelScale4x4Comp[1][0][k][j][i]    = quant_coef[k][j][i];
-          InvLevelScale4x4Comp[1][0][k][j][i] = dequant_coef[k][j][i]<<4;
+          p_Quant->q_params_4x4[1][0][k_mod][j][i].ScaleComp    = quant_coef[k][j][i];
+          p_Quant->q_params_4x4[1][0][k_mod][j][i].InvScaleComp = dequant_coef[k][j][i]<<4;
 
-          LevelScale4x4Comp[2][0][k][j][i]    = quant_coef[k][j][i];
-          InvLevelScale4x4Comp[2][0][k][j][i] = dequant_coef[k][j][i]<<4;
+          p_Quant->q_params_4x4[2][0][k_mod][j][i].ScaleComp    = quant_coef[k][j][i];
+          p_Quant->q_params_4x4[2][0][k_mod][j][i].InvScaleComp = dequant_coef[k][j][i]<<4;
         }
+      }
+    }
   }
   else
   {
-    for(k=0; k<6; k++)
+    for(k_mod=0; k_mod<max_qp; k_mod++)
     {
+      k = k_mod % 6;
       for(j=0; j<4; j++)
       {
         for(i=0; i<4; i++)
         {
           temp = (j<<2)+i;
-          if((!present[0]) || UseDefaultScalingMatrix4x4Flag[0])
+          if((!present[0]) || p_QScale->UseDefaultScalingMatrix4x4Flag[0])
           {
-            LevelScale4x4Comp[0][1][k][j][i]         = (quant_coef[k][j][i]<<4)/Quant_intra_default[temp];
-            InvLevelScale4x4Comp[0][1][k][j][i]      = dequant_coef[k][j][i]*Quant_intra_default[temp];
+            p_Quant->q_params_4x4[0][1][k_mod][j][i].ScaleComp    = (quant_coef[k][j][i]<<4)/Quant_intra_default[temp];
+            p_Quant->q_params_4x4[0][1][k_mod][j][i].InvScaleComp = dequant_coef[k][j][i]*Quant_intra_default[temp];
           }
           else
           {
-            LevelScale4x4Comp[0][1][k][j][i]         = (quant_coef[k][j][i]<<4)/ScalingList4x4[0][temp];
-            InvLevelScale4x4Comp[0][1][k][j][i]      = dequant_coef[k][j][i]*ScalingList4x4[0][temp];
+            p_Quant->q_params_4x4[0][1][k_mod][j][i].ScaleComp    = (quant_coef[k][j][i]<<4)/p_QScale->ScalingList4x4[0][temp];
+            p_Quant->q_params_4x4[0][1][k_mod][j][i].InvScaleComp = dequant_coef[k][j][i]*p_QScale->ScalingList4x4[0][temp];
           }
 
           if(!present[1])
           {
-            LevelScale4x4Comp[1][1][k][j][i]    = LevelScale4x4Comp[0][1][k][j][i];
-            InvLevelScale4x4Comp[1][1][k][j][i] = InvLevelScale4x4Comp[0][1][k][j][i];
+            p_Quant->q_params_4x4[1][1][k_mod][j][i].ScaleComp    = p_Quant->q_params_4x4[0][1][k_mod][j][i].ScaleComp;
+            p_Quant->q_params_4x4[1][1][k_mod][j][i].InvScaleComp = p_Quant->q_params_4x4[0][1][k_mod][j][i].InvScaleComp;
           }
           else
           {
-            LevelScale4x4Comp[1][1][k][j][i]    = (quant_coef[k][j][i]<<4)/(UseDefaultScalingMatrix4x4Flag[1] ? Quant_intra_default[temp]:ScalingList4x4[1][temp]);
-            InvLevelScale4x4Comp[1][1][k][j][i] = dequant_coef[k][j][i]*(UseDefaultScalingMatrix4x4Flag[1] ? Quant_intra_default[temp]:ScalingList4x4[1][temp]);
+            p_Quant->q_params_4x4[1][1][k_mod][j][i].ScaleComp    = (quant_coef[k][j][i]<<4)/(p_QScale->UseDefaultScalingMatrix4x4Flag[1] ? Quant_intra_default[temp]:p_QScale->ScalingList4x4[1][temp]);
+            p_Quant->q_params_4x4[1][1][k_mod][j][i].InvScaleComp = dequant_coef[k][j][i]*(p_QScale->UseDefaultScalingMatrix4x4Flag[1] ? Quant_intra_default[temp]:p_QScale->ScalingList4x4[1][temp]);
           }
 
           if(!present[2])
           {
-            LevelScale4x4Comp[2][1][k][j][i]    = LevelScale4x4Comp[1][1][k][j][i];
-            InvLevelScale4x4Comp[2][1][k][j][i] = InvLevelScale4x4Comp[1][1][k][j][i];
+            p_Quant->q_params_4x4[2][1][k_mod][j][i].ScaleComp    = p_Quant->q_params_4x4[1][1][k_mod][j][i].ScaleComp;
+            p_Quant->q_params_4x4[2][1][k_mod][j][i].InvScaleComp = p_Quant->q_params_4x4[1][1][k_mod][j][i].InvScaleComp;
           }
           else
           {
-            LevelScale4x4Comp[2][1][k][j][i]    = (quant_coef[k][j][i]<<4)/(UseDefaultScalingMatrix4x4Flag[2] ? Quant_intra_default[temp]:ScalingList4x4[2][temp]);
-            InvLevelScale4x4Comp[2][1][k][j][i] = dequant_coef[k][j][i]*(UseDefaultScalingMatrix4x4Flag[2] ? Quant_intra_default[temp]:ScalingList4x4[2][temp]);
+            p_Quant->q_params_4x4[2][1][k_mod][j][i].ScaleComp    = (quant_coef[k][j][i]<<4)/(p_QScale->UseDefaultScalingMatrix4x4Flag[2] ? Quant_intra_default[temp]:p_QScale->ScalingList4x4[2][temp]);
+            p_Quant->q_params_4x4[2][1][k_mod][j][i].InvScaleComp = dequant_coef[k][j][i]*(p_QScale->UseDefaultScalingMatrix4x4Flag[2] ? Quant_intra_default[temp]:p_QScale->ScalingList4x4[2][temp]);
           }
 
-          if((!present[3]) || UseDefaultScalingMatrix4x4Flag[3])
+          if((!present[3]) || p_QScale->UseDefaultScalingMatrix4x4Flag[3])
           {
-            LevelScale4x4Comp[0][0][k][j][i]         = (quant_coef[k][j][i]<<4)/Quant_inter_default[temp];
-            InvLevelScale4x4Comp[0][0][k][j][i]      = dequant_coef[k][j][i]*Quant_inter_default[temp];
+            p_Quant->q_params_4x4[0][0][k_mod][j][i].ScaleComp         = (quant_coef[k][j][i]<<4)/Quant_inter_default[temp];
+            p_Quant->q_params_4x4[0][0][k_mod][j][i].InvScaleComp      = dequant_coef[k][j][i]*Quant_inter_default[temp];
           }
           else
           {
-            LevelScale4x4Comp[0][0][k][j][i]         = (quant_coef[k][j][i]<<4)/ScalingList4x4[3][temp];
-            InvLevelScale4x4Comp[0][0][k][j][i]      = dequant_coef[k][j][i]*ScalingList4x4[3][temp];
+            p_Quant->q_params_4x4[0][0][k_mod][j][i].ScaleComp         = (quant_coef[k][j][i]<<4)/p_QScale->ScalingList4x4[3][temp];
+            p_Quant->q_params_4x4[0][0][k_mod][j][i].InvScaleComp      = dequant_coef[k][j][i]*p_QScale->ScalingList4x4[3][temp];
           }
 
           if(!present[4])
           {
-            LevelScale4x4Comp[1][0][k][j][i]    = LevelScale4x4Comp[0][0][k][j][i];
-            InvLevelScale4x4Comp[1][0][k][j][i] = InvLevelScale4x4Comp[0][0][k][j][i];
+            p_Quant->q_params_4x4[1][0][k_mod][j][i].ScaleComp    = p_Quant->q_params_4x4[0][0][k_mod][j][i].ScaleComp;
+            p_Quant->q_params_4x4[1][0][k_mod][j][i].InvScaleComp = p_Quant->q_params_4x4[0][0][k_mod][j][i].InvScaleComp;
           }
           else
           {
-            LevelScale4x4Comp[1][0][k][j][i]    = (quant_coef[k][j][i]<<4)/(UseDefaultScalingMatrix4x4Flag[4] ? Quant_inter_default[temp]:ScalingList4x4[4][temp]);
-            InvLevelScale4x4Comp[1][0][k][j][i] = dequant_coef[k][j][i]*(UseDefaultScalingMatrix4x4Flag[4] ? Quant_inter_default[temp]:ScalingList4x4[4][temp]);
+            p_Quant->q_params_4x4[1][0][k_mod][j][i].ScaleComp    = (quant_coef[k][j][i]<<4)/(p_QScale->UseDefaultScalingMatrix4x4Flag[4] ? Quant_inter_default[temp]:p_QScale->ScalingList4x4[4][temp]);
+            p_Quant->q_params_4x4[1][0][k_mod][j][i].InvScaleComp = dequant_coef[k][j][i]*(p_QScale->UseDefaultScalingMatrix4x4Flag[4] ? Quant_inter_default[temp]:p_QScale->ScalingList4x4[4][temp]);
           }
 
           if(!present[5])
           {
-            LevelScale4x4Comp[2][0][k][j][i]    = LevelScale4x4Comp[1][0][k][j][i];
-            InvLevelScale4x4Comp[2][0][k][j][i] = InvLevelScale4x4Comp[1][0][k][j][i];
+            p_Quant->q_params_4x4[2][0][k_mod][j][i].ScaleComp    = p_Quant->q_params_4x4[1][0][k_mod][j][i].ScaleComp;
+            p_Quant->q_params_4x4[2][0][k_mod][j][i].InvScaleComp = p_Quant->q_params_4x4[1][0][k_mod][j][i].InvScaleComp;
           }
           else
           {
-            LevelScale4x4Comp[2][0][k][j][i]    = (quant_coef[k][j][i]<<4)/(UseDefaultScalingMatrix4x4Flag[5] ? Quant_inter_default[temp]:ScalingList4x4[5][temp]);
-            InvLevelScale4x4Comp[2][0][k][j][i] = dequant_coef[k][j][i]*(UseDefaultScalingMatrix4x4Flag[5] ? Quant_inter_default[temp]:ScalingList4x4[5][temp]);
+            p_Quant->q_params_4x4[2][0][k_mod][j][i].ScaleComp    = (quant_coef[k][j][i]<<4)/(p_QScale->UseDefaultScalingMatrix4x4Flag[5] ? Quant_inter_default[temp]:p_QScale->ScalingList4x4[5][temp]);
+            p_Quant->q_params_4x4[2][0][k_mod][j][i].InvScaleComp = dequant_coef[k][j][i]*(p_QScale->UseDefaultScalingMatrix4x4Flag[5] ? Quant_inter_default[temp]:p_QScale->ScalingList4x4[5][temp]);
           }
         }
       }
@@ -727,12 +731,22 @@ void CalculateQuantParam(void)
  *
  ************************************************************************
  */
-void CalculateQuant8Param()
+void CalculateQuant8x8Param(ImageParameters *p_Img)
 {
+  QuantParameters *p_Quant = p_Img->p_Quant;
+  ScaleParameters *p_QScale = p_Img->p_QScale;
+
+  pic_parameter_set_rbsp_t *active_pps = p_Img->active_pps;
+  seq_parameter_set_rbsp_t *active_sps = p_Img->active_sps;
+
   int i, j, k, temp;
+  int k_mod;
   int n_ScalingList8x8;
   int present[6];
   int no_q_matrix=FALSE;
+  int max_bitdepth = imax(p_Img->bitdepth_luma, p_Img->bitdepth_chroma);
+  int max_qp = (3 + 6*(max_bitdepth));
+
 
   // maximum number of valid 8x8 scaling lists
   n_ScalingList8x8 = ( active_sps->chroma_format_idc != 3 ) ? 2 : 6;
@@ -744,81 +758,93 @@ void CalculateQuant8Param()
     memset(present, 0, sizeof(int)*n_ScalingList8x8);
 
     if(active_sps->seq_scaling_matrix_present_flag)
+    {
       for(i=0; i<n_ScalingList8x8; i++)
         present[i] = active_sps->seq_scaling_list_present_flag[i+6];
+    }
 
-      if(active_pps->pic_scaling_matrix_present_flag)
-        for(i=0; i<n_ScalingList8x8; i++)
-        {
-          if( i==0 || i==1 )
-            present[i] |= active_pps->pic_scaling_list_present_flag[i+6];
-          else
-            present[i] = active_pps->pic_scaling_list_present_flag[i+6];
-        }
+    if(active_pps->pic_scaling_matrix_present_flag)
+    {
+      for(i=0; i<n_ScalingList8x8; i++)
+      {
+        if( i==0 || i==1 )
+          present[i] |= active_pps->pic_scaling_list_present_flag[i+6];
+        else
+          present[i] = active_pps->pic_scaling_list_present_flag[i+6];
+      }
+    }
   }
 
   if(no_q_matrix==TRUE)
   {
-    for(k=0; k<6; k++)
+    for(k = 0; k < max_qp; k++)
+    {
+      k_mod = k %6;
       for(j=0; j<8; j++)
+      {
         for(i=0; i<8; i++)
         {
           // intra Y
-          LevelScale8x8Comp[0][1][k][j][i]      = quant_coef8[k][j][i];
-          InvLevelScale8x8Comp[0][1][k][j][i]   = dequant_coef8[k][j][i]<<4;
+          p_Quant->q_params_8x8[0][1][k][j][i].ScaleComp      = quant_coef8[k_mod][j][i];
+          p_Quant->q_params_8x8[0][1][k][j][i].InvScaleComp   = dequant_coef8[k_mod][j][i]<<4;
 
           // inter Y
-          LevelScale8x8Comp[0][0][k][j][i]      = quant_coef8[k][j][i];
-          InvLevelScale8x8Comp[0][0][k][j][i]   = dequant_coef8[k][j][i]<<4;
+          p_Quant->q_params_8x8[0][0][k][j][i].ScaleComp      = quant_coef8[k_mod][j][i];
+          p_Quant->q_params_8x8[0][0][k][j][i].InvScaleComp   = dequant_coef8[k_mod][j][i]<<4;
 
           if( n_ScalingList8x8 > 2 )  // 4:4:4 case only
           {
             // intra U
-            LevelScale8x8Comp[1][1][k][j][i]    = quant_coef8[k][j][i];
-            InvLevelScale8x8Comp[1][1][k][j][i] = dequant_coef8[k][j][i]<<4;
+            p_Quant->q_params_8x8[1][1][k][j][i].ScaleComp    = quant_coef8[k_mod][j][i];
+            p_Quant->q_params_8x8[1][1][k][j][i].InvScaleComp = dequant_coef8[k_mod][j][i]<<4;
 
             // intra V
-            LevelScale8x8Comp[2][1][k][j][i]    = quant_coef8[k][j][i];
-            InvLevelScale8x8Comp[2][1][k][j][i] = dequant_coef8[k][j][i]<<4;
+            p_Quant->q_params_8x8[2][1][k][j][i].ScaleComp    = quant_coef8[k_mod][j][i];
+            p_Quant->q_params_8x8[2][1][k][j][i].InvScaleComp = dequant_coef8[k_mod][j][i]<<4;
 
             // inter U
-            LevelScale8x8Comp[1][0][k][j][i]    = quant_coef8[k][j][i];
-            InvLevelScale8x8Comp[1][0][k][j][i] = dequant_coef8[k][j][i]<<4;
+            p_Quant->q_params_8x8[1][0][k][j][i].ScaleComp    = quant_coef8[k_mod][j][i];
+            p_Quant->q_params_8x8[1][0][k][j][i].InvScaleComp = dequant_coef8[k_mod][j][i]<<4;
 
             // inter V
-            LevelScale8x8Comp[2][0][k][j][i]    = quant_coef8[k][j][i];
-            InvLevelScale8x8Comp[2][0][k][j][i] = dequant_coef8[k][j][i]<<4;
+            p_Quant->q_params_8x8[2][0][k][j][i].ScaleComp    = quant_coef8[k_mod][j][i];
+            p_Quant->q_params_8x8[2][0][k][j][i].InvScaleComp = dequant_coef8[k_mod][j][i]<<4;
 
           }
         }
+      }
+    }
   }
   else
   {
-    for(k=0; k<6; k++)
+    for(k = 0; k < max_qp; k++)
+    {
+      k_mod = k %6;
       for(j=0; j<8; j++)
+      {
         for(i=0; i<8; i++)
         {
           temp = (j<<3)+i;
-          if((!present[0]) || UseDefaultScalingMatrix8x8Flag[0])
+          if((!present[0]) || p_QScale->UseDefaultScalingMatrix8x8Flag[0])
           {
-            LevelScale8x8Comp[0][1][k][j][i]    = (quant_coef8[k][j][i]<<4)/Quant8_intra_default[temp];
-            InvLevelScale8x8Comp[0][1][k][j][i] = dequant_coef8[k][j][i]*Quant8_intra_default[temp];
+            p_Quant->q_params_8x8[0][1][k][j][i].ScaleComp    = (quant_coef8[k_mod][j][i]<<4)/Quant8_intra_default[temp];
+            p_Quant->q_params_8x8[0][1][k][j][i].InvScaleComp = dequant_coef8[k_mod][j][i]*Quant8_intra_default[temp];
           }
           else
           {
-            LevelScale8x8Comp[0][1][k][j][i]    = (quant_coef8[k][j][i]<<4)/ScalingList8x8[0][temp];
-            InvLevelScale8x8Comp[0][1][k][j][i] = dequant_coef8[k][j][i]*ScalingList8x8[0][temp];
+            p_Quant->q_params_8x8[0][1][k][j][i].ScaleComp    = (quant_coef8[k_mod][j][i]<<4)/p_QScale->ScalingList8x8[0][temp];
+            p_Quant->q_params_8x8[0][1][k][j][i].InvScaleComp = dequant_coef8[k_mod][j][i]*p_QScale->ScalingList8x8[0][temp];
           }
 
-          if((!present[1]) || UseDefaultScalingMatrix8x8Flag[1])
+          if((!present[1]) || p_QScale->UseDefaultScalingMatrix8x8Flag[1])
           {
-            LevelScale8x8Comp[0][0][k][j][i]    = (quant_coef8[k][j][i]<<4)/Quant8_inter_default[temp];
-            InvLevelScale8x8Comp[0][0][k][j][i] = dequant_coef8[k][j][i]*Quant8_inter_default[temp];
+            p_Quant->q_params_8x8[0][0][k][j][i].ScaleComp    = (quant_coef8[k_mod][j][i]<<4)/Quant8_inter_default[temp];
+            p_Quant->q_params_8x8[0][0][k][j][i].InvScaleComp = dequant_coef8[k_mod][j][i]*Quant8_inter_default[temp];
           }
           else
           {
-            LevelScale8x8Comp[0][0][k][j][i]    = (quant_coef8[k][j][i]<<4)/ScalingList8x8[1][temp];
-            InvLevelScale8x8Comp[0][0][k][j][i] = dequant_coef8[k][j][i]*ScalingList8x8[1][temp];
+            p_Quant->q_params_8x8[0][0][k][j][i].ScaleComp    = (quant_coef8[k_mod][j][i]<<4)/p_QScale->ScalingList8x8[1][temp];
+            p_Quant->q_params_8x8[0][0][k][j][i].InvScaleComp = dequant_coef8[k_mod][j][i]*p_QScale->ScalingList8x8[1][temp];
           }
 
           if( n_ScalingList8x8 > 2 )
@@ -827,53 +853,54 @@ void CalculateQuant8Param()
             // Intra U
             if(!present[2])
             {
-              LevelScale8x8Comp[1][1][k][j][i]    = LevelScale8x8Comp[0][1][k][j][i];
-              InvLevelScale8x8Comp[1][1][k][j][i] = InvLevelScale8x8Comp[0][1][k][j][i];
+              p_Quant->q_params_8x8[1][1][k][j][i].ScaleComp    = p_Quant->q_params_8x8[0][1][k][j][i].ScaleComp;
+              p_Quant->q_params_8x8[1][1][k][j][i].InvScaleComp = p_Quant->q_params_8x8[0][1][k][j][i].InvScaleComp;
             }
             else
             {
-              LevelScale8x8Comp[1][1][k][j][i]    = (quant_coef8[k][j][i]<<4)/(UseDefaultScalingMatrix8x8Flag[2] ? Quant8_intra_default[temp]:ScalingList8x8[2][temp]);
-              InvLevelScale8x8Comp[1][1][k][j][i] = dequant_coef8[k][j][i]*(UseDefaultScalingMatrix8x8Flag[2] ? Quant8_intra_default[temp]:ScalingList8x8[2][temp]);
+              p_Quant->q_params_8x8[1][1][k][j][i].ScaleComp    = (quant_coef8[k_mod][j][i]<<4)/(p_QScale->UseDefaultScalingMatrix8x8Flag[2] ? Quant8_intra_default[temp]:p_QScale->ScalingList8x8[2][temp]);
+              p_Quant->q_params_8x8[1][1][k][j][i].InvScaleComp = dequant_coef8[k_mod][j][i]*(p_QScale->UseDefaultScalingMatrix8x8Flag[2] ? Quant8_intra_default[temp]:p_QScale->ScalingList8x8[2][temp]);
             }
 
             // Inter U
             if(!present[3])
             {
-              LevelScale8x8Comp[1][0][k][j][i]    = LevelScale8x8Comp[0][0][k][j][i];
-              InvLevelScale8x8Comp[1][0][k][j][i] = InvLevelScale8x8Comp[0][0][k][j][i];
+              p_Quant->q_params_8x8[1][0][k][j][i].ScaleComp    = p_Quant->q_params_8x8[0][0][k][j][i].ScaleComp;
+              p_Quant->q_params_8x8[1][0][k][j][i].InvScaleComp = p_Quant->q_params_8x8[0][0][k][j][i].InvScaleComp;
             }
             else
             {
-              LevelScale8x8Comp[1][0][k][j][i]    = (quant_coef8[k][j][i]<<4)/(UseDefaultScalingMatrix8x8Flag[3] ? Quant8_inter_default[temp]:ScalingList8x8[3][temp]);
-              InvLevelScale8x8Comp[1][0][k][j][i] = dequant_coef8[k][j][i]*(UseDefaultScalingMatrix8x8Flag[3] ? Quant8_inter_default[temp]:ScalingList8x8[3][temp]);
+              p_Quant->q_params_8x8[1][0][k][j][i].ScaleComp    = (quant_coef8[k_mod][j][i]<<4)/(p_QScale->UseDefaultScalingMatrix8x8Flag[3] ? Quant8_inter_default[temp]:p_QScale->ScalingList8x8[3][temp]);
+              p_Quant->q_params_8x8[1][0][k][j][i].InvScaleComp = dequant_coef8[k_mod][j][i]*(p_QScale->UseDefaultScalingMatrix8x8Flag[3] ? Quant8_inter_default[temp]:p_QScale->ScalingList8x8[3][temp]);
             }
 
             // Intra V
             if(!present[4])
             {
-              LevelScale8x8Comp[2][1][k][j][i]    = LevelScale8x8Comp[1][1][k][j][i];
-              InvLevelScale8x8Comp[2][1][k][j][i] = InvLevelScale8x8Comp[1][1][k][j][i];
+              p_Quant->q_params_8x8[2][1][k][j][i].ScaleComp    = p_Quant->q_params_8x8[1][1][k][j][i].ScaleComp;
+              p_Quant->q_params_8x8[2][1][k][j][i].InvScaleComp = p_Quant->q_params_8x8[1][1][k][j][i].InvScaleComp;
             }
             else
             {
-              LevelScale8x8Comp[2][1][k][j][i]    = (quant_coef8[k][j][i]<<4)/(UseDefaultScalingMatrix8x8Flag[4] ? Quant8_intra_default[temp]:ScalingList8x8[4][temp]);
-              InvLevelScale8x8Comp[2][1][k][j][i] = dequant_coef8[k][j][i]*(UseDefaultScalingMatrix8x8Flag[4] ? Quant8_intra_default[temp]:ScalingList8x8[4][temp]);
+              p_Quant->q_params_8x8[2][1][k][j][i].ScaleComp    = (quant_coef8[k_mod][j][i]<<4)/(p_QScale->UseDefaultScalingMatrix8x8Flag[4] ? Quant8_intra_default[temp]:p_QScale->ScalingList8x8[4][temp]);
+              p_Quant->q_params_8x8[2][1][k][j][i].InvScaleComp = dequant_coef8[k_mod][j][i]*(p_QScale->UseDefaultScalingMatrix8x8Flag[4] ? Quant8_intra_default[temp]:p_QScale->ScalingList8x8[4][temp]);
             }
 
             // Inter V
             if(!present[5])
             {
-              LevelScale8x8Comp[2][0][k][j][i]    = LevelScale8x8Comp[1][0][k][j][i];
-              InvLevelScale8x8Comp[2][0][k][j][i] = InvLevelScale8x8Comp[1][0][k][j][i];
+              p_Quant->q_params_8x8[2][0][k][j][i].ScaleComp    = p_Quant->q_params_8x8[1][0][k][j][i].ScaleComp;
+              p_Quant->q_params_8x8[2][0][k][j][i].InvScaleComp = p_Quant->q_params_8x8[1][0][k][j][i].InvScaleComp;
             }
             else
             {
-              LevelScale8x8Comp[2][0][k][j][i]    = (quant_coef8[k][j][i]<<4)/(UseDefaultScalingMatrix8x8Flag[5] ? Quant8_inter_default[temp]:ScalingList8x8[5][temp]);
-              InvLevelScale8x8Comp[2][0][k][j][i] = dequant_coef8[k][j][i]*(UseDefaultScalingMatrix8x8Flag[5] ? Quant8_inter_default[temp]:ScalingList8x8[5][temp]);
+              p_Quant->q_params_8x8[2][0][k][j][i].ScaleComp    = (quant_coef8[k_mod][j][i]<<4)/(p_QScale->UseDefaultScalingMatrix8x8Flag[5] ? Quant8_inter_default[temp]:p_QScale->ScalingList8x8[5][temp]);
+              p_Quant->q_params_8x8[2][0][k][j][i].InvScaleComp = dequant_coef8[k_mod][j][i] * (p_QScale->UseDefaultScalingMatrix8x8Flag[5] ? Quant8_inter_default[temp]:p_QScale->ScalingList8x8[5][temp]);
             }
-
           }
         }
+      }
+    }
   }
 }
 

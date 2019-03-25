@@ -16,9 +16,10 @@
 
 #include <math.h>
 
+#include "enc_statistics.h"
 #include "global.h"
 #include "img_distortion.h"
-#include "enc_statistics.h"
+#include "md_distortion.h"
 
 /*!
  ************************************************************************
@@ -26,8 +27,9 @@
  *    Find SNR for all three components
  ************************************************************************
  */
-void find_snr(ImageStructure *imgREF, ImageStructure *imgSRC, DistMetric *metricSSE, DistMetric *metricPSNR)
+void find_snr(ImageParameters *p_Img, InputParameters *p_Inp, ImageStructure *imgREF, ImageStructure *imgSRC, DistMetric *metricSSE, DistMetric *metricPSNR)
 {
+  DistortionParams *p_Dist = p_Img->p_Dist;
   FrameFormat *format = &imgREF->format;
   // Luma.
   metricSSE ->value[0] = (float) compute_SSE(imgREF->data[0], imgSRC->data[0], 0, 0, format->height, format->width);
@@ -43,10 +45,10 @@ void find_snr(ImageStructure *imgREF, ImageStructure *imgSRC, DistMetric *metric
   }
    
   {
-    accumulate_average(metricSSE,  dist->frame_ctr);
-    accumulate_average(metricPSNR, dist->frame_ctr);
+    accumulate_average(metricSSE,  p_Dist->frame_ctr);
+    accumulate_average(metricPSNR, p_Dist->frame_ctr);
 
-    accumulate_avslice(metricSSE,  img->type, stats->frame_ctr[img->type]);
-    accumulate_avslice(metricPSNR, img->type, stats->frame_ctr[img->type]);
+    accumulate_avslice(metricSSE,  p_Img->type, p_Img->p_Stats->frame_ctr[p_Img->type]);
+    accumulate_avslice(metricPSNR, p_Img->type, p_Img->p_Stats->frame_ctr[p_Img->type]);
   }
 }

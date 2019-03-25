@@ -1,8 +1,26 @@
+Changes in Version JM 16.0 (since JM 15.1)
+------------------------------------------
+- encoder: Early termination in various distortion computation functions (AT)
+- encoder/decoder: Various speed optimizations/restructuring/cleanups (AT)
+- encoder/decoder: removal of almost all global variables (AT)
+- encoder/decoder: Severe restructuring and merging of Various encoder and decoder functions in lcommon (AT)
+- decoder: Deblocking bug fix in the presence of errors (TB/AT)
+- encoder: Rate Control Improvements/Reentrancy (AL)
+- encoder: RDOQ/Mode decision bug fixes (YY)
+- encoder: Motion Estimation/Mode decision bug fixes (YHe)
+- encoder: Motion Estimation reorganization/cleanups (AT)
+- encoder/decoder: doxygen cleanups (YHe/AT)
+- encoder/decoder: add workspaces for Visual Studio 2009 (Windows) and Xcode (MacOS)
+
+
 Changes in Version JM 15.1 (since JM 15.0)
 ------------------------------------------
 - encoder/decoder: Redundant picture bug fixes (KS)
 - encoder: fix config limit type for IntraProfile (KS, bug id #153)
 - decoder: fix copy and paste bug in pps_is_equal() (KS, bug id #157)
+- decoder: cleanups to intra prediction functions (AT)
+- decoder: 4:4:4 bug fix (AT)
+- encoder/decoder: Various bug fixes/cleanups (AT/KS)
 
 Changes in Version JM 15.0 (since JM 14.2)
 ------------------------------------------
@@ -1403,6 +1421,7 @@ SW      Stephan Wenger          stewe@stewe.org
 SWi     Steffen Wittmann        Steffen.Wittmann@eu.panasonic.com
 SY      Steve Yao               steveyao@sandvideo.com
 SZ      Steve Zeng              stevezeng@rogers.com
+TB      Tomás Brandão           tomas.brandao@iscte.pt
 TH      Till Hallbach           halbach@tele.ntnu.no
 THi     Tobias Hinz             hinz@hhi.de
 TK      Thomas Kunlin           thomas.kunlin@st.com
@@ -1428,11 +1447,12 @@ YC      Yi-Jen Chiu             yi-jen.chiu@intel.com
 YD      Yunyang Dai             ydai@dolby.com
 YDh     Yves Dhondt             yves.dhondt@ugent.be
 YH      Yu-Wen Huang            YW_Huang@mtk.com.tw
+YHe     Yuwen He                yhe@dolby.com
 YK      Yoshihiro Kikuchi       yoshihiro.kikuchi@toshiba.co.jp
 YL      Yann Lemaguet           yann.lemaguet@philips.com
 YW      Ye-Kui Wang             ye-kui.wang@nokia.com
 YX      Yanjun Xu               yxu@sarnoff.com
-YY      Yan Ye                  yye@qualcomm.com
+YY      Yan Ye                  yye@dolby.com
 ZH      Zhou Heng               zhou_heng@yahoo.com
 ZHL     Zhen Li                 zhen.li@dolby.com
 ZL      Li Zhang                zhangli@jdl.ac.cn

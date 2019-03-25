@@ -26,65 +26,13 @@
 #define SYMTRACESTRING(s) // do nothing
 #endif
 
-int UsedBits;      // for internal statistics, is adjusted by se_v, ue_v, u_1
-
 // Note that all NA values are filled with 0
-
-//! gives CBP value from codeword number, both for intra and inter
-static const byte NCBP[2][48][2]=
-{
-  {  // 0      1        2       3       4       5       6       7       8       9      10      11
-    {15, 0},{ 0, 1},{ 7, 2},{11, 4},{13, 8},{14, 3},{ 3, 5},{ 5,10},{10,12},{12,15},{ 1, 7},{ 2,11},
-    { 4,13},{ 8,14},{ 6, 6},{ 9, 9},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},
-    { 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},
-    { 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0},{ 0, 0}
-  },
-  {
-    {47, 0},{31,16},{15, 1},{ 0, 2},{23, 4},{27, 8},{29,32},{30, 3},{ 7, 5},{11,10},{13,12},{14,15},
-    {39,47},{43, 7},{45,11},{46,13},{16,14},{ 3, 6},{ 5, 9},{10,31},{12,35},{19,37},{21,42},{26,44},
-    {28,33},{35,34},{37,36},{42,40},{44,39},{ 1,43},{ 2,45},{ 4,46},{ 8,17},{17,18},{18,20},{20,24},
-    {24,19},{ 6,21},{ 9,26},{22,28},{25,23},{32,27},{33,29},{34,30},{36,22},{40,25},{38,38},{41,41}
-  }
-};
-
-//! for the linfo_levrun_inter routine
-const byte NTAB1[4][8][2] =
-{
-  {{1,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0}},
-  {{1,1},{1,2},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0}},
-  {{2,0},{1,3},{1,4},{1,5},{0,0},{0,0},{0,0},{0,0}},
-  {{3,0},{2,1},{2,2},{1,6},{1,7},{1,8},{1,9},{4,0}},
-};
-const byte LEVRUN1[16]=
-{
-  4,2,2,1,1,1,1,1,1,1,0,0,0,0,0,0,
-};
-
-
-const byte NTAB2[4][8][2] =
-{
-  {{1,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0}},
-  {{1,1},{2,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0}},
-  {{1,2},{3,0},{4,0},{5,0},{0,0},{0,0},{0,0},{0,0}},
-  {{1,3},{1,4},{2,1},{3,1},{6,0},{7,0},{8,0},{9,0}},
-};
-
-//! for the linfo_levrun__c2x2 routine
-const byte LEVRUN3[4] =
-{
-  2,1,0,0
-};
-const byte NTAB3[2][2][2] =
-{
-  {{1,0},{0,0}},
-  {{2,0},{1,1}},
-};
 
 /*!
  *************************************************************************************
  * \brief
  *    ue_v, reads an ue(v) syntax element, the length in bits is stored in
- *    the global UsedBits variable
+ *    the global p_Dec->UsedBits variable
  *
  * \param tracestring
  *    the string for the trace file
@@ -106,7 +54,7 @@ int ue_v (char *tracestring, Bitstream *bitstream)
   symbol.mapping = linfo_ue;   // Mapping rule
   SYMTRACESTRING(tracestring);
   readSyntaxElement_VLC (&symbol, bitstream);
-  UsedBits+=symbol.len;
+  p_Dec->UsedBits+=symbol.len;
   return symbol.value1;
 }
 
@@ -115,7 +63,7 @@ int ue_v (char *tracestring, Bitstream *bitstream)
  *************************************************************************************
  * \brief
  *    ue_v, reads an se(v) syntax element, the length in bits is stored in
- *    the global UsedBits variable
+ *    the global p_Dec->UsedBits variable
  *
  * \param tracestring
  *    the string for the trace file
@@ -137,7 +85,7 @@ int se_v (char *tracestring, Bitstream *bitstream)
   symbol.mapping = linfo_se;   // Mapping rule: signed integer
   SYMTRACESTRING(tracestring);
   readSyntaxElement_VLC (&symbol, bitstream);
-  UsedBits+=symbol.len;
+  p_Dec->UsedBits+=symbol.len;
   return symbol.value1;
 }
 
@@ -146,7 +94,7 @@ int se_v (char *tracestring, Bitstream *bitstream)
  *************************************************************************************
  * \brief
  *    ue_v, reads an u(v) syntax element, the length in bits is stored in
- *    the global UsedBits variable
+ *    the global p_Dec->UsedBits variable
  *
  * \param LenInBits
  *    length of the syntax element
@@ -173,7 +121,7 @@ int u_v (int LenInBits, char*tracestring, Bitstream *bitstream)
   symbol.len = LenInBits;
   SYMTRACESTRING(tracestring);
   readSyntaxElement_FLC (&symbol, bitstream);
-  UsedBits+=symbol.len;
+  p_Dec->UsedBits+=symbol.len;
   return symbol.inf;
 }
 
@@ -181,7 +129,7 @@ int u_v (int LenInBits, char*tracestring, Bitstream *bitstream)
  *************************************************************************************
  * \brief
  *    i_v, reads an i(v) syntax element, the length in bits is stored in
- *    the global UsedBits variable
+ *    the global p_Dec->UsedBits variable
  *
  * \param LenInBits
  *    length of the syntax element
@@ -209,7 +157,7 @@ int i_v (int LenInBits, char*tracestring, Bitstream *bitstream)
   symbol.len = LenInBits;
   SYMTRACESTRING(tracestring);
   readSyntaxElement_FLC (&symbol, bitstream);
-  UsedBits+=symbol.len;
+  p_Dec->UsedBits+=symbol.len;
 
   // can be negative
   symbol.inf = -( symbol.inf & (1 << (LenInBits - 1)) ) | symbol.inf;
@@ -222,7 +170,7 @@ int i_v (int LenInBits, char*tracestring, Bitstream *bitstream)
  *************************************************************************************
  * \brief
  *    ue_v, reads an u(1) syntax element, the length in bits is stored in
- *    the global UsedBits variable
+ *    the global p_Dec->UsedBits variable
  *
  * \param tracestring
  *    the string for the trace file
@@ -255,7 +203,7 @@ Boolean u_1 (char *tracestring, Bitstream *bitstream)
 void linfo_ue(int len, int info, int *value1, int *dummy)
 {
   //assert ((len >> 1) < 32);
-  *value1 = (1 << (len >> 1)) + info - 1;
+  *value1 = (int) (((unsigned int) 1 << (len >> 1)) + (unsigned int) (info) - 1);
 }
 
 /*!
@@ -270,9 +218,8 @@ void linfo_ue(int len, int info, int *value1, int *dummy)
  */
 void linfo_se(int len,  int info, int *value1, int *dummy)
 {
-  int n;
   //assert ((len >> 1) < 32);
-  n = (1 << (len >> 1)) + info - 1;
+  unsigned int n = ((unsigned int) 1 << (len >> 1)) + (unsigned int) info - 1;
   *value1 = (n + 1) >> 1;
   if((n & 0x01) == 0)                           // lsb is signed bit
     *value1 = -*value1;
@@ -287,16 +234,29 @@ void linfo_se(int len,  int info, int *value1, int *dummy)
  *    cbp (intra)
  ************************************************************************
  */
-void linfo_cbp_intra(int len,int info,int *cbp, int *dummy)
+void linfo_cbp_intra_normal(int len,int info,int *cbp, int *dummy)
 {
   int cbp_idx;
 
   linfo_ue(len, info, &cbp_idx, dummy);
-  if((active_sps->chroma_format_idc==0)||(active_sps->chroma_format_idc==3))
-    *cbp=NCBP[0][cbp_idx][0];
-  else
-    *cbp=NCBP[1][cbp_idx][0];
+  *cbp=NCBP[1][cbp_idx][0];
+}
 
+
+/*!
+ ************************************************************************
+ * \par Input:
+ *    length and info
+ * \par Output:
+ *    cbp (intra)
+ ************************************************************************
+ */
+void linfo_cbp_intra_other(int len,int info,int *cbp, int *dummy)
+{
+  int cbp_idx;
+
+  linfo_ue(len, info, &cbp_idx, dummy);
+  *cbp=NCBP[0][cbp_idx][0];
 }
 
 /*!
@@ -307,15 +267,28 @@ void linfo_cbp_intra(int len,int info,int *cbp, int *dummy)
  *    cbp (inter)
  ************************************************************************
  */
-void linfo_cbp_inter(int len,int info,int *cbp, int *dummy)
+void linfo_cbp_inter_normal(int len,int info,int *cbp, int *dummy)
 {
   int cbp_idx;
 
   linfo_ue(len, info, &cbp_idx, dummy);
-  if((active_sps->chroma_format_idc==0)||(active_sps->chroma_format_idc==3))
-    *cbp=NCBP[0][cbp_idx][1];
-  else
-    *cbp=NCBP[1][cbp_idx][1];
+  *cbp=NCBP[1][cbp_idx][1];
+}
+
+/*!
+ ************************************************************************
+ * \par Input:
+ *    length and info
+ * \par Output:
+ *    cbp (inter)
+ ************************************************************************
+ */
+void linfo_cbp_inter_other(int len,int info,int *cbp, int *dummy)
+{
+  int cbp_idx;
+
+  linfo_ue(len, info, &cbp_idx, dummy);
+  *cbp=NCBP[0][cbp_idx][1];
 }
 
 /*!
@@ -416,7 +389,7 @@ int readSyntaxElement_VLC(SyntaxElement *sym, Bitstream *currStream)
  *    map it to the corresponding syntax element
  ************************************************************************
  */
-int readSyntaxElement_UVLC(SyntaxElement *sym, ImageParameters *img, struct datapartition *dP)
+int readSyntaxElement_UVLC(SyntaxElement *sym, ImageParameters *p_Img, struct datapartition *dP)
 {
   return (readSyntaxElement_VLC(sym, dP->bitstream));
 }
@@ -428,7 +401,7 @@ int readSyntaxElement_UVLC(SyntaxElement *sym, ImageParameters *img, struct data
  *    map it to the corresponding Intra Prediction Direction
  ************************************************************************
  */
-int readSyntaxElement_Intra4x4PredictionMode(SyntaxElement *sym, ImageParameters *img, Bitstream   *currStream)
+int readSyntaxElement_Intra4x4PredictionMode(SyntaxElement *sym, ImageParameters *p_Img, Bitstream   *currStream)
 {
   sym->len = GetVLCSymbol_IntraMode (currStream->streamBuffer, currStream->frame_bitoffset, &(sym->inf), currStream->bitstream_length);
 
@@ -493,29 +466,34 @@ int GetVLCSymbol_IntraMode (byte buffer[],int totbitoffset,int *info, int byteco
  */
 int more_rbsp_data (byte buffer[],int totbitoffset,int bytecount)
 {
-  int bitoffset   = (7 - (totbitoffset & 0x07));      // bit from start of byte
   long byteoffset = (totbitoffset >> 3);      // byte from start of buffer
-  byte *cur_byte  = &(buffer[byteoffset]);
-  int ctr_bit     = 0;      // control bit for current bit posision
-  int cnt         = 0;
-
-  //assert (byteoffset<bytecount);
-
   // there is more until we're in the last byte
-  if (byteoffset < (bytecount - 1)) return TRUE;
-
-  // read one bit
-  ctr_bit = ((*cur_byte)>> (bitoffset--)) & 0x01;
-
-  // a stop bit has to be one
-  if (ctr_bit==0) return TRUE;  
-
-  while (bitoffset>=0 && !cnt)
+  if (byteoffset < (bytecount - 1)) 
+    return TRUE;
+  else
   {
-    cnt |= ((*cur_byte)>> (bitoffset--)) & 0x01;   // set up control bit
-  }
+    int bitoffset   = (7 - (totbitoffset & 0x07));      // bit from start of byte
+    byte *cur_byte  = &(buffer[byteoffset]);
+    // read one bit
+    int ctr_bit     = ctr_bit = ((*cur_byte)>> (bitoffset--)) & 0x01;      // control bit for current bit posision
 
-  return (cnt);
+    //assert (byteoffset<bytecount);       
+
+    // a stop bit has to be one
+    if (ctr_bit==0) 
+      return TRUE;  
+    else
+    {
+      int cnt = 0;
+
+      while (bitoffset>=0 && !cnt)
+      {
+        cnt |= ((*cur_byte)>> (bitoffset--)) & 0x01;   // set up control bit
+      }
+
+      return (cnt);
+    }
+  }
 }
 
 
@@ -576,7 +554,6 @@ int GetVLCSymbol (byte buffer[],int totbitoffset,int *info, int bytecount)
 
   if (byteoffset + ((len + 7) >> 3) > bytecount)
     return -1;
-
   else
   {
     // make infoword
@@ -818,7 +795,7 @@ int readSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *sym,
  *    read NumCoeff/TrailingOnes codeword from UVLC-partition ChromaDC
  ************************************************************************
  */
-int readSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *sym,  Bitstream *currStream)
+int readSyntaxElement_NumCoeffTrailingOnesChromaDC(ImageParameters *p_Img, SyntaxElement *sym,  Bitstream *currStream)
 {
   static const byte lentab[3][4][17] =
   {
@@ -860,7 +837,7 @@ int readSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *sym,  Bitstrea
   };
 
   int code;
-  int yuv = active_sps->chroma_format_idc - 1;
+  int yuv = p_Img->active_sps->chroma_format_idc - 1;
   int retval = code_from_bitstream_2d(sym, currStream, &lentab[yuv][0][0], &codtab[yuv][0][0], 17, 4, &code);
 
   if (retval)
@@ -1081,7 +1058,7 @@ int readSyntaxElement_TotalZeros(SyntaxElement *sym,  Bitstream *currStream)
  *    read Total Zeros Chroma DC codeword from UVLC-partition
  ************************************************************************
  */
-int readSyntaxElement_TotalZerosChromaDC(SyntaxElement *sym,  Bitstream *currStream)
+int readSyntaxElement_TotalZerosChromaDC(ImageParameters *p_Img, SyntaxElement *sym,  Bitstream *currStream)
 {
   static const byte lentab[3][TOTRUN_NUM][16] =
   {
@@ -1148,7 +1125,7 @@ int readSyntaxElement_TotalZerosChromaDC(SyntaxElement *sym,  Bitstream *currStr
   };
 
   int code;
-  int yuv = active_sps->chroma_format_idc - 1;
+  int yuv = p_Img->active_sps->chroma_format_idc - 1;
   int vlcnum = sym->value1;
   int retval = code_from_bitstream_2d(sym, currStream, &lentab[yuv][vlcnum][0], &codtab[yuv][vlcnum][0], 16, 1, &code);
 

@@ -85,7 +85,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				InlineFunctionExpansion="2"
-				AdditionalIncludeDirectories="lencod\inc"
+				AdditionalIncludeDirectories="lencod/inc,lcommon/inc"
 				PreprocessorDefinitions="WIN32;DEBUG;_CONSOLE"
 				StringPooling="TRUE"
 				RuntimeLibrary="4"
@@ -107,10 +107,274 @@
 				AdditionalOptions="/FIXED:NO"
 				AdditionalDependencies="odbc32.lib odbccp32.lib Ws2_32.lib"
 				OutputFile="./bin/lencod.exe"
-				LinkIncremental="1"
+				LinkIncremental="2"
 				SuppressStartupBanner="TRUE"
 				GenerateDebugInformation="TRUE"
 				ProgramDatabaseFile=".\lencod\Release_vc7/lencod.pdb"
+				SubSystem="1"
+				TargetMachine="1"/>
+			<Tool
+				Name="VCMIDLTool"
+				TypeLibraryName=".\lencod\Release_vc7/lencod.tlb"
+				HeaderFileName=""/>
+			<Tool
+				Name="VCPostBuildEventTool"/>
+			<Tool
+				Name="VCPreBuildEventTool"/>
+			<Tool
+				Name="VCPreLinkEventTool"/>
+			<Tool
+				Name="VCResourceCompilerTool"
+				PreprocessorDefinitions="NDEBUG"
+				Culture="1033"/>
+			<Tool
+				Name="VCWebServiceProxyGeneratorTool"/>
+			<Tool
+				Name="VCXMLDataGeneratorTool"/>
+			<Tool
+				Name="VCWebDeploymentTool"/>
+			<Tool
+				Name="VCManagedWrapperGeneratorTool"/>
+			<Tool
+				Name="VCAuxiliaryManagedWrapperGeneratorTool"/>
+		</Configuration>
+		<Configuration
+			Name="Vtune|Win32"
+			OutputDirectory=".\lencod\VTune_vc7"
+			IntermediateDirectory=".\lencod\VTune_vc7"
+			ConfigurationType="1"
+			UseOfMFC="0"
+			ATLMinimizesCRunTimeLibraryUsage="FALSE"
+			CharacterSet="2">
+			<Tool
+				Name="VCCLCompilerTool"
+				AdditionalOptions=""
+				Optimization="2"
+				InlineFunctionExpansion="2"
+				AdditionalIncludeDirectories="lencod/inc,lcommon/inc"
+				PreprocessorDefinitions="WIN32;DEBUG;_CONSOLE"
+				StringPooling="TRUE"
+				RuntimeLibrary="4"
+				EnableFunctionLevelLinking="TRUE"
+				UsePrecompiledHeader="2"
+				PrecompiledHeaderFile=".\lencod\VTune_vc7/lencod.pch"
+				AssemblerListingLocation=".\lencod\VTune_vc7/"
+				ObjectFile=".\lencod\VTune_vc7/"
+				ProgramDataBaseFileName=".\lencod\Release_vc7/"
+				BrowseInformation="1"
+				WarningLevel="3"
+				SuppressStartupBanner="TRUE"
+				DebugInformationFormat="3"
+				CompileAs="0"/>
+			<Tool
+				Name="VCCustomBuildTool"/>
+			<Tool
+				Name="VCLinkerTool"
+				AdditionalOptions="/FIXED:NO"
+				AdditionalDependencies="odbc32.lib odbccp32.lib Ws2_32.lib"
+				OutputFile="./bin/lencod.exe"
+				LinkIncremental="1"
+				SuppressStartupBanner="TRUE"
+				GenerateDebugInformation="TRUE"
+				ProgramDatabaseFile=".\lencod\VTune_vc7/lencod.pdb"
+				SubSystem="1"
+				TargetMachine="1"/>
+			<Tool
+				Name="VCMIDLTool"
+				TypeLibraryName=".\lencod\Release_vc7/lencod.tlb"
+				HeaderFileName=""/>
+			<Tool
+				Name="VCPostBuildEventTool"/>
+			<Tool
+				Name="VCPreBuildEventTool"/>
+			<Tool
+				Name="VCPreLinkEventTool"/>
+			<Tool
+				Name="VCResourceCompilerTool"
+				PreprocessorDefinitions="NDEBUG"
+				Culture="1033"/>
+			<Tool
+				Name="VCWebServiceProxyGeneratorTool"/>
+			<Tool
+				Name="VCXMLDataGeneratorTool"/>
+			<Tool
+				Name="VCWebDeploymentTool"/>
+			<Tool
+				Name="VCManagedWrapperGeneratorTool"/>
+			<Tool
+				Name="VCAuxiliaryManagedWrapperGeneratorTool"/>
+		</Configuration>
+		<Configuration
+			Name="ReleaseFast|Win32"
+			OutputDirectory=".\lencod\ReleaseFast_vc7"
+			IntermediateDirectory=".\lencod\ReleaseFast_vc7"
+			ConfigurationType="1"
+			UseOfMFC="0"
+			ATLMinimizesCRunTimeLibraryUsage="FALSE"
+			CharacterSet="2">
+			<Tool
+				Name="VCCLCompilerTool"
+				Optimization="2"
+				InlineFunctionExpansion="2"
+				AdditionalIncludeDirectories="lencod/inc,lcommon/inc"
+				PreprocessorDefinitions="WIN32;DEBUG;_CONSOLE"
+				StringPooling="TRUE"
+				RuntimeLibrary="4"
+				EnableFunctionLevelLinking="TRUE"
+				UsePrecompiledHeader="2"
+				PrecompiledHeaderFile=".\lencod\ReleaseFast_vc7/lencod.pch"
+				AssemblerListingLocation=".\lencod\ReleaseFast_vc7/"
+				ObjectFile=".\lencod\ReleaseFast_vc7/"
+				ProgramDataBaseFileName=".\lencod\Release_vc7/"
+				BrowseInformation="1"
+				WarningLevel="3"
+				SuppressStartupBanner="TRUE"
+				DebugInformationFormat="3"
+				CompileAs="0"/>
+			<Tool
+				Name="VCCustomBuildTool"/>
+			<Tool
+				Name="VCLinkerTool"
+				AdditionalOptions="/FIXED:NO"
+				AdditionalDependencies="odbc32.lib odbccp32.lib Ws2_32.lib"
+				OutputFile="./bin/lencod.exe"
+				LinkIncremental="1"
+				SuppressStartupBanner="TRUE"
+				GenerateDebugInformation="TRUE"
+				ProgramDatabaseFile=".\lencod\ReleaseFast_vc7/lencod.pdb"
+				SubSystem="1"
+				TargetMachine="1"/>
+			<Tool
+				Name="VCMIDLTool"
+				TypeLibraryName=".\lencod\Release_vc7/lencod.tlb"
+				HeaderFileName=""/>
+			<Tool
+				Name="VCPostBuildEventTool"/>
+			<Tool
+				Name="VCPreBuildEventTool"/>
+			<Tool
+				Name="VCPreLinkEventTool"/>
+			<Tool
+				Name="VCResourceCompilerTool"
+				PreprocessorDefinitions="NDEBUG"
+				Culture="1033"/>
+			<Tool
+				Name="VCWebServiceProxyGeneratorTool"/>
+			<Tool
+				Name="VCXMLDataGeneratorTool"/>
+			<Tool
+				Name="VCWebDeploymentTool"/>
+			<Tool
+				Name="VCManagedWrapperGeneratorTool"/>
+			<Tool
+				Name="VCAuxiliaryManagedWrapperGeneratorTool"/>
+		</Configuration>
+		<Configuration
+			Name="ReleaseMMX|Win32"
+			OutputDirectory=".\lencod\Release_vc7_mmx"
+			IntermediateDirectory=".\lencod\Release_vc7_mmx"
+			ConfigurationType="1"
+			UseOfMFC="0"
+			ATLMinimizesCRunTimeLibraryUsage="FALSE"
+			CharacterSet="2">
+			<Tool
+				Name="VCCLCompilerTool"
+				AdditionalOptions="/Zp4"
+				Optimization="2"
+				InlineFunctionExpansion="2"
+				AdditionalIncludeDirectories="lencod/inc,lcommon/inc"
+				PreprocessorDefinitions="WIN32;DEBUG;_CONSOLE;USEMMX"
+				StringPooling="TRUE"
+				RuntimeLibrary="4"
+				EnableFunctionLevelLinking="TRUE"
+				UsePrecompiledHeader="2"
+				PrecompiledHeaderFile=".\lencod\Release_vc7_mmx/lencod.pch"
+				AssemblerListingLocation=".\lencod\Release_vc7_mmx/"
+				ObjectFile=".\lencod\Release_vc7_mmx/"
+				ProgramDataBaseFileName=".\lencod\Release_vc7_mmx/"
+				BrowseInformation="1"
+				WarningLevel="3"
+				SuppressStartupBanner="TRUE"
+				DebugInformationFormat="3"
+				CompileAs="0"/>
+			<Tool
+				Name="VCCustomBuildTool"/>
+			<Tool
+				Name="VCLinkerTool"
+				AdditionalOptions="/FIXED:NO "
+				AdditionalDependencies="odbc32.lib odbccp32.lib Ws2_32.lib"
+				OutputFile="./bin/lencodMMX.exe"
+				LinkIncremental="1"
+				SuppressStartupBanner="TRUE"
+				GenerateDebugInformation="TRUE"
+				ProgramDatabaseFile=".\lencod\Release_vc7_mmx/lencod.pdb"
+				SubSystem="1"
+				TargetMachine="1"/>
+			<Tool
+				Name="VCMIDLTool"
+				TypeLibraryName=".\lencod\Release_vc7/lencod.tlb"
+				HeaderFileName=""/>
+			<Tool
+				Name="VCPostBuildEventTool"/>
+			<Tool
+				Name="VCPreBuildEventTool"/>
+			<Tool
+				Name="VCPreLinkEventTool"/>
+			<Tool
+				Name="VCResourceCompilerTool"
+				PreprocessorDefinitions="NDEBUG"
+				Culture="1033"/>
+			<Tool
+				Name="VCWebServiceProxyGeneratorTool"/>
+			<Tool
+				Name="VCXMLDataGeneratorTool"/>
+			<Tool
+				Name="VCWebDeploymentTool"/>
+			<Tool
+				Name="VCManagedWrapperGeneratorTool"/>
+			<Tool
+				Name="VCAuxiliaryManagedWrapperGeneratorTool"/>
+		</Configuration>
+		<Configuration
+			Name="DebugMMX|Win32"
+			OutputDirectory=".\lencod/Debug_vc7_mmx"
+			IntermediateDirectory=".\lencod/Debug_vc7_mmx"
+			ConfigurationType="1"
+			UseOfMFC="0"
+			ATLMinimizesCRunTimeLibraryUsage="FALSE"
+			CharacterSet="2">
+			<Tool
+				Name="VCCLCompilerTool"
+				AdditionalOptions="/Zp4"
+				Optimization="0"
+				InlineFunctionExpansion="0"
+				AdditionalIncludeDirectories="lencod/inc,lcommon/inc"
+				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE;USEMMX"
+				StringPooling="FALSE"
+				BasicRuntimeChecks="3"
+				RuntimeLibrary="5"
+				EnableFunctionLevelLinking="FALSE"
+				UsePrecompiledHeader="2"
+				PrecompiledHeaderFile=".\lencod/Debug_vc7_mmx/lencod.pch"
+				AssemblerListingLocation=".\lencod/Debug_vc7_mmx/"
+				ObjectFile=".\lencod/Debug_vc7_mmx/"
+				ProgramDataBaseFileName=".\lencod\Debug_vc7_mmx/"
+				BrowseInformation="1"
+				WarningLevel="3"
+				SuppressStartupBanner="TRUE"
+				DebugInformationFormat="4"
+				CompileAs="0"/>
+			<Tool
+				Name="VCCustomBuildTool"/>
+			<Tool
+				Name="VCLinkerTool"
+				AdditionalOptions="/FIXED:NO "
+				AdditionalDependencies="odbc32.lib odbccp32.lib Ws2_32.lib"
+				OutputFile="./bin/lencodMMX.exe"
+				LinkIncremental="2"
+				SuppressStartupBanner="TRUE"
+				GenerateDebugInformation="TRUE"
+				ProgramDatabaseFile=".\lencod\Debug_vc7_mmx/lencod.pdb"
 				SubSystem="1"
 				TargetMachine="1"/>
 			<Tool
@@ -209,25 +473,31 @@
 				RelativePath=".\lencod\src\img_distortion.c">
 			</File>
 			<File
-				RelativePath=".\lencod\src\img_io.c">
+				RelativePath=".\lcommon\src\img_io.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\img_luma.c">
 			</File>
 			<File
-				RelativePath=".\lencod\src\img_process.c">
+				RelativePath=".\lcommon\src\img_process.c">
 			</File>
 			<File
-				RelativePath=".\lencod\src\input.c">
+				RelativePath=".\lcommon\src\input.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\intra4x4.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\intra8x8.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\intrarefresh.c">
 			</File>
 			<File
-				RelativePath=".\lencod\src\io_raw.c">
+				RelativePath=".\lcommon\src\io_raw.c">
 			</File>
 			<File
-				RelativePath=".\lencod\src\io_tiff.c">
+				RelativePath=".\lcommon\src\io_tiff.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\leaky_bucket.c">
@@ -236,10 +506,16 @@
 				RelativePath=".\lencod\src\lencod.c">
 			</File>
 			<File
+				RelativePath=".\lencod\src\list_reorder.c">
+			</File>
+			<File
 				RelativePath=".\lencod\src\loopFilter.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\macroblock.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\macroblock_P444.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\mb_access.c">
@@ -275,6 +551,15 @@
 				RelativePath=".\lencod\src\me_epzs.c">
 			</File>
 			<File
+				RelativePath=".\lencod\src\me_epzs_common.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\me_epzs_int.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\me_epzs_sub.c">
+			</File>
+			<File
 				RelativePath=".\lencod\src\me_fullfast.c">
 			</File>
 			<File
@@ -287,13 +572,19 @@
 				RelativePath=".\lencod\src\me_umhexsmp.c">
 			</File>
 			<File
-				RelativePath=".\lencod\src\memalloc.c">
+				RelativePath=".\lcommon\src\memalloc.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\mmco.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\mode_decision.c">
 			</File>
 			<File
-				RelativePath=".\lencod\src\mv-search.c">
+				RelativePath=".\lcommon\src\mv_prediction.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\mv_search.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\nal.c">
@@ -311,7 +602,7 @@
 				RelativePath=".\lencod\src\parset.c">
 			</File>
 			<File
-				RelativePath=".\lencod\src\parsetcommon.c">
+				RelativePath=".\lcommon\src\parsetcommon.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\q_around.c">
@@ -368,6 +659,15 @@
 				RelativePath=".\lencod\src\rd_intra_jm.c">
 			</File>
 			<File
+				RelativePath=".\lencod\src\rd_intra_jm444.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\rd_intra_jm_low.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\rd_pic_coding.c">
+			</File>
+			<File
 				RelativePath=".\lencod\src\rdopt.c">
 			</File>
 			<File
@@ -386,9 +686,6 @@
 				RelativePath=".\lencod\src\rdpicdecision.c">
 			</File>
 			<File
-				RelativePath=".\lencod\src\refbuf.c">
-			</File>
-			<File
 				RelativePath=".\lencod\src\report.c">
 			</File>
 			<File
@@ -404,10 +701,13 @@
 				RelativePath=".\lencod\src\symbol.c">
 			</File>
 			<File
-				RelativePath=".\lencod\src\transform.c">
+				RelativePath=".\lcommon\src\transform.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\transform8x8.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\transform8x8_H444.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\vlc.c">
@@ -416,7 +716,7 @@
 				RelativePath=".\lencod\src\weighted_prediction.c">
 			</File>
 			<File
-				RelativePath=".\lencod\src\win32.c">
+				RelativePath=".\lcommon\src\win32.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\wp_lms.c">
@@ -459,16 +759,19 @@
 				RelativePath=".\lencod\inc\contributors.h">
 			</File>
 			<File
-				RelativePath=".\lencod\inc\ctx_tables.h">
+				RelativePath=".\lcommon\inc\ctx_tables.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\defines.h">
 			</File>
 			<File
+				RelativePath=".\lcommon\inc\distortion.h">
+			</File>
+			<File
 				RelativePath=".\lencod\inc\elements.h">
 			</File>
 			<File
-				RelativePath=".\lencod\inc\enc_statistics.h">
+				RelativePath=".\lcommon\inc\enc_statistics.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\errdo.h">
@@ -489,7 +792,7 @@
 				RelativePath=".\lencod\inc\fmo.h">
 			</File>
 			<File
-				RelativePath=".\lencod\inc\frame.h">
+				RelativePath=".\lcommon\inc\frame.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\global.h">
@@ -498,7 +801,7 @@
 				RelativePath=".\lencod\inc\header.h">
 			</File>
 			<File
-				RelativePath=".\lencod\inc\ifunctions.h">
+				RelativePath=".\lcommon\inc\ifunctions.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\image.h">
@@ -516,46 +819,58 @@
 				RelativePath=".\lencod\inc\img_dist_ssim.h">
 			</File>
 			<File
-				RelativePath=".\lencod\inc\img_dist_wpsnr.h">
-			</File>
-			<File
 				RelativePath=".\lencod\inc\img_distortion.h">
 			</File>
 			<File
-				RelativePath=".\lencod\inc\img_io.h">
+				RelativePath=".\lcommon\inc\img_io.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\img_luma.h">
 			</File>
 			<File
-				RelativePath=".\lencod\inc\img_process.h">
+				RelativePath=".\lcommon\inc\img_process.h">
 			</File>
 			<File
-				RelativePath=".\lencod\inc\input.h">
+				RelativePath=".\lcommon\inc\input.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\intra4x4.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\intra8x8.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\intrarefresh.h">
 			</File>
 			<File
-				RelativePath=".\lencod\inc\io_image.h">
+				RelativePath=".\lcommon\inc\io_image.h">
 			</File>
 			<File
-				RelativePath=".\lencod\inc\io_raw.h">
+				RelativePath=".\lcommon\inc\io_raw.h">
 			</File>
 			<File
-				RelativePath=".\lencod\inc\io_tiff.h">
+				RelativePath=".\lcommon\inc\io_tiff.h">
 			</File>
 			<File
-				RelativePath=".\lencod\inc\io_video.h">
+				RelativePath=".\lcommon\inc\io_video.h">
+			</File>
+			<File
+				RelativePath=".\lcommon\inc\lagrangian.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\leaky_bucket.h">
 			</File>
 			<File
+				RelativePath=".\lencod\inc\list_reorder.h">
+			</File>
+			<File
 				RelativePath=".\lencod\inc\macroblock.h">
 			</File>
 			<File
-				RelativePath=".\lencod\inc\mb_access.h">
+				RelativePath=".\lencod\inc\macroblock_p444.h">
+			</File>
+			<File
+				RelativePath=".\lcommon\inc\mb_access.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\mbuffer.h">
@@ -567,10 +882,19 @@
 				RelativePath=".\lencod\inc\md_common.h">
 			</File>
 			<File
+				RelativePath=".\lencod\inc\md_distortion.h">
+			</File>
+			<File
 				RelativePath=".\lencod\inc\me_distortion.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\me_epzs.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\me_epzs_common.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\me_epzs_int.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\me_fullfast.h">
@@ -585,13 +909,19 @@
 				RelativePath=".\lencod\inc\me_umhexsmp.h">
 			</File>
 			<File
-				RelativePath=".\lencod\inc\memalloc.h">
+				RelativePath=".\lcommon\inc\memalloc.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\mmco.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\mode_decision.h">
 			</File>
 			<File
-				RelativePath=".\lencod\inc\mv-search.h">
+				RelativePath=".\lcommon\inc\mv_prediction.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\mv_search.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\nal.h">
@@ -600,10 +930,13 @@
 				RelativePath=".\lencod\inc\nalu.h">
 			</File>
 			<File
-				RelativePath=".\lencod\inc\nalucommon.h">
+				RelativePath=".\lcommon\inc\nalucommon.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\output.h">
+			</File>
+			<File
+				RelativePath=".\lcommon\inc\params.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\parset.h">
@@ -627,6 +960,9 @@
 				RelativePath=".\lencod\inc\quant8x8.h">
 			</File>
 			<File
+				RelativePath=".\lcommon\inc\quant_params.h">
+			</File>
+			<File
 				RelativePath=".\lencod\inc\quantChroma.h">
 			</File>
 			<File
@@ -636,7 +972,13 @@
 				RelativePath=".\lencod\inc\rc_quadratic.h">
 			</File>
 			<File
+				RelativePath=".\lencod\inc\rc_types.h">
+			</File>
+			<File
 				RelativePath=".\lencod\inc\rd_intra_jm.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\rd_intra_jm444.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\rdopt.h">
@@ -651,7 +993,7 @@
 				RelativePath=".\lencod\inc\refbuf.h">
 			</File>
 			<File
-				RelativePath=".\lencod\inc\report.h">
+				RelativePath=".\lcommon\inc\report.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\rtp.h">
@@ -666,19 +1008,25 @@
 				RelativePath=".\lencod\inc\symbol.h">
 			</File>
 			<File
-				RelativePath=".\lencod\inc\transform.h">
+				RelativePath=".\lcommon\inc\transform.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\transform8x8.h">
 			</File>
 			<File
-				RelativePath=".\lencod\inc\transform_wavelet.h">
+				RelativePath=".\lcommon\inc\typedefs.h">
+			</File>
+			<File
+				RelativePath=".\lcommon\inc\types.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\vlc.h">
 			</File>
 			<File
-				RelativePath=".\lencod\inc\win32.h">
+				RelativePath=".\lcommon\inc\vui_params.h">
+			</File>
+			<File
+				RelativePath=".\lcommon\inc\win32.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\wp.h">

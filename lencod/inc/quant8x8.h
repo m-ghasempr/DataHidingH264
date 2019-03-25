@@ -1,61 +1,29 @@
 
 /*!
- ************************************************************************
- * \file quant4x4.h
- *
- * \brief
- *    Quantization process header file
- *
- * \author
- *    Alexis Michael Tourapis         <alexismt@ieee.org>                
- *
- ************************************************************************
- */
+************************************************************************
+* \file quant4x4.h
+*
+* \brief
+*    Quantization process header file
+*
+* \author
+*    Alexis Michael Tourapis         <alexismt@ieee.org>                
+*
+************************************************************************
+*/
 
 #ifndef _QUANT8x8_H_
 #define _QUANT8x8_H_
 
-void init_quant_8x8(InputParameters *params, ImageParameters *img, Slice *currSlice);
+extern void init_quant_8x8 (Slice *currSlice);
 
-int quant_8x8_normal(int **tblock, int block_y, int block_x, int qp, 
-                     int*  ACLevel, int*  ACRun, 
-                     int **fadjust8x8, int **levelscale, int **invlevelscale, int **leveloffset,
-                     int *coeff_cost, const byte (*pos_scan)[2], const byte *c_cost);
+extern int quant_8x8_normal (Macroblock *currMB, int **tblock, struct quant_methods *q_method);
+extern int quant_8x8_around (Macroblock *currMB, int **tblock, struct quant_methods *q_method);
+extern int quant_8x8_trellis(Macroblock *currMB, int **tblock, struct quant_methods *q_method);
 
-int quant_8x8_around(int **tblock, int block_y, int block_x, int qp, 
-                     int*  ACLevel, int*  ACRun, 
-                     int **fadjust8x8, int **levelscale, int **invlevelscale, int **leveloffset,
-                     int *coeff_cost, const byte (*pos_scan)[2], const byte *c_cost);
-
-int quant_8x8_trellis (int **tblock, int block_y, int block_x, int qp,
-                       int*  ACLevel, int*  ACRun, 
-                       int **fadjust4x4, int **levelscale, int **invlevelscale, int **leveloffset,
-                       int *coeff_cost, const byte (*pos_scan)[2], const byte *c_cost);
-
-int (*quant_8x8)    (int **tblock, int block_y, int block_x, int qp, 
-                     int*  ACLevel, int*  ACRun, 
-                     int **fadjust8x8, int **levelscale, int **invlevelscale, int **leveloffset,
-                     int *coeff_cost, const byte (*pos_scan)[2], const byte *c_cost);
-
-int quant_8x8cavlc_around(int **tblock, int block_y, int block_x, int  qp,                 
-                          int***  cofAC, 
-                          int **fadjust8x8, int **levelscale, int **invlevelscale, int **leveloffset,
-                          int *coeff_cost, const byte (*pos_scan)[2], const byte *c_cost);
-
-int quant_8x8cavlc_normal(int **tblock, int block_y, int block_x, int  qp,                 
-                          int***  cofAC, 
-                          int **fadjust8x8, int **levelscale, int **invlevelscale, int **leveloffset,
-                          int *coeff_cost, const byte (*pos_scan)[2], const byte *c_cost);
-
-int quant_8x8cavlc_trellis(int **tblock, int block_y, int block_x, int  qp,                 
-                           int***  cofAC, 
-                           int **fadjust8x8, int **levelscale, int **invlevelscale, int **leveloffset,
-                           int *coeff_cost, const byte (*pos_scan)[2], const byte *c_cost);
-
-int (*quant_8x8cavlc)(int **tblock, int block_y, int block_x, int  qp,                 
-                      int***  cofAC, 
-                      int **fadjust8x8, int **levelscale, int **invlevelscale, int **leveloffset,
-                      int *coeff_cost, const byte (*pos_scan)[2], const byte *c_cost);
+extern int quant_8x8cavlc_around (Macroblock *currMB, int **tblock, struct quant_methods *q_method, int***  cofAC); 
+extern int quant_8x8cavlc_normal (Macroblock *currMB, int **tblock, struct quant_methods *q_method, int***  cofAC); 
+extern int quant_8x8cavlc_trellis(Macroblock *currMB, int **tblock, struct quant_methods *q_method, int***  cofAC); 
 
 #endif
 

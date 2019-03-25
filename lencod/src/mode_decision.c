@@ -28,11 +28,12 @@
 #include "rdoq.h"
 #include "errdo.h"
 #include "q_around.h"
+#include "slice.h"
+#include "md_common.h"
+#include "conformance.h"
+#include "me_umhex.h"
+#include "rdopt.h"
 
-//==== MODULE PARAMETERS ====
-const int  b8_mode_table[6]  = {0, 4, 5, 6, 7};                             // DO NOT CHANGE ORDER !!!
-const int  mb_mode_table[9]  = {0, 1, 2, 3, P8x8, I16MB, I4MB, I8MB, IPCM}; // DO NOT CHANGE ORDER !!!
-extern int luma_transform_size_8x8_flag;
 
 /*!
 *************************************************************************************
@@ -49,47 +50,112 @@ void reset_valid_modes(RD_PARAMS *enc_mb)
 /*!
 *************************************************************************************
 * \brief
+*    Checks whether a primary SP slice macroblock was encoded as I16
+*************************************************************************************
+*/
+static inline int check_for_SI16(int **lrec, int pix_x, int pix_y)
+{
+  int i,j;
+  for (i = pix_y; i < pix_y + MB_BLOCK_SIZE; i++)
+  {
+    for (j = pix_x;j < pix_x + MB_BLOCK_SIZE; j++)
+      if (lrec[i][j] != -16)
+        return 0;
+  }
+  return 1;
+}
+
+/*!
+*************************************************************************************
+* \brief
+*    Update parameters after encoding a macroblock
+*************************************************************************************
+*/
+void end_encode_one_macroblock(Macroblock *currMB)
+{
+  Slice *currSlice = currMB->p_slice;
+  ImageParameters *p_Img = currMB->p_Img;
+  InputParameters *p_Inp = currMB->p_Inp;
+
+  int bslice = (currSlice->slice_type == B_SLICE);
+
+  update_qp_cbp(currMB);
+
+  if ( (currSlice->MbaffFrameFlag)
+    && (currMB->mbAddrX & 0x01)
+    && (currMB->mb_type ? 0:((bslice) ? !currMB->cbp:1))  // bottom is skip
+    && ((currMB->PrevMB)->mb_type ? 0:((bslice) ? !(currMB->PrevMB)->cbp:1))
+    && !(field_flag_inference(currMB) == currMB->mb_field)) // top is skip
+  {
+    currSlice->rddata->min_rdcost = 1e30;  // don't allow coding of a MB pair as skip if wrong inference
+  }
+  else
+    currSlice->rddata->min_rdcost = (double)currMB->min_rdcost;
+
+  currSlice->rddata->min_dcost  = (double)currMB->min_dcost;
+  currSlice->rddata->min_rate   = (double)currMB->min_rate;
+
+  if(p_Inp->SearchMode == UM_HEX)
+  {
+    UMHEX_skip_intrabk_SAD(currMB, p_Img->listXsize[currMB->list_offset]);
+  }
+  else if(p_Inp->SearchMode == UM_HEX_SIMPLE)
+  {
+    smpUMHEX_skip_intrabk_SAD(currMB);
+  }
+
+  //--- constrain intra prediction ---
+  if(p_Inp->UseConstrainedIntraPred && (currSlice->slice_type == P_SLICE || currSlice->slice_type == B_SLICE))
+  {
+    p_Img->intra_block[currMB->mbAddrX] = IS_INTRA(currMB);
+  }
+}
+
+/*!
+*************************************************************************************
+* \brief
 *    Initialize Encoding parameters for Macroblock
 *************************************************************************************
 */
-void init_enc_mb_params(Macroblock* currMB, RD_PARAMS *enc_mb, int intra, int bslice)
+void init_enc_mb_params(Macroblock* currMB, RD_PARAMS *enc_mb, int intra)
 {
+  ImageParameters *p_Img = currMB->p_Img;
+  InputParameters *p_Inp = currMB->p_Inp;
+  Slice *currSlice = currMB->p_slice;
+  int bslice = (currSlice->slice_type == B_SLICE);
+
   int l,k;
 
-  //Setup list offset
-  enc_mb->list_offset[LIST_0] = LIST_0 + currMB->list_offset;
-  enc_mb->list_offset[LIST_1] = LIST_1 + currMB->list_offset;
+  enc_mb->curr_mb_field = (short) ((currSlice->MbaffFrameFlag)&&(currMB->mb_field));
 
-  enc_mb->curr_mb_field = ((img->MbaffFrameFlag)&&(currMB->mb_field));
- 
   // Set valid modes  
-  enc_mb->valid[I8MB]  = (!params->DisableIntraInInter || intra )?   params->Transform8x8Mode : 0;
-  enc_mb->valid[I4MB]  = (!params->DisableIntraInInter || intra )? ((params->Transform8x8Mode == 2) ? 0 : 1) : 0;
-  enc_mb->valid[I4MB]  = (!params->DisableIntra4x4  ) ? enc_mb->valid[I4MB] : 0;
-  enc_mb->valid[I16MB] = (!params->DisableIntraInInter || intra )? 1 : 0;
-  enc_mb->valid[I16MB] = (!params->DisableIntra16x16) ? enc_mb->valid[I16MB] : 0;
-  enc_mb->valid[IPCM]  = (!params->DisableIntraInInter || intra )? params->EnableIPCM : 0;
+  enc_mb->valid[I8MB]  = (short) ((!p_Inp->DisableIntraInInter || intra )?   p_Inp->Transform8x8Mode : 0);
+  enc_mb->valid[I4MB]  = (short) ((!p_Inp->DisableIntraInInter || intra )? ((p_Inp->Transform8x8Mode == 2) ? 0 : 1) : 0);
+  enc_mb->valid[I4MB]  = (short) ((!p_Inp->DisableIntra4x4  ) ? enc_mb->valid[I4MB] : 0);
+  enc_mb->valid[I16MB] = (short) ((!p_Inp->DisableIntraInInter || intra )? 1 : 0);
+  enc_mb->valid[I16MB] = (short) ((!p_Inp->DisableIntra16x16) ? enc_mb->valid[I16MB] : 0);
+  enc_mb->valid[IPCM]  = (short) ((!p_Inp->DisableIntraInInter || intra )? p_Inp->EnableIPCM : 0);
 
-  enc_mb->valid[0]     = (!intra && params->InterSearch[bslice][0]);
-  enc_mb->valid[1]     = (!intra && params->InterSearch[bslice][1]);
-  enc_mb->valid[2]     = (!intra && params->InterSearch[bslice][2]);
-  enc_mb->valid[3]     = (!intra && params->InterSearch[bslice][3]);
-  enc_mb->valid[4]     = (!intra && params->InterSearch[bslice][4]);
-  enc_mb->valid[5]     = (!intra && params->InterSearch[bslice][5] && !(params->Transform8x8Mode==2));
-  enc_mb->valid[6]     = (!intra && params->InterSearch[bslice][6] && !(params->Transform8x8Mode==2));
-  enc_mb->valid[7]     = (!intra && params->InterSearch[bslice][7] && !(params->Transform8x8Mode==2));
-  enc_mb->valid[P8x8]  = (enc_mb->valid[4] || enc_mb->valid[5] || enc_mb->valid[6] || enc_mb->valid[7]);
-  enc_mb->valid[12]    = (img->type == SI_SLICE);
+  enc_mb->valid[0]     = (short) (!intra && p_Inp->InterSearch[bslice][0]);
+  enc_mb->valid[1]     = (short) (!intra && p_Inp->InterSearch[bslice][1]);
+  enc_mb->valid[2]     = (short) (!intra && p_Inp->InterSearch[bslice][2]);
+  enc_mb->valid[3]     = (short) (!intra && p_Inp->InterSearch[bslice][3]);
+  enc_mb->valid[4]     = (short) (!intra && p_Inp->InterSearch[bslice][4]);
+  enc_mb->valid[5]     = (short) (!intra && p_Inp->InterSearch[bslice][5] && !(p_Inp->Transform8x8Mode==2));
+  enc_mb->valid[6]     = (short) (!intra && p_Inp->InterSearch[bslice][6] && !(p_Inp->Transform8x8Mode==2));
+  enc_mb->valid[7]     = (short) (!intra && p_Inp->InterSearch[bslice][7] && !(p_Inp->Transform8x8Mode==2));
+  enc_mb->valid[P8x8]  = (short) (enc_mb->valid[4] || enc_mb->valid[5] || enc_mb->valid[6] || enc_mb->valid[7]);
+  enc_mb->valid[12]    = (short) (currSlice->slice_type == SI_SLICE);
+
+  if (currSlice->UseRDOQuant && p_Inp->RDOQ_CP_Mode && (p_Img->qp != p_Img->masterQP) )  
+    RDOQ_update_mode(currSlice, enc_mb);
   
-  if (params->UseRDOQuant && params->RDOQ_CP_Mode && (img->qp != img->masterQP) )  
-    RDOQ_update_mode(enc_mb, bslice);
-
-  if(img->type==SP_SLICE)
+  if(currSlice->slice_type == SP_SLICE)
   {
-    if(si_frame_indicator)
+    if(p_Img->si_frame_indicator)
     {
       reset_valid_modes(enc_mb);
-      if(check_for_SI16())
+      if(check_for_SI16(p_Img->lrec, currMB->pix_x, currMB->pix_y))
       {
         enc_mb->valid[I16MB] = 1;
       }
@@ -98,10 +164,10 @@ void init_enc_mb_params(Macroblock* currMB, RD_PARAMS *enc_mb, int intra, int bs
         enc_mb->valid[I4MB]  = 1;
       }
     }
-    
-    if(sp2_frame_indicator)
+
+    if(p_Img->sp2_frame_indicator)
     {
-      if(check_for_SI16())
+      if(check_for_SI16(p_Img->lrec, currMB->pix_x, currMB->pix_y))
       {
         reset_valid_modes(enc_mb);
         enc_mb->valid[I16MB] = 1;
@@ -119,47 +185,48 @@ void init_enc_mb_params(Macroblock* currMB, RD_PARAMS *enc_mb, int intra, int bs
   //===== SET LAGRANGE PARAMETERS =====
   // Note that these are now computed at the slice level to reduce
   // computations and cleanup code.
-  if (bslice && img->nal_reference_idc)
+  if (bslice && p_Img->nal_reference_idc)
   {
-    enc_mb->lambda_md = img->lambda_md[5][img->masterQP];
+    enc_mb->lambda_md = p_Img->lambda_md[5][p_Img->masterQP];
 
-    enc_mb->lambda_me[F_PEL] = img->lambda_me[5][img->masterQP][F_PEL];
-    enc_mb->lambda_me[H_PEL] = img->lambda_me[5][img->masterQP][H_PEL];
-    enc_mb->lambda_me[Q_PEL] = img->lambda_me[5][img->masterQP][Q_PEL];
+    enc_mb->lambda_me[F_PEL] = p_Img->lambda_me[5][p_Img->masterQP][F_PEL];
+    enc_mb->lambda_me[H_PEL] = p_Img->lambda_me[5][p_Img->masterQP][H_PEL];
+    enc_mb->lambda_me[Q_PEL] = p_Img->lambda_me[5][p_Img->masterQP][Q_PEL];
 
-    enc_mb->lambda_mf[F_PEL] = img->lambda_mf[5][img->masterQP][F_PEL];
-    enc_mb->lambda_mf[H_PEL] = img->lambda_mf[5][img->masterQP][H_PEL];
-    enc_mb->lambda_mf[Q_PEL] = img->lambda_mf[5][img->masterQP][Q_PEL];
+    enc_mb->lambda_mf[F_PEL] = p_Img->lambda_mf[5][p_Img->masterQP][F_PEL];
+    enc_mb->lambda_mf[H_PEL] = p_Img->lambda_mf[5][p_Img->masterQP][H_PEL];
+    enc_mb->lambda_mf[Q_PEL] = p_Img->lambda_mf[5][p_Img->masterQP][Q_PEL];
   }
   else
   {
-    enc_mb->lambda_md = img->lambda_md[img->type][img->masterQP];
-    enc_mb->lambda_me[F_PEL] = img->lambda_me[img->type][img->masterQP][F_PEL];
-    enc_mb->lambda_me[H_PEL] = img->lambda_me[img->type][img->masterQP][H_PEL];
-    enc_mb->lambda_me[Q_PEL] = img->lambda_me[img->type][img->masterQP][Q_PEL];
+    enc_mb->lambda_md = p_Img->lambda_md[currSlice->slice_type][p_Img->masterQP];
 
-    enc_mb->lambda_mf[F_PEL] = img->lambda_mf[img->type][img->masterQP][F_PEL];
-    enc_mb->lambda_mf[H_PEL] = img->lambda_mf[img->type][img->masterQP][H_PEL];
-    enc_mb->lambda_mf[Q_PEL] = img->lambda_mf[img->type][img->masterQP][Q_PEL];
+    enc_mb->lambda_me[F_PEL] = p_Img->lambda_me[currSlice->slice_type][p_Img->masterQP][F_PEL];
+    enc_mb->lambda_me[H_PEL] = p_Img->lambda_me[currSlice->slice_type][p_Img->masterQP][H_PEL];
+    enc_mb->lambda_me[Q_PEL] = p_Img->lambda_me[currSlice->slice_type][p_Img->masterQP][Q_PEL];
+
+    enc_mb->lambda_mf[F_PEL] = p_Img->lambda_mf[currSlice->slice_type][p_Img->masterQP][F_PEL];
+    enc_mb->lambda_mf[H_PEL] = p_Img->lambda_mf[currSlice->slice_type][p_Img->masterQP][H_PEL];
+    enc_mb->lambda_mf[Q_PEL] = p_Img->lambda_mf[currSlice->slice_type][p_Img->masterQP][Q_PEL];
   }
- 
-  if (!img->MbaffFrameFlag)
+
+  if (!currSlice->MbaffFrameFlag)
   {
     for (l = LIST_0; l < BI_PRED; l++)
     {
-      for(k = 0; k < listXsize[l]; k++)
+      for(k = 0; k < p_Img->listXsize[l]; k++)
       {
-        if(img->structure != listX[l][k]->structure)
+        if(currSlice->structure != p_Img->listX[l][k]->structure)
         {
-          if (img->structure == TOP_FIELD)
-            listX[l][k]->chroma_vector_adjustment = -2;
-          else if (img->structure == BOTTOM_FIELD)
-            listX[l][k]->chroma_vector_adjustment = 2;
+          if (currSlice->structure == TOP_FIELD)
+            p_Img->listX[l][k]->chroma_vector_adjustment = -2;
+          else if (currSlice->structure == BOTTOM_FIELD)
+            p_Img->listX[l][k]->chroma_vector_adjustment = 2;
           else
-            listX[l][k]->chroma_vector_adjustment= 0;
+            p_Img->listX[l][k]->chroma_vector_adjustment= 0;
         }
         else
-          listX[l][k]->chroma_vector_adjustment= 0;
+          p_Img->listX[l][k]->chroma_vector_adjustment= 0;
       }
     }
   }
@@ -167,30 +234,40 @@ void init_enc_mb_params(Macroblock* currMB, RD_PARAMS *enc_mb, int intra, int bs
   {
     if (enc_mb->curr_mb_field)
     {
-      for (l = enc_mb->list_offset[LIST_0]; l <= enc_mb->list_offset[LIST_1]; l++)
+      for (l = currMB->list_offset; l <= currMB->list_offset + LIST_1; l++)
       {
-        for(k = 0; k < listXsize[l]; k++)
+        for(k = 0; k < p_Img->listXsize[l]; k++)
         {
-          listX[l][k]->chroma_vector_adjustment= 0;
-          if((currMB->mb_nr & 0x01) == 0 && listX[l][k]->structure == BOTTOM_FIELD)
-            listX[l][k]->chroma_vector_adjustment = -2;
-          if((currMB->mb_nr & 0x01) == 1 && listX[l][k]->structure == TOP_FIELD)
-            listX[l][k]->chroma_vector_adjustment = 2;
+          p_Img->listX[l][k]->chroma_vector_adjustment= 0;
+          if((currMB->mbAddrX & 0x01) == 0 && p_Img->listX[l][k]->structure == BOTTOM_FIELD)
+            p_Img->listX[l][k]->chroma_vector_adjustment = -2;
+          if((currMB->mbAddrX & 0x01) == 1 && p_Img->listX[l][k]->structure == TOP_FIELD)
+            p_Img->listX[l][k]->chroma_vector_adjustment = 2;
         }
       }
     }
     else
     {
-      for (l = enc_mb->list_offset[LIST_0]; l <= enc_mb->list_offset[LIST_1]; l++)
+      for (l = currMB->list_offset; l <= currMB->list_offset + LIST_1; l++)
       {
-        for(k = 0; k < listXsize[l]; k++)
-          listX[l][k]->chroma_vector_adjustment = 0;
+        for(k = 0; k < p_Img->listXsize[l]; k++)
+          p_Img->listX[l][k]->chroma_vector_adjustment = 0;
       }
     }
   }
 
   // reset chroma intra predictor to default
   currMB->c_ipred_mode = DC_PRED_8;
+
+  if(p_Inp->SearchMode == UM_HEX)
+  {
+    UMHEX_decide_intrabk_SAD(currMB);
+    UMHEX_DefineThresholdMB(p_Img, p_Inp);
+  }
+  else if (p_Inp->SearchMode == UM_HEX_SIMPLE)
+  {
+    smpUMHEX_decide_intrabk_SAD(currMB);
+  }
 }
 
 /*!
@@ -201,28 +278,32 @@ void init_enc_mb_params(Macroblock* currMB, RD_PARAMS *enc_mb, int intra, int bs
 */
 void list_prediction_cost(Macroblock *currMB, int list, int block, int mode, RD_PARAMS *enc_mb, int bmcost[5], char best_ref[2])
 {
+  Slice *currSlice = currMB->p_slice;
+  ImageParameters *p_Img = currMB->p_Img;
+  InputParameters *p_Inp = currMB->p_Inp;
+
   short ref;
   int mcost;
-  int cur_list = list < BI_PRED ? enc_mb->list_offset[list] : enc_mb->list_offset[LIST_0];
+  int cur_list = list < BI_PRED ? currMB->list_offset + list : currMB->list_offset;
+  int ref_lambda = (p_Inp->rdopt) ? enc_mb->lambda_mf[Q_PEL] :  enc_mb->lambda_mf[Q_PEL] >> 2;
 
   //--- get cost and reference frame for forward prediction ---
 
   if (list < BI_PRED)
   {
-    for (ref=0; ref < listXsize[cur_list]; ref++)
+    for (ref=0; ref < p_Img->listXsize[cur_list]; ref++)
     {
-      if (!img->checkref || list || ref==0 || (params->RestrictRef && CheckReliabilityOfRef (block, list, ref, mode)))
+      if (!p_Img->checkref || list || ref==0 || (p_Inp->RestrictRef && CheckReliabilityOfRef (currMB, block, list, ref, mode)))
       {
         // limit the number of reference frames to 1 when switching SP frames are used
-        if((!params->sp2_frame_indicator && !params->sp_output_indicator)||
-          ((params->sp2_frame_indicator || params->sp_output_indicator) && (img->type != P_SLICE && img->type != SP_SLICE))||
-          ((params->sp2_frame_indicator || params->sp_output_indicator) && ((img->type == P_SLICE || img->type == SP_SLICE) &&(ref==0))))
+        if((!p_Inp->sp2_frame_indicator && !p_Inp->sp_output_indicator)||
+          ((p_Inp->sp2_frame_indicator || p_Inp->sp_output_indicator) && (currSlice->slice_type != P_SLICE && currSlice->slice_type != SP_SLICE))||
+          ((p_Inp->sp2_frame_indicator || p_Inp->sp_output_indicator) && ((currSlice->slice_type == P_SLICE || currSlice->slice_type == SP_SLICE) &&(ref==0))))
         {
-          mcost  = (params->rdopt
-            ? REF_COST (enc_mb->lambda_mf[Q_PEL], ref, cur_list)
-            : (int) (2 * enc_mb->lambda_me[Q_PEL] * imin(ref, 1)));
+          mcost  = ref_cost(p_Img, ref_lambda, (short) ref, cur_list);
 
-          mcost += motion_cost[mode][list][ref][block];
+          mcost += p_Img->motion_cost[mode][list][ref][block];
+
           if (mcost < bmcost[list])
           {
             bmcost[list]   = mcost;
@@ -234,45 +315,38 @@ void list_prediction_cost(Macroblock *currMB, int list, int block, int mode, RD_
   }
   else if (list == BI_PRED)
   {
-    if (active_pps->weighted_bipred_idc == 1)
+    if (p_Img->active_pps->weighted_bipred_idc == 1)
     {
-      int weight_sum = wbp_weight[0][(int) best_ref[LIST_0]][(int) best_ref[LIST_1]][0] + wbp_weight[1][(int) best_ref[LIST_0]][(int) best_ref[LIST_1]][0];
-      
+      int weight_sum = currSlice->wbp_weight[0][(int) best_ref[LIST_0]][(int) best_ref[LIST_1]][0] + currSlice->wbp_weight[1][(int) best_ref[LIST_0]][(int) best_ref[LIST_1]][0];
+
       if (weight_sum < -128 ||  weight_sum > 127)
       {
         bmcost[list] = INT_MAX;
       }
       else
       {
-        bmcost[list]  = (params->rdopt
-          ? (REF_COST  (enc_mb->lambda_mf[Q_PEL], (short)best_ref[LIST_0], cur_list)
-          +  REF_COST  (enc_mb->lambda_mf[Q_PEL], (short)best_ref[LIST_1], cur_list + LIST_1))
-          : (int) (2 * (enc_mb->lambda_me[Q_PEL] * (imin((short)best_ref[LIST_0], 1) + imin((short)best_ref[LIST_1], 1)))));
+        bmcost[list]  = ref_cost(p_Img, ref_lambda, (short) best_ref[LIST_0], cur_list) +
+          ref_cost(p_Img, ref_lambda, (short) best_ref[LIST_1], cur_list + LIST_1);
         bmcost[list] += BIDPartitionCost (currMB, mode, block, best_ref, enc_mb->lambda_mf[Q_PEL]);
       }
     }
     else
     {
-      bmcost[list]  = (params->rdopt
-        ? (REF_COST  (enc_mb->lambda_mf[Q_PEL], (short)best_ref[LIST_0], cur_list)
-        +  REF_COST  (enc_mb->lambda_mf[Q_PEL], (short)best_ref[LIST_1], cur_list + LIST_1))
-        : (int) (2 * (enc_mb->lambda_me[Q_PEL] * (imin((short)best_ref[LIST_0], 1) + imin((short)best_ref[LIST_1], 1)))));
+      bmcost[list]  = ref_cost(p_Img, ref_lambda, (short) best_ref[LIST_0], cur_list) +
+        ref_cost(p_Img, ref_lambda, (short) best_ref[LIST_1], cur_list + LIST_1);
       bmcost[list] += BIDPartitionCost (currMB, mode, block, best_ref, enc_mb->lambda_mf[Q_PEL]);
     }
   }
   else
   {
-    bmcost[list]  = (params->rdopt
-      ? (REF_COST (enc_mb->lambda_mf[Q_PEL], 0, cur_list)
-      +  REF_COST (enc_mb->lambda_mf[Q_PEL], 0, cur_list + LIST_1))
-      : (int) (4 * enc_mb->lambda_me[Q_PEL]));
+    bmcost[list]  = ref_cost(p_Img, ref_lambda, 0, cur_list) + ref_cost(p_Img, ref_lambda, 0, cur_list + LIST_1);
     bmcost[list] += BPredPartitionCost(currMB, mode, block, 0, 0, enc_mb->lambda_mf[Q_PEL], !(list&1));
   }
 }
 
-int compute_ref_cost(RD_PARAMS *enc_mb, int ref, int list)
+static inline int compute_ref_cost(ImageParameters *p_Img, RD_PARAMS *enc_mb, int ref, int list)
 {
-  return WEIGHTED_COST(enc_mb->lambda_mf[Q_PEL],((listXsize[enc_mb->list_offset[list]] <= 1)? 0:refbits[ref]));
+  return WEIGHTED_COST(enc_mb->lambda_mf[Q_PEL],((p_Img->listXsize[list] <= 1)? 0 : p_Img->refbits[ref]));
 }
 
 /*!
@@ -281,23 +355,24 @@ int compute_ref_cost(RD_PARAMS *enc_mb, int ref, int list)
 *    Determination of prediction list based on simple distortion computation
 *************************************************************************************
 */
-void determine_prediction_list(int mode, int bmcost[5], char best_ref[2], char *best_pdir, int *cost, short *bipred_me)
+void determine_prediction_list( int bmcost[5], Info8x8 *best, int *cost)
 {
+
   int bestlist;  
   
   *cost += iminarray ( bmcost, 5, &bestlist);
   
   if (bestlist <= BI_PRED)  //LIST_0, LIST_1 & BI_DIR
   {
-    *best_pdir = bestlist; 
-    *bipred_me = 0;
+    best->pdir = (char) bestlist; 
+    best->bipred= 0;
   }
   else                      //BI_PRED_L0 & BI_PRED_L1
   {
-    *best_pdir = 2;    
-    *bipred_me = bestlist - 2;
-    best_ref[LIST_0] = 0;
-    best_ref[LIST_1] = 0;
+    best->pdir = 2;    
+    best->bipred = (char) (bestlist - 2);
+    best->ref[LIST_0] = 0;
+    best->ref[LIST_1] = 0;
   }
 }
 
@@ -307,92 +382,119 @@ void determine_prediction_list(int mode, int bmcost[5], char best_ref[2], char *
 *    RD decision process
 *************************************************************************************
 */
-void compute_mode_RD_cost(Slice *currSlice,
-                          Macroblock *currMB,
+void compute_mode_RD_cost(Macroblock *currMB,
                           RD_PARAMS *enc_mb,
-                          int mode,
-                          double *min_rdcost,
-                          double *min_dcost,
-                          double *min_rate,
-                          int i16mode,
-                          short bslice,
-                          short *inter_skip,
-                          int   is_cavlc)
+                          short mode,
+                          short *inter_skip)
 {
-   int terminate_16x16, terminate_trans, ctr16x16 = 0;
-  //--- transform size ---
-  currMB->luma_transform_size_8x8_flag = params->Transform8x8Mode==2
-    ?  (mode >= 1 && mode <= 3)
-    || (mode == 0 && bslice && active_sps->direct_8x8_inference_flag)
-    || ((mode == P8x8) && (enc_mb->valid[4]))
-    :  0;
+  ImageParameters *p_Img = currMB->p_Img;
+  InputParameters *p_Inp = currMB->p_Inp;
+  int terminate_16x16 = 0, terminate_trans = 0, ctr16x16 = 0;
+  Slice *currSlice = currMB->p_slice;
+  RDOPTStructure  *p_RDO = currSlice->p_RDO;
+  int bslice = (currSlice->slice_type == B_SLICE);
 
-  //store_coding_state (currSlice, currMB, cs_cm); // RD
-  SetModesAndRefframeForBlocks (currMB, mode);
-  memset( img->cofAC[0][0][0], 0, 4 * 4 * 2 * 65 * sizeof(int));
+  //--- transform size ---
+  currMB->luma_transform_size_8x8_flag = (byte) (p_Inp->Transform8x8Mode==2
+    ?  (mode >= 1 && mode <= 3)
+    || (mode == 0 && bslice && p_Img->active_sps->direct_8x8_inference_flag)
+    || ((mode == P8x8) && (enc_mb->valid[4]))
+    :  0);
+
+  SetModesAndRefframeForBlocks (currMB, (short) mode);
+  memset( currSlice->cofAC[0][0][0], 0, 2080 * sizeof(int)); // 4 * 4 * 2 * 65
 
   // Encode with coefficients
-  img->NoResidueDirect = 0;
+  currSlice->NoResidueDirect = 0;
 
-  if ((params->FastCrIntraDecision )
-    || (currMB->c_ipred_mode == DC_PRED_8 || (IS_INTRA(currMB) )))
+  if ((p_Inp->FastCrIntraDecision ) || (currMB->c_ipred_mode == DC_PRED_8 || (IS_INTRA(currMB) )))
   {
     do
     {
-      terminate_16x16 = bslice_16x16_termination_control(img->b8x8info, &ctr16x16, mode, bslice);
+      // This seems to have a problem since we are not properly copying the right b8x8info (transform based)
+      terminate_16x16 = bslice_16x16_termination_control(p_Inp, p_Img->b8x8info, &ctr16x16, mode, bslice);
+
       do
       {
-        if (RDCost_for_macroblocks (currSlice, currMB, enc_mb->lambda_md, mode, min_rdcost, min_dcost, min_rate, i16mode, is_cavlc))
+
+        if (mode == P8x8)
         {
-          //Rate control
-  
-          if (params->RCEnable)
+          int i;
+          if (currMB->luma_transform_size_8x8_flag)
           {
-            if(mode == P8x8)
-              rc_store_diff(img->opix_x, img->opix_y, currMB->luma_transform_size_8x8_flag == 1 ? tr8x8.mpr8x8 : tr4x4.mpr8x8);
-            else
-              rc_store_diff(img->opix_x, img->opix_y, pred);
+            for (i = 0; i < 4; i++)
+              p_Img->b8x8info->best[P8x8][i] = p_RDO->tr8x8->part[i];
           }
-
-          store_macroblock_parameters (currMB, mode);
-
-          if(params->rdopt == 2 && mode == 0 && params->EarlySkipEnable)
+          else
           {
-            // check transform quantized coeff.
-            if(currMB->cbp == 0)
-              *inter_skip = 1;
-          }
+            for (i = 0; i < 4; i++)
+              p_Img->b8x8info->best[P8x8][i] = p_RDO->tr4x4->part[i];
+          }          
         }
-        terminate_trans = transform_termination_control(currMB, mode, bslice);
+        // check if prediction parameters are in valid range.
+        if (CheckPredictionParams(currMB, p_Img->b8x8info, mode) == TRUE)
+        {
+          if (RDCost_for_macroblocks (currMB, enc_mb->lambda_md, mode))
+          {
+            //Rate control
+            if (p_Inp->RCEnable)
+            {
+              if(mode == P8x8)
+              {
+                rc_store_diff(currSlice->diffy, &p_Img->pCurImg[currMB->opix_y], currMB->pix_x, currMB->luma_transform_size_8x8_flag == TRUE ? p_RDO->tr8x8->mpr8x8 : p_RDO->tr4x4->mpr8x8);
+              }
+              else
+                rc_store_diff(currSlice->diffy, &p_Img->pCurImg[currMB->opix_y], currMB->pix_x, p_RDO->pred);
+            }
+
+            store_macroblock_parameters (currMB, mode);
+
+            if(p_Inp->rdopt == 2 && mode == 0 && p_Inp->EarlySkipEnable)
+            {
+              // check transform quantized coeff.
+              if(currMB->cbp == 0)
+                *inter_skip = 1;
+            }
+          }        
+        }
+        // This code needs to be fixed - BUG? ATOUR
+
+        terminate_trans = transform_termination_control(currMB, mode);
+
       }while (!terminate_trans);
     }while (!terminate_16x16);
 
     // Encode with no coefficients. Currently only for direct. This could be extended to all other modes as in example.
-    //if (mode < P8x8 && (*inter_skip == 0) && enc_mb->valid[mode] && currMB->cbp && (currMB->cbp&15) != 15 && !params->nobskip)
+    //if (mode < P8x8 && (*inter_skip == 0) && enc_mb->valid[mode] && currMB->cbp && (currMB->cbp&15) != 15 && !p_Inp->nobskip)
     if (bslice && mode == 0 && (*inter_skip == 0) && enc_mb->valid[mode] 
-    && currMB->cbp && (currMB->cbp&15) != 15 && !params->nobskip
-    && !(currMB->qp_scaled[0] == 0 && img->lossless_qpprime_flag==1) )
+    && currMB->cbp && (currMB->cbp&15) != 15 && !p_Inp->nobskip
+      && !(currMB->qp_scaled[0] == 0 && p_Img->lossless_qpprime_flag==1) )
     {
-      img->NoResidueDirect = 1;
-      
-      if (RDCost_for_macroblocks (currSlice, currMB, enc_mb->lambda_md, mode, min_rdcost, min_dcost, min_rate, i16mode, is_cavlc))
+      currSlice->NoResidueDirect = 1;
+
+      if (CheckPredictionParams(currMB, p_Img->b8x8info, mode) == TRUE)
       {
-        //Rate control
-        if (params->RCEnable)
-          rc_store_diff(img->opix_x,img->opix_y,pred);
-        if (img->AdaptiveRounding)
-          reset_adaptive_rounding_direct();
-        store_macroblock_parameters (currMB, mode);
+        if (RDCost_for_macroblocks (currMB, enc_mb->lambda_md, mode))
+        {
+          //Rate control
+          if (p_Inp->RCEnable)
+            rc_store_diff(currSlice->diffy, &p_Img->pCurImg[currMB->opix_y], currMB->pix_x, p_RDO->pred);
+
+          if (p_Img->AdaptiveRounding)
+            reset_adaptive_rounding_direct(p_Img);
+
+          store_macroblock_parameters (currMB, mode);
+        }
       }
     }
-    
+
     //modes 0 and 1 of a B frame 
-    if (img->AdaptiveRounding && bslice && mode <= 1)
+    if (p_Img->AdaptiveRounding && bslice && mode <= 1)
     { 
-      if (luma_transform_size_8x8_flag)
-        update_adaptive_rounding_16x16( img, img->ARCofAdj8x8, mode);
+      if (currMB->temp_transform_size_8x8_flag)
+        update_adaptive_rounding_16x16( p_Img, p_Img->ARCofAdj8x8, mode);
       else
-        update_adaptive_rounding_16x16( img, img->ARCofAdj4x4, mode);
+        update_adaptive_rounding_16x16( p_Img, p_Img->ARCofAdj4x4, mode);
     }
   }
 }
@@ -404,24 +506,21 @@ void compute_mode_RD_cost(Slice *currSlice,
 *    Mode Decision for an 8x8 sub-macroblock
 *************************************************************************************
 */
-void submacroblock_mode_decision(Slice *currSlice, 
+void submacroblock_mode_decision(Macroblock *currMB,
                                  RD_PARAMS *enc_mb,
-                                 RD_8x8DATA *dataTr,
-                                 Macroblock *currMB,
+                                 RD_8x8DATA *dataTr,                                 
                                  int ****cofACtr,
-                                 int *have_direct,
-                                 short bslice,
-                                 int block,
-                                 int *cost_direct,
-                                 int *cost,
-                                 int *cost8x8_direct,
-                                 int transform8x8,
-                                 int is_cavlc)
+                                 int block,                                 
+                                 int *cost)
 {
+  ImageParameters *p_Img = currMB->p_Img;
+  InputParameters *p_Inp = currMB->p_Inp;
+  Slice *currSlice = currMB->p_slice;
+  PicMotionParams *motion = &p_Img->enc_picture->motion;
+  int transform8x8 = currMB->luma_transform_size_8x8_flag;
   int64 curr_cbp_blk;
   double min_rdcost, rdcost = 0.0;
-  int j0, i0, j1, i1;
-  int i,j, k;
+  int j, k;
   int min_cost8x8, index;
   int mode;
   int bmcost[5] = {INT_MAX};
@@ -430,13 +529,15 @@ void submacroblock_mode_decision(Slice *currSlice,
   int maxindex =  (transform8x8) ? 2 : 5;
   int block_x, block_y;
   int lambda_mf[3];
-  
-  int ****fadjust = transform8x8? img->ARCofAdj8x8 : img->ARCofAdj4x4;
-  short bipred_me = 0;
 
-  char best_pdir = 0;
-  char best_ref[2] = {0, -1};
-  imgpel  **mb_pred = img->mb_pred[0];
+  int ****fadjust = transform8x8? p_Img->ARCofAdj8x8 : p_Img->ARCofAdj4x4;
+
+  //--- set coordinates ---
+  int j0 = ((block>>1)<<3);
+  int j1 = (j0>>2);
+  int i0 = ((block&0x01)<<3);
+  int i1 = (i0>>2);
+
   Boolean valid_8x8 = FALSE;
   Boolean stored_state_8x8 = FALSE;
 
@@ -444,33 +545,33 @@ void submacroblock_mode_decision(Slice *currSlice,
   int best_nz_coeff[2][2];
 #endif
 
-  //--- set coordinates ---
-  j0 = ((block>>1)<<3);
-  j1 = (j0>>2);
-  i0 = ((block&0x01)<<3);
-  i1 = (i0>>2);
+  Info8x8 *partition = &(dataTr->part[block]);
+  Info8x8 best;
+  // Init best (need to create simple function)
+  best.pdir = 0;
+  best.bipred = 0;
+  best.ref[LIST_0] = 0;
+  best.ref[LIST_1] = -1;
 
 #ifdef BEST_NZ_COEFF
   for(j = 0; j <= 1; j++)
   {
     for(i = 0; i <= 1; i++)
-      best_nz_coeff[i][j] = img->nz_coeff[currMB->mb_nr][i1 + i][j1 + j] = 0;
+      best_nz_coeff[i][j] = p_Img->nz_coeff[currMB->mbAddrX][i1 + i][j1 + j] = 0;
   }
 #endif
 
-  if (transform8x8)
-    currMB->luma_transform_size_8x8_flag = 1; //switch to transform size 8x8
-
-  //--- store coding state before coding ---
-  store_coding_state (currSlice, currMB, cs_cm);
+  if(p_Inp->subMBCodingState == 2)
+    currSlice->store_coding_state(currMB, currSlice->p_RDO->cs_tmp);
 
   //=====  LOOP OVER POSSIBLE CODING MODES FOR 8x8 SUB-PARTITION  =====
-  for (min_cost8x8 = INT_MAX, min_rdcost = 1e20, index = (bslice?0:1); index < maxindex; index++)
+  for (min_cost8x8 = INT_MAX, min_rdcost = 1e20, index = (currSlice->slice_type == B_SLICE ? 0 : 1); index < maxindex; index++)
   {
     mode = b8_mode_table[index];
+    best.mode = (char) mode;
     *cost = 0;
 
-    if (enc_mb->valid[mode] && (!(transform8x8 == 1 && mode > 4)) && (transform8x8 == 0 || mode != 0 || (mode == 0 && active_sps->direct_8x8_inference_flag)))
+    if (enc_mb->valid[mode] && (!(transform8x8 == 1 && mode > 4)) && (transform8x8 == 0 || mode != 0 || (mode == 0 && p_Img->active_sps->direct_8x8_inference_flag)))
     {
       if (transform8x8)
       {
@@ -482,11 +583,11 @@ void submacroblock_mode_decision(Slice *currSlice,
 
       if (mode==0)  //--- Direct8x8 Mode ---
       {        
-        block_x = img->block_x + (block & 0x01)*2;
-        block_y = img->block_y + (block & 0x02);
-        best_ref[LIST_0] = direct_ref_idx[LIST_0][block_y][block_x];
-        best_ref[LIST_1] = direct_ref_idx[LIST_1][block_y][block_x];
-        best_pdir        = direct_pdir[block_y][block_x];
+        block_x = currMB->block_x + (block & 0x01)*2;
+        block_y = currMB->block_y + (block & 0x02);
+        best.ref[LIST_0] = currSlice->direct_ref_idx[block_y][block_x][LIST_0];
+        best.ref[LIST_1] = currSlice->direct_ref_idx[block_y][block_x][LIST_1];
+        best.pdir        = currSlice->direct_pdir[block_y][block_x];
       } // if (mode==0)
       else
       {
@@ -496,59 +597,52 @@ void submacroblock_mode_decision(Slice *currSlice,
         //======= motion estimation for all reference frames ========
         //-----------------------------------------------------------
         memcpy(lambda_mf, enc_mb->lambda_mf, 3 * sizeof(int));
-        if (params->CtxAdptLagrangeMult == 1)
+
+        if (p_Inp->CtxAdptLagrangeMult == 1)
         {
-          lambda_mf[F_PEL] = (int)(lambda_mf[F_PEL] * lambda_mf_factor);
-          lambda_mf[H_PEL] = (int)(lambda_mf[H_PEL] * lambda_mf_factor);
-          lambda_mf[Q_PEL] = (int)(lambda_mf[Q_PEL] * lambda_mf_factor);
+          RDOPTStructure *p_RDO = currSlice->p_RDO;
+          lambda_mf[F_PEL] = (int)(lambda_mf[F_PEL] * p_RDO->lambda_mf_factor);
+          lambda_mf[H_PEL] = (int)(lambda_mf[H_PEL] * p_RDO->lambda_mf_factor);
+          lambda_mf[Q_PEL] = (int)(lambda_mf[Q_PEL] * p_RDO->lambda_mf_factor);
         }
 
-        PartitionMotionSearch (currMB, mode, block, lambda_mf);
+        SubPartitionMotionSearch (currMB, mode, block, lambda_mf);
 
         //--- get cost and reference frame for LIST 0 prediction ---
         bmcost[LIST_0] = INT_MAX;
-        list_prediction_cost(currMB, LIST_0, block, mode, enc_mb, bmcost, best_ref);
+        list_prediction_cost(currMB, LIST_0, block, mode, enc_mb, bmcost, best.ref);
 
         //store LIST 0 reference index for every block
-        block_x = img->block_x + (block & 0x01)*2;
-        block_y = img->block_y + (block & 0x02);
-        b_ref = best_ref[LIST_0];
-        ref_pic_num = enc_picture->ref_pic_num[enc_mb->list_offset[LIST_0]][(short) b_ref];
+        block_x = currMB->block_x + (block & 0x01)*2;
+        block_y = currMB->block_y + (block & 0x02);
+        b_ref = best.ref[LIST_0];
+        ref_pic_num = p_Img->enc_picture->ref_pic_num[currMB->list_offset][(short) b_ref];
 
-        for (j = block_y; j< block_y + 2; j++)
-        {
-          memset(&enc_picture->motion.ref_idx [LIST_0][j][block_x], b_ref, 2 * sizeof(char));
-        }
+        memset(&motion->ref_idx [LIST_0][block_y    ][block_x], b_ref, 2 * sizeof(char));
+        memset(&motion->ref_idx [LIST_0][block_y + 1][block_x], b_ref, 2 * sizeof(char));
 
-        for (j = block_y; j< block_y + 2; j++)
-        {
-          for (i = block_x; i < block_x + 2; i++)
-          {
-            enc_picture->motion.ref_pic_id[LIST_0][j][i] = ref_pic_num;
-          }
-        }
+        motion->ref_pic_id[LIST_0][block_y    ][block_x    ] = ref_pic_num;
+        motion->ref_pic_id[LIST_0][block_y    ][block_x + 1] = ref_pic_num;
+        motion->ref_pic_id[LIST_0][block_y + 1][block_x    ] = ref_pic_num;
+        motion->ref_pic_id[LIST_0][block_y + 1][block_x + 1] = ref_pic_num;
 
-        for (j = 0; j< 2; j++)
-        {
-          memcpy(enc_picture->motion.mv[LIST_0][block_y + j][block_x], img->all_mv[LIST_0][(short) b_ref][mode][j1 + j][i1], 4 * sizeof(short));
-        }
+        memcpy(motion->mv[LIST_0][block_y   ][block_x], currSlice->all_mv[LIST_0][(short) b_ref][mode][j1    ][i1], 4 * sizeof(short));
+        memcpy(motion->mv[LIST_0][block_y + 1][block_x], currSlice->all_mv[LIST_0][(short) b_ref][mode][j1 + 1][i1], 4 * sizeof(short));
 
-
-        if (bslice)
+        if (currSlice->slice_type == B_SLICE)
         {
           //--- get cost and reference frame for LIST 1 prediction ---
           bmcost[LIST_1] = INT_MAX;
           bmcost[BI_PRED] = INT_MAX;
-          list_prediction_cost(currMB, LIST_1, block, mode, enc_mb, bmcost, best_ref);
+          list_prediction_cost(currMB, LIST_1, block, mode, enc_mb, bmcost, best.ref);
 
           // Compute bipredictive cost between best list 0 and best list 1 references
-          list_prediction_cost(currMB, BI_PRED, block, mode, enc_mb, bmcost, best_ref);
+          list_prediction_cost(currMB, BI_PRED, block, mode, enc_mb, bmcost, best.ref);
 
           // currently Bi prediction ME is only supported for modes 1, 2, 3 and only for ref 0 and only for ref 0
-          if (is_bipred_enabled(mode))
+          if (is_bipred_enabled(p_Inp, mode))
           {
-            list_prediction_cost(currMB, BI_PRED_L0, block, mode, enc_mb, bmcost, 0);
-            list_prediction_cost(currMB, BI_PRED_L1, block, mode, enc_mb, bmcost, 0);
+            get_bipred_cost(currMB, mode, block, i1, j1, &best, enc_mb, bmcost);
           }
           else
           {
@@ -557,62 +651,52 @@ void submacroblock_mode_decision(Slice *currSlice,
           }
 
           //--- get prediction direction ----
-          determine_prediction_list(mode, bmcost, best_ref, &best_pdir, cost, &bipred_me);
+          determine_prediction_list(bmcost, &best, cost);
 
           //store backward reference index for every block
           for (k = LIST_0; k <= LIST_1; k++)
           {
-            for (j = block_y; j< block_y + 2; j++)
-            {
-              memset(&enc_picture->motion.ref_idx[k][j][block_x], best_ref[k], 2 * sizeof(char));
-            }
-            if (bipred_me)
+            memset(&motion->ref_idx[k][block_y    ][block_x], best.ref[k], 2 * sizeof(char));
+            memset(&motion->ref_idx[k][block_y + 1][block_x], best.ref[k], 2 * sizeof(char));
+
+            if (best.bipred)
             {              
-              for (j = 0; j< 2; j++)
-              {
-                memcpy(enc_picture->motion.mv[k][block_y + j][block_x], img->bipred_mv[bipred_me - 1][k][(short) best_ref[k]][mode][j1 + j][i1], 4 * sizeof(short));
-              }
+              memcpy(motion->mv[k][block_y    ][block_x], currSlice->bipred_mv[best.bipred - 1][k][(short) best.ref[k]][mode][j1    ][i1], 4 * sizeof(short));
+              memcpy(motion->mv[k][block_y + 1][block_x], currSlice->bipred_mv[best.bipred - 1][k][(short) best.ref[k]][mode][j1 + 1][i1], 4 * sizeof(short));
             }
             else
             {
-              for (j = 0; j< 2; j++)
-              {
-                memcpy(enc_picture->motion.mv[k][block_y + j][block_x], img->all_mv[k][(short) best_ref[k]][mode][j1 + j][i1], 4 * sizeof(short));
-              }
+              memcpy(motion->mv[k][block_y    ][block_x], currSlice->all_mv[k][(short) best.ref[k]][mode][j1    ][i1], 4 * sizeof(short));
+              memcpy(motion->mv[k][block_y + 1][block_x], currSlice->all_mv[k][(short) best.ref[k]][mode][j1 + 1][i1], 4 * sizeof(short));
             }
           }
-        } // if (bslice)
+        } // if (currSlice->slice_type == B_SLICE)
         else
         {
-          best_pdir = 0;
+          best.pdir = 0;
           *cost     = bmcost[LIST_0];
         }
       } // if (mode!=0)
 
       //--- get and check rate-distortion cost ---
-      rdcost = RDCost_for_8x8blocks (currSlice, currMB, &cnt_nonz, &curr_cbp_blk, enc_mb->lambda_md,
-        block, mode, best_pdir, best_ref[LIST_0], best_ref[LIST_1], bipred_me, is_cavlc);
+      rdcost = RDCost_for_8x8blocks (currMB, dataTr, &cnt_nonz, &curr_cbp_blk, enc_mb->lambda_md, block, (short) mode, &best, min_rdcost);
 
       //--- set variables if best mode has changed ---
       if (rdcost < min_rdcost)
       {
-        min_cost8x8                  = *cost;
-        min_rdcost                   = rdcost;
-        dataTr->part8x8mode  [block] = mode;
-        dataTr->part8x8pdir  [block] = best_pdir;
-        dataTr->part8x8l0ref [block] = best_ref[LIST_0];
-        dataTr->part8x8l1ref [block] = best_ref[LIST_1];
-        dataTr->part8x8bipred[block] = bipred_me;
-
-        currMB->b8mode[block] = mode;
+        min_cost8x8              = *cost;
+        min_rdcost               = rdcost;        
+        *partition               = best;
+        partition->mode          = (char) mode;
+        currMB->b8x8[block].mode = (char) mode;
 
 #ifdef BEST_NZ_COEFF
         if (cnt_nonz)
         {
           for(i = 0; i <= 1; i++)
           {
-            best_nz_coeff[i][0]= img->nz_coeff[currMB->mb_nr][i1 + i][j1    ];
-            best_nz_coeff[i][1]= img->nz_coeff[currMB->mb_nr][i1 + i][j1 + 1];
+            best_nz_coeff[i][0]= p_Img->nz_coeff[currMB->mbAddrX][i1 + i][j1    ];
+            best_nz_coeff[i][1]= p_Img->nz_coeff[currMB->mbAddrX][i1 + i][j1 + 1];
           }
         }
         else
@@ -629,64 +713,65 @@ void submacroblock_mode_decision(Slice *currSlice,
         best_cnt_nonz  = cnt_nonz;
 
         //--- store block cbp ---
-        cbp_blk8x8 &= (~(0x33 << (((block>>1)<<3)+((block & 0x01)<<1)))); // delete bits for block
-        cbp_blk8x8 |= curr_cbp_blk;
+        dataTr->cbp_blk8x8 &= (~(0x33 << (((block>>1)<<3)+((block & 0x01)<<1)))); // delete bits for block
+        dataTr->cbp_blk8x8 |= curr_cbp_blk;
 
         //--- store coefficients ---
-        memcpy(&cofACtr[0][0][0][0],&img->cofAC[block][0][0][0], 4 * 2 * 65 * sizeof(int));
+        memcpy(&cofACtr[0][0][0][0],&currSlice->cofAC[block][0][0][0], 4 * 2 * 65 * sizeof(int));
 
-        if( img->P444_joined ) 
+        if( currSlice->P444_joined ) 
         {
           //--- store coefficients ---
-          memcpy(&cofACtr[1][0][0][0],&img->cofAC[block + 4][0][0][0], 4 * 2 * 65 * sizeof(int));
-          memcpy(&cofACtr[2][0][0][0],&img->cofAC[block + 8][0][0][0], 4 * 2 * 65 * sizeof(int));
+          memcpy(&cofACtr[1][0][0][0],&currSlice->cofAC[block + 4][0][0][0], 4 * 2 * 65 * sizeof(int));
+          memcpy(&cofACtr[2][0][0][0],&currSlice->cofAC[block + 8][0][0][0], 4 * 2 * 65 * sizeof(int));
         }
 
         //--- store reconstruction and prediction ---
-        for (j = j0; j < j0 + BLOCK_SIZE_8x8; j++)
+        copy_image_data_8x8(&dataTr->rec_mbY8x8[j0], &p_Img->enc_picture->imgY[currMB->pix_y + j0], i0, currMB->pix_x + i0);
+        copy_image_data_8x8(&dataTr->mpr8x8[j0], &currSlice->mb_pred[0][j0], i0, i0);
+
+        if (p_Inp->rdopt == 3)
         {
-          memcpy(&dataTr->rec_mbY8x8[j][i0],&enc_picture->imgY[img->pix_y + j][img->pix_x + i0], BLOCK_SIZE_8x8 * sizeof(imgpel));
-          memcpy(&dataTr->mpr8x8[j][i0],&mb_pred[j][i0], BLOCK_SIZE_8x8 * sizeof(imgpel));
+          errdo_store_best_block(p_Inp, p_Img->p_decs->dec_mbY_best8x8[transform8x8], p_Img->enc_picture->p_dec_img[0], i0, j0, currMB->pix_x + i0, currMB->pix_y, BLOCK_SIZE_8x8);
+          errdo_store_best_block(p_Inp, p_Img->p_decs->dec_mb_pred_best8x8[transform8x8], p_Img->p_decs->dec_mb_pred, i0, j0, i0, 0, BLOCK_SIZE_8x8); 
         }
 
-        if (params->rdopt == 3)
-        {
-          errdo_store_best_block(decs->dec_mbY_best8x8[transform8x8], enc_picture->p_dec_img[0], i0, j0, img->pix_x + i0, img->pix_y, BLOCK_SIZE_8x8);
-          errdo_store_best_block(decs->dec_mb_pred_best8x8[transform8x8], decs->dec_mb_pred, i0, j0, i0, 0, BLOCK_SIZE_8x8); 
-        }
-
-        if(img->type==SP_SLICE && (!si_frame_indicator))
+        if(currSlice->slice_type == SP_SLICE && (!p_Img->si_frame_indicator))
         {
           for (j = j0; j < j0 + BLOCK_SIZE_8x8; j++)
           {
-            memcpy(&dataTr->lrec[j][i0],&lrec[img->pix_y + j][img->pix_x + i0], BLOCK_SIZE_8x8 * sizeof(int));
+            memcpy(&dataTr->lrec[j][i0],&p_Img->lrec[currMB->pix_y + j][currMB->pix_x + i0], BLOCK_SIZE_8x8 * sizeof(int));
           }
         }
 
-        if(img->P444_joined) 
+        if(currSlice->P444_joined) 
         {
-          for (j=j0; j<j0+8; j++)    
-          {
-            memcpy(&dataTr->rec_mb8x8_cr[0][j][i0],&enc_picture->imgUV[0][img->pix_y + j][img->pix_x + i0], BLOCK_SIZE_8x8 * sizeof(imgpel));
-            memcpy(&dataTr->rec_mb8x8_cr[1][j][i0],&enc_picture->imgUV[1][img->pix_y + j][img->pix_x + i0], BLOCK_SIZE_8x8 * sizeof(imgpel));
-            memcpy(&dataTr->mpr8x8CbCr[0][j][i0],&img->mb_pred[1][j][i0], BLOCK_SIZE_8x8 * sizeof(imgpel));
-            memcpy(&dataTr->mpr8x8CbCr[1][j][i0],&img->mb_pred[2][j][i0], BLOCK_SIZE_8x8 * sizeof(imgpel));
-          }
+          copy_image_data_8x8(&dataTr->rec_mb8x8_cr[0][j0], &p_Img->enc_picture->imgUV[0][currMB->pix_y + j0], i0, currMB->pix_x + i0);
+          copy_image_data_8x8(&dataTr->mpr8x8CbCr[0][j0], &currSlice->mb_pred[1][j0], i0, i0);
+
+          copy_image_data_8x8(&dataTr->rec_mb8x8_cr[1][j0], &p_Img->enc_picture->imgUV[1][currMB->pix_y + j0], i0, currMB->pix_x + i0);
+          copy_image_data_8x8(&dataTr->mpr8x8CbCr[1][j0], &currSlice->mb_pred[2][j0], i0, i0);
         }
 
 
         //--- store best 8x8 coding state ---
         if (block < 3)
         {
-          store_coding_state (currSlice, currMB, cs_b8);
+          currSlice->store_coding_state (currMB, currSlice->p_RDO->cs_b8);
           stored_state_8x8 = TRUE;
         }
       } // if (rdcost <= min_rdcost)
 
       //--- re-set coding state as it was before coding with current mode was performed ---
-      reset_coding_state (currSlice, currMB, cs_cm);
+      if (index != maxindex - 1)
+      {
+        if(p_Inp->subMBCodingState == 1)
+          currSlice->reset_coding_state (currMB, currSlice->p_RDO->cs_cm);
+        else if(p_Inp->subMBCodingState == 2)
+          currSlice->reset_coding_state (currMB, currSlice->p_RDO->cs_tmp);
+      }
     } // if ((enc_mb->valid[mode] && (transform8x8 == 0 || mode != 0 || (mode == 0 && active_sps->direct_8x8_inference_flag)))
-  } // for (min_rdcost=1e30, index=(bslice?0:1); index<6; index++)
+  } // for (min_rdcost=1e30, index=(currSlice->slice_type == B_SLICE ? 0 : 1); index<6; index++)
 
   if (valid_8x8 == TRUE)
   {
@@ -694,7 +779,7 @@ void submacroblock_mode_decision(Slice *currSlice,
     for(i = 0; i <= 1; i++)  
     {
       for(j = 0; j <= 1; j++)
-        img->nz_coeff[currMB->mb_nr][i1 + i][j1 + j] = best_nz_coeff[i][j];
+        p_Img->nz_coeff[currMB->mbAddrX][i1 + i][j1 + j] = best_nz_coeff[i][j];
     }
 #endif
 
@@ -705,12 +790,12 @@ void submacroblock_mode_decision(Slice *currSlice,
       else
         dataTr->mb_p8x8_cost = INT_MAX;
     }
-    
+
     //----- set cbp and count of nonzero coefficients ---
     if (best_cnt_nonz)
     {
-      cbp8x8       |= (1 << block);
-      cnt_nonz_8x8 += best_cnt_nonz;
+      dataTr->cbp8x8       |= (1 << block);
+      dataTr->cnt_nonz_8x8 += best_cnt_nonz;
     }
 
     if (!transform8x8)
@@ -720,32 +805,29 @@ void submacroblock_mode_decision(Slice *currSlice,
         //===== re-set reconstructed block =====
         j0   = 8*(block >> 1);
         i0   = 8*(block & 0x01);
-        for (j = j0; j < j0 + BLOCK_SIZE_8x8; j++)
+
+        // need to double check code since original did not use i0
+        copy_image_data_8x8(&p_Img->enc_picture->imgY[currMB->pix_y + j0], &dataTr->rec_mbY8x8[j0], currMB->pix_x + i0, i0);
+
+        if (p_Inp->rdopt == 3)
         {
-          memcpy(&enc_picture->imgY[img->pix_y + j][img->pix_x], dataTr->rec_mbY8x8[j], BLOCK_SIZE_8x8 * sizeof(imgpel));
+          errdo_get_best_block(currMB, p_Img->enc_picture->p_dec_img[0], p_Img->p_decs->dec_mbY_best8x8[transform8x8], j0, BLOCK_SIZE_8x8);
         }
 
-        if (params->rdopt == 3)
-        {
-          errdo_get_best_block(img, enc_picture->p_dec_img[0], decs->dec_mbY_best8x8[transform8x8], j0, BLOCK_SIZE_8x8);
-        }
-
-        if(img->type==SP_SLICE &&(!si_frame_indicator))
+        if(currSlice->slice_type == SP_SLICE &&(!p_Img->si_frame_indicator))
         {
           for (j = j0; j < j0 + BLOCK_SIZE_8x8; j++)
           {
-            memcpy(&lrec[img->pix_y + j][img->pix_x], dataTr->lrec[j],2*BLOCK_SIZE*sizeof(imgpel)); // reset the coefficients for SP slice
+            memcpy(&p_Img->lrec[currMB->pix_y + j][currMB->pix_x], dataTr->lrec[j], 2 * BLOCK_SIZE * sizeof(int)); // reset the coefficients for SP slice
           }
         }
 
-        if(img->P444_joined) 
+        if(currSlice->P444_joined) 
         {
+
           for (k=0; k<2; k++)
           {
-            for (j = j0; j < j0 + BLOCK_SIZE_8x8; j++)
-            {
-              memcpy(&enc_picture->imgUV[k][img->pix_y + j][img->pix_x], dataTr->rec_mb8x8_cr[k][j], BLOCK_SIZE_8x8 * sizeof(imgpel));
-            }
+            copy_image_data_8x8(&p_Img->enc_picture->imgUV[k][currMB->pix_y + j0], &dataTr->rec_mb8x8_cr[k][j0], currMB->pix_x + i0, i0);
           }
         }
       } // if (block<3)
@@ -753,19 +835,20 @@ void submacroblock_mode_decision(Slice *currSlice,
     else
     {
       //======= save motion data for 8x8 partition for transform size 8x8 ========    
-      StoreNewMotionVectorsBlock8x8(0, block, dataTr->part8x8mode[block], dataTr->part8x8l0ref[block], dataTr->part8x8l1ref[block], dataTr->part8x8pdir[block], dataTr->part8x8bipred[block], bslice);
+      StoreNewMotionVectorsBlock8x8(currSlice, 0, block, partition);
     }
 
-    //===== set motion vectors and reference frames (prediction) =====
-    SetRefAndMotionVectors (&enc_picture->motion, currMB, block, dataTr->part8x8mode[block], dataTr->part8x8pdir[block], dataTr->part8x8l0ref[block], dataTr->part8x8l1ref[block], dataTr->part8x8bipred[block]);
+    //===== set motion vectors and reference frames (prediction) =====    
+    currSlice->set_ref_and_motion_vectors (currMB, motion, partition, block);
 
     //===== set the coding state after current block =====
     //if (transform8x8 == 0 || block < 3)
     if (stored_state_8x8 == TRUE)
-      reset_coding_state (currSlice, currMB, cs_b8);
+      currSlice->reset_coding_state (currMB, currSlice->p_RDO->cs_b8);
     else
     {
-      update_adaptive_rounding_8x8(dataTr, fadjust);
+      currSlice->reset_coding_state (currMB, currSlice->p_RDO->cs_cm);
+      update_adaptive_rounding_8x8(p_Img, p_Inp, dataTr, fadjust);
     }
   }
 }
@@ -776,20 +859,22 @@ void submacroblock_mode_decision(Slice *currSlice,
 *    Low Complexity Mode Decision for an 8x8 sub-macroblock
 *************************************************************************************
 */
-void submacroblock_mode_decision_low(Slice *currSlice,
+void submacroblock_mode_decision_low(Macroblock *currMB,
                                      RD_PARAMS *enc_mb,
-                                     RD_8x8DATA *dataTr,
-                                     Macroblock *currMB,
+                                     RD_8x8DATA *dataTr,                                     
                                      int ****cofACtr,
                                      int *have_direct,
-                                     short bslice,
                                      int block,
                                      int *cost_direct,
                                      int *cost,
                                      int *cost8x8_direct,
-                                     int transform8x8,
-                                     int is_cavlc)
+                                     int transform8x8)
 {
+  ImageParameters *p_Img = currMB->p_Img;
+  InputParameters *p_Inp = currMB->p_Inp;
+  Slice *currSlice = currMB->p_slice;
+  PicMotionParams *motion = &p_Img->enc_picture->motion;
+
   int64 curr_cbp_blk;
   double min_rdcost, rdcost = 0.0;
   int j0, i0, j1, i1;
@@ -805,18 +890,25 @@ void submacroblock_mode_decision_low(Slice *currSlice,
   int block_x, block_y;
   int lambda_mf[3];
 
-  int ****fadjust = transform8x8? img->ARCofAdj8x8 : img->ARCofAdj4x4;
-  short pdir, bipred_me = 0;
+  int ****fadjust = transform8x8? p_Img->ARCofAdj8x8 : p_Img->ARCofAdj4x4;
+  short pdir;
 
-  char best_pdir = 0;
-  char best_ref[2] = {0, -1};
-  imgpel  **mb_pred = img->mb_pred[0];
   Boolean valid_8x8 = FALSE;
   Boolean stored_state_8x8 = FALSE;
 
 #ifdef BEST_NZ_COEFF
   int best_nz_coeff[2][2];
 #endif
+
+  Info8x8 best;
+  // Init best (need to create simple function)
+
+  best.pdir = 0;
+  best.bipred = 0;
+  best.ref[LIST_0] = 0;
+  best.ref[LIST_1] = -1;
+  
+  dataTr->part[block].mode = 0;
 
   //--- set coordinates ---
   j0 = ((block>>1)<<3);
@@ -828,23 +920,24 @@ void submacroblock_mode_decision_low(Slice *currSlice,
   for(j = 0; j <= 1; j++)
   {
     for(i = 0; i <= 1; i++)
-      best_nz_coeff[i][j] = img->nz_coeff[currMB->mb_nr][i1 + i][j1 + j] = 0;
+      best_nz_coeff[i][j] = p_Img->nz_coeff[currMB->mbAddrX][i1 + i][j1 + j] = 0;
   }
 #endif
 
   if (transform8x8)
-    currMB->luma_transform_size_8x8_flag = 1; //switch to transform size 8x8
+    currMB->luma_transform_size_8x8_flag = TRUE; //switch to transform size 8x8
 
   //--- store coding state before coding ---
-  store_coding_state (currSlice, currMB, cs_cm);
+  currSlice->store_coding_state (currMB, currSlice->p_RDO->cs_cm);
 
   //=====  LOOP OVER POSSIBLE CODING MODES FOR 8x8 SUB-PARTITION  =====
-  for (min_cost8x8 = INT_MAX, min_rdcost = 1e20, index = (bslice?0:1); index < maxindex; index++)
+  for (min_cost8x8 = INT_MAX, min_rdcost = 1e20, index = (currSlice->slice_type == B_SLICE ? 0 : 1); index < maxindex; index++)
   {
     mode = b8_mode_table[index];
+    best.mode = (char) mode;
     *cost = 0;
 
-    if (enc_mb->valid[mode] && (!(transform8x8 == 1 && mode > 4)) && (transform8x8 == 0 || mode != 0 || (mode == 0 && active_sps->direct_8x8_inference_flag)))
+    if (enc_mb->valid[mode] && (!(transform8x8 == 1 && mode > 4)) && (transform8x8 == 0 || mode != 0 || (mode == 0 && p_Img->active_sps->direct_8x8_inference_flag)))
     {
       if (transform8x8)
       {
@@ -877,7 +970,7 @@ void submacroblock_mode_decision_low(Slice *currSlice,
 
         if (transform8x8)
         {
-          switch(params->Transform8x8Mode)
+          switch(p_Inp->Transform8x8Mode)
           {
           case 1: // Mixture of 8x8 & 4x4 transform
             if((direct8x8_tmp < direct4x4_tmp) || !(enc_mb->valid[5] && enc_mb->valid[6] && enc_mb->valid[7]))
@@ -892,7 +985,7 @@ void submacroblock_mode_decision_low(Slice *currSlice,
             *cost = direct4x4_tmp;
             break;
           }
-          if (params->Transform8x8Mode==2)
+          if (p_Inp->Transform8x8Mode==2)
             *cost = INT_MAX;
         }
         else
@@ -900,11 +993,11 @@ void submacroblock_mode_decision_low(Slice *currSlice,
           *cost = direct4x4_tmp;
         }
 
-        block_x = img->block_x + (block & 0x01)*2;
-        block_y = img->block_y + (block & 0x02);
-        best_ref[LIST_0] = direct_ref_idx[LIST_0][block_y][block_x];
-        best_ref[LIST_1] = direct_ref_idx[LIST_1][block_y][block_x];
-        best_pdir        = direct_pdir[block_y][block_x];
+        block_x = currMB->block_x + (block & 0x01)*2;
+        block_y = currMB->block_y + (block & 0x02);
+        best.ref[LIST_0] = currSlice->direct_ref_idx[block_y][block_x][LIST_0];
+        best.ref[LIST_1] = currSlice->direct_ref_idx[block_y][block_x][LIST_1];
+        best.pdir        = currSlice->direct_pdir[block_y][block_x];
       } // if (mode==0)
       else
       {
@@ -914,50 +1007,51 @@ void submacroblock_mode_decision_low(Slice *currSlice,
         //======= motion estimation for all reference frames ========
         //-----------------------------------------------------------
         memcpy(lambda_mf, enc_mb->lambda_mf, 3 * sizeof(int));
-        if (params->CtxAdptLagrangeMult == 1)
+        if (p_Inp->CtxAdptLagrangeMult == 1)
         {
-          lambda_mf[F_PEL] = (int)(lambda_mf[F_PEL] * lambda_mf_factor);
-          lambda_mf[H_PEL] = (int)(lambda_mf[H_PEL] * lambda_mf_factor);
-          lambda_mf[Q_PEL] = (int)(lambda_mf[Q_PEL] * lambda_mf_factor);
+          RDOPTStructure *p_RDO = currSlice->p_RDO;
+          lambda_mf[F_PEL] = (int)(lambda_mf[F_PEL] * p_RDO->lambda_mf_factor);
+          lambda_mf[H_PEL] = (int)(lambda_mf[H_PEL] * p_RDO->lambda_mf_factor);
+          lambda_mf[Q_PEL] = (int)(lambda_mf[Q_PEL] * p_RDO->lambda_mf_factor);
         }
 
-        PartitionMotionSearch (currMB, mode, block, lambda_mf);
+        SubPartitionMotionSearch (currMB, mode, block, lambda_mf);
 
         //--- get cost and reference frame for LIST 0 prediction ---
         bmcost[LIST_0] = INT_MAX;
-        list_prediction_cost(currMB, LIST_0, block, mode, enc_mb, bmcost, best_ref);
+        list_prediction_cost(currMB, LIST_0, block, mode, enc_mb, bmcost, best.ref);
 
         //store LIST 0 reference index for every block
-        block_x = img->block_x + (block & 0x01)*2;
-        block_y = img->block_y + (block & 0x02);
-        b_ref = best_ref[LIST_0];
-        ref_pic_num = enc_picture->ref_pic_num[enc_mb->list_offset[LIST_0]][(short) b_ref];
+        block_x = currMB->block_x + (block & 0x01)*2;
+        block_y = currMB->block_y + (block & 0x02);
+        b_ref = best.ref[LIST_0];
+        ref_pic_num = p_Img->enc_picture->ref_pic_num[currMB->list_offset][(short) b_ref];
 
         for (j = block_y; j< block_y + 2; j++)
         {
-          memset(&enc_picture->motion.ref_idx [LIST_0][j][block_x], b_ref, 2 * sizeof(char));
+          memset(&motion->ref_idx [LIST_0][j][block_x], b_ref, 2 * sizeof(char));
         }
 
         for (j = block_y; j< block_y + 2; j++)
         {
           for (i = block_x; i < block_x + 2; i++)
           {
-            enc_picture->motion.ref_pic_id[LIST_0][j][i] = ref_pic_num;
+            motion->ref_pic_id[LIST_0][j][i] = ref_pic_num;
           }
         }
 
-        if (bslice)
+        if (currSlice->slice_type == B_SLICE)
         {
           //--- get cost and reference frame for LIST 1 prediction ---
           bmcost[LIST_1] = INT_MAX;
           bmcost[BI_PRED] = INT_MAX;
-          list_prediction_cost(currMB, LIST_1, block, mode, enc_mb, bmcost, best_ref);
+          list_prediction_cost(currMB, LIST_1, block, mode, enc_mb, bmcost, best.ref);
 
           // Compute bipredictive cost between best list 0 and best list 1 references
-          list_prediction_cost(currMB, BI_PRED, block, mode, enc_mb, bmcost, best_ref);
+          list_prediction_cost(currMB, BI_PRED, block, mode, enc_mb, bmcost, best.ref);
 
           // currently Bi prediction ME is only supported for modes 1, 2, 3 and only for ref 0 and only for ref 0
-          if (is_bipred_enabled(mode))
+          if (is_bipred_enabled(p_Inp, mode))
           {
             list_prediction_cost(currMB, BI_PRED_L0, block, mode, enc_mb, bmcost, 0);
             list_prediction_cost(currMB, BI_PRED_L1, block, mode, enc_mb, bmcost, 0);
@@ -969,48 +1063,44 @@ void submacroblock_mode_decision_low(Slice *currSlice,
           }
 
           //--- get prediction direction ----
-          determine_prediction_list(mode, bmcost, best_ref, &best_pdir, cost, &bipred_me);
+          determine_prediction_list(bmcost, &best, cost);
 
           //store backward reference index for every block
           for (k = LIST_0; k <= LIST_1; k++)
           {
             for (j = block_y; j< block_y + 2; j++)
             {
-              memset(&enc_picture->motion.ref_idx[k][j][block_x], best_ref[k], 2 * sizeof(char));
+              memset(&motion->ref_idx[k][j][block_x], best.ref[k], 2 * sizeof(char));
             }
           }
-        } // if (bslice)
+        } // if (currSlice->slice_type == B_SLICE)
         else
         {
-          best_pdir = 0;
+          best.pdir = 0;
           *cost     = bmcost[LIST_0];
         }
       } // if (mode!=0)
 
       if (*cost!=INT_MAX)
-        *cost += (REF_COST (enc_mb->lambda_mf[Q_PEL], B8Mode2Value (mode, best_pdir),
-        enc_mb->list_offset[(best_pdir < 1 ? LIST_0 : LIST_1)]) - 1);
+        *cost += (ref_cost(p_Img, enc_mb->lambda_mf[Q_PEL], (short) B8Mode2Value (currSlice, (short) mode, best.pdir), 
+        (best.pdir < 1 ? currMB->list_offset : currMB->list_offset + LIST_1)) - 1);
 
       //--- set variables if best mode has changed ---
       if (*cost < min_cost8x8)
       {
-        min_cost8x8                  = *cost;
-        min_rdcost                   = rdcost;
-        dataTr->part8x8mode  [block] = mode;
-        dataTr->part8x8pdir  [block] = best_pdir;
-        dataTr->part8x8l0ref [block] = best_ref[LIST_0];
-        dataTr->part8x8l1ref [block] = best_ref[LIST_1];
-        dataTr->part8x8bipred[block] = bipred_me;
-
-        currMB->b8mode[block] = mode;
+        min_cost8x8             = *cost;
+        min_rdcost               = rdcost;
+        
+        dataTr->part[block] = best;
+        currMB->b8x8[block].mode = (char) mode;
 
 #ifdef BEST_NZ_COEFF
         if (cnt_nonz)
         {
-          best_nz_coeff[0][0]= img->nz_coeff[currMB->mb_nr][i1    ][j1    ];
-          best_nz_coeff[0][1]= img->nz_coeff[currMB->mb_nr][i1    ][j1 + 1];
-          best_nz_coeff[1][0]= img->nz_coeff[currMB->mb_nr][i1 + 1][j1    ];
-          best_nz_coeff[1][1]= img->nz_coeff[currMB->mb_nr][i1 + 1][j1 + 1];
+          best_nz_coeff[0][0]= p_Img->nz_coeff[currMB->mbAddrX][i1    ][j1    ];
+          best_nz_coeff[0][1]= p_Img->nz_coeff[currMB->mbAddrX][i1    ][j1 + 1];
+          best_nz_coeff[1][0]= p_Img->nz_coeff[currMB->mbAddrX][i1 + 1][j1    ];
+          best_nz_coeff[1][1]= p_Img->nz_coeff[currMB->mbAddrX][i1 + 1][j1 + 1];
         }
         else
         {
@@ -1027,15 +1117,15 @@ void submacroblock_mode_decision_low(Slice *currSlice,
         //--- store best 8x8 coding state ---
         if (block < 3)
         {
-          store_coding_state (currSlice, currMB, cs_b8);
+          currSlice->store_coding_state (currMB, currSlice->p_RDO->cs_b8);
           stored_state_8x8 = TRUE;
         }
       } // if (rdcost <= min_rdcost)
 
       //--- re-set coding state as it was before coding with current mode was performed ---
-      reset_coding_state (currSlice, currMB, cs_cm);
+      currSlice->reset_coding_state (currMB, currSlice->p_RDO->cs_cm);
     } // if ((enc_mb->valid[mode] && (transform8x8 == 0 || mode != 0 || (mode == 0 && active_sps->direct_8x8_inference_flag)))
-  } // for (min_rdcost=1e30, index=(bslice?0:1); index<6; index++)
+  } // for (min_rdcost=1e30, index=(currSlice->slice_type == B_SLICE ? 0 : 1); index<6; index++)
 
   if (valid_8x8 == TRUE)
   {
@@ -1043,7 +1133,7 @@ void submacroblock_mode_decision_low(Slice *currSlice,
     for(i = 0; i <= 1; i++)  
     {
       for(j = 0; j <= 1; j++)
-        img->nz_coeff[currMB->mb_nr][i1 + i][j1 + j] = best_nz_coeff[i][j];
+        p_Img->nz_coeff[currMB->mbAddrX][i1 + i][j1 + j] = best_nz_coeff[i][j];
     }
 #endif
 
@@ -1062,77 +1152,79 @@ void submacroblock_mode_decision_low(Slice *currSlice,
         dataTr->mb_p8x8_cost += min_cost8x8;
       else
         dataTr->mb_p8x8_cost = INT_MAX;
-
-      mode = dataTr->part8x8mode[block];
-      pdir = dataTr->part8x8pdir[block];
+      
+      mode = dataTr->part[block].mode;
+      pdir = dataTr->part[block].pdir;
     }
     else
     {
-      mode = dataTr->part8x8mode[block];
-      pdir = dataTr->part8x8pdir[block];
+      mode = dataTr->part[block].mode;
+      pdir = dataTr->part[block].pdir;
     }
 
     curr_cbp_blk  = 0;
-    currMB->bipred_me[block] = dataTr->part8x8bipred[block];
-    currMB->ar_mode = (mode != 0)? mode: P8x8;
-    best_cnt_nonz = LumaResidualCoding8x8 (currMB, &dummy, &curr_cbp_blk, block, pdir,
-      (pdir == 0 || pdir == 2 ? mode : 0), (pdir == 1 || pdir == 2 ? mode : 0), 
-      dataTr->part8x8l0ref[block], dataTr->part8x8l1ref[block], is_cavlc);
+    currMB->b8x8[block].bipred = dataTr->part[block].bipred;
+    currMB->ar_mode = (short) ((mode != 0)? mode: P8x8);
 
-    if (img->P444_joined)
-      best_cnt_nonz += coeff_cost_cr[1] + coeff_cost_cr[2];
+    if (currSlice->P444_joined)
+    {
+      int list_mode[2];
+      list_mode[0] = (pdir == 0 || pdir == 2 ? mode : 0);
+      list_mode[1] = (pdir == 1 || pdir == 2 ? mode : 0);
 
-    cbp_blk8x8   &= (~(0x33 << (((block>>1)<<3)+((block & 0x01)<<1)))); // delete bits for block
-    cbp_blk8x8   |= curr_cbp_blk;
+      best_cnt_nonz = luma_residual_coding_p444_8x8 (currMB, &dummy, &curr_cbp_blk, block, pdir, list_mode, dataTr->part[block].ref);
+      best_cnt_nonz += currSlice->coeff_cost_cr[1] + currSlice->coeff_cost_cr[2];
+    }
+    else
+    {
+      int list_mode[2];
+      list_mode[0] = (pdir == 0 || pdir == 2 ? mode : 0);
+      list_mode[1] = (pdir == 1 || pdir == 2 ? mode : 0);
+      best_cnt_nonz = luma_residual_coding_8x8 (currMB, &dummy, &curr_cbp_blk, block, pdir, list_mode, dataTr->part[block].ref);
+    }
+
+
+    dataTr->cbp_blk8x8   &= (~(0x33 << (((block>>1)<<3)+((block & 0x01)<<1)))); // delete bits for block
+    dataTr->cbp_blk8x8   |= curr_cbp_blk;
 
     //--- store coefficients ---
-    memcpy(cofACtr[0][0][0],img->cofAC[block][0][0], 4 * 2 * 65 * sizeof(int));
+    memcpy(cofACtr[0][0][0],currSlice->cofAC[block][0][0], 4 * 2 * 65 * sizeof(int));
 
-    if(img->P444_joined) 
+    if(currSlice->P444_joined) 
     {
       //--- store coefficients ---
-      memcpy(cofACtr[1][0][0],img->cofAC[block + 4][0][0], 4 * 2 * 65 * sizeof(int));
-      memcpy(cofACtr[2][0][0],img->cofAC[block + 8][0][0], 4 * 2 * 65 * sizeof(int));
+      memcpy(cofACtr[1][0][0],currSlice->cofAC[block + 4][0][0], 4 * 2 * 65 * sizeof(int));
+      memcpy(cofACtr[2][0][0],currSlice->cofAC[block + 8][0][0], 4 * 2 * 65 * sizeof(int));
     }
 
 
     //--- store reconstruction and prediction ---
-    for (j = j0; j < j0 + BLOCK_SIZE_8x8; j++)
-    {
-      memcpy(&dataTr->rec_mbY8x8[j][i0], &enc_picture->imgY[img->pix_y + j][img->pix_x + i0], BLOCK_SIZE_8x8 * sizeof (imgpel));
-    }
-
-    for (j = j0; j < j0 + BLOCK_SIZE_8x8; j++)
-    {
-      memcpy(&dataTr->mpr8x8[j][i0], &mb_pred[j][i0], BLOCK_SIZE_8x8 * sizeof (imgpel));
-    }
+    copy_image_data_8x8(&dataTr->rec_mbY8x8[j0], &p_Img->enc_picture->imgY[currMB->pix_y + j0], i0, currMB->pix_x + i0);
+    copy_image_data_8x8(&dataTr->mpr8x8[j0], &currSlice->mb_pred[0][j0], i0, i0);
 
 
     //--- store reconstruction and prediction ---
-    if(img->type==SP_SLICE &&(!si_frame_indicator))
+    if(currSlice->slice_type == SP_SLICE &&(!p_Img->si_frame_indicator))
     {
       for (j=j0; j < j0 + BLOCK_SIZE_8x8; j++)
       {
-        memcpy(&dataTr->lrec[j][i0],&lrec[img->pix_y+j][img->pix_x+i0],BLOCK_SIZE_8x8 * sizeof(int)); // store coefficients for primary SP slice
+        memcpy(&dataTr->lrec[j][i0],&p_Img->lrec[currMB->pix_y+j][currMB->pix_x+i0],BLOCK_SIZE_8x8 * sizeof(int)); // store coefficients for primary SP slice
       }
     }
-    if(img->P444_joined) 
+    if(currSlice->P444_joined) 
     {
-      for (j=j0; j < j0 + BLOCK_SIZE_8x8; j++)
-      {   
-        memcpy(&dataTr->rec_mb8x8_cr[0][j][i0], &enc_picture->imgUV[0][img->pix_y + j][img->pix_x + i0], BLOCK_SIZE_8x8 * sizeof (imgpel));
-        memcpy(&dataTr->rec_mb8x8_cr[1][j][i0], &enc_picture->imgUV[1][img->pix_y + j][img->pix_x + i0], BLOCK_SIZE_8x8 * sizeof (imgpel));
-        memcpy(&dataTr->mpr8x8CbCr[0][j][i0], &img->mb_pred[1][j][i0], BLOCK_SIZE_8x8 * sizeof (imgpel)); 
-        memcpy(&dataTr->mpr8x8CbCr[1][j][i0], &img->mb_pred[2][j][i0], BLOCK_SIZE_8x8 * sizeof (imgpel));
-      }
+      copy_image_data_8x8(&dataTr->rec_mb8x8_cr[0][j0], &p_Img->enc_picture->imgUV[0][currMB->pix_y + j0], i0, currMB->pix_x + i0);
+      copy_image_data_8x8(&dataTr->mpr8x8CbCr[0][j0], &currSlice->mb_pred[1][j0], i0, i0);
+      copy_image_data_8x8(&dataTr->rec_mb8x8_cr[1][j0], &p_Img->enc_picture->imgUV[1][currMB->pix_y + j0], i0, currMB->pix_x + i0);
+      copy_image_data_8x8(&dataTr->mpr8x8CbCr[1][j0], &currSlice->mb_pred[2][j0], i0, i0);
     }   
 
 
     //----- set cbp and count of nonzero coefficients ---
     if (best_cnt_nonz)
     {
-      cbp8x8       |= (1 << block);
-      cnt_nonz_8x8 += best_cnt_nonz;
+      dataTr->cbp8x8       |= (1 << block);
+      dataTr->cnt_nonz_8x8 += best_cnt_nonz;
     }
 
     if (!transform8x8)
@@ -1142,108 +1234,92 @@ void submacroblock_mode_decision_low(Slice *currSlice,
         //===== re-set reconstructed block =====
         j0   = 8*(block >> 1);
         i0   = 8*(block & 0x01);
-        for (j = j0; j < j0 + BLOCK_SIZE_8x8; j++)
-        {
-          memcpy(&enc_picture->imgY[img->pix_y + j][img->pix_x], dataTr->rec_mbY8x8[j], BLOCK_SIZE_8x8 * sizeof(imgpel));
-        }
 
-        if(img->type==SP_SLICE &&(!si_frame_indicator))
+        copy_image_data_8x8(&p_Img->enc_picture->imgY[currMB->pix_y + j0], &dataTr->rec_mbY8x8[j0], currMB->pix_x + i0, i0);
+
+        if(currSlice->slice_type == SP_SLICE &&(!p_Img->si_frame_indicator))
         {
           for (j = j0; j < j0 + BLOCK_SIZE_8x8; j++)
           {
-            memcpy(&lrec[img->pix_y + j][img->pix_x], dataTr->lrec[j],2*BLOCK_SIZE*sizeof(imgpel)); // reset the coefficients for SP slice
+            memcpy(&p_Img->lrec[currMB->pix_y + j][currMB->pix_x], dataTr->lrec[j], 2 * BLOCK_SIZE * sizeof(int)); // reset the coefficients for SP slice
           }
         }
 
-        if(img->P444_joined) 
+        if(currSlice->P444_joined) 
         {
-          for (k=0; k<2; k++)
-          {
-            for (j = j0; j < j0 + BLOCK_SIZE_8x8; j++)
-            {
-              memcpy(&enc_picture->imgUV[k][img->pix_y + j][img->pix_x], dataTr->rec_mb8x8_cr[k][j], BLOCK_SIZE_8x8 * sizeof(imgpel));
-            }
-          }
+          copy_image_data_8x8(&p_Img->enc_picture->imgUV[0][currMB->pix_y + j0], &dataTr->rec_mb8x8_cr[0][j0], currMB->pix_x + i0, i0);
+          copy_image_data_8x8(&p_Img->enc_picture->imgUV[1][currMB->pix_y + j0], &dataTr->rec_mb8x8_cr[1][j0], currMB->pix_x + i0, i0);
         }
       } // if (block<3)
     }
     else
     {
       //======= save motion data for 8x8 partition for transform size 8x8 ========    
-      StoreNewMotionVectorsBlock8x8(0, block, dataTr->part8x8mode[block], dataTr->part8x8l0ref[block], dataTr->part8x8l1ref[block], dataTr->part8x8pdir[block], dataTr->part8x8bipred[block], bslice);
+      StoreNewMotionVectorsBlock8x8(currSlice, 0, block, &dataTr->part[block]);
     }
 
     //===== set motion vectors and reference frames (prediction) =====
-    SetRefAndMotionVectors (&enc_picture->motion, currMB, block, dataTr->part8x8mode[block], dataTr->part8x8pdir[block], dataTr->part8x8l0ref[block], dataTr->part8x8l1ref[block], dataTr->part8x8bipred[block]);
+    currSlice->set_ref_and_motion_vectors (currMB, motion, &dataTr->part[block], block);
 
     //===== set the coding state after current block =====
     //if (transform8x8 == 0 || block < 3)
     if (stored_state_8x8 == TRUE)
-      reset_coding_state (currSlice, currMB, cs_b8);
+      currSlice->reset_coding_state (currMB, currSlice->p_RDO->cs_b8);
     else
     {
-      update_adaptive_rounding_8x8(dataTr, fadjust);
+      update_adaptive_rounding_8x8(p_Img, p_Inp, dataTr, fadjust);
     }
   }
 }
 
-/*!
-*************************************************************************************
-* \brief
-*    Checks whether a primary SP slice macroblock was encoded as I16
-*************************************************************************************
-*/
-int check_for_SI16()
-{
-  int i,j;
-  for(i=img->pix_y;i<img->pix_y+MB_BLOCK_SIZE;i++)
-  {
-    for(j=img->pix_x;j<img->pix_x+MB_BLOCK_SIZE;j++)
-      if(lrec[i][j]!=-16)
-        return 0;
-  }
-  return 1;
-}
 
 void get_initial_mb16x16_cost(Macroblock* currMB)
 {
-  if (currMB->mb_available_left && currMB->mb_available_up)
+  ImageParameters *p_Img = currMB->p_Img;
+  RDOPTStructure *p_RDO = currMB->p_slice->p_RDO;
+  if (currMB->mb_left && currMB->mb_up)
   {
-    mb16x16_cost = (mb16x16_cost_frame[currMB->mb_nr - 1] +
-      mb16x16_cost_frame[currMB->mb_nr - (img->width>>4)] + 1)/2.0;
+    p_Img->mb16x16_cost = (p_Img->mb16x16_cost_frame[currMB->mbAddrX - 1] +
+      p_Img->mb16x16_cost_frame[currMB->mbAddrX - (p_Img->width>>4)] + 1)/2.0;
   }
-  else if (currMB->mb_available_left)
+  else if (currMB->mb_left)
   {
-    mb16x16_cost = mb16x16_cost_frame[currMB->mb_nr - 1];
+    p_Img->mb16x16_cost = p_Img->mb16x16_cost_frame[currMB->mbAddrX - 1];
   }
-  else if (currMB->mb_available_up)
+  else if (currMB->mb_up)
   {
-    mb16x16_cost = mb16x16_cost_frame[currMB->mb_nr - (img->width>>4)];
+    p_Img->mb16x16_cost = p_Img->mb16x16_cost_frame[currMB->mbAddrX - (p_Img->width>>4)];
   }
   else
   {
-    mb16x16_cost = CALM_MF_FACTOR_THRESHOLD;
+    p_Img->mb16x16_cost = CALM_MF_FACTOR_THRESHOLD;
   }
 
-  lambda_mf_factor = mb16x16_cost < CALM_MF_FACTOR_THRESHOLD ? 1.0 : sqrt(mb16x16_cost / (CALM_MF_FACTOR_THRESHOLD * img->lambda_mf_factor[img->type][img->qp]));
+  p_RDO->lambda_mf_factor = p_Img->mb16x16_cost < CALM_MF_FACTOR_THRESHOLD ? 1.0 : sqrt(p_Img->mb16x16_cost / (CALM_MF_FACTOR_THRESHOLD * p_Img->lambda_mf_factor[p_Img->type][p_Img->qp]));
 }
 
-void adjust_mb16x16_cost(int cost)
+void adjust_mb16x16_cost(Macroblock *currMB, int cost)
 {
-  mb16x16_cost = (double) cost;
-  mb16x16_cost_frame[img->current_mb_nr] = mb16x16_cost;
+  ImageParameters *p_Img = currMB->p_Img;
+  RDOPTStructure  *p_RDO = currMB->p_slice->p_RDO;
 
-  lambda_mf_factor = (mb16x16_cost < CALM_MF_FACTOR_THRESHOLD)
+  p_Img->mb16x16_cost = (double) cost;
+  p_Img->mb16x16_cost_frame[p_Img->current_mb_nr] = p_Img->mb16x16_cost;
+
+  p_RDO->lambda_mf_factor = (p_Img->mb16x16_cost < CALM_MF_FACTOR_THRESHOLD)
   ? 1.0
-  : sqrt(mb16x16_cost / (CALM_MF_FACTOR_THRESHOLD * img->lambda_mf_factor[img->type][img->qp]));
+  : sqrt(p_Img->mb16x16_cost / (CALM_MF_FACTOR_THRESHOLD * p_Img->lambda_mf_factor[p_Img->type][p_Img->qp]));
 }
 
-void update_lambda_costs(RD_PARAMS *enc_mb, int lambda_mf[3])
+void update_lambda_costs(Macroblock *currMB, RD_PARAMS *enc_mb, int lambda_mf[3])
 {
+  InputParameters *p_Inp = currMB->p_Inp;
+  RDOPTStructure  *p_RDO = currMB->p_slice->p_RDO;
+
   int MEPos;
   for (MEPos = 0; MEPos < 3; MEPos ++)
   {
-    lambda_mf[MEPos] = params->CtxAdptLagrangeMult == 0 ? enc_mb->lambda_mf[MEPos] : (int)(enc_mb->lambda_mf[MEPos] * sqrt(lambda_mf_factor));
+    lambda_mf[MEPos] = p_Inp->CtxAdptLagrangeMult == 0 ? enc_mb->lambda_mf[MEPos] : (int)(enc_mb->lambda_mf[MEPos] * sqrt(p_RDO->lambda_mf_factor));
   }
 }
 
@@ -1275,16 +1351,16 @@ int iminarray ( int arr[], int size, int *minind )
  *    Determines whether bi prediction is enabaled for current mode
  *************************************************************************************
  */
-int is_bipred_enabled(int mode) 
+int is_bipred_enabled(InputParameters *p_Inp, int mode) 
 {
   int enabled = 0;
   mode = (mode == P8x8) ? 4: mode;
 
-  if (params->BiPredMotionEstimation)
+  if (p_Inp->BiPredMotionEstimation)
   {
     if (mode > 0 && mode < 5)
     {
-      enabled = (params->BiPredSearch[mode - 1]) ? 1: 0;
+      enabled = (p_Inp->BiPredSearch[mode - 1]) ? 1: 0;
     }    
     else
     {
@@ -1305,25 +1381,31 @@ int is_bipred_enabled(int mode)
  *    Decides whether to perform tranform 8x8 for this mode
  *************************************************************************************
  */
-int transform_termination_control(Macroblock* currMB, int mode, int bslice) 
-{
+int transform_termination_control(Macroblock* currMB, int mode) 
+{  
+  ImageParameters *p_Img = currMB->p_Img;
+  InputParameters *p_Inp = currMB->p_Inp;
+
   // Go through transform modes.
   // Note that if currMB->cbp is 0 one could choose to skip 8x8 mode
   // although this could be due to deadzoning decisions.
-  //if (params->Transform8x8Mode==1 && currMB->cbp!=0)
-  if (params->Transform8x8Mode == 1)
+  //if (p_Inp->Transform8x8Mode==1 && currMB->cbp!=0)
+  if (p_Inp->Transform8x8Mode == 1)
   {
+    int bslice = currMB->p_slice->slice_type == B_SLICE;
     //=========== try the 8x8 transform with mb_types 16x16,16x8, 8x16, 8x8, and DIRECT 16x16 ===========
-    if (currMB->luma_transform_size_8x8_flag == 0 && 
-      ((mode >= 1 && mode <= 3) || (bslice && mode == 0 && active_sps->direct_8x8_inference_flag) || (mode == P8x8)))
+    if (currMB->luma_transform_size_8x8_flag == FALSE && 
+      ((mode >= 1 && mode <= 3) || (bslice && mode == 0 && p_Img->active_sps->direct_8x8_inference_flag) || (mode == P8x8)))
+        //if (currMB->luma_transform_size_8x8_flag == FALSE && 
+      //((mode >= 1 && mode <= 3) || (bslice && mode == 0 && active_sps->direct_8x8_inference_flag)))
     {
       //try with 8x8 transform size
-      currMB->luma_transform_size_8x8_flag = 1;
+      currMB->luma_transform_size_8x8_flag = TRUE;
       return 0;
     }
     else
     {
-      currMB->luma_transform_size_8x8_flag = 0;
+      currMB->luma_transform_size_8x8_flag = FALSE;
       return 1;
     }
   }
@@ -1339,51 +1421,102 @@ int transform_termination_control(Macroblock* currMB, int mode, int bslice)
  *    Update prediction direction for mode P16x16 to check all prediction directions
  *************************************************************************************
  */
-int bslice_16x16_termination_control(Block8x8Info *b8x8info, int *ctr16x16, int mode, int bslice)
-{  
-  char pdir = 0;
-  short i, bipred_me = 0;
+int bslice_16x16_termination_control(InputParameters *p_Inp, Block8x8Info *b8x8info, int *ctr16x16, int mode, int bslice)
+{
   int lastcheck = 1;
   //--- for INTER16x16 in BSLICEs check all prediction directions ---
   if (mode == 1 && bslice)
   {
+    char pdir = 0;
+    short i;
+    char bipred_me = 0;
+ 
     switch (*ctr16x16)
     {
-      case 0:
-        pdir = 0;
+    case 0:
+      pdir = 0;
+      lastcheck = 0;
+      break;
+    case 1:
+      pdir = 1;
+      lastcheck = 0;
+      break;
+    case 2:
+      pdir = 2;
+      if (p_Inp->BiPredMotionEstimation)
+      {
         lastcheck = 0;
-        break;
-      case 1:
-        pdir = 1;
-        lastcheck = 0;
-        break;
-      case 2:
-        pdir = 2;
-        if (params->BiPredMotionEstimation)
-        {
-          lastcheck = 0;
-        }
-        break;
-      case 3:
-        pdir = 2;
-        bipred_me = 1;
-        lastcheck = 0;
-        break;
-      case 4:
-        pdir = 2;
-        bipred_me = 2;
-        break;
-      default:
-        error("invalid 'ctr16x16' value", -1);
-        break;
+      }
+      break;
+    case 3:
+      pdir = 2;
+      bipred_me = 1;
+      lastcheck = 0;
+      break;
+    case 4:
+      pdir = 2;
+      bipred_me = 2;
+      break;
+    default:
+      error("invalid 'ctr16x16' value", -1);
+      break;
     }
     for (i = 0; i< 4; i++)
     {
-      b8x8info->bipred8x8me[1][i] = bipred_me;
-      b8x8info->best8x8pdir[1][i] = pdir;
+      b8x8info->best[1][i].bipred = bipred_me;
+      b8x8info->best[1][i].pdir = pdir;
     }
     (*ctr16x16)++;
   }
   return lastcheck;
 }
+
+/*!
+**************************************************************************************
+* \brief
+*     Compute bipred costs
+**************************************************************************************
+*/
+void get_bipred_cost(Macroblock *currMB, int mode, int block, int i, int j, Info8x8  *best, RD_PARAMS *enc_mb, int bmcost[5])
+{
+  Slice *currSlice = currMB->p_slice;
+  short   *bi0_mv_l0    = currSlice->bipred_mv[0][LIST_0][0][mode][j][i];
+  short   *bi0_mv_l1    = currSlice->bipred_mv[0][LIST_1][0][mode][j][i];
+  short   *bi1_mv_l0    = currSlice->bipred_mv[1][LIST_0][0][mode][j][i];
+  short   *bi1_mv_l1    = currSlice->bipred_mv[1][LIST_1][0][mode][j][i];
+
+  if (best->ref[0] == 0 && best->ref[1] == 0)
+  {
+    short   *single_mv_l0 = currSlice->all_mv [LIST_0][0][mode][j][i];
+    short   *single_mv_l1 = currSlice->all_mv [LIST_1][0][mode][j][i];
+
+    if ((single_mv_l0[0] != bi0_mv_l0[0]) || (single_mv_l0[1] != bi0_mv_l0[1]) ||
+      (single_mv_l1[0] != bi0_mv_l1[0]) || (single_mv_l1[1] != bi0_mv_l1[1]))
+      list_prediction_cost(currMB, BI_PRED_L0, block, mode, enc_mb, bmcost, 0);
+    else
+      bmcost[BI_PRED_L0] = INT_MAX;
+
+    if ((single_mv_l0[0] != bi1_mv_l0[0]) || (single_mv_l0[1] != bi1_mv_l0[1]) ||
+      (single_mv_l1[0] != bi1_mv_l1[0]) || (single_mv_l1[1] != bi1_mv_l1[1]))
+    {
+      if ((bi0_mv_l0[0] != bi1_mv_l0[0]) || (bi0_mv_l0[1] != bi1_mv_l0[1]) ||
+        (bi0_mv_l1[0] != bi1_mv_l1[0]) || (bi0_mv_l1[1] != bi1_mv_l1[1]))
+        list_prediction_cost(currMB, BI_PRED_L1, block, mode, enc_mb, bmcost, 0);
+      else
+        bmcost[BI_PRED_L1] = INT_MAX;
+    }
+    else
+      bmcost[BI_PRED_L1] = INT_MAX;
+  }
+  else
+  {
+    list_prediction_cost(currMB, BI_PRED_L0, block, mode, enc_mb, bmcost, 0);
+    if ((bi0_mv_l0[0] != bi1_mv_l0[0]) || (bi0_mv_l0[1] != bi1_mv_l0[1]) ||
+      (bi0_mv_l1[0] != bi1_mv_l1[0]) || (bi0_mv_l1[1] != bi1_mv_l1[1]))
+      list_prediction_cost(currMB, BI_PRED_L1, block, mode, enc_mb, bmcost, 0);
+    else
+      bmcost[BI_PRED_L1] = INT_MAX;
+  }
+}
+
 

@@ -8,28 +8,28 @@
  *    motion compensation header
  *
  * \author
- *    Alexis Michael Tourapis         <alexismt@ieee.org>                 \n
+ *      Main contributors (see contributors.h for copyright, 
+ *                         address and affiliation details)
+ *      - Alexis Michael Tourapis  <alexismt@ieee.org>
  *
- ************************************************************************/
+ *************************************************************************************
+ */
 
 #ifndef _MC_PREDICTION_H_
 #define _MC_PREDICTION_H_
 #include "mbuffer.h"
 
-void LumaPrediction      ( Macroblock* currMB, int, int, int, int, int, int, int, short, short, short );
-void LumaPredictionBi    ( Macroblock* currMB, int, int, int, int, int, int, short, short, int );
-void ChromaPrediction    ( Macroblock* currMB, int, int, int, int, int, int, int, int, short, short, short );
-void ChromaPrediction4x4 ( Macroblock* currMB, int, int, int, int, int, int, short, short, short);   
+extern void luma_prediction       ( Macroblock* currMB, int, int, int, int, int, int[2], char *, short );
+extern void luma_prediction_bi    ( Macroblock* currMB, int, int, int, int, int, int, short, short, int );
+extern void chroma_prediction     ( Macroblock* currMB, int, int, int, int, int, int, int, int, short, short, short );
+extern void chroma_prediction_4x4 ( Macroblock* currMB, int, int, int, int, int, int, short, short, short);   
 
-// function pointer for different ways of obtaining chroma interpolation
-void (*OneComponentChromaPrediction4x4)         (imgpel* , int , int , short*** , StorablePicture *listX, int );
-void OneComponentChromaPrediction4x4_regenerate (imgpel* , int , int , short*** , StorablePicture *listX, int );
-void OneComponentChromaPrediction4x4_retrieve   (imgpel* , int , int , short*** , StorablePicture *listX, int );
+extern void OneComponentChromaPrediction4x4_regenerate (Macroblock *currMB, imgpel* , int , int , short*** , StorablePicture *listX, int );
+extern void OneComponentChromaPrediction4x4_retrieve   (Macroblock *currMB, imgpel* , int , int , short*** , StorablePicture *listX, int );
 
-void IntraChromaPrediction ( Macroblock *currMB, int*, int*, int*);
-void IntraChromaRDDecision ( Macroblock *currMB, RD_PARAMS);
+extern void intra_chroma_prediction (Macroblock *currMB, int*, int*, int*);
 
-void ComputeResidue    (imgpel **curImg, imgpel **mb_pred, int **mb_rres, int mb_y, int mb_x, int opix_y, int opix_x, int width, int height);
-void SampleReconstruct (imgpel **curImg, imgpel **mb_pred, int **mb_rres, int mb_y, int mb_x, int opix_y, int opix_x, int width, int height, int max_imgpel_value, int dq_bits);
+extern void compute_residue    (imgpel **curImg, imgpel **mb_pred, int **mb_rres, int mb_x, int opix_x, int width, int height);
+extern void sample_reconstruct (imgpel **curImg, imgpel **mb_pred, int **mb_rres, int mb_x, int opix_x, int width, int height, int max_imgpel_value, int dq_bits);
 #endif
 

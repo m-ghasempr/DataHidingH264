@@ -21,63 +21,23 @@
 #include "global.h"
 #include "rc_quadratic.h"
 
-/* generic rate control variables */
-typedef struct {
-  // RC flags
-  int   TopFieldFlag;
-  int   FieldControl;
-  int   FieldFrame;
-  int   NoGranularFieldRC;
-  // bits stats
-  int   NumberofHeaderBits;
-  int   NumberofTextureBits;
-  int   NumberofBasicUnitHeaderBits;
-  int   NumberofBasicUnitTextureBits;
-  // frame stats
-  int   NumberofGOP;
-  int   NumberofCodedBFrame;  
-  // MAD stats
-  int64 TotalMADBasicUnit;
-  int   *MADofMB;
-  // buffer and budget
-  int64 CurrentBufferFullness; //LIZG 25/10/2002
-  int64 RemainingBits;
-  // bit allocations for RC_MODE_3
-  int   RCPSliceBits;
-  int   RCISliceBits;
-  int   RCBSliceBits[RC_MAX_TEMPORAL_LEVELS];
-  int   temporal_levels;
-  int   hierNb[RC_MAX_TEMPORAL_LEVELS];
-  int   NPSlice;
-  int   NISlice;
-} rc_generic;
-
-// macroblock activity
-extern int diffy[16][16];
 
 // generic functions
-int    Qstep2QP          ( double Qstep );
-double QP2Qstep          ( int QP );
-int    ComputeMBMAD      ( void );
-double ComputeFrameMAD   ( void );
-void   rc_store_mad      (Macroblock *currMB);
+extern int    Qstep2QP          ( double Qstep, int qp_offset );
+extern double QP2Qstep          ( int QP );
+extern int    ComputeMBMAD      ( int diff[16][16] );
+extern double ComputeFrameMAD   ( ImageParameters *p_Img );
+extern void   rc_store_mad      ( Macroblock *currMB );
 
 // rate control functions
 // init/copy
-void  rc_alloc_generic           ( rc_generic **prc );
-void  rc_free_generic            ( rc_generic **prc );
-void  rc_copy_generic            ( rc_generic *dst, rc_generic *src );
-void  rc_init_gop_params         (void);
-void  rc_init_frame              (int FrameNumberInFile);
-void  rc_init_sequence           (void);
-void  rc_store_slice_header_bits (int len);
-
-
-// rate control CURRENT pointers
-rc_generic   *generic_RC;
-// rate control object pointers for RDPictureDecision buffering...
-rc_generic   *generic_RC_init, *generic_RC_best;
-
+extern void  rc_alloc_generic           ( ImageParameters *p_Img, RCGeneric **p_quad );
+extern void  rc_free_generic            ( RCGeneric **p_quad );
+extern void  rc_copy_generic            ( ImageParameters *p_Img, RCGeneric *dst, RCGeneric *src );
+extern void  rc_init_gop_params         ( ImageParameters *p_Img, InputParameters *p_Inp );
+extern void  rc_init_frame              ( ImageParameters *p_Img, InputParameters *p_Inp);
+extern void  rc_init_sequence           ( ImageParameters *p_Img, InputParameters *p_Inp);
+extern void  rc_store_slice_header_bits ( ImageParameters *p_Img, InputParameters *p_Inp, int len);
 
 #endif
 

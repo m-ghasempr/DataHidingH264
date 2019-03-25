@@ -15,9 +15,6 @@
 #include "global.h"
 #include "nalucommon.h"
 
-static FILE *f = NULL;    // the output file
-
-
 /*!
  ********************************************************************************************
  * \brief
@@ -28,7 +25,7 @@ static FILE *f = NULL;    // the output file
  *
  ********************************************************************************************
 */
-int WriteAnnexbNALU (NALU_t *n)
+int WriteAnnexbNALU (ImageParameters *p_Img, NALU_t *n)
 {
   int BitsWritten = 0;
   int offset = 0;
@@ -38,7 +35,7 @@ int WriteAnnexbNALU (NALU_t *n)
 
   assert (n != NULL);
   assert (n->forbidden_bit == 0);
-  assert (f != NULL);
+  assert (p_Img->f_annexb != NULL);
   assert (n->startcodeprefix_len == 3 || n->startcodeprefix_len == 4);
 
 // printf ("WriteAnnexbNALU: writing %d bytes w/ startcode_len %d\n", n->len+1, n->startcodeprefix_len);
@@ -48,7 +45,7 @@ int WriteAnnexbNALU (NALU_t *n)
     length = 3;
   }
 
-  if ( length != fwrite (startcode+offset, 1, length, f))
+  if ( length != (int) fwrite (startcode+offset, 1, length, p_Img->f_annexb))
   {
     printf ("Fatal: cannot write %d bytes to bitstream file, exit (-1)\n", length);
     exit (-1);
@@ -58,7 +55,7 @@ int WriteAnnexbNALU (NALU_t *n)
 
   first_byte = (unsigned char) ((n->forbidden_bit << 7) | (n->nal_reference_idc << 5) | n->nal_unit_type);
 
-  if ( 1 != fwrite (&first_byte, 1, 1, f))
+  if ( 1 != fwrite (&first_byte, 1, 1, p_Img->f_annexb))
   {
     printf ("Fatal: cannot write %d bytes to bitstream file, exit (-1)\n", 1);
     exit (-1);
@@ -68,18 +65,18 @@ int WriteAnnexbNALU (NALU_t *n)
 
 // printf ("First Byte %x, nal_ref_idc %x, nal_unit_type %d\n", first_byte, n->nal_reference_idc, n->nal_unit_type);
 
-  if (n->len != fwrite (n->buf, 1, n->len, f))
+  if (n->len != fwrite (n->buf, 1, n->len, p_Img->f_annexb))
   {
     printf ("Fatal: cannot write %d bytes to bitstream file, exit (-1)\n", n->len);
     exit (-1);
   }
   BitsWritten += n->len * 8;
 
-  fflush (f);
+  fflush (p_Img->f_annexb);
 #if TRACE
-  fprintf (p_trace, "\n\nAnnex B NALU w/ %s startcode, len %d, forbidden_bit %d, nal_reference_idc %d, nal_unit_type %d\n\n",
+  fprintf (p_Enc->p_trace, "\n\nAnnex B NALU w/ %s startcode, len %d, forbidden_bit %d, nal_reference_idc %d, nal_unit_type %d\n\n",
     n->startcodeprefix_len == 4?"long":"short", n->len + 1, n->forbidden_bit, n->nal_reference_idc, n->nal_unit_type);
-  fflush (p_trace);
+  fflush (p_Enc->p_trace);
 #endif
   return BitsWritten;
 }
@@ -90,6 +87,8 @@ int WriteAnnexbNALU (NALU_t *n)
  * \brief
  *    Opens the output file for the bytestream
  *
+ * \param p_Img
+ *    ImageParameters structure
  * \param Filename
  *    The filename of the file to be opened
  *
@@ -98,9 +97,9 @@ int WriteAnnexbNALU (NALU_t *n)
  *
  ********************************************************************************************
 */
-void OpenAnnexbFile (char *Filename)
+void OpenAnnexbFile (ImageParameters *p_Img, char *Filename)
 {
-  if ((f = fopen (Filename, "wb")) == NULL)
+  if ((p_Img->f_annexb = fopen (Filename, "wb")) == NULL)
   {
     printf ("Fatal: cannot open Annex B bytestream file '%s', exit (-1)\n", Filename);
     exit (-1);
@@ -117,9 +116,9 @@ void OpenAnnexbFile (char *Filename)
  *    none.  Funtion trerminates the program in case of an error
  ********************************************************************************************
 */
-void CloseAnnexbFile(void) 
+void CloseAnnexbFile(ImageParameters *p_Img) 
 {
-  if (fclose (f))
+  if (fclose (p_Img->f_annexb))
   {
     printf ("Fatal: cannot close Annex B bytestream file, exit (-1)\n");
     exit (-1);

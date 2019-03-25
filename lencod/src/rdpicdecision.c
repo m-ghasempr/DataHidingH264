@@ -41,15 +41,13 @@ int rd_pic_decision(double snrY_version1, double snrY_version2, int bits_version
  *    Picture Coding Decision
  ************************************************************************
  */
-int picture_coding_decision (Picture *picture1, Picture *picture2, int qp)
+int picture_coding_decision (ImageParameters *p_Img, InputParameters *p_Inp, Picture *picture1, Picture *picture2, int qp)
 {
   double lambda_picture;
-  int spframe = (img->type == SP_SLICE);
-  int bframe = (img->type == B_SLICE);
   double sse_picture1, sse_picture2;
 
-  if (params->NumberBFrames)
-    lambda_picture = (qp < 20 ? 0.55 : 0.68) * pow (2, (qp - SHIFT_QP) / 3.0) * (bframe || spframe ? 2 : 1);
+  if (p_Inp->NumberBFrames)
+    lambda_picture = (qp < 20 ? 0.55 : 0.68) * pow (2, (qp - SHIFT_QP) / 3.0) * ((p_Img->type == B_SLICE) || (p_Img->type == SP_SLICE) ? 2 : 1);
   else
     lambda_picture = (qp < 20 ? 0.55 : 0.68) * pow (2, (qp - SHIFT_QP) / 3.0);
 

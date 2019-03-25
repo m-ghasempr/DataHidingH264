@@ -19,34 +19,32 @@
 #ifndef _RD_OPT_CS_H_
 #define _RD_OPT_CS_H_
 
-typedef struct {
+struct coding_state {
 
   // important variables of data partition array
-  int                   no_part;
-  EncodingEnvironment  *encenv;
+  int                  no_part;
   Bitstream            *bitstream;
+  EncodingEnvironment  *encenv;
 
   // contexts for binary arithmetic coding
-  int                   symbol_mode;
   MotionInfoContexts   *mot_ctx;
   TextureInfoContexts  *tex_ctx;
 
   // bit counter
-  int                   bitcounter[MAX_BITCOUNTER_MB];
+  BitCounter            bits;
 
   // elements of current macroblock
   short                 mvd[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE][2];
   int64                 cbp_bits[3];
   int64                 cbp_bits_8x8[3];
-} CSobj;
-typedef CSobj* CSptr;
+};
 
+typedef struct coding_state CSobj;
 
-void  delete_coding_state  (CSptr);  //!< delete structure
-CSptr create_coding_state  (void);       //!< create structure
+extern void  delete_coding_state  (CSobj *);  //!< delete structure
+extern CSobj *create_coding_state  (InputParameters *p_Inp);       //!< create structure
 
-void  store_coding_state   (Slice *currSlice, Macroblock *currMB, CSptr);  //!< store parameters
-void  reset_coding_state   (Slice *currSlice, Macroblock *currMB, CSptr);  //!< restore parameters
+extern void init_coding_state_methods(Slice *currSlice);  //!< Init methods given entropy coding
 
 
 #endif

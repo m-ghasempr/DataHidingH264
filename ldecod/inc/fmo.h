@@ -18,13 +18,13 @@
 #define _FMO_H_
 
 
-int FmoInit (pic_parameter_set_rbsp_t* pps, seq_parameter_set_rbsp_t* sps);
-int FmoFinit (void);
+extern int fmo_init (ImageParameters *p_Img);
+extern int FmoFinit (ImageParameters *p_Img);
 
-int FmoGetNumberOfSliceGroup(void);
-int FmoGetLastMBOfPicture(void);
-int FmoGetLastMBInSliceGroup(int SliceGroup);
-int FmoGetSliceGroupId (int mb);
-int FmoGetNextMBNr (int CurrentMbNr);
+extern int FmoGetNumberOfSliceGroup(ImageParameters *p_Img);
+extern int FmoGetLastMBOfPicture   (ImageParameters *p_Img);
+extern int FmoGetLastMBInSliceGroup(ImageParameters *p_Img, int SliceGroup);
+extern int FmoGetSliceGroupId      (ImageParameters *p_Img, int mb);
+extern int FmoGetNextMBNr          (ImageParameters *p_Img, int CurrentMbNr);
 
 #endif

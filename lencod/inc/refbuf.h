@@ -10,9 +10,7 @@
 #ifndef _REBUF_H_
 #define _REBUF_H_
 
-// global sub-pel image access variables
-extern int height_pad, width_pad;
-extern int height_pad_cr, width_pad_cr;
+#include "mbuffer.h"
 
 /*!
  ************************************************************************
@@ -21,9 +19,13 @@ extern int height_pad_cr, width_pad_cr;
  *    Input does not require subpixel image indices
  ************************************************************************
  */
-static inline imgpel *UMVLine4X (imgpel ****Pic, int y, int x, int height, int width)
+static inline imgpel *UMVLine4X (StorablePicture *ref, int y, int x)
 {
-  return &(Pic[(y & 0x03)][(x & 0x03)][iClip3( 0, height, y >> 2)][iClip3( 0, width, x >> 2)]);
+#if (PAD_AFTER)
+  y += IMG_PAD_SIZE_TIMES4;
+  x += IMG_PAD_SIZE_TIMES4;
+#endif
+  return &(ref->p_curr_img_sub[(y & 0x03)][(x & 0x03)][iClip3( 0, ref->size_y_pad, y >> 2)][iClip3( 0, ref->size_x_pad, x >> 2)]);
 }
 
 /*!
@@ -33,9 +35,29 @@ static inline imgpel *UMVLine4X (imgpel ****Pic, int y, int x, int height, int w
  *    Input does not require subpixel image indices
  ************************************************************************
  */
-static inline imgpel *FastLine4X (imgpel ****Pic, int y, int x)
+static inline imgpel *UMVLine4Xcr (StorablePicture *ref, int cmp, int y, int x)
 {
-  return &(Pic[(y & 0x03)][(x & 0x03)][y >> 2][x >> 2]);
+#if (PAD_AFTER)
+  y += IMG_PAD_SIZE_TIMES4;
+  x += IMG_PAD_SIZE_TIMES4;
+#endif
+  return &(ref->p_img_sub[cmp][(y & 0x03)][(x & 0x03)][iClip3( 0, ref->size_y_cr_pad, y >> 2)][iClip3( 0, ref->size_x_cr_pad, x >> 2)]);
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Yields a pel line _pointer_ from one of the 16 sub-images
+ *    Input does not require subpixel image indices
+ ************************************************************************
+ */
+static inline imgpel *FastLine4X (StorablePicture *ref, int y, int x)
+{
+#if (PAD_AFTER)
+  y += IMG_PAD_SIZE_TIMES4;
+  x += IMG_PAD_SIZE_TIMES4;
+#endif
+  return &(ref->p_curr_img_sub[(y & 0x03)][(x & 0x03)][y >> 2][x >> 2]);
 }
 
 /*!
@@ -46,9 +68,13 @@ static inline imgpel *FastLine4X (imgpel ****Pic, int y, int x)
  *    Input does not require subpixel image indices
  ************************************************************************
  */
-static inline imgpel *UMVLine8X_chroma (imgpel ****Pic, int y, int x, int height, int width)
+static inline imgpel *UMVLine8X_chroma (StorablePicture *ref, int cmp, int y, int x)
 {
-  return &(Pic[y & chroma_mask_mv_y][x & chroma_mask_mv_x][iClip3 (0, height, y >> chroma_shift_y)][iClip3 (0, width , x >> chroma_shift_x)]);
+#if (PAD_AFTER)
+  y += IMG_PAD_SIZE_TIMES4;
+  x += IMG_PAD_SIZE_TIMES4;
+#endif
+  return &(ref->p_img_sub[cmp][y & ref->chroma_mask_mv_y][x & ref->chroma_mask_mv_x][iClip3 (0, ref->size_y_cr_pad, y >> ref->chroma_shift_y)][iClip3 (0, ref->size_x_cr_pad, x >> ref->chroma_shift_x)]);
 }
 
 /*!
@@ -59,9 +85,13 @@ static inline imgpel *UMVLine8X_chroma (imgpel ****Pic, int y, int x, int height
  *    Input does not require subpixel image indices
  ************************************************************************
  */
-static inline imgpel *FastLine8X_chroma (imgpel ****Pic, int y, int x)
+static inline imgpel *FastLine8X_chroma (StorablePicture *ref, int cmp, int y, int x)
 {
-  return &(Pic[y & chroma_mask_mv_y][x & chroma_mask_mv_x][y >> chroma_shift_y][x >> chroma_shift_x]);
+#if (PAD_AFTER)
+  y += IMG_PAD_SIZE_TIMES4;
+  x += IMG_PAD_SIZE_TIMES4;
+#endif
+  return &(ref->p_img_sub[cmp][y & ref->chroma_mask_mv_y][x & ref->chroma_mask_mv_x][y >> ref->chroma_shift_y][x >> ref->chroma_shift_x]);
 }
 
 

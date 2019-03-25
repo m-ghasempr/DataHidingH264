@@ -16,15 +16,33 @@
 #include "annexb.h"
 #include "memalloc.h"
 
-static int  BitStreamFile = -1;                //!< the bit stream file
 static const unsigned int IOBUFFERSIZE = 65536;
-static byte *iobuffer;
-static byte *iobufferread;
-static unsigned int bytesinbuffer;
-static int is_eof;
 
-static int IsFirstByteStreamNALU = 1;
+void malloc_annex_b(ImageParameters *p_Img)
+{
+  if ( (p_Img->annex_b = (ANNEXB_t *) calloc(1, sizeof(ANNEXB_t))) == NULL)
+  {
+    snprintf(errortext, ET_SIZE, "Memory allocation for Annex_B file failed");
+    error(errortext,100);
+  }  
+}
 
+void init_annex_b(ANNEXB_t *annex_b)
+{
+  annex_b->BitStreamFile = -1;
+  annex_b->iobuffer = NULL;
+  annex_b->iobufferread = NULL;
+  annex_b->bytesinbuffer = 0;
+  annex_b->is_eof = FALSE;
+  annex_b->IsFirstByteStreamNALU = 1;
+  annex_b->nextstartcodebytes = 0;
+}
+
+void free_annex_b(ImageParameters *p_Img)
+{
+  free(p_Img->annex_b);
+  p_Img->annex_b = NULL;
+}
 
 /*!
 ************************************************************************
@@ -32,17 +50,17 @@ static int IsFirstByteStreamNALU = 1;
 *    fill IO buffer
 ************************************************************************
 */
-static inline int getChunk()
+static inline int getChunk(ANNEXB_t *annex_b)
 {
-  unsigned int readbytes = read (BitStreamFile, iobuffer, IOBUFFERSIZE);
+  unsigned int readbytes = read (annex_b->BitStreamFile, annex_b->iobuffer, IOBUFFERSIZE);
   if (0==readbytes)
   {
-    is_eof = TRUE;
+    annex_b->is_eof = TRUE;
     return 0;
   }
 
-  bytesinbuffer = readbytes;
-  iobufferread  = iobuffer;
+  annex_b->bytesinbuffer = readbytes;
+  annex_b->iobufferread = annex_b->iobuffer;
   return readbytes;
 }
 
@@ -53,15 +71,15 @@ static inline int getChunk()
 *    returns a byte from IO buffer
 ************************************************************************
 */
-static inline byte getfbyte()
+static inline byte getfbyte(ANNEXB_t *annex_b)
 {
-  if (0==bytesinbuffer)
+  if (0 == annex_b->bytesinbuffer)
   {
-    if (0 == getChunk())
+    if (0 == getChunk(annex_b))
       return 0;
   }
-  bytesinbuffer--;
-  return (*iobufferread++);
+  annex_b->bytesinbuffer--;
+  return (*annex_b->iobufferread++);
 }
 
 
@@ -118,25 +136,23 @@ static inline int FindStartCode (unsigned char *Buf, int zeros_in_startcode)
  *
  ************************************************************************
  */
-
-static int nextstartcodebytes = 0;
-
-int GetAnnexbNALU (NALU_t *nalu)
+int GetAnnexbNALU (ImageParameters *p_Img, NALU_t *nalu)
 {
+  ANNEXB_t *annex_b = p_Img->annex_b;
   int i;
   int info2 = 0, info3 = 0, pos = 0;
   int StartCodeFound = 0;
-  static byte *Buf, *pBuf; 
   int LeadingZero8BitsCount = 0;
+  byte *pBuf; 
 
-  if ((Buf = (byte*) calloc (nalu->max_size , sizeof(char))) == NULL) 
+  if ((annex_b->Buf = (byte*) calloc (nalu->max_size , sizeof(char))) == NULL) 
     no_mem_exit("GetAnnexbNALU: Buf");
 
-  pBuf = Buf;
+  pBuf = annex_b->Buf;
 
-  if (nextstartcodebytes != 0)
+  if (annex_b->nextstartcodebytes != 0)
   {
-    for (i=0; i<nextstartcodebytes-1; i++)
+    for (i=0; i<annex_b->nextstartcodebytes-1; i++)
     {
       (*pBuf++) = 0;
       pos++;
@@ -146,16 +162,16 @@ int GetAnnexbNALU (NALU_t *nalu)
   }
   else
   {
-    while(!is_eof)
+    while(!annex_b->is_eof)
     {
       pos++;
-      if ((*(pBuf++)= getfbyte())!= 0)
+      if ((*(pBuf++)= getfbyte(annex_b))!= 0)
         break;
     }
   }
-  if(is_eof == TRUE)
+  if(annex_b->is_eof == TRUE)
   {
-    free (Buf);
+    free (annex_b->Buf);
     if(pos==0)
     {
       return 0;
@@ -170,7 +186,7 @@ int GetAnnexbNALU (NALU_t *nalu)
   if(*(pBuf - 1) != 1 || pos < 3)
   {
     printf ("GetAnnexbNALU: no Start Code at the beginning of the NALU, return -1\n");
-    free (Buf);
+    free (annex_b->Buf);
     return -1;
   }
 
@@ -187,46 +203,46 @@ int GetAnnexbNALU (NALU_t *nalu)
   //the 1st byte stream NAL unit can has leading_zero_8bits, but subsequent ones are not
   //allowed to contain it since these zeros(if any) are considered trailing_zero_8bits
   //of the previous byte stream NAL unit.
-  if(!IsFirstByteStreamNALU && LeadingZero8BitsCount > 0)
+  if(!annex_b->IsFirstByteStreamNALU && LeadingZero8BitsCount > 0)
   {
     printf ("GetAnnexbNALU: The leading_zero_8bits syntax can only be present in the first byte stream NAL unit, return -1\n");
-    free (Buf);
+    free (annex_b->Buf);
     return -1;
   }
 
   LeadingZero8BitsCount = pos;
-  IsFirstByteStreamNALU = 0;
+  annex_b->IsFirstByteStreamNALU = 0;
 
   while (!StartCodeFound)
   {
-    if (is_eof == TRUE)
+    if (annex_b->is_eof == TRUE)
     {
       pBuf -= 2;
       while(*(pBuf--)==0)
         pos--;
 
       nalu->len = (pos - 1) - LeadingZero8BitsCount;
-      memcpy (nalu->buf, Buf + LeadingZero8BitsCount, nalu->len);
+      memcpy (nalu->buf, annex_b->Buf + LeadingZero8BitsCount, nalu->len);
       nalu->forbidden_bit     = (*(nalu->buf) >> 7) & 1;
-      nalu->nal_reference_idc = (*(nalu->buf) >> 5) & 3;
-      nalu->nal_unit_type     = (*(nalu->buf)) & 0x1f;
-      nextstartcodebytes = 0;
+      nalu->nal_reference_idc = (NalRefIdc) ((*(nalu->buf) >> 5) & 3);
+      nalu->nal_unit_type     = (NaluType) ((*(nalu->buf)) & 0x1f);
+      annex_b->nextstartcodebytes = 0;
 
       // printf ("GetAnnexbNALU, eof case: pos %d nalu->len %d, nalu->reference_idc %d, nal_unit_type %d \n", pos, nalu->len, nalu->nal_reference_idc, nalu->nal_unit_type);
 
 #if TRACE
-      fprintf (p_trace, "\n\nLast NALU in File\n\n");
-      fprintf (p_trace, "Annex B NALU w/ %s startcode, len %d, forbidden_bit %d, nal_reference_idc %d, nal_unit_type %d\n\n",
+      fprintf (p_Dec->p_trace, "\n\nLast NALU in File\n\n");
+      fprintf (p_Dec->p_trace, "Annex B NALU w/ %s startcode, len %d, forbidden_bit %d, nal_reference_idc %d, nal_unit_type %d\n\n",
         nalu->startcodeprefix_len == 4?"long":"short", nalu->len, nalu->forbidden_bit, nalu->nal_reference_idc, nalu->nal_unit_type);
-      fflush (p_trace);
+      fflush (p_Dec->p_trace);
 #endif
 
-      free (Buf);
+      free (annex_b->Buf);
       return (pos - 1);
     }
 
     pos++;
-    *(pBuf ++)  = getfbyte();    
+    *(pBuf ++)  = getfbyte(annex_b);    
     info3 = FindStartCode(pBuf - 4, 3);
     if(info3 != 1)
     {
@@ -244,18 +260,18 @@ int GetAnnexbNALU (NALU_t *nalu)
     pBuf -= 5;
     while(*(pBuf--) == 0)
       pos--;
-    nextstartcodebytes = 4;
+    annex_b->nextstartcodebytes = 4;
   }
   else if (info2 == 1)
-    nextstartcodebytes = 3;
+    annex_b->nextstartcodebytes = 3;
   else
   {
     printf(" Panic: Error in next start code search \n");
-    free (Buf);
+    free (annex_b->Buf);
     return -1;
   }
 
-  pos -= nextstartcodebytes;
+  pos -= annex_b->nextstartcodebytes;
 
   // Here the leading zeros(if any), Start code, the complete NALU, trailing zeros(if any)
   // and the next start code is in the Buf.
@@ -264,20 +280,21 @@ int GetAnnexbNALU (NALU_t *nalu)
   // is the size of the NALU.
 
   nalu->len = pos - LeadingZero8BitsCount;
-  memcpy (nalu->buf, Buf + LeadingZero8BitsCount, nalu->len);
+  memcpy (nalu->buf, annex_b->Buf + LeadingZero8BitsCount, nalu->len);
   nalu->forbidden_bit     = (*(nalu->buf) >> 7) & 1;
-  nalu->nal_reference_idc = (*(nalu->buf) >> 5) & 3;
-  nalu->nal_unit_type     = (*(nalu->buf)) & 0x1f;
+  nalu->nal_reference_idc = (NalRefIdc) ((*(nalu->buf) >> 5) & 3);
+  nalu->nal_unit_type     = (NaluType) ((*(nalu->buf)) & 0x1f);
   nalu->lost_packets = 0;
 
+  
   //printf ("GetAnnexbNALU, regular case: pos %d nalu->len %d, nalu->reference_idc %d, nal_unit_type %d \n", pos, nalu->len, nalu->nal_reference_idc, nalu->nal_unit_type);
 #if TRACE
-  fprintf (p_trace, "\n\nAnnex B NALU w/ %s startcode, len %d, forbidden_bit %d, nal_reference_idc %d, nal_unit_type %d\n\n",
+  fprintf (p_Dec->p_trace, "\n\nAnnex B NALU w/ %s startcode, len %d, forbidden_bit %d, nal_reference_idc %d, nal_unit_type %d\n\n",
     nalu->startcodeprefix_len == 4?"long":"short", nalu->len, nalu->forbidden_bit, nalu->nal_reference_idc, nalu->nal_unit_type);
-  fflush (p_trace);
+  fflush (p_Dec->p_trace);
 #endif
 
-  free (Buf);
+  free (annex_b->Buf);
   return (pos);
 }
 
@@ -290,24 +307,25 @@ int GetAnnexbNALU (NALU_t *nalu)
  *    none
  ************************************************************************
  */
-void OpenAnnexBFile (char *fn)
+void OpenAnnexBFile (ImageParameters *p_Img, char *fn)
 {
-  if (NULL != iobuffer)
+  ANNEXB_t *annex_b = p_Img->annex_b;
+  if (NULL != annex_b->iobuffer)
   {
     error ("OpenAnnexBFile: tried to open Annex B file twice",500);
   }
-  if ((BitStreamFile = open(fn, OPENFLAGS_READ)) == -1)
+  if ((annex_b->BitStreamFile = open(fn, OPENFLAGS_READ)) == -1)
   {
     snprintf (errortext, ET_SIZE, "Cannot open Annex B ByteStream file '%s'", fn);
     error(errortext,500);
   }
-  iobuffer = malloc (IOBUFFERSIZE * sizeof (byte));
-  if (NULL == iobuffer)
+  annex_b->iobuffer = malloc (IOBUFFERSIZE * sizeof (byte));
+  if (NULL == annex_b->iobuffer)
   {
     error ("OpenAnnexBFile: cannot allocate IO buffer",500);
   }
-  is_eof = FALSE;
-  getChunk();
+  annex_b->is_eof = FALSE;
+  getChunk(annex_b);
 }
 
 
@@ -317,14 +335,15 @@ void OpenAnnexBFile (char *fn)
  *    Closes the bit stream file
  ************************************************************************
  */
-void CloseAnnexBFile()
+void CloseAnnexBFile(ImageParameters *p_Img)
 {
-  if (BitStreamFile != -1)
+  ANNEXB_t *annex_b = p_Img->annex_b;
+  if (annex_b->BitStreamFile != -1)
   {
-    close(BitStreamFile);
-    BitStreamFile = - 1;
+    close(annex_b->BitStreamFile);
+    annex_b->BitStreamFile = - 1;
   }
-  free (iobuffer);
-  iobuffer = NULL;
+  free (annex_b->iobuffer);
+  annex_b->iobuffer = NULL;
 }
 

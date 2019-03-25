@@ -15,37 +15,18 @@
 #include "global.h"
 #include "mbuffer.h"
 
-/*!
- ************************************************************************
- * \brief
- *    Error handling procedure. Print error message to stderr and exit
- *    with supplied code.
- * \param text
- *    Error message
- * \param code
- *    Exit code
- ************************************************************************
- */
-void error(char *text, int code)
-{
-  fprintf(stderr, "%s\n", text);
-  flush_dpb();
-  exit(code);
-}
 
 #if TRACE
-
-static int bitcounter = 0;
 
 /*!
 ************************************************************************
 * \brief
-*    decrement trace bitcounter (used for special case in mb aff)
+*    decrement trace p_Dec->bitcounter (used for special case in mb aff)
 ************************************************************************
 */
 void dectracebitcnt(int count)
 {
-  bitcounter -= count;
+  p_Dec->bitcounter -= count;
 }
 
 /*!
@@ -70,43 +51,43 @@ void tracebits(
     error (errortext, 600);
   }
 
-  putc('@', p_trace);
-  chars = fprintf(p_trace, "%i", bitcounter);
+  putc('@', p_Dec->p_trace);
+  chars = fprintf(p_Dec->p_trace, "%i", p_Dec->bitcounter);
   while(chars++ < 5)
-    putc(' ',p_trace);
+    putc(' ',p_Dec->p_trace);
 
-  chars += fprintf(p_trace, " %s", trace_str);
+  chars += fprintf(p_Dec->p_trace, " %s", trace_str);
   while(chars++ < 55)
-    putc(' ',p_trace);
+    putc(' ',p_Dec->p_trace);
 
   // Align bitpattern
   if(len<15)
   {
     for(i=0 ; i<15-len ; i++)
-      fputc(' ', p_trace);
+      fputc(' ', p_Dec->p_trace);
   }
 
   // Print bitpattern
   for(i=0 ; i<len/2 ; i++)
   {
-    fputc('0', p_trace);
+    fputc('0', p_Dec->p_trace);
   }
   // put 1
-  fprintf(p_trace, "1");
+  fprintf(p_Dec->p_trace, "1");
 
   // Print bitpattern
   for(i=0 ; i<len/2 ; i++)
   {
       if (0x01 & ( info >> ((len/2-i)-1)))
-        fputc('1', p_trace);
+        fputc('1', p_Dec->p_trace);
       else
-        fputc('0', p_trace);
+        fputc('0', p_Dec->p_trace);
   }
 
-  fprintf(p_trace, " (%3d) \n", value1);
-  bitcounter += len;
+  fprintf(p_Dec->p_trace, " (%3d) \n", value1);
+  p_Dec->bitcounter += len;
 
-  fflush (p_trace);
+  fflush (p_Dec->p_trace);
 }
 
 /*!
@@ -130,30 +111,30 @@ void tracebits2(
     error (errortext, 600);
   }
 
-  putc('@', p_trace);
-  chars = fprintf(p_trace, "%i", bitcounter);
+  putc('@', p_Dec->p_trace);
+  chars = fprintf(p_Dec->p_trace, "%i", p_Dec->bitcounter);
 
   while(chars++ < 5)
-    putc(' ',p_trace);
+    putc(' ',p_Dec->p_trace);
 
-  chars += fprintf(p_trace, " %s", trace_str);
+  chars += fprintf(p_Dec->p_trace, " %s", trace_str);
 
   while(chars++ < 55)
-    putc(' ',p_trace);
+    putc(' ',p_Dec->p_trace);
 
   // Align bitpattern
   if(len < 15)
   {
     for(i = 0; i < 15 - len; i++)
-      fputc(' ', p_trace);
+      fputc(' ', p_Dec->p_trace);
   }
 
-  bitcounter += len;
+  p_Dec->bitcounter += len;
   while (len >= 32)
   {
     for(i = 0; i < 8; i++)
     {
-      fputc('0', p_trace);
+      fputc('0', p_Dec->p_trace);
     }
     len -= 8;
   }
@@ -162,14 +143,14 @@ void tracebits2(
   for(i=0 ; i<len ; i++)
   {
     if (0x01 & ( info >> (len-i-1)))
-      fputc('1', p_trace);
+      fputc('1', p_Dec->p_trace);
     else
-      fputc('0', p_trace);
+      fputc('0', p_Dec->p_trace);
   }
 
-  fprintf(p_trace, " (%3d) \n", info);
+  fprintf(p_Dec->p_trace, " (%3d) \n", info);
 
-  fflush (p_trace);
+  fflush (p_Dec->p_trace);
 }
 #endif
 

@@ -26,7 +26,6 @@ static const float K1 = 1.596f;
 static const float K2 = 0.391f;
 static const float K3 = 0.813f;
 static const float K4 = 2.018f;
-static int offset_y, offset_cr;
 #else
 static const float K0 = 1.000f;
 static const float K1 = 1.402f;
@@ -34,52 +33,49 @@ static const float K2 = 0.34414f;
 static const float K3 = 0.71414f;
 static const float K4 = 1.772f;
 #endif
-static int wk0, wk1, wk2, wk3, wk4;
 
-ImageStructure imgRGB_src, imgRGB_ref;
-
-int create_RGB_memory(ImageParameters *img)
+int create_RGB_memory(ImageParameters *p_Img)
 {
   int memory_size = 0;
   int j;
   for( j = 0; j < 3; j++ )
   {
-    memory_size += get_mem2Dpel (&imgRGB_src.data[j], img->height, img->width);
+    memory_size += get_mem2Dpel (&p_Img->imgRGB_src.data[j], p_Img->height, p_Img->width);
   }
   for( j = 0; j < 3; j++ )
   {
-    memory_size += get_mem2Dpel (&imgRGB_ref.data[j], img->height, img->width);
+    memory_size += get_mem2Dpel (&p_Img->imgRGB_ref.data[j], p_Img->height, p_Img->width);
   }
   
   return memory_size;
 }
 
-void delete_RGB_memory(void)
+void delete_RGB_memory(ImageParameters *p_Img)
 {
   int i;
   for( i = 0; i < 3; i++ )
   {
-    free_mem2Dpel(imgRGB_src.data[i]);
+    free_mem2Dpel(p_Img->imgRGB_src.data[i]);
   }
   for( i = 0; i < 3; i++ )
   {
-    free_mem2Dpel(imgRGB_ref.data[i]);
+    free_mem2Dpel(p_Img->imgRGB_ref.data[i]);
   }
 }
 
-void init_YUVtoRGB(void)
+void init_YUVtoRGB(ImageParameters *p_Img, InputParameters *p_Inp)
 { 
   float conv_scale = (float) (65536.0f);
 
-  wk0 = float2int(  conv_scale * K0);
-  wk1 = float2int(  conv_scale * K1);
-  wk2 = float2int( -conv_scale * K2);
-  wk3 = float2int( -conv_scale * K3);
-  wk4 = float2int(  conv_scale * K4);
+  p_Img->wka0 = float2int(  conv_scale * K0);
+  p_Img->wka1 = float2int(  conv_scale * K1);
+  p_Img->wka2 = float2int( -conv_scale * K2);
+  p_Img->wka3 = float2int( -conv_scale * K3);
+  p_Img->wka4 = float2int(  conv_scale * K4);
 
 #ifdef YUV2RGB_YOFFSET
-  offset_y = OFFSET_Y << (params->output.bit_depth[0] - 8);
-  offset_cr = 1 << (params->output.bit_depth[0] - 1);
+  p_Img->offset_y = OFFSET_Y << (p_Inp->output.bit_depth[0] - 8);
+  p_Img->offset_cr = 1 << (p_Inp->output.bit_depth[0] - 1);
 #endif
 }
 
@@ -92,12 +88,12 @@ void init_YUVtoRGB(void)
 *    Method not support for 4:0:0 content
 *************************************************************************************
 */
-void YUVtoRGB(ImageStructure *YUV, ImageStructure *RGB)
+void YUVtoRGB(ImageParameters *p_Img, ImageStructure *YUV, ImageStructure *RGB)
 {
-  static int i, j, j_cr, i_cr;
-  static int sy, su, sv;
-  static int wbuv, wguv, wruv;
-  static imgpel *Y, *U, *V, *R, *G, *B;
+  int i, j, j_cr, i_cr;
+  int sy, su, sv;
+  int wbuv, wguv, wruv;
+  imgpel *Y, *U, *V, *R, *G, *B;
   FrameFormat format = YUV->format;
   int width = format.width;
   int height = format.height;
@@ -106,7 +102,7 @@ void YUVtoRGB(ImageStructure *YUV, ImageStructure *RGB)
   // Color conversion
   for (j = 0; j < height; j++)
   {
-    j_cr = j >> shift_cr_y;
+    j_cr = j >> p_Img->shift_cr_y;
     Y = YUV->data[0][j];
     U = YUV->data[1][j_cr];
     V = YUV->data[2][j_cr];
@@ -116,24 +112,24 @@ void YUVtoRGB(ImageStructure *YUV, ImageStructure *RGB)
 
     for (i = 0; i < width; i++)
     {
-      i_cr = i >> shift_cr_x;
+      i_cr = i >> p_Img->shift_cr_x;
 
-      su = U[i_cr] - offset_cr;
-      sv = V[i_cr] - offset_cr;
+      su = U[i_cr] - p_Img->offset_cr;
+      sv = V[i_cr] - p_Img->offset_cr;
 
-      wruv = wk1 * sv;
-      wguv = wk2 * su + wk3 * sv;
-      wbuv = wk4 * su;
+      wruv = p_Img->wka1 * sv;
+      wguv = p_Img->wka2 * su + p_Img->wka3 * sv;
+      wbuv = p_Img->wka4 * su;
 
 #ifdef YUV2RGB_YOFFSET // Y offset value of 16 is considered
-      sy = wk0 * (Y[i] - offset_y);
+      sy = p_Img->wka0 * (Y[i] - p_Img->offset_y);
 #else
-      sy = wk0 * Y[i];
+      sy = p_Img->wka0 * Y[i];
 #endif
 
-      R[i] = iClip1( max_value, rshift_rnd(sy + wruv, 16));
-      G[i] = iClip1( max_value, rshift_rnd(sy + wguv, 16));
-      B[i] = iClip1( max_value, rshift_rnd(sy + wbuv, 16));
+      R[i] = (imgpel) iClip1( max_value, rshift_rnd(sy + wruv, 16));
+      G[i] = (imgpel) iClip1( max_value, rshift_rnd(sy + wguv, 16));
+      B[i] = (imgpel) iClip1( max_value, rshift_rnd(sy + wbuv, 16));
     }
   }
   // Setting RGB FrameFormat

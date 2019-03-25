@@ -18,14 +18,6 @@
 #ifndef _WP_MCPREC_H_
 #define _WP_MCPREC_H_
 
-
-#define WP_MCPREC_PLUS0       4
-#define WP_MCPREC_PLUS1       5
-#define WP_MCPREC_MINUS0      6
-#define WP_MCPREC_MINUS1      7
-#define WP_MCPREC_MINUS_PLUS0 8
-#define WP_REGULAR            9
-
 typedef struct
 {
   int PicNum;              // PicNum/FrameNum
@@ -39,7 +31,7 @@ typedef struct
 }
 WPXPass;
 
-typedef struct
+typedef struct wpx_object
 {
   int               num_wp_ref_list[2];         // num of elements in each of the above matrices [LIST]
   WeightedPredRefX *wp_ref_list[2];             // structure with reordering and WP information for ref frames [LIST]
@@ -48,17 +40,13 @@ typedef struct
 }
 WPXObject;
 
-WPXObject *pWPX;
-
-void   wpxInitWPXObject( void );
-void   wpxFreeWPXObject( void );
-void   wpxInitWPXPasses( InputParameters *params );
-void   wpxModifyRefPicList( ImageParameters *img );
-// Note that at some point, InputParameters params contents should be copied into ImageParameters *img. 
+extern void   wpxInitWPXObject( ImageParameters *p_Img );
+extern void   wpxFreeWPXObject( ImageParameters *p_Img );
+extern void   wpxInitWPXPasses( ImageParameters *p_Img, InputParameters *p_Inp );
+extern void   wpxModifyRefPicList( Slice *currSlice );
+// Note that at some point, InputParameters p_Inp contents should be copied into ImageParameters *p_Img. 
 // This would eliminate need of having to use both structures
-int    wpxDetermineWP( InputParameters *params, ImageParameters *img, int clist, int n );
-void   wpxAdaptRefNum( ImageParameters *img );
-void   wpxReorderLists( ImageParameters *img, Slice *currSlice );
+extern int    wpxDetermineWP( Slice *currSlice, int clist, int n );
+extern void   wpxAdaptRefNum( Slice *currSlice );
 
 #endif
-

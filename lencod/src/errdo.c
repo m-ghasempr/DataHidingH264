@@ -25,16 +25,15 @@
 #include "image.h"
 #include "errdo.h"
 #include "errdo_mc_prediction.h"
+#include "md_common.h"
 
-Decoders *decs = NULL;
+static StorablePicture* find_nearest_ref_picture(DecodedPictureBuffer *p_Dpb, int poc);
+static void copy_conceal_mb (Macroblock *currMB, StorablePicture *enc_pic, int decoder, int mb_error, StorablePicture* refPic);
+static void get_predicted_mb(Macroblock *currMB, StorablePicture *enc_pic, int decoder);
+static void add_residue     (Macroblock *currMB, StorablePicture *enc_pic, int decoder, int pl, int block8x8, int x_size, int y_size);
+static void Build_Status_Map(ImageParameters *p_Img, InputParameters *p_Inp, byte **s_map);
 
-static StorablePicture* find_nearest_ref_picture(int poc);
-static void copy_conceal_mb (StorablePicture *enc_pic, ImageParameters* image, int decoder, int mb_error, Macroblock* currMB, StorablePicture* refPic);
-static void get_predicted_mb(StorablePicture *enc_pic, ImageParameters* image, int decoder, Macroblock* currMB);
-static void add_residue     (StorablePicture *enc_pic, ImageParameters* image, int decoder, int pl, int block8x8, int x_size, int y_size);
-static void Build_Status_Map(byte **s_map);
-
-extern void DeblockFrame(ImageParameters *img, imgpel **, imgpel ***);
+extern void DeblockFrame(ImageParameters *p_Img, imgpel **, imgpel ***);
 
 /*!
 **************************************************************************************
@@ -42,22 +41,22 @@ extern void DeblockFrame(ImageParameters *img, imgpel **, imgpel ***);
 *      Allocate memory for error resilient RDO.  
 **************************************************************************************
 */
-int allocate_errdo_mem(InputParameters *pparams)
+int allocate_errdo_mem(ImageParameters *p_Img, InputParameters *p_Inp)
 {
   int memory_size = 0;
 
-  decs   = (Decoders *) malloc(sizeof(Decoders));
+  p_Img->p_decs   = (Decoders *) malloc(sizeof(Decoders));
 
-  decs->dec_mb_pred         = NULL;
-  decs->dec_mbY_best        = NULL;
-  decs->dec_mb_pred_best8x8 = NULL;
-  decs->dec_mbY_best8x8     = NULL;
-  decs->res_img             = NULL;
-  memory_size += get_mem3Dpel(&decs->dec_mb_pred, pparams->NoOfDecoders, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-  memory_size += get_mem3Dpel(&decs->dec_mbY_best, pparams->NoOfDecoders, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-  memory_size += get_mem4Dpel(&decs->dec_mbY_best8x8, 2, pparams->NoOfDecoders, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-  memory_size += get_mem4Dpel(&decs->dec_mb_pred_best8x8, 2, pparams->NoOfDecoders, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
-  memory_size += get_mem3Dint(&decs->res_img, MAX_PLANE, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
+  p_Img->p_decs->dec_mb_pred         = NULL;
+  p_Img->p_decs->dec_mbY_best        = NULL;
+  p_Img->p_decs->dec_mb_pred_best8x8 = NULL;
+  p_Img->p_decs->dec_mbY_best8x8     = NULL;
+  p_Img->p_decs->res_img             = NULL;
+  memory_size += get_mem3Dpel(&p_Img->p_decs->dec_mb_pred, p_Inp->NoOfDecoders, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
+  memory_size += get_mem3Dpel(&p_Img->p_decs->dec_mbY_best, p_Inp->NoOfDecoders, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
+  memory_size += get_mem4Dpel(&p_Img->p_decs->dec_mbY_best8x8, 2, p_Inp->NoOfDecoders, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
+  memory_size += get_mem4Dpel(&p_Img->p_decs->dec_mb_pred_best8x8, 2, p_Inp->NoOfDecoders, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
+  memory_size += get_mem3Dint(&p_Img->p_decs->res_img, MAX_PLANE, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
   
   return memory_size;
 }
@@ -68,31 +67,31 @@ int allocate_errdo_mem(InputParameters *pparams)
 *      free memory of error resilient RDO.  
 **************************************************************************************
 */
-void free_errdo_mem(void)
+void free_errdo_mem(ImageParameters *p_Img)
 {
-  if (decs->res_img)
+  if (p_Img->p_decs->res_img)
   {
-    free_mem3Dint(decs->res_img);
+    free_mem3Dint(p_Img->p_decs->res_img);
   }
-  if (decs->dec_mb_pred)
+  if (p_Img->p_decs->dec_mb_pred)
   {
-    free_mem3Dpel(decs->dec_mb_pred);
+    free_mem3Dpel(p_Img->p_decs->dec_mb_pred);
   }
-  if (decs->dec_mbY_best)
+  if (p_Img->p_decs->dec_mbY_best)
   {
-    free_mem3Dpel(decs->dec_mbY_best);
+    free_mem3Dpel(p_Img->p_decs->dec_mbY_best);
   }
-  if (decs->dec_mbY_best8x8)
+  if (p_Img->p_decs->dec_mbY_best8x8)
   {
-    free_mem4Dpel(decs->dec_mbY_best8x8);
+    free_mem4Dpel(p_Img->p_decs->dec_mbY_best8x8);
   }
-  if (decs->dec_mb_pred_best8x8)
+  if (p_Img->p_decs->dec_mb_pred_best8x8)
   {
-    free_mem4Dpel(decs->dec_mb_pred_best8x8);
+    free_mem4Dpel(p_Img->p_decs->dec_mb_pred_best8x8);
   }
 
-  if ( decs != NULL )
-    free( decs );
+  if ( p_Img->p_decs != NULL )
+    free( p_Img->p_decs );
 }
 
 /*!
@@ -106,35 +105,35 @@ void free_errdo_mem(void)
 *    4) Field coding
 **************************************************************************************
 */
-void decode_one_mb (ImageParameters *image, StorablePicture *enc_pic, int decoder, Macroblock* currMB)
+void decode_one_mb (Macroblock* currMB, StorablePicture *enc_pic, int decoder)
 {
   int i0, j;
-  static imgpel** curComp;
-  static imgpel** oldComp;
+  Slice *currSlice = currMB->p_slice;
+  ImageParameters *p_Img = currMB->p_Img;
+  imgpel** curComp;
+  imgpel** oldComp;
 
+  //printf("currMB->mb_type %d\n", currMB->mb_type);
   if (currMB->mb_type > P8x8) //Intra MB
   {
-    curComp = &enc_pic->p_dec_img[0][decoder][image->pix_y];
-    oldComp = &enc_pic->p_curr_img[image->pix_y];
-    i0 = image->pix_x;
-    for (j = 0; j < MB_BLOCK_SIZE; j++)
-    {
-      memcpy(&(curComp[j][i0]), &(oldComp[j][i0]), MB_BLOCK_SIZE*sizeof(imgpel));
-    }
+    curComp = &enc_pic->p_dec_img[0][decoder][currMB->pix_y];
+    oldComp = &enc_pic->p_curr_img[currMB->pix_y];
+    i0 = currMB->pix_x;
+    copy_image_data_16x16(curComp, oldComp, i0, i0);
   }
-  else if ((currMB->mb_type == 0) && (img->type != B_SLICE))
+  else if ((currMB->mb_type == 0) && (currSlice->slice_type != B_SLICE))
   {
-    get_predicted_mb(enc_pic, image, decoder, currMB);
-    curComp = &enc_pic->p_dec_img[0][decoder][image->pix_y];
-    for(j = 0; j < image->mb_size[0][1]; j++)
+    get_predicted_mb(currMB, enc_pic, decoder);
+    curComp = &enc_pic->p_dec_img[0][decoder][currMB->pix_y];
+    for(j = 0; j < p_Img->mb_size[0][1]; j++)
     {
-      memcpy(&(curComp[j][image->pix_x]), &(decs->dec_mb_pred[decoder][j][0]), image->mb_size[0][0] * sizeof(imgpel));
+      memcpy(&(curComp[j][currMB->pix_x]), &(p_Img->p_decs->dec_mb_pred[decoder][j][0]), p_Img->mb_size[0][0] * sizeof(imgpel));
     }
   }
   else 
   {
-    get_predicted_mb(enc_pic, image, decoder, currMB);
-    add_residue(enc_pic, image, decoder, PLANE_Y, 0, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
+    get_predicted_mb(currMB, enc_pic, decoder);
+    add_residue(currMB, enc_pic, decoder, PLANE_Y, 0, MB_BLOCK_SIZE, MB_BLOCK_SIZE);
   }
 }
 
@@ -142,11 +141,12 @@ void decode_one_mb (ImageParameters *image, StorablePicture *enc_pic, int decode
 **************************************************************************************
 * \brief 
 *      Finds predicted macroblock values 
-*   and copies them to img->mb_pred[0][][]
+*   and copies them to currSlice->mb_pred[0][][]
 **************************************************************************************
 */
-static void get_predicted_mb(StorablePicture *enc_pic, ImageParameters* image, int decoder, Macroblock* currMB)
+static void get_predicted_mb(Macroblock *currMB, StorablePicture *enc_pic, int decoder)
 {
+  Slice *currSlice = currMB->p_slice;
   int i,j,k;
   int block_size_x, block_size_y;
   int mv_mode, pred_dir;
@@ -154,18 +154,18 @@ static void get_predicted_mb(StorablePicture *enc_pic, ImageParameters* image, i
   int block8x8;
   int k_start, k_end, k_inc;
 
-  if (img->type == P_SLICE && !currMB->mb_type)
+  if (currSlice->slice_type == P_SLICE && !currMB->mb_type)
   {
     block_size_x = MB_BLOCK_SIZE;
     block_size_y = MB_BLOCK_SIZE;
-    perform_mc(decoder, PLANE_Y, enc_pic, image, currMB, LIST_0, 0, 0, enc_pic->motion.ref_idx, 0, 0, block_size_x, block_size_y, 0);
+    perform_mc(currMB, decoder, PLANE_Y, enc_pic, LIST_0, 0, 0, enc_pic->motion.ref_idx, 0, 0, block_size_x, block_size_y, 0);
   }
   else if (currMB->mb_type == 1)
   {
     block_size_x = MB_BLOCK_SIZE;
     block_size_y = MB_BLOCK_SIZE;
-    pred_dir = currMB->b8pdir[0];   
-    perform_mc(decoder, PLANE_Y, enc_pic, image, currMB, pred_dir, 1, 1, enc_pic->motion.ref_idx, 0, 0, block_size_x, block_size_y, currMB->bipred_me[0]);
+    pred_dir = currMB->b8x8[0].pdir;   
+    perform_mc(currMB, decoder, PLANE_Y, enc_pic, pred_dir, 1, 1, enc_pic->motion.ref_idx, 0, 0, block_size_x, block_size_y, currMB->b8x8[0].bipred);
   }
   else if (currMB->mb_type == 2)
   {   
@@ -174,8 +174,8 @@ static void get_predicted_mb(StorablePicture *enc_pic, ImageParameters* image, i
 
     for (block8x8 = 0; block8x8 < 4; block8x8 += 2)
     {
-      pred_dir = currMB->b8pdir[block8x8];
-      perform_mc(decoder, PLANE_Y, enc_pic, image, currMB, pred_dir, 2, 2, enc_pic->motion.ref_idx, 0, block8x8, block_size_x, block_size_y, currMB->bipred_me[block8x8]);
+      pred_dir = currMB->b8x8[block8x8].pdir;
+      perform_mc(currMB, decoder, PLANE_Y, enc_pic, pred_dir, 2, 2, enc_pic->motion.ref_idx, 0, block8x8, block_size_x, block_size_y, currMB->b8x8[block8x8].bipred);
     }
   }
   else if (currMB->mb_type == 3)
@@ -187,16 +187,16 @@ static void get_predicted_mb(StorablePicture *enc_pic, ImageParameters* image, i
     {
       i = block8x8<<1;
       j = 0;      
-      pred_dir = currMB->b8pdir[block8x8];
-      perform_mc(decoder, PLANE_Y, enc_pic, image, currMB, pred_dir, 3, 3, enc_pic->motion.ref_idx, i, j, block_size_x, block_size_y, currMB->bipred_me[block8x8]);
+      pred_dir = currMB->b8x8[block8x8].pdir;
+      perform_mc(currMB, decoder, PLANE_Y, enc_pic, pred_dir, 3, 3, enc_pic->motion.ref_idx, i, j, block_size_x, block_size_y, currMB->b8x8[block8x8].bipred);
     }
   }
   else 
   {
     for (block8x8 = 0; block8x8 < 4; block8x8++)
     {
-      mv_mode  = currMB->b8mode[block8x8];
-      pred_dir = currMB->b8pdir[block8x8];
+      mv_mode  = currMB->b8x8[block8x8].mode;
+      pred_dir = currMB->b8x8[block8x8].pdir;
 
       k_start = (block8x8 << 2);
       k_inc = (mv_mode == 5) ? 2 : 1;
@@ -218,7 +218,7 @@ static void get_predicted_mb(StorablePicture *enc_pic, ImageParameters* image, i
       {
         i =  (decode_block_scan[k] & 3);
         j = ((decode_block_scan[k] >> 2) & 3);
-        perform_mc(decoder, PLANE_Y, enc_pic, image, currMB, pred_dir, mv_mode, mv_mode, enc_pic->motion.ref_idx, i, j, block_size_x, block_size_y, currMB->bipred_me[block8x8]);
+        perform_mc(currMB, decoder, PLANE_Y, enc_pic, pred_dir, mv_mode, mv_mode, enc_pic->motion.ref_idx, i, j, block_size_x, block_size_y, currMB->b8x8[block8x8].bipred);
       }
     }
   }
@@ -236,7 +236,7 @@ static void get_predicted_mb(StorablePicture *enc_pic, ImageParameters* image, i
 *    4) Field coding
 **************************************************************************************
 */
-void decode_one_b8block (ImageParameters *image, StorablePicture *enc_pic, Macroblock* currMB, int decoder, int block8x8, short mv_mode, int pred_dir) 
+void decode_one_b8block (Macroblock* currMB, StorablePicture *enc_pic, int decoder, int block8x8, short mv_mode, int pred_dir) 
 {
   int i,j,k;
   int block_size_x, block_size_y;
@@ -247,13 +247,14 @@ void decode_one_b8block (ImageParameters *image, StorablePicture *enc_pic, Macro
   imgpel **oldComp;
   int k_start, k_end, k_inc;
   static const byte decode_block_scan[16] = {0,1,4,5,2,3,6,7,8,9,12,13,10,11,14,15};
+  Slice *currSlice = currMB->p_slice;
 
   if (mv_mode > 8)  //Intra
   {
     for(j = j0; j < j1; j++)
     {
-      curComp = &enc_pic->p_dec_img[0][decoder][image->pix_y];
-      oldComp = &enc_pic->p_curr_img[image->pix_y];
+      curComp = &enc_pic->p_dec_img[0][decoder][currMB->pix_y];
+      oldComp = &enc_pic->p_curr_img[currMB->pix_y];
       memcpy(&(curComp[j][i0]), &(oldComp[j][i0]), sizeof(imgpel)*8);
     }
   }
@@ -267,7 +268,7 @@ void decode_one_b8block (ImageParameters *image, StorablePicture *enc_pic, Macro
       k_end = k_start+1;
       block_size_x = 8;
       block_size_y = 8;
-      ref_idx_buf = direct_ref_idx;
+      ref_idx_buf = currSlice->direct_ref_idx;
     }
     else
     {
@@ -282,10 +283,10 @@ void decode_one_b8block (ImageParameters *image, StorablePicture *enc_pic, Macro
     {
       i =  (decode_block_scan[k] & 3);
       j = ((decode_block_scan[k] >> 2) & 3);
-      perform_mc(decoder, PLANE_Y, enc_pic, image, currMB, pred_dir, mv_mode, mv_mode, ref_idx_buf, i, j, block_size_x, block_size_y, currMB->bipred_me[block8x8]);
+      perform_mc(currMB, decoder, PLANE_Y, enc_pic, pred_dir, mv_mode, mv_mode, ref_idx_buf, i, j, block_size_x, block_size_y, currMB->b8x8[block8x8].bipred);
     }        
 
-    add_residue(enc_pic, image, decoder, PLANE_Y, block8x8, 8, 8);
+    add_residue(currMB, enc_pic, decoder, PLANE_Y, block8x8, 8, 8);
   }
 }
 
@@ -295,21 +296,23 @@ void decode_one_b8block (ImageParameters *image, StorablePicture *enc_pic, Macro
 *      Add residual to motion predicted block
 **************************************************************************************
 */
-static void add_residue (StorablePicture *enc_pic, ImageParameters* image, int decoder, int pl, int block8x8, int x_size, int y_size) 
+static void add_residue (Macroblock *currMB, StorablePicture *enc_pic, int decoder, int pl, int block8x8, int x_size, int y_size) 
 {
+  ImageParameters *p_Img = currMB->p_Img;
+  int max_pel_value = currMB->p_Img->max_pel_value_comp[pl];
   int i,j;
   int i0 = (block8x8 & 0x01)<<3, i1 = i0 + x_size;
   int j0 = (block8x8 >> 1)<<3,   j1 = j0 + y_size;
 
-  imgpel **p_dec_img = &enc_pic->p_dec_img[pl][decoder][image->pix_y];
-  int    **res_img   = decs->res_img[0];
-  imgpel** mpr       = decs->dec_mb_pred[decoder];
+  imgpel **p_dec_img = &enc_pic->p_dec_img[pl][decoder][currMB->pix_y];
+  int    **res_img   = p_Img->p_decs->res_img[0];
+  imgpel** mpr       = p_Img->p_decs->dec_mb_pred[decoder];
 
   for (j = j0; j < j1; j++)
   {
     for (i = i0; i < i1; i++)
     {
-      p_dec_img[j][image->pix_x+i] = iClip3(0, image->max_imgpel_value_comp[pl], (mpr[j][i] + res_img[j][i])); 
+      p_dec_img[j][currMB->pix_x + i] = (imgpel) iClip3(0, max_pel_value, (mpr[j][i] + res_img[j][i])); 
     } 
   }
 }
@@ -322,14 +325,14 @@ static void add_residue (StorablePicture *enc_pic, ImageParameters* image, int d
  *
  *************************************************************************************
  */
-void UpdateDecoders(InputParameters *params, ImageParameters *image, StorablePicture *enc_pic)
+void UpdateDecoders(ImageParameters *p_Img, InputParameters *p_Inp, StorablePicture *enc_pic)
 {
   int k;
-  for (k = 0; k < params->NoOfDecoders; k++)
+  for (k = 0; k < p_Inp->NoOfDecoders; k++)
   {
-    Build_Status_Map(enc_pic->mb_error_map[k]); // simulates the packet losses
-    error_conceal_picture(image, enc_pic, k); 
-    DeblockFrame (image, enc_pic->p_dec_img[0][k], NULL);
+    Build_Status_Map(p_Img, p_Inp, enc_pic->mb_error_map[k]); // simulates the packet losses
+    p_Img->error_conceal_picture(p_Img, enc_pic, k); 
+    DeblockFrame (p_Img, enc_pic->p_dec_img[0][k], NULL);
   }
 }
 
@@ -342,9 +345,9 @@ void UpdateDecoders(InputParameters *params, ImageParameters *image, StorablePic
  *
  *************************************************************************************
  */
-void init_error_conceal(int concealment_type)
+void init_error_conceal(ImageParameters *p_Img, int concealment_type)
 {
-  error_conceal_picture = copy_conceal_picture;
+  p_Img->error_conceal_picture = copy_conceal_picture;
 }
 
 /*!
@@ -356,8 +359,9 @@ void init_error_conceal(int concealment_type)
 *   current picture.
 **************************************************************************************
 */
-static void get_predicted_concealment_mb(StorablePicture* enc_pic, ImageParameters* image, int decoder, Macroblock* currMB)
+static void get_predicted_concealment_mb(Macroblock* currMB, StorablePicture* enc_pic, int decoder)
 {
+  Slice *currSlice = currMB->p_slice;
   int i,j,k;
   int block_size_x, block_size_y;
   int mv_mode, pred_dir;
@@ -365,18 +369,18 @@ static void get_predicted_concealment_mb(StorablePicture* enc_pic, ImageParamete
   int block8x8;
   int k_start, k_end, k_inc;
 
-  if (img->type == P_SLICE && !currMB->mb_type)
+  if (currSlice->slice_type == P_SLICE && !currMB->mb_type)
   {
     block_size_x = MB_BLOCK_SIZE;
     block_size_y = MB_BLOCK_SIZE;
-    perform_mc_concealment(decoder, PLANE_Y, enc_pic, image, currMB, LIST_0, 0, 0, enc_pic->motion.ref_idx, 0, 0, block_size_x, block_size_y);
+    perform_mc_concealment(currMB, decoder, PLANE_Y, enc_pic, LIST_0, 0, 0, enc_pic->motion.ref_idx, 0, 0, block_size_x, block_size_y);
   }
   else if (currMB->mb_type == 1)
   {
     block_size_x = MB_BLOCK_SIZE;
     block_size_y = MB_BLOCK_SIZE;
-    pred_dir = currMB->b8pdir[0];   
-    perform_mc_concealment(decoder, PLANE_Y, enc_pic, image, currMB, pred_dir, 1, 1, enc_pic->motion.ref_idx, 0, 0, block_size_x, block_size_y);
+    pred_dir = currMB->b8x8[0].pdir;   
+    perform_mc_concealment(currMB, decoder, PLANE_Y, enc_pic, pred_dir, 1, 1, enc_pic->motion.ref_idx, 0, 0, block_size_x, block_size_y);
   }
   else if (currMB->mb_type == 2)
   {   
@@ -385,8 +389,8 @@ static void get_predicted_concealment_mb(StorablePicture* enc_pic, ImageParamete
 
     for (block8x8 = 0; block8x8 < 4; block8x8 += 2)
     {
-      pred_dir = currMB->b8pdir[block8x8];
-      perform_mc_concealment(decoder, PLANE_Y, enc_pic, image, currMB, pred_dir, 2, 2, enc_pic->motion.ref_idx, 0, block8x8, block_size_x, block_size_y);
+      pred_dir = currMB->b8x8[block8x8].pdir;
+      perform_mc_concealment(currMB, decoder, PLANE_Y, enc_pic, pred_dir, 2, 2, enc_pic->motion.ref_idx, 0, block8x8, block_size_x, block_size_y);
     }
   }
   else if (currMB->mb_type == 3)
@@ -398,16 +402,16 @@ static void get_predicted_concealment_mb(StorablePicture* enc_pic, ImageParamete
     {
       i = block8x8<<1;
       j = 0;      
-      pred_dir = currMB->b8pdir[block8x8];
-      perform_mc_concealment(decoder, PLANE_Y, enc_pic, image, currMB, pred_dir, 3, 3, enc_pic->motion.ref_idx, i, j, block_size_x, block_size_y);
+      pred_dir = currMB->b8x8[block8x8].pdir;
+      perform_mc_concealment(currMB, decoder, PLANE_Y, enc_pic, pred_dir, 3, 3, enc_pic->motion.ref_idx, i, j, block_size_x, block_size_y);
     }
   }
   else 
   {
     for (block8x8 = 0; block8x8 < 4; block8x8++)
     {
-      mv_mode  = currMB->b8mode[block8x8];
-      pred_dir = currMB->b8pdir[block8x8];
+      mv_mode  = currMB->b8x8[block8x8].mode;
+      pred_dir = currMB->b8x8[block8x8].pdir;
 
       k_start = (block8x8 << 2);
       k_inc = (mv_mode == 5) ? 2 : 1;
@@ -429,11 +433,12 @@ static void get_predicted_concealment_mb(StorablePicture* enc_pic, ImageParamete
       {
         i =  (decode_block_scan[k] & 3);
         j = ((decode_block_scan[k] >> 2) & 3);
-        perform_mc_concealment(decoder, PLANE_Y, enc_pic, image, currMB, pred_dir, mv_mode, mv_mode, enc_pic->motion.ref_idx, i, j, block_size_x, block_size_y);
+        perform_mc_concealment(currMB, decoder, PLANE_Y, enc_pic, pred_dir, mv_mode, mv_mode, enc_pic->motion.ref_idx, i, j, block_size_x, block_size_y);
       }
     }
   }
 }
+
 
 /*!
  *************************************************************************************
@@ -444,7 +449,7 @@ static void get_predicted_concealment_mb(StorablePicture* enc_pic, ImageParamete
  *  
  *************************************************************************************
  */
-void copy_conceal_picture(ImageParameters *image, StorablePicture *enc_pic, int decoder)
+void copy_conceal_picture(ImageParameters *p_Img, StorablePicture *enc_pic, int decoder)
 {
   unsigned int mb;
   Macroblock* currMB;
@@ -452,21 +457,21 @@ void copy_conceal_picture(ImageParameters *image, StorablePicture *enc_pic, int 
   byte** mb_error_map = enc_pic->mb_error_map[decoder];
   StorablePicture* refPic;
 
-  refPic = find_nearest_ref_picture(enc_pic->poc); //Used for concealment if actual reference pic is not known.
+  refPic = find_nearest_ref_picture(p_Img->p_Dpb, enc_pic->poc); //Used for concealment if actual reference pic is not known.
 
-  for (mb = 0; mb < image->PicSizeInMbs; mb++)
+  for (mb = 0; mb < p_Img->PicSizeInMbs; mb++)
   {
-    image->mb_x = PicPos[mb][0];
-    image->mb_y = PicPos[mb][1];
-    mb_error = mb_error_map[image->mb_y][image->mb_x];
+    currMB = &p_Img->mb_data[mb];
+    currMB->mb_x = PicPos[mb][0];
+    currMB->mb_y = PicPos[mb][1];
+    mb_error = mb_error_map[currMB->mb_y][currMB->mb_x];
     if (mb_error)
-    {
-      currMB = &image->mb_data[mb];
-      image->block_x = image->mb_x << 2;
-      image->block_y = image->mb_y << 2;
-      image->pix_x   = image->block_x << 2;
-      image->pix_y   = image->block_y << 2;
-      copy_conceal_mb(enc_pic, image, decoder, mb_error, currMB, refPic);
+    {      
+      currMB->block_x = currMB ->mb_x << 2;
+      currMB->block_y = currMB->mb_y << 2;
+      currMB->pix_x   = currMB->block_x << 2;
+      currMB->pix_y   = currMB->block_y << 2;
+      copy_conceal_mb(currMB, enc_pic, decoder, mb_error, refPic);
     }
   }
 }
@@ -477,17 +482,18 @@ void copy_conceal_picture(ImageParameters *image, StorablePicture *enc_pic, int 
 *   
 *******************************************************************************************
 */
-static void copy_conceal_mb(StorablePicture *enc_pic, ImageParameters* image, int decoder, int mb_error, Macroblock* currMB, StorablePicture* refPic)
+static void copy_conceal_mb(Macroblock* currMB, StorablePicture *enc_pic, int decoder, int mb_error, StorablePicture* refPic)
 {
-  int j, i0 = img->pix_x;
-  imgpel** concealed_img = &(enc_pic->p_dec_img[0][decoder][image->pix_y]);
+  Slice *currSlice = currMB->p_slice;
+  int j, i0 = currMB->pix_x;
+  imgpel** concealed_img = &(enc_pic->p_dec_img[0][decoder][currMB->pix_y]);
   imgpel** ref_img;
 
   if (mb_error == 1 || (mb_error != 3 && currMB->mb_type > P8x8)) //All partitions lost, or intra mb lost
   {
     if (refPic != NULL) //Use nearest reference picture for concealment
     {
-      ref_img = &(refPic->p_dec_img[0][decoder][img->pix_y]);
+      ref_img = &(refPic->p_dec_img[0][decoder][currMB->pix_y]);
       for (j = 0; j < MB_BLOCK_SIZE; j++)
       {
         memcpy(&(concealed_img[j][i0]), &(ref_img[j][i0]), sizeof(imgpel)*MB_BLOCK_SIZE);
@@ -501,12 +507,13 @@ static void copy_conceal_mb(StorablePicture *enc_pic, ImageParameters* image, in
       }
     }
   }
-  else if (mb_error != 2 && image->type != I_SLICE && currMB->mb_type < P8x8) //Only partition 3 lost, and P/B macroblock
+  else if (mb_error != 2 && currSlice->slice_type != I_SLICE && currMB->mb_type < P8x8) //Only partition 3 lost, and P/B macroblock
   {
-    get_predicted_concealment_mb(enc_pic, image, decoder, currMB);
+    ImageParameters *p_Img = currMB->p_Img;
+    get_predicted_concealment_mb(currMB, enc_pic, decoder);
     for(j = 0; j < MB_BLOCK_SIZE; j++)
     {  
-      memcpy(&(concealed_img[j][i0]), &(decs->dec_mb_pred[decoder][j][0]), MB_BLOCK_SIZE * sizeof(imgpel));
+      memcpy(&(concealed_img[j][i0]), &(p_Img->p_decs->dec_mb_pred[decoder][j][0]), MB_BLOCK_SIZE * sizeof(imgpel));
     }
   }
 }
@@ -517,23 +524,23 @@ static void copy_conceal_mb(StorablePicture *enc_pic, ImageParameters* image, in
 *   
 *******************************************************************************************
 */
-static StorablePicture* find_nearest_ref_picture(int poc)
+static StorablePicture* find_nearest_ref_picture(DecodedPictureBuffer *p_Dpb, int poc)
 {
   unsigned int i;
   int min_poc_diff = 1000;
   int poc_diff;
   StorablePicture* refPic = NULL;
 
-  for (i = 0; i < dpb.ref_frames_in_buffer; i++)
+  for (i = 0; i < p_Dpb->ref_frames_in_buffer; i++)
   {
-    if (dpb.fs_ref[i]->is_used==3)
+    if (p_Dpb->fs_ref[i]->is_used==3)
     {
-      if ((dpb.fs_ref[i]->frame->used_for_reference)&&(!dpb.fs_ref[i]->frame->is_long_term))
+      if ((p_Dpb->fs_ref[i]->frame->used_for_reference)&&(!p_Dpb->fs_ref[i]->frame->is_long_term))
       {
-        poc_diff = iabs(dpb.fs_ref[i]->frame->poc - poc);
+        poc_diff = iabs(p_Dpb->fs_ref[i]->frame->poc - poc);
         if (poc_diff < min_poc_diff)
         {
-          refPic = dpb.fs_ref[i]->frame;
+          refPic = p_Dpb->fs_ref[i]->frame;
           min_poc_diff = poc_diff;
         }
       }
@@ -548,7 +555,7 @@ static StorablePicture* find_nearest_ref_picture(int poc)
  *    Gives the prediction residue for a block
  *************************************************************************************
  */
-void compute_residue_block (ImageParameters *image, imgpel **imgY, int **res_img, imgpel **mb_pred, int b8block, int block_size) 
+void compute_residue_block (Macroblock *currMB, imgpel **imgY, int **res_img, imgpel **mb_pred, int b8block, int block_size) 
 {
   int i,j;
   int i0 = (b8block & 0x01)<<3,   i1 = i0+block_size;
@@ -558,7 +565,7 @@ void compute_residue_block (ImageParameters *image, imgpel **imgY, int **res_img
   {
     for (j = j0; j < j1; j++)
     {
-      res_img[j][i] = (int)imgY[j][image->pix_x + i] - mb_pred[j][i];
+      res_img[j][i] = (int)imgY[j][currMB->pix_x + i] - mb_pred[j][i];
     } 
   }
 }
@@ -569,13 +576,13 @@ void compute_residue_block (ImageParameters *image, imgpel **imgY, int **res_img
  *    Stores the pel values for the current best mode.
  *************************************************************************************
  */
-void errdo_store_best_block(imgpel*** mbY, imgpel*** dec_img, int block_i, int block_j, int img_i, int img_j, int block_size)
+void errdo_store_best_block(InputParameters *p_Inp, imgpel*** mbY, imgpel*** dec_img, int block_i, int block_j, int img_i, int img_j, int block_size)
 
 {
   int j, k;
   int j1 = block_j + block_size;
   
-  for (k = 0; k < params->NoOfDecoders; k++)
+  for (k = 0; k < p_Inp->NoOfDecoders; k++)
   {
     for (j = block_j; j < j1; j++)
     {
@@ -590,16 +597,16 @@ void errdo_store_best_block(imgpel*** mbY, imgpel*** dec_img, int block_i, int b
  *    Restores the pel values from the current best mode.
  *************************************************************************************
  */
-void errdo_get_best_block(ImageParameters* image, imgpel*** dec_img, imgpel*** mbY, int j0, int block_size)
+void errdo_get_best_block(Macroblock *currMB, imgpel*** dec_img, imgpel*** mbY, int j0, int block_size)
 {
   int j, k;
   int j1 = j0 + block_size;
 
-  for (k = 0; k < params->NoOfDecoders; k++)
+  for (k = 0; k < currMB->p_Inp->NoOfDecoders; k++)
   {
     for (j = j0; j < j1; j++)
     {
-      memcpy(&dec_img[k][image->pix_y + j][image->pix_x], mbY[k][j], block_size * sizeof(imgpel));
+      memcpy(&dec_img[k][currMB->pix_y + j][currMB->pix_x], mbY[k][j], block_size * sizeof(imgpel));
     }
   }
 }
@@ -610,27 +617,32 @@ void errdo_get_best_block(ImageParameters* image, imgpel*** dec_img, imgpel*** m
  *    Builds a random status map showing whether each MB is received or lost, based
  *    on the packet loss rate and the slice structure.
  *
+ * \param p_Img
+ *    ImageParameters structure for encoding
+ * \param p_Inp
+ *    InputParameters for configurations
  * \param s_map
  *    The status map to be filled
  *************************************************************************************
  */
-static void Build_Status_Map(byte **s_map)
+static void Build_Status_Map(ImageParameters *p_Img, InputParameters *p_Inp, byte **s_map)
 {
-  int i,j,slice=-1,mb=0,jj,ii,packet_lost=0;
+  int i,j,slice=-1,mb=0,jj,ii;
+  byte packet_lost=0;
 
-  jj = img->height/MB_BLOCK_SIZE;
-  ii = img->width/MB_BLOCK_SIZE;
+  jj = p_Img->height/MB_BLOCK_SIZE;
+  ii = p_Img->width/MB_BLOCK_SIZE;
 
   for (j = 0; j < jj; j++)
   {
     for (i = 0; i < ii; i++)
     {
-      if (!params->slice_mode || img->mb_data[mb].slice_nr != slice) /* new slice */
+      if (!p_Inp->slice_mode || p_Img->mb_data[mb].slice_nr != slice) /* new slice */
       {
         packet_lost=0;
-        if ((double)rand()/(double)RAND_MAX*100 < params->LossRateC)   packet_lost += 3;
-        if ((double)rand()/(double)RAND_MAX*100 < params->LossRateB)   packet_lost += 2;
-        if ((double)rand()/(double)RAND_MAX*100 < params->LossRateA)   packet_lost  = 1;
+        if ((double)rand()/(double)RAND_MAX*100 < p_Inp->LossRateC)   packet_lost += 3;
+        if ((double)rand()/(double)RAND_MAX*100 < p_Inp->LossRateB)   packet_lost += 2;
+        if ((double)rand()/(double)RAND_MAX*100 < p_Inp->LossRateA)   packet_lost  = 1;
         slice++;
       }
       if (!packet_lost)
@@ -639,8 +651,8 @@ static void Build_Status_Map(byte **s_map)
       }
       else
       {
-        s_map[j][i]=packet_lost;
-        if(params->partition_mode == 0)  s_map[j][i]=1;
+        s_map[j][i] = packet_lost;
+        if(p_Inp->partition_mode == 0)  s_map[j][i]=1;
       }
       mb++;
     }

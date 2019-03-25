@@ -22,15 +22,22 @@
 #ifndef _DEFINES_H_
 #define _DEFINES_H_
 
+#include "typedefs.h"
+
 #if defined _DEBUG
 # define TRACE           0      //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
 #else
 # define TRACE           0      //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
 #endif
 
+#define JM                  "16 (FRExt)"
+#define VERSION             "16.0"
+#define EXT_VERSION         "(FRExt)"
+
 #define DUMP_DPB                  0    //!< Dump DPB info for debug purposes
 #define PAIR_FIELDS_IN_OUTPUT     0    //!< Pair field pictures for output purposes
 #define IMGTYPE                   1    //!< Define imgpel size type. 0 implies byte (cannot handle >8 bit depths) and 1 implies unsigned short
+#define ENABLE_FIELD_CTX          1    //!< Enables Field mode related context types for CABAC
 #define ENABLE_HIGH444_CTX        1    //!< Enables High 444 profile context types for CABAC. 
 #define ZEROSNR                   0    //!< PSNR computation method
 #define ENABLE_OUTPUT_TONEMAPPING 1    //!< enable tone map the output if tone mapping SEI present
@@ -53,6 +60,7 @@
 
 
 #define FILE_NAME_SIZE  255
+#define INPUT_TEXT_SIZE 1024
 
 #if (ENABLE_HIGH444_CTX == 1)
 # define NUM_BLOCK_TYPES 22  
@@ -79,12 +87,6 @@
 // These variables relate to the subpel accuracy supported by the software (1/4)
 #define BLOCK_SIZE_SP      16  // BLOCK_SIZE << 2
 #define BLOCK_SIZE_8x8_SP  32  // BLOCK_SIZE8x8 << 2
-
-
-typedef unsigned char  byte;     //!< byte type definition
-typedef unsigned char  uint8;    //!< type definition for unsigned char (same as byte)
-typedef unsigned short uint16;   //!< type definition for unsigned short (16 bits)
-typedef unsigned int   uint32;   //!< type definition for unsigned int (32 bits)
 
 #if (IMGTYPE == 0)
 typedef byte imgpel;
@@ -169,8 +171,8 @@ enum {
 
 #define IS_INTER(MB)    ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB && (MB)->mb_type!=I8MB  && (MB)->mb_type!=IPCM)
 #define IS_INTERMV(MB)  ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB && (MB)->mb_type!=I8MB  && (MB)->mb_type!=0 && (MB)->mb_type!=IPCM)
-#define IS_DIRECT(MB)   ((MB)->mb_type==0     && (img->type==B_SLICE ))
-#define IS_SKIP(MB)     ((MB)->mb_type==0     && (img->type==P_SLICE || img->type==SP_SLICE))
+#define IS_DIRECT(MB)   ((MB)->mb_type==0     && (currSlice->slice_type == B_SLICE ))
+#define IS_SKIP(MB)     ((MB)->mb_type==0     && (currSlice->slice_type == P_SLICE || currSlice->slice_type == SP_SLICE))
 
 #define TOTRUN_NUM       15
 #define RUNBEFORE_NUM     7
@@ -228,8 +230,10 @@ enum {
   PICTURE_DECODED = 2
 };
 
+#define  LAMBDA_ACCURACY_BITS         16
 #define INVALIDINDEX  (-135792468)
 
+#define RC_MAX_TEMPORAL_LEVELS   5
 
 //Start code and Emulation Prevention need this to be defined in identical manner at encoder and decoder
 #define ZEROBYTES_SHORTSTARTCODE 2 //indicates the number of zero bytes in the short start-code prefix
@@ -237,6 +241,6 @@ enum {
 #define MAX_PLANE       3
 #define IS_INDEPENDENT(IMG)           ((IMG)->separate_colour_plane_flag)
 #define IS_FREXT_PROFILE(profile_idc) ( profile_idc>=FREXT_HP || profile_idc == FREXT_CAVLC444 )
-#define HI_INTRA_ONLY_PROFILE (((active_sps->profile_idc>=FREXT_Hi10P)&&(active_sps->constrained_set3_flag))||(active_sps->profile_idc==FREXT_CAVLC444)) 
+#define HI_INTRA_ONLY_PROFILE (((p_Img->active_sps->profile_idc>=FREXT_Hi10P)&&(p_Img->active_sps->constrained_set3_flag))||(p_Img->active_sps->profile_idc==FREXT_CAVLC444)) 
 #endif
 

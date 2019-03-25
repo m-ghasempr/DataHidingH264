@@ -28,23 +28,24 @@
 *
 ************************************************************************
 */
-void init_quant_8x8(InputParameters *params, ImageParameters *img, Slice *currSlice)
+void init_quant_8x8(Slice *currSlice)
 {
+  ImageParameters *p_Img  = currSlice->p_Img; 
   // We may wish to have all these parameters switched at the slice level for speed up.
-  if (params->UseRDOQuant == 1)
+  if (currSlice->UseRDOQuant == 1)
   {
-    quant_8x8 = quant_8x8_trellis;
-    quant_8x8cavlc = quant_8x8cavlc_trellis;
+    currSlice->quant_8x8 = quant_8x8_trellis;
+    currSlice->quant_8x8cavlc = quant_8x8cavlc_trellis;
   }
-  else if (img->AdaptiveRounding)
+  else if (p_Img->AdaptiveRounding)
   {
-    quant_8x8 = quant_8x8_around;
-    quant_8x8cavlc = quant_8x8cavlc_around;
+    currSlice->quant_8x8 = quant_8x8_around;
+    currSlice->quant_8x8cavlc = quant_8x8cavlc_around;
   }
   else
   {
-    quant_8x8 = quant_8x8_normal;
-    quant_8x8cavlc = quant_8x8cavlc_normal;
+    currSlice->quant_8x8 = quant_8x8_normal;
+    currSlice->quant_8x8cavlc = quant_8x8cavlc_normal;
   }
 }
 

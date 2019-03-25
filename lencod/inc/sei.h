@@ -17,6 +17,21 @@
 
 #define MAX_LAYER_NUMBER 2
 #define MAX_DEPENDENT_SUBSEQ 5
+// tone mapping information
+#define MAX_CODED_BIT_DEPTH	12
+#define MAX_SEI_BIT_DEPTH	12
+#define MAX_NUM_PIVOTS		(1<<MAX_CODED_BIT_DEPTH)
+// This is only temp
+//! Buffering Period Information
+#define MAX_CPB_CNT_MINUS1 31
+#define MAX_PIC_STRUCT_VALUE 16
+#define MAX_FN 256
+
+#define AGGREGATION_PACKET_TYPE 4
+#define SEI_PACKET_TYPE 5  // Tian Dong: See VCEG-N72, it need updates
+
+#define NORMAL_SEI 0
+#define AGGREGATION_SEI 1
 
 
 //! definition of SEI payload type
@@ -49,13 +64,17 @@ typedef enum {
   SEI_MAX_ELEMENTS  //!< number of maximum syntax elements
 } SEI_type;
 
-#define MAX_FN 256
+typedef struct
+{
+  int seq_parameter_set_id;
+  int nal_initial_cpb_removal_delay[MAX_CPB_CNT_MINUS1+1];
+  int nal_initial_cpb_removal_delay_offset[MAX_CPB_CNT_MINUS1+1];
+  int vcl_initial_cpb_removal_delay[MAX_CPB_CNT_MINUS1+1];
+  int vcl_initial_cpb_removal_delay_offset[MAX_CPB_CNT_MINUS1+1];
 
-#define AGGREGATION_PACKET_TYPE 4
-#define SEI_PACKET_TYPE 5  // Tian Dong: See VCEG-N72, it need updates
-
-#define NORMAL_SEI 0
-#define AGGREGATION_SEI 1
+  Bitstream *data;
+  int payloadSize;
+} bufferingperiod_information_struct;
 
 //! SEI structure
 typedef struct
@@ -66,21 +85,6 @@ typedef struct
   byte* data;
 } sei_struct;
 
-//!< sei_message[0]: this struct is to store the sei message packtized independently
-//!< sei_message[1]: this struct is to store the sei message packtized together with slice data
-extern sei_struct sei_message[2];
-
-void InitSEIMessages(void);
-void CloseSEIMessages(void);
-Boolean HaveAggregationSEI(void);
-void write_sei_message(int id, byte* payload, int payload_size, int payload_type);
-void finalize_sei_message(int id);
-void clear_sei_message(int id);
-void AppendTmpbits2Buf( Bitstream* dest, Bitstream* source );
-
-void PrepareAggregationSEIMessage(void);
-
-
 //! Spare Picture
 typedef struct
 {
@@ -89,17 +93,6 @@ typedef struct
   int payloadSize;
   Bitstream* data;
 } spare_picture_struct;
-
-extern Boolean seiHasSparePicture;
-//extern Boolean sei_has_sp;
-extern spare_picture_struct seiSparePicturePayload;
-
-void InitSparePicture();
-void CloseSparePicture();
-void CalculateSparePicture();
-void ComposeSparePictureMessage(int delta_spare_frame_num, int ref_area_indicator, Bitstream *tmpBitstream);
-Boolean CompressSpareMBMap(unsigned char **map_sp, Bitstream *bitstream);
-void FinalizeSpareMBMap();
 
 //! Subseq Information
 typedef struct
@@ -113,31 +106,15 @@ typedef struct
   Bitstream* data;
 } subseq_information_struct;
 
-extern Boolean seiHasSubseqInfo;
-extern subseq_information_struct seiSubseqInfo[MAX_LAYER_NUMBER];
-
-void InitSubseqInfo(int currLayer);
-void UpdateSubseqInfo(int currLayer);
-void FinalizeSubseqInfo(int currLayer);
-void ClearSubseqInfoPayload(int currLayer);
-void CloseSubseqInfo(int currLayer);
-
 //! Subseq Layer Information
 typedef struct
 {
-  unsigned short bit_rate[MAX_LAYER_NUMBER];
-  unsigned short frame_rate[MAX_LAYER_NUMBER];
+  uint16 bit_rate[MAX_LAYER_NUMBER];
+  uint16 frame_rate[MAX_LAYER_NUMBER];
   byte data[4*MAX_LAYER_NUMBER];
   int layer_number;
   int payloadSize;
 } subseq_layer_information_struct;
-
-extern Boolean seiHasSubseqLayerInfo;
-extern subseq_layer_information_struct seiSubseqLayerInfo;
-
-void InitSubseqLayerInfo();
-void CloseSubseqLayerInfo();
-void FinalizeSubseqLayerInfo();
 
 //! Subseq Characteristics
 typedef struct
@@ -157,16 +134,6 @@ typedef struct
   int payloadSize;
 } subseq_char_information_struct;
 
-extern Boolean seiHasSubseqChar;
-extern subseq_char_information_struct seiSubseqChar;
-
-void InitSubseqChar();
-void ClearSubseqCharPayload();
-void UpdateSubseqChar();
-void FinalizeSubseqChar();
-void CloseSubseqChar();
-
-
 typedef struct
 {
   int scene_id;
@@ -176,14 +143,6 @@ typedef struct
   Bitstream* data;
   int payloadSize;
 } scene_information_struct;
-
-extern Boolean seiHasSceneInformation;
-extern scene_information_struct seiSceneInformation;
-
-void InitSceneInformation();
-void CloseSceneInformation();
-void UpdateSceneInformation(Boolean HasSceneInformation, int sceneID, int sceneTransType, int secondSceneID);
-void FinalizeSceneInformation();
 
 //! PanScanRect Information
 typedef struct
@@ -197,16 +156,6 @@ typedef struct
   Bitstream *data;
   int payloadSize;
 } panscanrect_information_struct;
-
-extern Boolean seiHasPanScanRectInfo;
-extern panscanrect_information_struct seiPanScanRectInfo;
-
-void InitPanScanRectInfo();
-void ClearPanScanRectInfoPayload();
-void UpdatePanScanRectInfo();
-void FinalizePanScanRectInfo();
-void ClosePanScanRectInfo();
-
 //! User_data_unregistered Information
 typedef struct
 {
@@ -215,15 +164,6 @@ typedef struct
   Bitstream *data;
   int payloadSize;
 } user_data_unregistered_information_struct;
-
-extern Boolean seiHasUser_data_unregistered_info;
-extern user_data_unregistered_information_struct seiUser_data_unregistered;
-
-void InitUser_data_unregistered();
-void ClearUser_data_unregistered();
-void UpdateUser_data_unregistered();
-void FinalizeUser_data_unregistered();
-void CloseUser_data_unregistered();
 
 //! User_data_registered_itu_t_t35 Information
 typedef struct
@@ -236,15 +176,6 @@ typedef struct
   int payloadSize;
 } user_data_registered_itu_t_t35_information_struct;
 
-extern Boolean seiHasUser_data_registered_itu_t_t35_info;
-extern user_data_registered_itu_t_t35_information_struct seiUser_data_registered_itu_t_t35;
-
-void InitUser_data_registered_itu_t_t35();
-void ClearUser_data_registered_itu_t_t35();
-void UpdateUser_data_registered_itu_t_t35();
-void FinalizeUser_data_registered_itu_t_t35();
-void CloseUser_data_registered_itu_t_t35();
-
 //! Recovery Point Information
 typedef struct
 {
@@ -256,103 +187,6 @@ typedef struct
   Bitstream *data;
   int payloadSize;
 } recovery_point_information_struct;
-
-extern Boolean seiHasRecoveryPoint_info;
-extern recovery_point_information_struct seiRecoveryPoint;
-
-void InitRandomAccess();
-void ClearRandomAccess();
-void UpdateRandomAccess();
-void FinalizeRandomAccess();
-void CloseRandomAccess();
-
-// tone mapping information
-#define MAX_CODED_BIT_DEPTH	12
-#define MAX_SEI_BIT_DEPTH	12
-#define MAX_NUM_PIVOTS		(1<<MAX_CODED_BIT_DEPTH)
-
-typedef struct
-{
-  unsigned int  tone_map_id;
-  unsigned char tone_map_cancel_flag;
-  unsigned int  tone_map_repetition_period;
-  unsigned char coded_data_bit_depth;
-  unsigned char sei_bit_depth;
-  unsigned int  model_id;
-  // variables for model 0
-  int  min_value;
-  int  max_value;
-  // variables for model 1
-  int  sigmoid_midpoint;
-  int  sigmoid_width;
-  // variables for model 2
-  int start_of_coded_interval[1<<MAX_SEI_BIT_DEPTH];
-  // variables for model 3
-  int num_pivots;
-  int coded_pivot_value[MAX_NUM_PIVOTS];
-  int sei_pivot_value[MAX_NUM_PIVOTS];
-
-  Bitstream *data;
-  int payloadSize;
-} tone_mapping_struct;
-
-extern Boolean seiHasTone_mapping;
-extern tone_mapping_struct seiToneMapping;
-
-void InitToneMapping();
-void FinalizeToneMapping();
-void ClearToneMapping();
-void UpdateToneMapping();
-void CloseToneMapping();
-
-//! Post Filter Hints Information
-typedef struct
-{
-  unsigned int  filter_hint_size_y;
-  unsigned int  filter_hint_size_x;
-  unsigned int  filter_hint_type;
-  int           ***filter_hint;
-  unsigned int  additional_extension_flag;
-
-  Bitstream *data;
-  int payloadSize;
-} post_filter_information_struct;
-
-extern Boolean seiHasPostFilterHints_info;
-extern post_filter_information_struct seiPostFilterHints;
-
-void InitPostFilterHints();
-void ClearPostFilterHints();
-void UpdatePostFilterHints();
-void FinalizePostFilterHints();
-void ClosePostFilterHints();
-
-int Write_SEI_NALU(int len);
-
-
-// This is only temp
-//! Buffering Period Information
-#define MAX_CPB_CNT_MINUS1 31
-#define MAX_PIC_STRUCT_VALUE 16
-typedef struct
-{
-  int seq_parameter_set_id;
-  int nal_initial_cpb_removal_delay[MAX_CPB_CNT_MINUS1+1];
-  int nal_initial_cpb_removal_delay_offset[MAX_CPB_CNT_MINUS1+1];
-  int vcl_initial_cpb_removal_delay[MAX_CPB_CNT_MINUS1+1];
-  int vcl_initial_cpb_removal_delay_offset[MAX_CPB_CNT_MINUS1+1];
-
-  Bitstream *data;
-  int payloadSize;
-} bufferingperiod_information_struct;
-extern Boolean seiHasBuffering_period;
-bufferingperiod_information_struct seiBufferingPeriod;
-
-void InitBufferingPeriod();
-void ClearBufferingPeriod();
-void CloseBufferingPeriod();
-void UpdateBufferingPeriod();
-void FinalizeBufferingPeriod();
 
 //! Picture timing Information
 typedef struct
@@ -379,14 +213,7 @@ typedef struct
   Bitstream *data;
   int payloadSize;
 } pictiming_information_struct;
-extern Boolean seiHasPicTiming_info;
-pictiming_information_struct seiPicTiming;
 
-void InitPicTiming();
-void ClearPicTiming();
-void ClosePicTiming();
-void UpdatePicTiming();
-void FinalizePicTiming();
 
 //! Picture timing Information
 typedef struct
@@ -400,15 +227,144 @@ typedef struct
   Bitstream *data;
   int payloadSize;
 } drpm_repetition_information_struct;
-extern Boolean seiHasDRPMRepetition_info;
-drpm_repetition_information_struct seiDRPMRepetition;
 
-void InitDRPMRepetition();
-void ClearDRPMRepetition();
-void CloseDRPMRepetition();
-void UpdateDRPMRepetition();
-void FinalizeDRPMRepetition();
-void free_drpm_buffer( DecRefPicMarking_t *pDRPM );
+
+//! Post Filter Hints Information
+typedef struct
+{
+  unsigned int  filter_hint_size_y;
+  unsigned int  filter_hint_size_x;
+  unsigned int  filter_hint_type;
+  int           ***filter_hint;
+  unsigned int  additional_extension_flag;
+
+  Bitstream *data;
+  int payloadSize;
+} post_filter_information_struct;
+
+typedef struct
+{
+  unsigned int  tone_map_id;
+  unsigned char tone_map_cancel_flag;
+  unsigned int  tone_map_repetition_period;
+  unsigned char coded_data_bit_depth;
+  unsigned char sei_bit_depth;
+  unsigned int  model_id;
+  // variables for model 0
+  int  min_value;
+  int  max_value;
+  // variables for model 1
+  int  sigmoid_midpoint;
+  int  sigmoid_width;
+  // variables for model 2
+  int start_of_coded_interval[1<<MAX_SEI_BIT_DEPTH];
+  // variables for model 3
+  int num_pivots;
+  int coded_pivot_value[MAX_NUM_PIVOTS];
+  int sei_pivot_value[MAX_NUM_PIVOTS];
+
+  Bitstream *data;
+  int payloadSize;
+} ToneMappingSEI;
+
+// Globals
+struct sei_params {
+  Boolean seiHasDRPMRepetition_info;
+  drpm_repetition_information_struct seiDRPMRepetition;
+
+  //!< sei_message[0]: this struct is to store the sei message packetized independently
+  //!< sei_message[1]: this struct is to store the sei message packetized together with slice data
+  sei_struct sei_message[2];
+  Boolean seiHasSparePicture;
+  //extern Boolean sei_has_sp;
+  spare_picture_struct seiSparePicturePayload;
+  Boolean seiHasSubseqInfo;
+  subseq_information_struct seiSubseqInfo[MAX_LAYER_NUMBER];
+  Boolean seiHasSubseqLayerInfo;
+  subseq_layer_information_struct seiSubseqLayerInfo;
+  Boolean seiHasSubseqChar;
+  subseq_char_information_struct seiSubseqChar;
+  Boolean seiHasSceneInformation;
+  scene_information_struct seiSceneInformation;
+  Boolean seiHasPanScanRectInfo;
+  panscanrect_information_struct seiPanScanRectInfo;
+  Boolean seiHasUser_data_unregistered_info;
+  user_data_unregistered_information_struct seiUser_data_unregistered;
+  Boolean seiHasUser_data_registered_itu_t_t35_info;
+  user_data_registered_itu_t_t35_information_struct seiUser_data_registered_itu_t_t35;
+  Boolean seiHasRecoveryPoint_info;
+  recovery_point_information_struct seiRecoveryPoint;
+  Boolean seiHasBuffering_period;
+  bufferingperiod_information_struct seiBufferingPeriod;
+  Boolean seiHasPicTiming_info;
+  pictiming_information_struct seiPicTiming;
+
+  Boolean seiHasTone_mapping;
+  ToneMappingSEI seiToneMapping;
+  Boolean seiHasPostFilterHints_info;
+  post_filter_information_struct seiPostFilterHints;
+
+  Boolean seiHasTemporal_reference;
+  Boolean seiHasClock_timestamp;
+  Boolean seiHasPanscan_rect;
+  Boolean seiHasHrd_picture;
+  Boolean seiHasFiller_payload;
+  Boolean seiHasUser_data_registered_itu_t_t35;
+  Boolean seiHasUser_data_unregistered;
+  Boolean seiHasRef_pic_buffer_management_repetition;
+  Boolean seiHasSpare_picture;
+  Boolean seiHasSubseq_information;
+  Boolean seiHasSubseq_layer_characteristics;
+  Boolean seiHasSubseq_characteristics;
+
+};
+
+typedef struct sei_params SEIParameters;
+
+// functions
+extern void InitSEIMessages      (ImageParameters *p_Img, InputParameters *p_Inp);
+extern void CloseSEIMessages     (ImageParameters *p_Img, InputParameters *p_Inp);
+extern Boolean HaveAggregationSEI(ImageParameters *p_Img);
+
+extern void clear_sei_message    (SEIParameters *p_SEI, int id);
+extern void AppendTmpbits2Buf    ( Bitstream* dest, Bitstream* source );
+extern void PrepareAggregationSEIMessage(ImageParameters *p_Img);
+extern void CalculateSparePicture();
+extern Boolean CompressSpareMBMap(ImageParameters *p_Img, unsigned char **map_sp, Bitstream *bitstream);
+extern void InitSubseqInfo(SEIParameters *p_SEI, int currLayer);
+extern void UpdateSubseqInfo  (ImageParameters *p_Img, InputParameters *p_Inp, int currLayer);
+extern void CloseSubseqInfo   (SEIParameters *p_SEI, int currLayer);
+void CloseSubseqLayerInfo();
+extern void UpdateSubseqChar(ImageParameters *p_Img);
+
+extern void InitSceneInformation        (SEIParameters *p_SEI);
+extern void CloseSceneInformation       (SEIParameters *p_SEI);
+extern void UpdateSceneInformation      (SEIParameters *p_SEI, Boolean HasSceneInformation, int sceneID, int sceneTransType, int secondSceneID);
+extern void FinalizeSceneInformation    (SEIParameters *p_SEI);
+extern void UpdatePanScanRectInfo(SEIParameters *p_SEI);
+
+extern void UpdateUser_data_unregistered(SEIParameters *p_SEI);
+extern void UpdateUser_data_registered_itu_t_t35(SEIParameters *p_SEI);
+
+extern void ClearRandomAccess(SEIParameters *p_SEI);
+extern void UpdateRandomAccess(ImageParameters *p_Img);
+
+extern void UpdateToneMapping(SEIParameters *p_SEI);
+
+extern void init_sei(SEIParameters *p_SEI);
+extern int Write_SEI_NALU(ImageParameters *p_Img, int len);
+extern void InitBufferingPeriod    (ImageParameters *p_Img);
+extern void ClearBufferingPeriod   (SEIParameters *p_SEI, seq_parameter_set_rbsp_t *active_sps);
+extern void UpdateBufferingPeriod  (ImageParameters *p_Img, InputParameters *p_Inp);
+extern void ClearPicTiming(SEIParameters *p_SEI);
+extern void UpdatePicTiming(ImageParameters *p_Img, InputParameters *p_Inp);
+extern void ClearDRPMRepetition(SEIParameters *p_SEI);
+extern void UpdateDRPMRepetition(SEIParameters *p_SEI);
+extern void free_drpm_buffer( DecRefPicMarking_t *pDRPM );
+extern void UpdatePostFilterHints(SEIParameters *p_SEI);
+extern void ComposeSparePictureMessage (SEIParameters *p_SEI, int delta_spare_frame_num, int ref_area_indicator, Bitstream *tmpBitstream);
+
+
 
 // end of temp additions
 #endif

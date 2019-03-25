@@ -16,7 +16,7 @@
  *    This simple error concealment implemented in this decoder uses
  *    the existing dependencies of syntax elements.
  *    In case that an element is detected as false this elements and all
- *    dependend elements are marked as elements to conceal in the ec_flag[]
+ *    dependend elements are marked as elements to conceal in the p_Img->ec_flag[]
  *    array. If the decoder requests a new element by the function
  *    readSyntaxElement_xxxx() this array is checked first if an error concealment has
  *    to be applied on this element.
@@ -33,72 +33,50 @@
 #include "global.h"
 #include "elements.h"
 
-static int ec_flag[SE_MAX_ELEMENTS];        //!< array to set errorconcealment
-/*
-static char SEtypes[][25] =
-{
-    "SE_HEADER",
-    "SE_PTYPE",
-    "SE_MBTYPE",
-    "SE_REFFRAME",
-    "SE_INTRAPREDMODE",
-    "SE_MVD",
-    "SE_CBP_INTRA",
-    "SE_LUM_DC_INTRA",
-    "SE_CHR_DC_INTRA",
-    "SE_LUM_AC_INTRA",
-    "SE_CHR_AC_INTRA",
-    "SE_CBP_INTER",
-    "SE_LUM_DC_INTER",
-    "SE_CHR_DC_INTER",
-    "SE_LUM_AC_INTER",
-    "SE_CHR_AC_INTER",
-    "SE_DELTA_QUANT_INTER",
-    "SE_DELTA_QUANT_INTRA",
-    "SE_BFRAME",
-    "SE_EOS"
-};
-*/
+
 
 /*!
  ***********************************************************************
  * \brief
  *    set concealment for all elements in same partition
  *    and dependend syntax elements
+ * \param p_Img
+ *      image encoding parameters for current picture
+ * \param se
+ *      type of syntax element to conceal
  * \return
  *    EC_REQ, elements of same type or depending type need error concealment. \n
  *    EX_SYNC   sync on next header
  ***********************************************************************
  */
-int set_ec_flag(
-  int se)   //!< type of syntax element to conceal
+int set_ec_flag(ImageParameters *p_Img, int se)
 {
 
   /*
-  if (ec_flag[se] == NO_EC)
+  if (p_Img->ec_flag[se] == NO_EC)
     printf("Error concealment on element %s\n",SEtypes[se]);
   */
   switch (se)
   {
   case SE_HEADER :
-    ec_flag[SE_HEADER] = EC_REQ;
+    p_Img->ec_flag[SE_HEADER] = EC_REQ;
   case SE_PTYPE :
-    ec_flag[SE_PTYPE] = EC_REQ;
+    p_Img->ec_flag[SE_PTYPE] = EC_REQ;
   case SE_MBTYPE :
-    ec_flag[SE_MBTYPE] = EC_REQ;
+    p_Img->ec_flag[SE_MBTYPE] = EC_REQ;
 
   case SE_REFFRAME :
-    ec_flag[SE_REFFRAME] = EC_REQ;
-    ec_flag[SE_MVD] = EC_REQ; // set all motion vectors to zero length
+    p_Img->ec_flag[SE_REFFRAME] = EC_REQ;
+    p_Img->ec_flag[SE_MVD] = EC_REQ; // set all motion vectors to zero length
     se = SE_CBP_INTER;      // conceal also Inter texture elements
     break;
 
   case SE_INTRAPREDMODE :
-    ec_flag[SE_INTRAPREDMODE] = EC_REQ;
+    p_Img->ec_flag[SE_INTRAPREDMODE] = EC_REQ;
     se = SE_CBP_INTRA;      // conceal also Intra texture elements
     break;
   case SE_MVD :
-    ec_flag[SE_MVD] = EC_REQ;
+    p_Img->ec_flag[SE_MVD] = EC_REQ;
     se = SE_CBP_INTER;      // conceal also Inter texture elements
     break;
 
@@ -109,33 +87,33 @@ int set_ec_flag(
   switch (se)
   {
   case SE_CBP_INTRA :
-    ec_flag[SE_CBP_INTRA] = EC_REQ;
+    p_Img->ec_flag[SE_CBP_INTRA] = EC_REQ;
   case SE_LUM_DC_INTRA :
-    ec_flag[SE_LUM_DC_INTRA] = EC_REQ;
+    p_Img->ec_flag[SE_LUM_DC_INTRA] = EC_REQ;
   case SE_CHR_DC_INTRA :
-    ec_flag[SE_CHR_DC_INTRA] = EC_REQ;
+    p_Img->ec_flag[SE_CHR_DC_INTRA] = EC_REQ;
   case SE_LUM_AC_INTRA :
-    ec_flag[SE_LUM_AC_INTRA] = EC_REQ;
+    p_Img->ec_flag[SE_LUM_AC_INTRA] = EC_REQ;
   case SE_CHR_AC_INTRA :
-    ec_flag[SE_CHR_AC_INTRA] = EC_REQ;
+    p_Img->ec_flag[SE_CHR_AC_INTRA] = EC_REQ;
     break;
 
   case SE_CBP_INTER :
-    ec_flag[SE_CBP_INTER] = EC_REQ;
+    p_Img->ec_flag[SE_CBP_INTER] = EC_REQ;
   case SE_LUM_DC_INTER :
-    ec_flag[SE_LUM_DC_INTER] = EC_REQ;
+    p_Img->ec_flag[SE_LUM_DC_INTER] = EC_REQ;
   case SE_CHR_DC_INTER :
-    ec_flag[SE_CHR_DC_INTER] = EC_REQ;
+    p_Img->ec_flag[SE_CHR_DC_INTER] = EC_REQ;
   case SE_LUM_AC_INTER :
-    ec_flag[SE_LUM_AC_INTER] = EC_REQ;
+    p_Img->ec_flag[SE_LUM_AC_INTER] = EC_REQ;
   case SE_CHR_AC_INTER :
-    ec_flag[SE_CHR_AC_INTER] = EC_REQ;
+    p_Img->ec_flag[SE_CHR_AC_INTER] = EC_REQ;
     break;
   case SE_DELTA_QUANT_INTER :
-    ec_flag[SE_DELTA_QUANT_INTER] = EC_REQ;
+    p_Img->ec_flag[SE_DELTA_QUANT_INTER] = EC_REQ;
     break;
   case SE_DELTA_QUANT_INTRA :
-    ec_flag[SE_DELTA_QUANT_INTRA] = EC_REQ;
+    p_Img->ec_flag[SE_DELTA_QUANT_INTRA] = EC_REQ;
     break;
   default:
     break;
@@ -151,11 +129,11 @@ int set_ec_flag(
  *
  ***********************************************************************
  */
-void reset_ec_flags()
+void reset_ec_flags(ImageParameters *p_Img)
 {
   int i;
   for (i=0; i<SE_MAX_ELEMENTS; i++)
-    ec_flag[i] = NO_EC;
+    p_Img->ec_flag[i] = NO_EC;
 }
 
 
@@ -170,9 +148,9 @@ void reset_ec_flags()
  *    EC_REQ if element requires error concealment
  ***********************************************************************
  */
-int get_concealed_element(SyntaxElement *sym)
+int get_concealed_element(ImageParameters *p_Img, SyntaxElement *sym)
 {
-  if (ec_flag[sym->type] == NO_EC)
+  if (p_Img->ec_flag[sym->type] == NO_EC)
     return NO_EC;
 /*
 #if TRACE

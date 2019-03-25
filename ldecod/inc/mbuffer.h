@@ -56,7 +56,7 @@ typedef struct storable_picture
   int         long_term_pic_num;
   int         long_term_frame_idx;
 
-  int         is_long_term;
+  byte        is_long_term;
   int         used_for_reference;
   int         is_output;
   int         non_existing;
@@ -74,8 +74,8 @@ typedef struct storable_picture
   imgpel **     imgY;         //!< Y picture component
   imgpel ***    imgUV;        //!< U and V picture components
   
-  PicMotionParams motion;              //!< Motion info
-  PicMotionParams JVmotion[MAX_PLANE]; //!< Motion info for 4:4:4 independent mode decoding
+  struct pic_motion_params motion;              //!< Motion info
+  struct pic_motion_params JVmotion[MAX_PLANE]; //!< Motion info for 4:4:4 independent mode decoding
 
   short **     slice_id;      //!< reference picture   [mb_x][mb_y]
 
@@ -110,15 +110,6 @@ typedef struct storable_picture
   int         tonemapped_bit_depth;  
   imgpel*     tone_mapping_lut;                //!< tone mapping look up table
 } StorablePicture;
-
-//! definition of motion parameters
-typedef struct motion_params
-{
-  int64 ***   ref_pic_id;    //!< reference picture identifier [list][subblock_y][subblock_x]
-  short ****  mv;            //!< motion vector       [list][subblock_x][subblock_y][component]
-  char  ***   ref_idx;       //!< reference picture   [list][subblock_y][subblock_x]
-  byte **     moving_block;
-} MotionParams;
 
 //! definition a picture (field or frame)
 typedef struct colocated_params
@@ -164,6 +155,8 @@ typedef struct frame_store
 //! Decoded Picture Buffer
 typedef struct decoded_picture_buffer
 {
+  ImageParameters *p_Img;
+  InputParameters *p_Inp;
   FrameStore  **fs;
   FrameStore  **fs_ref;
   FrameStore  **fs_ltref;
@@ -180,42 +173,37 @@ typedef struct decoded_picture_buffer
   FrameStore   *last_picture;
 } DecodedPictureBuffer;
 
+extern void             init_dpb(ImageParameters *p_Img);
+extern void             free_dpb(ImageParameters *p_Img);
+extern FrameStore*      alloc_frame_store(void);
+extern void             free_frame_store(ImageParameters *p_Img, FrameStore* f);
+extern StorablePicture* alloc_storable_picture(ImageParameters *p_Img, PictureStructure type, int size_x, int size_y, int size_x_cr, int size_y_cr);
+extern void             free_storable_picture (ImageParameters *p_Img, StorablePicture* p);
+extern void             store_picture_in_dpb(ImageParameters *p_Img, StorablePicture* p);
+extern void             flush_dpb(ImageParameters *p_Img);
 
-extern DecodedPictureBuffer dpb;
-extern StorablePicture **listX[6];
-extern int listXsize[6];
+extern void             dpb_split_field  (ImageParameters *p_Img, FrameStore *fs);
+extern void             dpb_combine_field(ImageParameters *p_Img, FrameStore *fs);
+extern void             dpb_combine_field_yuv(ImageParameters *p_Img, FrameStore *fs);
 
-void             init_dpb(void);
-void             free_dpb(void);
-FrameStore*      alloc_frame_store(void);
-void             free_frame_store(FrameStore* f);
-StorablePicture* alloc_storable_picture(PictureStructure type, int size_x, int size_y, int size_x_cr, int size_y_cr);
-void             free_storable_picture(StorablePicture* p);
-void             store_picture_in_dpb(StorablePicture* p);
-void             flush_dpb(void);
-
-void             dpb_split_field(FrameStore *fs);
-void             dpb_combine_field(FrameStore *fs);
-void             dpb_combine_field_yuv(FrameStore *fs);
-
-void             init_lists(int currSliceType, PictureStructure currPicStructure);
-void             reorder_ref_pic_list(StorablePicture **list, int *list_size,
+extern void             init_lists          (Slice *currSlice);
+extern void             reorder_ref_pic_list(ImageParameters *p_Img, StorablePicture **list, char *list_size,
                                       int num_ref_idx_lX_active_minus1, int *reordering_of_pic_nums_idc,
                                       int *abs_diff_pic_num_minus1, int *long_term_pic_idx);
 
-void             init_mbaff_lists(void);
-void             alloc_ref_pic_list_reordering_buffer(Slice *currSlice);
-void             free_ref_pic_list_reordering_buffer(Slice *currSlice);
+extern void             init_mbaff_lists(ImageParameters *p_Img);
+extern void             alloc_ref_pic_list_reordering_buffer(Slice *currSlice);
+extern void             free_ref_pic_list_reordering_buffer(Slice *currSlice);
 
-void             fill_frame_num_gap(ImageParameters *img);
+extern void             fill_frame_num_gap(ImageParameters *p_Img);
 
-ColocatedParams* alloc_colocated(int size_x, int size_y,int mb_adaptive_frame_field_flag);
-void free_colocated(ColocatedParams* p);
-void compute_colocated(ColocatedParams* p, StorablePicture **listX[6]);
+extern ColocatedParams* alloc_colocated(int size_x, int size_y,int mb_adaptive_frame_field_flag);
+extern void free_colocated(ColocatedParams* p);
+extern void compute_colocated     (Slice *currSlice, ColocatedParams* p, StorablePicture **listX[6]);
 
 // For 4:4:4 independent mode
-void compute_colocated_JV(ColocatedParams* p, StorablePicture **listX[6]);
-void copy_storable_param_JV( PicMotionParams  *JVplane, PicMotionParams  *motion );
+extern void compute_colocated_JV  ( Slice *currSlice, ColocatedParams* p, StorablePicture **listX[6]);
+extern void copy_storable_param_JV( ImageParameters *p_Img, PicMotionParams  *JVplane, PicMotionParams  *motion );
 
 #endif
 

@@ -19,7 +19,7 @@
 
 #include "erc_api.h"
 
-void ercPixConcealIMB(imgpel *currFrame, int row, int column, int predBlocks[], int frameWidth, int mbWidthInBlocks);
+void ercPixConcealIMB    (ImageParameters *p_Img, imgpel *currFrame, int row, int column, int predBlocks[], int frameWidth, int mbWidthInBlocks);
 
 int ercCollect8PredBlocks( int predBlocks[], int currRow, int currColumn, int *condition,
                           int maxRow, int maxColumn, int step, byte fNoCornerNeigh );

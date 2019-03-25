@@ -9,23 +9,23 @@
    H.264 JM coder/decoder
 
    Copyright (C) 2000 by
-      Telenor Broadband Services, Norway
-      Ericsson Radio Systems, Sweden
-      TELES AG, Germany
-      Nokia Inc., USA
-      Nokia Corporation, Finland
-      Siemens AG, Germany
-      Fraunhofer-Institute for Telecommunications Heinrich-Hertz-Institut (HHI), Germany
-      University of Hannover, Institut of Communication Theory and Signal Processing,Germany
-      Videolocus, Canada
-      LSI Logic, Canada
-      Motorola Inc., USA
-      Microsoft Corp., USA
-      Apple Computer, Inc.
-      RealNetworks, Inc., USA
-      Thomson, Inc., USA
-      Dolby Laboratories, Inc., USA
-      Sejong Univ., Digital Media System Lab., Korea
+   Apple Computer, Inc.
+   Dolby Laboratories, Inc., USA
+   Ericsson Radio Systems, Sweden
+   Fraunhofer-Institute for Telecommunications Heinrich-Hertz-Institut (HHI), Germany
+   LSI Logic, Canada
+   Microsoft Corp., USA
+   Motorola Inc., USA
+   Nokia Corporation, Finland
+   Nokia Inc., USA
+   RealNetworks, Inc., USA
+   Sejong Univ., Digital Media System Lab., Korea
+   Siemens AG, Germany
+   Telenor Broadband Services, Norway
+   TELES AG, Germany
+   Thomson, Inc., USA
+   University of Hannover, Institut of Communication Theory and Signal Processing,Germany
+   Videolocus, Canada
 
    \endverbatim
    \par Full Contact Information
@@ -188,6 +188,9 @@
 
       Alexis Michael Tourapis         <alexismt@ieee.org><atour@dolby.com>
       Athanasios Leontaris            <aleon@dolby.com>
+      Peshala Pahalawatta             <ppaha@dolby.com>
+      Yuwen He                        <yhe@dolby.com>  
+	    Yan Ye                          <yye@dolby.com>
       Dolby Laboratories Inc.
       3601 West Alameda Ave.
       Burbank, CA 91505

@@ -29,8 +29,6 @@
  *    pointer to a NALU
  *************************************************************************************
  */
-
-
 NALU_t *AllocNALU(int buffersize)
 {
   NALU_t *n;
@@ -60,12 +58,11 @@ NALU_t *AllocNALU(int buffersize)
  *
  *************************************************************************************
  */
-
 void FreeNALU(NALU_t *n)
 {
-  if (n)
+  if (n != NULL)
   {
-    if (n->buf)
+    if (n->buf != NULL)
     {
       free(n->buf);
       n->buf=NULL;
@@ -73,4 +70,3 @@ void FreeNALU(NALU_t *n)
     free (n);
   }
 }
-

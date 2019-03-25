@@ -31,7 +31,7 @@
  *    as in JVT doc
  * \param nal_reference_idc
  *    as in JVT doc
- * \param min_num_bytes
+ * \param UseAnnexbLongStartcode
  *    some incomprehensible CABAC stuff
  * \param UseAnnexbLongStartcode
  *    when 1 and when using AnnexB bytestreams, then use a long startcode prefix
@@ -41,14 +41,13 @@
  *************************************************************************************
  */
 
-int RBSPtoNALU (unsigned char *rbsp, NALU_t *nalu, int rbsp_size, int nal_unit_type, int nal_reference_idc,
-                int min_num_bytes, int UseAnnexbLongStartcode)
+int RBSPtoNALU (unsigned char *rbsp, NALU_t *nalu, int rbsp_size, int nal_unit_type, int nal_reference_idc, int UseAnnexbLongStartcode)
 {
   int len;
 
   assert (nalu != NULL);
   assert (nal_reference_idc <=3 && nal_reference_idc >=0);
-  assert (nal_unit_type > 0 && nal_unit_type <= 10);
+  assert (nal_unit_type > 0 && nal_unit_type <= 12);
   assert (rbsp_size < MAXRBSPSIZE);
   
   nalu->startcodeprefix_len = UseAnnexbLongStartcode ? 4 : 3;
@@ -69,33 +68,69 @@ int RBSPtoNALU (unsigned char *rbsp, NALU_t *nalu, int rbsp_size, int nal_unit_t
  ************************************************************************
  */
 
-int Write_AUD_NALU( void )
+int Write_AUD_NALU( ImageParameters *p_Img )
 {  
   int     RBSPlen = 0;
   int     NALUlen, len;
   byte    rbsp[MAXRBSPSIZE];
-  NALU_t *nalu = AllocNALU( 64000 );
+  NALU_t *nalu = AllocNALU( MAXNALUSIZE );
 
-  switch( img->type )
+  switch( p_Img->type )
   {
   case I_SLICE:
-    img->primary_pic_type = 0;
+    p_Img->primary_pic_type = 0;
     break;
   case P_SLICE:
-    img->primary_pic_type = 1;
+    p_Img->primary_pic_type = 1;
     break;
   case B_SLICE:
-    img->primary_pic_type = 2;
+    p_Img->primary_pic_type = 2;
     break;
   }
   RBSPlen = 1;
-  rbsp[0] = img->primary_pic_type << 5;
+  rbsp[0] = (byte) (p_Img->primary_pic_type << 5);
   rbsp[0] |= (1 << 4);
 
   // write RBSP into NALU
-  NALUlen = RBSPtoNALU( rbsp, nalu, RBSPlen, NALU_TYPE_AUD, NALU_PRIORITY_HIGHEST, 0, 1 );
+  NALUlen = RBSPtoNALU( rbsp, nalu, RBSPlen, NALU_TYPE_AUD, NALU_PRIORITY_DISPOSABLE, 1 );
   // write NALU into bitstream
-  len     = WriteNALU( nalu );
+  len     = p_Img->WriteNALU( p_Img, nalu );
+
+  FreeNALU( nalu );
+
+  return len;
+}
+
+/*!
+ ************************************************************************
+ *  \brief
+ *     write Filler Data NALU (results to num_bytes + 4 bytes written)
+ ************************************************************************
+ */
+
+int Write_Filler_Data_NALU( ImageParameters *p_Img, int num_bytes )
+{  
+  int     RBSPlen = num_bytes - 1;
+  int     NALUlen, len, bytes_written = 0;
+  byte    rbsp[MAXRBSPSIZE];
+  NALU_t *nalu = AllocNALU( MAXNALUSIZE );
+
+  num_bytes = iClip3( 1, (MAXRBSPSIZE - 2), num_bytes );
+  assert( num_bytes > 0 && num_bytes < (MAXRBSPSIZE - 1) );
+
+  while ( bytes_written < RBSPlen )
+  {
+    rbsp[ bytes_written++ ] = 0xFF;
+  }
+  rbsp[ bytes_written++ ] = 0x80; // rbsp_trailing_bits
+
+  assert( num_bytes == bytes_written );
+
+  // write RBSP into NALU
+  NALUlen = RBSPtoNALU( rbsp, nalu, RBSPlen, NALU_TYPE_FILL, NALU_PRIORITY_HIGHEST, 1 );
+  // write NALU into bitstream
+  len     = p_Img->WriteNALU( p_Img, nalu );
+  p_Img->bytes_in_picture += (nalu->len + 1);
 
   FreeNALU( nalu );
 

@@ -28,11 +28,68 @@
 #include "quant8x8.h"
 #include "rdoq.h"
 
-void rdoq_8x8_CABAC(int **tblock, int block_y, int block_x, int qp_per, int qp_rem, 
-                    int **levelscale, int **leveloffset, const byte *p_scan, int levelTrellis[64]);
+/*!
+************************************************************************
+* \brief
+*    Rate distortion optimized Quantization process for 
+*    all coefficients in a 8x8 block
+*
+************************************************************************
+*/
+static void rdoq_8x8_CABAC(Macroblock *currMB, int **tblock, int block_x,int qp_per, int qp_rem, 
+              LevelQuantParams **q_params_8x8, const byte *p_scan, int levelTrellis[64])
+{
+  ImageParameters *p_Img = currMB->p_Img;
+  levelDataStruct levelData[64];
+  double  lambda_md = 0.0;
+  int kStart = 0, kStop = 0, noCoeff = 0;
 
-void rdoq_8x8_CAVLC(int **tblock, int block_y, int block_x, int qp_per, int qp_rem, 
-                    int **levelscale, int **leveloffset, const byte *p_scan, int levelTrellis[4][16]);
+  if ((p_Img->type==B_SLICE) && p_Img->nal_reference_idc)
+  {
+    lambda_md = p_Img->lambda_md[5][p_Img->masterQP];  
+  }
+  else
+  {
+    lambda_md = p_Img->lambda_md[p_Img->type][p_Img->masterQP]; 
+  }
+
+  noCoeff = init_trellis_data_8x8_CABAC(currMB,tblock, block_x, qp_per, qp_rem, q_params_8x8, p_scan, &levelData[0], &kStart, &kStop);
+  est_writeRunLevel_CABAC(currMB, levelData, levelTrellis, LUMA_8x8, lambda_md, kStart, kStop, noCoeff, 0);
+}
+
+/*!
+************************************************************************
+* \brief
+*    Rate distortion optimized Quantization process for 
+*    all coefficients in a 8x8 block
+*
+************************************************************************
+*/
+static void rdoq_8x8_CAVLC(Macroblock *currMB, int **tblock, int block_y, int block_x, int qp_per, int qp_rem,
+                    LevelQuantParams **q_params_8x8, const byte *p_scan, int levelTrellis[4][16])
+{
+  ImageParameters *p_Img = currMB->p_Img;
+  int k;
+  levelDataStruct levelData[4][16]; 
+  double lambda_md = 0.0;
+  
+  int b8 = ((block_y >> 3)<<1) + (block_x >> 3);
+
+  if ((p_Img->type==B_SLICE) && p_Img->nal_reference_idc)
+  {
+    lambda_md = p_Img->lambda_md[5][p_Img->masterQP];  
+  }
+  else
+  {
+    lambda_md = p_Img->lambda_md[p_Img->type][p_Img->masterQP]; 
+  }
+
+  init_trellis_data_8x8_CAVLC (currMB, tblock, block_x, qp_per, qp_rem, q_params_8x8, p_scan, levelData);
+
+  for (k = 0; k < 4; k++)
+    est_RunLevel_CAVLC(currMB, levelData[k], levelTrellis[k], LUMA, b8, k, 16, lambda_md);
+}
+
 
 /*!
  ************************************************************************
@@ -45,25 +102,31 @@ void rdoq_8x8_CAVLC(int **tblock, int block_y, int block_x, int qp_per, int qp_r
  *
  ************************************************************************
  */
-int quant_8x8_trellis(int **tblock, int block_y, int block_x, int  qp,                
-                      int*  ACLevel, int*  ACRun, 
-                      int **fadjust8x8, int **levelscale, int **invlevelscale, int **leveloffset,
-                      int *coeff_cost, const byte (*pos_scan)[2], const byte *c_cost)
+int quant_8x8_trellis(Macroblock *currMB, int **tblock, struct quant_methods *q_method)
 {
-  static int i,j, coeff_ctr;
+  QuantParameters *p_Quant = currMB->p_Img->p_Quant;
+  int block_x = q_method->block_x;
+  int  qp = q_method->qp;
+  int*  ACLevel = q_method->ACLevel;
+  int*  ACRun   = q_method->ACRun;
+  LevelQuantParams **q_params_8x8 = q_method->q_params;
+  const byte (*pos_scan)[2] = q_method->pos_scan;
+  const byte *c_cost = q_method->c_cost;
+  int *coeff_cost = q_method->coeff_cost;
 
-  static int *m7;
-  static int scaled_coeff;
+  int i,j, coeff_ctr;
+
+  int *m7;
   int   level, run = 0;
   int   nonzero = FALSE;
-  int   qp_per = qp_per_matrix[qp];
-  int   qp_rem = qp_rem_matrix[qp];
+  int   qp_per = p_Quant->qp_per_matrix[qp];
+  int   qp_rem = p_Quant->qp_rem_matrix[qp];
   const byte *p_scan = &pos_scan[0][0];
   int*  ACL = &ACLevel[0];
   int*  ACR = &ACRun[0];
   int   levelTrellis[64];
 
-  rdoq_8x8_CABAC(tblock, block_y, block_x, qp_per, qp_rem, levelscale, leveloffset, p_scan, levelTrellis);
+  rdoq_8x8_CABAC(currMB, tblock, block_x, qp_per, qp_rem, q_params_8x8, p_scan, levelTrellis);
 
   // Quantization
   for (coeff_ctr = 0; coeff_ctr < 64; coeff_ctr++)
@@ -74,7 +137,6 @@ int quant_8x8_trellis(int **tblock, int block_y, int block_x, int  qp,
     m7 = &tblock[j][block_x + i];
     if (*m7 != 0)
     {    
-      scaled_coeff = iabs (*m7) * levelscale[j][i];
       level = levelTrellis[coeff_ctr];
 
       if (level != 0)
@@ -84,7 +146,7 @@ int quant_8x8_trellis(int **tblock, int block_y, int block_x, int  qp,
         *coeff_cost += (level > 1) ? MAX_VALUE : c_cost[run];
 
         level  = isignab(level, *m7);
-        *m7    = rshift_rnd_sf(((level * invlevelscale[j][i]) << qp_per), 6);
+        *m7    = rshift_rnd_sf(((level * q_params_8x8[j][i].InvScaleComp) << qp_per), 6);
         *ACL++ = level;
         *ACR++ = run; 
         // reset zero level counter
@@ -119,24 +181,31 @@ int quant_8x8_trellis(int **tblock, int block_y, int block_x, int  qp,
  *
  ************************************************************************
  */
-int quant_8x8cavlc_trellis(int **tblock, int block_y, int block_x, int  qp, int***  cofAC, 
-                           int **fadjust8x8, int **levelscale, int **invlevelscale, int **leveloffset,
-                           int *coeff_cost, const byte (*pos_scan)[2], const byte *c_cost)
+int quant_8x8cavlc_trellis(Macroblock *currMB, int **tblock, struct quant_methods *q_method, int***  cofAC)
 {
-  static int i,j, k, coeff_ctr;
+  QuantParameters *p_Quant = currMB->p_Img->p_Quant;
+  int block_x = q_method->block_x;
+  int block_y = q_method->block_y;
+  int  qp = q_method->qp;
+  LevelQuantParams **q_params_8x8 = q_method->q_params;
+  const byte (*pos_scan)[2] = q_method->pos_scan;
+  const byte *c_cost = q_method->c_cost;
+  int *coeff_cost = q_method->coeff_cost;
 
-  static int *m7;
+  int i,j, k, coeff_ctr;
+
+  int *m7;
   int level, runs[4] = { 0 };
   int nonzero = FALSE; 
-  int qp_per = qp_per_matrix[qp];  
-  int qp_rem = qp_rem_matrix[qp];
+  int qp_per = p_Quant->qp_per_matrix[qp];  
+  int qp_rem = p_Quant->qp_rem_matrix[qp];
   const byte *p_scan = &pos_scan[0][0];
   int*  ACL[4];  
   int*  ACR[4];
 
   int levelTrellis[4][16];
 
-  rdoq_8x8_CAVLC(tblock, block_y, block_x, qp_per, qp_rem, levelscale, leveloffset, p_scan, levelTrellis);
+  rdoq_8x8_CAVLC(currMB, tblock, block_y, block_x, qp_per, qp_rem, q_params_8x8, p_scan, levelTrellis);
 
   for (k = 0; k < 4; k++)
   {
@@ -165,7 +234,7 @@ int quant_8x8cavlc_trellis(int **tblock, int block_y, int block_x, int  qp, int*
           *coeff_cost += (level > 1) ? MAX_VALUE : c_cost[runs[k]];
 
           level  = isignab(level, *m7);
-          *m7    = rshift_rnd_sf(((level * invlevelscale[j][i]) << qp_per), 6);
+          *m7    = rshift_rnd_sf(((level * q_params_8x8[j][i].InvScaleComp) << qp_per), 6);
 
           *(ACL[k])++ = level;
           *(ACR[k])++ = runs[k];
@@ -189,66 +258,5 @@ int quant_8x8cavlc_trellis(int **tblock, int block_y, int block_x, int  qp, int*
     *(ACL[k]) = 0;
 
   return nonzero;
-}
-
-/*!
-************************************************************************
-* \brief
-*    Rate distortion optimized Quantization process for 
-*    all coefficients in a 8x8 block
-*
-************************************************************************
-*/
-void rdoq_8x8_CABAC(int **tblock, int block_y, int block_x,int qp_per, int qp_rem, 
-              int **levelscale, int **leveloffset, const byte *p_scan, int levelTrellis[64])
-{
-  levelDataStruct levelData[64];
-  double  lambda_md=0;
-  int kStart = 0, kStop = 0, noCoeff = 0;
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
-
-  if ((img->type==B_SLICE) && img->nal_reference_idc)
-  {
-    lambda_md = img->lambda_md[5][img->masterQP];  
-  }
-  else
-  {
-    lambda_md = img->lambda_md[img->type][img->masterQP]; 
-  }
-
-  noCoeff = init_trellis_data_8x8_CABAC(tblock, block_x, qp_per, qp_rem, levelscale, leveloffset, p_scan, currMB, &levelData[0], &kStart, &kStop, CABAC);
-  est_writeRunLevel_CABAC(levelData, levelTrellis, LUMA_8x8, lambda_md, kStart, kStop, noCoeff, 0);
-}
-
-/*!
-************************************************************************
-* \brief
-*    Rate distortion optimized Quantization process for 
-*    all coefficients in a 8x8 block
-*
-************************************************************************
-*/
-void rdoq_8x8_CAVLC(int **tblock, int block_y, int block_x, int qp_per, int qp_rem,
-                    int **levelscale, int **leveloffset, const byte *p_scan, int levelTrellis[4][16])
-{
-  int k;
-  levelDataStruct levelData[4][16]; 
-  double lambda_md;
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
-  int b8 = ((block_y/8)<<1)+block_x/8;
-
-  if ((img->type==B_SLICE) && img->nal_reference_idc)
-  {
-    lambda_md = img->lambda_md[5][img->masterQP];  
-  }
-  else
-  {
-    lambda_md = img->lambda_md[img->type][img->masterQP]; 
-  }
-
-  init_trellis_data_8x8_CAVLC (tblock, block_x, qp_per, qp_rem, levelscale, leveloffset, p_scan, currMB, levelData);
-
-  for (k = 0; k < 4; k++)
-    est_RunLevel_CAVLC(levelData[k], levelTrellis[k], LUMA, b8, k, 16, lambda_md);
 }
 

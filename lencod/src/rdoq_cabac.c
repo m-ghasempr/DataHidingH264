@@ -18,10 +18,9 @@
 #include "fmo.h"
 #include "macroblock.h"
 #include "mb_access.h"
-#include "ratectl.h"
 #include "rdoq.h"
 
-const int entropyBits[128]= 
+static const int entropyBits[128]= 
 {
      895,    943,    994,   1048,   1105,   1165,   1228,   1294, 
     1364,   1439,   1517,   1599,   1686,   1778,   1875,   1978, 
@@ -42,31 +41,178 @@ const int entropyBits[128]=
 };
 
 
-extern const int estErr4x4[6][4][4];
-extern const int estErr8x8[6][8][8];
+static int biari_no_bits(signed short symbol, BiContextTypePtr bi_ct )
+{
+  int ctx_state, estBits;
 
+  symbol = (short) (symbol != 0);
 
-int precalcUnaryLevelTab[128][MAX_PREC_COEFF];
-estBitsCabacStruct estBitsCabac[NUM_BLOCK_TYPES];
+  ctx_state = (symbol == bi_ct->MPS) ? 64 + bi_ct->state : 63 - bi_ct->state;
+  estBits=entropyBits[127 - ctx_state];
 
-void precalculate_unary_exp_golomb_level()
+  return(estBits);
+}
+
+static int biari_state(signed short symbol, BiContextTypePtr bi_ct )
+{ 
+  int ctx_state;
+
+  symbol = (short) (symbol != 0);
+  ctx_state = (symbol == bi_ct->MPS) ? 64 + bi_ct->state : 63 - bi_ct->state;
+
+  return(ctx_state);
+}
+
+/*!
+****************************************************************************
+* \brief
+*    estimate bit cost for each CBP bit
+****************************************************************************
+*/
+static void est_CBP_block_bit (Macroblock* currMB, int type)
+{
+  Slice *currSlice = currMB->p_slice;
+  estBitsCabacStruct *cabacEstBits = &currSlice->estBitsCabac[type];
+  int ctx;
+
+  for (ctx=0; ctx<=3; ctx++)
+  {
+    cabacEstBits->blockCbpBits[ctx][0]=biari_no_bits(0, currSlice->tex_ctx->bcbp_contexts[type2ctx_bcbp[type]]+ctx);
+
+    cabacEstBits->blockCbpBits[ctx][1]=biari_no_bits(1, currSlice->tex_ctx->bcbp_contexts[type2ctx_bcbp[type]]+ctx);
+  }
+}
+
+/*!
+****************************************************************************
+* \brief
+*    estimate CABAC bit cost for significant coefficient map
+****************************************************************************
+*/
+static void est_significance_map(Macroblock* currMB, int type)
+{
+  Slice *currSlice = currMB->p_slice;
+  int   k;
+  int   k1  = maxpos[type]-1;
+#if ENABLE_FIELD_CTX
+  int   fld = ( currSlice->structure!=FRAME || currMB->mb_field );
+#else
+  int   fld = 0;
+#endif
+  BiContextTypePtr  map_ctx   = currSlice->tex_ctx->map_contexts [fld][type2ctx_map [type]];
+  BiContextTypePtr  last_ctx  = currSlice->tex_ctx->last_contexts[fld][type2ctx_last[type]];
+  const byte *pos2ctxmap  = fld ? pos2ctx_map_int [type] : pos2ctx_map[type];
+  const byte *pos2ctxlast = pos2ctx_last[type];
+
+  estBitsCabacStruct *cabacEstBits = &currSlice->estBitsCabac[type];
+
+  for (k = 0; k < k1; k++) // if last coeff is reached, it has to be significant
+  {
+    cabacEstBits->significantBits[pos2ctxmap[k]][0] = biari_no_bits  (0,  map_ctx + pos2ctxmap[k]);
+
+    cabacEstBits->significantBits[pos2ctxmap[k]][1] = biari_no_bits  (1,  map_ctx + pos2ctxmap[k]);
+
+    cabacEstBits->lastBits[pos2ctxlast[k]][0] = biari_no_bits(0, last_ctx+pos2ctxlast[k]);
+
+    cabacEstBits->lastBits[pos2ctxlast[k]][1] = biari_no_bits(1, last_ctx+pos2ctxlast[k]);
+  }
+  // if last coeff is reached, it has to be significant
+  cabacEstBits->significantBits[pos2ctxmap[k1]][0]=0;
+  cabacEstBits->significantBits[pos2ctxmap[k1]][1]=0;
+  cabacEstBits->lastBits[pos2ctxlast[k1]][0]=0;
+  cabacEstBits->lastBits[pos2ctxlast[k1]][1]=0;
+}
+
+/*!
+****************************************************************************
+* \brief
+*    estimate bit cost of significant coefficient
+****************************************************************************
+*/
+static void est_significant_coefficients (Macroblock* currMB, int type)
+{
+  Slice *currSlice = currMB->p_slice;
+  int   ctx;
+  int maxCtx = imin(4, max_c2[type]);
+  estBitsCabacStruct *cabacEstBits = &currSlice->estBitsCabac[type];
+
+  for (ctx=0; ctx<=4; ctx++){    
+    cabacEstBits->greaterOneBits[0][ctx][0]=
+      biari_no_bits (0, currSlice->tex_ctx->one_contexts[type2ctx_one[type]] + ctx);
+
+    cabacEstBits->greaterOneBits[0][ctx][1]=
+      biari_no_bits (1, currSlice->tex_ctx->one_contexts[type2ctx_one[type]] + ctx);
+  }
+
+  for (ctx=0; ctx<=maxCtx; ctx++){
+    cabacEstBits->greaterOneBits[1][ctx][0]=
+      biari_no_bits(0, currSlice->tex_ctx->abs_contexts[type2ctx_abs[type]] + ctx);
+
+    cabacEstBits->greaterOneState[ctx]=biari_state(0, currSlice->tex_ctx->abs_contexts[type2ctx_abs[type]] + ctx);
+
+    cabacEstBits->greaterOneBits[1][ctx][1]=
+      biari_no_bits(1, currSlice->tex_ctx->abs_contexts[type2ctx_abs[type]] + ctx);
+  }
+}
+
+/*!
+****************************************************************************
+* \brief
+*    estimate unary exp golomb bit cost
+****************************************************************************
+*/
+static int est_unary_exp_golomb_level_encode(Macroblock *currMB, unsigned int symbol, int ctx, int type)
+{
+  Slice *currSlice = currMB->p_slice;
+  estBitsCabacStruct *cabacEstBits = &currSlice->estBitsCabac[type];
+  unsigned int l = symbol, k = 1;
+  unsigned int exp_start = 13; // 15-2 : 0,1 level decision always sent
+  int estBits;
+
+  if (symbol==0)
+  {
+    estBits = cabacEstBits->greaterOneBits[1][ctx][0];
+    return (estBits);
+  }
+  else
+  {
+    estBits = cabacEstBits->greaterOneBits[1][ctx][1];
+    // this could be done using min of the two conditionals * value
+    while (((--l)>0) && (++k <= exp_start))
+    {
+      estBits += cabacEstBits->greaterOneBits[1][ctx][1];
+    }
+    
+    if (symbol < exp_start)
+    {
+      estBits += cabacEstBits->greaterOneBits[1][ctx][0];
+    }
+    else 
+    {
+      estBits+=est_exp_golomb_encode_eq_prob(symbol - exp_start);
+    }
+  }
+  return(estBits);
+}
+
+void precalculate_unary_exp_golomb_level(ImageParameters *p_Img)
 {
   int state, ctx_state0, ctx_state1, estBits0, estBits1, symbol;
 
   for (state=0; state<=63; state++)
   {
     // symbol 0 is MPS
-    ctx_state0=64+state;
-    estBits0=entropyBits[127-ctx_state0];
-    ctx_state1=63-state;
-    estBits1=entropyBits[127-ctx_state1];
+    ctx_state0 = 64 + state;
+    estBits0   = entropyBits[127-ctx_state0];
+    ctx_state1 = 63 - state;
+    estBits1   = entropyBits[127-ctx_state1];
 
-    for (symbol=0; symbol<MAX_PREC_COEFF; symbol++)
+    for (symbol = 0; symbol < MAX_PREC_COEFF; symbol++)
     {
-      precalcUnaryLevelTab[ctx_state0][symbol]=est_unary_exp_golomb_level_bits(symbol, estBits0, estBits1);
+      p_Img->precalcUnaryLevelTab[ctx_state0][symbol] = est_unary_exp_golomb_level_bits(symbol, estBits0, estBits1);
 
       // symbol 0 is LPS
-      precalcUnaryLevelTab[ctx_state1][symbol]=est_unary_exp_golomb_level_bits(symbol, estBits1, estBits0);
+      p_Img->precalcUnaryLevelTab[ctx_state1][symbol] =est_unary_exp_golomb_level_bits(symbol, estBits1, estBits0);
     }
   }
 }
@@ -77,15 +223,15 @@ int est_unary_exp_golomb_level_bits(unsigned int symbol, int bits0, int bits1)
   unsigned int exp_start = 13; // 15-2 : 0,1 level decision always sent
   int estBits;
 
-  if (symbol==0)
+  if (symbol == 0)
   {
     return (bits0);
   }
   else
   {
-    estBits=bits1;
-    l=symbol;
-    k=1;
+    estBits = bits1;
+    l = symbol;
+    k = 1;
     while (((--l)>0) && (++k <= exp_start))
     {
       estBits += bits1;
@@ -96,7 +242,7 @@ int est_unary_exp_golomb_level_bits(unsigned int symbol, int bits0, int bits1)
     }
     else 
     {
-      estBits += est_exp_golomb_encode_eq_prob(symbol-exp_start);
+      estBits += est_exp_golomb_encode_eq_prob(symbol - exp_start);
     }
   }
   return(estBits);
@@ -112,7 +258,7 @@ int est_exp_golomb_encode_eq_prob(unsigned int symbol)
 {
   int k = 0, estBits = 0;
 
-  while(1)
+  for(;;)
   {
     if (symbol >= (unsigned int)(1<<k))   
     {
@@ -135,128 +281,15 @@ int est_exp_golomb_encode_eq_prob(unsigned int symbol)
 *   estimate bit cost for CBP, significant map and significant coefficients
 ****************************************************************************
 */
-void estRunLevel_CABAC (Slice *currSlice, Macroblock *currMB, int context) // marta - writes CABAC run/level 
+void estRunLevel_CABAC (Macroblock *currMB, int context) // marta - writes CABAC run/level 
 {
-  DataPartition*  dataPart = &(currSlice->partArr[0]); // assumed that no DP is used (table assignSE2partition_NoDP)
-  EncodingEnvironmentPtr eep_dp = &(dataPart->ee_cabac); 
-
-  est_CBP_block_bit  (currSlice, currMB, eep_dp, context);      
+  est_CBP_block_bit  (currMB, context);      
   //===== encode significance map =====
-  est_significance_map         (currSlice, currMB, eep_dp, context);      
+  est_significance_map         (currMB, context);      
   //===== encode significant coefficients =====
-  est_significant_coefficients (currSlice, currMB, eep_dp, context);
+  est_significant_coefficients (currMB, context);
 }
 
-/*!
-****************************************************************************
-* \brief
-*    estimate bit cost for each CBP bit
-****************************************************************************
-*/
-void est_CBP_block_bit (Slice *currSlice, Macroblock* currMB, EncodingEnvironmentPtr eep_dp, int type)
-{
-  estBitsCabacStruct *cabacEstBits = &estBitsCabac[type];
-  int ctx;
-
-  for (ctx=0; ctx<=3; ctx++)
-  {
-    cabacEstBits->blockCbpBits[ctx][0]=biari_no_bits(eep_dp, 0, currSlice->tex_ctx->bcbp_contexts[type2ctx_bcbp[type]]+ctx);
-
-    cabacEstBits->blockCbpBits[ctx][1]=biari_no_bits(eep_dp, 1, currSlice->tex_ctx->bcbp_contexts[type2ctx_bcbp[type]]+ctx);
-  }
-}
-
-/*!
-****************************************************************************
-* \brief
-*    estimate CABAC bit cost for significant coefficient map
-****************************************************************************
-*/
-void est_significance_map(Slice *currSlice, Macroblock* currMB, EncodingEnvironmentPtr eep_dp, int type)
-{
-  int   k;
-  int   k1  = maxpos[type]-1;
-#if ENABLE_FIELD_CTX
-  int   fld = ( img->structure!=FRAME || currMB->mb_field );
-#else
-  int   fld = 0;
-#endif
-  BiContextTypePtr  map_ctx   = currSlice->tex_ctx->map_contexts [fld][type2ctx_map [type]];
-  BiContextTypePtr  last_ctx  = currSlice->tex_ctx->last_contexts[fld][type2ctx_last[type]];
-  const byte *pos2ctxmap  = fld ? pos2ctx_map_int [type] : pos2ctx_map[type];
-  const byte *pos2ctxlast = pos2ctx_last[type];
-
-  estBitsCabacStruct *cabacEstBits = &estBitsCabac[type];
-
-  for (k = 0; k < k1; k++) // if last coeff is reached, it has to be significant
-  {
-    cabacEstBits->significantBits[pos2ctxmap[k]][0] = biari_no_bits  (eep_dp, 0,  map_ctx + pos2ctxmap[k]);
-
-    cabacEstBits->significantBits[pos2ctxmap[k]][1] = biari_no_bits  (eep_dp, 1,  map_ctx + pos2ctxmap[k]);
-
-    cabacEstBits->lastBits[pos2ctxlast[k]][0] = biari_no_bits(eep_dp, 0, last_ctx+pos2ctxlast[k]);
-
-    cabacEstBits->lastBits[pos2ctxlast[k]][1] = biari_no_bits(eep_dp, 1, last_ctx+pos2ctxlast[k]);
-  }
-  // if last coeff is reached, it has to be significant
-  cabacEstBits->significantBits[pos2ctxmap[k1]][0]=0;
-  cabacEstBits->significantBits[pos2ctxmap[k1]][1]=0;
-  cabacEstBits->lastBits[pos2ctxlast[k1]][0]=0;
-  cabacEstBits->lastBits[pos2ctxlast[k1]][1]=0;
-}
-
-/*!
-****************************************************************************
-* \brief
-*    estimate bit cost of significant coefficient
-****************************************************************************
-*/
-void est_significant_coefficients (Slice *currSlice, Macroblock* currMB, EncodingEnvironmentPtr eep_dp,  int type)
-{
-  int   ctx;
-  int maxCtx = imin(4, max_c2[type]);
-  estBitsCabacStruct *cabacEstBits = &estBitsCabac[type];
-
-  for (ctx=0; ctx<=4; ctx++){    
-    cabacEstBits->greaterOneBits[0][ctx][0]=
-      biari_no_bits (eep_dp, 0, currSlice->tex_ctx->one_contexts[type2ctx_one[type]] + ctx);
-
-    cabacEstBits->greaterOneBits[0][ctx][1]=
-      biari_no_bits (eep_dp, 1, currSlice->tex_ctx->one_contexts[type2ctx_one[type]] + ctx);
-  }
-
-  for (ctx=0; ctx<=maxCtx; ctx++){
-    cabacEstBits->greaterOneBits[1][ctx][0]=
-      biari_no_bits(eep_dp, 0, currSlice->tex_ctx->abs_contexts[type2ctx_abs[type]] + ctx);
-
-    cabacEstBits->greaterOneState[ctx]=biari_state(eep_dp, 0, currSlice->tex_ctx->abs_contexts[type2ctx_abs[type]] + ctx);
-
-    cabacEstBits->greaterOneBits[1][ctx][1]=
-      biari_no_bits(eep_dp, 1, currSlice->tex_ctx->abs_contexts[type2ctx_abs[type]] + ctx);
-  }
-}
-
-int biari_no_bits(EncodingEnvironmentPtr eep, signed short symbol, BiContextTypePtr bi_ct )
-{
-  int ctx_state, estBits;
-
-  symbol = (short) (symbol != 0);
-
-  ctx_state = (symbol == bi_ct->MPS) ? 64 + bi_ct->state : 63 - bi_ct->state;
-  estBits=entropyBits[127 - ctx_state];
-
-  return(estBits);
-}
-
-int biari_state(EncodingEnvironmentPtr eep, signed short symbol, BiContextTypePtr bi_ct )
-{ 
-  int ctx_state;
-
-  symbol = (short) (symbol != 0);
-  ctx_state = (symbol == bi_ct->MPS) ? 64 + bi_ct->state : 63 - bi_ct->state;
-
-  return(ctx_state);
-}
 
 /*!
 ****************************************************************************
@@ -266,19 +299,21 @@ int biari_state(EncodingEnvironmentPtr eep, signed short symbol, BiContextTypePt
 */
 int est_write_and_store_CBP_block_bit(Macroblock* currMB, int type) 
 {
-  estBitsCabacStruct *cabacEstBits = &estBitsCabac[type];
+  Slice *currSlice = currMB->p_slice;
+  ImageParameters *p_Img = currMB->p_Img;
+  estBitsCabacStruct *cabacEstBits = &currSlice->estBitsCabac[type];  
 
   int y_ac        = (type==LUMA_16AC || type==LUMA_8x8 || type==LUMA_8x4 || type==LUMA_4x8 || type==LUMA_4x4
     || type==CB_16AC || type==CB_8x8 || type==CB_8x4 || type==CB_4x8 || type==CB_4x4
     || type==CR_16AC || type==CR_8x8 || type==CR_8x4 || type==CR_4x8 || type==CR_4x4);
   int y_dc        = (type==LUMA_16DC || type==CB_16DC || type==CR_16DC); 
-  int u_ac        = (type==CHROMA_AC && !img->is_v_block);
-  int v_ac        = (type==CHROMA_AC &&  img->is_v_block);
+  int u_ac        = (type==CHROMA_AC && !p_Img->is_v_block);
+  int v_ac        = (type==CHROMA_AC &&  p_Img->is_v_block);
   int chroma_dc   = (type==CHROMA_DC || type==CHROMA_DC_2x4 || type==CHROMA_DC_4x4);
-  int u_dc        = (chroma_dc && !img->is_v_block);
-  int v_dc        = (chroma_dc &&  img->is_v_block);
-  int j           = ((y_ac || u_ac || v_ac ? img->subblock_y : 0) << 2);
-  int i           =  (y_ac || u_ac || v_ac ? img->subblock_x : 0);
+  int u_dc        = (chroma_dc && !p_Img->is_v_block);
+  int v_dc        = (chroma_dc &&  p_Img->is_v_block);
+  int j           = (y_ac || u_ac || v_ac ? currMB->subblock_y : 0);
+  int i           = (y_ac || u_ac || v_ac ? currMB->subblock_x : 0);
   int bit;
   int default_bit =  (IS_INTRA(currMB) ? 1 : 0);
   int upper_bit   = default_bit;
@@ -292,8 +327,8 @@ int est_write_and_store_CBP_block_bit(Macroblock* currMB, int type)
 
   if (y_ac || y_dc)
   {
-    get4x4Neighbour(currMB, (i << 2) - 1, j   , img->mb_size[IS_LUMA], &block_a);
-    get4x4Neighbour(currMB, (i << 2),     j -1, img->mb_size[IS_LUMA], &block_b);
+    get4x4Neighbour(currMB, i - 1, j   , p_Img->mb_size[IS_LUMA], &block_a);
+    get4x4Neighbour(currMB, i,     j -1, p_Img->mb_size[IS_LUMA], &block_b);
     if (y_ac)
     {
       if (block_a.available)
@@ -304,8 +339,8 @@ int est_write_and_store_CBP_block_bit(Macroblock* currMB, int type)
   }
   else
   {
-    get4x4Neighbour(currMB, (i << 2) - 1, j    , img->mb_size[IS_CHROMA], &block_a);
-    get4x4Neighbour(currMB, (i << 2),     j - 1, img->mb_size[IS_CHROMA], &block_b);
+    get4x4Neighbour(currMB, i - 1, j    , p_Img->mb_size[IS_CHROMA], &block_a);
+    get4x4Neighbour(currMB, i,     j - 1, p_Img->mb_size[IS_CHROMA], &block_b);
     if (u_ac||v_ac)
     {
       if (block_a.available)
@@ -317,24 +352,24 @@ int est_write_and_store_CBP_block_bit(Macroblock* currMB, int type)
 
   bit = (y_dc ? 0 : y_ac ? 1 : u_dc ? 17 : v_dc ? 18 : u_ac ? 19 : 35);
 
-  if (enc_picture->chroma_format_idc!=YUV444 || IS_INDEPENDENT(params))
+  if (p_Img->enc_picture->chroma_format_idc!=YUV444 || IS_INDEPENDENT(currMB->p_Inp))
   {
     if (type!=LUMA_8x8)
     {
       if (block_b.available)
       {
-        if(img->mb_data[block_b.mb_addr].mb_type==IPCM)
+        if(p_Img->mb_data[block_b.mb_addr].mb_type==IPCM)
           upper_bit = 1;
         else
-          upper_bit = get_bit(img->mb_data[block_b.mb_addr].cbp_bits[0], bit + bit_pos_b);
+          upper_bit = get_bit(p_Img->mb_data[block_b.mb_addr].cbp_bits[0], bit + bit_pos_b);
       }
 
       if (block_a.available)
       {
-        if(img->mb_data[block_a.mb_addr].mb_type==IPCM)
+        if(p_Img->mb_data[block_a.mb_addr].mb_type==IPCM)
           left_bit = 1;
         else
-          left_bit = get_bit(img->mb_data[block_a.mb_addr].cbp_bits[0], bit + bit_pos_a);
+          left_bit = get_bit(p_Img->mb_data[block_a.mb_addr].cbp_bits[0], bit + bit_pos_a);
       }
 
       ctx = 2*upper_bit+left_bit;
@@ -346,43 +381,43 @@ int est_write_and_store_CBP_block_bit(Macroblock* currMB, int type)
   {
     if (block_b.available)
     {
-      if(img->mb_data[block_b.mb_addr].mb_type == IPCM)
+      if(p_Img->mb_data[block_b.mb_addr].mb_type == IPCM)
         upper_bit=1;
       else
       {
         if(type==LUMA_8x8)
-          upper_bit = get_bit(img->mb_data[block_b.mb_addr].cbp_bits_8x8[0], bit + bit_pos_b);
+          upper_bit = get_bit(p_Img->mb_data[block_b.mb_addr].cbp_bits_8x8[0], bit + bit_pos_b);
         else if (type==CB_8x8)
-          upper_bit = get_bit(img->mb_data[block_b.mb_addr].cbp_bits_8x8[1], bit + bit_pos_b);
+          upper_bit = get_bit(p_Img->mb_data[block_b.mb_addr].cbp_bits_8x8[1], bit + bit_pos_b);
         else if (type==CR_8x8)
-          upper_bit = get_bit(img->mb_data[block_b.mb_addr].cbp_bits_8x8[2], bit + bit_pos_b);
+          upper_bit = get_bit(p_Img->mb_data[block_b.mb_addr].cbp_bits_8x8[2], bit + bit_pos_b);
         else if ((type==CB_4x4)||(type==CB_4x8)||(type==CB_8x4)||(type==CB_16AC)||(type==CB_16DC))
-          upper_bit = get_bit(img->mb_data[block_b.mb_addr].cbp_bits[1], bit + bit_pos_b);
+          upper_bit = get_bit(p_Img->mb_data[block_b.mb_addr].cbp_bits[1], bit + bit_pos_b);
         else if ((type==CR_4x4)||(type==CR_4x8)||(type==CR_8x4)||(type==CR_16AC)||(type==CR_16DC))
-          upper_bit = get_bit(img->mb_data[block_b.mb_addr].cbp_bits[2], bit + bit_pos_b);
+          upper_bit = get_bit(p_Img->mb_data[block_b.mb_addr].cbp_bits[2], bit + bit_pos_b);
         else
-          upper_bit = get_bit(img->mb_data[block_b.mb_addr].cbp_bits[0], bit + bit_pos_b);
+          upper_bit = get_bit(p_Img->mb_data[block_b.mb_addr].cbp_bits[0], bit + bit_pos_b);
       }
     }
 
     if (block_a.available)
     {
-      if(img->mb_data[block_a.mb_addr].mb_type==IPCM)
+      if(p_Img->mb_data[block_a.mb_addr].mb_type==IPCM)
         left_bit = 1;
       else
       {
         if(type==LUMA_8x8)
-          left_bit = get_bit(img->mb_data[block_a.mb_addr].cbp_bits_8x8[0],bit + bit_pos_a);
+          left_bit = get_bit(p_Img->mb_data[block_a.mb_addr].cbp_bits_8x8[0],bit + bit_pos_a);
         else if (type==CB_8x8)
-          left_bit = get_bit(img->mb_data[block_a.mb_addr].cbp_bits_8x8[1],bit + bit_pos_a);
+          left_bit = get_bit(p_Img->mb_data[block_a.mb_addr].cbp_bits_8x8[1],bit + bit_pos_a);
         else if (type==CR_8x8)
-          left_bit = get_bit(img->mb_data[block_a.mb_addr].cbp_bits_8x8[2],bit + bit_pos_a);
+          left_bit = get_bit(p_Img->mb_data[block_a.mb_addr].cbp_bits_8x8[2],bit + bit_pos_a);
         else if ((type==CB_4x4)||(type==CB_4x8)||(type==CB_8x4)||(type==CB_16AC)||(type==CB_16DC))
-          left_bit = get_bit(img->mb_data[block_a.mb_addr].cbp_bits[1], bit + bit_pos_a);
+          left_bit = get_bit(p_Img->mb_data[block_a.mb_addr].cbp_bits[1], bit + bit_pos_a);
         else if ((type==CR_4x4)||(type==CR_4x8)||(type==CR_8x4)||(type==CR_16AC)||(type==CR_16DC))
-          left_bit = get_bit(img->mb_data[block_a.mb_addr].cbp_bits[2], bit + bit_pos_a);
+          left_bit = get_bit(p_Img->mb_data[block_a.mb_addr].cbp_bits[2], bit + bit_pos_a);
         else
-          left_bit = get_bit(img->mb_data[block_a.mb_addr].cbp_bits[0], bit + bit_pos_a);
+          left_bit = get_bit(p_Img->mb_data[block_a.mb_addr].cbp_bits[0], bit + bit_pos_a);
       }
     }
 
@@ -400,10 +435,12 @@ int est_write_and_store_CBP_block_bit(Macroblock* currMB, int type)
 *    Rate distortion optimized trellis quantization
 ****************************************************************************
 */
-void est_writeRunLevel_CABAC(levelDataStruct levelData[], int levelTabMin[], int type, double lambda, int kInit, int kStop, 
+void est_writeRunLevel_CABAC(Macroblock *currMB, levelDataStruct levelData[], int levelTabMin[], int type, double lambda, int kInit, int kStop, 
                              int noCoeff, int estCBP)
 {
-  estBitsCabacStruct *cabacEstBits = &estBitsCabac[type];
+  ImageParameters *p_Img = currMB->p_Img;
+  Slice *currSlice = currMB->p_slice;
+  estBitsCabacStruct *cabacEstBits = &currSlice->estBitsCabac[type];
   int   k, i;
   int   estBits;
   double lagr, lagrMin=0, lagrTabMin, lagrTab;
@@ -516,11 +553,11 @@ void est_writeRunLevel_CABAC(levelDataStruct levelData[], int levelTabMin[], int
           ctx = imin(c2Tab[i], max_c2[type]);
           if ( (dataLevel->level[i] - 2) < MAX_PREC_COEFF)
           {
-            estBits += precalcUnaryLevelTab[cabacEstBits->greaterOneState[ctx]][dataLevel->level[i] - 2];
+            estBits += p_Img->precalcUnaryLevelTab[cabacEstBits->greaterOneState[ctx]][dataLevel->level[i] - 2];
           }
           else
           {
-            estBits += est_unary_exp_golomb_level_encode(dataLevel->level[i] - 2, ctx, type);
+            estBits += est_unary_exp_golomb_level_encode(currMB, dataLevel->level[i] - 2, ctx, type);
           }
 
           c1Tab[i] = 0;
@@ -558,44 +595,6 @@ void est_writeRunLevel_CABAC(levelDataStruct levelData[], int levelTabMin[], int
   }
 }
 
-/*!
-****************************************************************************
-* \brief
-*    estimate unary exp golomb bit cost
-****************************************************************************
-*/
-int est_unary_exp_golomb_level_encode(unsigned int symbol, int ctx, int type)
-{
-  estBitsCabacStruct *cabacEstBits = &estBitsCabac[type];
-  unsigned int l = symbol, k = 1;
-  unsigned int exp_start = 13; // 15-2 : 0,1 level decision always sent
-  int estBits;
-
-  if (symbol==0)
-  {
-    estBits = cabacEstBits->greaterOneBits[1][ctx][0];
-    return (estBits);
-  }
-  else
-  {
-    estBits = cabacEstBits->greaterOneBits[1][ctx][1];
-    // this could be done using min of the two conditionals * value
-    while (((--l)>0) && (++k <= exp_start))
-    {
-      estBits += cabacEstBits->greaterOneBits[1][ctx][1];
-    }
-    
-    if (symbol < exp_start)
-    {
-      estBits += cabacEstBits->greaterOneBits[1][ctx][0];
-    }
-    else 
-    {
-      estBits+=est_exp_golomb_encode_eq_prob(symbol - exp_start);
-    }
-  }
-  return(estBits);
-}
 
 /*!
 ****************************************************************************
@@ -603,12 +602,14 @@ int est_unary_exp_golomb_level_encode(unsigned int symbol, int ctx, int type)
 *    Initialize levelData 
 ****************************************************************************
 */
-int init_trellis_data_4x4_CABAC(int **tblock, int block_x, int qp_per, int qp_rem, int **levelscale, int **leveloffset, const byte *p_scan, Macroblock *currMB,  
-                      levelDataStruct *dataLevel, int* kStart, int* kStop, int type)
+int init_trellis_data_4x4_CABAC(Macroblock *currMB, int **tblock, int block_x, int qp_per, int qp_rem, 
+                                LevelQuantParams **q_params_4x4, const byte *p_scan, 
+                                levelDataStruct *dataLevel, int* kStart, int* kStop, int type)
 {
+  Slice *currSlice = currMB->p_slice;
   int noCoeff = 0;
   int i, j, coeff_ctr;
-  static int *m7;
+  int *m7;
   int end_coeff_ctr = ( ( type == LUMA_4x4 ) ? 16 : 15 );
   int q_bits = Q_BITS + qp_per; 
   int q_offset = ( 1 << (q_bits - 1) );
@@ -633,9 +634,9 @@ int init_trellis_data_4x4_CABAC(int **tblock, int block_x, int qp_per, int qp_re
     }
     else
     {
-      estErr = ((double) estErr4x4[qp_rem][j][i]) / norm_factor_4x4;
+      estErr = ((double) estErr4x4[qp_rem][j][i]) / currSlice->norm_factor_4x4;
 
-      dataLevel->levelDouble = iabs(*m7 * levelscale[j][i]);
+      dataLevel->levelDouble = iabs(*m7 * q_params_4x4[j][i].ScaleComp);
       level = (dataLevel->levelDouble >> q_bits);
 
       lowerInt = (((int)dataLevel->levelDouble - (level << q_bits)) < q_offset )? 1 : 0;
@@ -687,11 +688,12 @@ int init_trellis_data_4x4_CABAC(int **tblock, int block_x, int qp_per, int qp_re
 *    Initialize levelData 
 ****************************************************************************
 */
-int init_trellis_data_8x8_CABAC(int **tblock, int block_x, int qp_per, int qp_rem, int **levelscale, int **leveloffset, const byte *p_scan, Macroblock *currMB,  
-                      levelDataStruct *dataLevel, int* kStart, int* kStop, int symbolmode)
+int init_trellis_data_8x8_CABAC(Macroblock *currMB, int **tblock, int block_x, int qp_per, int qp_rem, LevelQuantParams **q_params_8x8, const byte *p_scan, 
+                      levelDataStruct *dataLevel, int* kStart, int* kStop)
 {
+  Slice *currSlice = currMB->p_slice;
   int noCoeff = 0;
-  static int *m7;
+  int *m7;
   int i, j, coeff_ctr, end_coeff_ctr = 64;
   int q_bits = Q_BITS_8 + qp_per;
   int q_offset = ( 1 << (q_bits - 1) );
@@ -715,9 +717,9 @@ int init_trellis_data_8x8_CABAC(int **tblock, int block_x, int qp_per, int qp_re
     }
     else
     {
-      estErr = (double) estErr8x8[qp_rem][j][i] / norm_factor_8x8;
+      estErr = (double) estErr8x8[qp_rem][j][i] / currSlice->norm_factor_8x8;
 
-      dataLevel->levelDouble = iabs(*m7 * levelscale[j][i]);
+      dataLevel->levelDouble = iabs(*m7 * q_params_8x8[j][i].ScaleComp);
       level = (dataLevel->levelDouble >> q_bits);
 
       lowerInt = (((int)dataLevel->levelDouble - (level << q_bits)) < q_offset )? 1 : 0;
@@ -769,17 +771,18 @@ int init_trellis_data_8x8_CABAC(int **tblock, int block_x, int qp_per, int qp_re
 *    Initialize levelData for Luma DC
 ****************************************************************************
 */
-int init_trellis_data_DC_CABAC(int **tblock, int qp_per, int qp_rem, 
-                         int levelscale, int leveloffset, const byte *p_scan, Macroblock *currMB,  
+int init_trellis_data_DC_CABAC(Macroblock *currMB, int **tblock, int qp_per, int qp_rem, 
+                         LevelQuantParams *q_params_4x4, const byte *p_scan, 
                          levelDataStruct *dataLevel, int* kStart, int* kStop)
 {
+  Slice *currSlice = currMB->p_slice;
   int noCoeff = 0;
   int i, j, coeff_ctr, end_coeff_ctr = 16;
   int q_bits   = Q_BITS + qp_per + 1; 
   int q_offset = ( 1 << (q_bits - 1) );
   int level, lowerInt, k;
   int *m7;
-  double err, estErr = (double) estErr4x4[qp_rem][0][0] / norm_factor_4x4; // note that we could also use int64
+  double err, estErr = (double) estErr4x4[qp_rem][0][0] / currSlice->norm_factor_4x4; // note that we could also use int64
 
   for (coeff_ctr = 0; coeff_ctr < end_coeff_ctr; coeff_ctr++)
   {
@@ -797,7 +800,7 @@ int init_trellis_data_DC_CABAC(int **tblock, int qp_per, int qp_rem,
     }
     else
     {
-      dataLevel->levelDouble = iabs(*m7 * levelscale);
+      dataLevel->levelDouble = iabs(*m7 * q_params_4x4->ScaleComp);
       level = (dataLevel->levelDouble >> q_bits);
 
       lowerInt=( ((int)dataLevel->levelDouble - (level<<q_bits)) < q_offset )? 1 : 0;

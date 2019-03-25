@@ -17,12 +17,8 @@
 #include "fmo.h"
 #include "macroblock.h"
 #include "mb_access.h"
-#include "ratectl.h"
 #include "rdoq.h"
 #include "block.h"
-
-extern const int estErr4x4[6][4][4];
-extern const int estErr8x8[6][8][8];
 
 /*!
 ************************************************************************
@@ -93,7 +89,7 @@ int cmp(const void *arg1, const void *arg2)
 *    estimate CAVLC bits
 ************************************************************************
 */
-int est_CAVLC_bits (levelDataStruct *levelData, int level_to_enc[16], int sign_to_enc[16], int nnz, int block_type)
+int est_CAVLC_bits (ImageParameters *p_Img, int level_to_enc[16], int sign_to_enc[16], int nnz, int block_type)
 {
   int           no_bits    = 0;
   SyntaxElement se;
@@ -105,7 +101,7 @@ int est_CAVLC_bits (levelDataStruct *levelData, int level_to_enc[16], int sign_t
   int numcoeff_vlc;
   int level_two_or_higher;
   int max_coeff_num = 0, cdc = (block_type == CHROMA_DC ? 1 : 0);
-  int yuv = img->yuv_format - 1;
+  int yuv = p_Img->yuv_format - 1;
   static const int incVlc[] = {0, 3, 6, 12, 24, 48, 32768};  // maximum vlc = 6
 
   int  pLevel[16] = {0};
@@ -212,7 +208,7 @@ int est_CAVLC_bits (levelDataStruct *levelData, int level_to_enc[16], int sign_t
   };
 
 
-  max_coeff_num = ( (block_type == CHROMA_DC) ? img->num_cdc_coeff : 
+  max_coeff_num = ( (block_type == CHROMA_DC) ? p_Img->num_cdc_coeff : 
   ( (block_type == LUMA_INTRA16x16AC || block_type == CB_INTRA16x16AC || block_type == CR_INTRA16x16AC || block_type == CHROMA_AC) ? 15 : 16) );
 
   //convert zigzag scan to (run, level) pairs
@@ -386,7 +382,7 @@ int est_CAVLC_bits (levelDataStruct *levelData, int level_to_enc[16], int sign_t
 *    estimate run and level for CAVLC 
 ****************************************************************************
 */
-void est_RunLevel_CAVLC(levelDataStruct *levelData, int *levelTrellis, int block_type, 
+void est_RunLevel_CAVLC(Macroblock *currMB, levelDataStruct *levelData, int *levelTrellis, int block_type, 
                         int b8, int b4, int coeff_num, double lambda)
 {
   int k, lastnonzero = -1, coeff_ctr;
@@ -394,18 +390,19 @@ void est_RunLevel_CAVLC(levelDataStruct *levelData, int *levelTrellis, int block
   int cstat, bestcstat = 0; 
   int nz_coeff=0;
   double lagr, lagrAcc = 0, minlagr = 0;
+  ImageParameters *p_Img = currMB->p_Img;
 
-  int subblock_x = ((b8&0x1)==0)?(((b4&0x1)==0)?0:1):(((b4&0x1)==0)?2:3); 
+  int subblock_x = ((b8 & 0x1) == 0) ? (((b4 & 0x1) == 0) ? 0 : 1) : (((b4 & 0x1) == 0) ? 2 : 3); 
   // horiz. position for coeff_count context  
-  int subblock_y = (b8<2)?((b4<2)?0:1):((b4<2)?2:3); 
+  int subblock_y = (b8 < 2) ? ((b4 < 2) ? 0 : 1) :((b4 < 2) ? 2 : 3); 
   // vert.  position for coeff_count context      
   int nnz; 
   levelDataStruct *dataLevel = &levelData[0];
 
   if (block_type != CHROMA_AC)
-    nnz = predict_nnz(&img->mb_data[img->current_mb_nr], LUMA, subblock_x,subblock_y); 
+    nnz = predict_nnz(currMB, LUMA, subblock_x, subblock_y); 
   else
-    nnz = predict_nnz_chroma(&img->mb_data[img->current_mb_nr], img->subblock_x, img->subblock_y+4);
+    nnz = predict_nnz_chroma(currMB, currMB->subblock_x >> 2, (currMB->subblock_y >> 2) + 4);
 
   for (coeff_ctr=0;coeff_ctr < coeff_num;coeff_ctr++)
   {	 
@@ -419,7 +416,7 @@ void est_RunLevel_CAVLC(levelDataStruct *levelData, int *levelTrellis, int block
     lagrAcc += dataLevel->errLevel[dataLevel->noLevels - 1];
 
     level_to_enc[coeff_ctr] = dataLevel->pre_level;
-    sign_to_enc[coeff_ctr] = dataLevel->sign;
+    sign_to_enc[coeff_ctr]  = dataLevel->sign;
 
     if(dataLevel->noLevels > 1)
     {
@@ -452,7 +449,7 @@ void est_RunLevel_CAVLC(levelDataStruct *levelData, int *levelTrellis, int block
         level_to_enc[dataLevel->coeff_ctr] = dataLevel->level[cstat];
         lagr = lagrAcc + dataLevel->errLevel[cstat];
 
-        lagr += lambda * est_CAVLC_bits(levelData, level_to_enc, sign_to_enc, nnz, block_type);
+        lagr += lambda * est_CAVLC_bits( p_Img, level_to_enc, sign_to_enc, nnz, block_type);
 
         if(cstat==0 || lagr<minlagr)
         {		
@@ -473,7 +470,7 @@ void est_RunLevel_CAVLC(levelDataStruct *levelData, int *levelTrellis, int block
     }
   }
 
-  img->nz_coeff [img->current_mb_nr ][subblock_x][subblock_y] = nz_coeff;
+  p_Img->nz_coeff [p_Img->current_mb_nr ][subblock_x][subblock_y] = nz_coeff;
 }
 
 /*!
@@ -482,11 +479,12 @@ void est_RunLevel_CAVLC(levelDataStruct *levelData, int *levelTrellis, int block
 *    Initialize levelData 
 ****************************************************************************
 */
-void init_trellis_data_4x4_CAVLC(int **tblock, int block_x, int qp_per, int qp_rem, int **levelscale, int **leveloffset, 
-                                 const byte *p_scan, Macroblock *currMB, levelDataStruct *dataLevel, int type)
+void init_trellis_data_4x4_CAVLC(Macroblock *currMB, int **tblock, int block_x, int qp_per, int qp_rem, LevelQuantParams **q_params_4x4,
+                                 const byte *p_scan, levelDataStruct *dataLevel, int type)
 {
+  Slice *currSlice = currMB->p_slice;
   int i, j, coeff_ctr; 
-  static int *m7;
+  int *m7;
   int end_coeff_ctr = ( ( type == LUMA_4x4 ) ? 16 : 15 );
   int q_bits = Q_BITS + qp_per; 
   int q_offset = ( 1 << (q_bits - 1) );
@@ -513,9 +511,9 @@ void init_trellis_data_4x4_CAVLC(int **tblock, int block_x, int qp_per, int qp_r
     }
     else
     {
-      estErr = ((double) estErr4x4[qp_rem][j][i]) / norm_factor_4x4;
+      estErr = ((double) estErr4x4[qp_rem][j][i]) / currSlice->norm_factor_4x4;
 
-      dataLevel->levelDouble = iabs(*m7 * levelscale[j][i]);
+      dataLevel->levelDouble = iabs(*m7 * q_params_4x4[j][i].ScaleComp);
       level = (dataLevel->levelDouble >> q_bits);
 
       lowerInt = (((int)dataLevel->levelDouble - (level << q_bits)) < q_offset )? 1 : 0;
@@ -551,7 +549,7 @@ void init_trellis_data_4x4_CAVLC(int **tblock, int block_x, int qp_per, int qp_r
       if(dataLevel->noLevels == 1)
         dataLevel->pre_level = 0;
       else
-        dataLevel->pre_level = (iabs (*m7) * levelscale[j][i] + leveloffset[j][i]) >> q_bits;
+        dataLevel->pre_level = (iabs (*m7) * q_params_4x4[j][i].ScaleComp + q_params_4x4[j][i].OffsetComp) >> q_bits;
       dataLevel->sign = isign(*m7);
     }
     dataLevel++;
@@ -564,16 +562,17 @@ void init_trellis_data_4x4_CAVLC(int **tblock, int block_x, int qp_per, int qp_r
 *    Initialize levelData for Luma DC
 ****************************************************************************
 */
-void init_trellis_data_DC_CAVLC(int **tblock, int qp_per, int qp_rem, 
-                         int levelscale, int leveloffset, const byte *p_scan, Macroblock *currMB,  
-                         levelDataStruct *dataLevel, int type)
+void init_trellis_data_DC_CAVLC(Macroblock *currMB, int **tblock, int qp_per, int qp_rem, 
+                         LevelQuantParams *q_params_4x4, const byte *p_scan, 
+                         levelDataStruct *dataLevel)
 {
+  Slice *currSlice = currMB->p_slice;
   int i, j, coeff_ctr, end_coeff_ctr = 16;
   int q_bits   = Q_BITS + qp_per + 1; 
   int q_offset = ( 1 << (q_bits - 1) );
   int level, lowerInt, k;
   int *m7;
-  double err, estErr = (double) estErr4x4[qp_rem][0][0] / norm_factor_4x4; // note that we could also use int64
+  double err, estErr = (double) estErr4x4[qp_rem][0][0] / currSlice->norm_factor_4x4; // note that we could also use int64
 
   for (coeff_ctr = 0; coeff_ctr < end_coeff_ctr; coeff_ctr++)
   {
@@ -593,7 +592,7 @@ void init_trellis_data_DC_CAVLC(int **tblock, int qp_per, int qp_rem,
     }
     else
     {
-      dataLevel->levelDouble = iabs(*m7 * levelscale);
+      dataLevel->levelDouble = iabs(*m7 * q_params_4x4->ScaleComp);
       level = (dataLevel->levelDouble >> q_bits);
 
       lowerInt=( ((int)dataLevel->levelDouble - (level<<q_bits)) < q_offset )? 1 : 0;
@@ -629,7 +628,7 @@ void init_trellis_data_DC_CAVLC(int **tblock, int qp_per, int qp_rem,
       if(dataLevel->noLevels == 1)
         dataLevel->pre_level = 0;
       else
-        dataLevel->pre_level = (iabs (*m7) * levelscale + leveloffset) >> q_bits;
+        dataLevel->pre_level = (iabs (*m7) * q_params_4x4->ScaleComp + q_params_4x4->OffsetComp) >> q_bits;
       dataLevel->sign = isign(*m7);
     }
     dataLevel++;
@@ -642,11 +641,12 @@ void init_trellis_data_DC_CAVLC(int **tblock, int qp_per, int qp_rem,
 *    Initialize levelData 
 ****************************************************************************
 */
-void init_trellis_data_8x8_CAVLC(int **tblock, int block_x, int qp_per, int qp_rem, int **levelscale, int **leveloffset, 
-                                 const byte *p_scan, Macroblock *currMB, levelDataStruct levelData[4][16])
+void init_trellis_data_8x8_CAVLC(Macroblock *currMB, int **tblock, int block_x, int qp_per, int qp_rem, LevelQuantParams **q_params_8x8, 
+                                 const byte *p_scan, levelDataStruct levelData[4][16])
 {
+  Slice *currSlice = currMB->p_slice;
   int i, j, block, coeff_ctr;
-  static int *m7;
+  int *m7;
   int q_bits   = Q_BITS_8 + qp_per;
   int q_offset = ( 1 << (q_bits - 1) );
   double err, estErr;
@@ -676,9 +676,9 @@ void init_trellis_data_8x8_CAVLC(int **tblock, int block_x, int qp_per, int qp_r
       }
       else
       {
-        estErr = (double) estErr8x8[qp_rem][j][i] / norm_factor_8x8;
+        estErr = (double) estErr8x8[qp_rem][j][i] / currSlice->norm_factor_8x8;
 
-        dataLevel->levelDouble = iabs(*m7 * levelscale[j][i]);
+        dataLevel->levelDouble = iabs(*m7 * q_params_8x8[j][i].ScaleComp);
         level = (dataLevel->levelDouble >> q_bits);
 
         lowerInt = (((int)dataLevel->levelDouble - (level << q_bits)) < q_offset ) ? 1 : 0;
@@ -723,7 +723,7 @@ void init_trellis_data_8x8_CAVLC(int **tblock, int block_x, int qp_per, int qp_r
         if(dataLevel->noLevels == 1)
           dataLevel->pre_level = 0;
         else
-          dataLevel->pre_level = (iabs (*m7) * levelscale[j][i] + leveloffset[j][i]) >> q_bits;
+          dataLevel->pre_level = (iabs (*m7) * q_params_8x8[j][i].ScaleComp + q_params_8x8[j][i].OffsetComp) >> q_bits;
         dataLevel->sign = isign(*m7);
       }
     }

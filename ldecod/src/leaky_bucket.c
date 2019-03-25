@@ -37,7 +37,7 @@
 /* gets unsigned double stored in Big Endian Order */
 unsigned long GetBigDoubleWord(FILE *fp)
 {
-  register unsigned long dw;
+  unsigned long dw;
   dw =  (unsigned long) (fgetc(fp) & 0xFF);
   dw = ((unsigned long) (fgetc(fp) & 0xFF)) | (dw << 0x08);
   dw = ((unsigned long) (fgetc(fp) & 0xFF)) | (dw << 0x08);
@@ -49,7 +49,7 @@ unsigned long GetBigDoubleWord(FILE *fp)
  ***********************************************************************
  * \brief
  *   Calculates if decoder leaky bucket parameters meets HRD constraints specified by encoder.
- * \param inp
+ * \param p_Inp
  *    Structure which contains decoder leaky bucket parameters.
  * \return
  *    None
@@ -66,7 +66,7 @@ unsigned long GetBigDoubleWord(FILE *fp)
  */
 
 /* Main Routine to verify HRD compliance */
-void calc_buffer(struct inp_par *inp)
+void calc_buffer(InputParameters *p_Inp)
 {
   unsigned long NumberLeakyBuckets, *Rmin, *Bmin, *Fmin;
   float B_interp,  F_interp;
@@ -75,9 +75,9 @@ void calc_buffer(struct inp_par *inp)
   unsigned long R_decoder, B_decoder, F_decoder;
   FILE *outf;
 
-  if ((outf=fopen(inp->LeakyBucketParamFile,"rb"))==NULL)
+  if ((outf=fopen(p_Inp->LeakyBucketParamFile,"rb"))==NULL)
     {
-    snprintf(errortext, ET_SIZE, "Error open file %s \n",inp->LeakyBucketParamFile);
+    snprintf(errortext, ET_SIZE, "Error open file %s \n",p_Inp->LeakyBucketParamFile);
     error(errortext,1);
     }
 
@@ -96,9 +96,9 @@ void calc_buffer(struct inp_par *inp)
   }
   fclose(outf);
 
-  R_decoder = inp->R_decoder;
-  F_decoder = inp->F_decoder;
-  B_decoder = inp->B_decoder;
+  R_decoder = p_Inp->R_decoder;
+  F_decoder = p_Inp->F_decoder;
+  B_decoder = p_Inp->B_decoder;
 
   for( iBucket =0; iBucket < NumberLeakyBuckets; iBucket++)
   {

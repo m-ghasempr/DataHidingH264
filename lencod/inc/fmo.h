@@ -17,23 +17,19 @@
 #ifndef _FMO_H_
 #define _FMO_H_
 
-#define MAXSLICEGROUPIDS 8
+extern int  FmoInit                       (ImageParameters * p_Img, pic_parameter_set_rbsp_t * pps, seq_parameter_set_rbsp_t * sps);
+extern void FmoUninit                     (ImageParameters *p_Img);
+extern int  FmoFinit                      (seq_parameter_set_rbsp_t * sps);
+extern int  FmoMB2SliceGroup              (ImageParameters *p_Img, int mb);
+extern int  FmoGetFirstMBOfSliceGroup     (ImageParameters *p_Img, int SliceGroupID);
+extern int  FmoGetFirstMacroblockInSlice  (ImageParameters *p_Img, int SliceGroup);
+extern int  FmoGetNextMBNr                (ImageParameters *p_Img, int CurrentMbNr);
+extern int  FmoGetPreviousMBNr            (ImageParameters *p_Img, int CurrentMbNr);
+extern int  FmoGetLastCodedMBOfSliceGroup (ImageParameters *p_Img, int SliceGroupID);
+extern int  FmoStartPicture               (ImageParameters *p_Img);
+extern int  FmoEndPicture                 (void);
+extern int  FmoSliceGroupCompletelyCoded  (ImageParameters *p_Img, int SliceGroupID);
+extern void FmoSetLastMacroblockInSlice   (ImageParameters *p_Img, int mb);
 
-int FmoInit(ImageParameters * img, pic_parameter_set_rbsp_t * pps, seq_parameter_set_rbsp_t * sps);
-void FmoUninit (void);
-int FmoFinit (seq_parameter_set_rbsp_t * sps);
-int FmoMB2SliceGroup (int mb);
-int FmoGetFirstMBOfSliceGroup (int SliceGroupID);
-int FmoGetFirstMacroblockInSlice (int SliceGroup);
-int FmoGetNextMBNr (int CurrentMbNr);
-int FmoGetLastCodedMBOfSliceGroup (int SliceGroupID);
-int FmoStartPicture (void);
-int FmoEndPicture(void);
-int FmoSliceGroupCompletelyCoded(int SliceGroupID);
-void FmoSetLastMacroblockInSlice (int mb);
-
-int FmoGetPreviousMBNr (int CurrentMbNr);
-
-extern byte *MBAmap;
 
 #endif

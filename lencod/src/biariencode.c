@@ -114,16 +114,14 @@ static const byte AC_next_state_LPS_64[64] =
 static const byte renorm_table_32[32]={6,5,4,4,3,3,3,3,2,2,2,2,2,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
 
 
-int pic_bin_count;
-
-void reset_pic_bin_count(void)
+void reset_pic_bin_count(ImageParameters *p_Img)
 {
-  pic_bin_count = 0;
+  p_Img->pic_bin_count = 0;
 }
 
-int get_pic_bin_count(void)
+int get_pic_bin_count(ImageParameters *p_Img)
 {
-  return pic_bin_count;
+  return p_Img->pic_bin_count;
 }
 
 /*!
@@ -141,8 +139,6 @@ EncodingEnvironmentPtr arienco_create_encoding_environment(void)
 
   return eep;
 }
-
-
 
 /*!
  ************************************************************************
@@ -169,19 +165,19 @@ void arienco_delete_encoding_environment(EncodingEnvironmentPtr eep)
 
 static inline void put_one_byte_final(EncodingEnvironmentPtr eep, unsigned int b)
 {
-  eep->Ecodestrm[(*eep->Ecodestrm_len)++] = b;
+  eep->Ecodestrm[(*eep->Ecodestrm_len)++] = (byte) b;
 }
 
 static forceinline void put_buffer(EncodingEnvironmentPtr eep)
 {
   while(eep->Epbuf>=0)
   {
-    eep->Ecodestrm[(*eep->Ecodestrm_len)++] =  (eep->Ebuffer>>((eep->Epbuf--)<<3))&0xFF; 
+    eep->Ecodestrm[(*eep->Ecodestrm_len)++] =  (byte) ((eep->Ebuffer>>((eep->Epbuf--)<<3))&0xFF); 
   }
   while(eep->C > 7)
   {
     eep->C-=8;
-    eep->E++;
+    ++(eep->E);
   }
   eep->Ebuffer = 0; 
 }
@@ -192,27 +188,31 @@ static inline void put_one_byte(EncodingEnvironmentPtr eep, int b)
   { 
     put_buffer(eep);
   } 
-  eep->Ebuffer = (eep->Ebuffer<<8) + (b);
-  eep->Epbuf++;
+  eep->Ebuffer <<= 8;
+  eep->Ebuffer += (b);
+
+  ++(eep->Epbuf);
 }
 
 static inline void put_one_word(EncodingEnvironmentPtr eep, int b) 
 {
-  if(eep->Epbuf>=3)
+  if (eep->Epbuf >= 3)
   { 
     put_buffer(eep);
   }
-  eep->Ebuffer = (eep->Ebuffer<<16) + (b);
+  eep->Ebuffer <<= 16;
+  eep->Ebuffer += (b);
+
   eep->Epbuf += 2;
 }
 
 static forceinline void propagate_carry(EncodingEnvironmentPtr eep)
 {
-  eep->Ebuffer +=1; 
+  ++(eep->Ebuffer); 
   while (eep->Echunks_outstanding > 0) 
   { 
     put_one_word(eep, 0); 
-    eep->Echunks_outstanding--; 
+    --(eep->Echunks_outstanding); 
   }
 }
 
@@ -221,7 +221,7 @@ static inline void put_last_chunk_plus_outstanding(EncodingEnvironmentPtr eep, u
   while (eep->Echunks_outstanding > 0)
   {
     put_one_word(eep, 0xFFFF);
-    eep->Echunks_outstanding--;
+    --(eep->Echunks_outstanding);
   }
   put_one_word(eep, l);
 }
@@ -231,7 +231,7 @@ static inline void put_last_chunk_plus_outstanding_final(EncodingEnvironmentPtr 
   while (eep->Echunks_outstanding > 0)
   {
     put_one_word(eep, 0xFFFF);
-    eep->Echunks_outstanding--;
+    --(eep->Echunks_outstanding);
   }
   put_one_byte(eep, l);
 }
@@ -267,8 +267,7 @@ void arienco_start_encoding(EncodingEnvironmentPtr eep,
   eep->Ecodestrm = code_buffer;
   eep->Ecodestrm_len = code_len;
 
-  eep->Erange = HALF-2;
-
+  eep->Erange = HALF;
 }
 
 /*!
@@ -278,9 +277,9 @@ void arienco_start_encoding(EncodingEnvironmentPtr eep,
 *    should be only used when slice is terminated
 ************************************************************************
 */
-void set_pic_bin_count(EncodingEnvironmentPtr eep)
+void set_pic_bin_count(ImageParameters *p_Img, EncodingEnvironmentPtr eep)
 {
-  pic_bin_count += eep->E*8 + eep->C; // no of processed bins
+  p_Img->pic_bin_count += (eep->E << 3) + eep->C; // no of processed bins
 }
 
 /*!
@@ -289,37 +288,36 @@ void set_pic_bin_count(EncodingEnvironmentPtr eep)
  *    Terminates the arithmetic codeword, writes stop bit and stuffing bytes (if any)
  ************************************************************************
  */
-void arienco_done_encoding(EncodingEnvironmentPtr eep)
+void arienco_done_encoding(Macroblock *currMB, EncodingEnvironmentPtr eep)
 {
-  register unsigned int low = eep->Elow;
-  int bl = eep->Ebits_to_go;
-  int remaining_bits = BITS_TO_LOAD - bl; // output (2 + remaining) bits for terminating the codeword + one stop bit
+  unsigned int low = eep->Elow;  
+  int remaining_bits = BITS_TO_LOAD - eep->Ebits_to_go; // output (2 + remaining) bits for terminating the codeword + one stop bit
   unsigned char mask;
-  int* bitCount = img->mb_data[img->current_mb_nr].bitcounter;
+  BitCounter *mbBits = &currMB->bits;
 
-  //pic_bin_count += eep->E*8 + eep->C; // no of processed bins
+  //p_Img->pic_bin_count += eep->E*8 + eep->C; // no of processed bins
 
   if (remaining_bits <= 5) // one terminating byte 
   {
-    bitCount[BITS_STUFFING]+=(5-remaining_bits);
-    mask = 255 - ((1 << (6-remaining_bits)) - 1); 
-    low = (low >> (MAX_BITS - 8)) & mask; // mask out the (2+remaining_bits) MSBs
-    low += (1<<(5-remaining_bits));       // put the terminating stop bit '1'
+    mbBits->mb_stuffing += (5 - remaining_bits);
+    mask = (unsigned char) (255 - ((1 << (6 - remaining_bits)) - 1)); 
+    low = (low >> (MASK_BITS)) & mask; // mask out the (2+remaining_bits) MSBs
+    low += (32 >> remaining_bits);       // put the terminating stop bit '1'
 
     put_last_chunk_plus_outstanding_final(eep, low);
     put_buffer(eep);
   }
-  else if(remaining_bits <=13)            // two terminating bytes
+  else if(remaining_bits <= 13)            // two terminating bytes
   {
-    bitCount[BITS_STUFFING] += (13-remaining_bits);
-    put_last_chunk_plus_outstanding_final(eep, ((low >> (MAX_BITS - 8)) & 0xFF)); // mask out the 8 MSBs for output
+    mbBits->mb_stuffing += (13 - remaining_bits);
+    put_last_chunk_plus_outstanding_final(eep, ((low >> (MASK_BITS)) & 0xFF)); // mask out the 8 MSBs for output
 
     put_buffer(eep);
     if (remaining_bits > 6)
     {
-      mask = 255 - ((1 << (14 - remaining_bits)) - 1); 
-      low = (low >> (MAX_BITS - 16)) & mask; 
-      low += (1<<(13-remaining_bits));     // put the terminating stop bit '1'
+      mask = (unsigned char) (255 - ((1 << (14 - remaining_bits)) - 1)); 
+      low = (low >> (B_BITS)) & mask; 
+      low += (0x2000 >> remaining_bits);     // put the terminating stop bit '1'
       put_one_byte_final(eep, low);
     }
     else
@@ -331,13 +329,13 @@ void arienco_done_encoding(EncodingEnvironmentPtr eep)
   { 
     put_last_chunk_plus_outstanding(eep, ((low >> B_BITS) & B_LOAD_MASK)); // mask out the 16 MSBs for output
     put_buffer(eep);
-    bitCount[BITS_STUFFING]+=(21-remaining_bits);
+    mbBits->mb_stuffing += (21 - remaining_bits);
 
     if (remaining_bits > 14)
     {
-      mask = 255 - ((1 << (22 - remaining_bits)) - 1); 
+      mask = (unsigned char) (255 - ((1 << (22 - remaining_bits)) - 1)); 
       low = (low >> (MAX_BITS - 24)) & mask; 
-      low += (1<<(21-remaining_bits));       // put the terminating stop bit '1'
+      low += (0x200000 >> remaining_bits);       // put the terminating stop bit '1'
       put_one_byte_final(eep, low);
     }
     else
@@ -348,7 +346,6 @@ void arienco_done_encoding(EncodingEnvironmentPtr eep)
   eep->Ebits_to_go = 8;
 }
 
-extern int cabac_encoding;
 
 /*!
  ************************************************************************
@@ -366,8 +363,8 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
  
   range -= rLPS;
 
-  eep->C++;
-  bi_ct->count += cabac_encoding;
+  ++(eep->C);
+  bi_ct->count += eep->p_Img->cabac_encoding;
 
   /* covers all cases where code does not bother to shift down symbol to be 
   * either 0 or 1, e.g. in some cases for cbp, mb_Type etc the code simply 
@@ -415,7 +412,7 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
 
     if( bl > MIN_BITS_TO_GO )
     {
-      eep->Elow = low;
+      eep->Elow   = low;
       eep->Erange = range;      
       eep->Ebits_to_go = bl;
       return;
@@ -432,7 +429,7 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
   }
   else          // low == "FF.."; keep it, may affect future carry
   {
-    eep->Echunks_outstanding++;
+    ++(eep->Echunks_outstanding);
   }
   eep->Erange = range;  
   eep->Ebits_to_go = bl + BITS_TO_LOAD;
@@ -447,9 +444,9 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
  */
 void biari_encode_symbol_eq_prob(EncodingEnvironmentPtr eep, signed short symbol)
 {
-  register unsigned int low = eep->Elow;
-  eep->Ebits_to_go--;  
-  eep->C++;
+  unsigned int low = eep->Elow;
+  --(eep->Ebits_to_go);  
+  ++(eep->C);
 
   if (symbol != 0)
   {
@@ -469,7 +466,7 @@ void biari_encode_symbol_eq_prob(EncodingEnvironmentPtr eep, signed short symbol
       put_last_chunk_plus_outstanding(eep, low);}
     else          // low == "FF"; keep it, may affect future carry
     {
-      eep->Echunks_outstanding++;
+      ++(eep->Echunks_outstanding);
     }
 
     eep->Ebits_to_go = BITS_TO_LOAD;
@@ -490,11 +487,11 @@ void biari_encode_symbol_eq_prob(EncodingEnvironmentPtr eep, signed short symbol
  */
 void biari_encode_symbol_final(EncodingEnvironmentPtr eep, signed short symbol)
 {
-  register unsigned int range = eep->Erange - 2;
-  register unsigned int low = eep->Elow;
+  unsigned int range = eep->Erange - 2;
+  unsigned int low = eep->Elow;
   int bl = eep->Ebits_to_go; 
 
-  eep->C++;
+  ++(eep->C);
 
   if (symbol == 0) // MPS
   {
@@ -508,7 +505,7 @@ void biari_encode_symbol_final(EncodingEnvironmentPtr eep, signed short symbol)
       range<<=1;
       if( --bl > MIN_BITS_TO_GO )  // renorm once, no output
       {
-        eep->Erange =range;
+        eep->Erange = range;
         eep->Ebits_to_go = bl;
         return;
       }
@@ -516,7 +513,7 @@ void biari_encode_symbol_final(EncodingEnvironmentPtr eep, signed short symbol)
   }
   else     // LPS
   {
-    low += range<<bl;
+    low += (range << bl);
     range = 2;
 
     if (low >= ONE) // output of carry needed
@@ -526,11 +523,11 @@ void biari_encode_symbol_final(EncodingEnvironmentPtr eep, signed short symbol)
     }
     bl -= 7; // 7 left shifts needed to renormalize
 
-    range<<=7;
+    range <<= 7;
     if( bl > MIN_BITS_TO_GO )
     {
       eep->Erange = range;
-      eep->Elow = low;
+      eep->Elow   = low;
       eep->Ebits_to_go = bl;
       return;
     }
@@ -538,7 +535,6 @@ void biari_encode_symbol_final(EncodingEnvironmentPtr eep, signed short symbol)
 
 
   //renorm needed
-
   eep->Elow = (low << BITS_TO_LOAD ) & (ONE_M1);
   low = (low >> B_BITS) & B_LOAD_MASK; // mask out the 8/16 MSBs
   if (low < B_LOAD_MASK)
@@ -547,7 +543,7 @@ void biari_encode_symbol_final(EncodingEnvironmentPtr eep, signed short symbol)
   }
   else
   {  // low == "FF"; keep it, may affect future carry
-    eep->Echunks_outstanding++;
+    ++(eep->Echunks_outstanding);
   }
 
   eep->Erange = range;
@@ -561,18 +557,18 @@ void biari_encode_symbol_final(EncodingEnvironmentPtr eep, signed short symbol)
  *    Initializes a given context with some pre-defined probability state
  ************************************************************************
  */
-void biari_init_context (BiContextTypePtr ctx, const char* ini)
+void biari_init_context (int qp, BiContextTypePtr ctx, const char* ini)
 {
-  int pstate = iClip3 ( 1, 126, ((ini[0]* imax(0, img->currentSlice->qp)) >> 4) + ini[1]);
+  int pstate = iClip3 ( 1, 126, ((ini[0]* qp) >> 4) + ini[1]);
 
   if ( pstate >= 64 )
   {
-    ctx->state = (unsigned short) (pstate - 64);
+    ctx->state = (uint16) (pstate - 64);
     ctx->MPS   = 1;
   }
   else
   {
-    ctx->state = (unsigned short) (63 - pstate);
+    ctx->state = (uint16) (63 - pstate);
     ctx->MPS   = 0;
   }
 

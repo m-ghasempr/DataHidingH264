@@ -10,18 +10,18 @@
  *      - Karsten Suehring        <suehring@hhi.de>
  ***************************************************************************************
  */
+
 #ifndef _OUTPUT_H_
 #define _OUTPUT_H_
 
-int testEndian(void);
 
-void write_stored_frame(FrameStore *fs, int p_out);
-void direct_output(StorablePicture *p, int p_out);
-void init_out_buffer(void);
-void uninit_out_buffer(void);
+extern void write_stored_frame(ImageParameters *p_Img, FrameStore *fs, int p_out);
+extern void direct_output     (ImageParameters *p_Img, StorablePicture *p, int p_out);
+extern void init_out_buffer   (ImageParameters *p_Img);
+extern void uninit_out_buffer (ImageParameters *p_Img);
 
 #if (PAIR_FIELDS_IN_OUTPUT)
-void flush_pending_output(int p_out);
+extern void flush_pending_output(ImageParameters *p_Img, int p_out);
 #endif
 
 #endif //_OUTPUT_H_

@@ -16,17 +16,12 @@
 #ifndef _CONTEXT_INI_
 #define _CONTEXT_INI_
 
-
-void  create_context_memory (void);
-void  free_context_memory   (void);
-
-void  init_contexts  (void);
-void  store_contexts (void);
-
-void  update_field_frame_contexts (int);
-void  update_rd_picture_contexts  (int);
-
-void  SetCtxModelNumber (void);
+extern void  create_context_memory       (ImageParameters *p_Img, InputParameters *p_Inp);
+extern void  free_context_memory         (ImageParameters *p_Img);
+extern void  update_field_frame_contexts (ImageParameters *p_Img, int);
+extern void  SetCtxModelNumber           (Slice *currSlice);
+extern void  init_contexts               (Slice *currSlice);
+extern void  store_contexts              (Slice *currSlice);
 
 #endif
 

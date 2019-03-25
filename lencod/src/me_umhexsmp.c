@@ -29,62 +29,51 @@
 #include "memalloc.h"
 #include "me_umhexsmp.h"
 #include "refbuf.h"
+#include "macroblock.h"
 #include "me_distortion.h"
-#include "mv-search.h"
+#include "mv_search.h"
 
 
-static const short Diamond_X[4]      = {-1, 1, 0, 0};
-static const short Diamond_Y[4]      = { 0, 0,-1, 1};
-static const short Hexagon_X[6]      = {-2, 2,-1, 1,-1, 1};
-static const short Hexagon_Y[6]      = { 0, 0,-2, 2, 2,-2};
-static const short Big_Hexagon_X[16] = {-4, 4, 0, 0,-4, 4,-4, 4,-4, 4,-4, 4,-2, 2,-2, 2};
-static const short Big_Hexagon_Y[16] = { 0, 0,-4, 4,-1, 1, 1,-1,-2, 2, 2,-2,-3, 3, 3,-3};
+static const MotionVector Diamond[4] = {{-4, 0}, {4, 0}, {0, -4}, {0, 4}};
+static const MotionVector Diamond_SubPelSearch[4] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
+static const MotionVector Hexagon[6] = {{-8, 0}, {8, 0},{-4, -8}, {4, 8}, {-4, 8}, {4 , -8}};
+static const short Big_Hexagon_X[16] = {-16, 16, 0, 0,-16, 16,-16, 16,-16, 16,-16, 16,-8, 8,-8, 8};
+static const short Big_Hexagon_Y[16] = { 0, 0,-16, 16,-4, 4, 4,-4,-8, 8, 8,-8,-12, 12, 12,-12};
 
-const short block_type_shift_factor[8] = {0, 0, 1, 1, 2, 3, 3, 1}; // last one relaxed to 1 instead 4
-
-static StorablePicture *ref_pic_ptr;
-static int dist_method;
-
-extern short*  spiral_hpel_search_x;
-extern short*  spiral_hpel_search_y;
-extern short*  spiral_search_x;
-extern short*  spiral_search_y;
+static const short block_type_shift_factor[8] = {0, 0, 1, 1, 2, 3, 3, 1}; // last one relaxed to 1 instead 4
 
 // Macro for motion estimation cost computation per match
-#define SEARCH_ONE_PIXEL_HELPER                                                           \
-  if(iabs(cand_x - center_x) <= search_range && iabs(cand_y - center_y) <= search_range)  \
-  {                                                                                       \
-    mcost = MV_COST (lambda_factor, mvshift, cand_x, cand_y, pred_x, pred_y);             \
-    mcost += computeUniPred[dist_method]( orig_pic, blocksize_y, blocksize_x,             \
-          min_mcost - mcost, (cand_x + IMG_PAD_SIZE) << 2, (cand_y + IMG_PAD_SIZE) << 2); \
-    if (mcost < min_mcost)                                                                \
-    {                                                                                     \
-      best_x    = cand_x;                                                                 \
-      best_y    = cand_y;                                                                 \
-      min_mcost = mcost;                                                                  \
-    }                                                                                     \
+#undef SEARCH_ONE_PIXEL_BIPRED
+#undef SEARCH_ONE_PIXEL
+#define SEARCH_ONE_PIXEL                                                                        \
+if((iabs(cand.mv_x - center.mv_x)>>2) <= search_range &&                                           \
+   (iabs(cand.mv_y - center.mv_y)>>2) <= search_range)                                             \
+{                                                                                             \
+    mcost  = mv_cost (p_Img, lambda_factor, &cand, &pred);                                      \
+    mcost += mv_block->computePredFPel( ref_picture, mv_block, min_mcost - mcost, &cand);       \
+    if (mcost < min_mcost)                                                                      \
+    {                                                                                           \
+      best = cand;                                                                              \
+      min_mcost = mcost;                                                                        \
+    }                                                                                           \
 }
 
-#define SEARCH_ONE_PIXEL_BIPRED_HELPER                                                    \
-if (iabs(cand_x - center2_x) <= search_range && iabs(cand_y - center2_y) <= search_range) \
-{                                                                                         \
-  mcost  = MV_COST (lambda_factor, mvshift, center1_x, center1_y, pred_x1, pred_y1);      \
-  mcost += MV_COST (lambda_factor, mvshift, cand_x,    cand_y,    pred_x2, pred_y2);      \
-  if (mcost < min_mcost)                                                                  \
-  {                                                                                       \
-    mcost  += computeBiPred(cur_pic, blocksize_y, blocksize_x,                            \
-                           min_mcost - mcost,                                             \
-                           (center1_x << 2) + IMG_PAD_SIZE_TIMES4,                        \
-                           (center1_y << 2) + IMG_PAD_SIZE_TIMES4,                        \
-                           (cand_x << 2) + IMG_PAD_SIZE_TIMES4,                           \
-                           (cand_y << 2) + IMG_PAD_SIZE_TIMES4);                          \
-    if (mcost < min_mcost)                                                                \
-    {                                                                                     \
-      best_x = cand_x;                                                                    \
-      best_y = cand_y;                                                                    \
-      min_mcost = mcost;                                                                  \
-    }                                                                                     \
-  }                                                                                       \
+#define SEARCH_ONE_PIXEL_BIPRED                                                                 \
+if ((iabs(cand.mv_x - center2.mv_x)>>2) <= search_range                                              \
+&& (iabs(cand.mv_y - center2.mv_x)>>2) <= search_range)                                              \
+{                                                                                               \
+  mcost  = mv_cost (p_Img, lambda_factor, &center1, &pred1);                                    \
+  mcost += mv_cost (p_Img, lambda_factor, &cand, &pred2);                                       \
+  if (mcost < min_mcost)                                                                        \
+  {                                                                                             \
+    mcost  += mv_block->computeBiPredFPel(ref_picture1, ref_picture2,                           \
+                           mv_block, min_mcost - mcost, &center1,  &cand);                      \
+    if (mcost < min_mcost)                                                                      \
+    {                                                                                           \
+      best = cand;                                                                              \
+      min_mcost = mcost;                                                                        \
+    }                                                                                           \
+  }                                                                                             \
 }
 
 /*!
@@ -95,13 +84,14 @@ if (iabs(cand_x - center2_x) <= search_range && iabs(cand_y - center2_y) <= sear
  *    performance and simplified UMHEX speed
  ************************************************************************
  */
-void smpUMHEX_init()
+void smpUMHEX_init(ImageParameters *p_Img)
 {
-  SymmetricalCrossSearchThreshold1 =  800;
-  SymmetricalCrossSearchThreshold2 = 7000;
-  ConvergeThreshold                = 1000;
-  SubPelThreshold1                 = 1000;
-  SubPelThreshold3                 =  400;
+  UMHexSMPStruct *p_UMHexSMP = p_Img->p_UMHexSMP;
+  p_UMHexSMP->SymmetricalCrossSearchThreshold1 =  800;
+  p_UMHexSMP->SymmetricalCrossSearchThreshold2 = 7000;
+  p_UMHexSMP->ConvergeThreshold                = 1000;
+  p_UMHexSMP->SubPelThreshold1                 = 1000;
+  p_UMHexSMP->SubPelThreshold3                 =  400;
 }
 
 /*!
@@ -110,15 +100,16 @@ void smpUMHEX_init()
  *    Allocation of space for fast motion estimation
  ************************************************************************
  */
-int smpUMHEX_get_mem()
+int smpUMHEX_get_mem(ImageParameters *p_Img)
 {
+  UMHexSMPStruct *p_UMHexSMP = p_Img->p_UMHexSMP;
   int memory_size = 0;
-  if (NULL==(smpUMHEX_flag_intra = calloc((img->width>>4)+1, sizeof(byte))))
-    no_mem_exit("smpUMHEX_get_mem: smpUMHEX_flag_intra");
+  if (NULL==(p_UMHexSMP->flag_intra = calloc((p_Img->width>>4)+1, sizeof(byte))))
+    no_mem_exit("smpUMHEX_get_mem: flag_intra");
 
-  memory_size += get_mem3Dint(&smpUMHEX_l0_cost, 9, img->height/4, img->width/4);
-  memory_size += get_mem3Dint(&smpUMHEX_l1_cost, 9, img->height/4, img->width/4);
-  memory_size += get_mem2D(&smpUMHEX_SearchState, 7, 7);
+  memory_size += get_mem3Dint(&p_UMHexSMP->l0_cost, 9, p_Img->height >> 2, p_Img->width >> 2);
+  memory_size += get_mem3Dint(&p_UMHexSMP->l1_cost, 9, p_Img->height >> 2, p_Img->width >> 2);
+  memory_size += get_mem2D(&p_UMHexSMP->SearchState, 7, 7);
 
   return memory_size;
 }
@@ -129,13 +120,15 @@ int smpUMHEX_get_mem()
  *    Free space for fast motion estimation
  ************************************************************************
  */
-void smpUMHEX_free_mem()
+void smpUMHEX_free_mem(ImageParameters *p_Img)
 {
-  free_mem3Dint(smpUMHEX_l0_cost );
-  free_mem3Dint(smpUMHEX_l1_cost );
-  free_mem2D(smpUMHEX_SearchState);
+  UMHexSMPStruct *p_UMHexSMP = p_Img->p_UMHexSMP;
+  free_mem3Dint(p_UMHexSMP->l0_cost );
+  free_mem3Dint(p_UMHexSMP->l1_cost );
+  free_mem2D(p_UMHexSMP->SearchState);
 
-  free (smpUMHEX_flag_intra);
+  free (p_UMHexSMP->flag_intra);
+  free (p_UMHexSMP);
 }
 
 
@@ -147,165 +140,135 @@ void smpUMHEX_free_mem()
 */
 int                                     //  ==> minimum motion cost after search
 smpUMHEXIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  current Macroblock
-                                     imgpel   *orig_pic,      // <--  not used
-                                     short     ref,           // <--  reference frame (0... or -1 (backward))
-                                     int       list,          // <--  reference picture list
-                                     char   ***refPic,        // <--  reference array
-                                     short ****tmp_mv,        // <--  mv array
-                                     int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
-                                     int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
-                                     int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
                                      MotionVector *pred_mv,    // <--  motion vector predictor (x|y) in sub-pel units
-                                     MotionVector *mv,         //  --> motion vector (x|y) - in pel units
-                                     int       search_range,  // <--  1-d search range in pel units
+                                     MEBlock *mv_block,
                                      int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
-                                     int       lambda_factor, // <--  lagrangian parameter for determining motion cost
-                                     int       apply_weights
+                                     int       lambda_factor  // <--  lagrangian parameter for determining motion cost
                                      )
 {
-  int   mvshift       = 2;                                        // motion vector shift for getting sub-pel units
-  int   blocksize_y   = params->blc_size[blocktype][1];            // vertical block size
-  int   blocksize_x   = params->blc_size[blocktype][0];            // horizontal block size
-  int   pred_x        = (pic_pix_x << mvshift) + pred_mv->mv_x;       // predicted position x (in sub-pel units)
-  int   pred_y        = (pic_pix_y << mvshift) + pred_mv->mv_y;       // predicted position y (in sub-pel units)
-  int   center_x      = pic_pix_x + mv->mv_x;                        // center position x (in pel units)
-  int   center_y      = pic_pix_y + mv->mv_y;                        // center position y (in pel units)
-  int   best_x        = 0, best_y = 0;
-  int   search_step, iYMinNow, iXMinNow;
-  int   cand_x, cand_y, mcost;
+  ImageParameters *p_Img = currMB->p_Img;
+  UMHexSMPStruct *p_UMHexSMP = p_Img->p_UMHexSMP;
+  int   blocktype     = mv_block->blocktype;  
+  short blocksize_x   = mv_block->blocksize_x;            // horizontal block size  
+  short blocksize_y   = mv_block->blocksize_y;            // vertical block size
+  short pic_pix_x     = mv_block->pos_x_padded;
+  short pic_pix_y     = mv_block->pos_y_padded;
+  
+  int   list = mv_block->list;
+  int   cur_list = list + currMB->list_offset;
+  short ref = mv_block->ref_idx;
+  StorablePicture *ref_picture = p_Img->listX[cur_list][ref];
+  int  search_range = mv_block->searchRange.max_x >> 2;
 
-  unsigned short  i, j, m;
+  MotionVector *mv    = &mv_block->mv[list];
+  MotionVector iMinNow, cand, center, pred, best = {0, 0};
 
+  int   search_step;
+  int   mcost;
 
-  //===== Use weighted Reference for ME ====
-  dist_method = F_PEL + 3 * apply_weights;
+  uint16  i, j, m;
 
-  ref_pic_ptr = listX[list + currMB->list_offset][ref];
+  pic_pix_x   = mv_block->pos_x_padded;
+  pic_pix_y   = mv_block->pos_y_padded;
+  pred.mv_x   = pic_pix_x + pred_mv->mv_x;       // predicted position x (in sub-pel units)
+  pred.mv_y   = pic_pix_y + pred_mv->mv_y;       // predicted position y (in sub-pel units)
+  center.mv_x = pic_pix_x + mv->mv_x;            // center position x (in pel units)
+  center.mv_y = pic_pix_y + mv->mv_y;            // center position y (in pel units)
 
-  // Note that following seem to be universal for all functions and could be moved to a separate, clean public function in me_distortion.c
-  ref_pic_sub.luma = ref_pic_ptr->p_curr_img_sub;
-
-  img_width  = ref_pic_ptr->size_x;
-  img_height = ref_pic_ptr->size_y;
-  width_pad  = ref_pic_ptr->size_x_pad;
-  height_pad = ref_pic_ptr->size_y_pad;
-
-  if (apply_weights)
-  {
-    weight_luma = wp_weight[list + currMB->list_offset][ref][0];
-    offset_luma = wp_offset[list + currMB->list_offset][ref][0];
-  }
-
-  if (ChromaMEEnable)
-  {
-    ref_pic_sub.crcb[0] = ref_pic_ptr->imgUV_sub[0];
-    ref_pic_sub.crcb[1] = ref_pic_ptr->imgUV_sub[1];
-    width_pad_cr  = ref_pic_ptr->size_x_cr_pad;
-    height_pad_cr = ref_pic_ptr->size_y_cr_pad;
-
-    if (apply_weights)
-    {
-      weight_cr[0] = wp_weight[list + currMB->list_offset][ref][1];
-      weight_cr[1] = wp_weight[list + currMB->list_offset][ref][2];
-      offset_cr[0] = wp_offset[list + currMB->list_offset][ref][1];
-      offset_cr[1] = wp_offset[list + currMB->list_offset][ref][2];
-    }
-  }
 
   //check the center median predictor
-  cand_x = center_x ;
-  cand_y = center_y ;
-  mcost = MV_COST (lambda_factor, mvshift, cand_x, cand_y, pred_x, pred_y);
 
+  cand = center;
+  mcost = mv_cost (p_Img, lambda_factor, &cand, &pred);
 
-  mcost += computeUniPred[dist_method](orig_pic, blocksize_y,blocksize_x, min_mcost - mcost,
-    (cand_x << 2) + IMG_PAD_SIZE_TIMES4,  (cand_y << 2) + IMG_PAD_SIZE_TIMES4);
+  mcost += mv_block->computePredFPel(ref_picture, mv_block, min_mcost - mcost, &cand);
 
   if (mcost < min_mcost)
   {
     min_mcost = mcost;
-    best_x    = cand_x;
-    best_y    = cand_y;
+    best = cand;
   }
 
-  iXMinNow = best_x;
-  iYMinNow = best_y;
+  iMinNow = best;
+
+  // check 0
   if ((0 != pred_mv->mv_x) || (0 != pred_mv->mv_y))
   {
-    cand_x = pic_pix_x;
-    cand_y = pic_pix_y;
-    SEARCH_ONE_PIXEL_HELPER
+    cand.mv_x = pic_pix_x;
+    cand.mv_y = pic_pix_y;
+    SEARCH_ONE_PIXEL;
+    iMinNow = best;
   }
 
   // If the min_mcost is small enough, do a local search then terminate
   // Ihis is good for stationary or quasi-stationary areas
-  if (min_mcost < (ConvergeThreshold>>block_type_shift_factor[blocktype]))
+  if (min_mcost < (p_UMHexSMP->ConvergeThreshold >> block_type_shift_factor[blocktype]))
   {
     for (m = 0; m < 4; m++)
     {
-      cand_x = iXMinNow + Diamond_X[m];
-      cand_y = iYMinNow + Diamond_Y[m];
-      SEARCH_ONE_PIXEL_HELPER
+      cand.mv_x = iMinNow.mv_x + Diamond[m].mv_x;
+      cand.mv_y = iMinNow.mv_y + Diamond[m].mv_y;
+      SEARCH_ONE_PIXEL;
     }
-    mv->mv_x = (short) (best_x - pic_pix_x);
-    mv->mv_y = (short) (best_y - pic_pix_y);
+    mv->mv_x = (short) (best.mv_x - pic_pix_x);
+    mv->mv_y = (short) (best.mv_y - pic_pix_y);
     return min_mcost;
   }
 
   // Small local search
+  iMinNow = best;
   for (m = 0; m < 4; m++)
   {
-    cand_x = iXMinNow + Diamond_X[m];
-    cand_y = iYMinNow + Diamond_Y[m];
-    SEARCH_ONE_PIXEL_HELPER
+    cand.mv_x = iMinNow.mv_x + Diamond[m].mv_x;
+    cand.mv_y = iMinNow.mv_y + Diamond[m].mv_y;
+    SEARCH_ONE_PIXEL;
   }
 
   // First_step: Symmetrical-cross search
   // If distortion is large, use large shapes. Otherwise, compact shapes are faster
   if ( (blocktype == 1 &&
-    min_mcost > (SymmetricalCrossSearchThreshold1>>block_type_shift_factor[blocktype])) ||
-    (min_mcost > (SymmetricalCrossSearchThreshold2>>block_type_shift_factor[blocktype])) )
+    min_mcost > (p_UMHexSMP->SymmetricalCrossSearchThreshold1 >> block_type_shift_factor[blocktype])) ||
+    (min_mcost > (p_UMHexSMP->SymmetricalCrossSearchThreshold2>>block_type_shift_factor[blocktype])) )
   {
-    iXMinNow = best_x;
-    iYMinNow = best_y;
+    iMinNow = best;
 
-    for(i = 1; i <= search_range/2; i++)
+    for(i = 4; i <= 4 * search_range - 4; i+= 8)
     {
-      search_step = (i<<1) - 1;
-      cand_x = iXMinNow + search_step;
-      cand_y = iYMinNow;
-      SEARCH_ONE_PIXEL_HELPER
+      search_step = i;
+      cand.mv_x = (short) (iMinNow.mv_x + search_step);
+      cand.mv_y = iMinNow.mv_y;
+      SEARCH_ONE_PIXEL;
 
-        cand_x = iXMinNow - search_step;
-      SEARCH_ONE_PIXEL_HELPER
+      cand.mv_x = (short) (iMinNow.mv_x - search_step);
+      SEARCH_ONE_PIXEL;
 
-        cand_x = iXMinNow;
-      cand_y = iYMinNow + search_step;
-      SEARCH_ONE_PIXEL_HELPER
+      cand.mv_x = iMinNow.mv_x;
+      cand.mv_y = (short) (iMinNow.mv_y + search_step);
+      SEARCH_ONE_PIXEL;
 
-        cand_y = iYMinNow - search_step;
-      SEARCH_ONE_PIXEL_HELPER
+      cand.mv_y = (short) (iMinNow.mv_y - search_step);
+      SEARCH_ONE_PIXEL;
     }
 
     // Hexagon Search
-    iXMinNow = best_x;
-    iYMinNow = best_y;
+    iMinNow = best;
+
     for (m = 0; m < 6; m++)
     {
-      cand_x = iXMinNow + Hexagon_X[m];
-      cand_y = iYMinNow + Hexagon_Y[m];
-      SEARCH_ONE_PIXEL_HELPER
+      cand.mv_x = iMinNow.mv_x + Hexagon[m].mv_x;
+      cand.mv_y = iMinNow.mv_y + Hexagon[m].mv_y;
+      SEARCH_ONE_PIXEL;
     }
     // Multi Big Hexagon Search
-    iXMinNow = best_x;
-    iYMinNow = best_y;
-    for(i = 1; i <= search_range/4; i++)
+    iMinNow = best;
+
+    for(i = 1; i <= search_range >> 2; i++)
     {
       for (m = 0; m < 16; m++)
       {
-        cand_x = iXMinNow + Big_Hexagon_X[m]*i;
-        cand_y = iYMinNow + Big_Hexagon_Y[m]*i;
-        SEARCH_ONE_PIXEL_HELPER
+        cand.mv_x = iMinNow.mv_x + Big_Hexagon_X[m]*i;
+        cand.mv_y = iMinNow.mv_y + Big_Hexagon_Y[m]*i;
+        SEARCH_ONE_PIXEL;
       }
     }
   }
@@ -313,58 +276,56 @@ smpUMHEXIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  current Ma
   // Search up_layer predictor for non 16x16 blocks
   if (blocktype > 1)
   {
-    cand_x = pic_pix_x + (smpUMHEX_pred_MV_uplayer_X/4);
-    cand_y = pic_pix_y + (smpUMHEX_pred_MV_uplayer_Y/4);
-    SEARCH_ONE_PIXEL_HELPER
+    cand.mv_x = pic_pix_x + (p_UMHexSMP->pred_MV_uplayer_X / 4) * 4;
+    cand.mv_y = pic_pix_y + (p_UMHexSMP->pred_MV_uplayer_Y / 4) * 4;
+    SEARCH_ONE_PIXEL;
   }
 
-  if(center_x != pic_pix_x || center_y != pic_pix_y)
+  if(center.mv_x != pic_pix_x || center.mv_y != pic_pix_y)
   {
-    cand_x = pic_pix_x;
-    cand_y = pic_pix_y;
-    SEARCH_ONE_PIXEL_HELPER
+    cand.mv_x = pic_pix_x;
+    cand.mv_y = pic_pix_y;
+    SEARCH_ONE_PIXEL;
 
-      iXMinNow = best_x;
-    iYMinNow = best_y;
+    iMinNow = best;
     // Local diamond search
     for (m = 0; m < 4; m++)
     {
-      cand_x = iXMinNow + Diamond_X[m];
-      cand_y = iYMinNow + Diamond_Y[m];
-      SEARCH_ONE_PIXEL_HELPER
+      cand.mv_x = iMinNow.mv_x + Diamond[m].mv_x;
+      cand.mv_y = iMinNow.mv_y + Diamond[m].mv_y;
+      SEARCH_ONE_PIXEL;
     }
   }
 
   // If the minimum cost is small enough, do a local search
   // and finish the search here
-  if (min_mcost < (ConvergeThreshold>>block_type_shift_factor[blocktype]))
+  if (min_mcost < (p_UMHexSMP->ConvergeThreshold >> block_type_shift_factor[blocktype]))
   {
-    iXMinNow = best_x;
-    iYMinNow = best_y;
+    iMinNow = best;
+
     for (m = 0; m < 4; m++)
     {
-      cand_x = iXMinNow + Diamond_X[m];
-      cand_y = iYMinNow + Diamond_Y[m];
-      SEARCH_ONE_PIXEL_HELPER
+      cand.mv_x = iMinNow.mv_x + Diamond[m].mv_x;
+      cand.mv_y = iMinNow.mv_y + Diamond[m].mv_y;
+      SEARCH_ONE_PIXEL;
     }
-    mv->mv_x = (short) (best_x - pic_pix_x);
-    mv->mv_y = (short) (best_y - pic_pix_y);
+    mv->mv_x = (short) (best.mv_x - pic_pix_x);
+    mv->mv_y = (short) (best.mv_y - pic_pix_y);
     return min_mcost;
   }
 
   //second_step:  Extended Hexagon-based Search
   for(i = 0; i < search_range; i++)
   {
-    iXMinNow = best_x;
-    iYMinNow = best_y;
+    iMinNow = best;
     for (m = 0; m < 6; m++)
     {
-      cand_x = iXMinNow + Hexagon_X[m];
-      cand_y = iYMinNow + Hexagon_Y[m];
-      SEARCH_ONE_PIXEL_HELPER
+      cand.mv_x = iMinNow.mv_x + Hexagon[m].mv_x;
+      cand.mv_y = iMinNow.mv_y + Hexagon[m].mv_y;
+      SEARCH_ONE_PIXEL;
     }
     // The minimum cost point happens in the center
-    if (best_x == iXMinNow && best_y == iYMinNow)
+    if (best.mv_x == iMinNow.mv_x && best.mv_y == iMinNow.mv_y)
     {
       break;
     }
@@ -373,36 +334,35 @@ smpUMHEXIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  current Ma
   //third_step: Small diamond search
   for(i = 0; i < search_range; i++)
   {
-    iXMinNow = best_x;
-    iYMinNow = best_y;
+    iMinNow = best;
     for (m = 0; m < 4; m++)
     {
-      cand_x = iXMinNow + Diamond_X[m];
-      cand_y = iYMinNow + Diamond_Y[m];
-      SEARCH_ONE_PIXEL_HELPER
+      cand.mv_x = iMinNow.mv_x + Diamond[m].mv_x;
+      cand.mv_y = iMinNow.mv_y + Diamond[m].mv_y;
+      SEARCH_ONE_PIXEL;
     }
 
     // The minimum cost point happens in the center
-    if (best_x == iXMinNow && best_y == iYMinNow)
+    if (best.mv_x == iMinNow.mv_x && best.mv_y == iMinNow.mv_y)
     {
       break;
     }
   }
 
-  mv->mv_x = (short) (best_x - pic_pix_x);
-  mv->mv_y = (short) (best_y - pic_pix_y);
+  mv->mv_x = (short) (best.mv_x - pic_pix_x);
+  mv->mv_y = (short) (best.mv_y - pic_pix_y);
 
-  for (j=(pic_pix_y>>2); j < (pic_pix_y>>2) + (blocksize_y>>2); j++)
+  for (j=(mv_block->pos_y2); j < (mv_block->pos_y2) + (blocksize_y>>2); j++)
   {
-    for (i=(pic_pix_x>>2); i < (pic_pix_x>>2) + (blocksize_x>>2); i++)    
+    for (i=(mv_block->pos_x2); i < (mv_block->pos_x2) + (blocksize_x>>2); i++)    
     {
-      if(list == 0)
+      if(mv_block->list == 0)
       {
-        smpUMHEX_l0_cost[blocktype][j][i] = min_mcost;
+        p_UMHexSMP->l0_cost[blocktype][j][i] = min_mcost;
       }
       else
       {
-        smpUMHEX_l1_cost[blocktype][j][i] = min_mcost;
+        p_UMHexSMP->l1_cost[blocktype][j][i] = min_mcost;
       }
     }
   }
@@ -417,68 +377,34 @@ smpUMHEXIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  current Ma
  ***********************************************************************
  */
 int                                               //  ==> minimum motion cost after search
-smpUMHEXFullSubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original pixel values for the AxB block
-                                     short     ref,           // <--  reference frame (0... or -1 (backward))
-                                     int       list,          // <--  reference picture list
-                                     int       list_offset,
-                                     int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
-                                     int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
-                                     int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
+smpUMHEXFullSubPelBlockMotionSearch (Macroblock *currMB,      // <--  current Macroblock
                                      MotionVector *pred_mv,    // <--  motion vector predictor (x|y) in sub-pel units
-                                     MotionVector *mv,         // <--> in: search center (x|y) / out: motion vector (x|y) - in pel units
-                                     int       search_pos2,   // <--  search positions for    half-pel search  (default: 9)
-                                     int       search_pos4,   // <--  search positions for quarter-pel search  (default: 9)
+                                     MEBlock *mv_block,
                                      int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
-                                     int       lambda_factor, // <--  lagrangian parameter for determining motion cost
-                                     int       apply_weights
+                                     int       lambda_factor  // <--  lagrangian parameter for determining motion cost
                                      )
 {
+  ImageParameters *p_Img = currMB->p_Img;
+  InputParameters *p_Inp = currMB->p_Inp;
+  Slice *currSlice = currMB->p_slice;
+  UMHexSMPStruct *p_UMHexSMP = p_Img->p_UMHexSMP;
   int   pos, best_pos, mcost;
 
-  int   cand_mv_x, cand_mv_y;
+  MotionVector cand;
 
-  int   check_position0 = (!params->rdopt && img->type!=B_SLICE && ref==0 && blocktype==1 && mv->mv_x==0 && mv->mv_y==0);
-  int   blocksize_x     = params->blc_size[blocktype][0];
-  int   blocksize_y     = params->blc_size[blocktype][1];
-  int   pic4_pix_x      = ((pic_pix_x + IMG_PAD_SIZE)<< 2);
-  int   pic4_pix_y      = ((pic_pix_y + IMG_PAD_SIZE)<< 2);
-  int   max_pos2        = ( !start_me_refinement_hp ? imax(1,search_pos2) : search_pos2);
+  int   blocktype = mv_block->blocktype;
+  int   list = mv_block->list;
+  int   list_offset = currMB->list_offset;
+  short ref = mv_block->ref_idx;
+  MotionVector *mv  = &mv_block->mv[list];
+ 
+  int   check_position0 = (!p_Inp->rdopt && currSlice->slice_type!=B_SLICE && ref==0 && blocktype==1 && mv->mv_x==0 && mv->mv_y==0);
 
-  int   cmv_x, cmv_y;
+  int   max_pos2        = ( !p_Img->start_me_refinement_hp ? imax(1, mv_block->search_pos2) : mv_block->search_pos2);
+  MotionVector cmv;
 
-  StorablePicture *ref_picture = listX[list + list_offset][ref];
+  StorablePicture *ref_picture = p_Img->listX[list + list_offset][ref];
 
-
-  dist_method = Q_PEL + 3 * apply_weights;
-
-  ref_pic_sub.luma = ref_picture->p_curr_img_sub;
-
-  img_width  = ref_picture->size_x;
-  img_height = ref_picture->size_y;
-  width_pad  = ref_picture->size_x_pad;
-  height_pad = ref_picture->size_y_pad;
-
-  if (apply_weights)
-  {
-    weight_luma = wp_weight[list + list_offset][ref][0];
-    offset_luma = wp_offset[list + list_offset][ref][0];
-  }
-
-  if (ChromaMEEnable)
-  {
-    ref_pic_sub.crcb[0] = ref_picture->imgUV_sub[0];
-    ref_pic_sub.crcb[1] = ref_picture->imgUV_sub[1];
-    width_pad_cr  = ref_picture->size_x_cr_pad;
-    height_pad_cr = ref_picture->size_y_cr_pad;
-
-    if (apply_weights)
-    {
-      weight_cr[0] = wp_weight[list + list_offset][ref][1];
-      weight_cr[1] = wp_weight[list + list_offset][ref][2];
-      offset_cr[0] = wp_offset[list + list_offset][ref][1];
-      offset_cr[1] = wp_offset[list + list_offset][ref][2];
-    }
-  }
 
   /*********************************
    *****                       *****
@@ -487,20 +413,19 @@ smpUMHEXFullSubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original p
    *********************************/
 
   //===== loop over search positions =====
-  for (best_pos = 0, pos = start_me_refinement_hp; pos < max_pos2; pos++)
+  for (best_pos = 0, pos = p_Img->start_me_refinement_hp; pos < max_pos2; pos++)
   {
-    cand_mv_x = mv->mv_x + (spiral_hpel_search_x[pos]);    // quarter-pel units
-    cand_mv_y = mv->mv_y + (spiral_hpel_search_y[pos]);    // quarter-pel units
+    cand.mv_x = mv->mv_x + p_Img->spiral_hpel_search[pos].mv_x;    // quarter-pel units
+    cand.mv_y = mv->mv_y + p_Img->spiral_hpel_search[pos].mv_y;    // quarter-pel units
 
     //----- set motion vector cost -----
-    mcost = MV_COST_SMP (lambda_factor, cand_mv_x, cand_mv_y, pred_mv->mv_x, pred_mv->mv_y);
+    mcost = mv_cost (p_Img, lambda_factor, &cand, pred_mv);
 
     if (mcost >= min_mcost) continue;
 
-    cmv_x = cand_mv_x + pic4_pix_x;
-    cmv_y = cand_mv_y + pic4_pix_y;
+    cmv = pad_MVs(cand, mv_block);
 
-    mcost += computeUniPred[dist_method]( orig_pic, blocksize_y, blocksize_x, min_mcost - mcost, cmv_x, cmv_y);
+    mcost += mv_block->computePredQPel( ref_picture, mv_block, min_mcost - mcost, &cmv);
 
     if (pos==0 && check_position0)
     {
@@ -512,7 +437,7 @@ smpUMHEXFullSubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original p
       min_mcost = mcost;
       best_pos  = pos;
     }
-    if (min_mcost < (SubPelThreshold3>>block_type_shift_factor[blocktype]))
+    if (min_mcost < (p_UMHexSMP->SubPelThreshold3 >> block_type_shift_factor[blocktype]))
     {
       break;
     }
@@ -520,18 +445,17 @@ smpUMHEXFullSubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original p
 
   if (best_pos)
   {
-    mv->mv_x += (spiral_hpel_search_x [best_pos]);
-    mv->mv_y += (spiral_hpel_search_y [best_pos]);
+    add_mvs(mv, &p_Img->spiral_hpel_search[best_pos]);
   }
 
   if ((mv->mv_x == 0) && (mv->mv_y == 0) && (pred_mv->mv_x == 0 && pred_mv->mv_y == 0) &&
-    (min_mcost < (SubPelThreshold1>>block_type_shift_factor[blocktype])) )
+    (min_mcost < (p_UMHexSMP->SubPelThreshold1 >> block_type_shift_factor[blocktype])) )
   {
     best_pos = 0;
     return min_mcost;
   }
 
-  if ( !start_me_refinement_qp )
+  if ( !p_Img->start_me_refinement_qp )
     min_mcost = INT_MAX;
 
   /************************************
@@ -541,27 +465,26 @@ smpUMHEXFullSubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original p
    ************************************/
 
   //===== loop over search positions =====
-  for (best_pos = 0, pos = start_me_refinement_qp; pos < search_pos4; pos++)
+  for (best_pos = 0, pos = p_Img->start_me_refinement_qp; pos < mv_block->search_pos4; pos++)
   {
-    cand_mv_x = mv->mv_x + spiral_search_x[pos];    // quarter-pel units
-    cand_mv_y = mv->mv_y + spiral_search_y[pos];    // quarter-pel units
+    cand.mv_x = mv->mv_x + p_Img->spiral_search[pos].mv_x;    // quarter-pel units
+    cand.mv_y = mv->mv_y + p_Img->spiral_search[pos].mv_y;    // quarter-pel units
 
     //----- set motion vector cost -----
-    mcost = MV_COST_SMP (lambda_factor, cand_mv_x, cand_mv_y, pred_mv->mv_x, pred_mv->mv_y);
+    mcost = mv_cost (p_Img, lambda_factor, &cand, pred_mv);
 
     if (mcost >= min_mcost) continue;
 
-    cmv_x = cand_mv_x + pic4_pix_x;
-    cmv_y = cand_mv_y + pic4_pix_y;
+    cmv = pad_MVs(cand, mv_block);
 
-    mcost += computeUniPred[dist_method]( orig_pic, blocksize_y, blocksize_x, min_mcost - mcost, cmv_x, cmv_y);
+    mcost += mv_block->computePredQPel( ref_picture, mv_block, min_mcost - mcost, &cmv);
 
     if (mcost < min_mcost)
     {
       min_mcost = mcost;
       best_pos  = pos;
     }
-    if (min_mcost < (SubPelThreshold3>>block_type_shift_factor[blocktype]))
+    if (min_mcost < (p_UMHexSMP->SubPelThreshold3 >> block_type_shift_factor[blocktype]))
     {
       break;
     }
@@ -569,8 +492,7 @@ smpUMHEXFullSubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original p
 
   if (best_pos)
   {
-    mv->mv_x += spiral_search_x [best_pos];
-    mv->mv_y += spiral_search_y [best_pos];
+    add_mvs(mv, &p_Img->spiral_search[best_pos]);
   }
 
   //===== return minimum motion cost =====
@@ -586,99 +508,56 @@ smpUMHEXFullSubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original p
  */
 int                                     //  ==> minimum motion cost after search
 smpUMHEXSubPelBlockMotionSearch  (
-                                  imgpel* orig_pic,        // <--  original pixel values for the AxB block
-                                  short     ref,           // <--  reference frame (0... or -1 (backward))
-                                  int       list,          // <--  reference picture list
-                                  int       list_offset,   // <--  MBAFF list offset
-                                  int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
-                                  int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
-                                  int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
+                                  Macroblock *currMB,      // <--  current Macroblock
                                   MotionVector *pred_mv,    // <--  motion vector predictor (x|y) in sub-pel units
-                                  MotionVector *mv,         // <--> in: search center (x|y) / out: MV (x|y) - in pel units
-                                  int       search_pos2,   // <--  search positions for    half-pel search  (default: 9)
-                                  int       search_pos4,   // <--  search positions for quarter-pel search  (default: 9)
+                                  MEBlock   *mv_block,           
                                   int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
-                                  int       lambda_factor, // <--  lagrangian parameter for determining motion cost
-                                  int       apply_weights
+                                  int       lambda_factor  // <--  lagrangian parameter for determining motion cost
                                   )
 {
+  ImageParameters *p_Img = currMB->p_Img;
+  UMHexSMPStruct *p_UMHexSMP = p_Img->p_UMHexSMP;
   int   mcost;
-  int   cand_mv_x, cand_mv_y;
+  MotionVector cand, iMinNow, currmv = {0, 0}, candWithPad;
 
-  StorablePicture *ref_picture = listX[list+list_offset][ref];
+  int   blocktype = mv_block->blocktype;
+  int   list = mv_block->list;
+  int   list_offset = currMB->list_offset;
+  short ref = mv_block->ref_idx;
+  MotionVector *mv  = &mv_block->mv[list];
 
-  short mv_shift        = 0;
-  short blocksize_x     = (short) params->blc_size[blocktype][0];
-  short blocksize_y     = (short) params->blc_size[blocktype][1];
-  int   pic4_pix_x      = ((pic_pix_x + IMG_PAD_SIZE)<<2);
-  int   pic4_pix_y      = ((pic_pix_y + IMG_PAD_SIZE)<<2);
+  StorablePicture *ref_picture = p_Img->listX[list+list_offset][ref];
 
-  int   iXMinNow, iYMinNow;
-  short dynamic_search_range, i, m;
-  int   currmv_x = 0, currmv_y = 0;
+  short dynamic_search_range = 3, i, m;
   int   pred_frac_mv_x,pred_frac_mv_y,abort_search;
   int   pred_frac_up_mv_x, pred_frac_up_mv_y;
 
-  dist_method = Q_PEL + 3 * apply_weights;
+  pred_frac_mv_x = (pred_mv->mv_x - mv->mv_x) %4; //& 0x03;
+  pred_frac_mv_y = (pred_mv->mv_y - mv->mv_y) %4; //& 0x03;
 
-  ref_pic_sub.luma = ref_picture->p_curr_img_sub;
+  pred_frac_up_mv_x = (p_UMHexSMP->pred_MV_uplayer_X - mv->mv_x) & 0x03;
+  pred_frac_up_mv_y = (p_UMHexSMP->pred_MV_uplayer_Y - mv->mv_y) & 0x03;
 
-  img_width  = ref_pic_ptr->size_x;
-  img_height = ref_pic_ptr->size_y;
-  width_pad  = ref_pic_ptr->size_x_pad;
-  height_pad = ref_pic_ptr->size_y_pad;
+  memset(p_UMHexSMP->SearchState[0], 0, (2 * dynamic_search_range + 1)*(2 * dynamic_search_range + 1));
 
-  if (apply_weights)
+  p_UMHexSMP->SearchState[dynamic_search_range][dynamic_search_range] = 1;
+  if( !p_Img->start_me_refinement_hp )
   {
-    weight_luma = wp_weight[list + list_offset][ref][0];
-    offset_luma = wp_offset[list + list_offset][ref][0];
-  }
+    cand.mv_x = mv->mv_x;
+    cand.mv_y = mv->mv_y;
+    mcost = mv_cost (p_Img, lambda_factor, &cand, pred_mv);
+    candWithPad = pad_MVs (cand, mv_block); //cand = pad_MVs (cand, mv_block);
 
-  if (ChromaMEEnable)
-  {
-    ref_pic_sub.crcb[0] = ref_pic_ptr->imgUV_sub[0];
-    ref_pic_sub.crcb[1] = ref_pic_ptr->imgUV_sub[1];
-    width_pad_cr  = ref_pic_ptr->size_x_cr_pad;
-    height_pad_cr = ref_pic_ptr->size_y_cr_pad;
-
-    if (apply_weights)
-    {
-      weight_cr[0] = wp_weight[list + list_offset][ref][1];
-      weight_cr[1] = wp_weight[list + list_offset][ref][2];
-      offset_cr[0] = wp_offset[list + list_offset][ref][1];
-      offset_cr[1] = wp_offset[list + list_offset][ref][2];
-    }
-  }
-
-  dynamic_search_range = 3;
-  pred_frac_mv_x = (pred_mv->mv_x - mv->mv_x) % 4;
-  pred_frac_mv_y = (pred_mv->mv_y - mv->mv_y) % 4;
-
-  pred_frac_up_mv_x = (smpUMHEX_pred_MV_uplayer_X - mv->mv_x) % 4;
-  pred_frac_up_mv_y = (smpUMHEX_pred_MV_uplayer_Y - mv->mv_y) % 4;
-
-  memset(smpUMHEX_SearchState[0], 0,
-    (2*dynamic_search_range+1)*(2*dynamic_search_range+1));
-
-  smpUMHEX_SearchState[dynamic_search_range][dynamic_search_range] = 1;
-  if( !start_me_refinement_hp )
-  {
-    cand_mv_x = mv->mv_x;
-    cand_mv_y = mv->mv_y;
-    mcost   = MV_COST (lambda_factor, mv_shift, cand_mv_x, cand_mv_y, pred_mv->mv_x, pred_mv->mv_y);
-    mcost   += computeUniPred[dist_method]( orig_pic, blocksize_y, blocksize_x,
-      min_mcost - mcost, cand_mv_x + pic4_pix_x, cand_mv_y + pic4_pix_y);
+    mcost   += mv_block->computePredQPel( ref_picture, mv_block, min_mcost - mcost, &candWithPad); //&cand);
     if (mcost < min_mcost)
     {
       min_mcost = mcost;
-      currmv_x  = cand_mv_x;
-      currmv_y  = cand_mv_y;
+      currmv = cand;
     }
   }
   else
   {
-    currmv_x = mv->mv_x;
-    currmv_y = mv->mv_y;
+    currmv = *mv;
   }
 
   // If the min_mcost is small enough and other statistics are positive,
@@ -686,27 +565,26 @@ smpUMHEXSubPelBlockMotionSearch  (
   if ( ((mv->mv_x) == 0) && ((mv->mv_y) == 0) &&
     (pred_frac_mv_x == 0 && pred_frac_up_mv_x == 0) &&
     (pred_frac_mv_y == 0 && pred_frac_up_mv_y == 0) &&
-    (min_mcost < (SubPelThreshold1>>block_type_shift_factor[blocktype])) )
+    (min_mcost < (p_UMHexSMP->SubPelThreshold1 >> block_type_shift_factor[blocktype])) )
   {
-    mv->mv_x = (short) currmv_x;
-    mv->mv_y = (short) currmv_y;
+    *mv = currmv;
     return min_mcost;
   }
 
   if(pred_frac_mv_x || pred_frac_mv_y)
   {
-    cand_mv_x = mv->mv_x + pred_frac_mv_x;
-    cand_mv_y = mv->mv_y + pred_frac_mv_y;
-    mcost   = MV_COST (lambda_factor, mv_shift, cand_mv_x, cand_mv_y, pred_mv->mv_x, pred_mv->mv_y);
-    mcost   += computeUniPred[dist_method]( orig_pic, blocksize_y, blocksize_x,
-      min_mcost - mcost, cand_mv_x + pic4_pix_x, cand_mv_y + pic4_pix_y);
+    cand.mv_x = (short) (mv->mv_x + pred_frac_mv_x);
+    cand.mv_y = (short) (mv->mv_y + pred_frac_mv_y);
+    p_UMHexSMP->SearchState[cand.mv_y -mv->mv_y + dynamic_search_range][cand.mv_x - mv->mv_x + dynamic_search_range] = 1;
+    mcost = mv_cost (p_Img, lambda_factor, &cand, pred_mv);
 
-    smpUMHEX_SearchState[cand_mv_y -mv->mv_y + dynamic_search_range][cand_mv_x - mv->mv_x + dynamic_search_range] = 1;
+    candWithPad = pad_MVs (cand, mv_block); //cand = pad_MVs (cand, mv_block);
+    mcost   += mv_block->computePredQPel( ref_picture, mv_block, min_mcost - mcost, &candWithPad); //&cand);
+
     if (mcost < min_mcost)
     {
       min_mcost = mcost;
-      currmv_x  = cand_mv_x;
-      currmv_y  = cand_mv_y;
+      currmv = cand;
     }
   }
 
@@ -715,34 +593,30 @@ smpUMHEXSubPelBlockMotionSearch  (
   {
     abort_search = 1;
 
-    iXMinNow = currmv_x;
-    iYMinNow = currmv_y;
+    iMinNow = currmv;
+
     for (m = 0; m < 4; m++)
     {
-      cand_mv_x = iXMinNow + Diamond_X[m];
-      cand_mv_y = iYMinNow + Diamond_Y[m];
+      cand.mv_x = iMinNow.mv_x + Diamond_SubPelSearch[m].mv_x; //Diamond[m].mv_x;
+      cand.mv_y = iMinNow.mv_y + Diamond_SubPelSearch[m].mv_y; //Diamond[m].mv_y;
 
-      if(iabs(cand_mv_x - mv->mv_x) <= dynamic_search_range && iabs(cand_mv_y - mv->mv_y) <= dynamic_search_range)
+      if(iabs(cand.mv_x - mv->mv_x) <= dynamic_search_range && iabs(cand.mv_y - mv->mv_y)  <= dynamic_search_range)
       {
-        if(!smpUMHEX_SearchState[cand_mv_y - mv->mv_y + dynamic_search_range][cand_mv_x - mv->mv_x + dynamic_search_range])
+        if(!p_UMHexSMP->SearchState[cand.mv_y - mv->mv_y + dynamic_search_range][cand.mv_x - mv->mv_x + dynamic_search_range])
         {
-          mcost = MV_COST (lambda_factor, mv_shift, cand_mv_x, cand_mv_y, pred_mv->mv_x, pred_mv->mv_y);
-          mcost += computeUniPred[dist_method]( orig_pic, blocksize_y, blocksize_x,
-            min_mcost - mcost, cand_mv_x + pic4_pix_x, cand_mv_y + pic4_pix_y);
-
-          smpUMHEX_SearchState[cand_mv_y - mv->mv_y + dynamic_search_range][cand_mv_x - mv->mv_x + dynamic_search_range] = 1;
-
+          p_UMHexSMP->SearchState[cand.mv_y - mv->mv_y + dynamic_search_range][cand.mv_x - mv->mv_x + dynamic_search_range] = 1;
+          mcost = mv_cost (p_Img, lambda_factor, &cand, pred_mv);
+          candWithPad = pad_MVs (cand, mv_block); //cand = pad_MVs (cand, mv_block);
+          mcost += mv_block->computePredQPel( ref_picture, mv_block, min_mcost - mcost, &candWithPad); //&cand);
           if (mcost < min_mcost)
           {
             min_mcost    = mcost;
-            currmv_x     = cand_mv_x;
-            currmv_y     = cand_mv_y;
+            currmv = cand;
             abort_search = 0;
           }
-          if (min_mcost < (SubPelThreshold3>>block_type_shift_factor[blocktype]))
+          if (min_mcost < (p_UMHexSMP->SubPelThreshold3 >> block_type_shift_factor[blocktype]))
           {
-            mv->mv_x = (short) currmv_x;
-            mv->mv_y = (short) currmv_y;
+            *mv = currmv;
             return min_mcost;
           }
         }
@@ -755,38 +629,27 @@ smpUMHEXSubPelBlockMotionSearch  (
     }
   }
 
-  mv->mv_x = (short) currmv_x;
-  mv->mv_y = (short) currmv_y;
+  *mv = currmv;
+
+  //===== return minimum motion cost =====
   return min_mcost;
 }
 
 
 int                                                   //  ==> minimum motion cost after search
-smpUMHEXSubPelBlockME (imgpel*   orig_pic,      // <--  original pixel values for the AxB block
-                    short     ref,           // <--  reference frame (0... or -1 (backward))
-                    int       list,
-                    int       list_offset,   // <--  MBAFF list offset
-                    int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
-                    int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
-                    int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
-                    MotionVector *pred_mv,    // <--  motion vector predictor (x|y) in sub-pel units
-                    MotionVector *mv,         // <--> in: search center (x|y) / out: motion vector (x|y) - in sub-pel units
-                    int       search_pos2,   // <--  search positions for    half-pel search  (default: 9)
-                    int       search_pos4,   // <--  search positions for quarter-pel search  (default: 9)
-                    int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
-                    int*      lambda_factor,
-                    int       apply_weights
-                    )
+smpUMHEXSubPelBlockME (Macroblock *currMB,       // <--  current Macroblock
+                       MotionVector *pred_mv,    // <--  motion vector predictor (x|y) in sub-pel units
+                       MEBlock *mv_block, 
+                       int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
+                       int*      lambda_factor                       )
 {  
-  if(blocktype > 1)
+  if(mv_block->blocktype > 1)
   {
-    min_mcost =  smpUMHEXSubPelBlockMotionSearch (orig_pic, ref, list, list_offset, pic_pix_x, pic_pix_y,
-      blocktype, pred_mv, mv, 9, 9, min_mcost, lambda_factor[Q_PEL], apply_weights);
+    min_mcost =  smpUMHEXSubPelBlockMotionSearch (currMB, pred_mv, mv_block, min_mcost, lambda_factor[Q_PEL]);
   }
   else
   {
-    min_mcost =  smpUMHEXFullSubPelBlockMotionSearch (orig_pic, ref, list, list_offset, pic_pix_x, pic_pix_y,
-      blocktype, pred_mv, mv, 9, 9, min_mcost, lambda_factor[Q_PEL], apply_weights);
+    min_mcost =  smpUMHEXFullSubPelBlockMotionSearch (currMB, pred_mv, mv_block, min_mcost, lambda_factor[Q_PEL]);
   }
 
   return min_mcost;
@@ -799,201 +662,136 @@ smpUMHEXSubPelBlockME (imgpel*   orig_pic,      // <--  original pixel values fo
  *
  ************************************************************************
  */
-int                                                           //  ==> minimum motion cost after search
-smpUMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB, // <--  current Macroblock
-                                           imgpel* cur_pic,   // <--  original pixel values for the AxB block
-                                           short     ref,           // <--  reference frame (0... or -1 (backward))
+int                                                                 //  ==> minimum motion cost after search
+smpUMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  current Macroblock
                                            int       list,          // <--  Current reference list
-                                           char   ***refPic,        // <--  reference array
-                                           short ****tmp_mv,        // <--  mv array
-                                           int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
-                                           int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
-                                           int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
-                                           MotionVector *pred_mv1,   // <--  motion vector predictor (x|y) in sub-pel units
-                                           MotionVector *pred_mv2,   // <--  motion vector predictor (x|y) in sub-pel units
-                                           MotionVector *mv1,         // <--> in: search center (x|y) / out: motion vector (x|y) - in pel units
+                                           MotionVector *pred_mv1,  // <--  motion vector predictor (x|y) in sub-pel units
+                                           MotionVector *pred_mv2,  // <--  motion vector predictor (x|y) in sub-pel units
+                                           MotionVector *mv1,       // <--> in: search center (x|y) / out: motion vector (x|y) - in pel units
                                            MotionVector *mv2,       // <--> in: search center (x|y) 
+                                           MEBlock *mv_block,       // <--  motion vector information
                                            int       search_range,  // <--  1-d search range in pel units
                                            int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
-                                           int       iteration_no,  // <--  bi pred iteration number
-                                           int       lambda_factor, // <--  lagrangian parameter for determining motion cost
-                                           int       apply_weights
+                                           int       lambda_factor  // <--  lagrangian parameter for determining motion cost
                                            )
 {
-  int   mvshift       = 2;                              // motion vector shift for getting sub-pel units
+  ImageParameters *p_Img = currMB->p_Img;
+  UMHexSMPStruct *p_UMHexSMP = p_Img->p_UMHexSMP;
 
-  int   search_step, iYMinNow, iXMinNow;
+  int   search_step;
   int   i, m;
-  int   cand_x, cand_y, mcost;
-  int   blocksize_y   = params->blc_size[blocktype][1];  // vertical block size
-  int   blocksize_x   = params->blc_size[blocktype][0];  // horizontal block size
-  int   pred_x1       = (pic_pix_x << 2) + pred_mv1->mv_x;  // predicted position x (in sub-pel units)
-  int   pred_y1       = (pic_pix_y << 2) + pred_mv1->mv_y;  // predicted position y (in sub-pel units)
-  int   pred_x2       = (pic_pix_x << 2) + pred_mv2->mv_x;  // predicted position x (in sub-pel units)
-  int   pred_y2       = (pic_pix_y << 2) + pred_mv2->mv_y;  // predicted position y (in sub-pel units)
-  short center2_x     = pic_pix_x + mv1->mv_x;            // center position x (in pel units)
-  short center2_y     = pic_pix_y + mv1->mv_y;            // center position y (in pel units)
-  short center1_x     = pic_pix_x + mv2->mv_x;            // mvx of second pred (in pel units)
-  short center1_y     = pic_pix_y + mv2->mv_y;            // mvy of second pred (in pel units)
-  int   best_x        = center2_x;
-  int   best_y        = center2_y;
+  int   mcost;
+  short blocktype     = mv_block->blocktype;
 
-  short offset1 = (apply_weights ? (list == 0?  wp_offset[currMB->list_offset    ][ref][0]:  wp_offset[currMB->list_offset + 1][0  ][ref]) : 0);
-  short offset2 = (apply_weights ? (list == 0?  wp_offset[currMB->list_offset + 1][ref][0]:  wp_offset[currMB->list_offset    ][0  ][ref]) : 0);
+  short pic_pix_x     = mv_block->pos_x_padded;
+  short pic_pix_y     = mv_block->pos_y_padded;
+  short ref = mv_block->ref_idx;
 
-  ref_pic1_sub.luma = listX[list + currMB->list_offset][ref]->p_curr_img_sub;
-  ref_pic2_sub.luma = listX[list == 0 ? 1 + currMB->list_offset: currMB->list_offset][ 0 ]->p_curr_img_sub;
+  StorablePicture *ref_picture1 = p_Img->listX[list + currMB->list_offset][ref];
+  StorablePicture *ref_picture2 = p_Img->listX[list == 0 ? 1 + currMB->list_offset: currMB->list_offset][ 0 ];  
 
-  img_width  = listX[list + currMB->list_offset][ref]->size_x;
-  img_height = listX[list + currMB->list_offset][ref]->size_y;
-  width_pad  = listX[list + currMB->list_offset][ref]->size_x_pad;
-  height_pad = listX[list + currMB->list_offset][ref]->size_y_pad;
+  MotionVector iMinNow, best, cand, pred1, pred2, center1, center2;
+  search_range >>= 2;
 
-  if (apply_weights)
-  {
-    weight1 = list == 0 ? wbp_weight[currMB->list_offset         ][ref][0][0] : wbp_weight[currMB->list_offset + LIST_1][0  ][ref][0];
-    weight2 = list == 0 ? wbp_weight[currMB->list_offset + LIST_1][ref][0][0] : wbp_weight[currMB->list_offset         ][0  ][ref][0];
-    offsetBi=(offset1 + offset2 + 1)>>1;
-    computeBiPred = computeBiPredSAD2; //ME only supports SAD computations
-  }
-  else
-  {
-    weight1 = 1<<luma_log_weight_denom;
-    weight2 = 1<<luma_log_weight_denom;
-    offsetBi = 0;
-    computeBiPred = computeBiPredSAD1; //ME only supports SAD computations
-  }
+  pred1.mv_x       = mv_block->pos_x_padded + pred_mv1->mv_x;  // predicted position x (in sub-pel units)
+  pred1.mv_y       = mv_block->pos_y_padded + pred_mv1->mv_y;  // predicted position y (in sub-pel units)
+  pred2.mv_x       = mv_block->pos_x_padded + pred_mv2->mv_x;  // predicted position x (in sub-pel units)
+  pred2.mv_y       = mv_block->pos_y_padded + pred_mv2->mv_y;  // predicted position y (in sub-pel units)
+  
+  center2.mv_x     = mv_block->pos_x_padded + mv1->mv_x;            // center position x (in pel units)
+  center2.mv_y     = mv_block->pos_y_padded + mv1->mv_y;                   // center position y (in pel units)
+  center1.mv_x     = mv_block->pos_x_padded + mv2->mv_x;            // mvx of second pred (in pel units)
+  center1.mv_y     = mv_block->pos_y_padded + mv2->mv_y;            // mvy of second pred (in pel units)
 
-  if (ChromaMEEnable )
-  {
-    ref_pic1_sub.crcb[0] = listX[list + currMB->list_offset][ref]->imgUV_sub[0];
-    ref_pic1_sub.crcb[1] = listX[list + currMB->list_offset][ref]->imgUV_sub[1];
-    ref_pic2_sub.crcb[0] = listX[list == 0 ? 1 + currMB->list_offset: currMB->list_offset][ 0 ]->imgUV_sub[0];
-    ref_pic2_sub.crcb[1] = listX[list == 0 ? 1 + currMB->list_offset: currMB->list_offset][ 0 ]->imgUV_sub[1];
-    width_pad_cr  = listX[list + currMB->list_offset][ref]->size_x_cr_pad;
-    height_pad_cr = listX[list + currMB->list_offset][ref]->size_y_cr_pad;
-    if (apply_weights)
-    {
-      weight1_cr[0] = list == 0 ? wbp_weight[currMB->list_offset         ][ref][0][1] : wbp_weight[currMB->list_offset + LIST_1][0  ][ref][1];
-      weight1_cr[1] = list == 0 ? wbp_weight[currMB->list_offset         ][ref][0][2] : wbp_weight[currMB->list_offset + LIST_1][0  ][ref][2];
-      weight2_cr[0] = list == 0 ? wbp_weight[currMB->list_offset + LIST_1][ref][0][1] : wbp_weight[currMB->list_offset         ][0  ][ref][1];
-      weight2_cr[1] = list == 0 ? wbp_weight[currMB->list_offset + LIST_1][ref][0][2] : wbp_weight[currMB->list_offset         ][0  ][ref][2];
-      offsetBi_cr[0] = (list == 0)
-        ? (wp_offset[currMB->list_offset         ][ref][1] + wp_offset[currMB->list_offset + LIST_1][ref][1] + 1) >> 1
-        : (wp_offset[currMB->list_offset + LIST_1][0  ][1] + wp_offset[currMB->list_offset         ][0  ][1] + 1) >> 1;
-      offsetBi_cr[1] = (list == 0)
-        ? (wp_offset[currMB->list_offset         ][ref][2] + wp_offset[currMB->list_offset + LIST_1][ref][2] + 1) >> 1
-        : (wp_offset[currMB->list_offset + LIST_1][0  ][2] + wp_offset[currMB->list_offset         ][0  ][2] + 1) >> 1;
-    }
-    else
-    {
-      weight1_cr[0] = 1<<chroma_log_weight_denom;
-      weight1_cr[1] = 1<<chroma_log_weight_denom;
-      weight2_cr[0] = 1<<chroma_log_weight_denom;
-      weight2_cr[1] = 1<<chroma_log_weight_denom;
-      offsetBi_cr[0] = 0;
-      offsetBi_cr[1] = 0;
-    }
-  }
+  //check the center median predictor
+  best = cand = center2;
+  mcost  = mv_cost (p_Img, lambda_factor, &center1, &pred1);
+  mcost += mv_cost (p_Img, lambda_factor, &cand, &pred2);
 
-  // Check the center median predictor
-  cand_x = center2_x ;
-  cand_y = center2_y ;
-  mcost  = MV_COST (lambda_factor, mvshift, center1_x, center1_y, pred_x1, pred_y1);
-  mcost += MV_COST (lambda_factor, mvshift, cand_x,    cand_y,    pred_x2, pred_y2);
-
-  mcost += computeBiPred(cur_pic,
-                        blocksize_y, blocksize_x, INT_MAX,
-                        (center1_x << 2) + IMG_PAD_SIZE_TIMES4,
-                        (center1_y << 2) + IMG_PAD_SIZE_TIMES4,
-                        (cand_x << 2) + IMG_PAD_SIZE_TIMES4,
-                        (cand_y << 2) + IMG_PAD_SIZE_TIMES4);
+  mcost += mv_block->computeBiPredFPel(ref_picture1, ref_picture2, mv_block,
+                        INT_MAX, &center1, &cand);
 
   if (mcost < min_mcost)
   {
     min_mcost = mcost;
-    best_x = cand_x;
-    best_y = cand_y;
+    best = cand;
   }
 
-  iXMinNow = best_x;
-  iYMinNow = best_y;
+  iMinNow = best;
   if (0 != pred_mv1->mv_x || 0 != pred_mv1->mv_y || 0 != pred_mv2->mv_x || 0 != pred_mv2->mv_y)
   {
-    cand_x = pic_pix_x;
-    cand_y = pic_pix_y;
-    SEARCH_ONE_PIXEL_BIPRED_HELPER;
+    cand.mv_x = pic_pix_x;
+    cand.mv_y = pic_pix_y;
+    SEARCH_ONE_PIXEL_BIPRED;
   }
 
   // If the min_mcost is small enough, do a local search then terminate
   // This is good for stationary or quasi-stationary areas
-  if ((min_mcost<<3) < (ConvergeThreshold>>(block_type_shift_factor[blocktype])))
+  if ((min_mcost<<3) < (p_UMHexSMP->ConvergeThreshold >> (block_type_shift_factor[blocktype])))
   {
     for (m = 0; m < 4; m++)
     {
-      cand_x = iXMinNow + Diamond_X[m];
-      cand_y = iYMinNow + Diamond_Y[m];
-      SEARCH_ONE_PIXEL_BIPRED_HELPER;
+      cand.mv_x = iMinNow.mv_x + Diamond[m].mv_x;
+      cand.mv_y = iMinNow.mv_y + Diamond[m].mv_y;
+      SEARCH_ONE_PIXEL_BIPRED;
     }
-    mv1->mv_x = best_x - pic_pix_x;
-    mv1->mv_y = best_y - pic_pix_y;
+
+    mv1->mv_x = (short) (best.mv_x - pic_pix_x);
+    mv1->mv_y = (short) (best.mv_y - pic_pix_y);
     return min_mcost;
   }
 
   // Small local search
   for (m = 0; m < 4; m++)
   {
-    cand_x = iXMinNow + Diamond_X[m];
-    cand_y = iYMinNow + Diamond_Y[m];
-    SEARCH_ONE_PIXEL_BIPRED_HELPER;
+    cand.mv_x = iMinNow.mv_x + Diamond[m].mv_x;
+    cand.mv_y = iMinNow.mv_y + Diamond[m].mv_y;
+    SEARCH_ONE_PIXEL_BIPRED;
   }
 
   // First_step: Symmetrical-cross search
   // If distortion is large, use large shapes. Otherwise, compact shapes are faster
   if ((blocktype == 1 &&
-    (min_mcost<<2) > (SymmetricalCrossSearchThreshold1>>block_type_shift_factor[blocktype])) ||
-    ((min_mcost<<2) > (SymmetricalCrossSearchThreshold2>>block_type_shift_factor[blocktype])))
+    (min_mcost<<2) > (p_UMHexSMP->SymmetricalCrossSearchThreshold1 >> block_type_shift_factor[blocktype])) ||
+    ((min_mcost<<2) > (p_UMHexSMP->SymmetricalCrossSearchThreshold2>>block_type_shift_factor[blocktype])))
   {
-    iXMinNow = best_x;
-    iYMinNow = best_y;
+    iMinNow.mv_x = best.mv_x;
+    iMinNow.mv_y = best.mv_y;
 
-    for (i = 1; i <= search_range / 2; i++)
+    for (i = 8; i <= 4 * search_range; i+= 8)
     {
-      search_step = (i<<1) - 1;
-      cand_x = iXMinNow + search_step;
-      cand_y = iYMinNow;
-      SEARCH_ONE_PIXEL_BIPRED_HELPER
+      search_step = i - 4;
+      cand.mv_x = (short) (iMinNow.mv_x + search_step);
+      cand.mv_y = iMinNow.mv_y;
+      SEARCH_ONE_PIXEL_BIPRED;
+      cand.mv_x = (short) (iMinNow.mv_x - search_step);
+      SEARCH_ONE_PIXEL_BIPRED;
 
-      cand_x = iXMinNow - search_step;
-      SEARCH_ONE_PIXEL_BIPRED_HELPER
-
-      cand_x = iXMinNow;
-      cand_y = iYMinNow + search_step;
-      SEARCH_ONE_PIXEL_BIPRED_HELPER
-
-      cand_y = iYMinNow - search_step;
-      SEARCH_ONE_PIXEL_BIPRED_HELPER
+      cand.mv_x = iMinNow.mv_x;
+      cand.mv_y = (short) (iMinNow.mv_y + search_step);
+      SEARCH_ONE_PIXEL_BIPRED;
+      cand.mv_y = (short) (iMinNow.mv_y - search_step);
+      SEARCH_ONE_PIXEL_BIPRED;
     }
 
     // Hexagon Search
-    iXMinNow = best_x;
-    iYMinNow = best_y;
+    iMinNow.mv_x = best.mv_x;
+    iMinNow.mv_y = best.mv_y;
     for (m = 0; m < 6; m++)
     {
-      cand_x = iXMinNow + Hexagon_X[m];
-      cand_y = iYMinNow + Hexagon_Y[m];
-      SEARCH_ONE_PIXEL_BIPRED_HELPER
+      cand.mv_x = iMinNow.mv_x + Hexagon[m].mv_x;
+      cand.mv_y = iMinNow.mv_y + Hexagon[m].mv_y;
+      SEARCH_ONE_PIXEL_BIPRED;
     }
     // Multi Big Hexagon Search
-    iXMinNow = best_x;
-    iYMinNow = best_y;
+    iMinNow = best;
     for(i = 1; i <= search_range / 4; i++)
     {
       for (m = 0; m < 16; m++)
       {
-        cand_x = iXMinNow + Big_Hexagon_X[m] * i;
-        cand_y = iYMinNow + Big_Hexagon_Y[m] * i;
-        SEARCH_ONE_PIXEL_BIPRED_HELPER
+        cand.mv_x = (short) (iMinNow.mv_x + Big_Hexagon_X[m] * i);
+        cand.mv_y = (short) (iMinNow.mv_y + Big_Hexagon_Y[m] * i);
+        SEARCH_ONE_PIXEL_BIPRED;
       }
     }
   }
@@ -1001,58 +799,55 @@ smpUMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB, // <--  current M
   // Search up_layer predictor for non 16x16 blocks
   if (blocktype > 1)
   {
-    cand_x = pic_pix_x + (smpUMHEX_pred_MV_uplayer_X / 4);
-    cand_y = pic_pix_y + (smpUMHEX_pred_MV_uplayer_Y / 4);
-    SEARCH_ONE_PIXEL_BIPRED_HELPER
+    cand.mv_x = pic_pix_x + (p_UMHexSMP->pred_MV_uplayer_X / 4) * 4;
+    cand.mv_y = pic_pix_y + (p_UMHexSMP->pred_MV_uplayer_Y / 4) * 4;
+    SEARCH_ONE_PIXEL_BIPRED;
   }
 
-  if(center2_x != pic_pix_x || center2_y != pic_pix_y)
+  if(center2.mv_x != pic_pix_x || center2.mv_x != pic_pix_y)
   {
-    cand_x = pic_pix_x;
-    cand_y = pic_pix_y;
-    SEARCH_ONE_PIXEL_BIPRED_HELPER
+    cand.mv_x = pic_pix_x;
+    cand.mv_y = pic_pix_y;
+    SEARCH_ONE_PIXEL_BIPRED;
 
-    iXMinNow = best_x;
-    iYMinNow = best_y;
+    iMinNow = best;
     // Local diamond search
     for (m = 0; m < 4; m++)
     {
-      cand_x = iXMinNow + Diamond_X[m];
-      cand_y = iYMinNow + Diamond_Y[m];
-      SEARCH_ONE_PIXEL_BIPRED_HELPER
+      cand.mv_x = iMinNow.mv_x + Diamond[m].mv_x;
+      cand.mv_y = iMinNow.mv_y + Diamond[m].mv_y;
+      SEARCH_ONE_PIXEL_BIPRED;
     }
   }
 
   // If the minimum cost is small enough, do a local search
   // and finish the search here
-  if ((min_mcost<<2) < (ConvergeThreshold>>block_type_shift_factor[blocktype]))
+  if ((min_mcost<<2) < (p_UMHexSMP->ConvergeThreshold >> block_type_shift_factor[blocktype]))
   {
-    iXMinNow = best_x;
-    iYMinNow = best_y;
+    iMinNow = best;
     for (m = 0; m < 4; m++)
     {
-      cand_x = iXMinNow + Diamond_X[m];
-      cand_y = iYMinNow + Diamond_Y[m];
-      SEARCH_ONE_PIXEL_BIPRED_HELPER
+      cand.mv_x = iMinNow.mv_x + Diamond[m].mv_x;
+      cand.mv_y = iMinNow.mv_y + Diamond[m].mv_y;
+      SEARCH_ONE_PIXEL_BIPRED;
     }
-    mv1->mv_x = (short) (best_x - pic_pix_x);
-    mv1->mv_y = (short) (best_y - pic_pix_y);
+    mv1->mv_x = (short) (best.mv_x - pic_pix_x);
+    mv1->mv_y = (short) (best.mv_y - pic_pix_y);
     return min_mcost;
   }
 
   // Second_step:  Extended Hexagon-based Search
   for (i = 0; i < search_range; i++)
   {
-    iXMinNow = best_x;
-    iYMinNow = best_y;
+    iMinNow = best;
     for (m = 0; m < 6; m++)
     {
-      cand_x = iXMinNow + Hexagon_X[m];
-      cand_y = iYMinNow + Hexagon_Y[m];
-      SEARCH_ONE_PIXEL_BIPRED_HELPER
+      cand.mv_x = iMinNow.mv_x + Hexagon[m].mv_x;
+      cand.mv_y = iMinNow.mv_y + Hexagon[m].mv_y;
+      SEARCH_ONE_PIXEL_BIPRED;
     }
     // The minimum cost point happens in the center
-    if (best_x == iXMinNow && best_y == iYMinNow)
+    if (best.mv_x == iMinNow.mv_x && best.mv_y == iMinNow.mv_y)
     {
       break;
     }
@@ -1061,24 +856,23 @@ smpUMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB, // <--  current M
   // Third_step: Small diamond search
   for (i = 0; i < search_range; i++)
   {
-    iXMinNow = best_x;
-    iYMinNow = best_y;
+    iMinNow = best;
     for (m = 0; m < 4; m++)
     {
-      cand_x = iXMinNow + Diamond_X[m];
-      cand_y = iYMinNow + Diamond_Y[m];
-      SEARCH_ONE_PIXEL_BIPRED_HELPER
+      cand.mv_x = iMinNow.mv_x + Diamond[m].mv_x;
+      cand.mv_y = iMinNow.mv_y + Diamond[m].mv_y;
+      SEARCH_ONE_PIXEL_BIPRED;
     }
 
     // The minimum cost point happens in the center
-    if (best_x == iXMinNow && best_y == iYMinNow)
+    if (best.mv_x == iMinNow.mv_x && best.mv_y == iMinNow.mv_y)
     {
       break;
     }
   }
 
-  mv1->mv_x = (short) (best_x - pic_pix_x);
-  mv1->mv_y = (short) (best_y - pic_pix_y);
+  mv1->mv_x = (short) (best.mv_x - pic_pix_x);
+  mv1->mv_y = (short) (best.mv_y - pic_pix_y);
   return min_mcost;
 }
 
@@ -1089,27 +883,31 @@ smpUMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB, // <--  current M
  *    used for fast motion estimation
  ************************************************************************
  */
-void smpUMHEX_decide_intrabk_SAD()
+void smpUMHEX_decide_intrabk_SAD(Macroblock *currMB)
 {
-  if (img->type != I_SLICE)
+  Slice *currSlice = currMB->p_slice;
+  ImageParameters *p_Img = currMB->p_Img;
+  UMHexSMPStruct *p_UMHexSMP = p_Img->p_UMHexSMP;
+
+  if (currSlice->slice_type != I_SLICE)
   {
-    if (img->pix_x == 0 && img->pix_y == 0)
+    if (currMB->pix_x == 0 && currMB->pix_y == 0)
     {
-      smpUMHEX_flag_intra_SAD = 0;
+      p_UMHexSMP->flag_intra_SAD = 0;
     }
-    else if (img->pix_x == 0)
+    else if (currMB->pix_x == 0)
     {
-      smpUMHEX_flag_intra_SAD = smpUMHEX_flag_intra[(img->pix_x)>>4];
+      p_UMHexSMP->flag_intra_SAD = p_UMHexSMP->flag_intra[(currMB->pix_x)>>4];
     }
-    else if (img->pix_y == 0)
+    else if (currMB->pix_y == 0)
     {
-      smpUMHEX_flag_intra_SAD = smpUMHEX_flag_intra[((img->pix_x)>>4)-1];
+      p_UMHexSMP->flag_intra_SAD = p_UMHexSMP->flag_intra[((currMB->pix_x)>>4)-1];
     }
     else
     {
-      smpUMHEX_flag_intra_SAD = ((smpUMHEX_flag_intra[(img->pix_x)>>4])||
-        (smpUMHEX_flag_intra[((img->pix_x)>>4)-1])||
-        (smpUMHEX_flag_intra[((img->pix_x)>>4)+1])) ;
+      p_UMHexSMP->flag_intra_SAD = ((p_UMHexSMP->flag_intra[(currMB->pix_x)>>4])||
+        (p_UMHexSMP->flag_intra[((currMB->pix_x)>>4)-1])||
+        (p_UMHexSMP->flag_intra[((currMB->pix_x)>>4)+1])) ;
     }
   }
   return;
@@ -1122,25 +920,28 @@ void smpUMHEX_decide_intrabk_SAD()
  *    used for fast motion estimation
  ************************************************************************
  */
-void smpUMHEX_skip_intrabk_SAD(int best_mode, int ref_max)
+void smpUMHEX_skip_intrabk_SAD(Macroblock *currMB)
 {
   short i, j, k;
+  ImageParameters *p_Img = currMB->p_Img;
+  Slice *currSlice = currMB->p_slice;
+  UMHexSMPStruct *p_UMHexSMP = p_Img->p_UMHexSMP;
 
-  if (img->number > 0)
+  if (p_Img->number > 0)
   {
-    smpUMHEX_flag_intra[(img->pix_x)>>4] = (best_mode == 9 || best_mode == 10) ? 1 : 0;
+    p_UMHexSMP->flag_intra[(currMB->pix_x)>>4] = (currMB->best_mode == 9 || currMB->best_mode == 10) ? 1 : 0;
   }
 
-  if (img->type != I_SLICE  && (best_mode == 9 || best_mode == 10))
+  if (currSlice->slice_type != I_SLICE  && (currMB->best_mode == 9 || currMB->best_mode == 10))
   {
-    for (i=0; i < 4; i++)
+    for (k=0; k < 9;k++)
     {
       for (j=0; j < 4; j++)
       {
-        for (k=0; k < 9;k++)
+        for (i=0; i < 4; i++)
         {
-          smpUMHEX_l0_cost[k][j][i] = 0;
-          smpUMHEX_l1_cost[k][j][i] = 0;
+          p_UMHexSMP->l0_cost[k][j][i] = 0;
+          p_UMHexSMP->l1_cost[k][j][i] = 0;
         }
       }
     }
@@ -1155,66 +956,70 @@ void smpUMHEX_skip_intrabk_SAD(int best_mode, int ref_max)
  *    used for fast motion estimation
  ************************************************************************
  */
-void smpUMHEX_setup(short ref,
-                          int list,
-                          int block_y,
-                          int block_x,
-                          int blocktype,
-                          short ******all_mv)
+void smpUMHEX_setup(Macroblock *currMB,
+                    short ref,
+                    int list,
+                    int block_y,
+                    int block_x,
+                    int blocktype,
+                    short ******all_mv)
 {
+  ImageParameters *p_Img = currMB->p_Img;
+  UMHexSMPStruct *p_UMHexSMP = p_Img->p_UMHexSMP;
+
   if (blocktype > 6)
   {
-    smpUMHEX_pred_MV_uplayer_X = all_mv[list][ref][5][block_y][block_x][0];
-    smpUMHEX_pred_MV_uplayer_Y = all_mv[list][ref][5][block_y][block_x][1];
+    p_UMHexSMP->pred_MV_uplayer_X = all_mv[list][ref][5][block_y][block_x][0];
+    p_UMHexSMP->pred_MV_uplayer_Y = all_mv[list][ref][5][block_y][block_x][1];
   }
   else if (blocktype > 4)
   {
-    smpUMHEX_pred_MV_uplayer_X = all_mv[list][ref][4][block_y][block_x][0];
-    smpUMHEX_pred_MV_uplayer_Y = all_mv[list][ref][4][block_y][block_x][1];
+    p_UMHexSMP->pred_MV_uplayer_X = all_mv[list][ref][4][block_y][block_x][0];
+    p_UMHexSMP->pred_MV_uplayer_Y = all_mv[list][ref][4][block_y][block_x][1];
   }
   else if (blocktype == 4)
   {
-    smpUMHEX_pred_MV_uplayer_X = all_mv[list][ref][2][block_y][block_x][0];
-    smpUMHEX_pred_MV_uplayer_Y = all_mv[list][ref][2][block_y][block_x][1];
+    p_UMHexSMP->pred_MV_uplayer_X = all_mv[list][ref][2][block_y][block_x][0];
+    p_UMHexSMP->pred_MV_uplayer_Y = all_mv[list][ref][2][block_y][block_x][1];
   }
   else if (blocktype > 1)
   {
-    smpUMHEX_pred_MV_uplayer_X = all_mv[list][ref][1][block_y][block_x][0];
-    smpUMHEX_pred_MV_uplayer_Y = all_mv[list][ref][1][block_y][block_x][1];
+    p_UMHexSMP->pred_MV_uplayer_X = all_mv[list][ref][1][block_y][block_x][0];
+    p_UMHexSMP->pred_MV_uplayer_Y = all_mv[list][ref][1][block_y][block_x][1];
   }
 
   if (blocktype > 1)
   {
     if (blocktype > 6)
     {
-      smpUMHEX_pred_SAD_uplayer = (list==1) ?
-        (smpUMHEX_l1_cost[5][(img->pix_y>>2)+block_y][(img->pix_x>>2)+block_x])
-        : (smpUMHEX_l0_cost[5][(img->pix_y>>2)+block_y][(img->pix_x>>2)+block_x]);
-      smpUMHEX_pred_SAD_uplayer /= 2;
+      p_UMHexSMP->pred_SAD_uplayer = (list==1) ?
+        (p_UMHexSMP->l1_cost[5][(currMB->block_y)+block_y][(currMB->block_x)+block_x])
+        : (p_UMHexSMP->l0_cost[5][(currMB->block_y)+block_y][(currMB->block_x)+block_x]);
+      p_UMHexSMP->pred_SAD_uplayer /= 2;
     }
     else if (blocktype > 4)
     {
-      smpUMHEX_pred_SAD_uplayer = (list==1) ?
-        (smpUMHEX_l1_cost[4][(img->pix_y>>2)+block_y][(img->pix_x>>2)+block_x])
-        : (smpUMHEX_l0_cost[4][(img->pix_y>>2)+block_y][(img->pix_x>>2)+block_x]);
-      smpUMHEX_pred_SAD_uplayer /= 2;
+      p_UMHexSMP->pred_SAD_uplayer = (list==1) ?
+        (p_UMHexSMP->l1_cost[4][(currMB->block_y)+block_y][(currMB->block_x)+block_x])
+        : (p_UMHexSMP->l0_cost[4][(currMB->block_y)+block_y][(currMB->block_x)+block_x]);
+      p_UMHexSMP->pred_SAD_uplayer /= 2;
     }
     else if (blocktype == 4)
     {
-      smpUMHEX_pred_SAD_uplayer = (list==1) ?
-        (smpUMHEX_l1_cost[2][(img->pix_y>>2)+block_y][(img->pix_x>>2)+block_x])
-        : (smpUMHEX_l0_cost[2][(img->pix_y>>2)+block_y][(img->pix_x>>2)+block_x]);
-      smpUMHEX_pred_SAD_uplayer /= 2;
+      p_UMHexSMP->pred_SAD_uplayer = (list==1) ?
+        (p_UMHexSMP->l1_cost[2][(currMB->block_y)+block_y][(currMB->block_x)+block_x])
+        : (p_UMHexSMP->l0_cost[2][(currMB->block_y)+block_y][(currMB->block_x)+block_x]);
+      p_UMHexSMP->pred_SAD_uplayer /= 2;
     }
     else
     {
-      smpUMHEX_pred_SAD_uplayer = (list==1) ?
-        (smpUMHEX_l1_cost[1][(img->pix_y>>2)+block_y][(img->pix_x>>2)+block_x])
-        : (smpUMHEX_l0_cost[1][(img->pix_y>>2)+block_y][(img->pix_x>>2)+block_x]);
-      smpUMHEX_pred_SAD_uplayer /= 2;
+      p_UMHexSMP->pred_SAD_uplayer = (list==1) ?
+        (p_UMHexSMP->l1_cost[1][(currMB->block_y)+block_y][(currMB->block_x)+block_x])
+        : (p_UMHexSMP->l0_cost[1][(currMB->block_y)+block_y][(currMB->block_x)+block_x]);
+      p_UMHexSMP->pred_SAD_uplayer /= 2;
     }
 
-    smpUMHEX_pred_SAD_uplayer = smpUMHEX_flag_intra_SAD ? 0 : smpUMHEX_pred_SAD_uplayer;
+    p_UMHexSMP->pred_SAD_uplayer = p_UMHexSMP->flag_intra_SAD ? 0 : p_UMHexSMP->pred_SAD_uplayer;
   }
 }
 

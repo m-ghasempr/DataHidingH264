@@ -34,18 +34,19 @@
  *
  ************************************************************************
  */
-int quant_dc2x2_around(int **tblock, int qp, int* DCLevel, int* DCRun, 
-                       int **fadjust, int levelscale, int invlevelscale, int leveloffset,
-                       const byte (*pos_scan)[2], int is_cavlc)
+int quant_dc2x2_around(Macroblock *currMB, int **tblock, int qp, int* DCLevel, int* DCRun, 
+                       LevelQuantParams *q_params_4x4, int **fadjust, const byte (*pos_scan)[2])
 {
-  static int coeff_ctr;
+  QuantParameters *p_Quant = currMB->p_Img->p_Quant;
+  Boolean is_cavlc = (currMB->p_slice->symbol_mode == CAVLC);
+  int coeff_ctr;
 
-  static int *m7;
-  static int scaled_coeff;
+  int *m7;
+  int scaled_coeff;
 
   int   level, run = 0;
   int   nonzero = FALSE;  
-  int   qp_per = qp_per_matrix[qp];
+  int   qp_per = p_Quant->qp_per_matrix[qp];
   int   q_bits = Q_BITS + qp_per + 1;
   //const byte *p_scan = &pos_scan[0][0];
   int*  DCL = &DCLevel[0];
@@ -54,14 +55,14 @@ int quant_dc2x2_around(int **tblock, int qp, int* DCLevel, int* DCRun,
   m7 = *tblock;
 
   // Quantization
-  for (coeff_ctr=0; coeff_ctr < 4; coeff_ctr++)
+  for (coeff_ctr=0; coeff_ctr < 4; ++coeff_ctr)
   {
-    // we need to update leveloffset to a 4x1 array that would contain offset info for 
+    // we need to update q_params_4x4->OffsetComp to a 4x1 array that would contain offset info for 
     // every 2x2 DC position
     if (*m7)
     {
-      scaled_coeff = iabs (*m7) * levelscale;
-      level = (scaled_coeff + (leveloffset << 1) ) >> q_bits;
+      scaled_coeff = iabs (*m7) * q_params_4x4->ScaleComp;
+      level = (scaled_coeff + (q_params_4x4->OffsetComp << 1) ) >> q_bits;
 
       if (level  != 0)
       {
@@ -70,7 +71,7 @@ int quant_dc2x2_around(int **tblock, int qp, int* DCLevel, int* DCRun,
 
         level = isignab(level, *m7);
 
-        *m7++ = ((level * invlevelscale) << qp_per);
+        *m7++ = ((level * q_params_4x4->InvScaleComp) << qp_per);
 
         *DCL++  = level;
         *DCR++  = run;
@@ -80,14 +81,14 @@ int quant_dc2x2_around(int **tblock, int qp, int* DCLevel, int* DCRun,
       }
       else
       {
-        run++;
+        ++run;
         *m7++ = 0;
       }
     }
     else
     {
-      run++;
-      m7++;
+      ++run;
+      ++m7;
     }
   }
 
@@ -107,25 +108,26 @@ int quant_dc2x2_around(int **tblock, int qp, int* DCLevel, int* DCRun,
  *
  ************************************************************************
  */
-int quant_dc4x2_around(int **tblock, int qp, int* DCLevel, int* DCRun, 
-                       int **fadjust, int levelscale, int invlevelscale, int leveloffset,
-                       const byte (*pos_scan)[2], int is_cavlc)
+int quant_dc4x2_around(Macroblock *currMB, int **tblock, int qp, int* DCLevel, int* DCRun, 
+                       LevelQuantParams *q_params_4x4, int **fadjust, const byte (*pos_scan)[2])
 {
-  static int i,j, coeff_ctr;
+  QuantParameters *p_Quant = currMB->p_Img->p_Quant;
+  Boolean is_cavlc = (currMB->p_slice->symbol_mode == CAVLC);
+  int i,j, coeff_ctr;
 
-  static int *m7;
-  static int scaled_coeff;
+  int *m7;
+  int scaled_coeff;
 
   int   level, run = 0;
   int   nonzero = FALSE;  
-  int   qp_per = qp_per_matrix[qp];
+  int   qp_per = p_Quant->qp_per_matrix[qp];
   int   q_bits = Q_BITS + qp_per + 1;
   const byte *p_scan = &pos_scan[0][0];
   int*  DCL = &DCLevel[0];
   int*  DCR = &DCRun[0];
 
   // Quantization
-  for (coeff_ctr = 0; coeff_ctr < 8; coeff_ctr++)
+  for (coeff_ctr = 0; coeff_ctr < 8; ++coeff_ctr)
   {
     j = *p_scan++;  // note that in this part, somehow coefficients were transposed from 2x4 to 4x2.
     i = *p_scan++;  
@@ -134,8 +136,8 @@ int quant_dc4x2_around(int **tblock, int qp, int* DCLevel, int* DCRun,
 
     if (*m7 != 0)
     {
-      scaled_coeff = iabs (*m7) * levelscale;
-      level = (scaled_coeff + (leveloffset << 1) ) >> q_bits;
+      scaled_coeff = iabs (*m7) * q_params_4x4->ScaleComp;
+      level = (scaled_coeff + (q_params_4x4->OffsetComp << 1) ) >> q_bits;
 
       if (level  != 0)
       {
@@ -143,7 +145,7 @@ int quant_dc4x2_around(int **tblock, int qp, int* DCLevel, int* DCRun,
           level = imin(level, CAVLC_LEVEL_LIMIT);
         level = isignab(level, *m7);
 
-        *m7 = ((level * invlevelscale) << qp_per);
+        *m7 = ((level * q_params_4x4->InvScaleComp) << qp_per);
 
         *DCL++  = level;
         *DCR++  = run;
@@ -153,13 +155,13 @@ int quant_dc4x2_around(int **tblock, int qp, int* DCLevel, int* DCRun,
       }
       else
       {
-        run++;
+        ++run;
         *m7 = 0;
       }
     }
     else
     {
-      run++;
+      ++run;
     }
   }
 

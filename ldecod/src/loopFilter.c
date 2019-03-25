@@ -25,14 +25,6 @@
 #include "mb_access.h"
 #include "loopfilter.h"
 
-byte mixedModeEdgeFlag, fieldModeFilteringFlag;
-
-static int64  **list0_refPicIdArr, **list1_refPicIdArr;
-static short  ***list0_mv, ***list1_mv;
-static char   **list0_refIdxArr, **list1_refIdxArr;
-static Macroblock *MbP;
-static imgpel   *SrcPtrP, *SrcPtrQ;
-
 /*********************************************************************************************************/
 
 // NOTE: In principle, the alpha and beta tables are calculated with the formulas below
@@ -69,16 +61,14 @@ static const char chroma_edge[2][4][4] = //[dir][edge][yuv_format]
 
 static const int pelnum_cr[2][4] =  {{0,8,16,16}, {0,8, 8,16}};  //[dir:0=vert, 1=hor.][yuv_format]
 
-void (*GetStrength)    (byte Strength[16],ImageParameters *img, Macroblock *MbQ, int dir,int edge, int mvlimit,StorablePicture *p);
-void GetStrengthNormal (byte Strength[16],ImageParameters *img, Macroblock *MbQ, int dir,int edge, int mvlimit,StorablePicture *p);
-void GetStrengthMBAff  (byte Strength[16],ImageParameters *img, Macroblock *MbQ, int dir,int edge, int mvlimit,StorablePicture *p);
-void (*EdgeLoopLuma)   (ColorPlane pl, imgpel** Img, byte Strength[16],ImageParameters *img, Macroblock *MbQ, int dir, int edge, StorablePicture *p);
-void EdgeLoopLumaNormal(ColorPlane pl, imgpel** Img, byte Strength[16],ImageParameters *img, Macroblock *MbQ, int dir, int edge, StorablePicture *p);
-void EdgeLoopLumaMBAff (ColorPlane pl, imgpel** Img, byte Strength[16],ImageParameters *img, Macroblock *MbQ, int dir, int edge, StorablePicture *p);
-void (*EdgeLoopChroma)(imgpel** Img, byte Strength[16],ImageParameters *img, Macroblock *MbQ, int dir, int edge, int uv, StorablePicture *p);
-void EdgeLoopChromaNormal(imgpel** Img, byte Strength[16],ImageParameters *img, Macroblock *MbQ, int dir, int edge, int uv, StorablePicture *p);
-void EdgeLoopChromaMBAff(imgpel** Img, byte Strength[16],ImageParameters *img, Macroblock *MbQ, int dir, int edge, int uv, StorablePicture *p);
-void DeblockMb(ImageParameters *img, StorablePicture *p, int MbQAddr);
+
+void GetStrengthNormal (byte Strength[16], Macroblock *MbQ, int dir,int edge, int mvlimit,StorablePicture *p);
+void GetStrengthMBAff  (byte Strength[16], Macroblock *MbQ, int dir,int edge, int mvlimit,StorablePicture *p);
+void EdgeLoopLumaNormal(ColorPlane pl, imgpel** Img, byte Strength[16],Macroblock *MbQ, int dir, int edge, StorablePicture *p);
+void EdgeLoopLumaMBAff (ColorPlane pl, imgpel** Img, byte Strength[16],Macroblock *MbQ, int dir, int edge, StorablePicture *p);
+void EdgeLoopChromaNormal(imgpel** Img, byte Strength[16],Macroblock *MbQ, int dir, int edge, int uv, StorablePicture *p);
+void EdgeLoopChromaMBAff(imgpel** Img, byte Strength[16],Macroblock *MbQ, int dir, int edge, int uv, StorablePicture *p);
+void DeblockMb(ImageParameters *p_Img, StorablePicture *p, int MbQAddr);
 int compute_deblock_strength(char **list0_refIdxArr, char **list1_refIdxArr, int64 **list0_refPicIdArr, int64 **list1_refPicIdArr, 
                              short  ***list0_mv, short  ***list1_mv, int blk_y, int blk_x, int blk_y2, int blk_x2, int mvlimit);
 
@@ -88,26 +78,26 @@ int compute_deblock_strength(char **list0_refIdxArr, char **list1_refIdxArr, int
  *    Filter all macroblocks in order of increasing macroblock address.
  *****************************************************************************************
  */
-void DeblockPicture(ImageParameters *img, StorablePicture *p)
+void DeblockPicture(ImageParameters *p_Img, StorablePicture *p)
 {
   unsigned i;
 
   if (p->MbaffFrameFlag == 1) 
   {
-    GetStrength    = GetStrengthMBAff;
-    EdgeLoopLuma   = EdgeLoopLumaMBAff;
-    EdgeLoopChroma = EdgeLoopChromaMBAff;
+    p_Img->GetStrength    = GetStrengthMBAff;
+    p_Img->EdgeLoopLuma   = EdgeLoopLumaMBAff;
+    p_Img->EdgeLoopChroma = EdgeLoopChromaMBAff;
   }
   else
   {
-    GetStrength    = GetStrengthNormal;
-    EdgeLoopLuma   = EdgeLoopLumaNormal;
-    EdgeLoopChroma = EdgeLoopChromaNormal;
+    p_Img->GetStrength    = GetStrengthNormal;
+    p_Img->EdgeLoopLuma   = EdgeLoopLumaNormal;
+    p_Img->EdgeLoopChroma = EdgeLoopChromaNormal;
   }
 
-  for (i = 0; i < p->PicSizeInMbs; i++)
+  for (i = 0; i < p->PicSizeInMbs; ++i)
   {
-    DeblockMb( img, p, i ) ;
+    DeblockMb( p_Img, p, i ) ;
   }
 }
 
@@ -119,12 +109,12 @@ void DeblockPicture(ImageParameters *img, StorablePicture *p)
  *****************************************************************************************
  */
 
-void DeblockMb(ImageParameters *img, StorablePicture *p, int MbQAddr)
+void DeblockMb(ImageParameters *p_Img, StorablePicture *p, int MbQAddr)
 {
   int           EdgeCondition;
   int           dir, edge;
   byte          Strength[16];
-  int           mb_x, mb_y;
+  short         mb_x, mb_y;
   
   int           filterNon8x8LumaEdgesFlag[4] = {1,1,1,1};
   int           filterLeftMbEdgeFlag;
@@ -132,7 +122,7 @@ void DeblockMb(ImageParameters *img, StorablePicture *p, int MbQAddr)
   int           fieldModeMbFlag;
   int           mvlimit = 4;
   int           i, StrengthSum;
-  Macroblock    *MbQ = &(img->mb_data[MbQAddr]) ; // current Mb
+  Macroblock    *MbQ = &(p_Img->mb_data[MbQAddr]) ; // current Mb
   imgpel **imgY   = p->imgY;
   imgpel ***imgUV = p->imgUV;
   
@@ -141,12 +131,12 @@ void DeblockMb(ImageParameters *img, StorablePicture *p, int MbQAddr)
   // return, if filter is disabled
   if (MbQ->DFDisableIdc==1) 
   {
-    img->DeblockCall = 0;
+    p_Img->DeblockCall = 0;
     return;
   }
 
-  img->DeblockCall = 1;
-  get_mb_pos (MbQAddr, img->mb_size[IS_LUMA], &mb_x, &mb_y);
+  p_Img->DeblockCall = 1;
+  get_mb_pos (p_Img, MbQAddr, p_Img->mb_size[IS_LUMA], &mb_x, &mb_y);
   
   filterLeftMbEdgeFlag = (mb_x != 0);
   filterTopMbEdgeFlag  = (mb_y != 0);
@@ -171,21 +161,21 @@ void DeblockMb(ImageParameters *img, StorablePicture *p, int MbQAddr)
     // if this the bottom of a frame macroblock pair then always filter the top edge
     filterTopMbEdgeFlag  = (p->MbaffFrameFlag && !MbQ->mb_field && (MbQAddr & 0x01)) ? 1 : MbQ->mbAvailB;
   }
-  img->current_mb_nr = MbQAddr;
+
   CheckAvailabilityOfNeighbors(MbQ);
 
-  for( dir = 0 ; dir < 2 ; dir++ )                                                      // filter first vertical edges, followed by horizontal 
+  for( dir = 0 ; dir < 2 ; ++dir )                                                      // filter first vertical edges, followed by horizontal 
   {
     EdgeCondition = (dir && filterTopMbEdgeFlag) || (!dir && filterLeftMbEdgeFlag); // can not filter beyond picture boundaries
-    for( edge=0; edge<4 ; edge++ )                                            // first 4 vertical strips of 16 pel
+    for( edge=0; edge<4 ; ++edge )                                            // first 4 vertical strips of 16 pel
     {                                                                               // then  4 horizontal
       if( edge || EdgeCondition )
       {
         edge_cr = chroma_edge[dir][edge][p->chroma_format_idc];
 
-        GetStrength(Strength, img, MbQ, dir, edge << 2, mvlimit, p); // Strength for 4 blks in 1 stripe
+        p_Img->GetStrength(Strength, MbQ, dir, edge << 2, mvlimit, p); // Strength for 4 blks in 1 stripe
         StrengthSum = Strength[0];
-        for (i = 1; i < MB_BLOCK_SIZE && StrengthSum == 0 ; i++)
+        for (i = 1; i < MB_BLOCK_SIZE && StrengthSum == 0 ; ++i)
         {
           StrengthSum += (int) Strength[i];
         }
@@ -194,55 +184,55 @@ void DeblockMb(ImageParameters *img, StorablePicture *p, int MbQAddr)
         {
           if (filterNon8x8LumaEdgesFlag[edge])
           {
-            EdgeLoopLuma( PLANE_Y, imgY, Strength, img, MbQ, dir, edge << 2, p) ;
-            if( active_sps->chroma_format_idc==YUV444 && !IS_INDEPENDENT(img) )
+            p_Img->EdgeLoopLuma( PLANE_Y, imgY, Strength, MbQ, dir, edge << 2, p) ;
+            if( p_Img->active_sps->chroma_format_idc==YUV444 && !IS_INDEPENDENT(p_Img) )
             {
-              EdgeLoopLuma(PLANE_U, imgUV[0], Strength, img, MbQ, dir, edge << 2, p);
-              EdgeLoopLuma(PLANE_V, imgUV[1], Strength, img, MbQ, dir, edge << 2, p);
+              p_Img->EdgeLoopLuma(PLANE_U, imgUV[0], Strength, MbQ, dir, edge << 2, p);
+              p_Img->EdgeLoopLuma(PLANE_V, imgUV[1], Strength, MbQ, dir, edge << 2, p);
             }
           }
-          if (active_sps->chroma_format_idc==YUV420 || active_sps->chroma_format_idc==YUV422)
+          if (p_Img->active_sps->chroma_format_idc==YUV420 || p_Img->active_sps->chroma_format_idc==YUV422)
           {
             if( (imgUV != NULL) && (edge_cr >= 0))
             {
-              EdgeLoopChroma( imgUV[0], Strength, img, MbQ, dir, edge_cr, 0, p);
-              EdgeLoopChroma( imgUV[1], Strength, img, MbQ, dir, edge_cr, 1, p);
+              p_Img->EdgeLoopChroma( imgUV[0], Strength, MbQ, dir, edge_cr, 0, p);
+              p_Img->EdgeLoopChroma( imgUV[1], Strength, MbQ, dir, edge_cr, 1, p);
             }
           }
         }
-        
-        if (dir && !edge && !MbQ->mb_field && mixedModeEdgeFlag) 
+                
+        if (dir && !edge && !MbQ->mb_field && p_Img->mixedModeEdgeFlag) 
         {
           // this is the extra horizontal edge between a frame macroblock pair and a field above it
-          img->DeblockCall = 2;
-          GetStrength(Strength, img, MbQ, dir, MB_BLOCK_SIZE, mvlimit, p); // Strength for 4 blks in 1 stripe
+          p_Img->DeblockCall = 2;
+          p_Img->GetStrength(Strength, MbQ, dir, MB_BLOCK_SIZE, mvlimit, p); // Strength for 4 blks in 1 stripe
           //if( *((int*)Strength) )                      // only if one of the 4 Strength bytes is != 0
-          {
+          {            
             if (filterNon8x8LumaEdgesFlag[edge])
-            {
-              EdgeLoopLuma(PLANE_Y, imgY, Strength, img, MbQ, dir, MB_BLOCK_SIZE, p) ;
-              if( active_sps->chroma_format_idc==YUV444 && !IS_INDEPENDENT(img) )
+            {             
+              p_Img->EdgeLoopLuma(PLANE_Y, imgY, Strength, MbQ, dir, MB_BLOCK_SIZE, p) ;
+              if( p_Img->active_sps->chroma_format_idc==YUV444 && !IS_INDEPENDENT(p_Img) )
               {
-                EdgeLoopLuma(PLANE_U, imgUV[0], Strength, img, MbQ, dir, MB_BLOCK_SIZE, p) ;
-                EdgeLoopLuma(PLANE_V, imgUV[1], Strength, img, MbQ, dir, MB_BLOCK_SIZE, p) ;
+                p_Img->EdgeLoopLuma(PLANE_U, imgUV[0], Strength, MbQ, dir, MB_BLOCK_SIZE, p) ;
+                p_Img->EdgeLoopLuma(PLANE_V, imgUV[1], Strength, MbQ, dir, MB_BLOCK_SIZE, p) ;
               }
             }
-            if (active_sps->chroma_format_idc==YUV420 || active_sps->chroma_format_idc==YUV422) 
+            if (p_Img->active_sps->chroma_format_idc==YUV420 || p_Img->active_sps->chroma_format_idc==YUV422) 
             {
               if( (imgUV != NULL) && (edge_cr >= 0))
               {
-                EdgeLoopChroma( imgUV[0], Strength, img, MbQ, dir, MB_BLOCK_SIZE, 0, p) ;
-                EdgeLoopChroma( imgUV[1], Strength, img, MbQ, dir, MB_BLOCK_SIZE, 1, p) ;
+                p_Img->EdgeLoopChroma( imgUV[0], Strength, MbQ, dir, MB_BLOCK_SIZE, 0, p) ;
+                p_Img->EdgeLoopChroma( imgUV[1], Strength, MbQ, dir, MB_BLOCK_SIZE, 1, p) ;
               }
             }
           }
-          img->DeblockCall = 1;
+          p_Img->DeblockCall = 1;
         }
       }
     }//end edge
   }//end loop dir
   
-  img->DeblockCall = 0;
+  p_Img->DeblockCall = 0;
 }
 
   /*!
@@ -254,15 +244,11 @@ void DeblockMb(ImageParameters *img, StorablePicture *p, int MbQAddr)
 
 #define ANY_INTRA (MbP->mb_type==I4MB||MbP->mb_type==I8MB||MbP->mb_type==I16MB||MbP->mb_type==IPCM||MbQ->mb_type==I4MB||MbQ->mb_type==I8MB||MbQ->mb_type==I16MB||MbQ->mb_type==IPCM)
 
-void GetStrengthNormal(byte Strength[MB_BLOCK_SIZE], ImageParameters *img, Macroblock *MbQ, int dir, int edge, int mvlimit, StorablePicture *p)
+void GetStrengthNormal(byte Strength[MB_BLOCK_SIZE], Macroblock *MbQ, int dir, int edge, int mvlimit, StorablePicture *p)
 {
-  static int64    ref_p0,ref_p1,ref_q0,ref_q1;
-  static int      blkP, blkQ, idx;
-  static int      blk_x, blk_x2, blk_y, blk_y2 ;
-  static int      xQ, yQ;
-  static int      mb_x, mb_y;
-  static PixelPos pixP, pixMB;
-  static byte     StrValue;
+  PixelPos pixP, pixMB;
+  byte     StrValue;
+  Macroblock *MbP;
 
   if ((p->slice_type==SP_SLICE)||(p->slice_type==SI_SLICE) )
   { 
@@ -272,24 +258,30 @@ void GetStrengthNormal(byte Strength[MB_BLOCK_SIZE], ImageParameters *img, Macro
   }
   else
   {    
-    xQ = dir ? 0 : edge - 1;
-    yQ = dir ? (edge < 16 ? edge - 1: 0) : 0;
+    ImageParameters *p_Img = MbQ->p_Img;
+    int xQ = dir ? 0 : edge - 1;
+    int yQ = dir ? (edge < 16 ? edge - 1: 0) : 0;
 
-    getNeighbour(MbQ, xQ, yQ, img->mb_size[IS_LUMA], &pixMB);
+    p_Img->getNeighbour(MbQ, xQ, yQ, p_Img->mb_size[IS_LUMA], &pixMB);
     pixP = pixMB;
-    MbP = &(img->mb_data[pixP.mb_addr]);
+    MbP = &(p_Img->mb_data[pixP.mb_addr]);
 
     if (!ANY_INTRA)
     {
       PicMotionParams *motion = &p->motion;
-      list0_refPicIdArr = motion->ref_pic_id[LIST_0];
-      list1_refPicIdArr = motion->ref_pic_id[LIST_1];
-      list0_mv = motion->mv[LIST_0];
-      list1_mv = motion->mv[LIST_1];
-      list0_refIdxArr = motion->ref_idx[LIST_0];
-      list1_refIdxArr = motion->ref_idx[LIST_1];
+      int64    ref_p0,ref_p1,ref_q0,ref_q1;
+      int      blkP, blkQ, idx;
+      int      blk_x, blk_x2, blk_y, blk_y2 ;
 
-      get_mb_block_pos (MbQ->mbAddrX, &mb_x, &mb_y);
+      int64  **list0_refPicIdArr = motion->ref_pic_id[LIST_0];
+      int64  **list1_refPicIdArr = motion->ref_pic_id[LIST_1];
+      short  ***list0_mv = motion->mv[LIST_0];
+      short  ***list1_mv = motion->mv[LIST_1];
+      char   **list0_refIdxArr = motion->ref_idx[LIST_0];
+      char   **list1_refIdxArr = motion->ref_idx[LIST_1];
+      short    mb_x, mb_y;
+
+      p_Img->get_mb_block_pos (MbQ->mbAddrX, &mb_x, &mb_y);
       mb_x <<= 2;
       mb_y <<= 2;
 
@@ -405,13 +397,17 @@ void GetStrengthNormal(byte Strength[MB_BLOCK_SIZE], ImageParameters *img, Macro
  *    returns a buffer of 16 Strength values for one stripe in a mb (for MBAFF)
  *********************************************************************************************
  */
-void GetStrengthMBAff(byte Strength[16], ImageParameters *img, Macroblock *MbQ, int dir, int edge, int mvlimit, StorablePicture *p)
+void GetStrengthMBAff(byte Strength[16], Macroblock *MbQ, int dir, int edge, int mvlimit, StorablePicture *p)
 {
-  int    blkP, blkQ, idx;
-  int    blk_x, blk_x2, blk_y, blk_y2 ;
-  int64    ref_p0,ref_p1,ref_q0,ref_q1;
-  int      xQ, yQ;
-  int      mb_x, mb_y;
+  short  blkP, blkQ, idx;
+  short  blk_x, blk_x2, blk_y, blk_y2 ;
+  int64  ref_p0,ref_p1,ref_q0,ref_q1;
+  int    xQ, yQ;
+  short  mb_x, mb_y;
+  int64  **list0_refPicIdArr, **list1_refPicIdArr;
+  short  ***list0_mv, ***list1_mv;
+  char   **list0_refIdxArr, **list1_refIdxArr;
+  Macroblock *MbP;
 
   PixelPos pixP;
   int dir_m1 = (1 - dir);
@@ -424,17 +420,17 @@ void GetStrengthMBAff(byte Strength[16], ImageParameters *img, Macroblock *MbQ, 
   list0_refPicIdArr = motion->ref_pic_id[LIST_0];
   list1_refPicIdArr = motion->ref_pic_id[LIST_1];
 
-  for( idx=0 ; idx<16 ; idx++ )
+  for( idx = 0; idx < 16; ++idx )
   {
+    ImageParameters *p_Img = MbQ->p_Img;
     xQ = dir ? idx : edge;
     yQ = dir ? (edge < MB_BLOCK_SIZE ? edge : 1) : idx;
-    getNeighbour(MbQ, xQ - dir_m1, yQ - dir, img->mb_size[IS_LUMA], &pixP);
+    p_Img->getNeighbour(MbQ, xQ - dir_m1, yQ - dir, p_Img->mb_size[IS_LUMA], &pixP);
     blkQ = (yQ & 0xFFFC) + (xQ >> 2);
     blkP = (pixP.y & 0xFFFC) + (pixP.x >> 2);
 
-
-    MbP = &(img->mb_data[pixP.mb_addr]);
-    mixedModeEdgeFlag = (byte) (MbQ->mb_field != MbP->mb_field);   
+    MbP = &(p_Img->mb_data[pixP.mb_addr]);
+    p_Img->mixedModeEdgeFlag = (byte) (MbQ->mb_field != MbP->mb_field);   
 
     if ((p->slice_type==SP_SLICE)||(p->slice_type==SI_SLICE) )
     {
@@ -459,13 +455,13 @@ void GetStrengthMBAff(byte Strength[16], ImageParameters *img, Macroblock *MbQ, 
           // if no coefs, but vector difference >= 1 set Strength=1
           // if this is a mixed mode edge then one set of reference pictures will be frame and the
           // other will be field
-          if (mixedModeEdgeFlag)
+          if (p_Img->mixedModeEdgeFlag)
           {
             (Strength[idx] = 1);
           }
           else
           {
-            get_mb_block_pos (MbQ->mbAddrX, &mb_x, &mb_y);
+            p_Img->get_mb_block_pos (MbQ->mbAddrX, &mb_x, &mb_y);
             blk_y  = (mb_y<<2) + (blkQ >> 2) ;
             blk_x  = (mb_x<<2) + (blkQ  & 3) ;
             blk_y2 = pixP.pos_y >> 2;
@@ -533,39 +529,44 @@ void GetStrengthMBAff(byte Strength[16], ImageParameters *img, Macroblock *MbQ, 
  *    Filters 16 pel block edge of Frame or Field coded MBs 
  *****************************************************************************************
  */
-void EdgeLoopLumaNormal(ColorPlane pl, imgpel** Img, byte Strength[16], ImageParameters *img, Macroblock *MbQ, 
+void EdgeLoopLumaNormal(ColorPlane pl, imgpel** Img, byte Strength[16], Macroblock *MbQ, 
               int dir, int edge, StorablePicture *p)
 {
-  static imgpel   L2, L1, L0, R0, R1, R2, L3, R3;
-  static PixelPos pixP, pixQ, pixMB1, pixMB2;
-  static int      C0, tc0, dif, RL0;
-  static int      pel, ap, aq, Strng;
-  static int      Alpha, Beta, small_gap;
-  static int      indexA, indexB;
-  static int      QP;
-  static const byte* ClipTab;
-  static int inc_dim, inc_dim3;
+  imgpel   L2, L1, L0, R0, R1, R2, L3, R3;
+  PixelPos pixP, pixQ, pixMB1, pixMB2;
+  int      C0, tc0, dif, RL0;
+  int      pel, ap, aq, Strng;
+  int      Alpha, Beta, small_gap;
+  int      indexA, indexB;
+  int      QP;
+  const    byte* ClipTab;
+  int      inc_dim, inc_dim3;
   int      xQ = dir ? 0 : edge - 1;
   int      yQ = dir ? (edge < MB_BLOCK_SIZE ? edge - 1: 0) : 0;
 
-  getNeighbour(MbQ, xQ, yQ, img->mb_size[IS_LUMA], &pixMB1); 
+  Macroblock *MbP;
+  imgpel   *SrcPtrP, *SrcPtrQ;
+
+  ImageParameters *p_Img = MbQ->p_Img;
+
+  p_Img->getNeighbour(MbQ, xQ, yQ, p_Img->mb_size[IS_LUMA], &pixMB1); 
 
   if (pixMB1.available || (MbQ->DFDisableIdc== 0))
   {
     int AlphaC0Offset = MbQ->DFAlphaC0Offset;
     int BetaOffset = MbQ->DFBetaOffset;
     int  dirM1 = (dir - 1);
-    int  bitdepth_scale   = pl ? img->bitdepth_scale[IS_CHROMA] : img->bitdepth_scale[IS_LUMA];
-    int  max_imgpel_value = img->max_imgpel_value_comp[pl];
+    int  bitdepth_scale   = pl ? p_Img->bitdepth_scale[IS_CHROMA] : p_Img->bitdepth_scale[IS_LUMA];
+    int  max_imgpel_value = p_Img->max_imgpel_value_comp[pl];
     int  width = p->size_x;
     pixP = pixMB1;
-    MbP  = &(img->mb_data[pixP.mb_addr]);
+    MbP  = &(p_Img->mb_data[pixP.mb_addr]);
     inc_dim = dir ? width : 1;
     inc_dim3 = inc_dim * 3;
 
     yQ += dir;
     xQ -= dirM1;
-    getNeighbour(MbQ, xQ, yQ, img->mb_size[IS_LUMA], &pixMB2);
+    p_Img->getNeighbour(MbQ, xQ, yQ, p_Img->mb_size[IS_LUMA], &pixMB2);
     pixQ = pixMB2;
 
     // Average QP of the two blocks
@@ -578,7 +579,7 @@ void EdgeLoopLumaNormal(ColorPlane pl, imgpel** Img, byte Strength[16], ImagePar
     Beta    = BETA_TABLE [indexB] * bitdepth_scale;
     ClipTab = CLIP_TAB[indexA];
 
-    for( pel = 0 ; pel < MB_BLOCK_SIZE ; pel++ )
+    for( pel = 0 ; pel < MB_BLOCK_SIZE ; ++pel )
     {
       if( (Strng = *(Strength++)) != 0)
       {
@@ -663,7 +664,7 @@ void EdgeLoopLumaNormal(ColorPlane pl, imgpel** Img, byte Strength[16], ImagePar
  *    Filters 16 pel block edge of Super MB Frame coded MBs
  *****************************************************************************************
  */
-void EdgeLoopLumaMBAff(ColorPlane pl, imgpel** Img, byte Strength[16], ImageParameters *img, Macroblock *MbQ, 
+void EdgeLoopLumaMBAff(ColorPlane pl, imgpel** Img, byte Strength[16], Macroblock *MbQ, 
               int dir, int edge, StorablePicture *p)
 {
   int      width = p->size_x;
@@ -683,26 +684,30 @@ void EdgeLoopLumaMBAff(ColorPlane pl, imgpel** Img, byte Strength[16], ImagePara
 
   PixelPos pixP, pixQ;
   int      dir_m1 = (1 - dir);
-  int      bitdepth_scale = pl? img->bitdepth_scale[IS_CHROMA] : img->bitdepth_scale[IS_LUMA];
-  int      max_imgpel_value = img->max_imgpel_value_comp[pl];
+  ImageParameters *p_Img = MbQ->p_Img;
+  int      bitdepth_scale = pl? p_Img->bitdepth_scale[IS_CHROMA] : p_Img->bitdepth_scale[IS_LUMA];
+  int      max_imgpel_value = p_Img->max_imgpel_value_comp[pl];
 
   int AlphaC0Offset = MbQ->DFAlphaC0Offset;
   int BetaOffset = MbQ->DFBetaOffset;
+  byte fieldModeFilteringFlag;
 
-  
-  for( pel = 0 ; pel < PelNum ; pel++ )
+  Macroblock *MbP;
+  imgpel   *SrcPtrP, *SrcPtrQ;
+
+  for( pel = 0 ; pel < PelNum ; ++pel )
   {
     xQ = dir ? pel : edge;
     yQ = dir ? (edge < 16 ? edge : 1) : pel;
-    getNeighbour(MbQ, xQ - (dir_m1), yQ - dir, img->mb_size[IS_LUMA], &pixP);     
+    p_Img->getNeighbour(MbQ, xQ - (dir_m1), yQ - dir, p_Img->mb_size[IS_LUMA], &pixP);     
 
     if (pixP.available || (MbQ->DFDisableIdc== 0))
     {
       if( (Strng = Strength[pel]) != 0)
       {
-        getNeighbour(MbQ, xQ, yQ, img->mb_size[IS_LUMA], &pixQ);
+        p_Img->getNeighbour(MbQ, xQ, yQ, p_Img->mb_size[IS_LUMA], &pixQ);
 
-        MbP = &(img->mb_data[pixP.mb_addr]);
+        MbP = &(p_Img->mb_data[pixP.mb_addr]);
         fieldModeFilteringFlag = (byte) (MbQ->mb_field || MbP->mb_field);
 
         incQ    = dir ? ((fieldModeFilteringFlag && !MbQ->mb_field) ? 2 * width : width) : 1;
@@ -794,28 +799,30 @@ void EdgeLoopLumaMBAff(ColorPlane pl, imgpel** Img, byte Strength[16], ImagePara
  *    Filters chroma block edge for Frame or Field coded pictures
  *****************************************************************************************
  */
-void EdgeLoopChromaNormal(imgpel** Img, byte Strength[16], ImageParameters *img, Macroblock *MbQ, 
-              int dir, int edge, int uv, StorablePicture *p)
+void EdgeLoopChromaNormal(imgpel** Img, byte Strength[16], Macroblock *MbQ, int dir, int edge, int uv, StorablePicture *p)
 {
-  static int      pel, Strng ;
-  static int      inc_dim;
-  static int      tc0, dif;
-  static imgpel   L1, L0, R0, R1;
-  static int      Alpha, Beta;
-  static const byte* ClipTab;
-  static int      indexA, indexB;
-  static int      StrengthIdx;
-  static PixelPos pixP, pixQ, pixMB1, pixMB2;
-  static int      QP;
+  int      pel, Strng ;
+  int      inc_dim;
+  int      tc0, dif;
+  imgpel   L1, L0, R0, R1;
+  int      Alpha, Beta;
+  const    byte* ClipTab;
+  int      indexA, indexB;
+  int      StrengthIdx;
+  PixelPos pixP, pixQ, pixMB1, pixMB2;
+  int      QP;
   int      PelNum = pelnum_cr[dir][p->chroma_format_idc];
+  ImageParameters *p_Img = MbQ->p_Img;
   
-  int      bitdepth_scale   = img->bitdepth_scale[IS_CHROMA];
-  int      max_imgpel_value = img->max_imgpel_value_comp[uv + 1];
+  int      bitdepth_scale   = p_Img->bitdepth_scale[IS_CHROMA];
+  int      max_imgpel_value = p_Img->max_imgpel_value_comp[uv + 1];
 
   int xQ = dir ? 0 : edge - 1;
   int yQ = dir ? (edge < 16 ? edge - 1: 0) : 0;
+  Macroblock *MbP;
+  imgpel   *SrcPtrP, *SrcPtrQ;
   
-  getNeighbour(MbQ, xQ, yQ, img->mb_size[IS_CHROMA], &pixMB1);
+  p_Img->getNeighbour(MbQ, xQ, yQ, p_Img->mb_size[IS_CHROMA], &pixMB1);
 
   if (pixMB1.available || (MbQ->DFDisableIdc == 0))
   {
@@ -824,12 +831,12 @@ void EdgeLoopChromaNormal(imgpel** Img, byte Strength[16], ImageParameters *img,
     int width = p->size_x_cr;
     int dirM1 = dir - 1;
     pixP = pixMB1;
-    MbP = &(img->mb_data[pixP.mb_addr]);
+    MbP = &(p_Img->mb_data[pixP.mb_addr]);
     yQ += dir;
     xQ -= dirM1;
     inc_dim = dir ? width : 1;
 
-    getNeighbour(MbQ, xQ, yQ, img->mb_size[IS_CHROMA], &pixMB2);
+    p_Img->getNeighbour(MbQ, xQ, yQ, p_Img->mb_size[IS_CHROMA], &pixMB2);
     pixQ = pixMB2;
 
     // Average QP of the two blocks
@@ -842,7 +849,7 @@ void EdgeLoopChromaNormal(imgpel** Img, byte Strength[16], ImageParameters *img,
     Beta    = BETA_TABLE [indexB] * bitdepth_scale;
     ClipTab = CLIP_TAB[indexA];
 
-    for( pel = 0 ; pel < PelNum ; pel++ )
+    for( pel = 0 ; pel < PelNum ; ++pel )
     {
       StrengthIdx = (PelNum == 8) ? (((pel >> 1) << 2) + (pel & 0x01)) : pel;
 
@@ -886,8 +893,7 @@ void EdgeLoopChromaNormal(imgpel** Img, byte Strength[16], ImageParameters *img,
 *    Filters chroma block edge for MBAFF types
 *****************************************************************************************
  */
-void EdgeLoopChromaMBAff(imgpel** Img, byte Strength[16], ImageParameters *img, Macroblock *MbQ,
-              int dir, int edge, int uv, StorablePicture *p)
+void EdgeLoopChromaMBAff(imgpel** Img, byte Strength[16], Macroblock *MbQ, int dir, int edge, int uv, StorablePicture *p)
 {
   int      pel, Strng ;
   int      incP, incQ;
@@ -902,20 +908,24 @@ void EdgeLoopChromaMBAff(imgpel** Img, byte Strength[16], ImageParameters *img, 
   int      xQ, yQ;
   PixelPos pixP, pixQ;
   int      dir_m1 = 1 - dir;
-  int      bitdepth_scale = img->bitdepth_scale[IS_CHROMA];
-  int      max_imgpel_value = img->max_imgpel_value_comp[uv + 1];
+  ImageParameters *p_Img = MbQ->p_Img;
+  int      bitdepth_scale = p_Img->bitdepth_scale[IS_CHROMA];
+  int      max_imgpel_value = p_Img->max_imgpel_value_comp[uv + 1];
   
   int      AlphaC0Offset = MbQ->DFAlphaC0Offset;
-  int      BetaOffset = MbQ->DFBetaOffset;
+  int      BetaOffset    = MbQ->DFBetaOffset;
+  byte fieldModeFilteringFlag;
+  Macroblock *MbP;
+  imgpel   *SrcPtrP, *SrcPtrQ;
   int      width = p->size_x_cr;
 
-  for( pel = 0 ; pel < PelNum ; pel++ )
+  for( pel = 0 ; pel < PelNum ; ++pel )
   {
     xQ = dir ? pel : edge;
     yQ = dir ? (edge < 16? edge : 1) : pel;
-    getNeighbour(MbQ, xQ, yQ, img->mb_size[IS_CHROMA], &pixQ);
-    getNeighbour(MbQ, xQ - (dir_m1), yQ - dir, img->mb_size[IS_CHROMA], &pixP);    
-    MbP = &(img->mb_data[pixP.mb_addr]);    
+    p_Img->getNeighbour(MbQ, xQ, yQ, p_Img->mb_size[IS_CHROMA], &pixQ);
+    p_Img->getNeighbour(MbQ, xQ - (dir_m1), yQ - dir, p_Img->mb_size[IS_CHROMA], &pixP);    
+    MbP = &(p_Img->mb_data[pixP.mb_addr]);    
     StrengthIdx = (PelNum == 8) ? ((MbQ->mb_field && !MbP->mb_field) ? pel << 1 :((pel >> 1) << 2) + (pel & 0x01)) : pel;
 
     if (pixP.available || (MbQ->DFDisableIdc == 0))
@@ -978,8 +988,8 @@ int compute_deblock_strength(char **list0_refIdxArr,
                              int blk_y2, int blk_x2, 
                              int mvlimit)
 {
-  static int64 ref_p0, ref_q0, ref_p1, ref_q1;
-  static byte StrValue;
+  int64 ref_p0, ref_q0, ref_p1, ref_q1;
+  byte StrValue;
 
   ref_p0 = list0_refIdxArr[blk_y] [blk_x] <0 ? INT64_MIN : list0_refPicIdArr[blk_y] [blk_x];
   ref_q0 = list0_refIdxArr[blk_y2][blk_x2]<0 ? INT64_MIN : list0_refPicIdArr[blk_y2][blk_x2];

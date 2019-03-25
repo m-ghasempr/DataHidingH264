@@ -18,6 +18,6 @@
 #ifndef _IMG_CHROMA_H_
 #define _IMG_CHROMA_H_
 
-void getSubImagesChroma( StorablePicture *s );
+extern void getSubImagesChroma(  ImageParameters *p_Img, InputParameters *p_Inp, StorablePicture *s );
 
 #endif // _IMG_CHROMA_H_

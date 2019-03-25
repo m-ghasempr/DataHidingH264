@@ -27,17 +27,14 @@ typedef struct
   int is_field;
 } ExpFrameInfo;
 
-typedef struct
+typedef struct exp_seq_info
 {
   int no_frames;
   ExpFrameInfo *info;
 } ExpSeqInfo;
 
-extern FILE       *expSFile;
-extern ExpSeqInfo *expSeq;
-
-extern void ReadExplicitSeqFile    (ExpSeqInfo *seq_info, int coding_index);
-extern void OpenExplicitSeqFile    (InputParameters *pparams);
-extern void CloseExplicitSeqFile   (void);
-extern void ExplicitUpdateImgParams(ExpFrameInfo *info, ImageParameters *p_img);
+extern void ReadExplicitSeqFile    (ExpSeqInfo *seq_info, FILE *exp_file, int coding_index);
+extern void OpenExplicitSeqFile    (ImageParameters *p_Img, InputParameters *p_Inp);
+extern void CloseExplicitSeqFile   (ImageParameters *p_Img);
+extern void ExplicitUpdateImgParams(ExpFrameInfo *info, ImageParameters *p_Img, InputParameters *p_Inp);
 #endif

@@ -1,4 +1,3 @@
-
 /*!
 *************************************************************************************
 * \file me_distortion.c
@@ -23,140 +22,148 @@
 #include "memalloc.h"
 #include "mb_access.h"
 #include "refbuf.h"
-#include "mv-search.h"
+#include "mv_search.h"
 #include "me_distortion.h"
 
 
 
-// Define Global Parameters
-SubImageContainer ref_pic_sub;
-SubImageContainer ref_pic1_sub;
-SubImageContainer ref_pic2_sub;
-
-short weight1, weight2, offsetBi;
-short weight1_cr[2], weight2_cr[2], offsetBi_cr[2];
-int weight_luma, weight_cr[2], offset_luma, offset_cr[2];
-short img_width, img_height;
-int test8x8transform;
-int ChromaMEEnable;
-
-// temp storage of pixel difference values prior to applying Hadamard Transform (4x4 or 8x8)
-static int diff[MB_PIXELS];
-// Hadamard related arrays
-static int m[16], d[16];
-static int m1[8][8], m2[8][8], m3[8][8];
-static imgpel *src_line, *ref_line, *ref1_line, *ref2_line;
-
-int (*computeUniPred[6])(imgpel* , int , int , int , int , int);
-int (*computeBiPred) (imgpel* , int , int , int , int , int, int , int);
-int (*computeBiPred1[3])(imgpel* , int , int , int , int , int, int , int);
-int (*computeBiPred2[3])(imgpel* , int , int , int , int , int, int , int);
-
 /*!
- ***********************************************************************
- * \brief
- *    Calculate SA(T)D
- ***********************************************************************
- */
-int distortion4x4(int* diff)
+***********************************************************************
+* \brief
+*    Calculate SAD
+***********************************************************************
+*/
+int distortion4x4SAD(int* diff, int min_dist)
 {
-  int distortion = 0, k, *byte_sse;
+  int distortion = 0, k;
 
-  switch(params->ModeDecisionMetric)
+  for (k = 0; k < 16; k++)
   {
-  case ERROR_SAD:
-    for (k = 0; k < 16; k++)
-    {
-      distortion += byte_abs [diff [k]];
-    }
-    break;
-  case ERROR_SSE:
-    byte_sse = img->quad;
-    for (k = 0; k < 16; k++)
-    {
-      distortion += byte_sse [diff [k]];
-    }
-    break;
-  case ERROR_SATD :
-  default:
-    distortion = HadamardSAD4x4( diff );
-    break;
+    distortion += iabs(*diff++);
   }
 
   return distortion;
 }
 
 /*!
- ***********************************************************************
- * \brief
- *    Calculate SA(T)D for 8x8
- ***********************************************************************
- */
-int distortion8x8(int* diff)
+***********************************************************************
+* \brief
+*    Calculate SSE 4x4
+***********************************************************************
+*/
+int distortion4x4SSE(int* diff, int min_dist)
 {
-  int distortion = 0, k, *byte_sse;
-
-  switch(params->ModeDecisionMetric)
+  int distortion = 0, k;
+  for (k = 0; k < 16; k++)
   {
-  case ERROR_SAD:
-    for (k = 0; k < 64; k++)
+    distortion += iabs2(*diff++);
+  }
+  return distortion;
+}
+
+
+/*!
+***********************************************************************
+* \brief
+*    Calculate SATD
+***********************************************************************
+*/
+int distortion4x4SATD(int* diff, int min_dist)
+{
+  return HadamardSAD4x4( diff );
+}
+
+
+/*!
+***********************************************************************
+* \brief
+*    Calculate SAD for 8x8 (with a threshold)
+***********************************************************************
+*/
+int distortion8x8SADthres(int* diff, int max_dist)
+{
+  int distortion = 0, i, j;
+
+  for (j = 0; j < 8; j++)
+  {
+    for (i = 0; i < 8; i++)
     {
-      distortion += byte_abs [diff [k]];
+      distortion += iabs(*diff++);
     }
-    break;
-  case ERROR_SSE:
-    byte_sse = img->quad;
-    for (k = 0; k < 64; k++)
-    {
-      distortion += byte_sse [diff [k]];
-    }
-    break;
-  case ERROR_SATD :
-  default:
-    distortion = HadamardSAD8x8( diff );
-    break;
+    if (*diff > max_dist)
+      return *diff;
   }
 
   return distortion;
 }
 
 /*!
- ***********************************************************************
- * \brief
- *    Calculate SA(T)D for 8x8
- ***********************************************************************
- */
-int HadamardMB (int c_diff[MB_PIXELS], int blocktype)
+***********************************************************************
+* \brief
+*    Calculate SAD for 8x8
+***********************************************************************
+*/
+int distortion8x8SAD(int* diff, int min_diff)
 {
-  int sad=0;
+  int distortion = 0, k;
 
-  switch(blocktype)
+  for (k = 0; k < 64; k++)
   {
-    //16x16
-  case 1:
-    sad  = HadamardSAD8x8( c_diff     );
-    sad += HadamardSAD8x8(&c_diff[ 64]);
-    sad += HadamardSAD8x8(&c_diff[128]);
-    sad += HadamardSAD8x8(&c_diff[192]);
-    break;
-    //16x8 8x16
-  case 2:
-  case 3:
-    sad  = HadamardSAD8x8( c_diff    );
-    sad += HadamardSAD8x8(&c_diff[64]);
-    break;
-    //8x8
-  case 4:
-    sad  = HadamardSAD8x8(c_diff);
-    break;
-    //8x4 4x8
-  default:
-    sad=-1;
-    break;
+    distortion += iabs(*diff++);
   }
 
-  return sad;
+  return distortion;
 }
+
+/*!
+***********************************************************************
+* \brief
+*    Calculate SSE for 8x8
+***********************************************************************
+*/
+int distortion8x8SSE(int* diff, int min_dist)
+{
+  int distortion = 0, k;
+  for (k = 0; k < 64; k++)
+  {
+    distortion += iabs2(*diff++);
+  }
+
+  return distortion;
+}
+
+/*!
+***********************************************************************
+* \brief
+*    Calculate SATD for 8x8
+***********************************************************************
+*/
+int distortion8x8SATD(int* diff, int min_dist)
+{
+  return HadamardSAD8x8( diff );
+}
+
+
+void select_distortion(ImageParameters *p_Img, InputParameters *p_Inp)
+{
+  switch(p_Inp->ModeDecisionMetric)
+  {
+  case ERROR_SAD:
+    p_Img->distortion4x4 = distortion4x4SAD;
+    p_Img->distortion8x8 = distortion8x8SAD;
+    break;
+  case ERROR_SSE:   
+    p_Img->distortion4x4 = distortion4x4SSE;
+    p_Img->distortion8x8 = distortion8x8SSE;
+    break;
+  case ERROR_SATD :
+  default:
+    p_Img->distortion4x4 = distortion4x4SATD;
+    p_Img->distortion8x8 = distortion8x8SATD;
+    break;
+  }
+}
+
 
 /*!
 ***********************************************************************
@@ -167,6 +174,7 @@ int HadamardMB (int c_diff[MB_PIXELS], int blocktype)
 int HadamardSAD4x4 (int* diff)
 {
   int k, satd = 0;
+  int m[16], d[16];
 
   /*===== hadamard transform =====*/
   m[ 0] = diff[ 0] + diff[12];
@@ -241,7 +249,7 @@ int HadamardSAD4x4 (int* diff)
   // Table lookup is faster than abs macro
   for (k=0; k<16; ++k)
   {
-    satd += byte_abs [d [k]];
+    satd += iabs(d [k]);
   }
 
 
@@ -257,6 +265,10 @@ int HadamardSAD4x4 (int* diff)
 int HadamardSAD8x8 (int* diff)
 {
   int i, j, jj, sad=0;
+
+  // Hadamard related arrays
+  int m1[8][8], m2[8][8], m3[8][8];
+
 
   //horizontal
   for (j=0; j < 8; j++)
@@ -333,56 +345,74 @@ int HadamardSAD8x8 (int* diff)
 *    SAD computation
 ************************************************************************
 */
-int computeSAD(imgpel* src_pic,
-               int blocksize_y,
-               int blocksize_x,
+int computeSAD(StorablePicture *ref1,
+               MEBlock *mv_block,
                int min_mcost,
-               int cand_x,
-               int cand_y)
+               MotionVector *cand)
 {
   int mcost = 0;
   int y,x;
-  int pad_size_x = img_padded_size_x - blocksize_x;
+  short blocksize_x = mv_block->blocksize_x;
+  short blocksize_y = mv_block->blocksize_y;
+  ImageParameters *p_Img = mv_block->p_Img;
+  int pad_size_x = p_Img->padded_size_x - blocksize_x;
+#if (JM_MEM_DISTORTION)
+  int *imgpel_abs = p_Img->imgpel_abs;
+#endif
 
-  src_line = src_pic;
-  ref_line = UMVLine4X (ref_pic_sub.luma, cand_y, cand_x, height_pad, width_pad);
+  imgpel *src_line, *ref_line;
+
+  src_line = mv_block->orig_pic[0];
+  ref_line = UMVLine4X (ref1, cand->mv_y, cand->mv_x);
   for (y=0; y<blocksize_y; y++)
   {
     for (x = 0; x < blocksize_x; x+=4)
     {
-      mcost += byte_abs[ *src_line++ - *ref_line++ ];
-      mcost += byte_abs[ *src_line++ - *ref_line++ ];
-      mcost += byte_abs[ *src_line++ - *ref_line++ ];
-      mcost += byte_abs[ *src_line++ - *ref_line++ ];
+#if (JM_MEM_DISTORTION)
+      mcost += imgpel_abs[ *src_line++ - *ref_line++ ];
+      mcost += imgpel_abs[ *src_line++ - *ref_line++ ];
+      mcost += imgpel_abs[ *src_line++ - *ref_line++ ];
+      mcost += imgpel_abs[ *src_line++ - *ref_line++ ];
+#else
+      mcost += iabs( *src_line++ - *ref_line++ );
+      mcost += iabs( *src_line++ - *ref_line++ );
+      mcost += iabs( *src_line++ - *ref_line++ );
+      mcost += iabs( *src_line++ - *ref_line++ );
+#endif
     }
     if (mcost >= min_mcost) return mcost;
     ref_line += pad_size_x;
   }
-  if ( ChromaMEEnable ) 
+  if ( mv_block->ChromaMEEnable ) 
   {
     // calculate chroma conribution to motion compensation error
-    int blocksize_x_cr = blocksize_x >> shift_cr_x;
-    int blocksize_y_cr = blocksize_y >> shift_cr_y;
-    int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_cr;
+    int blocksize_x_cr = mv_block->blocksize_cr_x;
+    int blocksize_y_cr = mv_block->blocksize_cr_y;
+    int cr_pad_size_x = p_Img->cr_padded_size_x - blocksize_x_cr;
     int k;
     int mcr_cost = 0; // chroma me cost
 
     for (k=0; k < 2; k++)
     {
-      src_line = src_pic + (256 << k);
-      ref_line = UMVLine8X_chroma ( ref_pic_sub.crcb[k], cand_y, cand_x, height_pad_cr, width_pad_cr);
+      src_line = mv_block->orig_pic[k+1];
+      ref_line = UMVLine8X_chroma ( ref1, k+1, cand->mv_y, cand->mv_x);
       mcr_cost = 0;
 
-      for (y=0; y<blocksize_y_cr; y++)
+      for (y = 0; y < blocksize_y_cr; y++)
       {
         for (x = 0; x < blocksize_x_cr; x += 2)
         {
-          mcr_cost += byte_abs[ *src_line++ - *ref_line++ ];
-          mcr_cost += byte_abs[ *src_line++ - *ref_line++ ];
+#if (JM_MEM_DISTORTION)
+          mcr_cost += imgpel_abs[ *src_line++ - *ref_line++ ];
+          mcr_cost += imgpel_abs[ *src_line++ - *ref_line++ ];
+#else
+          mcr_cost += iabs( *src_line++ - *ref_line++ );
+          mcr_cost += iabs( *src_line++ - *ref_line++ );
+#endif
         }
         ref_line += cr_pad_size_x;
       }
-      mcost += params->ChromaMEWeight * mcr_cost;
+      mcost += mv_block->ChromaMEWeight * mcr_cost;
       if (mcost >= min_mcost) return mcost;
     }
   }
@@ -396,63 +426,79 @@ int computeSAD(imgpel* src_pic,
 *    SAD computation for weighted samples
 ************************************************************************
 */
-int computeSADWP(imgpel* src_pic,
-               int blocksize_y,
-               int blocksize_x,
-               int min_mcost,
-               int cand_x,
-               int cand_y)
+int computeSADWP(StorablePicture *ref1,
+                 MEBlock *mv_block,
+                 int min_mcost,
+                 MotionVector *cand
+                 )
 {
   int mcost = 0;
   int y, x;
   int weighted_pel;
-  int pad_size_x = img_padded_size_x - blocksize_x;
+  short blocksize_x = mv_block->blocksize_x;
+  short blocksize_y = mv_block->blocksize_y;
 
-  src_line = src_pic;
-  ref_line = UMVLine4X (ref_pic_sub.luma, cand_y, cand_x, height_pad, width_pad);
+  ImageParameters *p_Img = mv_block->p_Img;
+  Slice *currSlice = mv_block->p_slice;  
+  int pad_size_x = p_Img->padded_size_x - blocksize_x;
+  int max_imgpel_value = p_Img->max_imgpel_value;
+  short weight = mv_block->weight_luma;
+  short offset = mv_block->offset_luma;
+
+  int wp_luma_round = currSlice->wp_luma_round;
+  short luma_log_weight_denom = currSlice->luma_log_weight_denom;
+
+  imgpel *src_line = mv_block->orig_pic[0];
+  imgpel *ref_line = UMVLine4X (ref1, cand->mv_y, cand->mv_x);
+
   for (y=0; y<blocksize_y; y++)
   {
     for (x = 0; x < blocksize_x; x+=4)
     {
-      weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
-      mcost += byte_abs[ *src_line++ -  weighted_pel ];
-      weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
-      mcost += byte_abs[ *src_line++ -  weighted_pel ];
-      weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
-      mcost += byte_abs[ *src_line++ -  weighted_pel ];
-      weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
-      mcost += byte_abs[ *src_line++ -  weighted_pel ];
+      weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
+      mcost += iabs( *src_line++ -  weighted_pel );
+      weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
+      mcost += iabs( *src_line++ -  weighted_pel );
+      weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
+      mcost += iabs( *src_line++ -  weighted_pel );
+      weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
+      mcost += iabs( *src_line++ -  weighted_pel );
     }
     if (mcost >= min_mcost) return mcost;
     ref_line += pad_size_x;
   }
-  if ( ChromaMEEnable ) 
+  if ( mv_block->ChromaMEEnable ) 
   {
     // calculate chroma conribution to motion compensation error
-    int blocksize_x_cr = blocksize_x >> shift_cr_x;
-    int blocksize_y_cr = blocksize_y >> shift_cr_y;
-    int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_cr;
+    int blocksize_x_cr = mv_block->blocksize_cr_x;
+    int blocksize_y_cr = mv_block->blocksize_cr_y;
+    int cr_pad_size_x = p_Img->cr_padded_size_x - blocksize_x_cr;
     int k;
     int mcr_cost = 0;
-    int max_imgpel_value_uv = img->max_imgpel_value_comp[1];
+    int max_imgpel_value_uv = p_Img->max_pel_value_comp[1];
+    int wp_chroma_round = currSlice->wp_chroma_round;
+    short chroma_log_weight_denom = currSlice->chroma_log_weight_denom;
 
     for (k=0; k < 2; k++)
     {
+      weight = mv_block->weight_cr[k];
+      offset = mv_block->offset_cr[k];
+
       mcr_cost = 0;
-      src_line = src_pic + (256 << k);
-      ref_line = UMVLine8X_chroma ( ref_pic_sub.crcb[k], cand_y, cand_x, height_pad_cr, width_pad_cr);
+      src_line = mv_block->orig_pic[k+1];
+      ref_line = UMVLine8X_chroma ( ref1, k+1, cand->mv_y, cand->mv_x);
       for (y=0; y<blocksize_y_cr; y++)
       {
         for (x = 0; x < blocksize_x_cr; x+=2)
         {
-          weighted_pel = iClip1( max_imgpel_value_uv, ((weight_cr[k] * *ref_line++  + wp_chroma_round) >> chroma_log_weight_denom) + offset_cr[k]);
-          mcr_cost += byte_abs[ *src_line++ -  weighted_pel ];
-          weighted_pel = iClip1( max_imgpel_value_uv, ((weight_cr[k] * *ref_line++  + wp_chroma_round) >> chroma_log_weight_denom) + offset_cr[k]);
-          mcr_cost += byte_abs[ *src_line++ -  weighted_pel ];
+          weighted_pel = iClip1( max_imgpel_value_uv, ((weight * *ref_line++  + wp_chroma_round) >> chroma_log_weight_denom) + offset);
+          mcr_cost += iabs( *src_line++ -  weighted_pel );
+          weighted_pel = iClip1( max_imgpel_value_uv, ((weight * *ref_line++  + wp_chroma_round) >> chroma_log_weight_denom) + offset);
+          mcr_cost += iabs( *src_line++ -  weighted_pel );
         }
         ref_line += cr_pad_size_x;
       }
-      mcost += params->ChromaMEWeight * mcr_cost;
+      mcost += mv_block->ChromaMEWeight * mcr_cost;
       if (mcost >= min_mcost) return mcost;
     }
   }
@@ -466,69 +512,86 @@ int computeSADWP(imgpel* src_pic,
 *    BiPred SAD computation (no weights)
 ************************************************************************
 */
-int computeBiPredSAD1(imgpel* src_pic,
-                      int blocksize_y,
-                      int blocksize_x,
+int computeBiPredSAD1(StorablePicture *ref1, 
+                      StorablePicture *ref2, 
+                      MEBlock *mv_block,
                       int min_mcost,
-                      int cand_x1, int cand_y1,
-                      int cand_x2, int cand_y2)
+                      MotionVector *cand1,
+                      MotionVector *cand2)
 {
   int mcost = 0;
   int bi_diff;
   int y,x;
-  int pad_size_x = img_padded_size_x - blocksize_x;
+  short blocksize_x = mv_block->blocksize_x;
+  short blocksize_y = mv_block->blocksize_y;
+  ImageParameters *p_Img = mv_block->p_Img;
+  int pad_size_x = p_Img->padded_size_x - blocksize_x;
+#if (JM_MEM_DISTORTION)
+  int *imgpel_abs = p_Img->imgpel_abs;
+#endif
 
-  src_line   = src_pic;
-  ref2_line  = UMVLine4X(ref_pic2_sub.luma, cand_y2, cand_x2, height_pad, width_pad);
-  ref1_line  = UMVLine4X(ref_pic1_sub.luma, cand_y1, cand_x1, height_pad, width_pad);
+  imgpel *src_line   = mv_block->orig_pic[0];
+  imgpel *ref2_line  = UMVLine4X(ref2, cand2->mv_y, cand2->mv_x);
+  imgpel *ref1_line  = UMVLine4X(ref1, cand1->mv_y, cand1->mv_x);
 
   for (y = 0; y < blocksize_y; y++)
   {
     for (x = 0; x < blocksize_x; x+=4)
     {
+#if (JM_MEM_DISTORTION)
       bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
-      mcost += byte_abs[bi_diff];
+      mcost += imgpel_abs[ bi_diff ];
       bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
-      mcost += byte_abs[bi_diff];
+      mcost += imgpel_abs[ bi_diff ];
       bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
-      mcost += byte_abs[bi_diff];
+      mcost += imgpel_abs[ bi_diff ];
       bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
-      mcost += byte_abs[bi_diff];
+      mcost += imgpel_abs[ bi_diff ];
+#else
+      bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
+      mcost += iabs(bi_diff);
+      bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
+      mcost += iabs(bi_diff);
+      bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
+      mcost += iabs(bi_diff);
+      bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
+      mcost += iabs(bi_diff);
+#endif
     }
     if (mcost >= min_mcost) return mcost;
     ref2_line += pad_size_x;
     ref1_line += pad_size_x;
   }
 
-  if ( ChromaMEEnable ) 
+  if ( mv_block->ChromaMEEnable ) 
   {
     // calculate chroma conribution to motion compensation error
-    int blocksize_x_cr = blocksize_x >> shift_cr_x;
-    int blocksize_y_cr = blocksize_y >> shift_cr_y;
-    int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_cr;
+    int blocksize_x_cr = mv_block->blocksize_cr_x;
+    int blocksize_y_cr = mv_block->blocksize_cr_y;
+    int cr_pad_size_x = p_Img->cr_padded_size_x - blocksize_x_cr;
     int k;
     int mcr_cost = 0;
 
-    for (k=0; k<2; k++)
+    for (k=1; k<3; k++)
     {
       mcr_cost = 0;
-      src_line = src_pic + (256 << k);
-      ref2_line = UMVLine8X_chroma ( ref_pic2_sub.crcb[k], cand_y2, cand_x2, height_pad_cr, width_pad_cr);
-      ref1_line = UMVLine8X_chroma ( ref_pic1_sub.crcb[k], cand_y1, cand_x1, height_pad_cr, width_pad_cr);
+      src_line = mv_block->orig_pic[k];
+      ref2_line = UMVLine8X_chroma ( ref2, k, cand2->mv_y, cand2->mv_x);
+      ref1_line = UMVLine8X_chroma ( ref1, k, cand1->mv_y, cand1->mv_x);
 
       for (y=0; y<blocksize_y_cr; y++)
       {
         for (x = 0; x < blocksize_x_cr; x+=2)
         {
           bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
-          mcr_cost += byte_abs[bi_diff];
+          mcr_cost += iabs(bi_diff);
           bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
-          mcr_cost += byte_abs[bi_diff];
+          mcr_cost += iabs(bi_diff);
         }        
         ref2_line += cr_pad_size_x;
         ref1_line += cr_pad_size_x;
       }
-      mcost += params->ChromaMEWeight * mcr_cost;
+      mcost += mv_block->ChromaMEWeight * mcr_cost;
       if (mcost >= min_mcost) return mcost;
     }
   }
@@ -541,24 +604,33 @@ int computeBiPredSAD1(imgpel* src_pic,
 *    BiPred SAD computation (with weights)
 ************************************************************************
 */
-int computeBiPredSAD2(imgpel* src_pic,
-                      int blocksize_y,
-                      int blocksize_x,
+int computeBiPredSAD2(StorablePicture *ref1, 
+                      StorablePicture *ref2, 
+                      MEBlock *mv_block,
                       int min_mcost,
-                      int cand_x1, int cand_y1,
-                      int cand_x2, int cand_y2)
+                      MotionVector *cand1,
+                      MotionVector *cand2)
 {
   int mcost = 0;
   int bi_diff;
-  int denom = luma_log_weight_denom + 1;
-  int lround = 2 * wp_luma_round;
+  ImageParameters *p_Img = mv_block->p_Img;
+  Slice *currSlice = mv_block->p_slice;
+  int denom = currSlice->luma_log_weight_denom + 1;
+  int lround = 2 * currSlice->wp_luma_round;  
+  int max_imgpel_value = p_Img->max_imgpel_value;
   int y,x;
   int weighted_pel, pixel1, pixel2;
-  int pad_size_x = img_padded_size_x - blocksize_x;
+  short blocksize_x = mv_block->blocksize_x;
+  short blocksize_y = mv_block->blocksize_y;
+  short weight1 = mv_block->weight1;
+  short weight2 = mv_block->weight2;
+  short offsetBi = mv_block->offsetBi;
 
-  src_line   = src_pic;
-  ref2_line  = UMVLine4X(ref_pic2_sub.luma, cand_y2, cand_x2, height_pad, width_pad);
-  ref1_line  = UMVLine4X(ref_pic1_sub.luma, cand_y1, cand_x1, height_pad, width_pad);
+  int pad_size_x = p_Img->padded_size_x - blocksize_x;
+
+  imgpel *src_line   = mv_block->orig_pic[0];
+  imgpel *ref2_line  = UMVLine4X(ref2, cand2->mv_y, cand2->mv_x);
+  imgpel *ref1_line  = UMVLine4X(ref1, cand1->mv_y, cand1->mv_x);
 
   for (y=0; y<blocksize_y; y++)
   {
@@ -566,105 +638,113 @@ int computeBiPredSAD2(imgpel* src_pic,
     {
       pixel1 = weight1 * (*ref1_line++);
       pixel2 = weight2 * (*ref2_line++);
-      weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
+      weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
       bi_diff = (*src_line++) - weighted_pel;
-      mcost += byte_abs[bi_diff];
+      mcost += iabs(bi_diff);
 
       pixel1 = weight1 * (*ref1_line++);
       pixel2 = weight2 * (*ref2_line++);
-      weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
+      weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
       bi_diff = (*src_line++) - weighted_pel;
-      mcost += byte_abs[bi_diff];
+      mcost += iabs(bi_diff);
 
       pixel1 = weight1 * (*ref1_line++);
       pixel2 = weight2 * (*ref2_line++);
-      weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
+      weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
       bi_diff = (*src_line++) - weighted_pel;
-      mcost += byte_abs[bi_diff];
+      mcost += iabs(bi_diff);
 
       pixel1 = weight1 * (*ref1_line++);
       pixel2 = weight2 * (*ref2_line++);
-      weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
+      weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
       bi_diff = (*src_line++) - weighted_pel;
-      mcost += byte_abs[bi_diff];
+      mcost += iabs(bi_diff);
     }
     if (mcost >= min_mcost) return mcost;
     ref2_line += pad_size_x;
     ref1_line += pad_size_x;
   }
 
-  if ( ChromaMEEnable ) 
+  if ( mv_block->ChromaMEEnable ) 
   {
     // calculate chroma conribution to motion compensation error
-    int blocksize_x_cr = blocksize_x >> shift_cr_x;
-    int blocksize_y_cr = blocksize_y >> shift_cr_y;
-    int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_cr;
+    int blocksize_x_cr = mv_block->blocksize_cr_x;
+    int blocksize_y_cr = mv_block->blocksize_cr_y;
+    int cr_pad_size_x  = p_Img->cr_padded_size_x - blocksize_x_cr;
     int k;
     int mcr_cost = 0;
-    int max_imgpel_value_uv = img->max_imgpel_value_comp[1];
+    int max_imgpel_value_uv = p_Img->max_pel_value_comp[1];
 
     for (k=0; k<2; k++)
     {
+      weight1  = mv_block->weight1_cr[k];
+      weight2  = mv_block->weight2_cr[k];
+      offsetBi = mv_block->offsetBi_cr[k];
+
       mcr_cost = 0;
-      src_line = src_pic + (256 << k);
-      ref2_line = UMVLine8X_chroma ( ref_pic2_sub.crcb[k], cand_y2, cand_x2, height_pad_cr, width_pad_cr);
-      ref1_line = UMVLine8X_chroma ( ref_pic1_sub.crcb[k], cand_y1, cand_x1, height_pad_cr, width_pad_cr);
+      src_line = mv_block->orig_pic[k+1];
+      ref2_line = UMVLine8X_chroma ( ref2, k+1, cand2->mv_y, cand2->mv_x);
+      ref1_line = UMVLine8X_chroma ( ref1, k+1, cand1->mv_y, cand1->mv_x);
 
       for (y=0; y<blocksize_y_cr; y++)
       {
         for (x = 0; x < blocksize_x_cr; x+=2)
         {
-          pixel1 = weight1_cr[k] * (*ref1_line++);
-          pixel2 = weight2_cr[k] * (*ref2_line++);
-          weighted_pel =  iClip1( max_imgpel_value_uv, ((pixel1 + pixel2 + lround) >> denom) + offsetBi_cr[k]);
+          pixel1 = weight1 * (*ref1_line++);
+          pixel2 = weight2 * (*ref2_line++);
+          weighted_pel = iClip1( max_imgpel_value_uv, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
           bi_diff = (*src_line++) - weighted_pel;
-          mcr_cost += byte_abs[bi_diff];
+          mcr_cost += iabs(bi_diff);
 
-          pixel1 = weight1_cr[k] * (*ref1_line++);
-          pixel2 = weight2_cr[k] * (*ref2_line++);
-          weighted_pel =  iClip1( max_imgpel_value_uv, ((pixel1 + pixel2 + lround) >> denom) + offsetBi_cr[k]);
+          pixel1 = weight1 * (*ref1_line++);
+          pixel2 = weight2 * (*ref2_line++);
+          weighted_pel = iClip1( max_imgpel_value_uv, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
           bi_diff = (*src_line++) - weighted_pel;
-          mcr_cost += byte_abs[bi_diff];
+          mcr_cost += iabs(bi_diff);
         }
         ref2_line += cr_pad_size_x;
         ref1_line += cr_pad_size_x;
       }
-      mcost += params->ChromaMEWeight * mcr_cost;
+      mcost += mv_block->ChromaMEWeight * mcr_cost;
       if (mcost >= min_mcost) return mcost;
-      
+
     }
   }
   return mcost;
 }
 
 /*!
- ************************************************************************
- * \brief
- *    SAD computation _with_ Hadamard Transform
- ************************************************************************
+************************************************************************
+* \brief
+*    SAD computation _with_ Hadamard Transform
+************************************************************************
 */
-int computeSATD(imgpel* src_pic,
-                int blocksize_y,
-                int blocksize_x,
+int computeSATD(StorablePicture *ref1,
+                MEBlock *mv_block,
                 int min_mcost,
-                int cand_x,
-                int cand_y)
+                MotionVector *cand
+                )
 {
   int mcost = 0;
   int y, x, y4, *d;
   int src_size_x, src_size_mul;
-  imgpel *src_tmp = src_pic;
+  short blocksize_x = mv_block->blocksize_x;
+  short blocksize_y = mv_block->blocksize_y;
+  ImageParameters *p_Img = mv_block->p_Img;
+  imgpel *src_tmp = mv_block->orig_pic[0];
+  int diff[MB_PIXELS];
+  imgpel *src_line, *ref_line;
 
-  if ( !test8x8transform )
+  if ( !mv_block->test8x8 )
   { // 4x4 TRANSFORM
     src_size_x = blocksize_x - BLOCK_SIZE;
     src_size_mul = blocksize_x * BLOCK_SIZE;
-    for (y = cand_y; y < cand_y + (blocksize_y<<2); y += (BLOCK_SIZE_SP))
+    for (y = cand->mv_y; y < cand->mv_y + (blocksize_y<<2); y += (BLOCK_SIZE_SP))
     {
       for (x=0; x<blocksize_x; x += BLOCK_SIZE)
       {
         d    = diff;
-        ref_line = UMVLine4X (ref_pic_sub.luma, y, cand_x + (x<<2), height_pad, width_pad);
+        ref_line = UMVLine4X (ref1, y, cand->mv_x + (x<<2));
         src_line = src_tmp + x;
         for (y4 = 0; y4 < BLOCK_SIZE; y4++ )
         {
@@ -673,7 +753,7 @@ int computeSATD(imgpel* src_pic,
           *d++ = *src_line++ - *ref_line++ ;
           *d++ = *src_line++ - *ref_line++ ;
 
-          ref_line += img_padded_size_x_m4x4;
+          ref_line += p_Img->padded_size_x_m4x4;
           src_line += src_size_x;
         }
         if ((mcost += HadamardSAD4x4 (diff)) > min_mcost) return mcost;
@@ -682,15 +762,15 @@ int computeSATD(imgpel* src_pic,
     }
   }
   else
-  { // 8x8 TRANSFORM
+  { // 8x8 TRANSFORM    
     src_size_x = (blocksize_x - BLOCK_SIZE_8x8);
     src_size_mul = blocksize_x * BLOCK_SIZE_8x8;
-    for (y = cand_y; y < cand_y + (blocksize_y<<2); y += (BLOCK_SIZE_8x8_SP) )
+    for (y = cand->mv_y; y < cand->mv_y + (blocksize_y<<2); y += (BLOCK_SIZE_8x8_SP) )
     {
       for (x=0; x<blocksize_x; x += BLOCK_SIZE_8x8 )
       {
         d = diff;
-        ref_line  = UMVLine4X (ref_pic_sub.luma, y, cand_x + (x<<2), height_pad, width_pad);
+        ref_line  = UMVLine4X (ref1, y, cand->mv_x + (x<<2));
         src_line = src_tmp + x;
         for (y4 = 0; y4 < BLOCK_SIZE_8x8; y4++ )
         {
@@ -703,7 +783,7 @@ int computeSATD(imgpel* src_pic,
           *d++ = *src_line++ - *ref_line++ ;
           *d++ = *src_line++ - *ref_line++ ;
 
-          ref_line += img_padded_size_x_m8x8;
+          ref_line += p_Img->padded_size_x_m8x8;
           src_line += src_size_x;
         }
         if ((mcost += HadamardSAD8x8 (diff)) > min_mcost) return mcost;
@@ -715,47 +795,59 @@ int computeSATD(imgpel* src_pic,
 }
 
 /*!
- ************************************************************************
- * \brief
- *    SAD computation of weighted samples _with_ Hadamard Transform
- ************************************************************************
+************************************************************************
+* \brief
+*    SAD computation of weighted samples _with_ Hadamard Transform
+************************************************************************
 */
-int computeSATDWP(imgpel* src_pic,
-                int blocksize_y,
-                int blocksize_x,
-                int min_mcost,
-                int cand_x,
-                int cand_y)
+int computeSATDWP(StorablePicture *ref1,
+                  MEBlock *mv_block,
+                  int min_mcost,
+                  MotionVector *cand
+                  )
 {
   int mcost = 0;
   int y, x, y4, *d;
   int weighted_pel;
   int src_size_x, src_size_mul;
-  imgpel *src_tmp = src_pic;
+  short blocksize_x = mv_block->blocksize_x;
+  short blocksize_y = mv_block->blocksize_y;
 
-  if ( !test8x8transform )
+  imgpel *src_tmp = mv_block->orig_pic[0];
+  ImageParameters *p_Img = mv_block->p_Img;
+  Slice *currSlice = mv_block->p_slice;
+  short luma_log_weight_denom = currSlice->luma_log_weight_denom;
+  short weight = mv_block->weight_luma;
+  short offset = mv_block->offset_luma; 
+
+  int wp_luma_round = currSlice->wp_luma_round;  
+  int max_imgpel_value = p_Img->max_imgpel_value;
+  int diff[MB_PIXELS];
+  imgpel *src_line, *ref_line;
+
+  if ( !mv_block->test8x8 )
   { // 4x4 TRANSFORM
     src_size_x = (blocksize_x - BLOCK_SIZE);
     src_size_mul = blocksize_x * BLOCK_SIZE;
-    for (y = cand_y; y < cand_y + (blocksize_y<<2); y += (BLOCK_SIZE_SP))
+    for (y = cand->mv_y; y < cand->mv_y + (blocksize_y<<2); y += (BLOCK_SIZE_SP))
     {
       for (x=0; x<blocksize_x; x += BLOCK_SIZE)
       {
         d    = diff;
-        ref_line = UMVLine4X (ref_pic_sub.luma, y, cand_x + (x<<2), height_pad, width_pad);
+        ref_line = UMVLine4X (ref1, y, cand->mv_x + (x<<2));
         src_line = src_tmp + x;
         for (y4 = 0; y4 < BLOCK_SIZE; y4++ )
         {
-          weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
+          weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
           *d++ = *src_line++ - weighted_pel;
-          weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
+          weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
           *d++ = *src_line++ - weighted_pel;
-          weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
+          weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
           *d++ = *src_line++ - weighted_pel;
-          weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
+          weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
           *d++ = *src_line++ - weighted_pel;
 
-          ref_line += img_padded_size_x_m4x4;
+          ref_line += p_Img->padded_size_x_m4x4;
           src_line += src_size_x;
         }
         if ((mcost += HadamardSAD4x4 (diff)) > min_mcost) return mcost;
@@ -767,33 +859,33 @@ int computeSATDWP(imgpel* src_pic,
   { // 8x8 TRANSFORM
     src_size_x = (blocksize_x - BLOCK_SIZE_8x8);
     src_size_mul = blocksize_x * BLOCK_SIZE_8x8;
-    for (y = cand_y; y < cand_y + (blocksize_y<<2); y += (BLOCK_SIZE_8x8_SP) )
+    for (y = cand->mv_y; y < cand->mv_y + (blocksize_y<<2); y += (BLOCK_SIZE_8x8_SP) )
     {
       for (x=0; x<blocksize_x; x += BLOCK_SIZE_8x8 )
       {
         d = diff;
-        ref_line  = UMVLine4X (ref_pic_sub.luma, y, cand_x + (x<<2), height_pad, width_pad);
+        ref_line  = UMVLine4X (ref1, y, cand->mv_x + (x<<2));
         src_line = src_tmp + x;
         for (y4 = 0; y4 < BLOCK_SIZE_8x8; y4++ )
         {
-          weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
+          weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
           *d++ = *src_line++ - weighted_pel;
-          weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
+          weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
           *d++ = *src_line++ - weighted_pel;
-          weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
+          weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
           *d++ = *src_line++ - weighted_pel;
-          weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
+          weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
           *d++ = *src_line++ - weighted_pel;
-          weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
+          weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
           *d++ = *src_line++ - weighted_pel;
-          weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
+          weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
           *d++ = *src_line++ - weighted_pel;
-          weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
+          weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
           *d++ = *src_line++ - weighted_pel;
-          weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
+          weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
           *d++ = *src_line++ - weighted_pel;
 
-          ref_line += img_padded_size_x_m8x8;
+          ref_line += p_Img->padded_size_x_m8x8;
           src_line += src_size_x;
         }
         if ((mcost += HadamardSAD8x8 (diff)) > min_mcost) return mcost;
@@ -805,24 +897,29 @@ int computeSATDWP(imgpel* src_pic,
 }
 
 /*!
- ************************************************************************
- * \brief
- *    BiPred (w/o weights) SATD computation
- ************************************************************************
+************************************************************************
+* \brief
+*    BiPred (w/o weights) SATD computation
+************************************************************************
 */
-int computeBiPredSATD1(imgpel* src_pic,
-                       int blocksize_y,
-                       int blocksize_x,
+int computeBiPredSATD1(StorablePicture *ref1, 
+                       StorablePicture *ref2, 
+                       MEBlock *mv_block,
                        int min_mcost,
-                       int cand_x1, int cand_y1,
-                       int cand_x2, int cand_y2)
+                       MotionVector *cand1,
+                       MotionVector *cand2)
 {
   int mcost = 0;
   int y, x, y4, *d;
   int src_size_x, src_size_mul;
-  imgpel *src_tmp = src_pic;
+  imgpel *src_tmp = mv_block->orig_pic[0];
+  int diff[MB_PIXELS];
+  imgpel *src_line, *ref1_line, *ref2_line;
+  short blocksize_x = mv_block->blocksize_x;
+  short blocksize_y = mv_block->blocksize_y;
+  ImageParameters *p_Img = mv_block->p_Img;
 
-  if ( !test8x8transform )
+  if ( !mv_block->test8x8 )
   { // 4x4 TRANSFORM
     src_size_x = (blocksize_x - BLOCK_SIZE);
     src_size_mul = blocksize_x * BLOCK_SIZE;
@@ -832,8 +929,8 @@ int computeBiPredSATD1(imgpel* src_pic,
       {
         d    = diff;
         src_line   = src_tmp + x;
-        ref2_line  = UMVLine4X(ref_pic2_sub.luma, cand_y2 + y, cand_x2 + (x<<2), height_pad, width_pad);
-        ref1_line  = UMVLine4X(ref_pic1_sub.luma, cand_y1 + y, cand_x1 + (x<<2), height_pad, width_pad);
+        ref2_line  = UMVLine4X(ref2, cand2->mv_y + y, cand2->mv_x + (x<<2));
+        ref1_line  = UMVLine4X(ref1, cand1->mv_y + y, cand1->mv_x + (x<<2));
         for (y4 = 0; y4 < BLOCK_SIZE; y4++ )
         {
           *d++ = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
@@ -841,8 +938,8 @@ int computeBiPredSATD1(imgpel* src_pic,
           *d++ = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
           *d++ = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
 
-          ref1_line += img_padded_size_x_m4x4;
-          ref2_line += img_padded_size_x_m4x4;
+          ref1_line += p_Img->padded_size_x_m4x4;
+          ref2_line += p_Img->padded_size_x_m4x4;
           src_line  += src_size_x;
         }
         if ((mcost += HadamardSAD4x4 (diff)) > min_mcost) return mcost;
@@ -854,16 +951,16 @@ int computeBiPredSATD1(imgpel* src_pic,
   { // 8x8 TRANSFORM
     src_size_x = (blocksize_x - BLOCK_SIZE_8x8);
     src_size_mul = blocksize_x * BLOCK_SIZE_8x8;
-    for (y=0; y<blocksize_y; y += BLOCK_SIZE_8x8 )
+    for (y=0; y<(blocksize_y << 2); y += BLOCK_SIZE_8x8_SP )
     {
-      int y_pos2 = cand_y2 + (y<<2);
-      int y_pos1 = cand_y1 + (y<<2);
+      int y_pos2 = cand2->mv_y + y;
+      int y_pos1 = cand1->mv_y + y;
       for (x=0; x<blocksize_x; x += BLOCK_SIZE_8x8 )
       {
         d = diff;
         src_line   = src_tmp + x;
-        ref2_line  = UMVLine4X(ref_pic2_sub.luma, y_pos2, cand_x2 + (x<<2), height_pad, width_pad);
-        ref1_line  = UMVLine4X(ref_pic1_sub.luma, y_pos1, cand_x1 + (x<<2), height_pad, width_pad);
+        ref2_line  = UMVLine4X(ref2, y_pos2, cand2->mv_x + (x<<2));
+        ref1_line  = UMVLine4X(ref1, y_pos1, cand1->mv_x + (x<<2));
         for (y4 = 0; y4 < BLOCK_SIZE_8x8; y4++ )
         {
           *d++ = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
@@ -875,8 +972,8 @@ int computeBiPredSATD1(imgpel* src_pic,
           *d++ = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
           *d++ = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
 
-          ref1_line += img_padded_size_x_m8x8;
-          ref2_line += img_padded_size_x_m8x8;
+          ref1_line += p_Img->padded_size_x_m8x8;
+          ref2_line += p_Img->padded_size_x_m8x8;
           src_line += src_size_x;
         }
         if ((mcost += HadamardSAD8x8 (diff)) > min_mcost) return mcost;
@@ -893,22 +990,34 @@ int computeBiPredSATD1(imgpel* src_pic,
 *    BiPred (w/ weights) SATD computation
 ************************************************************************
 */
-int computeBiPredSATD2(imgpel* src_pic,
-                       int blocksize_y,
-                       int blocksize_x,
+int computeBiPredSATD2(StorablePicture *ref1, 
+                       StorablePicture *ref2, 
+                       MEBlock *mv_block,
                        int min_mcost,
-                       int cand_x1, int cand_y1,
-                       int cand_x2, int cand_y2)
+                       MotionVector *cand1,
+                       MotionVector *cand2)
 {
   int mcost = 0;
   int y, x, y4, *d;
   int weighted_pel, pixel1, pixel2;
-  int denom = luma_log_weight_denom + 1;
-  int lround = 2 * wp_luma_round;
-  int src_size_x, src_size_mul;
-  imgpel *src_tmp = src_pic;
+  ImageParameters *p_Img = mv_block->p_Img;
+  Slice *currSlice = mv_block->p_slice;
+  int denom = currSlice->luma_log_weight_denom + 1;
+  int lround = 2 * currSlice->wp_luma_round;
+  short weight1 = mv_block->weight1;
+  short weight2 = mv_block->weight2;
+  short offsetBi = mv_block->offsetBi;
 
-  if ( !test8x8transform )
+
+  int max_imgpel_value = p_Img->max_imgpel_value;
+  int src_size_x, src_size_mul;
+  imgpel *src_tmp = mv_block->orig_pic[0];
+  int diff[MB_PIXELS];
+  imgpel *src_line, *ref1_line, *ref2_line;
+  short blocksize_x = mv_block->blocksize_x;
+  short blocksize_y = mv_block->blocksize_y;
+
+  if ( !mv_block->test8x8 )
   { // 4x4 TRANSFORM
     src_size_x = (blocksize_x - BLOCK_SIZE);
     src_size_mul = blocksize_x * BLOCK_SIZE;
@@ -918,33 +1027,33 @@ int computeBiPredSATD2(imgpel* src_pic,
       {
         d    = diff;
         src_line   = src_tmp + x;
-        ref2_line  = UMVLine4X(ref_pic2_sub.luma, cand_y2 + y, cand_x2 + (x<<2), height_pad, width_pad);
-        ref1_line  = UMVLine4X(ref_pic1_sub.luma, cand_y1 + y, cand_x1 + (x<<2), height_pad, width_pad);
+        ref2_line  = UMVLine4X(ref2, cand2->mv_y + y, cand2->mv_x + (x<<2));
+        ref1_line  = UMVLine4X(ref1, cand1->mv_y + y, cand1->mv_x + (x<<2));
         for (y4 = 0; y4 < BLOCK_SIZE; y4++ )
         {
           // 0
           pixel1 = weight1 * (*ref1_line++);
           pixel2 = weight2 * (*ref2_line++);
-          weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
+          weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
           *d++ =  (*src_line++) - weighted_pel;
           // 1
           pixel1 = weight1 * (*ref1_line++);
           pixel2 = weight2 * (*ref2_line++);
-          weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
+          weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
           *d++ =  (*src_line++) - weighted_pel;
           // 2
           pixel1 = weight1 * (*ref1_line++);
           pixel2 = weight2 * (*ref2_line++);
-          weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
+          weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
           *d++ =  (*src_line++) - weighted_pel;
           // 3
           pixel1 = weight1 * (*ref1_line++);
           pixel2 = weight2 * (*ref2_line++);
-          weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
+          weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
           *d++ =  (*src_line++) - weighted_pel;
 
-          ref1_line += img_padded_size_x_m4x4;
-          ref2_line += img_padded_size_x_m4x4;
+          ref1_line += p_Img->padded_size_x_m4x4;
+          ref2_line += p_Img->padded_size_x_m4x4;
           src_line  += src_size_x;
         }
         if ((mcost += HadamardSAD4x4 (diff)) > min_mcost) return mcost;
@@ -956,61 +1065,61 @@ int computeBiPredSATD2(imgpel* src_pic,
   { // 8x8 TRANSFORM
     src_size_x = (blocksize_x - BLOCK_SIZE_8x8);
     src_size_mul = blocksize_x * BLOCK_SIZE_8x8;
-    for (y=0; y<blocksize_y; y += BLOCK_SIZE_8x8 )
+    for (y=0; y < (blocksize_y << 2); y += BLOCK_SIZE_8x8_SP )
     {
-      int y_pos2 = cand_y2 + (y<<2);
-      int y_pos1 = cand_y1 + (y<<2);
+      int y_pos2 = cand2->mv_y + y;
+      int y_pos1 = cand1->mv_y + y;
       for (x=0; x<blocksize_x; x += BLOCK_SIZE_8x8 )
       {
         d = diff;
         src_line   = src_tmp + x;
-        ref2_line  = UMVLine4X(ref_pic2_sub.luma, y_pos2, cand_x2 + (x<<2), height_pad, width_pad);
-        ref1_line  = UMVLine4X(ref_pic1_sub.luma, y_pos1, cand_x1 + (x<<2), height_pad, width_pad);
+        ref2_line  = UMVLine4X(ref2, y_pos2, cand2->mv_x + (x<<2));
+        ref1_line  = UMVLine4X(ref1, y_pos1, cand1->mv_x + (x<<2));
         for (y4 = 0; y4 < BLOCK_SIZE_8x8; y4++ )
         {
           // 0
           pixel1 = weight1 * (*ref1_line++);
           pixel2 = weight2 * (*ref2_line++);
-          weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
+          weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
           *d++ =  (*src_line++) - weighted_pel;
           // 1
           pixel1 = weight1 * (*ref1_line++);
           pixel2 = weight2 * (*ref2_line++);
-          weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
+          weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
           *d++ =  (*src_line++) - weighted_pel;
           // 2
           pixel1 = weight1 * (*ref1_line++);
           pixel2 = weight2 * (*ref2_line++);
-          weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
+          weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
           *d++ =  (*src_line++) - weighted_pel;
           // 3
           pixel1 = weight1 * (*ref1_line++);
           pixel2 = weight2 * (*ref2_line++);
-          weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
+          weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
           *d++ =  (*src_line++) - weighted_pel;
           // 4
           pixel1 = weight1 * (*ref1_line++);
           pixel2 = weight2 * (*ref2_line++);
-          weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
+          weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
           *d++ =  (*src_line++) - weighted_pel;
           // 5
           pixel1 = weight1 * (*ref1_line++);
           pixel2 = weight2 * (*ref2_line++);
-          weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
+          weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
           *d++ =  (*src_line++) - weighted_pel;
           // 6
           pixel1 = weight1 * (*ref1_line++);
           pixel2 = weight2 * (*ref2_line++);
-          weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
+          weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
           *d++ =  (*src_line++) - weighted_pel;
           // 7
           pixel1 = weight1 * (*ref1_line++);
           pixel2 = weight2 * (*ref2_line++);
-          weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
+          weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
           *d++ =  (*src_line) - weighted_pel;
 
-          ref1_line += img_padded_size_x_m8x8;
-          ref2_line += img_padded_size_x_m8x8;
+          ref1_line += p_Img->padded_size_x_m8x8;
+          ref2_line += p_Img->padded_size_x_m8x8;
           src_line  += src_size_x;
         }
         if ((mcost += HadamardSAD8x8 (diff)) > min_mcost) return mcost;
@@ -1028,57 +1137,59 @@ int computeBiPredSATD2(imgpel* src_pic,
 ************************************************************************
 */
 
-int computeSSE(imgpel* src_pic,
-               int blocksize_y,
-               int blocksize_x,
+int computeSSE(StorablePicture *ref1,
+               MEBlock *mv_block,
                int min_mcost,
-               int cand_x,
-               int cand_y)
+               MotionVector *cand
+               )
 {
   int mcost = 0;
   int y,x;
-  int *byte_sse = img->quad;
-  int pad_size_x = img_padded_size_x - blocksize_x;
+  short blocksize_x = mv_block->blocksize_x;
+  short blocksize_y = mv_block->blocksize_y;
+  ImageParameters *p_Img = mv_block->p_Img;
+  int pad_size_x = p_Img->padded_size_x - blocksize_x;
 
-  src_line = src_pic;
-  ref_line = UMVLine4X (ref_pic_sub.luma, cand_y, cand_x, height_pad, width_pad);
+  imgpel *src_line = mv_block->orig_pic[0];
+  imgpel *ref_line = UMVLine4X (ref1, cand->mv_y, cand->mv_x);
+
   for (y=0; y<blocksize_y; y++)
   {
     for (x = 0; x < blocksize_x; x+=4)
     {
-      mcost += byte_sse[ *src_line++ - *ref_line++ ];
-      mcost += byte_sse[ *src_line++ - *ref_line++ ];
-      mcost += byte_sse[ *src_line++ - *ref_line++ ];
-      mcost += byte_sse[ *src_line++ - *ref_line++ ];
+      mcost += iabs2( *src_line++ - *ref_line++ );
+      mcost += iabs2( *src_line++ - *ref_line++ );
+      mcost += iabs2( *src_line++ - *ref_line++ );
+      mcost += iabs2( *src_line++ - *ref_line++ );
     }
     if (mcost >= min_mcost) return mcost;
     ref_line += pad_size_x;
   }
 
-  if ( ChromaMEEnable ) 
+  if ( mv_block->ChromaMEEnable ) 
   {
     // calculate chroma conribution to motion compensation error
-    int blocksize_x_cr = blocksize_x >> shift_cr_x;
-    int blocksize_y_cr = blocksize_y >> shift_cr_y;
-    int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_cr;
+    int blocksize_x_cr = mv_block->blocksize_cr_x;
+    int blocksize_y_cr = mv_block->blocksize_cr_y;
+    int cr_pad_size_x = p_Img->cr_padded_size_x - blocksize_x_cr;
     int k;
     int mcr_cost = 0;
 
     for (k=0; k<2; k++)
     {
       mcr_cost = 0;
-      src_line = src_pic + (256 << k);
-      ref_line = UMVLine8X_chroma ( ref_pic_sub.crcb[k], cand_y, cand_x, height_pad_cr, width_pad_cr);
+      src_line = mv_block->orig_pic[k+1];
+      ref_line = UMVLine8X_chroma ( ref1, k+1, cand->mv_y, cand->mv_x);
       for (y=0; y<blocksize_y_cr; y++)
       {
         for (x = 0; x < blocksize_x_cr; x+=2)
         {
-          mcr_cost += byte_sse[ *src_line++ - *ref_line++ ];
-          mcr_cost += byte_sse[ *src_line++ - *ref_line++ ];
+          mcr_cost += iabs2( *src_line++ - *ref_line++ );
+          mcr_cost += iabs2( *src_line++ - *ref_line++ );
         }
         ref_line += cr_pad_size_x;
       }
-      mcost += params->ChromaMEWeight * mcr_cost;
+      mcost += mv_block->ChromaMEWeight * mcr_cost;
       if (mcost >= min_mcost) return mcost;
     }
   }
@@ -1093,68 +1204,81 @@ int computeSSE(imgpel* src_pic,
 *    SSE computation of weighted samples
 ************************************************************************
 */
-
-int computeSSEWP(imgpel* src_pic,
-               int blocksize_y,
-               int blocksize_x,
-               int min_mcost,
-               int cand_x,
-               int cand_y)
+int computeSSEWP(StorablePicture *ref1,
+                 MEBlock *mv_block,
+                 int min_mcost,
+                 MotionVector *cand
+                 )
 {
   int mcost = 0;
   int y,x;
   int weighted_pel;
-  int *byte_sse = img->quad;
-  int pad_size_x = img_padded_size_x - blocksize_x;
+  short blocksize_x = mv_block->blocksize_x;
+  short blocksize_y = mv_block->blocksize_y;
+  ImageParameters *p_Img = mv_block->p_Img;
+  Slice *currSlice = mv_block->p_slice;  
+  short weight = mv_block->weight_luma;
+  short offset = mv_block->offset_luma; 
 
-  src_line = src_pic;
-  ref_line = UMVLine4X (ref_pic_sub.luma, cand_y, cand_x, height_pad, width_pad);
+  int wp_luma_round = currSlice->wp_luma_round;  
+  int pad_size_x = p_Img->padded_size_x - blocksize_x;
+  int max_imgpel_value = p_Img->max_imgpel_value;
+  short luma_log_weight_denom = currSlice->luma_log_weight_denom;
+
+  imgpel *src_line = mv_block->orig_pic[0];
+  imgpel *ref_line = UMVLine4X (ref1, cand->mv_y, cand->mv_x);
+
   for (y=0; y<blocksize_y; y++)
   {
     for (x = 0; x < blocksize_x; x+=4)
     {
-      weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
-      mcost += byte_sse[ *src_line++ - weighted_pel ];
-      weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
-      mcost += byte_sse[ *src_line++ - weighted_pel ];
-      weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
-      mcost += byte_sse[ *src_line++ - weighted_pel ];
-      weighted_pel = iClip1( img->max_imgpel_value, ((weight_luma * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset_luma);
-      mcost += byte_sse[ *src_line++ - weighted_pel ];
+      weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
+      mcost += iabs2( *src_line++ - weighted_pel );
+      weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
+      mcost += iabs2( *src_line++ - weighted_pel );
+      weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
+      mcost += iabs2( *src_line++ - weighted_pel );
+      weighted_pel = iClip1( max_imgpel_value, ((weight * *ref_line++  + wp_luma_round) >> luma_log_weight_denom) + offset);
+      mcost += iabs2( *src_line++ - weighted_pel );
     }
     if (mcost >= min_mcost) return mcost;
     ref_line += pad_size_x;
   }
 
-  if ( ChromaMEEnable ) 
+  if ( mv_block->ChromaMEEnable ) 
   {
     // calculate chroma conribution to motion compensation error
     // These could be made global to reduce computations
-    int blocksize_x_cr = blocksize_x >> shift_cr_x;
-    int blocksize_y_cr = blocksize_y >> shift_cr_y;
-    int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_cr;
+    int blocksize_x_cr = mv_block->blocksize_cr_x;
+    int blocksize_y_cr = mv_block->blocksize_cr_y;
+    int cr_pad_size_x  = p_Img->cr_padded_size_x - blocksize_x_cr;
     int k;
     int mcr_cost = 0;
-    int max_imgpel_value_uv = img->max_imgpel_value_comp[1];
+    int max_imgpel_value_uv = p_Img->max_pel_value_comp[1];
+    int wp_chroma_round = currSlice->wp_chroma_round;
+    short chroma_log_weight_denom = currSlice->chroma_log_weight_denom;
 
     for (k=0; k<2; k++)
     {
+      weight = mv_block->weight_cr[k];
+      offset = mv_block->offset_cr[k]; 
+
       mcr_cost = 0;
-      src_line = src_pic + (256 << k);
-      ref_line = UMVLine8X_chroma ( ref_pic_sub.crcb[k], cand_y, cand_x, height_pad_cr, width_pad_cr);
+      src_line = mv_block->orig_pic[k+1];
+      ref_line = UMVLine8X_chroma ( ref1, k+1, cand->mv_y, cand->mv_x);
       for (y=0; y<blocksize_y_cr; y++)
       {
 
         for (x = 0; x < blocksize_x_cr; x+=2)
         {
-          weighted_pel = iClip1( max_imgpel_value_uv, ((weight_cr[k] * *ref_line++  + wp_chroma_round) >> chroma_log_weight_denom) + offset_cr[k]);
-          mcr_cost += byte_sse[ *src_line++ - weighted_pel ];
-          weighted_pel = iClip1( max_imgpel_value_uv, ((weight_cr[k] * *ref_line++  + wp_chroma_round) >> chroma_log_weight_denom) + offset_cr[k]);
-          mcr_cost += byte_sse[ *src_line++ - weighted_pel ];
+          weighted_pel = iClip1( max_imgpel_value_uv, ((weight * *ref_line++  + wp_chroma_round) >> chroma_log_weight_denom) + offset);
+          mcr_cost += iabs2( *src_line++ - weighted_pel );
+          weighted_pel = iClip1( max_imgpel_value_uv, ((weight * *ref_line++  + wp_chroma_round) >> chroma_log_weight_denom) + offset);
+          mcr_cost += iabs2( *src_line++ - weighted_pel );
         }        
         ref_line += cr_pad_size_x;
       }
-      mcost += params->ChromaMEWeight * mcr_cost;
+      mcost += mv_block->ChromaMEWeight * mcr_cost;
       if (mcost >= min_mcost) return mcost;
     }
   }
@@ -1168,35 +1292,37 @@ int computeSSEWP(imgpel* src_pic,
 *    BiPred SSE computation (no weights)
 ************************************************************************
 */
-int computeBiPredSSE1(imgpel* src_pic,
-                      int blocksize_y,
-                      int blocksize_x,
+int computeBiPredSSE1(StorablePicture *ref1, 
+                      StorablePicture *ref2, 
+                      MEBlock *mv_block,
                       int min_mcost,
-                      int cand_x1, int cand_y1,
-                      int cand_x2, int cand_y2)
+                      MotionVector *cand1,
+                      MotionVector *cand2)
 {
   int mcost = 0;
   int bi_diff;
   int y,x;
-  int *byte_sse = img->quad;
-  int pad_size_x = img_padded_size_x - blocksize_x;
+  short blocksize_x = mv_block->blocksize_x;
+  short blocksize_y = mv_block->blocksize_y;
+  ImageParameters *p_Img = mv_block->p_Img;
+  int pad_size_x = p_Img->padded_size_x - blocksize_x;
 
-  src_line   = src_pic;
-  ref2_line  = UMVLine4X(ref_pic2_sub.luma, cand_y2, cand_x2, height_pad, width_pad);
-  ref1_line  = UMVLine4X(ref_pic1_sub.luma, cand_y1, cand_x1, height_pad, width_pad);
+  imgpel *src_line   = mv_block->orig_pic[0];
+  imgpel *ref2_line  = UMVLine4X(ref2, cand2->mv_y, cand2->mv_x);
+  imgpel *ref1_line  = UMVLine4X(ref1, cand1->mv_y, cand1->mv_x);
 
   for (y = 0; y < blocksize_y; y++)
   {
     for (x = 0; x < blocksize_x; x+=4)
     {
       bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
-      mcost += byte_sse[bi_diff];
+      mcost += iabs2(bi_diff);
       bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
-      mcost += byte_sse[bi_diff];
+      mcost += iabs2(bi_diff);
       bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
-      mcost += byte_sse[bi_diff];
+      mcost += iabs2(bi_diff);
       bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
-      mcost += byte_sse[bi_diff];
+      mcost += iabs2(bi_diff);
     }
 
     if (mcost >= min_mcost) return mcost;
@@ -1204,35 +1330,35 @@ int computeBiPredSSE1(imgpel* src_pic,
     ref1_line += pad_size_x;
   }
 
-  if ( ChromaMEEnable ) 
+  if ( mv_block->ChromaMEEnable ) 
   {
     // calculate chroma conribution to motion compensation error
-    int blocksize_x_cr = blocksize_x >> shift_cr_x;
-    int blocksize_y_cr = blocksize_y >> shift_cr_y;
-    int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_cr;
+    int blocksize_x_cr = mv_block->blocksize_cr_x;
+    int blocksize_y_cr = mv_block->blocksize_cr_y;
+    int cr_pad_size_x  = p_Img->cr_padded_size_x - blocksize_x_cr;
     int k;
     int mcr_cost = 0;
 
     for (k=0; k<2; k++)
     {
       mcr_cost = 0;
-      src_line = src_pic + (256 << k);
-      ref2_line = UMVLine8X_chroma ( ref_pic2_sub.crcb[k], cand_y2, cand_x2, height_pad_cr, width_pad_cr);
-      ref1_line = UMVLine8X_chroma ( ref_pic1_sub.crcb[k], cand_y1, cand_x1, height_pad_cr, width_pad_cr);
+      src_line = mv_block->orig_pic[k+1];
+      ref2_line = UMVLine8X_chroma ( ref2, k+1, cand2->mv_y, cand2->mv_x);
+      ref1_line = UMVLine8X_chroma ( ref1, k+1, cand1->mv_y, cand1->mv_x);
 
       for (y=0; y<blocksize_y_cr; y++)
       {
         for (x = 0; x < blocksize_x_cr; x+=2)
         {
           bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
-          mcr_cost += byte_sse[bi_diff];
+          mcr_cost += iabs2(bi_diff);
           bi_diff = (*src_line++) - ((*ref1_line++ + *ref2_line++ + 1)>>1);
-          mcr_cost += byte_sse[bi_diff];
+          mcr_cost += iabs2(bi_diff);
         }        
         ref2_line += cr_pad_size_x;
         ref1_line += cr_pad_size_x;
       }
-      mcost += params->ChromaMEWeight * mcr_cost;
+      mcost += mv_block->ChromaMEWeight * mcr_cost;
       if (mcost >= min_mcost) return mcost;
     }
   }
@@ -1247,49 +1373,58 @@ int computeBiPredSSE1(imgpel* src_pic,
 *    BiPred SSE computation (with weights)
 ************************************************************************
 */
-int computeBiPredSSE2(imgpel* src_pic,
-                      int blocksize_y,
-                      int blocksize_x,
+int computeBiPredSSE2(StorablePicture *ref1, 
+                      StorablePicture *ref2, 
+                      MEBlock *mv_block,
                       int min_mcost,
-                      int cand_x1, int cand_y1,
-                      int cand_x2, int cand_y2)
+                      MotionVector *cand1,
+                      MotionVector *cand2)
 {
   int mcost = 0;
   int bi_diff;
-  int denom = luma_log_weight_denom + 1;
-  int lround = 2 * wp_luma_round;
+  ImageParameters *p_Img = mv_block->p_Img;
+  Slice *currSlice = mv_block->p_slice;  
+  int denom = currSlice->luma_log_weight_denom + 1;
+  int lround = 2 * currSlice->wp_luma_round;
+  int max_imgpel_value = p_Img->max_imgpel_value;
   int y,x;
   int weighted_pel, pixel1, pixel2;
-  int pad_size_x = img_padded_size_x - blocksize_x;
+  short weight1 = mv_block->weight1;
+  short weight2 = mv_block->weight2;
+  short offsetBi = mv_block->offsetBi;
 
-  src_line   = src_pic;
-  ref2_line  = UMVLine4X(ref_pic2_sub.luma, cand_y2, cand_x2, height_pad, width_pad);
-  ref1_line  = UMVLine4X(ref_pic1_sub.luma, cand_y1, cand_x1, height_pad, width_pad);
+  short blocksize_x = mv_block->blocksize_x;
+  short blocksize_y = mv_block->blocksize_y;
+  int pad_size_x = p_Img->padded_size_x - blocksize_x;
+
+  imgpel *src_line   = mv_block->orig_pic[0];
+  imgpel *ref2_line  = UMVLine4X(ref2, cand2->mv_y, cand2->mv_x);
+  imgpel *ref1_line  = UMVLine4X(ref1, cand1->mv_y, cand1->mv_x);
   for (y=0; y<blocksize_y; y++)
   {
     for (x = 0; x < blocksize_x; x+=4)
     {
       pixel1 = weight1 * (*ref1_line++);
       pixel2 = weight2 * (*ref2_line++);
-      weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
+      weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
       bi_diff = (*src_line++) - weighted_pel;
       mcost += bi_diff * bi_diff;
 
       pixel1 = weight1 * (*ref1_line++);
       pixel2 = weight2 * (*ref2_line++);
-      weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
+      weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
       bi_diff = (*src_line++) - weighted_pel;
       mcost += bi_diff * bi_diff;
 
       pixel1 = weight1 * (*ref1_line++);
       pixel2 = weight2 * (*ref2_line++);
-      weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
+      weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
       bi_diff = (*src_line++) - weighted_pel;
       mcost += bi_diff * bi_diff;
 
       pixel1 = weight1 * (*ref1_line++);
       pixel2 = weight2 * (*ref2_line++);
-      weighted_pel =  iClip1( img->max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
+      weighted_pel =  iClip1( max_imgpel_value, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
       bi_diff = (*src_line++) - weighted_pel;
       mcost += bi_diff * bi_diff;
     }
@@ -1298,43 +1433,47 @@ int computeBiPredSSE2(imgpel* src_pic,
     ref1_line += pad_size_x;
   }
 
-  if ( ChromaMEEnable ) 
+  if ( mv_block->ChromaMEEnable ) 
   {
     // calculate chroma conribution to motion compensation error
-    int blocksize_x_cr = blocksize_x >> shift_cr_x;
-    int blocksize_y_cr = blocksize_y >> shift_cr_y;
-    int cr_pad_size_x = img_cr_padded_size_x - blocksize_x_cr;
+    int blocksize_x_cr = mv_block->blocksize_cr_x;
+    int blocksize_y_cr = mv_block->blocksize_cr_y;
+    int cr_pad_size_x  = p_Img->cr_padded_size_x - blocksize_x_cr;
     int k;
     int mcr_cost = 0;
-    int max_imgpel_value_uv = img->max_imgpel_value_comp[1];
+    int max_imgpel_value_uv = p_Img->max_pel_value_comp[1];
 
     for (k=0; k<2; k++)
     {
+      weight1  = mv_block->weight1_cr[k];
+      weight2  = mv_block->weight2_cr[k];
+      offsetBi = mv_block->offsetBi_cr[k];
+
       mcr_cost = 0;
-      src_line = src_pic + (256 << k);
-      ref2_line = UMVLine8X_chroma ( ref_pic2_sub.crcb[k], cand_y2, cand_x2, height_pad_cr, width_pad_cr);
-      ref1_line = UMVLine8X_chroma ( ref_pic1_sub.crcb[k], cand_y1, cand_x1, height_pad_cr, width_pad_cr);
+      src_line = mv_block->orig_pic[k+1];
+      ref2_line = UMVLine8X_chroma ( ref2, k+1, cand2->mv_y, cand2->mv_x);
+      ref1_line = UMVLine8X_chroma ( ref1, k+1, cand1->mv_y, cand1->mv_x);
 
       for (y=0; y<blocksize_y_cr; y++)
       {
         for (x = 0; x < blocksize_x_cr; x+=2)
         {
-          pixel1 = weight1_cr[k] * (*ref1_line++);
-          pixel2 = weight2_cr[k] * (*ref2_line++);
-          weighted_pel =  iClip1( max_imgpel_value_uv, ((pixel1 + pixel2 + lround) >> denom) + offsetBi_cr[k]);
+          pixel1 = weight1 * (*ref1_line++);
+          pixel2 = weight2 * (*ref2_line++);
+          weighted_pel = iClip1( max_imgpel_value_uv, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
           bi_diff = (*src_line++) - weighted_pel;
           mcr_cost += bi_diff * bi_diff;
 
-          pixel1 = weight1_cr[k] * (*ref1_line++);
-          pixel2 = weight2_cr[k] * (*ref2_line++);
-          weighted_pel =  iClip1( max_imgpel_value_uv, ((pixel1 + pixel2 + lround) >> denom) + offsetBi_cr[k]);
+          pixel1 = weight1 * (*ref1_line++);
+          pixel2 = weight2 * (*ref2_line++);
+          weighted_pel = iClip1( max_imgpel_value_uv, ((pixel1 + pixel2 + lround) >> denom) + offsetBi);
           bi_diff = (*src_line++) - weighted_pel;
           mcr_cost += bi_diff * bi_diff;
         }        
         ref2_line += cr_pad_size_x;
         ref1_line += cr_pad_size_x;
       }
-      mcost += params->ChromaMEWeight * mcr_cost;
+      mcost += mv_block->ChromaMEWeight * mcr_cost;
       if (mcost >= min_mcost) return mcost;
     }
   }

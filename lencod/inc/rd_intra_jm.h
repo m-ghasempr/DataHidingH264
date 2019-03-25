@@ -17,8 +17,11 @@
 #ifndef _RD_INTRA_JM_H_
 #define _RD_INTRA_JM_H_
 
-extern void Intra16x16_Mode_Decision (Macroblock* currMB, int* i16mode, int is_cavlc);
-extern int Mode_Decision_for_4x4IntraBlocks_JM_High (Slice *currSlice, Macroblock *currMB, int  b8,  int  b4,  double  lambda,  double*  min_cost, int cr_cbp[3], int is_cavlc);
-extern int Mode_Decision_for_4x4IntraBlocks_JM_Low  (Slice *currSlice, Macroblock *currMB, int  b8,  int  b4,  double  lambda,  double*  min_cost, int cr_cbp[3], int is_cavlc);
+extern double min_rdcost_16x16                      (Macroblock *currMB, double lambda);
+extern void Intra16x16_Mode_Decision_RDopt          (Macroblock *currMB, double lambda);
+extern void Intra16x16_Mode_Decision_SAD            (Macroblock *currMB);
+extern int Mode_Decision_for_4x4IntraBlocks_JM_High (Macroblock *currMB, int  b8,  int  b4,  double  lambda,  double*  min_cost);
+extern int Mode_Decision_for_4x4IntraBlocks_JM_Low  (Macroblock *currMB, int  b8,  int  b4,  double  lambda,  double*  min_cost);
+
 #endif
 

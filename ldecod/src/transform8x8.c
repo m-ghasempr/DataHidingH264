@@ -33,18 +33,19 @@
  *    Inverse 8x8 transformation
  ***********************************************************************
  */ 
-void itrans8x8(ImageParameters *img, //!< image parameters
-               Macroblock *currMB,   //!< current macroblock
+void itrans8x8(Macroblock *currMB,   //!< current macroblock
                ColorPlane pl,        //!< used color plane       
                int ioff,             //!< index to 4x4 block
                int joff)             //!< index to 4x4 block
 {
+  ImageParameters *p_Img = currMB->p_Img;
+  Slice *currSlice = currMB->p_Slice;
   int i,j;
 
-  imgpel **mpr    = img->mb_pred[pl];
-  imgpel **mb_rec = img->mb_rec[pl];
-  int    **m7     = img->mb_rres[pl];
-  int     max_imgpel_value = img->max_imgpel_value_comp[pl];
+  imgpel **mpr    = currSlice->mb_pred[pl];
+  imgpel **mb_rec = currSlice->mb_rec[pl];
+  int    **m7     = currSlice->mb_rres[pl];
+  int     max_imgpel_value = p_Img->max_imgpel_value_comp[pl];
 
   if (currMB->is_lossless == TRUE)
   {
@@ -60,7 +61,8 @@ void itrans8x8(ImageParameters *img, //!< image parameters
     for( j = joff; j < joff + 8; j++)
     {
       for( i = ioff; i < ioff + 8; i++)
-        mb_rec[j][i] = (imgpel) iClip1(max_imgpel_value, rshift_rnd_sf((m7[j][i] + ((long)mpr[j][i] << DQ_BITS_8)), DQ_BITS_8)); 
+        //mb_rec[j][i] = (imgpel) iClip1(max_imgpel_value, rshift_rnd_sf((m7[j][i] + ((long)mpr[j][i] << DQ_BITS_8)), DQ_BITS_8)); 
+        mb_rec[j][i] = (imgpel) iClip1(max_imgpel_value, mpr[j][i] + rshift_rnd_sf(m7[j][i], DQ_BITS_8)); 
     }
   }
 }

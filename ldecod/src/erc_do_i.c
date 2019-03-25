@@ -18,8 +18,8 @@
 #include "global.h"
 #include "erc_do.h"
 
-static void concealBlocks( int lastColumn, int lastRow, int comp, frame *recfr, int picSizeX, int *condition );
-static void pixMeanInterpolateBlock( imgpel *src[], imgpel *block, int blockSize, int frameWidth );
+static void concealBlocks          ( ImageParameters *p_Img, int lastColumn, int lastRow, int comp, frame *recfr, int picSizeX, int *condition );
+static void pixMeanInterpolateBlock( ImageParameters *p_Img, imgpel *src[], imgpel *block, int blockSize, int frameWidth );
 
 /*!
  ************************************************************************
@@ -29,6 +29,8 @@ static void pixMeanInterpolateBlock( imgpel *src[], imgpel *block, int blockSize
  * \return
  *      0, if the concealment was not successful and simple concealment should be used
  *      1, otherwise (even if none of the blocks were concealed)
+ * \param p_Img
+ *      image encoding parameters for current picture
  * \param recfr
  *      Reconstructed frame buffer
  * \param picSizeX
@@ -39,7 +41,7 @@ static void pixMeanInterpolateBlock( imgpel *src[], imgpel *block, int blockSize
  *      Variables for error concealment
  ************************************************************************
  */
-int ercConcealIntraFrame( frame *recfr, int picSizeX, int picSizeY, ercVariables_t *errorVar )
+int ercConcealIntraFrame( ImageParameters *p_Img, frame *recfr, int picSizeX, int picSizeY, ercVariables_t *errorVar )
 {
   int lastColumn = 0, lastRow = 0;
 
@@ -52,15 +54,15 @@ int ercConcealIntraFrame( frame *recfr, int picSizeX, int picSizeY, ercVariables
       // Y
       lastRow = (int) (picSizeY>>3);
       lastColumn = (int) (picSizeX>>3);
-      concealBlocks( lastColumn, lastRow, 0, recfr, picSizeX, errorVar->yCondition );
+      concealBlocks( p_Img, lastColumn, lastRow, 0, recfr, picSizeX, errorVar->yCondition );
 
       // U (dimensions halved compared to Y)
       lastRow = (int) (picSizeY>>4);
       lastColumn = (int) (picSizeX>>4);
-      concealBlocks( lastColumn, lastRow, 1, recfr, picSizeX, errorVar->uCondition );
+      concealBlocks( p_Img, lastColumn, lastRow, 1, recfr, picSizeX, errorVar->uCondition );
 
       // V ( dimensions equal to U )
-      concealBlocks( lastColumn, lastRow, 2, recfr, picSizeX, errorVar->vCondition );
+      concealBlocks( p_Img, lastColumn, lastRow, 2, recfr, picSizeX, errorVar->vCondition );
     }
     return 1;
   }
@@ -73,6 +75,8 @@ int ercConcealIntraFrame( frame *recfr, int picSizeX, int picSizeY, ercVariables
  * \brief
  *      Conceals the MB at position (row, column) using pixels from predBlocks[]
  *      using pixMeanInterpolateBlock()
+ * \param p_Img
+ *      image encoding parameters for current picture
  * \param currFrame
  *      current frame
  * \param row
@@ -87,7 +91,7 @@ int ercConcealIntraFrame( frame *recfr, int picSizeX, int picSizeY, ercVariables
  *      2 for Y, 1 for U/V components
  ************************************************************************
  */
-void ercPixConcealIMB(imgpel *currFrame, int row, int column, int predBlocks[], int frameWidth, int mbWidthInBlocks)
+void ercPixConcealIMB(ImageParameters *p_Img, imgpel *currFrame, int row, int column, int predBlocks[], int frameWidth, int mbWidthInBlocks)
 {
    imgpel *src[8]={NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL};
    imgpel *currBlock = NULL;
@@ -111,7 +115,7 @@ void ercPixConcealIMB(imgpel *currFrame, int row, int column, int predBlocks[], 
       src[7] = currFrame + row*frameWidth*8 + (column+mbWidthInBlocks)*8;
 
    currBlock = currFrame + row*frameWidth*8 + column*8;
-   pixMeanInterpolateBlock( src, currBlock, mbWidthInBlocks*8, frameWidth );
+   pixMeanInterpolateBlock( p_Img, src, currBlock, mbWidthInBlocks*8, frameWidth );
 }
 
 /*!
@@ -286,6 +290,8 @@ int ercCollectColumnBlocks( int predBlocks[], int currRow, int currColumn, int *
  *      to correct them, one block at a time.
  *      Scanning is done vertically and each corrupted column is corrected
  *      bi-directionally, i.e., first block, last block, first block+1, last block -1 ...
+ * \param p_Img
+ *      image encoding parameters for current picture
  * \param lastColumn
  *      Number of block columns in the frame
  * \param lastRow
@@ -300,7 +306,7 @@ int ercCollectColumnBlocks( int predBlocks[], int currRow, int currColumn, int *
  *      The block condition (ok, lost) table
  ************************************************************************
  */
-static void concealBlocks( int lastColumn, int lastRow, int comp, frame *recfr, int picSizeX, int *condition )
+static void concealBlocks( ImageParameters *p_Img, int lastColumn, int lastRow, int comp, frame *recfr, int picSizeX, int *condition )
 {
   int row, column, srcCounter = 0,  thr = ERC_BLOCK_CORRUPTED,
       lastCorruptedRow = -1, firstCorruptedRow = -1, currRow = 0,
@@ -343,13 +349,13 @@ static void concealBlocks( int lastColumn, int lastRow, int comp, frame *recfr, 
             switch( comp )
             {
             case 0 :
-              ercPixConcealIMB( recfr->yptr, currRow, column, predBlocks, picSizeX, 2 );
+              ercPixConcealIMB( p_Img, recfr->yptr, currRow, column, predBlocks, picSizeX, 2 );
               break;
             case 1 :
-              ercPixConcealIMB( recfr->uptr, currRow, column, predBlocks, (picSizeX>>1), 1 );
+              ercPixConcealIMB( p_Img, recfr->uptr, currRow, column, predBlocks, (picSizeX>>1), 1 );
               break;
             case 2 :
-              ercPixConcealIMB( recfr->vptr, currRow, column, predBlocks, (picSizeX>>1), 1 );
+              ercPixConcealIMB( p_Img, recfr->vptr, currRow, column, predBlocks, (picSizeX>>1), 1 );
               break;
             }
 
@@ -378,13 +384,13 @@ static void concealBlocks( int lastColumn, int lastRow, int comp, frame *recfr, 
             switch( comp )
             {
             case 0 :
-              ercPixConcealIMB( recfr->yptr, currRow, column, predBlocks, picSizeX, 2 );
+              ercPixConcealIMB( p_Img, recfr->yptr, currRow, column, predBlocks, picSizeX, 2 );
               break;
             case 1 :
-              ercPixConcealIMB( recfr->uptr, currRow, column, predBlocks, (picSizeX>>1), 1 );
+              ercPixConcealIMB( p_Img, recfr->uptr, currRow, column, predBlocks, (picSizeX>>1), 1 );
               break;
             case 2 :
-              ercPixConcealIMB( recfr->vptr, currRow, column, predBlocks, (picSizeX>>1), 1 );
+              ercPixConcealIMB( p_Img, recfr->vptr, currRow, column, predBlocks, (picSizeX>>1), 1 );
               break;
             }
 
@@ -437,15 +443,15 @@ static void concealBlocks( int lastColumn, int lastRow, int comp, frame *recfr, 
             switch( comp )
             {
             case 0 :
-              ercPixConcealIMB( recfr->yptr, currRow, column, predBlocks, picSizeX, 2 );
+              ercPixConcealIMB( p_Img, recfr->yptr, currRow, column, predBlocks, picSizeX, 2 );
               break;
 
             case 1 :
-              ercPixConcealIMB( recfr->uptr, currRow, column, predBlocks, (picSizeX>>1), 1 );
+              ercPixConcealIMB( p_Img, recfr->uptr, currRow, column, predBlocks, (picSizeX>>1), 1 );
               break;
 
             case 2 :
-              ercPixConcealIMB( recfr->vptr, currRow, column, predBlocks, (picSizeX>>1), 1 );
+              ercPixConcealIMB( p_Img, recfr->vptr, currRow, column, predBlocks, (picSizeX>>1), 1 );
               break;
             }
 
@@ -476,6 +482,8 @@ static void concealBlocks( int lastColumn, int lastRow, int comp, frame *recfr, 
  * \brief
  *      Does the actual pixel based interpolation for block[]
  *      using weighted average
+ * \param p_Img
+ *      image encoding parameters for current picture
  * \param src[]
  *      pointers to neighboring source blocks
  * \param block
@@ -486,7 +494,7 @@ static void concealBlocks( int lastColumn, int lastRow, int comp, frame *recfr, 
  *      Width of the frame in pixels
  ************************************************************************
  */
-static void pixMeanInterpolateBlock( imgpel *src[], imgpel *block, int blockSize, int frameWidth )
+static void pixMeanInterpolateBlock( ImageParameters *p_Img, imgpel *src[], imgpel *block, int blockSize, int frameWidth )
 {
   int row, column, k, tmp, srcCounter = 0, weight = 0, bmax = blockSize - 1;
 
@@ -529,7 +537,7 @@ static void pixMeanInterpolateBlock( imgpel *src[], imgpel *block, int blockSize
       if ( srcCounter > 0 )
         block[ k + column ] = (byte)(tmp/srcCounter);
       else
-        block[ k + column ] = blockSize == 8 ? img->dc_pred_value_comp[1] : img->dc_pred_value_comp[0];
+        block[ k + column ] = blockSize == 8 ? p_Img->dc_pred_value_comp[1] : p_Img->dc_pred_value_comp[0];
     }
     k += frameWidth;
   }

@@ -23,18 +23,14 @@
 
 #define DEBUG_WP  0
 
-void InitWP              (ImageParameters *img, InputParameters *params);
-void (*EstimateWPBSlice) (ImageParameters *img, InputParameters *params);
-void (*EstimateWPPSlice) (ImageParameters *img, InputParameters *params, int offset);
-int  (*TestWPPSlice)     (ImageParameters *img, InputParameters *params, int offset);
-int  (*TestWPBSlice)     (ImageParameters *img, InputParameters *params, int method);
+void InitWP              (ImageParameters *p_Img, InputParameters *p_Inp);
 
-void EstimateWPBSliceAlg0(ImageParameters *img, InputParameters *params);
-void EstimateWPPSliceAlg0(ImageParameters *img, InputParameters *params, int offset);
-int  TestWPPSliceAlg0    (ImageParameters *img, InputParameters *params, int offset);
-int  TestWPBSliceAlg0    (ImageParameters *img, InputParameters *params, int method);
+extern void EstimateWPBSliceAlg0(Slice *currSlice);
+extern void EstimateWPPSliceAlg0(Slice *currSlice, int offset);
+extern int  TestWPPSliceAlg0    (ImageParameters *p_Img, InputParameters *p_Inp, int offset);
+extern int  TestWPBSliceAlg0    (ImageParameters *p_Img, InputParameters *p_Inp, int method);
 
-double ComputeImgSum     (imgpel **CurrentImage, int height, int width);
+extern double ComputeImgSum     (imgpel **CurrentImage, int height, int width);
 
 #endif
 

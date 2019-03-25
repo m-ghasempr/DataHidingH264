@@ -21,14 +21,16 @@
 #ifndef _DEFINES_H_
 #define _DEFINES_H_
 
+#include "typedefs.h"
+
 #if defined _DEBUG
 # define TRACE           0      //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
 #else
 # define TRACE           0      //!< 0:Trace off 1:Trace on 2:detailed CABAC context information
 #endif
 
-#define JM                  "15 (FRExt)"
-#define VERSION             "15.1"
+#define JM                  "16 (FRExt)"
+#define VERSION             "16.0"
 #define EXT_VERSION         "(FRExt)"
 
 #define GET_METIME                1    //!< Enables or disables ME computation time
@@ -37,24 +39,39 @@
 #define ENABLE_FIELD_CTX          1    //!< Enables field context types for CABAC. If disabled, results in speedup for progressive content.
 #define ENABLE_HIGH444_CTX        1    //!< Enables High 444 context types for CABAC. If disabled, results in speedup of non High444 profile encodings.
 #define DEBUG_BITDEPTH            0    //!< Ensures that > 8 bit content have no values that would result in out of range results
-#define ALLOW_GRAYSCALE           0    //!< Allow encoding in grayscale
+#define ALLOW_GRAYSCALE           1    //!< Allow encoding in grayscale
 #define ZEROSNR                   1    //!< PSNR computation method
+#define PAD_AFTER                 0
+#define USE_RND_COST              0    //!< Perform ME RD decision using a rounding estimate of the motion cost
+#define JM_INT_DIVIDE             1
+#define JM_MEM_DISTORTION         0
+#define JCOST_CALC_SCALEUP        0    //!< 1: J = (D<<LAMBDA_ACCURACY_BITS)+Lambda*R; 0: J = D + ((Lambda*R+Rounding)>>LAMBDA_ACCURACY_BITS)
+#define INTRA_RDCOSTCALC_EARLY_TERMINATE  1
+#define INTRA_RDCOSTCALC_NNZ      1    //1: to recover block's nzn after rdcost calculation;
 
-#define MAX_RC_MODE              3
-#define RC_MAX_TEMPORAL_LEVELS   5
+#define EPZSREF                   1
+
+#define MAX_RC_MODE               3
+#define RC_MAX_TEMPORAL_LEVELS    5
 
 //#define BEST_NZ_COEFF 1   // yuwen 2005.11.03 => for high complexity mode decision (CAVLC, #TotalCoeff)
 
 //AVC Profile IDC definitions
-#define BASELINE         66      //!< YUV 4:2:0/8  "Baseline"
-#define MAIN             77      //!< YUV 4:2:0/8  "Main"
-#define EXTENDED         88      //!< YUV 4:2:0/8  "Extended"
-#define FREXT_HP        100      //!< YUV 4:2:0/8 "High"
-#define FREXT_Hi10P     110      //!< YUV 4:2:0/10 "High 10"
-#define FREXT_Hi422     122      //!< YUV 4:2:2/10 "High 4:2:2"
-#define FREXT_Hi444     244      //!< YUV 4:4:4/14 "High 4:4:4"
-#define FREXT_CAVLC444   44      //!< YUV 4:4:4/14 "CAVLC 4:4:4"
+enum {
+  FREXT_CAVLC444 = 44,      //!< YUV 4:4:4/14 "CAVLC 4:4:4"
+  BASELINE       = 66,      //!< YUV 4:2:0/8  "Baseline"
+  MAIN           = 77,      //!< YUV 4:2:0/8  "Main"
+  EXTENDED       = 88,      //!< YUV 4:2:0/8  "Extended"
+  FREXT_HP       = 100,     //!< YUV 4:2:0/8  "High"
+  FREXT_Hi10P    = 110,     //!< YUV 4:2:0/10 "High 10"
+  FREXT_Hi422    = 122,     //!< YUV 4:2:2/10 "High 4:2:2"
+  FREXT_Hi444    = 244      //!< YUV 4:4:4/14 "High 4:4:4"
+} ProfileIDC;
 
+#define SSE_MEMORY_ALIGNMENT      16
+
+// Some typedefs used in the software
+#include "types.h"
 
 #define FILE_NAME_SIZE  255
 #define INPUT_TEXT_SIZE 1024
@@ -86,18 +103,19 @@
 #define INVALIDINDEX  (-135792468)
 
 #define DUMMY   14
+#define ET_SIZE 300      //!< size of error text buffer
 
 
 #define  LAMBDA_ACCURACY_BITS         16
 #define  LAMBDA_FACTOR(lambda)        ((int)((double)(1 << LAMBDA_ACCURACY_BITS) * lambda + 0.5))
+#if JCOST_CALC_SCALEUP
+#define  WEIGHTED_COST(factor,bits)   ((factor) * (bits)) 
+#else
 #define  WEIGHTED_COST(factor,bits)   (((factor) * (bits)) >> LAMBDA_ACCURACY_BITS)
+#endif
 
-#define  MV_COST(f,s,cx,cy,px,py)    (WEIGHTED_COST(f,mvbits[((cx) << (s)) - px] + mvbits[((cy) << (s)) - py]))
-#define  MV_COST_SMP(f,cx,cy,px,py)  (WEIGHTED_COST(f,mvbits[cx - px] + mvbits[cy - py]))
-#define  REF_COST(f,ref,list_offset) (WEIGHTED_COST(f,((listXsize[list_offset]<=1)? 0:refbits[(ref)])))
-
-
-#define MAX_REFERENCE_PICTURES 32
+#define  MAXSLICEPERPICTURE           100
+#define  MAX_REFERENCE_PICTURES        32
 
 #define BLOCK_SHIFT            2
 #define BLOCK_SIZE             4
@@ -111,23 +129,21 @@
 #define BLOCK_MULTIPLE         4 // (MB_BLOCK_SIZE/BLOCK_SIZE)
 #define MB_BLOCK_PARTITIONS   16 // (BLOCK_MULTIPLE * BLOCK_MULTIPLE)
 #define BLOCK_CONTEXT         64 // (4 * MB_BLOCK_PARTITIONS)
-
 // These variables relate to the subpel accuracy supported by the software (1/4)
 #define BLOCK_SIZE_SP      16  // BLOCK_SIZE << 2
 #define BLOCK_SIZE_8x8_SP  32  // BLOCK_SIZE8x8 << 2
 
-
-typedef unsigned char  byte;     //!< byte type definition
-typedef unsigned char  uint8;    //!< type definition for unsigned char (same as byte)
-typedef unsigned short uint16;   //!< type definition for unsigned short (16 bits)
-typedef unsigned int   uint32;   //!< type definition for unsigned int (32 bits)
+// RDOQ
+#define MAX_PREC_COEFF    25
 
 #if (IMGTYPE == 0)
 typedef byte imgpel;
-typedef unsigned short distpel;
+typedef uint16 distpel;
+//typedef uint32 imgdist;
 #else
-typedef unsigned short imgpel;
-typedef int distpel;
+typedef uint16 imgpel;
+typedef uint32 distpel;
+//typedef uint64 imgdist;
 #endif
 
 //  Available MB modes
@@ -201,10 +217,6 @@ enum {
 
 
 #define IS_INTRA(MB)    ((MB)->mb_type==I4MB  || (MB)->mb_type==I16MB || (MB)->mb_type==I8MB || (MB)->mb_type==IPCM)
-
-#define IS_INTER(MB)    ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB && (MB)->mb_type!=I8MB)
-#define IS_INTERMV(MB)  ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB && (MB)->mb_type!=I8MB  && (MB)->mb_type!=0)
-#define IS_DIRECT(MB)   ((MB)->mb_type==0     && (img->type==B_SLICE))
 
 #define LEVEL_NUM         6
 #define TOTRUN_NUM       15
@@ -283,6 +295,28 @@ enum {
 #define MAX_PLANE       3
 #define IS_INDEPENDENT(IMG)           ((IMG)->separate_colour_plane_flag)
 #define IS_FREXT_PROFILE(profile_idc) ( profile_idc>=FREXT_HP || profile_idc == FREXT_CAVLC444 )
+
+#define MAXSLICEGROUPIDS 8
+
+
+#define NUM_MB_TYPE_CTX  11
+#define NUM_B8_TYPE_CTX  9
+#define NUM_MV_RES_CTX   10
+#define NUM_REF_NO_CTX   6
+#define NUM_DELTA_QP_CTX 4
+#define NUM_MB_AFF_CTX   4
+
+#define NUM_TRANSFORM_SIZE_CTX 3
+
+#define NUM_IPR_CTX    2
+#define NUM_CIPR_CTX   4
+#define NUM_CBP_CTX    4
+#define NUM_BCBP_CTX   4
+#define NUM_MAP_CTX   15
+#define NUM_LAST_CTX  15
+#define NUM_ONE_CTX    5
+#define NUM_ABS_CTX    5
+
 
 #endif
 
