@@ -252,21 +252,21 @@ static int ref_pic_list_reordering()
       do
       {
         i++;
-        len += ue_v ("SH: remapping_of_pic_num_idc", currSlice->remapping_of_pic_nums_idc_l0[i], bitstream);
-        if (currSlice->remapping_of_pic_nums_idc_l0[i]==0 ||
-            currSlice->remapping_of_pic_nums_idc_l0[i]==1)
+        len += ue_v ("SH: reordering_of_pic_num_idc", currSlice->reordering_of_pic_nums_idc_l0[i], bitstream);
+        if (currSlice->reordering_of_pic_nums_idc_l0[i]==0 ||
+            currSlice->reordering_of_pic_nums_idc_l0[i]==1)
         {
           len += ue_v ("SH: abs_diff_pic_num_minus1_l0", currSlice->abs_diff_pic_num_minus1_l0[i], bitstream);
         }
         else
         {
-          if (currSlice->remapping_of_pic_nums_idc_l0[i]==2)
+          if (currSlice->reordering_of_pic_nums_idc_l0[i]==2)
           {
             len += ue_v ("SH: long_term_pic_idx_l0", currSlice->long_term_pic_idx_l0[i], bitstream);
           }
         }
 
-      } while (currSlice->remapping_of_pic_nums_idc_l0[i] != 3);
+      } while (currSlice->reordering_of_pic_nums_idc_l0[i] != 3);
     }
   }
 
@@ -279,20 +279,20 @@ static int ref_pic_list_reordering()
       do
       {
         i++;
-        len += ue_v ("SH: remapping_of_pic_num_idc", currSlice->remapping_of_pic_nums_idc_l1[i], bitstream);
-        if (currSlice->remapping_of_pic_nums_idc_l1[i]==0 ||
-            currSlice->remapping_of_pic_nums_idc_l1[i]==1)
+        len += ue_v ("SH: remapping_of_pic_num_idc", currSlice->reordering_of_pic_nums_idc_l1[i], bitstream);
+        if (currSlice->reordering_of_pic_nums_idc_l1[i]==0 ||
+            currSlice->reordering_of_pic_nums_idc_l1[i]==1)
         {
           len += ue_v ("SH: abs_diff_pic_num_minus1_l1", currSlice->abs_diff_pic_num_minus1_l1[i], bitstream);
         }
         else
         {
-          if (currSlice->remapping_of_pic_nums_idc_l1[i]==2)
+          if (currSlice->reordering_of_pic_nums_idc_l1[i]==2)
           {
             len += ue_v ("SH: long_term_pic_idx_l1", currSlice->long_term_pic_idx_l1[i], bitstream);
           }
         }
-      } while (currSlice->remapping_of_pic_nums_idc_l1[i] != 3);
+      } while (currSlice->reordering_of_pic_nums_idc_l1[i] != 3);
     }
   }
 

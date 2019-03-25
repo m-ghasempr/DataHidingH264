@@ -23,6 +23,7 @@
 #include "image.h"
 #include "transform8x8.h"
 #include "fast_me.h"
+#include "simplified_fast_me.h"
 #include "ratectl.h"            
 #include "mode_decision.h"
 
@@ -947,8 +948,14 @@ void encode_one_macroblock ()
   double min_rate = 0, RDCost16 = DBL_MAX;
   
   
-  if(input->FMEnable)
+  if(input->FMEnable == 1)
+  {
     decide_intrabk_SAD();
+  }
+  else if (input->FMEnable ==2)
+  {
+    simplified_decide_intrabk_SAD();
+  }
   
   intra |= RandomIntra (img->current_mb_nr);    // Forced Pseudo-Random Intra
   
@@ -1157,8 +1164,6 @@ void encode_one_macroblock ()
         }// if (input->Transform8x8Mode)
         
 
-
-        
         if (input->Transform8x8Mode != 2)  
         {
           tr4x4.cost8x8 = 0;
@@ -1779,9 +1784,10 @@ void encode_one_macroblock ()
     if (((currMB->cbp&15) == 0) && !(IS_OLDINTRA(currMB) || currMB->mb_type == I8MB))
       currMB->luma_transform_size_8x8_flag = 0;
     
+    // precompute all chroma intra prediction modes
     if (img->yuv_format != YUV400)
-      // precompute all chroma intra prediction modes
       IntraChromaPrediction(NULL, NULL, NULL);
+
     img->i16offset = 0;
     dummy = 0;
     
@@ -1826,6 +1832,13 @@ void encode_one_macroblock ()
   if (input->RestrictRef)
     update_refresh_map(intra, intra1, currMB);  
   
-  if(input->FMEnable)
+  if(input->FMEnable == 1)
+  {
     skip_intrabk_SAD(best_mode, listXsize[enc_mb.list_offset[LIST_0]]);
+  }
+  else if(input->FMEnable == 2)
+  {
+    simplified_skip_intrabk_SAD(best_mode, listXsize[enc_mb.list_offset[LIST_0]]);
+  }
 }
+

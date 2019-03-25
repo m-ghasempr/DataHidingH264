@@ -442,11 +442,11 @@ typedef struct
   RMPNIbuffer_t        *rmpni_buffer; //!< stores the slice temporary buffer remapping commands
 
   int                 ref_pic_list_reordering_flag_l0;
-  int                 *remapping_of_pic_nums_idc_l0;
+  int                 *reordering_of_pic_nums_idc_l0;
   int                 *abs_diff_pic_num_minus1_l0;
   int                 *long_term_pic_idx_l0;
   int                 ref_pic_list_reordering_flag_l1;
-  int                 *remapping_of_pic_nums_idc_l1;
+  int                 *reordering_of_pic_nums_idc_l1;
   int                 *abs_diff_pic_num_minus1_l1;
   int                 *long_term_pic_idx_l1;
 
@@ -650,6 +650,7 @@ typedef struct
   int RDPictureDecision;         //!< Perform RD optimal decision between various coded versions of same picture
   int RDPictureIntra;            //!< Enabled RD pic decision for intra as well.
   int RDPSliceWeightOnly;        //!< If enabled, does not check QP variations for P slices.
+  int RDPSliceBTest;             //!< Tests B slice replacement for P.      
   int RDBSliceWeightOnly;        //!< If enabled, does not check QP variations for B slices.
   int SkipIntraInInterSlices;    //!< Skip intra type checking in inter slices if best_mode is skip/direct
   int BRefPictures;              //!< B coded reference pictures replace P pictures (0: not used, 1: used)
@@ -682,6 +683,15 @@ typedef struct
   int EnableIPCM;
 
   double FrameRate;
+
+  int EPZSPattern;
+  int EPZSDual;
+  int EPZSFixed;
+  int EPZSTemporal;
+  int EPZSSpatialMem;
+  int EPZSMinThresScale;
+  int EPZSMaxThresScale;
+  int EPZSMedThresScale;
 
   int chroma_qp_index_offset;
 #ifdef _FULL_SEARCH_RANGE_
@@ -794,6 +804,8 @@ typedef struct
   // Fast Mode Decision
   int EarlySkipEnable;
   int SelectiveIntraEnable;
+  int DisposableP;
+  int DispPQPOffset;
 } InputParameters;
 
 //! ImageParameters
@@ -1118,6 +1130,8 @@ typedef struct
   int    qp;
   int    prev_qp;
   int    prev_delta_qp;
+  int    delta_qp;
+  int    prev_cbp;
 } RD_DATA;
 
 
@@ -1179,15 +1193,6 @@ FILE *p_log;                     //!< SNR file
 FILE *p_trace;                   //!< Trace file
 int  p_in;                       //!< original YUV file handle
 int  p_dec;                      //!< decoded image file handle
-
-
-
-int glob_remapping_of_pic_nums_idc_l0[20];
-int glob_abs_diff_pic_num_minus1_l0[20];
-int glob_long_term_pic_idx_l0[20];
-int glob_remapping_of_pic_nums_idc_l1[20];
-int glob_abs_diff_pic_num_minus1_l1[20];
-int glob_long_term_pic_idx_l1[20]; 
 
 
 /***********************************************************************

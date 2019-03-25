@@ -31,16 +31,16 @@
 #include "image.h"
 #include "cabac.h"
 #include "elements.h"
+#include "epzs.h"
 
 // Local declarations
-
 static Slice *malloc_slice();
 static void  free_slice(Slice *slice);
 static void  init_slice(int start_mb_addr);
 static void set_ref_pic_num();
 extern ColocatedParams *Co_located;
 extern StorablePicture **listX[6];
-void poc_ref_pic_reorder(StorablePicture **list, unsigned num_ref_idx_lX_active, int *remapping_of_pic_nums_idc, int *abs_diff_pic_num_minus1, int *long_term_pic_idx, int weighted_prediction, int list_no);
+void poc_ref_pic_reorder(StorablePicture **list, unsigned num_ref_idx_lX_active, int *reordering_of_pic_nums_idc, int *abs_diff_pic_num_minus1, int *long_term_pic_idx, int weighted_prediction, int list_no);
 void SetLagrangianMultipliers();
 
 /*!
@@ -594,6 +594,27 @@ static void init_slice (int start_mb_addr)
     poc_based_ref_management(img->frame_num);
   }
 
+  if (input->EnableOpenGOP)
+  {
+    for (i = 0; i<listXsize[0]; i++)
+    {    
+      if (listX[0][i]->poc < img->last_valid_reference && img->ThisPOC > img->last_valid_reference)      
+      {
+        listXsize[0] = img->num_ref_idx_l0_active = max(1,i);
+        break;
+      }
+    }
+    
+    for (i = 0; i<listXsize[1]; i++)
+    {
+      if (listX[1][i]->poc < img->last_valid_reference && img->ThisPOC > img->last_valid_reference)
+      {
+        listXsize[1] = img->num_ref_idx_l1_active = max(1,i);
+        break;
+      }
+    }
+  }
+
   init_ref_pic_list_reordering();
 
   //Perform reordering based on poc distances for PyramidCoding
@@ -608,7 +629,7 @@ static void init_slice (int start_mb_addr)
     {
       for (i=0; i<img->num_ref_idx_l0_active + 1; i++)
       {
-        currSlice->remapping_of_pic_nums_idc_l0[i] = 3;
+        currSlice->reordering_of_pic_nums_idc_l0[i] = 3;
         currSlice->abs_diff_pic_num_minus1_l0[i] = 0;
         currSlice->long_term_pic_idx_l0[i] = 0;
       }
@@ -617,7 +638,7 @@ static void init_slice (int start_mb_addr)
       {
         for (i=0; i<img->num_ref_idx_l1_active + 1; i++)
         {
-          currSlice->remapping_of_pic_nums_idc_l1[i] = 3;
+          currSlice->reordering_of_pic_nums_idc_l1[i] = 3;
           currSlice->abs_diff_pic_num_minus1_l1[i] = 0;
           currSlice->long_term_pic_idx_l1[i] = 0;
         }
@@ -629,14 +650,14 @@ static void init_slice (int start_mb_addr)
       num_ref = img->num_ref_idx_l0_active;
       poc_ref_pic_reorder(listX[LIST_0], 
                           num_ref, 
-                          currSlice->remapping_of_pic_nums_idc_l0, 
+                          currSlice->reordering_of_pic_nums_idc_l0, 
                           currSlice->abs_diff_pic_num_minus1_l0, 
                           currSlice->long_term_pic_idx_l0, 0, LIST_0);
       
       //reference picture reordering
       reorder_ref_pic_list(listX[LIST_0], &listXsize[LIST_0], 
                            img->num_ref_idx_l0_active - 1, 
-                           currSlice->remapping_of_pic_nums_idc_l0, 
+                           currSlice->reordering_of_pic_nums_idc_l0, 
                            currSlice->abs_diff_pic_num_minus1_l0, 
                            currSlice->long_term_pic_idx_l0);
       
@@ -646,14 +667,14 @@ static void init_slice (int start_mb_addr)
         num_ref = img->num_ref_idx_l1_active;
         poc_ref_pic_reorder(listX[LIST_1], 
                             num_ref, 
-                            currSlice->remapping_of_pic_nums_idc_l1, 
+                            currSlice->reordering_of_pic_nums_idc_l1, 
                             currSlice->abs_diff_pic_num_minus1_l1, 
                             currSlice->long_term_pic_idx_l1, 0, LIST_1);
         
         //reference picture reordering
         reorder_ref_pic_list(listX[LIST_1], &listXsize[LIST_1], 
                              img->num_ref_idx_l1_active - 1, 
-                             currSlice->remapping_of_pic_nums_idc_l1, 
+                             currSlice->reordering_of_pic_nums_idc_l1, 
                              currSlice->abs_diff_pic_num_minus1_l1, 
                              currSlice->long_term_pic_idx_l1);
       }
@@ -661,26 +682,6 @@ static void init_slice (int start_mb_addr)
   }
 
 
-  if (input->EnableOpenGOP)
-  {
-    for (i = 0; i<listXsize[0]; i++)
-    {    
-      if (listX[0][i]->poc < img->last_valid_reference && img->ThisPOC > img->last_valid_reference)      
-      {
-        listXsize[0] = img->num_ref_idx_l0_active = i;
-        break;
-      }
-    }
-    
-    for (i = 0; i<listXsize[1]; i++)
-    {
-      if (listX[1][i]->poc < img->last_valid_reference && img->ThisPOC > img->last_valid_reference)
-      {
-        listXsize[1] = img->num_ref_idx_l1_active = i;
-        break;
-      }
-    }
-  }
   //if (img->MbaffFrameFlag)
   if (img->structure==FRAME)
     init_mbaff_lists();
@@ -708,7 +709,8 @@ static void init_slice (int start_mb_addr)
 
   if (img->type == B_SLICE)
     compute_colocated(Co_located, listX);
-
+  if (img->type != I_SLICE && input->FMEnable == 3)
+    EPZSSliceInit(EPZSCo_located, listX);
 }
 
 
@@ -889,7 +891,7 @@ void set_ref_pic_num()
 *    decide reference picture reordering, Frame only
 ************************************************************************
 */
-void poc_ref_pic_reorder(StorablePicture **list, unsigned num_ref_idx_lX_active, int *remapping_of_pic_nums_idc, int *abs_diff_pic_num_minus1, int *long_term_pic_idx, int weighted_prediction, int list_no)
+void poc_ref_pic_reorder(StorablePicture **list, unsigned num_ref_idx_lX_active, int *reordering_of_pic_nums_idc, int *abs_diff_pic_num_minus1, int *long_term_pic_idx, int weighted_prediction, int list_no)
 {
   unsigned i,j,k;
   
@@ -989,14 +991,14 @@ void poc_ref_pic_reorder(StorablePicture **list, unsigned num_ref_idx_lX_active,
       diff = re_order[i]-picNumLXPred;
       if (diff <= 0)
       {
-        remapping_of_pic_nums_idc[i] = 0;
+        reordering_of_pic_nums_idc[i] = 0;
         abs_diff_pic_num_minus1[i] = abs(diff)-1;
         if (abs_diff_pic_num_minus1[i] < 0)
           abs_diff_pic_num_minus1[i] = maxPicNum -1; 
       }
       else
       {
-        remapping_of_pic_nums_idc[i] = 1;
+        reordering_of_pic_nums_idc[i] = 1;
         abs_diff_pic_num_minus1[i] = abs(diff)-1;
       }
       picNumLXPred = re_order[i];
@@ -1035,7 +1037,7 @@ void poc_ref_pic_reorder(StorablePicture **list, unsigned num_ref_idx_lX_active,
       }
             
     }
-    remapping_of_pic_nums_idc[i] = 3;
+    reordering_of_pic_nums_idc[i] = 3;
     
     for(j=0; j<num_ref_idx_lX_active; j++)
     {
@@ -1094,7 +1096,7 @@ void SetLagrangianMultipliers()
             * ( (j == B_SLICE) ? 4.0 : (j == SP_SLICE) ? Clip3(1.4,3.0,(qp_temp / 12.0)) : 1.0);
           // Scale lambda due to hadamard qpel only consideration
           img->lambda_md[j][qp] = (input->hadamard == 2 ? 0.95 : 1.00) * img->lambda_md[j][qp];
-          img->lambda_md[j][qp] = (input->BRefPictures == 2 && img->b_frame_to_code == 0 ? 0.50 : 1.00) * img->lambda_md[j][qp];
+          img->lambda_md[j][qp] = (j == B_SLICE && input->BRefPictures == 2 && img->b_frame_to_code == 0 ? 0.50 : 1.00) * img->lambda_md[j][qp];
           
           if (j == B_SLICE)
           {

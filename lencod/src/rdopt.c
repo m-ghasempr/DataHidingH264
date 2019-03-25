@@ -2346,7 +2346,9 @@ void set_stored_macroblock_parameters ()
     
     rdopt->prev_qp=currMB->prev_qp;
     rdopt->prev_delta_qp=currMB->prev_delta_qp;
+    rdopt->delta_qp = currMB->delta_qp;
     rdopt->qp=currMB->qp;
+    rdopt->prev_cbp=currMB->prev_cbp;
     
     for(i = 0;i<4+img->num_blk8x8_uv;i++)
     {

@@ -71,6 +71,8 @@ Mapping Map[] = {
     {"OutputFile",               &configinput.outfile,                      1,   0.0,                       0,  0.0,              0.0              },
     {"ReconFile",                &configinput.ReconFile,                    1,   0.0,                       0,  0.0,              0.0              },
     {"TraceFile",                &configinput.TraceFile,                    1,   0.0,                       0,  0.0,              0.0              },
+    {"DisposableP",              &configinput.DisposableP,                  0,   0.0,                       1,  0.0,              1.0              },
+    {"DispPQPOffset",            &configinput.DispPQPOffset,                0,   0.0,                       0,-51.0,             51.0              },
     {"NumberBFrames",            &configinput.successive_Bframe,            0,   0.0,                       2,  0.0,              0.0              },
     {"BRefPicQPOffset",          &configinput.qpBRSOffset,                  0,   0.0,                       0,-51.0,             51.0              },
     {"DirectModeType",           &configinput.direct_spatial_mv_pred_flag,  0,   0.0,                       1,  0.0,              1.0              },
@@ -139,6 +141,7 @@ Mapping Map[] = {
     {"RDPictureDecision",        &configinput.RDPictureDecision,            0,   0.0,                       1,  0.0,              1.0              },
     {"RDPictureIntra",           &configinput.RDPictureIntra,               0,   0.0,                       1,  0.0,              1.0              },    
     {"RDPSliceWeightOnly",       &configinput.RDPSliceWeightOnly,           0,   1.0,                       1,  0.0,              1.0              },    
+    {"RDPSliceBTest",            &configinput.RDPSliceBTest,                0,   0.0,                       1,  0.0,              1.0              },
     {"RDBSliceWeightOnly",       &configinput.RDBSliceWeightOnly,           0,   0.0,                       1,  0.0,              1.0              },    
 
     {"SkipIntraInInterSlices",   &configinput.SkipIntraInInterSlices,       0,   0.0,                       1,  0.0,              1.0              },    
@@ -199,7 +202,15 @@ Mapping Map[] = {
     {"ScalingListPresentFlag7",  &configinput.ScalingListPresentFlag[7],    0,   0.0,                       1,  0.0,              3.0              },
 
     // Fast ME enable
-    {"UseFME",                   &configinput.FMEnable,                     0,   0.0,                       1,  0.0,              1.0              },
+    {"UseFME",                   &configinput.FMEnable,                     0,   0.0,                       1,  0.0,              3.0              },
+    {"EPZSPattern",              &configinput.EPZSPattern,                  0,   2.0,                       1,  0.0,              3.0              },
+    {"EPZSDualRefinement",       &configinput.EPZSDual,                     0,   3.0,                       1,  0.0,              4.0              },
+    {"EPZSFixedPredictors",      &configinput.EPZSFixed,                    0,   2.0,                       1,  0.0,              2.0              },
+    {"EPZSTemporal",             &configinput.EPZSTemporal,                 0,   1.0,                       1,  0.0,              1.0              },
+    {"EPZSSpatialMem",           &configinput.EPZSSpatialMem,               0,   1.0,                       1,  0.0,              1.0              },
+    {"EPZSMinThresScale",        &configinput.EPZSMinThresScale,            0,   0.0,                       0,  0.0,              0.0              },
+    {"EPZSMaxThresScale",        &configinput.EPZSMaxThresScale,            0,   1.0,                       0,  0.0,              0.0              },
+    {"EPZSMedThresScale",        &configinput.EPZSMedThresScale,            0,   1.0,                       0,  0.0,              0.0              },
     {"ChromaQPOffset",           &configinput.chroma_qp_index_offset,       0,   0.0,                       1,-51.0,             51.0              },
 
     // Fidelity Range Extensions

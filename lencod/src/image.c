@@ -95,7 +95,6 @@ int *last_P_no_fld;
 static void ReportFirstframe(int tmp_time, int me_time);
 static void ReportIntra(int tmp_time, int me_time);
 static void ReportSP(int tmp_time, int me_time);
-static void ReportRB(int tmp_time, int me_time);
 static void ReportP(int tmp_time, int me_time);
 static void ReportB(int tmp_time, int me_time);
 static void ReportNALNonVLCBits(int tmp_time, int me_time);
@@ -619,9 +618,6 @@ int encode_one_frame ()
         break;
       case B_SLICE:
         stats->bit_ctr_B += stats->bit_ctr - stats->bit_ctr_n;
-        if (img->nal_reference_idc>0)
-          ReportRB(tmp_time,me_time);
-        else
           ReportB(tmp_time,me_time);
         break;
       default:      // P
@@ -1061,7 +1057,6 @@ static void init_frame ()
   for(i=0;i< ((img->width/MB_BLOCK_SIZE)*(img->height/MB_BLOCK_SIZE));i++)
     img->mb_data[i].slice_nr=-1;
 	
-  //if (img->type != B_SLICE)
   if (img->b_frame_to_code == 0)
   {
     img->tr = start_tr_in_this_IGOP + IMG_NUMBER * (input->jumpd + 1);
@@ -1091,10 +1086,10 @@ static void init_frame ()
       {
 #ifdef _CHANGE_QP_
         if (input->qp2start > 0 && img->tr >= input->qp2start)
-          img->qp = input->qpN2;
+          img->qp = input->qpN2 + (img->nal_reference_idc ? 0 : input->DispPQPOffset);
         else
 #endif
-          img->qp = input->qpN;
+          img->qp = input->qpN + (img->nal_reference_idc ? 0 : input->DispPQPOffset);
         
         if (img->type == SP_SLICE)
         {
@@ -1249,10 +1244,10 @@ static void init_field ()
       {
 #ifdef _CHANGE_QP_
         if (input->qp2start > 0 && img->tr >= input->qp2start)
-          img->qp = input->qpN2;
+          img->qp = input->qpN2 + (img->nal_reference_idc ? 0 : input->DispPQPOffset);
         else
 #endif
-          img->qp = input->qpN;
+          img->qp = input->qpN + (img->nal_reference_idc ? 0 : input->DispPQPOffset);
         if (img->type == SP_SLICE)
         {
           img->qp = input->qpsp;
@@ -1766,6 +1761,8 @@ void copy_rdopt_data (int bot_block)
 
   currMB->prev_qp=rdopt->prev_qp;
   currMB->prev_delta_qp=rdopt->prev_delta_qp;
+  currMB->prev_cbp=rdopt->prev_cbp;
+  currMB->delta_qp=rdopt->delta_qp;
   currMB->qp=rdopt->qp;
 
   currMB->c_ipred_mode = rdopt->c_ipred_mode;
@@ -1936,17 +1933,17 @@ static void ReportFirstframe(int tmp_time,int me_time)
 
   if (input->Verbose == 1)
   {
-    printf ("%04d(IDR)%8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s\n",
+    printf ("%04d(IDR)%8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s    %d\n",
       frame_no, stats->bit_ctr - stats->bit_ctr_n, 
       img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time, me_time,
-      img->fld_flag ? "FLD" : "FRM"); 
+      img->fld_flag ? "FLD" : "FRM", img->nal_reference_idc); 
   }
   else if (input->Verbose == 2)
   {
-    printf ("%04d(IDR)%8d %1d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d   %2d %2d  %d\n",
+    printf ("%04d(IDR)%8d %1d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d   %2d %2d  %d   %d\n",
       frame_no, stats->bit_ctr - stats->bit_ctr_n,0,
       img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time, me_time,
-      img->fld_flag ? "FLD" : "FRM", intras, img->num_ref_idx_l0_active, img->num_ref_idx_l1_active,img->rd_pass);
+      img->fld_flag ? "FLD" : "FRM", intras, img->num_ref_idx_l0_active, img->num_ref_idx_l1_active,img->rd_pass, img->nal_reference_idc);
   }
   //Rate control
   if(input->RCEnable)
@@ -1971,28 +1968,28 @@ static void ReportIntra(int tmp_time, int me_time)
   if (input->Verbose == 1)
   {
    if (img->currentPicture->idr_flag == 1)
-      printf ("%04d(IDR)%8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s\n",
+      printf ("%04d(IDR)%8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s    %d\n",
       frame_no, stats->bit_ctr - stats->bit_ctr_n, 
       img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time, me_time,
-      img->fld_flag ? "FLD" : "FRM"); 
+      img->fld_flag ? "FLD" : "FRM", img->nal_reference_idc); 
     else
-      printf ("%04d(I)  %8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s\n",
+      printf ("%04d(I)  %8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s    %d\n",
       frame_no, stats->bit_ctr - stats->bit_ctr_n, 
       img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time, me_time,
-      img->fld_flag ? "FLD" : "FRM");
+      img->fld_flag ? "FLD" : "FRM", img->nal_reference_idc);
   }
   else if (input->Verbose == 2)
   {
     if (img->currentPicture->idr_flag == 1)
-      printf ("%04d(IDR)%8d %1d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d   %2d %2d  %d\n",
+      printf ("%04d(IDR)%8d %1d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d   %2d %2d  %d   %d\n",
       frame_no, stats->bit_ctr - stats->bit_ctr_n, 0,
       img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time, me_time,
-      img->fld_flag ? "FLD" : "FRM", intras, img->num_ref_idx_l0_active, img->num_ref_idx_l1_active,img->rd_pass); 
+      img->fld_flag ? "FLD" : "FRM", intras, img->num_ref_idx_l0_active, img->num_ref_idx_l1_active,img->rd_pass, img->nal_reference_idc); 
     else
-      printf ("%04d(I)  %8d %1d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d   %2d %2d  %d\n",
+      printf ("%04d(I)  %8d %1d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d   %2d %2d  %d   %d\n",
       frame_no, stats->bit_ctr - stats->bit_ctr_n, 0,
       img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time, me_time,
-      img->fld_flag ? "FLD" : "FRM", intras, img->num_ref_idx_l0_active, img->num_ref_idx_l1_active,img->rd_pass);
+      img->fld_flag ? "FLD" : "FRM", intras, img->num_ref_idx_l0_active, img->num_ref_idx_l1_active,img->rd_pass, img->nal_reference_idc);
   }
 }
 
@@ -2000,36 +1997,18 @@ static void ReportSP(int tmp_time, int me_time)
 {
   if (input->Verbose == 1)
   {
-    printf ("%04d(SP) %8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s\n",
+    printf ("%04d(SP) %8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s    %d\n",
       frame_no, stats->bit_ctr - stats->bit_ctr_n,  
       img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time, me_time,
-      img->fld_flag ? "FLD" : "FRM");
+      img->fld_flag ? "FLD" : "FRM", img->nal_reference_idc);
   }
   else if (input->Verbose == 2)
   {
     
-    printf ("%04d(SP) %8d %1d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d   %2d %2d  %d\n",
+    printf ("%04d(SP) %8d %1d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d   %2d %2d  %d   %d\n",
       frame_no, stats->bit_ctr - stats->bit_ctr_n, active_pps->weighted_pred_flag, 
       img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time, me_time,
-      img->fld_flag ? "FLD" : "FRM", intras, img->num_ref_idx_l0_active, img->num_ref_idx_l1_active,img->rd_pass);
-  }
-}
-
-static void ReportRB(int tmp_time, int me_time)
-{
-  if (input->Verbose == 1)
-  {
-    printf ("%04d(RB) %8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s\n",
-      frame_no, stats->bit_ctr - stats->bit_ctr_n,  
-      img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time, me_time,
-      img->fld_flag ? "FLD" : "FRM");
-  }
-  else
-  {
-    printf ("%04d(RB) %8d %1d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d\n",
-      frame_no, stats->bit_ctr - stats->bit_ctr_n, active_pps->weighted_bipred_idc, 
-      img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time, me_time,
-      img->fld_flag ? "FLD" : "FRM", intras,img->direct_spatial_mv_pred_flag, img->num_ref_idx_l0_active, img->num_ref_idx_l1_active,img->rd_pass);
+      img->fld_flag ? "FLD" : "FRM", intras, img->num_ref_idx_l0_active, img->num_ref_idx_l1_active,img->rd_pass, img->nal_reference_idc);
   }
 }
 
@@ -2037,17 +2016,17 @@ static void ReportB(int tmp_time, int me_time)
 {
   if (input->Verbose == 1)
   {
-    printf ("%04d(B)  %8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s\n",
+    printf ("%04d(B)  %8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s    %d\n",
     frame_no, stats->bit_ctr - stats->bit_ctr_n,
     img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time,me_time,
-    img->fld_flag ? "FLD" : "FRM");
+    img->fld_flag ? "FLD" : "FRM", img->nal_reference_idc);
   }
   else if (input->Verbose == 2)
   {
-    printf ("%04d(B)  %8d %1d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d\n",
+    printf ("%04d(B)  %8d %1d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d %1d %2d %2d  %d   %d\n",
     frame_no, stats->bit_ctr - stats->bit_ctr_n, active_pps->weighted_bipred_idc,
     img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time,me_time,
-    img->fld_flag ? "FLD" : "FRM",intras,img->direct_spatial_mv_pred_flag, img->num_ref_idx_l0_active, img->num_ref_idx_l1_active,img->rd_pass);
+    img->fld_flag ? "FLD" : "FRM",intras,img->direct_spatial_mv_pred_flag, img->num_ref_idx_l0_active, img->num_ref_idx_l1_active,img->rd_pass, img->nal_reference_idc);
   }
 }
 
@@ -2056,17 +2035,17 @@ static void ReportP(int tmp_time, int me_time)
 {            
   if (input->Verbose == 1)
   {
-    printf ("%04d(P)  %8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s\n",
+    printf ("%04d(P)  %8d   %2d %7.3f %7.3f %7.3f %9d %7d    %3s    %d\n",
       frame_no, stats->bit_ctr - stats->bit_ctr_n, 
       img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time, me_time,
-      img->fld_flag ? "FLD" : "FRM");
+      img->fld_flag ? "FLD" : "FRM", img->nal_reference_idc);
   }
   else if (input->Verbose == 2)
   {
-    printf ("%04d(P)  %8d %1d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d   %2d %2d  %d\n",
+    printf ("%04d(P)  %8d %1d %2d %7.3f %7.3f %7.3f %9d %7d    %3s %5d   %2d %2d  %d   %d\n",
       frame_no, stats->bit_ctr - stats->bit_ctr_n, active_pps->weighted_pred_flag, 
       img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time, me_time,
-      img->fld_flag ? "FLD" : "FRM", intras, img->num_ref_idx_l0_active, img->num_ref_idx_l1_active, img->rd_pass);
+      img->fld_flag ? "FLD" : "FRM", intras, img->num_ref_idx_l0_active, img->num_ref_idx_l1_active, img->rd_pass, img->nal_reference_idc);
   }
 }
 
@@ -2573,6 +2552,11 @@ static void rdPictureCoding()
       {
         active_pps = PicParSet[1];
       }
+      else if (input->RDPSliceBTest && active_sps->profile_idc != 66)
+      {
+        img->type = B_SLICE;
+        active_pps = PicParSet[0];        
+      }
       else
       {
         skip_encode = input->RDPSliceWeightOnly;
@@ -2590,11 +2574,7 @@ static void rdPictureCoding()
       else
       {
         skip_encode = input->RDBSliceWeightOnly;
-
-        if (img->nal_reference_idc)          
-          img->qp = (rd_qp - 1);
-        else
-          img->qp = (rd_qp + 1);
+        img->qp = rd_qp + (img->nal_reference_idc ? - 1 : 1);
       }      
     }
   }

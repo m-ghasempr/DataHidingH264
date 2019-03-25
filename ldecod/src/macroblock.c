@@ -943,7 +943,8 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
       for(j=0;j<BLOCK_SIZE;j++)
       {
         dec_picture->ref_idx[LIST_0][img_block_y+j][img->block_x+i] = 0;
-        dec_picture->ref_pic_id[LIST_0][img_block_y+j][img->block_x+i] = dec_picture->ref_pic_num[img->current_slice_nr][LIST_0 + list_offset][(short)dec_picture->ref_idx[LIST_0][img_block_y+j][img->block_x+i]];
+        dec_picture->ref_pic_id[LIST_0][img_block_y+j][img->block_x+i] = 
+          dec_picture->ref_pic_num[img->current_slice_nr][LIST_0 + list_offset][(short)dec_picture->ref_idx[LIST_0][img_block_y+j][img->block_x+i]];
       }
 
     return DECODE_MB;
@@ -1764,7 +1765,8 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
                     // If the current MB is a frame MB and the colocated is from a field picture, 
                     // then the co_located_ref_id may have been generated from the wrong value of 
                     // frame_poc if it references it's complementary field, so test both POC values
-                    if(listX[0][iref]->top_poc*2 == co_located_ref_id[refList][imgblock_y + j][img->block_x + k] || listX[0][iref]->bottom_poc*2 == co_located_ref_id[refList][imgblock_y + j][img->block_x + k])
+                    if(listX[0][iref]->top_poc*2 == co_located_ref_id[refList][imgblock_y + j][img->block_x + k] 
+                      || listX[0][iref]->bottom_poc*2 == co_located_ref_id[refList][imgblock_y + j][img->block_x + k])
                     {
                       mapped_idx=iref;
                       break;
@@ -2040,7 +2042,8 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
                     // If the current MB is a frame MB and the colocated is from a field picture, 
                     // then the co_located_ref_id may have been generated from the wrong value of 
                     // frame_poc if it references it's complementary field, so test both POC values
-                    if(listX[0][iref]->top_poc*2 == co_located_ref_id[refList][imgblock_y + j0][img->block_x + i0] || listX[0][iref]->bottom_poc*2 == co_located_ref_id[refList][imgblock_y + j0][img->block_x + i0])
+                    if(listX[0][iref]->top_poc*2 == co_located_ref_id[refList][imgblock_y + j0][img->block_x + i0] 
+                       || listX[0][iref]->bottom_poc*2 == co_located_ref_id[refList][imgblock_y + j0][img->block_x + i0])
                     {
                       mapped_idx=iref;
                       break;

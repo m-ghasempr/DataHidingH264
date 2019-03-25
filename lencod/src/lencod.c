@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 9.8 (FRExt)
+ *     JM 10.0 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -63,11 +63,13 @@
 #include "image.h"
 #include "output.h"
 #include "fast_me.h"
+#include "simplified_fast_me.h"
 #include "ratectl.h"
 #include "explicit_gop.h"
+#include "epzs.h"
 
-#define JM      "9 (FRExt)"
-#define VERSION "9.8"
+#define JM      "10 (FRExt)"
+#define VERSION "10.0"
 #define EXT_VERSION "(FRExt)"
 
 InputParameters inputs,      *input = &inputs;
@@ -132,6 +134,7 @@ void init_stats()
 int main(int argc,char **argv)
 {
   int M,N,n,np,nb;           //Rate control
+  int primary_disp = 0;
 
   p_dec = p_in = -1;
 
@@ -200,7 +203,7 @@ int main(int argc,char **argv)
   if(input->RCEnable)
     rc_init_seq();
 
-  if(input->FMEnable)
+  if(input->FMEnable == 1)
     DefineThreshold();
 
   // Init frame type counter. Only supports single slice per frame.
@@ -225,7 +228,11 @@ int main(int argc,char **argv)
 
   for (img->number=0; img->number < input->no_frames; img->number++)
   {
-    img->nal_reference_idc = 1;
+    //img->nal_reference_idc = 1;
+    if (input->intra_period)
+      img->nal_reference_idc = ((IMG_NUMBER % input->intra_period) && input->DisposableP) ? (img->number + 1)% 2 : 1;
+    else
+      img->nal_reference_idc = (img->number && input->DisposableP) ? (img->number + 1)% 2 : 1;
 
     //much of this can go in init_frame() or init_field()?
     //poc for this frame or field
@@ -241,7 +248,20 @@ int main(int argc,char **argv)
     //frame_num for this frame
     //if (input->BRefPictures== 0 || input->successive_Bframe == 0 || img-> number < 2)
     if ((input->BRefPictures != 1 &&  input->PyramidCoding == 0) || input->successive_Bframe == 0 || img-> number < 2)// ||  input->PyramidCoding == 0)
-      img->frame_num = (input->intra_period && input->idr_enable ? IMG_NUMBER % input->intra_period : IMG_NUMBER) % (1 << (log2_max_frame_num_minus4 + 4)); 
+    {
+      if (input->intra_period && input->idr_enable)
+      {
+        img->frame_num =  ((IMG_NUMBER - primary_disp)  % input->intra_period ) % (1 << (log2_max_frame_num_minus4 + 4)); 
+        if (IMG_NUMBER % input->intra_period  == 0)
+        {
+          img->frame_num = 0;
+          primary_disp   = 0;
+        }
+      }
+      else
+      img->frame_num = (IMG_NUMBER - primary_disp) % (1 << (log2_max_frame_num_minus4 + 4)); 
+
+    }
     else 
     {
       //img->frame_num ++;
@@ -250,6 +270,7 @@ int main(int argc,char **argv)
         if (0== (img->number % input->intra_period))
         {
           img->frame_num=0;
+          primary_disp   = 0;
         }
       }
       img->frame_num %= (1 << (log2_max_frame_num_minus4 + 4)); 
@@ -339,6 +360,12 @@ int main(int argc,char **argv)
     if (input->ReportFrameStats)
       report_frame_statistic();
     
+    if (img->nal_reference_idc == 0)
+    {
+            primary_disp ++;
+            img->frame_num -= 1;
+            img->frame_num %= (1 << (log2_max_frame_num_minus4 + 4));
+    }    
     encode_enhancement_layer();
     
     process_2nd_IGOP();
@@ -525,8 +552,6 @@ void CAVLC_init()
     for (k=0;k<4;k++)
       for (l=0;l < (4 + (unsigned int)img->num_blk8x8_uv);l++)
         img->nz_coeff[i][k][l]=0;
-
-
 }
 
 
@@ -1053,7 +1078,7 @@ void report()
   char name[30];
   int total_bits;
   float frame_rate;
-  float mean_motion_info_bit_use[2];
+  float mean_motion_info_bit_use[2] = {0.0};
 
 #ifndef WIN32
   time_t now;
@@ -1171,6 +1196,20 @@ void report()
       fprintf(stdout," Entropy coding method             : CABAC\n");
     
     fprintf(stdout,  " Profile/Level IDC                 : (%d,%d)\n",input->ProfileIDC,input->LevelIDC);
+    
+  if (input->FMEnable==1)
+    fprintf(stdout,  " Motion Estimation Scheme          : HEX\n");    
+  else if (input->FMEnable==2)
+    fprintf(stdout,  " Motion Estimation Scheme          : SHEX\n");
+   else if (input->FMEnable == 3)
+   {
+     fprintf(stdout,  " Motion Estimation Scheme          : EPZS\n");
+     EPZSOutputStats(stdout, 0);
+   }
+  else
+    fprintf(stdout,  " Motion Estimation Scheme          : Full Search\n");
+
+
     
 #ifdef _FULL_SEARCH_RANGE_
     if (input->full_search == 2)
@@ -1342,6 +1381,9 @@ void report()
   if(input->MbInterlace)
     fprintf(p_stat, " MB Field Coding : On \n");
 
+  if (input->FMEnable == 3)
+    EPZSOutputStats(p_stat, 1);
+  
 #ifdef _FULL_SEARCH_RANGE_
   if (input->full_search == 2)
     fprintf(p_stat," Search range restrictions    : none\n");
@@ -1424,7 +1466,6 @@ void report()
     fprintf(p_stat,"\n Mode     intra IPCM  |  %5d         |",stats->mode_use[B_SLICE][IPCM ]);
     mean_motion_info_bit_use[1] = (float)(stats->bit_use_mode[B_SLICE][0] + stats->bit_use_mode[B_SLICE][1] + stats->bit_use_mode[B_SLICE][2] 
                                       + stats->bit_use_mode[B_SLICE][3] + stats->bit_use_mode[B_SLICE][P8x8])/(float) frame_ctr[B_SLICE]; 
-
   }
 
   fprintf(p_stat,"\n\n ---------------------|----------------|----------------|----------------|\n");
@@ -1571,6 +1612,10 @@ void report()
 
   if (input->FMEnable==1)
     fprintf(p_log,"  HEX |");
+  else if (input->FMEnable==2)
+    fprintf(p_log," SHEX |");
+   else if (input->FMEnable == 3)
+    fprintf(p_log," EPZS |");
   else
     fprintf(p_log,"  OFF |");
 
@@ -1730,13 +1775,13 @@ void information_init()
   {
     case 1:         
       printf("-------------------------------------------------------------------------------\n");    
-      printf("  Frame  Bit/pic    QP   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld      \n");
+      printf("  Frame  Bit/pic    QP   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld Ref  \n");
       printf("-------------------------------------------------------------------------------\n");
       break;
     case 2:         
-      printf("-----------------------------------------------------------------------------------------\n");
-      printf("  Frame  Bit/pic WP QP   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP\n");
-      printf("-----------------------------------------------------------------------------------------\n");
+      printf("---------------------------------------------------------------------------------------------\n");
+      printf("  Frame  Bit/pic WP QP   SnrY    SnrU    SnrV    Time(ms) MET(ms) Frm/Fld   I D L0 L1 RDP Ref\n");
+      printf("---------------------------------------------------------------------------------------------\n");
       break;
     case 0:
     default:
@@ -1865,8 +1910,18 @@ int init_global_buffers()
     }
   }
 
-  if(input->FMEnable)
+  if (input->FMEnable == 1)
+  {
     memory_size += get_mem_FME();
+  }
+  else if (input->FMEnable == 2)
+  {
+    simplified_init_FME();
+    memory_size += simplified_get_mem_FME();
+  }
+  else if (input->FMEnable == 3)
+    memory_size += EPZSInit();
+
 
   if (input->RCEnable)
   {
@@ -2011,10 +2066,19 @@ void free_global_buffers()
 
   free_mem3Dint(img->nz_coeff, img->FrameSizeInMbs);
 
-  if(input->FMEnable)
+  if(input->FMEnable == 1)
   {
     free_mem_FME();
   }
+  else if (input->FMEnable == 2)
+  {
+    simplified_free_mem_FME();
+  }
+  else if (input->FMEnable == 3)
+  {
+    EPZSDelete();
+  }
+
 
   if (input->RCEnable)
   {
@@ -2098,9 +2162,6 @@ void free_mem_mv (short****** mv)
   }
   free (mv);
 }
-
-
-
 
 
 /*!

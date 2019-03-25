@@ -113,6 +113,8 @@ int RestOfSliceHeader()
   if (img->idr_flag)
   {
     img->pre_frame_num = img->frame_num;
+    // picture error concealment
+    img->last_ref_pic_poc = 0;
     assert(img->frame_num == 0);
   }
 
@@ -310,7 +312,7 @@ static void ref_pic_list_reordering()
       i=0;
       do
       {
-        val = currSlice->remapping_of_pic_nums_idc_l0[i] = ue_v("SH: remapping_of_pic_nums_idc_l0", currStream);
+        val = currSlice->reordering_of_pic_nums_idc_l0[i] = ue_v("SH: reordering_of_pic_nums_idc_l0", currStream);
         if (val==0 || val==1)
         {
           currSlice->abs_diff_pic_num_minus1_l0[i] = ue_v("SH: abs_diff_pic_num_minus1_l0", currStream);
@@ -337,7 +339,7 @@ static void ref_pic_list_reordering()
       i=0;
       do
       {
-        val = currSlice->remapping_of_pic_nums_idc_l1[i] = ue_v("SH: remapping_of_pic_nums_idc_l1", currStream);
+        val = currSlice->reordering_of_pic_nums_idc_l1[i] = ue_v("SH: reordering_of_pic_nums_idc_l1", currStream);
         if (val==0 || val==1)
         {
           currSlice->abs_diff_pic_num_minus1_l1[i] = ue_v("SH: abs_diff_pic_num_minus1_l1", currStream);

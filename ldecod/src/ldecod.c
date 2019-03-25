@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 9.8 (FRExt)
+ *     JM 10.0 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -67,8 +67,8 @@
 
 #include "erc_api.h"
 
-#define JM          "9 (FRExt)"
-#define VERSION     "9.8"
+#define JM          "10 (FRExt)"
+#define VERSION     "10.0"
 #define EXT_VERSION "(FRExt)"
 
 #define LOGFILE     "log.dec"
@@ -434,6 +434,10 @@ void init_conf(struct inp_par *inp, char *config_filename)
   FILE *fd;
   int NAL_mode;
 
+  // picture error concealment
+  int temp;
+  char tempval[100];
+
   // read the decoder configuration file
   if((fd=fopen(config_filename,"r")) == NULL)
   {
@@ -484,6 +488,11 @@ void init_conf(struct inp_par *inp, char *config_filename)
 
   inp->write_uv=1;
 
+  // picture error concealment
+  img->conceal_mode = inp->conceal_mode = 0;
+  img->ref_poc_gap = inp->ref_poc_gap = 2;
+  img->poc_gap = inp->poc_gap = 2;
+
 #ifdef _LEAKYBUCKET_
   fscanf(fd,"%ld,",&inp->R_decoder);             // Decoder rate
   fscanf(fd, "%*[^\n]");
@@ -495,8 +504,31 @@ void init_conf(struct inp_par *inp, char *config_filename)
   fscanf(fd,"%*[^\n]");
 #endif
 
-  fclose (fd);
+  /* since error concealment parameters are added at the end of
+  decoder conf file we need to read the leakybucket params to get to 
+  those parameters */
+#ifndef _LEAKYBUCKET_
+  fscanf(fd,"%ld,",&temp);
+  fscanf(fd, "%*[^\n]");
+  fscanf(fd,"%ld,",&temp);
+  fscanf(fd, "%*[^\n]");
+  fscanf(fd,"%ld,",&temp);
+  fscanf(fd, "%*[^\n]"); 
+  fscanf(fd,"%s",tempval);
+  fscanf(fd,"%*[^\n]");
+#endif
 
+  fscanf(fd,"%d",&inp->conceal_mode);   // Mode of Error Concealment
+  fscanf(fd,"%*[^\n]");
+  img->conceal_mode = inp->conceal_mode;
+  fscanf(fd,"%d",&inp->ref_poc_gap);   // POC gap depending on pattern
+  fscanf(fd,"%*[^\n]");
+  img->ref_poc_gap = inp->ref_poc_gap;
+  fscanf(fd,"%d",&inp->poc_gap);   // POC gap between consecutive frames in display order
+  fscanf(fd,"%*[^\n]");
+  img->poc_gap = inp->poc_gap;
+
+  fclose (fd);
 }
 
 /*!

@@ -176,7 +176,7 @@ void             dpb_combine_field_yuv(FrameStore *fs);
 
 void             init_lists(int currSliceType, PictureStructure currPicStructure);
 void             reorder_ref_pic_list(StorablePicture **list, int *list_size, 
-                                      int num_ref_idx_lX_active_minus1, int *remapping_of_pic_nums_idc, 
+                                      int num_ref_idx_lX_active_minus1, int *reordering_of_pic_nums_idc, 
                                       int *abs_diff_pic_num_minus1, int *long_term_pic_idx);
 
 void             init_mbaff_lists();

@@ -496,7 +496,11 @@ int test_wp_P_slice(int select_offset)
     {
       for (comp=0; comp < 3; comp ++)
       {
-        if (weight[clist][index][comp] != default_weight ||  offset[clist][index][comp] != 0)
+        int offset_test = input->RDPSliceBTest && active_sps->profile_idc != 66 
+          ? abs(offset[clist][index][comp]) > 2 
+          : offset[clist][index][comp] != 0;
+        
+        if (weight[clist][index][comp] != default_weight ||  offset_test)
         {
           perform_wp = 1;
           break;

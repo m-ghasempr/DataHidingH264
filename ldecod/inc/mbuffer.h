@@ -10,6 +10,11 @@
  *  \author
  *      Main contributors (see contributors.h for copyright, address and affiliation details)
  *      - Karsten Sühring          <suehring@hhi.de>
+ *      - Jill Boyce               <jill.boyce@thomson.net>
+ *      - Saurav K Bandyopadhyay   <saurav@ieee.org>
+ *      - Zhenyu Wu                <Zhenyu.Wu@thomson.net
+ *      - Purvin Pandit            <Purvin.Pandit@thomson.net>
+ *
  ***********************************************************************
  */
 #ifndef _MBUFFER_H_
@@ -93,6 +98,9 @@ typedef struct storable_picture
   int         slice_qp_delta;
   DecRefPicMarking_t *dec_ref_pic_marking_buffer;                    //!< stores the memory management control operations
 
+  // picture error concealment
+  int concealed_pic; //indicates if this is a concealed picutre
+
 } StorablePicture;
 
 
@@ -144,6 +152,9 @@ typedef struct frame_store
   int       is_output;
   int       poc;
 
+  // picture error concealment
+  int concealment_reference;
+
   StorablePicture *frame;
   StorablePicture *top_field;
   StorablePicture *bottom_field;
@@ -190,7 +201,7 @@ void             dpb_combine_field_yuv(FrameStore *fs);
 
 void             init_lists(int currSliceType, PictureStructure currPicStructure);
 void             reorder_ref_pic_list(StorablePicture **list, int *list_size, 
-                                      int num_ref_idx_lX_active_minus1, int *remapping_of_pic_nums_idc, 
+                                      int num_ref_idx_lX_active_minus1, int *reordering_of_pic_nums_idc, 
                                       int *abs_diff_pic_num_minus1, int *long_term_pic_idx);
 
 void             init_mbaff_lists();

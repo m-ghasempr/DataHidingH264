@@ -11,6 +11,11 @@
  *      Main contributors (see contributors.h for copyright, address and affiliation details)
  *      - Karsten Sühring                 <suehring@hhi.de>
  *      - Alexis Tourapis                 <alexismt@ieee.org>
+ *      - Jill Boyce                      <jill.boyce@thomson.net>
+ *      - Saurav K Bandyopadhyay          <saurav@ieee.org>
+ *      - Zhenyu Wu                       <Zhenyu.Wu@thomson.net
+ *      - Purvin Pandit                   <Purvin.Pandit@thomson.net>
+ *
  ***********************************************************************
  */
 
@@ -25,6 +30,9 @@
 #include "output.h"
 #include "image.h"
 #include "header.h"
+
+// picture error concealment
+#include "erc_api.h"
 
 static void insert_picture_in_dpb(FrameStore* fs, StorablePicture* p);
 static void output_one_frame_from_dpb();
@@ -264,9 +272,11 @@ void init_dpb()
   img->last_has_mmco_5 = 0;
 
   dpb.init_done = 1;
+
+  // picture error concealment
+  if(img->conceal_mode !=0)
+      last_out_fs = alloc_frame_store();
 }
-
-
 /*!
  ************************************************************************
  * \brief
@@ -303,6 +313,10 @@ void free_dpb()
     }
 
   dpb.init_done = 0;
+
+  // picture error concealment
+  if(img->conceal_mode != 0)
+      free_frame_store(last_out_fs);
 }
 
 
@@ -1433,8 +1447,9 @@ static void reorder_long_term(StorablePicture **RefPicListX, int num_ref_idx_lX_
   nIdx = *refIdxLX;
 
   for( cIdx = *refIdxLX; cIdx <= num_ref_idx_lX_active_minus1+1; cIdx++ )
-    if( (!RefPicListX[ cIdx ]->is_long_term ) ||  (RefPicListX[ cIdx ]->long_term_pic_num != LongTermPicNum ))
-      RefPicListX[ nIdx++ ] = RefPicListX[ cIdx ];
+    if (RefPicListX[ cIdx ])
+      if( (!RefPicListX[ cIdx ]->is_long_term ) ||  (RefPicListX[ cIdx ]->long_term_pic_num != LongTermPicNum ))
+        RefPicListX[ nIdx++ ] = RefPicListX[ cIdx ];
 }
 
 
@@ -1445,7 +1460,7 @@ static void reorder_long_term(StorablePicture **RefPicListX, int num_ref_idx_lX_
  *
  ************************************************************************
  */
-void reorder_ref_pic_list(StorablePicture **list, int *list_size, int num_ref_idx_lX_active_minus1, int *remapping_of_pic_nums_idc, int *abs_diff_pic_num_minus1, int *long_term_pic_idx)
+void reorder_ref_pic_list(StorablePicture **list, int *list_size, int num_ref_idx_lX_active_minus1, int *reordering_of_pic_nums_idc, int *abs_diff_pic_num_minus1, int *long_term_pic_idx)
 {
   int i;
 
@@ -1465,14 +1480,14 @@ void reorder_ref_pic_list(StorablePicture **list, int *list_size, int num_ref_id
 
   picNumLXPred = currPicNum;
 
-  for (i=0; remapping_of_pic_nums_idc[i]!=3; i++)
+  for (i=0; reordering_of_pic_nums_idc[i]!=3; i++)
   {
-    if (remapping_of_pic_nums_idc[i]>3)
+    if (reordering_of_pic_nums_idc[i]>3)
       error ("Invalid remapping_of_pic_nums_idc command", 500);
 
-    if (remapping_of_pic_nums_idc[i] < 2)
+    if (reordering_of_pic_nums_idc[i] < 2)
     {
-      if (remapping_of_pic_nums_idc[i] == 0)
+      if (reordering_of_pic_nums_idc[i] == 0)
       {
         if( picNumLXPred - ( abs_diff_pic_num_minus1[i] + 1 ) < 0 )
           picNumLXNoWrap = picNumLXPred - ( abs_diff_pic_num_minus1[i] + 1 ) + maxPicNum;
@@ -2239,6 +2254,8 @@ void store_picture_in_dpb(StorablePicture* p)
 {
   unsigned i;
   int poc, pos;
+  // picture error concealment
+  extern int pocs_in_dpb[100];
   // diagnostics
   //printf ("Storing (%s) non-ref pic with frame_num #%d\n", (p->type == FRAME)?"FRAME":(p->type == TOP_FIELD)?"TOP_FIELD":"BOTTOM_FIELD", p->pic_num);
   // if frame, check for new store, 
@@ -2248,7 +2265,11 @@ void store_picture_in_dpb(StorablePicture* p)
   img->last_pic_bottom_field = (p->structure == BOTTOM_FIELD);
 
   if (p->idr_flag)
+  {
     idr_memory_management(p);
+  // picture error concealment
+    memset(pocs_in_dpb, 0, sizeof(int)*100);
+  }
   else
   {
     // adaptive memory management
@@ -2288,10 +2309,22 @@ void store_picture_in_dpb(StorablePicture* p)
     sliding_window_memory_management(p);
   } 
 
+  // picture error concealment
+  if(img->conceal_mode != 0)
+    for(i=0;i<dpb.size;i++)
+      if(dpb.fs[i]->is_reference)
+        dpb.fs[i]->concealment_reference = 1;
+
   // first try to remove unused frames
   if (dpb.used_size==dpb.size)
   {
+    // picture error concealment
+    if (img->conceal_mode != 0)
+    conceal_non_ref_pics(2);
     remove_unused_frame_from_dpb();
+
+    if(img->conceal_mode != 0)
+      sliding_window_poc_management(p);
   }
   
   // then output frames until one can be removed
@@ -2318,7 +2351,7 @@ void store_picture_in_dpb(StorablePicture* p)
     {
       if (dpb.fs_ref[i]->frame_num == p->frame_num)
       {
-        error("duplicate frame_num im short-term reference picture buffer", 500);
+        error("duplicate frame_num in short-term reference picture buffer", 500);
       }
     }
 
@@ -2326,6 +2359,12 @@ void store_picture_in_dpb(StorablePicture* p)
   // store at end of buffer
 //  printf ("store frame/field at pos %d\n",dpb.used_size);
   insert_picture_in_dpb(dpb.fs[dpb.used_size],p);
+
+  // picture error concealment
+  if (p->idr_flag)
+  {
+      img->earlier_missing_poc = 0;
+  }
 
   if (p->structure != FRAME)
   {
@@ -2337,6 +2376,9 @@ void store_picture_in_dpb(StorablePicture* p)
   }
 
   dpb.used_size++;
+
+  if(img->conceal_mode != 0)
+      pocs_in_dpb[dpb.used_size-1] = p->poc;
 
   update_ref_list();
   update_ltref_list();
@@ -2696,12 +2738,26 @@ static void output_one_frame_from_dpb()
   // call the output function
 //  printf ("output frame with frame_num #%d, poc %d (dpb. dpb.size=%d, dpb.used_size=%d)\n", dpb.fs[pos]->frame_num, dpb.fs[pos]->frame->poc, dpb.size, dpb.used_size);
 
+  // picture error concealment
+  if(img->conceal_mode != 0)
+  {
+    if(dpb.last_output_poc == 0)
+    {
+      write_lost_ref_after_idr(pos);
+    }
+    write_lost_non_ref_pic(poc, p_out);
+  }
+
+// JVT-P072 ends
+
   write_stored_frame(dpb.fs[pos], p_out);
 
-  if (dpb.last_output_poc >= poc)
-  {
-    error ("output POC must be in ascending order", 150);
-  } 
+  // picture error concealment
+  if(img->conceal_mode == 0)
+    if (dpb.last_output_poc >= poc)
+    {
+      error ("output POC must be in ascending order", 150);
+    } 
   dpb.last_output_poc = poc;
   // free frame store and move empty store to end of buffer
   if (!is_used_for_reference(dpb.fs[pos]))
@@ -2724,6 +2780,10 @@ void flush_dpb()
 
   //diagnostics
 //  printf("Flush remaining frames from dpb. dpb.size=%d, dpb.used_size=%d\n",dpb.size,dpb.used_size);
+
+  if(img->conceal_mode == 0)
+    if (img->conceal_mode != 0)
+      conceal_non_ref_pics(0);
 
   // mark all frames unused
   for (i=0; i<dpb.used_size; i++)
@@ -3144,13 +3204,13 @@ void alloc_ref_pic_list_reordering_buffer(Slice *currSlice)
 
   if (img->type!=I_SLICE && img->type!=SI_SLICE)
   {
-    if ((currSlice->remapping_of_pic_nums_idc_l0 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: remapping_of_pic_nums_idc_l0");
+    if ((currSlice->reordering_of_pic_nums_idc_l0 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: reordering_of_pic_nums_idc_l0");
     if ((currSlice->abs_diff_pic_num_minus1_l0 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: abs_diff_pic_num_minus1_l0");
     if ((currSlice->long_term_pic_idx_l0 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: long_term_pic_idx_l0");
   }
   else
   {
-    currSlice->remapping_of_pic_nums_idc_l0 = NULL;
+    currSlice->reordering_of_pic_nums_idc_l0 = NULL;
     currSlice->abs_diff_pic_num_minus1_l0 = NULL;
     currSlice->long_term_pic_idx_l0 = NULL;
   }
@@ -3159,13 +3219,13 @@ void alloc_ref_pic_list_reordering_buffer(Slice *currSlice)
 
   if (img->type==B_SLICE)
   {
-    if ((currSlice->remapping_of_pic_nums_idc_l1 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: remapping_of_pic_nums_idc_l1");
+    if ((currSlice->reordering_of_pic_nums_idc_l1 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: reordering_of_pic_nums_idc_l1");
     if ((currSlice->abs_diff_pic_num_minus1_l1 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: abs_diff_pic_num_minus1_l1");
     if ((currSlice->long_term_pic_idx_l1 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: long_term_pic_idx_l1");
   }
   else
   {
-    currSlice->remapping_of_pic_nums_idc_l1 = NULL;
+    currSlice->reordering_of_pic_nums_idc_l1 = NULL;
     currSlice->abs_diff_pic_num_minus1_l1 = NULL;
     currSlice->long_term_pic_idx_l1 = NULL;
   }
@@ -3181,25 +3241,25 @@ void alloc_ref_pic_list_reordering_buffer(Slice *currSlice)
 void free_ref_pic_list_reordering_buffer(Slice *currSlice)
 {
 
-  if (currSlice->remapping_of_pic_nums_idc_l0) 
-    free(currSlice->remapping_of_pic_nums_idc_l0);
+  if (currSlice->reordering_of_pic_nums_idc_l0) 
+    free(currSlice->reordering_of_pic_nums_idc_l0);
   if (currSlice->abs_diff_pic_num_minus1_l0)
     free(currSlice->abs_diff_pic_num_minus1_l0);
   if (currSlice->long_term_pic_idx_l0)
     free(currSlice->long_term_pic_idx_l0);
 
-  currSlice->remapping_of_pic_nums_idc_l0 = NULL;
+  currSlice->reordering_of_pic_nums_idc_l0 = NULL;
   currSlice->abs_diff_pic_num_minus1_l0 = NULL;
   currSlice->long_term_pic_idx_l0 = NULL;
   
-  if (currSlice->remapping_of_pic_nums_idc_l1)
-    free(currSlice->remapping_of_pic_nums_idc_l1);
+  if (currSlice->reordering_of_pic_nums_idc_l1)
+    free(currSlice->reordering_of_pic_nums_idc_l1);
   if (currSlice->abs_diff_pic_num_minus1_l1)
     free(currSlice->abs_diff_pic_num_minus1_l1);
   if (currSlice->long_term_pic_idx_l1)
     free(currSlice->long_term_pic_idx_l1);
   
-  currSlice->remapping_of_pic_nums_idc_l1 = NULL;
+  currSlice->reordering_of_pic_nums_idc_l1 = NULL;
   currSlice->abs_diff_pic_num_minus1_l1 = NULL;
   currSlice->long_term_pic_idx_l1 = NULL;
 }

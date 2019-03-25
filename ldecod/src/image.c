@@ -18,6 +18,11 @@
  *    - Ye-Kui Wang                     <wyk@ieee.org>
  *    - Antti Hallapuro                 <antti.hallapuro@nokia.com>
  *    - Alexis Tourapis                 <alexismt@ieee.org>
+ *    - Jill Boyce                      <jill.boyce@thomson.net>
+ *    - Saurav K Bandyopadhyay          <saurav@ieee.org>
+ *    - Zhenyu Wu                       <Zhenyu.Wu@thomson.net
+ *    - Purvin Pandit                   <Purvin.Pandit@thomson.net>
+ *
  ***********************************************************************
  */
 
@@ -286,6 +291,9 @@ void find_snr(
   Boolean rgb_output = (active_sps->vui_seq_parameters.matrix_coefficients==0);
   unsigned char *buf;
 
+  // picture error concealment
+  char yuv_types[4][6]= {"4:0:0","4:2:0","4:2:2","4:4:4"};
+
   // calculate frame number
   int  psnrPOC = active_sps->mb_adaptive_frame_field_flag ? p->poc /(input->poc_scale) : p->poc/(input->poc_scale);
 
@@ -439,6 +447,15 @@ void find_snr(
     snr->snr_ua=(float)(snr->snr_ua*(snr->frame_ctr)+snr->snr_u)/(snr->frame_ctr+1); // average snr luma for all frames
     snr->snr_va=(float)(snr->snr_va*(snr->frame_ctr)+snr->snr_v)/(snr->frame_ctr+1); // average snr luma for all frames
   } 
+
+  // picture error concealment
+  if(p->concealed_pic)
+  {
+      fprintf(stdout,"%04d(P)  %8d %5d %5d %7.4f %7.4f %7.4f  %s %5d\n", 
+          frame_no, p->frame_poc, p->pic_num, p->qp, 
+          snr->snr_y, snr->snr_u, snr->snr_v, yuv_types[p->chroma_format_idc], 0);      
+
+  }
 }
 
 
@@ -616,7 +633,7 @@ void reorder_lists(int currSliceType, Slice * currSlice)
     {
       reorder_ref_pic_list(listX[0], &listXsize[0], 
                            img->num_ref_idx_l0_active - 1, 
-                           currSlice->remapping_of_pic_nums_idc_l0, 
+                           currSlice->reordering_of_pic_nums_idc_l0, 
                            currSlice->abs_diff_pic_num_minus1_l0, 
                            currSlice->long_term_pic_idx_l0);
     }
@@ -633,7 +650,7 @@ void reorder_lists(int currSliceType, Slice * currSlice)
     {
       reorder_ref_pic_list(listX[1], &listXsize[1], 
                            img->num_ref_idx_l1_active - 1, 
-                           currSlice->remapping_of_pic_nums_idc_l1, 
+                           currSlice->reordering_of_pic_nums_idc_l1, 
                            currSlice->abs_diff_pic_num_minus1_l1, 
                            currSlice->long_term_pic_idx_l1);
     }
@@ -1039,16 +1056,51 @@ void init_picture(struct img_par *img, struct inp_par *inp)
   {
     if (active_sps->gaps_in_frame_num_value_allowed_flag == 0)
     {
-      /* Advanced Error Concealment would be called here to combat unintentional loss of pictures. */
-      error("An unintentional loss of pictures occurs! Exit\n", 100);
-    }
-    fill_frame_num_gap(img);
-  }
-  img->pre_frame_num = img->frame_num;
-  img->num_dec_mb = 0;
+      // picture error concealment
+      if(inp->conceal_mode !=0)
+      {
+        if((img->frame_num) < (img->pre_frame_num))
+        {
+          /* Conceal lost IDR frames and any frames immediately 
+             following the IDR. Use frame copy for these since 
+             lists cannot be formed correctly for motion copy*/
+          img->conceal_mode = 1; 
+          img->IDR_concealment_flag = 1;
+          conceal_lost_frames(img);
+          //reset to original concealment mode for future drops
+          img->conceal_mode = inp->conceal_mode;
+        }
+        else
+        {
+          //reset to original concealment mode for future drops
+          img->conceal_mode = inp->conceal_mode;
 
+          img->IDR_concealment_flag = 0;
+          conceal_lost_frames(img);
+        }
+      }
+      else
+      {   /* Advanced Error Concealment would be called here to combat unintentional loss of pictures. */
+        error("An unintentional loss of pictures occurs! Exit\n", 100);
+      }
+    }
+    if(img->conceal_mode == 0)
+      fill_frame_num_gap(img);
+  }
+
+  if(img->nal_reference_idc)
+  {
+    img->pre_frame_num = img->frame_num;
+  }
+
+  //img->num_dec_mb = 0;
+  
   //calculate POC
   decode_poc(img);
+
+  if(img->nal_reference_idc)
+    img->last_ref_pic_poc = img->framepoc;
+
   //  dumppoc (img);
 
   if (img->structure==FRAME ||img->structure==TOP_FIELD)
@@ -1161,7 +1213,6 @@ void init_picture(struct img_par *img, struct inp_par *inp)
     dec_picture->frame_cropping_rect_top_offset    = active_sps->frame_cropping_rect_top_offset;
     dec_picture->frame_cropping_rect_bottom_offset = active_sps->frame_cropping_rect_bottom_offset;
   }
-
 }
 
 /*!
@@ -1506,7 +1557,7 @@ int is_new_picture()
     result |= (old_slice.bottom_field_flag != img->bottom_field_flag);
   }
 
-  result |= (old_slice.nal_ref_idc   != img->nal_reference_idc);
+  result |= (old_slice.nal_ref_idc != img->nal_reference_idc) && ((old_slice.nal_ref_idc == 0) || (img->nal_reference_idc == 0));
   
   result |= ( old_slice.idr_flag != img->idr_flag);
 

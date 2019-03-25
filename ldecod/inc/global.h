@@ -418,11 +418,11 @@ typedef struct
   TextureInfoContexts *tex_ctx;      //!< pointer to struct of context models for use in CABAC
   
   int                 ref_pic_list_reordering_flag_l0;
-  int                 *remapping_of_pic_nums_idc_l0;
+  int                 *reordering_of_pic_nums_idc_l0;
   int                 *abs_diff_pic_num_minus1_l0;
   int                 *long_term_pic_idx_l0;
   int                 ref_pic_list_reordering_flag_l1;
-  int                 *remapping_of_pic_nums_idc_l1;
+  int                 *reordering_of_pic_nums_idc_l1;
   int                 *abs_diff_pic_num_minus1_l1;
   int                 *long_term_pic_idx_l1;
 
@@ -613,6 +613,16 @@ typedef struct img_par
   struct timeb tstruct_end;
 #endif
 
+  // picture error concealment
+  int last_ref_pic_poc;
+  int ref_poc_gap;
+  int poc_gap;
+  int conceal_mode;
+  int earlier_missing_poc;
+  unsigned int frame_to_conceal;
+  int IDR_concealment_flag;
+  int conceal_slice_type;
+
 } ImageParameters;
 
 extern ImageParameters *img;
@@ -631,6 +641,12 @@ struct snr_par
   float snr_ya;                                //!< Average SNR Y(dB) remaining frames
   float snr_ua;                                //!< Average SNR U(dB) remaining frames
   float snr_va;                                //!< Average SNR V(dB) remaining frames
+  float sse_y;                                 //!< SSE Y
+  float sse_u;                                 //!< SSE U
+  float sse_v;                                 //!< SSE V
+  float msse_y;                                //!< Average SSE Y
+  float msse_u;                                //!< Average SSE U
+  float msse_v;                                //!< Average SSE V
 };
 
 int tot_time;
@@ -652,6 +668,11 @@ struct inp_par
   unsigned long F_decoder;                //!< Decoder Initial buffer fullness in HRD model
   char LeakyBucketParamFile[100];         //!< LeakyBucketParamFile
 #endif
+
+  // picture error concealment
+  int conceal_mode;
+  int ref_poc_gap;
+  int poc_gap;
 
 };
 

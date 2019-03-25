@@ -297,6 +297,9 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath=".\lencod\src\epzs.c">
+			</File>
+			<File
 				RelativePath="lencod\src\explicit_gop.c">
 				<FileConfiguration
 					Name="Debug|Win32">
@@ -960,6 +963,9 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath=".\lencod\src\simplified_fast_me.c">
+			</File>
+			<File
 				RelativePath="lencod\src\slice.c">
 				<FileConfiguration
 					Name="Debug|Win32">
@@ -1082,6 +1088,9 @@
 				RelativePath="lencod\inc\elements.h">
 			</File>
 			<File
+				RelativePath=".\lencod\inc\epzs.h">
+			</File>
+			<File
 				RelativePath="lencod\inc\explicit_gop.h">
 			</File>
 			<File
@@ -1161,6 +1170,9 @@
 			</File>
 			<File
 				RelativePath="lencod\inc\sei.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\simplified_fast_me.h">
 			</File>
 			<File
 				RelativePath="lencod\inc\transform8x8.h">

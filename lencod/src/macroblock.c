@@ -580,6 +580,7 @@ void start_macroblock(int mb_addr, int mb_field)
   currMB->bitcounter[BITS_COEFF_UV_MB   ] = 0;
 
 #ifdef _FAST_FULL_ME_
+//  if(input->FMEnable != 0 && input->FMEnable != 3)
   if(!input->FMEnable)
     ResetFastFullIntegerSearch ();
 #endif

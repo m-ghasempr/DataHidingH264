@@ -9,8 +9,12 @@
  * \author
  *      - Ari Hourunranta                <ari.hourunranta@nokia.com>
  *      - Ye-Kui Wang                   <wyk@ieee.org>
+ *      - Jill Boyce                     <jill.boyce@thomson.net>
+ *      - Saurav K Bandyopadhyay         <saurav@ieee.org>
+ *      - Zhenyu Wu                      <Zhenyu.Wu@thomson.net
+ *      - Purvin Pandit                  <Purvin.Pandit@thomson.net>
  *
- ************************************************************************
+ * ************************************************************************
  */
 
 
@@ -125,6 +129,44 @@ void ercMarkCurrMBConcealed( int currMBNum, int comp, int32 picSizeX, ercVariabl
 int ercConcealIntraFrame( frame *recfr, int32 picSizeX, int32 picSizeY, ercVariables_t *errorVar );
 int ercConcealInterFrame( frame *recfr, objectBuffer_t *object_list, 
                          int32 picSizeX, int32 picSizeY, ercVariables_t *errorVar, int chroma_format_idc );
+
+
+/* Thomson APIs for concealing entire frame loss */
+// This code reflects JVT-P072
+
+#include "mbuffer.h"
+#include "output.h"
+
+struct concealment_node {
+    StorablePicture* picture;
+    int  missingpocs;
+    struct concealment_node *next;
+};
+
+struct concealment_node * init_node(StorablePicture* , int );
+void print_node( struct concealment_node * );
+void print_list( struct concealment_node * );
+void add_node( struct concealment_node * );
+void delete_node( struct concealment_node * );
+void init_lists_for_non_reference_loss(int , PictureStructure );
+
+void conceal_non_ref_pics(int diff);
+void conceal_lost_frames(ImageParameters *img);
+void copy_to_conceal(StorablePicture *src, StorablePicture *dst, ImageParameters *img);
+
+void sliding_window_poc_management(StorablePicture *p);
+
+void write_lost_non_ref_pic(int poc, int p_out);
+void write_lost_ref_after_idr(int pos);
+
+FrameStore *last_out_fs;
+int pocs_in_dpb[100];
+int comp(const void *, const void *);
+StorablePicture *get_pic_from_dpb(int misssingpoc, int *pos);
+void update_ref_list_for_concealment();
+// JVT-P072 ends
+
+
 
 #endif
 

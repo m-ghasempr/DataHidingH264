@@ -669,9 +669,15 @@ static void PatchInp ()
 
   if (input->Log2MaxFNumMinus4 == -1)
     log2_max_frame_num_minus4 = Clip3(0,12, (int) (CeilLog2(input->no_frames * storedBplus1) - 4));
-    else 
+  else 
     log2_max_frame_num_minus4 = input->Log2MaxFNumMinus4;
   
+  if (log2_max_frame_num_minus4 == 0 && input->num_ref_frames == 16)
+  {
+    snprintf(errortext, ET_SIZE, " NumberReferenceFrames=%d and Log2MaxFNumMinus4=%d may lead to an invalid value of frame_num.", input->num_ref_frames, input-> Log2MaxFNumMinus4);
+    error (errortext, 500);
+  } 
+
   // set proper log2_max_pic_order_cnt_lsb_minus4.
   if (input->Log2MaxPOCLsbMinus4 == - 1)
     log2_max_pic_order_cnt_lsb_minus4 = Clip3(0,12, (int) (CeilLog2( 2*input->no_frames * (input->jumpd + 1)) - 4));
@@ -908,9 +914,12 @@ static void PatchInp ()
     error (errortext, 500);
   }
 
-  if (input->hadamard == 2 && input->FMEnable)
+  // the two HEX FME schemes support FAST Subpel ME. EPZS does not but works fine with
+  // Hadamard reduction with similar speed up. Subpel FME may be added at a later stage
+  // for this scheme for further speed increase.
+  if (input->hadamard == 2 && input->FMEnable != 0 && input->FMEnable != 3)
   {
-    snprintf(errortext, ET_SIZE, "UseHadamard=2 is not allowed when UseFME is set to 1.");
+    snprintf(errortext, ET_SIZE, "UseHadamard=2 is not allowed when UseFME is set to 1 or 2.");
     error (errortext, 500);
   }
 
@@ -1015,7 +1024,7 @@ static void PatchInp ()
     error (errortext, 500);
   }
 
-  if (input->search_range < input->BiPredMESearchRange)
+  if ((input->BiPredMotionEstimation) && (input->search_range < input->BiPredMESearchRange))
   {
     snprintf(errortext, ET_SIZE, "\nBiPredMESearchRange must be smaller or equal SearchRange.");
     error (errortext, 500);
@@ -1061,7 +1070,7 @@ static void ProfileCheck()
   // baseline
   if (input->ProfileIDC == 66 )
   {
-    if (input->successive_Bframe)
+    if (input->successive_Bframe || input->BRefPictures==2)
     {
       snprintf(errortext, ET_SIZE, "B pictures are not allowed in baseline.");
       error (errortext, 500);

@@ -1497,7 +1497,7 @@ static void reorder_long_term(StorablePicture **RefPicListX, int num_ref_idx_lX_
  *
  ************************************************************************
  */
-void reorder_ref_pic_list(StorablePicture **list, int *list_size, int num_ref_idx_lX_active_minus1, int *remapping_of_pic_nums_idc, int *abs_diff_pic_num_minus1, int *long_term_pic_idx)
+void reorder_ref_pic_list(StorablePicture **list, int *list_size, int num_ref_idx_lX_active_minus1, int *reordering_of_pic_nums_idc, int *abs_diff_pic_num_minus1, int *long_term_pic_idx)
 {
   int i;
 
@@ -1518,21 +1518,21 @@ void reorder_ref_pic_list(StorablePicture **list, int *list_size, int num_ref_id
 
   picNumLXPred = currPicNum;
 
-  for (i=0; remapping_of_pic_nums_idc[i]!=3; i++)
+  for (i=0; reordering_of_pic_nums_idc[i]!=3; i++)
   {
-    if (remapping_of_pic_nums_idc[i]>3)
+    if (reordering_of_pic_nums_idc[i]>3)
       error ("Invalid remapping_of_pic_nums_idc command", 500);
 
-    if (remapping_of_pic_nums_idc[i] < 2)
+    if (reordering_of_pic_nums_idc[i] < 2)
     {
-      if (remapping_of_pic_nums_idc[i] == 0)
+      if (reordering_of_pic_nums_idc[i] == 0)
       {
         if( picNumLXPred - ( abs_diff_pic_num_minus1[i] + 1 ) < 0 )
           picNumLXNoWrap = picNumLXPred - ( abs_diff_pic_num_minus1[i] + 1 ) + maxPicNum;
         else
           picNumLXNoWrap = picNumLXPred - ( abs_diff_pic_num_minus1[i] + 1 );
       }
-      else // (remapping_of_pic_nums_idc[i] == 1)
+      else // (reordering_of_pic_nums_idc[i] == 1)
       {
         if( picNumLXPred + ( abs_diff_pic_num_minus1[i] + 1 )  >=  maxPicNum )
           picNumLXNoWrap = picNumLXPred + ( abs_diff_pic_num_minus1[i] + 1 ) - maxPicNum;
@@ -1548,7 +1548,7 @@ void reorder_ref_pic_list(StorablePicture **list, int *list_size, int num_ref_id
 
       reorder_short_term(list, num_ref_idx_lX_active_minus1, picNumLX, &refIdxLX);
     }
-    else //(remapping_of_pic_nums_idc[i] == 2)
+    else //(reordering_of_pic_nums_idc[i] == 2)
     {
       reorder_long_term(list, num_ref_idx_lX_active_minus1, long_term_pic_idx[i], &refIdxLX);
     }
@@ -3253,13 +3253,13 @@ void alloc_ref_pic_list_reordering_buffer(Slice *currSlice)
 
   if (img->type!=I_SLICE && img->type!=SI_SLICE)
   {
-    if ((currSlice->remapping_of_pic_nums_idc_l0 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: remapping_of_pic_nums_idc_l0");
+    if ((currSlice->reordering_of_pic_nums_idc_l0 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: remapping_of_pic_nums_idc_l0");
     if ((currSlice->abs_diff_pic_num_minus1_l0 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: abs_diff_pic_num_minus1_l0");
     if ((currSlice->long_term_pic_idx_l0 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: long_term_pic_idx_l0");
   }
   else
   {
-    currSlice->remapping_of_pic_nums_idc_l0 = NULL;
+    currSlice->reordering_of_pic_nums_idc_l0 = NULL;
     currSlice->abs_diff_pic_num_minus1_l0 = NULL;
     currSlice->long_term_pic_idx_l0 = NULL;
   }
@@ -3268,13 +3268,13 @@ void alloc_ref_pic_list_reordering_buffer(Slice *currSlice)
 
   if (img->type==B_SLICE)
   {
-    if ((currSlice->remapping_of_pic_nums_idc_l1 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: remapping_of_pic_nums_idc_l1");
+    if ((currSlice->reordering_of_pic_nums_idc_l1 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: remapping_of_pic_nums_idc_l1");
     if ((currSlice->abs_diff_pic_num_minus1_l1 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: abs_diff_pic_num_minus1_l1");
     if ((currSlice->long_term_pic_idx_l1 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: long_term_pic_idx_l1");
   }
   else
   {
-    currSlice->remapping_of_pic_nums_idc_l1 = NULL;
+    currSlice->reordering_of_pic_nums_idc_l1 = NULL;
     currSlice->abs_diff_pic_num_minus1_l1 = NULL;
     currSlice->long_term_pic_idx_l1 = NULL;
   }
@@ -3290,25 +3290,25 @@ void alloc_ref_pic_list_reordering_buffer(Slice *currSlice)
 void free_ref_pic_list_reordering_buffer(Slice *currSlice)
 {
 
-  if (currSlice->remapping_of_pic_nums_idc_l0) 
-    free(currSlice->remapping_of_pic_nums_idc_l0);
+  if (currSlice->reordering_of_pic_nums_idc_l0) 
+    free(currSlice->reordering_of_pic_nums_idc_l0);
   if (currSlice->abs_diff_pic_num_minus1_l0)
     free(currSlice->abs_diff_pic_num_minus1_l0);
   if (currSlice->long_term_pic_idx_l0)
     free(currSlice->long_term_pic_idx_l0);
 
-  currSlice->remapping_of_pic_nums_idc_l0 = NULL;
+  currSlice->reordering_of_pic_nums_idc_l0 = NULL;
   currSlice->abs_diff_pic_num_minus1_l0 = NULL;
   currSlice->long_term_pic_idx_l0 = NULL;
   
-  if (currSlice->remapping_of_pic_nums_idc_l1)
-    free(currSlice->remapping_of_pic_nums_idc_l1);
+  if (currSlice->reordering_of_pic_nums_idc_l1)
+    free(currSlice->reordering_of_pic_nums_idc_l1);
   if (currSlice->abs_diff_pic_num_minus1_l1)
     free(currSlice->abs_diff_pic_num_minus1_l1);
   if (currSlice->long_term_pic_idx_l1)
     free(currSlice->long_term_pic_idx_l1);
   
-  currSlice->remapping_of_pic_nums_idc_l1 = NULL;
+  currSlice->reordering_of_pic_nums_idc_l1 = NULL;
   currSlice->abs_diff_pic_num_minus1_l1 = NULL;
   currSlice->long_term_pic_idx_l1 = NULL;
 }

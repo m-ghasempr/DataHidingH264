@@ -201,6 +201,12 @@
         
       Alexis Michael Tourapis         <alexismt@ieee.org>
   
+      Xiaoquan Yi                     <xyi@engr.scu.edu>
+      Jun Zhang                       <jzhang2@engr.scu.edu>
+      Dept. of C.E. Santa Clara Univ.
+      500 El Camino Real 
+      Santa Clara, CA 95053
+
    \endverbatim
  */
 
