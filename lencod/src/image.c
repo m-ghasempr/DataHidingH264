@@ -1316,6 +1316,23 @@ int encode_one_frame (VideoParameters *p_Vid, InputParameters *p_Inp)
       UpdatePixelMap (p_Vid, p_Inp);
   }
 
+#if OUTPUT_REF_LIST
+  {
+    int i;
+    printf( " [L0]: " );
+    for ( i = 0; i<p_Vid->currentSlice->listXsize[0]; i++ )
+    {
+      printf( "%d ", p_Vid->currentSlice->listX[0][i]->poc / 2 ); // may not work with field
+    }
+    printf( " [L1]: " );
+    for ( i = 0; i<p_Vid->currentSlice->listXsize[1]; i++ )
+    {
+      printf( "%d ", p_Vid->currentSlice->listX[1][i]->poc / 2 ); // may not work with field
+    }
+    printf("\n");
+  }  
+#endif
+
   free_slice_data(p_Vid);
 
   //Rate control

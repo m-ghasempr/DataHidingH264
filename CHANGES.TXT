@@ -1,3 +1,9 @@
+Changes in Version JM 18.3 (since JM 18.2)
+------------------------------------------
+- encoder: allow coding with the same GOP/reference picture settings like HM5 (BiL)
+- add HM-like example configurations (BiL)
+
+
 Changes in Version JM 18.2 (since JM 18.1)
 ------------------------------------------
 - encoder: fix MVC interlace encoder/decoder mismatch (AT/YHe/PeP)
@@ -1414,6 +1420,7 @@ AW      Armand Wemelsfelder     wemel@planet.nl
 BH      Barry Haskell           bhaskell@apple.com
 BJ      Byeungwoo Jeon          bjeon@yurim.skku.ac.kr
 BL      Brandon Lin             brandon@ubvideo.com
+BiL     Bin Li                  yhlibin@mail.ustc.edu.cn
 BY      Bill Yi                 bill.xyi@gmail.com
 CG      Cristina Gomila         GomilaC@tce.com
 CK      Christopher Kotchey     ckotchey@us.ibm.com

@@ -1374,17 +1374,68 @@ void init_slice (VideoParameters *p_Vid, Slice **currSlice, int start_mb_addr)
   if (((*currSlice)->slice_type == P_SLICE || (*currSlice)->slice_type == SP_SLICE) && p_Inp->P_List0_refs[layer_id])
   {
     (*currSlice)->num_ref_idx_active[LIST_0] = (char) imin((*currSlice)->num_ref_idx_active[LIST_0], p_Inp->P_List0_refs[layer_id] * ((p_Vid->structure !=0) + 1));
+#if CRA
+    if ( p_Inp->useCRA )
+    {
+      if ( ( ((*currSlice)->ThisPOC/2) - (p_Vid->p_Inp->NumberBFrames+1) ) % p_Vid->p_Inp->intra_period == 0 )
+      {
+        (*currSlice)->num_ref_idx_active[LIST_0] = (char) 1;
+      }
+    }
+#endif
   }
 
   if ((*currSlice)->slice_type == B_SLICE )
   {
     if (p_Inp->B_List0_refs[layer_id])
     {
+#if B0_MORE_REF
+      if ( p_Inp->BLevel0MoreRef )
+      {
+        if ( ((*currSlice)->ThisPOC/2) % (p_Vid->p_Inp->NumberBFrames+1) == 0 )
+        {
+          (*currSlice)->num_ref_idx_active[LIST_0] = (char) imin((*currSlice)->num_ref_idx_active[LIST_0], p_Inp->P_List0_refs[layer_id] * ((p_Vid->structure !=0) + 1));
+        }
+        else
+        {
+          (*currSlice)->num_ref_idx_active[LIST_0] = (char) imin((*currSlice)->num_ref_idx_active[LIST_0], p_Inp->B_List0_refs[layer_id] * ((p_Vid->structure !=0) + 1));
+        }
+      }
+      else
+#endif
       (*currSlice)->num_ref_idx_active[LIST_0] = (char) imin((*currSlice)->num_ref_idx_active[LIST_0], p_Inp->B_List0_refs[layer_id] * ((p_Vid->structure !=0) + 1));
+
+#if CRA
+      if ( p_Inp->useCRA )
+      {
+        if ( ( ((*currSlice)->ThisPOC/2) - (p_Vid->p_Inp->NumberBFrames+1) ) % p_Vid->p_Inp->intra_period == 0 )
+        {
+          (*currSlice)->num_ref_idx_active[LIST_0] = (char) 1;
+        }
+      }
+#endif
     }
     if (p_Inp->B_List1_refs[layer_id])
     {
       (*currSlice)->num_ref_idx_active[LIST_1] = (char) imin((*currSlice)->num_ref_idx_active[LIST_1], p_Inp->B_List1_refs[layer_id] * ((p_Vid->structure !=0) + 1));
+#if B0_MORE_REF
+      if ( p_Inp->BLevel0MoreRef )
+      {
+        if ( ((*currSlice)->ThisPOC/2) % (p_Vid->p_Inp->NumberBFrames+1) == 0 )
+        {
+          (*currSlice)->num_ref_idx_active[LIST_1] = (*currSlice)->num_ref_idx_active[LIST_0];
+        }
+      }
+#endif
+#if CRA
+      if ( p_Inp->useCRA )
+      {
+        if ( ( ((*currSlice)->ThisPOC/2) - (p_Vid->p_Inp->NumberBFrames+1) ) % p_Vid->p_Inp->intra_period == 0 )
+        {
+          (*currSlice)->num_ref_idx_active[LIST_1] = (*currSlice)->num_ref_idx_active[LIST_0];
+        }
+      }
+#endif
     }
     get_mem3D((byte ****)(void*)&(*currSlice)->direct_ref_idx, (*currSlice)->height_blk, (*currSlice)->width_blk, 2);
     get_mem2D((byte ***) (void*)&(*currSlice)->direct_pdir,    (*currSlice)->height_blk, (*currSlice)->width_blk);
@@ -1398,6 +1449,35 @@ void init_slice (VideoParameters *p_Vid, Slice **currSlice, int start_mb_addr)
   // assign list sizes
   (*currSlice)->num_ref_idx_active[LIST_0] = (*currSlice)->listXsize[LIST_0];
   (*currSlice)->num_ref_idx_active[LIST_1] = (*currSlice)->listXsize[LIST_1];
+
+#if CRA
+  if ( p_Inp->useCRA )
+  {
+    if ( ( (*currSlice)->slice_type == B_SLICE || (*currSlice)->slice_type == P_SLICE ) && (*currSlice)->p_Dpb->ref_frames_in_buffer >= 2 )
+    {
+      if ( ( ((*currSlice)->ThisPOC/2) - (p_Vid->p_Inp->NumberBFrames+1) ) % p_Vid->p_Inp->intra_period == 0 )
+      {
+        cra_ref_management_frame_pic(p_Dpb, p_Vid->frame_num);
+      }
+    }
+  }
+#endif
+
+#if HM50_LIKE_MMCO
+  if ( p_Inp->HM50LikeMMCO )
+  {
+    if (p_Vid->structure == FRAME && p_Dpb->ref_frames_in_buffer == active_sps->num_ref_frames)
+      hm50_ref_management_frame_pic(p_Dpb, p_Vid->frame_num);
+  }
+#endif
+
+#if LD_REF_SETTING
+  if ( p_Inp->useF701RefForLD )
+  {
+    if (p_Vid->structure == FRAME && p_Dpb->ref_frames_in_buffer == active_sps->num_ref_frames)
+      low_delay_ref_management_frame_pic(p_Dpb, p_Vid->frame_num);
+  }
+#endif
 
   //Perform memory management based on poc distances  
   if (p_Inp->SetFirstAsLongTerm && p_Vid->number == 0)

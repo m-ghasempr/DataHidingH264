@@ -62,6 +62,20 @@
 #define MAX_NUM_DPB_LAYERS        2
 //#define BEST_NZ_COEFF 1   // yuwen 2005.11.03 => for high complexity mode decision (CAVLC, #TotalCoeff)
 
+// defines for creating similar coding structures like HM
+#define OUTPUT_REF_LIST         0     //!< for debug purpose, output the reference picture list. do not support field
+
+#define B0_MORE_REF             1     ///!< used for random access setting, treat POC(HM like poc, =JM poc/2)%(NumberOfBFrames+1)==0 as B0, i.e. use more references at temporal level 0
+#define KEEP_B_SAME_LIST        1     ///!< keep B pictures using two identical reference picture lists
+#define CRA                     1     ///!< used for random access setting, HM CRA like random access point
+                                      ///!< using open GOP is not enough, for example, 32 is an Intra picture, when encoding 40, everything is OK.
+                                      ///!< but when encoding 36, there is one reference picture (32) in list0; actually, there should be two (32, 40) as HM.
+                                      ///!< setting number of reference frame to 1 at picture 40, using RPLR to let list1 use 32 as reference,
+                                      ///!< and marking all pictures unused for reference except 32 to solve this problem
+#define HM50_LIKE_MMCO          1     ///!< use the HM-5.0 like MMCO, keep the identical referencing structure as HM-5.0
+#define LD_REF_SETTING          1     ///!< used for low delay setting, 1+X referencing structure, as proposed in JCTVC-F701
+
+
 //AVC Profile IDC definitions
 enum {
   FREXT_CAVLC444 = 44,       //!< YUV 4:4:4/14 "CAVLC 4:4:4"

@@ -200,5 +200,4 @@ typedef enum {
   WP_REGULAR =            9
 } weighted_prediction_types;
 
-
 #endif

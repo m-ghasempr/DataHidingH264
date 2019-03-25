@@ -17,6 +17,15 @@
 
 extern void mmco_long_term(VideoParameters *p_Vid, int current_pic_num);
 extern void poc_based_ref_management_frame_pic(DecodedPictureBuffer *p_Dpb, int current_pic_num);
+#if CRA
+extern void cra_ref_management_frame_pic(DecodedPictureBuffer *p_Dpb, int current_pic_num);
+#endif
+#if HM50_LIKE_MMCO
+extern void hm50_ref_management_frame_pic(DecodedPictureBuffer *p_Dpb, int current_pic_num);
+#endif
+#if LD_REF_SETTING
+extern void low_delay_ref_management_frame_pic(DecodedPictureBuffer *p_Dpb, int current_pic_num);
+#endif
 extern void poc_based_ref_management_field_pic(DecodedPictureBuffer *p_Dpb, int current_pic_num);
 extern void tlyr_based_ref_management_frame_pic(VideoParameters *p_Vid, int current_pic_num); 
 

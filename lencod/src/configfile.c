@@ -1425,6 +1425,58 @@ static void PatchInp (VideoParameters *p_Vid, InputParameters *p_Inp)
     printf("Warning: Weighted Prediction may not function correctly for multiple slices\n"); 
   }
 
+#if KEEP_B_SAME_LIST
+  if ( p_Inp->BIdenticalList > 0 && p_Inp->ReferenceReorder != 1 )
+  {
+    snprintf(errortext, ET_SIZE, "Set two lists of B picture identical can only be used when ReferenceReorder is 1");
+    error (errortext, 500);
+  }
+#endif
+
+#if CRA
+  if ( p_Inp->useCRA == 1 && p_Inp->intra_period == 0 )
+  {
+    printf("Warning: CRA can only be used for IntraPeriod > 0, set CRA to 0\n");
+    p_Inp->useCRA = 0;
+  }
+  if ( p_Inp->useCRA == 1 && p_Inp->LowDelay == 1 )
+  {
+    snprintf(errortext, ET_SIZE, "CRA cannot be used when LowDelay is 1");
+    error (errortext, 500);
+  }
+#endif
+
+#if HM50_LIKE_MMCO
+  if ( p_Inp->HM50LikeMMCO == 1 )
+  {
+    printf("Warning: HM50LikeMMCO can only be used for random access case with GOP size equal to 8 and HM-5.0 coding order\n");
+    printf("         If it used for other coding structure, the performance may loss\n");
+  }
+  if ( p_Inp->HM50LikeMMCO == 1 && p_Inp->NumberBFrames != 7 )
+  {
+    printf("Warning: HM50LikeMMCO can only be used for random access case with NumberBFrames equal to 7, turn it off\n");
+    p_Inp->HM50LikeMMCO = 0;
+  }
+  if ( p_Inp->HM50LikeMMCO == 1 && p_Inp->LowDelay == 1 )
+  {
+    printf("Warning: HM50LikeMMCO cannot be used for low delay, turn it off\n");
+    p_Inp->HM50LikeMMCO = 0;
+  }
+#endif
+
+#if LD_REF_SETTING
+  if ( p_Inp->useF701RefForLD == 1 )
+  {
+    printf("Warning: useF701RefForLD can only be used for low delay case with GOP size equal to 4 and 4 reference frames as HM-5.0 low delay\n");
+    printf("         If other GOP size or number of reference frames are used, the performance may be loss with useF701RefForLD\n");
+  }
+  if ( p_Inp->useF701RefForLD == 1 && p_Inp->LowDelay == 0 )
+  {
+    snprintf(errortext, ET_SIZE, "useF701RefForLD can only be used when LowDelay is 1");
+    error (errortext, 500);
+  }
+#endif
+
   profile_check(p_Inp);
 
   if(!p_Inp->RDPictureDecision)

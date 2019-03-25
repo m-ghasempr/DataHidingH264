@@ -417,6 +417,22 @@ struct inp_par_enc
   // LZL additions
   int stdRange;                         //!< 1 - standard range, 0 - full range
   int videoCode;                        //!< 1 - 709, 3 - 601:  See VideoCode in io_tiff.
+
+#if B0_MORE_REF
+  int BLevel0MoreRef;
+#endif
+#if KEEP_B_SAME_LIST
+  int BIdenticalList;
+#endif
+#if CRA
+  int useCRA;
+#endif
+#if HM50_LIKE_MMCO
+  int HM50LikeMMCO;
+#endif
+#if LD_REF_SETTING
+  int useF701RefForLD;
+#endif
 };
 
 #endif
