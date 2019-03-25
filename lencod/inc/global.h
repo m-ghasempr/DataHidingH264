@@ -718,6 +718,7 @@ typedef struct slice
   int  pos;
 
   int default_pic_num[2][MAX_REFERENCE_PICTURES];
+  int default_view_id[2][MAX_REFERENCE_PICTURES];
 
   // Function pointers  
   int     (*mode_decision_for_I16x16_MB)        (Macroblock *currMB, int lambda);
@@ -934,7 +935,7 @@ typedef struct coding_par
 
   //uint32 dc_pred_value;                 //!< DC prediction value for current component
   //short max_imgpel_value;              //!< max value that one picture element (pixel) can take (depends on pic_unit_bitdepth)
-
+  char md5String[2][33];
 }CodingParameters;
 
 //! VideoParameters

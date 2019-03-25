@@ -30,7 +30,7 @@
 #endif
 
 #define JM                  "18 (FRExt)"
-#define VERSION             "18.1"
+#define VERSION             "18.2"
 #define EXT_VERSION         "(FRExt)"
 
 #define DUMP_DPB                  0    //!< Dump DPB info for debug purposes

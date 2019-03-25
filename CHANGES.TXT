@@ -1,3 +1,10 @@
+Changes in Version JM 18.2 (since JM 18.1)
+------------------------------------------
+- encoder: fix MVC interlace encoder/decoder mismatch (AT/YHe/PeP)
+- encoder: reference picture list performance fixes (AT/YHe)
+- decoder: fix deblocking filter strength for SP frames (KS/AT)
+
+
 Changes in Version JM 18.1 (since JM 18.0)
 ------------------------------------------
 - encoder/decoder: Direct Mode updates (YHe/KS)

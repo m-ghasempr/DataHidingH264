@@ -1085,61 +1085,45 @@ void reorder_lists( Slice *currSlice )
 {
   InputParameters *p_Inp = currSlice->p_Inp;
 
-  if ( p_Inp->ReferenceReorder == 1  && (currSlice->slice_type != I_SLICE && currSlice->slice_type != SI_SLICE) )
-  //if ( p_Inp->ReferenceReorder == 1 && currSlice->slice_type == P_SLICE )
+  // Perform reordering based on poc distances for HierarchicalCoding
+  if ( p_Inp->ReferenceReorder && (currSlice->slice_type == P_SLICE  || currSlice->slice_type == SP_SLICE))
   {
-    if ( currSlice->structure == FRAME )
-      currSlice->poc_ref_pic_reorder_frame(currSlice, currSlice->num_ref_idx_active[LIST_0], LIST_0);
-    else
+    int i, num_ref;
+
+    for (i = 0; i < currSlice->num_ref_idx_active[LIST_0] + 1; i++)
     {
-      poc_ref_pic_reorder_field_enh(currSlice, currSlice->num_ref_idx_active[LIST_0], LIST_0);
+      currSlice->modification_of_pic_nums_idc[LIST_0][i] = 3;
+      currSlice->abs_diff_pic_num_minus1[LIST_0][i] = 0;
+      currSlice->long_term_pic_idx[LIST_0][i] = 0;
     }
-    currSlice->num_ref_idx_active[LIST_0] = currSlice->listXsize[LIST_0]; 
-    currSlice->num_ref_idx_active[LIST_1] = currSlice->listXsize[LIST_1]; 
-  }
-  else 
-  {
-    // Perform reordering based on poc distances for HierarchicalCoding
-    if ( p_Inp->ReferenceReorder && (currSlice->slice_type == P_SLICE  || currSlice->slice_type == SP_SLICE))
-    //if ( p_Inp->ReferenceReorder && (currSlice->slice_type != I_SLICE && currSlice->slice_type != SI_SLICE) )
-    {
-      int i, num_ref;
 
-      for (i = 0; i < currSlice->num_ref_idx_active[LIST_0] + 1; i++)
-      {
-        currSlice->modification_of_pic_nums_idc[LIST_0][i] = 3;
-        currSlice->abs_diff_pic_num_minus1[LIST_0][i] = 0;
-        currSlice->long_term_pic_idx[LIST_0][i] = 0;
-      }
-
-      num_ref = currSlice->num_ref_idx_active[LIST_0];
+    num_ref = currSlice->num_ref_idx_active[LIST_0];
 
       if ( p_Inp->ReferenceReorder == 2 ) // temporal layer based
       {
-        if ( currSlice->structure == FRAME )
-          currSlice->poc_ref_pic_reorder_frame(currSlice, num_ref, LIST_0);
-      }
+      if ( currSlice->structure == FRAME )
+        currSlice->poc_ref_pic_reorder_frame(currSlice, num_ref, LIST_0);
+    }
+    else
+    {
+      if ( currSlice->structure == FRAME )
+        currSlice->poc_ref_pic_reorder_frame(currSlice, num_ref, LIST_0);
       else
       {
-        if ( currSlice->structure == FRAME )
-          currSlice->poc_ref_pic_reorder_frame(currSlice, num_ref, LIST_0);
-        else
-        {
-          poc_ref_pic_reorder_field_enh(currSlice, num_ref, LIST_0);
-        }
-      }
-
-      currSlice->num_ref_idx_active[LIST_0] = currSlice->listXsize[0]; 
-
-      if (p_Inp->ReferenceReorder > 1)
-      {
-        free_ref_pic_list_reordering_buffer(currSlice);
-        alloc_ref_pic_list_reordering_buffer(currSlice);
-        reorder_ref_pic_list ( currSlice, LIST_0);
+        poc_ref_pic_reorder_field_enh(currSlice, num_ref, LIST_0);
       }
     }
+
     currSlice->num_ref_idx_active[LIST_0] = currSlice->listXsize[0]; 
+
+    if (p_Inp->ReferenceReorder > 1)
+    {
+      free_ref_pic_list_reordering_buffer(currSlice);
+      alloc_ref_pic_list_reordering_buffer(currSlice);
+      reorder_ref_pic_list ( currSlice, LIST_0);
+    }
   }
+  currSlice->num_ref_idx_active[LIST_0] = currSlice->listXsize[0]; 
 }
 
 /*!
@@ -1202,6 +1186,9 @@ void set_default_ref_pic_lists(Slice *currSlice)
     for(ref = 0; ref < currSlice->listXsize[list]; ref++)
     {
       currSlice->default_pic_num[list][ref] = currSlice->listX[list][ref]->pic_num;
+#if MVC_EXTENSION_ENABLE
+      currSlice->default_view_id[list][ref] = currSlice->listX[list][ref]->view_id;
+#endif
     }
   }
 }
@@ -1243,7 +1230,12 @@ void reorder_against_default_ref_pic_lists(Slice *currSlice, int cur_list)
   for (i = 0; i < currSlice->listXsize[cur_list]; i++)
   {
     //printf("list %d %d : %d %d %d\n",currSlice->listXsize[cur_list], cur_list,i,currSlice->default_pic_num[cur_list][i], currSlice->listX[cur_list][i]->pic_num);
-    if(currSlice->default_pic_num[cur_list][i] != currSlice->listX[cur_list][i]->pic_num)
+    //if(currSlice->default_pic_num[cur_list][i] != currSlice->listX[cur_list][i]->pic_num)
+    if(
+#if MVC_EXTENSION_ENABLE
+      currSlice->default_view_id[cur_list][i] != currSlice->listX[cur_list][i]->view_id || 
+#endif
+       currSlice->default_pic_num[cur_list][i] != currSlice->listX[cur_list][i]->pic_num)
     {
       currSlice->ref_pic_list_reordering_flag[cur_list] = 1;
       break;

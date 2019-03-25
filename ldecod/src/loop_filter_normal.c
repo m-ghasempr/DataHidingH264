@@ -969,7 +969,7 @@ static void perform_db_dep_normal(Macroblock   *MbQ, StorablePicture *p)
     for (edge = 0; edge < 4 ; edge += 2)    
     {
       // If cbp == 0 then deblocking for some macroblock types could be skipped
-      if (MbQ->cbp == 0)
+      if (MbQ->cbp == 0 && (currSlice->slice_type == P_SLICE || currSlice->slice_type == B_SLICE))
       {
         //if (filterNon8x8LumaEdgesFlag[edge] == 0 && active_sps->chroma_format_idc != YUV444)
         if (edge > 0)
@@ -996,7 +996,7 @@ static void perform_db_dep_normal(Macroblock   *MbQ, StorablePicture *p)
     for( edge = 0; edge < 4 ; edge += 2 )
     {
       // If cbp == 0 then deblocking for some macroblock types could be skipped
-      if (MbQ->cbp == 0)
+      if (MbQ->cbp == 0 && (currSlice->slice_type == P_SLICE || currSlice->slice_type == B_SLICE))
       {
         if (edge > 0)
         {
@@ -1024,7 +1024,7 @@ static void perform_db_dep_normal(Macroblock   *MbQ, StorablePicture *p)
     for (edge = 0; edge < 4 ; ++edge )    
     {
       // If cbp == 0 then deblocking for some macroblock types could be skipped
-      if (MbQ->cbp == 0)
+      if (MbQ->cbp == 0 && (currSlice->slice_type == P_SLICE || currSlice->slice_type == B_SLICE))
       {
         if (edge > 0)
         {
@@ -1052,7 +1052,7 @@ static void perform_db_dep_normal(Macroblock   *MbQ, StorablePicture *p)
     for( edge = 0; edge < 4 ; ++edge )
     {
       // If cbp == 0 then deblocking for some macroblock types could be skipped
-      if (MbQ->cbp == 0)
+      if (MbQ->cbp == 0 && (currSlice->slice_type == P_SLICE || currSlice->slice_type == B_SLICE))
       {
         if (edge > 0)
         {

@@ -3311,7 +3311,7 @@ static StorablePicture * clone_storable_picture( VideoParameters *p_Vid, Storabl
   StorablePicture *p_stored_pic;
   int nal_reference_idc= p_Vid->nal_reference_idc;
   p_Vid->nal_reference_idc = NALU_PRIORITY_HIGH; //NALU_PRIORITY_DISPOSABLE;
-  p_stored_pic = alloc_storable_picture (p_Vid, (PictureStructure) p_Vid->structure, p_Vid->width, p_Vid->height, p_Vid->width_cr, p_Vid->height_cr);
+  p_stored_pic = alloc_storable_picture (p_Vid, (PictureStructure) p_Vid->structure, p_pic->size_x, p_pic->size_y, p_pic->size_x_cr, p_pic->size_y_cr);
   p_Vid->nal_reference_idc = nal_reference_idc;
   p_stored_pic->poc         = p_Vid->framepoc;
   p_stored_pic->top_poc     = p_Vid->toppoc;
