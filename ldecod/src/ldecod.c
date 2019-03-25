@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 5.0c
+ *     JM 6.0
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -111,31 +111,41 @@
   #include <conio.h>
 #endif
 
+#include <assert.h>
+
 #include "global.h"
-#include "bitsbuf.h"
 #include "rtp.h"
 #include "memalloc.h"
 #include "mbuffer.h"
 #include "leaky_bucket.h"
 #include "decodeiff.h"
 #include "fmo.h"
+#include "annexb.h"
 
-#if _ERROR_CONCEALMENT_
 #include "erc_api.h"
-#endif
 
-#define JM          "5"
-#define VERSION     "5.0c"
+#define JM          "6"
+#define VERSION     "6.0"
 
 #define LOGFILE     "log.dec"
 #define DATADECFILE "dataDec.txt"
 #define TRACEFILE   "trace_dec.txt"
 
-#if _ERROR_CONCEALMENT_
 extern objectBuffer_t *erc_object_list;
 extern ercVariables_t *erc_errorVar;
-#endif
 
+
+//! I have started to move the inp and img structures into global variables.
+//! They are declared in the following lines.  Since inp is defined in conio.h
+//! and cannot be overridden globally, it is defined here as input
+//!
+//! Everywhere, input-> and img-> can now be used either globally or with
+//! the local override through the formal parameter mechanism
+
+extern FILE* bits;
+struct inp_par    *input;         // input parameters from input configuration file
+struct snr_par    *snr;         // statistics
+struct img_par    *img;         // image parameters
 
 /*!
  ***********************************************************************
@@ -145,13 +155,8 @@ extern ercVariables_t *erc_errorVar;
  */
 int main(int argc, char **argv)
 {
-  extern FILE* bits;
-  struct inp_par    *inp;         // input parameters from input configuration file
-  struct snr_par    *snr;         // statistics
-  struct img_par    *img;         // image parameters
-
     // allocate memory for the structures
-  if ((inp =  (struct inp_par *)calloc(1, sizeof(struct inp_par)))==NULL) no_mem_exit("main: inp");
+  if ((input =  (struct inp_par *)calloc(1, sizeof(struct inp_par)))==NULL) no_mem_exit("main: input");
   if ((snr =  (struct snr_par *)calloc(1, sizeof(struct snr_par)))==NULL) no_mem_exit("main: snr");
   if ((img =  (struct img_par *)calloc(1, sizeof(struct img_par)))==NULL) no_mem_exit("main: img");
 
@@ -161,36 +166,24 @@ int main(int argc, char **argv)
     snprintf(errortext, ET_SIZE, "Usage: %s <config.dat> \n\t<config.dat> defines decoder parameters",argv[0]);
     error(errortext, 300);
   }
+//  isBigEndian = testEndian();
+  init_conf(input, argv[1]);
 
-  isBigEndian = testEndian();
-
-  // Initializes Configuration Parameters with configuration file
-  init_conf(inp, argv[1]);
-
-  img->UseConstrainedIntraPred = inp->UseConstrainedIntraPred;
-
-  if (inp->of_mode == PAR_OF_RTP)
+  
+  switch (input->FileFormat)
   {
-    extern FILE *bits;
-    // Read the first RTP packet conmtaining a header packet, and set the initial parameter set
-    RTPSequenceHeader (img, inp, bits);
+  case 0:
+    OpenBitstreamFile (input->infile);
+    break;
+  case 1:
+    OpenRTPFile (input->infile);
+    break;
+  default:
+    printf ("Unsupported file format %d, exit\n", input->FileFormat);
   }
-  if (inp->of_mode == PAR_OF_IFF)
-  {
-    // Read the first boxes, and set the initial parameter set
-    if ( -1 == IFFSequenceHeader( img, inp, bits ) )
-    {
-      snprintf(errortext, ET_SIZE, "Error: The input file is not in the Interim File Format\n");
-      error(errortext, 300);
-    }
-  }
-// printf ("In main: some pictrue information: %d x %d, with %d reference frames %d\n", img->height, img->width, img->buf_cycle, inp->buf_cycle);
-#ifndef _ABT_FLAG_IN_SLICE_HEADER_
-  USEABT = inp->abt; // set global ABT flag. (0=OFF, 1=Inter, 2=Inter&Intra)
-#endif
 
   // Allocate Slice data struct
-  malloc_slice(inp,img);
+  malloc_slice(input,img);
 
   init(img);
   img->number=0;
@@ -204,27 +197,22 @@ int main(int argc, char **argv)
 
   // B pictures
   Bframe_ctr=0;
+  init_poc();
 
   // time for total decoding session
   tot_time = 0;
-  if ( inp->of_mode == PAR_OF_IFF )
-    while ( parse_one_box(img, inp, snr, bits) != -1 );
-  else
-    while (decode_one_frame(img, inp, snr) != EOS);
+  while (decode_one_frame(img, input, snr) != EOS)
+    ;
 
   // B PICTURE : save the last P picture
   write_prev_Pframe(img, p_out);
 
-  report(inp, img, snr);
-
-  free_slice(inp,img);
-
+  report(input, img, snr);
+  free_slice(input,img);
   FmoFinit();
+  free_frame_buffers(input, img);
+  free_global_buffers(input, img);
 
-  free_frame_buffers(inp, img);
-  free_global_buffers(inp, img);
-
-  terminateInterimFile();
   CloseBitstreamFile();
 
   fclose(p_out);
@@ -234,17 +222,57 @@ int main(int argc, char **argv)
   fclose(p_trace);
 #endif
 
-#if _ERROR_CONCEALMENT_
   ercClose(erc_errorVar);
-#endif
 
-  free (inp);
+  free (input);
   free (snr);
   free (img);
   
   //while( !kbhit() ); 
   return 0;
 }
+
+/*!
+ ***********************************************************************
+ * \brief
+ *    Initializes the POC structure with appropriate parameters.
+ * 
+ ***********************************************************************
+ */
+void init_poc()
+{
+  int i;
+
+         for(i=0; i<MAX_NO_POC_FRAMES; i++){toprefpoc[i] = bottomrefpoc[i] = 1<<29;}            //init with large 
+
+}
+
+/*!
+ ***********************************************************************
+ * \brief
+ *    Pushes values onto the POC ref arrays  toprefpoc[] & bottomrefpoc[] 
+ * 
+ ***********************************************************************
+ */
+void push_poc(unsigned int topvalue, unsigned int bottomvalue, unsigned int ref_frame_ind )
+{
+  int i;
+  static int current_is_ref = 0;                //indicates if current top value is for a ref frame
+
+         if(current_is_ref){
+                 for(i=MAX_NO_POC_FRAMES-1; i>0; i--){          //move all the data down by one
+                        toprefpoc[i] = toprefpoc[i-1] ; 
+                        bottomrefpoc[i] = bottomrefpoc[i-1] ;
+                 }
+         }      
+        
+        toprefpoc[0] = topvalue;                //put new data
+        bottomrefpoc[0] = bottomvalue;
+
+        current_is_ref = ref_frame_ind;         //new data type
+
+}
+
 
 
 /*!
@@ -298,23 +326,6 @@ void init_conf(struct inp_par *inp,
   fscanf(fd,"%s",inp->reffile);               // reference file
   fscanf(fd,"%*[^\n]");
 
-    // Symbol mode
-  fscanf(fd,"%d,",&inp->symbol_mode);        // 0: UVLC 1: CABAC, may be overwritten ni case of RTP NAL
-  fscanf(fd,"%*[^\n]");
-  if (inp->symbol_mode != UVLC && inp->symbol_mode != CABAC)
-  {
-    snprintf(errortext, ET_SIZE, "Unsupported symbol mode=%d, use UVLC=0 or CABAC=1",inp->symbol_mode);
-    error(errortext,1);
-  }
-
-  // UseConstrainedIntraPred
-  fscanf(fd,"%d,",&inp->UseConstrainedIntraPred);        // 0: UsePred   1: ConstrainPred, may be overwritten in case of RTP NAL
-  fscanf(fd,"%*[^\n]");
-  if(inp->UseConstrainedIntraPred != 0 && inp->UseConstrainedIntraPred != 1)
-  {
-    snprintf(errortext, ET_SIZE, "Unsupported value=%d on constrained intra pred",inp->UseConstrainedIntraPred);
-    error(errortext,1);
-  }
 
   // Frame buffer size
   fscanf(fd,"%d,",&inp->buf_cycle);   // may be overwritten in case of RTP NAL
@@ -331,20 +342,10 @@ void init_conf(struct inp_par *inp,
   switch(NAL_mode)
   {
   case 0:
-    inp->of_mode = PAR_OF_26L;
-    // Note: Data Partitioning in 26L File Format not yet supported
-    inp->partition_mode = PAR_DP_1;
+    inp->FileFormat = PAR_OF_ANNEXB;
     break;
   case 1:
-    inp->of_mode = PAR_OF_RTP;
-    inp->partition_mode = PAR_DP_3;         // DP_3 forces malloc_slcie to reserve memory
-                                            // for three partitions.  In the RTP NAL, it can
-                                            // be chanegd on a slice basis whether to use
-                                            // one or three partitions
-    break;
-  case 2:
-    inp->of_mode = PAR_OF_IFF;
-    inp->partition_mode = PAR_DP_1;
+    inp->FileFormat = PAR_OF_RTP;
     break;
   default:
     snprintf(errortext, ET_SIZE, "NAL mode %i is not supported", NAL_mode);
@@ -362,15 +363,6 @@ void init_conf(struct inp_par *inp,
   fscanf(fd,"%*[^\n]");
 #endif
 
-#ifndef _ABT_FLAG_IN_SLICE_HEADER_
-  fscanf(fd,"%d,",&inp->abt); // Adaptive Block Transforms ABT
-  fscanf(fd,"%*[^\n]");
-  if ( (inp->abt < 0) || (inp->abt > 2) )
-    {
-      snprintf(errortext, ET_SIZE, "ABT Mode  %d not defined.",inp->abt);
-      error(errortext,1);
-    }
-#endif
 
   // Loop Filter parameters flag
   fscanf(fd,"%d,",&inp->LFParametersFlag);   // 0: No Params  1: Read Filter Params, may be overwritten in case of RTP NAL
@@ -394,11 +386,6 @@ void init_conf(struct inp_par *inp,
 #endif
 
 
-  if (OpenBitstreamFile (inp->infile) < 0)
-  {
-    snprintf (errortext, ET_SIZE, "Cannot open bitstream file '%s'", inp->infile);
-    error(errortext,500);
-  }
   if ((p_out=fopen(inp->outfile,"wb"))==0)
   {
     snprintf(errortext, ET_SIZE, "Error open file %s ",inp->outfile);
@@ -418,18 +405,7 @@ void init_conf(struct inp_par *inp,
   }
   else
     fprintf(stdout," Input reference file                   : %s \n",inp->reffile);
-#ifndef _ABT_FLAG_IN_SLICE_HEADER_
-  if ( inp->abt )
-  {
-    fprintf(stdout," Adaptive Block Transforms              : Used ");
-    if (inp->abt==INTER_ABT)
-      fprintf(stdout,"(Inter only)\n");
-    else
-      fprintf(stdout,"(Inter and Intra)\n");
-  }
-  else
-    fprintf(stdout," Adaptive Block Transforms              : Not used \n");
-#endif
+
   fprintf(stdout,"--------------------------------------------------------------------------\n");
 #ifdef _LEAKYBUCKET_
   fprintf(stdout," Rate_decoder        : %8ld \n",inp->R_decoder);
@@ -476,10 +452,6 @@ void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr)
   fprintf(stdout," Total decoding time : %.3f sec \n",tot_time*0.001);
   fprintf(stdout,"--------------------------------------------------------------------------\n");
   fprintf(stdout," Exit JM %s decoder, ver %s ",JM,VERSION);
-#if ( INI_CTX == 0 )
-  fprintf(stdout,"No CABAC Initialization. ");
-  fprintf(stdout," ABT_max_count %d ",INICNT_ABT);
-#endif
   fprintf(stdout,"\n");
   // write to log file
 
@@ -585,6 +557,87 @@ void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr)
 /*!
  ************************************************************************
  * \brief
+ *    Allocates a stand-alone partition structure.  Structure should
+ *    be freed by FreePartition();
+ *    data structures
+ *
+ * \par Input:
+ *    n: number of partitions in the array
+ * \par return
+ *    pointer to DataPartition Structure, zero-initialized
+ ************************************************************************
+ */
+
+DataPartition *AllocPartition(int n)
+{
+  DataPartition *partArr, *dataPart;
+  int i;
+
+  partArr = (DataPartition *) calloc(n, sizeof(DataPartition));
+  if (partArr == NULL)
+  {
+    snprintf(errortext, ET_SIZE, "AllocPartition: Memory allocation for Data Partition failed");
+    error(errortext, 100);
+  }
+
+  for (i=0; i<n; i++) // loop over all data partitions
+  {
+    dataPart = &(partArr[i]);
+    dataPart->bitstream = (Bitstream *) calloc(1, sizeof(Bitstream));
+    if (dataPart->bitstream == NULL)
+    {
+      snprintf(errortext, ET_SIZE, "AllocPartition: Memory allocation for Bitstream failed");
+      error(errortext, 100);
+    }
+    dataPart->bitstream->streamBuffer = (byte *) calloc(MAX_CODED_FRAME_SIZE, sizeof(byte));
+    if (dataPart->bitstream->streamBuffer == NULL)
+    {
+      snprintf(errortext, ET_SIZE, "AllocPartition: Memory allocation for streamBuffer failed");
+      error(errortext, 100);
+    }
+  }
+  return partArr;
+}
+
+
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Frees a partition structure (array).  
+ *
+ * \par Input:
+ *    Partition to be freed, size of partition Array (Number of Partitions)
+ *
+ * \par return
+ *    None
+ *
+ * \note
+ *    n must be the same as for the corresponding call of AllocPartition
+ ************************************************************************
+ */
+
+
+void FreePartition (DataPartition *dp, int n)
+{
+  int i;
+
+  assert (dp != NULL);
+  assert (dp->bitstream != NULL);
+  assert (dp->bitstream->streamBuffer != NULL);
+  for (i=0; i<n; i++)
+  {
+    free (dp[i].bitstream->streamBuffer);
+    free (dp[i].bitstream);
+  }
+  free (dp);
+}
+
+
+/*!
+ ************************************************************************
+ * \brief
  *    Allocates the slice structure along with its dependent
  *    data structures
  *
@@ -594,173 +647,28 @@ void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr)
  */
 void malloc_slice(struct inp_par *inp, struct img_par *img)
 {
-  int i;
-  DataPartition *dataPart;
   Slice *currSlice;
   const int buffer_size = MAX_CODED_FRAME_SIZE; // picture size unknown at this time, this value is to check
 
-  switch(inp->of_mode) // init depending on NAL mode
+  img->currentSlice = (Slice *) calloc(1, sizeof(Slice));
+  if ( (currSlice = img->currentSlice) == NULL)
   {
-    case PAR_OF_IFF:
-      // Current File Format
-      img->currentSlice = (Slice *) calloc(1, sizeof(Slice));
-      if ( (currSlice = img->currentSlice) == NULL)
-      {
-        snprintf(errortext, ET_SIZE, "Memory allocation for Slice datastruct in NAL-mode %d failed", inp->of_mode);
-        error(errortext,100);
-      }
-      if (inp->symbol_mode == CABAC)
-      {
-        // create all context models
-        currSlice->mot_ctx = create_contexts_MotionInfo();
-        currSlice->tex_ctx = create_contexts_TextureInfo();
-      }
-
-      switch(inp->partition_mode)
-      {
-      case PAR_DP_1:
-        currSlice->max_part_nr = 1;
-        break;
-      case PAR_DP_3:
-        error("Data Partitioning Mode 3 in 26L-Format not supported",1);
-        break;
-      default:
-        error("Data Partitioning Mode not supported!",1);
-        break;
-      }
-
-      currSlice->partArr = (DataPartition *) calloc(1, sizeof(DataPartition));
-      if (currSlice->partArr == NULL)
-      {
-        snprintf(errortext, ET_SIZE, "Memory allocation for Data Partition datastruct in NAL-mode %d failed", inp->of_mode);
-        error(errortext, 100);
-      }
-      dataPart = currSlice->partArr;
-      dataPart->bitstream = (Bitstream *) calloc(1, sizeof(Bitstream));
-      if (dataPart->bitstream == NULL)
-      {
-        snprintf(errortext, ET_SIZE, "Memory allocation for Bitstream datastruct in NAL-mode %d failed", inp->of_mode);
-        error(errortext, 100);
-      }
-      dataPart->bitstream->streamBuffer = (byte *) calloc(buffer_size, sizeof(byte));
-      if (dataPart->bitstream->streamBuffer == NULL)
-      {
-        snprintf(errortext, ET_SIZE, "Memory allocation for bitstream buffer in NAL-mode %d failed", inp->of_mode);
-        error(errortext, 100);
-      }
-      return;
-    
-    case PAR_OF_26L:
-      // Current File Format
-      img->currentSlice = (Slice *) calloc(1, sizeof(Slice));
-      if ( (currSlice = img->currentSlice) == NULL)
-      {
-        snprintf(errortext, ET_SIZE, "Memory allocation for Slice datastruct in NAL-mode %d failed", inp->of_mode);
-        error(errortext,100);
-      }
-
-      img->currentSlice->rmpni_buffer=NULL;
-
-      if (inp->symbol_mode == CABAC)
-      {
-        // create all context models
-        currSlice->mot_ctx = create_contexts_MotionInfo();
-        currSlice->tex_ctx = create_contexts_TextureInfo();
-      }
-
-      switch(inp->partition_mode)
-      {
-      case PAR_DP_1:
-        currSlice->max_part_nr = 1;
-        break;
-      case PAR_DP_3:
-        error("Data Partitioning Mode 3 in 26L-Format not supported",1);
-        break;
-      default:
-        error("Data Partitioning Mode not supported!",1);
-        break;
-      }
-
-      currSlice->partArr = (DataPartition *) calloc(1, sizeof(DataPartition));
-      if (currSlice->partArr == NULL)
-      {
-        snprintf(errortext, ET_SIZE, "Memory allocation for Data Partition datastruct in NAL-mode %d failed", inp->of_mode);
-        error(errortext, 100);
-      }
-      dataPart = currSlice->partArr;
-      dataPart->bitstream = (Bitstream *) calloc(1, sizeof(Bitstream));
-      if (dataPart->bitstream == NULL)
-      {
-        snprintf(errortext, ET_SIZE, "Memory allocation for Bitstream datastruct in NAL-mode %d failed", inp->of_mode);
-        error(errortext, 100);
-      }
-      dataPart->bitstream->streamBuffer = (byte *) calloc(buffer_size, sizeof(byte));
-      if (dataPart->bitstream->streamBuffer == NULL)
-      {
-        snprintf(errortext, ET_SIZE, "Memory allocation for bitstream buffer in NAL-mode %d failed", inp->of_mode);
-        error(errortext, 100);
-      }
-      return;
-    
-    case PAR_OF_RTP:
-      img->currentSlice = (Slice *) calloc(1, sizeof(Slice));
-      if ( (currSlice = img->currentSlice) == NULL)
-      {
-        snprintf(errortext, ET_SIZE, "Memory allocation for Slice datastruct in NAL-mode %d failed", inp->of_mode);
-        error(errortext, 100);
-      }
-
-      if (inp->symbol_mode == CABAC)
-      {
-        // create all context models
-        currSlice->mot_ctx = create_contexts_MotionInfo();
-        currSlice->tex_ctx = create_contexts_TextureInfo();
-      }
-
-      switch(inp->partition_mode)
-      {
-      case PAR_DP_1:
-        currSlice->max_part_nr = 1;
-        break;
-      case PAR_DP_3:
-        currSlice->max_part_nr = 3;
-        break;
-      default:
-        error("Data Partitioning Mode not supported!",1);
-        break;
-      }
-
-      currSlice->partArr = (DataPartition *) calloc(3, sizeof(DataPartition));
-      if (currSlice->partArr == NULL)
-      {
-        snprintf(errortext, ET_SIZE, "Memory allocation for Data Partition datastruct in NAL-mode %d failed", inp->of_mode);
-        error(errortext, 100);
-      }
-
-      for (i=0; i<3; i++) // loop over all data partitions
-      {
-        dataPart = &(currSlice->partArr[i]);
-        dataPart->bitstream = (Bitstream *) calloc(1, sizeof(Bitstream));
-        if (dataPart->bitstream == NULL)
-        {
-          snprintf(errortext, ET_SIZE, "Memory allocation for Bitstream datastruct in NAL-mode %d failed", inp->of_mode);
-          error(errortext, 100);
-        }
-        dataPart->bitstream->streamBuffer = (byte *) calloc(buffer_size, sizeof(byte));
-        if (dataPart->bitstream->streamBuffer == NULL)
-        {
-          snprintf(errortext, ET_SIZE, "Memory allocation for bitstream buffer in NAL-mode %d failed", inp->of_mode);
-          error(errortext, 100);
-        }
-      }
-      return;
-
-    default:
-      snprintf(errortext, ET_SIZE, "Output File Mode %d not supported", inp->of_mode);
-      error(errortext, 600);
+    snprintf(errortext, ET_SIZE, "Memory allocation for Slice datastruct in NAL-mode %d failed", inp->FileFormat);
+    error(errortext,100);
   }
-
+  img->currentSlice->rmpni_buffer=NULL;
+  //! you don't know whether we do CABAC hre, hence initialize CABAC anyway
+  // if (inp->symbol_mode == CABAC)
+  if (1)
+  {
+    // create all context models
+    currSlice->mot_ctx = create_contexts_MotionInfo();
+    currSlice->tex_ctx = create_contexts_TextureInfo();
+  }
+  currSlice->max_part_nr = 3;  //! assume data partitioning (worst case) for the following mallocs()
+  currSlice->partArr = AllocPartition(currSlice->max_part_nr);
 }
+
 
 /*!
  ************************************************************************
@@ -774,74 +682,19 @@ void malloc_slice(struct inp_par *inp, struct img_par *img)
  */
 void free_slice(struct inp_par *inp, struct img_par *img)
 {
-  int i;
-  DataPartition *dataPart;
   Slice *currSlice = img->currentSlice;
 
-  switch(inp->of_mode) // init depending on NAL mode
+  FreePartition (currSlice->partArr, 3);
+//      if (inp->symbol_mode == CABAC)
+  if (1)
   {
-    case PAR_OF_IFF:
-      dataPart = currSlice->partArr;  // only one active data partition
-      if (dataPart->bitstream->streamBuffer != NULL)
-        free(dataPart->bitstream->streamBuffer);
-      if (dataPart->bitstream != NULL)
-        free(dataPart->bitstream);
-      if (currSlice->partArr != NULL)
-        free(currSlice->partArr);
-      if (inp->symbol_mode == CABAC)
-      {
-        // delete all context models
-        delete_contexts_MotionInfo(currSlice->mot_ctx);
-        delete_contexts_TextureInfo(currSlice->tex_ctx);
-      }
-      if (currSlice != NULL)
-        free(img->currentSlice);
-      break;
-    case PAR_OF_26L:
-      // Current File Format
-      dataPart = currSlice->partArr;  // only one active data partition
-      if (dataPart->bitstream->streamBuffer != NULL)
-        free(dataPart->bitstream->streamBuffer);
-      if (dataPart->bitstream != NULL)
-        free(dataPart->bitstream);
-      if (currSlice->partArr != NULL)
-        free(currSlice->partArr);
-      if (inp->symbol_mode == CABAC)
-      {
-        // delete all context models
-        delete_contexts_MotionInfo(currSlice->mot_ctx);
-        delete_contexts_TextureInfo(currSlice->tex_ctx);
-      }
-      if (currSlice != NULL)
-        free(img->currentSlice);
-      break;
-    case PAR_OF_RTP:
-      // RTP File Format.
-      // Here, mallocSLice is always called with 3 partitions, although sometimes only one is used
-      for (i=0; i<3; i++) // loop over all data partitions
-      {
-        dataPart = &(currSlice->partArr[i]);
-        if (dataPart->bitstream->streamBuffer != NULL)
-          free(dataPart->bitstream->streamBuffer);
-        if (dataPart->bitstream != NULL)
-          free(dataPart->bitstream);
-      }
-      if (currSlice->partArr != NULL)
-        free(currSlice->partArr);
-      if (inp->symbol_mode == CABAC)
-      {
-        // delete all context models
-        delete_contexts_MotionInfo(currSlice->mot_ctx);
-        delete_contexts_TextureInfo(currSlice->tex_ctx);
-      }
-      if (currSlice != NULL)
-        free(img->currentSlice);
-      break;
-    default:
-      snprintf(errortext, ET_SIZE,  "Output File Mode %d not supported", inp->of_mode);
-      error(errortext, 400);
+    // delete all context models
+    delete_contexts_MotionInfo(currSlice->mot_ctx);
+    delete_contexts_TextureInfo(currSlice->tex_ctx);
   }
+  free(img->currentSlice);
 
+  currSlice = NULL;
 }
 
 /*!
@@ -927,7 +780,8 @@ int init_global_buffers(struct inp_par *inp, struct img_par *img)
   // allocate memory in structure img
   if(((img->mb_data) = (Macroblock *) calloc((img->width/MB_BLOCK_SIZE) * (img->height/MB_BLOCK_SIZE),sizeof(Macroblock))) == NULL)
     no_mem_exit("init_global_buffers: img->mb_data");
-  if(img->UseConstrainedIntraPred)
+//  if(img->UseConstrainedIntraPred)
+  if (1)      // Always alloc the memory -- we don't know what the parset will tell us later
   {
     if(((img->intra_block) = (int**)calloc((j=(img->width/MB_BLOCK_SIZE) * (img->height/MB_BLOCK_SIZE)),sizeof(int))) == NULL)
       no_mem_exit("init_global_buffers: img->intra_block");
@@ -956,8 +810,6 @@ int init_global_buffers(struct inp_par *inp, struct img_par *img)
   // int bw_mv[92][72][3];
   memory_size += get_mem3Dint(&(img->bw_mv),img->width/BLOCK_SIZE +4, img->height/BLOCK_SIZE,3);
 
-  memory_size += get_mem3Dint(&colB8mode,3,img->height/B8_SIZE, img->width/B8_SIZE); // collocated ABT block mode
-  
   // int fw_refFrArr[72][88];
   memory_size += get_mem2Dint(&(img->fw_refFrArr_top),img->height/BLOCK_SIZE,img->width/BLOCK_SIZE);
   // int bw_refFrArr[72][88];
@@ -988,6 +840,9 @@ int init_global_buffers(struct inp_par *inp, struct img_par *img)
   memory_size += get_mem2Dint(&(img->field_anchor),img->height/BLOCK_SIZE,img->width/BLOCK_SIZE);
   memory_size += get_mem2Dint(&(field_mb), img->height/MB_BLOCK_SIZE, img->width/MB_BLOCK_SIZE);
 
+  memory_size += get_mem3Dint(&(img->wp_weight), 2, MAX_REFERENCE_PICTURES, 3);
+  memory_size += get_mem3Dint(&(img->wp_offset), 2, MAX_REFERENCE_PICTURES, 3);
+  memory_size += get_mem4Dint(&(img->wbp_weight), 2, MAX_REFERENCE_PICTURES, MAX_REFERENCE_PICTURES, 3);
 
   // CAVLC mem
   if((img->nz_coeff = (int****)calloc(img->width/MB_BLOCK_SIZE,sizeof(int***))) == NULL)
@@ -1077,7 +932,8 @@ void free_global_buffers(struct inp_par *inp, struct img_par *img)
   // free mem, allocated for structure img
   if (img->mb_data       != NULL) free(img->mb_data);
 
-  if(img->UseConstrainedIntraPred)
+//  if(img->UseConstrainedIntraPred)
+  if (1)    // uncnonditionally allocated since introdiuction of par sets
   {
     j = (img->width/16)*(img->height/16);
     for (i=0; i<j; i++)
@@ -1105,8 +961,6 @@ void free_global_buffers(struct inp_par *inp, struct img_par *img)
   free_mem3Dint(img->fw_mv,img->width/BLOCK_SIZE + 4);
   free_mem3Dint(img->bw_mv,img->width/BLOCK_SIZE + 4);
 
-  free_mem3Dint(colB8mode,3); // collocated ABT block mode
-
   free_mem2Dint (img->ipredmode_frm);
   free_mem2Dint (img->ipredmode_top);
   free_mem2Dint (img->ipredmode_bot);
@@ -1129,4 +983,6 @@ void free_global_buffers(struct inp_par *inp, struct img_par *img)
   free_mem2Dint(field_mb);
 
 }
+
+
 

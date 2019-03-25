@@ -75,10 +75,9 @@ byte CLIP_TAB[52][5]  =
 } ;
 
 
-void GetStrength(byte Strength[4],byte LargeBlockEdge[4],struct img_par *img,Macroblock* MbP,Macroblock* MbQ,int dir,int edge,int mb_y,int mb_x,byte blkmode[2][2]);
-void EdgeLoop(byte* SrcPtr,byte Strength[4],byte LargeBlockEdge[4], int QP, int AlphaC0Offset, int BetaOffset, int dir,int width,int yuv);
+void GetStrength(byte Strength[4],struct img_par *img,Macroblock* MbP,Macroblock* MbQ,int dir,int edge,int mb_y,int mb_x);
+void EdgeLoop(byte* SrcPtr,byte Strength[4], int QP, int AlphaC0Offset, int BetaOffset, int dir,int width,int yuv);
 void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int mb_y, int mb_x) ;
-void get_deblock_modes(ImageParameters *img,Macroblock *MB,byte blkmode[2][2]);
 
 /*!
  *****************************************************************************************
@@ -87,13 +86,13 @@ void get_deblock_modes(ImageParameters *img,Macroblock *MB,byte blkmode[2][2]);
  *****************************************************************************************
  */
 void DeblockFrame(ImageParameters *img, byte **imgY, byte ***imgUV)
-  {
+{
   int       mb_x, mb_y ;
-
+  
   for( mb_y=0 ; mb_y<(img->height>>4) ; mb_y++ )
     for( mb_x=0 ; mb_x<(img->width>>4) ; mb_x++ )
       DeblockMb( img, imgY, imgUV, mb_y, mb_x ) ;
-  } 
+} 
 
 
   /*!
@@ -108,8 +107,6 @@ void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int mb_y, int m
   int           EdgeCondition;
   int           dir,edge,QP;
   byte          Strength[4], *SrcY, *SrcU, *SrcV ;
-  byte          LargeBlockEdge[4];
-  byte          blkmode[2][2];
   Macroblock    *MbP, *MbQ ; 
   int           sizey;
   
@@ -121,8 +118,6 @@ void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int mb_y, int m
 
   // This could also be handled as a filter offset of -51 
   if (MbQ->lf_disable) return;
-
-  get_deblock_modes(img,MbQ,blkmode);
 
   for( dir=0 ; dir<2 ; dir++ )                                             // vertical edges, than horicontal edges
   {
@@ -136,53 +131,20 @@ void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int mb_y, int m
         MbP = (edge)? MbQ : ((dir)? (MbQ -(img->width>>4))  : (MbQ-1) ) ;       // MbP = Mb of the remote 4x4 block
 
         QP  = ( MbP->qp + MbQ->qp ) >> 1 ;                   // Average QP of the two blocks
-        GetStrength(Strength,LargeBlockEdge,img,MbP,MbQ,dir,edge,mb_y<<2,mb_x<<2,blkmode); // Strength for 4 blks in 1 stripe
+        GetStrength(Strength,img,MbP,MbQ,dir,edge,mb_y<<2,mb_x<<2); // Strength for 4 blks in 1 stripe
         if( *((int*)Strength) )                      // only if one of the 4 Strength bytes is != 0
         {
-          EdgeLoop( SrcY + (edge<<2)* ((dir)? img->width:1 ), Strength, LargeBlockEdge, QP, MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width, 0) ; 
+          EdgeLoop( SrcY + (edge<<2)* ((dir)? img->width:1 ), Strength, QP, MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width, 0) ; 
           if( (imgUV != NULL) && !(edge & 1) )
           {
-            EdgeLoop( SrcU +  (edge<<1) * ((dir)? img->width_cr:1 ), Strength, LargeBlockEdge, QP_SCALE_CR[QP], MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width_cr, 1 ) ; 
-            EdgeLoop( SrcV +  (edge<<1) * ((dir)? img->width_cr:1 ), Strength, LargeBlockEdge, QP_SCALE_CR[QP], MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width_cr, 1 ) ; 
+            EdgeLoop( SrcU +  (edge<<1) * ((dir)? img->width_cr:1 ), Strength, QP_SCALE_CR[QP], MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width_cr, 1 ) ; 
+            EdgeLoop( SrcV +  (edge<<1) * ((dir)? img->width_cr:1 ), Strength, QP_SCALE_CR[QP], MbQ->lf_alpha_c0_offset, MbQ->lf_beta_offset, dir, img->width_cr, 1 ) ; 
           }
         }
       }
     }//end edge
   }//end loop dir
 }
-
-void get_deblock_modes(ImageParameters *img,Macroblock *MB,byte blkmode[2][2])
-{
- int i,j,mode;
-
-  if( MB->mb_type || !(img->type==INTER_IMG_1||img->type==INTER_IMG_MULT||img->type==SP_IMG_1||img->type==SP_IMG_MULT) ) //if not mode 0 or not a (S)P-frame
-  {
-    //not a copy block in a P-frame.
-    for(j=0;j<2;j++)
-      for(i=0;i<2;i++)
-      {
-        mode=3; //no ABT, always deblock all (depending on strength)
-        if(MB->useABT[(j<<1)|i])
-        {
-          mode=MB->abt_mode[(j<<1)|i]; //ABT
-          if(mode<0)mode=0;
-        }
-        blkmode[j][i]=mode;
-      }
-  }
-  else
-  {
-    //is a copy block in a P-frame
-    //unlike in the encoder, the useABT[] is valid here. (and we do not have the input params here)
-    if(MB->useABT[0])
-      for(i=0;i<4;i++)
-        blkmode[i>>1][i&1]=4+i;
-    else
-      for(i=0;i<4;i++)
-        blkmode[i>>1][i&1]=3;   //no ABT, always deblock all (depending on strength)
-  }
-}
-
 
   /*!
  *********************************************************************************************
@@ -194,26 +156,11 @@ void get_deblock_modes(ImageParameters *img,Macroblock *MB,byte blkmode[2][2])
 int  ININT_STRENGTH[4] = {0x04040404, 0x03030303, 0x03030303, 0x03030303} ; 
 byte BLK_NUM[2][4][4]  = {{{0,4,8,12},{1,5,9,13},{2,6,10,14},{3,7,11,15}},{{0,1,2,3},{4,5,6,7},{8,9,10,11},{12,13,14,15}}} ;
 byte BLK_4_TO_8[16]    = {0,0,1,1,0,0,1,1,2,2,3,3,2,2,3,3} ;
-//   indices to ABT_has_edge[][][]: ABTmode, subblockX, subblockY.
-//   content of ABT_has_edge[][][]: bit #0: left edge present, bit #1: top edge present, bit #2: right edge present, bit#3: bottom edge present.
-//   In this array, the values 4 to 7 for ABTmode are used to indicate 8x8 blocks of which two outer edges do not need to be deblocked.
-static const char ABT_has_edge[8][2][2]={
-  {{0x03,0x06},{0x09,0x0C}} , //8*8
-  {{0x0B,0x0E},{0x0B,0x0E}} , //8*4
-  {{0x07,0x07},{0x0D,0x0D}} , //4*8
-  {{0x0F,0x0F},{0x0F,0x0F}} , //4*4
-  {{0x03,0x02},{0x01,0x00}} , //UL
-  {{0x02,0x06},{0x00,0x04}} , //UR
-  {{0x01,0x00},{0x09,0x08}} , //BL
-  {{0x00,0x04},{0x08,0x0C}}   //BR
-};
 
-void GetStrength(byte Strength[4],byte LargeBlockEdge[4],struct img_par *img,Macroblock* MbP,Macroblock* MbQ,int dir,int edge,int block_y,int block_x,byte blkmode[2][2])
+void GetStrength(byte Strength[4],struct img_par *img,Macroblock* MbP,Macroblock* MbQ,int dir,int edge,int block_y,int block_x)
 {
   int    blkP, blkQ, idx ;
   int    blk_x, blk_x2, blk_y, blk_y2 ;
-  int    LBcount;
-  int    blk_mode1, blk_mode2;
   int    ***fw_mv = img->fw_mv;
   int    ***bw_mv = img->bw_mv;
   int    **fw_refFrArr = img->fw_refFrArr;
@@ -223,70 +170,44 @@ void GetStrength(byte Strength[4],byte LargeBlockEdge[4],struct img_par *img,Mac
 
   if(img->mb_frame_field_flag)
   {
-        fw_mv = img->fw_mv_frm;
-        bw_mv = img->bw_mv_frm;
-        fw_refFrArr = img->fw_refFrArr_frm;
-        bw_refFrArr = img->bw_refFrArr_frm;
+    fw_mv = img->fw_mv_frm;
+    bw_mv = img->bw_mv_frm;
+    fw_refFrArr = img->fw_refFrArr_frm;
+    bw_refFrArr = img->bw_refFrArr_frm;
   }
 
 
   for( idx=0 ; idx<4 ; idx++ )
   {                                                                                       // if not intra or SP-frame
-    LargeBlockEdge[idx]=0;
     blkQ = BLK_NUM[dir][ edge       ][idx] ;                 // if one of the 4x4 blocks has coefs.    set Strength=2
     blkP = BLK_NUM[dir][(edge-1) & 3][idx] ; 
-    blk_y  = block_y + (blkQ >> 2) ;                         // moved here for ABT
-    blk_x  = block_x + (blkQ  & 3)+4 ;                       // moved here for ABT
-    blk_mode1=blkmode[(blk_y&2)>>1][(blk_x&2)>>1];
     
-    if(  ABT_has_edge[ blk_mode1 ][ blk_y&1 ][ blk_x&1 ]  &  (1<<dir)  )
-    {
-      //is outer edge of a block
-      LargeBlockEdge[idx]=0;
-      blk_y2 = blk_y -  dir ;                       // moved here for ABT
-      blk_x2 = blk_x - !dir ;                       // moved here for ABT
-      blk_mode2=blkmode[(blk_y2&2)>>1][(blk_x2&2)>>1];
-      //if neighboring blocks are larger than 4x4 pixels, increase filter strength.
-      LBcount=0;
-      if(  !( ABT_has_edge[blk_mode1][blk_y&1][blk_x&1] & (1<<(dir+2)) )  )//if current block is 8 pix deep
-        LBcount++;
-      if(  !( ABT_has_edge[blk_mode2][blk_y2&1][blk_x2&1] & (1<<dir) )  )//if other block is 8 pix deep
-        LBcount++;
-      if(  (10>>dir)  !=  ( ABT_has_edge[blk_mode1][blk_y&1][blk_x&1] & (10>>dir) )  )//if current block a wide block
-        LBcount++;
-      if(  (10>>dir)  !=  ( ABT_has_edge[blk_mode2][blk_y2&1][blk_x2&1] & (10>>dir) )  )//if other block a wide block
-        LBcount++;
-      if(LBcount>3)LBcount=3;
-      LargeBlockEdge[idx]=LBcount;
 
-      if( (   img->type != SP_IMG_1) && (img->type != SP_IMG_MULT)  && (img->type != SI_IMG)
+    if( ( img->type != SP_IMG_1) && (img->type != SP_IMG_MULT)  && (img->type != SI_IMG)
           && !(MbP->mb_type==I4MB || MbP->mb_type==I16MB)
           && !(MbQ->mb_type==I4MB || MbQ->mb_type==I16MB) )
-      {
-        if( ((MbQ->cbp_blk &  (1 << blkQ )) != 0) || ((MbP->cbp_blk &  (1 << blkP)) != 0) )
-          Strength[idx] = 2 ;
-        else
-        {                                                     // if no coefs, but vector difference >= 1 set Strength=1 
-          if( (img->type == B_IMG_1)  || (img->type == B_IMG_MULT) )
-          {
-            Strength[idx] =  (abs( fw_mv[blk_x][blk_y][0] - fw_mv[blk_x2][blk_y2][0]) >= 4) |
-                             (abs( fw_mv[blk_x][blk_y][1] - fw_mv[blk_x2][blk_y2][1]) >= 4) |
-                             (abs( bw_mv[blk_x][blk_y][0] - bw_mv[blk_x2][blk_y2][0]) >= 4) |
-                             (abs( bw_mv[blk_x][blk_y][1] - bw_mv[blk_x2][blk_y2][1]) >= 4) |
-                                  (fw_refFrArr[blk_y][blk_x-4]   !=   fw_refFrArr[blk_y2][blk_x2-4] )|
-                                  (bw_refFrArr[blk_y][blk_x-4]   !=   bw_refFrArr[blk_y2][blk_x2-4] );
-          }
-          else
-            Strength[idx] =    (abs( img->mv[blk_x][blk_y][0] - img->mv[blk_x2][blk_y2][0]) >= 4 ) |
-                               (abs( img->mv[blk_x][blk_y][1] - img->mv[blk_x2][blk_y2][1]) >= 4 ) |
-                                    (refFrArr[blk_y][blk_x-4]   !=   refFrArr[blk_y2][blk_x2-4] );
-        }
-      }
-    }
-    else
     {
-      //is inside a larger transform block (ABT). Do not filter here.
-      Strength[idx]=0;
+      if( ((MbQ->cbp_blk &  (1 << blkQ )) != 0) || ((MbP->cbp_blk &  (1 << blkP)) != 0) )
+        Strength[idx] = 2 ;
+      else
+      {                                                     // if no coefs, but vector difference >= 1 set Strength=1 
+        blk_y  = block_y + (blkQ >> 2) ;   blk_y2 = blk_y -  dir ;
+        blk_x  = block_x + (blkQ  & 3)+4 ; blk_x2 = blk_x - !dir ;
+
+        if( (img->type == B_IMG_1)  || (img->type == B_IMG_MULT) )
+        {
+          Strength[idx] =  (abs( fw_mv[blk_x][blk_y][0] - fw_mv[blk_x2][blk_y2][0]) >= 4) |
+                           (abs( fw_mv[blk_x][blk_y][1] - fw_mv[blk_x2][blk_y2][1]) >= 4) |
+                           (abs( bw_mv[blk_x][blk_y][0] - bw_mv[blk_x2][blk_y2][0]) >= 4) |
+                           (abs( bw_mv[blk_x][blk_y][1] - bw_mv[blk_x2][blk_y2][1]) >= 4) |
+                           (fw_refFrArr[blk_y][blk_x-4]   !=   fw_refFrArr[blk_y2][blk_x2-4] )|
+                           (bw_refFrArr[blk_y][blk_x-4]   !=   bw_refFrArr[blk_y2][blk_x2-4] );
+        }
+        else
+          Strength[idx] =    (abs( img->mv[blk_x][blk_y][0] - img->mv[blk_x2][blk_y2][0]) >= 4 ) |
+                             (abs( img->mv[blk_x][blk_y][1] - img->mv[blk_x2][blk_y2][1]) >= 4 ) |
+                             (refFrArr[blk_y][blk_x-4]   !=   refFrArr[blk_y2][blk_x2-4] );
+      }
     }
   }
 }
@@ -298,7 +219,7 @@ void GetStrength(byte Strength[4],byte LargeBlockEdge[4],struct img_par *img,Mac
  *    Filters one edge of 16 (luma) or 8 (chroma) pel
  *****************************************************************************************
  */
-void EdgeLoop(byte* SrcPtr,byte Strength[4],byte LargeBlockEdge[4], int QP,
+void EdgeLoop(byte* SrcPtr,byte Strength[4],int QP,
               int AlphaC0Offset, int BetaOffset, int dir,int width,int yuv)
 {
   int      pel, ap, aq, PtrInc, Strng ;
@@ -321,26 +242,26 @@ void EdgeLoop(byte* SrcPtr,byte Strength[4],byte LargeBlockEdge[4], int QP,
   {
     if(!(pel&3))
     {
-      indexA = IClip(0, MAX_QP, QP + LargeBlockEdge[pel>>2] + AlphaC0Offset);
-      indexB = IClip(0, MAX_QP, QP + LargeBlockEdge[pel>>2] + BetaOffset);
+      indexA = IClip(0, MAX_QP, QP + AlphaC0Offset);
+      indexB = IClip(0, MAX_QP, QP + BetaOffset);
 
       Alpha=ALPHA_TABLE[indexA];
       Beta=BETA_TABLE[indexB];  
       ClipTab=CLIP_TAB[indexA];
     }
     if( (Strng = Strength[pel >> 2]) )
-      {
+    {
       L0  = SrcPtr [-inc ] ;
       R0  = SrcPtr [    0] ;
       AbsDelta  = abs( Delta = R0 - L0 )  ;
 
       if( AbsDelta < Alpha )
-        {
+      {
         C0  = ClipTab[ Strng ] ;
         L1  = SrcPtr[-inc2] ;
         R1  = SrcPtr[ inc ] ;
         if( ((abs( R0 - R1) - Beta )  & (abs(L0 - L1) - Beta )) < 0  ) 
-          {
+        {
           L2  = SrcPtr[-inc3] ;
           R2  = SrcPtr[ inc2] ;
           aq  = (abs( R0 - R2) - Beta ) < 0  ;
@@ -349,7 +270,7 @@ void EdgeLoop(byte* SrcPtr,byte Strength[4],byte LargeBlockEdge[4], int QP,
           RL0             = L0 + R0 ;
 
           if(Strng == 4 )    // INTRA strong filtering
-            {
+          {
             small_gap = (AbsDelta < ((Alpha >> 2) + 2));
          
             aq &= small_gap;
@@ -363,31 +284,31 @@ void EdgeLoop(byte* SrcPtr,byte Strength[4],byte LargeBlockEdge[4], int QP,
 
             SrcPtr[ inc2] = (aq && !yuv) ? (((SrcPtr[ inc3] + SrcPtr[ inc2]) <<1) + SrcPtr[ inc2] + R1 + RL0 + 4) >> 3 : R2;
             SrcPtr[-inc3] = (ap && !yuv) ? (((SrcPtr[-inc4] + SrcPtr[-inc3]) <<1) + SrcPtr[-inc3] + L1 + RL0 + 4) >> 3 : L2;
-            }
+          }
           else                                                                                   // normal filtering
-            {
+          {
             c0               = C0 + ap + aq ;
             dif              = IClip( -c0, c0, ( (Delta << 2) + (L1 - R1) + 4) >> 3 ) ;
             SrcPtr[  -inc ]  = IClip(0, 255, L0 + dif) ;
             SrcPtr[     0 ]  = IClip(0, 255, R0 - dif) ;
 
             if( !yuv )
-              {
+            {
               if( ap )
                 SrcPtr[-inc2] += IClip( -C0,  C0, ( L2 + (RL0 >> 1) - (L1<<1)) >> 1 ) ;
               if( aq  )
                 SrcPtr[  inc] += IClip( -C0,  C0, ( R2 + (RL0 >> 1) - (R1<<1)) >> 1 ) ;
-              } ;
             } ;
-          } ; 
-        } ;
+          } ;
+        } ; 
+      } ;
       SrcPtr += PtrInc ;      // Increment to next set of pixel
       pel    += yuv ;
-      } 
+    } 
     else
-      {
+    {
       SrcPtr += PtrInc << (2 - yuv) ;
       pel    += 3 ;
-      }  ;
+    }  ;
   }
 }

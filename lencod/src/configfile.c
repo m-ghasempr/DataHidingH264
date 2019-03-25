@@ -513,14 +513,15 @@ static void PatchInp ()
 
   if (input->partition_mode == 1 && input->UseConstrainedIntraPred == 0)
   {
+    printf ("Why this???");
     snprintf(errortext, ET_SIZE, "For Partition mode 1 UseConstrainedIntraPred must be set to 1");
     error (errortext, 400);
   }
 
 
-  if (input->of_mode < 0 || input->of_mode > 3)
+  if (input->of_mode < 0 || input->of_mode > 2)
   {
-    snprintf(errortext, ET_SIZE, "Unsupported Outpout file mode, must be between 0 and 2");
+    snprintf(errortext, ET_SIZE, "Unsupported Output file mode, must be between 0 and 1");
     error (errortext, 400);
   }
 
@@ -581,11 +582,11 @@ static void PatchInp ()
     }
   }
 
-  if (input->InterlaceCodingOption != FRAME_CODING && (input->of_mode == 1 || input->of_mode == 2))
-  {
-    snprintf(errortext, ET_SIZE, "AFF currently does not support RTP & IFF, check encoder.cfg");
-    error (errortext, 400);
-  }
+//  if (input->InterlaceCodingOption != FRAME_CODING && (input->of_mode == 1 || input->of_mode == 2))
+//  {
+//    snprintf(errortext, ET_SIZE, "AFF currently does not support RTP & IFF, check encoder.cfg");
+//    error (errortext, 400);
+//  }
 
   // Tian Dong: May 31, 2002
   // The number of frames in one sub-seq in enhanced layer should not exceed
@@ -596,15 +597,9 @@ static void PatchInp ()
     error (errortext, 500);
   }
   // Tian Dong: Enhanced GOP is not supported in bitstream mode. September, 2002
-  if ( input->NumFramesInELSubSeq > 0 && input->of_mode == PAR_OF_26L )
+  if ( input->NumFramesInELSubSeq > 0 && input->of_mode == PAR_OF_ANNEXB )
   {
     snprintf(errortext, ET_SIZE, "Enhanced GOP is not supported in bitstream mode and RTP mode yet.");
-    error (errortext, 500);
-  }
-  // Tian Dong: adaptive frame/field coding is not supported in IFF, May 31, 2002
-  if (input->of_mode == PAR_OF_IFF && input->InterlaceCodingOption != 0)
-  {
-    snprintf(errortext, ET_SIZE, "adaptive frame/field coding is not supported in IFF, May 31, 2002.");
     error (errortext, 500);
   }
   // Tian Dong (Sept 2002)
@@ -620,43 +615,33 @@ static void PatchInp ()
     snprintf(errortext, ET_SIZE, "Only RTP output mode is compatible with spare picture features in JM 4.1b.");
     error (errortext, 500);
   }
-  if (input->BipredictiveWeighting > 0)
+  if (input->StoredBPictures > 0)
   {
-    input->explicit_B_prediction = input->BipredictiveWeighting - 1;
     input->direct_type = DIR_SPATIAL;
+    printf("Stored B Picture coding is not supported for temporal direct mode currently.");
   }
-  else
-  {
-    input->explicit_B_prediction = -1; 
-  }
-  if(input->BipredictiveWeighting > 0 && input->successive_Bframe && input->direct_type == DIR_TEMPORAL)
+  if( (input->StoredBPictures || input->WeightedBiprediction > 0) && input->successive_Bframe && input->direct_type == DIR_TEMPORAL)
   {
     printf("Weighted bi-prediction coding is not supported for temporal direct mode currently.");
     input->direct_type = DIR_SPATIAL;
   }
-  if (input->BipredictiveWeighting > 0 && input->no_multpred < 2)
+  if( (input->WeightedPrediction > 0 || input->WeightedBiprediction > 0) && input->InterlaceCodingOption == MB_CODING )
   {
-    snprintf(errortext, ET_SIZE, "Bipredictive weighting is needed to have more than 2 frames.");
-    input->no_multpred = 2;
-  }
-  if(input->BipredictiveWeighting > 0 && input->InterlaceCodingOption == MB_CODING )
-  {
-    printf("Weighted bi-prediction coding is not supported for MB AFF currently.");
+    printf("Weighted prediction coding is not supported for MB AFF currently.");
     error (errortext, 500);
   }
-  if ( input->NumFramesInELSubSeq > 0 && input->BipredictiveWeighting > 0)
+  if ( input->NumFramesInELSubSeq > 0 && input->WeightedPrediction > 0)
   {
-    snprintf(errortext, ET_SIZE, "Enhanced GOP is not supported in weighted bi-prediction coding mode yet.");
+    snprintf(errortext, ET_SIZE, "Enhanced GOP is not supported in weighted prediction coding mode yet.");
     error (errortext, 500);
   }
 
   // JVT-D095, JVT-D097
-  input->num_slice_groups_minus1 = input->FmoNumSliceGroups;
   input->mb_allocation_map_type = input->FmoType;
   if(input->num_slice_groups_minus1 > 0)
   {
     if(input->mb_allocation_map_type >= 3)
-      input->num_slice_groups_minus1 = input->FmoNumSliceGroups = 1;
+      input->num_slice_groups_minus1 = input->num_slice_groups_minus1 = 1;
   }
   // End JVT-D095, JVT-D097
 

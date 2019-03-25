@@ -42,7 +42,8 @@
 #ifndef _HEADER_H_
 #define _HEADER_H_
 
-int SliceHeader(struct img_par *img, struct inp_par *inp);
+int FirstPartOfSliceHeader();
+int RestOfSliceHeader();
 
 #endif
 

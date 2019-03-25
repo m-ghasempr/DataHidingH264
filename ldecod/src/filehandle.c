@@ -88,36 +88,17 @@ void error(char *text, int code)
 void start_slice(struct img_par *img, struct inp_par *inp)
 {
   Slice *currSlice = img->currentSlice;
-  int i;
-
-  switch(inp->of_mode)
+/*
+  switch(inp->FileFormat)
   {
-    case PAR_OF_IFF:
-      if (inp->symbol_mode == UVLC)
-      {
-        // Current TML File Format
-        nal_startcode_follows = uvlc_startcode_follows;
-        currSlice->readSlice = readSliceIFF;
-        currSlice->partArr[0].readSyntaxElement = readSyntaxElement_UVLC;
-      }
-      else
-      {
-        // CABAC File Format
-        nal_startcode_follows = cabac_startcode_follows;
-        currSlice->readSlice = readSliceIFF;
-        currSlice->partArr[0].readSyntaxElement = readSyntaxElement_CABAC;
-      }
-      break;
-
-    case PAR_OF_26L:
-
+    case PAR_OF_ANNEXB:
       currSlice->dp_mode = PAR_DP_1; //other modes not supported
 
       if (inp->symbol_mode == UVLC)
       {
         // Current TML File Format
         nal_startcode_follows = uvlc_startcode_follows;
-        currSlice->readSlice = readSliceUVLC;
+//!        currSlice->readSlice = readSliceUVLC;
         currSlice->partArr[0].readSyntaxElement = readSyntaxElement_UVLC;
       }
       else
@@ -152,10 +133,11 @@ void start_slice(struct img_par *img, struct inp_par *inp)
       }
       break;
     default:
-      snprintf(errortext, ET_SIZE, "Input File Mode %d not supported", inp->of_mode);
+      snprintf(errortext, ET_SIZE, "Input File Mode %d not supported", inp->FileFormat);
       error(errortext,1);
       break;
   }
+  */
 }
 
 

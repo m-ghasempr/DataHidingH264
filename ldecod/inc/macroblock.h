@@ -53,6 +53,16 @@ const byte SNGL_SCAN[16][2] =
   {3,1},{3,2},{2,3},{3,3}
 };
 
+//! field scan pattern
+const byte FIELD_SCAN[16][2] =
+{
+  {0,0},{0,1},{1,0},{0,2},
+  {0,3},{1,1},{1,2},{1,3},
+  {2,0},{2,1},{2,2},{2,3},
+  {3,0},{3,1},{3,2},{3,3}
+};
+
+
 //! gives CBP value from codeword number, both for intra and inter
 const byte NCBP[48][2]=
 {

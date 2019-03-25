@@ -53,7 +53,9 @@
       Videolocus, Canada
       Motorola Inc., USA
       Microsoft Corp., USA
-
+      Apple Computer, Inc.
+      RealNetworks, Inc., USA
+      Thomson, Inc., USA
   \endverbatim
   \par Full Contact Information
   \verbatim
@@ -194,6 +196,21 @@
       20450 Stevens Creek Blvd.
       Cupertino, CA 95014
 
+      Barry Haskell
+      Apple Computer, Inc.      <bhaskell@apple.com>  
+      2 Infinite Loop
+      Cupertino, California 95014
+
+      Greg Conklin
+      RealNetworks, Inc.              <gregc@real.com>  
+      2601 Elliott Ave
+      Seattle, WA 98101
+
+      Jill Boyce             <jill.boyce@thomson.net>
+      Cristina Gomila        <cristina.gomila@thomson.net>
+      Thomson
+      2 Independence Way
+      Princeton, NJ 08540 
   \endverbatim
 */
 

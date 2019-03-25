@@ -54,24 +54,23 @@
 #include "mbuffer.h"
 #include "encodeiff.h"
 #include "defines.h"
+#include "vlc.h"
 
 // A little trick to avoid those horrible #if TRACE all over the source code
 #if TRACE
 #define SYMTRACESTRING(s) strncpy(sym->tracestring,s,TRACESTRING_SIZE)
 #else
-#define SYMTRACESTRING(s) // to nothing
+#define SYMTRACESTRING(s) // do nothing
 #endif
 
-// local function
-static int PutStartCode (Bitstream *s, int zeros_in_startcode);
+static int ref_pic_list_reordering();
+static int dec_ref_pic_marking();
+static int pred_weight_table();
 
 /*!
  ********************************************************************************************
  * \brief 
  *    Write a slice header
- * \note
- *    We do not have a picture header. All neccessary information is coded at
- *    the slice level.
  ********************************************************************************************
 */
 int SliceHeader()
@@ -79,209 +78,132 @@ int SliceHeader()
   int dP_nr = assignSE2partition[input->partition_mode][SE_HEADER];
   Bitstream *currStream = ((img->currentSlice)->partArr[dP_nr]).bitstream;
   DataPartition *partition = &((img->currentSlice)->partArr[dP_nr]);
-  SyntaxElement *sym;
   int len = 0;
-  int Quant = img->qp;                  // Hack.  This should be a parameter as soon as Gisle is done
-  int MBPosition = img->current_mb_nr;  // Hack.  This should be a paremeter as well.
-  int zeros_in_startcode;
+  int Quant = img->qp;
+  int val=0;
 
-  if ((sym=(SyntaxElement*)calloc(1,sizeof(SyntaxElement)))==NULL) no_mem_exit("SliceHeader:sym");
+  len  = ue_v("SH: first_mb_in_slice", img->current_mb_nr,   partition);
 
-  sym->type = SE_HEADER;                 // This will be true for all symbols generated here
-  sym->mapping = n_linfo2;               // Mapping rule: Simple code number to len/info
+  len += ue_v("SH: slice_type",        get_picture_type (),   partition);
 
+  // Note: Encoder supports only one pic/seq parameter set, hence value is
+  // hard coded to zero
+  len += ue_v("SH: pic_parameter_set_id" , 0 ,partition);
 
-  // Write a slice start code
-  if(MBPosition == 0) //beginning of picture; so use longer start code
-    zeros_in_startcode = ZEROBYTES_SHORTSTARTCODE + 1;
-  else           // not beginning of picture; so use short start code
-    zeros_in_startcode = ZEROBYTES_SHORTSTARTCODE;
-  len += PutStartCode (currStream, zeros_in_startcode);
-  startcodeprefix_len = (zeros_in_startcode + 1);
+  // frame_num
+  assert (img->frame_num < 1<<(LOG2_MAX_FRAME_NUM_MINUS4+4));  // check that it fits
+  len += u_v (LOG2_MAX_FRAME_NUM_MINUS4 + 4,"SH: frame_num", img->frame_num, partition);
 
-
-  // Now, take care of te UVLC coded data structure described in VCEG-M79
-  sym->value1 = 0;               // TRType = 0
-  SYMTRACESTRING("SH TemporalReferenceType");
-  len += writeSyntaxElement_UVLC (sym, partition);
-
-  sym->value1 = img->tr%256;         // TR, variable length
-
-  SYMTRACESTRING("SH TemporalReference");
-  len += writeSyntaxElement_UVLC (sym, partition);
-
-  // Size information.  If the picture is Intra, then transmit the size in MBs,
-  // For all other picture type just indicate that it didn't change.
-  // Note: this is currently the prudent way to do things, because we do not
-  // have anything similar to Annex P of H.263.  However, we should anticipate
-  // that one day we may want to have an Annex P type functionality.  Hence, it is
-  // unwise to assume that P pictures will never have a size indiciation.  So the
-  // one bit for an "unchanged" inidication is well spent.
-
-  if (img->type == INTRA_IMG||img->current_mb_nr==0)
- // if (img->type == INTRA_IMG)
+  if (input->InterlaceCodingOption != FRAME_CODING) // same condition as for sps->frame_mbs_only_flag!
   {
-    // Double check that width and height are divisible by 16
-    assert (img->width  % 16 == 0);
-    assert (img->height % 16 == 0);
+    // field_pic_flag    u(1)
+    val = (img->pstruct ==TOP_FIELD || img->pstruct ==BOTTOM_FIELD)?1:0;
+    len += u_1("SH: field_pic_flag" , val ,partition);
 
-    sym->value1 = 1;             // SizeType = Width/Height in MBs
-    SYMTRACESTRING("SH FullSizeInformation");
-    len += writeSyntaxElement_UVLC (sym, partition);
-    sym->value1 = img->width / 16;
-    SYMTRACESTRING("SH FullSize-X");
-    len += writeSyntaxElement_UVLC (sym, partition);
-    sym->value1 = img->height / 16;
-    SYMTRACESTRING("SH FullSize-Y");
-    len += writeSyntaxElement_UVLC (sym, partition);
-
-  } else
-  {    // Not an intra frame -> write "unchanged"
-    sym->value1 = 0;             // SizeType = Unchanged
-    SYMTRACESTRING("SH SizeUnchanged");
-    len += writeSyntaxElement_UVLC (sym, partition);
-  }
-  
-  // AMT - This should follow SH FirstMBInSlice
-  select_picture_type (sym);
-  SYMTRACESTRING("SH Picture Type Symbol");
-  len+= writeSyntaxElement_UVLC (sym, partition);
-
-  // picture structure, (0: progressive, 1: top field, 2: bottom field, 
-  // 3: top field first, 4: bottom field first)
-  sym->value1 = img->pstruct;
-  SYMTRACESTRING("SH Picture Stucture");
-  len += writeSyntaxElement_UVLC (sym, partition);
-
-  // Finally, write Reference Picture ID 
-  // WYK: Oct. 16, 2001. Now I use this for the reference frame ID (non-B frame ID). 
-  // If current frame is a B-frame, it will not change; otherwise it is increased by 1 based
-  // on refPicID of the previous frame. Thus, the decoder can know how many  non-B 
-  // frames are lost, and then can adjust the reference frame buffers correctly.
-  if (1)
-  {
-    sym->value1 = img->refPicID%16;         // refPicID, variable length
- 
-    SYMTRACESTRING("SH RefPicID");
-    len += writeSyntaxElement_UVLC (sym, partition);
-  }
-
-  // NOTE: following syntax elements have to be moved into nal_unit() and changed from e(v) to u(1)
-  if(1)
-  {
-    sym->value1 = img->disposable_flag;
-    SYMTRACESTRING("NAL disposable_flag");
-    len += writeSyntaxElement_UVLC (sym, partition);
-  }
-  
-  // NOTE: following syntax elements have to be moved into picture_layer_rbsp()
-  // explicit_B_prediction_block_weight_indication
-  if(img->type==B_IMG || img->type==BS_IMG)
-  {
-    sym->value1 = (input->BipredictiveWeighting > 0)? (input->BipredictiveWeighting-1) : 0;
-    SYMTRACESTRING("PH weighted_bipred_implicit_flag");
-    len += writeSyntaxElement_UVLC (sym, partition);
-  }
-
-  if (img->type==INTER_IMG || img->type==B_IMG || img->type==BS_IMG)
-  {
-    sym->value1 = img->num_ref_pic_active_fwd_minus1;
-    SYMTRACESTRING("num_ref_pic_active_fwd_minus1");
-    len += writeSyntaxElement_UVLC (sym, partition);
-    if (img->type==B_IMG || img->type==BS_IMG)
+    if (val)
     {
-      sym->value1 = img->num_ref_pic_active_bwd_minus1;
-      SYMTRACESTRING("num_ref_pic_active_bwd_minus1");
-      len += writeSyntaxElement_UVLC (sym, partition);
+      //bottom_field_flag     u(1)
+      val = (img->pstruct == BOTTOM_FIELD)?1:0;
+      len += u_1("SH: bottom_field_flag" , val ,partition);
     }
   }
 
-  // For the GOB address, use straigtforward procedure.  Note that this allows slices 
-  // to start at MB addresses up to 2^15 MBs due ot start code emulation problems.  
-  // This should be enough for most practical applications,. but probably not for cinema. 
-  // Has to be discussed. For the MPEG tests this is irrelevant, because there the rule 
-  // will be one silce--one picture.
-
-  // Put MB-Adresse
-  assert (MBPosition < (1<<15));
-  SYMTRACESTRING("SH FirstMBInSlice");
-  sym->value1 = MBPosition;
-  len += writeSyntaxElement_UVLC (sym, partition);
-
-  // AMT - Direct Mode Type selection for B pictures
-  if (img->type==B_IMG || img->type==BS_IMG)
+  if (img->idr_flag)
   {
-    SYMTRACESTRING("SH DirectSpatialFlag");
-    sym->bitpattern = input->direct_type;  // 1 for Spatial Direct, 0 for temporal Direct
-    sym->len = 1;
-    len += writeSyntaxElement_fixed(sym, partition);
+    // idr_pic_id
+    // hard coded to zero because we don't have proper IDR handling at the moment
+    len += ue_v ("SH: idr_pic_id", 0, partition);
   }
 
+  // POC not changed yet
+  if (img->pic_order_cnt_type < 2 && !img->delta_pic_order_always_zero_flag)
+  {
+    len += se_v ("SH: delta_pic_order_cnt[0]", img->delta_pic_order_cnt[0], partition);
 
-#ifdef _ABT_FLAG_IN_SLICE_HEADER_
-  // Indicate ABT mode to be applied.
-  // 0 == ABT off
-  // 1 == ABT inter
-  // 2 == ABT inter and intra
-  SYMTRACESTRING("SH ABTMode");
-  sym->value1 = input->abt;
-  len += writeSyntaxElement_UVLC (sym, partition);
-#endif
+    if (img->pic_order_present_flag && !img->fld_flag)
+    {
+      assert ("This case is not yet implemented\n");
+      assert (0==1);
+    }
+  }
+  else
+  {
+    assert ("This case is not implemented\n");
+    assert (0==1);
+  }
 
+  // ist there any sense in the following assignments ???
+  toprefpoc[0]=toprefpoc[0];
+  bottomrefpoc[0]=bottomrefpoc[0];
+  
+  // redundant slice info redundant_pic_cnt is missing here
+  if (input->redundant_slice_flag)
+  {
+    len += se_v ("SH: redundant_pic_cnt", img->redundant_pic_cnt, partition);
+  }
 
-  // Put Quant.  It's a bit irrationale that we still put the same quant here, but it's
-  // a good provision for the future.  In real-world applications slices typically
-  // start with Intra information, and Intra MBs will likely use a different quant
-  // than Inter
+  // Direct Mode Type selection for B pictures
+  if (img->type==B_IMG || img->type==BS_IMG)
+  {
+    len +=  u_1 ("SH: direct_spatial_mv_pred_flag", input->direct_type, partition);
+  }
 
-  // Note:  Traditionally, the QP is a bit mask.  However, at numerically large QPs
-  // we usually have high compression and don't want to waste bits, whereas
-  // at low QPs this is not as much an issue.  Hence, the QUANT parameter
-  // is coded as a UVLC calculated as 31 - QUANT.  That is, the UVLC representation
-  // of 31-QUANT is coded, instead of QUANT.
+  // num_ref_idx_active_override_flag here always 1
+  len +=  u_1 ("SH: num_ref_idx_active_override_flag", 1, partition);
 
-  SYMTRACESTRING("SH SliceQuant");
-  sym->mapping = dquant_linfo;  
-  sym->value1 = Quant - (MAX_QP - MIN_QP +1)/2;
-  len += writeSyntaxElement_UVLC (sym, partition);
-  if (img->types==SP_IMG )  
+  if (1) // if (num_ref_idx_active_override_flag)
+  {
+    if (img->type==INTER_IMG || img->type==B_IMG || img->type==BS_IMG || (img->type==INTER_IMG && img->types==SP_IMG))
+    {
+      len += ue_v ("SH: num_ref_pic_active_fwd_minus1", img->num_ref_pic_active_fwd_minus1, partition);
+      if (img->type==B_IMG || img->type==BS_IMG)
+      {
+        len += ue_v ("SH: num_ref_pic_active_bwd_minus1", img->num_ref_pic_active_bwd_minus1, partition);
+      }
+    }
+  }
+
+  len += ref_pic_list_reordering();
+
+  if ((img->type == INTER_IMG && input->WeightedPrediction) || 
+     ((img->type == B_IMG || img->type == BS_IMG) && input->WeightedBiprediction == 1))
+  {
+    len += pred_weight_table();
+  }
+
+  len += dec_ref_pic_marking();
+
+  if(input->symbol_mode==CABAC && img->type!=INTRA_IMG /*&& img->type!=SI_IMG*/)
+  {
+    len += ue_v("SH: cabac_init_idc", img->cabac_init_idc, partition);
+  }
+
+  // we transmit zero in the pps, so here the real QP
+  len += se_v("SH: slice_qp_delta", (img->qp - 26), partition);
+
+  if (img->types==SP_IMG )
   {
     if (img->types==SP_IMG && img->type!=INTRA_IMG) // Switch Flag only for SP pictures
     {
-      SYMTRACESTRING("SH SWITCH FLAG");
-      sym->bitpattern = 0;  // 1 for switching SP, 0 for normal SP
-      sym->len = 1;
-      len += writeSyntaxElement_fixed(sym, partition);
+      len += u_1 ("SH: sp_for_switch_flag", 0, partition);   // 1 for switching SP, 0 for normal SP
     }
-    
-    SYMTRACESTRING("SH SP SliceQuant");
-    sym->value1 = img->qpsp - (MAX_QP - MIN_QP +1)/2;
-    len += writeSyntaxElement_UVLC (sym, partition);
+    len += se_v ("SH: slice_qs_delta", (img->qpsp - 26), partition );
   }
 
   if (input->LFSendParameters)
   {
-    SYMTRACESTRING("SH LF_DISABLE FLAG");
-    sym->bitpattern = input->LFDisable;  /* Turn loop filter on/off on slice basis */
-    sym->len = 1;
-    len += writeSyntaxElement_fixed(sym, partition);
+    len += ue_v("SH: disable_deblocking_filter_idc",input->LFDisableIdc, partition);  // Turn loop filter on/off on slice basis 
 
-    if (!input->LFDisable)
+    if (input->LFDisableIdc!=1)
     {
-      sym->mapping = dquant_linfo;           // Mapping rule: Signed integer
-      SYMTRACESTRING("SH LFAlphaC0OffsetDiv2");
-      sym->value1 = input->LFAlphaC0Offset>>1; /* Convert from offset to code */
-      len += writeSyntaxElement_UVLC (sym, partition);
+      len += se_v ("SH: slice_alpha_c0_offset_div2", input->LFAlphaC0Offset / 2, partition);
 
-      SYMTRACESTRING("SH LFBetaOffsetDiv2");
-      sym->value1 = input->LFBetaOffset>>1; /* Convert from offset to code */
-      len += writeSyntaxElement_UVLC (sym, partition);
+      len += se_v ("SH: slice_beta_offset_div2", input->LFBetaOffset / 2, partition);
     }
   }
 
-  len+=writeERPS(sym, partition);
-  
-  free(sym);
+  // !KS: all fmo map types are currently mapped to type 6 so 
+  //      no slice_group_change_cycle is transmitted
 
   return len;
 }
@@ -289,238 +211,226 @@ int SliceHeader()
 /*!
  ********************************************************************************************
  * \brief 
- *    writes the ERPS syntax elements
+ *    writes the ref_pic_list_reordering syntax
+ *    based on content of according fields in img structure
  *
  * \return
- *    number of bits used for the ERPS
+ *    number of bits used 
  ********************************************************************************************
 */
-int writeERPS(SyntaxElement *sym, DataPartition *partition)
+static int ref_pic_list_reordering()
 {
-  int len=0;
+  int dP_nr = assignSE2partition[input->partition_mode][SE_HEADER];
+  Bitstream *currStream = ((img->currentSlice)->partArr[dP_nr]).bitstream;
+  DataPartition *partition = &((img->currentSlice)->partArr[dP_nr]);
+  Slice *currSlice = img->currentSlice;
 
-#ifdef _CHECK_MULTI_BUFFER_1_
-  RMPNIbuffer_t *r;
-#endif
+  int i, len=0;
 
-  /* RPSF: Reference Picture Selection Flags */
-  SYMTRACESTRING("SH: Reference Picture Selection Flags");
-  sym->value1 = 0;
-  len += writeSyntaxElement_UVLC (sym, partition);
-
-  /* PN: Picture Number */
-  SYMTRACESTRING("SH: Picture Number");
-  sym->value1 = img->pn;
-#ifdef FLD0
-  sym->value1 =0;
-#endif
-  len += writeSyntaxElement_UVLC (sym, partition);
-
-#ifdef _CHECK_MULTI_BUFFER_1_
-
-  /* RPSL: Reference Picture Selection Layer */
-  SYMTRACESTRING("SH: Reference Picture Selection Layer");
-  sym->value1 = 1;
-  len += writeSyntaxElement_UVLC (sym, partition);
-
-  if(img->type!=INTRA_IMG)
+  if ((img->type!=INTRA_IMG) /*&&(img->type!=SI_IMG)*/ )
   {
-    // let's mix some reference frames
-    if ((img->pn==5)&&(img->type==INTER_IMG))
+    len += u_1 ("SH: ref_pic_list_reordering_flag_l0", currSlice->ref_pic_list_reordering_flag_l0, partition);
+    if (currSlice->ref_pic_list_reordering_flag_l0)
     {
-      r = (RMPNIbuffer_t*)calloc (1,sizeof(RMPNIbuffer_t));
-      r->RMPNI=0;
-      r->Data=2;
-      r->Next=NULL;
-      img->currentSlice->rmpni_buffer=r;
-
-    
-      // negative ADPN follows
-      SYMTRACESTRING("SH: RMPNI");
-      sym->value1 = 0;
-      len += writeSyntaxElement_UVLC (sym, partition);
-
-      // ADPN
-      SYMTRACESTRING("SH: ADPN");
-      sym->value1 = 2;
-      len += writeSyntaxElement_UVLC (sym, partition);
-
+      i=0;
+      do
+      {
+        len += ue_v ("SH: remapping_of_pic_num_idc", currSlice->remapping_of_pic_nums_idc_l0[i], partition);
+        if (currSlice->remapping_of_pic_nums_idc_l0[i]==0 ||
+            currSlice->remapping_of_pic_nums_idc_l0[i]==1)
+        {
+          len += ue_v ("SH: abs_diff_pic_num_minus1_l0", currSlice->abs_diff_pic_num_minus1_l0[i], partition);
+        }
+        else
+        {
+          if (currSlice->remapping_of_pic_nums_idc_l0[i]==2)
+          {
+            len += ue_v ("SH: long_term_pic_idx_l0", currSlice->long_term_pic_idx_l0[i], partition);
+          }
+        }
+        i++;
+      } while (currSlice->remapping_of_pic_nums_idc_l0[i] != 3);
     }
-
-    // End loop
-    SYMTRACESTRING("SH: RMPNI");
-    sym->value1 = 3;
-    len += writeSyntaxElement_UVLC (sym, partition);
   }
+
+  if (img->type==B_IMG)
+  {
+    len += u_1 ("SH: ref_pic_list_reordering_flag_l1", currSlice->ref_pic_list_reordering_flag_l1, partition);
+    if (currSlice->ref_pic_list_reordering_flag_l1)
+    {
+      i=0;
+      do
+      {
+        len += ue_v ("SH: remapping_of_pic_num_idc", currSlice->remapping_of_pic_nums_idc_l1[i], partition);
+        if (currSlice->remapping_of_pic_nums_idc_l1[i]==0 ||
+            currSlice->remapping_of_pic_nums_idc_l1[i]==1)
+        {
+          len += ue_v ("SH: abs_diff_pic_num_minus1_l1", currSlice->abs_diff_pic_num_minus1_l1[i], partition);
+        }
+        else
+        {
+          if (currSlice->remapping_of_pic_nums_idc_l1[i]==2)
+          {
+            len += ue_v ("SH: long_term_pic_idx_l1", currSlice->long_term_pic_idx_l1[i], partition);
+          }
+        }
+        i++;
+      } while (currSlice->remapping_of_pic_nums_idc_l1[i] != 3);
+    }
+  }
+
   reorder_mref(img);
   
-#else
-  /* RPSL: Reference Picture Selection Layer */
-  SYMTRACESTRING("SH: Reference Picture Selection Layer");
-  sym->value1 = 0;
-  len += writeSyntaxElement_UVLC (sym, partition);
-
-#endif
-
-#ifdef _CHECK_MULTI_BUFFER_2_
-
-  SYMTRACESTRING("SH: Reference Picture Bufering Type");
-  sym->value1 = 1;
-  len += writeSyntaxElement_UVLC (sym, partition);
-
-
-  // some code to check operation
-  if ((img->pn==3) && (img->type==INTER_IMG))
-  {
-
-    // check in this frame as long term picture
-//    if (img->max_lindex==0)
-    {
-      // set long term buffer size = 2
-      SYMTRACESTRING("SH: MMCO Specify Max Long Term Index");
-      // command
-      sym->value1 = 4;
-      len += writeSyntaxElement_UVLC (sym, partition);
-      // size = 2+1 (MLP1)
-      sym->value1 = 2+1;
-      len += writeSyntaxElement_UVLC (sym, partition);
-
-      img->max_lindex=2;
-    }
-
-    // assign a long term index to actual frame
-    SYMTRACESTRING("SH: MMCO Assign Long Term Index to a Picture");
-    // command
-    sym->value1 = 3;
-    len += writeSyntaxElement_UVLC (sym, partition);
-    // DPN=0 for actual frame 
-    sym->value1 = 0;
-    len += writeSyntaxElement_UVLC (sym, partition);
-    //long term ID
-    sym->value1 = img->lindex;
-    len += writeSyntaxElement_UVLC (sym, partition);
-
-    // assign local long term
-    init_long_term_buffer(2,img);
-    init_mref(img);
-    init_Refbuf(img);
-
-    assign_long_term_id(3,img->lindex,img);
-    
-    img->lindex=(img->lindex+1)%img->max_lindex;
-
-
-  } 
-  if ((img->pn==4) && (img->type==INTER_IMG))
-  {
-    // delete long term picture again
-    SYMTRACESTRING("SH: MMCO Mark a Long-Term Picture as Unused");
-    // command
-    sym->value1 = 2;
-    len += writeSyntaxElement_UVLC (sym, partition);
-    SYMTRACESTRING("SH: MMCO LPIN");
-    // command
-    sym->value1 = (img->max_lindex+img->lindex-1)%img->max_lindex;
-    len += writeSyntaxElement_UVLC (sym, partition);
-  } 
-
-  // end MMCO loop
-  SYMTRACESTRING("SH: end loop");
-  sym->value1 = 0;
-  len += writeSyntaxElement_UVLC (sym, partition);
-#else
-    /* RPBT: Reference Picture Bufering Type */
-    SYMTRACESTRING("SH: Reference Picture Bufering Type");
-    sym->value1 = 0;
-    len += writeSyntaxElement_UVLC (sym, partition);
-#endif 
-
   return len;
 }
 
 
-int SequenceHeader (FILE *outf)
+/*!
+ ************************************************************************
+ * \brief
+ *    write the memory menagement control operations
+ ************************************************************************
+ */
+static int dec_ref_pic_marking()
 {
-  int LenInBytes = 0;
-  int HeaderInfo;         // Binary coded Headerinfo to be written in file
-  int ProfileLevelVersionHash;
+  int dP_nr = assignSE2partition[input->partition_mode][SE_HEADER];
+  DataPartition *partition = &((img->currentSlice)->partArr[dP_nr]);
+  Slice *currSlice = img->currentSlice;
 
-  // Handle the RTP case
-  if (input->of_mode == PAR_OF_RTP)
+  MMCObuffer_t *tmp_mmco;
+
+  int val, len=0;
+
+  if (img->idr_flag)
   {
-    // Tian Dong: The following lines will never be reached. June 10, 2002
-    if ((LenInBytes = RTPSequenceHeader (outf)) < 0)
-    {
-      snprintf (errortext, ET_SIZE, "SequenceHeaqder(): Problems writing the RTP Parameter Packet");
-      error (errortext, 600);
-      return -1;
-    }
-    else
-      return LenInBytes*8;
+    len += u_1("SH: no_output_of_prior_pics_flag", img->no_output_of_prior_pics_flag, partition);
+    len += u_1("SH: long_term_reference_flag", img->long_term_reference_flag, partition);
   }
-  // Non RTP-type file formats follow
-
-
-  switch (input->SequenceHeaderType)
+  else
   {
-  case 0:
-    // No SequenceHeader, do nothing
-    return 0;
-  case 1:
-    // A binary mini Sequence header.  Fixed length 32 bits.  Defined as follows
-    // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    // |        0          |        1          |        2          | 3 |
-    // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    // |0|1|2|3|4|5|6|7|8|9|0|1|2|3|4|5|6|7|8|9|0|1|2|3|4|5|6|7|8|9|0|1|
-    // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    // |     TR Modulus        |     PicIDModulus      |OfMode |part |S|
-    // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    //
-    // S is symbol_mode (UVLC = 0, CABAC = 1), the other are as in the input file
+    img->adaptive_ref_pic_buffering_flag = (img->mmco_buffer!=NULL);
 
-    assert (input->TRModulus < 4096);
-    assert (sizeof (int) == 4);
-    assert (input->PicIdModulus <4096);
-    assert (input->of_mode <16);
-    assert (input->partition_mode <8);
-    assert (input->symbol_mode < 2);
+    len += u_1("SH: adaptive_ref_pic_buffering_flag", img->adaptive_ref_pic_buffering_flag, partition);
 
-    ProfileLevelVersionHash = input->of_mode<<0 | input->partition_mode<<4 | input->symbol_mode<<7;
-    HeaderInfo = input->TRModulus | input->PicIdModulus<<12 | ProfileLevelVersionHash<<24;
-
-    if (1 != fwrite (&HeaderInfo, 4, 1, outf))
+    if (img->adaptive_ref_pic_buffering_flag)
     {
-      snprintf (errortext, ET_SIZE, "Error while writing Mini Sequence Header");
-      error(errortext, 500);
+      tmp_mmco = img->mmco_buffer;
+      // write Memory Management Control Operation 
+      do
+      {
+        if (tmp_mmco==NULL) error ("Error encoding MMCO commands", 500);
+        
+        val = tmp_mmco->MMCO;
+        len += ue_v("SH: memory_management_control_operation", val, partition);
+
+        if ((val==1)||(val==3)) 
+        {
+          len += 1 + ue_v("SH: difference_of_pic_nums_minus1", tmp_mmco->DPN, partition);
+        }
+        if ((val==2)||(val==3)||(val==6))
+        {
+          len+= ue_v("SH: long_term_pic_idx", tmp_mmco->LPIN, partition);
+        }
+        if (val==4)
+        {
+          len += ue_v("SH: max_long_term_pic_idx_plus1", tmp_mmco->MLIP1, partition);
+        }
+        
+        tmp_mmco=tmp_mmco->Next;
+        
+      } while (val != 0);
+      
     }
-#if TRACE
-    fprintf(p_trace, "Binary Mini Sequence Header 0x%x\n\n", HeaderInfo);
-#endif
-
-    return 32;
-
-  case 2:
-    // An ASCII representation of many input file parameters, useful for debug purposes
-    //
-    //
-    assert ("To be hacked");
-    return -1;
-  case 3:
-    // An UVLC coded representatioj of the Sequence Header.  To be hacked.
-    // Note that all UVLC initialization has already taken place, so just use
-    // write_synyaxelement() to put the sequence header symbols.  Has to be double
-    // checked whether this is true for cabac as well.  Do we need a new context
-    // for that?  Anyway:
-    //
-    assert ("to be hacked");
-    return -1;
-  default:
-    snprintf (errortext, ET_SIZE, "Unspported Sequence Header Type (should not happen since checked in input module, exiting");
-    error (errortext, 600);
-    return -1;
   }
+  return len;
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    write the memory menagement control operations
+ ************************************************************************
+ */
+static int pred_weight_table()
+{
+  int dP_nr = assignSE2partition[input->partition_mode][SE_HEADER];
+  DataPartition *partition = &((img->currentSlice)->partArr[dP_nr]);
+  Slice *currSlice = img->currentSlice;
+
+  int len = 0;
+  int i,j;
+
+  len += ue_v("SH: luma_log_weight_denom", luma_log_weight_denom, partition);
+  
+  len += ue_v("SH: chroma_log_weight_denom", chroma_log_weight_denom, partition);
+
+  for (i=0; i<= img->num_ref_pic_active_fwd_minus1; i++)
+  {
+    if (wp_weight[0][i][0] != 1<<luma_log_weight_denom)
+    {
+      len += u_1 ("SH: luma_weight_flag_l0", 1, partition);
+      
+      len += se_v ("SH: luma_weight_l0", wp_weight[0][i][0], partition);
+        
+      len += se_v ("SH: luma_offset_l0", wp_offset[0][i][0], partition);
+    }
+    else
+    {
+        len += u_1 ("SH: luma_weight_flag_l0", 0, partition);
+    }
+
+    if (wp_weight[0][i][j] != 1<<chroma_log_weight_denom)
+    {
+      len += u_1 ("chroma_weight_flag_l0", 1, partition);
+      for (j=1; j<3; j++)
+      {
+        len += se_v ("chroma_weight_l0", wp_weight[0][i][j] ,partition);
+      
+        len += se_v ("chroma_offset_l0", wp_offset[0][i][j] ,partition);
+      }
+    }
+    else
+    {
+      len += u_1 ("chroma_weight_flag_l0", 0, partition);
+    }
+  }
+
+  if (img->type == B_IMG || img->type == BS_IMG)
+  {
+    for (i=0; i<= img->num_ref_pic_active_bwd_minus1; i++)
+    {
+      if (wp_weight[1][i][0] != 1<<luma_log_weight_denom)
+      {
+        len += u_1 ("SH: luma_weight_flag_l1", 1, partition);
+        
+        len += se_v ("SH: luma_weight_l1", wp_weight[1][i][0], partition);
+        
+        len += se_v ("SH: luma_offset_l1", wp_offset[1][i][0], partition);
+      }
+      else
+      {
+        len += u_1 ("SH: luma_weight_flag_l1", 0, partition);
+      }
+      
+      if (wp_weight[1][i][j] != 1<<chroma_log_weight_denom)
+      {
+        len += u_1 ("chroma_weight_flag_l1", 1, partition);
+        for (j=1; j<3; j++)
+        {
+          len += se_v ("chroma_weight_l1", wp_weight[1][i][j] ,partition);
+          
+          len += se_v ("chroma_offset_l1", wp_offset[1][i][j] ,partition);
+        }
+      }
+      else
+      {
+        len += u_1 ("chroma_weight_flag_l1", 0, partition);
+      }
+    }
+  }
+  return len;
+}
+  
 /********************************************************************************************
  ********************************************************************************************
  *
@@ -529,38 +439,6 @@ int SequenceHeader (FILE *outf)
  ********************************************************************************************
  ********************************************************************************************/
 
-
-/*!
- ********************************************************************************************
- * \brief Puts the new Start Code into the Bitstream
- *    
- *
- * \return
- *    number of bits used for the Startcode
- *
- * \note Start-code is of the form N 0x00 bytes, followed by one 0x01 byte.
- *
- *  \param zeros_in_startcode indicates number of zero bytes in start-code
- *
- *  \note Start-code must be put in byte-aligned position
- ********************************************************************************************
-*/
-static int PutStartCode (Bitstream *s, int zeros_in_startcode)
-{
-  int i;
-  if(s->bits_to_go != 8)
-    printf(" Panic: Not byte aligned for putting new startcode - bits_to_go: %d\n", s->bits_to_go);  
-  assert(s->bits_to_go==8);
-  
-  s->byte_buf = 0;
-  for(i = 0; i < zeros_in_startcode; i++)
-    s->streamBuffer[s->byte_pos++]=s->byte_buf;
-
-  s->byte_buf = 1;
-  s->streamBuffer[s->byte_pos++]=s->byte_buf;
-  s->byte_buf = 0;
-  return (8*zeros_in_startcode+8);
-}
 
 
 // StW Note: This function is a hack.  It would be cleaner if the encoder maintains
@@ -574,79 +452,98 @@ static int PutStartCode (Bitstream *s, int zeros_in_startcode)
  *    Selects picture type and codes it to symbol
  ************************************************************************
  */
-void select_picture_type(SyntaxElement *symbol)
+int get_picture_type()
 {
-  int multpred;
 
-#ifdef _ADDITIONAL_REFERENCE_FRAME_
-  if (input->no_multpred <= 1 && input->add_ref_frame == 0)
-#else
-  if (input->no_multpred <= 1)
-#endif
-    multpred=FALSE;
-  else
-    multpred=TRUE;               // multiple reference frames in motion search
+  // set this value to zero for transmission without signaling 
+  // that the whole picture has the same slice type
+  int same_slicetype_for_whole_frame = 5;
 
-  if (img->type == INTRA_IMG)
+  // !KS: picture type needs cleanup
+  if(img->types == SP_IMG )
   {
-    symbol->len=3;
-    symbol->inf=1;
-    symbol->value1 = 2;
+    return 3 + same_slicetype_for_whole_frame;
   }
-  else if((img->type == INTER_IMG) && (multpred == FALSE) ) // inter single reference frame
+
+  switch (img->type)
   {
-    symbol->len=1;
-    symbol->inf=0;
-    symbol->value1 = 0;
-  }
-  else if((img->type == INTER_IMG) && (multpred == TRUE)) // inter multiple reference frames
-  {
-    symbol->len=3;
-    symbol->inf=0;
-    symbol->value1 = 1;
-  }
-  else if((img->type == B_IMG) && (multpred == FALSE))
-  {
-    symbol->len=5;
-    symbol->inf=0;
-    symbol->value1 = 3;
-  }
-  else if((img->type == B_IMG) && (multpred == TRUE))
-  {
-    symbol->len=5;
-    symbol->inf=1;
-    symbol->value1 = 4;
-  }
-  else if((img->type == BS_IMG) && (multpred == TRUE))
-  {
-    symbol->len=5;
-    symbol->inf=1;
-    symbol->value1 = 4;
-  }
-  else
-  {
+  case INTRA_IMG:
+    return 2 + same_slicetype_for_whole_frame;
+    break;
+  case INTER_IMG:
+    return 0 + same_slicetype_for_whole_frame;
+    break;
+  case B_IMG:
+  case BS_IMG:
+    return 1 + same_slicetype_for_whole_frame;
+    break;
+  case SP_IMG:
+    return 3 + same_slicetype_for_whole_frame;
+    break;
+  default:
     error("Picture Type not supported!",1);
+    break;
   }
-
-  if((img->types == SP_IMG ) && (multpred == FALSE))
-  {
-    symbol->len=5;
-    symbol->inf=0;
-    symbol->value1 = 5;
-  }
-  else if((img->types == SP_IMG) && (multpred == TRUE))
-  {
-    symbol->len=5;
-    symbol->inf=0;
-    symbol->value1 = 6;
-  }
-
-
-#if TRACE
-  snprintf(symbol->tracestring, TRACESTRING_SIZE, "Image type = %3d ", img->type);
-#endif
-  symbol->type = SE_PTYPE;
+   
+  return 0;
 }
 
 
 
+/*!
+ *****************************************************************************
+ *
+ * \brief 
+ *    int Partition_BC_Header () write the Partition type B, C header
+ *
+ * \return
+ *    Number of bits used by the partition header
+ *
+ * \para Parameters
+ *    PartNo: Partition Number to which the header should be written
+ *
+ * \para Side effects
+ *    Partition header as per VCEG-N72r2 is written into the appropriate 
+ *    partition bit buffer
+ *
+ * \para Limitations/Shortcomings/Tweaks
+ *    The current code does not support the change of picture parameters within
+ *    one coded sequence, hence there is only one parameter set necessary.  This
+ *    is hard coded to zero.
+ *
+ * \para
+ *    Note: this is still the old Partition_BC_Header and not yet compliant with
+ *    the spec.
+ *   
+ * \date
+ *    October 24, 2001
+ *
+ * \author
+ *    Stephan Wenger   stewe@cs.tu-berlin.de
+ *****************************************************************************/
+
+
+int Partition_BC_Header(int PartNo)
+{
+  DataPartition *partition = &((img->currentSlice)->partArr[PartNo]);
+  SyntaxElement symbol, *sym = &symbol;
+
+  int len = 0;
+
+  assert (input->of_mode == PAR_OF_RTP);
+  assert (PartNo > 0 && PartNo < img->currentSlice->max_part_nr);
+
+  sym->type = SE_HEADER;         // This will be true for all symbols generated here
+  sym->mapping = n_linfo2;       // Mapping rule: Simple code number to len/info
+
+
+  SYMTRACESTRING("RTP-PH: Picture ID");
+  sym->value1 = img->currentSlice->picture_id;
+  len += writeSyntaxElement_UVLC (sym, partition);
+
+  SYMTRACESTRING("RTP-PH: Slice ID");
+  sym->value1 = img->current_slice_nr;
+  len += writeSyntaxElement_UVLC (sym, partition);
+
+  return len;
+}

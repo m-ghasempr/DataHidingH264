@@ -49,6 +49,10 @@
 #ifndef _DEFINES_H_
 #define _DEFINES_H_
 
+#define  MAX_NO_POC_FRAMES  10  //size of poc ref array = max no ref frames+1
+#define  MAX_LENGTH_POC_CYCLE   10              //max no in type 1 poc cycle
+#define NONREFFRAME 0           // used with push_poc
+#define REFFRAME 1
 
 // CAVLC
 #define LUMA              0
@@ -71,14 +75,13 @@
 #define NUM_BLOCK_TYPES 8
 
 
-#define _ERROR_CONCEALMENT_   1   //!< 0: off; 1: on
 #define _ADAPT_LAST_GROUP_
 
 #define MAX_INFO_WORD  300000               //!< for one frame
 #define MAX_CODED_FRAME_SIZE 800000         //!< bytes for one frame
 #define MAXIMUM_UVLC_CODEWORD_PER_HEADER 20 //!< UVLC codewords per combined picture/slice header maximum
 #if defined _DEBUG
-#define TRACE           0                   //!< 0:Trace off 1:Trace on
+#define TRACE           1                   //!< 0:Trace off 1:Trace on
 #else
 #define TRACE           0                   //!< 0:Trace off 1:Trace on
 #endif
@@ -86,21 +89,7 @@
 
 #define absm(A) ((A)<(0) ? (-(A)):(A))      //!< abs macro, faster than procedure
 #define MAX_VALUE       999999              //!< used for start value for some variables
-
-// ---------------------------------------------------------------------------------
-// FLAGS and DEFINES for ABT. mwi
-#define INI_CTX         1       //!< use initialization values for all CABAC contexts. 0=off, 1=on
-#define INICNT_ABT      64    // max_count for ABT contexts
-
-#define B8_SIZE         8       // maximum block size of block transformed by ABT. 020308 mwi
-#define WHOLE_BLK      -1       // signal application on all subblocks for ABT routines. 020308 mwi
-#define ABT_OFF        -1
-#define QUANT_PERIOD    6       // mantissa/exponent quantization, step size doubles every QUANT_PERIOD qp
-#define _ALT_SCAN_              // use GI scan from JVT-C140 for field coding
-#define QP_OFS         -12      // workaround to use old qp-design for ABT routines
-#define _CD_4x4VALUES_          // use baseline 4x4 quantization values
-//#define _ABT_FLAG_IN_SLICE_HEADER_ // write ABT flag to slice header
-// ---------------------------------------------------------------------------------
+#define Clip1(a)            ((a)>255?255:((a)<0?0:(a)))
 
 #define P8x8    8
 #define I4MB    9
@@ -162,9 +151,9 @@
 #define PLANE_16        3
 
 // 8x8 chroma intra prediction modes
-#define DC_PRED_8       0
+#define VERT_PRED_8     0
 #define HOR_PRED_8      1
-#define VERT_PRED_8     2
+#define DC_PRED_8       2
 #define PLANE_8         3
 
 // QCIF format
@@ -189,6 +178,8 @@
 
 #define MIN_PIX_VAL     0                       //!< lowest legal values for 8 bit sample
 #define MAX_PIX_VAL     255                     //!< highest legal values for 8 bit sample
+
+#define MAX_REFERENCE_PICTURES 15
 
 #ifndef WIN32
 #define max(a, b)      ((a) > (b) ? (a) : (b))  //!< Macro returning max value
@@ -227,5 +218,11 @@
 
 //Start code and Emulation Prevention need this to be defined in identical manner at encoder and decoder
 #define ZEROBYTES_SHORTSTARTCODE 2 //indicates the number of zero bytes in the short start-code prefix
+
+
+
+//#define SIMPLE_CHROMA_WP 1
+
+
 #endif
 

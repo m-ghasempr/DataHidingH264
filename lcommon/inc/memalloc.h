@@ -51,11 +51,13 @@ int  get_mem2D(byte ***array2D, int rows, int columns);
 int  get_mem2Dint(int ***array2D, int rows, int columns);
 int  get_mem3D(byte ****array2D, int frames, int rows, int columns);
 int  get_mem3Dint(int ****array3D, int frames, int rows, int columns);
+int get_mem4Dint(int *****array4D, int idx, int frames, int rows, int columns );
 
 void free_mem2D(byte **array2D);
 void free_mem2Dint(int **array2D);
 void free_mem3D(byte ***array2D, int frames);
 void free_mem3Dint(int ***array3D, int frames);
+void free_mem4Dint(int ***array3D, int frames, int columns);
 
 void no_mem_exit(char *where);
 

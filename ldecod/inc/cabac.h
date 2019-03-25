@@ -57,12 +57,6 @@
  * l o c a l    c o n s t a n t s   f o r   i n i t i a l i z a t i o n   o f   m o d e l s
  *******************************************************************************************
  */
-static const int ABT_MODE_Ini[2][3][2]=
-{
-  {{-10,68}, { 4,62}, {14,33}}, // INTRA block mode in INTRA slices
-  {{-4 ,62}, { 1,63}, { 7,47}}  // INTRA block mode in INTER slices
-};
-
 
 static const int MB_TYPE_Ini[4][11][2]=
 {

@@ -85,8 +85,26 @@ void init_frame_buffers(InputParameters *inp, ImageParameters *img)
     get_mem3D(&(frm->picbuf_short[i]->mcef), 2, img->height_cr*2, img->width_cr*2);
     if (NULL == (frm->picbuf_short[i]->Refbuf11 = malloc ((img->width * img->height) * sizeof (pel_t))))
       no_mem_exit ("init_frame_buffers: Refbuf11");
+
+    if (input->WeightedPrediction || input->WeightedBiprediction)
+    {
+      get_mem2D(&(frm->picbuf_short[i]->mref_w), (img->height+2*IMG_PAD_SIZE)*4, (img->width+2*IMG_PAD_SIZE)*4);
+
+      if (NULL == (frm->picbuf_short[i]->Refbuf11_w = malloc ((img->width * img->height) * sizeof (pel_t))))
+        no_mem_exit ("init_frame_buffers: Refbuf11_w");
+    }
   }
 
+
+  if (input->WeightedPrediction > 0 || input->WeightedBiprediction > 0)
+  {
+    get_mem3Dint(&wp_weight, 2, MAX_REFERENCE_PICTURES, 3);
+    get_mem3Dint(&wp_offset, 2, MAX_REFERENCE_PICTURES, 3);
+    get_mem4Dint(&wbp_weight, 2, MAX_REFERENCE_PICTURES, MAX_REFERENCE_PICTURES, 3);
+
+    get_mem2Dint(&weight,  MAX_REFERENCE_PICTURES, 3);
+    get_mem2Dint(&offset, MAX_REFERENCE_PICTURES, 3);
+  }
 
   frm->short_size=bufsize;
   frm->short_used=0;
@@ -110,6 +128,12 @@ void init_frame_buffers(InputParameters *inp, ImageParameters *img)
       get_mem3D(&(fld->picbuf_short[i]->mcef), 2, img->height_cr, img->width_cr*2);
       if (NULL == (fld->picbuf_short[i]->Refbuf11 = malloc ((img->width * img->height / 2) * sizeof (pel_t))))
         no_mem_exit ("init_field_buffers: Refbuf11");
+      if (input->WeightedPrediction || input->WeightedBiprediction)
+      {
+        get_mem2D(&(fld->picbuf_short[i]->mref_w), (img->height/2+2*IMG_PAD_SIZE)*4, (img->width+2*IMG_PAD_SIZE)*4);
+        if (NULL == (fld->picbuf_short[i]->Refbuf11_w = malloc ((img->width * img->height / 2) * sizeof (pel_t))))
+          no_mem_exit ("init_field_buffers: Refbuf11_w");
+      }
     }
     
     fld->short_size=bufsize;
@@ -123,6 +147,13 @@ void init_frame_buffers(InputParameters *inp, ImageParameters *img)
         no_mem_exit("alloc_mref: mref_mbfld");
       for(i=0;i<bufsize;i++)
         get_mem2D(&mref_mbfld[i], (img->height/2+2*IMG_PAD_SIZE)*4, (img->width+2*IMG_PAD_SIZE)*4);
+      if (input->WeightedPrediction || input->WeightedBiprediction)
+      {
+        if ((mref_mbfld_w = (byte***)calloc(fld->short_size+fld->long_size,sizeof(byte**))) == NULL)
+          no_mem_exit("alloc_mref: mref_mbfld_w");
+        for(i=0;i<bufsize;i++)
+          get_mem2D(&mref_mbfld_w[i], (img->height/2+2*IMG_PAD_SIZE)*4, (img->width+2*IMG_PAD_SIZE)*4);
+      }
     }
     //  bufsize=img->buf_cycle+1;
   }
@@ -147,6 +178,11 @@ void free_frame_buffers(InputParameters *inp, ImageParameters *img)
     free_mem2D(frm->picbuf_short[i]->mref);
     free_mem3D(frm->picbuf_short[i]->mcef,2);
     free(frm->picbuf_short[i]->Refbuf11);
+    if (input->WeightedPrediction || input->WeightedBiprediction)
+    {
+      free_mem2D(frm->picbuf_short[i]->mref_w);
+      free(frm->picbuf_short[i]->Refbuf11_w);
+    }
   }
 
 
@@ -162,6 +198,11 @@ void free_frame_buffers(InputParameters *inp, ImageParameters *img)
       free_mem2D(frm->picbuf_long[i]->mref);
       free_mem3D(frm->picbuf_long[i]->mcef,2);
       free(frm->picbuf_long[i]->Refbuf11);
+      if (input->WeightedPrediction || input->WeightedBiprediction)
+      {
+        free_mem2D(frm->picbuf_long[i]->mref_w);
+        free(frm->picbuf_long[i]->Refbuf11_w);
+      }
     } 
     for (i=0;i<frm->long_size;i++)
       free (frm->picbuf_long[i]);
@@ -177,6 +218,11 @@ void free_frame_buffers(InputParameters *inp, ImageParameters *img)
       free_mem2D(fld->picbuf_short[i]->mref);
       free_mem3D(fld->picbuf_short[i]->mcef,2);
       free(fld->picbuf_short[i]->Refbuf11);
+      if (input->WeightedPrediction || input->WeightedBiprediction)
+      {
+        free_mem2D(fld->picbuf_short[i]->mref_w);
+        free(fld->picbuf_short[i]->Refbuf11_w);
+      }
     }
 
 
@@ -192,6 +238,11 @@ void free_frame_buffers(InputParameters *inp, ImageParameters *img)
         free_mem2D(fld->picbuf_long[i]->mref);
         free_mem3D(fld->picbuf_long[i]->mcef,2);
         free(fld->picbuf_long[i]->Refbuf11);
+        if (input->WeightedPrediction || input->WeightedBiprediction)
+        {
+          free_mem2D(fld->picbuf_long[i]->mref_w);
+          free(fld->picbuf_long[i]->Refbuf11_w);
+        }
       } 
       for (i=0;i<fld->long_size;i++)
         free (fld->picbuf_long[i]);
@@ -234,6 +285,11 @@ void init_long_term_buffer(int size, ImageParameters *img)
       free_mem2D(pb[i]->mref);
       free_mem3D(pb[i]->mcef, 2);
       free(pb[i]->Refbuf11);
+      if (input->WeightedPrediction || input->WeightedBiprediction)
+      {
+        free_mem2D(pb[i]->mref_w);
+        free(pb[i]->Refbuf11_w);
+      }
       free (pb[i]);
     }
 
@@ -254,9 +310,14 @@ void init_long_term_buffer(int size, ImageParameters *img)
     {
       if ((fb->picbuf_long[i]=(Frame*)calloc(1,sizeof (Frame)))==NULL) no_mem_exit("init_frame_buffers: fb->picbuf_long");
       get_mem2D(&(fb->picbuf_long[i]->mref), (img->height+2*IMG_PAD_SIZE)*4, (img->width+2*IMG_PAD_SIZE)*4);
+      if (input->WeightedPrediction || input->WeightedBiprediction)
+        get_mem2D(&(fb->picbuf_long[i]->mref_w), (img->height+2*IMG_PAD_SIZE)*4, (img->width+2*IMG_PAD_SIZE)*4);
       get_mem3D(&(fb->picbuf_long[i]->mcef), 2, img->height_cr*2, img->width_cr*2);
       if (NULL == (fb->picbuf_long[i]->Refbuf11 = malloc ((img->width * img->height) * sizeof (pel_t))))
         no_mem_exit ("init_long_term_buffer: Refbuf11");
+      if (input->WeightedPrediction || input->WeightedBiprediction)
+        if (NULL == (fb->picbuf_long[i]->Refbuf11_w = malloc ((img->width * img->height) * sizeof (pel_t))))
+          no_mem_exit ("init_long_term_buffer: Refbuf11_w");
     }
 
     free (pb);
@@ -335,11 +396,15 @@ void assign_long_term_id(int shortID, int longID, ImageParameters *img)
     fb->long_used=fb->long_size;
   
   memcpy (fb->picbuf_long[0]->mref[0], fb->picbuf_short[idx]->mref[0], ((img->height+2*IMG_PAD_SIZE)*4)*((img->width+2*IMG_PAD_SIZE)*4)); 
-  
+  if (input->WeightedPrediction || input->WeightedBiprediction)
+     memcpy (fb->picbuf_long[0]->mref_w[0], fb->picbuf_short[idx]->mref_w[0], ((img->height+2*IMG_PAD_SIZE)*4)*((img->width+2*IMG_PAD_SIZE)*4)); 
+
   for (uv=0; uv < 2; uv++)
     memcpy (fb->picbuf_long[0]->mcef[uv][0], fb->picbuf_short[idx]->mcef[uv][0], img->width_cr*img->height_cr); 
 
   memcpy (fb->picbuf_long[0]->Refbuf11, fb->picbuf_short[idx]->Refbuf11, img->width*img->height); 
+  if (input->WeightedPrediction || input->WeightedBiprediction)
+        memcpy (fb->picbuf_long[0]->Refbuf11, fb->picbuf_short[idx]->Refbuf11, img->width*img->height); 
 
   // sort the long term buffer by lt_IDs
   // Note: Just a  simple bubble sort implementation. The buffer is not very large
@@ -463,6 +528,7 @@ void alloc_mref(ImageParameters *img)
   if((mref_frm = (byte***)calloc(frm->short_size+frm->long_size,sizeof(byte**))) == NULL)
     no_mem_exit("alloc_mref: mref_frm");
 
+
   if (mcef_frm) 
     free (mcef_frm);
 
@@ -483,6 +549,26 @@ void alloc_mref(ImageParameters *img)
     if ((mcef_fld = (byte****)calloc(fld->short_size+fld->long_size,sizeof(byte***))) == NULL)
       no_mem_exit("alloc_mref: mcef_fld");
   }
+
+
+  if (input->WeightedPrediction || input->WeightedBiprediction)
+  {
+    if (mref_frm_w) 
+      free (mref_frm_w);
+
+    if((mref_frm_w = (byte***)calloc(frm->short_size+frm->long_size,sizeof(byte**))) == NULL)
+      no_mem_exit("alloc_mref: mref_frm_w");
+
+    if(input->InterlaceCodingOption != FRAME_CODING)
+    {
+      if (mref_fld_w) 
+        free (mref_fld_w);
+
+      if ((mref_fld_w = (byte***)calloc(fld->short_size+fld->long_size,sizeof(byte**))) == NULL)
+        no_mem_exit("alloc_mref: mref_fld_w");
+    }
+  }
+
 }
 
 /*!
@@ -491,18 +577,22 @@ void alloc_mref(ImageParameters *img)
  *    init mref pointer structure
  ************************************************************************
  */
-void init_mref(ImageParameters *img)
+void init_mref()
 {
   int i,j;
 
   for (i=0,j=0;i<fb->short_used;i++,j++)
   {
     mref[j]=fb->picbuf_short[i]->mref;
+    if (input->WeightedPrediction || input->WeightedBiprediction)
+      mref_w[j]=fb->picbuf_short[i]->mref_w;
     mcef[j]=fb->picbuf_short[i]->mcef;
   }
   for (i=0;i<fb->long_used;i++,j++)
   {
     mref[j]=fb->picbuf_long[i]->mref;
+    if (input->WeightedPrediction || input->WeightedBiprediction)
+      mref_w[j]=fb->picbuf_long[i]->mref_w;
     mcef[j]=fb->picbuf_long[i]->mcef;
   }
 
@@ -510,6 +600,8 @@ void init_mref(ImageParameters *img)
   for (;j<fb->long_size+fb->short_size;j++)
   {
     mref[j]=NULL;
+    if (input->WeightedPrediction || input->WeightedBiprediction)
+      mref_w[j]=NULL;
     mcef[j]=NULL;
   }
   
@@ -538,7 +630,7 @@ void reorder_mref(ImageParameters *img)
   // if nothing to do update mref and return
   if (img->currentSlice->rmpni_buffer== NULL) 
   {
-    init_mref(img);
+    init_mref();
     init_Refbuf(img);
     return;
   }
@@ -646,6 +738,11 @@ void reorder_mref(ImageParameters *img)
     mref[i]=fr[i]->mref;
     mcef[i]=fr[i]->mcef;
     Refbuf11[i]=fr[i]->Refbuf11;
+    if (input->WeightedPrediction || input->WeightedBiprediction)
+    {
+      mref_w[i]=fr[i]->mref_w;
+      Refbuf11_w[i]=fr[i]->Refbuf11_w;
+    }
   }
 
   // free temporary memory
@@ -667,9 +764,15 @@ void alloc_Refbuf (ImageParameters *img)
   int num_frames = frm->long_size+frm->short_size;
  
   if (Refbuf11_frm) free (Refbuf11_frm);
+  if (input->WeightedBiprediction || input->WeightedPrediction)
+        if (Refbuf11_frm_w) free (Refbuf11_frm_w);
 
   if (NULL == (Refbuf11_frm = malloc (num_frames * sizeof (pel_t *))))
     no_mem_exit ("alloc_Refbuf: Refbuf11_frm");
+  
+  if (input->WeightedBiprediction || input->WeightedPrediction)
+          if (NULL == (Refbuf11_frm_w = malloc (num_frames * sizeof (pel_t *))))
+                no_mem_exit ("alloc_Refbuf: Refbuf11_frm_w");
   
   if(input->InterlaceCodingOption != FRAME_CODING)
   {
@@ -678,6 +781,9 @@ void alloc_Refbuf (ImageParameters *img)
 
     if (NULL == (Refbuf11_fld = malloc (num_frames * sizeof (pel_t *))))
       no_mem_exit ("alloc_Refbuf: Refbuf11_fld");
+        if (input->WeightedBiprediction || input->WeightedPrediction)
+            if (NULL == (Refbuf11_fld_w = malloc (num_frames * sizeof (pel_t *))))
+                        no_mem_exit ("alloc_Refbuf: Refbuf11_fld_w");
   }
 }
 
@@ -694,18 +800,25 @@ void init_Refbuf(ImageParameters *img)
   for (i=0,j=0;i<fb->short_used;i++)
   {
     Refbuf11[j]=fb->picbuf_short[i]->Refbuf11;
+        if (input->WeightedBiprediction || input->WeightedPrediction)
+                Refbuf11_w[j]=fb->picbuf_short[i]->Refbuf11_w;
     j++;
   }
   for (i=0;i<fb->long_size;i++)
   {
     Refbuf11[j]=fb->picbuf_long[i]->Refbuf11;
+        if (input->WeightedBiprediction || input->WeightedPrediction)
+            Refbuf11_w[j]=fb->picbuf_long[i]->Refbuf11_w;
     j++;
   }
   for (;j<fb->long_size+fb->short_size;j++)
   {
     Refbuf11[j]=NULL;
+        if (input->WeightedBiprediction || input->WeightedPrediction)
+                Refbuf11_w[j]=NULL;
   }
 }
+
 
 /*!
  ************************************************************************
@@ -762,8 +875,8 @@ void add_frame(ImageParameters *img)
   fb->picbuf_short[0]->lt_picID=-1;
 
   // indicate which layer and sub-seq current ref frame comes from.
-  fb->picbuf_short[0]->layer_no=currPictureInfo.refFromLayerNumber;
-  fb->picbuf_short[0]->sub_seq_no=currPictureInfo.refFromSubSequenceIdentifier;
+//  fb->picbuf_short[0]->layer_no=currPictureInfo.refFromLayerNumber;
+//  fb->picbuf_short[0]->sub_seq_no=currPictureInfo.refFromSubSequenceIdentifier;
 
   (fb->short_used)++;
   if (fb->short_used>fb->short_size)
@@ -791,7 +904,11 @@ void copy_mref()
     for (i=0;i<fld->short_used;i++)
       for (j=0;j<4*(input->img_height/2 + 2*IMG_PAD_SIZE);j++)
         for(k=0;k<4*(img->width + 2*IMG_PAD_SIZE);k++)
+        {
           mref_mbfld[i][j][k] = fld->picbuf_short[i]->mref[j][k];
+          if (input->WeightedPrediction || input->WeightedBiprediction)
+            mref_mbfld_w[i][j][k] = fld->picbuf_short[i]->mref_w[j][k];
+        }
 
     // still need to do this regardless of mref==mref_fld is used or not
     if(mref != mref_fld)
@@ -799,12 +916,16 @@ void copy_mref()
       for (i=0,j=0;i<fld->short_used;i++)
       {
         mref_fld[j]=fld->picbuf_short[i]->mref;
+        if (input->WeightedPrediction || input->WeightedBiprediction)
+          mref_fld_w[j]=fld->picbuf_short[i]->mref_w;
         mcef_fld[j]=fld->picbuf_short[i]->mcef;
         j++;
       }
       for (i=0;i<fld->long_used;i++)
       {
         mref_fld[j]=fld->picbuf_long[i]->mref;
+        if (input->WeightedPrediction || input->WeightedBiprediction)
+          mref_fld_w[j]=fld->picbuf_long[i]->mref_w;
         mcef_fld[j]=fld->picbuf_long[i]->mcef;
         j++;
       }
@@ -813,6 +934,8 @@ void copy_mref()
       for (;j<fld->long_size+fld->short_size;j++)
       {
         mref_fld[j]=NULL;
+        if (input->WeightedPrediction || input->WeightedBiprediction)
+          mref_fld_w[j]=NULL;
         mcef_fld[j]=NULL;
       }
       
@@ -820,17 +943,85 @@ void copy_mref()
       for (i=0,j=0;i<fld->short_used;i++)
       {
         Refbuf11_fld[j]=fld->picbuf_short[i]->Refbuf11;
+        if (input->WeightedBiprediction || input->WeightedPrediction)
+                   Refbuf11_fld_w[j]=fld->picbuf_short[i]->Refbuf11_w;
         j++;
       }
       for (i=0;i<fld->long_size;i++)
       {
         Refbuf11_fld[j]=fld->picbuf_long[i]->Refbuf11;
+        if (input->WeightedBiprediction || input->WeightedPrediction)
+              Refbuf11_fld_w[j]=fld->picbuf_long[i]->Refbuf11_w;
         j++;
       }
       for (;j<fld->long_size+fld->short_size;j++)
       {
         Refbuf11_fld[j]=NULL;
+        if (input->WeightedBiprediction || input->WeightedPrediction)
+                Refbuf11_fld_w[j]=NULL;
       }
     }
   }
 }
+
+
+void alloc_ref_pic_list_reordering_buffer(Slice *currSlice)
+{
+  int size = img->num_ref_pic_active_fwd_minus1+1;
+
+  if (img->type!=INTRA_IMG /* && img->type!=SI_IMG */)
+  {
+    if ((currSlice->remapping_of_pic_nums_idc_l0 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: remapping_of_pic_nums_idc_l0");
+    if ((currSlice->abs_diff_pic_num_minus1_l0 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: abs_diff_pic_num_minus1_l0");
+    if ((currSlice->long_term_pic_idx_l0 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: long_term_pic_idx_l0");
+  }
+  else
+  {
+    currSlice->remapping_of_pic_nums_idc_l0 = NULL;
+    currSlice->abs_diff_pic_num_minus1_l0 = NULL;
+    currSlice->long_term_pic_idx_l0 = NULL;
+  }
+  
+  size = img->num_ref_pic_active_bwd_minus1+1;
+
+  if (img->type!=B_IMG)
+  {
+    if ((currSlice->remapping_of_pic_nums_idc_l1 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: remapping_of_pic_nums_idc_l1");
+    if ((currSlice->abs_diff_pic_num_minus1_l1 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: abs_diff_pic_num_minus1_l1");
+    if ((currSlice->long_term_pic_idx_l1 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: long_term_pic_idx_l1");
+  }
+  else
+  {
+    currSlice->remapping_of_pic_nums_idc_l1 = NULL;
+    currSlice->abs_diff_pic_num_minus1_l1 = NULL;
+    currSlice->long_term_pic_idx_l1 = NULL;
+  }
+}
+
+
+void free_ref_pic_list_reordering_buffer(Slice *currSlice)
+{
+
+  if (currSlice->remapping_of_pic_nums_idc_l0) 
+    free(currSlice->remapping_of_pic_nums_idc_l0);
+  if (currSlice->abs_diff_pic_num_minus1_l0)
+    free(currSlice->abs_diff_pic_num_minus1_l0);
+  if (currSlice->long_term_pic_idx_l0)
+    free(currSlice->long_term_pic_idx_l0);
+
+  currSlice->remapping_of_pic_nums_idc_l0 = NULL;
+  currSlice->abs_diff_pic_num_minus1_l0 = NULL;
+  currSlice->long_term_pic_idx_l0 = NULL;
+  
+  if (currSlice->remapping_of_pic_nums_idc_l1)
+    free(currSlice->remapping_of_pic_nums_idc_l1);
+  if (currSlice->abs_diff_pic_num_minus1_l1)
+    free(currSlice->abs_diff_pic_num_minus1_l1);
+  if (currSlice->long_term_pic_idx_l1)
+    free(currSlice->long_term_pic_idx_l1);
+  
+  currSlice->remapping_of_pic_nums_idc_l1 = NULL;
+  currSlice->abs_diff_pic_num_minus1_l1 = NULL;
+  currSlice->long_term_pic_idx_l1 = NULL;
+}
+

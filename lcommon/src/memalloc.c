@@ -145,6 +145,29 @@ int get_mem3Dint(int ****array3D, int frames, int rows, int columns)
 /*!
  ************************************************************************
  * \brief
+ *    Allocate 4D memory array -> int array3D[frames][rows][columns][component]
+ *
+ * \par Output:
+ *    memory size in bytes
+ ************************************************************************
+ */
+// same change as in get_mem2Dint
+int get_mem4Dint(int *****array4D, int idx, int frames, int rows, int columns )
+{
+  int  j;
+
+  if(((*array4D) = (int****)calloc(idx,sizeof(int**))) == NULL)
+    no_mem_exit("get_mem4Dint: array4D");
+
+  for(j=0;j<idx;j++)
+    get_mem3Dint( (*array4D)+j, frames, rows, columns ) ;
+
+  return idx*frames*rows*columns*sizeof(int);
+}
+
+/*!
+ ************************************************************************
+ * \brief
  *    free 2D memory array
  *    which was alocated with get_mem2D()
  ************************************************************************

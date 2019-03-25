@@ -87,11 +87,7 @@ LINK32=link.exe
 # PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
 # Begin Source File
 
-SOURCE=.\ldecod\src\abt.c
-# End Source File
-# Begin Source File
-
-SOURCE=.\ldecod\src\abt_const.c
+SOURCE=.\ldecod\src\annexb.c
 # End Source File
 # Begin Source File
 
@@ -100,10 +96,6 @@ SOURCE=.\ldecod\src\b_frame.c
 # Begin Source File
 
 SOURCE=.\ldecod\src\biaridecod.c
-# End Source File
-# Begin Source File
-
-SOURCE=.\ldecod\src\bitsbuf.c
 # End Source File
 # Begin Source File
 
@@ -140,10 +132,6 @@ SOURCE=.\ldecod\src\filehandle.c
 # Begin Source File
 
 SOURCE=.\ldecod\src\fmo.c
-# End Source File
-# Begin Source File
-
-SOURCE=.\ldecod\src\golomb_dec.c
 # End Source File
 # Begin Source File
 
@@ -187,7 +175,23 @@ SOURCE=.\ldecod\src\nal_part.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\ldecod\src\nalu.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lcommon\src\nalucommon.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\ldecod\src\output.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\ldecod\src\parset.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lcommon\src\parsetcommon.c
 # End Source File
 # Begin Source File
 
@@ -199,7 +203,7 @@ SOURCE=.\ldecod\src\sei.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\ldecod\src\uvlc.c
+SOURCE=.\ldecod\src\vlc.c
 # End Source File
 # End Group
 # Begin Group "Header Files"
@@ -207,7 +211,7 @@ SOURCE=.\ldecod\src\uvlc.c
 # PROP Default_Filter "h;hpp;hxx;hm;inl"
 # Begin Source File
 
-SOURCE=.\ldecod\inc\abt.h
+SOURCE=.\ldecod\inc\annexb.h
 # End Source File
 # Begin Source File
 
@@ -216,10 +220,6 @@ SOURCE=.\ldecod\inc\b_frame.h
 # Begin Source File
 
 SOURCE=.\ldecod\inc\biaridecod.h
-# End Source File
-# Begin Source File
-
-SOURCE=.\ldecod\inc\bitsbuf.h
 # End Source File
 # Begin Source File
 
@@ -271,10 +271,6 @@ SOURCE=.\ldecod\inc\global.h
 # End Source File
 # Begin Source File
 
-SOURCE=.\ldecod\inc\golomb_dec.h
-# End Source File
-# Begin Source File
-
 SOURCE=.\ldecod\inc\header.h
 # End Source File
 # Begin Source File
@@ -299,6 +295,22 @@ SOURCE=.\lcommon\inc\memalloc.h
 # End Source File
 # Begin Source File
 
+SOURCE=.\ldecod\inc\nalu.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lcommon\inc\nalucommon.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\ldecod\inc\parset.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lcommon\inc\parsetcommon.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\ldecod\inc\rtp.h
 # End Source File
 # Begin Source File
@@ -307,7 +319,7 @@ SOURCE=.\ldecod\inc\sei.h
 # End Source File
 # Begin Source File
 
-SOURCE=.\ldecod\inc\uvlc.h
+SOURCE=.\ldecod\inc\vlc.h
 # End Source File
 # End Group
 # Begin Source File

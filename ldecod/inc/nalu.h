@@ -1,6 +1,6 @@
 /*
 ***********************************************************************
-*  COPYRIGHT  AND  WARRANTY INFORMATION
+* COPYRIGHT AND WARRANTY INFORMATION
 *
 * Copyright 2001, International Telecommunications Union, Geneva
 *
@@ -30,39 +30,30 @@
 ************************************************************************
 */
 
-/*
- *************************************************************************************
+/*!
+ **************************************************************************************
  * \file
- *    golomb_dec.h
- *
+ *    parset.h
  * \brief
- *    Description
- *
+ *    Picture and Sequence Parameter Sets, encoder operations
+ *    This code reflects JVT version xxx
+ *  \date 25 November 2002
  * \author
- *    Main contributors (see contributors.h for copyright, address and affiliation details)
- *     -  Achim Dahlhoff      <dahlhoff@ient.rwth-aachen.de>
- *
- * \date
- *    Fri Mar 8 2002
- *
- *  copyright : (C) 2002      Institut und Lehrstuhl für Nachrichtentechnik
- *                            RWTH Aachen University
- *                            52072 Aachen
- *                            Germany
- *************************************************************************************
+ *    Main contributors (see contributors.h for copyright, address and affiliation details) 
+ *      - Stephan Wenger        <stewe@cs.tu-berlin.de>
+ ***************************************************************************************
  */
 
-#ifndef GOLOMB_H
-#define GOLOMB_H
 
-#include "global.h"
+#ifndef _NALU_H_
+#define _NALU_H_
 
-unsigned int decode_golomb_word(const unsigned char **buffer,unsigned int *bitoff,unsigned int grad0,unsigned int max_levels);
-unsigned int decode_multilayer_golomb_word(const unsigned char **buffer,unsigned int *bitoff,const unsigned int *grad0,const unsigned int *max_levels);
+#include <stdio.h>
+#include "nalucommon.h"
 
-
-
-int  readSyntaxElement_GOLOMB(SyntaxElement *sym, struct img_par *img, struct inp_par *inp, struct datapartition *dp);
+extern FILE *bits;
+int RBSPtoNALU (char *rbsp, NALU_t *nalu);
+int GetAnnexbNALU (NALU_t *nalu);
 
 
 #endif

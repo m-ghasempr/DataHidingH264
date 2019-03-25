@@ -152,7 +152,7 @@ int FmoInit (int xs, int ys, int NumSliceGroups, int FmoMode, int* MapData)
 
   if (NumSliceGroups == 0)         // One Slice Group == No FMO, scan order slices
   {
-    printf ("No FMO\n\n");
+//    printf ("No FMO\n\n");
     FmoGenerateDefaultMap (PictureXSize, PictureYSize, MBAmap);
   }
   else

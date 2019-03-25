@@ -121,7 +121,7 @@
 
 #include <assert.h>
 #include <stdlib.h>
-#include <malloc.h>
+#include <memory.h>
 #include <math.h>
 #include <string.h>
 #include <ctype.h>
@@ -129,11 +129,276 @@
 #include "global.h"
 #include "errorconcealment.h"
 #include "elements.h"
-#include "bitsbuf.h"
 #include "rtp.h"
 #include "fmo.h"
-#include "golomb_dec.h"
 #include "sei.h"
+#include "memalloc.h"
+
+
+FILE *bits;
+
+int RTPReadPacket (RTPpacket_t *p, FILE *bits);
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Opens the bit stream file named fn
+ * \return
+ *    none
+ ************************************************************************
+ */
+void OpenRTPFile (char *fn)
+{
+  if (NULL == (bits=fopen(fn, "rb")))
+  {
+    snprintf (errortext, ET_SIZE, "Cannot open RTP file '%s'", input->infile);
+    error(errortext,500);
+  }
+}
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Closes the bit stream file
+ ************************************************************************
+ */
+void CloseRTPFile()
+{
+  fclose (bits);
+}
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Fills nalu->buf and nalu->len with the payload of an RTP packet.  
+ *    Other fields in nalu-> remain uninitialized (will be taken care of 
+ *    by NALUtoRBSP.
+ *
+ * \return
+ *     4 in case of ok (for compatibility with GetAnnexbNALU)
+ *     0 if there is nothing any more to read (EOF)
+ *    -1 in case of any error
+ *
+ ************************************************************************
+ */
+
+int GetRTPNALU (NALU_t *nalu)
+{
+  RTPpacket_t *p;
+  int ret;
+
+  if ((p=malloc (sizeof (RTPpacket_t)))== NULL)
+    no_mem_exit ("GetRTPNALU-1");
+  if ((p->packet=malloc (MAXRTPPACKETSIZE))== NULL)
+    no_mem_exit ("GetRTPNALU-2");
+  if ((p->payload=malloc (MAXRTPPACKETSIZE))== NULL)
+    no_mem_exit ("GetRTPNALU-3");
+
+  ret = RTPReadPacket (p, bits);
+  nalu->forbidden_bit = 1;
+  nalu->len = 0;
+  
+  if (ret < 0)
+    return -1;
+  if (ret == 0)
+    return 0;
+
+  assert (nalu->len < MAXNALUSIZE);
+
+  nalu->len = p->paylen;
+  memcpy (nalu->buf, p->payload, p->paylen);
+  nalu->forbidden_bit = (nalu->buf[0]>>7) & 1;
+  nalu->nal_reference_idc = (nalu->buf[0]>>5) & 3;
+  nalu->nal_unit_type = (nalu->buf[0]) & 0x1f;
+
+//  printf ("Got an RTP NALU, len %d, first byte %x\n", nalu->len, nalu->buf[0]);
+  return nalu->len;
+}
+
+
+
+/*!
+ *****************************************************************************
+ *
+ * \brief 
+ *    DecomposeRTPpacket interprets the RTP packet and writes the various
+ *    structure members of the RTPpacket_t structure
+ *
+ * \return
+ *    0 in case of success
+ *    negative error code in case of failure
+ *
+ * \para Parameters
+ *    Caller is responsible to allocate enough memory for the generated payload
+ *    in parameter->payload. Typically a malloc of paclen-12 bytes is sufficient
+ *
+ * \para Side effects
+ *    none
+ *
+ * \date
+ *    30 Spetember 2001
+ *
+ * \author
+ *    Stephan Wenger   stewe@cs.tu-berlin.de
+ *****************************************************************************/
+
+int DecomposeRTPpacket (RTPpacket_t *p)
+
+{
+  // consistency check 
+  assert (p->packlen < 65536 - 28);  // IP, UDP headers
+  assert (p->packlen >= 12);         // at least a complete RTP header
+  assert (p->payload != NULL);
+  assert (p->packet != NULL);
+
+  // Extract header information
+
+  p->v  = p->packet[0] & 0x3;
+  p->p  = (p->packet[0] & 0x4) >> 2;
+  p->x  = (p->packet[0] & 0x8) >> 3;
+  p->cc = (p->packet[0] & 0xf0) >> 4;
+
+  p->m  = p->packet[1] & 0x1;
+  p->pt = (p->packet[1] & 0xfe) >> 1;
+
+  p->seq = p->packet[2] | (p->packet[3] << 8);
+
+  memcpy (&p->timestamp, &p->packet[4], 4);// change to shifts for unified byte sex
+  memcpy (&p->ssrc, &p->packet[8], 4);// change to shifts for unified byte sex
+
+  // header consistency checks
+  if (     (p->v != 2)
+        || (p->p != 0)
+        || (p->x != 0)
+        || (p->cc != 0) )
+  {
+    printf ("DecomposeRTPpacket, RTP header consistency problem, header follows\n");
+    DumpRTPHeader (p);
+    return -1;
+  }
+  p->paylen = p->packlen-12;
+  memcpy (p->payload, &p->packet[12], p->paylen);
+  return 0;
+}
+
+/*!
+ *****************************************************************************
+ *
+ * \brief 
+ *    DumpRTPHeader is a debug tool that dumps a human-readable interpretation
+ *    of the RTP header
+ *
+ * \return
+ *    n.a.
+ * \para Parameters
+ *    the RTP packet to be dumped, after DecompositeRTPpacket()
+ *
+ * \para Side effects
+ *    Debug output to stdout
+ *
+ * \date
+ *    30 Spetember 2001
+ *
+ * \author
+ *    Stephan Wenger   stewe@cs.tu-berlin.de
+ *****************************************************************************/
+
+void DumpRTPHeader (RTPpacket_t *p)
+
+{
+  int i;
+  for (i=0; i< 30; i++)
+    printf ("%02x ", p->packet[i]);
+  printf ("Version (V): %d\n", p->v);
+  printf ("Padding (P): %d\n", p->p);
+  printf ("Extension (X): %d\n", p->x);
+  printf ("CSRC count (CC): %d\n", p->cc);
+  printf ("Marker bit (M): %d\n", p->m);
+  printf ("Payload Type (PT): %d\n", p->pt);
+  printf ("Sequence Number: %d\n", p->seq);
+  printf ("Timestamp: %d\n", p->timestamp);
+  printf ("SSRC: %d\n", p->ssrc);
+}
+
+
+/*!
+ *****************************************************************************
+ *
+ * \brief 
+ *    RTPReadPacket reads one packet from file
+ *
+ * \return
+ *    0: EOF
+ *    negative: error
+ *    positive: size of RTP packet in bytes
+ *
+ * \para Paremeters
+ *    p: packet data structure, with memory for p->packet allocated
+ *
+ * Side effects:
+ *   - File pointer in bits moved
+ *   - p->xxx filled by reading and Decomposepacket()
+ *
+ * \date
+ *    04 November, 2001
+ *
+ * \author
+ *    Stephan Wenger, stewe@cs.tu-berlin.de
+ *****************************************************************************/
+
+int RTPReadPacket (RTPpacket_t *p, FILE *bits)
+{
+  int Filepos, intime;
+
+  assert (p != NULL);
+  assert (p->packet != NULL);
+  assert (p->payload != NULL);
+
+  Filepos = ftell (bits);
+  if (4 != fread (&p->packlen,1, 4, bits))
+    {
+      return 0;
+    }
+    
+  if (4 != fread (&intime, 1, 4, bits))
+    {
+      fseek (bits, Filepos, SEEK_SET);
+      printf ("RTPReadPacket: File corruption, could not read Timestamp, exit\n");
+      exit (-1);
+    }
+
+  assert (p->packlen < MAXRTPPACKETSIZE);
+
+  if (p->packlen != fread (p->packet, 1, p->packlen, bits))
+    {
+      printf ("RTPReadPacket: File corruption, could not read %d bytes\n", p->packlen);
+      exit (-1);    // EOF inidication
+    }
+
+  if (DecomposeRTPpacket (p) < 0)
+    {
+      // this should never happen, hence exit() is ok.  We probably do not want to attempt
+      // to decode a packet that obviously wasn't generated by RTP
+      printf ("Errors reported by DecomposePacket(), exit\n");
+      exit (-700);
+    }
+    assert (p->pt == H26LPAYLOADTYPE);
+    assert (p->ssrc == 0x12345678);
+  return p->packlen;
+}
+
+
+
+
+
+
+
+
+
+
+#if 0
 
 extern void tracebits(const char *trace_str,  int len,  int info,int value1,
     int value2) ;
@@ -403,7 +668,7 @@ int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
   
   buf = currSlice->partArr[0].bitstream->streamBuffer;
 
-  if(inp->symbol_mode == CABAC)
+  if(active_pps->entropy_coding_mode == CABAC)
   {
     dep = &((currSlice->partArr[0]).de_cabac);
     arideco_start_decoding(dep, buf, 0, &currSlice->partArr[0].bitstream->read_len, img->type);
@@ -430,576 +695,6 @@ assert (b_frame == 0);
   return FALSE;
 }
 
-#if 0
-/*! This is the old ReadRTPPacket routine.  It contains some code that
-    helps the error concealment in case there is a loss in the first
-    I frame.  It also has some other concealment code I don't understand.
-    I believe, most of the code is redundant for the RTP file format,
-    and the bitstream file format is not error resilient anyway, so why
-    bother.  But I may be wrong, hence the code is here, so that one could
-    steal parts of it.
-    Please don't simply comments it in, and the currently acrtive routine
-    out.  There are numerous small bug fixes in the code above, which
-    should be kept.  Also the FMO support.  If anyone wants (or needs) to 
-    touch this code, please contact me so that we can talk it through.
-    Thanks, Stephan
-    stewe@cs.tu-berlin.de
-*/
-  
-/*!
- ************************************************************************
- * \brief
- *    read all partitions of one slice from RTP packet stream, also handle
- *    any Parameter Update packets and SuUPP-Packets
- * \return
- *    -1 for EOF                                              \n
- *    Partition-Bitmask otherwise:
- *    Partition Bitmask: 0x1: Full Slice, 0x2: type A, 0x4: Type B 
- *                       0x8: Type C
- ************************************************************************
- */
-int ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits)
-{
-  Slice *currSlice = img->currentSlice;
-  DecodingEnvironmentPtr dep;
-  byte *buf;
-  static int first=1;
-  RTPpacket_t *p, *nextp;
-  RTPSliceHeader_t *sh, *nextsh;
-  int MBDataIndex;
-  int done = 0;
-  int err, back=0;
-  static int last_pframe=0, bframe_to_code=0;
-  int b_interval;
-  int FirstMacroblockInSlice;
-  static int b_frame = FALSE;
-  static int first_slice = FALSE;
-
-  assert (currSlice != NULL);
-  assert (bits != 0);
-
-  // Tenporal storage for this function only
-
-  p=alloca (sizeof (RTPpacket_t));      // the RTP packet
-  p->packet=alloca (MAXRTPPACKETSIZE);
-  p->payload=alloca (MAXRTPPAYLOADLEN);
-  nextp=alloca (sizeof (RTPpacket_t));  
-  sh=alloca(sizeof (RTPSliceHeader_t));
-  sh->RMPNIbuffer=NULL;
-  sh->MMCObuffer=NULL;
-
-  nextsh=alloca(sizeof (RTPSliceHeader_t));
-  nextsh->RMPNIbuffer=NULL;
-  nextsh->MMCObuffer=NULL;
-
-  ExpectedMBNr = img->current_mb_nr;
-  LastPicID = img->tr;
-
-  done = 0;
-  do  
-  {
-//    Filepos = ftell (bits);             // to be able to go back one packet
-      
-    if (RTPReadPacket (p, bits) < 0)    // Read and decompose
-      return -4711;
-
-    if (p->payload[0] == (PAYLOAD_TYPE_IDERP<<4) && fb != NULL && frm != NULL )  // Tian Dong: IDERP, JVT-C083
-    {
-      reset_buffers();
-      frm->picbuf_short[0]->used=0;
-      frm->picbuf_short[0]->picID=-1;
-      frm->picbuf_short[0]->lt_picID=-1;
-      frm->short_used=0;
-    }
-    switch (p->payload[0] & 0xf)
-    {
-    case 0:       // Full Slice packet
-    case 1:       // Partition type A packet
-      done = 1;
-      break;
- 
-    case 2:       // Partition B
-    case 3:       // Partition C
-      // Do nothing.  this results in discarding the unexpected Partition B, C
-      // packet, which will later be concealed "automatically", because when
-      // interpreting the next Partition A or full slice packet a range of
-      // lost blocks is found which will be concealed in the usual manner.
-      //
-      // If anyonme comes up with an idea how to use coefficients without the
-      // header information then this code has to be changed
-      printf ("found unexpected Partition %c packet, skipping\n", (p->payload[0]&0xf)==2?'B':'C');
-      break;
-    case 4:
-      //! Compound packets may be handled here, but I (StW) would personally prefer and
-      //! recommend to handle them externally, by a pre-processor tool.  For now,
-      //! compounds lead to exit()
-      printf ("Compound packets not yet implemented, exit\n");
-      exit (-700);
-      break;
-    case 5:
-      //! Add implementation of SUPP packets here
-      printf ("SUPP packets not yet implemented, skipped\n");
-      break;
-    case 6:
-      printf ("Found header packet\n");
-
-      if ((err = RTPInterpretParameterSetPacket (&p->payload[1], p->paylen-1)) < 0)
-      {
-        printf ("RTPInterpretParameterSetPacket returns error %d\n", err);
-      }
-      break;
-    default:
-      printf ("Undefined packet type %d found, skipped\n", p->payload[0] & 0xf);
-      assert (0==1);
-      break;
-    }
-  } while (!done);
-
-  // Here, all the non-video data packets and lonely type B, C partitions
-  // are handled.  Now work on the expected type A and full slice packets
-
-  assert ((p->payload[0] & 0xf) < 2);
-
-  if ((p->payload[0] & 0xf) == 0)       // Full Slice packet
-  {
-    currSlice->ei_flag = 0;
-    MBDataIndex = 1;                    // Skip First Byte
-    MBDataIndex += RTPInterpretSliceHeader (&p->payload[1], p->paylen-1, 0, sh);
-  }
-  else                                  // Partition A packet
-  {
-    currSlice->ei_flag = 0;
-    MBDataIndex = 1;                    // Skip First Byte
-    MBDataIndex += RTPInterpretSliceHeader (&p->payload[1], p->paylen-1, 1, sh);
-  }
-
-
-  FirstMacroblockInSlice = sh->FirstMBInSliceY * (img->width/16) + 
-                               sh->FirstMBInSliceX;   //! assumes picture sizes divisble by 16
-  // The purpose of the following if cascade is to check for a lost
-  // segment  of macroblocks.  if such a segment is found, a dummy slice
-  // without content, but with ei_flag set is generated in order to trigger
-  // concealment.
-  if(first)
-  {
-    first = FALSE;
-    bframe_to_code = InfoSet.NumberBFrames+1;
-    currSlice->max_part_nr = MAX_PART_NR;   // Just to get a start
-    ExpectedMBNr = 0;
-    LastPicID = -1;
-  }
-  // slightly different handling for first slice that is received
-  // necessary for the case we loose this first slice or even the whole first frame
-  if(first_slice == FALSE)
-  {
-    first_slice = TRUE;
-    b_frame = FALSE;
-    img->pn = 0;
-    if(sh->PictureID == 0)
-    {
-      if(FirstMacroblockInSlice == 0)
-        currSlice->partArr[0].bitstream->ei_flag = 0; // everything seems to be ok.
-      else
-      {
-        back=p->packlen+8;                // Unread the packet
-        fseek (bits, -back, SEEK_CUR);    
-        currSlice->ei_flag = 1;
-        currSlice->dp_mode = PAR_DP_1;
-        currSlice->start_mb_nr = ExpectedMBNr;
-        currSlice->next_header = RTPGetFollowingSliceHeader (img, nextp, nextsh);
-          
-        img->tr = currSlice->picture_id = last_pframe = sh->PictureID;
-        img->type = INTRA_IMG;
-        img->pn = 0;
-        bframe_to_code = 1;
- 
-        currSlice->start_mb_nr = 0;
-#if _ERROR_CONCEALMENT_
-        currSlice->last_mb_nr = FirstMacroblockInSlice-1;
-#else
-        currSlice->last_mb_nr = FirstMacroblockInSlice;
-#endif
-        currSlice->partArr[0].bitstream->bitstream_length=0;
-        currSlice->partArr[0].bitstream->read_len=0;
-        currSlice->partArr[0].bitstream->code_len=0;
-        currSlice->partArr[0].readSyntaxElement = readSyntaxElement_RTP;
-
-        return 0;
-      }
-    }
-    else
-    {
-      back=p->packlen+8;                // Unread the packet
-      fseek (bits, -back, SEEK_CUR);    
-      currSlice->ei_flag = 1;
-      currSlice->dp_mode = PAR_DP_1;
-      currSlice->start_mb_nr = ExpectedMBNr;
-      currSlice->next_header = RTPGetFollowingSliceHeader (img, nextp, nextsh);
-          
-      img->tr = currSlice->picture_id = last_pframe = 0;
-      img->type = INTRA_IMG;
-      img->pn = 0;
-      bframe_to_code = 1;
-
-      img->max_mb_nr = (img->width * img->height) / (MB_BLOCK_SIZE * MB_BLOCK_SIZE);
-#if _ERROR_CONCEALMENT_
-      currSlice->last_mb_nr = img->max_mb_nr-1;
-#else
-      currSlice->last_mb_nr = img->max_mb_nr;
-#endif
-      currSlice->partArr[0].bitstream->bitstream_length=0;
-      currSlice->partArr[0].bitstream->read_len=0;
-      currSlice->partArr[0].bitstream->code_len=0;
-      currSlice->partArr[0].readSyntaxElement = readSyntaxElement_RTP;
-
-      return 0;
-    }
-  }
-  else
-  {
-    if (LastPicID == sh->PictureID)   // we are in the same picture
-    {
-      if (ExpectedMBNr == FirstMacroblockInSlice)
-      {
-        currSlice->partArr[0].bitstream->ei_flag = 0;    // everything seems to be ok.
-      }
-      else
-      {
-        if (FirstMacroblockInSlice == 0)
-        {
-          assert ("weird! PicID wrap around?  Should not happen\n");
-        }
-        else
-        {
-          //printf ("SLICE LOSS 1: Slice loss at PicID %d, macoblocks %d to %d\n",LastPicID, ExpectedMBNr, FirstMacroblockInSlice-1);
-          back=p->packlen+8;
-          fseek (bits, -back, SEEK_CUR);    
-
-          //FirstMacroblockInSlice = (img->width*img->height)/(16*16);
-          currSlice->ei_flag = 1;
-          currSlice->dp_mode = PAR_DP_1;
-          currSlice->start_mb_nr = ExpectedMBNr;
-          //! just the same slice we just read!
-          currSlice->next_header = RTPGetFollowingSliceHeader (img, nextp, nextsh); 
-          assert (currSlice->start_mb_nr == img->current_mb_nr); 
-  #if _ERROR_CONCEALMENT_
-          currSlice->last_mb_nr = FirstMacroblockInSlice-1;
-  #else
-          currSlice->last_mb_nr = FirstMacroblockInSlice;
-  #endif
-          currSlice->partArr[0].bitstream->bitstream_length=0;
-          currSlice->partArr[0].bitstream->read_len=0;
-          currSlice->partArr[0].bitstream->code_len=0;
-          currSlice->partArr[0].bitstream->ei_flag=1;
-          
-          img->tr = currSlice->picture_id = LastPicID;
-         
-          return 0;
-        }
-      }
-    }
-    else      // we are in a different picture
-    {
-      b_interval = (int)((float)(InfoSet.FrameSkip +1)/(float)(InfoSet.NumberBFrames +1) + 0.49999);
-      if (ExpectedMBNr == 0)    // the old picture was finished
-      {
-        if (((last_pframe + InfoSet.FrameSkip +1)%256) == sh->PictureID && 
-             (bframe_to_code > InfoSet.NumberBFrames)) //! we received a new P-Frame and coded all B-Frames
-        {
-          if(InfoSet.NumberBFrames)
-          {
-            bframe_to_code = 1;
-            last_pframe = sh->PictureID-(InfoSet.FrameSkip +1);
-          }
-          else
-            last_pframe = sh->PictureID;
-
-          if(last_pframe < 0)
-            last_pframe += 256;
-          b_frame = FALSE;
-        }
-        else if(sh->PictureID == ((last_pframe + b_interval*bframe_to_code)%256) && InfoSet.NumberBFrames) //! we received a B-Frame
-        {
-          bframe_to_code ++;
-          b_frame = TRUE;
-          if(bframe_to_code > InfoSet.NumberBFrames)
-            last_pframe += (InfoSet.FrameSkip +1);
-        }
-        else if(sh->PictureID == last_pframe+1 && p->payload[0] == (PAYLOAD_TYPE_IDERP<<4) )
-        // Tian Dong: an IDERP picture is here.
-        {
-          last_pframe = sh->PictureID;
-          bframe_to_code = InfoSet.NumberBFrames+1;
-          b_frame = FALSE;
-        }
-        else //! we lost at least one whole frame
-        {
-          //printf ("SLICE LOSS 4: Slice loss at PicID %d containing the whole frame\n", LastPicID + InfoSet.FrameSkip +1); 
-          back=p->packlen+8;                // Unread the packet
-          fseek (bits, -back, SEEK_CUR);    
-          currSlice->ei_flag = 1;
-          currSlice->dp_mode = PAR_DP_1;
-          currSlice->start_mb_nr = ExpectedMBNr;
-          currSlice->next_header = RTPGetFollowingSliceHeader (img, nextp, nextsh); 
-          currSlice->partArr[0].readSyntaxElement = readSyntaxElement_RTP;
-          assert (currSlice->start_mb_nr == img->current_mb_nr); 
-
-  #if _ERROR_CONCEALMENT_
-          currSlice->last_mb_nr = img->max_mb_nr-1;
-  #else
-          currSlice->last_mb_nr = img->max_mb_nr;
-  #endif
-          currSlice->partArr[0].bitstream->bitstream_length=0;
-          currSlice->partArr[0].bitstream->read_len=0;
-          currSlice->partArr[0].bitstream->code_len=0;
-
-          if(!InfoSet.NumberBFrames || (bframe_to_code > InfoSet.NumberBFrames)) //! we expect a P-Frame
-          {
-            img->tr = currSlice->picture_id = (last_pframe + InfoSet.FrameSkip +1)%256;
-            img->type = INTER_IMG_1;
-            if(InfoSet.NumberBFrames)
-            {
-              last_pframe = img->tr-(InfoSet.FrameSkip +1);
-              bframe_to_code = 1;
-            }
-            else
-              last_pframe = img->tr;
-          
-            if(last_pframe < 0)
-              last_pframe += 256;
-            b_frame = FALSE;
-            img->pn++;
-          }
-          else //! we expect a B-Frame
-          {
-            img->tr = currSlice->picture_id = (last_pframe + b_interval*bframe_to_code)%256;
-            img->type = B_IMG_1;
-            bframe_to_code ++;
-            if(bframe_to_code > InfoSet.NumberBFrames)
-              last_pframe += (InfoSet.FrameSkip +1);
-          }
-        
-          return 0;
-        }
-        if(FirstMacroblockInSlice == 0)
-        {
-          currSlice->partArr[0].bitstream->ei_flag = 0; // everything seems to be ok.
-        }
-        else //! slice loss from the begining of the frame
-        {
-          //printf ("SLICE LOSS 2: Slice loss at PicID %d, beginning of picture to macroblock %d\n", LastPicID, FirstMacroblockInSlice); 
-          back=p->packlen+8;                // Unread the packet
-          fseek (bits, -back, SEEK_CUR);    
-          currSlice->ei_flag = 1;
-          currSlice->dp_mode = PAR_DP_1;
-          currSlice->start_mb_nr = ExpectedMBNr;
-          currSlice->next_header = RTPGetFollowingSliceHeader (img, nextp, nextsh); 
-          assert (currSlice->start_mb_nr == img->current_mb_nr); 
-
-  #if _ERROR_CONCEALMENT_
-          currSlice->last_mb_nr = FirstMacroblockInSlice-1;
-  #else
-          currSlice->last_mb_nr = FirstMacroblockInSlice;
-  #endif
-          currSlice->partArr[0].bitstream->bitstream_length=0;
-          currSlice->partArr[0].bitstream->read_len=0;
-          currSlice->partArr[0].bitstream->code_len=0;
-          currSlice->partArr[0].readSyntaxElement = readSyntaxElement_RTP;
-        
-          img->tr = currSlice->picture_id = sh->PictureID;
-          if(b_frame == FALSE) //! we expect a P-Frame
-          {
-            img->type = INTER_IMG_1;
-            img->pn++;
-          }  
-          else
-            img->type = B_IMG_1;
-        
-          return 0;
-        }
-      }
-      else //we did not finish the old frame
-      {
-        //upprintf ("SLICE LOSS 3: Slice loss at PicID %d, macroblocks %d to end of picture\n", LastPicID, ExpectedMBNr); 
-        back=p->packlen+8;                // Unread the packet
-        fseek (bits, -back, SEEK_CUR);    
-        currSlice->ei_flag = 1;
-        currSlice->dp_mode = PAR_DP_1;
-        currSlice->start_mb_nr = ExpectedMBNr;
-        currSlice->next_header = RTPGetFollowingSliceHeader (img, nextp, nextsh); 
-        assert (currSlice->start_mb_nr == img->current_mb_nr); 
-  #if _ERROR_CONCEALMENT_
-        currSlice->last_mb_nr = img->max_mb_nr-1;
-  #else
-        currSlice->last_mb_nr = img->max_mb_nr;
-  #endif
-        currSlice->partArr[0].bitstream->bitstream_length=0;
-        currSlice->partArr[0].bitstream->read_len=0;
-        currSlice->partArr[0].bitstream->code_len=0;
-        currSlice->partArr[0].readSyntaxElement = readSyntaxElement_RTP;
-      
-        img->tr = currSlice->picture_id = LastPicID;
-      
-        return 0;
-      }
-    }
-  }
-
-  // Here, all concealment is done and we have either a type A partition 
-  // packet or a full slice packet, which need to be worked on
-    
-  RTPUseParameterSet (sh->ParameterSet, img, inp);
-  RTPSetImgInp(img, inp, sh);
-
-  free_Partition (currSlice->partArr[0].bitstream);
-
-  assert (p->paylen-MBDataIndex >= 0);
-      
-  currSlice->partArr[0].bitstream->read_len = 0;
-  currSlice->partArr[0].bitstream->code_len = p->paylen-MBDataIndex;        // neu
-  currSlice->partArr[0].bitstream->bitstream_length = p->paylen-MBDataIndex;
-
-  memcpy (currSlice->partArr[0].bitstream->streamBuffer, &p->payload[MBDataIndex],p->paylen-MBDataIndex);
-
-  p->paylen = MBDataIndex + EBSPtoRBSP(currSlice->partArr[0].bitstream->streamBuffer, p->paylen - MBDataIndex, 0);
-  p->paylen = MBDataIndex + RBSPtoSODB(currSlice->partArr[0].bitstream->streamBuffer, p->paylen - MBDataIndex);
-  currSlice->partArr[0].bitstream->bitstream_length = p->paylen-MBDataIndex;
-
-  buf = currSlice->partArr[0].bitstream->streamBuffer;
-
-  if(inp->symbol_mode == CABAC)
-  {
-    dep = &((currSlice->partArr[0]).de_cabac);
-    arideco_start_decoding(dep, buf, 0, &currSlice->partArr[0].bitstream->read_len, img->type);
-  }
-      
-  currSlice->next_header = RTPGetFollowingSliceHeader (img, nextp, nextsh); // no use for the info in nextp, nextsh yet. 
-  
-  if ((p->payload[0]&0xf) == 0  || b_frame)         // Full Slice Packet or B-Frame
-  {
-    currSlice->dp_mode = PAR_DP_1;
-    currSlice->max_part_nr=1;
-    return 1;
-  }
-  else
-  {
-    currSlice->dp_mode = PAR_DP_3;
-    currSlice->max_part_nr = 3;
-    RTPProcessDataPartitionedSlice (img, inp, bits, p, sh->SliceID);
-    return 3;
-
-  }
-
-  return FALSE;
-}
-#endif
-
-/*!
- *****************************************************************************
- *
- * \brief 
- *    DecomposeRTPpacket interprets the RTP packet and writes the various
- *    structure members of the RTPpacket_t structure
- *
- * \return
- *    0 in case of success
- *    negative error code in case of failure
- *
- * \para Parameters
- *    Caller is responsible to allocate enough memory for the generated payload
- *    in parameter->payload. Typically a malloc of paclen-12 bytes is sufficient
- *
- * \para Side effects
- *    none
- *
- * \para Other Notes
- *    Function contains assert() tests for debug purposes (consistency checks
- *    for RTP header fields)
- *
- * \date
- *    30 Spetember 2001
- *
- * \author
- *    Stephan Wenger   stewe@cs.tu-berlin.de
- *****************************************************************************/
-
-int DecomposeRTPpacket (RTPpacket_t *p)
-
-{
-  // consistency check 
-  assert (p->packlen < 65536 - 28);  // IP, UDP headers
-  assert (p->packlen >= 12);         // at least a complete RTP header
-  assert (p->payload != NULL);
-  assert (p->packet != NULL);
-
-  // Extract header information
-
-  p->v  = p->packet[0] & 0x3;
-  p->p  = (p->packet[0] & 0x4) >> 2;
-  p->x  = (p->packet[0] & 0x8) >> 3;
-  p->cc = (p->packet[0] & 0xf0) >> 4;
-
-  p->m  = p->packet[1] & 0x1;
-  p->pt = (p->packet[1] & 0xfe) >> 1;
-
-  p->seq = p->packet[2] | (p->packet[3] << 8);
-
-  memcpy (&p->timestamp, &p->packet[4], 4);// change to shifts for unified byte sex
-  memcpy (&p->ssrc, &p->packet[8], 4);// change to shifts for unified byte sex
-
-  // header consistency checks
-  if (     (p->v != 2)
-        || (p->p != 0)
-        || (p->x != 0)
-        || (p->cc != 0) )
-  {
-    printf ("DecomposeRTPpacket, RTP header consistency problem, header follows\n");
-    DumpRTPHeader (p);
-    return -1;
-  }
-  p->paylen = p->packlen-12;
-  memcpy (p->payload, &p->packet[12], p->paylen);
-  return 0;
-}
-
-/*!
- *****************************************************************************
- *
- * \brief 
- *    DumpRTPHeader is a debug tool that dumps a human-readable interpretation
- *    of the RTP header
- *
- * \return
- *    n.a.
- * \para Parameters
- *    the RTP packet to be dumped, after DecompositeRTPpacket()
- *
- * \para Side effects
- *    Debug output to stdout
- *
- * \date
- *    30 Spetember 2001
- *
- * \author
- *    Stephan Wenger   stewe@cs.tu-berlin.de
- *****************************************************************************/
-
-void DumpRTPHeader (RTPpacket_t *p)
-
-{
-  int i;
-  for (i=0; i< 30; i++)
-    printf ("%02x ", p->packet[i]);
-  printf ("Version (V): %d\n", p->v);
-  printf ("Padding (P): %d\n", p->p);
-  printf ("Extension (X): %d\n", p->x);
-  printf ("CSRC count (CC): %d\n", p->cc);
-  printf ("Marker bit (M): %d\n", p->m);
-  printf ("Payload Type (PT): %d\n", p->pt);
-  printf ("Sequence Number: %d\n", p->seq);
-  printf ("Timestamp: %d\n", p->timestamp);
-  printf ("SSRC: %d\n", p->ssrc);
-}
 
 /*!
  *****************************************************************************
@@ -1056,9 +751,6 @@ int RTPInterpretSliceHeader (byte *buf, int bufsize, int ReadSliceId, RTPSliceHe
   }
   else if(sh->SliceType==1) // B Picture
   {
-    len = GetVLCSymbol(buf, bitptr, &info, bufsize);
-    linfo (len, info, &sh->explicit_B_prediction, &dummy);
-    bitptr+=len;
 
     len = GetVLCSymbol(buf, bitptr, &info, bufsize);
     linfo (len, info, &sh->num_ref_pic_active_fwd, &dummy);
@@ -1298,7 +990,7 @@ int RTPInterpretSliceHeader (byte *buf, int bufsize, int ReadSliceId, RTPSliceHe
   // JVT-D097
   if( img->num_slice_groups_minus1 > 0  &&  
       img->mb_allocation_map_type >= 4  &&  
-		  img->mb_allocation_map_type <= 6)
+                  img->mb_allocation_map_type <= 6)
   {
     len = GetVLCSymbol(buf, bitptr, &info, bufsize);
     linfo (len, info, &sh->slice_group_change_cycle, &dummy);
@@ -1549,10 +1241,6 @@ void RTPSetImgInp (struct img_par *img, struct inp_par *inp, RTPSliceHeader_t *s
   img->disposable_flag = sh->disposable_flag;
   img->num_ref_pic_active_fwd = sh->num_ref_pic_active_fwd;
   img->num_ref_pic_active_bwd = sh->num_ref_pic_active_bwd;
-  if(img->type==B_IMG_1 || img->type==B_IMG_MULT)
-    img->explicit_B_prediction = sh->explicit_B_prediction;
-  else
-    img->explicit_B_prediction = 0;
 
   if (img->type <= INTRA_IMG || img->type >= SP_IMG_1 || !img->disposable_flag) 
   {
@@ -1758,12 +1446,13 @@ int RTP_startcode_follows(struct img_par *img, struct inp_par *inp)
   int frame_bitoffset = currStream->frame_bitoffset;
   int info;
 
-  if (currStream->ei_flag)
-  {
+  assert (0==1);
+//  if (currStream->ei_flag)
+//  {
     //printf ("ei_flag set, img->current_mb_nr %d, currSlice->last_mb_nr %d\n", img->current_mb_nr, currSlice->last_mb_nr);
-    return (img->current_mb_nr == currSlice->last_mb_nr);
-  }
-  else
+//    return (img->current_mb_nr == currSlice->last_mb_nr);
+//  }
+//  else
   {
     if (-1 == GetVLCSymbol (buf, frame_bitoffset, &info, currStream->bitstream_length))
       return TRUE;
@@ -1795,8 +1484,7 @@ int readSyntaxElement_RTP(SyntaxElement *sym, struct img_par *img, struct inp_pa
   }
   get_concealed_element(sym);
 
-  if(!sym->golomb_maxlevels || (sym->type!=SE_LUM_DC_INTRA&&sym->type!=SE_LUM_AC_INTRA&&sym->type!=SE_LUM_DC_INTER&&sym->type!=SE_LUM_AC_INTER) )
-    sym->mapping(sym->len,sym->inf,&(sym->value1),&(sym->value2));
+  sym->mapping(sym->len,sym->inf,&(sym->value1),&(sym->value2));
 
 #if TRACE
   tracebits(sym->tracestring, sym->len, sym->inf, sym->value1, sym->value2);
@@ -1842,12 +1530,6 @@ void RTP_get_symbol(struct img_par *img, struct inp_par *inp, struct datapartiti
   int frame_bitoffset = currStream->frame_bitoffset;
   byte *buf = currStream->streamBuffer;
   int BitstreamLengthInBytes = currStream->bitstream_length;
-
-  if( sym->golomb_maxlevels && (sym->type==SE_LUM_DC_INTRA||sym->type==SE_LUM_AC_INTRA||sym->type==SE_LUM_DC_INTER||sym->type==SE_LUM_AC_INTER) )
-  {
-    readSyntaxElement_GOLOMB(sym,img,inp,dP);
-    return;
-  }
 
   sym->len =  GetVLCSymbol (buf, frame_bitoffset, &(sym->inf), BitstreamLengthInBytes);
   currStream->frame_bitoffset += sym->len;
@@ -2296,338 +1978,6 @@ ParSet[ps].XSizeMB, ParSet[ps].YSizeMB, ParSet[ps].EntropyCoding, ParSet[ps].Mot
   return 0;
 }
 
-#if 0
-/*!
- ************************************************************************
- * \brief
- *    Interrepts a parameter set packet
- ************************************************************************
- */
-
-#define EXPECT_ATTR 0
-#define EXPECT_PARSET_LIST 1
-#define EXPECT_PARSET_NO 2
-#define EXPECT_STRUCTNAME 3
-#define EXPECT_STRUCTVAL_INT 4
-#define EXPECT_STRUCTVAL_STRING 5
-
-#define INTERPRET_COPY 100
-#define INTERPRET_ENTROPY_CODING 101
-#define INTERPRET_MOTION_RESOLUTION 102
-#define INTERPRET_INTRA_PREDICTION 103
-#define INTERPRET_PARTITIONING_TYPE 104
-
-
-int RTPInterpretParameterSetPacket (char *buf, int buflen)
-
-{
-  // The dumbest possible parser that updates the parameter set variables 
-  // static to this module
-
-  int bufp = 0;
-  int state = EXPECT_ATTR;
-  int interpreter = 0;
-  int minus, number;
-  int ps;
-  char s[MAX_PARAMETER_STRINGLEN];
-  void *destin = NULL;
-
-  while (bufp < buflen)
-  {
-// printf ("%d\t%d\t %c%c%c%c%c%c%c%c  ", bufp, state, buf[bufp], buf[bufp+1], buf[bufp+2], buf[bufp+3], buf[bufp+4], buf[bufp+5], buf[bufp+6], buf[bufp+7], buf[bufp+8], buf[bufp+9]);
-
-    switch (state)
-    {
-    case EXPECT_ATTR:
-      if (buf[bufp] == '\004')      // Found UNIX EOF, this is the end marker
-        return 0;
-      if (strncmp ("a=H26L ", &buf[bufp], 7))
-      {
-        printf ("Parsing error EXPECT_ATTR in Header Packet: position %d, packet %s\n",
-                 bufp, &buf[bufp]);
-        return -1;
-      }
-      bufp += 7;
-      state = EXPECT_PARSET_LIST;
-      break;
-
-    case EXPECT_PARSET_LIST:
-      if (buf[bufp] != '(')
-      {
-        printf ("Parsing error EXPECT_PARSET in Header Packet: position %d, packet %s\n",
-                bufp, &buf[bufp]);
-        return -2;
-      }
-      bufp++;
-      state = EXPECT_PARSET_NO;
-      break;
-
-    case EXPECT_PARSET_NO:
-      number = 0;
-      minus = 1;
-      if (buf[bufp] == '-')
-      {
-        minus = -1;
-        bufp++;
-      }
-      while (isdigit (buf[bufp]))
-        number = number * 10 + ( (int)buf[bufp++] - (int) '0');
-      if (buf[bufp] == ',')
-      {
-        printf ("Update of more than one prameter set not yet supported\n");
-        return -1;
-      }
-      if (buf[bufp] != ')')
-      {
-        printf ("Parsing error NO PARSET LISTEND in Header Packet: position %d, packet %s\n",
-          bufp, &buf[bufp]);
-        return -1;
-      }
-      if (minus > 0)      // not negative
-        ps = number;
-
-      bufp+= 2;     // skip ) and blank
-      state = EXPECT_STRUCTNAME;
-      break;
-
-    case EXPECT_STRUCTNAME:
-      if (1 != sscanf (&buf[bufp], "%100s", s))   // Note the 100, which si MAX_PARAMETER_STRLEN
-      {
-        printf ("Parsing error EXPECT STRUCTNAME STRING in Header packet: position %d, packet %s\n",
-               bufp, &buf[bufp]);
-        return -1;
-      }
-      bufp += strlen (s);
-      bufp++;       // Skip the blank
-
-
-      if (!strncmp (s, "MaxPicID", MAX_PARAMETER_STRINGLEN))
-      {
-        state = EXPECT_STRUCTVAL_INT;
-        interpreter = INTERPRET_COPY;
-        destin = &ParSet[ps].MaxPicID;
-        break;
-      }
-      if (!strncmp (s, "BufCycle", MAX_PARAMETER_STRINGLEN))
-      {
-        state = EXPECT_STRUCTVAL_INT;
-        interpreter = INTERPRET_COPY;
-        destin = &ParSet[ps].BufCycle;
-        break;
-      }
-      if (!strncmp (s, "MaxPn", MAX_PARAMETER_STRINGLEN))
-      {
-        state = EXPECT_STRUCTVAL_INT;
-        interpreter = INTERPRET_COPY;
-        destin = &ParSet[ps].BufCycle;
-        break;
-      }
-
-      if (!strncmp (s, "UseMultpred", MAX_PARAMETER_STRINGLEN))
-      {
-        state = EXPECT_STRUCTVAL_INT;
-        interpreter = INTERPRET_COPY;
-        destin = &ParSet[ps].UseMultpred;
-        break;
-      }
-
-      if (!strncmp (s, "PixAspectRatioX", MAX_PARAMETER_STRINGLEN))
-      {
-        state = EXPECT_STRUCTVAL_INT;
-        interpreter = INTERPRET_COPY;
-        destin = &ParSet[ps].PixAspectRatioX;
-        break;
-      }
-      if (!strncmp (s, "PixAspectRatioY", MAX_PARAMETER_STRINGLEN))
-      {
-        state = EXPECT_STRUCTVAL_INT;
-        interpreter = INTERPRET_COPY;
-        destin = &ParSet[ps].PixAspectRatioY;
-        break;
-      }
-      if (!strncmp (s, "DisplayWindowOffsetTop", MAX_PARAMETER_STRINGLEN))
-      {
-        state = EXPECT_STRUCTVAL_INT;
-        interpreter = INTERPRET_COPY;
-        destin = &ParSet[ps].DisplayWindowOffsetTop;
-        break;
-      }
-      if (!strncmp (s, "DisplayWindowOffsetBottom", MAX_PARAMETER_STRINGLEN))
-      {
-        state = EXPECT_STRUCTVAL_INT;
-        interpreter = INTERPRET_COPY;
-        destin = &ParSet[ps].DisplayWindowOffsetBottom;
-        break;
-      }
-      if (!strncmp (s, "DisplayWindowOffsetRight", MAX_PARAMETER_STRINGLEN))
-      {
-        state = EXPECT_STRUCTVAL_INT;
-        interpreter = INTERPRET_COPY;
-        destin = &ParSet[ps].DisplayWindowOffsetRight;
-        break;
-      }
-      if (!strncmp (s, "DisplayWindowOffsetLeft", MAX_PARAMETER_STRINGLEN))
-      {
-        state = EXPECT_STRUCTVAL_INT;
-        interpreter = INTERPRET_COPY;
-        destin = &ParSet[ps].DisplayWindowOffsetLeft;
-        break;
-      }
-      if (!strncmp (s, "XSizeMB", MAX_PARAMETER_STRINGLEN))
-      {
-        state = EXPECT_STRUCTVAL_INT;
-        interpreter = INTERPRET_COPY;
-        destin = &ParSet[ps].XSizeMB;
-        break;
-      }
-      if (!strncmp (s, "YSizeMB", MAX_PARAMETER_STRINGLEN))
-      {
-        state = EXPECT_STRUCTVAL_INT;
-        interpreter = INTERPRET_COPY;
-        destin = &ParSet[ps].YSizeMB;
-        break;
-      }
-      if (!strncmp (s, "EntropyCoding", MAX_PARAMETER_STRINGLEN))
-      {
-        state = EXPECT_STRUCTVAL_STRING;
-        interpreter = INTERPRET_ENTROPY_CODING;
-        destin = &ParSet[ps].EntropyCoding;
-        break;
-      }
-      if (!strncmp (s, "PartitioningType", MAX_PARAMETER_STRINGLEN))
-      {
-        state = EXPECT_STRUCTVAL_STRING;
-        interpreter = INTERPRET_PARTITIONING_TYPE;
-        destin = &ParSet[ps].PartitioningType;
-        break;
-      }
-      if (!strncmp (s, "IntraPredictionType", MAX_PARAMETER_STRINGLEN))
-      {
-        state = EXPECT_STRUCTVAL_STRING;
-        interpreter = INTERPRET_INTRA_PREDICTION;
-        destin = &ParSet[ps].IntraPredictionType;
-        break;
-      }
-      if (!strncmp (s, "HRCParameters", MAX_PARAMETER_STRINGLEN))
-      {
-        state = EXPECT_STRUCTVAL_INT;
-        interpreter = INTERPRET_COPY;
-        destin = &ParSet[ps].HRCParameters;
-        break;
-      }
-      if (!strncmp (s, "FramesToBeEncoded", MAX_PARAMETER_STRINGLEN))
-      {
-        state = EXPECT_STRUCTVAL_INT;
-        interpreter = INTERPRET_COPY;
-        destin = &InfoSet.FramesToBeEncoded;
-        break;
-      }
-      if (!strncmp (s, "FrameSkip", MAX_PARAMETER_STRINGLEN))
-      {
-        state = EXPECT_STRUCTVAL_INT;
-        interpreter = INTERPRET_COPY;
-        destin = &InfoSet.FrameSkip;
-        break;
-      }
-      if (!strncmp (s, "SequenceFileName", MAX_PARAMETER_STRINGLEN))
-      {
-        state = EXPECT_STRUCTVAL_STRING;
-        interpreter = INTERPRET_COPY;
-        destin = &InfoSet.SequenceFileName;
-        break;
-      }
-      if (!strncmp (s, "NumberBFrames", MAX_PARAMETER_STRINGLEN))
-      {
-        state = EXPECT_STRUCTVAL_INT;
-        interpreter = INTERPRET_COPY;
-        destin = &InfoSet.NumberBFrames;
-        break;
-      }
-     
-      // Here, all defined Parameter names are checked.  Anything else is a syntax error
-      printf ("Syntax Error: unknown Parameter %s\n", s);
-      printf ("Parsing error in Header Packet: position %d, packet %s\n",
-          bufp, buf);
-      return -3;
-      break;        // to make lint happy
-    
-    case EXPECT_STRUCTVAL_INT:
-      if (1!=sscanf (&buf[bufp], "%d", (int *)destin))
-      {
-        printf ("Parsing error EXPECT STRUCTVAL INT in Header Packet: position %d, packet %s\n",
-          bufp, &buf[bufp]);
-        return -4;
-      }
-// printf ("EXPECT_STRCUTVAL_INT: write %d\n", * (int *)destin);
-      while (bufp < buflen && buf[bufp] != '\n')    // Skip any trailing whitespace and \n
-        bufp++;
-      bufp++;
-      state=EXPECT_ATTR;
-      break;
-      
-    case EXPECT_STRUCTVAL_STRING:
-      if (1 != sscanf (&buf[bufp], "%100s", s))
-      {
-        printf ("Parsing error EXPECT STRUCTVAL STRING in Header Packet: position %d, packet %s\n",
-          bufp, &buf[bufp]);
-        return -5;
-      }
-      while (bufp < buflen && buf[bufp] != '\n')   // Skip any trailing whitespace and \n
-        bufp++;
-      bufp++;
-      state=EXPECT_ATTR;
-
-      switch (interpreter)
-      {
-      case INTERPRET_COPY:
-        // nothing -- handled where it occurs
-        break;
-      case INTERPRET_ENTROPY_CODING:
-        if (!strncmp (s, "UVLC", 4))
-          * (int *)destin = 0;
-        else
-          * (int *)destin = 1;
-//        printf ("in INterpret, Entropy COding :%s: results in %d\n", s, *(int *)destin);
-        break;
-      case INTERPRET_MOTION_RESOLUTION:
-        if (!strncmp (s, "quater", 6))
-          * (int *)destin = 0;
-        else
-          * (int *)destin = 1;
-        break;
-      case INTERPRET_INTRA_PREDICTION:
-        if (!strncmp (s, "Unconstrained", 14))
-          * (int *)destin = 0;
-        else
-          * (int *)destin = 1;
-// printf ("Interpret Intra prediction returns %d\n", *);
-        break;
-      case INTERPRET_PARTITIONING_TYPE:
-        if (!strncmp (s, "one", 3))
-          * (int *)destin = 0;
-        else
-          * (int *)destin = 1;
-        break;
-      default:
-        assert (0==1);
-      }
-    break;
-
-    default:
-      printf ("Parsing error UNDEFINED SYNTAX in Header Packet: position %d, packet %s\n",
-        bufp, &buf[bufp]);
-      return -1;
-    }
-//  printf ("\t\t%d\n", bufp);
-  }
-
-//  printf ("CurrentParameterSet %d, ps %d\n", CurrentParameterSet, ps);
-//  printf ("RTPInterpretParameterPacket: xsize x Ysize, %d x %d, Entropy %d, Motion %d  MaxPicId %d\n",
-//    ParSet[ps].XSizeMB, ParSet[ps].YSizeMB, ParSet[ps].EntropyCoding, ParSet[ps].MotionResolution, ParSet[ps].MaxPicID);
-  ParSet[ps].Valid = 1;
-  return 0;
-}
-#endif
 
 /*!
  ************************************************************************
@@ -2699,16 +2049,18 @@ void RTPUseParameterSet (int n, struct img_par *img, struct inp_par *inp)
   // FilterParamtersFlag
   inp->LFParametersFlag =  ParSet[CurrentParameterSet].FilterParametersFlag;
   
-  // EntropyCoding
-  if (ParSet[CurrentParameterSet].EntropyCoding == 0)
+  // EntropyCoding: nothing to do, all info is taken from active_pps->entropy_coding
+/*  if (ParSet[CurrentParameterSet].EntropyCoding == 0)
     inp->symbol_mode = UVLC;
   else
     inp->symbol_mode = CABAC;
+*/
   // PartitioningType
-  inp->partition_mode = ParSet[CurrentParameterSet].PartitioningType;
+  // Nothing to do, info is taken from the first byte of the NALU
+//  inp->partition_mode = ParSet[CurrentParameterSet].PartitioningType;
 
   // IntraPredictionType
-  inp->UseConstrainedIntraPred = img->UseConstrainedIntraPred = ParSet[CurrentParameterSet].IntraPredictionType;
+//!  inp->UseConstrainedIntraPred = img->UseConstrainedIntraPred = ParSet[CurrentParameterSet].IntraPredictionType;
   
   //! img->type: This is calculated by using ParSet[CurrentParameterSet].UseMultpred
   //! and the slice type from the slice header.  It is set in RTPSetImgInp()
@@ -2733,69 +2085,6 @@ void RTPUseParameterSet (int n, struct img_par *img, struct inp_par *inp)
 }
 
 
-/*!
- *****************************************************************************
- *
- * \brief 
- *    RTPReadPacket reads one packet from file
- *
- * \return
- *    0 in case of success, -1 in case of error
- *
- * \para Paremeters
- *    p: packet data structure, with memory for p->packet allocated
- *
- * Side effects:
- *   - File pointer in bits moved
- *   - p->xxx filled by reading and Decomposepacket()
- *
- * \date
- *    04 November, 2001
- *
- * \author
- *    Stephan Wenger, stewe@cs.tu-berlin.de
- *****************************************************************************/
-
-int RTPReadPacket (RTPpacket_t *p, FILE *bits)
-{
-  int Filepos, intime;
-
-  assert (p != NULL);
-  assert (p->packet != NULL);
-  assert (p->payload != NULL);
-
-  Filepos = ftell (bits);
-  if (4 != fread (&p->packlen,1, 4, bits))
-    {
-      printf ("Unable to read 4 bytes for the RTP packet size\n");
-      fseek (bits, Filepos, SEEK_SET);
-      return -1;
-    }
-    
-  if (4 != fread (&intime, 1, 4, bits))
-    {
-      fseek (bits, Filepos, SEEK_SET);
-      printf ("RTPReadPacket: File corruption, could not read Timestamp, exit\n");
-      exit (-1);
-    }
-
-  assert (p->packlen < MAXRTPPACKETSIZE);
-  if (p->packlen != fread (p->packet, 1, p->packlen, bits))
-    {
-      printf ("RTPReadPacket: File corruption, could not read %d bytes\n", p->packlen);
-      exit (-1);    // EOF inidication
-    }
-  if (DecomposeRTPpacket (p) < 0)
-    {
-      // this should never happen, hence exit() is ok.  We probably do not want to attempt
-      // to decode a packet that obviously wasn't generated by RTP
-      printf ("Errors reported by DecomposePacket(), exit\n");
-      exit (-700);
-    }
-    assert (p->pt == H26LPAYLOADTYPE);
-    assert (p->ssrc == 0x12345678);
-  return 0;
-}
 
 
 /*!
@@ -2978,7 +2267,7 @@ void RTPProcessDataPartitionedSlice (struct img_par *img, struct inp_par *inp, F
       img->currentSlice->partArr[2].bitstream->ei_flag=0;
       img->currentSlice->ei_flag=0;
       img->currentSlice->next_header=EOS;
-      img->currentSlice->eos_flag=1;
+//      img->currentSlice->eos_flag=1;
       return;
     }
 
@@ -3116,3 +2405,4 @@ void ProcessAggregationPacket(RTPpacket_t *p, struct img_par *img)
 
   free( buf );
 }
+#endif

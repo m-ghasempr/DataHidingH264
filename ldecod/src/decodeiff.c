@@ -102,6 +102,7 @@
 #include "global.h"
 #include "decodeiff.h"
 #include "mbuffer.h"
+#include "vlc.h"
 
 FileTypeBox box_ft;
 FileHeaderBox box_fh;
@@ -890,8 +891,6 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
   buf->frame_bitoffset += sym.len;
   bitptr += sym.len;
 
-  img->explicit_B_prediction = 0;
-
   sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &(sym.inf), buf->bitstream_length );
   sym.mapping(sym.len, sym.inf, &(img->disposable_flag), &(sym.value2));
   buf->frame_bitoffset += sym.len;
@@ -907,10 +906,6 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
   }
   else if(img->type==B_IMG_1 || img->type==B_IMG_MULT)
   {
-    sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &(sym.inf), buf->bitstream_length );
-    sym.mapping(sym.len, sym.inf, &(img->explicit_B_prediction), &(sym.value2));
-    buf->frame_bitoffset += sym.len;
-    bitptr+=sym.len;
  
     sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &(sym.inf), buf->bitstream_length );
     sym.mapping(sym.len, sym.inf, &(img->num_ref_pic_active_fwd), &(sym.value2));
@@ -1022,12 +1017,6 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
   }
   
 
-#ifdef _ABT_FLAG_IN_SLICE_HEADER_
-  sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length );
-  sym.mapping(sym.len, sym.inf, &(sym.value1), &(sym.value2));
-  currSlice->abt = sym.value1;
-  bitptr += sym.len;
-#endif
 
   sym.mapping = linfo_dquant;
   sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length );
@@ -1055,11 +1044,11 @@ void decomposeSliceHeader( struct img_par *img, struct inp_par* inp, PayloadInfo
   if (inp->LFParametersFlag)
   {
     sym.len = GetfixedSymbol( buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length,1 );
-    currSlice->LFDisable = sym.inf;
+    currSlice->LFDisableIdc = sym.inf;
     buf->frame_bitoffset += sym.len;
     bitptr+=1;
 
-    if (!currSlice->LFDisable)
+    if (!currSlice->LFDisableIdc)
     {
       sym.mapping = linfo_dquant;
       sym.len = GetVLCSymbol( buf->streamBuffer, buf->frame_bitoffset, &sym.inf, buf->bitstream_length );
@@ -1301,7 +1290,7 @@ int rdOnePayload( struct img_par *img, struct inp_par* inp, PayloadInfo *pp, FIL
     read_len = &(currSlice->partArr[0].bitstream->read_len);
     *read_len = (int)pp->payloadSize;
 
-    if(inp->symbol_mode == CABAC)
+    if(active_pps->entropy_coding_mode  == CABAC)
     {
       dep = &((currSlice->partArr[0]).de_cabac);
       arideco_start_decoding(dep, buf, 0, read_len, img->type);
@@ -1375,11 +1364,11 @@ int IFFUseParameterSet( int n, struct img_par* img, struct inp_par* inp )
   img->height = box_ps.pictureHeightInMBs * MB_BLOCK_SIZE;
   img->height_cr = box_ps.pictureHeightInMBs * MB_BLOCK_SIZE / 2;
 
-  if ( box_ps.entropyCoding == 0 ) inp->symbol_mode = UVLC;
-  else inp->symbol_mode = CABAC;
+  if ( box_ps.entropyCoding == 0 ) active_pps->entropy_coding_mode  = UVLC;
+  else active_pps->entropy_coding_mode  = CABAC;
 
-  inp->partition_mode = box_ps.partitioningType;
-  inp->UseConstrainedIntraPred = box_ps.intraPredictionType;
+//!  inp->partition_mode = box_ps.partitioningType;
+//!  inp->UseConstrainedIntraPred = box_ps.intraPredictionType;
   inp->buf_cycle = box_ps.bufCycle;
   inp->LFParametersFlag = box_ps.loopFilterParametersFlag;
   return 0;

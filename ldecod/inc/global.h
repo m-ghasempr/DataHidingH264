@@ -59,6 +59,7 @@
 
 #include <stdio.h>                              //!< for FILE
 #include "defines.h"
+#include "parsetcommon.h"
 
 #ifdef WIN32
   #define  snprintf _snprintf
@@ -69,6 +70,11 @@ typedef unsigned char   byte;                   //!<  8 bit unsigned
 typedef int             int32;
 typedef unsigned int    u_int32;
 
+unsigned int toprefpoc[MAX_REFERENCE_PICTURES];
+unsigned int bottomrefpoc[MAX_REFERENCE_PICTURES];
+
+pic_parameter_set_rbsp_t *active_pps;
+seq_parameter_set_rbsp_t *active_sps;
 
 // global picture format dependend buffers, mem allocation in decod.c ******************
 int  **refFrArr;                                //!< Array for reference frames of each block
@@ -94,7 +100,6 @@ byte ***imgUV_ref;
 int  Bframe_ctr;
 byte prevP_tr, nextP_tr, P_interval;
 int  frame_no;
-int  ***colB8mode;                              //!< ABT: Array containing the modes of the collocated 8x8 Blocks.
 
 int  **refFrArr_frm;
 int  **refFrArr_top;
@@ -138,17 +143,17 @@ typedef enum
 //! Output File Types
 typedef enum
 {
-  PAR_OF_26L,   //<! Current TML description
+  PAR_OF_ANNEXB,   //<! Current TML description
   PAR_OF_RTP,   //<! RTP Packet Output format
-  PAR_OF_IFF    //<! Interim File Format
+//  PAR_OF_IFF    //<! Interim File Format
 } PAR_OF_TYPE;
 
 //! Boolean Type
-typedef enum {
+/*typedef enum {
   FALSE,
   TRUE
 } Boolean;
-
+*/
 //! definition of H.26L syntax elements
 typedef enum {
   SE_HEADER,
@@ -206,19 +211,6 @@ typedef enum {
 } SymbolMode;
 
 
-typedef enum {        // ABT
-  NO_ABT,
-  INTER_ABT,
-  INTER_INTRA_ABT
-} ABTMode;            // ABT
-
-typedef enum {        // ABT
-  B8x8=0,
-  B8x4,
-  B4x8,
-  B4x4
-} ABTBlockMode;       // ABT
-
 typedef enum {
   FRAME,
   TOP_FIELD,
@@ -258,7 +250,6 @@ typedef BiContextType *BiContextTypePtr;
  **********************************************************************
  */
 
-#define NUM_ABT_MODE_CTX 3
 #define NUM_MB_TYPE_CTX  11
 #define NUM_B8_TYPE_CTX  9
 #define NUM_MV_RES_CTX   10
@@ -269,7 +260,6 @@ typedef BiContextType *BiContextTypePtr;
 
 typedef struct
 {
-  BiContextType ABT_mode_contexts[2][NUM_ABT_MODE_CTX];
   BiContextType mb_type_contexts [4][NUM_MB_TYPE_CTX];
   BiContextType b8_type_contexts [2][NUM_B8_TYPE_CTX];
   BiContextType mv_res_contexts  [2][NUM_MV_RES_CTX];
@@ -341,8 +331,7 @@ typedef struct syntaxelement
   unsigned int  bitpattern;            //!< UVLC bitpattern
   int           context;               //!< CABAC context
   int           k;                     //!< CABAC context for coeff_count,uv
-  int           golomb_grad;           //needed if type is a golomb element (ABT)
-  int           golomb_maxlevels;      // (ABT)
+
 #if TRACE
   #define       TRACESTRING_SIZE 100           //!< size of trace string
   char          tracestring[TRACESTRING_SIZE]; //!< trace string
@@ -379,12 +368,6 @@ typedef struct macroblock
   int           b8mode[4];
   int           b8pdir[4];
   int           ei_flag;
-
-  int           useABT[4];          //!< ABT flag, indicating application of ABT for each 8x8 block (1=ABT)
-  int           abt_mode[4];        //!< ABT transform mode used for ABT.
-  int           abt_pred_mode[4];   //!< ABT mode used for ABT block prediction.
-
-  int           bipred_weighting_type[4];  //!< bi-predictive weighting type, 0:average 1:extrapolation
 
   int           lf_disable;
   int           lf_alpha_c0_offset;
@@ -432,20 +415,33 @@ typedef struct
   int                 start_mb_nr;   //!< MUST be set by NAL even in case of ei_flag == 1
   int                 max_part_nr;
   int                 dp_mode;       //!< data partioning mode
-  int                 eos_flag;      //!< end of sequence flag
   int                 next_header;
   int                 next_eiflag;
-  int                 last_mb_nr;    //!< only valid when entropy coding == CABAC
+//  int                 last_mb_nr;    //!< only valid when entropy coding == CABAC
   DataPartition       *partArr;      //!< array of partitions
   MotionInfoContexts  *mot_ctx;      //!< pointer to struct of context models for use in CABAC
   TextureInfoContexts *tex_ctx;      //!< pointer to struct of context models for use in CABAC
+  
+  // !KS: RMPNI buffer should be retired. just do some sore simple stuff
   RMPNIbuffer_t        *rmpni_buffer; //!< stores the slice temporary buffer remapping commands
-  int     (*readSlice)(struct img_par *, struct inp_par *);
-  int                 abt;           //!< ABT Flag
 
-  int                 LFDisable;        //!< Disable loop filter on slice
+  int                 ref_pic_list_reordering_flag_l0;
+  int                 *remapping_of_pic_nums_idc_l0;
+  int                 *abs_diff_pic_num_minus1_l0;
+  int                 *long_term_pic_idx_l0;
+  int                 ref_pic_list_reordering_flag_l1;
+  int                 *remapping_of_pic_nums_idc_l1;
+  int                 *abs_diff_pic_num_minus1_l1;
+  int                 *long_term_pic_idx_l1;
+
+  int     (*readSlice)(struct img_par *, struct inp_par *);
+
+  int                 LFDisableIdc;     //!< Disable loop filter on slice
   int                 LFAlphaC0Offset;  //!< Alpha and C0 offset for filtering slice
   int                 LFBetaOffset;     //!< Beta offset for filtering slice
+
+  int                 pic_parameter_set_id;   //!<the ID of the picture parameter set the slice is reffering to
+  int                 cabac_init_idc;
 
 } Slice;
 
@@ -492,7 +488,7 @@ typedef struct img_par
   int cofu[4];
   int **ipredmode;                            //<! prediction type [90][74]
   int quad[256];
-  int UseConstrainedIntraPred;
+  int constrained_intra_pred_flag;            //<! if 1, prediction only from other Intra MBs
   int ****nz_coeff;
   int **siblock;
   int cod_counter;                            //<! Current count of number of skipped macroblocks in a row
@@ -557,7 +553,6 @@ typedef struct img_par
   int disposable_flag;                          //!< flag for disposable frame, 1:disposable
   int num_ref_pic_active_fwd;                   //!< number of forward reference
   int num_ref_pic_active_bwd;                   //!< number of backward reference
-  int explicit_B_prediction;                    //!< type of weight for bi-pred, 0:average 1:implicit 
 
   // JVT-D095, JVT-D097
   int num_slice_groups_minus1; 
@@ -573,9 +568,56 @@ typedef struct img_par
   int redundant_slice_flag; 
   int redundant_pic_cnt; 
   int last_decoded_pic_id; 
-  // End JVT-D101
 
+  int explicit_B_prediction;
+
+
+
+  // End JVT-D101
+  unsigned int toppoc;      //poc for this frame or field
+  unsigned int bottompoc;   //poc of bottom field of frame (here always = poc+1)
+  unsigned int frame_num;   //frame_num for this frame
+  unsigned int field_pic_flag;
+  unsigned int bottom_field_flag;
+  
+  //the following should probably go in sequence parameters
+  // unsigned int log2_max_frame_num_minus4;
+  unsigned int pic_order_cnt_type;
+  unsigned int num_ref_frames_in_pic_order_cnt_cycle;
+  unsigned int delta_pic_order_always_zero_flag;
+                int offset_for_non_ref_pic;
+  int offset_for_top_to_bottom_field;
+  int offset_for_ref_frame[MAX_LENGTH_POC_CYCLE];
+
+  //weighted prediction
+  unsigned int weighted_pred_flag;
+  unsigned int weighted_bipred_explicit_flag;
+  unsigned int weighted_bipred_implicit_flag;
+  unsigned int luma_log_weight_denom;
+  unsigned int chroma_log_weight_denom;
+  int ***wp_weight;  // weight in [list][index][component] order
+  int ***wp_offset;  // offset in [list][index][component] order
+  int ****wbp_weight; //weight in [list][fw_index][bw_index][component] order
+  int wp_round_luma;
+  int wp_round_chroma;
+  unsigned int apply_weights;
+
+  //the following should probably go in picture parameters
+  unsigned int pic_order_present_flag;
+  
+  //the following are sent in the slice header
+  int delta_pic_order_cnt[2];
+  int idr_flag;
+  int idr_pic_id;
+  int MaxFrameNum;
+
+  int no_output_of_prior_pics_flag;
+  int long_term_reference_flag;
+  int adaptive_ref_pic_buffering_flag;
+  
 } ImageParameters;
+
+extern ImageParameters *img;
 
 // signal to noice ratio parameters
 struct snr_par
@@ -600,10 +642,9 @@ struct inp_par
   char outfile[100];                      //<! Decoded YUV 4:2:0 output
   char reffile[100];                      //<! Optional YUV 4:2:0 reference file for SNR measurement
   int  postfilter;                        //<! postfilter (0=OFF,1=ON)
-  int symbol_mode;                        //<! Specifies the mode the symbols are mapped on bits
-  int UseConstrainedIntraPred;            //<! 0: Inter MB pixels are allowed for intra prediction 1: Not allowed
-  int of_mode;                            //<! Specifies the mode of the output file
-  int partition_mode;                     //<! Specifies the mode of data partitioning
+//  int symbol_mode;                        //<! Specifies the mode the symbols are mapped on bits
+  int FileFormat;                         //<! File format of the Input file, PAR_OF_ANNEXB or PAR_OF_RTP
+//  int partition_mode;                     //<! Specifies the mode of data partitioning
   int buf_cycle;                          //<! Frame buffer size
 #ifdef _LEAKYBUCKET_
   unsigned long R_decoder;                //<! Decoder Rate in HRD Model
@@ -611,10 +652,11 @@ struct inp_par
   unsigned long F_decoder;                //<! Decoder Inital buffer fullness in HRD model
   char LeakyBucketParamFile[100];         //<! LeakyBucketParamFile
 #endif
-  int  abt;                               //<! Use Adaptive Block Transforms (ABT) 0:Off, 1: Inter ABT, 2: Inter & Intra ABT
   int LFParametersFlag;                   //<! Specifies that loop filter parameters are included in bitstream
 
 };
+
+extern struct inp_par *input;
 
 
 // files
@@ -627,13 +669,15 @@ FILE *p_datpart;                //<! file to write bitlength and id of all parti
 FILE *p_trace;
 #endif
 
-int USEABT; // Global Flag indicating ABT mode
-
 // prototypes
 void init_conf(struct inp_par *inp, char *config_filename);
 void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr);
 void find_snr(struct snr_par *snr,struct img_par *img, FILE *p_ref, int postfilter);
 void init(struct img_par *img);
+
+void init_poc();
+void push_poc(unsigned int topvalue, unsigned int bottomvalue, unsigned int ref_frame_ind );
+
 
 void malloc_slice(struct inp_par *inp, struct img_par *img);
 void free_slice(struct inp_par *inp, struct img_par *img);
@@ -648,7 +692,7 @@ void write_prev_Pframe(struct img_par *img,FILE *p_out);// B pictures
 void copy_Pframe(struct img_par *img,int);// B pictures
 
 
-int  read_new_slice(struct img_par *img, struct inp_par *inp);
+int  read_new_slice();
 void decode_one_slice(struct img_par *img,struct inp_par *inp);
 
 void start_macroblock(struct img_par *img,struct inp_par *inp, int CurrentMBInScanOrder);
@@ -672,46 +716,15 @@ void itrans(struct img_par *img,int ioff,int joff,int i0,int j0);
 void itrans_sp(struct img_par *img,int ioff,int joff,int i0,int j0);
 int  intrapred(struct img_par *img,int ioff,int joff,int i4,int j4);
 void itrans_2(struct img_par *img);
-int  intrapred_luma_2(struct img_par *img,int predmode);
+int  intrapred_luma_16x16(struct img_par *img,int predmode);
 int  sign(int a , int b);
 
-// UVLC mapping
-void linfo(int len, int info, int *value1, int *dummy);
-void linfo_mvd(int len,int info, int *signed_mvd, int *dummy);
-void linfo_cbp_intra(int len,int info,int *cbp, int *dummy);
-void linfo_cbp_inter(int len,int info,int *cbp, int *dummy);
-void linfo_dquant(int len,  int info, int *signed_dquant, int *dummy);
-void linfo_levrun_inter(int len,int info,int *level,int *irun);
-void linfo_levrun_intra(int len,int info,int *level,int *irun);
-void linfo_levrun_c2x2(int len,int info,int *level,int *irun);
-
-int  readSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct inp_par *inp, struct datapartition *dp);
-int  readSliceUVLC(struct img_par *img, struct inp_par *inp);
-int  readSyntaxElement_fixed(SyntaxElement *sym, struct img_par *img, struct inp_par *inp, struct datapartition *dP);
-int  readSyntaxElement_Intra4x4PredictionMode(SyntaxElement *sym, struct img_par *img, struct inp_par *inp, struct datapartition *dp);
 
 // Direct interpolation
 void get_block(int ref_frame,int x_pos, int y_pos, struct img_par *img, int block[BLOCK_SIZE][BLOCK_SIZE]);
 void get_quarterpel_block(int ref_frame,int x_pos, int y_pos, struct img_par *img, int block[BLOCK_SIZE][BLOCK_SIZE]);
 
-int  GetVLCSymbol (byte buffer[],int totbitoffset,int *info, int bytecount);
-int  GetfixedSymbol (byte buffer[],int totbitoffset,int *info, int bytecount, int len);
 // int   inter_intra(struct img_par *img);
-int  GetVLCSymbol_IntraMode (byte buffer[],int totbitoffset,int *info, int bytecount);
-
-int readSyntaxElement_FLC(SyntaxElement *sym, struct datapartition *dp);
-int readSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *sym,  DataPartition *dP,
-                                           char *type);
-int readSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *sym,  DataPartition *dP);
-int readSyntaxElement_Level_VLC0(SyntaxElement *sym, struct datapartition *dP);
-int readSyntaxElement_Level_VLCN(SyntaxElement *sym, int vlc, struct datapartition *dP);
-int readSyntaxElement_TotalZeros(SyntaxElement *sym,  DataPartition *dP);
-int readSyntaxElement_TotalZerosChromaDC(SyntaxElement *sym,  DataPartition *dP);
-int readSyntaxElement_Run(SyntaxElement *sym,  DataPartition *dP);
-int GetBits (byte buffer[],int totbitoffset,int *info, int bytecount, 
-             int numbits);
-int ShowBits (byte buffer[],int totbitoffset,int bytecount, int numbits);
-
 
 // SLICE function pointers
 int  (*nal_startcode_follows) ();
@@ -741,7 +754,6 @@ void delete_contexts_MotionInfo(MotionInfoContexts *enco_ctx);
 void delete_contexts_TextureInfo(TextureInfoContexts *enco_ctx);
 
 
-void readABTIntraBlkModeInfo2Buffer_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
 void readMB_typeInfoFromBuffer_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
 void readB8_typeInfoFromBuffer_CABAC(SyntaxElement *se, struct inp_par *inp, struct img_par *img, DecodingEnvironmentPtr dep_dp);
 void readIntraPredModeFromBuffer_CABAC(SyntaxElement *se, struct inp_par *inp,struct img_par *img, DecodingEnvironmentPtr dep_dp);
@@ -770,7 +782,6 @@ void CheckAvailabilityOfNeighborsForAff(struct img_par *img);
 
 void error(char *text, int code);
 void start_slice(struct img_par *img, struct inp_par *inp);
-int  terminate_slice(struct img_par *img, struct inp_par *inp, struct stat_par  *stat);
 
 // dynamic mem allocation
 int  init_global_buffers(struct inp_par *inp, struct img_par *img);
@@ -788,7 +799,6 @@ void decode_frame_slice(struct img_par *img,struct inp_par *inp, int current_hea
 void decode_field_slice(struct img_par *img,struct inp_par *inp, int current_header);
 void store_field_MV(struct img_par *img);
 void store_direct_moving_flag(struct img_par *img);
-void store_field_colB8mode(struct img_par *img);
 
 #define PAYLOAD_TYPE_IDERP 8
 int RBSPtoSODB(byte *streamBuffer, int last_byte_pos);
@@ -803,6 +813,18 @@ void copy_stored_B_motion_info(struct img_par *img);
 
 void SetOneRefMV(struct img_par* img);
 int peekSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct inp_par *inp, struct datapartition *dP);
+
+void fill_wp_params(struct img_par *img);
+
+void reset_wp_params(struct img_par *img);
+
+int poc_distance( int refa, int refb);
+
+void FreePartition (DataPartition *dp, int n);
+DataPartition *AllocPartition();
+
+void tracebits2(const char *trace_str, int len, int info);
+
 
 
 #endif

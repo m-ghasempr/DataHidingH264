@@ -52,6 +52,7 @@
 #include "mbuffer.h"
 #include "encodeiff.h"
 #include "sei.h"
+#include "vlc.h"
 
 Boolean seiHasTemporal_reference=FALSE;
 Boolean seiHasClock_timestamp=FALSE;
@@ -770,7 +771,7 @@ void FinalizeSpareMBMap()
   dest->byte_buf    = 0;
   memset( dest->streamBuffer, 0, MAXRTPPAYLOADLEN);
 
-  // 	delta_frame_num
+  //    delta_frame_num
   delta_frame_num = CurrFrameNum - seiSparePicturePayload.target_frame_num;
   if ( delta_frame_num < 0 ) delta_frame_num += MAX_FN;
   sym.value1 = delta_frame_num;

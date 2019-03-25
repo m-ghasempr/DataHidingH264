@@ -31,58 +31,29 @@
 */
 
 /*!
- ************************************************************************
- * \file uvlc.h
- *
+ **************************************************************************************
+ * \file
+ *    parset.h
+ * \brief
+ *    Picture and Sequence Parameter Sets, encoder operations
+ *    This code reflects JVT version xxx
+ *  \date 25 November 2002
  * \author
- *    Inge Lille-Langøy               <inge.lille-langoy@telenor.com>   \n
- *    Copyright (C) 1999  Telenor Satellite Services, Norway
- *
- ************************************************************************
+ *    Main contributors (see contributors.h for copyright, address and affiliation details) 
+ *      - Stephan Wenger        <stewe@cs.tu-berlin.de>
+ ***************************************************************************************
  */
 
-#ifndef _UVLC_H_
-#define _UVLC_H_
 
-// Note that all NA values are filled with 0
+#ifndef _NALU_H_
+#define _NALU_H_
 
-//! for the linfo_levrun_inter routine
-const byte NTAB1[4][8][2] =
-{
-  {{1,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0}},
-  {{1,1},{1,2},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0}},
-  {{2,0},{1,3},{1,4},{1,5},{0,0},{0,0},{0,0},{0,0}},
-  {{3,0},{2,1},{2,2},{1,6},{1,7},{1,8},{1,9},{4,0}},
-};
-const byte LEVRUN1[16]=
-{
-  4,2,2,1,1,1,1,1,1,1,0,0,0,0,0,0,
-};
+#include "nalucommon.h"
 
-//! for the linfo_levrun_intra routine
-const byte LEVRUN2[8]=
-{
-  9,3,1,1,1,0,0,0,
-};
-const byte NTAB2[4][8][2] =
-{
-  {{1,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0}},
-  {{1,1},{2,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0}},
-  {{1,2},{3,0},{4,0},{5,0},{0,0},{0,0},{0,0},{0,0}},
-  {{1,3},{1,4},{2,1},{3,1},{6,0},{7,0},{8,0},{9,0}},
-};
+int RBSPtoNALU (char *rbsp, NALU_t *nalu, int rbsp_size, int nal_unit_type, int nal_reference_idc, 
+                int min_num_bytes, int UseAnnexbLongStartcode);
 
-//! for the linfo_levrun__c2x2 routine
-const byte LEVRUN3[4] =
-{
-  2,1,0,0
-};
-const byte NTAB3[2][2][2] =
-{
-  {{1,0},{0,0}},
-  {{2,0},{1,1}},
-};
+int (*WriteNALU)(NALU_t *n);     //! Hides the write function in Annex B or RTP
 
 
 #endif
-

@@ -42,6 +42,7 @@
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details) 
  *      - Shankar Regunathan                  <shanre@microsoft.de>
+ *      - Stephan Wenger                      <stewe@cs.tu-berlin.de>
  ***************************************************************************************
  */
 
@@ -71,6 +72,8 @@
  ************************************************************************
 */
 
+static byte *NAL_Payload_buffer;
+
 void SODBtoRBSP(Bitstream *currStream)
 {
   currStream->byte_buf <<= 1;
@@ -95,6 +98,9 @@ void SODBtoRBSP(Bitstream *currStream)
 *            prevent start-code emulation begins.
 *  \param end_bytepos
 *           Size of streamBuffer in bytes.
+*  \param min_num_bytes
+*           Minimum number of bytes in payload. Should be 0 for VLC entropy
+*           coding mode. Determines number of stuffed words for CABAC mode.
 *  \return 
 *           Size of streamBuffer after stuffing.
 *  \note
@@ -104,22 +110,14 @@ void SODBtoRBSP(Bitstream *currStream)
 ************************************************************************
 */
 
-int RBSPtoEBSP(byte *streamBuffer, int begin_bytepos, int end_bytepos)
+int RBSPtoEBSP(byte *streamBuffer, int begin_bytepos, int end_bytepos, int min_num_bytes)
 {
   
   int i, j, count;
-  int min_num_bytes = 0;
-
-  if (streamBuffer[end_bytepos-1] == 0) { // CABAC is used
-    end_bytepos -= 5;
-    min_num_bytes = streamBuffer[end_bytepos] << 24;
-    min_num_bytes += streamBuffer[end_bytepos+1] << 16;
-    min_num_bytes += streamBuffer[end_bytepos+2] << 8;
-    min_num_bytes += streamBuffer[end_bytepos+3] << 0;
-  }
 
   for(i = begin_bytepos; i < end_bytepos; i++)
     NAL_Payload_buffer[i] = streamBuffer[i];
+
   count = 0;
   j = begin_bytepos;
   for(i = begin_bytepos; i < end_bytepos; i++) 
@@ -145,4 +143,37 @@ int RBSPtoEBSP(byte *streamBuffer, int begin_bytepos, int end_bytepos)
     stat->bit_use_stuffingBits[img->type]+=16;
   }
   return j;
+}
+
+ /*!
+ ************************************************************************
+ * \brief
+ *    Initializes NAL module (allocates NAL_Payload_buffer)
+ ************************************************************************
+*/
+
+void InitNal()
+{
+    const int buffer_size = (img->width * img->height * 4); // AH 190202: There can be data expansion with 
+                                                          // low QP values. So, we make sure that buffer 
+                                                          // does not everflow. 4 is probably safe multiplier.
+
+  //! Ugly ugly: NAL_Payload_buffer is allocated more than once, but only one instance is used and freed.
+  //! Should be allocated somewhere else, later...  StW 010103
+  NAL_Payload_buffer = (byte *) calloc(buffer_size, sizeof(byte));
+  assert (NAL_Payload_buffer != NULL);
+}
+
+
+ /*!
+ ************************************************************************
+ * \brief
+ *   Finits NAL module (frees NAL_Payload_buffer)
+ ************************************************************************
+*/
+
+void FinitNal()
+{
+  if(NAL_Payload_buffer)
+  free(NAL_Payload_buffer);
 }

@@ -92,12 +92,19 @@ int RBSPtoSODB(byte *streamBuffer, int last_byte_pos)
     ctr_bit= streamBuffer[last_byte_pos-1] & (0x01<<(bitoffset));
   }
   
-  streamBuffer[last_byte_pos-1] -= (0x01<<(bitoffset));
   
-  if(bitoffset == 7)
-    return(last_byte_pos-1);
-  else
-    return(last_byte_pos);
+  // We keep the stop bit for now
+/*  if (remove_stop)
+  {
+    streamBuffer[last_byte_pos-1] -= (0x01<<(bitoffset));
+    if(bitoffset == 7)
+      return(last_byte_pos-1);
+    else
+      return(last_byte_pos);
+  }
+*/
+  return(last_byte_pos);
+  
 }
 
 

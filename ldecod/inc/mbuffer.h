@@ -106,5 +106,8 @@ void copy2fb(ImageParameters *img);
 void add_frame(int pn_expected, int valid);
 void fill_PN_gap(ImageParameters *img);
 
+void alloc_ref_pic_list_reordering_buffer(Slice *currSlice);
+void free_ref_pic_list_reordering_buffer(Slice *currSlice);
+
 #endif
 

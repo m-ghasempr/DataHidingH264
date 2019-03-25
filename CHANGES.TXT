@@ -1,3 +1,67 @@
+Changes for Version JM 6.0 to JM 5.0h-suehring
+----------------------------------------------
+New features
+* post-Awaji slice header and parameter sets (except POC) (KS)
+
+Removed features
+* ABT (KS)
+
+Bug fixes
+* AFF (picture and mb) (KS)
+* Slice parsing with CAVLC (KS)
+* CABAC byte alignment (KS)
+* lots of stuff I can't remember in detail (KS)
+
+Cleanups
+* lots of stuff I can't remember in detail (KS)
+
+Known problems
+* slices have still encoder mismatch (looks like motion vector prediction)
+* FMO not tested, but probably won't work
+* SEI disabled (needs update to NAL units)
+* weighted prediction implementation in JM 5.0g unfinished
+* Error concealment disabled (needs new triggers)
+* DP (???)
+* I haven't merged any patches, I received since December
+
+Changes for Version JM 5.0h-suehring to JM 5.0g
+-----------------------------------------------
+New features
+* Sequence and Picture Parameter Sets
+* writes Annex B bytestream and RTP packets
+
+
+Changes for Version JM 5.0g to JM 5.0f
+--------------------------------------
+New features
+* Changes for Weigthed Prediction (JB)
+
+Note: This version seems to have severe performance problems
+
+Changes for Version JM 5.0f to JM 5.0e
+--------------------------------------
+New features
+* Reducing Pixel Dependencies for Intra-Prediction (JVT-E111) (GrC)
+
+
+Changes for Version JM 5.0e to JM 5.0d
+--------------------------------------
+New features
+* alternate scan for aff coding
+
+
+Changes for Version JM 5.0d to JM 5.0c
+--------------------------------------
+New features
+* added POC - for implementation details see changes_detail.txt (BH)
+
+Bug Fixes
+* reorder chroma intra pred modes aligned to draft (KS)
+
+Cleanups (no functional change)
+* cleaner parameter transfer for CABAC stuffing words (FB)
+
+
 Changes for Version JM 5.0c to JM 5.0b
 --------------------------------------
 New features
@@ -721,6 +785,7 @@ GS      Gary Sullivan		garysull@microsoft.com
 FW	Feng Wu			fengwu@microsoft.com
 HS      Heiko Schwarz           hschwarz@hhi.de
 IL      Inge Lille-Langoy       Inge.Lille-Langoy@telenor.com
+JB      Jill Boyce              BoyceJ@tce.com
 JL      Jani Lainema            Jani.Lainema@nokia.com
 JA      James Au                james@ubvideo.com
 IM      Iole Moccagatta         imoccaga@lsil.com

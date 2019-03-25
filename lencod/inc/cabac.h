@@ -58,12 +58,6 @@
  * l o c a l    c o n s t a n t s   f o r   i n i t i a l i z a t i o n   o f   m o d e l s
  *******************************************************************************************
  */
-static const int ABT_MODE_Ini[2][3][2]=
-{
-  {{-10,68}, { 4,62}, {14,33}}, // INTRA block mode in INTRA slices
-  {{-4 ,62}, { 1,63}, { 7,47}}  // INTRA block mode in INTER slices
-};
-
 static const int MB_TYPE_Ini[3][11][2]=
 {
   {{  7,25},  {8,35}, {-2,63}, {0,50},  {-9,68}, {-15,74},  {-3,36},  {-1,51},   {0,50},   {0,50}, {0,50}}, //I-FRAME
@@ -96,7 +90,7 @@ static const int DELTA_QP_Ini[4][2]=
 
 static const int MB_AFF_Ini[4][2]=
 {
-	{0,28},{0,45},{0,56},{0,50}
+        {0,28},{0,45},{0,56},{0,50}
 };
 
 static const int CBP_Ini[2][3][4][2]=
@@ -117,7 +111,7 @@ static const int IPR_Ini[2][2]=
 
 static const int CIPR_Ini[4][2]=
 {
-	{-4,61},{ 1,68},{ 1,71},{1,60}
+        {-4,61},{ 1,68},{ 1,71},{1,60}
 };
 
 static const int BCBP_Ini[2][NUM_BLOCK_TYPES][NUM_BCBP_CTX][2]=

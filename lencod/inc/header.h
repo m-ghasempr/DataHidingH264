@@ -42,9 +42,11 @@
 #ifndef _HEADER_H_
 #define _HEADER_H_
 
-int  SliceHeader();
+int SliceHeader();
+int Partition_BC_Header();
+
 int  writeERPS(SyntaxElement *sym, DataPartition *partition);
-int  SequenceHeader(FILE *outf);
+// int  SequenceHeader(FILE *outf);
 void write_terminating_bit (short);
 
 #endif

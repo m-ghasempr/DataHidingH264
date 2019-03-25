@@ -1066,8 +1066,9 @@ PayloadInfo* newPayloadInfo()
   pli->type = img->type;
   pli->max_lindex = img->max_lindex;
   pli->lindex = img->lindex;
-  pli->disposable_flag               = img->disposable_flag;
-  pli->explicit_B_prediction         = (input->BipredictiveWeighting > 0)? (input->BipredictiveWeighting-1) : 0;
+//  pli->disposable_flag               = img->disposable_flag;
+  pli->weighted_prediction         = input->WeightedPrediction;
+  pli->weighted_biprediction         = input->WeightedBiprediction;
   pli->num_ref_pic_active_fwd_minus1 = img->num_ref_pic_active_fwd_minus1;
   pli->num_ref_pic_active_bwd_minus1 = img->num_ref_pic_active_bwd_minus1;
 
@@ -1120,14 +1121,11 @@ PayloadInfo* newPayloadInfo()
 
   pli->firstMBInSliceX = img->mb_x;
   pli->firstMBInSliceY = img->mb_y;
-#ifdef _ABT_FLAG_IN_SLICE_HEADER_
-  pli->abtMode   = input->abt;
-#endif
   pli->initialQP = img->qp;
   pli->qpsp = img->qpsp;
 
   pli->filter_parameters_flag = input->LFSendParameters;
-  pli->lf_disable = input->LFDisable;
+  pli->lf_disable = input->LFDisableIdc;
   pli->lf_alpha_c0_offset_div2 = input->LFAlphaC0Offset >> 1;
   pli->lf_beta_offset_div2 = input->LFBetaOffset >> 1;
 
@@ -1183,7 +1181,7 @@ PayloadInfo* newPayloadInfo()
 
     // assign local long term
     init_long_term_buffer(2,img);
-    init_mref(img);
+    init_mref();
     init_Refbuf(img);
 
     if (img->current_slice_nr==0)
@@ -1289,9 +1287,19 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
     sym.value1 = pp->disposable_flag;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
+    if ( pp->sliceType2==INTER_IMG )
+    {
+      sym.value1 = pp->weighted_prediction;
+      writeSyntaxElement2Buf_UVLC(&sym, bitstream);
+    }
     if ( pp->sliceType2==B_IMG )
     {
-      sym.value1 = pp->explicit_B_prediction;
+          // weighted_bipred_explicit_flag
+          sym.value1 = (pp->weighted_biprediction == 1) ? 1:0;
+      writeSyntaxElement2Buf_UVLC(&sym, bitstream);
+
+          // weighted_bipred_implicit_flag
+          sym.value1 = (pp->weighted_biprediction == 2) ? 1:0;
       writeSyntaxElement2Buf_UVLC(&sym, bitstream);
     }
     if ( pp->sliceType2==INTER_IMG || pp->sliceType2==B_IMG )
@@ -1318,10 +1326,6 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
     }
 
 
-#ifdef _ABT_FLAG_IN_SLICE_HEADER_
-    sym.value1 = pp->abtMode;
-    writeSyntaxElement2Buf_UVLC(&sym, bitstream);
-#endif
     sym.mapping = dquant_linfo;
     sym.value1 = pp->initialQP - (MAX_QP - MIN_QP +1)/2;
     writeSyntaxElement2Buf_UVLC (&sym, bitstream);
@@ -1376,9 +1380,14 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
     sym.value1 = pp->disposable_flag;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
+    if ( pp->sliceType2==INTER_IMG )
+    {
+      sym.value1 = pp->weighted_prediction;
+      writeSyntaxElement2Buf_UVLC(&sym, bitstream);
+    }
     if ( pp->sliceType2==B_IMG )
     {
-      sym.value1 = pp->explicit_B_prediction;
+      sym.value1 = pp->weighted_biprediction;
       writeSyntaxElement2Buf_UVLC(&sym, bitstream);
     }
     if ( pp->sliceType2==INTER_IMG || pp->sliceType2==B_IMG )
@@ -1395,10 +1404,6 @@ size_t wrPayloadInfo( PayloadInfo* pp, FILE *fp )
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
     sym.value1 = pp->firstMBInSliceY;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
-#ifdef _ABT_FLAG_IN_SLICE_HEADER_
-    sym.value1 = pp->abtMode;
-    writeSyntaxElement2Buf_UVLC(&sym, bitstream);
-#endif
     sym.mapping = dquant_linfo;
     sym.value1 = pp->initialQP - (MAX_QP - MIN_QP + 1)/2;
     writeSyntaxElement2Buf_UVLC(&sym, bitstream);
@@ -2092,10 +2097,11 @@ size_t writefile_s( void* buf, size_t bufsize, size_t size, size_t count, FILE* 
  */
 void begin_sub_sequence()
 {
-  if ( input->of_mode == PAR_OF_26L || input->NumFramesInELSubSeq == 0 ) return;
+  if ( input->of_mode == PAR_OF_ANNEXB || input->NumFramesInELSubSeq == 0 ) return;
   if ( input->of_mode == PAR_OF_RTP ) 
-  {
-    begin_sub_sequence_rtp();
+  { 
+    assert (0==1);
+//    begin_sub_sequence_rtp();
     return;
   }
 
@@ -2125,10 +2131,11 @@ void begin_sub_sequence()
  */
 void end_sub_sequence()
 {
-  if ( input->of_mode != PAR_OF_26L || input->NumFramesInELSubSeq == 0 ) return;
+  if ( input->of_mode != PAR_OF_ANNEXB || input->NumFramesInELSubSeq == 0 ) return;
   if ( input->of_mode == PAR_OF_RTP ) 
   {
-    end_sub_sequence_rtp();
+    assert (0==1);
+//    end_sub_sequence_rtp();
     return;
   }
 
@@ -2269,6 +2276,11 @@ void remap_ref_short_term(PayloadInfo* pp)
     mref[i]=NULL;
     mcef[i]=NULL;
     Refbuf11[i]=NULL;
+    if (input->WeightedPrediction ||  input->WeightedBiprediction)
+    {
+      Refbuf11_w[i]=NULL;
+      mref_w[i]=NULL;
+    }
   }
 
 }

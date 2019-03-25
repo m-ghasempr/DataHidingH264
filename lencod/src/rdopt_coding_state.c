@@ -94,7 +94,7 @@ create_coding_state ()
     no_mem_exit("init_coding_state: cs");
 
   //=== important variables of data partition array ===
-  cs->no_part = img->currentSlice->max_part_nr;
+  cs->no_part = input->partition_mode==0?1:3;
   if (input->symbol_mode == CABAC)
   {
     if ((cs->encenv = (EncodingEnvironment*) calloc (cs->no_part, sizeof(EncodingEnvironment))) == NULL)

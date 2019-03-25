@@ -55,8 +55,10 @@ typedef struct
   int   picID;
   int   lt_picID;
   byte  **mref;
+  byte  **mref_w;
   byte  ***mcef;
   pel_t *Refbuf11;
+  pel_t *Refbuf11_w;
   int  islong;            //<! field is needed for reordering
   int layer_no;           //<! Tian: to save which layer and sub seq the short-term reference 
   int sub_seq_no;         //<! frames comes from. JVT-B042  June 01, 2002
@@ -93,7 +95,7 @@ void remove_long_term(int longID);
 void remove_short_term(int shortID);
 
 void alloc_mref(ImageParameters *img);
-void init_mref(ImageParameters *img);
+void init_mref();
 void reorder_mref(ImageParameters *img);
 
 void alloc_Refbuf (ImageParameters *img);
@@ -101,6 +103,9 @@ void init_Refbuf(ImageParameters *img);
 
 void add_frame(ImageParameters *img);
 void reset_buffers();
+
+void alloc_ref_pic_list_reordering_buffer(Slice *currSlice);
+void free_ref_pic_list_reordering_buffer(Slice *currSlice);
 
 #endif
 

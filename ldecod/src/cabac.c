@@ -50,7 +50,6 @@
 #include <string.h>
 #include "cabac.h"
 #include "memalloc.h"
-#include "bitsbuf.h"
 #include "header.h"
 #include "elements.h"
 
@@ -110,7 +109,6 @@ void init_contexts_MotionInfo (struct img_par *img, MotionInfoContexts *enco_ctx
 {
   int i,j;
 
-  INIT_CTX (2, NUM_ABT_MODE_CTX, enco_ctx->ABT_mode_contexts, ABT_MODE_Ini);
   INIT_CTX (4, NUM_MB_TYPE_CTX,  enco_ctx->mb_type_contexts,  MB_TYPE_Ini );
   INIT_CTX (2, NUM_B8_TYPE_CTX,  enco_ctx->b8_type_contexts,  B8_TYPE_Ini );
   INIT_CTX (2, NUM_MV_RES_CTX,   enco_ctx->mv_res_contexts,   MV_RES_Ini  );
@@ -367,41 +365,6 @@ void readBiMVD2Buffer_CABAC( SyntaxElement *se,
 }
 
 
-
-
-
-/*!
- ***************************************************************************
- * \brief
- *    This function is used to arithmetically encode the intra_block_modeABT
- ***************************************************************************
- */
-void readABTIntraBlkModeInfo2Buffer_CABAC(SyntaxElement *se,
-                                          struct inp_par *inp,
-                                          struct img_par *img,
-                                          DecodingEnvironmentPtr dep_dp)
-{
-  int                 act_sym = 0;
-  int                 ftype   = (img->type==INTRA_IMG?0:1);
-  MotionInfoContexts *ctx     = (img->currentSlice)->mot_ctx;
-
-  if   (biari_decode_symbol (dep_dp, ctx->ABT_mode_contexts[ftype]+0))
-  {
-    if (biari_decode_symbol (dep_dp, ctx->ABT_mode_contexts[ftype]+2))   act_sym = 3;
-    else                                                                 act_sym = 0;
-  }
-  else
-  {
-    if (biari_decode_symbol (dep_dp, ctx->ABT_mode_contexts[ftype]+1))   act_sym = 2;
-    else                                                                 act_sym = 1;
-  }
-
-  se->value1 = act_sym;
-}
-
-
-
-
 /*!
  ************************************************************************
  * \brief
@@ -559,7 +522,6 @@ void readMB_typeInfoFromBuffer_CABAC( SyntaxElement *se,
   int mode_sym;
   int ct = 0;
   int curr_mb_type;
-  int useABT   = ((inp->abt==INTER_INTRA_ABT) || (inp->abt==INTER_ABT));
 
 
   MotionInfoContexts *ctx = (img->currentSlice)->mot_ctx;
@@ -711,8 +673,7 @@ void readMB_typeInfoFromBuffer_CABAC( SyntaxElement *se,
             else
             {
               if (act_sym==22)     act_sym=23;
-              if ((!useABT) || (act_sym != 23))
-                if (biari_decode_symbol (dep_dp, &ctx->mb_type_contexts[2][6])) act_sym+=1; 
+              if (biari_decode_symbol (dep_dp, &ctx->mb_type_contexts[2][6])) act_sym+=1; 
             }
           }
           else
@@ -739,12 +700,8 @@ void readMB_typeInfoFromBuffer_CABAC( SyntaxElement *se,
       {
         if (biari_decode_symbol(dep_dp, &ctx->mb_type_contexts[1][4] )) 
         {
-          if (!useABT)
-          {
-            if (biari_decode_symbol(dep_dp, &ctx->mb_type_contexts[1][7] ))   act_sym = 7;
-            else                                                              act_sym = 6;
-          }
-          else                                                                act_sym = 6;
+          if (biari_decode_symbol(dep_dp, &ctx->mb_type_contexts[1][7] ))   act_sym = 7;
+          else                                                              act_sym = 6;
         }
         else
         {
@@ -1579,6 +1536,7 @@ int readSyntaxElement_CABAC(SyntaxElement *se, struct img_par *img, struct inp_p
  *    get slice and header
  ************************************************************************
  */
+/*
 int readSliceCABAC(struct img_par *img, struct inp_par *inp)
 {
   Slice *currSlice = img->currentSlice;
@@ -1592,6 +1550,7 @@ int readSliceCABAC(struct img_par *img, struct inp_par *inp)
   int newframe = 0;   //WYK: Oct. 8, 2001, change the method to find a new frame
   int startcodeprefix_len; //Number of bytes taken by start code prefix
 
+assert (0==1);
   currStream->frame_bitoffset =0;
 
   memset (code_buffer, 0xff, MAX_CODED_FRAME_SIZE);   // this prevents a buffer full with zeros
@@ -1611,7 +1570,7 @@ int readSliceCABAC(struct img_par *img, struct inp_par *inp)
   // Now we have the bits between the current startcode (inclusive) and the
   // next start code in code_buffer.  Now decode the start codes and the headers
   currStream->frame_bitoffset += startcodeprefix_len * 8;
-  BitsUsedByHeader+=SliceHeader(img, inp);
+  BitsUsedByHeader+=RestOfSliceHeader();
 
   //WYK: Oct. 8, 2001, change the method to find a new frame
   if(img->tr != img->tr_old)
@@ -1635,6 +1594,7 @@ int readSliceCABAC(struct img_par *img, struct inp_par *inp)
   return current_header;
 
 }
+*/
 
 /*!
  ************************************************************************

@@ -31,10 +31,10 @@
 */
 /*!
  ***************************************************************************
- * \file uvlc.c
+ * \file vlc.c
  *
  * \brief
- *    UVLC table helper functions
+ *    (CA)VLC coding functions
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
@@ -52,7 +52,164 @@
 #include <assert.h>
 
 #include "elements.h"
-#include "golomb.h"
+#include "vlc.h"
+
+#if TRACE
+#define SYMTRACESTRING(s) strncpy(sym.tracestring,s,TRACESTRING_SIZE)
+#else
+#define SYMTRACESTRING(s) // to nothing
+#endif
+
+
+/*! 
+ *************************************************************************************
+ * \brief
+ *    ue_v, writes an ue(v) syntax element, returns the length in bits
+ *
+ * \param 
+ *    tracestring: the string for the trace file
+ *    value: the value to be coded
+ *    part: the DataPartition the value should be coded into
+ *
+ * \return
+ *    Number of bits used by the coded syntax element
+ *
+ * \ note
+ *    This function writes always the bit buffer for the progressive scan flag, and
+ *    should not be used (or should be modified appropriately) for the interlace crap
+ *    When used in the context of the Parameter Sets, this is obviously not a
+ *    problem.
+ *
+ *************************************************************************************
+ */
+
+int ue_v (char *tracestring, int value, DataPartition *part)
+{
+  SyntaxElement symbol, *sym=&symbol;
+  sym->type = SE_HEADER;
+  sym->mapping = n_linfo2;               // Mapping rule: unsigned integer
+  sym->value1 = value;
+#if TRACE
+  strncpy(sym->tracestring,tracestring,TRACESTRING_SIZE);
+#endif
+  assert (part->bitstream->streamBuffer != NULL);
+  return writeSyntaxElement_UVLC (sym, part);
+}
+
+
+/*! 
+ *************************************************************************************
+ * \brief
+ *    ue_v, writes an ue(v) syntax element, returns the length in bits
+ *
+ * \param 
+ *    tracestring: the string for the trace file
+ *    value: the value to be coded
+ *    part: the DataPartition the value should be coded into
+ *
+ * \return
+ *    Number of bits used by the coded syntax element
+ *
+ * \ note
+ *    This function writes always the bit buffer for the progressive scan flag, and
+ *    should not be used (or should be modified appropriately) for the interlace crap
+ *    When used in the context of the Parameter Sets, this is obviously not a
+ *    problem.
+ *
+ *************************************************************************************
+ */
+
+int se_v (char *tracestring, int value, DataPartition *part)
+{
+  SyntaxElement symbol, *sym=&symbol;
+  sym->type = SE_HEADER;
+  sym->mapping = dquant_linfo;               // Mapping rule: signed integer
+  sym->value1 = value;
+#if TRACE
+  strncpy(sym->tracestring,tracestring,TRACESTRING_SIZE);
+#endif
+  assert (part->bitstream->streamBuffer != NULL);
+  return writeSyntaxElement_UVLC (sym, part);
+}
+
+
+/*! 
+ *************************************************************************************
+ * \brief
+ *    u_1, writes a flag (u(1) syntax element, returns the length in bits, 
+ *    always 1
+ *
+ * \param 
+ *    tracestring: the string for the trace file
+ *    value: the value to be coded
+ *    part: the DataPartition the value should be coded into
+ *
+ * \return
+ *    Number of bits used by the coded syntax element (always 1)
+ *
+ * \ note
+ *    This function writes always the bit buffer for the progressive scan flag, and
+ *    should not be used (or should be modified appropriately) for the interlace crap
+ *    When used in the context of the Parameter Sets, this is obviously not a
+ *    problem.
+ *
+ *************************************************************************************
+ */
+
+int u_1 (char *tracestring, int value, DataPartition *part)
+{
+  SyntaxElement symbol, *sym=&symbol;
+
+  sym->bitpattern = value;
+  sym->len = 1;
+  sym->type = SE_HEADER;
+  sym->value1 = value;
+#if TRACE
+  strncpy(sym->tracestring,tracestring,TRACESTRING_SIZE);
+#endif
+  assert (part->bitstream->streamBuffer != NULL);
+  return writeSyntaxElement_fixed(sym, part);
+}
+
+/*! 
+ *************************************************************************************
+ * \brief
+ *    u_v, writes a a n bit fixed length syntax element, returns the length in bits, 
+ *
+ * \param 
+ *    n number of bits to be used for binary unsigned coding
+ *    tracestring: the string for the trace file
+ *    value: the value to be coded
+ *    part: the DataPartition the value should be coded into
+ *
+ * \return
+ *    Number of bits used by the coded syntax element 
+ *
+ * \ note
+ *    This function writes always the bit buffer for the progressive scan flag, and
+ *    should not be used (or should be modified appropriately) for the interlace crap
+ *    When used in the context of the Parameter Sets, this is obviously not a
+ *    problem.
+ *
+ *************************************************************************************
+ */
+
+int u_v (int n, char *tracestring, int value, DataPartition *part)
+{
+  SyntaxElement symbol, *sym=&symbol;
+
+  sym->bitpattern = value;
+  sym->len = n;
+  sym->type = SE_HEADER;
+  sym->value1 = value;
+#if TRACE
+  strncpy(sym->tracestring,tracestring,TRACESTRING_SIZE);
+#endif
+  assert (part->bitstream->streamBuffer != NULL);
+  return writeSyntaxElement_fixed(sym, part);
+}
+
+
 
 /*!
  ************************************************************************
@@ -406,10 +563,6 @@ int symbol2uvlc(SyntaxElement *sym)
  */
 int writeSyntaxElement_UVLC(SyntaxElement *se, DataPartition *this_dataPart)
 {
-
-  if( se->golomb_maxlevels && (se->type==SE_LUM_DC_INTRA||se->type==SE_LUM_AC_INTRA||se->type==SE_LUM_DC_INTER||se->type==SE_LUM_AC_INTER) )
-    return writeSyntaxElement_GOLOMB(se,this_dataPart);
-
   se->mapping(se->value1,se->value2,&(se->len),&(se->inf));
   symbol2uvlc(se);
 
@@ -1033,8 +1186,7 @@ int writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *thi
  ************************************************************************
  */
 #if TRACE
-void
-trace2out(SyntaxElement *sym)
+void trace2out(SyntaxElement *sym)
 {
   static int bitcounter = 0;
   int i, chars;
@@ -1047,7 +1199,7 @@ trace2out(SyntaxElement *sym)
       putc(' ',p_trace);
 
     chars += fprintf(p_trace, "%s", sym->tracestring);
-    while(chars++ < 50)
+    while(chars++ < 55)
       putc(' ',p_trace);
 
   // Align bitpattern
@@ -1056,6 +1208,7 @@ trace2out(SyntaxElement *sym)
       for(i=0 ; i<15-sym->len ; i++)
         fputc(' ', p_trace);
     }
+    
     // Print bitpattern
     bitcounter += sym->len;
     for(i=1 ; i<=sym->len ; i++)
@@ -1070,3 +1223,27 @@ trace2out(SyntaxElement *sym)
   fflush (p_trace);
 }
 #endif
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    puts the less than 8 bits in the byte buffer of the Bitstream into
+ *    the streamBuffer.  
+ *
+ * \param
+ *   currStream: the Bitstream the alignment should be established
+ *
+ ************************************************************************
+ */
+
+void writeVlcByteAlign(Bitstream* currStream)
+{
+  if (currStream->bits_to_go < 8)
+  { // trailing bits to process
+    currStream->byte_buf <<= currStream->bits_to_go;
+    stat->bit_use_stuffingBits[img->type]+=currStream->bits_to_go;
+    currStream->streamBuffer[currStream->byte_pos++]=currStream->byte_buf;
+    currStream->bits_to_go = 8;
+  }
+}

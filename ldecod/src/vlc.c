@@ -50,24 +50,110 @@
 #include <stdlib.h>
 #include <memory.h>
 #include <string.h>
+#include <assert.h>
 
 #include "global.h"
-#include "uvlc.h"
+#include "vlc.h"
 #include "elements.h"
-#include "bitsbuf.h"
 #include "header.h"
-#include "golomb_dec.h"
 
 
 // A little trick to avoid those horrible #if TRACE all over the source code
 #if TRACE
-#define SYMTRACESTRING(s) strncpy(sym.tracestring,s,TRACESTRING_SIZE)
+#define SYMTRACESTRING(s) strncpy(sym->tracestring,s,TRACESTRING_SIZE)
 #else
 #define SYMTRACESTRING(s) // do nothing
 #endif
 
 extern void tracebits(const char *trace_str,  int len,  int info,int value1,
     int value2) ;
+
+
+extern int UsedBits;      // for internal statistics, is adjusted by se_v, ue_v, u_1
+
+// Note that all NA values are filled with 0
+
+//! for the linfo_levrun_inter routine
+const byte NTAB1[4][8][2] =
+{
+  {{1,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0}},
+  {{1,1},{1,2},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0}},
+  {{2,0},{1,3},{1,4},{1,5},{0,0},{0,0},{0,0},{0,0}},
+  {{3,0},{2,1},{2,2},{1,6},{1,7},{1,8},{1,9},{4,0}},
+};
+const byte LEVRUN1[16]=
+{
+  4,2,2,1,1,1,1,1,1,1,0,0,0,0,0,0,
+};
+
+
+const byte NTAB2[4][8][2] =
+{
+  {{1,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0}},
+  {{1,1},{2,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0}},
+  {{1,2},{3,0},{4,0},{5,0},{0,0},{0,0},{0,0},{0,0}},
+  {{1,3},{1,4},{2,1},{3,1},{6,0},{7,0},{8,0},{9,0}},
+};
+
+//! for the linfo_levrun__c2x2 routine
+const byte LEVRUN3[4] =
+{
+  2,1,0,0
+};
+const byte NTAB3[2][2][2] =
+{
+  {{1,0},{0,0}},
+  {{2,0},{1,1}},
+};
+
+
+int se_v (char *tracestring, DataPartition *part)
+{
+  SyntaxElement symbol, *sym=&symbol;
+
+  assert (part->bitstream->streamBuffer != NULL);
+  sym->type = SE_HEADER;
+  sym->mapping = linfo_dquant;   // Mapping rule: signed integer
+  SYMTRACESTRING(tracestring);
+  readSyntaxElement_UVLC (sym,img,input,part);
+  UsedBits+=sym->len;
+  return sym->value1;
+}
+
+
+int ue_v (char *tracestring, DataPartition *part)
+{
+  SyntaxElement symbol, *sym=&symbol;
+
+  assert (part->bitstream->streamBuffer != NULL);
+  sym->type = SE_HEADER;
+  sym->mapping = linfo;   // Mapping rule
+  SYMTRACESTRING(tracestring);
+  readSyntaxElement_UVLC (sym,img,input,part);
+  UsedBits+=sym->len;
+  return sym->value1;
+}
+
+                
+int u_1 (char *tracestring, DataPartition *part)
+{
+  return u_v (1, tracestring, part);
+}
+
+
+int u_v (int LenInBits, char*tracestring, DataPartition *part)
+{
+  SyntaxElement symbol, *sym=&symbol;
+
+  assert (part->bitstream->streamBuffer != NULL);
+  sym->type = SE_HEADER;
+  sym->mapping = linfo;   // Mapping rule
+  sym->len = LenInBits;
+  SYMTRACESTRING(tracestring);
+  readSyntaxElement_FLC (sym,part);
+  UsedBits+=sym->len;
+  return sym->inf;
+};
 
 /*!
  ************************************************************************
@@ -182,39 +268,6 @@ void linfo_levrun_inter(int len, int info, int *level, int *irun)
         *level = 0;
 }
 
-/*!
- ************************************************************************
- * \par Input:
- *    lenght and info
- * \par Output:
- *    level, run
- ************************************************************************
- */
-void linfo_levrun_intra(int len, int info, int *level,  int *irun)
-{
-  int l2;
-  int inf;
-
-  if (len<=9)
-  {
-    l2=mmax(0,len/2-1);
-    inf=info/2;
-    *level=NTAB2[l2][inf][0];
-    *irun=NTAB2[l2][inf][1];
-    if ((info&0x01)==1)
-      *level=-*level;                 // make sign
-  }
-  else                                  // if len > 9, skip using the array
-  {
-    *irun=(info&0x0e)>>1;
-    *level = LEVRUN2[*irun] + info/16 + (int)pow(2,len/2-4) -1;
-    if ((info&0x01)==1)
-      *level=-*level;
-  }
-    if (len == 1) // EOB
-        *level = 0;
-}
-
 
 /*!
  ************************************************************************
@@ -264,6 +317,7 @@ void linfo_levrun_c2x2(int len, int info, int *level, int *irun)
  *    readSliceUVLC returns -1 in case of problems, or oen of SOP, SOS, EOS in case of success
  ************************************************************************
  */
+/*
 int readSliceUVLC(struct img_par *img, struct inp_par *inp)
 {
   Slice *currSlice = img->currentSlice;
@@ -281,6 +335,7 @@ int readSliceUVLC(struct img_par *img, struct inp_par *inp)
   currStream->frame_bitoffset = 0;
   
   memset (buf, 0xff, MAX_CODED_FRAME_SIZE);   // this prevents a buffer full with zeros
+
   currStream->bitstream_length = GetOneSliceIntoSourceBitBuffer(img, inp, buf, &startcodeprefix_len);
   if (currStream->bitstream_length > startcodeprefix_len)  // More than just a start code
   {
@@ -312,9 +367,7 @@ int readSliceUVLC(struct img_par *img, struct inp_par *inp)
     // PLUS2, 7/7 temp fix for AFF
     if(img->structure != img->structure_old)        
       newframe |= 1;
-/*    else
-      newframe = 0;  */
-      img->structure_old = img->structure; 
+    img->structure_old = img->structure; 
 
   // if the TR of current slice is not identical to the TR  of previous received slice, we have a new frame
     if(newframe)
@@ -327,7 +380,7 @@ int readSliceUVLC(struct img_par *img, struct inp_par *inp)
     return EOS;
   return 0;
 }
-
+*/
 
 /*!
  ************************************************************************
@@ -342,9 +395,6 @@ int readSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct inp_p
   int frame_bitoffset = currStream->frame_bitoffset;
   byte *buf = currStream->streamBuffer;
   int BitstreamLengthInBytes = currStream->bitstream_length;
-
-  if( sym->golomb_maxlevels && (sym->type==SE_LUM_DC_INTRA||sym->type==SE_LUM_AC_INTRA||sym->type==SE_LUM_DC_INTER||sym->type==SE_LUM_AC_INTER) )
-    return readSyntaxElement_GOLOMB(sym,img,inp,dP);
 
   sym->len =  GetVLCSymbol (buf, frame_bitoffset, &(sym->inf), BitstreamLengthInBytes);
   if (sym->len == -1)
@@ -382,7 +432,7 @@ int readSyntaxElement_Intra4x4PredictionMode(SyntaxElement *sym, struct img_par 
   sym->value1                  = sym->len == 1 ? -1 : sym->inf;
 
 #if TRACE
-  tracebits(sym->tracestring, sym->len, sym->inf, sym->value1, sym->value2);
+  tracebits2(sym->tracestring, sym->len, sym->value1);
 #endif
 
   return 1;
@@ -485,11 +535,65 @@ int readSyntaxElement_fixed(SyntaxElement *sym, struct img_par *img, struct inp_
   currStream->frame_bitoffset += sym->len;
 
 #if TRACE
-  tracebits(sym->tracestring, sym->len, sym->inf, sym->value1, sym->value2);
+//  tracebits(sym->tracestring, sym->len, sym->inf, sym->value1, sym->value2);
+  tracebits2(sym->tracestring, sym->len, sym->inf);
 #endif
 
   return bitcounter;           // return absolute offset in bit from start of frame
 }
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    test if bit buffer contains only stop bit
+ *
+ * \param byte buffer[]
+ *    containing VLC-coded data bits
+ * \param int totbitoffset
+ *    bit offset from start of partition
+ * \param int bytecont
+ *    buffer length
+ ************************************************************************
+ */
+int more_rbsp_data (byte buffer[],int totbitoffset,int bytecount)
+{
+
+  long byteoffset;      // byte from start of buffer
+  int bitoffset;      // bit from start of byte
+  int ctr_bit=0;      // control bit for current bit posision
+  int bitcounter=1;
+
+  int cnt=0;
+
+  
+  byteoffset= totbitoffset/8;
+  bitoffset= 7-(totbitoffset%8);
+
+  assert (byteoffset<bytecount);
+
+  // there is more until we're in the last byte
+  if (byteoffset<(bytecount-1)) return TRUE;
+
+  // read one bit
+  ctr_bit = (buffer[byteoffset] & (0x01<<bitoffset));
+  
+  // a stop bit has to be one
+  if (ctr_bit==0) return TRUE;
+
+  bitoffset--;
+
+  while (bitoffset>=0)
+  {
+    ctr_bit = (buffer[byteoffset] & (0x01<<bitoffset));   // set up control bit
+    if (ctr_bit>0) cnt++;
+    bitoffset--;
+  }
+
+  return (0!=cnt);
+
+}
+
 
 /*!
  ************************************************************************
@@ -505,13 +609,18 @@ int uvlc_startcode_follows(struct img_par *img, struct inp_par *inp, int dummy)
   Bitstream   *currStream = dP->bitstream;
   byte *buf = currStream->streamBuffer;
   int frame_bitoffset = currStream->frame_bitoffset;
-  int info;
+/*  int info;
 // printf ("uvlc_startcode_follows returns %d\n", (-1 == GetVLCSymbol (buf, frame_bitoffset, &info, currStream->bitstream_length)));
   if (-1 == GetVLCSymbol (buf, frame_bitoffset, &info, currStream->bitstream_length))
     return TRUE;
   else
     return FALSE;
+*/
+  //!KS: new function test for End of Buffer
+  return (!(more_rbsp_data(buf, frame_bitoffset,currStream->bitstream_length)));
 }
+
+
 
 /*!
  ************************************************************************
@@ -1319,8 +1428,6 @@ int peekSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct inp_p
   byte *buf = currStream->streamBuffer;
   int BitstreamLengthInBytes = currStream->bitstream_length;
 
-  if( sym->golomb_maxlevels && (sym->type==SE_LUM_DC_INTRA||sym->type==SE_LUM_AC_INTRA||sym->type==SE_LUM_DC_INTER||sym->type==SE_LUM_AC_INTER) )
-    return readSyntaxElement_GOLOMB(sym,img,inp,dP);
 
 /*
   sym->len =  GetVLCSymbol (buf, frame_bitoffset, &(sym->inf), BitstreamLengthInBytes);

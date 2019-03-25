@@ -42,6 +42,66 @@
 #ifndef _RTP_H_
 #define _RTP_H_
 
+#include "nalucommon.h"
+
+#define MAXRTPPAYLOADLEN  (65536 - 40)    //!< Maximum payload size of an RTP packet */
+#define MAXRTPPACKETSIZE  (65536 - 28)    //!< Maximum size of an RTP packet incl. header */
+#define H26LPAYLOADTYPE 105               //!< RTP paylaod type fixed here for simplicity*/
+#define H26LSSRC 0x12345678               //!< SSRC, chosen to simplify debugging */
+#define RTP_TR_TIMESTAMP_MULT 1000        //!< should be something like 27 Mhz / 29.97 Hz */
+
+typedef struct 
+{
+  unsigned int v;          //!< Version, 2 bits, MUST be 0x2
+  unsigned int p;          //!< Padding bit, Padding MUST NOT be used
+  unsigned int x;          //!< Extension, MUST be zero
+  unsigned int cc;         /*!< CSRC count, normally 0 in the absence 
+                                of RTP mixers */
+  unsigned int m;          //!< Marker bit
+  unsigned int pt;         //!< 7 bits, Payload Type, dynamically established 
+  unsigned int seq;        /*!< RTP sequence number, incremented by one for
+                                each sent packet */
+  unsigned int old_seq;    //!< to detect wether packets were lost
+  unsigned int timestamp;  //!< timestamp, 27 MHz for H.26L
+  unsigned int ssrc;       //!< Synchronization Source, chosen randomly
+  byte *       payload;    //!< the payload including payload headers
+  unsigned int paylen;     //!< length of payload in bytes
+  byte *       packet;     //!< complete packet including header and payload
+  unsigned int packlen;    //!< length of packet, typically paylen+12
+} RTPpacket_t;
+
+void DumpRTPHeader (RTPpacket_t *p);
+
+
+int  GetRTPNALU (NALU_t *nalu);
+void OpenRTPFile (char *fn);
+void CloseRTPFile();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if 0
 #define RTP_MAX_PARAMETER_SET 10    /*!< Maximum number of supported parameter sets */
 
 #define RTP_PARAMETER_SET_OK  0
@@ -51,6 +111,7 @@
 #define RTP_MAX_STRING_LEN 4096
 
 #include "mbuffer.h"
+
 
 typedef struct
 {
@@ -86,6 +147,9 @@ typedef struct
 
 } ParameterSet_t;
 
+
+
+
 typedef struct
 {
   int FramesToBeEncoded;
@@ -99,26 +163,6 @@ typedef struct
 #define H26LPAYLOADTYPE 105               //!< RTP paylaod type fixed here for simplicity*/
 #define H26LSSRC 0x12345678               //!< SSRC, chosen to simplify debugging */
 #define RTP_TR_TIMESTAMP_MULT 1000        //!< should be something like 27 Mhz / 29.97 Hz */
-
-typedef struct 
-{
-  unsigned int v;          //!< Version, 2 bits, MUST be 0x2
-  unsigned int p;          //!< Padding bit, Padding MUST NOT be used
-  unsigned int x;          //!< Extension, MUST be zero
-  unsigned int cc;         /*!< CSRC count, normally 0 in the absence 
-                                of RTP mixers */
-  unsigned int m;          //!< Marker bit
-  unsigned int pt;         //!< 7 bits, Payload Type, dynamically established 
-  unsigned int seq;        /*!< RTP sequence number, incremented by one for
-                                each sent packet */
-  unsigned int old_seq;    //!< to detect wether packets were lost
-  unsigned int timestamp;  //!< timestamp, 27 MHz for H.26L
-  unsigned int ssrc;       //!< Synchronization Source, chosen randomly
-  byte *       payload;    //!< the payload including payload headers
-  unsigned int paylen;     //!< length of payload in bytes
-  byte *       packet;     //!< complete packet including header and payload
-  unsigned int packlen;    //!< length of packet, typically paylen+12
-} RTPpacket_t;
 
 
 typedef struct
@@ -150,6 +194,8 @@ typedef struct
 } RTPSliceHeader_t;
 
 
+
+
 extern ParameterSet_t ParSet[];
 
 int  ReadRTPPacket (struct img_par *img, struct inp_par *inp, FILE *bits);
@@ -175,5 +221,8 @@ void RTPProcessDataPartitionedSlice (struct img_par *img, struct inp_par *inp, F
 void CopyPartitionBitstring (struct img_par *img, RTPpacket_t *p, Bitstream *b, int dP, struct inp_par *inp);
 
 void ProcessAggregationPacket(RTPpacket_t *p, struct img_par *img);
+
+#endif
+
 
 #endif

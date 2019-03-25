@@ -87,11 +87,7 @@ LINK32=link.exe
 # PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
 # Begin Source File
 
-SOURCE=.\lencod\src\abt.c
-# End Source File
-# Begin Source File
-
-SOURCE=.\lencod\src\abt_const.c
+SOURCE=.\lencod\src\annexb.c
 # End Source File
 # Begin Source File
 
@@ -115,19 +111,11 @@ SOURCE=.\lencod\src\decoder.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\lencod\src\encodeiff.c
-# End Source File
-# Begin Source File
-
 SOURCE=.\lencod\src\filehandle.c
 # End Source File
 # Begin Source File
 
 SOURCE=.\lencod\src\fmo.c
-# End Source File
-# Begin Source File
-
-SOURCE=.\lencod\src\golomb.c
 # End Source File
 # Begin Source File
 
@@ -175,6 +163,22 @@ SOURCE=.\lencod\src\nal.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\lencod\src\nalu.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lcommon\src\nalucommon.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\parset.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lcommon\src\parsetcommon.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\src\rdopt.c
 # End Source File
 # Begin Source File
@@ -195,7 +199,11 @@ SOURCE=.\lencod\src\sei.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\lencod\src\uvlc.c
+SOURCE=.\lencod\src\slice.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\src\vlc.c
 # End Source File
 # End Group
 # Begin Group "Header Files"
@@ -203,7 +211,7 @@ SOURCE=.\lencod\src\uvlc.c
 # PROP Default_Filter "h;hpp;hxx;hm;inl"
 # Begin Source File
 
-SOURCE=.\lencod\inc\abt.h
+SOURCE=.\lencod\inc\annexb.h
 # End Source File
 # Begin Source File
 
@@ -247,10 +255,6 @@ SOURCE=.\lencod\inc\global.h
 # End Source File
 # Begin Source File
 
-SOURCE=.\lencod\inc\golomb.h
-# End Source File
-# Begin Source File
-
 SOURCE=.\lencod\inc\header.h
 # End Source File
 # Begin Source File
@@ -283,6 +287,22 @@ SOURCE=".\lencod\inc\mv-search.h"
 # End Source File
 # Begin Source File
 
+SOURCE=.\lencod\inc\nalu.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lcommon\inc\nalucommon.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\inc\parset.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lcommon\inc\parsetcommon.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\inc\rdopt_coding_state.h
 # End Source File
 # Begin Source File
@@ -296,6 +316,10 @@ SOURCE=.\lencod\inc\rtp.h
 # Begin Source File
 
 SOURCE=.\lencod\inc\sei.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\inc\vlc.h
 # End Source File
 # End Group
 # Begin Source File

@@ -50,6 +50,20 @@
 #ifndef _DEFINES_H_
 #define _DEFINES_H_
 
+#define TRACE           1   //!< 0:Trace off 1:Trace on
+
+// NAL Stuff
+
+// This could, in theory, be in parameter of the encoder config file.  In fact,
+// it was, tr_modulues and picidmodulus, which were never used by anyone and
+// are hence deleted.  Note: the JM50g software incorrectly implemented this
+// value as a log2_max_frame_num_PLUS4, meaning that 12 was sent in order to
+// sigbal an 8 bit frame_num.  This is corrected.
+
+#define LOG2_MAX_FRAME_NUM_MINUS4   4
+
+
+
 // CAVLC
 #define LUMA              0
 #define LUMA_INTRA16x16DC 1
@@ -59,7 +73,9 @@
 #define TOTRUN_NUM    15
 #define RUNBEFORE_NUM  7
 
-
+#define  MAX_NO_POC_FRAMES  10  //size of poc ref array
+#define NONREFFRAME 0           // used with push_poc
+#define REFFRAME 1
 
 
 //--- block types for CABAC
@@ -102,35 +118,12 @@
 
 #define IMG_PAD_SIZE    4   //!< Number of pixels padded around the reference frame (>=4)
 
-#if defined _DEBUG
-#define TRACE           0   //!< 0:Trace off 1:Trace on
-#else
-#define TRACE           0   //!< 0:Trace off 1:Trace on
-#endif
-
 #define BDIRECTINTRA        1        //!< Direct SpatioTemporal Prediction 
 
 #define absm(A) ((A)<(0) ? (-(A)):(A)) //!< abs macro, faster than procedure
 #define MAX_VALUE       999999   //!< used for start value for some variables
 
 #define Clip1(a)            ((a)>255?255:((a)<0?0:(a)))
-
-
-// ---------------------------------------------------------------------------------
-// FLAGS and DEFINES for ABT.
-#define INI_CTX         1       //!< use initialization values for all CABAC contexts. 0=off, 1=on
-#define INICNT_ABT      64      // max_count for ABT contexts if INI_CTX = 0
-
-#define B8_SIZE         8       // maximum block size of block transformed by ABT. 020308 mwi
-#define WHOLE_BLK      -1       // signal application on all subblocks for ABT routines. 020308 mwi
-#define ABT_OFF        -1
-#define QUANT_PERIOD    6       // mantissa/exponent quantization, step size doubles every QUANT_PERIOD qp
-#define _ALT_SCAN_              // use GI scan from JVT-C140 for field coding
-#define QP_OFS         -12      // workaround to use old qp-design for ABT routines
-#define _CD_4x4VALUES_          // use baseline 4x4 quantization values
-//#define _ABT_FLAG_IN_SLICE_HEADER_ // write ABT flag to slice header (needs fix)
-// ---------------------------------------------------------------------------------
-
 
 #define P8x8    8
 #define I4MB    9
@@ -154,7 +147,8 @@
 #define IS_OLDINTRA(MB) ((MB)->mb_type==I4MB)
 #define IS_INTER(MB)    ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB)
 #define IS_INTERMV(MB)  ((MB)->mb_type!=I4MB  && (MB)->mb_type!=I16MB  && (MB)->mb_type!=0)
-#define IS_DIRECT(MB)   ((MB)->mb_type==0     && img ->   type==B_IMG)
+#define IS_DIRECT(MB)   ((MB)->mb_type==0     && (img ->   type==B_IMG || img ->type==BS_IMG))
+// #define IS_DIRECT(MB)   ((MB)->mb_type==0     && img ->   type==B_IMG)
 #define IS_COPY(MB)     ((MB)->mb_type==0     && img ->   type==INTER_IMG);
 #define IS_P8x8(MB)     ((MB)->mb_type==P8x8)
 
@@ -177,7 +171,7 @@
 #define DIR_TEMPORAL    0   //!< Temporal Direct Mode
 #define DIR_SPATIAL     1    //!< Spatial Direct Mode
 
-
+#define MAX_REFERENCE_PICTURES 15
 
 #define BLOCK_SIZE      4
 #define MB_BLOCK_SIZE   16
@@ -201,11 +195,12 @@
 #define PLANE_16        3
 
 // 8x8 chroma intra prediction modes
-#define DC_PRED_8       0
+#define VERT_PRED_8     0
 #define HOR_PRED_8      1
-#define VERT_PRED_8     2
+#define DC_PRED_8       2
 #define PLANE_8         3
 
+/*
 // image formats
 #define SUB_QCIF        0       // GH added picture formats
 #define QCIF            1
@@ -219,6 +214,7 @@
 #define IMG_HEIGHT      144
 #define IMG_WIDTH_CR    88
 #define IMG_HEIGHT_CR   72
+*/
 
 #define INIT_FRAME_RATE 30
 #define EOS             1         //!< End Of Sequence
@@ -236,7 +232,7 @@
                                   // CAVLC needs more symbols per MB
 
 
-#define MAX_PART_NR     8 /*!< Maximum number of different data partitions.
+#define MAX_PART_NR     3 /*!< Maximum number of different data partitions.
                                Some reasonable number which should reflect
                                what is currently defined in the SE2Partition map (elements.h) */
 
@@ -244,5 +240,8 @@
                                              types to be coded, e.g. "IBBPBBPBB" */
 //Start code and Emulation Prevention need this to be defined in identical manner at encoder and decoder
 #define ZEROBYTES_SHORTSTARTCODE 2 //indicates the number of zero bytes in the short start-code prefix
+#define BIPRED_SIMPLE 1
+//#define SIMPLE_CHROMA_WP 1
+
 #endif
 

@@ -143,6 +143,8 @@ void free_frame_buffers(struct inp_par *inp, ImageParameters *img)
 {
   int i;
 
+  img->buf_cycle = inp->buf_cycle+1;
+
   for (i=0;i<img->buf_cycle;i++)
   {
     free_mem2D(frm->picbuf_short[i]->mref);
@@ -154,7 +156,7 @@ void free_frame_buffers(struct inp_par *inp, ImageParameters *img)
   for (i=0;i<img->buf_cycle;i++)
     free (frm->picbuf_short[i]);
 
-  free (frm->picbuf_short);
+  free (frm->picbuf_short);		//Access violation here may mean input file is empty
 
   if (frm->picbuf_long)
   {
@@ -537,6 +539,13 @@ void init_mref(ImageParameters *img)
  */
 void reorder_mref(ImageParameters *img)
 {
+
+  //!KS: do nothing but freeing the buffers, needs to be rewritten for list0 and list1
+  init_mref(img);
+  free_ref_pic_list_reordering_buffer(img->currentSlice);
+  return;
+
+#if (0)
   RMPNIbuffer_t *r;
 
   int pnp = img->pn;
@@ -548,6 +557,7 @@ void reorder_mref(ImageParameters *img)
   
   Frame **fr;
   Frame *f;
+
 
   // if nothing to do update mref and return
   if (img->currentSlice->rmpni_buffer==NULL) 
@@ -666,7 +676,7 @@ void reorder_mref(ImageParameters *img)
 
   // free temporary memory
   free (fr);
-
+#endif
 }
 
 /*!
@@ -848,3 +858,64 @@ void fill_PN_gap(ImageParameters *img)
   }
   fb = frm;
 }
+
+
+void alloc_ref_pic_list_reordering_buffer(Slice *currSlice)
+{
+  int size = img->num_ref_pic_active_fwd;
+
+  if (img->type!=INTRA_IMG && img->type!=SI_IMG)
+  {
+    if ((currSlice->remapping_of_pic_nums_idc_l0 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: remapping_of_pic_nums_idc_l0");
+    if ((currSlice->abs_diff_pic_num_minus1_l0 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: abs_diff_pic_num_minus1_l0");
+    if ((currSlice->long_term_pic_idx_l0 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: long_term_pic_idx_l0");
+  }
+  else
+  {
+    currSlice->remapping_of_pic_nums_idc_l0 = NULL;
+    currSlice->abs_diff_pic_num_minus1_l0 = NULL;
+    currSlice->long_term_pic_idx_l0 = NULL;
+  }
+  
+  size = img->num_ref_pic_active_bwd;
+
+  if (img->type!=B_IMG_1 || img->type!=B_IMG_MULT)
+  {
+    if ((currSlice->remapping_of_pic_nums_idc_l1 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: remapping_of_pic_nums_idc_l1");
+    if ((currSlice->abs_diff_pic_num_minus1_l1 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: abs_diff_pic_num_minus1_l1");
+    if ((currSlice->long_term_pic_idx_l1 = calloc(size,sizeof(int)))==NULL) no_mem_exit("alloc_ref_pic_list_reordering_buffer: long_term_pic_idx_l1");
+  }
+  else
+  {
+    currSlice->remapping_of_pic_nums_idc_l1 = NULL;
+    currSlice->abs_diff_pic_num_minus1_l1 = NULL;
+    currSlice->long_term_pic_idx_l1 = NULL;
+  }
+}
+
+void free_ref_pic_list_reordering_buffer(Slice *currSlice)
+{
+
+  if (currSlice->remapping_of_pic_nums_idc_l0) 
+    free(currSlice->remapping_of_pic_nums_idc_l0);
+  if (currSlice->abs_diff_pic_num_minus1_l0)
+    free(currSlice->abs_diff_pic_num_minus1_l0);
+  if (currSlice->long_term_pic_idx_l0)
+    free(currSlice->long_term_pic_idx_l0);
+
+  currSlice->remapping_of_pic_nums_idc_l0 = NULL;
+  currSlice->abs_diff_pic_num_minus1_l0 = NULL;
+  currSlice->long_term_pic_idx_l0 = NULL;
+  
+  if (currSlice->remapping_of_pic_nums_idc_l1)
+    free(currSlice->remapping_of_pic_nums_idc_l1);
+  if (currSlice->abs_diff_pic_num_minus1_l1)
+    free(currSlice->abs_diff_pic_num_minus1_l1);
+  if (currSlice->long_term_pic_idx_l1)
+    free(currSlice->long_term_pic_idx_l1);
+  
+  currSlice->remapping_of_pic_nums_idc_l1 = NULL;
+  currSlice->abs_diff_pic_num_minus1_l1 = NULL;
+  currSlice->long_term_pic_idx_l1 = NULL;
+}
+

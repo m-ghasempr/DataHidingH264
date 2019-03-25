@@ -1,3 +1,4 @@
+#define ABIPRED 1
 /*
 ***********************************************************************
 * COPYRIGHT AND WARRANTY INFORMATION
@@ -61,7 +62,6 @@
 #include "mv-search.h"
 #include "refbuf.h"
 #include "memalloc.h"
-#include "abt.h"
 
 
 // These procedure pointers are used by motion_search() and one_eigthpel()
@@ -306,7 +306,7 @@ SetupFastFullPelSearch (int   ref)  // <--  reference frame parameter (0... or -
 
   int     refframe      = (ref>=0 ? ref             : 0);
   int     refindex      = (ref>=0 ? ref             : img->buf_cycle);
-  pel_t*  ref_pic       = img->type==B_IMG? Refbuf11 [ref+((mref==mref_fld)) +1] : Refbuf11[ref];
+  pel_t*  ref_pic;    //   = img->type==B_IMG? Refbuf11 [ref+((mref==mref_fld)) +1] : Refbuf11[ref];
   int**   ref_array     = ((img->type!=B_IMG && img->type!=BS_IMG)? refFrArr : ref>=0 ? fw_refFrArr : bw_refFrArr);
   int***  mv_array      = ((img->type!=B_IMG && img->type!=BS_IMG)? tmp_mv   : ref>=0 ? tmp_fwMV    : tmp_bwMV);
   int**   block_sad     = BlockSAD[refindex][7];
@@ -317,9 +317,21 @@ SetupFastFullPelSearch (int   ref)  // <--  reference frame parameter (0... or -
   byte**  imgY_orig     = imgY_org;
   int     pix_y         = img->pix_y;
   
+  int apply_weights = ( (input->WeightedPrediction && img->type == INTER_IMG) ||
+                 (input->WeightedBiprediction && (img->type == B_IMG || img->type == BS_IMG)));
+  if (apply_weights)
+                 ref_pic       = img->type==B_IMG? Refbuf11_w [ref+((mref==mref_fld)) +1] : Refbuf11_w[ref];
+  else
+                 ref_pic       = img->type==B_IMG? Refbuf11 [ref+((mref==mref_fld)) +1] : Refbuf11[ref];
+
   if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
   {
+
+    if (apply_weights)
+            ref_pic       = img->type==B_IMG? Refbuf11_w [ref+(img->field_mode) +1] : Refbuf11_w[ref];
+        else
     ref_pic       = img->type==B_IMG? Refbuf11 [ref+(img->field_mode) +1] : Refbuf11[ref];
+
     block_sad     = BlockSAD[refindex][7];
     pix_y     = img->field_pix_y;
     if(img->top_field)
@@ -1068,8 +1080,8 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
                          int       search_pos2,   // <--  search positions for    half-pel search  (default: 9)
                          int       search_pos4,   // <--  search positions for quarter-pel search  (default: 9)
                          int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
-                         double    lambda,        // <--  lagrangian parameter for determining motion cost
-                         int       useABT)        // <--  use ABT SATD calculation
+                         double    lambda         // <--  lagrangian parameter for determining motion cost
+                         )
 {
   int   diff[16], *d;
   int   pos, best_pos, mcost, abort_search;
@@ -1077,7 +1089,7 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
   int   cand_mv_x, cand_mv_y;
   pel_t *orig_line;
   int   incr            = ref==-1 ? ((!img->fld_type)&&(mref==mref_fld)&&(img->type==B_IMG)) : (mref==mref_fld)&&(img->type==B_IMG) ;
-  pel_t **ref_pic       = img->type==B_IMG? mref [ref+1+incr] : mref [ref];
+  pel_t **ref_pic;      
   int   lambda_factor   = LAMBDA_FACTOR (lambda);
   int   mv_shift        = 0;
   int   check_position0 = (blocktype==1 && *mv_x==0 && *mv_y==0 && input->hadamard && !input->rdopt && img->type!=B_IMG && ref==0);
@@ -1089,13 +1101,22 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
   int   max_pos_y4      = ((img->height-blocksize_y+1)<<2);
   int   min_pos2        = (input->hadamard ? 0 : 1);
   int   max_pos2        = (input->hadamard ? max(1,search_pos2) : search_pos2);
-  int   curr_diff[MB_BLOCK_SIZE][MB_BLOCK_SIZE]; // for ABT SATD calculation
-  int   xx,yy,kk;                                // indicees for curr_diff
+  int apply_weights = ( (input->WeightedPrediction && img->type == INTER_IMG) ||
+                 (input->WeightedBiprediction && (img->type == B_IMG || img->type == BS_IMG)));
+
+  if (apply_weights)
+    ref_pic = img->type==B_IMG? mref_w [ref+1+incr] : mref_w [ref];
+  else
+    ref_pic = img->type==B_IMG? mref [ref+1+incr] : mref [ref];
+
 
   if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode && img->type == B_IMG)
   {
     incr    =  ref == -1 ? (img->top_field && img->field_mode):(img->field_mode);
-    ref_pic =  mref[ref+1+incr];
+    if (input->WeightedPrediction || input->WeightedBiprediction)
+      ref_pic =  mref_w[ref+1+incr];
+    else
+      ref_pic =  mref[ref+1+incr];
   }
 
 
@@ -1165,24 +1186,13 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
         *d++      = orig_line[x0+2]  -  PelY_14 (ref_pic, ry, rx0+ 8);
         *d        = orig_line[x0+3]  -  PelY_14 (ref_pic, ry, rx0+12);
 
-        if (!useABT)
+        if ((mcost += SATD (diff, input->hadamard)) > min_mcost)
         {
-          if ((mcost += SATD (diff, input->hadamard)) > min_mcost)
-          {
-            abort_search = 1;
-            break;
-          }
-        }
-        else  // copy diff to curr_diff for ABT SATD calculation
-        {
-          for (yy=y0,kk=0; yy<y0+4; yy++)
-            for (xx=x0; xx<x0+4; xx++, kk++)
-              curr_diff[yy][xx] = diff[kk];
+          abort_search = 1;
+          break;
         }
       }
     }
-    if (useABT)
-      mcost += find_sad_abt(input->hadamard, blocksize_x, blocksize_y, 0, 0, curr_diff);
 
     if (mcost < min_mcost)
     {
@@ -1255,24 +1265,13 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
         *d++      = orig_line[x0+2]  -  PelY_14 (ref_pic, ry, rx0+ 8);
         *d        = orig_line[x0+3]  -  PelY_14 (ref_pic, ry, rx0+12);
 
-        if (!useABT)
+        if ((mcost += SATD (diff, input->hadamard)) > min_mcost)
         {
-          if ((mcost += SATD (diff, input->hadamard)) > min_mcost)
-          {
-            abort_search = 1;
-            break;
-          }
-        }
-        else  // copy diff to curr_diff for ABT SATD calculation
-        {
-          for (yy=y0,kk=0; yy<y0+4; yy++)
-            for (xx=x0; xx<x0+4; xx++, kk++)
-              curr_diff[yy][xx] = diff[kk];
+          abort_search = 1;
+          break;
         }
       }
     }
-    if (useABT)
-      mcost += find_sad_abt(input->hadamard, blocksize_x, blocksize_y, 0, 0, curr_diff);
 
     if (mcost < min_mcost)
     {
@@ -1304,8 +1303,8 @@ BlockMotionSearch (int       ref,           // <--  reference frame (0... or -1 
                    int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
                    int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
                    int       search_range,  // <--  1-d search range for integer-position search
-                   double    lambda,        // <--  lagrangian parameter for determining motion cost
-                   int       useABT)        // <--  use ABT SATD calculation
+                   double    lambda         // <--  lagrangian parameter for determining motion cost
+                   )
 {
   static pel_t   orig_val [256];
   static pel_t  *orig_pic  [16] = {orig_val,     orig_val+ 16, orig_val+ 32, orig_val+ 48,
@@ -1418,7 +1417,7 @@ BlockMotionSearch (int       ref,           // <--  reference frame (0... or -1 
   }
   min_mcost =  SubPelBlockMotionSearch (orig_pic, ref, pic_pix_x, pic_pix_y, blocktype,
                                         pred_mv_x, pred_mv_y, &mv_x, &mv_y, 9, 9,
-                                        min_mcost, lambda, useABT);
+                                        min_mcost, lambda);
 
 
   if (!input->rdopt)
@@ -1477,8 +1476,7 @@ int
 BIDPartitionCost (int   blocktype,
                   int   block8x8,
                   int   fw_ref,
-                  int   lambda_factor,
-                  int   useABT)
+                  int   lambda_factor)
 {
   static int  bx0[5][4] = {{0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,2,0,0}, {0,2,0,2}};
   static int  by0[5][4] = {{0,0,0,0}, {0,0,0,0}, {0,2,0,0}, {0,0,0,0}, {0,0,2,2}};
@@ -1492,7 +1490,6 @@ BIDPartitionCost (int   blocktype,
   int   step_v0   = (input->blc_size[ parttype][1]>>2);
   int   step_h    = (input->blc_size[blocktype][0]>>2);
   int   step_v    = (input->blc_size[blocktype][1]>>2);
-  int   curr_blk[MB_BLOCK_SIZE][MB_BLOCK_SIZE]; // ABT pred.error buffer
   int   bxx, byy;                               // indexing curr_blk
   int   bsx       = min(input->blc_size[blocktype][0],8);
   int   bsy       = min(input->blc_size[blocktype][1],8);
@@ -1545,30 +1542,23 @@ BIDPartitionCost (int   blocktype,
     {
       pic_pix_x = img->pix_x + (block_x = (h<<2));
 
-      LumaPrediction4x4 (block_x, block_y, blocktype, blocktype, fw_ref);
+      LumaPrediction4x4 (block_x, block_y, blocktype, blocktype, fw_ref, 0);
 
       for (k=j=0; j<4; j++)
       for (  i=0; i<4; i++, k++)
       {
-        diff[k] = curr_blk[byy+j][bxx+i] =
-                  imgY_original[pic_pix_y+j][pic_pix_x+i] - img->mpr[i+block_x][j+block_y];
+        diff[k] = imgY_original[pic_pix_y+j][pic_pix_x+i] - img->mpr[i+block_x][j+block_y];
       }
-      if (!useABT)
-        mcost += SATD (diff, input->hadamard);
+      mcost += SATD (diff, input->hadamard);
     }
   }
-  if (useABT)
-  {
-    for (byy=0; byy<8 ; byy+=bsy)
-      for (bxx=0; bxx<8 ; bxx+=bsx)
-        mcost += find_sad_abt(input->hadamard,bsx,bsy,bxx,byy,curr_blk);
-  }
-
   return mcost;
 }
 
 
 
+
+#ifdef ABIPRED
 /*!
  ***********************************************************************
  * \brief
@@ -1576,13 +1566,13 @@ BIDPartitionCost (int   blocktype,
  ***********************************************************************
  */
 int
-ABIDPartitionCost (int   blocktype,
+BBIDPartitionCost (int   blocktype,
                    int   block8x8,
                    int*  fw_ref,
                    int*  bw_ref,
                    int   lambda_factor,
                    int*  abp_type,
-                   int   useABT)
+                   int   lambda_motion)
 {
   static int  bx0[5][4] = {{0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,2,0,0}, {0,2,0,2}};
   static int  by0[5][4] = {{0,0,0,0}, {0,0,0,0}, {0,2,0,0}, {0,0,0,0}, {0,0,2,2}};
@@ -1596,7 +1586,6 @@ ABIDPartitionCost (int   blocktype,
   int   step_v0   = (input->blc_size[ parttype][1]>>2);
   int   step_h    = (input->blc_size[blocktype][0]>>2);
   int   step_v    = (input->blc_size[blocktype][1]>>2);
-  int   curr_blk[MB_BLOCK_SIZE][MB_BLOCK_SIZE]; // ABT pred.error buffer
   int   bxx, byy;                               // indexing curr_blk
   int   bsx       = min(input->blc_size[blocktype][0],8);
   int   bsy       = min(input->blc_size[blocktype][1],8);
@@ -1607,7 +1596,39 @@ ABIDPartitionCost (int   blocktype,
   int   *****abp_all_dmv = img->abp_all_dmv;
   int   *****p_fwMV  = img->p_fwMV;
   int   *****p_bwMV  = img->p_bwMV;
-  int   mv_scale;
+  int   mv_scale, mv_scale1, mv_scale2;
+  int   delta_P;
+  int   TRp_f, TRp_b;
+  int   max_ref     = img->nb_references;
+  // Tian Dong. PLUS1. Add the following line:
+  int   adjust_ref;
+  int   tot_ref;
+  int   ref1, ref2;
+  int   max_mcost = (1<<30);
+  int   tfw_ref, tbw_ref, temp_fwref, temp_bwref;
+  int   tmp_smvx1, tmp_smvy1, tmp_smvx2, tmp_smvy2;
+  int   min_mcost = max_mcost;
+  int   write_ref   = (input->no_multpred>1 || input->add_ref_frame>0);
+  int   tmcost, tmcost1, tmcost2;
+
+  
+
+  adjust_ref  = (img->type==B_IMG? (mref==mref_fld)? 2 : 1 : 0);
+  adjust_ref  = min(adjust_ref, max_ref-1);
+  
+  if(mref==mref_fld)
+  {
+    max_ref = min (img->number-((mref==mref_fld)&&img->fld_type&&img->type==B_IMG), img->buf_cycle);
+    adjust_ref = 0;
+  }
+
+  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
+  {
+    max_ref   = min(2*img->number, img->buf_cycle);
+    adjust_ref  = 0;
+  }
+
+  tot_ref = max_ref-adjust_ref;
 
   if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
   {
@@ -1634,177 +1655,293 @@ ABIDPartitionCost (int   blocktype,
   }
 
 
-  if ((input->explicit_B_prediction==0 || input->explicit_B_prediction==1) && img->type==BS_IMG)
+#if !BIPRED_SIMPLE
+  if ((input->StoredBPictures) && img->type==BS_IMG)
   {
     //
     //  Interpolation (1/2,1/2,0)
     //
     //----- cost for motion vector bits -----
-    if ((input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode) || input->InterlaceCodingOption == FIELD_CODING) 
-    {
-      *fw_ref = 3;
-      *bw_ref = 1;
-    }
-    else
-    {
-      *fw_ref = 1;
-      *bw_ref = 0;
-    }
-    mvd_bits = 0;
-    mv_scale = 256*((*bw_ref)+1)/((*fw_ref)+1);
-    for (v=by0[parttype][block8x8]; v<by0[parttype][block8x8]+step_v0; v+=step_v)
-    for (h=bx0[parttype][block8x8]; h<bx0[parttype][block8x8]+step_h0; h+=step_h)
-    {
-      abp_all_dmv[h][v][*bw_ref][blocktype][0] = all_bmv [h][v][*bw_ref][blocktype][0] - ((mv_scale*all_mv [h][v][*fw_ref][blocktype][0]+128)>>8);
-      abp_all_dmv[h][v][*bw_ref][blocktype][1] = all_bmv [h][v][*bw_ref][blocktype][1] - ((mv_scale*all_mv [h][v][*fw_ref][blocktype][1]+128)>>8);
 
-      mvd_bits += mvbits[ all_mv [h][v][*fw_ref][blocktype][0] - p_fwMV[h][v][*fw_ref][blocktype][0] ];
-      mvd_bits += mvbits[ all_mv [h][v][*fw_ref][blocktype][1] - p_fwMV[h][v][*fw_ref][blocktype][1] ];
-      mvd_bits += mvbits[ abp_all_dmv[h][v][*bw_ref][blocktype][0] ];
-      mvd_bits += mvbits[ abp_all_dmv[h][v][*bw_ref][blocktype][1] ];
-    }
-    mcost0 = WEIGHTED_COST (lambda_factor, mvd_bits);
+    min_mcost = max_mcost;
 
-    //----- cost of residual signal -----
-    for (byy=0, v=by0[parttype][block8x8]; v<by0[parttype][block8x8]+step_v0; byy+=4, v++)
+
+    for (ref1=0; ref1<tot_ref-1; ref1++)
     {
-      pic_pix_y = pix_y + (block_y = (v<<2));
-
-      for (bxx=0, h=bx0[parttype][block8x8]; h<bx0[parttype][block8x8]+step_h0; bxx+=4, h++)
+      for (ref2=ref1+1; ref2<tot_ref; ref2++)
       {
-        pic_pix_x = img->pix_x + (block_x = (h<<2));
+        // joint optimization of mv and ref
+        tfw_ref = ref1;
+        tbw_ref = ref2;
 
-        AbpLumaPrediction4x4 (block_x, block_y, blocktype, blocktype, *fw_ref, *bw_ref, 1);
-
-        for (k=j=0; j<4; j++)
-        for (  i=0; i<4; i++, k++)
+        delta_P = (mref==mref_fld)?(img->imgtr_next_P_fld - img->imgtr_last_P_fld):2*(img->imgtr_next_P_frm - img->imgtr_last_P_frm);
+        if((mref==mref_fld) && !img->fld_type)  // top field
         {
-          diff[k] = curr_blk[byy+j][bxx+i] =
-                    imgY_original[pic_pix_y+j][pic_pix_x+i] - img->mpr[i+block_x][j+block_y];
+          TRp_f = delta_P*(tfw_ref/2+1)-(tfw_ref+1)%2;
+          TRp_b = delta_P*(tbw_ref/2+1)-(tbw_ref+1)%2;
+          
         }
-        if (!useABT)
-          mcost0 += SATD (diff, input->hadamard);
-      }
+        else if((mref==mref_fld) && img->fld_type)  // bot field
+        {
+          TRp_f = 1+delta_P*((tfw_ref+1)/2)-tfw_ref%2;
+          TRp_b = 1+delta_P*((tbw_ref+1)/2)-tbw_ref%2;
+          
+        }
+        else  // frame
+        {
+          TRp_f  = (tfw_ref+1)*delta_P;
+          TRp_b  = (tbw_ref+1)*delta_P;
+          
+          if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
+          {
+            delta_P = 2*(img->imgtr_next_P_frm - img->imgtr_last_P_frm);
+            if(img->top_field)
+            {
+              TRp_f = delta_P*(tfw_ref/2+1)-(tfw_ref+1)%2;
+              TRp_b = delta_P*(tbw_ref/2+1)-(tbw_ref+1)%2;
+            }
+            else
+            {
+              TRp_f= 1+delta_P*((tfw_ref+1)/2)-tfw_ref%2;
+              TRp_b= 1+delta_P*((tbw_ref+1)/2)-tbw_ref%2;
+              
+            }
+          }
+        }
 
-    }
-    if (useABT)
-    {
-      for (byy=0; byy<8 ; byy+=bsy)
-        for (bxx=0; bxx<8 ; bxx+=bsx)
-          mcost0 += find_sad_abt(input->hadamard,bsx,bsy,bxx,byy,curr_blk);
-    }
+        mv_scale1 = 256*TRp_b/TRp_f;
+        mv_scale2 = 256*TRp_f/TRp_b;
 
-    if (input->explicit_B_prediction==0 && img->type==BS_IMG)
-    {
-      *abp_type = 1;
-      mcost = mcost0;
-      if ((input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode) || input->InterlaceCodingOption == FIELD_CODING) 
-      {
-        *fw_ref = 3;
-        *bw_ref = 1;
-      }
-      else
-      {
-        *fw_ref = 1;
-        *bw_ref = 0;
+        mv_scale = mv_scale1;
+        mvd_bits = 0;   
+        for (v=by0[parttype][block8x8]; v<by0[parttype][block8x8]+step_v0; v+=step_v)
+        for (h=bx0[parttype][block8x8]; h<bx0[parttype][block8x8]+step_h0; h+=step_h)
+        {
+          abp_all_dmv[h][v][tbw_ref][blocktype][0] = all_bmv [h][v][tbw_ref][blocktype][0] - ((mv_scale*all_mv [h][v][tfw_ref][blocktype][0]+128)>>8);
+          abp_all_dmv[h][v][tbw_ref][blocktype][1] = all_bmv [h][v][tbw_ref][blocktype][1] - ((mv_scale*all_mv [h][v][tfw_ref][blocktype][1]+128)>>8);
+          
+          mvd_bits += mvbits[ all_mv [h][v][tfw_ref][blocktype][0] - p_fwMV[h][v][tfw_ref][blocktype][0] ];
+          mvd_bits += mvbits[ all_mv [h][v][tfw_ref][blocktype][1] - p_fwMV[h][v][tfw_ref][blocktype][1] ];
+          mvd_bits += mvbits[ abp_all_dmv[h][v][tbw_ref][blocktype][0] ];
+          mvd_bits += mvbits[ abp_all_dmv[h][v][tbw_ref][blocktype][1] ];
+        }
+        tmcost1 = WEIGHTED_COST (lambda_factor, mvd_bits);
+        tmcost1 += (input->rdopt ? write_ref ? REF_COST_FWD (lambda_factor, tfw_ref)  : 0 : (int)(2*lambda_motion*min(tfw_ref,1)));
+        tmcost1 += (input->rdopt ? write_ref ? REF_COST_BWD (lambda_factor, tbw_ref) : 0 : (int)(2*lambda_motion*min(tbw_ref,1)));
+
+
+
+        //! change the ref index
+        tfw_ref = ref2;
+        tbw_ref = ref1;
+        mv_scale = mv_scale2;
+        mvd_bits = 0;
+        for (v=by0[parttype][block8x8]; v<by0[parttype][block8x8]+step_v0; v+=step_v)
+        for (h=bx0[parttype][block8x8]; h<bx0[parttype][block8x8]+step_h0; h+=step_h)
+        {
+          abp_all_dmv[h][v][tbw_ref][blocktype][0] = all_bmv [h][v][tbw_ref][blocktype][0] - ((mv_scale*all_mv [h][v][tfw_ref][blocktype][0]+128)>>8);
+          abp_all_dmv[h][v][tbw_ref][blocktype][1] = all_bmv [h][v][tbw_ref][blocktype][1] - ((mv_scale*all_mv [h][v][tfw_ref][blocktype][1]+128)>>8);
+          
+          mvd_bits += mvbits[ all_mv [h][v][tfw_ref][blocktype][0] - p_fwMV[h][v][tfw_ref][blocktype][0] ];
+          mvd_bits += mvbits[ all_mv [h][v][tfw_ref][blocktype][1] - p_fwMV[h][v][tfw_ref][blocktype][1] ];
+          mvd_bits += mvbits[ abp_all_dmv[h][v][tbw_ref][blocktype][0] ];
+          mvd_bits += mvbits[ abp_all_dmv[h][v][tbw_ref][blocktype][1] ];
+        }
+        tmcost2 = WEIGHTED_COST (lambda_factor, mvd_bits);
+        tmcost2 += (input->rdopt ? write_ref ? REF_COST_FWD (lambda_factor, tfw_ref)  : 0 : (int)(2*lambda_motion*min(tfw_ref,1)));
+        tmcost2 += (input->rdopt ? write_ref ? REF_COST_BWD (lambda_factor, tbw_ref) : 0 : (int)(2*lambda_motion*min(tbw_ref,1)));
+
+
+        if (tmcost1 <= tmcost2)
+        {
+          tfw_ref = ref1;
+          tbw_ref = ref2;
+
+          mv_scale = mv_scale1;
+          for (v=by0[parttype][block8x8]; v<by0[parttype][block8x8]+step_v0; v+=step_v)
+          for (h=bx0[parttype][block8x8]; h<bx0[parttype][block8x8]+step_h0; h+=step_h)
+          {
+            abp_all_dmv[h][v][tbw_ref][blocktype][0] = all_bmv [h][v][tbw_ref][blocktype][0] - ((mv_scale*all_mv [h][v][tfw_ref][blocktype][0]+128)>>8);
+            abp_all_dmv[h][v][tbw_ref][blocktype][1] = all_bmv [h][v][tbw_ref][blocktype][1] - ((mv_scale*all_mv [h][v][tfw_ref][blocktype][1]+128)>>8);
+          }
+          tmcost = tmcost1;
+        }
+        else
+        {
+
+          tfw_ref = ref2;
+          tbw_ref = ref1;
+
+          mv_scale = mv_scale2;
+          for (v=by0[parttype][block8x8]; v<by0[parttype][block8x8]+step_v0; v+=step_v)
+          for (h=bx0[parttype][block8x8]; h<bx0[parttype][block8x8]+step_h0; h+=step_h)
+          {
+            abp_all_dmv[h][v][tbw_ref][blocktype][0] = all_bmv [h][v][tbw_ref][blocktype][0] - ((mv_scale*all_mv [h][v][tfw_ref][blocktype][0]+128)>>8);
+            abp_all_dmv[h][v][tbw_ref][blocktype][1] = all_bmv [h][v][tbw_ref][blocktype][1] - ((mv_scale*all_mv [h][v][tfw_ref][blocktype][1]+128)>>8);
+          }
+          tmcost = tmcost2;
+        }
+         
+
+
+
+
+        //----- cost of residual signal -----
+        for (byy=0, v=by0[parttype][block8x8]; v<by0[parttype][block8x8]+step_v0; byy+=4, v++)
+        {
+          pic_pix_y = pix_y + (block_y = (v<<2));
+          
+          for (bxx=0, h=bx0[parttype][block8x8]; h<bx0[parttype][block8x8]+step_h0; bxx+=4, h++)
+          {
+            pic_pix_x = img->pix_x + (block_x = (h<<2));
+
+   //         AbpLumaPrediction4x4 (block_x, block_y, blocktype, blocktype, tfw_ref, tbw_ref, 1);
+            LumaPrediction4x4 (block_x, block_y, blocktype, blocktype, tfw_ref, tbw_ref);
+
+            for (k=j=0; j<4; j++)
+              for (  i=0; i<4; i++, k++)
+              {
+                diff[k] = curr_blk[byy+j][bxx+i] =
+                  imgY_original[pic_pix_y+j][pic_pix_x+i] - img->mpr[i+block_x][j+block_y];
+              }
+          }
+          
+        }
+
+        if (tmcost < min_mcost)
+        {
+          *fw_ref = tfw_ref;
+          *bw_ref = tbw_ref;
+          min_mcost = tmcost;
+        }
       }
     }
+  
+  mcost = min_mcost;
+    
   }
-  if (input->explicit_B_prediction==1 && img->type==BS_IMG)
+
+
+
+#else
+  
+  temp_fwref = *fw_ref;
+  if ((input->StoredBPictures) && img->type==BS_IMG)
   {
     //
-    //  Extrapolation (2,-1,0)
-    //  
+    //  Interpolation (1/2,1/2,0)
+    //
     //----- cost for motion vector bits -----
-    if ((input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode) || input->InterlaceCodingOption == FIELD_CODING) 
+    
+    min_mcost = max_mcost;
+    
+    
+    for (ref2=0; ref2<tot_ref; ref2++)
     {
-      *fw_ref = 1;
-      *bw_ref = 3;
-    }
-    else
-    {
-      *fw_ref = 0;
-      *bw_ref = 1;
-    }
-    mvd_bits = 0;
-    mv_scale = 256*((*bw_ref)+1)/((*fw_ref)+1);
-    for (v=by0[parttype][block8x8]; v<by0[parttype][block8x8]+step_v0; v+=step_v)
-    for (h=bx0[parttype][block8x8]; h<bx0[parttype][block8x8]+step_h0; h+=step_h)
-    {
-      abp_all_dmv[h][v][*bw_ref][blocktype][0] = all_bmv [h][v][*bw_ref][blocktype][0] - ((mv_scale*all_mv [h][v][*fw_ref][blocktype][0]+128)>>8);
-      abp_all_dmv[h][v][*bw_ref][blocktype][1] = all_bmv [h][v][*bw_ref][blocktype][1] - ((mv_scale*all_mv [h][v][*fw_ref][blocktype][1]+128)>>8);
+      tfw_ref = temp_fwref;
+      tbw_ref = ref2;
+      if (tfw_ref == tbw_ref) continue;
 
-      mvd_bits += mvbits[ all_mv [h][v][*fw_ref][blocktype][0] - p_fwMV[h][v][*fw_ref][blocktype][0] ];
-      mvd_bits += mvbits[ all_mv [h][v][*fw_ref][blocktype][1] - p_fwMV[h][v][*fw_ref][blocktype][1] ];
-      mvd_bits += mvbits[ abp_all_dmv[h][v][*bw_ref][blocktype][0] ];
-      mvd_bits += mvbits[ abp_all_dmv[h][v][*bw_ref][blocktype][1] ];
-
-    }
-    mcost1 = WEIGHTED_COST (lambda_factor, mvd_bits);
-
-    //----- cost of residual signal -----
-    for (byy=0, v=by0[parttype][block8x8]; v<by0[parttype][block8x8]+step_v0; byy+=4, v++)
-    {
-      pic_pix_y = pix_y + (block_y = (v<<2));
-
-      for (bxx=0, h=bx0[parttype][block8x8]; h<bx0[parttype][block8x8]+step_h0; bxx+=4, h++)
+      
+      delta_P = (mref==mref_fld)?(img->imgtr_next_P_fld - img->imgtr_last_P_fld):2*(img->imgtr_next_P_frm - img->imgtr_last_P_frm);
+      if((mref==mref_fld) && !img->fld_type)  // top field
       {
-        pic_pix_x = img->pix_x + (block_x = (h<<2));
-
-        AbpLumaPrediction4x4 (block_x, block_y, blocktype, blocktype, *fw_ref, *bw_ref, 2);
-
-        for (k=j=0; j<4; j++)
-          for (  i=0; i<4; i++, k++)
+        TRp_f = delta_P*(tfw_ref/2+1)-(tfw_ref+1)%2;
+        TRp_b = delta_P*(tbw_ref/2+1)-(tbw_ref+1)%2;
+        
+      }
+      else if((mref==mref_fld) && img->fld_type)  // bot field
+      {
+        TRp_f = 1+delta_P*((tfw_ref+1)/2)-tfw_ref%2;
+        TRp_b = 1+delta_P*((tbw_ref+1)/2)-tbw_ref%2;
+        
+      }
+      else  // frame
+      {
+        TRp_f  = (tfw_ref+1)*delta_P;
+        TRp_b  = (tbw_ref+1)*delta_P;
+        
+        if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
+        {
+          delta_P = 2*(img->imgtr_next_P_frm - img->imgtr_last_P_frm);
+          if(img->top_field)
           {
-            diff[k] = curr_blk[byy+j][bxx+i] =
-              imgY_original[pic_pix_y+j][pic_pix_x+i] - img->mpr[i+block_x][j+block_y];
+            TRp_f = delta_P*(tfw_ref/2+1)-(tfw_ref+1)%2;
+            TRp_b = delta_P*(tbw_ref/2+1)-(tbw_ref+1)%2;
           }
-        if (!useABT)
-          mcost1 += SATD (diff, input->hadamard);
+          else
+          {
+            TRp_f= 1+delta_P*((tfw_ref+1)/2)-tfw_ref%2;
+            TRp_b= 1+delta_P*((tbw_ref+1)/2)-tbw_ref%2;
+          
+          }
+        }
       }
 
-    }
-    if (useABT)
-    {
-      for (byy=0; byy<8 ; byy+=bsy)
-        for (bxx=0; bxx<8 ; bxx+=bsx)
-          mcost1 += find_sad_abt(input->hadamard,bsx,bsy,bxx,byy,curr_blk);
-    }
+      mv_scale1 = 256*TRp_b/TRp_f;
+      mv_scale2 = 256*TRp_f/TRp_b;
 
-    if (mcost0<=mcost1)
-    {
-      *abp_type = 1;
-      mcost = mcost0;
-      if ((input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode) || input->InterlaceCodingOption == FIELD_CODING) 
+      mv_scale = mv_scale1;
+      mvd_bits = 0;   
+      for (v=by0[parttype][block8x8]; v<by0[parttype][block8x8]+step_v0; v+=step_v)
+        for (h=bx0[parttype][block8x8]; h<bx0[parttype][block8x8]+step_h0; h+=step_h)
+        {
+          abp_all_dmv[h][v][tbw_ref][blocktype][0] = all_bmv [h][v][tbw_ref][blocktype][0] - ((mv_scale*all_mv [h][v][tfw_ref][blocktype][0]+128)>>8);
+          abp_all_dmv[h][v][tbw_ref][blocktype][1] = all_bmv [h][v][tbw_ref][blocktype][1] - ((mv_scale*all_mv [h][v][tfw_ref][blocktype][1]+128)>>8);
+
+          mvd_bits += mvbits[ all_mv [h][v][tfw_ref][blocktype][0] - p_fwMV[h][v][tfw_ref][blocktype][0] ];
+          mvd_bits += mvbits[ all_mv [h][v][tfw_ref][blocktype][1] - p_fwMV[h][v][tfw_ref][blocktype][1] ];
+          mvd_bits += mvbits[ abp_all_dmv[h][v][tbw_ref][blocktype][0] ];
+          mvd_bits += mvbits[ abp_all_dmv[h][v][tbw_ref][blocktype][1] ];
+        }
+      tmcost1 = WEIGHTED_COST (lambda_factor, mvd_bits);
+      tmcost1 += (input->rdopt ? write_ref ? REF_COST_FWD (lambda_factor, tfw_ref)  : 0 : (int)(2*lambda_motion*min(tfw_ref,1)));
+      tmcost1 += (input->rdopt ? write_ref ? REF_COST_BWD (lambda_factor, tbw_ref) : 0 : (int)(2*lambda_motion*min(tbw_ref,1)));
+
+      tmcost = tmcost1;
+
+       
+      //----- cost of residual signal -----
+      for (byy=0, v=by0[parttype][block8x8]; v<by0[parttype][block8x8]+step_v0; byy+=4, v++)
       {
-        *fw_ref = 3;
-        *bw_ref = 1;
+        pic_pix_y = pix_y + (block_y = (v<<2));
+        
+        for (bxx=0, h=bx0[parttype][block8x8]; h<bx0[parttype][block8x8]+step_h0; bxx+=4, h++)
+        {
+          pic_pix_x = img->pix_x + (block_x = (h<<2));
+          
+          //         AbpLumaPrediction4x4 (block_x, block_y, blocktype, blocktype, tfw_ref, tbw_ref, 1);
+          LumaPrediction4x4 (block_x, block_y, blocktype, blocktype, tfw_ref, tbw_ref);
+          
+          for (k=j=0; j<4; j++)
+            for (  i=0; i<4; i++, k++)
+            {
+              diff[k] = imgY_original[pic_pix_y+j][pic_pix_x+i] - img->mpr[i+block_x][j+block_y];
+            }
+          tmcost += SATD (diff, input->hadamard);
+        }
+        
       }
-      else
-      {
-        *fw_ref = 1;
-        *bw_ref = 0;
-      }
+
+       if (tmcost < min_mcost)
+       {
+          *fw_ref = tfw_ref;
+          *bw_ref = tbw_ref;
+          min_mcost = tmcost;
+       }
     }
-    else
-    {
-      *abp_type = 2;
-      mcost = mcost1;
-      if ((input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode) || input->InterlaceCodingOption == FIELD_CODING) 
-      {
-        *fw_ref = 1;
-        *bw_ref = 3;
-      }
-      else
-      {
-        *fw_ref = 0;
-        *bw_ref = 1;
-      }
-    }
-  }
+ } 
+
+   
+    
+#endif
 
   return mcost;
 }
+
+#endif
+
+
 
 
 /*!
@@ -1828,14 +1965,7 @@ int GetSkipCostMB (double lambda)
       pic_pix_x = img->pix_x + block_x;
 
       //===== prediction of 4x4 block =====
-      if (img->type==BS_IMG) 
-      {
-        AbpLumaPrediction4x4 (block_x, block_y, 0, 0, 0, 0, 0);   
-      }
-      else
-      {
-        LumaPrediction4x4 (block_x, block_y, 0, 0, 0);
-      }
+      LumaPrediction4x4 (block_x, block_y, 0, 0, 0, 0);
 
       //===== get displaced frame difference ======                
       for (k=j=0; j<4; j++)
@@ -1945,17 +2075,14 @@ void FindSkipModeMotionVector ()
  *    Get cost for direct mode for an 8x8 block
  ************************************************************************
  */
-int Get_Direct_Cost8x8 (int block, double lambda, int abt_mode)
+int Get_Direct_Cost8x8 (int block, double lambda)
 {
   int block_y, block_x, pic_pix_y, pic_pix_x, i, j, k;
   int diff[16];
   int cost  = 0;
   int mb_y  = (block/2)<<3;
   int mb_x  = (block%2)<<3;
-  int curr_blk[MB_BLOCK_SIZE][MB_BLOCK_SIZE]; // ABT pred.error buffer
   int bxx, byy;                               // indexing curr_blk
-  int bsx   = ABT_TRSIZE[abt_mode][PIX];
-  int bsy   = ABT_TRSIZE[abt_mode][LIN];
   byte **imgY_original = imgY_org;
   int pix_y = img->pix_y;
 
@@ -1974,33 +2101,17 @@ int Get_Direct_Cost8x8 (int block, double lambda, int abt_mode)
       pic_pix_x = img->pix_x + block_x;
 
       //===== prediction of 4x4 block =====
-      if (img->type==BS_IMG) 
-      {
-        AbpLumaPrediction4x4 (block_x, block_y, 0, 0, 0, 0, 0);   
-      }
-      else
-      {
-        LumaPrediction4x4 (block_x, block_y, 0, 0, max(0,refFrArr[pic_pix_y>>2][pic_pix_x>>2]));
-      }
+      LumaPrediction4x4 (block_x, block_y, 0, 0, max(0,refFrArr[pic_pix_y>>2][pic_pix_x>>2]), 0);
 
       //===== get displaced frame difference ======                
       for (k=j=0; j<4; j++)
         for (i=0; i<4; i++, k++)
         {
-          diff[k] = curr_blk[byy+j][bxx+i] =
-                    imgY_original[pic_pix_y+j][pic_pix_x+i] - img->mpr[i+block_x][j+block_y];
+          diff[k] = imgY_original[pic_pix_y+j][pic_pix_x+i] - img->mpr[i+block_x][j+block_y];
 
         }
-      if (abt_mode == ABT_OFF)
-        cost += SATD (diff, input->hadamard);
+      cost += SATD (diff, input->hadamard);
     }
-  }
-
-  if (abt_mode != ABT_OFF)
-  {
-    for (byy=0; byy<8 ; byy+=bsy)
-      for (bxx=0; bxx<8 ; bxx+=bsx)
-        cost += find_sad_abt(input->hadamard,bsx,bsy,bxx,byy,curr_blk);
   }
 
   return cost;
@@ -2021,7 +2132,7 @@ int Get_Direct_CostMB (double lambda)
   
   for (i=0; i<4; i++)
   {
-    cost += Get_Direct_Cost8x8 (i, lambda, (input->abt)? getDirectModeABT(i) : ABT_OFF);
+    cost += Get_Direct_Cost8x8 (i, lambda);
   }
   return cost;
 }
@@ -2036,8 +2147,7 @@ int Get_Direct_CostMB (double lambda)
 void
 PartitionMotionSearch (int    blocktype,
                        int    block8x8,
-                       double lambda,
-                       int    useABT)
+                       double lambda)
 {
   static int  bx0[5][4] = {{0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,2,0,0}, {0,2,0,2}};
   static int  by0[5][4] = {{0,0,0,0}, {0,0,0,0}, {0,2,0,0}, {0,0,0,0}, {0,0,2,2}};
@@ -2132,7 +2242,7 @@ PartitionMotionSearch (int    blocktype,
           pic_block_x = img->block_x + h;
 
           //--- motion search for block ---
-          mcost = BlockMotionSearch (ref, 4*pic_block_x, 4*pic_block_y, blocktype, search_range, lambda, useABT);
+          mcost = BlockMotionSearch (ref, 4*pic_block_x, 4*pic_block_y, blocktype, search_range, lambda);
           motion_cost[blocktype][refinx][block8x8] += mcost;
 
           //--- set motion vectors and reference frame (for motion vector prediction) ---

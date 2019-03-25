@@ -58,26 +58,26 @@
 #define put_byte() { \
                      Ecodestrm[(*Ecodestrm_len)++] = Ebuffer; \
                      Ebits_to_go = 8; \
- 											 while (eep->C > 7) { \
-												eep->C-=8; \
-												eep->E++; \
-											 } \
+                     while (eep->C > 7) { \
+                       eep->C-=8; \
+                       eep->E++; \
+                     } \
                     } 
 
 #define put_one_bit(b) { \
-										Ebuffer <<= 1; Ebuffer |= (b); \
-                    if (--Ebits_to_go == 0) \
-                       put_byte(); \
-										}
+                         Ebuffer <<= 1; Ebuffer |= (b); \
+                         if (--Ebits_to_go == 0) \
+                           put_byte(); \
+                       }
 
 #define put_one_bit_plus_outstanding(b) { \
-                    put_one_bit(b); \
-                    while (Ebits_to_follow > 0) \
-										{ \
-                      Ebits_to_follow--; \
-                      put_one_bit(!(b)); \
-										} \
-									}
+                                          put_one_bit(b); \
+                                          while (Ebits_to_follow > 0) \
+                                          { \
+                                            Ebits_to_follow--; \
+                                            put_one_bit(!(b)); \
+                                          } \
+                                         }
 
 
 /*!
@@ -125,7 +125,7 @@ void arienco_delete_encoding_environment(EncodingEnvironmentPtr eep)
  */
 void arienco_start_encoding(EncodingEnvironmentPtr eep,
                             unsigned char *code_buffer,
-                            int *code_len, int *last_startcode, int slice_type )
+                            int *code_len, /* int *last_startcode, */ int slice_type )
 {
   Elow = 0;
   Ebits_to_follow = 0;
@@ -134,13 +134,13 @@ void arienco_start_encoding(EncodingEnvironmentPtr eep,
 
   Ecodestrm = code_buffer;
   Ecodestrm_len = code_len;
-  Ecodestrm_laststartcode = last_startcode;
+//  Ecodestrm_laststartcode = last_startcode;
 
   Erange = HALF-2;
 
   eep->C = 0;
-	eep->B = *code_len;
-	eep->E = 0;
+  eep->B = *code_len;
+  eep->E = 0;
 
 }
 
@@ -152,7 +152,7 @@ void arienco_start_encoding(EncodingEnvironmentPtr eep,
  */
 int arienco_bits_written(EncodingEnvironmentPtr eep)
 {
-   return (8 * (*Ecodestrm_len-*Ecodestrm_laststartcode) + Ebits_to_follow + 8  - Ebits_to_go);
+   return (8 * (*Ecodestrm_len /*-*Ecodestrm_laststartcode*/) + Ebits_to_follow + 8  - Ebits_to_go);
 }
 
 
@@ -168,7 +168,7 @@ void arienco_done_encoding(EncodingEnvironmentPtr eep)
   put_one_bit((Elow >> (B_BITS-2))&1);
   put_one_bit(1);
 
-	stat->bit_use_stuffingBits[img->type]+=(8-Ebits_to_go);
+        stat->bit_use_stuffingBits[img->type]+=(8-Ebits_to_go);
 
   while (Ebits_to_go != 8)
     put_one_bit(0);
@@ -178,14 +178,6 @@ void arienco_done_encoding(EncodingEnvironmentPtr eep)
   eep->E -= (img->current_mb_nr-img->currentSlice->start_mb_nr);
   eep->E = (eep->E + 31)>>5;
   // eep->E now contains the minimum number of bytes for the NAL unit
-  // the value of eep->E is appended to the end such that RBSPtoEBSP may use
-  // the information to determine how many stuffing words to append at the
-  // end of EBSP (a bit dirty, I know)
-  Ecodestrm[(*Ecodestrm_len)++] = eep->E>>24;
-  Ecodestrm[(*Ecodestrm_len)++] = eep->E>>16;
-  Ecodestrm[(*Ecodestrm_len)++] = eep->E>>8;
-  Ecodestrm[(*Ecodestrm_len)++] = eep->E>>0;
-  Ecodestrm[(*Ecodestrm_len)++] = 0;
 }
 
 
@@ -198,56 +190,56 @@ void arienco_done_encoding(EncodingEnvironmentPtr eep)
  */
 void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiContextTypePtr bi_ct )
 {
-	register unsigned int range = Erange;
-	register unsigned int low = Elow;
-	unsigned int rLPS = rLPS_table_64x4[bi_ct->state][(range>>6) & 3];
+  register unsigned int range = Erange;
+  register unsigned int low = Elow;
+  unsigned int rLPS = rLPS_table_64x4[bi_ct->state][(range>>6) & 3];
 
   /* covers all cases where code does not bother to shift down symbol to be 
    * either 0 or 1, e.g. in some cases for cbp, mb_Type etc the code symply 
-	 * masks off the bit position and passes in the resulting value */
+   * masks off the bit position and passes in the resulting value */
 
   if (symbol != 0) 
-	  symbol = 1;
-
-	range -= rLPS;
+    symbol = 1;
+  
+  range -= rLPS;
   if (symbol != bi_ct->MPS) 
   {
     low += range;
     range = rLPS;
-
+    
     if (!bi_ct->state)
-			bi_ct->MPS = bi_ct->MPS ^ 1;               // switch LPS if necessary
-		bi_ct->state = AC_next_state_LPS_64[bi_ct->state]; // next state
+      bi_ct->MPS = bi_ct->MPS ^ 1;               // switch LPS if necessary
+    bi_ct->state = AC_next_state_LPS_64[bi_ct->state]; // next state
   } 
   else 
-		bi_ct->state = AC_next_state_MPS_64[bi_ct->state]; // next state
+    bi_ct->state = AC_next_state_MPS_64[bi_ct->state]; // next state
  
 
   /* renormalisation */    
-	while (range < QUARTER)
+  while (range < QUARTER)
   {
-		if (low >= HALF)
+    if (low >= HALF)
     {
-			put_one_bit_plus_outstanding(1);
+      put_one_bit_plus_outstanding(1);
       low -= HALF;
-		}
+    }
     else 
-			if (low < QUARTER)
-			{
-				put_one_bit_plus_outstanding(0);
-			}
-			else
-			{
-				Ebits_to_follow++;
-				low -= QUARTER;
-			}
+      if (low < QUARTER)
+      {
+        put_one_bit_plus_outstanding(0);
+      }
+      else
+      {
+        Ebits_to_follow++;
+        low -= QUARTER;
+      }
     low <<= 1;
     range <<= 1;
   }
-	Erange = range;
-	Elow = low;
-	eep->C++;
-
+  Erange = range;
+  Elow = low;
+  eep->C++;
+  
 }
 
 
@@ -262,31 +254,31 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
  */
 void biari_encode_symbol_eq_prob(EncodingEnvironmentPtr eep, signed short symbol)
 {
-	register unsigned int low = (Elow<<1);
-
+  register unsigned int low = (Elow<<1);
+  
   if (symbol != 0)
     low += Erange;
 
   /* renormalisation as for biari_encode_symbol; 
      note that low has already been doubled */ 
-	if (low >= ONE)
-	{
-		put_one_bit_plus_outstanding(1);
+  if (low >= ONE)
+  {
+    put_one_bit_plus_outstanding(1);
     low -= ONE;
-	}
-	else 
-		if (low < HALF)
-		{
-			put_one_bit_plus_outstanding(0);
-		}
-		else
-		{
-			Ebits_to_follow++;
-			low -= HALF;
-		}
-	Elow = low;
-	eep->C++;
-
+  }
+  else 
+    if (low < HALF)
+    {
+      put_one_bit_plus_outstanding(0);
+    }
+    else
+    {
+      Ebits_to_follow++;
+      low -= HALF;
+    }
+    Elow = low;
+    eep->C++;
+    
 }
 
 /*!
@@ -297,37 +289,37 @@ void biari_encode_symbol_eq_prob(EncodingEnvironmentPtr eep, signed short symbol
  */
 void biari_encode_symbol_final(EncodingEnvironmentPtr eep, signed short symbol)
 {
-	register unsigned int range = Erange-2;
-	register unsigned int low = Elow;
-
+  register unsigned int range = Erange-2;
+  register unsigned int low = Elow;
+  
   if (symbol) {
- 		low += range;
+    low += range;
     range = 2;
   }
-
-	while (range < QUARTER)
+  
+  while (range < QUARTER)
   {
-		if (low >= HALF)
+    if (low >= HALF)
     {
-			put_one_bit_plus_outstanding(1);
+      put_one_bit_plus_outstanding(1);
       low -= HALF;
-		}
+    }
     else 
-			if (low < QUARTER)
-			{
-				put_one_bit_plus_outstanding(0);
-			}
-			else
-			{
-				Ebits_to_follow++;
-				low -= QUARTER;
-			}
-    low <<= 1;
-    range <<= 1;
+      if (low < QUARTER)
+      {
+        put_one_bit_plus_outstanding(0);
+      }
+      else
+      {
+        Ebits_to_follow++;
+        low -= QUARTER;
+      }
+      low <<= 1;
+      range <<= 1;
   }
-	Erange = range;
-	Elow = low;
-	eep->C++;
+  Erange = range;
+  Elow = low;
+  eep->C++;
 }
 
 
@@ -341,12 +333,12 @@ void biari_encode_symbol_final(EncodingEnvironmentPtr eep, signed short symbol)
 void biari_init_context (BiContextTypePtr ctx, const int* ini)
 {
   int pstate;
-
-	pstate = ((ini[0]*(img->qp-SHIFT_QP))>>4) + ini[1];
-
+  
+  pstate = ((ini[0]*(img->qp-SHIFT_QP))>>4) + ini[1];
+  
   if (img->type==INTRA_IMG) pstate = min (max (27, pstate),  74);  // states from 0 to 23
   else                      pstate = min (max ( 0, pstate), 101);  // states from 0 to 50
-
+  
   if (pstate>=51)
   {
     ctx->state  = pstate - 51;

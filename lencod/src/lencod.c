@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 5.0c
+ *     JM 6.0
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -76,6 +76,8 @@
 #if defined WIN32
   #include <conio.h>
 #endif
+#include <assert.h>
+
 #include "global.h"
 #include "configfile.h"
 #include "leaky_bucket.h"
@@ -86,8 +88,8 @@
 #include "fmo.h"
 #include "sei.h"
 
-#define JM      "5"
-#define VERSION "5.0c"
+#define JM      "6"
+#define VERSION "6.0"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
@@ -95,12 +97,6 @@ StatParameters  stats,  *stat  = &stats;
 SNRParameters   snrs,   *snr   = &snrs;
 Decoders decoders, *decs=&decoders;
 
-#ifdef _DEBUG
-byte    *tmp_streamBuffer;  //limin 01/02/02
-int     *pbits_to_go;     //!< current bitcounter, 
-byte    *pbyte_buf;       //!< current buffer for last written byte
-int     *pbyte_pos;
-#endif
 
 #ifdef _ADAPT_LAST_GROUP_
 int initial_Bframes = 0;
@@ -135,18 +131,18 @@ int main(int argc,char **argv)
   p_dec = p_dec_u = p_dec_v = p_stat = p_log = p_datpart = p_trace = NULL;
 
 
-  isBigEndian = testEndian();
+//  isBigEndian = testEndian();
 
   Configure (argc, argv);
-  img->disposable_flag = FALSE;
-
-  // Initialize Image Parameters
   init_img();
+  InitNal();
 
-  // Allocate Slice data struct
-  malloc_slice();
-
-  // create and init structure for rd-opt. mode decision
+  frame_pic = malloc_picture();
+  if (input->InterlaceCodingOption != FRAME_CODING)
+  {
+    top_pic = malloc_picture();
+    bottom_pic = malloc_picture();
+  }
   init_rdopt ();
 
   // allocate memory for frame buffers
@@ -155,11 +151,8 @@ int main(int argc,char **argv)
 
   Init_Motion_Search_Module ();
 
-  // Just some information which goes to the standard output
   information_init();
 
-  // Write sequence header; open bitstream files
-  stat->bit_slice = start_sequence();
   // B pictures
   Bframe_ctr=0;
   img->refPicID=-1;  //WYK: Oct. 16, 2001
@@ -174,35 +167,57 @@ int main(int argc,char **argv)
 #endif
 
   PatchInputNoFrames();
-
-  if ( input->of_mode == PAR_OF_IFF )
-    initSegmentBox(); // There is only one segment
-
   img->pn = -1;    // Tian
+  init_poc();
+
+  // Write sequence header (with parameter sets)
+  stat->bit_slice = start_sequence();
   start_frame_no_in_this_IGOP = 0;
   for (img->number=0; img->number < input->no_frames; img->number++)
   {
-    // Tian Dong. June 13, 2002, C083
-    // C083's picture Update Behavior need the following modification
-//    img->pn = img->number % (img->buf_cycle+1);
+    img->disposable_flag = FALSE;
     img->pn = (img->pn+1) % (img->buf_cycle+1); 
 
+    //much of this can go in init_frame() or init_field()?
+    //poc for this frame or field
+    img->toppoc = IMG_NUMBER*img->offset_for_ref_frame[0];
+    if (input->InterlaceCodingOption==FRAME_CODING)
+      img->bottompoc = img->toppoc;     //progressive
+    else 
+      img->bottompoc = img->toppoc+1;
+    push_poc(img->toppoc, img->bottompoc, REFFRAME);               //push poc values into array
+    
+    //frame_num for this frame
+    img->frame_num = IMG_NUMBER;
+    img->idr_flag = !IMG_NUMBER;            //for 2nd field, idr is reset in SliceHeader() //5.0f
+    
+    //the following is sent in the slice header
+    img->delta_pic_order_cnt[0]=0;
+    
     SetImgType();
 
 #ifdef _ADAPT_LAST_GROUP_
     if (input->successive_Bframe && input->last_frame && IMG_NUMBER+1 == input->no_frames)
-      {
-        int bi = (int)((float)(input->jumpd+1)/(input->successive_Bframe+1.0)+0.499999);
-        input->successive_Bframe = (input->last_frame-(img->number-1)*(input->jumpd+1))/bi-1;
-      }
+    {                                           
+      int bi = (int)((float)(input->jumpd+1)/(input->successive_Bframe+1.0)+0.499999);
+      
+      input->successive_Bframe = (input->last_frame-(img->number-1)*(input->jumpd+1))/bi-1;
+
+      //about to code the last ref frame, adjust deltapoc         
+      img->delta_pic_order_cnt[0]= -2*(initial_Bframes - input->successive_Bframe);
+      img->toppoc += img->delta_pic_order_cnt[0];
+      img->bottompoc += img->delta_pic_order_cnt[0];
+      toprefpoc[0] = img->toppoc;                             //fix array values too
+      bottomrefpoc[0] = img->bottompoc;
+      
+    }
 #endif
 
     image_type = img->type;
-    img->disposable_flag = FALSE;
     
     img->num_ref_pic_active_fwd_minus1 = max(0,img->nb_references - 1);
     num_ref_pic_bak          = img->num_ref_pic_active_fwd_minus1;
-    if (input->BipredictiveWeighting > 0)
+    if (input->StoredBPictures > 0)
     {
       if (input->InterlaceCodingOption>=MB_CODING)
       {
@@ -224,53 +239,55 @@ int main(int argc,char **argv)
     else
       img->layer = 1;
 
-    begin_sub_sequence(); // Tian Dong, JVT-B042, May 31, 2002
+
 
     encode_one_frame(); // encode one I- or P-frame
-    // Tian Dong. PLUS1, The following lines are moved ahead of the next IF June 06, 2002
-//    if (image_type == INTRA_IMG || img->types==SP_IMG)
-//    if (img->number == 0 )
-//    {
-//      img->nb_references = 1;
-//    }
-//    else
-    {
-      img->nb_references += 1;
-      img->nb_references = min(img->nb_references, img->buf_cycle +1); // Tian Dong. PLUS1, +1, June 7, 2002
-      img->nb_references = min(img->nb_references, fb->short_used+fb->long_used);// Tian Dong. June 7, 2002
-    }
+
+
+    img->nb_references += 1;
+    img->nb_references = min(img->nb_references, img->buf_cycle +1); // Tian Dong. PLUS1, +1, June 7, 2002
+    img->nb_references = min(img->nb_references, fb->short_used+fb->long_used);// Tian Dong. June 7, 2002
 
     if ((input->successive_Bframe != 0) && (IMG_NUMBER > 0)) // B-frame(s) to encode
     {
       img->type = B_IMG;            // set image type to B-frame
-      img->disposable_flag = TRUE;
       img->num_ref_pic_active_bwd_minus1 = 0;
 
       img->types= INTER_IMG;
 
-      if ( input->NumFramesInELSubSeq == 0 ) img->layer = 0;
-      else img->layer = 1;
+      if (input->NumFramesInELSubSeq == 0) 
+        img->layer = 0;
+      else 
+        img->layer = 1;
+
+      img->frame_num++;                 //increment frame_num once for B-frames
+      img->idr_flag=0;                                        //B-frames cannot be idr  //5.0f
+      img->disposable_flag = TRUE;      // These B frames are disposable (are the non-disposable B frames implemented???)
 
       for(img->b_frame_to_code=1; img->b_frame_to_code<=input->successive_Bframe; img->b_frame_to_code++)
       {
         img->num_ref_pic_active_fwd_minus1 = num_ref_pic_bak;       // coding field pictures would have changed this, so reset
+
+        //! somewhere here the disposable flag was set -- B frames are always disposable in this encoder.
+        //! This happens now in slice.c, terminate_slice, where the nal_reference_idc is set up
+        //poc for this B frame
+        img->toppoc = (IMG_NUMBER-1)*img->offset_for_ref_frame[0] + 2* img->b_frame_to_code;
+        if (input->InterlaceCodingOption==FRAME_CODING)
+          img->bottompoc = img->toppoc;     //progressive
+        else 
+          img->bottompoc = img->toppoc+1;
+        
+        push_poc(img->toppoc,img->bottompoc, NONREFFRAME);      //push pocs for B frame
+        
+        //the following is sent in the slice header
+        img->delta_pic_order_cnt[0]= 2*(img->b_frame_to_code-1);
+        
         encode_one_frame();  // encode one B-frame
       }
     }
-    
-
-    end_sub_sequence();  // Tian, JVT-B042, May 31, 2002
 
     process_2nd_IGOP();
   }
-  if ( input->of_mode == PAR_OF_IFF )
-  {
-    updateAlternateTrackHeaderBox();
-    updateAlternateTrackMediaBox();
-
-    updateSegmentBox();
-  }
-
   // terminate sequence
   terminate_sequence();
 
@@ -297,7 +314,11 @@ int main(int argc,char **argv)
 
 
 
-  free_slice();
+  free_picture (frame_pic);
+  if (top_pic)
+    free_picture (top_pic);
+  if (bottom_pic)
+    free_picture (bottom_pic);
 
   // free allocated memory for frame buffers
   free_frame_buffers(input,img);
@@ -305,9 +326,98 @@ int main(int argc,char **argv)
 
   // free image mem
   free_img ();
-
+  FinitNal();
   return 0;
 }
+
+
+/*!
+ ***********************************************************************
+ * \brief
+ *    Initializes the POC structure with appropriate parameters.
+ * 
+ ***********************************************************************
+ */
+void init_poc()
+{
+  int i;
+
+  if(input->no_frames > (1<<15))error("too many frames",-998);
+  if(input->no_multpred >= MAX_NO_POC_FRAMES)error("NumberReferenceFrames too large",-999);
+  for(i=0; i<MAX_NO_POC_FRAMES; i++){toprefpoc[i] = bottomrefpoc[i] = 1<<29;}            //init with large 
+
+  //the following should probably go in sequence parameters
+  // frame poc's increase by 2, field poc's by 1
+
+  // variable below gone for good, see defines.h LOG2_MAX_FRAME_NUM_MINUS4
+  //  img->log2_max_frame_num_minus4 = 4;           // used to be 12, bug?;      
+  img->pic_order_cnt_type=1;
+  img->num_ref_frames_in_pic_order_cnt_cycle=1;
+  img->delta_pic_order_always_zero_flag=0;
+  img->offset_for_non_ref_pic =  -2*(input->successive_Bframe);
+
+  if (input->InterlaceCodingOption==FRAME_CODING)
+    img->offset_for_top_to_bottom_field=0;
+  else    
+    img->offset_for_top_to_bottom_field=1;
+  img->offset_for_ref_frame[0] = 2*(input->successive_Bframe+1);
+
+                                    //the following should probably go in picture parameters
+  img->pic_order_present_flag=0;    //img->delta_pic_order_cnt[1] not sent
+}
+
+/*!
+ ***********************************************************************
+ * \brief
+ *    Pushes values onto the POC ref arrays  toprefpoc[] & bottomrefpoc[] 
+ * 
+ ***********************************************************************
+ */
+void push_poc(unsigned int topvalue, unsigned int bottomvalue, unsigned int ref_frame_ind )
+{
+  int i;
+  static int current_is_ref = 0;                //indicates if current top value is for a ref frame
+
+         if(current_is_ref){
+                 for(i=MAX_NO_POC_FRAMES-1; i>0; i--){          //move all the data down by one
+                        toprefpoc[i] = toprefpoc[i-1] ; 
+                        bottomrefpoc[i] = bottomrefpoc[i-1] ;
+                 }
+         }      
+        
+        toprefpoc[0] = topvalue;                //put new data
+        bottomrefpoc[0] = bottomvalue;
+
+        current_is_ref = ref_frame_ind;         //new data type
+
+}
+
+
+/*!
+ ***********************************************************************
+ * \brief
+ *    Initializes the img->nz_coeff
+ * \par Input:
+ *    none
+ * \par  Output:
+ *    none
+ * \ side effects
+ *    sets omg->nz_coef[][][][] to -1
+ ***********************************************************************
+ */
+void CAVLC_init()
+{
+  int i, j, k, l;
+
+  for (i=0;i < img->width/MB_BLOCK_SIZE; i++)
+    for (j=0; j < img->height/MB_BLOCK_SIZE; j++)
+      for (k=0;k<4;k++)
+        for (l=0;l<6;l++)
+          img->nz_coeff[i][j][k][l]=-1;
+
+
+}
+
 
 /*!
  ***********************************************************************
@@ -321,7 +431,7 @@ int main(int argc,char **argv)
  */
 void init_img()
 {
-  int i,j,k,l,size_x,size_y;
+  int i,j,size_x,size_y;
 
   img->no_multpred=input->no_multpred;
 #ifdef _ADDITIONAL_REFERENCE_FRAME_
@@ -452,12 +562,7 @@ void init_img()
     get_mem3Dint(&(img->nz_coeff[j]), img->height/MB_BLOCK_SIZE, 4, 6);
   }
 
-  for (i=0;i < img->width/MB_BLOCK_SIZE; i++)
-    for (j=0; j < img->height/MB_BLOCK_SIZE; j++)
-      for (k=0;k<4;k++)
-        for (l=0;l<6;l++)
-          img->nz_coeff[i][j][k][l]=-1;
-
+  CAVLC_init();
 
   // Prediction mode is set to -1 outside the frame, indicating that no prediction can be made from this part
   for (i=0; i < img->width/BLOCK_SIZE+1; i++)
@@ -500,7 +605,7 @@ void init_img()
   img->mb_y_upd=0;
 
   RandomIntraInit (img->width/16, img->height/16, input->RandomIntraMBRefresh);
-  FmoInit (img->width/16, img->height/16, input->FmoNumSliceGroups, input->FmoType, NULL); 
+  FmoInit (img->width/16, img->height/16, input->num_slice_groups_minus1, input->FmoType, NULL); 
 
   InitSEIMessages();  // Tian Dong (Sept 2002)
 
@@ -514,7 +619,7 @@ void init_img()
   }
   else
   {
-    input->LFDisable = 0;
+    input->LFDisableIdc = 0;
     input->LFAlphaC0Offset = 0;
     input->LFBetaOffset = 0;
   }
@@ -552,225 +657,49 @@ void free_img ()
 }
 
 
+
 /*!
  ************************************************************************
  * \brief
- *    Allocates the slice structure along with its dependent
+ *    Allocates the picture structure along with its dependent
  *    data structures
- * \par Input:
- *    Input Parameters struct inp_par *inp,  struct img_par *img
+ * \return
+ *    Pointer to a Picture
  ************************************************************************
  */
-void malloc_slice()
+
+Picture *malloc_picture()
 {
-  int i;
-  DataPartition *dataPart;
-  Slice *currSlice;
-  const int buffer_size = (img->width * img->height * 4); // AH 190202: There can be data expansion with 
-                                                          // low QP values. So, we make sure that buffer 
-                                                          // does not everflow. 4 is probably safe multiplier.
-  NAL_Payload_buffer = (byte *) calloc(buffer_size, sizeof(byte));
-
-  switch(input->of_mode) // init depending on NAL mode
-  {
-    case PAR_OF_IFF:
-    case PAR_OF_26L:
-      // Current File Format
-      img->currentSlice = (Slice *) calloc(1, sizeof(Slice));
-      if ( (currSlice = img->currentSlice) == NULL)
-      {
-        snprintf (errortext, ET_SIZE, "Memory allocation for Slice datastruct in NAL-mode %d failed", input->of_mode);
-        error(errortext, 600);
-      }
-      if (input->symbol_mode == CABAC)
-      {
-        // create all context models
-        currSlice->mot_ctx = create_contexts_MotionInfo();
-        currSlice->tex_ctx = create_contexts_TextureInfo();
-      }
-
-      switch(input->partition_mode)
-      {
-      case PAR_DP_1:
-        currSlice->max_part_nr = 1;
-        break;
-      case PAR_DP_3:
-        error("Data Partitioning not supported with bit stream file format",600);
-        break;
-      default:
-        error("Data Partitioning Mode not supported!",600);
-        break;
-      }
-
-
-      currSlice->partArr = (DataPartition *) calloc(currSlice->max_part_nr, sizeof(DataPartition));
-      if (currSlice->partArr == NULL)
-      {
-        snprintf(errortext, ET_SIZE, "Memory allocation for Data Partition datastruct in NAL-mode %d failed", input->of_mode);
-        error(errortext, 100);
-      }
-      for (i=0; i<currSlice->max_part_nr; i++) // loop over all data partitions
-      {
-        dataPart = &(currSlice->partArr[i]);
-        dataPart->bitstream_frm = (Bitstream *) calloc(1, sizeof(Bitstream));
-        if (dataPart->bitstream_frm == NULL)
-        {
-          snprintf(errortext, ET_SIZE, "Memory allocation for Bitstream datastruct in NAL-mode %d failed", input->of_mode);
-          error (errortext, 100);
-        }
-        dataPart->bitstream_frm->streamBuffer = (byte *) calloc(buffer_size, sizeof(byte));
-        if (dataPart->bitstream_frm->streamBuffer == NULL)
-        {
-          snprintf(errortext, ET_SIZE, "Memory allocation for bitstream buffer in NAL-mode %d failed", input->of_mode);
-          error (errortext, 100);
-        }
-        // Initialize storage of bitstream parameters
-        dataPart->bitstream_frm->stored_bits_to_go = 8;
-        dataPart->bitstream_frm->stored_byte_pos = 0;
-        dataPart->bitstream_frm->stored_byte_buf = 0;
-
-        if(input->InterlaceCodingOption != FRAME_CODING)
-        {
-          dataPart->bitstream_fld = (Bitstream *) calloc(1, sizeof(Bitstream));
-          if (dataPart->bitstream_fld == NULL)
-          {
-            snprintf(errortext, ET_SIZE, "Memory allocation for Bitstream datastruct in NAL-mode %d failed", input->of_mode);
-            error (errortext, 100);
-          }
-          dataPart->bitstream_fld->streamBuffer = (byte *) calloc(buffer_size, sizeof(byte));
-          if (dataPart->bitstream_fld->streamBuffer == NULL)
-          {
-            snprintf(errortext, ET_SIZE, "Memory allocation for bitstream buffer in NAL-mode %d failed", input->of_mode);
-            error (errortext, 100);
-          }
-          // Initialize storage of bitstream parameters
-          dataPart->bitstream_fld->stored_bits_to_go = 8;
-          dataPart->bitstream_fld->stored_byte_pos = 0;
-          dataPart->bitstream_fld->stored_byte_buf = 0;
-        }
-
-      }
-      return;
-    case PAR_OF_RTP:
-      // RTP packet file format
-      img->currentSlice = (Slice *) calloc(1, sizeof(Slice));
-      if ( (currSlice = img->currentSlice) == NULL)
-      {
-        snprintf(errortext, ET_SIZE, "Memory allocation for Slice datastruct in NAL-mode %d failed", input->of_mode);
-        error(errortext, 100);
-      }
-      if (input->symbol_mode == CABAC)
-      {
-        // create all context models
-        currSlice->mot_ctx = create_contexts_MotionInfo();
-        currSlice->tex_ctx = create_contexts_TextureInfo();
-      }
-      switch(input->partition_mode)
-      {
-      case PAR_DP_1:
-        currSlice->max_part_nr = 1;
-        break;
-      case PAR_DP_3:
-        currSlice->max_part_nr = 3;
-        break;
-      default:
-        error("Data Partitioning Mode not supported!",600);
-        break;
-      }
-
-      currSlice->partArr = (DataPartition *) calloc(currSlice->max_part_nr, sizeof(DataPartition));
-      if (currSlice->partArr == NULL)
-      {
-        snprintf(errortext, ET_SIZE, "Memory allocation for Data Partition datastruct in NAL-mode %d failed", input->of_mode);
-        error(errortext, 100);
-      }
-
-      for (i=0; i<currSlice->max_part_nr; i++) // loop over all data partitions
-      {
-        dataPart = &(currSlice->partArr[i]);
-        dataPart->bitstream_frm = (Bitstream *) calloc(1, sizeof(Bitstream));
-        if (dataPart->bitstream_frm == NULL)
-        {
-          snprintf(errortext, ET_SIZE, "Memory allocation for Bitstream datastruct in NAL-mode %d failed", input->of_mode);
-          error(errortext, 100);
-        }
-        dataPart->bitstream_frm->streamBuffer = (byte *) calloc(buffer_size, sizeof(byte));
-        if (dataPart->bitstream_frm->streamBuffer == NULL)
-        {
-          snprintf(errortext, ET_SIZE, "Memory allocation for bitstream buffer in NAL-mode %d failed", input->of_mode);
-          error(errortext, 100);
-        }
-        // Initialize storage of bitstream parameters
-        dataPart->bitstream_frm->stored_bits_to_go = 8;
-        dataPart->bitstream_frm->stored_byte_pos = 0;
-        dataPart->bitstream_frm->stored_byte_buf = 0;
-
-        if(input->InterlaceCodingOption != FRAME_CODING)
-        {
-          dataPart->bitstream_fld = (Bitstream *) calloc(1, sizeof(Bitstream));
-          if (dataPart->bitstream_fld == NULL)
-          {
-            snprintf(errortext, ET_SIZE, "Memory allocation for Bitstream datastruct in NAL-mode %d failed", input->of_mode);
-            error (errortext, 100);
-          }
-          dataPart->bitstream_fld->streamBuffer = (byte *) calloc(buffer_size, sizeof(byte));
-          if (dataPart->bitstream_fld->streamBuffer == NULL)
-          {
-            snprintf(errortext, ET_SIZE, "Memory allocation for bitstream buffer in NAL-mode %d failed", input->of_mode);
-            error (errortext, 100);
-          }
-          // Initialize storage of bitstream parameters
-          dataPart->bitstream_fld->stored_bits_to_go = 8;
-          dataPart->bitstream_fld->stored_byte_pos = 0;
-          dataPart->bitstream_fld->stored_byte_buf = 0;
-        }
-      }
-      return;
-
-    default:
-      snprintf(errortext, ET_SIZE, "Output File Mode %d not supported", input->of_mode);
-      error(errortext, 600);
-  }
-
+  Picture *pic;
+  if ((pic = calloc (1, sizeof (Picture))) == NULL) no_mem_exit ("malloc_picture: Picture structure");
+  //! Note: slice structures are allocated as needed in code_a_picture
+  return pic;
 }
 
 /*!
  ************************************************************************
  * \brief
- *    Memory frees of the Slice structure and of its dependent
- *    data structures
- * \par Input:
- *    Input Parameters struct inp_par *inp,  struct img_par *img
+ *    Frees a picture
+ * \param
+ *    pic: POinter to a Picture to be freed
  ************************************************************************
  */
-void free_slice()
+
+
+void free_picture(Picture *pic)
 {
   int i;
-  DataPartition *dataPart;
-  Slice *currSlice = img->currentSlice;
 
-  for (i=0; i<currSlice->max_part_nr; i++) // loop over all data partitions
+  if (pic != NULL)
   {
-    dataPart = &(currSlice->partArr[i]);
-    if (dataPart->bitstream->streamBuffer != NULL)
-      free(dataPart->bitstream->streamBuffer);
-    if (dataPart->bitstream != NULL)
-      free(dataPart->bitstream);
+    for (i=0; i<pic->no_slices; i++)
+      if (pic->slices[i] != NULL)
+        free (pic->slices[i]);
+    free (pic);
   }
-  if (currSlice->partArr != NULL)
-    free(currSlice->partArr);
-  if (input->symbol_mode == CABAC)
-  {
-    // delete all context models
-    delete_contexts_MotionInfo(currSlice->mot_ctx);
-    delete_contexts_TextureInfo(currSlice->tex_ctx);
-  }
-  if (currSlice != NULL)
-    free(img->currentSlice);
-
-  if(NAL_Payload_buffer)
-    free(NAL_Payload_buffer);
 }
+
+
 
 
 /*!
@@ -885,25 +814,15 @@ void report()
     if(input->successive_Bframe != 0)
       fprintf(stdout,   " No of ref. frames used in B pred  : %d\n",input->no_multpred);
   }
-  if(input->abt)
-  {
-    fprintf(stdout," Adaptive Block Transforms         : Used");
-    if (input->abt==INTER_ABT)
-      fprintf(stdout," (inter only)\n");
-    else
-      fprintf(stdout," (inter and intra)\n");
-  }
-  else
-    fprintf(stdout," Adaptive Block Transforms         : Not Used\n");            // ABT
   fprintf(stdout,   " Total encoding time for the seq.  : %.3f sec \n",tot_time*0.001);
 
   // B pictures
   fprintf(stdout, " Sequence type                     :" );
-  if(input->successive_Bframe==0 && input->BipredictiveWeighting > 0)
+  if(input->successive_Bframe==0 && input->StoredBPictures > 0)
     fprintf(stdout, " I-P-BS-BS (QP: I %d, P BS %d) \n",input->qp0, input->qpN);
-  else if(input->successive_Bframe==1 && input->BipredictiveWeighting > 0)
+  else if(input->successive_Bframe==1 && input->StoredBPictures > 0)
     fprintf(stdout, " I-B-P-BS-B-BS (QP: I %d, P BS %d, B %d) \n",input->qp0, input->qpN, input->qpB);
-  else if(input->successive_Bframe==2 && input->BipredictiveWeighting > 0)
+  else if(input->successive_Bframe==2 && input->StoredBPictures > 0)
     fprintf(stdout, " I-B-B-P-B-B-BS (QP: I %d, P BS %d, B %d) \n",input->qp0, input->qpN, input->qpB);
   else if(input->successive_Bframe==1)   fprintf(stdout, " IBPBP (QP: I %d, P %d, B %d) \n",
     input->qp0, input->qpN, input->qpB);
@@ -949,10 +868,7 @@ void report()
 
     switch(input->of_mode)
     {
-    case PAR_OF_IFF:
-      fprintf(stdout," Output File Format                : H.26L Interim File Format \n");
-      break;
-    case PAR_OF_26L:
+    case PAR_OF_ANNEXB:
       fprintf(stdout," Output File Format                : H.26L Bit Stream File Format \n");
       break;
     case PAR_OF_RTP:
@@ -974,7 +890,7 @@ void report()
   if(Bframe_ctr!=0)
   {
 
-    if(input->BipredictiveWeighting > 0)
+    if(input->StoredBPictures > 0)
     {
       fprintf(stdout, " Total bits                        : %d (I %5d, P BS %5d, B %d) \n",
             total_bits=stat->bit_ctr_P + stat->bit_ctr_0 + stat->bit_ctr_B, stat->bit_ctr_0, stat->bit_ctr_P, stat->bit_ctr_B);
@@ -991,7 +907,7 @@ void report()
     fprintf(stdout, " Bit rate (kbit/s)  @ %2.2f Hz     : %5.2f\n", frame_rate, stat->bitrate/1000);
 
   }
-  else if(input->BipredictiveWeighting > 0)
+  else if(input->StoredBPictures > 0)
   {
     fprintf(stdout, " Total bits                        : %d (I %5d, P BS %5d) \n",
     total_bits=stat->bit_ctr_P + stat->bit_ctr_0 , stat->bit_ctr_0, stat->bit_ctr_P);
@@ -1025,10 +941,6 @@ void report()
 
   fprintf(stdout,"--------------------------------------------------------------------------\n");
   fprintf(stdout,"Exit JM %s encoder ver %s ", JM, VERSION);
-#if ( INI_CTX == 0 )
-  fprintf(stdout,"No CABAC Initialization. ");
-  fprintf(stdout," ABT_max_count %d ",INICNT_ABT);
-#endif
   fprintf(stdout,"\n");
 
   // status file
@@ -1081,16 +993,6 @@ void report()
     if(input->successive_Bframe != 0)
       fprintf(p_stat, " No of frame used in B pred   : %d\n",input->no_multpred);
   }
-  if(input->abt) // ABT
-  {
-    fprintf(p_stat," Adaptive Block Transforms    : Used");
-    if (input->abt==INTER_ABT)
-      fprintf(p_stat," (inter only)\n");
-    else
-      fprintf(p_stat," (inter and intra)\n");
-  }
-  else
-    fprintf(p_stat," Adaptive Block Transforms    : Not Used\n"); // ~ABT
   if (input->symbol_mode == UVLC)
     fprintf(p_stat,   " Entropy coding method        : CAVLC\n");
   else
@@ -1261,11 +1163,11 @@ void report()
     }
     else                                            // Create header for new log file
     {
-      fprintf(p_log," ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
-      fprintf(p_log,"|            Encoder statistics. This file is generated during first encoding session, new sessions will be appended                                                   |\n");
-      fprintf(p_log," ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
-      fprintf(p_log,"| Date  | Time  |    Sequence        |#Img|Quant1|QuantN|Format|Hadamard|Search r|#Ref | ABT |Freq |Intra upd|SNRY 1|SNRU 1|SNRV 1|SNRY N|SNRU N|SNRV N|#Bitr P|#Bitr B|\n");
-      fprintf(p_log," ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
+      fprintf(p_log," ----------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
+      fprintf(p_log,"|            Encoder statistics. This file is generated during first encoding session, new sessions will be appended                                              |\n");
+      fprintf(p_log," ----------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
+      fprintf(p_log,"| Date  | Time  |    Sequence        |#Img|Quant1|QuantN|Format|Hadamard|Search r|#Ref | Freq |Intra upd|SNRY 1|SNRU 1|SNRV 1|SNRY N|SNRU N|SNRV N|#Bitr P|#Bitr B|\n");
+      fprintf(p_log," ----------------------------------------------------------------------------------------------------------------------------------------------------------------- \n");
     }
   }
   else
@@ -1315,13 +1217,6 @@ void report()
   fprintf(p_log,"   %2d   |",input->search_range );
 
   fprintf(p_log," %2d  |",input->no_multpred);
-
-  if(input->abt==INTER_ABT) // ABT
-    fprintf(p_log," P+B |");
-  else if (input->abt==INTER_INTRA_ABT)
-    fprintf(p_log,"I+P+B|");
-  else
-    fprintf(p_log," OFF |");
 
   fprintf(p_log," %2d  |",img->framerate/(input->jumpd+1));
 
@@ -1479,7 +1374,7 @@ int init_global_buffers()
 
   memory_size += get_mem2Dint(&abp_type_FrArr, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE);
 
-  if(input->successive_Bframe!=0 || input->BipredictiveWeighting > 0)
+  if(input->successive_Bframe!=0 || input->StoredBPictures > 0)
   {    
     // allocate memory for temp B-frame motion vector buffer: fw_refFrArr, bw_refFrArr
     // int ...refFrArr[72][88];
@@ -1529,7 +1424,7 @@ int init_global_buffers()
 
   alloc_Refbuf (img);
 
-  if(input->successive_Bframe!=0 || input->BipredictiveWeighting > 0)
+  if(input->successive_Bframe!=0 || input->StoredBPictures > 0)
   {
     // allocate memory for temp B-frame motion vector buffer: tmp_fwMV, tmp_bwMV, dfMV, dbMV
     // int ...MV[2][72][92];  ([2][72][88] should be enough)
@@ -1539,10 +1434,6 @@ int init_global_buffers()
     memory_size += get_mem3Dint(&dbMV,     2, img->height/BLOCK_SIZE, img->width/BLOCK_SIZE+4);
 
   }
-
-  // allocate memory for array containing the block modes of the collocated MBs. Needed for B-Frames ABT Direct Mode.
-  // colMBmode[frame/top/bottom][blk_y][blk_x]
-  memory_size += get_mem3Dint(&colB8mode, 5, img->height/B8_SIZE, img->width/B8_SIZE);
 
   // allocate memory for temp quarter pel luma frame buffer: img4Y_tmp
   // int img4Y_tmp[576][704];  (previously int imgY_tmp in global.h)
@@ -1589,7 +1480,7 @@ int init_global_buffers()
     memory_size += get_mem2D(&imgY_org_bot, height_field, img->width);
     memory_size += get_mem3D(&imgUV_org_bot, 2, height_field/2, img->width_cr);
 
-    if(input->successive_Bframe!=0 || input->BipredictiveWeighting > 0)
+    if(input->successive_Bframe!=0 || input->StoredBPictures > 0)
     {
       // allocate memory for temp B-frame motion vector buffer: fw_refFrArr, bw_refFrArr
       // int ...refFrArr[72][88];
@@ -1619,10 +1510,10 @@ int init_global_buffers()
 
   if(input->InterlaceCodingOption >= MB_CODING)
   {
-    memory_size += get_mem3Dint(&tmp_mv_top_save, 2, height_field/BLOCK_SIZE, img->width/BLOCK_SIZE+4);
-    memory_size += get_mem3Dint(&tmp_mv_bot_save, 2, height_field/BLOCK_SIZE, img->width/BLOCK_SIZE+4);
-    memory_size += get_mem2Dint(&refFrArr_top_save, height_field/BLOCK_SIZE, img->width/BLOCK_SIZE);
-    memory_size += get_mem2Dint(&refFrArr_bot_save, height_field/BLOCK_SIZE, img->width/BLOCK_SIZE);
+//    memory_size += get_mem3Dint(&tmp_mv_top_save, 2, height_field/BLOCK_SIZE, img->width/BLOCK_SIZE+4);
+//    memory_size += get_mem3Dint(&tmp_mv_bot_save, 2, height_field/BLOCK_SIZE, img->width/BLOCK_SIZE+4);
+//    memory_size += get_mem2Dint(&refFrArr_top_save, height_field/BLOCK_SIZE, img->width/BLOCK_SIZE);
+//    memory_size += get_mem2Dint(&refFrArr_bot_save, height_field/BLOCK_SIZE, img->width/BLOCK_SIZE);
   }
 
   }
@@ -1664,6 +1555,8 @@ void free_global_buffers()
   // free multiple ref frame buffers
   // number of reference frames increased by one for next P-frame
   free(mref_frm);
+  if (input->WeightedPrediction || input->WeightedBiprediction)
+    free(mref_frm_w);
   free(mcef_frm);
 
   free_mem2D(imgY_pf);       // free post filtering frame buffers
@@ -1673,11 +1566,13 @@ void free_global_buffers()
   free_mem3D(nextP_imgUV,2);
 
   free (Refbuf11_frm);
+  if (input->WeightedPrediction || input->WeightedBiprediction)
+        free (Refbuf11_frm_w);
 
   // free multiple ref frame buffers
   // number of reference frames increased by one for next P-frame
 
-  if(input->successive_Bframe!=0 || input->BipredictiveWeighting > 0)
+  if(input->successive_Bframe!=0 || input->StoredBPictures > 0)
   {
     // free last P-frame buffers for B-frame coding
     free_mem3Dint(tmp_fwMV,2);
@@ -1695,7 +1590,6 @@ void free_global_buffers()
   } // end if B frame
   free_mem2Dint(abp_type_FrArr);
 
-  free_mem3Dint(colB8mode,3);  // ABT
   free_mem2Dint(img4Y_tmp);    // free temp quarter pel frame buffer
 
   // free mem, allocated in init_img()
@@ -1764,9 +1658,11 @@ void free_global_buffers()
     // free multiple ref frame buffers
     // number of reference frames increased by one for next P-frame
     free(mref_fld);
+    if (input->WeightedPrediction || input->WeightedBiprediction)
+      free(mref_fld_w);
     free(mcef_fld);
 
-    if(input->successive_Bframe!=0 || input->BipredictiveWeighting > 0)
+    if(input->successive_Bframe!=0 || input->StoredBPictures > 0)
     {
       // free last P-frame buffers for B-frame coding
       free_mem2Dint(fw_refFrArr_top);
@@ -1781,6 +1677,8 @@ void free_global_buffers()
     } // end if B frame
 
     free (Refbuf11_fld);
+        if ( input->WeightedPrediction || input->WeightedBiprediction)
+                free (Refbuf11_fld_w);
 
     free_mem3Dint(tmp_mv_top,2);
     free_mem3Dint(tmp_mv_bot,2);
@@ -1969,92 +1867,6 @@ void free_mem_DCcoeff (int*** cofDC)
   free (cofDC);
 }
 
-/*!
- ************************************************************************
- * \brief
- *    point to frame coding variables 
- ************************************************************************
- */
-void put_buffer_frame()
-{
-  fb = frm;
-
-  imgY = imgY_frm;
-  imgUV = imgUV_frm;
-  imgY_org = imgY_org_frm;
-  imgUV_org = imgUV_org_frm;  
-  tmp_mv = tmp_mv_frm;
-  mref = mref_frm;
-  mcef = mcef_frm;  
-
-  refFrArr = refFrArr_frm;
-  fw_refFrArr = fw_refFrArr_frm;
-  bw_refFrArr = bw_refFrArr_frm;
-
-  Refbuf11 = Refbuf11_frm;
-  if (input->direct_type && (input->successive_Bframe!=0 || input->BipredictiveWeighting > 0))
-    moving_block=moving_block_frm;
-}
-
-/*!
- ************************************************************************
- * \brief
- *    point to top field coding variables 
- ************************************************************************
- */
-void put_buffer_top()
-{
-  fb = fld;
-
-  img->fld_type = 0;
-
-  imgY = imgY_top;
-  imgUV = imgUV_top;
-  imgY_org = imgY_org_top;
-  imgUV_org = imgUV_org_top;
-
-  mref = mref_fld;
-  mcef = mcef_fld;
-
-  Refbuf11 = Refbuf11_fld;  
-  tmp_mv = tmp_mv_top;
-  refFrArr = refFrArr_top;
-  fw_refFrArr = fw_refFrArr_top;
-  bw_refFrArr = bw_refFrArr_top;
-
-  if (input->direct_type && (input->successive_Bframe!=0 || input->BipredictiveWeighting > 0))
-    moving_block=moving_block_top;
-
-}
-
-/*!
- ************************************************************************
- * \brief
- *    point to bottom field coding variables 
- ************************************************************************
- */
-void put_buffer_bot()
-{
-  fb = fld;
-
-  img->fld_type = 1;
-
-  imgY = imgY_bot;
-  imgUV = imgUV_bot;
-  imgY_org = imgY_org_bot;
-  imgUV_org = imgUV_org_bot;
-
-  tmp_mv = tmp_mv_bot;
-  refFrArr = refFrArr_bot;
-  fw_refFrArr = fw_refFrArr_bot;
-  bw_refFrArr = bw_refFrArr_bot;
-  Refbuf11 = Refbuf11_fld;
-
-  mref = mref_fld;
-  mcef = mcef_fld;
-  if (input->direct_type && (input->successive_Bframe!=0 || input->BipredictiveWeighting > 0))
-    moving_block=moving_block_bot;
-}
 
 /*!
  ************************************************************************
@@ -2174,6 +1986,13 @@ void process_2nd_IGOP()
   img->nb_references = 0;
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    SetImgType
+ ************************************************************************
+ */
+
 void SetImgType()
 {
   if (input->intra_period == 0)
@@ -2185,7 +2004,7 @@ void SetImgType()
     else
     {
       img->type = INTER_IMG;        // P-frame
-      if(input->BipredictiveWeighting > 0 && img->number > 1)
+      if(input->StoredBPictures > 0 && img->number > 1)
       {
         img->type = BS_IMG;
       }
@@ -2208,7 +2027,7 @@ void SetImgType()
     else
     {
       img->type = INTER_IMG;        // P-frame
-      if(input->BipredictiveWeighting > 0 && img->number > 1)
+      if(input->StoredBPictures > 0 && img->number > 1)
       {
         img->type = BS_IMG;
       }
@@ -2230,3 +2049,18 @@ void SetImgType()
     img->nb_references--;
   }
 }
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    poc_distance()
+ ************************************************************************
+ */
+
+int poc_distance( int refa, int refb)
+{
+
+  return toprefpoc[refb + 1] - toprefpoc[refa + 1];
+}
+ 

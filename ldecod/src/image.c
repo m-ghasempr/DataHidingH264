@@ -67,23 +67,25 @@
 #include "mbuffer.h"
 #include "decodeiff.h"
 #include "fmo.h"
+#include "nalu.h"
+#include "parsetcommon.h"
+#include "parset.h"
+#include "header.h"
+#include "rtp.h"
 
 
-#if _ERROR_CONCEALMENT_
 #include "erc_api.h"
 extern objectBuffer_t *erc_object_list;
 extern ercVariables_t *erc_errorVar;
 extern frame erc_recfr;
 extern int erc_mvperMB;
 extern struct img_par *erc_img;
-#endif
 
 #ifdef _ADAPT_LAST_GROUP_
 int *last_P_no;
 int *last_P_no_frm;
 int *last_P_no_fld;
 #endif
-
 
 
 /*!
@@ -99,15 +101,10 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
   int current_header;
   Slice *currSlice = img->currentSlice;
   extern FILE* bits;
-  int Firstcall;
-
-#if _ERROR_CONCEALMENT_
   int ercStartMB;
   int ercSegment;
   frame recfr;
   int i;
-#endif
-
   time_t ltime1;                  // for time measurement
   time_t ltime2;
 
@@ -121,9 +118,6 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
 
   int tmp_time;                   // time used by decoding the last frame
 
-
-  if ( inp->of_mode == PAR_OF_IFF ) // for Interim File Format
-    rdPictureInfo( bits );
 
 #ifdef WIN32
   _ftime (&tstruct1);             // start time ms
@@ -141,31 +135,10 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
   while ((currSlice->next_header != EOS && currSlice->next_header != SOP))
   {
 // printf ("decode_one_frame: currSlice->next_header %d\n", currSlice->next_header);
-    // set the  corresponding read functions
-    start_slice(img, inp);
+    start_slice(img, inp);      //
+    current_header = read_new_slice();
 
-    // read new slice
-    Firstcall = (img->max_mb_nr == 0);    // A hack for the current byte string format.  In the current format,
-                                          // the picture size is part of the slice header and unknown before
-                                          // the first slice is read.  FMO needs to be initialized with the
-                                          // picture format.  Hence, test the picture size for initialization
-                                          // and initialize FMO in case of the first slice.
-    current_header = read_new_slice(img, inp);
-    if (Firstcall && (inp->of_mode == PAR_OF_26L || inp->of_mode == PAR_OF_IFF))
-    {
-      if (currSlice->structure!=0 && currSlice->structure!=3)
-      {
-        FmoInit (img, inp, img->width/16, img->height/8, NULL, 0);   // force a default MBAmap
-      }
-      else
-      {
-        FmoInit (img, inp, img->width/16, img->height/16, NULL, 0);   // force a default MBAmap
-      }
-    }
-    img->current_mb_nr = img->map_mb_nr = currSlice->start_mb_nr;//GB
-#ifdef _ABT_FLAG_IN_SLICE_HEADER_
-    USEABT = currSlice->abt;
-#endif
+//    img->current_mb_nr = img->map_mb_nr = currSlice->start_mb_nr;//GB
 
 // printf ("Now processing mb %d\n", img->current_mb_nr);
     if (current_header == EOS)
@@ -195,8 +168,8 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
       start_slice(img, inp);
       
       // read new slice
-      current_header = read_new_slice(img, inp);
-      img->current_mb_nr = currSlice->start_mb_nr;
+      current_header = read_new_slice();
+//      img->current_mb_nr = currSlice->start_mb_nr;
       
       if (current_header == EOS)
         return EOS;
@@ -211,8 +184,6 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
     DeblockFrame( img, imgY, imgUV ) ;
   }
 
-#if _ERROR_CONCEALMENT_
-  
   recfr.yptr = &imgY[0][0];
   recfr.uptr = &imgUV[0][0][0];
   recfr.vptr = &imgUV[1][0][0];
@@ -220,6 +191,8 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
   //! this is always true at the beginning of a frame
   ercStartMB = 0;
   ercSegment = 0;
+
+/* !KS: This needs to be fixed for multiple slices
   
   //! mark the start of the first segment
   ercStartSegment(0, ercSegment, 0 , erc_errorVar);
@@ -256,8 +229,9 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
     ercConcealIntraFrame(&recfr, img->width, img->height, erc_errorVar);
   else
     ercConcealInterFrame(&recfr, erc_object_list, img->width, img->height, erc_errorVar);
-#endif
+*/
   
+
   if (img->structure == FRAME)         // buffer mgt. for frame mode
     frame_postprocessing(img, inp);
   else
@@ -267,8 +241,6 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
     copy_stored_B_motion_info(img);
 
   store_field_MV(img);
-
-  store_field_colB8mode(img);
 
   if (p_ref)
     find_snr(snr,img,p_ref,inp->postfilter);      // if ref sequence exist
@@ -362,11 +334,6 @@ void find_snr(
   int  status;
   static int modulo_ctr_frm=0,modulo_ctr_fld=0,pic_id_old_frm=0,pic_id_old_fld=0;
   static int modulo_ctr_frm_b=0,modulo_ctr_fld_b=0,pic_id_old_frm_b=0,pic_id_old_fld_b=0;
-//  static int modulo_ctr = 0;
-//  static int modulo_ctr_b = 0;
-//  static int modulo_flag = 0;
- // static int modulo_flag_b = 0;
- // static int pic_id_old = 0, pic_id_old_b = 0;
   Slice *currSlice = img->currentSlice;
 
 #ifndef _ADAPT_LAST_GROUP_
@@ -467,15 +434,11 @@ void find_snr(
 
   // Collecting SNR statistics
   if (diff_y != 0)
-  {
     snr->snr_y=(float)(10*log10(65025*(float)(img->width)*(img->height)/(float)diff_y));        // luma snr for current frame
-  }
-
   if (diff_u != 0)
-  {
     snr->snr_u=(float)(10*log10(65025*(float)(img->width)*(img->height)/(float)(4*diff_u)));    //  chroma snr for current frame
+  if (diff_v != 0)
     snr->snr_v=(float)(10*log10(65025*(float)(img->width)*(img->height)/(float)(4*diff_v)));    //  chroma snr for current frame
-  }
 
   if (img->number == 0) // first
   {
@@ -485,6 +448,14 @@ void find_snr(
     snr->snr_ya=snr->snr_y1;
     snr->snr_ua=snr->snr_u1;
     snr->snr_va=snr->snr_v1;
+
+        if (diff_y == 0)   
+      snr->snr_ya=50; // need to assign a reasonable large number so avg snr of entire sequece isn't infinite
+        if (diff_u == 0)
+      snr->snr_ua=50;
+        if (diff_v == 0)
+      snr->snr_va=50;
+
   }
   else
   {
@@ -642,17 +613,183 @@ void get_block(int ref_frame,int x_pos, int y_pos, struct img_par *img, int bloc
 /*!
  ************************************************************************
  * \brief
- *    Reads new slice (picture) from bit_stream
+ *    Reads new slice from bit_stream
  ************************************************************************
  */
-int read_new_slice(struct img_par *img, struct inp_par *inp)
+int read_new_slice()
 {
+  NALU_t *nalu = AllocNALU();
+  int current_header;
+  int ret;
+  int BitsUsedByHeader;
+  Slice *currSlice = img->currentSlice;
+  Bitstream *currStream;
+  int newframe;
+//  int i;
 
-    int current_header;
-    Slice *currSlice = img->currentSlice;
+  while (1)
+  {
+    if (input->FileFormat == PAR_OF_ANNEXB)
+      ret=GetAnnexbNALU (nalu);
+    else
+      ret=GetRTPNALU (nalu);
 
-    // read new slice
-    current_header = currSlice->readSlice(img,inp);
+//    printf ("nalu->len %d\n", nalu->len);
+    
+    if (ret < 0)
+      printf ("Error while getting the NALU in file format %s, exit\n", input->FileFormat==PAR_OF_ANNEXB?"Annex B":"RTP");
+    if (ret == 0)
+    {
+//      printf ("read_new_slice: returning %s\n", "EOS");
+      return EOS;
+    }
+
+    // Got a NALU
+    if (nalu->forbidden_bit)
+    {
+      printf ("Found NALU w/ forbidden_bit set, bit error?  Let's try...\n");
+    }
+
+    switch (nalu->nal_unit_type)
+    {
+      case NALU_TYPE_SLICE:
+      case NALU_TYPE_IDR:
+        img->idr_flag = (nalu->nal_unit_type == NALU_TYPE_IDR);
+        img->disposable_flag = (nalu->nal_reference_idc == NALU_PRIORITY_DISPOSABLE);
+        currSlice->dp_mode = PAR_DP_1;
+        currSlice->max_part_nr = 1;
+        currSlice->ei_flag = 0;
+        currStream = currSlice->partArr[0].bitstream;
+        currStream->ei_flag = 0;
+        currStream->frame_bitoffset = currStream->read_len = 0;
+        memcpy (currStream->streamBuffer, &nalu->buf[1], nalu->len-1);
+        currStream->code_len = currStream->bitstream_length = RBSPtoSODB(currStream->streamBuffer, nalu->len-1);
+
+        // Some syntax of the Slice Header depends on the parameter set, which depends on
+        // the parameter set ID of the SLice header.  Hence, read the pic_parameter_set_id
+        // of the slice header first, then setup the active parameter sets, and then read
+        // the rest of the slice header
+        BitsUsedByHeader = FirstPartOfSliceHeader();
+        UseParameterSet (currSlice->pic_parameter_set_id);
+        BitsUsedByHeader+= RestOfSliceHeader ();
+  
+        if (img->currentSlice->structure!=0)
+        {
+          img->height /=2 ;
+          img->height_cr /=2;
+        }
+
+        // FMO stuff
+        //! note: this code does not yet support FMO.  Only the default MBAMap (all zeros,
+        //! no scattering) is implemented.  Hence the assert earlier.
+        if (img->currentSlice->structure!=0 && img->currentSlice->structure!=3)
+        {
+          FmoInit (img, input, active_sps->frame_width_in_mbs_minus1+1, (active_sps->frame_height_in_mbs_minus1+1)/2, NULL, 0);   // force a default MBAmap
+        }
+        else
+        {
+          FmoInit (img, input, active_sps->frame_width_in_mbs_minus1+1, active_sps->frame_height_in_mbs_minus1+1, NULL, 0);   // force a default MBAmap
+        }
+
+
+        // From here on, active_sps, active_pps and the slice header are valid
+//        printf ("img->frame num %d, img->tr %d, img->disposable_flag %d\n", img->frame_num, img->tr, img->disposable_flag);
+        img->current_mb_nr = img->map_mb_nr = currSlice->start_mb_nr;  //! potential interlace problem.  Is map_mb_nr correct?
+
+        if (img->tr_old != img->tr)
+        {
+          newframe=1;
+          img->tr_old = img->tr;
+        }
+        else
+          newframe = 0;
+        if (newframe)
+          current_header = SOP;
+        else
+          current_header = SOS;
+
+        if(img->structure != img->structure_old)        
+          newframe |= 1;
+
+        img->structure_old = img->structure; 
+//! new stuff StW
+        if(newframe)
+          current_header = SOP;
+        else
+          current_header = SOS;
+
+        if (active_pps->entropy_coding_mode == CABAC)
+        {
+          int ByteStartPosition = currStream->frame_bitoffset/8;
+          if (currStream->frame_bitoffset%8 != 0) 
+          {
+//            printf ("Slice header ends NOT at a byte aligned position\n");
+            ByteStartPosition++;
+          }
+//          else
+//            printf ("SLice header ends at a byte aligned position\n");
+// printf ("First CABAC Bytes to decode: %x %x %x %x %x\n", currStream->streamBuffer[ByteStartPosition],currStream->streamBuffer[ByteStartPosition+1],currStream->streamBuffer[ByteStartPosition+2],currStream->streamBuffer[ByteStartPosition+3],currStream->streamBuffer[ByteStartPosition+4],currStream->streamBuffer[ByteStartPosition+5]);
+
+          arideco_start_decoding (&currSlice->partArr[0].de_cabac, currStream->streamBuffer, ByteStartPosition, &currStream->read_len, img->type);
+        }
+// printf ("read_new_slice: returning %s\n", current_header == SOP?"SOP":"SOS");
+        return current_header;
+        break;
+      case NALU_TYPE_DPA:
+        //! The state machine here should follow the same ideas as the old readSliceRTP()
+        //! basically:
+        //! work on DPA (as above)
+        //! read and process all following SEI/SPS/PPS/PD/Filler NALUs
+        //! if next video NALU is dpB, 
+        //!   then read and check whether it belongs to DPA, if yes, use it
+        //! else
+        //!   ;   // nothing
+        //! read and process all following SEI/SPS/PPS/PD/Filler NALUs
+        //! if next video NALU is dpC
+        //!   then read and check whether it belongs to DPA (and DPB, if present), if yes, use it, done
+        //! else
+        //!   use the DPA (and the DPB if present)
+
+        assert (0==1);
+        break;
+      case NALU_TYPE_DPB:
+        printf ("read_new_slice: Found unexpected NALU_TYPE_DPB, len %d\n", nalu->len);
+        printf ("ignoring... moving on with next NALU\n");
+        //! Note: one could do something smarter here, e.g. checking the Slice ID
+        //! in conjunction with redundant_pic_cnt to identify lost pictures
+        assert (0==1);
+        break;
+      case NALU_TYPE_DPC:
+        printf ("read_new_slice: Found NALU_TYPE_DPC, len %d\n", nalu->len);
+        printf ("ignoring... moving on with next NALU\n");
+        //! Note: one could do something smarter here, e.g. checking the Slice ID
+        //! in conjunction with redundant_pic_cnt to identify lost pictures
+        assert (0==1);
+        break;
+      case NALU_TYPE_SEI:
+        printf ("read_new_slice: Found NALU_TYPE_SEI, len %d\n", nalu->len);
+        // do something w/ the nalu
+        assert (0==1);
+        break;
+      case NALU_TYPE_PPS:
+        ProcessPPS(nalu);
+        break;
+
+      case NALU_TYPE_SPS:
+        ProcessSPS(nalu);
+        break;
+      case NALU_TYPE_PD:
+        printf ("read_new_slice: Found NALU_TYPE_PD, len %d\n, ignored", nalu->len);
+        break;
+      case NALU_TYPE_FILL:
+        printf ("read_new_slice: Found NALU_TYPE_FILL, len %d\n", nalu->len);
+        printf ("Skipping these filling bits, proceeding w/ next NALU\n");
+        break;
+      default:
+        printf ("Found NALU type %d, len %d undefined, ignore NALU, moving on\n", nalu->nal_unit_type, nalu->len);
+    }
+  }
+
     return  current_header;
 }
 
@@ -684,9 +821,10 @@ void init_frame(struct img_par *img, struct inp_par *inp)
   //WYK: When entire non-B frames are lost, adjust the reference buffers
   //! TO 4.11.2001 Yes, but only for Bitstream mode! We do not loose anything in bitstream mode!
   //! Should remove this one time!
-  
+
+/* !KS removed refPicID from Header
 #ifndef AFF //to be fixed later
-  if(inp->of_mode == PAR_OF_26L) //! TO 4.11.2001 just to make sure that this piece of code 
+  if(inp->FileFormat == PAR_OF_ANNEXB) //! TO 4.11.2001 just to make sure that this piece of code 
   {                              //! does not affect any other input mode where this refPicID is not supported
     j = img->refPicID-img->refPicID_old;
     if(j<0) j += 16;    // img->refPicID is 4 bit, wrapps at 15
@@ -700,7 +838,7 @@ void init_frame(struct img_par *img, struct inp_par *inp)
     }
   }
 #endif
-  
+*/  
   if (img->number == 0) // first picture
   {
     nextP_tr=prevP_tr=img->tr;
@@ -763,13 +901,14 @@ void init_frame(struct img_par *img, struct inp_par *inp)
   for(j=0;j<(img->height /2)/BLOCK_SIZE+1;j++)
     img->ipredmode_bot[0][j+1]=-1;
 
+  // CAVLC init
   for (i=0;i < img->width/MB_BLOCK_SIZE; i++)
     for (j=0; j < img->height/MB_BLOCK_SIZE; j++)
       for (k=0;k<4;k++)
         for (l=0;l<6;l++)
           img->nz_coeff[i][j][k][l]=-1;  // CAVLC
 
-  if(img->UseConstrainedIntraPred)
+  if(img->constrained_intra_pred_flag)
   {
     for (i=0; i<img->width/MB_BLOCK_SIZE*img->height/MB_BLOCK_SIZE; i++)
     {
@@ -834,7 +973,6 @@ void exit_frame(struct img_par *img, struct inp_par *inp)
  *    MB to the buffer of the error concealment module.
  ************************************************************************
  */
-#if _ERROR_CONCEALMENT_
 
 void ercWriteMBMODEandMV(struct img_par *img,struct inp_par *inp)
 {
@@ -915,7 +1053,7 @@ void ercWriteMBMODEandMV(struct img_par *img,struct inp_par *inp)
     }
   }
 }
-#endif
+
 
 /*!
  ************************************************************************
@@ -935,11 +1073,16 @@ void decode_one_slice(struct img_par *img,struct inp_par *inp)
 
   while (end_of_slice == FALSE) // loop over macroblocks
   {
-		setRealMB_nr (img); //GB
+    setRealMB_nr (img); //GB
 
 
 #if TRACE
-    fprintf(p_trace,"\n*********** Pic: %i (I/P) MB: %i Slice: %i Type %d **********\n", img->tr, img->map_mb_nr, img->mb_data[img->map_mb_nr].slice_nr, img->type);
+// Here was the slice nr from the img->mb_data used.  This slice number is only set after 
+// the reconstruction of an MB and hence here not yet valid
+
+//    fprintf(p_trace,"\n*********** Pic: %i (I/P) MB: %i Slice: %i Type %d **********\n", img->tr, img->map_mb_nr, img->mb_data[img->map_mb_nr].slice_nr, img->type);
+  fprintf(p_trace,"\n*********** Pic: %i (I/P) MB: %i Slice: %i Type %d **********\n", img->tr, img->map_mb_nr, img->current_slice_nr, img->type);
+
 #endif
 
     // Initializes the current macroblock
@@ -963,9 +1106,7 @@ void decode_one_slice(struct img_par *img,struct inp_par *inp)
     if(img->mb_frame_field_flag && img->mb_field)
       img->num_ref_pic_active_fwd >>= 1;
 
-#if _ERROR_CONCEALMENT_
     ercWriteMBMODEandMV(img,inp);
-#endif
 
     end_of_slice=exit_macroblock(img,inp,(!img->mb_frame_field_flag||img->current_mb_nr%2));
   }
@@ -977,16 +1118,11 @@ void decode_one_slice(struct img_par *img,struct inp_par *inp)
 }
 
 
-
-
-
-
-
 void decode_frame_slice(struct img_par *img,struct inp_par *inp, int current_header)
 {
   Slice *currSlice = img->currentSlice;
 
-  if (inp->symbol_mode == CABAC)
+  if (active_pps->entropy_coding_mode == CABAC)
   {
     init_contexts_MotionInfo (img, currSlice->mot_ctx);
     init_contexts_TextureInfo(img, currSlice->tex_ctx);
@@ -998,9 +1134,9 @@ void decode_frame_slice(struct img_par *img,struct inp_par *inp, int current_hea
 
   // do reference frame buffer reordering
   reorder_mref(img);
+  fill_wp_params(img);
 
 
-#if _ERROR_CONCEALMENT_
   if (current_header == SOP)
   {
     if (img->number == 0) 
@@ -1012,29 +1148,20 @@ void decode_frame_slice(struct img_par *img,struct inp_par *inp, int current_hea
     erc_mvperMB = 0;
   }
     
+
   // decode main slice information
   if ((current_header == SOP || current_header == SOS) && currSlice->ei_flag == 0)
     decode_one_slice(img,inp);
     
   // setMB-Nr in case this slice was lost
-  if(currSlice->ei_flag)  
-    img->current_mb_nr = currSlice->last_mb_nr + 1;
-#else
-  // decode main slice information
-  if (current_header == SOP || current_header == SOS)
-    decode_one_slice(img,inp);
-#endif
+//  if(currSlice->ei_flag)  
+//    img->current_mb_nr = currSlice->last_mb_nr + 1;
 
-//! This code doesn't workj with FMO or a slice-lossy environment!
-
-//  if(currSlice->next_eiflag && img->current_mb_nr != img->max_mb_nr)
-//    currSlice->next_header = SOS;
+//! This code doesn't work with FMO or a slice-lossy environment!
+//! StW NEEDS FIXING
+  if(currSlice->next_eiflag && img->current_mb_nr != img->max_mb_nr)
+    currSlice->next_header = SOS;
 }
-
-
-
-
-
 
 
 
@@ -1042,7 +1169,7 @@ void decode_field_slice(struct img_par *img,struct inp_par *inp, int current_hea
 {
   Slice *currSlice = img->currentSlice;
 
-  if (inp->symbol_mode == CABAC)
+  if (active_pps->entropy_coding_mode == CABAC)
   {
     init_contexts_MotionInfo (img, currSlice->mot_ctx);
     init_contexts_TextureInfo(img, currSlice->tex_ctx);
@@ -1061,9 +1188,9 @@ void decode_field_slice(struct img_par *img,struct inp_par *inp, int current_hea
   
   // do reference frame buffer reordering
   reorder_mref(img);
+  fill_wp_params(img);
   
 
-#if _ERROR_CONCEALMENT_
   if (current_header == SOP)
   {
     if (img->number == 0) 
@@ -1082,17 +1209,10 @@ void decode_field_slice(struct img_par *img,struct inp_par *inp, int current_hea
   // setMB-Nr in case this slice was lost
 //  if(currSlice->ei_flag)  
 //    img->current_mb_nr = currSlice->last_mb_nr + 1;
-#else
-
-  // decode main slice information
-  if (current_header == SOP || current_header == SOS)
-    decode_one_slice(img,inp);
-
-#endif
 
 //! This code doesn't work with FMO or a slice lossy environment or out-of-order slices
-//  if(currSlice->next_eiflag && img->current_mb_nr != img->max_mb_nr)
-//    currSlice->next_header = SOS;
+  if(currSlice->next_eiflag && img->current_mb_nr != img->max_mb_nr)
+    currSlice->next_header = SOS;
 }
 
 /*!
@@ -1121,9 +1241,9 @@ void init_top(struct img_par *img, struct inp_par *inp)
   //WYK: When entire non-B frames are lost, adjust the reference buffers
   //! TO 4.11.2001 Yes, but only for Bitstream mode! We do not loose anything in bitstream mode!
   //! Should remove this one time!
-
+/* !KS removed refPicID from Header
 #ifndef AFF //to be fixed
-  if(inp->of_mode == PAR_OF_26L) //! TO 4.11.2001 just to make sure that this piece of code 
+  if(inp->FileFormat == PAR_OF_ANNEXB) //! TO 4.11.2001 just to make sure that this piece of code 
   {                              //! does not affect any other input mode where this refPicID is not supported
     j = img->refPicID-img->refPicID_old;
     if(j<0) j += 16;    // img->refPicID is 4 bit, wrapps at 15
@@ -1137,7 +1257,7 @@ void init_top(struct img_par *img, struct inp_par *inp)
     }
   }
 #endif
-
+*/
   if (img->number == 0) // first picture
   {
     nextP_tr=prevP_tr=img->tr;
@@ -1187,7 +1307,7 @@ void init_top(struct img_par *img, struct inp_par *inp)
     img->ipredmode[img->width/BLOCK_SIZE+1][j+1]=-1;
   }
 
-  if(img->UseConstrainedIntraPred)
+  if(img->constrained_intra_pred_flag)
   {
     for (i=0; i<img->width/MB_BLOCK_SIZE*img->height/MB_BLOCK_SIZE; i++)
     {
@@ -1247,9 +1367,9 @@ void init_bottom(struct img_par *img, struct inp_par *inp)
   //WYK: When entire non-B frames are lost, adjust the reference buffers
   //! TO 4.11.2001 Yes, but only for Bitstream mode! We do not loose anything in bitstream mode!
   //! Should remove this one time!
-  
+/* !KS removed refPicID from Header  
 #ifndef AFF //to be fixed
-  if(inp->of_mode == PAR_OF_26L) //! TO 4.11.2001 just to make sure that this piece of code 
+  if(inp->FileFormat == PAR_OF_ANNEXB) //! TO 4.11.2001 just to make sure that this piece of code 
   {                              //! does not affect any other input mode where this refPicID is not supported
     j = img->refPicID-img->refPicID_old;
     if(j<0) j += 16;    // img->refPicID is 4 bit, wrapps at 15
@@ -1263,7 +1383,7 @@ void init_bottom(struct img_par *img, struct inp_par *inp)
     }
   }
 #endif
-
+*/
   if(img->type==INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT || img->type == SI_IMG || !img->disposable_flag)
     copy2fb(img);       // trying to match exit_frame() in frame mode
 
@@ -1329,7 +1449,7 @@ void init_bottom(struct img_par *img, struct inp_par *inp)
     img->ipredmode[img->width/BLOCK_SIZE+1][j+1]=-1;
   }
 
-  if(img->UseConstrainedIntraPred)
+  if(img->constrained_intra_pred_flag)
   {
     for (i=0; i<img->width/MB_BLOCK_SIZE*img->height/MB_BLOCK_SIZE; i++)
     {
@@ -1650,52 +1770,6 @@ void store_direct_moving_flag(struct img par *img)
         }      
 }
 */
-// ABT
-int  field2frame_mode(int fld_mode)
-{
-  int frm_mode;
-  static const int field2frame_map[MAXMODE] = {-1, 1,1,3,3,4,6,6, -1, 7,1, -1, -1};
-
-  frm_mode = field2frame_map[fld_mode];
-  assert(frm_mode>0);
-
-  return frm_mode;
-
-}
-int frame2field_mode(int frm_mode)
-{
-  int fld_mode;
-  static const int frame2field_map[MAXMODE] = {-1, 2,5,4,5,5,7,7, -1, 7,2, -1, -1};
-
-  fld_mode = frame2field_map[frm_mode];
-  assert(fld_mode>0);
-
-  return fld_mode;
-
-}
-void store_field_colB8mode(struct img_par *img)
-{
-  int i, j;
-
-  if (USEABT)
-  {
-    if(img->type==INTRA_IMG || img->type == INTER_IMG_1 || img->type == INTER_IMG_MULT || img->type == SP_IMG_1 || img->type == SP_IMG_MULT || img->type == SI_IMG || !img->disposable_flag)
-    {
-      if (img->structure != FRAME)
-      {
-        for (i=0 ; i<img->width/B8_SIZE ; i++)
-          for (j=0 ; j<img->height/MB_BLOCK_SIZE ; j++)
-            colB8mode[FRAME][2*j][i] = colB8mode[FRAME][2*j+1][i] = field2frame_mode(colB8mode[TOP_FIELD][j][i]);
-      }
-      else
-      {
-        for (i=0 ; i<img->width/B8_SIZE ; i++)
-          for (j=0 ; j<img->height/MB_BLOCK_SIZE ; j++)
-            colB8mode[TOP_FIELD][j][i] = colB8mode[BOTTOM_FIELD][j][i] = frame2field_mode(colB8mode[FRAME][2*j][i]);
-      }
-    }
-  }
-}
 
 void copy_stored_B_motion_info(struct img_par *img)
 {
@@ -1752,4 +1826,163 @@ void copy_stored_B_motion_info(struct img_par *img)
       }
     }
   }
+}
+
+void reset_wp_params(struct img_par *img)
+{
+  int i,comp;
+  int log_weight_denom;
+
+  for (i=0; i<MAX_REFERENCE_PICTURES; i++)
+  {
+    for (comp=0; comp<3; comp++)
+    {
+      log_weight_denom = (comp == 0) ? img->luma_log_weight_denom : img->chroma_log_weight_denom;
+      img->wp_weight[0][i][comp] = 1<<log_weight_denom;
+      img->wp_weight[1][i][comp] = 1<<log_weight_denom;
+    }
+  }
+}
+
+
+void fill_wp_params(struct img_par *img)
+{
+  Slice *currSlice = img->currentSlice;
+  int i, j, n;
+  int comp;
+  int log_weight_denom;
+  int p0, p1, pt;
+  int bframe = (img->type==B_IMG_1 || img->type==B_IMG_MULT);
+//  int current_tr;
+//  int fwd_refframe_offset;
+//  int bwd_refframe_offset;
+  int fwd_ref[MAX_REFERENCE_PICTURES], bwd_ref[MAX_REFERENCE_PICTURES];
+  int index;
+  int max_bwd_ref, max_fwd_ref;
+
+#if 0
+  if(bframe)
+  {
+    int current_tr  = (img->structure==TOP_FIELD || img->structure==BOTTOM_FIELD)?img->tr_fld:2*img->tr_frm;
+    if(img->imgtr_next_P <= current_tr)
+      fwd_refframe_offset = 0;
+    else if (img->structure==FRAME)
+      fwd_refframe_offset = 1;
+    else
+      fwd_refframe_offset = 2;
+  }
+  else
+  {
+    fwd_refframe_offset = 0;
+  }
+
+  if (bframe && img->disposable_flag)
+  {
+    if(img->structure == TOP_FIELD)
+      bwd_refframe_offset = 1;
+    else
+      bwd_refframe_offset = 0;
+  }
+  else
+  {
+    bwd_refframe_offset = 0;
+  }
+
+#define fwd_ref_idx_to_refframe(idx) ((idx)+fwd_refframe_offset)
+#define bwd_ref_idx_to_refframe(idx) ((idx)+bwd_refframe_offset)
+#endif
+  if ((img->weighted_bipred_explicit_flag || img->weighted_bipred_implicit_flag) && (img->type == B_IMG_1 || img->type == B_IMG_MULT))
+  {
+    if (!img->disposable_flag )
+    {
+      max_bwd_ref = MAX_REFERENCE_PICTURES;
+      max_fwd_ref = MAX_REFERENCE_PICTURES;
+      for (index = 0; index < MAX_REFERENCE_PICTURES; index++)
+      {
+        fwd_ref[index] = index;
+        if (index == 0)
+          n = 1;
+        else if (index == 1)
+          n = 0;
+        else
+          n = index;
+        bwd_ref[index] = n;
+      }
+    }
+    else 
+    {
+       max_bwd_ref = 1;
+       max_fwd_ref = MAX_REFERENCE_PICTURES - 1;
+       for (index = 0; index < MAX_REFERENCE_PICTURES - 1; index++)
+       {
+         fwd_ref[index] = index+1;
+       }
+       bwd_ref[0] = 0; // only one possible backwards ref for traditional B picture in current software
+    }
+  }      
+
+  if (img->weighted_bipred_implicit_flag && bframe)
+  {
+    img->luma_log_weight_denom = 7;
+    img->chroma_log_weight_denom = 7;
+    img->wp_round_luma = 64;
+    img->wp_round_chroma = 64;
+
+    for (i=0; i<MAX_REFERENCE_PICTURES; i++)
+    {
+      for (comp=0; comp<3; comp++)
+      {
+        log_weight_denom = (comp == 0) ? img->luma_log_weight_denom : img->chroma_log_weight_denom;
+        img->wp_weight[0][i][comp] = 1<<log_weight_denom;
+        img->wp_weight[1][i][comp] = 1<<log_weight_denom;
+      }
+        }
+  }
+
+  if (bframe)
+  {
+    // !KS: initialization was missing here ????
+    max_bwd_ref = MAX_REFERENCE_PICTURES;
+    max_fwd_ref = MAX_REFERENCE_PICTURES;
+    // end KS
+    for (i=0; i<max_fwd_ref; i++)
+    {
+      for (j=0; j<max_bwd_ref; j++)
+      {
+        for (comp = 0; comp<3; comp++)
+        {
+          log_weight_denom = (comp == 0) ? img->luma_log_weight_denom : img->chroma_log_weight_denom;
+          if (img->weighted_bipred_explicit_flag)
+          {
+            img->wbp_weight[0][i][j][comp] =  img->wp_weight[0][i][comp];
+            img->wbp_weight[1][i][j][comp] =  img->wp_weight[1][j][comp];
+          }
+          else if (img->weighted_bipred_implicit_flag)
+          {
+            pt = poc_distance (fwd_ref[i], bwd_ref[j]);
+            if (pt == 0)
+            {
+              img->wbp_weight[0][i][j][comp] =   1<<log_weight_denom;
+              img->wbp_weight[1][i][j][comp] =   1<<log_weight_denom;
+            }
+            else
+            {
+              p0 = poc_distance (fwd_ref[i], -1);
+              p1 = poc_distance (-1, bwd_ref[j]);
+              img->wbp_weight[0][i][j][comp] = (p1 << (log_weight_denom+1)) / pt;
+              img->wbp_weight[1][i][j][comp] = (p0 << (log_weight_denom+1)) / pt;
+//               if (comp == 0)
+//                      printf ("bpw weight[%d] = %d, %d\n", n,
+//                              img->wbp_weight[0][i][j][0], img->wbp_weight[1][i][j][0]);
+            }
+          }
+        }
+     }
+   }
+ }
+}
+
+int poc_distance( int refa, int refb)
+{
+  return toprefpoc[refb + 1] - toprefpoc[refa + 1];
 }

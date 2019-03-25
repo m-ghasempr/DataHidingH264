@@ -72,17 +72,13 @@ static const int A[4][4] = {
 
 // Notation for comments regarding prediction and predictors.
 // The pels of the 4x4 block are labelled a..p. The predictor pels above
-// are labelled A..H, from the left I..P, and from above left X, as follows:
+// are labelled A..H, from the left I..L, and from above left X, as follows:
 //
 //  X A B C D E F G H
 //  I a b c d
 //  J e f g h
 //  K i j k l
 //  L m n o p
-//  M
-//  N
-//  O
-//  P
 //
 
 // Predictor array index definitions
@@ -99,10 +95,6 @@ static const int A[4][4] = {
 #define P_J (PredPel[10])
 #define P_K (PredPel[11])
 #define P_L (PredPel[12])
-#define P_M (PredPel[13])
-#define P_N (PredPel[14])
-#define P_O (PredPel[15])
-#define P_P (PredPel[16])
 
 /*!
  ***********************************************************************
@@ -125,12 +117,11 @@ int intrapred(
   int i,j;
   int s0;
   int img_y,img_x;
-  int PredPel[17];  // array of predictor pels
+  int PredPel[13];  // array of predictor pels
 
   int block_available_up;
   int block_available_up_right;
   int block_available_left;
-  int block_available_left_down;
 
   byte predmode = img->ipredmode[img_block_x+1][img_block_y+1];
 
@@ -145,7 +136,6 @@ int intrapred(
     block_available_up = (img->ipredmode_bot[img_block_x+1][img_block_y] >=0);
     block_available_up_right  = (img->ipredmode_bot[img_x/BLOCK_SIZE+2][img_y/BLOCK_SIZE] >=0); // ???
     block_available_left = (img->ipredmode_bot[img_block_x][img_block_y+1] >=0);
-    block_available_left_down = (img->ipredmode_bot[img_x/BLOCK_SIZE][img_y/BLOCK_SIZE+2] >=0); // ???
   }
   else
   {
@@ -154,7 +144,6 @@ int intrapred(
     block_available_up = (img->ipredmode_top[img_block_x+1][img_block_y] >=0);
     block_available_up_right  = (img->ipredmode_top[img_x/BLOCK_SIZE+2][img_y/BLOCK_SIZE] >=0); // ???
     block_available_left = (img->ipredmode_top[img_block_x][img_block_y+1] >=0);
-    block_available_left_down = (img->ipredmode_top[img_x/BLOCK_SIZE][img_y/BLOCK_SIZE+2] >=0); // ???
   }
   }
   else
@@ -162,7 +151,6 @@ int intrapred(
     block_available_up = (img->ipredmode[img_block_x+1][img_block_y] >=0);              /// can use frm
     block_available_up_right  = (img->ipredmode[img_x/BLOCK_SIZE+2][img_y/BLOCK_SIZE] >=0); // ???  /// can use frm
     block_available_left = (img->ipredmode[img_block_x][img_block_y+1] >=0);            /// can use frm
-    block_available_left_down = (img->ipredmode[img_x/BLOCK_SIZE][img_y/BLOCK_SIZE+2] >=0); // ???  /// can use frm
   }
 
   if(img_x%MB_BLOCK_SIZE == 12 && img->mb_frame_field_flag)
@@ -179,18 +167,6 @@ int intrapred(
         (i == 12 && j == 12))
     {
       block_available_up_right = 0;
-    }
-  }
-
-  if (block_available_left_down)
-  {
-    if (!(i == 0 && j == 0) &&
-        !(i == 8 && j == 0) &&
-        !(i == 0 && j == 4) &&
-        !(i == 0 && j == 8) &&
-        !(i == 8 && j == 8))
-    {
-      block_available_left_down = 0;
     }
   }
 
@@ -225,22 +201,10 @@ int intrapred(
     P_J = imgY[img_y+1][img_x-1];
     P_K = imgY[img_y+2][img_x-1];
     P_L = imgY[img_y+3][img_x-1];
-
-    if (block_available_left_down)
-    {
-      P_M = imgY[img_y+4][img_x-1];
-      P_N = imgY[img_y+5][img_x-1];
-      P_O = imgY[img_y+6][img_x-1];
-      P_P = imgY[img_y+7][img_x-1];
-    }
-    else
-    {
-      P_M = P_N = P_O = P_P = P_L;
-    }
   }
   else
   {
-    P_I = P_J = P_K = P_L = P_M = P_N = P_O = P_P = 128;
+    P_I = P_J = P_K = P_L = 128;
   }
 
   if (block_available_up && block_available_left)
@@ -321,22 +285,22 @@ int intrapred(
     break;
 
   case DIAG_DOWN_LEFT_PRED:
-    img->mpr[0+ioff][0+joff] = (P_A + P_C + P_I + P_K + 2*(P_B + P_J) + 4) / 8;
+    img->mpr[0+ioff][0+joff] = (P_A + P_C + 2*(P_B) + 2) / 4;
     img->mpr[1+ioff][0+joff] = 
-    img->mpr[0+ioff][1+joff] = (P_B + P_D + P_J + P_L + 2*(P_C + P_K) + 4) / 8;
+    img->mpr[0+ioff][1+joff] = (P_B + P_D + 2*(P_C) + 2) / 4;
     img->mpr[2+ioff][0+joff] =
     img->mpr[1+ioff][1+joff] =
-    img->mpr[0+ioff][2+joff] = (P_C + P_E + P_K + P_M + 2*(P_D + P_L) + 4) / 8;
+    img->mpr[0+ioff][2+joff] = (P_C + P_E + 2*(P_D) + 2) / 4;
     img->mpr[3+ioff][0+joff] = 
     img->mpr[2+ioff][1+joff] = 
     img->mpr[1+ioff][2+joff] = 
-    img->mpr[0+ioff][3+joff] = (P_D + P_F + P_L + P_N + 2*(P_E + P_M) + 4) / 8;
+    img->mpr[0+ioff][3+joff] = (P_D + P_F + 2*(P_E) + 2) / 4;
     img->mpr[3+ioff][1+joff] = 
     img->mpr[2+ioff][2+joff] = 
-    img->mpr[1+ioff][3+joff] = (P_E + P_G + P_M + P_O + 2*(P_F + P_N) + 4) / 8;
+    img->mpr[1+ioff][3+joff] = (P_E + P_G + 2*(P_F) + 2) / 4;
     img->mpr[3+ioff][2+joff] = 
-    img->mpr[2+ioff][3+joff] = (P_F + P_H + P_N + P_P + 2*(P_G + P_O) + 4) / 8;
-    img->mpr[3+ioff][3+joff] = (P_G + P_O + P_H + P_P + 2) / 4;
+    img->mpr[2+ioff][3+joff] = (P_F + P_H + 2*(P_G) + 2) / 4;
+    img->mpr[3+ioff][3+joff] = (P_G + 3*(P_H) + 2) / 4;
     break;
 
   case  VERT_RIGHT_PRED:/* diagonal prediction -22.5 deg to horizontal plane */
@@ -359,7 +323,7 @@ int intrapred(
     break;
 
   case  VERT_LEFT_PRED:/* diagonal prediction -22.5 deg to horizontal plane */
-    img->mpr[0+ioff][0+joff] = (2*(P_A + P_B + P_K) + P_J + P_L + 4) / 8;
+    img->mpr[0+ioff][0+joff] = (P_A + P_B + 1) / 2;
     img->mpr[1+ioff][0+joff] = 
     img->mpr[0+ioff][2+joff] = (P_B + P_C + 1) / 2;
     img->mpr[2+ioff][0+joff] = 
@@ -367,7 +331,7 @@ int intrapred(
     img->mpr[3+ioff][0+joff] = 
     img->mpr[2+ioff][2+joff] = (P_D + P_E + 1) / 2;
     img->mpr[3+ioff][2+joff] = (P_E + P_F + 1) / 2;
-    img->mpr[0+ioff][1+joff] = (2*(P_B + P_L) + P_A + P_C + P_K + P_M + 4) / 8;
+    img->mpr[0+ioff][1+joff] = (P_A + 2*P_B + P_C + 2) / 4;
     img->mpr[1+ioff][1+joff] = 
     img->mpr[0+ioff][3+joff] = (P_B + 2*P_C + P_D + 2) / 4;
     img->mpr[2+ioff][1+joff] = 
@@ -378,8 +342,8 @@ int intrapred(
     break;
 
   case  HOR_UP_PRED:/* diagonal prediction -22.5 deg to horizontal plane */
-    img->mpr[0+ioff][0+joff] = (2*(P_C + P_I + P_J) + P_B + P_D + 4) / 8;
-    img->mpr[1+ioff][0+joff] = (2*(P_D + P_J) + P_C + P_E + P_I + P_K + 4) / 8;
+    img->mpr[0+ioff][0+joff] = (P_I + P_J + 1) / 2;
+    img->mpr[1+ioff][0+joff] = (P_I + 2*P_J + P_K + 2) / 4;
     img->mpr[2+ioff][0+joff] = 
     img->mpr[0+ioff][1+joff] = (P_J + P_K + 1) / 2;
     img->mpr[3+ioff][0+joff] = 
@@ -387,13 +351,13 @@ int intrapred(
     img->mpr[2+ioff][1+joff] = 
     img->mpr[0+ioff][2+joff] = (P_K + P_L + 1) / 2;
     img->mpr[3+ioff][1+joff] = 
-    img->mpr[1+ioff][2+joff] = (P_K + 2*P_L + P_M + 2) / 4;
+    img->mpr[1+ioff][2+joff] = (P_K + 2*P_L + P_L + 2) / 4;
     img->mpr[3+ioff][2+joff] = 
-    img->mpr[1+ioff][3+joff] = (P_L + 2*P_M + P_N + 2) / 4;
+    img->mpr[1+ioff][3+joff] = 
     img->mpr[0+ioff][3+joff] = 
-    img->mpr[2+ioff][2+joff] = (P_L + P_M + 1) / 2;
-    img->mpr[2+ioff][3+joff] = (P_M + P_N + 1) / 2;
-    img->mpr[3+ioff][3+joff] = (P_M + 2*P_N + P_O + 2) / 4;
+    img->mpr[2+ioff][2+joff] = 
+    img->mpr[2+ioff][3+joff] = 
+    img->mpr[3+ioff][3+joff] = P_L;
     break;
 
   case  HOR_DOWN_PRED:/* diagonal prediction -22.5 deg to horizontal plane */
@@ -431,8 +395,8 @@ int intrapred(
  *    best SAD
  ***********************************************************************
  */
-int intrapred_luma_2(struct img_par *img, //!< image parameters
-                     int predmode)        //!< prediction mode
+int intrapred_luma_16x16(struct img_par *img, //!< image parameters
+                         int predmode)        //!< prediction mode
 {
   int s0=0,s1,s2;
 
@@ -459,7 +423,7 @@ int intrapred_luma_2(struct img_par *img, //!< image parameters
   }
   }
 
-  if(img->UseConstrainedIntraPred)
+  if(img->constrained_intra_pred_flag)
   {
     if (mb_available_up   && (img->intra_block[mb_nr-mb_width][2]==0 || img->intra_block[mb_nr-mb_width][3]==0))
       mb_available_up   = 0;

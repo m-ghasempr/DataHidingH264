@@ -42,6 +42,8 @@
 #include "global.h"
 #include "memalloc.h"
 #include "sei.h"
+#include "vlc.h"
+
 /*!
  ************************************************************************
  * \file  sei.c

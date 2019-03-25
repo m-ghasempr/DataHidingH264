@@ -46,6 +46,7 @@
  *    - Detlev Marpe                    <marpe@hhi.de>
  *    - Thomas Wedi                     <wedi@tnt.uni-hannover.de>
  *    - Ragip Kurceren                  <ragip.kurceren@nokia.com>
+ *    - Greg Conklin                    <gregc@real.com>
  *************************************************************************************
  */
 
@@ -58,6 +59,7 @@
 
 #include "block.h"
 #include "refbuf.h"
+#include "vlc.h"
 
 
 #define Q_BITS          15
@@ -99,10 +101,6 @@ static const int A[4][4] = {
 //  J e f g h
 //  K i j k l
 //  L m n o p
-//  M
-//  N
-//  O
-//  P
 //
 
 // Predictor array index definitions
@@ -119,10 +117,6 @@ static const int A[4][4] = {
 #define P_J (PredPel[10])
 #define P_K (PredPel[11])
 #define P_L (PredPel[12])
-#define P_M (PredPel[13])
-#define P_N (PredPel[14])
-#define P_O (PredPel[15])
-#define P_P (PredPel[16])
 
 /*!
  ************************************************************************
@@ -144,13 +138,12 @@ void intrapred_luma(int img_x,int img_y)
 {
   int i,j;
   int s0;
-  int PredPel[17];  // array of predictor pels
+  int PredPel[13];  // array of predictor pels
   byte **imgY_pred = imgY;  // For MB level frame/field coding tools -- set default to imgY
 
   int block_available_up        = (img->ipredmode[img_x/BLOCK_SIZE+1][img_y/BLOCK_SIZE] >=0);
   int block_available_up_right  = (img->ipredmode[img_x/BLOCK_SIZE+2][img_y/BLOCK_SIZE] >=0);
   int block_available_left      = (img->ipredmode[img_x/BLOCK_SIZE][img_y/BLOCK_SIZE+1] >=0);
-  int block_available_left_down = (img->ipredmode[img_x/BLOCK_SIZE][img_y/BLOCK_SIZE+2] >=0);
 
   if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
   {
@@ -160,14 +153,12 @@ void intrapred_luma(int img_x,int img_y)
       block_available_up        = (img->ipredmode_top[img_x/BLOCK_SIZE+1][img_y/BLOCK_SIZE] >=0);
       block_available_up_right  = (img->ipredmode_top[img_x/BLOCK_SIZE+2][img_y/BLOCK_SIZE] >=0);
       block_available_left      = (img->ipredmode_top[img_x/BLOCK_SIZE][img_y/BLOCK_SIZE+1] >=0);
-      block_available_left_down = (img->ipredmode_top[img_x/BLOCK_SIZE][img_y/BLOCK_SIZE+2] >=0);
     }
     else
     {
       block_available_up        = (img->ipredmode_bot[img_x/BLOCK_SIZE+1][img_y/BLOCK_SIZE] >=0);
       block_available_up_right  = (img->ipredmode_bot[img_x/BLOCK_SIZE+2][img_y/BLOCK_SIZE] >=0);
       block_available_left      = (img->ipredmode_bot[img_x/BLOCK_SIZE][img_y/BLOCK_SIZE+1] >=0);
-      block_available_left_down = (img->ipredmode_bot[img_x/BLOCK_SIZE][img_y/BLOCK_SIZE+2] >=0);
     }
   }
   
@@ -187,18 +178,6 @@ void intrapred_luma(int img_x,int img_y)
         (i == 12 && j == 12))
     {
       block_available_up_right = 0;
-    }
-  }
-
-  if (block_available_left_down)
-  {
-    if (!(i == 0 && j == 0) &&
-        !(i == 8 && j == 0) &&
-        !(i == 0 && j == 4) &&
-        !(i == 0 && j == 8) &&
-        !(i == 8 && j == 8))
-    {
-      block_available_left_down = 0;
     }
   }
 
@@ -233,22 +212,10 @@ void intrapred_luma(int img_x,int img_y)
     P_J = imgY_pred[img_y+1][img_x-1];
     P_K = imgY_pred[img_y+2][img_x-1];
     P_L = imgY_pred[img_y+3][img_x-1];
-
-    if (block_available_left_down)
-    {
-      P_M = imgY_pred[img_y+4][img_x-1];
-      P_N = imgY_pred[img_y+5][img_x-1];
-      P_O = imgY_pred[img_y+6][img_x-1];
-      P_P = imgY_pred[img_y+7][img_x-1];
-    }
-    else
-    {
-      P_M = P_N = P_O = P_P = P_L;
-    }
   }
   else
   {
-    P_I = P_J = P_K = P_L = P_M = P_N = P_O = P_P = 128;
+    P_I = P_J = P_K = P_L = 128;
   }
 
   // XXXGJC -- not quite right for this boundary
@@ -339,22 +306,22 @@ void intrapred_luma(int img_x,int img_y)
     img->mprr[DIAG_DOWN_RIGHT_PRED][0][3] = (P_B + 2*P_C + P_D + 2) / 4;
 
     // Mode DIAG_DOWN_LEFT_PRED
-    img->mprr[DIAG_DOWN_LEFT_PRED][0][0] = (P_A + P_C + P_I + P_K + 2*(P_B + P_J) + 4) / 8;
+    img->mprr[DIAG_DOWN_LEFT_PRED][0][0] = (P_A + P_C + 2*(P_B) + 2) / 4;
     img->mprr[DIAG_DOWN_LEFT_PRED][0][1] = 
-    img->mprr[DIAG_DOWN_LEFT_PRED][1][0] = (P_B + P_D + P_J + P_L + 2*(P_C + P_K) + 4) / 8;
+    img->mprr[DIAG_DOWN_LEFT_PRED][1][0] = (P_B + P_D + 2*(P_C) + 2) / 4;
     img->mprr[DIAG_DOWN_LEFT_PRED][0][2] =
     img->mprr[DIAG_DOWN_LEFT_PRED][1][1] =
-    img->mprr[DIAG_DOWN_LEFT_PRED][2][0] = (P_C + P_E + P_K + P_M + 2*(P_D + P_L) + 4) / 8;
+    img->mprr[DIAG_DOWN_LEFT_PRED][2][0] = (P_C + P_E + 2*(P_D) + 2) / 4;
     img->mprr[DIAG_DOWN_LEFT_PRED][0][3] = 
     img->mprr[DIAG_DOWN_LEFT_PRED][1][2] = 
     img->mprr[DIAG_DOWN_LEFT_PRED][2][1] = 
-    img->mprr[DIAG_DOWN_LEFT_PRED][3][0] = (P_D + P_F + P_L + P_N + 2*(P_E + P_M) + 4) / 8;
+    img->mprr[DIAG_DOWN_LEFT_PRED][3][0] = (P_D + P_F + 2*(P_E) + 2) / 4;
     img->mprr[DIAG_DOWN_LEFT_PRED][1][3] = 
     img->mprr[DIAG_DOWN_LEFT_PRED][2][2] = 
-    img->mprr[DIAG_DOWN_LEFT_PRED][3][1] = (P_E + P_G + P_M + P_O + 2*(P_F + P_N) + 4) / 8;
+    img->mprr[DIAG_DOWN_LEFT_PRED][3][1] = (P_E + P_G + 2*(P_F) + 2) / 4;
     img->mprr[DIAG_DOWN_LEFT_PRED][2][3] = 
-    img->mprr[DIAG_DOWN_LEFT_PRED][3][2] = (P_F + P_H + P_N + P_P + 2*(P_G + P_O) + 4) / 8;
-    img->mprr[DIAG_DOWN_LEFT_PRED][3][3] = (P_G + P_O + P_H + P_P + 2) / 4;
+    img->mprr[DIAG_DOWN_LEFT_PRED][3][2] = (P_F + P_H + 2*(P_G) + 2) / 4;
+    img->mprr[DIAG_DOWN_LEFT_PRED][3][3] = (P_G + 3*(P_H) + 2) / 4;
 
     // Mode VERT_RIGHT_PRED
     img->mprr[VERT_RIGHT_PRED][0][0] = 
@@ -375,7 +342,7 @@ void intrapred_luma(int img_x,int img_y)
     img->mprr[VERT_RIGHT_PRED][3][0] = (P_I + 2*P_J + P_K + 2) / 4;
 
     // Mode VERT_LEFT_PRED
-    img->mprr[VERT_LEFT_PRED][0][0] = (2*(P_A + P_B + P_K) + P_J + P_L + 4) / 8;
+    img->mprr[VERT_LEFT_PRED][0][0] = (P_A + P_B + 1) / 2;
     img->mprr[VERT_LEFT_PRED][0][1] = 
     img->mprr[VERT_LEFT_PRED][2][0] = (P_B + P_C + 1) / 2;
     img->mprr[VERT_LEFT_PRED][0][2] = 
@@ -383,7 +350,7 @@ void intrapred_luma(int img_x,int img_y)
     img->mprr[VERT_LEFT_PRED][0][3] = 
     img->mprr[VERT_LEFT_PRED][2][2] = (P_D + P_E + 1) / 2;
     img->mprr[VERT_LEFT_PRED][2][3] = (P_E + P_F + 1) / 2;
-    img->mprr[VERT_LEFT_PRED][1][0] = (2*(P_B + P_L) + P_A + P_C + P_K + P_M + 4) / 8;
+    img->mprr[VERT_LEFT_PRED][1][0] = (P_A + 2*P_B + P_C + 2) / 4;
     img->mprr[VERT_LEFT_PRED][1][1] = 
     img->mprr[VERT_LEFT_PRED][3][0] = (P_B + 2*P_C + P_D + 2) / 4;
     img->mprr[VERT_LEFT_PRED][1][2] = 
@@ -393,8 +360,8 @@ void intrapred_luma(int img_x,int img_y)
     img->mprr[VERT_LEFT_PRED][3][3] = (P_E + 2*P_F + P_G + 2) / 4;
 
     // Mode HOR_UP_PRED
-    img->mprr[HOR_UP_PRED][0][0] = (2*(P_C + P_I + P_J) + P_B + P_D + 4) / 8;
-    img->mprr[HOR_UP_PRED][0][1] = (2*(P_D + P_J) + P_C + P_E + P_I + P_K + 4) / 8;
+    img->mprr[HOR_UP_PRED][0][0] = (P_I + P_J + 1) / 2;
+    img->mprr[HOR_UP_PRED][0][1] = (P_I + 2*P_J + P_K + 2) / 4;
     img->mprr[HOR_UP_PRED][0][2] = 
     img->mprr[HOR_UP_PRED][1][0] = (P_J + P_K + 1) / 2;
     img->mprr[HOR_UP_PRED][0][3] = 
@@ -402,13 +369,13 @@ void intrapred_luma(int img_x,int img_y)
     img->mprr[HOR_UP_PRED][1][2] = 
     img->mprr[HOR_UP_PRED][2][0] = (P_K + P_L + 1) / 2;
     img->mprr[HOR_UP_PRED][1][3] = 
-    img->mprr[HOR_UP_PRED][2][1] = (P_K + 2*P_L + P_M + 2) / 4;
+    img->mprr[HOR_UP_PRED][2][1] = (P_K + 2*P_L + P_L + 2) / 4;
     img->mprr[HOR_UP_PRED][3][0] = 
-    img->mprr[HOR_UP_PRED][2][2] = (P_L + P_M + 1) / 2;
+    img->mprr[HOR_UP_PRED][2][2] = 
     img->mprr[HOR_UP_PRED][2][3] = 
-    img->mprr[HOR_UP_PRED][3][1] = (P_L + 2*P_M + P_N + 2) / 4;
-    img->mprr[HOR_UP_PRED][3][2] = (P_M + P_N + 1) / 2;
-    img->mprr[HOR_UP_PRED][3][3] = (P_M + 2*P_N + P_O + 2) / 4;
+    img->mprr[HOR_UP_PRED][3][1] = 
+    img->mprr[HOR_UP_PRED][3][2] = 
+    img->mprr[HOR_UP_PRED][3][3] = P_L;
 
     // Mode HOR_DOWN_PRED
     img->mprr[HOR_DOWN_PRED][0][0] = 
@@ -442,7 +409,7 @@ void intrapred_luma(int img_x,int img_y)
  *    none
  ************************************************************************
  */
-void intrapred_luma_2()
+void intrapred_luma_16x16()
 {
   int s0=0,s1,s2;
   int i,j;
@@ -558,7 +525,7 @@ void intrapred_luma_2()
  *    none
  ************************************************************************
  */
-int dct_luma2(int new_intra_mode)
+int dct_luma_16x16(int new_intra_mode)
 {
   int qp_const;
   int i,j;
@@ -686,8 +653,16 @@ int dct_luma2(int new_intra_mode)
 
   for (coeff_ctr=0;coeff_ctr<16;coeff_ctr++)
   {
-    i=SNGL_SCAN[coeff_ctr][0];
-    j=SNGL_SCAN[coeff_ctr][1];
+    if (img->field_picture || ( mb_adaptive && img->field_mode )) 
+    {  // Alternate scan for field coding
+        i=FIELD_SCAN[coeff_ctr][0];
+        j=FIELD_SCAN[coeff_ctr][1];
+    }
+    else 
+    {
+        i=SNGL_SCAN[coeff_ctr][0];
+        j=SNGL_SCAN[coeff_ctr][1];
+    }
 
     run++;
 
@@ -755,8 +730,17 @@ int dct_luma2(int new_intra_mode)
 
       for (coeff_ctr=1;coeff_ctr<16;coeff_ctr++) // set in AC coeff
       {
-        i=SNGL_SCAN[coeff_ctr][0];
-        j=SNGL_SCAN[coeff_ctr][1];
+
+        if (img->field_picture || ( mb_adaptive && img->field_mode )) 
+        {  // Alternate scan for field coding
+          i=FIELD_SCAN[coeff_ctr][0];
+          j=FIELD_SCAN[coeff_ctr][1];
+        }
+        else 
+        {
+          i=SNGL_SCAN[coeff_ctr][0];
+          j=SNGL_SCAN[coeff_ctr][1];
+        }
         run++;
 
         level= ( abs( M0[i][ii][j][jj]) * quant_coef[qp_rem][i][j] + qp_const) >> q_bits;
@@ -914,8 +898,17 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int old_intra_mode)
   
   for (coeff_ctr=0;coeff_ctr < 16;coeff_ctr++)
   {
-    i=SNGL_SCAN[coeff_ctr][0];
-    j=SNGL_SCAN[coeff_ctr][1];
+
+    if (img->field_picture || ( mb_adaptive && img->field_mode )) 
+    {  // Alternate scan for field coding
+        i=FIELD_SCAN[coeff_ctr][0];
+        j=FIELD_SCAN[coeff_ctr][1];
+    }
+    else 
+    {
+        i=SNGL_SCAN[coeff_ctr][0];
+        j=SNGL_SCAN[coeff_ctr][1];
+    }
     
     run++;
     ilev=0;
@@ -1133,8 +1126,17 @@ int dct_chroma(int uv,int cr_cbp)
 
       for (coeff_ctr=1; coeff_ctr < 16; coeff_ctr++)// start change rd_quant
       {
-        i = SNGL_SCAN[coeff_ctr][0];
-        j = SNGL_SCAN[coeff_ctr][1];
+
+        if (img->field_picture || ( mb_adaptive && img->field_mode )) 
+        {  // Alternate scan for field coding
+          i=FIELD_SCAN[coeff_ctr][0];
+          j=FIELD_SCAN[coeff_ctr][1];
+        }
+        else 
+        {
+          i=SNGL_SCAN[coeff_ctr][0];
+          j=SNGL_SCAN[coeff_ctr][1];
+        }
         ++run;
         ilev=0;
 
@@ -1178,8 +1180,17 @@ int dct_chroma(int uv,int cr_cbp)
         ACLevel[0] = 0;
         for (coeff_ctr=1; coeff_ctr < 16; coeff_ctr++)// ac coeff
         {
-          i=SNGL_SCAN[coeff_ctr][0];
-          j=SNGL_SCAN[coeff_ctr][1];
+
+          if (img->field_picture || ( mb_adaptive && img->field_mode )) 
+          {  // Alternate scan for field coding
+            i=FIELD_SCAN[coeff_ctr][0];
+            j=FIELD_SCAN[coeff_ctr][1];
+          }
+          else 
+          {
+            i=SNGL_SCAN[coeff_ctr][0];
+            j=SNGL_SCAN[coeff_ctr][1];
+          }
           img->m7[n1+i][n2+j]=0;
           ACLevel[coeff_ctr] = 0;
         }
@@ -1373,8 +1384,17 @@ int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
   
   for (coeff_ctr=0;coeff_ctr < 16;coeff_ctr++)     // 8 times if double scan, 16 normal scan
   {
-    i=SNGL_SCAN[coeff_ctr][0];
-    j=SNGL_SCAN[coeff_ctr][1];
+
+    if (img->field_picture || ( mb_adaptive && img->field_mode )) 
+    {  // Alternate scan for field coding
+        i=FIELD_SCAN[coeff_ctr][0];
+        j=FIELD_SCAN[coeff_ctr][1];
+    }
+    else 
+    {
+        i=SNGL_SCAN[coeff_ctr][0];
+        j=SNGL_SCAN[coeff_ctr][1];
+    }
     
     run++;
     ilev=0;
@@ -1730,8 +1750,17 @@ int dct_chroma_sp(int uv,int cr_cbp)
 
       for (coeff_ctr=1; coeff_ctr < 16; coeff_ctr++)// start change rd_quant
       {
-        i=SNGL_SCAN[coeff_ctr][0];
-        j=SNGL_SCAN[coeff_ctr][1];
+
+        if (img->field_picture || ( mb_adaptive && img->field_mode )) 
+        {  // Alternate scan for field coding
+          i=FIELD_SCAN[coeff_ctr][0];
+          j=FIELD_SCAN[coeff_ctr][1];
+        }
+        else 
+        {
+          i=SNGL_SCAN[coeff_ctr][0];
+          j=SNGL_SCAN[coeff_ctr][1];
+        }
         ++run;
         ilev=0;
 

@@ -1,6 +1,6 @@
 /*
 ***********************************************************************
-*  COPYRIGHT  AND  WARRANTY INFORMATION
+* COPYRIGHT AND WARRANTY INFORMATION
 *
 * Copyright 2001, International Telecommunications Union, Geneva
 *
@@ -30,41 +30,65 @@
 ************************************************************************
 */
 
-/*
- *************************************************************************************
- * \file
- *    golomb.h
+/*!
+ ************************************************************************
+ * \file  nalu.c
  *
  * \brief
- *    Description
+ *    Common NALU support functions
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
- *     -  Achim Dahlhoff      <dahlhoff@ient.rwth-aachen.de>
+ *    - Stephan Wenger   <stewe@cs.tu-berlin.de>
+ ************************************************************************
+ */
+
+#include <stdio.h>
+#include <assert.h>
+#include <malloc.h>
+#include "memory.h"
+
+#include "nalu.h"
+#include "memalloc.h"
+
+
+/*! 
+ *************************************************************************************
+ * \brief
+ *    Allocates memory for a NALU
  *
- * \date
- *    Fri Mar 8 2002
+ * \param none
  *
- *  copyright : (C) 2002      Institut und Lehrstuhl für Nachrichtentechnik
- *                            RWTH Aachen University
- *                            52072 Aachen
- *                            Germany
+ * \return
+ *    pointer to a NALU
+ *************************************************************************************
+ */
+ 
+
+NALU_t *AllocNALU()
+{
+  NALU_t *n;
+
+  if ((n = calloc (1, sizeof (NALU_t))) == NULL) no_mem_exit ("AllocNALU");
+  return n;
+}
+
+
+/*! 
+ *************************************************************************************
+ * \brief
+ *    Frees a NALU
+ *
+ * \param NALU to be freed
+ *
+ * \return
+ *    none
  *************************************************************************************
  */
 
-#ifndef GOLOMB_H
-#define GOLOMB_H
-
-#include "global.h"
-
-void encode_golomb_word(unsigned int symbol,unsigned int grad0,unsigned int max_levels,unsigned int *res_bits,unsigned int *res_len); //returns symbol coded. (might be cropped if max_levels is too small)
-void encode_multilayer_golomb_word(unsigned int symbol,const unsigned int *grad,const unsigned int *max_levels,unsigned int *res_bits,unsigned int *res_len); //terminate using a max_levels value of 30UL.
-
-unsigned int decode_golomb_word(const unsigned char **buffer,unsigned int *bitoff,unsigned int grad0,unsigned int max_levels);
-unsigned int decode_multilayer_golomb_word(const unsigned char **buffer,unsigned int *bitoff,const unsigned int *grad0,const unsigned int *max_levels);
+void FreeNALU(NALU_t *n)
+{
+  free (n);
+}
 
 
-int writeSyntaxElement_GOLOMB(SyntaxElement *se, DataPartition *this_dataPart);
-
-
-#endif

@@ -140,6 +140,7 @@ void write_prev_Pframe(struct img_par *img, FILE *p_out)
     img->height /= 2;
     img->height_cr /= 2;
   }
+  
 }
 
 
@@ -177,15 +178,17 @@ void tracebits(
   chars = fprintf(p_trace, "%i", bitcounter);
   while(chars++ < 6)
     putc(' ',p_trace);
+
   chars += fprintf(p_trace, "%s", trace_str);
-  while(chars++ < 45)
+  while(chars++ < 55)
     putc(' ',p_trace);
 
   // Align bitpattern
   if(len<15)
+  {
     for(i=0 ; i<15-len ; i++)
       fputc(' ', p_trace);
-
+  }
 
   // Print bitpattern
   for(i=0 ; i<len/2 ; i++)
@@ -194,6 +197,7 @@ void tracebits(
   }
   // put 1
   fprintf(p_trace, "1");
+
   // Print bitpattern
   for(i=0 ; i<len/2 ; i++)
   {
@@ -203,11 +207,9 @@ void tracebits(
         fputc('0', p_trace);
   }
 
-
-
   fprintf(p_trace, "  (%3d)\n", value1);
-
   bitcounter += len;
+
   fflush (p_trace);
 
 }
@@ -239,7 +241,7 @@ void tracebits2(
   while(chars++ < 6)
     putc(' ',p_trace);
   chars += fprintf(p_trace, "%s", trace_str);
-  while(chars++ < 45)
+  while(chars++ < 55)
     putc(' ',p_trace);
 
   // Align bitpattern
@@ -267,7 +269,7 @@ void tracebits2(
       fputc('0', p_trace);
   }
 
-  fputc('\n', p_trace);
+  fprintf(p_trace, "  (%3d)\n", info);
 
   fflush (p_trace);
 

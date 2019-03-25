@@ -51,6 +51,7 @@
 
 #include <stdio.h>
 #include "global.h"
+#include "nalu.h"
 
 #define MAXRTPPAYLOADLEN  (65536 - 40)    //!< Maximum payload size of an RTP packet
 #define MAXRTPPACKETSIZE  (65536 - 28)    //!< Maximum size of an RTP packet incl. header
@@ -77,25 +78,28 @@ typedef struct
   unsigned int packlen;    //!< length of packet, typically paylen+12
 } RTPpacket_t;
 
-
-int  RTPSequenceHeader (FILE *out);
-
+#if 0
 int  ComposeRTPPacket (RTPpacket_t *p);
 int  DecomposeRTPpacket (RTPpacket_t *p);
 int  WriteRTPPacket (RTPpacket_t *p, FILE *f);
 void DumpRTPHeader (RTPpacket_t *p);
-int  RTPSequenceHeader(FILE *);
 void RTPUpdateTimestamp (int tr);
-int  RTPSliceHeader();
 int  RTPWriteBits (int Marker, int PacketType, void * bitstream, 
                    int BitStreamLenInByte, FILE *out);
-int RTPPartition_BC_Header();
 
 Boolean isAggregationPacket();
 int aggregationRTPWriteBits (int Marker, int PacketType, int subPacketType, void * bitstream, int BitStreamLenInByte, FILE *out);
 
 void begin_sub_sequence_rtp();
 void end_sub_sequence_rtp();
+#endif
+
+void RTPUpdateTimestamp (int tr);
+void OpenRTPFile (char *Filename);
+void CloseRTPFile ();
+int WriteRTPNALU (NALU_t *n);
+
+
 
 #endif
 
