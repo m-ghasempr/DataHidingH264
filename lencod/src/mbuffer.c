@@ -111,7 +111,7 @@ int getDpbSize()
   case 42:
     return 12582912 / pic_size;
   case 50:
-    return 42301440 / pic_size;
+    return 42393600 / pic_size;
   case 51:
     return 70778880 / pic_size;
   default:
@@ -125,9 +125,6 @@ int getDpbSize()
  ************************************************************************
  * \brief
  *    Allocate memory for decoded picture buffer an initialize with sane values.
- *
- * \param inp
- *    Input Parameters
  *
  ************************************************************************
  */

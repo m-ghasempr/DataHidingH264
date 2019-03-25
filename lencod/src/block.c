@@ -98,10 +98,10 @@ static const int A[4][4] = {
  *    inaccessible neighbouring points are signalled with a negative
  *    value in the predmode array .
  *
- *  \para Input:
+ *  \par Input:
  *     Starting point of current 4x4 block image posision
  *
- *  \para Output:
+ *  \par Output:
  *      none
  ************************************************************************
  */
@@ -388,10 +388,10 @@ void intrapred_luma(int img_x,int img_y, int *left_available, int *up_available,
  * \brief
  *    16x16 based luma prediction
  *
- * \para Input:
+ * \par Input:
  *    Image parameters
  *
- * \para Output:
+ * \par Output:
  *    none
  ************************************************************************
  */
@@ -505,10 +505,10 @@ void intrapred_luma_16x16()
  * \brief
  *    For new intra pred routines
  *
- * \para Input:
+ * \par Input:
  *    Image par, 16x16 based intra mode
  *
- * \para Output:
+ * \par Output:
  *    none
  ************************************************************************
  */
@@ -796,10 +796,10 @@ int dct_luma_16x16(int new_intra_mode)
  *    to the prediction and writes the result to the decoded luma frame. Includes the
  *    RD constrained quantization also.
  *
- * \para Input:
+ * \par Input:
  *    block_x,block_y: Block position inside a macro block (0,4,8,12).
  *
- * \para Output_
+ * \par Output_
  *    nonzero: 0 if no levels are nonzero.  1 if there are nonzero levels.             \n
  *    coeff_cost: Counter for nonzero coefficients, used to discard expencive levels.
  ************************************************************************
@@ -968,11 +968,11 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int old_intra_mode)
  *    additional 2x2 transform of DC-coeffs. This routine is called
  *    ones for each of the chroma components.
  *
- * \para Input:
+ * \par Input:
  *    uv    : Make difference between the U and V chroma component  \n
  *    cr_cbp: chroma coded block pattern
  *
- * \para Output:
+ * \par Output:
  *    cr_cbp: Updated chroma coded block pattern.
  ************************************************************************
  */
@@ -1235,10 +1235,10 @@ int dct_chroma(int uv,int cr_cbp)
  *    to the prediction and writes the result to the decoded luma frame. Includes the
  *    RD constrained quantization also.
  *
- * \para Input:
+ * \par Input:
  *    block_x,block_y: Block position inside a macro block (0,4,8,12).
  *
- * \para Output:
+ * \par Output:
  *    nonzero: 0 if no levels are nonzero.  1 if there are nonzero levels.              \n
  *    coeff_cost: Counter for nonzero coefficients, used to discard expencive levels.
  *
@@ -1495,11 +1495,11 @@ int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
  *    additional 2x2 transform of DC-coeffs. This routine is called
  *    ones for each of the chroma components.
  *
- * \para Input:
+ * \par Input:
  *    uv    : Make difference between the U and V chroma component               \n
  *    cr_cbp: chroma coded block pattern
  *
- * \para Output:
+ * \par Output:
  *    cr_cbp: Updated chroma coded block pattern.
  ************************************************************************
  */
@@ -1870,10 +1870,10 @@ int dct_chroma_sp(int uv,int cr_cbp)
  *    to the prediction and writes the result to the decoded luma frame. Includes the
  *    RD constrained quantization also.
  *
- * \para Input:
+ * \par Input:
  *    block_x,block_y: Block position inside a macro block (0,4,8,12).
  *
- * \para Output:
+ * \par Output:
  *    nonzero: 0 if no levels are nonzero.  1 if there are nonzero levels.            \n
  *    coeff_cost: Counter for nonzero coefficients, used to discard expencive levels.
  ************************************************************************

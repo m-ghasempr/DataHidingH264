@@ -18,7 +18,6 @@
 #include "memalloc.h"
 #include "rtp.h"
 #include "mbuffer.h"
-#include "encodeiff.h"
 #include "sei.h"
 #include "vlc.h"
 
@@ -40,7 +39,7 @@ Boolean seiHasSubseq_information=FALSE;
 Boolean seiHasSubseq_layer_characteristics=FALSE;
 Boolean seiHasSubseq_characteristics=FALSE;
 
-/*!
+/*
  ************************************************************************
  *  \basic functions on supplemental enhancement information
  *  \brief
@@ -48,8 +47,8 @@ Boolean seiHasSubseq_characteristics=FALSE;
  ************************************************************************
  */
 
-//! sei_message[0]: this struct is to store the sei message packtized independently 
-//! sei_message[1]: this struct is to store the sei message packtized together with slice data
+//! sei_message[0]: this struct is to store the sei message packetized independently 
+//! sei_message[1]: this struct is to store the sei message packetized together with slice data
 sei_struct sei_message[2];
 
 void InitSEIMessages()
@@ -130,17 +129,19 @@ Boolean HaveAggregationSEI()
 
 /*!
  ************************************************************************
- *  \write_sei_message
  *  \brief
  *     write one sei payload to the sei message
- *  \input
- *    id:   0, if this is the normal packet
- *          1, if this is a aggregation packet
- *    payload: a pointer that point to the sei payload. Note that the bitstream
- *      should have be byte aligned already. 
- *    payload_size: the size of the sei payload
- *    payload_type: the type of the sei payload
- *  \output
+ *  \param id
+ *    0, if this is the normal packet \n
+ *    1, if this is a aggregation packet
+ *  \param payload
+ *    a pointer that point to the sei payload. Note that the bitstream
+ *    should have be byte aligned already. 
+ *  \param payload_size
+ *    the size of the sei payload
+ *  \param payload_type
+ *    the type of the sei payload
+ *  \par Output
  *    the content of the sei message (sei_message[id]) is updated.
  ************************************************************************
  */
@@ -175,14 +176,13 @@ void write_sei_message(int id, byte* payload, int payload_size, int payload_type
 
 /*!
  ************************************************************************
- *  \finalize_sei_message
  *  \brief
  *     write rbsp_trailing_bits to the sei message
- *  \input
- *    id:   0, if this is the normal packet
- *          1, if this is a aggregation packet
- *  \output
- *    the content of the sei message is updated and ready for packtization
+ *  \param id
+ *    0, if this is the normal packet \n
+ *    1, if this is a aggregation packet
+ *  \par Output
+ *    the content of the sei message is updated and ready for packetisation
  ************************************************************************
  */
 void finalize_sei_message(int id)
@@ -197,13 +197,12 @@ void finalize_sei_message(int id)
 
 /*!
  ************************************************************************
- *  \clear_sei_message
  *  \brief
  *     empty the sei message buffer
- *  \input
- *    id:   0, if this is the normal packet
- *          1, if this is a aggregation packet
- *  \output
+ *  \param id
+ *    0, if this is the normal packet \n
+ *    1, if this is a aggregation packet
+ *  \par Output
  *    the content of the sei message is cleared and ready for storing new 
  *      messages
  ************************************************************************
@@ -217,12 +216,13 @@ void clear_sei_message(int id)
 
 /*!
  ************************************************************************
- *  \appendTmpbits2Buf
  *  \brief
  *     copy the bits from one bitstream buffer to another one
- *  \input
- *    dest, source: the pointer to the source and dest bitstream buffer
- *  \output
+ *  \param dest
+ *    pointer to the dest bitstream buffer
+ *  \param source
+ *    pointer to the source bitstream buffer
+ *  \par Output
  *    the content of the dest bitstream is changed.
  ************************************************************************
  */
@@ -273,7 +273,7 @@ void AppendTmpbits2Buf( Bitstream* dest, Bitstream* source )
   }
 }
 
-/*!
+/*
  **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  *  \functions on spare pictures
  *  \brief
@@ -295,7 +295,6 @@ spare_picture_struct seiSparePicturePayload;
 
 /*!
  ************************************************************************
- *  \InitSparePicture
  *  \brief
  *      Init the global variables for spare picture information
  ************************************************************************
@@ -319,7 +318,6 @@ void InitSparePicture()
 
 /*!
  ************************************************************************
- *  \CloseSparePicture
  *  \brief
  *      Close the global variables for spare picture information
  ************************************************************************
@@ -338,14 +336,11 @@ void CloseSparePicture()
 
 /*!
  ************************************************************************
- *  \CalculateSparePicture
  *  \brief
  *     Calculate the spare picture info, save the result in map_sp
- *      then compose the spare picture infomation.
- *  \input
- *      none
- *  \output
- *      the spare picture payload is availble in *seiSparePicturePayload*
+ *      then compose the spare picture information.
+ *  \par Output
+ *      the spare picture payload is available in *seiSparePicturePayload*
  *      the syntax elements in the loop (see FCD), excluding the two elements
  *      at the beginning.
  ************************************************************************
@@ -518,14 +513,15 @@ void CalculateSparePicture()
 
 /*!
  ************************************************************************
- *  \ComposeSparePictureMessage
  *  \brief
  *      compose the spare picture information.
- *  \input
- *      delta_spare_frame_num: see FCD
- *      ref_area_indicator: Indicate how to represent the spare mb map
- *      bitstream: pointer to a buffer to save the payload
- *  \output
+ *  \param delta_spare_frame_num
+ *      see FCD
+ *  \param ref_area_indicator
+ *      Indicate how to represent the spare mb map
+ *  \param tmpBitstream
+ *      pointer to a buffer to save the payload
+ *  \par Output
  *      bitstream: the composed spare picture payload are 
  *        ready to put into the sei_message. 
  ************************************************************************
@@ -548,15 +544,16 @@ void ComposeSparePictureMessage(int delta_spare_frame_num, int ref_area_indicato
 
 /*!
  ************************************************************************
- *  \CompressSpareMBMap
  *  \brief
  *      test if the compressed spare mb map will occupy less mem and
  *      fill the payload buffer.
- *  \input
- *      map_sp:  in which the spare picture information are stored.
- *  \output
- *      return TRUE: If it is compressed version.
- *             FALSE: If it is not compressed.
+ *  \param map_sp
+ *      in which the spare picture information are stored.
+ *  \param bitstream
+ *      pointer to a buffer to save the payload
+ *  \return
+ *      TRUE: If it is compressed version, \n
+ *      FALSE: If it is not compressed.
  ************************************************************************
  */
 Boolean CompressSpareMBMap(unsigned char **map_sp, Bitstream *bitstream)
@@ -706,15 +703,14 @@ Boolean CompressSpareMBMap(unsigned char **map_sp, Bitstream *bitstream)
 
 /*!
  ************************************************************************
- *  \FinalizeSpareMBMap
  *  \brief
  *      Finalize the spare picture SEI payload.
  *        The spare picture paylaod will be ready for encapsulation, and it
  *        should be called before current picture packetized.
- *  \input
+ *  \par Input
  *      seiSparePicturePayload.data: points to the payload starting from
  *        delta_spare_frame_num. (See FCD)
- *  \output
+ *  \par Output
  *      seiSparePicturePayload.data is updated, pointing to the whole spare
  *        picture information: spare_picture( PayloadSize ) (See FCD)
  *        Make sure it is byte aligned.
@@ -772,7 +768,7 @@ void FinalizeSpareMBMap()
   free( source );
 }
 
-/*!
+/*
  **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  *  \functions on subseq information sei messages
  *  \brief
@@ -787,9 +783,8 @@ subseq_information_struct seiSubseqInfo[MAX_LAYER_NUMBER];
 
 /*!
  ************************************************************************
- *  \InitSubseqInfo
  *  \brief
- *      
+ *      init subseqence info
  ************************************************************************
  */
 void InitSubseqInfo(int currLayer)
@@ -813,9 +808,8 @@ void InitSubseqInfo(int currLayer)
 
 /*!
  ************************************************************************
- *  \UpdateSubseqInfo
  *  \brief
- *      Update
+ *      update subseqence info
  ************************************************************************
  */
 void UpdateSubseqInfo(int currLayer)
@@ -846,9 +840,8 @@ void UpdateSubseqInfo(int currLayer)
 
 /*!
  ************************************************************************
- *  \FinalizeSubseqInfo
  *  \brief
- *      Finalize
+ *      Finalize subseqence info
  ************************************************************************
  */
 void FinalizeSubseqInfo(int currLayer)
@@ -887,7 +880,6 @@ void FinalizeSubseqInfo(int currLayer)
 
 /*!
  ************************************************************************
- *  \ClearSubseqInfoPayload
  *  \brief
  *      Clear the payload buffer
  ************************************************************************
@@ -903,7 +895,6 @@ void ClearSubseqInfoPayload(int currLayer)
 
 /*!
  ************************************************************************
- *  \CloseSubseqInfo
  *  \brief
  *      Close the global variables for spare picture information
  ************************************************************************
@@ -917,7 +908,7 @@ void CloseSubseqInfo(int currLayer)
   free( seiSubseqInfo[currLayer].data );
 }
 
-/*!
+/*
  **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  *  \functions on subseq layer characteristic sei messages
  *  \brief
@@ -932,7 +923,6 @@ subseq_layer_information_struct seiSubseqLayerInfo;
 
 /*!
  ************************************************************************
- *  \InitSubseqLayerInfo
  *  \brief
  *      Init the global variables for spare picture information
  ************************************************************************
@@ -952,7 +942,6 @@ void InitSubseqLayerInfo()
 
 /*!
  ************************************************************************
- *  \CloseSubseqLayerInfo
  *  \brief
  *      
  ************************************************************************
@@ -963,7 +952,6 @@ void CloseSubseqLayerInfo()
 
 /*!
  ************************************************************************
- *  \FinalizeSubseqLayerInfo
  *  \brief
  *      Write the data to buffer, which is byte aligned
  ************************************************************************
@@ -983,7 +971,7 @@ void FinalizeSubseqLayerInfo()
   }
 }
 
-/*!
+/*
  **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  *  \functions on subseq characteristic sei messages
  *  \brief
@@ -1109,7 +1097,7 @@ void CloseSubseqChar()
 
 
 // JVT-D099
-/*!
+/*
  **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  *  \functions on scene information SEI message
  *  \brief
@@ -1205,7 +1193,7 @@ void UpdateSceneInformation(Boolean HasSceneInformation, int sceneID, int sceneT
 // End JVT-D099
 
 
-/*!
+/*
  **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  *  \functions on Pan Scan messages
  *  \brief
@@ -1309,7 +1297,7 @@ void ClosePanScanRectInfo()
   seiPanScanRectInfo.data = NULL;
 }
 
-/*!
+/*
  **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  *  \functions on arbitrary (unregistered) data
  *  \brief
@@ -1414,7 +1402,7 @@ void CloseUser_data_unregistered()
 }
 
 
-/*!
+/*
  **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  *  \functions on registered ITU_T_T35 user data
  *  \brief
@@ -1550,7 +1538,7 @@ void CloseUser_data_registered_itu_t_t35()
   }
 }
 
-/*!
+/*
  **++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  *  \functions on random access message
  *  \brief

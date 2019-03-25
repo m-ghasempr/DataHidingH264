@@ -24,8 +24,6 @@
  * \brief
  *    Allocates memory for a pps
  *
- * \param none
- *
  * \return
  *    pointer to a pps
  *************************************************************************************
@@ -48,8 +46,6 @@ pic_parameter_set_rbsp_t *AllocPPS ()
  * \brief
  *    Allocates memory for am sps
  *
- * \param none
- *
  * \return
  *    pointer to a sps
  *************************************************************************************
@@ -70,7 +66,8 @@ seq_parameter_set_rbsp_t *AllocSPS ()
  * \brief
  *    Frees a pps
  *
- * \param pps to be freed
+ * \param pps
+ *     pps to be freed
  *
  * \return
  *    none
@@ -90,7 +87,8 @@ seq_parameter_set_rbsp_t *AllocSPS ()
  * \brief
  *    Frees a sps
  *
- * \param sps to be freed
+ * \param sps
+ *     sps to be freed
  *
  * \return
  *    none

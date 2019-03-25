@@ -24,14 +24,14 @@
  * Format is line oriented, maximum of one parameter per line                           \n
  *                                                                                      \n
  * Lines have the following format:                                                     \n
- * <ParameterName> = <ParameterValue> # Comments \\n                                    \n
+ * \<ParameterName\> = \<ParameterValue\> # Comments \\n                                    \n
  * Whitespace is space and \\t
  * \par
- * <ParameterName> are the predefined names for Parameters and are case sensitive.
+ * \<ParameterName\> are the predefined names for Parameters and are case sensitive.
  *   See configfile.h for the definition of those names and their mapping to
  *   configinput->values.
  * \par
- * <ParameterValue> are either integers [0..9]* or strings.
+ * \<ParameterValue\> are either integers [0..9]* or strings.
  *   Integers must fit into the wordlengths, signed values are generally assumed.
  *   Strings containing no whitespace characters can be used directly.  Strings containing
  *   whitespace characters are to be inclosed in double quotes ("string with whitespace")
@@ -47,7 +47,7 @@
  * \par Rules for using command files
  *                                                                                      \n
  * All Parameters are initially taken from DEFAULTCONFIGFILENAME, defined in configfile.h.
- * If an -f <config> parameter is present in the command line then this file is used to
+ * If an -f \<config\> parameter is present in the command line then this file is used to
  * update the defaults of DEFAULTCONFIGFILENAME.  There can be more than one -f parameters
  * present.  If -p <ParameterName = ParameterValue> parameters are present then these
  * overide the default and the additional config file's settings, and are themselfes
@@ -72,6 +72,8 @@ static char *GetConfigFileContent (char *Filename);
 static void ParseContent (char *buf, int bufsize);
 static int ParameterNameToMapIndex (char *s);
 static void PatchInp ();
+static void ProfileCheck();
+static void LevelCheck();
 
 
 #define MAX_ITEMS_TO_PARSE  10000
@@ -83,7 +85,7 @@ static void PatchInp ();
  *   print help message and exit
  ***********************************************************************
  */
-void JMHelpExit ()
+void JMHelpExit()
 {
   fprintf( stderr, "\n   lencod [-h] [-p defenc.cfg] {[-f curenc1.cfg]...[-f curencN.cfg]}"
     " {[-p EncParam1=EncValue1]..[-p EncParamM=EncValueM]}\n\n"    
@@ -122,7 +124,7 @@ void JMHelpExit ()
  *    command line parameters
  ***********************************************************************
  */
-void Configure (int ac, char *av[])
+void Configure(int ac, char *av[])
 {
   char *content;
   int CLcount, ContentLen, NumberParams;
@@ -471,14 +473,6 @@ static void PatchInp ()
     snprintf(errortext, ET_SIZE, "Error input parameter sp_periodicity,check configuration file");
     error (errortext, 400);
   }
-  // consistency check Search_range
-
-/*  if (input->search_range > 39)   // StW
-  {
-    snprintf(errortext, ET_SIZE, "Error in input parameter search_range, check configuration file");
-    error (errortext, 400);
-  }
-*/
   if (input->PictureRate < 0 || input->PictureRate>100)   
   {
     snprintf(errortext, ET_SIZE, "Error in input parameter PictureRate, check configuration file");
@@ -528,31 +522,31 @@ static void PatchInp ()
   }
 
   // Set block sizes
-
-    input->blc_size[0][0]=16;
-    input->blc_size[0][1]=16;
-
-    input->blc_size[1][0]=16;
-    input->blc_size[1][1]=16;
-
-    input->blc_size[2][0]=16;
-    input->blc_size[2][1]= 8;
-
-    input->blc_size[3][0]= 8;
-    input->blc_size[3][1]=16;
-
-    input->blc_size[4][0]= 8;
-    input->blc_size[4][1]= 8;
-
-    input->blc_size[5][0]= 8;
-    input->blc_size[5][1]= 4;
-
-    input->blc_size[6][0]= 4;
-    input->blc_size[6][1]= 8;
-
-    input->blc_size[7][0]= 4;
-    input->blc_size[7][1]= 4;
-
+  
+  input->blc_size[0][0]=16;
+  input->blc_size[0][1]=16;
+  
+  input->blc_size[1][0]=16;
+  input->blc_size[1][1]=16;
+  
+  input->blc_size[2][0]=16;
+  input->blc_size[2][1]= 8;
+  
+  input->blc_size[3][0]= 8;
+  input->blc_size[3][1]=16;
+  
+  input->blc_size[4][0]= 8;
+  input->blc_size[4][1]= 8;
+  
+  input->blc_size[5][0]= 8;
+  input->blc_size[5][1]= 4;
+  
+  input->blc_size[6][0]= 4;
+  input->blc_size[6][1]= 8;
+  
+  input->blc_size[7][0]= 4;
+  input->blc_size[7][1]= 4;
+  
   if (input->partition_mode < 0 || input->partition_mode > 1)
   {
     snprintf(errortext, ET_SIZE, "Unsupported Partition mode, must be between 0 and 1");
@@ -670,23 +664,7 @@ static void PatchInp ()
     snprintf(errortext, ET_SIZE, "Only RTP output mode is compatible with spare picture features.");
     error (errortext, 500);
   }
-  /*
-  if (input->StoredBPictures > 0)
-  {
-    if (input->direct_type != DIR_SPATIAL)
-    {
-      input->direct_type = DIR_SPATIAL;
-      printf("Stored B Picture coding is not supported for temporal direct mode currently. Using spatial direct mode.");
-    }
-  }
-  */
-  /*
-  if( (input->StoredBPictures || input->WeightedBiprediction > 0) && input->successive_Bframe && input->direct_type == DIR_TEMPORAL)
-  {
-    printf("Weighted bi-prediction coding is not supported for temporal direct mode currently.");
-    input->direct_type = DIR_SPATIAL;
-  }
-  */
+
   if( (input->WeightedPrediction > 0 || input->WeightedBiprediction > 0) && (input->MbInterlace))
   {
     printf("Weighted prediction coding is not supported for MB AFF currently.");
@@ -698,7 +676,7 @@ static void PatchInp ()
     error (errortext, 500);
   }
 
-  // JVT-D095, JVT-D097
+  // FMO
   input->mb_allocation_map_type = input->FmoType;
   if(input->num_slice_groups_minus1 > 0)
   {
@@ -715,10 +693,13 @@ static void PatchInp ()
       error (errortext, 500);
     }
   }
-  // End JVT-D095, JVT-D097
+
   if( !input->direct_type && input->num_reference_frames<2 && input->successive_Bframe >0)
     error("temporal direct needs at least 2 ref frames\n",-1000);
 
+
+  ProfileCheck();
+  LevelCheck();
 }
 
 void PatchInputNoFrames()
@@ -732,3 +713,93 @@ void PatchInputNoFrames()
     input->NumFrameIn2ndIGOP = 1+(input->NumFrameIn2ndIGOP-1) * (input->NumFramesInELSubSeq+1);
   FirstFrameIn2ndIGOP = input->no_frames;
 }
+
+static void ProfileCheck()
+{
+  if ((input->ProfileIDC != 66 ) && (input->ProfileIDC != 77 ) && (input->ProfileIDC != 88 ))
+  {
+    snprintf(errortext, ET_SIZE, "Profile must be baseline(66)/main(77)/extended(88).");
+    error (errortext, 500);
+  }
+  // baseline
+  if (input->ProfileIDC == 66 )
+  {
+    if (input->successive_Bframe)
+    {
+      snprintf(errortext, ET_SIZE, "B pictures are not allowed in baseline.");
+      error (errortext, 500);
+    }
+    if (input->sp_periodicity)
+    {
+      snprintf(errortext, ET_SIZE, "SP pictures are not allowed in baseline.");
+      error (errortext, 500);
+    }
+    if (input->partition_mode)
+    {
+      snprintf(errortext, ET_SIZE, "Data partitioning is not allowed in baseline.");
+      error (errortext, 500);
+    }
+    if (input->WeightedPrediction)
+    {
+      snprintf(errortext, ET_SIZE, "Weighted prediction is not allowed in baseline.");
+      error (errortext, 500);
+    }
+    if (input->WeightedBiprediction)
+    {
+      snprintf(errortext, ET_SIZE, "Weighted prediction is not allowed in baseline.");
+      error (errortext, 500);
+    }
+    if (input->symbol_mode == CABAC)
+    {
+      snprintf(errortext, ET_SIZE, "CABAC is not allowed in baseline.");
+      error (errortext, 500);
+    }
+  }
+
+  // main
+  if (input->ProfileIDC == 77 )
+  {
+    if (input->sp_periodicity)
+    {
+      snprintf(errortext, ET_SIZE, "SP pictures are not allowed in main.");
+      error (errortext, 500);
+    }
+    if (input->partition_mode)
+    {
+      snprintf(errortext, ET_SIZE, "Data partitioning is not allowed in main.");
+      error (errortext, 500);
+    }
+    if (input->num_slice_groups_minus1)
+    {
+      snprintf(errortext, ET_SIZE, "num_slice_groups_minus1>0 (FMO) is not allowed in main.");
+      error (errortext, 500);
+    }
+    if (input->redundant_slice_flag)
+    {
+      snprintf(errortext, ET_SIZE, "Redundant pictures are not allowed in main.");
+      error (errortext, 500);
+    }
+  }
+
+  // extended
+  if (input->ProfileIDC == 88 )
+  {
+    if (!input->directInferenceFlag)
+    {
+      snprintf(errortext, ET_SIZE, "direct_8x8_inference flag must be equal to 1 in extended.");
+      error (errortext, 500);
+    }
+
+    if (input->symbol_mode == CABAC)
+    {
+      snprintf(errortext, ET_SIZE, "CABAC is not allowed in extended.");
+      error (errortext, 500);
+    }
+  }
+}
+
+static void LevelCheck()
+{
+  return;
+}
+

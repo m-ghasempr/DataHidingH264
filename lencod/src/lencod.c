@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 8.0
+ *     JM 8.1
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -54,7 +54,6 @@
 #include "mbuffer.h"
 #include "intrarefresh.h"
 #include "fmo.h"
-#include "encodeiff.h"
 #include "sei.h"
 #include "parset.h"
 #include "image.h"
@@ -63,7 +62,7 @@
 #include "ratectl.h"
 
 #define JM      "8"
-#define VERSION "8.0"
+#define VERSION "8.1
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
@@ -82,6 +81,8 @@ int    start_tr_in_this_IGOP = 0;
 int    FirstFrameIn2ndIGOP=0;
 int    cabac_encoding = 0;
 
+void Init_Motion_Search_Module ();
+void Clear_Motion_Search_Module ();
 
 /*!
  ***********************************************************************
@@ -95,9 +96,6 @@ int    cabac_encoding = 0;
  *    exit code
  ***********************************************************************
  */
-void Init_Motion_Search_Module ();
-void Clear_Motion_Search_Module ();
-
 int main(int argc,char **argv)
 {
   int M,N,n,np,nb;           //Rate control

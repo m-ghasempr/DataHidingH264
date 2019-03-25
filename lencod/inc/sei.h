@@ -15,6 +15,10 @@
 #ifndef SEI_H
 #define SEI_H
 
+#define MAX_LAYER_NUMBER 2
+#define MAX_DEPENDENT_SUBSEQ 5
+
+
 //! definition of SEI payload type
 typedef enum {
   SEI_ZERO,        //!< 0 is undefined, useless

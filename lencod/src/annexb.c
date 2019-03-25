@@ -81,7 +81,7 @@ int WriteAnnexbNALU (NALU_t *n)
  * \brief 
  *    Opens the output file for the bytestream    
  *
- * \param 
+ * \param Filename
  *    The filename of the file to be opened
  *
  * \return

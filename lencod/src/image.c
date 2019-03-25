@@ -36,7 +36,6 @@
 #include "image.h"
 #include "refbuf.h"
 #include "mbuffer.h"
-#include "encodeiff.h"
 #include "header.h"
 #include "intrarefresh.h"
 #include "fmo.h"
@@ -446,10 +445,7 @@ int encode_one_frame ()
   //Rate control
   if(input->RCEnable)
   {
-    if((input->symbol_mode == 0)&&(input->of_mode ==0))
-      bits = bits_frm;   //UVLC && Bitstream output mode 
-    else
-      bits = stat->bit_ctr-stat->bit_ctr_n;//CABAC*/
+    bits = stat->bit_ctr-stat->bit_ctr_n;
     rc_update_pict_frame(bits);
   }
 
@@ -1837,8 +1833,8 @@ static void ReportP(int tmp_time)
  * \brief
  *    Copies contents of a Sourceframe structure into the old-style
  *    variables imgY_org_frm and imgUV_org_frm.  No other side effects
- * \para
- *    sf: the source frame the frame is to be taken from
+ * \param sf
+ *    the source frame the frame is to be taken from
  ************************************************************************
  */
 
@@ -1862,8 +1858,8 @@ static void CopyFrameToOldImgOrgVariables (Sourceframe *sf)
  * \brief
  *    Copies contents of a Sourceframe structure into the old-style
  *    variables imgY_org_top and imgUV_org_top.  No other side effects
- * \para
- *    sf: the source frame the field is to be taken from
+ * \param sf
+ *    the source frame the field is to be taken from
  ************************************************************************
  */
 
@@ -1886,8 +1882,8 @@ static void CopyTopFieldToOldImgOrgVariables (Sourceframe *sf)
  * \brief
  *    Copies contents of a Sourceframe structure into the old-style
  *    variables imgY_org_bot and imgUV_org_bot.  No other side effects
- * \para
- *    sf: the source frame the field is to be taken from
+ * \param sf
+ *    the source frame the field is to be taken from
  ************************************************************************
  */
 
@@ -1911,9 +1907,10 @@ static void CopyBottomFieldToOldImgOrgVariables (Sourceframe *sf)
  ************************************************************************
  * \brief
  *    Allocates Sourceframe structure
- * \para
- *    xs: horizontal size of frame in pixels
- *    ys: vertical size of frame in pixels, must be divisible by 2
+ * \param xs
+ *    horizontal size of frame in pixels
+ * \param ys
+ *    vertical size of frame in pixels, must be divisible by 2
  * \return
  *    pointer to initialized source frame structure
  ************************************************************************
@@ -1948,7 +1945,7 @@ static Sourceframe *AllocSourceframe (int xs, int ys)
  ************************************************************************
  * \brief
  *    Frees Sourceframe structure
- * \para
+ * \param sf
  *    pointer to Sourceframe previoously allocated with ALlocSourceframe()
  * \return
  *    none
@@ -1979,7 +1976,7 @@ static void FreeSourceframe (Sourceframe *sf)
  *    of various variables in img-> and input->
  * \return
  *    frame number in the file to be read
- * \side effects
+ * \par side effects
  *    global variable frame_no updated -- dunno, for what this one is necessary
  ************************************************************************
  */
@@ -2003,12 +2000,16 @@ static int CalculateFrameNumber()
  ************************************************************************
  * \brief
  *    Generate Field Component from Frame Components by copying
- * \para
- *    src: source frame component
- *    top: destination top field component
- *    bot: destination bottom field component
- *    xs: horizontal size of frame in pixels
- *    ys: vertical size of frame in pixels, must be divisible by 2
+ * \param src
+ *    source frame component
+ * \param top
+ *    destination top field component
+ * \param bot
+ *    destination bottom field component
+ * \param xs
+ *    horizontal size of frame in pixels
+ * \param ys
+ *    vertical size of frame in pixels, must be divisible by 2
  ************************************************************************
  */
 static void GenerateFieldComponent (char *src, char *top, char *bot, int xs, int ys)
@@ -2028,13 +2029,17 @@ static void GenerateFieldComponent (char *src, char *top, char *bot, int xs, int
  ************************************************************************
  * \brief
  *    Reads one new frame from file
- * \para
- *    FrameNoInFile: Frame number in the source file
- *    HeaderSize: Number of bytes in the source file to be skipped
- *    xs: horizontal size of frame in pixels, must be divisible by 16
- *    ys: vertical size of frame in pixels, must be divisible by 16 or
- *        32 in case of MB-adaptive frame/field coding
- *    sf: Sourceframe structure to which the frame is written
+ * \param FrameNoInFile
+ *    Frame number in the source file
+ * \param HeaderSize
+ *    Number of bytes in the source file to be skipped
+ * \param xs
+ *    horizontal size of frame in pixels, must be divisible by 16
+ * \param ys
+ *    vertical size of frame in pixels, must be divisible by 16 or
+ *    32 in case of MB-adaptive frame/field coding
+ * \param sf
+ *    Sourceframe structure to which the frame is written
  ************************************************************************
  */
 static void ReadOneFrame (int FrameNoInFile, int HeaderSize, int xs, int ys, Sourceframe *sf)

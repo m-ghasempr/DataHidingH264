@@ -25,13 +25,20 @@
  * \brief
  *    Converts an RBSP to a NALU
  *
- * \param 
- *    rbsp: byte buffer with the rbsp
- *    nalu: nalu structure to be filled
- *    rbsp_size: size of the rbsp in bytes
- *    nal_unit_type, nal_reference_idc: as in JVT doc
- *    min_num_bytes: some incomprehensible CABAC stuff
- *    UseAnnexbLongStartcode: when 1 and when using AnnexB bytestreams, then use a long startcode prefix
+ * \param rbsp
+ *    byte buffer with the rbsp
+ * \param nalu
+ *    nalu structure to be filled
+ * \param rbsp_size
+ *    size of the rbsp in bytes
+ * \param nal_unit_type
+ *    as in JVT doc
+ * \param nal_reference_idc
+ *    as in JVT doc
+ * \param min_num_bytes
+ *    some incomprehensible CABAC stuff
+ * \param UseAnnexbLongStartcode
+ *    when 1 and when using AnnexB bytestreams, then use a long startcode prefix
  *
  * \return
  *    length of the NALU in bytes

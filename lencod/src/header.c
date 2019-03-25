@@ -499,22 +499,18 @@ int get_picture_type()
  * \return
  *    Number of bits used by the partition header
  *
- * \para Parameters
+ * \par Parameters
  *    PartNo: Partition Number to which the header should be written
  *
- * \para Side effects
+ * \par Side effects
  *    Partition header as per VCEG-N72r2 is written into the appropriate 
  *    partition bit buffer
  *
- * \para Limitations/Shortcomings/Tweaks
+ * \par Limitations/Shortcomings/Tweaks
  *    The current code does not support the change of picture parameters within
  *    one coded sequence, hence there is only one parameter set necessary.  This
  *    is hard coded to zero.
  *
- * \para
- *    Note: this is still the old Partition_BC_Header and not yet compliant with
- *    the spec.
- *   
  * \date
  *    October 24, 2001
  *

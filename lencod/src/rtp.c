@@ -59,14 +59,14 @@ FILE *f;
  *    0 in case of success
  *    negative error code in case of failure
  *
- * \para Parameters
+ * \par Parameters
  *    Caller is responsible to allocate enough memory for the generated packet
  *    in parameter->packet. Typically a malloc of 12+paylen bytes is sufficient
  *
- * \para Side effects
+ * \par Side effects
  *    none
  *
- * \para Other Notes
+ * \note
  *    Function contains assert() tests for debug purposes (consistency checks
  *    for RTP header fields
  *
@@ -126,12 +126,10 @@ int ComposeRTPPacket (RTPpacket_t *p)
  *    0 in case of access
  *    <0 in case of write failure (typically fatal)
  *
- * \para Parameters
- *    p: the RTP packet to be written (after ComposeRTPPacket() )
- *    f: output file
- *
- * \para Side effects
- *    none
+ * \param p
+ *    the RTP packet to be written (after ComposeRTPPacket() )
+ * \param f
+ *    output file
  *
  * \date
  *    October 23, 2001
@@ -171,10 +169,7 @@ int WriteRTPPacket (RTPpacket_t *p, FILE *f)
  * \return
  *    Number of bytes written to output file
  *
- * \para Parameters
- *    marker: markber bit,
- *
- * \para Side effects
+ * \par Side effects
  *    Packet written, RTPSequenceNumber and RTPTimestamp updated
  *   
  * \date
@@ -296,7 +291,7 @@ void RTPUpdateTimestamp (int tr)
  * \brief 
  *    Opens the output file for the RTP packet stream
  *
- * \param 
+ * \param Filename
  *    The filename of the file to be opened
  *
  * \return
@@ -320,9 +315,6 @@ void OpenRTPFile (char *Filename)
  * \brief 
  *    Closes the output file for the RTP packet stream
  *
- * \param 
- *    none
- *
  * \return
  *    none.  Function terminates the program in case of an error
  *
@@ -341,8 +333,6 @@ void CloseRTPFile ()
 
 
 
-
-
 #if 0
 /*!
  *****************************************************************************
@@ -353,10 +343,10 @@ void CloseRTPFile ()
  * \return
  *    Number of bytes written to output file
  *
- * \para Parameters
- *    marker: markber bit,
+ * \param marker
+ *    marker bit,
  *
- * \para Side effects
+ * \par Side effects
  *    Packet written, RTPSequenceNumber and RTPTimestamp updated
  *   
  * \date

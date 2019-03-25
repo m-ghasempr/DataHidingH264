@@ -41,9 +41,6 @@ static int GenerateVUISequenceParameters();
  *    generates a sequence and picture parameter set and stores these in global
  *    active_sps and active_pps
  *
- * \param 
- *    None.
- *
  * \return
  *    A NALU containing the Sequence ParameterSet
  *
@@ -68,9 +65,6 @@ void GenerateParameterSets ()
 * \brief
 *    frees global parameter sets active_sps and active_pps
 *
-* \param 
-*    None.
-*
 * \return
 *    A NALU containing the Sequence ParameterSet
 *
@@ -87,8 +81,8 @@ void FreeParameterSets ()
 * \brief
 *    int GenerateSeq_parameter_set_NALU ();
 *
-* \param 
-*    None.  Uses the global variables through FillParameterSetStructures()
+* \note
+*    Uses the global variables through FillParameterSetStructures()
 *
 * \return
 *    A NALU containing the Sequence ParameterSet
@@ -116,8 +110,8 @@ NALU_t *GenerateSeq_parameter_set_NALU ()
 * \brief
 *    NALU_t *GeneratePic_parameter_set_NALU ();
 *
-* \param 
-*    None.  Uses the global variables through FillParameterSetStructures()
+* \note
+*    Uses the global variables through FillParameterSetStructures()
 *
 * \return
 *    A NALU containing the Picture Parameter Set
@@ -145,9 +139,10 @@ NALU_t *GeneratePic_parameter_set_NALU()
  *    FillParameterSetStructures: extracts info from global variables and
  *    generates a picture and sequence parameter set structure
  *
- * \par Input:
- *    seq_parameter_set_rbsp_t *sps,  Sequence parameter set to be filled
- *    pic_parameter_set_rbsp_t *pps   Picture parameter set to be filled
+ * \param sps
+ *    Sequence parameter set to be filled
+ * \param pps
+ *    Picture parameter set to be filled
  * \par
  *    Function reads all kinds of values from several global variables,
  *    including input-> and image-> and fills in the sps and pps.  Many
@@ -336,9 +331,10 @@ FMOTYPE6:
  * \brief
  *    int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, char *rbsp);
  *
- * \param 
- *    sps:  sequence parameter structure
- *    rbsp:  buffer to be filled with the rbsp, size should be at least MAXIMUMPARSETRBSPSIZE
+ * \param sps
+ *    sequence parameter structure
+ * \param rbsp
+ *    buffer to be filled with the rbsp, size should be at least MAXIMUMPARSETRBSPSIZE
  *
  * \return
  *    size of the RBSP in bytes
@@ -429,9 +425,10 @@ int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, char *rbsp)
  * \brief
  *    int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *sps, char *rbsp);
  *
- * \param 
- *    pps: sequence parameter structure
- *    rbsp:  buffer to be filled with the rbsp, size should be at least MAXIMUMPARSETRBSPSIZE
+ * \param pps
+ *    picture parameter structure
+ * \param rbsp
+ *    buffer to be filled with the rbsp, size should be at least MAXIMUMPARSETRBSPSIZE
  *
  * \return
  *    size of the RBSP in bytes, negative in case of an error
@@ -536,8 +533,6 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, char *rbsp)
  * \brief
  *    Returns the Profile
  *
- * \param none
- *
  * \return
  *    Profile according to Annex A
  *
@@ -561,8 +556,6 @@ int IdentifyProfile()
  * \brief
  *    Returns the Level
  *
- * \param none
- *
  * \return
  *    Level according to Annex A
  *
@@ -581,8 +574,6 @@ int IdentifyLevel()
  *************************************************************************************
  * \brief
  *    Returns the number of reference frame buffers
- *
- * \param none
  *
  * \return
  *    Number of reference frame buffers used
@@ -604,6 +595,15 @@ int IdentifyNumRefFrames()
 }
 
 
+/*! 
+ *************************************************************************************
+ * \brief
+ *    Function body for VUI Parameter generation (to be done)
+ *
+ * \return
+ *    exits with error message
+ *************************************************************************************
+ */
 static int GenerateVUISequenceParameters()
 {
   printf ("Sequence Parameter VUI not yet implemented, this should never happen, exit\n");

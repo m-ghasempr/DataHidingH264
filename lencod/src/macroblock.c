@@ -43,8 +43,8 @@ extern int QP,QP2;
  * \brief
  *    updates the coordinates for the next macroblock to be processed
  *
- * \input
- *    mb: MB address in scan order
+ * \param mb_addr
+ *    MB address in scan order
  ************************************************************************
  */
 
@@ -713,16 +713,8 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
  *    FALSE if all Partitions of this slice are smaller than the allowed size
  *    TRUE is at least one Partition exceeds the limit
  *
- * \para Parameters
- *    
- *    
- *
- * \para Side effects
+ * \par Side effects
  *    none
- *
- * \para Other Notes
- *    
- *    
  *
  * \date
  *    4 November 2001
@@ -1452,7 +1444,7 @@ void IntraChromaPrediction8x8 (int *mb_up, int *mb_left, int*mb_up_left)
   int     block_x, block_y;
   int     mb_nr             = img->current_mb_nr;
   int     mb_available_up;
-  int     mb_available_left;
+  int     mb_available_left[2];
   int     mb_available_up_left;
   int     ih,iv;
   int     ib,ic,iaa;
@@ -1475,22 +1467,24 @@ void IntraChromaPrediction8x8 (int *mb_up, int *mb_left, int*mb_up_left)
   getNeighbour(mb_nr, 0     ,  -1 , 0, &up);
 
 
-  mb_available_up       = up.available;
-  mb_available_up_left  = left[0].available;
-  mb_available_left     = left[1].available;
+  mb_available_up                             = up.available;
+  mb_available_up_left                        = left[0].available;
+  mb_available_left[0] = mb_available_left[1] = left[1].available;
 
   if(input->UseConstrainedIntraPred)
   {
     mb_available_up      = up.available ? img->intra_block[up.mb_addr] : 0;
-    for (i=1, mb_available_left=1; i<9;i++)
-      mb_available_left  &= left[i].available ? img->intra_block[left[i].mb_addr]: 0;
+    for (i=1, mb_available_left[0]=1; i<5;i++)
+      mb_available_left[0]  &= left[i].available ? img->intra_block[left[i].mb_addr]: 0;
+    for (i=5, mb_available_left[1]=1; i<9;i++)
+      mb_available_left[1]  &= left[i].available ? img->intra_block[left[i].mb_addr]: 0;
     mb_available_up_left = left[0].available ? img->intra_block[left[0].mb_addr]: 0;
   }
 
   if (mb_up)
     *mb_up = mb_available_up;
   if (mb_left)
-    *mb_left = mb_available_left;
+    *mb_left = mb_available_left[0] && mb_available_left[1];
   if( mb_up_left )
     *mb_up_left = mb_available_up_left;
 
@@ -1509,30 +1503,30 @@ void IntraChromaPrediction8x8 (int *mb_up, int *mb_left, int*mb_up_left)
       switch ((block_y>>1) + (block_x>>2))
       {
       case 0:  //===== TOP LEFT =====
-        if      (mb_available_up)    for (i=0;i<4;i++)  s0 += image[up.pos_y][up.pos_x + i];
-        if      (mb_available_left)  for (i=1;i<5;i++)  s2 += image[left[i].pos_y][left[i].pos_x];
-        if      (mb_available_up && mb_available_left)  s  = (s0+s2+4) >> 3;
-        else if (mb_available_up)                       s  = (s0   +2) >> 2;
-        else if (mb_available_left)                     s  = (s2   +2) >> 2;
+        if      (mb_available_up)       for (i=0;i<4;i++)  s0 += image[up.pos_y][up.pos_x + i];
+        if      (mb_available_left[0])  for (i=1;i<5;i++)  s2 += image[left[i].pos_y][left[i].pos_x];
+        if      (mb_available_up && mb_available_left)     s  = (s0+s2+4) >> 3;
+        else if (mb_available_up)                          s  = (s0   +2) >> 2;
+        else if (mb_available_left)                        s  = (s2   +2) >> 2;
         break;
       case 1: //===== TOP RIGHT =====
-        if      (mb_available_up)    for (i=4;i<8;i++)  s1 += image[up.pos_y][up.pos_x + i];
-        else if (mb_available_left)  for (i=1;i<5;i++)  s2 += image[left[i].pos_y][left[i].pos_x];
-        if      (mb_available_up)                       s  = (s1   +2) >> 2;
-        else if (mb_available_left)                     s  = (s2   +2) >> 2;
+        if      (mb_available_up)       for (i=4;i<8;i++)  s1 += image[up.pos_y][up.pos_x + i];
+        else if (mb_available_left[0])  for (i=1;i<5;i++)  s2 += image[left[i].pos_y][left[i].pos_x];
+        if      (mb_available_up)                          s  = (s1   +2) >> 2;
+        else if (mb_available_left[0])                     s  = (s2   +2) >> 2;
         break;
       case 2: //===== BOTTOM LEFT =====
-        if      (mb_available_left)  for (i=5;i<9;i++)  s3 += image[left[i].pos_y][left[i].pos_x];
-        else if (mb_available_up)    for (i=0;i<4;i++)  s0 += image[up.pos_y][up.pos_x + i];
-        if      (mb_available_left)                     s  = (s3   +2) >> 2;
-        else if (mb_available_up)                       s  = (s0   +2) >> 2;
+        if      (mb_available_left[1])  for (i=5;i<9;i++)  s3 += image[left[i].pos_y][left[i].pos_x];
+        else if (mb_available_up)       for (i=0;i<4;i++)  s0 += image[up.pos_y][up.pos_x + i];
+        if      (mb_available_left[1])                     s  = (s3   +2) >> 2;
+        else if (mb_available_up)                          s  = (s0   +2) >> 2;
         break;
       case 3: //===== BOTTOM RIGHT =====
-        if      (mb_available_up)    for (i=4;i<8;i++)  s1 += image[up.pos_y][up.pos_x + i];
-        if      (mb_available_left)  for (i=5;i<9;i++)  s3 += image[left[i].pos_y][left[i].pos_x];
-        if      (mb_available_up && mb_available_left)  s  = (s1+s3+4) >> 3;
-        else if (mb_available_up)                       s  = (s1   +2) >> 2;
-        else if (mb_available_left)                     s  = (s3   +2) >> 2;
+        if      (mb_available_up)       for (i=4;i<8;i++)  s1 += image[up.pos_y][up.pos_x + i];
+        if      (mb_available_left[1])  for (i=5;i<9;i++)  s3 += image[left[i].pos_y][left[i].pos_x];
+        if      (mb_available_up && mb_available_left[1])  s  = (s1+s3+4) >> 3;
+        else if (mb_available_up)                          s  = (s1   +2) >> 2;
+        else if (mb_available_left[1])                     s  = (s3   +2) >> 2;
         break;
       }
 
@@ -1556,7 +1550,7 @@ void IntraChromaPrediction8x8 (int *mb_up, int *mb_left, int*mb_up_left)
     }
 
     // horizontal prediction 
-    if (mb_available_left)
+    if (mb_available_left[0] && mb_available_left[1])
     {
       for (i=1; i<9; i++)
         vline[i] = image[left[i].pos_y][left[i].pos_x];
@@ -1566,7 +1560,7 @@ void IntraChromaPrediction8x8 (int *mb_up, int *mb_left, int*mb_up_left)
     }
 
     // plane prediction 
-    if (mb_available_up_left)
+    if (mb_available_left[0] && mb_available_left[1] && mb_available_up && mb_available_up_left)
     {
       ih = 4*(hline[7] - image[left[0].pos_y][left[0].pos_x]);
       iv = 4*(vline[7+1] - image[left[0].pos_y][left[0].pos_x]);
@@ -1596,8 +1590,8 @@ void IntraChromaPrediction8x8 (int *mb_up, int *mb_left, int*mb_up_left)
     for (mode=DC_PRED_8; mode<=PLANE_8; mode++)
     {
       if ((mode==VERT_PRED_8 && !mb_available_up) ||
-          (mode==HOR_PRED_8 && !mb_available_left) ||
-          (mode==PLANE_8 && (!mb_available_left || !mb_available_up || !mb_available_up_left)))
+          (mode==HOR_PRED_8 && (!mb_available_left[0] || !mb_available_left[1])) ||
+          (mode==PLANE_8 && (!mb_available_left[0] || !mb_available_left[1] || !mb_available_up || !mb_available_up_left)))
         continue;
 
       cost = 0;

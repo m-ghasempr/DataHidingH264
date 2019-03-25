@@ -160,9 +160,6 @@ void UpdatePixelMap()
  *    macroblock, given the motion vectors that the motion search has 
  *    returned.
  *
- * \param ref_frame
- *    The number of the reference frame that we want to check
- *
  * \return
  *    If the return value is 1, the reference frame is reliable. If it 
  *    is 0, then it is not reliable.

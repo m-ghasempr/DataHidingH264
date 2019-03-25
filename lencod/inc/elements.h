@@ -12,7 +12,7 @@
  *      and 4 partitions per slice.  As per document VCEG-N72 this is changed
  *      in version 1.1 to only two patrition modes, one without DP and one with 
  *      3 partition per slice
- *.
+ *
  *  \author Sebastian Purreiter     <sebastian.purreiter@mch.siemens.de>
  *  \author Stephan Wenger          <stewe@cs.tu-berlin.de>
  *

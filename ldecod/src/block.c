@@ -529,7 +529,7 @@ void intrapred_chroma(struct img_par *img, int uv)
   PixelPos up;       //!< pixel position p(0,-1)
   PixelPos left[9];  //!< pixel positions p(-1, -1..8)
 
-  int up_avail, left_avail, left_up_avail;
+  int up_avail, left_avail[2], left_up_avail;
 
   for (i=0;i<9;i++)
   {
@@ -541,14 +541,16 @@ void intrapred_chroma(struct img_par *img, int uv)
   if (!img->constrained_intra_pred_flag)
   {
     up_avail   = up.available;
-    left_avail = left[1].available;
+    left_avail[0] = left_avail[1] = left[1].available;
     left_up_avail = left[0].available;
   }
   else
   {
     up_avail      = up.available ? img->intra_block[up.mb_addr] : 0;
-    for (i=1, left_avail=1; i<9;i++)
-      left_avail  &= left[i].available ? img->intra_block[left[i].mb_addr]: 0;
+    for (i=1, left_avail[0]=1; i<5;i++)
+      left_avail[0]  &= left[i].available ? img->intra_block[left[i].mb_addr]: 0;
+    for (i=5, left_avail[1]=1; i<9;i++)
+      left_avail[1]  &= left[i].available ? img->intra_block[left[i].mb_addr]: 0;
     left_up_avail = left[0].available ? img->intra_block[left[0].mb_addr]: 0;
   }
 
@@ -561,37 +563,52 @@ void intrapred_chroma(struct img_par *img, int uv)
         js0=js0+imgUV[uv][up.pos_y][up.pos_x+i];
         js1=js1+imgUV[uv][up.pos_y][up.pos_x+i+4];
       }
-      if(left_avail)
+      if(left_avail[0])
       {
         js2=js2+imgUV[uv][left[1+i].pos_y][left[1+i].pos_x];
+	  }
+      if(left_avail[1])
+	  {
         js3=js3+imgUV[uv][left[1+i+4].pos_y][left[1+i+4].pos_x];
       }
     }
-    if(up_avail && left_avail)
+    if(up_avail && left_avail[0])
     {
       js[0][0]=(js0+js2+4)/8;
       js[1][0]=(js1+2)/4;
+	}
+    if(up_avail && left_avail[1])
+	{
       js[0][1]=(js3+2)/4;
       js[1][1]=(js1+js3+4)/8;
     }
-    if(up_avail && !left_avail)
+    if(up_avail && !left_avail[0])
     {
       js[0][0]=(js0+2)/4;
       js[1][0]=(js1+2)/4;
+	}
+    if(up_avail && !left_avail[1])
+	{
       js[0][1]=(js0+2)/4;
       js[1][1]=(js1+2)/4;
     }
-    if(left_avail && !up_avail)
+    if(left_avail[0] && !up_avail)
     {
       js[0][0]=(js2+2)/4;
       js[1][0]=(js2+2)/4;
+	}
+    if(left_avail[1] && !up_avail)
+	{
       js[0][1]=(js3+2)/4;
       js[1][1]=(js3+2)/4;
     }
-    if(!up_avail && !left_avail)
+    if(!up_avail && !left_avail[0])
     {
       js[0][0]=128;
       js[1][0]=128;
+	}
+    if(!up_avail && !left_avail[1])
+	{
       js[0][1]=128;
       js[1][1]=128;
     }
@@ -615,7 +632,7 @@ void intrapred_chroma(struct img_par *img, int uv)
           }
         break;
       case HOR_PRED_8:
-        if (!left_avail)
+        if ( !left_avail[0] || !left_avail[1] )
           error("unexpected HOR_PRED_8 chroma intra prediction mode",-1);
 
         for (jj=0; jj<4; jj++)
@@ -637,7 +654,7 @@ void intrapred_chroma(struct img_par *img, int uv)
         }
         break;
       case PLANE_8:
-        if (!left_up_avail || !left_avail || !up_avail)
+        if (!left_up_avail || !left_avail[0] || !left_avail[1] || !up_avail)
           error("unexpected PLANE_8 chroma intra prediction mode",-1);
 
         ih=iv=0;

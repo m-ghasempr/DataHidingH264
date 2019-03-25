@@ -40,8 +40,8 @@
  *    the string for the trace file
  * \param value
  *    the value to be coded
- *  \param bitstream
- *    the Bitstream the value should be coded into
+ *  \param part
+ *    the Data Partition the value should be coded into
  *
  * \return
  *    Number of bits used by the coded syntax element
@@ -72,14 +72,14 @@ int ue_v (char *tracestring, int value, DataPartition *part)
 /*! 
  *************************************************************************************
  * \brief
- *    ue_v, writes an ue(v) syntax element, returns the length in bits
+ *    se_v, writes an se(v) syntax element, returns the length in bits
  *
  * \param tracestring
  *    the string for the trace file
  * \param value
  *    the value to be coded
- *  \param bitstream
- *    the Bitstream the value should be coded into
+ *  \param part
+ *    the Data Partition the value should be coded into
  *
  * \return
  *    Number of bits used by the coded syntax element
@@ -117,8 +117,8 @@ int se_v (char *tracestring, int value, DataPartition *part)
  *    the string for the trace file
  * \param value
  *    the value to be coded
- *  \param bitstream
- *    the Bitstream the value should be coded into
+ *  \param part
+ *    the Data Partition the value should be coded into
  *
  * \return
  *    Number of bits used by the coded syntax element (always 1)
@@ -153,12 +153,14 @@ int u_1 (char *tracestring, int value, DataPartition *part)
  * \brief
  *    u_v, writes a a n bit fixed length syntax element, returns the length in bits, 
  *
+ * \param n
+ *    length in bits
  * \param tracestring
  *    the string for the trace file
  * \param value
  *    the value to be coded
- *  \param bitstream
- *    the Bitstream the value should be coded into
+ *  \param part
+ *    the Data Partition the value should be coded into
  *
  * \return
  *    Number of bits used by the coded syntax element 
@@ -195,6 +197,8 @@ int u_v (int n, char *tracestring, int value, DataPartition *part)
  *    mapping for ue(v) syntax elements
  * \param ue
  *    value to be mapped
+ * \param dummy
+ *    dummy parameter
  * \param info
  *    returns mapped value
  * \param len
@@ -219,13 +223,15 @@ void ue_linfo(int ue, int dummy, int *len,int *info)
 /*!
  ************************************************************************
  * \brief
- *    mapping for ue(v) syntax elements
- * \param ue
+ *    mapping for se(v) syntax elements
+ * \param se
  *    value to be mapped
- * \param info
- *    returns mapped value
+ * \param dummy
+ *    dummy argument
  * \param len
  *    returns mapped value length
+ * \param info
+ *    returns mapped value
  ************************************************************************
  */
 void se_linfo(int se, int dummy, int *len,int *info)
@@ -260,7 +266,7 @@ void se_linfo(int se, int dummy, int *len,int *info)
  * \par Input:
  *    Number in the code table
  * \par Output:
- *    lenght and info
+ *    length and info
  ************************************************************************
  */
 void cbp_linfo_intra(int cbp, int dummy, int *len,int *info)
@@ -275,7 +281,7 @@ void cbp_linfo_intra(int cbp, int dummy, int *len,int *info)
  * \par Input:
  *    Number in the code table
  * \par Output:
- *    lenght and info
+ *    length and info
  ************************************************************************
  */
 void cbp_linfo_inter(int cbp, int dummy, int *len,int *info)
@@ -290,9 +296,9 @@ void cbp_linfo_inter(int cbp, int dummy, int *len,int *info)
  * \brief
  *    2x2 transform of chroma DC
  * \par Input:
- *    level and run for coefficiets
+ *    level and run for coefficients
  * \par Output:
- *    lenght and info
+ *    length and info
  * \note
  *    see ITU document for bit assignment
  ************************************************************************

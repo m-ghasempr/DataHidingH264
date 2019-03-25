@@ -368,7 +368,15 @@ SOURCE=.\lencod\inc\vlc.h
 # End Group
 # Begin Source File
 
-SOURCE=.\bin\encoder.cfg
+SOURCE=.\bin\encoder_baseline.cfg
+# End Source File
+# Begin Source File
+
+SOURCE=.\bin\encoder_extended.cfg
+# End Source File
+# Begin Source File
+
+SOURCE=.\bin\encoder_main.cfg
 # End Source File
 # End Target
 # End Project

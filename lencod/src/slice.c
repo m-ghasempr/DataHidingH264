@@ -37,7 +37,7 @@
 #include "cabac.h"
 #include "elements.h"
 
-//! Local declarations
+// Local declarations
 
 static Slice *malloc_slice();
 static void  free_slice(Slice *slice);
@@ -183,7 +183,7 @@ int terminate_slice()
  ************************************************************************
  * \brief
  *    Encodes one slice
- * \para
+ * \par
  *   returns the number of coded MBs in the SLice 
  ************************************************************************
  */
@@ -602,7 +602,7 @@ void free_slice_list(Picture *currPic)
  * \brief
  *    Memory frees of the Slice structure and of its dependent
  *    data structures
- * \para slice:
+ * \param slice:
  *    Slice to be freed
  ************************************************************************
  */

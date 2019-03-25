@@ -3050,27 +3050,20 @@ void decode_ipcm_mb(struct img_par *img)
 
   Macroblock *currMb = &img->mb_data[img->current_mb_nr];    
 
-  int dy;
-
-
   //Copy coefficents to decoded picture buffer
   //IPCM coefficents are stored in img->cof which is set in function readIPCMcoeffsFromNAL()
-  if (img->MbaffFrameFlag==1)
-    dy=2;
-  else
-    dy=1;
 
   for(i=0;i<16;i++)
     for(j=0;j<16;j++)
-      dec_picture->imgY[img->pix_y+i*dy][img->pix_x+j]=img->cof[i/4][j/4][i%4][j%4];
+      dec_picture->imgY[img->pix_y+i][img->pix_x+j]=img->cof[i/4][j/4][i%4][j%4];
 
   for(i=0;i<8;i++)
     for(j=0;j<8;j++)
-      dec_picture->imgUV[0][img->pix_c_y+i*dy][img->pix_c_x+j]=img->cof[i/4][j/4+4][i%4][j%4];
+      dec_picture->imgUV[0][img->pix_c_y+i][img->pix_c_x+j]=img->cof[i/4][j/4+4][i%4][j%4];
 
   for(i=0;i<8;i++)
     for(j=0;j<8;j++)
-      dec_picture->imgUV[1][img->pix_c_y+i*dy][img->pix_c_x+j]=img->cof[i/4+2][j/4+4][i%4][j%4];
+      dec_picture->imgUV[1][img->pix_c_y+i][img->pix_c_x+j]=img->cof[i/4+2][j/4+4][i%4][j%4];
 
 
 

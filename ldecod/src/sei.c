@@ -23,6 +23,7 @@
 #include "sei.h"
 #include "vlc.h"
 #include "header.h"
+#include "mbuffer.h"
 
 extern int UsedBits;
 
@@ -1317,7 +1318,12 @@ void interpret_buffering_period_info( byte* payload, int size, ImageParameters *
 
   seq_parameter_set_id   = ue_v("SEI: seq_parameter_set_id"  , buf);
 
-  active_sps = sps = &SeqParSet[seq_parameter_set_id];
+   sps = &SeqParSet[seq_parameter_set_id];
+   if (active_sps != sps)
+   {
+     active_sps = sps;
+	 init_dpb();
+   }
 
 #ifdef PRINT_BUFFERING_PERIOD_INFO
   printf("Buffering period SEI message\n");
