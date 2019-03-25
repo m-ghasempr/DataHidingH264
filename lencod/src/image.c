@@ -77,7 +77,7 @@ static void CopyBottomFieldToOldImgOrgVariables (Sourceframe *sf);
 static Sourceframe *AllocSourceframe (int xs, int ys);
 static void FreeSourceframe (Sourceframe *sf);
 static void ReadOneFrame (int FrameNoInFile, int HeaderSize, int xs, int ys, Sourceframe *sf);
-static void writeUnit(Bitstream* currStream);
+static void writeUnit(Bitstream* currStream ,int partition);
 
 #ifdef _ADAPT_LAST_GROUP_
 int *last_P_no;
@@ -455,7 +455,6 @@ int encode_one_frame ()
 
 /*
     
-
   if (input->InterlaceCodingOption == FRAME_CODING)
   {
     if (input->rdopt == 2 && img->type != B_SLICE)
@@ -557,7 +556,7 @@ int encode_one_frame ()
       else
         ReportB(tmp_time);
       break;
-    default:      // P, P_MULTPRED?
+    default:      // P
       stat->bit_ctr_P += stat->bit_ctr - stat->bit_ctr_n;
       ReportP(tmp_time);
     }
@@ -611,7 +610,7 @@ static int writeout_picture(Picture *pic)
       currStream = (currSlice->partArr[partition]).bitstream;
       assert (currStream->bits_to_go == 8);    //! should always be the case, the 
                                                //! byte alignment is done in terminate_slice
-      writeUnit (currSlice->partArr[partition].bitstream);
+			writeUnit (currSlice->partArr[partition].bitstream,partition);
 
     }           // partition loop
   }           // slice loop
@@ -707,12 +706,7 @@ void field_picture (Picture *top, Picture *bottom)
     nextP_tr_fld--;
 
   CopyTopFieldToOldImgOrgVariables (srcframe);
-/* 
-  if (img->type != I_SLICE && (input->WeightedPrediction == 1 || (input->WeightedBiprediction > 0 && (img->type == B_SLICE))))  if (img->type == B_SLICE)
-  {
-    estimate_weighting_factor ();
-  }
-  */
+  
   img->fld_flag = 1;
 //  img->bottom_field_flag = 0;
  
@@ -762,12 +756,6 @@ void field_picture (Picture *top, Picture *bottom)
     img->type = P_SLICE;
 
   CopyBottomFieldToOldImgOrgVariables (srcframe);
-/* 
-  if (img->type != I_SLICE && (input->WeightedPrediction == 1 || (input->WeightedBiprediction > 0 && (img->type == B_SLICE))))
-  {
-    estimate_weighting_factor ();
-  }
-  */
   img->fld_flag = 1;
 //  img->bottom_field_flag = 1;
 
@@ -835,9 +823,7 @@ static int picture_structure_decision (Picture *frame, Picture *top, Picture *bo
   float snr_frame, snr_field;
   int bit_frame, bit_field;
 
-  lambda_picture = 0.85 * pow (2, (img->qp - SHIFT_QP) / 3.0) * (bframe
-                                                                 || spframe ?
-                                                                 4 : 1);
+  lambda_picture = 0.85 * pow (2, (img->qp - SHIFT_QP) / 3.0) * (bframe || spframe ? 4 : 1);
 
   snr_frame = frame->distortion_y + frame->distortion_u + frame->distortion_v;
   //! all distrortions of a field picture are accumulated in the top field
@@ -1027,11 +1013,9 @@ static void init_frame ()
   if (img->type != B_SLICE && input->num_slice_groups_minus1 == 1 && input->FmoType > 3)
     {
       if (fmo_evlv_NewPeriod)
-        FmoInitEvolvingMBAmap (input->FmoType, img->width / 16,
-                               img->height / 16, MBAmap);
+      FmoInitEvolvingMBAmap (input->FmoType, img->width / 16, img->height / 16, MBAmap);
 
-      FmoUpdateEvolvingMBAmap (input->FmoType, img->width / 16,
-                               img->height / 16, MBAmap);
+    FmoUpdateEvolvingMBAmap (input->FmoType, img->width / 16, img->height / 16, MBAmap);
     }
   // End JVT-D097
   img->total_number_mb = (img->width * img->height) / (MB_BLOCK_SIZE * MB_BLOCK_SIZE);
@@ -1149,8 +1133,7 @@ static void init_field ()
 #endif
 
       img->b_interval =
-        (int) ((float) (input->jumpd + 1) / (input->successive_Bframe + 1.0) +
-               0.49999);
+      (int) ((float) (input->jumpd + 1) / (input->successive_Bframe + 1.0) + 0.49999);
 
       img->tr = prevP_no + (img->b_interval + 1) * img->b_frame_to_code;        // from prev_P
       if (img->tr >= nextP_no)
@@ -1176,241 +1159,15 @@ static void init_field ()
 
 #define Clip(min,max,val) (((val)<(min))?(min):(((val)>(max))?(max):(val)))
 
+
+
+
 /*!
  ************************************************************************
  * \brief
- *    Estimates reference picture weighting factors
+*    Generate Full Pel Representation
  ************************************************************************
  */
-static void estimate_weighting_factor ()
-{
-  int i, j, n;
-  //int l;
-  int x,z;
-  int dc_org = 0;
-  int index;
-  int comp;
-  int p0, pt;
-  int fwd_ref[MAX_REFERENCE_PICTURES], bwd_ref[MAX_REFERENCE_PICTURES];
-  int bframe = (img->type == B_SLICE);
-  int num_ref = min (img->number-((enc_picture!=enc_frame_picture)&&img->fld_type&&bframe), img->buf_cycle);
-  int dc_ref[MAX_REFERENCE_PICTURES];
-  int log_weight_denom;
-  int num_bwd_ref, num_fwd_ref;
-  pel_t*  ref_pic;   
-  pel_t*  ref_pic_w;   
-  int default_weight;
-  int default_weight_chroma;
-  int     list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
-
-  luma_log_weight_denom = 5;
-  chroma_log_weight_denom = 5;
-  wp_luma_round = 1 << (luma_log_weight_denom - 1);
-  wp_chroma_round = 1 << (chroma_log_weight_denom - 1);
-  default_weight = 1<<luma_log_weight_denom;
-  default_weight_chroma = 1<<chroma_log_weight_denom;
-
-  /* set all values to defaults */
-  for (i = 0; i < 2 + list_offset; i++)
-  {
-    for (j = 0; j < listXsize[i]; j++)
-    {
-      for (n = 0; n < 3; n++)
-      {
-        wp_weight[i][j][n] = default_weight;
-        wp_offset[i][j][n] = 0;
-      }
-    }
-  }
-
-  for (i = 0; i < img->height; i++)
-    for (j = 0; j < img->width; j++)
-    {
-      dc_org += imgY_org[i][j];
-    }
-
-
- //for (l=0; l<2; l++)
- {
- for (n = 0; n < listXsize[0]; n++)
- {
-   dc_ref[n] = 0;
-   
-   ref_pic       = listX[LIST_0][n]->imgY_11;
-   ref_pic_w     = listX[LIST_0][n]->imgY_11_w;
-   
-   // Y
-   for (i = 0; i < img->height * img->width; i++)
-   {
-     dc_ref[n] += ref_pic[i];
-   }
-   
-   if (dc_ref[n] != 0)
-     weight[n][0] = (int) (default_weight * (double) dc_org / (double) dc_ref[n] + 0.5);
-   else
-     weight[n][0] = 2*default_weight;  // only used when reference picture is black
-   
-//    printf("dc_org = %d, dc_ref = %d, weight[%d] = %d\n",dc_org, dc_ref[n],n,weight[n][0]);
-    
-    /* for now always use default weight for chroma weight */
-    weight[n][1] = default_weight_chroma;
-    weight[n][2] = default_weight_chroma;
-
-
-
-    /* store weighted reference pic for motion estimation */
-    for (i = 0; i < img->height * img->width; i++)
-    {
-      ref_pic_w[i] = Clip (0, 255, ((int) ref_pic[i] * weight[n][0] + wp_luma_round) / default_weight);
-    }
-    for (i = 0; i < 4*(img->height + 2*IMG_PAD_SIZE) ; i++)
-    {
-      for (j = 0; j< 4*(img->width + 2*IMG_PAD_SIZE); j++)
-      {
-//        mref_w[n][i][j] =   Clip (0, 255, ((int) mref[n][i][j] * weight[n][0] + wp_luma_round) / default_weight);
-        listX[LIST_0][n]->imgY_ups_w[i][j] =   Clip (0, 255, ((int) listX[LIST_0 ][n]->imgY_ups[i][j] * weight[n][0] + wp_luma_round) / default_weight);
-      }
-    }
- }
- }
-  if ((img->type == P_SLICE)||(img->type == SP_SLICE))
-  {
-    num_bwd_ref = 0;
-    num_fwd_ref = num_ref;
-  }
-  else
-  {
-    num_bwd_ref = (img->type == B_SLICE && img->nal_reference_idc>0) ? num_ref : 1;
-    num_fwd_ref = (img->type == B_SLICE && img->nal_reference_idc>0) ? num_ref+1 : num_ref;
-  }
-
-//  printf("num_fwd_ref = %d num_bwd_ref = %d\n",num_fwd_ref,num_bwd_ref);
-
-  {                             /* forward list */
-    if ((img->type == P_SLICE || img->type == SP_SLICE) && input->WeightedPrediction)
-    {
-      for (index = 0; index < num_ref; index++)
-      {
-        wp_weight[0][index][0] = weight[index][0];
-        wp_weight[0][index][1] = weight[index][1];
-        wp_weight[0][index][2] = weight[index][2];
-        // printf ("wp weight[%d] = %d  \n", index, wp_weight[0][index][0]);
-      }
-    }
-    else if (img->type == B_SLICE && img->nal_reference_idc>0 && (input->WeightedBiprediction == 1))
-    {
-      for (index = 0; index < num_ref; index++)
-      {
-        wp_weight[0][index][0] = weight[index][0];
-        wp_weight[0][index][1] = weight[index][1];
-        wp_weight[0][index][2] = weight[index][2];
-      }
-      for (index = 0; index < num_ref; index++)
-      {                     /* backward list */
-        if (index == 0)
-          n = 1;
-        else if (index == 1)
-          n = 0;
-        else
-          n = index;
-      }
-    }
-    else if (img->type == B_SLICE && (input->WeightedBiprediction == 1))
-    {
-      for (index = 0; index < num_ref - 1; index++)
-      {
-        wp_weight[0][index][0] = weight[index + 1][0];
-        wp_weight[0][index][1] = weight[index + 1][1];
-        wp_weight[0][index][2] = weight[index + 1][2];
-      }
-      wp_weight[1][0][0] = weight[0][0];
-      wp_weight[1][0][1] = weight[0][1];
-      wp_weight[1][0][2] = weight[0][2];
-    }
-    else
-    {
-      for (index = 0; index < num_ref; index++)
-      {
-        wp_weight[0][index][0] = 1<<luma_log_weight_denom;
-        wp_weight[0][index][1] = 1<<chroma_log_weight_denom;
-        wp_weight[0][index][2] = 1<<chroma_log_weight_denom;
-        wp_weight[1][index][0] = 1<<luma_log_weight_denom;
-        wp_weight[1][index][1] = 1<<chroma_log_weight_denom;
-        wp_weight[1][index][2] = 1<<chroma_log_weight_denom;
-      }
-    }
-
-    if (input->WeightedBiprediction > 0 && (img->type == B_SLICE))
-    {
-      if (img->nal_reference_idc>0)
-      {
-        for (index = 0; index < num_fwd_ref; index++)
-        {
-          fwd_ref[index] = index;
-          if (index == 0)
-            n = 1;
-          else if (index == 1)
-            n = 0;
-          else
-            n = index;
-          bwd_ref[index] = n;
-        }
-      }
-      else if (img->type == B_SLICE)
-      {
-        for (index = 0; index < num_fwd_ref; index++)
-        {
-          fwd_ref[index] = index+1;
-        }
-        bwd_ref[0] = 0; // only one possible backwards ref for traditional B picture in current software
-      }
-    }      
-
-    if (img->type == B_SLICE) // need to fill in wbp_weight values
-    { 
-      
-      for (i = 0; i < listXsize[LIST_0]; i++)
-      {
-        for (j = 0; j < listXsize[LIST_1]; j++)
-        {
-          for (comp = 0; comp < 3; comp++)
-          {
-            log_weight_denom = (comp == 0) ? luma_log_weight_denom : chroma_log_weight_denom;
-            if (input->WeightedBiprediction == 1)
-            {
-              wbp_weight[0][i][j][comp] = wp_weight[0][i][comp];
-              wbp_weight[1][i][j][comp] = wp_weight[1][j][comp];
-            }
-            else if (input->WeightedBiprediction == 2)
-            { // implicit mode
-              pt = (listX[LIST_1][j]->poc - listX[LIST_0][i]->poc);
-              p0 = (enc_picture->poc - listX[LIST_0][i]->poc);
-              
-              if (pt == 0)
-              {
-                wbp_weight[1][i][j][comp] =  32 ;
-                wbp_weight[0][i][j][comp] = 32;
-              }
-              else
-              {
-                x = (16384 + (pt>>1))/pt;
-                z = Clip(-1024, 1023, (x*p0 + 32 )>>6);
-                wbp_weight[1][i][j][comp] = z>>2;
-                if (wbp_weight[1][i][j][comp] < -64 || wbp_weight[1][i][j][comp] >128)
-                  wbp_weight[1][i][j][comp] = 32;
-                wbp_weight[0][i][j][comp] = 64 - wbp_weight[1][i][j][comp];
-                
-              }
-            }
-          }
-         // printf ("bpw weight[%d][%d] = %d  , %d (%d %d %d) (%d %d)\n", i, j, wbp_weight[0][i][j][0], wbp_weight[1][i][j][0],enc_picture->poc,listX[0][i]->poc, listX[1][j]->poc,num_fwd_ref,listXsize[0]);
-        }
-      }
-    }
-  }
-}
-
-
 static void GenerateFullPelRepresentation (pel_t ** Fourthpel,
                                            pel_t * Fullpel, int xsize,
                                            int ysize)
@@ -1652,7 +1409,8 @@ static void find_snr ()
         diff_v += img->quad[imgUV_org[1][j][i] - imgUV_com[1][j][i]];
        }
     }
-  }else
+  }
+  else
   { 
     imgY_org  = imgY_org_frm;
     imgUV_org = imgUV_org_frm;
@@ -1684,6 +1442,15 @@ static void find_snr ()
       }
     }
   }
+
+/*
+  if (diff_y == 0)
+    diff_y = 1;
+  if (diff_u == 0)
+    diff_u = 1;
+  if (diff_v == 0)
+    diff_v = 1; 
+*/
   //  Collecting SNR statistics
   if (diff_y != 0)
   {
@@ -1995,7 +1762,7 @@ static void ReportFirstframe(int tmp_time)
   //Rate control
   int bits;
 
-  printf ("%4d(I)  %8d %4d %7.4f %7.4f %7.4f  %5d       %3s \n",
+  printf ("%04d(I)  %8d %3d %7.4f %7.4f %7.4f  %5d       %3s \n",
           frame_no, stat->bit_ctr - stat->bit_ctr_n,
           img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time,
           img->fld_flag ? "FLD" : "FRM");
@@ -2021,12 +1788,12 @@ static void ReportFirstframe(int tmp_time)
 static void ReportIntra(int tmp_time)
 {
   if (img->currentPicture->idr_flag == 1)
-    printf ("%4d(IDR)%8d %4d %7.4f %7.4f %7.4f  %5d       %3s \n",
+    printf ("%04d(IDR)%8d %3d %7.4f %7.4f %7.4f  %5d       %3s \n",
           frame_no, stat->bit_ctr - stat->bit_ctr_n,
           img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time,
           img->fld_flag ? "FLD" : "FRM"); 
   else
-    printf ("%4d(I)  %8d %4d %7.4f %7.4f %7.4f  %5d       %3s \n",
+    printf ("%04d(I)  %8d %3d %7.4f %7.4f %7.4f  %5d       %3s \n",
           frame_no, stat->bit_ctr - stat->bit_ctr_n,
           img->qp, snr->snr_y, snr->snr_u, snr->snr_v, tmp_time,
           img->fld_flag ? "FLD" : "FRM");
@@ -2034,7 +1801,7 @@ static void ReportIntra(int tmp_time)
 
 static void ReportSP(int tmp_time)
 {
-  printf ("%4d(SP) %8d %4d %7.4f %7.4f %7.4f  %5d       %3s    %4d\n",
+  printf ("%04d(SP) %8d %3d %7.4f %7.4f %7.4f  %5d       %3s    %4d\n",
           frame_no, stat->bit_ctr - stat->bit_ctr_n, img->qp, snr->snr_y,
           snr->snr_u, snr->snr_v, tmp_time,
           img->fld_flag ? "FLD" : "FRM", intras);
@@ -2042,7 +1809,7 @@ static void ReportSP(int tmp_time)
 
 static void ReportBS(int tmp_time)
 {
-  printf ("%4d(BS) %8d %4d %7.4f %7.4f %7.4f  %5d       %3s    %4d\n",
+  printf ("%04d(BS) %8d %3d %7.4f %7.4f %7.4f  %5d       %3s    %4d\n",
           frame_no, stat->bit_ctr - stat->bit_ctr_n, img->qp, snr->snr_y,
           snr->snr_u, snr->snr_v, tmp_time,
           img->fld_flag ? "FLD" : "FRM", intras);
@@ -2050,7 +1817,7 @@ static void ReportBS(int tmp_time)
 
 static void ReportB(int tmp_time)
 {
-  printf ("%4d(B)  %8d %4d %7.4f %7.4f %7.4f  %5d       %3s \n",
+  printf ("%04d(B)  %8d %3d %7.4f %7.4f %7.4f  %5d       %3s \n",
           frame_no, stat->bit_ctr - stat->bit_ctr_n, img->qp,
           snr->snr_y, snr->snr_u, snr->snr_v, tmp_time,
           img->fld_flag ? "FLD" : "FRM");
@@ -2059,7 +1826,7 @@ static void ReportB(int tmp_time)
 
 static void ReportP(int tmp_time)
 {            
-  printf ("%4d(P)  %8d %4d %7.4f %7.4f %7.4f  %5d       %3s    %4d\n",
+  printf ("%04d(P)  %8d %3d %7.4f %7.4f %7.4f  %5d       %3s    %4d\n",
           frame_no, stat->bit_ctr - stat->bit_ctr_n, img->qp, snr->snr_y,
           snr->snr_u, snr->snr_v, tmp_time,
           img->fld_flag ? "FLD" : "FRM", intras);
@@ -2342,13 +2109,6 @@ static void put_buffer_frame()
 {
   imgY_org  = imgY_org_frm;
   imgUV_org = imgUV_org_frm;  
-  
-
-  if (input->WeightedPrediction || input->WeightedBiprediction) 
-    mref_w = mref_frm_w;
-
-  if (input->WeightedPrediction || input->WeightedBiprediction) 
-        Refbuf11_w = Refbuf11_frm_w;
 }
 
 /*!
@@ -2363,14 +2123,6 @@ static void put_buffer_top()
 
   imgY_org = imgY_org_top;
   imgUV_org = imgUV_org_top;
-
-
-  if (input->WeightedPrediction || input->WeightedBiprediction) 
-    mref_w = mref_fld_w;
-
-  if (input->WeightedPrediction || input->WeightedBiprediction)
-        Refbuf11_w = Refbuf11_fld_w;  
-
 }
 
 /*!
@@ -2385,13 +2137,6 @@ static void put_buffer_bot()
 
   imgY_org = imgY_org_bot;
   imgUV_org = imgUV_org_bot;
-
-  if (input->WeightedPrediction || input->WeightedBiprediction)
-        Refbuf11_w = Refbuf11_fld_w;
-
-  if (input->WeightedPrediction || input->WeightedBiprediction) 
-    mref_w = mref_fld_w;
-
 }
 
 /*!
@@ -2401,7 +2146,7 @@ static void put_buffer_bot()
  ************************************************************************
  */
 
-static void writeUnit(Bitstream* currStream)
+static void writeUnit(Bitstream* currStream,int partition)
 {
   NALU_t *nalu;
   assert (currStream->bits_to_go == 8);
@@ -2418,17 +2163,274 @@ static void writeUnit(Bitstream* currStream)
   }
   else if (img->type == B_SLICE)
   {
-    nalu->nal_unit_type = NALU_TYPE_SLICE;
-    nalu->nal_reference_idc = NALU_PRIORITY_DISPOSABLE;
-  //  assert (img->nal_reference_idc != 0);
+		//different nal header for different partitions
+    if(input->partition_mode == 0)
+		{
+      nalu->nal_unit_type = NALU_TYPE_SLICE;
+		}
+	  else
+		{
+      nalu->nal_unit_type = NALU_TYPE_DPA +  partition;
+		}
+    
+    if (img->nal_reference_idc !=0)
+		{
+			nalu->nal_reference_idc = NALU_PRIORITY_HIGH;
+		}
+    else
+    {
+      nalu->nal_reference_idc = NALU_PRIORITY_DISPOSABLE;
+    }
   }
-  else   // non-disposable, non IDR slice
+  else   // non-b frame, non IDR slice
   {
-    nalu->nal_unit_type = NALU_TYPE_SLICE;
+		//different nal header for different partitions
+    if(input->partition_mode == 0)
+    {
+      nalu->nal_unit_type = NALU_TYPE_SLICE;
+		}
+	  else
+		{
+     nalu->nal_unit_type = NALU_TYPE_DPA +  partition;
+		}
     nalu->nal_reference_idc = NALU_PRIORITY_HIGH;
   }
   nalu->forbidden_bit = 0;
   stat->bit_ctr += WriteNALU (nalu);
   
   FreeNALU(nalu);
+}
+/*!
+ ************************************************************************
+ * \brief
+ *    Estimates reference picture weighting factors
+ ************************************************************************
+ */
+static void estimate_weighting_factor ()
+{
+  int i, j, n;
+  //int l;
+  int x,z;
+  int dc_org = 0;
+  int index;
+  int comp;
+  int p0, pt;
+  int fwd_ref[MAX_REFERENCE_PICTURES], bwd_ref[MAX_REFERENCE_PICTURES];
+  int bframe = (img->type == B_SLICE);
+  int num_ref = min (img->number-((enc_picture!=enc_frame_picture)&&img->fld_type&&bframe), img->buf_cycle);
+  int dc_ref[MAX_REFERENCE_PICTURES];
+  int log_weight_denom;
+  int num_bwd_ref, num_fwd_ref;
+									pel_t*  ref_pic;   
+  pel_t*  ref_pic_w;   
+  int default_weight;
+  int default_weight_chroma;
+  int     list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
+
+  int weight[MAX_REFERENCE_PICTURES][3];
+
+  luma_log_weight_denom = 5;
+  chroma_log_weight_denom = 5;
+  wp_luma_round = 1 << (luma_log_weight_denom - 1);
+  wp_chroma_round = 1 << (chroma_log_weight_denom - 1);
+  default_weight = 1<<luma_log_weight_denom;
+  default_weight_chroma = 1<<chroma_log_weight_denom;
+
+  /* set all values to defaults */
+  for (i = 0; i < 2 + list_offset; i++)
+  {
+    for (j = 0; j < listXsize[i]; j++)
+    {
+      for (n = 0; n < 3; n++)
+      {
+        wp_weight[i][j][n] = default_weight;
+        wp_offset[i][j][n] = 0;
+      }
+    }
+  }
+
+  for (i = 0; i < img->height; i++)
+    for (j = 0; j < img->width; j++)
+    {
+      dc_org += imgY_org[i][j];
+    }
+
+
+ //for (l=0; l<2; l++)
+ {
+ for (n = 0; n < listXsize[0]; n++)
+ {
+   dc_ref[n] = 0;
+   
+   ref_pic       = listX[LIST_0][n]->imgY_11;
+   ref_pic_w     = listX[LIST_0][n]->imgY_11_w;
+   
+   // Y
+   for (i = 0; i < img->height * img->width; i++)
+   {
+     dc_ref[n] += ref_pic[i];
+   }
+   
+   if (dc_ref[n] != 0)
+     weight[n][0] = (int) (default_weight * (double) dc_org / (double) dc_ref[n] + 0.5);
+   else
+     weight[n][0] = 2*default_weight;  // only used when reference picture is black
+   
+//    printf("dc_org = %d, dc_ref = %d, weight[%d] = %d\n",dc_org, dc_ref[n],n,weight[n][0]);
+    
+    /* for now always use default weight for chroma weight */
+    weight[n][1] = default_weight_chroma;
+    weight[n][2] = default_weight_chroma;
+
+
+
+    /* store weighted reference pic for motion estimation */
+    for (i = 0; i < img->height * img->width; i++)
+    {
+      ref_pic_w[i] = Clip (0, 255, ((int) ref_pic[i] * weight[n][0] + wp_luma_round) / default_weight);
+    }
+    for (i = 0; i < 4*(img->height + 2*IMG_PAD_SIZE) ; i++)
+    {
+      for (j = 0; j< 4*(img->width + 2*IMG_PAD_SIZE); j++)
+      {
+        listX[LIST_0][n]->imgY_ups_w[i][j] =   Clip (0, 255, ((int) listX[LIST_0 ][n]->imgY_ups[i][j] * weight[n][0] + wp_luma_round) / default_weight);
+      }
+    }
+ }
+ }
+  if ((img->type == P_SLICE)||(img->type == SP_SLICE))
+  {
+    num_bwd_ref = 0;
+    num_fwd_ref = num_ref;
+  }
+  else
+  {
+    num_bwd_ref = (img->type == B_SLICE && img->nal_reference_idc>0) ? num_ref : 1;
+    num_fwd_ref = (img->type == B_SLICE && img->nal_reference_idc>0) ? num_ref+1 : num_ref;
+  }
+
+//  printf("num_fwd_ref = %d num_bwd_ref = %d\n",num_fwd_ref,num_bwd_ref);
+
+  {                             /* forward list */
+    if ((img->type == P_SLICE || img->type == SP_SLICE) && input->WeightedPrediction)
+    {
+      for (index = 0; index < num_ref; index++)
+      {
+        wp_weight[0][index][0] = weight[index][0];
+        wp_weight[0][index][1] = weight[index][1];
+        wp_weight[0][index][2] = weight[index][2];
+        // printf ("wp weight[%d] = %d  \n", index, wp_weight[0][index][0]);
+      }
+    }
+    else if (img->type == B_SLICE && img->nal_reference_idc>0 && (input->WeightedBiprediction == 1))
+    {
+      for (index = 0; index < num_ref; index++)
+      {
+        wp_weight[0][index][0] = weight[index][0];
+        wp_weight[0][index][1] = weight[index][1];
+        wp_weight[0][index][2] = weight[index][2];
+      }
+      for (index = 0; index < num_ref; index++)
+      {                     /* backward list */
+        if (index == 0)
+          n = 1;
+        else if (index == 1)
+          n = 0;
+        else
+          n = index;
+      }
+    }
+    else if (img->type == B_SLICE && (input->WeightedBiprediction == 1))
+    {
+      for (index = 0; index < num_ref - 1; index++)
+      {
+        wp_weight[0][index][0] = weight[index + 1][0];
+        wp_weight[0][index][1] = weight[index + 1][1];
+        wp_weight[0][index][2] = weight[index + 1][2];
+      }
+      wp_weight[1][0][0] = weight[0][0];
+      wp_weight[1][0][1] = weight[0][1];
+      wp_weight[1][0][2] = weight[0][2];
+    }
+    else
+    {
+      for (index = 0; index < num_ref; index++)
+      {
+        wp_weight[0][index][0] = 1<<luma_log_weight_denom;
+        wp_weight[0][index][1] = 1<<chroma_log_weight_denom;
+        wp_weight[0][index][2] = 1<<chroma_log_weight_denom;
+        wp_weight[1][index][0] = 1<<luma_log_weight_denom;
+        wp_weight[1][index][1] = 1<<chroma_log_weight_denom;
+        wp_weight[1][index][2] = 1<<chroma_log_weight_denom;
+      }
+    }
+
+    if (input->WeightedBiprediction > 0 && (img->type == B_SLICE))
+    {
+      if (img->nal_reference_idc>0)
+      {
+        for (index = 0; index < num_fwd_ref; index++)
+        {
+          fwd_ref[index] = index;
+          if (index == 0)
+            n = 1;
+          else if (index == 1)
+            n = 0;
+          else
+            n = index;
+          bwd_ref[index] = n;
+        }
+      }
+      else if (img->type == B_SLICE)
+      {
+        for (index = 0; index < num_fwd_ref; index++)
+        {
+          fwd_ref[index] = index+1;
+        }
+        bwd_ref[0] = 0; // only one possible backwards ref for traditional B picture in current software
+      }
+    }      
+
+    if (img->type == B_SLICE) // need to fill in wbp_weight values
+    { 
+      
+      for (i = 0; i < listXsize[LIST_0]; i++)
+      {
+        for (j = 0; j < listXsize[LIST_1]; j++)
+        {
+          for (comp = 0; comp < 3; comp++)
+          {
+            log_weight_denom = (comp == 0) ? luma_log_weight_denom : chroma_log_weight_denom;
+            if (input->WeightedBiprediction == 1)
+            {
+              wbp_weight[0][i][j][comp] = wp_weight[0][i][comp];
+              wbp_weight[1][i][j][comp] = wp_weight[1][j][comp];
+            }
+            else if (input->WeightedBiprediction == 2)
+            { // implicit mode
+              pt = (listX[LIST_1][j]->poc - listX[LIST_0][i]->poc);
+              p0 = (enc_picture->poc - listX[LIST_0][i]->poc);
+              
+              if (pt == 0)
+              {
+                wbp_weight[1][i][j][comp] =  32 ;
+                wbp_weight[0][i][j][comp] = 32;
+              }
+              else
+              {
+                x = (16384 + (pt>>1))/pt;
+                z = Clip(-1024, 1023, (x*p0 + 32 )>>6);
+                wbp_weight[1][i][j][comp] = z>>2;
+                if (wbp_weight[1][i][j][comp] < -64 || wbp_weight[1][i][j][comp] >128)
+                  wbp_weight[1][i][j][comp] = 32;
+                wbp_weight[0][i][j][comp] = 64 - wbp_weight[1][i][j][comp];
+                
+              }
+            }
+          }
+         // printf ("bpw weight[%d][%d] = %d  , %d (%d %d %d) (%d %d)\n", i, j, wbp_weight[0][i][j][0], wbp_weight[1][i][j][0],enc_picture->poc,listX[0][i]->poc, listX[1][j]->poc,num_fwd_ref,listXsize[0]);
+        }
+      }
+     }
+ }
 }

@@ -185,6 +185,7 @@ FrameStore* alloc_frame_store()
 
   f->is_used      = 0;
   f->is_reference = 0;
+  f->is_long_term = 0;
 
   f->is_output = 0;
 
@@ -676,13 +677,6 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
 
   StorablePicture *tmp_s;
 
-  if ((currSliceType == I_SLICE)||(currSliceType == SI_SLICE))
-  {
-    listXsize[0] = 0;
-    listXsize[1] = 0;
-    return;
-  }
-
   if (currPicStructure == FRAME)  
   {
     for (i=0; i<dpb.ref_frames_in_buffer; i++)
@@ -742,6 +736,13 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
     }
   }
 
+  if ((currSliceType == I_SLICE)||(currSliceType == SI_SLICE))
+  {
+    listXsize[0] = 0;
+    listXsize[1] = 0;
+    return;
+  }
+
   if ((currSliceType == P_SLICE)||(currSliceType == SP_SLICE))
   {
     // Calculate FrameNumWrap and PicNum
@@ -767,8 +768,8 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
       {
         if (dpb.fs_ltref[i]->is_used==3)
         {
-          dpb.fs_ltref[i]->frame->long_term_pic_num = dpb.fs_ltref[i]->frame->long_term_frame_idx;
           // if we have two fields, both must be long-term
+          dpb.fs_ltref[i]->frame->long_term_pic_num = dpb.fs_ltref[i]->frame->long_term_frame_idx;
           dpb.fs_ltref[i]->frame->order_num=list0idx;
           listX[0][list0idx++]=dpb.fs_ltref[i]->frame;
         }
@@ -882,6 +883,9 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
         if (dpb.fs_ltref[i]->is_used==3)
         {
           // if we have two fields, both must be long-term
+          dpb.fs_ltref[i]->frame->long_term_pic_num = dpb.fs_ltref[i]->frame->long_term_frame_idx;
+          dpb.fs_ltref[i]->frame->order_num=list0idx;
+
           listX[0][list0idx]  =dpb.fs_ltref[i]->frame;
           listX[1][list0idx++]=dpb.fs_ltref[i]->frame;
         }
@@ -953,6 +957,14 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
       for (i=0; i<dpb.ltref_frames_in_buffer; i++)
       {
         fs_listlt[listltidx++]=dpb.fs_ltref[i];
+        if (dpb.fs_ltref[i]->is_long_term & 1)
+        {
+          dpb.fs_ltref[i]->top_field->long_term_pic_num = 2 * dpb.fs_ltref[i]->top_field->long_term_frame_idx + add_top;
+        }
+        if (dpb.fs_ltref[i]->is_long_term & 2)
+        {
+          dpb.fs_ltref[i]->bottom_field->long_term_pic_num = 2 * dpb.fs_ltref[i]->bottom_field->long_term_frame_idx + add_bottom;
+        }
       }
 
       qsort((void *)fs_listlt, listltidx, sizeof(FrameStore*), compare_fs_by_lt_pic_idx_asc);
@@ -1054,7 +1066,7 @@ static StorablePicture*  get_short_term_pic(int picNum)
 
   for (i=0; i<dpb.ref_frames_in_buffer; i++)
   {
-    if (img->type==FRAME)
+    if (img->structure==FRAME)
     {
       if (dpb.fs_ref[i]->is_reference == 3)
         if ((!dpb.fs_ref[i]->frame->is_long_term)&&(dpb.fs_ref[i]->frame->pic_num == picNum))
@@ -1086,7 +1098,7 @@ static StorablePicture*  get_long_term_pic(int LongtermPicNum)
 
   for (i=0; i<dpb.ltref_frames_in_buffer; i++)
   {
-    if (img->type==FRAME)
+    if (img->structure==FRAME)
     {
       if (dpb.fs_ltref[i]->is_reference == 3)
         if ((dpb.fs_ltref[i]->frame->is_long_term)&&(dpb.fs_ltref[i]->frame->long_term_pic_num == LongtermPicNum))
@@ -1304,7 +1316,9 @@ static void idr_memory_management(StorablePicture* p)
     // free all stored pictures
     for (i=0; i<dpb.used_size; i++)
     {
+      // reset all reference settings
       free_frame_store(dpb.fs[i]);
+      alloc_frame_store(dpb.fs[i]);
       dpb.fs[i]=NULL;
     }
     for (i=0; i<dpb.ref_frames_in_buffer; i++)
@@ -1988,7 +2002,6 @@ static void insert_picture_in_dpb(FrameStore* fs, StorablePicture* p)
   case FRAME: 
     fs->frame = p;
     fs->is_used = 3;
-  
     if (p->used_for_reference)
     {
       fs->is_reference = 3;
@@ -2202,6 +2215,8 @@ static void remove_frame_from_dpb(int pos)
     error("invalid frame store type",500);
   }
   fs->is_used = 0;
+  fs->is_long_term = 0;
+  fs->is_reference = 0;
 
   // move empty framestore to end of buffer
   tmp = dpb.fs[pos];
@@ -2633,15 +2648,14 @@ void dpb_combine_field(FrameStore *fs)
   
   fs->top_field->frame = fs->bottom_field->frame = fs->frame;
   
+  //combine field for frame
   for (i=0;i<(listXsize[LIST_1]+1)/2;i++)
   {
-//    fs->frame->ref_pic_num[LIST_1][i]=   (fs->top_field->ref_pic_num[LIST_1][2*i]/2)*2;
     fs->frame->ref_pic_num[LIST_1][i]=   min ((fs->top_field->ref_pic_num[LIST_1][2*i]/2)*2, (fs->bottom_field->ref_pic_num[LIST_1][2*i]/2)*2);
   }
 
   for (i=0;i<(listXsize[LIST_0]+1)/2;i++)
   {
-//    fs->frame->ref_pic_num[LIST_0][i]=(fs->top_field->ref_pic_num[LIST_0][2*i]/2)*2;
     fs->frame->ref_pic_num[LIST_0][i]=   min ((fs->top_field->ref_pic_num[LIST_0][2*i]/2)*2, (fs->bottom_field->ref_pic_num[LIST_0][2*i]/2)*2);
   }
   

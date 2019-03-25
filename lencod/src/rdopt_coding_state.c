@@ -118,7 +118,8 @@ store_coding_state (CSptr cs)
   if (!input->rdopt)  return;
 
   //=== important variables of data partition array ===
-  for (i = 0; i < cs->no_part; i++)
+	//only one partition for IDR img
+  for (i = 0; i <(img->currentPicture->idr_flag? 1:cs->no_part); i++)
   {
     ee_src  = &(img->currentSlice->partArr[i].ee_cabac);
     bs_src  =   img->currentSlice->partArr[i].bitstream;
@@ -171,7 +172,8 @@ reset_coding_state (CSptr cs)
 
 
   //=== important variables of data partition array ===
-  for (i = 0; i < cs->no_part; i++)
+	//only one partition for IDR img
+  for (i = 0; i <(img->currentPicture->idr_flag? 1:cs->no_part); i++)
   {
     ee_dest = &(img->currentSlice->partArr[i].ee_cabac);
     bs_dest =   img->currentSlice->partArr[i].bitstream;

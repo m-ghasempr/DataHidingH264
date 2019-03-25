@@ -1,3 +1,25 @@
+Changes for Version JM7.6 to JM 7.5c
+------------------------------------
+- encoder/decoder: temporal direct loop index fix (RV/AT/KS)
+- encoder: fix memory leak (AT)
+- decoder: reset the wp_offset for the implicit mode (AT)
+- encoder: temporary fix for slice mode 2, Won't work with FMO (PK)
+- decoder: don't reset poc of other field (OD)
+- decoder: fix bw_ref_idx (AT)
+- encoder/decoder: fix long_term initialization (JK)
+- encoder/decoder: fix pic_num / frame_num_wrap initialization for intra sclices (JK)
+- encoder/decoder: datapartition fixed (ZL)
+- encoder: fix stored B pictures (AT)
+- encoder: small mbuffer.c fixes (AT)
+- encoder/decoder: add Visual Studio .NET workspaces (KS)
+- encoder: fix random intra blocks (TSh)
+- encoder: fix statistics (KS)
+- encoder: fix mb delta qp CABAC context selection (KS/AT)
+- encoder: Rate control fixes (SM)
+- encoder/decoder: fix initial reference picture list generation for long term pictures (RV)
+- encoder/decoder: fix no_output_of_prior_pics_flag handling (KS)
+- encoder: FAST_ME fixes (JX)
+
 Changes for Version JM7.5c to JM 7.5b
 -------------------------------------
 - encoder: add DirectInference parameter (AT)
@@ -735,8 +757,10 @@ IM      Iole Moccagatta         imoccaga@lsil.com
 JA      James Au                james@ubvideo.com
 JB      Jill Boyce              BoyceJ@tce.com
 JC      John Cox                jc@sj.co.uk
+JK      Jeong Kwon Kim          kjk@mcubeworks.com
 JL      Jani Lainema            Jani.Lainema@nokia.com
 JS      Joonho Song             jhsong@varovision.com
+JX      Jian Feng Xu            fenax@video.mdc.tsinghua.edu.cn
 KL      Karl Lillevold          Karll@real.com
 KP      Krit Panusopone         KPanusopone@gi.com
 KSa     Kazushi Sato            kazushi@av.crl.sony.co.jp
@@ -748,6 +772,8 @@ MG      Michael Gallant         mgallant@videolocus.com
 ML      Maxim Lobasso           lobasso@hotmail.com
 MN      Mike Nilsson            mike.nilsson@bt.com
 MW      Mathias Wien            wien@ient.rwth-aachen.de
+OD      Olivier Deygas          olivier.deygas@st.com
+PK      Petr Kadlec             Kadlec@FTW.at
 PL      Peter List              Peter.List@t-systems.de
 PN      Pavel Novotny           pnovotny@lsil.com
 PW      Ping Wu                 pwu@tandbergtv.com
@@ -755,12 +781,14 @@ RG      Rajeev Gandhi           rajeev@motorola.com
 RK      Ragip Kurceren          ragip.kurceren@nokia.com
 RS      Rickard Sjoberg         Rickard.Sjoberg@era.ericsson.se
 RaS     Raghavan Subramaniyan   Raghavan.S@motorola.com
+RV      Rajesh Kumar S Venkata  v-rajesh.kumar@st.com
 SR      Shankar Regunathan      shanre@microsoft.com
 SW      Stephan Wenger          stewe@cs.tu-berlin.de
 SY      Steve Yao               steveyao@sandvideo.com
 TH      Till Hallbach           halbach@tele.ntnu.no
 TO      Tobias Oelbaum          drehvial@gmx.net
 TS      Teruhiko Suzuki         teruhiko@av.crl.sony.co.jp
+TSh     Tamar Shoham            Tamar.Shoham@comverse.com
 TSt     Thomas Stockhammer      stockhammer@lnt.ei.tum.de
 TW      Thomas Wiegand          wiegand@hhi.de
 TWe     Thomas Wedi             wedi@tnt.uni-hannover.de
@@ -773,3 +801,4 @@ YL      Yann Lemaguet           yann.lemaguet@philips.com
 YW      Ye-Kui Wang             wyk@ieee.org
 XS      Xiaoyan Sun             sunxiaoyan@msrchina.research.microsoft.com      
 ZX      Z. Xue                  jon_xz@yahoo.com
+ZL      Li Zhang                zhangli@jdl.ac.cn

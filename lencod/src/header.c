@@ -203,6 +203,14 @@ int SliceHeader()
   // !KS: all fmo map types are currently mapped to type 6 so 
   //      no slice_group_change_cycle is transmitted
 
+  // NOTE: The following syntax element is actually part 
+  //        Slice data partition A RBSP syntax
+
+  if(input->partition_mode&&!img->currentPicture->idr_flag)
+  {
+    len += ue_v("DPA: slice_id", img->current_slice_nr, partition);
+  }
+
   return len;
 }
 
@@ -229,9 +237,10 @@ static int ref_pic_list_reordering()
     len += u_1 ("SH: ref_pic_list_reordering_flag_l0", currSlice->ref_pic_list_reordering_flag_l0, partition);
     if (currSlice->ref_pic_list_reordering_flag_l0)
     {
-      i=0;
+      i=-1;
       do
       {
+        i++;
         len += ue_v ("SH: remapping_of_pic_num_idc", currSlice->remapping_of_pic_nums_idc_l0[i], partition);
         if (currSlice->remapping_of_pic_nums_idc_l0[i]==0 ||
             currSlice->remapping_of_pic_nums_idc_l0[i]==1)
@@ -245,7 +254,6 @@ static int ref_pic_list_reordering()
             len += ue_v ("SH: long_term_pic_idx_l0", currSlice->long_term_pic_idx_l0[i], partition);
           }
         }
-        i++;
       } while (currSlice->remapping_of_pic_nums_idc_l0[i] != 3);
     }
   }
@@ -255,9 +263,10 @@ static int ref_pic_list_reordering()
     len += u_1 ("SH: ref_pic_list_reordering_flag_l1", currSlice->ref_pic_list_reordering_flag_l1, partition);
     if (currSlice->ref_pic_list_reordering_flag_l1)
     {
-      i=0;
+      i=-1;
       do
       {
+        i++;
         len += ue_v ("SH: remapping_of_pic_num_idc", currSlice->remapping_of_pic_nums_idc_l1[i], partition);
         if (currSlice->remapping_of_pic_nums_idc_l1[i]==0 ||
             currSlice->remapping_of_pic_nums_idc_l1[i]==1)
@@ -271,7 +280,6 @@ static int ref_pic_list_reordering()
             len += ue_v ("SH: long_term_pic_idx_l1", currSlice->long_term_pic_idx_l1[i], partition);
           }
         }
-        i++;
       } while (currSlice->remapping_of_pic_nums_idc_l1[i] != 3);
     }
   }
@@ -529,14 +537,19 @@ int Partition_BC_Header(int PartNo)
   sym->mapping = ue_linfo;       // Mapping rule: Simple code number to len/info
   sym->value2  = 0;
 
+	//ZL 
+	//changed according to the g050r1
+	SYMTRACESTRING("RTP-PH: Slice ID");
+  sym->value1 = img->current_slice_nr;
+  len += writeSyntaxElement_UVLC (sym, partition);
 
+	if(active_pps->redundant_pic_cnt_present_flag)
+  {
   SYMTRACESTRING("RTP-PH: Picture ID");
   sym->value1 = img->currentSlice->picture_id;
   len += writeSyntaxElement_UVLC (sym, partition);
+  }
 
-  SYMTRACESTRING("RTP-PH: Slice ID");
-  sym->value1 = img->current_slice_nr;
-  len += writeSyntaxElement_UVLC (sym, partition);
 
   return len;
 }

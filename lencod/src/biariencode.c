@@ -136,7 +136,7 @@ void arienco_done_encoding(EncodingEnvironmentPtr eep)
   put_one_bit((Elow >> (B_BITS-2))&1);
   put_one_bit(1);
 
-        stat->bit_use_stuffingBits[img->type]+=(8-Ebits_to_go);
+  stat->bit_use_stuffingBits[img->type]+=(8-Ebits_to_go);
 
   while (Ebits_to_go != 8)
     put_one_bit(0);

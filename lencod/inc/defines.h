@@ -47,7 +47,6 @@ typedef unsigned char byte;    //!< byte type definition
 #define NONREFFRAME 0           // used with push_poc
 #define REFFRAME 1
 
-#define ABIPRED
 
 //--- block types for CABAC
 #define LUMA_16DC       0

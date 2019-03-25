@@ -270,11 +270,6 @@ void writeMB_skip_flagInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_d
   }
   se->context = act_ctx;
 
-
-  if (!currMB->skip_flag)
-  {
-    last_dquant=0;
-  }
   return;
 }
 
@@ -765,8 +760,6 @@ void writeDquant_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
     act_sym--;
     unary_bin_encode(eep_dp, act_sym,ctx->delta_qp_contexts+act_ctx,1);
   }
-
-  last_dquant = dquant;
 }
 
 /*!
@@ -1019,12 +1012,6 @@ void writeCBP_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
     cbp_bit = ((cbp>>4) == 2) ? 1 : 0;
     biari_encode_symbol(eep_dp, (unsigned char) cbp_bit, ctx->cbp_contexts[2] + curr_cbp_ctx );
   }
-
-  if (!cbp)
-  {
-    last_dquant=0;
-  }
-
 }
 
 

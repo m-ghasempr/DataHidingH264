@@ -449,9 +449,6 @@ typedef struct
 byte   **imgY_org;           //!< Reference luma image
 byte  ***imgUV_org;          //!< Reference croma image
 //int    **refFrArr;           //!< Array for reference frames of each block
-byte  ***mref;               //!< 1/4 pix luma
-byte  ***mref_w;               //!< 1/4 pix luma for weighted prediction ME
-byte ****mcef;               //!< pix chroma
 int    **img4Y_tmp;          //!< for quarter pel interpolation
 
 pic_parameter_set_rbsp_t *active_pps;
@@ -462,14 +459,11 @@ seq_parameter_set_rbsp_t *active_sps;
 int  mb_adaptive;     //!< For MB level field/frame coding tools
 int  MBPairIsField;     //!< For MB level field/frame coding tools
 
-pel_t **Refbuf11_w;           // for weighted reference frame buffer
 
 //Weighted prediction
 int ***wp_weight;  // weight in [list][index][component] order
 int ***wp_offset;  // offset in [list][index][component] order
 int ****wbp_weight;  // weight in [list][fwd_index][bwd_idx][component] order
-int **weight;      // weight in [refbuf][component] order, because JM currently uses one list for fwd and bwd ref pics
-int **offset;      // offset in [refbuf][component] order, because JM currently uses one list for fwd and bwd ref pics
 int luma_log_weight_denom;
 int chroma_log_weight_denom;
 int wp_luma_round;
@@ -488,22 +482,8 @@ byte  ***imgUV_org_frm;
 byte   **imgY_com;               //!< Encoded luma images
 byte  ***imgUV_com;              //!< Encoded croma images
 
-pel_t **Refbuf11_fld_w;            //!< 1/1th pel (full pel) reference frame buffer
-
-
-// global picture format dependend buffers, mem allocation in image.c (field picture)
-byte  ***mref_fld_w;               //!< 1/4 pix luma for wp
-byte ***mref_mbfld_w;        //!< For MB level field/frame coding tools for wp
-byte  ***mref_frm_w;               //!< 1/4 pix luma
-
-
 int   ***direct_ref_idx;         //!< direct mode reference index buffer
 int    **direct_pdir;         //!< direct mode reference index buffer
-
-
-// global picture format dependend buffers, mem allocation in image.c (frame buffer)
-pel_t **Refbuf11_frm_w;            //!< 1/1th pel (full pel) reference frame buffer
-
 
 // Buffers for rd optimization with packet losses, Dim. Kontopodis
 byte **pixel_map;   //!< Shows the latest reference frame that is reliable for each pixel
@@ -516,7 +496,6 @@ int  tot_time;
 #define ET_SIZE 300      //!< size of error text buffer
 char errortext[ET_SIZE]; //!< buffer for error message for exit with error()
 
-int    **abp_type_arr;      //!< Array for abp_type of each block
 
 //! Info for the "decoders-in-the-encoder" used for rdoptimization with packet losses
 typedef struct
@@ -760,8 +739,6 @@ typedef struct
 
   int****** all_mv;       //!< replaces local all_mv
 
-  int****** abp_all_dmv;        //!< replaces local all_dmv for forward interpolative prediction
-
   int num_ref_idx_l0_active;
   int num_ref_idx_l1_active;
 
@@ -865,6 +842,7 @@ typedef struct
 
 } ImageParameters;
 
+#define NUM_PIC_TYPE 5
                                 //!< statistics
 typedef struct
 {
@@ -877,27 +855,23 @@ typedef struct
   int   bit_ctr_0;              //!< stored bit use for the first frame
   int   bit_ctr_n;              //!< bit usage for the current frame
   int   bit_slice;              //!< number of bits in current slice
-  int   bit_use_mode_inter[2][MAXMODE]; //!< statistics of bit usage
   int   bit_ctr_emulationprevention; //!< stored bits needed to prevent start code emulation
-  int   mode_use_intra[25];     //!< Macroblock mode usage for Intra frames
-  int   mode_use_inter[2][MAXMODE];
 
   // B pictures
-  int   *mode_use_Bframe;
-  int   *bit_use_mode_Bframe;
   int   bit_ctr_P;
   int   bit_ctr_B;
   float bitrate_P;
   float bitrate_B;
 
-#define NUM_PIC_TYPE 5
+  int   mode_use       [NUM_PIC_TYPE][MAXMODE]; //!< Macroblock mode usage for Intra frames
+  int   bit_use_mode   [NUM_PIC_TYPE][MAXMODE]; //!< statistics of bit usage
   int   bit_use_stuffingBits[NUM_PIC_TYPE];
-  int   bit_use_mb_type[NUM_PIC_TYPE];
-  int   bit_use_header[NUM_PIC_TYPE];
-  int   tmp_bit_use_cbp[NUM_PIC_TYPE];
-  int   bit_use_coeffY[NUM_PIC_TYPE];
-  int   bit_use_coeffC[NUM_PIC_TYPE];
-  int   bit_use_delta_quant[NUM_PIC_TYPE];
+  int   bit_use_mb_type     [NUM_PIC_TYPE];
+  int   bit_use_header      [NUM_PIC_TYPE];
+  int   tmp_bit_use_cbp     [NUM_PIC_TYPE];
+  int   bit_use_coeffY      [NUM_PIC_TYPE];
+  int   bit_use_coeffC      [NUM_PIC_TYPE];
+  int   bit_use_delta_quant [NUM_PIC_TYPE];
 
   int   em_prev_bits_frm;
   int   em_prev_bits_fld;
@@ -997,11 +971,9 @@ void  PartitionMotionSearch     (int, int, double);
 int   BIDPartitionCost          (int, int, int, int, int);
 int   LumaResidualCoding8x8     (int*, int*, int, int, int, int, int, int);
 int   writeLumaCoeff8x8         (int, int);
-int   writeMotionVector8x8      (int  i0, int  j0, int  i1, int  j1, int  refframe, int  dmv_flag, 
+int   writeMotionVector8x8      (int  i0, int  j0, int  i1, int  j1, int  refframe, 
                                  int  list_idx, int  mv_mode);
 int   writeReferenceFrame       (int, int, int, int, int);
-int   ABIDPartitionCost         (int, int, int*, int*, int, int*);
-int   BBIDPartitionCost         (int, int, int* , int* , int, int* , int);
 int   writeAbpCoeffIndex        (int, int, int, int);
 int   writeIntra4x4Modes        (int);
 int   writeChromaIntraPredMode  ();

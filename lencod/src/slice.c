@@ -35,6 +35,7 @@
 #include "vlc.h"
 #include "image.h"
 #include "cabac.h"
+#include "elements.h"
 
 //! Local declarations
 
@@ -79,6 +80,12 @@ int start_slice()
   int header_len = 0;
   int i;
   int NumberOfPartitions = (input->partition_mode == PAR_DP_1?1:3);
+
+	//one  partition for IDR img
+	if(img->currentPicture->idr_flag)
+	{
+     NumberOfPartitions = 1;
+	}
 
   init_ref_pic_list_reordering();
 
@@ -171,21 +178,6 @@ int terminate_slice()
 
   return 0;   
 }
-
-
-void SetStateVariablesForFrameMode()
-{
-  mref_w = mref_frm_w;  // set mref to mref_frm
-  Refbuf11_w = Refbuf11_frm_w;  // set Refbuff to frm
-}
-
-
-void SetStateVariablesForFieldMode()
-{
-  mref_w = mref_mbfld_w;        // set mref to mref_frm
-  Refbuf11_w = Refbuf11_fld_w;  // set Refbuff to frm
-}
-
 
 /*!
  ************************************************************************
@@ -289,8 +281,8 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
         //! It's now tested with an assert() (take it out if I'm wrong) and should be changed
         //! as soon as someone works on FMO
         
-        img->current_mb_nr--;/*KS*/  
         assert (img->current_mb_nr == CurrentMbAddr);
+        img->current_mb_nr--;/*KS*/  
       }
     }
     else                      // TBD -- Addition of FMO
@@ -339,7 +331,6 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
         
         start_macroblock (CurrentMbAddr, FALSE);
         
-        SetStateVariablesForFrameMode();
         rdopt = &rddata_top_frame_mb; // store data in top frame MB 
         encode_one_macroblock ();     // code the MB as frame
         FrameRDCost = rdopt->min_rdcost;
@@ -375,7 +366,6 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
         
 
         rdopt = &rddata_top_field_mb; // store data in top frame MB 
-        SetStateVariablesForFieldMode();
 //        TopFieldIsSkipped = 0;        // set the top field MB skipped flag to 0
         encode_one_macroblock ();     // code the MB as frame
         FieldRDCost = rdopt->min_rdcost;
@@ -386,7 +376,6 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
         img->top_field = 0;   // Set top field to 0
         start_macroblock (CurrentMbAddr+1, TRUE);
         rdopt = &rddata_bot_field_mb; // store data in top frame MB 
-        SetStateVariablesForFieldMode();
         encode_one_macroblock ();     // code the MB as frame
         FieldRDCost += rdopt->min_rdcost;
         //***   Bottom MB coded as field MB ***//
@@ -403,7 +392,6 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
         img->buf_cycle >>= 1;
         input->num_reference_frames >>= 1;
         MBPairIsField = 0;
-        SetStateVariablesForFrameMode();
         img->num_ref_idx_l0_active -= 1;
         img->num_ref_idx_l0_active >>= 1;
         
@@ -414,7 +402,6 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
       {
         img->field_mode = 1;
         MBPairIsField = 1;
-        SetStateVariablesForFieldMode();
       }
       
       //Rate control
@@ -560,6 +547,20 @@ static Slice *malloc_slice()
     }
 
   slice->max_part_nr = input->partition_mode==0?1:3;
+
+	//for IDR img there should be only one partition
+	if(img->currentPicture->idr_flag)
+		slice->max_part_nr = 1;
+  
+  assignSE2partition[0] = assignSE2partition_NoDP;
+	//ZL 
+	//for IDR img all the syntax element shoulde be mapped to one partition        
+  if(!img->currentPicture->idr_flag&&input->partition_mode==1)
+    assignSE2partition[1] =  assignSE2partition_DP;
+	else
+    assignSE2partition[1] =  assignSE2partition_NoDP;    		 
+
+
 
   slice->num_mb = 0;          // no coded MBs so far
 

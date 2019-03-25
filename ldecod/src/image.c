@@ -633,7 +633,7 @@ int read_new_slice()
   int newframe;
 
   int slice_id_a, slice_id_b, slice_id_c;
-  int redundant_pic_cnt_a, redundant_pic_cnt_b, redundant_pic_cnt_c;
+  int redundant_pic_cnt_b, redundant_pic_cnt_c;
   long ftell_position, expected_slice_type;
   
 //  int i;
@@ -862,13 +862,8 @@ int read_new_slice()
               Now I need to read the slice ID, which depends on the value of 
               redundant_pic_cnt_present_flag (pag.49). 
         */
-        
+
         slice_id_a  = ue_v("NALU:SLICE_A slice_idr", currStream);
-        if (active_pps->redundant_pic_cnt_present_flag)
-          redundant_pic_cnt_a = ue_v("NALU:SLICE_A redudand_pic_cnt", currStream);
-        else
-          redundant_pic_cnt_a = 0;
-        
         if (active_pps->entropy_coding_mode_flag)
         {
           int ByteStartPosition = currStream->frame_bitoffset/8;
@@ -1171,7 +1166,6 @@ void decode_one_slice(struct img_par *img,struct inp_par *inp)
 
   Boolean end_of_slice = FALSE;
   int read_flag;
-
   img->cod_counter=-1;
 
   //reset_ec_flags();
@@ -1187,7 +1181,6 @@ void decode_one_slice(struct img_par *img,struct inp_par *inp)
     start_macroblock(img,inp, img->current_mb_nr);
     // Get the syntax elements from the NAL
     read_flag = read_one_macroblock(img,inp);
-
     decode_one_macroblock(img,inp);
 
     if(img->MbaffFrameFlag && dec_picture->mb_field[img->current_mb_nr])
@@ -1496,6 +1489,8 @@ void fill_wp_params(struct img_par *img)
         log_weight_denom = (comp == 0) ? img->luma_log2_weight_denom : img->chroma_log2_weight_denom;
         img->wp_weight[0][i][comp] = 1<<log_weight_denom;
         img->wp_weight[1][i][comp] = 1<<log_weight_denom;
+        img->wp_offset[0][i][comp] = 0;
+        img->wp_offset[1][i][comp] = 0;
       }
     }
   }
@@ -1534,6 +1529,8 @@ void fill_wp_params(struct img_par *img)
               {
                 img->wbp_weight[1][i][j][comp] = 32;
                 img->wbp_weight[0][i][j][comp] = 32;
+                img->wp_offset[0][i][comp] = 0;
+                img->wp_offset[1][i][comp] = 0;
               }
             }
           }

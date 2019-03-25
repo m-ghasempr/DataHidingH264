@@ -127,26 +127,14 @@ void proceed2nextMacroblock()
 #endif
 
   // Update the statistics
-  stat->bit_use_mb_type[img->type]      += bitCount[BITS_MB_MODE];
-  stat->bit_use_coeffY[img->type]       += bitCount[BITS_COEFF_Y_MB] ;
-  stat->tmp_bit_use_cbp[img->type]      += bitCount[BITS_CBP_MB];
-  stat->bit_use_coeffC[img->type]       += bitCount[BITS_COEFF_UV_MB];
+  stat->bit_use_mb_type    [img->type]  += bitCount[BITS_MB_MODE];
+  stat->bit_use_coeffY     [img->type]  += bitCount[BITS_COEFF_Y_MB] ;
+  stat->tmp_bit_use_cbp    [img->type]  += bitCount[BITS_CBP_MB];
+  stat->bit_use_coeffC     [img->type]  += bitCount[BITS_COEFF_UV_MB];
   stat->bit_use_delta_quant[img->type]  += bitCount[BITS_DELTA_QUANT_MB];
 
-  if (img->type==I_SLICE)
-    ++stat->mode_use_intra[currMB->mb_type];
-  else
-    if (img->type != B_SLICE)
-    {
-      ++stat->mode_use_inter[0][currMB->mb_type];
-      stat->bit_use_mode_inter[0][currMB->mb_type]+= bitCount[BITS_INTER_MB];
-
-    }
-    else
-    {
-      stat->bit_use_mode_inter[1][currMB->mb_type]+= bitCount[BITS_INTER_MB];
-      ++stat->mode_use_inter[1][currMB->mb_type];
-    }
+  ++stat->mode_use[img->type][currMB->mb_type];
+  stat->bit_use_mode[img->type][currMB->mb_type]+= bitCount[BITS_INTER_MB];
 
   // Statistics
   if ((img->type == P_SLICE)||(img->type==SP_SLICE) )
@@ -558,9 +546,8 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
        currSE->value2 = 0;
        currSE->mapping = ue_linfo;
        currSE->type = SE_MBTYPE;
+       dataPart = &(currSlice->partArr[partMap[currSE->type]]);
 
-       if (img->type != B_SLICE)   dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-       else                    dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
        dataPart->writeSyntaxElement(  currSE, dataPart);
        rlc_bits=currSE->len;
 
@@ -677,9 +664,7 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
         currSE->value2 = 0;
         currSE->mapping = ue_linfo;
         currSE->type = SE_MBTYPE;
-
-        if (img->type != B_SLICE)   dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-        else                                             dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+        dataPart = &(currSlice->partArr[partMap[currSE->type]]);
         dataPart->writeSyntaxElement(  currSE, dataPart);
         rlc_bits=currSE->len;
         currMB->bitcounter[BITS_MB_MODE]+=rlc_bits;
@@ -688,9 +673,7 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
     }
     else //! MB that did not fit in this slice anymore is not a Skip MB
     {
-      if (img->type != B_SLICE)   dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
-      else                                             dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
-       
+      dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);       
       currStream = dataPart->bitstream;
         // update the bitstream
       currStream->bits_to_go = currStream->bits_to_go_skip;
@@ -710,8 +693,7 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
     currSE->value2 = 0;
     currSE->mapping = ue_linfo;
     currSE->type = SE_MBTYPE;
-    if (img->type != B_SLICE)   dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-    else                                             dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+    dataPart = &(currSlice->partArr[partMap[currSE->type]]);
     dataPart->writeSyntaxElement(  currSE, dataPart);
     rlc_bits=currSE->len;
     currMB->bitcounter[BITS_MB_MODE]+=rlc_bits;
@@ -916,7 +898,6 @@ LumaPrediction4x4 (int  block_x,    // <--  relative horizontal block coordinate
     {
       for   (j=block_y; j<block_y4; j++)
         for (i=block_x; i<block_x4; i++)  
-//          img->mpr[i][j] = (*fpred++ + *bpred++ + 1) / 2; 
           img->mpr[i][j] = clip1a(((wbp_weight[0][fw_ref_idx][bw_ref_idx][0] * *fpred++ + 
                                     wbp_weight[1][fw_ref_idx][bw_ref_idx][0] * *bpred++ + 
                                     2*wp_luma_round) >> (luma_log_weight_denom + 1)) + 
@@ -926,7 +907,6 @@ LumaPrediction4x4 (int  block_x,    // <--  relative horizontal block coordinate
     {
       for   (j=block_y; j<block_y4; j++)
         for (i=block_x; i<block_x4; i++)  
-          //img->mpr[i][j] = *fpred++;
           img->mpr[i][j] = clip1a(((wp_weight[0][fw_ref_idx][0] * *fpred++  + wp_luma_round) >> luma_log_weight_denom) +
           + wp_offset[0][fw_ref_idx][0] );
     }
@@ -936,48 +916,9 @@ LumaPrediction4x4 (int  block_x,    // <--  relative horizontal block coordinate
         for (i=block_x; i<block_x4; i++)  
           img->mpr[i][j] = clip1a(((wp_weight[1][bw_ref_idx][0] * *bpred++  + wp_luma_round) >> luma_log_weight_denom) +
           wp_offset[1][bw_ref_idx][0] );
-//          img->mpr[i][j] = *bpred++;
     }
 
 
-/*
-    if (direct || (fw_mode && bw_mode))
-    {
-      if (input->direct_type && direct)
-      {
-        for   (j=block_y; j<block_y4; j++)
-          for (i=block_x; i<block_x4; i++)  
-            if (fw_ref_idx ==-1)
-              img->mpr[i][j] = clip1a(((wp_weight[1][bw_ref_idx][0] * *bpred++ + wp_luma_round) >> luma_log_weight_denom) + wp_offset[1][bw_ref_idx][0]);
-            else if (bw_ref_idx ==-1 )
-              img->mpr[i][j] = clip1a(((wp_weight[0][fw_ref_idx][0] * *fpred++ + wp_luma_round) >> luma_log_weight_denom) + wp_offset[0][fw_ref_idx][0] );
-            else 
-              img->mpr[i][j] = clip1a(((wbp_weight[0][fw_ref_idx][bw_ref_idx][0] * *fpred++ + wbp_weight[1][fw_ref_idx][bw_ref_idx][0] * *bpred++ + 2*wp_luma_round) >> (luma_log_weight_denom + 1)) + ((wp_offset[0][fw_ref_idx][0] + wp_offset[1][bw_ref_idx][0] + 1)>>1)); 
-      }
-      else
-        for   (j=block_y; j<block_y4; j++)
-          for (i=block_x; i<block_x4; i++)  
-              img->mpr[i][j] = clip1a(((wbp_weight[0][fw_ref_idx][bw_ref_idx][0] * *fpred++ + wbp_weight[1][fw_ref_idx][bw_ref_idx][0] * *bpred++ + 2*wp_luma_round) >> (luma_log_weight_denom + 1)) + ((wp_offset[0][fw_ref_idx][0] + wp_offset[1][bw_ref_idx][0] + 1)>>1)); 
-    }
-    else if (img->type == B_SLICE && img->nal_reference_idc>0)
-    {
-      for   (j=block_y; j<block_y4; j++)
-        for (i=block_x; i<block_x4; i++)  
-          img->mpr[i][j] = clip1a((wbp_weight[0][fw_ref_idx][bw_ref_idx][0] * *fpred++ + wbp_weight[1][fw_ref_idx][bw_ref_idx][0] * *bpred++ + wp_offset[0][fw_ref_idx][0] + wp_offset[1][bw_ref_idx][0] + 2*wp_luma_round) >> (luma_log_weight_denom + 1));
-    }
-    else if (fw_mode || skipped)
-    {
-      for   (j=block_y; j<block_y4; j++)
-        for (i=block_x; i<block_x4; i++)  
-          img->mpr[i][j] = clip1a((wp_weight[0][fw_ref_idx][0] * *fpred++ + wp_offset[0][fw_ref_idx][0] + wp_luma_round) >> luma_log_weight_denom);
-    }
-    else
-    {
-      for   (j=block_y; j<block_y4; j++)
-        for (i=block_x; i<block_x4; i++)  
-          img->mpr[i][j] = clip1a((wp_weight[1][bw_ref_idx][0] * *bpred++ + wp_offset[1][bw_ref_idx][0] + wp_luma_round) >> luma_log_weight_denom);
-    }
-    */
   }
   else
   {
@@ -1342,8 +1283,6 @@ ChromaPrediction4x4 (int  uv,           // <-- colour component
   int  block_y4   = block_y+4;
   int* fpred      = fw_pred;
   int* bpred      = bw_pred;
-//  int  direct     = (fw_mode == 0 && bw_mode == 0 && (img->type == B_SLICE));
-//  int  skipped    = (fw_mode == 0 && bw_mode == 0 && (img->type != B_SLICE));
   int****** mv_array = img->all_mv;
 
   int apply_weights = ( (input->WeightedPrediction && (img->type == P_SLICE||img->type == SP_SLICE)) ||
@@ -1387,50 +1326,6 @@ ChromaPrediction4x4 (int  uv,           // <-- colour component
         for (i=block_x; i<block_x4; i++)  
           img->mpr[i][j] = clip1a(((wp_weight[1][bw_ref_idx][uv+1] * *bpred++ + wp_chroma_round) >> chroma_log_weight_denom) + wp_offset[1][bw_ref_idx][uv+1]);
     }
-/*
-    //    assert(1); //!KS
-    if (direct || (fw_mode && bw_mode))
-    {
-      if (direct && input->direct_type)
-      {
-        for (j=block_y; j<block_y4; j++)
-        for (i=block_x; i<block_x4; i++)  
-          if (fw_ref_idx==-1)
-            img->mpr[i][j] = clip1a(((wp_weight[1][bw_ref_idx][uv+1] * *bpred++  + wp_chroma_round) >> chroma_log_weight_denom) + wp_offset[1][bw_ref_idx][uv+1]);
-          else if (bw_ref_idx==-1)
-            img->mpr[i][j] =  clip1a(((wp_weight[0][fw_ref_idx][uv+1] * *fpred++  + wp_chroma_round) >> chroma_log_weight_denom) + wp_offset[0][fw_ref_idx][uv+1]);
-          else
-            img->mpr[i][j] =  clip1a(((wbp_weight[0][fw_ref_idx][bw_ref_idx][uv+1] * *fpred++ + wbp_weight[1][fw_ref_idx][bw_ref_idx][uv+1] * *bpred++ 
-                  + 2*wp_chroma_round) >> (chroma_log_weight_denom + 1)) + ((wp_offset[0][fw_ref_idx][uv+1] + wp_offset[1][bw_ref_idx][uv+1] + 1)>>1) );
-      }
-      else
-        for (j=block_y; j<block_y4; j++)
-          for (i=block_x; i<block_x4; i++)  
-            img->mpr[i][j] = clip1a(((wbp_weight[0][fw_ref_idx][bw_ref_idx][uv+1] * *fpred++ + wbp_weight[1][fw_ref_idx][bw_ref_idx][uv+1] * *bpred++ 
-                    + 2*wp_chroma_round) >> (chroma_log_weight_denom + 1)) + ((wp_offset[0][fw_ref_idx][uv+1] + wp_offset[1][bw_ref_idx][uv+1] + 1)>>1));
- 
-    }
-    else if (img->type == B_SLICE && img->nal_reference_idc>0)
-    {
-      for (j=block_y; j<block_y4; j++)
-        for (i=block_x; i<block_x4; i++)  
-          img->mpr[i][j] = clip1a(((wbp_weight[0][fw_ref_idx][bw_ref_idx][uv+1] * *fpred++ + wbp_weight[1][fw_ref_idx][bw_ref_idx][uv+1] * *bpred++ 
-                     + 2*wp_chroma_round) >> (chroma_log_weight_denom + 1)) + ((wp_offset[0][fw_ref_idx][uv+1] + wp_offset[1][bw_ref_idx][uv+1] + 1)>>1));
-    }
-    else if (fw_mode || skipped)
-    {
-      for (j=block_y; j<block_y4; j++)
-      for (i=block_x; i<block_x4; i++)  
-           img->mpr[i][j] = clip1a(((wp_weight[0][fw_ref_idx][uv+1] * *fpred++ + wp_chroma_round) >> chroma_log_weight_denom) +  wp_offset[0][fw_ref_idx][uv+1]);
-    }
-    else
-    {
-      for (j=block_y; j<block_y4; j++)
-      for (i=block_x; i<block_x4; i++)  
-            img->mpr[i][j] = clip1a(((wp_weight[1][bw_ref_idx][uv+1] * *bpred++ + wp_chroma_round) >> chroma_log_weight_denom) + wp_offset[1][bw_ref_idx][uv+1]);
-
-    }       
-    */
   }
   else
   {
@@ -1467,7 +1362,6 @@ void ChromaResidualCoding (int* cr_cbp)
   int   uv, block8, block_y, block_x, j, i;
   int   p_dir, fw_mode, bw_mode, refframe;
   int   skipped = (img->mb_data[img->current_mb_nr].mb_type == 0 && (img->type == P_SLICE || img->type == SP_SLICE));
-//  int   incr = 1, offset = 0; // For MB level field/frame coding 
   int   bw_ref;
 
   for (*cr_cbp=0, uv=0; uv<2; uv++)
@@ -1484,20 +1378,6 @@ void ChromaResidualCoding (int* cr_cbp)
 
         // ==== set chroma residue to zero for skip Mode in SP frames 
     if (img->NoResidueDirect)
-      for (j=0; j<8; j++)
-        for (i=0; i<8; i++)
-        {
-          enc_picture->imgUV[uv][img->pix_c_y+j][img->pix_c_x+i] = img->mpr[i][j];
-        }
-        else
-    if (skipped && img->type==SP_SLICE)
-      for (j=0; j<8; j++)
-        for (i=0; i<8; i++)
-        {
-          img->m7[i][j] = 0;
-        }
-    else
-    if (skipped)
     {
       for (j=0; j<8; j++)
         for (i=0; i<8; i++)
@@ -1506,10 +1386,30 @@ void ChromaResidualCoding (int* cr_cbp)
         }
     }
     else
-      for (j=0; j<8; j++)
-        for (i=0; i<8; i++)
+      if (skipped && img->type==SP_SLICE)
+      {
+        for (j=0; j<8; j++)
+          for (i=0; i<8; i++)
+          {
+            img->m7[i][j] = 0;
+          }
+      }
+      else
+        if (skipped)
         {
-          img->m7[i][j] = imgUV_org[uv][img->opix_c_y+j][img->opix_c_x+i] - img->mpr[i][j];
+          for (j=0; j<8; j++)
+            for (i=0; i<8; i++)
+            {
+              enc_picture->imgUV[uv][img->pix_c_y+j][img->pix_c_x+i] = img->mpr[i][j];
+            }
+        }
+        else
+        {
+          for (j=0; j<8; j++)
+            for (i=0; i<8; i++)
+            {
+              img->m7[i][j] = imgUV_org[uv][img->opix_c_y+j][img->opix_c_x+i] - img->mpr[i][j];
+            }
         }
 
     //===== DCT, Quantization, inverse Quantization, IDCT, and Reconstruction =====
@@ -1517,18 +1417,20 @@ void ChromaResidualCoding (int* cr_cbp)
     
     if (skipped && img->type==SP_SLICE)
     {
-        *cr_cbp=dct_chroma_sp(uv,*cr_cbp);
+      *cr_cbp=dct_chroma_sp(uv,*cr_cbp);
     }
     else
-    if (!img->NoResidueDirect && !skipped)
     {
-      if (img->type!=SP_SLICE || IS_INTRA (&img->mb_data[img->current_mb_nr]))
-        *cr_cbp=dct_chroma   (uv,*cr_cbp);
-      else
-        *cr_cbp=dct_chroma_sp(uv,*cr_cbp);
+      if (!img->NoResidueDirect && !skipped)
+      {
+        if (img->type!=SP_SLICE || IS_INTRA (&img->mb_data[img->current_mb_nr]))
+          *cr_cbp=dct_chroma   (uv,*cr_cbp);
+        else
+          *cr_cbp=dct_chroma_sp(uv,*cr_cbp);
+      }
     }
   }
-
+  
   //===== update currMB->cbp =====
   img->mb_data[img->current_mb_nr].cbp += ((*cr_cbp)<<4);  
 }
@@ -1850,9 +1752,7 @@ int writeIntra4x4Modes(int only_this_block)
     currSE->type = SE_INTRAPREDMODE;
 
     /*--- choose data partition ---*/
-    if (img->type != B_SLICE) dataPart = &(currSlice->partArr[partMap[SE_INTRAPREDMODE]]);
-    else                                           dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
-    
+    dataPart = &(currSlice->partArr[partMap[SE_INTRAPREDMODE]]);   
     /*--- encode and update rate ---*/
     if (input->symbol_mode == UVLC)    writeSyntaxElement_Intra4x4PredictionMode(currSE, dataPart);
     else                               dataPart->writeSyntaxElement (currSE, dataPart);
@@ -1942,134 +1842,114 @@ int writeMBHeader (int rdopt)  // GB CHROMA !!!!!!!!
   currMB->IntraChromaPredModeFlag = IS_INTRA(currMB);
 
   // choose the appropriate data partition
-  if (img->type != B_SLICE)   dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
-  else                        dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+  dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
   
-    //=====  BITS FOR MACROBLOCK MODE =====
-    if(img->type == I_SLICE)//GB
+  //=====  BITS FOR MACROBLOCK MODE =====
+  if(img->type == I_SLICE)//GB
+  {
+    // write mb_aff 
+    if(img->MbaffFrameFlag && !skip) // check for copy mode, Krit
     {
-      // write mb_aff 
-      if(img->MbaffFrameFlag && !skip) // check for copy mode, Krit
+      if(WriteFrameFieldMBInHeader)
       {
-        if(WriteFrameFieldMBInHeader)
+        currSE->value1 =  currMB->mb_field;
+        currSE->value2 = 0;
+        currSE->type   =  SE_MBTYPE;
+        
+        if (input->symbol_mode==UVLC)   currSE->mapping = ue_linfo;
+        else                            currSE->writing = writeFieldModeInfo_CABAC;
+          
+#if TRACE
+        snprintf(currSE->tracestring, TRACESTRING_SIZE, "Field mode = %3d",currMB->mb_field);
+#endif
+        if( input->symbol_mode==UVLC)
         {
-          currSE->value1 =  currMB->mb_field;
-          currSE->value2 = 0;
-          currSE->type   =  SE_MBTYPE;
-          
-          if (input->symbol_mode==UVLC)   currSE->mapping = ue_linfo;
-          else                            currSE->writing = writeFieldModeInfo_CABAC;
-          
-#if TRACE
-          snprintf(currSE->tracestring, TRACESTRING_SIZE, "Field mode = %3d",currMB->mb_field);
-#endif
-          if( input->symbol_mode==UVLC)
-          {
-            currSE->bitpattern = (currMB->mb_field ? 1 : 0);
-            currSE->len = 1;
-            writeSyntaxElement2Buf_Fixed(currSE, dataPart->bitstream);
-          }
-          else
-          {
-            dataPart->writeSyntaxElement(currSE, dataPart);
-          }
-
-          bitCount[BITS_MB_MODE] += currSE->len;
-          no_bits                += currSE->len;
-          currSE++;
-          currMB->currSEnr++;
+          currSE->bitpattern = (currMB->mb_field ? 1 : 0);
+          currSE->len = 1;
+          writeSyntaxElement2Buf_Fixed(currSE, dataPart->bitstream);
         }
+        else
+        {
+          dataPart->writeSyntaxElement(currSE, dataPart);
+        }
+
+        bitCount[BITS_MB_MODE] += currSE->len;
+        no_bits                += currSE->len;
+        currSE++;
+        currMB->currSEnr++;
       }
-      
-                        // write mb_type
-      currSE->value1  = MBType2Value (currMB);
-      currSE->value2  = 0;
-      currSE->type    = SE_MBTYPE;
-
-      if (input->symbol_mode == UVLC)  currSE->mapping = ue_linfo;
-      else                             currSE->writing = writeMB_typeInfo_CABAC;
-
-      dataPart->writeSyntaxElement( currSE, dataPart);
-#if TRACE
-      snprintf(currSE->tracestring, TRACESTRING_SIZE,   "MB mode(%2d,%2d) = %3d",img->mb_x, img->mb_y, currMB->mb_type);
-#endif
-      bitCount[BITS_MB_MODE] += currSE->len;
-      no_bits                += currSE->len;
-      currSE++;
-      currMB->currSEnr++;
     }
-    else if (input->symbol_mode == CABAC)//GB
+    
+                        // write mb_type
+    currSE->value1  = MBType2Value (currMB);
+    currSE->value2  = 0;
+    currSE->type    = SE_MBTYPE;
+    
+    if (input->symbol_mode == UVLC)  currSE->mapping = ue_linfo;
+    else                             currSE->writing = writeMB_typeInfo_CABAC;
+    
+    dataPart->writeSyntaxElement( currSE, dataPart);
+#if TRACE
+    snprintf(currSE->tracestring, TRACESTRING_SIZE,   "MB mode(%2d,%2d) = %3d",img->mb_x, img->mb_y, currMB->mb_type);
+#endif
+    bitCount[BITS_MB_MODE] += currSE->len;
+    no_bits                += currSE->len;
+    currSE++;
+    currMB->currSEnr++;
+  }
+  else if (input->symbol_mode == CABAC)//GB
+  {
+    
+    if (img->MbaffFrameFlag && (img->current_mb_nr%2 == 0||prevMbSkipped))
     {
-
-			if (img->MbaffFrameFlag && (img->current_mb_nr%2 == 0||prevMbSkipped))
-			{
-				mb_field_tmp = currMB->mb_field;
-				currMB->mb_field = field_flag_inference();
-				CheckAvailabilityOfNeighborsCABAC();
-				currMB->mb_field = mb_field_tmp;
-			}
-			
-      // write mb_skip_flag
-      mb_type         = MBType2Value (currMB);
-      currSE->value1  = mb_type;
-      currSE->value2  = currMB->cbp;
-      currSE->type    = SE_MBTYPE;
-      currSE->writing = writeMB_skip_flagInfo_CABAC;
-      dataPart->writeSyntaxElement( currSE, dataPart);
+      mb_field_tmp = currMB->mb_field;
+      currMB->mb_field = field_flag_inference();
+      CheckAvailabilityOfNeighborsCABAC();
+      currMB->mb_field = mb_field_tmp;
+    }
+    
+    // write mb_skip_flag
+    mb_type         = MBType2Value (currMB);
+    currSE->value1  = mb_type;
+    currSE->value2  = currMB->cbp;
+    currSE->type    = SE_MBTYPE;
+    currSE->writing = writeMB_skip_flagInfo_CABAC;
+    dataPart->writeSyntaxElement( currSE, dataPart);
 #if TRACE
-      if (img->type == B_SLICE)  snprintf(currSE->tracestring, TRACESTRING_SIZE, "B_MB skipflag(%2d,%2d) = %3d",img->mb_x, img->mb_y, (mb_type!=0 ||currMB->cbp!=0));
-      else                     snprintf(currSE->tracestring, TRACESTRING_SIZE,   "MB skipflag(%2d,%2d,%d) = %3d",img->mb_x, img->mb_y, currSE->context,(mb_type!=0));
+    if (img->type == B_SLICE)  snprintf(currSE->tracestring, TRACESTRING_SIZE, "B_MB skipflag(%2d,%2d) = %3d",img->mb_x, img->mb_y, (mb_type!=0 ||currMB->cbp!=0));
+    else                       snprintf(currSE->tracestring, TRACESTRING_SIZE, "MB skipflag(%2d,%2d,%d) = %3d",img->mb_x, img->mb_y, currSE->context,(mb_type!=0));
 #endif
-      bitCount[BITS_MB_MODE] += currSE->len;
-      no_bits                += currSE->len;
-      currSE++;
-      currMB->currSEnr++;
-
-			CheckAvailabilityOfNeighborsCABAC();
+    bitCount[BITS_MB_MODE] += currSE->len;
+    no_bits                += currSE->len;
+    currSE++;
+    currMB->currSEnr++;
+    
+    CheckAvailabilityOfNeighborsCABAC();
 			
-      // write mb_aff
-      if(img->MbaffFrameFlag && !skip) // check for copy mode, Krit
+    // write mb_aff
+    if(img->MbaffFrameFlag && !skip) // check for copy mode, Krit
+    {
+      if(WriteFrameFieldMBInHeader)
       {
-        if(WriteFrameFieldMBInHeader)
+        currSE->value1 = currMB->mb_field;
+        currSE->value2 = 0;
+        currSE->type   =  SE_MBTYPE;
+        
+        if (input->symbol_mode==UVLC)   currSE->mapping = ue_linfo;
+        else                            currSE->writing = writeFieldModeInfo_CABAC;
+        
+        if( input->symbol_mode==UVLC)
         {
-          currSE->value1 = currMB->mb_field;
-          currSE->value2 = 0;
-          currSE->type   =  SE_MBTYPE;
-
-          if (input->symbol_mode==UVLC)   currSE->mapping = ue_linfo;
-          else                            currSE->writing = writeFieldModeInfo_CABAC;
-
-          if( input->symbol_mode==UVLC)
-          {
-            currSE->bitpattern = (currMB->mb_field ? 1 : 0);
-            currSE->len = 1;
-            writeSyntaxElement2Buf_Fixed(currSE, dataPart->bitstream);
-          }
-          else
-          {
-            dataPart->writeSyntaxElement(currSE, dataPart);
-          }
-#if TRACE
-          snprintf(currSE->tracestring, TRACESTRING_SIZE, "Field mode = %3d",currMB->mb_field);
-#endif
-          bitCount[BITS_MB_MODE] += currSE->len;
-          no_bits                += currSE->len;
-          currSE++;
-          currMB->currSEnr++;
+          currSE->bitpattern = (currMB->mb_field ? 1 : 0);
+          currSE->len = 1;
+          writeSyntaxElement2Buf_Fixed(currSE, dataPart->bitstream);
         }
-      }
-      
-      // write mb_type
-      if (currMB->mb_type != 0 || ((img->type == B_SLICE) && currMB->cbp != 0))
-      {
-        currSE->value1  = mb_type;
-        currSE->value2  = 0;
-        currSE->type    = SE_MBTYPE;
-        currSE->writing = writeMB_typeInfo_CABAC;
-        dataPart->writeSyntaxElement( currSE, dataPart);
+        else
+        {
+          dataPart->writeSyntaxElement(currSE, dataPart);
+        }
 #if TRACE
-        if (img->type == B_SLICE)  snprintf(currSE->tracestring, TRACESTRING_SIZE, "B_MB mode(%2d,%2d) = %3d",img->mb_x, img->mb_y, currMB->mb_type);
-        else                     snprintf(currSE->tracestring, TRACESTRING_SIZE,   "MB mode(%2d,%2d) = %3d",img->mb_x, img->mb_y,currMB->mb_type);
+        snprintf(currSE->tracestring, TRACESTRING_SIZE, "Field mode = %3d",currMB->mb_field);
 #endif
         bitCount[BITS_MB_MODE] += currSE->len;
         no_bits                += currSE->len;
@@ -2077,14 +1957,108 @@ int writeMBHeader (int rdopt)  // GB CHROMA !!!!!!!!
         currMB->currSEnr++;
       }
     }
-    //GB
-    else if (currMB->mb_type != 0 || ((img->type == B_SLICE) && currMB->cbp != 0))
+      
+    // write mb_type
+    if (currMB->mb_type != 0 || ((img->type == B_SLICE) && currMB->cbp != 0))
     {
-      //===== Run Length Coding: Non-Skipped macorblock =====
+      currSE->value1  = mb_type;
+      currSE->value2  = 0;
+      currSE->type    = SE_MBTYPE;
+      currSE->writing = writeMB_typeInfo_CABAC;
+      dataPart->writeSyntaxElement( currSE, dataPart);
+#if TRACE
+      if (img->type == B_SLICE)  snprintf(currSE->tracestring, TRACESTRING_SIZE, "B_MB mode(%2d,%2d) = %3d",img->mb_x, img->mb_y, currMB->mb_type);
+      else                     snprintf(currSE->tracestring, TRACESTRING_SIZE,   "MB mode(%2d,%2d) = %3d",img->mb_x, img->mb_y,currMB->mb_type);
+#endif
+      bitCount[BITS_MB_MODE] += currSE->len;
+      no_bits                += currSE->len;
+      currSE++;
+      currMB->currSEnr++;
+    }
+  }
+
+  else if (currMB->mb_type != 0 || ((img->type == B_SLICE) && currMB->cbp != 0))
+  {
+    //===== Run Length Coding: Non-Skipped macorblock =====
+    currSE->value1  = img->cod_counter;
+    currSE->value2  = 0;
+    currSE->mapping = ue_linfo;
+    currSE->type    = SE_MBTYPE;
+    dataPart->writeSyntaxElement( currSE, dataPart);
+#if TRACE
+    snprintf(currSE->tracestring, TRACESTRING_SIZE, "MB runlength = %3d",img->cod_counter);
+#endif
+    bitCount[BITS_MB_MODE] += currSE->len;
+    no_bits                += currSE->len;
+    currSE++;
+    currMB->currSEnr++;
+    
+    // Reset cod counter
+    img->cod_counter = 0;
+    
+    // write mb_aff
+    if(img->MbaffFrameFlag && !skip) // check for copy mode, Krit
+    {
+      if(WriteFrameFieldMBInHeader)
+      {
+        currSE->value1 = currMB->mb_field;
+        currSE->type   =  SE_MBTYPE;
+        currSE->mapping = ue_linfo;
+        
+        //dataPart->writeSyntaxElement(currSE, dataPart);
+        currSE->bitpattern = (currMB->mb_field ? 1 : 0);
+        currSE->len = 1;
+        writeSyntaxElement2Buf_Fixed(currSE, dataPart->bitstream);
+
+#if TRACE
+        snprintf(currSE->tracestring, TRACESTRING_SIZE, "Field mode = %3d",currMB->mb_field);
+#endif
+        bitCount[BITS_MB_MODE] += currSE->len;
+        no_bits                += currSE->len;
+        currSE++;
+        currMB->currSEnr++;
+      }
+    }
+    // Put out mb mode
+    currSE->value1  = MBType2Value (currMB);
+    
+    if (img->type != B_SLICE)
+    {
+      currSE->value1--;
+    }
+    currSE->mapping = ue_linfo;
+    currSE->type    = SE_MBTYPE;
+    currSE->value2  = 0;
+    
+    dataPart->writeSyntaxElement( currSE, dataPart);
+#if TRACE
+    if (img->type == B_SLICE)   snprintf(currSE->tracestring, TRACESTRING_SIZE, "B_MB mode(%2d,%2d) = %3d",img->mb_x, img->mb_y, currMB->mb_type);
+    else                      snprintf(currSE->tracestring, TRACESTRING_SIZE,   "MB mode(%2d,%2d) = %3d",img->mb_x, img->mb_y,currMB->mb_type);
+#endif
+    bitCount[BITS_MB_MODE] += currSE->len;
+    no_bits                += currSE->len;
+    currSE++;
+    currMB->currSEnr++;
+  }
+  else
+  {
+    //Run Length Coding: Skipped macroblock
+    img->cod_counter++;
+
+    // CAVLC
+    for (j=0; j < 6; j++)
+      for (i=0; i < 4; i++)
+        img->nz_coeff [img->current_mb_nr][i][j]=0;
+
+
+    if(img->current_mb_nr == img->total_number_mb)
+    {
+      // Put out run
       currSE->value1  = img->cod_counter;
       currSE->value2  = 0;
       currSE->mapping = ue_linfo;
       currSE->type    = SE_MBTYPE;
+      
       dataPart->writeSyntaxElement( currSE, dataPart);
 #if TRACE
       snprintf(currSE->tracestring, TRACESTRING_SIZE, "MB runlength = %3d",img->cod_counter);
@@ -2096,89 +2070,13 @@ int writeMBHeader (int rdopt)  // GB CHROMA !!!!!!!!
       
       // Reset cod counter
       img->cod_counter = 0;
-      
-      // write mb_aff
-      if(img->MbaffFrameFlag && !skip) // check for copy mode, Krit
-      {
-        if(WriteFrameFieldMBInHeader)
-        {
-          currSE->value1 = currMB->mb_field;
-          currSE->type   =  SE_MBTYPE;
-          currSE->mapping = ue_linfo;
-          
-          //dataPart->writeSyntaxElement(currSE, dataPart);
-          currSE->bitpattern = (currMB->mb_field ? 1 : 0);
-          currSE->len = 1;
-          writeSyntaxElement2Buf_Fixed(currSE, dataPart->bitstream);
-
-#if TRACE
-          snprintf(currSE->tracestring, TRACESTRING_SIZE, "Field mode = %3d",currMB->mb_field);
-#endif
-          bitCount[BITS_MB_MODE] += currSE->len;
-          no_bits                += currSE->len;
-          currSE++;
-          currMB->currSEnr++;
-        }
-      }
-      // Put out mb mode
-      currSE->value1  = MBType2Value (currMB);
-
-      if (img->type != B_SLICE)
-      {
-        currSE->value1--;
-      }
-      currSE->mapping = ue_linfo;
-      currSE->type    = SE_MBTYPE;
-      currSE->value2  = 0;
-
-      dataPart->writeSyntaxElement( currSE, dataPart);
-#if TRACE
-      if (img->type == B_SLICE)   snprintf(currSE->tracestring, TRACESTRING_SIZE, "B_MB mode(%2d,%2d) = %3d",img->mb_x, img->mb_y, currMB->mb_type);
-      else                      snprintf(currSE->tracestring, TRACESTRING_SIZE,   "MB mode(%2d,%2d) = %3d",img->mb_x, img->mb_y,currMB->mb_type);
-#endif
-      bitCount[BITS_MB_MODE] += currSE->len;
-      no_bits                += currSE->len;
-      currSE++;
-      currMB->currSEnr++;
     }
-    else
-    {
-      //Run Length Coding: Skipped macroblock
-      img->cod_counter++;
-
-      // CAVLC
-      for (j=0; j < 6; j++)
-        for (i=0; i < 4; i++)
-          img->nz_coeff [img->current_mb_nr][i][j]=0;
-
-
-      if(img->current_mb_nr == img->total_number_mb)
-      {
-        // Put out run
-        currSE->value1  = img->cod_counter;
-        currSE->value2  = 0;
-        currSE->mapping = ue_linfo;
-        currSE->type    = SE_MBTYPE;
-
-        dataPart->writeSyntaxElement( currSE, dataPart);
-#if TRACE
-        snprintf(currSE->tracestring, TRACESTRING_SIZE, "MB runlength = %3d",img->cod_counter);
-#endif
-        bitCount[BITS_MB_MODE] += currSE->len;
-        no_bits                += currSE->len;
-        currSE++;
-        currMB->currSEnr++;
-
-        // Reset cod counter
-        img->cod_counter = 0;
-      }
-    }
-
+  }
+  
   //===== BITS FOR 8x8 SUB-PARTITION MODES =====
   if (IS_P8x8 (currMB))
   {
-    if (img->type != B_SLICE) dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
-    else                                           dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+    dataPart = &(currSlice->partArr[partMap[SE_MBTYPE]]);
     
     for (i=0; i<4; i++)
     {
@@ -2221,8 +2119,7 @@ void write_terminating_bit (short bit)
   EncodingEnvironmentPtr  eep_dp;
 
   //--- write non-slice termination symbol if the macroblock is not the first one in its slice ---
-  if (img->type != B_SLICE) dataPart = &(img->currentSlice->partArr[partMap[SE_MBTYPE]]);
-  else                                           dataPart = &(img->currentSlice->partArr[partMap[SE_BFRAME]]);
+  dataPart = &(img->currentSlice->partArr[partMap[SE_MBTYPE]]);
   dataPart->bitstream->write_flag = 1;
   eep_dp                          = &(dataPart->ee_cabac);
   
@@ -2257,9 +2154,7 @@ int writeChromaIntraPredMode()
   currSE->value1 = currMB->c_ipred_mode;
   currSE->value2 = 0;
   currSE->type = SE_INTRAPREDMODE;
-
-  if (img->type != B_SLICE) dataPart = &(currSlice->partArr[partMap[SE_INTRAPREDMODE]]);
-  else                                           dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+  dataPart = &(currSlice->partArr[partMap[SE_INTRAPREDMODE]]);
 
   dataPart->writeSyntaxElement (currSE, dataPart);
   bitCount[BITS_COEFF_UV_MB] += currSE->len;
@@ -2271,6 +2166,33 @@ int writeChromaIntraPredMode()
   currMB->currSEnr++;
 
   return rate;
+}
+
+
+/*!
+************************************************************************
+* \brief
+*    Set global last_dquant according to macroblock delta qp
+************************************************************************
+*/
+
+extern int last_dquant;
+
+void set_last_dquant()
+{
+  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+
+  if ((IS_INTERMV (currMB)  || IS_INTRA (currMB)  ) ||
+    ((img->type==B_SLICE)     && currMB->cbp != 0)  )
+  {
+    // non-skip
+    last_dquant = currMB->delta_qp;
+  }
+  else
+  {
+    // skip
+    last_dquant = 0;
+  }
 }
 
 
@@ -2320,6 +2242,7 @@ void write_one_macroblock (int eos_bit)
         img->nz_coeff [img->current_mb_nr][i][j]=0;  // CAVLC
   }
 
+  set_last_dquant();
 
   //--- constrain intra prediction ---
   if(input->UseConstrainedIntraPred && (img->type==P_SLICE || img->type==B_SLICE))
@@ -2336,15 +2259,15 @@ void write_one_macroblock (int eos_bit)
 
   //Rate control
   img->NumberofMBHeaderBits=bitCount[BITS_MB_MODE]   + bitCount[BITS_INTER_MB]
-    + bitCount[BITS_CBP_MB]  + bitCount[BITS_DELTA_QUANT_MB];
+                           + bitCount[BITS_CBP_MB]  + bitCount[BITS_DELTA_QUANT_MB];
   img->NumberofMBTextureBits= bitCount[BITS_COEFF_Y_MB]+ bitCount[BITS_COEFF_UV_MB];
   img->NumberofTextureBits +=img->NumberofMBTextureBits;
   img->NumberofHeaderBits +=img->NumberofMBHeaderBits;
   /*basic unit layer rate control*/
   if(img->BasicUnit<img->Frame_Total_Number_MB)
   {
-      img->NumberofBasicUnitHeaderBits +=img->NumberofMBHeaderBits;
-      img->NumberofBasicUnitTextureBits +=img->NumberofMBTextureBits;
+    img->NumberofBasicUnitHeaderBits +=img->NumberofMBHeaderBits;
+    img->NumberofBasicUnitTextureBits +=img->NumberofMBTextureBits;
   }
   /*record the total number of MBs*/
   img->NumberofCodedMacroBlocks++;
@@ -2398,8 +2321,8 @@ int writeReferenceFrame (int mode, int i, int j, int fwd_flag, int  ref)
 
   currSE->value1 = ref;
   currSE->value2  = 0;
+  currSE->type   = SE_REFFRAME;
 
-  currSE->type   = ((img->type==B_SLICE) ? SE_BFRAME : SE_REFFRAME);
   dataPart = &(currSlice->partArr[partMap[currSE->type]]);
   if (input->symbol_mode == UVLC)
   {
@@ -2455,7 +2378,6 @@ int writeMotionVector8x8 (int  i0,
                           int  i1,
                           int  j1,
                           int  refframe,
-                          int  dmv_flag,
                           int  list_idx,
                           int  mv_mode)
 {
@@ -2475,8 +2397,6 @@ int writeMotionVector8x8 (int  i0,
 
   int******      all_mv     = img->all_mv;
   int******      pred_mv    = img->pred_mv;
-  int******      abp_all_dmv = img->abp_all_dmv;
-
 
 
   for (j=j0; j<j1; j+=step_v)
@@ -2484,18 +2404,8 @@ int writeMotionVector8x8 (int  i0,
   {
     for (k=0; k<2; k++) 
     {
-      if (img->type==B_SLICE && img->nal_reference_idc>0 && dmv_flag)
-      {
-        curr_mvd = abp_all_dmv[i][j][list_idx][refindex][mv_mode][k];
-      }
-      else if (img->type==B_SLICE && img->nal_reference_idc>0 && !dmv_flag)
-      {
-        curr_mvd = all_mv[i][j][list_idx][refindex][mv_mode][k] - pred_mv[i][j][list_idx][refindex][mv_mode][k];
-      }
-      else
-      {
-        curr_mvd = all_mv[i][j][list_idx][refindex][mv_mode][k] - pred_mv[i][j][list_idx][refindex][mv_mode][k];
-      }
+      curr_mvd = all_mv[i][j][list_idx][refindex][mv_mode][k] - pred_mv[i][j][list_idx][refindex][mv_mode][k];
+
 
       //--- store (oversampled) mvd ---
       for (l=0; l < step_v; l++)
@@ -2504,7 +2414,7 @@ int writeMotionVector8x8 (int  i0,
 
       currSE->value1 = curr_mvd;
       currSE->value2 = 0;
-      currSE->type   = ((img->type==B_SLICE) ? SE_BFRAME : SE_MVD);
+      currSE->type   = SE_MVD;
       if (input->symbol_mode == UVLC)
       {
         currSE->mapping = se_linfo;
@@ -2516,27 +2426,19 @@ int writeMotionVector8x8 (int  i0,
         currSE->value2  = 2*k+list_idx; // identifies the component and the direction; only used for context determination
         currSE->writing = writeMVD_CABAC;
       }  
-      dataPart = &(currSlice->partArr[partMap[(img->type==B_SLICE)? SE_BFRAME : SE_MVD]]);
+      dataPart = &(currSlice->partArr[partMap[SE_MVD]]);
       dataPart->writeSyntaxElement (currSE, dataPart);
 #if TRACE
-      if (img->type==B_SLICE && img->nal_reference_idc>0 && dmv_flag)
+      if (!list_idx)
       {
-        if (list_idx)
-        {
-          snprintf(currSE->tracestring, TRACESTRING_SIZE, "BDMV(%d) = %3d  (org_mv %3d)",k, curr_mvd, all_mv[i][j][list_idx][refindex][mv_mode][k]);
-        }
+        snprintf(currSE->tracestring, TRACESTRING_SIZE, "mvd_l0 (%d) = %3d  (org_mv %3d pred_mv %3d)",k, curr_mvd, all_mv[i][j][list_idx][refindex][mv_mode][k], pred_mv[i][j][list_idx][refindex][mv_mode][k]);
       }
       else
       {
-        if (!list_idx)
-        {
-          snprintf(currSE->tracestring, TRACESTRING_SIZE, "mvd_l0 (%d) = %3d  (org_mv %3d pred_mv %3d)",k, curr_mvd, all_mv[i][j][list_idx][refindex][mv_mode][k], pred_mv[i][j][list_idx][refindex][mv_mode][k]);
-        }
-        else
-        {
-          snprintf(currSE->tracestring, TRACESTRING_SIZE, "mvd_l1 (%d) = %3d  (org_mv %3d pred_mv %3d)",k, curr_mvd, all_mv[i][j][list_idx][refindex][mv_mode][k], pred_mv[i][j][list_idx][refindex][mv_mode][k]);
-        }
+        
+        snprintf(currSE->tracestring, TRACESTRING_SIZE, "mvd_l1 (%d) = %3d  (org_mv %3d pred_mv %3d)",k, curr_mvd, all_mv[i][j][list_idx][refindex][mv_mode][k], pred_mv[i][j][list_idx][refindex][mv_mode][k]);
       }
+
 #endif
       bitCount[BITS_INTER_MB] += currSE->len;
       rate                    += currSE->len;
@@ -2582,15 +2484,15 @@ int writeMotionInfo2NAL ()
           no_bits += writeReferenceFrame (currMB->b8mode[k], i0, j0, 1, enc_picture->ref_idx[LIST_0][img->block_x+i0][img->block_y+j0]);
         }
       }
-        for (j0=0; j0<4; j0+=step_v0)
-        for (i0=0; i0<4; i0+=step_h0)
+      for (j0=0; j0<4; j0+=step_v0)
+      for (i0=0; i0<4; i0+=step_h0)
+      {
+        k=j0+(i0/2);
+        if ((currMB->b8pdir[k]==1 || currMB->b8pdir[k]==2) && currMB->b8mode[k]!=0)//has backward vector
         {
-          k=j0+(i0/2);
-          if ((currMB->b8pdir[k]==1 || currMB->b8pdir[k]==2) && currMB->b8mode[k]!=0)//has backward vector
-          {
-            no_bits += writeReferenceFrame (currMB->b8mode[k], i0, j0, 0, enc_picture->ref_idx[LIST_1][img->block_x+i0][img->block_y+j0]);
-          }
+          no_bits += writeReferenceFrame (currMB->b8mode[k], i0, j0, 0, enc_picture->ref_idx[LIST_1][img->block_x+i0][img->block_y+j0]);
         }
+      }
     }
   }
 
@@ -2604,7 +2506,7 @@ int writeMotionInfo2NAL ()
       if ((currMB->b8pdir[k]==0 || currMB->b8pdir[k]==2) && currMB->b8mode[k]!=0)//has forward vector
       {
         refframe  = enc_picture->ref_idx[LIST_0][img->block_x+i0][img->block_y+j0];
-        no_bits  += writeMotionVector8x8 (i0, j0, i0+step_h0, j0+step_v0, refframe, 0/*MV*/, LIST_0, currMB->b8mode[k]);
+        no_bits  += writeMotionVector8x8 (i0, j0, i0+step_h0, j0+step_v0, refframe, LIST_0, currMB->b8mode[k]);
       }
     }
   }
@@ -2620,14 +2522,7 @@ int writeMotionInfo2NAL ()
       if ((currMB->b8pdir[k]==1 || currMB->b8pdir[k]==2) && currMB->b8mode[k]!=0)//has backward vector
       {
         refframe  = enc_picture->ref_idx[LIST_1][img->block_x+i0][img->block_y+j0];
-        if(img->type==B_SLICE && img->nal_reference_idc>0 && currMB->b8pdir[k]==2 && (abp_type_arr[img->block_y+j0][img->block_x+i0]==1 || abp_type_arr[img->block_y+j0][img->block_x+i0]==2))
-        {
-          no_bits  += writeMotionVector8x8 (i0, j0, i0+step_h0, j0+step_v0, refframe, 1/*DMV*/, LIST_1, currMB->b8mode[k]);
-        }
-        else
-        {
-          no_bits  += writeMotionVector8x8 (i0, j0, i0+step_h0, j0+step_v0, refframe, 0, LIST_1, currMB->b8mode[k]);
-        }
+        no_bits  += writeMotionVector8x8 (i0, j0, i0+step_h0, j0+step_v0, refframe, LIST_1, currMB->b8mode[k]);
       }
     }
   }
@@ -2677,7 +2572,6 @@ int writeChromaCoeff ()
           // CAVLC
       }
       else
-
       {
 
         DCLevel = img->cofDC[uv+1][0];
@@ -2698,9 +2592,7 @@ int writeChromaCoeff ()
           img->is_v_block     = uv;
     
           // choose the appropriate data partition
-          if (img->type!=B_SLICE)   dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-          else                                         dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
-    
+          dataPart = &(currSlice->partArr[partMap[currSE->type]]);    
           dataPart->writeSyntaxElement (currSE, dataPart);
           bitCount[BITS_COEFF_UV_MB] += currSE->len;
           rate                       += currSE->len;
@@ -2710,7 +2602,7 @@ int writeChromaCoeff ()
           // proceed to next SE 
           currSE++;  
           currMB->currSEnr++;
-      }
+        }
       }
     }
   }
@@ -2721,10 +2613,10 @@ int writeChromaCoeff ()
   //=====
   uv=-1;   
   if (cbp >> 4 == 2) // check if chroma bits in coded block pattern = 10b
-    {  
+  {  
     for (mb_y=4; mb_y < 6; mb_y += 2)
     for (mb_x=0; mb_x < 4; mb_x += 2)
-      {
+    {
       for (j=mb_y; j < mb_y+2; j++)
       {
         jj=j/2;
@@ -2741,7 +2633,6 @@ int writeChromaCoeff ()
             // CAVLC
           }
           else
-
           {
 
             ACLevel = img->cofAC[b8][b4][0];
@@ -2769,9 +2660,7 @@ int writeChromaCoeff ()
               img->is_v_block     = (uv>=4);
 
               // choose the appropriate data partition
-              if (img->type!=B_SLICE)   dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-              else                                         dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
-        
+              dataPart = &(currSlice->partArr[partMap[currSE->type]]); 
               dataPart->writeSyntaxElement (currSE, dataPart);
               bitCount[BITS_COEFF_UV_MB] += currSE->len;
               rate                       += currSE->len;
@@ -2831,9 +2720,7 @@ int writeLumaCoeff4x4_CABAC (int b8, int b4, int intra4x4mode)
     img->is_intra_block = intra4x4mode;
 
     // choose the appropriate data partition
-    if (img->type != B_SLICE)    dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-    else                                              dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
-          
+    dataPart = &(currSlice->partArr[partMap[currSE->type]]);          
     dataPart->writeSyntaxElement (currSE, dataPart);
     bitCount[BITS_COEFF_Y_MB] += currSE->len;
     rate                      += currSE->len;
@@ -2916,8 +2803,7 @@ int writeCBPandLumaCoeff ()
     if (input->symbol_mode == CABAC)   currSE->writing = writeCBP_CABAC;
                       
     // choose the appropriate data partition
-    if (img->type != B_SLICE) dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-    else                                           dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+    dataPart = &(currSlice->partArr[partMap[currSE->type]]);
     
     dataPart->writeSyntaxElement(currSE, dataPart);
     bitCount[BITS_CBP_MB] += currSE->len;
@@ -2944,9 +2830,7 @@ int writeCBPandLumaCoeff ()
 
 
     // choose the appropriate data partition
-    if (img->type != B_SLICE)   dataPart = &(img->currentSlice->partArr[partMap[currSE->type]]);
-    else                                             dataPart = &(img->currentSlice->partArr[partMap[SE_BFRAME]]);
-
+    dataPart = &(img->currentSlice->partArr[partMap[currSE->type]]);
     dataPart->writeSyntaxElement(  currSE, dataPart);
     bitCount[BITS_DELTA_QUANT_MB] += currSE->len;
     rate                          += currSE->len;
@@ -2958,11 +2842,9 @@ int writeCBPandLumaCoeff ()
     currMB->currSEnr++;
   }
 
-  {
-    for (j=0; j < 6; j++)
-      for (i=0; i < 4; i++)
-        img->nz_coeff [img->current_mb_nr][i][j]=0;  // CAVLC
-  }
+  for (j=0; j < 6; j++)
+    for (i=0; i < 4; i++)
+      img->nz_coeff [img->current_mb_nr][i][j]=0;  // CAVLC
 
   if (!IS_NEWINTRA (currMB))
   {
@@ -2993,7 +2875,9 @@ int writeCBPandLumaCoeff ()
         if (input->symbol_mode == UVLC)
         {
           currSE->mapping = levrun_linfo_inter;
-        }else{
+        }
+        else
+        {
           currSE->writing = writeRunLevel_CABAC;
         }
 
@@ -3002,8 +2886,7 @@ int writeCBPandLumaCoeff ()
         img->is_intra_block = 1;
 
         // choose the appropriate data partition
-        if (img->type != B_SLICE)   dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-        else                                             dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+        dataPart = &(currSlice->partArr[partMap[currSE->type]]);
     
         dataPart->writeSyntaxElement (currSE, dataPart);
         bitCount[BITS_COEFF_Y_MB] += currSE->len;
@@ -3048,7 +2931,9 @@ int writeCBPandLumaCoeff ()
             if (input->symbol_mode == UVLC)
             {
               currSE->mapping = levrun_linfo_inter;
-            }else{
+            }
+            else
+            {
               currSE->writing = writeRunLevel_CABAC;
             }
             currSE->context     = LUMA_16AC;
@@ -3056,8 +2941,7 @@ int writeCBPandLumaCoeff ()
             img->is_intra_block = 1;
 
             // choose the appropriate data partition
-            if (img->type != B_SLICE)   dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-            else                                             dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
+           dataPart = &(currSlice->partArr[partMap[currSE->type]]);
 
             dataPart->writeSyntaxElement (currSE, dataPart);
             bitCount[BITS_COEFF_Y_MB] += currSE->len;
@@ -3305,11 +3189,6 @@ int writeCoeff4x4_CAVLC (int block_type, int b8, int b4, int param)
     break;
   }
 
-  if (img->type == B_SLICE)
-  {
-    dptype = SE_BFRAME;
-  }
-
   dataPart = &(currSlice->partArr[partMap[dptype]]);
 
   numcoeff = 0;
@@ -3481,21 +3360,21 @@ int writeCoeff4x4_CAVLC (int block_type, int b8, int b4, int param)
 
       currSE->value1 = level;
       currSE->type  = dptype;   
-
-  #if TRACE
-        snprintf(currSE->tracestring, 
-          TRACESTRING_SIZE, "%s lev (%d,%d) k=%d vlc=%d lev=%3d",
-            type, subblock_x, subblock_y, k, vlcnum, level);
-  #endif
-
-          if (level_two_or_higher)
-          {
-            if (currSE->value1 > 0)
-              currSE->value1 --;
-            else
-              currSE->value1 ++;
-            level_two_or_higher = 0;
-          }
+      
+#if TRACE
+      snprintf(currSE->tracestring, 
+        TRACESTRING_SIZE, "%s lev (%d,%d) k=%d vlc=%d lev=%3d",
+        type, subblock_x, subblock_y, k, vlcnum, level);
+#endif
+      
+      if (level_two_or_higher)
+      {
+        if (currSE->value1 > 0)
+          currSE->value1 --;
+        else
+          currSE->value1 ++;
+        level_two_or_higher = 0;
+      }
 
       //    encode level
       if (vlcnum == 0)

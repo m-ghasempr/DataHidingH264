@@ -316,18 +316,19 @@ FME_SetMotionVectorPredictor (int  pmv[2],
   int temp_pred_SAD[2];
   pred_SAD_space = 0;
 
-  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
+//REMARK: interlace can not work now.2004.3.3
+  if(input->MbInterlace && mb_adaptive && img->field_mode)
   {
-    pic_block_y          = img->field_block_y + (mb_y>>2);
-    mb_available_up      = (img->field_mb_y == 0          ) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width  ].slice_nr);
+    pic_block_y          = (img->block_y>>1) + (mb_y>>2);
+    mb_available_up      = (img->mb_y == 0          ) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width  ].slice_nr);
     mb_available_left    = (img->mb_x == 0          ) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-1         ].slice_nr);
     mb_available_upleft  = (img->mb_x == 0 ||
-                            img->field_mb_y == 0          ) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr);
+                            img->mb_y == 0          ) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr);
     mb_available_upright = (img->mb_x >= mb_width-1 ||
-                            img->field_mb_y == 0          ) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width+1].slice_nr);
+                            img->mb_y == 0          ) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width+1].slice_nr);
   }
   
-  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive)
+  if(input->MbInterlace && mb_adaptive)
   {
     if(img->field_mode && !img->top_field)
       mb_available_upright=0; // set mb_available_upright to 0 for bottom MBs in a MB pair
@@ -388,16 +389,17 @@ FME_SetMotionVectorPredictor (int  pmv[2],
   }
   
     //write refFrArr[][] for current subMB partition
-    refFrArray[pic_block_y][pic_block_x]= ref;  //needed for other subMB partitions in this MB partition
+//    refFrArray[pic_block_y][pic_block_x]= ref;  //needed for other subMB partitions in this MB partition
+//    refFrArray[pic_block_x][pic_block_y]= ref;  //needed for other subMB partitions in this MB partition
 
 //  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive)
 //    block_available_upright = 0;      // temp fix for MB level field/frame coding
 
   mvPredType = MVPRED_MEDIAN;
-  rFrameL    = block_available_left    ? refFrArray[pic_block_y]  [pic_block_x-1] : -1;
-  rFrameU    = block_available_up      ? refFrArray[pic_block_y-1][pic_block_x]   : -1;
-  rFrameUR   = block_available_upright ? refFrArray[pic_block_y-1][pic_block_x+blockshape_x/4] :
-               block_available_upleft  ? refFrArray[pic_block_y-1][pic_block_x-1] : -1;
+  rFrameL    = block_available_left    ? refFrArray[pic_block_x-1] [pic_block_y]: -1;
+  rFrameU    = block_available_up      ? refFrArray[pic_block_x]   [pic_block_y-1]: -1;
+  rFrameUR   = block_available_upright ? refFrArray[pic_block_x+blockshape_x/4][pic_block_y-1] :
+               block_available_upleft  ? refFrArray[pic_block_x-1][pic_block_y-1] : -1;
   
   
   
@@ -523,6 +525,9 @@ FME_BlockMotionSearch (int       ref,           //!< reference frame (0... )
   int***    tmp_mv_array  = enc_picture->mv[list];
   
   int****** all_mv    = img->all_mv;  
+//modified 2004.3.3
+  int       pic_pix_x = img->opix_x + mb_x;
+  int       pic_pix_y = img->opix_y + mb_y;
 
 
   //FAST MOTION ESTIMATION. ZHIBO CHEN 2003.3
@@ -537,7 +542,9 @@ FME_BlockMotionSearch (int       ref,           //!< reference frame (0... )
   {
     for (i = 0; i < bsx; i++)
     {
-      orig_pic[j][i] = imgY_org[img->opix_y+j][img->opix_c_x+i];
+		//modified 2004.3.3
+//      orig_pic[j][i] = imgY_org[img->opix_y+j][img->opix_c_x+i];
+      orig_pic[j][i] = imgY_org[pic_pix_y+j][pic_pix_x+i];
     }
   }
 
@@ -546,7 +553,7 @@ FME_BlockMotionSearch (int       ref,           //!< reference frame (0... )
   {
     pred_MV_uplayer[0] = all_mv[block_x][block_y][list][ref][5][0];
     pred_MV_uplayer[1] = all_mv[block_x][block_y][list][ref][5][1];
-    pred_SAD_uplayer    = (list==1) ? (all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][0][5][0]) : (all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][refframe][5][0]);
+    pred_SAD_uplayer    = (list==1) ? (all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][0][5][0]) : (all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][ref][5][0]);
     pred_SAD_uplayer   /= 2; 
     
   }
@@ -554,7 +561,7 @@ FME_BlockMotionSearch (int       ref,           //!< reference frame (0... )
   {
     pred_MV_uplayer[0] = all_mv[block_x][block_y][list][ref][4][0];
     pred_MV_uplayer[1] = all_mv[block_x][block_y][list][ref][4][1];
-    pred_SAD_uplayer    = (list==1) ? (all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][0][4][0]) : (all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][refframe][4][0]);
+    pred_SAD_uplayer    = (list==1) ? (all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][0][4][0]) : (all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][ref][4][0]);
     pred_SAD_uplayer   /= 2; 
     
   }
@@ -562,14 +569,14 @@ FME_BlockMotionSearch (int       ref,           //!< reference frame (0... )
   {
     pred_MV_uplayer[0] = all_mv[block_x][block_y][list][ref][2][0];
     pred_MV_uplayer[1] = all_mv[block_x][block_y][list][ref][2][1];
-    pred_SAD_uplayer    = (list==1) ? (all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][0][2][0]) : (all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][refframe][2][0]);
+    pred_SAD_uplayer    = (list==1) ? (all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][0][2][0]) : (all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][ref][2][0]);
     pred_SAD_uplayer   /= 2; 
   }
   else if(blocktype > 1)
   {
     pred_MV_uplayer[0] = all_mv[block_x][block_y][list][ref][1][0];
     pred_MV_uplayer[1] = all_mv[block_x][block_y][list][ref][1][1];
-    pred_SAD_uplayer    = (list==1) ? (all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][0][1][0]) : (all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][refframe][1][0]);
+    pred_SAD_uplayer    = (list==1) ? (all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][0][1][0]) : (all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][ref][1][0]);
     pred_SAD_uplayer   /= 2; 
   }
   
@@ -577,30 +584,30 @@ FME_BlockMotionSearch (int       ref,           //!< reference frame (0... )
   {
     if(blocktype>6)
     {
-      pred_MV_uplayer[0] = all_bmv[block_x][block_y][refframe][5][0];
-      pred_MV_uplayer[1] = all_bmv[block_x][block_y][refframe][5][1];
-      pred_SAD_uplayer    = (list==1) ? (all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][0][5][0]) : (all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][refframe][5][0]);
+      pred_MV_uplayer[0] = all_mv[block_x][block_y][list][ref][5][0];
+      pred_MV_uplayer[1] = all_mv[block_x][block_y][list][ref][5][1];
+      pred_SAD_uplayer    = (list==1) ? (all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][0][5][0]) : (all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][ref][5][0]);
       pred_SAD_uplayer   /= 2; 
     }
     else if(blocktype>4)
     {
-      pred_MV_uplayer[0] = all_bmv[block_x][block_y][refframe][4][0];
-      pred_MV_uplayer[1] = all_bmv[block_x][block_y][refframe][4][1];
-      pred_SAD_uplayer    = (list==1) ? (all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][0][4][0]) : (all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][refframe][4][0]);
+      pred_MV_uplayer[0] = all_mv[block_x][block_y][list][ref][4][0];
+      pred_MV_uplayer[1] = all_mv[block_x][block_y][list][ref][4][1];
+      pred_SAD_uplayer    = (list==1) ? (all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][0][4][0]) : (all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][ref][4][0]);
       pred_SAD_uplayer   /= 2; 
     }
     else if(blocktype == 4)
     {
-      pred_MV_uplayer[0] = all_bmv[block_x][block_y][refframe][2][0];
-      pred_MV_uplayer[1] = all_bmv[block_x][block_y][refframe][2][1];
-      pred_SAD_uplayer    = (list==1) ? (all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][0][2][0]) : (all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][refframe][2][0]);
+      pred_MV_uplayer[0] = all_mv[block_x][block_y][list][ref][2][0];
+      pred_MV_uplayer[1] = all_mv[block_x][block_y][list][ref][2][1];
+      pred_SAD_uplayer    = (list==1) ? (all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][0][2][0]) : (all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][ref][2][0]);
       pred_SAD_uplayer   /= 2; 
     }
     else if(blocktype > 1)
     {
-      pred_MV_uplayer[0] = all_bmv[block_x][block_y][refframe][1][0];
-      pred_MV_uplayer[1] = all_bmv[block_x][block_y][refframe][1][1];
-      pred_SAD_uplayer    = (list==1) ? (all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][0][1][0]) : (all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][refframe][1][0]);
+      pred_MV_uplayer[0] = all_mv[block_x][block_y][list][ref][1][0];
+      pred_MV_uplayer[1] = all_mv[block_x][block_y][list][ref][1][1];
+      pred_SAD_uplayer    = (list==1) ? (all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][0][1][0]) : (all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][ref][1][0]);
       pred_SAD_uplayer   /= 2; 
     }
   }
@@ -608,63 +615,63 @@ FME_BlockMotionSearch (int       ref,           //!< reference frame (0... )
   pred_SAD_uplayer = flag_intra_SAD ? 0 : pred_SAD_uplayer;// for irregular motion
  
   //Coordinate prediction
-  if (img->number > refframe+1)
+  if (img->number > ref+1)
   {
-    pred_SAD_time = all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][refframe][blocktype][0];
-    pred_MV_time[0] = all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][refframe][blocktype][1];
-    pred_MV_time[1] = all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][refframe][blocktype][2];
+    pred_SAD_time = all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][ref][blocktype][0];
+    pred_MV_time[0] = all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][ref][blocktype][1];
+    pred_MV_time[1] = all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][ref][blocktype][2];
   }
  
   if(list==1 && (Bframe_ctr%N_Bframe) > 1) 
   {
-    pred_SAD_time = all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][refframe][blocktype][0];
+    pred_SAD_time = all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][ref][blocktype][0];
     pred_MV_time[0] = (int)(all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][0][blocktype][1] * ((n_Bframe==1) ? (N_Bframe) : (N_Bframe-n_Bframe+1.0)/(N_Bframe-n_Bframe+2.0)) );//should add a factor
     pred_MV_time[1] = (int)(all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][0][blocktype][2] *((n_Bframe==1) ? (N_Bframe) : (N_Bframe-n_Bframe+1.0)/(N_Bframe-n_Bframe+2.0)) );//should add a factor
   }
 
   if (input->PicInterlace == FIELD_CODING) 
   {
-    if (img->type == P_SLICE && refframe > 1)
+    if (img->type == P_SLICE && ref > 1)
     {
-      pred_SAD_ref = all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][(refframe-2)][blocktype][0];
+      pred_SAD_ref = all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][(ref-2)][blocktype][0];
       pred_SAD_ref = flag_intra_SAD ? 0 : pred_SAD_ref;//add this for irregular motion
-      pred_MV_ref[0] = all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][(refframe-2)][blocktype][1];
-      pred_MV_ref[0] = (int)(pred_MV_ref[0]*((refframe>>1)+1)/(float)((refframe>>1)));
-      pred_MV_ref[1] = all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][(refframe-2)][blocktype][2];
-      pred_MV_ref[1] = (int)(pred_MV_ref[1]*((refframe>>1)+1)/(float)((refframe>>1)));
+      pred_MV_ref[0] = all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][(ref-2)][blocktype][1];
+      pred_MV_ref[0] = (int)(pred_MV_ref[0]*((ref>>1)+1)/(float)((ref>>1)));
+      pred_MV_ref[1] = all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][(ref-2)][blocktype][2];
+      pred_MV_ref[1] = (int)(pred_MV_ref[1]*((ref>>1)+1)/(float)((ref>>1)));
     }
-    if (img->type == B_SLICE && list==0 && (refframe==0 || refframe==1) )
+    if (img->type == B_SLICE && list==0 && (ref==0 || ref==1) )
     {
       pred_SAD_ref = all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][0][blocktype][0];
       pred_SAD_ref = flag_intra_SAD ? 0 : pred_SAD_ref;//add this for irregular motion
-      pred_MV_ref[0] =(int) (all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][refframe][blocktype][1]*(-n_Bframe)/(N_Bframe-n_Bframe+1.0f)); //should add a factor
-      pred_MV_ref[1] =(int) ( all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][refframe][blocktype][2]*(-n_Bframe)/(N_Bframe-n_Bframe+1.0f)); 
+      pred_MV_ref[0] =(int) (all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][ref][blocktype][1]*(-n_Bframe)/(N_Bframe-n_Bframe+1.0f)); //should add a factor
+      pred_MV_ref[1] =(int) ( all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][ref][blocktype][2]*(-n_Bframe)/(N_Bframe-n_Bframe+1.0f)); 
     }
   }
  else //frame case
   {
-    if (refframe > 0)
+    if (ref > 0)
     {//field_mode top_field
-      pred_SAD_ref = all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][(refframe-1)][blocktype][0];
+      pred_SAD_ref = all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][(ref-1)][blocktype][0];
       pred_SAD_ref = flag_intra_SAD ? 0 : pred_SAD_ref;//add this for irregular motion
-      pred_MV_ref[0] = all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][(refframe-1)][blocktype][1];
-      pred_MV_ref[0] = (int)(pred_MV_ref[0]*(refframe+1)/(float)(refframe));
-      pred_MV_ref[1] = all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][(refframe-1)][blocktype][2];
-      pred_MV_ref[1] = (int)(pred_MV_ref[1]*(refframe+1)/(float)(refframe));
+      pred_MV_ref[0] = all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][(ref-1)][blocktype][1];
+      pred_MV_ref[0] = (int)(pred_MV_ref[0]*(ref+1)/(float)(ref));
+      pred_MV_ref[1] = all_mincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][(ref-1)][blocktype][2];
+      pred_MV_ref[1] = (int)(pred_MV_ref[1]*(ref+1)/(float)(ref));
     }
-    if (img->type == B_SLICE && (list==0 && refframe==0)) //B frame forward prediction, first ref
+    if (img->type == B_SLICE && (list==0 && ref==0)) //B frame forward prediction, first ref
     {
       pred_SAD_ref = all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][0][blocktype][0];
       pred_SAD_ref = flag_intra_SAD ? 0 : pred_SAD_ref;//add this for irregular motion
-      pred_MV_ref[0] =(int) (all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][refframe][blocktype][1]*(-n_Bframe)/(N_Bframe-n_Bframe+1.0f)); //should add a factor
-      pred_MV_ref[1] =(int) ( all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][refframe][blocktype][2]*(-n_Bframe)/(N_Bframe-n_Bframe+1.0f)); 
+      pred_MV_ref[0] =(int) (all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][ref][blocktype][1]*(-n_Bframe)/(N_Bframe-n_Bframe+1.0f)); //should add a factor
+      pred_MV_ref[1] =(int) ( all_bwmincost[(img->pix_x>>2)+block_x][(img->pix_y>>2)+block_y][ref][blocktype][2]*(-n_Bframe)/(N_Bframe-n_Bframe+1.0f)); 
     }
   }
   //===========================================
   //=====   GET MOTION VECTOR PREDICTOR   =====
   //===========================================
                       //NB  pred_mv is only 2D here
-  FME_SetMotionVectorPredictor (pred_mv, refFrArray, tmp_mv_array, refframe, list, mb_x, mb_y, bsx, bsy, blocktype, ref);
+  FME_SetMotionVectorPredictor (pred_mv, refFrArray, tmp_mv_array, ref, list, mb_x, mb_y, bsx, bsy, blocktype, ref);
   pred_mv_x = pred_mv[0];
   pred_mv_y = pred_mv[1];
 
@@ -695,9 +702,9 @@ FME_BlockMotionSearch (int       ref,           //!< reference frame (0... )
     for (j=0; j < (bsy>>2); j++)
     {
       if(list == 0) 
-        all_mincost[(img->pix_x>>2)+block_x+i][(img->pix_y>>2)+block_y+j][refframe][blocktype][0] = min_mcost;
+        all_mincost[(img->pix_x>>2)+block_x+i][(img->pix_y>>2)+block_y+j][ref][blocktype][0] = min_mcost;
       else
-        all_bwmincost[(img->pix_x>>2)+block_x+i][(img->pix_y>>2)+block_y+j][refframe][blocktype][0] = min_mcost; 
+        all_bwmincost[(img->pix_x>>2)+block_x+i][(img->pix_y>>2)+block_y+j][ref][blocktype][0] = min_mcost; 
     }
   }
 
@@ -730,13 +737,13 @@ FME_BlockMotionSearch (int       ref,           //!< reference frame (0... )
     {
       if(list == 0)
       {
-        all_mincost[(img->pix_x>>2)+block_x+i][(img->pix_y>>2)+block_y+j][refframe][blocktype][1] = mv_x;
-        all_mincost[(img->pix_x>>2)+block_x+i][(img->pix_y>>2)+block_y+j][refframe][blocktype][2] = mv_y;
+        all_mincost[(img->pix_x>>2)+block_x+i][(img->pix_y>>2)+block_y+j][ref][blocktype][1] = mv_x;
+        all_mincost[(img->pix_x>>2)+block_x+i][(img->pix_y>>2)+block_y+j][ref][blocktype][2] = mv_y;
       }
       else
       {
-        all_bwmincost[(img->pix_x>>2)+block_x+i][(img->pix_y>>2)+block_y+j][refframe][blocktype][1] = mv_x;
-        all_bwmincost[(img->pix_x>>2)+block_x+i][(img->pix_y>>2)+block_y+j][refframe][blocktype][2] = mv_y;
+        all_bwmincost[(img->pix_x>>2)+block_x+i][(img->pix_y>>2)+block_y+j][ref][blocktype][1] = mv_x;
+        all_bwmincost[(img->pix_x>>2)+block_x+i][(img->pix_y>>2)+block_y+j][ref][blocktype][2] = mv_y;
 
       }
     }
@@ -758,8 +765,8 @@ FME_BlockMotionSearch (int       ref,           //!< reference frame (0... )
       if (cost < min_mcost)
       {
         min_mcost = cost;
-        mv_x      = img->all_mv [0][0][0][0][0];
-        mv_y      = img->all_mv [0][0][0][0][1];
+        mv_x      = img->all_mv [0][0][0][0][0][0];
+        mv_y      = img->all_mv [0][0][0][0][0][1];
       }
     }
   }
@@ -767,12 +774,12 @@ FME_BlockMotionSearch (int       ref,           //!< reference frame (0... )
   //===============================================
   //=====   SET MV'S AND RETURN MOTION COST   =====
   //===============================================
-//  {int h4x4blkno = 4+(pic_pix_x>>2);  int v4x4blkno = pic_pix_y>>2;
+//  int h4x4blkno = 4+(pic_pix_x>>2);  int v4x4blkno = pic_pix_y>>2;
    {int h4x4blkno = (pic_pix_x>>2);  int v4x4blkno = pic_pix_y>>2;
   for (i=0; i < (bsx>>2); i++){
     for (j=0; j < (bsy>>2); j++){
-      all_mv[block_x+i][block_y+j][refframe][blocktype][0] = mv_x;
-      all_mv[block_x+i][block_y+j][refframe][blocktype][1] = mv_y;
+      all_mv[block_x+i][block_y+j][list][ref][blocktype][0] = mv_x;
+      all_mv[block_x+i][block_y+j][list][ref][blocktype][1] = mv_y;
       tmp_mv_array[h4x4blkno+i][v4x4blkno+j][0] = mv_x; //adding 4 is weird, also y,x instead of x,y????
       tmp_mv_array[h4x4blkno+i][v4x4blkno+j][1] = mv_y;
     }
@@ -783,20 +790,20 @@ FME_BlockMotionSearch (int       ref,           //!< reference frame (0... )
     for (j=0; j < (bsy>>2); j++)
     {
       //  Backward
-      all_bmv[block_x+i][block_y+j][ref][blocktype][0] = mv_x;
-      all_bmv[block_x+i][block_y+j][ref][blocktype][1] = mv_y;
+      all_mv[block_x+i][block_y+j][list][ref][blocktype][0] = mv_x;
+      all_mv[block_x+i][block_y+j][list][ref][blocktype][1] = mv_y;
     }
   }
   return min_mcost;
 }
 
-_inline int PartCalMad(pel_t *ref_pic,pel_t** orig_pic,pel_t *(*get_ref_line)(int, pel_t*, int, int), int blocksize_y,int blocksize_x, int blocksize_x4,int mcost,int min_mcost,int cand_x,int cand_y)
+_inline int PartCalMad(pel_t *ref_pic,pel_t** orig_pic,pel_t *(*get_ref_line)(int, pel_t*, int, int, int, int), int blocksize_y,int blocksize_x, int blocksize_x4,int mcost,int min_mcost,int cand_x,int cand_y)
 {
   int y,x4;
   pel_t *orig_line, *ref_line;
   for (y=0; y<blocksize_y; y++)
     {
-    ref_line  = get_ref_line (blocksize_x, ref_pic, cand_y+y, cand_x);
+    ref_line  = get_ref_line (blocksize_x, ref_pic, cand_y+y, cand_x, img->height, img->width);//2004.3.3
     orig_line = orig_pic [y];
     
     for (x4=0; x4<blocksize_x4; x4++)
@@ -868,7 +875,7 @@ FastIntegerPelBlockMotionSearch  (pel_t**   orig_pic,     // <--  not used
   static int Big_Hexagon_y[16] = {4, 3, 2,  1, 0, -1, -2, -3, -4, -3, -2, -1, 0, 1, 2, 3};
 
   int   pos, cand_x, cand_y,  mcost;
-  pel_t *(*get_ref_line)(int, pel_t*, int, int);
+  pel_t *(*get_ref_line)(int, pel_t*, int, int, int, int);
   pel_t*  ref_pic       = listX[list][ref]->imgY_11;//img->type==B_IMG? Refbuf11 [ref+((mref==mref_fld)) +1] : Refbuf11[ref];
   int   best_pos      = 0;                                        // position with minimum motion cost
   int   max_pos       = (2*search_range+1)*(2*search_range+1);    // number of search positions
@@ -1163,6 +1170,16 @@ int AddUpSADQuarter(int pic_pix_x,int pic_pix_y,int blocksize_x,int blocksize_y,
   int  mcost = Mvmcost;
   int yy,kk,xx;
   int   curr_diff[MB_BLOCK_SIZE][MB_BLOCK_SIZE]; // for ABT SATD calculation
+//2004.3.3
+  int   img_width=img->width, img_height=img->height;
+/*
+  StorablePicture *ref_picture;
+  int   list_offset     = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
+  ref_picture     = listX[list+list_offset][ref];
+  img_width  = ref_picture->size_x;
+  img_height = ref_picture->size_y;
+*/
+
   
   for (y0=0, abort_search=0; y0<blocksize_y && !abort_search; y0+=4)
   {
@@ -1174,28 +1191,28 @@ int AddUpSADQuarter(int pic_pix_x,int pic_pix_y,int blocksize_x,int blocksize_y,
       d   = diff;
       
       orig_line = orig_pic [y0  ];    ry=ry0;
-      *d++      = orig_line[x0  ]  -  PelY_14 (ref_pic, ry, rx0   );
-      *d++      = orig_line[x0+1]  -  PelY_14 (ref_pic, ry, rx0+ 4);
-      *d++      = orig_line[x0+2]  -  PelY_14 (ref_pic, ry, rx0+ 8);
-      *d++      = orig_line[x0+3]  -  PelY_14 (ref_pic, ry, rx0+ 12);
+      *d++      = orig_line[x0  ]  -  PelY_14 (ref_pic, ry, rx0   , img_height, img_width);
+      *d++      = orig_line[x0+1]  -  PelY_14 (ref_pic, ry, rx0+ 4, img_height, img_width);
+      *d++      = orig_line[x0+2]  -  PelY_14 (ref_pic, ry, rx0+ 8, img_height, img_width);
+      *d++      = orig_line[x0+3]  -  PelY_14 (ref_pic, ry, rx0+ 12, img_height, img_width);
       
       orig_line = orig_pic [y0+1];    ry=ry0+4;
-      *d++      = orig_line[x0  ]  -  PelY_14 (ref_pic, ry, rx0   );
-      *d++      = orig_line[x0+1]  -  PelY_14 (ref_pic, ry, rx0+ 4);
-      *d++      = orig_line[x0+2]  -  PelY_14 (ref_pic, ry, rx0+ 8);
-      *d++      = orig_line[x0+3]  -  PelY_14 (ref_pic, ry, rx0+ 12);
+      *d++      = orig_line[x0  ]  -  PelY_14 (ref_pic, ry, rx0   , img_height, img_width);
+      *d++      = orig_line[x0+1]  -  PelY_14 (ref_pic, ry, rx0+ 4, img_height, img_width);
+      *d++      = orig_line[x0+2]  -  PelY_14 (ref_pic, ry, rx0+ 8, img_height, img_width);
+      *d++      = orig_line[x0+3]  -  PelY_14 (ref_pic, ry, rx0+ 12, img_height, img_width);
       
       orig_line = orig_pic [y0+2];    ry=ry0+8;
-      *d++      = orig_line[x0  ]  -  PelY_14 (ref_pic, ry, rx0   );
-      *d++      = orig_line[x0+1]  -  PelY_14 (ref_pic, ry, rx0+ 4);
-      *d++      = orig_line[x0+2]  -  PelY_14 (ref_pic, ry, rx0+ 8);
-      *d++      = orig_line[x0+3]  -  PelY_14 (ref_pic, ry, rx0+ 12);
+      *d++      = orig_line[x0  ]  -  PelY_14 (ref_pic, ry, rx0   , img_height, img_width);
+      *d++      = orig_line[x0+1]  -  PelY_14 (ref_pic, ry, rx0+ 4, img_height, img_width);
+      *d++      = orig_line[x0+2]  -  PelY_14 (ref_pic, ry, rx0+ 8, img_height, img_width);
+      *d++      = orig_line[x0+3]  -  PelY_14 (ref_pic, ry, rx0+ 12, img_height, img_width);
       
       orig_line = orig_pic [y0+3];    ry=ry0+12;
-      *d++      = orig_line[x0  ]  -  PelY_14 (ref_pic, ry, rx0   );
-      *d++      = orig_line[x0+1]  -  PelY_14 (ref_pic, ry, rx0+ 4);
-      *d++      = orig_line[x0+2]  -  PelY_14 (ref_pic, ry, rx0+ 8);
-      *d        = orig_line[x0+3]  -  PelY_14 (ref_pic, ry, rx0+ 12);
+      *d++      = orig_line[x0  ]  -  PelY_14 (ref_pic, ry, rx0   , img_height, img_width);
+      *d++      = orig_line[x0+1]  -  PelY_14 (ref_pic, ry, rx0+ 4, img_height, img_width);
+      *d++      = orig_line[x0+2]  -  PelY_14 (ref_pic, ry, rx0+ 8, img_height, img_width);
+      *d        = orig_line[x0+3]  -  PelY_14 (ref_pic, ry, rx0+ 12, img_height, img_width);
       
       if (!useABT)
       {

@@ -1644,7 +1644,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
                 }
                 else
                 {
-                  for (iref=0;iref<listXsize[refList + list_offset];iref++)
+                  for (iref=0;iref<listXsize[LIST_0 + list_offset];iref++)
                   {
                     if (dec_picture->ref_pic_num[LIST_0 + list_offset][iref]==listX[LIST_1 + list_offset][0]->ref_pic_num[refList][ref_idx])
                     {
@@ -1910,7 +1910,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
             }
             else             
             {
-              for (iref=0;iref<listXsize[refList + list_offset];iref++)
+              for (iref=0;iref<listXsize[LIST_0 + list_offset];iref++)
               {
                 if (dec_picture->ref_pic_num[LIST_0 + list_offset][iref]==listX[LIST_1 + list_offset][0]->ref_pic_num[refList][ref_idx])
                 {
@@ -3394,7 +3394,6 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
             bw_refframe = dec_picture->ref_idx[LIST_1][i4][j4];
             fw_ref_idx = fw_refframe;
             bw_ref_idx = bw_refframe;
-            bw_ref_idx = img->disposable_flag ? bw_ref_idx : 1 - bw_ref_idx;
           }
           else
           {
@@ -3467,7 +3466,6 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
               
               fw_ref_idx = fw_refframe;
               bw_ref_idx = bw_refframe;
-              bw_ref_idx = img->disposable_flag ? bw_ref_idx : 1 - bw_ref_idx;
               
               if      (dec_picture->ref_idx[LIST_1][i4][j4]==-1) direct_pdir = 0;
               else if (dec_picture->ref_idx[LIST_0][i4][j4]==-1) direct_pdir = 1;
@@ -3508,7 +3506,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                 }
                 else
                 {
-                  for (iref=0;iref<listXsize[refList + list_offset];iref++)
+                  for (iref=0;iref<listXsize[LIST_0 + list_offset];iref++)
                   {
                     if (dec_picture->ref_pic_num[LIST_0 + list_offset][iref]==listX[LIST_1 + list_offset][0]->ref_pic_num[refList ][ref_idx])
                     {
@@ -3848,7 +3846,6 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                   
                   fw_ref_idx = fw_refframe;
                   bw_ref_idx = bw_refframe;
-                  bw_ref_idx = img->disposable_flag ? bw_ref_idx : 1 - bw_ref_idx;
                 }
                 else
                 {
@@ -3863,7 +3860,6 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                     {
                       bw_refframe = dec_picture->ref_idx[LIST_1][(ifx/2)*2][2*(jf/2)];
                       bw_ref_idx = bw_refframe;
-                      bw_ref_idx = img->disposable_flag ? bw_ref_idx : 1 - bw_ref_idx;
                     }
                     
                     if      (dec_picture->ref_idx[LIST_1][(ifx/2)*2][2*(jf/2)]==-1) direct_pdir = 0;
@@ -3878,7 +3874,6 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                     
                     fw_ref_idx = fw_refframe;
                     bw_ref_idx = bw_refframe;
-                    bw_ref_idx = img->disposable_flag ? bw_ref_idx : 1 - bw_ref_idx;
                   }
                 }
                 

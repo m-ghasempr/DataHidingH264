@@ -667,11 +667,11 @@ void decoding_poc(struct img_par *img)
     else if (img->bottom_field_flag==0)
     {  //top field 
       img->ThisPOC = img->toppoc = img->ExpectedPicOrderCnt + img->delta_pic_order_cnt[0];
-      img->bottompoc = 0;
+      //img->bottompoc = 0;
     } 
     else
     {  //bottom field
-      img->toppoc = 0;
+      //img->toppoc = 0;
       img->ThisPOC = img->bottompoc = img->ExpectedPicOrderCnt + img->offset_for_top_to_bottom_field + img->delta_pic_order_cnt[0];
     }
   

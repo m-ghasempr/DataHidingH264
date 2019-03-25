@@ -90,19 +90,29 @@ void Configure (int ac, char *av[])
 {
   char *content;
   int CLcount, ContentLen, NumberParams;
+  char *filename=DEFAULTCONFIGFILENAME;
 
   memset (&configinput, 0, sizeof (InputParameters));
   // Process default config file
 
-  printf ("Parsing Configfile %s", DEFAULTCONFIGFILENAME);
-  content = GetConfigFileContent (DEFAULTCONFIGFILENAME);
+  CLcount = 1;
+
+  if (ac>=3)
+  {
+    if (0 == strncmp (av[1], "-d", 2))
+    {
+      filename=av[2];
+      CLcount = 3;
+    }
+  }
+  printf ("Parsing Configfile %s", filename);
+  content = GetConfigFileContent (filename);
   ParseContent (content, strlen(content));
   printf ("\n");
   free (content);
 
   // Parse the command line
 
-  CLcount = 1;
   while (CLcount < ac)
   {
     if (0 == strncmp (av[CLcount], "-f", 2))  // A file parameter?
@@ -133,7 +143,7 @@ void Configure (int ac, char *av[])
         if ((content = malloc (ContentLen))==NULL) no_mem_exit("Configure: content");;
         content[0] = '\0';
 
-        // concatenate all parameters itendified before
+        // concatenate all parameters identified before
 
         while (CLcount < NumberParams)
         {
@@ -494,14 +504,6 @@ static void PatchInp ()
     error (errortext, 400);
   }
 
-  if (input->partition_mode == 1 && input->UseConstrainedIntraPred == 0)
-  {
-    printf ("Why this???");
-    snprintf(errortext, ET_SIZE, "For Partition mode 1 UseConstrainedIntraPred must be set to 1");
-    error (errortext, 400);
-  }
-
-
   if (input->of_mode < 0 || input->of_mode > 2)
   {
     snprintf(errortext, ET_SIZE, "Unsupported Output file mode, must be between 0 and 1");
@@ -613,6 +615,7 @@ static void PatchInp ()
     snprintf(errortext, ET_SIZE, "Only RTP output mode is compatible with spare picture features.");
     error (errortext, 500);
   }
+  /*
   if (input->StoredBPictures > 0)
   {
     if (input->direct_type != DIR_SPATIAL)
@@ -621,11 +624,14 @@ static void PatchInp ()
       printf("Stored B Picture coding is not supported for temporal direct mode currently. Using spatial direct mode.");
     }
   }
+  */
+  /*
   if( (input->StoredBPictures || input->WeightedBiprediction > 0) && input->successive_Bframe && input->direct_type == DIR_TEMPORAL)
   {
     printf("Weighted bi-prediction coding is not supported for temporal direct mode currently.");
     input->direct_type = DIR_SPATIAL;
   }
+  */
   if( (input->WeightedPrediction > 0 || input->WeightedBiprediction > 0) && (input->MbInterlace))
   {
     printf("Weighted prediction coding is not supported for MB AFF currently.");

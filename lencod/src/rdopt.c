@@ -35,6 +35,7 @@ extern       int  QP2QUANT  [40];
 int QP,QP2;
 int DELTA_QP,DELTA_QP2;
 int diffy[16][16];
+static int pred[16][16];
 
 extern       int  QP2QUANT  [40];
 
@@ -57,7 +58,6 @@ int   best_c_imode;
 int   best_i16offset;
 
 int   best8x8bwref     [MAXMODE][4];       // [mode][block]
-int   best8x8abp_type  [MAXMODE][4];       // [mode][block]
 int   abp_typeframe[4][4];
 
 /*!
@@ -353,10 +353,7 @@ double RDCost_for_4x4IntraBlocks (int*    nonzero,
   if (input->symbol_mode != UVLC)    currSE->writing = writeIntraPredMode_CABAC;
 
   //--- choose data partition ---
-
-  if (img->type!=B_SLICE)   dataPart = &(currSlice->partArr[partMap[SE_INTRAPREDMODE]]);
-  else                                         dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
-
+  dataPart = &(currSlice->partArr[partMap[SE_INTRAPREDMODE]]);
   //--- encode and update rate ---
   if (input->symbol_mode == UVLC)    writeSyntaxElement_Intra4x4PredictionMode(currSE, dataPart);
   else                               dataPart->writeSyntaxElement (currSE, dataPart);
@@ -674,10 +671,7 @@ double RDCost_for_8x8blocks (int*    cnt_nonz,   // --> number of nonzero coeffi
     currSE->value1  = b8value;
     currSE->writing = writeB8_typeInfo_CABAC;
     currSE->type    = SE_MBTYPE;
-
-    if (img->type==B_SLICE && img->nal_reference_idc==0)   dataPart = &(currSlice->partArr[partMap[currSE->type]]);
-    else                                         dataPart = &(currSlice->partArr[partMap[SE_BFRAME]]);
-
+    dataPart = &(currSlice->partArr[partMap[currSE->type]]);
     dataPart->writeSyntaxElement (currSE, dataPart);
     rate += currSE->len;
     currSE++;
@@ -687,9 +681,9 @@ double RDCost_for_8x8blocks (int*    cnt_nonz,   // --> number of nonzero coeffi
   //----- motion information -----
   if (!direct)
   {
-    if ((input->num_reference_frames>1 ) && (pdir==0 || pdir==2))
+    if ((img->num_ref_idx_l0_active > 1 ) && (pdir==0 || pdir==2))
       rate  += writeReferenceFrame (mode, i0, j0, 1, ref);
-    if(input->StoredBPictures > 0)
+    if(img->num_ref_idx_l1_active > 1 && img->type== B_SLICE)
     {
       if (pdir==1 || pdir==2)
       {
@@ -699,17 +693,11 @@ double RDCost_for_8x8blocks (int*    cnt_nonz,   // --> number of nonzero coeffi
 
     if (pdir==0 || pdir==2)
     {
-      if(img->type==B_SLICE && img->nal_reference_idc>0 && (pdir==1 || pdir==2) )
-        rate  += writeMotionVector8x8 (i0, j0, i0+2, j0+2, ref, 1/*DMV*/, LIST_0, mode);
-      else
-        rate  += writeMotionVector8x8 (i0, j0, i0+2, j0+2, ref, 0, LIST_0, mode);
+      rate  += writeMotionVector8x8 (i0, j0, i0+2, j0+2, ref,LIST_0, mode);
     }
     if (pdir==1 || pdir==2)
     {
-      if(img->type==B_SLICE && img->nal_reference_idc>0 && (pdir==0 || pdir==2) )
-        rate  += writeMotionVector8x8 (i0, j0, i0+2, j0+2, bwd_ref, 1/*DMV*/, LIST_1, mode);
-      else
-        rate  += writeMotionVector8x8 (i0, j0, i0+2, j0+2, bwd_ref, 0, LIST_1, mode);
+      rate  += writeMotionVector8x8 (i0, j0, i0+2, j0+2, bwd_ref, LIST_1, mode);
     }
   }
 
@@ -822,15 +810,12 @@ void SetModesAndRefframeForBlocks (int mode)
           {     //direct mode
             enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j] = direct_ref_idx[LIST_0][img->block_x+i][img->block_y+j];
             enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j] = direct_ref_idx[LIST_1][img->block_x+i][img->block_y+j];
-
-            abp_type_arr[img->block_y+j][img->block_x+i] = best8x8abp_type[mode][2*(j/2)+(i/2)];
           }
           else
           {   //intra
             enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j] = -1;
             enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j] = -1;
             
-            abp_type_arr[img->block_y+j][img->block_x+i] = best8x8abp_type[mode][2*(j/2)+(i/2)];
           }
         }
     }
@@ -863,8 +848,6 @@ void SetModesAndRefframeForBlocks (int mode)
             enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j] = (IS_FW ? best8x8fwref[mode][k] : -1);
             enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j] = (IS_BW ? best8x8bwref[mode][k] : -1);
           }
-
-          abp_type_arr[img->block_y+j][img->block_x+i] = (IS_BW ? best8x8abp_type[mode][k] : 0);
         }
     }
     else
@@ -1140,6 +1123,19 @@ int RDCost_for_macroblocks (double   lambda,      // <-- lagrange multiplier
     compute_residue_mb (mode==I16MB?i16mode:-1);
   }
 
+  //Rate control
+  if (mode == I16MB)
+  {
+	  for(i=0; i<16; i++)
+	  for(j=0; j<16; j++)
+	    pred[j][i] = img->mprr_2[i16mode][j][i];
+  }else
+  {
+	  for(i=0; i<16; i++)
+	  for(j=0; j<16; j++)
+	    pred[j][i] = img->mpr[i][j];
+  }
+
   img->i16offset = 0;
   dummy = 0;
   ChromaResidualCoding (&dummy);
@@ -1333,8 +1329,6 @@ void store_macroblock_parameters (int mode)
     if (bframe)
     {
       brefframe[j][i] = enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j];
-
-      abp_typeframe[j][i] = abp_type_arr[img->block_y + j][img->block_x + i];     
     }
   }
 
@@ -1490,7 +1484,6 @@ void set_stored_macroblock_parameters ()
         if(img->MbaffFrameFlag)
           rdopt->refar[LIST_1][j][i]            = brefframe[j][i];
 
-        abp_type_arr[img->block_y+j][img->block_x+i] = abp_typeframe[j][i];
     }
   }
 
@@ -1540,7 +1533,7 @@ void set_stored_macroblock_parameters ()
  *    Set reference frames and motion vectors
  *************************************************************************************
  */
-void SetRefAndMotionVectors (int block, int mode, int pdir, int fwref, int bwref, int abp_type)
+void SetRefAndMotionVectors (int block, int mode, int pdir, int fwref, int bwref)
 {
   int     i, j=0;
   int     bslice  = (img->type==B_SLICE);
@@ -1552,7 +1545,7 @@ void SetRefAndMotionVectors (int block, int mode, int pdir, int fwref, int bwref
 
   int list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
 
-//  if (mode==IBLOCK)
+
   if (pdir<0)
   {
     for (j=j0; j<j1; j++)
@@ -1593,7 +1586,6 @@ void SetRefAndMotionVectors (int block, int mode, int pdir, int fwref, int bwref
           bwref =direct_ref_idx[LIST_1][img->block_x+i][img->block_y+j];
         }
         
-        abp_type_arr[img->block_y+j][img->block_x+i] = abp_type;
         
         if ((pdir==0 || pdir==2))
         {
@@ -1692,13 +1684,9 @@ int field_flag_inference()
    
    int     **ipredmodes = img->ipredmode;
    int     best_bw_ref = -1;
-   int     best_abp_type =0;
    int     ******allmvs = img->all_mv;
 
    
-#ifdef ABIPRED
-   int tmp_fw_ref = 0, tmp_bw_ref = 0;
-#endif
    int  l,list_offset;
 
    int curr_mb_field = ((img->MbaffFrameFlag)&&(currMB->mb_field));
@@ -1710,24 +1698,22 @@ int field_flag_inference()
        list_offset = 4; // bottom field mb
      else
        list_offset = 2; // top field mb
-       //max_y_cr = img->height_cr/2-1;
    }
    else
    {
      list_offset = 0;  // no mb aff or frame mb
-     //max_y_cr = img->height_cr-1;
    }
 
 #ifdef _Fast_ME_
    decide_intrabk_SAD();
 #endif
    
+   intra |= RandomIntra (img->current_mb_nr);    // Forced Pseudo-Random Intra
+
    //===== SET VALID MODES =====
    valid[I4MB]   = 1;
    valid[I16MB]  = 1;
    
-   // HS: I'm not sure when the Intra Mode on 8x8 basis should be unvalid
-   //     Is it o.k. for data partitioning? (where the syntax elements have to written to?)
    valid[0]      = (!intra );
    valid[1]      = (!intra && input->InterSearch16x16);
    valid[2]      = (!intra && input->InterSearch16x8);
@@ -1739,8 +1725,6 @@ int field_flag_inference()
    valid[P8x8]   = (valid[4] || valid[5] || valid[6] || valid[7]);
    valid[12]     = (siframe);
 
-   intra |= RandomIntra (img->current_mb_nr);    // Forced Pseudo-Random Intra
-   
    if (!img->MbaffFrameFlag)
    {
      for (l=0+list_offset;l<(2+list_offset);l++)
@@ -1786,13 +1770,13 @@ int field_flag_inference()
    //===== SET LAGRANGE PARAMETERS =====
    if (input->rdopt)
    {
-     qp            = (double)img->qp - SHIFT_QP;
-     
-    if (input->successive_Bframe>0)
+     qp = (double)img->qp - SHIFT_QP;
+
+     if (input->successive_Bframe>0)
        lambda_mode   = 0.68 * pow (2, qp/3.0) * (img->type==B_SLICE? max(2.00,min(4.00,(qp / 6.0))):spframe?max(1.4,min(3.0,(qp / 12.0))):1.0);  
      else
        lambda_mode   = 0.85 * pow (2, qp/3.0) * (img->type==B_SLICE? 4.0:spframe?max(1.4,min(3.0,(qp / 12.0))):1.0);  
-       
+
      lambda_motion = sqrt (lambda_mode);
    }
    else
@@ -1831,19 +1815,19 @@ int field_flag_inference()
            for (cost=0, block=0; block<(mode==1?1:2); block++)
            {
              PartitionMotionSearch (mode, block, lambda_motion);
-             
+
              //--- set 4x4 block indizes (for getting MV) ---
              j = (block==1 && mode==2 ? 2 : 0);
              i = (block==1 && mode==3 ? 2 : 0);
-             
+
              //--- get cost and reference frame for forward prediction ---
              for (fw_mcost=max_mcost, ref=0; ref<listXsize[LIST_0+list_offset]; ref++)
              {
-               if (!checkref || ref==0 || CheckReliabilityOfRef (block, ref, mode))
+               if (!checkref || ref==0 || CheckReliabilityOfRef (block, LIST_0, ref, mode))
                {
                  mcost  = (input->rdopt ? REF_COST (lambda_motion_factor, ref, LIST_0 + list_offset) : (int)(2*lambda_motion*min(ref,1)));
-                 
-                 mcost += motion_cost[mode][0][ref][block];
+
+                 mcost += motion_cost[mode][LIST_0][ref][block];
                  if (mcost < fw_mcost)
                  {
                    fw_mcost    = mcost;
@@ -1851,32 +1835,25 @@ int field_flag_inference()
                  }
                }
              }
-            
+
              if (bframe)
              {
                //--- get cost for bidirectional prediction ---
-               
-               if (img->type==B_SLICE && img->nal_reference_idc>0)
+               for (bw_mcost=max_mcost, ref=0; ref<listXsize[LIST_1 + list_offset]; ref++)
                {
-#if BIPRED_SIMPLE
-                 tmp_fw_ref = best_fw_ref;
-#endif
-                 assert(1); //!KS
-                 bid_mcost = max_mcost;
-//                 bid_mcost =  BBIDPartitionCost (mode, block, &tmp_fw_ref, &tmp_bw_ref, lambda_motion_factor, &best_abp_type, (int)lambda_motion);
-                 
-                 best_bw_ref = 0;
-                 bw_mcost = 1<<20;
+                 mcost  = (input->rdopt ? REF_COST (lambda_motion_factor, ref, LIST_1 + list_offset) : (int)(2*lambda_motion*min(ref,1)));
+                 mcost += motion_cost[mode][LIST_1][ref][block];
+                 if (mcost < bw_mcost)
+                 {
+                   bw_mcost    = mcost;
+                   best_bw_ref = ref;
+                 }
                }
-               else
-               {
-                 bw_mcost   = motion_cost[mode][1][0][block];
-                 // check bidirectional between best forward and ref_idx=0 backward
-                 bid_mcost  = (input->rdopt ? REF_COST (lambda_motion_factor, best_fw_ref) : (int)(2*lambda_motion*min(best_fw_ref,1)));
-                 bid_mcost += BIDPartitionCost (mode, block, best_fw_ref, 0, lambda_motion_factor);
-                 best_abp_type = 1;
-               }
-               
+
+               // search bidirectional between best forward and ref_idx=0 backward
+               bid_mcost  = (input->rdopt ? (REF_COST (lambda_motion_factor, best_fw_ref,LIST_0+list_offset)+REF_COST (lambda_motion_factor, 0,LIST_1+list_offset)) : (int)(2*lambda_motion*min(best_fw_ref,1)));
+               bid_mcost += BIDPartitionCost (mode, block, best_fw_ref, 0, lambda_motion_factor);
+
                //--- get prediction direction ----
                if (fw_mcost<=bw_mcost && fw_mcost<=bid_mcost)
                {
@@ -1894,85 +1871,83 @@ int field_flag_inference()
                {
                  best_pdir = 2;
                  cost += bid_mcost;
-                 
-                 if (img->type==B_SLICE && img->nal_reference_idc>0)
-                 {
-                   best_fw_ref = tmp_fw_ref;
-                   best_bw_ref = tmp_bw_ref;
-                 }
-                 else
-                 {
-                   best_abp_type = 1;
-                   best_bw_ref = 0;
-                 }
+                 best_bw_ref = 0;
                }
-               
              }
              else // if (bframe)
              {
                best_pdir  = 0;
                cost      += fw_mcost;
              }
-             
+
              if (mode==1)
              {
-               for (j=0; j<4; j++)
-                 for (i=0; i<4; i++)
+               if (best_pdir==1)
+               {
+                 for (j=0; j<4; j++)
                  {
-                   enc_picture->ref_idx[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = best_fw_ref;
-                   enc_picture->ref_pic_id [LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = enc_picture->ref_pic_num[LIST_0 + list_offset][enc_picture->ref_idx[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j]]; 
-                   enc_picture->mv[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][0] = img->all_mv[i][j][best_fw_ref][mode][0];
-                   enc_picture->mv[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][1] = img->all_mv[i][j][best_fw_ref][mode][1];
+                   for (i=0; i<4; i++)
+                   {
+                     enc_picture->ref_idx[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = -1;
+                     enc_picture->ref_pic_id [LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = -1; 
+                     enc_picture->mv[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][0] = 0;
+                     enc_picture->mv[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][1] = 0;
+                   }
                  }
-                 
-                 if (best_pdir==1)
+               }
+               else
+               {
+                 for (j=0; j<4; j++)
+                 {
+                   for (i=0; i<4; i++)
+                   {
+                     enc_picture->ref_idx[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = best_fw_ref;
+                     enc_picture->ref_pic_id [LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = enc_picture->ref_pic_num[LIST_0 + list_offset][enc_picture->ref_idx[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j]];  
+                     enc_picture->mv[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][0] = img->all_mv[i][j][LIST_0][best_fw_ref][mode][0];
+                     enc_picture->mv[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][1] = img->all_mv[i][j][LIST_0][best_fw_ref][mode][1];
+                   }
+                 }
+               }
+
+               if (bframe)
+               {
+                 if (best_pdir==0)
                  {
                    for (j=0; j<4; j++)
+                   {
                      for (i=0; i<4; i++)
                      {
-                       enc_picture->ref_idx[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = -1;
-                       enc_picture->ref_pic_id [LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = -1; 
-                       enc_picture->mv[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][0] = 0;
-                       enc_picture->mv[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][1] = 0;
+                       enc_picture->ref_idx[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = -1;
+                       enc_picture->ref_pic_id [LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = -1;   
+                       enc_picture->mv[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][0] = 0;
+                       enc_picture->mv[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][1] = 0;
                      }
+                   }
                  }
-                 
-                 if (bframe)
+                 else
                  {
                    for (j=0; j<4; j++)
+                   {
                      for (i=0; i<4; i++)
                      {
                        enc_picture->ref_idx[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = best_bw_ref;
                        enc_picture->ref_pic_id [LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = enc_picture->ref_pic_num[LIST_1 + list_offset][enc_picture->ref_idx[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j]];
                        if(best_bw_ref>=0)
                        {
-                         enc_picture->mv[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][0] = img->all_bmv[i][j][best_bw_ref][mode][0];
-                         enc_picture->mv[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][1] = img->all_bmv[i][j][best_bw_ref][mode][1];
+                         enc_picture->mv[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][0] = img->all_mv[i][j][LIST_1][best_bw_ref][mode][0];
+                         enc_picture->mv[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][1] = img->all_mv[i][j][LIST_1][best_bw_ref][mode][1];
                        }
                      }
-                     
-                     if (best_pdir==0)
-                     {
-                       for (j=0; j<4; j++)
-                         for (i=0; i<4; i++)
-                         {
-                           enc_picture->ref_idx[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = -1;
-                           enc_picture->ref_pic_id [LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = -1;   
-                           enc_picture->mv[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][0] = 0;
-                           enc_picture->mv[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][1] = 0;
-                         }
-                     }
+                   }
                  }
-             }else if (mode==2)
+               }
+             }
+             else if (mode==2)
              {
                for (j=0; j<2; j++)
+               {
                  for (i=0; i<4; i++)
                  {
-                   enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+block*2+j] = best_fw_ref;
-                   enc_picture->ref_pic_id [LIST_0][img->block_x+i][img->block_y+block*2+j] = enc_picture->ref_pic_num[LIST_0 + list_offset][enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+block*2+j]];
-                   enc_picture->mv[LIST_0][img->block_x+i][img->block_y+block*2+j][0] = img->all_mv[i][j][best_fw_ref][mode][0];
-                   enc_picture->mv[LIST_0][img->block_x+i][img->block_y+block*2+j][1] = img->all_mv[i][j][best_fw_ref][mode][1];
-                   
                    if (best_pdir==1)
                    {
                      enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+block*2+j] = -1;
@@ -1980,17 +1955,16 @@ int field_flag_inference()
                      enc_picture->mv[LIST_0][img->block_x+i][img->block_y+block*2+j][0] = 0;
                      enc_picture->mv[LIST_0][img->block_x+i][img->block_y+block*2+j][1] = 0;
                    }
-                   
+                   else
+                   {
+                     enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+block*2+j] = best_fw_ref;
+                     enc_picture->ref_pic_id [LIST_0][img->block_x+i][img->block_y+block*2+j] = enc_picture->ref_pic_num[LIST_0 + list_offset][enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+block*2+j]];
+                     enc_picture->mv[LIST_0][img->block_x+i][img->block_y+block*2+j][0] = img->all_mv[i][j+block*2][LIST_0][best_fw_ref][mode][0];
+                     enc_picture->mv[LIST_0][img->block_x+i][img->block_y+block*2+j][1] = img->all_mv[i][j+block*2][LIST_0][best_fw_ref][mode][1];
+                   }
+
                    if (bframe)
                    {
-                     enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+block*2+j] = best_bw_ref;
-                     enc_picture->ref_pic_id [LIST_1][img->block_x+i][img->block_y+block*2+j] = enc_picture->ref_pic_num[LIST_1 + list_offset][enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+block*2+j]];
-                     if(best_bw_ref>=0)
-                     {
-                       enc_picture->mv[LIST_1][img->block_x+i][img->block_y+block*2+j][0] = img->all_bmv[i][j][best_bw_ref][mode][0];
-                       enc_picture->mv[LIST_1][img->block_x+i][img->block_y+block*2+j][1] = img->all_bmv[i][j][best_bw_ref][mode][1];
-                     }
-                     
                      if (best_pdir==0)
                      {
                        enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+block*2+j] = -1;
@@ -1998,36 +1972,43 @@ int field_flag_inference()
                        enc_picture->mv[LIST_1][img->block_x+i][img->block_y+block*2+j][0] = 0;
                        enc_picture->mv[LIST_1][img->block_x+i][img->block_y+block*2+j][1] = 0;
                      }
+                     else
+                     {
+                       enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+block*2+j] = best_bw_ref;
+                       enc_picture->ref_pic_id [LIST_1][img->block_x+i][img->block_y+block*2+j] = enc_picture->ref_pic_num[LIST_1 + list_offset][enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+block*2+j]];
+                       if(best_bw_ref>=0)
+                       {
+                         enc_picture->mv[LIST_1][img->block_x+i][img->block_y+block*2+j][0] = img->all_mv[i][j][LIST_1][best_bw_ref][mode][0];
+                         enc_picture->mv[LIST_1][img->block_x+i][img->block_y+block*2+j][1] = img->all_mv[i][j][LIST_1][best_bw_ref][mode][1];
+                       }
+                     }
                    }
                  }
-             }else
+               }
+             }
+             else
              {
                for (j=0; j<4; j++)
+               {
                  for (i=0; i<2; i++)
                  {
-                   enc_picture->ref_idx[LIST_0][img->block_x+block*2+i][img->block_y+j] = best_fw_ref;
-                   enc_picture->ref_pic_id [LIST_0][img->block_x+block*2+i][img->block_y+j] = enc_picture->ref_pic_num[LIST_0 + list_offset][enc_picture->ref_idx[LIST_0][img->block_x+block*2+i][img->block_y+j]];
-                   enc_picture->mv[LIST_0][img->block_x+block*2+i][img->block_y+j][0] = img->all_mv[i][j][best_fw_ref][mode][0];
-                   enc_picture->mv[LIST_0][img->block_x+block*2+i][img->block_y+j][1] = img->all_mv[i][j][best_fw_ref][mode][1];
-                   
                    if (best_pdir==1)
                    {
                      enc_picture->ref_idx[LIST_0][img->block_x+block*2+i][img->block_y+j] = -1;
-                     enc_picture->ref_pic_id [LIST_0][img->block_x+block*2+i][img->block_y+j] = enc_picture->ref_pic_num[LIST_0 + list_offset][enc_picture->ref_idx[LIST_0][img->block_x+block*2+i][img->block_y+j]];
+                     enc_picture->ref_pic_id [LIST_0][img->block_x+block*2+i][img->block_y+j] = -1;
                      enc_picture->mv[LIST_0][img->block_x+block*2+i][img->block_y+j][0] = 0;
                      enc_picture->mv[LIST_0][img->block_x+block*2+i][img->block_y+j][1] = 0;
                    }
-                   
+                   else
+                   {
+                     enc_picture->ref_idx[LIST_0][img->block_x+block*2+i][img->block_y+j] = best_fw_ref;
+                     enc_picture->ref_pic_id [LIST_0][img->block_x+block*2+i][img->block_y+j] = enc_picture->ref_pic_num[LIST_0 + list_offset][enc_picture->ref_idx[LIST_0][img->block_x+block*2+i][img->block_y+j]];
+                     enc_picture->mv[LIST_0][img->block_x+block*2+i][img->block_y+j][0] = img->all_mv[i][j][LIST_0][best_fw_ref][mode][0];
+                     enc_picture->mv[LIST_0][img->block_x+block*2+i][img->block_y+j][1] = img->all_mv[i][j][LIST_0][best_fw_ref][mode][1];
+                   }
+
                    if (bframe)
                    {
-                     enc_picture->ref_idx[LIST_1][img->block_x+block*2+i][img->block_y+j] = best_bw_ref;
-                     enc_picture->ref_pic_id [LIST_1][img->block_x+block*2+i][img->block_y+j] = enc_picture->ref_pic_num[LIST_1 + list_offset][enc_picture->ref_idx[LIST_1][img->block_x+block*2+i][img->block_y+j]];
-                     if(best_bw_ref>=0)
-                     {
-                       enc_picture->mv[LIST_1][img->block_x+block*2+i][img->block_y+j][0] = img->all_bmv[i][j][best_bw_ref][mode][0];
-                       enc_picture->mv[LIST_1][img->block_x+block*2+i][img->block_y+j][1] = img->all_bmv[i][j][best_bw_ref][mode][1];
-                     }
-                     
                      if (best_pdir==0)
                      {
                        enc_picture->ref_idx[LIST_1][img->block_x+block*2+i][img->block_y+j] = -1;
@@ -2035,39 +2016,47 @@ int field_flag_inference()
                        enc_picture->mv[LIST_1][img->block_x+block*2+i][img->block_y+j][0] = 0;
                        enc_picture->mv[LIST_1][img->block_x+block*2+i][img->block_y+j][1] = 0;
                      }
+                     else
+                     {
+                       enc_picture->ref_idx[LIST_1][img->block_x+block*2+i][img->block_y+j] = best_bw_ref;
+                       enc_picture->ref_pic_id [LIST_1][img->block_x+block*2+i][img->block_y+j] = enc_picture->ref_pic_num[LIST_1 + list_offset][enc_picture->ref_idx[LIST_1][img->block_x+block*2+i][img->block_y+j]];
+                       if(best_bw_ref>=0)
+                       {
+                         enc_picture->mv[LIST_1][img->block_x+block*2+i][img->block_y+j][0] = img->all_mv[i][j][LIST_1][best_bw_ref][mode][0];
+                         enc_picture->mv[LIST_1][img->block_x+block*2+i][img->block_y+j][1] = img->all_mv[i][j][LIST_1][best_bw_ref][mode][1];
+                       }
+                     }
                    }
                  }
+               }
              }
-             
+
              //----- set reference frame and direction parameters -----
              if (mode==3)
              {
                best8x8fwref [3][  block] = best8x8fwref [3][  block+2] = best_fw_ref;
                best8x8pdir[3][  block] = best8x8pdir[3][  block+2] = best_pdir;
                best8x8bwref   [3][block] = best8x8bwref   [3][block+2] = best_bw_ref;
-               best8x8abp_type[3][block] = best8x8abp_type[3][block+2] = best_abp_type;
              }
              else if (mode==2)
              {
                best8x8fwref [2][2*block] = best8x8fwref [2][2*block+1] = best_fw_ref;
                best8x8pdir[2][2*block] = best8x8pdir[2][2*block+1] = best_pdir;
                best8x8bwref   [2][2*block] = best8x8bwref   [2][2*block+1] = best_bw_ref;
-               best8x8abp_type[2][2*block] = best8x8abp_type[2][2*block+1] = best_abp_type;
              }
              else
              {
                best8x8fwref [1][0] = best8x8fwref [1][1] = best8x8fwref [1][2] = best8x8fwref [1][3] = best_fw_ref;
                best8x8pdir[1][0] = best8x8pdir[1][1] = best8x8pdir[1][2] = best8x8pdir[1][3] = best_pdir;
                best8x8bwref   [1][0] = best8x8bwref   [1][1] = best8x8bwref   [1][2] = best8x8bwref   [1][3] = best_bw_ref;
-               best8x8abp_type[1][0] = best8x8abp_type[1][1] = best8x8abp_type[1][2] = best8x8abp_type[1][3] = best_abp_type;
              }
-             
+
              //--- set reference frames and motion vectors ---
              if (mode>1 && block==0) 
-               SetRefAndMotionVectors (block, mode, best_pdir, best_fw_ref, best_bw_ref, best_abp_type);
-             
+               SetRefAndMotionVectors (block, mode, best_pdir, best_fw_ref, best_bw_ref);
+
           } // for (block=0; block<(mode==1?1:2); block++)
-          
+
           if (cost < min_cost)
           {
             best_mode = mode;
@@ -2138,25 +2127,9 @@ int field_flag_inference()
                     enc_picture->ref_idx[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = best_fw_ref;
                     enc_picture->ref_pic_id [LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = enc_picture->ref_pic_num[LIST_0 + list_offset][enc_picture->ref_idx[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j]];
                   }
-                  
+
                 if (bframe)
                 {
-                  
-                  if (img->type==B_SLICE && img->nal_reference_idc>0)
-                  {
-                    //--- get cost for bidirectional prediction ---
-#if BIPRED_SIMPLE
-                    tmp_fw_ref = best_fw_ref;
-#endif
-                    assert(1); //!KS
-                    //                      bid_mcost =  ABIDPartitionCost (mode, block, &tmp_fw_ref, &tmp_bw_ref, lambda_motion_factor, &best_abp_type);
-                    //                   bid_mcost =  BBIDPartitionCost (mode, block, &tmp_fw_ref, &tmp_bw_ref, lambda_motion_factor, &best_abp_type,  useABT, lambda_motion);
-                    
-                    best_bw_ref = 0;
-                    bw_mcost = 1<<20;
-                  }
-                  else
-                  {
                     for (bw_mcost=max_mcost, ref=0; ref<listXsize[LIST_1+list_offset]; ref++)
                     {
                       mcost  = (input->rdopt ? REF_COST(lambda_motion_factor,ref,LIST_1+list_offset) : (int)(2*lambda_motion*min(ref,1)));
@@ -2172,7 +2145,6 @@ int field_flag_inference()
                     // bidirectional uses best forward and zero backward reference
                     bid_mcost  = (input->rdopt ? (REF_COST (lambda_motion_factor, best_fw_ref, LIST_0 + list_offset)+REF_COST (lambda_motion_factor, 0, LIST_1 + list_offset)) : (int)(2*lambda_motion*min(best_fw_ref,1)));
                     bid_mcost += BIDPartitionCost (mode, block, best_fw_ref, 0, lambda_motion_factor );
-                  }
                   
                   //--- get prediction direction ----
                   if      (fw_mcost<=bw_mcost && fw_mcost<=bid_mcost)
@@ -2191,16 +2163,7 @@ int field_flag_inference()
                   {
                     best_pdir = 2;
                     cost = bid_mcost;
-                    
-                    if (img->type==B_SLICE && img->nal_reference_idc>0)
-                    {
-                      best_fw_ref = tmp_fw_ref;
-                      best_bw_ref = tmp_bw_ref;
-                    }
-                    else
-                    {
-                      best_bw_ref = 0;
-                    }
+                    best_bw_ref = 0;
                   }
                     //store backward reference index for every block
                   for (j=0; j<2; j++)
@@ -2242,7 +2205,7 @@ int field_flag_inference()
                 best8x8pdir    [P8x8][block] = best_pdir;
                 best8x8fwref   [P8x8][block] = best_fw_ref;
                 best8x8bwref   [P8x8][block] = best_bw_ref;
-                best8x8abp_type[P8x8][block] = best_abp_type;
+
                 
                 //--- store number of nonzero coefficients ---
                 best_cnt_nonz  = cnt_nonz;
@@ -2334,7 +2297,7 @@ int field_flag_inference()
           } // if (block<3)
             
           //===== set motion vectors and reference frames (prediction) =====
-          SetRefAndMotionVectors (block, mode, best8x8pdir[P8x8][block], best8x8fwref[P8x8][block], best8x8bwref[P8x8][block], best8x8abp_type[P8x8][block]);
+          SetRefAndMotionVectors (block, mode, best8x8pdir[P8x8][block], best8x8fwref[P8x8][block], best8x8bwref[P8x8][block]);
           //===== set the coding state after current block =====
           reset_coding_state (cs_b8);
         } // for (cbp8x8=cbp_blk8x8=cnt_nonz_8x8=0, block=0; block<4; block++)
@@ -2393,20 +2356,6 @@ int field_flag_inference()
             if (bframe)
             {
               //--- get cost for bidirectional prediction ---
-              
-              if (img->type==B_SLICE && img->nal_reference_idc>0)
-              {
-#if BIPRED_SIMPLE
-                tmp_fw_ref = best_fw_ref;
-#endif
-                assert(1); //!KS
-//                bid_mcost =  BBIDPartitionCost (mode, block, &tmp_fw_ref, &tmp_bw_ref, lambda_motion_factor, &best_abp_type, (int)lambda_motion);
-                
-                best_bw_ref = 0;
-                bw_mcost = 1<<20;
-              }
-              else
-              {
                 for (bw_mcost=max_mcost, ref=0; ref<listXsize[LIST_1 + list_offset]; ref++)
                 {
                   mcost  = (input->rdopt ? REF_COST (lambda_motion_factor, ref, LIST_1 + list_offset) : (int)(2*lambda_motion*min(ref,1)));
@@ -2421,8 +2370,7 @@ int field_flag_inference()
                 // search bidirectional between best forward and ref_idx=0 backward
                 bid_mcost  = (input->rdopt ? (REF_COST (lambda_motion_factor, best_fw_ref,LIST_0+list_offset)+REF_COST (lambda_motion_factor, 0,LIST_1+list_offset)) : (int)(2*lambda_motion*min(best_fw_ref,1)));
                 bid_mcost += BIDPartitionCost (mode, block, best_fw_ref, 0, lambda_motion_factor);
-                best_abp_type = 1;
-              }
+
               
               //--- get prediction direction ----
               if (fw_mcost<=bw_mcost && fw_mcost<=bid_mcost)
@@ -2441,17 +2389,7 @@ int field_flag_inference()
               {
                 best_pdir = 2;
                 cost += bid_mcost;
-                
-                if (img->type==B_SLICE && img->nal_reference_idc>0)
-                {
-                  best_fw_ref = tmp_fw_ref;
-                  best_bw_ref = tmp_bw_ref;
-                }
-                else
-                {
-                  best_abp_type = 1;
-                  best_bw_ref = 0;
-                }
+                best_bw_ref = 0;
               }
               
             }
@@ -2522,7 +2460,8 @@ int field_flag_inference()
                   }
                 }
               }
-            }else if (mode==2)
+            }
+            else if (mode==2)
             {
               for (j=0; j<2; j++)
               {
@@ -2617,26 +2556,23 @@ int field_flag_inference()
               best8x8fwref   [3][block] = best8x8fwref   [3][block+2] = best_fw_ref;
               best8x8pdir    [3][block] = best8x8pdir    [3][block+2] = best_pdir;
               best8x8bwref   [3][block] = best8x8bwref   [3][block+2] = best_bw_ref;
-              best8x8abp_type[3][block] = best8x8abp_type[3][block+2] = best_abp_type;
             }
             else if (mode==2)
             {
               best8x8fwref   [2][2*block] = best8x8fwref   [2][2*block+1] = best_fw_ref;
               best8x8pdir    [2][2*block] = best8x8pdir    [2][2*block+1] = best_pdir;
               best8x8bwref   [2][2*block] = best8x8bwref   [2][2*block+1] = best_bw_ref;
-              best8x8abp_type[2][2*block] = best8x8abp_type[2][2*block+1] = best_abp_type;
             }
             else
             {
               best8x8fwref   [1][0] = best8x8fwref   [1][1] = best8x8fwref   [1][2] = best8x8fwref   [1][3] = best_fw_ref;
               best8x8pdir    [1][0] = best8x8pdir    [1][1] = best8x8pdir    [1][2] = best8x8pdir    [1][3] = best_pdir;
               best8x8bwref   [1][0] = best8x8bwref   [1][1] = best8x8bwref   [1][2] = best8x8bwref   [1][3] = best_bw_ref;
-              best8x8abp_type[1][0] = best8x8abp_type[1][1] = best8x8abp_type[1][2] = best8x8abp_type[1][3] = best_abp_type;
             }
             
             //--- set reference frames and motion vectors ---
             if (mode>1 && block==0)
-              SetRefAndMotionVectors (block, mode, best_pdir, best_fw_ref, best_bw_ref, best_abp_type);
+              SetRefAndMotionVectors (block, mode, best_pdir, best_fw_ref, best_bw_ref);
             
           } // for (block=0; block<(mode==1?1:2); block++)
           
@@ -2703,23 +2639,16 @@ int field_flag_inference()
               if (RDCost_for_macroblocks (lambda_mode, mode, &min_rdcost))
               {
                 //Rate control
-                if (mode == I16MB)
-                {
-                  int i16mode = img->i16offset -  (currMB->cbp&15?13:1) + ((currMB->cbp&0x30)>>2);
-                  for (i=0; i<16; i++)
-                    for(j=0; j<16; j++)
-                      diffy[j][i] = imgY_org[img->opix_y+j][img->opix_x+i]-img->mprr_2[i16mode][j][i];
-                }
-                else if(mode == P8x8)
+                if(mode == P8x8)
                 {
                   for (i=0; i<16; i++)
                     for(j=0; j<16; j++)
-                      diffy[j][i] = imgY_org[img->opix_y+j][img->opix_x+i]-mpr8x8[i][j];
+                      diffy[j][i] = imgY_org[img->opix_y+j][img->opix_x+i] - mpr8x8[j][i];
                 }else
                 {
                   for (i=0; i<16; i++)
                     for(j=0; j<16; j++)
-                      diffy[j][i] = imgY_org[img->opix_y+j][img->opix_x+i]-img->mpr[i][j];
+                      diffy[j][i] = imgY_org[img->opix_y+j][img->opix_x+i] - pred[j][i];
                 }
                 
                 store_macroblock_parameters (mode);
@@ -2734,7 +2663,7 @@ int field_flag_inference()
               //Rate control
               for (i=0; i<16; i++)
                 for(j=0; j<16; j++)
-                  diffy[j][i] = imgY_org[img->opix_y+j][img->opix_x+i]-img->mpr[i][j];
+                  diffy[j][i] = imgY_org[img->opix_y+j][img->opix_x+i] - pred[j][i];
                 store_macroblock_parameters (mode);
             }
           }
