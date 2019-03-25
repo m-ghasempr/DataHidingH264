@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 6.1d
+ *     JM 6.1e
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -124,7 +124,7 @@
 #include "erc_api.h"
 
 #define JM          "6"
-#define VERSION     "6.1d"
+#define VERSION     "6.1e"
 
 #define LOGFILE     "log.dec"
 #define DATADECFILE "dataDec.txt"

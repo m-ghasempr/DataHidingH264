@@ -1,3 +1,11 @@
+Changes for Version JM 6.1e to JM 6.1d
+--------------------------------------
+Bug fixes
+* reference frame flag list1
+* memory allocation
+* CABAC updates
+
+
 Changes for Version JM 6.1d to JM 6.1c
 --------------------------------------
 Bug fixes

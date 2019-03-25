@@ -448,7 +448,7 @@ void readMB_skip_flagInfoFromBuffer_CABAC( SyntaxElement *se,
       a = (currMB->mb_available[1][0]->mb_type==0 && currMB->mb_available[1][0]->cbp==0 ? 0 : 1);
     act_ctx = 7 + a + b;
 
-    if (biari_decode_symbol (dep_dp, &ctx->mb_type_contexts[2][act_ctx]) == 0)
+	if (biari_decode_symbol (dep_dp, &ctx->mb_type_contexts[2][act_ctx]) == 1)
       se->value1 = se->value2 = 0;
     else
       se->value1 = se->value2 = 1;
@@ -464,8 +464,7 @@ void readMB_skip_flagInfoFromBuffer_CABAC( SyntaxElement *se,
     else
       a = (( (currMB->mb_available[1][0])->mb_type != 0) ? 1 : 0 );
     act_ctx = a + b;
-
-    if (biari_decode_symbol(dep_dp, &ctx->mb_type_contexts[1][act_ctx]) == 0)
+    if (biari_decode_symbol(dep_dp, &ctx->mb_type_contexts[1][act_ctx]) == 1)
       se->value1 = 0;
     else
       se->value1 = 1;
@@ -774,7 +773,7 @@ void readIntraPredModeFromBuffer_CABAC( SyntaxElement *se,
 	act_sym = biari_decode_symbol(dep_dp, ctx->ipr_contexts);
 
 	// remaining_mode_selector
-	if (act_sym == 0)
+	if (act_sym == 1)
 		se->value1 = -1;
 	else
 	{

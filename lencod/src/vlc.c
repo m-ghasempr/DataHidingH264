@@ -1201,7 +1201,7 @@ void writeVlcByteAlign(Bitstream* currStream)
 {
   if (currStream->bits_to_go < 8)
   { // trailing bits to process
-    currStream->byte_buf <<= currStream->bits_to_go;
+    currStream->byte_buf = (currStream->byte_buf <<currStream->bits_to_go) | (0xff >> (8 - currStream->bits_to_go));
     stat->bit_use_stuffingBits[img->type]+=currStream->bits_to_go;
     currStream->streamBuffer[currStream->byte_pos++]=currStream->byte_buf;
     currStream->bits_to_go = 8;

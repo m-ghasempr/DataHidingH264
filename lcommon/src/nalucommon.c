@@ -74,7 +74,7 @@ NALU_t *AllocNALU(int buffersize)
 
   n->max_size=buffersize;
 
-  if ((n->buf = calloc (buffersize, sizeof (NALU_t))) == NULL) no_mem_exit ("AllocNALU: n->buf");
+  if ((n->buf = calloc (buffersize, sizeof (byte))) == NULL) no_mem_exit ("AllocNALU: n->buf");
   
   return n;
 }

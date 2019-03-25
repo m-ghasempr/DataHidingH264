@@ -208,10 +208,9 @@ void writeMB_skip_flagInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPt
     act_ctx = 7 + a + b;
 
     if (se->value1==0 && se->value2==0) // DIRECT mode, no coefficients
-      biari_encode_symbol (eep_dp, 0, &ctx->mb_type_contexts[2][act_ctx]);
-    else
       biari_encode_symbol (eep_dp, 1, &ctx->mb_type_contexts[2][act_ctx]);
-     
+    else
+      biari_encode_symbol (eep_dp, 0, &ctx->mb_type_contexts[2][act_ctx]);   
   }
   else
   {
@@ -227,9 +226,9 @@ void writeMB_skip_flagInfo2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPt
     act_ctx = a + b;
 
     if (curr_mb_type==0) // SKIP
-      biari_encode_symbol(eep_dp, 0,&ctx->mb_type_contexts[1][act_ctx]);
-    else
       biari_encode_symbol(eep_dp, 1,&ctx->mb_type_contexts[1][act_ctx]);
+    else
+      biari_encode_symbol(eep_dp, 0,&ctx->mb_type_contexts[1][act_ctx]);
   }
   se->context = act_ctx;
   return;
@@ -603,10 +602,10 @@ void writeIntraPredMode2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr e
 
         // use_most_probable_mode
         if (se->value1 == -1)
-                biari_encode_symbol(eep_dp, 0, ctx->ipr_contexts);
+				biari_encode_symbol(eep_dp, 1, ctx->ipr_contexts);
         else
         {
-                biari_encode_symbol(eep_dp, 1, ctx->ipr_contexts);
+				biari_encode_symbol(eep_dp, 0, ctx->ipr_contexts);
 
                 // remaining_mode_selector
                 biari_encode_symbol(eep_dp,(signed short)( se->value1 & 0x1    ), ctx->ipr_contexts+1);
