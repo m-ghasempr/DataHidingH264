@@ -1,34 +1,3 @@
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
 
 /*!
  ***********************************************************************
@@ -54,6 +23,8 @@ typedef struct storable_picture
   PictureStructure structure;
 
   int         poc;
+  int         top_poc;
+  int         bottom_poc;
   int         order_num;
   int         ref_pic_num[6][20];
   int         pic_num;
@@ -73,9 +44,11 @@ typedef struct storable_picture
 
   byte *      mb_field;      //<! field macroblock indicator
 
-  int  ***    ref_idx;       //<! reference picture   [list][mb_nr][subblock_x][subblock_y]
+  int  ***    ref_idx;       //<! reference picture   [list][subblock_x][subblock_y]
                              //   [list][mb_nr][subblock_x][subblock_y]
-  int  ****   mv;            //<! motion vector       [list][mb_nr][subblock_x][subblock_y]
+  int  ***    ref_pic_id;    //<! reference picture identifier [list][subblock_x][subblock_y]
+                             //   (not  simply index) 
+  int  ****   mv;            //<! motion vector       [list][subblock_x][subblock_y][component]
   
   byte **     moving_block;
   
@@ -95,7 +68,7 @@ typedef struct frame_store
   int       is_non_existent;
 
   unsigned  frame_num;
-  unsigned  frame_num_wrap;
+  int       frame_num_wrap;
   int       long_term_frame_idx;
   int       is_output;
   int       poc;

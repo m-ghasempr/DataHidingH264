@@ -42,7 +42,7 @@ RSC=rc.exe
 # PROP Ignore_Export_Lib 0
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_CONSOLE" /D "_MBCS" /YX /FD /c
-# ADD CPP /nologo /W3 /GX /O2 /Ob2 /I "lencod\inc" /I "lcommon\inc" /D "WIN32" /D "NDEBUG" /D "_CONSOLE" /D "_MBCS" /FR /YX /FD /c
+# ADD CPP /nologo /W3 /GX /Zi /O2 /Ob2 /I "lencod\inc" /I "lcommon\inc" /D "WIN32" /D "DEBUG" /D "_CONSOLE" /D "_MBCS" /FR /YX /FD /c
 # ADD BASE RSC /l 0x409 /d "NDEBUG"
 # ADD RSC /l 0x409 /d "NDEBUG"
 BSC32=bscmake.exe
@@ -50,7 +50,7 @@ BSC32=bscmake.exe
 # ADD BSC32 /nologo
 LINK32=link.exe
 # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /machine:I386
-# ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /machine:I386 /out:"./bin/lencod.exe"
+# ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386 /out:"./bin/lencod.exe"
 
 !ELSEIF  "$(CFG)" == "lencod - Win32 Debug"
 
@@ -66,7 +66,7 @@ LINK32=link.exe
 # PROP Ignore_Export_Lib 0
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /W3 /GX /ZI /Od /D "WIN32" /D "_DEBUG" /D "_CONSOLE" /D "_MBCS" /YX /FD /GZ /c
-# ADD CPP /nologo /W3 /GX /Zi /Od /Ob1 /I "lencod/inc" /I "lcommon/inc" /D "WIN32" /D "_DEBUG" /D "_CONSOLE" /D "_MBCS" /FR /YX /FD /GZ /c
+# ADD CPP /nologo /W3 /GX /ZI /Od /I "lencod/inc" /I "lcommon/inc" /D "WIN32" /D "_DEBUG" /D "_CONSOLE" /D "_MBCS" /FR /YX /FD /GZ /c
 # ADD BASE RSC /l 0x409 /d "_DEBUG"
 # ADD RSC /l 0x409 /d "_DEBUG"
 BSC32=bscmake.exe
@@ -151,7 +151,7 @@ SOURCE=.\lencod\src\macroblock.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\lcommon\src\mb_access.c
+SOURCE=.\lencod\src\mb_access.c
 # End Source File
 # Begin Source File
 
@@ -159,7 +159,7 @@ SOURCE=.\lencod\src\mbuffer.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\lcommon\src\memalloc.c
+SOURCE=.\lencod\src\memalloc.c
 # End Source File
 # Begin Source File
 
@@ -175,7 +175,7 @@ SOURCE=.\lencod\src\nalu.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\lcommon\src\nalucommon.c
+SOURCE=.\lencod\src\nalucommon.c
 # End Source File
 # Begin Source File
 
@@ -187,7 +187,7 @@ SOURCE=.\lencod\src\parset.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\lcommon\src\parsetcommon.c
+SOURCE=.\lencod\src\parsetcommon.c
 # End Source File
 # Begin Source File
 
@@ -251,7 +251,7 @@ SOURCE=.\lencod\inc\contributors.h
 # End Source File
 # Begin Source File
 
-SOURCE=.\lcommon\inc\ctx_tables.h
+SOURCE=.\lencod\inc\ctx_tables.h
 # End Source File
 # Begin Source File
 
@@ -295,7 +295,7 @@ SOURCE=.\lencod\inc\macroblock.h
 # End Source File
 # Begin Source File
 
-SOURCE=.\lcommon\inc\mb_access.h
+SOURCE=.\lencod\inc\mb_access.h
 # End Source File
 # Begin Source File
 
@@ -303,7 +303,7 @@ SOURCE=.\lencod\inc\mbuffer.h
 # End Source File
 # Begin Source File
 
-SOURCE=.\lcommon\inc\memalloc.h
+SOURCE=.\lencod\inc\memalloc.h
 # End Source File
 # Begin Source File
 
@@ -315,7 +315,7 @@ SOURCE=.\lencod\inc\nalu.h
 # End Source File
 # Begin Source File
 
-SOURCE=.\lcommon\inc\nalucommon.h
+SOURCE=.\lencod\inc\nalucommon.h
 # End Source File
 # Begin Source File
 
@@ -327,7 +327,7 @@ SOURCE=.\lencod\inc\parset.h
 # End Source File
 # Begin Source File
 
-SOURCE=.\lcommon\inc\parsetcommon.h
+SOURCE=.\lencod\inc\parsetcommon.h
 # End Source File
 # Begin Source File
 

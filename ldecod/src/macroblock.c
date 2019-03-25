@@ -1,34 +1,3 @@
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
 
 /*!
  ***********************************************************************
@@ -388,7 +357,6 @@ void interpret_mb_mode_SI(struct img_par *img)
 void init_macroblock(struct img_par *img)
 {
   int i,j;
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
 
   for (i=0;i<BLOCK_SIZE;i++)
   {                           // reset vectors and pred. modes
@@ -408,6 +376,8 @@ void init_macroblock(struct img_par *img)
     {
       dec_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j] = -1;
       dec_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j] = -1;
+      dec_picture->ref_pic_id[LIST_0][img->block_x+i][img->block_y+j] = -1;
+      dec_picture->ref_pic_id[LIST_1][img->block_x+i][img->block_y+j] = -1;
     }
 }
 
@@ -506,7 +476,6 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
   Slice *currSlice = img->currentSlice;
   DataPartition *dP;
   int *partMap = assignSE2partition[currSlice->dp_mode];
-  int mb_width = img->width/16;
   Macroblock *topMB = NULL;
   int  prevMbSkipped = 0;
   int  img_block_y;
@@ -792,10 +761,10 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
     int zeroMotionAbove;
     int zeroMotionLeft;
     PixelPos mb_a, mb_b;
-    int      a_mv_y;
-    int      a_ref_idx;
-    int      b_mv_y;
-    int      b_ref_idx;
+    int      a_mv_y = 0;
+    int      a_ref_idx = 0;
+    int      b_mv_y = 0;
+    int      b_ref_idx = 0;
 
     getLuma4x4Neighbour(img->current_mb_nr,0,0,-1, 0,&mb_a);
     getLuma4x4Neighbour(img->current_mb_nr,0,0, 0,-1,&mb_b);
@@ -865,6 +834,7 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
       for(j=0;j<BLOCK_SIZE;j++)
       {
         dec_picture->ref_idx[LIST_0][img->block_x+i][img_block_y+j] = 0;
+        dec_picture->ref_pic_id[LIST_0][img->block_x+i][img_block_y+j] = dec_picture->ref_pic_num[LIST_0][dec_picture->ref_idx[LIST_0][img->block_x+i][img_block_y+j]];
       }
 
     return DECODE_MB;
@@ -946,6 +916,12 @@ void read_ipred_modes(struct img_par *img,struct inp_par *inp)
           bi = img->block_x + bx;
           bj = img->block_y + by;
 
+          if (img->constrained_intra_pred_flag)
+          {
+            left_block.available = left_block.available ? img->intra_block[left_block.mb_addr] : 0;
+            top_block.available  = top_block.available  ? img->intra_block[top_block.mb_addr]  : 0;
+          }
+
           // !! KS: not sure if the follwing is still correct...
           ts=ls=0;   // Check to see if the neighboring block is SI
           if (IS_OLDINTRA(currMB) && img->type == SI_SLICE)           // need support for MBINTLC1
@@ -1014,9 +990,6 @@ static void SetMotionVectorPredictor (struct img_par  *img,
 {
   int mb_x                 = 4*block_x;
   int mb_y                 = 4*block_y;
-  int pic_block_x          = img->block_x + block_x;
-  int pic_block_y          = img->block_y + block_y;
-  int mb_width             = img->width/16;
   int mb_nr                = img->current_mb_nr;
 
   int mv_a, mv_b, mv_c, pred_vec=0;
@@ -1114,7 +1087,7 @@ static void SetMotionVectorPredictor (struct img_par  *img,
   else if(rFrameL != ref_frame && rFrameU == ref_frame && rFrameUR != ref_frame)  mvPredType = MVPRED_U;
   else if(rFrameL != ref_frame && rFrameU != ref_frame && rFrameUR == ref_frame)  mvPredType = MVPRED_UR;
   // Directional predictions 
-  else if(blockshape_x == 8 && blockshape_y == 16)
+  if(blockshape_x == 8 && blockshape_y == 16)
   {
     if(mb_x == 0)
     {
@@ -1252,7 +1225,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
   int vec;
 
   int iTRb,iTRp;
-  int mv_scale;
+  int mv_scale = 0;
 
   int flag_mode;
 
@@ -1780,10 +1753,10 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
                   iTRp = Clip3( -128, 127,  listX[LIST_1 + list_offset][0]->poc - listX[LIST_0 + list_offset][mapped_idx]->poc);
 
                   if (iTRp!=0)
-                    {
-                  prescale = ( 16384 + abs( iTRp / 2 ) ) / iTRp;
-                  mv_scale = Clip3( -1024, 1023, ( iTRb * prescale + 32 ) >> 6 ) ;
-                    }
+                  {
+                    prescale = ( 16384 + abs( iTRp / 2 ) ) / iTRp;
+                    mv_scale = Clip3( -1024, 1023, ( iTRb * prescale + 32 ) >> 6 ) ;
+                  }
                   
                   dec_picture->ref_idx [LIST_0][img->block_x+i][img->block_y+j] = mapped_idx;
                   dec_picture->ref_idx [LIST_1][img->block_x+i][img->block_y+j] = 0;
@@ -1798,9 +1771,9 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
                     {
                       dec_picture->mv  [LIST_0][i4][j4][ii]=listX[LIST_1 + list_offset][0]->mv[refList][i4][j6][ii];
                       dec_picture->mv  [LIST_1][i4][j4][ii]=0;
-                      }
-                      else
-                      {
+                    }
+                    else
+                    {
                       dec_picture->mv  [LIST_0][i4][j4][ii]=(mv_scale * listX[LIST_1 + list_offset][0]->mv[refList][i4][j6][ii] + 128 ) >> 8;
                       dec_picture->mv  [LIST_1][i4][j4][ii]=dec_picture->mv[LIST_0][i4][j4][ii] - listX[LIST_1 + list_offset][0]->mv[refList][i4][j6][ii] ;
                     }
@@ -1868,6 +1841,19 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
       }
     }
   }
+  // record reference picture Ids for deblocking decisions
+  for(i4=img->block_x;i4<(img->block_x+4);i4++)
+  for(j4=img->block_y;j4<(img->block_y+4);j4++)
+  {
+    if(dec_picture->ref_idx[LIST_0][i4][j4]>=0)
+       dec_picture->ref_pic_id[LIST_0][i4][j4] = dec_picture->ref_pic_num[LIST_0][dec_picture->ref_idx[LIST_0][i4][j4]];
+    else
+       dec_picture->ref_pic_id[LIST_0][i4][j4] = -1;
+    if(dec_picture->ref_idx[LIST_1][i4][j4]>=0)
+       dec_picture->ref_pic_id[LIST_1][i4][j4] = dec_picture->ref_pic_num[LIST_1][dec_picture->ref_idx[LIST_1][i4][j4]];  
+    else
+       dec_picture->ref_pic_id[LIST_1][i4][j4] = -1;  
+  }
 }
 
 
@@ -1890,6 +1876,12 @@ int predict_nnz(struct img_par *img, int i,int j)
 
   // left block
   getLuma4x4Neighbour(mb_nr, i, j, -1, 0, &pix);
+/* to be inserted only for dp
+  if (pix.available && img->constrained_intra_pred_flag)
+  {
+    pix.available &= img->intra_block[pix.mb_addr];
+  }
+*/  
   if (pix.available)
   {
     pred_nnz = img->nz_coeff [pix.mb_addr ][pix.x][pix.y];
@@ -1898,6 +1890,12 @@ int predict_nnz(struct img_par *img, int i,int j)
 
   // top block
   getLuma4x4Neighbour(mb_nr, i, j, 0, -1, &pix);
+/* to be inserted only for dp
+  if (pix.available && img->constrained_intra_pred_flag)
+  {
+    pix.available &= img->intra_block[pix.mb_addr];
+  }
+*/  
   if (pix.available)
   {
     pred_nnz += img->nz_coeff [pix.mb_addr ][pix.x][pix.y];
@@ -1930,6 +1928,12 @@ int predict_nnz_chroma(struct img_par *img, int i,int j)
 
   // left block
   getChroma4x4Neighbour(mb_nr, i%2, j-4, -1, 0, &pix);
+/*  to be inserted only for dp
+  if (pix.available && img->constrained_intra_pred_flag)
+  {
+    pix.available &= img->intra_block[pix.mb_addr];
+  }
+*/  
   if (pix.available)
   {
     pred_nnz = img->nz_coeff [pix.mb_addr ][2 * (i/2) + pix.x][4 + pix.y];
@@ -1938,6 +1942,12 @@ int predict_nnz_chroma(struct img_par *img, int i,int j)
   
   // top block
   getChroma4x4Neighbour(mb_nr, i%2, j-4, 0, -1, &pix);
+/*  to be inserted only for dp
+  if (pix.available && img->constrained_intra_pred_flag)
+  {
+    pix.available &= img->intra_block[pix.mb_addr];
+  }
+*/  
   if (pix.available)
   {
     pred_nnz += img->nz_coeff [pix.mb_addr ][2 * (i/2) + pix.x][4 + pix.y];
@@ -2822,19 +2832,13 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
   int fw_ref_idx, bw_ref_idx;
 
   int  *** mv_array, ***fw_mv_array, ***bw_mv_array;
-  int bframe = (img->type==B_SLICE);
-
-  int  **moving_block_dir = moving_block; 
 
   int partmode        = (IS_P8x8(currMB)?4:currMB->mb_type);
-  int step_h0 = BLOCK_STEP [partmode][0];
-  int step_v0 = BLOCK_STEP [partmode][1];
 
   int iTRb, iTRp;
   int mv_scale;
 
   int mb_nr             = img->current_mb_nr;
-  int mb_width          = img->width/16;
   int smb       = ((img->type==SP_SLICE) && IS_INTER (currMB)) || (img->type == SI_SLICE && currMB->mb_type == SI4MB);
   int list_offset;
   int max_y_cr;
@@ -3101,6 +3105,12 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
 
           if (img->apply_weights)
           {
+            if (((active_pps->weighted_pred_flag&&(img->type==P_SLICE|| img->type == SP_SLICE))||
+                (active_pps->weighted_bipred_idc==1 && (img->type==B_SLICE))) && curr_mb_field)
+            {
+              ref_idx >>=1;
+            }
+
             for(ii=0;ii<BLOCK_SIZE;ii++)
               for(jj=0;jj<BLOCK_SIZE;jj++)  
                 img->mpr[ii+ioff][jj+joff] = Clip1(((img->wp_weight[pred_dir][ref_idx][0] *  tmp_block[ii][jj]+ img->wp_round_luma) >>img->luma_log2_weight_denom)  + img->wp_offset[pred_dir][ref_idx][0] );
@@ -3298,6 +3308,9 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                 bw_ref_idx = bw_refframe;
               }
             }
+            // store reference picture ID determined by direct mode
+            dec_picture->ref_pic_id[LIST_0][i4][j4] = dec_picture->ref_pic_num[LIST_0][dec_picture->ref_idx[LIST_0][i4][j4]];
+            dec_picture->ref_pic_id[LIST_1][i4][j4] = dec_picture->ref_pic_num[LIST_1][dec_picture->ref_idx[LIST_1][i4][j4]];  
           }
                  
           if (mv_mode==0 && img->direct_type )
@@ -3377,6 +3390,11 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
           {
             if (img->apply_weights)
             {
+              if (((active_pps->weighted_pred_flag&&(img->type==P_SLICE|| img->type == SP_SLICE))||
+                (active_pps->weighted_bipred_idc==1 && (img->type==B_SLICE))) && curr_mb_field)
+              {
+                fw_ref_idx >>=1;
+              }
               for(ii=0;ii<BLOCK_SIZE;ii++)
                 for(jj=0;jj<BLOCK_SIZE;jj++)  
                   img->mpr[ii+ioff][jj+joff] = Clip1(((tmp_block[ii][jj] * img->wp_weight[0][fw_ref_idx][0]  + img->wp_round_luma)>>img->luma_log2_weight_denom) + img->wp_offset[0][fw_ref_idx][0]);
@@ -3392,6 +3410,13 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
           {              
             if (img->apply_weights)
             {
+              if (((active_pps->weighted_pred_flag&&(img->type==P_SLICE|| img->type == SP_SLICE))||
+                (active_pps->weighted_bipred_idc==1 && (img->type==B_SLICE))) && curr_mb_field)
+              {
+                fw_ref_idx >>=1;
+                bw_ref_idx >>=1;
+              }
+
               for(ii=0;ii<BLOCK_SIZE;ii++)
                 for(jj=0;jj<BLOCK_SIZE;jj++)  
                   img->mpr[ii+ioff][jj+joff] = Clip1(((tmp_blockbw[ii][jj] * img->wp_weight[1][bw_ref_idx][0] + img->wp_round_luma)>>img->luma_log2_weight_denom) + img->wp_offset[1][bw_ref_idx][0]);
@@ -3405,12 +3430,20 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
           }
           else if(img->apply_weights)
           {
-            int alpha_fw = img->wbp_weight[0][fw_ref_idx][bw_ref_idx][0];
-            int alpha_bw = img->wbp_weight[1][fw_ref_idx][bw_ref_idx][0];
+            int alpha_fw, alpha_bw;
+            if (((active_pps->weighted_pred_flag&&(img->type==P_SLICE|| img->type == SP_SLICE))||
+              (active_pps->weighted_bipred_idc==1 && (img->type==B_SLICE))) && curr_mb_field)
+            {
+              fw_ref_idx >>=1;
+              bw_ref_idx >>=1;
+            }
+
+            alpha_fw = img->wbp_weight[0][fw_ref_idx][bw_ref_idx][0];
+            alpha_bw = img->wbp_weight[1][fw_ref_idx][bw_ref_idx][0];
             
             for(ii=0;ii<BLOCK_SIZE;ii++)
               for(jj=0;jj<BLOCK_SIZE;jj++)  
-                img->mpr[ii+ioff][jj+joff] = (int)Clip1(((alpha_fw * tmp_block[ii][jj] + alpha_bw * tmp_blockbw[ii][jj]  + 2*img->wp_round_luma) >> (img->luma_log2_weight_denom+1)) + ((img->wp_offset[0][fw_ref_idx][0] + img->wp_offset[1][bw_ref_idx][0] + 1) >>1));
+                img->mpr[ii+ioff][jj+joff] = (int)Clip1(((alpha_fw * tmp_block[ii][jj] + alpha_bw * tmp_blockbw[ii][jj]  + (1<<img->luma_log2_weight_denom)) >> (img->luma_log2_weight_denom+1)) + ((img->wp_offset[0][fw_ref_idx][0] + img->wp_offset[1][bw_ref_idx][0] + 1) >>1));
           }
           else
           {
@@ -3736,7 +3769,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                     
                     int alpha_fw = img->wbp_weight[0][fw_ref_idx][bw_ref_idx][uv+1];
                     int alpha_bw = img->wbp_weight[1][fw_ref_idx][bw_ref_idx][uv+1];
-                    img->mpr[ii+ioff][jj+joff]= Clip1(((alpha_fw * fw_pred + alpha_bw * bw_pred  + 2*img->wp_round_chroma) >> (img->chroma_log2_weight_denom + 1))+ ((img->wp_offset[0][fw_ref_idx][uv+1] + img->wp_offset[1][bw_ref_idx][uv+1] + 1)>>1) );
+                    img->mpr[ii+ioff][jj+joff]= Clip1(((alpha_fw * fw_pred + alpha_bw * bw_pred  + (1<<img->chroma_log2_weight_denom)) >> (img->chroma_log2_weight_denom + 1))+ ((img->wp_offset[0][fw_ref_idx][uv+1] + img->wp_offset[1][bw_ref_idx][uv+1] + 1)>>1) );
                   }
                 }
                 else

@@ -1,34 +1,3 @@
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
 
 /*!
  ***********************************************************************
@@ -40,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 6.2
+ *     JM 7.2
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -91,8 +60,8 @@
 #include "image.h"
 #include "output.h"
 
-#define JM      "6"
-#define VERSION "6.2"
+#define JM      "7"
+#define VERSION "7.2"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
@@ -129,17 +98,12 @@ void Clear_Motion_Search_Module ();
 
 int main(int argc,char **argv)
 {
-  int num_ref_pic_bak;
   
   p_dec = p_stat = p_log = p_trace = NULL;
-
-  printf("Sorry, encoding is broken in this release (JM 6.2).\n\n");
-  exit(1);
 
   Configure (argc, argv);
   init_img();
   AllocNalPayloadBuffer();
-
 
   frame_pic = malloc_picture();
   if (input->InterlaceCodingOption != FRAME_CODING)
@@ -191,6 +155,7 @@ int main(int argc,char **argv)
       img->bottompoc = img->toppoc+1;   //hard coded
 
     push_poc(img->toppoc, img->bottompoc, REFFRAME);               //push poc values into array
+		img->framepoc = min (img->toppoc, img->bottompoc);
     
     //frame_num for this frame
     img->frame_num = IMG_NUMBER % (1 << (LOG2_MAX_FRAME_NUM_MINUS4 + 4));
@@ -218,9 +183,6 @@ int main(int argc,char **argv)
 #endif
     img->framepoc = min (img->toppoc, img->bottompoc);
 
-    img->num_ref_idx_l0_active = max(1,img->nb_references);
-    num_ref_pic_bak            = img->num_ref_idx_l0_active-1;
-  
     // which layer the image belonged to?
     if ( IMG_NUMBER % (input->NumFramesInELSubSeq+1) == 0 )
       img->layer = 0;
@@ -250,7 +212,6 @@ int main(int argc,char **argv)
 
       for(img->b_frame_to_code=1; img->b_frame_to_code<=input->successive_Bframe; img->b_frame_to_code++)
       {
-        img->num_ref_idx_l0_active = num_ref_pic_bak+1;       // coding field pictures would have changed this, so reset
 
         //! somewhere here the disposable flag was set -- B frames are always disposable in this encoder.
         //! This happens now in slice.c, terminate_slice, where the nal_reference_idc is set up
@@ -262,7 +223,8 @@ int main(int argc,char **argv)
           img->bottompoc = img->toppoc+1;
         
         push_poc(img->toppoc,img->bottompoc, NONREFFRAME);      //push pocs for B frame
-        
+        img->framepoc = min (img->toppoc, img->bottompoc);
+
         //the following is sent in the slice header
         img->delta_pic_order_cnt[0]= 2*(img->b_frame_to_code-1);
         img->delta_pic_order_cnt[1]= 0;   // POC200301
@@ -270,8 +232,9 @@ int main(int argc,char **argv)
         encode_one_frame();  // encode one B-frame
       }
     }
-
+    
     process_2nd_IGOP();
+
   }
   // terminate sequence
   terminate_sequence();
@@ -284,7 +247,7 @@ int main(int argc,char **argv)
   if (p_trace)
     fclose(p_trace);
 
-  Clear_Motion_Search_Module ();
+  //Clear_Motion_Search_Module ();
 
   RandomIntraUninit();
   FmoUninit();

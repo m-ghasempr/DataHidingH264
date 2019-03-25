@@ -1,34 +1,3 @@
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
 
 /*!
  **************************************************************************
@@ -50,14 +19,22 @@
 #ifndef _DEFINES_H_
 #define _DEFINES_H_
 
+#define G50_SPS
 
-#define TRACE           1   //!< 0:Trace off 1:Trace on
+#if defined _DEBUG
+#define TRACE           1                   //!< 0:Trace off 1:Trace on
+#else
+#define TRACE           0                   //!< 0:Trace off 1:Trace on
+#endif
 
 typedef unsigned char byte;    //!< byte type definition
 
 // APJ: Added the following define
 #define PROFILE_IDC     88
 #define LEVEL_IDC       21
+
+#define LIST_0 0
+#define LIST_1 1
 
 // CAVLC
 #define LUMA              0
@@ -72,6 +49,7 @@ typedef unsigned char byte;    //!< byte type definition
 #define NONREFFRAME 0           // used with push_poc
 #define REFFRAME 1
 
+#define ABIPRED
 
 //--- block types for CABAC
 #define LUMA_16DC       0

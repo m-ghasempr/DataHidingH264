@@ -1,35 +1,3 @@
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
-
 
 /*!
  ************************************************************************
@@ -73,9 +41,7 @@ pic_parameter_set_rbsp_t PicParSet[MAXPPS];
 int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
 {
   unsigned i;
-#ifdef G50_SPS
   int reserved_zero;
-#endif
   Bitstream *s = p->bitstream;
 
   assert (p != NULL);
@@ -87,21 +53,14 @@ int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
 
   sps->profile_idc                            = u_v  (8, "SPS: profile_idc"                           , s);
 
-#ifdef G50_SPS
   sps->constrained_set0_flag                  = u_1  (   "SPS: constrained_set0_flag"                 , s);
   sps->constrained_set1_flag                  = u_1  (   "SPS: constrained_set1_flag"                 , s);
   sps->constrained_set2_flag                  = u_1  (   "SPS: constrained_set2_flag"                 , s);
   reserved_zero                               = u_v  (5, "SPS: reserved_zero_5bits"                   , s);
   assert (reserved_zero==0);
-#endif
 
   sps->level_idc                              = u_v  (8, "SPS: level_idc"                             , s);
   
-#ifndef G50_SPS
-  sps->more_than_one_slice_group_allowed_flag = u_1  ("SPS: more_than_one_slice_group_allowed_flag"   , s);
-  sps->arbitrary_slice_order_allowed_flag     = u_1  ("SPS: arbitrary_slice_order_allowed_flag"       , s);
-  sps->redundant_slices_allowed_flag          = u_1  ("SPS: redundant_slices_allowed_flag"            , s);
-#endif
 
   sps->seq_parameter_set_id                   = ue_v ("SPS: seq_parameter_set_id"                     , s);
   sps->log2_max_frame_num_minus4              = ue_v ("SPS: log2_max_frame_num_minus4"                , s);
@@ -128,7 +87,6 @@ int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
     sps->mb_adaptive_frame_field_flag          = u_1  ("SPS: mb_adaptive_frame_field_flag"           , s);
   }
   sps->direct_8x8_inference_flag             = u_1  ("SPS: direct_8x8_inference_flag"              , s);
-#ifdef G50_SPS
   sps->frame_cropping_flag                   = u_1  ("SPS: frame_cropping_flag"                , s);
 
   if (sps->frame_cropping_flag)
@@ -138,7 +96,6 @@ int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
     sps->frame_cropping_rect_top_offset       = ue_v ("SPS: frame_cropping_rect_top_offset"            , s);
     sps->frame_cropping_rect_bottom_offset    = ue_v ("SPS: frame_cropping_rect_bottom_offset"         , s);
   }
-#endif
   sps->vui_parameters_present_flag           = u_1  ("SPS: vui_parameters_present_flag"            , s);
   if (sps->vui_parameters_present_flag)
   {
@@ -229,18 +186,6 @@ int InterpretPPS (DataPartition *p, pic_parameter_set_rbsp_t *pps)
   pps->deblocking_filter_control_present_flag = u_1 ("PPS: deblocking_filter_control_present_flag" , s);
   pps->constrained_intra_pred_flag           = u_1  ("PPS: constrained_intra_pred_flag"            , s);
   pps->redundant_pic_cnt_present_flag        = u_1  ("PPS: redundant_pic_cnt_present_flag"         , s);
-
-#ifndef G50_SPS
-  pps->frame_cropping_flag                   = u_1  ("PPS: frame_cropping_flag"                , s);
-
-  if (pps->frame_cropping_flag)
-  {
-    pps->frame_cropping_rect_left_offset      = ue_v ("PPS: frame_cropping_rect_left_offset"           , s);
-    pps->frame_cropping_rect_right_offset     = ue_v ("PPS: frame_cropping_rect_right_offset"          , s);
-    pps->frame_cropping_rect_top_offset       = ue_v ("PPS: frame_cropping_rect_top_offset"            , s);
-    pps->frame_cropping_rect_bottom_offset    = ue_v ("PPS: frame_cropping_rect_bottom_offset"         , s);
-  }
-#endif
 
   pps->Valid = TRUE;
   return UsedBits;
@@ -377,12 +322,12 @@ void UseParameterSet (int PicParsetId)
     img->num_ref_frames_in_pic_order_cnt_cycle = sps->num_ref_frames_in_pic_order_cnt_cycle;
     if(img->num_ref_frames_in_pic_order_cnt_cycle != 1)
       error("num_ref_frames_in_pic_order_cnt_cycle != 1",-1001);
-    if(img->num_ref_frames_in_pic_order_cnt_cycle >= MAX_LENGTH_POC_CYCLE)
+    if(img->num_ref_frames_in_pic_order_cnt_cycle >= MAXnum_ref_frames_in_pic_order_cnt_cycle)
       error("num_ref_frames_in_pic_order_cnt_cycle too large",-1011);
 
     img->delta_pic_order_always_zero_flag = sps->delta_pic_order_always_zero_flag;
-    if(img->delta_pic_order_always_zero_flag != 0)
-      error ("delta_pic_order_always_zero_flag != 0",-1002);
+//    if(img->delta_pic_order_always_zero_flag != 0) !KS2
+//      error ("delta_pic_order_always_zero_flag != 0",-1002);
  
     img->offset_for_non_ref_pic = sps->offset_for_non_ref_pic;
   

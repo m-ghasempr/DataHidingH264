@@ -1,34 +1,3 @@
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
 
 /*!
  ************************************************************************
@@ -478,6 +447,9 @@ int   **moving_block_top;       //!< stationary block buffer - field
 int   **moving_block_bot;       //!< stationary block buffer - field
 
 int    **refFrArr;           //!< Array for reference frames of each block
+
+pic_parameter_set_rbsp_t *active_pps;
+seq_parameter_set_rbsp_t *active_sps;
 
 // B pictures
 // motion vector : forward, backward, direct
@@ -1046,7 +1018,7 @@ void SetRefFrameInfo (int, int);
 int  writeMBHeader   (int rdopt); 
 
 extern int*   refbits;
-extern int*** motion_cost;
+extern int**** motion_cost;
 
 void  Get_Direct_Motion_Vectors ();
 void  PartitionMotionSearch     (int, int, double);
@@ -1146,13 +1118,11 @@ void writeIntraPredMode_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeB8_typeInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeRefFrame2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeRefFrame_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
-void writeBwdRefFrame_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeMVD_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeCBP_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeDquant_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeRunLevel_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeBiDirBlkSize_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
-void writeBiMVD_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void writeCIPredMode_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
 void print_ctx_TextureInfo(TextureInfoContexts *enco_ctx);
 void writeMB_skip_flagInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);

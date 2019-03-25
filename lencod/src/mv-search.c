@@ -1,35 +1,3 @@
-#define ABIPRED 1
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
 
 /*!
  *************************************************************************************
@@ -60,9 +28,11 @@
 #include <limits.h>
 
 #include "global.h"
+#include "image.h"
 #include "mv-search.h"
 #include "refbuf.h"
 #include "memalloc.h"
+#include "mb_access.h"
 
 
 // These procedure pointers are used by motion_search() and one_eigthpel()
@@ -70,21 +40,22 @@ static pel_t (*PelY_14) (pel_t**, int, int);
 static pel_t *(*PelYline_11) (pel_t *, int, int);
 
 // Statistics, temporary
-int    max_mvd;
-int*   spiral_search_x;
-int*   spiral_search_y;
-int*   mvbits;
-int*   refbits;
-int*   byte_abs;
-int*** motion_cost;
+int     max_mvd;
+int*    spiral_search_x;
+int*    spiral_search_y;
+int*    mvbits;
+int*    refbits;
+int*    byte_abs;
+int**** motion_cost;
 
 
 void SetMotionVectorPredictor (int  pmv[2],
-                               int  **refFrArr,
-                               int  ***tmp_mv,
+                               int  ***refPic,
+                               int  ****tmp_mv,
                                int  ref_frame,
-                               int  mb_x,
-                               int  mb_y,
+                               int  list,
+                               int  block_x,
+                               int  block_y,
                                int  blockshape_x,
                                int  blockshape_y);
 
@@ -94,12 +65,12 @@ void SetMotionVectorPredictor (int  pmv[2],
  *****  static variables for fast integer motion estimation
  *****
  */
-static int  *search_setup_done;  //!< flag if all block SAD's have been calculated yet
-static int  *search_center_x;    //!< absolute search center for fast full motion search
-static int  *search_center_y;    //!< absolute search center for fast full motion search
-static int  *pos_00;             //!< position of (0,0) vector
-static int  ****BlockSAD;        //!< SAD for all blocksize, ref. frames and motion vectors
-static int  *max_search_range;
+static int  **search_setup_done;  //!< flag if all block SAD's have been calculated yet
+static int  **search_center_x;    //!< absolute search center for fast full motion search
+static int  **search_center_y;    //!< absolute search center for fast full motion search
+static int  **pos_00;             //!< position of (0,0) vector
+static int  *****BlockSAD;        //!< SAD for all blocksize, ref. frames and motion vectors
+static int  **max_search_range;
 
 
 /*!
@@ -111,51 +82,74 @@ static int  *max_search_range;
 void
 InitializeFastFullIntegerSearch ()
 {
-  int  i, j, k;
+  int  i, j, k, list;
   int  search_range = input->search_range;
   int  max_pos      = (2*search_range+1) * (2*search_range+1);
 
   if(input->InterlaceCodingOption != FRAME_CODING) 
     img->buf_cycle *= 2;
 
-  if ((BlockSAD = (int****)malloc ((img->buf_cycle+1) * sizeof(int***))) == NULL)
+  if ((BlockSAD = (int*****)malloc (2 * sizeof(int****))) == NULL)
     no_mem_exit ("InitializeFastFullIntegerSearch: BlockSAD");
-  for (i = 0; i <= img->buf_cycle; i++)
+  for (list=0; list<2;list++)
   {
-    if ((BlockSAD[i] = (int***)malloc (8 * sizeof(int**))) == NULL)
+    if ((BlockSAD[list] = (int****)malloc ((img->buf_cycle+1) * sizeof(int***))) == NULL)
       no_mem_exit ("InitializeFastFullIntegerSearch: BlockSAD");
-    for (j = 1; j < 8; j++)
+    for (i = 0; i <= img->buf_cycle; i++)
     {
-      if ((BlockSAD[i][j] = (int**)malloc (16 * sizeof(int*))) == NULL)
+      if ((BlockSAD[list][i] = (int***)malloc (8 * sizeof(int**))) == NULL)
         no_mem_exit ("InitializeFastFullIntegerSearch: BlockSAD");
-      for (k = 0; k < 16; k++)
+      for (j = 1; j < 8; j++)
       {
-        if ((BlockSAD[i][j][k] = (int*)malloc (max_pos * sizeof(int))) == NULL)
+        if ((BlockSAD[list][i][j] = (int**)malloc (16 * sizeof(int*))) == NULL)
           no_mem_exit ("InitializeFastFullIntegerSearch: BlockSAD");
+        for (k = 0; k < 16; k++)
+        {
+          if ((BlockSAD[list][i][j][k] = (int*)malloc (max_pos * sizeof(int))) == NULL)
+            no_mem_exit ("InitializeFastFullIntegerSearch: BlockSAD");
+        }
       }
     }
   }
 
-  if ((search_setup_done = (int*)malloc ((img->buf_cycle+1)*sizeof(int)))==NULL)
+  if ((search_setup_done = (int**)malloc (2*sizeof(int)))==NULL)
     no_mem_exit ("InitializeFastFullIntegerSearch: search_setup_done");
-  if ((search_center_x = (int*)malloc ((img->buf_cycle+1)*sizeof(int)))==NULL)
+  if ((search_center_x = (int**)malloc (2*sizeof(int)))==NULL)
     no_mem_exit ("InitializeFastFullIntegerSearch: search_center_x");
-  if ((search_center_y = (int*)malloc ((img->buf_cycle+1)*sizeof(int)))==NULL)
+  if ((search_center_y = (int**)malloc (2*sizeof(int)))==NULL)
     no_mem_exit ("InitializeFastFullIntegerSearch: search_center_y");
-  if ((pos_00 = (int*)malloc ((img->buf_cycle+1)*sizeof(int)))==NULL)
+  if ((pos_00 = (int**)malloc (2*sizeof(int)))==NULL)
     no_mem_exit ("InitializeFastFullIntegerSearch: pos_00");
-  if ((max_search_range = (int*)malloc ((img->buf_cycle+1)*sizeof(int)))==NULL)
+  if ((max_search_range = (int**)malloc (2*sizeof(int)))==NULL)
     no_mem_exit ("InitializeFastFullIntegerSearch: max_search_range");
+
+  for (list=0; list<2; list++)
+  {
+  if ((search_setup_done[list] = (int*)malloc ((img->buf_cycle+1)*sizeof(int)))==NULL)
+    no_mem_exit ("InitializeFastFullIntegerSearch: search_setup_done");
+  if ((search_center_x[list] = (int*)malloc ((img->buf_cycle+1)*sizeof(int)))==NULL)
+    no_mem_exit ("InitializeFastFullIntegerSearch: search_center_x");
+  if ((search_center_y[list] = (int*)malloc ((img->buf_cycle+1)*sizeof(int)))==NULL)
+    no_mem_exit ("InitializeFastFullIntegerSearch: search_center_y");
+  if ((pos_00[list] = (int*)malloc ((img->buf_cycle+1)*sizeof(int)))==NULL)
+    no_mem_exit ("InitializeFastFullIntegerSearch: pos_00");
+  if ((max_search_range[list] = (int*)malloc ((img->buf_cycle+1)*sizeof(int)))==NULL)
+    no_mem_exit ("InitializeFastFullIntegerSearch: max_search_range");
+  }
 
   // assign max search ranges for reference frames
   if (input->full_search == 2)
   {
-    for (i=0; i<=img->buf_cycle; i++)  max_search_range[i] = search_range;
+    for (list=0;list<2;list++)
+      for (i=0; i<=img->buf_cycle; i++)  max_search_range[list][i] = search_range;
   }
   else
   {
-    max_search_range[0] = max_search_range[img->buf_cycle] = search_range;
-    for (i=1; i< img->buf_cycle; i++)  max_search_range[i] = search_range / 2;
+    for (list=0;list<2;list++)
+    {
+      max_search_range[list][0] = max_search_range[list][img->buf_cycle] = search_range;
+      for (i=1; i< img->buf_cycle; i++)  max_search_range[list][i] = search_range / 2;
+    }
   }
 
   if(input->InterlaceCodingOption != FRAME_CODING) 
@@ -173,25 +167,37 @@ InitializeFastFullIntegerSearch ()
 void
 ClearFastFullIntegerSearch ()
 {
-  int  i, j, k;
+  int  i, j, k, list;
 
   if(input->InterlaceCodingOption != FRAME_CODING) 
     img->buf_cycle *= 2;
 
-  for (i = 0; i <= img->buf_cycle; i++)
+  for (list=0; list<2; list++)
   {
-    for (j = 1; j < 8; j++)
+    for (i = 0; i <= img->buf_cycle; i++)
     {
-      for (k = 0; k < 16; k++)
+      for (j = 1; j < 8; j++)
       {
-        free (BlockSAD[i][j][k]);
+        for (k = 0; k < 16; k++)
+        {
+          free (BlockSAD[list][i][j][k]);
+        }
+        free (BlockSAD[list][i][j]);
       }
-      free (BlockSAD[i][j]);
+      free (BlockSAD[list][i]);
     }
-    free (BlockSAD[i]);
+    free (BlockSAD[list]);
   }
   free (BlockSAD);
 
+  for (list=0; list<2; list++)
+  {
+    free (search_setup_done[list]);
+    free (search_center_x[list]);
+    free (search_center_y[list]);
+    free (pos_00[list]);
+    free (max_search_range[list]);
+  }
   free (search_setup_done);
   free (search_center_x);
   free (search_center_y);
@@ -213,9 +219,10 @@ ClearFastFullIntegerSearch ()
 void
 ResetFastFullIntegerSearch ()
 {
-  int i;
-  for (i = 0; i <= img->buf_cycle; i++)
-    search_setup_done [i] = 0;
+  int i,list;
+  for (list=0; list<2; list++)
+    for (i = 0; i <= img->buf_cycle; i++)
+      search_setup_done [list][i] = 0;
 }
 
 /*!
@@ -225,7 +232,7 @@ ResetFastFullIntegerSearch ()
  ***********************************************************************
  */
 void
-SetupLargerBlocks (int refindex, int max_pos)
+SetupLargerBlocks (int list, int refindex, int max_pos)
 {
 #define ADD_UP_BLOCKS()   _o=*_bo; _i=*_bi; _j=*_bj; for(pos=0;pos<max_pos;pos++) _o[pos] = _i[pos] + _j[pos];
 #define INCREMENT(inc)    _bo+=inc; _bi+=inc; _bj+=inc;
@@ -234,8 +241,8 @@ SetupLargerBlocks (int refindex, int max_pos)
   register int *_o,   *_i,   *_j;
 
   //--- blocktype 6 ---
-  _bo = BlockSAD[refindex][6];
-  _bi = BlockSAD[refindex][7];
+  _bo = BlockSAD[list][refindex][6];
+  _bi = BlockSAD[list][refindex][7];
   _bj = _bi + 4;
   ADD_UP_BLOCKS(); INCREMENT(1);
   ADD_UP_BLOCKS(); INCREMENT(1);
@@ -247,8 +254,8 @@ SetupLargerBlocks (int refindex, int max_pos)
   ADD_UP_BLOCKS();
 
   //--- blocktype 5 ---
-  _bo = BlockSAD[refindex][5];
-  _bi = BlockSAD[refindex][7];
+  _bo = BlockSAD[list][refindex][5];
+  _bi = BlockSAD[list][refindex][7];
   _bj = _bi + 1;
   ADD_UP_BLOCKS(); INCREMENT(2);
   ADD_UP_BLOCKS(); INCREMENT(2);
@@ -260,8 +267,8 @@ SetupLargerBlocks (int refindex, int max_pos)
   ADD_UP_BLOCKS();
 
   //--- blocktype 4 ---
-  _bo = BlockSAD[refindex][4];
-  _bi = BlockSAD[refindex][6];
+  _bo = BlockSAD[list][refindex][4];
+  _bi = BlockSAD[list][refindex][6];
   _bj = _bi + 1;
   ADD_UP_BLOCKS(); INCREMENT(2);
   ADD_UP_BLOCKS(); INCREMENT(6);
@@ -269,22 +276,22 @@ SetupLargerBlocks (int refindex, int max_pos)
   ADD_UP_BLOCKS();
 
   //--- blocktype 3 ---
-  _bo = BlockSAD[refindex][3];
-  _bi = BlockSAD[refindex][4];
+  _bo = BlockSAD[list][refindex][3];
+  _bi = BlockSAD[list][refindex][4];
   _bj = _bi + 8;
   ADD_UP_BLOCKS(); INCREMENT(2);
   ADD_UP_BLOCKS();
 
   //--- blocktype 2 ---
-  _bo = BlockSAD[refindex][2];
-  _bi = BlockSAD[refindex][4];
+  _bo = BlockSAD[list][refindex][2];
+  _bi = BlockSAD[list][refindex][4];
   _bj = _bi + 2;
   ADD_UP_BLOCKS(); INCREMENT(8);
   ADD_UP_BLOCKS();
 
   //--- blocktype 1 ---
-  _bo = BlockSAD[refindex][1];
-  _bi = BlockSAD[refindex][3];
+  _bo = BlockSAD[list][refindex][1];
+  _bi = BlockSAD[list][refindex][3];
   _bj = _bi + 2;
   ADD_UP_BLOCKS();
 }
@@ -296,7 +303,7 @@ SetupLargerBlocks (int refindex, int max_pos)
  *    Setup the fast search for an macroblock
  ***********************************************************************
  */
-void SetupFastFullPelSearch (int   ref)  // <--  reference frame parameter (0... or -1 (backward))
+void SetupFastFullPelSearch (int ref, int list)  // <--  reference frame parameter, list0 or 1
 {
   int     pmv[2];
   pel_t   orig_blocks[256], *orgptr=orig_blocks, *refptr;
@@ -306,12 +313,12 @@ void SetupFastFullPelSearch (int   ref)  // <--  reference frame parameter (0...
   int     refframe      = (ref>=0 ? ref             : 0);
   int     refindex      = (ref>=0 ? ref             : img->buf_cycle);
   pel_t*  ref_pic;    //   = img->type==B_SLICE? Refbuf11 [ref+((mref==mref_fld)) +1] : Refbuf11[ref];
-  int**   ref_array     = ((img->type!=B_SLICE && img->type!=BS_IMG)? refFrArr : ref>=0 ? fw_refFrArr : bw_refFrArr);
-  int***  mv_array      = ((img->type!=B_SLICE && img->type!=BS_IMG)? tmp_mv   : ref>=0 ? tmp_fwMV    : tmp_bwMV);
-  int**   block_sad     = BlockSAD[refindex][7];
+  int**   ref_array     = enc_picture->ref_idx[list];
+  int***  mv_array      = enc_picture->mv[list];
+  int**   block_sad     = BlockSAD[list][ref][7];
   int     max_width     = img->width  - 17;
   int     max_height    = img->height - 17;
-  int     search_range  = max_search_range[refindex];
+  int     search_range  = max_search_range[list][ref];
   int     max_pos       = (2*search_range+1) * (2*search_range+1);
   byte**  imgY_orig     = imgY_org;
   int     pix_y         = img->pix_y;
@@ -321,7 +328,7 @@ void SetupFastFullPelSearch (int   ref)  // <--  reference frame parameter (0...
   if (apply_weights)
     ref_pic       = img->type==B_SLICE? Refbuf11_w [ref+((mref==mref_fld)) +1] : Refbuf11_w[ref];
   else
-    ref_pic       = img->type==B_SLICE? Refbuf11 [ref+((mref==mref_fld)) +1] : Refbuf11[ref];
+    ref_pic       = listX[list][ref]->imgY_11;
 
   if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
   {
@@ -331,7 +338,7 @@ void SetupFastFullPelSearch (int   ref)  // <--  reference frame parameter (0...
     else
       ref_pic       = img->type==B_SLICE? Refbuf11 [ref+(img->field_mode) +1] : Refbuf11[ref];
     
-    block_sad     = BlockSAD[refindex][7];
+    block_sad     = BlockSAD[list][refindex][7];
     pix_y     = img->field_pix_y;
     if(img->top_field)
     {
@@ -349,19 +356,19 @@ void SetupFastFullPelSearch (int   ref)  // <--  reference frame parameter (0...
 
 
   //===== get search center: predictor of 16x16 block =====
-  SetMotionVectorPredictor (pmv, ref_array, mv_array, refframe, 0, 0, 16, 16);
-  search_center_x[refindex] = pmv[0] / 4;
-  search_center_y[refindex] = pmv[1] / 4;
+  SetMotionVectorPredictor (pmv, enc_picture->ref_idx, enc_picture->mv, ref, list, 0, 0, 16, 16);
+  search_center_x[list][ref] = pmv[0] / 4;
+  search_center_y[list][ref] = pmv[1] / 4;
   if (!input->rdopt)
   {
     //--- correct center so that (0,0) vector is inside ---
-    search_center_x[refindex] = max(-search_range, min(search_range, search_center_x[refindex]));
-    search_center_y[refindex] = max(-search_range, min(search_range, search_center_y[refindex]));
+    search_center_x[list][ref] = max(-search_range, min(search_range, search_center_x[list][ref]));
+    search_center_y[list][ref] = max(-search_range, min(search_range, search_center_y[list][ref]));
   }
-  search_center_x[refindex] += img->pix_x;
-  search_center_y[refindex] += pix_y;
-  offset_x = search_center_x[refindex];
-  offset_y = search_center_y[refindex];
+  search_center_x[list][ref] += img->pix_x;
+  search_center_y[list][ref] += pix_y;
+  offset_x = search_center_x[list][ref];
+  offset_y = search_center_y[list][ref];
 
 
   //===== copy original block for fast access =====
@@ -393,7 +400,7 @@ void SetupFastFullPelSearch (int   ref)  // <--  reference frame parameter (0...
       if (ref_x == spiral_search_x[pos] &&
           ref_y == spiral_search_y[pos])
       {
-        pos_00[refindex] = pos;
+        pos_00[list][ref] = pos;
         break;
       }
     }
@@ -454,73 +461,45 @@ void SetupFastFullPelSearch (int   ref)  // <--  reference frame parameter (0...
 
 
   //===== combine SAD's for larger block types =====
-  SetupLargerBlocks (refindex, max_pos);
+  SetupLargerBlocks (list, ref, max_pos);
 
 
   //===== set flag marking that search setup have been done =====
-  search_setup_done[refindex] = 1;
+  search_setup_done[list][ref] = 1;
 }
 #endif // _FAST_FULL_ME_
 
-
 /*!
- ***********************************************************************
+ ************************************************************************
  * \brief
- *    setting the motion vector predictor
- ***********************************************************************
+ *    Set motion vector predictor
+ ************************************************************************
  */
-void
-SetMotionVectorPredictor (int  pmv[2],
-                          int  **refFrArr,
-                          int  ***tmp_mv,
-                          int  ref_frame,
-                          int  mb_x,
-                          int  mb_y,
-                          int  blockshape_x,
-                          int  blockshape_y)
+void SetMotionVectorPredictor (int  pmv[2],
+                               int  ***refPic,
+                               int  ****tmp_mv,
+                               int  ref_frame,
+                               int  list,
+                               int  block_x,
+                               int  block_y,
+                               int  blockshape_x,
+                               int  blockshape_y)
 {
-  int pic_block_x          = img->block_x + (mb_x>>2);
-  int pic_block_y          = img->block_y + (mb_y>>2);
+  int mb_x                 = 4*block_x;
+  int mb_y                 = 4*block_y;
   int mb_nr                = img->current_mb_nr;
-  int mb_width             = img->width/16;
-  int mb_available_up      = (img->mb_y == 0          ) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width  ].slice_nr);
-  int mb_available_left    = (img->mb_x == 0          ) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-1         ].slice_nr);
-  int mb_available_upleft  = (img->mb_x == 0 ||
-                              img->mb_y == 0          ) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr);
-  int mb_available_upright = (img->mb_x >= mb_width-1 ||
-                              img->mb_y == 0          ) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width+1].slice_nr);
-  int block_available_up, block_available_left, block_available_upright, block_available_upleft;
-  int mv_a, mv_b, mv_c, mv_d, pred_vec=0;
+
+  int mv_a, mv_b, mv_c, pred_vec=0;
   int mvPredType, rFrameL, rFrameU, rFrameUR;
   int hv;
 
-  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
-  {
-    pic_block_y          = img->field_block_y + (mb_y>>2);
-    mb_available_up      = (img->field_mb_y == 0          ) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width  ].slice_nr);
-    mb_available_left    = (img->mb_x == 0          ) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-1         ].slice_nr);
-    mb_available_upleft  = (img->mb_x == 0 ||
-                            img->field_mb_y == 0          ) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr);
-    mb_available_upright = (img->mb_x >= mb_width-1 ||
-                            img->field_mb_y == 0          ) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width+1].slice_nr);
-  }
-  
-  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive)
-  {
-    if(img->field_mode && !img->top_field)
-      mb_available_upright=0; // set mb_available_upright to 0 for bottom MBs in a MB pair
-    else if(!img->field_mode && img->mb_y%2)
-      mb_available_upright=0; // set mb_available_upright to 0 for bottom MBs in a MB pair
 
-  }
+  PixelPos block_a, block_b, block_c, block_d;
 
-  /* D B C */
-  /* A X   */
-  
-  /* 1 A, B, D are set to 0 if unavailable       */
-  /* 2 If C is not available it is replaced by D */
-  block_available_up   = mb_available_up   || (mb_y > 0);
-  block_available_left = mb_available_left || (mb_x > 0);
+  getLuma4x4Neighbour(mb_nr, block_x, block_y,           -1,  0, &block_a);
+  getLuma4x4Neighbour(mb_nr, block_x, block_y,            0, -1, &block_b);
+  getLuma4x4Neighbour(mb_nr, block_x, block_y, blockshape_x, -1, &block_c);
+  getLuma4x4Neighbour(mb_nr, block_x, block_y,           -1, -1, &block_d);
 
   if (mb_y > 0)
   {
@@ -528,64 +507,82 @@ SetMotionVectorPredictor (int  pmv[2],
     {
       if (mb_y==8)
       {
-        if (blockshape_x == 16)      block_available_upright = 0;
-        else                         block_available_upright = 1;
+        if (blockshape_x == 16)      block_c.available  = 0;
+        else                         block_c.available &= 1;
       }
       else
       {
-        if (mb_x+blockshape_x != 8)  block_available_upright = 1;
-        else                         block_available_upright = 0;
+        if (mb_x+blockshape_x != 8)  block_c.available &= 1;
+        else                         block_c.available  = 0;
       }
     }
     else
     {
-      if (mb_x+blockshape_x != 16)   block_available_upright = 1;
-      else                           block_available_upright = 0;
+      if (mb_x+blockshape_x != 16)   block_c.available &= 1;
+      else                           block_c.available  = 0;
     }
   }
-  else if (mb_x+blockshape_x != MB_BLOCK_SIZE)
+
+  if (!block_c.available)
   {
-    block_available_upright = block_available_up;
+    block_c=block_d;
   }
-  else
-  {
-    block_available_upright = mb_available_upright;
-  }
-  
-  if (mb_x > 0)
-  {
-    block_available_upleft = (mb_y > 0 ? 1 : block_available_up);
-  }
-  else if (mb_y > 0)
-  {
-    block_available_upleft = block_available_left;
-  }
-  else
-  {
-    block_available_upleft = mb_available_upleft;
-  }
-  
-//  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive)
-//    block_available_upright = 0;      // temp fix for MB level field/frame coding
 
   mvPredType = MVPRED_MEDIAN;
-  rFrameL    = block_available_left    ? refFrArr[pic_block_y]  [pic_block_x-1] : -1;
-  rFrameU    = block_available_up      ? refFrArr[pic_block_y-1][pic_block_x]   : -1;
-  rFrameUR   = block_available_upright ? refFrArr[pic_block_y-1][pic_block_x+blockshape_x/4] :
-               block_available_upleft  ? refFrArr[pic_block_y-1][pic_block_x-1] : -1;
-  
-  
-  
+
+  if (!img->MbaffFrameFlag)
+  {
+    rFrameL    = block_a.available    ? refPic[list][block_a.pos_x][block_a.pos_y] : -1;
+    rFrameU    = block_b.available    ? refPic[list][block_b.pos_x][block_b.pos_y] : -1;
+    rFrameUR   = block_c.available    ? refPic[list][block_c.pos_x][block_c.pos_y] : -1;
+  }
+  else
+  {
+    if (img->mb_data[img->current_mb_nr].mb_field)
+    {
+      rFrameL    = block_a.available    ? 
+        img->mb_data[block_a.mb_addr].mb_field ? 
+        refPic[list][block_a.pos_x][block_a.pos_y]:
+        refPic[list][block_a.pos_x][block_a.pos_y] * 2: 
+        -1;
+      rFrameU    = block_b.available    ? 
+        img->mb_data[block_b.mb_addr].mb_field ? 
+        refPic[list][block_b.pos_x][block_b.pos_y]:
+        refPic[list][block_b.pos_x][block_b.pos_y] * 2: 
+        -1;
+      rFrameUR    = block_c.available    ? 
+        img->mb_data[block_c.mb_addr].mb_field ? 
+        refPic[list][block_c.pos_x][block_c.pos_y]:
+        refPic[list][block_c.pos_x][block_c.pos_y] * 2: 
+        -1;
+    }
+    else
+    {
+      rFrameL    = block_a.available    ? 
+        img->mb_data[block_a.mb_addr].mb_field ? 
+        refPic[list][block_a.pos_x][block_a.pos_y] >>1:
+        refPic[list][block_a.pos_x][block_a.pos_y] : 
+        -1;
+      rFrameU    = block_b.available    ? 
+        img->mb_data[block_b.mb_addr].mb_field ? 
+        refPic[list][block_b.pos_x][block_b.pos_y] >>1:
+        refPic[list][block_b.pos_x][block_b.pos_y] : 
+        -1;
+      rFrameUR    = block_c.available    ? 
+        img->mb_data[block_c.mb_addr].mb_field ? 
+        refPic[list][block_c.pos_x][block_c.pos_y] >>1:
+        refPic[list][block_c.pos_x][block_c.pos_y] : 
+        -1;
+    }
+  }
+
+
   /* Prediction if only one of the neighbors uses the reference frame
-  * we are checking
-  */
-  
-  if(rFrameL == ref_frame && rFrameU != ref_frame && rFrameUR != ref_frame)
-    mvPredType = MVPRED_L;
-  else if(rFrameL != ref_frame && rFrameU == ref_frame && rFrameUR != ref_frame)
-    mvPredType = MVPRED_U;
-  else if(rFrameL != ref_frame && rFrameU != ref_frame && rFrameUR == ref_frame)
-    mvPredType = MVPRED_UR;
+   * we are checking
+   */
+  if(rFrameL == ref_frame && rFrameU != ref_frame && rFrameUR != ref_frame)       mvPredType = MVPRED_L;
+  else if(rFrameL != ref_frame && rFrameU == ref_frame && rFrameUR != ref_frame)  mvPredType = MVPRED_U;
+  else if(rFrameL != ref_frame && rFrameU != ref_frame && rFrameUR == ref_frame)  mvPredType = MVPRED_UR;
   // Directional predictions 
   else if(blockshape_x == 8 && blockshape_y == 16)
   {
@@ -596,7 +593,7 @@ SetMotionVectorPredictor (int  pmv[2],
     }
     else
     {
-      if(rFrameUR == ref_frame)
+      if( rFrameUR == ref_frame)
         mvPredType = MVPRED_UR;
     }
   }
@@ -613,25 +610,58 @@ SetMotionVectorPredictor (int  pmv[2],
         mvPredType = MVPRED_L;
     }
   }
-  
-#define MEDIAN(a,b,c)  (a>b?a>c?b>c?b:c:a:b>c?a>c?a:c:b)
-  
+
   for (hv=0; hv < 2; hv++)
   {
-    mv_a = block_available_left    ? tmp_mv[hv][pic_block_y  ][4+pic_block_x-1]              : 0;
-    mv_b = block_available_up      ? tmp_mv[hv][pic_block_y-1][4+pic_block_x]                : 0;
-    mv_d = block_available_upleft  ? tmp_mv[hv][pic_block_y-1][4+pic_block_x-1]              : 0;
-    mv_c = block_available_upright ? tmp_mv[hv][pic_block_y-1][4+pic_block_x+blockshape_x/4] : mv_d;
-    
+    if (!img->MbaffFrameFlag || hv==0)
+    {
+      mv_a = block_a.available  ? tmp_mv[list][block_a.pos_x][block_a.pos_y][hv] : 0;
+      mv_b = block_b.available  ? tmp_mv[list][block_b.pos_x][block_b.pos_y][hv] : 0;
+      mv_c = block_c.available  ? tmp_mv[list][block_c.pos_x][block_c.pos_y][hv] : 0;
+    }
+    else
+    {
+      if (img->mb_data[img->current_mb_nr].mb_field)
+      {
+        mv_a = block_a.available  ? img->mb_data[block_a.mb_addr].mb_field?
+          tmp_mv[list][block_a.pos_x][block_a.pos_y][hv]:
+          tmp_mv[list][block_a.pos_x][block_a.pos_y][hv] / 2: 
+          0;
+        mv_b = block_b.available  ? img->mb_data[block_b.mb_addr].mb_field?
+          tmp_mv[list][block_b.pos_x][block_b.pos_y][hv]:
+          tmp_mv[list][block_b.pos_x][block_b.pos_y][hv] / 2: 
+          0;
+        mv_c = block_c.available  ? img->mb_data[block_c.mb_addr].mb_field?
+          tmp_mv[list][block_c.pos_x][block_c.pos_y][hv]:
+          tmp_mv[list][block_c.pos_x][block_c.pos_y][hv] / 2: 
+          0;
+      }
+      else
+      {
+        mv_a = block_a.available  ? img->mb_data[block_a.mb_addr].mb_field?
+          tmp_mv[list][block_a.pos_x][block_a.pos_y][hv] * 2:
+          tmp_mv[list][block_a.pos_x][block_a.pos_y][hv]: 
+          0;
+        mv_b = block_b.available  ? img->mb_data[block_b.mb_addr].mb_field?
+          tmp_mv[list][block_b.pos_x][block_b.pos_y][hv] * 2:
+          tmp_mv[list][block_b.pos_x][block_b.pos_y][hv]: 
+          0;
+        mv_c = block_c.available  ? img->mb_data[block_c.mb_addr].mb_field?
+          tmp_mv[list][block_c.pos_x][block_c.pos_y][hv] * 2:
+          tmp_mv[list][block_c.pos_x][block_c.pos_y][hv]: 
+          0;
+      }
+    }
+
+
     switch (mvPredType)
     {
     case MVPRED_MEDIAN:
-      if(!(block_available_upleft || block_available_up || block_available_upright))
+      if(!(block_b.available || block_c.available))
         pred_vec = mv_a;
       else
-        pred_vec = MEDIAN (mv_a, mv_b, mv_c);
+        pred_vec = mv_a+mv_b+mv_c-min(mv_a,min(mv_b,mv_c))-max(mv_a,max(mv_b,mv_c));
       break;
-      
     case MVPRED_L:
       pred_vec = mv_a;
       break;
@@ -646,10 +676,9 @@ SetMotionVectorPredictor (int  pmv[2],
     }
 
     pmv[hv] = pred_vec;
-  }
-#undef MEDIAN
-}
 
+  }
+}
 
 /*!
  ************************************************************************
@@ -684,7 +713,7 @@ Init_Motion_Search_Module ()
     no_mem_exit("Init_Motion_Search_Module: refbits");
   if ((byte_abs = (int*)calloc(512, sizeof(int))) == NULL)
     no_mem_exit("Init_Motion_Search_Module: byte_abs");
-  get_mem3Dint (&motion_cost, 8, 2*(img->buf_cycle+1), 4);
+  get_mem4Dint (&motion_cost, 8, 2*(img->buf_cycle+1),2, 4);
 
   //--- set array offsets ---
   mvbits   += max_mvd;
@@ -755,7 +784,7 @@ Clear_Motion_Search_Module ()
   free (mvbits);
   free (refbits);
   free (byte_abs);
-  free_mem3Dint (motion_cost, 8);
+  free_mem4Dint (motion_cost, 2, 8);
 
 #ifdef _FAST_FULL_ME_
   ClearFastFullIntegerSearch ();
@@ -787,8 +816,7 @@ FullPelBlockMotionSearch (pel_t**   orig_pic,     // <--  original pixel values 
   int   pos, cand_x, cand_y, y, x4, mcost;
   pel_t *orig_line, *ref_line;
   pel_t *(*get_ref_line)(int, pel_t*, int, int);
-
-  pel_t*  ref_pic       = img->type==B_SLICE? Refbuf11 [ref+((mref==mref_fld)) +1] : Refbuf11[ref];
+	pel_t*  ref_pic       = ref<0 ? listX[LIST_1][0]->imgY_11 : listX[LIST_0][ref]->imgY_11;
   int   best_pos      = 0;                                        // position with minimum motion cost
   int   max_pos       = (2*search_range+1)*(2*search_range+1);    // number of search positions
   int   lambda_factor = LAMBDA_FACTOR (lambda);                   // factor for determining lagragian motion cost
@@ -877,6 +905,7 @@ FullPelBlockMotionSearch (pel_t**   orig_pic,     // <--  original pixel values 
 int                                                   //  ==> minimum motion cost after search
 FastFullPelBlockMotionSearch (pel_t**   orig_pic,     // <--  not used
                               int       ref,          // <--  reference frame (0... or -1 (backward))
+                              int       list,
                               int       pic_pix_x,    // <--  absolute x-coordinate of regarded AxB block
                               int       pic_pix_y,    // <--  absolute y-coordinate of regarded AxB block
                               int       blocktype,    // <--  block type (1-16x16 ... 7-4x4)
@@ -890,7 +919,7 @@ FastFullPelBlockMotionSearch (pel_t**   orig_pic,     // <--  not used
 {
   int   pos, offset_x, offset_y, cand_x, cand_y, mcost;
 
-  int   refindex      = (ref!=-1 ? ref : img->buf_cycle);                   // reference frame index (array entry)
+//  int   refindex      = (ref!=-1 ? ref : img->buf_cycle);                   // reference frame index (array entry)
   int   max_pos       = (2*search_range+1)*(2*search_range+1);              // number of search positions
   int   lambda_factor = LAMBDA_FACTOR (lambda);                             // factor for determining lagragian motion cost
   int   best_pos      = 0;                                                  // position with minimum motion cost
@@ -902,33 +931,33 @@ FastFullPelBlockMotionSearch (pel_t**   orig_pic,     // <--  not used
   {
     pix_y = img->field_pix_y;
     block_index   = (pic_pix_y-pix_y)+((pic_pix_x-img->pix_x)>>2); 
-    block_sad     = BlockSAD[refindex][blocktype][block_index];
+    block_sad     = BlockSAD[list][ref][blocktype][block_index];
   }
   else
   {
     block_index   = (pic_pix_y-img->pix_y)+((pic_pix_x-img->pix_x)>>2); // block index for indexing SAD array
-    block_sad     = BlockSAD[refindex][blocktype][block_index];         // pointer to SAD array
+    block_sad     = BlockSAD[list][ref][blocktype][block_index];         // pointer to SAD array
     pix_y         = img->pix_y;
   }
 
   //===== set up fast full integer search if needed / set search center =====
-  if (!search_setup_done[refindex])
+  if (!search_setup_done[list][ref])
   {
-    SetupFastFullPelSearch (ref);
+    SetupFastFullPelSearch (ref, list);
   }
-  offset_x = search_center_x[refindex] - img->pix_x;
-  offset_y = search_center_y[refindex] - pix_y;
+  offset_x = search_center_x[list][ref] - img->pix_x;
+  offset_y = search_center_y[list][ref] - pix_y;
 
 
   //===== cost for (0,0)-vector: it is done before, because MVCost can be negative =====
   if (!input->rdopt)
   {
-    mcost = block_sad[pos_00[refindex]] + MV_COST (lambda_factor, 2, 0, 0, pred_mv_x, pred_mv_y);
+    mcost = block_sad[pos_00[list][ref]] + MV_COST (lambda_factor, 2, 0, 0, pred_mv_x, pred_mv_y);
 
     if (mcost < min_mcost)
     {
       min_mcost = mcost;
-      best_pos  = pos_00[refindex];
+      best_pos  = pos_00[list][ref];
     }
   }
 
@@ -1073,6 +1102,7 @@ SATD (int* diff, int use_hadamard)
 int                                               //  ==> minimum motion cost after search
 SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values for the AxB block
                          int       ref,           // <--  reference frame (0... or -1 (backward))
+                         int       list,          // <--  reference picture list 
                          int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
                          int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
                          int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
@@ -1091,7 +1121,7 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
   int   y0, x0, ry0, rx0, ry;
   int   cand_mv_x, cand_mv_y;
   pel_t *orig_line;
-  int   incr            = ref==-1 ? ((!img->fld_type)&&(mref==mref_fld)&&(img->type==B_SLICE)) : (mref==mref_fld)&&(img->type==B_SLICE) ;
+  int   incr            = ref==-1 ? ((!img->fld_type)&&(enc_picture!=enc_frame_picture)&&(img->type==B_SLICE)) : (enc_picture==enc_frame_picture)&&(img->type==B_SLICE) ;
   pel_t **ref_pic;      
   int   lambda_factor   = LAMBDA_FACTOR (lambda);
   int   mv_shift        = 0;
@@ -1110,7 +1140,7 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
   if (apply_weights)
     ref_pic = img->type==B_SLICE? mref_w [ref+1+incr] : mref_w [ref];
   else
-    ref_pic = img->type==B_SLICE? mref [ref+1+incr] : mref [ref];
+    ref_pic = listX[list][ref]->imgY_ups;
 
   if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode && img->type == B_SLICE)
   {
@@ -1300,6 +1330,7 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
  */
 int                                         //  ==> minimum motion cost after search
 BlockMotionSearch (int       ref,           // <--  reference frame (0... or -1 (backward))
+                   int       list,
                    int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
                    int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
                    int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
@@ -1325,11 +1356,15 @@ BlockMotionSearch (int       ref,           // <--  reference frame (0... or -1 
   int       bsy       = input->blc_size[blocktype][1];
   int       refframe  = (ref==-1 ? 0 : ref);
   int*      pred_mv;
-  int**     ref_array = ((img->type!=B_SLICE && img->type!=BS_IMG) ? refFrArr : ref>=0 ? fw_refFrArr : bw_refFrArr);
-  int***    mv_array  = ((img->type!=B_SLICE && img->type!=BS_IMG) ? tmp_mv   : ref>=0 ? tmp_fwMV    : tmp_bwMV);
+  int**     ref_array;
+  int***    mv_array;
   int*****  all_bmv   = img->all_bmv;
-  int*****  all_mv    = (ref==-1 ? img->all_bmv : img->all_mv);
+  int*****  all_mv    = (list ? img->all_bmv : img->all_mv);
   byte**    imgY_org_pic = imgY_org;
+
+  ref_array = enc_picture->ref_idx[list];
+  mv_array  = enc_picture->mv[list];
+
 
   if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
   {
@@ -1355,7 +1390,7 @@ BlockMotionSearch (int       ref,           // <--  reference frame (0... or -1 
     }
   }
   else
-    pred_mv = ((img->type!=B_SLICE && img->type!=BS_IMG) ? img->mv  : ref>=0 ? img->p_fwMV : img->p_bwMV)[mb_x>>2][mb_y>>2][refframe][blocktype];
+    pred_mv = (img->type!=B_SLICE  ? img->mv  : list==0 ? img->p_fwMV : img->p_bwMV)[mb_x>>2][mb_y>>2][ref][blocktype];
 
 
 
@@ -1374,7 +1409,7 @@ BlockMotionSearch (int       ref,           // <--  reference frame (0... or -1 
   //===========================================
   //=====   GET MOTION VECTOR PREDICTOR   =====
   //===========================================
-  SetMotionVectorPredictor (pred_mv, ref_array, mv_array, refframe, mb_x, mb_y, bsx, bsy);
+  SetMotionVectorPredictor (pred_mv, enc_picture->ref_idx, enc_picture->mv, ref, list, block_x, block_y, bsx, bsy);
   pred_mv_x = pred_mv[0];
   pred_mv_y = pred_mv[1];
 
@@ -1403,7 +1438,7 @@ BlockMotionSearch (int       ref,           // <--  reference frame (0... or -1 
 
   // comments:   - orig_pic is not used  -> be careful
   //             - search center is automatically determined
-  min_mcost = FastFullPelBlockMotionSearch (orig_pic, ref, pic_pix_x, pic_pix_y, blocktype,
+  min_mcost = FastFullPelBlockMotionSearch (orig_pic, ref, list, pic_pix_x, pic_pix_y, blocktype,
                                             pred_mv_x, pred_mv_y, &mv_x, &mv_y, search_range,
                                             min_mcost, lambda);
 
@@ -1416,7 +1451,7 @@ BlockMotionSearch (int       ref,           // <--  reference frame (0... or -1 
   {
     min_mcost = max_value;
   }
-  min_mcost =  SubPelBlockMotionSearch (orig_pic, ref, pic_pix_x, pic_pix_y, blocktype,
+  min_mcost =  SubPelBlockMotionSearch (orig_pic, ref, list, pic_pix_x, pic_pix_y, blocktype,
                                         pred_mv_x, pred_mv_y, &mv_x, &mv_y, 9, 9,
                                         min_mcost, lambda);
 
@@ -2216,10 +2251,6 @@ int GetSkipCostMB (double lambda)
 void FindSkipModeMotionVector ()
 {
   int bx, by;
-  int mb_available_up   = (img->mb_y == 0)  ? 0 : (img->mb_data[img->current_mb_nr].slice_nr == img->mb_data[img->current_mb_nr-img->width/16].slice_nr);
-  int mb_available_left = (img->mb_x == 0)  ? 0 : (img->mb_data[img->current_mb_nr].slice_nr == img->mb_data[img->current_mb_nr-1                    ].slice_nr);
-  int zeroMotionAbove   = !mb_available_up  ? 1 : refFrArr[img->block_y-1][img->block_x] == 0 && tmp_mv[0][img->block_y-1][4+img->block_x]   == 0 && tmp_mv[1][img->block_y-1][4+img->block_x]   == 0 ? 1 : 0;
-  int zeroMotionLeft    = !mb_available_left? 1 : refFrArr[img->block_y][img->block_x-1] == 0 && tmp_mv[0][img->block_y  ][4+img->block_x-1] == 0 && tmp_mv[1][img->block_y  ][4+img->block_x-1] == 0 ? 1 : 0;
   int mb_y = img->mb_y;
   int block_y = img->block_y;
   int **refar = refFrArr;
@@ -2228,54 +2259,55 @@ void FindSkipModeMotionVector ()
   int *****mv  = img->mv;
   int pmv[2];
 
-  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
-  {
-    mb_y  =img->field_mb_y;
-    block_y = img->field_block_y;
-    if(img->top_field)
-    {
-      all_mv=img->all_mv_top;
-      mv  =img->mv_top;
-      tmpmv =tmp_mv_top;
-      refar =refFrArr_top;
-    }
-    else
-    {
-      all_mv=img->all_mv_bot;
-      mv  =img->mv_bot;
-      tmpmv =tmp_mv_bot;
-      refar =refFrArr_bot;
+  int zeroMotionAbove;
+  int zeroMotionLeft;
+  PixelPos mb_a, mb_b;
+  int      a_mv_y = 0;
+  int      a_ref_idx = 0;
+  int      b_mv_y = 0;
+  int      b_ref_idx = 0;
 
+  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  
+  getLuma4x4Neighbour(img->current_mb_nr,0,0,-1, 0,&mb_a);
+  getLuma4x4Neighbour(img->current_mb_nr,0,0, 0,-1,&mb_b);
+  
+  if (mb_a.available)
+  {
+    a_mv_y    = enc_picture->mv[LIST_0][mb_a.pos_x][mb_a.pos_y][1];
+    a_ref_idx = enc_picture->ref_idx[LIST_0][mb_a.pos_x][mb_a.pos_y];
+    
+    if (currMB->mb_field && !img->mb_data[mb_a.mb_addr].mb_field)
+    {
+      a_mv_y    /=2;
+      a_ref_idx *=2;
+    }
+    if (!currMB->mb_field && img->mb_data[mb_a.mb_addr].mb_field)
+    {
+      a_mv_y    *=2;
+      a_ref_idx >>=1;
     }
   }
-
-
-  if(mb_adaptive)
+  
+  if (mb_b.available)
   {
-    if(!img->field_mode)    // if current MB is in frame mode
+    b_mv_y    = enc_picture->mv[LIST_0][mb_b.pos_x][mb_b.pos_y][1];
+    b_ref_idx = enc_picture->ref_idx[LIST_0][mb_b.pos_x][mb_b.pos_y];
+    
+    if (currMB->mb_field && !img->mb_data[mb_b.mb_addr].mb_field)
     {
-      if(mb_available_up)
-        zeroMotionAbove = field_mb[img->mb_y-1][img->mb_x] ? 1:zeroMotionAbove; // if top MB Pair is frame then motion MV ok, else set it to 0
-      
-      if(mb_available_left)
-        zeroMotionLeft = field_mb[img->mb_y][img->mb_x-1] ? 1:zeroMotionLeft;     // if left MB Pair is frame then motion MV ok, else set it to 1
+      b_mv_y    /=2;
+      b_ref_idx *=2;
     }
-    else            // else if current MB is in field mode
+    if (!currMB->mb_field && img->mb_data[mb_b.mb_addr].mb_field)
     {
-      
-      mb_available_up   = (mb_y == 0)  ? 0 : (img->mb_data[img->current_mb_nr].slice_nr == img->mb_data[img->current_mb_nr-img->width/32].slice_nr);
-      mb_available_left = (img->mb_x == 0)  ? 0 : (img->mb_data[img->current_mb_nr].slice_nr == img->mb_data[img->current_mb_nr-1                    ].slice_nr);
-      zeroMotionAbove   = !mb_available_up  ? 1 : refar[block_y-1][img->block_x] == 0 && tmpmv[0][block_y-1][4+img->block_x]   == 0 && tmpmv[1][block_y-1][4+img->block_x]   == 0 ? 1 : 0;
-      zeroMotionLeft    = !mb_available_left? 1 : refar[block_y][img->block_x-1] == 0 && tmpmv[0][block_y  ][4+img->block_x-1] == 0 && tmpmv[1][block_y  ][4+img->block_x-1] == 0 ? 1 : 0;
-      
-      if(mb_available_up)
-        zeroMotionAbove = field_mb[img->mb_y-1][img->mb_x] ? zeroMotionAbove:1; // if top MB Pair is field then motion MV ok, else set it to 0
-      
-      if(mb_available_left)
-        zeroMotionLeft = field_mb[img->mb_y][img->mb_x-1] ? zeroMotionLeft:1;     // if left MB Pair is field then motion MV ok, else set it to 1
-      
+      b_mv_y    *=2;
+      b_ref_idx >>=1;
     }
   }
+  
+  zeroMotionLeft  = !mb_a.available ? 1 : a_ref_idx==0 && enc_picture->mv[LIST_0][mb_a.pos_x][mb_a.pos_y][0]==0 && a_mv_y==0 ? 1 : 0;
+  zeroMotionAbove = !mb_b.available ? 1 : b_ref_idx==0 && enc_picture->mv[LIST_0][mb_b.pos_x][mb_b.pos_y][0]==0 && b_mv_y==0 ? 1 : 0;
   
   if (zeroMotionAbove || zeroMotionLeft)
   {
@@ -2288,7 +2320,7 @@ void FindSkipModeMotionVector ()
   }
   else
   {
-    SetMotionVectorPredictor (pmv, refar, tmpmv, 0, 0, 0, 16, 16);
+    SetMotionVectorPredictor (pmv, enc_picture->ref_idx, enc_picture->mv, 0, LIST_0, 0, 0, 16, 16);
     for (by = 0;by < 4;by++)
       for (bx = 0;bx < 4;bx++)
       {
@@ -2382,7 +2414,7 @@ PartitionMotionSearch (int    blocktype,
   static int  by0[5][4] = {{0,0,0,0}, {0,0,0,0}, {0,2,0,0}, {0,0,0,0}, {0,0,2,2}};
 
   int   **ref_array, ***mv_array, *****all_mv;
-  int   ref, refinx, refframe, v, h, mcost, search_range, i, j;
+  int   ref, v, h, mcost, search_range, i, j;
   int   pic_block_x, pic_block_y;
   int   bframe    = (img->type==B_SLICE);
   int   max_ref   = bframe? img->nb_references-1 : img->nb_references;
@@ -2393,112 +2425,108 @@ PartitionMotionSearch (int    blocktype,
   int   step_v    = (input->blc_size[blocktype][1]>>2);
   int   block_y   = img->block_y;
   int   **bref_array, ***bwMV;
+  int   list;
+  int   numlists;
 
-  if(mref==mref_fld)   //field coding, 
-//    max_ref = min (2*img->nb_references, max(0,img->buf_cycle-(img->fld_type*2)));
-    max_ref = min (max(0,2*img->nb_references-(img->fld_type*2)), img->buf_cycle);
-//    max_ref = min (img->number-((mref==mref_fld)&&img->fld_type&&bframe), img->buf_cycle);
+  max_ref = img->num_ref_idx_l0_active;
+
   if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
   {
-      max_ref   = min (2*img->number, img->buf_cycle);
-      if(img->top_field)
-        block_y = 4*(img->mb_y/2)+(img->block_y-4*img->mb_y);  // seems to be un-necessary, can use img->field_block_y instead 
-      else
-        block_y = 4*((img->mb_y-1)/2)+(img->block_y-4*img->mb_y);
+    if(img->top_field)
+      block_y = 4*(img->mb_y/2)+(img->block_y-4*img->mb_y);  // seems to be un-necessary, can use img->field_block_y instead 
+    else
+      block_y = 4*((img->mb_y-1)/2)+(img->block_y-4*img->mb_y);
   }
 
+  numlists=bframe?2:1;
+
   //===== LOOP OVER REFERENCE FRAMES =====
-  for (ref=(bframe?-1:0); ref<max_ref; ref++)
+  for (list=0; list<numlists;list++)
   {
-    refinx    = ref+1;
-    refframe  = (ref<0?0:ref);
-#ifdef _ADDITIONAL_REFERENCE_FRAME_
-    if ((ref<input->num_reference_frames) || (ref==input->add_ref_frame))
+    max_ref=(list==0?img->num_ref_idx_l0_active:img->num_ref_idx_l1_active);
+    for (ref=0; ref<max_ref; ref++)
     {
+      //refinx    = ref+1;
+      //refframe  = (ref<0?0:ref);
+#ifdef _ADDITIONAL_REFERENCE_FRAME_
+      if ((ref<input->num_reference_frames) || (ref==input->add_ref_frame))
+      {
 #endif
-      //----- set search range ---
+        //----- set search range ---
 #ifdef _FULL_SEARCH_RANGE_
-      if      (input->full_search == 2) search_range = input->search_range;
-      else if (input->full_search == 1) search_range = input->search_range /  (min(refframe,1)+1);
-      else                              search_range = input->search_range / ((min(refframe,1)+1) * min(2,blocktype));
+        if      (input->full_search == 2) search_range = input->search_range;
+        else if (input->full_search == 1) search_range = input->search_range /  (min(ref,1)+1);
+        else                              search_range = input->search_range / ((min(ref,1)+1) * min(2,blocktype));
 #else
-      search_range = input->search_range / ((min(refframe,1)+1) * min(2,blocktype));
+        search_range = input->search_range / ((min(ref,1)+1) * min(2,blocktype));
 #endif
-
-      //----- set arrays -----
-      ref_array = ((img->type!=B_SLICE && img->type!=BS_IMG) ? refFrArr : ref<0 ? bw_refFrArr : fw_refFrArr);
-      mv_array  = ((img->type!=B_SLICE && img->type!=BS_IMG) ?   tmp_mv : ref<0 ?    tmp_bwMV :    tmp_fwMV);
-      if (img->type==BS_IMG)
-      {
-        bref_array = bw_refFrArr;
-        bwMV = tmp_bwMV;
-      }
-      all_mv    = (ref<0 ? img->all_bmv : img->all_mv);
-      if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
-      {
-        if(img->top_field)
+        
+        //----- set arrays -----
+        ref_array = enc_picture->ref_idx[list];
+        mv_array  = enc_picture->mv[list];
+        
+        all_mv    = (list ? img->all_bmv : img->all_mv);
+        
+        if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
         {
-          ref_array = ((img->type!=B_SLICE && img->type!=BS_IMG) ? refFrArr_top : ref<0 ? bw_refFrArr_top : fw_refFrArr_top);
-          mv_array  = ((img->type!=B_SLICE && img->type!=BS_IMG) ?   tmp_mv_top : ref<0 ?    tmp_bwMV_top :    tmp_fwMV_top);
-          if (img->type==BS_IMG)
+          if(img->top_field)
           {
-            bref_array = bw_refFrArr_top;
-            bwMV = tmp_bwMV_top;
-          }
-          all_mv    = (ref<0 ? img->all_bmv_top : img->all_mv_top);
-        }
-        else
-        {
-          ref_array = ((img->type!=B_SLICE && img->type!=BS_IMG) ? refFrArr_bot : ref<0 ? bw_refFrArr_bot : fw_refFrArr_bot);
-          mv_array  = ((img->type!=B_SLICE && img->type!=BS_IMG) ?   tmp_mv_bot : ref<0 ?    tmp_bwMV_bot :    tmp_fwMV_bot);
-          if (img->type==BS_IMG)
-          {
-            bref_array = bw_refFrArr_bot;
-            bwMV = tmp_bwMV_bot;
-          }
-          all_mv    = (ref<0 ? img->all_bmv_bot : img->all_mv_bot);
-        }
-      }
-
-      //----- init motion cost -----
-      motion_cost[blocktype][refinx][block8x8] = 0;
-
-      //===== LOOP OVER BLOCKS =====
-      for (v=by0[parttype][block8x8]; v<by0[parttype][block8x8]+step_v0; v+=step_v)
-      {
-        pic_block_y = block_y + v;
-
-        for (h=bx0[parttype][block8x8]; h<bx0[parttype][block8x8]+step_h0; h+=step_h)
-        {
-          pic_block_x = img->block_x + h;
-
-          //--- motion search for block ---
-          mcost = BlockMotionSearch (ref, 4*pic_block_x, 4*pic_block_y, blocktype, search_range, lambda);
-          motion_cost[blocktype][refinx][block8x8] += mcost;
-
-          //--- set motion vectors and reference frame (for motion vector prediction) ---
-          for (j=0; j<step_v; j++)
-          for (i=0; i<step_h; i++)
-          {
-            mv_array[0][pic_block_y+j][pic_block_x+i+4] = all_mv[h][v][refframe][blocktype][0];
-            mv_array[1][pic_block_y+j][pic_block_x+i+4] = all_mv[h][v][refframe][blocktype][1];
-            ref_array  [pic_block_y+j][pic_block_x+i  ] = refframe;
+            ref_array = ((img->type!=B_SLICE && img->type!=BS_IMG) ? refFrArr_top : ref<0 ? bw_refFrArr_top : fw_refFrArr_top);
+            mv_array  = ((img->type!=B_SLICE && img->type!=BS_IMG) ?   tmp_mv_top : ref<0 ?    tmp_bwMV_top :    tmp_fwMV_top);
             if (img->type==BS_IMG)
             {
-              bwMV    [0][pic_block_y+j][pic_block_x+i+4] = all_mv[h][v][refframe][blocktype][0];
-              bwMV    [1][pic_block_y+j][pic_block_x+i+4] = all_mv[h][v][refframe][blocktype][1];
-              bref_array [pic_block_y+j][pic_block_x+i  ] = refframe;
+              bref_array = bw_refFrArr_top;
+              bwMV = tmp_bwMV_top;
             }
+            all_mv    = (list<0 ? img->all_bmv_top : img->all_mv_top);
+          }
+          else
+          {
+            ref_array = ((img->type!=B_SLICE && img->type!=BS_IMG) ? refFrArr_bot : ref<0 ? bw_refFrArr_bot : fw_refFrArr_bot);
+            mv_array  = ((img->type!=B_SLICE && img->type!=BS_IMG) ?   tmp_mv_bot : ref<0 ?    tmp_bwMV_bot :    tmp_fwMV_bot);
+            if (img->type==BS_IMG)
+            {
+              bref_array = bw_refFrArr_bot;
+              bwMV = tmp_bwMV_bot;
+            }
+            all_mv    = (list<0 ? img->all_bmv_bot : img->all_mv_bot);
           }
         }
-      }
+        
+        //----- init motion cost -----
+        motion_cost[blocktype][ref][list][block8x8] = 0;
+        
+        //===== LOOP OVER BLOCKS =====
+        for (v=by0[parttype][block8x8]; v<by0[parttype][block8x8]+step_v0; v+=step_v)
+        {
+          pic_block_y = block_y + v;
+          
+          for (h=bx0[parttype][block8x8]; h<bx0[parttype][block8x8]+step_h0; h+=step_h)
+          {
+            pic_block_x = img->block_x + h;
+            
+            //--- motion search for block ---
+            mcost = BlockMotionSearch (ref, list, 4*pic_block_x, 4*pic_block_y, blocktype, search_range, lambda);
+            motion_cost[blocktype][ref][list][block8x8] += mcost;
+            
+            //--- set motion vectors and reference frame (for motion vector prediction) ---
+            for (j=0; j<step_v; j++)
+              for (i=0; i<step_h; i++)
+              {
+                mv_array  [pic_block_x+i][pic_block_y+j][0] = all_mv[h][v][ref][blocktype][0];
+                mv_array  [pic_block_x+i][pic_block_y+j][1] = all_mv[h][v][ref][blocktype][1];
+                ref_array [pic_block_x+i][pic_block_y+j]    = ref;
+              }
+          }
+        }
 #ifdef _ADDITIONAL_REFERENCE_FRAME_
-    }
-    else
-    {
-      motion_cost[blocktype][refinx][block8x8] = (1<<20);
-    }
+      }
+      else
+      {
+        motion_cost[blocktype][ref][list][block8x8] = (1<<20);
+      }
 #endif
+    }
   }
 }
 
@@ -2517,7 +2545,6 @@ Get_Direct_Motion_Vectors ()
 {
   int  block_x, block_y, pic_block_x, pic_block_y;
   int  refframe, refP_tr, TRb, TRp, TRd;
-  int  frame_no_next_P, frame_no_B, delta_P;
   int  pix_y    = img->pix_y;
   int  **refarr = refFrArr;
   int  ***tmpmvs = tmp_mv;
@@ -2556,159 +2583,224 @@ Get_Direct_Motion_Vectors ()
 
   }
   
-  if (input->direct_type)
+  if (input->direct_type)  //spatial direct mode copy from decoder
 //   if(input->direct_type && !(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode))
   {
     
-    int pic_blockx            = img->block_x;
-    int pic_blocky            = pix_y>>2; 
-    int mb_nr                 = img->current_mb_nr;
-    int mb_width              = img->width/16;
-    int mb_available_up       = (img->mb_y == 0 || pic_blocky == 0 ) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width  ].slice_nr);
-    int mb_available_left     = (img->mb_x == 0          ) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-1         ].slice_nr);
-    int mb_available_upleft  = (img->mb_x == 0 ||
-      img->mb_y == 0  || pic_blocky == 0  ) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr);
-    int mb_available_upright = (MB_AFF_mode && img->mb_y%2)? 0 : (img->mb_x >= mb_width-1 ||
-      img->mb_y == 0  || pic_blocky == 0  ) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width+1].slice_nr);
-
-    int fw_rFrameL              = mb_available_left    ? fwrefarr[pic_blocky]  [pic_blockx-1]   : -1;
-    int fw_rFrameU              = mb_available_up      ? fwrefarr[pic_blocky-1][pic_blockx]     : -1;
-    int fw_rFrameUL             = mb_available_upleft  ? fwrefarr[pic_blocky-1][pic_blockx-1]   : -1;
-    int fw_rFrameUR             = mb_available_upright ? fwrefarr[pic_blocky-1][pic_blockx+4]   : fw_rFrameUL; 
-
-    int bw_rFrameL              = mb_available_left    ? bwrefarr[pic_blocky]  [pic_blockx-1]   : -1;
-    int bw_rFrameU              = mb_available_up      ? bwrefarr[pic_blocky-1][pic_blockx]     : -1;
-    int bw_rFrameUL             = mb_available_upleft  ? bwrefarr[pic_blocky-1][pic_blockx-1]   : -1;
-    int bw_rFrameUR             = mb_available_upright ? bwrefarr[pic_blocky-1][pic_blockx+4]   : bw_rFrameUL; 
+    int fw_rFrameL, fw_rFrameU, fw_rFrameUL, fw_rFrameUR;
+    int bw_rFrameL, bw_rFrameU, bw_rFrameUL, bw_rFrameUR; 
+		int fw_rFrame,bw_rFrame;
+		int pmvfw[2]={0,0},pmvbw[2]={0,0};
     
-    int fw_rFrame,bw_rFrame;
-    int pmvfw[2]={0,0},pmvbw[2]={0,0};
-    if (!fw_rFrameL || !fw_rFrameU || !fw_rFrameUR)
-      fw_rFrame=0;
-    else
-      fw_rFrame=min(fw_rFrameL&15,min(fw_rFrameU&15,fw_rFrameUR&15));
+    PixelPos mb_left, mb_up, mb_upleft, mb_upright;              
+    
+    getLuma4x4Neighbour(img->current_mb_nr,0,0,-1, 0,&mb_left);
+    getLuma4x4Neighbour(img->current_mb_nr,0,0, 0,-1,&mb_up);
+    getLuma4x4Neighbour(img->current_mb_nr,0,0,16, -1,&mb_upright);
+    getLuma4x4Neighbour(img->current_mb_nr,0,0, -1,-1,&mb_upleft);
 
-    if (img->type==BS_IMG)
+    if (!img->MbaffFrameFlag)
     {
-      if (bw_rFrameL==1 || bw_rFrameU==1 || bw_rFrameUR==1)
-        bw_rFrame=1;
-      else
-        bw_rFrame=min(bw_rFrameL&15,min(bw_rFrameU&15,bw_rFrameUR&15));
+      fw_rFrameL = mb_left.available ? enc_picture->ref_idx[LIST_0][mb_left.pos_x][mb_left.pos_y] : -1;
+      fw_rFrameU = mb_up.available ? enc_picture->ref_idx[LIST_0][mb_up.pos_x][mb_up.pos_y] : -1;
+      fw_rFrameUL = mb_upleft.available ? enc_picture->ref_idx[LIST_0][mb_upleft.pos_x][mb_upleft.pos_y] : -1;
+      fw_rFrameUR = mb_upright.available ? enc_picture->ref_idx[LIST_0][mb_upright.pos_x][mb_upright.pos_y] : fw_rFrameUL;      
+      
+      bw_rFrameL = mb_left.available ? enc_picture->ref_idx[LIST_1][mb_left.pos_x][mb_left.pos_y] : -1;
+      bw_rFrameU = mb_up.available ? enc_picture->ref_idx[LIST_1][mb_up.pos_x][mb_up.pos_y] : -1;
+      bw_rFrameUL = mb_upleft.available ? enc_picture->ref_idx[LIST_1][mb_upleft.pos_x][mb_upleft.pos_y] : -1;
+      bw_rFrameUR = mb_upright.available ? enc_picture->ref_idx[LIST_1][mb_upright.pos_x][mb_upright.pos_y] : bw_rFrameUL;      
     }
     else
     {
-      if (!bw_rFrameL || !bw_rFrameU || !bw_rFrameUR)
-        bw_rFrame=0;
-      else
-        bw_rFrame=min(bw_rFrameL&15,min(bw_rFrameU&15,bw_rFrameUR&15));
-    }
+      if (img->mb_data[img->current_mb_nr].mb_field)
+      {
+        fw_rFrameL = mb_left.available ? 
+          img->mb_data[mb_left.mb_addr].mb_field  || enc_picture->ref_idx[LIST_0][mb_left.pos_x][mb_left.pos_y] < 0? 
+          enc_picture->ref_idx[LIST_0][mb_left.pos_x][mb_left.pos_y] : 
+          enc_picture->ref_idx[LIST_0][mb_left.pos_x][mb_left.pos_y] * 2: -1;
 
-    if (fw_rFrame !=15)
-      SetMotionVectorPredictor(pmvfw, fwrefarr, tmpmvfw, fw_rFrame, 0, 0, 16, 16);
-    if (bw_rFrame !=15)
-      SetMotionVectorPredictor(pmvbw, bwrefarr, tmpmvbw, bw_rFrame, 0, 0, 16, 16);
+        fw_rFrameU = mb_up.available ? 
+          img->mb_data[mb_up.mb_addr].mb_field || enc_picture->ref_idx[LIST_0][mb_up.pos_x][mb_up.pos_y] < 0? 
+          enc_picture->ref_idx[LIST_0][mb_up.pos_x][mb_up.pos_y] : 
+        enc_picture->ref_idx[LIST_0][mb_up.pos_x][mb_up.pos_y] * 2: -1;
+
+        fw_rFrameUL = mb_upleft.available ? 
+          img->mb_data[mb_upleft.mb_addr].mb_field || enc_picture->ref_idx[LIST_0][mb_upleft.pos_x][mb_upleft.pos_y] < 0?         
+          enc_picture->ref_idx[LIST_0][mb_upleft.pos_x][mb_upleft.pos_y] : 
+        enc_picture->ref_idx[LIST_0][mb_upleft.pos_x][mb_upleft.pos_y] *2: -1;      
+
+        fw_rFrameUR = mb_upright.available ? 
+          img->mb_data[mb_upright.mb_addr].mb_field || enc_picture->ref_idx[LIST_0][mb_upright.pos_x][mb_upright.pos_y] < 0?
+          enc_picture->ref_idx[LIST_0][mb_upright.pos_x][mb_upright.pos_y] : 
+        enc_picture->ref_idx[LIST_0][mb_upright.pos_x][mb_upright.pos_y] * 2: fw_rFrameUL;      
+        
+        bw_rFrameL = mb_left.available ? 
+          img->mb_data[mb_left.mb_addr].mb_field || enc_picture->ref_idx[LIST_1][mb_left.pos_x][mb_left.pos_y] < 0? 
+          enc_picture->ref_idx[LIST_1][mb_left.pos_x][mb_left.pos_y] : 
+        enc_picture->ref_idx[LIST_1][mb_left.pos_x][mb_left.pos_y] * 2: -1;
+
+        bw_rFrameU = mb_up.available ? 
+          img->mb_data[mb_up.mb_addr].mb_field || enc_picture->ref_idx[LIST_1][mb_up.pos_x][mb_up.pos_y] < 0? 
+          enc_picture->ref_idx[LIST_1][mb_up.pos_x][mb_up.pos_y] : 
+        enc_picture->ref_idx[LIST_1][mb_up.pos_x][mb_up.pos_y] * 2: -1;
+
+        bw_rFrameUL = mb_upleft.available ? 
+          img->mb_data[mb_upleft.mb_addr].mb_field || enc_picture->ref_idx[LIST_1][mb_upleft.pos_x][mb_upleft.pos_y] < 0?         
+          enc_picture->ref_idx[LIST_1][mb_upleft.pos_x][mb_upleft.pos_y] : 
+        enc_picture->ref_idx[LIST_1][mb_upleft.pos_x][mb_upleft.pos_y] *2: -1;      
+
+        bw_rFrameUR = mb_upright.available ? 
+          img->mb_data[mb_upright.mb_addr].mb_field || enc_picture->ref_idx[LIST_1][mb_upright.pos_x][mb_upright.pos_y] < 0?         
+          enc_picture->ref_idx[LIST_1][mb_upright.pos_x][mb_upright.pos_y] : 
+        enc_picture->ref_idx[LIST_1][mb_upright.pos_x][mb_upright.pos_y] * 2: bw_rFrameUL;              
+      }
+      else
+      {
+        fw_rFrameL = mb_left.available ? 
+          img->mb_data[mb_left.mb_addr].mb_field || enc_picture->ref_idx[LIST_0][mb_left.pos_x][mb_left.pos_y]  < 0 ?
+          enc_picture->ref_idx[LIST_0][mb_left.pos_x][mb_left.pos_y] >> 1 : 
+        enc_picture->ref_idx[LIST_0][mb_left.pos_x][mb_left.pos_y]: -1;
+        
+        fw_rFrameU = mb_up.available ? 
+          img->mb_data[mb_up.mb_addr].mb_field || enc_picture->ref_idx[LIST_0][mb_up.pos_x][mb_up.pos_y] < 0 ?
+          enc_picture->ref_idx[LIST_0][mb_up.pos_x][mb_up.pos_y] >> 1 :  
+        enc_picture->ref_idx[LIST_0][mb_up.pos_x][mb_up.pos_y] : -1;
+        
+        fw_rFrameUL = mb_upleft.available ? 
+          img->mb_data[mb_upleft.mb_addr].mb_field || enc_picture->ref_idx[LIST_0][mb_upleft.pos_x][mb_upleft.pos_y] < 0 ?
+          enc_picture->ref_idx[LIST_0][mb_upleft.pos_x][mb_upleft.pos_y]>> 1 : 
+        enc_picture->ref_idx[LIST_0][mb_upleft.pos_x][mb_upleft.pos_y] : -1;      
+        
+        fw_rFrameUR = mb_upright.available ? 
+          img->mb_data[mb_upright.mb_addr].mb_field || enc_picture->ref_idx[LIST_0][mb_upright.pos_x][mb_upright.pos_y] < 0 ? 
+          enc_picture->ref_idx[LIST_0][mb_upright.pos_x][mb_upright.pos_y] >> 1 :  
+        enc_picture->ref_idx[LIST_0][mb_upright.pos_x][mb_upright.pos_y] : fw_rFrameUL;      
+        
+        bw_rFrameL = mb_left.available ? 
+          img->mb_data[mb_left.mb_addr].mb_field || enc_picture->ref_idx[LIST_1][mb_left.pos_x][mb_left.pos_y] < 0 ?
+          enc_picture->ref_idx[LIST_1][mb_left.pos_x][mb_left.pos_y] >> 1 :  
+        enc_picture->ref_idx[LIST_1][mb_left.pos_x][mb_left.pos_y] : -1;
+        
+        bw_rFrameU = mb_up.available ? 
+          img->mb_data[mb_up.mb_addr].mb_field || enc_picture->ref_idx[LIST_1][mb_up.pos_x][mb_up.pos_y] < 0 ?
+          enc_picture->ref_idx[LIST_1][mb_up.pos_x][mb_up.pos_y] >> 1 : 
+        enc_picture->ref_idx[LIST_1][mb_up.pos_x][mb_up.pos_y] : -1;
+        
+        bw_rFrameUL = mb_upleft.available ? 
+          img->mb_data[mb_upleft.mb_addr].mb_field || enc_picture->ref_idx[LIST_1][mb_upleft.pos_x][mb_upleft.pos_y] < 0 ?
+          enc_picture->ref_idx[LIST_1][mb_upleft.pos_x][mb_upleft.pos_y] >> 1 : 
+        enc_picture->ref_idx[LIST_1][mb_upleft.pos_x][mb_upleft.pos_y] : -1;      
+        
+        bw_rFrameUR = mb_upright.available ? 
+          img->mb_data[mb_upright.mb_addr].mb_field || enc_picture->ref_idx[LIST_1][mb_upright.pos_x][mb_upright.pos_y] < 0 ?
+          enc_picture->ref_idx[LIST_1][mb_upright.pos_x][mb_upright.pos_y] >> 1: 
+        enc_picture->ref_idx[LIST_1][mb_upright.pos_x][mb_upright.pos_y] : bw_rFrameUL;      
+      }
+    }
     
-    for (block_y=0; block_y<4; block_y++)
+    fw_rFrame = (fw_rFrameL >= 0 && fw_rFrameU >= 0) ? min(fw_rFrameL,fw_rFrameU): max(fw_rFrameL,fw_rFrameU);
+    fw_rFrame = (fw_rFrame >= 0 && fw_rFrameUR >= 0) ? min(fw_rFrame,fw_rFrameUR): max(fw_rFrame,fw_rFrameUR);
+    
+    bw_rFrame = (bw_rFrameL >= 0 && bw_rFrameU >= 0) ? min(bw_rFrameL,bw_rFrameU): max(bw_rFrameL,bw_rFrameU);
+    bw_rFrame = (bw_rFrame >= 0 && bw_rFrameUR >= 0) ? min(bw_rFrame,bw_rFrameUR): max(bw_rFrame,bw_rFrameUR);        
+    
+    if (fw_rFrame >=0)
+      SetMotionVectorPredictor (pmvfw, enc_picture->ref_idx, enc_picture->mv,fw_rFrame,LIST_0, 0, 0, 16, 16);
+    
+    if (bw_rFrame >=0)
+      SetMotionVectorPredictor (pmvbw, enc_picture->ref_idx, enc_picture->mv, bw_rFrame, LIST_1,0, 0, 16, 16);
+
+		for (block_y=0; block_y<4; block_y++)
     {
       pic_block_y = (pix_y>>2) + block_y;
       
       for (block_x=0; block_x<4; block_x++)
       {
         pic_block_x = (img->pix_x>>2) + block_x;
-        if (fw_rFrame !=15)
-        {                   
-          if  (fw_rFrame == 0 && !moving_block_dir[pic_block_y][pic_block_x])       
+				if (fw_rFrame >=0)
+				{
+					if (!fw_rFrame  && !moving_block_dir[pic_block_y][pic_block_x]) 
+					{
+						all_mvs [block_x][block_y][0][0][0] = 0;
+						all_mvs [block_x][block_y][0][0][1] = 0;            
+						fwdir_refFrArr[pic_block_y][pic_block_x]=0;       
+					}
+					else
+					{
+						all_mvs [block_x][block_y][fw_rFrame][0][0] = pmvfw[0];
+						all_mvs [block_x][block_y][fw_rFrame][0][1] = pmvfw[1];
+						fwdir_refFrArr[pic_block_y][pic_block_x]=fw_rFrame;              
+					}
+				}
+				else
+				{
+					fwdir_refFrArr[pic_block_y][pic_block_x]=-1;          
+					all_mvs [block_x][block_y][0][0][0] = 0;
+					all_mvs [block_x][block_y][0][0][1] = 0;
+				}
+				
+				if (bw_rFrame >=0)
+				{
+					if  (bw_rFrame==0 && !moving_block_dir[pic_block_y][pic_block_x])  
+					{                  
+						all_bmvs [block_x][block_y][0][0][0] = 0;
+						all_bmvs [block_x][block_y][0][0][1] = 0;
+						bwdir_refFrArr[pic_block_y][pic_block_x]=bw_rFrame;     
+					}
+					else
+					{
+						bwdir_refFrArr[pic_block_y][pic_block_x]=bw_rFrame;
+						all_bmvs[block_x][block_y][bw_rFrame][0][0] = pmvbw[0];
+						all_bmvs[block_x][block_y][bw_rFrame][0][1] = pmvbw[1];
+					}               
+				}
+				else
+				{      
+					bwdir_refFrArr[pic_block_y][pic_block_x]=-1;
+					if (img->type==BS_IMG)
           {
-            all_mvs [block_x][block_y][0][0][0] = 0;
-            all_mvs [block_x][block_y][0][0][1] = 0;            
-            fwdir_refFrArr[pic_block_y][pic_block_x]=0;            
-          }
-          else 
-          {
-            all_mvs [block_x][block_y][fw_rFrame][0][0] = pmvfw[0];
-            all_mvs [block_x][block_y][fw_rFrame][0][1] = pmvfw[1];
-            fwdir_refFrArr[pic_block_y][pic_block_x]=fw_rFrame;              
-          }
-        }
-        else
-        {          
-          fwdir_refFrArr[pic_block_y][pic_block_x]=-1;          
-          all_mvs [block_x][block_y][0][0][0] = 0;
-          all_mvs [block_x][block_y][0][0][1] = 0;
-        }
-        if (bw_rFrame !=15)
-        {
-//          if (refframe==0 && (abs( tmpmvs[0][pic_block_y][pic_block_x+4])>>1) == 0 && (abs(tmpmvs[1][pic_block_y][pic_block_x+4])>>1) == 0)
-          if (img->type==BS_IMG)
-          {
-            if  (bw_rFrame == 1 && !moving_block_dir[pic_block_y][pic_block_x]) 
-            {
-              all_bmvs [block_x][block_y][1][0][0] = 0;
-              all_bmvs [block_x][block_y][1][0][1] = 0;
-              bwdir_refFrArr[pic_block_y][pic_block_x]=1;            
-            }
-            else 
-            {
-              bwdir_refFrArr[pic_block_y][pic_block_x]=bw_rFrame;
-              all_bmvs[block_x][block_y][bw_rFrame][0][0] = pmvbw[0];
-              all_bmvs[block_x][block_y][bw_rFrame][0][1] = pmvbw[1];
-            }            
-          }
-          else
-          {
-            if  (!moving_block_dir[pic_block_y][pic_block_x])       
-            {
-              all_bmvs [block_x][block_y][0][0][0] = 0;
-              all_bmvs [block_x][block_y][0][0][1] = 0;
-              bwdir_refFrArr[pic_block_y][pic_block_x]=0;            
-            }
-            else 
-            {
-              all_bmvs[block_x][block_y][0][0][0] = pmvbw[0];
-              all_bmvs[block_x][block_y][0][0][1] = pmvbw[1];
-              bwdir_refFrArr[pic_block_y][pic_block_x]=bw_rFrame;
-            }            
-          }
-        }
-        else
-        {
-          bwdir_refFrArr[pic_block_y][pic_block_x]=-1;
-          if (img->type==BS_IMG)
-          {
-            all_bmvs [block_x][block_y][1][0][0] = 0;
-            all_bmvs [block_x][block_y][1][0][1] = 0;
-          }
-          else
-          {
-            all_bmvs [block_x][block_y][0][0][0] = 0;
-            all_bmvs [block_x][block_y][0][0][1] = 0;
-          }
-        }
-        if (fw_rFrame ==15 && bw_rFrame ==15)
-        {
-          if (img->type==BS_IMG)
+						all_bmvs [block_x][block_y][1][0][0] = 0;
+						all_bmvs [block_x][block_y][1][0][1] = 0;
+					}else
+					{
+						all_bmvs [block_x][block_y][0][0][0] = 0;
+						all_bmvs [block_x][block_y][0][0][1] = 0;
+					}
+				}
+				
+				if (fw_rFrame < 0 && bw_rFrame < 0)
+				{
+					if (img->type==BS_IMG)
           {
             fwdir_refFrArr[pic_block_y][pic_block_x] = 0;
             bwdir_refFrArr[pic_block_y][pic_block_x] = 1;
           }
           else
-          {
-            fwdir_refFrArr[pic_block_y][pic_block_x] = 
-              bwdir_refFrArr[pic_block_y][pic_block_x] = 0;
-          }
-        }
-      }      
-    }
+					{
+						fwdir_refFrArr[pic_block_y][pic_block_x] = 
+						bwdir_refFrArr[pic_block_y][pic_block_x] = 0;
+					}
+				}
+			}
+		}
   }
   else
   {
+		//temporal direct mode copy from decoder
     for (block_y=0; block_y<4; block_y++)
     {
       pic_block_y = (pix_y>>2) + block_y;
       
       for (block_x=0; block_x<4; block_x++)
       {
+       	int refList; 
+        int ref_idx; 
+
         pic_block_x = (img->pix_x>>2) + block_x;
+
+				refList = (listX[LIST_1][0]->ref_idx[LIST_0][pic_block_x][pic_block_y]== -1 ? LIST_1 : LIST_0);
+        ref_idx =listX[LIST_1][0]->ref_idx[refList][pic_block_x][pic_block_y];
 
 
         // next P is intra mode
@@ -2737,49 +2829,76 @@ Get_Direct_Motion_Vectors ()
         else 
         {
 
+					int mapped_idx=0;
+          int prescale,iref; 
+
 #ifdef _ADAPT_LAST_GROUP_
           refP_tr = last_P_no [refframe];
 #else
           refP_tr = nextP_tr - ((refframe+1)*img->p_interval);
 #endif
-          
-          frame_no_next_P = (mref==mref_fld) ? img->imgtr_next_P_fld+img->fld_type : 2*img->imgtr_next_P_frm;
-          frame_no_B = (mref==mref_fld) ? img->tr : 2*img->tr;
-          delta_P = (mref==mref_fld)?(img->imgtr_next_P_fld - img->imgtr_last_P_fld):2*(img->imgtr_next_P_frm - img->imgtr_last_P_frm);
-          if((mref==mref_fld) && !img->fld_type)  // top field
+ 
+					if ((enc_picture->ref_pic_num[LIST_0][ref_idx]==listX[LIST_1][0]->ref_pic_num[refList][ref_idx])&&(ref_idx>=0))
+					{
+						mapped_idx=ref_idx;
+					}
+					else
+					{
+						for (iref=0;iref<listXsize[refList];iref++)
+						{
+							if (enc_picture->ref_pic_num[LIST_0 ][iref]==listX[LIST_1][0]->ref_pic_num[refList ][ref_idx])
+							{
+								mapped_idx=iref;
+								break;
+							}
+							else //! invalid index. Default to zero even though this case should not happen
+							{                        
+								mapped_idx=0;
+							}
+						}
+					}
+	
+          if (!img->MbaffFrameFlag || !img->mb_data[img->current_mb_nr].mb_field)
           {
-            TRp = delta_P*(refframe/2+1)-(refframe+1)%2;
+            TRb = Clip3( -128, 127, enc_picture->poc - listX[LIST_0 ][mapped_idx]->poc );
           }
-          else if((mref==mref_fld) && img->fld_type)  // bot field
+          else
           {
-            TRp = 1+delta_P*((refframe+1)/2)-refframe%2;
-          }
-          else  // frame
-          {
-            TRp  = (refframe+1)*delta_P;
-            if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
-            {
-              delta_P = 2*(img->imgtr_next_P_frm - img->imgtr_last_P_frm);
-              if(img->top_field)
-                TRp = delta_P*(refframe/2+1)-(refframe+1)%2;
-              else
-                TRp = 1+delta_P*((refframe+1)/2)-refframe%2;
-            }
-            
+            if (img->current_mb_nr%2 == 0)
+              TRb = Clip3( -128, 127, enc_picture->poc - listX[LIST_0][mapped_idx]->poc );
+            else
+              TRb = Clip3( -128, 127, enc_picture->poc + 1 - listX[LIST_0 ][mapped_idx]->poc );
           }
           
-          TRb = TRp - (frame_no_next_P - frame_no_B);
+          TRp = Clip3( -128, 127, listX[LIST_1 ][0]->poc - listX[LIST_0 ][mapped_idx]->poc);
           
+          if (TRp!=0)
+          {
+            prescale = ( 16384 + abs( TRp / 2 ) ) / TRp;
+            mv_scale = Clip3( -1024, 1023, ( TRb * prescale + 32 ) >> 6 ) ;
+          }
           TRd    = TRb      - TRp;
-          mv_scale = (TRb * 256) / TRp;       //! Note that this could be precomputed at the frame/slice level. 
-                                              //! In such case, an array is needed for each different reference.
-          // forward
-          all_mvs [block_x][block_y][refframe][0][0] = (mv_scale * tmpmvs[0][pic_block_y][pic_block_x+4] + 128) >> 8;
-          all_mvs [block_x][block_y][refframe][0][1] = (mv_scale * tmpmvs[1][pic_block_y][pic_block_x+4] + 128) >> 8;
-          // backward
-          all_bmvs[block_x][block_y][       0][0][0] = ((mv_scale - 256)* tmpmvs[0][pic_block_y][pic_block_x+4] + 128) >> 8;
-          all_bmvs[block_x][block_y][       0][0][1] = ((mv_scale - 256)* tmpmvs[1][pic_block_y][pic_block_x+4] + 128) >> 8;
-          
+			
+					if (TRp==0)
+					{
+						// forward
+						all_mvs [block_x][block_y][0][0][0] = listX[LIST_1][0]->mv[refList][img->block_x+block_x][img->block_y+block_y][0];
+						all_mvs [block_x][block_y][0][0][1] = listX[LIST_1][0]->mv[refList][img->block_x+block_x][img->block_y+block_y][1];
+						// backward
+						all_bmvs[block_x][block_y][       0][0][0] = 0;
+						all_bmvs[block_x][block_y][       0][0][1] = 0;
+					}else
+					{
+						// forward
+						all_mvs [block_x][block_y][mapped_idx][0][0] = (mv_scale * listX[LIST_1][0]->mv[refList][img->block_x+block_x][img->block_y+block_y][0] + 128) >> 8;
+						all_mvs [block_x][block_y][mapped_idx][0][1] = (mv_scale * listX[LIST_1][0]->mv[refList][img->block_x+block_x][img->block_y+block_y][1] + 128) >> 8;
+						// backward
+						all_bmvs[block_x][block_y][       0][0][0] = ((mv_scale - 256)* listX[LIST_1][0]->mv[refList][img->block_x+block_x][img->block_y+block_y][0] + 128) >> 8;
+						all_bmvs[block_x][block_y][       0][0][1] = ((mv_scale - 256)* listX[LIST_1][0]->mv[refList][img->block_x+block_x][img->block_y+block_y][1] + 128) >> 8;
+					}
+						refFrArr[img->block_y+block_y][img->block_x+block_x]=mapped_idx;
+						fwrefarr[img->block_y+block_y][img->block_x+block_x]=mapped_idx;
+						bwrefarr[img->block_y+block_y][img->block_x+block_x]=0;
         }
       }
     }

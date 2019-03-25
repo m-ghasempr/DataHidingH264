@@ -20,3 +20,11 @@ code from the decoder, but currently don't have the time to finish that.
 If you're interested in encoder work, please contact me.
 
 Karsten
+Changes for JM 7.1 encoder
+--------------------------
+Known problems:
+   - Decoder sometimes can't decode the bitstream with CABAC on, 
+     multiple reference and B slice coding option.
+   - constrained intra prediction
+
+Siwei

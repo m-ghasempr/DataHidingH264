@@ -1,34 +1,3 @@
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
 
 /*!
  *************************************************************************************
@@ -60,6 +29,7 @@
 #include "fmo.h"
 #include "vlc.h"
 #include "image.h"
+#include "mb_access.h"
 
  /*!
  ************************************************************************
@@ -245,6 +215,16 @@ void start_macroblock()
     }
   }
 
+  //initialize reference index 
+	for (j=0; j < BLOCK_MULTIPLE; j++)
+    for (i=0; i < BLOCK_MULTIPLE; i++)
+    {
+      enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y + j] =-1;
+      enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y + j] =-1;
+      enc_picture->ref_pic_id[LIST_0][img->block_x+i][img->block_y+j] = -1;
+      enc_picture->ref_pic_id[LIST_1][img->block_x+i][img->block_y+j] = -1;
+    }
+  
   // Reset syntax element entries in MB struct
   currMB->mb_type   = 0;
   currMB->cbp_blk   = 0;
@@ -764,7 +744,8 @@ OneComponentLumaPrediction4x4 (int*   mpred,      //  --> array of prediction va
                                int    ref)        // <--  reference frame (0.. / -1:backward)
 {
   int incr;
-  pel_t** ref_pic;
+  //pel_t** ref_pic;
+	int block[BLOCK_SIZE][BLOCK_SIZE];
 
   int     pix_add = 4;
   int     j0      = (pic_pix_y << 2) + mv[1], j1=j0+pix_add, j2=j1+pix_add, j3=j2+pix_add;
@@ -778,6 +759,26 @@ OneComponentLumaPrediction4x4 (int*   mpred,      //  --> array of prediction va
   if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive)
     incr    = (ref==-1 ? (img->top_field&&img->field_mode): direct_mode ? (img->top_field&&img->field_mode):img->field_mode);
 
+	get_block(ref<0 ? 0:ref,ref<0 ? listX[1]:listX[0], i0,j0,block);
+
+  *mpred++ = block[0][0];
+
+  *mpred++ = block[1][0];
+  *mpred++ = block[2][0];
+  *mpred++ = block[3][0];
+  *mpred++ = block[0][1];
+  *mpred++ = block[1][1];
+  *mpred++ = block[2][1];
+  *mpred++ = block[3][1];
+  *mpred++ = block[0][2];
+  *mpred++ = block[1][2];
+  *mpred++ = block[2][2];
+  *mpred++ = block[3][2];
+  *mpred++ = block[0][3];
+  *mpred++ = block[1][3];
+  *mpred++ = block[2][3];
+  *mpred++ = block[3][3];
+	/*
   ref_pic   = img->type==B_SLICE? mref [ref+1+incr] : mref [ref];
 
   *mpred++ = get_pel (ref_pic, j0, i0);
@@ -796,6 +797,7 @@ OneComponentLumaPrediction4x4 (int*   mpred,      //  --> array of prediction va
   *mpred++ = get_pel (ref_pic, j3, i1);
   *mpred++ = get_pel (ref_pic, j3, i2);
   *mpred++ = get_pel (ref_pic, j3, i3);
+	*/
 }
 
 
@@ -1265,7 +1267,8 @@ OneComponentChromaPrediction4x4 (int*     mpred,      //  --> array to store pre
     img_pic_c_y = img->field_pix_c_y;
   }
   
-  refimage  = img->type==B_SLICE? mcef [ref+1+incr][uv] : mcef [ref][uv];
+  //refimage  = img->type==B_SLICE? mcef [ref+1+incr][uv] : mcef [ref][uv];
+	refimage  = ref<0? listX[LIST_1][0]->imgUV[uv]: listX[LIST_0][ref]->imgUV[uv];
 
   for (j=pix_c_y; j<je; j++)
   for (i=pix_c_x; i<ie; i++)
@@ -1607,6 +1610,17 @@ void IntraChromaPrediction8x8 (int *mb_up, int *mb_left, int*mb_up_left)
   int     cost;
   int     min_cost;
   int     diff[16];
+	int     left_avail;
+	PixelPos up;       //!< pixel position p(0,-1)
+  PixelPos left[9];  //!< pixel positions p(-1, -1..8)
+
+
+	for (i=0;i<9;i++)
+  {
+    getNeighbour(mb_nr, -1 ,  i-1 , 0, &left[i]);
+  }
+  
+  getNeighbour(mb_nr, 0     ,  -1 , 0, &up);
 
   if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
   {
@@ -1619,14 +1633,10 @@ void IntraChromaPrediction8x8 (int *mb_up, int *mb_left, int*mb_up_left)
 
   if(input->UseConstrainedIntraPred)
   {
-    /*
-    if (mb_available_up   && (img->intra_block[mb_nr-mb_width][2]==0 || img->intra_block[mb_nr-mb_width][3]==0))
-      mb_available_up   = 0;
-    if (mb_available_left && (img->intra_block[mb_nr-       1][1]==0 || img->intra_block[mb_nr       -1][3]==0))
-      mb_available_left = 0;
-    if (mb_available_up_left && (img->intra_block[mb_nr-mb_width-1][3]==0))
-      mb_available_up_left = 0;
-      */
+		mb_available_up      = up.available ? img->intra_block[up.mb_addr] : 0;
+    for (i=1, left_avail=1; i<9;i++)
+      mb_available_left  &= left[i].available ? img->intra_block[left[i].mb_addr]: 0;
+    mb_available_up_left = left[0].available ? img->intra_block[left[0].mb_addr]: 0;
   }
 
   if (mb_up)
@@ -2435,7 +2445,7 @@ int writeReferenceFrame (int mode, int i, int j, int fwd_flag, int  ref)
 
   currSE->value1 = ref;
 
-  if(mref==mref_fld)
+  if(enc_picture!=enc_frame_picture)
   {
     if(currSE->value1 % 2)        //favoring the same field
       currSE->value1 -= 1;
@@ -2468,14 +2478,8 @@ int writeReferenceFrame (int mode, int i, int j, int fwd_flag, int  ref)
     currSE->context = BType2CtxRef (mode);
     img->subblock_x = i; // position used for context determination
     img->subblock_y = j; // position used for context determination
-    if (fwd_flag)
-    {
-      currSE->writing = writeRefFrame_CABAC;
-    }
-    else
-    {
-      currSE->writing = writeBwdRefFrame_CABAC;
-    }
+    currSE->writing = writeRefFrame_CABAC;
+    currSE->value2 = (fwd_flag)? LIST_0:LIST_1;
     dataPart->writeSyntaxElement (currSE, dataPart);
   }
 
@@ -2578,16 +2582,8 @@ int writeMotionVector8x8 (int  i0,
       {
         img->subblock_x = i; // position used for context determination
         img->subblock_y = j; // position used for context determination
-        if (img->type!=B_SLICE && img->type!=BS_IMG)
-        {
-          currSE->value2  = k; // identifies the component and the direction; only used for context determination
-          currSE->writing = writeMVD_CABAC;
-        }
-        else
-        {
-          currSE->value2  = 2*k+bwflag; // identifies the component and the direction; only used for context determination
-          currSE->writing = writeBiMVD_CABAC;
-        }
+        currSE->value2  = 2*k+bwflag; // identifies the component and the direction; only used for context determination
+        currSE->writing = writeMVD_CABAC;
       }  
       dataPart = &(currSlice->partArr[partMap[(img->type==B_SLICE || img->type==BS_IMG)? SE_BFRAME : SE_MVD]]);
       dataPart->writeSyntaxElement (currSE, dataPart);
@@ -3751,24 +3747,17 @@ int find_sad_16x16(int *intra_mode)
   int ii,jj;
   int incr = 1;
   int offset = 0; // For MB level field/frame coding  
+  int mb_nr = img->current_mb_nr;
+  PixelPos pix_left, pix_up, pix_up_left;
+  
+  getNeighbour(mb_nr, -1 ,  0 , 1, &pix_left);
+  getNeighbour(mb_nr,  0 , -1 , 1, &pix_up);
+  getNeighbour(mb_nr, -1 , -1 , 1, &pix_up_left);
 
   best_intra_sad2=MAX_VALUE;
 
   for (k=0;k<4;k++)
   {
-    int mb_nr = img->current_mb_nr;
-    int mb_width = img->width/16;
-    int mb_available_up = (img->mb_y == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
-    int mb_available_left = (img->mb_x == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-1].slice_nr);
-    int mb_available_up_left = (img->mb_x == 0 || img->mb_y == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr);
-  
-  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
-  {
-    mb_available_up = (img->field_mb_y == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
-    mb_available_up_left = (img->field_mb_y == 0 || img->mb_x == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr);
-    incr = 2;
-    offset = img->top_field ? 0:-15;
-  }
     if(input->UseConstrainedIntraPred)
     {
       /*
@@ -3781,7 +3770,7 @@ int find_sad_16x16(int *intra_mode)
       */
     }
     //check if there are neighbours to predict from
-    if ((k==0 && !mb_available_up) || (k==1 && !mb_available_left) || (k==3 && (!mb_available_left || !mb_available_up || !mb_available_up_left)))
+    if ((k==0 && !pix_up.available) || (k==1 && !pix_left.available) || (k==3 && (!pix_left.available || !pix_up.available || !pix_up_left.available)))
     {
       ; // edge, do nothing
     }

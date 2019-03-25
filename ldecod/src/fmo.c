@@ -1,34 +1,3 @@
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
 
 /*!
  *****************************************************************************
@@ -49,7 +18,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#include <memory.h>
 #include <malloc.h>
 
 
@@ -452,9 +420,10 @@ static void FmoGenerateType2MapUnitMap (pic_parameter_set_rbsp_t* pps, seq_param
  */
 static void FmoGenerateType3MapUnitMap (pic_parameter_set_rbsp_t* pps, seq_parameter_set_rbsp_t* sps, unsigned PicSizeInMapUnits )
 {
-  unsigned i, k, x, y;
-  unsigned leftBound, topBound, rightBound, bottomBound, xDir, yDir;
-  unsigned mapUnitVacant;
+  unsigned i, k;
+  int leftBound, topBound, rightBound, bottomBound;
+  int x, y, xDir, yDir;
+  int mapUnitVacant;
 
   unsigned mapUnitsInSliceGroup0 = min((pps->slice_group_change_rate_minus1 + 1) * img->slice_group_change_cycle, PicSizeInMapUnits);
 
@@ -488,7 +457,7 @@ static void FmoGenerateType3MapUnitMap (pic_parameter_set_rbsp_t* pps, seq_param
     else 
       if( xDir  ==  1  &&  x  ==  rightBound ) 
       {
-        rightBound = min( rightBound + 1, img->PicWidthInMbs - 1 );
+        rightBound = min( rightBound + 1, (int)img->PicWidthInMbs - 1 );
         x = rightBound;
         xDir = 0;
         yDir = 1 - 2 * pps->slice_group_change_direction_flag;
@@ -504,7 +473,7 @@ static void FmoGenerateType3MapUnitMap (pic_parameter_set_rbsp_t* pps, seq_param
         else 
           if( yDir  ==  1  &&  y  ==  bottomBound ) 
           {
-            bottomBound = min( bottomBound + 1, img->PicHeightInMapUnits - 1 );
+            bottomBound = min( bottomBound + 1, (int)img->PicHeightInMapUnits - 1 );
             y = bottomBound;
             xDir = 2 * pps->slice_group_change_direction_flag - 1;
             yDir = 0;

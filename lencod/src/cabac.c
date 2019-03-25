@@ -1,34 +1,3 @@
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
 
 /*!
  *************************************************************************************
@@ -48,6 +17,8 @@
 #include <memory.h>
 #include <assert.h>
 #include "cabac.h"
+#include "image.h"
+#include "mb_access.h"
 
 /*!
  ************************************************************************
@@ -511,7 +482,7 @@ void writeB8_typeInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
   act_sym = se->value1;
   act_ctx = 0;
 
-  if (!bframe)
+  if (!bframe)  
   {
     switch (act_sym)
     {
@@ -630,51 +601,41 @@ void writeRefFrame_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
   int   a, b;
   int   act_ctx;
   int   act_sym;
-  int** refframe_array = ((img->type==B_SLICE || img->type==BS_IMG)? fw_refFrArr : refFrArr);
-  int   block_y        = img->block_y;
+  int** refframe_array = enc_picture->ref_idx[se->value2];
 
-  if( input->InterlaceCodingOption >= MB_CODING && mb_adaptive )
-  {
-    if( !img->field_mode )
-    {
-      refframe_array = ((img->type==B_SLICE || img->type==BS_IMG) ? fw_refFrArr_frm : refFrArr_frm);
-    }
-    else if ( !img->top_field )
-    {
-      refframe_array = ((img->type==B_SLICE || img->type==BS_IMG) ? fw_refFrArr_bot : refFrArr_bot);
-      block_y        = ( img->block_y - 4 ) / 2;
-    }
-    else
-    {
-      refframe_array = ((img->type==B_SLICE || img->type==BS_IMG) ? fw_refFrArr_top : refFrArr_top);
-      block_y        = img->block_y / 2;
-    }
-  }
+  int   b8a, b8b;
 
-	if ((img->subblock_y == 0) && ((currMB->mb_available_up == NULL) || (IS_DIRECT(currMB->mb_available_up))))
-		b = 0;
+  PixelPos block_a, block_b;
+  
+  getLuma4x4Neighbour(img->current_mb_nr, img->subblock_x, img->subblock_y, -1,  0, &block_a);
+  getLuma4x4Neighbour(img->current_mb_nr, img->subblock_x, img->subblock_y,  0, -1, &block_b);
+
+  b8a=((block_a.x/2)%2)+2*((block_a.y/2)%2);
+  b8b=((block_b.x/2)%2)+2*((block_b.y/2)%2);
+
+  
+  if (!block_b.available)
+    b=0;
+  else if (IS_DIRECT(&img->mb_data[block_b.mb_addr]) || (img->mb_data[block_b.mb_addr].b8mode[b8b]==0 && img->mb_data[block_b.mb_addr].b8pdir[b8b]==2))
+    b=0;
   else
 	{
-    /*===== HS: the chosen refframe_array should already contain the scale versions of RefIdx =====
-		if(( input->InterlaceCodingOption >= MB_CODING && mb_adaptive && (img->subblock_y == 0)
-			 && (img->field_mode == 0) && (currMB->mb_available[0][1]->mb_field == 1))) //|| (img->field_mode == 1))
-			b = (refframe_array[block_y+img->subblock_y-1][img->block_x+img->subblock_x] > 1 ? 1 : 0);
+		if (img->MbaffFrameFlag && (currMB->mb_field == 0) && (img->mb_data[block_b.mb_addr].mb_field == 1))
+			b = (refframe_array[block_b.pos_x][block_b.pos_y] > 1 ? 1 : 0);
 		else
-    */
-			b = (refframe_array[block_y+img->subblock_y-1][img->block_x+img->subblock_x] > 0 ? 1 : 0);
+			b = (refframe_array[block_b.pos_x][block_b.pos_y] > 0 ? 1 : 0);
 	}
 
-	if ((img->subblock_x == 0) && ((currMB->mb_available_left == NULL) || (IS_DIRECT(currMB->mb_available_left))))
-    a = 0;
+  if (!block_a.available)
+    a=0;
+  else if (IS_DIRECT(&img->mb_data[block_a.mb_addr]) || (img->mb_data[block_a.mb_addr].b8mode[b8a]==0 && img->mb_data[block_a.mb_addr].b8pdir[b8a]==2))
+    a=0;
   else 
 	{
-    /*===== HS: the chosen refframe_array should already contain the scale versions of RefIdx =====
-		if(( input->InterlaceCodingOption >= MB_CODING && mb_adaptive && (img->subblock_x == 0)
-			 && (img->field_mode == 0) && (currMB->mb_available[1][0]->mb_field == 1))) // || (img->field_mode == 1))
-			a = (refframe_array[block_y+img->subblock_y][img->block_x+img->subblock_x-1] > 1 ? 1 : 0);
+		if (img->MbaffFrameFlag && (currMB->mb_field == 0) && (img->mb_data[block_a.mb_addr].mb_field == 1))
+			a = (refframe_array[block_a.pos_x][block_a.pos_y] > 1 ? 1 : 0);
 		else
-    */
-			a = (refframe_array[block_y+img->subblock_y][img->block_x+img->subblock_x-1] > 0 ? 1 : 0);
+			a = (refframe_array[block_a.pos_x][block_a.pos_y] > 0 ? 1 : 0);
 	}
 
   act_ctx     = a + 2*b; 
@@ -691,177 +652,6 @@ void writeRefFrame_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
     act_sym--;
     act_ctx=4;
     unary_bin_encode(eep_dp, act_sym,ctx->ref_no_contexts[addctx]+act_ctx,1);
-  }
-}
-
-
-/*!
- ****************************************************************************
- * \brief
- *    This function is used to arithmetically encode the reference
- *    parameter of a given MB.
- ****************************************************************************
- */
-void writeBwdRefFrame_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
-{
-  MotionInfoContexts  *ctx    = img->currentSlice->mot_ctx;
-  Macroblock          *currMB = &img->mb_data[img->current_mb_nr];
-  int                 addctx  = 0;
-
-  int   a, b;
-  int   act_ctx;
-  int   act_sym;
-  int** refframe_array = ((img->type==B_SLICE || img->type==BS_IMG)? bw_refFrArr : refFrArr);
-  int   block_y        = img->block_y;
-
-
-  if( input->InterlaceCodingOption >= MB_CODING && mb_adaptive )
-  {
-    if( !img->field_mode )
-    {
-      refframe_array = ((img->type==B_SLICE || img->type==BS_IMG) ? bw_refFrArr_frm : refFrArr_frm);
-    }
-    else if ( !img->top_field )
-    {
-      refframe_array = ((img->type==B_SLICE || img->type==BS_IMG) ? bw_refFrArr_bot : refFrArr_bot);
-      block_y        = ( img->block_y - 4 ) / 2;
-    }
-    else
-    {
-      refframe_array = ((img->type==B_SLICE || img->type==BS_IMG) ? bw_refFrArr_top : refFrArr_top);
-      block_y        = img->block_y / 2;
-    }
-  }
-	if ((img->subblock_y == 0) && ((currMB->mb_available_up == NULL) || (IS_DIRECT(currMB->mb_available_up))))
-		b = 0;
-	else
-	{
-    /*===== HS: the chosen refframe_array should already contain the scale versions of RefIdx =====
-		if( input->InterlaceCodingOption >= MB_CODING && mb_adaptive && (img->subblock_y == 0)
-			 && (img->field_mode == 0) && (currMB->mb_available[0][1]->mb_field == 1))
-			b = (BWD_IDX(refframe_array[block_y+img->subblock_y-1][img->block_x+img->subblock_x]) > 1 ? 1 : 0);
-		else
-    */
-			b = (BWD_IDX(refframe_array[block_y+img->subblock_y-1][img->block_x+img->subblock_x]) > 0 ? 1 : 0);
-	}
-
-	if ((img->subblock_x == 0) && ((currMB->mb_available_up == NULL) || (IS_DIRECT(currMB->mb_available_left))))
-		a = 0;
-  else 
-	{
-    /*===== HS: the chosen refframe_array should already contain the scale versions of RefIdx =====
-		if( input->InterlaceCodingOption >= MB_CODING && mb_adaptive && (img->subblock_x == 0)
-			 && (img->field_mode == 0) && (currMB->mb_available[1][0]->mb_field == 1))
-			a = (BWD_IDX(refframe_array[block_y+img->subblock_y][img->block_x+img->subblock_x-1]) > 1 ? 1 : 0);
-		else
-    */
-			a = (BWD_IDX(refframe_array[block_y+img->subblock_y][img->block_x+img->subblock_x-1]) > 0 ? 1 : 0);
-	}
-
-
-  act_ctx     = a + 2*b;
-  se->context = act_ctx; // store context
-  act_sym     = se->value1;
-
-  if (act_sym==0)
-  {
-    biari_encode_symbol(eep_dp, 0, ctx->/*bwd_*/ref_no_contexts[addctx] + act_ctx );
-  }
-  else
-  {
-    biari_encode_symbol(eep_dp, 1, ctx->/*bwd_*/ref_no_contexts[addctx] + act_ctx);
-    act_sym--;
-    act_ctx=4;
-    unary_bin_encode(eep_dp, act_sym,ctx->/*bwd_*/ref_no_contexts[addctx]+act_ctx,1);
-  }
-}
-
-
-/*!
- ****************************************************************************
- * \brief
- *    This function is used to arithmetically encode the motion
- *    vector data of a given MB.
- ****************************************************************************
- */
-void writeMVD_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
-{
-  int i = img->subblock_x;
-  int j = img->subblock_y;
-  int a, b;
-  int act_ctx;
-  int act_sym;
-  int mv_pred_res;
-  int mv_local_err;
-  int mv_sign;
-  int k = se->value2; // MVD component
-
-  MotionInfoContexts  *ctx         = img->currentSlice->mot_ctx;
-  Macroblock          *currMB      = &img->mb_data[img->current_mb_nr];
-
-  if (j==0)
-  {
-    if (currMB->mb_available_up == NULL)
-      b = 0;
-    else 
-		{
-      b = absm((currMB->mb_available_up)->mvd[0][BLOCK_SIZE-1][i][k]);
-			if	( input->InterlaceCodingOption >= MB_CODING && mb_adaptive && (k==1))
-			{
-				if ((currMB->mb_field==0) && (currMB->mb_available_up->mb_field==1))
-					b *= 2;
-				else if ((currMB->mb_field==1) && (currMB->mb_available_up->mb_field==0))
-					b /= 2;
-			}
-		}
-  }
-  else
-    b = absm(currMB->mvd[0][j-1][i][k]);
-          
-  if (i==0)
-  {
-    if (currMB->mb_available_left == NULL)
-      a = 0;
-    else 
-		{
-			a = absm((currMB->mb_available_left)->mvd[0][j][BLOCK_SIZE-1][k]);
-			if	( input->InterlaceCodingOption >= MB_CODING && mb_adaptive && (k==1))
-			{
-				if ((currMB->mb_field==0) && (currMB->mb_available_left->mb_field==1))
-					a *= 2;
-				else if ((currMB->mb_field==1) && (currMB->mb_available_left->mb_field==0))
-					a /= 2;
-			}
-		}
-  }
-  else
-    a = absm(currMB->mvd[0][j][i-1][k]);
-
-   se->value2 = a+b;
-  if ((mv_local_err=a+b)<3)
-    act_ctx = 5*k;
-  else
-  {
-    if (mv_local_err>32)
-      act_ctx=5*k+3;
-    else
-      act_ctx=5*k+2;
-  }
-  mv_pred_res = se->value1;
-  se->context = act_ctx;
-
-  act_sym = absm(mv_pred_res);
-
-  if (act_sym == 0)
-    biari_encode_symbol(eep_dp, 0, &ctx->mv_res_contexts[0][act_ctx] );
-  else
-  {
-    biari_encode_symbol(eep_dp, 1, &ctx->mv_res_contexts[0][act_ctx] );
-    act_sym--;
-    act_ctx=5*k;
-    unary_exp_golomb_mv_encode(eep_dp,act_sym,ctx->mv_res_contexts[1]+act_ctx,3);
-    mv_sign = (mv_pred_res<0) ? 1: 0;
-    biari_encode_symbol_eq_prob(eep_dp, (unsigned char) mv_sign);
   }
 }
 
@@ -914,7 +704,7 @@ void writeDquant_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
  *    vector data of a B-frame MB.
  ****************************************************************************
  */
-void writeBiMVD_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
+void writeMVD_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
 {
   int i = img->subblock_x;
   int j = img->subblock_y;
@@ -924,49 +714,44 @@ void writeBiMVD_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
   int mv_pred_res;
   int mv_local_err;
   int mv_sign;
-  int backward = se->value2 & 0x01;
+  int list_idx = se->value2 & 0x01;
   int k = (se->value2>>1); // MVD component
+
+  PixelPos block_a, block_b;
 
   MotionInfoContexts  *ctx    = img->currentSlice->mot_ctx;
   Macroblock          *currMB = &img->mb_data[img->current_mb_nr];
 
-  if (j==0)
-  {
-    if (currMB->mb_available_up == NULL)
-      b = 0;
-    else
-		{
-      b = absm((currMB->mb_available_up)->mvd[backward][BLOCK_SIZE-1][i][k]);
-			if	( input->InterlaceCodingOption >= MB_CODING && mb_adaptive && (k==1))
-			{
-				if ((currMB->mb_field==0) && (currMB->mb_available_up->mb_field==1))
-					b *= 2;
-				else if ((currMB->mb_field==1) && (currMB->mb_available_up->mb_field==0))
-					b /= 2;
-			}
-		}
-  }
-  else
-    b = absm(currMB->mvd[backward][j-1][i][k]);
+  getLuma4x4Neighbour(img->current_mb_nr, i, j, -1,  0, &block_a);
+  getLuma4x4Neighbour(img->current_mb_nr, i, j,  0, -1, &block_b);
 
-  if (i==0)
+  if (block_b.available)
   {
-    if (currMB->mb_available_left == NULL)
-      a = 0;
-    else
-		{
-			a = absm((currMB->mb_available_left)->mvd[backward][j][BLOCK_SIZE-1][k]);
-			if	( input->InterlaceCodingOption >= MB_CODING && mb_adaptive && (k==1))
-			{
-				if ((currMB->mb_field==0) && (currMB->mb_available_left->mb_field==1))
-					a *= 2;
-				else if ((currMB->mb_field==1) && (currMB->mb_available_left->mb_field==0))
-					a /= 2;
-			}
-		}
+    b = absm(img->mb_data[block_b.mb_addr].mvd[list_idx][block_b.y][block_b.x][k]);
+    if (img->MbaffFrameFlag && (k==1)) 
+    {
+      if ((currMB->mb_field==0) && (img->mb_data[block_b.mb_addr].mb_field==1))
+        b *= 2;
+      else if ((currMB->mb_field==1) && (img->mb_data[block_b.mb_addr].mb_field==0))
+        b /= 2;
+    }
   }
   else
-    a = absm(currMB->mvd[backward][j][i-1][k]);
+    b=0;
+          
+  if (block_a.available)
+  {
+    a = absm(img->mb_data[block_a.mb_addr].mvd[list_idx][block_a.y][block_a.x][k]);
+    if (img->MbaffFrameFlag && (k==1)) 
+    {
+      if ((currMB->mb_field==0) && (img->mb_data[block_a.mb_addr].mb_field==1))
+        a *= 2;
+      else if ((currMB->mb_field==1) && (img->mb_data[block_a.mb_addr].mb_field==0))
+        a /= 2;
+    }
+  }
+  else
+    a = 0;
 
   if ((mv_local_err=a+b)<3)
     act_ctx = 5*k;

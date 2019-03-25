@@ -1,34 +1,3 @@
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
 
 /*!
  *************************************************************************************
@@ -49,7 +18,6 @@
  *                                                    from JVT-E089                              (21-Nov-2002)
  *************************************************************************************
  */
-
 #include <stdlib.h>
 #include <string.h>
 #include "global.h"
@@ -93,8 +61,6 @@ void DeblockFrame(ImageParameters *img, byte **imgY, byte ***imgUV)
 {
   unsigned i;
   int mb_x, mb_y ;
-
-  return;
 
   for (i=0; i<img->PicSizeInMbs; i++)
   {
@@ -188,8 +154,10 @@ void GetStrength(byte Strength[4],struct img_par *img,Macroblock* MbP,Macroblock
   int    ***list1_mv = dec_picture->mv[LIST_1];
   int    **list0_refIdxArr = dec_picture->ref_idx[LIST_0];
   int    **list1_refIdxArr = dec_picture->ref_idx[LIST_1];
+	int    **list0_refPicIdArr = dec_picture->ref_pic_id[LIST_0];
+	int    **list1_refPicIdArr = dec_picture->ref_pic_id[LIST_1];
 
-  if (img->structure==FRAME)
+  if ((img->structure==FRAME) || !dir)
     *((int*)Strength) = ININT_STRENGTH[edge] ;                     // Start with Strength=3. or Strength=4 for Mb-edge
   else
     *((int*)Strength) = ININT_STRENGTH[3] ;                        //  Strength=3. for fields
@@ -200,9 +168,7 @@ void GetStrength(byte Strength[4],struct img_par *img,Macroblock* MbP,Macroblock
     blkQ = BLK_NUM[dir][ edge       ][idx] ;                 // if one of the 4x4 blocks has coefs.    set Strength=2
     blkP = BLK_NUM[dir][(edge-1) & 3][idx] ; 
     
-
-    if( ( img->type != SP_SLICE) && (img->type != SI_SLICE)
-          && !(MbP->mb_type==I4MB || MbP->mb_type==I16MB)
+    if(  !(MbP->mb_type==I4MB || MbP->mb_type==I16MB)
           && !(MbQ->mb_type==I4MB || MbQ->mb_type==I16MB) )
     {
       if( ((MbQ->cbp_blk &  (1 << blkQ )) != 0) || ((MbP->cbp_blk &  (1 << blkP)) != 0) )
@@ -211,20 +177,64 @@ void GetStrength(byte Strength[4],struct img_par *img,Macroblock* MbP,Macroblock
       {                                                     // if no coefs, but vector difference >= 1 set Strength=1 
         blk_y  = block_y + (blkQ >> 2) ;   blk_y2 = blk_y -  dir ;
         blk_x  = block_x + (blkQ  & 3) ;   blk_x2 = blk_x - !dir ;
-
         if( (img->type == B_SLICE) )
         {
-          Strength[idx] =  (abs( list0_mv[blk_x][blk_y][0] - list0_mv[blk_x2][blk_y2][0]) >= 4) |
-                           (abs( list0_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= 4) |
-                           (abs( list1_mv[blk_x][blk_y][0] - list1_mv[blk_x2][blk_y2][0]) >= 4) |
-                           (abs( list1_mv[blk_x][blk_y][1] - list1_mv[blk_x2][blk_y2][1]) >= 4) |
-                           (list0_refIdxArr[blk_x][blk_y]   !=   list0_refIdxArr[blk_x2][blk_y2] )|
-                           (list1_refIdxArr[blk_x][blk_y]   !=   list1_refIdxArr[blk_x2][blk_y2] );
+          int ref_p0,ref_p1,ref_q0,ref_q1;	    
+          ref_p0 = list0_refIdxArr[blk_x][blk_y]<0 ? -1 : list0_refPicIdArr[blk_x][blk_y];
+          ref_q0 = list0_refIdxArr[blk_x2][blk_y2]<0 ? -1 : list0_refPicIdArr[blk_x2][blk_y2];
+          ref_p1 = list1_refIdxArr[blk_x][blk_y]<0 ? -1 : list1_refPicIdArr[blk_x][blk_y];
+          ref_q1 = list1_refIdxArr[blk_x2][blk_y2]<0 ? -1 : list1_refPicIdArr[blk_x2][blk_y2];
+          if ( ((ref_p0==ref_q0) && (ref_p1==ref_q1)) ||
+            ((ref_p0==ref_q1) && (ref_p1==ref_q0))) 
+          {
+            Strength[idx]=0;
+            // L0 and L1 reference pictures of p0 are different; q0 as well
+            if (ref_p0 != ref_p1) 
+            {	
+              // compare MV for the same reference picture
+              if (ref_p0==ref_q0) 
+              {
+                Strength[idx] =  (abs( list0_mv[blk_x][blk_y][0] - list0_mv[blk_x2][blk_y2][0]) >= 4) |
+                  (abs( list0_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= 4) |
+                  (abs( list1_mv[blk_x][blk_y][0] - list1_mv[blk_x2][blk_y2][0]) >= 4) |
+                  (abs( list1_mv[blk_x][blk_y][1] - list1_mv[blk_x2][blk_y2][1]) >= 4);
+              }
+              else 
+              {
+                Strength[idx] =  (abs( list0_mv[blk_x][blk_y][0] - list1_mv[blk_x2][blk_y2][0]) >= 4) |
+                  (abs( list0_mv[blk_x][blk_y][1] - list1_mv[blk_x2][blk_y2][1]) >= 4) |
+                  (abs( list1_mv[blk_x][blk_y][0] - list0_mv[blk_x2][blk_y2][0]) >= 4) |
+                  (abs( list1_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= 4);
+              }	
+            }
+            else 
+            {	// L0 and L1 reference pictures of p0 are the same; q0 as well
+              
+              Strength[idx] =  ((abs( list0_mv[blk_x][blk_y][0] - list0_mv[blk_x2][blk_y2][0]) >= 4) |
+                (abs( list0_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= 4 ) |
+                (abs( list1_mv[blk_x][blk_y][0] - list1_mv[blk_x2][blk_y2][0]) >= 4) |
+                (abs( list1_mv[blk_x][blk_y][1] - list1_mv[blk_x2][blk_y2][1]) >= 4))
+                &&
+                ((abs( list0_mv[blk_x][blk_y][0] - list1_mv[blk_x2][blk_y2][0]) >= 4) |
+                (abs( list0_mv[blk_x][blk_y][1] - list1_mv[blk_x2][blk_y2][1]) >= 4) |
+                (abs( list1_mv[blk_x][blk_y][0] - list0_mv[blk_x2][blk_y2][0]) >= 4) |
+                (abs( list1_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= 4));
+            }				
+          }
+          else 
+          {
+            Strength[idx] = 1;				
+          }		
         }
-        else
-          Strength[idx] =    (abs( list0_mv[blk_x][blk_y][0] - list0_mv[blk_x2][blk_y2][0]) >= 4 ) |
-                             (abs( list0_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= 4 ) |
-                             (list1_refIdxArr[blk_x][blk_y]   !=   list1_refIdxArr[blk_x2][blk_y2] );
+        else	
+        {	// P slice
+          int ref_p0,ref_q0;	    
+          ref_p0 = list0_refIdxArr[blk_x][blk_y]<0 ? -1 : list0_refPicIdArr[blk_x][blk_y];
+          ref_q0 = list0_refIdxArr[blk_x2][blk_y2]<0 ? -1 : list0_refPicIdArr[blk_x2][blk_y2];
+          Strength[idx] =  (ref_p0 != ref_q0 ) |
+            (abs( list0_mv[blk_x][blk_y][0] - list0_mv[blk_x2][blk_y2][0]) >= 4 ) |
+            (abs( list0_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= 4 );
+        }
       }
     }
   }
@@ -248,21 +258,21 @@ void EdgeLoop(byte* SrcPtr,byte Strength[4],int QP,
   byte*    ClipTab = NULL;   
   int      small_gap;
   int      indexA, indexB;
-
-
+  
+  
   PtrInc  = dir?      1 : width ;
   inc     = dir?  width : 1 ;                     // vertical filtering increment to next pixel is 1 else width
   inc2    = inc<<1 ;    
   inc3    = inc + inc2 ;    
   inc4    = inc<<2 ;
-
+  
   for( pel=0 ; pel<16 ; pel++ )
   {
     if(!(pel&3))
     {
       indexA = IClip(0, MAX_QP, QP + AlphaC0Offset);
       indexB = IClip(0, MAX_QP, QP + BetaOffset);
-
+      
       Alpha=ALPHA_TABLE[indexA];
       Beta=BETA_TABLE[indexB];  
       ClipTab=CLIP_TAB[indexA];
@@ -272,7 +282,7 @@ void EdgeLoop(byte* SrcPtr,byte Strength[4],int QP,
       L0  = SrcPtr [-inc ] ;
       R0  = SrcPtr [    0] ;
       AbsDelta  = abs( Delta = R0 - L0 )  ;
-
+      
       if( AbsDelta < Alpha )
       {
         C0  = ClipTab[ Strng ] ;
@@ -281,38 +291,38 @@ void EdgeLoop(byte* SrcPtr,byte Strength[4],int QP,
         if( ((abs( R0 - R1) - Beta )  & (abs(L0 - L1) - Beta )) < 0  ) 
         {
           if( !yuv)
-            {
-          L2  = SrcPtr[-inc3] ;
-          R2  = SrcPtr[ inc2] ;
-          aq  = (abs( R0 - R2) - Beta ) < 0  ;
-          ap  = (abs( L0 - L2) - Beta ) < 0  ;
-            }
-
+          {
+            L2  = SrcPtr[-inc3] ;
+            R2  = SrcPtr[ inc2] ;
+            aq  = (abs( R0 - R2) - Beta ) < 0  ;
+            ap  = (abs( L0 - L2) - Beta ) < 0  ;
+          }
+          
           RL0             = L0 + R0 ;
-
+          
           if(Strng == 4 )    // INTRA strong filtering
           {
             if( yuv)  // Chroma
-              {
+            {
               SrcPtr[   0 ] = ((R1 << 1) + R0 + L1 + 2) >> 2; 
               SrcPtr[-inc ] = ((L1 << 1) + L0 + R1 + 2) >> 2;                                           
-              }
+            }
             else  // Luma
-              {
-            small_gap = (AbsDelta < ((Alpha >> 2) + 2));
-         
-            aq &= small_gap;
-            ap &= small_gap;
-
-            SrcPtr[   0 ]   = aq ? ( L1 + ((R1 + RL0) << 1) +  SrcPtr[ inc2] + 4) >> 3 : ((R1 << 1) + R0 + L1 + 2) >> 2 ;
-            SrcPtr[-inc ]   = ap ? ( R1 + ((L1 + RL0) << 1) +  SrcPtr[-inc3] + 4) >> 3 : ((L1 << 1) + L0 + R1 + 2) >> 2 ;
-
-            SrcPtr[ inc ] =   aq  ? ( SrcPtr[ inc2] + R0 + R1 + L0 + 2) >> 2 : SrcPtr[ inc ];
-            SrcPtr[-inc2] =   ap  ? ( SrcPtr[-inc3] + L1 + L0 + R0 + 2) >> 2 : SrcPtr[-inc2];
-
+            {
+              small_gap = (AbsDelta < ((Alpha >> 2) + 2));
+              
+              aq &= small_gap;
+              ap &= small_gap;
+              
+              SrcPtr[   0 ]   = aq ? ( L1 + ((R1 + RL0) << 1) +  SrcPtr[ inc2] + 4) >> 3 : ((R1 << 1) + R0 + L1 + 2) >> 2 ;
+              SrcPtr[-inc ]   = ap ? ( R1 + ((L1 + RL0) << 1) +  SrcPtr[-inc3] + 4) >> 3 : ((L1 << 1) + L0 + R1 + 2) >> 2 ;
+              
+              SrcPtr[ inc ] =   aq  ? ( SrcPtr[ inc2] + R0 + R1 + L0 + 2) >> 2 : SrcPtr[ inc ];
+              SrcPtr[-inc2] =   ap  ? ( SrcPtr[-inc3] + L1 + L0 + R0 + 2) >> 2 : SrcPtr[-inc2];
+              
               SrcPtr[ inc2] = aq ? (((SrcPtr[ inc3] + SrcPtr[ inc2]) <<1) + SrcPtr[ inc2] + R1 + RL0 + 4) >> 3 : R2;
               SrcPtr[-inc3] = ap ? (((SrcPtr[-inc4] + SrcPtr[-inc3]) <<1) + SrcPtr[-inc3] + L1 + RL0 + 4) >> 3 : L2;
-              }
+            }
           }
           else                                                                                   // normal filtering
           {
@@ -320,7 +330,7 @@ void EdgeLoop(byte* SrcPtr,byte Strength[4],int QP,
             dif              = IClip( -c0, c0, ( (Delta << 2) + (L1 - R1) + 4) >> 3 ) ;
             SrcPtr[  -inc ]  = IClip(0, 255, L0 + dif) ;
             SrcPtr[     0 ]  = IClip(0, 255, R0 - dif) ;
-
+            
             if( !yuv )
             {
               if( ap )

@@ -1,34 +1,3 @@
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
 
 /*!
  ************************************************************************
@@ -70,20 +39,11 @@ typedef unsigned char   byte;                   //!<  8 bit unsigned
 typedef int             int32;
 typedef unsigned int    u_int32;
 
-unsigned int toprefpoc[MAX_REFERENCE_PICTURES];
-unsigned int bottomrefpoc[MAX_REFERENCE_PICTURES];
-
 pic_parameter_set_rbsp_t *active_pps;
 seq_parameter_set_rbsp_t *active_sps;
 
 // global picture format dependend buffers, mem allocation in decod.c ******************
 int  **refFrArr;                                //!< Array for reference frames of each block
-
-int   **moving_block;           //<! stationary block buffer
-int   **moving_block_frm;       //<! stationary block buffer - frame
-int   **moving_block_top;       //<! stationary block buffer - field
-int   **moving_block_bot;       //<! stationary block buffer - field
-
 
 byte **imgY_ref;                                //!< reference frame find snr
 byte ***imgUV_ref;
@@ -91,19 +51,7 @@ byte ***imgUV_ref;
 int  ReMapRef[20];
 // B pictures
 int  Bframe_ctr;
-byte prevP_tr, nextP_tr, P_interval;
 int  frame_no;
-
-int  **refFrArr_frm;
-int  **refFrArr_top;
-int  **refFrArr_bot;
-
-byte ***mref_frm;                               //!< 1/1 pix luma for direct interpolation
-byte ****mcef_frm;                              //!< pix chroma
-
-byte ***mref_fld;                               //!< 1/1 pix luma for direct interpolation
-byte ****mcef_fld;     
-byte nextP_tr_frm, nextP_tr_fld;
 
 // For MB level frame/field coding
 int  TopFieldForSkip_Y[16][16];
@@ -112,6 +60,8 @@ int  TopFieldForSkip_UV[2][16][16];
 
 #define ET_SIZE 300      //!< size of error text buffer
 char errortext[ET_SIZE]; //!< buffer for error message for exit with error()
+
+int g_new_frame;
 
 /***********************************************************************
  * T y p e    d e f i n i t i o n s    f o r    T M L
@@ -350,6 +300,8 @@ typedef struct macroblock
   int           cbp, cbp_blk ;
   unsigned long cbp_bits;
 
+  int           is_skip;
+
   int           i16mode;
   int           b8mode[4];
   int           b8pdir[4];
@@ -398,7 +350,6 @@ typedef struct datapartition
 typedef struct
 {
   int                 ei_flag;       //!< 0 if the partArr[0] contains valid information
-  int                 picture_id;    //!< MUST be set by NAL even in case ei_flag == 1
   int                 qp;
   int                 picture_type;  //!< picture type
   PictureStructure    structure;     //!< Identify picture structure type
@@ -476,10 +427,6 @@ typedef struct img_par
   int structure;                               //<! Identify picture structure type
   int structure_old;                           //<! temp fix for multi slice per picture
   int pstruct_next_P;
-  int imgtr_next_P;
-  int imgtr_last_P;
-  int tr_frm;
-  int tr_fld;
 
   // B pictures
   Slice       *currentSlice;                   //<! pointer to current Slice data struct
@@ -504,7 +451,6 @@ typedef struct img_par
   // JVT-D101
   int redundant_slice_flag; 
   int redundant_pic_cnt; 
-  int last_decoded_pic_id; 
 
   int explicit_B_prediction;
 
@@ -529,7 +475,7 @@ typedef struct img_par
            int offset_for_non_ref_pic;
            int offset_for_top_to_bottom_field;
   unsigned int num_ref_frames_in_pic_order_cnt_cycle;
-           int offset_for_ref_frame[MAX_LENGTH_POC_CYCLE];
+           int offset_for_ref_frame[MAXnum_ref_frames_in_pic_order_cnt_cycle];
 
   // POC200301
   //the following is for slice header syntax elements of poc
@@ -547,9 +493,10 @@ typedef struct img_par
   // for POC mode 1:
   unsigned int AbsFrameNum;
     signed int ExpectedPicOrderCnt, PicOrderCntCycleCnt, FrameNumInPicOrderCntCycle;
-  unsigned int PreviousFrameNum, FrameNumOffset, ExpectedDeltaPerPicOrderCntCycle;
-  unsigned int Previousfield_pic_flag,Previousbottom_field_flag,Previousnal_reference_idc,FirstFieldType;
-           int Previousdelta_pic_order_cnt[2], PreviousPOC, ThisPOC;
+  unsigned int PreviousFrameNum, FrameNumOffset;
+           int ExpectedDeltaPerPicOrderCntCycle;
+           int PreviousPOC, ThisPOC;
+           int PreviousFrameNumOffset;
   // /////////////////////////
 
 
@@ -652,10 +599,6 @@ void init_conf(struct inp_par *inp, char *config_filename);
 void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr);
 void init(struct img_par *img);
 
-void init_poc();
-void push_poc(unsigned int topvalue, unsigned int bottomvalue, unsigned int ref_frame_ind );
-
-
 void malloc_slice(struct inp_par *inp, struct img_par *img);
 void free_slice(struct inp_par *inp, struct img_par *img);
 
@@ -727,8 +670,6 @@ int peekSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct inp_p
 void fill_wp_params(struct img_par *img);
 
 void reset_wp_params(struct img_par *img);
-
-int poc_distance( int refa, int refb);
 
 void FreePartition (DataPartition *dp, int n);
 DataPartition *AllocPartition();

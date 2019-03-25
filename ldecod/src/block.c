@@ -1,34 +1,3 @@
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
 
 /*!
  ***********************************************************************
@@ -48,8 +17,8 @@
 #include "contributors.h"
 
 #include <stdlib.h>
-#include <math.h>
 
+#include "global.h"
 #include "block.h"
 #include "image.h"
 #include "mb_access.h"
@@ -152,7 +121,8 @@ int intrapred(
 
   if (img->constrained_intra_pred_flag)
   {
-    block_available_left     = pix_a[0].available ? img->intra_block[pix_a[0].mb_addr] : 0;
+    for (i=0, block_available_left=1; i<4;i++)
+      block_available_left  &= pix_a[i].available ? img->intra_block[pix_a[i].mb_addr]: 0;
     block_available_up       = pix_b.available ? img->intra_block [pix_b.mb_addr] : 0;
     block_available_up_right = pix_c.available ? img->intra_block [pix_c.mb_addr] : 0;
     block_available_up_left  = pix_d.available ? img->intra_block [pix_d.mb_addr] : 0;
@@ -250,18 +220,27 @@ int intrapred(
     break;
 
   case VERT_PRED:                       /* vertical prediction from block above */
+    if (!block_available_up)
+      printf ("warning: Intra_4x4_Vertical prediction mode not allowed at mb %d\n",img->current_mb_nr);
+
     for(j=0;j<BLOCK_SIZE;j++)
       for(i=0;i<BLOCK_SIZE;i++)
         img->mpr[i+ioff][j+joff]=imgY[pix_b.pos_y][pix_b.pos_x+i];/* store predicted 4x4 block */
     break;
 
-  case HOR_PRED:                        /* horisontal prediction from left block */
+  case HOR_PRED:                        /* horizontal prediction from left block */
+    if (!block_available_left)
+      printf ("warning: Intra_4x4_Horizontal prediction mode not allowed at mb %d\n",img->current_mb_nr);
+
     for(j=0;j<BLOCK_SIZE;j++)
       for(i=0;i<BLOCK_SIZE;i++)
         img->mpr[i+ioff][j+joff]=imgY[pix_a[j].pos_y][pix_a[j].pos_x]; /* store predicted 4x4 block */
     break;
 
   case DIAG_DOWN_RIGHT_PRED:
+    if ((!block_available_up)||(!block_available_left)||(!block_available_up_left))
+      printf ("warning: Intra_4x4_Diagonal_Down_Right prediction mode not allowed at mb %d\n",img->current_mb_nr);
+
     img->mpr[0+ioff][3+joff] = (P_L + 2*P_K + P_J + 2) / 4; 
     img->mpr[0+ioff][2+joff] =
     img->mpr[1+ioff][3+joff] = (P_K + 2*P_J + P_I + 2) / 4; 
@@ -281,6 +260,9 @@ int intrapred(
     break;
 
   case DIAG_DOWN_LEFT_PRED:
+    if (!block_available_up)
+      printf ("warning: Intra_4x4_Diagonal_Down_Left prediction mode not allowed at mb %d\n",img->current_mb_nr);
+
     img->mpr[0+ioff][0+joff] = (P_A + P_C + 2*(P_B) + 2) / 4;
     img->mpr[1+ioff][0+joff] = 
     img->mpr[0+ioff][1+joff] = (P_B + P_D + 2*(P_C) + 2) / 4;
@@ -300,6 +282,9 @@ int intrapred(
     break;
 
   case  VERT_RIGHT_PRED:/* diagonal prediction -22.5 deg to horizontal plane */
+    if ((!block_available_up)||(!block_available_left)||(!block_available_up_left))
+      printf ("warning: Intra_4x4_Vertical_Right prediction mode not allowed at mb %d\n",img->current_mb_nr);
+
     img->mpr[0+ioff][0+joff] = 
     img->mpr[1+ioff][2+joff] = (P_X + P_A + 1) / 2;
     img->mpr[1+ioff][0+joff] = 
@@ -319,6 +304,9 @@ int intrapred(
     break;
 
   case  VERT_LEFT_PRED:/* diagonal prediction -22.5 deg to horizontal plane */
+    if (!block_available_up)
+      printf ("warning: Intra_4x4_Vertical_Left prediction mode not allowed at mb %d\n",img->current_mb_nr);
+    
     img->mpr[0+ioff][0+joff] = (P_A + P_B + 1) / 2;
     img->mpr[1+ioff][0+joff] = 
     img->mpr[0+ioff][2+joff] = (P_B + P_C + 1) / 2;
@@ -338,6 +326,9 @@ int intrapred(
     break;
 
   case  HOR_UP_PRED:/* diagonal prediction -22.5 deg to horizontal plane */
+    if (!block_available_left)
+      printf ("warning: Intra_4x4_Horizontal_Up prediction mode not allowed at mb %d\n",img->current_mb_nr);
+    
     img->mpr[0+ioff][0+joff] = (P_I + P_J + 1) / 2;
     img->mpr[1+ioff][0+joff] = (P_I + 2*P_J + P_K + 2) / 4;
     img->mpr[2+ioff][0+joff] = 
@@ -357,6 +348,9 @@ int intrapred(
     break;
 
   case  HOR_DOWN_PRED:/* diagonal prediction -22.5 deg to horizontal plane */
+    if ((!block_available_up)||(!block_available_left)||(!block_available_up_left))
+      printf ("warning: Intra_4x4_Horizontal_Down prediction mode not allowed at mb %d\n",img->current_mb_nr);
+
     img->mpr[0+ioff][0+joff] = 
     img->mpr[2+ioff][1+joff] = (P_X + P_I + 1) / 2;
     img->mpr[1+ioff][0+joff] = 
@@ -376,7 +370,7 @@ int intrapred(
     break;
 
   default:
-    printf("Error: illegal prediction mode input: %d\n",predmode);
+    printf("Error: illegal intra_4x4 prediction mode: %d\n",predmode);
     return SEARCH_SYNC;
     break;
   }
@@ -404,21 +398,12 @@ int intrapred_luma_16x16(struct img_par *img, //!< image parameters
   byte **imgY=dec_picture->imgY;
 
   int mb_nr=img->current_mb_nr;
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
 
   PixelPos up;          //!< pixel position p(0,-1)
   PixelPos left[17];    //!< pixel positions p(-1, -1..15)
 
   int up_avail, left_avail, left_up_avail;
-  /*
-  if(img->constrained_intra_pred_flag)
-  {
-    if (mb_available_up   && (img->intra_block[mb_nr-mb_width][2]==0 || img->intra_block[mb_nr-mb_width][3]==0))
-      mb_available_up   = 0;
-    if (mb_available_left && (img->intra_block[mb_nr-       1][1]==0 || img->intra_block[mb_nr       -1][3]==0))
-      mb_available_left = 0;
-  }
-  */
+
   s1=s2=0;
 
   for (i=0;i<17;i++)

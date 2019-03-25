@@ -1,35 +1,3 @@
-#define ABIPRED 1
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
 
 /*!
  ***************************************************************************
@@ -359,13 +327,13 @@ double RDCost_for_4x4IntraBlocks (int*    nonzero,
   const int      *partMap      = assignSE2partition[input->partition_mode];
   DataPartition  *dataPart;
 
-  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
+/*  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
   {
     pic_pix_y   = img->field_pix_y + block_y;
     pic_block_y = pic_pix_y/4;
     imgY_orig   = img->top_field ? imgY_org_top : imgY_org_bot;
   }
-
+*/
   //===== perform DCT, Q, IQ, IDCT, Reconstruction =====
   dummy = 0;
   *nonzero = dct_luma (block_x, block_y, &dummy, 1);
@@ -373,7 +341,8 @@ double RDCost_for_4x4IntraBlocks (int*    nonzero,
   //===== get distortion (SSD) of 4x4 block =====
   for (y=0; y<4; y++)
   for (x=pic_pix_x; x<pic_pix_x+4; x++)  
-    distortion += img->quad [imgY_orig[pic_pix_y+y][x] - imgY[frame_pic_pix_y+y][x]];
+    distortion += img->quad [imgY_orig[pic_pix_y+y][x] - imgY[pic_pix_y+y][x]];
+//    distortion += img->quad [imgY_orig[pic_pix_y+y][x] - imgY[frame_pic_pix_y+y][x]];
 
   //===== RATE for INTRA PREDICTION MODE  (SYMBOL MODE MUST BE SET TO UVLC) =====
   currSE->value1 = (mostProbableMode == ipmode) ? -1 : ipmode < mostProbableMode ? ipmode : ipmode-1;
@@ -456,7 +425,6 @@ int Mode_Decision_for_4x4IntraBlocks (int  b8,  int  b4,  double  lambda,  int* 
 
   *min_cost = (1<<20);
 
-
   //===== INTRA PREDICTION FOR 4x4 BLOCK =====
   intrapred_luma (pic_pix_x, pic_pix_y, &left_available, &up_available, &all_available);
 
@@ -504,7 +472,8 @@ int Mode_Decision_for_4x4IntraBlocks (int  b8,  int  b4,  double  lambda,  int* 
 
           //--- set reconstruction ---
           for (y=0; y<4; y++)
-          for (x=0; x<4; x++)  rec4x4[y][x] = enc_picture->imgY[frame_pic_pix_y+y][pic_pix_x+x];
+//          for (x=0; x<4; x++)  rec4x4[y][x] = enc_picture->imgY[frame_pic_pix_y+y][pic_pix_x+x];
+          for (x=0; x<4; x++)  rec4x4[y][x] = enc_picture->imgY[pic_pix_y+y][pic_pix_x+x];
 
           //--- flag if dct-coefficients must be coded ---
           nonzero = c_nz;
@@ -554,7 +523,8 @@ int Mode_Decision_for_4x4IntraBlocks (int  b8,  int  b4,  double  lambda,  int* 
     for (y=0; y<4; y++)
     for (x=0; x<4; x++)
     {
-      enc_picture->imgY[frame_pic_pix_y+y][pic_pix_x+x] = rec4x4[y][x];
+//      enc_picture->imgY[frame_pic_pix_y+y][pic_pix_x+x] = rec4x4[y][x];
+      enc_picture->imgY[pic_pix_y+y][pic_pix_x+x] = rec4x4[y][x];
       img->mpr[block_x+x][block_y+y] = img->mprr[best_ipmode][y][x];
       /*
       if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
@@ -828,7 +798,7 @@ void SetModesAndRefframeForBlocks (int mode)
   int    **bwrefarr = bw_refFrArr;
   int        **frefarr = refFrArr;
   int        block_y = img->block_y;
-
+	
   if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
   {
     block_y = img->field_block_y;
@@ -847,55 +817,62 @@ void SetModesAndRefframeForBlocks (int mode)
       abp_type_arr = abp_type_FrArr_bot;
     }
   }
-
+	
   //--- macroblock type ---
   currMB->mb_type = mode;
-
+	
   //--- block 8x8 mode and prediction direction ---
   switch (mode)
   {
-    case 0:
-      for(i=0;i<4;i++)
+	case 0:
+		for(i=0;i<4;i++)
+		{
+			currMB->b8mode[i] = 0;
+			currMB->b8pdir[i] = (bframe?2:0);
+      if ((input->direct_type)&&(img->type!=P_SLICE))
       {
-        currMB->b8mode[i] = 0;
-        currMB->b8pdir[i] = (bframe?2:0);
-      }
-      break;
-    case 1:
-    case 2:
-    case 3:
-      for(i=0;i<4;i++)
-      {
-        currMB->b8mode[i] = mode;
-        currMB->b8pdir[i] = best8x8pdir[mode][i];
-      }
-      break;
-    case P8x8:
-      for(i=0;i<4;i++)
-      {
-        currMB->b8mode[i]   = best8x8mode[i];
-        currMB->b8pdir[i]   = best8x8pdir[mode][i];
-      }
-      break;
-    case I4MB:
-      for(i=0;i<4;i++)
-      {
-        currMB->b8mode[i] = IBLOCK;
-        currMB->b8pdir[i] = -1;
-     }
-      break;
-    case I16MB:
-      for(i=0;i<4;i++)
-      {
-        currMB->b8mode[i] = 0;
-        currMB->b8pdir[i] = -1;
-      }
-      break;
-    default:
-      printf ("Unsupported mode in SetModesAndRefframeForBlocks!\n");
-      exit (1);
-  }
+        if (fwdir_refFrArr[img->block_y+(i/2)*2][img->block_x+(i%1)*2] == -1) currMB->b8pdir[i] =1;
+        else if (bwdir_refFrArr[img->block_y+(i/2)*2][img->block_x+(i%1)*2] == -1) currMB->b8pdir[i] =0;
+        else currMB->b8pdir[i]=2;
 
+        }
+		}
+		break;
+	case 1:
+	case 2:
+	case 3:
+		for(i=0;i<4;i++)
+		{
+			currMB->b8mode[i] = mode;
+			currMB->b8pdir[i] = best8x8pdir[mode][i];
+		}
+		break;
+	case P8x8:
+		for(i=0;i<4;i++)
+		{
+			currMB->b8mode[i]   = best8x8mode[i];
+			currMB->b8pdir[i]   = best8x8pdir[mode][i];
+		}
+		break;
+	case I4MB:
+		for(i=0;i<4;i++)
+		{
+			currMB->b8mode[i] = IBLOCK;
+			currMB->b8pdir[i] = -1;
+		}
+		break;
+	case I16MB:
+		for(i=0;i<4;i++)
+		{
+			currMB->b8mode[i] = 0;
+			currMB->b8pdir[i] = -1;
+		}
+		break;
+	default:
+		printf ("Unsupported mode in SetModesAndRefframeForBlocks!\n");
+		exit (1);
+  }
+	
 #define IS_FW ((best8x8pdir[mode][k]==0 || best8x8pdir[mode][k]==2) && (mode!=P8x8 || best8x8mode[k]!=0 || !bframe))
 #define IS_BW ((best8x8pdir[mode][k]==1 || best8x8pdir[mode][k]==2) && (mode!=P8x8 || best8x8mode[k]!=0))
   //--- reference frame arrays ---
@@ -904,50 +881,69 @@ void SetModesAndRefframeForBlocks (int mode)
     if (bframe)
     { 
       for (j=0;j<4;j++)
-      for (i=0;i<4;i++)
-      {
-        if(!mode)
-        {
-          if (img->type==BS_IMG)
-          {
-            fwrefarr[block_y+j][img->block_x+i] = fwdir_refFrArr[block_y+j][img->block_x+i];
-            bwrefarr[block_y+j][img->block_x+i] = bwdir_refFrArr[block_y+j][img->block_x+i];            
-            frefarr [block_y+j][img->block_x+i] = fwdir_refFrArr[block_y+j][img->block_x+i];
-            abp_type_arr[block_y+j][img->block_x+i] = best8x8abp_type[mode][2*(j/2)+(i/2)];
-          }
-          else 
-          {
-            if (input->direct_type)
-            {
-              fwrefarr[block_y+j][img->block_x+i] = fwdir_refFrArr[block_y+j][img->block_x+i];
-              bwrefarr[block_y+j][img->block_x+i] = bwdir_refFrArr[block_y+j][img->block_x+i];            
-            }
-            else
-            {
-              fwrefarr[block_y+j][img->block_x+i] = frefarr[block_y+j][img->block_x+i];
-              bwrefarr[block_y+j][img->block_x+i] = min(frefarr[block_y+j][img->block_x+i],0);
-            }
-          }
-        }
-        else
-        {
-          fwrefarr[block_y+j][img->block_x+i] = -1;
-          bwrefarr[block_y+j][img->block_x+i] = -1;          
-          if (img->type==BS_IMG)
-          {
-            frefarr [block_y+j][img->block_x+i] = -1;
-            abp_type_arr[block_y+j][img->block_x+i] = best8x8abp_type[mode][2*(j/2)+(i/2)];
-          }
-        }
-      }
+				for (i=0;i<4;i++)
+				{
+					if(!mode)
+					{
+						if (img->type==BS_IMG)
+						{
+							fwrefarr[block_y+j][img->block_x+i] = fwdir_refFrArr[block_y+j][img->block_x+i];
+							bwrefarr[block_y+j][img->block_x+i] = bwdir_refFrArr[block_y+j][img->block_x+i];            
+							frefarr [block_y+j][img->block_x+i] = fwdir_refFrArr[block_y+j][img->block_x+i];
+							abp_type_arr[block_y+j][img->block_x+i] = best8x8abp_type[mode][2*(j/2)+(i/2)];
+							
+							enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j] = fwrefarr[block_y+j][img->block_x+i];
+							enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j] = bwrefarr[block_y+j][img->block_x+i];
+						}
+						else 
+						{
+							if (input->direct_type)
+							{
+								fwrefarr[block_y+j][img->block_x+i] = fwdir_refFrArr[block_y+j][img->block_x+i];
+								bwrefarr[block_y+j][img->block_x+i] = bwdir_refFrArr[block_y+j][img->block_x+i];            
+								
+								enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j] = fwrefarr[block_y+j][img->block_x+i];
+								enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j] = bwrefarr[block_y+j][img->block_x+i];
+							}
+							else
+							{
+								fwrefarr[block_y+j][img->block_x+i] = frefarr[block_y+j][img->block_x+i];
+								bwrefarr[block_y+j][img->block_x+i] = min(frefarr[block_y+j][img->block_x+i],0);
+							
+								
+								enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j] = fwrefarr[block_y+j][img->block_x+i];
+								enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j] = bwrefarr[block_y+j][img->block_x+i];
+							}
+						}
+					}
+					else
+					{
+						fwrefarr[block_y+j][img->block_x+i] = -1;
+						bwrefarr[block_y+j][img->block_x+i] = -1;          
+						
+						enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j] = fwrefarr[block_y+j][img->block_x+i];
+						enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j] = bwrefarr[block_y+j][img->block_x+i];
+						
+						if (img->type==BS_IMG)
+						{
+							frefarr [block_y+j][img->block_x+i] = -1;
+							abp_type_arr[block_y+j][img->block_x+i] = best8x8abp_type[mode][2*(j/2)+(i/2)];
+						}
+					}
+          enc_picture->ref_pic_id [LIST_0][img->block_x+i][img->block_y+j] = enc_picture->ref_pic_num[LIST_0][enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j]];
+          enc_picture->ref_pic_id [LIST_1][img->block_x+i][img->block_y+j] = enc_picture->ref_pic_num[LIST_1][enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j]];
+				}
     }
     else
     {
       for (j=0;j<4;j++)
-      for (i=0;i<4;i++)
-      {
-        frefarr [block_y+j][img->block_x+i] = (mode==0?0:-1);
-      }
+				for (i=0;i<4;i++)
+				{
+					frefarr [block_y+j][img->block_x+i] = (mode==0?0:-1);
+					
+					enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j] = frefarr [block_y+j][img->block_x+i];
+          enc_picture->ref_pic_id [LIST_0][img->block_x+i][img->block_y+j] = enc_picture->ref_pic_num[LIST_0][enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j]];
+				}
     }
   }
   else
@@ -955,58 +951,79 @@ void SetModesAndRefframeForBlocks (int mode)
     if (bframe)
     {
       for (j=0;j<4;j++)
-      for (i=0;i<4;i++)
-      {
-        k = 2*(j/2)+(i/2);
-        l = 2*(j%2)+(i%2);
+				for (i=0;i<4;i++)
+				{
+					k = 2*(j/2)+(i/2);
+					l = 2*(j%2)+(i%2);
+					
+					if (img->type==BS_IMG)
+					{
+						if(mode == P8x8 && best8x8mode[k]==0)
+						{
+							fwrefarr[block_y+j][img->block_x+i] = fwdir_refFrArr[block_y+j][img->block_x+i];
+							bwrefarr[block_y+j][img->block_x+i] = bwdir_refFrArr[block_y+j][img->block_x+i];    
+							
+							enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j] = fwrefarr[block_y+j][img->block_x+i];
+							enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j] = bwrefarr[block_y+j][img->block_x+i];
+						}
+						else
+						{
+							fwrefarr[block_y+j][img->block_x+i] = (IS_FW ? best8x8ref[mode][k]   : -1);
+							bwrefarr[block_y+j][img->block_x+i] = (IS_BW ? best8x8bwref[mode][k] : -1);
+							
+							enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j] = fwrefarr[block_y+j][img->block_x+i];
+							enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j] = bwrefarr[block_y+j][img->block_x+i];
+						}
+						frefarr [block_y+j][img->block_x+i] = fwrefarr[block_y+j][img->block_x+i];
+						abp_type_arr[block_y+j][img->block_x+i] = (IS_BW ? best8x8abp_type[mode][k] : 0);
+					}
+					else
+					{
+						if(mode == P8x8 && best8x8mode[k]==0)
+						{           
+							if (input->direct_type)
+							{
+								fwrefarr[block_y+j][img->block_x+i] = fwdir_refFrArr[block_y+j][img->block_x+i];
+								bwrefarr[block_y+j][img->block_x+i] = bwdir_refFrArr[block_y+j][img->block_x+i];            
+								
+								enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j] = fwrefarr[block_y+j][img->block_x+i];
+								enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j] = bwrefarr[block_y+j][img->block_x+i];
+							}
+							else
+							{
+								fwrefarr[block_y+j][img->block_x+i] = frefarr[block_y+j][img->block_x+i];
+								bwrefarr[block_y+j][img->block_x+i] = min(frefarr[block_y+j][img->block_x+i],0);
+								
+								enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j] = fwrefarr[block_y+j][img->block_x+i];
+								enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j] = bwrefarr[block_y+j][img->block_x+i];
+							}
+						}
+						else
+						{
+							fwrefarr[block_y+j][img->block_x+i] = (IS_FW ? best8x8ref[mode][k] : -1);
+							bwrefarr[block_y+j][img->block_x+i] = (IS_BW ?                   0 : -1);
+							
+							enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j] = fwrefarr[block_y+j][img->block_x+i];
+							enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j] = bwrefarr[block_y+j][img->block_x+i];
+						}
+					}
+          enc_picture->ref_pic_id [LIST_0][img->block_x+i][img->block_y+j] = enc_picture->ref_pic_num[LIST_0][enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j]];
+          enc_picture->ref_pic_id [LIST_1][img->block_x+i][img->block_y+j] = enc_picture->ref_pic_num[LIST_1][enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j]];
 
-        if (img->type==BS_IMG)
-        {
-          if(mode == P8x8 && best8x8mode[k]==0)
-          {
-            fwrefarr[block_y+j][img->block_x+i] = fwdir_refFrArr[block_y+j][img->block_x+i];
-            bwrefarr[block_y+j][img->block_x+i] = bwdir_refFrArr[block_y+j][img->block_x+i];            
-          }
-          else
-          {
-            fwrefarr[block_y+j][img->block_x+i] = (IS_FW ? best8x8ref[mode][k]   : -1);
-            bwrefarr[block_y+j][img->block_x+i] = (IS_BW ? best8x8bwref[mode][k] : -1);
-          }
-          frefarr [block_y+j][img->block_x+i] = fwrefarr[block_y+j][img->block_x+i];
-          abp_type_arr[block_y+j][img->block_x+i] = (IS_BW ? best8x8abp_type[mode][k] : 0);
-        }
-        else
-        {
-          if(mode == P8x8 && best8x8mode[k]==0)
-          {           
-            if (input->direct_type)
-            {
-              fwrefarr[block_y+j][img->block_x+i] = fwdir_refFrArr[block_y+j][img->block_x+i];
-              bwrefarr[block_y+j][img->block_x+i] = bwdir_refFrArr[block_y+j][img->block_x+i];            
-            }
-            else
-            {
-              fwrefarr[block_y+j][img->block_x+i] = frefarr[block_y+j][img->block_x+i];
-              bwrefarr[block_y+j][img->block_x+i] = min(frefarr[block_y+j][img->block_x+i],0);
-            }
-          }
-          else
-          {
-            fwrefarr[block_y+j][img->block_x+i] = (IS_FW ? best8x8ref[mode][k] : -1);
-            bwrefarr[block_y+j][img->block_x+i] = (IS_BW ?                   0 : -1);
-          }
-        }
-      }
+				}
     }
     else
     {
       for (j=0;j<4;j++)
-      for (i=0;i<4;i++)
-      {
-        k = 2*(j/2)+(i/2);
-        l = 2*(j%2)+(i%2);
-        frefarr [block_y+j][img->block_x+i] = (IS_FW ? best8x8ref[mode][k] : -1);
-      }
+				for (i=0;i<4;i++)
+				{
+					k = 2*(j/2)+(i/2);
+					l = 2*(j%2)+(i%2);
+					frefarr [block_y+j][img->block_x+i] = (IS_FW ? best8x8ref[mode][k] : -1);
+					
+					enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j] = frefarr [block_y+j][img->block_x+i];
+          enc_picture->ref_pic_id [LIST_0][img->block_x+i][img->block_y+j] = enc_picture->ref_pic_num[LIST_0][enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j]];
+				}
     }
   }
 #undef IS_FW
@@ -1101,7 +1118,7 @@ void SetMotionVectorsMB (Macroblock* currMB, int bframe)
   int block_y    = img->block_y;
   int **brefar     = bw_refFrArr;
   int  bw_ref;
-
+	
   if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
   {
     if(img->top_field)
@@ -1136,171 +1153,215 @@ void SetMotionVectorsMB (Macroblock* currMB, int bframe)
     }
   }
   for (j=0; j<4; j++)
-  for (i=0; i<4; i++)
-  {
-    mode8 = currMB->b8mode[k=2*(j/2)+(i/2)];
-    pdir8 = currMB->b8pdir[k];
-    l     = 2*(j%2)+(i%2);
-    by    = block_y+j;
-    bxr   = img->block_x+i;
-    bx    = img->block_x+i+4;
-    ref   = (bframe?frefar:refar)[by][bxr];
-    bw_ref = (bframe?brefar:refar)[by][bxr];
-
-    if (!bframe)
-    {
-      if (mode8!=IBLOCK && ref != -1)
-      {
-        mv   [0][by][bx] = all_mv [i][j][ ref][mode8][0];
-        mv   [1][by][bx] = all_mv [i][j][ ref][mode8][1];
-      }
-      else
-      {
-        mv   [0][by][bx] = 0;
-        mv   [1][by][bx] = 0;
-      }
-
-    if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive)
-    {
-      rdopt->tmp_mv[0][j][i]  = mv[0][by][bx];
-      rdopt->tmp_mv[1][j][i]  = mv[1][by][bx];
-    }
-
-    }
-    else
-    {
-      if (pdir8==-1) // intra
-      {
-        fwMV [0][by][bx] = 0;
-        fwMV [1][by][bx] = 0;
-        bwMV [0][by][bx] = 0;
-        bwMV [1][by][bx] = 0;
-        dfMV     [0][by][bx] = 0;
-        dfMV     [1][by][bx] = 0;
-        dbMV     [0][by][bx] = 0;
-        dbMV     [1][by][bx] = 0;
-        if (img->type==BS_IMG)
-        {
-          mv   [0][by][bx] = 0;
-          mv   [1][by][bx] = 0;
-        }
-      }
-      else if (pdir8==0) // forward
-      {
-        fwMV [0][by][bx] = all_mv [i][j][ ref][mode8][0];
-        fwMV [1][by][bx] = all_mv [i][j][ ref][mode8][1];
-        bwMV [0][by][bx] = 0;
-        bwMV [1][by][bx] = 0;
-        dfMV     [0][by][bx] = 0;
-        dfMV     [1][by][bx] = 0;
-        dbMV     [0][by][bx] = 0;
-        dbMV     [1][by][bx] = 0;
-        if (img->type==BS_IMG)
-        {
-          mv   [0][by][bx] = all_mv [i][j][ ref][mode8][0];
-          mv   [1][by][bx] = all_mv [i][j][ ref][mode8][1];
-        }
-      }
-      else if (pdir8==1) // backward
-      {
-        fwMV [0][by][bx] = 0;
-        fwMV [1][by][bx] = 0;
-        if (img->type==BS_IMG)
-        {
-          bwMV [0][by][bx] = all_bmv[i][j][bw_ref][mode8][0];
-          bwMV [1][by][bx] = all_bmv[i][j][bw_ref][mode8][1];
-          mv   [0][by][bx] = 0;
-          mv   [1][by][bx] = 0;
-        }
-        else
-        {
-          bwMV [0][by][bx] = all_bmv[i][j][   0][mode8][0];
-          bwMV [1][by][bx] = all_bmv[i][j][   0][mode8][1];
-        }
-        dfMV     [0][by][bx] = 0;
-        dfMV     [1][by][bx] = 0;
-        dbMV     [0][by][bx] = 0;
-        dbMV     [1][by][bx] = 0;
-      }
-      else if (mode8!=0) // bidirect
-      {
-        fwMV [0][by][bx] = all_mv [i][j][ ref][mode8][0];
-        fwMV [1][by][bx] = all_mv [i][j][ ref][mode8][1];
-        if (img->type==BS_IMG)
-        {
-          bwMV [0][by][bx] = all_bmv[i][j][bw_ref][mode8][0];
-          bwMV [1][by][bx] = all_bmv[i][j][bw_ref][mode8][1];
-          mv   [0][by][bx] = all_mv [i][j][ref][mode8][0];
-          mv   [1][by][bx] = all_mv [i][j][ref][mode8][1];
-        }
-        else
-        {
-          bwMV [0][by][bx] = all_bmv[i][j][   0][mode8][0];
-          bwMV [1][by][bx] = all_bmv[i][j][   0][mode8][1];
-        }
-        dfMV     [0][by][bx] = 0;
-        dfMV     [1][by][bx] = 0;
-        dbMV     [0][by][bx] = 0;
-        dbMV     [1][by][bx] = 0;
-      }
-      else // direct
-      {
-        if(img->type==BS_IMG)
-        {
-          fwMV [0][by][bx] = dfMV     [0][by][bx] = all_mv [i][j][max(0,fwdir_refFrArr[by][bxr])][    0][0];
-          fwMV [1][by][bx] = dfMV     [1][by][bx] = all_mv [i][j][max(0,fwdir_refFrArr[by][bxr])][    0][1];
-          if(bwdir_refFrArr[by][bxr]==-1)
-          {
-            bwMV [0][by][bx] = dbMV     [0][by][bx] = all_bmv[i][j][                             1][    0][0];
-            bwMV [1][by][bx] = dbMV     [1][by][bx] = all_bmv[i][j][                             1][    0][1];
-          }
-          else
-          {
-            bwMV [0][by][bx] = dbMV     [0][by][bx] = all_bmv[i][j][bwdir_refFrArr[by][bxr]][    0][0];
-            bwMV [1][by][bx] = dbMV     [1][by][bx] = all_bmv[i][j][bwdir_refFrArr[by][bxr]][    0][1];
-          }
-          mv   [0][by][bx] = fwMV [0][by][bx];
-          mv   [1][by][bx] = fwMV [1][by][bx];
-        }
-        else
-        {
-          if (input->direct_type)
-            dref = max(0,fwdir_refFrArr[by][bxr]);        
-          else
-            dref = max(0,refar[by][bxr]);        
-
-          fwMV [0][by][bx] = dfMV     [0][by][bx] = all_mv [i][j][dref][    0][0];
-          fwMV [1][by][bx] = dfMV     [1][by][bx] = all_mv [i][j][dref][    0][1];
-          bwMV [0][by][bx] = dbMV     [0][by][bx] = all_bmv[i][j][   0][    0][0];
-          bwMV [1][by][bx] = dbMV     [1][by][bx] = all_bmv[i][j][   0][    0][1];
-        }
-      }
-
-      if(img->type==BS_IMG)
-      {
-        if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive)
-        {
-          rdopt->tmp_mv[0][j][i]  = mv[0][by][bx];
-          rdopt->tmp_mv[1][j][i]  = mv[1][by][bx];
-        }
-      }
-      if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive)
-      {
-        rdopt->tmp_fwMV[0][j][i]  = fwMV[0][by][bx];
-        rdopt->tmp_fwMV[1][j][i]  = fwMV[1][by][bx];
-        rdopt->tmp_bwMV[0][j][i]  = bwMV[0][by][bx];
-        rdopt->tmp_bwMV[1][j][i]  = bwMV[1][by][bx];
-        rdopt->dfMV[0][j][i] = dfMV     [0][by][bx];
-        rdopt->dfMV[1][j][i] = dfMV     [1][by][bx];                  
-        rdopt->dbMV[0][j][i] = dbMV     [0][by][bx];
-        rdopt->dbMV[1][j][i] = dbMV     [1][by][bx];                  
-      }
+		for (i=0; i<4; i++)
+		{
+			mode8 = currMB->b8mode[k=2*(j/2)+(i/2)];
+			pdir8 = currMB->b8pdir[k];
+			l     = 2*(j%2)+(i%2);
+			by    = block_y+j;
+			bxr   = img->block_x+i;
+			bx    = img->block_x+i+4;
+			ref   = (bframe?frefar:refar)[by][bxr];
+			bw_ref = (bframe?brefar:refar)[by][bxr];
+			
+			if (!bframe)
+			{
+				if (mode8!=IBLOCK && ref != -1)
+				{
+					mv   [0][by][bx] = all_mv [i][j][ ref][mode8][0];
+					mv   [1][by][bx] = all_mv [i][j][ ref][mode8][1];
+					enc_picture->mv[LIST_0][bxr][by][0] = all_mv [i][j][ ref][mode8][0];
+					enc_picture->mv[LIST_0][bxr][by][1] = all_mv [i][j][ ref][mode8][1];
+				}
+				else
+				{
+					mv   [0][by][bx] = 0;
+					mv   [1][by][bx] = 0;
+					enc_picture->mv[LIST_0][bxr][by][0] = 0;
+					enc_picture->mv[LIST_0][bxr][by][1] = 0;
+				}
+				
+				if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive)
+				{
+					rdopt->tmp_mv[0][j][i]  = mv[0][by][bx];
+					rdopt->tmp_mv[1][j][i]  = mv[1][by][bx];
+				}
+				
+			}
+			else
+			{
+				if (pdir8==-1) // intra
+				{
+					enc_picture->mv[LIST_0][bxr][by][0] = 0;
+					enc_picture->mv[LIST_0][bxr][by][1] = 0;
+					enc_picture->mv[LIST_1][bxr][by][0] = 0;
+					enc_picture->mv[LIST_1][bxr][by][1] = 0;
+					
+					fwMV [0][by][bx] = 0;
+					fwMV [1][by][bx] = 0;
+					bwMV [0][by][bx] = 0;
+					bwMV [1][by][bx] = 0;
+					dfMV     [0][by][bx] = 0;
+					dfMV     [1][by][bx] = 0;
+					dbMV     [0][by][bx] = 0;
+					dbMV     [1][by][bx] = 0;
+					if (img->type==BS_IMG)
+					{
+						mv   [0][by][bx] = 0;
+						mv   [1][by][bx] = 0;
+					}
+				}
+				else if (pdir8==0) // forward
+				{
+					enc_picture->mv[LIST_0][bxr][by][0] = all_mv [i][j][ ref][mode8][0];
+					enc_picture->mv[LIST_0][bxr][by][1] = all_mv [i][j][ ref][mode8][1];
+					enc_picture->mv[LIST_1][bxr][by][0] = 0;
+					enc_picture->mv[LIST_1][bxr][by][1] = 0;
+					
+					fwMV [0][by][bx] = all_mv [i][j][ ref][mode8][0];
+					fwMV [1][by][bx] = all_mv [i][j][ ref][mode8][1];
+					bwMV [0][by][bx] = 0;
+					bwMV [1][by][bx] = 0;
+					dfMV     [0][by][bx] = 0;
+					dfMV     [1][by][bx] = 0;
+					dbMV     [0][by][bx] = 0;
+					dbMV     [1][by][bx] = 0;
+					if (img->type==BS_IMG)
+					{
+						mv   [0][by][bx] = all_mv [i][j][ ref][mode8][0];
+						mv   [1][by][bx] = all_mv [i][j][ ref][mode8][1];
+					}
+				}
+				else if (pdir8==1) // backward
+				{
+					enc_picture->mv[LIST_0][bxr][by][0] = 0;
+					enc_picture->mv[LIST_0][bxr][by][1] = 0;
+					
+					fwMV [0][by][bx] = 0;
+					fwMV [1][by][bx] = 0;
+					if (img->type==BS_IMG)
+					{
+						bwMV [0][by][bx] = all_bmv[i][j][bw_ref][mode8][0];
+						bwMV [1][by][bx] = all_bmv[i][j][bw_ref][mode8][1];
+						enc_picture->mv[LIST_1][bxr][by][0] = all_bmv[i][j][bw_ref][mode8][0];
+						enc_picture->mv[LIST_1][bxr][by][1] = all_bmv[i][j][bw_ref][mode8][1];
+						mv   [0][by][bx] = 0;
+						mv   [1][by][bx] = 0;
+					}
+					else
+					{
+						bwMV [0][by][bx] = all_bmv[i][j][   0][mode8][0];
+						bwMV [1][by][bx] = all_bmv[i][j][   0][mode8][1];
+						enc_picture->mv[LIST_1][bxr][by][0] = all_bmv[i][j][   0][mode8][0];
+						enc_picture->mv[LIST_1][bxr][by][1] = all_bmv[i][j][   0][mode8][1];
+					}
+					dfMV     [0][by][bx] = 0;
+					dfMV     [1][by][bx] = 0;
+					dbMV     [0][by][bx] = 0;
+					dbMV     [1][by][bx] = 0;
+				}
+				else if (mode8!=0) // bidirect
+				{
+					enc_picture->mv[LIST_0][bxr][by][0] = all_mv [i][j][ ref][mode8][0];
+					enc_picture->mv[LIST_0][bxr][by][1] = all_mv [i][j][ ref][mode8][1];
+					
+					fwMV [0][by][bx] = all_mv [i][j][ ref][mode8][0];
+					fwMV [1][by][bx] = all_mv [i][j][ ref][mode8][1];
+					if (img->type==BS_IMG)
+					{
+						enc_picture->mv[LIST_1][bxr][by][0] = all_bmv[i][j][bw_ref][mode8][0];
+						enc_picture->mv[LIST_1][bxr][by][1] = all_bmv[i][j][bw_ref][mode8][1];
+						
+						bwMV [0][by][bx] = all_bmv[i][j][bw_ref][mode8][0];
+						bwMV [1][by][bx] = all_bmv[i][j][bw_ref][mode8][1];
+						mv   [0][by][bx] = all_mv [i][j][ref][mode8][0];
+						mv   [1][by][bx] = all_mv [i][j][ref][mode8][1];
+					}
+					else
+					{
+						enc_picture->mv[LIST_1][bxr][by][0] = all_bmv[i][j][   0][mode8][0];
+						enc_picture->mv[LIST_1][bxr][by][1] = all_bmv[i][j][   0][mode8][1];
+						
+						bwMV [0][by][bx] = all_bmv[i][j][   0][mode8][0];
+						bwMV [1][by][bx] = all_bmv[i][j][   0][mode8][1];
+					}
+					dfMV     [0][by][bx] = 0;
+					dfMV     [1][by][bx] = 0;
+					dbMV     [0][by][bx] = 0;
+					dbMV     [1][by][bx] = 0;
+				}
+				else // direct
+				{
+					if(img->type==BS_IMG)
+					{
+						enc_picture->mv[LIST_0][bxr][by][0] = dfMV     [0][by][bx] = all_mv [i][j][max(0,fwdir_refFrArr[by][bxr])][    0][0];
+						enc_picture->mv[LIST_0][bxr][by][1] = dfMV     [1][by][bx] = all_mv [i][j][max(0,fwdir_refFrArr[by][bxr])][    0][1];
+						
+						fwMV [0][by][bx] = dfMV     [0][by][bx] = all_mv [i][j][max(0,fwdir_refFrArr[by][bxr])][    0][0];
+						fwMV [1][by][bx] = dfMV     [1][by][bx] = all_mv [i][j][max(0,fwdir_refFrArr[by][bxr])][    0][1];
+						if(bwdir_refFrArr[by][bxr]==-1)
+						{
+							enc_picture->mv[LIST_1][bxr][by][0] = dbMV     [0][by][bx] = all_bmv[i][j][                             1][    0][0];
+							enc_picture->mv[LIST_1][bxr][by][1] = dbMV     [1][by][bx] = all_bmv[i][j][                             1][    0][1];
+							
+							bwMV [0][by][bx] = dbMV     [0][by][bx] = all_bmv[i][j][                             1][    0][0];
+							bwMV [1][by][bx] = dbMV     [1][by][bx] = all_bmv[i][j][                             1][    0][1];
+						}
+						else
+						{
+							enc_picture->mv[LIST_1][bxr][by][0] = dbMV     [0][by][bx] = all_bmv[i][j][bwdir_refFrArr[by][bxr]][    0][0];
+							enc_picture->mv[LIST_1][bxr][by][1] = dbMV     [1][by][bx] = all_bmv[i][j][bwdir_refFrArr[by][bxr]][    0][1];
+							
+							bwMV [0][by][bx] = dbMV     [0][by][bx] = all_bmv[i][j][bwdir_refFrArr[by][bxr]][    0][0];
+							bwMV [1][by][bx] = dbMV     [1][by][bx] = all_bmv[i][j][bwdir_refFrArr[by][bxr]][    0][1];
+						}
+						mv   [0][by][bx] = fwMV [0][by][bx];
+						mv   [1][by][bx] = fwMV [1][by][bx];
+					}
+					else
+					{
+						if (input->direct_type)
+							dref = max(0,fwdir_refFrArr[by][bxr]);        
+						else
+							dref = max(0,refar[by][bxr]);        
+						
+						enc_picture->mv[LIST_0][bxr][by][0] = dfMV     [0][by][bx] = all_mv [i][j][dref][    0][0];
+						enc_picture->mv[LIST_0][bxr][by][1] = dfMV     [1][by][bx] = all_mv [i][j][dref][    0][1];
+						enc_picture->mv[LIST_1][bxr][by][0] = dbMV     [0][by][bx] = all_bmv[i][j][   0][    0][0];
+						enc_picture->mv[LIST_1][bxr][by][1] = dbMV     [1][by][bx] = all_bmv[i][j][   0][    0][1];
+						
+						fwMV [0][by][bx] = dfMV     [0][by][bx] = all_mv [i][j][dref][    0][0];
+						fwMV [1][by][bx] = dfMV     [1][by][bx] = all_mv [i][j][dref][    0][1];
+						bwMV [0][by][bx] = dbMV     [0][by][bx] = all_bmv[i][j][   0][    0][0];
+						bwMV [1][by][bx] = dbMV     [1][by][bx] = all_bmv[i][j][   0][    0][1];
+					}
+				}
+				
+				if(img->type==BS_IMG)
+				{
+					if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive)
+					{
+						rdopt->tmp_mv[0][j][i]  = mv[0][by][bx];
+						rdopt->tmp_mv[1][j][i]  = mv[1][by][bx];
+					}
+				}
+				if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive)
+				{
+					rdopt->tmp_fwMV[0][j][i]  = fwMV[0][by][bx];
+					rdopt->tmp_fwMV[1][j][i]  = fwMV[1][by][bx];
+					rdopt->tmp_bwMV[0][j][i]  = bwMV[0][by][bx];
+					rdopt->tmp_bwMV[1][j][i]  = bwMV[1][by][bx];
+					rdopt->dfMV[0][j][i] = dfMV     [0][by][bx];
+					rdopt->dfMV[1][j][i] = dfMV     [1][by][bx];                  
+					rdopt->dbMV[0][j][i] = dbMV     [0][by][bx];
+					rdopt->dbMV[1][j][i] = dbMV     [1][by][bx];                  
+				}
     }
   }
-
-// copy all the motion vectors into rdopt structure
-// Can simplify this by copying the MV's of the best mode (TBD)
-
+	
+	// copy all the motion vectors into rdopt structure
+	// Can simplify this by copying the MV's of the best mode (TBD)
+	
   if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive)
   {
     for(i=0;i<4;i++)
@@ -1313,7 +1374,7 @@ void SetMotionVectorsMB (Macroblock* currMB, int bframe)
             rdopt->p_fwMV[i][j][k][l][0] = p_fwMV[i][j][k][l][0];
             rdopt->p_bwMV[i][j][k][l][0] = p_bwMV[i][j][k][l][0];
             rdopt->mv[i][j][k][l][0]    = imgmv[i][j][k][l][0];
-          
+						
             rdopt->all_mv[i][j][k][l][1] = all_mv[i][j][k][l][1];
             rdopt->all_bmv[i][j][k][l][1] =all_bmv[i][j][k][l][1];
             rdopt->p_fwMV[i][j][k][l][1] = p_fwMV[i][j][k][l][1];
@@ -1321,7 +1382,7 @@ void SetMotionVectorsMB (Macroblock* currMB, int bframe)
             rdopt->mv[i][j][k][l][1]    = imgmv[i][j][k][l][1];
           }
   }
-
+	
 }
 
 
@@ -1600,10 +1661,24 @@ void store_macroblock_parameters (int mode)
   for (i=0; i<4; i++)
   {  
     frefframe[j][i] = frefar[block_y+j  ][img->block_x +i ];
+    enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j] = frefframe[j][i];
+	  if ((b8mode[i]==0) && (frefframe[j][i]<0) && (!input->direct_type))
+    {
+	    enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j] = 0;
+    }
+
+    enc_picture->ref_pic_id [LIST_0][img->block_x+i][img->block_y+j] = enc_picture->ref_pic_num[LIST_0][enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j]];
+						
     if (bframe)
     {
       brefframe[j][i] = brefar[block_y +j ][img->block_x+i  ];
+			enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j] = brefframe[j][i];
+			if ((b8mode[i]==0)&&(!input->direct_type))
+      {
+				enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j] = 0;
+      }
       abp_typeframe[j][i] = abp_type_arr[block_y + j][img->block_x + i];     
+      enc_picture->ref_pic_id [LIST_1][img->block_x+i][img->block_y+j] = enc_picture->ref_pic_num[LIST_1][enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j]];
     }
   }
 
@@ -1733,26 +1808,81 @@ void set_stored_macroblock_parameters ()
   for (j=0; j<4; j++)
   for (i=0; i<4; i++)
   {
-    frefar[block_y+j][img->block_x+i] = frefframe[j][i];
-//    frefar[block_y+j][img->block_x+i] = frefframe[2*(j/2) + (i/2)];
+    frefar[block_y+j][img->block_x+i] = frefframe[j][i];	
+		enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j] = frefframe[j][i];
+
+		// temporal direct mode 
+		if ((currMB->b8mode[i/2+(j/2)*2] == 0) && (frefframe[j][i] < 0) && !input->direct_type)
+    {
+			enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j] = 0;
+    }
+		// backward prediction or intra
+		if ((currMB->b8pdir[i/2+(j/2)*2] == 1) || IS_INTRA(currMB))
+		{
+			enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j] = -1;
+			enc_picture->mv[LIST_0][img->block_x+i][img->block_y+j][0] =0;
+			enc_picture->mv[LIST_0][img->block_x+i][img->block_y+j][1] = 0;
+		}
+
+    enc_picture->ref_pic_id [LIST_0][img->block_x+i][img->block_y+j] = enc_picture->ref_pic_num[LIST_0][enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j]];
+		// forward prediction or intra
+		if ((currMB->b8pdir[i/2+(j/2)*2] == 0) || IS_INTRA(currMB))
+		{
+			enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j] = -1;
+      enc_picture->ref_pic_id [LIST_1][img->block_x+i][img->block_y+j] = enc_picture->ref_pic_num[LIST_1][enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j]];	
+			enc_picture->mv[LIST_1][img->block_x+i][img->block_y+j][0] =0;
+			enc_picture->mv[LIST_1][img->block_x+i][img->block_y+j][1] = 0;
+		}
+		
+		if ((img->type!=I_SLICE) && (enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j] >= 0) && (frefframe[j][i] >= 0))
+		{
+			enc_picture->mv[LIST_0][img->block_x+i][img->block_y+j][0] = img->all_mv[i][j][frefframe[j][i]][currMB->b8mode[i/2+(j/2)*2]][0];
+			enc_picture->mv[LIST_0][img->block_x+i][img->block_y+j][1] = img->all_mv[i][j][frefframe[j][i]][currMB->b8mode[i/2+(j/2)*2]][1];
+		}
+		//    frefar[block_y+j][img->block_x+i] = frefframe[2*(j/2) + (i/2)];
     if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive)
       rdopt->frefar[j][i]            = frefar[block_y+j][img->block_x+i];
   }
   if (bframe)
   {
     for (j=0; j<4; j++)
-    for (i=0; i<4; i++)
-    {
-//      brefar[block_y+j][img->block_x+i] = brefframe[2*(j/2) + (i/2)];
-      brefar[block_y+j][img->block_x+i] = brefframe[j][i];
-      if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive)
-        rdopt->brefar[j][i]            = brefar[block_y+j][img->block_x+i];
-      if (img->type==BS_IMG)
-      {
-        refFrArr [block_y+j][img->block_x+i] = frefar[block_y+j][img->block_x+i];
-        abp_type_arr[block_y+j][img->block_x+i] = abp_typeframe[j][i];
-      }
+			for (i=0; i<4; i++)
+			{
+				//      brefar[block_y+j][img->block_x+i] = brefframe[2*(j/2) + (i/2)];
+				brefar[block_y+j][img->block_x+i] = brefframe[j][i];
+				
+				enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j] = brefframe[j][i];
+				
+				// temporal direct mode
+				if ((currMB->b8mode[i/2+(j/2)*2] == 0) && (!input->direct_type))
+        {
+					enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j] = 0;
+        }
+				
+				if((currMB->b8pdir[i/2+(j/2)*2]==1) || (currMB->b8pdir[i/2+(j/2)*2]==2))
+					enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j] = 0;
+				else if ((currMB->b8pdir[i/2+(j/2)*2]==0) || IS_INTRA(currMB))
+				{
+					enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j] = -1;
+					enc_picture->mv[LIST_1][img->block_x+i][img->block_y+j][0] = 0;
+					enc_picture->mv[LIST_1][img->block_x+i][img->block_y+j][1] = 0;
+				}
 
+				if ((enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j] >= 0) && (brefframe[j][i] >= 0))
+				{
+					enc_picture->mv[LIST_1][img->block_x+i][img->block_y+j][0] = img->all_bmv[i][j][0][currMB->b8mode[i/2+(j/2)*2]][0];
+					enc_picture->mv[LIST_1][img->block_x+i][img->block_y+j][1] = img->all_bmv[i][j][0][currMB->b8mode[i/2+(j/2)*2]][1];
+				}
+				
+        enc_picture->ref_pic_id [LIST_1][img->block_x+i][img->block_y+j] = enc_picture->ref_pic_num[LIST_1][enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j]];
+
+        if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive)
+					rdopt->brefar[j][i]            = brefar[block_y+j][img->block_x+i];
+				if (img->type==BS_IMG)
+				{
+					refFrArr [block_y+j][img->block_x+i] = frefar[block_y+j][img->block_x+i];
+					abp_type_arr[block_y+j][img->block_x+i] = abp_typeframe[j][i];
+				}
     }
   }
 
@@ -1880,7 +2010,7 @@ void SetRefAndMotionVectors (int block, int mode, int ref, int pdir, int abp_typ
           {
             fmvArr[0][block_y+j][img->block_x+i+4] = all_mv_arr[i][j][ref][mode][0];
             fmvArr[1][block_y+j][img->block_x+i+4] = all_mv_arr[i][j][ref][mode][1];
-            frefArr  [block_y+j][img->block_x+i  ] = ref;
+			      frefArr  [block_y+j][img->block_x+i  ] = ref;
           }
         }
     }
@@ -2011,7 +2141,52 @@ void encode_one_macroblock ()
 #ifdef ABIPRED
   int tmp_fw_ref, tmp_bw_ref;
 #endif
-  
+  int  **fwrefarr = fw_refFrArr;
+  int  **bwrefarr = bw_refFrArr;
+  int  **refarr = refFrArr;
+
+  //===== SET VALID MODES =====
+//  valid[I4MB]   = 1;
+//  valid[I16MB]  = 0;
+  valid[I4MB]   = 1;
+  valid[I16MB]  = 1;
+
+  // HS: I'm not sure when the Intra Mode on 8x8 basis should be unvalid
+  //     Is it o.k. for data partitioning? (where the syntax elements have to written to?)
+  valid[0]      = (!intra );
+  valid[1]      = (!intra && input->InterSearch16x16);
+  valid[2]      = (!intra && input->InterSearch16x8);
+  valid[3]      = (!intra && input->InterSearch8x16);
+  valid[4]      = (!intra && input->InterSearch8x8);
+  valid[5]      = (!intra && input->InterSearch8x4);
+  valid[6]      = (!intra && input->InterSearch4x8);
+  valid[7]      = (!intra && input->InterSearch4x4);
+  valid[P8x8]   = (valid[4] || valid[5] || valid[6] || valid[7]);
+  valid[12]     = (siframe);
+/*
+  valid[0]      = (!intra );
+  valid[1]      = (!intra && 1);
+  valid[2]      = 0;
+  valid[3]      = 0;
+  valid[4]      = 0;
+  valid[5]      = 0;
+  valid[6]      = 0;
+  valid[7]      = 0;
+  valid[P8x8]   = 0;
+  valid[12]     = (siframe);
+*/
+
+	
+  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
+  {
+    refarr   = (img->top_field ? refFrArr_top:refFrArr_bot);
+    if (input->direct_type)
+    {
+      fwrefarr   = (img->top_field ? fw_refFrArr_top:fw_refFrArr_bot);
+      bwrefarr   = (img->top_field ? bw_refFrArr_top:bw_refFrArr_bot);
+    }
+  }
+
   intra |= RandomIntra (img->current_mb_nr);    // Forced Pseudo-Random Intra
 
   if(img->MbaffFrameFlag)
@@ -2033,24 +2208,6 @@ void encode_one_macroblock ()
       refar  = refFrArr_bot;
     }
   }
-
-  //===== SET VALID MODES =====
-  valid[I4MB]   = 1;
-  valid[I16MB]  = 0;
-//  valid[I16MB]  = 1;
-
-  // HS: I'm not sure when the Intra Mode on 8x8 basis should be unvalid
-  //     Is it o.k. for data partitioning? (where the syntax elements have to written to?)
-  valid[0]      = (!intra );
-  valid[1]      = (!intra && input->InterSearch16x16);
-  valid[2]      = (!intra && input->InterSearch16x8);
-  valid[3]      = (!intra && input->InterSearch8x16);
-  valid[4]      = (!intra && input->InterSearch8x8);
-  valid[5]      = (!intra && input->InterSearch8x4);
-  valid[6]      = (!intra && input->InterSearch4x8);
-  valid[7]      = (!intra && input->InterSearch4x4);
-  valid[P8x8]   = (valid[4] || valid[5] || valid[6] || valid[7]);
-  valid[12]     = (siframe);
 
   //===== SET LAGRANGE PARAMETERS =====
   if (input->rdopt)
@@ -2169,7 +2326,7 @@ void encode_one_macroblock ()
                   {
                     mcost  = (input->rdopt ? write_ref ? REF_COST_FWD (lambda_motion_factor, ref) : 0 : (int)(2*lambda_motion*min(ref,1)));
 
-                    mcost += motion_cost[mode][ref+1][block];
+                    mcost += motion_cost[mode][ref][0][block];
                     if (mcost < fw_mcost)
                     {
                       fw_mcost    = mcost;
@@ -2177,6 +2334,14 @@ void encode_one_macroblock ()
                     }
                   }
                 }
+				        
+								//store forward reference index for every block
+								for (j=0; j<2; j++)
+									for (i=0; i<2; i++)
+									{
+										enc_picture->ref_idx[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = best_fw_ref;
+                    enc_picture->ref_pic_id [LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = enc_picture->ref_pic_num[LIST_0][enc_picture->ref_idx[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j]];
+									}
 
                 if (bframe)
                 {
@@ -2195,7 +2360,7 @@ void encode_one_macroblock ()
                   else
                   {
                     bid_mcost  = (input->rdopt ? write_ref ? REF_COST (lambda_motion_factor, best_fw_ref) : 0 : (int)(2*lambda_motion*min(best_fw_ref,1)));
-                    bw_mcost   = motion_cost[mode][0][block];
+                    bw_mcost   = motion_cost[mode][0][1][block];
                     bid_mcost += BIDPartitionCost (mode, block, best_fw_ref, lambda_motion_factor );
                   }
 
@@ -2235,6 +2400,13 @@ void encode_one_macroblock ()
                       best_bw_ref = 0;
                     }
                   }
+									//store backward reference index for every block
+									for (j=0; j<2; j++)
+										for (i=0; i<2; i++)
+										{
+											enc_picture->ref_idx[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = best_bw_ref;
+                      enc_picture->ref_pic_id [LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = enc_picture->ref_pic_num[LIST_1][enc_picture->ref_idx[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j]];	
+										}
                 } // if (bframe)
                 else
                 {
@@ -2382,6 +2554,107 @@ void encode_one_macroblock ()
             }*/
           } // if (block<3)
 
+					// save last reference index and mv
+					for (j=0; j<2; j++)
+						for (i=0; i<2; i++)
+						{
+							int ref;
+							
+							if ((best8x8ref[P8x8][block] >= 0) || (best8x8mode[block] == 0))
+							{
+								if (best8x8mode[block] == 0)  // direct mode
+								{
+									if (input->direct_type)  // spatial direct mode
+										ref = fwdir_refFrArr[img->block_y+(block&2)+j][img->block_x+(block&1)*2+i];
+									else
+									{
+										//temporal direct mode
+										int ref_idx,refList,mapped_idx,iref;
+										mapped_idx = 0; 
+										ref = fwrefarr[img->block_y+block/2][img->block_x+(block&1)];
+										
+										refList = (listX[LIST_1][0]->ref_idx[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j]== -1 ? LIST_1 : LIST_0);
+										ref_idx =listX[LIST_1][0]->ref_idx[refList][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j];
+										
+										if ((enc_picture->ref_pic_num[LIST_0][ref_idx] == listX[LIST_1][0]->ref_pic_num[refList][ref_idx])&&(ref_idx>=0))
+										{
+											mapped_idx=ref_idx;
+										}
+										else
+										{
+											for (iref=0;iref<listXsize[refList];iref++)
+											{
+												if (enc_picture->ref_pic_num[LIST_0 ][iref] == listX[LIST_1][0]->ref_pic_num[refList ][ref_idx])
+												{
+													mapped_idx=iref;
+													break;
+												}
+												else //! invalid index. Default to zero even though this case should not happen
+												{                        
+													mapped_idx=0;
+												}
+											}
+										}
+										ref = mapped_idx;								
+									}
+								}
+								else
+									ref = best8x8ref[P8x8][block];
+								// save mv
+								if (ref >= 0)
+								{
+									enc_picture->mv[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][0] = img->all_mv[(block&1)*2+i][(block&2)+j][ref][best8x8mode[block]][0];
+									enc_picture->mv[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][1] = img->all_mv[(block&1)*2+i][(block&2)+j][ref][best8x8mode[block]][1];
+								}					
+								enc_picture->ref_idx[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = ref;
+                enc_picture->ref_pic_id [LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = enc_picture->ref_pic_num[LIST_0][enc_picture->ref_idx[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j]];	
+							}
+							
+							if (bframe)					
+							{
+								if ((best8x8bwref   [P8x8][block] >=0 ) || (best8x8mode[block] == 0))
+								{
+									enc_picture->mv[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][0] = img->all_bmv[(block&1)*2+i][(block&2)+j][0][best8x8mode[block]][0];
+									enc_picture->mv[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][1] = img->all_bmv[(block&1)*2+i][(block&2)+j][0][best8x8mode[block]][1];
+									enc_picture->ref_idx[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = 0;
+								
+									if (input->direct_type && (best8x8mode[block] == 0))
+                  {
+										enc_picture->ref_idx[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = bwdir_refFrArr[img->block_y+(block&2)+j][img->block_x+(block&1)*2+i];
+                  }
+                  enc_picture->ref_pic_id [LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = enc_picture->ref_pic_num[LIST_1][enc_picture->ref_idx[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j]];	
+
+								} 
+								
+								if (input->direct_type && (best8x8mode[block] == 0))
+								{
+									if (fwdir_refFrArr[img->block_y+(block&2)+j][img->block_x+(block&1)*2+i] == -1) 
+										currMB->b8pdir[i] =1;
+									else if (bwdir_refFrArr[img->block_y+(block&2)+j][img->block_x+(block&1)*2+i] == -1) 
+										currMB->b8pdir[i] =0;
+									else 
+										currMB->b8pdir[i]=2;     
+									
+									best8x8pdir[P8x8][block] = currMB->b8pdir[i];
+								}
+							}		
+
+							if (best8x8pdir[P8x8][block] == 1)
+							{
+								enc_picture->ref_idx[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = -1;
+                enc_picture->ref_pic_id [LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = enc_picture->ref_pic_num[LIST_0][enc_picture->ref_idx[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j]];
+								enc_picture->mv[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][0] = 0;
+								enc_picture->mv[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][1] = 0;
+							}
+
+							if (best8x8pdir[P8x8][block] == 0)
+							{
+								enc_picture->ref_idx[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = -1;
+                enc_picture->ref_pic_id [LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = enc_picture->ref_pic_num[LIST_1][enc_picture->ref_idx[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j]];
+								enc_picture->mv[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][0] = 0;
+								enc_picture->mv[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][1] = 0;
+							}
+						}
           //===== set the coding state after current block =====
           reset_coding_state (cs_b8);
         } // for (cbp8x8=cbp_blk8x8=cnt_nonz_8x8=0, block=0; block<4; block++)
@@ -2401,8 +2674,6 @@ void encode_one_macroblock ()
       {
         cost8x8 = (1<<20);
       }
-
-
 
       //===== MOTION ESTIMATION FOR 16x16, 16x8, 8x16 BLOCKS =====
       for (min_cost=cost8x8, best_mode=P8x8, mode=3; mode>0; mode--)
@@ -2424,7 +2695,7 @@ void encode_one_macroblock ()
               {
                 mcost  = (input->rdopt ? write_ref ? REF_COST_FWD (lambda_motion_factor, ref) : 0 : (int)(2*lambda_motion*min(ref,1)));
 
-                mcost += motion_cost[mode][ref+1][block];
+                mcost += motion_cost[mode][ref][0][block];
                 if (mcost < fw_mcost)
                 {
                   fw_mcost    = mcost;
@@ -2432,7 +2703,7 @@ void encode_one_macroblock ()
                 }
               }
             }
-
+		
             if (bframe)
             {
               //--- get cost for bidirectional prediction ---
@@ -2448,7 +2719,7 @@ void encode_one_macroblock ()
               }
               else
               {
-                bw_mcost   = motion_cost[mode][0][block];
+                bw_mcost   = motion_cost[mode][0][1][block];
                 bid_mcost  = (input->rdopt ? write_ref ? REF_COST (lambda_motion_factor, best_fw_ref) : 0 : (int)(2*lambda_motion*min(best_fw_ref,1)));
                 bid_mcost += BIDPartitionCost (mode, block, best_fw_ref, lambda_motion_factor);
                 best_abp_type = 1;
@@ -2490,14 +2761,139 @@ void encode_one_macroblock ()
                   best_bw_ref = 0;
                 }
               }
+
             }
             else // if (bframe)
             {
               best_pdir  = 0;
               cost      += fw_mcost;
             }
+			
+						if (mode==1)
+						{
+							for (j=0; j<4; j++)
+								for (i=0; i<4; i++)
+								{
+									enc_picture->ref_idx[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = best_fw_ref;
+                  enc_picture->ref_pic_id [LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = enc_picture->ref_pic_num[LIST_0][enc_picture->ref_idx[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j]];	
+									enc_picture->mv[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][0] = img->all_mv[i][j][best_fw_ref][mode][0];
+									enc_picture->mv[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][1] = img->all_mv[i][j][best_fw_ref][mode][1];
+								}
+								
+								if (best_pdir==1)
+								{
+									for (j=0; j<4; j++)
+										for (i=0; i<4; i++)
+										{
+											enc_picture->ref_idx[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = -1;
+                      enc_picture->ref_pic_id [LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = enc_picture->ref_pic_num[LIST_0][enc_picture->ref_idx[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j]];	
+											enc_picture->mv[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][0] = 0;
+											enc_picture->mv[LIST_0][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][1] = 0;
+										}
+								}
 
+								if (bframe)
+								{
+									for (j=0; j<4; j++)
+										for (i=0; i<4; i++)
+										{
+											enc_picture->ref_idx[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = best_bw_ref;
+                      enc_picture->ref_pic_id [LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = enc_picture->ref_pic_num[LIST_1][enc_picture->ref_idx[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j]];
+											if(best_bw_ref>=0)
+											{
+												enc_picture->mv[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][0] = img->all_bmv[i][j][best_bw_ref][mode][0];
+												enc_picture->mv[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][1] = img->all_bmv[i][j][best_bw_ref][mode][1];
+											}
+										}
 
+										if (best_pdir==0)
+										{
+											for (j=0; j<4; j++)
+												for (i=0; i<4; i++)
+												{
+													enc_picture->ref_idx[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = -1;
+                          enc_picture->ref_pic_id [LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j] = enc_picture->ref_pic_num[LIST_1][enc_picture->ref_idx[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j]];		
+													enc_picture->mv[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][0] = 0;
+													enc_picture->mv[LIST_1][img->block_x+(block&1)*2+i][img->block_y+(block&2)+j][1] = 0;
+												}
+										}
+								}
+						}else if (mode==2)
+						{
+							for (j=0; j<2; j++)
+								for (i=0; i<4; i++)
+								{
+									enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+block*2+j] = best_fw_ref;
+                  enc_picture->ref_pic_id [LIST_0][img->block_x+i][img->block_y+block*2+j] = enc_picture->ref_pic_num[LIST_0][enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+block*2+j]];
+									enc_picture->mv[LIST_0][img->block_x+i][img->block_y+block*2+j][0] = img->all_mv[i][j][best_fw_ref][mode][0];
+									enc_picture->mv[LIST_0][img->block_x+i][img->block_y+block*2+j][1] = img->all_mv[i][j][best_fw_ref][mode][1];
+									
+									if (best_pdir==1)
+									{
+										enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+block*2+j] = -1;
+                    enc_picture->ref_pic_id [LIST_0][img->block_x+i][img->block_y+block*2+j] = enc_picture->ref_pic_num[LIST_0][enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+block*2+j]];
+									  enc_picture->mv[LIST_0][img->block_x+i][img->block_y+block*2+j][0] = 0;
+									  enc_picture->mv[LIST_0][img->block_x+i][img->block_y+block*2+j][1] = 0;
+									}
+
+									if (bframe)
+									{
+										enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+block*2+j] = best_bw_ref;
+                    enc_picture->ref_pic_id [LIST_1][img->block_x+i][img->block_y+block*2+j] = enc_picture->ref_pic_num[LIST_1][enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+block*2+j]];
+										if(best_bw_ref>=0)
+										{
+											enc_picture->mv[LIST_1][img->block_x+i][img->block_y+block*2+j][0] = img->all_bmv[i][j][best_bw_ref][mode][0];
+											enc_picture->mv[LIST_1][img->block_x+i][img->block_y+block*2+j][1] = img->all_bmv[i][j][best_bw_ref][mode][1];
+										}
+
+										if (best_pdir==0)
+										{
+											enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+block*2+j] = -1;
+                      enc_picture->ref_pic_id [LIST_1][img->block_x+i][img->block_y+block*2+j] = enc_picture->ref_pic_num[LIST_1][enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+block*2+j]];
+											enc_picture->mv[LIST_1][img->block_x+i][img->block_y+block*2+j][0] = 0;
+											enc_picture->mv[LIST_1][img->block_x+i][img->block_y+block*2+j][1] = 0;
+										}
+									}
+								}
+						}else
+						{
+							for (j=0; j<4; j++)
+								for (i=0; i<2; i++)
+								{
+									enc_picture->ref_idx[LIST_0][img->block_x+block*2+i][img->block_y+j] = best_fw_ref;
+                    enc_picture->ref_pic_id [LIST_0][img->block_x+i][img->block_y+block*2+j] = enc_picture->ref_pic_num[LIST_0][enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+block*2+j]];
+									enc_picture->mv[LIST_0][img->block_x+block*2+i][img->block_y+j][0] = img->all_mv[i][j][best_fw_ref][mode][0];
+									enc_picture->mv[LIST_0][img->block_x+block*2+i][img->block_y+j][1] = img->all_mv[i][j][best_fw_ref][mode][1];
+																
+									if (best_pdir==1)
+									{
+										enc_picture->ref_idx[LIST_0][img->block_x+block*2+i][img->block_y+j] = -1;
+                    enc_picture->ref_pic_id [LIST_0][img->block_x+i][img->block_y+block*2+j] = enc_picture->ref_pic_num[LIST_0][enc_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+block*2+j]];
+										enc_picture->mv[LIST_0][img->block_x+block*2+i][img->block_y+j][0] = 0;
+										enc_picture->mv[LIST_0][img->block_x+block*2+i][img->block_y+j][1] = 0;
+									}
+
+									if (bframe)
+									{
+										enc_picture->ref_idx[LIST_1][img->block_x+block*2+i][img->block_y+j] = best_bw_ref;
+                      enc_picture->ref_pic_id [LIST_1][img->block_x+i][img->block_y+block*2+j] = enc_picture->ref_pic_num[LIST_1][enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+block*2+j]];
+										if(best_bw_ref>=0)
+										{
+											enc_picture->mv[LIST_1][img->block_x+block*2+i][img->block_y+j][0] = img->all_bmv[i][j][best_bw_ref][mode][0];
+											enc_picture->mv[LIST_1][img->block_x+block*2+i][img->block_y+j][1] = img->all_bmv[i][j][best_bw_ref][mode][1];
+										}
+
+										if (best_pdir==0)
+										{
+											enc_picture->ref_idx[LIST_1][img->block_x+block*2+i][img->block_y+j] = -1;
+                      enc_picture->ref_pic_id [LIST_1][img->block_x+i][img->block_y+block*2+j] = enc_picture->ref_pic_num[LIST_1][enc_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+block*2+j]];
+											enc_picture->mv[LIST_1][img->block_x+block*2+i][img->block_y+j][0] = 0;
+											enc_picture->mv[LIST_1][img->block_x+block*2+i][img->block_y+j][1] = 0;
+										}
+									}
+								}
+						}
+						
             //----- set reference frame and direction parameters -----
             if (mode==3)
             {

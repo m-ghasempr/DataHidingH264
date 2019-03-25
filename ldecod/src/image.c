@@ -1,34 +1,3 @@
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
 
 /*!
  ***********************************************************************
@@ -48,6 +17,7 @@
  *    - Gabi Blaettermann               <blaetter@hhi.de>
  *    - Ye-Kui Wang                     <wyk@ieee.org>
  *    - Antti Hallapuro                 <antti.hallapuro@nokia.com>
+ *    - Alexis Tourapis                 <alexismt@ieee.org>
  ***********************************************************************
  */
 
@@ -77,6 +47,7 @@
 #include "mb_access.h"
 
 #include "context_ini.h"
+#include "cabac.h"
 
 
 #include "erc_api.h"
@@ -224,6 +195,8 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
     dec_picture=NULL;
   }
 
+  g_new_frame=1;
+
 /*  recfr.yptr = &imgY[0][0];
   recfr.uptr = &imgUV[0][0][0];
   recfr.vptr = &imgUV[1][0][0];
@@ -291,22 +264,22 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
 
   if(img->type == I_SLICE) // I picture
     fprintf(stdout,"%3d(I)  %3d %5d %7.4f %7.4f %7.4f %5d\n",
-        frame_no, img->tr, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
+        frame_no, img->ThisPOC, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
   else if(img->type == P_SLICE) // P pictures
     fprintf(stdout,"%3d(P)  %3d %5d %7.4f %7.4f %7.4f %5d\n",
-    frame_no, img->tr, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
+    frame_no, img->ThisPOC, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
   else if(img->type == SP_SLICE) // SP pictures
     fprintf(stdout,"%3d(SP) %3d %5d %7.4f %7.4f %7.4f %5d\n",
-    frame_no, img->tr, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
+    frame_no, img->ThisPOC, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
   else if (img->type == SI_SLICE)
     fprintf(stdout,"%3d(SI) %3d %5d %7.4f %7.4f %7.4f %5d\n",
-    frame_no, img->tr, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
+    frame_no, img->ThisPOC, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
   else if(!img->disposable_flag) // stored B pictures
     fprintf(stdout,"%3d(BS) %3d %5d %7.4f %7.4f %7.4f %5d\n",
-        frame_no, img->tr, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
+        frame_no, img->ThisPOC, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
   else // B pictures
     fprintf(stdout,"%3d(B)  %3d %5d %7.4f %7.4f %7.4f %5d\n",
-        frame_no, img->tr, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
+        frame_no, img->ThisPOC, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
 
   fflush(stdout);
 
@@ -335,8 +308,6 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
   img->current_mb_nr = -4712;   // impossible value for debugging, StW
   img->current_slice_nr = 0;
 
-  img->last_decoded_pic_id = img->tr; // JVT-D101
-
   return (SOP);
 }
 
@@ -357,21 +328,10 @@ void find_snr(
   int diff_y,diff_u,diff_v;
   int uv;
   int  status;
-  Slice *currSlice = img->currentSlice;
 
-  // TO 5.11.2001 We do have some problems finding the correct frame in the original sequence
-  // if errors appear. In this case the method of using this p_frame_no, nextP_tr, prevP_tr
-  // variables does not work. So I use the picture_id instead.
-
-  // POC200301 The following modifications are done to make the decoder can get right frame_no
-  // in case of more than one IDR pictures. I have not found any reasons to use something like
-  // 256*modulo_ctr_xxx.
-
-  //calculate frame number
-  if (img->structure == FRAME)
-    frame_no = currSlice->picture_id;
-  else
-    frame_no = currSlice->picture_id/2;
+  // calculate frame number
+  // KS: This works for the way, the HHI encoder sets POC
+    frame_no = img->ThisPOC/2;
 
   rewind(p_ref);
 
@@ -380,7 +340,7 @@ void find_snr(
     status = fseek (p_ref, (long) p->size_y* (long) (p->size_x*3/2), SEEK_CUR);
     if (status != 0)
     {
-      snprintf(errortext, ET_SIZE, "Error in seeking img->tr: %d", img->tr);
+      snprintf(errortext, ET_SIZE, "Error in seeking frame number: %d", frame_no);
       error(errortext, 500);
     }
   }
@@ -455,11 +415,17 @@ void find_snr(
       snr->snr_va=50;
 
   }
-  else
+/*  else
   {
     snr->snr_ya=(float)(snr->snr_ya*(img->number+Bframe_ctr)+snr->snr_y)/(img->number+Bframe_ctr+1); // average snr chroma for all frames
     snr->snr_ua=(float)(snr->snr_ua*(img->number+Bframe_ctr)+snr->snr_u)/(img->number+Bframe_ctr+1); // average snr luma for all frames
     snr->snr_va=(float)(snr->snr_va*(img->number+Bframe_ctr)+snr->snr_v)/(img->number+Bframe_ctr+1); // average snr luma for all frames
+  } */
+ else
+  {
+    snr->snr_ya=(float)(snr->snr_ya*(img->number - 1 + Bframe_ctr)+snr->snr_y)/(img->number+Bframe_ctr); // average snr luma for all frames
+    snr->snr_ua=(float)(snr->snr_ua*(img->number - 1 + Bframe_ctr)+snr->snr_u)/(img->number+Bframe_ctr); // average snr chroma for all frames
+    snr->snr_va=(float)(snr->snr_va*(img->number - 1 + Bframe_ctr)+snr->snr_v)/(img->number+Bframe_ctr); // average snr chromafor all frames
   }
 }
 
@@ -653,6 +619,7 @@ int read_new_slice()
   Bitstream *currStream;
   int newframe;
 //  int i;
+//  static count=0;
 
   while (1)
   {
@@ -708,10 +675,12 @@ int read_new_slice()
         init_lists(img->type, img->currentSlice->structure);
         reorder_lists (img->type, img->currentSlice);
 
-/*        if (img->frame_num==3)
+/*        if (img->frame_num==1)
         {
-          for (i=0; i<listXsize[1]; i++)
-            write_picture(listX[1][i], p_out2);
+          count ++;
+          if (count==1)
+            for (i=0; i<listXsize[0]; i++)
+              write_picture(listX[0][i], p_out2);
         }
 */
         if (img->MbaffFrameFlag)
@@ -726,13 +695,12 @@ int read_new_slice()
         }
 
         // From here on, active_sps, active_pps and the slice header are valid
-//        printf ("img->frame num %d, img->tr %d, img->disposable_flag %d\n", img->frame_num, img->tr, img->disposable_flag);
         img->current_mb_nr = currSlice->start_mb_nr;
 
-        if (img->tr_old != img->tr)
+        if (img->tr_old != img->ThisPOC)
         {
           newframe=1;
-          img->tr_old = img->tr;
+          img->tr_old = img->ThisPOC;
         }
         else
           newframe = 0;
@@ -746,8 +714,11 @@ int read_new_slice()
 
         img->structure_old = img->structure; 
 //! new stuff StW
-        if(newframe)
+        if(newframe || g_new_frame)
+        {
           current_header = SOP;
+          g_new_frame=0;
+        }
         else
           current_header = SOS;
 
@@ -807,13 +778,13 @@ int read_new_slice()
         ProcessSPS(nalu);
         break;
       case NALU_TYPE_PD:
-        printf ("read_new_slice: Found 'Picture Delimiter' NAL unit, len %d, ignored\n", nalu->len);
+//        printf ("read_new_slice: Found 'Access Unit Delimiter' NAL unit, len %d, ignored\n", nalu->len);
         break;
       case NALU_TYPE_EOSEQ:
-        printf ("read_new_slice: Found 'End of Sequence' NAL unit, len %d, ignored\n", nalu->len);
+//        printf ("read_new_slice: Found 'End of Sequence' NAL unit, len %d, ignored\n", nalu->len);
         break;
       case NALU_TYPE_EOSTREAM:
-        printf ("read_new_slice: Found 'End of Stream' NAL unit, len %d, ignored\n", nalu->len);
+//        printf ("read_new_slice: Found 'End of Stream' NAL unit, len %d, ignored\n", nalu->len);
         break;
       case NALU_TYPE_FILL:
         printf ("read_new_slice: Found NALU_TYPE_FILL, len %d\n", nalu->len);
@@ -838,7 +809,6 @@ int read_new_slice()
  */
 void init_frame(struct img_par *img, struct inp_par *inp)
 {
-  static int first_P = TRUE;
   int i,k,l,j;
 
   if (dec_picture)
@@ -849,6 +819,8 @@ void init_frame(struct img_par *img, struct inp_par *inp)
 
   dec_picture = alloc_storable_picture (FRAME, img->width, img->height, img->width_cr, img->height_cr);
   dec_picture->poc=img->framepoc;
+  dec_picture->top_poc=img->toppoc;
+  dec_picture->bottom_poc=img->bottompoc;
   dec_picture->pic_num = img->frame_num;
   dec_picture->coded_frame = (img->structure==FRAME);
 //  dec_picture->mb_adaptive_frame_field_flag = img->MbaffFrameFlag;
@@ -872,21 +844,6 @@ void init_frame(struct img_par *img, struct inp_par *inp)
     
   img->current_slice_nr=0;
 
-  if (img->number == 0) // first picture
-  {
-    nextP_tr=prevP_tr=img->tr;
-  }
-  else if(img->type == I_SLICE || img->type == P_SLICE || img->type == SP_SLICE || img->type == SI_SLICE || !img->disposable_flag)
-  {
-    nextP_tr=img->tr;
-    
-    if(first_P) // first P picture
-    {
-      first_P = FALSE;
-      P_interval=nextP_tr-prevP_tr; //! TO 4.11.2001 we get problems here in case the first P-Frame was lost
-    }
-  }
-  
   if (img->type > SI_SLICE)
   {
     set_ec_flag(SE_PTYPE);
@@ -920,10 +877,6 @@ void init_frame(struct img_par *img, struct inp_par *inp)
     img->mb_data[i].slice_nr = -1; 
     img->mb_data[i].ei_flag = 1;
   }
-
-  refFrArr = refFrArr_frm;
-  moving_block = moving_block_frm;
-
 }
 
 /*!
@@ -1047,7 +1000,7 @@ void decode_one_slice(struct img_par *img,struct inp_par *inp)
   {
 
 #if TRACE
-  fprintf(p_trace,"\n*********** Pic: %i (I/P) MB: %i Slice: %i Type %d **********\n", img->tr, img->current_mb_nr, img->current_slice_nr, img->type);
+  fprintf(p_trace,"\n*********** POC: %i (I/P) MB: %i Slice: %i Type %d **********\n", img->ThisPOC, img->current_mb_nr, img->current_slice_nr, img->type);
 #endif
 
     // Initializes the current macroblock
@@ -1079,6 +1032,7 @@ void decode_frame_slice(struct img_par *img,struct inp_par *inp, int current_hea
   if (active_pps->entropy_coding_mode_flag)
   {
     init_contexts (img);
+    cabac_new_slice();
   }
 
   // init new frame
@@ -1124,6 +1078,7 @@ void decode_field_slice(struct img_par *img,struct inp_par *inp, int current_hea
   if (active_pps->entropy_coding_mode_flag)
   {
     init_contexts (img);
+    cabac_new_slice();
   }
   
   // init new frame
@@ -1173,7 +1128,6 @@ void decode_field_slice(struct img_par *img,struct inp_par *inp, int current_hea
  */
 void init_top(struct img_par *img, struct inp_par *inp)
 {
-  static int first_P = TRUE;
   int i;
 
   if (dec_picture)
@@ -1183,6 +1137,8 @@ void init_top(struct img_par *img, struct inp_par *inp)
   }
   dec_picture = alloc_storable_picture (TOP_FIELD, img->width, img->height, img->width_cr, img->height_cr);
   dec_picture->poc=img->toppoc;
+  dec_picture->top_poc=img->toppoc;
+  dec_picture->bottom_poc=img->bottompoc;
   dec_picture->pic_num = img->frame_num;
   dec_picture->coded_frame = (img->structure==FRAME);
   dec_picture->mb_adaptive_frame_field_flag = img->MbaffFrameFlag;
@@ -1204,23 +1160,6 @@ void init_top(struct img_par *img, struct inp_par *inp)
   img->block_y = img->pix_y = img->pix_c_y = 0; // define vertical positions
   img->block_x = img->pix_x = img->pix_c_x = 0; // define horizontal positions
 
-  nextP_tr = nextP_tr_fld;
-
-  if (img->number == 0) // first picture
-  {
-    nextP_tr=prevP_tr=img->tr;
-  }
-  else if(img->type == I_SLICE || img->type == P_SLICE || img->type == SP_SLICE || img->type == SI_SLICE || !img->disposable_flag)  // I or P pictures
-  {
-    nextP_tr=img->tr;
-
-    if(first_P) // first P picture
-    {
-      first_P = FALSE;
-      P_interval=nextP_tr-prevP_tr; //! TO 4.11.2001 we get problems here in case the first P-Frame was lost
-    }
-  }
-  
   if (img->type > SI_SLICE)
   {
     set_ec_flag(SE_PTYPE);
@@ -1245,10 +1184,6 @@ void init_top(struct img_par *img, struct inp_par *inp)
   for(i=0; i<(int)img->PicSizeInMbs; i++)
     img->mb_data[i].slice_nr = -1;
 
-  refFrArr = refFrArr_top;
-
-  moving_block = moving_block_top;
-
 }
 
 /*!
@@ -1259,7 +1194,6 @@ void init_top(struct img_par *img, struct inp_par *inp)
  */
 void init_bottom(struct img_par *img, struct inp_par *inp)
 {
-  static int first_P = TRUE;
   int i;
 
   if (dec_picture)
@@ -1269,6 +1203,8 @@ void init_bottom(struct img_par *img, struct inp_par *inp)
   }
   dec_picture = alloc_storable_picture (BOTTOM_FIELD, img->width, img->height, img->width_cr, img->height_cr);
   dec_picture->poc=img->bottompoc;
+  dec_picture->top_poc=img->toppoc;
+  dec_picture->bottom_poc=img->bottompoc;
   dec_picture->pic_num = img->frame_num + 1;
   dec_picture->coded_frame = (img->structure==FRAME);
   dec_picture->mb_adaptive_frame_field_flag = img->MbaffFrameFlag;
@@ -1291,21 +1227,6 @@ void init_bottom(struct img_par *img, struct inp_par *inp)
   img->block_x = img->pix_x = img->pix_c_x = 0; // define horizontal positions
 
 
-  if (img->number == 0) // first picture
-  {
-    nextP_tr=prevP_tr=img->tr;
-  }
-  else if (img->type == I_SLICE || img->type == P_SLICE || img->type == SP_SLICE || img->type == SI_SLICE || !img->disposable_flag)  // I or P pictures
-  {
-    nextP_tr=img->tr;
-    
-    if(first_P) // first P picture
-    {
-      first_P = FALSE;
-      P_interval=nextP_tr-prevP_tr; //! TO 4.11.2001 we get problems here in case the first P-Frame was lost
-    }
-  }
-
   if (img->type > SI_SLICE)
   {
     set_ec_flag(SE_PTYPE);
@@ -1324,9 +1245,6 @@ void init_bottom(struct img_par *img, struct inp_par *inp)
   for(i=0; i<(int)img->PicSizeInMbs; i++)
     img->mb_data[i].slice_nr = -1;
 
-  moving_block = moving_block_bot;
-  refFrArr = refFrArr_bot;
-
 }
 
 /*!
@@ -1337,12 +1255,6 @@ void init_bottom(struct img_par *img, struct inp_par *inp)
  */
 void frame_postprocessing(struct img_par *img, struct inp_par *inp)
 {
-  if((img->number)&&(img->type==I_SLICE || img->type == P_SLICE || img->type == SP_SLICE || img->type == SI_SLICE || !img->disposable_flag))
-  {
-
-    nextP_tr_fld = nextP_tr * 2;
-    nextP_tr_frm = nextP_tr;
-  }
 }
 
 /*!
@@ -1353,12 +1265,6 @@ void frame_postprocessing(struct img_par *img, struct inp_par *inp)
  */
 void field_postprocessing(struct img_par *img, struct inp_par *inp)
 {
-  if((img->number>1)&&(img->type==I_SLICE || img->type == P_SLICE || img->type == SP_SLICE || img->type == SI_SLICE || !img->disposable_flag))
-  {
-    nextP_tr_frm = nextP_tr / 2;
-    nextP_tr_fld = nextP_tr;
-  }
-
   img->height *= 2;
   img->height_cr *= 2;
   img->number /= 2;
@@ -1385,46 +1291,16 @@ void reset_wp_params(struct img_par *img)
 
 void fill_wp_params(struct img_par *img)
 {
-  int i, j, n;
+  int i, j;
   int comp;
   int log_weight_denom;
   int p0, pt;
-//  int p1;
   int bframe = (img->type==B_SLICE);
-  int fwd_ref[MAX_REFERENCE_PICTURES], bwd_ref[MAX_REFERENCE_PICTURES];
-  int index;
   int max_bwd_ref, max_fwd_ref;
   int x,z;
 
   max_fwd_ref = img->num_ref_idx_l0_active;
   max_bwd_ref = img->num_ref_idx_l1_active;
-
-
-if ((img->weighted_bipred_idc > 0) && (img->type == B_SLICE))
-  {
-    if (!img->disposable_flag )
-    {
-      for (index = 0; index < MAX_REFERENCE_PICTURES; index++)
-      {
-        fwd_ref[index] = index;
-        if (index == 0)
-          n = 1;
-        else if (index == 1)
-          n = 0;
-        else
-          n = index;
-        bwd_ref[index] = n;
-      }
-    }
-    else 
-    {
-       for (index = 0; index < MAX_REFERENCE_PICTURES - 1; index++)
-       {
-         fwd_ref[index] = index+1;
-       }
-       bwd_ref[0] = 0; // only one possible backwards ref for traditional B picture in current software
-    }
-  }      
 
   if (img->weighted_bipred_idc == 2 && bframe)
   {
@@ -1441,12 +1317,11 @@ if ((img->weighted_bipred_idc > 0) && (img->type == B_SLICE))
         img->wp_weight[0][i][comp] = 1<<log_weight_denom;
         img->wp_weight[1][i][comp] = 1<<log_weight_denom;
       }
-        }
+    }
   }
 
   if (bframe)
   {
-
     for (i=0; i<max_fwd_ref; i++)
     {
       for (j=0; j<max_bwd_ref; j++)
@@ -1461,31 +1336,25 @@ if ((img->weighted_bipred_idc > 0) && (img->type == B_SLICE))
           }
           else if (img->weighted_bipred_idc == 2)
           {
-            pt = poc_distance (fwd_ref[i], bwd_ref[j]);
-            if (pt == 0)
+            pt = listX[LIST_1][j]->poc - listX[LIST_0][i]->poc;
+            if (pt == 0 || listX[LIST_1][j]->is_long_term || listX[LIST_0][i]->is_long_term)
             {
               img->wbp_weight[0][i][j][comp] =   32;
               img->wbp_weight[1][i][j][comp] =   32;
             }
             else
             {
-              p0 = poc_distance (fwd_ref[i], -1);
- //             p1 = poc_distance (-1, bwd_ref[j]);
+              p0 = img->ThisPOC - listX[LIST_0][i]->poc;
 
-			  x = (16384 + (pt>>1))/pt;
-			  z = Clip3(-1024, 1023, (x*p0 + 32 )>>6);
+              x = (16384 + (pt>>1))/pt;
+              z = Clip3(-1024, 1023, (x*p0 + 32 )>>6);
               img->wbp_weight[1][i][j][comp] = z >> 2;
               img->wbp_weight[0][i][j][comp] = 64 - img->wbp_weight[1][i][j][comp];
-			  if (img->wbp_weight[1][i][j][comp] < -64 || img->wbp_weight[1][i][j][comp] > 128)
-			  {
-				  img->wbp_weight[1][i][j][comp] = 32;
-				  img->wbp_weight[0][i][j][comp] = 32;
-			  }
-
-
-               if (comp == 0)
-                      printf ("bpw weight[%d][%d] = %d, %d\n", i,j,
-                              img->wbp_weight[0][i][j][0], img->wbp_weight[1][i][j][0]);
+              if (img->wbp_weight[1][i][j][comp] < -64 || img->wbp_weight[1][i][j][comp] > 128)
+              {
+                img->wbp_weight[1][i][j][comp] = 32;
+                img->wbp_weight[0][i][j][comp] = 32;
+              }
             }
           }
         }

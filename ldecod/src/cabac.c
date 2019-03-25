@@ -1,34 +1,3 @@
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
 
 /*!
  *************************************************************************************
@@ -44,20 +13,18 @@
  */
 
 #include <stdlib.h>
-#include <math.h>
-#include <memory.h>
-#include <assert.h> // for debugging
 #include <string.h>
+
+#include "global.h"
 #include "cabac.h"
 #include "memalloc.h"
-#include "header.h"
 #include "elements.h"
-#include "global.h"
 #include "image.h"
 #include "biaridecod.h"
 #include "mb_access.h"
 
 int symbolCount = 0;
+int last_dquant = 0;
 
 
 /***********************************************************************
@@ -101,6 +68,10 @@ void CheckAvailabilityOfNeighborsCABAC()
     currMB->mb_available_left = NULL;
 }
 
+void cabac_new_slice()
+{
+  last_dquant=0;
+}
 
 /*!
  ************************************************************************
@@ -233,8 +204,8 @@ int check_next_mb_and_get_field_mode_CABAC( SyntaxElement *se,
   currMB->slice_nr = img->current_slice_nr;
   currMB->mb_field = img->mb_data[img->current_mb_nr-1].mb_field;
 
+  CheckAvailabilityOfNeighbors();
   CheckAvailabilityOfNeighborsCABAC();
-//  CheckAvailabilityOfNeighbors(img);
     
   //create
   dep_dp_copy = (DecodingEnvironmentPtr) calloc(1, sizeof(DecodingEnvironment) );
@@ -254,6 +225,7 @@ int check_next_mb_and_get_field_mode_CABAC( SyntaxElement *se,
 #if TRACE
   strncpy(se->tracestring, "mb_skip_flag (of following bottom MB)", TRACESTRING_SIZE);
 #endif
+  last_dquant = 0;
   readMB_skip_flagInfo_CABAC(se,inp,img,dep_dp);
 
   skip = (bframe)? (se->value1==0 && se->value2==0) : (se->value1==0);
@@ -457,7 +429,11 @@ void readB8_typeInfo_CABAC (SyntaxElement *se,
     }
   }
   se->value1 = act_sym;
-//	if (act_sym == 13)				printf(" stop");
+
+#if TRACE
+  fprintf(p_trace, "@%d %s\t\t%d\n",symbolCount++, se->tracestring, se->value1);
+  fflush(p_trace);
+#endif
 }
 
 /*!
@@ -519,6 +495,10 @@ void readMB_skip_flagInfo_CABAC( SyntaxElement *se,
   fprintf(p_trace, "@%d %s\t\t%d\t%d %d\n",symbolCount++, se->tracestring, se->value1,a,b);
   fflush(p_trace);
 #endif
+  if (!se->value1)
+  {
+    last_dquant=0;
+  }
   return;
 }
 /*!
@@ -854,16 +834,20 @@ void readRefFrame_CABAC( SyntaxElement *se,
   int   act_ctx;
   int   act_sym;
   int** refframe_array = dec_picture->ref_idx[se->value2];
+  int   b8a, b8b;
 
   PixelPos block_a, block_b;
   
   getLuma4x4Neighbour(img->current_mb_nr, img->subblock_x, img->subblock_y, -1,  0, &block_a);
   getLuma4x4Neighbour(img->current_mb_nr, img->subblock_x, img->subblock_y,  0, -1, &block_b);
 
+  b8a=((block_a.x/2)%2)+2*((block_a.y/2)%2);
+  b8b=((block_b.x/2)%2)+2*((block_b.y/2)%2);
 
   if (!block_b.available)
     b=0;
-  else if (IS_DIRECT(&img->mb_data[block_b.mb_addr]))
+  else if (IS_DIRECT(&img->mb_data[block_b.mb_addr]) || (img->mb_data[block_b.mb_addr].b8mode[b8b]==0 && img->mb_data[block_b.mb_addr].b8pdir[b8b]==2))
+//  else if (IS_DIRECT(&img->mb_data[block_b.mb_addr]))
     b=0;
   else 
   {
@@ -875,7 +859,8 @@ void readRefFrame_CABAC( SyntaxElement *se,
 
   if (!block_a.available)
     a=0;
-  else if (IS_DIRECT(&img->mb_data[block_a.mb_addr]))
+  else if (IS_DIRECT(&img->mb_data[block_a.mb_addr]) || (img->mb_data[block_a.mb_addr].b8mode[b8a]==0 && img->mb_data[block_a.mb_addr].b8pdir[b8a]==2))
+//  else if (IS_DIRECT(&img->mb_data[block_a.mb_addr]))
     a=0;
   else 
 	{
@@ -919,16 +904,12 @@ void readDquant_CABAC( SyntaxElement *se,
                        DecodingEnvironmentPtr dep_dp)
 {
   MotionInfoContexts *ctx = img->currentSlice->mot_ctx;
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
 
   int act_ctx;
   int act_sym;
   int dquant;
 
-  if (currMB->mb_available_left == NULL)
-    act_ctx = 0;
-  else
-    act_ctx = ( ((currMB->mb_available_left)->delta_quant != 0) ? 1 : 0);
+  act_ctx = ( (last_dquant != 0) ? 1 : 0);
 
   act_sym = biari_decode_symbol(dep_dp,ctx->delta_qp_contexts + act_ctx );
   if (act_sym != 0)
@@ -942,6 +923,8 @@ void readDquant_CABAC( SyntaxElement *se,
   if((act_sym & 0x01)==0)                           // lsb is signed bit
     dquant = -dquant;
   se->value1 = dquant;
+
+  last_dquant = dquant;
 
 #if TRACE
   fprintf(p_trace, "@%d %s\t\t\t%d\n",symbolCount++, se->tracestring, se->value1);
@@ -1048,6 +1031,11 @@ void readCBP_CABAC(SyntaxElement *se,
 
   se->value1 = cbp;
 
+  if (!cbp)
+  {
+    last_dquant=0;
+  }
+
 #if TRACE
   fprintf(p_trace, "@%d %s\t\t\t%d\n",symbolCount++, se->tracestring, se->value1);
   fflush(p_trace);
@@ -1130,11 +1118,7 @@ int read_and_store_CBP_block_bit (Macroblock              *currMB,
   int v_dc        = (type==CHROMA_DC &&  img->is_v_block);
   int j           = (y_ac || u_ac || v_ac ? img->subblock_y : 0);
   int i           = (y_ac || u_ac || v_ac ? img->subblock_x : 0);
-//  int bit         = (y_dc ? 0 : y_ac ? 1+4*j+i : u_dc ? 17 : v_dc ? 18 : u_ac ? 19+2*j+i : 23+2*j+i);
   int bit         = (y_dc ? 0 : y_ac ? 1 : u_dc ? 17 : v_dc ? 18 : u_ac ? 19 : 23);
-  int ystep_back  = (y_ac ? 12 : u_ac || v_ac ? 2 : 0);
-  int xstep_back  = (y_ac ?  3 : u_ac || v_ac ? 1 : 0);
-  int ystep       = (y_ac ?  4 : u_ac || v_ac ? 2 : 0);
   int default_bit = (img->is_intra_block ? 1 : 0);
   int upper_bit   = default_bit;
   int left_bit    = default_bit;

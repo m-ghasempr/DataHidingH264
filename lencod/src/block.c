@@ -1,34 +1,3 @@
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
 
 /*!
  *************************************************************************************
@@ -169,7 +138,8 @@ void intrapred_luma(int img_x,int img_y, int *left_available, int *up_available,
 
   if (input->UseConstrainedIntraPred)
   {
-    block_available_left     = pix_a[0].available ? img->intra_block[pix_a[0].mb_addr] : 0;
+    for (i=0, block_available_left=1; i<4;i++)
+      block_available_left  &= pix_a[i].available ? img->intra_block[pix_a[i].mb_addr]: 0;
     block_available_up       = pix_b.available ? img->intra_block [pix_b.mb_addr] : 0;
     block_available_up_right = pix_c.available ? img->intra_block [pix_c.mb_addr] : 0;
     block_available_up_left  = pix_d.available ? img->intra_block [pix_d.mb_addr] : 0;
@@ -429,76 +399,79 @@ void intrapred_luma(int img_x,int img_y, int *left_available, int *up_available,
 void intrapred_luma_16x16()
 {
   int s0=0,s1,s2;
-  int i,j;
   int s[16][2];
+  int i,j;
 
   int ih,iv;
   int ib,ic,iaa;
+
   byte **imgY_pred = enc_picture->imgY;  // For Mb level field/frame coding tools -- default to frame pred
   int pix_y = img->pix_y; // For MB level field/frame coding tools
 
+  int mb_nr=img->current_mb_nr;
+  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
 
-  int mb_nr = img->current_mb_nr;
-  int mb_width = img->width/16;
-  int mb_available_left = (img->mb_x == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-1].slice_nr);
-  int mb_available_up = (img->mb_y == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
-  int mb_available_up_left = (img->mb_x==0 || img->mb_y==0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr);
+  PixelPos up;          //!< pixel position p(0,-1)
+  PixelPos left[17];    //!< pixel positions p(-1, -1..15)
 
-  if(input->UseConstrainedIntraPred)
+  int up_avail, left_avail, left_up_avail;
+  /*
+  if(img->constrained_intra_pred_flag)
   {
-    /*
     if (mb_available_up   && (img->intra_block[mb_nr-mb_width][2]==0 || img->intra_block[mb_nr-mb_width][3]==0))
       mb_available_up   = 0;
     if (mb_available_left && (img->intra_block[mb_nr-       1][1]==0 || img->intra_block[mb_nr       -1][3]==0))
       mb_available_left = 0;
-    if (mb_available_up_left && (img->intra_block[mb_nr-mb_width-1][3]==0))
-      mb_available_left = 0;
-      */
   }
+  */
 
-  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
+  for (i=0;i<17;i++)
   {
-    if(img->top_field)
-    {
-      mb_available_up = (img->mb_y/2 == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
-      mb_available_up_left = (img->mb_y/2 == 0 || img->mb_x==0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr);
-      pix_y   = img->field_pix_y; // set pix_y to field pix_y
-    }
-    else
-    {
-      mb_available_up = ((img->mb_y-1)/2 == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
-      mb_available_up_left = ((img->mb_y-1)/2 == 0 || img->mb_x==0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr);
-      pix_y   = img->field_pix_y; // set pix_y to field pix_y
-    }
+    getNeighbour(mb_nr, -1 ,  i-1 , 1, &left[i]);
+  }
+  
+  getNeighbour(mb_nr, 0     ,  -1 , 1, &up);
+
+  if (!(input->UseConstrainedIntraPred))
+  {
+    up_avail   = up.available;
+    left_avail = left[1].available;
+    left_up_avail = left[0].available;
+  }
+  else
+  {
+    up_avail      = up.available ? img->intra_block[up.mb_addr] : 0;
+    for (i=1, left_avail=1; i<17;i++)
+      left_avail  &= left[i].available ? img->intra_block[left[i].mb_addr]: 0;
+    left_up_avail = left[0].available ? img->intra_block[left[0].mb_addr]: 0;
   }
 
-  
   s1=s2=0;
   // make DC prediction
   for (i=0; i < MB_BLOCK_SIZE; i++)
   {
-    if (mb_available_up)
-      s1 += imgY_pred[pix_y-1][img->pix_x+i];    // sum hor pix
-    if (mb_available_left)
-      s2 += imgY_pred[pix_y+i][img->pix_x-1];    // sum vert pix
+    if (up_avail)
+      s1 += imgY_pred[up.pos_y][up.pos_x+i];    // sum hor pix
+    if (left_avail)
+      s2 += imgY_pred[left[i+1].pos_y][left[i+1].pos_x];    // sum vert pix
   }
-  if (mb_available_up && mb_available_left)
+  if (up_avail && left_avail)
     s0=(s1+s2+16)/(2*MB_BLOCK_SIZE);             // no edge
-  if (!mb_available_up && mb_available_left)
+  if (!up_avail && left_avail)
     s0=(s2+8)/MB_BLOCK_SIZE;                     // upper edge
-  if (mb_available_up && !mb_available_left)
+  if (up_avail && !left_avail)
     s0=(s1+8)/MB_BLOCK_SIZE;                     // left edge
-  if (!mb_available_up && !mb_available_left)
+  if (!up_avail && !left_avail)
     s0=128;                                      // top left corner, nothing to predict from
 
   for (i=0; i < MB_BLOCK_SIZE; i++)
   {
     // vertical prediction
-    if (mb_available_up)
-      s[i][0]=imgY_pred[pix_y-1][img->pix_x+i];
+    if (up_avail)
+      s[i][0]=imgY_pred[up.pos_y][up.pos_x+i];
     // horizontal prediction
-    if (mb_available_left)
-      s[i][1]=imgY_pred[pix_y+i][img->pix_x-1];
+    if (left_avail)
+      s[i][1]=imgY_pred[left[i+1].pos_y][left[i+1].pos_x];
   }
 
   for (j=0; j < MB_BLOCK_SIZE; j++)
@@ -510,7 +483,7 @@ void intrapred_luma_16x16()
       img->mprr_2[DC_PRED_16  ][j][i]=s0;      // store DC prediction
     }
   }
-  if (!mb_available_up || !mb_available_left || !mb_available_up_left) // edge
+  if (!up_avail || !left_avail || !left_up_avail) // edge
     return;
 
   // 16 bit integer plan pred
@@ -519,13 +492,18 @@ void intrapred_luma_16x16()
   iv=0;
   for (i=1;i<9;i++)
   {
-    ih += i*(imgY_pred[pix_y-1][img->pix_x+7+i] - imgY_pred[pix_y-1][img->pix_x+7-i]);
-    iv += i*(imgY_pred[pix_y+7+i][img->pix_x-1] - imgY_pred[pix_y+7-i][img->pix_x-1]);
+    if (i<8)
+      ih += i*(imgY_pred[up.pos_y][up.pos_x+7+i] - imgY_pred[up.pos_y][up.pos_x+7-i]);
+    else
+      ih += i*(imgY_pred[up.pos_y][up.pos_x+7+i] - imgY_pred[left[0].pos_y][left[0].pos_x]);
+    
+    iv += i*(imgY_pred[left[8+i].pos_y][left[8+i].pos_x] - imgY_pred[left[8-i].pos_y][left[8-i].pos_x]);
   }
   ib=(5*ih+32)>>6;
   ic=(5*iv+32)>>6;
+  
+  iaa=16*(imgY_pred[up.pos_y][up.pos_x+15]+imgY_pred[left[16].pos_y][left[16].pos_x]);
 
-  iaa=16*(imgY_pred[pix_y-1][img->pix_x+15]+imgY_pred[pix_y+15][img->pix_x-1]);
   for (j=0;j< MB_BLOCK_SIZE;j++)
   {
     for (i=0;i< MB_BLOCK_SIZE;i++)

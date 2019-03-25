@@ -1,34 +1,3 @@
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
 
 /*!
  **************************************************************************
@@ -49,18 +18,11 @@
 #ifndef _DEFINES_H_
 #define _DEFINES_H_
 
-// #define G50_SPS
-
 #if defined _DEBUG
 #define TRACE           1                   //!< 0:Trace off 1:Trace on
 #else
 #define TRACE           0                   //!< 0:Trace off 1:Trace on
 #endif
-
-#define MAX_NO_POC_FRAMES      10   //size of poc ref array = max no ref frames+1
-#define MAX_LENGTH_POC_CYCLE   10   //max no in type 1 poc cycle
-#define NONREFFRAME             0  // used with push_poc
-#define REFFRAME                1
 
 #define LIST_0 0
 #define LIST_1 1
@@ -153,7 +115,7 @@
 #define SEARCH_SYNC     1
 #define PICTURE_DECODED 2
 
-#define MAX_REFERENCE_PICTURES 15
+#define MAX_REFERENCE_PICTURES 32		//!< H264 allows 32 fields
 
 #ifndef WIN32
 #define max(a, b)      ((a) > (b) ? (a) : (b))  //!< Macro returning max value

@@ -1,3 +1,40 @@
+Changes for Encoder Version JM7.2 to JM 6.2
+--------------------------------------------
+Bug fixes
+- DPB correlated things, such as motion search etc.(KS,SM)
+- Direct mode(SM)
+
+Changes for Decoder Version JM 7.2 to JM 7.1
+--------------------------------------------
+Bug fixes
+- deblocking filter reference pictures (LK)
+- small POC fixes (KS)
+
+Cleanup
+- remove JVT-F100 syntax support (KS)
+
+Changes for Decoder Version JM 7.1 to JM 7.0
+--------------------------------------------
+Bug fixes
+- loop filter (KS)
+- weighted prediction (KS)
+- reference list generation (KS)
+- 8x8 direct modes (AT)
+- constrained intra prediction (KS)
+
+
+Changes for Decoder Version JM 7.0 to JM 6.2
+--------------------------------------------
+Bug fixes
+- POC updates (BH)
+- CABAC dqant and red_idx_lx contexts (KS)
+- small cleanups and other fixes
+
+Other
+- removed common directory, put a copy of these file in each
+  encoder and decoder 
+
+
 Changes for Version JM 6.2 to JM 6.1b
 --------------------------------------
 Note: This is a decoder only release. Encoding is broken.
@@ -588,6 +625,7 @@ Bug Fixes
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 People:
 KS      Karsten Suehring        suehring@hhi.de
+SM      Siwei Ma                swma@jdl.ac.cn
 AH      Antti Hallapuro         antti.hallapuro@nokia.com
 AT      Alexis Michael Tourapis alexismt@ieee.org
 AJ      Anthony Joch            anthony@ubvideo.com

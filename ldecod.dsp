@@ -155,7 +155,7 @@ SOURCE=.\ldecod\src\macroblock.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\lcommon\src\mb_access.c
+SOURCE=.\ldecod\src\mb_access.c
 # End Source File
 # Begin Source File
 
@@ -163,7 +163,7 @@ SOURCE=.\ldecod\src\mbuffer.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\lcommon\src\memalloc.c
+SOURCE=.\ldecod\src\memalloc.c
 # End Source File
 # Begin Source File
 
@@ -179,7 +179,7 @@ SOURCE=.\ldecod\src\nalu.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\lcommon\src\nalucommon.c
+SOURCE=.\ldecod\src\nalucommon.c
 # End Source File
 # Begin Source File
 
@@ -191,7 +191,7 @@ SOURCE=.\ldecod\src\parset.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\lcommon\src\parsetcommon.c
+SOURCE=.\ldecod\src\parsetcommon.c
 # End Source File
 # Begin Source File
 
@@ -235,7 +235,7 @@ SOURCE=.\ldecod\inc\contributors.h
 # End Source File
 # Begin Source File
 
-SOURCE=.\lcommon\inc\ctx_tables.h
+SOURCE=.\ldecod\inc\ctx_tables.h
 # End Source File
 # Begin Source File
 
@@ -287,7 +287,7 @@ SOURCE=.\ldecod\inc\macroblock.h
 # End Source File
 # Begin Source File
 
-SOURCE=.\lcommon\inc\mb_access.h
+SOURCE=.\ldecod\inc\mb_access.h
 # End Source File
 # Begin Source File
 
@@ -295,7 +295,7 @@ SOURCE=.\ldecod\inc\mbuffer.h
 # End Source File
 # Begin Source File
 
-SOURCE=.\lcommon\inc\memalloc.h
+SOURCE=.\ldecod\inc\memalloc.h
 # End Source File
 # Begin Source File
 
@@ -303,7 +303,7 @@ SOURCE=.\ldecod\inc\nalu.h
 # End Source File
 # Begin Source File
 
-SOURCE=.\lcommon\inc\nalucommon.h
+SOURCE=.\ldecod\inc\nalucommon.h
 # End Source File
 # Begin Source File
 
@@ -315,7 +315,7 @@ SOURCE=.\ldecod\inc\parset.h
 # End Source File
 # Begin Source File
 
-SOURCE=.\lcommon\inc\parsetcommon.h
+SOURCE=.\ldecod\inc\parsetcommon.h
 # End Source File
 # Begin Source File
 

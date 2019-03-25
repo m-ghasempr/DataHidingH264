@@ -1,34 +1,3 @@
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
 
 /*!
  *************************************************************************************
@@ -123,9 +92,6 @@ int *last_P_no_frm;
 int *last_P_no_fld;
 #endif
 
-static void UnifiedOneForthPix (pel_t ** imgY, pel_t ** imgU, pel_t ** imgV,
-                                pel_t ** out4Y, pel_t ** outU, pel_t ** outV,
-                                pel_t * ref11);
 static void ReportFirstframe(int tmp_time);
 static void ReportIntra(int tmp_time);
 static void ReportSP(int tmp_time);
@@ -167,21 +133,58 @@ void code_a_picture(Picture *pic)
 {
   int NumberOfCodedMBs = 0;
   int SliceGroup = 0;
-  int j;
+  int i,j;
 
   img->currentPicture = pic;
 
-  img->currentPicture->idr_flag = (!IMG_NUMBER) && (!(img->structure==BOTTOM_FIELD)) ;            //for 2nd field, idr is reset in SliceHeader() //5.0f
+  img->currentPicture->idr_flag = (!IMG_NUMBER) && (!(img->structure==BOTTOM_FIELD));
 
   pic->no_slices = 0;
   pic->distortion_u = pic->distortion_v = pic->distortion_y = 0.0;
 
+  // restrict list 1 size
+  if (img->structure==FRAME)
+  {
+    img->num_ref_idx_l0_active = img->buf_cycle;
+    img->num_ref_idx_l1_active = (img->type==B_SLICE?1:0);
+  }
+  else
+  {
+    img->num_ref_idx_l0_active = 2*img->buf_cycle;
+    img->num_ref_idx_l1_active = (img->type==B_SLICE?2:0);
+  }
+
+  // generate reference picture lists
   init_lists(img->type, img->structure);
+
+	// update reference picture number index
+	for (i=0;i<listXsize[LIST_0];i++)
+  {
+    enc_picture->ref_pic_num[LIST_0][i]=listX[LIST_0][i]->poc;
+  }
+
+  for (i=0;i<listXsize[LIST_1];i++)
+  {
+    enc_picture->ref_pic_num[LIST_1][i]=listX[LIST_1][i]->poc;
+  }
+
+  if (img->MbaffFrameFlag)
+    for (j=2;j<6;j++)
+      for (i=0;i<listXsize[j];i++)
+      {
+        enc_picture->ref_pic_num[j][i]=listX[j][i]->poc;        
+      }
+
+  // assign list 0 size from list size
+  img->num_ref_idx_l0_active = listXsize[0];
+  img->num_ref_idx_l1_active = listXsize[1];
+
   if (img->MbaffFrameFlag)
     init_mbaff_lists();
 
   RandomIntraNewPicture ();     //! Allocates forced INTRA MBs (even for fields!)
   FmoStartPicture ();           //! picture level initialization of FMO
+
   while (NumberOfCodedMBs < img->total_number_mb)       // loop over slices
   {
     // Encode one SLice Group
@@ -281,6 +284,7 @@ int encode_one_frame ()
     if (input->InterlaceCodingOption >= MB_CODING)
       mb_adaptive = 1;
     img->field_picture = 0; // we encode a frame
+
     frame_picture (frame_pic);
     // For field coding, turn MB level field/frame coding flag off
     if (input->InterlaceCodingOption >= MB_CODING)
@@ -514,10 +518,12 @@ void frame_picture (Picture *frame)
   enc_frame_picture->poc=img->framepoc;
   enc_frame_picture->pic_num = img->frame_num;
   enc_frame_picture->coded_frame = 1;
+  img->PicSizeInMbs = img->FrameSizeInMbs;
 
   enc_frame_picture->mb_adaptive_frame_field_flag = img->MbaffFrameFlag = (input->InterlaceCodingOption == MB_CODING);
 
   enc_picture=enc_frame_picture;
+
 
   stat->em_prev_bits_frm = 0;
   stat->em_prev_bits = &stat->em_prev_bits_frm;
@@ -569,7 +575,7 @@ void field_picture (Picture *top, Picture *bottom)
   img->height = input->img_height / 2;
   img->height_cr = input->img_height / 4;
   img->fld_flag = 1;
-
+  img->PicSizeInMbs = img->FrameSizeInMbs/2;
   // Top field
   
 //  img->bottom_field_flag = 0;
@@ -1064,25 +1070,6 @@ static void init_field ()
   input->successive_Bframe /= 2;
   img->buf_cycle *= 2;
   img->number = 2 * img->number + img->fld_type;
-  if (img->type == BS_IMG)
-  {
-    img->num_ref_idx_l0_active =
-      max (1, min (img->number , img->buf_cycle + img->fld_type ));
-    img->num_ref_idx_l1_active =
-      max (1, min (img->number , 4 + img->fld_type));
-  }
-  else if (img->type == B_SLICE)
-  {
-    img->num_ref_idx_l0_active =
-      max (1, min (img->number , img->buf_cycle ));
-    img->num_ref_idx_l1_active = 1;
-  }
-  else
-  {
-    img->num_ref_idx_l0_active =
-      max (1, min (img->number , img->buf_cycle + img->fld_type ));
-    img->num_ref_idx_l1_active = 1;
-  }
   img->total_number_mb = (img->width * img->height) / (MB_BLOCK_SIZE * MB_BLOCK_SIZE);
 }
 
@@ -1126,59 +1113,57 @@ static void estimate_weighting_factor ()
   for (i = 0; i < 2; i++)
     for (j = 0; j < MAX_REFERENCE_PICTURES; j++)
       for (n = 0; n < 3; n++)
-        {
-          wp_weight[i][j][n] = default_weight;
-          wp_offset[i][j][n] = 0;
-        }
+      {
+        wp_weight[i][j][n] = default_weight;
+        wp_offset[i][j][n] = 0;
+      }
 
   for (i = 0; i < img->height; i++)
     for (j = 0; j < img->width; j++)
-      {
-        dc_org += imgY_org[i][j];
-      }
-
-
-  for (n = 0; n < num_ref; n++)
     {
-      dc_ref[n] = 0;
+      dc_org += imgY_org[i][j];
+    }
 
-      ref_pic       = img->type==B_SLICE? Refbuf11 [n] : Refbuf11[n];
-      ref_pic_w       = img->type==B_SLICE? Refbuf11_w [n] : Refbuf11_w[n];
 
-      // Y
-      for (i = 0; i < img->height * img->width; i++)
-        {
-          dc_ref[n] += ref_pic[i];
-        }
-
-      if (dc_ref[n] != 0)
-        weight[n][0] =
-          (int) (default_weight * (double) dc_org / (double) dc_ref[n] + 0.5);
-      else
-        weight[n][0] = 2*default_weight;  // only used when reference picture is black
-
+ for (n = 0; n < num_ref; n++)
+ {
+   dc_ref[n] = 0;
+   
+   ref_pic       = img->type==B_SLICE? Refbuf11 [n] : Refbuf11[n];
+   ref_pic_w       = img->type==B_SLICE? Refbuf11_w [n] : Refbuf11_w[n];
+   
+   // Y
+   for (i = 0; i < img->height * img->width; i++)
+   {
+     dc_ref[n] += ref_pic[i];
+   }
+   
+   if (dc_ref[n] != 0)
+     weight[n][0] = (int) (default_weight * (double) dc_org / (double) dc_ref[n] + 0.5);
+   else
+     weight[n][0] = 2*default_weight;  // only used when reference picture is black
+   
 	  printf("dc_org = %d, dc_ref = %d, weight[%d] = %d\n",dc_org, dc_ref[n],n,weight[n][0]);
+    
+    /* for now always use default weight for chroma weight */
+    weight[n][1] = default_weight_chroma;
+    weight[n][2] = default_weight_chroma;
 
-      /* for now always use default weight for chroma weight */
-      weight[n][1] = default_weight_chroma;
-      weight[n][2] = default_weight_chroma;
 
 
-
-  /* store weighted reference pic for motion estimation */
-  for (i = 0; i < img->height * img->width; i++)
-  {
-    ref_pic_w[i] =
-    Clip (0, 255, ((int) ref_pic[i] * weight[n][0] + wp_luma_round) / default_weight);
-  }
-  for (i = 0; i < 4*(img->height + 2*IMG_PAD_SIZE) ; i++)
-  {
-    for (j = 0; j< 4*(img->width + 2*IMG_PAD_SIZE); j++)
+    /* store weighted reference pic for motion estimation */
+    for (i = 0; i < img->height * img->width; i++)
     {
-       mref_w[n][i][j] =   Clip (0, 255, ((int) mref[n][i][j] * weight[n][0] + wp_luma_round) / default_weight);
-     }
-  }
-}
+      ref_pic_w[i] = Clip (0, 255, ((int) ref_pic[i] * weight[n][0] + wp_luma_round) / default_weight);
+    }
+    for (i = 0; i < 4*(img->height + 2*IMG_PAD_SIZE) ; i++)
+    {
+      for (j = 0; j< 4*(img->width + 2*IMG_PAD_SIZE); j++)
+      {
+        mref_w[n][i][j] =   Clip (0, 255, ((int) mref[n][i][j] * weight[n][0] + wp_luma_round) / default_weight);
+      }
+    }
+ }
 
   if ((img->type == P_SLICE)||(img->type == SP_SLICE))
   {
@@ -1195,129 +1180,124 @@ static void estimate_weighting_factor ()
 
   {                             /* forward list */
     if ((img->type == P_SLICE || img->type == SP_SLICE) && input->WeightedPrediction)
+    {
+      for (index = 0; index < num_ref; index++)
       {
-        for (index = 0; index < num_ref; index++)
-          {
-            wp_weight[0][index][0] = weight[index][0];
-            wp_weight[0][index][1] = weight[index][1];
-            wp_weight[0][index][2] = weight[index][2];
-  //              printf ("wp weight[%d] = %d  \n", index,
-  //                      wp_weight[0][index][0]);
-          }
+        wp_weight[0][index][0] = weight[index][0];
+        wp_weight[0][index][1] = weight[index][1];
+        wp_weight[0][index][2] = weight[index][2];
+        // printf ("wp weight[%d] = %d  \n", index, wp_weight[0][index][0]);
       }
+    }
     else if (img->type == BS_IMG && (input->WeightedBiprediction == 1))
+    {
+      for (index = 0; index < num_ref; index++)
       {
-        for (index = 0; index < num_ref; index++)
-          {
-            wp_weight[0][index][0] = weight[index][0];
-            wp_weight[0][index][1] = weight[index][1];
-            wp_weight[0][index][2] = weight[index][2];
-          }
-        for (index = 0; index < num_ref; index++)
-          {                     /* backward list */
-            if (index == 0)
-              n = 1;
-            else if (index == 1)
-              n = 0;
-            else
-              n = index;
-          }
+        wp_weight[0][index][0] = weight[index][0];
+        wp_weight[0][index][1] = weight[index][1];
+        wp_weight[0][index][2] = weight[index][2];
       }
+      for (index = 0; index < num_ref; index++)
+      {                     /* backward list */
+        if (index == 0)
+          n = 1;
+        else if (index == 1)
+          n = 0;
+        else
+          n = index;
+      }
+    }
     else if (img->type == B_SLICE && (input->WeightedBiprediction == 1))
-      {
-        for (index = 0; index < num_ref - 1; index++)
-          {
-            wp_weight[0][index][0] = weight[index + 1][0];
-            wp_weight[0][index][1] = weight[index + 1][1];
-            wp_weight[0][index][2] = weight[index + 1][2];
-          }
-        wp_weight[1][0][0] = weight[0][0];
-        wp_weight[1][0][1] = weight[0][1];
-        wp_weight[1][0][2] = weight[0][2];
-        }
-    else
-        {
-          for (index = 0; index < num_ref; index++)
-            {
-              wp_weight[0][index][0] = 1<<luma_log_weight_denom;
-              wp_weight[0][index][1] = 1<<chroma_log_weight_denom;
-              wp_weight[0][index][2] = 1<<chroma_log_weight_denom;
-              wp_weight[1][index][0] = 1<<luma_log_weight_denom;
-              wp_weight[1][index][1] = 1<<chroma_log_weight_denom;
-              wp_weight[1][index][2] = 1<<chroma_log_weight_denom;
-            }
-        }
-
-
-
-
-  if (input->WeightedBiprediction > 0 && (img->type == B_SLICE || img->type == BS_IMG))
-  {
-    if (img->type == BS_IMG )
     {
-      for (index = 0; index < num_fwd_ref; index++)
+      for (index = 0; index < num_ref - 1; index++)
       {
-        fwd_ref[index] = index;
-      if (index == 0)
-        n = 1;
-      else if (index == 1)
-        n = 0;
-      else
-        n = index;
-      bwd_ref[index] = n;
-	  }
-    }
-    else if (img->type == B_SLICE)
-    {
-      for (index = 0; index < num_fwd_ref; index++)
-      {
-        fwd_ref[index] = index+1;
+        wp_weight[0][index][0] = weight[index + 1][0];
+        wp_weight[0][index][1] = weight[index + 1][1];
+        wp_weight[0][index][2] = weight[index + 1][2];
       }
-      bwd_ref[0] = 0; // only one possible backwards ref for traditional B picture in current software
+      wp_weight[1][0][0] = weight[0][0];
+      wp_weight[1][0][1] = weight[0][1];
+      wp_weight[1][0][2] = weight[0][2];
     }
-  }      
-
-
-  if (img->type == B_SLICE || img->type == BS_IMG) // need to fill in wbp_weight values
-  { 
-
-    for (i = 0; i < num_fwd_ref; i++)
+    else
     {
-      for (j = 0; j < num_bwd_ref; j++)
+      for (index = 0; index < num_ref; index++)
       {
-        for (comp = 0; comp < 3; comp++)
-        {
-          log_weight_denom = (comp == 0) ? luma_log_weight_denom : chroma_log_weight_denom;
-          if (input->WeightedBiprediction == 1)
-          {
-            wbp_weight[0][i][j][comp] = wp_weight[0][i][comp];
-            wbp_weight[1][i][j][comp] = wp_weight[1][j][comp];
-          }
-          else if (input->WeightedBiprediction == 2)
-          { // implicit mode
-            pt = poc_distance (fwd_ref[i], bwd_ref[j]);
-            p0 = poc_distance (fwd_ref[i], -1);
-            if (pt == 0)
-            {
-              wbp_weight[1][i][j][comp] =  32 ;
-              wbp_weight[0][i][j][comp] = 32;
-            }	
-            else
-            {
-			  x = (16384 + (pt>>1))/pt;
-			  z = Clip(-1024, 1023, (x*p0 + 32 )>>6);
-              wbp_weight[1][i][j][comp] = z>>2;
-			  if (wbp_weight[1][i][j][comp] < -64 || wbp_weight[1][i][j][comp] >128)
-				  wbp_weight[1][i][j][comp] = 32;
-              wbp_weight[0][i][j][comp] = 64 - wbp_weight[1][i][j][comp];
+        wp_weight[0][index][0] = 1<<luma_log_weight_denom;
+        wp_weight[0][index][1] = 1<<chroma_log_weight_denom;
+        wp_weight[0][index][2] = 1<<chroma_log_weight_denom;
+        wp_weight[1][index][0] = 1<<luma_log_weight_denom;
+        wp_weight[1][index][1] = 1<<chroma_log_weight_denom;
+        wp_weight[1][index][2] = 1<<chroma_log_weight_denom;
+      }
+    }
 
+    if (input->WeightedBiprediction > 0 && (img->type == B_SLICE || img->type == BS_IMG))
+    {
+      if (img->type == BS_IMG )
+      {
+        for (index = 0; index < num_fwd_ref; index++)
+        {
+          fwd_ref[index] = index;
+          if (index == 0)
+            n = 1;
+          else if (index == 1)
+            n = 0;
+          else
+            n = index;
+          bwd_ref[index] = n;
+        }
+      }
+      else if (img->type == B_SLICE)
+      {
+        for (index = 0; index < num_fwd_ref; index++)
+        {
+          fwd_ref[index] = index+1;
+        }
+        bwd_ref[0] = 0; // only one possible backwards ref for traditional B picture in current software
+      }
+    }      
+
+
+    if (img->type == B_SLICE || img->type == BS_IMG) // need to fill in wbp_weight values
+    { 
+      
+      for (i = 0; i < num_fwd_ref; i++)
+      {
+        for (j = 0; j < num_bwd_ref; j++)
+        {
+          for (comp = 0; comp < 3; comp++)
+          {
+            log_weight_denom = (comp == 0) ? luma_log_weight_denom : chroma_log_weight_denom;
+            if (input->WeightedBiprediction == 1)
+            {
+              wbp_weight[0][i][j][comp] = wp_weight[0][i][comp];
+              wbp_weight[1][i][j][comp] = wp_weight[1][j][comp];
+            }
+            else if (input->WeightedBiprediction == 2)
+            { // implicit mode
+              pt = poc_distance (fwd_ref[i], bwd_ref[j]);
+              p0 = poc_distance (fwd_ref[i], -1);
+              if (pt == 0)
+              {
+                wbp_weight[1][i][j][comp] =  32 ;
+                wbp_weight[0][i][j][comp] = 32;
+              }	
+              else
+              {
+                x = (16384 + (pt>>1))/pt;
+                z = Clip(-1024, 1023, (x*p0 + 32 )>>6);
+                wbp_weight[1][i][j][comp] = z>>2;
+                if (wbp_weight[1][i][j][comp] < -64 || wbp_weight[1][i][j][comp] >128)
+                  wbp_weight[1][i][j][comp] = 32;
+                wbp_weight[0][i][j][comp] = 64 - wbp_weight[1][i][j][comp];
+                
               }
- //              if (comp == 0 )
-  //              printf ("bpw weight[%d][%d] = %d  , %d \n", i, j,
-  //                      wbp_weight[0][i][j][0], wbp_weight[1][i][j][0]);
-           }
+              // if (comp == 0 )
+              //   printf ("bpw weight[%d][%d] = %d  , %d \n", i, j, wbp_weight[0][i][j][0], wbp_weight[1][i][j][0]);
+            }
           }
-          }
+        }
       }
     }
   }
@@ -1369,64 +1349,78 @@ static void GenerateFullPelRepresentation (pel_t ** Fourthpel,
  *    Uses (writes) img4Y_tmp.  This should be moved to a static variable
  *    in this module
  ************************************************************************/
-static void UnifiedOneForthPix (pel_t ** imgY, pel_t ** imgU, pel_t ** imgV,
-                                pel_t ** out4Y, pel_t ** outU, pel_t ** outV,
-                                pel_t * ref11)
+void UnifiedOneForthPix (StorablePicture *s)
 {
-   int is;
-    int i, j, j4;
-    int ie2, je2, jj, maxy;
+  int is;
+  int i, j, j4;
+  int ie2, je2, jj, maxy;
+  
+  byte **out4Y;
+  byte  *ref11;
+  byte  **imgY = s->imgY;
+  
+  // don't upsample twice
+  if (s->imgY_ups || s->imgY_11)
+    return;
 
+  s->imgY_11 = malloc ((s->size_x * s->size_y) * sizeof (byte));
+  if (NULL == s->imgY_11)
+    no_mem_exit("alloc_storable_picture: s->imgY_11");
+  
+  get_mem2D (&(s->imgY_ups), (2*IMG_PAD_SIZE + s->size_y)*4, (2*IMG_PAD_SIZE + s->size_x)*4);
 
-    for (j = -IMG_PAD_SIZE; j < img->height + IMG_PAD_SIZE; j++)
-      {
-        for (i = -IMG_PAD_SIZE; i < img->width + IMG_PAD_SIZE; i++)
-          {
-            jj = max (0, min (img->height - 1, j));
-            is =
+  out4Y = s->imgY_ups;
+  ref11 = s->imgY_11;
+
+  for (j = -IMG_PAD_SIZE; j < s->size_y + IMG_PAD_SIZE; j++)
+  {
+    for (i = -IMG_PAD_SIZE; i < s->size_x + IMG_PAD_SIZE; i++)
+    {
+      jj = max (0, min (s->size_y - 1, j));
+      is =
               (ONE_FOURTH_TAP[0][0] *
-               (imgY[jj][max (0, min (img->width - 1, i))] +
-                imgY[jj][max (0, min (img->width - 1, i + 1))]) +
+               (imgY[jj][max (0, min (s->size_x - 1, i))] +
+                imgY[jj][max (0, min (s->size_x - 1, i + 1))]) +
                ONE_FOURTH_TAP[1][0] *
-               (imgY[jj][max (0, min (img->width - 1, i - 1))] +
-                imgY[jj][max (0, min (img->width - 1, i + 2))]) +
+               (imgY[jj][max (0, min (s->size_x - 1, i - 1))] +
+                imgY[jj][max (0, min (s->size_x - 1, i + 2))]) +
                ONE_FOURTH_TAP[2][0] *
-               (imgY[jj][max (0, min (img->width - 1, i - 2))] +
-                imgY[jj][max (0, min (img->width - 1, i + 3))]));
-            img4Y_tmp[j + IMG_PAD_SIZE][(i + IMG_PAD_SIZE) * 2] = imgY[jj][max (0, min (img->width - 1, i))] * 1024;    // 1/1 pix pos
+               (imgY[jj][max (0, min (s->size_x - 1, i - 2))] +
+                imgY[jj][max (0, min (s->size_x - 1, i + 3))]));
+            img4Y_tmp[j + IMG_PAD_SIZE][(i + IMG_PAD_SIZE) * 2] = imgY[jj][max (0, min (s->size_x - 1, i))] * 1024;    // 1/1 pix pos
             img4Y_tmp[j + IMG_PAD_SIZE][(i + IMG_PAD_SIZE) * 2 + 1] = is * 32;  // 1/2 pix pos
-          }
-      }
-
-    for (i = 0; i < (img->width + 2 * IMG_PAD_SIZE) * 2; i++)
-      {
-        for (j = 0; j < img->height + 2 * IMG_PAD_SIZE; j++)
-          {
-            j4 = j * 4;
-            maxy = img->height + 2 * IMG_PAD_SIZE - 1;
-            // change for TML4, use 6 TAP vertical filter
-            is =
+    }
+  }
+  
+  for (i = 0; i < (s->size_x + 2 * IMG_PAD_SIZE) * 2; i++)
+  {
+    for (j = 0; j < s->size_y + 2 * IMG_PAD_SIZE; j++)
+    {
+      j4 = j * 4;
+      maxy = s->size_y + 2 * IMG_PAD_SIZE - 1;
+      // change for TML4, use 6 TAP vertical filter
+      is =
               (ONE_FOURTH_TAP[0][0] *
                (img4Y_tmp[j][i] + img4Y_tmp[min (maxy, j + 1)][i]) +
                ONE_FOURTH_TAP[1][0] * (img4Y_tmp[max (0, j - 1)][i] +
                                        img4Y_tmp[min (maxy, j + 2)][i]) +
                ONE_FOURTH_TAP[2][0] * (img4Y_tmp[max (0, j - 2)][i] +
                                        img4Y_tmp[min (maxy, j + 3)][i])) / 32;
-
-            PutPel_14 (out4Y, (j - IMG_PAD_SIZE) * 4, (i - IMG_PAD_SIZE * 2) * 2, (pel_t) max (0, min (255, (int) ((img4Y_tmp[j][i] + 512) / 1024))));  // 1/2 pix
-            PutPel_14 (out4Y, (j - IMG_PAD_SIZE) * 4 + 2, (i - IMG_PAD_SIZE * 2) * 2, (pel_t) max (0, min (255, (int) ((is + 512) / 1024))));   // 1/2 pix
-          }
-      }
-
-    /* 1/4 pix */
-    /* luma */
-    ie2 = (img->width + 2 * IMG_PAD_SIZE - 1) * 4;
-    je2 = (img->height + 2 * IMG_PAD_SIZE - 1) * 4;
-
-    for (j = 0; j < je2 + 4; j += 2)
-      for (i = 0; i < ie2 + 3; i += 2)
-        {
-          /*  '-'  */
+      
+      PutPel_14 (out4Y, (j - IMG_PAD_SIZE) * 4, (i - IMG_PAD_SIZE * 2) * 2, (pel_t) max (0, min (255, (int) ((img4Y_tmp[j][i] + 512) / 1024))));  // 1/2 pix
+      PutPel_14 (out4Y, (j - IMG_PAD_SIZE) * 4 + 2, (i - IMG_PAD_SIZE * 2) * 2, (pel_t) max (0, min (255, (int) ((is + 512) / 1024))));   // 1/2 pix
+    }
+  }
+  
+  /* 1/4 pix */
+  /* luma */
+  ie2 = (s->size_x + 2 * IMG_PAD_SIZE - 1) * 4;
+  je2 = (s->size_y + 2 * IMG_PAD_SIZE - 1) * 4;
+  
+  for (j = 0; j < je2 + 4; j += 2)
+    for (i = 0; i < ie2 + 3; i += 2)
+    {
+      /*  '-'  */
           PutPel_14 (out4Y, j - IMG_PAD_SIZE * 4, i - IMG_PAD_SIZE * 4 + 1,
                      (pel_t) (max
                               (0,
@@ -1440,15 +1434,15 @@ static void UnifiedOneForthPix (pel_t ** imgY, pel_t ** imgU, pel_t ** imgV,
                                                              i + 2) -
                                                         IMG_PAD_SIZE * 4)+1) /
                                     2))));
-        }
+    }
     for (i = 0; i < ie2 + 4; i++)
+    {
+      for (j = 0; j < je2 + 3; j += 2)
       {
-        for (j = 0; j < je2 + 3; j += 2)
-          {
-            if (i % 2 == 0)
-              {
-                /*  '|'  */
-                PutPel_14 (out4Y, j - IMG_PAD_SIZE * 4 + 1,
+        if (i % 2 == 0)
+        {
+          /*  '|'  */
+          PutPel_14 (out4Y, j - IMG_PAD_SIZE * 4 + 1,
                            i - IMG_PAD_SIZE * 4,
                            (pel_t) (max
                                     (0,
@@ -1464,9 +1458,9 @@ static void UnifiedOneForthPix (pel_t ** imgY, pel_t ** imgU, pel_t ** imgV,
                                                               i -
                                                               IMG_PAD_SIZE *
                                                               4)+1) / 2))));
-              }
-            else if ((j % 4 == 0 && i % 4 == 1) || (j % 4 == 2 && i % 4 == 3))
-              {
+        }
+        else if ((j % 4 == 0 && i % 4 == 1) || (j % 4 == 2 && i % 4 == 3))
+        {
                 /*  '/'  */
                 PutPel_14 (out4Y, j - IMG_PAD_SIZE * 4 + 1,
                            i - IMG_PAD_SIZE * 4,
@@ -1486,9 +1480,9 @@ static void UnifiedOneForthPix (pel_t ** imgY, pel_t ** imgU, pel_t ** imgV,
                                                               i -
                                                               IMG_PAD_SIZE *
                                                               4 - 1) + 1) / 2))));
-              }
-            else
-              {
+        }
+        else
+        {
                 /*  '\'  */
                 PutPel_14 (out4Y, j - IMG_PAD_SIZE * 4 + 1,
                            i - IMG_PAD_SIZE * 4,
@@ -1511,14 +1505,14 @@ static void UnifiedOneForthPix (pel_t ** imgY, pel_t ** imgU, pel_t ** imgV,
       }
 
     /*  Chroma: */
-    for (j = 0; j < img->height_cr; j++)
+/*    for (j = 0; j < img->height_cr; j++)
       {
         memcpy (outU[j], imgU[j], img->width_cr);       // just copy 1/1 pix, interpolate "online" 
         memcpy (outV[j], imgV[j], img->width_cr);
       }
-
+*/
     // Generate 1/1th pel representation (used for integer pel MV search)
-    GenerateFullPelRepresentation (out4Y, ref11, img->width, img->height);
+    GenerateFullPelRepresentation (out4Y, ref11, s->size_x, s->size_y);
 
 }
 
@@ -2869,16 +2863,17 @@ static void put_buffer_frame()
   imgY_org = imgY_org_frm;
   imgUV_org = imgUV_org_frm;  
   tmp_mv = tmp_mv_frm;
-  mref = mref_frm;
+  
+	//mref = mref_frm;
   if (input->WeightedPrediction || input->WeightedBiprediction) 
     mref_w = mref_frm_w;
-  mcef = mcef_frm;  
+  //mcef = mcef_frm;  
 
   refFrArr = refFrArr_frm;
   fw_refFrArr = fw_refFrArr_frm;
   bw_refFrArr = bw_refFrArr_frm;
 
-  Refbuf11 = Refbuf11_frm;
+  //Refbuf11 = Refbuf11_frm;
   if (input->WeightedPrediction || input->WeightedBiprediction) 
         Refbuf11_w = Refbuf11_frm_w;
   if (input->direct_type && (input->successive_Bframe!=0 || input->StoredBPictures > 0))
@@ -2971,7 +2966,7 @@ static void writeUnit(Bitstream* currStream)
   {
     nalu->nal_unit_type = NALU_TYPE_SLICE;
     nalu->nal_reference_idc = NALU_PRIORITY_DISPOSABLE;
-    assert (img->nal_reference_idc != 0);
+  //  assert (img->nal_reference_idc != 0);
   }
   else   // non-disposable, non IDR slice
   {
@@ -2982,4 +2977,140 @@ static void writeUnit(Bitstream* currStream)
   stat->bit_ctr += WriteNALU (nalu);
   
   FreeNALU(nalu);
+}
+
+
+void get_block(int ref_frame, StorablePicture **list, int x_pos, int y_pos, int block[BLOCK_SIZE][BLOCK_SIZE])
+{
+  int dx, dy;
+  int x, y;
+  int i, j;
+  int maxold_x,maxold_y;
+  int result;
+  int pres_x;
+  int pres_y; 
+  int tmp_res[4][9];
+  static const int COEF[6] = {
+			1, -5, 20, 20, -5, 1
+		};
+
+ 
+  dx = x_pos&3;
+  dy = y_pos&3;
+  x_pos = (x_pos-dx)/4;
+  y_pos = (y_pos-dy)/4;
+
+  maxold_x = img->width-1;
+  maxold_y = img->height-1;
+
+  if (enc_picture->mb_field[img->current_mb_nr])
+    maxold_y = img->height/2 - 1;
+
+if (dx == 0 && dy == 0) {  /* fullpel position */
+    for (j = 0; j < BLOCK_SIZE; j++)
+      for (i = 0; i < BLOCK_SIZE; i++)
+        block[i][j] = list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j))][max(0,min(maxold_x,x_pos+i))];
+  }
+  else { /* other positions */
+
+    if (dy == 0) { /* No vertical interpolation */
+
+      for (j = 0; j < BLOCK_SIZE; j++) {
+        for (i = 0; i < BLOCK_SIZE; i++) {
+          for (result = 0, x = -2; x < 4; x++)
+            result += list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j))][max(0,min(maxold_x,x_pos+i+x))]*COEF[x+2];
+          block[i][j] = max(0, min(255, (result+16)/32));
+        }
+      }
+
+      if ((dx&1) == 1) {
+        for (j = 0; j < BLOCK_SIZE; j++)
+          for (i = 0; i < BLOCK_SIZE; i++)
+            block[i][j] = (block[i][j] + list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j))][max(0,min(maxold_x,x_pos+i+dx/2))] +1 )/2;
+      }
+    }
+    else if (dx == 0) {  /* No horizontal interpolation */
+
+      for (j = 0; j < BLOCK_SIZE; j++) {
+        for (i = 0; i < BLOCK_SIZE; i++) {
+          for (result = 0, y = -2; y < 4; y++)
+            result += list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j+y))][max(0,min(maxold_x,x_pos+i))]*COEF[y+2];
+          block[i][j] = max(0, min(255, (result+16)/32));
+        }
+      }
+
+      if ((dy&1) == 1) {
+        for (j = 0; j < BLOCK_SIZE; j++)
+          for (i = 0; i < BLOCK_SIZE; i++)
+           block[i][j] = (block[i][j] + list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j+dy/2))][max(0,min(maxold_x,x_pos+i))] +1 )/2;
+      }
+    }
+    else if (dx == 2) {  /* Vertical & horizontal interpolation */
+
+      for (j = -2; j < BLOCK_SIZE+3; j++) {
+        for (i = 0; i < BLOCK_SIZE; i++)
+          for (tmp_res[i][j+2] = 0, x = -2; x < 4; x++)
+            tmp_res[i][j+2] += list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j))][max(0,min(maxold_x,x_pos+i+x))]*COEF[x+2];
+      }
+
+      for (j = 0; j < BLOCK_SIZE; j++) {
+        for (i = 0; i < BLOCK_SIZE; i++) {
+          for (result = 0, y = -2; y < 4; y++)
+            result += tmp_res[i][j+y+2]*COEF[y+2];
+          block[i][j] = max(0, min(255, (result+512)/1024));
+        } 
+      }
+
+      if ((dy&1) == 1) {
+        for (j = 0; j < BLOCK_SIZE; j++)
+          for (i = 0; i < BLOCK_SIZE; i++)
+            block[i][j] = (block[i][j] + max(0, min(255, (tmp_res[i][j+2+dy/2]+16)/32)) +1 )/2;
+      }
+    }
+    else if (dy == 2) {  /* Horizontal & vertical interpolation */
+
+      for (j = 0; j < BLOCK_SIZE; j++) {
+        for (i = -2; i < BLOCK_SIZE+3; i++)
+          for (tmp_res[j][i+2] = 0, y = -2; y < 4; y++)
+            tmp_res[j][i+2] += list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j+y))][max(0,min(maxold_x,x_pos+i))]*COEF[y+2];
+      }
+
+      for (j = 0; j < BLOCK_SIZE; j++) {
+        for (i = 0; i < BLOCK_SIZE; i++) {
+          for (result = 0, x = -2; x < 4; x++)
+            result += tmp_res[j][i+x+2]*COEF[x+2];
+          block[i][j] = max(0, min(255, (result+512)/1024));
+        }
+      }
+
+      if ((dx&1) == 1) {
+        for (j = 0; j < BLOCK_SIZE; j++)
+          for (i = 0; i < BLOCK_SIZE; i++)
+            block[i][j] = (block[i][j] + max(0, min(255, (tmp_res[j][i+2+dx/2]+16)/32))+1)/2;
+      }
+    }
+    else {  /* Diagonal interpolation */
+
+      for (j = 0; j < BLOCK_SIZE; j++) {
+        for (i = 0; i < BLOCK_SIZE; i++) {
+          pres_y = dy == 1 ? y_pos+j : y_pos+j+1;
+          pres_y = max(0,min(maxold_y,pres_y));
+          for (result = 0, x = -2; x < 4; x++)
+            result += list[ref_frame]->imgY[pres_y][max(0,min(maxold_x,x_pos+i+x))]*COEF[x+2];
+          block[i][j] = max(0, min(255, (result+16)/32));
+        }
+      }
+
+      for (j = 0; j < BLOCK_SIZE; j++) {
+        for (i = 0; i < BLOCK_SIZE; i++) {
+          pres_x = dx == 1 ? x_pos+i : x_pos+i+1;
+          pres_x = max(0,min(maxold_x,pres_x));
+          for (result = 0, y = -2; y < 4; y++)
+            result += list[ref_frame]->imgY[max(0,min(maxold_y,y_pos+j+y))][pres_x]*COEF[y+2];
+          block[i][j] = (block[i][j] + max(0, min(255, (result+16)/32)) +1 ) / 2;
+        }
+      }
+
+    }
+  }
 }

@@ -1,34 +1,3 @@
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
 
 /*!
  **************************************************************************************
@@ -203,10 +172,17 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
   sps->profile_idc = IdentifyProfile();
   sps->level_idc = IdentifyLevel();
 
-	sps->more_than_one_slice_group_allowed_flag = (input->FmoType!=0);
+#ifdef G50_SPS
+  // needs to be set according to profile
+  sps->constrained_set0_flag = 0;
+  sps->constrained_set1_flag = 0;
+  sps->constrained_set2_flag = 0;
+#else
+  sps->more_than_one_slice_group_allowed_flag = (input->FmoType!=0);
   // no out of order slice support
-	sps->arbitrary_slice_order_allowed_flag = 0;
-	sps->redundant_slices_allowed_flag = (input->redundant_slice_flag);
+  sps->arbitrary_slice_order_allowed_flag = 0;
+  sps->redundant_slices_allowed_flag = (input->redundant_slice_flag);
+#endif
 
   // Parameter Set ID hardcoded to zero
   sps->seq_parameter_set_id = 0;
@@ -328,7 +304,14 @@ FMOTYPE6:
 
   // the picture vui consists currently of the cropping rectangle, which cannot
   // used by the current decoder and hence is never sent.
+#ifdef G50_SPS
+  sps->frame_cropping_flag = FALSE;
+#else
   pps->frame_cropping_flag = FALSE;
+#endif
+
+	active_sps = sps;
+  active_pps = pps;
 };
 
 
@@ -368,10 +351,22 @@ int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, char *rbsp)
   partition->bitstream->bits_to_go = 8;
 
   len+=u_v  (8, "SPS: profile_idc",                             sps->profile_idc,                               partition);
+
+#ifdef G50_SPS
+  len+=u_1  ("SPS: constrained_set0_flag",                      sps->constrained_set0_flag,    partition);
+  len+=u_1  ("SPS: constrained_set1_flag",                      sps->constrained_set1_flag,    partition);
+  len+=u_1  ("SPS: constrained_set2_flag",                      sps->constrained_set2_flag,    partition);
+  len+=u_v  (5, "SPS: reserved_zero",                           0,                             partition);
+#endif
+
   len+=u_v  (8, "SPS: level_idc",                               sps->level_idc,                                 partition);
+
+#ifndef G50_SPS
   len+=u_1  ("SPS: more_than_one_slice_group_allowed_flag",     sps->more_than_one_slice_group_allowed_flag,    partition);
   len+=u_1  ("SPS: arbitrary_slice_order_allowed_flag",         sps->arbitrary_slice_order_allowed_flag,        partition);
   len+=u_1  ("SPS: redundant_slices_allowed_flag",              sps->redundant_slices_allowed_flag,             partition);
+#endif
+
   len+=ue_v ("SPS: seq_parameter_set_id",                    sps->seq_parameter_set_id,                      partition);
   len+=ue_v ("SPS: log2_max_frame_num_minus4",               sps->log2_max_frame_num_minus4,                 partition);
   len+=ue_v ("SPS: pic_order_cnt_type",                      sps->pic_order_cnt_type,                        partition);
@@ -397,7 +392,8 @@ int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, char *rbsp)
     len+=u_1  ("SPS: mb_adaptive_frame_field_flag",            sps->mb_adaptive_frame_field_flag,              partition);
   }
   len+=u_1  ("SPS: direct_8x8_inference_flag",               sps->direct_8x8_inference_flag,                 partition);
-#ifdef G50SPS
+
+#ifdef G50_SPS
   len+=u_1  ("SPS: frame_cropping_flag",                      sps->frame_cropping_flag,                       partition);
   if (sps->frame_cropping_flag)
   {
@@ -407,6 +403,7 @@ int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, char *rbsp)
     len+=ue_v ("SPS: frame_cropping_rect_bottom_offset",        sps->frame_cropping_rect_bottom_offset,         partition);
   }
 #endif
+
   len+=u_1  ("SPS: vui_parameters_present_flag",             sps->vui_parameters_present_flag,               partition);
   if (sps->vui_parameters_present_flag)
     len+=GenerateVUISequenceParameters();    // currently a dummy, asserting
@@ -513,7 +510,8 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, char *rbsp)
   len+=u_1  ("PPS: deblocking_filter_control_present_flag",   pps->deblocking_filter_control_present_flag,    partition);
   len+=u_1  ("PPS: constrained_intra_pred_flag",              pps->constrained_intra_pred_flag,               partition);
   len+=u_1  ("PPS: redundant_pic_cnt_present_flag",           pps->redundant_pic_cnt_present_flag,            partition);
-#ifndef G50SPS
+
+#ifndef G50_SPS
   len+=u_1  ("PPS: frame_cropping_flag",                      pps->frame_cropping_flag,                       partition);
   if (pps->frame_cropping_flag)
   {
@@ -523,6 +521,7 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, char *rbsp)
     len+=ue_v ("PPS: frame_cropping_rect_bottom_offset",        pps->frame_cropping_rect_bottom_offset,         partition);
   }
 #endif
+
   SODBtoRBSP(partition->bitstream);     // copies the last couple of bits into the byte buffer
   
   LenInBytes=partition->bitstream->byte_pos;

@@ -1,34 +1,3 @@
-/*
-***********************************************************************
-* COPYRIGHT AND WARRANTY INFORMATION
-*
-* Copyright 2001, International Telecommunications Union, Geneva
-*
-* DISCLAIMER OF WARRANTY
-*
-* These software programs are available to the user without any
-* license fee or royalty on an "as is" basis. The ITU disclaims
-* any and all warranties, whether express, implied, or
-* statutory, including any implied warranties of merchantability
-* or of fitness for a particular purpose.  In no event shall the
-* contributor or the ITU be liable for any incidental, punitive, or
-* consequential damages of any kind whatsoever arising from the
-* use of these programs.
-*
-* This disclaimer of warranty extends to the user of these programs
-* and user's customers, employees, agents, transferees, successors,
-* and assigns.
-*
-* The ITU does not represent or warrant that the programs furnished
-* hereunder are free of infringement of any third-party patents.
-* Commercial implementations of ITU-T Recommendations, including
-* shareware, may be subject to royalty fees to patent holders.
-* Information regarding the ITU-T patent policy is available from
-* the ITU Web site at http://www.itu.int.
-*
-* THIS IS NOT A GRANT OF PATENT RIGHTS - SEE THE ITU-T PATENT POLICY.
-************************************************************************
-*/
 
 /*!
  *************************************************************************************
@@ -180,12 +149,21 @@ int RestOfSliceHeader()
     img->pic_order_cnt_lsb = u_v(active_sps->log2_max_pic_order_cnt_lsb_minus4 + 4, "SH: pic_order_cnt_lsb", currStream);
     if( img->pic_order_present_flag  ==  1 &&  !img->field_pic_flag )
       img->delta_pic_order_cnt_bottom = se_v("SH: delta_pic_order_cnt_bottom", currStream);
+    else
+      img->delta_pic_order_cnt_bottom = 0;  
   }
   if( img->pic_order_cnt_type == 1 && !img->delta_pic_order_always_zero_flag ) 
   {
     img->delta_pic_order_cnt[ 0 ] = se_v("SH: delta_pic_order_cnt[0]", currStream);
     if( img->pic_order_present_flag  ==  1  &&  !img->field_pic_flag )
       img->delta_pic_order_cnt[ 1 ] = se_v("SH: delta_pic_order_cnt[1]", currStream);
+  }else
+  {
+    if (img->pic_order_cnt_type == 1)
+    {
+      img->delta_pic_order_cnt[ 0 ] = 0;
+      img->delta_pic_order_cnt[ 1 ] = 0;
+    }
   }
   
   //! redundant_pic_cnt is missing here
@@ -383,10 +361,10 @@ static void pred_weight_table()
   int i,j;
 
   img->luma_log2_weight_denom = ue_v ("SH: luma_log2_weight_denom", currStream);
-  img->wp_round_luma = 1<<(img->luma_log2_weight_denom - 1);
+  img->wp_round_luma = img->luma_log2_weight_denom ? 1<<(img->luma_log2_weight_denom - 1): 0;
   
   img->chroma_log2_weight_denom = ue_v ("SH: chroma_log2_weight_denom", currStream);
-  img->wp_round_chroma = 1<<(img->chroma_log2_weight_denom - 1);
+  img->wp_round_chroma = img->chroma_log2_weight_denom ? 1<<(img->chroma_log2_weight_denom - 1): 0;
 
   reset_wp_params(img);
 
@@ -416,7 +394,7 @@ static void pred_weight_table()
       }
       else
       {
-        img->wp_weight[0][i][j] = 1<<img->luma_log2_weight_denom;
+        img->wp_weight[0][i][j] = 1<<img->chroma_log2_weight_denom;
         img->wp_offset[0][i][j] = 0;
       }
     }
@@ -449,7 +427,7 @@ static void pred_weight_table()
         }
         else
         {
-          img->wp_weight[1][i][j] = 1<<img->luma_log2_weight_denom;
+          img->wp_weight[1][i][j] = 1<<img->chroma_log2_weight_denom;
           img->wp_offset[1][i][j] = 0;
         }
       }
@@ -547,12 +525,8 @@ void dec_ref_pic_marking(Bitstream *currStream)
 void decoding_poc(struct img_par *img)
 {
   int i;
-  static int flag = 0;
-  Slice *currSlice = img->currentSlice;
   // for POC mode 0:
   unsigned int        MaxPicOrderCntLsb = (1<<(active_sps->log2_max_pic_order_cnt_lsb_minus4+4));
-  flag ++;
-  // for POC mode 1:
 
   switch ( img->pic_order_cnt_type )
   {
@@ -592,15 +566,12 @@ void decoding_poc(struct img_par *img)
     if(img->idr_flag)
     {
       img->FrameNumOffset=0;     //  first pix of IDRGOP, 
-      // why the following two lines?????
-      img->FirstFieldType = img->bottom_field_flag;              //save type of first field of frame
-                                                            //NB may not work with mixed field & frame coding
       img->delta_pic_order_cnt[0]=0;                        //ignore first delta
       if(img->frame_num)  error("frame_num != 0 in idr pix", -1020);
     }
     else if (img->frame_num<img->PreviousFrameNum)
     {             //not first pix of IDRGOP
-      img->FrameNumOffset += img->MaxFrameNum;
+      img->FrameNumOffset = img->PreviousFrameNumOffset + img->MaxFrameNum;
     }
 
     // 2nd
@@ -639,41 +610,16 @@ void decoding_poc(struct img_par *img)
       img->toppoc = img->ExpectedPicOrderCnt + img->delta_pic_order_cnt[0];
       img->bottompoc = img->toppoc + img->offset_for_top_to_bottom_field + img->delta_pic_order_cnt[1];
       img->ThisPOC = img->framepoc = (img->toppoc < img->bottompoc)? img->toppoc : img->bottompoc; // POC200301
-      if(img->PreviousPOC!=img->ThisPOC)
-      {         //new frame detected
-        if(img->disposable_flag)
-          push_poc(img->toppoc,img->bottompoc,NONREFFRAME);
-        else
-          push_poc(img->toppoc,img->bottompoc,REFFRAME);
-      }
     }
     else if (img->bottom_field_flag==0)
     {  //top field 
       img->ThisPOC = img->toppoc = img->ExpectedPicOrderCnt + img->delta_pic_order_cnt[0];
       img->bottompoc = 0;
-      if((img->PreviousPOC!=img->ThisPOC)  &&  (img->FirstFieldType==img->bottom_field_flag))
-      {           //new frame detected
-        if(img->disposable_flag)
-          push_poc(img->toppoc,0,NONREFFRAME);
-        else
-          push_poc(img->toppoc,0,REFFRAME);
-      }
-      else
-        toprefpoc[0] = img->toppoc;                //2nd field of same frame
     } 
     else
     {  //bottom field
       img->toppoc = 0;
       img->ThisPOC = img->bottompoc = img->ExpectedPicOrderCnt + img->offset_for_top_to_bottom_field + img->delta_pic_order_cnt[0];
-      if(img->PreviousPOC!=img->ThisPOC  &&  img->FirstFieldType==img->bottom_field_flag)
-      {           //new frame detected
-        if(img->disposable_flag)
-          push_poc(0,img->bottompoc,NONREFFRAME);
-        else 
-          push_poc(0,img->bottompoc,REFFRAME);
-      }
-      else 
-        bottomrefpoc[0] = img->bottompoc;          //2nd field of same frame
     }
   
     // 4th (last) update "Previous" stuff for next slice
@@ -713,49 +659,6 @@ void decoding_poc(struct img_par *img)
     assert( 1==0 );
     break;
   }
-
-  //temp stuff to track tr
-  if(img->field_pic_flag)
-  {
-    img->tr_fld = img->ThisPOC;
-    if(img->bottom_field_flag)
-    {
-      currSlice->picture_id = img->tr = img->bottompoc;
-    }
-    else
-    {   //top field
-      currSlice->picture_id = img->tr = img->toppoc;
-    }
-  }
-  else
-  {           //frame pix  -  use toppoc/2
-    img->tr_frm = (img->ThisPOC/2) ;
-    
-    currSlice->picture_id = (img->toppoc/2);
-    if (!active_sps->frame_mbs_only_flag && !img->MbaffFrameFlag)
-      img->tr = (img->toppoc);
-    else
-      img->tr = (img->toppoc/2);
-  }
-            //moved from above for stuff that still uses img->tr
-            //soon to be obsolete
-  if(!img->current_slice_nr)
-  { 
-    if((img->type != B_SLICE) || !img->disposable_flag) 
-    {
-      img->pstruct_next_P = img->structure;
-      if(img->structure == TOP_FIELD)
-      {
-        img->imgtr_last_P = img->imgtr_next_P;
-        img->imgtr_next_P = img->tr_fld;
-      }
-      else if(img->structure == FRAME)
-      {
-        img->imgtr_last_P = img->imgtr_next_P;
-        img->imgtr_next_P = 2*img->tr_frm;
-      }
-    }
-  }
 }
 
 void post_poc(struct img_par *img)
@@ -771,14 +674,9 @@ void post_poc(struct img_par *img)
     break;
 
 
-  case 1: // POC MODE 1
+  case 1: // POC MODE 1    called at end of picture
     img->PreviousFrameNum=img->frame_num;
-    img->Previousfield_pic_flag=img->field_pic_flag;
-    img->Previousbottom_field_flag=img->bottom_field_flag;
-    img->Previousnal_reference_idc=img->idr_flag;               
-    img->Previousdelta_pic_order_cnt[0]=img->delta_pic_order_cnt[0];
-    img->Previousdelta_pic_order_cnt[1]=img->delta_pic_order_cnt[1];
-    img->PreviousPOC=img->ThisPOC;
+    img->PreviousFrameNumOffset=img->FrameNumOffset;
     break;
 
 
@@ -832,12 +730,6 @@ int dumppoc(struct img_par *img) {
     printf ("MaxFrameNum                           %d\n", img->MaxFrameNum);
 
     return 0;
-}
-
-// this function is likely to be updated according to how POC values are managed in JM.
-int poc_distance( int refa, int refb)
-{
-  return toprefpoc[refb + 1] - toprefpoc[refa + 1];
 }
 
 /*!
