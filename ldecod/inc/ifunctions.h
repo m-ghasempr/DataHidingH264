@@ -72,7 +72,8 @@ static inline double dabs2(double x)
   return (x) * (x);
 }
 
-static inline int iabs2(int x) {
+static inline int iabs2(int x) 
+{
   return (x) * (x);
 }
 

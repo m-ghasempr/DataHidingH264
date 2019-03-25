@@ -1,4 +1,3 @@
-
 /*!
 *************************************************************************************
 * \file img_luma.c
@@ -8,8 +7,8 @@
 *
 * \author
 *    Main contributors (see contributors.h for copyright, address and affiliation details)
-*      - Athanasios Leontaris    <aleon@dolby.com>
 *      - Alexis Michael Tourapis <alexis.tourapis@dolby.com>
+*      - Athanasios Leontaris    <aleon@dolby.com>
 *
 *************************************************************************************
 */

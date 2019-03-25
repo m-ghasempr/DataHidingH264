@@ -731,7 +731,8 @@ int encode_one_frame (void)
     }
   }
 
-  img->AverageFrameQP = (img->SumFrameQP + (img->FrameSizeInMbs >> 1))/img->FrameSizeInMbs;
+  img->AverageFrameQP = isign(img->SumFrameQP) * ((iabs(img->SumFrameQP) + (int) (img->FrameSizeInMbs >> 1))/ (int) img->FrameSizeInMbs);
+
   if ( input->RCEnable && input->RCUpdateMode <= MAX_RC_MODE && img->type != B_SLICE && input->basicunit < img->FrameSizeInMbs )
     quadratic_RC->CurrLastQP = img->AverageFrameQP;
 
@@ -1299,8 +1300,8 @@ static void init_frame (void)
         {
           if ( (input->qp2start > 0) && ( ( (img->tr ) % (2*input->qp2start) ) >=input->qp2start ))
           {
-            img->qp = input->qpN2-(input->qpN-input->qpsp);
-            img->qpsp = input->qpN2-(input->qpN-input->qpsp_pred);
+            img->qp = input->qpN2 - (input->qpN - input->qpsp);
+            img->qpsp = input->qpN2 - (input->qpN - input->qpsp_pred);
           }
           else
           {

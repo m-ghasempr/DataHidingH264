@@ -417,7 +417,7 @@ int computeSADWP(imgpel* src_pic,
                int cand_y)
 {
   int mcost = 0;
-  int y,x;
+  int y, x;
   int weighted_pel;
   int pad_size_x = img_padded_size_x - blocksize_x;
 
@@ -638,7 +638,7 @@ int computeBiPredSAD2(imgpel* src_pic,
           weighted_pel =  iClip1( max_imgpel_value_uv, ((pixel1 + pixel2 + lround) >> denom) + offsetBi_cr[k]);
           bi_diff = (*src_line++) - weighted_pel;
           mcr_cost += byte_abs[bi_diff];
-        }        
+        }
         ref2_line += cr_pad_size_x;
         ref1_line += cr_pad_size_x;
       }

@@ -1,11 +1,23 @@
+Changes in Version JM 13.2 (since JM 13.1)
+------------------------------------------
+- encoder: 4:4:4 chroma mismatch fix (4x4 intra) (KS)
+- encoder: 4:2:2 chroma mismatch fix (THi)
+- encoder: fixes for negative QP (AT)
+- encoder: fix trace file and average qp calculation for slices with fixed byte size (AL)
+- decoder: fix temporal direct mode (KS)
+- decoder: implement I_PCM for more than 8bpp (KS)
+
+
 Changes in Version JM 13.1 (since JM 13.0)
 ------------------------------------------
 - encoder: 4:4:4 performance fix (4x4 intra) (KS)
 - encoder: always use ChromaMEEnable for 4:4:4 common mode (KS)
+- encoder: 4:2:2 transform fix (AT)
 - decoder: fix slice_group_id allocation (KS)
 - encoder/decoder: fix inline functions for compilers without c99 support (KS)
 - encoder/decoder: makefile updates (LW/KS)
 - encoder/decoder: 4:0:0 fixes (KS)
+- encoder/decoder: further cleanups (AT/KS)
 
 
 

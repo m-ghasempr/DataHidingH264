@@ -217,6 +217,7 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
 {
   Boolean end_of_slice = FALSE;
   Boolean recode_macroblock;
+  Boolean prev_recode_mb = FALSE;
   int len;
   int NumberOfCodedMBs = 0;
   Macroblock* currMB      = NULL;
@@ -295,16 +296,16 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
 
       start_macroblock (&currMB, CurrentMbAddr, FALSE);
       encode_one_macroblock (currMB);
-      write_one_macroblock (currMB, 1);
-
+      write_one_macroblock (currMB, 1, prev_recode_mb);
       terminate_macroblock (currMB, &end_of_slice, &recode_macroblock);
-
+      prev_recode_mb = recode_macroblock;
 //       printf ("encode_one_slice: mb %d,  slice %d,   bitbuf bytepos %d EOS %d\n",
 //       img->current_mb_nr, img->current_slice_nr,
 //       img->currentSlice->partArr[0].bitstream->byte_pos, end_of_slice);
 
       if (recode_macroblock == FALSE)       // The final processing of the macroblock has been done
       {
+        img->SumFrameQP += currMB->qp;
         CurrentMbAddr = FmoGetNextMBNr (CurrentMbAddr);
         if (CurrentMbAddr == -1)   // end of slice
         {
@@ -511,8 +512,9 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
 
       rdopt =  img->field_mode ? &rddata_top_field_mb : &rddata_top_frame_mb;
       copy_rdopt_data (currMB, 0);  // copy the MB data for Top MB from the temp buffers
-      write_one_macroblock (currMB, 1);     // write the Top MB data to the bitstream
+      write_one_macroblock (currMB, 1, prev_recode_mb);     // write the Top MB data to the bitstream
       terminate_macroblock (currMB, &end_of_slice, &recode_macroblock);     // done coding the Top MB
+      prev_recode_mb = recode_macroblock;
 
       if (recode_macroblock == FALSE)       // The final processing of the macroblock has been done
       {
@@ -534,8 +536,9 @@ int encode_one_slice (int SliceGroupId, Picture *pic, int TotalCodedMBs)
         rdopt = img->field_mode ? &rddata_bot_field_mb : &rddata_bot_frame_mb;
         copy_rdopt_data (currMB, 1);  // copy the MB data for Bottom MB from the temp buffers
 
-        write_one_macroblock (currMB, 0);     // write the Bottom MB data to the bitstream
+        write_one_macroblock (currMB, 0, prev_recode_mb);     // write the Bottom MB data to the bitstream
         terminate_macroblock (currMB, &end_of_slice, &recode_macroblock);     // done coding the Top MB
+        prev_recode_mb = recode_macroblock;
         if (recode_macroblock == FALSE)       // The final processing of the macroblock has been done
         {
           CurrentMbAddr = FmoGetNextMBNr (CurrentMbAddr);

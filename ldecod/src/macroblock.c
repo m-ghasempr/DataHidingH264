@@ -484,7 +484,7 @@ void read_one_macroblock(Macroblock *currMB, struct img_par *img,struct inp_par 
   int i;
 
   SyntaxElement currSE;
-  int mb_nr = img->current_mb_nr;
+  int mb_nr = img->current_mb_nr; 
 
   Slice *currSlice = img->currentSlice;
   DataPartition *dP;
@@ -1013,45 +1013,7 @@ void readIPCMcoeffsFromNAL(struct img_par *img, struct inp_par *inp, struct data
   //  because we have variable for integer bytes position
   if(active_pps->entropy_coding_mode_flag  == CABAC)
   {
-    //read luma and chroma IPCM coefficients
-    currSE.len = (int64) 8;
-    TRACE_STRING("pcm_byte luma");
-
-    for(i=0;i<MB_BLOCK_SIZE;i++)
-    {
-      for(j=0;j<MB_BLOCK_SIZE;j++)
-      {
-        readIPCMBytes_CABAC(&currSE, dP);
-        img->cof[0][i][j] = currSE.value1;        
-      }
-    }
-    if ((dec_picture->chroma_format_idc != YUV400) && !IS_INDEPENDENT(img))
-    {
-      TRACE_STRING("pcm_byte chroma");
-      for(i=0;i<img->mb_cr_size_y;i++)
-      {
-        for(j=0;j<img->mb_cr_size_x;j++)
-        {
-          readIPCMBytes_CABAC(&currSE, dP);
-          img->cof[1][i][j] = currSE.value1;          
-        }
-      }
-      for(i=0;i<img->mb_cr_size_y;i++)
-      {
-        for(j=0;j<img->mb_cr_size_x;j++)
-        {
-          readIPCMBytes_CABAC(&currSE, dP);
-          img->cof[2][i][j] = currSE.value1;          
-        }
-      }
-    }
-    //If the decoded MB is IPCM MB, decoding engine is initialized
-
-    // here the decoding engine is directly initialized without checking End of Slice
-    // The reason is that, whether current MB is the last MB in slice or not, there is
-    // at least one 'end of slice' syntax after this MB. So when fetching bytes in this
-    // initialization process, we can guarantee there is bits available in bitstream.
-
+    readIPCM_CABAC(dP);
     init_decoding_engine_IPCM(img);
   }
   else
@@ -3906,7 +3868,7 @@ void readCBPandCoeffsFromNAL(Macroblock *currMB, struct img_par *img,struct inp_
                   imgcof[ 0][i<<2] = ((((m6[0]+m6[3])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_uv_dc][0][0]+(1<<(3-qp_per_uv_dc)))>>(4-qp_per_uv_dc))+2)>>2;
                   imgcof[ 4][i<<2] = ((((m6[1]+m6[2])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_uv_dc][0][0]+(1<<(3-qp_per_uv_dc)))>>(4-qp_per_uv_dc))+2)>>2;
                   imgcof[ 8][i<<2] = ((((m6[1]-m6[2])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_uv_dc][0][0]+(1<<(3-qp_per_uv_dc)))>>(4-qp_per_uv_dc))+2)>>2;
-                  imgcof[12][i<<2] = ((((m6[1]-m6[2])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_uv_dc][0][0]+(1<<(3-qp_per_uv_dc)))>>(4-qp_per_uv_dc))+2)>>2;
+                  imgcof[12][i<<2] = ((((m6[0]-m6[3])*InvLevelScale4x4Chroma_Inter[uv][qp_rem_uv_dc][0][0]+(1<<(3-qp_per_uv_dc)))>>(4-qp_per_uv_dc))+2)>>2;
                 }
               }
               else
@@ -4002,8 +3964,8 @@ void readCBPandCoeffsFromNAL(Macroblock *currMB, struct img_par *img,struct inp_
               {
                 if (levarr[k] != 0)
                 {
-                  currMB->cbp_blk |= ((int64)1) << cbp_blk_chroma[b8][b4];
-                  coef_ctr += runarr[k]+1;
+                  currMB->cbp_blk |= ((int64) 1) << cbp_blk_chroma[b8][b4];
+                  coef_ctr += runarr[k] + 1;
 
                   i0=pos_scan4x4[coef_ctr][0];
                   j0=pos_scan4x4[coef_ctr][1];

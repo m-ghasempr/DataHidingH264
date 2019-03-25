@@ -22,7 +22,7 @@ void proceed2nextMacroblock(Macroblock* currMB);
 void  start_macroblock(Macroblock** currMB, int mb_addr, int mb_field);
 void  terminate_macroblock(Macroblock* currMB, Boolean *end_of_slice, Boolean *recode_macroblock);
 
-void  write_one_macroblock(Macroblock* currMB, int eos_bit);
+void  write_one_macroblock(Macroblock* currMB, int eos_bit, Boolean prev_recode_mb);
 
 int  LumaResidualCoding8x8 (Macroblock* currMB, int*, int64*, int, short, int, int, short, short);
 void LumaResidualCoding (Macroblock *currMB);

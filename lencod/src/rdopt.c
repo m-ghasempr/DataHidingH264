@@ -782,24 +782,24 @@ int Mode_Decision_for_4x4IntraBlocks (Macroblock *currMB, int  b8,  int  b4,  do
           curr_mpr = img->mpr[0];
         }
 
-          if ((img->yuv_format == YUV444) && !IS_INDEPENDENT(input))  //For residual DPCM
+        if ((img->yuv_format == YUV444) && !IS_INDEPENDENT(input))  //For residual DPCM
+        {
+          if((lossless_qpprime)&&(ipmode<2))  
           {
-            if((lossless_qpprime)&&(ipmode<2))  
-            {
-              Residual_DPCM_4x4(ipmode, PLANE_Y, block_y, block_x);
-              Residual_DPCM_4x4(ipmode, PLANE_U, block_y, block_x);
-              Residual_DPCM_4x4(ipmode, PLANE_V, block_y, block_x);
-              ipmode_DPCM=ipmode;
-            }
+            Residual_DPCM_4x4(ipmode, PLANE_Y, block_y, block_x);
+            Residual_DPCM_4x4(ipmode, PLANE_U, block_y, block_x);
+            Residual_DPCM_4x4(ipmode, PLANE_V, block_y, block_x);
+            ipmode_DPCM=ipmode;
           }
-          else if ((img->yuv_format == YUV444) && IS_INDEPENDENT(input))
+        }
+        else if ((img->yuv_format == YUV444) && IS_INDEPENDENT(input))
+        {
+          if((lossless_qpprime)&&(ipmode<2))  
           {
-            if((lossless_qpprime)&&(ipmode<2))  
-            {
-              Residual_DPCM_4x4(ipmode, PLANE_Y, block_y, block_x);
-              ipmode_DPCM=ipmode;
-            }
+            Residual_DPCM_4x4(ipmode, PLANE_Y, block_y, block_x);
+            ipmode_DPCM=ipmode;
           }
+        }
 
         //===== store the coding state =====
         //store_coding_state (currMB, cs_cm);
@@ -859,14 +859,14 @@ int Mode_Decision_for_4x4IntraBlocks (Macroblock *currMB, int  b8,  int  b4,  do
           {
             for (j = block_y; j < block_y + 4; j++)
               memcpy(&fadjust4x4[j][block_x],&img->fadjust4x4[1][j][block_x], BLOCK_SIZE * sizeof(int));
-              if(img->yuv_format == YUV444 && !IS_INDEPENDENT(input))
+            if(img->yuv_format == YUV444 && !IS_INDEPENDENT(input))
+            {
+              for (j=0; j<4; j++)
               {
-                for (j=0; j<4; j++)
-                {
-                  memcpy(&fadjust4x4Cr[0][block_y+j][block_x],&img->fadjust4x4Cr[0][1][block_y+j][block_x], BLOCK_SIZE * sizeof(int));
-                  memcpy(&fadjust4x4Cr[1][block_y+j][block_x],&img->fadjust4x4Cr[1][1][block_y+j][block_x], BLOCK_SIZE * sizeof(int));
-                }
+                memcpy(&fadjust4x4Cr[0][block_y+j][block_x],&img->fadjust4x4Cr[0][1][block_y+j][block_x], BLOCK_SIZE * sizeof(int));
+                memcpy(&fadjust4x4Cr[1][block_y+j][block_x],&img->fadjust4x4Cr[1][1][block_y+j][block_x], BLOCK_SIZE * sizeof(int));
               }
+            }
           }
         }
 
@@ -912,7 +912,7 @@ int Mode_Decision_for_4x4IntraBlocks (Macroblock *currMB, int  b8,  int  b4,  do
     }
 
     select_dct(currMB);
-    nonzero = pDCT_4x4 (currMB, PLANE_Y, block_x, block_y, &dummy, 1);
+    nonzero = cr_cbp[0] =pDCT_4x4 (currMB, PLANE_Y, block_x, block_y, &dummy, 1);
 
     if ((img->yuv_format == YUV444) && !IS_INDEPENDENT(input))
     {
@@ -1035,14 +1035,11 @@ int Mode_Decision_for_8x8IntraBlocks(Macroblock *currMB, int b8,double lambda,do
 
   for (b4=0; b4<4; b4++)
   {
-    if (Mode_Decision_for_4x4IntraBlocks (currMB, b8, b4, lambda, &cost4x4, CbCr_cbp))
-    {
-      non_zero[0] = 1;
-    }
-    *cost += cost4x4;
+    non_zero[0] |= Mode_Decision_for_4x4IntraBlocks (currMB, b8, b4, lambda, &cost4x4, CbCr_cbp);
+    non_zero[1] |= CbCr_cbp[1];
+    non_zero[2] |= CbCr_cbp[2];
 
-    non_zero[1] = (CbCr_cbp[1] != 0);
-    non_zero[2] = (CbCr_cbp[2] != 0);
+    *cost += cost4x4;
   }
 #ifdef RESET_STATE
   //reset_coding_state (currMB, cs_cm);
@@ -1736,7 +1733,7 @@ void SetCoeffAndReconstruction8x8 (Macroblock* currMB)
         {
           for (k = 0; k<4; k++)
             for (j = 0; j<2; j++)
-              memcpy (img->cofAC[4+block+uv*4][k][j],cofAC8x8ts[uv][block][k][j], 65 * sizeof(int));
+              memcpy (img->cofAC[4+block+uv*4][k][j],cofAC8x8ts[uv + 1][block][k][j], 65 * sizeof(int));
         }
       }
     }

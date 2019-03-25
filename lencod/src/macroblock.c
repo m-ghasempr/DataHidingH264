@@ -998,11 +998,11 @@ int LumaResidualCoding8x8 ( Macroblock* currMB, //!< Current Macroblock to be co
     coeff_cost  = 0;
     (*cbp)     &=  (63 - cbp_mask);
     (*cbp_blk) &= ~(51 << (4*block8x8-2*(block8x8 & 0x01)));
-    /*
+    
     for( i = 0; i < 4; i++ )
       for( j = 0; j < 2; j++ )
         memset( img->cofAC[block8x8][i][j], 0, 65 * sizeof(int));
-    */
+    
     for (j=mb_y; j<mb_y+8; j++)
       memcpy(&enc_picture->imgY[img->pix_y + j][img->pix_x + mb_x], &img->mpr[0][j][mb_x], 2 * BLOCK_SIZE * sizeof(imgpel));
 
@@ -1137,15 +1137,13 @@ void LumaResidualCoding (Macroblock *currMB)
     currMB->cbp_blk &= 0xff0000 ;
     for (j=0; j < MB_BLOCK_SIZE; j++)
       memcpy(&enc_picture->imgY[img->pix_y+j][img->pix_x], curr_mpr[j], MB_BLOCK_SIZE * sizeof (imgpel));
-    
-    /*
+        
     for(block8x8=0;block8x8<4;block8x8++)
     {
       for( i = 0; i < 4; i++ )
         for( j = 0; j < 2; j++ )
           memset( img->cofAC[block8x8][i][j], 0, 65 * sizeof(int));
-    }
-    */
+    }   
 
     if (img->type==SP_SLICE)
     {
@@ -2121,7 +2119,7 @@ void set_last_dquant(Macroblock *currMB)
  *    Passes the chosen syntax elements to the NAL
  ************************************************************************
  */
-void write_one_macroblock (Macroblock* currMB, int eos_bit)
+void write_one_macroblock (Macroblock* currMB, int eos_bit, Boolean prev_recode_mb)
 {
   int*        bitCount = currMB->bitcounter;
   int i;
@@ -2131,15 +2129,16 @@ void write_one_macroblock (Macroblock* currMB, int eos_bit)
   // enable writing of trace file
 #if TRACE
   Slice *curr_slice = img->currentSlice;
-  curr_slice->partArr[0].bitstream->trace_enabled = TRUE;
-  if (input->partition_mode)
+  if ( prev_recode_mb == FALSE )
   {
-    curr_slice->partArr[1].bitstream->trace_enabled = TRUE;
-    curr_slice->partArr[2].bitstream->trace_enabled = TRUE;
+    curr_slice->partArr[0].bitstream->trace_enabled = TRUE;
+    if (input->partition_mode)
+    {
+      curr_slice->partArr[1].bitstream->trace_enabled = TRUE;
+      curr_slice->partArr[2].bitstream->trace_enabled = TRUE;
+    }
   }
 #endif
-
-  img->SumFrameQP += currMB->qp;
 
   //--- constrain intra prediction ---
   if(input->UseConstrainedIntraPred && (img->type==P_SLICE || img->type==B_SLICE))

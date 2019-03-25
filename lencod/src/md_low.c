@@ -462,6 +462,15 @@ void encode_one_macroblock_low (Macroblock *currMB)
     else
     {
       currMB->luma_transform_size_8x8_flag = tmp_8x8_flag; // restore if not best
+      if ((img->yuv_format == YUV444) && !IS_INDEPENDENT(input))
+      {
+        cmp_cbp[1] = curr_cbp[0]; 
+        cmp_cbp[2] = curr_cbp[1]; 
+        currMB->cbp |= cmp_cbp[1];    
+        currMB->cbp |= cmp_cbp[2];    
+        cmp_cbp[1] = currMB->cbp;   
+        cmp_cbp[2] = currMB->cbp;
+      }
     }
   }
 

@@ -19,10 +19,10 @@
 #include "image.h"
 #include "biaridecod.h"
 #include "mb_access.h"
+#include "vlc.h"
 
 int symbolCount = 0;
 int last_dquant = 0;
-
 
 /***********************************************************************
  * L O C A L L Y   D E F I N E D   F U N C T I O N   P R O T O T Y P E S
@@ -1890,21 +1890,20 @@ unsigned int unary_exp_golomb_mv_decode(DecodingEnvironmentPtr dep_dp,
 /*!
  ************************************************************************
  * \brief
- *    Read one byte from CABAC-partition.
- *    Bitstream->read_len will be modified
- *    (for IPCM CABAC  28/11/2003)
- *
- * \author
- *    Dong Wang <Dong.Wang@bristol.ac.uk>
+ *    Read I_PCM macroblock 
  ************************************************************************
 */
-void readIPCMBytes_CABAC(SyntaxElement *sym, struct datapartition *dP)
+void readIPCM_CABAC(struct datapartition *dP)
 {
   Bitstream* currStream = dP->bitstream;
   DecodingEnvironmentPtr dep = &(dP->de_cabac);
-  int* read_len = &(currStream->read_len);
-  int code_len = currStream->code_len;
   byte *buf = currStream->streamBuffer;
+
+  int val = 0;
+
+  int bits_read = 0;
+  int bitoffset, bitdepth;
+  int uv, i, j;
 
   while (dep->DbitsLeft >= 8)
   {
@@ -1912,21 +1911,51 @@ void readIPCMBytes_CABAC(SyntaxElement *sym, struct datapartition *dP)
     dep->DbitsLeft-=8;
     (*dep->Dcodestrm_len)--;
   }
+  
+  bitoffset = (*dep->Dcodestrm_len) << 3;
 
-#if (TRACE==2)
-  fprintf(p_trace, "read_len: %d\n", *read_len);
-#endif
-
-  sym->len=8;
-
-  if(*read_len<code_len)
-    sym->inf=buf[(*read_len)++];
-
-  sym->value1=sym->inf;
-
+  // read luma values
+  bitdepth = img->bitdepth_luma;
+  for(i=0;i<MB_BLOCK_SIZE;i++)
+  {
+    for(j=0;j<MB_BLOCK_SIZE;j++)
+    {
+      bits_read += GetBits(buf, bitoffset, &val, dP->bitstream->bitstream_length, bitdepth);
 #if TRACE
-  tracebits2(sym->tracestring, sym->len, sym->inf);
+      tracebits2("pcm_byte luma", bitdepth, val);
 #endif
+      img->cof[0][i][j] = val;
 
+      bitoffset += bitdepth;
+    }
+  }
+
+  // read chroma values
+  bitdepth = img->bitdepth_chroma;
+  if ((dec_picture->chroma_format_idc != YUV400) && !IS_INDEPENDENT(img))
+  {
+    for (uv=1; uv<3; uv++)
+    {
+      for(i=0;i<img->mb_cr_size_y;i++)
+      {
+        for(j=0;j<img->mb_cr_size_x;j++)
+        {
+          bits_read += GetBits(buf, bitoffset, &val, dP->bitstream->bitstream_length, bitdepth);
+#if TRACE
+          tracebits2("pcm_byte chroma", bitdepth, val);
+#endif
+          img->cof[uv][i][j] = val;
+
+          bitoffset += bitdepth;
+        }
+      }
+    }
+  }
+
+  (*dep->Dcodestrm_len) += ( bits_read >> 3);
+  if (bits_read & 7)
+  {
+    (*dep->Dcodestrm_len)++;
+  }
 }
 

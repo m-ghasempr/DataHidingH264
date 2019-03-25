@@ -3546,75 +3546,59 @@ void compute_colocated(ColocatedParams* p, StorablePicture **listX[6])
 
   if (!active_sps->frame_mbs_only_flag || active_sps->direct_8x8_inference_flag)
   {
-    if (img->MbaffFrameFlag)
+    for (j=0 ; j < (fs->size_y>>2); j++)
     {
-      for (j=0 ; j < (fs->size_y>>2); j++)
+      jdiv = (j>>1);
+      jj = jdiv + ((j>>3)<<1);
+      for (i=0 ; i < (fs->size_x >> 2) ; i++)
       {
-        jdiv = (j>>1);
-        jj = jdiv + ((j>>3)<<1);
-        for (i=0 ; i < (fs->size_x >> 2) ; i++)
+
+        if (img->MbaffFrameFlag && fs->field_frame[j][i])
         {
+          //! Assign frame buffers for field MBs
+          //! Check whether we should use top or bottom field mvs.
+          //! Depending on the assigned poc values.
 
-          if (fs->field_frame[j][i])
+          if (iabs(dec_picture->poc - fs_bottom->poc)> iabs(dec_picture->poc -fs_top->poc) )
           {
-            //! Assign frame buffers for field MBs
-            //! Check whether we should use top or bottom field mvs.
-            //! Depending on the assigned poc values.
+            p->mv[LIST_0][j][i][0]      = fs_top->mv[LIST_0][jdiv][i][0];
+            p->mv[LIST_0][j][i][1]      = fs_top->mv[LIST_0][jdiv][i][1] ;
+            p->mv[LIST_1][j][i][0]      = fs_top->mv[LIST_1][jdiv][i][0];
+            p->mv[LIST_1][j][i][1]      = fs_top->mv[LIST_1][jdiv][i][1] ;
+            p->ref_idx[LIST_0][j][i]    = fs_top->ref_idx[LIST_0][jdiv][i];
+            p->ref_idx[LIST_1][j][i]    = fs_top->ref_idx[LIST_1][jdiv][i];
+            p->ref_pic_id[LIST_0][j][i] = fs->ref_id[LIST_0][jj][i];
+            p->ref_pic_id[LIST_1][j][i] = fs->ref_id[LIST_1][jj][i];
 
-            if (iabs(dec_picture->poc - fs_bottom->poc)> iabs(dec_picture->poc -fs_top->poc) )
-            {
-              p->mv[LIST_0][j][i][0]      = fs_top->mv[LIST_0][jdiv][i][0];
-              p->mv[LIST_0][j][i][1]      = fs_top->mv[LIST_0][jdiv][i][1] ;
-              p->mv[LIST_1][j][i][0]      = fs_top->mv[LIST_1][jdiv][i][0];
-              p->mv[LIST_1][j][i][1]      = fs_top->mv[LIST_1][jdiv][i][1] ;
-              p->ref_idx[LIST_0][j][i]    = fs_top->ref_idx[LIST_0][jdiv][i];
-              p->ref_idx[LIST_1][j][i]    = fs_top->ref_idx[LIST_1][jdiv][i];
-              p->ref_pic_id[LIST_0][j][i] = fs->ref_id[LIST_0][jj][i];
-              p->ref_pic_id[LIST_1][j][i] = fs->ref_id[LIST_1][jj][i];
-
-              p->is_long_term             = fs_top->is_long_term;
-            }
-            else
-            {
-              p->mv[LIST_0][j][i][0]      = fs_bottom->mv[LIST_0][jdiv][i][0];
-              p->mv[LIST_0][j][i][1]      = fs_bottom->mv[LIST_0][jdiv][i][1] ;
-              p->mv[LIST_1][j][i][0]      = fs_bottom->mv[LIST_1][jdiv][i][0];
-              p->mv[LIST_1][j][i][1]      = fs_bottom->mv[LIST_1][jdiv][i][1] ;
-              p->ref_idx[LIST_0][j][i]    = fs_bottom->ref_idx[LIST_0][jdiv][i];
-              p->ref_idx[LIST_1][j][i]    = fs_bottom->ref_idx[LIST_1][jdiv][i];
-              p->ref_pic_id[LIST_0][j][i] = fs->ref_id[LIST_0][jj + 4][i];
-              p->ref_pic_id[LIST_1][j][i] = fs->ref_id[LIST_1][jj + 4][i];
-
-              p->is_long_term             = fs_bottom->is_long_term;
-            }
+            p->is_long_term             = fs_top->is_long_term;
           }
           else
           {
-            p->mv[LIST_0][j][i][0]      = fs->mv[LIST_0][j][i][0];
-            p->mv[LIST_0][j][i][1]      = fs->mv[LIST_0][j][i][1] ;
-            p->mv[LIST_1][j][i][0]      = fs->mv[LIST_1][j][i][0];
-            p->mv[LIST_1][j][i][1]      = fs->mv[LIST_1][j][i][1] ;
-            p->ref_idx[LIST_0][j][i]    = fs->ref_idx[LIST_0][j][i];
-            p->ref_idx[LIST_1][j][i]    = fs->ref_idx[LIST_1][j][i];
-            p->ref_pic_id[LIST_0][j][i] = fs->ref_id[LIST_0][j][i];
-            p->ref_pic_id[LIST_1][j][i] = fs->ref_id[LIST_1][j][i];
+            p->mv[LIST_0][j][i][0]      = fs_bottom->mv[LIST_0][jdiv][i][0];
+            p->mv[LIST_0][j][i][1]      = fs_bottom->mv[LIST_0][jdiv][i][1] ;
+            p->mv[LIST_1][j][i][0]      = fs_bottom->mv[LIST_1][jdiv][i][0];
+            p->mv[LIST_1][j][i][1]      = fs_bottom->mv[LIST_1][jdiv][i][1] ;
+            p->ref_idx[LIST_0][j][i]    = fs_bottom->ref_idx[LIST_0][jdiv][i];
+            p->ref_idx[LIST_1][j][i]    = fs_bottom->ref_idx[LIST_1][jdiv][i];
+            p->ref_pic_id[LIST_0][j][i] = fs->ref_id[LIST_0][jj + 4][i];
+            p->ref_pic_id[LIST_1][j][i] = fs->ref_id[LIST_1][jj + 4][i];
 
-            p->is_long_term             = fs->is_long_term;
+            p->is_long_term             = fs_bottom->is_long_term;
           }
         }
-      }
-    }
-    else
-    {      
-      p->is_long_term = fs->is_long_term;
-      for (j = 0; j < (fs->size_y >> 2); j++)
-      {
-        memcpy(p->ref_idx[LIST_0][j], fs->ref_idx[LIST_0][j], (fs->size_x>>2) * sizeof(char));
-        memcpy(p->ref_idx[LIST_1][j], fs->ref_idx[LIST_1][j], (fs->size_x>>2) * sizeof(char));
-        memcpy(p->ref_pic_id[LIST_0][j], fs->ref_pic_id[LIST_0][j], (fs->size_x>>2) * sizeof(int64));
-        memcpy(p->ref_pic_id[LIST_1][j], fs->ref_pic_id[LIST_1][j], (fs->size_x>>2) * sizeof(int64));
-        memcpy(&p->mv[LIST_0][j][0][0], &fs->mv[LIST_0][j][0][0], 2 * (fs->size_x>>2) * sizeof(short));
-        memcpy(&p->mv[LIST_1][j][0][0], &fs->mv[LIST_1][j][0][0], 2 * (fs->size_x>>2) * sizeof(short));
+        else
+        {
+          p->mv[LIST_0][j][i][0]      = fs->mv[LIST_0][j][i][0];
+          p->mv[LIST_0][j][i][1]      = fs->mv[LIST_0][j][i][1] ;
+          p->mv[LIST_1][j][i][0]      = fs->mv[LIST_1][j][i][0];
+          p->mv[LIST_1][j][i][1]      = fs->mv[LIST_1][j][i][1] ;
+          p->ref_idx[LIST_0][j][i]    = fs->ref_idx[LIST_0][j][i];
+          p->ref_idx[LIST_1][j][i]    = fs->ref_idx[LIST_1][j][i];
+          p->ref_pic_id[LIST_0][j][i] = fs->ref_id[LIST_0][j][i];
+          p->ref_pic_id[LIST_1][j][i] = fs->ref_id[LIST_1][j][i];
+
+          p->is_long_term             = fs->is_long_term;
+        }
       }
     }
   }

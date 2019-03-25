@@ -14,7 +14,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 13.1 (FRExt)
+ *     JM 13.2 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -71,7 +71,7 @@
 #include "q_offsets.h"
 
 #define JM      "13 (FRExt)"
-#define VERSION "13.1"
+#define VERSION "13.2"
 #define EXT_VERSION "(FRExt)"
 
 InputParameters inputs,      *input = &inputs;
