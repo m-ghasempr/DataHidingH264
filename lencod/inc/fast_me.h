@@ -79,6 +79,7 @@ int **McostState; //state for integer pel search
 int *****all_mincost;//store the MV and SAD information needed;
 int *****all_bwmincost;//store for backward prediction
 int pred_SAD_space,pred_SAD_time,pred_SAD_ref,pred_SAD_uplayer;//SAD prediction
+int FME_blocktype;  //blocktype for FME SetMotionVectorPredictor
 int pred_MV_time[2],pred_MV_ref[2],pred_MV_uplayer[2];//pred motion vector by space or tempral correlation,Median is provided
 
 //for early termination
@@ -156,18 +157,6 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
                          int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
                          double    lambda         // <--  lagrangian parameter for determining motion cost
                          );
-
-void FME_SetMotionVectorPredictor (int  pmv[2],
-                                   int  **refFrArr,
-                                   int  ***tmp_mv,
-                                   int  ref_frame,
-                                   int  list,
-                                   int  mb_x,
-                                   int  mb_y,
-                                   int  blockshape_x,
-                                   int  blockshape_y,
-                                   int  blocktype,
-                                   int  ref);
 
 int                                         //  ==> minimum motion cost after search
 FME_BlockMotionSearch (int       ref,           // <--  reference frame (0... or -1 (backward))

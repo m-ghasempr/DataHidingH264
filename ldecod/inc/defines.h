@@ -24,9 +24,6 @@
 #define TRACE           0                   //!< 0:Trace off 1:Trace on
 #endif
 
-#define LIST_0 0
-#define LIST_1 1
-
 // CAVLC
 #define LUMA              0
 #define LUMA_INTRA16x16DC 1

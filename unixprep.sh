@@ -11,12 +11,12 @@ rm -f lencod/dependencies; touch lencod/dependencies
 rm -f ldecod/dependencies; touch ldecod/dependencies
 
 echo "Removing DOS LF chars..."
-for f in l{en,de}cod/{src,inc}/*.[ch]
+for f in l[ed][ne]cod/[si][rn]c/*.[ch]
 do
    sed -e "s///" < $f >$f.tmp && mv $f.tmp $f
 done
 
-for f in l{en,de}cod/Makefile
+for f in l[ed][ne]cod/Makefile
 do
    sed -e "s///" < $f >$f.tmp && mv $f.tmp $f
 done

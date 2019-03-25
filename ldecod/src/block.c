@@ -119,7 +119,7 @@ int intrapred(
 
   pix_c.available = pix_c.available && !(((ioff==4)||(ioff==12)) && ((joff==4)||(joff==12)));
 
-  if (img->constrained_intra_pred_flag)
+  if (active_pps->constrained_intra_pred_flag)
   {
     for (i=0, block_available_left=1; i<4;i++)
       block_available_left  &= pix_a[i].available ? img->intra_block[pix_a[i].mb_addr]: 0;
@@ -413,7 +413,7 @@ int intrapred_luma_16x16(struct img_par *img, //!< image parameters
   
   getNeighbour(mb_nr, 0     ,  -1 , 1, &up);
 
-  if (!img->constrained_intra_pred_flag)
+  if (!active_pps->constrained_intra_pred_flag)
   {
     up_avail   = up.available;
     left_avail = left[1].available;
@@ -538,7 +538,7 @@ void intrapred_chroma(struct img_par *img, int uv)
   
   getNeighbour(mb_nr, 0     ,  -1 , 0, &up);
 
-  if (!img->constrained_intra_pred_flag)
+  if (!active_pps->constrained_intra_pred_flag)
   {
     up_avail   = up.available;
     left_avail[0] = left_avail[1] = left[1].available;
@@ -817,12 +817,13 @@ void itrans_sp(struct img_par *img,  //!< image parameters
   int q_bits_sp    = Q_BITS+qp_per_sp;
   int qp_const2=(1<<q_bits_sp)/2;  //sp_pred
 
-  if (img->sp_switch || img->type == SI_SLICE)
+  if (img->type == SI_SLICE) //ES  modified
   {
     qp_per = (img->qpsp-MIN_QP)/6;
     qp_rem = (img->qpsp-MIN_QP)%6;
     q_bits = Q_BITS+qp_per;
   }
+
   for (j=0; j< BLOCK_SIZE; j++)
   for (i=0; i< BLOCK_SIZE; i++)
       predicted_block[i][j]=img->mpr[i+ioff][j+joff];
@@ -861,8 +862,17 @@ void itrans_sp(struct img_par *img,  //!< image parameters
   {
     // recovering coefficient since they are already dequantized earlier
     img->cof[i0][j0][i][j]=(img->cof[i0][j0][i][j] >> qp_per) / dequant_coef[qp_rem][i][j]; 
-    ilev=((img->cof[i0][j0][i][j]*dequant_coef[qp_rem][i][j]*A[i][j]<< qp_per) >>6)+predicted_block[i][j] ;
-    img->cof[i0][j0][i][j]=sign((abs(ilev) * quant_coef[qp_rem_sp][i][j] + qp_const2) >> q_bits_sp, ilev) * dequant_coef[qp_rem_sp][i][j] << qp_per_sp;
+    if(img->sp_switch)
+    {
+      ilev=(abs(predicted_block[i][j]) * quant_coef[qp_rem_sp][i][j] + qp_const2) >> q_bits_sp; //ES added
+      ilev= sign(ilev,predicted_block[i][j])+ img->cof[i0][j0][i][j];                           //ES added
+      img->cof[i0][j0][i][j] = sign(abs(ilev) * dequant_coef[qp_rem_sp][i][j] << qp_per_sp ,ilev) ; //ES added 
+    }                                                                                             //ES added
+    else
+    {                                                                                          //ES added
+      ilev=((img->cof[i0][j0][i][j]*dequant_coef[qp_rem][i][j]*A[i][j]<< qp_per) >>6)+predicted_block[i][j] ;
+      img->cof[i0][j0][i][j]=sign((abs(ilev) * quant_coef[qp_rem_sp][i][j] + qp_const2) >> q_bits_sp, ilev) * dequant_coef[qp_rem_sp][i][j] << qp_per_sp;
+    }
   }
   // horizontal
   for (j=0;j<BLOCK_SIZE;j++)
@@ -1036,7 +1046,7 @@ void itrans_sp_chroma(struct img_par *img,int ll)
   q_bits_sp    = Q_BITS+qp_per_sp;
   qp_const2=(1<<q_bits_sp)/2;  //sp_pred
 
-  if (img->sp_switch || img->type == SI_SLICE)
+  if (img->type == SI_SLICE)
   {
     qp_per    = ((img->qpsp < 0 ? img->qpsp : QP_SCALE_CR[img->qpsp]) - MIN_QP) / 6;
     qp_rem    = ((img->qpsp < 0 ? img->qpsp : QP_SCALE_CR[img->qpsp]) - MIN_QP) % 6;
@@ -1097,9 +1107,22 @@ void itrans_sp_chroma(struct img_par *img,int ll)
   for (n1=0; n1 < 2; n1 ++)
   for (n2=0; n2 < 2; n2 ++)
   {
-    ilev=((img->cof[n1+ll][4+n2][0][0]*dequant_coef[qp_rem][0][0]*A[0][0]<< qp_per) >>5)+mp1[n1+n2*2] ;
-    mp1[n1+n2*2]=sign((abs(ilev)* quant_coef[qp_rem_sp][0][0]+ 2 * qp_const2)>> (q_bits_sp+1),ilev)*dequant_coef[qp_rem_sp][0][0]<<qp_per_sp;
+    if (img->sp_switch )
+    {
+      //quantization fo predicted block
+      ilev=(abs (mp1[n1+n2*2]) * quant_coef[qp_rem_sp][0][0] + 2 * qp_const2) >> (q_bits_sp + 1); 
+      //addition 	  
+      ilev=img->cof[n1+ll][4+n2][0][0]+sign(ilev,mp1[n1+n2*2]);                                   
+      //dequantization
+      mp1[n1+n2*2] =ilev*dequant_coef[qp_rem_sp][0][0]<<qp_per_sp;                                
+    }   
+    else
+    {
+      ilev=((img->cof[n1+ll][4+n2][0][0]*dequant_coef[qp_rem][0][0]*A[0][0]<< qp_per) >>5)+mp1[n1+n2*2] ;
+      mp1[n1+n2*2]=sign((abs(ilev)* quant_coef[qp_rem_sp][0][0]+ 2 * qp_const2)>> (q_bits_sp+1),ilev)*dequant_coef[qp_rem_sp][0][0]<<qp_per_sp;
+    }
   }
+
 
   for (n2=0; n2 < 2; n2 ++)
   for (n1=0; n1 < 2; n1 ++)
@@ -1108,8 +1131,23 @@ void itrans_sp_chroma(struct img_par *img,int ll)
   {
   // recovering coefficient since they are already dequantized earlier
     img->cof[n1+ll][4+n2][i][j] = (img->cof[n1+ll][4+n2][i][j] >> qp_per) / dequant_coef[qp_rem][i][j];
-    ilev=((img->cof[n1+ll][4+n2][i][j]*dequant_coef[qp_rem][i][j]*A[i][j]<< qp_per) >>6)+predicted_chroma_block[n1*BLOCK_SIZE+i][n2*BLOCK_SIZE+j] ;
-    img->cof[n1+ll][4+n2][i][j] = sign((abs(ilev) * quant_coef[qp_rem_sp][i][j] + qp_const2)>> q_bits_sp,ilev)*dequant_coef[qp_rem_sp][i][j]<<qp_per_sp;
+
+    if (img->sp_switch )
+    {
+      //quantization of the predicted block
+      ilev =  (abs(predicted_chroma_block[n1*BLOCK_SIZE+i][n2*BLOCK_SIZE+j]) * quant_coef[qp_rem_sp][i][j] + qp_const2) >> q_bits_sp;
+      //addition of the residual
+      ilev = sign(ilev,predicted_chroma_block[n1*BLOCK_SIZE+i][n2*BLOCK_SIZE+j]) + img->cof[n1+ll][4+n2][i][j];
+      // Inverse quantization 
+      img->cof[n1+ll][4+n2][i][j] = ilev * dequant_coef[qp_rem_sp][i][j] << qp_per_sp  ;
+    }
+    else
+    {
+      //dequantization and addition of the predicted block
+      ilev=((img->cof[n1+ll][4+n2][i][j]*dequant_coef[qp_rem][i][j]*A[i][j]<< qp_per) >>6)+predicted_chroma_block[n1*BLOCK_SIZE+i][n2*BLOCK_SIZE+j] ;
+      //quantization and dequantization
+      img->cof[n1+ll][4+n2][i][j] = sign((abs(ilev) * quant_coef[qp_rem_sp][i][j] + qp_const2)>> q_bits_sp,ilev)*dequant_coef[qp_rem_sp][i][j]<<qp_per_sp;
+    }
   }
   img->cof[0+ll][4][0][0]=(mp1[0]+mp1[1]+mp1[2]+mp1[3])>>1;
   img->cof[1+ll][4][0][0]=(mp1[0]-mp1[1]+mp1[2]-mp1[3])>>1;

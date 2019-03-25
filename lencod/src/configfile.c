@@ -312,6 +312,7 @@ void ParseContent (char *buf, int bufsize)
   char *p = buf;
   char *bufend = &buf[bufsize];
   int IntContent;
+  double DoubleContent;
   int i;
 
 // Stage one: Generate an argc/argv-type list in items[], without comments and whitespace.
@@ -401,6 +402,15 @@ void ParseContent (char *buf, int bufsize)
         strcpy ((char *) Map[MapIdx].Place, items [i+2]);
         printf (".");
         break;
+      case 2:           // Numerical double
+        if (1 != sscanf (items[i+2], "%lf", &DoubleContent))
+        {
+          snprintf (errortext, ET_SIZE, " Parsing error: Expected numerical value for Parameter of %s, found '%s'.", items[i], items[i+2]);
+          error (errortext, 300);
+        }
+        * (double *) (Map[MapIdx].Place) = DoubleContent;
+        printf (".");
+        break;
       default:
         assert ("Unknown value type in the map definition of configfile.h");
     }
@@ -431,6 +441,27 @@ static int ParameterNameToMapIndex (char *s)
       i++;
   return -1;
 };
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    calculate Ceil(Log2(uiVal))
+ ************************************************************************
+ */
+unsigned CeilLog2( unsigned uiVal)
+{
+  unsigned uiTmp = uiVal;
+  unsigned uiRet = 0;
+
+  while( uiTmp != 0 )
+  {
+    uiTmp >>= 1;
+    uiRet++;
+  }
+  return uiRet;
+}
+
 
 /*!
  ***********************************************************************
@@ -467,7 +498,27 @@ static void PatchInp ()
     snprintf(errortext, ET_SIZE, "Error input parameter quant_B,check configuration file");
     error (errortext, 400);
   }
+#ifdef _CHANGE_QP_
+  if (input->qp2start && (input->qpB2 > MAX_QP || input->qpB2 < MIN_QP))
+  {
+    snprintf(errortext, ET_SIZE, "Error input parameter ChangeQPB,check configuration file");
+    error (errortext, 400);
+  }
 
+  if (input->qp2start && (input->qp02 > MAX_QP || input->qp02 < MIN_QP))
+  {
+    snprintf(errortext, ET_SIZE, "Error input parameter ChangeQIB,check configuration file");
+    error (errortext, 400);
+  }
+
+  if (input->qp2start && (input->qpN2 > MAX_QP || input->qpN2 < MIN_QP))
+  {
+    snprintf(errortext, ET_SIZE, "Error input parameter ChangeQPP,check configuration file");
+    error (errortext, 400);
+  }
+
+
+#endif
   if (input->qpsp > MAX_QP || input->qpsp < MIN_QP)
   {
     snprintf(errortext, ET_SIZE, "Error input parameter quant_sp,check configuration file");
@@ -483,17 +534,23 @@ static void PatchInp ()
     snprintf(errortext, ET_SIZE, "Error input parameter sp_periodicity,check configuration file");
     error (errortext, 400);
   }
-  if (input->PictureRate < 0 || input->PictureRate>100)   
+  if (input->FrameRate < 0 || input->FrameRate>100)   
   {
-    snprintf(errortext, ET_SIZE, "Error in input parameter PictureRate, check configuration file");
+    snprintf(errortext, ET_SIZE, "Error in input parameter FrameRate, check configuration file");
     error (errortext, 400);
   }
-  if (input->PictureRate == 0)
-    input->PictureRate = INIT_FRAME_RATE;
+  if (input->FrameRate == 0)
+    input->FrameRate = INIT_FRAME_RATE;
 
   if (input->idr_enable < 0 || input->idr_enable > 1)   
   {
     snprintf(errortext, ET_SIZE, "Error in input parameter IDRIntraEnable, check configuration file");
+    error (errortext, 400);
+  }
+
+  if (input->start_frame < 0 )   
+  {
+    snprintf(errortext, ET_SIZE, "Error in input parameter StartFrane, Check configuration file.");
     error (errortext, 400);
   }
 
@@ -557,6 +614,15 @@ static void PatchInp ()
   input->blc_size[7][0]= 4;
   input->blc_size[7][1]= 4;
   
+  // set proper log2_max_frame_num_minus4.
+  {
+    int storedBplus1 = (input->StoredBPictures ) ? input->successive_Bframe + 1: 1;
+
+    log2_max_frame_num_minus4 = max( (int)(CeilLog2(input->no_frames * storedBplus1))-4, 0);
+  }
+
+  log2_max_pic_order_cnt_lsb_minus4 = max( (int)(CeilLog2(2*input->no_frames * (input->successive_Bframe + 1))) -4, 0);
+
   if (input->partition_mode < 0 || input->partition_mode > 1)
   {
     snprintf(errortext, ET_SIZE, "Unsupported Partition mode, must be between 0 and 1");
@@ -586,10 +652,18 @@ static void PatchInp ()
   if (input->PicInterlace>0 || input->MbInterlace>0)
   {
     if (input->directInferenceFlag==0)
-      printf("DirectInferenceFlag set to 1 due to interlace coding.\n");
+      printf("\nDirectInferenceFlag set to 1 due to interlace coding.");
     input->directInferenceFlag=1;
   }
 
+  if (input->PicInterlace>0)
+  {
+    if (input->IntraBottom!=0 && input->IntraBottom!=1)
+    {
+      snprintf(errortext, ET_SIZE, "Incorrect value %d for IntraBottom. Use 0 (disable) or 1 (enable).", input->IntraBottom);
+      error (errortext, 400);
+    }
+  } 
   // Cabac/UVLC consistency check
   if (input->symbol_mode != UVLC && input->symbol_mode != CABAC)
   {
@@ -704,7 +778,19 @@ static void PatchInp ()
     snprintf (errortext, ET_SIZE, "Unsupported MbInterlace=%d, use frame based coding=0 or field based coding=1 or adaptive=2",input->MbInterlace);
     error (errortext, 400);
   }
-   
+
+  if (input->WeightedPrediction < 0 || input->WeightedPrediction > 1 )
+  {
+    snprintf (errortext, ET_SIZE, "\nWeightedPrediction=%d is not allowed.Select 0 (normal) or 1 (explicit)",input->WeightedPrediction);
+    error (errortext, 400);
+  }
+
+  if (input->WeightedBiprediction < 0 || input->WeightedBiprediction > 2 )
+  {
+    snprintf (errortext, ET_SIZE, "\nWeightedBiprediction=%d is not allowed.Select 0 (normal), 1 (explicit), or 2 (implicit)",input->WeightedBiprediction);
+    error (errortext, 400);
+  }
+  
   if (input->PicInterlace || input->MbInterlace)
   {
     if (input->img_height % 32 != 0 )
@@ -777,7 +863,45 @@ static void PatchInp ()
       error (errortext, 500);
     }
   }
+/*
+  switch (input->ProfileIDC)
+  {
+  case 66:
+  case 77:
+  case 88:
+    break;
+  default:
+    snprintf(errortext, ET_SIZE, "ProfileIDC (%d) is invalid.", input->ProfileIDC);
+    error (errortext, 500);
+    break;
+  }
 
+  switch (input->LevelIDC)
+  {
+  case 10:
+  case 11:
+  case 12:
+  case 13:
+  case 20:
+  case 21:
+  case 22:
+    break;
+  case 30:
+  case 31:
+  case 32:
+  case 40:
+  case 41:
+  case 42:
+  case 50:
+  case 51:
+    //input->directInferenceFlag = 1;
+    break;
+  default:
+    snprintf(errortext, ET_SIZE, "LevelIDC (%d) is invalid.", input->LevelIDC);
+    error (errortext, 500);
+    break;
+  }
+*/
   if( !input->direct_type && input->num_reference_frames<2 && input->successive_Bframe >0)
     error("temporal direct needs at least 2 ref frames\n",-1000);
 

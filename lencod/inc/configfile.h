@@ -34,8 +34,9 @@ InputParameters configinput;
 Mapping Map[] = {
     {"ProfileIDC",               &configinput.ProfileIDC,              0},
     {"LevelIDC",                 &configinput.LevelIDC,                0},
-    {"PictureRate",              &configinput.PictureRate,             0},
+    {"FrameRate",                &configinput.FrameRate,               0},
     {"IDRIntraEnable",           &configinput.idr_enable,              0},
+    {"StartFrame",               &configinput.start_frame,             0},
     {"IntraPeriod",              &configinput.intra_period,            0},
     {"FramesToBeEncoded",        &configinput.no_frames,               0},
     {"QPFirstFrame",             &configinput.qp0,                     0},
@@ -44,6 +45,9 @@ Mapping Map[] = {
     {"UseHadamard",              &configinput.hadamard,                0},
     {"SearchRange",              &configinput.search_range,            0},
     {"NumberReferenceFrames",    &configinput.num_reference_frames,    0},
+    {"PList0References",         &configinput.P_List0_refs,            0},
+    {"BList0References",         &configinput.B_List0_refs,            0},
+    {"BList1References",         &configinput.B_List1_refs,            0},
     {"SourceWidth",              &configinput.img_width,               0},
     {"SourceHeight",             &configinput.img_height,              0},
     {"MbLineIntraUpdate",        &configinput.intra_upd,               0},
@@ -80,6 +84,7 @@ Mapping Map[] = {
     {"LastFrameNumber",          &configinput.last_frame,              0},
 #endif
 #ifdef _CHANGE_QP_
+    {"ChangeQPI",                &configinput.qp02,                    0},
     {"ChangeQPP",                &configinput.qpN2,                    0},
     {"ChangeQPB",                &configinput.qpB2,                    0},
     {"ChangeQPStart",            &configinput.qp2start,                0},
@@ -97,6 +102,9 @@ Mapping Map[] = {
 #endif
     {"PicInterlace",             &configinput.PicInterlace,            0},
     {"MbInterlace",              &configinput.MbInterlace,             0},
+
+    {"IntraBottom",              &configinput.IntraBottom,             0},
+
     {"NumberFramesInEnhancementLayerSubSequence", &configinput.NumFramesInELSubSeq, 0},
     {"NumberOfFrameInSecondIGOP",&configinput.NumFrameIn2ndIGOP, 0},
     {"RandomIntraMBRefresh",     &configinput.RandomIntraMBRefresh,    0},
@@ -136,6 +144,7 @@ Mapping Map[] = {
     // Fast ME enable
     {"UseFME",                   &configinput.FMEnable,                0},
     
+    {"ChromaQPOffset",           &configinput.chroma_qp_index_offset,  0},    
     {NULL,                       NULL,                                -1}
 };
 

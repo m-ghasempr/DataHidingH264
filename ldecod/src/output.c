@@ -41,6 +41,9 @@ void write_picture(StorablePicture *p, FILE *p_out)
   int crop_left, crop_right, crop_top, crop_bottom;
   int crop_vert_mult;
   
+  if (p->non_existing)
+    return;
+
   if (active_sps->frame_mbs_only_flag)
   {
     crop_vert_mult = 2;
@@ -156,7 +159,7 @@ void write_unpaired_field(FrameStore* fs, FILE *p_out)
     // we have a top field
     // construct an empty bottom field
     p = fs->top_field;
-    fs->bottom_field = alloc_storable_picture(BOTTOM_FIELD, p->size_x, p->size_y, p->size_x_cr, p->size_y_cr);
+    fs->bottom_field = alloc_storable_picture(BOTTOM_FIELD, p->size_x, 2*p->size_y, p->size_x_cr, 2*p->size_y_cr);
     clear_picture(fs->bottom_field);
     dpb_combine_field(fs);
     write_picture (fs->frame, p_out);
@@ -167,8 +170,8 @@ void write_unpaired_field(FrameStore* fs, FILE *p_out)
     // we have a bottom field
     // construct an empty top field
     p = fs->bottom_field;
-    fs->top_field = alloc_storable_picture(TOP_FIELD, p->size_x, p->size_y, p->size_x_cr, p->size_y_cr);
-    clear_picture(fs->bottom_field);
+    fs->top_field = alloc_storable_picture(TOP_FIELD, p->size_x, 2*p->size_y, p->size_x_cr, 2*p->size_y_cr);
+    clear_picture(fs->top_field);
     dpb_combine_field(fs);
     write_picture (fs->frame, p_out);
   }

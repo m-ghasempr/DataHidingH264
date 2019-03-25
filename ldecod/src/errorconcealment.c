@@ -4,7 +4,7 @@
  * \file errorconcealment.c
  *
  * \brief
- *    Implements error concealment scheme for H.26L decoder
+ *    Implements error concealment scheme for H.264 decoder
  *
  * \date
  *    6.10.2000

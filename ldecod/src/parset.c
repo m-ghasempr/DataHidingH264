@@ -25,6 +25,7 @@
 #include "cabac.h"
 #include "vlc.h"
 #include "mbuffer.h"
+#include "erc_api.h"
 
 #if TRACE
 #define SYMTRACESTRING(s) strncpy(sym->tracestring,s,TRACESTRING_SIZE)
@@ -33,10 +34,13 @@
 #endif
 
 extern int UsedBits;      // for internal statistics, is adjusted by se_v, ue_v, u_1
+extern ColocatedParams *Co_located;
 
 seq_parameter_set_rbsp_t SeqParSet[MAXSPS];
 pic_parameter_set_rbsp_t PicParSet[MAXPPS];
-                          
+
+extern StorablePicture* dec_picture;
+
 // fill sps with content of p
 
 int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
@@ -191,16 +195,6 @@ int InterpretPPS (DataPartition *p, pic_parameter_set_rbsp_t *pps)
 }
 
 
-void DumpSPS (seq_parameter_set_rbsp_t *sps)
-{
-  printf ("Dumping a sequence parset, to be implemented\n");
-};
-
-void DumpPPS (pic_parameter_set_rbsp_t *pps)
-{
-  printf ("Dumping a picture parset, to be implemented\n");
-}
-
 void PPSConsistencyCheck (pic_parameter_set_rbsp_t *pps)
 {
   printf ("Consistency checking a picture parset, to be implemented\n");
@@ -220,6 +214,7 @@ void MakePPSavailable (int id, pic_parameter_set_rbsp_t *pps)
     free (PicParSet[id].slice_group_id);
 
   memcpy (&PicParSet[id], pps, sizeof (pic_parameter_set_rbsp_t));
+
   if ((PicParSet[id].slice_group_id = calloc (PicParSet[id].num_slice_group_map_units_minus1+1, sizeof(int))) == NULL)
     no_mem_exit ("MakePPSavailable: Cannot calloc slice_group_id");
   
@@ -238,15 +233,27 @@ void ProcessSPS (NALU_t *nalu)
   DataPartition *dp = AllocPartition(1);
   seq_parameter_set_rbsp_t *sps = AllocSPS();
   int dummy;
-
+  
   memcpy (dp->bitstream->streamBuffer, &nalu->buf[1], nalu->len-1);
   dp->bitstream->code_len = dp->bitstream->bitstream_length = RBSPtoSODB (dp->bitstream->streamBuffer, nalu->len-1);
   dp->bitstream->ei_flag = 0;
   dp->bitstream->read_len = dp->bitstream->frame_bitoffset = 0;
   dummy = InterpretSPS (dp, sps);
-  // DumpSPS (sps);
+
+  if (active_sps)
+  {
+    if (sps->seq_parameter_set_id == active_sps->seq_parameter_set_id)
+    {
+      if (dec_picture)
+      {
+        // this may only happen on slice loss
+        exit_frame();
+      }
+    }
+  }
   // SPSConsistencyCheck (pps);
   MakeSPSavailable (sps->seq_parameter_set_id, sps);
+
   FreePartition (dp, 1);
   FreeSPS (sps);
 }
@@ -265,8 +272,18 @@ void ProcessPPS (NALU_t *nalu)
   dp->bitstream->ei_flag = 0;
   dp->bitstream->read_len = dp->bitstream->frame_bitoffset = 0;
   dummy = InterpretPPS (dp, pps);
-  // DumpPPS (pps);
   // PPSConsistencyCheck (pps);
+  if (active_pps)
+  {
+    if (pps->pic_parameter_set_id == active_pps->pic_parameter_set_id)
+    {
+      if (dec_picture)
+      {
+        // this may only happen on slice loss
+        exit_frame();
+      }
+    }
+  }
   MakePPSavailable (pps->pic_parameter_set_id, pps);
   FreePartition (dp, 1);
   FreePPS (pps);
@@ -277,7 +294,6 @@ void UseParameterSet (int PicParsetId)
 {
   seq_parameter_set_rbsp_t *sps = &SeqParSet[PicParSet[PicParsetId].seq_parameter_set_id];
   pic_parameter_set_rbsp_t *pps = &PicParSet[PicParsetId];
-  static unsigned int ExpectedDeltaPerPicOrderCntCycle;  // POC200301 Can it be deleted?
   int i;
 
 
@@ -289,85 +305,73 @@ void UseParameterSet (int PicParsetId)
   sps =  &SeqParSet[PicParSet[PicParsetId].seq_parameter_set_id];
 
   
-  if (active_sps != sps)
-  {
-    active_sps = sps;
-    init_dpb();
-  }
-
-  active_pps = pps;
-
   // In theory, and with a well-designed software, the lines above
   // are everything necessary.  In practice, we need to patch many values
   // in img-> (but no more in inp-> -- these have been taken care of)
-
 
   // Sequence Parameter Set Stuff first
 
 //  printf ("Using Picture Parameter set %d and associated Sequence Parameter Set %d\n", PicParsetId, PicParSet[PicParsetId].seq_parameter_set_id);
 
-//  img->log2_max_frame_num_minus4 = sps->log2_max_frame_num_minus4;
   img->MaxFrameNum = 1<<(sps->log2_max_frame_num_minus4+4);
   
-  img->pic_order_cnt_type = sps->pic_order_cnt_type;
-  // POC200301
-  if (img->pic_order_cnt_type < 0 || img->pic_order_cnt_type > 2)  // != 1
+  if (sps->pic_order_cnt_type < 0 || sps->pic_order_cnt_type > 2)  // != 1
   {
-    printf ("sps->pic_order_cnt_type %d, expected 1, expect the unexpected...\n", sps->pic_order_cnt_type);
-    assert (sps->pic_order_cnt_type == 1);
+    printf ("invalid sps->pic_order_cnt_type = %d\n", sps->pic_order_cnt_type);
     error ("pic_order_cnt_type != 1", -1000);
   }
 
-  if (img->pic_order_cnt_type == 0)
+  if (sps->pic_order_cnt_type == 1)
   {
-//    img->log2_max_pic_order_cnt_lsb_minus4 = sps->log2_max_pic_order_cnt_lsb_minus4;
-  }
-  else if (img->pic_order_cnt_type == 1) // POC200301
-  {
-    img->num_ref_frames_in_pic_order_cnt_cycle = sps->num_ref_frames_in_pic_order_cnt_cycle;
-
-    if(img->num_ref_frames_in_pic_order_cnt_cycle >= MAXnum_ref_frames_in_pic_order_cnt_cycle)
+    if(sps->num_ref_frames_in_pic_order_cnt_cycle >= MAXnum_ref_frames_in_pic_order_cnt_cycle)
+    {
       error("num_ref_frames_in_pic_order_cnt_cycle too large",-1011);
-
-    img->delta_pic_order_always_zero_flag = sps->delta_pic_order_always_zero_flag;
-//    if(img->delta_pic_order_always_zero_flag != 0) !KS2
-//      error ("delta_pic_order_always_zero_flag != 0",-1002);
- 
-    img->offset_for_non_ref_pic = sps->offset_for_non_ref_pic;
-  
-    img->offset_for_top_to_bottom_field = sps->offset_for_top_to_bottom_field;
-  
-
-    ExpectedDeltaPerPicOrderCntCycle=0;
-    if (sps->num_ref_frames_in_pic_order_cnt_cycle)
-      for(i=0;i<(int)sps->num_ref_frames_in_pic_order_cnt_cycle;i++) 
-      {
-        img->offset_for_ref_frame[i] = sps->offset_for_ref_frame[i];
-        ExpectedDeltaPerPicOrderCntCycle += sps->offset_for_ref_frame[i];
-      }
+    }
   }
   
-  img->PicWidthInMbs = (active_sps->pic_width_in_mbs_minus1 +1);
-  img->PicHeightInMapUnits = (active_sps->pic_height_in_map_units_minus1 +1);
-  img->FrameHeightInMbs = ( 2 - active_sps->frame_mbs_only_flag ) * img->PicHeightInMapUnits;
+  img->PicWidthInMbs = (sps->pic_width_in_mbs_minus1 +1);
+  img->PicHeightInMapUnits = (sps->pic_height_in_map_units_minus1 +1);
+  img->FrameHeightInMbs = ( 2 - sps->frame_mbs_only_flag ) * img->PicHeightInMapUnits;
+  img->FrameSizeInMbs = img->PicWidthInMbs * img->FrameHeightInMbs;
 
   img->width = img->PicWidthInMbs * MB_BLOCK_SIZE;
   img->width_cr = img->width /2;
   img->height = img->FrameHeightInMbs * MB_BLOCK_SIZE;
   img->height_cr = img->height / 2;
 
-  // Picture Parameter Stuff
+  if (active_sps != sps)
+  {
+    if (dec_picture)
+    {
+      // this may only happen on slice loss
+      exit_frame();
+    }
+    active_sps = sps;
+    init_global_buffers();
+    if (!img->no_output_of_prior_pics_flag)
+    {
+      flush_dpb();
+    }
+    init_dpb();
 
-  img->weighted_pred_flag = pps->weighted_pred_flag;
-  img->weighted_bipred_idc = pps->weighted_bipred_idc;
+    if (NULL!=Co_located)
+    {
+      free_collocated(Co_located);
+    }
+    Co_located = alloc_colocated (img->width, img->height,sps->mb_adaptive_frame_field_flag);
+    ercInit(img->width, img->height, 1);
+  }
 
-  img->pic_order_present_flag = pps->pic_order_present_flag;
-  // POC200301 DELETE
-//  if(img->pic_order_present_flag != 0)
-//    error ("pic_order_present_flag != 0",-1004);
 
-  img->constrained_intra_pred_flag = pps->constrained_intra_pred_flag;
-
+  if (active_pps != pps)
+  {
+    if (dec_picture)
+    {
+      // this may only happen on slice loss
+      exit_frame();
+    }
+    active_pps = pps;
+  }
 
   // currSlice->dp_mode is set by read_new_slice (NALU first byte available there)
   if (pps->entropy_coding_mode_flag == UVLC)
@@ -387,3 +391,4 @@ void UseParameterSet (int PicParsetId)
     }
   }
 }
+

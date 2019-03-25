@@ -24,9 +24,8 @@
 #include "contributors.h"
 
 #include <math.h>
+#include <limits.h>
 #include <stdlib.h>
-#include <time.h>
-#include <sys/timeb.h>
 #include <string.h>
 #include <assert.h>
 
@@ -48,6 +47,7 @@
 
 #include "context_ini.h"
 #include "cabac.h"
+#include "loopfilter.h"
 
 #include "vlc.h"
 
@@ -61,8 +61,11 @@ extern struct img_par *erc_img;
 //extern FILE *p_out2;
 
 extern StorablePicture **listX[6];
+extern ColocatedParams *Co_located;
 
 StorablePicture *dec_picture;
+
+OldSliceParams old_slice;
 
 void MbAffPostProc()
 {
@@ -72,7 +75,7 @@ void MbAffPostProc()
   byte ***imgUV = dec_picture->imgUV;
 
   int i, x, y, x0, y0, uv;
-  for (i=0; i<(int)img->PicSizeInMbs; i+=2)
+  for (i=0; i<(int)dec_picture->PicSizeInMbs; i+=2)
   {
     if (dec_picture->mb_field[i])
     {
@@ -120,194 +123,30 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
 {
   int current_header;
   Slice *currSlice = img->currentSlice;
-  int ercStartMB;
-  int ercSegment;
-//  frame recfr;
-
-  time_t ltime1;                  // for time measurement
-  time_t ltime2;
-
-#ifdef WIN32
-  struct _timeb tstruct1;
-  struct _timeb tstruct2;
-#else
-  struct timeb tstruct1;
-  struct timeb tstruct2;
-#endif
-
-  int tmp_time;                   // time used by decoding the last frame
-
-
-#ifdef WIN32
-  _ftime (&tstruct1);             // start time ms
-#else
-  ftime (&tstruct1);              // start time ms
-#endif
-  time( &ltime1 );                // start time s
 
   img->current_slice_nr = 0;
   img->current_mb_nr = -4711;     // initialized to an impossible value for debugging -- correct value is taken from slice header
   currSlice->next_header = -8888; // initialized to an impossible value for debugging -- correct value is taken from slice header
   img->num_dec_mb = 0;
+  img->newframe = 1;
 
   while ((currSlice->next_header != EOS && currSlice->next_header != SOP))
   {
     current_header = read_new_slice();
 
     if (current_header == EOS)
+    {
+      exit_frame();
       return EOS;
+    }
 
-    if (img->structure == FRAME)
-      decode_frame_slice(img, inp, current_header);
-    else 
-      decode_field_slice(img, inp, current_header);
+    decode_slice(img, inp, current_header);
 
+    img->newframe = 0;
     img->current_slice_nr++;
   }
 
-  //deblocking for frame or first field
-  DeblockFrame( img, dec_picture->imgY, dec_picture->imgUV ) ;
-  if (img->MbaffFrameFlag)
-    MbAffPostProc();
-
-  store_picture_in_dpb(dec_picture);
-  dec_picture=NULL;
-
-  if(img->structure != FRAME)       //if the previous pict is top or bottom field, 
-  {
-    img->current_slice_nr = 0;
-    currSlice->next_header = -8889;
-    img->num_dec_mb = 0;
-    while ((currSlice->next_header != EOS && currSlice->next_header != SOP))
-    {   
-      current_header = read_new_slice();
-      
-      if (current_header == EOS)
-        return EOS;
-      
-      decode_field_slice(img, inp, current_header);
-      
-      img->current_slice_nr++;  
-    }
-
-    //deblocking second field
-    DeblockFrame( img, dec_picture->imgY, dec_picture->imgUV ) ;
-    store_picture_in_dpb(dec_picture);
-    dec_picture=NULL;
-  }
-
-  g_new_frame=1;
-
-/*  recfr.yptr = &imgY[0][0];
-  recfr.uptr = &imgUV[0][0][0];
-  recfr.vptr = &imgUV[1][0][0];
-*/
-  //! this is always true at the beginning of a frame
-  ercStartMB = 0;
-  ercSegment = 0;
-
-/* !KS: This needs to be fixed for multiple slices
-  
-  //! mark the start of the first segment
-  ercStartSegment(0, ercSegment, 0 , erc_errorVar);
-  //! generate the segments according to the macroblock map
-  for(i = 1; i<img->PicSizeInMbs; i++)
-  {
-    if(img->mb_data[i].ei_flag != img->mb_data[i-1].ei_flag)
-    {
-      ercStopSegment(i-1, ercSegment, 0, erc_errorVar); //! stop current segment
-      
-      //! mark current segment as lost or OK
-      if(img->mb_data[i-1].ei_flag)
-        ercMarkCurrSegmentLost(img->width, erc_errorVar);
-      else
-        ercMarkCurrSegmentOK(img->width, erc_errorVar);
-      
-      ercSegment++;  //! next segment
-      ercStartSegment(i, ercSegment, 0 , erc_errorVar); //! start new segment
-      ercStartMB = i;//! save start MB for this segment 
-    }
-  }
-  //! mark end of the last segent
-  ercStopSegment(img->PicSizeInMbs-1, ercSegment, 0, erc_errorVar);
-  if(img->mb_data[i-1].ei_flag)
-    ercMarkCurrSegmentLost(img->width, erc_errorVar);
-  else
-    ercMarkCurrSegmentOK(img->width, erc_errorVar);
-
-  //! call the right error concealment function depending on the frame type.
-  erc_mvperMB /= img->PicSizeInMbs;
-
-  erc_img = img;
-  if(img->type == I_SLICE || img->type == SI_SLICE) // I-frame
-    ercConcealIntraFrame(&recfr, img->width, img->height, erc_errorVar);
-  else
-    ercConcealInterFrame(&recfr, erc_object_list, img->width, img->height, erc_errorVar);
-*/
-  
-
-  if (img->structure == FRAME)         // buffer mgt. for frame mode
-    frame_postprocessing(img, inp);
-  else
-    field_postprocessing(img, inp);   // reset all interlaced variables
-
-  post_poc( img );                    // POC200301
-
-
-#ifdef WIN32
-  _ftime (&tstruct2);   // end time ms
-#else
-  ftime (&tstruct2);    // end time ms
-#endif
-  time( &ltime2 );                                // end time sec
-  tmp_time=(ltime2*1000+tstruct2.millitm) - (ltime1*1000+tstruct1.millitm);
-  tot_time=tot_time + tmp_time;
-
-  if(img->type == I_SLICE) // I picture
-    fprintf(stdout,"%3d(I)  %3d %5d %7.4f %7.4f %7.4f %5d\n",
-        frame_no, img->ThisPOC, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
-  else if(img->type == P_SLICE) // P pictures
-    fprintf(stdout,"%3d(P)  %3d %5d %7.4f %7.4f %7.4f %5d\n",
-    frame_no, img->ThisPOC, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
-  else if(img->type == SP_SLICE) // SP pictures
-    fprintf(stdout,"%3d(SP) %3d %5d %7.4f %7.4f %7.4f %5d\n",
-    frame_no, img->ThisPOC, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
-  else if (img->type == SI_SLICE)
-    fprintf(stdout,"%3d(SI) %3d %5d %7.4f %7.4f %7.4f %5d\n",
-    frame_no, img->ThisPOC, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
-  else if(!img->disposable_flag) // stored B pictures
-    fprintf(stdout,"%3d(BS) %3d %5d %7.4f %7.4f %7.4f %5d\n",
-        frame_no, img->ThisPOC, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
-  else // B pictures
-    fprintf(stdout,"%3d(B)  %3d %5d %7.4f %7.4f %7.4f %5d\n",
-        frame_no, img->ThisPOC, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
-
-  fflush(stdout);
-
-  //! TO 19.11.2001 Known Problem: for init_frame we have to know the picture type of the actual frame
-  //! in case the first slice of the P-Frame following the I-Frame was lost we decode this P-Frame but 
-  //! do not write it because it was assumed to be an I-Frame in init_frame. So we force the decoder to
-  //! guess the right picture type. This is a hack a should be removed by the time there is a clean
-  //! solution where we do not have to know the picture type for the function init_frame.
-  if(img->type == I_SLICE)
-    img->type = P_SLICE;
-  //! End TO 19.11.2001
-
-  if(img->type == I_SLICE || img->type == SI_SLICE || img->type == P_SLICE || !img->disposable_flag)   // I or P pictures
-    img->number++;
-  else
-    Bframe_ctr++;    // B pictures
-
-  exit_frame(img, inp);
-
-  if (img->structure != FRAME)
-  {
-    img->height /= 2;
-    img->height_cr /= 2;
-  }
-
-  img->current_mb_nr = -4712;   // impossible value for debugging, StW
-  img->current_slice_nr = 0;
+  exit_frame();
 
   return (SOP);
 }
@@ -323,7 +162,7 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
 void find_snr(
   struct snr_par  *snr,   //!< pointer to snr parameters
   StorablePicture *p,     //!< picture to be compared
-  FILE *p_ref)            //!< filestream to reference YUV file
+  FILE *p_ref)            //!< open reference YUV file
 {
   int i,j;
   int diff_y,diff_u,diff_v;
@@ -331,19 +170,18 @@ void find_snr(
   int  status;
 
   // calculate frame number
-  // KS: This works for the way, the HHI encoder sets POC
-//  frame_no = img->ThisPOC/2;
-  
-  int  psnrPOC = active_sps->mb_adaptive_frame_field_flag ? (img->toppoc!=img->bottompoc)? img->framepoc /2 :img->framepoc  : img->framepoc/2;
-  // calculate frame number
-  // KS: This works for the way, the HHI encoder sets POC
-  //frame_no = img->ThisPOC/2;
+  int  psnrPOC = active_sps->mb_adaptive_frame_field_flag ? p->poc /(input->poc_scale) : p->poc/(3-input->poc_scale);
+
+  // KS: Code below might work better if you have fields and a large (>1) poc offset between them
+//  int  poc_diff=max(1,(p->bottom_poc - p->top_poc));
+//  int  psnrPOC = active_sps->mb_adaptive_frame_field_flag ? p->poc /(input->poc_scale*poc_diff) : p->poc/((3-input->poc_scale)*poc_diff);
 
   if (psnrPOC==0 && img->psnr_number)
     img->idr_psnr_number=img->psnr_number + 1;
   img->psnr_number=max(img->psnr_number,img->idr_psnr_number+psnrPOC);
-
+  
   frame_no = img->idr_psnr_number+psnrPOC;
+
 
   rewind(p_ref);
 
@@ -353,7 +191,10 @@ void find_snr(
     if (status != 0)
     {
       snprintf(errortext, ET_SIZE, "Error in seeking frame number: %d", frame_no);
-      error(errortext, 500);
+      fprintf(stderr, "%s", errortext);
+      return;
+//      snprintf(errortext, ET_SIZE, "Error in seeking frame number: %d", frame_no);
+//      error(errortext, 500);
     }
   }
 
@@ -418,27 +259,26 @@ void find_snr(
     snr->snr_ya=snr->snr_y1;
     snr->snr_ua=snr->snr_u1;
     snr->snr_va=snr->snr_v1;
-    
-    if (diff_y == 0)   
-      snr->snr_ya=50; // need to assign a reasonable large number so avg snr of entire sequece isn't infinite
-    if (diff_u == 0)
-      snr->snr_ua=50;
-    if (diff_v == 0)
-      snr->snr_va=50;
 
+//    snr->snr_ya=snr->snr_y1=snr->snr_y;                                                        // keep luma snr for first frame
+//    snr->snr_ya=snr->snr_u1=snr->snr_u;                                                        // keep chroma snr for first frame
+//    snr->snr_ya=snr->snr_v1=snr->snr_v;                                                        // keep chroma snr for first frame
+  
   }
-/*  else
+  else
   {
     snr->snr_ya=(float)(snr->snr_ya*(img->number+Bframe_ctr)+snr->snr_y)/(img->number+Bframe_ctr+1); // average snr chroma for all frames
     snr->snr_ua=(float)(snr->snr_ua*(img->number+Bframe_ctr)+snr->snr_u)/(img->number+Bframe_ctr+1); // average snr luma for all frames
     snr->snr_va=(float)(snr->snr_va*(img->number+Bframe_ctr)+snr->snr_v)/(img->number+Bframe_ctr+1); // average snr luma for all frames
-  } */
+  } 
+  /*
  else
   {
     snr->snr_ya=(float)(snr->snr_ya*(img->number - 1 + Bframe_ctr)+snr->snr_y)/(img->number+Bframe_ctr); // average snr luma for all frames
     snr->snr_ua=(float)(snr->snr_ua*(img->number - 1 + Bframe_ctr)+snr->snr_u)/(img->number+Bframe_ctr); // average snr chroma for all frames
     snr->snr_va=(float)(snr->snr_va*(img->number - 1 + Bframe_ctr)+snr->snr_v)/(img->number+Bframe_ctr); // average snr chromafor all frames
   }
+  */
 }
 
 
@@ -468,11 +308,11 @@ void get_block(int ref_frame, StorablePicture **list, int x_pos, int y_pos, stru
   x_pos = (x_pos-dx)/4;
   y_pos = (y_pos-dy)/4;
 
-  maxold_x = img->width-1;
-  maxold_y = img->height-1;
+  maxold_x = dec_picture->size_x-1;
+  maxold_y = dec_picture->size_y-1;
 
   if (dec_picture->mb_field[img->current_mb_nr])
-    maxold_y = img->height/2 - 1;
+    maxold_y = dec_picture->size_y/2 - 1;
 
   if (dx == 0 && dy == 0) {  /* fullpel position */
     for (j = 0; j < BLOCK_SIZE; j++)
@@ -585,7 +425,7 @@ void get_block(int ref_frame, StorablePicture **list, int x_pos, int y_pos, stru
 }
 
 
-static void reorder_lists(int currSliceType, Slice * currSlice)
+void reorder_lists(int currSliceType, Slice * currSlice)
 {
 
   if ((currSliceType != I_SLICE)&&(currSliceType != SI_SLICE))
@@ -636,23 +476,35 @@ static void reorder_lists(int currSliceType, Slice * currSlice)
 void set_ref_pic_num()
 {
   int i,j;
-
+  
   for (i=0;i<listXsize[LIST_0];i++)
   {
     dec_picture->ref_pic_num[LIST_0][i]=listX[LIST_0][i]->poc * 2 + ((listX[LIST_0][i]->structure==BOTTOM_FIELD)?1:0) ; 
+    dec_picture->frm_ref_pic_num[LIST_0][i]=listX[LIST_0][i]->frame_poc * 2; 
+    dec_picture->top_ref_pic_num[LIST_0][i]=listX[LIST_0][i]->top_poc * 2; 
+    dec_picture->bottom_ref_pic_num[LIST_0][i]=listX[LIST_0][i]->bottom_poc * 2 + 1; 
+    //printf("POCS %d %d %d %d ",listX[LIST_0][i]->frame_poc,listX[LIST_0][i]->bottom_poc,listX[LIST_0][i]->top_poc,listX[LIST_0][i]->poc);
+    //printf("refid %d %d %d %d\n",(int) dec_picture->frm_ref_pic_num[LIST_0][i],(int) dec_picture->top_ref_pic_num[LIST_0][i],(int) dec_picture->bottom_ref_pic_num[LIST_0][i],(int) dec_picture->ref_pic_num[LIST_0][i]);
   }
 
   for (i=0;i<listXsize[LIST_1];i++)
   {
     dec_picture->ref_pic_num[LIST_1][i]=listX[LIST_1][i]->poc  *2 + ((listX[LIST_1][i]->structure==BOTTOM_FIELD)?1:0);
+    dec_picture->frm_ref_pic_num[LIST_1][i]=listX[LIST_1][i]->frame_poc * 2; 
+    dec_picture->top_ref_pic_num[LIST_1][i]=listX[LIST_1][i]->top_poc * 2; 
+    dec_picture->bottom_ref_pic_num[LIST_1][i]=listX[LIST_1][i]->bottom_poc * 2 + 1; 
   }
 
   if (img->structure==FRAME)
     for (j=2;j<6;j++)
       for (i=0;i<listXsize[j];i++)
-      {
+      {    
         dec_picture->ref_pic_num[j][i] = listX[j][i]->poc * 2 + ((listX[j][i]->structure==BOTTOM_FIELD)?1:0);
+        dec_picture->frm_ref_pic_num[j][i] = listX[j][i]->frame_poc * 2 ;
+        dec_picture->top_ref_pic_num[j][i] = listX[j][i]->top_poc * 2 ;
+        dec_picture->bottom_ref_pic_num[j][i] = listX[j][i]->bottom_poc * 2 + 1;
       }
+
 }
 
 
@@ -670,7 +522,6 @@ int read_new_slice()
   int BitsUsedByHeader;
   Slice *currSlice = img->currentSlice;
   Bitstream *currStream;
-  int newframe;
 
   int slice_id_a, slice_id_b, slice_id_c;
   int redundant_pic_cnt_b, redundant_pic_cnt_c;
@@ -739,8 +590,22 @@ int read_new_slice()
 
         FmoInit (active_pps, active_sps);
 
+        if(is_new_picture())
+        {
+          init_picture(img, input);
+          
+          current_header = SOP;
+        }
+        else
+          current_header = SOS;
+  
         init_lists(img->type, img->currentSlice->structure);
         reorder_lists (img->type, img->currentSlice);
+
+        if (img->structure==FRAME)
+        {
+          init_mbaff_lists();
+        }
 
 /*        if (img->frame_num==1) // write a reference list
         {
@@ -750,48 +615,12 @@ int read_new_slice()
               write_picture(listX[0][i], p_out2);
         }
 */
-        //if (img->MbaffFrameFlag)
-        if (img->structure==FRAME)
-        {
-          init_mbaff_lists();
-        }
-
-        if (img->currentSlice->structure!=0)
-        {
-          img->height /=2 ;
-          img->height_cr /=2;
-        }
 
         // From here on, active_sps, active_pps and the slice header are valid
         if (img->MbaffFrameFlag)
           img->current_mb_nr = currSlice->start_mb_nr << 1;
         else
           img->current_mb_nr = currSlice->start_mb_nr;
-
-        if (img->tr_old != img->ThisPOC)
-        {
-          newframe=1;
-          img->tr_old = img->ThisPOC;
-        }
-        else
-          newframe = 0;
-        if (newframe)
-          current_header = SOP;
-        else
-          current_header = SOS;
-
-        if(img->structure != img->structure_old)        
-          newframe |= 1;
-
-        img->structure_old = img->structure; 
-//! new stuff StW
-        if(newframe || g_new_frame)
-        {
-          current_header = SOP;
-          g_new_frame=0;
-        }
-        else
-          current_header = SOS;
 
         if (active_pps->entropy_coding_mode_flag)
         {
@@ -851,19 +680,22 @@ int read_new_slice()
         BitsUsedByHeader    += RestOfSliceHeader ();
         
         FmoInit (active_pps, active_sps);
+
+        if(is_new_picture())
+        {
+          init_picture(img, input);
+          current_header = SOP;
+        }
+        else
+          current_header = SOS;
+
         
         init_lists(img->type, img->currentSlice->structure);
         reorder_lists (img->type, img->currentSlice);
         
-        if (img->MbaffFrameFlag)
+        if (img->structure==FRAME)
         {
           init_mbaff_lists();
-        }
-
-        if (img->currentSlice->structure!=0)
-        {
-          img->height /=2 ;
-          img->height_cr /=2;
         }
 
         // From here on, active_sps, active_pps and the slice header are valid
@@ -872,30 +704,6 @@ int read_new_slice()
         else
           img->current_mb_nr = currSlice->start_mb_nr;
 
-        if (img->tr_old != img->ThisPOC)
-        {
-          newframe=1;
-          img->tr_old = img->ThisPOC;
-        }
-        else
-          newframe = 0;
-        if (newframe)
-          current_header = SOP;
-        else
-          current_header = SOS;
-
-        if(img->structure != img->structure_old)        
-          newframe |= 1;
-
-        img->structure_old = img->structure; 
-//! new stuff StW
-        if(newframe || g_new_frame)
-        {
-          current_header = SOP;
-          g_new_frame=0;
-        }
-        else
-          current_header = SOS;
 
         /* 
            LC:
@@ -1018,28 +826,77 @@ int read_new_slice()
 /*!
  ************************************************************************
  * \brief
- *    Initializes the parameters for a new frame
+ *    Initializes the parameters for a new picture
  ************************************************************************
  */
-void init_frame(struct img_par *img, struct inp_par *inp)
+void init_picture(struct img_par *img, struct inp_par *inp)
 {
   int i,k,l;
-
   if (dec_picture)
   {
     // this may only happen on slice loss
-    store_picture_in_dpb(dec_picture);
+    exit_frame();
   }
 
-  dec_picture = alloc_storable_picture (FRAME, img->width, img->height, img->width_cr, img->height_cr);
-  dec_picture->poc=img->framepoc;
+  if (img->frame_num != img->pre_frame_num && img->frame_num != (img->pre_frame_num + 1) % img->MaxFrameNum) 
+  {
+    if (active_sps->gaps_in_frame_num_value_allowed_flag == 0)
+    {
+      /* Advanced Error Concealment would be called here to combat unintentional loss of pictures. */
+      error("An unintentional loss of pictures occurs! Exit\n", 100);
+    }
+    fill_frame_num_gap(img);
+  }
+  img->pre_frame_num = img->frame_num;
+
+  //calculate POC
+  decode_poc(img);
+  //  dumppoc (img);
+
+  if (img->structure==FRAME ||img->structure==TOP_FIELD)
+  {
+#ifdef WIN32
+    _ftime (&(img->tstruct_start));             // start time ms
+#else
+    ftime (&(img->tstruct_start));              // start time ms
+#endif
+    time( &(img->ltime_start));                // start time s
+  }
+
+  dec_picture = alloc_storable_picture (img->structure, img->width, img->height, img->width_cr, img->height_cr);
   dec_picture->top_poc=img->toppoc;
   dec_picture->bottom_poc=img->bottompoc;
-  dec_picture->pic_num = img->frame_num;
-  dec_picture->coded_frame = (img->structure==FRAME);
-//  dec_picture->mb_adaptive_frame_field_flag = img->MbaffFrameFlag;
+  dec_picture->frame_poc=img->framepoc;
 
-   
+  // reset all variables of the error concealment instance before decoding of every frame.
+  // here the third parameter should, if perfectly, be equal to the number of slices per frame.
+  // using little value is ok, the code will allocate more memory if the slice number is larger
+  ercReset(erc_errorVar, img->PicSizeInMbs, img->PicSizeInMbs, dec_picture->size_x);
+  erc_mvperMB = 0;
+
+  switch (img->structure )
+  {
+  case TOP_FIELD:
+    {
+      dec_picture->poc=img->toppoc;
+      img->number *= 2;
+      break;
+    }
+  case BOTTOM_FIELD:
+    {
+      dec_picture->poc=img->bottompoc;
+      img->number++;
+      break;
+    }
+  case FRAME:
+    {
+      dec_picture->poc=img->framepoc;
+      break;
+    }
+  default:
+    error("img->structure not initialized", 235);
+  }
+
   img->current_slice_nr=0;
 
   if (img->type > SI_SLICE)
@@ -1048,19 +905,13 @@ void init_frame(struct img_par *img, struct inp_par *inp)
     img->type = P_SLICE;  // concealed element
   }
 
-  // allocate memory for frame buffers
-  if (img->idr_flag) 
-  {
-    init_global_buffers(inp, img); 
-  }
-
   // CAVLC init
   for (i=0;i < (int)img->PicSizeInMbs; i++)
     for (k=0;k<4;k++)
       for (l=0;l<6;l++)
         img->nz_coeff[i][k][l]=-1;  // CAVLC
 
-  if(img->constrained_intra_pred_flag)
+  if(active_pps->constrained_intra_pred_flag)
   {
     for (i=0; i<(int)img->PicSizeInMbs; i++)
     {
@@ -1068,13 +919,32 @@ void init_frame(struct img_par *img, struct inp_par *inp)
     }
   }
 
-  // WYK: Oct. 8, 2001. Set the slice_nr member of each MB to -1, to ensure correct when packet loss occurs
+  // Set the slice_nr member of each MB to -1, to ensure correct when packet loss occurs
   // TO set Macroblock Map (mark all MBs as 'have to be concealed')
   for(i=0; i<(int)img->PicSizeInMbs; i++)
   {
     img->mb_data[i].slice_nr = -1; 
     img->mb_data[i].ei_flag = 1;
   }
+
+  img->mb_y = img->mb_x = 0;
+  img->block_y = img->pix_y = img->pix_c_y = 0; // define vertical positions
+  img->block_x = img->pix_x = img->pix_c_x = 0; // define horizontal positions
+
+  dec_picture->slice_type = img->type;
+  dec_picture->used_for_reference = (img->nal_reference_idc != 0);
+  dec_picture->idr_flag = img->idr_flag;
+  dec_picture->no_output_of_prior_pics_flag = img->no_output_of_prior_pics_flag;
+  dec_picture->long_term_reference_flag = img->long_term_reference_flag;
+  dec_picture->adaptive_ref_pic_buffering_flag = img->adaptive_ref_pic_buffering_flag;
+
+  dec_picture->dec_ref_pic_marking_buffer = img->dec_ref_pic_marking_buffer;
+  img->dec_ref_pic_marking_buffer = NULL;
+
+  dec_picture->MbaffFrameFlag = img->MbaffFrameFlag;
+  dec_picture->pic_num = img->frame_num;
+  dec_picture->frame_num = img->frame_num;
+  dec_picture->coded_frame = (img->structure==FRAME);
 }
 
 /*!
@@ -1083,9 +953,147 @@ void init_frame(struct img_par *img, struct inp_par *inp)
  *    exit a frame
  ************************************************************************
  */
-void exit_frame(struct img_par *img, struct inp_par *inp)
+void exit_frame()
 {
-  img->pre_frame_num = img->frame_num;
+  int ercStartMB;
+  int ercSegment;
+  frame recfr;
+  unsigned int i;
+  int structure, frame_poc, slice_type, refpic;
+
+  int tmp_time;                   // time used by decoding the last frame
+
+  // this should not happen, just to be sure....
+  if (dec_picture==NULL)
+  {
+    return;
+  }
+
+  //deblocking for frame or field
+  DeblockPicture( img, dec_picture ) ;
+  if (dec_picture->MbaffFrameFlag)
+    MbAffPostProc();
+
+
+  recfr.yptr = &dec_picture->imgY[0][0];
+  recfr.uptr = &dec_picture->imgUV[0][0][0];
+  recfr.vptr = &dec_picture->imgUV[1][0][0];
+
+  //! this is always true at the beginning of a frame
+  ercStartMB = 0;
+  ercSegment = 0;
+
+  //! mark the start of the first segment
+  if (!dec_picture->MbaffFrameFlag)
+  {
+    ercStartSegment(0, ercSegment, 0 , erc_errorVar);
+    //! generate the segments according to the macroblock map
+    for(i = 1; i<img->PicSizeInMbs; i++)
+    {
+      if(img->mb_data[i].ei_flag != img->mb_data[i-1].ei_flag)
+      {
+        ercStopSegment(i-1, ercSegment, 0, erc_errorVar); //! stop current segment
+        
+        //! mark current segment as lost or OK
+        if(img->mb_data[i-1].ei_flag)
+          ercMarkCurrSegmentLost(dec_picture->size_x, erc_errorVar);
+        else
+          ercMarkCurrSegmentOK(dec_picture->size_x, erc_errorVar);
+        
+        ercSegment++;  //! next segment
+        ercStartSegment(i, ercSegment, 0 , erc_errorVar); //! start new segment
+        ercStartMB = i;//! save start MB for this segment 
+      }
+    }
+    //! mark end of the last segment
+    ercStopSegment(dec_picture->PicSizeInMbs-1, ercSegment, 0, erc_errorVar);
+    if(img->mb_data[i-1].ei_flag)
+      ercMarkCurrSegmentLost(dec_picture->size_x, erc_errorVar);
+    else
+      ercMarkCurrSegmentOK(dec_picture->size_x, erc_errorVar);
+    
+    //! call the right error concealment function depending on the frame type.
+    erc_mvperMB /= dec_picture->PicSizeInMbs;
+    
+    erc_img = img;
+    if(dec_picture->slice_type == I_SLICE || dec_picture->slice_type == SI_SLICE) // I-frame
+      ercConcealIntraFrame(&recfr, dec_picture->size_x, dec_picture->size_y, erc_errorVar);
+    else
+      ercConcealInterFrame(&recfr, erc_object_list, dec_picture->size_x, dec_picture->size_y, erc_errorVar);
+  }
+
+  if (img->structure == FRAME)         // buffer mgt. for frame mode
+    frame_postprocessing(img, input);
+  else
+    field_postprocessing(img, input);   // reset all interlaced variables
+
+  structure  = dec_picture->structure;
+  slice_type = dec_picture->slice_type;
+  frame_poc  = dec_picture->frame_poc;
+  refpic     = dec_picture->used_for_reference;
+
+  store_picture_in_dpb(dec_picture);
+  dec_picture=NULL;
+
+  if (img->last_has_mmco_5)
+  {
+    img->pre_frame_num = 0;
+  }
+
+  if ((structure==FRAME)||structure==BOTTOM_FIELD)
+  {
+    
+#ifdef WIN32
+    _ftime (&(img->tstruct_end));             // start time ms
+#else
+    ftime (&(img->tstruct_end));              // start time ms
+#endif
+    
+    time( &(img->ltime_end));                // start time s
+
+    tmp_time=(img->ltime_end*1000+img->tstruct_end.millitm) - (img->ltime_start*1000+img->tstruct_start.millitm);
+    tot_time=tot_time + tmp_time;
+    
+    if(slice_type == I_SLICE) // I picture
+      fprintf(stdout,"%3d(I)  %3d %5d %7.4f %7.4f %7.4f %5d\n",
+      frame_no, frame_poc, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
+    else if(slice_type == P_SLICE) // P pictures
+      fprintf(stdout,"%3d(P)  %3d %5d %7.4f %7.4f %7.4f %5d\n",
+      frame_no, frame_poc, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
+    else if(slice_type == SP_SLICE) // SP pictures
+      fprintf(stdout,"%3d(SP) %3d %5d %7.4f %7.4f %7.4f %5d\n",
+      frame_no, frame_poc, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
+    else if (slice_type == SI_SLICE)
+      fprintf(stdout,"%3d(SI) %3d %5d %7.4f %7.4f %7.4f %5d\n",
+      frame_no, frame_poc, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
+    else if(refpic) // stored B pictures
+      fprintf(stdout,"%3d(BS) %3d %5d %7.4f %7.4f %7.4f %5d\n",
+      frame_no, frame_poc, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
+    else // B pictures
+      fprintf(stdout,"%3d(B)  %3d %5d %7.4f %7.4f %7.4f %5d\n",
+      frame_no, frame_poc, img->qp,snr->snr_y,snr->snr_u,snr->snr_v,tmp_time);
+    
+    fflush(stdout);
+    
+    //! TO 19.11.2001 Known Problem: for init_frame we have to know the picture type of the actual frame
+    //! in case the first slice of the P-Frame following the I-Frame was lost we decode this P-Frame but 
+    //! do not write it because it was assumed to be an I-Frame in init_frame. So we force the decoder to
+    //! guess the right picture type. This is a hack a should be removed by the time there is a clean
+    //! solution where we do not have to know the picture type for the function init_frame.
+//    if(img->type == I_SLICE)
+//      img->type = P_SLICE;
+    //! End TO 19.11.2001
+    
+    if(slice_type == I_SLICE || slice_type == SI_SLICE || slice_type == P_SLICE || refpic)   // I or P pictures
+      img->number++;
+    else
+      Bframe_ctr++;    // B pictures
+    
+  }
+
+  img->current_mb_nr = -4712;   // impossible value for debugging, StW
+  img->current_slice_nr = 0;
+
 }
 
 /*!
@@ -1100,7 +1108,7 @@ void ercWriteMBMODEandMV(struct img_par *img,struct inp_par *inp)
 {
   extern objectBuffer_t *erc_object_list;
   int i, ii, jj, currMBNum = img->current_mb_nr;
-  int mbx = xPosMB(currMBNum,img->width), mby = yPosMB(currMBNum,img->width);
+  int mbx = xPosMB(currMBNum,dec_picture->size_x), mby = yPosMB(currMBNum,dec_picture->size_x);
   objectBuffer_t *currRegion, *pRegion;
   Macroblock *currMB = &img->mb_data[currMBNum];
   int***  mv;
@@ -1124,20 +1132,22 @@ void ercWriteMBMODEandMV(struct img_par *img,struct inp_par *inp)
       }
       else
       {
+        ii              = 4*mbx + (i%2)*2;// + BLOCK_SIZE;
+        jj              = 4*mby + (i/2)*2;
         if (currMB->b8mode[i]>=5 && currMB->b8mode[i]<=7)  // SMALL BLOCKS
         {
-          ii              = 4*mbx + (i%2)*2 + BLOCK_SIZE;
-          jj              = 4*mby + (i/2)*2;
           pRegion->mv[0]  = (dec_picture->mv[LIST_0][ii][jj][0] + dec_picture->mv[LIST_0][ii+1][jj][0] + dec_picture->mv[LIST_0][ii][jj+1][0] + dec_picture->mv[LIST_0][ii+1][jj+1][0] + 2)/4;
           pRegion->mv[1]  = (dec_picture->mv[LIST_0][ii][jj][1] + dec_picture->mv[LIST_0][ii+1][jj][1] + dec_picture->mv[LIST_0][ii][jj+1][1] + dec_picture->mv[LIST_0][ii+1][jj+1][1] + 2)/4;
         }
         else // 16x16, 16x8, 8x16, 8x8
         {
-          pRegion->mv[0]  = dec_picture->mv[LIST_0][4*mbx+(i%2)*2+BLOCK_SIZE][4*mby+(i/2)*2][0];
-          pRegion->mv[1]  = dec_picture->mv[LIST_0][4*mbx+(i%2)*2+BLOCK_SIZE][4*mby+(i/2)*2][1];
+          pRegion->mv[0]  = dec_picture->mv[LIST_0][ii][jj][0];
+          pRegion->mv[1]  = dec_picture->mv[LIST_0][ii][jj][1];
+//          pRegion->mv[0]  = dec_picture->mv[LIST_0][4*mbx+(i%2)*2+BLOCK_SIZE][4*mby+(i/2)*2][0];
+//          pRegion->mv[1]  = dec_picture->mv[LIST_0][4*mbx+(i%2)*2+BLOCK_SIZE][4*mby+(i/2)*2][1];
         }
         erc_mvperMB      += mabs(pRegion->mv[0]) + mabs(pRegion->mv[1]);
-        pRegion->mv[2]    = refFrArr[4*mby+(i/2)*2][4*mbx+(i%2)*2];
+        pRegion->mv[2]    = dec_picture->ref_idx[LIST_0][ii][jj];
       }
     }
   }
@@ -1145,7 +1155,7 @@ void ercWriteMBMODEandMV(struct img_par *img,struct inp_par *inp)
   {
     for (i=0; i<4; i++)
     {
-      ii                  = 4*mbx + (i%2)*2 + BLOCK_SIZE;
+      ii                  = 4*mbx + (i%2)*2;// + BLOCK_SIZE;
       jj                  = 4*mby + (i/2)*2;
       pRegion             = currRegion + i;
       pRegion->regionMode = (currMB->mb_type  ==I16MB  ? REGMODE_INTRA      :
@@ -1158,22 +1168,144 @@ void ercWriteMBMODEandMV(struct img_par *img,struct inp_par *inp)
       }
       else
       {
-        mv                = (currMB->b8mode[i]==0 && currMB->b8pdir[i]==2 ? 0/*img->dbMV*/ : currMB->b8pdir[i]==1 ? dec_picture->mv[LIST_1] : dec_picture->mv[LIST_0]);
+        int idx = (dec_picture->ref_idx[0][ii][jj]<0)?1:0;
+//        int idx = (currMB->b8mode[i]==0 && currMB->b8pdir[i]==2 ? LIST_0 : currMB->b8pdir[i]==1 ? LIST_1 : LIST_0);
+//        int idx = currMB->b8pdir[i]==0 ? LIST_0 : LIST_1;
+        mv                = dec_picture->mv[idx];
         pRegion->mv[0]    = (mv[ii][jj][0] + mv[ii+1][jj][0] + mv[ii][jj+1][0] + mv[ii+1][jj+1][0] + 2)/4;
         pRegion->mv[1]    = (mv[ii][jj][1] + mv[ii+1][jj][1] + mv[ii][jj+1][1] + mv[ii+1][jj+1][1] + 2)/4;
         erc_mvperMB      += mabs(pRegion->mv[0]) + mabs(pRegion->mv[1]);
+
+        pRegion->mv[2]  = (dec_picture->ref_idx[idx][ii][jj]);
+/*        
         if (currMB->b8pdir[i]==0 || (currMB->b8pdir[i]==2 && currMB->b8mode[i]!=0)) // forward or bidirect
         {
-          pRegion->mv[2]  = (dec_picture->ref_idx[LIST_1][ii-4][jj]-1);
+          pRegion->mv[2]  = (dec_picture->ref_idx[LIST_0][ii][jj]);
           ///???? is it right, not only "img->fw_refFrArr[jj][ii-4]"
         }
         else
         {
-          pRegion->mv[2]  = 0;
+          pRegion->mv[2]  = (dec_picture->ref_idx[LIST_1][ii][jj]);
+//          pRegion->mv[2]  = 0;
         }
+        */
       }
     }
   }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    set defaults for old_slice
+ *    NAL unit of a picture"
+ ************************************************************************
+ */
+void init_old_slice()
+{
+  old_slice.field_pic_flag = 0;
+
+  old_slice.pps_id = INT_MAX;
+
+  old_slice.frame_num = INT_MAX;
+
+  old_slice.nal_ref_idc = INT_MAX;
+  
+  old_slice.idr_flag = 0;
+
+  old_slice.pic_oder_cnt_lsb          = UINT_MAX;
+  old_slice.delta_pic_oder_cnt_bottom = INT_MAX;
+
+  old_slice.delta_pic_order_cnt[0] = INT_MAX;
+  old_slice.delta_pic_order_cnt[1] = INT_MAX;
+
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    save slice parameters that are needed for checking of "first VCL
+ *    NAL unit of a picture"
+ ************************************************************************
+ */
+void exit_slice()
+{
+
+  old_slice.pps_id = img->currentSlice->pic_parameter_set_id;
+
+  old_slice.frame_num = img->frame_num;
+
+  old_slice.field_pic_flag = img->field_pic_flag;
+
+  if(img->field_pic_flag)
+  {
+    old_slice.bottom_field_flag = img->bottom_field_flag;
+  }
+
+  old_slice.nal_ref_idc   = img->nal_reference_idc;
+  
+  old_slice.idr_flag = img->idr_flag;
+  if (img->idr_flag)
+  {
+    old_slice.idr_pic_id = img->idr_pic_id;
+  }
+
+  if (active_sps->pic_order_cnt_type == 0)
+  {
+    old_slice.pic_oder_cnt_lsb          = img->pic_order_cnt_lsb;
+    old_slice.delta_pic_oder_cnt_bottom = img->delta_pic_order_cnt_bottom;
+  }
+
+  if (active_sps->pic_order_cnt_type == 1)
+  {
+    old_slice.delta_pic_order_cnt[0] = img->delta_pic_order_cnt[0];
+    old_slice.delta_pic_order_cnt[1] = img->delta_pic_order_cnt[1];
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    detect if current slice is "first VCL NAL unit of a picture"
+ ************************************************************************
+ */
+int is_new_picture()
+{
+  int result=0;
+
+  result |= (old_slice.pps_id != img->currentSlice->pic_parameter_set_id);
+
+  result |= (old_slice.frame_num != img->frame_num);
+
+  result |= (old_slice.field_pic_flag != img->field_pic_flag);
+
+  if(img->field_pic_flag && old_slice.field_pic_flag)
+  {
+    result |= (old_slice.bottom_field_flag != img->bottom_field_flag);
+  }
+
+  result |= (old_slice.nal_ref_idc   != img->nal_reference_idc);
+  
+  result |= ( old_slice.idr_flag != img->idr_flag);
+
+  if (img->idr_flag && old_slice.idr_flag)
+  {
+    result |= (old_slice.idr_pic_id != img->idr_pic_id);
+  }
+
+  if (active_sps->pic_order_cnt_type == 0)
+  {
+    result |=  (old_slice.pic_oder_cnt_lsb          != img->pic_order_cnt_lsb);
+    result |=  (old_slice.delta_pic_oder_cnt_bottom != img->delta_pic_order_cnt_bottom);
+  }
+
+  if (active_sps->pic_order_cnt_type == 1)
+  {
+    result |= (old_slice.delta_pic_order_cnt[0] != img->delta_pic_order_cnt[0]);
+    result |= (old_slice.delta_pic_order_cnt[1] != img->delta_pic_order_cnt[1]);
+  }
+
+  return result;
 }
 
 
@@ -1191,6 +1323,9 @@ void decode_one_slice(struct img_par *img,struct inp_par *inp)
   img->cod_counter=-1;
 
   set_ref_pic_num();
+
+  if (img->type == B_SLICE)
+      compute_collocated(Co_located, listX);
 
   //reset_ec_flags();
 
@@ -1213,16 +1348,18 @@ void decode_one_slice(struct img_par *img,struct inp_par *inp)
       img->num_ref_idx_l1_active >>= 1;
     }
 
-    //ercWriteMBMODEandMV(img,inp);
+    ercWriteMBMODEandMV(img,inp);
 
     end_of_slice=exit_macroblock(img,inp,(!img->MbaffFrameFlag||img->current_mb_nr%2));
   }
+
+  exit_slice();
   //reset_ec_flags();
 
 }
 
 
-void decode_frame_slice(struct img_par *img,struct inp_par *inp, int current_header)
+void decode_slice(struct img_par *img,struct inp_par *inp, int current_header)
 {
   Slice *currSlice = img->currentSlice;
 
@@ -1232,25 +1369,11 @@ void decode_frame_slice(struct img_par *img,struct inp_par *inp, int current_hea
     cabac_new_slice();
   }
 
-  // init new frame
-  if (current_header == SOP)
-    init_frame(img, inp);
-
-  if ( (img->weighted_bipred_idc > 0  && (img->type == B_SLICE)) || (img->weighted_pred_flag && img->type !=I_SLICE))
+  if ( (active_pps->weighted_bipred_idc > 0  && (img->type == B_SLICE)) || (active_pps->weighted_pred_flag && img->type !=I_SLICE))
     fill_wp_params(img);
 
-  /*
-  if (current_header == SOP)
-  {
-    if (img->number == 0) 
-      ercInit(img->width, img->height, 1);
-    // reset all variables of the error concealmnet instance before decoding of every frame.
-    // here the third parameter should, if perfectly, be equal to the number of slices per frame.
-    // using little value is ok, the code will alloc more memory if the slice number is larger
-    ercReset(erc_errorVar, img->PicSizeInMbs, img->PicSizeInMbs, img->width);
-    erc_mvperMB = 0;
-  }
-  */
+  //printf("frame picture %d %d %d\n",img->structure,img->ThisPOC,img->direct_type);
+  
 
   // decode main slice information
   if ((current_header == SOP || current_header == SOS) && currSlice->ei_flag == 0)
@@ -1260,176 +1383,8 @@ void decode_frame_slice(struct img_par *img,struct inp_par *inp, int current_hea
 //  if(currSlice->ei_flag)  
 //    img->current_mb_nr = currSlice->last_mb_nr + 1;
 
-//! This code doesn't work with FMO or a slice-lossy environment!
-//! StW NEEDS FIXING
-  /*if(img->current_mb_nr != img->PicSizeInMbs)
-    currSlice->next_header = SOS; */
 }
 
-
-
-void decode_field_slice(struct img_par *img,struct inp_par *inp, int current_header)
-{
-  Slice *currSlice = img->currentSlice;
-
-  if (active_pps->entropy_coding_mode_flag)
-  {
-    init_contexts (img);
-    cabac_new_slice();
-  }
-  
-  // init new frame
-  if (current_header == SOP)
-  {
-    if (img->structure == TOP_FIELD)
-      init_top(img, inp); // set up field buffer in this function
-    else
-    {
-      init_bottom(img, inp);
-    }
-  }
-  
-  if ( (img->weighted_bipred_idc > 0  && (img->type == B_SLICE)) || (img->weighted_pred_flag && img->type !=I_SLICE))
-    fill_wp_params(img);
- 
-  /*
-  if (current_header == SOP)
-  {
-    if (img->number == 0) 
-      ercInit(img->width, 2*img->height, 1);
-    // reset all variables of the error concealmnet instance before decoding of every frame.
-    // here the third parameter should, if perfectly, be equal to the number of slices per frame.
-    // using little value is ok, the code will alloc more memory if the slice number is larger
-    ercReset(erc_errorVar, img->PicSizeInMbs, img->PicSizeInMbs, img->width);
-    erc_mvperMB = 0;
-  }
-  */
-
-  // decode main slice information
-  if ((current_header == SOP || current_header == SOS) && currSlice->ei_flag == 0)
-    decode_one_slice(img,inp);
-  
-  // setMB-Nr in case this slice was lost
-//  if(currSlice->ei_flag)  
-//    img->current_mb_nr = currSlice->last_mb_nr + 1;
-
-//! This code doesn't work with FMO or a slice lossy environment or out-of-order slices
-  /*if(img->current_mb_nr != img->PicSizeInMbs)
-    currSlice->next_header = SOS; */
-}
-
-/*!
- ************************************************************************
- * \brief
- *    Initializes the parameters for a new field
- ************************************************************************
- */
-void init_top(struct img_par *img, struct inp_par *inp)
-{
-  int i;
-
-  if (dec_picture)
-  {
-    // this may only happen on slice loss
-    store_picture_in_dpb(dec_picture);
-  }
-  dec_picture = alloc_storable_picture (TOP_FIELD, img->width, img->height, img->width_cr, img->height_cr);
-  dec_picture->poc=img->toppoc;
-  dec_picture->top_poc=img->toppoc;
-  dec_picture->bottom_poc=img->bottompoc;
-  dec_picture->pic_num = img->frame_num;
-  dec_picture->coded_frame = (img->structure==FRAME);
-  dec_picture->mb_adaptive_frame_field_flag = img->MbaffFrameFlag;
-
-  img->number *= 2;
-  img->current_slice_nr=0;
-
-  img->mb_y = img->mb_x = 0;
-  img->block_y = img->pix_y = img->pix_c_y = 0; // define vertical positions
-  img->block_x = img->pix_x = img->pix_c_x = 0; // define horizontal positions
-
-  if (img->type > SI_SLICE)
-  {
-    set_ec_flag(SE_PTYPE);
-    img->type = P_SLICE;  // concealed element
-  }
-
-  // allocate memory for frame buffers
-  if (img->idr_flag) 
-  {
-    init_global_buffers(inp, img); 
-  }
-
-  if(img->constrained_intra_pred_flag)
-  {
-    for (i=0; i<(int)img->PicSizeInMbs; i++)
-    {
-      img->intra_block[i] = 1;
-    }
-  }
-
-  // WYK: Oct. 8, 2001. Set the slice_nr member of each MB to -1, to ensure correct when packet loss occurs
-  for(i=0; i<(int)img->PicSizeInMbs; i++)
-    img->mb_data[i].slice_nr = -1;
-
-}
-
-/*!
- ************************************************************************
- * \brief
- *    Initializes the parameters for a new field
- ************************************************************************
- */
-void init_bottom(struct img_par *img, struct inp_par *inp)
-{
-  int i;
-
-  if (dec_picture)
-  {
-    // this may only happen on slice loss
-    store_picture_in_dpb(dec_picture);
-  }
-  dec_picture = alloc_storable_picture (BOTTOM_FIELD, img->width, img->height, img->width_cr, img->height_cr);
-  dec_picture->poc=img->bottompoc;
-  dec_picture->top_poc=img->toppoc;
-  dec_picture->bottom_poc=img->bottompoc;
-  dec_picture->pic_num = img->frame_num;
-  dec_picture->coded_frame = (img->structure==FRAME);
-  dec_picture->mb_adaptive_frame_field_flag = img->MbaffFrameFlag;
-
-  img->number++;
-  img->current_slice_nr=0;
-
-  img->mb_y = img->mb_x = 0;
-  img->block_y = img->pix_y = img->pix_c_y = 0; // define vertical positions
-  img->block_x = img->pix_x = img->pix_c_x = 0; // define horizontal positions
-
-
-  if (img->type > SI_SLICE)
-  {
-    set_ec_flag(SE_PTYPE);
-    img->type = P_SLICE;  // concealed element
-  }
-
-  // allocate memory for frame buffers
-  if (img->idr_flag) 
-  {
-    init_global_buffers(inp, img); 
-  }
-
-  if(img->constrained_intra_pred_flag)
-  {
-    for (i=0; i<(int)img->PicSizeInMbs; i++)
-    {
-      img->intra_block[i] = 1;
-    }
-  }
-
-  // WYK: Oct. 8, 2001. Set the slice_nr member of each MB to -1, to ensure correct when packet loss occurs
-  for(i=0; i<(int)img->PicSizeInMbs; i++)
-    img->mb_data[i].slice_nr = -1;
-
-}
 
 /*!
  ************************************************************************
@@ -1449,8 +1404,6 @@ void frame_postprocessing(struct img_par *img, struct inp_par *inp)
  */
 void field_postprocessing(struct img_par *img, struct inp_par *inp)
 {
-  img->height *= 2;
-  img->height_cr *= 2;
   img->number /= 2;
 }
 
@@ -1475,7 +1428,7 @@ void reset_wp_params(struct img_par *img)
 
 void fill_wp_params(struct img_par *img)
 {
-  int i, j;
+  int i, j, k;
   int comp;
   int log_weight_denom;
   int p0, pt;
@@ -1486,7 +1439,7 @@ void fill_wp_params(struct img_par *img)
   max_fwd_ref = img->num_ref_idx_l0_active;
   max_bwd_ref = img->num_ref_idx_l1_active;
 
-  if (img->weighted_bipred_idc == 2 && bframe)
+  if (active_pps->weighted_bipred_idc == 2 && bframe)
   {
     img->luma_log2_weight_denom = 5;
     img->chroma_log2_weight_denom = 5;
@@ -1515,12 +1468,12 @@ void fill_wp_params(struct img_par *img)
         for (comp = 0; comp<3; comp++)
         {
           log_weight_denom = (comp == 0) ? img->luma_log2_weight_denom : img->chroma_log2_weight_denom;
-          if (img->weighted_bipred_idc == 1)
+          if (active_pps->weighted_bipred_idc == 1)
           {
             img->wbp_weight[0][i][j][comp] =  img->wp_weight[0][i][comp];
             img->wbp_weight[1][i][j][comp] =  img->wp_weight[1][j][comp];
           }
-          else if (img->weighted_bipred_idc == 2)
+          else if (active_pps->weighted_bipred_idc == 2)
           {
             pt = listX[LIST_1][j]->poc - listX[LIST_0][i]->poc;
             if (pt == 0 || listX[LIST_1][j]->is_long_term || listX[LIST_0][i]->is_long_term)
@@ -1531,22 +1484,74 @@ void fill_wp_params(struct img_par *img)
             else
             {
               p0 = img->ThisPOC - listX[LIST_0][i]->poc;
-
+              
               x = (16384 + (pt>>1))/pt;
               z = Clip3(-1024, 1023, (x*p0 + 32 )>>6);
+              
               img->wbp_weight[1][i][j][comp] = z >> 2;
               img->wbp_weight[0][i][j][comp] = 64 - img->wbp_weight[1][i][j][comp];
               if (img->wbp_weight[1][i][j][comp] < -64 || img->wbp_weight[1][i][j][comp] > 128)
               {
-                img->wbp_weight[1][i][j][comp] = 32;
                 img->wbp_weight[0][i][j][comp] = 32;
+                img->wbp_weight[1][i][j][comp] = 32;
                 img->wp_offset[0][i][comp] = 0;
                 img->wp_offset[1][i][comp] = 0;
               }
             }
           }
         }
-     }
-   }
- }
+      }
+    }
+  }
+
+  if (bframe && img->MbaffFrameFlag)
+  {
+    for (i=0; i<2*max_fwd_ref; i++)
+    {
+      for (j=0; j<2*max_bwd_ref; j++)
+      {
+        for (comp = 0; comp<3; comp++)
+        {
+          for (k=2; k<6; k+=2)
+          {
+            img->wp_offset[k+0][i][comp] = img->wp_offset[0][i/2][comp];
+            img->wp_offset[k+1][i][comp] = img->wp_offset[1][i/2][comp];
+
+            log_weight_denom = (comp == 0) ? img->luma_log2_weight_denom : img->chroma_log2_weight_denom;
+            if (active_pps->weighted_bipred_idc == 1)
+            {
+              img->wbp_weight[k+0][i][j][comp] =  img->wp_weight[0][i/2][comp];
+              img->wbp_weight[k+1][i][j][comp] =  img->wp_weight[1][j/2][comp];
+            }
+            else if (active_pps->weighted_bipred_idc == 2)
+            {
+              pt = listX[k+LIST_1][j]->poc - listX[k+LIST_0][i]->poc;
+              if (pt == 0 || listX[k+LIST_1][j]->is_long_term || listX[k+LIST_0][i]->is_long_term)
+              {
+                img->wbp_weight[k+0][i][j][comp] =   32;
+                img->wbp_weight[k+1][i][j][comp] =   32;
+              }
+              else
+              {
+                p0 = ((k==2)?img->toppoc:img->bottompoc) - listX[k+LIST_0][i]->poc;
+                
+                x = (16384 + (pt>>1))/pt;
+                z = Clip3(-1024, 1023, (x*p0 + 32 )>>6);
+
+                img->wbp_weight[k+1][i][j][comp] = z >> 2;
+                img->wbp_weight[k+0][i][j][comp] = 64 - img->wbp_weight[k+1][i][j][comp];
+                if (img->wbp_weight[k+1][i][j][comp] < -64 || img->wbp_weight[k+1][i][j][comp] > 128)
+                {
+                  img->wbp_weight[k+1][i][j][comp] = 32;
+                  img->wbp_weight[k+0][i][j][comp] = 32;
+                  img->wp_offset[k+0][i][comp] = 0;
+                  img->wp_offset[k+1][i][comp] = 0;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 }

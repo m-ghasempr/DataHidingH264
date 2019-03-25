@@ -254,6 +254,7 @@ static void copyBetweenFrames (frame *recfr,
    int currYBlockNum, int32 picSizeX, int32 regionSize)
 {
   int j, k, location, xmin, ymin;
+  StorablePicture* refPic = listX[0][0];
    
   /* set the position of the region to be copied */
   xmin = (xPosYBlock(currYBlockNum,picSizeX)<<3);
@@ -263,15 +264,18 @@ static void copyBetweenFrames (frame *recfr,
     for (k = xmin; k < xmin + regionSize; k++)
     {
       location = j * picSizeX + k; 
-      recfr->yptr[location] = dec_picture->imgY[j][k];
+//th      recfr->yptr[location] = dec_picture->imgY[j][k];
+      recfr->yptr[location] = refPic->imgY[j][k];
     }
      
     for (j = ymin / 2; j < (ymin + regionSize) / 2; j++)
       for (k = xmin / 2; k < (xmin + regionSize) / 2; k++)
       {
         location = j * picSizeX / 2 + k;
-        recfr->uptr[location] = dec_picture->imgUV[0][j][k];
-        recfr->vptr[location] = dec_picture->imgUV[1][j][k];
+//th        recfr->uptr[location] = dec_picture->imgUV[0][j][k];
+//th        recfr->vptr[location] = dec_picture->imgUV[1][j][k];
+        recfr->uptr[location] = refPic->imgUV[0][j][k];
+        recfr->vptr[location] = refPic->imgUV[1][j][k];
       }                                
 }
 
@@ -599,10 +603,10 @@ static void buildPredRegionYUV(struct img_par *img, int32 *mv, int x, int y, byt
             j1=(img->pix_c_y+jj+joff)*f1+mv[1];
 
 
-            ii0=max (0, min (i1/f1, img->width_cr-1));
-            jj0=max (0, min (j1/f1, img->height_cr-1));
-            ii1=max (0, min ((i1+f2)/f1, img->width_cr-1));
-            jj1=max (0, min ((j1+f2)/f1, img->height_cr-1));
+            ii0=max (0, min (i1/f1, dec_picture->size_x_cr-1));
+            jj0=max (0, min (j1/f1, dec_picture->size_y_cr-1));
+            ii1=max (0, min ((i1+f2)/f1, dec_picture->size_x_cr-1));
+            jj1=max (0, min ((j1+f2)/f1, dec_picture->size_y_cr-1));
 
             if1=(i1 & f2);
             jf1=(j1 & f2);

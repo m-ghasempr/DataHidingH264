@@ -23,6 +23,7 @@
 #include "global.h"
 #include "image.h"
 #include "mb_access.h"
+#include "loopfilter.h"
 
 extern const byte QP_SCALE_CR[52] ;
 
@@ -48,9 +49,9 @@ byte CLIP_TAB[52][5]  =
   { 0, 9,12,18,18},{ 0,10,13,20,20},{ 0,11,15,23,23},{ 0,13,17,25,25}
 } ;
 
-void GetStrength(byte Strength[16],struct img_par *img,int MbQAddr,int dir,int edge, int mvlimit);
+void GetStrength(byte Strength[16],struct img_par *img,int MbQAddr,int dir,int edge, int mvlimit,StorablePicture *p);
 void EdgeLoop(byte** Img, byte Strength[16],struct img_par *img, int MbQAddr, int AlphaC0Offset, int BetaOffset, int dir, int edge, int width, int yuv);
-void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int MbQAddr) ;
+void DeblockMb(ImageParameters *img, StorablePicture *p, int MbQAddr) ;
 
 /*!
  *****************************************************************************************
@@ -58,13 +59,13 @@ void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int MbQAddr) ;
  *    Filter all macroblocks in order of increasing macroblock address.
  *****************************************************************************************
  */
-void DeblockFrame(ImageParameters *img, byte **imgY, byte ***imgUV)
+void DeblockPicture(ImageParameters *img, StorablePicture *p)
 {
   unsigned i;
 
-  for (i=0; i<img->PicSizeInMbs; i++)
+  for (i=0; i<p->PicSizeInMbs; i++)
   {
-    DeblockMb( img, imgY, imgUV, i ) ;
+    DeblockMb( img, p, i ) ;
   }
 } 
 
@@ -76,7 +77,7 @@ void DeblockFrame(ImageParameters *img, byte **imgY, byte ***imgUV)
  *****************************************************************************************
  */
 
-void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int MbQAddr)
+void DeblockMb(ImageParameters *img, StorablePicture *p, int MbQAddr)
 {
   int           EdgeCondition;
   int           dir,edge;
@@ -89,6 +90,8 @@ void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int MbQAddr)
   int           mvlimit=4;
   int           i, StrengthSum;
   Macroblock    *MbQ;
+  byte **imgY   = p->imgY;
+  byte ***imgUV = p->imgUV;
   
   img->DeblockCall = 1;
   get_mb_pos (MbQAddr, &mb_x, &mb_y);
@@ -97,10 +100,10 @@ void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int MbQAddr)
 
   MbQ  = &(img->mb_data[MbQAddr]) ; // current Mb
 
-  if (img->MbaffFrameFlag && mb_y==16 && MbQ->mb_field)
+  if (p->MbaffFrameFlag && mb_y==16 && MbQ->mb_field)
     filterTopMbEdgeFlag = 0;
 
-  fieldModeMbFlag       = img->field_pic_flag || (img->MbaffFrameFlag && MbQ->mb_field);
+  fieldModeMbFlag       = (p->structure!=FRAME) || (p->MbaffFrameFlag && MbQ->mb_field);
   if (fieldModeMbFlag)
     mvlimit = 2;
 
@@ -128,30 +131,30 @@ void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int MbQAddr)
       if( edge || EdgeCondition )
       {
 
-        GetStrength(Strength,img,MbQAddr,dir,edge, mvlimit); // Strength for 4 blks in 1 stripe
+        GetStrength(Strength,img,MbQAddr,dir,edge, mvlimit, p); // Strength for 4 blks in 1 stripe
         StrengthSum = Strength[0];
         for (i = 1; i < 16; i++) StrengthSum += Strength[i];
         if( StrengthSum )                      // only if one of the 16 Strength bytes is != 0
         {
-          EdgeLoop( imgY, Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, edge, img->width, 0) ; 
+          EdgeLoop( imgY, Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, edge, p->size_x, 0) ; 
           if( (imgUV != NULL) && !(edge & 1) )
           {
-            EdgeLoop( imgUV[0], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, edge/2, img->width_cr, 1 ) ; 
-            EdgeLoop( imgUV[1], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, edge/2, img->width_cr, 1 ) ; 
+            EdgeLoop( imgUV[0], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, edge/2, p->size_x_cr, 1 ) ; 
+            EdgeLoop( imgUV[1], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, edge/2, p->size_x_cr, 1 ) ; 
           }
         }
 
         if (dir && !edge && !MbQ->mb_field && mixedModeEdgeFlag) {
           // this is the extra horizontal edge between a frame macroblock pair and a field above it
           img->DeblockCall = 2;
-          GetStrength(Strength,img,MbQAddr,dir,4, mvlimit); // Strength for 4 blks in 1 stripe
+          GetStrength(Strength,img,MbQAddr,dir,4, mvlimit, p); // Strength for 4 blks in 1 stripe
           if( *((int*)Strength) )                      // only if one of the 4 Strength bytes is != 0
           {
-            EdgeLoop( imgY, Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, 4, img->width, 0) ; 
+            EdgeLoop( imgY, Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, 4, p->size_x, 0) ; 
             if( (imgUV != NULL) && !(edge & 1) )
             {
-              EdgeLoop( imgUV[0], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, 4, img->width_cr, 1 ) ; 
-              EdgeLoop( imgUV[1], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, 4, img->width_cr, 1 ) ; 
+              EdgeLoop( imgUV[0], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, 4, p->size_x_cr, 1 ) ; 
+              EdgeLoop( imgUV[1], Strength, img, MbQAddr, MbQ->LFAlphaC0Offset, MbQ->LFBetaOffset, dir, 4, p->size_x_cr, 1 ) ; 
             }
           }
           img->DeblockCall = 1;
@@ -176,7 +179,7 @@ byte BLK_NUM[2][4][4]  = {{{0,4,8,12},{1,5,9,13},{2,6,10,14},{3,7,11,15}},{{0,1,
 byte BLK_4_TO_8[16]    = {0,0,1,1,0,0,1,1,2,2,3,3,2,2,3,3} ;
 #define ANY_INTRA (MbP->mb_type==I4MB||MbP->mb_type==I16MB||MbP->mb_type==IPCM||MbQ->mb_type==I4MB||MbQ->mb_type==I16MB||MbQ->mb_type==IPCM)
 
-void GetStrength(byte Strength[16],struct img_par *img,int MbQAddr,int dir,int edge, int mvlimit)
+void GetStrength(byte Strength[16],struct img_par *img,int MbQAddr,int dir,int edge, int mvlimit, StorablePicture *p)
 {
   int    blkP, blkQ, idx;
   int    blk_x, blk_x2, blk_y, blk_y2 ;
@@ -207,18 +210,18 @@ void GetStrength(byte Strength[16],struct img_par *img,int MbQAddr,int dir,int e
     blkQ = ((yQ>>2)<<2) + (xQ>>2);
     blkP = ((yP>>2)<<2) + (xP>>2);
 
-    if ((img->type==SP_SLICE)||(img->type==SI_SLICE) )
+    if ((p->slice_type==SP_SLICE)||(p->slice_type==SI_SLICE) )
     {
-      Strength[idx] = (edge == 0 && (((!img->MbaffFrameFlag && !img->field_pic_flag) ||
-      (img->MbaffFrameFlag && !MbP->mb_field && !MbQ->mb_field)) ||
-      ((img->MbaffFrameFlag || img->field_pic_flag) && !dir))) ? 4 : 3;
+      Strength[idx] = (edge == 0 && (((!p->MbaffFrameFlag && (p->structure==FRAME)) ||
+      (p->MbaffFrameFlag && !MbP->mb_field && !MbQ->mb_field)) ||
+      ((p->MbaffFrameFlag || (p->structure != FRAME)) && !dir))) ? 4 : 3;
     }
     else
     {
       // Start with Strength=3. or Strength=4 for Mb-edge
-      Strength[idx] = (edge == 0 && (((!img->MbaffFrameFlag && !img->field_pic_flag) ||
-        (img->MbaffFrameFlag && !MbP->mb_field && !MbQ->mb_field)) ||
-        ((img->MbaffFrameFlag || img->field_pic_flag) && !dir))) ? 4 : 3;
+      Strength[idx] = (edge == 0 && (((!p->MbaffFrameFlag && (p->structure==FRAME)) ||
+        (p->MbaffFrameFlag && !MbP->mb_field && !MbQ->mb_field)) ||
+        ((p->MbaffFrameFlag || (p->structure!=FRAME)) && !dir))) ? 4 : 3;
 
       if(  !(MbP->mb_type==I4MB || MbP->mb_type==I16MB || MbP->mb_type==IPCM)
         && !(MbQ->mb_type==I4MB || MbQ->mb_type==I16MB || MbQ->mb_type==IPCM) )

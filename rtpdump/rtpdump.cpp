@@ -20,13 +20,13 @@ int main(int argc, char* argv[])
 
   if (argc != 2)
   {
-    printf ("Usage: %s <H.26L RTP packet file\n");
+    printf ("Usage: %s <H.264 RTP packet file\n");
     return -1;
   }
 
   if (NULL == (f = fopen (argv[1], "rb")))
   {
-    printf ("%s: cannot open H.26L packet file %s for reading\n", argv[0], argv[1]);
+    printf ("%s: cannot open H.264 packet file %s for reading\n", argv[0], argv[1]);
     return -2;
   }
 

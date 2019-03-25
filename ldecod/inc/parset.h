@@ -19,9 +19,6 @@
 #include "parsetcommon.h"
 #include "nalucommon.h"
 
-void DumpSPS (seq_parameter_set_rbsp_t *sps);
-void DumpPPS (pic_parameter_set_rbsp_t *pps);
-
 void PPSConsistencyCheck (pic_parameter_set_rbsp_t *pps);
 void SPSConsistencyCheck (seq_parameter_set_rbsp_t *sps);
 

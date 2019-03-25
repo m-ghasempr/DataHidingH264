@@ -1,7 +1,30 @@
+Changes for Version JM 8.3 to JM 8.2
+------------------------------------
+- encoder: fast motion estimation fixes und cleanup (WF)
+- decoder: fix for SP decoding (ES)
+- encoder/decoder: direct mode cleanup and fixes (AT)
+- decoder: POC cleanup and fixes (AT)
+- encoder: set log2_max_frame_num_minus4 dynamically (AT)
+- decoder: fix dangling fields (KS)
+- encoder/decoder: fix mismatch in B-pictures with RDOptimization=0 (KS)
+- encoder/decoder: fix redundant_pic_cnt syntax element type (KS)
+- encoder: fix num_slice_groups_minus1>0 bug (KS)
+- decoder: fix field mmco bugs and (KS)
+- decoder: fix initial reference picture list generation with long-term pictures (KS)
+- decoder: fix new picture detection (KS)
+- decoder: fix weighted prediction (KS/AS)
+- encoder/decoder: fix max PPS id (KS)
+- decoder: remove redundant variables (KS)
+- decoder: re-enable non-normative error concealment for non mb-aff (KS/THi)
+- decoder: several smaller fixes (KS)
+
+
 Changes for Version JM 8.2 to JM 8.1a
 -------------------------------------
-- encoder: megre FMO (DW)
+- encoder: merge FMO (DW)
 - encoder/decoder: add error/warning if DPB size is zero at specified level (KS)
+- fix unixprep.sh script for Solaris /bin/sh (DD)
+
 
 Changes for Version JM 8.1a to JM 8.1
 -------------------------------------
@@ -785,11 +808,13 @@ AW      Armand Wemelsfelder     wemel@planet.nl
 BH      Barry Haskell           bhaskell@apple.com
 CG      Cristina Gomila         GomilaC@tce.com
 DC      Doug Chin               dougchin@sandvideo.com
+DD      Dmitriy Demin           Dmitriy.Demin@Sun.COM
 DH      Dzung Hoang             dzung.hoang@conexant.com
 DK      Dimitris Kontopodis     dkonto@eikon.tum.de
 DM      Detlev Marpe            marpe@hhi.de
 DT      Dong Tian               tian@cs.tut.fi
 DW      Dong Wang               Dong.Wang@bristol.ac.uk
+ES	Eric Setton		esetton@stanford.edu
 FB      Frank Bossen            bossen@docomolabs-usa.com
 GB      Gabi Blaetterman        blaetter@hhi.de
 GC      Guy Cote                guy@videolocus.com
@@ -831,6 +856,7 @@ SR      Shankar Regunathan      shanre@microsoft.com
 SW      Stephan Wenger          stewe@cs.tu-berlin.de
 SY      Steve Yao               steveyao@sandvideo.com
 TH      Till Hallbach           halbach@tele.ntnu.no
+THi	Tobias Hinz		hinz@hhi.de
 TK      Thomas Kunlin           thomas.kunlin@ief.u-psud.fr
 TO      Tobias Oelbaum          drehvial@gmx.net
 TS      Teruhiko Suzuki         teruhiko@av.crl.sony.co.jp
@@ -841,6 +867,7 @@ TWe     Thomas Wedi             wedi@tnt.uni-hannover.de
 TWa     Toby Walker             tobyw@usrl.sony.com
 VG      Valeri George           valeri.george@hhi.fraunhofer.de
 VV      Viktor Varsa            viktor.varsa@nokia.com
+WF	Wenfang Fu		fwf@video.mdc.tsinghua.edu.cn
 WYK     Ye-Kui Wang             wyk@ieee.org
 YK      Yoshihiro Kikuchi       yoshihiro.kikuchi@toshiba.co.jp
 YL      Yann Lemaguet           yann.lemaguet@philips.com

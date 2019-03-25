@@ -740,6 +740,10 @@ void writeDquant_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp)
   int dquant = se->value1;
   int sign=0;
 
+  Macroblock     *currMB       = &img->mb_data[img->current_mb_nr];
+
+  last_dquant=currMB->prev_delta_qp;
+
   if (dquant <= 0)
     sign = 1;
   act_sym = abs(dquant) << 1;

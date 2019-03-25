@@ -45,6 +45,8 @@
 #endif
 
 extern int last_dquant;
+extern ColocatedParams *Co_located;
+
 
 static void SetMotionVectorPredictor (struct img_par  *img,
                                       int             *pmv_x,
@@ -159,8 +161,13 @@ int exit_macroblock(struct img_par *img,struct inp_par *inp,int eos_bit)
   if (img->num_dec_mb == img->PicSizeInMbs)
 //  if (img->current_mb_nr == FmoGetLastMBOfPicture(currSlice->structure))
   {
+//thb
+/*
     if (currSlice->next_header != EOS)
       currSlice->next_header = SOP;
+*/
+//the
+    assert (nal_startcode_follows (img, inp, eos_bit) == TRUE);
     return TRUE;
   }
   // ask for last mb in the slice  UVLC
@@ -413,8 +420,8 @@ void init_macroblock(struct img_par *img)
     }
   }
 
-  for (j=0; j<4; j++)
-    for (i=0; i<4; i++)
+  for (j=0; j<BLOCK_SIZE; j++)
+    for (i=0; i<BLOCK_SIZE; i++)
     {
       dec_picture->ref_idx[LIST_0][img->block_x+i][img->block_y+j] = -1;
       dec_picture->ref_idx[LIST_1][img->block_x+i][img->block_y+j] = -1;
@@ -755,7 +762,7 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
     }
   }
 
-  if(img->constrained_intra_pred_flag && (img->type==P_SLICE|| img->type==B_SLICE))        // inter frame
+  if(active_pps->constrained_intra_pred_flag && (img->type==P_SLICE|| img->type==B_SLICE))        // inter frame
   {
     if( !IS_INTRA(currMB) )
     {
@@ -1103,7 +1110,7 @@ void read_ipred_modes(struct img_par *img,struct inp_par *inp)
           bi = img->block_x + bx;
           bj = img->block_y + by;
 
-          if (img->constrained_intra_pred_flag)
+          if (active_pps->constrained_intra_pred_flag)
           {
             left_block.available = left_block.available ? img->intra_block[left_block.mb_addr] : 0;
             top_block.available  = top_block.available  ? img->intra_block[top_block.mb_addr]  : 0;
@@ -1174,8 +1181,8 @@ static void SetMotionVectorPredictor (struct img_par  *img,
                                       int             blockshape_x,
                                       int             blockshape_y)
 {
-  int mb_x                 = 4*block_x;
-  int mb_y                 = 4*block_y;
+  int mb_x                 = BLOCK_SIZE*block_x;
+  int mb_y                 = BLOCK_SIZE*block_y;
   int mb_nr                = img->current_mb_nr;
 
   int mv_a, mv_b, mv_c, pred_vec=0;
@@ -1410,20 +1417,47 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
   int j4, i4, ii,jj;
   int vec;
 
-  int iTRb,iTRp;
   int mv_scale = 0;
 
   int flag_mode;
 
   int list_offset = ((img->MbaffFrameFlag)&&(currMB->mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
 
+  byte **    moving_block;
+  int ****   co_located_mv;
+  int ***    co_located_ref_idx;
+  int64 ***    co_located_ref_id;
+
+  if ((img->MbaffFrameFlag)&&(currMB->mb_field))
+  {
+    if(img->current_mb_nr%2)
+    {
+      moving_block = Co_located->bottom_moving_block;
+      co_located_mv = Co_located->bottom_mv;
+      co_located_ref_idx = Co_located->bottom_ref_idx;
+      co_located_ref_id = Co_located->bottom_ref_pic_id;
+    }
+    else
+    {
+      moving_block = Co_located->top_moving_block;
+      co_located_mv = Co_located->top_mv;
+      co_located_ref_idx = Co_located->top_ref_idx;
+      co_located_ref_id = Co_located->top_ref_pic_id;
+    }
+  }
+  else
+  {
+    moving_block = Co_located->moving_block;
+    co_located_mv = Co_located->mv;
+    co_located_ref_idx = Co_located->ref_idx;
+    co_located_ref_id = Co_located->ref_pic_id;
+  }
+
   if (bframe && IS_P8x8 (currMB))
   {
     if (img->direct_type)
     {
-      //int pic_blocky          = (img->mb_frame_field_flag && currMB->mb_field)? ((img->current_mb_nr%2)?img->block_y/2-BLOCK_SIZE / 2:img->block_y/2):img->block_y;
       int imgblock_y= ((img->MbaffFrameFlag)&&(currMB->mb_field))? (img->current_mb_nr%2) ? (img->block_y-4)/2:img->block_y/2: img->block_y;
-      //int list_offset = ((img->MbaffFrameFlag)&&(currMB->mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
       int fw_rFrameL, fw_rFrameU, fw_rFrameUL, fw_rFrameUR;
       int bw_rFrameL, bw_rFrameU, bw_rFrameUL, bw_rFrameUR;
       
@@ -1431,6 +1465,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
       
       int fw_rFrame,bw_rFrame;
       int pmvfw[2]={0,0},pmvbw[2]={0,0};
+     
       
       getLuma4x4Neighbour(img->current_mb_nr, 0, 0, -1,  0, &mb_left);
       getLuma4x4Neighbour(img->current_mb_nr, 0, 0,  0, -1, &mb_up);
@@ -1559,58 +1594,60 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
               int j6 = imgblock_y+j;
               j4 = img->block_y+j;
               i4 = img->block_x+k;
-                  
+              
+              
               if (fw_rFrame >= 0)
-                {
-                if  (!fw_rFrame  && !listX[LIST_1 +list_offset][0]->moving_block[i4][j6])       
-                  {                    
+              {
+                
+                if  (!fw_rFrame  && !moving_block[i4][j6])       
+                {                    
                   dec_picture->mv  [LIST_0][i4][j4][0] = 0;
                   dec_picture->mv  [LIST_0][i4][j4][1] = 0;
                   dec_picture->ref_idx[LIST_0][i4][j4] = 0;                    
-                  }
-                  else
-                  {
+                }
+                else
+                {
                   
                   dec_picture->mv  [LIST_0][i4][j4][0] = pmvfw[0];
                   dec_picture->mv  [LIST_0][i4][j4][1] = pmvfw[1];
                   dec_picture->ref_idx[LIST_0][i4][j4] = fw_rFrame;
-                  }
                 }
-                else
-                {
+              }
+              else
+              {
                 dec_picture->mv  [LIST_0][i4][j4][0] = 0;
                 dec_picture->mv  [LIST_0][i4][j4][1] = 0;
                 dec_picture->ref_idx[LIST_0][i4][j4] = -1;
-                }
+              }
               if (bw_rFrame >= 0)
+              {
+                if  (bw_rFrame==0 && !moving_block[i4][j6])                         
                 {
-                if  (bw_rFrame==0 && !listX[LIST_1 +list_offset][0]->moving_block[i4][j6])                         
-                  {
                   dec_picture->mv  [LIST_1][i4][j4][0] = 0;
                   dec_picture->mv  [LIST_1][i4][j4][1] = 0;
                   dec_picture->ref_idx[LIST_1][i4][j4] = 0;
-                  }
-                  else
-                  {
-                  dec_picture->mv  [LIST_1][i4][j4][0] = pmvbw[0];
-                  dec_picture->mv  [LIST_1][i4][j4][1] = pmvbw[1];
-                  dec_picture->ref_idx[LIST_1][i4][j4] = bw_rFrame;
-                  }
                 }
                 else
                 {
+                  dec_picture->mv  [LIST_1][i4][j4][0] = pmvbw[0];
+                  dec_picture->mv  [LIST_1][i4][j4][1] = pmvbw[1];
+                  dec_picture->ref_idx[LIST_1][i4][j4] = bw_rFrame;
+                }
+              }
+              else
+              {
                 dec_picture->mv  [LIST_1][i4][j4][0] = 0;
                 dec_picture->mv  [LIST_1][i4][j4][1] = 0;
                 dec_picture->ref_idx[LIST_1][i4][j4] = -1;                               
-                }
-
+              }
+              
               if (fw_rFrame <0 && bw_rFrame <0)
-                {
+              {
                 dec_picture->ref_idx[LIST_0][i4][j4] = 0;
                 dec_picture->ref_idx[LIST_1][i4][j4] = 0;                  
               }
             }
-        }
+      }
     }
     else
     {
@@ -1618,17 +1655,19 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
       {
         if (currMB->b8mode[i] == 0)
         {
+
           for(j=2*(i/2);j<2*(i/2)+2;j++)
           {
             for(k=2*(i%2);k<2*(i%2)+2;k++)
             {
-              int ref_idx;
+              
               int list_offset = ((img->MbaffFrameFlag)&&(currMB->mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
               int imgblock_y= ((img->MbaffFrameFlag)&&(currMB->mb_field))? (img->current_mb_nr%2) ? (img->block_y-4)/2 : img->block_y/2 : img->block_y;
-              int refList = (listX[LIST_1 + list_offset][0]->ref_idx[LIST_0 ][img->block_x+k][imgblock_y+j]== -1 ? LIST_1 : LIST_0);
+              int refList = co_located_ref_idx[LIST_0 ][img->block_x+k][imgblock_y+j]== -1 ? LIST_1 : LIST_0;
+              int ref_idx = co_located_ref_idx[refList][img->block_x + k][imgblock_y + j];
               int mapped_idx, iref;                             
+ 
 
-              ref_idx= listX[LIST_1 + list_offset][0]->ref_idx[refList][img->block_x + k][imgblock_y + j];
 
               if (ref_idx == -1)
               {
@@ -1637,49 +1676,19 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
               }
               else
               {
-              
-                //if (dec_picture->ref_pic_num[LIST_0 + list_offset][ref_idx]==listX[LIST_1 + list_offset][0]->ref_pic_num[refList][ref_idx])
-                //{
-                //  mapped_idx=ref_idx;
-                //}
-                //else
-                if (listX[LIST_1 + list_offset][0]->ref_poc[refList][img->block_x+k][imgblock_y+j] == 1)
+                for (iref=0;iref<min(img->num_ref_idx_l0_active,listXsize[LIST_0 + list_offset]);iref++)
                 {
-                  for (iref=0;iref<min(img->num_ref_idx_l0_active,listXsize[LIST_0 + list_offset]);iref++)
+                  if (dec_picture->ref_pic_num[LIST_0 + list_offset][iref]==co_located_ref_id[refList][img->block_x + k][imgblock_y + j])
                   {
-                    
-                    if (listX[LIST_0 + list_offset][iref]->poc==listX[LIST_1 + list_offset][0]->poc)
-                    {
-                      mapped_idx=iref;
-                      break;
-                    }
-                    else //! invalid index. Default to zero even though this case should not happen
-                    {                        
-                      mapped_idx=INVALIDINDEX;
-                    }
+                    mapped_idx=iref;
+                    break;
                   }
-                  if (INVALIDINDEX == mapped_idx)
-                  {
-                    error("temporal direct error\ncolocated block has ref that is unavailable",-1111);
-                  }
-                }                
-                else                  
+                  else //! invalid index. Default to zero even though this case should not happen
+                    mapped_idx=INVALIDINDEX;
+                }
+                if (INVALIDINDEX == mapped_idx)
                 {
-                  for (iref=0;iref<min(img->num_ref_idx_l0_active,listXsize[LIST_0 + list_offset]);iref++)
-                  {
-
-                    if (dec_picture->ref_pic_num[LIST_0 + list_offset][iref]==listX[LIST_1 + list_offset][0]->ref_pic_num[refList][ref_idx])
-                    {
-                      mapped_idx=iref;
-                      break;
-                    }
-                    else //! invalid index. Default to zero even though this case should not happen
-                      mapped_idx=INVALIDINDEX;
-                  }
-                  if (INVALIDINDEX == mapped_idx)
-                  {
-                    error("temporal direct error\ncolocated block has ref that is unavailable",-1111);
-                  }
+                  error("temporal direct error\ncolocated block has ref that is unavailable",-1111);
                 }
                 dec_picture->ref_idx [LIST_0][img->block_x + k][img->block_y + j] = mapped_idx;
                 dec_picture->ref_idx [LIST_1][img->block_x + k][img->block_y + j] = 0;                
@@ -1900,10 +1909,8 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
           int list_offset = ((img->MbaffFrameFlag)&&(currMB->mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
           int imgblock_y= ((img->MbaffFrameFlag)&&(currMB->mb_field))? (img->current_mb_nr%2) ? (img->block_y-4)/2:img->block_y/2 : img->block_y;
 
-          int refList = (listX[LIST_1 + list_offset][0]->ref_idx[LIST_0][img->block_x+i0][imgblock_y+j0]== -1 ? LIST_1 : LIST_0);
-          int ref_idx;
-          
-          ref_idx= listX[LIST_1 + list_offset][0]->ref_idx[refList][img->block_x+i0][imgblock_y+j0];          
+          int refList = (co_located_ref_idx[LIST_0][img->block_x+i0][imgblock_y+j0]== -1 ? LIST_1 : LIST_0);
+          int ref_idx =  co_located_ref_idx[refList][img->block_x+i0][imgblock_y+j0];          
           
           if (ref_idx==-1)
           {
@@ -1925,75 +1932,31 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
           {        
             int mapped_idx, iref;                             
             int j6;
-            
-            if (listX[LIST_1 + list_offset][0]->ref_poc[refList][img->block_x+i0][imgblock_y+j0] == 1)              
+                        
+            for (iref=0;iref<min(img->num_ref_idx_l0_active,listXsize[LIST_0 + list_offset]);iref++)
             {
-              for (iref=0;iref<min(img->num_ref_idx_l0_active,listXsize[LIST_0 + list_offset]);iref++)
-              {
-                
-
-                if (listX[LIST_0 + list_offset][iref]->poc==listX[LIST_1 + list_offset][0]->poc)
-                {
-                  mapped_idx=iref;
-                  break;
-                }
-                else //! invalid index. Default to zero even though this case should not happen
-                {                        
-                  mapped_idx=INVALIDINDEX;
-                }
-              }
-              if (INVALIDINDEX == mapped_idx)
-              {
-                error("temporal direct error\ncolocated block has ref that is unavailable",-1111);
-              }
-            }
-            
-            else
               
-            {
-              for (iref=0;iref<min(img->num_ref_idx_l0_active,listXsize[LIST_0 + list_offset]);iref++)
+              if (dec_picture->ref_pic_num[LIST_0 + list_offset][iref]==co_located_ref_id[refList][img->block_x+i0][imgblock_y+j0])
               {
-
-                if (dec_picture->ref_pic_num[LIST_0 + list_offset][iref]==listX[LIST_1 + list_offset][0]->ref_pic_num[refList][ref_idx])
-                {
-                  mapped_idx=iref;
-                  break;
-                }
-                else //! invalid index. Default to zero even though this case should not happen
-                  mapped_idx=INVALIDINDEX;
+                mapped_idx=iref;
+                break;
               }
-              if (INVALIDINDEX == mapped_idx)
-              {
-                error("temporal direct error\ncolocated block has ref that is unavailable",-1111);
-              }
+              else //! invalid index. Default to zero even though this case should not happen
+                mapped_idx=INVALIDINDEX;
             }
+            
+            if (INVALIDINDEX == mapped_idx)
+            {
+              error("temporal direct error\ncolocated block has ref that is unavailable",-1111);
+            }
+            
             
             for (j=j0; j<j0+step_v0; j++)
               for (i=i0; i<i0+step_h0; i++)
               {
                 {
-                  int prescale;
+                  mv_scale = img->mvscale[LIST_0 + list_offset][mapped_idx];
 
-                  if (!img->MbaffFrameFlag || !img->mb_data[img->current_mb_nr].mb_field)
-                  {
-                    iTRb = Clip3( -128, 127, dec_picture->poc - listX[LIST_0 + list_offset][mapped_idx]->poc );
-                  }
-                  else
-                  {
-                    if (img->current_mb_nr%2 == 0)
-                      iTRb = Clip3( -128, 127, dec_picture->top_poc - listX[LIST_0 + list_offset][mapped_idx]->poc );
-                    else
-                      iTRb = Clip3( -128, 127, dec_picture->bottom_poc - listX[LIST_0 + list_offset][mapped_idx]->poc );
-                  }
-
-                  iTRp = Clip3( -128, 127,  listX[LIST_1 + list_offset][0]->poc - listX[LIST_0 + list_offset][mapped_idx]->poc);
-
-                  if (iTRp!=0)
-                  {
-                    prescale = ( 16384 + abs( iTRp / 2 ) ) / iTRp;
-                    mv_scale = Clip3( -1024, 1023, ( iTRb * prescale + 32 ) >> 6 ) ;
-                  }
-                  
                   dec_picture->ref_idx [LIST_0][img->block_x+i][img->block_y+j] = mapped_idx;
                   dec_picture->ref_idx [LIST_1][img->block_x+i][img->block_y+j] = 0;
                   
@@ -2003,15 +1966,17 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
 
                   for (ii=0; ii < 2; ii++) 
                   {              
-                    if (iTRp==0)
-                    {
-                      dec_picture->mv  [LIST_0][i4][j4][ii]=listX[LIST_1 + list_offset][0]->mv[refList][i4][j6][ii];
+                    //if (iTRp==0)
+                    if (mv_scale == 9999 || listX[LIST_0+list_offset][mapped_idx]->is_long_term)
+//                    if (mv_scale==9999 || Co_located->is_long_term)
+                    {                      
+                      dec_picture->mv  [LIST_0][i4][j4][ii]=co_located_mv[refList][i4][j6][ii];
                       dec_picture->mv  [LIST_1][i4][j4][ii]=0;
                     }
                     else
                     {
-                      dec_picture->mv  [LIST_0][i4][j4][ii]=(mv_scale * listX[LIST_1 + list_offset][0]->mv[refList][i4][j6][ii] + 128 ) >> 8;
-                      dec_picture->mv  [LIST_1][i4][j4][ii]=dec_picture->mv[LIST_0][i4][j4][ii] - listX[LIST_1 + list_offset][0]->mv[refList][i4][j6][ii] ;
+                      dec_picture->mv  [LIST_0][i4][j4][ii]=(mv_scale * co_located_mv[refList][i4][j6][ii] + 128 ) >> 8;
+                      dec_picture->mv  [LIST_1][i4][j4][ii]=dec_picture->mv[LIST_0][i4][j4][ii] - co_located_mv[refList][i4][j6][ii];
                     }
                   }
                 } 
@@ -2114,7 +2079,7 @@ int predict_nnz(struct img_par *img, int i,int j)
   // left block
   getLuma4x4Neighbour(mb_nr, i, j, -1, 0, &pix);
 /* to be inserted only for dp
-  if (pix.available && img->constrained_intra_pred_flag)
+  if (pix.available && active_pps->constrained_intra_pred_flag)
   {
     pix.available &= img->intra_block[pix.mb_addr];
   }
@@ -2128,7 +2093,7 @@ int predict_nnz(struct img_par *img, int i,int j)
   // top block
   getLuma4x4Neighbour(mb_nr, i, j, 0, -1, &pix);
 /* to be inserted only for dp
-  if (pix.available && img->constrained_intra_pred_flag)
+  if (pix.available && active_pps->constrained_intra_pred_flag)
   {
     pix.available &= img->intra_block[pix.mb_addr];
   }
@@ -2168,7 +2133,7 @@ int predict_nnz_chroma(struct img_par *img, int i,int j)
   // left block
   getChroma4x4Neighbour(mb_nr, i%2, j-4, -1, 0, &pix);
 /*  to be inserted only for dp
-  if (pix.available && img->constrained_intra_pred_flag)
+  if (pix.available && active_pps->constrained_intra_pred_flag)
   {
     pix.available &= img->intra_block[pix.mb_addr];
   }
@@ -2182,7 +2147,7 @@ int predict_nnz_chroma(struct img_par *img, int i,int j)
   // top block
   getChroma4x4Neighbour(mb_nr, i%2, j-4, 0, -1, &pix);
 /*  to be inserted only for dp
-  if (pix.available && img->constrained_intra_pred_flag)
+  if (pix.available && active_pps->constrained_intra_pred_flag)
   {
     pix.available &= img->intra_block[pix.mb_addr];
   }
@@ -3120,7 +3085,6 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
 
   int  *** mv_array, ***fw_mv_array, ***bw_mv_array;
 
-  int iTRb, iTRp;
   int mv_scale;
 
   int mb_nr             = img->current_mb_nr;
@@ -3138,7 +3102,11 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
   int direct_pdir;
 
   int curr_mb_field = ((img->MbaffFrameFlag)&&(currMB->mb_field));
-
+  
+  byte **     moving_block;
+  int ****     co_located_mv;
+  int ***     co_located_ref_idx;
+  int64 ***    co_located_ref_id;
 
   if(currMB->mb_type==IPCM)
   {
@@ -3153,16 +3121,34 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
   if (curr_mb_field)
   {
     if(mb_nr%2)
+    {
       list_offset = 4; // top field mb
+      moving_block = Co_located->bottom_moving_block;
+      co_located_mv = Co_located->bottom_mv;
+      co_located_ref_idx = Co_located->bottom_ref_idx;
+      co_located_ref_id = Co_located->bottom_ref_pic_id;
+    }
     else
+    {
       list_offset = 2; // bottom field mb
-    max_y_cr = img->height_cr/2-1;
+      moving_block = Co_located->top_moving_block;
+      co_located_mv = Co_located->top_mv;
+      co_located_ref_idx = Co_located->top_ref_idx;
+      co_located_ref_id = Co_located->top_ref_pic_id;
+    }
+    max_y_cr = dec_picture->size_y_cr/2-1;
   }
   else
   {
     list_offset = 0;  // no mb aff or frame mb
-    max_y_cr = img->height_cr-1;
+    moving_block = Co_located->moving_block;
+    co_located_mv = Co_located->mv;
+    co_located_ref_idx = Co_located->ref_idx;
+    co_located_ref_id = Co_located->ref_pic_id;
+    max_y_cr = dec_picture->size_y_cr-1;
   }
+
+
 
   if (!img->MbaffFrameFlag)
   {
@@ -3379,7 +3365,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
         if (pred_dir != 2)
         {
           //===== FORWARD/BACKWARD PREDICTION =====
-          ref_idx  = dec_picture->ref_idx[LIST_0 + pred_dir][i4][j4];
+          fw_refframe = ref_idx  = dec_picture->ref_idx[LIST_0 + pred_dir][i4][j4];
           mv_array = dec_picture->mv[LIST_0 + pred_dir];
           list     = listX[0+list_offset+ pred_dir];
           vec1_x = i4*4*mv_mul + mv_array[i4][j4][0];
@@ -3408,7 +3394,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
 
             for(ii=0;ii<BLOCK_SIZE;ii++)
               for(jj=0;jj<BLOCK_SIZE;jj++)  
-                img->mpr[ii+ioff][jj+joff] = Clip1(((img->wp_weight[pred_dir][ref_idx][0] *  tmp_block[ii][jj]+ img->wp_round_luma) >>img->luma_log2_weight_denom)  + img->wp_offset[pred_dir][ref_idx][0] );
+                img->mpr[ii+ioff][jj+joff] = Clip1(((img->wp_weight[pred_dir][ref_idx][0] *  tmp_block[ii][jj]+ img->wp_round_luma) >>img->luma_log2_weight_denom)  + img->wp_offset[pred_dir][fw_refframe>>curr_mb_field][0] );
           }
           else
           {
@@ -3442,9 +3428,10 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
               int imgblock_y= ((img->MbaffFrameFlag)&&(currMB->mb_field))? (img->current_mb_nr%2) ? (img->block_y-4)/2:img->block_y/2: img->block_y;
               int j6=imgblock_y+j;
 
+
               if (fw_rFrame >=0)
               {
-                if (!fw_rFrame  && !listX[LIST_1 +list_offset][0]->moving_block[i4][j6]) 
+                if (!fw_rFrame  && !moving_block[i4][j6]) 
                 {
                   dec_picture->mv  [LIST_0][i4][j4][0]= 0;
                   dec_picture->mv  [LIST_0][i4][j4][1]= 0;
@@ -3466,7 +3453,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
               
               if (bw_rFrame >=0)
               {
-                if  (bw_rFrame==0 && !listX[LIST_1 +list_offset][0]->moving_block[i4][j6])  
+                if  (bw_rFrame==0 && !moving_block[i4][j6])  
                 {                  
                   
                   dec_picture->mv  [LIST_1][i4][j4][0]= 0;
@@ -3509,13 +3496,14 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
             }
             else // Temporal Mode
             {
-              //              int list_offset = ((img->mb_frame_field_flag)&&(currMB->mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
+              
               int imgblock_y= ((img->MbaffFrameFlag)&&(currMB->mb_field))? (img->current_mb_nr%2) ? (img->block_y-4)/2:img->block_y/2: img->block_y;
               int j6= imgblock_y + j;
               
-              int refList = (listX[LIST_1 + list_offset][0]->ref_idx[LIST_0][i4][j6]== -1 ? LIST_1 : LIST_0);
-              int ref_idx=listX[LIST_1 + list_offset][0]->ref_idx[refList][i4][j6];
-              
+              int refList = (co_located_ref_idx[LIST_0][i4][j6]== -1 ? LIST_1 : LIST_0);
+              int ref_idx =  co_located_ref_idx[refList][i4][j6];
+
+
               if(ref_idx==-1) // co-located is intra mode
               {
                 for(hv=0; hv<2; hv++)
@@ -3533,13 +3521,12 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
               else // co-located skip or inter mode
               {
                 int mapped_idx=0;
-                int prescale, iref;                             
-                if (listX[LIST_1 + list_offset][0]->ref_poc[refList][i4][j6] == 1)
+                int iref;          
+                
                 {
                   for (iref=0;iref<min(img->num_ref_idx_l0_active,listXsize[LIST_0 + list_offset]);iref++)
                   {
-                
-                    if (listX[LIST_0 + list_offset][iref]->poc==listX[LIST_1 + list_offset][0]->poc)
+                    if (dec_picture->ref_pic_num[LIST_0 + list_offset][iref]==co_located_ref_id[refList][i4][j6])
                     {
                       mapped_idx=iref;
                       break;
@@ -3550,68 +3537,31 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                     }
                   }
                   if (INVALIDINDEX == mapped_idx)
-                  {
+                  {   
                     error("temporal direct error\ncolocated block has ref that is unavailable",-1111);
                   }
                 }
-                
-                else
-                {
-                  for (iref=0;iref<min(img->num_ref_idx_l0_active,listXsize[LIST_0 + list_offset]);iref++)
-                  {
-                    if (dec_picture->ref_pic_num[LIST_0 + list_offset][iref]==listX[LIST_1 + list_offset][0]->ref_pic_num[refList ][ref_idx])
-                    {
-                      mapped_idx=iref;
-                      break;
-                    }
-                    else //! invalid index. Default to zero even though this case should not happen
-                    {                        
-                      mapped_idx=INVALIDINDEX;
-                    }
-                  }
-                  if (INVALIDINDEX == mapped_idx)
-                  {
-                    error("temporal direct error\ncolocated block has ref that is unavailable",-1111);
-                  }
-                }
-                
+          
                 fw_ref_idx = mapped_idx;
-                
-                if (!img->MbaffFrameFlag || !img->mb_data[img->current_mb_nr].mb_field)
-                {
-                  iTRb = Clip3( -128, 127, dec_picture->poc - listX[LIST_0 + list_offset][mapped_idx]->poc );
-                }
-                else
-                {
-                  if (img->current_mb_nr%2 == 0)
-                    iTRb = Clip3( -128, 127, dec_picture->top_poc - listX[LIST_0 + list_offset][mapped_idx]->poc );
-                  else
-                    iTRb = Clip3( -128, 127, dec_picture->bottom_poc - listX[LIST_0 + list_offset][mapped_idx]->poc );
-                }
-                
-                iTRp = Clip3( -128, 127, listX[LIST_1 + list_offset][0]->poc - listX[LIST_0 + list_offset][mapped_idx]->poc);
-                
-                if (iTRp!=0)
-                {
-                  prescale = ( 16384 + abs( iTRp / 2 ) ) / iTRp;
-                  mv_scale = Clip3( -1024, 1023, ( iTRb * prescale + 32 ) >> 6 ) ;
-                }
-                
+                mv_scale = img->mvscale[LIST_0 + list_offset][mapped_idx];
+
                 //! In such case, an array is needed for each different reference.
-                if (iTRp==0)
+//                if (mv_scale == 9999 || Co_located->is_long_term)
+                if (mv_scale == 9999 || listX[LIST_0+list_offset][mapped_idx]->is_long_term)
                 {
-                  dec_picture->mv  [LIST_0][i4][j4][0]=listX[LIST_1 + list_offset][0]->mv[refList][i4][j6][0];
-                  dec_picture->mv  [LIST_0][i4][j4][1]=listX[LIST_1 + list_offset][0]->mv[refList][i4][j6][1];
+                  dec_picture->mv  [LIST_0][i4][j4][0]=co_located_mv[refList][i4][j6][0];
+                  dec_picture->mv  [LIST_0][i4][j4][1]=co_located_mv[refList][i4][j6][1];
+
                   dec_picture->mv  [LIST_1][i4][j4][0]=0;
                   dec_picture->mv  [LIST_1][i4][j4][1]=0;
                 }
                 else
                 {
-                  dec_picture->mv  [LIST_0][i4][j4][0]=(mv_scale * listX[LIST_1 + list_offset][0]->mv[refList][i4][j6][0] + 128 ) >> 8;
-                  dec_picture->mv  [LIST_0][i4][j4][1]=(mv_scale * listX[LIST_1 + list_offset][0]->mv[refList][i4][j6][1] + 128 ) >> 8;
+                  dec_picture->mv  [LIST_0][i4][j4][0]=(mv_scale * co_located_mv[refList][i4][j6][0] + 128 ) >> 8;
+                  dec_picture->mv  [LIST_0][i4][j4][1]=(mv_scale * co_located_mv[refList][i4][j6][1] + 128 ) >> 8;
                   
-                  dec_picture->mv  [LIST_1][i4][j4][0]=dec_picture->mv  [LIST_0][i4][j4][0] - listX[LIST_1 + list_offset][0]->mv[refList][i4][j6][0] ;
-                  dec_picture->mv  [LIST_1][i4][j4][1]=dec_picture->mv  [LIST_0][i4][j4][1] - listX[LIST_1 + list_offset][0]->mv[refList][i4][j6][1] ;
+                  dec_picture->mv  [LIST_1][i4][j4][0]=dec_picture->mv  [LIST_0][i4][j4][0] - co_located_mv[refList][i4][j6][0] ;
+                  dec_picture->mv  [LIST_1][i4][j4][1]=dec_picture->mv  [LIST_0][i4][j4][1] - co_located_mv[refList][i4][j6][1] ;
                 }
                 
                 fw_refframe = dec_picture->ref_idx[LIST_0][i4][j4] = mapped_idx; //listX[1][0]->ref_idx[refList][i4][j4];
@@ -3712,7 +3662,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                 for(jj=0;jj<BLOCK_SIZE;jj++)  
                   img->mpr[ii+ioff][jj+joff] = Clip1(((tmp_block[ii][jj] * img->wp_weight[0][fw_ref_idx][0]  
                                                + img->wp_round_luma)>>img->luma_log2_weight_denom) 
-                                               + img->wp_offset[0][fw_ref_idx][0]);
+                                               + img->wp_offset[0][fw_refframe>>curr_mb_field][0]);
             }
             else
             {
@@ -3736,7 +3686,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                 for(jj=0;jj<BLOCK_SIZE;jj++)  
                   img->mpr[ii+ioff][jj+joff] = Clip1(((tmp_blockbw[ii][jj] * img->wp_weight[1][bw_ref_idx][0] 
                                                + img->wp_round_luma)>>img->luma_log2_weight_denom) 
-                                               + img->wp_offset[1][bw_ref_idx][0]);
+                                               + img->wp_offset[1][bw_refframe>>curr_mb_field][0]);
             }
             else
             {
@@ -3748,7 +3698,11 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
           else if(img->apply_weights)
           {
             int alpha_fw, alpha_bw;
+            int wt_list_offset = (active_pps->weighted_bipred_idc==2)?list_offset:0;
+            int wo_shift = (active_pps->weighted_bipred_idc==2)?0:curr_mb_field;
+
             if (mv_mode==0 && img->direct_type==0 )bw_ref_idx=0;    //temporal direct 
+
             if (((active_pps->weighted_pred_flag&&(img->type==P_SLICE|| img->type == SP_SLICE))||
               (active_pps->weighted_bipred_idc==1 && (img->type==B_SLICE))) && curr_mb_field)
             {
@@ -3756,14 +3710,14 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
               bw_ref_idx >>=1;
             }
 
-            alpha_fw = img->wbp_weight[0][fw_refframe][bw_refframe][0];
-            alpha_bw = img->wbp_weight[1][fw_refframe][bw_refframe][0];
-            
+            alpha_fw = img->wbp_weight[0+wt_list_offset][fw_ref_idx][bw_ref_idx][0];
+            alpha_bw = img->wbp_weight[1+wt_list_offset][fw_ref_idx][bw_ref_idx][0];
+
             for(ii=0;ii<BLOCK_SIZE;ii++)
               for(jj=0;jj<BLOCK_SIZE;jj++)  
                 img->mpr[ii+ioff][jj+joff] = (int)Clip1(((alpha_fw * tmp_block[ii][jj] + alpha_bw * tmp_blockbw[ii][jj]  
                                              + (1<<img->luma_log2_weight_denom)) >> (img->luma_log2_weight_denom+1)) 
-                                             + ((img->wp_offset[0][fw_refframe][0] + img->wp_offset[1][bw_refframe][0] + 1) >>1));
+                                             + ((img->wp_offset[wt_list_offset+0][fw_ref_idx][0] + img->wp_offset[wt_list_offset+1][bw_ref_idx][0] + 1) >>1));
           }
           else
           {
@@ -3829,7 +3783,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
               {
                 if1=(i4+ii)/2;
                 
-                ref_idx   = dec_picture->ref_idx[LIST_0+pred_dir][if1][jf];
+                fw_refframe = ref_idx   = dec_picture->ref_idx[LIST_0+pred_dir][if1][jf];
                 
                 i1=(img->pix_c_x+ii+ioff)*f1+mv_array[if1][jf][0];
 
@@ -3861,7 +3815,13 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                           if1*jf0*list[ref_idx]->imgUV[uv][jj0][ii1]+
                           if0*jf1*list[ref_idx]->imgUV[uv][jj1][ii0]+
                           if1*jf1*list[ref_idx]->imgUV[uv][jj1][ii1]+f4)/f3;
-                  img->mpr[ii+ioff][jj+joff] = Clip1(((img->wp_weight[pred_dir][ref_idx][uv+1] * pred  + img->wp_round_chroma)>>img->chroma_log2_weight_denom) + img->wp_offset[pred_dir][ref_idx][uv+1]);
+                  if (((active_pps->weighted_pred_flag&&(img->type==P_SLICE|| img->type == SP_SLICE))||
+                    (active_pps->weighted_bipred_idc==1 && (img->type==B_SLICE))) && curr_mb_field)
+                  {
+                    ref_idx >>=1;
+                  }
+
+                  img->mpr[ii+ioff][jj+joff] = Clip1(((img->wp_weight[pred_dir][ref_idx][uv+1] * pred  + img->wp_round_chroma)>>img->chroma_log2_weight_denom) + img->wp_offset[pred_dir][fw_refframe>>curr_mb_field][uv+1]);
                 }
                 else
                 {
@@ -4073,20 +4033,31 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                 
                 if (img->apply_weights)
                 {
+                  if (((active_pps->weighted_pred_flag&&(img->type==P_SLICE|| img->type == SP_SLICE))||
+                    (active_pps->weighted_bipred_idc==1 && (img->type==B_SLICE))) && curr_mb_field)
+                  {
+                    fw_ref_idx >>=1;
+                    bw_ref_idx >>=1;
+                  }
+
                   if (img->direct_type && direct_pdir==1)
                   {
-                    img->mpr[ii+ioff][jj+joff]= Clip1(((img->wp_weight[1][bw_ref_idx][uv+1] * bw_pred  + img->wp_round_chroma)>>img->chroma_log2_weight_denom) + img->wp_offset[1][bw_ref_idx][uv+1]);   // Replaced with integer only operations
+                    img->mpr[ii+ioff][jj+joff]= Clip1(((img->wp_weight[1][bw_ref_idx][uv+1] * bw_pred  + img->wp_round_chroma)>>img->chroma_log2_weight_denom) + img->wp_offset[1][bw_refframe>>curr_mb_field][uv+1]);   // Replaced with integer only operations
                   }
                   else if (img->direct_type && direct_pdir==0)
                   {
-                    img->mpr[ii+ioff][jj+joff]=Clip1(((img->wp_weight[0][fw_ref_idx][uv+1] * fw_pred + img->wp_round_chroma)>>img->chroma_log2_weight_denom) + img->wp_offset[0][fw_ref_idx][uv+1]);   // Replaced with integer only operations
+                    img->mpr[ii+ioff][jj+joff]=Clip1(((img->wp_weight[0][fw_ref_idx][uv+1] * fw_pred + img->wp_round_chroma)>>img->chroma_log2_weight_denom) + img->wp_offset[0][fw_refframe>>curr_mb_field][uv+1]);   // Replaced with integer only operations
                   }
                   else
                   {
                     
-                    int alpha_fw = img->wbp_weight[0][fw_ref_idx][bw_ref_idx][uv+1];
-                    int alpha_bw = img->wbp_weight[1][fw_ref_idx][bw_ref_idx][uv+1];
-                    img->mpr[ii+ioff][jj+joff]= Clip1(((alpha_fw * fw_pred + alpha_bw * bw_pred  + (1<<img->chroma_log2_weight_denom)) >> (img->chroma_log2_weight_denom + 1))+ ((img->wp_offset[0][fw_ref_idx][uv+1] + img->wp_offset[1][bw_ref_idx][uv+1] + 1)>>1) );
+                    int wt_list_offset = (active_pps->weighted_bipred_idc==2)?list_offset:0;
+                    int wt_shift = (active_pps->weighted_bipred_idc==2)?0:curr_mb_field;
+
+                    int alpha_fw = img->wbp_weight[0+wt_list_offset][fw_ref_idx][bw_ref_idx][uv+1];
+                    int alpha_bw = img->wbp_weight[1+wt_list_offset][fw_ref_idx][bw_ref_idx][uv+1];
+
+                    img->mpr[ii+ioff][jj+joff]= Clip1(((alpha_fw * fw_pred + alpha_bw * bw_pred  + (1<<img->chroma_log2_weight_denom)) >> (img->chroma_log2_weight_denom + 1))+ ((img->wp_offset[wt_list_offset + 0][fw_ref_idx][uv+1] + img->wp_offset[wt_list_offset + 1][bw_ref_idx][uv+1] + 1)>>1) );
                   }
                 }
                 else

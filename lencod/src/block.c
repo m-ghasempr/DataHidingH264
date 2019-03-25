@@ -526,15 +526,19 @@ int dct_luma_16x16(int new_intra_mode)
   int qp_per,qp_rem,q_bits;
   int ac_coef = 0;
 
+  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+
   int   b8, b4;
   int*  DCLevel = img->cofDC[0][0];
   int*  DCRun   = img->cofDC[0][1];
   int*  ACLevel;
   int*  ACRun;
 
-  qp_per    = (img->qp-MIN_QP)/6;
-  qp_rem    = (img->qp-MIN_QP)%6;
+  qp_per    = (currMB->qp-MIN_QP)/6;
+  qp_rem    = (currMB->qp-MIN_QP)%6;
+
   q_bits    = Q_BITS+qp_per;
+  
   qp_const  = (1<<q_bits)/3;
 
   for (j=0;j<16;j++)
@@ -822,8 +826,8 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int old_intra_mode)
 
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
 
-  qp_per    = (img->qp-MIN_QP)/6;
-  qp_rem    = (img->qp-MIN_QP)%6;
+  qp_per    = (currMB->qp-MIN_QP)/6;
+  qp_rem    = (currMB->qp-MIN_QP)%6;
   q_bits    = Q_BITS+qp_per;
 
   if (img->type == I_SLICE)
@@ -994,8 +998,10 @@ int dct_chroma(int uv,int cr_cbp)
   int*  ACLevel;
   int*  ACRun;
 
-  qp_per    = QP_SCALE_CR[img->qp-MIN_QP]/6;
-  qp_rem    = QP_SCALE_CR[img->qp-MIN_QP]%6;
+  int qpChroma=Clip3(0, 51, currMB->qp + active_pps->chroma_qp_index_offset);
+  
+  qp_per    = QP_SCALE_CR[qpChroma-MIN_QP]/6;
+  qp_rem    = QP_SCALE_CR[qpChroma-MIN_QP]%6;
   q_bits    = Q_BITS+qp_per;
 
   if (img->type == I_SLICE)
@@ -1263,18 +1269,19 @@ int dct_luma_sp(int block_x,int block_y,int *coeff_cost)
   int   b4      = 2*(pos_y%2) + (pos_x%2);
   int*  ACLevel = img->cofAC[b8][b4][0];
   int*  ACRun   = img->cofAC[b8][b4][1];
+  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
 
   // For encoding optimization
   int c_err1, c_err2, level1, level2;
   double D_dis1, D_dis2;
   int len, info;
-  double lambda_mode   = 0.85 * pow (2, img->qp/3.0) * 4; 
+  double lambda_mode   = 0.85 * pow (2, (currMB->qp - SHIFT_QP)/3.0) * 4; 
 
-  qp_per    = (img->qp-MIN_QP)/6;
-  qp_rem    = (img->qp-MIN_QP)%6;
+  qp_per    = (currMB->qp-MIN_QP)/6;
+  qp_rem    = (currMB->qp-MIN_QP)%6;
   q_bits    = Q_BITS+qp_per;
-  qp_per_sp    = (img->qpsp-MIN_QP)/6;
-  qp_rem_sp    = (img->qpsp-MIN_QP)%6;
+  qp_per_sp    = (currMB->qpsp-MIN_QP)/6;
+  qp_rem_sp    = (currMB->qpsp-MIN_QP)%6;
   q_bits_sp    = Q_BITS+qp_per_sp;
 
   qp_const=(1<<q_bits)/6;    // inter
@@ -1524,16 +1531,21 @@ int dct_chroma_sp(int uv,int cr_cbp)
   int c_err1, c_err2, level1, level2;
   int len, info;
   double D_dis1, D_dis2;
-  double lambda_mode   = 0.85 * pow (2, img->qp/3.0) * 4; 
+  double lambda_mode   = 0.85 * pow (2, (currMB->qp -SHIFT_QP)/3.0) * 4; 
 
-  qp_per    = ((img->qp<0?img->qp:QP_SCALE_CR[img->qp])-MIN_QP)/6;
-  qp_rem    = ((img->qp<0?img->qp:QP_SCALE_CR[img->qp])-MIN_QP)%6;
+
+  int qpChroma=Clip3(0, 51, currMB->qp + active_pps->chroma_qp_index_offset);
+  int qpChromaSP=Clip3(0, 51, currMB->qpsp + active_pps->chroma_qp_index_offset);
+
+  qp_per    = ((qpChroma<0?qpChroma:QP_SCALE_CR[qpChroma])-MIN_QP)/6;
+  qp_rem    = ((qpChroma<0?qpChroma:QP_SCALE_CR[qpChroma])-MIN_QP)%6;
   q_bits    = Q_BITS+qp_per;
   qp_const=(1<<q_bits)/6;    // inter
-  qp_per_sp    = ((img->qpsp<0?img->qpsp:QP_SCALE_CR[img->qpsp])-MIN_QP)/6;
-  qp_rem_sp    = ((img->qpsp<0?img->qpsp:QP_SCALE_CR[img->qpsp])-MIN_QP)%6;
+  qp_per_sp    = ((qpChromaSP<0?currMB->qpsp:QP_SCALE_CR[qpChromaSP])-MIN_QP)/6;
+  qp_rem_sp    = ((qpChromaSP<0?currMB->qpsp:QP_SCALE_CR[qpChromaSP])-MIN_QP)%6;
   q_bits_sp    = Q_BITS+qp_per_sp;
-  qp_const2=(1<<q_bits_sp)/2;  //sp_pred
+  qp_const2    = (1<<q_bits_sp)/2;  //sp_pred
+  
 
   for (j=0; j < MB_BLOCK_SIZE/2; j++)
     for (i=0; i < MB_BLOCK_SIZE/2; i++)
@@ -1884,11 +1896,13 @@ void copyblock_sp(int block_x,int block_y)
 
   int i,j,i1,j1,m5[4],m6[4];
 
+  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+
   int predicted_block[BLOCK_SIZE][BLOCK_SIZE];
-  int qp_per = (img->qpsp-MIN_QP)/6;
-  int qp_rem = (img->qpsp-MIN_QP)%6;
+  int qp_per = (currMB->qpsp-MIN_QP)/6;
+  int qp_rem = (currMB->qpsp-MIN_QP)%6;
   int q_bits    = Q_BITS+qp_per;
-  int qp_const2=(1<<q_bits)/2;  //sp_pred
+  int qp_const2 = (1<<q_bits)/2;  //sp_pred
 
   //  Horizontal transform
   for (j=0; j< BLOCK_SIZE; j++)

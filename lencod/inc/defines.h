@@ -29,7 +29,7 @@ typedef unsigned char byte;    //!< byte type definition
 
 #define LIST_0 0
 #define LIST_1 1
-
+#define ZEROSNR 1
 // CAVLC
 #define LUMA              0
 #define LUMA_INTRA16x16DC 1
@@ -112,8 +112,8 @@ typedef unsigned char byte;    //!< byte type definition
 #define MAX_QP          51
 #define SHIFT_QP        12
 
-#define LOG2_MAX_FRAME_NUM_MINUS4   4           // POC200301 moved from defines.h
-#define LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4 4     // POC200301 newly added
+#define LOG2_MAX_FRAME_NUM_MINUS4   7           // POC200301 moved from defines.h
+#define LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4 7     // POC200301 newly added
 
 // Direct Mode types
 #define DIR_TEMPORAL    0   //!< Temporal Direct Mode

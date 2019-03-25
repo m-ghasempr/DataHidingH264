@@ -6,7 +6,7 @@
  *
  *  \par Copyright statements
     \verbatim
-   H.26L TML coder/decoder
+   H.264 JM coder/decoder
 
    Copyright (C) 2000 by
       Telenor Broadband Services, Norway

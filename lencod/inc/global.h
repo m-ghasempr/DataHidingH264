@@ -4,7 +4,7 @@
  *  \file
  *     global.h
  *  \brief
- *     global definitions for for H.26L encoder.
+ *     global definitions for for H.264 encoder.
  *  \author
  *     Copyright (C) 1999  Telenor Satellite Services,Norway
  *                         Ericsson Radio Systems, Sweden
@@ -81,7 +81,7 @@ typedef enum {
   ADAPTIVE_CODING
 } CodingType;
 
-//! definition of H.26L syntax elements
+//! definition of H.264 syntax elements
 typedef enum {
   SE_HEADER,
   SE_PTYPE,
@@ -309,6 +309,7 @@ typedef struct macroblock
   int                 slice_nr;
   int                 delta_qp;
   int                 qp ;
+  int                 qpsp ;
   int                 bitcounter[MAX_BITCOUNTER_MB];
 
   struct macroblock   *mb_available_up;   //!< pointer to neighboring MB (CABAC)
@@ -338,6 +339,7 @@ typedef struct macroblock
   // rate control
   double              actj;               // macroblock activity measure for macroblock j
   int                 prev_qp;
+  int                 prev_delta_qp;
   int                 prev_cbp;
   int                 predict_qp;
   int                 predict_error;
@@ -451,6 +453,10 @@ byte  ***imgUV_org;          //!< Reference croma image
 //int    **refFrArr;           //!< Array for reference frames of each block
 int    **img4Y_tmp;          //!< for quarter pel interpolation
 
+unsigned int log2_max_frame_num_minus4;
+unsigned int log2_max_pic_order_cnt_lsb_minus4;
+
+int  me_tot_time,me_time;
 pic_parameter_set_rbsp_t *active_pps;
 seq_parameter_set_rbsp_t *active_sps;
 
@@ -540,6 +546,10 @@ typedef struct
                                      generally around the predicted vector. Max vector is 2xmcrange.  For 8x8
                                      and 4x4 block sizes the search range is 1/2 of that for 16x16 blocks.       */
   int num_reference_frames;     //!< number of reference frames to be used
+  int P_List0_refs;
+  int B_List0_refs;
+  int B_List1_refs;
+
   int img_width;                //!< image width  (must be a multiple of 16 pels)
   int img_height;               //!< image height (must be a multiple of 16 pels)
   int yuv_format;               //!< GH: YUV format (0=4:0:0, 1=4:2:0, 2=4:2:2, 3=4:4:4,currently only 4:2:0 is supported)
@@ -554,12 +564,13 @@ typedef struct
   int UseConstrainedIntraPred;  //!< 0: Inter MB pixels are allowed for intra prediction 1: Not allowed
   int  infile_header;           //!< If input file has a header set this to the length of the header
   char infile[100];             //!< YUV 4:2:0 input format
-  char outfile[100];            //!< H.26L compressed output bitstream
+  char outfile[100];            //!< H.264 compressed output bitstream
   char ReconFile[100];          //!< Reconstructed Pictures
   char TraceFile[100];          //!< Trace Outputs
   int intra_period;             //!< Random Access period though intra
 
-  int idr_enable;
+  int idr_enable;				//!< Encode intra slices as IDR
+  int start_frame;				//!< Encode sequence starting from Frame start_frame
 
   // B pictures
   int successive_Bframe;        //!< number of B frames that will be used
@@ -575,8 +586,7 @@ typedef struct
   int WeightedPrediction;        //!< Weighted prediciton for P frames (0: not used, 1: explicit)
   int WeightedBiprediction;      //!< Weighted prediciton for B frames (0: not used, 1: explicit, 2: implicit)
   int StoredBPictures;           //!< Stored (Reference) B pictures replace P pictures (0: not used, 1: used)
-  int explicit_B_prediction;     //!< explicite B prediction  // Jill get rid of eventually
-  // Introduced by TOM
+
   int symbol_mode;              //!< Specifies the mode the symbols are mapped on bits
   int of_mode;                  //!< Specifies the mode of the output file
   int partition_mode;           //!< Specifies the mode of data partitioning
@@ -590,8 +600,9 @@ typedef struct
   int InterSearch4x4;
 
   char PictureTypeSequence[MAXPICTURETYPESEQUENCELEN];
-  int PictureRate;
+  int FrameRate;
 
+  int chroma_qp_index_offset;
 #ifdef _FULL_SEARCH_RANGE_
   int full_search;
 #endif
@@ -600,6 +611,7 @@ typedef struct
 #endif
 #ifdef _CHANGE_QP_
   int qpN2, qpB2, qp2start;
+  int qp02;
 #endif
   int rdopt;
 #ifdef _LEAKYBUCKET_
@@ -610,6 +622,8 @@ typedef struct
 
   int PicInterlace;           //!< picture adaptive frame/field
   int MbInterlace;            //!< macroblock adaptive frame/field
+
+  int IntraBottom;            //!< Force Intra Bottom at GOP periods.
 
   int LossRateA;              //!< assumed loss probablility of partition A (or full slice), in per cent, used for loss-aware R/D optimization
   int LossRateB;              //!< assumed loss probablility of partition B, in per cent, used for loss-aware R/D 
@@ -747,13 +761,18 @@ typedef struct
   int****** pred_mv;                 //!< motion vector predictors for all block types and all reference frames
 
   int****** all_mv;       //!< replaces local all_mv
+  int LFDisableIdc;
+  int LFAlphaC0Offset;
+  int LFBetaOffset;
+
+  int direct_type;              //!< Direct Mode type to be used (1: Temporal, 0: Spatial)
 
   int num_ref_idx_l0_active;
   int num_ref_idx_l1_active;
 
   int field_mode;     //!< For MB level field/frame -- field mode on flag
   int top_field;      //!< For MB level field/frame -- top field flag
-
+  int mvscale[6][MAX_REFERENCE_PICTURES];
   int buf_cycle;
   int i16offset;
 
@@ -911,6 +930,9 @@ typedef struct
   int    refar[2][4][4];       //!< reference frame array [list][x][y]
   int    i16offset;
   int    c_ipred_mode;
+  int    qp;
+  int    prev_qp;
+  int    prev_delta_qp;
 } RD_DATA;
 
 RD_DATA *rdopt; 
@@ -936,7 +958,6 @@ FILE *p_trace;                   //!< Trace file
  ***********************************************************************
  */
 
-
 void intrapred_luma(int CurrPixX,int CurrPixY, int *left_available, int *up_available, int *all_available);
 void init();
 int  find_sad(int hadamard, int m7[16][16]);
@@ -961,7 +982,7 @@ void report();
 void information_init();
 int  get_picture_type();
 void DeblockFrame(ImageParameters *img, byte **, byte ***) ;
-
+int clip1a(int a);
 
 void  LumaPrediction4x4 (int, int, int, int, int, int, int);
 int   SATD (int*, int);
@@ -988,6 +1009,9 @@ int   writeReferenceFrame       (int, int, int, int, int);
 int   writeAbpCoeffIndex        (int, int, int, int);
 int   writeIntra4x4Modes        (int);
 int   writeChromaIntraPredMode  ();
+
+void estimate_weighting_factor_B_slice();
+void estimate_weighting_factor_P_slice();
 
 int  Get_Direct_Cost8x8 (int, double);
 int  Get_Direct_CostMB  (double);

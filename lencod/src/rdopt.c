@@ -31,7 +31,7 @@
 #include "cabac.h"            // head file for rate control
 
 //Rate control
-extern       int  QP2QUANT  [40];
+
 int QP,QP2;
 int DELTA_QP,DELTA_QP2;
 int diffy[16][16];
@@ -347,7 +347,8 @@ double RDCost_for_4x4IntraBlocks (int*    nonzero,
   currSE->type    = SE_INTRAPREDMODE;
 
   //--- set function pointer ----
-  if (input->symbol_mode != UVLC)    currSE->writing = writeIntraPredMode_CABAC;
+  if (input->symbol_mode != UVLC)    
+  currSE->writing = writeIntraPredMode_CABAC;
 
   //--- choose data partition ---
   dataPart = &(currSlice->partArr[partMap[SE_INTRAPREDMODE]]);
@@ -427,10 +428,10 @@ int Mode_Decision_for_4x4IntraBlocks (int  b8,  int  b4,  double  lambda,  int* 
   //===== LOOP OVER ALL 4x4 INTRA PREDICTION MODES =====
   for (ipmode=0; ipmode<NO_INTRA_PMODE; ipmode++)
   {
-    if( (ipmode==DC_PRED) ||
+    int available_mode =  (ipmode==DC_PRED) ||
         ((ipmode==VERT_PRED||ipmode==VERT_LEFT_PRED||ipmode==DIAG_DOWN_LEFT_PRED) && up_available ) ||
-        ((ipmode==HOR_PRED||ipmode==HOR_UP_PRED) && left_available ) ||
-        (all_available) )
+        ((ipmode==HOR_PRED||ipmode==HOR_UP_PRED) && left_available ) ||(all_available);
+    if( available_mode)
     {
       if (!input->rdopt)
       {
@@ -608,7 +609,7 @@ double RDCost_for_8x8blocks (int*    cnt_nonz,   // --> number of nonzero coeffi
   {
     if (direct_pdir[img->block_x+i0][img->block_y+j0]<0) // mode not allowed
     {
-      return (1e30);
+      return (1e20);
     }
     else
     {
@@ -690,7 +691,7 @@ double RDCost_for_8x8blocks (int*    cnt_nonz,   // --> number of nonzero coeffi
 
     if (pdir==0 || pdir==2)
     {
-      rate  += writeMotionVector8x8 (i0, j0, i0+2, j0+2, ref,LIST_0, mode);
+      rate  += writeMotionVector8x8 (i0, j0, i0+2, j0+2, ref, LIST_0, mode);
     }
     if (pdir==1 || pdir==2)
     {
@@ -972,18 +973,12 @@ void SetMotionVectorsMB (Macroblock* currMB, int bframe)
       bxr   = img->block_x+i;
       bx    = img->block_x+i+4;
 
-/*      if ((mode8==0)&&bslice)
-      {
-        pdir8  = direct_pdir[bxr][by];
-        ref    = direct_ref_idx[LIST_0][bxr][by];
-        bw_ref = direct_ref_idx[LIST_1][bxr][by];
-      }
-      else*/
-      {
+
+      
         pdir8 = currMB->b8pdir[k];
         ref    = enc_picture->ref_idx[LIST_0][bxr][by];
         bw_ref = enc_picture->ref_idx[LIST_1][bxr][by];
-      }
+      
       
       if (!bframe)
       {
@@ -1382,6 +1377,7 @@ void set_stored_macroblock_parameters ()
   //==== macroblock type ====
   currMB->mb_type = mode;
 
+
   if(img->MbaffFrameFlag)
   {
     rdopt->mode = mode;
@@ -1390,6 +1386,9 @@ void set_stored_macroblock_parameters ()
     rdopt->cbp_blk = cbp_blk;
     rdopt->mb_type  = mode;
 
+    rdopt->prev_qp=currMB->prev_qp;
+    rdopt->prev_delta_qp=currMB->prev_delta_qp;
+    rdopt->qp=currMB->qp;
 
     for(i=0;i<6;i++)
       for(j=0;j<4;j++)
@@ -1582,7 +1581,6 @@ void SetRefAndMotionVectors (int block, int mode, int pdir, int fwref, int bwref
           fwref =direct_ref_idx[LIST_0][img->block_x+i][img->block_y+j];
           bwref =direct_ref_idx[LIST_1][img->block_x+i][img->block_y+j];
         }
-        
         
         if ((pdir==0 || pdir==2))
         {
@@ -2028,20 +2026,20 @@ int field_flag_inference()
              //----- set reference frame and direction parameters -----
              if (mode==3)
              {
-               best8x8fwref [3][  block] = best8x8fwref [3][  block+2] = best_fw_ref;
-               best8x8pdir[3][  block] = best8x8pdir[3][  block+2] = best_pdir;
+               best8x8fwref   [3][block] = best8x8fwref   [3][block+2] = best_fw_ref;
+               best8x8pdir    [3][block] = best8x8pdir    [3][block+2] = best_pdir;
                best8x8bwref   [3][block] = best8x8bwref   [3][block+2] = best_bw_ref;
              }
              else if (mode==2)
              {
-               best8x8fwref [2][2*block] = best8x8fwref [2][2*block+1] = best_fw_ref;
-               best8x8pdir[2][2*block] = best8x8pdir[2][2*block+1] = best_pdir;
+               best8x8fwref   [2][2*block] = best8x8fwref   [2][2*block+1] = best_fw_ref;
+               best8x8pdir    [2][2*block] = best8x8pdir    [2][2*block+1] = best_pdir;
                best8x8bwref   [2][2*block] = best8x8bwref   [2][2*block+1] = best_bw_ref;
              }
              else
              {
-               best8x8fwref [1][0] = best8x8fwref [1][1] = best8x8fwref [1][2] = best8x8fwref [1][3] = best_fw_ref;
-               best8x8pdir[1][0] = best8x8pdir[1][1] = best8x8pdir[1][2] = best8x8pdir[1][3] = best_pdir;
+               best8x8fwref   [1][0] = best8x8fwref   [1][1] = best8x8fwref   [1][2] = best8x8fwref   [1][3] = best_fw_ref;
+               best8x8pdir    [1][0] = best8x8pdir    [1][1] = best8x8pdir    [1][2] = best8x8pdir    [1][3] = best_pdir;
                best8x8bwref   [1][0] = best8x8bwref   [1][1] = best8x8bwref   [1][2] = best8x8bwref   [1][3] = best_bw_ref;
              }
 
@@ -2233,6 +2231,9 @@ int field_flag_inference()
           } // for (min_rdcost=1e30, index=(bframe?0:1); index<6; index++)
           
           cost8x8 += min_cost8x8;
+
+//          if (!input->rdopt) cost8x8+= min_cost8x8;
+//          else cost8x8 += min_rdcost;          
           
           if (!input->rdopt)
           {
@@ -2243,8 +2244,8 @@ int field_flag_inference()
             best_cnt_nonz = LumaResidualCoding8x8 (&dummy, &curr_cbp_blk, block, pdir,
                                                    (pdir==0||pdir==2?mode:0),
                                                    (pdir==1||pdir==2?mode:0),
-                                                   (mode!=0?best8x8fwref[P8x8][block]:max(0,enc_picture->ref_idx[LIST_0][img->block_x+i1][img->block_y+j1])),
-                                                   (mode!=0?best8x8bwref[P8x8][block]:0));
+                                                   (best8x8fwref[P8x8][block]),
+                                                   (best8x8bwref[P8x8][block]));
             cbp_blk8x8   &= (~(0x33 << (((block>>1)<<3)+((block%2)<<1)))); // delete bits for block
             cbp_blk8x8   |= curr_cbp_blk;
             
@@ -2464,6 +2465,17 @@ int field_flag_inference()
   
   if (input->rdopt)
   {
+    
+    if ((cbp!=0 || best_mode==I16MB ))
+      currMB->prev_cbp = 1;
+    else if (cbp==0 && !input->RCEnable)
+    {
+      currMB->delta_qp = 0;
+      currMB->qp = currMB->prev_qp;
+      img->qp = currMB->qp;
+      currMB->prev_cbp = 0;
+    }
+
     // Rate control
     if(input->RCEnable)
     {   

@@ -39,7 +39,7 @@ typedef struct
   unsigned int pt;         //!< 7 bits, Payload Type, dynamically established
   unsigned int seq;        /*!< RTP sequence number, incremented by one for 
                                 each sent packet */
-  unsigned int timestamp;  //!< timestamp, 27 MHz for H.26L
+  unsigned int timestamp;  //!< timestamp, 27 MHz for H.264
   unsigned int ssrc;       //!< Synchronization Source, chosen randomly
   byte *       payload;    //!< the payload including payload headers
   unsigned int paylen;     //!< length of payload in bytes

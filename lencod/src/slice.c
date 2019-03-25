@@ -36,13 +36,16 @@
 #include "image.h"
 #include "cabac.h"
 #include "elements.h"
+#include "mbuffer.h"
 
 // Local declarations
 
 static Slice *malloc_slice();
 static void  free_slice(Slice *slice);
 static void  init_slice(int start_mb_addr);
-
+static void set_ref_pic_num();
+extern ColocatedParams *Co_located;
+extern StorablePicture **listX[6];
 
 /*!
  ************************************************************************
@@ -197,6 +200,11 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
   double FrameRDCost, FieldRDCost;
 
   img->cod_counter = 0;
+
+  set_ref_pic_num();
+
+  if (img->type == B_SLICE)
+      compute_collocated(Co_located, listX);
 
   CurrentMbAddr = FmoGetFirstMacroblockInSlice (SliceGroupId);
 // printf ("\n\nEncode_one_slice: PictureID %d SliceGroupId %d  SliceID %d  FirstMB %d \n", img->tr, SliceGroupId, img->current_slice_nr, CurrentMbInScanOrder);
@@ -653,3 +661,36 @@ void modify_redundant_pic_cnt(unsigned char *buffer)
   buffer[rpc_bytes_to_go] |= tmp;
 }
 
+void set_ref_pic_num()
+{
+  int i,j;
+  
+  //! need to add field ref_pic_num that handles field pair.
+
+  for (i=0;i<listXsize[LIST_0];i++)
+  {
+    enc_picture->ref_pic_num[LIST_0][i]=listX[LIST_0][i]->poc * 2 + ((listX[LIST_0][i]->structure==BOTTOM_FIELD)?1:0) ; 
+    enc_picture->frm_ref_pic_num[LIST_0][i]=listX[LIST_0][i]->frame_poc * 2; 
+    enc_picture->top_ref_pic_num[LIST_0][i]=listX[LIST_0][i]->top_poc * 2; 
+    enc_picture->bottom_ref_pic_num[LIST_0][i]=listX[LIST_0][i]->bottom_poc * 2 + 1; 
+  }
+
+  for (i=0;i<listXsize[LIST_1];i++)
+  {
+    enc_picture->ref_pic_num[LIST_1][i]=listX[LIST_1][i]->poc  *2 + ((listX[LIST_1][i]->structure==BOTTOM_FIELD)?1:0);
+    enc_picture->frm_ref_pic_num[LIST_1][i]=listX[LIST_1][i]->frame_poc * 2; 
+    enc_picture->top_ref_pic_num[LIST_1][i]=listX[LIST_1][i]->top_poc * 2; 
+    enc_picture->bottom_ref_pic_num[LIST_1][i]=listX[LIST_1][i]->bottom_poc * 2 + 1; 
+  }
+
+  if (img->structure==FRAME)
+    for (j=2;j<6;j++)
+      for (i=0;i<listXsize[j];i++)
+      {    
+        enc_picture->ref_pic_num[j][i] = listX[j][i]->poc * 2 + ((listX[j][i]->structure==BOTTOM_FIELD)?1:0);
+        enc_picture->frm_ref_pic_num[j][i] = listX[j][i]->frame_poc * 2 ;
+        enc_picture->top_ref_pic_num[j][i] = listX[j][i]->top_poc * 2 ;
+        enc_picture->bottom_ref_pic_num[j][i] = listX[j][i]->bottom_poc * 2 + 1;
+      }
+
+}

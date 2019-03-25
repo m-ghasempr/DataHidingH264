@@ -1322,7 +1322,11 @@ void interpret_buffering_period_info( byte* payload, int size, ImageParameters *
    if (active_sps != sps)
    {
      active_sps = sps;
-	 init_dpb();
+     if (!img->no_output_of_prior_pics_flag)
+     {
+       flush_dpb();
+     }
+     init_dpb();
    }
 
 #ifdef PRINT_BUFFERING_PERIOD_INFO

@@ -31,7 +31,7 @@
 #define SIZEslice_group_id      (sizeof (int) * 60000)    // should be sufficient for HUGE pictures, need one int per MB in a picture
 
 #define MAXSPS  32
-#define MAXPPS  128
+#define MAXPPS  256
 
 //! Boolean Type
 typedef enum {

@@ -13,6 +13,9 @@
  */
 
 #include "global.h"
+#include "mbuffer.h"
+
+extern StorablePicture *dec_picture;
 
 /*!
  ************************************************************************
@@ -22,7 +25,7 @@
  */
 int mb_is_available(int mbAddr, int currMbAddr)
 {
-  if ((mbAddr < 0) || (mbAddr > ((int)img->PicSizeInMbs - 1)))
+  if ((mbAddr < 0) || (mbAddr > ((int)dec_picture->PicSizeInMbs - 1)))
     return 0;
 
   // the following line checks both: slice number and if the mb has been decoded
@@ -52,7 +55,7 @@ void CheckAvailabilityOfNeighbors()
   currMB->mb_available_up   = NULL;
   currMB->mb_available_left = NULL;
 
-  if (img->MbaffFrameFlag)
+  if (dec_picture->MbaffFrameFlag)
   {
     currMB->mbAddrA = 2 * (mb_nr/2 - 1);
     currMB->mbAddrB = 2 * (mb_nr/2 - img->PicWidthInMbs);
@@ -88,7 +91,7 @@ void CheckAvailabilityOfNeighbors()
 void get_mb_block_pos (int mb_addr, int *x, int*y)
 {
 
-  if (img->MbaffFrameFlag)
+  if (dec_picture->MbaffFrameFlag)
   {
     *x = ((mb_addr/2) % img->PicWidthInMbs);
     *y = ( ((mb_addr/2) / img->PicWidthInMbs)  * 2 + (mb_addr%2));
@@ -584,7 +587,7 @@ void getAffNeighbour(int curr_mb_nr, int xN, int yN, int luma, PixelPos *pix)
  */
 void getNeighbour(int curr_mb_nr, int xN, int yN, int luma, PixelPos *pix)
 {
-  if (img->MbaffFrameFlag)
+  if (dec_picture->MbaffFrameFlag)
     getAffNeighbour(curr_mb_nr, xN, yN, luma, pix);
   else
     getNonAffNeighbour(curr_mb_nr, xN, yN, luma, pix);

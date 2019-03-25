@@ -21,8 +21,8 @@
 #include "memalloc.h"
 #include "erc_api.h"
 
-objectBuffer_t *erc_object_list;
-ercVariables_t *erc_errorVar;
+objectBuffer_t *erc_object_list = NULL;
+ercVariables_t *erc_errorVar = NULL;
 frame erc_recfr;
 int erc_mvperMB;
 
@@ -34,6 +34,7 @@ int erc_mvperMB;
  */
 void ercInit(int pic_sizex, int pic_sizey, int flag)
 {
+  ercClose(erc_errorVar);
   erc_object_list = (objectBuffer_t *) calloc((pic_sizex * pic_sizey) >> 6, sizeof(objectBuffer_t));
   if (erc_object_list == NULL) no_mem_exit("ercInit: erc_object_list");
   
@@ -195,10 +196,14 @@ void ercClose( ercVariables_t *errorVar )
       free( errorVar->prevFrameYCondition );
     }
     free( errorVar );
+    errorVar = NULL;
   }
-  
-  free(erc_object_list);
-  
+
+  if (erc_object_list)
+  {
+    free(erc_object_list);
+    erc_object_list=NULL;
+  }
 }
 
 /*!

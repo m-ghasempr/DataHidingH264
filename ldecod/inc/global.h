@@ -4,7 +4,7 @@
  *  \file
  *     global.h
  *  \brief
- *     global definitions for for H.26L decoder.
+ *     global definitions for for H.264 decoder.
  *  \author
  *     Copyright (C) 1999  Telenor Satellite Services,Norway
  *                         Ericsson Radio Systems, Sweden
@@ -27,6 +27,8 @@
 #define _GLOBAL_H_
 
 #include <stdio.h>                              //!< for FILE
+#include <time.h>
+#include <sys/timeb.h>
 #include "defines.h"
 #include "parsetcommon.h"
 
@@ -71,8 +73,6 @@ int  TopFieldForSkip_UV[2][16][16];
 #define ET_SIZE 300      //!< size of error text buffer
 char errortext[ET_SIZE]; //!< buffer for error message for exit with error()
 
-int g_new_frame;
-
 /***********************************************************************
  * T y p e    d e f i n i t i o n s    f o r    T M L
  ***********************************************************************
@@ -100,7 +100,7 @@ typedef enum
   TRUE
 } Boolean;
 */
-//! definition of H.26L syntax elements
+//! definition of H.264 syntax elements
 typedef enum {
   SE_HEADER,
   SE_PTYPE,
@@ -155,6 +155,11 @@ typedef enum {
   UVLC,
   CABAC
 } SymbolMode;
+
+typedef enum {
+ LIST_0=0,
+ LIST_1=1
+} Lists;
 
 
 typedef enum {
@@ -404,7 +409,6 @@ typedef struct img_par
   int current_slice_nr;
   int *intra_block;
   int tr;                                     //!< temporal reference, 8 bit, wrapps at 255
-  int tr_old;                                     //!< old temporal reference, for detection of a new frame, added by WYK
   int qp;                                     //!< quant for the current frame
   int qpsp;                                   //!< quant for SP-picture predicted frame
   int sp_switch;                              //!< 1 for switching sp, 0 for normal sp
@@ -425,19 +429,19 @@ typedef struct img_par
 
   int allrefzero;
   int mpr[16][16];                            //!< predicted block
-
+  int mvscale[6][MAX_REFERENCE_PICTURES];
   int m7[16][16];                             //!< final 4x4 block. Extended to 16x16 for ABT
   int cof[4][6][4][4];                        //!< correction coefficients from predicted
   int cofu[4];
   int **ipredmode;                            //!< prediction type
   int quad[256];
-  int constrained_intra_pred_flag;            //!< if 1, prediction only from other Intra MBs
   int ***nz_coeff;
   int **siblock;
   int cod_counter;                            //!< Current count of number of skipped macroblocks in a row
 
+  int newframe;
+
   int structure;                               //!< Identify picture structure type
-  int structure_old;                           //!< temp fix for multi slice per picture
   int pstruct_next_P;
 
   // B pictures
@@ -480,19 +484,6 @@ typedef struct img_par
   unsigned int field_pic_flag;
   unsigned int bottom_field_flag;
   
-  //the following should probably go in sequence parameters
-  // unsigned int log2_max_frame_num_minus4;
-  unsigned int pic_order_cnt_type;
-  // for poc mode 0, POC200301
-  // unsigned int log2_max_pic_order_cnt_lsb_minus4;  
-  // for poc mode 1, POC200301
-  unsigned int delta_pic_order_always_zero_flag;
-           int offset_for_non_ref_pic;
-           int offset_for_top_to_bottom_field;
-  unsigned int num_ref_frames_in_pic_order_cnt_cycle;
-           int offset_for_ref_frame[MAXnum_ref_frames_in_pic_order_cnt_cycle];
-
-  // POC200301
   //the following is for slice header syntax elements of poc
   // for poc mode 0.
   unsigned int pic_order_cnt_lsb;
@@ -505,6 +496,7 @@ typedef struct img_par
     signed int PrevPicOrderCntMsb;
   unsigned int PrevPicOrderCntLsb;
     signed int PicOrderCntMsb;
+
   // for POC mode 1:
   unsigned int AbsFrameNum;
     signed int ExpectedPicOrderCnt, PicOrderCntCycleCnt, FrameNumInPicOrderCntCycle;
@@ -514,10 +506,7 @@ typedef struct img_par
            int PreviousFrameNumOffset;
   // /////////////////////////
 
-
   //weighted prediction
-  unsigned int weighted_pred_flag;
-  unsigned int weighted_bipred_idc;
   unsigned int luma_log2_weight_denom;
   unsigned int chroma_log2_weight_denom;
   int ***wp_weight;  // weight in [list][index][component] order
@@ -527,8 +516,6 @@ typedef struct img_par
   int wp_round_chroma;
   unsigned int apply_weights;
 
-  unsigned int pic_order_present_flag;
-  
   int idr_flag;
   int nal_reference_idc;                       //!< nal_reference_idc from NAL unit
 
@@ -555,6 +542,17 @@ typedef struct img_par
   int idr_psnr_number;
   int psnr_number;
 
+  time_t ltime_start;               // for time measurement
+  time_t ltime_end;                 // for time measurement
+
+#ifdef WIN32
+  struct _timeb tstruct_start;
+  struct _timeb tstruct_end;
+#else
+  struct timeb tstruct_start;
+  struct timeb tstruct_end;
+#endif
+
 } ImageParameters;
 
 extern ImageParameters *img;
@@ -578,11 +576,13 @@ int tot_time;
 // input parameters from configuration file
 struct inp_par
 {
-  char infile[100];                       //!< Telenor H.26L input
+  char infile[100];                       //!< H.264 inputfile
   char outfile[100];                      //!< Decoded YUV 4:2:0 output
   char reffile[100];                      //!< Optional YUV 4:2:0 reference file for SNR measurement
   int FileFormat;                         //!< File format of the Input file, PAR_OF_ANNEXB or PAR_OF_RTP
   int dpb_size;                          //!< Frame buffer size
+  int ref_offset;
+  int poc_scale;
 
 #ifdef _LEAKYBUCKET_
   unsigned long R_decoder;                //!< Decoder Rate in HRD Model
@@ -605,6 +605,22 @@ typedef struct pix_pos
   int pos_y;
 } PixelPos;
 
+typedef struct old_slice_par
+{
+   unsigned field_pic_flag;
+   unsigned bottom_field_flag;
+   unsigned frame_num;
+   int nal_ref_idc;
+   unsigned pic_oder_cnt_lsb;
+   int delta_pic_oder_cnt_bottom;
+   int delta_pic_order_cnt[2];
+   int idr_flag;
+   int idr_pic_id;
+   int pps_id;
+} OldSliceParams;
+
+extern OldSliceParams old_slice;
+
 // files
 FILE *p_out;                    //!< pointer to output YUV file
 //FILE *p_out2;                    //!< pointer to debug output YUV file
@@ -624,9 +640,8 @@ void malloc_slice(struct inp_par *inp, struct img_par *img);
 void free_slice(struct inp_par *inp, struct img_par *img);
 
 int  decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *snr);
-void init_frame(struct img_par *img, struct inp_par *inp);
-void exit_frame(struct img_par *img, struct inp_par *inp);
-void DeblockFrame(struct img_par *img, byte **imgY, byte ***imgUV ) ;
+void init_picture(struct img_par *img, struct inp_par *inp);
+void exit_frame();
 
 int  read_new_slice();
 void decode_one_slice(struct img_par *img,struct inp_par *inp);
@@ -666,18 +681,17 @@ void free_Partition(Bitstream *currStream);
 void reset_ec_flags();
 
 void error(char *text, int code);
+int  is_new_picture();
+void init_old_slice();
 
 // dynamic mem allocation
-int  init_global_buffers(struct inp_par *inp, struct img_par *img);
-void free_global_buffers(struct inp_par *inp, struct img_par *img);
+int  init_global_buffers();
+void free_global_buffers();
 
 void frame_postprocessing(struct img_par *img, struct inp_par *inp);
 void field_postprocessing(struct img_par *img, struct inp_par *inp);
 int  bottom_field_picture(struct img_par *img,struct inp_par *inp);
-void init_top(struct img_par *img, struct inp_par *inp);
-void init_bottom(struct img_par *img, struct inp_par *inp);
-void decode_frame_slice(struct img_par *img,struct inp_par *inp, int current_header);
-void decode_field_slice(struct img_par *img,struct inp_par *inp, int current_header);
+void decode_slice(struct img_par *img,struct inp_par *inp, int current_header);
 
 #define PAYLOAD_TYPE_IDERP 8
 int RBSPtoSODB(byte *streamBuffer, int last_byte_pos);
@@ -703,5 +717,6 @@ void tracebits2(const char *trace_str, int len, int info);
 
 void init_decoding_engine_IPCM(struct img_par *img);
 void readIPCMBytes_CABAC(SyntaxElement *sym, Bitstream *currStream);
+
 
 #endif

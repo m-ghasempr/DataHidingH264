@@ -13,7 +13,7 @@
 #ifndef _MV_SEARCH_H_
 #define _MV_SEARCH_H_
 
-//! convert from H.263 QP to H.26L quant given by: quant=pow(2,QP/6)
+//! convert from H.263 QP to H.264 quant given by: quant=pow(2,QP/6)
 const int QP2QUANT[40]=
 {
    1, 1, 1, 1, 2, 2, 2, 2,

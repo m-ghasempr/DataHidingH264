@@ -283,6 +283,10 @@ SOURCE=.\ldecod\inc\leaky_bucket.h
 # End Source File
 # Begin Source File
 
+SOURCE=.\ldecod\inc\loopfilter.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\ldecod\inc\macroblock.h
 # End Source File
 # Begin Source File

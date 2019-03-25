@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 8.2
+ *     JM 8.3
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -62,7 +62,7 @@
 #include "erc_api.h"
 
 #define JM          "8"
-#define VERSION     "8.2"
+#define VERSION     "8.3"
 
 #define LOGFILE     "log.dec"
 #define DATADECFILE "dataDec.txt"
@@ -70,7 +70,7 @@
 
 extern objectBuffer_t *erc_object_list;
 extern ercVariables_t *erc_errorVar;
-
+extern ColocatedParams *Co_located;
 
 // I have started to move the inp and img structures into global variables.
 // They are declared in the following lines.  Since inp is defined in conio.h
@@ -109,9 +109,9 @@ int main(int argc, char **argv)
   }
 
   init_conf(input, argv[1]);
-  
-  g_new_frame=1;
 
+  init_old_slice();
+  
   switch (input->FileFormat)
   {
   case 0:
@@ -136,12 +136,11 @@ int main(int argc, char **argv)
 //  init_dpb(input);
   init_out_buffer();
 
-  img->idr_psnr_number=0;
+  img->idr_psnr_number=input->ref_offset;
   img->psnr_number=0;
 
   img->number=0;
   img->type = I_SLICE;
-  img->tr_old = -1; // WYK: Oct. 8, 2001, for detection of a new frame
   img->dec_ref_pic_marking_buffer = NULL;
 
   // B pictures
@@ -155,7 +154,7 @@ int main(int argc, char **argv)
   report(input, img, snr);
   free_slice(input,img);
   FmoFinit();
-  free_global_buffers(input, img);
+  free_global_buffers();
 
   flush_dpb();
 
@@ -174,6 +173,7 @@ int main(int argc, char **argv)
   free_dpb();
   uninit_out_buffer();
 
+  free_collocated(Co_located);
   free (input);
   free (snr);
   free (img);
@@ -226,7 +226,7 @@ void init_conf(struct inp_par *inp,
     error(errortext, 300);
   }
 
-  fscanf(fd,"%s",inp->infile);                // H.26L compressed input bitsream
+  fscanf(fd,"%s",inp->infile);                // H.264 compressed input bitsream
   fscanf(fd,"%*[^\n]");
 
   fscanf(fd,"%s",inp->outfile);               // YUV 4:2:2 input format
@@ -259,6 +259,19 @@ void init_conf(struct inp_par *inp,
   default:
     snprintf(errortext, ET_SIZE, "NAL mode %i is not supported", NAL_mode);
     error(errortext,400);
+  }
+
+  fscanf(fd,"%d,",&inp->ref_offset);   // offset used for SNR computation
+  fscanf(fd,"%*[^\n]");
+
+  fscanf(fd,"%d,",&inp->poc_scale);   // offset used for SNR computation
+  fscanf(fd,"%*[^\n]");
+
+
+  if (inp->poc_scale < 1 || inp->poc_scale > 2)
+  {
+    snprintf(errortext, ET_SIZE, "Poc Scale is %d. It has to be 1 or 2",inp->poc_scale);
+    error(errortext,1);
   }
 
 #ifdef _LEAKYBUCKET_
@@ -298,7 +311,7 @@ void init_conf(struct inp_par *inp,
   fprintf(stdout,"--------------------------------------------------------------------------\n");
   fprintf(stdout," Decoder config file                    : %s \n",config_filename);
   fprintf(stdout,"--------------------------------------------------------------------------\n");
-  fprintf(stdout," Input H.26L bitstream                  : %s \n",inp->infile);
+  fprintf(stdout," Input H.264 bitstream                  : %s \n",inp->infile);
   fprintf(stdout," Output decoded YUV 4:2:0               : %s \n",inp->outfile);
   fprintf(stdout," Output status file                     : %s \n",LOGFILE);
   if ((p_ref=fopen(inp->reffile,"rb"))==0)
@@ -614,19 +627,13 @@ void free_slice(struct inp_par *inp, struct img_par *img)
  *     Number of allocated bytes
  ***********************************************************************
  */
-int init_global_buffers(struct inp_par *inp, struct img_par *img)
+int init_global_buffers()
 {
   int memory_size=0;
 
   if (global_init_done)
   {
-    free_global_buffers(inp, img);
-  }
-
-  if (img->structure != FRAME)
-  {
-    img->height *= 2;         // set height to frame (twice of field) for normal variables
-    img->height_cr *= 2;      // set height to frame (twice of field) for normal variables
+    free_global_buffers();
   }
 
   // allocate memory for reference frame in find_snr
@@ -634,31 +641,25 @@ int init_global_buffers(struct inp_par *inp, struct img_par *img)
   memory_size += get_mem3D(&imgUV_ref, 2, img->height_cr, img->width_cr);
 
   // allocate memory in structure img
-  if(((img->mb_data) = (Macroblock *) calloc((img->width/MB_BLOCK_SIZE) * (img->height/MB_BLOCK_SIZE),sizeof(Macroblock))) == NULL)
+  if(((img->mb_data) = (Macroblock *) calloc(img->FrameSizeInMbs, sizeof(Macroblock))) == NULL)
     no_mem_exit("init_global_buffers: img->mb_data");
 
-  if(((img->intra_block) = (int*)calloc((img->width/MB_BLOCK_SIZE) * (img->height/MB_BLOCK_SIZE),sizeof(int))) == NULL)
+  if(((img->intra_block) = (int*)calloc(img->FrameSizeInMbs, sizeof(int))) == NULL)
     no_mem_exit("init_global_buffers: img->intra_block");
 
-  memory_size += get_mem2Dint(&(img->ipredmode),img->width/BLOCK_SIZE , img->height/BLOCK_SIZE);
+  memory_size += get_mem2Dint(&(img->ipredmode), 4*img->PicWidthInMbs , 4*img->FrameHeightInMbs);
 
-  memory_size += get_mem2Dint(&(img->field_anchor),img->height/BLOCK_SIZE,img->width/BLOCK_SIZE);
+  memory_size += get_mem2Dint(&(img->field_anchor),4*img->FrameHeightInMbs, 4*img->PicWidthInMbs);
 
   memory_size += get_mem3Dint(&(img->wp_weight), 2, MAX_REFERENCE_PICTURES, 3);
-  memory_size += get_mem3Dint(&(img->wp_offset), 2, MAX_REFERENCE_PICTURES, 3);
-  memory_size += get_mem4Dint(&(img->wbp_weight), 2, MAX_REFERENCE_PICTURES, MAX_REFERENCE_PICTURES, 3);
+  memory_size += get_mem3Dint(&(img->wp_offset), 6, MAX_REFERENCE_PICTURES, 3);
+  memory_size += get_mem4Dint(&(img->wbp_weight), 6, MAX_REFERENCE_PICTURES, MAX_REFERENCE_PICTURES, 3);
 
   // CAVLC mem
   memory_size += get_mem3Dint(&(img->nz_coeff), img->FrameSizeInMbs, 4, 6);
 
-  memory_size += get_mem2Dint(&(img->siblock),img->width/MB_BLOCK_SIZE  , img->height/MB_BLOCK_SIZE);
+  memory_size += get_mem2Dint(&(img->siblock),img->PicWidthInMbs  , img->FrameHeightInMbs);
 
-  if (img->structure != FRAME)
-  {
-    img->height /= 2;      // reset height for normal variables
-    img->height_cr /= 2;   // reset height for normal variables
-  }
-  
   global_init_done = 1;
 
   return (memory_size);
@@ -679,7 +680,7 @@ int init_global_buffers(struct inp_par *inp, struct img_par *img)
  *
  ************************************************************************
  */
-void free_global_buffers(struct inp_par *inp, struct img_par *img)
+void free_global_buffers()
 {
   free_mem2D (imgY_ref);
   free_mem3D (imgUV_ref,2);

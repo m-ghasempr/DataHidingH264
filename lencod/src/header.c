@@ -4,7 +4,7 @@
  * \file header.c
  *
  * \brief
- *    H.26L Slice and Sequence headers
+ *    H.264 Slice and Sequence headers
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
@@ -46,6 +46,7 @@ int SliceHeader()
 {
   int dP_nr = assignSE2partition[input->partition_mode][SE_HEADER];
   DataPartition *partition = &((img->currentSlice)->partArr[dP_nr]);
+  Slice* currSlice = img->currentSlice;
   int len = 0;
   unsigned int field_pic_flag = 0, bottom_field_flag = 0;    // POC200301
 
@@ -61,13 +62,14 @@ int SliceHeader()
 
   // Note: Encoder supports only one pic/seq parameter set, hence value is
   // hard coded to zero
-  len += ue_v("SH: pic_parameter_set_id" , 0 ,partition);
+//  len += ue_v("SH: pic_parameter_set_id" , 0 ,partition);
+  len += ue_v("SH: pic_parameter_set_id" , active_pps->pic_parameter_set_id ,partition);
 
   // frame_num
-  if(input->no_frames >= 1<<(LOG2_MAX_FRAME_NUM_MINUS4+4))
-    error ("Too many frames.  Increase LOG2_MAX_FRAME_NUM_MINUS4",-999);  
+  if(input->no_frames >= 1<<(log2_max_frame_num_minus4+4))
+    error ("Too many frames.  Increase log2_max_frame_num_minus4",-999);  
 
-  len += u_v (LOG2_MAX_FRAME_NUM_MINUS4 + 4,"SH: frame_num", img->frame_num, partition);
+  len += u_v (log2_max_frame_num_minus4 + 4,"SH: frame_num", img->frame_num, partition);
 
   if (!active_sps->frame_mbs_only_flag)
   {
@@ -96,17 +98,18 @@ int SliceHeader()
   {
     if (active_sps->frame_mbs_only_flag)
     {
-      img->pic_order_cnt_lsb = (img->toppoc & ~((((unsigned int)(-1)) << (LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4+4))) );
+      img->pic_order_cnt_lsb = (img->toppoc & ~((((unsigned int)(-1)) << (log2_max_pic_order_cnt_lsb_minus4+4))) );
     }
     else
     {
       if (!field_pic_flag || img->structure == TOP_FIELD)
-        img->pic_order_cnt_lsb = (img->toppoc & ~((((unsigned int)(-1)) << (LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4+4))) );
+        img->pic_order_cnt_lsb = (img->toppoc & ~((((unsigned int)(-1)) << (log2_max_pic_order_cnt_lsb_minus4+4))) );
       else if ( img->structure == BOTTOM_FIELD )
-        img->pic_order_cnt_lsb = (img->bottompoc & ~((((unsigned int)(-1)) << (LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4+4))) );
+        img->pic_order_cnt_lsb = (img->bottompoc & ~((((unsigned int)(-1)) << (log2_max_pic_order_cnt_lsb_minus4+4))) );
     }
 
-    len += u_v (LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4+4, "SH: pic_order_cnt_lsb", img->pic_order_cnt_lsb, partition);
+    len += u_v (log2_max_pic_order_cnt_lsb_minus4+4, "SH: pic_order_cnt_lsb", img->pic_order_cnt_lsb, partition);
+
     if (img->pic_order_present_flag && !field_pic_flag)  // img->fld_flag
     {
       len += se_v ("SH: delta_pic_order_cnt_bottom", img->delta_pic_order_cnt_bottom, partition);
@@ -129,13 +132,14 @@ int SliceHeader()
   // redundant slice info redundant_pic_cnt is missing here
   if (input->redundant_slice_flag)
   {
-    len += se_v ("SH: redundant_pic_cnt", img->redundant_pic_cnt, partition);
+    len += ue_v ("SH: redundant_pic_cnt", img->redundant_pic_cnt, partition);
   }
 
   // Direct Mode Type selection for B pictures
   if (img->type==B_SLICE)
   {
-    len +=  u_1 ("SH: direct_spatial_mv_pred_flag", input->direct_type, partition);
+    len +=  u_1 ("SH: direct_spatial_mv_pred_flag", img->direct_type, partition);  	
+    //len +=  u_1 ("SH: direct_spatial_mv_pred_flag", input->direct_type, partition);
   }
 
   if ((img->type == P_SLICE) || (img->type == B_SLICE) || (img->type==SP_SLICE))
@@ -165,8 +169,10 @@ int SliceHeader()
   }
   len += ref_pic_list_reordering();
 
-  if (((img->type == P_SLICE || img->type == SP_SLICE) && input->WeightedPrediction) || 
-     ((img->type == B_SLICE) && input->WeightedBiprediction == 1))
+  //if (((img->type == P_SLICE || img->type == SP_SLICE) && input->WeightedPrediction) || 
+  //   ((img->type == B_SLICE) && input->WeightedBiprediction == 1))
+  if (((img->type == P_SLICE || img->type == SP_SLICE) && active_pps->weighted_pred_flag) || 
+     ((img->type == B_SLICE) && active_pps->weighted_bipred_idc == 1))  
   {
     len += pred_weight_table();
   }
@@ -180,7 +186,8 @@ int SliceHeader()
   }
 
   // we transmit zero in the pps, so here the real QP
-  len += se_v("SH: slice_qp_delta", (img->qp - 26), partition);
+  //len += se_v("SH: slice_qp_delta", (img->qp - 26), partition);
+  len += se_v("SH: slice_qp_delta", (currSlice->qp - 26 - active_pps->pic_init_qp_minus26), partition);  
 
   if (img->type==SP_SLICE /*|| img->type==SI_SLICE*/)
   {
@@ -190,7 +197,7 @@ int SliceHeader()
     }
     len += se_v ("SH: slice_qs_delta", (img->qpsp - 26), partition );
   }
-
+/*
   if (input->LFSendParameters)
   {
     len += ue_v("SH: disable_deblocking_filter_idc",input->LFDisableIdc, partition);  // Turn loop filter on/off on slice basis 
@@ -200,6 +207,18 @@ int SliceHeader()
       len += se_v ("SH: slice_alpha_c0_offset_div2", input->LFAlphaC0Offset / 2, partition);
 
       len += se_v ("SH: slice_beta_offset_div2", input->LFBetaOffset / 2, partition);
+    }
+  }
+*/
+  if (active_pps->deblocking_filter_control_present_flag)
+  {
+    len += ue_v("SH: disable_deblocking_filter_idc",img->LFDisableIdc, partition);  // Turn loop filter on/off on slice basis 
+
+    if (img->LFDisableIdc!=1)
+    {
+      len += se_v ("SH: slice_alpha_c0_offset_div2", img->LFAlphaC0Offset / 2, partition);
+
+      len += se_v ("SH: slice_beta_offset_div2", img->LFBetaOffset / 2, partition);
     }
   }
 
@@ -265,6 +284,7 @@ static int ref_pic_list_reordering()
             len += ue_v ("SH: long_term_pic_idx_l0", currSlice->long_term_pic_idx_l0[i], partition);
           }
         }
+
       } while (currSlice->remapping_of_pic_nums_idc_l0[i] != 3);
     }
   }

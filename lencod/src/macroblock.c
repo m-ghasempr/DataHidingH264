@@ -108,13 +108,14 @@ int clip1a(int a)
 void proceed2nextMacroblock()
 {
 #if TRACE
+  int i;
   int use_bitstream_backing = (input->slice_mode == FIXED_RATE || input->slice_mode == CALLBACK);
 #endif
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
   int*        bitCount = currMB->bitcounter;
 
 #if TRACE
-  int i;
+
   if (p_trace)
   {
     fprintf(p_trace, "\n*********** Pic: %i (I/P) MB: %i Slice: %i **********\n\n", frame_no, img->current_mb_nr, img->current_slice_nr);
@@ -140,7 +141,7 @@ void proceed2nextMacroblock()
   if ((img->type == P_SLICE)||(img->type==SP_SLICE) )
   {
     ++stat->quant0;
-    stat->quant1 += img->qp;      // to find average quant for inter frames
+    stat->quant1 += currMB->qp;      // to find average quant for inter frames
   }
 }
 
@@ -201,8 +202,19 @@ void start_macroblock(int mb_addr, int mb_field)
 
   // Initialize delta qp change from last macroblock. Feature may be used for future rate control
   // Rate control
+  currMB->qpsp       = img->qpsp;
   if(input->RCEnable)
   {
+    if (img->current_mb_nr==0)
+    {
+      currMB->prev_qp = img->qp;
+      currMB->prev_delta_qp = 0;
+    }
+    else
+    {    
+      currMB->prev_qp = img->mb_data[img->current_mb_nr-1].qp;
+      currMB->prev_delta_qp = img->mb_data[img->current_mb_nr-1].delta_qp;
+    }
     /*frame layer rate control*/
     if(input->basicunit==img->Frame_Total_Number_MB)
     {
@@ -392,20 +404,39 @@ void start_macroblock(int mb_addr, int mb_field)
          currMB->prev_qp=img->qp;
        }
     }   
-  }else
+  }
+  else
   {
-    currMB->delta_qp = 0;
-    currMB->qp       = img->qp;       // needed in loop filter (even if constant QP is used)
+    Slice* currSlice = img->currentSlice;
+  	
+    int prev_mb = FmoGetPreviousMBNr(img->current_mb_nr);
+    if (prev_mb>-1)
+    {
+      currMB->prev_qp = img->mb_data[prev_mb].qp;
+      currMB->prev_delta_qp = img->mb_data[prev_mb].delta_qp;
+    }
+    else
+    {
+      currMB->prev_qp = currSlice->qp;
+      currMB->prev_delta_qp = 0;
+    }
+
+    currMB->qp       = currSlice->qp ;
+  
+    currMB->delta_qp = currMB->qp - currMB->prev_qp;
+    DELTA_QP = DELTA_QP2 = currMB->delta_qp;
+    QP = QP2 = currMB->qp;
+    
   }
   // Initialize counter for MB symbols
   currMB->currSEnr=0;
 
   // loop filter parameter
-  if (input->LFSendParameters)
+  if (active_pps->deblocking_filter_control_present_flag)
   {
-    currMB->LFDisableIdc    = input->LFDisableIdc;
-    currMB->LFAlphaC0Offset = input->LFAlphaC0Offset;
-    currMB->LFBetaOffset    = input->LFBetaOffset;
+    currMB->LFDisableIdc    = img->LFDisableIdc;
+    currMB->LFAlphaC0Offset = img->LFAlphaC0Offset;
+    currMB->LFBetaOffset    = img->LFBetaOffset;
   }
   else
   {
@@ -467,11 +498,11 @@ void start_macroblock(int mb_addr, int mb_field)
 
   // store filtering parameters for this MB; For now, we are using the
   // same offset throughout the sequence
-  currMB->lf_disable = input->LFDisableIdc;
-  currMB->lf_alpha_c0_offset = input->LFAlphaC0Offset;
-  currMB->lf_beta_offset = input->LFBetaOffset;
-
-
+  currMB->lf_disable = img->LFDisableIdc;
+  currMB->lf_alpha_c0_offset = img->LFAlphaC0Offset;
+  currMB->lf_beta_offset = img->LFBetaOffset;
+  
+  
   // Initialize bitcounters for this macroblock
   if(img->current_mb_nr == 0) // No slice header to account for
   {
@@ -880,8 +911,11 @@ LumaPrediction4x4 (int  block_x,    // <--  relative horizontal block coordinate
 //  int  direct    = (fw_mode == 0 && bw_mode == 0 && (img->type == B_SLICE));
 //  int  skipped   = (fw_mode == 0 && bw_mode == 0 && (img->type != B_SLICE));
 
-  int  apply_weights = ( (input->WeightedPrediction && (img->type == P_SLICE || img->type == SP_SLICE)) ||
-                         (input->WeightedBiprediction && (img->type == B_SLICE)));  
+//  int  apply_weights = ( (input->WeightedPrediction && (img->type == P_SLICE || img->type == SP_SLICE)) ||
+//                         (input->WeightedBiprediction && (img->type ==B_SLICE)));  
+  int  apply_weights = ( (active_pps->weighted_pred_flag && (img->type== P_SLICE || img->type == SP_SLICE)) ||
+                         (active_pps->weighted_bipred_idc && (img->type== B_SLICE)));  
+
   
   int  list_offset   = ((img->MbaffFrameFlag)&&(img->mb_data[img->current_mb_nr].mb_field))? img->current_mb_nr%2 ? 4 : 2 : 0;
 
@@ -1289,8 +1323,11 @@ ChromaPrediction4x4 (int  uv,           // <-- colour component
   int* bpred      = bw_pred;
   int****** mv_array = img->all_mv;
 
-  int apply_weights = ( (input->WeightedPrediction && (img->type == P_SLICE||img->type == SP_SLICE)) ||
-                     (input->WeightedBiprediction && (img->type == B_SLICE)));
+  //int apply_weights = ( (input->WeightedPrediction && (img->type == P_SLICE||img->type == SP_SLICE)) ||
+//                     (input->WeightedBiprediction && (img->type == B_SLICE)));
+  int  apply_weights = ( (active_pps->weighted_pred_flag && (img->type == P_SLICE || img->type == SP_SLICE)) ||
+                         (active_pps->weighted_bipred_idc && (img->type == B_SLICE)));  
+
 
   //===== INTRA PREDICTION =====
   if (p_dir==-1)
@@ -2219,7 +2256,8 @@ void write_one_macroblock (int eos_bit)
   //===== init and update number of intra macroblocks =====
   if (img->current_mb_nr==0)
     intras=0;
-  if ((img->type==P_SLICE || img->type==SP_SLICE || (img->type==B_SLICE && img->nal_reference_idc>0)) && IS_INTRA(currMB))
+  //if ((img->type==P_SLICE || img->type==SP_SLICE || (img->type==B_SLICE && img->nal_reference_idc>0)) && IS_INTRA(currMB))
+  if (IS_INTRA(currMB))
     intras++;
 
   //--- write non-slice termination symbol if the macroblock is not the first one in its slice ---

@@ -117,6 +117,8 @@ store_coding_state (CSptr cs)
 
   if (!input->rdopt)  return;
 
+  if (cs->symbol_mode==CABAC)
+  {
   //=== important variables of data partition array ===
 	//only one partition for IDR img
   for (i = 0; i <(img->currentPicture->idr_flag? 1:cs->no_part); i++)
@@ -126,17 +128,25 @@ store_coding_state (CSptr cs)
     ee_dest = &(cs->encenv   [i]);
     bs_dest = &(cs->bitstream[i]);
 
-    if (cs->symbol_mode==CABAC) memcpy (ee_dest, ee_src, sizeof(EncodingEnvironment));
+    memcpy (ee_dest, ee_src, sizeof(EncodingEnvironment));
     memcpy (bs_dest, bs_src, sizeof(Bitstream));
   }
 
   //=== contexts for binary arithmetic coding ===
-  if (cs->symbol_mode == CABAC)
-  {
     memcpy (mc_dest, mc_src, sizeof(MotionInfoContexts));
     memcpy (tc_dest, tc_src, sizeof(TextureInfoContexts));
+  
   }
-
+  else
+  {
+    //=== important variables of data partition array ===
+  for (i = 0; i <(img->currentPicture->idr_flag? 1:cs->no_part); i++)
+  {    
+    bs_src  =   img->currentSlice->partArr[i].bitstream;   
+    bs_dest = &(cs->bitstream[i]);
+      memcpy (bs_dest, bs_src, sizeof(Bitstream));
+    }
+  }
   //=== syntax element number and bitcounters ===
   cs->currSEnr = currMB->currSEnr;
   memcpy (cs->bitcounter, currMB->bitcounter, MAX_BITCOUNTER_MB*sizeof(int));
@@ -170,7 +180,8 @@ reset_coding_state (CSptr cs)
 
   if (!input->rdopt)  return;
 
-
+  if (cs->symbol_mode==CABAC) 
+  {
   //=== important variables of data partition array ===
 	//only one partition for IDR img
   for (i = 0; i <(img->currentPicture->idr_flag? 1:cs->no_part); i++)
@@ -181,18 +192,30 @@ reset_coding_state (CSptr cs)
     bs_src  = &(cs->bitstream[i]);
 
     //--- parameters of encoding environments ---
-    if (cs->symbol_mode==CABAC) memcpy (ee_dest, ee_src, sizeof(EncodingEnvironment));
+    memcpy (ee_dest, ee_src, sizeof(EncodingEnvironment));
     memcpy (bs_dest, bs_src, sizeof(Bitstream));
   }
 
 
   //=== contexts for binary arithmetic coding ===
-  if (cs->symbol_mode == CABAC)
-  {
     memcpy (mc_dest, mc_src, sizeof(MotionInfoContexts));
     memcpy (tc_dest, tc_src, sizeof(TextureInfoContexts));
+    
   }
+  else
+  {
+    //=== important variables of data partition array ===
+	//only one partition for IDR img
+  for (i = 0; i <(img->currentPicture->idr_flag? 1:cs->no_part); i++)
 
+    {
+      bs_dest =   img->currentSlice->partArr[i].bitstream;
+      bs_src  = &(cs->bitstream[i]);
+
+      //--- parameters of encoding environments ---   
+      memcpy (bs_dest, bs_src, sizeof(Bitstream));
+    }
+  }
 
   //=== syntax element number and bitcounters ===
   currMB->currSEnr = cs->currSEnr;

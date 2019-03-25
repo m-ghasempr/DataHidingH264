@@ -4,7 +4,7 @@
  * \file header.c
  *
  * \brief
- *    H.26L Slice headers
+ *    H.264 Slice headers
  *
  *************************************************************************************
  */
@@ -23,6 +23,8 @@
 #include "header.h"
 
 #include "ctx_tables.h"
+
+extern StorablePicture *dec_picture;
 
 #if TRACE
 #define SYMTRACESTRING(s) strncpy(sym.tracestring,s,TRACESTRING_SIZE)
@@ -113,15 +115,6 @@ int RestOfSliceHeader()
     img->pre_frame_num = img->frame_num;
     assert(img->frame_num == 0);
   }
-  if (img->frame_num != img->pre_frame_num && img->frame_num != (img->pre_frame_num + 1) % img->MaxFrameNum) 
-  {
-    if (active_sps->gaps_in_frame_num_value_allowed_flag == 0)
-    {
-      /* Advanced Error Concealment would be called here to combat unintentional loss of pictures. */
-      error("An unintentional loss of pictures occurs! Exit\n", 100);
-    }
-    fill_frame_num_gap(img);
-  }
 
   if (active_sps->frame_mbs_only_flag)
   {
@@ -159,23 +152,22 @@ int RestOfSliceHeader()
     img->idr_pic_id = ue_v("SH: idr_pic_id", currStream);
   }
 
-  // POC200301
-  if (img->pic_order_cnt_type == 0)
+  if (active_sps->pic_order_cnt_type == 0)
   {
     img->pic_order_cnt_lsb = u_v(active_sps->log2_max_pic_order_cnt_lsb_minus4 + 4, "SH: pic_order_cnt_lsb", currStream);
-    if( img->pic_order_present_flag  ==  1 &&  !img->field_pic_flag )
+    if( active_pps->pic_order_present_flag  ==  1 &&  !img->field_pic_flag )
       img->delta_pic_order_cnt_bottom = se_v("SH: delta_pic_order_cnt_bottom", currStream);
     else
       img->delta_pic_order_cnt_bottom = 0;  
   }
-  if( img->pic_order_cnt_type == 1 && !img->delta_pic_order_always_zero_flag ) 
+  if( active_sps->pic_order_cnt_type == 1 && !active_sps->delta_pic_order_always_zero_flag ) 
   {
     img->delta_pic_order_cnt[ 0 ] = se_v("SH: delta_pic_order_cnt[0]", currStream);
-    if( img->pic_order_present_flag  ==  1  &&  !img->field_pic_flag )
+    if( active_pps->pic_order_present_flag  ==  1  &&  !img->field_pic_flag )
       img->delta_pic_order_cnt[ 1 ] = se_v("SH: delta_pic_order_cnt[1]", currStream);
   }else
   {
-    if (img->pic_order_cnt_type == 1)
+    if (active_sps->pic_order_cnt_type == 1)
     {
       img->delta_pic_order_cnt[ 0 ] = 0;
       img->delta_pic_order_cnt[ 1 ] = 0;
@@ -185,7 +177,7 @@ int RestOfSliceHeader()
   //! redundant_pic_cnt is missing here
   if (active_pps->redundant_pic_cnt_present_flag)
   {
-    img->redundant_pic_cnt = u_1 ("SH: redundant_pic_cnt", currStream);
+    img->redundant_pic_cnt = ue_v ("SH: redundant_pic_cnt", currStream);
   }
 
   if(img->type==B_SLICE)
@@ -216,8 +208,8 @@ int RestOfSliceHeader()
 
   ref_pic_list_reordering();
 
-  img->apply_weights = ((img->weighted_pred_flag && (currSlice->picture_type == P_SLICE || currSlice->picture_type == SP_SLICE) )
-          || ((img->weighted_bipred_idc > 0 ) && (currSlice->picture_type == B_SLICE)));
+  img->apply_weights = ((active_pps->weighted_pred_flag && (currSlice->picture_type == P_SLICE || currSlice->picture_type == SP_SLICE) )
+          || ((active_pps->weighted_bipred_idc > 0 ) && (currSlice->picture_type == B_SLICE)));
 
   if ((active_pps->weighted_pred_flag&&(img->type==P_SLICE|| img->type == SP_SLICE))||
       (active_pps->weighted_bipred_idc==1 && (img->type==B_SLICE)))
@@ -284,11 +276,6 @@ int RestOfSliceHeader()
   img->PicHeightInMbs = img->FrameHeightInMbs / ( 1 + img->field_pic_flag );
   img->PicSizeInMbs   = img->PicWidthInMbs * img->PicHeightInMbs;
   img->FrameSizeInMbs = img->PicWidthInMbs * img->FrameHeightInMbs;
-
-  //calculate pocs  POC200301
-  decoding_poc(img);
-  //note  UsedBits is probably inaccurate
-//  dumppoc (img);
 
   return UsedBits;
 }
@@ -419,7 +406,7 @@ static void pred_weight_table()
       }
     }
   }
-  if ((img->type == B_SLICE) && img->weighted_bipred_idc == 1)
+  if ((img->type == B_SLICE) && active_pps->weighted_bipred_idc == 1)
   {
     for (i=0; i<img->num_ref_idx_l1_active; i++)
     {
@@ -542,13 +529,13 @@ void dec_ref_pic_marking(Bitstream *currStream)
  *    none
  ************************************************************************
  */
-void decoding_poc(struct img_par *img)
+void decode_poc(struct img_par *img)
 {
   int i;
   // for POC mode 0:
   unsigned int        MaxPicOrderCntLsb = (1<<(active_sps->log2_max_pic_order_cnt_lsb_minus4+4));
 
-  switch ( img->pic_order_cnt_type )
+  switch ( active_sps->pic_order_cnt_type )
   {
   case 0: // POC MODE 0
     // 1st
@@ -591,17 +578,40 @@ void decoding_poc(struct img_par *img)
     }
 
     if (!img->field_pic_flag)
+    {
       img->bottompoc = img->toppoc + img->delta_pic_order_cnt_bottom;
+    }
     else
+    {
       if( img->bottom_field_flag ) 
+      {
         img->ThisPOC= img->bottompoc = img->PicOrderCntMsb + img->pic_order_cnt_lsb;
+      }
+    }
 
     // last: some post-processing. 
       
-    if ( img->toppoc <= img->bottompoc )
-      img->framepoc = img->toppoc;
-    else
-      img->framepoc = img->bottompoc;
+//    if (img->newframe == 1)
+    {
+      if (!img->bottom_field_flag)
+      {      
+        img->framepoc = img->toppoc;
+      }
+      else
+      {
+        img->framepoc = img->bottompoc;
+      }
+    }
+
+    if ( img->frame_num!=img->PreviousFrameNum)
+      img->PreviousFrameNum=img->frame_num;
+
+    if(!img->disposable_flag)
+    {
+      img->PrevPicOrderCntLsb = img->pic_order_cnt_lsb;
+      img->PrevPicOrderCntMsb = img->PicOrderCntMsb;
+    }
+
     break;
 
   case 1: // POC MODE 1
@@ -629,7 +639,7 @@ void decoding_poc(struct img_par *img)
     }
 
     // 2nd
-    if(img->num_ref_frames_in_pic_order_cnt_cycle) 
+    if(active_sps->num_ref_frames_in_pic_order_cnt_cycle) 
       img->AbsFrameNum = img->FrameNumOffset+img->frame_num;
     else 
       img->AbsFrameNum=0;
@@ -644,40 +654,37 @@ void decoding_poc(struct img_par *img)
 
     if(img->AbsFrameNum)
     {
-      img->PicOrderCntCycleCnt = (img->AbsFrameNum-1)/img->num_ref_frames_in_pic_order_cnt_cycle;
-      img->FrameNumInPicOrderCntCycle = (img->AbsFrameNum-1)%img->num_ref_frames_in_pic_order_cnt_cycle;
+      img->PicOrderCntCycleCnt = (img->AbsFrameNum-1)/active_sps->num_ref_frames_in_pic_order_cnt_cycle;
+      img->FrameNumInPicOrderCntCycle = (img->AbsFrameNum-1)%active_sps->num_ref_frames_in_pic_order_cnt_cycle;
       img->ExpectedPicOrderCnt = img->PicOrderCntCycleCnt*img->ExpectedDeltaPerPicOrderCntCycle;
       for(i=0;i<=(int)img->FrameNumInPicOrderCntCycle;i++)
-        img->ExpectedPicOrderCnt += img->offset_for_ref_frame[i];
+        img->ExpectedPicOrderCnt += active_sps->offset_for_ref_frame[i];
     }
     else 
       img->ExpectedPicOrderCnt=0;
 
     if(img->disposable_flag)
-      img->ExpectedPicOrderCnt += img->offset_for_non_ref_pic;
+      img->ExpectedPicOrderCnt += active_sps->offset_for_non_ref_pic;
 
-    // TIAN DONG: The following processing may need to be updated. POC200301
-    // and some codes can move to post_poc().
-    // post processing: for management of POC values of pictures in buffer
     if(img->field_pic_flag==0)
     {           //frame pix
       img->toppoc = img->ExpectedPicOrderCnt + img->delta_pic_order_cnt[0];
-      img->bottompoc = img->toppoc + img->offset_for_top_to_bottom_field + img->delta_pic_order_cnt[1];
+      img->bottompoc = img->toppoc + active_sps->offset_for_top_to_bottom_field + img->delta_pic_order_cnt[1];
       img->ThisPOC = img->framepoc = (img->toppoc < img->bottompoc)? img->toppoc : img->bottompoc; // POC200301
     }
     else if (img->bottom_field_flag==0)
     {  //top field 
       img->ThisPOC = img->toppoc = img->ExpectedPicOrderCnt + img->delta_pic_order_cnt[0];
-      //img->bottompoc = 0;
     } 
     else
     {  //bottom field
-      //img->toppoc = 0;
-      img->ThisPOC = img->bottompoc = img->ExpectedPicOrderCnt + img->offset_for_top_to_bottom_field + img->delta_pic_order_cnt[0];
+      img->ThisPOC = img->bottompoc = img->ExpectedPicOrderCnt + active_sps->offset_for_top_to_bottom_field + img->delta_pic_order_cnt[0];
     }
-  
-    // 4th (last) update "Previous" stuff for next slice
-//    post_poc( img );
+    img->framepoc=img->ThisPOC;
+
+    img->PreviousFrameNum=img->frame_num;
+    img->PreviousFrameNumOffset=img->FrameNumOffset;
+    
     break;
 
 
@@ -713,36 +720,6 @@ void decoding_poc(struct img_par *img)
       else img->bottompoc = img->framepoc = img->ThisPOC;
     }
 
-    break;
-
-
-  default:
-    //error must occurs
-    assert( 1==0 );
-    break;
-  }
-}
-
-void post_poc(struct img_par *img)
-{
-  switch ( img->pic_order_cnt_type )
-  {
-  case 0: // POC MODE 0
-    if( !img->disposable_flag )
-    {
-      img->PrevPicOrderCntLsb = img->pic_order_cnt_lsb;
-      img->PrevPicOrderCntMsb = img->PicOrderCntMsb;
-    }
-    break;
-
-
-  case 1: // POC MODE 1    called at end of picture
-    img->PreviousFrameNum=img->frame_num;
-    img->PreviousFrameNumOffset=img->FrameNumOffset;
-    break;
-
-
-  case 2: // POC MODE 2
     if (!img->disposable_flag)
       img->PreviousFrameNum=img->frame_num;
     img->PreviousFrameNumOffset=img->FrameNumOffset;
@@ -754,10 +731,7 @@ void post_poc(struct img_par *img)
     assert( 1==0 );
     break;
   }
-
 }
-
-
 
 /*!
  ************************************************************************
@@ -777,15 +751,15 @@ int dumppoc(struct img_par *img) {
     printf ("POC SPS\n");
     printf ("log2_max_frame_num_minus4             %d\n", active_sps->log2_max_frame_num_minus4);         // POC200301
     printf ("log2_max_pic_order_cnt_lsb_minus4     %d\n", active_sps->log2_max_pic_order_cnt_lsb_minus4);
-    printf ("pic_order_cnt_type                    %d\n", img->pic_order_cnt_type);
-    printf ("num_ref_frames_in_pic_order_cnt_cycle %d\n", img->num_ref_frames_in_pic_order_cnt_cycle);
-    printf ("delta_pic_order_always_zero_flag      %d\n", img->delta_pic_order_always_zero_flag);
-    printf ("offset_for_non_ref_pic                %d\n", img->offset_for_non_ref_pic);
-    printf ("offset_for_top_to_bottom_field        %d\n", img->offset_for_top_to_bottom_field);
-    printf ("offset_for_ref_frame[0]               %d\n", img->offset_for_ref_frame[0]);
-    printf ("offset_for_ref_frame[1]               %d\n", img->offset_for_ref_frame[1]);
+    printf ("pic_order_cnt_type                    %d\n", active_sps->pic_order_cnt_type);
+    printf ("num_ref_frames_in_pic_order_cnt_cycle %d\n", active_sps->num_ref_frames_in_pic_order_cnt_cycle);
+    printf ("delta_pic_order_always_zero_flag      %d\n", active_sps->delta_pic_order_always_zero_flag);
+    printf ("offset_for_non_ref_pic                %d\n", active_sps->offset_for_non_ref_pic);
+    printf ("offset_for_top_to_bottom_field        %d\n", active_sps->offset_for_top_to_bottom_field);
+    printf ("offset_for_ref_frame[0]               %d\n", active_sps->offset_for_ref_frame[0]);
+    printf ("offset_for_ref_frame[1]               %d\n", active_sps->offset_for_ref_frame[1]);
     printf ("POC in SLice Header\n");
-    printf ("pic_order_present_flag                %d\n", img->pic_order_present_flag);
+    printf ("pic_order_present_flag                %d\n", active_pps->pic_order_present_flag);
     printf ("delta_pic_order_cnt[0]                %d\n", img->delta_pic_order_cnt[0]);
     printf ("delta_pic_order_cnt[1]                %d\n", img->delta_pic_order_cnt[1]);
     printf ("delta_pic_order_cnt[2]                %d\n", img->delta_pic_order_cnt[2]);

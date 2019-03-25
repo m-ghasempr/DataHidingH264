@@ -27,12 +27,15 @@
 #include "parset.h"
 #include "fmo.h"
 #include "vlc.h"
+#include "mbuffer.h"
 
 // Local helpers
 static int IdentifyProfile();
 static int IdentifyLevel();
 static int IdentifyNumRefFrames();
 static int GenerateVUISequenceParameters();
+
+extern ColocatedParams *Co_located;
 
 
 /*! 
@@ -209,8 +212,9 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
   //! the poc implementation covers only a subset of the poc functionality.
   //! Here, the same subset is implemented.  Changes in the POC stuff have
   //! also to be reflected here
-  sps->log2_max_frame_num_minus4 = LOG2_MAX_FRAME_NUM_MINUS4;
-  sps->log2_max_pic_order_cnt_lsb_minus4 = LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4;   // POC200301
+  sps->log2_max_frame_num_minus4 = log2_max_frame_num_minus4;
+  sps->log2_max_pic_order_cnt_lsb_minus4 = log2_max_pic_order_cnt_lsb_minus4;
+  
   sps->pic_order_cnt_type = input->pic_order_cnt_type;
   sps->num_ref_frames_in_pic_order_cnt_cycle = img->num_ref_frames_in_pic_order_cnt_cycle;
   sps->delta_pic_order_always_zero_flag = img->delta_pic_order_always_zero_flag;
@@ -239,7 +243,20 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
 
   // Sequence VUI not implemented, signalled as not present
   sps->vui_parameters_present_flag = FALSE;
-
+  
+  {
+    int PicWidthInMbs, PicHeightInMapUnits, FrameHeightInMbs;
+    int width, height;
+    PicWidthInMbs = (sps->pic_width_in_mbs_minus1 +1);
+    PicHeightInMapUnits = (sps->pic_height_in_map_units_minus1 +1);
+    FrameHeightInMbs = ( 2 - sps->frame_mbs_only_flag ) * PicHeightInMapUnits;
+    
+    width = PicWidthInMbs * MB_BLOCK_SIZE;
+    height = FrameHeightInMbs * MB_BLOCK_SIZE;
+    
+    Co_located = alloc_colocated (width, height,sps->mb_adaptive_frame_field_flag);
+    
+  }
   // *************************************************************************
   // Picture Parameter Set 
   // *************************************************************************
@@ -306,7 +323,9 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
 // End FMO stuff
 
   pps->num_ref_idx_l0_active_minus1 = sps->frame_mbs_only_flag ? (sps->num_ref_frames-1) : (2 * sps->num_ref_frames - 1) ;   // set defaults
-  pps->num_ref_idx_l1_active_minus1 = sps->frame_mbs_only_flag ? 0 : 1 ;   // set defaults
+  pps->num_ref_idx_l1_active_minus1 = sps->frame_mbs_only_flag ? (sps->num_ref_frames-1) : (2 * sps->num_ref_frames - 1) ;   // set defaults
+  //pps->num_ref_idx_l1_active_minus1 = sps->frame_mbs_only_flag ? 0 : 1 ;   // set defaults
+
   
   pps->weighted_pred_flag = input->WeightedPrediction;
   pps->weighted_bipred_idc = input->WeightedBiprediction;
@@ -314,7 +333,7 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
   pps->pic_init_qp_minus26 = 0;         // hard coded to zero, QP lives in the slice header
   pps->pic_init_qs_minus26 = 0;
 
-  pps->chroma_qp_index_offset = 0;      // double check: is this chroma fidelity thing already implemented???
+  pps->chroma_qp_index_offset = input->chroma_qp_index_offset;      // double check: is this chroma fidelity thing already implemented???
 
   pps->deblocking_filter_control_present_flag = input->LFSendParameters;
   pps->constrained_intra_pred_flag = input->UseConstrainedIntraPred;

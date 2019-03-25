@@ -4,7 +4,7 @@
  * \file elements.h
  *
  * \brief
- *    Header file for elements in H.26L streams
+ *    Header file for elements in H.264 streams
  *
  * \date
  *    6.10.2000
@@ -24,7 +24,7 @@
 #define _ELEMENTS_H_
 
 /*!
- *  definition of H.26L syntaxelements
+ *  definition of H.264 syntax elements
  *  order of elements follow dependencies for picture reconstruction
  */
 /*!
