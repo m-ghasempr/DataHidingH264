@@ -14,7 +14,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 17.1 (FRExt)
+ *     JM 17.2 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"

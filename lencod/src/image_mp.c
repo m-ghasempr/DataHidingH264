@@ -196,6 +196,8 @@ void frame_picture_mp_p_slice(VideoParameters *p_Vid, InputParameters *p_Inp)
         {
           p_Vid->write_macroblock = FALSE;
           p_Vid->p_curr_frm_struct->qp = p_Vid->qp;
+          free_slice_list(p_Vid->frame_pic[rd_pass]);
+          free_storable_picture(p_Vid, p_Vid->enc_frame_picture[rd_pass]);
           frame_picture (p_Vid, p_Vid->frame_pic[rd_pass], &p_Vid->imgData, rd_pass);
           selection = picture_coding_decision(p_Vid, p_Vid->frame_pic[0], p_Vid->frame_pic[rd_pass], rd_qp);
 #if (DBG_IMAGE_MP)

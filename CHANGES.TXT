@@ -1,3 +1,8 @@
+Changes in Version JM 17.2 (since JM 17.1)
+------------------------------------------
+- encoder: fix memory leak for picture based RD-decision (YY)
+- rtpdump: fix build in old workspaces (KS)
+
 Changes in Version JM 17.1 (since JM 17.0)
 ------------------------------------------
 - decoder: fix delta_pic_order_cnt[0] in IDR frames (KS, bug #57)

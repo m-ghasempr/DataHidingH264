@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="Windows-1252"?>
 <VisualStudioProject
 	ProjectType="Visual C++"
-	Version="8.00"
+	Version="8,00"
 	Name="lencod"
 	ProjectGUID="{9A39F1B7-3DFE-4263-8C02-8070F7D99AFA}"
 	RootNamespace="lencod"
@@ -1437,10 +1437,6 @@
 		</File>
 		<File
 			RelativePath="bin\encoder_yuv422.cfg"
-			>
-		</File>
-		<File
-			RelativePath=".\VTune\lencod.vpj"
 			>
 		</File>
 	</Files>
