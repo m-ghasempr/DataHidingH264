@@ -515,8 +515,20 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
   int rlc_bits=0;
   EncodingEnvironmentPtr eep;
   int use_bitstream_backing = (input->slice_mode == FIXED_RATE || input->slice_mode == CALLBACK);
-  int new_slice = ( (img->current_mb_nr == 0) || img->mb_data[img->current_mb_nr-1].slice_nr != img->current_slice_nr);
+  int new_slice;
   static int skip = FALSE;
+
+	 
+  // if previous mb in the same slice group has different slice number as the current, it's the
+  // the start of new slice
+  new_slice=0;
+  if ( (img->current_mb_nr==0) || (FmoGetPreviousMBNr(img->current_mb_nr)<0) )
+    new_slice=1;
+  else if( img->mb_data[FmoGetPreviousMBNr(img->current_mb_nr)].slice_nr != img->current_slice_nr )
+    new_slice=1;
+	
+  
+  *recode_macroblock=FALSE;
 
   switch(input->slice_mode)
   {
@@ -525,13 +537,20 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
     *recode_macroblock = FALSE;
     if ((currSlice->num_mb) == img->total_number_mb) // maximum number of MBs reached
       *end_of_slice = TRUE;
+
+    // if it's end of current slice group, slice ends too
+    *end_of_slice |= (img->current_mb_nr == FmoGetLastCodedMBOfSliceGroup (FmoMB2SliceGroup (img->current_mb_nr)));
+		
     break;
   case FIXED_MB:
     // For slice mode one, check if a new slice boundary follows
     currSlice->num_mb++;
     *recode_macroblock = FALSE;
-    *end_of_slice = (currSlice->num_mb >= input->slice_argument);  // End of Slice
-    *end_of_slice |= (img->current_mb_nr+1) == img->total_number_mb;    // End of Picture condition
+    //! Check end-of-slice group condition first
+    *end_of_slice = (img->current_mb_nr == FmoGetLastCodedMBOfSliceGroup (FmoMB2SliceGroup (img->current_mb_nr)));
+    //! Now check maximum # of MBs in slice
+    *end_of_slice |= (currSlice->num_mb >= input->slice_argument);
+		
     break;
 
     // For slice modes two and three, check if coding of this macroblock
@@ -576,7 +595,9 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
          skip = FALSE;
      }
      // maximum number of MBs
-     if ((*recode_macroblock == FALSE) && ((img->current_mb_nr+1) == img->total_number_mb)) 
+		 
+     // check if current slice group is finished
+     if ((*recode_macroblock == FALSE) && (img->current_mb_nr == FmoGetLastCodedMBOfSliceGroup (FmoMB2SliceGroup (img->current_mb_nr)))) 
      {
        *end_of_slice = TRUE;
        if(!img->cod_counter)
@@ -603,19 +624,9 @@ void terminate_macroblock(Boolean *end_of_slice, Boolean *recode_macroblock)
         *end_of_slice = TRUE;
       }
     }
-    if ( (*recode_macroblock == FALSE) && ((img->current_mb_nr+1) == img->total_number_mb) ) // maximum number of MBs
+		
+    if ( (*recode_macroblock == FALSE) && (img->current_mb_nr == FmoGetLastCodedMBOfSliceGroup (FmoMB2SliceGroup (img->current_mb_nr)))) 
       *end_of_slice = TRUE;
-    break;
-
-  case FMO:
-    // The FMO slice mode acts like slice mode 1 (fixed maximum #of mbs per slice, in slice_argument)
-
-    currSlice->num_mb++;
-    *recode_macroblock = FALSE;
-    // Check end-of-slice group condition first
-    *end_of_slice = (img->current_mb_nr == FmoGetLastCodedMBOfSliceGroup (FmoMB2SliceGroup (img->current_mb_nr)));
-    // Now check maximum # of MBs in slice
-    *end_of_slice |= (currSlice->num_mb >= input->slice_argument);
     break;
 
   default:
@@ -1161,14 +1172,14 @@ LumaResidualCoding ()
  ************************************************************************
  */
 void
-OneComponentChromaPrediction4x4 (int*      mpred,      //<! array to store prediction values
-                                 int       block_c_x,    //<! horizontal pixel coordinate of 4x4 block
-                                 int       block_c_y,    //<! vertical   pixel coordinate of 4x4 block
-                                 int****** mv,         //<! motion vector array
-                                 int       list_idx,   //<! reference picture list
-                                 int       ref,        //<! reference index
-                                 int       blocktype,  //<! block type
-                                 int       uv)         //<! chroma component
+OneComponentChromaPrediction4x4 (int*      mpred,      //!< array to store prediction values
+                                 int       block_c_x,  //!< horizontal pixel coordinate of 4x4 block
+                                 int       block_c_y,  //!< vertical   pixel coordinate of 4x4 block
+                                 int****** mv,         //!< motion vector array
+                                 int       list_idx,   //!< reference picture list
+                                 int       ref,        //!< reference index
+                                 int       blocktype,  //!< block type
+                                 int       uv)         //!< chroma component
 {
   int     i, j, ii, jj, ii0, jj0, ii1, jj1, if0, if1, jf0, jf1;
   int*    mvb;

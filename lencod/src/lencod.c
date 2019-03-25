@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 8.1a
+ *     JM 8.2
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -62,7 +62,7 @@
 #include "ratectl.h"
 
 #define JM      "8"
-#define VERSION "8.1a"
+#define VERSION "8.2"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
@@ -608,7 +608,6 @@ void init_img()
   img->mb_y_upd=0;
 
   RandomIntraInit (img->width/16, img->height/16, input->RandomIntraMBRefresh);
-  FmoInit (img->width/16, img->height/16, input->num_slice_groups_minus1, input->FmoType, NULL); 
 
   InitSEIMessages();  // Tian Dong (Sept 2002)
 

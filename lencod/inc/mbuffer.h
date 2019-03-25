@@ -48,13 +48,13 @@ typedef struct storable_picture
   byte **     imgY_ups_w;    //!< Y picture component upsampled (Quarter pel) for weighted prediction
   byte ***    imgUV;         //!< U and V picture components
 
-  byte *      mb_field;      //<! field macroblock indicator
+  byte *      mb_field;      //!< field macroblock indicator
 
-  int  ***    ref_idx;       //<! reference picture   [list][subblock_x][subblock_y]
+  int  ***    ref_idx;       //!< reference picture   [list][subblock_x][subblock_y]
                              //   [list][mb_nr][subblock_x][subblock_y]
-  int64 ***    ref_pic_id;    //<! reference picture identifier [list][subblock_x][subblock_y]
+  int64 ***    ref_pic_id;    //!< reference picture identifier [list][subblock_x][subblock_y]
                              //   (not  simply index) 
-  int  ****   mv;            //<! motion vector       [list][subblock_x][subblock_y][component]
+  int  ****   mv;            //!< motion vector       [list][subblock_x][subblock_y][component]
   
   byte **     moving_block;
   
@@ -67,9 +67,9 @@ typedef struct storable_picture
 //! Frame Stores for Decoded Picture Buffer
 typedef struct frame_store
 {
-  int       is_used;                //<! 0=empty; 1=top; 2=bottom; 3=both fields (or frame)
-  int       is_reference;           //<! 0=not used for ref; 1=top used; 2=bottom used; 3=both fields (or frame) used
-  int       is_long_term;           //<! 0=not used for ref; 1=top used; 2=bottom used; 3=both fields (or frame) used
+  int       is_used;                //!< 0=empty; 1=top; 2=bottom; 3=both fields (or frame)
+  int       is_reference;           //!< 0=not used for ref; 1=top used; 2=bottom used; 3=both fields (or frame) used
+  int       is_long_term;           //!< 0=not used for ref; 1=top used; 2=bottom used; 3=both fields (or frame) used
 
   int       is_non_existent;
 

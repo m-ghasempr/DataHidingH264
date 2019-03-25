@@ -17,11 +17,11 @@
 #ifndef _FMO_H_
 #define _FMO_H_
 
-#define MAXIMUM_FMO_INITIALIZATION_INTEGERS 1000
+#define MAXSLICEGROUPIDS 8
 
-int FmoInit (int xs, int ys, int NumSliceGroups, int FmoMode, int* MapData);
+int FmoInit(ImageParameters * img, pic_parameter_set_rbsp_t * pps, seq_parameter_set_rbsp_t * sps);
 void FmoUninit ();
-int FmoFinit ();
+int FmoFinit (seq_parameter_set_rbsp_t * sps);
 int FmoMB2SliceGroup (int mb);
 int FmoGetFirstMBOfSliceGroup (int SliceGroupID);
 int FmoGetFirstMacroblockInSlice (int SliceGroup);
@@ -32,13 +32,8 @@ int FmoEndPicture();
 int FmoSliceGroupCompletelyCoded(int SliceGroupID);
 void FmoSetLastMacroblockInSlice (int mb);
 
-// JVT-D097
-int FmoInitEvolvingMBAmap (int FmoMode, int XSize, int YSize, int *MBAmap);
-int FmoUpdateEvolvingMBAmap (int FmoMode, int XSize, int YSize, int *MBAmap);
+int FmoGetPreviousMBNr (int CurrentMbNr);
 
 extern int *MBAmap; 
-extern int fmo_evlv_NewPeriod;
-extern int slice_group_change_cycle;
-// End JVT-D097
 
 #endif

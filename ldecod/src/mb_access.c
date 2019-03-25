@@ -428,8 +428,11 @@ void getAffNeighbour(int curr_mb_nr, int xN, int yN, int luma, PixelPos *pix)
             pix->mb_addr  = currMb->mbAddrB;
             // for the deblocker if the current MB is a frame and the one above is a field
             // then the neighbor is the top MB of the pair
-            if (!(img->DeblockCall == 1 && (img->mb_data[currMb->mbAddrB]).mb_field))
-              pix->mb_addr  += 1;
+            if (currMb->mbAvailB)
+            {
+              if (!(img->DeblockCall == 1 && (img->mb_data[currMb->mbAddrB]).mb_field))
+                pix->mb_addr  += 1;
+            }
 
             pix->available = currMb->mbAvailB;
              yM      = yN;

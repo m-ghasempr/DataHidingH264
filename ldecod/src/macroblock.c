@@ -4075,11 +4075,11 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
                 {
                   if (img->direct_type && direct_pdir==1)
                   {
-                    img->mpr[ii+ioff][jj+joff]= Clip1(((img->wp_weight[1][bw_ref_idx][uv+1] * bw_pred  + img->wp_round_chroma)>>img->chroma_log2_weight_denom) + img->wp_offset[1][bw_ref_idx][uv+1]);   //<! Replaced with integer only operations
+                    img->mpr[ii+ioff][jj+joff]= Clip1(((img->wp_weight[1][bw_ref_idx][uv+1] * bw_pred  + img->wp_round_chroma)>>img->chroma_log2_weight_denom) + img->wp_offset[1][bw_ref_idx][uv+1]);   // Replaced with integer only operations
                   }
                   else if (img->direct_type && direct_pdir==0)
                   {
-                    img->mpr[ii+ioff][jj+joff]=Clip1(((img->wp_weight[0][fw_ref_idx][uv+1] * fw_pred + img->wp_round_chroma)>>img->chroma_log2_weight_denom) + img->wp_offset[0][fw_ref_idx][uv+1]);   //<! Replaced with integer only operations
+                    img->mpr[ii+ioff][jj+joff]=Clip1(((img->wp_weight[0][fw_ref_idx][uv+1] * fw_pred + img->wp_round_chroma)>>img->chroma_log2_weight_denom) + img->wp_offset[0][fw_ref_idx][uv+1]);   // Replaced with integer only operations
                   }
                   else
                   {

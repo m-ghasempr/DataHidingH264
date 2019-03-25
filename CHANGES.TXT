@@ -1,3 +1,8 @@
+Changes for Version JM 8.2 to JM 8.1a
+-------------------------------------
+- encoder: megre FMO (DW)
+- encoder/decoder: add error/warning if DPB size is zero at specified level (KS)
+
 Changes for Version JM 8.1a to JM 8.1
 -------------------------------------
 - encoder/decoder: fix bug in constrained intra prediction fix (KS)

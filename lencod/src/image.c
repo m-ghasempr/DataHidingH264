@@ -223,6 +223,12 @@ void code_a_picture(Picture *pic)
   }
 
   RandomIntraNewPicture ();     //! Allocates forced INTRA MBs (even for fields!)
+
+  // The slice_group_change_cycle can be changed here.
+  // FmoInit() is called before coding each picture, frame or field
+  img->slice_group_change_cycle=1;
+  FmoInit(img, active_pps, active_sps);
+	
   FmoStartPicture ();           //! picture level initialization of FMO
 
   while (NumberOfCodedMBs < img->total_number_mb)       // loop over slices
@@ -916,6 +922,12 @@ static void init_frame ()
   img->block_y = img->pix_y = img->pix_c_y = 0; 
   img->block_x = img->pix_x = img->block_c_x = img->pix_c_x = 0;
 
+  // The 'slice_nr' of each macroblock is set to -1 here, to guarantee the correct encoding 
+  // with FMO (if no FMO, encoding is correct without following assignment), 
+  // for which MBs may not be encoded with scan order
+  for(i=0;i< ((img->width/MB_BLOCK_SIZE)*(img->height/MB_BLOCK_SIZE));i++)
+    img->mb_data[i].slice_nr=-1;
+	
   if (img->type != B_SLICE)
   {
     img->tr = start_tr_in_this_IGOP + IMG_NUMBER * (input->jumpd + 1);
@@ -1005,15 +1017,6 @@ static void init_frame ()
   //! Commented out by StW, needs fixing in SEI.h to keep the trace file clean
   //  PrepareAggregationSEIMessage ();
 
-  // JVT-D097
-  if (img->type != B_SLICE && input->num_slice_groups_minus1 == 1 && input->FmoType > 3)
-    {
-      if (fmo_evlv_NewPeriod)
-      FmoInitEvolvingMBAmap (input->FmoType, img->width / 16, img->height / 16, MBAmap);
-
-    FmoUpdateEvolvingMBAmap (input->FmoType, img->width / 16, img->height / 16, MBAmap);
-    }
-  // End JVT-D097
   img->total_number_mb = (img->width * img->height) / (MB_BLOCK_SIZE * MB_BLOCK_SIZE);
 
   img->no_output_of_prior_pics_flag = 0;

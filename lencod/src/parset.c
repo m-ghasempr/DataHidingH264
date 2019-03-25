@@ -255,50 +255,52 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
   // Begin FMO stuff
   pps->num_slice_groups_minus1 = input->num_slice_groups_minus1;
 
+	
+  //! Following set the parameter for different slice group types
   if (pps->num_slice_groups_minus1 > 0)
-    switch (input->mb_allocation_map_type)
+    switch (input->slice_group_map_type)
     {
     case 0:
-      pps->slice_group_map_type = 6;       // This implementation always uses the fully flexible map
-      printf ("Param.c: FMO type 0 not yet signalled, using 6 instead\n");
-      goto FMOTYPE6;
-      // This code should work as soon as the re-generation of the MBAmap in
-      // the decoder does its job
-      // pps->mb_slice_group_map_type = 0;    // according to the draft
-      // for (i=0; i< pps->num_slice_groups_minus1+1; i++)
-      //   pps->run_length[i] = img->width/16;    // Line interleaving
+			
+      pps->slice_group_map_type = 0;
+      for(i=0; i<=pps->num_slice_groups_minus1; i++)
+      {
+        pps->run_length_minus1[i]=input->run_length_minus1[i];
+      }
+			
       break;
     case 1:
-      pps->slice_group_map_type = 6;       // This implementation always uses the fully flexible map
-      printf ("Param.c: FMO type 1 not yet signalled, using 6 instead\n");
-      goto FMOTYPE6;
-      // This code should work as soon as the re-generation of the MBAmap in
-      // the decoder does its job
-      // pps->mb_slice_group_map_type = 1;    // according to the draft
+      pps->slice_group_map_type = 1;
       break;
     case 2:
-      assert(pps->num_slice_groups_minus1 == 1);      // restriction of the config file
+      // i loops from 0 to num_slice_groups_minus1-1, because no info for background needed
+      pps->slice_group_map_type = 2;
       for(i=0; i<pps->num_slice_groups_minus1; i++)
       {
-        pps->top_left[i] = input->top_left_mb;
-        pps->bottom_right[i] = input->bottom_right_mb;
+        pps->top_left[i] = input->top_left[i];
+        pps->bottom_right[i] = input->bottom_right[i];      
       }
      break;
     case 3:
     case 4:
     case 5:
-      pps->slice_group_change_direction_flag = input->slice_group_change_direction;
+      pps->slice_group_map_type = input->slice_group_map_type;
+			
+      pps->slice_group_change_direction_flag = input->slice_group_change_direction_flag;
       pps->slice_group_change_rate_minus1 = input->slice_group_change_rate_minus1;
       break;
     case 6:
-FMOTYPE6:
-      pps->slice_group_map_type = 6;       // This implementation always uses the fully flexible map
-      pps->num_slice_group_map_units_minus1 = (img->height/16) * (img->width/16) - 1;
-      for (i=0;i<=pps->num_slice_group_map_units_minus1; i++)
-        pps->slice_group_id[i++] = FmoMB2SliceGroup (i);
+      pps->slice_group_map_type = 6;   
+      pps->pic_size_in_map_units_minus1 = 
+				((input->img_height/MB_BLOCK_SIZE)/(2-sps->frame_mbs_only_flag))
+				*(input->img_width/MB_BLOCK_SIZE) -1;
+			
+      for (i=0;i<=pps->pic_size_in_map_units_minus1; i++)
+        pps->slice_group_id[i] = input->slice_group_id[i];
+			
       break;
     default:
-      printf ("Param.c: FMO type invalid, default\n");
+      printf ("Parset.c: slice_group_map_type invalid, default\n");
       assert (0==1);
     }
 // End FMO stuff
@@ -497,9 +499,9 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, char *rbsp)
       else
         NumberBitsPerSliceGroupId=0;
         
-      len+=ue_v ("PPS: num_slice_group_map_units_minus1",                  pps->num_slice_group_map_units_minus1,                 partition);
-      for(i=0; i<=pps->num_slice_group_map_units_minus1; i++)
-        len+= u_v  (NumberBitsPerSliceGroupId, "PPS: >slice_group_id[i]",                            pps->slice_group_id[i],                         partition);
+      len+=ue_v ("PPS: pic_size_in_map_units_minus1",          pps->pic_size_in_map_units_minus1,             partition);
+      for(i=0; i<=pps->pic_size_in_map_units_minus1; i++)
+        len+= u_v  (NumberBitsPerSliceGroupId, "PPS: >slice_group_id[i]",   pps->slice_group_id[i],           partition);			
     }
   }
   // End of FMO stuff

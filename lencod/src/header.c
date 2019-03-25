@@ -49,6 +49,9 @@ int SliceHeader()
   int len = 0;
   unsigned int field_pic_flag = 0, bottom_field_flag = 0;    // POC200301
 
+  int num_bits_slice_group_change_cycle;
+  float numtmp;	
+	
   if (img->MbaffFrameFlag)
     len  = ue_v("SH: first_mb_in_slice", img->current_mb_nr >> 1,   partition);
   else
@@ -200,9 +203,17 @@ int SliceHeader()
     }
   }
 
-  // !KS: all fmo map types are currently mapped to type 6 so 
-  //      no slice_group_change_cycle is transmitted
-
+	
+  if ( active_pps->num_slice_groups_minus1>0 &&
+    active_pps->slice_group_map_type>=3 && active_pps->slice_group_map_type<=5)
+  {
+    numtmp=img->PicHeightInMapUnits*img->PicWidthInMbs/(float)(active_pps->slice_group_change_rate_minus1+1)+1;
+    num_bits_slice_group_change_cycle = (int)ceil(log(numtmp)/log(2));
+    
+    //! img->slice_group_change_cycle can be changed before calling FmoInit()
+    len += u_v (num_bits_slice_group_change_cycle, "SH: slice_group_change_cycle", img->slice_group_change_cycle, partition);
+  }
+  
   // NOTE: The following syntax element is actually part 
   //        Slice data partition A RBSP syntax
 

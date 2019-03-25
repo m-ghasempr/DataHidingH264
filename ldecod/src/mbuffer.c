@@ -140,9 +140,17 @@ void init_dpb()
   }
 
   dpb.size      = getDpbSize();
+
+  if (0==dpb.size)
+  {
+    printf("warning: DPB size of zero frames at specified level / frame size. Decoding may fail.\n");
+  }
 //  dpb.size      = input->dpb_size;
   dpb.used_size = 0;
   dpb.last_picture = NULL;
+
+  dpb.ref_frames_in_buffer = 0;
+  dpb.ltref_frames_in_buffer = 0;
 
   dpb.fs = calloc(dpb.size, sizeof (FrameStore*));
   if (NULL==dpb.fs) 

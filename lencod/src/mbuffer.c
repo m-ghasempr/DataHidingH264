@@ -139,8 +139,17 @@ void init_dpb()
 
   dpb.size      = getDpbSize();
 //  dpb.size      = inp->num_reference_frames + inp->successive_Bframe;
+
+  if ((0==dpb.size) && ((input->intra_period!=1) || (input->successive_Bframe!=0)))
+  {
+    error("DPB size of zero frames at specified level / frame size not possible for for P/B coding. Increase level.", 1000);
+  }
+
   dpb.used_size = 0;
   dpb.last_picture = NULL;
+
+  dpb.ref_frames_in_buffer = 0;
+  dpb.ltref_frames_in_buffer = 0;
 
   dpb.fs = calloc(dpb.size, sizeof (FrameStore*));
   if (NULL==dpb.fs) 

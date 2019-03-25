@@ -100,9 +100,8 @@ Mapping Map[] = {
     {"NumberFramesInEnhancementLayerSubSequence", &configinput.NumFramesInELSubSeq, 0},
     {"NumberOfFrameInSecondIGOP",&configinput.NumFrameIn2ndIGOP, 0},
     {"RandomIntraMBRefresh",     &configinput.RandomIntraMBRefresh,    0},
-    {"num_slice_groups_minus1",  &configinput.num_slice_groups_minus1, 0},
-    {"FmoType",                  &configinput.FmoType,                 0},
-    {"FmoConfigFileName",        &configinput.FmoConfigFileName,       1},
+		
+		
     {"WeightedPrediction",       &configinput.WeightedPrediction,      0},
     {"WeightedBiprediction",     &configinput.WeightedBiprediction,    0},
     {"StoredBPictures",          &configinput.StoredBPictures,         0},
@@ -114,10 +113,12 @@ Mapping Map[] = {
     {"SparePictureDetectionThr", &configinput.SPDetectionThreshold,    0},
     {"SparePicturePercentageThr",&configinput.SPPercentageThreshold,   0},
 
-    {"FmoTopLeftMB",             &configinput.top_left_mb,                    0},
-    {"FmoBottomRightMB",         &configinput.bottom_right_mb,                0},
-    {"FmoChangeDirection",       &configinput.slice_group_change_direction,   0},
-    {"FmoChangeRate",            &configinput.slice_group_change_rate_minus1, 0},
+    {"num_slice_groups_minus1",           &configinput.num_slice_groups_minus1,           0},
+    {"slice_group_map_type",              &configinput.slice_group_map_type,              0},
+    {"slice_group_change_direction_flag", &configinput.slice_group_change_direction_flag, 0},
+    {"slice_group_change_rate_minus1",    &configinput.slice_group_change_rate_minus1,    0},
+    {"SliceGroupConfigFileName",          &configinput.SliceGroupConfigFileName,          1},
+		
 
     {"UseRedundantSlice",        &configinput.redundant_slice_flag,    0},
     {"PicOrderCntType",          &configinput.pic_order_cnt_type,      0},

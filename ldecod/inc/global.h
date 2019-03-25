@@ -81,17 +81,17 @@ int g_new_frame;
 //! Data Partitioning Modes
 typedef enum
 {
-  PAR_DP_1,    //<! no data partitioning is supported
-  PAR_DP_3,    //<! data partitioning with 3 partitions
+  PAR_DP_1,    //!< no data partitioning is supported
+  PAR_DP_3,    //!< data partitioning with 3 partitions
 } PAR_DP_TYPE;
 
 
 //! Output File Types
 typedef enum
 {
-  PAR_OF_ANNEXB,   //<! Current TML description
-  PAR_OF_RTP,   //<! RTP Packet Output format
-//  PAR_OF_IFF    //<! Interim File Format
+  PAR_OF_ANNEXB,   //!< Current TML description
+  PAR_OF_RTP,   //!< RTP Packet Output format
+//  PAR_OF_IFF    //!< Interim File Format
 } PAR_OF_TYPE;
 
 //! Boolean Type
@@ -398,22 +398,22 @@ typedef struct
 // image parameters
 typedef struct img_par
 {
-  int number;                                 //<! frame number
+  int number;                                 //!< frame number
   unsigned current_mb_nr; // bitstream order
   unsigned num_dec_mb;
   int current_slice_nr;
   int *intra_block;
-  int tr;                                     //<! temporal reference, 8 bit, wrapps at 255
-  int tr_old;                                     //<! old temporal reference, for detection of a new frame, added by WYK
-  int qp;                                     //<! quant for the current frame
-  int qpsp;                                   //<! quant for SP-picture predicted frame
-  int sp_switch;                              //<! 1 for switching sp, 0 for normal sp
-  int direct_type;                          //<! 1 for Spatial Direct, 0 for Temporal
-  int type;                                   //<! image type INTER/INTRA
+  int tr;                                     //!< temporal reference, 8 bit, wrapps at 255
+  int tr_old;                                     //!< old temporal reference, for detection of a new frame, added by WYK
+  int qp;                                     //!< quant for the current frame
+  int qpsp;                                   //!< quant for SP-picture predicted frame
+  int sp_switch;                              //!< 1 for switching sp, 0 for normal sp
+  int direct_type;                          //!< 1 for Spatial Direct, 0 for Temporal
+  int type;                                   //!< image type INTER/INTRA
   int width;
   int height;
-  int width_cr;                               //<! width chroma
-  int height_cr;                              //<! height chroma
+  int width_cr;                               //!< width chroma
+  int height_cr;                              //!< height chroma
   int mb_y;
   int mb_x;
   int block_y;
@@ -424,25 +424,25 @@ typedef struct img_par
   int pix_c_x;
 
   int allrefzero;
-  int mpr[16][16];                            //<! predicted block
+  int mpr[16][16];                            //!< predicted block
 
-  int m7[16][16];                             //<! final 4x4 block. Extended to 16x16 for ABT
-  int cof[4][6][4][4];                        //<! correction coefficients from predicted
+  int m7[16][16];                             //!< final 4x4 block. Extended to 16x16 for ABT
+  int cof[4][6][4][4];                        //!< correction coefficients from predicted
   int cofu[4];
-  int **ipredmode;                            //<! prediction type [90][74]
+  int **ipredmode;                            //!< prediction type
   int quad[256];
-  int constrained_intra_pred_flag;            //<! if 1, prediction only from other Intra MBs
+  int constrained_intra_pred_flag;            //!< if 1, prediction only from other Intra MBs
   int ***nz_coeff;
   int **siblock;
-  int cod_counter;                            //<! Current count of number of skipped macroblocks in a row
+  int cod_counter;                            //!< Current count of number of skipped macroblocks in a row
 
-  int structure;                               //<! Identify picture structure type
-  int structure_old;                           //<! temp fix for multi slice per picture
+  int structure;                               //!< Identify picture structure type
+  int structure_old;                           //!< temp fix for multi slice per picture
   int pstruct_next_P;
 
   // B pictures
-  Slice       *currentSlice;                   //<! pointer to current Slice data struct
-  Macroblock          *mb_data;                //<! array containing all MBs of a whole frame
+  Slice       *currentSlice;                   //!< pointer to current Slice data struct
+  Macroblock          *mb_data;                //!< array containing all MBs of a whole frame
   int subblock_x;
   int subblock_y;
   int is_intra_block;
@@ -456,7 +456,7 @@ typedef struct img_par
 
   int **field_anchor;
 
-  DecRefPicMarking_t *dec_ref_pic_marking_buffer;                    //<! stores the memory management control operations
+  DecRefPicMarking_t *dec_ref_pic_marking_buffer;                    //!< stores the memory management control operations
 
   int disposable_flag;                          //!< flag for disposable frame, 1:disposable
   int num_ref_idx_l0_active;             //!< number of forward reference
@@ -562,15 +562,15 @@ extern struct snr_par  *snr;
 // signal to noice ratio parameters
 struct snr_par
 {
-  float snr_y;                                 //<! current Y SNR
-  float snr_u;                                 //<! current U SNR
-  float snr_v;                                 //<! current V SNR
-  float snr_y1;                                //<! SNR Y(dB) first frame
-  float snr_u1;                                //<! SNR U(dB) first frame
-  float snr_v1;                                //<! SNR V(dB) first frame
-  float snr_ya;                                //<! Average SNR Y(dB) remaining frames
-  float snr_ua;                                //<! Average SNR U(dB) remaining frames
-  float snr_va;                                //<! Average SNR V(dB) remaining frames
+  float snr_y;                                 //!< current Y SNR
+  float snr_u;                                 //!< current U SNR
+  float snr_v;                                 //!< current V SNR
+  float snr_y1;                                //!< SNR Y(dB) first frame
+  float snr_u1;                                //!< SNR U(dB) first frame
+  float snr_v1;                                //!< SNR V(dB) first frame
+  float snr_ya;                                //!< Average SNR Y(dB) remaining frames
+  float snr_ua;                                //!< Average SNR U(dB) remaining frames
+  float snr_va;                                //!< Average SNR V(dB) remaining frames
 };
 
 int tot_time;
@@ -578,17 +578,17 @@ int tot_time;
 // input parameters from configuration file
 struct inp_par
 {
-  char infile[100];                       //<! Telenor H.26L input
-  char outfile[100];                      //<! Decoded YUV 4:2:0 output
-  char reffile[100];                      //<! Optional YUV 4:2:0 reference file for SNR measurement
-  int FileFormat;                         //<! File format of the Input file, PAR_OF_ANNEXB or PAR_OF_RTP
-  int dpb_size;                          //<! Frame buffer size
+  char infile[100];                       //!< Telenor H.26L input
+  char outfile[100];                      //!< Decoded YUV 4:2:0 output
+  char reffile[100];                      //!< Optional YUV 4:2:0 reference file for SNR measurement
+  int FileFormat;                         //!< File format of the Input file, PAR_OF_ANNEXB or PAR_OF_RTP
+  int dpb_size;                          //!< Frame buffer size
 
 #ifdef _LEAKYBUCKET_
-  unsigned long R_decoder;                //<! Decoder Rate in HRD Model
-  unsigned long B_decoder;                //<! Decoder Buffer size in HRD model
-  unsigned long F_decoder;                //<! Decoder Inital buffer fullness in HRD model
-  char LeakyBucketParamFile[100];         //<! LeakyBucketParamFile
+  unsigned long R_decoder;                //!< Decoder Rate in HRD Model
+  unsigned long B_decoder;                //!< Decoder Buffer size in HRD model
+  unsigned long F_decoder;                //!< Decoder Inital buffer fullness in HRD model
+  char LeakyBucketParamFile[100];         //!< LeakyBucketParamFile
 #endif
 
 };
@@ -606,10 +606,10 @@ typedef struct pix_pos
 } PixelPos;
 
 // files
-FILE *p_out;                    //<! pointer to output YUV file
-//FILE *p_out2;                    //<! pointer to debug output YUV file
-FILE *p_ref;                    //<! pointer to input original reference YUV file file
-FILE *p_log;                    //<! SNR file
+FILE *p_out;                    //!< pointer to output YUV file
+//FILE *p_out2;                    //!< pointer to debug output YUV file
+FILE *p_ref;                    //!< pointer to input original reference YUV file file
+FILE *p_log;                    //!< SNR file
 
 #if TRACE
 FILE *p_trace;

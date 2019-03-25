@@ -68,6 +68,8 @@
 #include "fast_me.h"
 
 
+#include "fmo.h"
+
 static char *GetConfigFileContent (char *Filename);
 static void ParseContent (char *buf, int bufsize);
 static int ParameterNameToMapIndex (char *s);
@@ -439,6 +441,14 @@ static int ParameterNameToMapIndex (char *s)
 static void PatchInp ()
 {
 
+
+  // These variables are added for FMO
+  FILE * sgfile;
+  int i;
+  int frame_mb_only;
+  int mb_width, mb_height, mapunit_height;
+
+	
   // consistency check of QPs
   if (input->qp0 > MAX_QP || input->qp0 < MIN_QP)
   {
@@ -606,6 +616,81 @@ static void PatchInp ()
     error (errortext, 500);
   }
 
+	
+  // add check for MAXSLICEGROUPIDS
+  if(input->num_slice_groups_minus1>=MAXSLICEGROUPIDS)
+  {
+    snprintf(errortext, ET_SIZE, "num_slice_groups_minus1 exceeds MAXSLICEGROUPIDS");
+    error (errortext, 500);
+  }
+  
+  
+  
+  // Following codes are to read slice group configuration from SliceGroupConfigFileName for slice group type 0,2 or 6
+  if( (input->num_slice_groups_minus1!=0)&&
+    ((input->slice_group_map_type == 0) || (input->slice_group_map_type == 2) || (input->slice_group_map_type == 6)) )
+  { 
+    if (strlen (input->SliceGroupConfigFileName) > 0 && (sgfile=fopen(input->SliceGroupConfigFileName,"r"))==NULL)
+    {
+      snprintf(errortext, ET_SIZE, "Error open file %s", input->SliceGroupConfigFileName);
+      error (errortext, 500);
+    }
+    else
+    {
+      if (input->slice_group_map_type == 0) 
+      {
+        input->run_length_minus1=(int *)malloc(sizeof(int)*(input->num_slice_groups_minus1+1));
+        
+        
+        // each line contains one 'run_length_minus1' value
+        for(i=0;i<=input->num_slice_groups_minus1;i++)
+        {
+          fscanf(sgfile,"%d",(input->run_length_minus1+i));
+          fscanf(sgfile,"%*[^\n]");
+          
+        }
+      }
+      else if (input->slice_group_map_type == 2)
+      {
+        input->top_left=(int *)malloc(sizeof(int)*input->num_slice_groups_minus1);
+        input->bottom_right=(int *)malloc(sizeof(int)*input->num_slice_groups_minus1);
+        
+        // every two lines contain 'top_left' and 'bottom_right' value
+        for(i=0;i<input->num_slice_groups_minus1;i++)
+        {
+          fscanf(sgfile,"%d",(input->top_left+i));
+          fscanf(sgfile,"%*[^\n]");
+          fscanf(sgfile,"%d",(input->bottom_right+i));
+          fscanf(sgfile,"%*[^\n]");
+        }
+        
+      }
+      else if (input->slice_group_map_type == 6)
+      {
+        frame_mb_only = !(input->PicInterlace || input->MbInterlace);
+        mb_width= input->img_width/16;
+        mb_height= input->img_height/16;
+        mapunit_height=mb_height/(2-frame_mb_only);
+        
+        input->slice_group_id=(int * ) malloc(sizeof(int)*mapunit_height*mb_width);
+        
+        // each line contains slice_group_id for one Macroblock
+        for (i=0;i<mapunit_height*mb_width;i++)
+        {
+          fscanf(sgfile,"%d",(input->slice_group_id+i));
+          if ( *(input->slice_group_id+i) > input->num_slice_groups_minus1 )
+          {
+            snprintf(errortext, ET_SIZE, "Error read slice group information from file %s", input->SliceGroupConfigFileName);
+            error (errortext, 500);
+          }
+          fscanf(sgfile,"%*[^\n]");
+        }
+      }
+      fclose(sgfile);
+      
+    }
+  }
+  
   // frame/field consistency check
   if (input->PicInterlace != FRAME_CODING && input->PicInterlace != ADAPTIVE_CODING && input->PicInterlace != FIELD_CODING)
   {
@@ -676,14 +761,13 @@ static void PatchInp ()
     error (errortext, 500);
   }
 
-  // FMO
-  input->mb_allocation_map_type = input->FmoType;
+  //! the number of slice groups is forced to be 1 for slice group type 3-5
   if(input->num_slice_groups_minus1 > 0)
   {
-    if(input->mb_allocation_map_type >= 3)
-      input->num_slice_groups_minus1 = input->num_slice_groups_minus1 = 1;
+    if( (input->slice_group_map_type >= 3) && (input->slice_group_map_type<=5) ) 
+      input->num_slice_groups_minus1 = 1;
   }
-
+	
   // Rate control
   if(input->RCEnable)
   {

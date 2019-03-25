@@ -276,13 +276,14 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
       }
       else
       {
-        //! The statement below breaks obviously FMO.  I believe the correct statement would be
-        //! img->current_mb_nr = CurrentMbInScanOrder;  
-        //! It's now tested with an assert() (take it out if I'm wrong) and should be changed
-        //! as soon as someone works on FMO
-        
-        assert (img->current_mb_nr == CurrentMbAddr);
-        img->current_mb_nr--;/*KS*/  
+        //!Go back to the previous MB to recode it
+        img->current_mb_nr = FmoGetPreviousMBNr(img->current_mb_nr);
+        if(img->current_mb_nr == -1 )   // The first MB of the slice group  is too big,
+                                        // which means it's impossible to encode picture using current slice bits restriction
+        {
+          snprintf (errortext, ET_SIZE, "Error encoding first MB with spcified parameter, bits of current MB may be too big");
+          error (errortext, 300);
+        }
       }
     }
     else                      // TBD -- Addition of FMO
@@ -448,10 +449,13 @@ int encode_one_slice (int SliceGroupId, Picture *pic)
       }
       img->field_mode = img->top_field = 0; // reset to frame mode
       
-      CurrentMbAddr += 2;     //! Breaks FMO
-      if (CurrentMbAddr == img->total_number_mb )
-        end_of_slice = TRUE;        // just in case it does n't get set in terminate_macroblock
       
+      // go to next MB pair, not next MB
+      CurrentMbAddr = FmoGetNextMBNr (CurrentMbAddr);
+      CurrentMbAddr = FmoGetNextMBNr (CurrentMbAddr);
+      
+      if (CurrentMbAddr == FmoGetLastCodedMBOfSliceGroup (FmoMB2SliceGroup (CurrentMbAddr)))
+        end_of_slice = TRUE;        // just in case it does n't get set in terminate_macroblock  
     }
   }  
 /*

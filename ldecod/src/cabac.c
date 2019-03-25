@@ -249,7 +249,6 @@ int check_next_mb_and_get_field_mode_CABAC( SyntaxElement *se,
   memcpy( img->currentSlice->mot_ctx->mb_aff_contexts,mb_aff_ctx_copy,NUM_MB_AFF_CTX*sizeof(BiContextType) );
 
   CheckAvailabilityOfNeighborsCABAC();
-//  CheckAvailabilityOfNeighbors(img);
   
   //delete
   free(dep_dp_copy);

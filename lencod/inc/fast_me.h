@@ -179,14 +179,14 @@ FME_BlockMotionSearch (int       ref,           // <--  reference frame (0... or
                        double    lambda         // <--  lagrangian parameter for determining motion cost
                        );
 
-int                                              //<! minimum motion cost after search
-noFME_BlockMotionSearch (int       ref,          //<! reference idx
-                         int       list,         //<! reference pciture list
-                         int       mb_x,         //<! x-coordinate inside macroblock
-                         int       mb_y,         //<! y-coordinate inside macroblock
-                         int       blocktype,    //<! block type (1-16x16 ... 7-4x4)
-                         int       search_range, //<! 1-d search range for integer-position search
-                         double    lambda        //<! lagrangian parameter for determining motion cost
+int                                              //!< minimum motion cost after search
+noFME_BlockMotionSearch (int       ref,          //!< reference idx
+                         int       list,         //!< reference pciture list
+                         int       mb_x,         //!< x-coordinate inside macroblock
+                         int       mb_y,         //!< y-coordinate inside macroblock
+                         int       blocktype,    //!< block type (1-16x16 ... 7-4x4)
+                         int       search_range, //!< 1-d search range for integer-position search
+                         double    lambda        //!< lagrangian parameter for determining motion cost
                          );
 #endif
 

@@ -1309,14 +1309,14 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
  *    Block motion search
  ***********************************************************************
  */
-int                                         //<! minimum motion cost after search
-BlockMotionSearch (int       ref,           //<! reference idx
-                   int       list,          //<! reference pciture list
-                   int       mb_x,         //<! x-coordinate inside macroblock
-                   int       mb_y,         //<! y-coordinate inside macroblock
-                   int       blocktype,     //<! block type (1-16x16 ... 7-4x4)
-                   int       search_range,  //<! 1-d search range for integer-position search
-                   double    lambda         //<! lagrangian parameter for determining motion cost
+int                                         //!< minimum motion cost after search
+BlockMotionSearch (int       ref,           //!< reference idx
+                   int       list,          //!< reference pciture list
+                   int       mb_x,          //!< x-coordinate inside macroblock
+                   int       mb_y,          //!< y-coordinate inside macroblock
+                   int       blocktype,     //!< block type (1-16x16 ... 7-4x4)
+                   int       search_range,  //!< 1-d search range for integer-position search
+                   double    lambda         //!< lagrangian parameter for determining motion cost
                    )
 {
   static pel_t   orig_val [256];

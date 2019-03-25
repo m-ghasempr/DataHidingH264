@@ -608,20 +608,18 @@ typedef struct
   char LeakyBucketParamFile[100];
 #endif
 
-  int PicInterlace;           //! picture adaptive frame/field
-  int MbInterlace;            //! macroblock adaptive frame/field
+  int PicInterlace;           //!< picture adaptive frame/field
+  int MbInterlace;            //!< macroblock adaptive frame/field
 
-  int LossRateA;              //! assumed loss probablility of partition A (or full slice), in per cent, used for loss-aware R/D optimization
-  int LossRateB;              //! assumed loss probablility of partition B, in per cent, used for loss-aware R/D 
-  int LossRateC;              //! assumed loss probablility of partition C, in per cent, used for loss-aware R/D 
+  int LossRateA;              //!< assumed loss probablility of partition A (or full slice), in per cent, used for loss-aware R/D optimization
+  int LossRateB;              //!< assumed loss probablility of partition B, in per cent, used for loss-aware R/D 
+  int LossRateC;              //!< assumed loss probablility of partition C, in per cent, used for loss-aware R/D 
   int NoOfDecoders;
   int RestrictRef;
   int NumFramesInELSubSeq;
   int NumFrameIn2ndIGOP;
 
-  int RandomIntraMBRefresh;     //! Number of pseudo-random intra-MBs per picture
-  int FmoType;                  //! Type pf FMO MBAmap description, see CD doc
-  char FmoConfigFileName[100];  //! Filename for config info fot type 0, 2
+  int RandomIntraMBRefresh;     //!< Number of pseudo-random intra-MBs per picture
 
   int LFSendParameters;
   int LFDisableIdc;
@@ -632,14 +630,19 @@ typedef struct
   int SPDetectionThreshold;
   int SPPercentageThreshold;
 
-  // JVT-D095, JVT-D097
-  int num_slice_groups_minus1; //! "FmoNumSliceGroups" in encoder.cfg, same as FmoNumSliceGroups, which should be erased later
-  int mb_allocation_map_type; //! "FmoType" in encoder.cfg, same as FmoType, FmoType should be erased latter
-  int top_left_mb; //! "FmoTopLeftMB"  in encoder.cfg
-  int bottom_right_mb; //! "FmoBottomRightMB" in encoder.cfg
-  int slice_group_change_direction; //! "FmoChangeDirection" in encoder.cfg
-  int slice_group_change_rate_minus1; //! "FmoChangeRate" in encoder.cfg
-  // End JVT-D095, JVT-D097
+  // FMO
+  char SliceGroupConfigFileName[100];    //!< Filename for config info fot type 0, 2, 6	
+  int num_slice_groups_minus1;           //!< "FmoNumSliceGroups" in encoder.cfg, same as FmoNumSliceGroups, which should be erased later
+  int slice_group_map_type; 
+
+  int *top_left;                         //!< top_left and bottom_right store values indicating foregrounds
+  int *bottom_right; 
+  int *slice_group_id;                   //!< slice_group_id is for slice group type being 6  
+  int *run_length_minus1;                //!< run_length_minus1 is for slice group type being 0
+
+  int slice_group_change_direction_flag;
+  int slice_group_change_rate_minus1;
+  int slice_group_change_cycle;
 
   int redundant_slice_flag; //! whether redundant slices exist,  JVT-D101
   int pic_order_cnt_type;   // POC200301
@@ -846,6 +849,8 @@ typedef struct
   int last_has_mmco_5;
   int pre_frame_num;
 
+  int slice_group_change_cycle;
+
 } ImageParameters;
 
 #define NUM_PIC_TYPE 5
@@ -901,9 +906,9 @@ typedef struct
   int    intra_pred_modes[16];
   int    cbp, cbp_blk;
   int    mode;
-  int    ******pred_mv;        //<! predicted motion vectors
-  int    ******all_mv;         //<! all modes motion vectors
-  int    refar[2][4][4];       //<! reference frame array [list][x][y]
+  int    ******pred_mv;        //!< predicted motion vectors
+  int    ******all_mv;         //!< all modes motion vectors
+  int    refar[2][4][4];       //!< reference frame array [list][x][y]
   int    i16offset;
   int    c_ipred_mode;
 } RD_DATA;
@@ -1040,15 +1045,11 @@ int  start_slice();
 int  terminate_slice();
 
 // B pictures
-int  motion_search_Bframe(int tot_intra_sad);
 int  get_fwMV(int *min_fw_sad, int tot_intra_sad);
 void get_bwMV(int *min_bw_sad);
 void get_bid(int *bid_sad, int fw_predframe_no);
 void get_dir(int *dir_sad);
 void compare_sad(int tot_intra_sad, int fw_sad, int bw_sad, int bid_sad, int dir_sad, int);
-void LumaResidualCoding_B();
-void ChromaCoding_B(int *cr_cbp);
-int  writeMotionInfo2NAL_Bframe();
 int  BlkSize2CodeNumber(int blc_size_h, int blc_size_v);
 
 void InitMotionVectorSearchModule();
