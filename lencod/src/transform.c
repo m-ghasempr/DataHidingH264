@@ -216,6 +216,136 @@ void ihadamard4x4(int (*tblock)[4], int (*block)[4])
   }
 }
 
+void hadamard4x2(int (*block)[4], int (*tblock)[4])
+{
+  int i;
+  int *pTmp = tmp;
+  static int p0,p1,p2,p3;
+  static int t0,t1,t2,t3;
+
+  // Horizontal
+  *(pTmp++) = block[0][0] + block[1][0];
+  *(pTmp++) = block[0][1] + block[1][1];
+  *(pTmp++) = block[0][2] + block[1][2];
+  *(pTmp++) = block[0][3] + block[1][3];
+
+  *(pTmp++) = block[0][0] - block[1][0];
+  *(pTmp++) = block[0][1] - block[1][1];
+  *(pTmp++) = block[0][2] - block[1][2];
+  *(pTmp  ) = block[0][3] - block[1][3];
+
+  // Vertical
+  pTmp = tmp;
+  for (i=0;i<2;i++)
+  {      
+    p0 = *(pTmp++);
+    p1 = *(pTmp++);
+    p2 = *(pTmp++);
+    p3 = *(pTmp++);
+
+    t0 = p0 + p3;
+    t1 = p1 + p2;
+    t2 = p1 - p2;
+    t3 = p0 - p3;
+
+    tblock[i][0] = (t0 + t1);
+    tblock[i][1] = (t3 + t2);
+    tblock[i][2] = (t0 - t1);      
+    tblock[i][3] = (t3 - t2);
+  }
+}
+
+void ihadamard4x2(int (*tblock)[4], int (*block)[4])
+{
+  int i;  
+  int *pTmp = tmp;
+  static int p0,p1,p2,p3;
+  static int t0,t1,t2,t3;
+
+  // Horizontal
+  *(pTmp++) = tblock[0][0] + tblock[1][0];
+  *(pTmp++) = tblock[0][1] + tblock[1][1];
+  *(pTmp++) = tblock[0][2] + tblock[1][2];
+  *(pTmp++) = tblock[0][3] + tblock[1][3];
+
+  *(pTmp++) = tblock[0][0] - tblock[1][0];
+  *(pTmp++) = tblock[0][1] - tblock[1][1];
+  *(pTmp++) = tblock[0][2] - tblock[1][2];
+  *(pTmp  ) = tblock[0][3] - tblock[1][3];
+
+  // Vertical
+  pTmp = tmp;
+  for (i = 0; i < 2; i++)
+  {
+    p0 = *(pTmp++);
+    p1 = *(pTmp++);
+    p2 = *(pTmp++);
+    p3 = *(pTmp++);
+
+    t0 = p0 + p2;
+    t1 = p0 - p2;
+    t2 = p1 - p3;
+    t3 = p1 + p3;
+
+    // coefficients (transposed)
+    block[0][i] = t0 + t3;
+    block[1][i] = t1 + t2;
+    block[2][i] = t1 - t2;
+    block[3][i] = t0 - t3;
+  }
+}
+
+//following functions perform 8 additions, 8 assignments. Should be a bit faster
+void hadamard2x2(int (*block)[16], int tblock[4])
+{
+  static int p0,p1,p2,p3;
+
+  p0 = block[0][0] + block[0][4];
+  p1 = block[0][0] - block[0][4];
+  p2 = block[4][0] + block[4][4];
+  p3 = block[4][0] - block[4][4];
+ 
+  tblock[0] = (p0 + p2);
+  tblock[1] = (p1 + p3);
+  tblock[2] = (p0 - p2);
+  tblock[3] = (p1 - p3);
+}
+
+void ihadamard2x2(int tblock[4], int block[4])
+{
+  static int t0,t1,t2,t3;
+
+  t0 = tblock[0] + tblock[1];
+  t1 = tblock[0] - tblock[1];
+  t2 = tblock[2] + tblock[3];
+  t3 = tblock[2] - tblock[3];
+
+  block[0] = (t0 + t2);
+  block[1] = (t1 + t3);
+  block[2] = (t0 - t2);
+  block[3] = (t1 - t3);
+}
+
+/*
+void hadamard2x2(int (*block)[16], int tblock[4])
+{
+  //12 additions, 4 assignments
+    tblock[0] = (block[0][0] + block[0][4] + block[4][0] + block[4][4]);
+    tblock[1] = (block[0][0] - block[0][4] + block[4][0] - block[4][4]);
+    tblock[2] = (block[0][0] + block[0][4] - block[4][0] - block[4][4]);
+    tblock[3] = (block[0][0] - block[0][4] - block[4][0] + block[4][4]);
+}
+
+void ihadamard2x2(int tblock[4], int block[4])
+{
+    block[0] = (tblock[0] + tblock[1] + tblock[2] + tblock[3]);
+    block[1] = (tblock[0] - tblock[1] + tblock[2] - tblock[3]);
+    block[2] = (tblock[0] + tblock[1] - tblock[2] - tblock[3]);
+    block[3] = (tblock[0] - tblock[1] - tblock[2] + tblock[3]);
+}
+
+*/
+
 
 void forward8x8(int (*block)[16], int (*tblock)[16], int pos_y, int pos_x)
 {

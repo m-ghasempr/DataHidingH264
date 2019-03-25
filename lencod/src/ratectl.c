@@ -33,7 +33,7 @@ void rc_store_mad(Macroblock *currMB)
 {
   generic_RC->MADofMB[img->current_mb_nr] = ComputeMBMAD();
 
-  if(input->basicunit < img->FrameSizeInMbs)
+  if(params->basicunit < img->FrameSizeInMbs)
   {
     generic_RC->TotalMADBasicUnit += generic_RC->MADofMB[img->current_mb_nr];
   }  
@@ -53,28 +53,20 @@ void update_qp_cbp(Macroblock *currMB, short best_mode)
     currMB->prev_cbp = 1;
   else
   {
-    currMB->delta_qp     = 0;
-    currMB->qp           = currMB->prev_qp;
-    
-    set_chroma_qp(currMB);
+    currMB->prev_cbp = 0;
+    currMB->delta_qp = 0;
+    currMB->qp       = currMB->prev_qp;
+    img->qp          = currMB->qp;
+    update_qp(currMB);    
 
-    currMB->qp_scaled[0] = currMB->qp + img->bitdepth_luma_qp_scale - MIN_QP;
-    currMB->qp_scaled[1] = currMB->qpc[0] + img->bitdepth_chroma_qp_scale;
-    currMB->qp_scaled[2] = currMB->qpc[1] + img->bitdepth_chroma_qp_scale;
-
-    select_dct(currMB);
-
-    img->qp           = currMB->qp;
-    currMB->prev_cbp  = 0;
   }
 
-  if (input->MbInterlace)
+  if (params->MbInterlace)
   {
     // update rdopt buffered qps...
     rdopt->qp        = currMB->qp;
     rdopt->delta_qp  = currMB->delta_qp;
     rdopt->prev_cbp  = currMB->prev_cbp;
-    memcpy(rdopt->qp_scaled, currMB->qp_scaled, 3 * sizeof(int));
 
     delta_qp_mbaff[currMB->mb_field][img->bot_MB] = currMB->delta_qp;
     qp_mbaff      [currMB->mb_field][img->bot_MB] = currMB->qp;
@@ -276,48 +268,53 @@ void rc_init_gop_params(void)
 {
   int np, nb; 
 
-  switch( input->RCUpdateMode )
+  switch( params->RCUpdateMode )
   {
   case RC_MODE_1: case RC_MODE_3: 
     if ( !(img->number) )
     {
       /* number of P frames */
-      np = input->no_frames - 1;
+      np = params->no_frames - 1;
       /* number of B frames */
-      nb = np * input->successive_Bframe;
+      nb = np * params->successive_Bframe;
 
       rc_init_GOP(quadratic_RC, np, nb);
     }
     break;
   case RC_MODE_0: case RC_MODE_2:
-    if (input->idr_period == 0)
+    if (params->idr_period == 0)
     {
-      /* number of P frames */
-      np = input->no_frames - 1;
-      /* number of B frames */
-      nb = np * input->successive_Bframe;
+      if ( !(img->number) )
+      {
+        /* number of P frames */
+        np = params->no_frames - 1;
+        /* number of B frames */
+        nb = np * params->successive_Bframe;
+        rc_init_GOP(quadratic_RC, np, nb);
+      }
     }
-    else   
+    else if ( (!params->adaptive_idr_period && ( img->frm_number - img->lastIDRnumber ) % params->idr_period == 0)
+      || (params->adaptive_idr_period == 1 && ( img->frm_number - imax(img->lastIntraNumber, img->lastIDRnumber) ) % params->idr_period == 0) )  
     {
-      int M = input->successive_Bframe + 1;
-      int N = M * input->idr_period;      
+      int M = params->successive_Bframe + 1;
+      int N = M * params->idr_period;      
       int n = (img->number == 0) ? N - ( M - 1) : N;
 
       /* last GOP may contain less frames */
-      if ((img->number / input->idr_period) >= (input->no_frames / input->idr_period))
+      if ((img->number / params->idr_period) >= (params->no_frames / params->idr_period))
       {
         if (img->number != 0)
-          n = (input->no_frames - img->number) * (input->successive_Bframe + 1);
+          n = (params->no_frames - img->number) * (params->successive_Bframe + 1);
         else
-          n = input->no_frames  + (input->no_frames - 1) * input->successive_Bframe;
+          n = params->no_frames  + (params->no_frames - 1) * params->successive_Bframe;
       }
 
       /* number of P frames */
       np = (img->number == 0) ? 1 + ((n - 2) / M) : (n - 1) / M; 
       /* number of B frames */
       nb = n - np - 1;
+      rc_init_GOP(quadratic_RC, np, nb);
     }
-    rc_init_GOP(quadratic_RC, np, nb);
     break;
   default:
     break;
@@ -334,17 +331,17 @@ void rc_init_gop_params(void)
 
 void rc_init_frame(int FrameNumberInFile)
 {
-  switch( input->RCUpdateMode )
+  switch( params->RCUpdateMode )
   {
   case RC_MODE_0:  case RC_MODE_1:  case RC_MODE_2:  case RC_MODE_3:
 
   // update the number of MBs in the basic unit for MBAFF coding
-  if( (input->MbInterlace) && (input->basicunit < img->FrameSizeInMbs) && (img->type == P_SLICE || (input->RCUpdateMode == RC_MODE_1 && img->number) ) )
-    img->BasicUnit = input->basicunit << 1;
+  if( (params->MbInterlace) && (params->basicunit < img->FrameSizeInMbs) && (img->type == P_SLICE || (params->RCUpdateMode == RC_MODE_1 && img->number) ) )
+    img->BasicUnit = params->basicunit << 1;
   else
-    img->BasicUnit = input->basicunit;
+    img->BasicUnit = params->basicunit;
 
-    if ( input->RDPictureDecision )
+    if ( params->RDPictureDecision )
     {    
       rc_copy_quadratic( quadratic_RC_init, quadratic_RC ); // store rate allocation quadratic...    
       rc_copy_generic( generic_RC_init, generic_RC ); // ...and generic model
@@ -371,7 +368,7 @@ void rc_init_frame(int FrameNumberInFile)
 
 void rc_init_sequence(void)
 {
-  switch( input->RCUpdateMode )
+  switch( params->RCUpdateMode )
   {
   case RC_MODE_0:  case RC_MODE_1:  case RC_MODE_2:  case RC_MODE_3:
     rc_init_seq(quadratic_RC);
@@ -383,7 +380,7 @@ void rc_init_sequence(void)
 
 void rc_store_slice_header_bits( int len )
 {
-  switch (input->RCUpdateMode)
+  switch (params->RCUpdateMode)
   {
   case RC_MODE_0:  case RC_MODE_1:  case RC_MODE_2:  case RC_MODE_3:
     generic_RC->NumberofHeaderBits +=len;
@@ -401,19 +398,13 @@ void update_qp_cbp_tmp(Macroblock *currMB, int cbp, int best_mode)
 {
   if (((cbp!=0 || best_mode==I16MB) && (best_mode!=IPCM) ))
     currMB->prev_cbp = 1;
-  else if ((cbp==0 && !input->RCEnable) || (best_mode==IPCM))
+  else if ((cbp==0) || (best_mode==IPCM))
   {
+    currMB->prev_cbp  = 0;
     currMB->delta_qp  = 0;
     currMB->qp        = currMB->prev_qp;
-    currMB->qp_scaled[0] = currMB->qp + img->bitdepth_luma_qp_scale - MIN_QP;
-    currMB->qp_scaled[1] = currMB->qpc[0] + img->bitdepth_chroma_qp_scale;
-    currMB->qp_scaled[2] = currMB->qpc[1] + img->bitdepth_chroma_qp_scale;
-
-    select_dct(currMB);
-
-    set_chroma_qp(currMB);
     img->qp           = currMB->qp;
-    currMB->prev_cbp  = 0;
+    update_qp(currMB);        
   }
 }
 

@@ -202,7 +202,7 @@ void init_dpb(void)
 
   dpb.size      = getDpbSize();
 
-  if (dpb.size < (unsigned int)input->num_ref_frames)
+  if (dpb.size < (unsigned int)params->num_ref_frames)
   {
     error ("DPB size at specified level is smaller than the specified number of reference frames. This is not allowed.\n", 1000);
   }
@@ -386,7 +386,7 @@ StorablePicture* alloc_storable_picture(PictureStructure structure, int size_x, 
   get_mem3Dint64 (&(s->ref_id),     6, size_y / BLOCK_SIZE, size_x / BLOCK_SIZE);
   get_mem4Dshort (&(s->mv),         2, size_y / BLOCK_SIZE, size_x / BLOCK_SIZE, 2);
 
-  if( IS_INDEPENDENT(input) )
+  if( IS_INDEPENDENT(params) )
   {
     for( nplane=0; nplane<MAX_PLANE; nplane++ )
     {
@@ -482,49 +482,49 @@ void free_storable_picture(StorablePicture* p)
   {
     if (p->ref_idx)
     {
-      free_mem3D ((byte***)p->ref_idx, 2);
+      free_mem3D ((byte***)p->ref_idx);
       p->ref_idx = NULL;
     }
 
     if (p->ref_pic_id)
     {
-      free_mem3Dint64 (p->ref_pic_id, 6);
+      free_mem3Dint64 (p->ref_pic_id);
       p->ref_pic_id = NULL;
     }
     if (p->ref_id)
     {
-      free_mem3Dint64 (p->ref_id, 6);
+      free_mem3Dint64 (p->ref_id);
       p->ref_id = NULL;
     }
     if (p->mv)
     {
-      free_mem4Dshort (p->mv, 2, p->size_y / BLOCK_SIZE);
+      free_mem4Dshort (p->mv);
       p->mv = NULL;
     }
 
-    if( IS_INDEPENDENT(input) )
+    if( IS_INDEPENDENT(params) )
     {
       for( nplane=0; nplane<MAX_PLANE; nplane++ )
       {
         if (p->ref_idx_JV[nplane])
         {
-          free_mem3D ((byte***)p->ref_idx_JV[nplane], 2);
+          free_mem3D ((byte***)p->ref_idx_JV[nplane]);
           p->ref_idx_JV[nplane] = NULL;
         }
     
         if (p->ref_pic_id_JV[nplane])
         {
-          free_mem3Dint64 (p->ref_pic_id_JV[nplane], 6);
+          free_mem3Dint64 (p->ref_pic_id_JV[nplane]);
           p->ref_pic_id_JV[nplane] = NULL;
         }
         if (p->ref_id_JV[nplane])
         {
-          free_mem3Dint64 (p->ref_id_JV[nplane], 6);
+          free_mem3Dint64 (p->ref_id_JV[nplane]);
           p->ref_id_JV[nplane] = NULL;
         }
         if (p->mv_JV[nplane])
         {
-          free_mem4Dshort (p->mv_JV[nplane], 2, p->size_y / BLOCK_SIZE);
+          free_mem4Dshort (p->mv_JV[nplane]);
           p->mv_JV[nplane] = NULL;
         }
       }
@@ -548,16 +548,16 @@ void free_storable_picture(StorablePicture* p)
       p->imgY=NULL;      
     }    
 
-    if( IS_INDEPENDENT(input) )
+    if( IS_INDEPENDENT(params) )
     {
       if (p->imgY_sub)
       {
-        free_mem4Dpel (p->imgY_sub,4,4);
+        free_mem4Dpel (p->imgY_sub);
         p->imgY_sub=NULL;
       }
       if (p->imgUV_sub)
       {
-        free_mem5Dpel (p->imgUV_sub, 2, 4, 4 );
+        free_mem5Dpel (p->imgUV_sub);
         p->imgUV_sub = NULL;
       }
       p->p_curr_img     = NULL;
@@ -573,24 +573,24 @@ void free_storable_picture(StorablePicture* p)
     {
       if (p->imgY_sub)
       {
-        free_mem4Dpel (p->imgY_sub,4,4);
+        free_mem4Dpel (p->imgY_sub);
         p->imgY_sub=NULL;
       }
-      if ( p->imgUV_sub && img->yuv_format != YUV400 && input->ChromaMCBuffer )
+      if ( p->imgUV_sub && img->yuv_format != YUV400 && params->ChromaMCBuffer )
       {
         if ( img->yuv_format == YUV420 )
         {
-          free_mem5Dpel (p->imgUV_sub, 2, 8, 8 );
+          free_mem5Dpel (p->imgUV_sub);
           p->imgUV_sub = NULL;
         }
         else if ( img->yuv_format == YUV422 )
         {
-          free_mem5Dpel (p->imgUV_sub, 2, 4, 8 );
+          free_mem5Dpel (p->imgUV_sub);
           p->imgUV_sub = NULL;
         }
         else
         { // YUV444
-          free_mem5Dpel (p->imgUV_sub, 2, 4, 4 );
+          free_mem5Dpel (p->imgUV_sub);
           p->imgUV_sub = NULL;
         }
       }
@@ -598,7 +598,7 @@ void free_storable_picture(StorablePicture* p)
 
     if (p->imgUV)
     {
-      free_mem3Dpel (p->imgUV, 2);
+      free_mem3Dpel (p->imgUV);
       p->imgUV=NULL;
     }
 
@@ -653,18 +653,18 @@ static void unmark_for_reference(FrameStore* fs)
   {
     if (fs->frame->imgY_sub)
     {
-      free_mem4Dpel (fs->frame->imgY_sub, 4, 4);
+      free_mem4Dpel (fs->frame->imgY_sub);
       fs->frame->imgY_sub=NULL;
     }
 
     if (fs->frame->ref_pic_id)
     {
-      free_mem3Dint64 (fs->frame->ref_pic_id, 6);
+      free_mem3Dint64 (fs->frame->ref_pic_id);
       fs->frame->ref_pic_id = NULL;
     }
     if (fs->frame->ref_id)
     {
-      free_mem3Dint64 (fs->frame->ref_id, 6);
+      free_mem3Dint64 (fs->frame->ref_id);
       fs->frame->ref_id = NULL;
     }
   }
@@ -673,18 +673,18 @@ static void unmark_for_reference(FrameStore* fs)
   {
     if (fs->top_field->imgY_sub)
     {
-      free_mem4Dpel (fs->top_field->imgY_sub, 4, 4);
+      free_mem4Dpel (fs->top_field->imgY_sub);
       fs->top_field->imgY_sub=NULL;
     }
 
     if (fs->top_field->ref_pic_id)
     {
-      free_mem3Dint64 (fs->top_field->ref_pic_id, 6);
+      free_mem3Dint64 (fs->top_field->ref_pic_id);
       fs->top_field->ref_pic_id = NULL;
     }
     if (fs->top_field->ref_id)
     {
-      free_mem3Dint64 (fs->top_field->ref_id, 6);
+      free_mem3Dint64 (fs->top_field->ref_id);
       fs->top_field->ref_id = NULL;
     }
 
@@ -693,17 +693,17 @@ static void unmark_for_reference(FrameStore* fs)
   {
     if (fs->bottom_field->imgY_sub)
     {
-      free_mem4Dpel (fs->bottom_field->imgY_sub, 4, 4);
+      free_mem4Dpel (fs->bottom_field->imgY_sub);
       fs->bottom_field->imgY_sub=NULL;
     }
     if (fs->bottom_field->ref_pic_id)
     {
-      free_mem3Dint64 (fs->bottom_field->ref_pic_id, 6);
+      free_mem3Dint64 (fs->bottom_field->ref_pic_id);
       fs->bottom_field->ref_pic_id = NULL;
     }
     if (fs->bottom_field->ref_id)
     {
-      free_mem3Dint64 (fs->bottom_field->ref_id, 6);
+      free_mem3Dint64 (fs->bottom_field->ref_id);
       fs->bottom_field->ref_id = NULL;
     }
   }
@@ -2476,7 +2476,7 @@ void replace_top_pic_with_frame(StorablePicture* p)
   // upsample a reference picture
   if (p->used_for_reference)
   {
-    if( IS_INDEPENDENT(input) )
+    if( IS_INDEPENDENT(params) )
     {
       UnifiedOneForthPix_JV(0, p);
       UnifiedOneForthPix_JV(1, p);
@@ -2549,7 +2549,7 @@ static void insert_picture_in_dpb(FrameStore* fs, StorablePicture* p)
   // upsample a reference picture
   if (p->used_for_reference)
   {
-    if( IS_INDEPENDENT(input) )
+    if( IS_INDEPENDENT(params) )
     {
       UnifiedOneForthPix_JV(0, p);
       UnifiedOneForthPix_JV(1, p);
@@ -2892,7 +2892,7 @@ static void output_one_frame_from_dpb(void)
   write_stored_frame(dpb.fs[pos], p_dec);
 
   // if redundant picture in use, output POC may be not in ascending order
-  if(input->redundant_pic_flag == 0)
+  if(params->redundant_pic_flag == 0)
   {
     if (dpb.last_output_poc >= poc)
     {
@@ -3002,7 +3002,7 @@ void dpb_split_field(FrameStore *fs)
       memcpy(fs->bottom_field->imgUV[1][i], fs->frame->imgUV[1][i*2 + 1], fs->frame->size_x_cr*sizeof(imgpel));
     }
 
-    if( IS_INDEPENDENT(input) )
+    if( IS_INDEPENDENT(params) )
     {
       UnifiedOneForthPix_JV(0, fs->top_field);
       UnifiedOneForthPix_JV(1, fs->top_field);
@@ -3266,7 +3266,7 @@ void dpb_combine_field(FrameStore *fs)
 
   dpb_combine_field_yuv(fs);
 
-  if( IS_INDEPENDENT(input) )
+  if( IS_INDEPENDENT(params) )
   {
     UnifiedOneForthPix_JV(0, fs->frame);
     UnifiedOneForthPix_JV(1, fs->frame);
@@ -3521,9 +3521,9 @@ void free_colocated(ColocatedParams* p)
 {
   if (p)
   {
-    free_mem3D      ((byte***)p->ref_idx, 2);
-    free_mem3Dint64 (p->ref_pic_id, 2);
-    free_mem4Dshort (p->mv, 2, p->size_y / BLOCK_SIZE);
+    free_mem3D      ((byte***)p->ref_idx);
+    free_mem3Dint64 (p->ref_pic_id);
+    free_mem4Dshort (p->mv);
 
     if (p->moving_block)
     {
@@ -3538,9 +3538,9 @@ void free_colocated(ColocatedParams* p)
 
     if (p->mb_adaptive_frame_field_flag)
     {
-      free_mem3D      ((byte***)p->top_ref_idx, 2);
-      free_mem3Dint64 (p->top_ref_pic_id, 2);
-      free_mem4Dshort (p->top_mv, 2, p->size_y / BLOCK_SIZE / 2);
+      free_mem3D      ((byte***)p->top_ref_idx);
+      free_mem3Dint64 (p->top_ref_pic_id);
+      free_mem4Dshort (p->top_mv);
 
 
       if (p->top_moving_block)
@@ -3549,9 +3549,9 @@ void free_colocated(ColocatedParams* p)
         p->top_moving_block=NULL;
       }
 
-      free_mem3D      ((byte***)p->bottom_ref_idx, 2);
-      free_mem3Dint64 (p->bottom_ref_pic_id, 2);
-      free_mem4Dshort (p->bottom_mv, 2, p->size_y / BLOCK_SIZE / 2);
+      free_mem3D      ((byte***)p->bottom_ref_idx);
+      free_mem3Dint64 (p->bottom_ref_pic_id);
+      free_mem4Dshort (p->bottom_mv);
 
 
       if (p->bottom_moving_block)

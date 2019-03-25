@@ -54,7 +54,7 @@ pic_parameter_set_rbsp_t PicParSet[MAXPPS];
 
 extern StorablePicture* dec_picture;
 
-extern void init_frext(struct img_par *img);
+extern void init_frext(ImageParameters *img);
 
 // syntax for scaling list matrix values
 void Scaling_List(int *scalingList, int sizeOfScalingList, Boolean *UseDefaultScalingMatrix, Bitstream *s)
@@ -489,13 +489,12 @@ void ProcessSPS (NALU_t *nalu)
 {
   DataPartition *dp = AllocPartition(1);
   seq_parameter_set_rbsp_t *sps = AllocSPS();
-  int dummy;
 
   memcpy (dp->bitstream->streamBuffer, &nalu->buf[1], nalu->len-1);
   dp->bitstream->code_len = dp->bitstream->bitstream_length = RBSPtoSODB (dp->bitstream->streamBuffer, nalu->len-1);
   dp->bitstream->ei_flag = 0;
   dp->bitstream->read_len = dp->bitstream->frame_bitoffset = 0;
-  dummy = InterpretSPS (dp, sps);
+  InterpretSPS (dp, sps);
 
   if (sps->Valid)
   {
@@ -537,7 +536,6 @@ void ProcessPPS (NALU_t *nalu)
 {
   DataPartition *dp;
   pic_parameter_set_rbsp_t *pps;
-  int dummy;
 
   dp = AllocPartition(1);
   pps = AllocPPS();
@@ -545,7 +543,7 @@ void ProcessPPS (NALU_t *nalu)
   dp->bitstream->code_len = dp->bitstream->bitstream_length = RBSPtoSODB (dp->bitstream->streamBuffer, nalu->len-1);
   dp->bitstream->ei_flag = 0;
   dp->bitstream->read_len = dp->bitstream->frame_bitoffset = 0;
-  dummy = InterpretPPS (dp, pps);
+  InterpretPPS (dp, pps);
   // PPSConsistencyCheck (pps);
   if (active_pps)
   {
@@ -681,7 +679,7 @@ void UseParameterSet (int PicParsetId)
   if (PicParSet[PicParsetId].Valid != TRUE)
     printf ("Trying to use an invalid (uninitialized) Picture Parameter Set with ID %d, expect the unexpected...\n", PicParsetId);
   if (SeqParSet[PicParSet[PicParsetId].seq_parameter_set_id].Valid != TRUE)
-    printf ("PicParset %d references an invalid (uninitialized) Sequence Parameter Set with ID %d, expect the unexpected...\n", PicParsetId, PicParSet[PicParsetId].seq_parameter_set_id);
+    printf ("PicParset %d references an invalid (uninitialized) Sequence Parameter Set with ID %d, expect the unexpected...\n", PicParsetId, (int) PicParSet[PicParsetId].seq_parameter_set_id);
 
   sps =  &SeqParSet[PicParSet[PicParsetId].seq_parameter_set_id];
 
@@ -696,7 +694,7 @@ void UseParameterSet (int PicParsetId)
 
   if ((int) sps->pic_order_cnt_type < 0 || sps->pic_order_cnt_type > 2)  // != 1
   {
-    printf ("invalid sps->pic_order_cnt_type = %d\n", sps->pic_order_cnt_type);
+    printf ("invalid sps->pic_order_cnt_type = %d\n", (int) sps->pic_order_cnt_type);
     error ("pic_order_cnt_type != 1", -1000);
   }
 

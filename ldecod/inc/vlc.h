@@ -31,21 +31,21 @@ void linfo_levrun_inter(int len,int info,int *level,int *irun);
 void linfo_levrun_c2x2(int len,int info,int *level,int *irun);
 
 int  readSyntaxElement_VLC (SyntaxElement *sym, Bitstream *currStream);
-int  readSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct datapartition *dp);
-int  readSyntaxElement_Intra4x4PredictionMode(SyntaxElement *sym, struct img_par *img, struct datapartition *dp);
+int  readSyntaxElement_UVLC(SyntaxElement *sym, ImageParameters *img, struct datapartition *dp);
+int  readSyntaxElement_Intra4x4PredictionMode(SyntaxElement *sym, ImageParameters *img, Bitstream   *currStream);
 
 int  GetVLCSymbol (byte buffer[],int totbitoffset,int *info, int bytecount);
 int  GetVLCSymbol_IntraMode (byte buffer[],int totbitoffset,int *info, int bytecount);
 
-int readSyntaxElement_FLC(SyntaxElement *sym, Bitstream *currStream);
+int readSyntaxElement_FLC                         (SyntaxElement *sym, Bitstream *currStream);
 int readSyntaxElement_NumCoeffTrailingOnes(SyntaxElement *sym,  Bitstream *currStream,
                                            char *type);
-int readSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *sym,  Bitstream *currStream);
-int readSyntaxElement_Level_VLC0(SyntaxElement *sym, Bitstream *currStream);
-int readSyntaxElement_Level_VLCN(SyntaxElement *sym, int vlc, Bitstream *currStream);
-int readSyntaxElement_TotalZeros(SyntaxElement *sym,  Bitstream *currStream);
-int readSyntaxElement_TotalZerosChromaDC(SyntaxElement *sym,  Bitstream *currStream);
-int readSyntaxElement_Run(SyntaxElement *sym,  Bitstream *currStream);
+int readSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *sym, Bitstream *currStream);
+int readSyntaxElement_Level_VLC0                  (SyntaxElement *sym, Bitstream *currStream);
+int readSyntaxElement_Level_VLCN                  (SyntaxElement *sym, int vlc, Bitstream *currStream);
+int readSyntaxElement_TotalZeros                  (SyntaxElement *sym, Bitstream *currStream);
+int readSyntaxElement_TotalZerosChromaDC          (SyntaxElement *sym, Bitstream *currStream);
+int readSyntaxElement_Run                         (SyntaxElement *sym, Bitstream *currStream);
 int GetBits (byte buffer[],int totbitoffset,int *info, int bytecount,
              int numbits);
 int ShowBits (byte buffer[],int totbitoffset,int bytecount, int numbits);

@@ -16,12 +16,49 @@
 
 #include "global.h"
 #include "image.h"
-
+#include "wp.h"
 
 /*!
 ************************************************************************
 * \brief
-*    Estimates reference picture weighting factors
+*    Initialize weighting parameter functions
+************************************************************************
+*/
+void InitWP(InputParameters *params)
+{
+  //if (params->WPMethod == 0)
+  {
+    EstimateWPPSlice = estimate_weighting_factor_P_slice;
+    EstimateWPBSlice = estimate_weighting_factor_B_slice;
+    TestWPPSlice = test_wp_P_slice;
+    TestWPBSlice = test_wp_B_slice;
+  }
+}
+
+/*!
+************************************************************************
+* \brief
+*    Compute sum of samples in a picture
+************************************************************************
+*/
+double ComputeImgSum(imgpel **CurrentImage, int height, int width)
+{
+  int i, j;
+  double sum_value = 0.0;
+  for (i = 0; i < height; i++)
+  {
+    for (j = 0; j < width; j++)
+    {
+      sum_value += (double) CurrentImage[i][j];
+    }
+  }
+  return sum_value;
+}
+
+/*!
+************************************************************************
+* \brief
+*    Estimates reference picture weighting factors for P slices
 ************************************************************************
 */
 
@@ -65,54 +102,37 @@ void estimate_weighting_factor_P_slice(int select_offset)
     }
   }
 
-  for (i = 0; i < img->height; i++)
-  {
-    for (j = 0; j < img->width; j++)
-    {
-      dc_org += (double) pCurImg[i][j];
-    }
-  }
-
+  dc_org = ComputeImgSum(pCurImg, img->height, img->width);
+  
   for (clist = 0; clist < 2 + list_offset; clist++)
   {
     for (n = 0; n < listXsize[clist]; n++)
     {
-      dc_ref[n] = 0.0;
-
-      tmpPtr = listX[clist][n]->p_curr_img_sub[0][0];
-
       // Y
-      for (j = IMG_PAD_SIZE; j < img->height + IMG_PAD_SIZE; j++)
-      {
-        for ( i = IMG_PAD_SIZE; i < img->width + IMG_PAD_SIZE; i++ )
-        {
-          dc_ref[n] += (double) tmpPtr[j][i];
-        }
-      }
+      tmpPtr = listX[clist][n]->p_curr_img;      
+      dc_ref[n] = ComputeImgSum(tmpPtr, img->height, img->width);
 
       if (select_offset == 0)
       {
-        {
-          if (dc_ref[n] != 0.0)
-            weight[clist][n][0] = (int) (default_weight[0] * dc_org / dc_ref[n] + 0.5);
-          else
-            weight[clist][n][0] = default_weight[0];  // only used when reference picture is black
-          weight[clist][n][0] = iClip3(-128, 127, weight[clist][n][0]);
-        }
+        if (dc_ref[n] != 0.0)
+          weight[clist][n][0] = (int) (default_weight[0] * dc_org / dc_ref[n] + 0.5);
+        else
+          weight[clist][n][0] = default_weight[0];  // only used when reference picture is black
+        weight[clist][n][0] = iClip3(-128, 127, weight[clist][n][0]);
       }
       else
       {
         offset[clist][n][0] = (int) ((dc_org - dc_ref[n])/(img->size)+0.5);
+        offset[clist][n][0] = (offset[clist][n][0]+((img->bitdepth_luma-8)>>1))>>(img->bitdepth_luma-8);
         offset[clist][n][0] = iClip3( -128, 127, offset[clist][n][0]);
+        offset[clist][n][0] = offset[clist][n][0]<<(img->bitdepth_luma-8);
         weight[clist][n][0] = default_weight[0];
       }
 
-      {
-        weight[clist][n][1] = default_weight[1];
-        weight[clist][n][2] = default_weight[2];
-        offset[clist][n][1] = 0;
-        offset[clist][n][2] = 0;
-      }
+      weight[clist][n][1] = default_weight[1];
+      weight[clist][n][2] = default_weight[2];
+      offset[clist][n][1] = 0;
+      offset[clist][n][2] = 0;
     }
   }
 
@@ -230,7 +250,6 @@ void estimate_weighting_factor_B_slice()
     }
   }
 
-
   if (active_pps->weighted_bipred_idc == 2) //! implicit mode
   {
     for (i = 0; i < listXsize[LIST_0]; i++)
@@ -261,52 +280,34 @@ void estimate_weighting_factor_B_slice()
   }
   else
   {
-    for (i = 0; i < img->height; i++)
-    {
-      for (j = 0; j < img->width; j++)
-      {
-        dc_org += (double) pCurImg[i][j];
-      }
-    }
+    dc_org = ComputeImgSum(pCurImg, img->height, img->width);
 
     for (clist=0; clist<2 + list_offset; clist++)
     {
       for (n = 0; n < listXsize[clist]; n++)
       {
-        dc_ref[clist][n] = 0.0;
-
-        tmpPtr = listX[clist][n]->p_curr_img_sub[0][0];
-
         // To simplify these computations we may wish to perform these after a reference is 
         // stored in the reference buffer and attach them to the storedimage structure!!!
         // Y
-        for (j = IMG_PAD_SIZE; j < (img->height + IMG_PAD_SIZE); j++)
-        {
-          for (i = IMG_PAD_SIZE; i < img->width + IMG_PAD_SIZE; i++)
-          {
-            dc_ref[clist][n] += (double) tmpPtr[j][i];
-          }
-        }
-        {
-          if (dc_ref[clist][n] != 0.0)
-            wf_weight = (int) (default_weight[0] * dc_org / dc_ref[clist][n] + 0.5);
-          else
-            wf_weight = default_weight[0];  // only used when reference picture is black
-          wf_weight = iClip3(-128, 127, wf_weight);
-          wf_offset = 0;
-        }
+        tmpPtr = listX[clist][n]->p_curr_img;
+        dc_ref[clist][n] = ComputeImgSum(tmpPtr, img->height, img->width);
+
+        if (dc_ref[clist][n] != 0.0)
+          wf_weight = (int) (default_weight[0] * dc_org / dc_ref[clist][n] + 0.5);
+        else
+          wf_weight = default_weight[0];  // only used when reference picture is black
+        wf_weight = iClip3(-128, 127, wf_weight);
+        wf_offset = 0;
 
         //    printf("dc_org = %d, dc_ref = %d, weight[%d] = %d\n",dc_org, dc_ref[n],n,weight[n][0]);
 
         weight[clist][n][0] = wf_weight;
         offset[clist][n][0] = wf_offset;
 
-        {
-          weight[clist][n][1] = default_weight[1];
-          weight[clist][n][2] = default_weight[2];        
-          offset[clist][n][1] = 0;
-          offset[clist][n][2] = 0;
-        }           
+        weight[clist][n][1] = default_weight[1];
+        weight[clist][n][2] = default_weight[2];        
+        offset[clist][n][1] = 0;
+        offset[clist][n][2] = 0;
       }
     }
 
@@ -331,12 +332,8 @@ void estimate_weighting_factor_B_slice()
       {
         for (index = 0; index < listXsize[clist]; index++)
         {
-          wp_weight[clist][index][0] = default_weight[0];
-          wp_weight[clist][index][1] = default_weight[1];
-          wp_weight[clist][index][2] = default_weight[2];
-          wp_offset[clist][index][0] = 0;
-          wp_offset[clist][index][1] = 0;
-          wp_offset[clist][index][2] = 0;
+          memcpy(wp_weight[clist][index], default_weight, 3 * sizeof(int));
+          memset(wp_offset[clist][index], 0, 3 * sizeof(int));
         }
       }
     }
@@ -408,46 +405,29 @@ int test_wp_P_slice(int select_offset)
     }
   }
 
-  for (i = 0; i < img->height; i++)
-  {
-    for (j = 0; j < img->width; j++)
-    {
-      dc_org += (double) pCurImg[i][j];
-    }
-  }
+  dc_org = ComputeImgSum(pCurImg, img->height, img->width);
 
   for (clist = 0; clist < 2 + list_offset; clist++)
   {
     for (n = 0; n < listXsize[clist]; n++)
     {
-      dc_ref[n] = 0.0;
-
-      tmpPtr = listX[clist][n]->p_curr_img_sub[0][0];
-
-      // Y
-      for (j = IMG_PAD_SIZE; j < img->height + IMG_PAD_SIZE; j++)
-      {
-        for ( i = IMG_PAD_SIZE; i < img->width + IMG_PAD_SIZE; i++ )
-        {
-          dc_ref[n] += (double) tmpPtr[j][i];
-        }
-      }
+      tmpPtr = listX[clist][n]->p_curr_img;
+      dc_ref[n] = ComputeImgSum(tmpPtr, img->height, img->width);
 
       if (select_offset == 0)
       {
-        {
-          if (dc_ref[n] != 0.0)
-            weight[clist][n][0] = (int) (default_weight[0] * dc_org / dc_ref[n] + 0.5);
-          else
-            weight[clist][n][0] = default_weight[0];  // only used when reference picture is black
-          weight[clist][n][0] = iClip3(-128, 127, weight[clist][n][0]);
-        }
-
+        if (dc_ref[n] != 0.0)
+          weight[clist][n][0] = (int) (default_weight[0] * dc_org / dc_ref[n] + 0.5);
+        else
+          weight[clist][n][0] = default_weight[0];  // only used when reference picture is black
+        weight[clist][n][0] = iClip3(-128, 127, weight[clist][n][0]);
       }
       else
       {
         offset[clist][n][0] = (int) ((dc_org - dc_ref[n])/(img->size)+0.5);
+        offset[clist][n][0] = (offset[clist][n][0]+((img->bitdepth_luma-8)>>1))>>(img->bitdepth_luma-8);
         offset[clist][n][0] = iClip3( -128, 127, offset[clist][n][0]);
+        offset[clist][n][0] = offset[clist][n][0]<<(img->bitdepth_luma-8);
         weight[clist][n][0] = default_weight[0];
       }
     }
@@ -459,7 +439,7 @@ int test_wp_P_slice(int select_offset)
     {
       for (comp=0; comp < 3; comp ++)
       {
-        int offset_test = input->RDPSliceBTest && active_sps->profile_idc != 66
+        int offset_test = params->RDPSliceBTest && active_sps->profile_idc != 66
           ? iabs(offset[clist][index][comp]) > 2
           : offset[clist][index][comp] != 0;
 
@@ -604,50 +584,32 @@ int test_wp_B_slice(int select_method)
   }
   else
   {
-    for (i = 0; i < img->height; i++)
-    {
-      for (j = 0; j < img->width; j++)
-      {
-        dc_org += (double) pCurImg[i][j];
-      }
-    }
+    dc_org = ComputeImgSum(pCurImg, img->height, img->width);
 
     for (clist=0; clist<2 + list_offset; clist++)
     {
       for (n = 0; n < listXsize[clist]; n++)
       {
-        dc_ref[clist][n] = 0.0;
-
-        tmpPtr = listX[clist][n]->p_curr_img_sub[0][0];
-
         // To simplify these computations we may wish to perform these after a reference is 
         // stored in the reference buffer and attach them to the storedimage structure!!!
         // Y
-        for (j = IMG_PAD_SIZE; j < (img->height + IMG_PAD_SIZE); j++)
-        {
-          for (i = IMG_PAD_SIZE; i < img->width + IMG_PAD_SIZE; i++)
-          {
-            dc_ref[clist][n] += (double) tmpPtr[j][i];
-          }
-        }
-        {
-          if (dc_ref[clist][n] != 0.0)
-            wf_weight = (int) (default_weight[0] * dc_org / dc_ref[clist][n] + 0.5);
-          else
-            wf_weight = default_weight[0];  // only used when reference picture is black
-          wf_weight = iClip3(-128, 127, wf_weight);
-          wf_offset = 0;
-        }
+        tmpPtr = listX[clist][n]->p_curr_img;
+        dc_ref[clist][n] = ComputeImgSum(tmpPtr, img->height, img->width);
+
+        if (dc_ref[clist][n] != 0.0)
+          wf_weight = (int) (default_weight[0] * dc_org / dc_ref[clist][n] + 0.5);
+        else
+          wf_weight = default_weight[0];  // only used when reference picture is black
+        wf_weight = iClip3(-128, 127, wf_weight);
+        wf_offset = 0;
 
         weight[clist][n][0] = wf_weight;
         offset[clist][n][0] = wf_offset;
 
-        {
-          weight[clist][n][1] = default_weight[1];
-          weight[clist][n][2] = default_weight[2];        
-          offset[clist][n][1] = 0;
-          offset[clist][n][2] = 0;
-        }           
+        weight[clist][n][1] = default_weight[1];
+        weight[clist][n][2] = default_weight[2];        
+        offset[clist][n][1] = 0;
+        offset[clist][n][2] = 0;
       }
     }
 
@@ -657,11 +619,8 @@ int test_wp_B_slice(int select_method)
       {
         for (index = 0; index < listXsize[clist]; index++)
         {
-          for (comp = 0; comp < 3; comp++)
-          {
-            wp_weight[clist][index][comp] = weight[clist][index][comp];
-            wp_offset[clist][index][comp] = offset[clist][index][comp];
-          }
+          memcpy(wp_weight[clist][index], weight[clist][index], 3 * sizeof(int));
+          memcpy(wp_offset[clist][index], offset[clist][index], 3 * sizeof(int));
         }
       }
     }
@@ -671,12 +630,8 @@ int test_wp_B_slice(int select_method)
       {
         for (index = 0; index < listXsize[clist]; index++)
         {
-          wp_weight[clist][index][0] = default_weight[0];
-          wp_weight[clist][index][1] = default_weight[1];
-          wp_weight[clist][index][2] = default_weight[2];
-          wp_offset[clist][index][0] = 0;
-          wp_offset[clist][index][1] = 0;
-          wp_offset[clist][index][2] = 0;
+          memcpy(wp_weight[clist][index], default_weight, 3 * sizeof(int));
+          memset(wp_offset[clist][index], 0, 3 * sizeof(int));
         }
       }
     }
@@ -703,8 +658,8 @@ int test_wp_B_slice(int select_method)
   {
     int active_refs[2];
 
-    active_refs[0]=input->B_List0_refs == 0 ? listXsize[0] : imin(input->B_List0_refs,listXsize[0]);
-    active_refs[1]=input->B_List1_refs == 0 ? listXsize[1] : imin(input->B_List0_refs,listXsize[1]);
+    active_refs[0] = (params->B_List0_refs == 0 ? listXsize[0] : imin(params->B_List0_refs,listXsize[0]));
+    active_refs[1] = (params->B_List1_refs == 0 ? listXsize[1] : imin(params->B_List0_refs,listXsize[1]));
 
     for (clist=0; clist<2 + list_offset; clist++)
     {

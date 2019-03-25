@@ -65,24 +65,24 @@ int write_PPS(int len, int PPS_id)
  *    appropriate sequence header
  ************************************************************************
  */
-int start_sequence()
+int start_sequence(void)
 {
-  int i,len=0, total_pps = (input->GenerateMultiplePPS) ? 3 : 1;
+  int i,len=0, total_pps = (params->GenerateMultiplePPS) ? 3 : 1;
   NALU_t *nalu;
 
 
-  switch(input->of_mode)
+  switch(params->of_mode)
   {
     case PAR_OF_ANNEXB:
-      OpenAnnexbFile (input->outfile);
+      OpenAnnexbFile (params->outfile);
       WriteNALU = WriteAnnexbNALU;
       break;
     case PAR_OF_RTP:
-      OpenRTPFile (input->outfile);
+      OpenRTPFile (params->outfile);
       WriteNALU = WriteRTPNALU;
       break;
     default:
-      snprintf(errortext, ET_SIZE, "Output File Mode %d not supported", input->of_mode);
+      snprintf(errortext, ET_SIZE, "Output File Mode %d not supported", params->of_mode);
       error(errortext,1);
       return 1;
   }
@@ -103,7 +103,7 @@ int start_sequence()
      len = write_PPS(len, i);
   }
 
-  if (input->GenerateSEIMessage)
+  if (params->GenerateSEIMessage)
   {
     nalu = NULL;
     nalu = GenerateSEImessage_NALU();
@@ -122,9 +122,9 @@ int start_sequence()
  *    appropriate sequence header
  ************************************************************************
  */
-int rewrite_paramsets()
+int rewrite_paramsets(void)
 {
-  int i,len=0, total_pps = (input->GenerateMultiplePPS) ? 3 : 1;
+  int i,len=0, total_pps = (params->GenerateMultiplePPS) ? 3 : 1;
   NALU_t *nalu;
 
   //! As a sequence header, here we write both sequence and picture
@@ -143,7 +143,7 @@ int rewrite_paramsets()
      len = write_PPS(len, i);
   }
 
-  if (input->GenerateSEIMessage)
+  if (params->GenerateSEIMessage)
   {
     nalu = NULL;
     nalu = GenerateSEImessage_NALU();
@@ -162,14 +162,14 @@ int rewrite_paramsets()
  *     output files
  ************************************************************************
  */
-int terminate_sequence()
+int terminate_sequence(void)
 {
 //  Bitstream *currStream;
 
   // Mainly flushing of everything
   // Add termination symbol, etc.
 
-  switch(input->of_mode)
+  switch(params->of_mode)
   {
     case PAR_OF_ANNEXB:
       CloseAnnexbFile();
@@ -178,7 +178,7 @@ int terminate_sequence()
       CloseRTPFile();
       return 0;
     default:
-      snprintf(errortext, ET_SIZE, "Output File Mode %d not supported", input->of_mode);
+      snprintf(errortext, ET_SIZE, "Output File Mode %d not supported", params->of_mode);
       error(errortext,1);
       return 1;
   }

@@ -11,6 +11,8 @@ NAME=   lencod
 
 ### include debug information: 1=yes, 0=no
 DBG?= 0
+### include MMX optimization : 1=yes, 0=no
+M32?= 0
 
 DEPEND= dependencies
 
@@ -22,9 +24,14 @@ OBJDIR= obj
 ADDSRCDIR= ../lcommon/src
 ADDINCDIR= ../lcommon/inc
 
-CC=     $(shell which gcc)
+ifeq ($(M32),1)
+CC=     $(shell which gcc) -m32
+else
+CC=     $(shell which gcc) 
+endif
 
 LIBS=   -lm
+AFLAGS=  
 CFLAGS=  -std=gnu99 -pedantic -ffloat-store -fno-strict-aliasing
 FLAGS=  $(CFLAGS) -Wall -I$(INCDIR) -I$(ADDINCDIR) -D __USE_LARGEFILE64 -D _FILE_OFFSET_BITS=64
 
@@ -45,7 +52,15 @@ BIN=    $(BINDIR)/$(NAME)$(SUFFIX).exe
 
 .PHONY: default distclean clean tags depend
 
-default: objdir_mk depend bin 
+default: messages objdir_mk depend bin 
+
+messages:
+ifeq ($(M32),1)
+	@echo 'Compiling with M32 support...'
+endif
+ifeq ($(DBG),1)
+	@echo 'Compiling with Debug support...'
+endif
 
 clean:
 	@echo remove all objects
@@ -62,14 +77,14 @@ tags:
 bin:    $(OBJ)
 	@echo
 	@echo 'creating binary "$(BIN)"'
-	@$(CC) -o $(BIN) $(OBJ) $(LIBS)
+	@$(CC) $(AFLAGS) -o $(BIN) $(OBJ) $(LIBS)
 	@echo '... done'
 	@echo
 
 depend:
 	@echo
 	@echo 'checking dependencies'
-	@$(SHELL) -ec '$(CC) -MM $(CFLAGS) -I$(INCDIR) -I$(ADDINCDIR) $(SRC) $(ADDSRC)                  \
+	@$(SHELL) -ec '$(CC) $(AFLAGS) -MM $(CFLAGS) -I$(INCDIR) -I$(ADDINCDIR) $(SRC) $(ADDSRC)                  \
          | sed '\''s@\(.*\)\.o[ :]@$(OBJDIR)/\1.o$(SUFFIX):@g'\''               \
          >$(DEPEND)'
 	@echo

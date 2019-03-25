@@ -13,14 +13,14 @@
 #ifndef _OUTPUT_H_
 #define _OUTPUT_H_
 
-int testEndian();
+int testEndian(void);
 
 void write_stored_frame(FrameStore *fs, int p_out);
 void direct_output(StorablePicture *p, int p_out);
-void init_out_buffer();
-void uninit_out_buffer();
+void init_out_buffer(void);
+void uninit_out_buffer(void);
 
-#ifdef PAIR_FIELDS_IN_OUTPUT
+#if (PAIR_FIELDS_IN_OUTPUT)
 void flush_pending_output(int p_out);
 #endif
 

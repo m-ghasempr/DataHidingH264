@@ -15,33 +15,11 @@
 #include "contributors.h"
 #include "global.h"
 #include "image.h"
+#include "input.h"
 
 void write_out_picture(StorablePicture *p, int p_out);
 
 FrameStore* out_buffer;
-
-
-/*!
- ************************************************************************
- * \brief
- *      checks if the System is big- or little-endian
- * \return
- *      0, little-endian (e.g. Intel architectures)
- *      1, big-endian (e.g. SPARC, MIPS, PowerPC)
- ************************************************************************
- */
-int testEndian()
-{
-  short s;
-  byte *p;
-
-  p=(byte*)&s;
-
-  s=1;
-
-  return (*p==0);
-}
-
 
 /*!
  ************************************************************************
@@ -83,8 +61,13 @@ void img2buf (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int sym
   if (( sizeof(char) == sizeof (imgpel)) && ( sizeof(char) == symbol_size_in_bytes))
   {
     // imgpel == pixel_in_file == 1 byte -> simple copy
-    for(i=0;i<theight;i++)
-      memcpy(buf+crop_left+(i*twidth),&(imgX[i+crop_top][crop_left]), twidth);
+    if (crop_left == 0 && crop_top == 0 && crop_right == 0 && crop_bottom == 0)
+      memcpy(buf,&(imgX[0][0]), twidth * theight);
+    else
+    {
+      for(i=0;i<theight;i++)
+        memcpy(buf + crop_left + (i * twidth),&(imgX[i + crop_top][crop_left]), twidth);
+    }
   }
   else
   {
@@ -194,8 +177,8 @@ void write_out_picture(StorablePicture *p, int p_out)
   int SubHeightC [4]= { 1, 2, 1, 1};
 
   int crop_left, crop_right, crop_top, crop_bottom;
-  int symbol_size_in_bytes = img->pic_unit_size_on_disk/8;
-  Boolean rgb_output = (Boolean) (input->rgb_input_flag != 0 && input->yuv_format==3);
+  int symbol_size_in_bytes = img->out_unit_size_on_disk/8;
+  Boolean rgb_output = (Boolean) (params->rgb_input_flag != 0 && params->yuv_format==3);
   unsigned char *buf;
 
   if (p->non_existing)
@@ -218,7 +201,7 @@ void write_out_picture(StorablePicture *p, int p_out)
   //printf ("write frame size: %dx%d\n", p->size_x-crop_left-crop_right,p->size_y-crop_top-crop_bottom );
 
   // KS: this buffer should actually be allocated only once, but this is still much faster than the previous version
-  buf = malloc (p->size_x*p->size_y*symbol_size_in_bytes);
+  buf = malloc (p->size_x * p->size_y * symbol_size_in_bytes);
   if (NULL==buf)
   {
     no_mem_exit("write_out_picture: buf");
@@ -307,6 +290,8 @@ void clear_picture(StorablePicture *p)
 
   if (img->bitdepth_luma == 8)
   {
+    // this does not seem to be right since it seems to work only for imgpel == byte
+    // should be fixed
     for(i=0;i<p->size_y;i++)
       memset(p->imgY[i], img->dc_pred_value_comp[0], p->size_x*sizeof(imgpel));
   }
@@ -319,11 +304,11 @@ void clear_picture(StorablePicture *p)
   }
 
   if (img->bitdepth_chroma == 8)
-  {  
-  for(i=0;i<p->size_y_cr;i++)
-    memset(p->imgUV[0][i], img->dc_pred_value_comp[1], p->size_x_cr*sizeof(imgpel));
-  for(i=0;i<p->size_y_cr;i++)
-    memset(p->imgUV[1][i], img->dc_pred_value_comp[2], p->size_x_cr*sizeof(imgpel));
+  {
+    for(i=0;i<p->size_y_cr;i++)
+      memset(p->imgUV[0][i], img->dc_pred_value_comp[1], p->size_x_cr*sizeof(imgpel));
+    for(i=0;i<p->size_y_cr;i++)
+      memset(p->imgUV[1][i], img->dc_pred_value_comp[2], p->size_x_cr*sizeof(imgpel));
   }
   else
   {  

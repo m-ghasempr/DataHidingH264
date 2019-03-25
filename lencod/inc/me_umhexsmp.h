@@ -52,72 +52,95 @@ void    smpUMHEX_skip_intrabk_SAD(int, int);
 void    smpUMHEX_setup(short, int, int, int, int, short ******);
 
 int                                     //  ==> minimum motion cost after search
-smpUMHEXIntegerPelBlockMotionSearch (
-               imgpel   *orig_pic,      // <--  not used
-               short     ref,           // <--  reference frame (0... or -1 (backward))
-               int       list,          // <--  reference picture list
-               int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
-               int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
-               int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
-               short     pred_mv_x,     // <--  motion vector predictor (x) in sub-pel units
-               short     pred_mv_y,     // <--  motion vector predictor (y) in sub-pel units
-               short*    mv_x,          //  --> motion vector (x) - in pel units
-               short*    mv_y,          //  --> motion vector (y) - in pel units
-               int       search_range,  // <--  1-d search range in pel units
-               int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
-               int       lambda_factor);// <--  lagrangian parameter for determining motion cost
+smpUMHEXIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  current Macroblock
+                                     imgpel   *orig_pic,      // <--  not used
+                                     short     ref,           // <--  reference frame (0... or -1 (backward))
+                                     int       list,          // <--  reference picture list
+                                     int       list_offset,   // <--  MBAFF list offset
+                                     char   ***refPic,        // <--  reference array
+                                     short ****tmp_mv,        // <--  mv array
+                                     int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
+                                     int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
+                                     int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
+                                     short     pred_mv[2],    // <--  motion vector predictor (x|y) in sub-pel units
+                                     short     mv[2],         //  --> motion vector (x|y) - in pel units
+                                     int       search_range,  // <--  1-d search range in pel units
+                                     int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
+                                     int       lambda_factor, // <--  lagrangian parameter for determining motion cost
+                                     int       apply_weights
+                                     );
 
 int                                     //  ==> minimum motion cost after search
 smpUMHEXSubPelBlockMotionSearch  (
                imgpel* orig_pic,        // <--  original pixel values for the AxB block
                short     ref,           // <--  reference frame (0... or -1 (backward))
                int       list,          // <--  reference picture list
+               int       list_offset,   // <--  MBAFF list offset
                int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
                int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
                int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
-               short     pred_mv_x,     // <--  motion vector predictor (x) in sub-pel units
-               short     pred_mv_y,     // <--  motion vector predictor (y) in sub-pel units
-               short*    mv_x,          // <--> in: search center (x) / out: motion vector (x) - in pel units
-               short*    mv_y,          // <--> in: search center (y) / out: motion vector (y) - in pel units
+               short     pred_mv[2],    // <--  motion vector predictor (x|y) in sub-pel units
+               short     mv[2],         // <--> in: search center (x|y) / out: motion vector (x|y) - in pel units
                int       search_pos2,   // <--  search positions for    half-pel search  (default: 9)
                int       search_pos4,   // <--  search positions for quarter-pel search  (default: 9)
                int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
-               int       lambda_factor);// <--  lagrangian parameter for determining motion cost
+               int       lambda_factor, // <--  lagrangian parameter for determining motion cost
+               int       apply_weights
+               );
 
 int                                               //  ==> minimum motion cost after search
 smpUMHEXFullSubPelBlockMotionSearch (imgpel*   orig_pic,      // <--  original pixel values for the AxB block
                          short     ref,           // <--  reference frame (0... or -1 (backward))
                          int       list,          // <--  reference picture list
+                         int       list_offset,   // <--  MBAFF list offset
                          int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
                          int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
                          int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
-                         short     pred_mv_x,     // <--  motion vector predictor (x) in sub-pel units
-                         short     pred_mv_y,     // <--  motion vector predictor (y) in sub-pel units
-                         short*    mv_x,          // <--> in: search center (x) / out: motion vector (x) - in pel units
-                         short*    mv_y,          // <--> in: search center (y) / out: motion vector (y) - in pel units
+                         short     pred_mv[2],    // <--  motion vector predictor (x|y) in sub-pel units
+                         short     mv[2],         // <--> in: search center (x|y) / out: motion vector (x|y) - in pel units
                          int       search_pos2,   // <--  search positions for    half-pel search  (default: 9)
                          int       search_pos4,   // <--  search positions for quarter-pel search  (default: 9)
                          int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
-                         int       lambda_factor);// <--  lagrangian parameter for determining motion cost
-
-int                                                           //  ==> minimum motion cost after search
-smpUMHEXBipredIntegerPelBlockMotionSearch (imgpel* cur_pic,  // <--  original pixel values for the AxB block
+                         int       lambda_factor, // <--  lagrangian parameter for determining motion cost
+                         int       apply_weights
+                         );
+int                                                                 //  ==> minimum motion cost after search
+smpUMHEXBipredIntegerPelBlockMotionSearch (Macroblock *currMB,      // <--  current Macroblock
+                                           imgpel* cur_pic,         // <--  original pixel values for the AxB block
                                            short     ref,           // <--  reference frame (0... or -1 (backward))
-                                           int       list,
+                                           int       list,          // <--  Current reference list
+                                           int       list_offset,   // <--  MBAFF list offset
+                                           char   ***refPic,        // <--  reference array
+                                           short ****tmp_mv,        // <--  mv array
                                            int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
                                            int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
                                            int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
-                                           short     pred_mv_x1,    // <--  motion vector predictor (x) in sub-pel units
-                                           short     pred_mv_y1,    // <--  motion vector predictor (y) in sub-pel units
-                                           short     pred_mv_x2,    // <--  motion vector predictor (x) in sub-pel units
-                                           short     pred_mv_y2,    // <--  motion vector predictor (y) in sub-pel units
-                                           short*    mv_x,          // <--> in: search center (x) / out: motion vector (x) - in pel units
-                                           short*    mv_y,          // <--> in: search center (y) / out: motion vector (y) - in pel units
-                                           short*    s_mv_x,        // <--> in: search center (x) / out: motion vector (x) - in pel units
-                                           short*    s_mv_y,        // <--> in: search center (y) / out: motion vector (y) - in pel units
+                                           short     pred_mv1[2],   // <--  motion vector predictor (x|y) in sub-pel units
+                                           short     pred_mv2[2],   // <--  motion vector predictor (x|y) in sub-pel units
+                                           short     mv[2],         // <--> in: search center (x|y) / out: motion vector (x|y) - in pel units
+                                           short     s_mv[2],       // <--> in: search center (x|y) / out: motion vector (x|y) - in pel units
                                            int       search_range,  // <--  1-d search range in pel units
                                            int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
-                                           int       lambda_factor);// <--  lagrangian parameter for determining motion cost
+                                           int       lambda_factor, // <--  lagrangian parameter for determining motion cost
+                                           int       apply_weights
+                                           );
 
+
+int                                                   //  ==> minimum motion cost after search
+smpUMHEXSubPelBlockME (imgpel*   orig_pic,      // <--  original pixel values for the AxB block
+                    short     ref,           // <--  reference frame (0... or -1 (backward))
+                    int       list,
+                    int       list_offset,   // <--  MBAFF list offset
+                    int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
+                    int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
+                    int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
+                    short     pred_mv[2],    // <--  motion vector predictor (x|y) in sub-pel units
+                    short     mv[2],         // <--> in: search center (x|y) / out: motion vector (x|y) - in sub-pel units
+                    int       search_pos2,   // <--  search positions for    half-pel search  (default: 9)
+                    int       search_pos4,   // <--  search positions for quarter-pel search  (default: 9)
+                    int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
+                    int*      lambda,
+                    int       apply_weights
+                    );
 
 #endif

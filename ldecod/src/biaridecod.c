@@ -104,7 +104,6 @@ const byte rLPS_table_64x4[64][4]=
 };
 
 
-
 const byte AC_next_state_MPS_64[64] =    
 {
   1,2,3,4,5,6,7,8,9,10,
@@ -230,7 +229,7 @@ unsigned int getword(DecodingEnvironmentPtr dep)
  ************************************************************************
  */
 void arideco_start_decoding(DecodingEnvironmentPtr dep, unsigned char *code_buffer,
-                            int firstbyte, int *code_len, int slice_type )
+                            int firstbyte, int *code_len)
 {
 
   Dcodestrm      =    code_buffer;
@@ -303,10 +302,11 @@ unsigned int biari_decode_symbol(DecodingEnvironmentPtr dep, BiContextTypePtr bi
   else         // LPS 
   {
     value -= (range<<DbitsLeft);
-    bit ^= 1;
+    bit ^= 0x01;
 
     if (!state)          // switch meaning of MPS if necessary 
       bi_ct->MPS ^= 0x01; 
+
     bi_ct->state = AC_next_state_LPS_64[state]; // next state 
 
     renorm = renorm_table_32[(rLPS>>3) & 0x1F]; 
@@ -410,7 +410,7 @@ unsigned int biari_decode_final(DecodingEnvironmentPtr dep)
  *    Initializes a given context with some pre-defined probability state
  ************************************************************************
  */
-void biari_init_context (struct img_par* img, BiContextTypePtr ctx, const int* ini)
+void biari_init_context (ImageParameters *img, BiContextTypePtr ctx, const int* ini)
 {
   int pstate = ((ini[0]* imax(0,img->qp) )>>4) + ini[1];
   pstate = iClip3(1, 126, pstate);

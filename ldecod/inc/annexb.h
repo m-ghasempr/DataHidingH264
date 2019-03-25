@@ -20,7 +20,7 @@ extern int NALUCount;
 
 int  GetAnnexbNALU (NALU_t *nalu);
 void OpenBitstreamFile (char *fn);
-void CloseBitstreamFile();
+void CloseBitstreamFile(void);
 void CheckZeroByteNonVCL(NALU_t *nalu);
 void CheckZeroByteVCL(NALU_t *nalu);
 

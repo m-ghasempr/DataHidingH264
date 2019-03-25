@@ -9,8 +9,11 @@ SUBDIRS := lencod ldecod rtpdump rtp_loss
 
 ### include debug information: 1=yes, 0=no
 DBG?= 0
+### include M32 optimization : 1=yes, 0=no
+M32?= 0
 
 export DBG
+export M32
 
 .PHONY: default all distclean clean tags depend $(SUBDIRS)
 

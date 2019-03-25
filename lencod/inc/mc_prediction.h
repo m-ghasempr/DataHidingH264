@@ -14,6 +14,7 @@
 
 #ifndef _MC_PREDICTION_H_
 #define _MC_PREDICTION_H_
+#include "mbuffer.h"
 
 void LumaPrediction      ( Macroblock* currMB, int, int, int, int, int, int, int, short, short );
 void LumaPredictionBi    ( Macroblock* currMB, int, int, int, int, int, int, short, short, int );
@@ -21,9 +22,9 @@ void ChromaPrediction    ( Macroblock* currMB, int, int, int, int, int, int, int
 void ChromaPrediction4x4 ( Macroblock* currMB, int, int, int, int, int, int, short, short);   
 
 // function pointer for different ways of obtaining chroma interpolation
-void (*OneComponentChromaPrediction4x4)         (imgpel* , int , int , short****** , int , short , int , int );
-void OneComponentChromaPrediction4x4_regenerate (imgpel* , int , int , short****** , int , short , int , int );
-void OneComponentChromaPrediction4x4_retrieve   (imgpel* , int , int , short****** , int , short , int , int );
+void (*OneComponentChromaPrediction4x4)         (imgpel* , int , int , short*** , StorablePicture *listX, int );
+void OneComponentChromaPrediction4x4_regenerate (imgpel* , int , int , short*** , StorablePicture *listX, int );
+void OneComponentChromaPrediction4x4_retrieve   (imgpel* , int , int , short*** , StorablePicture *listX, int );
 
 void IntraChromaPrediction ( Macroblock *currMB, int*, int*, int*);
 void IntraChromaRDDecision ( Macroblock *currMB, RD_PARAMS);

@@ -3,7 +3,7 @@
  *  \file
  *     loopfilter.h
  *  \brief
- *     external loop filter interface
+ *     external deblocking filter interface
  ************************************************************************
  */
 
@@ -13,6 +13,6 @@
 #include "global.h"
 #include "mbuffer.h"
 
-void DeblockPicture(struct img_par *img, StorablePicture *p) ;
+void DeblockPicture(ImageParameters *img, StorablePicture *p) ;
 
 #endif //_LOOPFILTER_H_

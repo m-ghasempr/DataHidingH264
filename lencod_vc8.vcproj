@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="Windows-1252"?>
 <VisualStudioProject
 	ProjectType="Visual C++"
-	Version="8,00"
+	Version="8.00"
 	Name="lencod"
 	ProjectGUID="{9A39F1B7-3DFE-4263-8C02-8070F7D99AFA}"
 	>
@@ -229,6 +229,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lencod\src\conformance.c"
+				>
+			</File>
+			<File
 				RelativePath=".\lencod\src\context_ini.c"
 				>
 			</File>
@@ -262,6 +266,10 @@
 			</File>
 			<File
 				RelativePath=".\lencod\src\img_luma.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\input.c"
 				>
 			</File>
 			<File
@@ -385,11 +393,51 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lencod\src\quant4x4.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\quant4x4_around.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\quant4x4_normal.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\quant4x4_trellis.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\quant8x8.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\quant8x8_around.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\quant8x8_normal.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\quant8x8_trellis.c"
+				>
+			</File>
+			<File
 				RelativePath=".\lencod\src\ratectl.c"
 				>
 			</File>
 			<File
 				RelativePath=".\lencod\src\rc_quadratic.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\rd_intra_jm.c"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\src\rdo_quant.c"
 				>
 			</File>
 			<File
@@ -466,6 +514,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lencod\inc\conformance.h"
+				>
+			</File>
+			<File
 				RelativePath=".\lencod\inc\context_ini.h"
 				>
 			</File>
@@ -494,6 +546,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lencod\inc\frame.h"
+				>
+			</File>
+			<File
 				RelativePath=".\lencod\inc\global.h"
 				>
 			</File>
@@ -515,6 +571,14 @@
 			</File>
 			<File
 				RelativePath=".\lencod\inc\img_luma.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\inc\img_predblk.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\inc\input.h"
 				>
 			</File>
 			<File
@@ -570,10 +634,6 @@
 				>
 			</File>
 			<File
-				RelativePath=".\lencod\inc\minmax.h"
-				>
-			</File>
-			<File
 				RelativePath=".\lencod\inc\mode_decision.h"
 				>
 			</File>
@@ -610,11 +670,31 @@
 				>
 			</File>
 			<File
+				RelativePath=".\lencod\inc\quant4x4.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\inc\quant8x8.h"
+				>
+			</File>
+			<File
 				RelativePath=".\lencod\inc\ratectl.h"
 				>
 			</File>
 			<File
 				RelativePath=".\lencod\inc\rc_quadratic.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\inc\rd_intra_jm.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\inc\rdo_quant.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\inc\rdopt.h"
 				>
 			</File>
 			<File
@@ -651,6 +731,10 @@
 			</File>
 			<File
 				RelativePath=".\lencod\inc\win32.h"
+				>
+			</File>
+			<File
+				RelativePath=".\lencod\inc\wp.h"
 				>
 			</File>
 		</Filter>

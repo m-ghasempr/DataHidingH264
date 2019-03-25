@@ -64,7 +64,7 @@ void create_context_memory (void)
   int num_mb  = img->FrameSizeInMbs; // number of macroblocks for frame
   double log2 = log(2.0);
 
-  num_mb_per_slice  = (input->slice_mode == 1 ? input->slice_argument : num_mb);
+  num_mb_per_slice  = (params->slice_mode == 1 ? params->slice_argument : num_mb);
   number_of_slices  = (num_mb + num_mb_per_slice - 1) / num_mb_per_slice;
 
   if ((initialized  = (int***) malloc (3 * sizeof(int**))) == NULL)
@@ -184,9 +184,9 @@ void SetCtxModelNumber (void)
     img->model_number=DEFAULT_CTX_MODEL;
     return;
   }
-  if(input->context_init_method==FIXED)
+  if(params->context_init_method==FIXED)
   {
-    img->model_number=input->model_number;
+    img->model_number=params->model_number;
     return;
   }
 
@@ -333,7 +333,7 @@ void store_contexts (void)
   int img_type    = img->type;
   int ctx_number  = img->currentSlice->start_mb_nr / num_mb_per_slice;
 
-  if( input->context_init_method )
+  if( params->context_init_method )
   {
     initialized [frame_field][img_type][ctx_number] = 1;
     GetCtxModelNumber (model_number[frame_field][img_type]+ctx_number, img->currentSlice->mot_ctx, img->currentSlice->tex_ctx);

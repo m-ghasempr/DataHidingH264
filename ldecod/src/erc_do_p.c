@@ -26,7 +26,7 @@
 #include "mc_prediction.h"
 
 extern int erc_mvperMB;
-struct img_par *erc_img;
+ImageParameters *erc_img;
 
 // picture error concealment
 // concealment_head points to first node in list, concealment_end points to
@@ -42,10 +42,10 @@ static int concealByTrial(frame *recfr, imgpel *predMB,
 static int edgeDistortion (int predBlocks[], int currYBlockNum, imgpel *predMB,
                            imgpel *recY, int picSizeX, int regionSize);
 static void copyBetweenFrames (frame *recfr, int currYBlockNum, int picSizeX, int regionSize);
-static void buildPredRegionYUV(struct img_par *img, int *mv, int x, int y, imgpel *predMB);
+static void buildPredRegionYUV(ImageParameters *img, int *mv, int x, int y, imgpel *predMB);
 
 // picture error concealment
-static void buildPredblockRegionYUV(struct img_par *img, int *mv,
+static void buildPredblockRegionYUV(ImageParameters *img, int *mv,
                                     int x, int y, imgpel *predMB, int list);
 static void CopyImgData(imgpel **inputY, imgpel ***inputUV, imgpel **outputY, imgpel ***outputUV, 
                         int img_width, int img_height, int img_width_cr, int img_height_cr);
@@ -547,7 +547,7 @@ static int concealByTrial(frame *recfr, imgpel *predMB,
 *      the Y,U,V planes are concatenated y = predMB, u = predMB+256, v = predMB+320
 ************************************************************************
 */
-static void buildPredRegionYUV(struct img_par *img, int *mv, int x, int y, imgpel *predMB)
+static void buildPredRegionYUV(ImageParameters *img, int *mv, int x, int y, imgpel *predMB)
 {
   static imgpel tmp_block[MB_BLOCK_SIZE][MB_BLOCK_SIZE];
   int i=0, j=0, ii=0, jj=0,i1=0,j1=0,j4=0,i4=0;
@@ -591,7 +591,7 @@ static void buildPredRegionYUV(struct img_par *img, int *mv, int x, int y, imgpe
       vec1_x = i4*4*mv_mul + mv[0];
       vec1_y = j4*4*mv_mul + mv[1];
 
-      get_block_luma(PLANE_Y, ref_frame, listX[0], vec1_x, vec1_y, BLOCK_SIZE, BLOCK_SIZE, img, tmp_block);  
+      get_block_luma(PLANE_Y, listX[0][ref_frame], vec1_x, vec1_y, BLOCK_SIZE, BLOCK_SIZE, img, tmp_block);  
 
       for(ii=0;ii<BLOCK_SIZE;ii++)
         for(jj=0;jj<MB_BLOCK_SIZE/BLOCK_SIZE;jj++)
@@ -788,14 +788,14 @@ static int edgeDistortion (int predBlocks[], int currYBlockNum, imgpel *predMB,
           neighbor = currBlock - picSizeX;
           for ( i = 0; i < regionSize; i++ )
           {
-            distortion += mabs((int)(predMB[i] - neighbor[i]));
+            distortion += iabs((int)(predMB[i] - neighbor[i]));
           }
           break;
         case 5:
           neighbor = currBlock - 1;
           for ( i = 0; i < regionSize; i++ )
           {
-            distortion += mabs((int)(predMB[i*16] - neighbor[i*picSizeX]));
+            distortion += iabs((int)(predMB[i*16] - neighbor[i*picSizeX]));
           }
           break;
         case 6:
@@ -803,7 +803,7 @@ static int edgeDistortion (int predBlocks[], int currYBlockNum, imgpel *predMB,
           currBlockOffset = (regionSize-1)*16;
           for ( i = 0; i < regionSize; i++ )
           {
-            distortion += mabs((int)(predMB[i+currBlockOffset] - neighbor[i]));
+            distortion += iabs((int)(predMB[i+currBlockOffset] - neighbor[i]));
           }
           break;
         case 7:
@@ -811,7 +811,7 @@ static int edgeDistortion (int predBlocks[], int currYBlockNum, imgpel *predMB,
           currBlockOffset = regionSize-1;
           for ( i = 0; i < regionSize; i++ )
           {
-            distortion += mabs((int)(predMB[i*16+currBlockOffset] - neighbor[i*picSizeX]));
+            distortion += iabs((int)(predMB[i*16+currBlockOffset] - neighbor[i*picSizeX]));
           }
           break;
         }
@@ -844,7 +844,7 @@ static int edgeDistortion (int predBlocks[], int currYBlockNum, imgpel *predMB,
 *
 *************************************************************************
 */
-static void buildPredblockRegionYUV(struct img_par *img, int *mv,
+static void buildPredblockRegionYUV(ImageParameters *img, int *mv,
                                     int x, int y, imgpel *predMB, int list)
 {
   static imgpel tmp_block[MB_BLOCK_SIZE][MB_BLOCK_SIZE];
@@ -879,7 +879,7 @@ static void buildPredblockRegionYUV(struct img_par *img, int *mv,
 
   vec1_x = x*mv_mul + mv[0];
   vec1_y = y*mv_mul + mv[1];
-  get_block_luma(PLANE_Y, ref_frame, listX[list], vec1_x,vec1_y, BLOCK_SIZE, BLOCK_SIZE, img, tmp_block);  
+  get_block_luma(PLANE_Y, listX[list][ref_frame], vec1_x,vec1_y, BLOCK_SIZE, BLOCK_SIZE, img, tmp_block);  
 
   for(jj=0;jj<MB_BLOCK_SIZE/BLOCK_SIZE;jj++)
     for(ii=0;ii<BLOCK_SIZE;ii++)
@@ -1685,7 +1685,7 @@ void delete_list( struct concealment_node *ptr )
 void conceal_non_ref_pics(int diff)
 {
   int missingpoc = 0;
-  unsigned int i, pos;
+  unsigned int i, pos = 0;
   StorablePicture *conceal_from_picture = NULL;
   StorablePicture *conceal_to_picture = NULL;
   struct concealment_node *concealment_ptr = NULL;

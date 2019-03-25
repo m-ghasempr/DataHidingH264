@@ -29,7 +29,10 @@ int recovery_flag = 0;
 extern int non_conforming_stream;
 
 void write_out_picture(StorablePicture *p, int p_out);
-
+void (*img2buf)     (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom);
+void img2buf_byte   (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom);
+void img2buf_normal (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom);
+void img2buf_endian (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom);
 
 /*!
  ************************************************************************
@@ -40,7 +43,7 @@ void write_out_picture(StorablePicture *p, int p_out);
  *      1, big-endian (e.g. SPARC, MIPS, PowerPC)
  ************************************************************************
  */
-int testEndian()
+int testEndian(void)
 {
   short s;
   byte *p;
@@ -52,6 +55,29 @@ int testEndian()
   return (*p==0);
 }
 
+
+/*!
+ ************************************************************************
+ * \brief
+ *      selects appropriate output function given system arch. and data
+ * \return
+ *
+ ************************************************************************
+ */
+void initOutput(int symbol_size_in_bytes)
+{
+  if (( sizeof(char) == sizeof (imgpel)) && ( sizeof(char) == symbol_size_in_bytes))
+  {
+    img2buf = img2buf_byte;
+  }
+  else
+  {
+    if (( sizeof(char) != sizeof (imgpel)) && testEndian())
+      img2buf = img2buf_endian;
+    else
+      img2buf = img2buf_normal;
+  }    
+}
 
 /*!
  ************************************************************************
@@ -77,7 +103,7 @@ int testEndian()
  *    pixels to crop from bottom
  ************************************************************************
  */
-void img2buf (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom)
+void img2buf_normal (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom)
 {
   int i,j;
 
@@ -86,108 +112,159 @@ void img2buf (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int sym
 
   int size = 0;
 
-  unsigned char  ui8;
-  unsigned short tmp16, ui16;
-  unsigned long  tmp32, ui32;
-
-  if (( sizeof(char) == sizeof (imgpel)) && ( sizeof(char) == symbol_size_in_bytes))
+  // sizeof (imgpel) > sizeof(char)
+  // little endian
+  if (sizeof (imgpel) < symbol_size_in_bytes)
   {
-    // imgpel == pixel_in_file == 1 byte -> simple copy
-    buf += crop_left;
-    for(i = 0; i < theight; i++) 
+    // this should not happen. we should not have smaller imgpel than our source material.
+    size = sizeof (imgpel);
+    // clear buffer
+    memset (buf, 0, (twidth * theight * symbol_size_in_bytes));
+  }
+  else
+  {
+    size = symbol_size_in_bytes;
+  }
+
+  if ((crop_top || crop_bottom || crop_left || crop_right) || (size != 1))
+  {
+    for(i=crop_top;i<size_y-crop_bottom;i++)
     {
-      memcpy(buf, &(imgX[i + crop_top][crop_left]), twidth);
-      buf += twidth;
+      int ipos = (i - crop_top) * (twidth);
+      for(j=crop_left;j<size_x-crop_right;j++)
+      {
+        memcpy(buf+((j-crop_left+(ipos))*symbol_size_in_bytes),&(imgX[i][j]), size);
+      }
     }
   }
   else
   {
-    // sizeof (imgpel) > sizeof(char)
-    if (testEndian())
-    {
-      // big endian
-      switch (symbol_size_in_bytes)
-      {
-      case 1:
-        {
-          for(i=crop_top;i<size_y-crop_bottom;i++)
-            for(j=crop_left;j<size_x-crop_right;j++)
-            {
-              ui8 = (unsigned char) (imgX[i][j]);
-              buf[(j-crop_left+((i-crop_top)*(twidth)))] = ui8;
-            }
-          break;
-        }
-      case 2:
-        {
-          for(i=crop_top;i<size_y-crop_bottom;i++)
-            for(j=crop_left;j<size_x-crop_right;j++)
-            {
-              tmp16 = (unsigned short) (imgX[i][j]);
-              ui16  = (tmp16 >> 8) | ((tmp16&0xFF)<<8);
-              memcpy(buf+((j-crop_left+((i-crop_top)*(twidth)))*2),&(ui16), 2);
-            }
-          break;
-        }
-      case 4:
-        {
-          for(i=crop_top;i<size_y-crop_bottom;i++)
-            for(j=crop_left;j<size_x-crop_right;j++)
-            {
-              tmp32 = (unsigned long) (imgX[i][j]);
-              ui32  = ((tmp32&0xFF00)<<8) | ((tmp32&0xFF)<<24) | ((tmp32&0xFF0000)>>8) | ((tmp32&0xFF000000)>>24);
-              memcpy(buf+((j-crop_left+((i-crop_top)*(twidth)))*4),&(ui32), 4);
-            }
-          break;
-        }
-      default:
-        {
-           error ("writing only to formats of 8, 16 or 32 bit allowed on big endian architecture", 500);
-           break;
-        }
-      }
-
-    }
-    else
-    {
-      // little endian
-      if (sizeof (imgpel) < symbol_size_in_bytes)
-      {
-        // this should not happen. we should not have smaller imgpel than our source material.
-        size = sizeof (imgpel);
-        // clear buffer
-        memset (buf, 0, (twidth*theight*symbol_size_in_bytes));
-      }
-      else
-      {
-        size = symbol_size_in_bytes;
-      }
-
-      if ((crop_top || crop_bottom || crop_left || crop_right) || (size != 1))
-      {
-        for(i=crop_top;i<size_y-crop_bottom;i++)
-        {
-          int ipos = (i-crop_top)*(twidth);
-          for(j=crop_left;j<size_x-crop_right;j++)
-          {
-            memcpy(buf+((j-crop_left+(ipos))*symbol_size_in_bytes),&(imgX[i][j]), size);
-          }
-        }
-      }
-      else
-      {
-        imgpel *cur_pixel = &(imgX[0][0]);;
-        for(i = 0; i < size_y * size_x; i++)
-        {          
-          *(buf++)=(char) *(cur_pixel++);
-        }
-      }
+    imgpel *cur_pixel = &(imgX[0][0]);;
+    for(i = 0; i < size_y * size_x; i++)
+    {          
+      *(buf++)=(char) *(cur_pixel++);
     }
   }
 }
 
+/*!
+ ************************************************************************
+ * \brief
+ *    Convert image plane to temporary buffer for file writing
+ * \param imgX
+ *    Pointer to image plane
+ * \param buf
+ *    Buffer for file output
+ * \param size_x
+ *    horizontal size
+ * \param size_y
+ *    vertical size
+ * \param symbol_size_in_bytes
+ *    number of bytes used per pel
+ * \param crop_left
+ *    pixels to crop from left
+ * \param crop_right
+ *    pixels to crop from right
+ * \param crop_top
+ *    pixels to crop from top
+ * \param crop_bottom
+ *    pixels to crop from bottom
+ ************************************************************************
+ */
+void img2buf_byte (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom)
+{
+  int i;
 
-#ifdef PAIR_FIELDS_IN_OUTPUT
+  int twidth  = size_x - crop_left - crop_right;
+  int theight = size_y - crop_top - crop_bottom;
+
+  // imgpel == pixel_in_file == 1 byte -> simple copy
+  buf += crop_left;
+  for(i = 0; i < theight; i++) 
+  {
+    memcpy(buf, &(imgX[i + crop_top][crop_left]), twidth);
+    buf += twidth;
+  }
+}
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Convert image plane to temporary buffer for file writing
+ * \param imgX
+ *    Pointer to image plane
+ * \param buf
+ *    Buffer for file output
+ * \param size_x
+ *    horizontal size
+ * \param size_y
+ *    vertical size
+ * \param symbol_size_in_bytes
+ *    number of bytes used per pel
+ * \param crop_left
+ *    pixels to crop from left
+ * \param crop_right
+ *    pixels to crop from right
+ * \param crop_top
+ *    pixels to crop from top
+ * \param crop_bottom
+ *    pixels to crop from bottom
+ ************************************************************************
+ */
+void img2buf_endian (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes, int crop_left, int crop_right, int crop_top, int crop_bottom)
+{
+  int i,j;
+  static unsigned char  ui8;
+  static unsigned short tmp16, ui16;
+  static unsigned long  tmp32, ui32;
+
+  int twidth  = size_x - crop_left - crop_right;
+
+  // big endian
+  switch (symbol_size_in_bytes)
+  {
+  case 1:
+    {
+      for(i=crop_top;i<size_y-crop_bottom;i++)
+        for(j=crop_left;j<size_x-crop_right;j++)
+        {
+          ui8 = (unsigned char) (imgX[i][j]);
+          buf[(j-crop_left+((i-crop_top)*(twidth)))] = ui8;
+        }
+        break;
+    }
+  case 2:
+    {
+      for(i=crop_top;i<size_y-crop_bottom;i++)
+        for(j=crop_left;j<size_x-crop_right;j++)
+        {
+          tmp16 = (unsigned short) (imgX[i][j]);
+          ui16  = (unsigned short) ((tmp16 >> 8) | ((tmp16&0xFF)<<8));
+          memcpy(buf+((j-crop_left+((i-crop_top)*(twidth)))*2),&(ui16), 2);
+        }
+        break;
+    }
+  case 4:
+    {
+      for(i=crop_top;i<size_y-crop_bottom;i++)
+        for(j=crop_left;j<size_x-crop_right;j++)
+        {
+          tmp32 = (unsigned long) (imgX[i][j]);
+          ui32  = (unsigned long) (((tmp32&0xFF00)<<8) | ((tmp32&0xFF)<<24) | ((tmp32&0xFF0000)>>8) | ((tmp32&0xFF000000)>>24));
+          memcpy(buf+((j-crop_left+((i-crop_top)*(twidth)))*4),&(ui32), 4);
+        }
+        break;
+    }
+  default:
+    {
+      error ("writing only to formats of 8, 16 or 32 bit allowed on big endian architecture", 500);
+      break;
+    }
+  }  
+}
+
+
+#if (PAIR_FIELDS_IN_OUTPUT)
 
 void clear_picture(StorablePicture *p);
 
@@ -381,7 +458,7 @@ void write_out_picture(StorablePicture *p, int p_out)
   if (p->non_existing)
     return;
 
-#ifdef ENABLE_OUTPUT_TONEMAPPING
+#if (ENABLE_OUTPUT_TONEMAPPING)
   // note: this tone-mapping is working for RGB format only. Sharp
   if (p->seiHasTone_mapping && rgb_output)
   {
@@ -406,6 +483,7 @@ void write_out_picture(StorablePicture *p, int p_out)
   }
 
   //printf ("write frame size: %dx%d\n", p->size_x-crop_left-crop_right,p->size_y-crop_top-crop_bottom );
+  initOutput(symbol_size_in_bytes);
 
   // KS: this buffer should actually be allocated only once, but this is still much faster than the previous version
   buf = malloc (p->size_x*p->size_y*symbol_size_in_bytes);
@@ -421,7 +499,7 @@ void write_out_picture(StorablePicture *p, int p_out)
     crop_top    = ( 2 - p->frame_mbs_only_flag ) * p->frame_cropping_rect_top_offset;
     crop_bottom = ( 2 - p->frame_mbs_only_flag ) * p->frame_cropping_rect_bottom_offset;
 
-    img2buf (p->imgUV[1], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
+    img2buf_normal (p->imgUV[1], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
     write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes);
 
     if (p->frame_cropping_flag)
@@ -437,7 +515,7 @@ void write_out_picture(StorablePicture *p, int p_out)
     }
   }
 
-  img2buf (p->imgY, buf, p->size_x, p->size_y, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
+  img2buf_normal (p->imgY, buf, p->size_x, p->size_y, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
   write(p_out, buf, (p->size_y-crop_bottom-crop_top)*(p->size_x-crop_right-crop_left)*symbol_size_in_bytes);
 
   if (p->chroma_format_idc!=YUV400)
@@ -447,18 +525,18 @@ void write_out_picture(StorablePicture *p, int p_out)
     crop_top    = ( 2 - p->frame_mbs_only_flag ) * p->frame_cropping_rect_top_offset;
     crop_bottom = ( 2 - p->frame_mbs_only_flag ) * p->frame_cropping_rect_bottom_offset;
 
-    img2buf (p->imgUV[0], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
+    img2buf_normal (p->imgUV[0], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
     write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)* symbol_size_in_bytes);
 
     if (!rgb_output)
     {
-      img2buf (p->imgUV[1], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
+      img2buf_normal (p->imgUV[1], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, crop_left, crop_right, crop_top, crop_bottom);
       write(p_out, buf, (p->size_y_cr-crop_bottom-crop_top)*(p->size_x_cr-crop_right-crop_left)*symbol_size_in_bytes);
     }
   }
   else
   {
-    if (input->write_uv)
+    if (params->write_uv)
     {
       int i,j;
       imgpel cr_val = (imgpel) (1<<(img->bitdepth_luma - 1));
@@ -469,12 +547,12 @@ void write_out_picture(StorablePicture *p, int p_out)
           p->imgUV[0][j][i]=cr_val;
 
       // fake out U=V=128 to make a YUV 4:2:0 stream
-      img2buf (p->imgUV[0], buf, p->size_x/2, p->size_y/2, symbol_size_in_bytes, crop_left/2, crop_right/2, crop_top/2, crop_bottom/2);
+      img2buf_normal (p->imgUV[0], buf, p->size_x/2, p->size_y/2, symbol_size_in_bytes, crop_left/2, crop_right/2, crop_top/2, crop_bottom/2);
 
       write(p_out, buf, symbol_size_in_bytes * (p->size_y-crop_bottom-crop_top)/2 * (p->size_x-crop_right-crop_left)/2 );
       write(p_out, buf, symbol_size_in_bytes * (p->size_y-crop_bottom-crop_top)/2 * (p->size_x-crop_right-crop_left)/2 );
 
-      free_mem3Dpel(p->imgUV, 1);
+      free_mem3Dpel(p->imgUV);
       p->imgUV=NULL;
     }
   }
@@ -490,10 +568,11 @@ void write_out_picture(StorablePicture *p, int p_out)
  *    Initialize output buffer for direct output
  ************************************************************************
  */
-void init_out_buffer()
+void init_out_buffer(void)
 {
-  out_buffer = alloc_frame_store();
-#ifdef PAIR_FIELDS_IN_OUTPUT
+  out_buffer = alloc_frame_store();  
+
+#if (PAIR_FIELDS_IN_OUTPUT)
   pending_output = calloc (sizeof(StorablePicture), 1);
   if (NULL==pending_output) no_mem_exit("init_out_buffer");
   pending_output->imgUV = NULL;
@@ -507,11 +586,11 @@ void init_out_buffer()
  *    Uninitialize output buffer for direct output
  ************************************************************************
  */
-void uninit_out_buffer()
+void uninit_out_buffer(void)
 {
   free_frame_store(out_buffer);
   out_buffer=NULL;
-#ifdef PAIR_FIELDS_IN_OUTPUT
+#if (PAIR_FIELDS_IN_OUTPUT)
   flush_pending_output(p_out);
   free (pending_output);
 #endif
@@ -668,7 +747,7 @@ void direct_output(StorablePicture *p, int p_out)
     flush_direct_output(p_out);
     write_picture (p, p_out, FRAME);
     calculate_frame_no(p);
-    if (-1!=p_ref && !input->silent)
+    if (-1!=p_ref && !params->silent)
       find_snr(snr, p, p_ref);
     free_storable_picture(p);
     return;
@@ -697,7 +776,7 @@ void direct_output(StorablePicture *p, int p_out)
     write_picture (out_buffer->frame, p_out, FRAME);
 
     calculate_frame_no(p);
-    if (-1!=p_ref && !input->silent)
+    if (-1!=p_ref && !params->silent)
       find_snr(snr, out_buffer->frame, p_ref);
     free_storable_picture(out_buffer->frame);
     out_buffer->frame = NULL;

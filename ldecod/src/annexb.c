@@ -53,7 +53,7 @@ int GetAnnexbNALU (NALU_t *nalu)
 
   if ((Buf = (unsigned char*)calloc (nalu->max_size , sizeof(char))) == NULL) no_mem_exit("GetAnnexbNALU: Buf");
 
-  while(!feof(bits) && (Buf[pos++]=fgetc(bits))==0);
+  while(!feof(bits) && (Buf[pos++]= (unsigned char) fgetc(bits))==0);
 
   if(feof(bits))
   {
@@ -133,7 +133,7 @@ int GetAnnexbNALU (NALU_t *nalu)
       free(Buf);
       return pos-1;
     }
-    Buf[pos++] = fgetc (bits);
+    Buf[pos++] = (unsigned char) fgetc (bits);
     info3 = FindStartCode(&Buf[pos-4], 3);
     if(info3 != 1)
       info2 = FindStartCode(&Buf[pos-3], 2);
@@ -208,7 +208,7 @@ void OpenBitstreamFile (char *fn)
 {
   if (NULL == (bits=fopen(fn, "rb")))
   {
-    snprintf (errortext, ET_SIZE, "Cannot open Annex B ByteStream file '%s'", input->infile);
+    snprintf (errortext, ET_SIZE, "Cannot open Annex B ByteStream file '%s'", params->infile);
     error(errortext,500);
   }
 }

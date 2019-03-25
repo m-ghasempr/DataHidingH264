@@ -14,7 +14,7 @@
 #define _ERRORCONCEALMENT_H_
 
 int set_ec_flag(int se);
-void reset_ec_flags();
+void reset_ec_flags(void);
 int get_concealed_element(SyntaxElement *sym);
 
 #endif

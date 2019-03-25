@@ -50,8 +50,8 @@ void CheckAvailabilityOfNeighborsCABAC(Macroblock *currMB)
 {
   PixelPos up, left;
 
-  getNeighbour(currMB, -1,  0, IS_LUMA, &left);
-  getNeighbour(currMB,  0, -1, IS_LUMA, &up);
+  getNeighbour(currMB, -1,  0, img->mb_size[IS_LUMA], &left);
+  getNeighbour(currMB,  0, -1, img->mb_size[IS_LUMA], &up);
 
   if (up.available)
     currMB->mb_available_up = &img->mb_data[up.mb_addr];
@@ -64,7 +64,7 @@ void CheckAvailabilityOfNeighborsCABAC(Macroblock *currMB)
     currMB->mb_available_left = NULL;
 }
 
-void cabac_new_slice()
+void cabac_new_slice(void)
 {
   last_dquant=0;
 }
@@ -146,7 +146,7 @@ void delete_contexts_TextureInfo(TextureInfoContexts *deco_ctx)
 }
 
 void readFieldModeInfo_CABAC( SyntaxElement *se,
-                              struct img_par *img,
+                              ImageParameters *img,
                               DecodingEnvironmentPtr dep_dp)
 {
   int a,b,act_ctx;
@@ -174,7 +174,7 @@ void readFieldModeInfo_CABAC( SyntaxElement *se,
 
 
 int check_next_mb_and_get_field_mode_CABAC( SyntaxElement *se,
-                                            struct img_par *img,
+                                            ImageParameters *img,
                                             DataPartition  *act_dp)
 {
   BiContextTypePtr          mb_type_ctx_copy[4];
@@ -265,11 +265,11 @@ int check_next_mb_and_get_field_mode_CABAC( SyntaxElement *se,
  ************************************************************************
  */
 void readMVD_CABAC( SyntaxElement *se,
-                    struct img_par *img,
+                    ImageParameters *img,
                     DecodingEnvironmentPtr dep_dp)
 {
-  int i = img->subblock_x;
-  int j = img->subblock_y;
+  int i = img->subblock_x << 2;
+  int j = img->subblock_y << 2;
   int a, b;
   int act_ctx;
   int act_sym;
@@ -283,8 +283,8 @@ void readMVD_CABAC( SyntaxElement *se,
   MotionInfoContexts *ctx = img->currentSlice->mot_ctx;
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
 
-  getLuma4x4Neighbour(currMB, (i<<2) - 1, (j<<2),     &block_a);
-  getLuma4x4Neighbour(currMB, (i<<2),     (j<<2) - 1, &block_b);
+  get4x4Neighbour(currMB, i - 1, j    , img->mb_size[IS_LUMA], &block_a);
+  get4x4Neighbour(currMB, i,     j - 1, img->mb_size[IS_LUMA], &block_b);
 
   if (block_b.available)
   {
@@ -319,9 +319,9 @@ void readMVD_CABAC( SyntaxElement *se,
   else
   {
     if (mv_local_err>32)
-      act_ctx=5*k+3;
+      act_ctx = 5*k+3;
     else
-      act_ctx=5*k+2;
+      act_ctx = 5*k+2;
   }
   se->context = act_ctx;
 
@@ -353,7 +353,7 @@ void readMVD_CABAC( SyntaxElement *se,
  ************************************************************************
  */
 void readB8_typeInfo_CABAC (SyntaxElement *se,
-                            struct img_par *img,
+                            ImageParameters *img,
                             DecodingEnvironmentPtr dep_dp)
 {
   int act_sym = 0;
@@ -436,7 +436,7 @@ void readB8_typeInfo_CABAC (SyntaxElement *se,
  ************************************************************************
  */
 void readMB_skip_flagInfo_CABAC( SyntaxElement *se,
-                                 struct img_par *img,
+                                 ImageParameters *img,
                                  DecodingEnvironmentPtr dep_dp)
 {
   int a, b;
@@ -504,7 +504,7 @@ void readMB_skip_flagInfo_CABAC( SyntaxElement *se,
 */
 
 void readMB_transform_size_flag_CABAC( SyntaxElement *se,
-                                  struct img_par *img,
+                                  ImageParameters *img,
                                   DecodingEnvironmentPtr dep_dp)
 {
   MotionInfoContexts *ctx    = (img->currentSlice)->mot_ctx;
@@ -533,7 +533,7 @@ void readMB_transform_size_flag_CABAC( SyntaxElement *se,
  ************************************************************************
  */
 void readMB_typeInfo_CABAC( SyntaxElement *se,
-                            struct img_par *img,
+                            ImageParameters *img,
                             DecodingEnvironmentPtr dep_dp)
 {
   MotionInfoContexts *ctx = (img->currentSlice)->mot_ctx;
@@ -544,7 +544,6 @@ void readMB_typeInfo_CABAC( SyntaxElement *se,
   int act_sym;
   int bframe=(img->type==B_SLICE);
   int mode_sym;
-  int ct = 0;
   int curr_mb_type;
 
 
@@ -683,7 +682,6 @@ void readMB_typeInfo_CABAC( SyntaxElement *se,
   {
     if (bframe)
     {
-      ct = 1;
       if (currMB->mb_available_up == NULL)
         b = 0;
       else
@@ -815,7 +813,7 @@ void readMB_typeInfo_CABAC( SyntaxElement *se,
  ************************************************************************
  */
 void readIntraPredMode_CABAC( SyntaxElement *se,
-                              struct img_par *img,
+                              ImageParameters *img,
                               DecodingEnvironmentPtr dep_dp)
 {
   TextureInfoContexts *ctx     = img->currentSlice->tex_ctx;
@@ -848,7 +846,7 @@ void readIntraPredMode_CABAC( SyntaxElement *se,
  ************************************************************************
  */
 void readRefFrame_CABAC( SyntaxElement *se,
-                         struct img_par *img,
+                         ImageParameters *img,
                          DecodingEnvironmentPtr dep_dp)
 {
   MotionInfoContexts *ctx = img->currentSlice->mot_ctx;
@@ -863,11 +861,11 @@ void readRefFrame_CABAC( SyntaxElement *se,
 
   PixelPos block_a, block_b;
 
-  getLuma4x4Neighbour(currMB, (img->subblock_x<<2) - 1, (img->subblock_y<<2),     &block_a);
-  getLuma4x4Neighbour(currMB, (img->subblock_x<<2),     (img->subblock_y<<2) - 1, &block_b);
+  get4x4Neighbour(currMB, (img->subblock_x<<2) - 1, (img->subblock_y<<2)    , img->mb_size[IS_LUMA], &block_a);
+  get4x4Neighbour(currMB, (img->subblock_x<<2),     (img->subblock_y<<2) - 1, img->mb_size[IS_LUMA], &block_b);
 
-  b8a=((block_a.x/2)%2)+2*((block_a.y/2)%2);
-  b8b=((block_b.x/2)%2)+2*((block_b.y/2)%2);
+  b8a=((block_a.x>>1)&0x01)+2*((block_a.y>>1)&0x01);
+  b8b=((block_b.x>>1)&0x01)+2*((block_b.y>>1)&0x01);
 
   if (!block_b.available)
     b=0;
@@ -901,7 +899,7 @@ void readRefFrame_CABAC( SyntaxElement *se,
   if (act_sym != 0)
   {
     act_ctx = 4;
-    act_sym = unary_bin_decode(dep_dp,ctx->ref_no_contexts[addctx]+act_ctx,1);
+    act_sym = unary_bin_decode(dep_dp,ctx->ref_no_contexts[addctx] + act_ctx,1);
     act_sym++;
   }
   se->value1 = act_sym;
@@ -922,7 +920,7 @@ void readRefFrame_CABAC( SyntaxElement *se,
  ************************************************************************
  */
 void readDquant_CABAC( SyntaxElement *se,
-                       struct img_par *img,
+                       ImageParameters *img,
                        DecodingEnvironmentPtr dep_dp)
 {
   MotionInfoContexts *ctx = img->currentSlice->mot_ctx;
@@ -937,11 +935,11 @@ void readDquant_CABAC( SyntaxElement *se,
   if (act_sym != 0)
   {
     act_ctx = 2;
-    act_sym = unary_bin_decode(dep_dp,ctx->delta_qp_contexts+act_ctx,1);
+    act_sym = unary_bin_decode(dep_dp,ctx->delta_qp_contexts + act_ctx,1);
     act_sym++;
   }
 
-  dquant = (act_sym+1)/2;
+  dquant = (act_sym + 1)/2;
   if((act_sym & 0x01)==0)                           // lsb is signed bit
     dquant = -dquant;
   se->value1 = dquant;
@@ -961,7 +959,7 @@ void readDquant_CABAC( SyntaxElement *se,
  ************************************************************************
  */
 void readCBP_CABAC(SyntaxElement *se,
-                   struct img_par *img,
+                   ImageParameters *img,
                    DecodingEnvironmentPtr dep_dp)
 {
   TextureInfoContexts *ctx = img->currentSlice->tex_ctx;
@@ -969,7 +967,7 @@ void readCBP_CABAC(SyntaxElement *se,
 
   int mb_x, mb_y;
   int a, b;
-  int curr_cbp_ctx, curr_cbp_idx;
+  int curr_cbp_ctx;
   int cbp = 0;
   int cbp_bit;
   int mask;
@@ -980,11 +978,6 @@ void readCBP_CABAC(SyntaxElement *se,
   {
     for (mb_x=0; mb_x < 4; mb_x += 2)
     {
-      if (currMB->b8mode[mb_y+(mb_x/2)]==IBLOCK)
-        curr_cbp_idx = 0;
-      else
-        curr_cbp_idx = 1;
-
       if (mb_y == 0)
       {
         if (currMB->mb_available_up == NULL)
@@ -994,7 +987,7 @@ void readCBP_CABAC(SyntaxElement *se,
           if((currMB->mb_available_up)->mb_type==IPCM)
             b=0;
           else
-            b = (( ((currMB->mb_available_up)->cbp & (1<<(2+mb_x/2))) == 0) ? 1 : 0);
+            b = (( ((currMB->mb_available_up)->cbp & (1<<(2 + (mb_x>>1)))) == 0) ? 1 : 0);
         }
 
       }
@@ -1003,16 +996,13 @@ void readCBP_CABAC(SyntaxElement *se,
 
       if (mb_x == 0)
       {
-        getLuma4x4Neighbour(currMB, (mb_x<<2) - 1, (mb_y << 2), &block_a);
+        get4x4Neighbour(currMB, (mb_x<<2) - 1, (mb_y << 2), img->mb_size[IS_LUMA], &block_a);
         if (block_a.available)
         {
-          {
-            if(img->mb_data[block_a.mb_addr].mb_type==IPCM)
-              a=0;
-            else
-              a = (( (img->mb_data[block_a.mb_addr].cbp & (1<<(2*(block_a.y/2)+1))) == 0) ? 1 : 0);
-          }
-
+          if(img->mb_data[block_a.mb_addr].mb_type==IPCM)
+            a=0;
+          else
+            a = (( (img->mb_data[block_a.mb_addr].cbp & (1<<(2*(block_a.y/2)+1))) == 0) ? 1 : 0);
         }
         else
           a=0;
@@ -1039,7 +1029,6 @@ void readCBP_CABAC(SyntaxElement *se,
       else
         b = ((currMB->mb_available_up)->cbp > 15) ? 1 : 0;
     }
-
 
     a = 0;
     if (currMB->mb_available_left != NULL)
@@ -1106,7 +1095,7 @@ void readCBP_CABAC(SyntaxElement *se,
  ************************************************************************
  */
 void readCIPredMode_CABAC(SyntaxElement *se,
-                          struct img_par *img,
+                          ImageParameters *img,
                           DecodingEnvironmentPtr dep_dp)
 {
 
@@ -1163,7 +1152,7 @@ static const int max_c2       [] = { 4,  4,  4,  4,  4,  4,  3,  4,  3,  3,  4, 
 */
 int read_and_store_CBP_block_bit (Macroblock              *currMB,
                                   DecodingEnvironmentPtr  dep_dp,
-                                  struct img_par          *img,
+                                  ImageParameters          *img,
                                   int                     type)
 {
 #define BIT_SET(x,n)  ((int)(((x)&((int64)1<<(n)))>>(n)))
@@ -1191,8 +1180,8 @@ int read_and_store_CBP_block_bit (Macroblock              *currMB,
   PixelPos block_a, block_b;
   if (y_ac || y_dc)
   {
-    getLuma4x4Neighbour(currMB, (i<<2) - 1, (j<<2),     &block_a);
-    getLuma4x4Neighbour(currMB, (i<<2),     (j<<2) - 1, &block_b);
+    get4x4Neighbour(currMB, (i<<2) - 1, (j<<2),     img->mb_size[IS_LUMA], &block_a);
+    get4x4Neighbour(currMB, (i<<2),     (j<<2) - 1, img->mb_size[IS_LUMA], &block_b);
     if (y_ac)
     {
       if (block_a.available)
@@ -1203,8 +1192,8 @@ int read_and_store_CBP_block_bit (Macroblock              *currMB,
   }
   else
   {
-    getChroma4x4Neighbour(currMB, (i<<2) - 1, (j<<2),     &block_a);
-    getChroma4x4Neighbour(currMB, (i<<2),     (j<<2) - 1, &block_b);
+    get4x4Neighbour(currMB, (i<<2) - 1, (j<<2),     img->mb_size[IS_CHROMA], &block_a);
+    get4x4Neighbour(currMB, (i<<2),     (j<<2) - 1, img->mb_size[IS_CHROMA], &block_b);
     if (u_ac||v_ac)
     {
       if (block_a.available)
@@ -1250,7 +1239,7 @@ int read_and_store_CBP_block_bit (Macroblock              *currMB,
       if (block_b.available)
       {
         if(img->mb_data[block_b.mb_addr].mb_type==IPCM)
-          upper_bit=1;
+          upper_bit = 1;
         else
           upper_bit = BIT_SET(img->mb_data[block_b.mb_addr].cbp_bits[0],bit+bit_pos_b);
       }
@@ -1259,7 +1248,7 @@ int read_and_store_CBP_block_bit (Macroblock              *currMB,
       if (block_a.available)
       {
         if(img->mb_data[block_a.mb_addr].mb_type==IPCM)
-          left_bit=1;
+          left_bit = 1;
         else
           left_bit = BIT_SET(img->mb_data[block_a.mb_addr].cbp_bits[0],bit+bit_pos_a);
       }
@@ -1327,86 +1316,59 @@ int read_and_store_CBP_block_bit (Macroblock              *currMB,
   if (cbp_bit)
   {  
     if (type==LUMA_8x8) 
-    {
-      currMB->cbp_bits[0]   |= ((int64)1<< bit   );
-      currMB->cbp_bits[0]   |= ((int64)1<<(bit+1));
-      currMB->cbp_bits[0]   |= ((int64)1<<(bit+4));
-      currMB->cbp_bits[0]   |= ((int64)1<<(bit+5));
+    {      
+      currMB->cbp_bits[0] |= ((int64) 0x33 << bit   );
       
       if (dec_picture->chroma_format_idc==YUV444)
       {
-        currMB->cbp_bits_8x8[0]   |= ((int64)1<< bit   );
-        currMB->cbp_bits_8x8[0]   |= ((int64)1<<(bit+1));
-        currMB->cbp_bits_8x8[0]   |= ((int64)1<<(bit+4));
-        currMB->cbp_bits_8x8[0]   |= ((int64)1<<(bit+5));
+        currMB->cbp_bits_8x8[0]   |= ((int64) 0x33 << bit   );
       }
     }
     else if (type==CB_8x8)
     {
-      currMB->cbp_bits_8x8[1]   |= ((int64)1<< bit   );
-      currMB->cbp_bits_8x8[1]   |= ((int64)1<<(bit+1));
-      currMB->cbp_bits_8x8[1]   |= ((int64)1<<(bit+4));
-      currMB->cbp_bits_8x8[1]   |= ((int64)1<<(bit+5));
-      
-      currMB->cbp_bits[1]   |= ((int64)1<< bit   );
-      currMB->cbp_bits[1]   |= ((int64)1<<(bit+1));
-      currMB->cbp_bits[1]   |= ((int64)1<<(bit+4));
-      currMB->cbp_bits[1]   |= ((int64)1<<(bit+5));
+      currMB->cbp_bits_8x8[1]   |= ((int64) 0x33 << bit   );      
+      currMB->cbp_bits[1]   |= ((int64) 0x33 << bit   );
     }
     else if (type==CR_8x8)
     {
-      currMB->cbp_bits_8x8[2]   |= ((int64)1<< bit   );
-      currMB->cbp_bits_8x8[2]   |= ((int64)1<<(bit+1));
-      currMB->cbp_bits_8x8[2]   |= ((int64)1<<(bit+4));
-      currMB->cbp_bits_8x8[2]   |= ((int64)1<<(bit+5));
-      
-      currMB->cbp_bits[2]   |= ((int64)1<< bit   );
-      currMB->cbp_bits[2]   |= ((int64)1<<(bit+1));
-      currMB->cbp_bits[2]   |= ((int64)1<<(bit+4));
-      currMB->cbp_bits[2]   |= ((int64)1<<(bit+5));
-      
+      currMB->cbp_bits_8x8[2]   |= ((int64) 0x33 << bit   );      
+      currMB->cbp_bits[2]   |= ((int64) 0x33 << bit   );
     }
     else if (type==LUMA_8x4)
     {
-      currMB->cbp_bits[0]   |= ((int64)1<< bit   );
-      currMB->cbp_bits[0]   |= ((int64)1<<(bit+1));
+      currMB->cbp_bits[0]   |= ((int64) 0x03 << bit   );
     }
     else if (type==CB_8x4)
     {
-      currMB->cbp_bits[1]   |= ((int64)1<< bit   );
-      currMB->cbp_bits[1]   |= ((int64)1<<(bit+1));
+      currMB->cbp_bits[1]   |= ((int64) 0x03 << bit   );
     }
     else if (type==CR_8x4)
     {
-      currMB->cbp_bits[2]   |= ((int64)1<< bit   );
-      currMB->cbp_bits[2]   |= ((int64)1<<(bit+1));
+      currMB->cbp_bits[2]   |= ((int64) 0x03 << bit   );
     }
     else if (type==LUMA_4x8)
     {
-      currMB->cbp_bits[0]   |= ((int64)1<< bit   );
-      currMB->cbp_bits[0]   |= ((int64)1<<(bit+4));
+      currMB->cbp_bits[0]   |= ((int64) 0x11<< bit   );
     }
     else if (type==CB_4x8)
     {
-      currMB->cbp_bits[1]   |= ((int64)1<< bit   );
-      currMB->cbp_bits[1]   |= ((int64)1<<(bit+4));
+      currMB->cbp_bits[1]   |= ((int64)0x11<< bit   );
     }
     else if (type==CR_4x8)
     {
-      currMB->cbp_bits[2]   |= ((int64)1<< bit   );
-      currMB->cbp_bits[2]   |= ((int64)1<<(bit+4));
+      currMB->cbp_bits[2]   |= ((int64)0x11<< bit   );
     }
     else if ((type==CB_4x4)||(type==CB_16AC)||(type==CB_16DC))
     {
-      currMB->cbp_bits[1]   |= ((int64)1<<bit);
+      currMB->cbp_bits[1]   |= ((int64)0x01<<bit);
     }
     else if ((type==CR_4x4)||(type==CR_16AC)||(type==CR_16DC))
     {
-      currMB->cbp_bits[2]   |= ((int64)1<<bit);
+      currMB->cbp_bits[2]   |= ((int64)0x01<<bit);
     }
     else
     {
-      currMB->cbp_bits[0]   |= ((int64)1<<bit);
+      currMB->cbp_bits[0]   |= ((int64)0x01<<bit);
     }
   }
   return cbp_bit;
@@ -1482,14 +1444,14 @@ static const int* pos2ctx_last    [] = {pos2ctx_last4x4, pos2ctx_last4x4, pos2ct
  */
 int read_significance_map (Macroblock              *currMB,
                            DecodingEnvironmentPtr  dep_dp,
-                           struct img_par          *img,
+                           ImageParameters          *img,
                            int                     type,
                            int                     coeff[])
 {
   int   i, sig;
   int   coeff_ctr = 0;
   int   i0        = 0;
-  int   i1        = maxpos[type];
+  int   i1        = maxpos[type] + 1;
 
   int               fld       = ( img->structure!=FRAME || currMB->mb_field );
   const int **pos2ctx_Map = (fld) ? pos2ctx_map_int : pos2ctx_map;
@@ -1503,7 +1465,7 @@ int read_significance_map (Macroblock              *currMB,
     i0++; i1++; coeff--;
   }
 
-  for (i=i0; i<i1; i++) // if last coeff is reached, it has to be significant
+  for (i=i0; i < i1 - 1; i++) // if last coeff is reached, it has to be significant
   {
     //--- read significance symbol ---
     sig = biari_decode_symbol   (dep_dp, map_ctx + pos2ctx_Map [type][i]);
@@ -1515,7 +1477,8 @@ int read_significance_map (Macroblock              *currMB,
       //--- read last coefficient symbol ---
       if (biari_decode_symbol (dep_dp, last_ctx + pos2ctx_last[type][i]))
       {
-        for (i++; i<i1+1; i++) coeff[i] = 0;
+        for (i++; i < i1; i++) 
+          coeff[i] = 0;
       }
     }
     else
@@ -1524,7 +1487,7 @@ int read_significance_map (Macroblock              *currMB,
     }
   }
   //--- last coefficient must be significant if no last symbol was received ---
-  if (i<i1+1)
+  if (i < i1)
   {
     coeff[i] = 1;
     coeff_ctr++;
@@ -1542,7 +1505,7 @@ int read_significance_map (Macroblock              *currMB,
  ************************************************************************
  */
 void read_significant_coefficients (DecodingEnvironmentPtr  dep_dp,
-                                    struct img_par          *img,
+                                    ImageParameters          *img,
                                     int                     type,
                                     int                     coeff[])
 {
@@ -1585,7 +1548,7 @@ void read_significant_coefficients (DecodingEnvironmentPtr  dep_dp,
  ************************************************************************
  */
 void readRunLevel_CABAC (SyntaxElement  *se,
-                         struct img_par *img,
+                         ImageParameters *img,
                          DecodingEnvironmentPtr dep_dp)
 {
   static int  coeff[64]; // one more for EOB
@@ -1637,7 +1600,7 @@ void readRunLevel_CABAC (SyntaxElement  *se,
  *    arithmetic decoding
  ************************************************************************
  */
-int readSyntaxElement_CABAC(SyntaxElement *se, struct img_par *img, DataPartition *this_dataPart)
+int readSyntaxElement_CABAC(SyntaxElement *se, ImageParameters *img, DataPartition *this_dataPart)
 {
 
   int curr_len;
@@ -1742,7 +1705,7 @@ unsigned int unary_bin_decode(DecodingEnvironmentPtr dep_dp,
  * StW, 8.7.02
  ************************************************************************
  */
-int cabac_startcode_follows(struct img_par *img, int eos_bit)
+int cabac_startcode_follows(ImageParameters *img, int eos_bit)
 {
   Slice         *currSlice  = img->currentSlice;
   int           *partMap    = assignSE2partition[currSlice->dp_mode];

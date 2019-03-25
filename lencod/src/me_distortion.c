@@ -75,7 +75,7 @@ int distortion4x4(int* diff)
 {
   int distortion = 0, k, *byte_sse;
 
-  switch(input->ModeDecisionMetric)
+  switch(params->ModeDecisionMetric)
   {
   case ERROR_SAD:
     for (k = 0; k < 16; k++)
@@ -109,7 +109,7 @@ int distortion8x8(int* diff)
 {
   int distortion = 0, k, *byte_sse;
 
-  switch(input->ModeDecisionMetric)
+  switch(params->ModeDecisionMetric)
   {
   case ERROR_SAD:
     for (k = 0; k < 64; k++)
@@ -395,7 +395,7 @@ int computeSAD(imgpel* src_pic,
         }
         ref_line += cr_pad_size_x;
       }
-      mcost += input->ChromaMEWeight * mcr_cost;
+      mcost += params->ChromaMEWeight * mcr_cost;
       if (mcost >= min_mcost) return mcost;
     }
   }
@@ -465,7 +465,7 @@ int computeSADWP(imgpel* src_pic,
         }
         ref_line += cr_pad_size_x;
       }
-      mcost += input->ChromaMEWeight * mcr_cost;
+      mcost += params->ChromaMEWeight * mcr_cost;
       if (mcost >= min_mcost) return mcost;
     }
   }
@@ -541,7 +541,7 @@ int computeBiPredSAD1(imgpel* src_pic,
         ref2_line += cr_pad_size_x;
         ref1_line += cr_pad_size_x;
       }
-      mcost += input->ChromaMEWeight * mcr_cost;
+      mcost += params->ChromaMEWeight * mcr_cost;
       if (mcost >= min_mcost) return mcost;
     }
   }
@@ -642,7 +642,7 @@ int computeBiPredSAD2(imgpel* src_pic,
         ref2_line += cr_pad_size_x;
         ref1_line += cr_pad_size_x;
       }
-      mcost += input->ChromaMEWeight * mcr_cost;
+      mcost += params->ChromaMEWeight * mcr_cost;
       if (mcost >= min_mcost) return mcost;
       
     }
@@ -1091,7 +1091,7 @@ int computeSSE(imgpel* src_pic,
         }
         ref_line += cr_pad_size_x;
       }
-      mcost += input->ChromaMEWeight * mcr_cost;
+      mcost += params->ChromaMEWeight * mcr_cost;
       if (mcost >= min_mcost) return mcost;
     }
   }
@@ -1167,7 +1167,7 @@ int computeSSEWP(imgpel* src_pic,
         }        
         ref_line += cr_pad_size_x;
       }
-      mcost += input->ChromaMEWeight * mcr_cost;
+      mcost += params->ChromaMEWeight * mcr_cost;
       if (mcost >= min_mcost) return mcost;
     }
   }
@@ -1245,7 +1245,7 @@ int computeBiPredSSE1(imgpel* src_pic,
         ref2_line += cr_pad_size_x;
         ref1_line += cr_pad_size_x;
       }
-      mcost += input->ChromaMEWeight * mcr_cost;
+      mcost += params->ChromaMEWeight * mcr_cost;
       if (mcost >= min_mcost) return mcost;
     }
   }
@@ -1347,7 +1347,7 @@ int computeBiPredSSE2(imgpel* src_pic,
         ref2_line += cr_pad_size_x;
         ref1_line += cr_pad_size_x;
       }
-      mcost += input->ChromaMEWeight * mcr_cost;
+      mcost += params->ChromaMEWeight * mcr_cost;
       if (mcost >= min_mcost) return mcost;
     }
   }

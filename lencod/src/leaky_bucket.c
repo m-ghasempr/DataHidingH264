@@ -48,7 +48,7 @@ int get_LeakyBucketRate(unsigned long NumberLeakyBuckets, unsigned long *Rmin)
   FILE *f;
   unsigned long i, buf;
 
-  if((f = fopen(input->LeakyBucketRateFile, "r")) == NULL)
+  if((f = fopen(params->LeakyBucketRateFile, "r")) == NULL)
   {
     printf(" LeakyBucketRate File does not exist. Using rate calculated from avg. rate \n");
     return 0;
@@ -97,7 +97,7 @@ void PutBigDoubleWord(unsigned long dw, FILE *fp)
 /*!
  ***********************************************************************
  * \brief
- *   Stores the Leaky BucketParameters in file input->LeakyBucketParamFile.
+ *   Stores the Leaky BucketParameters in file params->LeakyBucketParamFile.
  * \param NumberLeakyBuckets
  *    Number of LeakyBuckets.
  * \param Rmin
@@ -125,14 +125,14 @@ void write_buffer(unsigned long NumberLeakyBuckets, unsigned long Rmin[], unsign
   FILE *outf;
   unsigned long iBucket;
 
-  if ((outf=fopen(input->LeakyBucketParamFile,"wb"))==NULL)
+  if ((outf=fopen(params->LeakyBucketParamFile,"wb"))==NULL)
   {
-    snprintf(errortext, ET_SIZE, "Error open file lk %s  \n",input->LeakyBucketParamFile);
+    snprintf(errortext, ET_SIZE, "Error open file lk %s  \n",params->LeakyBucketParamFile);
     error(errortext,1);
   }
 
   PutBigDoubleWord(NumberLeakyBuckets, outf);
-  if (input->Verbose != 0)
+  if (params->Verbose != 0)
     printf(" Number Leaky Buckets: %ld \n     Rmin     Bmin     Fmin \n", NumberLeakyBuckets);
   for(iBucket =0; iBucket < NumberLeakyBuckets; iBucket++)
   {
@@ -142,7 +142,7 @@ void write_buffer(unsigned long NumberLeakyBuckets, unsigned long Rmin[], unsign
     PutBigDoubleWord(Rmin[iBucket], outf);
     PutBigDoubleWord(Bmin[iBucket], outf);
     PutBigDoubleWord(Fmin[iBucket], outf);
-    if (input->Verbose != 0)
+    if (params->Verbose != 0)
       printf(" %8ld %8ld %8ld \n", Rmin[iBucket], Bmin[iBucket], Fmin[iBucket]);
   }
   fclose(outf);
@@ -207,7 +207,7 @@ void calc_buffer()
   long maxBuffer, actualBuffer, InitFullness, iChannelRate;
   unsigned long *Rmin, *Bmin, *Fmin;
 
-  switch (input->Verbose)
+  switch (params->Verbose)
   {
     case 1:
       fprintf(stdout,"-------------------------------------------------------------------------------\n");
@@ -224,8 +224,8 @@ void calc_buffer()
       printf("\nEncoding. Please Wait.\n\n");
       break;
   }
-  printf(" Total Frames:  %ld (%d) \n", total_frame_buffer, input->no_frames);
-  NumberLeakyBuckets = (unsigned long) input->NumberLeakyBuckets;
+  printf(" Total Frames:  %ld (%d) \n", total_frame_buffer, params->no_frames);
+  NumberLeakyBuckets = (unsigned long) params->NumberLeakyBuckets;
   buffer_frame = calloc(total_frame_buffer+1, sizeof(long));
   if(!buffer_frame)
     no_mem_exit("init_buffer: buffer_frame");
@@ -251,9 +251,9 @@ void calc_buffer()
     for(iBucket=0; iBucket < NumberLeakyBuckets; iBucket++)
     {
       if(iBucket == 0)
-        Rmin[iBucket] = (unsigned long)((float) AvgRate * img->framerate)/(input->jumpd+1); /* convert bits/frame to bits/second */
+        Rmin[iBucket] = (unsigned long)((float) AvgRate * img->framerate)/(params->jumpd+1); /* convert bits/frame to bits/second */
       else
-        Rmin[iBucket] = (unsigned long) ((float) Rmin[iBucket-1] + (AvgRate/4) * (img->framerate) / (input->jumpd+1));
+        Rmin[iBucket] = (unsigned long) ((float) Rmin[iBucket-1] + (AvgRate/4) * (img->framerate) / (params->jumpd+1));
     }
   }
   Sort(NumberLeakyBuckets, Rmin);
@@ -261,7 +261,7 @@ void calc_buffer()
   maxBuffer = AvgRate * 20; /* any initialization is good. */
   for(iBucket=0; iBucket< NumberLeakyBuckets; iBucket++)
   {
-    iChannelRate = (long) (Rmin[iBucket] * (input->jumpd+1)/(img->framerate)); /* converts bits/second to bits/frame */
+    iChannelRate = (long) (Rmin[iBucket] * (params->jumpd+1)/(img->framerate)); /* converts bits/second to bits/frame */
     /* To calculate initial buffer size */
     InitFullness = maxBuffer; /* set Initial Fullness to be buffer size */
     buffer_frame[0] = InitFullness;

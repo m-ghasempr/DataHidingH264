@@ -54,16 +54,16 @@ void RTPUpdateTimestamp (int tr);
 int  RTPWriteBits (int Marker, int PacketType, void * bitstream,
                    int BitStreamLenInByte, FILE *out);
 
-Boolean isAggregationPacket();
+Boolean isAggregationPacket(void);
 int aggregationRTPWriteBits (int Marker, int PacketType, int subPacketType, void * bitstream, int BitStreamLenInByte, FILE *out);
 
-void begin_sub_sequence_rtp();
-void end_sub_sequence_rtp();
+void begin_sub_sequence_rtp(void);
+void end_sub_sequence_rtp(void);
 #endif
 
 void RTPUpdateTimestamp (int tr);
 void OpenRTPFile (char *Filename);
-void CloseRTPFile ();
+void CloseRTPFile (void);
 int WriteRTPNALU (NALU_t *n);
 
 

@@ -29,7 +29,6 @@
 #include "image.h"
 #include "mb_access.h"
 
-#if !defined(USEMMX) // MMX, SSE, SSE2 intrinsic support
 static int diff  [16];
 static imgpel l0_pred[MB_PIXELS];
 static imgpel l1_pred[MB_PIXELS];
@@ -37,62 +36,70 @@ static imgpel l1_pred[MB_PIXELS];
 
 static const unsigned char subblk_offset_x[3][8][4] =
 {
-  { {0, 4, 0, 4},
-    {0, 4, 0, 4},
-    {0, 0, 0, 0},
-    {0, 0, 0, 0},
-    {0, 0, 0, 0},
-    {0, 0, 0, 0},
-    {0, 0, 0, 0},
-    {0, 0, 0, 0}, },
-
-  { {0, 4, 0, 4},
-    {0, 4, 0, 4},
+  { 
     {0, 4, 0, 4},
     {0, 4, 0, 4},
     {0, 0, 0, 0},
     {0, 0, 0, 0},
     {0, 0, 0, 0},
-    {0, 0, 0, 0}, },
-
-  { {0, 4, 0, 4},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0}, 
+  },
+  { 
+    {0, 4, 0, 4},
+    {0, 4, 0, 4},
+    {0, 4, 0, 4},
+    {0, 4, 0, 4},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0}, 
+  },
+  { 
+    {0, 4, 0, 4},
     {8,12, 8,12},
     {0, 4, 0, 4},
     {8,12, 8,12},
     {0, 4, 0, 4},
     {8,12, 8,12},
     {0, 4, 0, 4},
-    {8,12, 8,12}  }
+    {8,12, 8,12}  
+  }
 };
 
 static const unsigned char subblk_offset_y[3][8][4] =
 {
-  { {0, 0, 4, 4},
+  { 
+    {0, 0, 4, 4},
     {0, 0, 4, 4},
     {0, 0, 0, 0},
     {0, 0, 0, 0},
     {0, 0, 0, 0},
     {0, 0, 0, 0},
     {0, 0, 0, 0},
-    {0, 0, 0, 0}, },
-
-  { {0, 0, 4, 4},
+    {0, 0, 0, 0}, 
+  },
+  { 
+    {0, 0, 4, 4},
     {8, 8,12,12},
     {0, 0, 4, 4},
     {8, 8,12,12},
     {0, 0, 0, 0},
     {0, 0, 0, 0},
     {0, 0, 0, 0},
-    {0, 0, 0, 0} },
-
- { {0, 0, 4, 4},
-   {0, 0, 4, 4},
-   {8, 8,12,12},
-   {8, 8,12,12},
-   {0, 0, 4, 4},
-   {0, 0, 4, 4},
-   {8, 8,12,12},
-   {8, 8,12,12} }
+    {0, 0, 0, 0},
+  },
+  {
+    {0, 0, 4, 4},
+    {0, 0, 4, 4},
+    {8, 8,12,12},
+    {8, 8,12,12},
+    {0, 0, 4, 4},
+    {0, 0, 4, 4},
+    {8, 8,12,12},
+    {8, 8,12,12} 
+  }
 };
 
 /*!
@@ -102,19 +109,19 @@ static const unsigned char subblk_offset_y[3][8][4] =
  ************************************************************************
  */
 static inline void OneComponentLumaPrediction ( imgpel*   mpred,       //!< array of prediction values (row by row)
-                                  int    pic_pix_x,      //!< motion shifted horizontal coordinate of block
-                                  int    pic_pix_y,      //!< motion shifted vertical   coordinate of block
-                                  int    block_size_x,   //!< horizontal block size
-                                  int    block_size_y,   //!< vertical block size
-                                  StorablePicture *list //!< reference picture list
-                                 )
+                                               int    pic_pix_x,      //!< motion shifted horizontal coordinate of block
+                                               int    pic_pix_y,      //!< motion shifted vertical   coordinate of block
+                                               int    block_size_x,   //!< horizontal block size
+                                               int    block_size_y,   //!< vertical block size
+                                               StorablePicture *list //!< reference picture list
+                                               )
 {
   int     j;
   imgpel *ref_line = UMVLine4X (list->p_curr_img_sub, pic_pix_y, pic_pix_x);
 
   width_pad  = list->size_x_pad;
   height_pad = list->size_y_pad;
-  
+
   for (j = 0; j < block_size_y; j++) 
   {
     memcpy(mpred, ref_line, block_size_x * sizeof(imgpel));
@@ -151,7 +158,7 @@ void LumaPrediction ( Macroblock* currMB,//!< Current Macroblock
   int  by           = block_y >> 2;
   imgpel* l0pred    = l0_pred;
   imgpel* l1pred    = l1_pred;  
-  short**** mv_array = img->all_mv[by][bx];
+  short****** mv_array = img->all_mv;
   short   *curr_mv = NULL;
   imgpel (*curr_mpr)[16] = img->mpr[0];
 
@@ -159,22 +166,22 @@ void LumaPrediction ( Macroblock* currMB,//!< Current Macroblock
     (active_pps->weighted_bipred_idc && (img->type== B_SLICE)));
 
   if (currMB->bi_pred_me && l0_ref_idx == 0 && l1_ref_idx == 0 && p_dir == 2 && l0_mode==1 && l1_mode==1)
-    mv_array = currMB->bi_pred_me == 1? img->bipred_mv1[by][bx] : img->bipred_mv2[by][bx];
+    mv_array = currMB->bi_pred_me == 1? img->bipred_mv1 : img->bipred_mv2;
 
   switch (p_dir)
   {
   case 0:
-    curr_mv = mv_array[LIST_0][l0_ref_idx][l0_mode];
+    curr_mv = mv_array[LIST_0][l0_ref_idx][l0_mode][by][bx];
     OneComponentLumaPrediction (l0_pred, pic_opix_x + curr_mv[0], pic_opix_y + curr_mv[1], block_size_x, block_size_y, listX[LIST_0 + currMB->list_offset][l0_ref_idx]);
     break;
   case 1:
-    curr_mv = mv_array[LIST_1][l1_ref_idx][l1_mode];
+    curr_mv = mv_array[LIST_1][l1_ref_idx][l1_mode][by][bx];
     OneComponentLumaPrediction (l1_pred, pic_opix_x + curr_mv[0], pic_opix_y + curr_mv[1], block_size_x, block_size_y, listX[LIST_1 + currMB->list_offset][l1_ref_idx]);
     break;
   case 2:
-    curr_mv = mv_array[LIST_0][l0_ref_idx][l0_mode];
+    curr_mv = mv_array[LIST_0][l0_ref_idx][l0_mode][by][bx];
     OneComponentLumaPrediction (l0_pred, pic_opix_x + curr_mv[0], pic_opix_y + curr_mv[1], block_size_x, block_size_y, listX[LIST_0 + currMB->list_offset][l0_ref_idx]);
-    curr_mv = mv_array[LIST_1][l1_ref_idx][l1_mode];
+    curr_mv = mv_array[LIST_1][l1_ref_idx][l1_mode][by][bx];
     OneComponentLumaPrediction (l1_pred, pic_opix_x + curr_mv[0], pic_opix_y + curr_mv[1], block_size_x, block_size_y, listX[LIST_1 + currMB->list_offset][l1_ref_idx]);
     break;
   default:
@@ -271,9 +278,9 @@ void LumaPredictionBi ( Macroblock* currMB, //!< Current Macroblock
 
   int  apply_weights = ( (active_pps->weighted_pred_flag && (img->type == P_SLICE || img->type == SP_SLICE)) ||
     (active_pps->weighted_bipred_idc && (img->type == B_SLICE)));  
-  short   ****mv_array = list ? img->bipred_mv1[by][bx] : img->bipred_mv2[by][bx];
-  short   *mv_arrayl0 = mv_array[LIST_0][l0_ref_idx][l0_mode];
-  short   *mv_arrayl1 = mv_array[LIST_1][l1_ref_idx][l1_mode];
+  short   ******mv_array = list ? img->bipred_mv1 : img->bipred_mv2;
+  short   *mv_arrayl0 = mv_array[LIST_0][l0_ref_idx][l0_mode][by][bx];
+  short   *mv_arrayl1 = mv_array[LIST_1][l1_ref_idx][l1_mode][by][bx];
   imgpel (*curr_mpr)[16] = img->mpr[0];
 
   OneComponentLumaPrediction (l0_pred, pic_opix_x + mv_arrayl0[0], pic_opix_y + mv_arrayl0[1], block_size_x, block_size_y, listX[0+currMB->list_offset][l0_ref_idx]);
@@ -311,10 +318,8 @@ void OneComponentChromaPrediction4x4_regenerate (
                                  imgpel*     mpred,      //!< array to store prediction values
                                  int         block_c_x,  //!< horizontal pixel coordinate of 4x4 block
                                  int         block_c_y,  //!< vertical   pixel coordinate of 4x4 block
-                                 short****** mv,         //!< motion vector array
-                                 int         list_idx,   //!< reference picture list
-                                 short       ref,        //!< reference index
-                                 int         blocktype,  //!< block type
+                                 short***    mv,         //!< motion vector array
+                                 StorablePicture *list,
                                  int         uv)         //!< chroma component
 {
   int     i, j, ii, jj, ii0, jj0, ii1, jj1, if0, if1, jf0, jf1;
@@ -335,9 +340,7 @@ void OneComponentChromaPrediction4x4_regenerate (
   int     mb_cr_x_div4 = img->mb_cr_size_x>>2;
   int     jpos;
 
-  StorablePicture **list = listX[list_idx + list_offset];
-
-  imgpel** refimage = list[ref]->imgUV[uv];
+  imgpel** refimage = list->imgUV[uv];
 
   for (j=block_c_y; j < block_c_y + BLOCK_SIZE; j++)
   {
@@ -347,13 +350,13 @@ void OneComponentChromaPrediction4x4_regenerate (
     for (i=block_c_x; i < block_c_x + BLOCK_SIZE; i++)
     {
       iix = i/mb_cr_x_div4;
-      mvb  = mv [jjx][iix][list_idx][ref][blocktype];
+      mvb  = mv [jjx][iix];
 
       ii   = (i + img->opix_c_x)*f1_x + mvb[0];
       jj   = jpos + mvb[1];
 
       if (active_sps->chroma_format_idc == 1)
-        jj  += list[ref]->chroma_vector_adjustment;
+        jj  += list->chroma_vector_adjustment;
 
       ii0  = iClip3 (0, max_x_cr, ii/f1_x);
       jj0  = iClip3 (0, max_y_cr, jj/f1_y);
@@ -380,16 +383,12 @@ void OneComponentChromaPrediction4x4_regenerate (
 void OneComponentChromaPrediction4x4_retrieve (imgpel*        mpred,      //!< array to store prediction values
                                  int         block_c_x,  //!< horizontal pixel coordinate of 4x4 block
                                  int         block_c_y,  //!< vertical   pixel coordinate of 4x4 block
-                                 short****** mv,         //!< motion vector array
-                                 int         list_idx,   //!< reference picture list
-                                 short       ref,        //!< reference index
-                                 int         blocktype,  //!< block type
+                                 short***    mv,         //!< motion vector array
+                                 StorablePicture *list,
                                  int         uv)         //!< chroma component
 {
   int     j, ii, jj;
   short*  mvb;
-
-  int     list_offset = img->mb_data[img->current_mb_nr].list_offset;
 
   int     jjx;
   int     right_shift_x = 4 - chroma_shift_x;
@@ -401,16 +400,13 @@ void OneComponentChromaPrediction4x4_retrieve (imgpel*        mpred,      //!< a
   int     ipos1 = ((block_c_x + img->opix_c_x    ) << chroma_shift_x) + IMG_PAD_SIZE_TIMES4;
   int     ipos2 = ((block_c_x + img->opix_c_x + 2) << chroma_shift_x) + IMG_PAD_SIZE_TIMES4;
 
-
-  StorablePicture **list = listX[list_idx + list_offset];
-
-  imgpel**** refsubimage = list[ref]->imgUV_sub[uv];
+  imgpel**** refsubimage = list->imgUV_sub[uv];
   imgpel *line_ptr;
 
-  int jj_chroma = ((active_sps->chroma_format_idc == 1) ? list[ref]->chroma_vector_adjustment : 0) + IMG_PAD_SIZE_TIMES4;
+  int jj_chroma = ((active_sps->chroma_format_idc == 1) ? list->chroma_vector_adjustment : 0) + IMG_PAD_SIZE_TIMES4;
 
-  width_pad_cr  = list[ref]->size_x_cr_pad;
-  height_pad_cr = list[ref]->size_y_cr_pad;
+  width_pad_cr  = list->size_x_cr_pad;
+  height_pad_cr = list->size_y_cr_pad;
 
   for (j=block_c_y; j < block_c_y + BLOCK_SIZE; j++)
   {
@@ -418,7 +414,7 @@ void OneComponentChromaPrediction4x4_retrieve (imgpel*        mpred,      //!< a
 
     jpos = ( (j + img->opix_c_y) << chroma_shift_y ) + jj_chroma;
 
-    mvb  = mv [jjx][pos_x1][list_idx][ref][blocktype];
+    mvb  = mv [jjx][pos_x1];
 
     ii   = ipos1 + mvb[0];
     jj   = jpos  + mvb[1];
@@ -427,7 +423,7 @@ void OneComponentChromaPrediction4x4_retrieve (imgpel*        mpred,      //!< a
     *mpred++ = *line_ptr++;
     *mpred++ = *line_ptr;
 
-    mvb  = mv [jjx][pos_x2][list_idx][ref][blocktype];
+    mvb  = mv [jjx][pos_x2];
 
     ii   = ipos2 + mvb[0];
     jj   = jpos  + mvb[1];
@@ -516,7 +512,7 @@ void ChromaPrediction ( Macroblock* currMB, // <-- Current Macroblock
   int  by           = block_y >> 2;
   imgpel* l0pred     = l0_pred;
   imgpel* l1pred     = l1_pred;
-  short**** mv_array = img->all_mv[by][bx];    
+  short****** mv_array = img->all_mv;    
   int max_imgpel_value_uv = img->max_imgpel_value_comp[1];
   int uv_comp = uv + 1;
   imgpel (*curr_mpr)[16] = img->mpr[ uv_comp];
@@ -525,7 +521,7 @@ void ChromaPrediction ( Macroblock* currMB, // <-- Current Macroblock
     (active_pps->weighted_bipred_idc && (img->type == B_SLICE)));
 
   if (currMB->bi_pred_me && l0_ref_idx == 0 && l1_ref_idx == 0 && p_dir == 2 && l0_mode==1 && l1_mode==1)
-    mv_array = currMB->bi_pred_me == 1? img->bipred_mv1[by][bx] : img->bipred_mv2[by][bx];
+    mv_array = currMB->bi_pred_me == 1? img->bipred_mv1 : img->bipred_mv2;
 
   //===== INTRA PREDICTION =====
   if (p_dir==-1)
@@ -538,14 +534,14 @@ void ChromaPrediction ( Macroblock* currMB, // <-- Current Macroblock
   switch (p_dir)
   {
   case 0:
-    OneComponentChromaPrediction (l0_pred, pic_opix_x + mv_array[LIST_0][l0_ref_idx][l0_mode][0], pic_opix_y + mv_array[LIST_0][l0_ref_idx][l0_mode][1], block_size_x, block_size_y, listX[0+currMB->list_offset][l0_ref_idx], uv);
+    OneComponentChromaPrediction (l0_pred, pic_opix_x + mv_array[LIST_0][l0_ref_idx][l0_mode][by][bx][0], pic_opix_y + mv_array[LIST_0][l0_ref_idx][l0_mode][by][bx][1], block_size_x, block_size_y, listX[0+currMB->list_offset][l0_ref_idx], uv);
     break;
   case 1: 
-    OneComponentChromaPrediction (l1_pred, pic_opix_x + mv_array[LIST_1][l1_ref_idx][l1_mode][0], pic_opix_y + mv_array[LIST_1][l1_ref_idx][l1_mode][1], block_size_x, block_size_y, listX[1+currMB->list_offset][l1_ref_idx], uv);
+    OneComponentChromaPrediction (l1_pred, pic_opix_x + mv_array[LIST_1][l1_ref_idx][l1_mode][by][bx][0], pic_opix_y + mv_array[LIST_1][l1_ref_idx][l1_mode][by][bx][1], block_size_x, block_size_y, listX[1+currMB->list_offset][l1_ref_idx], uv);
     break;
   case 2:
-    OneComponentChromaPrediction (l0_pred, pic_opix_x + mv_array[LIST_0][l0_ref_idx][l0_mode][0], pic_opix_y + mv_array[LIST_0][l0_ref_idx][l0_mode][1], block_size_x, block_size_y, listX[0+currMB->list_offset][l0_ref_idx], uv);
-    OneComponentChromaPrediction (l1_pred, pic_opix_x + mv_array[LIST_1][l1_ref_idx][l1_mode][0], pic_opix_y + mv_array[LIST_1][l1_ref_idx][l1_mode][1], block_size_x, block_size_y, listX[1+currMB->list_offset][l1_ref_idx], uv);
+    OneComponentChromaPrediction (l0_pred, pic_opix_x + mv_array[LIST_0][l0_ref_idx][l0_mode][by][bx][0], pic_opix_y + mv_array[LIST_0][l0_ref_idx][l0_mode][by][bx][1], block_size_x, block_size_y, listX[0+currMB->list_offset][l0_ref_idx], uv);
+    OneComponentChromaPrediction (l1_pred, pic_opix_x + mv_array[LIST_1][l1_ref_idx][l1_mode][by][bx][0], pic_opix_y + mv_array[LIST_1][l1_ref_idx][l1_mode][by][bx][1], block_size_x, block_size_y, listX[1+currMB->list_offset][l1_ref_idx], uv);
     break;
   default:
     break;
@@ -639,6 +635,7 @@ void ChromaPrediction4x4 ( Macroblock* currMB, // <-- Current Macroblock
   int max_imgpel_value_uv = img->max_imgpel_value_comp[1];
   int uv_comp = uv + 1;
   imgpel (*curr_mpr)[16] = img->mpr[uv_comp];
+  int     list_offset = currMB->list_offset;
 
   int  apply_weights = ( (active_pps->weighted_pred_flag && (img->type == P_SLICE || img->type == SP_SLICE)) ||
     (active_pps->weighted_bipred_idc && (img->type == B_SLICE)));
@@ -656,14 +653,14 @@ void ChromaPrediction4x4 ( Macroblock* currMB, // <-- Current Macroblock
   switch (p_dir)
   {
   case 0: // LIST_0
-    (*OneComponentChromaPrediction4x4) (l0_pred, block_x, block_y, mv_array, LIST_0, l0_ref_idx, l0_mode, uv);
+    (*OneComponentChromaPrediction4x4) (l0_pred, block_x, block_y, mv_array[LIST_0][l0_ref_idx][l0_mode], listX[LIST_0 + list_offset][l0_ref_idx], uv);
     break;
   case 1: // LIST_1
-    (*OneComponentChromaPrediction4x4) (l1_pred, block_x, block_y, mv_array, LIST_1, l1_ref_idx, l1_mode, uv);
+    (*OneComponentChromaPrediction4x4) (l1_pred, block_x, block_y, mv_array[LIST_1][l1_ref_idx][l1_mode], listX[LIST_1 + list_offset][l1_ref_idx], uv);
     break;
   case 2: // BI_PRED
-    (*OneComponentChromaPrediction4x4) (l0_pred, block_x, block_y, mv_array, LIST_0, l0_ref_idx, l0_mode, uv);
-    (*OneComponentChromaPrediction4x4) (l1_pred, block_x, block_y, mv_array, LIST_1, l1_ref_idx, l1_mode, uv);
+    (*OneComponentChromaPrediction4x4) (l0_pred, block_x, block_y, mv_array[LIST_0][l0_ref_idx][l0_mode], listX[LIST_0 + list_offset][l0_ref_idx], uv);
+    (*OneComponentChromaPrediction4x4) (l1_pred, block_x, block_y, mv_array[LIST_1][l1_ref_idx][l1_mode], listX[LIST_1 + list_offset][l1_ref_idx], uv);
     break;
   default:
     break;
@@ -776,16 +773,16 @@ void IntraChromaPrediction (Macroblock *currMB, int *mb_up, int *mb_left, int*mb
 
   for (i=0;i<cr_MB_y+1;i++)
   {
-    getNeighbour(currMB, -1 , i-1 , IS_CHROMA, &left[i]);
+    getNeighbour(currMB, -1 , i-1 , img->mb_size[IS_CHROMA], &left[i]);
   }
-  getNeighbour(currMB, 0 , -1 , IS_CHROMA, &up);
+  getNeighbour(currMB, 0 , -1 , img->mb_size[IS_CHROMA], &up);
 
 
   mb_available_up                             = up.available;
   mb_available_up_left                        = left[0].available;
   mb_available_left[0] = mb_available_left[1] = left[1].available;
 
-  if(input->UseConstrainedIntraPred)
+  if(params->UseConstrainedIntraPred)
   {
     mb_available_up = up.available ? img->intra_block[up.mb_addr] : 0;
     for (i=0, mb_available_left[0]=1; i<(cr_MB_y>>1);i++)
@@ -826,30 +823,56 @@ void IntraChromaPrediction (Macroblock *currMB, int *mb_up, int *mb_left, int*mb
         switch (block_pos[yuv][b8][b4])
         {
         case 0:  //===== TOP LEFT =====
-          if      (mb_available_up)       for (i=blk_x;i<(blk_x+4);i++)  s0 += image[up.pos_y][up.pos_x + i];
-          if      (mb_available_left[0])  for (i=blk_y;i<(blk_y+4);i++)  s2 += image[left[i].pos_y][left[i].pos_x];
-          if      (mb_available_up && mb_available_left[0])  s  = (s0+s2+4) >> 3;
-          else if (mb_available_up)                          s  = (s0   +2) >> 2;
-          else if (mb_available_left[0])                     s  = (s2   +2) >> 2;
+          if      (mb_available_up)       
+            for (i=blk_x;i<(blk_x+4);i++)  
+              s0 += image[up.pos_y][up.pos_x + i];
+          if      (mb_available_left[0])  
+            for (i=blk_y;i<(blk_y+4);i++)  
+              s2 += image[left[i].pos_y][left[i].pos_x];
+          if      (mb_available_up && mb_available_left[0])  
+            s  = (s0+s2+4) >> 3;
+          else if (mb_available_up)                          
+            s  = (s0   +2) >> 2;
+          else if (mb_available_left[0])                     
+            s  = (s2   +2) >> 2;
           break;
         case 1: //===== TOP RIGHT =====
-          if      (mb_available_up)       for (i=blk_x;i<(blk_x+4);i++)  s1 += image[up.pos_y][up.pos_x + i];
-          else if (mb_available_left[0])  for (i=blk_y;i<(blk_y+4);i++)  s2 += image[left[i].pos_y][left[i].pos_x];
-          if      (mb_available_up)                          s  = (s1   +2) >> 2;
-          else if (mb_available_left[0])                     s  = (s2   +2) >> 2;
+          if      (mb_available_up)       
+            for (i=blk_x;i<(blk_x+4);i++)  
+              s1 += image[up.pos_y][up.pos_x + i];
+          else if (mb_available_left[0])  
+            for (i=blk_y;i<(blk_y+4);i++) 
+              s2 += image[left[i].pos_y][left[i].pos_x];
+          if      (mb_available_up)       
+            s  = (s1   +2) >> 2;
+          else if (mb_available_left[0])                    
+            s  = (s2   +2) >> 2;
           break;
         case 2: //===== BOTTOM LEFT =====
-          if      (mb_available_left[1])  for (i=blk_y;i<(blk_y+4);i++)  s3 += image[left[i].pos_y][left[i].pos_x];
-          else if (mb_available_up)       for (i=blk_x;i<(blk_x+4);i++)  s0 += image[up.pos_y][up.pos_x + i];
-          if      (mb_available_left[1])                     s  = (s3   +2) >> 2;
-          else if (mb_available_up)                          s  = (s0   +2) >> 2;
+          if      (mb_available_left[1])  
+            for (i=blk_y;i<(blk_y+4);i++)  
+              s3 += image[left[i].pos_y][left[i].pos_x];
+          else if (mb_available_up)       
+            for (i=blk_x;i<(blk_x+4);i++)  
+              s0 += image[up.pos_y][up.pos_x + i];
+          if      (mb_available_left[1])                     
+            s  = (s3   +2) >> 2;
+          else if (mb_available_up)                          
+            s  = (s0   +2) >> 2;
           break;
         case 3: //===== BOTTOM RIGHT =====
-          if      (mb_available_up)       for (i=blk_x;i<(blk_x+4);i++)  s1 += image[up.pos_y][up.pos_x + i];
-          if      (mb_available_left[1])  for (i=blk_y;i<(blk_y+4);i++)  s3 += image[left[i].pos_y][left[i].pos_x];
-          if      (mb_available_up && mb_available_left[1])  s  = (s1+s3+4) >> 3;
-          else if (mb_available_up)                          s  = (s1   +2) >> 2;
-          else if (mb_available_left[1])                     s  = (s3   +2) >> 2;
+          if      (mb_available_up)       
+            for (i=blk_x;i<(blk_x+4);i++)  
+              s1 += image[up.pos_y][up.pos_x + i];
+          if      (mb_available_left[1])  
+            for (i=blk_y;i<(blk_y+4);i++)  
+              s3 += image[left[i].pos_y][left[i].pos_x];
+          if      (mb_available_up && mb_available_left[1])  
+            s  = (s1+s3+4) >> 3;
+          else if (mb_available_up)                          
+            s  = (s1   +2) >> 2;
+          else if (mb_available_left[1])                     
+            s  = (s3   +2) >> 2;
           break;
         }
 
@@ -905,22 +928,21 @@ void IntraChromaPrediction (Macroblock *currMB, int *mb_up, int *mb_left, int*mb
       cur_pred = curr_mpr_16x16[PLANE_8];
       for (j=0; j<cr_MB_y; j++)
         for (i=0; i<cr_MB_x; i++)
-          cur_pred[j][i]= iClip3(0, max_imgpel_value_uv,
-           (iaa+(i-(cr_MB_x>>1)+1)*ib+(j-(cr_MB_y>>1)+1)*ic+16)>>5);
+          cur_pred[j][i]= iClip1( max_imgpel_value_uv, (iaa+(i-(cr_MB_x>>1)+1)*ib+(j-(cr_MB_y>>1)+1)*ic+16)>>5);
     }
   }
 
-  if (!input->rdopt)      // the rd-opt part does not work correctly (see encode_one_macroblock)
+  if (!params->rdopt)      // the rd-opt part does not work correctly (see encode_one_macroblock)
   {                       // since ipredmodes could be overwritten => encoder-decoder-mismatches
     // pick lowest cost prediction mode
     min_cost = INT_MAX;
     for (i=0;i<cr_MB_y;i++)
     {
-      getNeighbour(currMB, 0 , i, IS_CHROMA, &left[i]);
+      getNeighbour(currMB, 0 , i, img->mb_size[IS_CHROMA], &left[i]);
     }
     for (mode=DC_PRED_8; mode<=PLANE_8; mode++)
     {
-      if ((img->type != I_SLICE || !input->IntraDisableInterOnly) && input->ChromaIntraDisable == 1 && mode!=DC_PRED_8)
+      if ((img->type != I_SLICE || !params->IntraDisableInterOnly) && params->ChromaIntraDisable == 1 && mode!=DC_PRED_8)
         continue;
 
       if ((mode==VERT_PRED_8 && !mb_available_up) ||
@@ -961,12 +983,11 @@ void ComputeResidue (imgpel **curImg, imgpel mpr[16][16], int img_m7[16][16], in
   static imgpel *imgOrg, *imgPred;
   static int    *m7;
   int i, j;
-  imgpel (*curr_mpr)[16] = mpr;
 
   for (j = mb_y; j < mb_y + height; j++)
   {
     imgOrg = &curImg[opix_y + j][opix_x];    
-    imgPred = &curr_mpr[j][mb_x];
+    imgPred = &mpr[j][mb_x];
     m7 = &img_m7[j][mb_x]; 
     for (i = 0; i < width; i++)
     {
@@ -980,16 +1001,15 @@ void SampleReconstruct (imgpel **curImg, imgpel mpr[16][16], int img_m7[16][16],
   static imgpel *imgOrg, *imgPred;
   static int    *m7;
   int i, j;
-  imgpel (*curr_mpr)[16] = mpr;
 
   for (j = mb_y; j < mb_y + height; j++)
   {
     imgOrg = &curImg[opix_y + j][opix_x];
-    imgPred = &curr_mpr[j][mb_x];
+    imgPred = &mpr[j][mb_x];
     m7 = &img_m7[j][mb_x]; 
     for (i=0;i<width;i++)
       *imgOrg++ = iClip1( max_imgpel_value, rshift_rnd_sf(*m7++, dq_bits) + *imgPred++);
   }
 }
 
-#endif
+

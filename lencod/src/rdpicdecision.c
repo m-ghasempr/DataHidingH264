@@ -49,7 +49,7 @@ int picture_coding_decision (Picture *picture1, Picture *picture2, int qp)
   double snr_picture1, snr_picture2;
   int bit_picture1, bit_picture2;
 
-  if (input->successive_Bframe)
+  if (params->successive_Bframe)
     lambda_picture = (qp < 20 ? 0.55 : 0.68) * pow (2, (qp - SHIFT_QP) / 3.0) * (bframe || spframe ? 2 : 1);
   else
     lambda_picture = (qp < 20 ? 0.55 : 0.68) * pow (2, (qp - SHIFT_QP) / 3.0);

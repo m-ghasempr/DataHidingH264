@@ -1,4 +1,3 @@
-
 /*!
  ************************************************************************
  * \file vlc.c
@@ -319,8 +318,9 @@ void linfo_levrun_inter(int len, int info, int *level, int *irun)
 {
   int l2;
   int inf;
-  assert (((len>>1)-5)<32);
-  if (len<=9)
+  assert (((len >> 1) - 5) < 32);
+  
+  if (len <= 9)
   {
     l2     = imax(0,(len >> 1)-1);
     inf    = info >> 1;
@@ -336,6 +336,7 @@ void linfo_levrun_inter(int len, int info, int *level, int *irun)
     if ((info & 0x01) == 1)
       *level = -*level;
   }
+  
   if (len == 1) // EOB
     *level = 0;
 }
@@ -408,7 +409,7 @@ int readSyntaxElement_VLC(SyntaxElement *sym, Bitstream *currStream)
  *    map it to the corresponding syntax element
  ************************************************************************
  */
-int readSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct datapartition *dP)
+int readSyntaxElement_UVLC(SyntaxElement *sym, ImageParameters *img, struct datapartition *dP)
 {
   return (readSyntaxElement_VLC(sym, dP->bitstream));
 }
@@ -420,20 +421,17 @@ int readSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct datap
  *    map it to the corresponding Intra Prediction Direction
  ************************************************************************
  */
-int readSyntaxElement_Intra4x4PredictionMode(SyntaxElement *sym, struct img_par *img,struct datapartition *dP)
+int readSyntaxElement_Intra4x4PredictionMode(SyntaxElement *sym, ImageParameters *img, Bitstream   *currStream)
 {
-  Bitstream   *currStream            = dP->bitstream;
-  int         frame_bitoffset        = currStream->frame_bitoffset;
-  int         BitstreamLengthInBytes = currStream->bitstream_length;
-  byte        *buf                   = currStream->streamBuffer;
+  int         *frame_bitoffset       = &currStream->frame_bitoffset;
 
-  sym->len = GetVLCSymbol_IntraMode (buf, frame_bitoffset, &(sym->inf), BitstreamLengthInBytes);
+  sym->len = GetVLCSymbol_IntraMode (currStream->streamBuffer, *frame_bitoffset, &(sym->inf), currStream->bitstream_length);
 
   if (sym->len == -1)
     return -1;
 
-  currStream->frame_bitoffset += sym->len;
-  sym->value1                  = sym->len == 1 ? -1 : sym->inf;
+  *frame_bitoffset += sym->len;
+  sym->value1       = (sym->len == 1) ? -1 : sym->inf;
 
 #if TRACE
   tracebits2(sym->tracestring, sym->len, sym->value1);
@@ -532,7 +530,7 @@ int more_rbsp_data (byte buffer[],int totbitoffset,int bytecount)
  *    Check if there are symbols for the next MB
  ************************************************************************
  */
-int uvlc_startcode_follows(struct img_par *img, int dummy)
+int uvlc_startcode_follows(ImageParameters *img, int dummy)
 {
   int dp_Nr = assignSE2partition[img->currentSlice->dp_mode][SE_MBTYPE];
   DataPartition *dP = &(img->currentSlice->partArr[dp_Nr]);
@@ -898,10 +896,10 @@ int readSyntaxElement_Level_VLC0(SyntaxElement *sym, Bitstream *currStream)
     addbit = (len - 16);
     len   -= 4;
     code   = ShowBits(buf, frame_bitoffset, BitstreamLengthInBytes, len);
-    sign   =  (code & 0x01);
+    sign   = (code & 0x01);
     frame_bitoffset += len;    
 
-    offset=(2048<<addbit) - 2032;
+    offset = (2048 << addbit) - 2032;
     level = (code >> 1) + offset;
     code |= (1 << (len)); // for display purpose only
     len += addbit + 16;
@@ -943,6 +941,7 @@ int readSyntaxElement_Level_VLCN(SyntaxElement *sym, int vlc, Bitstream *currStr
   while (!ShowBits(buf, frame_bitoffset + numPrefix, BitstreamLengthInBytes, 1))
     numPrefix++;
 
+
   len = numPrefix + 1;
 
   if (numPrefix < 15)
@@ -971,12 +970,16 @@ int readSyntaxElement_Level_VLCN(SyntaxElement *sym, int vlc, Bitstream *currStr
     code = (code << (11 + addbit) )| sb;
 
     len   += (11 + addbit);
-    offset = (2048 << addbit) + escape - 2048;
-    levabs = sb + offset;
 
+    offset = (2048 << addbit) + escape - 2048;
+
+    levabs = sb + offset;
+    
     // read 1 bit -> sign
     sign = ShowBits(buf, frame_bitoffset + len, BitstreamLengthInBytes, 1);
+
     code = (code << 1)| sign;
+
     len++;
   }
 
@@ -1365,7 +1368,7 @@ int ShowBitsThres (byte *curbyte, int bitoffset, int bytecount, int numbits, int
  *    if a skipped MB is field/frame
  ************************************************************************
  */
-int peekSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct datapartition *dP)
+int peekSyntaxElement_UVLC(SyntaxElement *sym, ImageParameters *img, struct datapartition *dP)
 {
   Bitstream   *currStream    = dP->bitstream;
   int frame_bitoffset        = currStream->frame_bitoffset;

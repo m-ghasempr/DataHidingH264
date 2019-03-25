@@ -158,13 +158,13 @@ static const short Offset8_inter_default[64] = {
  */
 void allocate_QOffsets ()
 {
-  int max_bitdepth = imax(input->BitDepthLuma, input->BitDepthChroma);
+  int max_bitdepth = imax(params->output.bit_depth[0], params->output.bit_depth[1]);
   int max_qp = (3 + 6*(max_bitdepth) - MIN_QP);
 
   get_mem5Dint(&LevelOffset4x4Comp, 3, 2, max_qp + 1, 4, 4);
   get_mem5Dint(&LevelOffset8x8Comp, 3, 2, max_qp + 1, 8, 8);
 
-  if (input->AdaptRoundingFixed)
+  if (params->AdaptRoundingFixed)
   {
     get_mem3Dshort(&OffsetList4x4, 1, 25, 16);
     get_mem3Dshort(&OffsetList8x8, 1, 15, 64);    
@@ -187,21 +187,18 @@ void allocate_QOffsets ()
  */
 void free_QOffsets ()
 {
-  int max_bitdepth = imax(input->BitDepthLuma, input->BitDepthChroma);
-  int max_qp = (3 + 6*(max_bitdepth) - MIN_QP);
+  free_mem5Dint(LevelOffset4x4Comp);
+  free_mem5Dint(LevelOffset8x8Comp);
 
-  free_mem5Dint(LevelOffset4x4Comp, 3, 2, max_qp + 1);
-  free_mem5Dint(LevelOffset8x8Comp, 3, 2, max_qp + 1);
-
-  if (input->AdaptRoundingFixed)
+  if (params->AdaptRoundingFixed)
   {
-    free_mem3Dshort(OffsetList8x8, 1);
-    free_mem3Dshort(OffsetList4x4, 1);    
+    free_mem3Dshort(OffsetList8x8);
+    free_mem3Dshort(OffsetList4x4);    
   }
   else
   {
-    free_mem3Dshort(OffsetList8x8, max_qp + 1);
-    free_mem3Dshort(OffsetList4x4, max_qp + 1);    
+    free_mem3Dshort(OffsetList8x8);
+    free_mem3Dshort(OffsetList4x4);    
   }
 
   free_mem2Dshort(OffsetList8x8input);
@@ -392,11 +389,11 @@ void Init_QOffsetMatrix ()
 
   allocate_QOffsets ();
 
-  if (input->OffsetMatrixPresentFlag)
+  if (params->OffsetMatrixPresentFlag)
   {
     printf ("Parsing Quantization Offset Matrix file %s ",
-      input->QOffsetMatrixFile);
-    content = GetConfigFileContent (input->QOffsetMatrixFile, 0);
+      params->QOffsetMatrixFile);
+    content = GetConfigFileContent (params->QOffsetMatrixFile, 0);
     if (content != '\0')
       ParseQOffsetMatrix (content, strlen (content));
     else
@@ -404,7 +401,7 @@ void Init_QOffsetMatrix ()
       printf
         ("\nError: %s\nProceeding with default values for all matrices.",
         errortext);
-      input->OffsetMatrixPresentFlag = 0;
+      params->OffsetMatrixPresentFlag = 0;
     }
 
     printf ("\n");
@@ -431,12 +428,12 @@ void Init_QOffsetMatrix ()
 void InitOffsetParam ()
 {
   int i, k;
-  int max_qp_luma = (4 + 6*(input->BitDepthLuma) - MIN_QP);
-  int max_qp_cr   = (4 + 6*(input->BitDepthChroma) - MIN_QP);
+  int max_qp_luma = (4 + 6*(params->output.bit_depth[0]) - MIN_QP);
+  int max_qp_cr   = (4 + 6*(params->output.bit_depth[1]) - MIN_QP);
 
-  for (i = 0; i < (input->AdaptRoundingFixed ? 1 : imax(max_qp_luma, max_qp_cr)); i++)
+  for (i = 0; i < (params->AdaptRoundingFixed ? 1 : imax(max_qp_luma, max_qp_cr)); i++)
   {
-    if (input->OffsetMatrixPresentFlag)
+    if (params->OffsetMatrixPresentFlag)
     {
       memcpy(&(OffsetList4x4[i][0][0]),&(OffsetList4x4input[0][0]), 400 * sizeof(short)); // 25 * 16
       memcpy(&(OffsetList8x8[i][0][0]),&(OffsetList8x8input[0][0]), 960 * sizeof(short)); // 15 * 64
@@ -501,8 +498,8 @@ void CalculateOffsetParam ()
   int max_qp_scale = imax(img->bitdepth_luma_qp_scale, img->bitdepth_chroma_qp_scale);
   int max_qp = 51 + max_qp_scale - MIN_QP;
 
-  AdaptRndWeight = input->AdaptRndWFactor[img->nal_reference_idc != 0][img_type];
-  AdaptRndCrWeight = input->AdaptRndCrWFactor[img->nal_reference_idc != 0][img_type];
+  AdaptRndWeight = params->AdaptRndWFactor[img->nal_reference_idc != 0][img_type];
+  AdaptRndCrWeight = params->AdaptRndCrWFactor[img->nal_reference_idc != 0][img_type];
 
   if (img_type == I_SLICE )
   {
@@ -510,7 +507,7 @@ void CalculateOffsetParam ()
     {
       k = qp_per_matrix [qp];
       qp_per = Q_BITS + k - OffsetBits;
-      OffsetList = OffsetList4x4[input->AdaptRoundingFixed ? 0 : qp];
+      OffsetList = OffsetList4x4[params->AdaptRoundingFixed ? 0 : qp];
       LevelOffsetCmp0Intra = LevelOffset4x4Comp[0][1][qp];
       LevelOffsetCmp1Intra = LevelOffset4x4Comp[1][1][qp];
       LevelOffsetCmp2Intra = LevelOffset4x4Comp[2][1][qp];
@@ -533,7 +530,7 @@ void CalculateOffsetParam ()
     {
       k = qp_per_matrix [qp];
       qp_per = Q_BITS + k - OffsetBits;
-      OffsetList = OffsetList4x4[input->AdaptRoundingFixed ? 0 : qp];
+      OffsetList = OffsetList4x4[params->AdaptRoundingFixed ? 0 : qp];
       LevelOffsetCmp0Intra = LevelOffset4x4Comp[0][1][qp];
       LevelOffsetCmp1Intra = LevelOffset4x4Comp[1][1][qp];
       LevelOffsetCmp2Intra = LevelOffset4x4Comp[2][1][qp];
@@ -572,7 +569,7 @@ void CalculateOffsetParam ()
     {
       k = qp_per_matrix [qp];
       qp_per = Q_BITS + k - OffsetBits;
-      OffsetList = OffsetList4x4[input->AdaptRoundingFixed ? 0 : qp];
+      OffsetList = OffsetList4x4[params->AdaptRoundingFixed ? 0 : qp];
       LevelOffsetCmp0Intra = LevelOffset4x4Comp[0][1][qp];
       LevelOffsetCmp1Intra = LevelOffset4x4Comp[1][1][qp];
       LevelOffsetCmp2Intra = LevelOffset4x4Comp[2][1][qp];
@@ -599,7 +596,7 @@ void CalculateOffsetParam ()
   }
 
   // setting for 4x4 luma quantization offset
-  if( IS_INDEPENDENT(input) )
+  if( IS_INDEPENDENT(params) )
   {
     if( img->colour_plane_id == 0 )
     {
@@ -640,7 +637,7 @@ void CalculateOffset8Param ()
     for (qp = 0; qp < max_qp + 1; qp++)
     {
       q_bits = Q_BITS_8 + qp_per_matrix[qp] - OffsetBits;
-      k = input->AdaptRoundingFixed ? 0 : qp;
+      k = params->AdaptRoundingFixed ? 0 : qp;
       for (j = 0; j < 8; j++)
       {
         temp = (j << 3);
@@ -663,7 +660,7 @@ void CalculateOffset8Param ()
     for (qp = 0; qp < max_qp + 1; qp++)
     {
       q_bits = Q_BITS_8 + qp_per_matrix[qp] - OffsetBits;
-      k = input->AdaptRoundingFixed ? 0 : qp;
+      k = params->AdaptRoundingFixed ? 0 : qp;
       for (j = 0; j < 8; j++)
       {
         temp = (j << 3);
@@ -695,7 +692,7 @@ void CalculateOffset8Param ()
     for (qp = 0; qp < max_qp + 1; qp++)
     {
       q_bits = Q_BITS_8 + qp_per_matrix[qp] - OffsetBits;
-      k = input->AdaptRoundingFixed ? 0 : qp;
+      k = params->AdaptRoundingFixed ? 0 : qp;
       for (j = 0; j < 8; j++)
       {
         temp = (j << 3);
@@ -723,7 +720,7 @@ void CalculateOffset8Param ()
   }
 
   // setting for 8x8 luma quantization offset
-  if( IS_INDEPENDENT(input) )
+  if( IS_INDEPENDENT(params) )
   {
     if( img->colour_plane_id == 0 )
     {

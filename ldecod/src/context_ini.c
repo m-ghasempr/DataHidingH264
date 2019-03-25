@@ -61,7 +61,7 @@
 
 
 void
-init_contexts (struct img_par* img)
+init_contexts (ImageParameters *img)
 {
   MotionInfoContexts*  mc = img->currentSlice->mot_ctx;
   TextureInfoContexts* tc = img->currentSlice->tex_ctx;

@@ -10,13 +10,13 @@
 #ifndef _HEADER_H_
 #define _HEADER_H_
 
-int FirstPartOfSliceHeader();
-int RestOfSliceHeader();
+int FirstPartOfSliceHeader(void);
+int RestOfSliceHeader(void);
 
 void dec_ref_pic_marking(Bitstream *currStream);
 
-void decode_poc(struct img_par *img);
-int dumppoc(struct img_par *img);
+void decode_poc(ImageParameters *img);
+int dumppoc(ImageParameters *img);
 
 #endif
 

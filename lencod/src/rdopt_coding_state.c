@@ -25,8 +25,7 @@
  *    delete structure for storing coding state
  ************************************************************************
  */
-void
-delete_coding_state (CSptr cs)
+void delete_coding_state (CSptr cs)
 {
   if (cs != NULL)
   {
@@ -60,8 +59,8 @@ CSptr create_coding_state ()
     no_mem_exit("init_coding_state: cs");
 
   //=== important variables of data partition array ===
-  cs->no_part = input->partition_mode==0?1:3;
-  if (input->symbol_mode == CABAC)
+  cs->no_part = params->partition_mode==0?1:3;
+  if (params->symbol_mode == CABAC)
   {
     if ((cs->encenv = (EncodingEnvironment*) calloc (cs->no_part, sizeof(EncodingEnvironment))) == NULL)
       no_mem_exit("init_coding_state: cs->encenv");
@@ -74,7 +73,7 @@ CSptr create_coding_state ()
     no_mem_exit("init_coding_state: cs->bitstream");
 
   //=== context for binary arithmetic coding ===
-  cs->symbol_mode = input->symbol_mode;
+  cs->symbol_mode = params->symbol_mode;
   if (cs->symbol_mode == CABAC)
   {
     cs->mot_ctx = create_contexts_MotionInfo ();
@@ -96,14 +95,13 @@ CSptr create_coding_state ()
  *    store coding state (for rd-optimized mode decision)
  ************************************************************************
  */
-void
-store_coding_state (Macroblock *currMB, CSptr cs)
+void store_coding_state (Macroblock *currMB, CSptr cs)
 {
   int  i;
   int  i_last = img->currentPicture->idr_flag? 1:cs->no_part;
   Slice *currSlice = img->currentSlice;
 
-  if (!input->rdopt)  return;
+  if (!params->rdopt)  return;
 
   if (cs->symbol_mode==CABAC)
   {
@@ -131,10 +129,10 @@ store_coding_state (Macroblock *currMB, CSptr cs)
   memcpy (cs->bitcounter, currMB->bitcounter, MAX_BITCOUNTER_MB * sizeof(int));
 
   //=== elements of current macroblock ===
-  memcpy (cs->mvd, currMB->mvd, BLOCK_CONTEXT * sizeof(int));
+  memcpy (cs->mvd, currMB->mvd, BLOCK_CONTEXT * sizeof(short));
   memcpy (cs->cbp_bits, currMB->cbp_bits, 3 * sizeof(int64));
   
-  if (img->yuv_format==YUV444 && !IS_INDEPENDENT(input))
+  if (img->P444_joined)
   memcpy (cs->cbp_bits_8x8, currMB->cbp_bits_8x8, 3 * sizeof(int64));
 }
 
@@ -151,7 +149,7 @@ void reset_coding_state (Macroblock *currMB, CSptr cs)
   int  i_last = img->currentPicture->idr_flag? 1:cs->no_part;
   Slice *currSlice = img->currentSlice;
 
-  if (!input->rdopt)  return;
+  if (!params->rdopt)  return;
 
   if (cs->symbol_mode==CABAC)
   {
@@ -183,9 +181,10 @@ void reset_coding_state (Macroblock *currMB, CSptr cs)
   memcpy (currMB->bitcounter, cs->bitcounter, MAX_BITCOUNTER_MB * sizeof(int));
 
   //=== elements of current macroblock ===
-  memcpy (currMB->mvd, cs->mvd, BLOCK_CONTEXT * sizeof(int));
+  memcpy (currMB->mvd, cs->mvd, BLOCK_CONTEXT * sizeof(short));
   memcpy (currMB->cbp_bits, cs->cbp_bits, 3 * sizeof(int64));
-  if(img->yuv_format==YUV444 && !IS_INDEPENDENT(input))
+  if(img->P444_joined)
     memcpy (currMB->cbp_bits_8x8, cs->cbp_bits_8x8, 3 * sizeof(int64));
 }
+
 

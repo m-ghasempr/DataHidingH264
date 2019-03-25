@@ -17,61 +17,21 @@
 #ifndef _MV_SEARCH_H_
 #define _MV_SEARCH_H_
 
-//! convert from H.263 QP to H.264 quant given by: quant=pow(2,QP/6)
-const int QP2QUANT[40]=
-{
-   1, 1, 1, 1, 2, 2, 2, 2,
-   3, 3, 3, 4, 4, 4, 5, 6,
-   6, 7, 8, 9,10,11,13,14,
-  16,18,20,23,25,29,32,36,
-  40,45,51,57,64,72,81,91
-};
+extern int (*BiPredME)      (Macroblock *, imgpel *, short, int, int, char  ***, short  ****,
+                       int, int, int, short[2], short[2], short[2], short[2], int, int, int, int);
 
-// Vertical MV Limits (integer/halfpel/quarterpel)
-// Currently only Integer Pel restrictions are used,
-// since the way values are specified
-// (i.e. mvlowbound = (levelmvlowbound + 1) and the way
-// Subpel ME is performed, subpel will always be within range.
+extern int (*SubPelBiPredME)(imgpel* orig_pic, short ref, int list, int pic_pix_x, int pic_pix_y,
+                             int blocktype, short pred_mv1[2], short pred_mv2[2], short mv1[2], short mv2[2], 
+                             int search_pos2, int search_pos4, int min_mcost, int* lambda_factor, int apply_weights);
+extern int (*SubPelME)      (imgpel* orig_pic, short ref, int list, int list_offset, int pic_pix_x, int pic_pix_y, 
+                             int blocktype, short pred_mv[2], short mv[2], 
+                             int search_pos2, int search_pos4, int min_mcost, int* lambda_factor, int apply_weights);
 
-const int LEVELMVLIMIT[17][6] =
-{
-  {  -63,  63,  -128,  127,  -256,  255},
-  {  -63,  63,  -128,  127,  -256,  255},
-  { -127, 127,  -256,  255,  -512,  511},
-  { -127, 127,  -256,  255,  -512,  511},
-  { -127, 127,  -256,  255,  -512,  511},
-  { -127, 127,  -256,  255,  -512,  511},
-  { -255, 255,  -512,  511, -1024, 1023},
-  { -255, 255,  -512,  511, -1024, 1023},
-  { -255, 255,  -512,  511, -1024, 1023},
-  { -511, 511, -1024, 1023, -2048, 2047},
-  { -511, 511, -1024, 1023, -2048, 2047},
-  { -511, 511, -1024, 1023, -2048, 2047},
-  { -511, 511, -1024, 1023, -2048, 2047},
-  { -511, 511, -1024, 1023, -2048, 2047},
-  { -511, 511, -1024, 1023, -2048, 2047},
-  { -511, 511, -1024, 1023, -2048, 2047},
-  { -511, 511, -1024, 1023, -2048, 2047}
+extern void SetMotionVectorPredictor (Macroblock *currMB, short  pmv[2], char   **refPic, short  ***tmp_mv,
+                               short  ref_frame, int list, int block_x, int block_y, int blockshape_x, int blockshape_y);
 
-  /*
-  {  -64,  63,  -128,  127,  -256,  255},
-  {  -64,  63,  -128,  127,  -256,  255},
-  { -128, 127,  -256,  255,  -512,  511},
-  { -128, 127,  -256,  255,  -512,  511},
-  { -128, 127,  -256,  255,  -512,  511},
-  { -128, 127,  -256,  255,  -512,  511},
-  { -256, 255,  -512,  511, -1024, 1023},
-  { -256, 255,  -512,  511, -1024, 1023},
-  { -256, 255,  -512,  511, -1024, 1023},
-  { -512, 511, -1024, 1023, -2048, 2047},
-  { -512, 511, -1024, 1023, -2048, 2047},
-  { -512, 511, -1024, 1023, -2048, 2047},
-  { -512, 511, -1024, 1023, -2048, 2047},
-  { -512, 511, -1024, 1023, -2048, 2047},
-  { -512, 511, -1024, 1023, -2048, 2047},
-  { -512, 511, -1024, 1023, -2048, 2047},
-  { -512, 511, -1024, 1023, -2048, 2047}
-  */
-};
+extern void PrepareMEParams(int apply_weights, int ChromaMEEnable, int list, int ref);
+extern void PrepareBiPredMEParams(int apply_weights, int ChromaMEEnable, int list, int list_offset, int ref);
+
 #endif
 

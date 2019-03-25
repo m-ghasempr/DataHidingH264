@@ -17,6 +17,13 @@
 
 #define MAX_LIST_SIZE 33
 
+typedef struct picture_stats
+{
+  double dsum[3];
+  double dvar[3];
+} PictureStats;
+
+
 //! definition a picture (field or frame)
 typedef struct storable_picture
 {
@@ -51,8 +58,13 @@ typedef struct storable_picture
 
   imgpel **   imgY;          //!< Y picture component
   imgpel **** imgY_sub;      //!< Y picture component upsampled (Quarter pel)
-  imgpel *****imgUV_sub;      //!< UV picture component upsampled (Quarter/One-Eighth pel)
+  imgpel *****imgUV_sub;     //!< UV picture component upsampled (Quarter/One-Eighth pel)
   imgpel ***  imgUV;         //!< U and V picture components
+
+  imgpel **   p_img[MAX_PLANE];          //!< pointer array for accessing imgY/imgUV[]
+  imgpel **** p_img_sub[MAX_PLANE];      //!< pointer array for storing top address of imgY_sub/imgUV_sub[]
+  imgpel **   p_curr_img;                //!< current int-pel ref. picture area to be used for motion estimation
+  imgpel **** p_curr_img_sub;            //!< current sub-pel ref. picture area to be used for motion estimation
 
   byte *      mb_field;      //!< field macroblock indicator
 
@@ -81,18 +93,14 @@ typedef struct storable_picture
   int         frame_cropping_rect_top_offset;
   int         frame_cropping_rect_bottom_offset;
 
-  imgpel **   p_img[MAX_PLANE];          //!< pointer array for accessing imgY/imgUV[]
-  imgpel **** p_img_sub[MAX_PLANE];     //!< pointer array for storing top address of imgY_sub/imgUV_sub[]
-
   char  ***   ref_idx_JV[MAX_PLANE];       //!< ref_idx to be used for 4:4:4 independent mode encoding
   int64 ***   ref_pic_id_JV[MAX_PLANE];    //!< ref_pic_id to be used for 4:4:4 independent mode encoding
   int64 ***   ref_id_JV[MAX_PLANE];        //!< ref_id to be used for 4:4:4 independent mode encoding
   short ****  mv_JV[MAX_PLANE];            //!< mv to be used for 4:4:4 independent mode encoding
   int colour_plane_id;                     //!< colour_plane_id to be used for 4:4:4 independent mode encoding
 
-  imgpel **   p_curr_img;                    //!< current int-pel ref. picture area to be used for motion estimation
-  imgpel **** p_curr_img_sub;                //!< current sub-pel ref. picture area to be used for motion estimation
-
+  PictureStats p_stats;
+  
 } StorablePicture;
 
 
@@ -147,7 +155,6 @@ typedef struct frame_store
   StorablePicture *frame;
   StorablePicture *top_field;
   StorablePicture *bottom_field;
-
 } FrameStore;
 
 

@@ -65,7 +65,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
   Macroblock* prevMB      = (prev_mb_nr >= 0) ? &img->mb_data[prev_mb_nr]:NULL ;
 
   char   **ipredmodes = img->ipredmode;
-  short   *allmvs = input->IntraProfile ? NULL: img->all_mv[0][0][0][0][0];
+  short   *allmvs = params->IntraProfile ? NULL: img->all_mv[0][0][0][0][0];
   int     ****i4p;  //for non-RD-opt. mode
   imgpel  (*curr_mpr)[16] = img->mpr[0];
 
@@ -74,11 +74,11 @@ void encode_one_macroblock_low (Macroblock *currMB)
   short inter_skip = 0;
 
 
-  if(input->SearchMode == UM_HEX)
+  if(params->SearchMode == UM_HEX)
   {
     UMHEX_decide_intrabk_SAD();
   }
-  else if (input->SearchMode == UM_HEX_SIMPLE)
+  else if (params->SearchMode == UM_HEX_SIMPLE)
   {
     smpUMHEX_decide_intrabk_SAD();
   }
@@ -105,7 +105,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
       Get_Direct_Motion_Vectors (currMB);
     }
 
-    if (input->CtxAdptLagrangeMult == 1)
+    if (params->CtxAdptLagrangeMult == 1)
     {
       get_initial_mb16x16_cost(currMB);
     }
@@ -140,7 +140,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
             list_prediction_cost(currMB, BI_PRED, block, mode, enc_mb, bmcost, best_ref);
 
             // Finally, if mode 16x16, compute cost for bipredictive ME vectore
-            if (input->BiPredMotionEstimation && mode == 1)
+            if (params->BiPredMotionEstimation && mode == 1)
             {
               list_prediction_cost(currMB, BI_PRED_L0, block, mode, enc_mb, bmcost, 0);
               list_prediction_cost(currMB, BI_PRED_L1, block, mode, enc_mb, bmcost, 0);
@@ -188,7 +188,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
         } // for (block=0; block<(mode==1?1:2); block++)
 
         currMB->luma_transform_size_8x8_flag = 0;
-        if (input->Transform8x8Mode) //for inter rd-off, set 8x8 to do 8x8 transform
+        if (params->Transform8x8Mode) //for inter rd-off, set 8x8 to do 8x8 transform
         {
           SetModesAndRefframeForBlocks(currMB, mode);
           currMB->luma_transform_size_8x8_flag = TransformDecision(currMB, -1, &cost);
@@ -200,7 +200,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
           min_cost  = cost;
           best_transform_flag = currMB->luma_transform_size_8x8_flag;
 
-          if (input->CtxAdptLagrangeMult == 1)
+          if (params->CtxAdptLagrangeMult == 1)
           {
             adjust_mb16x16_cost(cost);
           }
@@ -219,7 +219,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
 
       currMB->all_blk_8x8 = -1;
 
-      if (input->Transform8x8Mode)
+      if (params->Transform8x8Mode)
       {
         tr8x8.cost8x8 = 0;
         //===========================================================
@@ -244,10 +244,10 @@ void encode_one_macroblock_low (Macroblock *currMB)
 
         //--- re-set coding state (as it was before 8x8 block coding) ---
         //reset_coding_state (currMB, cs_mb);
-      }// if (input->Transform8x8Mode)
+      }// if (params->Transform8x8Mode)
 
 
-      if (input->Transform8x8Mode != 2)
+      if (params->Transform8x8Mode != 2)
       {
         tr4x4.cost8x8 = 0;
         //=================================================================
@@ -266,26 +266,26 @@ void encode_one_macroblock_low (Macroblock *currMB)
         }
         //--- re-set coding state (as it was before 8x8 block coding) ---
         // reset_coding_state (currMB, cs_mb);
-      }// if (input->Transform8x8Mode != 2)
+      }// if (params->Transform8x8Mode != 2)
 
       //--- re-set coding state (as it was before 8x8 block coding) ---
       reset_coding_state (currMB, cs_mb);
 
 
       // This is not enabled yet since mpr has reverse order.
-      if (input->RCEnable)
+      if (params->RCEnable)
         rc_store_diff(img->opix_x, img->opix_y, curr_mpr);
 
       //check cost for P8x8 for non-rdopt mode
       if (tr4x4.cost8x8 < min_cost || tr8x8.cost8x8 < min_cost)
       {
         best_mode = P8x8;
-        if (input->Transform8x8Mode == 2)
+        if (params->Transform8x8Mode == 2)
         {
           min_cost = tr8x8.cost8x8;
           currMB->luma_transform_size_8x8_flag=1;
         }
-        else if (input->Transform8x8Mode)
+        else if (params->Transform8x8Mode)
         {
           if (tr8x8.cost8x8 < tr4x4.cost8x8)
           {
@@ -345,7 +345,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
   {
     if(have_direct)
     {
-      switch(input->Transform8x8Mode)
+      switch(params->Transform8x8Mode)
       {
       case 1: // Mixture of 8x8 & 4x4 transform
         cost = ((cost8x8_direct < cost_direct) || !(enc_mb.valid[5] && enc_mb.valid[6] && enc_mb.valid[7]))
@@ -370,9 +370,9 @@ void encode_one_macroblock_low (Macroblock *currMB)
 
     if (cost <= min_cost)
     {
-      if(active_sps->direct_8x8_inference_flag && input->Transform8x8Mode)
+      if(active_sps->direct_8x8_inference_flag && params->Transform8x8Mode)
       {
-        if(input->Transform8x8Mode==2)
+        if(params->Transform8x8Mode==2)
           currMB->luma_transform_size_8x8_flag=1;
         else
         {
@@ -386,7 +386,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
         currMB->luma_transform_size_8x8_flag=0;
 
       //Rate control
-      if (input->RCEnable)
+      if (params->RCEnable)
         rc_store_diff(img->opix_x, img->opix_y, curr_mpr);
 
       min_cost  = cost;
@@ -412,7 +412,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
     if (rd_cost <= min_rd_cost) //HYU_NOTE. bug fix. 08/15/07
     {
       currMB->cbp = temp_cpb;
-      if ((img->yuv_format == YUV444) && !IS_INDEPENDENT(input))
+      if (img->P444_joined)
       {
         curr_cbp[0] = cmp_cbp[1];  
         curr_cbp[1] = cmp_cbp[2];
@@ -421,7 +421,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
       if(enc_mb.valid[I4MB])   //KHHan. bug fix. Oct.15.2007
       {
         //coeffs
-        if (input->Transform8x8Mode != 2) 
+        if (params->Transform8x8Mode != 2) 
         {
           i4p=cofAC; cofAC=img->cofAC; img->cofAC=i4p;
         }
@@ -437,7 +437,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
         }
       }
 
-      if ((img->yuv_format == YUV444) && !IS_INDEPENDENT(input))
+      if (img->P444_joined)
       {
         for(j=0; j<MB_BLOCK_SIZE; j++)
         {
@@ -452,7 +452,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
       }
       
       //Rate control
-      if (input->RCEnable)
+      if (params->RCEnable)
         rc_store_diff(img->opix_x, img->opix_y, curr_mpr);
 
       min_rd_cost  = rd_cost; 
@@ -462,7 +462,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
     else
     {
       currMB->luma_transform_size_8x8_flag = tmp_8x8_flag; // restore if not best
-      if ((img->yuv_format == YUV444) && !IS_INDEPENDENT(input))
+      if (img->P444_joined)
       {
         cmp_cbp[1] = curr_cbp[0]; 
         cmp_cbp[2] = curr_cbp[1]; 
@@ -485,7 +485,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
       currMB->cbp = temp_cpb;
 
       //Rate control
-      if (input->RCEnable)
+      if (params->RCEnable)
         rc_store_diff(img->opix_x, img->opix_y, curr_mpr);
 
       min_rd_cost  = rd_cost; 
@@ -495,7 +495,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
     else
     {
       currMB->luma_transform_size_8x8_flag = tmp_8x8_flag; // restore if not best
-      if ((img->yuv_format == YUV444) && !IS_INDEPENDENT(input))
+      if (img->P444_joined)
       {
         cmp_cbp[1] = curr_cbp[0]; 
         cmp_cbp[2] = curr_cbp[1]; 
@@ -512,7 +512,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
   {
     currMB->luma_transform_size_8x8_flag = 0;
     intrapred_16x16 (currMB, PLANE_Y);
-    if ((img->yuv_format == YUV444) && !IS_INDEPENDENT(input))
+    if (img->P444_joined)
     {
       select_plane(PLANE_U);
       intrapred_16x16 (currMB, PLANE_U);
@@ -520,22 +520,31 @@ void encode_one_macroblock_low (Macroblock *currMB)
       intrapred_16x16 (currMB, PLANE_V);
       select_plane(PLANE_Y);
     }
+    switch(params->FastIntra16x16)
+    {
+    case 0:
+    default:
+      find_sad_16x16 = find_sad_16x16_JM;
+      break;
+    }
+
     rd_cost = find_sad_16x16 (currMB, &i16mode);
 
     if (rd_cost < min_rd_cost)
     {
       //Rate control      
-      if (input->RCEnable)
+      if (params->RCEnable)
         rc_store_diff(img->opix_x,img->opix_y,img->mpr_16x16[0][i16mode]);
 
       best_mode   = I16MB;      
-      currMB->cbp = dct_16x16 (currMB, PLANE_Y, i16mode);
-      if ((img->yuv_format == YUV444) && !IS_INDEPENDENT(input))
+      min_rd_cost  = rd_cost; 
+      currMB->cbp = pDCT_16x16 (currMB, PLANE_Y, i16mode);
+      if (img->P444_joined)
       {
         select_plane(PLANE_U);
-        cmp_cbp[1] = dct_16x16(currMB, PLANE_U, i16mode);
+        cmp_cbp[1] = pDCT_16x16(currMB, PLANE_U, i16mode);
         select_plane(PLANE_V);
-        cmp_cbp[2] = dct_16x16(currMB, PLANE_V, i16mode);   
+        cmp_cbp[2] = pDCT_16x16(currMB, PLANE_V, i16mode);   
 
         select_plane(PLANE_Y);
         currMB->cbp |= cmp_cbp[1];    
@@ -562,7 +571,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
 
     if (best_mode==P8x8)
     {
-      if (currMB->luma_transform_size_8x8_flag && (cbp8_8x8ts == 0) && input->Transform8x8Mode != 2)
+      if (currMB->luma_transform_size_8x8_flag && (cbp8_8x8ts == 0) && params->Transform8x8Mode != 2)
         currMB->luma_transform_size_8x8_flag = 0;
 
       SetCoeffAndReconstruction8x8 (currMB);
@@ -585,7 +594,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
         {
           memcpy(&enc_picture->imgY[img->pix_y + j][img->pix_x],temp_imgY[j], MB_BLOCK_SIZE * sizeof(imgpel));
         }
-        if ((img->yuv_format == YUV444) && !IS_INDEPENDENT(input))
+        if (img->P444_joined)
         {
           for(j=0; j<MB_BLOCK_SIZE; j++)
           {
@@ -607,7 +616,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
             currMB->luma_transform_size_8x8_flag = best_transform_flag;
           LumaResidualCoding (currMB);
 
-          if ((img->yuv_format == YUV444) && !IS_INDEPENDENT(input))
+          if (img->P444_joined)
           {
             if((currMB->cbp==0 && cmp_cbp[1] == 0 && cmp_cbp[2] == 0) &&(best_mode==0))
               currMB->luma_transform_size_8x8_flag = 0;
@@ -616,7 +625,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
             currMB->luma_transform_size_8x8_flag = 0;
 
           //Rate control
-          if (input->RCEnable)
+          if (params->RCEnable)
             rc_store_diff(img->opix_x,img->opix_y,curr_mpr);
         }
       }
@@ -643,7 +652,7 @@ void encode_one_macroblock_low (Macroblock *currMB)
     SetMotionVectorsMB (currMB, bslice);
 
     //===== check for SKIP mode =====
-    if((img->yuv_format == YUV444) && !IS_INDEPENDENT(input))
+    if(img->P444_joined)
     {
       if ((pslice) && best_mode==1 && currMB->cbp==0 && cmp_cbp[1] == 0 && cmp_cbp[2] == 0 &&
         enc_picture->ref_idx[LIST_0][img->block_y][img->block_x]    == 0 &&
@@ -663,16 +672,17 @@ void encode_one_macroblock_low (Macroblock *currMB)
       currMB->luma_transform_size_8x8_flag = 0;
     }
 
-    if(img->MbaffFrameFlag)
+    if (img->MbaffFrameFlag || (params->UseRDOQuant && params->RDOQ_QP_Num > 1))
       set_mbaff_parameters(currMB);
   }
 
   // Rate control
-  if(input->RCEnable && input->RCUpdateMode <= MAX_RC_MODE)
+  if(params->RCEnable && params->RCUpdateMode <= MAX_RC_MODE)
     rc_store_mad(currMB);
   update_qp_cbp(currMB, best_mode);
 
   rdopt->min_rdcost = min_rd_cost;
+  rdopt->min_dcost = min_rd_cost;
 
   if ( (img->MbaffFrameFlag)
     && (img->current_mb_nr%2)
@@ -684,20 +694,20 @@ void encode_one_macroblock_low (Macroblock *currMB)
   }
 
   //===== Decide if this MB will restrict the reference frames =====
-  if (input->RestrictRef)
+  if (params->RestrictRef)
     update_refresh_map(intra, intra1, currMB);
 
-  if(input->SearchMode == UM_HEX)
+  if(params->SearchMode == UM_HEX)
   {
     UMHEX_skip_intrabk_SAD(best_mode, listXsize[enc_mb.list_offset[LIST_0]]);
   }
-  else if(input->SearchMode == UM_HEX_SIMPLE)
+  else if(params->SearchMode == UM_HEX_SIMPLE)
   {
     smpUMHEX_skip_intrabk_SAD(best_mode, listXsize[enc_mb.list_offset[LIST_0]]);
   }
 
   //--- constrain intra prediction ---
-  if(input->UseConstrainedIntraPred && (img->type==P_SLICE || img->type==B_SLICE))
+  if(params->UseConstrainedIntraPred && (img->type==P_SLICE || img->type==B_SLICE))
   {
     img->intra_block[img->current_mb_nr] = IS_INTRA(currMB);
   }

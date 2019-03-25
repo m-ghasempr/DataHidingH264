@@ -68,7 +68,7 @@ void InitSEIMessages()
   seiSparePicturePayload.data = NULL;
   InitSparePicture();
   InitSubseqChar();
-  if (input->NumFramesInELSubSeq != 0)
+  if (params->NumFramesInELSubSeq != 0)
     InitSubseqLayerInfo();
   InitSceneInformation();
   // init panscanrect sei message
@@ -93,7 +93,7 @@ void CloseSEIMessages()
 {
   int i;
 
-  if (input->NumFramesInELSubSeq != 0)
+  if (params->NumFramesInELSubSeq != 0)
     CloseSubseqLayerInfo();
 
   CloseSubseqChar();
@@ -145,7 +145,7 @@ Boolean HaveAggregationSEI()
     return TRUE;
 
   return FALSE;
-//  return input->SparePictureOption && ( seiHasSpare_picture || seiHasSubseq_information ||
+//  return params->SparePictureOption && ( seiHasSpare_picture || seiHasSubseq_information ||
 //    seiHasSubseq_layer_characteristics || seiHasSubseq_characteristics );
 }
 
@@ -375,8 +375,8 @@ void CalculateSparePicture()
   Bitstream *tmpBitstream;
 
   int num_of_mb=(img->height/16) * (img->width/16);
-  int threshold1 = 16*16*input->SPDetectionThreshold;
-  int threshold2 = num_of_mb * input->SPPercentageThreshold / 100;
+  int threshold1 = 16*16*params->SPDetectionThreshold;
+  int threshold2 = num_of_mb * params->SPPercentageThreshold / 100;
   int ref_area_indicator;
   int CandidateSpareFrameNum, SpareFrameNum;
   int possible_spare_pic_num;
@@ -845,15 +845,15 @@ void UpdateSubseqInfo(int currLayer)
 
   if ( currLayer == 0 )
   {
-    if ( img->number == input->no_frames - 1 )
+    if ( img->number == params->no_frames - 1 )
       seiSubseqInfo[currLayer].last_picture_flag = 1;
     else
       seiSubseqInfo[currLayer].last_picture_flag = 0;
   }
   if ( currLayer == 1 )
   {
-    if ( ((IMG_NUMBER%(input->NumFramesInELSubSeq + 1) == 0) && (input->successive_Bframe != 0) && (IMG_NUMBER>0)) || // there are B frames
-      ((IMG_NUMBER%(input->NumFramesInELSubSeq + 1) == input->NumFramesInELSubSeq) && (input->successive_Bframe==0))  // there are no B frames
+    if ( ((IMG_NUMBER%(params->NumFramesInELSubSeq + 1) == 0) && (params->successive_Bframe != 0) && (IMG_NUMBER>0)) || // there are B frames
+      ((IMG_NUMBER%(params->NumFramesInELSubSeq + 1) == params->NumFramesInELSubSeq) && (params->successive_Bframe==0))  // there are no B frames
       )
       seiSubseqInfo[currLayer].last_picture_flag = 1;
     else
@@ -1679,10 +1679,10 @@ int ParseToneMappingConfigFile(tone_mapping_struct* pSeiToneMapping)
   char buf[1024];
   unsigned int tmp;
 
-  printf ("Parsing Tone mapping cfg file %s ..........\n\n", input->ToneMappingFile);
-  if ((fp = fopen(input->ToneMappingFile, "r")) == NULL) 
+  printf ("Parsing Tone mapping cfg file %s ..........\n\n", params->ToneMappingFile);
+  if ((fp = fopen(params->ToneMappingFile, "r")) == NULL) 
   {
-    fprintf(stderr, "Tone mapping config file %s is not found, disable tone mapping SEI\n", input->ToneMappingFile);
+    fprintf(stderr, "Tone mapping config file %s is not found, disable tone mapping SEI\n", params->ToneMappingFile);
     seiHasTone_mapping=FALSE;
 
     return 1;
@@ -1776,7 +1776,7 @@ int ParseToneMappingConfigFile(tone_mapping_struct* pSeiToneMapping)
 
 void InitToneMapping() 
 {
-  if (input->ToneMappingSEIPresentFlag == 0)
+  if (params->ToneMappingSEIPresentFlag == 0)
   {
     seiHasTone_mapping = FALSE;
     return;
@@ -2015,7 +2015,7 @@ void ClosePostFilterHints()
     free(seiPostFilterHints.data->streamBuffer);
     free(seiPostFilterHints.data);  
     if (seiPostFilterHints.filter_hint)
-      free_mem3Dint(seiPostFilterHints.filter_hint, 3);
+      free_mem3Dint(seiPostFilterHints.filter_hint);
   }
   seiPostFilterHints.data = NULL;
 }

@@ -25,13 +25,13 @@
 
 #include "me_distortion.h"
 #include "me_fullsearch.h"
+#include "conformance.h"
 
 // Define External Global Parameters
 extern int *mvbits;
 extern short*   spiral_search_x;
 extern short*   spiral_search_y;
 extern int *byte_abs;
-extern const int LEVELMVLIMIT[17][6];
 
 /*****
  *****  static variables for fast integer motion estimation
@@ -46,9 +46,8 @@ static int  **max_search_range;
 
 extern void SetMotionVectorPredictor (Macroblock *currMB, short  pmv[2], char   **refPic,
                                       short  ***tmp_mv, short  ref_frame,
-                                      int    list, int    block_x,
-                                      int    block_y, int    blockshape_x,
-                                      int    blockshape_y);
+                                      int    list,      int mb_x, int mb_y, 
+                                      int    blockshape_x, int blockshape_y);
 
 // Functions
 /*!
@@ -65,11 +64,10 @@ extern void SetMotionVectorPredictor (Macroblock *currMB, short  pmv[2], char   
  *    function creating arrays for fast integer motion estimation
  ***********************************************************************
  */
-void
-InitializeFastFullIntegerSearch ()
+void InitializeFastFullIntegerSearch (void)
 {
   int  i, j, k, list;
-  int  search_range = input->search_range;
+  int  search_range = params->search_range;
   int  max_pos      = (2*search_range+1) * (2*search_range+1);
 
   if ((BlockSAD = (distpel*****)malloc (2 * sizeof(distpel****))) == NULL)
@@ -122,7 +120,7 @@ InitializeFastFullIntegerSearch ()
   }
 
   // assign max search ranges for reference frames
-  if (input->full_search == 2)
+  if (params->full_search == 2)
   {
     for (list=0;list<2;list++)
       for (i=0; i<img->max_num_references; i++)
@@ -281,7 +279,7 @@ SetupLargerBlocks (int list, int refindex, int max_pos)
 #if GEN_ME
 void SetupFastFullPelSearch (Macroblock *currMb, short ref, int list)  // <--  reference frame parameter, list0 or 1
 {
-  short   pmv[2];
+  short   pmv[2], mv[2];
   static imgpel   orig_pels[768];
 
   imgpel  *srcptr = orig_pels;
@@ -297,7 +295,7 @@ void SetupFastFullPelSearch (Macroblock *currMb, short ref, int list)  // <--  r
   int     list_offset   = img->mb_data[img->current_mb_nr].list_offset;
 
   int     apply_weights = ( (active_pps->weighted_pred_flag && (img->type == P_SLICE || img->type == SP_SLICE)) ||
-    (active_pps->weighted_bipred_idc && (img->type == B_SLICE))) && input->UseWeightedReferenceME;
+    (active_pps->weighted_bipred_idc && (img->type == B_SLICE))) && params->UseWeightedReferenceME;
   int abs_y4, abs_x4;
 
   int   i, j, k;
@@ -393,20 +391,20 @@ void SetupFastFullPelSearch (Macroblock *currMb, short ref, int list)  // <--  r
   //===== get search center: predictor of 16x16 block =====
   SetMotionVectorPredictor (currMB, pmv, enc_picture->ref_idx[list], enc_picture->mv[list], ref, list, 0, 0, 16, 16);
 
-  search_center_x[list][ref] = pmv[0] / 4;
-  search_center_y[list][ref] = pmv[1] / 4;
+  mv[0] = pmv[0] / 4;
+  mv[1] = pmv[1] / 4;
 
-  if (!input->rdopt)
+  if (!params->rdopt)
   {
     //--- correct center so that (0,0) vector is inside ---
-    search_center_x[list][ref] = iClip3(-search_range, search_range, search_center_x[list][ref]);
-    search_center_y[list][ref] = iClip3(-search_range, search_range, search_center_y[list][ref]);
+    mv[0] = iClip3(-search_range, search_range, mv[0]);
+    mv[1] = iClip3(-search_range, search_range, mv[1]);
   }
-  search_center_x[list][ref] = iClip3(-2047 + search_range, 2047 - search_range, search_center_x[list][ref]);
-  search_center_y[list][ref] = iClip3(LEVELMVLIMIT[img->LevelIndex][0] + search_range, LEVELMVLIMIT[img->LevelIndex][1]  - search_range, search_center_y[list][ref]);
 
-  search_center_x[list][ref] += img->opix_x;
-  search_center_y[list][ref] += img->opix_y;
+  clip_mv_range(img, search_range, mv, F_PEL);
+
+  search_center_x[list][ref] = mv[0] + img->opix_x;
+  search_center_y[list][ref] = mv[1] + img->opix_y;
 
   offset_x = search_center_x[list][ref];
   offset_y = search_center_y[list][ref];
@@ -424,7 +422,7 @@ void SetupFastFullPelSearch (Macroblock *currMb, short ref, int list)  // <--  r
   }
 
   //===== determine position of (0,0)-vector =====
-  if (!input->rdopt)
+  if (!params->rdopt)
   {
     ref_x = img->opix_x - offset_x;
     ref_y = img->opix_y - offset_y;
@@ -505,9 +503,9 @@ void SetupFastFullPelSearch (Macroblock *currMB, short ref, int list)  // <--  r
 
   int     list_offset   = img->mb_data[img->current_mb_nr].list_offset;
   int     apply_weights = ( (active_pps->weighted_pred_flag && (img->type == P_SLICE || img->type == SP_SLICE)) ||
-    (active_pps->weighted_bipred_idc && (img->type == B_SLICE))) && input->UseWeightedReferenceME;
+    (active_pps->weighted_bipred_idc && (img->type == B_SLICE))) && params->UseWeightedReferenceME;
   int     weighted_pel;
-  int *dist_method = input->MEErrorMetric[0] ? img->quad : byte_abs;
+  int *dist_method = params->MEErrorMetric[0] ? img->quad : byte_abs;
 
   ref_picture     = listX[list+list_offset][ref];
   ref_access_method = FAST_ACCESS;
@@ -550,7 +548,7 @@ void SetupFastFullPelSearch (Macroblock *currMB, short ref, int list)  // <--  r
   search_center_x[list][ref] = pmv[0] / 4;
   search_center_y[list][ref] = pmv[1] / 4;
 
-  if (!input->rdopt)
+  if (!params->rdopt)
   {
     //--- correct center so that (0,0) vector is inside ---
     search_center_x[list][ref] = iClip3(-search_range, search_range, search_center_x[list][ref]);
@@ -597,7 +595,7 @@ void SetupFastFullPelSearch (Macroblock *currMB, short ref, int list)  // <--  r
   }
 
   //===== determine position of (0,0)-vector =====
-  if (!input->rdopt)
+  if (!params->rdopt)
   {
     ref_x = img->opix_x - offset_x;
     ref_y = img->opix_y - offset_y;
@@ -827,22 +825,25 @@ void SetupFastFullPelSearch (Macroblock *currMB, short ref, int list)  // <--  r
  *    Fast Full pixel block motion search
  ***********************************************************************
  */
-int                                                   //  ==> minimum motion cost after search
-FastFullPelBlockMotionSearch (imgpel*   orig_pic,     // <--  not used
-                              short     ref,          // <--  reference frame (0... or -1 (backward))
+int                                                     //  ==> minimum motion cost after search
+FastFullPelBlockMotionSearch (Macroblock *currMB,       // <--  current Macroblock
+                              imgpel*   orig_pic,       // <--  not used
+                              short     ref,            // <--  reference frame (0... or -1 (backward))
                               int       list,
-                              int       pic_pix_x,    // <--  absolute x-coordinate of regarded AxB block
-                              int       pic_pix_y,    // <--  absolute y-coordinate of regarded AxB block
-                              int       blocktype,    // <--  block type (1-16x16 ... 7-4x4)
-                              short     pred_mv_x,    // <--  motion vector predictor (x) in sub-pel units
-                              short     pred_mv_y,    // <--  motion vector predictor (y) in sub-pel units
-                              short*    mv_x,         //  --> motion vector (x) - in pel units
-                              short*    mv_y,         //  --> motion vector (y) - in pel units
-                              int       search_range, // <--  1-d search range in pel units
-                              int       min_mcost,    // <--  minimum motion cost (cost for center or huge value)
-                              int       lambda_factor)       // <--  lagrangian parameter for determining motion cost
+                              int       list_offset,    // <--  MBAFF list offset
+                              char   ***refPic,         // <--  reference array
+                              short ****tmp_mv,         // <--  mv array
+                              int       pic_pix_x,      // <--  absolute x-coordinate of regarded AxB block
+                              int       pic_pix_y,      // <--  absolute y-coordinate of regarded AxB block
+                              int       blocktype,      // <--  block type (1-16x16 ... 7-4x4)
+                              short     pred_mv[2],     // <--  motion vector predictor (x) in sub-pel units
+                              short     mv[2],          // <--> in: search center (x) / out: motion vector (x) - in pel units
+                              int       search_range,   // <--  1-d search range in pel units
+                              int       min_mcost,      // <--  minimum motion cost (cost for center or huge value)
+                              int       lambda_factor,  // <--  lagrangian parameter for determining motion cost
+                              int       apply_weights
+                              )
 {
-  Macroblock *currMB = &(img->mb_data[img->current_mb_nr]);
   int   pos, offset_x, offset_y, cand_x, cand_y, mcost;
   int   max_pos       = (2*search_range+1)*(2*search_range+1);              // number of search positions
   int   best_pos      = 0;                                                  // position with minimum motion cost
@@ -862,9 +863,9 @@ FastFullPelBlockMotionSearch (imgpel*   orig_pic,     // <--  not used
   offset_y = search_center_y[list][ref] - img->opix_y;
 
   //===== cost for (0,0)-vector: it is done before, because MVCost can be negative =====
-  if (!input->rdopt)
+  if (!params->rdopt)
   {
-    mcost = block_sad[pos_00[list][ref]] + MV_COST_SMP (lambda_factor, 0, 0, pred_mv_x, pred_mv_y);
+    mcost = block_sad[pos_00[list][ref]] + MV_COST_SMP (lambda_factor, 0, 0, pred_mv[0], pred_mv[1]);
 
     if (mcost < min_mcost)
     {
@@ -883,7 +884,7 @@ FastFullPelBlockMotionSearch (imgpel*   orig_pic,     // <--  not used
       cand_x = (offset_x + spiral_search_x[pos])<<2;
       cand_y = (offset_y + spiral_search_y[pos])<<2;
       mcost  = *block_sad;
-      mcost += MV_COST_SMP (lambda_factor, cand_x, cand_y, pred_mv_x, pred_mv_y);
+      mcost += MV_COST_SMP (lambda_factor, cand_x, cand_y, pred_mv[0], pred_mv[1]);
 
       //--- check motion cost ---
       if (mcost < min_mcost)
@@ -895,8 +896,8 @@ FastFullPelBlockMotionSearch (imgpel*   orig_pic,     // <--  not used
   }
 
   //===== set best motion vector and return minimum motion cost =====
-  *mv_x = offset_x + spiral_search_x[best_pos];
-  *mv_y = offset_y + spiral_search_y[best_pos];
+  mv[0] = offset_x + spiral_search_x[best_pos];
+  mv[1] = offset_y + spiral_search_y[best_pos];
   return min_mcost;
 }
 

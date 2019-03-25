@@ -20,7 +20,7 @@
 #define _ME_EPZS_H_
 
 
-#define CHECK_RANGE  ((cand_x >= 0) && (cand_x < img_width  - blocksize_x) &&(cand_y >= 0) && (cand_y < img_height - blocksize_y))
+#define CHECK_RANGE  ((cand.mv_x >= 0) && (cand.mv_x < img_width  - blocksize_x) &&(cand.mv_y >= 0) && (cand.mv_y < img_height - blocksize_y))
 
 
 typedef struct
@@ -39,7 +39,7 @@ typedef struct
 
 typedef struct
 {
-  int mv[2];
+  MotionVector motion;
   int start_nmbr;
   int next_points;
 }
@@ -67,24 +67,23 @@ typedef enum
 extern EPZSColocParams *EPZSCo_located;
 extern int ***EPZSDistortion;  //!< Array for storing SAD Values
 
-extern int EPZSInit(void);
+extern int  EPZSInit(void);
 extern void EPZSDelete (void);
 extern void EPZSOutputStats(FILE *stat,short stats_file);
 extern void EPZSSliceInit(EPZSColocParams* p, StorablePicture **listX[6]);
-extern int EPZSPelBlockMotionSearch (Macroblock *, imgpel *, short, int, int, char ***, short ****,
-                                     int, int, int, short[2], short[2], int, int, int);
+extern int  EPZSPelBlockMotionSearch (Macroblock *, imgpel *, short, int, int, char ***, short ****,
+                                     int, int, int, short[2], short[2], int, int, int, int);
 
-extern int EPZSBiPredBlockMotionSearch (Macroblock *, imgpel *, short, int, int, char  ***, short  ****,
-                                        int, int, int, short*, short *,
-                                        short[2], short[2], int, int, int);
+extern int  EPZSBiPredBlockMotionSearch (Macroblock *, imgpel *, short, int, int, char  ***, short  ****,
+                                        int, int, int, short[2], short[2],
+                                        short[2], short[2], int, int, int, int);
 
-extern int EPZSSubPelBlockMotionSearch (Macroblock *, imgpel *, short, int, int, int, int, short[2],
-                                        short[2], int, int, int, int*);
+extern int EPZSSubPelBlockMotionSearch (imgpel *, short, int, int, int, int, int, short[2],
+                                        short[2], int, int, int, int*, int);
 
-extern int EPZSSubPelBlockSearchBiPred  (Macroblock *,imgpel* orig_pic, short ref, int list, int pic_pix_x, int pic_pix_y,
-                                         int blocktype, short *pred_mv1, short *pred_mv2,
-                                         short mv1[2], short mv2[2],
-                                         int search_pos2, int search_pos4, int min_mcost, int *lambda_factor);
+extern int EPZSSubPelBlockSearchBiPred  (imgpel* orig_pic, short ref, int list, int pic_pix_x, int pic_pix_y,
+                                         int blocktype, short pred_mv1[2], short pred_mv2[2], short mv1[2], short mv2[2],
+                                         int search_pos2, int search_pos4, int min_mcost, int *lambda_factor, int apply_weights);
 
 #endif
 

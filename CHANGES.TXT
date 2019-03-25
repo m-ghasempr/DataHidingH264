@@ -1,9 +1,33 @@
+Changes in Version JM 14.0 (since JM 13.2)
+------------------------------------------
+- encoder: Bipredictive ME bug fixes (AT)
+- encoder: Intra mode decision reorganization (LL/AT)
+- encoder: Quantization/transform process reorganization (AT)
+- encoder: Trellis based quantization (VCEG-AH21) (LL/AT)
+- encoder: WP Cleanups (AT)
+- encoder: Lossless Coding Cleanups / Bug fixes (AT)
+- encoder: Profile/Level Conformance code cleanups (AT)
+- encoder: fix trace file for data partitioning (KS)
+- encoder: fix encoding for picture aff (KS)
+- encoder: fix memory allocations with num_ref_frames=0 (KS)
+- encoder: fix rate control config error message (AL)
+- encoder: fix 4:2:2 chroma transform (KS)
+- encoder: fix 4:2:2 chroma scaling matrices (SSe)
+- encoder: improve profile restrictions (KS)
+- decoder: fix 4:2:2 decoding (SWi)
+- decoder: allow intra-only deblocking filter configuration in decoder.cfg (KS)
+- decoder: add quantizer initialization for data partitioning (PL)
+- encoder/decoder: memory assignment reorganization (AT)
+- encoder/decoder: deblocking cleanups (AT)
+
+
 Changes in Version JM 13.2 (since JM 13.1)
 ------------------------------------------
 - encoder: 4:4:4 chroma mismatch fix (4x4 intra) (KS)
 - encoder: 4:2:2 chroma mismatch fix (THi)
 - encoder: fixes for negative QP (AT)
 - encoder: fix trace file and average qp calculation for slices with fixed byte size (AL)
+- encoder/decoder: various 4:4:4 fixes (HY)
 - decoder: fix temporal direct mode (KS)
 - decoder: implement I_PCM for more than 8bpp (KS)
 
@@ -1247,6 +1271,7 @@ GrC     Greg Conklin            gregc@real.com
 GS      Gary Sullivan           garysull@microsoft.com
 FW      Feng Wu                 fengwu@microsoft.com
 HS      Heiko Schwarz           hschwarz@hhi.de
+HY      Haoping Yu              haoping.yu@thomson.net
 HZ      Huipin Zhang            hzhang@mobilygen.com
 IL      Inge Lille-Langoy       Inge.Lille-Langoy@telenor.com
 IM      Iole Moccagatta         imoccaga@lsil.com
@@ -1265,6 +1290,7 @@ KL      Karl Lillevold          Karll@real.com
 KP      Krit Panusopone         KPanusopone@gi.com
 KSa     Kazushi Sato            kazushi@av.crl.sony.co.jp
 LK      Louis Kerofsky          lkerofsky@sharplabs.com
+LL      Limin Liu               lliu@dolby.com
 LW      Limin Wang              liwang@gi.com
 LWi     Lowell Winger           lwinger@videolocus.com
 LP      Luca Pezzoni            luca.pezzoni@st.com

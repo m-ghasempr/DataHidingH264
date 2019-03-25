@@ -297,7 +297,7 @@ void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiCont
     range = rLPS;
 
     if (!bi_ct->state)
-      bi_ct->MPS = (bi_ct->MPS ^ 0x01);               // switch MPS if necessary
+      bi_ct->MPS ^= 0x01;               // switch MPS if necessary
 
     bi_ct->state = AC_next_state_LPS_64[bi_ct->state]; // next state
 

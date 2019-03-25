@@ -24,7 +24,7 @@ extern RD_8x8DATA tr4x4, tr8x8;
 extern double mb16x16_cost;
 extern double lambda_mf_factor;
 
-extern const  int LEVELMVLIMIT[17][6];
+
 extern int    ****cofAC8x8ts[3];        // [8x8block][4x4block][level/run][scan_pos]
 extern int    ****cofAC, ****cofAC8x8;        // [8x8block][4x4block][level/run][scan_pos]
 extern int   ****cofAC8x8CbCr[2];
@@ -59,7 +59,6 @@ extern void   assign_enc_picture_params(int, char, int, int, int, int, int);
 extern void   update_refresh_map(int intra, int intra1, Macroblock *currMB);
 extern void   SetMotionVectorsMB (Macroblock*, int);
 extern void   SetCoeffAndReconstruction8x8 (Macroblock*);
-extern void   fast_mode_intra_decision(Macroblock *currMB, short *intra_skip, double min_rate);
 
 extern int    GetBestTransformP8x8(void);
 extern int    I16Offset (int, int);
@@ -87,6 +86,6 @@ void get_initial_mb16x16_cost(Macroblock* currMB);
 void adjust_mb16x16_cost(int);
 
 int64 (*getDistortion)( Macroblock *currMB );
-int64 distortionSSE( Macroblock *currMB );
+int64 distortionSSE   ( Macroblock *currMB );
 #endif
 

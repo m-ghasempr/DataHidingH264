@@ -51,9 +51,9 @@ static int pred_weight_table      (Bitstream *bitstream);
  *    number of bits used
  ********************************************************************************************
 */
-int SliceHeader()
+int SliceHeader(void)
 {
-  int dP_nr = assignSE2partition[input->partition_mode][SE_HEADER];
+  int dP_nr = assignSE2partition[params->partition_mode][SE_HEADER];
   Bitstream *bitstream = img->currentSlice->partArr[dP_nr].bitstream;
   Slice* currSlice = img->currentSlice;
   int len = 0;
@@ -175,7 +175,7 @@ int SliceHeader()
   if (img->nal_reference_idc)
     len += dec_ref_pic_marking(bitstream);
 
-  if(input->symbol_mode==CABAC && img->type!=I_SLICE /*&& img->type!=SI_IMG*/)
+  if(params->symbol_mode==CABAC && img->type!=I_SLICE /*&& img->type!=SI_IMG*/)
   {
     len += ue_v("SH: cabac_init_idc", img->model_number, bitstream);
   }
@@ -193,13 +193,13 @@ int SliceHeader()
 
   if (active_pps->deblocking_filter_control_present_flag)
   {
-    len += ue_v("SH: disable_deblocking_filter_idc",img->LFDisableIdc, bitstream);  // Turn loop filter on/off on slice basis
+    len += ue_v("SH: disable_deblocking_filter_idc",img->DFDisableIdc, bitstream);  // Turn deblocking filter on/off on slice basis
 
-    if (img->LFDisableIdc!=1)
+    if (img->DFDisableIdc!=1)
     {
-      len += se_v ("SH: slice_alpha_c0_offset_div2", img->LFAlphaC0Offset / 2, bitstream);
+      len += se_v ("SH: slice_alpha_c0_offset_div2", img->DFAlphaC0Offset / 2, bitstream);
 
-      len += se_v ("SH: slice_beta_offset_div2", img->LFBetaOffset / 2, bitstream);
+      len += se_v ("SH: slice_beta_offset_div2", img->DFBetaOffset / 2, bitstream);
     }
   }
 
@@ -217,7 +217,7 @@ int SliceHeader()
   // NOTE: The following syntax element is actually part
   //        Slice data bitstream A RBSP syntax
 
-  if(input->partition_mode&&!img->currentPicture->idr_flag)
+  if(params->partition_mode&&!img->currentPicture->idr_flag)
   {
     len += ue_v("DPA: slice_id", img->current_slice_nr, bitstream);
   }
@@ -242,7 +242,7 @@ static int ref_pic_list_reordering(Bitstream *bitstream)
   int i, len=0;
 
   // RPLR for redundant pictures
-  if(input->redundant_pic_flag && redundant_coding)
+  if(params->redundant_pic_flag && redundant_coding)
   {
     currSlice->ref_pic_list_reordering_flag_l0 = 1;
     currSlice->reordering_of_pic_nums_idc_l0[0] = 0;
@@ -404,7 +404,7 @@ static int pred_weight_table(Bitstream *bitstream)
     {
       len += u_1  ("SH: luma_weight_flag_l0", 1, bitstream);
       len += se_v ("SH: luma_weight_l0", wp_weight[0][i][0], bitstream);
-      len += se_v ("SH: luma_offset_l0", wp_offset[0][i][0], bitstream);
+      len += se_v ("SH: luma_offset_l0", (wp_offset[0][i][0]>>(img->bitdepth_luma-8)), bitstream);
     }
     else
     {
@@ -420,7 +420,7 @@ static int pred_weight_table(Bitstream *bitstream)
         for (j=1; j<3; j++)
         {
           len += se_v ("chroma_weight_l0", wp_weight[0][i][j] ,bitstream);
-          len += se_v ("chroma_offset_l0", wp_offset[0][i][j] ,bitstream);
+          len += se_v ("chroma_offset_l0", (wp_offset[0][i][j]>>(img->bitdepth_chroma-8)) ,bitstream);
         }
       }
       else
@@ -438,7 +438,7 @@ static int pred_weight_table(Bitstream *bitstream)
       {
         len += u_1  ("SH: luma_weight_flag_l1", 1, bitstream);
         len += se_v ("SH: luma_weight_l1", wp_weight[1][i][0], bitstream);
-        len += se_v ("SH: luma_offset_l1", wp_offset[1][i][0], bitstream);
+        len += se_v ("SH: luma_offset_l1", (wp_offset[1][i][0]>>(img->bitdepth_luma-8)), bitstream);
       }
       else
       {
@@ -454,7 +454,7 @@ static int pred_weight_table(Bitstream *bitstream)
           for (j=1; j<3; j++)
           {
             len += se_v ("chroma_weight_l1", wp_weight[1][i][j] ,bitstream);
-            len += se_v ("chroma_offset_l1", wp_offset[1][i][j] ,bitstream);
+            len += se_v ("chroma_offset_l1", (wp_offset[1][i][j]>>(img->bitdepth_chroma-8)) ,bitstream);
           }
         }
         else

@@ -29,8 +29,8 @@ extern StorablePicture *dec_picture;
 
 extern int UsedBits;
 
-static void ref_pic_list_reordering();
-static void pred_weight_table();
+static void ref_pic_list_reordering(void);
+static void pred_weight_table(void);
 
 
 /*!
@@ -73,7 +73,7 @@ unsigned CeilLog2_sf( unsigned uiVal)
  *    Length of the first part of the slice header (in bits)
  ************************************************************************
  */
-int FirstPartOfSliceHeader()
+int FirstPartOfSliceHeader(void)
 {
   Slice *currSlice = img->currentSlice;
   int dP_nr = assignSE2partition[currSlice->dp_mode][SE_HEADER];
@@ -110,7 +110,7 @@ int FirstPartOfSliceHeader()
  *    Length of the second part of the Slice header in bits
  ************************************************************************
  */
-int RestOfSliceHeader()
+int RestOfSliceHeader(void)
 {
   Slice *currSlice = img->currentSlice;
   int dP_nr = assignSE2partition[currSlice->dp_mode][SE_HEADER];
@@ -263,26 +263,26 @@ int RestOfSliceHeader()
       error ("slice_qs_delta makes slice_qs_y out of range", 500);
   }
 
-  if ( !HI_INTRA_ONLY_PROFILE || (HI_INTRA_ONLY_PROFILE && (input->loopfilter_bitstream==1) ))
+  if ( !HI_INTRA_ONLY_PROFILE || (HI_INTRA_ONLY_PROFILE && (params->intra_profile_deblocking == 1) ))
   //then read flags and parameters from bistream
   {
     if (active_pps->deblocking_filter_control_present_flag)
     {
-      currSlice->LFDisableIdc = ue_v ("SH: disable_deblocking_filter_idc", currStream);
+      currSlice->DFDisableIdc = ue_v ("SH: disable_deblocking_filter_idc", currStream);
 
-      if (currSlice->LFDisableIdc!=1)
+      if (currSlice->DFDisableIdc!=1)
       {
-        currSlice->LFAlphaC0Offset = 2 * se_v("SH: slice_alpha_c0_offset_div2", currStream);
-        currSlice->LFBetaOffset = 2 * se_v("SH: slice_beta_offset_div2", currStream);
+        currSlice->DFAlphaC0Offset = 2 * se_v("SH: slice_alpha_c0_offset_div2", currStream);
+        currSlice->DFBetaOffset = 2 * se_v("SH: slice_beta_offset_div2", currStream);
       }
       else
       {
-        currSlice->LFAlphaC0Offset = currSlice->LFBetaOffset = 0;
+        currSlice->DFAlphaC0Offset = currSlice->DFBetaOffset = 0;
       }
     }
     else
     {
-      currSlice->LFDisableIdc = currSlice->LFAlphaC0Offset = currSlice->LFBetaOffset = 0;
+      currSlice->DFDisableIdc = currSlice->DFAlphaC0Offset = currSlice->DFBetaOffset = 0;
     }
   }
   else //By default the Loop Filter is Off
@@ -290,17 +290,17 @@ int RestOfSliceHeader()
     //still need to parse the SEs (read flags and parameters from bistream) but will ignore
     if (active_pps->deblocking_filter_control_present_flag)
     {
-      currSlice->LFDisableIdc = ue_v ("SH: disable_deblocking_filter_idc", currStream);
+      currSlice->DFDisableIdc = ue_v ("SH: disable_deblocking_filter_idc", currStream);
 
-      if (currSlice->LFDisableIdc!=1)
+      if (currSlice->DFDisableIdc!=1)
       {
-        currSlice->LFAlphaC0Offset = 2 * se_v("SH: slice_alpha_c0_offset_div2", currStream);
-        currSlice->LFBetaOffset = 2 * se_v("SH: slice_beta_offset_div2", currStream);
+        currSlice->DFAlphaC0Offset = 2 * se_v("SH: slice_alpha_c0_offset_div2", currStream);
+        currSlice->DFBetaOffset = 2 * se_v("SH: slice_beta_offset_div2", currStream);
       }
     }//444_TEMP_NOTE. the end of change. 08/07/07
     //Ignore the SEs, by default the Loop Filter is Off
-    currSlice->LFDisableIdc =1;
-    currSlice->LFAlphaC0Offset = currSlice->LFBetaOffset = 0;
+    currSlice->DFDisableIdc =1;
+    currSlice->DFAlphaC0Offset = currSlice->DFBetaOffset = 0;
   }
 
 
@@ -331,7 +331,7 @@ int RestOfSliceHeader()
  *    read the reference picture reordering information
  ************************************************************************
  */
-static void ref_pic_list_reordering()
+static void ref_pic_list_reordering(void)
 {
   Slice *currSlice = img->currentSlice;
   int dP_nr = assignSE2partition[currSlice->dp_mode][SE_HEADER];
@@ -408,7 +408,7 @@ static void ref_pic_list_reordering()
  *    read the weighted prediction tables
  ************************************************************************
  */
-static void pred_weight_table()
+static void pred_weight_table(void)
 {
   Slice *currSlice = img->currentSlice;
   int dP_nr = assignSE2partition[currSlice->dp_mode][SE_HEADER];
@@ -436,6 +436,7 @@ static void pred_weight_table()
     {
       img->wp_weight[0][i][0] = se_v ("SH: luma_weight_l0", currStream);
       img->wp_offset[0][i][0] = se_v ("SH: luma_offset_l0", currStream);
+      img->wp_offset[0][i][0] = img->wp_offset[0][i][0]<<(img->bitdepth_luma-8);
     }
     else
     {
@@ -453,6 +454,7 @@ static void pred_weight_table()
         {
           img->wp_weight[0][i][j] = se_v("SH: chroma_weight_l0", currStream);
           img->wp_offset[0][i][j] = se_v("SH: chroma_offset_l0", currStream);
+          img->wp_offset[0][i][j] = img->wp_offset[0][i][j]<<(img->bitdepth_chroma-8);
         }
         else
         {
@@ -472,6 +474,7 @@ static void pred_weight_table()
       {
         img->wp_weight[1][i][0] = se_v ("SH: luma_weight_l1", currStream);
         img->wp_offset[1][i][0] = se_v ("SH: luma_offset_l1", currStream);
+        img->wp_offset[1][i][0] = img->wp_offset[1][i][0]<<(img->bitdepth_luma-8);
       }
       else
       {
@@ -489,6 +492,7 @@ static void pred_weight_table()
           {
             img->wp_weight[1][i][j] = se_v("SH: chroma_weight_l1", currStream);
             img->wp_offset[1][i][j] = se_v("SH: chroma_offset_l1", currStream);
+            img->wp_offset[1][i][j] = img->wp_offset[1][i][j]<<(img->bitdepth_chroma-8);
           }
           else
           {
@@ -571,8 +575,8 @@ void dec_ref_pic_marking(Bitstream *currStream)
           tmp_drpm2->Next=tmp_drpm;
         }
 
-      }while (val != 0);
-
+      }
+      while (val != 0);
     }
   }
 }
@@ -588,7 +592,7 @@ void dec_ref_pic_marking(Bitstream *currStream)
  *    none
  ************************************************************************
  */
-void decode_poc(struct img_par *img)
+void decode_poc(ImageParameters *img)
 {
   int i;
   // for POC mode 0:
@@ -689,7 +693,7 @@ void decode_poc(struct img_par *img)
       img->AbsFrameNum = img->FrameNumOffset+img->frame_num;
     else
       img->AbsFrameNum=0;
-    if( (!img->nal_reference_idc) && img->AbsFrameNum>0)
+    if( (!img->nal_reference_idc) && img->AbsFrameNum > 0)
       img->AbsFrameNum--;
 
     // 3rd
@@ -789,31 +793,31 @@ void decode_poc(struct img_par *img)
  *    none
  ************************************************************************
  */
-int dumppoc(struct img_par *img) 
+int dumppoc(ImageParameters *img) 
 {
     printf ("\nPOC locals...\n");
-    printf ("toppoc                                %d\n", img->toppoc);
-    printf ("bottompoc                             %d\n", img->bottompoc);
-    printf ("frame_num                             %d\n", img->frame_num);
-    printf ("field_pic_flag                        %d\n", img->field_pic_flag);
-    printf ("bottom_field_flag                     %d\n", img->bottom_field_flag);
+    printf ("toppoc                                %d\n", (int) img->toppoc);
+    printf ("bottompoc                             %d\n", (int) img->bottompoc);
+    printf ("frame_num                             %d\n", (int) img->frame_num);
+    printf ("field_pic_flag                        %d\n", (int) img->field_pic_flag);
+    printf ("bottom_field_flag                     %d\n", (int) img->bottom_field_flag);
     printf ("POC SPS\n");
-    printf ("log2_max_frame_num_minus4             %d\n", active_sps->log2_max_frame_num_minus4);         // POC200301
-    printf ("log2_max_pic_order_cnt_lsb_minus4     %d\n", active_sps->log2_max_pic_order_cnt_lsb_minus4);
-    printf ("pic_order_cnt_type                    %d\n", active_sps->pic_order_cnt_type);
-    printf ("num_ref_frames_in_pic_order_cnt_cycle %d\n", active_sps->num_ref_frames_in_pic_order_cnt_cycle);
-    printf ("delta_pic_order_always_zero_flag      %d\n", active_sps->delta_pic_order_always_zero_flag);
-    printf ("offset_for_non_ref_pic                %d\n", active_sps->offset_for_non_ref_pic);
-    printf ("offset_for_top_to_bottom_field        %d\n", active_sps->offset_for_top_to_bottom_field);
-    printf ("offset_for_ref_frame[0]               %d\n", active_sps->offset_for_ref_frame[0]);
-    printf ("offset_for_ref_frame[1]               %d\n", active_sps->offset_for_ref_frame[1]);
+    printf ("log2_max_frame_num_minus4             %d\n", (int) active_sps->log2_max_frame_num_minus4);         // POC200301
+    printf ("log2_max_pic_order_cnt_lsb_minus4     %d\n", (int) active_sps->log2_max_pic_order_cnt_lsb_minus4);
+    printf ("pic_order_cnt_type                    %d\n", (int) active_sps->pic_order_cnt_type);
+    printf ("num_ref_frames_in_pic_order_cnt_cycle %d\n", (int) active_sps->num_ref_frames_in_pic_order_cnt_cycle);
+    printf ("delta_pic_order_always_zero_flag      %d\n", (int) active_sps->delta_pic_order_always_zero_flag);
+    printf ("offset_for_non_ref_pic                %d\n", (int) active_sps->offset_for_non_ref_pic);
+    printf ("offset_for_top_to_bottom_field        %d\n", (int) active_sps->offset_for_top_to_bottom_field);
+    printf ("offset_for_ref_frame[0]               %d\n", (int) active_sps->offset_for_ref_frame[0]);
+    printf ("offset_for_ref_frame[1]               %d\n", (int) active_sps->offset_for_ref_frame[1]);
     printf ("POC in SLice Header\n");
-    printf ("pic_order_present_flag                %d\n", active_pps->pic_order_present_flag);
-    printf ("delta_pic_order_cnt[0]                %d\n", img->delta_pic_order_cnt[0]);
-    printf ("delta_pic_order_cnt[1]                %d\n", img->delta_pic_order_cnt[1]);
-    printf ("delta_pic_order_cnt[2]                %d\n", img->delta_pic_order_cnt[2]);
-    printf ("idr_flag                              %d\n", img->idr_flag);
-    printf ("MaxFrameNum                           %d\n", img->MaxFrameNum);
+    printf ("pic_order_present_flag                %d\n", (int) active_pps->pic_order_present_flag);
+    printf ("delta_pic_order_cnt[0]                %d\n", (int) img->delta_pic_order_cnt[0]);
+    printf ("delta_pic_order_cnt[1]                %d\n", (int) img->delta_pic_order_cnt[1]);
+    printf ("delta_pic_order_cnt[2]                %d\n", (int) img->delta_pic_order_cnt[2]);
+    printf ("idr_flag                              %d\n", (int) img->idr_flag);
+    printf ("MaxFrameNum                           %d\n", (int) img->MaxFrameNum);
 
     return 0;
 }
@@ -825,7 +829,7 @@ int dumppoc(struct img_par *img)
  *  POC200301
  ************************************************************************
  */
-int picture_order(struct img_par *img)
+int picture_order(ImageParameters *img)
 {
   if (img->field_pic_flag==0) // is a frame
     return img->framepoc;

@@ -46,7 +46,7 @@ typedef enum {
 #define MAX_SEI_BIT_DEPTH    12
 #define MAX_NUM_PIVOTS     (1<<MAX_CODED_BIT_DEPTH)
 
-#ifdef ENABLE_OUTPUT_TONEMAPPING
+#if (ENABLE_OUTPUT_TONEMAPPING)
 typedef struct
 {
   Boolean seiHasTone_mapping;
@@ -93,9 +93,9 @@ void interpret_post_filter_hints_info( byte* payload, int size, ImageParameters 
 // functions for tone mapping SEI message
 void interpret_tone_mapping( byte* payload, int size, ImageParameters *img );
 
-#ifdef ENABLE_OUTPUT_TONEMAPPING
+#if (ENABLE_OUTPUT_TONEMAPPING)
 void tone_map(imgpel** imgX, imgpel* lut, int size_x, int size_y);
-void init_tone_mapping_sei();
-void update_tone_mapping_sei();
+void init_tone_mapping_sei(void);
+void update_tone_mapping_sei(void);
 #endif
 #endif

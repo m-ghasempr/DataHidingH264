@@ -282,7 +282,7 @@ void PatchMatrix(void)
 
   for(i=0; i<6; i++)
   {
-    if(input->ScalingListPresentFlag[i])
+    if(params->ScalingListPresentFlag[i])
     {
       ScalingList=ScalingList4x4input[i];
       if(matrix4x4_check[i])
@@ -317,7 +317,7 @@ void PatchMatrix(void)
       }
     }
 
-    if(input->ScalingListPresentFlag[i+6])
+    if(params->ScalingListPresentFlag[i+6])
     {
       ScalingList=ScalingList8x8input[i];
       if(matrix8x8_check[i])
@@ -362,7 +362,7 @@ void PatchMatrix(void)
  */
 void allocate_QMatrix (void)
 {
-  int bitdepth_qp_scale = 6*(input->BitDepthLuma - 8);
+  int bitdepth_qp_scale = 6*(params->output.bit_depth[0] - 8);
   int i;
 
   if ((qp_per_matrix = (int*)malloc((MAX_QP + 1 +  bitdepth_qp_scale)*sizeof(int))) == NULL)
@@ -394,11 +394,11 @@ void free_QMatrix ()
   free(qp_rem_matrix);
   free(qp_per_matrix);
 
-  free_mem5Dint(LevelScale4x4Comp, 3, 2, 6);
-  free_mem5Dint(LevelScale8x8Comp, 3, 2, 6);
+  free_mem5Dint(LevelScale4x4Comp);
+  free_mem5Dint(LevelScale8x8Comp);
 
-  free_mem5Dint(InvLevelScale4x4Comp, 3, 2, 6);
-  free_mem5Dint(InvLevelScale8x8Comp, 3, 2, 6);
+  free_mem5Dint(InvLevelScale4x4Comp);
+  free_mem5Dint(InvLevelScale8x8Comp);
 }
 
 
@@ -415,10 +415,10 @@ void Init_QMatrix (void)
 
   allocate_QMatrix ();
 
-  if(input->ScalingMatrixPresentFlag)
+  if(params->ScalingMatrixPresentFlag)
   {
-    printf ("Parsing QMatrix file %s ", input->QmatrixFile);
-    content = GetConfigFileContent(input->QmatrixFile, 0);
+    printf ("Parsing QMatrix file %s ", params->QmatrixFile);
+    content = GetConfigFileContent(params->QmatrixFile, 0);
     if(content!='\0')
       ParseMatrix(content, strlen (content));
     else
@@ -456,7 +456,7 @@ void CalculateQuantParam(void)
     no_q_matrix=TRUE;
   else
   {
-    memset(present, 0, sizeof(int)*6);
+    memset(present, 0, 6 * sizeof(int));
 
     if(active_sps->seq_scaling_matrix_present_flag)
       for(i=0; i<6; i++)

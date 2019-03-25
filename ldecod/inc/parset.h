@@ -36,7 +36,7 @@ void ProcessPPS (NALU_t *nalu);
 
 void UseParameterSet (int PicParsetId);
 
-void CleanUpPPS();
+void CleanUpPPS(void);
 
 void activate_sps (seq_parameter_set_rbsp_t *sps);
 void activate_pps (pic_parameter_set_rbsp_t *pps);

@@ -19,10 +19,10 @@
 
 
 int FmoInit (pic_parameter_set_rbsp_t* pps, seq_parameter_set_rbsp_t* sps);
-int FmoFinit ();
+int FmoFinit (void);
 
-int FmoGetNumberOfSliceGroup();
-int FmoGetLastMBOfPicture();
+int FmoGetNumberOfSliceGroup(void);
+int FmoGetLastMBOfPicture(void);
 int FmoGetLastMBInSliceGroup(int SliceGroup);
 int FmoGetSliceGroupId (int mb);
 int FmoGetNextMBNr (int CurrentMbNr);

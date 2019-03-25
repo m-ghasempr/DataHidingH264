@@ -104,7 +104,7 @@ typedef struct storable_picture
   DecRefPicMarking_t *dec_ref_pic_marking_buffer;                    //!< stores the memory management control operations
 
   // picture error concealment
-  int         concealed_pic; //indicates if this is a concealed picutre
+  int         concealed_pic; //indicates if this is a concealed picture
   
   // variables for tone mapping
   int         seiHasTone_mapping;
@@ -216,7 +216,7 @@ void             reorder_ref_pic_list(StorablePicture **list, int *list_size,
                                       int num_ref_idx_lX_active_minus1, int *reordering_of_pic_nums_idc,
                                       int *abs_diff_pic_num_minus1, int *long_term_pic_idx);
 
-void             init_mbaff_lists();
+void             init_mbaff_lists(void);
 void             alloc_ref_pic_list_reordering_buffer(Slice *currSlice);
 void             free_ref_pic_list_reordering_buffer(Slice *currSlice);
 

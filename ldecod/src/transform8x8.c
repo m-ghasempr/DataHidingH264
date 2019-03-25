@@ -218,9 +218,9 @@ void   LowPassForIntra8x8Pred(imgpel *PredPel, int block_up_left, int block_up, 
  *
  ************************************************************************
  */
-int intrapred8x8( Macroblock *currMB,   //!< Current Macroblock
-                  ColorPlane pl,        //!< Current Colorplane
-                  struct img_par *img,  //!< image parameters
+int intrapred8x8( ColorPlane pl,        //!< Current Colorplane
+                  ImageParameters *img,  //!< image parameters
+                  Macroblock *currMB,   //!< Current Macroblock
                   int b8)
 
 {
@@ -247,18 +247,19 @@ int intrapred8x8( Macroblock *currMB,   //!< Current Macroblock
   int ipos4 = ioff + 4, ipos5 = ioff + 5, ipos6 = ioff + 6, ipos7 = ioff + 7;
   int jpos, ipos;
   imgpel *pred_pels, (*mpr)[16] = img->mpr[pl];
+  int *mb_size = img->mb_size[IS_LUMA];
 
   byte predmode = img->ipredmode[img_block_y][img_block_x];
   ipmode_DPCM = predmode;  //For residual DPCM
 
   for (i=0;i<8;i++)
   {
-    getNeighbour(currMB, ioff - 1, joff + i, IS_LUMA, &pix_a[i]);
+    getNeighbour(currMB, ioff - 1, joff + i, mb_size, &pix_a[i]);
   }
 
-  getNeighbour(currMB, ioff    , joff - 1, IS_LUMA, &pix_b);
-  getNeighbour(currMB, ioff + 8, joff - 1, IS_LUMA, &pix_c);
-  getNeighbour(currMB, ioff - 1, joff - 1, IS_LUMA, &pix_d);
+  getNeighbour(currMB, ioff    , joff - 1, mb_size, &pix_b);
+  getNeighbour(currMB, ioff + 8, joff - 1, mb_size, &pix_c);
+  getNeighbour(currMB, ioff - 1, joff - 1, mb_size, &pix_d);
 
   pix_c.available = pix_c.available &&!(ioff == 8 && joff == 8);
 
@@ -278,11 +279,6 @@ int intrapred8x8( Macroblock *currMB,   //!< Current Macroblock
     block_available_up_left  = pix_d.available;
   }
 
-//  *left_available = block_available_left;
-//  *up_available   = block_available_up;
-//  *all_available  = block_available_up && block_available_left && block_available_up_left;
-
-  // form predictor pels
   // form predictor pels
   if (block_available_up)
   {
@@ -298,7 +294,7 @@ int intrapred8x8( Macroblock *currMB,   //!< Current Macroblock
   }
   else
   {
-    P_A = P_B = P_C = P_D = P_E = P_F = P_G = P_H = img->dc_pred_value_comp[pl];
+    P_A = P_B = P_C = P_D = P_E = P_F = P_G = P_H = (imgpel) img->dc_pred_value_comp[pl];
   }
 
   if (block_available_up_right)
@@ -332,7 +328,7 @@ int intrapred8x8( Macroblock *currMB,   //!< Current Macroblock
   }
   else
   {
-    P_Q = P_R = P_S = P_T = P_U = P_V = P_W = P_X = img->dc_pred_value_comp[pl];
+    P_Q = P_R = P_S = P_T = P_U = P_V = P_W = P_X = (imgpel) img->dc_pred_value_comp[pl];
   }
 
   if (block_available_up_left)
@@ -341,12 +337,11 @@ int intrapred8x8( Macroblock *currMB,   //!< Current Macroblock
   }
   else
   {
-    P_Z = img->dc_pred_value_comp[pl];
+    P_Z = (imgpel) img->dc_pred_value_comp[pl];
   }
 
   LowPassForIntra8x8Pred(&(P_Z), block_available_up_left, block_available_up, block_available_left);
 
-//img->mpr[y][x]
   switch(predmode)
   {
   case DC_PRED:
@@ -375,10 +370,9 @@ int intrapred8x8( Macroblock *currMB,   //!< Current Macroblock
       for(i = ioff; i < ioff + BLOCK_SIZE_8x8; i++)
         mpr[j][i] = (imgpel) s0;
     break;
-
   case VERT_PRED:
     if (!block_available_up)
-      printf ("warning: Intra_8x8_Vertical prediction mode not allowed at mb %d\n",img->current_mb_nr);
+      printf ("warning: Intra_8x8_Vertical prediction mode not allowed at mb %d\n", (int) img->current_mb_nr);
 
     for (i=0; i < BLOCK_SIZE_8x8; i++)
     {
@@ -395,7 +389,7 @@ int intrapred8x8( Macroblock *currMB,   //!< Current Macroblock
     break;
   case HOR_PRED:
     if (!block_available_left)
-      printf ("warning: Intra_8x8_Horizontal prediction mode not allowed at mb %d\n",img->current_mb_nr);
+      printf ("warning: Intra_8x8_Horizontal prediction mode not allowed at mb %d\n", (int) img->current_mb_nr);
 
     for (j=0; j < BLOCK_SIZE_8x8; j++)
     {
@@ -413,7 +407,7 @@ int intrapred8x8( Macroblock *currMB,   //!< Current Macroblock
 
   case DIAG_DOWN_LEFT_PRED:
     if (!block_available_up)
-      printf ("warning: Intra_8x8_Diagonal_Down_Left prediction mode not allowed at mb %d\n",img->current_mb_nr);
+      printf ("warning: Intra_8x8_Diagonal_Down_Left prediction mode not allowed at mb %d\n", (int) img->current_mb_nr);
     // Mode DIAG_DOWN_LEFT_PRED
     mpr[jpos0][ipos0] = (imgpel) ((P_A + P_C + 2*(P_B) + 2) >> 2);
     mpr[jpos1][ipos0] =
@@ -483,7 +477,7 @@ int intrapred8x8( Macroblock *currMB,   //!< Current Macroblock
 
   case VERT_LEFT_PRED:
     if (!block_available_up)
-      printf ("warning: Intra_4x4_Vertical_Left prediction mode not allowed at mb %d\n",img->current_mb_nr);
+      printf ("warning: Intra_4x4_Vertical_Left prediction mode not allowed at mb %d\n", (int) img->current_mb_nr);
 
     mpr[jpos0][ipos0] = (imgpel) ((P_A + P_B + 1) >> 1);
     mpr[jpos0][ipos1] =
@@ -554,7 +548,7 @@ int intrapred8x8( Macroblock *currMB,   //!< Current Macroblock
 
   case DIAG_DOWN_RIGHT_PRED:
     if ((!block_available_up)||(!block_available_left)||(!block_available_up_left))
-      printf ("warning: Intra_8x8_Diagonal_Down_Right prediction mode not allowed at mb %d\n",img->current_mb_nr);
+      printf ("warning: Intra_8x8_Diagonal_Down_Right prediction mode not allowed at mb %d\n", (int) img->current_mb_nr);
 
     // Mode DIAG_DOWN_RIGHT_PRED
     mpr[jpos7][ipos0] = (imgpel) ((P_X + P_V + 2*(P_W) + 2) >> 2);
@@ -625,7 +619,7 @@ int intrapred8x8( Macroblock *currMB,   //!< Current Macroblock
 
   case  VERT_RIGHT_PRED:/* diagonal prediction -22.5 deg to horizontal plane */
     if ((!block_available_up)||(!block_available_left)||(!block_available_up_left))
-      printf ("warning: Intra_8x8_Vertical_Right prediction mode not allowed at mb %d\n",img->current_mb_nr);
+      printf ("warning: Intra_8x8_Vertical_Right prediction mode not allowed at mb %d\n", (int) img->current_mb_nr);
 
     mpr[jpos0][ipos0] =
     mpr[jpos2][ipos1] =
@@ -695,7 +689,7 @@ int intrapred8x8( Macroblock *currMB,   //!< Current Macroblock
 
   case  HOR_DOWN_PRED:/* diagonal prediction -22.5 deg to horizontal plane */
     if ((!block_available_up)||(!block_available_left)||(!block_available_up_left))
-      printf ("warning: Intra_8x8_Horizontal_Down prediction mode not allowed at mb %d\n",img->current_mb_nr);
+      printf ("warning: Intra_8x8_Horizontal_Down prediction mode not allowed at mb %d\n", (int) img->current_mb_nr);
 
     mpr[jpos0][ipos0] =
     mpr[jpos1][ipos2] =
@@ -765,7 +759,7 @@ int intrapred8x8( Macroblock *currMB,   //!< Current Macroblock
 
   case  HOR_UP_PRED:/* diagonal prediction -22.5 deg to horizontal plane */
     if (!block_available_left)
-      printf ("warning: Intra_8x8_Horizontal_Up prediction mode not allowed at mb %d\n",img->current_mb_nr);
+      printf ("warning: Intra_8x8_Horizontal_Up prediction mode not allowed at mb %d\n", (int) img->current_mb_nr);
 
     mpr[jpos0][ipos0] = (imgpel) ((P_Q + P_R + 1) >> 1);
     mpr[jpos1][ipos0] =
@@ -856,53 +850,51 @@ void LowPassForIntra8x8Pred(imgpel *PredPel, int block_up_left, int block_up, in
 
   memcpy(&LoopArray[0], &PredPel[0], 25 * sizeof(imgpel));
 
-  if(block_up)
-  {
-    if(block_up_left)
-    {
-      LoopArray[1] = (((&P_Z)[0] + ((&P_Z)[1]<<1) + (&P_Z)[2] + 2)>>2);
-    }
-    else
-      LoopArray[1] = (((&P_Z)[1] + ((&P_Z)[1]<<1) + (&P_Z)[2] + 2)>>2);
-
-
-    for(i = 2; i <16; i++)
-    {
-      LoopArray[i] = (((&P_Z)[i-1] + ((&P_Z)[i]<<1) + (&P_Z)[i+1] + 2)>>2);
-    }
-    LoopArray[16] = ((P_P + (P_P<<1) + P_O + 2)>>2);
-  }
-
   if(block_up_left)
   {
-
     if(block_up && block_left)
     {
-      LoopArray[0] = ((P_Q + (P_Z<<1) + P_A +2)>>2);
+      LoopArray[0] = (imgpel) ((P_Q + (P_Z<<1) + P_A +2)>>2);
     }
     else
     {
       if(block_up)
-        LoopArray[0] = ((P_Z + (P_Z<<1) + P_A +2)>>2);
-      else
-        if(block_left)
-          LoopArray[0] = ((P_Z + (P_Z<<1) + P_Q +2)>>2);
+        LoopArray[0] = (imgpel) ((P_Z + (P_Z<<1) + P_A +2)>>2);
+      else if (block_left)
+        LoopArray[0] = (imgpel) ((P_Z + (P_Z<<1) + P_Q +2)>>2);
     }
-
   }
+  
+  if(block_up)
+  {    
+    if(block_up_left)
+    {
+      LoopArray[1] = (imgpel) ((PredPel[0] + (PredPel[1]<<1) + PredPel[2] + 2)>>2);
+    }
+    else
+      LoopArray[1] = (imgpel) ((PredPel[1] + (PredPel[1]<<1) + PredPel[2] + 2)>>2);
+
+
+    for(i = 2; i <16; i++)
+    {
+      LoopArray[i] = (imgpel) ((PredPel[i-1] + (PredPel[i]<<1) + PredPel[i+1] + 2)>>2);
+    }
+    LoopArray[16] = (imgpel) ((P_P + (P_P<<1) + P_O + 2)>>2);
+  }
+
 
   if(block_left)
   {
     if(block_up_left)
-      LoopArray[17] = ((P_Z + (P_Q<<1) + P_R + 2)>>2);
+      LoopArray[17] = (imgpel) ((P_Z + (P_Q<<1) + P_R + 2)>>2);
     else
-      LoopArray[17] = ((P_Q + (P_Q<<1) + P_R + 2)>>2);
+      LoopArray[17] = (imgpel) ((P_Q + (P_Q<<1) + P_R + 2)>>2);
 
     for(i = 18; i <24; i++)
     {
-      LoopArray[i] = (((&P_Z)[i-1] + ((&P_Z)[i]<<1) + (&P_Z)[i+1] + 2)>>2);
+      LoopArray[i] = (imgpel) ((PredPel[i-1] + (PredPel[i]<<1) + PredPel[i+1] + 2)>>2);
     }
-    LoopArray[24] = ((P_W + (P_X<<1) + P_X + 2)>>2);
+    LoopArray[24] = (imgpel) ((P_W + (P_X<<1) + P_X + 2) >> 2);
   }
 
   memcpy(&PredPel[0], &LoopArray[0], 25 * sizeof(imgpel));
@@ -917,12 +909,13 @@ void LowPassForIntra8x8Pred(imgpel *PredPel, int block_up_left, int block_up, in
  ***********************************************************************
  */ 
 void itrans8x8(ColorPlane pl,
-               struct img_par *img, //!< image parameters
+               ImageParameters *img, //!< image parameters
               int ioff,            //!< index to 4x4 block
               int joff)            //!<
 {
   int i,j;
   Boolean lossless_qpprime = (Boolean) ((img->qp + img->bitdepth_luma_qp_scale)==0 && img->lossless_qpprime_flag==1);
+
   imgpel (*mpr)[16] = img->mpr[pl];
   int    (*m7)[16] = img->m7[pl];
   int     max_imgpel_value = pl ? img->max_imgpel_value_uv : img->max_imgpel_value;
@@ -941,8 +934,7 @@ void itrans8x8(ColorPlane pl,
     for( j = joff; j < joff + 8; j++)
     {
       for( i = ioff; i < ioff + 8; i++)
-        m7[j][i] = iClip1(max_imgpel_value, 
-        rshift_rnd_sf((m7[j][i] + ((long)mpr[j][i] << DQ_BITS_8)), DQ_BITS_8)); 
+        m7[j][i] = iClip1(max_imgpel_value, rshift_rnd_sf((m7[j][i] + ((long)mpr[j][i] << DQ_BITS_8)), DQ_BITS_8)); 
     }
   }
 }

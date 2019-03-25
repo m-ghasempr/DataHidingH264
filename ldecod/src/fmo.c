@@ -102,7 +102,7 @@ static int FmoGenerateMapUnitToSliceGroupMap (pic_parameter_set_rbsp_t* pps, seq
     FmoGenerateType6MapUnitMap (pps, sps, NumSliceGroupMapUnits);
     break;
   default:
-    printf ("Illegal slice_group_map_type %d , exit \n", pps->slice_group_map_type);
+    printf ("Illegal slice_group_map_type %d , exit \n", (int) pps->slice_group_map_type);
     exit (-1);
   }
   return 0;

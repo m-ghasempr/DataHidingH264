@@ -39,9 +39,6 @@ threshold, concealByCopy is used, otherwise concealByTrial is used. */
 #define ERC_BLOCK_CORRUPTED         1
 #define ERC_BLOCK_EMPTY             0
 
-#define mabs(a) ( (a) < 0 ? -(a) : (a) )
-#define mmax(a,b) ((a) > (b) ? (a) : (b))
-#define mmin(a,b) ((a) < (b) ? (a) : (b))
 
 /*
 * Functions to convert MBNum representation to blockNum

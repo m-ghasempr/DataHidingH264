@@ -92,7 +92,7 @@ char errortext[ET_SIZE]; //!< buffer for error message for exit with error()
 typedef enum
 {
   PAR_DP_1,    //!< no data partitioning is supported
-  PAR_DP_3,    //!< data partitioning with 3 partitions
+  PAR_DP_3     //!< data partitioning with 3 partitions
 } PAR_DP_TYPE;
 
 
@@ -170,8 +170,9 @@ typedef enum
 
 typedef enum 
 {
-  LIST_0=0,
-  LIST_1=1
+  LIST_0  = 0,
+  LIST_1  = 1,
+  BI_PRED = 2
 } Lists;
 
 
@@ -191,7 +192,7 @@ typedef enum
   // RGB
   PLANE_G = 0,
   PLANE_B = 1,
-  PLANE_R = 2,
+  PLANE_R = 2
 } ColorPlane;
 
 
@@ -286,8 +287,8 @@ typedef struct
   BiContextType  cipr_contexts[NUM_CIPR_CTX];
   BiContextType  cbp_contexts [3][NUM_CBP_CTX];
   BiContextType  bcbp_contexts[NUM_BLOCK_TYPES][NUM_BCBP_CTX];
-  BiContextType  map_contexts     [2][NUM_BLOCK_TYPES][NUM_MAP_CTX];
-  BiContextType  last_contexts    [2][NUM_BLOCK_TYPES][NUM_LAST_CTX];
+  BiContextType  map_contexts [2][NUM_BLOCK_TYPES][NUM_MAP_CTX];
+  BiContextType  last_contexts[2][NUM_BLOCK_TYPES][NUM_LAST_CTX];
   BiContextType  one_contexts [NUM_BLOCK_TYPES][NUM_ONE_CTX];
   BiContextType  abs_contexts [NUM_BLOCK_TYPES][NUM_ABS_CTX];
 } TextureInfoContexts;
@@ -335,7 +336,7 @@ typedef struct syntaxelement
   //! for mapping of UVLC to syntaxElement
   void    (*mapping)(int len, int info, int *value1, int *value2);
   //! used for CABAC: refers to actual coding method of each individual syntax element type
-  void  (*reading)(struct syntaxelement *, struct img_par *, DecodingEnvironmentPtr);
+  void  (*reading)(struct syntaxelement *, struct img_par *img, DecodingEnvironmentPtr);
 
 } SyntaxElement;
 
@@ -353,7 +354,7 @@ typedef struct macroblock
 
   // some storage of macroblock syntax elements for global access
   int           mb_type;
-  int           mvd[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE][2];      //!< indices correspond to [forw,backw][block_y][block_x][x,y]
+  short         mvd[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE][2];      //!< indices correspond to [forw,backw][block_y][block_x][x,y]
   int           cbp;
   int64         cbp_blk ;
   int64         cbp_blk_CbCr[2]; 
@@ -366,9 +367,9 @@ typedef struct macroblock
   char          ei_flag;             //!< error indicator flag that enables concealment
   char          dpl_flag;            //!< error indicator flag that signals a missing data partition
 
-  int           LFDisableIdc;
-  int           LFAlphaC0Offset;
-  int           LFBetaOffset;
+  int           DFDisableIdc;
+  int           DFAlphaC0Offset;
+  int           DFBetaOffset;
 
   int           c_ipred_mode;       //!< chroma intra prediction mode
   int           mb_field;
@@ -438,9 +439,9 @@ typedef struct
 
   int     (*readSlice)(struct img_par *, struct inp_par *);
 
-  int                 LFDisableIdc;     //!< Disable loop filter on slice
-  int                 LFAlphaC0Offset;  //!< Alpha and C0 offset for filtering slice
-  int                 LFBetaOffset;     //!< Beta offset for filtering slice
+  int                 DFDisableIdc;     //!< Disable deblocking filter on slice
+  int                 DFAlphaC0Offset;  //!< Alpha and C0 offset for filtering slice
+  int                 DFBetaOffset;     //!< Beta offset for filtering slice
 
   int                 pic_parameter_set_id;   //!<the ID of the picture parameter set the slice is reffering to
 
@@ -682,7 +683,7 @@ struct inp_par
   int poc_scale;
   int write_uv;
   int silent;
-  int loopfilter_bitstream;               //!< Loop filter usage determined by flags and parameters in bitstream 
+  int intra_profile_deblocking;               //!< Loop filter usage determined by flags and parameters in bitstream 
 
 #ifdef _LEAKYBUCKET_
   unsigned long R_decoder;                //!< Decoder Rate in HRD Model
@@ -698,16 +699,16 @@ struct inp_par
 
 };
 
-extern struct inp_par *input;
+extern struct inp_par *params;
 
 typedef struct pix_pos
 {
-  int available;
-  int mb_addr;
-  int x;
-  int y;
-  int pos_x;
-  int pos_y;
+  int  available;
+  int  mb_addr;
+  int  x;
+  int  y;
+  int  pos_x;
+  int  pos_y;
 } PixelPos;
 
 typedef struct old_slice_par
@@ -748,88 +749,79 @@ void Error_tracking(void);
 
 // prototypes
 void init_conf(struct inp_par *inp, char *config_filename);
-void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr);
-void init(struct img_par *img);
+void report(struct inp_par *inp, ImageParameters *img, struct snr_par *snr);
+void init(ImageParameters *img);
 
-void malloc_slice(struct inp_par *inp, struct img_par *img);
-void free_slice(struct inp_par *inp, struct img_par *img);
+void malloc_slice(struct inp_par *inp, ImageParameters *img);
+void free_slice(ImageParameters *img);
 
-int  decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *snr);
-void init_picture(struct img_par *img, struct inp_par *inp);
-void exit_picture();
+int  decode_one_frame(ImageParameters *img,struct inp_par *inp, struct snr_par *snr);
+void init_picture(ImageParameters *img, struct inp_par *inp);
+void exit_picture(void);
 
-int  read_new_slice();
-void decode_one_slice(struct img_par *img,struct inp_par *inp);
+int  read_new_slice(void);
+void decode_one_slice(ImageParameters *img,struct inp_par *inp);
 
-void start_macroblock(Macroblock **currMB, struct img_par *img,int CurrentMBInScanOrder);
-void read_one_macroblock(Macroblock *currMB, struct img_par *img,struct inp_par *inp);
-void read_ipred_modes(Macroblock *currMB, struct img_par *img,struct inp_par *inp);
-int  decode_one_macroblock(Macroblock *currMB, struct img_par *img,struct inp_par *inp);
-Boolean  exit_macroblock(struct img_par *img,struct inp_par *inp, int eos_bit);
-void decode_ipcm_mb(Macroblock *currMB, struct img_par *img);
+void start_macroblock(Macroblock **currMB, ImageParameters *img);
+void read_one_macroblock(Macroblock *currMB, ImageParameters *img);
+void read_ipred_modes(Macroblock *currMB, ImageParameters *img);
+int  decode_one_macroblock(Macroblock *currMB, ImageParameters *img);
+Boolean  exit_macroblock(ImageParameters *img,int eos_bit);
+void decode_ipcm_mb(Macroblock *currMB, ImageParameters *img);
 
 
-void readMotionInfoFromNAL (Macroblock *currMB, struct img_par *img,struct inp_par *inp);
-void readCBPandCoeffsFromNAL(Macroblock *currMB, struct img_par *img,struct inp_par *inp);
-void concealIPCMcoeffs(struct img_par *img);
-void readIPCMcoeffsFromNAL(struct img_par *img, struct inp_par *inp, struct datapartition *dP);
-void SetMotionVectorPredictor (Macroblock *currMB, struct img_par  *img, short pmv[2], char ref_frame, byte list, 
+void readMotionInfoFromNAL (Macroblock *currMB, ImageParameters *img);
+void readCBPandCoeffsFromNAL(Macroblock *currMB, ImageParameters *img);
+void concealIPCMcoeffs(ImageParameters *img);
+void readIPCMcoeffsFromNAL(ImageParameters *img, struct datapartition *dP);
+void SetMotionVectorPredictor (Macroblock *currMB, ImageParameters  *img, short pmv[2], char ref_frame, byte list, 
                                char ***refPic, short ****tmp_mv, 
-                               int block_x, int block_y, int blockshape_x, int blockshape_y);
+                               int mb_x, int mb_y, int blockshape_x, int blockshape_y);
 
-void readLumaCoeff8x8_CABAC (Macroblock *currMB, ColorPlane pl, struct img_par *img,struct inp_par *inp, int b8);
-void itrans8x8(ColorPlane pl, struct img_par *img, int ioff, int joff);
+void readLumaCoeff8x8_CABAC (Macroblock *currMB, ColorPlane pl, ImageParameters *img, int b8);
 
-void copyblock_sp(struct img_par *img,int block_x,int block_y);
-int  intrapred_luma_16x16(Macroblock *currMB, ColorPlane pl, struct img_par *img,int predmode);
-void intrapred_chroma(Macroblock *currMB, struct img_par *img, int uv);
+void copyblock_sp(ImageParameters *img,int block_x,int block_y);
+int  intrapred_luma_16x16(Macroblock *currMB, ColorPlane pl, ImageParameters *img,int predmode);
+void intrapred_chroma(Macroblock *currMB, ImageParameters *img, int uv);
 
 // SLICE function pointers
-int  (*nal_startcode_follows) (struct img_par*, int );
+int  (*nal_startcode_follows) (ImageParameters*, int );
 
 // NAL functions TML/CABAC bitstream
-int  uvlc_startcode_follows(struct img_par *img, int dummy);
-int  cabac_startcode_follows(struct img_par *img, int eos_bit);
+int  uvlc_startcode_follows(ImageParameters *img, int dummy);
+int  cabac_startcode_follows(ImageParameters *img, int eos_bit);
 void free_Partition(Bitstream *currStream);
 
 // ErrorConcealment
-void reset_ec_flags();
+void reset_ec_flags(void);
 
 void error(char *text, int code);
-int  is_new_picture();
-void init_old_slice();
+int  is_new_picture(void);
+void init_old_slice(void);
 
 // dynamic mem allocation
-int  init_global_buffers();
-void free_global_buffers();
+int  init_global_buffers(void);
+void free_global_buffers(void);
 
-void frame_postprocessing(struct img_par *img, struct inp_par *inp);
-void field_postprocessing(struct img_par *img, struct inp_par *inp);
-int  bottom_field_picture(struct img_par *img,struct inp_par *inp);
-void decode_slice(struct img_par *img,struct inp_par *inp, int current_header);
+void frame_postprocessing(ImageParameters *img);
+void field_postprocessing(ImageParameters *img);
+void decode_slice(ImageParameters *img,struct inp_par *inp, int current_header);
 
 int RBSPtoSODB(byte *streamBuffer, int last_byte_pos);
 int EBSPtoRBSP(byte *streamBuffer, int end_bytepos, int begin_bytepos);
 
-// For MB level frame/field coding
-void init_super_macroblock(struct img_par *img,struct inp_par *inp);
-void exit_super_macroblock(struct img_par *img,struct inp_par *inp);
-int  decode_super_macroblock(struct img_par *img,struct inp_par *inp);
-void decode_one_Copy_topMB(struct img_par *img,struct inp_par *inp);
+int peekSyntaxElement_UVLC(SyntaxElement *sym, ImageParameters *img, struct datapartition *dP);
 
-void SetOneRefMV(struct img_par* img);
-int peekSyntaxElement_UVLC(SyntaxElement *sym, struct img_par *img, struct datapartition *dP);
+void fill_wp_params(ImageParameters *img);
 
-void fill_wp_params(struct img_par *img);
-
-void reset_wp_params(struct img_par *img);
+void reset_wp_params(ImageParameters *img);
 
 void FreePartition (DataPartition *dp, int n);
-DataPartition *AllocPartition();
+DataPartition *AllocPartition(int n);
 
 void tracebits2(const char *trace_str, int len, int info);
 
-void init_decoding_engine_IPCM(struct img_par *img);
+void init_decoding_engine_IPCM(ImageParameters *img);
 void readIPCM_CABAC(struct datapartition *dP);
 
 unsigned CeilLog2( unsigned uiVal);
@@ -841,14 +833,18 @@ void CalculateQuantParam(void);
 void CalculateQuant8Param(void);
 
 //For residual DPCM
-int Inv_Residual_trans_4x4(struct img_par *img, int ioff, int joff, int i0, int j0, int chroma, int yuv);
-int Inv_Residual_trans_8x8(ColorPlane PLANE_Y, struct img_par *img, int ioff,int joff);
 int ipmode_DPCM;
 
 // For 4:4:4 independent mode
 void change_plane_JV( int nplane );
-void make_frame_picture_JV();
+void make_frame_picture_JV(void);
 
+// Interpret MB mode
+void (*interpret_mb_mode)(Macroblock *currMB);
+void interpret_mb_mode_P(Macroblock *currMB);
+void interpret_mb_mode_B(Macroblock *currMB);
+void interpret_mb_mode_I(Macroblock *currMB);
+void interpret_mb_mode_SI(Macroblock *currMB);
 #endif
 
 

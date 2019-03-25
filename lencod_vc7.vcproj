@@ -161,6 +161,9 @@
 				RelativePath=".\lencod\src\configfile.c">
 			</File>
 			<File
+				RelativePath=".\lencod\src\conformance.c">
+			</File>
+			<File
 				RelativePath=".\lencod\src\context_ini.c">
 			</File>
 			<File
@@ -186,6 +189,9 @@
 			</File>
 			<File
 				RelativePath=".\lencod\src\img_luma.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\input.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\intrarefresh.c">
@@ -278,10 +284,40 @@
 				RelativePath=".\lencod\src\q_offsets.c">
 			</File>
 			<File
+				RelativePath=".\lencod\src\quant4x4.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\quant4x4_around.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\quant4x4_normal.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\quant4x4_trellis.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\quant8x8.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\quant8x8_around.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\quant8x8_normal.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\quant8x8_trellis.c">
+			</File>
+			<File
 				RelativePath=".\lencod\src\ratectl.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\rc_quadratic.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\rd_intra_jm.c">
+			</File>
+			<File
+				RelativePath=".\lencod\src\rdo_quant.c">
 			</File>
 			<File
 				RelativePath=".\lencod\src\rdopt.c">
@@ -339,6 +375,9 @@
 				RelativePath=".\lencod\inc\configfile.h">
 			</File>
 			<File
+				RelativePath=".\lencod\inc\conformance.h">
+			</File>
+			<File
 				RelativePath=".\lencod\inc\context_ini.h">
 			</File>
 			<File
@@ -360,6 +399,9 @@
 				RelativePath=".\lencod\inc\fmo.h">
 			</File>
 			<File
+				RelativePath=".\lencod\inc\frame.h">
+			</File>
+			<File
 				RelativePath=".\lencod\inc\global.h">
 			</File>
 			<File
@@ -376,6 +418,9 @@
 			</File>
 			<File
 				RelativePath=".\lencod\inc\img_luma.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\input.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\intrarefresh.h">
@@ -417,9 +462,6 @@
 				RelativePath=".\lencod\inc\memalloc.h">
 			</File>
 			<File
-				RelativePath=".\lencod\inc\minmax.h">
-			</File>
-			<File
 				RelativePath=".\lencod\inc\mode_decision.h">
 			</File>
 			<File
@@ -447,10 +489,25 @@
 				RelativePath=".\lencod\inc\q_offsets.h">
 			</File>
 			<File
+				RelativePath=".\lencod\inc\quant4x4.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\quant8x8.h">
+			</File>
+			<File
 				RelativePath=".\lencod\inc\ratectl.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\rc_quadratic.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\rd_intra_jm.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\rdo_quant.h">
+			</File>
+			<File
+				RelativePath=".\lencod\inc\rdopt.h">
 			</File>
 			<File
 				RelativePath=".\lencod\inc\rdopt_coding_state.h">
@@ -479,12 +536,18 @@
 			<File
 				RelativePath=".\lencod\inc\win32.h">
 			</File>
+			<File
+				RelativePath=".\lencod\inc\wp.h">
+			</File>
 		</Filter>
 		<File
 			RelativePath="bin\encoder.cfg">
 		</File>
 		<File
 			RelativePath="bin\encoder_yuv422.cfg">
+		</File>
+		<File
+			RelativePath=".\VTune\lencod.vpj">
 		</File>
 	</Files>
 	<Globals>

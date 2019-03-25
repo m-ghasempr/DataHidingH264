@@ -46,12 +46,12 @@ void writeRefFrame_CABAC(SyntaxElement *se, DataPartition *dp);
 void writeMVD_CABAC(SyntaxElement *se, DataPartition *dp);
 void writeCBP_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartition *dp);
 void writeDquant_CABAC(SyntaxElement *se, DataPartition *dp);
-void writeRunLevel_CABAC(SyntaxElement *se, DataPartition *dp);
+void writeRunLevel_CABAC(Macroblock* currMB, SyntaxElement *se, DataPartition *dp);
 void writeCIPredMode_CABAC(SyntaxElement *se, DataPartition *dp);
 void print_ctx_TextureInfo(TextureInfoContexts *enco_ctx);
-void writeMB_skip_flagInfo_CABAC(SyntaxElement *se, DataPartition *dp);
+void writeMB_skip_flagInfo_CABAC(Macroblock *currMB, SyntaxElement *se, DataPartition *dp);
 void writeFieldModeInfo_CABAC(SyntaxElement *se, DataPartition *dp); //GB
-void writeCBP_BIT_CABAC (int b8, int bit, int cbp, Macroblock* currMB, int inter, EncodingEnvironmentPtr eep_dp);
+void writeCBP_BIT_CABAC (Macroblock* currMB, int b8, int bit, int cbp, int inter, EncodingEnvironmentPtr eep_dp, TextureInfoContexts *ctx);
 void cabac_new_slice(void);
 void CheckAvailabilityOfNeighborsCABAC(Macroblock* currMB);
 

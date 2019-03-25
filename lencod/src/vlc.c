@@ -1205,10 +1205,10 @@ int writeSyntaxElement_Level_VLC1(SyntaxElement *se, DataPartition *dp, int prof
     int levabsm16 = levabs - 16;
 
     // escape code2
-    if ((levabsm16) > 2048)
+    if ((levabsm16) >= 2048)
     {
       numPrefix++;
-      while ((levabsm16) > (1<<(numPrefix-3)) - 4096)
+      while ((levabsm16) >= (1<<(numPrefix-3)) - 4096)
       {
         numPrefix++;
       }
@@ -1286,20 +1286,22 @@ int writeSyntaxElement_Level_VLCN(SyntaxElement *se, int vlc, DataPartition *dp,
 
     iLength = 28;    
 
-    if ((levabsesc) > 2048)
+    if ((levabsesc) >= 2048)
     {
       numPrefix++;
-      while ((levabsesc) > (1<<(numPrefix-3)) - 4096)
+      while ((levabsesc) >= (1<<(numPrefix-3)) - 4096)
       {
         numPrefix++;
       }
     }
 
     addbit  = numPrefix - 15;
+
     iLength += (addbit<<1);
     offset = (2048 << addbit) - 2048;
 
     iCodeword = (1 << (12 + addbit)) | ((levabsesc - offset) << 1) | sign;
+
     /* Assert to make sure that the code fits in the VLC */
     /* make sure that we are in High Profile to represent level_prefix > 15 */
     if (numPrefix > 15 &&  !IS_FREXT_PROFILE( profile_idc ))

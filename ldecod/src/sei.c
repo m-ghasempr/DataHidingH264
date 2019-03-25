@@ -27,7 +27,7 @@ extern int UsedBits;
 
 extern seq_parameter_set_rbsp_t SeqParSet[MAXSPS];
 
-#ifdef ENABLE_OUTPUT_TONEMAPPING
+#if (ENABLE_OUTPUT_TONEMAPPING)
 tone_mapping_struct seiToneMapping;
 #endif
 
@@ -297,8 +297,10 @@ void interpret_spare_pic( byte* payload, int size, ImageParameters *img )
           {
             no_bit0 = ue_v("SEI: zero_run_length", buf);
           }
-          if (no_bit0>0) map[i][y][x] = bit0;
-          else map[i][y][x] = bit1;
+          if (no_bit0>0) 
+            map[i][y][x] = (byte) bit0;
+          else 
+            map[i][y][x] = (byte) bit1;
           no_bit0--;
 
           // go to the next mb:
@@ -428,7 +430,7 @@ void interpret_spare_pic( byte* payload, int size, ImageParameters *img )
 #undef WRITE_MAP_IMAGE
 #endif
 
-  free_mem3D( map, num_spare_pics );
+  free_mem3D( map );
 
   free(buf);
 }
@@ -1956,7 +1958,7 @@ void interpret_tone_mapping( byte* payload, int size, ImageParameters *img )
       }
     }
 
-#ifdef ENABLE_OUTPUT_TONEMAPPING
+#if (ENABLE_OUTPUT_TONEMAPPING)
     // Currently, only when the map_id == 0, the tone-mapping is actually applied.
     if (seiToneMappingTmp.tone_map_id== 0) 
     {
@@ -2035,7 +2037,7 @@ void interpret_tone_mapping( byte* payload, int size, ImageParameters *img )
   free (buf);
 }
 
-#ifdef ENABLE_OUTPUT_TONEMAPPING
+#if (ENABLE_OUTPUT_TONEMAPPING)
 // tone map using the look-up-table generated according to SEI tone mapping message
 void tone_map (imgpel** imgX, imgpel* lut, int size_x, int size_y)
 {
@@ -2130,6 +2132,6 @@ void interpret_post_filter_hints_info( byte* payload, int size, ImageParameters 
 #undef PRINT_POST_FILTER_HINT_INFO
 #endif
 
-  free_mem3Dint (filter_hint, 3);
+  free_mem3Dint (filter_hint);
   free( buf );
 }

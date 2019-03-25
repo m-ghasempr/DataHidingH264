@@ -317,7 +317,7 @@ void OpenRTPFile (char *Filename)
  ********************************************************************************************
 */
 
-void CloseRTPFile ()
+void CloseRTPFile (void)
 {
   fclose(f);
 }
@@ -438,7 +438,7 @@ int aggregationRTPWriteBits (int Marker, int PacketType, int subPacketType, void
  * \author
  *    Dong Tian   tian@cs.tut.fi
  *****************************************************************************/
-Boolean isAggregationPacket()
+Boolean isAggregationPacket(void)
 {
   if (HaveAggregationSEI())
   {
@@ -460,7 +460,7 @@ Boolean isAggregationPacket()
  * \author
  *    Dong Tian   tian@cs.tut.fi
  *****************************************************************************/
-void PrepareAggregationSEIMessage()
+void PrepareAggregationSEIMessage(void)
 {
   Boolean has_aggregation_sei_message = FALSE;
 
@@ -588,9 +588,9 @@ void PrepareAggregationSEIMessage()
  *    Dong Tian   tian@cs.tut.fi
  *****************************************************************************/
 
-void begin_sub_sequence_rtp()
+void begin_sub_sequence_rtp(void)
 {
-  if ( input->of_mode != PAR_OF_RTP || input->NumFramesInELSubSeq == 0 )
+  if ( params->of_mode != PAR_OF_RTP || params->NumFramesInELSubSeq == 0 )
     return;
 
   // begin to encode the base layer subseq
@@ -602,7 +602,7 @@ void begin_sub_sequence_rtp()
       UpdateSubseqChar();
   }
   // begin to encode the enhanced layer subseq
-  if ( IMG_NUMBER % (input->NumFramesInELSubSeq+1) == 1 )
+  if ( IMG_NUMBER % (params->NumFramesInELSubSeq+1) == 1 )
   {
 //    printf("begin to encode the enhanced layer subseq\n");
     InitSubseqInfo(1);  // init the sub-sequence in the enhanced layer
@@ -624,10 +624,10 @@ void begin_sub_sequence_rtp()
  * \author
  *    Dong Tian   tian@cs.tut.fi
  *****************************************************************************/
-void end_sub_sequence_rtp()
+void end_sub_sequence_rtp(void)
 {
   // end of the base layer:
-  if ( img->number == input->no_frames - 1 )
+  if ( img->number == params->no_frames - 1 )
   {
     //    printf("end of encoding the base layer subseq\n");
     CloseSubseqInfo(0);
@@ -635,8 +635,8 @@ void end_sub_sequence_rtp()
   }
 
   // end of the enhanced layer:
-  if ( ((IMG_NUMBER%(input->NumFramesInELSubSeq+1)==0) && (input->successive_Bframe != 0) && (IMG_NUMBER>0)) || // there are B frames
-    ((IMG_NUMBER%(input->NumFramesInELSubSeq+1)==input->NumFramesInELSubSeq) && (input->successive_Bframe==0))   // there are no B frames
+  if ( ((IMG_NUMBER%(params->NumFramesInELSubSeq+1)==0) && (params->successive_Bframe != 0) && (IMG_NUMBER>0)) || // there are B frames
+    ((IMG_NUMBER%(params->NumFramesInELSubSeq+1)==params->NumFramesInELSubSeq) && (params->successive_Bframe==0))   // there are no B frames
     )
   {
     //    printf("end of encoding the enhanced layer subseq\n");

@@ -25,11 +25,12 @@ int  get_mem5Dint(int ******array5D, int refs, int blocktype, int rows, int colu
 int  get_mem2Dint64(int64 ***array2D, int rows, int columns);
 int  get_mem3Dint64(int64 ****array3D, int frames, int rows, int columns);
 
-int  get_mem2Dshort(short ***array2D, int rows, int columns);
-int  get_mem3Dshort(short ****array3D, int frames, int rows, int columns);
-int  get_mem4Dshort(short *****array4D, int idx, int frames, int rows, int columns );
-int  get_mem5Dshort(short ******array5D, int refs, int blocktype, int rows, int columns, int component);
-int  get_mem6Dshort(short *******array6D, int list, int refs, int blocktype, int rows, int columns, int component);
+int  get_mem2Dshort(short ***array2D, int dim0, int dim1);
+int  get_mem3Dshort(short ****array3D, int dim0, int dim1, int dim2);
+int  get_mem4Dshort(short *****array4D, int dim0, int dim1, int dim2, int dim3);
+int  get_mem5Dshort(short ******array5D, int dim0, int dim1, int dim2, int dim3, int dim4);
+int  get_mem6Dshort(short *******array6D, int dim0, int dim1, int dim2, int dim3, int dim4, int dim5);
+int  get_mem7Dshort(short ********array7D, int dim0, int dim1, int dim2, int dim3, int dim4, int dim5, int dim6);
 
 int get_mem2Dpel(imgpel ***array2D, int rows, int columns);
 int get_mem3Dpel(imgpel ****array3D, int frames, int rows, int columns);
@@ -43,27 +44,31 @@ int get_mem3Ddb_offset(double ****array2D, int rows, int columns, int pels, int 
 int get_mem2Dint_offset(int ***array2D, int rows, int columns, int offset);
 int get_mem3Dint_offset(int ****array3D, int rows, int columns, int pels, int offset);
 
-void free_mem2D(byte **array2D);
-void free_mem3D(byte ***array2D, int frames);
+int get_offset_mem2Dshort(short ***array2D, int rows, int columns, int offset_y, int offset_x);
+void free_offset_mem2Dshort(short **array2D, int columns, int offset_x, int offset_y);
 
-void free_mem2Dint(int **array2D);
-void free_mem3Dint(int ***array3D, int frames);
-void free_mem4Dint(int ****array4D, int idx, int frames);
-void free_mem5Dint(int *****array5D, int refs, int blocktype, int rows);
+void free_mem2D     (byte      **array2D);
+void free_mem3D     (byte     ***array2D);
 
-void free_mem2Dint64(int64 **array2D);
-void free_mem3Dint64(int64 ***array3D64, int frames);
+void free_mem2Dint  (int       **array2D);
+void free_mem3Dint  (int      ***array3D);
+void free_mem4Dint  (int     ****array4D);
+void free_mem5Dint  (int    *****array5D);
 
-void free_mem2Dshort(short **array2D);
-void free_mem3Dshort(short ***array3D, int frames);
-void free_mem4Dshort(short ****array4D, int idx, int frames);
-void free_mem5Dshort(short *****array5D, int refs, int blocktype, int height);
-void free_mem6Dshort(short ******array5D, int list, int refs, int blocktype, int height);
+void free_mem2Dint64(int64     **array2D);
+void free_mem3Dint64(int64    ***array3D);
 
-void free_mem2Dpel(imgpel **array2D);
-void free_mem3Dpel(imgpel ***array3D, int frames);
-void free_mem4Dpel(imgpel ****array4D, int sub_x, int sub_y);
-void free_mem5Dpel(imgpel *****array5D, int dims, int sub_x, int sub_y);
+void free_mem2Dshort(short      **array2D);
+void free_mem3Dshort(short     ***array3D);
+void free_mem4Dshort(short    ****array4D);
+void free_mem5Dshort(short   *****array5D);
+void free_mem6Dshort(short  ******array6D);
+void free_mem7Dshort(short *******array7D);
+
+void free_mem2Dpel  (imgpel    **array2D);
+void free_mem3Dpel  (imgpel   ***array3D);
+void free_mem4Dpel  (imgpel  ****array4D);
+void free_mem5Dpel  (imgpel *****array5D);
 
 void free_mem2Ddouble(double **array2D);
 void free_mem2Ddb_offset(double **array2D, int offset);

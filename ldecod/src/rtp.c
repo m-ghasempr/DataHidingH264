@@ -116,7 +116,7 @@ void OpenRTPFile (char *fn)
 {
   if (NULL == (bits=fopen(fn, "rb")))
   {
-    snprintf (errortext, ET_SIZE, "Cannot open RTP file '%s'", input->infile);
+    snprintf (errortext, ET_SIZE, "Cannot open RTP file '%s'", params->infile);
     error(errortext,500);
   }
 }
@@ -128,7 +128,7 @@ void OpenRTPFile (char *fn)
  *    Closes the bit stream file
  ************************************************************************
  */
-void CloseRTPFile()
+void CloseRTPFile(void)
 {
   fclose (bits);
 }
@@ -173,10 +173,10 @@ int GetRTPNALU (NALU_t *nalu)
     if (first_call)
     {
       first_call = 0;
-      old_seq = p->seq - 1;
+      old_seq = (unsigned short) (p->seq - 1);
     }
 
-    nalu->lost_packets = ( p->seq - (old_seq + 1) );
+    nalu->lost_packets = (unsigned short) ( p->seq - (old_seq + 1) );
     old_seq = p->seq;
 
     assert (p->paylen < nalu->max_size);
@@ -304,15 +304,15 @@ void DumpRTPHeader (RTPpacket_t *p)
   int i;
   for (i=0; i< 30; i++)
     printf ("%02x ", p->packet[i]);
-  printf ("Version (V): %d\n", p->v);
-  printf ("Padding (P): %d\n", p->p);
-  printf ("Extension (X): %d\n", p->x);
-  printf ("CSRC count (CC): %d\n", p->cc);
-  printf ("Marker bit (M): %d\n", p->m);
-  printf ("Payload Type (PT): %d\n", p->pt);
-  printf ("Sequence Number: %d\n", p->seq);
-  printf ("Timestamp: %d\n", p->timestamp);
-  printf ("SSRC: %d\n", p->ssrc);
+  printf ("Version (V): %d\n", (int) p->v);
+  printf ("Padding (P): %d\n", (int) p->p);
+  printf ("Extension (X): %d\n", (int) p->x);
+  printf ("CSRC count (CC): %d\n", (int) p->cc);
+  printf ("Marker bit (M): %d\n", (int) p->m);
+  printf ("Payload Type (PT): %d\n", (int) p->pt);
+  printf ("Sequence Number: %d\n", (int) p->seq);
+  printf ("Timestamp: %d\n", (int) p->timestamp);
+  printf ("SSRC: %d\n", (int) p->ssrc);
 }
 
 
@@ -369,7 +369,7 @@ int RTPReadPacket (RTPpacket_t *p, FILE *bits)
 
   if (p->packlen != fread (p->packet, 1, p->packlen, bits))
   {
-    printf ("RTPReadPacket: File corruption, could not read %d bytes\n", p->packlen);
+    printf ("RTPReadPacket: File corruption, could not read %d bytes\n", (int) p->packlen);
     exit (-1);    // EOF inidication
   }
 

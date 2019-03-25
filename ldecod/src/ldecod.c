@@ -15,7 +15,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 13.2 (FRExt)
+ *     JM 14.0 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -59,8 +59,8 @@
 #include "sei.h"
 #include "erc_api.h"
 
-#define JM          "13 (FRExt)"
-#define VERSION     "13.2"
+#define JM          "14 (FRExt)"
+#define VERSION     "14.0"
 #define EXT_VERSION "(FRExt)"
 
 #define LOGFILE     "log.dec"
@@ -76,15 +76,15 @@ extern ColocatedParams *Co_located_JV[MAX_PLANE];  //!< Co_located to be used du
 // They are declared in the following lines.  Since inp is defined in conio.h
 // and cannot be overridden globally, it is defined here as input
 //
-// Everywhere, input-> and img-> can now be used either globally or with
+// Everywhere, params-> and img-> can now be used either globally or with
 // the local override through the formal parameter mechanism
 
 extern FILE* bits;
 extern StorablePicture* dec_picture;
 
-struct inp_par    *input;       //!< input parameters from input configuration file
+struct inp_par    *params;       //!< input parameters from input configuration file
 struct snr_par    *snr;         //!< statistics
-struct img_par    *img;         //!< image parameters
+ImageParameters   *img;         //!< image parameters
 
 int global_init_done = 0;
 
@@ -94,7 +94,7 @@ int global_init_done = 0;
  *   print help message and exit
  ***********************************************************************
  */
-void JMDecHelpExit ()
+void JMDecHelpExit (void)
 {
   fprintf( stderr, "\n   ldecod [-h] {[defdec.cfg] | {[-p pocScale][-i bitstream.264]...[-o output.yuv] [-r reference.yuv] [-uv]}}\n\n"
     "## Parameters\n\n"
@@ -107,7 +107,7 @@ void JMDecHelpExit ()
     "   -r  :  Reference file name. If not specified default output is set as test_rec.yuv\n\n"
     "   -p  :  Poc Scale. \n"
     "   -uv :  write chroma components for monochrome streams(4:2:0)\n"
-    "   -lp :  By default the loop filter for High Intra-Only profile is off \n\t  regardless of the flags in the bitstream. In the presence of\n\t  this option, the loop filter usage will then be determined \n\t  by the flags and parameters in the bitstream.\n\n" 
+    "   -lp :  By default the deblocking filter for High Intra-Only profile is off \n\t  regardless of the flags in the bitstream. In the presence of\n\t  this option, the loop filter usage will then be determined \n\t  by the flags and parameters in the bitstream.\n\n" 
 
     "## Supported video file formats\n"
     "   Input : .264 -> H.264 bitstream files. \n"
@@ -130,20 +130,20 @@ void Configure(int ac, char *av[])
   CLcount = 1;
 
 
-  strcpy(input->infile,"test.264");      //! set default bitstream name
-  strcpy(input->outfile,"test_dec.yuv"); //! set default output file name
-  strcpy(input->reffile,"test_rec.yuv"); //! set default reference file name
-  input->FileFormat = PAR_OF_ANNEXB;
-  input->ref_offset=0;
-  input->poc_scale=2;
-  input->silent = FALSE;
-  input->loopfilter_bitstream = 0;
+  strcpy(params->infile,"test.264");      //! set default bitstream name
+  strcpy(params->outfile,"test_dec.yuv"); //! set default output file name
+  strcpy(params->reffile,"test_rec.yuv"); //! set default reference file name
+  params->FileFormat = PAR_OF_ANNEXB;
+  params->ref_offset=0;
+  params->poc_scale=2;
+  params->silent = FALSE;
+  params->intra_profile_deblocking = 0;
 
 #ifdef _LEAKYBUCKET_
-  input->R_decoder=500000;          //! Decoder rate
-  input->B_decoder=104000;          //! Decoder buffer size
-  input->F_decoder=73000;           //! Decoder initial delay
-  strcpy(input->LeakyBucketParamFile,"leakybucketparam.cfg");    // file where Leaky Bucket params (computed by encoder) are stored
+  params->R_decoder=500000;          //! Decoder rate
+  params->B_decoder=104000;          //! Decoder buffer size
+  params->F_decoder=73000;           //! Decoder initial delay
+  strcpy(params->LeakyBucketParamFile,"leakybucketparam.cfg");    // file where Leaky Bucket params (computed by encoder) are stored
 #endif
 
   if (ac==2)
@@ -154,12 +154,12 @@ void Configure(int ac, char *av[])
     }
     else if (0 == strncmp (av[1], "-s", 2))
     {
-      input->silent = TRUE;
+      params->silent = TRUE;
     }
     else
     {
       config_filename=av[1];
-      init_conf(input, av[1]);
+      init_conf(params, av[1]);
     }
     CLcount=2;
   }
@@ -168,7 +168,7 @@ void Configure(int ac, char *av[])
   {
     if (0 == strncmp (av[1], "-i", 2))
     {
-      strcpy(input->infile,av[2]);
+      strcpy(params->infile,av[2]);
       CLcount = 3;
     }
     if (0 == strncmp (av[1], "-h", 2))
@@ -177,7 +177,7 @@ void Configure(int ac, char *av[])
     }
     if (0 == strncmp (av[1], "-s", 2))
     {
-      input->silent = TRUE;
+      params->silent = TRUE;
     }
   }
 
@@ -192,44 +192,44 @@ void Configure(int ac, char *av[])
 
     if (0 == strncmp (av[CLcount], "-s", 2))
     {
-      input->silent = TRUE;
+      params->silent = TRUE;
       CLcount ++;
     }
 
     if (0 == strncmp (av[CLcount], "-i", 2))  //! Input file
     {
-      strcpy(input->infile,av[CLcount+1]);
+      strcpy(params->infile,av[CLcount+1]);
       CLcount += 2;
     }
     else if (0 == strncmp (av[CLcount], "-o", 2))  //! Output File
     {
-      strcpy(input->outfile,av[CLcount+1]);
+      strcpy(params->outfile,av[CLcount+1]);
       CLcount += 2;
     }
     else if (0 == strncmp (av[CLcount], "-r", 2))  //! Reference File
     {
-      strcpy(input->reffile,av[CLcount+1]);
+      strcpy(params->reffile,av[CLcount+1]);
       CLcount += 2;
     }
     else if (0 == strncmp (av[CLcount], "-p", 2))  //! Poc Scale
     {
-      sscanf (av[CLcount+1], "%d", &input->poc_scale);
+      sscanf (av[CLcount+1], "%d", &params->poc_scale);
       CLcount += 2;
     }
     else if (0 == strncmp (av[CLcount], "-uv", 3))  //! indicate UV writing for 4:0:0
     {
-      input->write_uv = 1;
+      params->write_uv = 1;
       CLcount ++;
     }
     else if (0 == strncmp (av[CLcount], "-lp", 3))  
     {
-      input->loopfilter_bitstream = 1;
+      params->intra_profile_deblocking = 1;
       CLcount ++;
     }
     else
     {
       //config_filename=av[CLcount];
-      //init_conf(input, config_filename);
+      //init_conf(params, config_filename);
       snprintf(errortext, ET_SIZE, "Invalid syntax. Use ldecod -h for proper usage");
       error(errortext, 300);
     }
@@ -243,14 +243,14 @@ void Configure(int ac, char *av[])
   }
 #endif
 
-  if ((p_out=open(input->outfile, OPENFLAGS_WRITE, OPEN_PERMISSIONS))==-1)
+  if ((p_out=open(params->outfile, OPENFLAGS_WRITE, OPEN_PERMISSIONS))==-1)
   {
-    snprintf(errortext, ET_SIZE, "Error open file %s ",input->outfile);
+    snprintf(errortext, ET_SIZE, "Error open file %s ",params->outfile);
     error(errortext,500);
   }
 /*  if ((p_out2=fopen("out.yuv","wb"))==0)
   {
-    snprintf(errortext, ET_SIZE, "Error open file %s ",input->outfile);
+    snprintf(errortext, ET_SIZE, "Error open file %s ",params->outfile);
     error(errortext,500);
   }*/
 
@@ -258,27 +258,27 @@ void Configure(int ac, char *av[])
   fprintf(stdout,"----------------------------- JM %s %s -----------------------------\n", VERSION, EXT_VERSION);
   fprintf(stdout," Decoder config file                    : %s \n",config_filename);
   fprintf(stdout,"--------------------------------------------------------------------------\n");
-  fprintf(stdout," Input H.264 bitstream                  : %s \n",input->infile);
-  fprintf(stdout," Output decoded YUV                     : %s \n",input->outfile);
+  fprintf(stdout," Input H.264 bitstream                  : %s \n",params->infile);
+  fprintf(stdout," Output decoded YUV                     : %s \n",params->outfile);
   fprintf(stdout," Output status file                     : %s \n",LOGFILE);
-  if ((p_ref=open(input->reffile,OPENFLAGS_READ))==-1)
+  if ((p_ref=open(params->reffile,OPENFLAGS_READ))==-1)
   {
-    fprintf(stdout," Input reference file                   : %s does not exist \n",input->reffile);
+    fprintf(stdout," Input reference file                   : %s does not exist \n",params->reffile);
     fprintf(stdout,"                                          SNR values are not available\n");
   }
   else
-    fprintf(stdout," Input reference file                   : %s \n",input->reffile);
+    fprintf(stdout," Input reference file                   : %s \n",params->reffile);
 
   fprintf(stdout,"--------------------------------------------------------------------------\n");
 #ifdef _LEAKYBUCKET_
-  fprintf(stdout," Rate_decoder        : %8ld \n",input->R_decoder);
-  fprintf(stdout," B_decoder           : %8ld \n",input->B_decoder);
-  fprintf(stdout," F_decoder           : %8ld \n",input->F_decoder);
-  fprintf(stdout," LeakyBucketParamFile: %s \n",input->LeakyBucketParamFile); // Leaky Bucket Param file
-  calc_buffer(input);
+  fprintf(stdout," Rate_decoder        : %8ld \n",params->R_decoder);
+  fprintf(stdout," B_decoder           : %8ld \n",params->B_decoder);
+  fprintf(stdout," F_decoder           : %8ld \n",params->F_decoder);
+  fprintf(stdout," LeakyBucketParamFile: %s \n",params->LeakyBucketParamFile); // Leaky Bucket Param file
+  calc_buffer(params);
   fprintf(stdout,"--------------------------------------------------------------------------\n");
 #endif
-  if (!input->silent)
+  if (!params->silent)
   {
     fprintf(stdout,"POC must = frame# or field# for SNRs to be correct\n");
     fprintf(stdout,"--------------------------------------------------------------------------\n");
@@ -300,28 +300,28 @@ int main(int argc, char **argv)
   int nplane;
 
   // allocate memory for the structures
-  if ((input =  (struct inp_par *)calloc(1, sizeof(struct inp_par)))==NULL) no_mem_exit("main: input");
+  if ((params =  (struct inp_par *)calloc(1, sizeof(struct inp_par)))==NULL) no_mem_exit("main: params");
   if ((snr   =  (struct snr_par *)calloc(1, sizeof(struct snr_par)))==NULL) no_mem_exit("main: snr");
-  if ((img   =  (struct img_par *)calloc(1, sizeof(struct img_par)))==NULL) no_mem_exit("main: img");
+  if ((img   =  (ImageParameters *)calloc(1, sizeof(ImageParameters)))==NULL) no_mem_exit("main: img");
 
   Configure (argc, argv);
 
   init_old_slice();
 
-  switch (input->FileFormat)
+  switch (params->FileFormat)
   {
   case 0:
-    OpenBitstreamFile (input->infile);
+    OpenBitstreamFile (params->infile);
     break;
   case 1:
-    OpenRTPFile (input->infile);
+    OpenRTPFile (params->infile);
     break;
   default:
-    printf ("Unsupported file format %d, exit\n", input->FileFormat);
+    printf ("Unsupported file format %d, exit\n", params->FileFormat);
   }
 
   // Allocate Slice data struct
-  malloc_slice(input,img);
+  malloc_slice(params,img);
 
   init(img);
 
@@ -330,9 +330,9 @@ int main(int argc, char **argv)
   dpb.init_done = 0;
   g_nFrame = 0;
 
-  init_out_buffer();
+  init_out_buffer();  
 
-  img->idr_psnr_number=input->ref_offset;
+  img->idr_psnr_number=params->ref_offset;
   img->psnr_number=0;
 
   img->number=0;
@@ -352,17 +352,17 @@ int main(int argc, char **argv)
     ref_flag[i]=1;
   }
 
-  while (decode_one_frame(img, input, snr) != EOS)
+  while (decode_one_frame(img, params, snr) != EOS)
     ;
 
-  report(input, img, snr);
-  free_slice(input,img);
+  report(params, img, snr);
+  free_slice(img);
   FmoFinit();
   free_global_buffers();
 
   flush_dpb();
 
-#ifdef PAIR_FIELDS_IN_OUTPUT
+#if (PAIR_FIELDS_IN_OUTPUT)
   flush_pending_output(p_out);
 #endif
 
@@ -393,7 +393,7 @@ int main(int argc, char **argv)
   {
     free_colocated(Co_located);
   }
-  free (input);
+  free (params);
   free (snr);
   free (img);
 
@@ -409,7 +409,7 @@ int main(int argc, char **argv)
  *    Initilize some arrays
  ***********************************************************************
  */
-void init(struct img_par *img)  //!< image parameters
+void init(ImageParameters *img)  //!< image parameters
 {
   img->oldFrameSizeInMbs = -1;
 
@@ -420,7 +420,7 @@ void init(struct img_par *img)  //!< image parameters
   img->recovery_point_found = 0;
   img->recovery_poc = 0x7fffffff; /* set to a max value */
 
-#ifdef ENABLE_OUTPUT_TONEMAPPING
+#if (ENABLE_OUTPUT_TONEMAPPING)
   init_tone_mapping_sei();
 #endif
 }
@@ -431,7 +431,7 @@ void init(struct img_par *img)  //!< image parameters
  *    Initialize FREXT variables
  ***********************************************************************
  */
-void init_frext(struct img_par *img)  //!< image parameters
+void init_frext(ImageParameters *img)  //!< image parameters
 {
   //pel bitdepth init
   img->bitdepth_luma_qp_scale   = 6*(img->bitdepth_luma   - 8);
@@ -482,7 +482,7 @@ void init_frext(struct img_par *img)  //!< image parameters
 /*!
  ************************************************************************
  * \brief
- *    Read input from configuration file
+ *    Read parameters from configuration file
  *
  * \par Input:
  *    Name of configuration filename
@@ -591,6 +591,8 @@ void init_conf(struct inp_par *inp, char *config_filename)
   img->poc_gap = inp->poc_gap;
   fscanf(fd,"%d,",&inp->silent);     // use silent decode mode
   fscanf(fd,"%*[^\n]");
+  fscanf(fd,"%d,",&inp->intra_profile_deblocking);     // use deblocking filter in intra only profile
+  fscanf(fd,"%*[^\n]");
 
   fclose (fd);
 }
@@ -602,14 +604,14 @@ void init_conf(struct inp_par *inp, char *config_filename)
  *
  * \par Input:
  *    struct inp_par *inp,
- *    struct img_par *img,
+ *    ImageParameters *img,
  *    struct snr_par *stat
  *
  * \par Output:
  *    None
  ************************************************************************
  */
-void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr)
+void report(struct inp_par *inp, ImageParameters *img, struct snr_par *snr)
 {
   #define OUTSTRING_SIZE 255
   char string[OUTSTRING_SIZE];
@@ -623,7 +625,7 @@ void report(struct inp_par *inp, struct img_par *img, struct snr_par *snr)
   char timebuf[128];
 #endif
 
-  if (input->silent == FALSE)
+  if (params->silent == FALSE)
   {
     fprintf(stdout,"-------------------- Average SNR all frames ------------------------------\n");
     fprintf(stdout," SNR Y(dB)           : %5.2f\n",snr->snra[0]);
@@ -845,10 +847,10 @@ void FreePartition (DataPartition *dp, int n)
  *    data structures
  *
  * \par Input:
- *    Input Parameters struct inp_par *inp,  struct img_par *img
+ *    Input Parameters struct inp_par *inp,  ImageParameters *img
  ************************************************************************
  */
-void malloc_slice(struct inp_par *inp, struct img_par *img)
+void malloc_slice(struct inp_par *inp, ImageParameters *img)
 {
   Slice *currSlice;
 
@@ -879,10 +881,10 @@ void malloc_slice(struct inp_par *inp, struct img_par *img)
  *    data structures
  *
  * \par Input:
- *    Input Parameters struct inp_par *inp,  struct img_par *img
+ *    Input Parameters struct inp_par *inp,  ImageParameters *img
  ************************************************************************
  */
-void free_slice(struct inp_par *inp, struct img_par *img)
+void free_slice(ImageParameters *img)
 {
   Slice *currSlice = img->currentSlice;
 
@@ -907,13 +909,13 @@ void free_slice(struct inp_par *inp, struct img_par *img)
  *    void free_global_buffers()
  *
  *  \par Input:
- *    Input Parameters struct inp_par *inp, Image Parameters struct img_par *img
+ *    Input Parameters struct inp_par *inp, Image Parameters ImageParameters *img
  *
  *  \par Output:
  *     Number of allocated bytes
  ***********************************************************************
  */
-int init_global_buffers()
+int init_global_buffers(void)
 {
   int memory_size=0;
   int i;
@@ -984,21 +986,21 @@ int init_global_buffers()
  *    int init_global_buffers()
  *
  * \par Input:
- *    Input Parameters struct inp_par *inp, Image Parameters struct img_par *img
+ *    Input Parameters struct inp_par *inp, Image Parameters ImageParameters *img
  *
  * \par Output:
  *    none
  *
  ************************************************************************
  */
-void free_global_buffers()
+void free_global_buffers(void)
 {
   free_mem2Dpel (imgY_ref);
   if (imgUV_ref)
-    free_mem3Dpel (imgUV_ref,2);
+    free_mem3Dpel (imgUV_ref);
 
   // CAVLC free mem
-  free_mem3Dint(img->nz_coeff, img->oldFrameSizeInMbs);
+  free_mem3Dint(img->nz_coeff);
 
   free_mem2Dint(img->siblock);
 
@@ -1011,9 +1013,9 @@ void free_global_buffers()
   free (img->intra_block);
   free_mem2D(img->ipredmode);
 
-  free_mem3Dint(img->wp_weight, 2);
-  free_mem3Dint(img->wp_offset, 6);
-  free_mem4Dint(img->wbp_weight, 6, MAX_REFERENCE_PICTURES);
+  free_mem3Dint(img->wp_weight);
+  free_mem3Dint(img->wp_offset);
+  free_mem4Dint(img->wbp_weight);
 
   global_init_done = 0;
 

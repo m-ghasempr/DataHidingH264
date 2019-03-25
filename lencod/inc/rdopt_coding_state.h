@@ -35,7 +35,7 @@ typedef struct {
   int                   bitcounter[MAX_BITCOUNTER_MB];
 
   // elements of current macroblock
-  int                   mvd[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE][2];
+  short                 mvd[2][BLOCK_MULTIPLE][BLOCK_MULTIPLE][2];
   int64                 cbp_bits[3];
   int64                 cbp_bits_8x8[3];
 } CSobj;

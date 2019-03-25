@@ -47,8 +47,8 @@ typedef struct {
   int   RCBSliceBits[RC_MAX_TEMPORAL_LEVELS];
   int   temporal_levels;
   int   hierNb[RC_MAX_TEMPORAL_LEVELS];
-  int   NPslice;
-  int   NIslice;
+  int   NPSlice;
+  int   NISlice;
 } rc_generic;
 
 // macroblock activity

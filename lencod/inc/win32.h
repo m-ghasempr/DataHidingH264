@@ -20,7 +20,6 @@
 # include <string.h>
 # include <assert.h>
 
-
 #if defined(WIN32)
 # include <io.h>
 # include <sys/types.h>

@@ -114,12 +114,12 @@ void get_mb_block_pos_mbaff (int mb_addr, int *x, int*y)
  *    returns the x and y sample coordinates for a given MbAddress
  ************************************************************************
  */
-void get_mb_pos (int mb_addr, int *x, int*y, int is_chroma)
+void get_mb_pos (int mb_addr, int mb_size[2], int *x, int*y)
 {
   get_mb_block_pos(mb_addr, x, y);
 
-  (*x) *= img->mb_size[is_chroma][0];
-  (*y) *= img->mb_size[is_chroma][1];
+  (*x) *= mb_size[0];
+  (*y) *= mb_size[1];
 }
 
 
@@ -139,9 +139,10 @@ void get_mb_pos (int mb_addr, int *x, int*y, int is_chroma)
  *    returns position informations
  ************************************************************************
  */
-void getNonAffNeighbour(Macroblock *currMb, int xN, int yN, int is_chroma, PixelPos *pix)
+void getNonAffNeighbour(Macroblock *currMb, int xN, int yN, int mb_size[2], PixelPos *pix)
 {
-  int maxW = img->mb_size[is_chroma][0], maxH = img->mb_size[is_chroma][1];
+  int maxW = mb_size[0], maxH = mb_size[1];
+  static int *CurPos;
 
   if ((xN<0)&&(yN<0))
   {
@@ -175,12 +176,11 @@ void getNonAffNeighbour(Macroblock *currMb, int xN, int yN, int is_chroma, Pixel
 
   if (pix->available || img->DeblockCall)
   {
-    int *CurPos = PicPos[ pix->mb_addr ];
-
     pix->x = xN & (maxW - 1);
     pix->y = yN & (maxH - 1);
-    pix->pos_x = CurPos[0] * maxW + pix->x;
-    pix->pos_y = CurPos[1] * maxH + pix->y;
+    CurPos = PicPos[ pix->mb_addr ];
+    pix->pos_x = pix->x + CurPos[0] * maxW;
+    pix->pos_y = pix->y + CurPos[1] * maxH;
   }
 }
 
@@ -200,13 +200,13 @@ void getNonAffNeighbour(Macroblock *currMb, int xN, int yN, int is_chroma, Pixel
  *    returns position informations
  ************************************************************************
  */
-void getAffNeighbour(Macroblock *currMb, int xN, int yN, int is_chroma, PixelPos *pix)
+void getAffNeighbour(Macroblock *currMb, int xN, int yN, int mb_size[2], PixelPos *pix)
 {
   int maxW, maxH;
   int yM = -1;
 
-  maxW = img->mb_size[is_chroma][0];
-  maxH = img->mb_size[is_chroma][1];
+  maxW = mb_size[0];
+  maxH = mb_size[1];
 
   // initialize to "not available"
   pix->available = FALSE;
@@ -523,36 +523,9 @@ void getAffNeighbour(Macroblock *currMb, int xN, int yN, int is_chroma, PixelPos
   {
     pix->x = xN & (maxW - 1);
     pix->y = yM & (maxH - 1);
-    get_mb_pos(pix->mb_addr, &(pix->pos_x), &(pix->pos_y), is_chroma);
+    get_mb_pos(pix->mb_addr, mb_size, &(pix->pos_x), &(pix->pos_y));
     pix->pos_x += pix->x;
     pix->pos_y += pix->y;
-  }
-}
-
-/*!
- ************************************************************************
- * \brief
- *    get neighboring 4x4 luma block
- * \param currMb
- *   current macroblock
- * \param block_x_pos
- *    input x block position
- * \param block_y_pos
- *    input y block position
- * \param pix
- *    returns position informations
- ************************************************************************
- */
-void getLuma4x4Neighbour (Macroblock *currMb, int block_x_pos, int block_y_pos, PixelPos *pix)
-{
-  getNeighbour(currMb, block_x_pos, block_y_pos, IS_LUMA, pix);
-
-  if (pix->available)
-  {
-    pix->x >>= 2;
-    pix->y >>= 2;
-    pix->pos_x >>= 2;
-    pix->pos_y >>= 2;
   }
 }
 
@@ -571,9 +544,9 @@ void getLuma4x4Neighbour (Macroblock *currMb, int block_x_pos, int block_y_pos, 
  *    returns position informations
  ************************************************************************
  */
-void getChroma4x4Neighbour (Macroblock *currMb, int block_x, int block_y, PixelPos *pix)
+void get4x4Neighbour (Macroblock *currMb, int block_x, int block_y, int mb_size[2], PixelPos *pix)
 {
-  getNeighbour(currMb, block_x, block_y, IS_CHROMA, pix);
+  getNeighbour(currMb, block_x, block_y, mb_size, pix);
 
   if (pix->available)
   {
