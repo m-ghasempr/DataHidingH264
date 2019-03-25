@@ -205,7 +205,7 @@ int GetRTPNALU (NALU_t *nalu)
   if (ret == 0)
     return 0;
 
-  assert (nalu->len < MAXNALUSIZE);
+  assert (p->paylen < nalu->max_size);
 
   nalu->len = p->paylen;
   memcpy (nalu->buf, p->payload, p->paylen);

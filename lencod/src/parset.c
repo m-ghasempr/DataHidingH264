@@ -84,7 +84,7 @@ NALU_t *GenerateSeq_parameter_set_NALU ()
 {
   seq_parameter_set_rbsp_t *sps = NULL; 
   pic_parameter_set_rbsp_t *pps = NULL;
-  NALU_t *n = AllocNALU();
+  NALU_t *n = AllocNALU(64000);
   int RBSPlen = 0;
   int NALUlen;
   byte rbsp[MAXRBSPSIZE];
@@ -122,7 +122,7 @@ NALU_t *GeneratePic_parameter_set_NALU()
 {
   seq_parameter_set_rbsp_t *sps = NULL; 
   pic_parameter_set_rbsp_t *pps = NULL;
-  NALU_t *n = AllocNALU();
+  NALU_t *n = AllocNALU(64000);
   int RBSPlen = 0;
   int NALUlen;
   byte rbsp[MAXRBSPSIZE];

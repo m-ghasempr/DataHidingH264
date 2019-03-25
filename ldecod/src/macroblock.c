@@ -62,7 +62,6 @@
 #include "elements.h"
 #include "errorconcealment.h"
 #include "macroblock.h"
-#include "decodeiff.h"
 #include "fmo.h"
 #include "vlc.h"
 
@@ -1089,16 +1088,10 @@ int read_one_macroblock(struct img_par *img,struct inp_par *inp)
   {
     int i, j, iii, jjj, pmv[2];
     int ***tmp_mv         = img->mv;
-    int mb_available_up   = (img->mb_y == 0)  ? 0 : (currMB->slice_nr == img->mb_data[img->map_mb_nr-img->width/16]/*GB [img->current_mb_nr-img->width/16]*/.slice_nr);
-    int mb_available_left = (img->mb_x == 0)  ? 0 : (currMB->slice_nr == img->mb_data[img->map_mb_nr-1]/*GB [img->current_mb_nr-1]*/.slice_nr);
+    int mb_available_up   = (img->mb_y == 0)  ? 0 : (currMB->slice_nr == img->mb_data[img->map_mb_nr-img->width/16].slice_nr);
+    int mb_available_left = (img->mb_x == 0)  ? 0 : (currMB->slice_nr == img->mb_data[img->map_mb_nr-1].slice_nr);
     int zeroMotionAbove   = !mb_available_up  ? 1 : refFrArr[img->block_y-1][img->block_x]  == 0 && tmp_mv[4+img->block_x  ][img->block_y-1][0] == 0 && tmp_mv[4+img->block_x  ][img->block_y-1][1] == 0 ? 1 : 0;
     int zeroMotionLeft    = !mb_available_left? 1 : refFrArr[img->block_y][img->block_x-1]  == 0 && tmp_mv[4+img->block_x-1][img->block_y  ][0] == 0 && tmp_mv[4+img->block_x-1][img->block_y  ][1] == 0 ? 1 : 0;
-
-    mb_available_up   = (img->mb_y == 0)  ? 0 : 1;// GB
-    mb_available_left   = (img->mb_x == 0)  ? 0 : 1;//GB
-    zeroMotionAbove   = !mb_available_up  ? 1 : refFrArr[img->block_y-1][img->block_x]  == 0 && tmp_mv[4+img->block_x  ][img->block_y-1][0] == 0 && tmp_mv[4+img->block_x  ][img->block_y-1][1] == 0 ? 1 : 0;;
-    zeroMotionLeft   = !mb_available_left  ? 1 : refFrArr[img->block_y][img->block_x-1]  == 0 && tmp_mv[4+img->block_x-1][img->block_y  ][0] == 0 && tmp_mv[4+img->block_x-1][img->block_y  ][1] == 0 ? 1 : 0;
-
 
     currMB->cbp = 0;
 
@@ -1461,12 +1454,13 @@ SetMotionVectorPredictor (struct img_par  *img,
   int pic_block_x          = img->block_x + block_x;
   int pic_block_y          = img->block_y + block_y;
   int mb_width             = img->width/16;
-  int mb_available_up =      (img->mb_y == 0        ) ? 0 : 1;
-  int mb_available_left =    (img->mb_x == 0        ) ? 0 : 1;
-  int mb_available_upleft  = (img->mb_x == 0          ||
-                              img->mb_y == 0        ) ? 0 : 1;
-  int mb_available_upright = (img->mb_x >= mb_width-1 ||
-                              img->mb_y == 0        ) ? 0 : 1;
+  int mb_nr = img->map_mb_nr;
+  int mb_available_up   = (img->mb_y == 0 ) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width  ].slice_nr);
+  int mb_available_left = (img->mb_x == 0 ) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-1         ].slice_nr);
+  int mb_available_upleft  = (img->mb_x == 0) ? 0 : ((img->mb_y == 0) ? 0 : 
+                                                     (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr));
+  int mb_available_upright = (img->mb_y == 0) ? 0 : ((img->mb_x >= (mb_width-1)) ? 0 :
+                                                     (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width+1].slice_nr));
 
   int block_available_up, block_available_left, block_available_upright, block_available_upleft;
   int mv_a, mv_b, mv_c, mv_d, pred_vec=0;
@@ -1482,12 +1476,6 @@ SetMotionVectorPredictor (struct img_par  *img,
         tmp_mv             = img->mv_top;
       pic_block_x          = img->block_x + (mb_x>>2);
       pic_block_y          = img->block_y/2 + (mb_y>>2);
-      mb_available_up =      (img->mb_y == 0        ) ? 0 : 1;
-      mb_available_left =    (img->mb_x == 0        ) ? 0 : 1;
-      mb_available_upleft  = (img->mb_x == 0          ||
-                              img->mb_y == 0        ) ? 0 : 1;
-      mb_available_upright = (img->mb_x >= mb_width-1 ||
-                              img->mb_y == 0        ) ? 0 : 1;
     }
     else
     {
@@ -1495,23 +1483,13 @@ SetMotionVectorPredictor (struct img_par  *img,
         tmp_mv             = img->mv_bot;
       pic_block_x          = img->block_x + (mb_x>>2);
       pic_block_y          = (img->block_y-4)/2 + (mb_y>>2);
-      mb_available_up =      (img->mb_y == 1        ) ? 0 : 1;
-      mb_available_left =    (img->mb_x == 0        ) ? 0 : 1;
-      mb_available_upleft  = (img->mb_x == 0          ||
-                              img->mb_y == 1        ) ? 0 : 1;
-      mb_available_upright = 0;
+      mb_available_upright = 0;         // Not sure if this is right
     }
   }
   else
   {
-    mb_available_up =      (img->mb_y == 0        ) ? 0 : 1;
-    mb_available_left =    (img->mb_x == 0        ) ? 0 : 1;
-    mb_available_upleft  = (img->mb_x == 0          ||
-                              img->mb_y == 0        ) ? 0 : 1;
-    mb_available_upright = (img->mb_x >= mb_width-1 ||
-                              img->mb_y == 0        ) ? 0 : 1;
     if(img->mb_frame_field_flag)
-      mb_available_upright = (img->mb_y%2) ? 0:mb_available_upright;
+      mb_available_upright = (img->mb_y%2) ? 0:mb_available_upright;  // Not sure if this is right
   }
 
   /* D B C */
@@ -5453,10 +5431,12 @@ int decode_super_macroblock(struct img_par *img,struct inp_par *inp)
   }
 
   if (img->mb_field)
+  {
     if (img->current_mb_nr%2)
       mb_available_up   = ((img->mb_y-1)/2 == 0) ? 0 : 1;
     else
       mb_available_up   = (img->mb_y/2 == 0) ? 0 : 1;
+  }
 
   if(img->constrained_intra_pred_flag)
   {

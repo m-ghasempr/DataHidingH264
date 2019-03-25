@@ -3221,14 +3221,14 @@ int predict_nnz(int i,int j)
   if (i)
     Left_block= img->nz_coeff [img->mb_x ][img->mb_y ][i-1][j];
   else
-//    Left_block= mb_available_left ? img->nz_coeff [img->mb_x-1 ][img->mb_y ][3][j] : -1;
-    Left_block= img->mb_x > 0 ? img->nz_coeff [img->mb_x-1 ][img->mb_y ][3][j] : -1;
+    Left_block= mb_available_left ? img->nz_coeff [img->mb_x-1 ][img->mb_y ][3][j] : -1;
+//    Left_block= img->mb_x > 0 ? img->nz_coeff [img->mb_x-1 ][img->mb_y ][3][j] : -1;
 
   if (j)
     Top_block=  img->nz_coeff [img->mb_x ][img->mb_y ][i][j-1];
   else
-//  Top_block=  mb_available_up ? img->nz_coeff [img->mb_x ][img->mb_y-decr ][i][3] : -1;
-    Top_block=  mb_ypos > 0 ? img->nz_coeff [img->mb_x ][img->mb_y-decr ][i][3] : -1;
+  Top_block=  mb_available_up ? img->nz_coeff [img->mb_x ][img->mb_y-decr ][i][3] : -1;
+//  Top_block=  mb_ypos > 0 ? img->nz_coeff [img->mb_x ][img->mb_y-decr ][i][3] : -1;
   
   
   pred_nnz=0;
@@ -3280,8 +3280,8 @@ int predict_nnz_chroma(int i,int j)
   if (i==1 || i==3)
     Left_block= img->nz_coeff [img->mb_x ][mb_y ][i-1][j];
   else
-     Left_block= mb_available_left ? img->nz_coeff [img->mb_x-1 ][img->mb_y ][i+1][j] : -1;
-//     Left_block= img->mb_x > 0 ? img->nz_coeff [img->mb_x-1 ][img->mb_y ][i+1][j] : -1;
+    Left_block= mb_available_left ? img->nz_coeff [img->mb_x-1 ][img->mb_y ][i+1][j] : -1;
+//    Left_block= img->mb_x > 0 ? img->nz_coeff [img->mb_x-1 ][img->mb_y ][i+1][j] : -1;
 
   if (j==5)
     Top_block=  img->nz_coeff [img->mb_x ][img->mb_y ][i][j-1];

@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 6.0
+ *     JM 6.0a
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -118,14 +118,13 @@
 #include "memalloc.h"
 #include "mbuffer.h"
 #include "leaky_bucket.h"
-#include "decodeiff.h"
 #include "fmo.h"
 #include "annexb.h"
 
 #include "erc_api.h"
 
 #define JM          "6"
-#define VERSION     "6.0"
+#define VERSION     "6.0a"
 
 #define LOGFILE     "log.dec"
 #define DATADECFILE "dataDec.txt"

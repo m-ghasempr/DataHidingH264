@@ -2317,8 +2317,7 @@ void encode_one_macroblock ()
                                                    (pdir==0||pdir==2?mode:0),
                                                    (pdir==1||pdir==2?mode:0),
                                                    (mode!=0?best8x8ref[P8x8][block]:max(0,refar[block_y+j1][img->block_x+i1])),
-                                                   (mode!=0?best8x8bwref[P8x8][block]:0),
-                                                   best8x8abp_type[P8x8][block]);
+                                                   (mode!=0?best8x8bwref[P8x8][block]:0));
             cbp_blk8x8   &= (~(0x33 << (((block>>1)<<3)+((block%2)<<1)))); // delete bits for block
             cbp_blk8x8   |= curr_cbp_blk;
 

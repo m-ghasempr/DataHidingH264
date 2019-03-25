@@ -52,8 +52,8 @@
 #include "nalucommon.h"
 
 extern FILE *bits;
-int RBSPtoNALU (char *rbsp, NALU_t *nalu);
-int GetAnnexbNALU (NALU_t *nalu);
 
+int GetAnnexbNALU (NALU_t *nalu);
+int NALUtoRBSP (NALU_t *nalu);
 
 #endif

@@ -50,7 +50,7 @@
 #ifndef _DEFINES_H_
 #define _DEFINES_H_
 
-#define TRACE           1   //!< 0:Trace off 1:Trace on
+#define TRACE           0   //!< 0:Trace off 1:Trace on
 
 // NAL Stuff
 

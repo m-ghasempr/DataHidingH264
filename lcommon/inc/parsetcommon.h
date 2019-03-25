@@ -206,7 +206,4 @@ seq_parameter_set_rbsp_t *AllocSPS ();
 void FreePPS (pic_parameter_set_rbsp_t *pps);
 void FreeSPS (seq_parameter_set_rbsp_t *sps);
 
-
-
-
 #endif

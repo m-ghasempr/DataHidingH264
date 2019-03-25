@@ -32,7 +32,7 @@
 
 /*!
  *************************************************************************************
- * \file bitsbuf.h
+ * \file annexb.h
  *
  * \brief
  *    Annex B byte stream buffer handling.

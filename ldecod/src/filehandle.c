@@ -59,7 +59,6 @@
 #include <string.h>    // strncpy
 #endif
 #include "rtp.h"
-#include "decodeiff.h"
 
 
 /*!

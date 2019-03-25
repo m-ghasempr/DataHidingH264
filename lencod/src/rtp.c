@@ -272,7 +272,7 @@ int WriteRTPNALU (NALU_t *n)
   free (p->packet);
   free (p->payload);
   free (p);
-  return (n->len);
+  return (n->len * 8);
 }
 
 

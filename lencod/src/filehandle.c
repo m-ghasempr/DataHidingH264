@@ -89,7 +89,7 @@ void error(char *text, int code)
  */
 int start_sequence()
 {
-  int len;
+  int len=0;
   NALU_t *nalu;
 
   switch(input->of_mode)
@@ -115,12 +115,13 @@ int start_sequence()
   
   nalu = NULL;
   nalu = GenerateSeq_parameter_set_NALU ();
-  len = WriteNALU (nalu);
+  len += WriteNALU (nalu);
   FreeNALU (nalu);
   nalu = NULL;
   nalu = GeneratePic_parameter_set_NALU ();
-  len = WriteNALU (nalu);
+  len += WriteNALU (nalu);
   FreeNALU (nalu);
+  stat->bit_ctr_parametersets = len;
   return 0;
 }
 

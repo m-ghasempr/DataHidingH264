@@ -3106,7 +3106,7 @@ static void writeUnit(Bitstream* currStream)
 {
   NALU_t *nalu;
   assert (currStream->bits_to_go == 8);
-  nalu = AllocNALU();
+  nalu = AllocNALU(img->width*img->height*4);
   nalu->startcodeprefix_len = 2+(img->current_mb_nr == 0?ZEROBYTES_SHORTSTARTCODE+1:ZEROBYTES_SHORTSTARTCODE);
 //printf ("nalu->startcodeprefix_len %d\n", nalu->startcodeprefix_len);
   nalu->len = currStream->byte_pos +1;            // add one for the first byte of the NALU
@@ -3129,7 +3129,7 @@ static void writeUnit(Bitstream* currStream)
     nalu->nal_reference_idc = NALU_PRIORITY_HIGH;
   }
   nalu->forbidden_bit = 0;
-  stat->bit_ctr += WriteNALU (nalu) * 8;
+  stat->bit_ctr += WriteNALU (nalu);
   
   FreeNALU(nalu);
 }

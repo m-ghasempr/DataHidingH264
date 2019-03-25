@@ -40,7 +40,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 6.0
+ *     JM 6.0a
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -89,7 +89,7 @@
 #include "sei.h"
 
 #define JM      "6"
-#define VERSION "6.0"
+#define VERSION "6.0a"
 
 InputParameters inputs, *input = &inputs;
 ImageParameters images, *img   = &images;
@@ -135,7 +135,7 @@ int main(int argc,char **argv)
 
   Configure (argc, argv);
   init_img();
-  InitNal();
+  AllocNalPayloadBuffer();
 
   frame_pic = malloc_picture();
   if (input->InterlaceCodingOption != FRAME_CODING)
@@ -326,7 +326,7 @@ int main(int argc,char **argv)
 
   // free image mem
   free_img ();
-  FinitNal();
+  FreeNalPayloadBuffer();
   return 0;
 }
 
@@ -938,6 +938,7 @@ void report()
   }
 
   fprintf(stdout, " Bits to avoid Startcode Emulation : %d \n", stat->bit_ctr_emulationprevention);
+  fprintf(stdout, " Bits for parameter sets           : %d \n", stat->bit_ctr_parametersets);
 
   fprintf(stdout,"--------------------------------------------------------------------------\n");
   fprintf(stdout,"Exit JM %s encoder ver %s ", JM, VERSION);

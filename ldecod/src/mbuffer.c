@@ -51,7 +51,6 @@
 #include "global.h"
 #include "mbuffer.h"
 #include "memalloc.h"
-#include "decodeiff.h"
 
 /*!
  ************************************************************************
@@ -757,8 +756,8 @@ void copy2fb(ImageParameters *img)
       for (j=0; j < img->height_cr; j++)
         fb->picbuf_short[0]->mcef[uv][j][i]=imgUV[uv][j][i];// just copy 1/1 pix, interpolate "online"  
 
-  fb->picbuf_short[0]->layerNumber = currPictureInfo.layerNumber;
-  fb->picbuf_short[0]->subSequenceIdentifier = currPictureInfo.subSequenceIdentifier;
+//  fb->picbuf_short[0]->layerNumber = currPictureInfo.layerNumber;
+//  fb->picbuf_short[0]->subSequenceIdentifier = currPictureInfo.subSequenceIdentifier;
 
   // MMCO will be done after storing the decoded frame
   while (img->mmco_buffer)

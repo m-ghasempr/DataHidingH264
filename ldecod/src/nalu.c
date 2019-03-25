@@ -68,29 +68,12 @@
  *************************************************************************************
  */
 
-int NALUtoRBSP (NALU_t *nalu, char *rbsp)
-
+int NALUtoRBSP (NALU_t *nalu)
 {
-  int len;
-
   assert (nalu != NULL);
-  assert (rbsp != NULL);
 
-  nalu->forbidden_bit = (nalu->buf[0]<<7) & 1;
-  nalu->nal_reference_idc = (nalu->buf[0]<<5) & 3;
-  nalu->nal_unit_type = (nalu->buf[0]) & 0x1f;
+  nalu->len = EBSPtoRBSP (nalu->buf, nalu->len, 1) ; 
 
-
-  memcpy (rbsp, &nalu->buf[1], nalu->len-1);
-
-// printf ("First Byte %x\n", nalu->buf[0]);
-// printf ("RBSPtoNALU: Before: NALU len %d\t RBSP %x %x %x %x\n", nalu->len, (unsigned) nalu->buf[1], (unsigned) nalu->buf[2], (unsigned) nalu->buf[3], (unsigned) nalu->buf[4]);
-
-  len = EBSPtoRBSP (rbsp, nalu->len-1, 0);
-
-// printf ("RBSPtoNALU: After : NALU len %d\t EBSP %x %x %x %x\n", nalu->len, (unsigned) nalu->buf[1], (unsigned) nalu->buf[2], (unsigned) nalu->buf[3], (unsigned) nalu->buf[4]);
-// printf ("len %d\n\n", len);
-
-  return len;
+  return nalu->len ;
 }
 

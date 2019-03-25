@@ -52,6 +52,7 @@
 #include "annexb.h"
 #include "global.h"
 #include "nalucommon.h"
+#include "memalloc.h"
 
 
 FILE *bits = NULL;                //!< the bit stream file
@@ -81,7 +82,9 @@ int GetAnnexbNALU (NALU_t *nalu)
 {
   int info2, info3, pos = 0;
   int StartCodeFound, rewind;
-  char Buf[MAXNALUSIZE];
+  char *Buf;
+    
+  if ((Buf = (char*)calloc (nalu->max_size , sizeof(char))) == NULL) no_mem_exit("GetAnnexbNALU: Buf");
 
   nalu->startcodeprefix_len=3;
 
@@ -202,7 +205,7 @@ void OpenBitstreamFile (char *fn)
 {
   if (NULL == (bits=fopen(fn, "rb")))
   {
-    snprintf (errortext, ET_SIZE, "Cannot open RTP file '%s'", input->infile);
+    snprintf (errortext, ET_SIZE, "Cannot open Annex B ByteStream file '%s'", input->infile);
     error(errortext,500);
   }
 }

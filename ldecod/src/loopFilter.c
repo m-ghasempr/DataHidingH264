@@ -45,7 +45,8 @@
  *    - Peter List      Peter.List@t-systems.de:  inplace filtering and various simplifications (10-Jan-2002)
  *    - Anthony Joch    anthony@ubvideo.com:      Simplified switching between filters and 
  *                                                non-recursive default filter.                 (08-Jul-2002)
- *
+ *   - Cristina Gomila  cristina.gomila@thomson.net: Simplification of the chroma deblocking
+ *                                                   from JVT-E089                              (21-Nov-2002)
  *************************************************************************************
  */
 
@@ -262,15 +263,25 @@ void EdgeLoop(byte* SrcPtr,byte Strength[4],int QP,
         R1  = SrcPtr[ inc ] ;
         if( ((abs( R0 - R1) - Beta )  & (abs(L0 - L1) - Beta )) < 0  ) 
         {
+          if( !yuv)
+            {
           L2  = SrcPtr[-inc3] ;
           R2  = SrcPtr[ inc2] ;
           aq  = (abs( R0 - R2) - Beta ) < 0  ;
           ap  = (abs( L0 - L2) - Beta ) < 0  ;
+            }
 
           RL0             = L0 + R0 ;
 
           if(Strng == 4 )    // INTRA strong filtering
           {
+            if( yuv)  // Chroma
+              {
+              SrcPtr[   0 ] = ((R1 << 1) + R0 + L1 + 2) >> 2; 
+              SrcPtr[-inc ] = ((L1 << 1) + L0 + R1 + 2) >> 2;                                           
+              }
+            else  // Luma
+              {
             small_gap = (AbsDelta < ((Alpha >> 2) + 2));
          
             aq &= small_gap;
@@ -282,12 +293,13 @@ void EdgeLoop(byte* SrcPtr,byte Strength[4],int QP,
             SrcPtr[ inc ] =   aq  ? ( SrcPtr[ inc2] + R0 + R1 + L0 + 2) >> 2 : SrcPtr[ inc ];
             SrcPtr[-inc2] =   ap  ? ( SrcPtr[-inc3] + L1 + L0 + R0 + 2) >> 2 : SrcPtr[-inc2];
 
-            SrcPtr[ inc2] = (aq && !yuv) ? (((SrcPtr[ inc3] + SrcPtr[ inc2]) <<1) + SrcPtr[ inc2] + R1 + RL0 + 4) >> 3 : R2;
-            SrcPtr[-inc3] = (ap && !yuv) ? (((SrcPtr[-inc4] + SrcPtr[-inc3]) <<1) + SrcPtr[-inc3] + L1 + RL0 + 4) >> 3 : L2;
+              SrcPtr[ inc2] = aq ? (((SrcPtr[ inc3] + SrcPtr[ inc2]) <<1) + SrcPtr[ inc2] + R1 + RL0 + 4) >> 3 : R2;
+              SrcPtr[-inc3] = ap ? (((SrcPtr[-inc4] + SrcPtr[-inc3]) <<1) + SrcPtr[-inc3] + L1 + RL0 + 4) >> 3 : L2;
+              }
           }
           else                                                                                   // normal filtering
           {
-            c0               = C0 + ap + aq ;
+            c0               = yuv? (C0+1):(C0 + ap + aq) ;
             dif              = IClip( -c0, c0, ( (Delta << 2) + (L1 - R1) + 4) >> 3 ) ;
             SrcPtr[  -inc ]  = IClip(0, 255, L0 + dif) ;
             SrcPtr[     0 ]  = IClip(0, 255, R0 - dif) ;
@@ -312,3 +324,5 @@ void EdgeLoop(byte* SrcPtr,byte Strength[4],int QP,
     }  ;
   }
 }
+
+

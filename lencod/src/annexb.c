@@ -145,7 +145,7 @@ int WriteAnnexbNALU (NALU_t *n)
 
   if (n->len != fwrite (n->buf, 1, n->len, f))
   {
-    printf ("Fatal: cannot write %d bytes to bitstream file, exit (-1)\n");
+    printf ("Fatal: cannot write %d bytes to bitstream file, exit (-1)\n", n->len);
     exit (-1);
   }
   BitsWritten += n->len * 8;
@@ -233,7 +233,7 @@ int AnnexBPictureParameterSet (FILE *outf, pic_parameter_set_rbsp_t *pps)
 }
 
 
-
+*/
 /*!
  ********************************************************************************************
  * \brief Puts the new Start Code into the Bitstream

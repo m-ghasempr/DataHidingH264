@@ -609,7 +609,6 @@ void get_block(int ref_frame,int x_pos, int y_pos, struct img_par *img, int bloc
 }
 
 
-
 /*!
  ************************************************************************
  * \brief
@@ -618,7 +617,7 @@ void get_block(int ref_frame,int x_pos, int y_pos, struct img_par *img, int bloc
  */
 int read_new_slice()
 {
-  NALU_t *nalu = AllocNALU();
+  NALU_t *nalu = AllocNALU(MAX_CODED_FRAME_SIZE);
   int current_header;
   int ret;
   int BitsUsedByHeader;
@@ -634,6 +633,7 @@ int read_new_slice()
     else
       ret=GetRTPNALU (nalu);
 
+    NALUtoRBSP(nalu);
 //    printf ("nalu->len %d\n", nalu->len);
     
     if (ret < 0)
@@ -733,6 +733,7 @@ int read_new_slice()
           arideco_start_decoding (&currSlice->partArr[0].de_cabac, currStream->streamBuffer, ByteStartPosition, &currStream->read_len, img->type);
         }
 // printf ("read_new_slice: returning %s\n", current_header == SOP?"SOP":"SOS");
+        FreeNALU(nalu);
         return current_header;
         break;
       case NALU_TYPE_DPA:
@@ -790,7 +791,9 @@ int read_new_slice()
     }
   }
 
-    return  current_header;
+  FreeNALU(nalu);
+
+  return  current_header;
 }
 
 

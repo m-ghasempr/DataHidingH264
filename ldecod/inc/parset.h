@@ -43,6 +43,9 @@
  *      - Stephan Wenger        <stewe@cs.tu-berlin.de>
  ***************************************************************************************
  */
+#ifndef _PARSET_H_
+#define _PARSET_H_
+
 
 #include "parsetcommon.h"
 #include "nalucommon.h"
@@ -60,3 +63,5 @@ void ProcessSPS (NALU_t *nalu);
 void ProcessPPS (NALU_t *nalu);
 
 void UseParameterSet (int PicParsetId);
+
+#endif

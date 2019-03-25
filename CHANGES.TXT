@@ -1,3 +1,19 @@
+Changes for Version JM 6.0a to JM 6.0
+-------------------------------------
+New features
+* chroma loop filter update (CG)
+
+Bug fixes
+* fix overflowing buffer for large image formats (PW/KS)
+* fix large memory leak (KS)
+* slice coding (RaS)
+* fix bit statistics (KS)
+* call EBSPtoRBSP at the decoder (TS/KS)
+
+Cleanups
+* remove some of the gcc warnings and old files (KS)
+
+
 Changes for Version JM 6.0 to JM 5.0h-suehring
 ----------------------------------------------
 New features
@@ -510,260 +526,6 @@ Bug Fixes
 * DP & CABAC (TO)
 
 
-Changes for Version JM 1.0 to TML 9.6
------------------------------------
-
-New Features
-* ERPS works also with bitstream file
-
-Bug Fixes
-* Bitstream file works again with new reference frame buffers (KS)
-* Leaky bucket memory allocation (KS/SR)
-* Fix encoder memory leak (KS)
-* Update workspace include path for Release mode (KS)
-* Data partitioning fixes (TO)
-* Update doxygen config files (KS)
-* Data Partitioning / ERPS fixes (KS/TO)
-
-Cleanups
-* remove unused code (KS/TO)
-* use free_mem?D in encoder (KS)
-
-Changes for Version 9.6 to Version 9.4
---------------------------------------
-
-New Features
-* Data Partitioning (SW/TO)
-* ERPS / Annex U functionality (KS)
-
--> see "Changes_detail.txt" for more details on changes
-
-Bug Fixes
-* align CABAC MV coding to document (DM)
-* fixes for RD Optimization for error prone channels (DK)
-
-Cleanups
-* cosmetical .dat file updates (ZX/KS)
-* Bitstream file cleanup
-
-Changes for Version 9.4 to Version 9.0
---------------------------------------
-New Features
-* Block based interpolation at the decoder (AH)
-* vbv multiple leaky buffer compliance feature (SR)
-* 16x16 intra prediction clipping (GC)
-
-Bug Fixes
-* CABAC dquant mapping (GB)
-* Interpolation filter fix (AH)
-* Chroma mismatch fix (MG)
-
-Cleanups
-* move leaky buffer stuff into own files (KS)
-* make leaky buffer output look less ugly (KS)
-* remove some gcc -Wall warnings (KS)
-
-Changes for Version 9.0 to Version 8.7
---------------------------------------
-New Features
-* Complexity reduced interpolation filer (AH)
-* Interpolation outside the picture (AH)
-
-Bug Fixes
-* Fix the trace file bug (KS)
-* add line breaks for CABAC trace file output (KS)
-* Intra frame period fixes (YL)
-* Some more bug fixes for the new added EC mode (TO/TSt/DK)
-* correct picture numbers for B-frames (TO)
-
-
-Changes for Version 8.7 to Version 8.6
---------------------------------------
-
-* Code cleanups (KS)
-  - removed old Loop filter Code (#if !defined LOOP_FILTER_MB)
-  - removed non UMV code (#if !defined UMV)
-* Bug fixing (KS)
-  - correct SP frame coding for RTP file format
-* Intra frame period (YL/KS)
-  - known bug: decoder writes frames in wrong order
-* Bug fix  (YW)
-  - GOB update
-
-Encoder:
-
-* Removed the Interim File Format (TO)
-* Bug fixes for Slice Mode 2 in case of small slices (TO)
-* Bug fixes for Loop filter and Slice Mode 2 (TS)
-* RTP-File Format added (SW)
-  - currently only one partition per slice is allowed
-  - Support for multiple (3) partitions per slice will follow
-* RD Optimization for error prone channels added (DK)
-* Minor cleanups (cosmetical work) (TO)
-* Added new parameters to the Configfile (DK)
-* Added headerbits to the statistics 
-
-Decoder
-* Removed the Interim File Format (TO)
-* RTP-File Format added (StW)
-  - currently only one partition per slice is allowed
-  - Support for multiple (3) partitions per slice will follow
-* Changes in find_snr for case of slice losses (TO)
-* Some Bug fixes for the new added EC mode (TO)
-* Modifications to detect slice/frame losses in RTP File Format (TO)
-* Some modifications to enhance the robustness to loss of slices (TO)
-* Changes in the Configfile for the new RTP File Mode (SW)
-  - note that if the RTP File Format was chosen the Entropy coding mode
-    that is given in the Configfile is ignored
-
-Known Bugs
-Encoder
-* If Slice Mode 2 is chosen a tracefile name must be given
-* A new parameter was added to the picture header of the 26L Format 
-  to deal with packet losses. As no errors or packet losses appear in
-  a bitstream environment this is nonsense and should be removed one time 
-  (not really a bug)
-
-Decoder
-* The equivalent for item two of the known bugs in the encoder
-
-Changes for Version 8.6 relative to Version 8.5
------------------------------------------------
-
-Decoder:
-
-* the error concealment algorithms (EC) in VCEG-N62 has been supported (WYK, VV)
-  - six files (3 .c files and 3 .h files beginning with "erc_") added
-  - important modifications in other files are marked with "_ERROR_CONCEALMENT_"
-    or "WYK", and EC can be disabled as stated in "defines.h"
-  - modifications to make decoder robust and correct to slice/frame losses
-  - all picture types (I, P, B, SP) are supported
-* some trivial modifications (WYK)
-  - some unused codes and bad brace and code indentations cleaned
-  - encoded SP-frames displayed as "SP" instead of "P"
-
-Encoder:
-
-* The picture header as slightly changed (WYK)
-  - the last parameter are utilized as RefPicID, the ID of non-B frames
-  - a variable "int refPicID" added into the structure ImageParameters
-* bug fixed for mismatch in SP-frames when RD-optimization enabled (RK)
-* some trivial modifications (WYK)
-  - some unused codes and bad brace and code indentations cleaned
-  - encoded SP-frames displayed as "SP" instead of "P"
-
-
-Changes for Version 8.5 relative to Version 8.4
------------------------------------------------
-
-* reformat software to comply with coding style (KS)
-
-* convert comments to documentation comments (KS)
-
-* Bug fix: bit counter (DM,KS)
-
-* Bug fix: qp=0 not accepted (GS)
-
-* Bug fix: mismatch if different frame qp settings (JL,KS)
-
-* memory management cleanups (KS)
-  - fix some memory leaks
-  - check returned pointer after _every_ malloc/calloc
-
-* use size checking string functions (KS)
-  - replace sprintf and strcpy with snprintf and strncpy
-
-* clean up exit calls (KS)
-  - use common error() function for all error exits
-
-
-Changes for Version 8.4 relative to Version 8.0
------------------------------------------------
-
-* Datapartitioning according to VCEG-M52 supported (TO)
-
-* Output in InterimFileFormat supported (TO)
-
-* Bugfixes for SliceMode 2 (fixed Bytes/MB) (TO)
-  - adaptions for RLC of SkipMBs 
-
-* Changed initialisation values for CABAC contexts (TO)
-
-* PictureHeader and SliceHeader at the beginning of every slice (TO)
-
-* RunLength and constrained intra prediction (RS)
-
-* Implementation of delta-QP (IL)
-
-* loopfilter simplification including a macroblock-based approach (PL)
-
-* Removal of RD Quant (IL)
-
-* Chroma coefficient removal (IL)
-
-
-Changes for Version 8.0 relative to Version 6.1
------------------------------------------------
-
-* Fast Integer Pixel Motion Estimation (HS)
-  - precalculation of SAD for all 4x4 blocks and all vector positions
-  - SAD calculation of nxm blocks is based on 4x4 SAD's
-  - search range center is the predictor of 16x16 block for all block sizes
-
-* Extended Search range (HS, SW)
-  - search range can be 39x39 at maximum
-  - search range reductions for older reference frames or older reference frames
-    and smaller blocks can be enabled in the configuration file
-
-* Unrestricted Motion Vectors (HS, SW)
-  - Unrestricted motion vectors for P- and B-frames
-  - no range checking in Direct mode
-
-* Adaption of P-Interval and Single Quantizer Change (primarily for MPEG-test) (HS)
-  - the interval P-P can be adapted at the very end of a sequence to hit the last
-    frame which then have to be specified in the configuration file
-  - the quantization parameters can be changed once per sequence (config file)
-
-* Rate-Distortion Optimization (HS, TW)
-  - a rd-optimized mode can be enabled in the configuration file
-  - in rd-opt. mode:
-    - slightly modified rate-constrained motion estimation
-    - rate-constrained macroblock mode decision
-    - rate-constrained mode decision for 4x4 intra modes
-  - the rd-opt. mode decision need to code (DCT, Q, Q^-1, IDCT, entopy coding)
-    each block/macroblock several times
-
-* Increased Frame Buffer (HS, TW)
-  - the frame buffer for long term memory prediction is no longer restricted to
-    five reference frames
-  - the buffer size in the encoder will be adapted according to the number of reference
-    frames given (config file) and the config file parameter "AdditionalReferenceFrame"
-  - the buffer size in the decoder has to be specified in the config file
-  - the parameter "AdditionalReferenceFrame" specifies a reference frame index which is
-    considered during motion estimation
-  - E.g:  NumberReferenceFrames=5, AdditionalReferenceFrame=19
-    -> 20 reference frames are stored at encoder side
-    -> the frames with indizes 0,1,2,3,4, and 19 are searched during motion estimation
-
-* NAL/Slices (TO)
-  - support of slices in both symbol modes
-  - at the decoder UVLC symbols are decoded by the time they are needed, not for the whole 
-    slice at one time (to be in line with the encoder)
-  
-
-* Added Motion Compensated Prediction with 1/8-pel MV-resolution: (TWe)
-  - New Parameter in CFG-file to switch between 1/4- and 1/8-pel
-  - New interplation filter for 1/8-pel MV-resolution added.
-    a) reference frames are sampled up and stpred by a factor of 4 (1/4-pel resolution)
-    b) 1/8-pel postitions are calculated on the fly by bilinear interolation
-    c) all chroma values are interpolated with a bilinear filter
-    d) items b) and c) lead to a slightly reduced gain compared to implementation
-     in M20, but still a gain up to 1.0 dB is obtained comared to TML591. 
-  Thus, further improvements are possible.
-
-* General (all / KS)
-  - Some clean-ups of data structures
-  - removal of superfluous source and include files in the decoder
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 People:
@@ -771,6 +533,7 @@ KS      Karsten Suehring        suehring@hhi.de
 AH      Antti Hallapuro         antti.hallapuro@nokia.com
 AT      Alexis Michael Tourapis alexismt@ieee.org
 AJ      Anthony Joch            anthony@ubvideo.com
+CG      Cristina Gomila         GomilaC@tce.com
 BH      Barry Haskell           bhaskell@apple.com
 DC      Doug Chin               dougchin@sandvideo.com
 DH      Dzung Hoang             dzung.hoang@conexant.com
@@ -778,11 +541,11 @@ DK      Dimitris Kontopodis     dkonto@eikon.tum.de
 DM      Detlev Marpe            marpe@hhi.de
 DT      Dong Tian               tian@cs.tut.fi
 FB      Frank Bossen            bossen@docomolabs-usa.com
-GC	Guy Cote                guy@videolocus.com
-GrC	Greg Conklin            gregc@real.com
+GC      Guy Cote                guy@videolocus.com
+GrC     Greg Conklin            gregc@real.com
 GB      Gabi Blaetterman        blaetter@hhi.de
-GS      Gary Sullivan		garysull@microsoft.com
-FW	Feng Wu			fengwu@microsoft.com
+GS      Gary Sullivan           garysull@microsoft.com
+FW      Feng Wu                 fengwu@microsoft.com
 HS      Heiko Schwarz           hschwarz@hhi.de
 IL      Inge Lille-Langoy       Inge.Lille-Langoy@telenor.com
 JB      Jill Boyce              BoyceJ@tce.com
@@ -790,7 +553,7 @@ JL      Jani Lainema            Jani.Lainema@nokia.com
 JA      James Au                james@ubvideo.com
 IM      Iole Moccagatta         imoccaga@lsil.com
 KP      Krit Panusopone         KPanusopone@gi.com
-KL	Karl Lillevold		Karll@real.com
+KL      Karl Lillevold          Karll@real.com
 LK      Louis Kerofsky          lkerofsky@sharplabs.com
 LW      Limin Wang              liwang@gi.com
 LWi     Lowell Winger           lwinger@videolocus.com
@@ -799,21 +562,24 @@ MN      Mike Nilsson            mike.nilsson@bt.com
 MG      Michael Gallant         mgallant@videolocus.com
 MW      Mathias Wien            wien@ient.rwth-aachen.de
 PL      Peter List              Peter.List@t-systems.de
+PW      Ping Wu                 pwu@tandbergtv.com
 RG      Rajeev Gandhi           rajeev@motorola.com
-RK	Ragip Kurceren 		ragip.kurceren@nokia.com
-RS      Rickard Sj÷berg         Rickard.Sjoberg@era.ericsson.se
+RK      Ragip Kurceren          ragip.kurceren@nokia.com
+RS      Rickard Sjoberg         Rickard.Sjoberg@era.ericsson.se
+RaS     Raghavan Subramaniyan   Raghavan.S@motorola.com
 SR      Shankar Regunathan      shanre@microsoft.com
 SW      Stephan Wenger          stewe@cs.tu-berlin.de
 TH      Till Hallbach           halbach@tele.ntnu.no
 TO      Tobias Oelbaum          drehvial@gmx.net
-TSt	Thomas Stockhammer	stockhammer@lnt.ei.tum.de
+TS      Teruhiko Suzuki         teruhiko@av.crl.sony.co.jp
+TSt     Thomas Stockhammer      stockhammer@lnt.ei.tum.de
 TW      Thomas Wiegand          wiegand@hhi.de
 TWe     Thomas Wedi             wedi@tnt.uni-hannover.de
 TWa     Toby Walker             tobyw@usrl.sony.com
-VV	Viktor Varsa		viktor.varsa@nokia.com
-WYK	Ye-Kui Wang		wyk@ieee.org
+VV      Viktor Varsa            viktor.varsa@nokia.com
+WYK     Ye-Kui Wang             wyk@ieee.org
 YK      Yoshihiro Kikuchi       yoshihiro.kikuchi@toshiba.co.jp
-YL      Yann Lemaguet		yann.lemaguet@philips.com
+YL      Yann Lemaguet           yann.lemaguet@philips.com
 YW      Ye-Kui Wang             wyk@ieee.org
 ZX      Z. Xue                  jon_xz@yahoo.com
 XS      Xiaoyan Sun             sunxiaoyan@msrchina.research.microsoft.com      

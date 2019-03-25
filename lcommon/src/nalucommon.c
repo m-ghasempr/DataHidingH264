@@ -65,11 +65,16 @@
  */
  
 
-NALU_t *AllocNALU()
+NALU_t *AllocNALU(int buffersize)
 {
   NALU_t *n;
 
-  if ((n = calloc (1, sizeof (NALU_t))) == NULL) no_mem_exit ("AllocNALU");
+  if ((n = calloc (1, sizeof (NALU_t))) == NULL) no_mem_exit ("AllocNALU: n");
+
+  n->max_size=buffersize;
+
+  if ((n->buf = calloc (buffersize, sizeof (NALU_t))) == NULL) no_mem_exit ("AllocNALU: n->buf");
+  
   return n;
 }
 
@@ -88,7 +93,13 @@ NALU_t *AllocNALU()
 
 void FreeNALU(NALU_t *n)
 {
-  free (n);
+  if (n)
+  {
+    if (n->buf)
+      free(n->buf);
+    
+    free (n);
+  }
 }
 
 

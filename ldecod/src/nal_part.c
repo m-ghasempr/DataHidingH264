@@ -54,8 +54,7 @@
 #include "global.h"
 #include "elements.h"
 
-extern void tracebits(const char *trace_str,  int len,  int info,int value1,
-    int value2) ;
+extern void tracebits(const char *trace_str,  int len,  int info,int value1, int value2) ;
 
 
 /*!

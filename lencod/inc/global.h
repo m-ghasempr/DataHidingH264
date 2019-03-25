@@ -935,6 +935,7 @@ typedef struct
   int   em_prev_bits_frm;
   int   em_prev_bits_fld;
   int  *em_prev_bits;
+  int   bit_ctr_parametersets;
 } StatParameters;
 
 //!< For MB level field/frame coding tools
@@ -1260,9 +1261,8 @@ extern int FirstFrameIn2ndIGOP;
 #define IMG_NUMBER (img->number-start_frame_no_in_this_IGOP)
 #define PAYLOAD_TYPE_IDERP 8
 
-//byte *NAL_Payload_buffer;
-void InitNal();
-void FinitNal();
+void AllocNalPayloadBuffer();
+void FreeNalPayloadBuffer();
 void SODBtoRBSP(Bitstream *currStream);
 int RBSPtoEBSP(byte *streamBuffer, int begin_bytepos, int end_bytepos, int min_num_bytes);
 int Bytes_After_Header;
