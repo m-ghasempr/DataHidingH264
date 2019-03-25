@@ -151,26 +151,6 @@ void intrapred_luma(int img_x,int img_y, int *left_available, int *up_available,
     block_available_up_right = pix_c.available;
     block_available_up_left  = pix_d.available;
   }
-
-    //sw paff
-  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive)
-  {
-    if(img->field_mode)
-    {
-      if(img_x%MB_BLOCK_SIZE == 12 && img_y%MB_BLOCK_SIZE )
-        block_available_up_right = 0; // for MB pairs some blocks will not have block available up right  
-    }
-    else
-    {
-      if(img_x%MB_BLOCK_SIZE == 12 && img_y%(2*MB_BLOCK_SIZE) )
-        block_available_up_right = 0; // for MB pairs some blocks will not have block available up right  
-    }
-
-    /*
-    if(img_x%MB_BLOCK_SIZE == 12)   
-      block_available_up_right = 0; // for MB pairs some blocks will not have block available up right  
-      */
-  }
   
   *left_available = block_available_left;
   *up_available   = block_available_up;
@@ -179,7 +159,6 @@ void intrapred_luma(int img_x,int img_y, int *left_available, int *up_available,
   i = (img_x & 15);
   j = (img_y & 15);
 
-  // form predictor pels
   // form predictor pels
   if (block_available_up)
   {
@@ -424,11 +403,9 @@ void intrapred_luma_16x16()
 
   int ih,iv;
   int ib,ic,iaa;
-  int mb_width = img->width/16;
 
-  byte **imgY_pred = enc_picture->imgY;  // For Mb level field/frame coding tools -- default to frame pred
-  int mb_nr=img->current_mb_nr;
-  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+  byte   **imgY_pred = enc_picture->imgY;  // For Mb level field/frame coding tools -- default to frame pred
+  int          mb_nr = img->current_mb_nr;
 
   PixelPos up;          //!< pixel position p(0,-1)
   PixelPos left[17];    //!< pixel positions p(-1, -1..15)
@@ -454,25 +431,6 @@ void intrapred_luma_16x16()
     for (i=1, left_avail=1; i<17;i++)
       left_avail  &= left[i].available ? img->intra_block[left[i].mb_addr]: 0;
     left_up_avail = left[0].available ? img->intra_block[left[0].mb_addr]: 0;
-  }
-
-  //sw paff
-  if(input->InterlaceCodingOption >= MB_CODING && mb_adaptive && img->field_mode)
-  {
-    if(img->top_field)
-    {
-      up_avail = (img->mb_y/2 == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
-      left_up_avail = (img->mb_y/2 == 0 || img->mb_x==0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr);
-      //pix_y   = img->field_pix_y; // set pix_y to field pix_y
-      imgY_pred = enc_top_picture->imgY; // set the prediction image to top field
-    }
-    else
-    {
-      up_avail = ((img->mb_y-1)/2 == 0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width].slice_nr);
-      left_up_avail = ((img->mb_y-1)/2 == 0 || img->mb_x==0) ? 0 : (img->mb_data[mb_nr].slice_nr == img->mb_data[mb_nr-mb_width-1].slice_nr);
-      imgY_pred = enc_bottom_picture->imgY;
-      //pix_y   = img->field_pix_y; // set pix_y to field pix_y
-    }
   }
 
   s1=s2=0;
@@ -567,8 +525,6 @@ int dct_luma_16x16(int new_intra_mode)
   int run,scan_pos,coeff_ctr,level;
   int qp_per,qp_rem,q_bits;
   int ac_coef = 0;
-  int incr=1;
-  int offset=0;
 
   int   b8, b4;
   int*  DCLevel = img->cofDC[0][0];
@@ -581,26 +537,11 @@ int dct_luma_16x16(int new_intra_mode)
   q_bits    = Q_BITS+qp_per;
   qp_const  = (1<<q_bits)/3;
 
-
-  if(input->InterlaceCodingOption>=MB_CODING && img->field_mode && mb_adaptive)
-  {
-    if(img->top_field)
-    {
-      offset = 0;
-      incr   = 2;
-    }
-    else
-    {
-      offset = -15;
-      incr   = 2;
-    }
-  }
-
   for (j=0;j<16;j++)
   {
     for (i=0;i<16;i++)
     {
-      M1[i][j]=imgY_org[img->pix_y+(incr*j)+offset][img->pix_x+i]-img->mprr_2[new_intra_mode][j][i];
+      M1[i][j]=imgY_org[img->opix_y+j][img->opix_x+i]-img->mprr_2[new_intra_mode][j][i];
       M0[i%4][i/4][j%4][j/4]=M1[i][j];
     }
   }
@@ -879,6 +820,8 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int old_intra_mode)
   int*  ACLevel = img->cofAC[b8][b4][0];
   int*  ACRun   = img->cofAC[b8][b4][1];
 
+  Macroblock *currMB = &img->mb_data[img->current_mb_nr];
+
   qp_per    = (img->qp-MIN_QP)/6;
   qp_rem    = (img->qp-MIN_QP)%6;
   q_bits    = Q_BITS+qp_per;
@@ -928,7 +871,7 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int old_intra_mode)
   for (coeff_ctr=0;coeff_ctr < 16;coeff_ctr++)
   {
 
-    if (img->field_picture || ( mb_adaptive && img->field_mode )) 
+    if (img->field_picture || ( img->MbaffFrameFlag && currMB->mb_field )) 
     {  // Alternate scan for field coding
         i=FIELD_SCAN[coeff_ctr][0];
         j=FIELD_SCAN[coeff_ctr][1];
@@ -1156,7 +1099,7 @@ int dct_chroma(int uv,int cr_cbp)
       for (coeff_ctr=1; coeff_ctr < 16; coeff_ctr++)// start change rd_quant
       {
 
-        if (img->field_picture || ( mb_adaptive && img->field_mode )) 
+        if (img->field_picture || ( img->MbaffFrameFlag && currMB->mb_field )) 
         {  // Alternate scan for field coding
           i=FIELD_SCAN[coeff_ctr][0];
           j=FIELD_SCAN[coeff_ctr][1];
@@ -1210,7 +1153,7 @@ int dct_chroma(int uv,int cr_cbp)
         for (coeff_ctr=1; coeff_ctr < 16; coeff_ctr++)// ac coeff
         {
 
-          if (img->field_picture || ( mb_adaptive && img->field_mode )) 
+          if (img->field_picture || ( img->MbaffFrameFlag && currMB->mb_field )) 
           {  // Alternate scan for field coding
             i=FIELD_SCAN[coeff_ctr][0];
             j=FIELD_SCAN[coeff_ctr][1];

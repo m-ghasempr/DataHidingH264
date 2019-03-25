@@ -2056,7 +2056,7 @@ void readMotionInfoFromNAL (struct img_par *img, struct inp_par *inp)
 /*!
  ************************************************************************
  * \brief
- *    Get the Prediction from the Neighboring BLocks for Number of Nonzero Coefficients 
+ *    Get the Prediction from the Neighboring Blocks for Number of Nonzero Coefficients 
  *    
  *    Luma Blocks
  ************************************************************************
@@ -2105,10 +2105,12 @@ int predict_nnz(struct img_par *img, int i,int j)
 
   return pred_nnz;
 }
+
+
 /*!
  ************************************************************************
  * \brief
- *    Get the Prediction from the Neighboring BLocks for Number of Nonzero Coefficients 
+ *    Get the Prediction from the Neighboring Blocks for Number of Nonzero Coefficients 
  *    
  *    Chroma Blocks   
  ************************************************************************
@@ -3082,8 +3084,6 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
   int fw_ref_idx, bw_ref_idx;
 
   int  *** mv_array, ***fw_mv_array, ***bw_mv_array;
-
-  int partmode        = (IS_P8x8(currMB)?4:currMB->mb_type);
 
   int iTRb, iTRp;
   int mv_scale;

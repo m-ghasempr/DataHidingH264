@@ -25,6 +25,7 @@
 
 
 #include "ctx_tables.h"
+#include "cabac.h"
 
 #define DEFAULT_CTX_MODEL   0
 #define RELIABLE_COUNT      32.0
@@ -65,7 +66,7 @@ double probability[128] =
 void create_context_memory ()
 {
   int i, j, k;
-  int num_mb    = (img->width*img->height)>>8; // number of macroblocks for frame
+  int num_mb    = img->FrameSizeInMbs; // number of macroblocks for frame
  
   num_mb_per_slice  = (input->slice_mode==1 ? input->slice_argument : num_mb);
   number_of_slices  = (num_mb + num_mb_per_slice - 1) / num_mb_per_slice;

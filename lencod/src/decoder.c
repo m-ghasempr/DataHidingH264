@@ -75,8 +75,8 @@ void decode_one_b8block (int decoder, int mbmode, int b8block, int b8mode, int b
         for (by=by0; by<by1; by++)
         for (bx=bx0; bx<bx1; bx++)
         {
-          mv[0][by][bx] = img->all_mv[bx][by][b8ref][b8mode][0];
-          mv[1][by][bx] = img->all_mv[bx][by][b8ref][b8mode][1];
+          mv[0][by][bx] = img->all_mv[bx][by][LIST_0][b8ref][b8mode][0];
+          mv[1][by][bx] = img->all_mv[bx][by][LIST_0][b8ref][b8mode][1];
         }
       }
       else
@@ -145,10 +145,12 @@ void decode_one_b8block (int decoder, int mbmode, int b8block, int b8mode, int b
  */
 void decode_one_mb (int decoder, Macroblock* currMB)
 {
+  /*
   decode_one_b8block (decoder, currMB->mb_type, 0, currMB->b8mode[0], refFrArr[img->block_y+0][img->block_x+0]);
   decode_one_b8block (decoder, currMB->mb_type, 1, currMB->b8mode[1], refFrArr[img->block_y+0][img->block_x+2]);
   decode_one_b8block (decoder, currMB->mb_type, 2, currMB->b8mode[2], refFrArr[img->block_y+2][img->block_x+0]);
   decode_one_b8block (decoder, currMB->mb_type, 3, currMB->b8mode[3], refFrArr[img->block_y+2][img->block_x+2]);
+  */
 }
 
 /*! 
@@ -518,6 +520,7 @@ void Conceal_Error(byte **inY, int mb_y, int mb_x, byte ***refY, byte **s_map)
   int resY[MB_BLOCK_SIZE][MB_BLOCK_SIZE];
 	int copy  = (decs->dec_mb_mode[mb_x][mb_y]==0 && (img->type==P_SLICE || (img->type==B_SLICE && img->nal_reference_idc>0)));
   int inter = (((decs->dec_mb_mode[mb_x][mb_y]>=1 && decs->dec_mb_mode[mb_x][mb_y]<=3) || decs->dec_mb_mode[mb_x][mb_y]==P8x8) && (img->type==P_SLICE || (img->type==B_SLICE && img->nal_reference_idc>0)));
+  int ***tmp_mv = enc_picture->mv[LIST_0];
   
   switch(s_map[mb_y][mb_x])
   {
@@ -541,7 +544,7 @@ void Conceal_Error(byte **inY, int mb_y, int mb_x, byte ***refY, byte **s_map)
     for (block_y=0; block_y<BLOCK_MULTIPLE; block_y++)
       for (block_x=0; block_x<BLOCK_MULTIPLE; block_x++)
         for (i=0;i<2;i++)
-          mv[i][block_y][block_x]=tmp_mv[i][mb_y*BLOCK_SIZE+block_y][mb_x*BLOCK_SIZE+block_x+4];
+          mv[i][block_y][block_x]=tmp_mv[mb_x*BLOCK_SIZE+block_x+4][mb_y*BLOCK_SIZE+block_y][i];
     
     //! Residuum ist set to zero    
     for(i=0;i<MB_BLOCK_SIZE;i++)
@@ -597,7 +600,7 @@ void Conceal_Error(byte **inY, int mb_y, int mb_x, byte ***refY, byte **s_map)
       for (block_y=0; block_y<BLOCK_MULTIPLE; block_y++)
         for (block_x=0; block_x<BLOCK_MULTIPLE; block_x++)
           for (i=0;i<2;i++)
-            mv[i][block_y][block_x]=tmp_mv[i][mb_y*BLOCK_SIZE+block_y][mb_x*BLOCK_SIZE+block_x+4];
+            mv[i][block_y][block_x]=tmp_mv[mb_x*BLOCK_SIZE+block_x+4][mb_y*BLOCK_SIZE+block_y][i];
     
       //! Residuum ist set to zero    
       for(i=0;i<MB_BLOCK_SIZE;i++)

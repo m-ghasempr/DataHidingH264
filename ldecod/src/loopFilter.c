@@ -117,6 +117,9 @@ void DeblockMb(ImageParameters *img, byte **imgY, byte ***imgUV, int MbQAddr)
     filterTopMbEdgeFlag  = MbQ->mbAvailB;;
   }
 
+  img->current_mb_nr = MbQAddr;
+  CheckAvailabilityOfNeighbors();
+
   for( dir=0 ; dir<2 ; dir++ )                                             // vertical edges, than horicontal edges
   {
     EdgeCondition = (dir && filterTopMbEdgeFlag) || (!dir && filterLeftMbEdgeFlag); // can not filter beyond picture boundaries

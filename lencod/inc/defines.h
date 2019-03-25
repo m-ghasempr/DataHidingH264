@@ -19,12 +19,10 @@
 #ifndef _DEFINES_H_
 #define _DEFINES_H_
 
-#define G50_SPS
-
 #if defined _DEBUG
-#define TRACE           1                   //!< 0:Trace off 1:Trace on
+#define TRACE           0                   //!< 0:Trace off 1:Trace on
 #else
-#define TRACE           1                   //!< 0:Trace off 1:Trace on
+#define TRACE           0                   //!< 0:Trace off 1:Trace on
 #endif
 
 typedef unsigned char byte;    //!< byte type definition
@@ -63,15 +61,6 @@ typedef unsigned char byte;    //!< byte type definition
 #define NUM_BLOCK_TYPES 8
 
 
-#define clamp(a,b,c) ( (a)<(b) ? (b) : ((a)>(c)?(c):(a)) )    //!< clamp a to the range of [b;c]
-
-
-// Constants for the interim file format
-#define WORKING_DRAFT_MAJOR_NO 0    // inidicate the working draft version number
-#define WORKING_DRAFT_MINOR_NO 4
-#define INTERIM_FILE_MAJOR_NO 0     // indicate interim file format version number
-#define INTERIM_FILE_MINOR_NO 1
-
 #define _FAST_FULL_ME_
 
 //#define _Fast_ME_  //defnition for fast motion estiamtion , added by Zhibo Chen, refer JVT-D016 for detail
@@ -79,11 +68,7 @@ typedef unsigned char byte;    //!< byte type definition
 #define _FULL_SEARCH_RANGE_
 #define _ADAPT_LAST_GROUP_
 #define _CHANGE_QP_
-#define _ADDITIONAL_REFERENCE_FRAME_
 #define _LEAKYBUCKET_
-
-// #define _CHECK_MULTI_BUFFER_1_
-// #define _CHECK_MULTI_BUFFER_2_
 
 // ---------------------------------------------------------------------------------
 // FLAGS and DEFINES for new chroma intra prediction, Dzung Hoang
@@ -108,16 +93,16 @@ typedef unsigned char byte;    //!< byte type definition
 #define IBLOCK  11
 #define SI4MB   12
 #define MAXMODE 13
+#define IPCM    14
+
 
 #define  LAMBDA_ACCURACY_BITS         16
 #define  LAMBDA_FACTOR(lambda)        ((int)((double)(1<<LAMBDA_ACCURACY_BITS)*lambda+0.5))
 #define  WEIGHTED_COST(factor,bits)   (((factor)*(bits))>>LAMBDA_ACCURACY_BITS)
 #define  MV_COST(f,s,cx,cy,px,py)     (WEIGHTED_COST(f,mvbits[((cx)<<(s))-px]+mvbits[((cy)<<(s))-py]))
-#define  REF_COST(f,ref)              (WEIGHTED_COST(f,refbits[(ref)]))
+//#define  REF_COST(f,ref)              (WEIGHTED_COST(f,refbits[(ref)]))
 
-#define  BWD_IDX(ref)                 (((ref)<2)? 1-(ref): (ref))
-#define  REF_COST_FWD(f,ref)          (WEIGHTED_COST(f,((img->num_ref_idx_l0_active==1)? 0:refbits[(ref)])))
-#define  REF_COST_BWD(f,ref)          (WEIGHTED_COST(f,((img->num_ref_idx_l1_active==1)? 0:BWD_IDX(refbits[ref]))))
+#define  REF_COST(f,ref,list_offset) (WEIGHTED_COST(f,((listXsize[list_offset]<=1)? 0:refbits[(ref)])))
 
 #define IS_INTRA(MB)    ((MB)->mb_type==I4MB  || (MB)->mb_type==I16MB)
 #define IS_NEWINTRA(MB) ((MB)->mb_type==I16MB)
@@ -169,22 +154,6 @@ typedef unsigned char byte;    //!< byte type definition
 #define HOR_PRED_8      1
 #define VERT_PRED_8     2
 #define PLANE_8         3
-
-/*
-// image formats
-#define SUB_QCIF        0       // GH added picture formats
-#define QCIF            1
-#define CIF             2
-#define CIF_4           3       // GH added picture formats
-#define CIF_16          4       // GH added picture formats
-#define CUSTOM          5       // GH added picture formats
-
-// QCIF format
-#define IMG_WIDTH       176
-#define IMG_HEIGHT      144
-#define IMG_WIDTH_CR    88
-#define IMG_HEIGHT_CR   72
-*/
 
 #define INIT_FRAME_RATE 30
 #define EOS             1         //!< End Of Sequence

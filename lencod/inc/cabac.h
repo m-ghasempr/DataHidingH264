@@ -23,34 +23,39 @@
 #include "global.h"
 
 
-
-
-/***********************************************************************
- * L O C A L L Y   D E F I N E D   F U N C T I O N   P R O T O T Y P E S
- ***********************************************************************
- */
-
-
-
-void unary_bin_encode(EncodingEnvironmentPtr eep_frame,
-                      unsigned int symbol,
-                      BiContextTypePtr ctx,
-                      int ctx_offset);
-
-void unary_bin_max_encode(EncodingEnvironmentPtr eep_frame,
-                          unsigned int symbol,
-                          BiContextTypePtr ctx,
-                          int ctx_offset,
-                          unsigned int max_symbol);
-
-void unary_exp_golomb_level_encode( EncodingEnvironmentPtr eep_dp,
-                                    unsigned int symbol,
-                                    BiContextTypePtr ctx);
-
-void unary_exp_golomb_mv_encode(EncodingEnvironmentPtr eep_dp,
-                                unsigned int symbol,
-                                BiContextTypePtr ctx,
-                                unsigned int max_bin);
+// CABAC
+void arienco_start_encoding(EncodingEnvironmentPtr eep, unsigned char *code_buffer, int *code_len, /* int *last_startcode, */int slice_type);
+int  arienco_bits_written(EncodingEnvironmentPtr eep);
+void arienco_done_encoding(EncodingEnvironmentPtr eep);
+void biari_init_context (BiContextTypePtr ctx, const int* ini);
+void rescale_cum_freq(BiContextTypePtr bi_ct);
+void biari_encode_symbol(EncodingEnvironmentPtr eep, signed short symbol, BiContextTypePtr bi_ct );
+void biari_encode_symbol_eq_prob(EncodingEnvironmentPtr eep, signed short symbol);
+void biari_encode_symbol_final(EncodingEnvironmentPtr eep, signed short symbol);
+MotionInfoContexts* create_contexts_MotionInfo(void);
+TextureInfoContexts* create_contexts_TextureInfo(void);
+void init_contexts_MotionInfo (MotionInfoContexts  *enco_ctx);
+void init_contexts_TextureInfo(TextureInfoContexts *enco_ctx);
+void delete_contexts_MotionInfo(MotionInfoContexts *enco_ctx);
+void delete_contexts_TextureInfo(TextureInfoContexts *enco_ctx);
+void writeHeaderToBuffer();
+int  writeSyntaxElement_CABAC(SyntaxElement *se, DataPartition *this_dataPart);
+void writeMB_typeInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeIntraPredMode_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeB8_typeInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeRefFrame2Buffer_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeRefFrame_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeMVD_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeCBP_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeDquant_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeRunLevel_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeBiDirBlkSize_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeCIPredMode_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void print_ctx_TextureInfo(TextureInfoContexts *enco_ctx);
+void writeMB_skip_flagInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp);
+void writeFieldModeInfo_CABAC(SyntaxElement *se, EncodingEnvironmentPtr eep_dp); //GB
+void writeCBP_BIT_CABAC (int b8, int bit, int cbp, Macroblock* currMB, int inter, EncodingEnvironmentPtr eep_dp);
+void cabac_new_slice();
 
 #endif  // CABAC_H
 

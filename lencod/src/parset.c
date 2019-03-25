@@ -201,17 +201,10 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
   sps->profile_idc = IdentifyProfile();
   sps->level_idc = IdentifyLevel();
 
-#ifdef G50_SPS
   // needs to be set according to profile
   sps->constrained_set0_flag = 0;
   sps->constrained_set1_flag = 0;
   sps->constrained_set2_flag = 0;
-#else
-  sps->more_than_one_slice_group_allowed_flag = (input->FmoType!=0);
-  // no out of order slice support
-  sps->arbitrary_slice_order_allowed_flag = 0;
-  sps->redundant_slices_allowed_flag = (input->redundant_slice_flag);
-#endif
 
   // Parameter Set ID hardcoded to zero
   sps->seq_parameter_set_id = 0;
@@ -223,7 +216,7 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
   //! also to be reflected here
   sps->log2_max_frame_num_minus4 = LOG2_MAX_FRAME_NUM_MINUS4;
   sps->log2_max_pic_order_cnt_lsb_minus4 = LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4;   // POC200301
-  sps->pic_order_cnt_type = img->pic_order_cnt_type;
+  sps->pic_order_cnt_type = input->pic_order_cnt_type;
   sps->num_ref_frames_in_pic_order_cnt_cycle = img->num_ref_frames_in_pic_order_cnt_cycle;
   sps->delta_pic_order_always_zero_flag = img->delta_pic_order_always_zero_flag;
   sps->offset_for_non_ref_pic = img->offset_for_non_ref_pic;
@@ -239,15 +232,15 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
   //required_frame_num_update_behaviour_flag hardcoded to zero
   sps->gaps_in_frame_num_value_allowed_flag = FALSE;    // double check
 
-  sps->frame_mbs_only_flag = (input->InterlaceCodingOption == FRAME_CODING);
+  sps->frame_mbs_only_flag = !(input->PicInterlace || input->MbInterlace);
 
   // Picture size, finally a simple one :-)
   sps->pic_width_in_mbs_minus1 = (input->img_width/16) -1;
   sps->pic_height_in_map_units_minus1 = ((input->img_height/16)/ (2 - sps->frame_mbs_only_flag)) - 1;
 
   // a couple of flags, simple
-  sps->mb_adaptive_frame_field_flag = (input->InterlaceCodingOption == MB_CODING);
-  sps->direct_8x8_inference_flag = FALSE;
+  sps->mb_adaptive_frame_field_flag = (FRAME_CODING != input->MbInterlace);
+  sps->direct_8x8_inference_flag = TRUE;
 
   // Sequence VUI not implemented, signalled as not present
   sps->vui_parameters_present_flag = FALSE;
@@ -315,8 +308,8 @@ FMOTYPE6:
     }
 // End FMO stuff
 
-  pps->num_ref_idx_l0_active_minus1 = img->num_ref_idx_l0_active-1;   // check this
-  pps->num_ref_idx_l1_active_minus1 = img->num_ref_idx_l1_active-1;   // check this
+  pps->num_ref_idx_l0_active_minus1 = sps->frame_mbs_only_flag ? (sps->num_ref_frames-1) : (2 * sps->num_ref_frames - 1) ;   // set defaults
+  pps->num_ref_idx_l1_active_minus1 = sps->frame_mbs_only_flag ? 0 : 1 ;   // set defaults
   
   pps->weighted_pred_flag = input->WeightedPrediction;
   pps->weighted_bipred_idc = input->WeightedBiprediction;
@@ -333,11 +326,7 @@ FMOTYPE6:
 
   // the picture vui consists currently of the cropping rectangle, which cannot
   // used by the current decoder and hence is never sent.
-#ifdef G50_SPS
   sps->frame_cropping_flag = FALSE;
-#else
-  pps->frame_cropping_flag = FALSE;
-#endif
 };
 
 
@@ -378,20 +367,12 @@ int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, char *rbsp)
 
   len+=u_v  (8, "SPS: profile_idc",                             sps->profile_idc,                               partition);
 
-#ifdef G50_SPS
   len+=u_1  ("SPS: constrained_set0_flag",                      sps->constrained_set0_flag,    partition);
   len+=u_1  ("SPS: constrained_set1_flag",                      sps->constrained_set1_flag,    partition);
   len+=u_1  ("SPS: constrained_set2_flag",                      sps->constrained_set2_flag,    partition);
   len+=u_v  (5, "SPS: reserved_zero",                           0,                             partition);
-#endif
 
   len+=u_v  (8, "SPS: level_idc",                               sps->level_idc,                                 partition);
-
-#ifndef G50_SPS
-  len+=u_1  ("SPS: more_than_one_slice_group_allowed_flag",     sps->more_than_one_slice_group_allowed_flag,    partition);
-  len+=u_1  ("SPS: arbitrary_slice_order_allowed_flag",         sps->arbitrary_slice_order_allowed_flag,        partition);
-  len+=u_1  ("SPS: redundant_slices_allowed_flag",              sps->redundant_slices_allowed_flag,             partition);
-#endif
 
   len+=ue_v ("SPS: seq_parameter_set_id",                    sps->seq_parameter_set_id,                      partition);
   len+=ue_v ("SPS: log2_max_frame_num_minus4",               sps->log2_max_frame_num_minus4,                 partition);
@@ -419,7 +400,6 @@ int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, char *rbsp)
   }
   len+=u_1  ("SPS: direct_8x8_inference_flag",               sps->direct_8x8_inference_flag,                 partition);
 
-#ifdef G50_SPS
   len+=u_1  ("SPS: frame_cropping_flag",                      sps->frame_cropping_flag,                       partition);
   if (sps->frame_cropping_flag)
   {
@@ -428,7 +408,6 @@ int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, char *rbsp)
     len+=ue_v ("SPS: frame_cropping_rect_top_offset",           sps->frame_cropping_rect_top_offset,            partition);
     len+=ue_v ("SPS: frame_cropping_rect_bottom_offset",        sps->frame_cropping_rect_bottom_offset,         partition);
   }
-#endif
 
   len+=u_1  ("SPS: vui_parameters_present_flag",             sps->vui_parameters_present_flag,               partition);
   if (sps->vui_parameters_present_flag)
@@ -538,17 +517,6 @@ int GeneratePic_parameter_set_rbsp (pic_parameter_set_rbsp_t *pps, char *rbsp)
   len+=u_1  ("PPS: deblocking_filter_control_present_flag",   pps->deblocking_filter_control_present_flag,    partition);
   len+=u_1  ("PPS: constrained_intra_pred_flag",              pps->constrained_intra_pred_flag,               partition);
   len+=u_1  ("PPS: redundant_pic_cnt_present_flag",           pps->redundant_pic_cnt_present_flag,            partition);
-
-#ifndef G50_SPS
-  len+=u_1  ("PPS: frame_cropping_flag",                      pps->frame_cropping_flag,                       partition);
-  if (pps->frame_cropping_flag)
-  {
-    len+=ue_v ("PPS: frame_cropping_rect_left_offset",          pps->frame_cropping_rect_left_offset,           partition);
-    len+=ue_v ("PPS: frame_cropping_rect_right_offset",         pps->frame_cropping_rect_right_offset,          partition);
-    len+=ue_v ("PPS: frame_cropping_rect_top_offset",           pps->frame_cropping_rect_top_offset,            partition);
-    len+=ue_v ("PPS: frame_cropping_rect_bottom_offset",        pps->frame_cropping_rect_bottom_offset,         partition);
-  }
-#endif
 
   SODBtoRBSP(partition->bitstream);     // copies the last couple of bits into the byte buffer
   

@@ -23,14 +23,18 @@ typedef struct storable_picture
   PictureStructure structure;
 
   int         poc;
-
+  int         top_poc;
+  int         bottom_poc;
+  int         order_num;
+  int         ref_pic_num[6][20];
   int         pic_num;
   int         long_term_pic_num;
   int         long_term_frame_idx;
-	int         ref_pic_num[6][20];  //add for direct mode
 
   int         is_long_term;
   int         used_for_reference;
+  int         is_output;
+  int         non_existing;
 
   int         size_x, size_y, size_x_cr, size_y_cr;
   int         chroma_vector_adjustment;
@@ -39,16 +43,19 @@ typedef struct storable_picture
 
   byte **     imgY;          //!< Y picture component
   byte *      imgY_11;       //!< Y picture component with padded borders
+  byte *      imgY_11_w;     //!< Y picture component with padded borders for weighted prediction
   byte **     imgY_ups;      //!< Y picture component upsampled (Quarter pel)
+  byte **     imgY_ups_w;    //!< Y picture component upsampled (Quarter pel) for weighted prediction
   byte ***    imgUV;         //!< U and V picture components
 
-  byte *      mb_field;      //!< field macroblock indicator
+  byte *      mb_field;      //<! field macroblock indicator
 
-  int  ***    ref_idx;       //<! reference picture   [list][mb_nr][subblock_x][subblock_y]
+  int  ***    ref_idx;       //<! reference picture   [list][subblock_x][subblock_y]
                              //   [list][mb_nr][subblock_x][subblock_y]
-  int  ***    ref_pic_id;    //<! reference picture identifier [list][subblock_x][subblock_y]
+  int64 ***    ref_pic_id;    //<! reference picture identifier [list][subblock_x][subblock_y]
                              //   (not  simply index) 
-  int  ****   mv;            //<! motion vector       [list][mb_nr][subblock_x][subblock_y]
+  int  ****   mv;            //<! motion vector       [list][subblock_x][subblock_y][component]
+  
   byte **     moving_block;
   
   struct storable_picture *top_field;     // for mb aff, if frame for referencing the top field
@@ -67,7 +74,7 @@ typedef struct frame_store
   int       is_non_existent;
 
   unsigned  frame_num;
-  unsigned  frame_num_wrap;
+  int       frame_num_wrap;
   int       long_term_frame_idx;
   int       is_output;
   int       poc;
@@ -105,6 +112,7 @@ void             free_frame_store(FrameStore* f);
 StorablePicture* alloc_storable_picture(PictureStructure type, int size_x, int size_y, int size_x_cr, int size_y_cr);
 void             free_storable_picture(StorablePicture* p);
 void             store_picture_in_dpb(StorablePicture* p);
+void             replace_top_pic_with_frame(StorablePicture* p);
 void             flush_dpb();
 
 void             dpb_split_field(FrameStore *fs);
@@ -118,6 +126,8 @@ void             reorder_ref_pic_list(StorablePicture **list, int *list_size,
 void             init_mbaff_lists();
 void             alloc_ref_pic_list_reordering_buffer(Slice *currSlice);
 void             free_ref_pic_list_reordering_buffer(Slice *currSlice);
+
+void             fill_frame_num_gap(ImageParameters *img);
 
 #endif
 

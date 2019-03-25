@@ -54,6 +54,10 @@
 const double THETA=1.3636;
 const int Switch=0;
 
+int Iprev_bits=0;
+int Pprev_bits=0;
+
+
 /* rate control variables */
 int Xp, Xb;
 static int R,T_field;
@@ -238,8 +242,8 @@ void rc_init_GOP(int np, int nb)
 	else
 	{
 /*adaptive field/frame coding*/
-		if((input->InterlaceCodingOption==1)\
-			||(input->InterlaceCodingOption==3))
+		if((input->PicInterlace==ADAPTIVE_CODING)\
+			||(input->MbInterlace))
 		{
 			if (img->FieldFrame == 1)
 			{
@@ -288,7 +292,7 @@ void rc_init_pict(int fieldpic,int topfield,int targetcomputation)
 	int i;
 
 /*compute the total number of basic units in a frame*/
-	if(input->InterlaceCodingOption==3)
+	if(input->MbInterlace)
 		TotalNumberofBasicUnit=img->Frame_Total_Number_MB/img->BasicUnit;
 	img->NumberofCodedMacroBlocks=0;
 
@@ -333,7 +337,7 @@ frame layer rate control*/
 					if(img->NumberofCodedPFrame>0)
 					{
 						/*adaptive frame/filed coding*/
-						if(((input->InterlaceCodingOption==1)||(input->InterlaceCodingOption==3))\
+						if(((input->PicInterlace==ADAPTIVE_CODING)||(input->MbInterlace))\
 							&&(img->FieldControl==1))
 						{
 							for(i=0;i<TotalNumberofBasicUnit;i++)
@@ -450,8 +454,8 @@ frame layer rate control*/
 			T = MAX(T, (long) LowerBound);
     		T = MIN(T, (long) UpperBound2);
 
-			if((topfield)||(fieldpic&&((input->InterlaceCodingOption==1)\
-				||(input->InterlaceCodingOption==3))))
+			if((topfield)||(fieldpic&&((input->PicInterlace==ADAPTIVE_CODING)\
+				||(input->MbInterlace))))
 				T_field=T;
 		}
 	}
@@ -625,8 +629,8 @@ int updateQuantizationParameter(int topfield)
 					/*adaptive field/frame coding*/
 					else if(BFrameNumber==1)
 					{
-						if((input->InterlaceCodingOption==1)\
-							||(input->InterlaceCodingOption==3))
+						if((input->PicInterlace==ADAPTIVE_CODING)\
+							||(input->MbInterlace))
 						{
 							if(img->FieldControl==0)
 							{										
@@ -660,8 +664,8 @@ int updateQuantizationParameter(int topfield)
 					/*adaptive field/frame coding*/
 					else if(BFrameNumber==1)
 					{
-						if((input->InterlaceCodingOption==1)\
-							||(input->InterlaceCodingOption==3))
+						if((input->PicInterlace==ADAPTIVE_CODING)\
+							||(input->MbInterlace))
 						{
 							if(img->FieldControl==0)
 							{
@@ -708,7 +712,7 @@ int updateQuantizationParameter(int topfield)
 				
 				if(img->FieldControl==0)
 				{
-					if(input->InterlaceCodingOption==0)
+					if(active_sps->frame_mbs_only_flag)
 					{
 						img->TotalQpforPPicture +=m_Qc;
 						PreviousQp1=PreviousQp2;
@@ -725,8 +729,8 @@ int updateQuantizationParameter(int topfield)
 			else
 			{
 				/*adaptive field/frame coding*/
-				if(((input->InterlaceCodingOption==1)\
-					||(input->InterlaceCodingOption==3))\
+				if(((input->PicInterlace==ADAPTIVE_CODING)\
+					||(input->MbInterlace))\
 					&&(img->FieldControl==0))
 				{
 					/*previous choice is frame coding*/
@@ -784,7 +788,7 @@ int updateQuantizationParameter(int topfield)
 				if(img->FieldControl==0)
 				{
 					/*frame coding*/
-					if(input->InterlaceCodingOption==0)
+					if(active_sps->frame_mbs_only_flag)
 					{
 						img->TotalQpforPPicture +=m_Qc;
 						PreviousQp1=PreviousQp2;
@@ -805,7 +809,7 @@ int updateQuantizationParameter(int topfield)
 		 if((img->type==P_SLICE)&&(img->IFLAG==0))
 		 {
 			 /*field coding*/
-			 if(input->InterlaceCodingOption==2)
+			 if(input->PicInterlace==FIELD_CODING)
 			 {
 				 img->TotalQpforPPicture +=m_Qc;
 				 PreviousQp1=PreviousQp2+1; 
@@ -847,8 +851,8 @@ int updateQuantizationParameter(int topfield)
 				/*adaptive field/frame coding*/
 				else if(BFrameNumber==1)
 				{
-					if((input->InterlaceCodingOption==1)\
-						||(input->InterlaceCodingOption==3))
+					if((input->PicInterlace==ADAPTIVE_CODING)\
+						||(input->MbInterlace))
 					{
 						if(img->FieldControl==0)
 						{							
@@ -882,8 +886,8 @@ int updateQuantizationParameter(int topfield)
 				/*adaptive field/frame coding*/
 				else if(BFrameNumber==1)
 				{
-					if((input->InterlaceCodingOption==1)\
-						||(input->InterlaceCodingOption==3))
+					if((input->PicInterlace==ADAPTIVE_CODING)\
+						||(input->MbInterlace))
 					{
 						if(img->FieldControl==0)
 						{
@@ -943,7 +947,7 @@ int updateQuantizationParameter(int topfield)
 					if((!topfield)&&(NumberofBasicUnit==0))
 					{
 						/*frame coding or field coding*/
-						if((input->InterlaceCodingOption==0)||(input->InterlaceCodingOption==2))
+						if((active_sps->frame_mbs_only_flag)||(input->PicInterlace==FIELD_CODING))
 						{
 							img->TotalQpforPPicture +=m_Qc;
 							PreviousQp1=PreviousQp2;
@@ -952,8 +956,8 @@ int updateQuantizationParameter(int topfield)
 							PAveHeaderBits3=PAveHeaderBits2;
 						}
 						/*adaptive frame/field coding*/
-						else if((input->InterlaceCodingOption==1)\
-							||(input->InterlaceCodingOption==3))
+						else if((input->PicInterlace==ADAPTIVE_CODING)\
+							||(input->MbInterlace))
 						{
 							if(img->FieldControl==0)
 							{
@@ -992,8 +996,8 @@ int updateQuantizationParameter(int topfield)
 				{
 
 					/*adaptive field/frame coding*/
-					if(((input->InterlaceCodingOption==1)\
-						||(input->InterlaceCodingOption==3))\
+					if(((input->PicInterlace==ADAPTIVE_CODING)\
+						||(input->MbInterlace))\
 						&&(img->FieldControl==0))
 					{
 						/*previous choice is frame coding*/
@@ -1056,7 +1060,7 @@ int updateQuantizationParameter(int topfield)
 						   if((!topfield)||(img->FieldControl==0))
 						   {
 							   /*frame coding or field coding*/
-							   if((input->InterlaceCodingOption==0)||(input->InterlaceCodingOption==2))
+							   if((active_sps->frame_mbs_only_flag)||(input->PicInterlace==FIELD_CODING))
 							   {
 								   PAverageQP=(int)(1.0*TotalFrameQP/TotalNumberofBasicUnit+0.5);
 								   if (img->NumberofPPicture == (input->intra_period - 2))
@@ -1085,8 +1089,8 @@ int updateQuantizationParameter(int topfield)
 								   PAveHeaderBits3=PAveHeaderBits2;
 							   }
 							   /*adaptive field/frame coding*/
-							   else if((input->InterlaceCodingOption==1)\
-								   ||(input->InterlaceCodingOption==3))
+							   else if((input->PicInterlace==ADAPTIVE_CODING)\
+								   ||(input->MbInterlace))
 							   {
 								   if(img->FieldControl==0)
 								   {
@@ -1112,7 +1116,7 @@ int updateQuantizationParameter(int topfield)
 				   else
 				   {
 		         /*predict the MAD of current picture*/
-					   if(((input->InterlaceCodingOption==1)||(input->InterlaceCodingOption==3))\
+					   if(((input->PicInterlace==ADAPTIVE_CODING)||(input->MbInterlace))\
 						   &&(img->FieldControl==1))
 					   {
 						   CurrentFrameMAD=MADPictureC1*FCBUPFMAD[TotalNumberofBasicUnit-NumberofBasicUnit]+MADPictureC2;
@@ -1172,7 +1176,7 @@ int updateQuantizationParameter(int topfield)
 						   if((!topfield)||(img->FieldControl==0))
 						   {
 							   /*frame coding or field coding*/
-							   if((input->InterlaceCodingOption==0)||(input->InterlaceCodingOption==2))
+							   if((active_sps->frame_mbs_only_flag)||(input->PicInterlace==FIELD_CODING))
 							   {
 								   PAverageQP=(int)(1.0*TotalFrameQP/TotalNumberofBasicUnit+0.5);
 								   if (img->NumberofPPicture == (input->intra_period - 2))
@@ -1184,8 +1188,8 @@ int updateQuantizationParameter(int topfield)
 								   PAveFrameQP=PAverageQP;
 								   PAveHeaderBits3=PAveHeaderBits2;
 							   }
-							   else if((input->InterlaceCodingOption==1)\
-								   ||(input->InterlaceCodingOption==3))
+							   else if((input->PicInterlace==ADAPTIVE_CODING)\
+								   ||(input->MbInterlace))
 							   {
 								   if(img->FieldControl==0)
 								   {
@@ -1232,7 +1236,7 @@ void updateRCModel ()
 		else
 		{
 			/*compute the MAD of the current basic unit*/
-			if((input->InterlaceCodingOption==3)&&(img->FieldControl==0))
+			if((input->MbInterlace)&&(img->FieldControl==0))
 				CurrentFrameMAD=img->TotalMADBasicUnit/img->BasicUnit/2;
 			else
 				CurrentFrameMAD=img->TotalMADBasicUnit/img->BasicUnit;
@@ -1254,7 +1258,7 @@ void updateRCModel ()
 						+PAveHeaderBits3*NumberofBasicUnit)/TotalNumberofBasicUnit+0.5);
 				}
 					/*update the record of MADs for reference*/
-			    if(((input->InterlaceCodingOption==1)||(input->InterlaceCodingOption==3))\
+			    if(((input->PicInterlace==ADAPTIVE_CODING)||(input->MbInterlace))\
 				  &&(img->FieldControl==1))
      				FCBUCFMAD[TotalNumberofBasicUnit-1-NumberofBasicUnit]=CurrentFrameMAD;
 	    		else
@@ -1457,7 +1461,7 @@ void updateMADModel ()
 				ReferenceMAD[0]=PictureMAD[1];
 			else
 			{
-				if(((input->InterlaceCodingOption==1)||(input->InterlaceCodingOption==3))\
+				if(((input->PicInterlace==ADAPTIVE_CODING)||(input->MbInterlace))\
 					&&(img->FieldControl==1))
 					ReferenceMAD[0]=FCBUPFMAD[TotalNumberofBasicUnit-1-NumberofBasicUnit];
 				else

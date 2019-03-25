@@ -660,7 +660,7 @@ static void gen_pic_list_from_frame_list(PictureStructure currStrcture, FrameSto
  */
 void init_lists(int currSliceType, PictureStructure currPicStructure)
 {
-  int add_top, add_bottom;
+  int add_top = 0, add_bottom = 0;
   unsigned i;
   int j;
   int MaxFrameNum = 1 << (active_sps->log2_max_frame_num_minus4 + 4);
@@ -683,6 +683,65 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
     return;
   }
 
+  if (currPicStructure == FRAME)  
+  {
+    for (i=0; i<dpb.ref_frames_in_buffer; i++)
+    {
+      if (dpb.fs_ref[i]->is_used==3)
+      {
+        if ((dpb.fs_ref[i]->frame->used_for_reference)&&(!dpb.fs_ref[i]->frame->is_long_term))
+        {
+          if( dpb.fs_ref[i]->frame_num > img->frame_num )
+          {
+            dpb.fs_ref[i]->frame_num_wrap = dpb.fs_ref[i]->frame_num - MaxFrameNum;
+          }
+          else
+          {
+            dpb.fs_ref[i]->frame_num_wrap = dpb.fs_ref[i]->frame_num;
+          }
+          dpb.fs_ref[i]->frame->pic_num = dpb.fs_ref[i]->frame_num_wrap;
+          dpb.fs_ref[i]->frame->order_num=list0idx;
+        }
+      }
+    }
+  }
+  else
+  {
+    if (currPicStructure == TOP_FIELD)
+    {
+      add_top    = 1;
+      add_bottom = 0;
+    }
+    else
+    {
+      add_top    = 0;
+      add_bottom = 1;
+    }
+    
+    for (i=0; i<dpb.ref_frames_in_buffer; i++)
+    {
+      if (dpb.fs_ref[i]->is_reference)
+      {
+        if( dpb.fs_ref[i]->frame_num > img->frame_num )
+        {
+          dpb.fs_ref[i]->frame_num_wrap = dpb.fs_ref[i]->frame_num - MaxFrameNum;
+        }
+        else
+        {
+          dpb.fs_ref[i]->frame_num_wrap = dpb.fs_ref[i]->frame_num;
+        }
+        if (dpb.fs_ref[i]->is_reference & 1)
+        {
+          dpb.fs_ref[i]->top_field->pic_num = (2 * dpb.fs_ref[i]->frame_num_wrap) + add_top;
+        }
+        if (dpb.fs_ref[i]->is_reference & 2)
+        {
+          dpb.fs_ref[i]->bottom_field->pic_num = (2 * dpb.fs_ref[i]->frame_num_wrap) + add_bottom;
+        }
+      }
+    }
+  }
+
   if ((currSliceType == P_SLICE)||(currSliceType == SP_SLICE))
   {
     // Calculate FrameNumWrap and PicNum
@@ -694,16 +753,6 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
         {
           if ((dpb.fs_ref[i]->frame->used_for_reference)&&(!dpb.fs_ref[i]->frame->is_long_term))
           {
-            if( dpb.fs_ref[i]->frame_num > img->frame_num )
-            {
-              dpb.fs_ref[i]->frame_num_wrap = dpb.fs_ref[i]->frame_num - MaxFrameNum;
-            }
-            else
-            {
-              dpb.fs_ref[i]->frame_num_wrap = dpb.fs_ref[i]->frame_num;
-            }
-            dpb.fs_ref[i]->frame->pic_num = dpb.fs_ref[i]->frame_num_wrap;
-            dpb.fs_ref[i]->frame->order_num=list0idx;
             listX[0][list0idx++] = dpb.fs_ref[i]->frame;
           }
         }
@@ -736,37 +785,10 @@ void init_lists(int currSliceType, PictureStructure currPicStructure)
       if (NULL==fs_listlt) 
          no_mem_exit("init_lists: fs_listlt");
 
-      if (currPicStructure == TOP_FIELD)
-      {
-        add_top    = 1;
-        add_bottom = 0;
-      }
-      else
-      {
-        add_top    = 0;
-        add_bottom = 1;
-      }
-      
       for (i=0; i<dpb.ref_frames_in_buffer; i++)
       {
         if (dpb.fs_ref[i]->is_reference)
         {
-          if( dpb.fs_ref[i]->frame_num > img->frame_num )
-          {
-            dpb.fs_ref[i]->frame_num_wrap = dpb.fs_ref[i]->frame_num - MaxFrameNum;
-          }
-          else
-          {
-            dpb.fs_ref[i]->frame_num_wrap = dpb.fs_ref[i]->frame_num;
-          }
-          if (dpb.fs_ref[i]->is_reference & 1)
-          {
-            dpb.fs_ref[i]->top_field->pic_num = (2 * dpb.fs_ref[i]->frame_num_wrap) + add_top;
-          }
-          if (dpb.fs_ref[i]->is_reference & 2)
-          {
-            dpb.fs_ref[i]->bottom_field->pic_num = (2 * dpb.fs_ref[i]->frame_num_wrap) + add_bottom;
-          }
           fs_list0[list0idx++] = dpb.fs_ref[i];
         }
       }

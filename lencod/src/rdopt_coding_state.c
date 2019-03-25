@@ -18,6 +18,7 @@
 #include <math.h>
 #include <memory.h>
 #include "rdopt_coding_state.h"
+#include "cabac.h"
 
 
 

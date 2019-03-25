@@ -177,3 +177,4 @@ FME_BlockMotionSearch (int       ref,           // <--  reference frame (0... or
 					   );
 
 #endif
+

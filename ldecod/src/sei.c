@@ -66,7 +66,7 @@ void InterpretSEIMessage(byte* msg, int size, ImageParameters *img)
 {
   int payload_type = 0;
   int payload_size = 0;
-  int offset = 0;
+  int offset = 1;
   byte tmp_byte;
   do
   {
@@ -1317,7 +1317,7 @@ void interpret_buffering_period_info( byte* payload, int size, ImageParameters *
 
   seq_parameter_set_id   = ue_v("SEI: seq_parameter_set_id"  , buf);
 
-  sps = &SeqParSet[seq_parameter_set_id];
+  active_sps = sps = &SeqParSet[seq_parameter_set_id];
 
 #ifdef PRINT_BUFFERING_PERIOD_INFO
   printf("Buffering period SEI message\n");

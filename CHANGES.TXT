@@ -1,3 +1,24 @@
+Changes for Version JM7.5a to JM 7.5
+------------------------------------
+Bug fixes
+- encoder: fix direct mode coding (KS/AT)
+- encoder: reenable old rd-opt labda calculation (KS/AT)
+
+Changes for Version JM7.5 to JM 7.4
+-----------------------------------
+Bug fixes
+- decoder: SEI parsing (JC)
+
+- encoder: merge deblocking filter from decoder (KS)
+- encoder: merge dpb fixes from decoder (KS)
+
+- encoder: rewrite most of MB AFF handling, 
+           support list_0 and list_1 properly, etc. (KS)
+
+- encoder/decoder: fix first_mb_in_slice for mb aff (KS)
+- encoder/decoder: deblocking filter with multiple slices (KS)
+
+
 Changes for Version JM7.4 to JM 7.3
 -----------------------------------
 Bug fixes
@@ -682,6 +703,7 @@ IL      Inge Lille-Langoy       Inge.Lille-Langoy@telenor.com
 IM      Iole Moccagatta         imoccaga@lsil.com
 JA      James Au                james@ubvideo.com
 JB      Jill Boyce              BoyceJ@tce.com
+JC      John Cox                jc@sj.co.uk
 JL      Jani Lainema            Jani.Lainema@nokia.com
 JS      Joonho Song             jhsong@varovision.com
 KL      Karl Lillevold          Karll@real.com

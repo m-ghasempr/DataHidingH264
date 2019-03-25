@@ -123,7 +123,7 @@ int RBSPtoEBSP(byte *streamBuffer, int begin_bytepos, int end_bytepos, int min_n
 
 void AllocNalPayloadBuffer()
 {
-  const int buffer_size = (img->width * img->height * 4); // AH 190202: There can be data expansion with 
+  const int buffer_size = (input->img_width * input->img_height * 4); // AH 190202: There can be data expansion with 
                                                           // low QP values. So, we make sure that buffer 
                                                           // does not everflow. 4 is probably safe multiplier.
   FreeNalPayloadBuffer();

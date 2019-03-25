@@ -26,8 +26,11 @@ int mb_is_available(int mbAddr, int currMbAddr)
     return 0;
 
   // the following line checks both: slice number and if the mb has been decoded
-  if (img->mb_data[mbAddr].slice_nr != img->mb_data[currMbAddr].slice_nr)
-    return 0;
+  if (!img->DeblockCall)
+  {
+    if (img->mb_data[mbAddr].slice_nr != img->mb_data[currMbAddr].slice_nr)
+      return 0;
+  }
   
   return 1;
 }
@@ -88,8 +91,7 @@ void CheckAvailabilityOfNeighbors()
 void get_mb_block_pos (int mb_addr, int *x, int*y)
 {
 
-  //sw mb aff
-  if (img->MbaffFrameFlag&&mb_adaptive)
+  if (img->MbaffFrameFlag)
   {
     *x = ((mb_addr/2) % img->PicWidthInMbs);
     *y = ( ((mb_addr/2) / img->PicWidthInMbs)  * 2 + (mb_addr%2));
@@ -176,7 +178,7 @@ void getNonAffNeighbour(int curr_mb_nr, int xN, int yN, int luma, PixelPos *pix)
   {
     pix->available = 0;
   }
-  if (pix->available)
+  if (pix->available || img->DeblockCall)
   {
     pix->x = (xN + maxWH) % maxWH;
     pix->y = (yN + maxWH) % maxWH;
@@ -237,9 +239,7 @@ void getAffNeighbour(int curr_mb_nr, int xN, int yN, int luma, PixelPos *pix)
   {
     if (yN < 0)
     {
-      //sw mbaff
-      //if(!currMb->mb_field)
-      if(mb_adaptive)
+      if(!currMb->mb_field)
       {
         // frame
         if (curr_mb_nr%2 == 0)
@@ -302,9 +302,7 @@ void getAffNeighbour(int curr_mb_nr, int xN, int yN, int luma, PixelPos *pix)
     { // xN < 0 && yN >= 0
       if ((yN >= 0) && (yN <maxWH))
       {
-        //sw mbaff
-        //if(!currMb->mb_field)
-        if(mb_adaptive)
+        if (!currMb->mb_field)
         {
           // frame
           if(curr_mb_nr % 2 == 0)
@@ -424,15 +422,18 @@ void getAffNeighbour(int curr_mb_nr, int xN, int yN, int luma, PixelPos *pix)
     {
       if (yN<0)
       {
-        //sw mbaff
-        //if(!currMb->mb_field)
-        if(mb_adaptive)
+        if (!currMb->mb_field)
         {
           //frame
           if (curr_mb_nr % 2 == 0)
           {
             //top
-            pix->mb_addr  = currMb->mbAddrB + 1;
+            pix->mb_addr  = currMb->mbAddrB;
+            // for the deblocker if the current MB is a frame and the one above is a field
+            // then the neighbor is the top MB of the pair
+            if (!(img->DeblockCall == 1 && (img->mb_data[currMb->mbAddrB]).mb_field))
+              pix->mb_addr  += 1;
+
             pix->available = currMb->mbAvailB;
              yM      = yN;
           }
@@ -477,7 +478,15 @@ void getAffNeighbour(int curr_mb_nr, int xN, int yN, int luma, PixelPos *pix)
       else
       {
         // yN >=0
-        if ((yN >= 0) && (yN <maxWH))
+        // for the deblocker if this is the extra edge then do this special stuff
+        if (yN == 0 && img->DeblockCall == 2)
+        {
+          pix->mb_addr  = currMb->mbAddrB + 1;
+          pix->available = 1;
+           yM      = yN - 1;
+        }
+
+        else if ((yN >= 0) && (yN <maxWH))
         {
           pix->mb_addr  = curr_mb_nr;
           pix->available = 1;
@@ -490,9 +499,7 @@ void getAffNeighbour(int curr_mb_nr, int xN, int yN, int luma, PixelPos *pix)
       // xN >= maxWH
       if(yN < 0)
       {
-        //sw mbaff
-        //if(!currMb->mb_field)
-        if(mb_adaptive)
+        if (!currMb->mb_field)
         {
           // frame
           if (curr_mb_nr % 2 == 0)
@@ -540,7 +547,7 @@ void getAffNeighbour(int curr_mb_nr, int xN, int yN, int luma, PixelPos *pix)
       }
     }
   }
-  if (pix->available)
+  if (pix->available || img->DeblockCall)
   {
     pix->x = (xN + maxWH) % maxWH;
     pix->y = (yM + maxWH) % maxWH;

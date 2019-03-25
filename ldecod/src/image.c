@@ -723,7 +723,10 @@ int read_new_slice()
         }
 
         // From here on, active_sps, active_pps and the slice header are valid
-        img->current_mb_nr = currSlice->start_mb_nr;
+        if (img->MbaffFrameFlag)
+          img->current_mb_nr = currSlice->start_mb_nr << 1;
+        else
+          img->current_mb_nr = currSlice->start_mb_nr;
 
         if (img->tr_old != img->ThisPOC)
         {
@@ -824,7 +827,10 @@ int read_new_slice()
         }
 
         // From here on, active_sps, active_pps and the slice header are valid
-        img->current_mb_nr = currSlice->start_mb_nr;
+        if (img->MbaffFrameFlag)
+          img->current_mb_nr = currSlice->start_mb_nr << 1;
+        else
+          img->current_mb_nr = currSlice->start_mb_nr;
 
         if (img->tr_old != img->ThisPOC)
         {

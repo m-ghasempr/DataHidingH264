@@ -26,8 +26,11 @@ int mb_is_available(int mbAddr, int currMbAddr)
     return 0;
 
   // the following line checks both: slice number and if the mb has been decoded
-  if (img->mb_data[mbAddr].slice_nr != img->mb_data[currMbAddr].slice_nr)
-    return 0;
+  if (!img->DeblockCall)
+  {
+    if (img->mb_data[mbAddr].slice_nr != img->mb_data[currMbAddr].slice_nr)
+      return 0;
+  }
   
   return 1;
 }

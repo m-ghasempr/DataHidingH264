@@ -150,9 +150,9 @@ int RestOfSliceHeader()
 
   img->MbaffFrameFlag=(active_sps->mb_adaptive_frame_field_flag && (img->field_pic_flag==0));
 
-  if (img->structure == 0) assert (img->field_pic_flag == 0);
-  if (img->structure == 1) assert (img->field_pic_flag == 1 && img->bottom_field_flag == 0);
-  if (img->structure == 2) assert (img->field_pic_flag == 1 && img->bottom_field_flag == 1);
+  if (img->structure == FRAME       ) assert (img->field_pic_flag == 0);
+  if (img->structure == TOP_FIELD   ) assert (img->field_pic_flag == 1 && img->bottom_field_flag == 0);
+  if (img->structure == BOTTOM_FIELD) assert (img->field_pic_flag == 1 && img->bottom_field_flag == 1);
 
   if (img->idr_flag)
   {
@@ -208,6 +208,10 @@ int RestOfSliceHeader()
         img->num_ref_idx_l1_active = 1 + ue_v ("SH: num_ref_idx_l1_active_minus1", currStream);
       }
     }
+  }
+  if (img->type!=B_SLICE)
+  {
+    img->num_ref_idx_l1_active = 0;
   }
 
   ref_pic_list_reordering();

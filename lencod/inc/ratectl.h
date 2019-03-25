@@ -147,8 +147,9 @@ Boolean GOPOverdue;
 int diffy[16][16];
 int diffyy[16][16];
 int diffy8[16][16];//for P8X8 mode 
-static int Iprev_bits=0;
-static int Pprev_bits=0;
+
+extern int Iprev_bits;
+extern int Pprev_bits;
 
 void rc_init_seq();
 void rc_init_GOP(int np, int nb);
@@ -169,3 +170,4 @@ int Qstep2QP( double Qstep );
 double QP2Qstep( int QP );
 
 #endif
+

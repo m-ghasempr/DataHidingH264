@@ -60,6 +60,7 @@ int ue_v (char *tracestring, int value, DataPartition *part)
   sym->type = SE_HEADER;
   sym->mapping = ue_linfo;               // Mapping rule: unsigned integer
   sym->value1 = value;
+  sym->value2 = 0;
 #if TRACE
   strncpy(sym->tracestring,tracestring,TRACESTRING_SIZE);
 #endif
@@ -97,6 +98,7 @@ int se_v (char *tracestring, int value, DataPartition *part)
   sym->type = SE_HEADER;
   sym->mapping = se_linfo;               // Mapping rule: signed integer
   sym->value1 = value;
+  sym->value2 = 0;
 #if TRACE
   strncpy(sym->tracestring,tracestring,TRACESTRING_SIZE);
 #endif
@@ -137,6 +139,7 @@ int u_1 (char *tracestring, int value, DataPartition *part)
   sym->len = 1;
   sym->type = SE_HEADER;
   sym->value1 = value;
+  sym->value2 = 0;
 #if TRACE
   strncpy(sym->tracestring,tracestring,TRACESTRING_SIZE);
 #endif
@@ -177,6 +180,7 @@ int u_v (int n, char *tracestring, int value, DataPartition *part)
   sym->len = n;
   sym->type = SE_HEADER;
   sym->value1 = value;
+  sym->value2 = 0;
 #if TRACE
   strncpy(sym->tracestring,tracestring,TRACESTRING_SIZE);
 #endif

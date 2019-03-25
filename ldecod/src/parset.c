@@ -64,7 +64,7 @@ int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
 
   sps->seq_parameter_set_id                   = ue_v ("SPS: seq_parameter_set_id"                     , s);
   sps->log2_max_frame_num_minus4              = ue_v ("SPS: log2_max_frame_num_minus4"                , s);
-  sps->pic_order_cnt_type                     = ue_v ("SPS: pic_order_count_type"                     , s);
+  sps->pic_order_cnt_type                     = ue_v ("SPS: pic_order_cnt_type"                       , s);
 
   if (sps->pic_order_cnt_type == 0)
     sps->log2_max_pic_order_cnt_lsb_minus4 = ue_v ("SPS: log2_max_pic_order_cnt_lsb_minus4"           , s);

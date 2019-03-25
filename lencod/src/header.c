@@ -49,7 +49,10 @@ int SliceHeader()
   int len = 0;
   unsigned int field_pic_flag = 0, bottom_field_flag = 0;    // POC200301
 
-  len  = ue_v("SH: first_mb_in_slice", img->current_mb_nr,   partition);
+  if (img->MbaffFrameFlag)
+    len  = ue_v("SH: first_mb_in_slice", img->current_mb_nr >> 1,   partition);
+  else
+    len  = ue_v("SH: first_mb_in_slice", img->current_mb_nr,   partition);
 
   len += ue_v("SH: slice_type",        get_picture_type (),   partition);
 
@@ -58,13 +61,12 @@ int SliceHeader()
   len += ue_v("SH: pic_parameter_set_id" , 0 ,partition);
 
   // frame_num
-  //assert (img->frame_num < 1<<(LOG2_MAX_FRAME_NUM_MINUS4+4));  // check that it fits
-	//sw
 	if(input->no_frames >= 1<<(LOG2_MAX_FRAME_NUM_MINUS4+4))
 		error ("Too many frames.  Increase LOG2_MAX_FRAME_NUM_MINUS4",-999);  
+
   len += u_v (LOG2_MAX_FRAME_NUM_MINUS4 + 4,"SH: frame_num", img->frame_num, partition);
 
-  if (input->InterlaceCodingOption != FRAME_CODING) // same condition as for sps->frame_mbs_only_flag!
+  if (!active_sps->frame_mbs_only_flag)
   {
     // field_pic_flag    u(1)
     field_pic_flag = (img->structure ==TOP_FIELD || img->structure ==BOTTOM_FIELD)?1:0;
@@ -89,7 +91,7 @@ int SliceHeader()
   // POC200301
   if (img->pic_order_cnt_type == 0)
   {
-    if (input->InterlaceCodingOption == FRAME_CODING) // same condition as for sps->frame_mbs_only_flag!
+    if (!active_sps->frame_mbs_only_flag)
     {
       img->pic_order_cnt_lsb = (img->toppoc & ~((((unsigned int)(-1)) << (LOG2_MAX_PIC_ORDER_CNT_LSB_MINUS4+4))) );
     }
@@ -135,10 +137,20 @@ int SliceHeader()
 
   if ((img->type == P_SLICE) || (img->type == B_SLICE) || (img->type==SP_SLICE))
   {
+    int override_flag;
+    if ((img->type == P_SLICE) || (img->type==SP_SLICE))
+    {
+      override_flag = (img->num_ref_idx_l0_active != (active_pps->num_ref_idx_l0_active_minus1 +1)) ? 1 : 0;
+    }
+    else
+    {
+      override_flag = ((img->num_ref_idx_l0_active != (active_pps->num_ref_idx_l0_active_minus1 +1)) 
+                      || (img->num_ref_idx_l1_active != (active_pps->num_ref_idx_l1_active_minus1 +1))) ? 1 : 0;
+    }
     // num_ref_idx_active_override_flag here always 1
-    len +=  u_1 ("SH: num_ref_idx_active_override_flag", 1, partition);
+    len +=  u_1 ("SH: num_ref_idx_active_override_flag", override_flag, partition);
     
-    if (1) // if (num_ref_idx_active_override_flag)
+    if (override_flag) 
     {
       len += ue_v ("SH: num_ref_idx_l0_active_minus1", img->num_ref_idx_l0_active-1, partition);
 		  if (img->type==B_SLICE)
@@ -515,6 +527,7 @@ int Partition_BC_Header(int PartNo)
 
   sym->type = SE_HEADER;         // This will be true for all symbols generated here
   sym->mapping = ue_linfo;       // Mapping rule: Simple code number to len/info
+  sym->value2  = 0;
 
 
   SYMTRACESTRING("RTP-PH: Picture ID");

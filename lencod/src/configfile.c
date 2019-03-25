@@ -178,7 +178,7 @@ void Configure (int ac, char *av[])
  */
 char *GetConfigFileContent (char *Filename)
 {
-  unsigned FileSize;
+  long FileSize;
   FILE *f;
   char *buf;
 
@@ -197,7 +197,7 @@ char *GetConfigFileContent (char *Filename)
   FileSize = ftell (f);
   if (FileSize < 0 || FileSize > 60000)
   {
-    snprintf (errortext, ET_SIZE, "Unreasonable Filesize %d reported by ftell for configuration file %s.\n", FileSize, Filename);
+    snprintf (errortext, ET_SIZE, "Unreasonable Filesize %ld reported by ftell for configuration file %s.\n", FileSize, Filename);
     error (errortext, 300);
   }
   if (0 != fseek (f, 0, SEEK_SET))
@@ -535,14 +535,20 @@ static void PatchInp ()
   }
 
   // frame/field consistency check
-  if (input->InterlaceCodingOption != FRAME_CODING && input->InterlaceCodingOption != ADAPTIVE_CODING && input->InterlaceCodingOption != FIELD_CODING
-    && input->InterlaceCodingOption != MB_CODING)
+  if (input->PicInterlace != FRAME_CODING && input->PicInterlace != ADAPTIVE_CODING && input->PicInterlace != FIELD_CODING)
   {
-    snprintf (errortext, ET_SIZE, "Unsupported InterlaceCodingOption=%d, use frame based coding=0 or adaptive=1 or field based coding=2",input->InterlaceCodingOption);
+    snprintf (errortext, ET_SIZE, "Unsupported PicInterlace=%d, use frame based coding=0 or field based coding=1 or adaptive=2",input->PicInterlace);
+    error (errortext, 400);
+  }
+
+  // frame/field consistency check
+  if (input->MbInterlace != FRAME_CODING && input->MbInterlace != ADAPTIVE_CODING && input->MbInterlace != FIELD_CODING)
+  {
+    snprintf (errortext, ET_SIZE, "Unsupported MbInterlace=%d, use frame based coding=0 or field based coding=1 or adaptive=2",input->MbInterlace);
     error (errortext, 400);
   }
    
-  if (input->InterlaceCodingOption != FRAME_CODING)
+  if (input->PicInterlace || input->MbInterlace)
   {
     if (input->img_height % 32 != 0 )
     { 
@@ -551,7 +557,7 @@ static void PatchInp ()
     }
   }
 
-  if ((!input->rdopt)&&(input->InterlaceCodingOption==MB_CODING))
+  if ((!input->rdopt)&&(input->MbInterlace))
   {
     snprintf(errortext, ET_SIZE, "MB AFF is not compatible with non-rd-optimized coding.");
     error (errortext, 500);
@@ -574,9 +580,9 @@ static void PatchInp ()
   }
   // Tian Dong (Sept 2002)
   // The AFF is not compatible with spare picture for the time being.
-  if (input->InterlaceCodingOption != FRAME_CODING && input->SparePictureOption == TRUE)
+  if ((input->PicInterlace || input->MbInterlace) && input->SparePictureOption == TRUE)
   {
-    snprintf(errortext, ET_SIZE, "The AFF is not compatible with spare picture.");
+    snprintf(errortext, ET_SIZE, "AFF is not compatible with spare picture.");
     error (errortext, 500);
   }
 
@@ -599,7 +605,7 @@ static void PatchInp ()
     printf("Weighted bi-prediction coding is not supported for temporal direct mode currently.");
     input->direct_type = DIR_SPATIAL;
   }
-  if( (input->WeightedPrediction > 0 || input->WeightedBiprediction > 0) && input->InterlaceCodingOption == MB_CODING )
+  if( (input->WeightedPrediction > 0 || input->WeightedBiprediction > 0) && (input->MbInterlace))
   {
     printf("Weighted prediction coding is not supported for MB AFF currently.");
     error (errortext, 500);

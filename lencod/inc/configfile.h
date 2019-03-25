@@ -81,15 +81,13 @@ Mapping Map[] = {
     {"LossRateC",                &configinput.LossRateC,               0},
     {"NumberOfDecoders",         &configinput.NoOfDecoders,            0},
     {"RestrictRefFrames",        &configinput.RestrictRef ,            0},
-#ifdef _ADDITIONAL_REFERENCE_FRAME_
-    {"AdditionalReferenceFrame", &configinput.add_ref_frame,           0},
-#endif
 #ifdef _LEAKYBUCKET_
     {"NumberofLeakyBuckets",     &configinput.NumberLeakyBuckets,      0},
     {"LeakyBucketRateFile",      &configinput.LeakyBucketRateFile,     1},
     {"LeakyBucketParamFile",     &configinput.LeakyBucketParamFile,    1},
 #endif
-    {"InterlaceCodingOption",    &configinput.InterlaceCodingOption,   0},
+    {"PicInterlace",             &configinput.PicInterlace,            0},
+    {"MbInterlace",              &configinput.MbInterlace,             0},
     {"NumberFramesInEnhancementLayerSubSequence", &configinput.NumFramesInELSubSeq, 0},
     {"NumberOfFrameInSecondIGOP",&configinput.NumFrameIn2ndIGOP, 0},
     {"RandomIntraMBRefresh",     &configinput.RandomIntraMBRefresh,    0},
