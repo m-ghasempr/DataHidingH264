@@ -1042,7 +1042,7 @@ void report()
 {
   int bit_use[NUM_PIC_TYPE][2] ;
   int i,j;
-  char name[20];
+  char name[30];
   int total_bits;
   float frame_rate;
   float mean_motion_info_bit_use[2];

@@ -526,7 +526,7 @@ int RDCost_for_4x4Blocks_Chroma (int     b8,
       currMB->currSEnr++;
     }
   }
-  //reset_coding_state (cs_cm);
+  reset_coding_state (cs_cm);
   
   return rate;
 }

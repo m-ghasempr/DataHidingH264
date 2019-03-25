@@ -345,7 +345,7 @@ FastIntegerPelBlockMotionSearch  (pel_t**   orig_pic,     // <--  not used
 
 
   //prediciton using mV of last ref moiton vector
-  if (input->PicInterlace == FIELD_CODING)
+  if (img->field_picture)
   {
     if ((list==0 && ref>1) || (img->type == B_SLICE && list == 0 && (ref==0 ||ref==1 ) )) 
       //Notes: for interlace case, ref==1 should be added
@@ -828,7 +828,7 @@ void setup_FME(short ref, int list, int block_y, int block_x, int blocktype, sho
   }
   
   //MV ref-frame prediction
-  if (input->PicInterlace == FIELD_CODING) 
+  if (img->field_picture) 
   {
     if (list==0 && ref > 1)
     {
@@ -862,7 +862,7 @@ void setup_FME(short ref, int list, int block_y, int block_x, int blocktype, sho
   /******************************SAD prediction**********************************/
   if (list==0 && ref>0)
   {
-    if (input->PicInterlace == FIELD_CODING)
+    if (img->field_picture)
     {
       if (ref > 1)
       {
@@ -906,5 +906,9 @@ void setup_FME(short ref, int list, int block_y, int block_x, int blocktype, sho
     
     pred_SAD_uplayer = flag_intra_SAD ? 0 : pred_SAD_uplayer;// for irregular motion
   }
+
+
+  FME_blocktype=blocktype;
+
 }
 

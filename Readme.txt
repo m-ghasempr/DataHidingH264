@@ -7,6 +7,7 @@ please send comments and additions to suehring@hhi.de
 2. Command line parameters
 3. Input/Output file format
 4. Configuration files
+5. Platform specific notes
 
 
 1. Compilation
@@ -113,4 +114,26 @@ please send comments and additions to suehring@hhi.de
 
   The values are read in a predefined order. See the example file for details.
 
-  
+
+5. Platform specific notes
+--------------------------
+  This section contains hints for compiling and running the JM software on different 
+  operating systems.
+
+5.1 MacOS X
+-----------
+  MacOs X has a UNIX core so most of the UNIX compile process will work. You might need 
+  the following modifications:
+
+  a) in Makefile change "CC = $(shell which gcc)" to "CC = gcc"
+     (it seems "which" doesn't work)
+
+  b) MacOS X (before "Tiger") doesn't come with ftime. We suggest using a third party ftime 
+     implementation, e.g. from:
+
+     http://darwinsource.opendarwin.org/10.3.4/OpenSSL096-3/openssl/crypto/ftime.c
+
+5.2 FreeBSD
+-----------
+  You might need to add "-lcompat" to LIBS in the Makefiles for correct linking.
+

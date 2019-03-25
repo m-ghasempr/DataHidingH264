@@ -2610,7 +2610,7 @@ int writeMBLayer (int rdopt, int *coeff_rate)
       {
         for (j=0;j<img->mb_cr_size_y;j++)
         {
-          jj = img->pix_y+j;
+          jj = img->pix_c_y+j;
           for (i=0;i<img->mb_cr_size_x;i++)
           {
             if (input->symbol_mode == CABAC) {

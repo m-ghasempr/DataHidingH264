@@ -176,7 +176,7 @@ int terminate_slice(int lastslice)
       if (lastslice && i==((currSlice->max_part_nr-1)))
       {
         RawMbBits = 256 * img->bitdepth_luma + 2 * MbWidthC[active_sps->chroma_format_idc] * MbHeightC[active_sps->chroma_format_idc] * img->bitdepth_chroma;
-        min_num_bytes = ((96 * get_pic_bin_count()) - (RawMbBits * (int)img->PicSizeInMbs *3) + 511) / 1024;
+        min_num_bytes = ((96 * get_pic_bin_count()) - (RawMbBits * (int)img->PicSizeInMbs *3) + 1023) / 1024;
         if (min_num_bytes>img->bytes_in_picture)
         {
           stuffing_bytes = min_num_bytes - img->bytes_in_picture;
@@ -725,9 +725,12 @@ static Slice *malloc_slice()
   int i;
   DataPartition *dataPart;
   Slice *slice;
-  const int buffer_size = (img->width * img->height * 4); // AH 190202: There can be data expansion with 
+
+//  const int buffer_size = (img->width * img->height * 4); // AH 190202: There can be data expansion with 
                                                           // low QP values. So, we make sure that buffer 
                                                           // does not overflow. 4 is probably safe multiplier.
+  const int buffer_size = 500 + img->FrameSizeInMbs * (128 + 256 * img->bitdepth_luma + 512 * img->bitdepth_chroma);
+                                                          // KS: this is approx. max. allowed code picture size
 
   if ((slice = (Slice *) calloc(1, sizeof(Slice))) == NULL) no_mem_exit ("malloc_slice: slice structure");
 

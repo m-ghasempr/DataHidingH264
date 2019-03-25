@@ -2395,7 +2395,7 @@ BlockMotionSearch (short     ref,           //!< reference idx
   //===========================================
   //=====   GET MOTION VECTOR PREDICTOR   =====
   //===========================================
-  
+ 
   SetMotionVectorPredictor (pred_mv, enc_picture->ref_idx[list], enc_picture->mv[list], ref, list, block_x, block_y, bsx, bsy);
   
   pred_mv_x = pred_mv[0];

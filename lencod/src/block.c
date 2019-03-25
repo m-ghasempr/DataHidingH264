@@ -986,7 +986,7 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int intra)
     ilev=0;
     
     if(lossless_qpprime)
-      level = absm (m4[j][i]);
+      level = absm (img->m7[j][i]);
     else
       level = (absm (m4[j][i]) * levelscale[i][j] + leveloffset[i][j]) >> q_bits;
 
@@ -1009,7 +1009,11 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int intra)
 
       *coeff_cost += (level > 1 || lossless_qpprime) ? MAX_VALUE : COEFF_COST[input->disthres][run];
 
-      ACLevel[scan_pos] = sign(level,m4[j][i]);
+      if(lossless_qpprime)
+        ACLevel[scan_pos] = sign(level,img->m7[j][i]);
+      else
+        ACLevel[scan_pos] = sign(level,m4[j][i]);
+
       ACRun  [scan_pos] = run;
       ++scan_pos;
       run=-1;                     // reset zero level counter

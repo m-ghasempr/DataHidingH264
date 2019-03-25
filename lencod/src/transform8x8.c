@@ -1779,28 +1779,19 @@ int dct_luma8x8(int b8,int *coeff_cost, int intra)
       for( i=0; i<2*BLOCK_SIZE; i++)
       {
         pix_x = block_x+i;
-        img->m7[j][i] = clip1a((img->m7[j][i]+((long)img->mpr[pix_y][pix_x] << DQ_BITS_8)+DQ_ROUND_8)>>DQ_BITS_8);
+        if(lossless_qpprime)
+          img->m7[j][i] = img->m7[j][i]+img->mpr[pix_y][block_x+i];
+        else
+          img->m7[j][i] = clip1a((img->m7[j][i]+((long)img->mpr[pix_y][pix_x] << DQ_BITS_8)+DQ_ROUND_8)>>DQ_BITS_8);
         enc_picture->imgY[ipix_y][img->pix_x + pix_x]=img->m7[j][i];
       }
     }
   }
-  else 
+  else if(!lossless_qpprime)
   {
-    if(lossless_qpprime)
-    {
-      for( j=0; j<2*BLOCK_SIZE; j++)
-      {
-        pix_y = block_y+j;    
-        for( i=0; i<2*BLOCK_SIZE; i++)
-          img->m7[j][i] = img->m7[j][i]+img->mpr[pix_y][block_x+i];
-      }
-    }
-    else         // Residue Color Transform
-    {
-      for( j=0; j<2*BLOCK_SIZE; j++)
-        for( i=0; i<2*BLOCK_SIZE; i++)
-          img->m7[j][i] =(img->m7[j][i]+DQ_ROUND_8)>>DQ_BITS_8;
-    }
+    for( j=0; j<2*BLOCK_SIZE; j++)
+      for( i=0; i<2*BLOCK_SIZE; i++)
+        img->m7[j][i] =(img->m7[j][i]+DQ_ROUND_8)>>DQ_BITS_8;
   }
   
   //  Decoded block moved to frame memory

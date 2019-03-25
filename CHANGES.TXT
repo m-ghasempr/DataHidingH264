@@ -1,3 +1,13 @@
+Changes for Version JM 9.6 to JM 9.5
+------------------------------------
+- encoder: FME fixes (WF)
+- encoder: fixes for I_PCM and encoder output (SN)
+- encoder: fix rounding for CABAC stuffing
+- encoder: lossless mode fixes (WK)
+- encoder: increase maximum slice size (WK/KS)
+- add platform specific notes to readme.txt
+
+
 Changes for Version JM 9.5 to JM 9.4
 ------------------------------------
 - encoder: open GOP support (AT)
