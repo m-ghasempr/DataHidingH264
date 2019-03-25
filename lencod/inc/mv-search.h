@@ -7,7 +7,7 @@
  *   array definition for motion search
  *
  * \author
- *    Inge Lille-Langøy               <inge.lille-langoy@telenor.com>   \n
+ *    Inge Lille-Langoy               <inge.lille-langoy@telenor.com>   \n
  *    Copyright (C) 1999  Telenor Satellite Services, Norway
  *
  ************************************************************************

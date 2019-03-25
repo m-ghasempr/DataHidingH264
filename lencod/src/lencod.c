@@ -9,7 +9,7 @@
  *     The main contributors are listed in contributors.h
  *
  *  \version
- *     JM 9.0 (FRExt)
+ *     JM 9.1 (FRExt)
  *
  *  \note
  *     tags are used for document system "doxygen"
@@ -22,7 +22,7 @@
  *     H.264/AVC reference encoder project main()
  *  \author
  *   Main contributors (see contributors.h for copyright, address and affiliation details)
- *   - Inge Lille-Langøy               <inge.lille-langoy@telenor.com>
+ *   - Inge Lille-Langoy               <inge.lille-langoy@telenor.com>
  *   - Rickard Sjoberg                 <rickard.sjoberg@era.ericsson.se>
  *   - Stephan Wenger                  <stewe@cs.tu-berlin.de>
  *   - Jani Lainema                    <jani.lainema@nokia.com>
@@ -66,7 +66,7 @@
 #include "explicit_gop.h"
 
 #define JM      "9 (FRExt)"
-#define VERSION "9.0"
+#define VERSION "9.1"
 #define EXT_VERSION "(FRExt)"
 
 InputParameters inputs,      *input = &inputs;
@@ -117,6 +117,8 @@ int main(int argc,char **argv)
   Configure (argc, argv);
 
   Init_QMatrix();
+
+  Init_QOffsetMatrix();
 
   AllocNalPayloadBuffer();
 
@@ -200,8 +202,8 @@ int main(int argc,char **argv)
     img->framepoc = min (img->toppoc, img->bottompoc);
 
     //frame_num for this frame
-    //if (input->StoredBPictures == 0 || input->successive_Bframe == 0 || img-> number < 2)
-    if ((input->StoredBPictures == 0 &&  input->PyramidCoding == 0) || input->successive_Bframe == 0 || img-> number < 2 || input->PyramidCoding == 0)
+    //if (input->BRefPictures== 0 || input->successive_Bframe == 0 || img-> number < 2)
+    if ((input->BRefPictures== 0 &&  input->PyramidCoding == 0) || input->successive_Bframe == 0 || img-> number < 2)// ||  input->PyramidCoding == 0)
       img->frame_num = (input->intra_period && input->idr_enable ? IMG_NUMBER % input->intra_period : IMG_NUMBER) % (1 << (log2_max_frame_num_minus4 + 4)); 
     else 
     {
@@ -219,7 +221,7 @@ int main(int argc,char **argv)
     //the following is sent in the slice header
     img->delta_pic_order_cnt[0]=0;
 
-    if (input->StoredBPictures)
+    if (input->BRefPictures)
     {
       if (img->number)
       {
@@ -430,7 +432,7 @@ void init_poc()
   img->delta_pic_order_always_zero_flag=0;
   img->num_ref_frames_in_pic_order_cnt_cycle= 1;
 
-  if (input->StoredBPictures)
+  if (input->BRefPictures)
   {
     img->offset_for_non_ref_pic  =  0;
     img->offset_for_ref_frame[0] =   2;
@@ -609,21 +611,28 @@ void init_img()
     img->quad[i]=img->quad[-i]=i*i;
   }
 
-  img->width    = input->img_width;
-  img->height   = input->img_height;
+  img->width    = (input->img_width+img->auto_crop_right);
+  img->height   = (input->img_height+img->auto_crop_bottom);
   if (img->yuv_format != YUV400)
   {
-    img->width_cr = input->img_width/(16/mb_width_cr[img->yuv_format]);
-    img->height_cr= input->img_height_cr = input->img_height/(16/mb_height_cr[img->yuv_format]);
+    img->width_cr = img->width/(16/mb_width_cr[img->yuv_format]);
+    img->height_cr= img->height/(16/mb_height_cr[img->yuv_format]);
+
+    input->img_width_cr  = input->img_width/(16/mb_width_cr[img->yuv_format]);
+    input->img_height_cr = input->img_height/(16/mb_height_cr[img->yuv_format]);
   }
   else
   {
     img->width_cr = 0;
     img->height_cr= 0;
+
+    input->img_width_cr  = 0;
+    input->img_height_cr = 0;
   }
+  img->height_cr_frame = img->height_cr;
   
-  img->PicWidthInMbs    = input->img_width/MB_BLOCK_SIZE;
-  img->FrameHeightInMbs = input->img_height/MB_BLOCK_SIZE;
+  img->PicWidthInMbs    = (input->img_width+img->auto_crop_right)/MB_BLOCK_SIZE;
+  img->FrameHeightInMbs = (input->img_height+img->auto_crop_bottom)/MB_BLOCK_SIZE;
   img->FrameSizeInMbs   = img->PicWidthInMbs * img->FrameHeightInMbs;
 
   img->PicHeightInMapUnits = ( active_sps->frame_mbs_only_flag ? img->FrameHeightInMbs : img->FrameHeightInMbs/2 );
@@ -668,7 +677,7 @@ void init_img()
 
   // Initialize filtering parameters. If sending parameters, the offsets are 
   // multiplied by 2 since inputs are taken in "div 2" format.
-  // If not sending paramters, all fields are cleared 
+  // If not sending parameters, all fields are cleared 
   if (input->LFSendParameters)
   {
     input->LFAlphaC0Offset <<= 1;
@@ -859,7 +868,7 @@ void report_frame_statistic()
 #endif
   
   for (i=0;i<20;i++)
-    name[i]=input->infile[i+max(0,strlen(input->infile)-20)]; // write last part of path, max 20 chars
+    name[i]=input->infile[i+max(0,(int) (strlen(input->infile)-20))]; // write last part of path, max 20 chars
   fprintf(p_stat_frm,"%20.20s|",name);
   
   fprintf(p_stat_frm,"%3d |",frame_no);
@@ -1106,15 +1115,15 @@ void report()
     {
       for (i=0;i<input->successive_Bframe;i++)
       {
-        if (input->StoredBPictures)
-          strncat(seqtype,"-BS",max (0, 80-1-strlen(seqtype)));
+        if (input->BRefPictures)
+          strncat(seqtype,"-BRP",max (0, (int) (79-strlen(seqtype))));
         else
-          strncat(seqtype,"-B",max (0, 80-1-strlen(seqtype)));
+          strncat(seqtype,"-B",max (0, (int) (79-strlen(seqtype))));
       }
-      strncat(seqtype,"-P",max (0, 80-1-strlen(seqtype)));
+      strncat(seqtype,"-P",max (0, (int) (79-strlen(seqtype))));
     }
-    if (input->StoredBPictures)
-      fprintf(stdout, " %s (QP: I %d, P %d, BS %d) \n", seqtype,input->qp0, input->qpN, input->qpB+input->qpBSoffset);
+    if (input->BRefPictures)
+      fprintf(stdout, " %s (QP: I %d, P %d, BRP %d) \n", seqtype,input->qp0, input->qpN, Clip3(0,51,input->qpB+input->qpBRSOffset));
     else
       fprintf(stdout, " %s (QP: I %d, P %d, B %d) \n", seqtype,input->qp0, input->qpN, input->qpB);
   }
@@ -1634,6 +1643,43 @@ void information_init()
   printf("-------------------------------------------------------------------------------\n");
 }
  
+/*!
+ ************************************************************************
+ * \brief
+ *    memory allocation for original picture buffers
+ ************************************************************************
+ */
+int init_orig_buffers()
+{
+  int memory_size = 0;
+  
+  // allocate memory for reference frame buffers: imgY_org_frm, imgUV_org_frm
+  memory_size += get_mem2Dpel(&imgY_org_frm, img->height, img->width);
+
+  if (img->yuv_format != YUV400)
+    memory_size += get_mem3Dpel(&imgUV_org_frm, 2, img->height_cr, img->width_cr);
+
+
+  if(!active_sps->frame_mbs_only_flag)
+  {
+    // allocate memory for reference frame buffers: imgY_org, imgUV_org
+    init_top_bot_planes(imgY_org_frm, img->height, img->width, &imgY_org_top, &imgY_org_bot);
+
+    if (img->yuv_format != YUV400)
+    {
+      if(((imgUV_org_top) = (imgpel***)calloc(2,sizeof(imgpel**))) == NULL)
+        no_mem_exit("init_global_buffers: imgUV_org_top");
+      if(((imgUV_org_bot) = (imgpel***)calloc(2,sizeof(imgpel**))) == NULL)
+        no_mem_exit("init_global_buffers: imgUV_org_bot");
+
+      memory_size += 4*(sizeof(imgpel**));
+
+      memory_size += init_top_bot_planes(imgUV_org_frm[0], img->height_cr, img->width_cr, &(imgUV_org_top[0]), &(imgUV_org_bot[0]));
+      memory_size += init_top_bot_planes(imgUV_org_frm[1], img->height_cr, img->width_cr, &(imgUV_org_top[1]), &(imgUV_org_bot[1]));
+    }
+  }
+  return memory_size;
+}
 
 /*!
  ************************************************************************
@@ -1650,8 +1696,6 @@ void information_init()
 int init_global_buffers()
 {
   int j,memory_size=0;
-  int height_field = img->height/2;
-  int height_field_cr = img->height_cr/2;
 #ifdef _ADAPT_LAST_GROUP_
   extern int *last_P_no_frm;
   extern int *last_P_no_fld;
@@ -1663,32 +1707,24 @@ int init_global_buffers()
       no_mem_exit("init_global_buffers: last_P_no");
 #endif
 
-  // allocate memory for encoding frame buffers: imgY, imgUV
-
-  // allocate memory for reference frame buffers: imgY_org, imgUV_org
-
-  memory_size += get_mem2Dpel(&imgY_org_frm, img->height, img->width);
-
-  if (img->yuv_format != YUV400)
-    memory_size += get_mem3Dpel(&imgUV_org_frm, 2, img->height_cr, img->width_cr);
-    
+  memory_size += init_orig_buffers(); 
     
 
-    if (input->WeightedPrediction || input->WeightedBiprediction)
-    {
-      // Currently only use up to 20 references. Need to use different indicator such as maximum num of references in list
-      memory_size += get_mem3Dint(&wp_weight,6,MAX_REFERENCE_PICTURES,3);
-      memory_size += get_mem3Dint(&wp_offset,6,MAX_REFERENCE_PICTURES,3);
-
-      memory_size += get_mem4Dint(&wbp_weight, 6, MAX_REFERENCE_PICTURES, MAX_REFERENCE_PICTURES, 3);
-    }
+  if (input->WeightedPrediction || input->WeightedBiprediction)
+  {
+    // Currently only use up to 20 references. Need to use different indicator such as maximum num of references in list
+    memory_size += get_mem3Dint(&wp_weight,6,MAX_REFERENCE_PICTURES,3);
+    memory_size += get_mem3Dint(&wp_offset,6,MAX_REFERENCE_PICTURES,3);
+    
+    memory_size += get_mem4Dint(&wbp_weight, 6, MAX_REFERENCE_PICTURES, MAX_REFERENCE_PICTURES, 3);
+  }
 
   // allocate memory for reference frames of each block: refFrArr
 
-  if(input->successive_Bframe!=0 || input->StoredBPictures > 0)
+  if(input->successive_Bframe!=0 || input->BRefPictures> 0)
   {    
-    memory_size += get_mem3Dint(&direct_ref_idx, 2, img->width/BLOCK_SIZE, img->height/BLOCK_SIZE);
-    memory_size += get_mem2Dint(&direct_pdir, img->width/BLOCK_SIZE, img->height/BLOCK_SIZE);
+    memory_size += get_mem3Dshort(&direct_ref_idx, 2, img->width/BLOCK_SIZE, img->height/BLOCK_SIZE);
+    memory_size += get_mem2Dshort(&direct_pdir, img->width/BLOCK_SIZE, img->height/BLOCK_SIZE);
   }
 
   // allocate memory for temp quarter pel luma frame buffer: img4Y_tmp
@@ -1718,18 +1754,11 @@ int init_global_buffers()
 
   if(!active_sps->frame_mbs_only_flag)
   {
-    // allocate memory for encoding frame buffers: imgY, imgUV
     memory_size += get_mem2Dpel(&imgY_com, img->height, img->width);
-
-    // allocate memory for reference frame buffers: imgY_org, imgUV_org
-    memory_size += get_mem2Dpel(&imgY_org_top, height_field, img->width);
-    memory_size += get_mem2Dpel(&imgY_org_bot, height_field, img->width);
 
     if (img->yuv_format != YUV400)
     {
       memory_size += get_mem3Dpel(&imgUV_com, 2, img->height_cr, img->width_cr);
-      memory_size += get_mem3Dpel(&imgUV_org_bot, 2, height_field_cr, img->width_cr);
-      memory_size += get_mem3Dpel(&imgUV_org_top, 2, height_field_cr, img->width_cr);
     }
   }
 
@@ -1738,6 +1767,36 @@ int init_global_buffers()
 
   return (memory_size);
 }
+
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Free allocated memory of original picture buffers
+ ************************************************************************
+ */
+void free_orig_planes()
+{
+  free_mem2Dpel(imgY_org_frm);      // free ref frame buffers
+
+  if (img->yuv_format != YUV400)
+    free_mem3Dpel(imgUV_org_frm, 2);
+
+
+  if(!active_sps->frame_mbs_only_flag)
+  {
+    free_top_bot_planes(imgY_org_top, imgY_org_bot);
+
+    if (img->yuv_format != YUV400)
+    {
+      free_top_bot_planes(imgUV_org_top[0], imgUV_org_bot[0]);
+      free_top_bot_planes(imgUV_org_top[1], imgUV_org_bot[1]);
+      free (imgUV_org_top);
+      free (imgUV_org_bot);
+    }
+  }
+}
+
 
 /*!
  ************************************************************************
@@ -1763,12 +1822,7 @@ void free_global_buffers()
   free (last_P_no_fld);
 #endif
 
-  free_mem2Dpel(imgY_org_frm);      // free ref frame buffers
-  if (img->yuv_format != YUV400)
-    free_mem3Dpel(imgUV_org_frm, 2);
-
-  // free multiple ref frame buffers
-  // number of reference frames increased by one for next P-frame
+  free_orig_planes();
 
   if (input->WeightedPrediction || input->WeightedBiprediction)
   {
@@ -1777,10 +1831,10 @@ void free_global_buffers()
     free_mem4Dint(wbp_weight,6,MAX_REFERENCE_PICTURES);
   }
 
-  if(input->successive_Bframe!=0 || input->StoredBPictures > 0)
+  if(input->successive_Bframe!=0 || input->BRefPictures> 0)
   {
-    free_mem3Dint(direct_ref_idx,2);
-    free_mem2Dint(direct_pdir);
+    free_mem3Dshort(direct_ref_idx,2);
+    free_mem2Dshort(direct_pdir);
   } // end if B frame
 
 
@@ -1837,13 +1891,9 @@ void free_global_buffers()
   if(!active_sps->frame_mbs_only_flag)
   {
     free_mem2Dpel(imgY_com);
-    free_mem2Dpel(imgY_org_top);      // free ref frame buffers
-    free_mem2Dpel(imgY_org_bot);      // free ref frame buffers
     if (img->yuv_format != YUV400)
     {
       free_mem3Dpel(imgUV_com,2);
-      free_mem3Dpel(imgUV_org_top,2);
-      free_mem3Dpel(imgUV_org_bot,2);
     }
   }
 
@@ -1863,36 +1913,36 @@ void free_global_buffers()
  * \return memory size in bytes
  ************************************************************************
  */
-int get_mem_mv (int******* mv)
+int get_mem_mv (short ******* mv)
 {
   int i, j, k, l, m;
 
-  if ((*mv = (int******)calloc(4,sizeof(int*****))) == NULL)
+  if ((*mv = (short******)calloc(4,sizeof(short*****))) == NULL)
     no_mem_exit ("get_mem_mv: mv");
   for (i=0; i<4; i++)
   {
-    if (((*mv)[i] = (int*****)calloc(4,sizeof(int****))) == NULL)
+    if (((*mv)[i] = (short*****)calloc(4,sizeof(short****))) == NULL)
       no_mem_exit ("get_mem_mv: mv");
     for (j=0; j<4; j++)
     {
-      if (((*mv)[i][j] = (int****)calloc(2,sizeof(int***))) == NULL)
+      if (((*mv)[i][j] = (short****)calloc(2,sizeof(short***))) == NULL)
         no_mem_exit ("get_mem_mv: mv");
       for (k=0; k<2; k++)
       {
-        if (((*mv)[i][j][k] = (int***)calloc(img->max_num_references,sizeof(int**))) == NULL)
+        if (((*mv)[i][j][k] = (short***)calloc(img->max_num_references,sizeof(short**))) == NULL)
           no_mem_exit ("get_mem_mv: mv");
         for (l=0; l<img->max_num_references; l++)
         {
-          if (((*mv)[i][j][k][l] = (int**)calloc(9,sizeof(int*))) == NULL)
+          if (((*mv)[i][j][k][l] = (short**)calloc(9,sizeof(short*))) == NULL)
             no_mem_exit ("get_mem_mv: mv");
           for (m=0; m<9; m++)
-            if (((*mv)[i][j][k][l][m] = (int*)calloc(2,sizeof(int))) == NULL)
+            if (((*mv)[i][j][k][l][m] = (short*)calloc(2,sizeof(short))) == NULL)
               no_mem_exit ("get_mem_mv: mv");
         }
       }
     }
   }
-  return 4*4*img->max_num_references*9*2*sizeof(int);
+  return 4*4*img->max_num_references*9*2*sizeof(short);
 }
 
 
@@ -1904,7 +1954,7 @@ int get_mem_mv (int******* mv)
  *    int****** mv
  ************************************************************************
  */
-void free_mem_mv (int****** mv)
+void free_mem_mv (short****** mv)
 {
   int i, j, k, l, m;
 

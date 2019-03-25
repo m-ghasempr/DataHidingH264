@@ -9,7 +9,7 @@
  *
  *  \author
  *      Main contributors (see contributors.h for copyright, address and affiliation details)
- *      - Inge Lille-Langøy          <inge.lille-langoy@telenor.com>
+ *      - Inge Lille-Langoy          <inge.lille-langoy@telenor.com>
  *      - Rickard Sjoberg            <rickard.sjoberg@era.ericsson.se>
  ***********************************************************************
  */
@@ -574,7 +574,7 @@ void intrapred_chroma(struct img_par *img, int uv)
   int ih, iv, ib, ic, iaa;
   
   int      b8, b4;
-  int      yuv = img->yuv_format - 1;
+  int      yuv = dec_picture->chroma_format_idc - 1;
   int      blk_x, blk_y;
   int      block_pos[3][4][4]= //[yuv][b8][b4]
   {

@@ -146,7 +146,6 @@
       San Diego, CA 92121 USA
 
       Feng Wu                         <fengwu@microsoft.com>
-      Alexis Michael Tourapis         <alexismt@ieee.org>
       Xiaoyan Sun                     <sunxiaoyan@msrchina.research.microsoft.com>
       Microsoft Research Asia
       3/F, Beijing Sigma Center
@@ -183,10 +182,15 @@
 
       Jill Boyce                      <jill.boyce@thomson.net>
       Cristina Gomila                 <cristina.gomila@thomson.net>
-      Alexis Tourapis                 <alexandros.tourapis@thomson.net>
       Thomson
       2 Independence Way
       Princeton, NJ 08540
+
+      Alexis Michael Tourapis         <alexis@mobilygen.com>
+      Mobilygen Corporation 
+      2100 Lakeside Drive
+      Santa Clara, CA, 95054
+
   \endverbatim
 */
 

@@ -7,7 +7,7 @@
  *    headers for image processing
  *
  * \author
- *  Inge Lille-Langøy               <inge.lille-langoy@telenor.com>
+ *  Inge Lille-Langoy               <inge.lille-langoy@telenor.com>
  *  Copyright (C) 1999  Telenor Satellite Services, Norway
  ************************************************************************
  */

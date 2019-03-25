@@ -803,15 +803,18 @@ void set_ref_pic_num()
     enc_picture->bottom_ref_pic_num [LIST_1][i]=listX[LIST_1][i]->bottom_poc * 2 + 1; 
   }
 
-  if (img->structure==FRAME)
-    for (j=2;j<6;j++)
-      for (i=0;i<listXsize[j];i++)
-      {    
-        enc_picture->ref_pic_num[j][i] = listX[j][i]->poc * 2 + ((listX[j][i]->structure==BOTTOM_FIELD)?1:0);
-        enc_picture->frm_ref_pic_num[j][i] = listX[j][i]->frame_poc * 2 ;
-        enc_picture->top_ref_pic_num[j][i] = listX[j][i]->top_poc * 2 ;
-        enc_picture->bottom_ref_pic_num[j][i] = listX[j][i]->bottom_poc * 2 + 1;
-      }
+  if (!active_sps->frame_mbs_only_flag)
+  {
+    if (img->structure==FRAME)
+      for (j=2;j<6;j++)
+        for (i=0;i<listXsize[j];i++)
+        {    
+          enc_picture->ref_pic_num[j][i] = listX[j][i]->poc * 2 + ((listX[j][i]->structure==BOTTOM_FIELD)?1:0);
+          enc_picture->frm_ref_pic_num[j][i] = listX[j][i]->frame_poc * 2 ;
+          enc_picture->top_ref_pic_num[j][i] = listX[j][i]->top_poc * 2 ;
+          enc_picture->bottom_ref_pic_num[j][i] = listX[j][i]->bottom_poc * 2 + 1;
+        }
+  }
 
 }
 

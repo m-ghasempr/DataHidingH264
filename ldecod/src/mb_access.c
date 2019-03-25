@@ -148,7 +148,7 @@ void getNonAffNeighbour(unsigned int curr_mb_nr, int xN, int yN, int luma, Pixel
   }
   else
   {
-    assert(img->yuv_format != 0);
+    assert(dec_picture->chroma_format_idc != 0);
     maxW = img->mb_cr_size_x;
     maxH = img->mb_cr_size_y;
   }
@@ -230,7 +230,7 @@ void getAffNeighbour(unsigned int curr_mb_nr, int xN, int yN, int luma, PixelPos
   }
   else
   {
-    assert(img->yuv_format != 0);
+    assert(dec_picture->chroma_format_idc != 0);
     maxW = img->mb_cr_size_x;
     maxH = img->mb_cr_size_y;
   }

@@ -1055,7 +1055,7 @@ void readCBP_CABAC(SyntaxElement *se,
   }
 
 
-  if (img->yuv_format != YUV400)
+  if (dec_picture->chroma_format_idc != YUV400)
   {
     // coding of chroma part
     // CABAC decoding for BinIdx 0

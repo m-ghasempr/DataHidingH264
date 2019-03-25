@@ -216,7 +216,7 @@ void PatchMatrix(void)
         if(fail) //value of matrix exceed range
         {
           printf("\n%s value exceed range. (Value must be 1 to 255)\n", MatrixType4x4[i]);
-          printf("Padding with default values for this matrix.\n\n");
+          printf("Setting default values for this matrix.");
           if(i>2)
             memcpy(ScalingList, Quant_inter_default, sizeof(short)*16);
           else
@@ -225,7 +225,7 @@ void PatchMatrix(void)
       }
       else //matrix not found, pad with default value
       {
-        printf("\n%s matrix not found... padding with default values.\n\n", MatrixType4x4[i]);
+        printf("\n%s matrix definition not found. Setting default values.", MatrixType4x4[i]);
         if(i>2)
           memcpy(ScalingList, Quant_inter_default, sizeof(short)*16);
         else
@@ -251,7 +251,7 @@ void PatchMatrix(void)
         if(fail) //value of matrix exceed range
         {
           printf("\n%s value exceed range. (Value must be 1 to 255)\n", MatrixType8x8[i]);
-          printf("Padding with default values for this matrix.\n\n");
+          printf("Setting default values for this matrix.");
           if(i==7)
             memcpy(ScalingList, Quant8_inter_default, sizeof(short)*64);
           else
@@ -260,7 +260,7 @@ void PatchMatrix(void)
       }
       else //matrix not found, pad with default value
       {
-        printf("\n%s matrix not found... padding with default values.\n\n", MatrixType8x8[i]);
+        printf("\n%s matrix definition not found. Setting default values.", MatrixType8x8[i]);
         if(i==7)
           memcpy(ScalingList, Quant8_inter_default, sizeof(short)*64);
         else
@@ -282,12 +282,13 @@ void Init_QMatrix (void)
 
   if(input->ScalingMatrixPresentFlag)
   {
-    printf ("Parsing Configfile %s ", input->QmatrixFile);
+    printf ("Parsing QMatrix file %s ", input->QmatrixFile);
     content = GetConfigFileContent(input->QmatrixFile, 0);
     if(content!='\0')
       ParseMatrix(content, strlen (content));
     else
-      printf("\nError...file not found, proceeding with default values for all the matrix.");
+      printf("\nError: %s\nProceeding with default values for all matrices.", errortext);
+
     PatchMatrix();
     printf("\n");
 
@@ -297,3 +298,4 @@ void Init_QMatrix (void)
     free(content);
   }
 }
+

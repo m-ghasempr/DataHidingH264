@@ -124,7 +124,7 @@ void ercMarkCurrMBConcealed( int currMBNum, int comp, int32 picSizeX, ercVariabl
 
 int ercConcealIntraFrame( frame *recfr, int32 picSizeX, int32 picSizeY, ercVariables_t *errorVar );
 int ercConcealInterFrame( frame *recfr, objectBuffer_t *object_list, 
-                         int32 picSizeX, int32 picSizeY, ercVariables_t *errorVar );
+                         int32 picSizeX, int32 picSizeY, ercVariables_t *errorVar, int chroma_format_idc );
 
 #endif
 

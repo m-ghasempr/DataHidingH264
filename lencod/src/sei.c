@@ -59,7 +59,7 @@ void InitSEIMessages()
   for (i=0; i<2; i++)
   {
     sei_message[i].data = malloc(MAXRTPPAYLOADLEN);
-    assert( sei_message[i].data != NULL );
+    if( sei_message[i].data == NULL ) no_mem_exit("InitSEIMessages: sei_message[i].data");
     sei_message[i].subPacketType = SEI_PACKET_TYPE;
     clear_sei_message(i);
   }
@@ -306,9 +306,9 @@ void InitSparePicture()
   if ( seiSparePicturePayload.data != NULL ) CloseSparePicture();
 
   seiSparePicturePayload.data = malloc( sizeof(Bitstream) );
-  assert( seiSparePicturePayload.data != NULL );
+  if ( seiSparePicturePayload.data == NULL ) no_mem_exit("InitSparePicture: seiSparePicturePayload.data"); 
   seiSparePicturePayload.data->streamBuffer = malloc(MAXRTPPAYLOADLEN);
-  assert( seiSparePicturePayload.data->streamBuffer != NULL );
+  if ( seiSparePicturePayload.data->streamBuffer == NULL ) no_mem_exit("InitSparePicture: seiSparePicturePayload.data->streamBuffer"); 
   memset( seiSparePicturePayload.data->streamBuffer, 0, MAXRTPPAYLOADLEN);
   seiSparePicturePayload.num_spare_pics = 0;
   seiSparePicturePayload.target_frame_num = 0;
@@ -400,9 +400,9 @@ void CalculateSparePicture()
   seiSparePicturePayload.target_frame_num = img->number % MAX_FN;
   // init the local bitstream memory.
   tmpBitstream = malloc(sizeof(Bitstream));
-  assert( tmpBitstream != NULL );
+  if ( tmpBitstream == NULL ) no_mem_exit("CalculateSparePicture: tmpBitstream");
   tmpBitstream->streamBuffer = malloc(MAXRTPPAYLOADLEN);
-  assert( tmpBitstream->streamBuffer != NULL );
+  if ( tmpBitstream->streamBuffer == NULL ) no_mem_exit("CalculateSparePicture: tmpBitstream->streamBuffer");
   memset( tmpBitstream->streamBuffer, 0, MAXRTPPAYLOADLEN);
 
 #ifdef WRITE_MAP_IMAGE
@@ -730,9 +730,9 @@ void FinalizeSpareMBMap()
 
   source = seiSparePicturePayload.data;
   dest = malloc(sizeof(Bitstream));
-  assert( dest != NULL );
+  if ( dest == NULL ) no_mem_exit("FinalizeSpareMBMap: dest");
   dest->streamBuffer = malloc(MAXRTPPAYLOADLEN);
-  assert( dest->streamBuffer != NULL );
+  if ( dest->streamBuffer == NULL ) no_mem_exit("FinalizeSpareMBMap: dest->streamBuffer");
   dest->bits_to_go  = 8;
   dest->byte_pos    = 0;
   dest->byte_buf    = 0;
@@ -801,7 +801,9 @@ void InitSubseqInfo(int currLayer)
   seiSubseqInfo[currLayer].payloadSize = 0;
 
   seiSubseqInfo[currLayer].data = malloc( sizeof(Bitstream) );
+  if ( seiSubseqInfo[currLayer].data == NULL ) no_mem_exit("InitSubseqInfo: seiSubseqInfo[currLayer].data");
   seiSubseqInfo[currLayer].data->streamBuffer = malloc( MAXRTPPAYLOADLEN );
+  if ( seiSubseqInfo[currLayer].data->streamBuffer == NULL ) no_mem_exit("InitSubseqInfo: seiSubseqInfo[currLayer].data->streamBuffer");
   seiSubseqInfo[currLayer].data->bits_to_go  = 8;
   seiSubseqInfo[currLayer].data->byte_pos    = 0;
   seiSubseqInfo[currLayer].data->byte_buf    = 0;
@@ -989,9 +991,9 @@ subseq_char_information_struct seiSubseqChar;
 void InitSubseqChar()
 {
   seiSubseqChar.data = malloc( sizeof(Bitstream) );
-  assert( seiSubseqChar.data != NULL );
+  if( seiSubseqChar.data == NULL ) no_mem_exit("InitSubseqChar: seiSubseqChar.data");
   seiSubseqChar.data->streamBuffer = malloc(MAXRTPPAYLOADLEN);
-  assert( seiSubseqChar.data->streamBuffer != NULL );
+  if( seiSubseqChar.data->streamBuffer == NULL ) no_mem_exit("InitSubseqChar: seiSubseqChar.data->streamBuffer");
   ClearSubseqCharPayload();
 
   seiSubseqChar.subseq_layer_num = img->layer;
@@ -1120,7 +1122,9 @@ void InitSceneInformation()
   seiSceneInformation.second_scene_id = -1;
 
   seiSceneInformation.data = malloc( sizeof(Bitstream) );
+  if( seiSceneInformation.data == NULL ) no_mem_exit("InitSceneInformation: seiSceneInformation.data");
   seiSceneInformation.data->streamBuffer = malloc( MAXRTPPAYLOADLEN );
+  if( seiSceneInformation.data->streamBuffer == NULL ) no_mem_exit("InitSceneInformation: seiSceneInformation.data->streamBuffer");
   seiSceneInformation.data->bits_to_go  = 8;
   seiSceneInformation.data->byte_pos    = 0;
   seiSceneInformation.data->byte_buf    = 0;
@@ -1212,9 +1216,9 @@ void InitPanScanRectInfo()
 {
 
   seiPanScanRectInfo.data = malloc( sizeof(Bitstream) );
-  assert( seiPanScanRectInfo.data != NULL );
+  if( seiPanScanRectInfo.data == NULL ) no_mem_exit("InitPanScanRectInfo: seiPanScanRectInfo.data");
   seiPanScanRectInfo.data->streamBuffer = malloc(MAXRTPPAYLOADLEN);
-  assert( seiPanScanRectInfo.data->streamBuffer != NULL );
+  if( seiPanScanRectInfo.data->streamBuffer == NULL ) no_mem_exit("InitPanScanRectInfo: seiPanScanRectInfo.data->streamBuffer");
   ClearPanScanRectInfoPayload();
 
   seiPanScanRectInfo.pan_scan_rect_left_offset = 0;
@@ -1314,11 +1318,11 @@ void InitUser_data_unregistered()
 {
 
   seiUser_data_unregistered.data = malloc( sizeof(Bitstream) );
-  assert( seiUser_data_unregistered.data != NULL );
+  if( seiUser_data_unregistered.data == NULL ) no_mem_exit("InitUser_data_unregistered: seiUser_data_unregistered.data");
   seiUser_data_unregistered.data->streamBuffer = malloc(MAXRTPPAYLOADLEN);
-  assert( seiUser_data_unregistered.data->streamBuffer != NULL );
+  if( seiUser_data_unregistered.data->streamBuffer == NULL ) no_mem_exit("InitUser_data_unregistered: seiUser_data_unregistered.data->streamBuffer");
   seiUser_data_unregistered.byte = malloc(MAXRTPPAYLOADLEN);
-  assert( seiUser_data_unregistered.byte != NULL);
+  if( seiUser_data_unregistered.byte == NULL ) no_mem_exit("InitUser_data_unregistered: seiUser_data_unregistered.byte");
   ClearUser_data_unregistered();
 
 }
@@ -1419,11 +1423,11 @@ void InitUser_data_registered_itu_t_t35()
 {
 
   seiUser_data_registered_itu_t_t35.data = malloc( sizeof(Bitstream) );
-  assert( seiUser_data_registered_itu_t_t35.data != NULL );
+  if( seiUser_data_registered_itu_t_t35.data == NULL ) no_mem_exit("InitUser_data_unregistered: seiUser_data_registered_itu_t_t35.data");
   seiUser_data_registered_itu_t_t35.data->streamBuffer = malloc(MAXRTPPAYLOADLEN);
-  assert( seiUser_data_registered_itu_t_t35.data->streamBuffer != NULL );
+  if( seiUser_data_registered_itu_t_t35.data->streamBuffer == NULL ) no_mem_exit("InitUser_data_unregistered: seiUser_data_registered_itu_t_t35.data->streamBuffer");
   seiUser_data_registered_itu_t_t35.byte = malloc(MAXRTPPAYLOADLEN);
-  assert( seiUser_data_registered_itu_t_t35.byte != NULL);
+  if( seiUser_data_registered_itu_t_t35.data == NULL ) no_mem_exit("InitUser_data_unregistered: seiUser_data_registered_itu_t_t35.byte");
   ClearUser_data_registered_itu_t_t35();
 
 }
@@ -1555,9 +1559,9 @@ void InitRandomAccess()
 {
 
   seiRandomAccess.data = malloc( sizeof(Bitstream) );
-  assert( seiRandomAccess.data != NULL );
+  if( seiRandomAccess.data == NULL ) no_mem_exit("InitRandomAccess: seiRandomAccess.data");
   seiRandomAccess.data->streamBuffer = malloc(MAXRTPPAYLOADLEN);
-  assert( seiRandomAccess.data->streamBuffer != NULL );
+  if( seiRandomAccess.data->streamBuffer == NULL ) no_mem_exit("InitRandomAccess: seiRandomAccess.data->streamBuffer");
   ClearRandomAccess();
 
 }

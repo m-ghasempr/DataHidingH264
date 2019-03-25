@@ -8,7 +8,7 @@
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
- *    - Inge Lille-Langøy               <inge.lille-langoy@telenor.com>
+ *    - Inge Lille-Langoy               <inge.lille-langoy@telenor.com>
  *    - Rickard Sjoberg                 <rickard.sjoberg@era.ericsson.se>
  *    - Jani Lainema                    <jani.lainema@nokia.com>
  *    - Sebastian Purreiter             <sebastian.purreiter@mch.siemens.de>
@@ -98,7 +98,7 @@ void MbAffPostProc()
           imgY[y0+(2*y+1)][x0+x] = temp[x][y+MB_BLOCK_SIZE];
         }
 
-      if (img->yuv_format != YUV400)
+      if (dec_picture->chroma_format_idc != YUV400)
       {
         x0 = x0 / (16/img->mb_cr_size_x);
         y0 = y0 / (16/img->mb_cr_size_y);
@@ -163,6 +163,97 @@ int decode_one_frame(struct img_par *img,struct inp_par *inp, struct snr_par *sn
 
 
 /*!
+ ************************************************************************
+ * \brief
+ *    Convert file read buffer to source picture structure
+ * \param imgX
+ *    Pointer to image plane
+ * \param buf
+ *    Buffer for file output
+ * \param size
+ *    image size in pixel
+ ************************************************************************
+ */
+void buf2img (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes)
+{
+  int i,j;
+
+  unsigned short tmp16, ui16;
+  unsigned long  tmp32, ui32;
+
+  if (symbol_size_in_bytes> sizeof(imgpel))
+  {
+    error ("Source picture has higher bit depth than imgpel data type. Please recompile with larger data type for imgpel.", 500);
+  }
+
+  if (( sizeof(char) == sizeof (imgpel)) && ( sizeof(char) == symbol_size_in_bytes))
+  {
+    // imgpel == pixel_in_file == 1 byte -> simple copy
+    for(j=0;j<size_y;j++)
+      memcpy(imgX[j], buf+j*size_x, size_x);
+  }
+  else
+  {
+    // sizeof (imgpel) > sizeof(char)
+    if (testEndian())
+    {
+      // big endian
+      switch (symbol_size_in_bytes)
+      {
+      case 1:
+        {
+          for(j=0;j<size_y;j++)
+            for(i=0;i<size_x;i++)
+            {
+              imgX[j][i]= buf[i+j*size_x];
+            }
+          break;
+        }
+      case 2:
+        {
+          for(j=0;j<size_y;j++)
+            for(i=0;i<size_x;i++)
+            {
+              memcpy(&tmp16, buf+((i+j*size_x)*2), 2);
+              ui16  = (tmp16 >> 8) | ((tmp16&0xFF)<<8);
+              imgX[j][i] = (imgpel) ui16;
+            }
+          break;
+        }
+      case 4:
+        {
+          for(j=0;j<size_y;j++)
+            for(i=0;i<size_x;i++)
+            {
+              memcpy(&tmp32, buf+((i+j*size_x)*4), 4);
+              ui32  = ((tmp32&0xFF00)<<8) | ((tmp32&0xFF)<<24) | ((tmp32&0xFF0000)>>8) | ((tmp32&0xFF000000)>>24);
+              imgX[j][i] = (imgpel) ui32;
+            }
+        }
+      default:
+        {
+           error ("reading only from formats of 8, 16 or 32 bit allowed on big endian architecture", 500);
+           break;
+        }
+      }
+
+    }
+    else
+    {
+      // little endian
+      for (j=0; j < size_y; j++)
+        for (i=0; i < size_x; i++)
+        {
+          imgX[j][i]=0;
+          memcpy(&(imgX[j][i]), buf +((i+j*size_x)*symbol_size_in_bytes), symbol_size_in_bytes);
+        }
+
+    }
+  }
+}
+
+
+/*!
 ************************************************************************
 * \brief
 *    Find PSNR for all three components.Compare decoded frame with
@@ -179,16 +270,27 @@ void find_snr(
   int uv;
   int64  status;
   int symbol_size_in_bytes = img->pic_unit_bitsize_on_disk/8;
-  int64 framesize_in_bytes = (((int64)p->size_y*p->size_x) + ((int64)p->size_y_cr*p->size_x_cr)*2) * symbol_size_in_bytes;
+  int size_x_cr, size_y_cr;
+  int64 framesize_in_bytes;
   unsigned int max_pix_value_sqd = img->max_imgpel_value * img->max_imgpel_value;
   unsigned int max_pix_value_sqd_uv = img->max_imgpel_value_uv * img->max_imgpel_value_uv;
   Boolean rgb_output = (active_sps->vui_seq_parameters.matrix_coefficients==0);
-  
-  char *buf;
+  unsigned char *buf;
 
-// calculate frame number
+  // calculate frame number
   int  psnrPOC = active_sps->mb_adaptive_frame_field_flag ? p->poc /(input->poc_scale) : p->poc/(3-input->poc_scale);
   
+  if ((p->chroma_format_idc==YUV400) && input->write_uv)
+  {
+    size_x_cr = p->size_x/2;
+    size_y_cr = p->size_y/2;
+  }
+  else
+  {
+    size_x_cr = p->size_x_cr;
+    size_y_cr = p->size_y_cr;
+  }
+  framesize_in_bytes = (((int64)p->size_y*p->size_x) + ((int64)size_y_cr*size_x_cr)*2) * symbol_size_in_bytes;
 
   if (psnrPOC==0 && img->psnr_number)
     img->idr_psnr_number=img->psnr_number + 1;
@@ -216,15 +318,9 @@ void find_snr(
     lseek (p_ref, framesize_in_bytes/3, SEEK_CUR);
 
   read(p_ref, buf, p->size_y*p->size_x*symbol_size_in_bytes);
+  buf2img(imgY_ref, buf, p->size_x, p->size_y, symbol_size_in_bytes);
 
-  for (j=0; j < p->size_y; j++)
-    for (i=0; i < p->size_x; i++)
-    {
-      imgY_ref[j][i]=0;
-      memcpy(&(imgY_ref[j][i]), buf +((j*p->size_x+i)*symbol_size_in_bytes), symbol_size_in_bytes);
-    }
-
-  if (img->yuv_format != YUV400)
+  if (dec_picture->chroma_format_idc != YUV400)
   {
     for (uv=0; uv < 2; uv++)
     {
@@ -232,10 +328,7 @@ void find_snr(
         lseek (p_ref, -framesize_in_bytes, SEEK_CUR);
     
       read(p_ref, buf, p->size_y_cr*p->size_x_cr*symbol_size_in_bytes);
-    
-      for (j=0; j < p->size_y_cr ; j++)
-        for (i=0; i < p->size_x_cr; i++)
-          memcpy(&(imgUV_ref[uv][j][i]), buf +((j*p->size_x_cr+i)*symbol_size_in_bytes), symbol_size_in_bytes);
+      buf2img(imgUV_ref[uv], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes);
     }
   }
 
@@ -258,7 +351,7 @@ void find_snr(
   diff_u=0;
   diff_v=0;
   
-  if (img->yuv_format != YUV400)
+  if (dec_picture->chroma_format_idc != YUV400)
   {
     for (j=0; j < p->size_y_cr; ++j)
     {
@@ -279,15 +372,15 @@ void find_snr(
 
   // Collecting SNR statistics
   if (diff_y != 0)
-    snr->snr_y=(float)(10*log10(max_pix_value_sqd*(double)((double)(img->width)*(img->height) / diff_y)));        // luma snr for current frame
+    snr->snr_y=(float)(10*log10(max_pix_value_sqd*(double)((double)(p->size_x)*(p->size_y) / diff_y)));        // luma snr for current frame
   else
     snr->snr_y=0;
   if (diff_u != 0)
-    snr->snr_u=(float)(10*log10(max_pix_value_sqd_uv*(double)((double)(img->width_cr)*(img->height_cr) / (diff_u))));    //  chroma snr for current frame
+    snr->snr_u=(float)(10*log10(max_pix_value_sqd_uv*(double)((double)(p->size_x_cr)*(p->size_y_cr) / (diff_u))));    //  chroma snr for current frame
   else
     snr->snr_u=0;
   if (diff_v != 0)
-    snr->snr_v=(float)(10*log10(max_pix_value_sqd_uv*(double)((double)(img->width_cr)*(img->height_cr) / (diff_v))));    //  chroma snr for current frame
+    snr->snr_v=(float)(10*log10(max_pix_value_sqd_uv*(double)((double)(p->size_x_cr)*(p->size_y_cr) / (diff_v))));    //  chroma snr for current frame
   else
     snr->snr_v=0;
 
@@ -905,6 +998,9 @@ void init_picture(struct img_par *img, struct inp_par *inp)
   dec_picture->frame_poc=img->framepoc;
   dec_picture->qp=img->qp;
   dec_picture->slice_qp_delta=currSlice->slice_qp_delta;
+  dec_picture->chroma_qp_offset[0] = active_pps->chroma_qp_index_offset;
+  dec_picture->chroma_qp_offset[1] = active_pps->second_chroma_qp_index_offset;
+
   // reset all variables of the error concealment instance before decoding of every frame.
   // here the third parameter should, if perfectly, be equal to the number of slices per frame.
   // using little value is ok, the code will allocate more memory if the slice number is larger
@@ -984,6 +1080,8 @@ void init_picture(struct img_par *img, struct inp_par *inp)
   dec_picture->frame_num = img->frame_num;
   dec_picture->coded_frame = (img->structure==FRAME);
 
+  dec_picture->chroma_format_idc = active_sps->chroma_format_idc;
+
   dec_picture->frame_mbs_only_flag = active_sps->frame_mbs_only_flag;
   dec_picture->frame_cropping_flag = active_sps->frame_cropping_flag;
 
@@ -1011,7 +1109,7 @@ void exit_picture()
   int ercSegment;
   frame recfr;
   unsigned int i;
-  int structure, frame_poc, slice_type, refpic, qp, pic_num;
+  int structure, frame_poc, slice_type, refpic, qp, pic_num, chroma_format_idc;
 
   int tmp_time;                   // time used by decoding the last frame
   char yuvFormat[10];
@@ -1029,7 +1127,7 @@ void exit_picture()
     MbAffPostProc();
 
   recfr.yptr = &dec_picture->imgY[0][0];
-  if (img->yuv_format != YUV400)
+  if (dec_picture->chroma_format_idc != YUV400)
   {
     recfr.uptr = &dec_picture->imgUV[0][0][0];
     recfr.vptr = &dec_picture->imgUV[1][0][0];
@@ -1075,7 +1173,7 @@ void exit_picture()
     if(dec_picture->slice_type == I_SLICE || dec_picture->slice_type == SI_SLICE) // I-frame
       ercConcealIntraFrame(&recfr, dec_picture->size_x, dec_picture->size_y, erc_errorVar);
     else
-      ercConcealInterFrame(&recfr, erc_object_list, dec_picture->size_x, dec_picture->size_y, erc_errorVar);
+      ercConcealInterFrame(&recfr, erc_object_list, dec_picture->size_x, dec_picture->size_y, erc_errorVar, dec_picture->chroma_format_idc);
   }
 
   if (img->structure == FRAME)         // buffer mgt. for frame mode
@@ -1089,6 +1187,8 @@ void exit_picture()
   refpic     = dec_picture->used_for_reference;
   qp         = dec_picture->qp;
   pic_num    = dec_picture->pic_num;
+
+  chroma_format_idc= dec_picture->chroma_format_idc;
 
   store_picture_in_dpb(dec_picture);
   dec_picture=NULL;
@@ -1112,7 +1212,7 @@ void exit_picture()
     tmp_time=(img->ltime_end*1000+img->tstruct_end.millitm) - (img->ltime_start*1000+img->tstruct_start.millitm);
     tot_time=tot_time + tmp_time;
 
-    sprintf(yuvFormat,"%s", yuv_types[img->yuv_format]);
+    sprintf(yuvFormat,"%s", yuv_types[chroma_format_idc]);
     
     if(slice_type == I_SLICE) // I picture
       fprintf(stdout,"%3d(I)  %3d %3d %5d %7.4f %7.4f %7.4f  %s %5d\n",
@@ -1483,10 +1583,10 @@ void fill_wp_params(struct img_par *img)
   int i, j, k;
   int comp;
   int log_weight_denom;
-  int p0, pt;
+  int tb, td;
   int bframe = (img->type==B_SLICE);
   int max_bwd_ref, max_fwd_ref;
-  int x,z;
+  int tx,DistScaleFactor;
 
   max_fwd_ref = img->num_ref_idx_l0_active;
   max_bwd_ref = img->num_ref_idx_l1_active;
@@ -1527,20 +1627,20 @@ void fill_wp_params(struct img_par *img)
           }
           else if (active_pps->weighted_bipred_idc == 2)
           {
-            pt = listX[LIST_1][j]->poc - listX[LIST_0][i]->poc;
-            if (pt == 0 || listX[LIST_1][j]->is_long_term || listX[LIST_0][i]->is_long_term)
+            td = Clip3(-128,127,listX[LIST_1][j]->poc - listX[LIST_0][i]->poc);
+            if (td == 0 || listX[LIST_1][j]->is_long_term || listX[LIST_0][i]->is_long_term)
             {
               img->wbp_weight[0][i][j][comp] =   32;
               img->wbp_weight[1][i][j][comp] =   32;
             }
             else
             {
-              p0 = img->ThisPOC - listX[LIST_0][i]->poc;
+              tb = Clip3(-128,127,img->ThisPOC - listX[LIST_0][i]->poc);
 
-              x = (16384 + (pt>>1))/pt;
-              z = Clip3(-1024, 1023, (x*p0 + 32 )>>6);
+              tx = (16384 + abs(td/2))/td;
+              DistScaleFactor = Clip3(-1024, 1023, (tx*tb + 32 )>>6);
               
-              img->wbp_weight[1][i][j][comp] = z >> 2;
+              img->wbp_weight[1][i][j][comp] = DistScaleFactor >> 2;
               img->wbp_weight[0][i][j][comp] = 64 - img->wbp_weight[1][i][j][comp];
               if (img->wbp_weight[1][i][j][comp] < -64 || img->wbp_weight[1][i][j][comp] > 128)
               {
@@ -1577,20 +1677,20 @@ void fill_wp_params(struct img_par *img)
             }
             else if (active_pps->weighted_bipred_idc == 2)
             {
-              pt = listX[k+LIST_1][j]->poc - listX[k+LIST_0][i]->poc;
-              if (pt == 0 || listX[k+LIST_1][j]->is_long_term || listX[k+LIST_0][i]->is_long_term)
+              td = Clip3(-128,127,listX[k+LIST_1][j]->poc - listX[k+LIST_0][i]->poc);
+              if (td == 0 || listX[k+LIST_1][j]->is_long_term || listX[k+LIST_0][i]->is_long_term)
               {
                 img->wbp_weight[k+0][i][j][comp] =   32;
                 img->wbp_weight[k+1][i][j][comp] =   32;
               }
               else
               {
-                p0 = ((k==2)?img->toppoc:img->bottompoc) - listX[k+LIST_0][i]->poc;
+                tb = Clip3(-128,127,((k==2)?img->toppoc:img->bottompoc) - listX[k+LIST_0][i]->poc);
                 
-                x = (16384 + (pt>>1))/pt;
-                z = Clip3(-1024, 1023, (x*p0 + 32 )>>6);
+                tx = (16384 + abs(td/2))/td;
+                DistScaleFactor = Clip3(-1024, 1023, (tx*tb + 32 )>>6);
 
-                img->wbp_weight[k+1][i][j][comp] = z >> 2;
+                img->wbp_weight[k+1][i][j][comp] = DistScaleFactor >> 2;
                 img->wbp_weight[k+0][i][j][comp] = 64 - img->wbp_weight[k+1][i][j][comp];
                 if (img->wbp_weight[k+1][i][j][comp] < -64 || img->wbp_weight[k+1][i][j][comp] > 128)
                 {

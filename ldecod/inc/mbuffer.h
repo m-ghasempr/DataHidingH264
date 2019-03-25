@@ -82,6 +82,7 @@ typedef struct storable_picture
   int         long_term_reference_flag;
   int         adaptive_ref_pic_buffering_flag;
 
+  int         chroma_format_idc;
   int         frame_mbs_only_flag;
   int         frame_cropping_flag;
   int         frame_cropping_rect_left_offset;
@@ -89,6 +90,7 @@ typedef struct storable_picture
   int         frame_cropping_rect_top_offset;
   int         frame_cropping_rect_bottom_offset;
   int         qp;
+  int         chroma_qp_offset[2];
   int         slice_qp_delta;
   DecRefPicMarking_t *dec_ref_pic_marking_buffer;                    //!< stores the memory management control operations
 

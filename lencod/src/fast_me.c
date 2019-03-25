@@ -111,13 +111,13 @@ int get_mem_mincost (int****** mv)
 {
   int i, j, k, l;
 
-  if ((*mv = (int*****)calloc(input->img_width/4,sizeof(int****))) == NULL)
+  if ((*mv = (int*****)calloc(img->width/4,sizeof(int****))) == NULL)
     no_mem_exit ("get_mem_mv: mv");
-  for (i=0; i<input->img_width/4; i++)
+  for (i=0; i<img->width/4; i++)
   {
-    if (((*mv)[i] = (int****)calloc(input->img_height/4,sizeof(int***))) == NULL)
+    if (((*mv)[i] = (int****)calloc(img->height/4,sizeof(int***))) == NULL)
       no_mem_exit ("get_mem_mv: mv");
-    for (j=0; j<input->img_height/4; j++)
+    for (j=0; j<img->height/4; j++)
     {
       if (((*mv)[i][j] = (int***)calloc(img->max_num_references, sizeof(int**))) == NULL)
         no_mem_exit ("get_mem_mv: mv");
@@ -132,7 +132,7 @@ int get_mem_mincost (int****** mv)
     }
   }
 
-  return input->img_width/4*input->img_height/4*img->max_num_references*9*3*sizeof(int);
+  return img->width/4*img->height/4*img->max_num_references*9*3*sizeof(int);
 }
 /*!
  *******************************************************************************
@@ -149,13 +149,13 @@ int get_mem_bwmincost (int****** mv)
   int i, j, k, l;
 
 
-  if ((*mv = (int*****)calloc(input->img_width/4,sizeof(int****))) == NULL)
+  if ((*mv = (int*****)calloc(img->width/4,sizeof(int****))) == NULL)
     no_mem_exit ("get_mem_mv: mv");
-  for (i=0; i<input->img_width/4; i++)
+  for (i=0; i<img->width/4; i++)
   {
-    if (((*mv)[i] = (int****)calloc(input->img_height/4,sizeof(int***))) == NULL)
+    if (((*mv)[i] = (int****)calloc(img->height/4,sizeof(int***))) == NULL)
       no_mem_exit ("get_mem_mv: mv");
-    for (j=0; j<input->img_height/4; j++)
+    for (j=0; j<img->height/4; j++)
     {
       if (((*mv)[i][j] = (int***)calloc(img->max_num_references,sizeof(int**))) == NULL)
         no_mem_exit ("get_mem_mv: mv");
@@ -170,12 +170,14 @@ int get_mem_bwmincost (int****** mv)
     }
   }
 
-  return input->img_width/4*input->img_height/4*img->max_num_references*9*3*sizeof(int);
+  return img->width/4*img->height/4*img->max_num_references*9*3*sizeof(int);
 }
 
 int get_mem_FME()
 {
   int memory_size = 0;
+  if (NULL==(flag_intra = calloc ((img->width>>4)+1,sizeof(int)))) no_mem_exit("get_mem_FME: flag_intra");
+
   memory_size += get_mem2Dint(&McostState, 2*input->search_range+1, 2*input->search_range+1);
   memory_size += get_mem_mincost (&(all_mincost));
   memory_size += get_mem_bwmincost(&(all_bwmincost));
@@ -196,9 +198,9 @@ void free_mem_mincost (int***** mv)
 {
   int i, j, k, l;
 
-  for (i=0; i<input->img_width/4; i++)
+  for (i=0; i<img->width/4; i++)
   {
-    for (j=0; j<input->img_height/4; j++)
+    for (j=0; j<img->height/4; j++)
     {
       for (k=0; k<img->max_num_references; k++)
       {
@@ -225,9 +227,9 @@ void free_mem_bwmincost (int***** mv)
 {
   int i, j, k, l;
 
-  for (i=0; i<input->img_width/4; i++)
+  for (i=0; i<img->width/4; i++)
   {
-    for (j=0; j<input->img_height/4; j++)
+    for (j=0; j<img->height/4; j++)
     {
       for (k=0; k<img->max_num_references; k++)
       {
@@ -249,6 +251,8 @@ void free_mem_FME()
   free_mem_bwmincost(all_bwmincost);
 
   free_mem2D(SearchState);
+
+  free (flag_intra);
 }
 
 
@@ -312,18 +316,18 @@ int PartCalMad(pel_t *ref_pic,pel_t** orig_pic,pel_t *(*get_ref_line)(int, pel_t
  */
 int                                     //  ==> minimum motion cost after search
 FastIntegerPelBlockMotionSearch  (pel_t**   orig_pic,     // <--  not used
-                  int       ref,          // <--  reference frame (0... or -1 (backward))
-                  int       list,
-                  int       pic_pix_x,    // <--  absolute x-coordinate of regarded AxB block
-                  int       pic_pix_y,    // <--  absolute y-coordinate of regarded AxB block
-                  int       blocktype,    // <--  block type (1-16x16 ... 7-4x4)
-                  int       pred_mv_x,    // <--  motion vector predictor (x) in sub-pel units
-                  int       pred_mv_y,    // <--  motion vector predictor (y) in sub-pel units
-                  int*      mv_x,         //  --> motion vector (x) - in pel units
-                  int*      mv_y,         //  --> motion vector (y) - in pel units
-                  int       search_range, // <--  1-d search range in pel units                         
-                  int       min_mcost,    // <--  minimum motion cost (cost for center or huge value)
-                  double    lambda)       // <--  lagrangian parameter for determining motion cost
+                                  short     ref,          // <--  reference frame (0... or -1 (backward))
+                                  int       list,
+                                  int       pic_pix_x,    // <--  absolute x-coordinate of regarded AxB block
+                                  int       pic_pix_y,    // <--  absolute y-coordinate of regarded AxB block
+                                  int       blocktype,    // <--  block type (1-16x16 ... 7-4x4)
+                                  short     pred_mv_x,    // <--  motion vector predictor (x) in sub-pel units
+                                  short     pred_mv_y,    // <--  motion vector predictor (y) in sub-pel units
+                                  short*    mv_x,         //  --> motion vector (x) - in pel units
+                                  short*    mv_y,         //  --> motion vector (y) - in pel units
+                                  int       search_range, // <--  1-d search range in pel units                         
+                                  int       min_mcost,    // <--  minimum motion cost (cost for center or huge value)
+                                  double    lambda)       // <--  lagrangian parameter for determining motion cost
 {
   static int Diamond_x[4] = {-1, 0, 1, 0};
   static int Diamond_y[4] = {0, 1, 0, -1};
@@ -691,15 +695,15 @@ int AddUpSADQuarter(int pic_pix_x,int pic_pix_y,int blocksize_x,int blocksize_y,
 
 int                                                   //  ==> minimum motion cost after search
 FastSubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values for the AxB block
-                             int       ref,           // <--  reference frame (0... or -1 (backward))
+                             short     ref,           // <--  reference frame (0... or -1 (backward))
                              int       list,
                              int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
                              int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
                              int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
-                             int       pred_mv_x,     // <--  motion vector predictor (x) in sub-pel units
-                             int       pred_mv_y,     // <--  motion vector predictor (y) in sub-pel units
-                             int*      mv_x,          // <--> in: search center (x) / out: motion vector (x) - in pel units
-                             int*      mv_y,          // <--> in: search center (y) / out: motion vector (y) - in pel units
+                             short     pred_mv_x,     // <--  motion vector predictor (x) in sub-pel units
+                             short     pred_mv_y,     // <--  motion vector predictor (y) in sub-pel units
+                             short*    mv_x,          // <--> in: search center (x) / out: motion vector (x) - in pel units
+                             short*    mv_y,          // <--> in: search center (y) / out: motion vector (y) - in pel units
                              int       search_pos2,   // <--  search positions for    half-pel search  (default: 9)
                              int       search_pos4,   // <--  search positions for quarter-pel search  (default: 9)
                              int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)

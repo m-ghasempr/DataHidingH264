@@ -62,8 +62,8 @@
 
 static int FirstMBInSlice[MAXSLICEGROUPIDS];
 
-int *MBAmap = NULL;   
-int *MapUnitToSliceGroupMap = NULL; 
+byte *MBAmap = NULL;   
+byte *MapUnitToSliceGroupMap = NULL; 
 unsigned PicSizeInMapUnits;
 
 
@@ -109,15 +109,15 @@ static int FmoGenerateMapUnitToSliceGroupMap (ImageParameters * img, pic_paramet
   if (MapUnitToSliceGroupMap)
     free (MapUnitToSliceGroupMap);
   
-  if ((MapUnitToSliceGroupMap = malloc ((PicSizeInMapUnits) * sizeof (int))) == NULL)
+  if ((MapUnitToSliceGroupMap = malloc ((PicSizeInMapUnits) * sizeof (byte))) == NULL)
   {
-    printf ("cannot allocated %d bytes for MapUnitToSliceGroupMap, exit\n", PicSizeInMapUnits * sizeof (int));
+    printf ("cannot allocated %d bytes for MapUnitToSliceGroupMap, exit\n", PicSizeInMapUnits * sizeof (byte));
     exit (-1);
   }
   
   if (pps->num_slice_groups_minus1 == 0)    // only one slice group
   {
-    memset (MapUnitToSliceGroupMap, 0,  PicSizeInMapUnits * sizeof (int));
+    memset (MapUnitToSliceGroupMap, 0,  PicSizeInMapUnits * sizeof (byte));
     return 0;
   }
   
@@ -173,9 +173,9 @@ static int FmoGenerateMBAmap (ImageParameters * img, seq_parameter_set_rbsp_t* s
     free (MBAmap);
   
   
-  if ((MBAmap = malloc ((img->PicSizeInMbs) * sizeof (int))) == NULL)
+  if ((MBAmap = malloc ((img->PicSizeInMbs) * sizeof (byte))) == NULL)
   {
-    printf ("cannot allocated %d bytes for MBAmap, exit\n", (img->PicSizeInMbs) * sizeof (int));
+    printf ("cannot allocated %d bytes for MBAmap, exit\n", (img->PicSizeInMbs) * sizeof (byte));
     exit (-1);
   }
   

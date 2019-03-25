@@ -174,7 +174,7 @@ void init_dpb()
   {
     printf("warning: DPB size of zero frames at specified level / frame size. Decoding may fail.\n");
   }
-//  dpb.size      = input->dpb_size;
+
   dpb.used_size = 0;
   dpb.last_picture = NULL;
 
@@ -334,7 +334,7 @@ StorablePicture* alloc_storable_picture(PictureStructure structure, int size_x, 
   s->imgUV = NULL;
 
   get_mem2Dpel (&(s->imgY), size_y, size_x);
-  if (img->yuv_format != YUV400)
+  if (active_sps->chroma_format_idc != YUV400)
     get_mem3Dpel (&(s->imgUV), 2, size_y_cr, size_x_cr);
 
   s->mb_field = calloc (s->PicSizeInMbs, sizeof(int));
@@ -2666,6 +2666,8 @@ void dpb_split_field(FrameStore *fs)
   fs->bottom_field->top_field = fs->top_field;
   fs->bottom_field->frame     = fs->frame;
 
+  fs->top_field->chroma_format_idc = fs->bottom_field->chroma_format_idc = fs->frame->chroma_format_idc;
+
   //store reference picture index
   if (!fs->frame->frame_mbs_only_flag)
   {
@@ -2875,6 +2877,7 @@ void dpb_combine_field(FrameStore *fs)
   
   fs->frame->coded_frame = 0;
 
+  fs->frame->chroma_format_idc = fs->top_field->chroma_format_idc;
   fs->frame->frame_cropping_flag = fs->top_field->frame_cropping_flag;
   if (fs->frame->frame_cropping_flag)
   {

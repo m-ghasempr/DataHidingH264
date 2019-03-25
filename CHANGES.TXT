@@ -1,3 +1,33 @@
+Changes for Version JM 9.1 to JM 9.0
+------------------------------------
+- encoder: RCT: Enabling inter mode selection (WK)
+- encoder: RCT: Correcting I16 mode selection (WK)
+- encoder: fix YUV header seek problem (PL)
+- encoder: reduce memory usage (KS)
+- encoder: remove assert in RC (KS)
+- encoder: fix qpBSoffset usage (AT)
+- encoder: fix stored B-pictures (KS)
+- encoder: fix qp change (AT)
+- encoder: fix direct mode selection (KS)
+- encoder: fix wrong memory allocation in FastME code (KS)
+- encoder: fix IDR encoding (LP/SKa/AT)
+- encoder: fix QMatrix config file reading (KS)
+- encoder: automatically add borders for picture sizes that are not multiple of 16  (KS)
+- encoder: default config parameter initialization (AT)
+- encoder: add checks for minimum and maximun values for each config parameter (AT)
+- encoder: support for explicit lagrangian parameters (AT)
+- encoder: support for explicit rounding offset parameters (AT)
+- decoder: allow 4:2:0 file format for monochrome streams (LW/KS)
+- decoder: fix VLC coeff reading (WZ)
+- decoder: fix second chroma qp offset (TS/KS)
+- decoder: fix VUI syntax (SK)
+- decoder: new command line interface (AT)
+- encoder/decoder: RCT: Correcting lossless coding/decoding (WK)
+- encoder/decoder: fix file reading/writing for non-Intel architectures (KS)
+- encoder/decoder: Fix YUV 4:0:0 output (SG)
+- encoder/decoder: Fix prediction weight calculations (AT)
+
+
 Changes for Version JM 9.0 to JM 8.6
 ------------------------------------
 
@@ -930,9 +960,12 @@ RK      Ragip Kurceren          ragip.kurceren@nokia.com
 RS      Rickard Sjoberg         Rickard.Sjoberg@era.ericsson.se
 RaS     Raghavan Subramaniyan   Raghavan.S@motorola.com
 RV      Rajesh Kumar S Venkata  v-rajesh.kumar@st.com
-SR      Shankar Regunathan      shanre@microsoft.com
+SG      Steve Gordon            sgordon@broadcom.com
+SK	Shafi Ullah Khan	shafi@sarayusoftech.com
+SKa	Shinya Kadono		kadono.shinya@jp.panasonic.com
 SM	Sebastian Manciulea	sebastian@splash.ro
 SN	Satoshi Nakagawa	nakagawa@okilab.net
+SR      Shankar Regunathan      shanre@microsoft.com
 SW      Stephan Wenger          stewe@cs.tu-berlin.de
 SY      Steve Yao               steveyao@sandvideo.com
 TH      Till Hallbach           halbach@tele.ntnu.no

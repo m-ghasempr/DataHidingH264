@@ -44,15 +44,15 @@ void RandomIntraInit(int xsize, int ysize, int refresh)
 {
   int i, pos;
 
-  srand (1);      // A fixed random initializer to make things reproducable
+  srand (1);      // A fixed random initializer to make things reproducible
   NumberOfMBs = xsize * ysize;
   NumberIntraPerPicture = refresh;
 
   RefreshPattern = malloc (sizeof (int) * NumberOfMBs);
-  assert (RefreshPattern != NULL);
+  if (RefreshPattern == NULL) no_mem_exit("RandomIntraInit: RefreshPattern");
 
   IntraMBs = malloc (sizeof (int) * refresh);
-  assert (IntraMBs != NULL);
+  if (IntraMBs == NULL) no_mem_exit("RandomIntraInit: IntraMBs");
 
   for (i= 0; i<NumberOfMBs; i++)
     RefreshPattern[i] = -1;

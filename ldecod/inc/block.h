@@ -7,7 +7,7 @@
  *    definitions for block decoding functions
  *
  * \author
- *  Inge Lille-Langøy               <inge.lille-langoy@telenor.com>    \n
+ *  Inge Lille-Langoy               <inge.lille-langoy@telenor.com>    \n
  *  Telenor Satellite Services                                         \n
  *  P.O.Box 6914 St.Olavs plass                                        \n
  *  N-0130 Oslo, Norway

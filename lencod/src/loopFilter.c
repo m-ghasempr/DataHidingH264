@@ -140,7 +140,9 @@ void DeblockMb(ImageParameters *img, imgpel **imgY, imgpel ***imgUV, int MbQAddr
   {
     // don't filter at slice boundaries
     filterLeftMbEdgeFlag = MbQ->mbAvailA;
-    filterTopMbEdgeFlag  = MbQ->mbAvailB;;
+    // if this the bottom of a frame macroblock pair then always filter the top edge
+    if (img->MbaffFrameFlag && !MbQ->mb_field && (MbQAddr % 2)) filterTopMbEdgeFlag  = 1;
+    else                                                      filterTopMbEdgeFlag  = MbQ->mbAvailB;
   }
 
   img->current_mb_nr = MbQAddr;
@@ -209,12 +211,12 @@ void GetStrength(byte Strength[16],ImageParameters *img,int MbQAddr,int dir,int 
 {
   int    blkP, blkQ, idx;
   int    blk_x, blk_x2, blk_y, blk_y2 ;
-  int    ***list0_mv = enc_picture->mv[LIST_0];
-  int    ***list1_mv = enc_picture->mv[LIST_1];
-  int    **list0_refIdxArr = enc_picture->ref_idx[LIST_0];
-  int    **list1_refIdxArr = enc_picture->ref_idx[LIST_1];
-  int64    **list0_refPicIdArr = enc_picture->ref_pic_id[LIST_0];
-  int64    **list1_refPicIdArr = enc_picture->ref_pic_id[LIST_1];
+  short  ***list0_mv = enc_picture->mv[LIST_0];
+  short  ***list1_mv = enc_picture->mv[LIST_1];
+  short  **list0_refIdxArr = enc_picture->ref_idx[LIST_0];
+  short  **list1_refIdxArr = enc_picture->ref_idx[LIST_1];
+  int64  **list0_refPicIdArr = enc_picture->ref_pic_id[LIST_0];
+  int64  **list1_refPicIdArr = enc_picture->ref_pic_id[LIST_1];
   int    xQ, xP, yQ, yP;
   int    mb_x, mb_y;
   Macroblock    *MbQ;
@@ -269,7 +271,7 @@ void GetStrength(byte Strength[16],ImageParameters *img,int MbQAddr,int dir,int 
           blk_x  = (mb_x<<2) + (blkQ  & 3) ;
           blk_y2 = pixP.pos_y >> 2;
           blk_x2 = pixP.pos_x >> 2;
-          if( (img->type == B_SLICE) )
+//            if( (img->type == B_SLICE) )
           {
               int64 ref_p0,ref_p1,ref_q0,ref_q1;      
               ref_p0 = list0_refIdxArr[blk_x][blk_y]<0 ? -1 : list0_refPicIdArr[blk_x][blk_y];
@@ -318,7 +320,7 @@ void GetStrength(byte Strength[16],ImageParameters *img,int MbQAddr,int dir,int 
                 Strength[idx] = 1;        
               } 
             }
-          else  
+/*            else  
           { // P slice
               int64 ref_p0,ref_q0;      
               ref_p0 = list0_refIdxArr[blk_x][blk_y]<0 ? -1 : list0_refPicIdArr[blk_x][blk_y];
@@ -326,7 +328,7 @@ void GetStrength(byte Strength[16],ImageParameters *img,int MbQAddr,int dir,int 
               Strength[idx] =  (ref_p0 != ref_q0 ) |
                 (abs( list0_mv[blk_x][blk_y][0] - list0_mv[blk_x2][blk_y2][0]) >= 4 ) |
                 (abs( list0_mv[blk_x][blk_y][1] - list0_mv[blk_x2][blk_y2][1]) >= mvlimit );
-            }
+              } */
           }
         }
       }

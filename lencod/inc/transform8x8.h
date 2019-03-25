@@ -24,7 +24,6 @@ int    Mode_Decision_for_new_8x8IntraBlocks (int b8, double lambda, int *min_cos
 void   intrapred_luma8x8(int img_x,int img_y, int *left_available, int *up_available, int *all_available);
 
 double RDCost_for_8x8IntraBlocks(int *c_nz, int b8, int ipmode, double lambda, double min_rdcost, int mostProbableMode);
-int    RDCost_for_8x8Blocks_Chroma (int b8, int b4, int  chroma);
 
 int    dct_luma8x8(int b8,int *coeff_cost, int intra);
 

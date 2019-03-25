@@ -141,8 +141,7 @@ typedef struct
   int       pic_init_qs_minus26;                              // se(v)
   int       chroma_qp_index_offset;                           // se(v)
 
-  int       cb_qp_index_offset;                               // se(v)
-  int       cr_qp_index_offset;                               // se(v)
+  int       second_chroma_qp_index_offset;                    // se(v)
 
   Boolean   deblocking_filter_control_present_flag;           // u(1)
   Boolean   constrained_intra_pred_flag;                      // u(1)
@@ -162,6 +161,7 @@ typedef struct
   Boolean   constrained_set3_flag;                            // u(1)
   unsigned  level_idc;                                        // u(8)
   unsigned  seq_parameter_set_id;                             // ue(v)
+  unsigned  chroma_format_idc;                                // ue(v)
 
   Boolean  seq_scaling_matrix_present_flag;                   // u(1)
   int      seq_scaling_list_present_flag[8];                  // u(1)

@@ -11,7 +11,7 @@
  *     Copyright (C) 1999  Telenor Satellite Services,Norway
  *                         Ericsson Radio Systems, Sweden
  *
- *     Inge Lille-Langøy               <inge.lille-langoy@telenor.com>
+ *     Inge Lille-Langoy               <inge.lille-langoy@telenor.com>
  *
  *     Telenor Satellite Services
  *     Keysers gt.13                       tel.:   +47 23 13 86 98
@@ -33,6 +33,7 @@
 #include "defines.h"
 #include "parsetcommon.h"
 #include "q_matrix.h"
+#include "q_offsets.h"
 #include "minmax.h"
 
 #ifdef WIN32
@@ -41,10 +42,14 @@
 
 #if defined(WIN32) && !defined(__GNUC__)
   typedef __int64   int64;
+#ifndef INT64_MIN
 # define INT64_MIN        (-9223372036854775807i64 - 1i64)
+#endif
 #else
   typedef long long int64;
+#ifndef INT64_MIN
 # define INT64_MIN        (-9223372036854775807LL - 1LL)
+#endif
 #endif
 
 #ifdef WIN32
@@ -72,8 +77,8 @@
 
 //#define pel_t byte
 
-#define pel_t unsigned short
 #define imgpel unsigned short
+#define pel_t imgpel
 
 //! Data Partitioning Modes
 typedef enum
@@ -91,14 +96,16 @@ typedef enum
 } PAR_OF_TYPE;
 
 //! Field Coding Types
-typedef enum {
+typedef enum 
+{
   FRAME_CODING,
   FIELD_CODING,
   ADAPTIVE_CODING
 } CodingType;
 
 //! definition of H.264 syntax elements
-typedef enum {
+typedef enum 
+{
   SE_HEADER,
   SE_PTYPE,
   SE_MBTYPE,
@@ -124,14 +131,16 @@ typedef enum {
 } SE_type;         // substituting the definitions in elements.h
 
 
-typedef enum {
+typedef enum 
+{
   INTER_MB,
   INTRA_MB_4x4,
   INTRA_MB_16x16
 } IntraInterDecision;
 
 
-typedef enum {
+typedef enum 
+{
   BITS_HEADER,
   BITS_TOTAL_MB,
   BITS_MB_MODE,
@@ -144,7 +153,8 @@ typedef enum {
 } BitCountType;
 
 
-typedef enum {
+typedef enum 
+{
   NO_SLICES,
   FIXED_MB,
   FIXED_RATE,
@@ -153,19 +163,22 @@ typedef enum {
 } SliceMode;
 
 
-typedef enum {
+typedef enum 
+{
   UVLC,
   CABAC
 } SymbolMode;
 
 
-typedef enum {
+typedef enum 
+{
   FRAME,
   TOP_FIELD,
   BOTTOM_FIELD
 } PictureStructure;           //!< New enum for field processing
 
-typedef enum {
+typedef enum 
+{
   P_SLICE = 0,
   B_SLICE,
   I_SLICE,
@@ -459,20 +472,9 @@ Picture *bottom_pic;
 Picture *frame_pic;
 
 
-typedef struct
-{
-  // Size info
-  int x_size, y_framesize, y_fieldsize;
-  int x_size_cr, y_framesize_cr, y_fieldsize_cr;              //ADD-VG-15052004
-  imgpel *yf, *uf, *vf;                    //!< frame representation
-  imgpel *yt, *ut, *vt;                    //!< top field
-  imgpel *yb, *ub, *vb;                    //!< bottom field
-} Sourceframe;
-
 // global picture format dependend buffers, mem allocation in image.c
 imgpel **imgY_org;           //!< Reference luma image
 imgpel ***imgUV_org;         //!< Reference chroma image
-//int    **refFrArr;           //!< Array for reference frames of each block
 int    **img4Y_tmp;          //!< for quarter pel interpolation
 
 unsigned int log2_max_frame_num_minus4;
@@ -510,8 +512,8 @@ imgpel  ***imgUV_org_frm;
 imgpel   **imgY_com;               //!< Encoded luma images
 imgpel  ***imgUV_com;              //!< Encoded croma images
 
-int   ***direct_ref_idx;           //!< direct mode reference index buffer
-int    **direct_pdir;              //!< direct mode reference index buffer
+short   ***direct_ref_idx;           //!< direct mode reference index buffer
+short    **direct_pdir;              //!< direct mode reference index buffer
 
 // Buffers for rd optimization with packet losses, Dim. Kontopodis
 byte **pixel_map;   //!< Shows the latest reference frame that is reliable for each pixel
@@ -606,7 +608,7 @@ typedef struct
   // B pictures
   int successive_Bframe;        //!< number of B frames that will be used
   int qpB;                      //!< QP for non-reference B slice coded pictures
-  int qpBSoffset;                     //!< QP for reference B slice coded pictures
+  int qpBRSOffset;                     //!< QP for reference B slice coded pictures
   int direct_spatial_mv_pred_flag;              //!< Direct Mode type to be used (0: Temporal, 1: Spatial)
   int directInferenceFlag;      //!< Direct Inference Flag
 
@@ -618,7 +620,7 @@ typedef struct
   int WeightedPrediction;        //!< Weighted prediciton for P frames (0: not used, 1: explicit)
   int WeightedBiprediction;      //!< Weighted prediciton for B frames (0: not used, 1: explicit, 2: implicit)
   int UseWeightedReferenceME;    //!< Use Weighted Reference for ME.
-  int StoredBPictures;           //!< Stored (Reference) B pictures replace P pictures (0: not used, 1: used)
+  int BRefPictures;              //!< B coded reference pictures replace P pictures (0: not used, 1: used)
   int PyramidCoding;
   char ExplicitPyramidFormat[1024];  //!< Explicit GOP format (PyramidCoding==3). 
   int PyramidRefReorder;       //!< Reordering based on Poc distances for PyramidCoding
@@ -644,8 +646,6 @@ typedef struct
   int Intra16x16PlaneDisable;
   int ChromaIntraDisable;
 
-  
-  char PictureTypeSequence[MAXPICTURETYPESEQUENCELEN];
   double FrameRate;
 
   int chroma_qp_index_offset;
@@ -657,7 +657,7 @@ typedef struct
 #endif
 #ifdef _CHANGE_QP_
   int qpN2, qpB2, qp2start;
-  int qp02, qpBs2offset;
+  int qp02, qpBRS2Offset;
 #endif
   int rdopt;
   int disthres;
@@ -700,7 +700,7 @@ typedef struct
 
   int *top_left;                         //!< top_left and bottom_right store values indicating foregrounds
   int *bottom_right; 
-  int *slice_group_id;                   //!< slice_group_id is for slice group type being 6  
+  byte *slice_group_id;                   //!< slice_group_id is for slice group type being 6  
   int *run_length_minus1;                //!< run_length_minus1 is for slice group type being 0
 
   int slice_group_change_direction_flag;
@@ -733,6 +733,7 @@ typedef struct
   int BitDepthLuma;
   int BitDepthChroma;
   int img_height_cr;
+  int img_width_cr;
   int rgb_input_flag;
   int cb_qp_index_offset;
   int cr_qp_index_offset;
@@ -742,6 +743,13 @@ typedef struct
 
   //Residue Color Transform
   int residue_transform_flag;
+
+  // Lambda Params
+  int UseExplicitLambdaParams;
+  double LambdaWeight[6];
+
+  char QOffsetMatrixFile[FILE_NAME_SIZE];        //!< Quantization Offset matrix cfg file
+  int  OffsetMatrixPresentFlag;                  //!< Enable Explicit Quantization Offset Matrices
 
 } InputParameters;
 
@@ -765,6 +773,7 @@ typedef struct
   int width_cr;                //!< Number of pels chroma
   int height;                  //!< Number of lines
   int height_cr;               //!< Number of lines  chroma
+  int height_cr_frame;         //!< Number of lines  chroma frame
   int subblock_x;              //!< current subblock horizontal
   int subblock_y;              //!< current subblock vertical
   int is_intra_block;
@@ -830,9 +839,9 @@ typedef struct
   int fw_mb_mode;
   int bw_mb_mode;
 
-  int****** pred_mv;                 //!< motion vector predictors for all block types and all reference frames
+  short****** pred_mv;                 //!< motion vector predictors for all block types and all reference frames
+  short****** all_mv;                  //!< replaces local all_mv
 
-  int****** all_mv;       //!< replaces local all_mv
   int LFDisableIdc;
   int LFAlphaC0Offset;
   int LFBetaOffset;
@@ -964,6 +973,9 @@ typedef struct
   // Residue Color Transform
   int residue_transform_flag;
 
+  int auto_crop_right;
+  int auto_crop_bottom;
+
 } ImageParameters;
 
 #define NUM_PIC_TYPE 5
@@ -1027,9 +1039,9 @@ typedef struct
   int    cbp;
   int64  cbp_blk;
   int    mode;
-  int    ******pred_mv;        //!< predicted motion vectors
-  int    ******all_mv;         //!< all modes motion vectors
-  int    refar[2][4][4];       //!< reference frame array [list][x][y]
+  short  ******pred_mv;        //!< predicted motion vectors
+  short  ******all_mv;         //!< all modes motion vectors
+  short  refar[2][4][4];       //!< reference frame array [list][x][y]
   int    i16offset;
   int    c_ipred_mode;
 
@@ -1120,10 +1132,12 @@ void  MarkAllMacroblockModes(ImageParameters *img, imgpel **, imgpel ***);
 
 void CalculateQuantParam();
 void CalculateQuant8Param();
+void CalculateOffsetParam();
+void CalculateOffset8Param();
 int  TransformDecision(int, int*);
 int  SATD8X8(int*, int);
 
-void  LumaPrediction4x4 (int, int, int, int, int, int, int);
+void  LumaPrediction4x4 (int, int, int, int, int, short, short);
 int   SATD (int*, int);
 
 pel_t* FastLineX (int, pel_t*, int, int, int, int);
@@ -1132,7 +1146,7 @@ pel_t* UMVLineX  (int, pel_t*, int, int, int, int);
 void LumaResidualCoding ();
 void ChromaResidualCoding (int*);
 void IntraChromaPrediction (int*, int*, int*);
-void ChromaPrediction4x4 (int, int, int, int, int, int, int, int);
+void ChromaPrediction4x4 (int, int, int, int, int, int, short, short);
 int  writeMBLayer   (int rdopt);
 
 extern int*   refbits;
@@ -1140,8 +1154,8 @@ extern int**** motion_cost;
 
 void  Get_Direct_Motion_Vectors ();
 void  PartitionMotionSearch     (int, int, double);
-int   BIDPartitionCost          (int, int, int, int, int);
-int   LumaResidualCoding8x8     (int*, int64*, int, int, int, int, int, int);
+int   BIDPartitionCost          (int, int, short, short, int);
+int   LumaResidualCoding8x8     (int*, int64*, int, short, int, int, short, short);
 int   writeLumaCoeff8x8         (int, int, int);
 int   writeMotionVector8x8      (int  i0, int  j0, int  i1, int  j1, int  refframe, int  list_idx, int  mv_mode);
 int   writeReferenceFrame       (int, int, int, int, int);
@@ -1166,8 +1180,8 @@ int  init_global_buffers();
 void free_global_buffers();
 void no_mem_exit  (char *where);
 
-int  get_mem_mv  (int*******);
-void free_mem_mv (int******);
+int  get_mem_mv  (short*******);
+void free_mem_mv (short******);
 void free_img    ();
 
 int  get_mem_ACcoeff  (int*****);
@@ -1289,7 +1303,7 @@ void modify_redundant_pic_cnt(unsigned char *streamBuffer);
 // End JVT-D101
 
 // Fast ME enable
-int BlockMotionSearch (int,int,int,int,int,int,double);
+int BlockMotionSearch (short,int,int,int,int,int,double);
 void encode_one_macroblock (void);
 
 int RDCost_for_4x4Blocks_Chroma (int b8, int b4, int  chroma);

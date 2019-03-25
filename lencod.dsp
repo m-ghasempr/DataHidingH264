@@ -203,6 +203,10 @@ SOURCE=.\lencod\src\q_matrix.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\lencod\src\q_offsets.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\lencod\src\ratectl.c
 # End Source File
 # Begin Source File
@@ -364,6 +368,10 @@ SOURCE=.\lencod\inc\parsetcommon.h
 # Begin Source File
 
 SOURCE=.\lencod\inc\q_matrix.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\lencod\inc\q_offsets.h
 # End Source File
 # Begin Source File
 

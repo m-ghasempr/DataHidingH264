@@ -8,7 +8,7 @@
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
- *     - Inge Lille-Langøy               <inge.lille-langoy@telenor.com>
+ *     - Inge Lille-Langoy               <inge.lille-langoy@telenor.com>
  *     - Rickard Sjoberg                 <rickard.sjoberg@era.ericsson.se>
  *     - Jani Lainema                    <jani.lainema@nokia.com>
  *     - Sebastian Purreiter             <sebastian.purreiter@mch.siemens.de>
@@ -49,6 +49,7 @@
 #include "nalu.h"
 #include "ratectl.h"
 #include "mb_access.h"
+#include "output.h"
 
 void code_a_picture(Picture *pic);
 void frame_picture (Picture *frame);
@@ -73,12 +74,11 @@ static void put_buffer_bot();
 
 static void copy_motion_vectors_MB();
 
-static void CopyFrameToOldImgOrgVariables (Sourceframe *sf);
-static void CopyTopFieldToOldImgOrgVariables (Sourceframe *sf);
-static void CopyBottomFieldToOldImgOrgVariables (Sourceframe *sf);
-static Sourceframe *AllocSourceframe (int xs, int ys, int xs_cr, int ys_cr);
-static void FreeSourceframe (Sourceframe *sf);
-static void ReadOneFrame (int FrameNoInFile, int HeaderSize, int xs, int ys, int xs_cr, int ys_cr, Sourceframe *sf);
+static void PaddAutoCropBorders (int org_size_x, int org_size_y, int img_size_x, int img_size_y,
+                                 int org_size_x_cr, int org_size_y_cr, int img_size_x_cr, int img_size_y_cr);
+
+static void ReadOneFrame (int FrameNoInFile, int HeaderSize, int xs, int ys, int xs_cr, int ys_cr);
+
 static void writeUnit(Bitstream* currStream ,int partition);
 
 #ifdef _ADAPT_LAST_GROUP_
@@ -90,23 +90,12 @@ int *last_P_no_fld;
 static void ReportFirstframe(int tmp_time, int me_time);
 static void ReportIntra(int tmp_time, int me_time);
 static void ReportSP(int tmp_time, int me_time);
-static void ReportBS(int tmp_time, int me_time);
+static void ReportBRP(int tmp_time, int me_time);
 static void ReportP(int tmp_time, int me_time);
 static void ReportB(int tmp_time, int me_time);
 static void ReportNALNonVLCBits(int tmp_time, int me_time);
 
-/*
-static void ReportFirstframe(int tmp_time);
-static void ReportIntra(int tmp_time);
-static void ReportSP(int tmp_time);
-static void ReportBS(int tmp_time);
-static void ReportP(int tmp_time);
-static void ReportB(int tmp_time);
-*/
-
 static int CalculateFrameNumber();  // Calculates the next frame number
-static int FrameNumberInFile;       // The current frame number in the input file
-static Sourceframe *srcframe;
 
 StorablePicture *enc_picture;
 StorablePicture *enc_frame_picture;
@@ -223,9 +212,13 @@ void code_a_picture(Picture *pic)
   FmoStartPicture ();           //! picture level initialization of FMO
 
   CalculateQuantParam();
+  CalculateOffsetParam();
 
   if(input->AllowTransform8x8)
+  {
     CalculateQuant8Param();
+    CalculateOffset8Param();
+  }
 
   while (NumberOfCodedMBs < img->total_number_mb)       // loop over slices
   {
@@ -267,6 +260,7 @@ int encode_one_frame ()
 {
   static int prev_frame_no = 0; // POC200301
   static int consecutive_non_reference_pictures = 0; // POC200301
+  int        FrameNumberInFile;
 
 #ifdef _LEAKYBUCKET_
   extern long Bit_Buffer[10000];
@@ -320,13 +314,13 @@ int encode_one_frame ()
   init_frame ();
   FrameNumberInFile = CalculateFrameNumber();
 
-  srcframe = AllocSourceframe (img->width, img->height, img->width_cr, img->height_cr);
-  
   ReadOneFrame (FrameNumberInFile, input->infile_header,
-                img->width, img->height, img->width_cr, img->height_cr, srcframe);
-  CopyFrameToOldImgOrgVariables (srcframe);
+                input->img_width, input->img_height, input->img_width_cr, input->img_height_cr);
 
-  // Set parameters for directmode and Deblocking filter
+  PaddAutoCropBorders (input->img_width, input->img_height, input->img_width_cr, input->img_height_cr,
+                       img->width, img->height, img->width_cr, img->height_cr);
+
+  // set parameters for direct mode and deblocking filter
   img->direct_spatial_mv_pred_flag     = input->direct_spatial_mv_pred_flag;
   img->LFDisableIdc    = input->LFDisableIdc;
   img->LFAlphaC0Offset = input->LFAlphaC0Offset;
@@ -555,28 +549,23 @@ int encode_one_frame ()
     {
     case I_SLICE:
       stats->bit_ctr_P += stats->bit_ctr - stats->bit_ctr_n;
-	  ReportIntra(tmp_time,me_time);
-      //ReportIntra(tmp_time);
+      ReportIntra(tmp_time,me_time);
       break;
     case SP_SLICE:
       stats->bit_ctr_P += stats->bit_ctr - stats->bit_ctr_n;
       ReportSP(tmp_time,me_time);
-      //ReportSP(tmp_time);
       break;
     case B_SLICE:
       stats->bit_ctr_B += stats->bit_ctr - stats->bit_ctr_n;
       if (img->nal_reference_idc>0)
-        ReportBS(tmp_time,me_time);
-        //ReportBS(tmp_time);
+        ReportBRP(tmp_time,me_time);
       else
         ReportB(tmp_time,me_time);
-        //ReportB(tmp_time);
 
       break;
     default:      // P
       stats->bit_ctr_P += stats->bit_ctr - stats->bit_ctr_n;
       ReportP(tmp_time,me_time);
-      //ReportP(tmp_time);
     }
   }
   stats->bit_ctr_n = stats->bit_ctr;
@@ -594,8 +583,6 @@ int encode_one_frame ()
   }
 
   stats->bit_ctr_parametersets_n=0;
-
-  FreeSourceframe (srcframe);
 
   if (IMG_NUMBER == 0)
     return 0;
@@ -638,6 +625,28 @@ static int writeout_picture(Picture *pic)
 }
 
 
+void copy_params()
+{
+  enc_picture->frame_mbs_only_flag = active_sps->frame_mbs_only_flag;
+  enc_picture->frame_cropping_flag = active_sps->frame_cropping_flag;
+  enc_picture->chroma_format_idc   = active_sps->chroma_format_idc;
+
+  if (active_sps->frame_cropping_flag)
+  {
+    enc_picture->frame_cropping_rect_left_offset=active_sps->frame_cropping_rect_left_offset; 
+    enc_picture->frame_cropping_rect_right_offset=active_sps->frame_cropping_rect_right_offset; 
+    enc_picture->frame_cropping_rect_top_offset=active_sps->frame_cropping_rect_top_offset; 
+    enc_picture->frame_cropping_rect_bottom_offset=active_sps->frame_cropping_rect_bottom_offset; 
+  }
+  else
+  {
+    enc_picture->frame_cropping_rect_left_offset=0; 
+    enc_picture->frame_cropping_rect_right_offset=0; 
+    enc_picture->frame_cropping_rect_top_offset=0; 
+    enc_picture->frame_cropping_rect_bottom_offset=0; 
+  }
+}
+
 /*!
  ************************************************************************
  * \brief
@@ -664,15 +673,10 @@ void frame_picture (Picture *frame)
   enc_frame_picture->MbaffFrameFlag = img->MbaffFrameFlag = (input->MbInterlace != FRAME_CODING);
 
   enc_picture=enc_frame_picture;
+  copy_params();
 
   stats->em_prev_bits_frm = 0;
   stats->em_prev_bits = &stats->em_prev_bits_frm;
-
-  if (img->MbaffFrameFlag)
-  {
-    CopyTopFieldToOldImgOrgVariables (srcframe);
-    CopyBottomFieldToOldImgOrgVariables (srcframe);
-  }
 
   img->fld_flag = 0;
   code_a_picture(frame);
@@ -708,8 +712,8 @@ void field_picture (Picture *top, Picture *bottom)
   stats->em_prev_bits = &stats->em_prev_bits_fld;
   img->number *= 2;
   img->buf_cycle *= 2;
-  img->height = input->img_height / 2; 
-  img->height_cr = input->img_height_cr / 2;
+  img->height = (input->img_height+img->auto_crop_bottom) / 2; 
+  img->height_cr = img->height_cr_frame / 2;
   img->fld_flag = 1;
   img->PicSizeInMbs = img->FrameSizeInMbs/2;
   // Top field
@@ -726,12 +730,13 @@ void field_picture (Picture *top, Picture *bottom)
   
   img->structure = TOP_FIELD;
   enc_picture = enc_top_picture;
+  copy_params();
+
   put_buffer_top ();
   init_field ();
   if (img->type == B_SLICE)       //all I- and P-frames
     nextP_tr_fld--;
 
-  CopyTopFieldToOldImgOrgVariables (srcframe);
 
   img->fld_flag = 1;
 //  img->bottom_field_flag = 0;
@@ -772,6 +777,7 @@ void field_picture (Picture *top, Picture *bottom)
   img->ThisPOC = img->bottompoc;
   img->structure = BOTTOM_FIELD;
   enc_picture = enc_bottom_picture;
+  copy_params();
   put_buffer_bot ();
   img->number++;
 
@@ -783,7 +789,6 @@ void field_picture (Picture *top, Picture *bottom)
  if (img->type == I_SLICE && input->IntraBottom!=1)
     img->type = P_SLICE;
 
-  CopyBottomFieldToOldImgOrgVariables (srcframe);
   img->fld_flag = 1;
 //  img->bottom_field_flag = 1;
 
@@ -819,8 +824,8 @@ static void distortion_fld (float *dis_fld_y, float *dis_fld_u, float *dis_fld_v
 
   img->number /= 2;
   img->buf_cycle /= 2;
-  img->height = input->img_height;
-  img->height_cr = input->img_height_cr;
+  img->height = (input->img_height+img->auto_crop_bottom);
+  img->height_cr = img->height_cr_frame;
   img->total_number_mb =
     (img->width * img->height) / (MB_BLOCK_SIZE * MB_BLOCK_SIZE);
 
@@ -891,7 +896,7 @@ static void frame_mode_buffer (int bit_frame, float snr_frame_y, float snr_frame
   if ((input->PicInterlace != FRAME_CODING)||(input->MbInterlace != FRAME_CODING))
   {
     img->height = img->height / 2;
-    img->height_cr = input->img_height_cr / 2;
+    img->height_cr = img->height_cr / 2;
     img->number *= 2;
     
     put_buffer_top ();
@@ -900,8 +905,8 @@ static void frame_mode_buffer (int bit_frame, float snr_frame_y, float snr_frame
     put_buffer_bot ();
     
     img->number /= 2;         // reset the img->number to field
-    img->height = input->img_height;
-    img->height_cr = input->img_height_cr;
+    img->height = (input->img_height+img->auto_crop_bottom);
+    img->height_cr = img->height_cr_frame;
     img->total_number_mb =
       (img->width * img->height) / (MB_BLOCK_SIZE * MB_BLOCK_SIZE);
     
@@ -956,7 +961,6 @@ static void init_frame ()
   //if (img->type != B_SLICE)
   if (img->b_frame_to_code == 0)
   {
-    
     img->tr = start_tr_in_this_IGOP + IMG_NUMBER * (input->jumpd + 1);
     
     img->imgtr_last_P_frm = img->imgtr_next_P_frm;
@@ -1055,15 +1059,14 @@ static void init_frame ()
 #ifdef _CHANGE_QP_
         if (input->qp2start > 0 && img->tr >= input->qp2start)
         {
-          img->qp = input->qpB2 + input->qpBs2offset;
+          img->qp = Clip3(0,51,input->qpB2 + input->qpBRS2Offset);
         }
         else
 #endif
         {
-          img->qp = input->qpB + input->qpBs2offset;
+          img->qp = Clip3(0,51,input->qpB + input->qpBRSOffset);
         }
       }
-
     }
     else if (input->PyramidCoding ==3)  
     {
@@ -1227,10 +1230,10 @@ static void init_field ()
         {
 #ifdef _CHANGE_QP_
           if (input->qp2start > 0 && img->tr >= input->qp2start)
-            img->qp = input->qpB2 + input->qpBs2offset;
+            img->qp = Clip3(0,51,input->qpB2 + input->qpBRS2Offset);
           else
 #endif
-            img->qp = input->qpB + input->qpBs2offset;
+            img->qp = Clip3(0,51,input->qpB + input->qpBRSOffset);
           
         }
       }
@@ -1310,6 +1313,8 @@ void UnifiedOneForthPix (StorablePicture *s)
   if (input->WeightedPrediction || input->WeightedBiprediction)
   {
       s->imgY_11_w = malloc ((s->size_x * s->size_y) * sizeof (imgpel));
+      if (NULL == s->imgY_11_w)
+        no_mem_exit("alloc_storable_picture: s->imgY_11_w");
       get_mem2Dpel (&(s->imgY_ups_w), (2*IMG_PAD_SIZE + s->size_y)*4, (2*IMG_PAD_SIZE + s->size_x)*4);
   }
   out4Y = s->imgY_ups;
@@ -1892,9 +1897,9 @@ static void ReportSP(int tmp_time, int me_time)
           img->fld_flag ? "FLD" : "FRM", intras);
 }
 
-static void ReportBS(int tmp_time, int me_time)
+static void ReportBRP(int tmp_time, int me_time)
 {
-  printf ("%04d(BS) %8d %1d %2d %7.3f %7.3f %7.3f  %7d   %5d     %3s   %3d %1d\n",
+  printf ("%04d(BRP) %8d %1d %2d %7.3f %7.3f %7.3f  %7d   %5d     %3s   %3d %1d\n",
     frame_no, stats->bit_ctr - stats->bit_ctr_n, active_pps->weighted_bipred_idc, img->qp, snr->snr_y,
     snr->snr_u, snr->snr_v, tmp_time, me_time,
     img->fld_flag ? "FLD" : "FRM", intras,img->direct_spatial_mv_pred_flag);
@@ -1921,168 +1926,63 @@ static void ReportP(int tmp_time, int me_time)
 /*!
  ************************************************************************
  * \brief
- *    Copies contents of a Sourceframe structure into the old-style
- *    variables imgY_org_frm and imgUV_org_frm.  No other side effects
- * \param sf
- *    the source frame the frame is to be taken from
+ *    Padding of automatically added border for picture sizes that are not
+ *     multiples of macroblock/macroblock pair size
+ *
+ * \param org_size_x
+ *    original image horizontal size (luma)
+ * \param org_size_y
+ *    original image vertical size (luma)
+ * \param img_size_x
+ *    coded image horizontal size (luma)
+ * \param img_size_y
+ *    code image vertical size (luma)
+ * \param org_size_x_cr
+ *    original image horizontal size (chroma)
+ * \param org_size_y_cr
+ *    original image vertical size (chroma)
+ * \param img_size_x_cr
+ *    coded image horizontal size (chroma)
+ * \param img_size_y_cr
+ *    code image vertical size (chroma)
  ************************************************************************
  */
-
-static void CopyFrameToOldImgOrgVariables (Sourceframe *sf)
+static void PaddAutoCropBorders (int org_size_x, int org_size_y, int img_size_x, int img_size_y,
+                                 int org_size_x_cr, int org_size_y_cr, int img_size_x_cr, int img_size_y_cr)
 {
   int x, y;
   
-  for (y=0; y<sf->y_framesize; y++)
-  for (x=0; x<sf->x_size; x++)
-    imgY_org_frm [y][x] = sf->yf[y*sf->x_size+x];
+  //padding right border
+  for (y=0; y<org_size_y; y++)
+    for (x=org_size_x; x<img_size_x; x++)
+      imgY_org_frm [y][x] = imgY_org_frm [y][x-1];
+
+  //padding bottom border
+  for (y=org_size_y; y<img_size_y; y++)
+    for (x=0; x<img_size_x; x++)
+      imgY_org_frm [y][x] = imgY_org_frm [y-1][x];
+
 
   if (img->yuv_format != YUV400)
   {
-    for (y=0; y<sf->y_framesize_cr; y++)
-      for (x=0; x<sf->x_size_cr; x++)
+    //padding right border
+    for (y=0; y<org_size_y_cr; y++)
+      for (x=org_size_x_cr; x<img_size_x_cr; x++)
       {
-        imgUV_org_frm[0][y][x] = sf->uf[y*sf->x_size_cr+x];
-        imgUV_org_frm[1][y][x] = sf->vf[y*sf->x_size_cr+x];
+        imgUV_org_frm [0][y][x] = imgUV_org_frm [0][y][x-1];
+        imgUV_org_frm [1][y][x] = imgUV_org_frm [1][y][x-1];
+      }
+     
+    //padding bottom border
+    for (y=org_size_y_cr; y<img_size_y_cr; y++)
+      for (x=0; x<img_size_x_cr; x++)
+      {
+        imgUV_org_frm [0][y][x] = imgUV_org_frm [0][y-1][x];
+        imgUV_org_frm [1][y][x] = imgUV_org_frm [1][y-1][x];
       }
   }
 }
 
-/*!
- ************************************************************************
- * \brief
- *    Copies contents of a Sourceframe structure into the old-style
- *    variables imgY_org_top and imgUV_org_top.  No other side effects
- * \param sf
- *    the source frame the field is to be taken from
- ************************************************************************
- */
-
-static void CopyTopFieldToOldImgOrgVariables (Sourceframe *sf)
-{
-  int x, y;
-
-  for (y=0; y<sf->y_fieldsize; y++)
-  for (x=0; x<sf->x_size; x++)
-    imgY_org_top [y][x] = sf->yt[y*sf->x_size+x];
-
-  if (img->yuv_format != YUV400)
-  {
-    for (y=0; y<sf->y_fieldsize_cr; y++)
-      for (x=0;x<sf->x_size_cr; x++)
-      {
-        imgUV_org_top[0][y][x] = sf->ut[y*sf->x_size_cr+x];
-        imgUV_org_top[1][y][x] = sf->vt[y*sf->x_size_cr+x];
-      }
-  }
-}
-/*!
- ************************************************************************
- * \brief
- *    Copies contents of a Sourceframe structure into the old-style
- *    variables imgY_org_bot and imgUV_org_bot.  No other side effects
- * \param sf
- *    the source frame the field is to be taken from
- ************************************************************************
- */
-
-static void CopyBottomFieldToOldImgOrgVariables (Sourceframe *sf)
-{
-  int x, y;
-  
-  for (y=0; y<sf->y_fieldsize; y++)
-  for (x=0; x<sf->x_size; x++)
-    imgY_org_bot [y][x] = sf->yb[y*sf->x_size+x];
-
-  if (img->yuv_format != YUV400)
-  {
-    for (y=0; y<sf->y_fieldsize_cr; y++)
-      for (x=0;x<sf->x_size_cr; x++)
-      {
-        imgUV_org_bot[0][y][x] = sf->ub[y*sf->x_size_cr+x];
-        imgUV_org_bot[1][y][x] = sf->vb[y*sf->x_size_cr+x];
-      }
-  }
-}
-
-
-/*!
-************************************************************************
-* \brief
-*    Allocates Sourceframe structure
-* \param xs
-*    horizontal size of frame in pixels
-* \param ys
-*    vertical size of frame in pixels, must be divisible by 2
-* \param xs_cr
-*    horizontal chroma size of frame in pixels
-* \param ys_cr
-*    vertical chroma size of frame in pixels, must be divisible by 2
-* \return
-*    pointer to initialized source frame structure
-************************************************************************
-*/
-
-static Sourceframe *AllocSourceframe (int xs, int ys, int xs_cr, int ys_cr)
-{
-  Sourceframe *sf = NULL;
-  const unsigned int bytes_y = xs*ys*sizeof(imgpel);
-  const unsigned int bytes_uv = (xs_cr*ys_cr)*sizeof(imgpel);
-
-  if ((sf = calloc (1, sizeof (Sourceframe))) == NULL) no_mem_exit ("ReadOneFrame: sf");
-  if (sf->yf == NULL) if ((sf->yf = calloc (1, bytes_y)) == NULL) no_mem_exit ("ReadOneFrame: sf->yf");
-  if (sf->yt == NULL) if ((sf->yt = calloc (1, bytes_y/2)) == NULL) no_mem_exit ("ReadOneFrame: sf->yt");
-  if (sf->yb == NULL) if ((sf->yb = calloc (1, bytes_y/2)) == NULL) no_mem_exit ("ReadOneFrame: sf->yb");
-  if (img->yuv_format != YUV400)
-  {
-    if (sf->uf == NULL) if ((sf->uf = calloc (1, bytes_uv)) == NULL) no_mem_exit ("ReadOneFrame: sf->uf");
-    if (sf->ut == NULL) if ((sf->ut = calloc (1, bytes_uv/2)) == NULL) no_mem_exit ("ReadOneFrame: sf->ut");
-    if (sf->ub == NULL) if ((sf->ub = calloc (1, bytes_uv/2)) == NULL) no_mem_exit ("ReadOneFrame: sf->ub");
-    if (sf->vf == NULL) if ((sf->vf = calloc (1, bytes_uv)) == NULL) no_mem_exit ("ReadOneFrame: sf->vf");
-    if (sf->vt == NULL) if ((sf->vt = calloc (1, bytes_uv/2)) == NULL) no_mem_exit ("ReadOneFrame: sf->vt");
-    if (sf->vb == NULL) if ((sf->vb = calloc (1, bytes_uv/2)) == NULL) no_mem_exit ("ReadOneFrame: sf->vb");
-  }
-  sf->x_size = xs;
-  sf->x_size_cr = xs_cr;  //ADD-VG-15052004
-  sf->y_framesize = ys;
-  sf->y_framesize_cr = ys_cr;
-  sf->y_fieldsize = ys/2;
-  sf->y_fieldsize_cr = ys_cr/2;
-  
-  return sf;
-}
-
-
-
-/*!
- ************************************************************************
- * \brief
- *    Frees Sourceframe structure
- * \param sf
- *    pointer to Sourceframe previoously allocated with ALlocSourceframe()
- * \return
- *    none
- ************************************************************************
- */
-
-static void FreeSourceframe (Sourceframe *sf)
-{
-  if (sf!=NULL) 
-  {
-    if (sf->yf != NULL) free (sf->yf);
-    if (sf->yt != NULL) free (sf->yt);
-    if (sf->yb != NULL) free (sf->yb);
-    if (img->yuv_format != YUV400)
-    {
-      if (sf->uf != NULL) free (sf->uf);
-      if (sf->ut != NULL) free (sf->ut);
-      if (sf->ub != NULL) free (sf->ub);
-      if (sf->vf != NULL) free (sf->vf);
-      if (sf->vt != NULL) free (sf->vt);
-      if (sf->vb != NULL) free (sf->vb);
-    }
-    free (sf);
-  }
-}
 
 /*!
  ************************************************************************
@@ -2121,80 +2021,136 @@ static int CalculateFrameNumber()
 /*!
  ************************************************************************
  * \brief
- *    Generate Field Component from Frame Components by copying
- * \param src
- *    source frame component
- * \param top
- *    destination top field component
- * \param bot
- *    destination bottom field component
- * \param xs
- *    horizontal size of frame in pixels
- * \param ys
- *    vertical size of frame in pixels, must be divisible by 2
+ *    Convert file read buffer to source picture structure
+ * \param imgX
+ *    Pointer to image plane
+ * \param buf
+ *    Buffer for file output
+ * \param size
+ *    image size in pixel
  ************************************************************************
  */
-static void GenerateFieldComponent (imgpel *src, imgpel *top, imgpel *bot, int xs, int ys)
+void buf2img (imgpel** imgX, unsigned char* buf, int size_x, int size_y, int symbol_size_in_bytes)
 {
-  int fieldline;
-  assert (ys % 2 == 0);
+  int i,j;
 
-  for (fieldline = 0; fieldline < ys/2; fieldline++)
+  unsigned short tmp16, ui16;
+  unsigned long  tmp32, ui32;
+
+  if (symbol_size_in_bytes> sizeof(imgpel))
   {
-    memcpy (&top[xs * fieldline], &src[xs * (fieldline * 2 + 0)], xs*sizeof(imgpel));
-    memcpy (&bot[xs * fieldline], &src[xs * (fieldline * 2 + 1)], xs*sizeof(imgpel));
+    error ("Source picture has higher bit depth than imgpel data type. Please recompile with larger data type for imgpel.", 500);
+  }
+
+  if (( sizeof(char) == sizeof (imgpel)) && ( sizeof(char) == symbol_size_in_bytes))
+  {
+    // imgpel == pixel_in_file == 1 byte -> simple copy
+    for(j=0;j<size_y;j++)
+      memcpy(imgX[j], buf+j*size_x, size_x);
+  }
+  else
+  {
+    // sizeof (imgpel) > sizeof(char)
+    if (testEndian())
+    {
+      // big endian
+      switch (symbol_size_in_bytes)
+      {
+      case 1:
+        {
+          for(j=0;j<size_y;j++)
+            for(i=0;i<size_x;i++)
+            {
+              imgX[j][i]= buf[i+j*size_x];
+            }
+          break;
+        }
+      case 2:
+        {
+          for(j=0;j<size_y;j++)
+            for(i=0;i<size_x;i++)
+            {
+              memcpy(&tmp16, buf+((i+j*size_x)*2), 2);
+              ui16  = (tmp16 >> 8) | ((tmp16&0xFF)<<8);
+              imgX[j][i] = (imgpel) ui16;
+            }
+
+          break;
+        }
+      case 4:
+        {
+          for(j=0;j<size_y;j++)
+            for(i=0;i<size_x;i++)
+            {
+              memcpy(&tmp32, buf+((i+j*size_x)*4), 4);
+              ui32  = ((tmp32&0xFF00)<<8) | ((tmp32&0xFF)<<24) | ((tmp32&0xFF0000)>>8) | ((tmp32&0xFF000000)>>24);
+              imgX[j][i] = (imgpel) ui32;
+            }
+        }
+      default:
+        {
+           error ("reading only from formats of 8, 16 or 32 bit allowed on big endian architecture", 500);
+           break;
+        }
+      }
+
+    }
+    else
+    {
+      // little endian
+      for (j=0; j < size_y; j++)
+        for (i=0; i < size_x; i++)
+        {
+          imgX[j][i]=0;
+          memcpy(&(imgX[j][i]), buf +((i+j*size_x)*symbol_size_in_bytes), symbol_size_in_bytes);
+        }
+    }
   }
 }
+
 
 /*!
  ************************************************************************
  * \brief
  *    Reads one new frame from file
+ *
  * \param FrameNoInFile
  *    Frame number in the source file
  * \param HeaderSize
  *    Number of bytes in the source file to be skipped
  * \param xs
- *    horizontal size of frame in pixels, must be divisible by 16
+ *    horizontal size of frame in pixels
  * \param ys
- *    vertical size of frame in pixels, must be divisible by 16 or
- *    32 in case of MB-adaptive frame/field coding
+ *    vertical size of frame in pixels
  * \param xs_cr
- *    horizontal chroma size of frame in pixels, must be divisible by 16
+ *    horizontal chroma size of frame in pixels
  * \param ys_cr
- *    vertical chroma size of frame in pixels, must be divisible by 16 or
- *    32 in case of MB-adaptive frame/field coding
- * \param sf
- *    Sourceframe structure to which the frame is written
+ *    vertical chroma size of frame in pixels
  ************************************************************************
  */
-static void ReadOneFrame (int FrameNoInFile, int HeaderSize, int xs, int ys, int xs_cr, int ys_cr, Sourceframe *sf)
+static void ReadOneFrame (int FrameNoInFile, int HeaderSize, int xs, int ys, int xs_cr, int ys_cr)
 {
   unsigned int symbol_size_in_bytes = img->pic_unit_size_on_disk/8;
   
-  const int bytes_y = xs*ys * symbol_size_in_bytes;
-  const int bytes_uv = xs_cr*ys_cr * symbol_size_in_bytes;
+  const int imgsize_y = xs*ys;
+  const int imgsize_uv = xs_cr*ys_cr;
+
+  const int bytes_y = imgsize_y * symbol_size_in_bytes;
+  const int bytes_uv = imgsize_uv * symbol_size_in_bytes;
 
   const int64 framesize_in_bytes = bytes_y + 2*bytes_uv;
-  char *buf;
-  int i;
+  unsigned char *buf;
 
   Boolean rgb_input = (input->rgb_input_flag==1 && input->yuv_format==3);
 
 
-  assert (xs % MB_BLOCK_SIZE == 0);
-  assert (ys % MB_BLOCK_SIZE == 0);
   assert (p_in != -1);
-  assert (sf != NULL);
-  assert (sf->yf != NULL);
-
-  assert (FrameNumberInFile == FrameNoInFile);
 
   // KS: this buffer should actually be allocated only once, but this is still much faster than the previous version
-  buf = malloc (xs*ys * symbol_size_in_bytes);
+  if (NULL==(buf = malloc (xs*ys * symbol_size_in_bytes))) no_mem_exit("ReadOneFrame: buf");
 
   // skip Header
-  if (lseek (p_in, HeaderSize, SEEK_SET) != 0)
+  if (lseek (p_in, HeaderSize, SEEK_SET) != HeaderSize)
   {
     error ("ReadOneFrame: cannot fseek to (Header size) in p_in", -1);
   }
@@ -2226,12 +2182,8 @@ static void ReadOneFrame (int FrameNoInFile, int HeaderSize, int xs, int ys, int
       report_stats_on_error();
       exit (-1);
     }
-    for (i=0; i < bytes_y; i++)
-    {
-      sf->yf[i]=0;
-      memcpy(&(sf->yf[i]), buf +(i*symbol_size_in_bytes), symbol_size_in_bytes);
-    }
-    
+
+    buf2img(imgY_org_frm, buf, xs, ys, symbol_size_in_bytes);
     
     if (img->yuv_format != YUV400)
     {
@@ -2241,11 +2193,7 @@ static void ReadOneFrame (int FrameNoInFile, int HeaderSize, int xs, int ys, int
         report_stats_on_error();
         exit (-1);
       }
-      for (i=0; i < bytes_uv; i++)
-      {
-        sf->uf[i]=0;
-        memcpy(&(sf->uf[i]), buf +(i*symbol_size_in_bytes), symbol_size_in_bytes);
-      }
+      buf2img(imgUV_org_frm[0], buf, xs_cr, ys_cr, symbol_size_in_bytes);
       
       if(rgb_input)
         lseek (p_in, -framesize_in_bytes, SEEK_CUR);
@@ -2256,12 +2204,8 @@ static void ReadOneFrame (int FrameNoInFile, int HeaderSize, int xs, int ys, int
         report_stats_on_error();
         exit (-1);
       }
-      for (i=0; i < bytes_uv; i++)
-      {
-        sf->vf[i]=0;
-        memcpy(&(sf->vf[i]), buf +(i*symbol_size_in_bytes), symbol_size_in_bytes);
-      }
-      
+      buf2img(imgUV_org_frm[1], buf, xs_cr, ys_cr, symbol_size_in_bytes);
+
       if(rgb_input)
         lseek (p_in, framesize_in_bytes*2/3, SEEK_CUR);
     }
@@ -2273,15 +2217,6 @@ static void ReadOneFrame (int FrameNoInFile, int HeaderSize, int xs, int ys, int
   }
   free (buf);
   
-  // Complete frame is read into sf->?f, now setup 
-  // top and bottom field (sf->?t and sf->?b)
-
-  GenerateFieldComponent (sf->yf, sf->yt, sf->yb, xs, ys);
-  if (img->yuv_format != YUV400)
-  {
-    GenerateFieldComponent (sf->uf, sf->ut, sf->ub, xs_cr, ys_cr);
-    GenerateFieldComponent (sf->vf, sf->vt, sf->vb, xs_cr, ys_cr);
-  }
 }
 
 

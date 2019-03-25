@@ -164,7 +164,7 @@ typedef unsigned char byte;    //!< byte type definition
 #define VERT_PRED_8     2
 #define PLANE_8         3
 
-#define INIT_FRAME_RATE 30.0
+#define INIT_FRAME_RATE 30
 #define EOS             1         //!< End Of Sequence
 
 
@@ -184,8 +184,6 @@ typedef unsigned char byte;    //!< byte type definition
                                Some reasonable number which should reflect
                                what is currently defined in the SE2Partition map (elements.h) */
 
-#define MAXPICTURETYPESEQUENCELEN 100   /*!< Maximum size of the string that defines the picture
-                                             types to be coded, e.g. "IBBPBBPBB" */
 //Start code and Emulation Prevention need this to be defined in identical manner at encoder and decoder
 #define ZEROBYTES_SHORTSTARTCODE 2 //indicates the number of zero bytes in the short start-code prefix
 #define BIPRED_SIMPLE 1

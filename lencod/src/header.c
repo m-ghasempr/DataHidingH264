@@ -9,6 +9,7 @@
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
  *      - Stephan Wenger                  <stewe@cs.tu-berlin.de>
+ *      - Karsten Suehring                <suehring@hhi.de>
  *************************************************************************************
  */
 
@@ -48,6 +49,9 @@ static int pred_weight_table();
  ********************************************************************************************
  * \brief 
  *    Write a slice header
+ *
+ * \return
+ *    number of bits used 
  ********************************************************************************************
 */
 int SliceHeader()
@@ -56,7 +60,7 @@ int SliceHeader()
   DataPartition *partition = &((img->currentSlice)->partArr[dP_nr]);
   Slice* currSlice = img->currentSlice;
   int len = 0;
-  unsigned int field_pic_flag = 0, bottom_field_flag = 0;    // POC200301
+  unsigned int field_pic_flag = 0, bottom_field_flag = 0;
 
   int num_bits_slice_group_change_cycle;
   float numtmp;	
@@ -68,15 +72,9 @@ int SliceHeader()
 
   len += ue_v("SH: slice_type",        get_picture_type (),   partition);
 
-  // Note: Encoder supports only one pic/seq parameter set, hence value is
-  // hard coded to zero
-//  len += ue_v("SH: pic_parameter_set_id" , 0 ,partition);
   len += ue_v("SH: pic_parameter_set_id" , active_pps->pic_parameter_set_id ,partition);
 
   // frame_num
-//  if(input->no_frames >= 1<<(log2_max_frame_num_minus4+4))
-//    error ("Too many frames.  Increase log2_max_frame_num_minus4",-999);  
-
   len += u_v (log2_max_frame_num_minus4 + 4,"SH: frame_num", img->frame_num, partition);
 
   if (!active_sps->frame_mbs_only_flag)
@@ -97,11 +95,9 @@ int SliceHeader()
   if (img->currentPicture->idr_flag)
   {
     // idr_pic_id
-    // hard coded to zero because we don't have proper IDR handling at the moment
-    len += ue_v ("SH: idr_pic_id", 0, partition);
+    len += ue_v ("SH: idr_pic_id", (img->number % 2), partition);
   }
 
-  // POC200301
   if (img->pic_order_cnt_type == 0)
   {
     if (active_sps->frame_mbs_only_flag)
@@ -157,7 +153,7 @@ int SliceHeader()
       override_flag = ((img->num_ref_idx_l0_active != (active_pps->num_ref_idx_l0_active_minus1 +1)) 
                       || (img->num_ref_idx_l1_active != (active_pps->num_ref_idx_l1_active_minus1 +1))) ? 1 : 0;
     }
-    // num_ref_idx_active_override_flag here always 1
+
     len +=  u_1 ("SH: num_ref_idx_active_override_flag", override_flag, partition);
     
     if (override_flag) 
@@ -172,8 +168,6 @@ int SliceHeader()
   }
   len += ref_pic_list_reordering();
 
-  //if (((img->type == P_SLICE || img->type == SP_SLICE) && input->WeightedPrediction) || 
-  //   ((img->type == B_SLICE) && input->WeightedBiprediction == 1))
   if (((img->type == P_SLICE || img->type == SP_SLICE) && active_pps->weighted_pred_flag) || 
      ((img->type == B_SLICE) && active_pps->weighted_bipred_idc == 1))  
   {
@@ -188,8 +182,6 @@ int SliceHeader()
     len += ue_v("SH: cabac_init_idc", img->model_number, partition);
   }
 
-  // we transmit zero in the pps, so here the real QP
-  //len += se_v("SH: slice_qp_delta", (img->qp - 26), partition);
   len += se_v("SH: slice_qp_delta", (currSlice->qp - 26 - active_pps->pic_init_qp_minus26), partition);  
 
   if (img->type==SP_SLICE /*|| img->type==SI_SLICE*/)
@@ -200,19 +192,7 @@ int SliceHeader()
     }
     len += se_v ("SH: slice_qs_delta", (img->qpsp - 26), partition );
   }
-/*
-  if (input->LFSendParameters)
-  {
-    len += ue_v("SH: disable_deblocking_filter_idc",input->LFDisableIdc, partition);  // Turn loop filter on/off on slice basis 
 
-    if (input->LFDisableIdc!=1)
-    {
-      len += se_v ("SH: slice_alpha_c0_offset_div2", input->LFAlphaC0Offset / 2, partition);
-
-      len += se_v ("SH: slice_beta_offset_div2", input->LFBetaOffset / 2, partition);
-    }
-  }
-*/
   if (active_pps->deblocking_filter_control_present_flag)
   {
     len += ue_v("SH: disable_deblocking_filter_idc",img->LFDisableIdc, partition);  // Turn loop filter on/off on slice basis 
@@ -325,7 +305,10 @@ static int ref_pic_list_reordering()
 /*!
  ************************************************************************
  * \brief
- *    write the memory menagement control operations
+ *    write the memory management control operations
+ *
+ * \return
+ *    number of bits used 
  ************************************************************************
  */
 static int dec_ref_pic_marking()
@@ -385,10 +368,14 @@ static int dec_ref_pic_marking()
   return len;
 }
 
+
 /*!
  ************************************************************************
  * \brief
- *    write the memory menagement control operations
+ *    write prediction weight table
+ *
+ * \return
+ *    number of bits used 
  ************************************************************************
  */
 static int pred_weight_table()
@@ -472,30 +459,18 @@ static int pred_weight_table()
   return len;
 }
   
-/********************************************************************************************
- ********************************************************************************************
- *
- * Local Support Functions
- *
- ********************************************************************************************
- ********************************************************************************************/
-
-
-
-// StW Note: This function is a hack.  It would be cleaner if the encoder maintains
-// the picture type in the given format.  Note further that I have yet to understand
-// why the encoder needs to know whether a picture is predicted from one or more
-// reference pictures.
 
 /*!
  ************************************************************************
  * \brief
  *    Selects picture type and codes it to symbol
+ *
+ * \return
+ *    symbol value for picture type
  ************************************************************************
  */
 int get_picture_type()
 {
-
   // set this value to zero for transmission without signaling 
   // that the whole picture has the same slice type
   int same_slicetype_for_whole_frame = 5;
@@ -551,8 +526,6 @@ int get_picture_type()
  * \author
  *    Stephan Wenger   stewe@cs.tu-berlin.de
  *****************************************************************************/
-
-
 int Partition_BC_Header(int PartNo)
 {
   DataPartition *partition = &((img->currentSlice)->partArr[PartNo]);

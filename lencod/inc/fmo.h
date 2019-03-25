@@ -34,6 +34,6 @@ void FmoSetLastMacroblockInSlice (int mb);
 
 int FmoGetPreviousMBNr (int CurrentMbNr);
 
-extern int *MBAmap; 
+extern byte *MBAmap; 
 
 #endif

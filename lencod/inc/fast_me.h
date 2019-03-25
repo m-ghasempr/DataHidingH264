@@ -89,7 +89,7 @@ int *****all_mincost;//store the MV and SAD information needed;
 int *****all_bwmincost;//store for backward prediction
 int pred_SAD_space,pred_SAD_time,pred_SAD_ref,pred_SAD_uplayer;//SAD prediction
 int FME_blocktype;  //blocktype for FME SetMotionVectorPredictor
-int pred_MV_time[2],pred_MV_ref[2],pred_MV_uplayer[2];//pred motion vector by space or tempral correlation,Median is provided
+int pred_MV_time[2],pred_MV_ref[2],pred_MV_uplayer[2];//pred motion vector by space or temporal correlation,Median is provided
 
 //for early termination
 float Quantize_step;
@@ -97,7 +97,7 @@ float  Bsize[8];
 int Thresh4x4;
 float AlphaSec[8];
 float AlphaThird[8];
-int  flag_intra[124];//HD enough
+int  *flag_intra;
 int  flag_intra_SAD;
 void DefineThreshold();
 void DefineThresholdMB();
@@ -116,18 +116,18 @@ void skip_intrabk_SAD(int best_mode, int ref_max);
 
 int                                     //  ==> minimum motion cost after search
 FastIntegerPelBlockMotionSearch  (pel_t**   orig_pic,     // <--  not used
-                                  int       ref,          // <--  reference frame (0... or -1 (backward))
+                                  short     ref,          // <--  reference frame (0... or -1 (backward))
                                   int       list,
                                   int       pic_pix_x,    // <--  absolute x-coordinate of regarded AxB block
                                   int       pic_pix_y,    // <--  absolute y-coordinate of regarded AxB block
                                   int       blocktype,    // <--  block type (1-16x16 ... 7-4x4)
-                                  int       pred_mv_x,    // <--  motion vector predictor (x) in sub-pel units
-                                  int       pred_mv_y,    // <--  motion vector predictor (y) in sub-pel units
-                                  int*      mv_x,         //  --> motion vector (x) - in pel units
-                                  int*      mv_y,         //  --> motion vector (y) - in pel units
+                                  short     pred_mv_x,    // <--  motion vector predictor (x) in sub-pel units
+                                  short     pred_mv_y,    // <--  motion vector predictor (y) in sub-pel units
+                                  short*    mv_x,         //  --> motion vector (x) - in pel units
+                                  short*    mv_y,         //  --> motion vector (y) - in pel units
                                   int       search_range, // <--  1-d search range in pel units                         
                                   int       min_mcost,    // <--  minimum motion cost (cost for center or huge value)
-                                  double    lambda) ;      // <--  lagrangian parameter for determining motion cost
+                                  double    lambda) ;     // <--  lagrangian parameter for determining motion cost
 
 int AddUpSADQuarter(int pic_pix_x,int pic_pix_y,int blocksize_x,int blocksize_y,
                     int cand_mv_x,int cand_mv_y, StorablePicture *ref_picture, pel_t**   orig_pic, 
@@ -135,32 +135,32 @@ int AddUpSADQuarter(int pic_pix_x,int pic_pix_y,int blocksize_x,int blocksize_y,
 
 int                                                   //  ==> minimum motion cost after search
 FastSubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values for the AxB block
-                             int       ref,           // <--  reference frame (0... or -1 (backward))
+                             short       ref,           // <--  reference frame (0... or -1 (backward))
                              int       list,
                              int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
                              int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
                              int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
-                             int       pred_mv_x,     // <--  motion vector predictor (x) in sub-pel units
-                             int       pred_mv_y,     // <--  motion vector predictor (y) in sub-pel units
-                             int*      mv_x,          // <--> in: search center (x) / out: motion vector (x) - in pel units
-                             int*      mv_y,          // <--> in: search center (y) / out: motion vector (y) - in pel units
+                             short     pred_mv_x,     // <--  motion vector predictor (x) in sub-pel units
+                             short     pred_mv_y,     // <--  motion vector predictor (y) in sub-pel units
+                             short*    mv_x,          // <--> in: search center (x) / out: motion vector (x) - in pel units
+                             short*    mv_y,          // <--> in: search center (y) / out: motion vector (y) - in pel units
                              int       search_pos2,   // <--  search positions for    half-pel search  (default: 9)
                              int       search_pos4,   // <--  search positions for quarter-pel search  (default: 9)
                              int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
-                             double    lambda,
-                             int  useABT);        // <--  lagrangian parameter for determining motion cost
+                             double    lambda,        // <--  lagrangian parameter for determining motion cost
+                             int  useABT);
 
 int                                               //  ==> minimum motion cost after search
 SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values for the AxB block
-                         int       ref,           // <--  reference frame (0... or -1 (backward))
+                         short     ref,           // <--  reference frame (0... or -1 (backward))
                          int       list,
                          int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
                          int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
                          int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
-                         int       pred_mv_x,     // <--  motion vector predictor (x) in sub-pel units
-                         int       pred_mv_y,     // <--  motion vector predictor (y) in sub-pel units
-                         int*      mv_x,          // <--> in: search center (x) / out: motion vector (x) - in pel units
-                         int*      mv_y,          // <--> in: search center (y) / out: motion vector (y) - in pel units
+                         short     pred_mv_x,     // <--  motion vector predictor (x) in sub-pel units
+                         short     pred_mv_y,     // <--  motion vector predictor (y) in sub-pel units
+                         short*    mv_x,          // <--> in: search center (x) / out: motion vector (x) - in pel units
+                         short*    mv_y,          // <--> in: search center (y) / out: motion vector (y) - in pel units
                          int       search_pos2,   // <--  search positions for    half-pel search  (default: 9)
                          int       search_pos4,   // <--  search positions for quarter-pel search  (default: 9)
                          int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
@@ -168,7 +168,7 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
                          );
 
 int                                         //  ==> minimum motion cost after search
-FME_BlockMotionSearch (int       ref,           // <--  reference frame (0... or -1 (backward))
+FME_BlockMotionSearch (short     ref,           // <--  reference frame (0... or -1 (backward))
                        int       list,
                        int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
                        int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
@@ -178,7 +178,7 @@ FME_BlockMotionSearch (int       ref,           // <--  reference frame (0... or
                        );
 
 int                                              //!< minimum motion cost after search
-noFME_BlockMotionSearch (int       ref,          //!< reference idx
+noFME_BlockMotionSearch (short     ref,          //!< reference idx
                          int       list,         //!< reference pciture list
                          int       mb_x,         //!< x-coordinate inside macroblock
                          int       mb_y,         //!< y-coordinate inside macroblock

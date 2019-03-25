@@ -46,24 +46,24 @@ typedef struct storable_picture
   int         coded_frame;
   int         MbaffFrameFlag;
 
-  imgpel **     imgY;          //!< Y picture component
-  imgpel *      imgY_11;       //!< Y picture component with padded borders
-  imgpel *      imgY_11_w;     //!< Y picture component with padded borders for weighted prediction
-  imgpel **     imgY_ups;      //!< Y picture component upsampled (Quarter pel)
-  imgpel **     imgY_ups_w;    //!< Y picture component upsampled (Quarter pel) for weighted prediction
-  imgpel ***    imgUV;         //!< U and V picture components
+  imgpel **   imgY;          //!< Y picture component
+  imgpel *    imgY_11;       //!< Y picture component with padded borders
+  imgpel *    imgY_11_w;     //!< Y picture component with padded borders for weighted prediction
+  imgpel **   imgY_ups;      //!< Y picture component upsampled (Quarter pel)
+  imgpel **   imgY_ups_w;    //!< Y picture component upsampled (Quarter pel) for weighted prediction
+  imgpel ***  imgUV;         //!< U and V picture components
 
   byte *      mb_field;      //!< field macroblock indicator
 
-  int  ***    ref_idx;       //!< reference picture   [list][subblock_x][subblock_y]
+  short ***   ref_idx;       //!< reference picture   [list][subblock_x][subblock_y]
 
-  int64 ***    ref_pic_id;    //!< reference picture identifier [list][subblock_x][subblock_y]
+  int64 ***   ref_pic_id;    //!< reference picture identifier [list][subblock_x][subblock_y]
                              //   (not  simply index) 
 
-  int64 ***    ref_id;    //!< reference picture identifier [list][subblock_x][subblock_y]
+  int64 ***   ref_id;    //!< reference picture identifier [list][subblock_x][subblock_y]
                              //   (not  simply index) 
 
-  int  ****   mv;            //!< motion vector       [list][subblock_x][subblock_y][component]
+  short ****  mv;            //!< motion vector       [list][subblock_x][subblock_y][component]
   
   byte **     moving_block;
   byte **     field_frame;         //!< indicates if co_located is field or frame.
@@ -72,42 +72,45 @@ typedef struct storable_picture
   struct storable_picture *bottom_field;  // for mb aff, if frame for referencing the bottom field
   struct storable_picture *frame;         // for mb aff, if field for referencing the combined frame
 
+  int         chroma_format_idc;
+  int         frame_mbs_only_flag;
+  int         frame_cropping_flag;
+  int         frame_cropping_rect_left_offset;
+  int         frame_cropping_rect_right_offset;
+  int         frame_cropping_rect_top_offset;
+  int         frame_cropping_rect_bottom_offset;
 } StorablePicture;
 
 
 //! definition a picture (field or frame)
 typedef struct colocated_params
 {
-//  byte *      mb_field;      //!< field macroblock indicator
   int         mb_adaptive_frame_field_flag;
   int         size_x, size_y;
 
   int64       ref_pic_num[6][MAX_LIST_SIZE];  
 
-  int  ***    ref_idx;       //!< reference picture   [list][subblock_x][subblock_y]
-  int64 ***    ref_pic_id;    //!< reference picture identifier [list][subblock_x][subblock_y]
-  int  ****   mv;            //!< motion vector       [list][subblock_x][subblock_y][component]  
+  short ***   ref_idx;       //!< reference picture   [list][subblock_x][subblock_y]
+  int64 ***   ref_pic_id;    //!< reference picture identifier [list][subblock_x][subblock_y]
+  short ****  mv;            //!< motion vector       [list][subblock_x][subblock_y][component]  
   byte **     moving_block;
 
   // Top field params
   int64       top_ref_pic_num[6][MAX_LIST_SIZE];  
-  int  ***    top_ref_idx;       //!< reference picture   [list][subblock_x][subblock_y]
-  int64 ***    top_ref_pic_id;    //!< reference picture identifier [list][subblock_x][subblock_y]
-  int  ****   top_mv;            //!< motion vector       [list][subblock_x][subblock_y][component]  
+  short ***   top_ref_idx;       //!< reference picture   [list][subblock_x][subblock_y]
+  int64 ***   top_ref_pic_id;    //!< reference picture identifier [list][subblock_x][subblock_y]
+  short ****  top_mv;            //!< motion vector       [list][subblock_x][subblock_y][component]  
   byte **     top_moving_block;
 
   // Bottom field params
   int64       bottom_ref_pic_num[6][MAX_LIST_SIZE];  
-  int  ***    bottom_ref_idx;       //!< reference picture   [list][subblock_x][subblock_y]
-  int64 ***    bottom_ref_pic_id;    //!< reference picture identifier [list][subblock_x][subblock_y]
-  int  ****   bottom_mv;            //!< motion vector       [list][subblock_x][subblock_y][component] 
+  short ***   bottom_ref_idx;       //!< reference picture   [list][subblock_x][subblock_y]
+  int64 ***   bottom_ref_pic_id;    //!< reference picture identifier [list][subblock_x][subblock_y]
+  short ****  bottom_mv;            //!< motion vector       [list][subblock_x][subblock_y][component] 
   byte **     bottom_moving_block;
   
   int         is_long_term;
   byte **     field_frame;         //!< indicates if co_located is field or frame.
-  //struct colocated_params *top_field;     // for mb aff, if frame for referencing the top field
-  //struct colocated_params *bottom_field;  // for mb aff, if frame for referencing the bottom field
-  //struct colocated_params *frame;         // for mb aff, if field for referencing the combined frame
 
 } ColocatedParams;
 

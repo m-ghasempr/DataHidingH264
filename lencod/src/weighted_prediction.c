@@ -11,14 +11,12 @@
 *     - Alexis Michael Tourapis         <alexismt@ieee.org>
 *************************************************************************************
 */
+#include "math.h"
 #include "contributors.h"
 
 #include "global.h"
 
 #include "image.h"
-
-
-#define Clip(min,max,val) (((val)<(min))?(min):(((val)>(max))?(max):(val)))
 
 /*!
 ************************************************************************
@@ -111,13 +109,13 @@ void estimate_weighting_factor_P_slice()
         /* store weighted reference pic for motion estimation */
         for (i = 0; i < img->height * img->width; i++)
         {          
-          ref_pic_w[i] = Clip (0, img->max_imgpel_value , (((int) ref_pic[i] * weight[clist][n][0] + wp_luma_round) >> luma_log_weight_denom) + offset[clist][n][0]);
+          ref_pic_w[i] = Clip3 (0, img->max_imgpel_value , (((int) ref_pic[i] * weight[clist][n][0] + wp_luma_round) >> luma_log_weight_denom) + offset[clist][n][0]);
         }
         for (i = 0; i < 4*(img->height + 2*IMG_PAD_SIZE) ; i++)
         {
           for (j = 0; j< 4*(img->width + 2*IMG_PAD_SIZE); j++)
           {
-            listX[LIST_0][n]->imgY_ups_w[i][j] =   Clip (0, img->max_imgpel_value, (((int) listX[LIST_0 ][n]->imgY_ups[i][j] * weight[clist][n][0] + wp_luma_round) >> luma_log_weight_denom) + offset[clist][n][0]);
+            listX[LIST_0][n]->imgY_ups_w[i][j] =   Clip3 (0, img->max_imgpel_value, (((int) listX[LIST_0 ][n]->imgY_ups[i][j] * weight[clist][n][0] + wp_luma_round) >> luma_log_weight_denom) + offset[clist][n][0]);
           }
         }
       }
@@ -147,7 +145,7 @@ void estimate_weighting_factor_B_slice()
 {
   int i, j, n, l;
   
-  int x,z;
+  int tx,DistScaleFactor;
   double dc_org = 0.0;
   int index;
   int comp;
@@ -193,14 +191,13 @@ void estimate_weighting_factor_B_slice()
   {
     for (j = 0; j < listXsize[LIST_1]; j++)
     {
-      int pt,p0;
-      pt = (listX[LIST_1][j]->poc - listX[LIST_0][i]->poc);
-      p0 = (enc_picture->poc - listX[LIST_0][i]->poc);
+      int td, tb;
+      td = Clip3(-128,127,(listX[LIST_1][j]->poc - listX[LIST_0][i]->poc));
+      tb = Clip3(-128,127,(enc_picture->poc - listX[LIST_0][i]->poc));
       for (comp = 0; comp < 3; comp++)
       {
-        { // implicit weights
-          
-          if (pt == 0)
+         // implicit weights          
+          if (td == 0)
           {
             im_weight[1][i][j][comp] = 32 ;
             im_weight[0][i][j][comp] = 32;
@@ -209,16 +206,15 @@ void estimate_weighting_factor_B_slice()
           }
           else
           {            
-            x = (16384 + (pt>>1))/pt;
-            z = Clip(-1024, 1023, (x*p0 + 32 )>>6);
-            im_weight[1][i][j][comp] = z>>2;
+            tx = (16384 + abs(td/2))/td;
+            DistScaleFactor = Clip3(-1024, 1023, (tx*tb + 32 )>>6);
+            im_weight[1][i][j][comp] = DistScaleFactor>>2;
             if (im_weight[1][i][j][comp] < -64 || im_weight[1][i][j][comp] >128)
               im_weight[1][i][j][comp] = 32;
             im_weight[0][i][j][comp] = 64 - im_weight[1][i][j][comp];            
             im_offset[1][i][j][comp] = 0;
             im_offset[0][i][j][comp] = 0;
-          }
-        }
+          }        
       }
       /*
       printf ("%d imp weight[%d][%d] = %d  , %d (%d %d %d) (%d %d) (%d %d)\n",enc_picture->poc, i, j,  im_weight[0][i][j][0], im_weight[1][i][j][0],
@@ -329,13 +325,13 @@ void estimate_weighting_factor_B_slice()
         /* store weighted reference pic for motion estimation */
         for (i = 0; i < img->height * img->width; i++)
         {
-          ref_pic_w[i] = Clip (0, img->max_imgpel_value, (((int) ref_pic[i] * wf_weight + wp_luma_round) >> luma_log_weight_denom) + wf_offset);
+          ref_pic_w[i] = Clip3 (0, img->max_imgpel_value, (((int) ref_pic[i] * wf_weight + wp_luma_round) >> luma_log_weight_denom) + wf_offset);
         }
         for (i = 0; i < 4*(img->height + 2*IMG_PAD_SIZE) ; i++)
         {
           for (j = 0; j< 4*(img->width + 2*IMG_PAD_SIZE); j++)
           {
-            listX[LIST_0][n]->imgY_ups_w[i][j] =   Clip (0, img->max_imgpel_value, (((int) listX[LIST_0][n]->imgY_ups[i][j] * wf_weight + wp_luma_round) >> (luma_log_weight_denom)) + wf_offset );      	
+            listX[LIST_0][n]->imgY_ups_w[i][j] =   Clip3 (0, img->max_imgpel_value, (((int) listX[LIST_0][n]->imgY_ups[i][j] * wf_weight + wp_luma_round) >> (luma_log_weight_denom)) + wf_offset );      	
           }
           
         }

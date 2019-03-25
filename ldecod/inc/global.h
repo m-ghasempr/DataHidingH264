@@ -9,7 +9,7 @@
  *     Copyright (C) 1999  Telenor Satellite Services,Norway
  *                         Ericsson Radio Systems, Sweden
  *
- *     Inge Lille-Langøy               <inge.lille-langoy@telenor.com>
+ *     Inge Lille-Langoy               <inge.lille-langoy@telenor.com>
  *
  *     Telenor Satellite Services
  *     Keysers gt.13                       tel.:   +47 23 13 86 98
@@ -58,10 +58,14 @@ typedef unsigned int    u_int32;
 
 #if defined(WIN32) && !defined(__GNUC__)
   typedef __int64   int64;
+#ifndef INT64_MIN
 # define INT64_MIN        (-9223372036854775807i64 - 1i64)
+#endif
 #else
   typedef long long int64;
+#ifndef INT64_MIN
 # define INT64_MIN        (-9223372036854775807LL - 1LL)
+#endif
 #endif
 
 
@@ -592,7 +596,6 @@ typedef struct img_par
   int num_cdc_coeff;
   int mb_cr_size_x;
   int mb_cr_size_y;
-  int chroma_qp_offset[2];                    //!< offset for qp for chroma [0-Cb, 1-Cr] 
   
   int idr_psnr_number;
   int psnr_number;
@@ -639,14 +642,14 @@ struct inp_par
   char outfile[100];                      //!< Decoded YUV 4:2:0 output
   char reffile[100];                      //!< Optional YUV 4:2:0 reference file for SNR measurement
   int FileFormat;                         //!< File format of the Input file, PAR_OF_ANNEXB or PAR_OF_RTP
-  int dpb_size;                          //!< Frame buffer size
   int ref_offset;
   int poc_scale;
+  int write_uv;
 
 #ifdef _LEAKYBUCKET_
   unsigned long R_decoder;                //!< Decoder Rate in HRD Model
   unsigned long B_decoder;                //!< Decoder Buffer size in HRD model
-  unsigned long F_decoder;                //!< Decoder Inital buffer fullness in HRD model
+  unsigned long F_decoder;                //!< Decoder Initial buffer fullness in HRD model
   char LeakyBucketParamFile[100];         //!< LeakyBucketParamFile
 #endif
 

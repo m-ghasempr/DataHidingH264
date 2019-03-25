@@ -112,7 +112,7 @@ int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
   sps->seq_parameter_set_id                   = ue_v ("SPS: seq_parameter_set_id"                     , s);
 
   // Fidelity Range Extensions stuff
-  img->yuv_format = 1;
+  sps->chroma_format_idc = 1;
   sps->bit_depth_luma_minus8   = 0;
   sps->bit_depth_chroma_minus8 = 0;
   img->lossless_qpprime_flag   = 0;
@@ -125,10 +125,10 @@ int InterpretSPS (DataPartition *p, seq_parameter_set_rbsp_t *sps)
      (sps->profile_idc==FREXT_Hi422) ||
      (sps->profile_idc==FREXT_Hi444))
   {
-    img->yuv_format                             = ue_v ("SPS: chroma_format_idc"                       , s);
+    sps->chroma_format_idc                      = ue_v ("SPS: chroma_format_idc"                       , s);
     
     // Residue Color Transform
-    if(img->yuv_format == 3)
+    if(sps->chroma_format_idc == 3)
       img->residue_transform_flag = u_1  ("SPS: residue_transform_flag"            , s);
 
     sps->bit_depth_luma_minus8                  = ue_v ("SPS: bit_depth_luma_minus8"                   , s);
@@ -247,8 +247,8 @@ int ReadVUI(DataPartition *p, seq_parameter_set_rbsp_t *sps)
     sps->vui_seq_parameters.timing_info_present_flag          = u_1  ("VUI: timing_info_present_flag"           , s);
     if (sps->vui_seq_parameters.timing_info_present_flag)
     {
-      sps->vui_seq_parameters.num_units_in_tick               = u_v  (16,"VUI: num_units_in_tick"               , s);
-      sps->vui_seq_parameters.time_scale                      = u_v  (16,"VUI: time_scale"                      , s);
+      sps->vui_seq_parameters.num_units_in_tick               = u_v  (32,"VUI: num_units_in_tick"               , s);
+      sps->vui_seq_parameters.time_scale                      = u_v  (32,"VUI: time_scale"                      , s);
       sps->vui_seq_parameters.fixed_frame_rate_flag           = u_1  (   "VUI: fixed_frame_rate_flag"           , s);
     }
     sps->vui_seq_parameters.nal_hrd_parameters_present_flag   = u_1  ("VUI: nal_hrd_parameters_present_flag"    , s);
@@ -383,16 +383,7 @@ int InterpretPPS (DataPartition *p, pic_parameter_set_rbsp_t *pps)
   pps->pic_init_qp_minus26                   = se_v ("PPS: pic_init_qp_minus26"                    , s);
   pps->pic_init_qs_minus26                   = se_v ("PPS: pic_init_qs_minus26"                    , s);
 
-  if((SeqParSet[pps->seq_parameter_set_id].profile_idc==FREXT_HP   ) ||
-     (SeqParSet[pps->seq_parameter_set_id].profile_idc==FREXT_Hi10P) || 
-     (SeqParSet[pps->seq_parameter_set_id].profile_idc==FREXT_Hi422) || 
-     (SeqParSet[pps->seq_parameter_set_id].profile_idc==FREXT_Hi444))
-  {
-    pps->cb_qp_index_offset                  = se_v ("PPS: chroma_qp_index_offset"                 , s);
-    pps->chroma_qp_index_offset              = pps->cb_qp_index_offset;
-  }
-  else
-    pps->chroma_qp_index_offset              = se_v ("PPS: chroma_qp_index_offset"                 , s);
+  pps->chroma_qp_index_offset                = se_v ("PPS: chroma_qp_index_offset"                 , s);
 
   pps->deblocking_filter_control_present_flag = u_1 ("PPS: deblocking_filter_control_present_flag" , s);
   pps->constrained_intra_pred_flag           = u_1  ("PPS: constrained_intra_pred_flag"            , s);
@@ -419,7 +410,11 @@ int InterpretPPS (DataPartition *p, pic_parameter_set_rbsp_t *pps)
         }
       }
     }
-    pps->cr_qp_index_offset                  = se_v ("PPS: second_chroma_qp_index_offset"          , s);
+    pps->second_chroma_qp_index_offset      = se_v ("PPS: second_chroma_qp_index_offset"          , s);
+  }
+  else
+  {
+    pps->second_chroma_qp_index_offset      = pps->chroma_qp_index_offset;
   }
 
   pps->Valid = TRUE;
@@ -547,7 +542,7 @@ void activate_sps (seq_parameter_set_rbsp_t *sps)
 
     // Fidelity Range Extensions stuff (part 1)
     img->bitdepth_luma   = sps->bit_depth_luma_minus8 + 8;
-    if (img->yuv_format != YUV400)
+    if (sps->chroma_format_idc != YUV400)
       img->bitdepth_chroma = sps->bit_depth_chroma_minus8 + 8;  
 
     img->MaxFrameNum = 1<<(sps->log2_max_frame_num_minus4+4);
@@ -555,21 +550,23 @@ void activate_sps (seq_parameter_set_rbsp_t *sps)
     img->PicHeightInMapUnits = (sps->pic_height_in_map_units_minus1 +1);
     img->FrameHeightInMbs = ( 2 - sps->frame_mbs_only_flag ) * img->PicHeightInMapUnits;
     img->FrameSizeInMbs = img->PicWidthInMbs * img->FrameHeightInMbs;
+    
+    img->yuv_format=sps->chroma_format_idc;
 
     img->width = img->PicWidthInMbs * MB_BLOCK_SIZE;
     img->height = img->FrameHeightInMbs * MB_BLOCK_SIZE;
 
-    if (img->yuv_format == YUV420)
+    if (sps->chroma_format_idc == YUV420)
     {
       img->width_cr = img->width /2;
       img->height_cr = img->height / 2;
     }
-    else if (img->yuv_format == YUV422)
+    else if (sps->chroma_format_idc == YUV422)
     {
       img->width_cr = img->width /2;
       img->height_cr = img->height;
     }
-    else if (img->yuv_format == YUV444)
+    else if (sps->chroma_format_idc == YUV444)
     {
       //YUV444
       img->width_cr = img->width;
@@ -608,16 +605,6 @@ void activate_pps(pic_parameter_set_rbsp_t *pps)
     // Fidelity Range Extensions stuff (part 2)
     img->AllowTransform8x8 = pps->transform_8x8_mode_flag;
 
-    if((img->profile_idc==FREXT_HP   ) ||
-       (img->profile_idc==FREXT_Hi10P) ||
-       (img->profile_idc==FREXT_Hi422) ||
-       (img->profile_idc==FREXT_Hi444))
-    {
-      img->chroma_qp_offset[0] = active_pps->cb_qp_index_offset;
-      img->chroma_qp_offset[1] = active_pps->cr_qp_index_offset;
-    }
-    else
-      img->chroma_qp_offset[0] = img->chroma_qp_offset[1] = active_pps->chroma_qp_index_offset;
   }
 }  
 

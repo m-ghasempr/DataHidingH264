@@ -28,7 +28,7 @@
 
 #define MAXIMUMPARSETRBSPSIZE   1500
 #define MAXIMUMPARSETNALUSIZE   1500
-#define SIZEslice_group_id      (sizeof (int) * 60000)    // should be sufficient for HUGE pictures, need one int per MB in a picture
+#define SIZEslice_group_id      (sizeof (byte) * 60000)    // should be sufficient for HUGE pictures, need one int per MB in a picture
 
 #define MAXSPS  32
 #define MAXPPS  256
@@ -120,7 +120,7 @@ typedef struct
       unsigned  slice_group_change_rate_minus1;               // ue(v)
     // else if( slice_group_map_type = = 6 )
       unsigned  pic_size_in_map_units_minus1;	                // ue(v)
-      unsigned  *slice_group_id;                              // complete MBAmap u(v)
+      byte      *slice_group_id;                              // complete MBAmap u(v)
 			
   int       num_ref_idx_l0_active_minus1;                     // ue(v)
   int       num_ref_idx_l1_active_minus1;                     // ue(v)
@@ -152,6 +152,7 @@ typedef struct
   Boolean   constrained_set3_flag;                            // u(1)
   unsigned  level_idc;                                        // u(8)
   unsigned  seq_parameter_set_id;                             // ue(v)
+  unsigned  chroma_format_idc;                                // ue(v)
 
   Boolean   seq_scaling_matrix_present_flag;                  // u(1)
   int       seq_scaling_list_present_flag[8];                 // u(1)

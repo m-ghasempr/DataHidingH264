@@ -520,7 +520,7 @@ void Conceal_Error(imgpel **inY, int mb_y, int mb_x, imgpel ***refY, byte **s_ma
   int resY[MB_BLOCK_SIZE][MB_BLOCK_SIZE];
   int copy  = (decs->dec_mb_mode[mb_x][mb_y]==0 && (img->type==P_SLICE || (img->type==B_SLICE && img->nal_reference_idc>0)));
   int inter = (((decs->dec_mb_mode[mb_x][mb_y]>=1 && decs->dec_mb_mode[mb_x][mb_y]<=3) || decs->dec_mb_mode[mb_x][mb_y]==P8x8) && (img->type==P_SLICE || (img->type==B_SLICE && img->nal_reference_idc>0)));
-  int ***tmp_mv = enc_picture->mv[LIST_0];
+  short ***tmp_mv = enc_picture->mv[LIST_0];
   
   switch(s_map[mb_y][mb_x])
   {

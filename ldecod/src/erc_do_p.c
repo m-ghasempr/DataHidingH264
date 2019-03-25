@@ -63,7 +63,7 @@ static int uv_div[2][4] = {{0, 1, 1, 0}, {0, 1, 0, 0}}; //[x/y][yuv_format]
  ************************************************************************
  */
 int ercConcealInterFrame(frame *recfr, objectBuffer_t *object_list, 
-                         int32 picSizeX, int32 picSizeY, ercVariables_t *errorVar ) 
+                         int32 picSizeX, int32 picSizeY, ercVariables_t *errorVar, int chroma_format_idc ) 
 {
   int lastColumn = 0, lastRow = 0, predBlocks[8];
   int lastCorruptedRow = -1, firstCorruptedRow = -1, currRow = 0, 
@@ -76,7 +76,7 @@ int ercConcealInterFrame(frame *recfr, objectBuffer_t *object_list,
     /* if there are segments to be concealed */
     if ( errorVar->nOfCorruptedSegments ) 
     {
-      if (img->yuv_format != YUV400)
+      if (chroma_format_idc != YUV400)
         predMB = (imgpel *) malloc(256 + (img->mb_cr_size_x*img->mb_cr_size_y)*2);
       else
         predMB = (imgpel *) malloc(256);
@@ -275,11 +275,11 @@ static void copyBetweenFrames (frame *recfr,
       recfr->yptr[location] = refPic->imgY[j][k];
     }
      
-    for (j = ymin >> uv_div[1][img->yuv_format]; j < (ymin + regionSize) >> uv_div[1][img->yuv_format]; j++)
-      for (k = xmin >> uv_div[0][img->yuv_format]; k < (xmin + regionSize) >> uv_div[0][img->yuv_format]; k++)
+    for (j = ymin >> uv_div[1][dec_picture->chroma_format_idc]; j < (ymin + regionSize) >> uv_div[1][dec_picture->chroma_format_idc]; j++)
+      for (k = xmin >> uv_div[0][dec_picture->chroma_format_idc]; k < (xmin + regionSize) >> uv_div[0][dec_picture->chroma_format_idc]; k++)
       {
 //        location = j * picSizeX / 2 + k;
-        location = ((j * picSizeX) >> uv_div[0][img->yuv_format]) + k;
+        location = ((j * picSizeX) >> uv_div[0][dec_picture->chroma_format_idc]) + k;
         
 //th        recfr->uptr[location] = dec_picture->imgUV[0][j][k];
 //th        recfr->vptr[location] = dec_picture->imgUV[1][j][k];
@@ -546,7 +546,7 @@ static void buildPredRegionYUV(struct img_par *img, int32 *mv, int x, int y, img
   //FRExt
   int f1_x, f1_y, f2_x, f2_y, f3, f4, ifx;
   int b8, b4;
-  int yuv = img->yuv_format - 1;
+  int yuv = dec_picture->chroma_format_idc - 1;
   
   int ref_frame = mv[2];
 
@@ -591,7 +591,7 @@ static void buildPredRegionYUV(struct img_par *img, int32 *mv, int x, int y, img
   }
   pMB += 256;
 
-  if (img->yuv_format != YUV400)
+  if (dec_picture->chroma_format_idc != YUV400)
   {
     // chroma *******************************************************
     f1_x = 64/img->mb_cr_size_x;
@@ -680,8 +680,8 @@ static void copyPredMB (int currYBlockNum, imgpel *predMB, frame *recfr,
   
   int j, k, xmin, ymin, xmax, ymax;
   int32 locationTmp, locationPred;
-  int uv_x = uv_div[0][img->yuv_format];
-  int uv_y = uv_div[1][img->yuv_format];
+  int uv_x = uv_div[0][dec_picture->chroma_format_idc];
+  int uv_y = uv_div[1][dec_picture->chroma_format_idc];
   
   xmin = (xPosYBlock(currYBlockNum,picSizeX)<<3);
   ymin = (yPosYBlock(currYBlockNum,picSizeX)<<3);
@@ -698,7 +698,7 @@ static void copyPredMB (int currYBlockNum, imgpel *predMB, frame *recfr,
     }
   }
   
-  if (img->yuv_format != YUV400)
+  if (dec_picture->chroma_format_idc != YUV400)
   {
     for (j = (ymin>>uv_y); j <= (ymax>>uv_y); j++) 
     {

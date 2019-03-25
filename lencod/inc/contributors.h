@@ -101,7 +101,7 @@
       Philips Research France
 
       Dong Tian                       <tian@cs.tut.fi>
-      Ye-Kui Wang                  <wyk@ieee.org>
+      Ye-Kui Wang                     <wyk@ieee.org>
       Tampere University of Technology
       Tampere International Center for Signal Processing
       33720 Tampere, Finland
@@ -132,7 +132,6 @@
       San Diego, CA 92121 USA
 
       Feng Wu                         <fengwu@microsoft.com>
-      Alexis Michael Tourapis         <alexismt@ieee.org>
       Xiaoyan Sun                     <sunxiaoyan@msrchina.research.microsoft.com>
       Microsoft Research Asia
       3/F, Beijing Sigma Center
@@ -140,25 +139,25 @@
       Beijing China 100080
 
 
-      Mathias Wien                     <wien@ient.rwth-aachen.de>
+      Mathias Wien                    <wien@ient.rwth-aachen.de>
       Institut und Lehrstuhl für Nachrichtentechnik
       RWTH Aachen University
       52072 Aachen
       Germany
 
-      Achim Dahlhoff                   <dahlhoff@ient.rwth-aachen.de>
+      Achim Dahlhoff                  <dahlhoff@ient.rwth-aachen.de>
       Institut und Lehrstuhl für Nachrichtentechnik
       RWTH Aachen University
       52072 Aachen
       Germany
 
-      Yoshihiro Kikuchi                <yoshihiro.kikuchi@toshiba.co.jp>
-      Takeshi Chujoh                   <takeshi.chujoh@toshiba.co.jp>
+      Yoshihiro Kikuchi               <yoshihiro.kikuchi@toshiba.co.jp>
+      Takeshi Chujoh                  <takeshi.chujoh@toshiba.co.jp>
       Toshiba Corporation
       Research and Development Center
       Kawasaki 212-8582, Japan
 
-      Shinya Kadono                    <kadono@drl.mei.co.jp>
+      Shinya Kadono                   <kadono@drl.mei.co.jp>
       Matsushita Electric Industrial Co., Ltd.
       1006 Kadoma, Kadoma
       Osaka 663-8113, Japan
@@ -171,7 +170,7 @@
       Cupertino, CA 95014
 
       Barry Haskell
-      Apple Computer, Inc.      <bhaskell@apple.com>
+      Apple Computer, Inc.            <bhaskell@apple.com>
       2 Infinite Loop
       Cupertino, California 95014
 
@@ -180,13 +179,13 @@
       2601 Elliott Ave
       Seattle, WA 98101
 
-      Jill Boyce             <jill.boyce@thomson.net>
-      Cristina Gomila        <cristina.gomila@thomson.net>
+      Jill Boyce                      <jill.boyce@thomson.net>
+      Cristina Gomila                 <cristina.gomila@thomson.net>
       Thomson
       2 Independence Way
       Princeton, NJ 08540
       
-      Siwei Ma                                <swma@jdl.ac.cn>
+      Siwei Ma                        <swma@jdl.ac.cn>
       Institute of Computing Technology
       Chinese Academy of Sciences 
       Kexueyuan South Road 6
@@ -203,7 +202,6 @@
       Mobilygen Corporation 
       2100 Lakeside Drive
       Santa Clara, CA, 95054
-
   
    \endverbatim
  */

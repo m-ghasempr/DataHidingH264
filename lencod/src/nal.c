@@ -118,9 +118,9 @@ int RBSPtoEBSP(byte *streamBuffer, int begin_bytepos, int end_bytepos, int min_n
 
 void AllocNalPayloadBuffer()
 {
-  const int buffer_size = (input->img_width * input->img_height * 4); // AH 190202: There can be data expansion with 
+  const int buffer_size = ((input->img_width+img->auto_crop_right) * (input->img_height+img->auto_crop_bottom) * 4); // AH 190202: There can be data expansion with 
                                                           // low QP values. So, we make sure that buffer 
-                                                          // does not everflow. 4 is probably safe multiplier.
+                                                          // does not overflow. 4 is probably safe multiplier.
   FreeNalPayloadBuffer();
 
   NAL_Payload_buffer = (byte *) calloc(buffer_size, sizeof(byte));

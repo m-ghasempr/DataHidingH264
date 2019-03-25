@@ -8,7 +8,7 @@
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
- *    - Inge Lille-Langøy               <inge.lille-langoy@telenor.com>
+ *    - Inge Lille-Langoy               <inge.lille-langoy@telenor.com>
  *    - Detlev Marpe                    <marpe@hhi.de>
  *    - Stephan Wenger                  <stewe@cs.tu-berlin.de>
  ***************************************************************************

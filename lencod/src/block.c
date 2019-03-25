@@ -8,7 +8,7 @@
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
- *    - Inge Lille-Langøy               <inge.lille-langoy@telenor.com>
+ *    - Inge Lille-Langoy               <inge.lille-langoy@telenor.com>
  *    - Rickard Sjoberg                 <rickard.sjoberg@era.ericsson.se>
  *    - Stephan Wenger                  <stewe@cs.tu-berlin.de>
  *    - Jani Lainema                    <jani.lainema@nokia.com>
@@ -641,6 +641,86 @@ void CalculateQuantParam(void)
   }
 }
 
+
+/*!
+ ************************************************************************
+ * \brief
+ *    Calculation of the quantization offset params at the frame level
+ *
+ * \par Input:
+ *    none
+ *
+ * \par Output:
+ *    none
+ ************************************************************************
+ */
+ void CalculateOffsetParam(void)
+ {
+   int i, j, k, temp;
+   int qp_per;
+   
+   if(input->OffsetMatrixPresentFlag)
+   {
+     for(k=0; k<13; k++)
+     {
+       qp_per = Q_BITS + k;
+       for(j=0; j<4; j++)
+       {
+         for(i=0; i<4; i++)
+         {
+           temp = (i<<2)+j;
+           if (img->type == I_SLICE)
+           {
+             LevelOffset4x4Luma_Intra[k][j][i]         = ((1<<qp_per) * OffsetList4x4input[0][temp] + 512)>>10;
+             LevelOffset4x4Chroma_Intra[0][k][j][i]    = ((1<<qp_per) * OffsetList4x4input[1][temp] + 512)>>10;
+             LevelOffset4x4Chroma_Intra[1][k][j][i]    = ((1<<qp_per) * OffsetList4x4input[2][temp] + 512)>>10;
+           }
+           else
+           {
+             LevelOffset4x4Luma_Intra[k][j][i]         = ((1<<qp_per) * OffsetList4x4input[3][temp] + 512)>>10;
+             LevelOffset4x4Chroma_Intra[0][k][j][i]    = ((1<<qp_per) * OffsetList4x4input[4][temp] + 512)>>10;
+             LevelOffset4x4Chroma_Intra[1][k][j][i]    = ((1<<qp_per) * OffsetList4x4input[5][temp] + 512)>>10;
+           }
+           
+           LevelOffset4x4Luma_Inter[k][j][i]         = ((1<<qp_per) * OffsetList4x4input[6][temp] + 512)>>10;
+           LevelOffset4x4Chroma_Inter[0][k][j][i]    = ((1<<qp_per) * OffsetList4x4input[7][temp] + 512)>>10;
+           LevelOffset4x4Chroma_Inter[1][k][j][i]    = ((1<<qp_per) * OffsetList4x4input[8][temp] + 512)>>10;
+         }
+       }
+     }
+   }
+   else
+   {
+     for(k=0; k<13; k++)
+     {
+       qp_per = Q_BITS + k;
+       for(j=0; j<4; j++)
+       {
+         for(i=0; i<4; i++)
+         {
+           temp = (i<<2)+j;
+           if (img->type == I_SLICE)
+           {
+             LevelOffset4x4Luma_Intra[k][j][i]         = ((1<<qp_per) * Offset_intra_default_intra[temp] + 512)>>10;
+             LevelOffset4x4Chroma_Intra[0][k][j][i]    = ((1<<qp_per) * Offset_intra_default_intra[temp] + 512)>>10;
+             LevelOffset4x4Chroma_Intra[1][k][j][i]    = ((1<<qp_per) * Offset_intra_default_intra[temp] + 512)>>10;
+           }
+           else
+           {
+             LevelOffset4x4Luma_Intra[k][j][i]         = ((1<<qp_per) * Offset_intra_default_inter[temp] + 512)>>10;
+             LevelOffset4x4Chroma_Intra[0][k][j][i]    = ((1<<qp_per) * Offset_intra_default_inter[temp] + 512)>>10;
+             LevelOffset4x4Chroma_Intra[1][k][j][i]    = ((1<<qp_per) * Offset_intra_default_inter[temp] + 512)>>10;
+           }
+           LevelOffset4x4Luma_Inter[k][j][i]         = ((1<<qp_per) * Offset_inter_default[temp] + 512)>>10;
+           LevelOffset4x4Chroma_Inter[0][k][j][i]    = ((1<<qp_per) * Offset_inter_default[temp] + 512)>>10;
+           LevelOffset4x4Chroma_Inter[1][k][j][i]    = ((1<<qp_per) * Offset_inter_default[temp] + 512)>>10;
+         }
+       }
+     }
+   }
+ }
+ 
+
 /*!
  ************************************************************************
  * \brief
@@ -655,7 +735,7 @@ void CalculateQuantParam(void)
  */
 int dct_luma_16x16(int new_intra_mode)
 {
-  int qp_const;
+  //int qp_const;
   int i,j;
   int ii,jj;
   int i1,j1;
@@ -680,7 +760,7 @@ int dct_luma_16x16(int new_intra_mode)
   qp_per    = (currMB->qp + img->bitdepth_luma_qp_scale - MIN_QP)/6;
   qp_rem    = (currMB->qp + img->bitdepth_luma_qp_scale - MIN_QP)%6;
   q_bits    = Q_BITS+qp_per;
-  qp_const  = (1<<q_bits)/3;
+  //qp_const  = (1<<q_bits)/3;
 
   for (j=0;j<16;j++)
   {
@@ -789,7 +869,8 @@ int dct_luma_16x16(int new_intra_mode)
     if(lossless_qpprime)
       level= abs(M4[i][j]);
     else
-      level= (abs(M4[i][j]) * LevelScale4x4Luma_Intra[qp_rem][0][0] + (qp_const<<1)) >> (q_bits+1);
+        level= (abs(M4[i][j]) * LevelScale4x4Luma_Intra[qp_rem][0][0] + (LevelOffset4x4Luma_Intra[qp_per][0][0]<<1)) >> (q_bits+1);
+      //level= (abs(M4[i][j]) * LevelScale4x4Luma_Intra[qp_rem][0][0] + (qp_const<<1)) >> (q_bits+1);
 
     if (input->symbol_mode == UVLC && img->qp < 10) 
     {
@@ -886,8 +967,9 @@ int dct_luma_16x16(int new_intra_mode)
 
         if(lossless_qpprime)
           level= abs( M0[i][ii][j][jj]);
-        else
-          level= ( abs( M0[i][ii][j][jj]) * LevelScale4x4Luma_Intra[qp_rem][i][j] + qp_const) >> q_bits;
+        else          
+          level= ( abs( M0[i][ii][j][jj]) * LevelScale4x4Luma_Intra[qp_rem][i][j] + LevelOffset4x4Luma_Intra[qp_per][i][j]) >> q_bits;
+        //level= ( abs( M0[i][ii][j][jj]) * LevelScale4x4Luma_Intra[qp_rem][i][j] + qp_const) >> q_bits;
 
         if (level != 0)
         {
@@ -972,7 +1054,10 @@ int dct_luma_16x16(int new_intra_mode)
     {
       for (i=0;i<16;i++)
       {
-        img->m7[i][j]=((M0[i%4][i/4][j%4][j/4]+DQ_ROUND)>>DQ_BITS);
+        if(lossless_qpprime)
+          img->m7[i][j]=M0[i%4][i/4][j%4][j/4];
+        else
+          img->m7[i][j]=((M0[i%4][i/4][j%4][j/4]+DQ_ROUND)>>DQ_BITS);
       }
     }
   }
@@ -1014,7 +1099,8 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int intra)
   int sign(int a,int b);
 
   int i,j,i1,j1,ilev,m5[4],m6[4],coeff_ctr;
-  int qp_const,level,scan_pos,run;
+  //int qp_const;
+  int level,scan_pos,run;
   int nonzero;
   int qp_per,qp_rem,q_bits;
 
@@ -1031,12 +1117,13 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int intra)
   qp_per    = (currMB->qp + img->bitdepth_luma_qp_scale - MIN_QP)/6; 
   qp_rem    = (currMB->qp + img->bitdepth_luma_qp_scale - MIN_QP)%6; 
   q_bits    = Q_BITS+qp_per;
-
+/*
   if (img->type == I_SLICE)
     qp_const=(1<<q_bits)/3;    // intra
   else
     qp_const=(1<<q_bits)/6;    // inter
-  
+*/
+//  printf("q_bits %d %d %d %d\n",q_bits,qp_per,qp_const,LevelOffset4x4Luma_Intra[qp_per][0][0]);
   //  Horizontal transform
   for (j=0; j < BLOCK_SIZE && !lossless_qpprime; j++)
   {
@@ -1094,9 +1181,11 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int intra)
     if(lossless_qpprime)
       level = abs (img->m7[i][j]);
     else if(intra == 1)
-      level = (abs (img->m7[i][j]) * LevelScale4x4Luma_Intra[qp_rem][i][j] + qp_const) >> q_bits;
+      level = (abs (img->m7[i][j]) * LevelScale4x4Luma_Intra[qp_rem][i][j] + LevelOffset4x4Luma_Intra[qp_per][i][j]) >> q_bits;
+    //level = (abs (img->m7[i][j]) * LevelScale4x4Luma_Intra[qp_rem][i][j] + qp_const) >> q_bits;    
     else
-      level = (abs (img->m7[i][j]) * LevelScale4x4Luma_Inter[qp_rem][i][j] + qp_const) >> q_bits;
+      level = (abs (img->m7[i][j]) * LevelScale4x4Luma_Inter[qp_rem][i][j] + LevelOffset4x4Luma_Inter[qp_per][i][j]) >> q_bits;
+    //level = (abs (img->m7[i][j]) * LevelScale4x4Luma_Inter[qp_rem][i][j] + qp_const) >> q_bits;
 
     if (level != 0)
     {
@@ -1180,8 +1269,16 @@ int dct_luma(int block_x,int block_y,int *coeff_cost, int intra)
       } 
       else 
       {
-        img->m7[i][j] =(m6[j]+m6[j1]+DQ_ROUND)>>DQ_BITS;
-        img->m7[i][j1]=(m6[j]-m6[j1]+DQ_ROUND)>>DQ_BITS;
+        if(lossless_qpprime)
+        {
+          img->m7[i][j] =m6[j]+m6[j1];
+          img->m7[i][j1]=m6[j]-m6[j1];
+        }
+        else
+        {
+          img->m7[i][j] =(m6[j]+m6[j1]+DQ_ROUND)>>DQ_BITS;
+          img->m7[i][j1]=(m6[j]-m6[j1]+DQ_ROUND)>>DQ_BITS;
+        }
       }
     }
   }
@@ -1248,9 +1345,9 @@ int dct_chroma(int uv,int cr_cbp)
   int m4[4][4];
   int qp_per_dc = 0;
   int qp_rem_dc = 0;
-  int qp_const;
+  //int qp_const;
   int q_bits_422 = 0;	
-  int qp_const_422 = 0;
+  //int qp_const_422 = 0;
   Boolean lossless_qpprime = ((currMB->qp + img->bitdepth_luma_qp_scale)==0 && img->lossless_qpprime_flag==1);
 
   qp_c      = currMB->qp + img->chroma_qp_offset[uv];
@@ -1260,23 +1357,24 @@ int dct_chroma(int uv,int cr_cbp)
   qp_per    = (qp_c + img->bitdepth_chroma_qp_scale)/6;              
   qp_rem    = (qp_c + img->bitdepth_chroma_qp_scale)%6;              
   q_bits    = Q_BITS+qp_per;
-  
+  /*
   if (img->type == I_SLICE)
     qp_const=(1<<q_bits)/3;    // intra
   else
     qp_const=(1<<q_bits)/6;    // inter
-
+*/
   if (img->yuv_format == YUV422)
   {
     //for YUV422 only
     qp_per_dc = (qp_c + 3 + img->bitdepth_chroma_qp_scale)/6;
     qp_rem_dc = (qp_c + 3 + img->bitdepth_chroma_qp_scale)%6;
-    q_bits_422 = Q_BITS+qp_per_dc;
-    
+    //q_bits_422 = Q_BITS+qp_per_dc;
+    /*
     if (img->type == I_SLICE)		
       qp_const_422=(1<<q_bits_422)/3;    // intra
     else
       qp_const_422=(1<<q_bits_422)/6;    // inter
+      */
   }
 
   
@@ -1340,9 +1438,11 @@ int dct_chroma(int uv,int cr_cbp)
       ilev=0;
       
       if(intra == 1)
-        level =(abs(m1[coeff_ctr]) * LevelScale4x4Chroma_Intra[uv][qp_rem][0][0] + (qp_const<<1)) >> (q_bits+1);
+        level =(abs(m1[coeff_ctr]) * LevelScale4x4Chroma_Intra[uv][qp_rem][0][0] + (LevelOffset4x4Chroma_Intra[uv][qp_per][0][0]<<1)) >> (q_bits+1);
+        //level =(abs(m1[coeff_ctr]) * LevelScale4x4Chroma_Intra[uv][qp_rem][0][0] + (qp_const<<1)) >> (q_bits+1);
       else
-        level =(abs(m1[coeff_ctr]) * LevelScale4x4Chroma_Inter[uv][qp_rem][0][0] + (qp_const<<1)) >> (q_bits+1);
+        level =(abs(m1[coeff_ctr]) * LevelScale4x4Chroma_Inter[uv][qp_rem][0][0] + (LevelOffset4x4Chroma_Inter[uv][qp_per][0][0]<<1)) >> (q_bits+1);
+        //level =(abs(m1[coeff_ctr]) * LevelScale4x4Chroma_Inter[uv][qp_rem][0][0] + (qp_const<<1)) >> (q_bits+1);
       
       if (input->symbol_mode == UVLC && img->qp < 4) 
       {
@@ -1444,10 +1544,12 @@ int dct_chroma(int uv,int cr_cbp)
       run++;
 
       if(intra == 1)
-        level =(abs(m4[i][j]) * LevelScale4x4Chroma_Intra[uv][qp_rem_dc][0][0] + (qp_const_422*2)) >> (q_bits_422+1);
+        level =(abs(m4[i][j]) * LevelScale4x4Chroma_Intra[uv][qp_rem_dc][0][0] + (LevelOffset4x4Chroma_Intra[uv][qp_per_dc][0][0]*2)) >> (q_bits_422+1);
+        //level =(abs(m4[i][j]) * LevelScale4x4Chroma_Intra[uv][qp_rem_dc][0][0] + (qp_const_422*2)) >> (q_bits_422+1);
       else
-        level =(abs(m4[i][j]) * LevelScale4x4Chroma_Inter[uv][qp_rem_dc][0][0] + (qp_const_422*2)) >> (q_bits_422+1);
-      
+        level =(abs(m4[i][j]) * LevelScale4x4Chroma_Inter[uv][qp_rem_dc][0][0] + (LevelOffset4x4Chroma_Inter[uv][qp_per_dc][0][0]*2)) >> (q_bits_422+1);
+      //level =(abs(m4[i][j]) * LevelScale4x4Chroma_Inter[uv][qp_rem_dc][0][0] + (qp_const_422*2)) >> (q_bits_422+1);
+
       if (level != 0)
       {
         //YUV422
@@ -1572,10 +1674,12 @@ int dct_chroma(int uv,int cr_cbp)
       
       if(lossless_qpprime)
         level = abs(m4[i][j]);
-      else if(intra == 1)
-        level =(abs(m4[i][j]) * LevelScale4x4Chroma_Intra[uv][qp_rem][0][0] + (qp_const*2)) >> (q_bits+1);
+      else if(intra == 1)        
+        level =(abs(m4[i][j]) * LevelScale4x4Chroma_Intra[uv][qp_rem][0][0] + (LevelOffset4x4Chroma_Intra[uv][qp_per][0][0]*2)) >> (q_bits+1);
+      //level =(abs(m4[i][j]) * LevelScale4x4Chroma_Intra[uv][qp_rem][0][0] + (qp_const*2)) >> (q_bits+1);
       else
-        level =(abs(m4[i][j]) * LevelScale4x4Chroma_Inter[uv][qp_rem][0][0] + (qp_const*2)) >> (q_bits+1);
+        level =(abs(m4[i][j]) * LevelScale4x4Chroma_Inter[uv][qp_rem][0][0] + (LevelOffset4x4Chroma_Inter[uv][qp_per][0][0]*2)) >> (q_bits+1);
+      //level =(abs(m4[i][j]) * LevelScale4x4Chroma_Inter[uv][qp_rem][0][0] + (qp_const*2)) >> (q_bits+1);
       
       if (level != 0)
       {
@@ -1691,10 +1795,12 @@ int dct_chroma(int uv,int cr_cbp)
 
         if(lossless_qpprime)
           level = abs(img->m7[n1+i][n2+j]);
-        else if(intra == 1)
-          level=(abs(img->m7[n1+i][n2+j])*LevelScale4x4Chroma_Intra[uv][qp_rem][i][j]+qp_const)>>q_bits;
+        else if(intra == 1)          
+          level=(abs(img->m7[n1+i][n2+j])*LevelScale4x4Chroma_Intra[uv][qp_rem][i][j]+LevelOffset4x4Chroma_Intra[uv][qp_per][i][j])>>q_bits;
+        //level=(abs(img->m7[n1+i][n2+j])*LevelScale4x4Chroma_Intra[uv][qp_rem][i][j]+qp_const)>>q_bits;
         else
-          level=(abs(img->m7[n1+i][n2+j])*LevelScale4x4Chroma_Inter[uv][qp_rem][i][j]+qp_const)>>q_bits;
+          level=(abs(img->m7[n1+i][n2+j])*LevelScale4x4Chroma_Inter[uv][qp_rem][i][j]+LevelOffset4x4Chroma_Inter[uv][qp_per][i][j])>>q_bits;
+        //level=(abs(img->m7[n1+i][n2+j])*LevelScale4x4Chroma_Inter[uv][qp_rem][i][j]+qp_const)>>q_bits;
 
         if (level  != 0)
         {
@@ -1826,8 +1932,16 @@ int dct_chroma(int uv,int cr_cbp)
           } 
           else 
           {
-            img->m7[n1+i][n2+j] =(m6[j]+m6[j2]+DQ_ROUND)>>DQ_BITS;
-            img->m7[n1+i][n2+j2]=(m6[j]-m6[j2]+DQ_ROUND)>>DQ_BITS;
+            if(lossless_qpprime)
+            {
+               img->m7[n1+i][n2+j] =m6[j]+m6[j2];
+               img->m7[n1+i][n2+j2]=m6[j]-m6[j2];
+            }
+            else
+            {
+              img->m7[n1+i][n2+j] =(m6[j]+m6[j2]+DQ_ROUND)>>DQ_BITS;
+              img->m7[n1+i][n2+j2]=(m6[j]-m6[j2]+DQ_ROUND)>>DQ_BITS;
+            }
           }
         }
       }
@@ -1857,7 +1971,8 @@ int dct_chroma4x4(int uv, int b8, int b4)
   int sign(int a,int b);
 
   int i,j,i1,j1,ilev,m5[4],m6[4],coeff_ctr;
-  int qp_const,level,scan_pos,run;
+  //int qp_const;
+  int level,scan_pos,run;
   int nonzeroAC;
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
   int   intra = IS_INTRA (currMB);
@@ -1876,12 +1991,12 @@ int dct_chroma4x4(int uv, int b8, int b4)
   qp_per    = (qp_c + img->bitdepth_chroma_qp_scale)/6;              
   qp_rem    = (qp_c + img->bitdepth_chroma_qp_scale)%6;              
   q_bits    = Q_BITS+qp_per;
-
+/*
   if (img->type == I_SLICE)
     qp_const=(1<<q_bits)/3;    // intra
   else
     qp_const=(1<<q_bits)/6;    // inter
-
+*/
   //  Horizontal transform
   if(!lossless_qpprime)
   for (j=0; j < BLOCK_SIZE; j++)
@@ -1923,27 +2038,37 @@ int dct_chroma4x4(int uv, int b8, int b4)
 
   if(lossless_qpprime)
     level = abs(img->m7[0][0]);
-  else if(intra == 1)
-    level =(abs(img->m7[0][0]) * LevelScale4x4Chroma_Intra[uv][qp_rem][0][0] + qp_const) >> q_bits;
+  else if(intra == 1)    
+    level =(abs(img->m7[0][0]) * LevelScale4x4Chroma_Intra[uv][qp_rem][0][0] + LevelOffset4x4Chroma_Intra[uv][qp_per][0][0]) >> q_bits;
+  //level =(abs(img->m7[0][0]) * LevelScale4x4Chroma_Intra[uv][qp_rem][0][0] + qp_const) >> q_bits;
   else
-    level =(abs(img->m7[0][0]) * LevelScale4x4Chroma_Inter[uv][qp_rem][0][0] + qp_const) >> q_bits;
+    level =(abs(img->m7[0][0]) * LevelScale4x4Chroma_Inter[uv][qp_rem][0][0] + LevelOffset4x4Chroma_Inter[uv][qp_per][0][0]) >> q_bits;
+  //level =(abs(img->m7[0][0]) * LevelScale4x4Chroma_Inter[uv][qp_rem][0][0] + qp_const) >> q_bits;
+
   b8 -= 4*(uv+1);
   dc_level_temp[uv][2*(b8%2)+(b4%2)][2*(b8/2)+(b4/2)] = sign(level, img->m7[0][0]);
 
   /* Inverse Quantization */
-  if(qp_per<4)
+  if(lossless_qpprime)
   {
-    if(intra == 1)
-      img->m7[0][0] = sign( ((level*InvLevelScale4x4Chroma_Intra[uv][qp_rem][0][0]+(1<<(3-qp_per)))>>(4-qp_per)), img->m7[0][0]);
-    else
-      img->m7[0][0] = sign( ((level*InvLevelScale4x4Chroma_Inter[uv][qp_rem][0][0]+(1<<(3-qp_per)))>>(4-qp_per)), img->m7[0][0]);
+    img->m7[0][0] = sign( level, img->m7[0][0]);
   }
   else
   {
-    if(intra == 1)
-      img->m7[0][0] = sign( ((level*InvLevelScale4x4Chroma_Intra[uv][qp_rem][0][0])<<(qp_per-4)), img->m7[0][0]);
+    if(qp_per<4)
+    {
+      if(intra == 1)
+        img->m7[0][0] = sign( ((level*InvLevelScale4x4Chroma_Intra[uv][qp_rem][0][0]+(1<<(3-qp_per)))>>(4-qp_per)), img->m7[0][0]);
+      else
+        img->m7[0][0] = sign( ((level*InvLevelScale4x4Chroma_Inter[uv][qp_rem][0][0]+(1<<(3-qp_per)))>>(4-qp_per)), img->m7[0][0]);
+    }
     else
-      img->m7[0][0] = sign( ((level*InvLevelScale4x4Chroma_Inter[uv][qp_rem][0][0])<<(qp_per-4)), img->m7[0][0]);
+    {
+      if(intra == 1)
+        img->m7[0][0] = sign( ((level*InvLevelScale4x4Chroma_Intra[uv][qp_rem][0][0])<<(qp_per-4)), img->m7[0][0]);
+      else
+        img->m7[0][0] = sign( ((level*InvLevelScale4x4Chroma_Inter[uv][qp_rem][0][0])<<(qp_per-4)), img->m7[0][0]);
+    }
   }
 
   for (coeff_ctr=1;coeff_ctr < 16;coeff_ctr++)
@@ -1956,24 +2081,27 @@ int dct_chroma4x4(int uv, int b8, int b4)
 
     if(lossless_qpprime)
       level = abs (img->m7[i][j]);
-    else if(intra == 1)
-      level = (abs(img->m7[i][j])*LevelScale4x4Chroma_Intra[uv][qp_rem][i][j]+qp_const)>>q_bits;
-	else
-      level = (abs(img->m7[i][j])*LevelScale4x4Chroma_Inter[uv][qp_rem][i][j]+qp_const)>>q_bits;
-
+    else if(intra == 1)      
+      level = (abs(img->m7[i][j])*LevelScale4x4Chroma_Intra[uv][qp_rem][i][j]+LevelOffset4x4Chroma_Intra[uv][qp_per][i][j])>>q_bits;
+    //level = (abs(img->m7[i][j])*LevelScale4x4Chroma_Intra[uv][qp_rem][i][j]+qp_const)>>q_bits;
+    else
+      level = (abs(img->m7[i][j])*LevelScale4x4Chroma_Inter[uv][qp_rem][i][j]+LevelOffset4x4Chroma_Inter[uv][qp_per][i][j])>>q_bits;
+      //level = (abs(img->m7[i][j])*LevelScale4x4Chroma_Inter[uv][qp_rem][i][j]+qp_const)>>q_bits;
+    
     if (level != 0)
     {
       if(i||j) nonzeroAC=TRUE;
-
+      
       ACLevel[scan_pos] = sign(level,img->m7[i][j]);
       ACRun  [scan_pos] = run;
       ++scan_pos;
       run=-1;                     // reset zero level counter
-
+      
       level=sign(level, img->m7[i][j]);
-      if(lossless_qpprime){
+      if(lossless_qpprime)
+      {
         ilev=level;
-	  }
+      }
       else if(qp_per<4)
       {
         if(intra == 1)

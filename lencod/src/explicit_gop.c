@@ -73,8 +73,8 @@ void create_pyramid()
     }
      
     curlevel = GOPlevels ;
-    curGOPLevelfrm = (int*)malloc(GOPlevels*sizeof(int));
-    curGOPLeveldist= (int*)malloc(GOPlevels*sizeof(int));
+    if (NULL == (curGOPLevelfrm = (int*)malloc(GOPlevels*sizeof(int)))) no_mem_exit("create_pyramid:curGOPLevelfrm");
+    if (NULL == (curGOPLeveldist= (int*)malloc(GOPlevels*sizeof(int)))) no_mem_exit("create_pyramid:curGOPLeveldist");
     
     for (i=0; i <input->successive_Bframe; i++)
     {
@@ -371,7 +371,7 @@ void encode_enhancement_layer()
       else 
         img->layer = 1;
       
-      if (input->StoredBPictures == 0 && input->PyramidCoding==0)
+      if (input->BRefPictures == 0 && input->PyramidCoding==0)
       {
         img->frame_num++;                 //increment frame_num once for B-frames
         img->frame_num %= (1 << (log2_max_frame_num_minus4 + 4));
@@ -401,7 +401,10 @@ void encode_enhancement_layer()
           if (input->PyramidCoding == 3)
             img->b_interval = 1.0;
           
-          img->toppoc = 2*((IMG_NUMBER-1)*(input->jumpd + 1) + (int) (img->b_interval * (double)(1 + gop_structure[img->b_frame_to_code - 1].display_no)));      
+          if(input->intra_period && input->idr_enable)
+            img->toppoc = 2*(((IMG_NUMBER%input->intra_period)-1)*(input->jumpd+1) + (int)(img->b_interval * (double)(1 + gop_structure[img->b_frame_to_code - 1].display_no)));
+          else
+            img->toppoc = 2*((IMG_NUMBER-1)*(input->jumpd + 1) + (int)(img->b_interval * (double)(1 + gop_structure[img->b_frame_to_code -1].display_no)));
 
           if (img->b_frame_to_code == 1)
             img->delta_pic_order_cnt[0] = img->toppoc - 2*(start_tr_in_this_IGOP  + (IMG_NUMBER)*((input->jumpd+1)));
@@ -429,8 +432,7 @@ void encode_enhancement_layer()
         {
           
           img->nal_reference_idc = 0;     
-          if (input->StoredBPictures == 1 )
-            
+          if (input->BRefPictures == 1 )
           {
             img->nal_reference_idc = 1;
             img->frame_num++;                 //increment frame_num once for B-frames
@@ -443,8 +445,10 @@ void encode_enhancement_layer()
           if (input->PyramidCoding == 3)
             img->b_interval = 1.0;
           
-          img->toppoc = 2*((IMG_NUMBER-1)*(input->jumpd+1) + (int) (img->b_interval * (double)img->b_frame_to_code));      
-
+          if(input->intra_period && input->idr_enable)
+            img->toppoc = 2*(((IMG_NUMBER% input->intra_period)-1)*(input->jumpd+1) + (int) (img->b_interval * (double)img->b_frame_to_code));
+          else
+            img->toppoc = 2*((IMG_NUMBER-1)*(input->jumpd+1) + (int) (img->b_interval * (double)img->b_frame_to_code));
 
           if ((input->PicInterlace==FRAME_CODING)&&(input->MbInterlace==FRAME_CODING))
             img->bottompoc = img->toppoc;     //progressive
@@ -454,7 +458,7 @@ void encode_enhancement_layer()
           img->framepoc = min (img->toppoc, img->bottompoc);
           
           //the following is sent in the slice header
-          if (!input->StoredBPictures)
+          if (!input->BRefPictures)
           {
             img->delta_pic_order_cnt[0]= 2*(img->b_frame_to_code-1);
           }
@@ -497,12 +501,12 @@ void poc_based_ref_management(int current_pic_num)
     }
   }
   
-  tmp_drpm=(DecRefPicMarking_t*)calloc (1,sizeof (DecRefPicMarking_t));
+  if (NULL==(tmp_drpm=(DecRefPicMarking_t*)calloc (1,sizeof (DecRefPicMarking_t)))) no_mem_exit("poc_based_ref_management: tmp_drpm");
   tmp_drpm->Next=NULL;
   
   tmp_drpm->memory_management_control_operation = 0;
   
-  tmp_drpm2=(DecRefPicMarking_t*)calloc (1,sizeof (DecRefPicMarking_t));
+  if (NULL==(tmp_drpm2=(DecRefPicMarking_t*)calloc (1,sizeof (DecRefPicMarking_t)))) no_mem_exit("poc_based_ref_management: tmp_drpm2");
   tmp_drpm2->Next=tmp_drpm;
   
   tmp_drpm2->memory_management_control_operation = 1;

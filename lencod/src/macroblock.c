@@ -8,7 +8,7 @@
  *
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
- *    - Inge Lille-Langøy               <inge.lille-langoy@telenor.com>
+ *    - Inge Lille-Langoy               <inge.lille-langoy@telenor.com>
  *    - Rickard Sjoberg                 <rickard.sjoberg@era.ericsson.se>
  *    - Jani Lainema                    <jani.lainema@nokia.com>
  *    - Sebastian Purreiter             <sebastian.purreiter@mch.siemens.de>
@@ -882,8 +882,8 @@ void
 OneComponentLumaPrediction4x4 (int*   mpred,      //  --> array of prediction values (row by row)
                                int    pic_pix_x,  // <--  absolute horizontal coordinate of 4x4 block
                                int    pic_pix_y,  // <--  absolute vertical   coordinate of 4x4 block
-                               int*   mv,         // <--  motion vector
-                               int    ref,        // <--  reference frame 
+                               short* mv,         // <--  motion vector
+                               short  ref,        // <--  reference frame 
                                StorablePicture **list)
 {
   pel_t** ref_pic;
@@ -953,13 +953,13 @@ copyblock4x4 (int*   mpred,      //  --> array of prediction values (row by row)
  ************************************************************************
  */
 void
-LumaPrediction4x4 (int  block_x,    // <--  relative horizontal block coordinate of 4x4 block
-                   int  block_y,    // <--  relative vertical   block coordinate of 4x4 block
-                   int  p_dir,      // <--  prediction direction (0=forward, 1=backward, 2=bidir)
-                   int  fw_mode,    // <--  forward  prediction mode (1-7, 0=DIRECT if bw_mode=0)
-                   int  bw_mode,    // <--  backward prediction mode (1-7, 0=DIRECT if fw_mode=0)
-                   int  fw_ref_idx, // <--  reference frame for forward prediction (-1: Intra4x4 pred. with fw_mode)
-                   int  bw_ref_idx  )    
+LumaPrediction4x4 (int   block_x,    // <--  relative horizontal block coordinate of 4x4 block
+                   int   block_y,    // <--  relative vertical   block coordinate of 4x4 block
+                   int   p_dir,      // <--  prediction direction (0=forward, 1=backward, 2=bidir)
+                   int   fw_mode,    // <--  forward  prediction mode (1-7, 0=DIRECT if bw_mode=0)
+                   int   bw_mode,    // <--  backward prediction mode (1-7, 0=DIRECT if fw_mode=0)
+                   short fw_ref_idx, // <--  reference frame for forward prediction (-1: Intra4x4 pred. with fw_mode)
+                   short bw_ref_idx  )    
 {
   static int fw_pred[16];
   static int bw_pred[16];
@@ -1051,14 +1051,14 @@ LumaPrediction4x4 (int  block_x,    // <--  relative horizontal block coordinate
  ************************************************************************
  */
 int                                       //  ==> coefficient cost
-LumaResidualCoding8x8 (int  *cbp,         //  --> cbp (updated according to processed 8x8 luminance block)
-                       int64  *cbp_blk,     //  --> block cbp (updated according to processed 8x8 luminance block)
-                       int  block8x8,     // <--  block number of 8x8 block
-                       int  p_dir,        // <--  prediction direction
-                       int  fw_mode,      // <--  forward  prediction mode (1-7, 0=DIRECT)
-                       int  bw_mode,      // <--  backward prediction mode (1-7, 0=DIRECT)
-                       int  fw_refframe,  // <--  reference frame for forward prediction
-                       int  bw_refframe   // <--  reference frame for backward prediction
+LumaResidualCoding8x8 (int   *cbp,         //  --> cbp (updated according to processed 8x8 luminance block)
+                       int64 *cbp_blk,     //  --> block cbp (updated according to processed 8x8 luminance block)
+                       int   block8x8,     // <--  block number of 8x8 block
+                       short p_dir,        // <--  prediction direction
+                       int   fw_mode,      // <--  forward  prediction mode (1-7, 0=DIRECT)
+                       int   bw_mode,      // <--  backward prediction mode (1-7, 0=DIRECT)
+                       short fw_refframe,  // <--  reference frame for forward prediction
+                       short bw_refframe   // <--  reference frame for backward prediction
                        )
 {
   int    block_y, block_x, pic_pix_y, pic_pix_x, i, j, nonzero = 0, cbp_blk_mask;
@@ -1090,7 +1090,8 @@ LumaResidualCoding8x8 (int  *cbp,         //  --> cbp (updated according to proc
       cbp_blk_mask = (block_x>>2) + block_y;
 
       // Residue Color Transform
-	  if(img->residue_transform_flag){
+	  if(img->residue_transform_flag)
+    {
         ChromaPrediction4x4 (0, block_x, block_y, p_dir, fw_mode, bw_mode, fw_refframe, bw_refframe);
         for (j=0; j<4; j++)
         for (i=0; i<4; i++)
@@ -1165,6 +1166,25 @@ LumaResidualCoding8x8 (int  *cbp,         //  --> cbp (updated according to proc
             img->m7[i][j] = resTrans_G[i+block_x][j+block_y];
           else
             img->m7[i+bxx][j+byy] = resTrans_G[i+block_x][j+block_y];
+        }
+
+        // Residue Color Transform
+        //===== DCT, Quantization, inverse Quantization, IDCT, Reconstruction =====      
+        if (img->NoResidueDirect != 1 && !skipped && !need_8x8_transform )
+        {
+          //===== DCT, Quantization, inverse Quantization, IDCT, Reconstruction =====
+          if (img->type!=SP_SLICE)  nonzero = dct_luma   (block_x, block_y, &coeff_cost, 0);
+          else                      nonzero = dct_luma_sp(block_x, block_y, &coeff_cost);
+          
+          for (j=0; j<4; j++)
+            for (i=0; i<4; i++)
+              rec_resG[i+block_x][j+block_y] = img->m7[i][j];
+            
+          if (nonzero)
+          {
+            (*cbp_blk) |= 1 << cbp_blk_mask;  // one bit for every 4x4 block
+            (*cbp)     |= cbp_mask;           // one bit for the 4x4 blocks of an 8x8 block
+          }
         }
       }
     }
@@ -1248,7 +1268,7 @@ LumaResidualCoding8x8 (int  *cbp,         //  --> cbp (updated according to proc
  ************************************************************************
  */
 void
-SetModesAndRefframe (int b8, int* p_dir, int* fw_mode, int* bw_mode, int* fw_ref, int* bw_ref)
+SetModesAndRefframe (int b8, short* p_dir, int* fw_mode, int* bw_mode, short* fw_ref, short* bw_ref)
 {
   Macroblock* currMB = &img->mb_data[img->current_mb_nr];
   int         j      = 2*(b8/2);
@@ -1309,7 +1329,8 @@ void
 LumaResidualCoding ()
 {
   int i,j,block8x8,b8_x,b8_y;
-  int p_dir, fw_mode, bw_mode, refframe;
+  int fw_mode, bw_mode;
+  short p_dir, refframe;
   int sum_cnt_nonz;
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
 
@@ -1319,7 +1340,7 @@ LumaResidualCoding ()
 
   for (block8x8=0; block8x8<4; block8x8++)
   {
-    int bw_ref;
+    short bw_ref;
     SetModesAndRefframe (block8x8, &p_dir, &fw_mode, &bw_mode, &refframe, &bw_ref);
 
     sum_cnt_nonz += LumaResidualCoding8x8 (&(currMB->cbp), &(currMB->cbp_blk), block8x8,
@@ -1367,7 +1388,8 @@ TransformDecision (int block_check, int *cost)
 {
   int    block_y, block_x, pic_pix_y, pic_pix_x, i, j, k;
   int    mb_y, mb_x, block8x8;
-  int    p_dir, fw_mode, bw_mode, fw_ref, bw_ref;
+  int    fw_mode, bw_mode;
+  short  p_dir, fw_ref, bw_ref;
   int    num_blks;
   int    cost8x8=0, cost4x4=0;
   int    diff[64], *diff_ptr;
@@ -1440,17 +1462,17 @@ TransformDecision (int block_check, int *cost)
  ************************************************************************
  */
 void
-OneComponentChromaPrediction4x4 (int*      mpred,      //!< array to store prediction values
-                                 int       block_c_x,  //!< horizontal pixel coordinate of 4x4 block
-                                 int       block_c_y,  //!< vertical   pixel coordinate of 4x4 block
-                                 int****** mv,         //!< motion vector array
-                                 int       list_idx,   //!< reference picture list
-                                 int       ref,        //!< reference index
-                                 int       blocktype,  //!< block type
-                                 int       uv)         //!< chroma component
+OneComponentChromaPrediction4x4 (int*        mpred,      //!< array to store prediction values
+                                 int         block_c_x,  //!< horizontal pixel coordinate of 4x4 block
+                                 int         block_c_y,  //!< vertical   pixel coordinate of 4x4 block
+                                 short****** mv,         //!< motion vector array
+                                 int         list_idx,   //!< reference picture list
+                                 short       ref,        //!< reference index
+                                 int         blocktype,  //!< block type
+                                 int         uv)         //!< chroma component
 {
   int     i, j, ii, jj, ii0, jj0, ii1, jj1, if0, if1, jf0, jf1;
-  int*    mvb;
+  short*  mvb;
   pel_t** refimage;
   int     f1_x = 64/img->mb_cr_size_x;
   int     f2_x=f1_x-1;
@@ -1542,14 +1564,14 @@ void IntraChromaPrediction4x4 (int  uv,       // <-- colour component
  ************************************************************************
  */
 void
-ChromaPrediction4x4 (int  uv,           // <-- colour component
-                     int  block_x,      // <-- relative horizontal block coordinate of 4x4 block
-                     int  block_y,      // <-- relative vertical   block coordinate of 4x4 block
-                     int  p_dir,        // <-- prediction direction
-                     int  fw_mode,      // <-- forward  prediction mode (1-7, 0=DIRECT if bw_mode=0)
-                     int  bw_mode,      // <-- backward prediction mode (1-7, 0=DIRECT if fw_mode=0)
-                     int  fw_ref_idx,   // <-- reference frame for forward prediction (if (<0) -> intra prediction)
-                     int  bw_ref_idx)   // <-- reference frame for backward prediction 
+ChromaPrediction4x4 (int   uv,           // <-- colour component
+                     int   block_x,      // <-- relative horizontal block coordinate of 4x4 block
+                     int   block_y,      // <-- relative vertical   block coordinate of 4x4 block
+                     int   p_dir,        // <-- prediction direction
+                     int   fw_mode,      // <-- forward  prediction mode (1-7, 0=DIRECT if bw_mode=0)
+                     int   bw_mode,      // <-- backward prediction mode (1-7, 0=DIRECT if fw_mode=0)
+                     short fw_ref_idx,   // <-- reference frame for forward prediction (if (<0) -> intra prediction)
+                     short bw_ref_idx)   // <-- reference frame for backward prediction 
 {
   static int fw_pred[16];
   static int bw_pred[16];
@@ -1559,7 +1581,7 @@ ChromaPrediction4x4 (int  uv,           // <-- colour component
   int  block_y4  = block_y+4;
   int* fpred     = fw_pred;
   int* bpred     = bw_pred;
-  int****** mv_array = img->all_mv;
+  short****** mv_array = img->all_mv;
 
   //int apply_weights = ( (input->WeightedPrediction && (img->type == P_SLICE||img->type == SP_SLICE)) ||
 //                     (input->WeightedBiprediction && (img->type == B_SLICE)));
@@ -1639,9 +1661,9 @@ ChromaPrediction4x4 (int  uv,           // <-- colour component
 void ChromaResidualCoding (int* cr_cbp)
 {
   int   uv, block8, block_y, block_x, j, i;
-  int   p_dir, fw_mode, bw_mode, refframe;
+  int   fw_mode, bw_mode;
+  short p_dir, refframe, bw_ref;
   int   skipped = (img->mb_data[img->current_mb_nr].mb_type == 0 && (img->type == P_SLICE || img->type == SP_SLICE));
-  int   bw_ref;
   int   yuv = img->yuv_format - 1; //ADD-VG-15052004
 
   int   block8x8_idx[3][4][4] =     //ADD-VG-15052004
@@ -2824,8 +2846,8 @@ int writeMotionVector8x8 (int  i0,
   const int*     partMap    = assignSE2partition[input->partition_mode];
   int            refindex   = refframe;
 
-  int******      all_mv     = img->all_mv;
-  int******      pred_mv    = img->pred_mv;
+  short******    all_mv     = img->all_mv;
+  short******    pred_mv    = img->pred_mv;
 
   for (j=j0; j<j1; j+=step_v)
   for (i=i0; i<i1; i+=step_h)

@@ -231,7 +231,7 @@ void linfo_se(int len,  int info, int *value1, int *dummy)
 /*!
  ************************************************************************
  * \par Input:
- *    lenght and info
+ *    length and info
  * \par Output:
  *    cbp (intra)
  ************************************************************************
@@ -242,13 +242,13 @@ void linfo_cbp_intra(int len,int info,int *cbp, int *dummy)
   int cbp_idx;
 
   linfo_ue(len,info,&cbp_idx,dummy);
-  *cbp=NCBP[img->yuv_format?1:0][cbp_idx][0];
+  *cbp=NCBP[active_sps->chroma_format_idc?1:0][cbp_idx][0];
 }
 
 /*!
  ************************************************************************
  * \par Input:
- *    lenght and info
+ *    length and info
  * \par Output:
  *    cbp (inter)
  ************************************************************************
@@ -259,13 +259,13 @@ void linfo_cbp_inter(int len,int info,int *cbp, int *dummy)
   int cbp_idx;
 
   linfo_ue(len,info,&cbp_idx,dummy);
-  *cbp=NCBP[img->yuv_format?1:0][cbp_idx][1];
+  *cbp=NCBP[active_sps->chroma_format_idc?1:0][cbp_idx][1];
 }
 
 /*!
  ************************************************************************
  * \par Input:
- *    lenght and info
+ *    length and info
  * \par Output:
  *    level, run
  ************************************************************************
@@ -298,7 +298,7 @@ void linfo_levrun_inter(int len, int info, int *level, int *irun)
 /*!
  ************************************************************************
  * \par Input:
- *    lenght and info
+ *    length and info
  * \par Output:
  *    level, run
  ************************************************************************
@@ -835,7 +835,7 @@ int readSyntaxElement_NumCoeffTrailingOnesChromaDC(SyntaxElement *sym,  DataPart
     { 0, 0, 0, 3, 3, 4, 4, 4, 4, 4,12,12, 8,12, 8,12, 8}}
   
   };
-  int yuv = img->yuv_format - 1;
+  int yuv = active_sps->chroma_format_idc - 1;
   //ADD-VG-14052004-END
 
   lt = &lentab[yuv][0][0];
@@ -1153,7 +1153,7 @@ int readSyntaxElement_TotalZerosChromaDC(SyntaxElement *sym,  DataPartition *dP)
     {0,1,1},
     {0,1}}  
   };
-  int yuv = img->yuv_format - 1;
+  int yuv = active_sps->chroma_format_idc - 1;
 
   vlcnum = sym->value1;
 

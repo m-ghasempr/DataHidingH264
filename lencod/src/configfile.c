@@ -78,6 +78,8 @@
        char *GetConfigFileContent (char *Filename);
 static void ParseContent (char *buf, int bufsize);
 static int ParameterNameToMapIndex (char *s);
+static int InitEncoderParams();
+static int TestEncoderParams(int bitdepth_qp_scale);
 static void PatchInp ();
 static void ProfileCheck();
 static void LevelCheck();
@@ -138,9 +140,9 @@ void Configure (int ac, char *av[])
   char *filename=DEFAULTCONFIGFILENAME;
 
   memset (&configinput, 0, sizeof (InputParameters));
-  //Set some initial parameters.
-  configinput.LevelIDC   = LEVEL_IDC;
-  configinput.ProfileIDC = PROFILE_IDC;
+  //Set default parameters.
+  printf ("Setting Default Parameters...\n");
+  InitEncoderParams();
 
   // Process default config file
   CLcount = 1;
@@ -167,6 +169,8 @@ void Configure (int ac, char *av[])
   }
   printf ("Parsing Configfile %s", filename);
   content = GetConfigFileContent (filename);
+  if (NULL==content)
+    error (errortext, 300);
   ParseContent (content, strlen(content));
   printf ("\n");
   free (content);
@@ -183,6 +187,8 @@ void Configure (int ac, char *av[])
     if (0 == strncmp (av[CLcount], "-f", 2))  // A file parameter?
     {
       content = GetConfigFileContent (av[CLcount+1]);
+      if (NULL==content)
+        error (errortext, 300);
       printf ("Parsing Configfile %s", av[CLcount+1]);
       ParseContent (content, strlen (content));
       printf ("\n");
@@ -250,6 +256,9 @@ void Configure (int ac, char *av[])
  *    buf and returns buf
  * \param Filename
  *    name of config file
+ * \return
+ *    if successfull, content of config file
+ *    NULL in case of error. Error message will be set in errortext
  ***********************************************************************
  */
 char *GetConfigFileContent (char *Filename)
@@ -260,26 +269,26 @@ char *GetConfigFileContent (char *Filename)
 
   if (NULL == (f = fopen (Filename, "r")))
   {
-      snprintf (errortext, ET_SIZE, "Cannot open configuration file %s.\n", Filename);
-      error (errortext, 300);
+      snprintf (errortext, ET_SIZE, "Cannot open configuration file %s.", Filename);
+      return NULL;
   }
 
   if (0 != fseek (f, 0, SEEK_END))
   {
-    snprintf (errortext, ET_SIZE, "Cannot fseek in configuration file %s.\n", Filename);
-    error (errortext, 300);
+    snprintf (errortext, ET_SIZE, "Cannot fseek in configuration file %s.", Filename);
+    return NULL;
   }
 
   FileSize = ftell (f);
   if (FileSize < 0 || FileSize > 60000)
   {
-    snprintf (errortext, ET_SIZE, "Unreasonable Filesize %ld reported by ftell for configuration file %s.\n", FileSize, Filename);
-    error (errortext, 300);
+    snprintf (errortext, ET_SIZE, "Unreasonable Filesize %ld reported by ftell for configuration file %s.", FileSize, Filename);
+    return NULL;
   }
   if (0 != fseek (f, 0, SEEK_SET))
   {
-    snprintf (errortext, ET_SIZE, "Cannot fseek in configuration file %s.\n", Filename);
-    error (errortext, 300);
+    snprintf (errortext, ET_SIZE, "Cannot fseek in configuration file %s.", Filename);
+    return NULL;
   }
 
   if ((buf = malloc (FileSize + 1))==NULL) no_mem_exit("GetConfigFileContent: buf");
@@ -392,7 +401,7 @@ void ParseContent (char *buf, int bufsize)
       error (errortext, 300);
     }
 
-    // Now interprete the Value, context sensitive...
+    // Now interpret the Value, context sensitive...
 
     switch (Map[MapIdx].Type)
     {
@@ -448,6 +457,93 @@ static int ParameterNameToMapIndex (char *s)
   return -1;
 };
 
+/*!
+ ***********************************************************************
+ * \brief
+ *    Sets initial values for encoding parameters.
+ * \return
+ *    -1 for error
+ ***********************************************************************
+ */
+static int InitEncoderParams()
+{
+  int i = 0;
+
+  while (Map[i].TokenName != NULL)
+  {
+    if (Map[i].Type == 0)
+        * (int *) (Map[i].Place) = (int) Map[i].Default;
+    else if (Map[i].Type == 2)
+    * (double *) (Map[i].Place) = Map[i].Default;
+      i++;
+  }
+  return -1;
+};
+
+static int TestEncoderParams(int bitdepth_qp_scale)
+{
+  int i = 0;
+
+  while (Map[i].TokenName != NULL)
+  {
+    if (Map[i].param_limits == 1)
+    {
+      if (Map[i].Type == 0)
+      {
+        if ( * (int *) (Map[i].Place) < (int) Map[i].min_limit || * (int *) (Map[i].Place) > (int) Map[i].max_limit )
+        {
+          snprintf(errortext, ET_SIZE, "Error in input parameter %s. Check configuration file. Value should be in [%d, %d] range.", Map[i].TokenName, (int) Map[i].min_limit,(int)Map[i].max_limit );
+          error (errortext, 400);
+        }
+        
+      }
+      else if (Map[i].Type == 2)
+      {
+        if ( * (double *) (Map[i].Place) < Map[i].min_limit || * (double *) (Map[i].Place) > Map[i].max_limit )
+        {
+          snprintf(errortext, ET_SIZE, "Error in input parameter %s. Check configuration file. Value should be in [%.2f, %.2f] range.", Map[i].TokenName,Map[i].min_limit ,Map[i].max_limit );
+          error (errortext, 400);
+        }        
+      }            
+    }
+    else if (Map[i].param_limits == 2)
+    {
+      if (Map[i].Type == 0)
+      {
+        if ( * (int *) (Map[i].Place) < (int) Map[i].min_limit )
+        {
+          snprintf(errortext, ET_SIZE, "Error in input parameter %s. Check configuration file. Value should not be smaller than %d.", Map[i].TokenName, (int) Map[i].min_limit);
+          error (errortext, 400);
+        }
+        
+      }
+      else if (Map[i].Type == 2)
+      {
+        if ( * (double *) (Map[i].Place) < Map[i].min_limit )
+        {
+          snprintf(errortext, ET_SIZE, "Error in input parameter %s. Check configuration file. Value should not be smaller than %2.f.", Map[i].TokenName,Map[i].min_limit);
+          error (errortext, 400);
+        }        
+      }
+    }
+    else if (Map[i].param_limits == 3) // Only used for QPs
+    {
+      if (Map[i].Type == 0)
+      {
+        if ( * (int *) (Map[i].Place) < (int) (Map[i].min_limit - bitdepth_qp_scale) || * (int *) (Map[i].Place) > (int) Map[i].max_limit )
+        {
+          snprintf(errortext, ET_SIZE, "Error in input parameter %s. Check configuration file. Value should be in [%d, %d] range.", Map[i].TokenName, (int) (Map[i].min_limit - bitdepth_qp_scale),(int)Map[i].max_limit );
+          error (errortext, 400);
+        }
+        
+      }
+    }
+ 
+    i++;
+  }
+  return -1;
+};
+
 
 /*!
  ************************************************************************
@@ -488,124 +584,10 @@ static void PatchInp ()
 //  input->BitDepthChroma = input->BitDepthLuma;
   input->LowPassForIntra8x8 = 1;                    //low pass is always used
 
-  // consistency check of QPs
-  if (input->qp0 > MAX_QP || input->qp0 < (MIN_QP - bitdepth_qp_scale))
-  {
-    snprintf(errortext, ET_SIZE, "Error in input parameter QPIlice. Check configuration file");
-    error (errortext, 400);
-  }
-  
-  if (input->qpN > MAX_QP || input->qpN < (MIN_QP - bitdepth_qp_scale))
-  {
-    snprintf(errortext, ET_SIZE, "Error in input parameter QPPlice. Check configuration file");
-    error (errortext, 400);
-  }
-  
-  if (input->qpB > MAX_QP || input->qpB < (MIN_QP - bitdepth_qp_scale))
-  {
-    snprintf(errortext, ET_SIZE, "Error in input parameter QPBSlice. Check configuration file");
-    error (errortext, 400);
-  }
+  TestEncoderParams(bitdepth_qp_scale);
 
-  if ((input->qpBSoffset + input->qpB > MAX_QP) || (input->qpBSoffset + input->qpB < (MIN_QP - bitdepth_qp_scale)))
-  {
-    snprintf(errortext, ET_SIZE, "Error in input parameter qpBSoffset. Check configuration file");
-    error (errortext, 400);
-  }
-
-#ifdef _CHANGE_QP_
-  if (input->qp2start && (input->qpB2 > MAX_QP || input->qpB2 < (MIN_QP - bitdepth_qp_scale)))
-  {
-    snprintf(errortext, ET_SIZE, "Error in input parameter ChangeQPB. Check configuration file");
-    error (errortext, 400);
-  }
-
-  if (input->qp2start && (input->qp02 > MAX_QP || input->qp02 < (MIN_QP - bitdepth_qp_scale)))
-  {
-    snprintf(errortext, ET_SIZE, "Error in input parameter ChangeQIB. Check configuration file");
-    error (errortext, 400);
-  }
-  
-  if (input->qp2start && (input->qpN2 > MAX_QP || input->qpN2 < (MIN_QP - bitdepth_qp_scale)))
-  {
-    snprintf(errortext, ET_SIZE, "Error in input parameter ChangeQPP. Check configuration file");
-    error (errortext, 400);
-  }
-
-  if (input->qp2start && ((input->qpBs2offset + input->qpB2 > MAX_QP) || (input->qpBs2offset + input->qpB2 < (MIN_QP - bitdepth_qp_scale))))
-  {
-    snprintf(errortext, ET_SIZE, "Error in input parameter ChangeQPBs. Check configuration file");
-    error (errortext, 400);
-  }
-#endif
-  if (input->qpsp > MAX_QP || input->qpsp < (MIN_QP - bitdepth_qp_scale))
-  {
-    snprintf(errortext, ET_SIZE, "Error in input parameter quant_sp. Check configuration file");
-    error (errortext, 400);
-  }
-  if (input->qpsp_pred > MAX_QP || input->qpsp_pred < (MIN_QP - bitdepth_qp_scale))
-  {
-    snprintf(errortext, ET_SIZE, "Error in input parameter quant_sp_pred. Check configuration file");
-    error (errortext, 400);
-  }
-  if (input->sp_periodicity <0)
-  {
-    snprintf(errortext, ET_SIZE, "Error in input parameter sp_periodicity. Check configuration file");
-    error (errortext, 400);
-  }
-  if (input->FrameRate < 0.0 || input->FrameRate>100.0)   
-  {
-    snprintf(errortext, ET_SIZE, "Error in input parameter FrameRate, check configuration file");
-    error (errortext, 400);
-  }
   if (input->FrameRate == 0.0)
     input->FrameRate = INIT_FRAME_RATE;
-
-  if (input->idr_enable < 0 || input->idr_enable > 1)   
-  {
-    snprintf(errortext, ET_SIZE, "Error in input parameter IDRIntraEnable, check configuration file");
-    error (errortext, 400);
-  }
-
-  if (input->start_frame < 0 )   
-  {
-    snprintf(errortext, ET_SIZE, "Error in input parameter StartFrame, Check configuration file.");
-    error (errortext, 400);
-  }
-
-  // consistency check num_ref_frames
-  if (input->num_ref_frames<1) input->num_ref_frames=1;
-
-
-  // consistency check size information
-
-  if (input->img_height % 16 != 0 || input->img_width % 16 != 0)
-  {
-    snprintf(errortext, ET_SIZE, "Unsupported image format x=%d,y=%d, must be a multiple of 16",input->img_width,input->img_height);
-    error (errortext, 400);
-  }
-
-#ifdef _LEAKYBUCKET_
-  // consistency check for Number of Leaky Bucket parameters
-  if(input->NumberLeakyBuckets < 2 || input->NumberLeakyBuckets > 255) 
-  {
-    snprintf(errortext, ET_SIZE, "Number of Leaky Buckets should be between 2 and 255 but is %d \n", input->NumberLeakyBuckets);
-    error(errortext, 400);
-  }
-#endif
-
-  // check range of filter offsets
-  if (input->LFAlphaC0Offset > 6 || input->LFAlphaC0Offset < -6)
-  {
-    snprintf(errortext, ET_SIZE, "Error in input parameter LFAlphaC0Offset, check configuration file");
-    error (errortext, 400);
-  }
-
-  if (input->LFBetaOffset > 6 || input->LFBetaOffset < -6)
-  {
-    snprintf(errortext, ET_SIZE, "Error in input parameter LFBetaOffset, check configuration file");
-    error (errortext, 400);
-  }
 
   // Set block sizes
 
@@ -635,7 +617,7 @@ static void PatchInp ()
 
   // set proper log2_max_frame_num_minus4.
   {
-    int storedBplus1 = (input->StoredBPictures ) ? input->successive_Bframe + 1: 1;
+    int storedBplus1 = (input->BRefPictures ) ? input->successive_Bframe + 1: 1;
 
 //    log2_max_frame_num_minus4 = max( (int)(CeilLog2(input->no_frames * storedBplus1))-4, 0);
     if (input->Log2MaxFrameNum < 4)
@@ -646,18 +628,6 @@ static void PatchInp ()
   }
 
   log2_max_pic_order_cnt_lsb_minus4 = max( (int)(CeilLog2( 2*input->no_frames * (input->jumpd + 1))) -4, 0);
-
-  if (input->partition_mode < 0 || input->partition_mode > 1)
-  {
-    snprintf(errortext, ET_SIZE, "Unsupported Partition mode, must be between 0 and 1");
-    error (errortext, 400);
-  }
-
-  if (input->of_mode < 0 || input->of_mode > 2)
-  {
-    snprintf(errortext, ET_SIZE, "Unsupported Output file mode, must be between 0 and 1");
-    error (errortext, 400);
-  }
 
   // B picture consistency check
   if(input->successive_Bframe > input->jumpd)
@@ -714,13 +684,72 @@ static void PatchInp ()
     error (errortext, 500);
   }
 
+
+  // consistency check size information
+  /*
+  if (input->img_height % 16 != 0 || input->img_width % 16 != 0)
+  {
+    snprintf(errortext, ET_SIZE, "Unsupported image format x=%d,y=%d, must be a multiple of 16",input->img_width,input->img_height);
+    error (errortext, 400);
+  }
+
+  if (input->PicInterlace || input->MbInterlace)
+  {
+    if (input->img_height % 32 != 0 )
+    { 
+      snprintf(errortext, ET_SIZE, "Unsupported image format y=%d, must be a multiple of 32 for adaptive frame/field",input->img_height);
+      error (errortext, 400);
+    }
+  }
+ */
+  if (input->img_width % 16 != 0)
+  {
+    img->auto_crop_right = 16-(input->img_width % 16);
+  }
+  else
+  {
+    img->auto_crop_right=0;
+  }
+  if (input->PicInterlace || input->MbInterlace)
+  {
+    if (input->img_height % 2 != 0)
+    {
+      error ("even number of lines required for interlaced coding", 500);
+    }
+    if (input->img_height % 32 != 0)
+    {
+      img->auto_crop_bottom = 32-(input->img_height % 32);
+    }
+    else
+    {
+      img->auto_crop_bottom=0;
+    }
+  }
+  else
+  {
+    if (input->img_height % 16 != 0)
+    {
+      img->auto_crop_bottom = 16-(input->img_height % 16);
+    }
+    else
+    {
+      img->auto_crop_bottom=0;
+    }
+  }
+  if (img->auto_crop_bottom || img->auto_crop_right)
+  {
+    printf ("Warning: Automatical cropping activated: Coded frame Size: %dx%d\n", input->img_width+img->auto_crop_right, input->img_height+img->auto_crop_bottom);
+  }
+
+  /*
   // add check for MAXSLICEGROUPIDS
   if(input->num_slice_groups_minus1>=MAXSLICEGROUPIDS)
   {
     snprintf(errortext, ET_SIZE, "num_slice_groups_minus1 exceeds MAXSLICEGROUPIDS");
     error (errortext, 500);
   }
-  
+  */
+
   // Following codes are to read slice group configuration from SliceGroupConfigFileName for slice group type 0,2 or 6
   if( (input->num_slice_groups_minus1!=0)&&
     ((input->slice_group_map_type == 0) || (input->slice_group_map_type == 2) || (input->slice_group_map_type == 6)) )
@@ -735,7 +764,8 @@ static void PatchInp ()
       if (input->slice_group_map_type == 0) 
       {
         input->run_length_minus1=(int *)malloc(sizeof(int)*(input->num_slice_groups_minus1+1));
-        
+        if (NULL==input->run_length_minus1) 
+          no_mem_exit("PatchInp: input->run_length_minus1");
         
         // each line contains one 'run_length_minus1' value
         for(i=0;i<=input->num_slice_groups_minus1;i++)
@@ -749,6 +779,10 @@ static void PatchInp ()
       {
         input->top_left=(int *)malloc(sizeof(int)*input->num_slice_groups_minus1);
         input->bottom_right=(int *)malloc(sizeof(int)*input->num_slice_groups_minus1);
+        if (NULL==input->top_left) 
+          no_mem_exit("PatchInp: input->top_left");
+        if (NULL==input->bottom_right) 
+          no_mem_exit("PatchInp: input->bottom_right");
         
         // every two lines contain 'top_left' and 'bottom_right' value
         for(i=0;i<input->num_slice_groups_minus1;i++)
@@ -762,17 +796,22 @@ static void PatchInp ()
       }
       else if (input->slice_group_map_type == 6)
       {
+        int tmp;
+
         frame_mb_only = !(input->PicInterlace || input->MbInterlace);
-        mb_width= input->img_width/16;
-        mb_height= input->img_height/16;
+        mb_width= (input->img_width+img->auto_crop_right)/16;
+        mb_height= (input->img_height+img->auto_crop_bottom)/16;
         mapunit_height=mb_height/(2-frame_mb_only);
         
-        input->slice_group_id=(int * ) malloc(sizeof(int)*mapunit_height*mb_width);
+        input->slice_group_id=(byte * ) malloc(sizeof(byte)*mapunit_height*mb_width);
+        if (NULL==input->slice_group_id) 
+          no_mem_exit("PatchInp: input->slice_group_id");
         
         // each line contains slice_group_id for one Macroblock
         for (i=0;i<mapunit_height*mb_width;i++)
         {
-          fscanf(sgfile,"%d",(input->slice_group_id+i));
+          fscanf(sgfile,"%d", &tmp);
+          input->slice_group_id[i]= (byte) tmp;
           if ( *(input->slice_group_id+i) > input->num_slice_groups_minus1 )
           {
             snprintf(errortext, ET_SIZE, "Error read slice group information from file %s", input->SliceGroupConfigFileName);
@@ -814,27 +853,7 @@ static void PatchInp ()
     error (errortext, 400);
   }
    
-  if (input->WeightedPrediction < 0 || input->WeightedPrediction > 1 )
-  {
-    snprintf (errortext, ET_SIZE, "\nWeightedPrediction=%d is not allowed.Select 0 (normal) or 1 (explicit)",input->WeightedPrediction);
-    error (errortext, 400);
-  }
-
-  if (input->WeightedBiprediction < 0 || input->WeightedBiprediction > 2 )
-  {
-    snprintf (errortext, ET_SIZE, "\nWeightedBiprediction=%d is not allowed.Select 0 (normal), 1 (explicit), or 2 (implicit)",input->WeightedBiprediction);
-    error (errortext, 400);
-  }
-  
-  if (input->PicInterlace || input->MbInterlace)
-  {
-    if (input->img_height % 32 != 0 )
-    { 
-      snprintf(errortext, ET_SIZE, "Unsupported image format y=%d, must be a multiple of 32 for adaptive frame/field",input->img_height);
-      error (errortext, 400);
-    }
-  }
-
+ 
   if ((!input->rdopt)&&(input->MbInterlace))
   {
     snprintf(errortext, ET_SIZE, "MB AFF is not compatible with non-rd-optimized coding.");
@@ -897,14 +916,14 @@ static void PatchInp ()
   // Rate control
   if(input->RCEnable)
   {
-    if ( (input->img_height*input->img_width/256)%input->basicunit!=0)
+    if ( ((input->img_height+img->auto_crop_bottom)*(input->img_width+img->auto_crop_right)/256)%input->basicunit!=0)
     {
       snprintf(errortext, ET_SIZE, "Basic unit is not defined correctly.");
       error (errortext, 500);
     }
   }
 
-  if ((input->successive_Bframe)&&(input->StoredBPictures)&&(input->idr_enable)&&(input->intra_period)&&(input->pic_order_cnt_type!=0))
+  if ((input->successive_Bframe)&&(input->BRefPictures)&&(input->idr_enable)&&(input->intra_period)&&(input->pic_order_cnt_type!=0))
   {
     error("Stored B pictures combined with IDR pictures only supported in Picture Order Count type 0\n",-1000);
   }

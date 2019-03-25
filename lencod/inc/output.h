@@ -14,6 +14,8 @@
 #ifndef _OUTPUT_H_
 #define _OUTPUT_H_
 
+int testEndian();
+
 void write_stored_frame(FrameStore *fs, int p_out);
 void direct_output(StorablePicture *p, int p_out);
 void init_out_buffer();

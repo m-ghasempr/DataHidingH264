@@ -13,6 +13,10 @@
  *    Main contributors (see contributors.h for copyright, address and affiliation details) 
  *    - Yuri Vatis  vatis@hhi.de
  **************************************************************************/
+
+#ifndef _TRANSFORM8X8_H_
+#define _TRANSFORM8X8_H_
+
 #include "global.h"
 #include "image.h"
 #include "mb_access.h"
@@ -31,3 +35,4 @@ int dct_luma8x8(int block_x,int block_y,int *coeff_cost);
 void LowPassForIntra8x8Pred(int *PredPel, int block_up_left, int block_up, int block_left);
       
 
+#endif

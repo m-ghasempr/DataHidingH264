@@ -132,7 +132,7 @@ void rc_init_seq()
   else
     DDquant=2;
   
-  MBPerRow=input->img_width/16;
+  MBPerRow=img->width/16;
   
   /*adaptive field/frame coding*/
   img->FieldControl=0;
@@ -1499,7 +1499,7 @@ void updateMADModel ()
   
   if(img->NumberofCodedPFrame>0)
   {
-    assert (img->type!=P_SLICE);
+    //assert (img->type!=P_SLICE);
     
     /*frame layer rate control*/
     if(img->BasicUnit==img->Frame_Total_Number_MB)

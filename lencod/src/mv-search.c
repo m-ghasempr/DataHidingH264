@@ -9,7 +9,7 @@
  * \author
  *    Main contributors (see contributors.h for copyright, address and affiliation details)
  *      - Stephan Wenger                  <stewe@cs.tu-berlin.de>
- *      - Inge Lille-Langøy               <inge.lille-langoy@telenor.com>
+ *      - Inge Lille-Langoy               <inge.lille-langoy@telenor.com>
  *      - Rickard Sjoberg                 <rickard.sjoberg@era.ericsson.se>
  *      - Stephan Wenger                  <stewe@cs.tu-berlin.de>
  *      - Jani Lainema                    <jani.lainema@nokia.com>
@@ -52,15 +52,15 @@ int*    byte_abs;
 int**** motion_cost;
 
 
-void SetMotionVectorPredictor (int  pmv[2],
-                               int  ***refPic,
-                               int  ****tmp_mv,
-                               int  ref_frame,
-                               int  list,
-                               int  block_x,
-                               int  block_y,
-                               int  blockshape_x,
-                               int  blockshape_y);
+void SetMotionVectorPredictor (short  pmv[2],
+                               short  ***refPic,
+                               short  ****tmp_mv,
+                               short  ref_frame,
+                               int    list,
+                               int    block_x,
+                               int    block_y,
+                               int    blockshape_x,
+                               int    blockshape_y);
 
 #ifdef _FAST_FULL_ME_
 
@@ -300,9 +300,9 @@ SetupLargerBlocks (int list, int refindex, int max_pos)
  *    Setup the fast search for an macroblock
  ***********************************************************************
  */
-void SetupFastFullPelSearch (int ref, int list)  // <--  reference frame parameter, list0 or 1
+void SetupFastFullPelSearch (short ref, int list)  // <--  reference frame parameter, list0 or 1
 {
-  int     pmv[2];
+  short   pmv[2];
   pel_t   orig_blocks[256], *orgptr=orig_blocks, *refptr;
   int     offset_x, offset_y, x, y, range_partly_outside, ref_x, ref_y, pos, abs_x, abs_y, bindex, blky;
   int     LineSadBlk0, LineSadBlk1, LineSadBlk2, LineSadBlk3;
@@ -456,15 +456,15 @@ void SetupFastFullPelSearch (int ref, int list)  // <--  reference frame paramet
  *    Set motion vector predictor
  ************************************************************************
  */
-void SetMotionVectorPredictor (int  pmv[2],
-                               int  ***refPic,
-                               int  ****tmp_mv,
-                               int  ref_frame,
-                               int  list,
-                               int  block_x,
-                               int  block_y,
-                               int  blockshape_x,
-                               int  blockshape_y)
+void SetMotionVectorPredictor (short  pmv[2],
+                               short  ***refPic,
+                               short  ****tmp_mv,
+                               short  ref_frame,
+                               int    list,
+                               int    block_x,
+                               int    block_y,
+                               int    blockshape_x,
+                               int    blockshape_y)
 {
   int mb_x                 = 4*block_x;
   int mb_y                 = 4*block_y;
@@ -932,15 +932,15 @@ FullPelBlockMotionSearch (pel_t**   orig_pic,     // <--  original pixel values 
  */
 int                                                   //  ==> minimum motion cost after search
 FastFullPelBlockMotionSearch (pel_t**   orig_pic,     // <--  not used
-                              int       ref,          // <--  reference frame (0... or -1 (backward))
+                              short     ref,          // <--  reference frame (0... or -1 (backward))
                               int       list,
                               int       pic_pix_x,    // <--  absolute x-coordinate of regarded AxB block
                               int       pic_pix_y,    // <--  absolute y-coordinate of regarded AxB block
                               int       blocktype,    // <--  block type (1-16x16 ... 7-4x4)
-                              int       pred_mv_x,    // <--  motion vector predictor (x) in sub-pel units
-                              int       pred_mv_y,    // <--  motion vector predictor (y) in sub-pel units
-                              int*      mv_x,         //  --> motion vector (x) - in pel units
-                              int*      mv_y,         //  --> motion vector (y) - in pel units
+                              short     pred_mv_x,    // <--  motion vector predictor (x) in sub-pel units
+                              short     pred_mv_y,    // <--  motion vector predictor (y) in sub-pel units
+                              short*    mv_x,         //  --> motion vector (x) - in pel units
+                              short*    mv_y,         //  --> motion vector (y) - in pel units
                               int       search_range, // <--  1-d search range in pel units
                               int       min_mcost,    // <--  minimum motion cost (cost for center or huge value)
                               double    lambda)       // <--  lagrangian parameter for determining motion cost
@@ -1266,15 +1266,15 @@ find_SATD (int curr_diff[MB_BLOCK_SIZE][MB_BLOCK_SIZE], int use_hadamard, int bl
  */
 int                                               //  ==> minimum motion cost after search
 SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values for the AxB block
-                         int       ref,           // <--  reference frame (0... or -1 (backward))
+                         short     ref,           // <--  reference frame (0... or -1 (backward))
                          int       list,          // <--  reference picture list 
                          int       pic_pix_x,     // <--  absolute x-coordinate of regarded AxB block
                          int       pic_pix_y,     // <--  absolute y-coordinate of regarded AxB block
                          int       blocktype,     // <--  block type (1-16x16 ... 7-4x4)
-                         int       pred_mv_x,     // <--  motion vector predictor (x) in sub-pel units
-                         int       pred_mv_y,     // <--  motion vector predictor (y) in sub-pel units
-                         int*      mv_x,          // <--> in: search center (x) / out: motion vector (x) - in pel units
-                         int*      mv_y,          // <--> in: search center (y) / out: motion vector (y) - in pel units
+                         short     pred_mv_x,     // <--  motion vector predictor (x) in sub-pel units
+                         short     pred_mv_y,     // <--  motion vector predictor (y) in sub-pel units
+                         short*    mv_x,          // <--> in: search center (x) / out: motion vector (x) - in pel units
+                         short*    mv_y,          // <--> in: search center (y) / out: motion vector (y) - in pel units
                          int       search_pos2,   // <--  search positions for    half-pel search  (default: 9)
                          int       search_pos4,   // <--  search positions for quarter-pel search  (default: 9)
                          int       min_mcost,     // <--  minimum motion cost (cost for center or huge value)
@@ -1527,7 +1527,7 @@ SubPelBlockMotionSearch (pel_t**   orig_pic,      // <--  original pixel values 
  ***********************************************************************
  */
 int                                         //!< minimum motion cost after search
-BlockMotionSearch (int       ref,           //!< reference idx
+BlockMotionSearch (short     ref,           //!< reference idx
                    int       list,          //!< reference pciture list
                    int       mb_x,          //!< x-coordinate inside macroblock
                    int       mb_y,          //!< y-coordinate inside macroblock
@@ -1542,7 +1542,8 @@ BlockMotionSearch (int       ref,           //!< reference idx
                                    orig_val+128, orig_val+144, orig_val+160, orig_val+176,
                                    orig_val+192, orig_val+208, orig_val+224, orig_val+240};
 
-  int       pred_mv_x, pred_mv_y, mv_x, mv_y, i, j;
+  short     pred_mv_x, pred_mv_y, mv_x, mv_y;
+  int       i, j;
 
   int       max_value = INT_MAX;
   int       min_mcost = max_value;
@@ -1556,11 +1557,10 @@ BlockMotionSearch (int       ref,           //!< reference idx
   int       pic_pix_x = img->opix_x + mb_x;
   int       pic_pix_y = img->opix_y + mb_y;
 
-  int*      pred_mv;
+  short*    pred_mv;
 
-  int***    mv_array  = enc_picture->mv[list];
-
-  int****** all_mv    = img->all_mv;
+  short***    mv_array  = enc_picture->mv[list];
+  short****** all_mv    = img->all_mv;
 
 #ifdef WIN32
   struct _timeb tstruct1;
@@ -1916,8 +1916,8 @@ BlockMotionSearch (int       ref,           //!< reference idx
  */
 int BIDPartitionCost (int   blocktype,
                       int   block8x8,
-                      int   fw_ref,
-                      int   bw_ref,
+                      short fw_ref,
+                      short bw_ref,
                       int   lambda_factor)
 {
   static int  bx0[5][4] = {{0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,2,0,0}, {0,2,0,2}};
@@ -1939,8 +1939,8 @@ int BIDPartitionCost (int   blocktype,
   int   step_v    = (input->blc_size[blocktype][1]>>2);
   int   bxx, byy;                               // indexing curr_blk
 
-  int   ******all_mv = img->all_mv;
-  int   ******  p_mv = img->pred_mv;
+  short   ******all_mv = img->all_mv;
+  short   ******  p_mv = img->pred_mv;
 
   //----- cost for motion vector bits -----
   for (v=by0[parttype][block8x8]; v<by0[parttype][block8x8]+step_v0; v+=step_v)
@@ -2059,10 +2059,10 @@ int GetSkipCostMB (double lambda)
  */
 void FindSkipModeMotionVector ()
 {
-  int bx, by;
-  int ******all_mv = img->all_mv;
+  int   bx, by;
+  short ******all_mv = img->all_mv;
 
-  int pmv[2];
+  short pmv[2];
 
   int zeroMotionAbove;
   int zeroMotionLeft;
@@ -2253,8 +2253,9 @@ PartitionMotionSearch (int    blocktype,
   static int  bx0[5][4] = {{0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,2,0,0}, {0,2,0,2}};
   static int  by0[5][4] = {{0,0,0,0}, {0,0,0,0}, {0,2,0,0}, {0,0,0,0}, {0,0,2,2}};
 
-  int   **ref_array, ***mv_array;
-  int   ref, v, h, mcost, search_range, i, j;
+  short **ref_array, ***mv_array;
+  short ref;
+  int   v, h, mcost, search_range, i, j;
   int   pic_block_x, pic_block_y;
   int   bslice    = (img->type==B_SLICE);
   int   parttype  = (blocktype<4?blocktype:4);
@@ -2342,12 +2343,12 @@ extern int* last_P_no;
 void Get_Direct_Motion_Vectors ()
 {
 
-  int  block_x, block_y, pic_block_x, pic_block_y, opic_block_x, opic_block_y;
-  int  ******all_mvs = img->all_mv;
-  int  mv_scale;
-  byte **    moving_block;
-  int ****   co_located_mv;
-  int ***    co_located_ref_idx;
+  int   block_x, block_y, pic_block_x, pic_block_y, opic_block_x, opic_block_y;
+  short ******all_mvs = img->all_mv;
+  int   mv_scale;
+  byte  **   moving_block;
+  short ****   co_located_mv;
+  short ***    co_located_ref_idx;
   int64 ***    co_located_ref_id;
   Macroblock *currMB = &img->mb_data[img->current_mb_nr];
 
@@ -2379,10 +2380,10 @@ void Get_Direct_Motion_Vectors ()
   if (img->direct_spatial_mv_pred_flag)  //spatial direct mode copy from decoder
   {
     
-    int fw_rFrameL, fw_rFrameU, fw_rFrameUL, fw_rFrameUR;
-    int bw_rFrameL, bw_rFrameU, bw_rFrameUL, bw_rFrameUR; 
-    int fw_rFrame,bw_rFrame;
-    int pmvfw[2]={0,0},pmvbw[2]={0,0};
+    short fw_rFrameL, fw_rFrameU, fw_rFrameUL, fw_rFrameUR;
+    short bw_rFrameL, bw_rFrameU, bw_rFrameUL, bw_rFrameUR; 
+    short fw_rFrame,bw_rFrame;
+    short pmvfw[2]={0,0},pmvbw[2]={0,0};
 
     PixelPos mb_left, mb_up, mb_upleft, mb_upright;              
     

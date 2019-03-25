@@ -183,6 +183,9 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
                                  pic_parameter_set_rbsp_t *pps)
 {
   unsigned i;
+  int SubWidthC  [4]= { 1, 2, 2, 1};
+  int SubHeightC [4]= { 1, 2, 1, 1};
+
   int frext_profile = ((IdentifyProfile()==FREXT_HP) || 
                       (IdentifyProfile()==FREXT_Hi10P) ||
                       (IdentifyProfile()==FREXT_Hi422) ||
@@ -242,8 +245,8 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
   sps->frame_mbs_only_flag = !(input->PicInterlace || input->MbInterlace);
 
   // Picture size, finally a simple one :-)
-  sps->pic_width_in_mbs_minus1 = (input->img_width/16) -1;
-  sps->pic_height_in_map_units_minus1 = ((input->img_height/16)/ (2 - sps->frame_mbs_only_flag)) - 1;
+  sps->pic_width_in_mbs_minus1 = ((input->img_width+img->auto_crop_right)/16) -1;
+  sps->pic_height_in_map_units_minus1 = (((input->img_height+img->auto_crop_bottom)/16)/ (2 - sps->frame_mbs_only_flag)) - 1;
 
   // a couple of flags, simple
   sps->mb_adaptive_frame_field_flag = (FRAME_CODING != input->MbInterlace);
@@ -251,6 +254,8 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
   
   // Sequence VUI not implemented, signalled as not present
   sps->vui_parameters_present_flag = (input->rgb_input_flag && input->yuv_format==3);
+
+  sps->chroma_format_idc = input->yuv_format;
 
   {
     int PicWidthInMbs, PicHeightInMapUnits, FrameHeightInMbs;
@@ -363,8 +368,8 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
     case 6:
       pps->slice_group_map_type = 6;   
       pps->pic_size_in_map_units_minus1 = 
-				((input->img_height/MB_BLOCK_SIZE)/(2-sps->frame_mbs_only_flag))
-				*(input->img_width/MB_BLOCK_SIZE) -1;
+				(((input->img_height+img->auto_crop_bottom)/MB_BLOCK_SIZE)/(2-sps->frame_mbs_only_flag))
+				*((input->img_width+img->auto_crop_right)/MB_BLOCK_SIZE) -1;
 			
       for (i=0;i<=pps->pic_size_in_map_units_minus1; i++)
         pps->slice_group_id[i] = input->slice_group_id[i];
@@ -401,9 +406,26 @@ void FillParameterSetStructures (seq_parameter_set_rbsp_t *sps,
   
   pps->redundant_pic_cnt_present_flag = 0;
 
-  // the picture vui consists currently of the cropping rectangle, which cannot
-  // used by the current decoder and hence is never sent.
-  sps->frame_cropping_flag = FALSE;
+  if (img->auto_crop_right || img->auto_crop_bottom)
+  {
+    sps->frame_cropping_flag = TRUE;
+    sps->frame_cropping_rect_left_offset=0;
+    sps->frame_cropping_rect_top_offset=0;
+    sps->frame_cropping_rect_right_offset=  (img->auto_crop_right / SubWidthC[sps->chroma_format_idc]);
+    sps->frame_cropping_rect_bottom_offset= (img->auto_crop_bottom / (SubHeightC[sps->chroma_format_idc] * (2 - sps->frame_mbs_only_flag)));
+    if (img->auto_crop_right % SubWidthC[sps->chroma_format_idc])
+    {
+      error("automatic frame cropping (width) not possible",500);
+    }
+    if (img->auto_crop_bottom % (SubHeightC[sps->chroma_format_idc] * (2 - sps->frame_mbs_only_flag)))
+    {
+      error("automatic frame cropping (height) not possible",500);
+    }
+  }
+  else
+  {
+    sps->frame_cropping_flag = FALSE;
+  }
 };
 
 /*! 
@@ -513,7 +535,7 @@ int GenerateSeq_parameter_set_rbsp (seq_parameter_set_rbsp_t *sps, char *rbsp)
      (sps->profile_idc==FREXT_Hi422) ||
      (sps->profile_idc==FREXT_Hi444))
   {
-    len+=ue_v ("SPS: chroma_format_idc",                        img->yuv_format,                                 partition);
+    len+=ue_v ("SPS: chroma_format_idc",                        sps->chroma_format_idc,                          partition);
     if(img->yuv_format == 3)
       len+=u_1  ("SPS: residue_transform_flag",                 img->residue_transform_flag,                     partition);
     len+=ue_v ("SPS: bit_depth_luma_minus8",                    sps->bit_depth_luma_minus8,                      partition);

@@ -1210,7 +1210,7 @@ void read_ipred_modes(struct img_par *img,struct inp_par *inp)
     }
   }
 
-  if (IntraChromaPredModeFlag && img->yuv_format != YUV400)
+  if (IntraChromaPredModeFlag && dec_picture->chroma_format_idc != YUV400)
   {
     currSE.type = SE_INTRAPREDMODE;
     TRACE_STRING("intra_chroma_pred_mode");
@@ -2196,7 +2196,7 @@ int predict_nnz_chroma(struct img_par *img, int i,int j)
   int j_off_tab [12] = {0,0,0,0,4,4,4,4,8,8,8,8};
   int j_off = j_off_tab[j];
   
-  if (img->yuv_format != YUV444)
+  if (dec_picture->chroma_format_idc != YUV444)
   {
     //YUV420 and YUV422
     // left block
@@ -2716,7 +2716,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
   int temp[4];
   
   int b4;
-  int yuv = img->yuv_format-1;
+  int yuv = dec_picture->chroma_format_idc-1;
   int m5[4];
   int m6[4];
 
@@ -2728,11 +2728,11 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
 
   // QPI
   //init constants for every chroma qp offset
-  if (img->yuv_format != YUV400)
+  if (dec_picture->chroma_format_idc != YUV400)
   {
     for (i=0; i<2; i++)
     {
-      qp_uv[i] = img->qp + img->chroma_qp_offset[i];
+      qp_uv[i] = img->qp + dec_picture->chroma_qp_offset[i];
       qp_uv[i] = Clip3(-(img->bitdepth_chroma_qp_scale), 51, qp_uv[i]);
       qp_c[i]  = (qp_uv[i] < 0)? qp_uv[i] : QP_SCALE_CR[qp_uv[i]-MIN_QP];
       qp_per_uv[i] = (qp_c[i] + img->bitdepth_chroma_qp_scale)/6;
@@ -2949,11 +2949,11 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
   qp_const  = 1<<(3-qp_per);
   
   //init constants for every chroma qp offset
-  if (img->yuv_format != YUV400)
+  if (dec_picture->chroma_format_idc != YUV400)
   {
     for(i=0; i < 2; i++)
     {
-      qp_uv[i] = img->qp + img->chroma_qp_offset[i];
+      qp_uv[i] = img->qp + dec_picture->chroma_qp_offset[i];
       qp_uv[i] = Clip3(-(img->bitdepth_chroma_qp_scale), 51, qp_uv[i]);
       qp_c[i]  = (qp_uv[i] < 0)? qp_uv[i] : QP_SCALE_CR[qp_uv[i]-MIN_QP];
       qp_per_uv[i] = (qp_c[i] + img->bitdepth_chroma_qp_scale)/6;
@@ -3188,7 +3188,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
     }
   }
 
-  if (img->yuv_format != YUV400)
+  if (dec_picture->chroma_format_idc != YUV400)
   {
     for (j=4;j<(4+img->num_blk8x8_uv);j++) // reset all chroma coeffs before read
     for (i=0;i<4;i++)
@@ -3212,7 +3212,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
       {
         uv = ll>>1;
 
-        if (img->yuv_format == YUV420)
+        if (dec_picture->chroma_format_idc == YUV420)
         {
           //===================== CHROMA DC YUV420 ======================
           for (i=0;i<4;i++)
@@ -3293,16 +3293,16 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
               if(qp_per_uv[uv]<5)
               {
                 if(intra == 1)
-                  temp[i]=(temp[i]*InvLevelScale4x4Chroma_Intra[img->is_v_block ? 1:0][qp_rem_uv[uv]][0][0])>>(5-qp_per_uv[uv]);
+                  temp[i]=(temp[i]*InvLevelScale4x4Chroma_Intra[uv][qp_rem_uv[uv]][0][0])>>(5-qp_per_uv[uv]);
                 else
-                  temp[i]=(temp[i]*InvLevelScale4x4Chroma_Inter[img->is_v_block ? 1:0][qp_rem_uv[uv]][0][0])>>(5-qp_per_uv[uv]);
+                  temp[i]=(temp[i]*InvLevelScale4x4Chroma_Inter[uv][qp_rem_uv[uv]][0][0])>>(5-qp_per_uv[uv]);
               }
               else
               {
                 if(intra == 1)
-                  temp[i]=(temp[i]*InvLevelScale4x4Chroma_Intra[img->is_v_block ? 1:0][qp_rem_uv[uv]][0][0])<<(qp_per_uv[uv]-5);
+                  temp[i]=(temp[i]*InvLevelScale4x4Chroma_Intra[uv][qp_rem_uv[uv]][0][0])<<(qp_per_uv[uv]-5);
                 else
-                  temp[i]=(temp[i]*InvLevelScale4x4Chroma_Inter[img->is_v_block ? 1:0][qp_rem_uv[uv]][0][0])<<(qp_per_uv[uv]-5);
+                  temp[i]=(temp[i]*InvLevelScale4x4Chroma_Inter[uv][qp_rem_uv[uv]][0][0])<<(qp_per_uv[uv]-5);
               }
             }
             img->cof[0+ll][4][0][0]=temp[0];
@@ -3311,7 +3311,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
             img->cof[1+ll][5][0][0]=temp[3];
           }
         }
-        else if (img->yuv_format == YUV422)
+        else if (dec_picture->chroma_format_idc == YUV422)
         {
           int i,j,j1;
           int uv_idx = ll;
@@ -3432,7 +3432,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
               }
             }//for (j=0;j<2;j++)
           }//for (i=0;i<2;i++)
-        }//else if (img->yuv_format == YUV422)
+        }//else if (dec_picture->chroma_format_idc == YUV422)
         else
         {
           //===================== CHROMA DC YUV444 ======================
@@ -3565,7 +3565,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
           else
           { //residual_transform_dc
 
-            for (i=0;i<4 ;i++)
+            for (i=0;i<4  && !lossless_qpprime ;i++)
             for (j=0; j < 4;j++)
             {
               if(qp_per_uv[uv]<4)
@@ -3592,7 +3592,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
               }
             }
           } //residual_transform_dc
-        }//else (img->yuv_format == YUV444)
+        }//else (dec_picture->chroma_format_idc == YUV444)
       }//for (ll=0;ll<3;ll+=2)
     }
 
@@ -3731,7 +3731,7 @@ void readCBPandCoeffsFromNAL(struct img_par *img,struct inp_par *inp)
         } //for (b4=0; b4 < 4; b4++)
       } //for (b8=0; b8 < img->num_blk8x8_uv; b8++)
     } //if (cbp>31)
-  } //if (img->yuv_format != YUV400)
+  } //if (dec_picture->chroma_format_idc != YUV400)
 }
 
 
@@ -3759,7 +3759,7 @@ void decode_ipcm_mb(struct img_par *img)
     for(j=0;j<16;j++)
       dec_picture->imgY[img->pix_y+i][img->pix_x+j]=img->cof[i/4][j/4][i%4][j%4];
 
-  if (img->yuv_format != YUV400)
+  if (dec_picture->chroma_format_idc != YUV400)
   {
     for(i=0;i<img->mb_cr_size_y;i++)
       for(j=0;j<img->mb_cr_size_x;j++)
@@ -3852,7 +3852,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
 
   int b8, b4;
   int uv_shift;
-  int yuv = img->yuv_format - 1;
+  int yuv = dec_picture->chroma_format_idc - 1;
 
   // Residue Color Transform
   int residue_transform_flag = img->residue_transform_flag;
@@ -4563,7 +4563,7 @@ int decode_one_macroblock(struct img_par *img,struct inp_par *inp)
     }
   }
 
-  if (img->yuv_format != YUV400)
+  if (dec_picture->chroma_format_idc != YUV400)
   {
     // chroma decoding *******************************************************
     f1_x = 64/img->mb_cr_size_x;

@@ -1527,6 +1527,61 @@ void CalculateQuant8Param()
 /*!
  ************************************************************************
  * \brief
+ *    Calculate the quantisation offset parameters
+ *
+ ************************************************************************
+ */
+void CalculateOffset8Param()
+{
+
+  int i, j, k, temp;
+   int q_bits;
+   
+   if(input->OffsetMatrixPresentFlag)
+   {
+     for(k=0; k<13; k++)
+     {
+       q_bits = Q_BITS_8 + k;
+       for(j=0; j<8; j++)
+       {
+         for(i=0; i<8; i++)
+         {           
+           temp = (i<<3)+j;
+           if (img->type == I_SLICE)
+             LevelOffset8x8Luma_Intra[k][j][i] = ((1<<q_bits) * OffsetList8x8input[0][temp] + 512)>>10;
+           else
+             LevelOffset8x8Luma_Intra[k][j][i] = ((1<<q_bits) * OffsetList8x8input[1][temp] + 512)>>10;
+
+           LevelOffset8x8Luma_Inter[k][j][i] = ((1<<q_bits) * OffsetList8x8input[2][temp] + 512)>>10;
+         }
+       }
+     }
+   }
+   else
+   {
+     for(k=0; k<13; k++)
+     {
+       q_bits = Q_BITS_8 + k;
+       for(j=0; j<8; j++)
+       {
+         for(i=0; i<8; i++)
+         {
+           temp = (i<<3)+j;
+           if (img->type == I_SLICE)
+             LevelOffset8x8Luma_Intra[k][j][i] = ((1<<q_bits) * Offset8_intra_default_intra[temp] + 512)>>10;
+           else
+             LevelOffset8x8Luma_Intra[k][j][i] = ((1<<q_bits) * Offset8_intra_default_inter[temp] + 512)>>10;
+           LevelOffset8x8Luma_Inter[k][j][i] = ((1<<q_bits) * Offset8_inter_default[temp] + 512)>>10;
+         }
+       }
+     }
+   }
+}
+
+
+/*!
+ ************************************************************************
+ * \brief
  *    The routine performs transform,quantization,inverse transform, adds the diff.
  *    to the prediction and writes the result to the decoded luma frame. Includes the
  *    RD constrained quantization also.
@@ -1580,6 +1635,7 @@ int dct_luma8x8(int b8,int *coeff_cost, int intra)
   else 
     qp_const=(1<<q_bits)/6;
 */
+  
   if (img->type == I_SLICE)
     qp_const=(1<<q_bits)/3;    // intra
   else
@@ -1686,10 +1742,12 @@ int dct_luma8x8(int b8,int *coeff_cost, int intra)
     
     if(lossless_qpprime)
       level = abs (img->m7[i][j]);
-    else if(intra == 1)
-      level = (abs (img->m7[i][j]) * LevelScale8x8Luma_Intra[qp_rem][i][j] + qp_const) >> q_bits;
+    else if(intra == 1)      
+      level = (abs (img->m7[i][j]) * LevelScale8x8Luma_Intra[qp_rem][i][j] + LevelOffset8x8Luma_Intra[qp_per][i][j]) >> q_bits;
+    //level = (abs (img->m7[i][j]) * LevelScale8x8Luma_Intra[qp_rem][i][j] + qp_const) >> q_bits;
     else
-      level = (abs (img->m7[i][j]) * LevelScale8x8Luma_Inter[qp_rem][i][j] + qp_const) >> q_bits;
+      level = (abs (img->m7[i][j]) * LevelScale8x8Luma_Inter[qp_rem][i][j] + LevelOffset8x8Luma_Inter[qp_per][i][j]) >> q_bits;
+    //level = (abs (img->m7[i][j]) * LevelScale8x8Luma_Inter[qp_rem][i][j] + qp_const) >> q_bits;
     
     if (level != 0)
     {
